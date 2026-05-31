@@ -122,36 +122,44 @@ ASCII summary only.  `demo_cmaes_magnet_design.py` additionally needs `optuna`
   to ~0.8% RMS over the DSV.  Uses a numpy Biot-Savart kernel (the ObjFlmCur
   tilted-loop path is unreliable for these non-planar loops).
 - **`demo_sf_to_peec_gx.py`** (`--with-peec`): same Gx SF design, then
-  threaded into ONE continuous conductor.  Three single-stroke methods are
-  available via `--chain-method`:
-    - `kuijpers` (default, **recommended**): Kuijpers, Jansen, Lomonova,
-      Compumag 2023 paper [525] Method-1 inspired.  Each lobe gets a fixed
-      cut phi (`+x` lobes at phi=0, `-x` at phi=π).  Every contour is
-      opened at the point closest to its lobe's cut phi, and contours are
-      sorted by the z coordinate of their cut point.  Adjacent contours
-      are connected by ONE straight (phi, z) "rung" at the cut -- the
-      pattern of Fig.4 in the paper.  The paper proves the chain's
-      deviation from the iso-contours is collocated with the field error
-      in the target region, so keeping deviations small AND parallel
-      minimises stray field.
-    - `lobe`: 4-quadrant classification + within-quadrant spiral via
-      greedy NN + 3 inter-quadrant geodesic arcs.  No cut-line discipline.
-    - `greedy`: legacy global nearest-neighbour.  The chain criss-crosses
-      the cylinder, producing the visually "wasted" arcs flagged by the
-      user (「等高線同士を無駄に接続している」).
+  threaded into ONE continuous conductor.  Five single-stroke methods are
+  available via `--chain-method`.  **When joining a new coil's contours,
+  use the [`single-stroke-chain`](../../.claude/skills/single-stroke-chain/SKILL.md)
+  skill** — the connection has no clean closed-form optimum and is a
+  reason-and-verify task (build → measure DSV RMS → keep only if it beats
+  the baseline → escalate to Path-A).
+    - `field_aware` (default, **recommended**, 2026-05-31): the `kuijpers`
+      lobe/current-sign visiting ORDER (the dominant factor) + each
+      contour's cut chosen by coordinate descent to minimise the AZIMUTHAL
+      arc to its chain neighbours (axial `dz` is free).  This lets the rung
+      stray fields cancel more symmetrically over the DSV.
+    - `kuijpers` (prior best): Kuijpers, Jansen, Lomonova, Compumag 2023
+      paper [525] Method-1.  Per-lobe fixed cut phi (`+x` at 0, `-x` at π),
+      one straight axial (phi, z) "rung" per contour pair (Fig.4 pattern).
+    - `lobe`: 4-quadrant classification + within-quadrant spiral.
+    - `greedy`: legacy global nearest-neighbour (visually "wasted" arcs).
+    - `nn_blend`: CAUTIONARY negative result — geometric-shortest balanced
+      cut.  Shortest rungs but WORST field (geometry-only NN interleaves
+      the lobe current signs).  Do not use for field accuracy.
   Field comparison at the same SF design (24 phi x 40 z surface, 12 levels):
 
-  | method     | segs | wire len | DSV RMS | x-axis nonlin |
-  |------------|------|----------|---------|---------------|
-  | greedy     | 1350 | 22.65 m  | 21.78 % | 11.40 %       |
-  | lobe       | 1350 | 24.67 m  | 23.98 % |  9.67 %       |
-  | kuijpers   | 1040 | 23.99 m  | 16.24 % |  9.73 %       |
+  | method       | DSV RMS  | x-axis nonlin |
+  |--------------|----------|---------------|
+  | **field_aware** | **9.29 %** | **7.20 %**  |
+  | kuijpers     | 16.24 %  |  9.73 %       |
+  | greedy       | 21.78 %  | 11.40 %       |
+  | lobe         | 23.98 %  |  9.67 %       |
+  | nn_blend     | 65.08 %  | 38.90 %       |
 
-  `kuijpers` gives the lowest DSV RMS (-25 % vs greedy, -32 % vs lobe),
-  matches the best nonlinearity, AND uses 23 % fewer segments because
-  each blend is a single straight rung at fixed phi instead of an 8-
-  segment geodesic helix.  This is the predicted outcome of Kuijpers'
-  proof "deviation region = field error region".
+  `field_aware` gives the lowest DSV RMS — 43 % below `kuijpers` at this
+  config, and 30–54 % below across an nlevels 10/12/16 + mesh sweep.  The
+  key finding: field impact is NOT predicted by rung length (geometric or
+  azimuthal) — `nn_blend` and `field_aware` have near-equal azimuthal rung
+  totals but 8× different RMS.  The lever is the current-sign-respecting
+  ORDER, then symmetric cut placement so the rung stray fields cancel; no
+  single scalar metric captures it (hence the skill).  This SOFTENS the
+  HARD-tier "16 % ceiling" — it was a `kuijpers`-method artifact, not a
+  fundamental bound.
 
   **Path A compensated iteration** (research): ``--compensated-iter N
   --compensated-step alpha`` runs N iterations of the fixed-point

@@ -445,6 +445,320 @@ def single_stroke_chain_phi_z(polylines, n_arc=8):
     return np.vstack(chain)
 
 
+def _embed3d_bodies(polylines, a):
+    """Open-loop bodies (closed loops with the duplicate end vertex dropped)
+    plus their 3D cylinder embedding (a*cos phi, a*sin phi, z).  Distances for
+    nearest-neighbour ordering and balanced cuts are TRUE wire distances in 3D,
+    so an azimuthal rung at large radius is correctly costed more than the same
+    delta-phi near the axis."""
+    bodies, embs = [], []
+    for poly in polylines:
+        body = poly[:-1] if np.linalg.norm(poly[0] - poly[-1]) < 1e-9 else poly
+        bodies.append(np.asarray(body, dtype=float))
+        embs.append(np.column_stack([
+            a * np.cos(body[:, 0]), a * np.sin(body[:, 0]), body[:, 1]]))
+    return bodies, embs
+
+
+def single_stroke_nn_blend_phi_z(polylines, a, n_blend=8, cd_passes=4):
+    """NEGATIVE RESULT (2026-05-31): geometric-shortest blend != least field.
+
+    Motivation (what was asked): replace the long inter-lobe "rungs" with an
+    algorithm that connects ONLY nearest-neighbour contours and BLENDS them
+    at the geometrically shortest point, so no rung spans far across the
+    (phi, z) map.
+
+    Measured outcome on the Gx 4-lobe fingerprint: this produces the SHORTEST
+    individual rungs but the WORST DSV field of all four methods --
+
+        method     DSV RMS   x-nonlin   longest rung
+        nn_blend   0.651     0.389      291 mm   <-- this function
+        kuijpers   0.162     0.097      291 mm   (default)
+        greedy     0.218     0.114       61 mm
+        lobe       0.240     0.097       40 mm
+
+    Why it fails: on a multi-lobe coil the stray field of a connecting rung
+    scales with the rung's TRANSVERSE (azimuthal) component, NOT its 3D
+    length (Kuijpers' collocation argument).  Measuring the AZIMUTHAL arc
+    length summed over all rungs makes the correlation explicit:
+
+        method     azimuthal rung total   DSV RMS
+        kuijpers          7444 mm          0.162
+        nn_blend         12847 mm          0.651
+
+    The balanced cut minimised the 3D CHORD distance between consecutive cut
+    points, but the wire actually travels the azimuthal ARC between them, and
+    geometry-only nearest-neighbour ordering scatters the cuts in phi AND
+    interleaves the four lobes' ALTERNATING current signs (+,-,-,+ for Gx).
+    So the "shortest-chord" hop frequently turns into a long azimuthal sweep
+    bridging two opposite-sign contours -- more transverse rung, worse field.
+    Minimising geometric distance is the wrong objective; kuijpers keeps the
+    WITHIN-lobe rungs axial (per-lobe constant-phi cut) and pays the
+    azimuthal cost only on the few necessary inter-lobe half-turns.  The
+    principled way further down is the Path-A compensated iteration
+    (``--compensated-iter``), which folds the rung field back into the SF
+    target.
+
+    Kept as a CAUTIONARY option (``--chain-method nn_blend``); do not use it
+    for field accuracy.  See memory feedback_single_stroke_chain_orientation_
+    traps + radia-mcp aca_tsvd(single_stroke).
+
+    The algorithm itself (for reference):
+
+      1. NEIGHBOURS ONLY -- contours are visited in nearest-neighbour order
+         on the true 3D cylinder closest-approach distance, seeded at the
+         outermost contour.  The wire therefore only ever hops to the
+         spatially nearest not-yet-used contour; it never connects a
+         contour to a far-away one.
+
+      2. LEAST-IMPACT BLEND -- each contour is opened at the point that
+         JOINTLY minimises the incoming + outgoing connector length
+         (coordinate descent: cut_k = argmin over the contour of
+         dist(cut_{k-1}, .) + dist(., cut_{k+1})).  Because a closed loop
+         opened at one point has its entry and exit at that SAME point, a
+         single cut governs both rungs; optimising it drives every rung to
+         its shortest possible length -> minimum deviation from the
+         iso-contours -> least stray field (Kuijpers' collocation argument).
+
+    Orientation is preserved throughout (loops are rolled, never reversed --
+    reversing flips the per-loop current sign and breaks Bz; see
+    feedback_single_stroke_chain_orientation_traps).
+
+    Returns the (phi, z) chain.  Use ``connector_lengths_phi_z`` to audit the
+    rung lengths (the metric this method minimises).
+    """
+    n = len(polylines)
+    if n == 0:
+        return np.zeros((0, 2))
+    bodies, embs = _embed3d_bodies(polylines, a)
+    if n == 1:
+        b = bodies[0]
+        return np.vstack([b, b[:1]]) if len(b) else np.zeros((0, 2))
+
+    # --- pairwise closest-approach (distance + the two argmin indices) ---
+    def loop_loop(i, j):
+        D = np.linalg.norm(embs[i][:, None, :] - embs[j][None, :, :], axis=2)
+        ai, aj = np.unravel_index(int(np.argmin(D)), D.shape)
+        return float(D[ai, aj]), int(ai), int(aj)
+
+    dist = np.full((n, n), np.inf)
+    for i in range(n):
+        for j in range(i + 1, n):
+            d, _, _ = loop_loop(i, j)
+            dist[i, j] = dist[j, i] = d
+
+    # --- seed: outermost contour (largest 3D bounding-box diagonal) ---
+    extent = [float(np.linalg.norm(embs[i].max(0) - embs[i].min(0)))
+              for i in range(n)]
+    start = int(np.argmax(extent))
+
+    # --- nearest-neighbour visiting order (neighbours only) ---
+    order = [start]
+    used = [False] * n
+    used[start] = True
+    for _ in range(n - 1):
+        last = order[-1]
+        cand = [dist[last, j] if not used[j] else np.inf for j in range(n)]
+        nxt = int(np.argmin(cand))
+        order.append(nxt)
+        used[nxt] = True
+
+    # --- initialise each cut at the point closest to its order-successor ---
+    cut = [0] * n
+    for kk in range(n):
+        i = order[kk]
+        j = order[kk + 1] if kk + 1 < n else order[kk - 1]
+        _, ai, _ = loop_loop(i, j)
+        cut[kk] = ai
+
+    # --- coordinate descent: balanced cut minimises in + out rung ---
+    def cut_pt(kk):
+        return embs[order[kk]][cut[kk]]
+
+    for _ in range(cd_passes):
+        for kk in range(n):
+            i = order[kk]
+            pts = embs[i]
+            cost = np.zeros(len(pts))
+            if kk > 0:
+                cost = cost + np.linalg.norm(pts - cut_pt(kk - 1), axis=1)
+            if kk < n - 1:
+                cost = cost + np.linalg.norm(pts - cut_pt(kk + 1), axis=1)
+            cut[kk] = int(np.argmin(cost))
+
+    # --- build the chain: open at the (balanced) cut, short geodesic blend ---
+    chain_parts = []
+    for kk in range(n):
+        i = order[kk]
+        body = bodies[i]
+        ci = cut[kk]
+        opened = np.vstack([body[ci:], body[:ci]])
+        if chain_parts:
+            prev_end = chain_parts[-1][-1]
+            blend = _geodesic_arc_phi_z(prev_end, opened[0], n_blend)
+            if len(blend) > 0:
+                chain_parts.append(blend)
+        chain_parts.append(opened)
+
+    return np.vstack(chain_parts) if chain_parts else np.zeros((0, 2))
+
+
+def _kuijpers_lobe_order(polylines, a):
+    """Return contour indices in kuijpers lobe/current-sign order.
+
+    4-lobe classification by (sign x, sign z) of the 3D centroid; within a
+    lobe sort by the z of the fixed-phi cut (descending for +z lobes,
+    ascending for -z lobes); lobes traversed (+x+z)(+x-z)(-x-z)(-x+z).  This
+    is the ORDER that respects the Gx coil's alternating current signs (the
+    part of kuijpers that geometry-only NN throws away)."""
+    n = len(polylines)
+    centroids = []
+    for poly in polylines:
+        pts = np.column_stack([a * np.cos(poly[:, 0]),
+                               a * np.sin(poly[:, 0]), poly[:, 1]])
+        centroids.append(pts.mean(axis=0))
+    centroids = np.asarray(centroids)
+    lobes = {(+1, +1): [], (+1, -1): [], (-1, +1): [], (-1, -1): []}
+    for k, c in enumerate(centroids):
+        lobes[(+1 if c[0] >= 0 else -1, +1 if c[2] >= 0 else -1)].append(k)
+    cut_phi = {(+1, +1): 0.0, (+1, -1): 0.0, (-1, +1): np.pi, (-1, -1): np.pi}
+
+    def cut_z(idx, cp):
+        p = polylines[idx]
+        dphi = ((p[:, 0] - cp + np.pi) % (2 * np.pi)) - np.pi
+        return float(p[int(np.argmin(np.abs(dphi))), 1])
+
+    for key in lobes:
+        cp = cut_phi[key]
+        desc = (key[1] == +1)
+        lobes[key].sort(key=(lambda k, _cp=cp: -cut_z(k, _cp)) if desc
+                        else (lambda k, _cp=cp: cut_z(k, _cp)))
+    order = []
+    for key in [(+1, +1), (+1, -1), (-1, -1), (-1, +1)]:
+        order.extend(lobes[key])
+    return order
+
+
+def single_stroke_field_aware_phi_z(polylines, a, n_blend=8, cd_passes=5):
+    """Field-aware single-stroke (DEFAULT): kuijpers sign-order + min-AZIMUTHAL
+    cuts.  Best DSV RMS we have found -- beats kuijpers in every tested config.
+
+    Two ingredients, learned from the nn_blend negative result (2026-05-31):
+
+      1. ORDER = kuijpers lobe/current-sign order (``_kuijpers_lobe_order``).
+         This is the DOMINANT factor.  The nn_blend failure (RMS 0.65) was
+         NOT about rung length -- it was its geometry-only nearest-neighbour
+         order INTERLEAVING the four lobes' alternating current signs
+         (+,-,-,+).  Keep opposite-sign contours out of adjacency and the
+         catastrophe disappears.
+
+      2. CUT = chosen to minimise the AZIMUTHAL arc to the chain neighbours
+         (coordinate descent: cut_k = argmin over the contour of
+         a*|dphi(pt, cut_{k-1})| + a*|dphi(pt, cut_{k+1})|).  Axial rung
+         content (dz) is free (zero stray) so it is not penalised.  Versus
+         kuijpers' fixed-phi snap, aligning consecutive cuts to their MUTUAL
+         best phi lets the rungs' stray fields cancel more symmetrically over
+         the DSV.
+
+    Measured (default nphi=24 nz=40 nlevels=12 DSV):
+
+        method        DSV RMS   x-nonlin   azimuthal rung total
+        field_aware   0.093     0.072      12522 mm   <- this function
+        kuijpers      0.162     0.097       7444 mm
+        lobe          0.240     0.097      10863 mm
+        greedy        0.218     0.114      11580 mm
+        nn_blend      0.651     0.389      12847 mm
+
+    Robust: field_aware < kuijpers RMS at nlevels 10/12/16 and at
+    nphi32/nz48/nlevels14 (30-54% lower).  NOTE the azimuthal total is NOT a
+    clean predictor -- field_aware has MORE azimuthal arc than kuijpers yet
+    lower RMS, because the field impact is the symmetric CANCELLATION of the
+    rung stray fields over the DSV, not their summed length.  That subtlety
+    (cancellation depends on placement + sign structure, not a closed-form
+    metric) is why the single-stroke connection is better handled as a
+    reason-and-verify SKILL than a fixed formula.
+
+    Orientation preserved (loops rolled, never reversed).
+    """
+    n = len(polylines)
+    if n == 0:
+        return np.zeros((0, 2))
+    bodies, _ = _embed3d_bodies(polylines, a)
+    if n == 1:
+        b = bodies[0]
+        return np.vstack([b, b[:1]]) if len(b) else np.zeros((0, 2))
+
+    order = _kuijpers_lobe_order(polylines, a)
+
+    def wrap(d):
+        return (d + np.pi) % (2.0 * np.pi) - np.pi
+
+    # initialise each cut at the point closest to its lobe cut phi (kuijpers)
+    cut_phi_of = {}
+    centroids = [np.column_stack([a*np.cos(p[:,0]), a*np.sin(p[:,0]), p[:,1]]).mean(0)
+                 for p in polylines]
+    cut = {}
+    for idx in order:
+        cp = 0.0 if centroids[idx][0] >= 0 else np.pi
+        cut[idx] = int(np.argmin(np.abs(wrap(bodies[idx][:, 0] - cp))))
+
+    # coordinate descent on AZIMUTHAL arc to neighbours (axial dz free)
+    for _ in range(cd_passes):
+        for kk, idx in enumerate(order):
+            phis = bodies[idx][:, 0]
+            cost = np.zeros(len(phis))
+            if kk > 0:
+                pp = bodies[order[kk - 1]][cut[order[kk - 1]], 0]
+                cost = cost + np.abs(wrap(phis - pp))
+            if kk < n - 1:
+                pn = bodies[order[kk + 1]][cut[order[kk + 1]], 0]
+                cost = cost + np.abs(wrap(phis - pn))
+            cut[idx] = int(np.argmin(cost))
+
+    chain_parts = []
+    for idx in order:
+        body = bodies[idx]
+        ci = cut[idx]
+        opened = np.vstack([body[ci:], body[:ci]])
+        if chain_parts:
+            prev_end = chain_parts[-1][-1]
+            blend = _geodesic_arc_phi_z(prev_end, opened[0], n_blend)
+            if len(blend) > 0:
+                chain_parts.append(blend)
+        chain_parts.append(opened)
+    return np.vstack(chain_parts) if chain_parts else np.zeros((0, 2))
+
+
+def connector_lengths_phi_z(polylines, chain_phi_z, a):
+    """Audit the inter-contour connector segments (the 'rungs').
+
+    A rung is a chain segment that bridges a gap between two contours rather
+    than tracing an iso-contour.  We flag segments longer than 2x the median
+    edge length -- a robust proxy that does not need per-vertex contour
+    membership.  Returns ``(max_rung, total_rung, n_rung, azimuthal_total)``
+    in metres.  ``azimuthal_total`` = sum over rungs of ``a*|dphi|``, the
+    field-impact correlator established by the nn_blend negative result
+    (2026-05-31): DSV RMS tracks the azimuthal total, NOT the 3D length.
+    """
+    path = np.column_stack([
+        a * np.cos(chain_phi_z[:, 0]),
+        a * np.sin(chain_phi_z[:, 0]),
+        chain_phi_z[:, 1]])
+    seg = np.linalg.norm(np.diff(path, axis=0), axis=1)   # length L = n-1
+    valid = seg > 1.0e-12
+    if not valid.any():
+        return 0.0, 0.0, 0, 0.0
+    med = float(np.median(seg[valid]))
+    is_rung = seg > 2.0 * med                              # length L, boolean
+    if not is_rung.any():
+        return 0.0, 0.0, 0, 0.0
+    dphi = (np.diff(chain_phi_z[:, 0]) + np.pi) % (2.0 * np.pi) - np.pi
+    azim = a * np.abs(dphi)                                # length L
+    rung = seg[is_rung]
+    return (float(rung.max()), float(rung.sum()), int(is_rung.sum()),
+            float(azim[is_rung].sum()))
+
+
 def chain_phi_z_to_3d(chain_phi_z, a, dedupe_tol=1.0e-9):
     """Map (phi, z) chain to 3D and drop adjacent duplicates (matplotlib's
     contour algorithm emits repeated vertices on cell boundaries; these become
@@ -480,14 +794,30 @@ def main():
     ap.add_argument("--narc", type=int, default=8,
                     help="segments per single-stroke connection arc")
     ap.add_argument("--chain-method",
-                    choices=["kuijpers", "lobe", "greedy"],
-                    default="kuijpers",
-                    help="kuijpers (default, recommended) = Kuijpers 2023 "
-                         "Method-1 style: per-lobe cut line at fixed phi, "
-                         "contours sorted by cut z, straight 'rung' blends; "
-                         "lobe = 4-quadrant with within-lobe greedy NN; "
-                         "greedy = legacy global nearest-neighbour (the one "
-                         "that produces obvious 'wasted' criss-cross arcs)")
+                    choices=["field_aware", "kuijpers", "lobe", "greedy",
+                             "nn_blend"],
+                    default="field_aware",
+                    help="field_aware (default, recommended, 2026-05-31) = "
+                         "kuijpers lobe/current-sign ORDER + each contour cut "
+                         "chosen to minimise the AZIMUTHAL arc to its chain "
+                         "neighbours.  Beats kuijpers on DSV RMS in every "
+                         "tested config (0.093 vs 0.162 at the default; 30-54% "
+                         "lower RMS across nlevels/mesh sweeps); "
+                         "kuijpers = Kuijpers 2023 Method-1: per-lobe cut at "
+                         "fixed phi, straight AXIAL 'rung' blends (the prior "
+                         "best); "
+                         "lobe = 4-quadrant within-lobe greedy NN; "
+                         "greedy = legacy global NN (incoming-only cut); "
+                         "nn_blend = NEGATIVE RESULT (2026-05-31): "
+                         "nearest-neighbour order + balanced cuts that "
+                         "minimise the GEOMETRIC connector length.  Produces "
+                         "the SHORTEST rungs but the WORST field (RMS 0.65 vs "
+                         "kuijpers 0.16) because on a multi-lobe coil the "
+                         "stray field scales with a rung's TRANSVERSE "
+                         "(azimuthal) component, not its length, and "
+                         "geometry-only NN interleaves the lobes' alternating "
+                         "current signs.  Kept as a cautionary option; do NOT "
+                         "use for field accuracy")
     ap.add_argument("--with-peec", action="store_true",
                     help="also run STEP export + PEEC L, R")
     ap.add_argument("--compensated-iter", type=int, default=0,
@@ -552,7 +882,11 @@ def main():
 
     # ------- [3] single-stroke chain via cylinder-surface geodesics -------
     def build_chain_from_polylines(_polys):
-        if args.chain_method == "kuijpers":
+        if args.chain_method == "field_aware":
+            return single_stroke_field_aware_phi_z(_polys, a, n_blend=args.narc)
+        elif args.chain_method == "nn_blend":
+            return single_stroke_nn_blend_phi_z(_polys, a, n_blend=args.narc)
+        elif args.chain_method == "kuijpers":
             return single_stroke_kuijpers_chain_phi_z(_polys, a)
         elif args.chain_method == "lobe":
             return single_stroke_lobe_chain_phi_z(_polys, a, n_arc=args.narc)
@@ -614,11 +948,17 @@ def main():
     path = chain_phi_z_to_3d(chain_phi_z, a)
     seg_lens = np.linalg.norm(np.diff(path, axis=0), axis=1)
     length = float(seg_lens.sum())
+    max_rung, total_rung, n_rung, azim_rung = connector_lengths_phi_z(
+        polylines, chain_phi_z, a)
     print(f"[3] single-stroke chain ({args.chain_method}"
           f"{' +compensated' if args.compensated_iter > 0 else ''}):"
           f" {len(path)} points,"
           f" {len(path) - 1} segments, wire length = {length:.3f} m"
           f" (one continuous conductor)")
+    print(f"    connectors (inter-contour rungs): {n_rung} rungs,"
+          f" longest = {max_rung*1e3:.1f} mm, total = {total_rung*1e3:.1f} mm;"
+          f" AZIMUTHAL total = {azim_rung*1e3:.0f} mm"
+          f" (<- field-impact correlator)")
 
     # ------- [6][7] field of single-stroke coil over the DSV and on x-axis ----
     # Fit one global current that minimises ||I*Bz_unit - Gx*x||_DSV; this is
