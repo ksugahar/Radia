@@ -219,13 +219,27 @@ class LaminationTab(QWidget):
         self.H_amp = _double(0.0, 1e6, 1000.0, step=10, decimals=2)
         self.freq = _double(0.1, 1e6, 1000.0, step=10, decimals=2)
         self.fes_order = _spin(1, 5, 2)
+        self.em_table = QLineEdit("")
+        em_row = QHBoxLayout()
+        em_row.addWidget(self.em_table, 1)
+        em_browse = QPushButton("Browse…")
+        em_browse.clicked.connect(self._browse_em_table)
+        em_row.addWidget(em_browse)
         gf.addRow("H amplitude [A/m]", self.H_amp)
         gf.addRow("Operating freq [Hz]", self.freq)
         gf.addRow("FES order", self.fes_order)
+        gf.addRow("em-table JSON (global mode)", em_row)
         glob.setLayout(gf)
         layout.addWidget(glob)
 
         layout.addStretch()
+
+    def _browse_em_table(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Choose em-table JSON (from a prior 'cell' run)", "",
+            "JSON (*.json);;All files (*)")
+        if path:
+            self.em_table.setText(path)
 
     def build_cmd(self, output_json):
         mode_text = self.mode.currentText().split(" ")[0]
@@ -249,6 +263,12 @@ class LaminationTab(QWidget):
             if not vol:
                 return None
             cmd += ["--vol", vol]
+        if mode_text == "global":
+            # global mode reuses an em-table JSON from a prior 'cell' run;
+            # calc_motor_lamination.py errors clearly if it is missing.
+            em = self.em_table.text().strip()
+            if em:
+                cmd += ["--em-table", em]
         return cmd
 
 
