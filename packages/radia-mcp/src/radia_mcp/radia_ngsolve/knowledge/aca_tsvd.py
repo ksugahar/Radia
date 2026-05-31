@@ -735,9 +735,30 @@ Implemented as ``coil_distort_3d`` + CLI ``--distort --distort-comps
 --distort-fit-n F``.  A fast vectorised ``bz_fast`` (broadcast
 segments x obs, z-component only) replaces the per-segment Python loop
 of ``h_segments_batch`` for the Gauss-Newton Jacobian (the field is
-called ~N_dof times per iter).  Next: port to the cylinder (Gx
-fingerprint) via an ngsolve.bem high-order surface so the contours are
-clean, then sheet-metal-distort the manufactured chain.
+called ~N_dof times per iter).
+
+CYLINDER PORT (done 2026-06-01) -- ``demo_sf_to_peec_gx.py --distort``:
+``coil_distort_cyl`` bends the Gx fingerprint single-stroke on a
+cylinder.  The analog of the planar z-lift is a RADIAL bend dr (out of
+the surface) + azimuthal s=a*dphi + axial dz, on a phi-periodic (phi,z)
+control grid.  Gx (HARD tier): single-stroke 8.5-9.3% -> distort 1.4%
+(ONE current, ~30mm bend, full r+s+z).  INTERESTING REVERSAL: on the
+cylinder the IN-SURFACE reroute (sz) is the DOMINANT lever and radial
+(r) alone is WEAKEST (needs ~50mm) -- OPPOSITE of the plane (where the
+out-of-plane lift dominated).  Reason: cylinder wires already wrap in
+3D, so repositioning ALONG the surface reshapes the current pattern
+more than lifting OFF it; for an internal DSV a radial move only weakly
+changes the wire-DSV distance.  The optimal sheet-metal direction is
+GEOMETRY-DEPENDENT; Gauss-Newton picks it automatically.
+
+Also added ``--regularize {tsvd,tikhonov,h1}`` to the cylinder psi
+solve (was plain TSVD).  alpha L-curve is NON-MONOTONIC (contour
+topology jumps with alpha): TSVD mode-truncation is the BEST
+regulariser for the Gx single-stroke (8.45%), best ridge alpha=1e-2*mean
+only ties it (8.97%), H1 worse (over-spreads current -> longer
+connectors) -- OPPOSITE ranking from the planar uniform case (where H1
+was cleanest).  Recipe: pick the regularisation that minimises the
+SINGLE-STROKE RMS, then distort.
 
 ## Acceleration path for FE-direct: WAIT for Joachim H-matrix (2026-05-30)
 
