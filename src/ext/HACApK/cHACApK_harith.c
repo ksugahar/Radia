@@ -466,6 +466,28 @@ static int dense_to_rk_truncate(
 long g_dbg_n_materialize = 0;
 long g_dbg_materialize_elems = 0;
 
+/* Breakdown of WHICH operand kinds trigger the materialize fallback, so the
+ * optimization (rk-factored mixed multiply vs sub-view split) is targeted at
+ * the dominant case rather than guessed. kind index: 0=internal, 1=rk leaf,
+ * 2=dense leaf. addmul indexed [kindA*3 + kindB]; lln/run [kindL_or_U*3 + kindX]. */
+long g_dbg_mixed_addmul[9] = {0};
+long g_dbg_mixed_lln[9] = {0};
+long g_dbg_mixed_run[9] = {0};
+
+static inline int node_kind_idx(const st_cHACApK_block_node_t *n)
+{
+    if (leaf_is_rk(n)) return 1;
+    if (leaf_is_dense(n)) return 2;
+    return 0; /* internal */
+}
+
+void cHACApK_hlu_get_mixed_breakdown(long *out_addmul9, long *out_lln9, long *out_run9)
+{
+    if (out_addmul9) for (int i = 0; i < 9; i++) out_addmul9[i] = g_dbg_mixed_addmul[i];
+    if (out_lln9)    for (int i = 0; i < 9; i++) out_lln9[i]    = g_dbg_mixed_lln[i];
+    if (out_run9)    for (int i = 0; i < 9; i++) out_run9[i]    = g_dbg_mixed_run[i];
+}
+
 static double *materialize_node_as_dense(const st_cHACApK_block_node_t *node)
 {
     if (!node) return NULL;
@@ -642,6 +664,173 @@ static int set_node_from_dense(
             int col_off = child->dof_col_start - col_base;
             const double *D_sub = D + row_off + (size_t)col_off * (size_t)D_ld;
             int rc = set_node_from_dense(D_sub, D_ld, cm, cn, child);
+            if (rc != CHACAPK_HARITH_OK) return rc;
+        }
+    }
+    return CHACAPK_HARITH_OK;
+}
+
+
+/* ---------- matvec/matmat helpers for the materialize-free mixed multiply ----
+ *
+ * These apply a block-tree node (dense leaf / rk leaf / internal) to a dense
+ * block of k columns WITHOUT ever densifying the node. They use LOCAL column-
+ * major indexing: B is indexed [0, node->dof_ncols) x k, C is [0, node->dof_
+ * nrows) x k (or transposed for the _trans variant). Internal nodes recurse,
+ * slicing B/C by the child's DOF offset relative to the parent -- exactly the
+ * pattern in materialize_node_as_dense, but the node stays compressed.
+ *
+ * This is the key to exploiting HACApK's compression: an rk-leaf operand in a
+ * trailing update is handled as U(V^T B) via these helpers + add_lowrank_to_
+ * node, instead of the Phase 3.6 materialize-and-redo fallback that densified
+ * the whole internal operand (the dominant materialize cost at small leaf). */
+
+/* C[dof_nrows x k] += alpha * node * B[dof_ncols x k]  (LOCAL indexing). */
+static int node_matmat_local(const st_cHACApK_block_node_t *node, double alpha,
+                             const double *B, int ldB, int k,
+                             double *C, int ldC)
+{
+    if (!node || k <= 0) return CHACAPK_HARITH_OK;
+    int m = node->dof_nrows, n = node->dof_ncols;
+
+    if (leaf_is_dense(node)) {
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    m, k, n, alpha, leaf_dense_data(node), m,
+                    B, ldB, 1.0, C, ldC);
+        return CHACAPK_HARITH_OK;
+    }
+    if (leaf_is_rk(node)) {
+        int kt = leaf_rk_rank(node);
+        if (kt <= 0) return CHACAPK_HARITH_OK;
+        double *T = (double*)malloc(sizeof(double) * (size_t)kt * (size_t)k);
+        if (!T) return CHACAPK_HARITH_ERR_NULL;
+        /* T = V^T B  (kt x k) */
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    kt, k, n, 1.0, leaf_rk_V(node), n, B, ldB, 0.0, T, kt);
+        /* C += alpha U T  (m x k) */
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    m, k, kt, alpha, leaf_rk_U(node), m, T, kt, 1.0, C, ldC);
+        free(T);
+        return CHACAPK_HARITH_OK;
+    }
+    /* internal: recurse, slicing B by child col-offset, C by child row-offset. */
+    int nr = node->nrsons, nc = node->ncsons;
+    int rb = node->dof_row_start, cb = node->dof_col_start;
+    for (int j_s = 0; j_s < nc; j_s++) {
+        for (int i_s = 0; i_s < nr; i_s++) {
+            const st_cHACApK_block_node_t *ch = node->sons[i_s + j_s * nr];
+            int row_off = ch->dof_row_start - rb;
+            int col_off = ch->dof_col_start - cb;
+            int rc = node_matmat_local(ch, alpha, B + col_off, ldB, k,
+                                       C + row_off, ldC);
+            if (rc != CHACAPK_HARITH_OK) return rc;
+        }
+    }
+    return CHACAPK_HARITH_OK;
+}
+
+/* C[dof_ncols x k] += alpha * node^T * B[dof_nrows x k]  (LOCAL indexing). */
+static int node_matmat_trans_local(const st_cHACApK_block_node_t *node, double alpha,
+                                   const double *B, int ldB, int k,
+                                   double *C, int ldC)
+{
+    if (!node || k <= 0) return CHACAPK_HARITH_OK;
+    int m = node->dof_nrows, n = node->dof_ncols;
+
+    if (leaf_is_dense(node)) {
+        /* C(n x k) += alpha * data^T(n x m) * B(m x k) */
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    n, k, m, alpha, leaf_dense_data(node), m,
+                    B, ldB, 1.0, C, ldC);
+        return CHACAPK_HARITH_OK;
+    }
+    if (leaf_is_rk(node)) {
+        int kt = leaf_rk_rank(node);
+        if (kt <= 0) return CHACAPK_HARITH_OK;
+        double *T = (double*)malloc(sizeof(double) * (size_t)kt * (size_t)k);
+        if (!T) return CHACAPK_HARITH_ERR_NULL;
+        /* node^T = V U^T;  T = U^T B  (kt x k) */
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    kt, k, m, 1.0, leaf_rk_U(node), m, B, ldB, 0.0, T, kt);
+        /* C += alpha V T  (n x k) */
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    n, k, kt, alpha, leaf_rk_V(node), n, T, kt, 1.0, C, ldC);
+        free(T);
+        return CHACAPK_HARITH_OK;
+    }
+    /* internal: child^T maps child row-space (B+row_off) to col-space (C+col_off). */
+    int nr = node->nrsons, nc = node->ncsons;
+    int rb = node->dof_row_start, cb = node->dof_col_start;
+    for (int j_s = 0; j_s < nc; j_s++) {
+        for (int i_s = 0; i_s < nr; i_s++) {
+            const st_cHACApK_block_node_t *ch = node->sons[i_s + j_s * nr];
+            int row_off = ch->dof_row_start - rb;
+            int col_off = ch->dof_col_start - cb;
+            int rc = node_matmat_trans_local(ch, alpha, B + row_off, ldB, k,
+                                             C + col_off, ldC);
+            if (rc != CHACAPK_HARITH_OK) return rc;
+        }
+    }
+    return CHACAPK_HARITH_OK;
+}
+
+/* C += alpha * U * W^T, where the increment is rank-k: U is (m x k, ld ldU),
+ * W is (n x k, ld ldW). Mirrors add_dense_to_node but carries the low-rank
+ * factors so an internal C never gets a full m x n densification.
+ *   - dense leaf C: GEMM accumulate.
+ *   - rk leaf C: stack [U_c | alpha U] / [V_c | W], SVD-recompress.
+ *   - internal C: recurse, slicing U by rows, W by rows (= product cols). */
+static int add_lowrank_to_node(double alpha, const double *U, int ldU,
+                               const double *W, int ldW, int m, int n, int k,
+                               st_cHACApK_block_node_t *C)
+{
+    if (!C) return CHACAPK_HARITH_ERR_NULL;
+    if (k <= 0) return CHACAPK_HARITH_OK;
+
+    if (leaf_is_dense(C)) {
+        if (leaf_rows(C) != m || leaf_cols(C) != n) return CHACAPK_HARITH_ERR_TOPOLOGY;
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                    m, n, k, alpha, U, ldU, W, ldW, 1.0, leaf_dense_data(C), m);
+        return CHACAPK_HARITH_OK;
+    }
+    if (leaf_is_rk(C)) {
+        int kc = leaf_rk_rank(C);
+        int kw = kc + k;
+        double *Uw = (double*)malloc(sizeof(double) * (size_t)m * (size_t)kw);
+        double *Vw = (double*)malloc(sizeof(double) * (size_t)n * (size_t)kw);
+        if (!Uw || !Vw) { free(Uw); free(Vw); return CHACAPK_HARITH_ERR_NULL; }
+        if (kc > 0) memcpy(Uw, leaf_rk_U(C), sizeof(double) * (size_t)m * (size_t)kc);
+        if (kc > 0) memcpy(Vw, leaf_rk_V(C), sizeof(double) * (size_t)n * (size_t)kc);
+        /* right half: alpha*U (m x k) and W (n x k), respecting input ld. */
+        for (int j = 0; j < k; j++) {
+            double *dstU = Uw + (size_t)(kc + j) * (size_t)m;
+            const double *srcU = U + (size_t)j * (size_t)ldU;
+            for (int i = 0; i < m; i++) dstU[i] = alpha * srcU[i];
+            double *dstV = Vw + (size_t)(kc + j) * (size_t)n;
+            const double *srcW = W + (size_t)j * (size_t)ldW;
+            memcpy(dstV, srcW, sizeof(double) * (size_t)n);
+        }
+        double *U_new = NULL, *V_new = NULL; int k_new = 0;
+        int rc = rkleaf_recompress(Uw, Vw, m, n, kw, g_hlu_trunc_tol, kw,
+                                    &U_new, &V_new, &k_new);
+        free(Uw); free(Vw);
+        if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
+        free(C->leaf_mtx->a1); free(C->leaf_mtx->a2);
+        C->leaf_mtx->a1 = U_new; C->leaf_mtx->a2 = V_new;
+        C->leaf_mtx->kt = k_new;
+        return CHACAPK_HARITH_OK;
+    }
+    /* internal: recurse with row-slices of U and W. */
+    int nr = C->nrsons, nc = C->ncsons;
+    int rb = C->dof_row_start, cb = C->dof_col_start;
+    for (int j_s = 0; j_s < nc; j_s++) {
+        for (int i_s = 0; i_s < nr; i_s++) {
+            st_cHACApK_block_node_t *ch = C->sons[i_s + j_s * nr];
+            int cm = ch->dof_nrows, cn = ch->dof_ncols;
+            int row_off = ch->dof_row_start - rb;
+            int col_off = ch->dof_col_start - cb;
+            int rc = add_lowrank_to_node(alpha, U + row_off, ldU,
+                                         W + col_off, ldW, cm, cn, k, ch);
             if (rc != CHACAPK_HARITH_OK) return rc;
         }
     }
@@ -933,7 +1122,44 @@ static int h_addmul(double alpha,
         return CHACAPK_HARITH_OK;
     }
 
-    /* dense(A) * dense(B) -> rk(C) + all MIXED leaf+internal cases:
+    /* ---- materialize-FREE mixed multiply when an operand is an rk leaf ----
+     * These cover the dominant mixed cases at small leaf (rk x rk, internal x
+     * rk, rk x internal -- ~73-93% of mixed addmul). Factor through the rk
+     * waist so the OTHER (possibly internal) operand is only touched via
+     * matvec, never densified:
+     *   rk A = U_A V_A^T:  C += alpha U_A (V_A^T B) = add_lowrank(U_A, B^T V_A)
+     *   rk B = U_B V_B^T:  C += alpha (A U_B) V_B^T = add_lowrank(A U_B, V_B) */
+    if (leaf_is_rk(A)) {
+        int m = C->dof_nrows, n = C->dof_ncols, inner = A->dof_ncols;
+        int k = leaf_rk_rank(A);
+        if (k <= 0) return CHACAPK_HARITH_OK;
+        /* W (n x k) = B^T V_A  (V_A is inner x k = B's row space). */
+        double *W = (double*)calloc((size_t)n * (size_t)k, sizeof(double));
+        if (!W) return CHACAPK_HARITH_ERR_NULL;
+        int rc = node_matmat_trans_local(B, 1.0, leaf_rk_V(A), inner, k, W, n);
+        if (rc == CHACAPK_HARITH_OK)
+            rc = add_lowrank_to_node(alpha, leaf_rk_U(A), m, W, n, m, n, k, C);
+        free(W);
+        g_stats.n_dense_gemm++;
+        return rc;
+    }
+    if (leaf_is_rk(B)) {
+        int m = C->dof_nrows, n = C->dof_ncols, inner = A->dof_ncols;
+        int k = leaf_rk_rank(B);
+        if (k <= 0) return CHACAPK_HARITH_OK;
+        /* P (m x k) = A U_B  (U_B is inner x k = A's col space). */
+        double *P = (double*)calloc((size_t)m * (size_t)k, sizeof(double));
+        if (!P) return CHACAPK_HARITH_ERR_NULL;
+        int rc = node_matmat_local(A, 1.0, leaf_rk_U(B), inner, k, P, m);
+        if (rc == CHACAPK_HARITH_OK)
+            rc = add_lowrank_to_node(alpha, P, m, leaf_rk_V(B), n, m, n, k, C);
+        free(P);
+        g_stats.n_dense_gemm++;
+        return rc;
+    }
+
+    /* dense(A) * dense(B) -> rk(C) + remaining MIXED leaf+internal cases
+     * (internal x internal, internal x dense, dense x internal, dense*dense->rk):
      * Phase 3.6 materialize-and-redo fallback.
      *
      *   1. Materialize A and B as flat dense buffers (handles all 3 cases:
@@ -953,27 +1179,41 @@ static int h_addmul(double alpha,
                     (A_is_leaf  ||  B_is_leaf ||  C_is_leaf);
         int dense_dense_rk = leaf_is_dense(A) && leaf_is_dense(B) && leaf_is_rk(C);
         if (mixed || dense_dense_rk) {
+            g_dbg_mixed_addmul[node_kind_idx(A)*3 + node_kind_idx(B)]++;
             int m = C->dof_nrows;
             int n = C->dof_ncols;
             int inner = A->dof_ncols;  /* == B->dof_nrows */
+            int rc;
 
-            double *A_dense = materialize_node_as_dense(A);
-            double *B_dense = materialize_node_as_dense(B);
-            if (!A_dense || !B_dense) {
+            if (!leaf_is_dense(A) && !leaf_is_rk(A)) {
+                /* A internal (covers internal x internal, internal x dense):
+                 * matmat THROUGH A so A's subtree compression is exploited
+                 * (rk leaves handled as U(V^T...) ); materialize only B. */
+                double *B_dense = materialize_node_as_dense(B);   /* inner x n */
+                double *D = (double*)calloc((size_t)m * (size_t)n, sizeof(double));
+                if (!B_dense || !D) { free(B_dense); free(D);
+                                       return CHACAPK_HARITH_ERR_NULL; }
+                rc = node_matmat_local(A, alpha, B_dense, inner, n, D, m);
+                free(B_dense);
+                if (rc == CHACAPK_HARITH_OK) rc = add_dense_to_node(D, m, m, n, C);
+                free(D);
+            } else {
+                /* A is a dense leaf (small): dense x internal / dense*dense->rk.
+                 * Materialize both (A is a leaf -> cheap; B's inner dim is
+                 * leaf-bounded because A's col cluster is at leaf level). */
+                double *A_dense = materialize_node_as_dense(A);
+                double *B_dense = materialize_node_as_dense(B);
+                double *D = (double*)malloc(sizeof(double) * (size_t)m * (size_t)n);
+                if (!A_dense || !B_dense || !D) {
+                    free(A_dense); free(B_dense); free(D);
+                    return CHACAPK_HARITH_ERR_NULL;
+                }
+                cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                            m, n, inner, alpha, A_dense, m, B_dense, inner, 0.0, D, m);
                 free(A_dense); free(B_dense);
-                return CHACAPK_HARITH_ERR_NULL;
+                rc = add_dense_to_node(D, m, m, n, C);
+                free(D);
             }
-            double *D = (double*)malloc(sizeof(double) * (size_t)m * (size_t)n);
-            if (!D) { free(A_dense); free(B_dense); return CHACAPK_HARITH_ERR_NULL; }
-            cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-                        m, n, inner, alpha,
-                        A_dense, m,
-                        B_dense, inner,
-                        0.0, D, m);
-            free(A_dense); free(B_dense);
-
-            int rc = add_dense_to_node(D, m, m, n, C);
-            free(D);
             g_stats.n_dense_gemm++;
             return rc;
         }
@@ -1043,6 +1283,7 @@ static int htrsm_lln(const st_cHACApK_block_node_t *L,
         int X_is_leaf = leaf_is_dense(X) || leaf_is_rk(X);
         int mixed = (!L_is_leaf || !X_is_leaf) && (L_is_leaf || X_is_leaf);
         if (mixed) {
+            g_dbg_mixed_lln[node_kind_idx(L)*3 + node_kind_idx(X)]++;
             int m = L->dof_nrows;  /* == L->dof_ncols (square) */
             int n = X->dof_ncols;
             double *L_dense = materialize_node_as_dense(L);
@@ -1128,6 +1369,7 @@ static int htrsm_run(const st_cHACApK_block_node_t *U,
         int X_is_leaf = leaf_is_dense(X) || leaf_is_rk(X);
         int mixed = (!U_is_leaf || !X_is_leaf) && (U_is_leaf || X_is_leaf);
         if (mixed) {
+            g_dbg_mixed_run[node_kind_idx(U)*3 + node_kind_idx(X)]++;
             int n_u = U->dof_nrows;  /* U is square */
             int m_x = X->dof_nrows;
             double *U_dense = materialize_node_as_dense(U);
@@ -1286,6 +1528,7 @@ int cHACApK_hlu_decomp(st_cHACApK_block_node_t *root)
     clear_ipiv_registry();
     g_dbg_n_materialize = 0;
     g_dbg_materialize_elems = 0;
+    for (int i = 0; i < 9; i++) { g_dbg_mixed_addmul[i] = 0; g_dbg_mixed_lln[i] = 0; g_dbg_mixed_run[i] = 0; }
     clock_t t0 = clock();
     int rc = hlu_rec(root);
     g_stats.t_decomp_sec = (double)(clock() - t0) / (double)CLOCKS_PER_SEC;
