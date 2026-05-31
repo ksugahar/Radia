@@ -2962,21 +2962,21 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 	// Update H-matrix diagonal with current inv_chi
 	m_hacapk->UpdateDiagonal(inv_chi);
 
-	// ALPHA-FREE loop-star gauge: solve the reduced star-subspace system
-	// T^T A T y = T^T rhs (H-matrix unchanged, sandwiched with the sparse T),
-	// sigma = T y. Field-exact + well-conditioned for the LINEAR regime (the
-	// principled replacement for the fragile alpha-shift deflation). No Newton
-	// line search (linear). Enabled by rad.SetLoopStarGauge(True).
+	// ALPHA-FREE loop-star gauge (tree-cotree split): solve the reduced star
+	// system T^T A T y = T^T rhs (H-matrix unchanged, sandwiched with the sparse
+	// star T), then KEEP the loop content via block Gauss-Seidel iterative
+	// refinement (star <-> loop on the true residual). The result matches the
+	// direct LU/FEM solution (FIELD-EXACT, loops kept) at every mu_r -- the
+	// principled, alpha-free replacement for the fragile alpha-shift deflation.
+	// Linear regime (uniform chi). Enabled by rad.SetLoopStarGauge(True).
 	if(rad.m_loopstar_gauge)
 	{
-		// SolveLoopStar uses a reduced-DIAGONAL Jacobi preconditioner (no block
-		// data passed). NOTE: the block-Jacobi SANDWICH (T^T M_bj^-1 T) was tried
-		// and is MUCH worse (linear 50->902, nonlinear 3023->49141 iters) because
-		// M_bj^-1, the block-diagonal of the FULL A, does not match the reduced
-		// operator's structure (star variables are not element-blocked). The
-		// diagonal Jacobi is best: LINEAR 2.12x faster than OFF; NONLINEAR
-		// field-exact (slower than OFF's block-Jacobi, accepted -- the value is
-		// the clean loop-free solution, not speed).
+		// SolveLoopStar: K-dense reduced solve of A_SS (the star block), then the
+		// keep-loops block Gauss-Seidel recovers the loop part so sigma == the
+		// direct solution. (An earlier remove-loops variant -- sigma = T y only --
+		// dropped the loops AND, because the sparse star and loop bases are not
+		// exactly orthogonal, left a ~0.5% external-field error on the C-type;
+		// the Gauss-Seidel refinement fixes both. See rad_hacapk.cpp::SolveLoopStar.)
 		std::vector<double> sigma_ls(totalDOF);
 		int it_ls = m_hacapk->SolveLoopStar(rhs, sigma_ls, tol, max_iter);
 		if(it_ls < 0) return 0;   // star basis unavailable -> fail loudly
