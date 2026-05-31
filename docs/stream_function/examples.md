@@ -9,7 +9,7 @@ All under [`examples/stream_function/`](../../examples/stream_function/).
 | `demo_coil_design_gz.py` | Cylinder, Gz gradient (1D) | 0.5 % | Original SA-25-020 demo |
 | `demo_coil_design_gx.py` | Cylinder, Gx fingerprint (2D) | 0.8 % | Continuous SF solve, no chain |
 | `demo_sf_to_peec_gz.py` | Cylinder, Gz + single-stroke + PEEC + CAD | — | Full pipeline incl. STEP export |
-| `demo_sf_to_peec_gx.py` | Cylinder, Gx + 3 chain methods + PEEC + CAD | 16.24 % (kuijpers) | `--chain-method {greedy, lobe, kuijpers}` |
+| `demo_sf_to_peec_gx.py` | Cylinder, Gx + chain methods + PEEC + CAD + sheet-metal distortion | 9.3 % (field_aware) → **1.4 %** (`--distort`, 1 current) | `--chain-method {field_aware, kuijpers, lobe, greedy}`; `--distort` = single-current radial bend; `--regularize {tsvd, tikhonov, h1}` |
 | `demo_planar_uniform_coil.py` | Plane source, uniform Bz target | 0.58 % (+ Path-A) | Basis-loop pipeline |
 | `demo_planar_uniform_fem_psi.py` | Plane, FE-direct H¹ ψ + Path-A + LS-OMP shim + sheet-metal distortion | **183 ppm** (10 feeds) / **605 ppm** (1 current, `--distort`) | `--order 3 --nlevels 30 --shim-tol-ppm 200`; or `--distort` = single-current 3D wire bend (no extra feeds); honest `--eval-n` grid |
 | `demo_planar_uniform_fem_psi_aca.py` | Plane, FE matrix + HACApK ACA+TSVD | 0.67 % (+ Path-A) | Validates ACA+ on FE matrix |
