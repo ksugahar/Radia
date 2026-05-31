@@ -167,9 +167,19 @@ build.log
 *.h.bak
 *.py.bak
 *.old
+# Timestamped build backups (Build.ps1 backs up the old .pyd before copying
+# the new one as e.g. _radia_pybind.pyd.bak_20260531_093705 /
+# .pyd.old_20260530_165537).  Plain *.bak / *.old above do NOT match the
+# trailing timestamp, so these accumulated (87 MB / 37 files seen 2026-05-31).
+*.bak_*
+*.old_*
 git_bisect_test.ps1
 git_bisect_wrapper.ps1
 bisect_test_temp.py
+# Local (non-CI) test artifacts at repo root
+/local-*-results.xml
+/test_gmsh_*.geo
+/test_gmsh_*.msh
 
 # ============================================================================
 # Python Virtual Environments
