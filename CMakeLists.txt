@@ -228,6 +228,7 @@ set(HACAPK_SOURCES
 	${EXT_DIR}/HACApK/cHACApK_pca_cluster.c  # PCA cluster split for flat meshes (Phase 0.5 of H-LU project)
 	${EXT_DIR}/HACApK/cHACApK_block_tree.c   # Block-tree view on flat leaves (Phase 0.7 of H-LU)
 	${EXT_DIR}/HACApK/cHACApK_harith.c        # H-arithmetic Phase 1/2 minimal (dense-leaf H-LU)
+	${EXT_DIR}/HACApK/cHACApK_harith_par.cpp  # ngcore TaskManager bridge for block-parallel H-LU
 	${CORE_DIR}/rad_hacapk_parallel.cpp  # C++ TaskManager wrappers for HACApK C code
 )
 

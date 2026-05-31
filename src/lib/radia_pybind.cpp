@@ -63,6 +63,10 @@ extern "C" {
     double cHACApK_hlu_get_trunc_tol(void);
     void cHACApK_hlu_get_materialize_stats(long *out_n_calls, long *out_n_elems);
     void cHACApK_hlu_get_mixed_breakdown(long *out_addmul9, long *out_lln9, long *out_run9);
+    void cHACApK_hlu_set_parallel(int on);
+    int  cHACApK_hlu_get_parallel(void);
+    void cHACApK_hlu_set_par_cutoff(long c);
+    int  chacapk_max_threads(void);
     double cHACApK_harith_self_test_mixed_sibling_nonuniform(int n1, int n2, int m1, int m3);
     double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
     double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
@@ -2906,6 +2910,18 @@ PYBIND11_MODULE(_radia_pybind, m) {
         (power-of-2 element-count) trees; large values indicate the
         materialize-and-redo path dominating on unbalanced trees.
     )pbdoc");
+
+    m.def("HLUSetParallel", [](bool on) { cHACApK_hlu_set_parallel(on ? 1 : 0); },
+          py::arg("on"),
+          "Enable/disable block-level parallelism (ngcore TaskManager) in the "
+          "H-LU h_addmul recursion. Default on.");
+    m.def("HLUGetParallel", []() { return cHACApK_hlu_get_parallel() != 0; });
+    m.def("HLUSetParCutoff", [](long c) { cHACApK_hlu_set_par_cutoff(c); },
+          py::arg("cutoff"),
+          "Minimum C-block area (rows*cols) above which h_addmul parallelizes "
+          "its output blocks. Below this it runs serial (avoids tiny tasks).");
+    m.def("HLUMaxThreads", []() { return chacapk_max_threads(); },
+          "ngcore TaskManager max threads available to the H-LU.");
 
     m.def("HLUMixedBreakdown", []() -> py::dict {
         long a[9] = {0}, l[9] = {0}, r[9] = {0};
