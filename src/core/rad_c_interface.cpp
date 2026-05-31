@@ -138,6 +138,7 @@ void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
 int HMatrixDensify(int, double*, int*);
 double HLUTestOnHACApK(int);
+int HLUDebugMaterialize(int, double*, int*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
@@ -1467,6 +1468,11 @@ int HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
 double HLUTestOnHACApK(int InteractElemKey)
 {
 	return rad.HLUTestOnHACApK(InteractElemKey);
+}
+
+int HLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out)
+{
+	return rad.HLUDebugMaterialize(InteractElemKey, A_perm_out, lod_out, nd_out);
 }
 
 //-------------------------------------------------------------------------

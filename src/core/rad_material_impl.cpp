@@ -1066,8 +1066,50 @@ extern "C" {
     double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
                                       const double *x_orig, const double *y_orig,
                                       int nffc);
+    int cHACApK_hlu_debug_materialize(void *leafmtxp_void, void *control_void,
+                                        int nffc,
+                                        double *A_perm_out,
+                                        int *lod_out,
+                                        int *nd_out);
 }
 #endif
+
+int radTApplication::HLUDebugMaterialize(int InteractElemKey,
+                                          double *A_perm_out,
+                                          int *lod_out,
+                                          int *nd_out)
+{
+#ifdef RADIA_USE_HACAPK
+    try
+    {
+        radThg hg;
+        if(!ValidateElemKey(InteractElemKey, hg)) return 0;
+        radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+        if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0; }
+
+        int totalDOF = InteractPtr->GetTotalDOF();
+        if (totalDOF <= 0) return 0;
+
+        RadHACApKMSCManager mgr(InteractPtr);
+        RadHACApKParams params;
+        params.aca_eps = m_hacapk_eps;
+        params.leaf_size = m_hacapk_leaf_size;
+        params.eta = m_hacapk_eta;
+        params.print_level = 0;
+        if(!mgr.BuildHMatrix(params)) return 0;
+
+        int nffc_uniform = 6;
+        int rc = cHACApK_hlu_debug_materialize(
+            mgr.GetLeafmtxp(), mgr.GetLcontrol(),
+            nffc_uniform, A_perm_out, lod_out, nd_out);
+        return rc == 0 ? 1 : 0;
+    }
+    catch (...) { Initialize(); return 0; }
+#else
+    (void)InteractElemKey; (void)A_perm_out; (void)lod_out; (void)nd_out;
+    return 0;
+#endif
+}
 
 double radTApplication::HLUTestOnHACApK(int InteractElemKey)
 {

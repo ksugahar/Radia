@@ -90,6 +90,7 @@ void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
 int HMatrixDensify(int, double*, int*);
 double HLUTestOnHACApK(int);
+int HLUDebugMaterialize(int, double*, int*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
@@ -1380,6 +1381,15 @@ double CALL RadHLUTestOnHACApK(int InteractElemKey)
 #endif
 	ngcore::RegionTaskManager rtm;
 	return HLUTestOnHACApK(InteractElemKey);
+}
+
+int CALL RadHLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out)
+{
+#ifdef HAVE_LAPACK
+	mkl_set_num_threads(1);
+#endif
+	ngcore::RegionTaskManager rtm;
+	return HLUDebugMaterialize(InteractElemKey, A_perm_out, lod_out, nd_out);
 }
 
 //-------------------------------------------------------------------------
