@@ -5,4 +5,4 @@ intersect volume all
 volume all scheme tetmesh
 volume all size 5
 mesh volume all
-export radia_nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_out_o2.bdf" order 2 overwrite
+export jmag_nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_out_o2.bdf" order 2 overwrite

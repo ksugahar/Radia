@@ -278,7 +278,7 @@ cubit.cmd('nodeset 2 name "corners"')
 
 ## LAB policy: `export` uses blocks only
 
-The `export netgen` / `export gmsh` / `export radia_nastran`
+The `export netgen` / `export gmsh` / `export jmag_nastran`
 commands (from the `cubit_mesh_export` LAB plugin) read from blocks
 only. Sidesets and nodesets are ignored by this plugin.
 

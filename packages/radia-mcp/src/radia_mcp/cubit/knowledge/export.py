@@ -22,7 +22,7 @@ Path A is the recommended export path. Use `export netgen "mesh.vol" order N` fo
 |---------|--------|-----------|-------|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |
 | `export gmsh "f.msh" order N` | Gmsh v4.1 (.msh) | 1-3 | Wedge limited to order 2 |
-| `export radia_nastran "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | nopyramid for JMAG |
+| `export jmag_nastran "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | nopyramid for JMAG |
 | `export vtk "f.vtk" order N` | VTK Legacy (.vtk) | 1-2 | ParaView visualization |
 | `export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
 | `export femeem "dir"` | FEMEEM (Gifu Univ.) | 1 (tet only) | Creates directory with 4 files |
@@ -255,7 +255,7 @@ EXPORT_NASTRAN = """
 # Nastran BDF Export (order 1-2)
 
 ```
-export radia_nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
+export jmag_nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
 ```
 
 No block assignment required.
@@ -277,7 +277,7 @@ No block assignment required.
 | CTRIA3 (3) | CTRIA6 (6) | Triangle |
 | CQUAD4 (4) | CQUAD8 (8) | Quadrilateral |
 
-**IMPORTANT**: Use `export radia_nastran`, NOT `export nastran` (Cubit built-in has different format).
+**IMPORTANT**: Use `export jmag_nastran`, NOT `export nastran` (Cubit built-in has different format).
 
 Nastran BDF is export-only. It is NOT a supported input path for Radia/NGSolve.
 """
@@ -350,7 +350,7 @@ EXPORT_COMPARISON = """
 |----------|-------------------|-----|
 | NGSolve FEM (any order) | `export netgen "f.vol" order N` | Order 1-5 via ACIS CallbackGeometry |
 | GMSH visualization | `export gmsh "f.msh" order N` | v4.1, order 1-3 |
-| JMAG / Nastran solver | `export radia_nastran "f.bdf" order N` | Order 1-2, nopyramid for JMAG |
+| JMAG / Nastran solver | `export jmag_nastran "f.bdf" order N` | Order 1-2, nopyramid for JMAG |
 | ParaView visualization | `export vtk "f.vtk" order N` | Order 1-2 |
 | ELF/MAGIC solver | `export meg "f.meg"` | Order 1, ELF element type labels |
 | FEMEEM solver | `export femeem "dir"` | Order 1, tet only |
@@ -403,10 +403,10 @@ EXPORT_DECISION_GUIDE = """
 
 ## "I need structural FEA (Nastran / JMAG)"
 
--> Use `export radia_nastran` (order 1-2):
+-> Use `export jmag_nastran` (order 1-2):
   ```python
-  cubit.cmd('export radia_nastran "mesh.bdf" order 2 overwrite')
-  cubit.cmd('export radia_nastran "mesh.bdf" order 2 nopyramid overwrite')  # JMAG
+  cubit.cmd('export jmag_nastran "mesh.bdf" order 2 overwrite')
+  cubit.cmd('export jmag_nastran "mesh.bdf" order 2 nopyramid overwrite')  # JMAG
   ```
 
 ### JMAG-specific: Pyramid Element Problem
@@ -417,7 +417,7 @@ the interface. Two solutions:
 
 1. **Use nopyramid** (recommended): Writes pyramids as degenerate CHEXA
    ```python
-   cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
+   cubit.cmd('export jmag_nastran "mesh.bdf" nopyramid overwrite')
    ```
 
 2. **Use pure tet mesh**: Avoids pyramids entirely
@@ -457,14 +457,14 @@ geometry leads to poor quality or failed meshing.
 | meg (.meg) | 1 | Yes | Yes | - |
 | femeem (dir) | 1 (tet) | No | Yes | - |
 
-## IMPORTANT: `export radia_nastran` (NOT `export nastran`)
+## IMPORTANT: `export jmag_nastran` (NOT `export nastran`)
 
 Cubit has a **built-in** `export nastran` command (e.g., `export nastran "f.bdf" overwrite everything`).
 Radia's Nastran export uses a DIFFERENT command name to avoid conflict:
 
 ```python
 # CORRECT: Radia's export (supports order 2, nopyramid, block labels)
-cubit.cmd('export radia_nastran "mesh.bdf" order 2 dimension 3 overwrite')
+cubit.cmd('export jmag_nastran "mesh.bdf" order 2 dimension 3 overwrite')
 
 # WRONG: Cubit's built-in (different format, no order 2, no nopyramid)
 cubit.cmd('export nastran "mesh.bdf" overwrite everything')

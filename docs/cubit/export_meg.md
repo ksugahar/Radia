@@ -14,7 +14,7 @@ export meg "filename.meg" [threed|twod|axisymmetric] [labels "1:MMB,2:MWL,..."] 
 > `export meg` was rejected with `Unrecognized Identifier: 'meg'`.
 > The command is now `export meg`, consistent with the other plugin
 > exporters (`export gmsh / netgen / vtk / femeem / meg`, plus
-> `export radia_nastran`). ELF block-name → prefix auto-detection (see "ELF Element
+> `export jmag_nastran`). ELF block-name → prefix auto-detection (see "ELF Element
 > Type Labels" below) is unchanged.
 
 Block names define ELF physics element types (3-character prefix).
