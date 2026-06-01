@@ -1,5 +1,5 @@
 """
-Test 'radia_export netgen' APREPRO command (compact Netgen, static link).
+Test 'export netgen' APREPRO command (compact Netgen, static link).
 
 Tests:
 1. Sphere tet mesh (order 1-4)
@@ -102,7 +102,7 @@ def test_sphere_tet_orders():
 
     for order in [1, 2, 3, 4]:
         vol_path = os.path.join(OUT_DIR, f"sphere_o{order}.vol")
-        cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
+        cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
         sz = check_vol_file(vol_path)
         print(f"  order {order}: {sz:,} bytes")
 
@@ -120,7 +120,7 @@ def test_brick_hex():
     cubit.cmd('block 1 name "brick"')
 
     vol_path = os.path.join(OUT_DIR, "brick_hex_o2.vol")
-    cubit.cmd(f'radia_export netgen "{vol_path}" order 2 overwrite')
+    cubit.cmd(f'export netgen "{vol_path}" order 2 overwrite')
     sz = check_vol_file(vol_path)
     print(f"  hex order 2: {sz:,} bytes")
 
@@ -143,7 +143,7 @@ def test_multi_block_labels():
     cubit.cmd('block 2 name "air"')
 
     vol_path = os.path.join(OUT_DIR, "multi_block.vol")
-    cubit.cmd(f'radia_export netgen "{vol_path}" order 2 overwrite')
+    cubit.cmd(f'export netgen "{vol_path}" order 2 overwrite')
     sz = check_vol_file(vol_path)
     print(f"  multi-block: {sz:,} bytes")
 
@@ -171,7 +171,7 @@ def test_sideset_labels():
     cubit.cmd('sideset 2 name "top"')
 
     vol_path = os.path.join(OUT_DIR, "sideset_labels.vol")
-    cubit.cmd(f'radia_export netgen "{vol_path}" order 2 overwrite')
+    cubit.cmd(f'export netgen "{vol_path}" order 2 overwrite')
     sz = check_vol_file(vol_path)
     print(f"  sideset: {sz:,} bytes")
 
@@ -202,7 +202,7 @@ def test_volume_accuracy():
     results = {}
     for order in [1, 2]:
         vol_path = os.path.join(OUT_DIR, f"sphere_vol_o{order}.vol")
-        cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
+        cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
 
         mesh = Mesh(vol_path)
         vol = Integrate(CF(1), mesh)
@@ -236,7 +236,7 @@ def test_ngsolve_readback():
     cubit.cmd('block 1 name "solid"')
 
     vol_path = os.path.join(OUT_DIR, "fem_test.vol")
-    cubit.cmd(f'radia_export netgen "{vol_path}" order 2 overwrite')
+    cubit.cmd(f'export netgen "{vol_path}" order 2 overwrite')
 
     mesh = Mesh(vol_path)
     print(f"  Mesh: {mesh.ne} elements, {mesh.nv} vertices")
@@ -264,7 +264,7 @@ def test_ngsolve_readback():
 # ================================================================
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("radia_export netgen Command Test Suite (compact Netgen)")
+    print("export netgen Command Test Suite (compact Netgen)")
     print("=" * 60)
 
     run_test("Sphere tet orders 1-4", test_sphere_tet_orders)

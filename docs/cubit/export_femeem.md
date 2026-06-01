@@ -5,7 +5,7 @@ Export mesh to FEMEEM format (Gifu University 3D FEM solver).
 ## Syntax
 
 ```
-radia_export femeem "dirname" [scale <value>] [overwrite]
+export femeem "dirname" [scale <value>] [overwrite]
 ```
 
 Creates a directory containing the four files required by FEMEEM.
@@ -64,7 +64,7 @@ cubit.cmd("sideset 1 add surface all")
 cubit.cmd('sideset 1 name "outer_boundary"')
 
 # Export with mm scale (FEMEEM expects mm)
-cubit.cmd('radia_export femeem "femeem_output" scale 1000 overwrite')
+cubit.cmd('export femeem "femeem_output" scale 1000 overwrite')
 ```
 
 This creates:

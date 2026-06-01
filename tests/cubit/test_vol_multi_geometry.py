@@ -1,5 +1,5 @@
 """
-Multi-geometry volume accuracy test (radia_export netgen C++ command).
+Multi-geometry volume accuracy test (export netgen C++ command).
 
 Shapes:
   1. Sphere (R=0.05) — single curved surface
@@ -182,7 +182,7 @@ for name, cmds, v_exact, a_exact in test_cases:
 
     # --- Export netgen ---
     vol_path = os.path.join(OUT_DIR, f"multi_{name}.vol")
-    cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+    cubit.cmd(f'export netgen "{vol_path}" order {ORDER} overwrite')
     with TaskManager():
         mesh = Mesh(vol_path)
         vol = Integrate(CF(1), mesh)

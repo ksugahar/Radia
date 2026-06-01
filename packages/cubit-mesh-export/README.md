@@ -13,10 +13,10 @@ the user, NOT by this plugin.
 ## Features
 
 - **Cubit plugin** (`.ccm` + `.ccl` + `.pyd`):
-  - `radia_export {netgen|gmsh|nastran|vtk|femeem|meg}` APREPRO commands
+  - `export {netgen|gmsh|vtk|femeem|meg}` + `export radia_nastran` APREPRO commands
   - **Export Mesh** GUI menu
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
-- **Kelvin open-boundary** transformation built into `radia_export netgen`
+- **Kelvin open-boundary** transformation built into `export netgen`
   (auto-add an exterior sphere with copy-mesh + periodic identification)
 - **Per-axis symmetry-plane BC labels** (`bn`/`ht`) for 1/2 and 1/4 reduced
   domains
@@ -50,19 +50,19 @@ Always re-run `cubit-plugin-install` after upgrading.
 ## Cubit commands
 
 ```
-radia_export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
-radia_export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 (lab standard)
-radia_export nastran "model.bdf" order 2 overwrite                # Nastran BDF
-radia_export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
+export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
+export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 (lab standard)
+export radia_nastran "model.bdf" order 2 overwrite                # Nastran BDF
+export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
 ```
 
-The `radia_export netgen` command additionally accepts Kelvin / symmetry
+The `export netgen` command additionally accepts Kelvin / symmetry
 options (see below). The other formats do not consume Kelvin.
 
 ## Workflow
 
 ```
-   ┌────────────┐    radia_export netgen        ┌──────────┐
+   ┌────────────┐    export netgen        ┌──────────┐
    │  Cubit     │   ─────────────────────────▶  │  .vol    │
    │  geometry  │   (+add_kelvin, +sym)         │          │
    └────────────┘                                └──────────┘
@@ -85,7 +85,7 @@ Idempotent helper: skipped if a `kelvin` block already exists; needs an
 `air` block in the current Cubit model.
 
 ```
-radia_export netgen "model.vol" order 3 overwrite \
+export netgen "model.vol" order 3 overwrite \
     add_kelvin                       # auto-create the exterior Kelvin sphere
     [kelvin_air "air"]               # name of the air block (default "air")
     [kelvin_block "kelvin"]          # name to give the Kelvin block (default "kelvin")
@@ -223,7 +223,7 @@ python "from add_kelvin import add_kelvin_cubit"
 python "add_kelvin_cubit(R=0.06, symmetry=['z'])"
 ```
 
-The `radia_export netgen ... add_kelvin` flow handles `sys.path`
+The `export netgen ... add_kelvin` flow handles `sys.path`
 itself, so users invoking Kelvin via the new APREPRO args do not need
 to set anything by hand.
 

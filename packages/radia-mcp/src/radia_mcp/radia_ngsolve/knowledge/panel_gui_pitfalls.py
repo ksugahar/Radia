@@ -752,7 +752,7 @@ contributors think the export failed and start coarsening the mesh.
 
 **Root cause**: The cap applies to Cubit's own ``export gmsh`` /
 ``export vtk`` / ``export exo`` exporters. The Radia in-tree
-``radia_export netgen`` plugin BYPASSES the cap and writes the .vol
+``export netgen`` plugin BYPASSES the cap and writes the .vol
 regardless of the warning. Both the ERROR line and the
 ``Exported Netgen Vol (order N): ...`` line appear in the same Cubit
 run, so the export succeeded.

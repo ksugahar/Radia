@@ -567,7 +567,7 @@ class IHPanel(ModePanel):
         # h1_order=3 with a clear error.
         # NOTE: the GEOMETRY curve order is NOT a panel knob -- it is
         # fixed by the .vol's baked curvedelements (set at Cubit-export
-        # time via ``radia_export netgen "f.vol" order N``) and
+        # time via ``export netgen "f.vol" order N``) and
         # auto-detected by calc_inductance.py from the companion
         # ``.vol.json``.  A post-load ``mesh.Curve(p)`` silently falls
         # back to flat without a CAD callback, so we never expose it.

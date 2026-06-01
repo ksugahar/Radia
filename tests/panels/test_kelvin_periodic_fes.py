@@ -2,7 +2,7 @@
 
 Sub-second tests (no physics solve) that lock the 2026-04-25 finding:
 both OCC `Identify(IdentificationType.PERIODIC)` and Cubit
-`radia_export netgen` produce .vol files where NGSolve's `Periodic`
+`export netgen` produce .vol files where NGSolve's `Periodic`
 H1 FES correctly slaves high-order DOFs at order=2.
 
 Catches regression of either:

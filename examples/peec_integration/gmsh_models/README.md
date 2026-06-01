@@ -72,7 +72,7 @@ python demo_gmsh_to_peec.py
 - Maximum compatibility
 - Simpler structure than v4.1
 
-**Note**: For NGSolve FEM computation, use `radia_export netgen "mesh.vol"` (.vol format) instead of .msh. The .msh format is used here for GMSH visualization and PEEC surface mesh input only.
+**Note**: For NGSolve FEM computation, use `export netgen "mesh.vol"` (.vol format) instead of .msh. The .msh format is used here for GMSH visualization and PEEC surface mesh input only.
 
 ## Next Steps
 

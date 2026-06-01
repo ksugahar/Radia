@@ -243,7 +243,7 @@ cubit.cmd(f"curve {curve_id} interval 36")
 cubit.cmd(f"mesh curve {curve_id}")
 cubit.cmd(f"block 1 add curve {curve_id}")
 cubit.cmd("block 1 name 'conductor'")
-cubit.cmd('radia_export gmsh "coil_mesh.msh" overwrite')
+cubit.cmd('export gmsh "coil_mesh.msh" overwrite')
 ```
 
 **Use `filaments_from_step()` instead** — it extracts topology directly from the STEP solid.

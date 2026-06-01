@@ -300,7 +300,7 @@ block 1 add volume <air_id>
 block 1 name "air"
 block 2 add volume <coil_id>
 block 2 name "coil"
-radia_export netgen "model.vol" order 1 overwrite
+export netgen "model.vol" order 1 overwrite
 ```
 
 **Do NOT use interface approach** (workpiece meshed as separate volume).

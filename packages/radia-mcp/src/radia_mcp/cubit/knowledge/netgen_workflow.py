@@ -2,8 +2,8 @@
 Netgen/NGSolve high-order curving workflow knowledge base.
 
 This is the most important knowledge module. It covers:
-- Export path: APREPRO command (C++) `radia_export netgen`
-- Workflow: Cubit geometry -> mesh -> radia_export netgen -> NGSolve Mesh()
+- Export path: APREPRO command (C++) `export netgen`
+- Workflow: Cubit geometry -> mesh -> export netgen -> NGSolve Mesh()
 - CallbackGeometry and ACIS curving (compact_netgen)
 - .vol file as sole interface between Cubit and NGSolve
 - Troubleshooting guide
@@ -16,13 +16,13 @@ WORKFLOW_OVERVIEW = """
 
 ### Path A: APREPRO Command (recommended, fast)
 ```
-cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
 # -> mesh.vol (with curvedelements section) + mesh.vol.json (CAD reference)
 ```
 Uses NetgenCurver (compact_netgen C++ static link). No Python, no DLL dependency.
 
 ### Path B: Python (reference, deprecated)
-Path B (`extract_curved_mesh`) has been removed. Use Path A (`radia_export netgen`) for all workflows.
+Path B (`extract_curved_mesh`) has been removed. Use Path A (`export netgen`) for all workflows.
 
 Both paths use **CallbackGeometry** to delegate surface/edge projection
 to Cubit's ACIS kernel via `closest_point_trimmed`. No STEP files,
@@ -31,7 +31,7 @@ no OCC geometry, no SetGeomInfo needed.
 ## .vol as Sole Interface
 
 ```
-Cubit (ACIS geometry) -> radia_export netgen -> .vol (self-contained)
+Cubit (ACIS geometry) -> export netgen -> .vol (self-contained)
                                            |
                               NGSolve: Mesh("mesh.vol")
                               (no Cubit, no STEP needed)
@@ -45,18 +45,18 @@ curving coefficients). NGSolve reads it without any geometry file.
 
 1. **Is your geometry planar (no curved surfaces)?**
    -> Use any export format. Curving is not needed.
-   -> Simplest: `radia_export netgen "mesh.vol" order 1` + `Mesh("mesh.vol")`
+   -> Simplest: `export netgen "mesh.vol" order 1` + `Mesh("mesh.vol")`
 
 2. **Do you only need 2nd order (not 3rd+)?**
-   -> Use `radia_export netgen`:
+   -> Use `export netgen`:
    ```
-   Cubit -> mesh -> radia_export netgen "mesh.vol" order 2 -> Mesh("mesh.vol")
+   Cubit -> mesh -> export netgen "mesh.vol" order 2 -> Mesh("mesh.vol")
    ```
 
 3. **Do you need 3rd order or higher?**
-   -> Use `radia_export netgen` with higher order:
+   -> Use `export netgen` with higher order:
    ```
-   Cubit -> mesh -> radia_export netgen "mesh.vol" order 3 -> Mesh("mesh.vol")
+   Cubit -> mesh -> export netgen "mesh.vol" order 3 -> Mesh("mesh.vol")
    ```
    Works for ANY geometry shape — cylinder, sphere, torus, cone,
    Boolean operations, freeform surfaces, etc. Supports order 1-5.
@@ -77,20 +77,20 @@ Key: p=5 achieves 10^-5 to 10^-6 % error for ALL shapes, matching OCC native acc
 
 | Method | p=2 Error | p=5 Error | Max Order | Complexity |
 |--------|-----------|-----------|-----------|------------|
-| radia_export netgen (ACIS) | ~0.003-0.03% | ~1e-6% | 5 (tet/hex/wedge) | Low |
+| export netgen (ACIS) | ~0.003-0.03% | ~1e-6% | 5 (tet/hex/wedge) | Low |
 | OCC mesh.Curve() | ~0.003-0.03% | ~1e-6% | 5+ (tet) | Low |
 | 1st order (no curving) | ~1.4% | N/A | 1 | None |
 
 ## Key Principle
 
-`radia_export netgen` uses Cubit's ACIS kernel for surface projection via
+`export netgen` uses Cubit's ACIS kernel for surface projection via
 CallbackGeometry (compact_netgen C++ static link). The mesh curving is done
 entirely in the C++ plugin — no STEP files, no OCC geometry, no Python
 dependency. The .vol file contains the curved mesh ready for NGSolve.
 """
 
 WORKFLOW_EXPORT_CURVED = """
-# radia_export netgen APREPRO Command Reference
+# export netgen APREPRO Command Reference
 
 ## Signature
 
@@ -98,7 +98,7 @@ WORKFLOW_EXPORT_CURVED = """
 import tempfile
 from ngsolve import Mesh
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 ```
 
@@ -167,7 +167,7 @@ cubit.cmd("block 1 add volume all")
 
 # Export with curving
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 
 # Verify
@@ -196,7 +196,7 @@ cubit.cmd("block 1 add volume all")
 
 # Works for any geometry — cylinder holes, fillets, chamfers, BSplines...
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 ```
 
@@ -231,7 +231,7 @@ cubit.cmd('block 1 name "domain"')
 
 # Step 3: Export with curving (no STEP, no OCC, no SetGeomInfo!)
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 
 # Step 4: Verify
@@ -243,7 +243,7 @@ print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 ## Note
 
 No STEP export/reimport needed. No OCCGeometry. No set_cylinder_geominfo().
-`radia_export netgen` handles everything via Cubit's ACIS kernel.
+`export netgen` handles everything via Cubit's ACIS kernel.
 """
 
 WORKFLOW_SPHERE = """
@@ -269,7 +269,7 @@ cubit.cmd("block 1 add volume all")
 
 # Step 3: Export with curving
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 
 # Step 4: Verify
@@ -303,7 +303,7 @@ cubit.cmd("block 1 add volume all")
 
 # Step 3: Export with curving
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 
 # Step 4: Verify
@@ -343,7 +343,7 @@ Use `create torus` + `webcut` instead.
 WORKFLOW_COMPLEX = """
 # Complex Geometry (Boolean Operations)
 
-With `radia_export netgen`, complex geometries require NO special workflow.
+With `export netgen`, complex geometries require NO special workflow.
 Boolean operations, multiple curved surfaces, freeform surfaces — all
 are handled automatically by the ACIS kernel.
 
@@ -370,7 +370,7 @@ cubit.cmd("block 1 add volume all")
 
 # Step 3: Export with curving — works for any geometry
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 
 # Step 4: Verify
@@ -389,7 +389,7 @@ The old workflow required:
 - export_netgen_with_names() for name-based mapping
 - set_*_geominfo() for each curved surface type
 
-With `radia_export netgen`, ALL of this is eliminated. The ACIS kernel handles
+With `export netgen`, ALL of this is eliminated. The ACIS kernel handles
 surface projection for any geometry directly, regardless of complexity.
 """
 
@@ -397,7 +397,7 @@ WORKFLOW_GMSH_2ND_ORDER = """
 # Alternative: Netgen .vol 2nd Order Workflow (Simplest)
 
 If you only need 2nd order elements and don't need 3rd order or higher,
-the APREPRO radia_export netgen command provides a simple workflow.
+the APREPRO export netgen command provides a simple workflow.
 
 ## Step-by-Step
 
@@ -415,7 +415,7 @@ cubit.cmd("block 1 add volume 1")
 cubit.cmd('block 1 name "sphere"')
 
 # Step 3: Export to Netgen .vol with order 2
-cubit.cmd('radia_export netgen "mesh.vol" order 2 overwrite')
+cubit.cmd('export netgen "mesh.vol" order 2 overwrite')
 
 # Step 4: Read into NGSolve
 mesh = Mesh("mesh.vol")
@@ -439,7 +439,7 @@ WORKFLOW_ACCURACY = """
 | Method | Order 1 | Order 2 | Order 3 | Order 4 | Order 5 |
 |--------|---------|---------|---------|---------|---------|
 | No curving | ~1.4% | - | - | - | - |
-| radia_export netgen | ~1.4% | ~0.003% | ~0.0004% | ~0.00005% | ~0.000006% |
+| export netgen | ~1.4% | ~0.003% | ~0.0004% | ~0.00005% | ~0.000006% |
 
 ## When Higher Order Matters
 
@@ -486,7 +486,7 @@ print(f"Area error: {area_error:.4f}%")
 TROUBLESHOOTING = """
 # Troubleshooting High-Order Curving
 
-## radia_export netgen() Fails or Produces Wrong Results
+## export netgen() Fails or Produces Wrong Results
 
 ### Symptom: RuntimeError during Curve()
 
@@ -523,7 +523,7 @@ Fix: cubit.cmd("block 2 add tri all")  # Add boundary elements
 
 **Cause**: 1st order mesh without curving
 ```
-Fix: Use radia_export netgen(cubit, order=2) or higher
+Fix: Use export netgen(cubit, order=2) or higher
      Or use Gmsh 2nd order alternative
 ```
 
@@ -558,7 +558,7 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 
 **Key insight**: By using system Python with `CUBIT_PATH`, scripts can access both
 the Cubit API and NGSolve/Netgen simultaneously. This is essential for the
-radia_export netgen() workflow.
+export netgen() workflow.
 
 ## NGSolve/Cubit DLL Conflict: Import Order Matters
 
@@ -598,7 +598,7 @@ the very top of the script, before adding Cubit to `sys.path` or importing `cubi
 """
 
 DELETED_APIS = """
-# Deleted APIs (Replaced by radia_export netgen APREPRO command)
+# Deleted APIs (Replaced by export netgen APREPRO command)
 
 The following APIs have been **completely removed**.
 Do NOT use them — they no longer exist.
@@ -607,10 +607,10 @@ Do NOT use them — they no longer exist.
 
 | Function | Replacement |
 |----------|-------------|
-| `export_NetgenMesh()` | `radia_export netgen` APREPRO command |
-| `export_netgen()` (alias) | `radia_export netgen` APREPRO command |
-| `export_netgen_with_names()` | `radia_export netgen` APREPRO command |
-| `extract_curved_mesh()` | `radia_export netgen` APREPRO command |
+| `export_NetgenMesh()` | `export netgen` APREPRO command |
+| `export_netgen()` (alias) | `export netgen` APREPRO command |
+| `export_netgen_with_names()` | `export netgen` APREPRO command |
+| `extract_curved_mesh()` | `export netgen` APREPRO command |
 | `name_occ_faces()` | Not needed (no OCC geometry) |
 | `set_cylinder_geominfo()` | Not needed (ACIS handles curving) |
 | `set_sphere_geominfo()` | Not needed |
@@ -631,7 +631,7 @@ The old workflow required multiple steps:
 5. Per-shape UV computation (set_*_geominfo())
 6. Manual mesh.Curve(order)
 
-`radia_export netgen` replaces ALL of these steps with a single APREPRO command.
+`export netgen` replaces ALL of these steps with a single APREPRO command.
 It uses CallbackGeometry to delegate surface projection to Cubit's ACIS
 kernel directly, without any STEP file exchange or OCC geometry.
 
@@ -653,7 +653,7 @@ import tempfile
 from ngsolve import Mesh
 # Single APREPRO command replaces everything
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 ```
 
@@ -680,7 +680,7 @@ cubit.cmd("create cylinder height 4 radius 0.3")
 cubit.cmd("subtract volume 2 from volume 1")
 # ... mesh and blocks ...
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 ```
 """
@@ -705,7 +705,7 @@ clicks "Radia-NGSolve" -> OK in the Cubit GUI. Kelvin is added automatically
 3. register_toolbar.py checks: is "kelvin" block already present?
    - YES -> skip, proceed to export
    - NO  -> auto-detect R, symmetry, and call add_kelvin_cubit()
-4. radia_export netgen -> .vol (with Kelvin + periodic identification)
+4. export netgen -> .vol (with Kelvin + periodic identification)
 5. Launch analysis window (calc_fem.py reads .vol with Kelvin)
 
 ## Auto-Detection Logic
@@ -774,7 +774,7 @@ sideset 2 add surface <gap2>; sideset 2 name "sink"
 
 	topics = {
 		"overview": WORKFLOW_OVERVIEW,
-		"radia_export netgen": WORKFLOW_EXPORT_CURVED,
+		"export netgen": WORKFLOW_EXPORT_CURVED,
 		"simple_cylinder": WORKFLOW_CYLINDER,
 		"simple_sphere": WORKFLOW_SPHERE,
 		"simple_torus": WORKFLOW_TORUS,

@@ -167,7 +167,7 @@ def build_and_export(out_dir, orders=(1, 2, 3),
     for order in orders:
         out_path = os.path.join(out_dir, f"sphere_1_4_p{order}.vol").replace(
             "\\", "/")
-        cubit.cmd(f'radia_export netgen "{out_path}" order {order} overwrite')
+        cubit.cmd(f'export netgen "{out_path}" order {order} overwrite')
         saved.append(out_path)
         print(f"  Exported order={order}: {out_path}")
     return saved

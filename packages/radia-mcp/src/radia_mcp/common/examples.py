@@ -1312,7 +1312,7 @@ _CUBIT_QUERIES = [
 	"hex meshing tutorial",
 	"sweep scheme example",
 	"journal file example",
-	"radia_export example",
+	"export example",
 	"boundary layer mesh",
 	"thin shell mesh",
 	"mesh quality metric",

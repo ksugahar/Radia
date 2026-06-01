@@ -105,7 +105,7 @@ def solve_cube_kelvin_freq(mesh, omega, sigma_cu, mu_0, H_ext=1.0,
     NOTE: This is a SIMPLIFIED FEM (no explicit Periodic Kelvin identification --
     the Kelvin material is included as a volume but the periodic pairing
     requires matching boundary faces, which is non-trivial without Cubit's
-    radia_export netgen).  Treating Kelvin region as a "large air" extension
+    export netgen).  Treating Kelvin region as a "large air" extension
     with truncation effect at outer boundary.
     """
     from ngsolve import (HCurl, BilinearForm, LinearForm, GridFunction,
@@ -225,5 +225,5 @@ if __name__ == "__main__":
     print("(no Cubit), so the Kelvin Periodic identification is not embedded")
     print("(would require translation-based ident.Add() on matched sphere faces).")
     print("The outer boundary is treated as Dirichlet, which truncates the open")
-    print("domain.  For full production accuracy, use Cubit+radia_export netgen")
+    print("domain.  For full production accuracy, use Cubit+export netgen")
     print("and calc_fem_kelvin.py per the verified recipe.")

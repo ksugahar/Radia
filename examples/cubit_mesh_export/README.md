@@ -26,9 +26,9 @@ Requires Cubit installed with the radia plugin (`radia-setup`).
 ## Export Commands (C++ .ccm plugin)
 
 ```
-radia_export gmsh "file.msh" [order {1|2}] [dimension {2|3}] [overwrite]
-radia_export nastran "file.bdf" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]
-radia_export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
+export gmsh "file.msh" [order {1|2}] [dimension {2|3}] [overwrite]
+export radia_nastran "file.bdf" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]
+export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
 ```
 
 ## See Also

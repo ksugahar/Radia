@@ -1044,7 +1044,7 @@ def ngsbem_inductance(topic: str = "all") -> str:
     on high-order curved surface elements.
 
     Key workflow:
-      Cubit mesh -> radia_export netgen "mesh.vol" order N -> LaplaceSL BEM -> L extraction
+      Cubit mesh -> export netgen "mesh.vol" order N -> LaplaceSL BEM -> L extraction
 
     Sources:
       - https://docu.ngsolve.org/latest/how_to/ngsbem.html
@@ -1509,7 +1509,7 @@ def panel_gui_pitfalls(topic: str = "") -> str:
       panel_qt_testing        -- use tests/panels/test_*_qt.py headless
                                  PySide6 tests as regression guards;
                                  string-grep tests do not catch behaviour
-      learn_edition_cap       -- ignore the 50k warning, radia_export bypasses it
+      learn_edition_cap       -- ignore the 50k warning, export bypasses it
 
     Args:
         topic: Empty for the full document, or one of the topic

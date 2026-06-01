@@ -132,7 +132,7 @@ for method_name, cmds in coil_methods:
 
     for order in orders:
         vol_path = os.path.join(OUT_DIR, f"{method_name}_o{order}.vol")
-        cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
+        cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
 
         mesh = Mesh(vol_path)
         with TaskManager():

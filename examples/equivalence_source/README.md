@@ -38,7 +38,7 @@ Full production pipeline test: Cubit `.jou` -> `.vol` -> CLI -> NFS
 
 Workflow:
 1. Cubit headless: create sphere R=0.5, sideset `nfs_surface`,
-   `radia_export netgen` -> `inner_mesh.vol`.
+   `export netgen` -> `inner_mesh.vol`.
    (Falls back to NGSolve OCC if Cubit 2025.12 plugin isn't
    registered; the plugin needs rebuild against the new Cubit SDK
    but the rest of the pipeline is independent of Cubit.)

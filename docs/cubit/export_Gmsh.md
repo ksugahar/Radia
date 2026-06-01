@@ -5,14 +5,14 @@ Export mesh to Gmsh v4.1 format with high-order element support (order 1-3).
 ## Syntax
 
 ```
-radia_export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
+export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 ```
 
 No block assignment required — all meshed elements are exported automatically.
 Sidesets are exported as surface elements. Nodesets as point elements.
 
-> **IMPORTANT**: Use `radia_export gmsh`, NOT `export gmsh`.
-> Cubit has no built-in `export gmsh` command — only `radia_export gmsh` is available.
+> **NOTE**: `export gmsh` is provided by the Radia Cubit plugin.
+> Cubit has no built-in Gmsh exporter, so there is no command conflict.
 
 ### Options
 
@@ -26,7 +26,7 @@ Sidesets are exported as surface elements. Nodesets as point elements.
 | `overwrite` | off | Overwrite existing file |
 
 > **Order 4-5**: Not supported in Gmsh export (face/volume interior node extraction
-> is unreliable, leading to negative Jacobians). Use `radia_export netgen` for order 4-5.
+> is unreliable, leading to negative Jacobians). Use `export netgen` for order 4-5.
 
 ## Supported Elements
 
@@ -92,7 +92,7 @@ cubit.cmd("create brick x 1 y 1 z 1")
 cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
 
-cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
+cubit.cmd('export gmsh "mesh.msh" overwrite')
 ```
 
 ### 2D Export with Normal Orientation
@@ -102,7 +102,7 @@ cubit.cmd("create surface rectangle width 1 height 1 zplane")
 cubit.cmd("surface 1 scheme trimesh")
 cubit.cmd("mesh surface 1")
 
-cubit.cmd('radia_export gmsh "plate.msh" dimension 2 overwrite')
+cubit.cmd('export gmsh "plate.msh" dimension 2 overwrite')
 ```
 
 ### High-Order Export (order 2)
@@ -114,13 +114,13 @@ cubit.cmd("volume 1 size 0.3")
 cubit.cmd("mesh volume 1")
 
 # No block assignment or element type change needed
-cubit.cmd('radia_export gmsh "mesh_o2.msh" order 2 overwrite')
+cubit.cmd('export gmsh "mesh_o2.msh" order 2 overwrite')
 ```
 
 ### 3rd Order Export
 
 ```python
-cubit.cmd('radia_export gmsh "mesh_o3.msh" order 3 overwrite')
+cubit.cmd('export gmsh "mesh_o3.msh" order 3 overwrite')
 ```
 
 > Order 2+ generates a companion `.geo` file (with `Mesh.NumSubEdges=4`)

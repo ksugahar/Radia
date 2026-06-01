@@ -94,5 +94,5 @@ block 2 name "air"
 # The launcher writes a kelvin_reduction object into launcher_config.json
 # (keys 'x' and 'z' with values 'bn0' and 'ht0' respectively), then plays
 # auto_kelvin_entry.py which delegates to add_kelvin_cubit just before
-# radia_export netgen.  (APREPRO chokes on embedded braces + colons, so
+# export netgen.  (APREPRO chokes on embedded braces + colons, so
 # this comment avoids showing the literal JSON.)

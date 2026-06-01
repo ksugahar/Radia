@@ -78,7 +78,7 @@ def new_electromagnet_simulation(magnet_type: str = "dipole") -> str:
         "1. Define coil with CoilBuilder (no coil mesh needed)\n"
         "   - electromagnet_usage('coilbuilder') for API reference\n"
         "2. Create yoke + air + Kelvin domain in Cubit\n"
-        "   - radia_export netgen 'model.vol' order 2 overwrite\n"
+        "   - export netgen 'model.vol' order 2 overwrite\n"
         "3. NGSolve FEM solve (Omega-reduced scalar potential)\n"
         "   - electromagnet_usage('kelvin_workflow') for full code\n"
         "4. Visualize with GmshPostExport + coil STEP overlay\n"

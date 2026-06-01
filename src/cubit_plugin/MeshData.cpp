@@ -99,7 +99,7 @@ void MeshData::extract_elements(MeshExportInterface *iface)
   // SNAPSHOT user-defined blocks BEFORE calling iface->get_block_list.
   //
   // BUG (keiko 2026-05-30, 100号機, ih_toymodel 6turn coil loft):
-  //   `radia_export netgen` errors with "ERROR: No block with ID 2 was
+  //   `export netgen` errors with "ERROR: No block with ID 2 was
   //   found" AND leaves a phantom block 2 in the Cubit session.
   //
   // Cause: MeshExportInterface::get_block_list returns Cubit's internal

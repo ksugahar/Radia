@@ -144,7 +144,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
 
 ## Cubit Workflow: Offset Spheres (3D with .vol export)
 
-For Cubit-based meshes exported via `radia_export netgen`.
+For Cubit-based meshes exported via `export netgen`.
 Verified with NGSolve 6.2.2603, Coreform Cubit 2025.12.
 
 ### Step-by-step procedure
@@ -179,7 +179,7 @@ Verified with NGSolve 6.2.2603, Coreform Cubit 2025.12.
    - sideset "kelvin_ext": exterior sphere surface (kelvin boundary)
    - These MUST be set explicitly in the .py -- offset spheres do not share
      a face, so DomainIn/DomainOut auto-detection does NOT work
-10. radia_export netgen: writes periodic identification as TRANSLATION
+10. export netgen: writes periodic identification as TRANSLATION
     - C++ reads bc names "kelvin_int" / "kelvin_ext" from sidesets
     - Computes offset = mean(kelvin_ext vertices) - mean(kelvin_int vertices)
     - Bijective nearest-neighbor matching (no duplicate targets)
@@ -1428,7 +1428,7 @@ Neumann BC (silently wrong, looks like a small Dirichlet truncation).
 int_face.Identify(ext_face, "kelvin", IdentificationType.PERIODIC)
 ```
 
-**Cubit**: The C++ exporter (`radia_export netgen`) reads sideset names
+**Cubit**: The C++ exporter (`export netgen`) reads sideset names
 "kelvin_int" and "kelvin_ext", computes the translation offset, and writes
 `ident.Add()` pairs to the .vol automatically.
 
@@ -1458,7 +1458,7 @@ if n_coupled == 0:
         "Periodic BC NOT working! FreeDofs unchanged. "
         "Check: (1) Identify() before GenerateMesh/Glue, "
         "(2) sideset names kelvin_int/kelvin_ext in .jou, "
-        "(3) radia_export netgen wrote identification pairs.")
+        "(3) export netgen wrote identification pairs.")
 ```
 
 Typical: ~2-5% of DOFs are coupled (boundary DOFs on the Kelvin spheres).

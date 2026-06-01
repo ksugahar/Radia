@@ -8,7 +8,7 @@ Two formulations:
 User workflow:
   1. Write coil Python script (defines build_coil() -> CoilBuilder)
   2. Write .jou to create iron yoke + air + mesh + named blocks
-  3. Cubit panel exports .vol via `radia_export netgen`, then runs Solve
+  3. Cubit panel exports .vol via `export netgen`, then runs Solve
 
 Mesh interface:
   This script takes a Netgen .vol file via --vol (not .cub5).  The .vol
@@ -191,7 +191,7 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
 
     Args:
         coil_script: Path to Python script with build_coil()
-        vol_file: Netgen .vol file (exported by Cubit `radia_export netgen`
+        vol_file: Netgen .vol file (exported by Cubit `export netgen`
             or produced directly by Netgen; the .vol is the sole interface
             between Cubit and NGSolve per the Cubit/NGSolve separation
             policy — this script no longer imports cubit).
@@ -294,7 +294,7 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
     # BND (codim-1, surface) + BBBND (codim-3, vertex).  "GND" for the
     # Kelvin-centre Dirichlet is typically a BBBND vertex label set by
     # `add_kelvin_cubit` via the Cubit nodeset -> Netgen CD3 propagation
-    # path in radia_export netgen.  Join both namespaces so the existing
+    # path in export netgen.  Join both namespaces so the existing
     # Dirichlet-pick logic that searches a single `boundaries` iterable
     # still works.
     bnd_list = list(mesh.GetBoundaries())

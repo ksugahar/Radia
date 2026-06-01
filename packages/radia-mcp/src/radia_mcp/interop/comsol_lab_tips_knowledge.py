@@ -742,7 +742,7 @@ Shortcut (slide 15, romaji: "2-ji yousou tou settei no shikata"
 ## Radia / NGSolve counterpart
 
   NGSolve: fes = HCurl(mesh, order=p)
-  Radia + NGSolve curving: order 1-5 via radia_export netgen
+  Radia + NGSolve curving: order 1-5 via export netgen
   Radia accelerator panel default: p=1 (mesh refinement preferred)
 
 Same lab rule applies: p=1 with fine mesh first, p=2 only when
@@ -1039,7 +1039,7 @@ debugging the section-17 square-coil investigation.
 
 For the Radia pipeline:
 
-  Cubit -> radia_export netgen "f.vol" order N -> NGSolve Mesh()
+  Cubit -> export netgen "f.vol" order N -> NGSolve Mesh()
 
 This bypasses Nastran .bdf entirely and:
   * Preserves block/sideset names as material/boundary labels

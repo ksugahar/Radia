@@ -42,7 +42,7 @@ Workflow once this script is played in Cubit (GUI or batch):
     play "ih_fem_kelvin_demo.py"
 
     # Step 2: export .vol (Cubit APREPRO command from the Radia plugin)
-    radia_export netgen "ih_fem_kelvin_demo.vol" order 1 overwrite
+    export netgen "ih_fem_kelvin_demo.vol" order 1 overwrite
 
     # Step 3: outside Cubit -- PEEC coil L+R from the .step.
     # Use the canonical `_peec_ind.json` output suffix so the .gitignore
@@ -244,7 +244,7 @@ info = add_kelvin_cubit(R=R_air, symmetry=["z"])
 # can consume directly.  Order 1 is enough for the demo (the panel
 # tests are at order 1; higher orders are for production p-convergence).
 out_vol = os.path.join(_here, "ih_fem_kelvin_demo.vol").replace("\\", "/")
-cubit.cmd('radia_export netgen "%s" order 1 overwrite' % out_vol)
+cubit.cmd('export netgen "%s" order 1 overwrite' % out_vol)
 
 print()
 print("ih_fem_kelvin_demo.py: done")

@@ -3,9 +3,9 @@ Radia Export menu — PySide6 port of the legacy Qt5 .ccl plugin.
 
 Replaces the in-tree C++ Claro component (RadiaComp.cpp) with a pure
 Python (PySide6) toolbar that runs inside Cubit's embedded Python
-interpreter.  The .ccm (APREPRO commands `radia_export gmsh / nastran /
+interpreter.  The .ccm (APREPRO commands `export gmsh / nastran /
 vtk / netgen / femeem / meg`) is unchanged — this module just calls
-`cubit.cmd("radia_export ...")` after collecting user input through Qt
+`cubit.cmd("export ...")` after collecting user input through Qt
 dialogs parented to the Cubit main window.
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
@@ -274,7 +274,7 @@ class ExportDialog(QDialog):
     """Format-aware export options dialog.
 
     Builds the same set of widgets as the legacy C++ ExportDialog so
-    the same `radia_export` APREPRO command is emitted.  Per-format
+    the same `export` APREPRO command is emitted.  Per-format
     settings are persisted to ``%APPDATA%/Radia/export_settings.json``
     under the format key (``netgen_vol`` / ``gmsh`` / ``nastran`` /
     ``vtk`` / ``femeem`` / ``meg``).
@@ -551,14 +551,14 @@ class ExportDialog(QDialog):
 
     # ------------------------------------------------------------------
     def cubit_command(self):
-        """Build the `radia_export ...` APREPRO command string."""
+        """Build the `export ...` APREPRO command string."""
         f = self.file_path()
         order = self.order()
         fmt = self._fmt
         cmd = ""
 
         if fmt == FMT_NETGEN:
-            cmd = f'radia_export netgen "{f}" order {order}'
+            cmd = f'export netgen "{f}" order {order}'
             if self._kelvin_enable and self._kelvin_enable.isChecked():
                 cmd += " add_kelvin"
                 if self._kelvin_mesh_size:
@@ -585,29 +585,29 @@ class ExportDialog(QDialog):
 
         elif fmt == FMT_GMSH:
             dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = (f'radia_export gmsh "{f}" order {order} '
+            cmd = (f'export gmsh "{f}" order {order} '
                    f'dimension {dim}')
 
         elif fmt == FMT_NASTRAN:
             dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = (f'radia_export nastran "{f}" order {order} '
+            cmd = (f'export radia_nastran "{f}" order {order} '
                    f'dimension {dim}')
             if self._nopyramid and self._nopyramid.currentIndex() == 1:
                 cmd += " nopyramid"
 
         elif fmt == FMT_VTK:
             dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = (f'radia_export vtk "{f}" order {order} '
+            cmd = (f'export vtk "{f}" order {order} '
                    f'dimension {dim}')
 
         elif fmt == FMT_FEMEEM:
             sc = self._scale.text() if self._scale else "1.0"
-            cmd = f'radia_export femeem "{f}" scale {sc}'
+            cmd = f'export femeem "{f}" scale {sc}'
 
         elif fmt == FMT_MEG:
             dim_idx = self._dimension.currentIndex()
             dim_opt = ("threed", "twod", "axisymmetric")[dim_idx]
-            cmd = f'radia_export meg "{f}" {dim_opt}'
+            cmd = f'export meg "{f}" {dim_opt}'
             if self._block_table and self._block_table.rowCount() > 0:
                 pairs = []
                 for r in range(self._block_table.rowCount()):
@@ -718,7 +718,7 @@ class ExportDialog(QDialog):
 # ----------------------------------------------------------------------
 
 def _run_generic_export(fmt, cubit_mod, parent):
-    """Show ExportDialog and execute the chosen `radia_export` command."""
+    """Show ExportDialog and execute the chosen `export` command."""
     global _last_jou_path
 
     if cubit_mod.get_volume_count() == 0:
@@ -880,7 +880,7 @@ def _run_netgen_export(cubit_mod, parent):
     if not os.path.isfile(vol_path):
         QMessageBox.warning(
             parent, "Export failed",
-            f"radia_export netgen command did not produce:\n{vol_path}")
+            f"export netgen command did not produce:\n{vol_path}")
         return
     print(f"Exported: {vol_path}")
     _open_in_os(vol_path)
@@ -1064,7 +1064,7 @@ def _run_mesh_evaluation(cubit_mod, parent):
     for p in range(1, max_order + 1):
         vp = f"{base}_p{p}.vol"
         cubit_mod.cmd(
-            f'radia_export netgen "{vp}" order {p} overwrite')
+            f'export netgen "{vp}" order {p} overwrite')
         if os.path.isfile(vp):
             print(f"  p={p}: {vp}")
         else:
@@ -1074,9 +1074,9 @@ def _run_mesh_evaluation(cubit_mod, parent):
     gmsh_max = min(max_order, 3)
     bdf_max = min(max_order, 2)
     fmt_specs = [
-        ("gmsh", "msh", "radia_export gmsh", gmsh_max),
-        ("nastran", "bdf", "radia_export nastran", bdf_max),
-        ("vtk", "vtk", "radia_export vtk", bdf_max),
+        ("gmsh", "msh", "export gmsh", gmsh_max),
+        ("nastran", "bdf", "export radia_nastran", bdf_max),
+        ("vtk", "vtk", "export vtk", bdf_max),
     ]
     for name, ext, cmd_prefix, max_ord in fmt_specs:
         for p in range(1, max_ord + 1):

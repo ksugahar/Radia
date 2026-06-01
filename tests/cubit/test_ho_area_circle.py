@@ -313,13 +313,13 @@ def main():
 
     test_cases = [
         ("GMSH v4.1", ".msh",
-         'radia_export gmsh "{f}" order {o} dimension 2 overwrite',
+         'export gmsh "{f}" order {o} dimension 2 overwrite',
          parse_gmsh_area),
         ("Nastran", ".bdf",
-         'radia_export nastran "{f}" order {o} dimension 2 overwrite',
+         'export radia_nastran "{f}" order {o} dimension 2 overwrite',
          parse_nastran_area),
         ("VTK", ".vtk",
-         'radia_export vtk "{f}" order {o} dimension 2 overwrite',
+         'export vtk "{f}" order {o} dimension 2 overwrite',
          parse_vtk_area),
     ]
 

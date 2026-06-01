@@ -133,7 +133,7 @@ def solve_fem(vol_file="", fes_order=1,
     if fes_order > curve_order:
         return {
             "error": f"fes_order ({fes_order}) > mesh curve_order ({curve_order}). "
-                     f"Re-export .vol with 'radia_export netgen ... order {fes_order}' "
+                     f"Re-export .vol with 'export netgen ... order {fes_order}' "
                      f"or use --fes-order {curve_order}."
         }
     _log(f"MESH:curve_order={curve_order}, fes_order={fes_order}")

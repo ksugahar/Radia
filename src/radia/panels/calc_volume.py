@@ -8,7 +8,7 @@ Called as subprocess from Radia app or Cubit panel:
 
 Three mesh paths:
   .vol:  Pre-exported Netgen mesh (preferred, no Cubit needed)
-  .cub5: Cubit -> radia_export netgen "mesh.vol" order N -> NGSolve
+  .cub5: Cubit -> export netgen "mesh.vol" order N -> NGSolve
   .step: OCC geometry -> Netgen mesh -> mesh.Curve(order) -> NGSolve
 
 IMPORTANT: NGSolve must be imported BEFORE cubit to avoid numpy DLL conflict.
@@ -57,7 +57,7 @@ def calculate_volume_vol(vol_file):
 
 
 def calculate_volume(cub5_file, order):
-    """Calculate volume using Cubit ACIS kernel + radia_export netgen.
+    """Calculate volume using Cubit ACIS kernel + export netgen.
 
     Legacy path — prefer .vol export + calculate_volume_vol().
     """
@@ -100,11 +100,11 @@ def calculate_volume(cub5_file, order):
     import tempfile
     try:
         vol_path = tempfile.mktemp(suffix='.vol')
-        cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
+        cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
     except Exception as e:
         return {
             "volumes": results, "cad_total": cad_total,
-            "error": f"radia_export netgen order={order} failed: {e}",
+            "error": f"export netgen order={order} failed: {e}",
         }
 
     mesh = NGMesh(vol_path)
