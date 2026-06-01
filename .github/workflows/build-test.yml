@@ -229,21 +229,28 @@ jobs:
       # would fail their pyd-mandate check (added 2026-04-24 after
       # the PyPI 0.6.0 partial-wheel incident).
       # ----------------------------------------------------------------
-      - name: Fetch cubit_mesh_curver.pyd from binaries release
+      - name: Ensure cubit_mesh_curver.pyd (Build.ps1 local; binaries fallback)
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # gh CLI was retired from the LAB self-hosted runner on
-          # 2026-05-24. tools/download_release_asset.py is a stdlib-only
-          # (urllib + json) replacement that uses the GitHub REST API
-          # directly. Identical retry semantics as before (6 attempts,
-          # exponential backoff for the post-push asset-upload race).
-          python tools\download_release_asset.py `
-            --repo ${{ github.repository }} `
-            --tag binaries `
-            --name cubit_mesh_curver.pyd `
-            --dest "${{ github.workspace }}\src\radia"
+          # Tier-2 (2026-06): the .pyd now lives in the cubit-mesh-export
+          # package (Build.ps1 propagates it there; the self-hosted runner
+          # has Cubit 2025.12 + the SDK cmake module).  Only fetch from the
+          # binaries release as a FALLBACK when Build.ps1 did not supply it.
+          # download_release_asset.py is stdlib-only (urllib+json); gh CLI
+          # was retired from the runner 2026-05-24.
+          $pkgDir = "${{ github.workspace }}\packages\cubit-mesh-export\src\cubit_mesh_export"
+          if (Test-Path "$pkgDir\cubit_mesh_curver.pyd") {
+            Write-Host "cubit_mesh_curver.pyd present (Build.ps1) -- skipping binaries fetch"
+          } else {
+            Write-Host "cubit_mesh_curver.pyd absent -- fetching from binaries release"
+            python tools\download_release_asset.py `
+              --repo ${{ github.repository }} `
+              --tag binaries `
+              --name cubit_mesh_curver.pyd `
+              --dest $pkgDir
+          }
 
       # ----------------------------------------------------------------
       # Test: Run basic pytest tests (~2 sec)
@@ -506,32 +513,23 @@ jobs:
           CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK: "1"
         run: |
           $pkgDir = "${{ github.workspace }}\packages\cubit-mesh-export\src\cubit_mesh_export"
-          # Copy binaries to cubit-mesh-export package
-          # Note (radia 4.80.0): cubit_mesh_export.ccl removed — Qt5 GUI deleted,
-          # PySide6 toolbar (src/radia/panels/radia_export_menu.py) replaces it.
-          $binaries = @(
-            @{ src = "src\radia\cubit_mesh_curver.pyd"; dst = "cubit_mesh_curver.pyd" },
-            @{ src = "src\radia\cubit_mesh_export.ccm";      dst = "cubit_mesh_export.ccm" }
-          )
-          # All 2 binaries are MANDATORY. Missing any of them indicates
-          # Build.ps1 failed silently for the corresponding artifact —
-          # we refuse to ship a wheel that cubit-plugin-install would
-          # then leave half-deployed (2026-04-24: PyPI 0.6.0 shipped
-          # without cubit_mesh_curver.pyd because this step warned only).
+          # Tier-2 (2026-06): Build.ps1 propagates the .ccm + .pyd DIRECTLY
+          # into the cubit-mesh-export package (src/radia no longer carries
+          # them -- cme is the sole shipper).  Verify they are present
+          # in-place; missing any is a MANDATORY fail (refuse a partial
+          # wheel, per the 2026-04-24 PyPI 0.6.0 partial-wheel incident).
+          $binaries = @("cubit_mesh_curver.pyd", "cubit_mesh_export.ccm")
           $missing = @()
           foreach ($b in $binaries) {
-            $s = "${{ github.workspace }}\$($b.src)"
-            $d = "$pkgDir\$($b.dst)"
-            if (Test-Path $s) {
-              Copy-Item $s $d -Force
-              Write-Host "Copied $($b.dst) to cubit-mesh-export"
+            if (Test-Path "$pkgDir\$b") {
+              Write-Host "Present in cubit-mesh-export package: $b"
             } else {
-              $missing += $b.src
+              $missing += $b
             }
           }
           if ($missing.Count -gt 0) {
-            Write-Host "::error::Build.ps1 did not produce required binaries: $($missing -join ', ')"
-            Write-Host "         Refusing to build a partial wheel."
+            Write-Host "::error::cubit-mesh-export package missing required binaries: $($missing -join ', ')"
+            Write-Host "         Build.ps1 did not propagate them. Refusing to build a partial wheel."
             exit 1
           }
           pip install build wheel --quiet
