@@ -61,9 +61,9 @@ radia-*/
 # cubit-mesh-export wheel and CI does not rebuild them. .pyd is
 # intentionally NOT tracked (Policy 2 bans .pyd in git, and it is an
 # optional Cubit-less HO meshing module). Wheel ships .ccm + .ccl only.
-!src/radia/radia_cubit.ccm
-!packages/cubit-mesh-export/src/cubit_mesh_export/radia_cubit.ccm
-!packages/cubit-mesh-export/src/cubit_mesh_export/radia_cubit.ccl
+!src/radia/cubit_mesh_export.ccm
+!packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_export.ccm
+!packages/cubit-mesh-export/src/cubit_mesh_export/cubit_mesh_export.ccl
 *.exe
 *.out
 *.app
@@ -452,7 +452,7 @@ examples/c_type_electromagnet/dipole_field.msh
 
 # Cubit intermediate files (pwd = repo root when launched from GUI)
 ExportedMesh.*
-radia_cubit_model.cub5
+cubit_mesh_export_model.cub5
 sphere_o3.vol
 p_convergence_sphere.png
 cubit[0-9]*.jou

@@ -69,7 +69,7 @@ the Cubit plugin — net zero gain over PyPI install.
 LAB has the canonical NAS-mapped working tree at `S:\\Radia\\01_GitHub`.
 All editing happens here. Build.ps1 compiles C++ artifacts directly
 into the local clone (`src/radia/_radia_pybind.pyd`,
-`packages/cubit-mesh-export/.../radia_cubit_mesh.pyd`, etc.) and the
+`packages/cubit-mesh-export/.../cubit_mesh_curver.pyd`, etc.) and the
 editable install picks them up immediately.
 
 After every release, refresh the LAB metadata:
@@ -308,10 +308,10 @@ automatically by `pip install --upgrade radia==<X.Y.Z>` because
 PyPI installs are not editable.
 
 ============================================================
-## pyd_dll_bootstrap — `radia_cubit_mesh.pyd` requires `import radia` first
+## pyd_dll_bootstrap — `cubit_mesh_curver.pyd` requires `import radia` first
 ============================================================
 
-`radia_cubit_mesh.pyd` (the cubit-mesh-export C++ extension) depends
+`cubit_mesh_curver.pyd` (the cubit-mesh-export C++ extension) depends
 on Netgen DLLs (`nglib.dll`, `ngcore.dll`). On import these DLLs must
 be findable via the Windows DLL search path.
 
@@ -320,11 +320,11 @@ NGSolve / Netgen / MKL DLL directories. So:
 
 ```python
 import radia                    # First — sets DLL paths
-from cubit_mesh_export import radia_cubit_mesh   # Now this loads
+from cubit_mesh_export import cubit_mesh_curver   # Now this loads
 ```
 
 Without the `import radia` first, you get
-`ImportError: DLL load failed while importing radia_cubit_mesh: ...`.
+`ImportError: DLL load failed while importing cubit_mesh_curver: ...`.
 
 This issue applied historically to mdx editable; on a PyPI install
 (both 100号機 and mdx now) the wheel installer registers DLL search
@@ -334,8 +334,8 @@ paths via its own hooks, so the bootstrap is automatic.
 ## cubit_plugin_layers — Cubit plugin lives in TWO independent places
 ============================================================
 
-The Cubit plugin (`radia_cubit.ccm`, `radia_cubit.ccl`,
-`radia_cubit_mesh.cp312-win_amd64.pyd`, `nglib.dll`, `ngcore.dll`) is
+The Cubit plugin (`cubit_mesh_export.ccm`, `cubit_mesh_export.ccl`,
+`cubit_mesh_curver.cp312-win_amd64.pyd`, `nglib.dll`, `ngcore.dll`) is
 deployed to `C:\\Program Files\\Coreform Cubit 2025.12\\bin\\` by
 `cubit-plugin-install`. This is INDEPENDENT of the Python editable
 install: Cubit reads its plugin directory directly, not via Python's
@@ -368,9 +368,9 @@ Implications:
 | `radia.__version__` says X.Y.Z but `pip list` says A.B.C | metadata_sync skipped on LAB (editable)                                | `pip install -e <path> --no-deps --no-cache-dir` |
 | `ImportError: cannot import name 'check' from 'cubit_mesh_export'` | legacy `cubit_mesh_export.py` shadow at site-packages                | Delete `Lib/site-packages/cubit_mesh_export.py` and `__pycache__/cubit_mesh_export.cpython-312.pyc`, then re-install |
 | `AttributeError: module 'cubit_mesh_export' has no attribute '__version__'` | same legacy shadow                                                     | same |
-| `ImportError: DLL load failed while importing radia_cubit_mesh` | `import radia` not done first (DLL bootstrap) — only on legacy editable | `import radia` before `from cubit_mesh_export import radia_cubit_mesh`; on PyPI installs this is automatic |
+| `ImportError: DLL load failed while importing cubit_mesh_curver` | `import radia` not done first (DLL bootstrap) — only on legacy editable | `import radia` before `from cubit_mesh_export import cubit_mesh_curver`; on PyPI installs this is automatic |
 | `cubit-smoke-test` fails with "Learn Edition restriction"     | mdx (or 100号機) has Cubit Learn Edition; harmless ERROR line on radia_export | Ignore — `radia_export netgen` writes the .vol successfully despite the message; the smoke test tolerates this |
-| `Phase 9 cross-machine drift on cme/radia_cubit.ccl` | LAB has been doing local Cubit-plugin rebuilds; mdx / 100号機 have the published PyPI binary which differs slightly (PE timestamps, embedded paths) | Acceptable drift if no `src/cubit_plugin/` source change since cubit-mesh-export tag |
+| `Phase 9 cross-machine drift on cme/cubit_mesh_export.ccl` | LAB has been doing local Cubit-plugin rebuilds; mdx / 100号機 have the published PyPI binary which differs slightly (PE timestamps, embedded paths) | Acceptable drift if no `src/cubit_plugin/` source change since cubit-mesh-export tag |
 | `cubit-plugin-install --verify-only` reports `[SIZE]` or `[HASH]` mismatch | binary deploy partial / Cubit was running during last install         | Stop Cubit, re-run `cubit-plugin-install --all-users` |
 | panel windows die in headless test with `QFontDatabase: Cannot find font directory`     | benign warning on `QT_QPA_PLATFORM=offscreen`                          | Ignore — not a failure; for production rendering Qt finds system fonts |
 

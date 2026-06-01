@@ -157,7 +157,7 @@ def _check_plugin_freshness():
     the FaceDescriptor DomainIn/Out fix).  Fail loudly.
 
     Note: the Qt5 .ccl is gone (radia 4.80.0).  Only .ccm (APREPRO
-    commands) and the .pyd (radia_cubit_mesh) are deployed now.
+    commands) and the .pyd (cubit_mesh_curver) are deployed now.
     """
     try:
         from install_panels import find_cubit_bin
@@ -179,7 +179,7 @@ def _check_plugin_freshness():
         return
     tol_sec = 3600  # 1 h tolerance (one pip install batches within a minute)
     stale = []
-    for name in ("radia_cubit.ccm", "radia_cubit_mesh.cp312-win_amd64.pyd"):
+    for name in ("cubit_mesh_export.ccm", "cubit_mesh_curver.cp312-win_amd64.pyd"):
         p = os.path.join(plugin_dir, name)
         if not os.path.isfile(p):
             continue

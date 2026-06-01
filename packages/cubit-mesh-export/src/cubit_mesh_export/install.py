@@ -197,7 +197,7 @@ def _running_cubit_processes():
 
     A non-empty list means the plugin files are likely locked -- installing
     over them is not safe. The 2026-04-14 incident on 100号機 was caused by
-    a running Cubit holding radia_cubit.ccm open, which made copy silently
+    a running Cubit holding cubit_mesh_export.ccm open, which made copy silently
     produce a half-updated plugin set.
     """
     hits = []
@@ -240,7 +240,7 @@ def _file_is_locked(path: Path) -> str:
     """Return '' if the file is writable (or missing), else a reason string.
 
     On Windows, if a process has the file mapped (e.g. a running Cubit with
-    radia_cubit.ccm loaded), attempting to open it with exclusive
+    cubit_mesh_export.ccm loaded), attempting to open it with exclusive
     read-write will raise PermissionError. We use that as the lock probe.
     """
     if not path.exists():
@@ -260,12 +260,12 @@ def _critical_plugin_files(cubit_dir: Path):
     plugins = cubit_dir / "bin" / "plugins"
     bin_ = cubit_dir / "bin"
     return [
-        plugins / "radia_cubit.ccm",
-        plugins / "radia_cubit_mesh.cp312-win_amd64.pyd",
+        plugins / "cubit_mesh_export.ccm",
+        plugins / "cubit_mesh_curver.cp312-win_amd64.pyd",
         plugins / "nglib.dll",
         plugins / "ngcore.dll",
-        bin_ / "radia_cubit.ccl",
-        plugins / "radia_cubit.ccl",  # historical stale location
+        bin_ / "cubit_mesh_export.ccl",
+        plugins / "cubit_mesh_export.ccl",  # historical stale location
     ]
 
 
@@ -275,15 +275,15 @@ def _expected_deployments(pkg_dir: Path, cubit_dir: Path):
     plugins_dir = cubit_dir / "bin" / "plugins"
     bin_dir = cubit_dir / "bin"
     pairs = []
-    if (pkg_dir / "radia_cubit.ccm").is_file():
-        pairs.append((pkg_dir / "radia_cubit.ccm",
-                       plugins_dir / "radia_cubit.ccm"))
-    if (pkg_dir / "radia_cubit.ccl").is_file():
-        pairs.append((pkg_dir / "radia_cubit.ccl",
-                       bin_dir / "radia_cubit.ccl"))
-    if (pkg_dir / "radia_cubit_mesh.pyd").is_file():
-        pairs.append((pkg_dir / "radia_cubit_mesh.pyd",
-                       plugins_dir / "radia_cubit_mesh.cp312-win_amd64.pyd"))
+    if (pkg_dir / "cubit_mesh_export.ccm").is_file():
+        pairs.append((pkg_dir / "cubit_mesh_export.ccm",
+                       plugins_dir / "cubit_mesh_export.ccm"))
+    if (pkg_dir / "cubit_mesh_export.ccl").is_file():
+        pairs.append((pkg_dir / "cubit_mesh_export.ccl",
+                       bin_dir / "cubit_mesh_export.ccl"))
+    if (pkg_dir / "cubit_mesh_curver.pyd").is_file():
+        pairs.append((pkg_dir / "cubit_mesh_curver.pyd",
+                       plugins_dir / "cubit_mesh_curver.cp312-win_amd64.pyd"))
     nglib, ngcore = _find_netgen_dlls()
     if nglib:
         pairs.append((nglib, plugins_dir / nglib.name))
@@ -309,7 +309,7 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
     Checks:
       - every expected destination file exists
       - destination file size + sha256 match the package source
-      - no stale ``radia_cubit.ccl`` lingering in bin/plugins/ (the
+      - no stale ``cubit_mesh_export.ccl`` lingering in bin/plugins/ (the
         2026-04-14 shadow bug)
 
     Independent from ``preflight()`` (which is read-only safety-before-write).
@@ -345,7 +345,7 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
             print(f"    [OK] {dst.name}  ({dst_size} bytes, sha256 match)")
 
     # Stale .ccl in plugins/ shadow guard.
-    stale_ccl = cubit_dir / "bin" / "plugins" / "radia_cubit.ccl"
+    stale_ccl = cubit_dir / "bin" / "plugins" / "cubit_mesh_export.ccl"
     if stale_ccl.is_file():
         msg = (f"stale shadow file: {stale_ccl} -- the .ccl belongs in "
                f"{cubit_dir / 'bin'}, not bin/plugins/. Re-run "
@@ -412,11 +412,19 @@ def preflight(cubit_dir: Path, *, verbose: bool = True):
 # ============================================================
 
 _CLEAN_PATTERNS = [
+    "cubit_mesh_export.ccm",
+    "cubit_mesh_export.ccl",
+    "cubit_mesh_curver*.pyd",
+    "nglib.dll",
+    "ngcore.dll",
+    # Tier-2 rename cleanup (2026-06-01): also remove the OLD radia_cubit.*
+    # plugin from machines deployed before the cubit_mesh_export rename, so
+    # Cubit does not load BOTH the old and new .ccm and double-register the
+    # `radia_export` APREPRO commands.  Safe to leave indefinitely (a no-op
+    # once every machine is migrated).
     "radia_cubit.ccm",
     "radia_cubit.ccl",
     "radia_cubit_mesh*.pyd",
-    "nglib.dll",
-    "ngcore.dll",
 ]
 
 
@@ -618,24 +626,24 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
 
     # Copy artefacts with per-file verification.
     copy_jobs = []
-    ccm_src = pkg_dir / "radia_cubit.ccm"
+    ccm_src = pkg_dir / "cubit_mesh_export.ccm"
     if ccm_src.is_file():
-        copy_jobs.append((ccm_src, plugins_dir / "radia_cubit.ccm"))
+        copy_jobs.append((ccm_src, plugins_dir / "cubit_mesh_export.ccm"))
     else:
-        print(f"  [--] radia_cubit.ccm not found in {pkg_dir} -- skipping")
+        print(f"  [--] cubit_mesh_export.ccm not found in {pkg_dir} -- skipping")
 
-    ccl_src = pkg_dir / "radia_cubit.ccl"
+    ccl_src = pkg_dir / "cubit_mesh_export.ccl"
     if ccl_src.is_file():
         # NOTE: .ccl goes in bin/, not bin/plugins/ -- Cubit loads Qt
         # components from bin/ directly. See 2026-04-14 incident.
-        copy_jobs.append((ccl_src, cubit_dir / "bin" / "radia_cubit.ccl"))
+        copy_jobs.append((ccl_src, cubit_dir / "bin" / "cubit_mesh_export.ccl"))
 
-    pyd_src = pkg_dir / "radia_cubit_mesh.pyd"
+    pyd_src = pkg_dir / "cubit_mesh_curver.pyd"
     if pyd_src.is_file():
         copy_jobs.append(
-            (pyd_src, plugins_dir / "radia_cubit_mesh.cp312-win_amd64.pyd"))
+            (pyd_src, plugins_dir / "cubit_mesh_curver.cp312-win_amd64.pyd"))
     else:
-        print(f"  [--] radia_cubit_mesh.pyd not found in {pkg_dir} -- skipping")
+        print(f"  [--] cubit_mesh_curver.pyd not found in {pkg_dir} -- skipping")
 
     nglib, ngcore = _find_netgen_dlls()
     if nglib:

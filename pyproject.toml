@@ -133,11 +133,11 @@ radia-vol-viewer-gui = "radia.tools.vol_sol_viewer:main"
 [tool.setuptools.package-data]
 # Note (radia 4.80.0): Qt5 GUI ".ccl" removed (RadiaComp.cpp gone; PySide6
 # toolbar at radia/panels/radia_export_menu.py replaces it).
-# Note (Tier-2, 2026-06-01): the Cubit plugin binaries (radia_cubit.ccm,
-# radia_cubit_mesh.pyd) are NO LONGER bundled in the radia wheel.  They are
+# Note (Tier-2, 2026-06-01): the Cubit plugin binaries (cubit_mesh_export.ccm,
+# cubit_mesh_curver.pyd) are NO LONGER bundled in the radia wheel.  They are
 # shipped + deployed SOLELY by the cubit-mesh-export package, so radia and
 # cubit-mesh-export release fully independently.  "*.ccm" is dropped here;
-# radia_cubit_mesh.pyd is excluded below (the "*.pyd" glob ships only
+# cubit_mesh_curver.pyd is excluded below (the "*.pyd" glob ships only
 # _radia_pybind.pyd / cln_core.pyd / mmm_core.pyd / peec_matrices.pyd /
 # sparsesolv_ngsolve.pyd).
 radia = [
@@ -162,7 +162,7 @@ radia = [
     # Tier-2 (2026-06-01): the Cubit plugin .pyd is shipped only by the
     # cubit-mesh-export package, never by radia -- exclude it from the
     # "*.pyd" glob in case a stale build artifact lingers in src/radia/.
-    "radia_cubit_mesh.pyd",
+    "cubit_mesh_curver.pyd",
     # Debug/temp files that match package-data globs but should not ship
     "panels/samples/_*.jou",
     "panels/samples/_*.py",

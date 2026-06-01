@@ -242,7 +242,7 @@ To handle complex field sources efficiently, the framework employs state-of-the-
 ### 3. Visualization & Export
 *   **PyVista Viewer**: Modern, interactive 3D visualization within Python/Jupyter.
 *   **VTK Export**: Compatible with ParaView.
-*   **GMSH/STEP**: Mesh import via GMSH, CAD interoperability via Coreform Cubit (integrated radia Cubit plugin and `radia_cubit_mesh` module).
+*   **GMSH/STEP**: Mesh import via GMSH, CAD interoperability via Coreform Cubit (integrated radia Cubit plugin and `cubit_mesh_curver` module).
 
 ---
 

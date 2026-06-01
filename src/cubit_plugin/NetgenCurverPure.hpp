@@ -7,7 +7,7 @@
  * Accepts mesh data and projection/normal callbacks from Python.
  * Does NOT include any Cubit headers or link to Cubit libraries.
  *
- * Used by the pybind11 module (radia_cubit_mesh.pyd) to enable
+ * Used by the pybind11 module (cubit_mesh_curver.pyd) to enable
  * high-order curved meshes from external Python 3.12 via
  * cubit Python API + Netgen C++.
  * =================================================================== */

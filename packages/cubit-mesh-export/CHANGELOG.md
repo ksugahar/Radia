@@ -4,6 +4,38 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## Unreleased — Tier-2 sole-shipper + de-radia plugin rename
+
+Two coupled changes that let `cubit-mesh-export` and `radia` release
+fully independently:
+
+1. **Sole shipper of the Cubit plugin binary.**  `cubit-mesh-export`
+   is now the ONLY package that ships and deploys the Cubit plugin;
+   `radia` no longer bundles it.  Previously both wheels carried the
+   plugin binary, which forced lockstep releases (a plugin fix meant
+   re-releasing `radia` too).  The shared C++ source stays in the
+   monorepo (`src/cubit_plugin/`) -- only the ship/release coupling is
+   removed.
+
+2. **De-radia file/module rename.**  The deployed plugin files drop
+   the `radia_` prefix (the plugin is Cubit-side tooling, not a radia
+   runtime component):
+
+   | Old | New |
+   |-----|-----|
+   | `radia_cubit.ccm` | `cubit_mesh_export.ccm` |
+   | `radia_cubit_mesh.cp312-win_amd64.pyd` | `cubit_mesh_curver.cp312-win_amd64.pyd` |
+   | `radia_cubit_pybind.cpp` (C++ source) | `cubit_mesh_export_pybind.cpp` |
+   | pybind module `radia_cubit_mesh` | `cubit_mesh_curver` |
+
+   The APREPRO command name is **unchanged** -- it is still
+   `radia_export netgen/gmsh/nastran/vtk`, so existing `.jou` scripts
+   keep working (only the binary / module filenames changed).
+
+   `cubit-plugin-install` now removes any old `radia_cubit.*` files
+   left by a pre-rename deployment, so Cubit does not load both the
+   old and new `.ccm` and double-register the `radia_export` commands.
+
 ## 0.6.0 — Japanese / Unicode path support
 
 Released 2026-04-22.

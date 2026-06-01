@@ -121,11 +121,11 @@ endif()
 # --------------------------------------------------------
 # The Qt5 .ccl GUI component (RadiaComp.cpp) was deleted in radia
 # 4.80.0; all GUI work is now in src/radia/panels/radia_export_menu.py
-# (PySide6).  The .ccm (APREPRO commands) and .pyd (radia_cubit_mesh)
+# (PySide6).  The .ccm (APREPRO commands) and .pyd (cubit_mesh_curver)
 # below have no Qt dependency.
 
 # --------------------------------------------------------
-# Target 1: radia_cubit.ccm (command plugin, goes to plugins/)
+# Target 1: cubit_mesh_export.ccm (command plugin, goes to plugins/)
 #
 # Registers APREPRO commands: export gmsh/nastran/vtk/netgen
 # Loaded by Python API (CUBIT_PLUGIN_DIR) and by cubitcomp
@@ -164,60 +164,60 @@ if(HAVE_NETGEN)
   endif()
 endif()
 
-add_library(radia_cubit_ccm MODULE ${CCM_SOURCES})
-set_target_properties(radia_cubit_ccm PROPERTIES
-    OUTPUT_NAME "radia_cubit"
+add_library(cubit_mesh_export_ccm MODULE ${CCM_SOURCES})
+set_target_properties(cubit_mesh_export_ccm PROPERTIES
+    OUTPUT_NAME "cubit_mesh_export"
     SUFFIX ".ccm"
     CXX_STANDARD 17
     # Separate PDB per target so .ccm and .ccl don't clobber each other.
-    PDB_NAME "radia_cubit_ccm"
-    COMPILE_PDB_NAME "radia_cubit_ccm"
+    PDB_NAME "cubit_mesh_export_ccm"
+    COMPILE_PDB_NAME "cubit_mesh_export_ccm"
 )
-target_link_libraries(radia_cubit_ccm cubiti cubit_util cubit_geom)
+target_link_libraries(cubit_mesh_export_ccm cubiti cubit_util cubit_geom)
 
 # DELAYLOAD cubit_geom so the .ccm can still load even if
 # cubit_geom.dll init is deferred until first geometry call
 if(MSVC)
-  set_target_properties(radia_cubit_ccm PROPERTIES
+  set_target_properties(cubit_mesh_export_ccm PROPERTIES
     LINK_FLAGS "/DELAYLOAD:cubit_geom.dll"
   )
-  target_link_libraries(radia_cubit_ccm delayimp)
+  target_link_libraries(cubit_mesh_export_ccm delayimp)
 endif()
 
 option(DEBUG_HO_NODES "Print debug info for high-order node registration" OFF)
 
 if(HAVE_NETGEN)
-  target_compile_definitions(radia_cubit_ccm PRIVATE HAVE_NETGEN)
+  target_compile_definitions(cubit_mesh_export_ccm PRIVATE HAVE_NETGEN)
   if(DEBUG_HO_NODES)
-    target_compile_definitions(radia_cubit_ccm PRIVATE DEBUG_HO_NODES)
+    target_compile_definitions(cubit_mesh_export_ccm PRIVATE DEBUG_HO_NODES)
   endif()
   if(USE_COMPACT_NETGEN)
-    target_include_directories(radia_cubit_ccm PRIVATE ${COMPACT_NETGEN_INCLUDES})
-    target_compile_definitions(radia_cubit_ccm PRIVATE ${COMPACT_NETGEN_DEFS})
+    target_include_directories(cubit_mesh_export_ccm PRIVATE ${COMPACT_NETGEN_INCLUDES})
+    target_compile_definitions(cubit_mesh_export_ccm PRIVATE ${COMPACT_NETGEN_DEFS})
     if(MSVC)
-      target_compile_options(radia_cubit_ccm PRIVATE /bigobj)
+      target_compile_options(cubit_mesh_export_ccm PRIVATE /bigobj)
     endif()
     if(OpenMP_CXX_FOUND)
-      target_link_libraries(radia_cubit_ccm OpenMP::OpenMP_CXX)
+      target_link_libraries(cubit_mesh_export_ccm OpenMP::OpenMP_CXX)
     endif()
   else()
-    target_include_directories(radia_cubit_ccm PRIVATE
+    target_include_directories(cubit_mesh_export_ccm PRIVATE
       "${NETGEN_DIR}/include"
       "${NETGEN_DIR}/include/include"
     )
-    target_link_libraries(radia_cubit_ccm netgen::nglib netgen::ngcore)
+    target_link_libraries(cubit_mesh_export_ccm netgen::nglib netgen::ngcore)
   endif()
 endif()
 
 # --------------------------------------------------------
-# Target 2 (radia_cubit.ccl) removed in radia 4.80.0.
+# Target 2 (cubit_mesh_export.ccl) removed in radia 4.80.0.
 # --------------------------------------------------------
 # The Qt5 GUI Claro Component is replaced by the PySide6 toolbar at
 # src/radia/panels/radia_export_menu.py.  See CLAUDE.md "Cubit Panel
 # Architecture" Layer 2 (Cubit Python).
 
 # --------------------------------------------------------
-# pybind11 module: radia_cubit_mesh (.pyd) — Cubit-free
+# pybind11 module: cubit_mesh_curver (.pyd) — Cubit-free
 # --------------------------------------------------------
 find_package(Python3 COMPONENTS Interpreter Development)
 execute_process(
@@ -228,40 +228,40 @@ set(pybind11_DIR "${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11")
 find_package(pybind11 QUIET)
 
 if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
-  message(STATUS "pybind11 + Netgen found: building radia_cubit_mesh (Cubit-free)")
+  message(STATUS "pybind11 + Netgen found: building cubit_mesh_curver (Cubit-free)")
 
-  pybind11_add_module(radia_cubit_mesh
-      radia_cubit_pybind.cpp
+  pybind11_add_module(cubit_mesh_curver
+      cubit_mesh_export_pybind.cpp
       NetgenCurverPure.cpp
       NetgenCurverPure.hpp
       callbackgeom.cpp
       callbackgeom.hpp
   )
-  set_target_properties(radia_cubit_mesh PROPERTIES CXX_STANDARD 17)
+  set_target_properties(cubit_mesh_curver PROPERTIES CXX_STANDARD 17)
 
-  target_include_directories(radia_cubit_mesh PRIVATE
+  target_include_directories(cubit_mesh_curver PRIVATE
     "${NETGEN_DIR}/include"
     "${NETGEN_DIR}/include/include"
     "${CMAKE_CURRENT_SOURCE_DIR}"
   )
-  target_link_libraries(radia_cubit_mesh PRIVATE netgen::nglib netgen::ngcore)
+  target_link_libraries(cubit_mesh_curver PRIVATE netgen::nglib netgen::ngcore)
 
-  install(TARGETS radia_cubit_mesh
+  install(TARGETS cubit_mesh_curver
       LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/plugins"
   )
 elseif(pybind11_FOUND AND NOT HAVE_NETGEN)
-  message(STATUS "pybind11 found but Netgen missing: skipping radia_cubit_mesh")
+  message(STATUS "pybind11 found but Netgen missing: skipping cubit_mesh_curver")
 else()
-  message(STATUS "pybind11 not found: skipping radia_cubit_mesh Python module")
+  message(STATUS "pybind11 not found: skipping cubit_mesh_curver Python module")
 endif()
 
 # --------------------------------------------------------
 # Install
 # --------------------------------------------------------
-install(TARGETS radia_cubit_ccm
+install(TARGETS cubit_mesh_export_ccm
     LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/plugins"
 )
-# radia_cubit_ccl install removed in radia 4.80.0 (Qt5 .ccl deleted;
+# cubit_mesh_export_ccl install removed in radia 4.80.0 (Qt5 .ccl deleted;
 # replaced by PySide6 src/radia/panels/radia_export_menu.py).
 
 if(HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)

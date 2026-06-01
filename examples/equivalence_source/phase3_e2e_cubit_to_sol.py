@@ -125,7 +125,7 @@ def step1_cubit_mesh():
         return False
     print(f"  CUBIT_PLUGIN_DIR = {os.environ.get('CUBIT_PLUGIN_DIR')}")
     print(f"  plugin .ccm exists: "
-          f"{Path(plugin_dir, 'radia_cubit.ccm').exists()}")
+          f"{Path(plugin_dir, 'cubit_mesh_export.ccm').exists()}")
 
     cubit.cmd("reset")
     cubit.cmd("create sphere radius 0.5")

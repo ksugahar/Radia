@@ -9,3 +9,5 @@
 dist/
 build/
 *.egg-info/
+# Tier-2 (2026-06-01): track the renamed plugin .ccm (was radia_cubit.ccm)
+!cubit_mesh_export.ccm

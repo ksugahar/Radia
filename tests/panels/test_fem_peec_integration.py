@@ -8,7 +8,7 @@ Tests the full Cubit pipeline:
   5. calc_fem_kelvin.solve_fem(peec_step=...) → L
   6. Verify L vs Grover analytical (±15%)
 
-Requires: Cubit license, NGSolve, radia_cubit.ccm plugin.
+Requires: Cubit license, NGSolve, cubit_mesh_export.ccm plugin.
 """
 
 import math

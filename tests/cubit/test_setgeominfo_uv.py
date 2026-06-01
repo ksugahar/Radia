@@ -41,7 +41,7 @@ if _fork_path:
 from ngsolve import Mesh, Integrate, CF, BND
 from ngsolve import TaskManager
 import cubit
-import radia_cubit_mesh
+import cubit_mesh_curver
 
 print("=" * 60)
 print("Test: SetGeomInfo API with UV from OCC Geometry")
@@ -90,7 +90,7 @@ print(f"  Tets: {cubit.get_tet_count()}")
 print("\nStep 2: Export mesh using extract_curved_mesh")
 
 print("  Testing extract_curved_mesh(order=1)...")
-mesh1 = radia_cubit_mesh.extract_curved_mesh(order=1)
+mesh1 = cubit_mesh_curver.extract_curved_mesh(order=1)
 with TaskManager():
     area1 = Integrate(CF(1), mesh1, VOL_or_BND=BND)
     vol1 = Integrate(CF(1), mesh1)
@@ -99,7 +99,7 @@ with TaskManager():
 
     print("  Testing extract_curved_mesh(order=2)...")
     try:
-        mesh2 = radia_cubit_mesh.extract_curved_mesh(order=2)
+        mesh2 = cubit_mesh_curver.extract_curved_mesh(order=2)
         area2 = Integrate(CF(1), mesh2, VOL_or_BND=BND)
         vol2 = Integrate(CF(1), mesh2)
         print(f"    Area: {area2:.6f} (error: {abs(area2-expected_area)/expected_area*100:.4f}%)")
@@ -109,7 +109,7 @@ with TaskManager():
 
     print("  Testing extract_curved_mesh(order=3)...")
     try:
-        mesh3 = radia_cubit_mesh.extract_curved_mesh(order=3)
+        mesh3 = cubit_mesh_curver.extract_curved_mesh(order=3)
         area3 = Integrate(CF(1), mesh3, VOL_or_BND=BND)
         vol3 = Integrate(CF(1), mesh3)
         print(f"    Area: {area3:.6f} (error: {abs(area3-expected_area)/expected_area*100:.4f}%)")
