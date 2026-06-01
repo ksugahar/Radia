@@ -284,7 +284,7 @@ PATTERNS: list[dict] = [
         "topics": ["release", "ci", "github-actions", "concurrency"],
         "severity": "medium",
         "first_seen": "2026-05-30",
-        "last_seen": "2026-05-30",
+        "last_seen": "2026-06-01",
         "what": "v4.85.0 tag CI was cancelled within 1 second of "
                 "starting.  Release-publish workflow then never "
                 "fired (workflow_run: success required).",
@@ -337,7 +337,7 @@ PATTERNS: list[dict] = [
         "topics": ["release", "lab", "editable"],
         "severity": "medium",
         "first_seen": "2026-04-28",
-        "last_seen": "2026-05-30",
+        "last_seen": "2026-06-01",
         "what": "After release-triple Phase 8, LAB's "
                 "`pip show radia` no longer says "
                 "'Editable project location: S:\\Radia\\01_GitHub'.  "
@@ -363,7 +363,7 @@ PATTERNS: list[dict] = [
         "topics": ["build", "ci", "ninja", "pybind11"],
         "severity": "high",
         "first_seen": "2026-05-30",
-        "last_seen": "2026-05-30",
+        "last_seen": "2026-06-01",
         "what": "3 intermittent main-push CI failures with 0 artifacts "
                 "uploaded.  pytest crashed before junit XMLs were "
                 "written because import radia segfaulted on ABI "
@@ -384,6 +384,100 @@ PATTERNS: list[dict] = [
                       "to CI but eliminates the entire class.",
         "related": ["memory/feedback_ninja_stale_obj_after_netgen_upgrade.md",
                     ".github/workflows/build-test.yml"],
+    },
+    {
+        "id": "ci-workflow-stale-binary-path-after-relocation",
+        "title": "After relocating/renaming a bundled binary, the CI "
+                 "workflow still sourced it from the OLD path/name -> "
+                 "first push RED at the binaries-fetch step.",
+        "topics": ["release", "ci", "tier2", "binary", "github-actions"],
+        "severity": "high",
+        "first_seen": "2026-06-01",
+        "last_seen": "2026-06-01",
+        "what": "First push after Tier-2 (Cubit plugin .pyd/.ccm moved "
+                "OUT of src/radia into the cubit-mesh-export package) + "
+                "the de-radia rename turned build-test CI RED at the "
+                "'fetch cubit_mesh_curver.pyd from binaries' step (6 "
+                "download attempts, exit 1).  Job died before tests -> "
+                "no junit XML.  Build + tests themselves were fine.",
+        "root_cause": "build-test.yml fetched the .pyd to src/radia and "
+                      "the wheel-build step copied .pyd/.ccm FROM "
+                      "src/radia -- but Build.ps1 now propagates them "
+                      "into packages/cubit-mesh-export/src/cubit_mesh_"
+                      "export.  The renamed asset (radia_cubit_mesh.pyd "
+                      "-> cubit_mesh_curver.pyd) was also not yet in the "
+                      "binaries release.",
+        "detection": "ci-verify RED; runner _diag Worker log 'Failed to "
+                     "download cubit_mesh_curver.pyd after 6 attempts'.",
+        "prevention": "When relocating OR renaming a bundled binary, "
+                      "grep ALL .github/workflows/*.yml (build-test + "
+                      "release-*) for the old path/name and fix: fetch "
+                      "dest, wheel-build source, pre-push hook upload "
+                      "list, binaries-release asset name.  The runner has "
+                      "the Cubit SDK so Build.ps1 supplies the .pyd "
+                      "locally -- make the binaries fetch a FALLBACK "
+                      "(skip-if-present), not mandatory.",
+        "related": [".github/workflows/build-test.yml",
+                    "memory/project_tier2_cme_sole_plugin_shipper_2026_06_01.md"],
+    },
+    {
+        "id": "release-smoke-admin-license-fail-nonblocking",
+        "title": "release_triple phase8 reports FAIL because cubit-smoke "
+                 "over SSH runs as Administrator (no license) -- but the "
+                 "deploy itself is verified OK.",
+        "topics": ["release", "ci", "cubit", "license", "smoke"],
+        "severity": "medium",
+        "first_seen": "2026-06-01",
+        "last_seen": "2026-06-01",
+        "what": "phase8 on 100号機 + mdx fails: cubit-smoke 'export did "
+                "not produce smoke.vol', Cubit exit=1 (0xC0000005); "
+                "cubit.log says 'License Error: No license found'.  This "
+                "stops `all` before phase8e/phase9 even though the "
+                "binaries deployed fine.",
+        "root_cause": "cubit-smoke-test over SSH runs as the Administrator "
+                      "Windows profile, whose Coreform license is not "
+                      "activated (renewals cache absent), so Cubit can't "
+                      "start.  The DEPLOY is fine: cubit-plugin-install "
+                      "--verify-only passes (sha256 match + compat OK + "
+                      "old radia_cubit.* removed).",
+        "detection": "cubit.log 'License Error: No license found' under "
+                     "the smoke temp dir; --verify-only is green.",
+        "prevention": "NON-BLOCKING: real lab users have their own "
+                      "licenses.  `release_triple done` (preflight + "
+                      "verify-editable + phase9) has NO smoke, so it "
+                      "passes -- use it as the release gate, not phase8's "
+                      "smoke.  Don't burn a Learn seat activating the "
+                      "Administrator profile just for the smoke.",
+        "related": [".claude/skills/cubit-license/SKILL.md",
+                    "memory/reference_rlm_activate_logoff_procedure.md"],
+    },
+    {
+        "id": "gitignored-skills-lag-code-renames",
+        "title": ".claude/skills (gitignored, LAB-local) keep OLD "
+                 "binary/command/cmake-target names after a code rename.",
+        "topics": ["skills", "rename", "deploy", "release"],
+        "severity": "medium",
+        "first_seen": "2026-06-01",
+        "last_seen": "2026-06-01",
+        "what": "After renaming the Cubit plugin "
+                "(radia_cubit.*->cubit_mesh_export.*/cubit_mesh_curver) + "
+                "the command verb (radia_export->export, nastran-> "
+                "jmag_nastran), the deploy/release-triple/build skills "
+                "still listed the OLD cmake targets (radia_cubit_ccm), "
+                "binary names, and radia_export commands -- they would "
+                "fail if run verbatim.",
+        "root_cause": ".claude/skills/ is gitignored (LAB-local dev "
+                      "convenience), so a rename in TRACKED code does NOT "
+                      "propagate to the skills; they must be swept by "
+                      "hand.",
+        "detection": "grep -r '<old-token>' .claude/skills after any "
+                     "binary / command / target rename.",
+        "prevention": "On ANY binary/command/cmake-target rename, grep "
+                      ".claude/skills for the old token and sweep "
+                      "(byte-level rename).  7 skills needed it this "
+                      "time: deploy, release-triple, build, radia-plugin-"
+                      "check, cubit-license, cubit-run, pyside6-health.",
+        "related": ["memory/project_tier2_cme_sole_plugin_shipper_2026_06_01.md"],
     },
 
     # =====================================================
