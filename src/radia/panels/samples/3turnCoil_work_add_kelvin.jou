@@ -31,7 +31,7 @@
 reset
 # All numeric coordinates below are in METRES (radia 4.12.0 m-only
 # policy).  Cubit 2025.3 does not have `set unit-system` -- numeric
-# values are dimensionless to Cubit, but radia_export netgen treats
+# values are dimensionless to Cubit, but export netgen treats
 # them as m per CLAUDE.md "Unit System Policy" and writes a m-unit
 # .vol.  The companion coil STEP (export step below) inherits Cubit's
 # default unit declaration in the STEP header; the PEEC-BEM workflow
@@ -1299,7 +1299,7 @@ merge volume 1 2 3 4
 # Tag sibc on the AIR side (vol 3 and vol 4 — both hemispheres) via a
 # bbox predicate around the wp cavity.  Tagging "surface in volume 2"
 # (wp) does NOT propagate to the BND triangles emitted by
-# `radia_export netgen` when wp is skipped in the mesh step.  See
+# `export netgen` when wp is skipped in the mesh step.  See
 # `3turnCoil_work.jou` for the full discussion (verified 2026-04-29).
 #
 # wp cavity bbox: cylindrical side at xy in [-5, +5] mm, end caps at

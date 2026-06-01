@@ -53,7 +53,7 @@ import numpy as np
 
 def _detect_vol_curving_order(vol_path: str) -> int:
     """Read companion ``<vol_path>.json`` (written by Cubit's
-    ``radia_export netgen``) to find the curving order baked into the
+    ``export netgen``) to find the curving order baked into the
     .vol.  Returns the integer ``order`` field, or 1 if the companion
     JSON is missing / malformed (= flat, safe default).
 
@@ -599,7 +599,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     bnds = set(vol_mesh.GetBoundaries())
 
     # Detect the .vol's baked-in curving order from companion .vol.json
-    # (written by Cubit ``radia_export netgen``).  The .vol's
+    # (written by Cubit ``export netgen``).  The .vol's
     # ``curvedelements`` section is loaded automatically by Mesh(); a
     # post-load ``mesh.Curve(p)`` would try to UPGRADE and, without a
     # CAD callback, silently fall back to flat -- so we never call it.

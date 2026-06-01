@@ -4360,7 +4360,7 @@ Complete pipeline for accelerator electromagnet analysis.
 
 ```
 CoilBuilder → Biot-Savart Hs (no coil mesh)
-Cubit → hex mesh + radia_export netgen "mesh.vol" order N
+Cubit → hex mesh + export netgen "mesh.vol" order N
 NGSolve → Omega-reduced Omega + Kelvin + Energy-based B-input Play
 ```
 
@@ -4388,7 +4388,7 @@ radia_objects = coil.to_radia() # Biot-Savart source (NO mesh)
 import tempfile
 from ngsolve import Mesh
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 # ACIS CallbackGeometry: no STEP, no OCC, no seam problems
 ```
@@ -4789,7 +4789,7 @@ geo = Glue(OCCGeometry("cubit_export.step").solids)
 
 Cubit's `imprint+merge` creates ACIS-kernel sharing, but OCCT's STEP
 reader does not propagate that sharing into BRep identity.  For ACIS
-origins, the **correct pipeline is Cubit -> radia_export netgen -> .vol**
+origins, the **correct pipeline is Cubit -> export netgen -> .vol**
 (no STEP round-trip, no OCC load, `.vol` text preserves sharing natively).
 
 ## Correspondence with Cubit
@@ -4892,7 +4892,7 @@ serialisation format that carries it (Christopher's recommendation).
 interfaces, either:
 - Use `.brep` (Python side only; Cubit cannot write BREP)
 - Rebuild the carve logic after `OCCGeometry(step).solids`
-- Use the Cubit -> `radia_export netgen` -> `.vol` pipeline entirely
+- Use the Cubit -> `export netgen` -> `.vol` pipeline entirely
   (skips OCC on the Python side)
 
 ## See also

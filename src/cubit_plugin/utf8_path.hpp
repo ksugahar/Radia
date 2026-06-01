@@ -18,7 +18,7 @@
 // non-Windows builds the std::string path is passed through unchanged.
 //
 // Observed 2026-04-21 with path `C:\temp\日本語テスト\3turncoil.stp`
-// failing every `radia_export netgen / gmsh / nastran / vtk / meg` call.
+// failing every `export netgen / gmsh / nastran / vtk / meg` call.
 
 #include <filesystem>
 #include <string>

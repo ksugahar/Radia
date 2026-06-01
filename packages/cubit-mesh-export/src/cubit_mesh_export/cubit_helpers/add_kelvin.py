@@ -1073,7 +1073,7 @@ def auto_add_kelvin_from_current_model(air_block="air",
     """Detect air sphere + symmetry, then call add_kelvin_cubit().
 
     Meant to be invoked by the Radia-NGSolve launcher just before
-    `radia_export netgen`.  Runs inside Cubit's embedded Python.
+    `export netgen`.  Runs inside Cubit's embedded Python.
 
     Steps (matching the 2026-04-14 c60a6007 implementation):
       1. If a `<kelvin_block>` block already exists, skip (idempotent).

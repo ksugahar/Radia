@@ -14,7 +14,7 @@ volume all size 3
 mesh volume all
 
 # Test exports
-radia_export nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o1.bdf" order 1 overwrite
-radia_export nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o2.bdf" order 2 overwrite
-radia_export gmsh "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o1.msh" order 1 overwrite
-radia_export gmsh "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o2.msh" order 2 overwrite
+export radia_nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o1.bdf" order 1 overwrite
+export radia_nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o2.bdf" order 2 overwrite
+export gmsh "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o1.msh" order 1 overwrite
+export gmsh "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o2.msh" order 2 overwrite

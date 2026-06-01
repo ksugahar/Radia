@@ -84,7 +84,7 @@ The same 6 nodes carry:
 
 - **Geometry** : `x(u, v) = sum_i x_i * N_i^{P2}(u, v)` — quadratic
   approximation of the workpiece surface.  Curved.  Sourced from the
-  Cubit `radia_export netgen "f.vol" order 2` companion JSON via
+  Cubit `export netgen "f.vol" order 2` companion JSON via
   [`bem_sibc_solver.py`](../../src/radia/bem_sibc_solver.py).
 - **Basis** : `phi(u, v) = sum_i phi_i * N_i^{P2}(u, v)` — scalar
   Lagrange P2 finite element.

@@ -1251,7 +1251,7 @@ CROSS_REFERENCE = r"""
 
 ## Case #3 (forced periodic BC script, 2021-09)
    -> Radia analog: the C++ Cubit plugin's auto-pairing of Kelvin faces
-                    during ``radia_export netgen`` (see
+                    during ``export netgen`` (see
                     ``src/cubit_plugin/ExportNetgenCommand.cpp`` and the
                     Identifications block written into the .vol).
                     The MATLAB script is the algorithmic blueprint.

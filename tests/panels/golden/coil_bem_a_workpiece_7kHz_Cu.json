@@ -4,7 +4,7 @@
   "sample": {
     "coil_step": "src/radia/panels/samples/ih_peec_inductance_coil.step",
     "vol": "src/radia/panels/samples/ih_peec_bem_coarse.vol",
-    "comment": "Coil STEP: gapped torus R=30mm a=3mm gap=5deg, ASCII STEP coords in metres.  Workpiece .vol: Cu cylinder R=25mm H=25mm meshed via Cubit + radia_export netgen, sibc sideset on the wp-cavity boundary (workpiece-as-hole convention).  Same physical setup as peec_bem_coarse_7kHz_Cu.json, just different coil solver."
+    "comment": "Coil STEP: gapped torus R=30mm a=3mm gap=5deg, ASCII STEP coords in metres.  Workpiece .vol: Cu cylinder R=25mm H=25mm meshed via Cubit + export netgen, sibc sideset on the wp-cavity boundary (workpiece-as-hole convention).  Same physical setup as peec_bem_coarse_7kHz_Cu.json, just different coil solver."
   },
   "physics": {
     "coil": "gapped torus R=30mm a=3mm gap=5deg, Cu sigma=5.8e7, mu_r=1",

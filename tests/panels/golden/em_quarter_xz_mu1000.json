@@ -5,7 +5,7 @@
     "vol": "C:/temp/em_quarter.vol",
     "coil_script": "src/radia/panels/samples/em_sample_coil.py",
     "generator_jou": "src/radia/panels/samples/em/em_1-4_quarter_xz.jou",
-    "generator_cmd_note": "Regenerate via Cubit batch: play em_1-4_quarter_xz.jou + play auto_kelvin_entry.py (with RADIA_LAUNCHER_CONFIG containing kelvin_reduction={x: bn=0, z: ht=0}) + radia_export netgen order=2 overwrite."
+    "generator_cmd_note": "Regenerate via Cubit batch: play em_1-4_quarter_xz.jou + play auto_kelvin_entry.py (with RADIA_LAUNCHER_CONFIG containing kelvin_reduction={x: bn=0, z: ht=0}) + export netgen order=2 overwrite."
   },
   "geometry_note": "1/4 xz quadrant: yoke reduced to x>=0 AND z>=0, air quarter-sphere (x>=0, z>=0 via intersect with octant brick), Kelvin 1/4 sphere offset in y.  Symmetry sidesets sym_bn=0_x and sym_ht=0_z enable Omega-reduced FEM to pick Dirichlet on z=0 (Omega=0) and Natural on x=0.",
   "physics": {

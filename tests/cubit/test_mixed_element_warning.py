@@ -40,8 +40,8 @@ cubit.cmd("block 1 name 'solid'")
 with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 	vtk_file = f.name
 
-print("  Calling radia_export gmsh (should see no warning):")
-cubit.cmd(f'radia_export gmsh "{vtk_file}" overwrite')
+print("  Calling export gmsh (should see no warning):")
+cubit.cmd(f'export gmsh "{vtk_file}" overwrite')
 os.unlink(vtk_file)
 
 # Test 2: Mixed element types in block (warning expected)
@@ -68,8 +68,8 @@ cubit.cmd("block 1 name 'mixed'")
 with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 	vtk_file = f.name
 
-print("  Calling radia_export gmsh (should see warning about mixed types):")
-cubit.cmd(f'radia_export gmsh "{vtk_file}" overwrite')
+print("  Calling export gmsh (should see warning about mixed types):")
+cubit.cmd(f'export gmsh "{vtk_file}" overwrite')
 os.unlink(vtk_file)
 
 # Test 3: Multiple separate blocks (no warning expected)
@@ -96,8 +96,8 @@ cubit.cmd("block 2 name 'hexes'")
 with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 	vtk_file = f.name
 
-print("  Calling radia_export gmsh (should see no warning):")
-cubit.cmd(f'radia_export gmsh "{vtk_file}" overwrite')
+print("  Calling export gmsh (should see no warning):")
+cubit.cmd(f'export gmsh "{vtk_file}" overwrite')
 os.unlink(vtk_file)
 
 print("\n" + "=" * 70)

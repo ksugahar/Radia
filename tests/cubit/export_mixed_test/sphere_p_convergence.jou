@@ -11,8 +11,8 @@ block 1 name "sphere"
 sideset 1 add surface 1
 sideset 1 name "surface"
 
-radia_export netgen "{DIR}/sphere_o1.vol" order 1 overwrite
-radia_export netgen "{DIR}/sphere_o2.vol" order 2 overwrite
-radia_export netgen "{DIR}/sphere_o3.vol" order 3 overwrite
-radia_export netgen "{DIR}/sphere_o4.vol" order 4 overwrite
-radia_export netgen "{DIR}/sphere_o5.vol" order 5 overwrite
+export netgen "{DIR}/sphere_o1.vol" order 1 overwrite
+export netgen "{DIR}/sphere_o2.vol" order 2 overwrite
+export netgen "{DIR}/sphere_o3.vol" order 3 overwrite
+export netgen "{DIR}/sphere_o4.vol" order 4 overwrite
+export netgen "{DIR}/sphere_o5.vol" order 5 overwrite

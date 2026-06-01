@@ -352,7 +352,7 @@ def generate_test_cases():
     # --- GMSH: order(1-3) x dim(2D,3D) (v4.1 only) ---
     # GMSH max order is 3; order 4-5 is a documented error (NetgenCurver
     # face/volume interior nodes are unreliable at p>=4 -> negative
-    # Jacobians).  Use `radia_export netgen` for order 4-5.  See CLAUDE.md
+    # Jacobians).  Use `export netgen` for order 4-5.  See CLAUDE.md
     # "GMSH order limit".
     for model in ['3d', '2d']:
         for order in [1, 2, 3]:
@@ -370,7 +370,7 @@ def generate_test_cases():
                 elif model == '2d':
                     expected_types.append(GMSH_TRI_TYPES[order])
 
-                cmd = (f'radia_export gmsh "{fname}" order {order} '
+                cmd = (f'export gmsh "{fname}" order {order} '
                        f'dimension {dim} overwrite')
 
                 cases.append({
@@ -393,7 +393,7 @@ def generate_test_cases():
                     name = f"nastran_{model}_order{order}_dim{dim}{nopyr_str}"
                     fname = os.path.join(OUT_DIR, f"{name}.bdf")
 
-                    cmd = (f'radia_export nastran "{fname}" order {order} '
+                    cmd = (f'export radia_nastran "{fname}" order {order} '
                            f'dimension {dim} overwrite')
                     if nopyr:
                         cmd += ' nopyramid'
@@ -412,7 +412,7 @@ def generate_test_cases():
                 name = f"vtk_{model}_order{order}_dim{dim}"
                 fname = os.path.join(OUT_DIR, f"{name}.vtk")
 
-                cmd = (f'radia_export vtk "{fname}" order {order} '
+                cmd = (f'export vtk "{fname}" order {order} '
                        f'dimension {dim} overwrite')
 
                 cases.append({

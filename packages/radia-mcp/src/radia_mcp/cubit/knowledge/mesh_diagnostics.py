@@ -276,9 +276,9 @@ cubit.cmd('nodeset 2 name "corners"')
 - "I have a heat flux in W/m^2" -> sideset.
 - "I have a fixed temperature in K" -> nodeset.
 
-## LAB policy: `radia_export` uses blocks only
+## LAB policy: `export` uses blocks only
 
-The `radia_export netgen` / `radia_export gmsh` / `radia_export nastran`
+The `export netgen` / `export gmsh` / `export radia_nastran`
 commands (from the `cubit_mesh_export` LAB plugin) read from blocks
 only. Sidesets and nodesets are ignored by this plugin.
 
@@ -541,12 +541,12 @@ The core idea is:
 ## Integrating with the solver
 
 Check that the solver's Jacobian warnings align with Cubit's quality
-warnings. For NGSolve (via radia_export netgen), the high-order mesh
+warnings. For NGSolve (via export netgen), the high-order mesh
 curving can rescue borderline straight-edge tets - so a `shape` score
 just below 0.2 is often survivable if the mesh is curved at order 2+.
 
 ```python
-cubit.cmd(f'radia_export netgen "{out_path}" order 2 overwrite')
+cubit.cmd(f'export netgen "{out_path}" order 2 overwrite')
 ```
 
 See `netgen_workflow_guide workflow=accuracy` for how to verify order
@@ -632,7 +632,7 @@ cubit.cmd('block 1 name "domain"')
 
 # Export
 out = os.environ.get("OUT_PATH", "out.vol")
-cubit.cmd(f'radia_export netgen "{out}" order {ORDER} overwrite')
+cubit.cmd(f'export netgen "{out}" order {ORDER} overwrite')
 ```
 
 ## Running scripts

@@ -3,7 +3,7 @@ Test: .vol curving round-trip (Save + Load curvedelements).
 
 Workflow:
   1. Cubit: sphere -> tet mesh
-  2. radia_export netgen .vol with order=2,3 curving
+  2. export netgen .vol with order=2,3 curving
   3. Load .vol -> NGSolve Mesh
   4. Check volume accuracy and curvedelements section presence
 
@@ -68,7 +68,7 @@ cubit.cmd('block 1 name "sphere"')
 print(f"Cubit mesh: {cubit.get_tet_count()} tets")
 
 # ============================================================
-# Step 2: radia_export netgen .vol for each order, load and check
+# Step 2: export netgen .vol for each order, load and check
 # ============================================================
 results = {}
 
@@ -77,7 +77,7 @@ for order in [2, 3]:
 
     # Export .vol via C++ plugin
     vol_path = os.path.join(OUT_DIR, f"sphere_roundtrip_o{order}.vol")
-    cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
+    cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
     sz = os.path.getsize(vol_path)
     print(f"  Exported: {vol_path} ({sz:,} bytes)")
 

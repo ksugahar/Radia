@@ -1,12 +1,12 @@
 {
   "description": "Golden reference for calc_accel_magnet.py on the C-type dipole em_sample.jou (half-z model, linear mu_r=1000).",
-  "rationale": "Knowledge accumulation mechanism (per user feedback 2026-04-24 about losing working implementations): locks the end-to-end path yoke.jou -> radia_export netgen (with Auto-Kelvin quarter-detected -> full z-cut kelvin pair) -> NGSolve Mesh + BBBND GND via CD3 propagation -> FEM Omega-reduced + Kelvin periodic -> B_origin + W_mag + L.  Any regression in the Cubit plugin's nodeset/sideset export, in add_periodic_kelvin fallback, or in calc_accel_magnet's Dirichlet setup will trip this test.",
+  "rationale": "Knowledge accumulation mechanism (per user feedback 2026-04-24 about losing working implementations): locks the end-to-end path yoke.jou -> export netgen (with Auto-Kelvin quarter-detected -> full z-cut kelvin pair) -> NGSolve Mesh + BBBND GND via CD3 propagation -> FEM Omega-reduced + Kelvin periodic -> B_origin + W_mag + L.  Any regression in the Cubit plugin's nodeset/sideset export, in add_periodic_kelvin fallback, or in calc_accel_magnet's Dirichlet setup will trip this test.",
   "sample": {
     "vol": "src/radia/panels/samples/em_sample.vol",
     "coil_script": "src/radia/panels/samples/em_sample_coil.py",
     "generator_jou": "src/radia/panels/samples/em_sample.jou",
     "bh_curve": "src/radia/panels/samples/em_sample_bh.txt",
-    "generator_cmd_note": "Regenerate via Cubit batch: python-run em_sample.jou + auto_add_kelvin_from_current_model() + radia_export netgen order=1 overwrite.  Land .vol directly at src/radia/panels/samples/em_sample.vol (shipped with the wheel via pyproject.toml package-data).  Reference template: C:/temp/kelvin_bench/regen_em_sample.py."
+    "generator_cmd_note": "Regenerate via Cubit batch: python-run em_sample.jou + auto_add_kelvin_from_current_model() + export netgen order=1 overwrite.  Land .vol directly at src/radia/panels/samples/em_sample.vol (shipped with the wheel via pyproject.toml package-data).  Reference template: C:/temp/kelvin_bench/regen_em_sample.py."
   },
   "geometry_note": "Half-y model: yoke in y=[0, 0.18] only (no y-reflection in mesh; physically the ELF reference is quarter-XZ with mesh reduced further).  Comparing to the ELF quarter-XZ -228.1 mT reference (verified by examples/c_type_electromagnet/mu=1000/quarter/verify_elf_radia.py 2026-04-25) requires setting up sym_tangential/sym_normal BCs AND porting examples/c_type_electromagnet/mu=1000/coil_model.py to a CoilBuilder script (Y_CENTER=131.25 mm vs em_sample_coil's 151.25 mm) -- that variant lives in the future em/em_elf_quarter_xz.jou.",
   "physics": {

@@ -17,7 +17,7 @@ std::vector<std::string> ExportGmshCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
-    "radia_export gmsh <string:label='filename',help='<filename>'> "
+    "export gmsh <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1-5>'>] "
     "[dimension <value:label='dimension',help='<2 or 3>'>] "
     "[overwrite]"
@@ -29,7 +29,7 @@ std::vector<std::string> ExportGmshCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "radia_export gmsh \"filename\" [order {1|2|3|4|5}] [dimension {2|3}] [overwrite]"
+    "export gmsh \"filename\" [order {1|2|3|4|5}] [dimension {2|3}] [overwrite]"
   );
   return help;
 }
@@ -69,7 +69,7 @@ bool ExportGmshCommand::execute(CubitCommandData &data)
   // linear interpolation -> negative Jacobians in GMSH). Use .vol for p>=4.
   if (order > 3) {
     PRINT_ERROR("GMSH export: order %d not supported. "
-                "Use 'radia_export netgen' for order 4-5.\n", order);
+                "Use 'export netgen' for order 4-5.\n", order);
     return false;
   }
 #ifndef HAVE_NETGEN
@@ -165,7 +165,7 @@ int ExportGmshCommand::gmsh_type(const MeshElement &elem, int order)
     if (is_line) return 26;   // LINE4
   }
   // Order 4-5: not supported for GMSH (face/volume node extraction unreliable).
-  // Use radia_export netgen for order 4-5.
+  // Use export netgen for order 4-5.
 
   // Fallback: WEDGE order 3-5 not supported by GMSH, warn and use linear
   if (is_wed && order >= 3) {

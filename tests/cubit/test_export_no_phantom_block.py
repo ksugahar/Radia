@@ -1,8 +1,8 @@
-"""Regression test for the radia_export phantom-block bug.
+"""Regression test for the export phantom-block bug.
 
 BUG (2026-05-30, reported by keiko on 100号機 with a 6-turn loft coil
 journal at W:/31_Go-Tech/.../2026_05_21_6turn_coil_loft/):
-  Running `radia_export netgen` against a journal with K user-defined
+  Running `export netgen` against a journal with K user-defined
   blocks produces:
     * the error "ERROR: No block with ID K+1 was found", and
     * a phantom block (id K+1) gets created in the Cubit session and
@@ -96,7 +96,7 @@ def fresh_cubit():
 
 
 def _snapshot_cubit_state():
-    """Capture every entity collection that radia_export should NOT modify."""
+    """Capture every entity collection that export should NOT modify."""
     return {
         "blocks":   tuple(cubit.parse_cubit_list("block",   "all")),
         "sidesets": tuple(cubit.parse_cubit_list("sideset", "all")),
@@ -127,7 +127,7 @@ def test_radia_export_netgen_does_not_create_phantom_block(fresh_cubit, tmp_path
 
     vol_path = str(tmp_path / "out.vol")
     # The bug message: ERROR: No block with ID 2 was found.
-    cubit.cmd(f'radia_export netgen "{vol_path}" order 1')
+    cubit.cmd(f'export netgen "{vol_path}" order 1')
 
     snapshot_after = _snapshot_cubit_state()
 
@@ -136,7 +136,7 @@ def test_radia_export_netgen_does_not_create_phantom_block(fresh_cubit, tmp_path
                for k in snapshot_before
                if snapshot_before[k] != snapshot_after[k]}
     assert not drifted, (
-        f"radia_export netgen drifted Cubit state -- likely a phantom-block "
+        f"export netgen drifted Cubit state -- likely a phantom-block "
         f"side effect.  Drifted entries: {drifted}"
     )
 
@@ -146,7 +146,7 @@ def test_radia_export_netgen_does_not_create_phantom_block(fresh_cubit, tmp_path
 
 
 def test_radia_export_netgen_is_state_idempotent(fresh_cubit, tmp_path):
-    """Calling radia_export N times back-to-back must keep Cubit state
+    """Calling export N times back-to-back must keep Cubit state
     pinned to the first snapshot.
 
     This catches the broader "any side effect during export" class of
@@ -160,14 +160,14 @@ def test_radia_export_netgen_is_state_idempotent(fresh_cubit, tmp_path):
     cubit.cmd("block 1 name 'workpiece'")
 
     # First export -- treat its post-state as the reference.
-    cubit.cmd(f'radia_export netgen "{tmp_path / "out_0.vol"}" order 1')
+    cubit.cmd(f'export netgen "{tmp_path / "out_0.vol"}" order 1')
     s0 = _snapshot_cubit_state()
 
     # Subsequent exports must not drift.
     for i in range(1, 3):
-        cubit.cmd(f'radia_export netgen "{tmp_path / f"out_{i}.vol"}" order 1')
+        cubit.cmd(f'export netgen "{tmp_path / f"out_{i}.vol"}" order 1')
         si = _snapshot_cubit_state()
         drifted = {k: (s0[k], si[k]) for k in s0 if s0[k] != si[k]}
         assert not drifted, (
-            f"radia_export iteration {i} drifted from iteration 0: {drifted}"
+            f"export iteration {i} drifted from iteration 0: {drifted}"
         )

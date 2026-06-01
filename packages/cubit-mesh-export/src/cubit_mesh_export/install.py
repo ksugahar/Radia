@@ -420,7 +420,7 @@ _CLEAN_PATTERNS = [
     # Tier-2 rename cleanup (2026-06-01): also remove the OLD radia_cubit.*
     # plugin from machines deployed before the cubit_mesh_export rename, so
     # Cubit does not load BOTH the old and new .ccm and double-register the
-    # `radia_export` APREPRO commands.  Safe to leave indefinitely (a no-op
+    # `export` APREPRO commands.  Safe to leave indefinitely (a no-op
     # once every machine is migrated).
     "radia_cubit.ccm",
     "radia_cubit.ccl",

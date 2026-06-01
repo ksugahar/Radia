@@ -133,7 +133,7 @@ def main():
                         total_failed += 1
                     break
 
-    # --- Test 3: p-convergence (sphere, order 1-5 via radia_export netgen) ---
+    # --- Test 3: p-convergence (sphere, order 1-5 via export netgen) ---
     print("=== Test 3: p-convergence (sphere order 1-5) ===")
     p_conv_jou = os.path.join(SCRIPT_DIR, "sphere_p_convergence.jou")
     if os.path.isfile(p_conv_jou):

@@ -79,7 +79,7 @@ std::vector<std::string> ExportNetgenCommand::get_syntax()
   // global GUI launcher.  Each kelvin_sym_<axis> takes a string in
   // {off, bn, ht}; "off" is the default and means "no reduction".
   syntax_list.push_back(
-    "radia_export netgen <string:label='filename',help='<filename>'> "
+    "export netgen <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1-5>'>] "
     "[overwrite] "
     "[add_kelvin] "
@@ -97,7 +97,7 @@ std::vector<std::string> ExportNetgenCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "radia_export netgen \"filename.vol\" [order {1|2|3|4|5}] [overwrite]\n"
+    "export netgen \"filename.vol\" [order {1|2|3|4|5}] [overwrite]\n"
     "                  [add_kelvin]\n"
     "                  [kelvin_air \"air\"] [kelvin_block \"kelvin\"]\n"
     "                  [kelvin_mesh <size_m>]\n"
@@ -289,7 +289,7 @@ static void run_auto_kelvin(bool add_kelvin,
 bool ExportNetgenCommand::execute(CubitCommandData &data)
 {
 #ifndef HAVE_NETGEN
-  PRINT_ERROR("radia_export netgen requires Netgen support (not built).\n");
+  PRINT_ERROR("export netgen requires Netgen support (not built).\n");
   return false;
 #else
   // Suppress Cubit Learn Edition's 50k-cap ERROR during the export.

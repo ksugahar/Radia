@@ -121,7 +121,7 @@ for method_name, commands in racetrack_methods:
         vol_path = os.path.join(OUT_DIR, f"{method_name}_order{order}.vol")
 
         try:
-            cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
+            cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
             mesh = Mesh(vol_path)
             with TaskManager():
                 V_ng = Integrate(CF(1), mesh)

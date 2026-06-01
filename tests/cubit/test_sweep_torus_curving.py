@@ -4,7 +4,7 @@ Test: sweep torus p-convergence with UV-guided projection fix.
 Verifies that ACIS projection correctly handles sweep torus surfaces
 split at z=0.
 
-Tests Path A (C++ plugin, radia_export netgen command) p-convergence.
+Tests Path A (C++ plugin, export netgen command) p-convergence.
 
 Previously: closest_point_trimmed cross-projected between upper/lower halves,
 causing negative Jacobians and broken p-convergence.
@@ -122,8 +122,8 @@ for method_name, commands in torus_methods:
         vol_path = os.path.join(OUT_DIR, f"{method_name}_A_order{order}.vol")
         msh_path = os.path.join(OUT_DIR, f"{method_name}_A_order{order}.msh")
 
-        cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
-        cubit.cmd(f'radia_export gmsh "{msh_path}" order {order} overwrite')
+        cubit.cmd(f'export netgen "{vol_path}" order {order} overwrite')
+        cubit.cmd(f'export gmsh "{msh_path}" order {order} overwrite')
 
         V_ng = volume_from_vol(vol_path, order)
         err_pct = (V_ng - V_exact) / V_exact * 100.0

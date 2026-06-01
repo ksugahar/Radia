@@ -4,10 +4,10 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
-## Unreleased — Tier-2 sole-shipper + de-radia plugin rename
+## Unreleased — Tier-2 sole-shipper + de-radia rename + `export` command verb
 
-Two coupled changes that let `cubit-mesh-export` and `radia` release
-fully independently:
+Three coupled changes that let `cubit-mesh-export` and `radia` release
+fully independently and clean up the radia-prefixed naming:
 
 1. **Sole shipper of the Cubit plugin binary.**  `cubit-mesh-export`
    is now the ONLY package that ships and deploys the Cubit plugin;
@@ -28,13 +28,31 @@ fully independently:
    | `radia_cubit_pybind.cpp` (C++ source) | `cubit_mesh_export_pybind.cpp` |
    | pybind module `radia_cubit_mesh` | `cubit_mesh_curver` |
 
-   The APREPRO command name is **unchanged** -- it is still
-   `radia_export netgen/gmsh/nastran/vtk`, so existing `.jou` scripts
-   keep working (only the binary / module filenames changed).
+   `cubit-plugin-install` removes any old `radia_cubit.*` files left by
+   a pre-rename deployment, so Cubit does not load both the old and new
+   `.ccm` and double-register the export commands.
 
-   `cubit-plugin-install` now removes any old `radia_cubit.*` files
-   left by a pre-rename deployment, so Cubit does not load both the
-   old and new `.ccm` and double-register the `radia_export` commands.
+3. **APREPRO command verb renamed `radia_export <fmt>` -> `export <fmt>`.**
+   The mesh-export commands now extend Cubit's native `export` verb
+   instead of using a separate `radia_export` verb:
+
+   | Old command | New command |
+   |-------------|-------------|
+   | `radia_export netgen "f.vol"`  | `export netgen "f.vol"` |
+   | `radia_export gmsh "f.msh"`    | `export gmsh "f.msh"` |
+   | `radia_export vtk "f.vtk"`     | `export vtk "f.vtk"` |
+   | `radia_export femeem "dir"`    | `export femeem "dir"` |
+   | `radia_export meg "f.meg"`     | `export meg "f.meg"` |
+   | `radia_export nastran "f.bdf"` | `export radia_nastran "f.bdf"` |
+
+   **Breaking**: existing `.jou` scripts calling `radia_export ...` must
+   be updated to `export ...` (the old verb is removed -> Cubit reports
+   `Unrecognized Keyword: 'radia_export'`).  Nastran is the one
+   exception: Cubit has a built-in `export nastran` (different BDF
+   format, no high-order support), so the plugin's BDF writer is exposed
+   as `export radia_nastran` to avoid shadowing the built-in.  The other
+   five formats are not built-in Cubit export keywords, so they extend
+   `export` cleanly.
 
 ## 0.6.0 — Japanese / Unicode path support
 
@@ -44,7 +62,7 @@ All 6 mesh exporters now correctly write `.vol` / `.msh` / `.bdf` /
 `.vtk` / `.meg` / FEMEEM `in.dat` to paths containing non-ASCII
 characters (Japanese, Korean, Greek etc.) on any Windows codepage.
 
-Before: `radia_export netgen "C:/temp/日本語/coil.vol"` raised
+Before: `export netgen "C:/temp/日本語/coil.vol"` raised
   `"No mapping for the Unicode character exists in the target
    multi-byte code page."` and wrote no file.
 After: same command writes the file (22,521 bytes on the reference
@@ -76,7 +94,7 @@ Applied to all 6 exporters:
 ### Smoke test harness
 
 `smoke_test.py` driver wrapper now terminates with explicit
-`exit 0` after `radia_export netgen`.  On slower boxes (100号機)
+`exit 0` after `export netgen`.  On slower boxes (100号機)
 Cubit's headless teardown access-violates (exit code 0xC0000005)
 before the mesh DB destructor flushes the `.vol` writer; the
 explicit exit forces shutdown through the normal exit handler so

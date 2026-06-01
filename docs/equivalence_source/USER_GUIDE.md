@@ -144,7 +144,7 @@ for a verified end-to-end test.
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Cubit headless: build mesh, label "nfs_surface" sideset        │
-│  radia_export netgen "model.vol" order 2 overwrite              │
+│  export netgen "model.vol" order 2 overwrite              │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ .vol with bcnames "nfs_surface"
 ┌──────────────────────────┼──────────────────────────────────────┐

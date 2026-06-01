@@ -3,7 +3,7 @@
 Demonstrates the full near-field-source production pipeline:
 
   1. Cubit headless: create sphere mesh, mark "nfs_surface" sideset,
-     `radia_export netgen` -> inner_mesh.vol
+     `export netgen` -> inner_mesh.vol
   2. NGSolve: load inner_mesh.vol; sample analytic magnetic-dipole
      H field on its VectorH1 space; save as H_inner.sol
   3. Subprocess: invoke the CLI
@@ -145,15 +145,15 @@ def step1_cubit_mesh():
     if INNER_VOL.exists():
         INNER_VOL.unlink()
     try:
-        cubit.cmd(f'radia_export netgen "{vol_path}" order 1')
+        cubit.cmd(f'export netgen "{vol_path}" order 1')
     except SyntaxError:
-        print("  NOTE: radia_export keyword not registered on Cubit 2025.12")
+        print("  NOTE: export keyword not registered on Cubit 2025.12")
         print("  (plugin .ccm loads but commands fail to register; needs")
         print("   plugin rebuild against the new Cubit SDK).  Falling back")
         print("  to OCC mesh path.")
         return False
     if not INNER_VOL.exists():
-        print(f"  ERROR: radia_export netgen did not produce {INNER_VOL}")
+        print(f"  ERROR: export netgen did not produce {INNER_VOL}")
         return False
     size_kb = INNER_VOL.stat().st_size // 1024
     print(f"  Exported {INNER_VOL.name}  ({size_kb} KB)")

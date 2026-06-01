@@ -58,7 +58,7 @@ std::vector<std::string> ExportVtkCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
-    "radia_export vtk <string:label='filename',help='<filename>'> "
+    "export vtk <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1 or 2>'>] "
     "[dimension <value:label='dimension',help='<2 or 3>'>] "
     "[overwrite]"
@@ -70,7 +70,7 @@ std::vector<std::string> ExportVtkCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "radia_export vtk \"filename\" [order {1|2}] [dimension {2|3}] [overwrite]"
+    "export vtk \"filename\" [order {1|2}] [dimension {2|3}] [overwrite]"
   );
   return help;
 }

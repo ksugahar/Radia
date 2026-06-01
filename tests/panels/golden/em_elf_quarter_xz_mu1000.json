@@ -5,7 +5,7 @@
     "vol": "C:/temp/em_elf_quarter.vol",
     "coil_script": "src/radia/panels/samples/em_elf_coil.py",
     "generator_jou": "src/radia/panels/samples/em/em_elf_quarter_xz.jou",
-    "generator_cmd_note": "Regenerate via Cubit batch with kelvin_reduction = {'x': 'bn=0', 'z': 'ht=0'} -> radia_export netgen order=2 overwrite.  Requires the ELF .meg at S:/ELF_MAGIC/2020_03_07_CEFC_2020/model_C-Type/mu=1000/ELF_MMB8T_EIEM2_1x1x1/quater/ELF_magic.meg or override via ELF_MEG_PATH env var."
+    "generator_cmd_note": "Regenerate via Cubit batch with kelvin_reduction = {'x': 'bn=0', 'z': 'ht=0'} -> export netgen order=2 overwrite.  Requires the ELF .meg at S:/ELF_MAGIC/2020_03_07_CEFC_2020/model_C-Type/mu=1000/ELF_MMB8T_EIEM2_1x1x1/quater/ELF_magic.meg or override via ELF_MEG_PATH env var."
   },
   "geometry_note": "Yoke: 13 ELF hex CAD volumes UNITED into 1 -> tetmesh at 5 mm.  This trades exact 13-hex topology for face-conformality (per-volume hex meshing fails: imprint+merge is 'overconstrained' for slanted hexes, and per-volume equivalence misses coincident nodes due to heal-perturbation).  Air: full sphere intersected with octant brick (x>=0, z>=0).  Kelvin: full sphere offset along +y, webcut at x=0/z=0 to give 1/4 Kelvin; Kelvin pair 1585/1585 at machine precision.",
   "physics": {

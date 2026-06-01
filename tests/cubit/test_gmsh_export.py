@@ -1,5 +1,5 @@
 """
-Test Gmsh export via cubit.cmd('radia_export gmsh ... ...').
+Test Gmsh export via cubit.cmd('export gmsh ... ...').
 
 Tests:
 1. Basic format validation (v4.1)
@@ -148,7 +148,7 @@ def test_format_version():
 	cubit.cmd("block 1 name 'solid'")
 
 	msh_file = "test_gmsh_format.msh"
-	cubit.cmd(f'radia_export gmsh "{msh_file}" overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" overwrite')
 
 	result = parse_gmsh_file(msh_file)
 
@@ -184,7 +184,7 @@ def test_3d_tet_mesh():
 	cubit.cmd("block 1 name 'solid'")
 
 	msh_file = "test_gmsh_tet.msh"
-	cubit.cmd(f'radia_export gmsh "{msh_file}" overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" overwrite')
 
 	result = parse_gmsh_file(msh_file)
 	print(f"  1st order - Nodes: {result['nodes']}, Elements: {result['elements']}")
@@ -195,7 +195,7 @@ def test_3d_tet_mesh():
 
 	# 2nd order: the 'order' keyword drives element order (NOT the Cubit
 	# block element type, which the exporter ignores).
-	cubit.cmd(f'radia_export gmsh "{msh_file}" order 2 overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" order 2 overwrite')
 	result = parse_gmsh_file(msh_file)
 	print(f"  2nd order - Nodes: {result['nodes']}, Elements: {result['elements']}")
 	print(f"  Element types: {result['element_types']}")
@@ -221,7 +221,7 @@ def test_3d_hex_mesh():
 	cubit.cmd("block 1 name 'solid'")
 
 	msh_file = "test_gmsh_hex.msh"
-	cubit.cmd(f'radia_export gmsh "{msh_file}" overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" overwrite')
 
 	result = parse_gmsh_file(msh_file)
 	print(f"  1st order - Element types: {result['element_types']}")
@@ -230,7 +230,7 @@ def test_3d_hex_mesh():
 	os.remove(msh_file)
 
 	# 2nd order: the 'order' keyword drives element order.
-	cubit.cmd(f'radia_export gmsh "{msh_file}" order 2 overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" order 2 overwrite')
 	result = parse_gmsh_file(msh_file)
 	print(f"  2nd order - Element types: {result['element_types']}")
 	assert GMSH_TYPES['HEX20'] in result['element_types'], "HEX20 not found"
@@ -255,7 +255,7 @@ def test_2d_mesh_with_dim_auto():
 	cubit.cmd("block 1 name 'plate'")
 
 	msh_file = "test_gmsh_2d.msh"
-	cubit.cmd(f'radia_export gmsh "{msh_file}" overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" overwrite')
 
 	result = parse_gmsh_file(msh_file)
 	print(f"  Element types: {result['element_types']}")
@@ -282,7 +282,7 @@ def test_2d_mesh_normal_orientation():
 	cubit.cmd("block 1 name 'plate'")
 
 	msh_file = "test_gmsh_2d_normal.msh"
-	cubit.cmd(f'radia_export gmsh "{msh_file}" dimension 2 overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" dimension 2 overwrite')
 
 	# Check file was created
 	assert os.path.exists(msh_file), "File not created"
@@ -309,7 +309,7 @@ def test_entities_section():
 	cubit.cmd("block 1 name 'solid'")
 
 	msh_file = "test_gmsh_entities.msh"
-	cubit.cmd(f'radia_export gmsh "{msh_file}" overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" overwrite')
 
 	result = parse_gmsh_file(msh_file)
 	print(f"  Entities: {result['entities']}")
@@ -344,7 +344,7 @@ def test_mixed_elements():
 	cubit.cmd("block 2 name 'tet_region'")
 
 	msh_file = "test_gmsh_mixed.msh"
-	cubit.cmd(f'radia_export gmsh "{msh_file}" overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" overwrite')
 
 	result = parse_gmsh_file(msh_file)
 	print(f"  Element types: {result['element_types']}")
@@ -375,7 +375,7 @@ def test_physical_names():
 	cubit.cmd("block 2 name 'boundary_faces'")
 
 	msh_file = "test_gmsh_names.msh"
-	cubit.cmd(f'radia_export gmsh "{msh_file}" overwrite')
+	cubit.cmd(f'export gmsh "{msh_file}" overwrite')
 
 	result = parse_gmsh_file(msh_file)
 	print(f"  Physical names: {result['physical_names']}")

@@ -62,7 +62,7 @@ CoilBuilder (Radia)
        v
 Cubit (hex mesh)
   Iron yoke + air + Kelvin domain -> hex sweep mesh
-  radia_export netgen "model.vol" order N -> arbitrary-order hex mesh
+  export netgen "model.vol" order N -> arbitrary-order hex mesh
   CallbackGeometry -> ACIS direct curving (NO STEP/OCC)
        |
        | curved hex mesh (.vol)
@@ -295,7 +295,7 @@ sideset 2 add surface {kelvin_outer}
 sideset 2 name "kelvin_ext"
 
 # 6. Export
-radia_export netgen "magnet.vol" order 2 overwrite
+export netgen "magnet.vol" order 2 overwrite
 ```
 
 ## NGSolve FEM Solve (Omega-Reduced Scalar Potential)

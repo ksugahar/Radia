@@ -182,7 +182,7 @@ PATTERNS: list[dict] = [
         "severity": "high",
         "first_seen": "2026-05-30",
         "last_seen": "2026-05-31",
-        "what": "After `radia_export netgen`, Cubit shows a new "
+        "what": "After `export netgen`, Cubit shows a new "
                 "phantom block (id K+1) that the user never created.  "
                 "Subsequent parse_cubit_list('volume', 'in block K+1') "
                 "errors with 'No block with ID K+1 was found'.  "
@@ -197,7 +197,7 @@ PATTERNS: list[dict] = [
                       "with id ~ K+1.  Source: MeshData.cpp::"
                       "extract_elements / _sidesets / _nodesets.",
         "detection": "tests/cubit/test_export_no_phantom_block.py "
-                     "(state-snapshot diff before/after radia_export). "
+                     "(state-snapshot diff before/after export). "
                      "cubit-smoke-test also exercises the round-trip.",
         "prevention": "BEFORE calling iface->get_*_list, snapshot the "
                       "USER-defined ids via "

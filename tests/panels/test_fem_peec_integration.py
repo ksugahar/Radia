@@ -4,7 +4,7 @@ Tests the full Cubit pipeline:
   1. Cubit: create torus coil + air sphere
   2. Subtract coil from air (hole), mesh air
   3. add_kelvin_cubit() → Kelvin sphere with copy mesh + periodic BC
-  4. radia_export netgen → .vol, export step → coil.step
+  4. export netgen → .vol, export step → coil.step
   5. calc_fem_kelvin.solve_fem(peec_step=...) → L
   6. Verify L vs Grover analytical (±15%)
 
@@ -104,7 +104,7 @@ def peec_cubit_model():
     vol_path = os.path.join(tmpdir, "model.vol")
     step_path = os.path.join(tmpdir, "coil.step")
 
-    cubit.cmd(f'radia_export netgen "{vol_path}" order 1 overwrite')
+    cubit.cmd(f'export netgen "{vol_path}" order 1 overwrite')
     cubit.cmd(f'export step "{step_path}" volume 2 overwrite')
 
     return {

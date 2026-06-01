@@ -1,6 +1,6 @@
 """Cubit entry point for Auto-Kelvin addition (argument-driven).
 
-Invoked by ``radia_export netgen ... add_kelvin ...`` (C++) via::
+Invoked by ``export netgen ... add_kelvin ...`` (C++) via::
 
     play "<plugin_dir>/cubit_helpers/auto_kelvin_entry.py"
 

@@ -112,7 +112,7 @@ production tool for this is Coreform Cubit, accessed through
 cubit-mesh-export:
 
 ```
-radia_export netgen "model.vol" order N \\
+export netgen "model.vol" order N \\
     [add_kelvin] \\
     [kelvin_mesh <m>] \\
     [kelvin_sym_x|y|z {off|bn|ht}] \\
@@ -156,7 +156,7 @@ Need labels (material / BND / BBBND) ?
 |           Use it for PEEC, label-free CAD inspection, geometry sharing.
 +-- Yes  -> .vol is required.
             Route through cubit-mesh-export:
-                radia_export netgen "model.vol" order N [add_kelvin] [...]
+                export netgen "model.vol" order N [add_kelvin] [...]
             Then hand the .vol to the appropriate radia-* domain tool.
 ```
 

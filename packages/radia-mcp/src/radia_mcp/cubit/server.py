@@ -91,7 +91,7 @@ def _format_findings(filepath: str, findings: list[dict]) -> str:
 
 EXAMPLES = {}
 
-EXAMPLES['cylinder'] = '''# Cylinder with radia_export netgen (high-order curving)
+EXAMPLES['cylinder'] = '''# Cylinder with export netgen (high-order curving)
 import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -115,7 +115,7 @@ cubit.cmd("block 1 add volume all")
 
 # Export with curving via C++ APREPRO command
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order {ORDER} overwrite')
 mesh = Mesh(vol_path)
 
 expected_vol = math.pi * R**2 * H
@@ -123,7 +123,7 @@ vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['sphere'] = '''# Sphere with radia_export netgen
+EXAMPLES['sphere'] = '''# Sphere with export netgen
 import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -145,7 +145,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add volume all")
 
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order {ORDER} overwrite')
 mesh = Mesh(vol_path)
 
 expected_vol = 4/3 * math.pi * R**3
@@ -153,7 +153,7 @@ vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['torus'] = '''# Torus with radia_export netgen
+EXAMPLES['torus'] = '''# Torus with export netgen
 import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -175,7 +175,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add volume all")
 
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order {ORDER} overwrite')
 mesh = Mesh(vol_path)
 
 expected_vol = 2 * math.pi**2 * R_MAJOR * R_MINOR**2
@@ -183,7 +183,7 @@ vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['cone'] = '''# Cone with radia_export netgen
+EXAMPLES['cone'] = '''# Cone with export netgen
 import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -205,7 +205,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add volume all")
 
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order {ORDER} overwrite')
 mesh = Mesh(vol_path)
 
 expected_vol = 1/3 * math.pi * R_BASE**2 * H
@@ -213,7 +213,7 @@ vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['hex_cylinder'] = '''# Hex-meshed Cylinder with radia_export netgen
+EXAMPLES['hex_cylinder'] = '''# Hex-meshed Cylinder with export netgen
 import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -240,7 +240,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add volume all")
 
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order 3 overwrite')
 mesh = Mesh(vol_path)
 
 expected_vol = math.pi * R**2 * H
@@ -248,7 +248,7 @@ vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['complex_named'] = '''# Complex Geometry with Boolean Operations (radia_export netgen)
+EXAMPLES['complex_named'] = '''# Complex Geometry with Boolean Operations (export netgen)
 import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -275,7 +275,7 @@ cubit.cmd("block 1 add volume all")
 
 # Export with curving via C++ APREPRO command
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order {ORDER} overwrite')
 mesh = Mesh(vol_path)
 
 expected_vol = BRICK_SIZE**3 - math.pi * R_HOLE**2 * BRICK_SIZE
@@ -307,7 +307,7 @@ cubit.cmd("block 1 add volume 1")
 cubit.cmd('block 1 name "sphere"')
 
 # Export to Netgen .vol (order 2 with ACIS curving)
-cubit.cmd('radia_export netgen "sphere.vol" order 2 overwrite')
+cubit.cmd('export netgen "sphere.vol" order 2 overwrite')
 
 # Read into NGSolve
 mesh = Mesh("sphere.vol")
@@ -341,7 +341,7 @@ cubit.cmd('block 1 name "domain"')
 
 # --- Export with curving via C++ APREPRO command ---
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order {ORDER} overwrite')
 mesh = Mesh(vol_path)
 
 # --- Solve Poisson equation ---
@@ -382,10 +382,10 @@ def cubit_docs(topic: str = "all") -> str:
 	        "all"                    - Overview of all categories
 	        --- Export formats ---
 	        "export_overview"        - All export commands overview
-	        "gmsh_v2"               - Gmsh v4.1 format (radia_export gmsh)
+	        "gmsh_v2"               - Gmsh v4.1 format (export gmsh)
 	        "gmsh_v4"               - Gmsh v4.1 format policy
-	        "netgen"                - Netgen .vol export (radia_export netgen)
-	        "nastran"               - Nastran BDF (radia_export nastran)
+	        "netgen"                - Netgen .vol export (export netgen)
+	        "nastran"               - Nastran BDF (export radia_nastran)
 	        "exodus"                - Exodus II (Cubit built-in)
 	        "export_comparison"     - Format comparison and decision matrix
 	        "export_decision_guide" - Decision tree for format selection
@@ -525,7 +525,7 @@ def netgen_workflow_guide(workflow: str = "overview") -> str:
 	Args:
 	    workflow: Workflow to document. Options:
 	        "overview"          - Decision tree: which workflow to use
-	        "radia_export netgen"     - radia_export netgen() API reference
+	        "export netgen"     - export netgen() API reference
 	        "simple_cylinder"   - Cylinder example
 	        "simple_sphere"     - Sphere example
 	        "simple_torus"      - Torus example
@@ -549,12 +549,12 @@ def netgen_code_example(shape: str = "cylinder") -> str:
 
 	Args:
 	    shape: Geometry shape for the example. Options:
-	        "cylinder"       - Cylinder with radia_export netgen
-	        "sphere"         - Sphere with radia_export netgen
-	        "torus"          - Torus with radia_export netgen
-	        "cone"           - Cone with radia_export netgen
-	        "hex_cylinder"   - Hex-meshed cylinder with radia_export netgen
-	        "complex_named"  - Boolean geometry with radia_export netgen
+	        "cylinder"       - Cylinder with export netgen
+	        "sphere"         - Sphere with export netgen
+	        "torus"          - Torus with export netgen
+	        "cone"           - Cone with export netgen
+	        "hex_cylinder"   - Hex-meshed cylinder with export netgen
+	        "complex_named"  - Boolean geometry with export netgen
 	        "gmsh_2nd_order" - Gmsh 2nd order alternative (simplest)
 	        "poisson_sphere" - Complete FEM: Poisson equation on sphere
 	"""
@@ -618,7 +618,7 @@ def lint_cubit_script(filepath: str) -> str:
 	- Hardcoded absolute paths (MODERATE)
 	- Missing boundary element block for Netgen (MODERATE)
 	- Wrong file extension for export format (MODERATE)
-	- mesh.Curve() without radia_export netgen (MODERATE)
+	- mesh.Curve() without export netgen (MODERATE)
 	- Blocks registered without names (LOW)
 
 	Args:
@@ -702,7 +702,7 @@ def lint_cubit_directory(directory: str = "examples") -> str:
 
 SCRIPT_TEMPLATES = {}
 
-SCRIPT_TEMPLATES['tet_netgen'] = '''# Cubit -> NGSolve: Tet mesh with high-order curving (radia_export netgen)
+SCRIPT_TEMPLATES['tet_netgen'] = '''# Cubit -> NGSolve: Tet mesh with high-order curving (export netgen)
 import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -733,7 +733,7 @@ cubit.cmd('block 1 name "domain"')
 
 # === EXPORT WITH CURVING (C++ APREPRO command) ===
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order {CURVE_ORDER} overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order {CURVE_ORDER} overwrite')
 mesh = Mesh(vol_path)
 
 # === VERIFY ===
@@ -742,7 +742,7 @@ area = Integrate(CF(1), mesh, VOL_or_BND=BND)
 print(f"Volume: {vol:.6f}, Surface area: {area:.6f}")
 '''
 
-SCRIPT_TEMPLATES['tet_netgen_named'] = '''# Cubit -> NGSolve: Complex geometry with Boolean operations (radia_export netgen)
+SCRIPT_TEMPLATES['tet_netgen_named'] = '''# Cubit -> NGSolve: Complex geometry with Boolean operations (export netgen)
 import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -771,7 +771,7 @@ cubit.cmd("block 1 add volume all")
 
 # === EXPORT WITH CURVING (C++ APREPRO command) ===
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order {CURVE_ORDER} overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order {CURVE_ORDER} overwrite')
 mesh = Mesh(vol_path)
 
 vol = Integrate(CF(1), mesh)
@@ -803,7 +803,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add volume all")
 
 # === EXPORT (.vol with order 2 curving) ===
-cubit.cmd('radia_export netgen "mesh.vol" order 2 overwrite')
+cubit.cmd('export netgen "mesh.vol" order 2 overwrite')
 
 # === IMPORT TO NGSOLVE ===
 mesh = Mesh("mesh.vol")
@@ -811,7 +811,7 @@ vol = Integrate(CF(1), mesh)
 print(f"Volume: {vol:.6f}")
 '''
 
-SCRIPT_TEMPLATES['hex_netgen'] = '''# Cubit -> NGSolve: Hex mesh with high-order curving (radia_export netgen)
+SCRIPT_TEMPLATES['hex_netgen'] = '''# Cubit -> NGSolve: Hex mesh with high-order curving (export netgen)
 import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -844,7 +844,7 @@ cubit.cmd('block 1 name "domain"')
 
 # === EXPORT WITH CURVING (C++ APREPRO command) ===
 vol_path = tempfile.mktemp(suffix='.vol')
-cubit.cmd(f'radia_export netgen "{vol_path}" order {CURVE_ORDER} overwrite')
+cubit.cmd(f'export netgen "{vol_path}" order {CURVE_ORDER} overwrite')
 mesh = Mesh(vol_path)
 
 vol = Integrate(CF(1), mesh)
@@ -954,10 +954,10 @@ def generate_cubit_script(workflow: str = "tet_netgen") -> str:
 
 	Args:
 	    workflow: Script template to generate. Options:
-	        "tet_netgen"       - Tet mesh -> radia_export netgen with ACIS curving
-	        "tet_netgen_named" - Complex geometry with radia_export netgen
+	        "tet_netgen"       - Tet mesh -> export netgen with ACIS curving
+	        "tet_netgen_named" - Complex geometry with export netgen
 	        "tet_gmsh"         - Tet mesh -> Netgen .vol 2nd order (simplest)
-	        "hex_netgen"       - Hex mesh -> radia_export netgen with curving
+	        "hex_netgen"       - Hex mesh -> export netgen with curving
 	"""
 	workflow = workflow.lower().strip()
 	if workflow in SCRIPT_TEMPLATES:
@@ -983,14 +983,14 @@ def get_lint_rules() -> str:
 			'rule': 'missing-block-registration',
 			'severity': 'CRITICAL',
 			'description': 'Export function called but no block registration found.',
-			'trigger': 'radia_export gmsh without any block/mesh',
+			'trigger': 'export gmsh without any block/mesh',
 			'fix': 'cubit.cmd("block 1 add tet all")',
 		},
 		{
 			'rule': 'missing-mesh-command',
 			'severity': 'CRITICAL',
 			'description': 'Export function called but no mesh command found.',
-			'trigger': 'radia_export without mesh volume/surface command',
+			'trigger': 'export without mesh volume/surface command',
 			'fix': 'cubit.cmd("mesh volume all")',
 		},
 		{
@@ -1026,7 +1026,7 @@ def get_lint_rules() -> str:
 			'severity': 'CRITICAL',
 			'description': 'Deleted API (export_netgen, set_*_geominfo, name_occ_faces) detected.',
 			'trigger': 'Any usage of export_netgen, export_NetgenMesh, set_*_geominfo, name_occ_faces',
-			'fix': 'Use radia_export netgen "f.vol" order N',
+			'fix': 'Use export netgen "f.vol" order N',
 		},
 		{
 			'rule': 'nodeset-sideset-usage',
@@ -1040,21 +1040,21 @@ def get_lint_rules() -> str:
 			'severity': 'CRITICAL',
 			'description': '(See above) Catches all deleted API usage.',
 			'trigger': 'export_netgen_with_names, name_occ_faces',
-			'fix': 'Use radia_export netgen "f.vol" order N',
+			'fix': 'Use export netgen "f.vol" order N',
 		},
 		{
 			'rule': 'deleted-api-usage',
 			'severity': 'CRITICAL',
 			'description': '(See above) Catches export_netgen and other deleted APIs.',
 			'trigger': 'export_netgen(cubit, geometry=geo)',
-			'fix': 'Use radia_export netgen "f.vol" order N',
+			'fix': 'Use export netgen "f.vol" order N',
 		},
 		{
 			'rule': 'deleted-api-noheal',
 			'severity': 'INFO',
-			'description': 'Name-based workflow (name_occ_faces + noheal) is deleted. Use radia_export netgen.',
+			'description': 'Name-based workflow (name_occ_faces + noheal) is deleted. Use export netgen.',
 			'trigger': 'name_occ_faces(shape) + STEP import',
-			'fix': 'Use radia_export netgen(cubit, order=N) - no STEP needed',
+			'fix': 'Use export netgen(cubit, order=N) - no STEP needed',
 		},
 		{
 			'rule': 'hardcoded-absolute-path',
@@ -1067,22 +1067,22 @@ def get_lint_rules() -> str:
 			'rule': 'missing-boundary-block',
 			'severity': 'MODERATE',
 			'description': 'Volume element block found but no surface element block for Netgen export.',
-			'trigger': 'block 1 add tet all + radia_export netgen(...) without tri block',
+			'trigger': 'block 1 add tet all + export netgen(...) without tri block',
 			'fix': 'cubit.cmd("block 2 add tri all")',
 		},
 		{
 			'rule': 'wrong-file-extension',
 			'severity': 'MODERATE',
 			'description': 'Export file extension does not match the format.',
-			'trigger': 'radia_export gmsh "mesh.vtk" (wrong extension)',
+			'trigger': 'export gmsh "mesh.vtk" (wrong extension)',
 			'fix': 'Use correct extension: .msh, .bdf, .exo, .vol',
 		},
 		{
 			'rule': 'curve-without-export-curved',
 			'severity': 'MODERATE',
-			'description': 'Manual mesh.Curve() is not needed. radia_export netgen embeds curving in .vol.',
-			'trigger': 'mesh.Curve(3) without radia_export netgen',
-			'fix': 'Use cubit.cmd(\'radia_export netgen "mesh.vol" order 3 overwrite\') then mesh = Mesh("mesh.vol")',
+			'description': 'Manual mesh.Curve() is not needed. export netgen embeds curving in .vol.',
+			'trigger': 'mesh.Curve(3) without export netgen',
+			'fix': 'Use cubit.cmd(\'export netgen "mesh.vol" order 3 overwrite\') then mesh = Mesh("mesh.vol")',
 		},
 		{
 			'rule': 'missing-block-names',
@@ -2153,7 +2153,7 @@ def cubit_lookup(query: str, max_results: int = 5, chunk_lines: int = 40) -> str
 	  - coverage bonus for hitting many distinct query terms
 
 	Args:
-	    query: keywords (e.g., "sweep scheme source", "radia_export netgen
+	    query: keywords (e.g., "sweep scheme source", "export netgen
 	        high order", "quality metrics").
 	    max_results: cap on returned chunks (default 5).
 	    chunk_lines: target chunk size before heading-based re-anchoring
@@ -2289,7 +2289,7 @@ def cubit_examples(query: str, limit: int = 3,
 	  1. **Coreform forum** (Discourse): 15 seed queries (tutorial,
 	     hex meshing, sweep, boundary layer, thin shell, quality,
 	     refinement, abaqus, high-order, polyhedron, multi-sweep,
-	     imprint/merge, webcut, radia_export, journal)
+	     imprint/merge, webcut, export, journal)
 	  2. **Local lab archive**: `S:\\CoreformCubit` (~145 .jou/.py
 	     across years of research projects — twisted wire, claw-pole
 	     alternator, kelvin transformation, TEAM problems, helical
@@ -2699,7 +2699,7 @@ def cubit_ask(query: str, limit: int = 6,
 	boost), so a single ranked list is meaningful.
 
 	Use this when you don't know where the answer lives — "how do I
-	mesh a helix coil?" / "radia_export netgen order 3" / "Cubit
+	mesh a helix coil?" / "export netgen order 3" / "Cubit
 	crashes on imprint".
 
 	Args:
@@ -4390,9 +4390,9 @@ def new_cubit_mesh(geometry: str, element_type: str = "tet") -> str:
 		"2. Register blocks with names: block N add {tet|hex} all; block N name '...'\n"
 		"3. Add boundary block: block N add {tri|quad} all\n"
 		"4. Use relative paths for imports\n"
-		"5. For curved mesh: cubit.cmd('radia_export netgen \"mesh.vol\" order N overwrite')\n"
+		"5. For curved mesh: cubit.cmd('export netgen \"mesh.vol\" order N overwrite')\n"
 		"6. Verify volume after curving\n"
-		"7. For Gmsh visualization: cubit.cmd('radia_export gmsh \"mesh.msh\" order N overwrite')\n"
+		"7. For Gmsh visualization: cubit.cmd('export gmsh \"mesh.msh\" order N overwrite')\n"
 	)
 
 
@@ -4403,7 +4403,7 @@ def cubit_to_ngsolve(mesh_file: str) -> str:
 		f"Set up a Cubit -> NGSolve high-order workflow for: {mesh_file}\n\n"
 		"Workflow:\n"
 		"1. Create geometry and mesh in Cubit\n"
-		"2. cubit.cmd('radia_export netgen \"mesh.vol\" order N overwrite')\n"
+		"2. cubit.cmd('export netgen \"mesh.vol\" order N overwrite')\n"
 		"3. mesh = Mesh('mesh.vol')  # already curved, no mesh.Curve() needed\n"
 	)
 
@@ -4419,11 +4419,11 @@ def cubit_export_decision_guide() -> str:
 		"# Cubit Export Format Decision Guide\n\n"
 		"| Need | Command | Max Order |\n"
 		"|------|---------|----------|\n"
-		"| NGSolve FEM (recommended) | radia_export netgen \"f.vol\" order N | 1-5 |\n"
-		"| GMSH visualization | radia_export gmsh \"f.msh\" order N | 1-3 |\n"
-		"| Nastran / JMAG | radia_export nastran \"f.bdf\" order N | 1-2 |\n"
-		"| ParaView | radia_export vtk \"f.vtk\" order N | 1-2 |\n"
-		"| ELF/MAGIC | radia_export meg \"f.meg\" | 1 |\n"
+		"| NGSolve FEM (recommended) | export netgen \"f.vol\" order N | 1-5 |\n"
+		"| GMSH visualization | export gmsh \"f.msh\" order N | 1-3 |\n"
+		"| Nastran / JMAG | export radia_nastran \"f.bdf\" order N | 1-2 |\n"
+		"| ParaView | export vtk \"f.vtk\" order N | 1-2 |\n"
+		"| ELF/MAGIC | export meg \"f.meg\" | 1 |\n"
 		"| Cubit-native archival | export mesh \"f.exo\" | all |\n"
 	)
 

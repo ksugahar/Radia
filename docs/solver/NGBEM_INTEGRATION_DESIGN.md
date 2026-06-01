@@ -462,7 +462,7 @@ class NGBEMLoopStarESIMSolver(NGBEMLoopStarSolver):
 Coreform Cubit (.cub5)
         |
         v
-GMSH Format (.msh)  <-- radia Cubit plugin (radia_export gmsh)
+GMSH Format (.msh)  <-- radia Cubit plugin (export gmsh)
         |
         v
 NGSolve Mesh (via Mesh() constructor)
@@ -491,7 +491,7 @@ for el in mesh.Elements(VOL):
 ### Coreform to Netgen Hex Pipeline
 
 ```
-Cubit -> radia_export netgen "model.vol" order N -> NGSolve Mesh("model.vol")
+Cubit -> export netgen "model.vol" order N -> NGSolve Mesh("model.vol")
 ```
 
 ```python
@@ -507,7 +507,7 @@ cubit.cmd("block 1 add volume all")
 cubit.cmd('block 1 name "domain"')
 
 # Export .vol with high-order curving
-cubit.cmd('radia_export netgen "model.vol" order 3 overwrite')
+cubit.cmd('export netgen "model.vol" order 3 overwrite')
 
 mesh = Mesh("model.vol")
 ```
@@ -570,7 +570,7 @@ When extracting surface from hex mesh:
 
 ```python
 from ngsolve import Mesh
-# Use: cubit.cmd('radia_export gmsh "model.msh" overwrite')
+# Use: cubit.cmd('export gmsh "model.msh" overwrite')
 
 def import_coreform_hex_mesh(cubit_file, surface_names=None):
     """
