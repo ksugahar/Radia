@@ -141,7 +141,7 @@ print("Test 5: Cubit hex mesh with extract_curved_mesh")
 try:
     import cubit
     sys.path.insert(0, os.path.join(repo_root, 'src', 'radia'))
-    import radia_cubit_mesh
+    import cubit_mesh_curver
 
     # Create simple box in Cubit
     cubit.init(['cubit', '-nojournal', '-batch'])
@@ -161,7 +161,7 @@ try:
     print(f"  Created {cubit.get_hex_count()} hex elements")
 
     # Export via extract_curved_mesh (handles geometry + curving internally)
-    ngs_mesh = radia_cubit_mesh.extract_curved_mesh(order=2)
+    ngs_mesh = cubit_mesh_curver.extract_curved_mesh(order=2)
     print(f"  NGSolve mesh: ne={ngs_mesh.ne}, nv={ngs_mesh.nv}")
     print("  PASSED: extract_curved_mesh with curving succeeded")
 

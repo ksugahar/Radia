@@ -42,7 +42,7 @@ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DNETGEN_SRC_DIR="C:/netgen_build/netgen_fork" \
   src/cubit_plugin
 
-cmake --build . --target radia_cubit_ccm   # APREPRO commands (plugins/)
+cmake --build . --target cubit_mesh_export_ccm   # APREPRO commands (plugins/)
 # .ccl (Qt5 GUI) was removed in radia 4.80.0; PySide6 toolbar at
 # src/radia/panels/radia_export_menu.py replaces it.
 ```

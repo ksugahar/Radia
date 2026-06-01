@@ -31,7 +31,7 @@ S:\Radia\01_GitHub\
     cubit-mesh-export/    # Independent PyPI package (pip install cubit-mesh-export)
       src/cubit_mesh_export/
         check.py          # check-vol CLI + check_consistency() API
-        radia_cubit_mesh.pyd  # C++ pybind11 module (bundled)
+        cubit_mesh_curver.pyd  # C++ pybind11 module (bundled)
   tests/                  # Radia tests + tests/mcp/
   examples/
   docs/
@@ -60,6 +60,64 @@ cubit-plugin-install            # Deploy Cubit plugin + panels (skip if no Cubit
 ---
 
 ## Critical Policies
+
+### Repository First, Not Papers — Don't Publish the Unfinished (2026-06-01)
+
+**POLICY**: The PRIMARY deliverable of this lab is the **repository** — a
+correct, working, maintainable codebase that other people (and future-you)
+can build on. A paper is a *byproduct* of having built something real, NOT
+the goal that the code serves. **Paper-supremacy (論文至上主義) is harmful
+and explicitly rejected here.**
+
+**Concrete rules**:
+
+1. **Never write a result into a paper before it is actually finished and
+   verified in the repository.** "Finished" means: implemented, tested,
+   golden-locked where applicable, and the claim measured — not "looks like
+   it will work", not "p≈2.1 in a pre-asymptotic range", not "should scale".
+   If the repository can't back the claim *today*, the claim does not go in
+   a paper.
+
+2. **There is no obligation to publish.** A technique that is implemented,
+   correct, and useful in the repo is a *complete success on its own* even
+   if no paper is ever written about it. Code that improves the repository
+   needs no external justification. Do NOT manufacture a paper out of an
+   unfinished or unproven result just to "have a publication".
+
+3. **A negative or partial result is a real result — keep it in the repo
+   (memory/, tests/), do not launder it into a paper.** "H-ILU works as a
+   field-exact preconditioner (3 iters) but its sub-cubic scalability is not
+   yet demonstrated (materialize-fallback-dominated)" is the *honest* state.
+   It belongs in `memory/`, not as a scalability claim in a paper.
+
+4. **When choosing what to work on, weigh "does this make the repository
+   better/more correct" ABOVE "does this give me a figure".** A 10-minute
+   sweep that produces a publishable figure but doesn't improve the code is
+   worth LESS than fixing the actual bottleneck, even if the fix is harder
+   and might yield a negative result. Optimize for the codebase, not the
+   CV.
+
+**Why** (same spirit as "No Fallbacks — Fail Fast, Fail Loud"): a wrong or
+half-true number put in a paper is **worse than no paper** — it gets cited,
+trusted, and cannot be recalled. The repository, by contrast, can always be
+corrected, re-measured, and improved. Investing in the repository compounds;
+chasing publications on unfinished work does not. **Build the thing; the
+paper, if any, follows from the thing actually being done.**
+
+**The repository is a bonsai (盆栽), not a product pitch.** You tend it
+because a well-formed tree is its own reward: no dead branches, balanced
+proportion, each cut making the whole a little better. There is no judge to
+impress and no prize to win — the *tending itself* is the point. A correct,
+clean, well-pruned codebase is a complete and sufficient outcome. Honest
+negative results (a clearly-seen limit, recorded in `memory/`) are
+themselves good pruning: they show the true shape of the tree. Work on what
+makes the tree healthier, at whatever pace the work deserves.
+
+This policy *governs prioritization decisions*: when a task is framed as
+"do X because it's good for the paper", that framing is not a valid reason
+on its own. Re-ask: "is X good for the repository?" If yes, do it for that
+reason. If the only argument for X is the paper, deprioritize it in favor of
+work that genuinely improves the code.
 
 ### Green's Function: Laplace Kernel Only (MQS/Darwin)
 
@@ -93,8 +151,8 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 
 ### Cubit Plugin Binary: cubit-mesh-export is the Sole Shipper (Tier-2, 2026-06-01)
 
-**POLICY**: The Cubit plugin binaries (`radia_cubit.ccm` +
-`radia_cubit_mesh.pyd`, built from `src/cubit_plugin/`) are bundled,
+**POLICY**: The Cubit plugin binaries (`cubit_mesh_export.ccm` +
+`cubit_mesh_curver.pyd`, built from `src/cubit_plugin/`) are bundled,
 shipped, and deployed **ONLY by the `cubit-mesh-export` package**.  The
 `radia` wheel does **NOT** bundle them (dropped from radia `package-data`;
 removed from `src/radia/`).
@@ -1526,8 +1584,8 @@ pip show <pkg> | Select-String "Editable project location"
 + `cubit-plugin-install --all-users` を実行。
 
 **100号機 / mdx Cubit plugin (regular file)**:
-- `<Cubit>\bin\plugins\radia_cubit.ccm` (regular file from PyPI wheel; the Qt5 `.ccl` was removed in radia 4.80.0)
-- `<Cubit>\bin\plugins\radia_cubit_mesh.cp312-win_amd64.pyd` (regular file from PyPI wheel)
+- `<Cubit>\bin\plugins\cubit_mesh_export.ccm` (regular file from PyPI wheel; the Qt5 `.ccl` was removed in radia 4.80.0)
+- `<Cubit>\bin\plugins\cubit_mesh_curver.cp312-win_amd64.pyd` (regular file from PyPI wheel)
 
 LAB の `Build.ps1` 出力は **NAS の `S:\Radia\01_GitHub` に書かれるが、100号機 / mdx の
 PyPI install には反映されない**。C++ 変更を 100号機 / mdx で試すには PyPI release を
@@ -1750,7 +1808,7 @@ from cubit_mesh_export.check import check_consistency  # API
 
 **Module names**:
 - `cubit_mesh_export` — canonical Python package (PyPI: cubit-mesh-export)
-- `radia_cubit_mesh` — C++ pybind11 module (bundled in cubit_mesh_export, unchanged)
+- `cubit_mesh_curver` — C++ pybind11 module (bundled in cubit_mesh_export, unchanged)
 - `check_vol_consistency` — thin backward-compat re-export in `src/radia/panels/` (imports from cubit_mesh_export.check)
 
 Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('radia_export gmsh/nastran/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `cubit-plugin-install`).
@@ -2509,13 +2567,13 @@ PyQt5, or the old C++ Qt5 `.ccl` Claro component anywhere.
 - **No fallback** (per "No Fallbacks -- Fail Fast"): never
   `try PySide6 except PyQt5`.  An old Cubit without PySide6 must raise the
   ImportError loudly so the operator fixes the environment.
-- **C++ plugin is Qt-free**: `radia_cubit.ccm` (APREPRO `radia_export`
-  commands) + `radia_cubit_mesh.pyd` link only the Cubit C++ API +
+- **C++ plugin is Qt-free**: `cubit_mesh_export.ccm` (APREPRO `radia_export`
+  commands) + `cubit_mesh_curver.pyd` link only the Cubit C++ API +
   statically-linked netgen -- NO Qt (verified: 0 Qt5 imports).  No Qt SDK
   is needed to build the plugin.
 - **Removed in radia 4.80.0**: the Qt5 `.ccl` GUI (`RadiaComp.cpp`,
-  `HighOrderMesh.cpp`) and the `radia_cubit_ccl` build target.  A leftover
-  `<Cubit>/bin/radia_cubit.ccl` is a stale artifact (Cubit 2025.12 ignores
+  `HighOrderMesh.cpp`) and the `cubit_mesh_export_ccl` build target.  A leftover
+  `<Cubit>/bin/cubit_mesh_export.ccl` is a stale artifact (Cubit 2025.12 ignores
   it; remove on redeploy).
 
 ### Panel Layout Policy: 10pt + Vertical Scrollbar, Never Compress (2026-05-29)
@@ -2758,7 +2816,7 @@ mode-suffix:
 **POLICY**: Cubit plugin functionality MUST be implemented in C++ to avoid Python ABI mismatch. Cubit embeds Python 3.10; NGSolve/Radia use Python 3.12. Sharing Python objects between them causes segfaults and DLL conflicts.
 
 - `.ccm`: Link Cubit C++ API (cubiti, cubit_util) directly -- no Python, no Qt (the Qt5 `.ccl` GUI was removed in radia 4.80.0; the GUI is the PySide6 toolbar in Layer 2)
-- `radia_cubit_mesh.pyd`: pybind11 for Python 3.12 -- does NOT link Cubit C++ libraries
+- `cubit_mesh_curver.pyd`: pybind11 for Python 3.12 -- does NOT link Cubit C++ libraries
 - Netgen `SetNCD2Names()` is not exposed to Python -- call from C++ side in `NetgenCurverPure`
 - Interface between Cubit and NGSolve: **.vol file** (text format, no ABI dependency)
 - Export Mesh BACKEND (`radia_export` APREPRO commands) is C++ only (see Cubit Mesh Export Module below). The Export Mesh GUI menu IS Python/PySide6 (Layer 2, `radia_export_menu.py`) -- that is the supported GUI since radia 4.80.0, not a forbidden one.
@@ -2902,15 +2960,15 @@ All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 
 ## Cubit Mesh Export Module
 
-**POLICY**: The Export Mesh **backend** is **C++ only** -- all mesh extraction / curving / file writing lives in the `radia_cubit.ccm` APREPRO commands (`radia_export ...`).  The Export Mesh **GUI** is the PySide6 toolbar (`panels/radia_export_menu.py`, Layer 2), which only collects options and calls the C++ `radia_export` command via `cubit.cmd`.  Do NOT re-implement export logic in Python, and do NOT add a second GUI.  (The Qt5 `.ccl` GUI was removed in radia 4.80.0.)
+**POLICY**: The Export Mesh **backend** is **C++ only** -- all mesh extraction / curving / file writing lives in the `cubit_mesh_export.ccm` APREPRO commands (`radia_export ...`).  The Export Mesh **GUI** is the PySide6 toolbar (`panels/radia_export_menu.py`, Layer 2), which only collects options and calls the C++ `radia_export` command via `cubit.cmd`.  Do NOT re-implement export logic in Python, and do NOT add a second GUI.  (The Qt5 `.ccl` GUI was removed in radia 4.80.0.)
 
 ### C++ Plugin Architecture
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `.ccm` (plugins/) | `radia_cubit.ccm` | APREPRO commands: `radia_export gmsh/nastran/vtk/netgen` |
+| `.ccm` (plugins/) | `cubit_mesh_export.ccm` | APREPRO commands: `radia_export gmsh/nastran/vtk/netgen` |
 | GUI (Layer 2) | `panels/radia_export_menu.py` | PySide6 Export Mesh menu + dialogs (replaced the Qt5 `.ccl`, removed in radia 4.80.0) |
-| `.pyd` (plugins/) | `radia_cubit_mesh.pyd` | pybind11: Cubit-free mesh curving |
+| `.pyd` (plugins/) | `cubit_mesh_curver.pyd` | pybind11: Cubit-free mesh curving |
 
 **Export formats** (all in C++, ACIS geometry projection for curving):
 
@@ -2968,7 +3026,7 @@ negative Jacobians in GMSH). Use `radia_export netgen` for order 4-5.
 | `src/cubit_plugin/callbackgeom.cpp` | ACIS projection callbacks for CallbackGeometry |
 | `src/radia/panels/radia_export_menu.py` | PySide6 Export Mesh GUI (replaced RadiaComp.cpp `.ccl`, removed in radia 4.80.0) |
 | `src/cubit_plugin/RadiaPlugin.cpp` | Command plugin registration (.ccm) |
-| `src/cubit_plugin/radia_cubit_pybind.cpp` | pybind11 module (.pyd) |
+| `src/cubit_plugin/cubit_mesh_export_pybind.cpp` | pybind11 module (.pyd) |
 
 ### Build
 

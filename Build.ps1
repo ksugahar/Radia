@@ -203,7 +203,7 @@ if errorlevel 1 ( echo WARNING: radia_axifemm build failed )
 
 echo.
 echo ========================================
-echo   Building radia_cubit_mesh (Cubit plugin .pyd)
+echo   Building cubit_mesh_curver (Cubit plugin .pyd)
 echo ========================================
 set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
 set "CUBIT_PLUGIN_BUILD=$PROJECT_DIR\src\cubit_plugin\build-pyd"
@@ -221,14 +221,14 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
     cd /d "%CUBIT_PLUGIN_BUILD%"
     rem build-pyd: force FULL Netgen mode (disable compact_netgen detection)
-    rem so radia_cubit_mesh.pyd builds against pip-installed Netgen + pybind11.
+    rem so cubit_mesh_curver.pyd builds against pip-installed Netgen + pybind11.
     rem .ccm/.ccl in build-ccm continue to use compact_netgen (no DLL deps).
     "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" -DCOMPACT_NETGEN_OVERRIDES=NONE "%CUBIT_PLUGIN_SRC%"
-    "$CMAKE_EXE" --build . --config Release --target radia_cubit_mesh -j
-    if errorlevel 1 ( echo WARNING: radia_cubit_mesh build failed )
+    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver -j
+    if errorlevel 1 ( echo WARNING: cubit_mesh_curver build failed )
 
     rem ========================================
-    rem   Building radia_cubit.ccm (APREPRO commands; no Qt deps)
+    rem   Building cubit_mesh_export.ccm (APREPRO commands; no Qt deps)
     rem ========================================
     rem radia 4.80.0 removed the Qt5 .ccl GUI component (RadiaComp.cpp);
     rem all GUI work is now in src/radia/panels/radia_export_menu.py
@@ -236,14 +236,14 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     rem when the Cubit SDK is present.
     echo.
     echo ========================================
-    echo   Building radia_cubit.ccm (APREPRO commands)
+    echo   Building cubit_mesh_export.ccm (APREPRO commands)
     echo ========================================
     set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
     if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
     cd /d "!CUBIT_CCM_BUILD!"
     "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
-    "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccm -j
-    if errorlevel 1 ( echo WARNING: radia_cubit_ccm build failed )
+    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_export_ccm -j
+    if errorlevel 1 ( echo WARNING: cubit_mesh_export_ccm build failed )
 
     cd /d "$BUILD_DIR"
 ) else (
@@ -295,7 +295,7 @@ try {
 
     # Cubit plugin files (built in src/cubit_plugin/build-*): shipped ONLY by
     # the cubit-mesh-export package (Tier-2, 2026-06-01).  radia NO LONGER
-    # bundles radia_cubit.ccm/.pyd -- cme is the sole shipper AND deployer
+    # bundles cubit_mesh_export.ccm/.pyd -- cme is the sole shipper AND deployer
     # (its cubit-plugin-install), so radia and cubit-mesh-export release fully
     # independently.  Safe because radia's setup_cubit.py delegates plugin
     # install to cme, and register_toolbar.py freshness-checks the DEPLOYED
@@ -304,10 +304,10 @@ try {
     # Freshness check: copy when src newer than dst (or dst missing).
     $cmeDir = "$PROJECT_DIR\packages\cubit-mesh-export\src\cubit_mesh_export"
     $cubitFiles = @(
-        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-pyd\radia_cubit_mesh.cp312-win_amd64.pyd";
-           dst = "$cmeDir\radia_cubit_mesh.pyd" },
-        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-ccm\radia_cubit.ccm";
-           dst = "$cmeDir\radia_cubit.ccm" }
+        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-pyd\cubit_mesh_curver.cp312-win_amd64.pyd";
+           dst = "$cmeDir\cubit_mesh_curver.pyd" },
+        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-ccm\cubit_mesh_export.ccm";
+           dst = "$cmeDir\cubit_mesh_export.ccm" }
     )
     foreach ($cf in $cubitFiles) {
         $name = Split-Path $cf.dst -Leaf

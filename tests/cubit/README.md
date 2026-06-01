@@ -1,4 +1,4 @@
-# Tests for Radia Cubit Plugin (radia_cubit_mesh)
+# Tests for Radia Cubit Plugin (cubit_mesh_curver)
 
 ## Running Tests
 
@@ -75,7 +75,7 @@ if cubit_path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-import radia_cubit_mesh
+import cubit_mesh_curver
 
 # Test code here...
 ```

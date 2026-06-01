@@ -1,5 +1,5 @@
 // ============================================================
-// radia_cubit_pybind — pybind11 module for Cubit→Netgen mesh curving
+// cubit_mesh_export_pybind — pybind11 module for Cubit→Netgen mesh curving
 //
 // Cubit-free: receives mesh data and projection/normal callbacks
 // from Python (cubit Python API), uses only Netgen C++ for
@@ -26,7 +26,7 @@ namespace ng = netgen;
 // ============================================================
 // Module definition
 // ============================================================
-PYBIND11_MODULE(radia_cubit_mesh, m)
+PYBIND11_MODULE(cubit_mesh_curver, m)
 {
     m.doc() = R"doc(
         Radia Cubit mesh curving (C++ accelerated, Cubit-free).

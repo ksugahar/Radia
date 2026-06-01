@@ -38,7 +38,7 @@ radia_export nastran <"filename"> [order <1|2>] [dimension <2|3>] [nopyramid] [o
 - No `#!python` block — pure APREPRO/journal command
 - Usable directly in `.jou` files
 
-**Installation:** Copy `radia_cubit.ccm` to `<Cubit install>/bin/plugins/` or set `CUBIT_PLUGIN_DIR`.
+**Installation:** Copy `cubit_mesh_export.ccm` to `<Cubit install>/bin/plugins/` or set `CUBIT_PLUGIN_DIR`.
 
 **Build:** See [src/cubit_plugin/CMakeLists.txt](../../src/cubit_plugin/CMakeLists.txt).
 

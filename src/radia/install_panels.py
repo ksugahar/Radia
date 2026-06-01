@@ -303,7 +303,7 @@ def install_panels(all_users=False):
 	  - pip install -e . (editable): repo's panels/ directory
 	  - pip install (normal):        site-packages panels/ directory
 
-	Also sets CUBIT_PLUGIN_DIR so the radia_cubit.ccm plugin commands
+	Also sets CUBIT_PLUGIN_DIR so the cubit_mesh_export.ccm plugin commands
 	are available in journal files.
 
 	Args:

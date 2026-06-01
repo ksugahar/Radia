@@ -1094,7 +1094,7 @@ cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external pa
 Old dynamic-linked ccm is ~238 KB. Check after radia-setup:
 ```python
 import os
-ccm = r"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\radia_cubit.ccm"
+ccm = r"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\cubit_mesh_export.ccm"
 print(f"ccm: {os.path.getsize(ccm):,} bytes")  # should be > 400,000
 ```
 
