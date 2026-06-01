@@ -95,4 +95,4 @@ volume {air_top} {air_bot} visibility off
 # Kelvin + export, or run manually in Cubit after this .jou finishes:
 #   python "from add_kelvin import add_kelvin_cubit"
 #   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-#   radia_export netgen "ih_closed_torus.vol" order 1 overwrite
+#   export netgen "ih_closed_torus.vol" order 1 overwrite

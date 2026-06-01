@@ -65,7 +65,7 @@ adds the Kelvin exterior sphere and the GND nodeset.
 2. In the Cubit launcher dialog, check "Add Kelvin open boundary
    (auto)" and select the matching symmetry ("Full", "Half (Z)",
    "Quarter (X,Z)", "Eighth").
-3. Export via `radia_export netgen ... order 2 overwrite`.  The
+3. Export via `export netgen ... order 2 overwrite`.  The
    `.vol` will have `cd3names` (GND) and `pointelements` entries
    from the nodeset propagation added 2026-04-24 (commit 07b15414).
 4. Run `calc_accel_magnet.py --coil-script em_sample_coil.{step|py}

@@ -143,7 +143,7 @@ print(f"    Block 2: 'panel' (2D surface elements)")
 output_file = "dual_mesh_filament_panel.msh"
 print(f"\n[8] Exporting to GMSH v4.1 format...")
 
-cubit.cmd(f'radia_export gmsh "{output_file}" overwrite')
+cubit.cmd(f'export gmsh "{output_file}" overwrite')
 
 print(f"    OK Created: {output_file}")
 print(f"    Format: GMSH v4.1 (1D Filament + 2D Panel)")

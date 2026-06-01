@@ -128,7 +128,7 @@ mesh.Curve(p)   # geometric refinement matching FE order
 
 For Cubit-generated mesh:
 ```bash
-radia_export netgen "model.vol" order 3   # exports with curved nodes
+export netgen "model.vol" order 3   # exports with curved nodes
 ```
 
 ## References (this folder)

@@ -671,7 +671,7 @@ the Maxwell stress tensor path is independent and unaffected.
 
 | Removed                 | Replacement                                            |
 |-------------------------|--------------------------------------------------------|
-| `rad.ObjDivMag(obj, k)` | Use external meshers: Cubit (`radia_export netgen`) or Netgen OCC -> `.vol` -> `netgen_mesh_to_radia`. |
+| `rad.ObjDivMag(obj, k)` | Use external meshers: Cubit (`export netgen`) or Netgen OCC -> `.vol` -> `netgen_mesh_to_radia`. |
 | `rad.ObjDivMagPln(obj, planes)` | Same. Plane-based splits are mesh generation, not Radia's job. |
 | `rad.ObjCutMag(obj, plane)` | Same. |
 
@@ -759,7 +759,7 @@ rad.MatApl(container, mat)
 from ngsolve import Mesh
 from radia.netgen_mesh_import import netgen_mesh_to_radia
 
-# Load .vol exported from Cubit (radia_export netgen "mesh.vol" order N)
+# Load .vol exported from Cubit (export netgen "mesh.vol" order N)
 mesh = Mesh("mesh.vol")
 container = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
 ```
@@ -3938,7 +3938,7 @@ CRITICAL: The operation order matters. Mesh air FIRST, then create kelvin and co
    target curve <dst_c> target vertex <dst_v>
 7. Tet mesh kelvin volumes (copied surface constrains boundary)
 8. Create blocks: yoke, air, kelvin, kelvin_int, kelvin_ext
-9. radia_export netgen -> Scale(mm_to_m) -> add_periodic_kelvin
+9. export netgen -> Scale(mm_to_m) -> add_periodic_kelvin
 ```
 
 ### Why This Order

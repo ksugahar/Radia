@@ -3,7 +3,7 @@
 Locks the C-type dipole EM panel end-to-end path:
 
     em_sample.jou  (ELF CEFC 2020 C-Type geometry, half-z model)
-       --> radia_export netgen   (via Cubit + Auto-Kelvin)
+       --> export netgen   (via Cubit + Auto-Kelvin)
           --> em_sample.vol      (with cd3names "GND" from nodeset propagation)
 
     em_sample_coil.{step|py}

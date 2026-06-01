@@ -10,7 +10,7 @@
 ##   (b) after playing this .jou, run these Cubit Python commands:
 ##           python "from add_kelvin import add_kelvin_cubit"
 ##           python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-##       then export: radia_export netgen "foo.vol" order 1 overwrite
+##       then export: export netgen "foo.vol" order 1 overwrite
 ##
 ## Running this .jou alone produces a .vol WITHOUT the 'kelvin' material,
 ## so calc_fem_coilmesh.py falls back to Dirichlet A=0 (truncation error,
@@ -34,7 +34,7 @@
 ##   Air:       sphere R = 0.060 m  (~2x coil major radius)
 ##
 ## After playback + add_kelvin, export via:
-##   radia_export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
+##   export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
 ##
 ## Run via: Solve -> Radia-NGSolve -> Induction Heating -> Method: FEM
 
@@ -111,5 +111,5 @@ volume {air_top} {air_bot} visibility off
 # In Cubit:
 #   python "from add_kelvin import add_kelvin_cubit"
 #   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-#   radia_export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
+#   export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
 # Or play the companion .py (does everything in one shot).

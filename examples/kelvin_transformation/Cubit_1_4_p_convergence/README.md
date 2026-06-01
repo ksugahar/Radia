@@ -1,6 +1,6 @@
 # Cubit 1/4 Sphere + Kelvin: p-convergence (VERIFIED)
 
-p-convergence demonstration for the Cubit-meshed `radia_export netgen`
+p-convergence demonstration for the Cubit-meshed `export netgen`
 + NGSolve Kelvin transformation pipeline, on a magnetic sphere
 (mu_r = 100) in uniform Hz background.
 
@@ -53,7 +53,7 @@ After this, imprint+merge correctly identifies the shared mag-air
 interface and the netgen `FaceDescriptor` gets `domin = air_index,
 domout = mag_index` (two-sided).
 
-### 2. Cubit FD orientation differs from OCC after `radia_export netgen`
+### 2. Cubit FD orientation differs from OCC after `export netgen`
 
 Probing both meshes:
 
@@ -146,7 +146,7 @@ to <1%.
 
 ## What this verifies
 
-- **Cubit `radia_export netgen` produces a valid Kelvin-Periodic
+- **Cubit `export netgen` produces a valid Kelvin-Periodic
   `.vol`** at any order (1, 2, 3 all tested).
 - **NGSolve `Periodic` H1 FES correctly slaves high-order DOFs**
   using the Cubit-written point identifications + mesh topology.

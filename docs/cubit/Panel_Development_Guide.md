@@ -27,7 +27,7 @@ register_toolbar.py (Cubit GUI Python, Qt)
   |
   |-- YourDialog(QDialog)
   |     1. Display UI (Qt widgets)
-  |     2. cubit.cmd('radia_export netgen "model.vol" order 2 overwrite')
+  |     2. cubit.cmd('export netgen "model.vol" order 2 overwrite')
   |     3. QProcess -> [external_python, calc_your.py, --vol model.vol, ...]
   |     4. Parse JSON result
   |     5. Display result in dialog
@@ -42,7 +42,7 @@ calc_your.py (External Python, NO Qt, NO cubit)
 **Key rules**:
 - `calc_*.py` runs in external Python (with NGSolve). It must NOT import Qt.
 - `calc_*.py` must NOT import cubit. The `.vol` file is the sole interface.
-- Mesh curving is done at export time (`radia_export netgen ... order N`).
+- Mesh curving is done at export time (`export netgen ... order N`).
 
 ## Step-by-Step: Adding a New Panel
 
@@ -83,7 +83,7 @@ def solve_your(vol_file, param1=1.0):
 
     setup_paths()
 
-    # 1. Load mesh from .vol (labels embedded by radia_export netgen)
+    # 1. Load mesh from .vol (labels embedded by export netgen)
     mesh = Mesh(vol_file)
     progress("MESH", f"{mesh.GetNE()} elements")
 
@@ -147,7 +147,7 @@ class YourDialog(QDialog):
         # Export mesh to .vol (curving done here, at export time)
         tmpdir = tempfile.mkdtemp(prefix="radia_your_")
         vol_file = os.path.join(tmpdir, "model.vol").replace("\\", "/")
-        cubit.cmd(f'radia_export netgen "{vol_file}" order 2 overwrite')
+        cubit.cmd(f'export netgen "{vol_file}" order 2 overwrite')
 
         # JSON output file
         self._result_json = os.path.join(tmpdir, "result.json").replace("\\", "/")

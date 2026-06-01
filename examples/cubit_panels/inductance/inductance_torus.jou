@@ -29,4 +29,4 @@ sideset 2 add surface 3
 sideset 2 name "sink"
 
 ## Export netgen .vol (order 2)
-radia_export netgen "inductance_torus.vol" order 2 overwrite
+export netgen "inductance_torus.vol" order 2 overwrite

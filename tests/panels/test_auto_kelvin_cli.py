@@ -98,7 +98,7 @@ def _run_cubit_with_config(tmpdir: Path, add_kelvin: bool,
 
     We probe ``cubit.get_block_id_list`` + ``parse_cubit_list('tet',
     'in block N')`` directly rather than going through
-    ``radia_export netgen`` + ``.vol.json``.  Deterministic and faster;
+    ``export netgen`` + ``.vol.json``.  Deterministic and faster;
     also orthogonal to the cosmetic Learn Edition 50k-element export
     cap message (which per user 2026-04-24 does not block the export
     but is noisy in logs).

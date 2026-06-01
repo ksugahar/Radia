@@ -35,7 +35,7 @@ the Cubit panel's Browse dialog.  To run one:
    explicitly calls `add_kelvin_cubit()`.  The `.jou` files in this
    directory do *not* add Kelvin.
 3. In Cubit: `Play → <file.py>` (or `<file.jou>`).
-4. Export: `radia_export netgen "model.vol" order 1 overwrite`.
+4. Export: `export netgen "model.vol" order 1 overwrite`.
 
 The `.py` loader finds `add_kelvin.py` via two paths: repo-relative
 (`../../../src/radia/panels/add_kelvin.py`) or the pip-installed radia

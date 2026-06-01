@@ -5,7 +5,7 @@
     "vol": "C:/temp/em_full.vol",
     "coil_script": "src/radia/panels/samples/em_sample_coil.py",
     "generator_jou": "src/radia/panels/samples/em/em_1-1_full.jou",
-    "generator_cmd_note": "Regenerate via Cubit batch: play em_1-1_full.jou + play auto_kelvin_entry.py (with kelvin_reduction=null) + radia_export netgen order=2 overwrite."
+    "generator_cmd_note": "Regenerate via Cubit batch: play em_1-1_full.jou + play auto_kelvin_entry.py (with kelvin_reduction=null) + export netgen order=2 overwrite."
   },
   "geometry_note": "Full geometry baseline: yoke at x in [-12.5, +12.5], y in [0, 182.5], z in [-26.25, +26.25] mm; air sphere radius 0.40 m centred at origin, with z=0 mesh seam (both hemispheres retained).  Kelvin sphere is full + offset along +x.  This is the largest of the 4 variants (8x more DOFs than 1/8).",
   "physics": {

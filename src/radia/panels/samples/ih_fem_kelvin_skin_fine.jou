@@ -1,6 +1,6 @@
 ## FEM-Kelvin sample with FINE coil mesh (skin depth well-resolved)
 ##
-## NOTE: `export step` and `radia_export ...` below write to Cubit's
+## NOTE: `export step` and `export ...` below write to Cubit's
 ## CWD (current working directory).  Cubit aprepro has no
 ## "current journal path" variable, so the .jou cannot self-locate.
 ## Before playing: either use **File -> Open Journal** (Cubit sets

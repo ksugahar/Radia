@@ -5,14 +5,14 @@ Export mesh to Netgen `.vol` format with high-order curved elements (order 1-5).
 ## Syntax
 
 ```
-radia_export netgen "filename.vol" [order <1-5>] [overwrite]
+export netgen "filename.vol" [order <1-5>] [overwrite]
 ```
 
 No block assignment required — all meshed elements are exported automatically.
 Sidesets become boundary labels. Block names become material labels.
 
-> **IMPORTANT**: Use `radia_export netgen`, NOT `export netgen`.
-> Cubit has no built-in Netgen export.
+> **NOTE**: `export netgen` is provided by the Radia Cubit plugin.
+> Cubit has no built-in Netgen exporter, so there is no command conflict.
 
 ### Options
 
@@ -57,7 +57,7 @@ cubit.cmd("volume all size 0.1")
 cubit.cmd("mesh volume all")
 
 # Export with order 3 curving
-cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
 
 # Load in NGSolve — no STEP file needed
 mesh = Mesh("mesh.vol")
@@ -142,7 +142,7 @@ cubit.cmd('block 1 name "iron"')
 cubit.cmd("block 2 add tet all in volume 2")
 cubit.cmd('block 2 name "air"')
 
-cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
 # mesh.GetMaterials() -> ('iron', 'air')
 ```
 
@@ -207,7 +207,7 @@ ng_mesh = extract_curved_mesh(cubit, order=3)
 mesh = ngsolve.Mesh(ng_mesh)
 ```
 
-For file-based workflows, `radia_export netgen` is preferred — it handles all labeling, Kelvin detection, and companion JSON automatically.
+For file-based workflows, `export netgen` is preferred — it handles all labeling, Kelvin detection, and companion JSON automatically.
 
 ## Troubleshooting
 
@@ -225,7 +225,7 @@ Check that sidesets are defined before export. Surfaces not in any sideset get a
 
 ### Hex Boundary Layer Failure
 
-If `radia_export netgen` fails on hex boundary layers, export as Gmsh order 1 (`radia_export gmsh "mesh.msh"`) as a fallback.
+If `export netgen` fails on hex boundary layers, export as Gmsh order 1 (`export gmsh "mesh.msh"`) as a fallback.
 
 ## See Also
 

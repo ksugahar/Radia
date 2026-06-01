@@ -125,7 +125,7 @@ See [A-formulation/README.md](A-formulation/README.md) for details.
 ### Cubit_1_4_p_convergence (**VERIFIED 2026-04-25**)
 
 End-to-end p-convergence demonstration for the Cubit-meshed
-`radia_export netgen` -> NGSolve Omega-Reduced Omega + Kelvin pipeline.
+`export netgen` -> NGSolve Omega-Reduced Omega + Kelvin pipeline.
 Cubit-builds a 1/4 sector (x>=0, y>=0, full z) mu_r=100 sphere in
 uniform Hz, exports `.vol` at p=1, 2, 3, solves and probes Hz at
 origin.  At p=2 matches analytical to **+0.71%**.  See

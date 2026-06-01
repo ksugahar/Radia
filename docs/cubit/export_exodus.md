@@ -24,7 +24,7 @@ element orders through Cubit's own block element-type settings
 other formats is the `NetgenCurver`-based ACIS projection for high
 order curving — Exodus does not need that because Cubit already
 produces curved-element Exodus files from its own high-order meshes.
-`radia_export exodus` does not exist; use `export mesh` directly.
+`export exodus` does not exist; use `export mesh` directly.
 
 ## Supported Elements
 

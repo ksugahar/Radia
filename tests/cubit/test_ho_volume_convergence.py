@@ -2,7 +2,7 @@
 High-order volume convergence test for mixed element types.
 
 Tests:
-  1. p-convergence: radia_export netgen .vol at order 1-5, volume must converge to CAD
+  1. p-convergence: export netgen .vol at order 1-5, volume must converge to CAD
 
 Cases:
   1. Flat brick (hex + tet + pyramid) -- exact volume expected
@@ -417,7 +417,7 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
 
     for order in range(1, 6):
         vol_path = os.path.join(OUT_DIR, f"{case_name}_o{order}.vol")
-        cmd = f'radia_export netgen "{vol_path}" order {order} overwrite'
+        cmd = f'export netgen "{vol_path}" order {order} overwrite'
         try:
             cubit.cmd(cmd)
             mesh = Mesh(vol_path)

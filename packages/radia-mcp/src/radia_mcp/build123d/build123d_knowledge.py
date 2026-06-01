@@ -1082,7 +1082,7 @@ through Cubit (preferred for hex) or Netgen (tet):
 #   import "coil.step"; mesh volume all
 #   sideset 1 add surface <source_id>; sideset 1 name "source"
 #   sideset 2 add surface <sink_id>;   sideset 2 name "sink"
-#   radia_export netgen "coil.vol" overwrite
+#   export netgen "coil.vol" overwrite
 
 # Option 2: Netgen tet mesh from build123d directly
 from build123d import export_step

@@ -38,7 +38,7 @@
 # dialog.  The launcher writes a kelvin_reduction object into
 # launcher_config.json (keys 'x', 'y', 'z' with values 'ht0', 'ht0',
 # 'bn0' respectively); auto_kelvin_entry.py delegates to
-# add_kelvin_cubit just before radia_export netgen.  (APREPRO chokes
+# add_kelvin_cubit just before export netgen.  (APREPRO chokes
 # on embedded braces + colons, so this comment avoids the literal
 # JSON form.)
 reset

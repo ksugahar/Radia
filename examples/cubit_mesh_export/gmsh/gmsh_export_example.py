@@ -2,7 +2,7 @@
 Gmsh Export Example
 
 Demonstrates exporting Cubit mesh to Gmsh v4.1 format
-using the radia_export gmsh command.
+using the export gmsh command.
 
 Output files:
     - cube.msh            : Gmsh v4.1 format (1st order)
@@ -38,14 +38,14 @@ cubit.cmd("block 2 name 'boundary'")
 
 # Export to Gmsh v4.1 (default)
 print("\nExporting to Gmsh v4.1...")
-cubit.cmd('radia_export gmsh "cube.msh" overwrite')
+cubit.cmd('export gmsh "cube.msh" overwrite')
 print("  Created: cube.msh")
 
 # 2nd order example
 print("\nCreating 2nd order mesh...")
 cubit.cmd("block 1 element type tetra10")
 cubit.cmd("block 2 element type tri6")
-cubit.cmd('radia_export gmsh "cube_2nd_order.msh" overwrite')
+cubit.cmd('export gmsh "cube_2nd_order.msh" overwrite')
 print("  Created: cube_2nd_order.msh")
 
 print("\nDone!")

@@ -9,7 +9,7 @@ Why this exists
 There are three upstream paths that produce a Kelvin-ready `.vol`:
 
 1. **Cubit C++ exporter** (`ExportNetgenCommand.cpp`): writes point-pair
-   identifications during `radia_export netgen` if every kelvin_int
+   identifications during `export netgen` if every kelvin_int
    vertex matches a kelvin_ext vertex within tolerance after the rigid
    Kelvin translation.  All-or-nothing: a single unmatched vertex
    skips the C++ identification entirely.

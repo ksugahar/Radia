@@ -333,7 +333,7 @@ top open item for IGTE.
 (`ih_fem_kelvin_demo_coil.step`, 16 perimeter filaments) at 50 kHz, 1 A.
 Linear Dowell SIBC (`--impedance-model sibc`).
 
-The Cubit export was repeated with `radia_export netgen "f.vol" order N`
+The Cubit export was repeated with `export netgen "f.vol" order N`
 for N = 1, 2, producing two .vol files with **identical mesh topology**
 (2150 BND triangles, 1077 vertices) but different curving order.  This
 isolates the curve-order effect from any mesh-refinement effect.

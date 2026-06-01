@@ -147,7 +147,7 @@ info = add_kelvin_cubit(R=R, symmetry=["z"])
 
 # === 12. Export .vol =========================================================
 vol_path = os.path.join(SAMPLES_DIR, "ih_fem_kelvin_skin.vol")
-cubit.cmd('radia_export netgen "%s" order 1 overwrite' % vol_path)
+cubit.cmd('export netgen "%s" order 1 overwrite' % vol_path)
 
 print("")
 print("ih_fem_kelvin_skin.py: done")
