@@ -13,7 +13,7 @@ the user, NOT by this plugin.
 ## Features
 
 - **Cubit plugin** (`.ccm` + `.ccl` + `.pyd`):
-  - `export {netgen|gmsh|vtk|femeem|meg}` + `export radia_nastran` APREPRO commands
+  - `export {netgen|gmsh|vtk|femeem|meg}` + `export jmag_nastran` APREPRO commands
   - **Export Mesh** GUI menu
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
 - **Kelvin open-boundary** transformation built into `export netgen`
@@ -52,7 +52,7 @@ Always re-run `cubit-plugin-install` after upgrading.
 ```
 export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
 export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 (lab standard)
-export radia_nastran "model.bdf" order 2 overwrite                # Nastran BDF
+export jmag_nastran "model.bdf" order 2 overwrite                # Nastran BDF
 export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
 ```
 

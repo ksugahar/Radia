@@ -385,7 +385,7 @@ def cubit_docs(topic: str = "all") -> str:
 	        "gmsh_v2"               - Gmsh v4.1 format (export gmsh)
 	        "gmsh_v4"               - Gmsh v4.1 format policy
 	        "netgen"                - Netgen .vol export (export netgen)
-	        "nastran"               - Nastran BDF (export radia_nastran)
+	        "nastran"               - Nastran BDF (export jmag_nastran)
 	        "exodus"                - Exodus II (Cubit built-in)
 	        "export_comparison"     - Format comparison and decision matrix
 	        "export_decision_guide" - Decision tree for format selection
@@ -4421,7 +4421,7 @@ def cubit_export_decision_guide() -> str:
 		"|------|---------|----------|\n"
 		"| NGSolve FEM (recommended) | export netgen \"f.vol\" order N | 1-5 |\n"
 		"| GMSH visualization | export gmsh \"f.msh\" order N | 1-3 |\n"
-		"| Nastran / JMAG | export radia_nastran \"f.bdf\" order N | 1-2 |\n"
+		"| Nastran / JMAG | export jmag_nastran \"f.bdf\" order N | 1-2 |\n"
 		"| ParaView | export vtk \"f.vtk\" order N | 1-2 |\n"
 		"| ELF/MAGIC | export meg \"f.meg\" | 1 |\n"
 		"| Cubit-native archival | export mesh \"f.exo\" | all |\n"
