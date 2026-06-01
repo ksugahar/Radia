@@ -60,7 +60,7 @@ std::vector<std::string> ExportNastranCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
-    "export radia_nastran <string:label='filename',help='<filename>'> "
+    "export jmag_nastran <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1 or 2>'>] "
     "[dimension <value:label='dimension',help='<2 or 3>'>] "
     "[nopyramid] "
@@ -73,7 +73,7 @@ std::vector<std::string> ExportNastranCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "export radia_nastran \"filename\" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]"
+    "export jmag_nastran \"filename\" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]"
   );
   return help;
 }

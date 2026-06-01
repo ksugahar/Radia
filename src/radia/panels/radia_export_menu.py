@@ -590,7 +590,7 @@ class ExportDialog(QDialog):
 
         elif fmt == FMT_NASTRAN:
             dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = (f'export radia_nastran "{f}" order {order} '
+            cmd = (f'export jmag_nastran "{f}" order {order} '
                    f'dimension {dim}')
             if self._nopyramid and self._nopyramid.currentIndex() == 1:
                 cmd += " nopyramid"
@@ -1075,7 +1075,7 @@ def _run_mesh_evaluation(cubit_mod, parent):
     bdf_max = min(max_order, 2)
     fmt_specs = [
         ("gmsh", "msh", "export gmsh", gmsh_max),
-        ("nastran", "bdf", "export radia_nastran", bdf_max),
+        ("nastran", "bdf", "export jmag_nastran", bdf_max),
         ("vtk", "vtk", "export vtk", bdf_max),
     ]
     for name, ext, cmd_prefix, max_ord in fmt_specs:

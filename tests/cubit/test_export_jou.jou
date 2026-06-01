@@ -18,7 +18,7 @@ export gmsh "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_o2.msh" orde
 export gmsh "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_v41_o2.msh" order 2 overwrite
 
 ## Nastran
-export radia_nastran "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_o2.bdf" order 2 dimension 3 overwrite
+export jmag_nastran "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_o2.bdf" order 2 dimension 3 overwrite
 
 ## VTK
 export vtk "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_o2.vtk" order 2 dimension 3 overwrite
