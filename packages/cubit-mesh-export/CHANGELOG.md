@@ -4,7 +4,9 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
-## Unreleased — Tier-2 sole-shipper + de-radia rename + `export` command verb
+## 0.11.0 — Tier-2 sole-shipper + de-radia rename + `export` command verb
+
+Released 2026-06-01.
 
 Three coupled changes that let `cubit-mesh-export` and `radia` release
 fully independently and clean up the radia-prefixed naming:
