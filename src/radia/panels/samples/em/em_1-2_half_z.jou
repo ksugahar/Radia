@@ -77,4 +77,4 @@ block 2 name "air"
 # Kelvin (FEM only): add via the launcher dialog "Add Kelvin open
 # boundary (auto)" checkbox with "Quarter (X,Z)" symmetry.  The
 # launcher injects add_kelvin_cubit(symmetry=["x","z"]) via
-# auto_kelvin_entry.py just before radia_export netgen.
+# auto_kelvin_entry.py just before export netgen.

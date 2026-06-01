@@ -20,7 +20,7 @@ std::vector<std::string> ExportFemeemCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
-    "radia_export femeem <string:label='filename',help='<directory>'> "
+    "export femeem <string:label='filename',help='<directory>'> "
     "[scale <value:label='scale',help='<coordinate scale>'>] "
     "[overwrite]"
   );
@@ -31,7 +31,7 @@ std::vector<std::string> ExportFemeemCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "radia_export femeem \"dirname\" [scale <value>] [overwrite]"
+    "export femeem \"dirname\" [scale <value>] [overwrite]"
   );
   return help;
 }

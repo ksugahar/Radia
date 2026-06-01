@@ -5,7 +5,7 @@ Export mesh to VTK Legacy format (.vtk) for visualization in ParaView etc.
 ## Syntax
 
 ```
-radia_export vtk "filename.vtk" [order <1|2>] [dimension <2|3>] [overwrite]
+export vtk "filename.vtk" [order <1|2>] [dimension <2|3>] [overwrite]
 ```
 
 No block assignment required. Sidesets are exported as surface cells.
@@ -89,7 +89,7 @@ cubit.cmd("create brick x 1 y 1 z 1")
 cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
 
-cubit.cmd('radia_export vtk "mesh.vtk" overwrite')
+cubit.cmd('export vtk "mesh.vtk" overwrite')
 ```
 
 ### 2nd Order with Curved Surfaces
@@ -100,7 +100,7 @@ cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("volume 1 size 0.3")
 cubit.cmd("mesh volume 1")
 
-cubit.cmd('radia_export vtk "sphere_o2.vtk" order 2 overwrite')
+cubit.cmd('export vtk "sphere_o2.vtk" order 2 overwrite')
 ```
 
 ## Limitations

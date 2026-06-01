@@ -179,7 +179,7 @@ except (ImportError, AttributeError):
     print("  Note: CallbackGeometry not available, using order=1")
     # Use Netgen .vol export as fallback
     vol_tmp = os.path.join(work_dir, "_temp_dipole.vol")
-    cubit.cmd(f'radia_export netgen "{vol_tmp}" order 1 overwrite')
+    cubit.cmd(f'export netgen "{vol_tmp}" order 1 overwrite')
     mesh = Mesh(vol_tmp)
     os.remove(vol_tmp)
 

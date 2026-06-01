@@ -8,7 +8,7 @@ Coverage:
     A. Module imports + symbol surface
     B. QAction comes from QtGui (PySide6/Qt6 location), not QtWidgets
     C. ExportDialog.cubit_command() round-trip for all 6 formats
-       (default options yield the expected `radia_export ...` APREPRO
+       (default options yield the expected `export ...` APREPRO
         commands so the .ccm side is unchanged)
     D. Netgen Kelvin options (add_kelvin, kelvin_mesh, kelvin_sym_*)
     E. Nastran nopyramid flag
@@ -172,7 +172,7 @@ class TestNetgenCommand(_DialogTestBase):
         # Default order is 3 (combo index 2)
         self.assertRegex(
             cmd,
-            r'^radia_export netgen "[^"]+myjob\.vol" order 3 overwrite$')
+            r'^export netgen "[^"]+myjob\.vol" order 3 overwrite$')
         # No Kelvin by default
         self.assertNotIn("add_kelvin", cmd)
 
@@ -221,7 +221,7 @@ class TestGmshCommand(_DialogTestBase):
         cmd = d.cubit_command()
         self.assertRegex(
             cmd,
-            r'^radia_export gmsh "[^"]+\.msh" order \d+ dimension 3 '
+            r'^export gmsh "[^"]+\.msh" order \d+ dimension 3 '
             r'overwrite$')
 
     def test_2d_dimension(self):
@@ -240,7 +240,7 @@ class TestNastranCommand(_DialogTestBase):
         cmd = d.cubit_command()
         self.assertRegex(
             cmd,
-            r'^radia_export nastran "[^"]+\.bdf" order \d+ '
+            r'^export radia_nastran "[^"]+\.bdf" order \d+ '
             r'dimension 3 overwrite$')
         # nopyramid default = off
         self.assertNotIn("nopyramid", cmd)
@@ -257,7 +257,7 @@ class TestVtkCommand(_DialogTestBase):
         d = self._make_dialog(rem.FMT_VTK)
         self.assertRegex(
             d.cubit_command(),
-            r'^radia_export vtk "[^"]+\.vtk" order \d+ '
+            r'^export vtk "[^"]+\.vtk" order \d+ '
             r'dimension 3 overwrite$')
 
 
@@ -269,7 +269,7 @@ class TestFemeemCommand(_DialogTestBase):
         # FEMEEM uses directory output (no .ext on filename)
         self.assertRegex(
             cmd,
-            r'^radia_export femeem "[^"]+" scale [\d.]+ overwrite$')
+            r'^export femeem "[^"]+" scale [\d.]+ overwrite$')
 
     def test_custom_scale(self):
         d = self._make_dialog(rem.FMT_FEMEEM)
@@ -284,7 +284,7 @@ class TestMegCommand(_DialogTestBase):
         cmd = d.cubit_command()
         self.assertRegex(
             cmd,
-            r'^radia_export meg "[^"]+\.meg" threed overwrite$')
+            r'^export meg "[^"]+\.meg" threed overwrite$')
 
     def test_2d_dimension(self):
         d = self._make_dialog(rem.FMT_MEG)
@@ -521,7 +521,7 @@ class TestMeshEvaluationRunner(unittest.TestCase):
             rem._run_mesh_evaluation(self._cubit, parent=None)
 
         netgen_cmds = [c for c in self._cmds_issued
-                       if c.startswith("radia_export netgen ")]
+                       if c.startswith("export netgen ")]
         self.assertEqual(
             len(netgen_cmds), 5,
             f"expected 5 netgen exports, got {len(netgen_cmds)}: "
@@ -548,13 +548,13 @@ class TestMeshEvaluationRunner(unittest.TestCase):
             rem._run_mesh_evaluation(self._cubit, parent=None)
 
         gmsh_qa = [c for c in self._cmds_issued
-                   if c.startswith("radia_export gmsh ")
+                   if c.startswith("export gmsh ")
                    and "_qa_" in c]
         nast_qa = [c for c in self._cmds_issued
-                   if c.startswith("radia_export nastran ")
+                   if c.startswith("export radia_nastran ")
                    and "_qa_" in c]
         vtk_qa = [c for c in self._cmds_issued
-                  if c.startswith("radia_export vtk ")
+                  if c.startswith("export vtk ")
                   and "_qa_" in c]
         self.assertEqual(len(gmsh_qa), 3,
                          f"GMSH QA: expected 3, got {gmsh_qa}")
@@ -661,13 +661,13 @@ try:
     cubit.cmd('block 1 name "sphere"')
     for p in range(1, max_order + 1):
         vp = "%s_p%d.vol" % (base, p)
-        cubit.cmd('radia_export netgen "%s" order %d overwrite' % (vp, p))
+        cubit.cmd('export netgen "%s" order %d overwrite' % (vp, p))
 
     # Format QA (mimics _run_mesh_evaluation Phase 1b)
     fmt_specs = [
-        ("gmsh", "msh", "radia_export gmsh", min(max_order, 3)),
-        ("nastran", "bdf", "radia_export nastran", min(max_order, 2)),
-        ("vtk", "vtk", "radia_export vtk", min(max_order, 2)),
+        ("gmsh", "msh", "export gmsh", min(max_order, 3)),
+        ("nastran", "bdf", "export radia_nastran", min(max_order, 2)),
+        ("vtk", "vtk", "export vtk", min(max_order, 2)),
     ]
     for name, ext, cmd_prefix, max_ord in fmt_specs:
         for p in range(1, max_ord + 1):
@@ -699,7 +699,7 @@ def _run_pconv_subprocess(base, max_order, radius, msize, timeout=240):
         _PCONV_SCRIPT_BODY,
         args=(base, max_order, radius, msize),
         timeout=timeout)
-    # Cubit's "no radia_export" failure is symptomatic of a deeper
+    # Cubit's "no export" failure is symptomatic of a deeper
     # license failure; surface the real cause to the test runner.
     if "RLM ERROR code: -102" in stdout or \
        "Couldn't initialize RLM" in stdout:

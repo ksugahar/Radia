@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the Radia Cubit plugin export commands (`radia_export`).
+This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the Radia Cubit plugin export commands (`export <fmt>`).
 
 ## Creating 2nd Order Elements
 
@@ -85,14 +85,14 @@ print(f"get_expanded_connectivity: {len(nodes_2nd)} nodes")  # 10
 
 ## Impact on Export Functions
 
-All `radia_export` commands internally extract 1st order elements only, then use
+All plugin `export <fmt>` commands internally extract 1st order elements only, then use
 **NetgenCurver** (CallbackGeometry + ACIS projection) to generate high-order nodes
 at the requested order. Block element type settings (`tetra10`, etc.) are ignored.
 
 ```python
 # The order parameter controls high-order curving — not the block element type
-cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
-cubit.cmd('radia_export gmsh "mesh.msh" order 2 overwrite')
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('export gmsh "mesh.msh" order 2 overwrite')
 ```
 
 ## Design Philosophy
@@ -135,7 +135,7 @@ print(f"1st order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id)
 print(f"1st order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
 # Export 1st order Gmsh
-cubit.cmd('radia_export gmsh "sphere_1st.msh" overwrite')
+cubit.cmd('export gmsh "sphere_1st.msh" overwrite')
 
 # Convert to 2nd order
 cubit.cmd("block 1 element type tetra10")
@@ -146,7 +146,7 @@ print(f"2nd order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id)
 print(f"2nd order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
 # Export 2nd order Gmsh
-cubit.cmd('radia_export gmsh "sphere_2nd.msh" overwrite')
+cubit.cmd('export gmsh "sphere_2nd.msh" overwrite')
 ```
 
 Output:
@@ -161,12 +161,12 @@ Output:
 
 | Export Function | High-Order Method | Max Order |
 |----------------|-------------------|-----------|
-| `radia_export netgen "f.vol" order N` | NetgenCurver (compact_netgen) | 1-5 |
-| `radia_export gmsh "f.msh" order N` | NetgenCurver | 1-3 |
-| `radia_export nastran "f.bdf" order N` | NetgenCurver | 1-2 |
-| `radia_export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
+| `export netgen "f.vol" order N` | NetgenCurver (compact_netgen) | 1-5 |
+| `export gmsh "f.msh" order N` | NetgenCurver | 1-3 |
+| `export radia_nastran "f.bdf" order N` | NetgenCurver | 1-2 |
+| `export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
 
-> **Note**: `radia_export nastran` (NOT `export nastran`). Cubit has a built-in `export nastran` with different format.
+> **Note**: `export radia_nastran` (NOT `export nastran`). Cubit has a built-in `export nastran` with different format.
 
 ## See Also
 

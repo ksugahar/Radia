@@ -193,14 +193,14 @@ def check_missing_step_reimport(filepath: str, lines: List[str]) -> List[Dict]:
 	findings = []
 	# Detect usage of deleted APIs
 	deleted_apis = [
-		('export_netgen', 'radia_export netgen'),
-		('export_NetgenMesh', 'radia_export netgen'),
-		('export_netgen_with_names', 'radia_export netgen'),
-		('name_occ_faces', 'radia_export netgen (no OCC needed)'),
-		('set_cylinder_geominfo', 'radia_export netgen'),
-		('set_sphere_geominfo', 'radia_export netgen'),
-		('set_torus_geominfo', 'radia_export netgen'),
-		('set_cone_geominfo', 'radia_export netgen'),
+		('export_netgen', 'export netgen'),
+		('export_NetgenMesh', 'export netgen'),
+		('export_netgen_with_names', 'export netgen'),
+		('name_occ_faces', 'export netgen (no OCC needed)'),
+		('set_cylinder_geominfo', 'export netgen'),
+		('set_sphere_geominfo', 'export netgen'),
+		('set_torus_geominfo', 'export netgen'),
+		('set_cone_geominfo', 'export netgen'),
 	]
 	for i, line in enumerate(lines, 1):
 		stripped = line.strip()
@@ -277,7 +277,7 @@ def check_missing_boundary_block(filepath: str, lines: List[str]) -> List[Dict]:
 	)
 	# Only flag for Netgen/curved exports (boundary elements most important)
 	has_netgen_export = any(
-		re.search(r'radia_export netgen', line)
+		re.search(r'export netgen', line)
 		for line in lines
 	)
 
@@ -386,7 +386,7 @@ def check_setgeominfo_without_geometry(filepath: str, lines: List[str]) -> List[
 
 
 def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dict]:
-	"""MODERATE: Manual mesh.Curve() without radia_export netgen (legacy pattern)."""
+	"""MODERATE: Manual mesh.Curve() without export netgen (legacy pattern)."""
 	findings = []
 	has_curve = False
 	curve_line = None
@@ -402,8 +402,8 @@ def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dic
 	if not has_curve:
 		return findings
 
-	# Check for radia_export netgen (which handles Curve internally)
-	has_radia_export_netgen = any('radia_export netgen' in line for line in lines)
+	# Check for export netgen (which handles Curve internally)
+	has_radia_export_netgen = any('export netgen' in line for line in lines)
 	# Check for OCC native mesh (which has built-in geometry)
 	has_occ_mesh = any('GenerateMesh' in line for line in lines)
 
@@ -413,10 +413,10 @@ def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dic
 			'severity': 'MODERATE',
 			'rule': 'curve-without-export-curved',
 			'message': (
-				'mesh.Curve() called but no radia_export netgen() found. '
-				'For Cubit meshes, use radia_export netgen(cubit, order=N) which '
+				'mesh.Curve() called but no export netgen() found. '
+				'For Cubit meshes, use export netgen(cubit, order=N) which '
 				'handles curving automatically via ACIS CallbackGeometry. '
-				'See: netgen_workflow_guide("radia_export netgen")'
+				'See: netgen_workflow_guide("export netgen")'
 			),
 		})
 	return findings
@@ -614,7 +614,7 @@ def check_plain_gmsh_export(filepath: str, lines: List[str]) -> List[Dict]:
 	deprecated lab-wide as of 2026-04-19.
 
 	Valid replacements (both emit v4.1):
-	  - `radia_export gmsh "file.msh" order N overwrite`
+	  - `export gmsh "file.msh" order N overwrite`
 	  - `export mesh "file.msh" mesh_version 4.1 overwrite` (only if the
 	    Cubit build supports the option — newer Coreform versions do)
 	"""
@@ -639,7 +639,7 @@ def check_plain_gmsh_export(filepath: str, lines: List[str]) -> List[Dict]:
 			'rule': 'gmsh-v22-deprecated',
 			'message': (
 				f'`export mesh "{m.group(1)}"` emits MSH v2.2 '
-				f'(deprecated lab-wide). Use `radia_export gmsh '
+				f'(deprecated lab-wide). Use `export gmsh '
 				f'"{m.group(1)}" order N` (v4.1) or append '
 				f'`mesh_version 4.1 overwrite` on newer Cubit builds.'
 			),

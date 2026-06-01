@@ -27,4 +27,4 @@ sideset 1 add surface all
 sideset 1 name "wp_surface"
 
 ## Export netgen .vol (order 2 for curved cylinder)
-radia_export netgen "ih_workpiece.vol" order 2 overwrite
+export netgen "ih_workpiece.vol" order 2 overwrite

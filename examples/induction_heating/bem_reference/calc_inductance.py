@@ -152,7 +152,7 @@ def extract_inductance_vol(vol_file, source_label="source",
                 f"  sideset 1 name \"source\"\n"
                 f"  sideset 2 add surface <sink_face_id>\n"
                 f"  sideset 2 name \"sink\"\n"
-                f"Then re-export with: radia_export netgen \"model.vol\" order N"}
+                f"Then re-export with: export netgen \"model.vol\" order N"}
     source_label = "|".join(src_matches)
     sink_label = "|".join(sink_matches)
 
@@ -1583,7 +1583,7 @@ def run_bem_pipeline(vol_file, source_label="source", sink_label="sink",
     """Full BEM pipeline: .vol -> .sol files + .msh visualization.
 
     Input:
-        {name}.vol       Cubit-exported mesh (radia_export netgen order 2)
+        {name}.vol       Cubit-exported mesh (export netgen order 2)
 
     Output (all in same directory as .vol):
         {name}_coil.vol  Coil surface mesh

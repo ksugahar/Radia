@@ -148,7 +148,7 @@ mdx HAS Cubit installed at
 Edition).  `cubit-plugin-install --verify-only` validates 5/5 sha256
 match. Headless smoke test: the `cubit-smoke-test` CLI (shipped with
 cubit-mesh-export >= 0.5.3) runs `coreform_cubit -batch -nographics`
-and verifies `radia_export netgen` writes a valid .vol.
+and verifies `export netgen` writes a valid .vol.
 
 The retired editable workflow at `C:\\Radia\\01_GitHub` may stay for
 fixture reads (`tests/panels/golden/*.step` etc.) but Python no
@@ -369,7 +369,7 @@ Implications:
 | `ImportError: cannot import name 'check' from 'cubit_mesh_export'` | legacy `cubit_mesh_export.py` shadow at site-packages                | Delete `Lib/site-packages/cubit_mesh_export.py` and `__pycache__/cubit_mesh_export.cpython-312.pyc`, then re-install |
 | `AttributeError: module 'cubit_mesh_export' has no attribute '__version__'` | same legacy shadow                                                     | same |
 | `ImportError: DLL load failed while importing cubit_mesh_curver` | `import radia` not done first (DLL bootstrap) — only on legacy editable | `import radia` before `from cubit_mesh_export import cubit_mesh_curver`; on PyPI installs this is automatic |
-| `cubit-smoke-test` fails with "Learn Edition restriction"     | mdx (or 100号機) has Cubit Learn Edition; harmless ERROR line on radia_export | Ignore — `radia_export netgen` writes the .vol successfully despite the message; the smoke test tolerates this |
+| `cubit-smoke-test` fails with "Learn Edition restriction"     | mdx (or 100号機) has Cubit Learn Edition; harmless ERROR line on export | Ignore — `export netgen` writes the .vol successfully despite the message; the smoke test tolerates this |
 | `Phase 9 cross-machine drift on cme/cubit_mesh_export.ccl` | LAB has been doing local Cubit-plugin rebuilds; mdx / 100号機 have the published PyPI binary which differs slightly (PE timestamps, embedded paths) | Acceptable drift if no `src/cubit_plugin/` source change since cubit-mesh-export tag |
 | `cubit-plugin-install --verify-only` reports `[SIZE]` or `[HASH]` mismatch | binary deploy partial / Cubit was running during last install         | Stop Cubit, re-run `cubit-plugin-install --all-users` |
 | panel windows die in headless test with `QFontDatabase: Cannot find font directory`     | benign warning on `QT_QPA_PLATFORM=offscreen`                          | Ignore — not a failure; for production rendering Qt finds system fonts |

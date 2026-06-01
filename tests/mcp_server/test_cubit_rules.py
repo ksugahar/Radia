@@ -198,7 +198,7 @@ class TestMissingStepReimport:
 
     def test_allows_radia_export_netgen(self):
         code = (
-            'mesh = cubit.cmd("radia_export netgen output.vol order 2")\n'
+            'mesh = cubit.cmd("export netgen output.vol order 2")\n'
         )
         assert _run(check_missing_step_reimport, code) == []
 
@@ -229,7 +229,7 @@ class TestMissingBoundaryBlock:
     def test_detects_missing_surface_block(self):
         code = (
             'cubit.cmd("block 1 add tet all")\n'
-            'cubit.cmd("radia_export netgen output.vol order 2")\n'
+            'cubit.cmd("export netgen output.vol order 2")\n'
         )
         findings = _run(check_missing_boundary_block, code)
         assert len(findings) == 1
@@ -238,7 +238,7 @@ class TestMissingBoundaryBlock:
         code = (
             'cubit.cmd("block 1 add tet all")\n'
             'cubit.cmd("block 2 add tri all")\n'
-            'cubit.cmd("radia_export netgen output.vol order 2")\n'
+            'cubit.cmd("export netgen output.vol order 2")\n'
         )
         assert _run(check_missing_boundary_block, code) == []
 
@@ -266,7 +266,7 @@ class TestCurveWithoutSetGeomInfo:
 
     def test_allows_radia_export_netgen(self):
         code = (
-            'cubit.cmd("radia_export netgen output.vol order 3")\n'
+            'cubit.cmd("export netgen output.vol order 3")\n'
         )
         assert _run(check_curve_without_setgeominfo, code) == []
 

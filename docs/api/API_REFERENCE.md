@@ -122,7 +122,7 @@ The following APIs have been removed from Radia. Calling them will raise an erro
 | Library | Date | Replacement | Reason |
 |---------|------|-------------|--------|
 | ExaFMM-t (FMM acceleration, method 3) | 2026-03-06 | HACApK (H-matrix) | FMM removed from repo |
-| `GmshBuilder` | 2026-03-13 | Cubit plugin (`radia_export gmsh`) | GMSH is visualization-only, not mesh generation |
+| `GmshBuilder` | 2026-03-13 | Cubit plugin (`export gmsh`) | GMSH is visualization-only, not mesh generation |
 
 ### Removed Mesh Import Paths
 
@@ -134,7 +134,7 @@ The following APIs have been removed from Radia. Calling them will raise an erro
 The **only supported mesh input format** for Radia and NGSolve is **Netgen `.vol`**:
 
 ```
-Cubit → radia_export netgen "mesh.vol" → NGSolve Mesh("mesh.vol") → netgen_mesh_to_radia()
+Cubit → export netgen "mesh.vol" → NGSolve Mesh("mesh.vol") → netgen_mesh_to_radia()
 ```
 
 ---
@@ -812,7 +812,7 @@ M_avg_z = np.mean([m[2] for m in M_list])
 The **only** supported mesh import path for Radia magnetostatic analysis is:
 
 ```
-Cubit → radia_export netgen "mesh.vol" → NGSolve Mesh("mesh.vol") → netgen_mesh_to_radia()
+Cubit → export netgen "mesh.vol" → NGSolve Mesh("mesh.vol") → netgen_mesh_to_radia()
 ```
 
 Nastran BDF import and Gmsh `.msh` import are **not supported** for Radia/NGSolve input.

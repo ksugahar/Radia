@@ -14,7 +14,7 @@ PANEL_CONVENTIONS = """
 Cubit Solve -> Radia-NGSolve...
   +-- Launcher dialog (Cubit Qt5): mode + order + folder + label check
   |     |
-  |     +-- radia_export netgen "radia_model.vol" order N overwrite
+  |     +-- export netgen "radia_model.vol" order N overwrite
   |     +-- Launch: python radia_*.py radia_model.vol [--optional-files ...]
   |
   +-- radia_ih.py    (Induction Heating: BEM / FEM)
@@ -116,7 +116,7 @@ sideset 1 name "source"
 
 The launcher always calls:
 ```
-radia_export netgen "radia_model.vol" order N overwrite
+export netgen "radia_model.vol" order N overwrite
 ```
 
 The analysis window receives .vol as first argument. It does NOT export.
@@ -129,7 +129,7 @@ LABEL_GUIDE = """
 ## How Labels Flow
 
 ```
-Cubit blocks/sidesets -> radia_export netgen -> .vol SetMaterial/SetBCName
+Cubit blocks/sidesets -> export netgen -> .vol SetMaterial/SetBCName
                                           -> NGSolve mesh.Materials() / mesh.Boundaries()
 ```
 

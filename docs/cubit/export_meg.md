@@ -5,16 +5,16 @@ Export mesh to ELF/MAGIC MEG format for electromagnetic field analysis.
 ## Syntax
 
 ```
-radia_export meg "filename.meg" [threed|twod|axisymmetric] [labels "1:MMB,2:MWL,..."] [overwrite]
+export meg "filename.meg" [threed|twod|axisymmetric] [labels "1:MMB,2:MWL,..."] [overwrite]
 ```
 
 > **Note (2026-04-24)**: Earlier releases registered this command as
 > bare `export meg` under the assumption that Cubit owned the `.meg`
 > format. In practice Cubit has no built-in `meg` keyword, so the bare
 > `export meg` was rejected with `Unrecognized Identifier: 'meg'`.
-> The command now uses the `radia_export` prefix like every other
-> Radia exporter (`radia_export gmsh / netgen / nastran / vtk / femeem
-> / meg`). ELF block-name → prefix auto-detection (see "ELF Element
+> The command is now `export meg`, consistent with the other plugin
+> exporters (`export gmsh / netgen / vtk / femeem / meg`, plus
+> `export radia_nastran`). ELF block-name → prefix auto-detection (see "ELF Element
 > Type Labels" below) is unchanged.
 
 Block names define ELF physics element types (3-character prefix).
@@ -58,7 +58,7 @@ Blocks named `AIR` also map to `MMB` (air is still a magnetic region in ELF).
 The `labels` option overrides block-name-based prefix detection:
 
 ```
-radia_export meg "mesh.meg" labels "1:MMB,2:MWL,3:MCO" overwrite
+export meg "mesh.meg" labels "1:MMB,2:MWL,3:MCO" overwrite
 ```
 
 ## Supported Elements
@@ -122,19 +122,19 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all in volume 1")
 cubit.cmd('block 1 name "MMB_core"')
 
-cubit.cmd('radia_export meg "model.meg" overwrite')
+cubit.cmd('export meg "model.meg" overwrite')
 ```
 
 ### 2D Planar Analysis
 
 ```python
-cubit.cmd('radia_export meg "model_2d.meg" twod overwrite')
+cubit.cmd('export meg "model_2d.meg" twod overwrite')
 ```
 
 ### Axisymmetric Analysis
 
 ```python
-cubit.cmd('radia_export meg "model_axi.meg" axisymmetric overwrite')
+cubit.cmd('export meg "model_axi.meg" axisymmetric overwrite')
 ```
 
 ## Compatibility

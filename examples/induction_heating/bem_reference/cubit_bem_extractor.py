@@ -236,7 +236,7 @@ class BEMExtractor:
 
         # Export Cubit mesh via C++ plugin (ACIS kernel curving)
         vol_path = tempfile.mktemp(suffix='.vol')
-        cubit.cmd(f'radia_export netgen "{vol_path}" order {curve_order} overwrite')
+        cubit.cmd(f'export netgen "{vol_path}" order {curve_order} overwrite')
         self.mesh = NGMesh(vol_path)
         self._cubit = cubit
         self._curve_order = curve_order

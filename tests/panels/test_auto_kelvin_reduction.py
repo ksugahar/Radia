@@ -6,7 +6,7 @@ Locks the full pipeline:
       --> kelvin_reduction={"x": "ht=0", "z": "bn=0"} in launcher config
          --> add_kelvin.add_kelvin_cubit(reduction=...)
             --> sym_ht=0_x / sym_bn=0_z sidesets on air+Kelvin cut faces
-               --> radia_export netgen
+               --> export netgen
                   --> .vol + .vol.json with the sym_*_* bcnames
 
 Verifies (2026-04-25 regression guard):
@@ -126,7 +126,7 @@ def test_reduction_quarter_xz_emits_sym_labels(tmp_path):
         f'play "{make_py.as_posix()}"\n'
         f'play "{ENTRY_SCRIPT.as_posix()}"\n'
         f'play "{probe_py.as_posix()}"\n'
-        f'radia_export netgen "{vol_path.as_posix()}" order 1 overwrite\n',
+        f'export netgen "{vol_path.as_posix()}" order 1 overwrite\n',
         encoding="ascii",
     )
 
@@ -264,7 +264,7 @@ def test_reduction_eighth_emits_sym_and_kelvin_far(tmp_path):
         f'play "{make_py.as_posix()}"\n'
         f'play "{ENTRY_SCRIPT.as_posix()}"\n'
         f'play "{probe_py.as_posix()}"\n'
-        f'radia_export netgen "{vol_path.as_posix()}" order 1 overwrite\n',
+        f'export netgen "{vol_path.as_posix()}" order 1 overwrite\n',
         encoding="ascii",
     )
 

@@ -12,7 +12,7 @@ Runs inside Cubit on startup (via ~/.cubit -> startup.py) and performs:
 
 The Qt5 C++ Claro component (src/cubit_plugin/RadiaComp.cpp) was
 deleted in radia 4.80.0; all GUI work is now PySide6.  The .ccm
-(APREPRO commands `radia_export gmsh / netgen / nastran / vtk /
+(APREPRO commands `export gmsh / netgen / nastran / vtk /
 femeem / meg`) is unchanged and remains the backend.
 """
 

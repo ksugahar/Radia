@@ -89,7 +89,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 The following features were removed; their docs were deleted to prevent confusion:
 
-- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed.  Use Netgen `.vol` (preferred) or GMSH v4.1 as the mesh interchange format into NGSolve.  Note: **Cubit-side Nastran BDF export** (`radia_export nastran`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships.
+- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed.  Use Netgen `.vol` (preferred) or GMSH v4.1 as the mesh interchange format into NGSolve.  Note: **Cubit-side Nastran BDF export** (`export radia_nastran`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships.
 - **Scattered-field Robin RHS** (`docs/FEM_SCATTERED_FIELD.md`): removed 2026-04-24; the formulation could not be made stable for MSC coupling.  The total-field formulation in `calc_fem_kelvin.py` is the shipped path.
 
 See [CHANGELOG.md](../CHANGELOG.md) for the full removal history per release.

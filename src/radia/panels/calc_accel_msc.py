@@ -7,7 +7,7 @@ Pipeline:
 User workflow:
   1. Write coil Python script (defines build_coil() -> CoilBuilder)
   2. Write .jou to create iron yoke hex mesh + named blocks, export .vol
-     via `radia_export netgen`
+     via `export netgen`
   3. Run this script with --vol <file>
 
 Mesh materials (user sets in .jou before export):
@@ -135,7 +135,7 @@ def _extract_elements_from_mesh(mesh, material_name="yoke"):
     """Extract hex/tet/wedge elements for a given material from an NGSolve mesh.
 
     Replaces the pre-policy `_extract_elements_from_cubit` helper.  The
-    `radia_export netgen` C++ command emits coordinates in meters (the
+    `export netgen` C++ command emits coordinates in meters (the
     lab-wide unit) so no coordinate scaling is needed.
 
     Args:
@@ -181,7 +181,7 @@ def solve_msc(coil_script="", vol_file="",
         vol_file: Netgen .vol file with hex/tet/wedge elements for a
             material named 'yoke' (sole interface between Cubit and
             NGSolve; this script does NOT import cubit).  Coordinates
-            are in meters (radia_export netgen policy).
+            are in meters (export netgen policy).
         mat: EMMaterial instance (iron yoke properties)
         ima: IMA string e.g. '+x-z' for quarter model ('' = no IMA)
         solver: 0=LU, 1=BiCGSTAB, 2=HACApK

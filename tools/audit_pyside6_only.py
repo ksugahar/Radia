@@ -15,7 +15,7 @@ Static checks:
 
 Headless check (isolated subprocess, offscreen Qt):
   5. IHPanel / EMPanel / PCBPanel construct under PySide6 offscreen, and
-     ExportDialog builds all 6 formats emitting valid ``radia_export ...
+     ExportDialog builds all 6 formats emitting valid ``export ...
      overwrite`` commands.  (build_command raising a ValueError for a
      missing required input is EXPECTED fail-loud validation, not a defect.)
 
@@ -164,7 +164,7 @@ def _run_smoke() -> int:
                     rem.FMT_VTK, rem.FMT_FEMEEM, rem.FMT_MEG):
             dlg = rem.ExportDialog(fmt, "C:/temp/model.jou", stub, parent=None)
             cmd = dlg.cubit_command()
-            if not (cmd.startswith("radia_export ") and cmd.endswith(" overwrite")):
+            if not (cmd.startswith("export ") and cmd.endswith(" overwrite")):
                 fails.append(f"ExportDialog[{fmt}]: bad cmd {cmd!r}")
     except Exception as e:  # noqa: BLE001
         fails.append(f"ExportDialog: {type(e).__name__}: {e}")

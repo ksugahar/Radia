@@ -21,7 +21,7 @@
 ##   Air:       sphere R = 0.060 m  (~2x coil major radius)
 ##
 ## After playback + add_kelvin, export via:
-##   radia_export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite
+##   export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite
 ##
 ## Also exports STEP for PEEC comparison:
 ##   File -> Export -> ih_fem_kelvin_skin_coil.step (coil volume only)
@@ -110,4 +110,4 @@ volume {air_top} {air_bot} visibility off
 # Kelvin added automatically, or run these Cubit Python commands manually:
 #   python "from add_kelvin import add_kelvin_cubit"
 #   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-#   radia_export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite
+#   export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite

@@ -3,7 +3,7 @@ End-to-end smoke test for a deployed cubit-mesh-export plugin.
 
 Runs Cubit in ``-batch -nographics`` mode on the canonical
 ``ih_bem_sample.jou`` from the radia package, exports a high-order .vol
-via ``radia_export netgen``, then asserts that the .vol contains the
+via ``export netgen``, then asserts that the .vol contains the
 expected boundary labels (``source``, ``sink``, ``sibc``). Used as the
 last gate after ``cubit-plugin-install`` to prove the full round-trip
 is healthy.
@@ -183,7 +183,7 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     # normal exit handler so the .vol is flushed first.
     driver.write_text(textwrap.dedent(f"""\
         play "{sample.as_posix()}"
-        radia_export netgen "{vol_path.as_posix()}" order {order} overwrite
+        export netgen "{vol_path.as_posix()}" order {order} overwrite
         exit 0
     """), encoding="utf-8")
     print(f"  Work:   {work}")
@@ -212,11 +212,11 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     # launcher (target-centric architecture, 2026-05-05).
 
     # Cubit's headless mode is flaky: it often segfaults in the mesh-cleanup
-    # stage AFTER radia_export has written the .vol. We therefore trust the
+    # stage AFTER export has written the .vol. We therefore trust the
     # .vol as the source of truth -- its presence + valid bcnames means the
     # plugin round-trip succeeded, regardless of Cubit's exit code.
     if not vol_path.is_file():
-        print(f"[FAIL] radia_export did not produce {vol_path}")
+        print(f"[FAIL] export did not produce {vol_path}")
         if proc.returncode != 0:
             print(f"[DIAG] Cubit exited with {proc.returncode} "
                   "(0xC0000005 = access violation is common on exit).")
@@ -276,13 +276,13 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
 def main():
     parser = argparse.ArgumentParser(
         prog="cubit-smoke-test",
-        description="End-to-end smoke test: Cubit -batch -> radia_export "
+        description="End-to-end smoke test: Cubit -batch -> export "
                     "netgen -> boundary-label check on the exported .vol.")
     parser.add_argument("--jou", default="",
                         help="override the source .jou (default: "
                              "radia/panels/samples/ih_bem_sample.jou)")
     parser.add_argument("--order", type=int, default=2,
-                        help="mesh curving order passed to radia_export "
+                        help="mesh curving order passed to export "
                              "netgen (default 2)")
     parser.add_argument("--expect", nargs="+",
                         default=["source", "sink", "sibc"],

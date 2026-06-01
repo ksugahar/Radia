@@ -94,7 +94,7 @@ cubit.cmd('sideset 2 name "coil_surface"')
 info = add_kelvin_cubit(R=R, symmetry=["z"])
 
 vol_path = os.path.join(SAMPLES_DIR, "ih_closed_torus.vol")
-cubit.cmd('radia_export netgen "%s" order 1 overwrite' % vol_path)
+cubit.cmd('export netgen "%s" order 1 overwrite' % vol_path)
 
 print("")
 print("ih_closed_torus.py: done")

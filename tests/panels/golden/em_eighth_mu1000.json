@@ -5,7 +5,7 @@
     "vol": "C:/temp/em_eighth.vol",
     "coil_script": "src/radia/panels/samples/em_sample_coil.py",
     "generator_jou": "src/radia/panels/samples/em/em_1-8_eighth.jou",
-    "generator_cmd_note": "Regenerate via Cubit batch: play em_1-8_eighth.jou + play auto_kelvin_entry.py (with RADIA_LAUNCHER_CONFIG containing kelvin_reduction with x=ht=0, y=ht=0, z=bn=0) + radia_export netgen order=2 overwrite."
+    "generator_cmd_note": "Regenerate via Cubit batch: play em_1-8_eighth.jou + play auto_kelvin_entry.py (with RADIA_LAUNCHER_CONFIG containing kelvin_reduction with x=ht=0, y=ht=0, z=bn=0) + export netgen order=2 overwrite."
   },
   "geometry_note": "1/8 octant: yoke at x>=0, y>=0, z>=0 (no yoke change vs 1/4 since the C-shape is already in y>=0); air 1/8 sphere via intersect with octant brick.  Kelvin offset along x (default = first reduction axis), webcut at x=offset_dist (kelvin_far), y=0 (sym), z=0 (sym).  GND nodeset at Kelvin centre (offset_dist, 0, 0).",
   "physics": {

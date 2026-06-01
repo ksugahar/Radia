@@ -21,7 +21,7 @@ but **no `Identifications` section yet**, and you need to enable
 `Periodic(H1(mesh, ...))` to couple the two surfaces for the Kelvin
 open-boundary truncation.  Reaching this state typically means:
 
-  - The Cubit C++ exporter (`radia_export netgen`) ran but its
+  - The Cubit C++ exporter (`export netgen`) ran but its
     all-or-nothing vertex matching skipped due to a single tolerance
     miss (typical 1/8-octant geometry).
   - The mesh came from somewhere outside the Cubit panel pipeline --
@@ -219,7 +219,7 @@ are stored as sets of equivalence classes).
 
 ## 3. C++ Cubit-export path is preferred when available
 
-When `radia_export netgen` succeeds in writing identifications during
+When `export netgen` succeeds in writing identifications during
 the .vol export (typical 1/2 / 1/4 octant geometry), use those.  This
 post-hoc helper is the FALLBACK for cases where the C++ all-or-nothing
 matching skipped due to a single tolerance miss -- it accepts the same

@@ -292,11 +292,11 @@ def main():
 
         # Export order=1
         f1 = os.path.join(OUT_DIR, f"sphere_order1_sz{mesh_size}.msh")
-        cubit.cmd(f'radia_export gmsh "{f1}" order 1 overwrite')
+        cubit.cmd(f'export gmsh "{f1}" order 1 overwrite')
 
         # Export order=2
         f2 = os.path.join(OUT_DIR, f"sphere_order2_sz{mesh_size}.msh")
-        cubit.cmd(f'radia_export gmsh "{f2}" order 2 overwrite')
+        cubit.cmd(f'export gmsh "{f2}" order 2 overwrite')
 
         # Parse and compute volumes
         print("\nOrder 1 (TET4):")
