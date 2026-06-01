@@ -43,14 +43,14 @@ fully independently and clean up the radia-prefixed naming:
    | `radia_export vtk "f.vtk"`     | `export vtk "f.vtk"` |
    | `radia_export femeem "dir"`    | `export femeem "dir"` |
    | `radia_export meg "f.meg"`     | `export meg "f.meg"` |
-   | `radia_export nastran "f.bdf"` | `export radia_nastran "f.bdf"` |
+   | `radia_export nastran "f.bdf"` | `export jmag_nastran "f.bdf"` |
 
    **Breaking**: existing `.jou` scripts calling `radia_export ...` must
    be updated to `export ...` (the old verb is removed -> Cubit reports
    `Unrecognized Keyword: 'radia_export'`).  Nastran is the one
    exception: Cubit has a built-in `export nastran` (different BDF
    format, no high-order support), so the plugin's BDF writer is exposed
-   as `export radia_nastran` to avoid shadowing the built-in.  The other
+   as `export jmag_nastran` to avoid shadowing the built-in.  The other
    five formats are not built-in Cubit export keywords, so they extend
    `export` cleanly.
 

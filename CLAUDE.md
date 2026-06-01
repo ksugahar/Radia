@@ -1619,7 +1619,7 @@ cubit.cmd("mesh volume 1")
 cubit.cmd('export femeem "C:\\tmp\\cub" overwrite')
 ```
 
-**対象**: `export {gmsh,netgen,radia_nastran,vtk,femeem}`、panels の非 GUI ロジック、BEM extractor、`export_curved`。
+**対象**: `export {gmsh,netgen,jmag_nastran,vtk,femeem}`、panels の非 GUI ロジック、BEM extractor、`export_curved`。
 GUI が絶対必要なもの (panel dialog のレンダリング) のみ例外。
 
 **前提**: `cubit` は Python API import (`S:/Radia/01_GitHub/src/radia/install_panels.py` の `find_cubit_bin()` で自動検出可)。バッチ起動でライセンス消費あり。
@@ -1811,7 +1811,7 @@ from cubit_mesh_export.check import check_consistency  # API
 - `cubit_mesh_curver` — C++ pybind11 module (bundled in cubit_mesh_export, unchanged)
 - `check_vol_consistency` — thin backward-compat re-export in `src/radia/panels/` (imports from cubit_mesh_export.check)
 
-Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('export gmsh/radia_nastran/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `cubit-plugin-install`).
+Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('export gmsh/jmag_nastran/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `cubit-plugin-install`).
 
 ### PEEC Conductor Mesh
 
@@ -2759,7 +2759,7 @@ mode-suffix:
 │  Export Mesh menu (GMSH/Nastran/VTK/Netgen Vol/FEMEEM/MEG)      │
 │  Mesh Evaluation (_p1.vol ... _p5.vol + format QA exports)      │
 │  ensure_jou_path(): .jou save -> basename for all output files  │
-│  export netgen/gmsh/radia_nastran/vtk (APREPRO commands)  │
+│  export netgen/gmsh/jmag_nastran/vtk (APREPRO commands)  │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 2: Cubit GUI Python (Python 3.10 + PySide6, Cubit 2025.12)│
@@ -2966,7 +2966,7 @@ All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `.ccm` (plugins/) | `cubit_mesh_export.ccm` | APREPRO commands: `export gmsh/radia_nastran/vtk/netgen` |
+| `.ccm` (plugins/) | `cubit_mesh_export.ccm` | APREPRO commands: `export gmsh/jmag_nastran/vtk/netgen` |
 | GUI (Layer 2) | `panels/radia_export_menu.py` | PySide6 Export Mesh menu + dialogs (replaced the Qt5 `.ccl`, removed in radia 4.80.0) |
 | `.pyd` (plugins/) | `cubit_mesh_curver.pyd` | pybind11: Cubit-free mesh curving |
 
@@ -2976,7 +2976,7 @@ All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 |--------|---------|-----------|-------|
 | Netgen Vol | `export netgen "f.vol" order 3` | 1-5 | Primary format for NGSolve FEM |
 | GMSH v4.1 | `export gmsh "f.msh"`           | 1-3 | Lab-wide standard; structured entity blocks |
-| Nastran BDF | `export radia_nastran "f.bdf"` | 1-2 | CTETRA/CTETRA(10), nopyramid option |
+| Nastran BDF | `export jmag_nastran "f.bdf"` | 1-2 | CTETRA/CTETRA(10), nopyramid option |
 | VTK | `export vtk "f.vtk"` | 1-2 | Legacy format, cell types 10/24 |
 
 **GMSH order limit**: Order 4-5 is an error (not fallback). NetgenCurver face/volume

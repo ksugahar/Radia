@@ -163,10 +163,10 @@ Output:
 |----------------|-------------------|-----------|
 | `export netgen "f.vol" order N` | NetgenCurver (compact_netgen) | 1-5 |
 | `export gmsh "f.msh" order N` | NetgenCurver | 1-3 |
-| `export radia_nastran "f.bdf" order N` | NetgenCurver | 1-2 |
+| `export jmag_nastran "f.bdf" order N` | NetgenCurver | 1-2 |
 | `export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
 
-> **Note**: `export radia_nastran` (NOT `export nastran`). Cubit has a built-in `export nastran` with different format.
+> **Note**: `export jmag_nastran` (NOT `export nastran`). Cubit has a built-in `export nastran` with different format.
 
 ## See Also
 

@@ -240,7 +240,7 @@ class TestNastranCommand(_DialogTestBase):
         cmd = d.cubit_command()
         self.assertRegex(
             cmd,
-            r'^export radia_nastran "[^"]+\.bdf" order \d+ '
+            r'^export jmag_nastran "[^"]+\.bdf" order \d+ '
             r'dimension 3 overwrite$')
         # nopyramid default = off
         self.assertNotIn("nopyramid", cmd)
@@ -551,7 +551,7 @@ class TestMeshEvaluationRunner(unittest.TestCase):
                    if c.startswith("export gmsh ")
                    and "_qa_" in c]
         nast_qa = [c for c in self._cmds_issued
-                   if c.startswith("export radia_nastran ")
+                   if c.startswith("export jmag_nastran ")
                    and "_qa_" in c]
         vtk_qa = [c for c in self._cmds_issued
                   if c.startswith("export vtk ")
@@ -666,7 +666,7 @@ try:
     # Format QA (mimics _run_mesh_evaluation Phase 1b)
     fmt_specs = [
         ("gmsh", "msh", "export gmsh", min(max_order, 3)),
-        ("nastran", "bdf", "export radia_nastran", min(max_order, 2)),
+        ("nastran", "bdf", "export jmag_nastran", min(max_order, 2)),
         ("vtk", "vtk", "export vtk", min(max_order, 2)),
     ]
     for name, ext, cmd_prefix, max_ord in fmt_specs:
