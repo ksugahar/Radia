@@ -91,6 +91,35 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 - After cloning, run `./download_binaries.sh` to fetch binaries
 - `.png`, `.pdf` allowed in repository; `.msh`, `.vtu`, `.vtk`, `.vol` are gitignored
 
+### Cubit Plugin Binary: cubit-mesh-export is the Sole Shipper (Tier-2, 2026-06-01)
+
+**POLICY**: The Cubit plugin binaries (`radia_cubit.ccm` +
+`radia_cubit_mesh.pyd`, built from `src/cubit_plugin/`) are bundled,
+shipped, and deployed **ONLY by the `cubit-mesh-export` package**.  The
+`radia` wheel does **NOT** bundle them (dropped from radia `package-data`;
+removed from `src/radia/`).
+
+**Why**: so `radia` and `cubit-mesh-export` **release fully
+independently** — a Cubit-plugin change is a `cubit-mesh-export` release;
+a radia-code change is a `radia` release.  This was the chosen answer to
+"should cubit-mesh-export be a separate repo?": keep the monorepo (shared
+C++ source in `src/cubit_plugin/`, one build, no version drift) but remove
+the **ship/release coupling** that previously forced lockstep releases.
+
+**How it stays safe**:
+- `src/radia/setup_cubit.py` delegates plugin install to cme's
+  `cubit-plugin-install`; `register_toolbar.py::_check_plugin_freshness`
+  checks the **DEPLOYED** plugin, never a radia-bundled copy — so radia
+  has no runtime/deploy dependency on bundling the binary.
+- `Build.ps1` and `tools/release_triple.py phase0` propagate the built
+  binaries to the **cme package only** (not `src/radia/`).
+- The radia↔cme compat window (`COMPAT_CUBIT_MESH_EXPORT_*` /
+  `COMPAT_RADIA_*`, enforced by `cubit-plugin-install` at deploy) remains
+  the safety net the 2026-04-14 sideset/.ccl drift incident motivated.
+- Release per-package (`v*` / `cubit-mesh-export-v*` / `radia-mcp-v*`);
+  bundle all three only when they genuinely co-change (see the
+  `release-triple` skill).
+
 ### File Placement Policy
 
 **POLICY**: Generated output files (`.png`, `.msh`, `.vtu`, `.vol`) must be placed **next to their corresponding `.py` script**.

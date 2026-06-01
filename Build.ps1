@@ -293,16 +293,21 @@ try {
         @{ src = "cln_core.cp312-win_amd64.pyd";      dst = "cln_core.pyd";      required = $false }
     )
 
-    # Cubit plugin files (built in separate build dirs)
-    # Freshness check: compare build output against destination.
-    #   - If src is newer than dst (or dst missing): copy (UPDATED)
-    #   - If src == dst (same size + same or older time): skip (up-to-date)
-    #   - If src is missing: skip with warning
+    # Cubit plugin files (built in src/cubit_plugin/build-*): shipped ONLY by
+    # the cubit-mesh-export package (Tier-2, 2026-06-01).  radia NO LONGER
+    # bundles radia_cubit.ccm/.pyd -- cme is the sole shipper AND deployer
+    # (its cubit-plugin-install), so radia and cubit-mesh-export release fully
+    # independently.  Safe because radia's setup_cubit.py delegates plugin
+    # install to cme, and register_toolbar.py freshness-checks the DEPLOYED
+    # plugin, not a radia-bundled copy.  Build output is copied DIRECTLY to
+    # the cme package (no src/radia/ hop).
+    # Freshness check: copy when src newer than dst (or dst missing).
+    $cmeDir = "$PROJECT_DIR\packages\cubit-mesh-export\src\cubit_mesh_export"
     $cubitFiles = @(
         @{ src = "$PROJECT_DIR\src\cubit_plugin\build-pyd\radia_cubit_mesh.cp312-win_amd64.pyd";
-           dst = "$PROJECT_DIR\src\radia\radia_cubit_mesh.pyd" },
+           dst = "$cmeDir\radia_cubit_mesh.pyd" },
         @{ src = "$PROJECT_DIR\src\cubit_plugin\build-ccm\radia_cubit.ccm";
-           dst = "$PROJECT_DIR\src\radia\radia_cubit.ccm" }
+           dst = "$cmeDir\radia_cubit.ccm" }
     )
     foreach ($cf in $cubitFiles) {
         $name = Split-Path $cf.dst -Leaf
@@ -312,41 +317,16 @@ try {
             if (Test-Path $cf.dst) {
                 $dstInfo = Get-Item $cf.dst
                 if ($srcInfo.Length -eq $dstInfo.Length -and $srcInfo.LastWriteTime -le $dstInfo.LastWriteTime) {
-                    Write-Host "  ${name}: up-to-date ($([math]::Round($srcInfo.Length / 1KB, 1)) KB)" -ForegroundColor Cyan
+                    Write-Host "  cubit-mesh-export/${name}: up-to-date ($([math]::Round($srcInfo.Length / 1KB, 1)) KB)" -ForegroundColor Cyan
                     $needCopy = $false
                 }
             }
             if ($needCopy) {
                 Copy-Item $cf.src $cf.dst -Force
-                Write-Host "  ${name}: $([math]::Round($srcInfo.Length / 1KB, 1)) KB (UPDATED)" -ForegroundColor Green
+                Write-Host "  cubit-mesh-export/${name}: $([math]::Round($srcInfo.Length / 1KB, 1)) KB (UPDATED)" -ForegroundColor Green
             }
         } else {
             Write-Host "  ${name}: skipped (not built)" -ForegroundColor Yellow
-        }
-    }
-
-    # Copy plugin binaries to cubit-mesh-export package (for wheel + cubit-plugin-install)
-    $cmeDir = "$PROJECT_DIR\packages\cubit-mesh-export\src\cubit_mesh_export"
-    $cmeCopies = @(
-        @{ src = "$PROJECT_DIR\src\radia\radia_cubit_mesh.pyd"; name = "radia_cubit_mesh.pyd" },
-        @{ src = "$PROJECT_DIR\src\radia\radia_cubit.ccm";      name = "radia_cubit.ccm" },
-        @{ src = "$PROJECT_DIR\src\radia\radia_cubit.ccl";       name = "radia_cubit.ccl" }
-    )
-    foreach ($cc in $cmeCopies) {
-        if (Test-Path $cc.src) {
-            $srcInfo = Get-Item $cc.src
-            $cmeDst = "$cmeDir\$($cc.name)"
-            $needCopy = $true
-            if (Test-Path $cmeDst) {
-                $dstInfo = Get-Item $cmeDst
-                if ($srcInfo.Length -eq $dstInfo.Length -and $srcInfo.LastWriteTime -le $dstInfo.LastWriteTime) {
-                    $needCopy = $false
-                }
-            }
-            if ($needCopy) {
-                Copy-Item $cc.src $cmeDst -Force
-                Write-Host "  cubit-mesh-export/$($cc.name): copied" -ForegroundColor Green
-            }
         }
     }
 
@@ -355,13 +335,10 @@ try {
     # `get_requires_for_build_wheel` that compares mtime of every file
     # in src/cubit_plugin/ vs every bundled binary.  Ninja's incremental
     # build only rebuilds targets whose transitive source changed, so
-    # editing a .cpp file that only feeds the .ccm leaves the .pyd
-    # (or vice-versa) untouched, which the freshness gate then FALSE-
-    # alarms on.  Fix: after all copies, force-touch every bundled
-    # binary mtime so it >= newest source mtime.  Build.ps1 has already
-    # ensured the CONTENTS are up-to-date; this only corrects mtime.
-    #
-    # As of radia 4.80.0 the .ccl is gone — only .ccm + .pyd remain.
+    # editing a .cpp that only feeds the .ccm leaves the .pyd (or vice-
+    # versa) untouched, which the freshness gate then FALSE-alarms on.
+    # Fix: force-touch every bundled binary mtime so it >= newest source.
+    # (As of radia 4.80.0 the .ccl is gone -- only .ccm + .pyd remain.)
     $pluginSrcFiles = Get-ChildItem "$PROJECT_DIR\src\cubit_plugin" `
         -Include "*.cpp","*.hpp","*.h","*.c" -File -Recurse `
         -ErrorAction SilentlyContinue
@@ -369,19 +346,12 @@ try {
         $newest = ($pluginSrcFiles | Measure-Object -Property LastWriteTime -Maximum).Maximum
         # Bump by 1 s so freshness check sees ">= newest source".
         $touchTime = $newest.AddSeconds(1)
-        foreach ($cc in $cmeCopies) {
-            $cmeDst = "$cmeDir\$($cc.name)"
-            if (Test-Path $cmeDst) {
-                (Get-Item -LiteralPath $cmeDst).LastWriteTime = $touchTime
+        foreach ($cf in $cubitFiles) {
+            if (Test-Path $cf.dst) {
+                (Get-Item -LiteralPath $cf.dst).LastWriteTime = $touchTime
             }
         }
-        # Also touch the src/radia/ copies so install_full.py /
-        # verify-deploy freshness checks see consistent mtimes.
-        foreach ($name in @("radia_cubit_mesh.pyd", "radia_cubit.ccm")) {
-            $p = "$PROJECT_DIR\src\radia\$name"
-            if (Test-Path $p) { (Get-Item -LiteralPath $p).LastWriteTime = $touchTime }
-        }
-        Write-Host "  bundled plugin binaries: mtime synced to newest source ($touchTime)" -ForegroundColor Cyan
+        Write-Host "  cubit-mesh-export plugin binaries: mtime synced to newest source ($touchTime)" -ForegroundColor Cyan
     }
 
     foreach ($mod in $modules) {

@@ -209,10 +209,13 @@ def cmd_phase0(args):
         return 3
     run(["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1)])
 
-    # Propagate to both source-of-truth dirs.  Only .ccm now (the .ccl
-    # target was removed in radia 4.80.0 along with RadiaComp.cpp).
+    # Propagate to the cubit-mesh-export package ONLY (Tier-2, 2026-06-01):
+    # cme is the sole shipper of the Cubit plugin binary; radia no longer
+    # bundles radia_cubit.ccm, so radia + cme release fully independently.
+    # Only .ccm here (the .ccl target was removed in radia 4.80.0; the .pyd
+    # is propagated by the full Build.ps1, not this fast .ccm-only phase0).
     for src_name, dst_dirs in [
-        ("build-ccm/radia_cubit.ccm", ["src/radia", "packages/cubit-mesh-export/src/cubit_mesh_export"]),
+        ("build-ccm/radia_cubit.ccm", ["packages/cubit-mesh-export/src/cubit_mesh_export"]),
     ]:
         src = REPO / "src/cubit_plugin" / src_name
         if not src.is_file():
@@ -222,7 +225,7 @@ def cmd_phase0(args):
             dst = REPO / d / src.name
             run(["cp", str(src), str(dst)])
 
-    ok("Phase 0 complete; .ccm propagated to src/radia + cubit-mesh-export pkg")
+    ok("Phase 0 complete; .ccm propagated to cubit-mesh-export pkg (radia no longer bundles it)")
     return 0
 
 
