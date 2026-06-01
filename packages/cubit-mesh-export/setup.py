@@ -60,7 +60,7 @@ def _check_binary_freshness():
     # deleted; PySide6 toolbar at radia/panels/radia_export_menu.py
     # replaces it.
     bundled = [
-        pkg_dir / "radia_cubit.ccm",
+        pkg_dir / "cubit_mesh_export.ccm",
     ]
     present = [p for p in bundled if p.is_file()]
     missing = [p for p in bundled if not p.is_file()]
@@ -73,7 +73,7 @@ def _check_binary_freshness():
             "in package source dir.\n")
         sys.stderr.write(
             "  Building sdist or a Python-only wheel. Wheel will lack "
-            "radia_cubit.ccm and cubit-plugin-install will refuse "
+            "cubit_mesh_export.ccm and cubit-plugin-install will refuse "
             "to deploy from it.\n")
         return
     if missing:
@@ -85,7 +85,7 @@ def _check_binary_freshness():
             sys.stderr.write(f"  [MISSING] {p}\n")
         sys.stderr.write(
             "\n  All-or-nothing: either ship every binary or none. Rebuild "
-            "and re-propagate (radia_cubit.ccm is built by Build.ps1; the\n"
+            "and re-propagate (cubit_mesh_export.ccm is built by Build.ps1; the\n"
             "  .ccl was removed in radia 4.80.0) before retrying.\n\n")
         sys.exit(1)
     bundled = present  # only freshness-check the binaries we will ship

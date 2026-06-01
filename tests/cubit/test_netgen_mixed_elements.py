@@ -109,9 +109,9 @@ print(f"  [OK] Exported to {step_file}")
 # Step 4: Use extract_curved_mesh function
 print("\nStep 4: Using extract_curved_mesh() function...")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import radia_cubit_mesh
+import cubit_mesh_curver
 
-mesh = radia_cubit_mesh.extract_curved_mesh(order=2)
+mesh = cubit_mesh_curver.extract_curved_mesh(order=2)
 print(f"  [OK] Created ngsolve.Mesh: ne={mesh.ne}, nv={mesh.nv}")
 
 # Step 5: Check materials and boundaries

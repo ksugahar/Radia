@@ -1,6 +1,6 @@
 # Cubit Mesh Export Examples
 
-Example scripts for the radia Cubit C++ plugin (`radia_cubit.ccm`), organized by export format.
+Example scripts for the radia Cubit C++ plugin (`cubit_mesh_export.ccm`), organized by export format.
 
 ## Folder Structure
 

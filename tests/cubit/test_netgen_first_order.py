@@ -23,9 +23,9 @@ if _cubit_path and _cubit_path not in sys.path:
 
 import cubit
 
-# Add parent directory to path for radia_cubit_mesh
+# Add parent directory to path for cubit_mesh_curver
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import radia_cubit_mesh
+import cubit_mesh_curver
 
 # Initialize Cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
@@ -56,7 +56,7 @@ def test_1st_order_mesh_exports_1st_order():
 	print(f"  Cubit tet nodes (get_expanded_connectivity): {len(expanded_nodes)}")
 
 	# Export via extract_curved_mesh(order=1)
-	mesh = radia_cubit_mesh.extract_curved_mesh(order=1)
+	mesh = cubit_mesh_curver.extract_curved_mesh(order=1)
 
 	print(f"  NGSolve mesh elements: {mesh.ne}")
 
@@ -103,7 +103,7 @@ def test_2nd_order_mesh_still_exports_1st_order():
 		print(f"  Warning: Expected 10 nodes for TET10, got {len(cubit_nodes_2nd)}")
 
 	# Export via extract_curved_mesh(order=1)
-	mesh = radia_cubit_mesh.extract_curved_mesh(order=1)
+	mesh = cubit_mesh_curver.extract_curved_mesh(order=1)
 
 	print(f"  NGSolve mesh elements: {mesh.ne}")
 
@@ -132,7 +132,7 @@ def test_curved_export_works():
 	# Export with curving
 	for order in [1, 2, 3]:
 		try:
-			mesh = radia_cubit_mesh.extract_curved_mesh(order=order)
+			mesh = cubit_mesh_curver.extract_curved_mesh(order=order)
 			print(f"  extract_curved_mesh(order={order}) - OK, ne={mesh.ne}, nv={mesh.nv}")
 		except Exception as e:
 			print(f"  extract_curved_mesh(order={order}) - FAIL: {e}")

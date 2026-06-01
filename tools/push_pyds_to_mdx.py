@@ -31,13 +31,13 @@ PYDS = [
      [r"C:\Radia\01_GitHub\src\radia\cln_core.pyd"]),
     (LAB_REPO / "src" / "radia" / "peec_matrices.pyd",
      [r"C:\Radia\01_GitHub\src\radia\peec_matrices.pyd"]),
-    # CRITICAL: radia_cubit_mesh.pyd lives in TWO paths on the local clone.
+    # CRITICAL: cubit_mesh_curver.pyd lives in TWO paths on the local clone.
     # LAB Build.ps1 writes both; on mdx (no build) we mirror both.
     (LAB_REPO / "packages" / "cubit-mesh-export" / "src" / "cubit_mesh_export"
-        / "radia_cubit_mesh.pyd",
-     [r"C:\Radia\01_GitHub\src\radia\radia_cubit_mesh.pyd",
+        / "cubit_mesh_curver.pyd",
+     [r"C:\Radia\01_GitHub\src\radia\cubit_mesh_curver.pyd",
       r"C:\Radia\01_GitHub\packages\cubit-mesh-export\src\cubit_mesh_export"
-      r"\radia_cubit_mesh.pyd"]),
+      r"\cubit_mesh_curver.pyd"]),
 ]
 
 

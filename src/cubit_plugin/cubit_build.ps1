@@ -38,8 +38,8 @@ if (-not (Test-Path $buildPyd)) { New-Item -ItemType Directory -Path $buildPyd |
 Set-Location $buildPyd
 & $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCubit_DIR=$($env:CUBIT_DIR)" "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
 if ($LASTEXITCODE -ne 0) { throw "cmake configure build-pyd failed" }
-& $cmake --build . --config Release --target radia_cubit_mesh -j
-if ($LASTEXITCODE -ne 0) { throw "cmake build radia_cubit_mesh failed" }
+& $cmake --build . --config Release --target cubit_mesh_curver -j
+if ($LASTEXITCODE -ne 0) { throw "cmake build cubit_mesh_curver failed" }
 
 # build-ccm
 $buildCcm = Join-Path $src "build-ccm"
@@ -47,9 +47,9 @@ if (-not (Test-Path $buildCcm)) { New-Item -ItemType Directory -Path $buildCcm |
 Set-Location $buildCcm
 & $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl "-DCubit_DIR=$($env:CUBIT_DIR)" "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
 if ($LASTEXITCODE -ne 0) { throw "cmake configure build-ccm failed" }
-& $cmake --build . --config Release --target radia_cubit_ccm -j
-if ($LASTEXITCODE -ne 0) { throw "cmake build radia_cubit_ccm failed" }
-# radia_cubit_ccl removed in radia 4.80.0 (Qt5 .ccl deleted; PySide6
+& $cmake --build . --config Release --target cubit_mesh_export_ccm -j
+if ($LASTEXITCODE -ne 0) { throw "cmake build cubit_mesh_export_ccm failed" }
+# cubit_mesh_export_ccl removed in radia 4.80.0 (Qt5 .ccl deleted; PySide6
 # toolbar at src/radia/panels/radia_export_menu.py replaces it).
 
 Write-Host "BUILD OK"

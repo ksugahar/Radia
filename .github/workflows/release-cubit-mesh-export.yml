@@ -52,7 +52,7 @@ jobs:
           # in a half-deployed state).
           # Note (radia 4.80.0): .ccl removed — Qt5 GUI deleted, replaced
           # by PySide6 toolbar src/radia/panels/radia_export_menu.py.
-          required = ["radia_cubit.ccm", "radia_cubit_mesh.pyd"]
+          required = ["cubit_mesh_export.ccm", "cubit_mesh_curver.pyd"]
           missing = [r for r in required if not any(n.endswith(r) for n in names)]
           if missing:
               print(f"::error::Wheel missing mandatory plugin binaries: {missing}")
