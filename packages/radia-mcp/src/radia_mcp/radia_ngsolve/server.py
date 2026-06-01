@@ -1539,7 +1539,7 @@ def install_deploy(topic: str = "") -> str:
       editable_to_pypi_migration  -- e.g. 100号機 NAS-editable -> PyPI
       pypi_to_editable_migration  -- e.g. mdx PyPI -> editable
       metadata_sync               -- pip metadata vs radia.__version__
-      pyd_dll_bootstrap           -- radia_cubit_mesh requires `import radia` first
+      pyd_dll_bootstrap           -- cubit_mesh_curver requires `import radia` first
       cubit_plugin_layers         -- Cubit plugin lives in TWO places
       common_failure_modes        -- symptoms and fixes table
 

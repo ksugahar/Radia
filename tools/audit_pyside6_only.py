@@ -10,7 +10,7 @@ Static checks:
      only actual ``import``/``from ... import`` lines).
   2. Core GUI modules import PySide6.
   3. radia pyproject.toml declares PySide6 and lists no PyQt5 dependency.
-  4. radia_cubit.ccm (if present in the package source) has NO Qt5 DLL
+  4. cubit_mesh_export.ccm (if present in the package source) has NO Qt5 DLL
      dependency (pefile import-table scan).
 
 Headless check (isolated subprocess, offscreen Qt):
@@ -108,8 +108,8 @@ def check_pyproject() -> list[str]:
 
 
 def check_ccm_qt_free() -> tuple[str, list[str]]:
-    """radia_cubit.ccm must not import any Qt5 DLL (pefile). Returns (status, issues)."""
-    ccm = ROOT / "packages" / "cubit-mesh-export" / "src" / "cubit_mesh_export" / "radia_cubit.ccm"
+    """cubit_mesh_export.ccm must not import any Qt5 DLL (pefile). Returns (status, issues)."""
+    ccm = ROOT / "packages" / "cubit-mesh-export" / "src" / "cubit_mesh_export" / "cubit_mesh_export.ccm"
     if not ccm.is_file():
         return ("skip (no .ccm in package source)", [])
     try:
@@ -212,7 +212,7 @@ def main(argv: list[str]) -> int:
     all_issues += pyproj
 
     ccm_status, ccm_issues = check_ccm_qt_free()
-    print(f"[{'FAIL' if ccm_issues else 'OK'}] radia_cubit.ccm Qt-free  ({ccm_status})")
+    print(f"[{'FAIL' if ccm_issues else 'OK'}] cubit_mesh_export.ccm Qt-free  ({ccm_status})")
     all_issues += ccm_issues
 
     smoke = check_panel_smoke()

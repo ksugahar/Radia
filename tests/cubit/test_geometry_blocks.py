@@ -20,9 +20,9 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 import tempfile
 
-# Add parent directory to path for radia_cubit_mesh
+# Add parent directory to path for cubit_mesh_curver
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import radia_cubit_mesh
+import cubit_mesh_curver
 
 # Initialize Cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
@@ -50,7 +50,7 @@ def test_helper_function():
 	cubit.cmd("block 2 add tri all in surface all")
 
 	# Use extract_mesh_data to get elements
-	mesh_data = radia_cubit_mesh.extract_mesh_data(order=1)
+	mesh_data = cubit_mesh_curver.extract_mesh_data(order=1)
 	# mesh_data provides element information from blocks
 	print(f"  Mesh data extracted successfully")
 	print(f"  Total tets in mesh: {num_tets}")
@@ -75,7 +75,7 @@ def test_helper_function():
 	cubit.cmd("block 1 add volume 1")
 	cubit.cmd("block 2 add surface 1")
 
-	mesh_data = radia_cubit_mesh.extract_mesh_data(order=1)
+	mesh_data = cubit_mesh_curver.extract_mesh_data(order=1)
 	print(f"\n  Geometry blocks:")
 	print(f"    Total tets: {num_tets}")
 

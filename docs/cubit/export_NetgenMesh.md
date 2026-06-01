@@ -34,7 +34,7 @@ Sidesets become boundary labels. Block names become material labels.
 
 ## How It Works
 
-The C++ plugin (`radia_cubit.ccm`) performs the entire export without Python:
+The C++ plugin (`cubit_mesh_export.ccm`) performs the entire export without Python:
 
 1. **Extract** — `MeshData::extract(order)` reads linear mesh from Cubit's `MeshExportInterface`
 2. **Curve** — `NetgenCurver` builds a `netgen.meshing.Mesh` and calls `BuildCurvedElements(order)` using an ACIS `CallbackGeometry` that projects nodes onto the exact CAD surfaces

@@ -1,1 +1,1 @@
-"""Tests for Cubit mesh export (radia_cubit_mesh plugin + cubit.cmd)."""
+"""Tests for Cubit mesh export (cubit_mesh_curver plugin + cubit.cmd)."""

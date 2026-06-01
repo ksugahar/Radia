@@ -1,5 +1,5 @@
 """
-Test radia_cubit_mesh.extract_curved_mesh() function.
+Test cubit_mesh_curver.extract_curved_mesh() function.
 
 Tests:
 1. 3D tet mesh export
@@ -21,9 +21,9 @@ if _cubit_path and _cubit_path not in sys.path:
 
 import cubit
 
-# Add parent directory to path for radia_cubit_mesh
+# Add parent directory to path for cubit_mesh_curver
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import radia_cubit_mesh
+import cubit_mesh_curver
 
 # Initialize Cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
@@ -72,7 +72,7 @@ def test_basic_tet_export():
 		return True
 
 	# Export via extract_curved_mesh
-	mesh = radia_cubit_mesh.extract_curved_mesh(order=1)
+	mesh = cubit_mesh_curver.extract_curved_mesh(order=1)
 
 	# Verify mesh
 	num_elements = mesh.ne
@@ -121,7 +121,7 @@ def test_1st_order_output_with_2nd_order_mesh():
 		return True
 
 	# Export via extract_curved_mesh(order=1)
-	mesh = radia_cubit_mesh.extract_curved_mesh(order=1)
+	mesh = cubit_mesh_curver.extract_curved_mesh(order=1)
 
 	print(f"  NGSolve mesh: {mesh.ne} elements, {mesh.nv} vertices")
 	print("  PASS: extract_curved_mesh(order=1) outputs 1st order elements")
@@ -176,7 +176,7 @@ def test_node_coordinates():
 		return True
 
 	# Export and verify coordinates
-	mesh = radia_cubit_mesh.extract_curved_mesh(order=1)
+	mesh = cubit_mesh_curver.extract_curved_mesh(order=1)
 
 	print(f"  NGSolve mesh: {mesh.ne} elements, {mesh.nv} vertices")
 	print("  PASS: Node coordinates correctly exported")
@@ -219,7 +219,7 @@ def test_element_connectivity():
 		return True
 
 	# Export and verify
-	mesh = radia_cubit_mesh.extract_curved_mesh(order=1)
+	mesh = cubit_mesh_curver.extract_curved_mesh(order=1)
 
 	print(f"  NGSolve mesh: {mesh.ne} elements verified")
 	print("  PASS: Element connectivity correct")
@@ -245,7 +245,7 @@ def test_ngsolve_integration():
 	cubit.cmd("block 1 add tet all")
 
 	# Export via extract_curved_mesh
-	mesh = radia_cubit_mesh.extract_curved_mesh(order=1)
+	mesh = cubit_mesh_curver.extract_curved_mesh(order=1)
 
 	print(f"  NGSolve mesh created successfully")
 	print(f"  Elements: {mesh.ne}")
@@ -292,7 +292,7 @@ def test_curve_high_order():
 	# Export mesh with curving via extract_curved_mesh
 	for order in [1, 2, 3]:
 		try:
-			mesh = radia_cubit_mesh.extract_curved_mesh(order=order)
+			mesh = cubit_mesh_curver.extract_curved_mesh(order=order)
 			print(f"  extract_curved_mesh(order={order}) succeeded! ne={mesh.ne}, nv={mesh.nv}")
 		except Exception as e:
 			print(f"  extract_curved_mesh(order={order}) failed: {e}")
@@ -339,7 +339,7 @@ def test_multiple_blocks():
 		return True
 
 	# Export via extract_curved_mesh
-	mesh = radia_cubit_mesh.extract_curved_mesh(order=1)
+	mesh = cubit_mesh_curver.extract_curved_mesh(order=1)
 
 	print(f"  NGSolve mesh: {mesh.ne} elements")
 	print("  PASS: Multiple blocks exported")

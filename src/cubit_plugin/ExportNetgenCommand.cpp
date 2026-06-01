@@ -50,7 +50,7 @@ static void ensure_netgen_dll_path()
   if (hm) {
     char path[MAX_PATH];
     if (GetModuleFileNameA(hm, path, MAX_PATH)) {
-      // path = .../plugins/radia_cubit.ccm or .../bin/radia_cubit.ccl
+      // path = .../plugins/cubit_mesh_export.ccm or .../bin/cubit_mesh_export.ccl
       std::string dir(path);
       auto pos = dir.find_last_of("\\/");
       if (pos != std::string::npos) {

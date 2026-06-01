@@ -137,7 +137,7 @@ def _bundled_plugin_mtime():
     """
     pkg = REPO / "packages/cubit-mesh-export/src/cubit_mesh_export"
     times = []
-    for name in ("radia_cubit.ccm",):
+    for name in ("cubit_mesh_export.ccm",):
         p = pkg / name
         if p.is_file():
             times.append(p.stat().st_mtime)
@@ -211,11 +211,11 @@ def cmd_phase0(args):
 
     # Propagate to the cubit-mesh-export package ONLY (Tier-2, 2026-06-01):
     # cme is the sole shipper of the Cubit plugin binary; radia no longer
-    # bundles radia_cubit.ccm, so radia + cme release fully independently.
+    # bundles cubit_mesh_export.ccm, so radia + cme release fully independently.
     # Only .ccm here (the .ccl target was removed in radia 4.80.0; the .pyd
     # is propagated by the full Build.ps1, not this fast .ccm-only phase0).
     for src_name, dst_dirs in [
-        ("build-ccm/radia_cubit.ccm", ["packages/cubit-mesh-export/src/cubit_mesh_export"]),
+        ("build-ccm/cubit_mesh_export.ccm", ["packages/cubit-mesh-export/src/cubit_mesh_export"]),
     ]:
         src = REPO / "src/cubit_plugin" / src_name
         if not src.is_file():
@@ -877,7 +877,7 @@ def _run_pyside6_health_audit():
       1. zero real PyQt5 / PySide2 / PyQt6 imports in tracked *.py
       2. core GUI modules import PySide6
       3. radia pyproject declares PySide6, no PyQt5 dependency
-      4. radia_cubit.ccm has no Qt5 DLL dependency
+      4. cubit_mesh_export.ccm has no Qt5 DLL dependency
       5. headless panel smoke (IH/EM/PCB construct + ExportDialog
          builds all 6 formats) in an isolated offscreen subprocess
 

@@ -214,7 +214,7 @@ jobs:
           Write-Host "_radia_pybind.pyd: ${sz} MB"
 
       # ----------------------------------------------------------------
-      # Fetch radia_cubit_mesh.pyd from GitHub Releases binaries tag.
+      # Fetch cubit_mesh_curver.pyd from GitHub Releases binaries tag.
       #
       # CI runners do NOT have the Coreform Cubit SDK (cmake module),
       # pybind11, or the qt5_sdk needed to build the Cubit plugin
@@ -229,7 +229,7 @@ jobs:
       # would fail their pyd-mandate check (added 2026-04-24 after
       # the PyPI 0.6.0 partial-wheel incident).
       # ----------------------------------------------------------------
-      - name: Fetch radia_cubit_mesh.pyd from binaries release
+      - name: Fetch cubit_mesh_curver.pyd from binaries release
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -242,7 +242,7 @@ jobs:
           python tools\download_release_asset.py `
             --repo ${{ github.repository }} `
             --tag binaries `
-            --name radia_cubit_mesh.pyd `
+            --name cubit_mesh_curver.pyd `
             --dest "${{ github.workspace }}\src\radia"
 
       # ----------------------------------------------------------------
@@ -507,17 +507,17 @@ jobs:
         run: |
           $pkgDir = "${{ github.workspace }}\packages\cubit-mesh-export\src\cubit_mesh_export"
           # Copy binaries to cubit-mesh-export package
-          # Note (radia 4.80.0): radia_cubit.ccl removed — Qt5 GUI deleted,
+          # Note (radia 4.80.0): cubit_mesh_export.ccl removed — Qt5 GUI deleted,
           # PySide6 toolbar (src/radia/panels/radia_export_menu.py) replaces it.
           $binaries = @(
-            @{ src = "src\radia\radia_cubit_mesh.pyd"; dst = "radia_cubit_mesh.pyd" },
-            @{ src = "src\radia\radia_cubit.ccm";      dst = "radia_cubit.ccm" }
+            @{ src = "src\radia\cubit_mesh_curver.pyd"; dst = "cubit_mesh_curver.pyd" },
+            @{ src = "src\radia\cubit_mesh_export.ccm";      dst = "cubit_mesh_export.ccm" }
           )
           # All 2 binaries are MANDATORY. Missing any of them indicates
           # Build.ps1 failed silently for the corresponding artifact —
           # we refuse to ship a wheel that cubit-plugin-install would
           # then leave half-deployed (2026-04-24: PyPI 0.6.0 shipped
-          # without radia_cubit_mesh.pyd because this step warned only).
+          # without cubit_mesh_curver.pyd because this step warned only).
           $missing = @()
           foreach ($b in $binaries) {
             $s = "${{ github.workspace }}\$($b.src)"

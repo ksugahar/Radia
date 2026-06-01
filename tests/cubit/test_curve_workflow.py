@@ -36,7 +36,7 @@ if _fork_path:
 from ngsolve import Mesh, Integrate, CF, BND
 from ngsolve import TaskManager
 import cubit
-import radia_cubit_mesh
+import cubit_mesh_curver
 
 print("=" * 60)
 print("Test: Complete Cubit-to-NGSolve High-Order Curving Workflow")
@@ -100,7 +100,7 @@ for order in [1, 2, 3]:
     print("=" * 60)
 
     try:
-        mesh = radia_cubit_mesh.extract_curved_mesh(order=order)
+        mesh = cubit_mesh_curver.extract_curved_mesh(order=order)
         with TaskManager():
             area = Integrate(CF(1), mesh, VOL_or_BND=BND)
             vol = Integrate(CF(1), mesh)
