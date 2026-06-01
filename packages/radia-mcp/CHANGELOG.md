@@ -5,6 +5,15 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.98.0 — Cubit knowledge updated for the `export` command verb
+
+Released 2026-06-01.
+
+The cubit / radia_ngsolve knowledge now documents the renamed Cubit
+plugin commands (`export netgen / gmsh / vtk / femeem / meg` + `export
+jmag_nastran`) instead of the old `radia_export` verb, matching
+cubit-mesh-export 0.11.0 / radia 4.88.0.
+
 ## 0.97.0 — SF-coil RegularizedTSVD + single-stroke field_aware + sheet-metal distort + bug-pattern catalog
 
 Released 2026-05-31.

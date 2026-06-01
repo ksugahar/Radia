@@ -3,6 +3,22 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.88.0 — Cubit plugin command verb `radia_export` -> `export`
+
+Released 2026-06-01.
+
+The Cubit mesh-export commands now extend Cubit's native `export` verb
+(`export netgen / gmsh / vtk / femeem / meg`, plus `export jmag_nastran`
+for the JMAG-targeted Nastran BDF) instead of the old `radia_export`
+verb.  The radia-side panels (`radia_export_menu`) emit the new commands;
+the plugin binary lives solely in the cubit-mesh-export package (Tier-2),
+so the radia wheel no longer bundles the `.ccm` / `.pyd`.
+
+**Breaking**: existing `.jou` scripts calling `radia_export ...` must be
+updated to `export ...` (the old verb is removed -> Cubit reports
+`Unrecognized Keyword: 'radia_export'`).  See cubit-mesh-export 0.11.0
+for the full command map.
+
 ## 4.87.0 — feat(ih): thermal targets the workpiece solid only (+ 2-file qsurf input)
 
 Released 2026-06-01.
