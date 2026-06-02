@@ -924,6 +924,15 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
 
+	// HELMHOLTZ-HODGE loop removal for the NON-HACApK solvers (method 0 = LU,
+	// method 1 = dense BiCGSTAB), so "loop is non-physical" is consistent across ALL
+	// solver paths -- not only method 2. Applied ONCE after convergence, via a
+	// standalone cycle-projection (no H-matrix needed; pure sparse CG on L^T L).
+#ifdef RADIA_USE_HACAPK
+	if(rad.m_loop_projection && !rad.m_loopstar_gauge && !rad.m_loopdefl_gauge)
+		RadHACApKMSCManager::ProjectOutLoopsStandalone(IntrctPtr, rad.m_bicg_tol, 10000);
+#endif
+
 	return iterCount;
 }
 
@@ -3925,7 +3934,10 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	// driven by the true A^-1 b (loop-included) and only the FINAL answer is made
 	// loop-free. N L = 0 so N*sigma -- the on-element field -- is unchanged. The
 	// projected sigma is synced back to the element Magn so rad.Fld / rad.ObjM see it.
-	if(rad.m_loop_projection && m_hacapk && m_hacapk->IsValid())
+	// Skip when a loop-handling gauge is active (loop-star keeps loops by design;
+	// loop-deflated already removes them) -- do not double-process.
+	if(rad.m_loop_projection && !rad.m_loopstar_gauge && !rad.m_loopdefl_gauge
+	   && m_hacapk && m_hacapk->IsValid())
 	{
 		std::vector<double> sig_lp(FlatMagn, FlatMagn + totalDOF);
 		int it_lp = m_hacapk->ProjectOutLoops(sig_lp, rad.m_bicg_tol, 10000);
