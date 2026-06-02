@@ -294,6 +294,25 @@ distance.  Full `r+s+z` combines both and wins.  The Gauss-Newton framework
 picks the effective direction automatically — **the optimal sheet-metal
 direction is geometry-dependent**.
 
+**Compose with electric shims (`--distort --shim-loops K`).**  The geometric
+bend and the separate-feed shims cancel *different* parts of the residual, so
+they compose.  Critically, **the bend is far more feed-efficient**: one bent
+wire (1 feed) reaches 1.4 % where ten electric shims alone (10 feeds) only
+reach 2.3 %.  Adding shims on the *distorted* residual then refines it:
+
+| coil | feeds | DSV RMS |
+|------|-------|---------|
+| single-stroke | 1 | 8.5 % |
+| + 10 electric shims (no bend) | 11 | 2.3 % |
+| **+ sheet-metal distort** | **1** | **1.4 %** |
+| + distort **and** 10 shims | 11 | **1.0 %** |
+
+So the practical recipe on the hard tier: **distort first** (one printable
+part does the heavy lifting), then add a few electric shims only to clean the
+remaining high-spatial-frequency residual.  Under `--distort`, the `[8]`
+shim-only block is skipped and the shims are applied to the distorted residual
+in `[9]` instead.
+
 **ψ regularisation — `--regularize {tsvd, tikhonov, h1}`.**  The cylinder ψ
 solve also takes a Tikhonov family: `tsvd` (ACA+TSVD mode-truncation,
 default), `tikhonov` (ridge `(AᵀA + αI)ψ = AᵀB`, dense, `--alpha`), `h1`
@@ -305,6 +324,33 @@ H1 is worse (it over-spreads the current → longer connectors).  This is the
 *opposite* ranking from the planar uniform case (where H1 was cleanest) —
 another geometry-dependence.  Practical recipe: pick the regularisation that
 minimises the **single-stroke RMS** (not the smoothest ψ), then distort.
+
+### Arbitrary curved formers (sphere) — FE-direct ψ ([`demo_sphere_fe_direct.py`](../../examples/stream_function/demo_sphere_fe_direct.py))
+
+The basis-loop representation needs a structured `(φ, z)` grid, so it is
+stuck on planes and cylinders.  **FE-direct ψ meshes ANY surface** — the
+real payoff of the high-order (cubic) FE stream function.  On a *sphere*
+former (NMR shim coil around the magnet), surface FEM done robustly (mesh
+the solid, `H1(mesh, order=3, definedon=mesh.Boundaries(".*"))`, `ds` +
+`grad(.).Trace()`, `mesh.Curve(3)` isoparametric) with the general kernel
+`K = n̂ × ∇_s ψ` (the curved-surface generalisation of the planar `ẑ × ∇ψ`):
+
+| target | continuous ψ | single-stroke | + sheet-metal distort |
+|--------|--------------|---------------|-----------------------|
+| uniform Bz (l=1) | cres 3e-15 (0 ppm) | **0.24 %** | — |
+| Z2 shim (l=2,m=0) | cres 5e-14 | 4.3 % | **0.36 %** (1 current, ~2 mm bend) |
+
+The full manufacturable pipeline runs on the curved former: FE-direct ψ →
+single-stroke (latitude-ring spiral, real inter-turn spacing **10.5 mm** ≥
+conductor width) → sphere sheet-metal distortion (radial `δr` + tangential)
+→ 0.36 %.  Why it matters: the *design-surface shape is not a
+manufacturability constraint* — any fabricable former (sphere / conformal /
+3D-printed) holds a coil; the real constraints are the **wire pattern**
+(single-stroke, min-spacing ≥ width, no self-cross), all handled here.  The
+easy/hard split is set by **target complexity** (uniform l=1 → 0.24 % clean;
+fingerprint → hard), NOT the surface shape.  Caveat: the supplied chainer is
+for *axisymmetric* (m=0: Z1/Z2/Z3…) shims; m≠0 tesserals need a general
+field-aware sphere chainer.
 
 ## Can single-stroke reach a 100 ppm-class spec? (No, for Gx)
 

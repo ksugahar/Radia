@@ -169,6 +169,24 @@ public:
 	bool m_loopstar_gauge;
 	void SetLoopStarGauge(bool enable) { m_loopstar_gauge = enable; }
 
+	// LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB gauge: keep the element DOF space (block-
+	// Jacobi works) and deflate the loop null space via a two-level projector
+	// (SolveLoopDeflatedBlockJacobi). Scalable alternative to loop-star + K-dense at
+	// high mu_r (no 15^3 cap, no A_SS compression dependence). Linear regime.
+	bool m_loopdefl_gauge;
+	void SetLoopDeflBlockJacobiGauge(bool enable) { m_loopdefl_gauge = enable; }
+
+	// HELMHOLTZ-HODGE loop removal: after the solve, subtract the non-physical loop
+	// (circulating-charge = ker(N)) component from sigma via a cheap, well-conditioned
+	// CG projection off the topological cycle space. Gives a loop-free physical answer
+	// without changing N*sigma (the field). Scalable, mu_r-independent. Applied across
+	// ALL solver paths (method 0 LU / 1 dense BiCGSTAB / 2 HACApK) for consistency.
+	// DEFAULT ON: loops are non-physical circulating surface charges; the physical
+	// answer is loop-free. Skipped automatically when the loop-star gauge is active
+	// (loop-star already handles the loop content -- do not double-process).
+	bool m_loop_projection;
+	void SetLoopProjection(bool enable) { m_loop_projection = enable; }
+
 	// Detailed timing statistics (ELF-compatible)
 	double m_timing_hmatrix_build;   // H-matrix construction time
 	double m_timing_linear_solve;    // Total BiCGSTAB solve time
@@ -246,6 +264,8 @@ public:
 		m_deflate_nullspace = false;
 		m_deflate_alpha = 1.0;
 		m_loopstar_gauge = false;
+		m_loopdefl_gauge = false;
+		m_loop_projection = true;   // DEFAULT ON: return loop-free (physical) sigma
 		m_timing_hmatrix_build = 0.0;
 		m_timing_linear_solve = 0.0;
 		m_linear_iterations = 0;
