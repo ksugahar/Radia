@@ -449,7 +449,7 @@ just the SF design, gates HARD-tier quality.  The two best ideas COMPOSE:
 `field_aware` + Path-A (`--compensated-iter 40 --compensated-step 0.3`)
 reaches **8.1 %**, roughly half the old `kuijpers` baseline.  Going lower
 still likely needs B-spline SFD (Kuijpers Methods 2/3) or multivalued-
-potential reformulation (Path D in `aca_tsvd(topic=single_stroke)`).
+potential reformulation (Path D in `streamfunction(topic=single_stroke)`).
 
 ## Dead-end variants (do NOT re-try)
 
@@ -525,6 +525,6 @@ you still see no window, see `gmsh_usage(topic=pitfalls)` #9.)
 
   - Math: [theory.md](theory.md) Path-A section
   - Open extension paths: [paper_outline.md](paper_outline.md) Path A/B/D
-  - MCP topic: `aca_tsvd(topic=single_stroke)`,
-    `aca_tsvd(topic=session_2026_05_30)` sections 2 (chain methods) +
+  - MCP topic: `streamfunction(topic=single_stroke)`,
+    `streamfunction(topic=session_2026_05_30)` sections 2 (chain methods) +
     3 (Path-A representation) + 4 (dead-end variants).
