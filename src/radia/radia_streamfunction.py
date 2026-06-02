@@ -27,9 +27,11 @@ TITLE = "Radia - Stream-Function Coil Design"
 
 _EVAL_BROWSE = {"eval_vol": ("Eval region .vol",
                              "Netgen Vol (*.vol);;All (*)")}
-_REG_LABELS = {"regularize": "Regularisation:"}
+_REG_LABELS = {"regularize": "Regularisation:", "confine": "Current confine:"}
 _REG_CHOICES = {"regularize": [("L2 (min |psi|)", "l2"),
-                               ("H1 (min current energy)", "h1")]}
+                               ("H1 (min current energy)", "h1")],
+                "confine": [("Unconfined", "off"),
+                            ("Confined (psi=0 on former edge)", "on")]}
 
 # argparser dests that the top panel / build_command own, never a sub widget.
 _BASE_SKIP = ("coil_vol", "output", "msh_output", "method")

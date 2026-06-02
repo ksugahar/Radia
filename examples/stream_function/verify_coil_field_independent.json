@@ -12,6 +12,7 @@
     {
       "case": "uniform",
       "target_cf": "1",
+      "confine": "off",
       "n_turns": 10,
       "n_open": 0,
       "design_homogeneity": 7.7663953083567e-06,
@@ -22,6 +23,7 @@
     {
       "case": "gradient",
       "target_cf": "x",
+      "confine": "off",
       "n_turns": 35,
       "n_open": 35,
       "design_homogeneity": 5.241417774613474e-05,
@@ -29,6 +31,18 @@
       "rel_segment_vs_radia": 1.147033889455458e-08,
       "gradient_G": 0.7537405666586313,
       "gradient_nonlinearity": 0.047609789574821315
+    },
+    {
+      "case": "gradient_confined",
+      "target_cf": "x",
+      "confine": "on",
+      "n_turns": 35,
+      "n_open": 0,
+      "design_homogeneity": 0.00018117988350017065,
+      "best_fit_current_A": 9000.663494631975,
+      "rel_segment_vs_radia": 1.1957230564331246e-08,
+      "gradient_G": 0.994522128400339,
+      "gradient_nonlinearity": 0.012843181769952503
     }
   ]
 }
