@@ -26,10 +26,17 @@ omitted, the material's preset constant sigma is used at all
 temperatures (table is then "1D in H, replicated across T") -- useful
 for sanity checks against the existing 1D Karl path at fixed T.
 
-BH curve is treated as T-invariant in v1; T-dependent BH is on the
-roadmap (see CLAUDE.md "Production roadmap" note).  This is the
-single dominant simplification of the v1 table; the dominant
-T-dependence in IH steel below the Curie point is sigma, not BH.
+``sigma(T)`` is the dominant T-dependence in IH steel BELOW the Curie
+point and is captured exactly by ``--sigma-T-curve``.  Approaching the
+Curie point the permeability collapses; ``--curie-temp <Tc_celsius>``
+opts into a ``mu(T)`` model that scales the BH curve's MAGNETIC part by
+``f(T) = (1 - T/Tc)^beta`` (``beta = --curie-exp``, default 0.5),
+clamped to [0, 1], so ``mu_r -> 1`` (paramagnetic) at and above Tc.
+Default (``--curie-temp 0``) leaves BH T-invariant.  The ``mu(T)``
+collapse is an OPT-IN approximation: T-dependent material data is
+inherently uncertain, so it is supplied as a user-chosen functional
+form ``(Tc, beta)`` -- never hardcoded false certainty (see CLAUDE.md
+"T-dependence: functionalize as T-functions + honest uncertainty").
 
 Output ``.npz`` schema
 ----------------------
@@ -38,8 +45,9 @@ Output ``.npz`` schema
     Zs_re     (n_H, n_T)    float, Ohm
     Zs_im     (n_H, n_T)    float, Ohm
     q_surf    (n_H, n_T)    float, W/m^2   (= 0.5 * Re(Z_s) * H^2)
-    meta      0-d str       JSON: material, frequency, sigma_T_path,
-                                  n_nodes, num_skin_depths, build_time_s
+    meta      0-d str       JSON: material, frequency, sigma_T_curve,
+                                  curie_temp, curie_exp, n_nodes,
+                                  num_skin_depths, schema, build_time_s
 """
 
 from __future__ import annotations
