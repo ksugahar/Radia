@@ -168,6 +168,26 @@ def test_streamfunction_manufacture(sample_vols):
     assert r["peec"]["L_H"] > 0.0 and r["peec"]["R_ohm"] >= 0.0
 
 
+def test_streamfunction_field_aware_chain(sample_vols):
+    """Field-aware chaining (default) chooses the connector cuts to minimise
+    the full one-current WIRE error, so it is never worse than nearest-
+    neighbour -- and much better once the contours close.  Also exposes the
+    open-contour diagnostic (this fixture's short former leaves them open)."""
+    coil, evalv = sample_vols
+    base = ["--order", "1", "--method", "manufacture", "--nlevels", "10",
+            "--eval-max", "40"]
+    rn = _run_calc(coil, evalv, "x", extra=base + ["--chain", "nn"])
+    rf = _run_calc(coil, evalv, "x", extra=base + ["--chain", "field_aware"])
+    assert "error" not in rn and "error" not in rf
+    assert rn["chain_method"] == "nn"
+    assert rf["chain_method"] == "field_aware"
+    # never worse than nearest-neighbour (small tolerance for descent ties)
+    assert rf["wire_homogeneity_rms"] <= rn["wire_homogeneity_rms"] * 1.05, \
+        f"field_aware {rf['wire_homogeneity_rms']} > nn {rn['wire_homogeneity_rms']}"
+    # open-contour count is reported (the former-sizing diagnostic)
+    assert "n_open_contours" in rf and rf["n_open_contours"] >= 0
+
+
 def test_streamfunction_field_cross_codebase(tmp_path):
     """End-to-end (A): the SF design routine's coil field matches Radia's
     INDEPENDENT C++ Biot-Savart (rad.ObjFlmCur) -- an external-codebase

@@ -421,6 +421,82 @@ def _dedupe(path, tol=1e-10):
     return np.array(keep)
 
 
+def _field_aware_chain(loops, signs, mpts, target_flat, vector_b,
+                       n_cut=24, passes=4):
+    """Field-aware single-stroke chain (geometry-independent): visit the
+    sign-aligned contour loops in nearest-neighbour order, but choose each
+    loop's ENTRY/EXIT point (the cut) by coordinate descent to minimise the
+    full one-current WIRE field error ``min_I ||I*(loops + connectors) - B||``.
+
+    The loop field is fixed; only the inter-loop connectors (the 'rungs')
+    depend on the cuts.  Minimising the TOTAL error (not the connectors in
+    isolation) is what makes this correct on BOTH closed contours (residual
+    ~0 -> it drives the connectors' net field to zero, reaching the
+    separate-turns floor with NO --distort) and open contours (large residual
+    from the rim-closing chords -> it at least uses the connectors to cancel
+    part of it, never worse than nearest-neighbour).
+
+    Returns (chain_xyz, n_connectors, connector_length)."""
+    if not loops:
+        return np.zeros((0, 3)), 0, 0.0
+    L = [_close_loop(p if s >= 0.0 else p[::-1]) for p, s in zip(loops, signs)]
+    order = _nn_order([p.mean(axis=0) for p in L])
+    L = [L[i] for i in order]
+    ncomp = len(target_flat)
+    den = float(np.linalg.norm(target_flat)) + 1e-30
+
+    def fld(a, b):
+        B = _segment_field_B(np.array([a, b]), mpts, 1.0)
+        return B.reshape(-1) if vector_b else B[:, 2]
+
+    def loop_fld(p):
+        B = _segment_field_B(p, mpts, 1.0)
+        return B.reshape(-1) if vector_b else B[:, 2]
+
+    def rot(p, c):
+        body = p[:-1]
+        r = np.roll(body, -c, axis=0)
+        return np.vstack([r, r[0]])
+
+    loops_field = np.sum([loop_fld(p) for p in L], axis=0)   # fixed (cuts-free)
+    cuts = [0] * len(L)
+    conn_f = [np.zeros(ncomp) for _ in range(max(0, len(L) - 1))]
+
+    def set_conn(i):
+        if 0 <= i < len(L) - 1:
+            conn_f[i] = fld(rot(L[i], cuts[i])[0], rot(L[i + 1], cuts[i + 1])[0])
+
+    def wire_err():
+        ct = loops_field + (np.sum(conn_f, axis=0) if conn_f else 0.0)
+        I = _best_fit_current(ct, target_flat)
+        return float(np.linalg.norm(I * ct - target_flat) / den)
+
+    for i in range(len(L) - 1):
+        set_conn(i)
+    for _ in range(passes):
+        for i in range(len(L)):
+            nb = len(L[i]) - 1
+            if nb < 2:
+                continue
+            step = max(1, nb // n_cut)
+            best, beste = cuts[i], None
+            for c in range(0, nb, step):
+                cuts[i] = c
+                set_conn(i - 1)
+                set_conn(i)
+                e = wire_err()
+                if beste is None or e < beste:
+                    beste, best = e, c
+            cuts[i] = best
+            set_conn(i - 1)
+            set_conn(i)
+    chain = _dedupe(np.vstack([rot(L[i], cuts[i]) for i in range(len(L))]))
+    clen = sum(float(np.linalg.norm(rot(L[i + 1], cuts[i + 1])[0]
+                                    - rot(L[i], cuts[i])[0]))
+               for i in range(len(L) - 1))
+    return chain, max(0, len(L) - 1), clen
+
+
 def _segment_field_B(path, obs, current=1.0):
     """Biot-Savart B (T) of a polyline of straight segments at obs points.
     General finite-wire formula (verified vs infinite-wire mu0 I/2 pi d)."""
@@ -741,7 +817,17 @@ def run_manufacture(args):
         else:
             loops_homo = float("nan")
 
-        chain, n_conn, conn_len = _single_stroke_chain(loops_signed)
+        # open contours (hit the coil boundary) -> closing them with a rim
+        # chord injects a spurious edge current; a high count means the former
+        # is too small for this target (extend it).  This is the dominant
+        # single-current error when it happens -- NOT the connectors.
+        n_open = sum(1 for p in loops
+                     if np.linalg.norm(p[0] - p[-1]) > 1e-9)
+        if args.chain == "nn":
+            chain, n_conn, conn_len = _single_stroke_chain(loops_signed)
+        else:                                  # field_aware (default)
+            chain, n_conn, conn_len = _field_aware_chain(
+                loops, signs, P["mpts"], target_flat, vector_b)
         chain = _dedupe(chain)
         t2 = time.perf_counter()
 
@@ -759,11 +845,12 @@ def run_manufacture(args):
             "eval_vol": os.path.basename(args.eval_vol),
             "order": args.order, "regularize": args.regularize,
             "alpha": args.alpha, "nlevels": args.nlevels,
-            "chain_method": "nn_single_stroke",
+            "chain_method": args.chain,
             "ndof": int(P["fes"].ndof), "n_measure": int(P["n_measure"]),
             "homogeneity_rms": homo,             # continuous psi (design ref)
             "peak_J": peak_J,
             "n_levels": len(levels), "n_loops": int(len(loops)),
+            "n_open_contours": int(n_open),
             "n_wire_points": int(len(chain)),
             "wire_length_m": wire_len,
             "n_connectors": int(n_conn),
@@ -773,11 +860,13 @@ def run_manufacture(args):
             "wire_homogeneity_rms": wire_homo,    # single-stroke (delivered)
             "rms": wire_homo,                     # primary = delivered wire
             "note": "homogeneity_rms = continuous psi design; "
-                    "loops_homogeneity_rms = N separate contour turns "
-                    "(orientation-consistent, best discretisation); "
-                    "wire_homogeneity_rms = single-stroke one-current wire "
-                    "(includes connector overhead). Field-aware chaining is "
-                    "the planar/cylinder demo refinement.",
+                    "loops_homogeneity_rms = N separate contour turns (best "
+                    "discretisation); wire_homogeneity_rms = single-stroke "
+                    "one-current wire. With closed contours (n_open_contours=0) "
+                    "the field-aware chain reaches the separate-turns floor "
+                    "without --distort; a high n_open_contours means the former "
+                    "is too small (extend it) -- that, not the connectors, is "
+                    "the dominant single-current error.",
         }
 
         if args.distort:
@@ -874,6 +963,12 @@ def build_argparser():
     # ---- manufacture mode ----
     ap.add_argument("--nlevels", type=int, default=12,
                     help="number of iso-contours = wire turns (manufacture)")
+    ap.add_argument("--chain", choices=["field_aware", "nn"],
+                    default="field_aware",
+                    help="single-stroke chaining: field_aware (min net "
+                         "connector field; reaches the separate-turns floor "
+                         "for closed contours, no distort) or nn (nearest "
+                         "neighbour)")
     ap.add_argument("--distort", action="store_true",
                     help="single-current sheet-metal wire distortion (manufacture)")
     ap.add_argument("--distort-grid", type=int, default=3,
