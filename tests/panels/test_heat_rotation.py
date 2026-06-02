@@ -49,7 +49,7 @@ def synthetic_setup(tmp_path_factory):
     At theta=pi/2 the same body point sits at world (0,1,0), and
     q_em(0,1,0)=0.  At theta=pi it sits at (-1,0,0), q_em=-1.
     """
-    from ngsolve import (Mesh, H1, GridFunction, x as ng_x)
+    from ngsolve import (Mesh, H1, GridFunction, x as ng_x, TaskManager)
     from netgen.occ import Box, Pnt, OCCGeometry
     from netgen.meshing import meshsize
 
@@ -155,3 +155,55 @@ def test_rotation_pi_over_2_swaps_x_to_y(synthetic_setup):
         val_half = q_cf.vec.FV()[best_vnr]
         # At theta=pi/2, body (1,0,0) ↦ world (0,1,0), q_em = x = 0.
         assert val_half == pytest.approx(0.0, abs=0.05)
+
+
+def test_phi_average_uniform_of_x_is_zero(synthetic_setup):
+    """--q-phi-average (the 'uniform' / circumferential-average mode):
+    the phi-average of q_em=x around z is 0 everywhere (x = r*cos(phi)
+    integrates to 0 over a full turn).  Contrast with the no-rotation
+    mode (theta=0 projection) which keeps the LOCAL value ~1 at (1,0,0)
+    -- so this test, together with test_rotation_zero_matches_identity,
+    pins both modes the panel offers (uniform vs no-rotation)."""
+    import calc_heat
+    from types import SimpleNamespace
+    import tempfile
+
+    em_mesh, gf_q_em, wp_mesh = synthetic_setup
+
+    with tempfile.TemporaryDirectory() as td:
+        sol = os.path.join(td, "q.sol")
+        vol = os.path.join(td, "wp.vol")
+        gf_q_em.Save(sol)
+        em_mesh.ngmesh.Save(vol)
+
+        args = SimpleNamespace(q_uniform=None, qsurf_sol=sol, em_vol=vol,
+                               qsurf_order=1, surface_label="default",
+                               rotation_axis="z",
+                               q_phi_average=True, q_phi_average_n=48)
+        q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
+
+        # phi-average produces a STATIC axisymmetric source -> NO resampler
+        # (the time loop treats this like a uniform/constant source).
+        assert resample is None
+
+        # The face-centre vertex near (1,0,0): rotating it around z sweeps
+        # the unit circle (cos t, sin t, 0) -- all inside the cube -- and
+        # the mean of q_em=x=cos t over a full turn is 0.
+        best_vnr = _surf_vnr_nearest(wp_mesh, (1.0, 0.0, 0.0))
+        val_phi_avg = q_cf.vec.FV()[best_vnr]
+        assert val_phi_avg == pytest.approx(0.0, abs=0.05)
+
+
+def test_phi_average_requires_spatial_not_uniform(synthetic_setup):
+    """--q-phi-average + --q-uniform is contradictory (a constant is
+    already azimuthally uniform) and must fail loud, per No-Fallback."""
+    import calc_heat
+    from types import SimpleNamespace
+
+    _em, _gf, wp_mesh = synthetic_setup
+    args = SimpleNamespace(q_uniform=1.0e6, qsurf_sol="", em_vol="",
+                           qsurf_order=1, surface_label="default",
+                           rotation_axis="z",
+                           q_phi_average=True, q_phi_average_n=48)
+    with pytest.raises(ValueError, match="q-phi-average"):
+        calc_heat._build_qsurf_cf(wp_mesh, args)
