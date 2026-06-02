@@ -79,6 +79,22 @@ CATALOG: dict[str, dict[str, Any]] = {
         ],
         "tags": ["fem", "solver"],
     },
+    "radia-streamfunction": {
+        "subpackage": "radia_mcp.streamfunction",
+        "entry_point": "mcp-server-radia-streamfunction",
+        "description": "Stream-function coil design: (ACA+)+TSVD least-norm, "
+                       "FE-direct psi, regularisation / folded-Tikhonov Pareto "
+                       "front, single-stroke chain, sheet-metal (板金) levers",
+        "primary_tools": ["streamfunction"],
+        "related": [
+            "radia-ngsolve",
+            "optuna",
+            "nmr-mri",
+            "electromagnet",
+            "peec",
+        ],
+        "tags": ["coil-design", "solver"],
+    },
     "fem": {
         "subpackage": "radia_mcp.fem",
         "entry_point": "mcp-server-fem",
