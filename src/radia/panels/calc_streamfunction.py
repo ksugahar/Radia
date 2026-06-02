@@ -864,6 +864,106 @@ def _flux_line_plot(chain, current, out_path, plane="y", half=None,
             "n_flux_lines": int(len(seeds))}
 
 
+def _equal_3d(ax, pts):
+    """Equal aspect box for a 3D axis around a point cloud."""
+    pts = np.asarray(pts, float)
+    c = pts.mean(axis=0)
+    r = float(np.max(np.abs(pts - c))) + 1e-9
+    ax.set_xlim(c[0] - r, c[0] + r)
+    ax.set_ylim(c[1] - r, c[1] + r)
+    ax.set_zlim(c[2] - r, c[2] + r)
+    try:
+        ax.set_box_aspect((1, 1, 1))
+    except Exception:                              # older matplotlib
+        pass
+    ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
+
+
+def _tube_mesh(path, radius, n_circ=12):
+    """Sweep a circle of given radius along the polyline with a twist-free
+    (parallel-transport) frame -> (X, Y, Z) for plot_surface.  This is the
+    'with thickness' (太さ) rendering of the single conductor."""
+    P = np.asarray(path, float)
+    if len(P) < 2:
+        return None
+    T = np.gradient(P, axis=0)
+    T /= (np.linalg.norm(T, axis=1, keepdims=True) + 1e-30)
+    a = np.array([0.0, 0.0, 1.0]) if abs(T[0, 2]) < 0.9 else np.array([1.0, 0, 0])
+    Nprev = a - (a @ T[0]) * T[0]
+    Nprev /= (np.linalg.norm(Nprev) + 1e-30)
+    Ns = np.zeros_like(P)
+    Ns[0] = Nprev
+    for i in range(1, len(P)):
+        v = np.cross(T[i - 1], T[i])
+        s = float(np.linalg.norm(v))
+        Ni = Nprev
+        if s > 1e-9:                               # rotate the frame
+            ax_ = v / s
+            ang = np.arctan2(s, float(T[i - 1] @ T[i]))
+            Ni = (Nprev * np.cos(ang) + np.cross(ax_, Nprev) * np.sin(ang)
+                  + ax_ * (ax_ @ Nprev) * (1 - np.cos(ang)))
+        Ni = Ni - (Ni @ T[i]) * T[i]
+        Ni /= (np.linalg.norm(Ni) + 1e-30)
+        Ns[i] = Ni
+        Nprev = Ni
+    Bb = np.cross(T, Ns)
+    th = np.linspace(0.0, 2.0 * np.pi, n_circ)
+    ct, st = np.cos(th), np.sin(th)
+    X = np.empty((len(P), n_circ)); Y = np.empty_like(X); Z = np.empty_like(X)
+    for i in range(len(P)):
+        ring = (P[i][None, :] + radius * (ct[:, None] * Ns[i][None, :]
+                                          + st[:, None] * Bb[i][None, :]))
+        X[i], Y[i], Z[i] = ring[:, 0], ring[:, 1], ring[:, 2]
+    return X, Y, Z
+
+
+def _steps_plot(loops, chain, dist_chain, diam, out_path, target_cf=""):
+    """Per-step manufacturing visualisation -- a 2x2 3D figure showing the
+    coil at each stage: (1) equal-current iso-contours (N = nlevels turns),
+    (2) the single-stroke (一筆書き) wire, (3) the sheet-metal (板金)
+    distorted wire, (4) the wire WITH thickness (太さ) + distortion."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (registers 3d)
+    final = dist_chain if dist_chain is not None else chain
+    allpts = np.vstack([chain, final])
+    fig = plt.figure(figsize=(11.0, 9.0))
+
+    ax = fig.add_subplot(2, 2, 1, projection="3d")
+    for p in loops:
+        ax.plot(p[:, 0], p[:, 1], p[:, 2], lw=0.7)
+    ax.set_title(f"1. equal-current contours (N={len(loops)} turns)",
+                 fontsize=9)
+    _equal_3d(ax, allpts)
+
+    ax = fig.add_subplot(2, 2, 2, projection="3d")
+    ax.plot(chain[:, 0], chain[:, 1], chain[:, 2], lw=0.7, color="C0")
+    ax.set_title("2. single-stroke wire (ikkaki)", fontsize=9)
+    _equal_3d(ax, allpts)
+
+    ax = fig.add_subplot(2, 2, 3, projection="3d")
+    ax.plot(final[:, 0], final[:, 1], final[:, 2], lw=0.7, color="C3")
+    note = "" if dist_chain is not None else " (no --distort: = stage 2)"
+    ax.set_title("3. sheet-metal (bankin) distorted" + note, fontsize=9)
+    _equal_3d(ax, allpts)
+
+    ax = fig.add_subplot(2, 2, 4, projection="3d")
+    tube = _tube_mesh(final, max(diam, 1e-6) / 2.0)
+    if tube is not None:
+        ax.plot_surface(tube[0], tube[1], tube[2], color="C1",
+                        alpha=0.9, linewidth=0, antialiased=True)
+    ax.set_title(f"4. with thickness (d={diam*1e3:.1f} mm) + distort",
+                 fontsize=9)
+    _equal_3d(ax, allpts)
+
+    fig.suptitle(f"SF coil manufacturing stages  (target Bz = {target_cf})")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    return {"steps_plot": out_path}
+
+
 def _peec_inductance(chain, diam, sigma, freq):
     """PEEC L, R of the single-stroke wire (one port across the two ends)."""
     from radia.peec_matrices import PEECBuilder
@@ -1136,6 +1236,15 @@ def run_manufacture(args):
             result["peec"] = _peec_inductance(
                 out_chain, args.wire_diam, 5.8e7, args.peec_freq)
 
+        if args.steps_plot:
+            try:
+                result.update(_steps_plot(
+                    loops_signed, chain,
+                    out_chain if args.distort else None,
+                    args.wire_diam, args.steps_plot, args.target_cf))
+            except Exception as e:                 # noqa: BLE001
+                result["steps_plot_error"] = str(e)
+
         if args.flux_plot:
             try:
                 result.update(_flux_line_plot(
@@ -1248,6 +1357,9 @@ def build_argparser():
                          "cut-plane (manufacture)")
     ap.add_argument("--flux-plane", choices=["x", "y", "z"], default="y",
                     help="cut-plane normal for --flux-plot (manufacture)")
+    ap.add_argument("--steps-plot", default="",
+                    help="per-step manufacturing PNG (contours -> single-stroke "
+                         "-> sheet-metal -> with thickness) (manufacture)")
     # ---- output ----
     ap.add_argument("--msh-output", default="",
                     help="optional GMSH .msh of psi on the coil surface")
