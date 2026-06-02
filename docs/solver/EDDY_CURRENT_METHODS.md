@@ -985,25 +985,21 @@ Higher-order SIBC is needed only for:
 | Per-element Z_s | Average H_t used | Medium (improves P distribution) |
 | High-order SIBC | Mitzner curvature 1/R | Low (< 0.4% at target xi=140) |
 
-### Cubit Panel: 2-Stage Design
+### Cubit Panel: EM -> q_surf -> Thermal
 
-```
-[Solve L]  Stage 1: BEM (surface mesh only) -> coil inductance L
-[Solve P]  Stage 2: FEM-ESIM (auto air mesh) -> workpiece heating P
-```
+The induction-heating panel (`radia_ih`) runs the EM solve and the
+thermal solve as separate, independent modes (see "Cubit Panel
+Architecture" in CLAUDE.md):
 
-Stage 1 and Stage 2 are **independent** (Solve P does NOT depend on Solve L).
+1. **EM**: `calc_inductance.py` (PEEC / BEM-A weak coupling: L + Delta_L
+   + P_wp), `calc_fem_kelvin.py` (PEEC + FEM-Kelvin + SIBC), or
+   `calc_fem_coilmesh.py` (full FEM A-V).  Each emits a workpiece
+   surface power density `q_surf` (`*_qsurf.sol`).
+2. **Thermal**: `calc_heat.py` / `calc_heat_axisym.py` consume the
+   workpiece `.vol` + `q_surf` and solve the heat equation.
 
-Stage 2 pipeline (`calc_heating.py`):
-1. Extract coil/workpiece geometry from Cubit blocks (bounding boxes)
-2. Auto-generate 2D axisymmetric mesh (OCC: air + coil + workpiece hole + Kelvin)
-3. FEM static solve (A-formulation, coil = J0 source, ~0.4s)
-4. Sample H_t on workpiece surface from grad(u)
-5. ESIM cell problem per surface segment -> P density [W/m^2]
-6. Return P distribution + total P as JSON
-
-User only needs to define Cubit blocks: `conductor`, `source`, `sink`, `workpiece`.
-No air mesh creation needed.
+All EM solvers read a pre-meshed `.vol` (no auto air-mesh generation);
+the Cubit/NGSolve interface is `.vol`-only per CLAUDE.md.
 
 ### When Each Method is Best
 

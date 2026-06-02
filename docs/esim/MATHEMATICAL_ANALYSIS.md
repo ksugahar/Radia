@@ -429,9 +429,8 @@ The `'slab'` geometry captures `κ_1 = κ_2 = 0` (flat plate).
 | `calc_inductance.py`     | `'cylinder'` | global `--half-thickness` | No |
 | `calc_fem_kelvin.py`     | `'cylinder'` | global `--half-thickness` | No |
 | `calc_fem_coilmesh.py`   | `'cylinder'` | global `--half-thickness` | No |
-| `calc_heating.py`        | `'cylinder'` | derived from coil geometry | No |
 
-All four pass a **single global radius** to a **single ESIM solver
+All three pass a **single global radius** to a **single ESIM solver
 instance** and use **scalar Z_s** (one impedance value for the whole
 workpiece).  Reference:
 [`calc_fem_kelvin.py:265-268`](../../src/radia/panels/calc_fem_kelvin.py#L265-L268),
