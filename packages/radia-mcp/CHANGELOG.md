@@ -26,12 +26,14 @@ crystallized as its own package.
   footnote textbox on a .pptx slide), and `presentation_citation_audit`
   (flag dangling `[N]` and never-cited references).
 - **figure (policy)**: codified two figure conventions in the quality
-  rules. (1) The no-in-figure-title rule is scoped to BODY-referenceable
-  (paper) figures — `emit_paper_figure` now auto-exempts the
-  `beamer_169_*` slide profiles (a slide has no LaTeX `\caption`).
-  (2) Made the font rule explicit: on-page **10 pt at 8 cm = 1.25 pt/cm**;
-  matplotlib authors at the embed size (→ 10 pt @ 8 cm), MATLAB authors
-  oversized (→ **20 pt @ 16 cm**, a 2× downscale to the 8 cm column).
+  rules. (1) The no-in-figure-title rule applies to ALL figures —
+  including the `beamer_169_*` slide profiles (`emit_paper_figure`'s
+  no-title gate fires for them too; the slide's title is the beamer
+  frametitle / caption). The beamer slide profiles use **10 pt** (not
+  11) to honour the on-page rule. (2) Made the font rule explicit:
+  on-page **10 pt at 8 cm = 1.25 pt/cm**; matplotlib authors at the
+  embed size (→ 10 pt @ 8 cm), MATLAB authors oversized (→ **20 pt @
+  16 cm**, a 2× downscale to the 8 cm column).
 
 ## 0.99.1 — radia-ih knowledge sync + 3 new bug-patterns
 
