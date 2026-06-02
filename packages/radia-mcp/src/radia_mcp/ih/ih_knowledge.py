@@ -1490,14 +1490,18 @@ Steel 7 kHz induction heating (R_wp=10mm):
 - ESIM handles nonlinear BH (Dowell/linear SIBC cannot)
 - Boundary layer mesh for skin effect: **NOT needed**
 
-### 2-Stage Panel Workflow
+### EM -> q_surf -> Thermal Workflow
 
-```
-[Solve L]  Stage 1: BEM inductance (surface mesh, fast, for design exploration)
-[Solve P]  Stage 2: FEM-ESIM heating (auto 2D-axi mesh, independent from BEM)
-```
+The radia_ih panel runs the EM solve and the thermal solve as separate
+modes:
 
-Stage 2 implementation: `src/radia/panels/calc_heating.py`
+- **EM** (`calc_inductance.py` / `calc_fem_kelvin.py` /
+  `calc_fem_coilmesh.py`) emits a workpiece surface power density
+  `q_surf` (`*_qsurf.sol`).
+- **Thermal** (`calc_heat.py` / `calc_heat_axisym.py`) consumes the
+  workpiece `.vol` + `q_surf` and solves the heat equation.
+
+All EM solvers read a pre-meshed `.vol` (no auto air-mesh generation).
 """
 
 
