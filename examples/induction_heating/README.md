@@ -23,3 +23,19 @@ Examples demonstrating electromagnetic induction heating analysis using the ESIM
 
 - K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025, DOI: 10.1109/TMAG.2025.3613932
 - SAE J2954 - Wireless Power Transfer for Light-Duty Plug-In/Electric Vehicles and Alignment Methodology (referenced in WPT demos at 85 kHz)
+
+## See also: the production / panel IH pipeline
+
+These scripts are the **research layer** (standalone ESIM / RWG-EFIE
+demonstrations).  The production EM -> thermal pipeline that runs
+end-to-end through the **radia-ih** panel + `calc_*.py` CLIs is
+documented separately:
+
+- [`docs/IH_THERMAL_WORKFLOW.md`](../../docs/IH_THERMAL_WORKFLOW.md) --
+  the full EM -> thermal workflow, including **"Phase B (coupled)"**:
+  the `sigma(T)` / `mu(T)` thermal-EM coupling via a precomputed
+  `Z_s(|H_t|, T)` table (`calc_em_table.py` builds it, then
+  `calc_heat_with_em_table.py` looks it up per timestep -- with
+  `--ht-source kelvin` or `biot`).
+- radia-mcp tool `ih_esim(topic="em_table_coupling")` -- the same
+  coupled track as a queryable knowledge topic.
