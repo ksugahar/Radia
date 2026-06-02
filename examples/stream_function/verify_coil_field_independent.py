@@ -72,8 +72,7 @@ def _design_loops(coil_vol, eval_vol, target_cf, order, nlevels,
         order=order, regularize="h1", alpha=0.0, eval_max=400, confine=confine)
     P = _build_problem(args)
     psi_f, _fit, homo = _solve_and_metrics(P, 0.0)
-    psi = np.zeros(P["fes"].ndof)
-    psi[P["fi"]] = psi_f
+    psi = P["R"] @ psi_f          # independent-DOF -> all-DOF (Abe eq.6)
     coil = P["coil"]
     verts = np.array([list(v.point) for v in coil.vertices])
     psi_v = psi[:coil.nv]
@@ -229,7 +228,7 @@ def main():
     # coil is manufacturable AND still cross-validated by Radia C++.
     cases = {"uniform": ("1", "off"),
              "gradient": ("x", "off"),
-             "gradient_confined": ("x", "on")}
+             "gradient_confined": ("x", "abe")}
     results = []
     for name in args.cases.split(","):
         name = name.strip()

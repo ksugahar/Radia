@@ -230,7 +230,7 @@ VERIFIED (order 2, results in `verify_coil_field_independent.json`):
 |------|--------|-------|-------------------------|----------------|
 | uniform  | `Bz = 1` | 10 | **3.5e-11** (vector-diff rel) | uniformity 0.46 % |
 | gradient | `Bz = x` | 35 | **1.1e-8** (vector-diff rel)  | G = 0.75 T/m, nonlinearity 4.8 % (35 contours open) |
-| gradient_confined | `Bz = x`, `--confine on` | 35 | **1.2e-8** | G = 0.99 T/m, nonlinearity **1.3 %** (0 open) |
+| gradient_confined | `Bz = x`, `--confine abe` | 21 | **1.2e-8** | G = 0.99 T/m, nonlinearity **1.0 %** (0 open) |
 
 The engines agree to **8-11 digits** -- the designer's field is confirmed by
 an independent C++ codebase, so it is not merely self-consistent.  The
@@ -273,15 +273,27 @@ field-aware chaining gives a single-stroke, single-current wire without the
 sheet-metal `--distort` crutch** (which stays as an optional extra).  Two ways
 to close them:
 
-- `--confine on` -- enforce psi = 0 on the former edge so the current stays on
-  the patch.  Closes the contours on **any** former (the gradient_confined row
-  above: short L = 0.5 m former, 0 open, 1.3 % nonlinearity).  This is the
-  standard gradient/shim-coil boundary condition; leave it **off** for
-  solenoid-type targets where the two ends must sit at different psi.
-- or simply use a longer former (`L = 1.6 m` above) so they close on their own.
+- `--confine abe` (**recommended**) -- the canonical Abe edge-equipotential
+  current-potential BC (M. Abe, IEEE Trans. Magn., DUCAS; Appendix eq.6
+  `T = R T_IN`): each PHYSICAL boundary edge is tied to ONE free constant
+  (A-1: no current crosses the edge) with one ground (A-3).  Closes the
+  contours on **any** former AND works for gradient *and* solenoid (the two
+  cylinder ends take different free constants).  Implemented as a DOF-reduction
+  matrix `R`; seam edges are excluded by element adjacency.  The
+  gradient_confined row above (short L = 0.5 m, 21 turns, 0 open, **1.0 %**
+  separate-turn nonlinearity, cross-validated) uses it.
+- `--confine on` -- the simpler special case psi = 0 on every edge.  Fine for
+  a single-feed gradient coil; **breaks** solenoid-type targets (the two ends
+  are forced to the same psi).
+- or simply use a longer former (`L = 1.6 m` above) so the contours close on
+  their own.
 
-With confinement + enough turns the short-former Gx single-stroke reaches
-~1.5-2 % (`--nlevels 30`), no distort.  Locked by
+Caveat: `abe`/`on` make the DESIGN and the SEPARATE-TURN coil accurate and the
+contours close; the single-stroke WIRE error additionally depends on the
+chaining of the (now boundary-confined) contours -- `abe`'s boundary-hugging
+contours can chain into a slightly worse one-wire path than `on`, so the best
+*single-stroke* choice is target-specific.  With enough turns the short-former
+Gx single-stroke reaches ~1.5-2 % (`--nlevels 30`), no distort.  Locked by
 `test_streamfunction_field_aware_chain` and `test_streamfunction_confine_closes_contours`.
 
 ## References
