@@ -1,0 +1,34 @@
+{
+  "meshes": {
+    "coil": "vc_coil_cyl.vol",
+    "eval": "vc_eval_dsv.vol",
+    "cylinder_r_m": 0.15,
+    "cylinder_L_m": 0.5,
+    "dsv_r_m": 0.05
+  },
+  "order": 2,
+  "nlevels": 10,
+  "cases": [
+    {
+      "case": "uniform",
+      "target_cf": "1",
+      "n_turns": 10,
+      "n_open": 0,
+      "design_homogeneity": 7.7663953083567e-06,
+      "best_fit_current_A": 47515.394703194805,
+      "rel_segment_vs_radia": 3.461435248646477e-11,
+      "bz_uniformity": 0.004623977490969965
+    },
+    {
+      "case": "gradient",
+      "target_cf": "x",
+      "n_turns": 35,
+      "n_open": 35,
+      "design_homogeneity": 5.241417774613474e-05,
+      "best_fit_current_A": 5668.218655428382,
+      "rel_segment_vs_radia": 1.147033889455458e-08,
+      "gradient_G": 0.7537405666586313,
+      "gradient_nonlinearity": 0.047609789574821315
+    }
+  ]
+}
