@@ -154,6 +154,8 @@ void SetHACApKParams( double, int, double );
 void SetHACApKDeflation( const int*, int, const int*, const double*, int, double );
 void SetDeflateNullspace( int, double );
 void SetLoopStarGauge( int );
+void SetLoopDeflBlockJacobiGauge( int );
+void SetLoopProjection( int );
 void GetHACApKStats( double*, int* );
 #endif
 void GetSolveStats( double*, int* );
@@ -1566,6 +1568,16 @@ void SetDeflateNullspace(int enable, double alpha)
 void SetLoopStarGauge(int enable)
 {
 	rad.SetLoopStarGauge(enable != 0);
+}
+
+void SetLoopDeflBlockJacobiGauge(int enable)
+{
+	rad.SetLoopDeflBlockJacobiGauge(enable != 0);
+}
+
+void SetLoopProjection(int enable)
+{
+	rad.SetLoopProjection(enable != 0);
 }
 
 void GetHACApKStats(double* dOut, int* nOut)
