@@ -107,10 +107,12 @@ def _assemble_biot_savart(fes, n, pts, comps):
     return A
 
 
-def _seminorm(fes, fi, regularize):
-    """SPD seminorm S (free block): l2 = identity, h1 = surface H1 stiffness."""
+def _seminorm(fes, regularize):
+    """SPD seminorm S over ALL DOFs: l2 = identity, h1 = surface H1 stiffness.
+    The caller reduces it to the independent-DOF space via the R matrix
+    (``S_ind = R^T S R``)."""
     if regularize == "l2":
-        return np.eye(len(fi))
+        return np.eye(fes.ndof)
     from ngsolve import BilinearForm, grad, ds, TaskManager
     u, v = fes.TnT()
     a = BilinearForm(fes, symmetric=True)
@@ -118,8 +120,101 @@ def _seminorm(fes, fi, regularize):
     a += 1.0e-10 * u * v * ds
     with TaskManager():
         a.Assemble()
-    Sd = np.array(a.mat.ToDense())
-    return Sd[np.ix_(fi, fi)]
+    return np.array(a.mat.ToDense())
+
+
+def _build_abe_R(coil, fes, order):
+    """Abe edge-equipotential node-current-potential constraint (Abe, IEEE
+    Trans. Magn., 'A Design Tool/Technique for MRI GC using DUCAS', Appendix:
+    eq.6 ``T = R T_IN`` with constraints A-1 / A-3).
+
+    Each PHYSICAL boundary edge component of the coil patch is tied to ONE
+    free constant (A-1: no current crosses the edge -> the contours close);
+    one component (or one node, on a closed surface) is grounded (A-3: only
+    grad(T) carries current, so the overall additive constant is fixed).
+    Higher-order DOFs ON the physical boundary are zeroed (T constant along
+    the edge).  A 'seam' edge of a periodic CAD face is NOT a physical
+    boundary -- it is excluded by the element-adjacency test (a physical
+    boundary mesh-edge belongs to exactly ONE surface element; a seam to two).
+
+    Returns (R, n_components)."""
+    from collections import defaultdict
+    from ngsolve import BND
+    nv, ndof = coil.nv, fes.ndof
+    ecount = defaultdict(int)
+    for el in coil.Elements(BND):
+        vs = [v.nr for v in el.vertices]
+        m = len(vs)
+        for a in range(m):
+            i, j = vs[a], vs[(a + 1) % m]
+            ecount[(min(i, j), max(i, j))] += 1
+    bnd_edges = [e for e, c in ecount.items() if c == 1]   # physical boundary
+    adj = defaultdict(list)
+    bverts = set()
+    for i, j in bnd_edges:
+        adj[i].append(j); adj[j].append(i); bverts |= {i, j}
+    comp = {}
+    cid = 0
+    for v in bverts:
+        if v in comp:
+            continue
+        stack = [v]; comp[v] = cid
+        while stack:
+            u_ = stack.pop()
+            for w in adj[u_]:
+                if w not in comp:
+                    comp[w] = cid; stack.append(w)
+        cid += 1
+    ncomp = cid
+
+    cols = []
+    comp_col = {}
+    # one free constant per boundary component, grounding component 0
+    for c in range(ncomp):
+        comp_col[c] = None if c == 0 else len(cols)
+        if c != 0:
+            cols.append([])
+    grounded_vertex = None
+    for vtx in range(nv):
+        if vtx in comp:
+            cc = comp_col[comp[vtx]]
+            if cc is not None:
+                cols[cc].append(vtx)
+            # else: grounded boundary component -> psi = 0 there (no column)
+        else:
+            cols.append([vtx])                       # interior vertex
+    if ncomp == 0:        # closed surface (no boundary): ground one node
+        grounded_vertex = 0
+        cols = [c for c in cols if c != [0]]
+    # higher-order DOFs: interior keep, physical-boundary zero
+    if order > 1:
+        from ngsolve import H1
+        fd = H1(coil, order=order, definedon=coil.Boundaries(".*"),
+                dirichlet_bbnd=".*")
+        bmask = ~np.array(fd.FreeDofs())
+        for d in range(nv, ndof):
+            if not bmask[d]:
+                cols.append([d])                     # interior higher-order
+            # else: boundary higher-order -> zeroed (no column)
+    R = np.zeros((ndof, len(cols)))
+    for k, ds_ in enumerate(cols):
+        for d in ds_:
+            R[d, k] = 1.0
+    return R, ncomp
+
+
+def _dof_reduction_R(args, coil, fes):
+    """Independent-DOF -> all-DOF map R (Abe eq.6).  off/on: R = I[:, free] so
+    the result is numerically identical to plain free-DOF selection.  abe:
+    Abe's edge-equipotential constraint (handles gradient AND solenoid)."""
+    from ngsolve import H1                                   # noqa: F401 (abe path)
+    if getattr(args, "confine", "off") == "abe":
+        R, _ = _build_abe_R(coil, fes, args.order)
+        return R
+    fi = np.where(np.array(fes.FreeDofs()))[0]
+    R = np.zeros((fes.ndof, len(fi)))
+    R[fi, np.arange(len(fi))] = 1.0
+    return R
 
 
 def _element_centroids(mesh):
@@ -153,18 +248,21 @@ def _build_problem(args, eval_scale=1.0):
     from radia.stream_function import aca_tsvd, RegularizedTSVD
 
     coil = Mesh(args.coil_vol)
-    # confine = enforce psi = 0 on the coil-surface boundary edges (BBND) so
-    # NO current crosses the former edge -> the iso-contours CLOSE on any
-    # former (manufacturable single-stroke) instead of running off the ends.
-    # This is the standard gradient/shim-coil BC (current returns within the
-    # patch).  NOT for solenoid-type targets where the two ends must sit at
-    # DIFFERENT psi (a net axial current) -- there ".*" zeroing kills the
-    # field; leave --confine off for those.
-    diri = ({"dirichlet_bbnd": ".*"}
-            if getattr(args, "confine", "off") == "on" else {})
+    # confine = the stream-function (current-potential) boundary condition.
+    #   off : none (current may cross the former edge -> contours can run off
+    #         the ends).
+    #   on  : psi = 0 on every boundary edge (simple gradient/shim BC; BREAKS
+    #         solenoid-type targets where the two ends need different psi).
+    #   abe : Abe edge-equipotential -- each physical boundary component gets
+    #         ONE free constant + one ground (eq.6 R).  Closes the contours
+    #         AND works for gradient and solenoid; strictly the best.
+    # All three are expressed as one DOF-reduction matrix R (Abe eq.6
+    # ``T = R T_IN``); off/on reduce to plain free-DOF column selection.
+    confine = getattr(args, "confine", "off")
+    diri = {"dirichlet_bbnd": ".*"} if confine == "on" else {}
     fes = H1(coil, order=args.order, definedon=coil.Boundaries(".*"), **diri)
     n = specialcf.normal(3)
-    fi = np.where(np.array(fes.FreeDofs()))[0]
+    R = _dof_reduction_R(args, coil, fes)
 
     target_cf, tdim = _parse_target_cf(args.target_cf)
     if tdim not in (1, 3):
@@ -189,29 +287,33 @@ def _build_problem(args, eval_scale=1.0):
     Bm = _eval_target_np(args.target_cf, mpts, vector_b)
     Ac = _assemble_biot_savart(fes, n, cpts, comps)
     Am = _assemble_biot_savart(fes, n, mpts, comps)
-    S = _seminorm(fes, fi, args.regularize)
-    Af = Ac[:, fi]
-    base = aca_tsvd(Ac.shape[0], len(fi), lambda i, j: float(Af[i, j]),
-                    modes=Ac.shape[0], kmax=min(Ac.shape[0], len(fi)),
+    Sf = _seminorm(fes, args.regularize)        # full-DOF seminorm
+    S = R.T @ Sf @ R                            # reduce to independent space
+    Af = Ac @ R                                 # rows x n_independent
+    Am_R = Am @ R
+    n_free = R.shape[1]
+    base = aca_tsvd(Ac.shape[0], n_free, lambda i, j: float(Af[i, j]),
+                    modes=Ac.shape[0], kmax=min(Ac.shape[0], n_free),
                     aca_eps=1e-10, method=3)
     reg = RegularizedTSVD.from_stiffness(base, S)
     md = float(np.mean(np.diag(Af.T @ Af)))
-    return dict(coil=coil, fes=fes, fi=fi, n=n, vector_b=vector_b,
-                comps=comps, Ac=Ac, Af=Af, Am=Am, Bc=Bc, Bm=Bm, reg=reg,
+    return dict(coil=coil, fes=fes, R=R, n_free=n_free, n=n, vector_b=vector_b,
+                comps=comps, Ac=Ac, Af=Af, Am=Am_R, Bc=Bc, Bm=Bm, reg=reg,
                 base=base, target_cf=target_cf, evalm=evalm, cpts=cpts,
-                mpts=mpts, eval_scale=eval_scale,
+                mpts=mpts, eval_scale=eval_scale, confine=confine,
                 md=md, n_constraint=len(cpts), n_measure=len(mpts))
 
 
 def _solve_and_metrics(P, alpha):
     """Solve psi at a given alpha; return (psi_full, fit_rms, homogeneity, peak)."""
-    Bc, Bm, Af, Am, fi, reg, md = (P["Bc"], P["Bm"], P["Af"], P["Am"],
-                                   P["fi"], P["reg"], P["md"])
+    Bc, Bm, Af, Am, reg, md = (P["Bc"], P["Bm"], P["Af"], P["Am"],
+                               P["reg"], P["md"])
     psi_f = reg.solve(Bc, alpha=alpha * md) if alpha > 0 else reg.solve(Bc)
     fit_rms = float(np.linalg.norm(Af @ psi_f - Bc) / (np.linalg.norm(Bc) + 1e-30))
     # true homogeneity = field error at the INTERIOR measure points (not
-    # constraints) -> captures the between-constraint deviation
-    homo = float(np.linalg.norm(Am[:, fi] @ psi_f - Bm)
+    # constraints) -> captures the between-constraint deviation.  Af/Am are
+    # already reduced to the independent-DOF space (Af = Ac R, Am = Am_full R).
+    homo = float(np.linalg.norm(Am @ psi_f - Bm)
                  / (np.linalg.norm(Bm) + 1e-30))
     return psi_f, fit_rms, homo
 
@@ -231,10 +333,10 @@ def _per_vertex_grad_norm(fes, coil, gfu):
     return np.abs(gK.vec.FV().NumPy()[:coil.nv].copy())
 
 
-def _weighted_surface_stiffness(fes, coil, fi, w_vertex):
-    """``int w(x) grad_s u . grad_s v ds`` (free block); w from vertex values.
-    Caller holds the TaskManager context (this is a panel calc, not a helper
-    module)."""
+def _weighted_surface_stiffness(fes, coil, w_vertex):
+    """``int w(x) grad_s u . grad_s v ds`` over ALL DOFs; w from vertex values.
+    Caller reduces to the independent space via R.  Caller holds the
+    TaskManager context (this is a panel calc, not a helper module)."""
     from ngsolve import BilinearForm, GridFunction, H1, grad, ds
     fes_w = H1(coil, order=1, definedon=coil.Boundaries(".*"))
     gw = GridFunction(fes_w)
@@ -244,8 +346,7 @@ def _weighted_surface_stiffness(fes, coil, fi, w_vertex):
     a += gw * grad(u).Trace() * grad(v).Trace() * ds
     a += 1.0e-12 * u * v * ds
     a.Assemble()
-    Sd = np.array(a.mat.ToDense())
-    return Sd[np.ix_(fi, fi)]
+    return np.array(a.mat.ToDense())
 
 
 def _linf_irls_front(P, alpha, n_iter, weight_ratio_max=20.0, damping=0.5,
@@ -259,20 +360,20 @@ def _linf_irls_front(P, alpha, n_iter, weight_ratio_max=20.0, damping=0.5,
     the lever pushes the design point DOWN the peak-current axis."""
     from ngsolve import GridFunction
     from radia.stream_function import RegularizedTSVD
-    fes, coil, fi = P["fes"], P["coil"], P["fi"]
+    fes, coil, R = P["fes"], P["coil"], P["R"]
     Bc, Bm, Am, md, base = P["Bc"], P["Bm"], P["Am"], P["md"], P["base"]
     nv = coil.nv
     w = np.ones(nv)
     front = []
     for k in range(n_iter):
-        Sw = _weighted_surface_stiffness(fes, coil, fi, w)
+        Sw = R.T @ _weighted_surface_stiffness(fes, coil, w) @ R
         reg = RegularizedTSVD.from_stiffness(base, Sw)
         psi_f = reg.solve(Bc, alpha=alpha * md) if alpha > 0 else reg.solve(Bc)
-        psi = np.zeros(fes.ndof); psi[fi] = psi_f
+        psi = R @ psi_f
         gfu = GridFunction(fes); gfu.vec.FV().NumPy()[:] = psi
         gnorm = _per_vertex_grad_norm(fes, coil, gfu)
         peak = float(np.max(gnorm))
-        homo = float(np.linalg.norm(Am[:, fi] @ psi_f - Bm)
+        homo = float(np.linalg.norm(Am @ psi_f - Bm)
                      / (np.linalg.norm(Bm) + 1e-30))
         front.append({"iter": int(k), "homogeneity_rms": homo,
                       "peak_J": peak})
@@ -667,8 +768,7 @@ def run_design(args):
         P = _build_problem(args)
         t1 = time.perf_counter()
         psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha)
-        psi = np.zeros(P["fes"].ndof)
-        psi[P["fi"]] = psi_f
+        psi = P["R"] @ psi_f
         gfu = GridFunction(P["fes"])
         gfu.vec.FV().NumPy()[:] = psi
         peak_J = _peak_current_density(P["fes"], P["coil"], gfu)
@@ -680,8 +780,8 @@ def run_design(args):
             "coil_vol": os.path.basename(args.coil_vol),
             "eval_vol": os.path.basename(args.eval_vol),
             "order": args.order, "regularize": args.regularize,
-            "alpha": args.alpha,
-            "ndof": int(P["fes"].ndof), "ndof_free": int(len(P["fi"])),
+            "alpha": args.alpha, "confine": P["confine"],
+            "ndof": int(P["fes"].ndof), "ndof_free": int(P["n_free"]),
             "n_constraint": int(P["n_constraint"]),
             "n_measure": int(P["n_measure"]),
             "n_constraints": int(P["Ac"].shape[0]),
@@ -714,7 +814,7 @@ def _pareto_alpha(P, args):
     front = []
     for lam in lams:
         psi_f, fit_rms, homo = _solve_and_metrics(P, lam)
-        psi = np.zeros(P["fes"].ndof); psi[P["fi"]] = psi_f
+        psi = P["R"] @ psi_f
         gfu = GridFunction(P["fes"]); gfu.vec.FV().NumPy()[:] = psi
         peak = _peak_current_density(P["fes"], P["coil"], gfu)
         front.append({"alpha": float(lam), "homogeneity_rms": homo,
@@ -734,7 +834,7 @@ def _pareto_geometry(args):
     for s in scales:
         P = _build_problem(args, eval_scale=float(s))
         psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha)
-        psi = np.zeros(P["fes"].ndof); psi[P["fi"]] = psi_f
+        psi = P["R"] @ psi_f
         gfu = GridFunction(P["fes"]); gfu.vec.FV().NumPy()[:] = psi
         peak = _peak_current_density(P["fes"], P["coil"], gfu)
         front.append({"eval_scale": float(s), "homogeneity_rms": homo,
@@ -785,7 +885,7 @@ def run_manufacture(args):
         P = _build_problem(args)
         t1 = time.perf_counter()
         psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha)
-        psi = np.zeros(P["fes"].ndof); psi[P["fi"]] = psi_f
+        psi = P["R"] @ psi_f
         gfu = GridFunction(P["fes"]); gfu.vec.FV().NumPy()[:] = psi
         peak_J = _peak_current_density(P["fes"], P["coil"], gfu)
         t_psi = time.perf_counter()
@@ -947,11 +1047,12 @@ def build_argparser():
     ap.add_argument("--regularize", choices=["l2", "h1"], default="h1",
                     help="seminorm: l2 (min |psi|) or h1 (min surface-current "
                          "energy)")
-    ap.add_argument("--confine", choices=["on", "off"], default="off",
-                    help="confine current to the coil patch (psi=0 on the "
-                         "former edge): closes the contours on ANY former for "
-                         "gradient/shim coils. Leave off for solenoid-type "
-                         "targets (net axial current).")
+    ap.add_argument("--confine", choices=["off", "on", "abe"], default="off",
+                    help="current-confinement BC. off=none; on=psi 0 on the "
+                         "former edge (gradient/shim; breaks solenoids); "
+                         "abe=Abe edge-equipotential (one free constant per "
+                         "boundary + ground) -- closes the contours AND works "
+                         "for gradient and solenoid (recommended).")
     ap.add_argument("--alpha", type=float, default=0.0,
                     help="Tikhonov weight (design; 0 = exact-fit min-seminorm)")
     ap.add_argument("--eval-max", type=int, default=400,
