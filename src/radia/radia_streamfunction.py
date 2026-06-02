@@ -176,7 +176,16 @@ class StreamFunctionPanel(ModePanel):
 class StreamFunctionWindow(AnalysisWindow):
     def __init__(self, vol_path=""):
         super().__init__(TITLE, vol_path, settings_key="streamfunction")
-        self._set_panel(StreamFunctionPanel())
+        panel = StreamFunctionPanel()
+        self._set_panel(panel)
+        # Restore last session's widget state FIRST, then let an explicit
+        # launcher vol_path override the restored coil wp_vol.  Restoring
+        # AFTER setText (or not restoring at all) would silently drop the
+        # Cubit Solve-menu's current .vol -- the radia_em / radia_ih
+        # restore-order bug class.
+        self._restore_settings()
+        if vol_path and "wp_vol" in panel._widgets:
+            panel._widgets["wp_vol"].setText(self.display_path(vol_path))
 
 
 if __name__ == "__main__":

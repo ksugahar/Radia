@@ -216,5 +216,22 @@ class TestSaveRestore:
         fresh.deleteLater()
 
 
+# ============================================================
+# Window: launcher .vol overrides the restored coil wp_vol
+# ============================================================
+class TestWindowVolOverride:
+
+    def test_launcher_vol_fills_wp_vol(self, qapp, tmp_path):
+        """StreamFunctionWindow must restore settings AND let the constructor
+        vol_path (the Cubit Solve-menu's current .vol) override the restored
+        coil wp_vol -- the radia_em / radia_ih restore-order bug class."""
+        from radia_streamfunction import StreamFunctionWindow
+        coil = tmp_path / "launcher_coil.vol"
+        coil.write_text("mesh3d 1\n")
+        win = StreamFunctionWindow(vol_path=str(coil))
+        assert win._panel.wp_vol_path().endswith("launcher_coil.vol")
+        win.deleteLater()
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
