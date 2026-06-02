@@ -116,5 +116,57 @@ def test_streamfunction_pareto_front(sample_vols):
     assert front[-1]["homogeneity_rms"] >= front[0]["homogeneity_rms"]
 
 
+def test_streamfunction_pareto_levers(sample_vols):
+    """linf lever drops the peak current over its IRLS trajectory; geometry
+    lever's homogeneity worsens as the eval region (DSV) grows."""
+    coil, evalv = sample_vols
+    rl = _run_calc(coil, evalv, "x",
+                   extra=["--order", "1", "--method", "pareto",
+                          "--pareto-lever", "linf", "--linf-iter", "5",
+                          "--eval-max", "30"])
+    assert "error" not in rl, f"linf error: {rl.get('error')}"
+    assert rl["pareto_lever"] == "linf"
+    fl = rl["front"]
+    assert len(fl) == 5
+    # IRLS minimax does not RAISE the peak current end-to-end
+    assert fl[-1]["peak_J"] <= fl[0]["peak_J"] * 1.001, \
+        f"linf raised the peak: {fl[0]['peak_J']} -> {fl[-1]['peak_J']}"
+
+    rg = _run_calc(coil, evalv, "x",
+                   extra=["--order", "1", "--method", "pareto",
+                          "--pareto-lever", "geometry", "--n-alpha", "3",
+                          "--eval-max", "30"])
+    assert "error" not in rg, f"geometry error: {rg.get('error')}"
+    assert rg["pareto_lever"] == "geometry"
+    fg = rg["front"]
+    assert len(fg) == 3
+    # larger eval region -> harder -> worse homogeneity (monotone front)
+    assert fg[-1]["homogeneity_rms"] >= fg[0]["homogeneity_rms"]
+    assert fg[-1]["eval_scale"] > fg[0]["eval_scale"]
+
+
+def test_streamfunction_manufacture(sample_vols):
+    """Manufacture: psi iso-contours -> single-stroke wire -> PEEC.  The
+    orientation-consistent separate turns reproduce the Gx target (validates
+    the discretisation); the single-stroke wire + PEEC inductance are
+    produced."""
+    coil, evalv = sample_vols
+    r = _run_calc(coil, evalv, "x",
+                  extra=["--order", "1", "--method", "manufacture",
+                         "--nlevels", "8", "--eval-max", "25",
+                         "--peec", "--peec-freq", "1e5"])
+    assert "error" not in r, f"manufacture error: {r.get('error')}"
+    assert r["method"] == "manufacture"
+    assert r["n_loops"] > 0 and r["n_wire_points"] > 10
+    assert r["wire_length_m"] > 0.0
+    # separate orientation-consistent turns reproduce the Gx target well
+    assert r["loops_homogeneity_rms"] < 5.0e-2, \
+        f"separate-turns coil inaccurate: {r['loops_homogeneity_rms']}"
+    assert r["wire_homogeneity_rms"] > 0.0       # single-stroke (connectors)
+    assert r["best_fit_current_A"] != 0.0
+    # PEEC inductance positive, resistance non-negative
+    assert r["peec"]["L_H"] > 0.0 and r["peec"]["R_ohm"] >= 0.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

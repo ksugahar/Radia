@@ -17,12 +17,17 @@ I/O (per the 2026-06 design decisions):
 THREE MODES (--method):
   design       target -> A psi = B (folded-Tikhonov RegularizedTSVD) -> psi,
                field homogeneity over the eval region, peak surface current.
-  pareto       sweep the Tikhonov alpha -> the (homogeneity, peak current
-               density) Pareto front (the --pareto-lever {alpha} L-curve;
-               linf / geometry / sheetmetal levers: interface defined, bodies
-               are follow-ons).
-  manufacture  single-stroke chain + sheet-metal wire distortion + CAD(STEP) +
-               PEEC inductance.  (interface defined; body is a follow-on.)
+  pareto       (homogeneity, peak current density) Pareto front via a chosen
+               --pareto-lever:
+                 alpha     Tikhonov L-curve (one factorisation, swept alpha)
+                 linf      minimax IRLS trajectory (peak current down at
+                           ~constant homogeneity; re-uses the ONE ACA factor)
+                 geometry  eval-region (DSV) scale sweep (dual of former size)
+  manufacture  psi iso-contours (marching triangles) -> nearest-neighbour
+               single-stroke wire -> optional sheet-metal wire distortion
+               (--distort) -> CAD STEP (--step-output) -> PEEC L,R (--peec).
+               Reports the discretised-wire field homogeneity (design loop
+               closed).  GENERAL on any loaded surface mesh.
 
 Surface-FE convention (verified): a standalone surface .vol loads with ne=0
 (surface elements as boundary), so psi uses
@@ -58,12 +63,22 @@ def _parse_target_cf(expr):
     return cf, cf.dim
 
 
-def _target_values(target_cf, vector_b, mesh, pts):
-    """Evaluate the target CF at points -> flat array (1 or 3 per point)."""
+def _eval_target_np(expr, pts, vector_b):
+    """Evaluate the target field EXPRESSION numerically at arbitrary points
+    (no mesh containment needed -- so the geometry lever can scale the eval
+    region beyond the original mesh).  Returns a flat array (1 or 3 / point)."""
+    import math
+
+    def _cf(*a):
+        return tuple(a) if len(a) > 1 else a[0]
+
     out = []
     for p in pts:
-        tv = target_cf(mesh(p[0], p[1], p[2]))
-        out.extend(list(tv) if vector_b else [float(tv)])
+        scope = {"x": float(p[0]), "y": float(p[1]), "z": float(p[2]),
+                 "CF": _cf, "sin": np.sin, "cos": np.cos, "exp": np.exp,
+                 "sqrt": np.sqrt, "log": np.log, "pi": math.pi}
+        v = eval(expr, {"__builtins__": {}}, scope)            # noqa: S307
+        out.extend([float(c) for c in v] if vector_b else [float(v)])
     return np.array(out, dtype=float)
 
 
@@ -128,8 +143,12 @@ def _peak_current_density(fes, coil, gfu):
     return float(np.max(np.abs(gK.vec.FV().NumPy())))
 
 
-def _build_problem(args):
-    """Shared setup: coil FES, eval constraint + measure points, target, A, S."""
+def _build_problem(args, eval_scale=1.0):
+    """Shared setup: coil FES, eval constraint + measure points, target, A, S.
+
+    ``eval_scale`` (geometry lever) scales the eval-region points about their
+    common centroid -- a larger homogeneous volume relative to the fixed coil
+    is the dual of the classic former-size lever, and needs no coil re-mesh."""
     from ngsolve import Mesh, H1, specialcf
     from radia.stream_function import aca_tsvd, RegularizedTSVD
 
@@ -152,8 +171,13 @@ def _build_problem(args):
     if args.eval_max and len(mpts) > args.eval_max:
         mpts = mpts[np.linspace(0, len(mpts) - 1, args.eval_max).astype(int)]
 
-    Bc = _target_values(target_cf, vector_b, evalm, cpts)
-    Bm = _target_values(target_cf, vector_b, evalm, mpts)
+    if eval_scale != 1.0:
+        c0 = cpts.mean(axis=0)
+        cpts = c0 + (cpts - c0) * eval_scale
+        mpts = c0 + (mpts - c0) * eval_scale
+
+    Bc = _eval_target_np(args.target_cf, cpts, vector_b)
+    Bm = _eval_target_np(args.target_cf, mpts, vector_b)
     Ac = _assemble_biot_savart(fes, n, cpts, comps)
     Am = _assemble_biot_savart(fes, n, mpts, comps)
     S = _seminorm(fes, fi, args.regularize)
@@ -165,6 +189,8 @@ def _build_problem(args):
     md = float(np.mean(np.diag(Af.T @ Af)))
     return dict(coil=coil, fes=fes, fi=fi, n=n, vector_b=vector_b,
                 comps=comps, Ac=Ac, Af=Af, Am=Am, Bc=Bc, Bm=Bm, reg=reg,
+                base=base, target_cf=target_cf, evalm=evalm, cpts=cpts,
+                mpts=mpts, eval_scale=eval_scale,
                 md=md, n_constraint=len(cpts), n_measure=len(mpts))
 
 
@@ -179,6 +205,374 @@ def _solve_and_metrics(P, alpha):
     homo = float(np.linalg.norm(Am[:, fi] @ psi_f - Bm)
                  / (np.linalg.norm(Bm) + 1e-30))
     return psi_f, fit_rms, homo
+
+
+# ==========================================================================
+# Pareto lever bodies (design stage): linf (L-inf minimax) + geometry sweep.
+# (alpha = the Tikhonov L-curve in _solve_and_metrics; sheet-metal is a
+# manufacture-stage WIRE operation -- see run_manufacture --distort.)
+# ==========================================================================
+def _per_vertex_grad_norm(fes, coil, gfu):
+    """Per-vertex |grad_s psi| via the documented boundary-H1 nodal Set
+    workaround (point eval on a boundary-defined H1 returns 0)."""
+    from ngsolve import GridFunction, grad, sqrt as ng_sqrt, InnerProduct
+    Kmag = ng_sqrt(InnerProduct(grad(gfu).Trace(), grad(gfu).Trace()))
+    gK = GridFunction(fes)
+    gK.Set(Kmag, definedon=coil.Boundaries(".*"))
+    return np.abs(gK.vec.FV().NumPy()[:coil.nv].copy())
+
+
+def _weighted_surface_stiffness(fes, coil, fi, w_vertex):
+    """``int w(x) grad_s u . grad_s v ds`` (free block); w from vertex values.
+    Caller holds the TaskManager context (this is a panel calc, not a helper
+    module)."""
+    from ngsolve import BilinearForm, GridFunction, H1, grad, ds
+    fes_w = H1(coil, order=1, definedon=coil.Boundaries(".*"))
+    gw = GridFunction(fes_w)
+    gw.vec.FV().NumPy()[:coil.nv] = w_vertex
+    u, v = fes.TnT()
+    a = BilinearForm(fes, symmetric=True)
+    a += gw * grad(u).Trace() * grad(v).Trace() * ds
+    a += 1.0e-12 * u * v * ds
+    a.Assemble()
+    Sd = np.array(a.mat.ToDense())
+    return Sd[np.ix_(fi, fi)]
+
+
+def _linf_irls_front(P, alpha, n_iter, weight_ratio_max=20.0, damping=0.5,
+                     hot_quantile=0.85, hot_boost=3.0):
+    """L-inf (minimax peak current) lever via bounded-ratio active-set IRLS.
+
+    Re-uses the ONE ACA+TSVD factorisation (``P['base']``); each iter rebuilds
+    only the weighted surface-H1 stiffness and refolds RegularizedTSVD.  The
+    returned 'front' is the IRLS trajectory: peak |grad psi| drops over
+    iterations while the homogeneity stays ~constant (exact data fit), i.e.
+    the lever pushes the design point DOWN the peak-current axis."""
+    from ngsolve import GridFunction
+    from radia.stream_function import RegularizedTSVD
+    fes, coil, fi = P["fes"], P["coil"], P["fi"]
+    Bc, Bm, Am, md, base = P["Bc"], P["Bm"], P["Am"], P["md"], P["base"]
+    nv = coil.nv
+    w = np.ones(nv)
+    front = []
+    for k in range(n_iter):
+        Sw = _weighted_surface_stiffness(fes, coil, fi, w)
+        reg = RegularizedTSVD.from_stiffness(base, Sw)
+        psi_f = reg.solve(Bc, alpha=alpha * md) if alpha > 0 else reg.solve(Bc)
+        psi = np.zeros(fes.ndof); psi[fi] = psi_f
+        gfu = GridFunction(fes); gfu.vec.FV().NumPy()[:] = psi
+        gnorm = _per_vertex_grad_norm(fes, coil, gfu)
+        peak = float(np.max(gnorm))
+        homo = float(np.linalg.norm(Am[:, fi] @ psi_f - Bm)
+                     / (np.linalg.norm(Bm) + 1e-30))
+        front.append({"iter": int(k), "homogeneity_rms": homo,
+                      "peak_J": peak})
+        # bounded-ratio reweight + active-set push + renormalise + damping
+        rel = np.clip(gnorm / (peak + 1e-30), 1.0 / weight_ratio_max, 1.0)
+        w_new = rel ** 2.0
+        thresh = float(np.quantile(gnorm, hot_quantile))
+        w_new = np.where(gnorm >= thresh, w_new * hot_boost, w_new)
+        w_new = w_new / (np.mean(w_new) + 1e-30)
+        w = (1.0 - damping) * w + damping * w_new
+    return front
+
+
+# ==========================================================================
+# Manufacture stage: psi iso-contours -> single-stroke wire -> (sheet-metal)
+# -> CAD(STEP) -> PEEC.  All GENERAL on a loaded surface mesh (marching
+# triangles), not tied to a cylinder / plane parametrisation.
+# ==========================================================================
+def _surface_triangles(coil):
+    """Vertex-index triangles of the coil surface (BND elements; fan-split
+    any quads)."""
+    from ngsolve import BND
+    tris = []
+    for el in coil.Elements(BND):
+        vs = [v.nr for v in el.vertices]
+        if len(vs) == 3:
+            tris.append((vs[0], vs[1], vs[2]))
+        elif len(vs) == 4:
+            tris.append((vs[0], vs[1], vs[2]))
+            tris.append((vs[0], vs[2], vs[3]))
+    return tris
+
+
+def _char_len(verts, tris):
+    ls = [float(np.linalg.norm(verts[a] - verts[b]))
+          for (a, b, c) in tris[:4000]]
+    return float(np.median(ls)) if ls else 1.0
+
+
+def _contour_levels(psi_v, n):
+    lo, hi = float(np.min(psi_v)), float(np.max(psi_v))
+    if hi - lo < 1e-30:
+        return []
+    return list(np.linspace(lo, hi, n + 2)[1:-1])
+
+
+def _contour_segments(verts, fv, tris, level):
+    """Marching-triangles iso-segments of (fv - level) == 0 on the surface."""
+    segs = []
+    for (a, b, c) in tris:
+        fa, fb, fc = fv[a] - level, fv[b] - level, fv[c] - level
+        pts = []
+        for i, j, fi_, fj_ in ((a, b, fa, fb), (b, c, fb, fc), (c, a, fc, fa)):
+            if (fi_ < 0.0) != (fj_ < 0.0):
+                t = fi_ / (fi_ - fj_)
+                pts.append(verts[i] + t * (verts[j] - verts[i]))
+        if len(pts) == 2:
+            segs.append((pts[0], pts[1]))
+    return segs
+
+
+def _segs_to_polylines(segs, tol):
+    """Chain iso-segments into polylines (loops/arcs) by snapping shared
+    endpoints (adjacent triangles emit identical crossing points on a shared
+    edge, so exact-match snapping is robust)."""
+    coords = []
+    idx = {}
+
+    def gid(p):
+        key = (int(round(p[0] / tol)), int(round(p[1] / tol)),
+               int(round(p[2] / tol)))
+        if key not in idx:
+            idx[key] = len(coords); coords.append(np.asarray(p, float))
+        return idx[key]
+
+    adj = {}
+    for a, b in segs:
+        ia, ib = gid(a), gid(b)
+        if ia == ib:
+            continue
+        adj.setdefault(ia, []).append(ib)
+        adj.setdefault(ib, []).append(ia)
+    coords = np.array(coords) if coords else np.zeros((0, 3))
+    visited = set()
+    polylines = []
+    for start in list(adj.keys()):
+        for nb in adj[start]:
+            e0 = frozenset((start, nb))
+            if e0 in visited:
+                continue
+            visited.add(e0)
+            poly = [start, nb]
+            cur = nb
+            while True:
+                nxts = [x for x in adj.get(cur, [])
+                        if frozenset((cur, x)) not in visited]
+                if not nxts:
+                    break
+                nxt = nxts[0]
+                visited.add(frozenset((cur, nxt)))
+                poly.append(nxt); cur = nxt
+                if cur == start:
+                    break
+            if len(poly) >= 2:
+                polylines.append(coords[poly])
+    return polylines
+
+
+def _nn_order(cents):
+    n = len(cents)
+    used = [False] * n
+    order = [0]; used[0] = True
+    for _ in range(n - 1):
+        last = cents[order[-1]]
+        best, bd = -1, 1e30
+        for j in range(n):
+            if used[j]:
+                continue
+            d = float(np.linalg.norm(cents[j] - last))
+            if d < bd:
+                bd, best = d, j
+        order.append(best); used[best] = True
+    return order
+
+
+def _single_stroke_chain(polylines):
+    """Nearest-neighbour single stroke: visit contour loops in NN order, each
+    closed into a full turn, opened at the point nearest the previous loop's
+    end (the field-aware Kuijpers chain is the planar/cylinder demo
+    refinement).  Returns (chain_xyz, n_connectors, total_connector_len)."""
+    if not polylines:
+        return np.zeros((0, 3)), 0, 0.0
+    cents = [p.mean(axis=0) for p in polylines]
+    order = _nn_order(cents)
+    chain, conns, conn_len, last = [], 0, 0.0, None
+    for oi in order:
+        poly = polylines[oi]
+        if last is not None:
+            d = np.linalg.norm(poly - last, axis=1)
+            s = int(np.argmin(d))
+            poly = np.roll(poly, -s, axis=0)
+            conn_len += float(np.linalg.norm(poly[0] - last)); conns += 1
+        poly = np.vstack([poly, poly[0]])          # close the turn
+        chain.append(poly); last = poly[-1]
+    return np.vstack(chain), conns, conn_len
+
+
+def _dedupe(path, tol=1e-10):
+    if len(path) == 0:
+        return path
+    keep = [path[0]]
+    for p in path[1:]:
+        if np.linalg.norm(p - keep[-1]) > tol:
+            keep.append(p)
+    return np.array(keep)
+
+
+def _segment_field_B(path, obs, current=1.0):
+    """Biot-Savart B (T) of a polyline of straight segments at obs points.
+    General finite-wire formula (verified vs infinite-wire mu0 I/2 pi d)."""
+    obs = np.asarray(obs, float)
+    B = np.zeros((len(obs), 3))
+    for k in range(len(path) - 1):
+        p1, p2 = path[k], path[k + 1]
+        e = p2 - p1
+        L = float(np.linalg.norm(e))
+        if L < 1e-12:
+            continue
+        e = e / L
+        r1 = obs - p1; r2 = obs - p2
+        n1 = np.linalg.norm(r1, axis=1); n2 = np.linalg.norm(r2, axis=1)
+        c1 = (r1 @ e) / np.maximum(n1, 1e-30)
+        c2 = (r2 @ e) / np.maximum(n2, 1e-30)
+        rp = r1 - np.outer(r1 @ e, e)
+        d = np.linalg.norm(rp, axis=1)
+        phi = np.cross(np.tile(e, (len(obs), 1)), rp)
+        pn = np.linalg.norm(phi, axis=1)
+        good = (d > 1e-12) & (pn > 1e-30)
+        phi_hat = np.zeros_like(phi)
+        phi_hat[good] = phi[good] / pn[good, None]
+        Bmag = np.zeros(len(obs))
+        Bmag[good] = _MU0_4PI * current * (c1[good] - c2[good]) / d[good]
+        B += Bmag[:, None] * phi_hat
+    return B
+
+
+def _best_fit_current(field_flat, target_flat):
+    d = float(field_flat @ field_flat)
+    return float(field_flat @ target_flat / d) if d > 0.0 else 0.0
+
+
+def _wire_field_flat(path, mpts, vector_b, current=1.0):
+    Bm = _segment_field_B(path, mpts, current)
+    return Bm.reshape(-1) if vector_b else Bm[:, 2]
+
+
+def _close_loop(p):
+    if len(p) >= 2 and np.linalg.norm(p[0] - p[-1]) > 1e-12:
+        return np.vstack([p, p[0]])
+    return p
+
+
+def _loop_field_signs(loops, mpts, target_flat, vector_b):
+    """Per-loop unit-current fields + the sign that makes each loop's field
+    reinforce the target (consistent contour orientation): s_k = sign(f_k . B).
+    Returns (fields[list], signs[ndarray]).  Without this the marching-triangle
+    contour winding is arbitrary and adjacent turns cancel."""
+    fields = [_wire_field_flat(_close_loop(p), mpts, vector_b, 1.0)
+              for p in loops]
+    signs = np.array([1.0 if (f @ target_flat) >= 0.0 else -1.0
+                      for f in fields])
+    return fields, signs
+
+
+def _distort_wire(chain, mpts, target_flat, vector_b, n_grid=3, n_iter=5,
+                  lam_rel=0.3, step=0.8, fd=1.0e-5):
+    """Sheet-metal (bankin-ho) single-current wire distortion: bend the ONE
+    series wire with a smooth 3D trilinear control grid (out-of-surface lever)
+    to better hit the target, contour LEVELS fixed.  Gauss-Newton with a
+    displacement penalty relative to mean(diag(JtJ)), I_w re-fit each step.
+    Returns (chain_best, I_w, rms0, rms_best, max_disp)."""
+    chain = np.asarray(chain, float)
+    bb_min = chain.min(0); span = np.maximum(chain.max(0) - bb_min, 1e-9)
+    g = int(n_grid)
+    u = (chain - bb_min) / span * (g - 1)
+    i0 = np.clip(np.floor(u).astype(int), 0, g - 2)
+    f = u - i0
+
+    def deform(dofs):
+        C = dofs.reshape(g, g, g, 3)
+        d = np.zeros_like(chain)
+        for cx in (0, 1):
+            for cy in (0, 1):
+                for cz in (0, 1):
+                    wgt = ((f[:, 0] if cx else 1 - f[:, 0])
+                           * (f[:, 1] if cy else 1 - f[:, 1])
+                           * (f[:, 2] if cz else 1 - f[:, 2]))
+                    d += wgt[:, None] * C[i0[:, 0] + cx, i0[:, 1] + cy,
+                                          i0[:, 2] + cz]
+        return chain + d
+
+    def fitI(fu):
+        d = float(fu @ fu)
+        return float(fu @ target_flat / d) if d else 0.0
+
+    den = float(np.linalg.norm(target_flat)) + 1e-30
+    ndof = g * g * g * 3
+    p0 = deform(np.zeros(ndof))
+    f0 = _wire_field_flat(p0, mpts, vector_b); I0 = fitI(f0)
+    rms0 = float(np.linalg.norm(I0 * f0 - target_flat) / den)
+    dofs = np.zeros(ndof)
+    best = (rms0, p0.copy(), I0)
+    for _ in range(int(n_iter)):
+        w = deform(dofs)
+        fb = _wire_field_flat(w, mpts, vector_b); Ib = fitI(fb)
+        base = Ib * fb; r = target_flat - base
+        J = np.empty((len(base), ndof))
+        for dd in range(ndof):
+            d2 = dofs.copy(); d2[dd] += fd
+            fu = _wire_field_flat(deform(d2), mpts, vector_b)
+            J[:, dd] = (fitI(fu) * fu - base) / fd
+        JtJ = J.T @ J
+        md = float(np.mean(np.diag(JtJ))) + 1e-30
+        dofs = dofs + step * np.linalg.solve(
+            JtJ + lam_rel * md * np.eye(ndof),
+            J.T @ r - lam_rel * md * dofs)
+        w = deform(dofs)
+        fu = _wire_field_flat(w, mpts, vector_b); Iu = fitI(fu)
+        rms = float(np.linalg.norm(Iu * fu - target_flat) / den)
+        if rms < best[0]:
+            best = (rms, w.copy(), Iu)
+    disp = float(np.max(np.linalg.norm(best[1] - chain, axis=1)))
+    return best[1], best[2], rms0, best[0], disp
+
+
+def _write_step_polylines(polylines, filename):
+    """Write contour polylines as OCC wire edges to a STEP file (general)."""
+    from netgen.occ import Pnt, Segment, Glue
+    edges = []
+    for poly in polylines:
+        for k in range(len(poly) - 1):
+            p, q = poly[k], poly[k + 1]
+            if np.linalg.norm(q - p) < 1e-9:
+                continue
+            edges.append(Segment(Pnt(float(p[0]), float(p[1]), float(p[2])),
+                                  Pnt(float(q[0]), float(q[1]), float(q[2]))))
+    if not edges:
+        raise ValueError("no wire segments to export to STEP")
+    Glue(edges).WriteStep(filename)
+
+
+def _peec_inductance(chain, diam, sigma, freq):
+    """PEEC L, R of the single-stroke wire (one port across the two ends)."""
+    from radia.peec_matrices import PEECBuilder
+    from radia.peec_topology import PEECCircuitSolver
+    chain = _dedupe(chain, tol=1e-9)
+    if len(chain) < 2:
+        raise ValueError("chain too short for PEEC")
+    b = PEECBuilder()
+    ids = [b.add_node_at(float(p[0]), float(p[1]), float(p[2])) for p in chain]
+    for k in range(len(chain) - 1):
+        b.add_connected_segment(ids[k], ids[k + 1], diam, diam, sigma)
+    b.add_port(ids[0], ids[-1])
+    solver = PEECCircuitSolver(b.build_topology())
+    Z = complex(solver.compute_port_impedance(freq))
+    omega = 2.0 * np.pi * freq
+    return {"freq_Hz": freq, "Z_re_ohm": Z.real, "Z_im_ohm": Z.imag,
+            "L_H": (Z.imag / omega) if omega > 0 else 0.0, "R_ohm": Z.real,
+            "n_nodes": int(len(chain))}
 
 
 def run_design(args):
@@ -226,26 +620,61 @@ def run_design(args):
     return result
 
 
+def _pareto_alpha(P, args):
+    """alpha lever: Tikhonov L-curve (re-uses one factorisation per point)."""
+    from ngsolve import GridFunction
+    lams = np.concatenate([[0.0], np.logspace(
+        np.log10(args.alpha_min), np.log10(args.alpha_max),
+        max(1, args.n_alpha - 1))])
+    front = []
+    for lam in lams:
+        psi_f, fit_rms, homo = _solve_and_metrics(P, lam)
+        psi = np.zeros(P["fes"].ndof); psi[P["fi"]] = psi_f
+        gfu = GridFunction(P["fes"]); gfu.vec.FV().NumPy()[:] = psi
+        peak = _peak_current_density(P["fes"], P["coil"], gfu)
+        front.append({"alpha": float(lam), "homogeneity_rms": homo,
+                      "peak_J": peak})
+    return front
+
+
+def _pareto_geometry(args):
+    """geometry lever: sweep the eval-region (DSV) scale about its centroid --
+    the dual of the former-size lever; each scale -> one (homogeneity, peak)
+    point at the design alpha.  Re-builds A per scale (the coil moves relative
+    to the target)."""
+    from ngsolve import GridFunction
+    scales = np.linspace(args.geom_scale_min, args.geom_scale_max,
+                         max(2, args.n_alpha))
+    front = []
+    for s in scales:
+        P = _build_problem(args, eval_scale=float(s))
+        psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha)
+        psi = np.zeros(P["fes"].ndof); psi[P["fi"]] = psi_f
+        gfu = GridFunction(P["fes"]); gfu.vec.FV().NumPy()[:] = psi
+        peak = _peak_current_density(P["fes"], P["coil"], gfu)
+        front.append({"eval_scale": float(s), "homogeneity_rms": homo,
+                      "peak_J": peak})
+    return front
+
+
 def run_pareto(args):
-    """alpha-sweep -> (homogeneity, peak current density) Pareto front."""
-    from ngsolve import GridFunction, TaskManager
-    if args.pareto_lever != "alpha":
-        return {"error": f"pareto-lever '{args.pareto_lever}' interface defined "
-                         f"but body is a follow-on (task #52); use 'alpha'"}
+    """(homogeneity, peak current density) Pareto front via a chosen lever:
+    alpha (Tikhonov L-curve), linf (minimax IRLS trajectory) or geometry
+    (eval-region scale sweep)."""
+    from ngsolve import TaskManager
     t0 = time.perf_counter()
     with TaskManager():
-        P = _build_problem(args)
-        lams = np.concatenate([[0.0], np.logspace(
-            np.log10(args.alpha_min), np.log10(args.alpha_max),
-            max(1, args.n_alpha - 1))])
-        front = []
-        for lam in lams:
-            psi_f, fit_rms, homo = _solve_and_metrics(P, lam)
-            psi = np.zeros(P["fes"].ndof); psi[P["fi"]] = psi_f
-            gfu = GridFunction(P["fes"]); gfu.vec.FV().NumPy()[:] = psi
-            peak = _peak_current_density(P["fes"], P["coil"], gfu)
-            front.append({"alpha": float(lam), "homogeneity_rms": homo,
-                          "peak_J": peak})
+        if args.pareto_lever == "geometry":
+            P = _build_problem(args)        # for metadata (ndof etc.)
+            front = _pareto_geometry(args)
+        else:
+            P = _build_problem(args)
+            if args.pareto_lever == "alpha":
+                front = _pareto_alpha(P, args)
+            elif args.pareto_lever == "linf":
+                front = _linf_irls_front(P, args.alpha, args.linf_iter)
+            else:                            # pragma: no cover - argparse guards
+                raise ValueError(f"unknown pareto-lever {args.pareto_lever}")
     return {
         "method": "pareto", "pareto_lever": args.pareto_lever,
         "target_cf": args.target_cf,
@@ -253,24 +682,146 @@ def run_pareto(args):
         "coil_vol": os.path.basename(args.coil_vol),
         "eval_vol": os.path.basename(args.eval_vol),
         "order": args.order, "regularize": args.regularize,
+        "alpha": args.alpha,
         "ndof": int(P["fes"].ndof), "n_measure": int(P["n_measure"]),
-        "n_alpha": len(front), "front": front,
+        "n_alpha": len(front), "n_points": len(front), "front": front,
         "t_total_s": round(time.perf_counter() - t0, 3),
     }
 
 
 def run_manufacture(args):
-    """single-stroke chain + sheet-metal distortion + CAD + PEEC.  Interface
-    defined; body is a follow-on (task #52)."""
-    return {
-        "method": "manufacture",
-        "error": "manufacture mode interface is defined but the body is a "
-                 "follow-on (task #52): single-stroke chain + sheet-metal "
-                 "distortion + STEP + PEEC.",
-        "nlevels": args.nlevels, "chain_method": args.chain_method,
-        "distort": args.distort, "step_output": args.step_output,
-        "peec": args.peec,
-    }
+    """psi iso-contours -> single-stroke wire -> (sheet-metal distort) ->
+    CAD(STEP, --step-output) -> PEEC inductance (--peec).  Reports the
+    manufactured-wire field homogeneity at the eval region (closes the design
+    loop: does the discretised wire still hit the target?)."""
+    from ngsolve import GridFunction, TaskManager
+    t0 = time.perf_counter()
+    with TaskManager():
+        P = _build_problem(args)
+        t1 = time.perf_counter()
+        psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha)
+        psi = np.zeros(P["fes"].ndof); psi[P["fi"]] = psi_f
+        gfu = GridFunction(P["fes"]); gfu.vec.FV().NumPy()[:] = psi
+        peak_J = _peak_current_density(P["fes"], P["coil"], gfu)
+        t_psi = time.perf_counter()
+
+        coil = P["coil"]
+        verts = np.array([list(v.point) for v in coil.vertices])
+        psi_v = psi[:coil.nv]
+        tris = _surface_triangles(coil)
+        clen = _char_len(verts, tris)
+        tol = max(1e-12, 1e-6 * clen)
+        levels = _contour_levels(psi_v, args.nlevels)
+        loops = []
+        for lev in levels:
+            loops.extend(_segs_to_polylines(
+                _contour_segments(verts, psi_v, tris, lev), tol))
+        if not loops:
+            return {"method": "manufacture",
+                    "error": "psi has no iso-contours at the requested levels "
+                             "(check the target / coil surface)"}
+        wire_len = sum(float(np.sum(np.linalg.norm(np.diff(p, axis=0), axis=1)))
+                       for p in loops)
+        vector_b = P["vector_b"]
+        target_flat = P["Bm"]
+        den_t = float(np.linalg.norm(target_flat)) + 1e-30
+
+        # consistent contour orientation: flip loops whose field opposes B
+        fields, signs = _loop_field_signs(loops, P["mpts"], target_flat,
+                                          vector_b)
+        loops_signed = [p if s >= 0.0 else p[::-1]
+                        for p, s in zip(loops, signs)]
+        # separate-turns best (per-loop currents) -- the discretisation's best
+        Fm = np.column_stack([s * f for f, s in zip(fields, signs)]) \
+            if fields else np.zeros((len(target_flat), 0))
+        if Fm.shape[1] > 0:
+            I_loops, *_ = np.linalg.lstsq(Fm, target_flat, rcond=None)
+            loops_homo = float(np.linalg.norm(Fm @ I_loops - target_flat)
+                               / den_t)
+        else:
+            loops_homo = float("nan")
+
+        chain, n_conn, conn_len = _single_stroke_chain(loops_signed)
+        chain = _dedupe(chain)
+        t2 = time.perf_counter()
+
+        # single-stroke wire (ONE series current) field homogeneity
+        f_unit = _wire_field_flat(chain, P["mpts"], vector_b, 1.0)
+        I_w = _best_fit_current(f_unit, target_flat)
+        wire_homo = float(np.linalg.norm(I_w * f_unit - target_flat) / den_t)
+
+        out_chain = chain
+        result = {
+            "method": "manufacture",
+            "target_cf": args.target_cf,
+            "target_kind": "vector_B" if vector_b else "Bz",
+            "coil_vol": os.path.basename(args.coil_vol),
+            "eval_vol": os.path.basename(args.eval_vol),
+            "order": args.order, "regularize": args.regularize,
+            "alpha": args.alpha, "nlevels": args.nlevels,
+            "chain_method": "nn_single_stroke",
+            "ndof": int(P["fes"].ndof), "n_measure": int(P["n_measure"]),
+            "homogeneity_rms": homo,             # continuous psi (design ref)
+            "peak_J": peak_J,
+            "n_levels": len(levels), "n_loops": int(len(loops)),
+            "n_wire_points": int(len(chain)),
+            "wire_length_m": wire_len,
+            "n_connectors": int(n_conn),
+            "connector_length_m": conn_len,
+            "best_fit_current_A": I_w,
+            "loops_homogeneity_rms": loops_homo,  # separate turns (best disc.)
+            "wire_homogeneity_rms": wire_homo,    # single-stroke (delivered)
+            "rms": wire_homo,                     # primary = delivered wire
+            "note": "homogeneity_rms = continuous psi design; "
+                    "loops_homogeneity_rms = N separate contour turns "
+                    "(orientation-consistent, best discretisation); "
+                    "wire_homogeneity_rms = single-stroke one-current wire "
+                    "(includes connector overhead). Field-aware chaining is "
+                    "the planar/cylinder demo refinement.",
+        }
+
+        if args.distort:
+            cw, Iw2, rms0, rmsb, disp = _distort_wire(
+                chain, P["mpts"], target_flat, vector_b,
+                n_grid=args.distort_grid, n_iter=args.distort_iter)
+            out_chain = _dedupe(cw)
+            result.update({
+                "distort": True,
+                "distort_grid": args.distort_grid,
+                "distort_iter": args.distort_iter,
+                "wire_homogeneity_rms_before": rms0,
+                "wire_homogeneity_rms": rmsb,
+                "rms": rmsb,
+                "distort_max_disp_m": disp,
+                "best_fit_current_A": Iw2,
+            })
+        t3 = time.perf_counter()
+
+        if args.step_output:
+            step_poly = [out_chain] if args.distort else loops
+            _write_step_polylines(step_poly, args.step_output)
+            result["step"] = args.step_output
+
+        if args.peec:
+            result["peec"] = _peec_inductance(
+                out_chain, args.wire_diam, 5.8e7, args.peec_freq)
+
+        if args.msh_output:
+            try:
+                from radia.gmsh_post_export import GmshPostExport
+                post = GmshPostExport(coil, boundary=True)
+                post.add_field("psi", psi_v, ncomp=1)
+                post.write(args.msh_output)
+                result["msh"] = args.msh_output
+            except Exception as e:                 # noqa: BLE001
+                result["msh_error"] = str(e)
+
+        result["t_mesh_s"] = round(t1 - t0, 3)
+        result["t_solve_s"] = round(t_psi - t1, 3)
+        result["t_chain_s"] = round(t2 - t_psi, 3)
+        result["t_distort_s"] = round(t3 - t2, 3)
+        result["t_total_s"] = round(time.perf_counter() - t0, 3)
+    return result
 
 
 def run(args):
@@ -303,32 +854,40 @@ def build_argparser():
                     help="cap on constraint / measure points (subsample)")
     # ---- pareto mode ----
     ap.add_argument("--pareto-lever",
-                    choices=["alpha", "linf", "geometry", "sheetmetal"],
+                    choices=["alpha", "linf", "geometry"],
                     default="alpha",
-                    help="front-pushing lever (alpha = L-curve sweep; "
-                         "linf/geometry/sheetmetal: interface defined, "
-                         "follow-on bodies)")
+                    help="front-pushing lever: alpha (Tikhonov L-curve), "
+                         "linf (minimax IRLS peak-current trajectory), "
+                         "geometry (eval-region scale sweep)")
     ap.add_argument("--alpha-min", type=float, default=1e-4,
                     help="pareto alpha-sweep lower bound (relative)")
     ap.add_argument("--alpha-max", type=float, default=3e1,
                     help="pareto alpha-sweep upper bound (relative)")
     ap.add_argument("--n-alpha", type=int, default=12,
-                    help="pareto alpha-sweep number of points")
+                    help="pareto sweep number of points (alpha/geometry)")
+    ap.add_argument("--linf-iter", type=int, default=8,
+                    help="linf lever IRLS iterations (pareto)")
+    ap.add_argument("--geom-scale-min", type=float, default=0.6,
+                    help="geometry lever: eval-region scale lower bound")
+    ap.add_argument("--geom-scale-max", type=float, default=1.6,
+                    help="geometry lever: eval-region scale upper bound")
     # ---- manufacture mode ----
     ap.add_argument("--nlevels", type=int, default=12,
                     help="number of iso-contours = wire turns (manufacture)")
-    ap.add_argument("--chain-method",
-                    choices=["field_aware", "kuijpers", "lobe", "greedy"],
-                    default="field_aware",
-                    help="single-stroke chain method (manufacture)")
     ap.add_argument("--distort", action="store_true",
                     help="single-current sheet-metal wire distortion (manufacture)")
-    ap.add_argument("--distort-comps", default="rsz",
-                    help="sheet-metal distortion components (manufacture)")
+    ap.add_argument("--distort-grid", type=int, default=3,
+                    help="sheet-metal 3D control-grid size per axis (manufacture)")
+    ap.add_argument("--distort-iter", type=int, default=5,
+                    help="sheet-metal Gauss-Newton iterations (manufacture)")
     ap.add_argument("--step-output", default="",
-                    help="STEP CAD output path (manufacture)")
+                    help="STEP CAD output path for the wire (manufacture)")
     ap.add_argument("--peec", action="store_true",
-                    help="compute PEEC coil inductance (manufacture)")
+                    help="compute PEEC coil inductance L, R (manufacture)")
+    ap.add_argument("--wire-diam", type=float, default=1e-3,
+                    help="PEEC wire cross-section size in m (manufacture)")
+    ap.add_argument("--peec-freq", type=float, default=1e5,
+                    help="PEEC evaluation frequency in Hz (manufacture)")
     # ---- output ----
     ap.add_argument("--msh-output", default="",
                     help="optional GMSH .msh of psi on the coil surface")
