@@ -74,12 +74,16 @@ def test_streamfunction_design_gx_golden(sample_vols):
     assert r["method"] == "design"
     assert r["target_kind"] == "Bz"
     assert r["ndof"] > 100 and r["ndof_free"] > 0
-    assert r["n_eval"] > 0
-    # scalar Bz target -> exactly one constraint row per eval point
-    assert r["n_constraints"] == r["n_eval"], \
-        f"scalar Bz should give 1 row/eval pt: {r['n_constraints']} vs {r['n_eval']}"
-    # alpha=0 exact-fit min-seminorm -> residual ~ 0 (underdetermined system)
-    assert r["rms"] < 5.0e-2, f"exact-fit residual too large: {r['rms']}"
+    assert r["n_constraint"] > 0 and r["n_measure"] > 0
+    # scalar Bz target -> exactly one constraint row per constraint point
+    assert r["n_constraints"] == r["n_constraint"], \
+        f"scalar Bz: 1 row/pt expected: {r['n_constraints']} vs {r['n_constraint']}"
+    # both metrics present: fit residual (at constraints) + true homogeneity
+    # (field error at the interior measure points)
+    assert "fit_residual_rms" in r and "homogeneity_rms" in r
+    # well-conditioned small DSV: homogeneity stays tight
+    assert r["rms"] < 5.0e-2, f"homogeneity too large: {r['rms']}"
+    assert r["homogeneity_rms"] == r["rms"]
     # peak surface current density (mesh-sensitive -> wide band around ~3.4e5)
     assert 2.0e5 < r["peak_J"] < 5.0e5, f"peak_J out of band: {r['peak_J']}"
     assert r["t_solve_s"] >= 0.0
@@ -91,9 +95,25 @@ def test_streamfunction_vector_b_constraints(sample_vols):
     r = _run_calc(coil, evalv, "(0, 0, 1)", extra=["--alpha", "0.01"])
     assert "error" not in r, f"calc error: {r.get('error')}"
     assert r["target_kind"] == "vector_B"
-    assert r["n_constraints"] == 3 * r["n_eval"], \
-        f"vector B should give 3 rows/eval pt: {r['n_constraints']} vs {r['n_eval']}"
+    assert r["n_constraints"] == 3 * r["n_constraint"], \
+        f"vector B: 3 rows/pt expected: {r['n_constraints']} vs {r['n_constraint']}"
     assert r["peak_J"] > 0.0
+
+
+def test_streamfunction_pareto_front(sample_vols):
+    """Pareto mode (alpha-sweep) returns a (homogeneity, peak) front; the
+    homogeneity worsens monotonically toward the over-regularised end."""
+    coil, evalv = sample_vols
+    r = _run_calc(coil, evalv, "x",
+                  extra=["--method", "pareto", "--n-alpha", "5"])
+    assert "error" not in r, f"calc error: {r.get('error')}"
+    assert r["method"] == "pareto"
+    front = r["front"]
+    assert len(front) == r["n_alpha"] == 5
+    for p in front:
+        assert p["homogeneity_rms"] >= 0.0 and p["peak_J"] > 0.0
+    # the largest-alpha point is the least homogeneous (most regularised)
+    assert front[-1]["homogeneity_rms"] >= front[0]["homogeneity_rms"]
 
 
 if __name__ == "__main__":
