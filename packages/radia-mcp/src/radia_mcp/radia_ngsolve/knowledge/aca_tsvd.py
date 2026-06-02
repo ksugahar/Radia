@@ -1744,6 +1744,86 @@ finds one specific point while NSGA-II explores the front.
     SIAM -- standard reference for TSVD + Tikhonov; the specific
     Path-A x cached folded form is the SF-coil-design-specific
     composition implemented here.
+
+
+================================================================
+PARETO FRONT (field homogeneity vs peak current density) + the
+SHEET-METAL (板金) lever   [2026-06, radia 4.89.1+]
+================================================================
+
+1. FOLDED TIKHONOV (the "+ alpha I" core).  RegularizedTSVD.solve(B,
+   alpha=0.0) was extended: for alpha > 0 the SAME cached ACA+TSVD
+   factorisation gains a single alpha*I inside the k x k core,
+
+       psi(alpha) = S^-1 V . (alpha I + Sigma^2 W)^-1 . Sigma . U^T B
+                  == (A^T A + alpha S)^-1 A^T B,   W = V^T S^-1 V.
+
+   This UNIFIES, on one factorisation: TSVD (hard truncation via
+   k_mode), Tikhonov (smooth filter sigma/(sigma^2+alpha); S=I gives the
+   classic filter factors to machine precision), and the generalised
+   seminorm S.  alpha=0 recovers the exact-fit min-seminorm form.  An
+   entire L-curve / Pareto alpha-sweep re-solves only the small core
+   (~50 us/point), no re-factorisation.  Verified vs dense
+   (A^T A + alpha S)^-1 A^T B (machine precision for S=I; ACA tolerance
+   for general S).  4 golden tests in tests/test_stream_function.py.
+
+2. PARETO FRONT.  Objectives f1 = ||A psi - B||/||B|| (homogeneity),
+   f2 = max_v |grad psi| (peak surface current density = ||K||_inf).
+   Tikhonov is the weighted-sum scalarisation of the convex bi-objective
+   (misfit, seminorm), so the alpha-sweep traces the WHOLE convex Pareto
+   front.  demo_pareto_tikhonov_aca.py: --front {energy, peak, both}.
+
+3. FOUR STACKABLE LEVERS to push the front (planar gradient hot-spot,
+   order-3 psi):
+     1. Tikhonov alpha  -- moves ALONG the front.
+     2. L-inf seminorm (bounded-ratio IRLS) -- redistributes current
+        within a FIXED A: -18% peak (median) at matched homogeneity.
+     3. geometry -- changes A: planar former size -34% (monotone,
+        diminishing returns); cylinder LENGTH has an OPTIMUM
+        (~50 cm, -37%; longer stops helping once it covers the DSV).
+     4. sheet-metal (板金) deformation -- FORM the surface (see 4).
+   NSGA-II over (geometry, alpha) traces the 3-objective
+   (homogeneity, peak, former-size) surface: low peak REQUIRES a larger
+   former.  demo_pareto_geometry_nsga.py, demo_pareto_cylinder.py.
+
+4. SHEET-METAL (板金) -- the lever DIRECTION is geometry-dependent, and
+   the honest claim requires separating STANDOFF from BENDING:
+     * STANDOFF = forming the sheet CLOSER (smaller average gap): large
+       but achievable by repositioning a FLAT former -> NOT genuine.
+     * BENDING  = reshaping at FIXED average standoff -> genuine forming.
+   - PLANAR: out-of-surface bending z=f(x,y) is the lever.  Genuine
+     (zero-mean, fixed avg standoff, |z|<=5cm) pushes the whole front
+     -5..-18% (best -17% near exact homogeneity, per-alpha CMA-ES,
+     warm-started).  Standoff-allowed reaches -53% but is
+     standoff-dominated.  Distance-dominated field => bending bounded.
+     demo_pareto_deform.py (--zero-mean default / --allow-standoff).
+   - CYLINDER: the lever FLIPS.  Out-of-surface (radial) forming is WEAK
+     (~-3%, optimiser barely uses the |dr| budget); the IN-SURFACE axial
+     bending is DOMINANT.  Length-preserving axial reparametrisation
+     Z(z)=z+sum_k b_k sin(k pi (z+L/2)/L) redistributes loop spacing at
+     FIXED radius => 100% genuine forming, NO standoff component (no
+     zero-mean trick needed).  Whole Gx-fingerprint front -10..-25%
+     (best -25%).  Done RIGHT: local-spacing peak (non-uniform axial
+     derivative) + spacing-WEIGHTED graph Laplacian seminorm (z-edge
+     a*dphi/dZ, phi-edge dZ/(a*dphi)) + monotone dZ/dz>0 penalty.
+     demo_pareto_cylinder_deform.py.
+   - 2D in-surface (axial Z(z) + azimuthal Phi(phi)) was tested: it adds
+     only ~0.5 pp over axial-only at exact homogeneity (-18.0% vs -17.5%)
+     for the Gx fingerprint -- the azimuthal current is a smooth cos phi
+     with no hot spot to redistribute, so the AXIAL reparametrisation is
+     essentially the full in-surface lever.  Honest (mildly negative)
+     result: not integrated (not worth the periodic-azimuthal complexity
+     for +0.5 pp); azimuthal may matter for higher-order targets.
+   Same plane-vs-cylinder reversal as the single-stroke distortion lever
+   (out-of-surface lift on the plane, in-surface reroute on the
+   cylinder) -- see topic "single_stroke".
+
+DEMOS (examples/stream_function/):
+  demo_pareto_tikhonov_aca.py     -- folded-Tikhonov (homogeneity, peak) front
+  demo_pareto_geometry_nsga.py    -- geometry lever + NSGA-II joint front
+  demo_pareto_cylinder.py         -- cylinder Gx, length lever (optimum)
+  demo_pareto_deform.py           -- planar sheet-metal (zero-mean genuine)
+  demo_pareto_cylinder_deform.py  -- cylinder in-surface axial bending (genuine)
 """
 
 
@@ -1765,6 +1845,24 @@ def get_aca_tsvd_knowledge(topic: str = "overview") -> str:
         "regularized": ACA_TSVD_REGULARIZED,
     }
     aliases = {
+        # Pareto front + folded Tikhonov + sheet-metal (板金) lever
+        "pareto": "regularized", "pareto_front": "regularized",
+        "pareto-front": "regularized", "front": "regularized",
+        "peak_current_density": "regularized", "peak_current": "regularized",
+        "peak_j": "regularized", "peak": "regularized", "homogeneity": "regularized",
+        "tikhonov": "regularized", "tikhonov_alpha": "regularized",
+        "alpha_sweep": "regularized", "l_curve": "regularized",
+        "lcurve": "regularized", "l-curve": "regularized",
+        "filter_factors": "regularized", "geometry_lever": "regularized",
+        "former_size": "regularized", "cylinder_length": "regularized",
+        "nsga": "regularized", "nsga2": "regularized", "nsga-ii": "regularized",
+        "joint_front": "regularized", "linf": "regularized", "l_inf": "regularized",
+        "minimax": "regularized", "irls": "regularized",
+        "pareto_bankin": "regularized", "bankin_pareto": "regularized",
+        "sheet_metal_pareto": "regularized", "surface_forming": "regularized",
+        "in_surface": "regularized", "in-surface": "regularized",
+        "axial_bending": "regularized", "radial_forming": "regularized",
+        "lever_flip": "regularized", "deform_pareto": "regularized",
         "kernel": "kernel_agnostic", "generic": "kernel_agnostic",
         "speed": "performance", "speedup": "performance", "benchmark": "performance",
         "optuna": "cmaes", "cma-es": "cmaes", "cma_es": "cmaes",
