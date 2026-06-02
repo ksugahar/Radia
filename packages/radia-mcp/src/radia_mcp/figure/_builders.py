@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._paper_figure import _get_mpl, OKABE_ITO
-from ._lab_api import lab_figure
+from ._lab_api import lab_figure, legend_no_overlap
 
 
 def _cycle(keys, colors):
@@ -48,7 +48,7 @@ def scaling_loglog(x, series, ylabel, *, xlabel="DOF", embed_width_cm=7.6,
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.grid(True, which="both", ls=":", lw=0.5, alpha=0.55)
-    ax.legend(fontsize=8)
+    legend_no_overlap(ax, fontsize=8)
     return fig, ax
 
 
@@ -73,7 +73,7 @@ def grouped_bars(group_labels, series, ylabel, *, embed_width_cm=8.4,
     ax.set_xticks(x)
     ax.set_xticklabels(group_labels)
     ax.grid(axis="y", which="both", ls=":", lw=0.5, alpha=0.6, zorder=0)
-    ax.legend(fontsize=8)
+    legend_no_overlap(ax, fontsize=8)
     return fig, ax
 
 
@@ -94,7 +94,7 @@ def convergence(curves, ylabel, *, xlabel="iteration", embed_width_cm=7.6,
     if ylim:
         ax.set_ylim(*ylim)
     ax.grid(alpha=0.3)
-    ax.legend(loc="best")
+    legend_no_overlap(ax)
     return fig, ax
 
 

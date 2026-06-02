@@ -46,6 +46,15 @@ crystallized as its own package.
   `bh_curve`), `_assert_times_new_roman` (catches the silent DejaVu
   fallback), and a `figure_audit_embeds(tex)` MCP tool that lints a .tex
   for height-constrained / `\linewidth` / DejaVu-embedding figures.
+- **figure (layout)**: `legend_no_overlap(ax)` places the legend by the
+  standard escalation and never on top of the data — `loc='best'`, then the
+  exhaustive best-of-six in-axes search (`find_best_legend_loc`), then (if a
+  curve still passes under it) OUTSIDE-right with the axes shrunk to fit the
+  SAME figure width.  `save_lab_figure(tighten=...)` now pushes the axes box
+  to the limit within the FIXED figure size (`auto_tighten`, overhang-safe so
+  labels never clip) and reports `axes_fraction` — the supported
+  "bbox ぎりぎり" path, NOT `bbox_inches='tight'` (which would change the
+  width and break 10 pt @ width).  Builders use `legend_no_overlap` by default.
 
 ## 0.99.1 — radia-ih knowledge sync + 3 new bug-patterns
 
