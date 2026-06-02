@@ -98,24 +98,73 @@ def load_sigma_T_csv(path):
     return sigma_at
 
 
+# Approximate Curie-collapse permeability model: mu_r -> 1 as T -> Tc.
+_MU_0 = 4.0e-7 * np.pi
+
+
+def curie_factor(T_c, T_curie, exp=0.5):
+    """Curie-collapse scale f(T) in [0, 1] applied to the MAGNETIC part
+    of the BH curve.  f = 1 below ~0 C, decreasing to 0 at/above the
+    Curie temperature ``T_curie`` (ferromagnetic -> paramagnetic).
+
+    Deliberately SIMPLE, documented approximation
+    (``f = (1 - T/Tc)^exp`` clamped to [0, 1]); the user OPTS IN by
+    supplying --curie-temp (default disabled = constant BH).  No Curie
+    temperature is ever assumed implicitly.  For a material's MEASURED
+    temperature-dependent BH curves, supply those directly rather than
+    this model.  The emitted Z_s(H, T) table is the auditable record of
+    whatever mu(T) was assumed.
+    """
+    if T_curie <= 0.0:
+        return 1.0
+    x = 1.0 - float(T_c) / float(T_curie)
+    if x <= 0.0:
+        return 0.0
+    if x > 1.0:
+        x = 1.0
+    return x ** float(exp)
+
+
+def curie_scaled_bh(bh_curve, f):
+    """Scale the magnetic part of a ``[[H, B], ...]`` BH curve by ``f``:
+    ``B_T(H) = mu_0*H + f*(B0(H) - mu_0*H)``.  f = 1 leaves it unchanged;
+    f = 0 collapses to the paramagnetic line B = mu_0*H (mu_r = 1).  A
+    convex blend of mu_0*H and B0(H), so monotonicity is preserved."""
+    return [[float(H), _MU_0 * float(H) + f * (float(B) - _MU_0 * float(H))]
+            for H, B in bh_curve]
+
+
 def build_table(material, frequency, H_grid, T_grid, sigma_at,
-                n_nodes=100, num_skin_depths=10):
+                n_nodes=100, num_skin_depths=10,
+                curie_temp=0.0, curie_exp=0.5):
     """Sweep (H, T) and return (Zs_re, Zs_im, q_surf) arrays.
 
     Each cell instantiates a fresh ESIMCellProblemSolver (cheap; the
     mesh build is dominated by a few hundred floats) so the sigma at
     that T can flow into the rho = 1/sigma the solver bakes into its
     PDE coefficients.
+
+    sigma(T) enters via ``sigma_at(T)``.  When ``curie_temp > 0`` the BH
+    curve's magnetic part is additionally scaled per column by the Curie
+    factor f(T) (see curie_factor) so mu(T) -> 1 approaching Tc.  Both
+    are user-opted-in; constant otherwise.
     """
     n_H = len(H_grid)
     n_T = len(T_grid)
     Zs_re = np.zeros((n_H, n_T), dtype=float)
     Zs_im = np.zeros((n_H, n_T), dtype=float)
 
-    bh = material.bh_curve
+    bh0 = material.bh_curve
+    use_curie = curie_temp > 0.0 and bh0 is not None
     t0 = time.perf_counter()
     for j, T_c in enumerate(T_grid):
         sigma_T = sigma_at(T_c)
+        if use_curie:
+            f = curie_factor(T_c, curie_temp, curie_exp)
+            bh = curie_scaled_bh(bh0, f)
+        else:
+            f = 1.0
+            bh = bh0
         solver = ESIMCellProblemSolver(
             bh_curve=bh, sigma=sigma_T, frequency=frequency,
             n_nodes=n_nodes, num_skin_depths=num_skin_depths)
@@ -124,8 +173,9 @@ def build_table(material, frequency, H_grid, T_grid, sigma_at,
             Z = complex(res["Z"])
             Zs_re[i, j] = Z.real
             Zs_im[i, j] = Z.imag
-        _log(f"col {j+1}/{n_T} T={T_c:.1f}C sigma={sigma_T:.3e} "
-             f"done t={time.perf_counter() - t0:.1f}s")
+        _log(f"col {j+1}/{n_T} T={T_c:.1f}C sigma={sigma_T:.3e}"
+             + (f" mu_scale={f:.3f}" if use_curie else "")
+             + f" done t={time.perf_counter() - t0:.1f}s")
 
     q_surf = 0.5 * Zs_re * (H_grid[:, None] ** 2)
     return Zs_re, Zs_im, q_surf
@@ -166,10 +216,19 @@ def run(args):
     _log(f"H_grid: {args.n_H} pts [{H_grid[0]:.2e}, {H_grid[-1]:.2e}] A/m")
     _log(f"T_grid: {args.n_T} pts [{T_grid[0]:.1f}, {T_grid[-1]:.1f}] C")
 
+    if args.curie_temp > 0:
+        if material.bh_curve is None:
+            raise ValueError(
+                "--curie-temp requires a magnetic material with a BH "
+                "curve (e.g. --material steel or --bh-file); the Curie "
+                "collapse scales the BH magnetic part toward mu_r=1.")
+        _log(f"mu(T): Curie collapse Tc={args.curie_temp:.1f}C "
+             f"exp={args.curie_exp:g} (approx opt-in model)")
     t0 = time.perf_counter()
     Zs_re, Zs_im, q_surf = build_table(
         material, args.frequency, H_grid, T_grid, sigma_at,
-        n_nodes=args.n_nodes, num_skin_depths=args.num_skin_depths)
+        n_nodes=args.n_nodes, num_skin_depths=args.num_skin_depths,
+        curie_temp=args.curie_temp, curie_exp=args.curie_exp)
     build_time_s = time.perf_counter() - t0
 
     out_path = args.em_table_output
@@ -184,6 +243,8 @@ def run(args):
         "sigma_T_curve": sigma_T_path,
         "sigma_default": material.sigma,
         "mu_r": material.mu_r,
+        "curie_temp": float(args.curie_temp),
+        "curie_exp": float(args.curie_exp),
         "n_nodes": args.n_nodes,
         "num_skin_depths": args.num_skin_depths,
         "build_time_s": build_time_s,
@@ -235,6 +296,16 @@ def main():
                         help="2-col CSV (T_celsius, sigma_S_per_m).  "
                              "When given, overrides EMMaterial.sigma at "
                              "each grid T (linear interp, clamped).")
+    parser.add_argument("--curie-temp", type=float, default=0.0,
+                        help="Curie temperature [degC] for the mu(T) "
+                             "collapse (0 = disabled = constant BH).  "
+                             "OPT-IN: scales the BH magnetic part by "
+                             "f(T)=(1-T/Tc)^exp clamped to [0,1] so "
+                             "mu_r -> 1 at/above Tc.  Approximate model; "
+                             "supply measured T-dependent BH for real data.")
+    parser.add_argument("--curie-exp", type=float, default=0.5,
+                        help="Exponent in the Curie factor (1-T/Tc)^exp "
+                             "(default 0.5, mean-field-ish).")
     parser.add_argument("--n-nodes", type=int, default=100,
                         help="ESIM cell-problem 1D mesh nodes")
     parser.add_argument("--num-skin-depths", type=float, default=10.0,
