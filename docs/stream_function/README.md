@@ -6,8 +6,13 @@ single-stroke chain construction (field_aware / Kuijpers), FE-direct ψ with
 H1 / σ-weighted / inductance / L∞ regularisation, Path-A compensated
 iteration, Optuna CMA-ES surface-deformation outer loop, **single-current
 "sheet-metal" wire distortion** (one bent conductor instead of separate shim
-feeds), and **FE-direct ψ on arbitrary curved formers** (sphere / conformal /
-3D-printed — the case the basis-loop representation cannot do).
+feeds), **FE-direct ψ on arbitrary curved formers** (sphere / conformal /
+3D-printed — the case the basis-loop representation cannot do), and
+**folded-Tikhonov + ACA-TSVD Pareto optimisation of the (field homogeneity,
+peak current density) front** with four stackable levers — Tikhonov α
+(L-curve), L∞ minimax, geometry (former size / cylinder length), and
+**sheet-metal surface forming** (genuine bending: planar out-of-surface −17 %,
+cylinder in-surface −25 %).
 
 The single-file [`../stream_function.md`](../stream_function.md) is the
 short *entry point*; this folder is the detailed reference.
@@ -21,18 +26,26 @@ short *entry point*; this folder is the detailed reference.
 | Bend that one wire into a manufacturable single-current shim (no extra feeds) | [single_stroke.md § sheet-metal distortion](single_stroke.md#single-current-sheet-metal-coil-distortion-bankin-ho--no-extra-feeds) |
 | Design on an arbitrary curved former (sphere / conformal) | [single_stroke.md § arbitrary curved formers](single_stroke.md#arbitrary-curved-formers-sphere--fe-direct-ψ-demo_sphere_fe_directpy) |
 | Pick a regularisation for your problem | [regularization.md](regularization.md) |
+| Push the **(homogeneity, peak current density)** Pareto front (Tikhonov α / L∞ / geometry / sheet-metal forming) | [regularization.md § Pushing the front](regularization.md#pushing-the-homogeneity-peak-j-pareto-front) |
 | Optimise the coil SURFACE geometry (bilevel) | [deformation.md](deformation.md) |
 | Look up the Python API | [api.md](api.md) |
 | Reproduce a published benchmark | [benchmarks.md](benchmarks.md) |
 | Hook ngsolve.bem H-matrix (2604+) | [ngsbem_integration.md](ngsbem_integration.md) |
 | Cite / publish this work | [paper_outline.md](paper_outline.md) |
 
-> **Two different "deformations" — do not confuse them.**
-> [deformation.md](deformation.md) reshapes the coil *surface* and re-solves ψ
-> (bilevel geometry optimisation).  The *sheet-metal* distortion in
+> **Three different "deformations" — do not confuse them.**
+> (1) [deformation.md](deformation.md) reshapes the coil *surface* and
+> re-solves ψ for ACCURACY (bilevel geometry optimisation, (RMS, energy)).
+> (2) The **sheet-metal surface forming** in
+> [regularization.md § Pushing the front](regularization.md#pushing-the-homogeneity-peak-j-pareto-front)
+> also reshapes the *surface* + re-solves ψ, but to lower the **peak current
+> density** on the (homogeneity, peak) front — with the honest
+> standoff-vs-genuine-bending decomposition (`demo_pareto_deform.py` /
+> `demo_pareto_cylinder_deform.py`).
+> (3) The *sheet-metal wire* distortion in
 > [single_stroke.md](single_stroke.md) keeps ψ + the contour levels fixed and
 > bends the manufactured *wire* (one current) to cancel the single-stroke
-> residual.
+> residual.  (1) and (2) are surface reshapes that re-solve ψ; (3) keeps ψ.
 
 ## Quick-start (5 lines)
 

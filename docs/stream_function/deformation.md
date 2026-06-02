@@ -243,10 +243,25 @@ NSGA-II actively explores the full curve.
 | Budget < 15 trials                                     | `--minimize-reg` (CMA-ES converges faster on a scalar) |
 | Budget ≥ 30 trials                                     | either; `--pareto` gives more information per trial |
 
+## A different objective: the (homogeneity, peak current density) front
+
+The `--pareto` front above is **(RMS, ψᵀSψ)** — field accuracy vs the L²
+surface-current energy.  A SEPARATE Pareto study optimises **(field
+homogeneity, PEAK current density `max|∇ψ|`)** via the folded-Tikhonov
+α-sweep, and uses surface deformation as one of its levers — there it is the
+**sheet-metal (板金) surface-forming** lever (genuine bending at FIXED average
+standoff, with the honest standoff-vs-bending decomposition): planar
+out-of-surface −17 %, cylinder in-surface −25 %.  Same surface-reshape +
+re-solve-ψ mechanism as this page, different objective (peak, not energy).
+See [regularization.md § Pushing the front](regularization.md#pushing-the-homogeneity-peak-j-pareto-front)
+and `demo_pareto_deform.py` / `demo_pareto_cylinder_deform.py`.
+
 ## Cross-reference
 
   - Inner solvers: [regularization.md](regularization.md)
+  - Pushing the (homogeneity, peak-J) front + sheet-metal forming:
+    [regularization.md § Pushing the front](regularization.md#pushing-the-homogeneity-peak-j-pareto-front)
   - Math: [theory.md](theory.md)
   - Optuna BBO recipes: MCP `optuna(topic=lab_applications)`
   - SA-25-020 lineage: MCP `aca_tsvd(topic=cmaes)`
-  - Regularisation closed form: MCP `aca_tsvd(topic=regularized)`
+  - Regularisation closed form + Pareto/板金: MCP `aca_tsvd(topic=regularized)`
