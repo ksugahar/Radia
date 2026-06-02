@@ -770,6 +770,50 @@ part), then a few shims clean the high-freq residual.  Under --distort the
 [9].  The Gx 3D plot colours the wire by RADIAL bend (sheet-metal forming
 visible).
 
+## FE-direct on ARBITRARY surfaces -- the "3rd-order is big" win (2026-06-02)
+
+User 「3次が使えるのは大きいはず」「コイル設計面はどんな形をしていても
+作れるはず」.  The basis-loop representation needs a structured (phi,z) grid,
+so it is stuck on planes/cylinders.  FE-direct H1 psi MESHES ANY SURFACE --
+THAT is the real payoff of the high-order (cubic) FE stream function:
+design the SF directly ON the real manufacturable former (sphere /
+conformal / 3D-printed), the NMR shim use case.  ``demo_sphere_fe_direct.py``.
+
+Surface FEM done robustly: mesh the SOLID ball, ``H1(mesh, order=3,
+definedon=mesh.Boundaries(".*"))``, integrate with ``ds`` + ``grad(.).Trace()``,
+``mesh.Curve(3)`` (isoparametric -- curve order = field order; verified by
+sphere area: Curve(1) 0.86% err -> Curve(3) 0.0003%).  General kernel (works
+on ANY surface, the curved generalisation of planar z_hat x grad psi):
+  A[j,i] = (mu0/4pi) int_S [ (n x grad_s phi_i) x (r_t-r') ]_z / |r_t-r'|^3 dS
+with ``n = specialcf.normal(3)``, ``K_v = Cross(n, grad(v).Trace())``.
+
+Results (R=150mm coil, DSV r=80mm):
+  - uniform Bz (l=1):  continuous cres 3e-15 (0 ppm), single-stroke 0.24%.
+  - Z2 shim (l=2,m=0): continuous cres 5e-14, single-stroke 4.3% -> sphere
+    sheet-metal distort 0.36% (one current, ~2mm bend); real inter-turn
+    spacing 10.5mm >= conductor width (manufacturable single wire).
+
+Manufacturable pipeline blocker + fix: evaluating a boundary-H1 GridFunction
+at 3D points returns 0 (lands in a volume element).  Fix: sample psi at the
+BOUNDARY VERTICES (``gf.vec[vertex_nr]`` = nodal value) -> scipy.griddata to a
+(phi,theta) grid (periodic phi via 3 wrapped copies) -> contour -> spiral
+chain (sort by theta, open at min phi) -> sphere embed.  The Z2 "0 mm
+spacing" was a FALSE ALARM (closed-circle phi=0/2pi endpoints + seam
+connection points); the real inter-turn spacing is 10.5mm.
+
+KEY POINTS:
+  - The DESIGN-SURFACE SHAPE is NOT a manufacturability constraint -- any
+    fabricable former holds a coil; the real constraints are the WIRE pattern
+    (single-stroke / min-spacing / no self-cross / bend radius).
+  - easy/hard is set by TARGET complexity (uniform l=1 -> 0.24% clean
+    latitude-ring spiral; Gx fingerprint -> hard), NOT the surface shape.
+  - FE-direct's value is GENERALITY (any surface), NOT a single-stroke-RMS
+    improvement: on the cylinder Gx it does NOT beat basis-loop (the
+    fingerprint topology-jumps regardless of representation; Path-A
+    oscillates), but on a sphere basis-loop simply cannot be laid.
+  - Caveat: the supplied sphere chainer is for AXISYMMETRIC (m=0: Z1/Z2/Z3...)
+    shims; m!=0 tesserals need a general field-aware sphere chainer.
+
 ## Acceleration path for FE-direct: WAIT for Joachim H-matrix (2026-05-30)
 
 Decision: do NOT build a custom HACApK ↔ ngsolve.bem basis bridge to
@@ -1745,6 +1789,12 @@ def get_aca_tsvd_knowledge(topic: str = "overview") -> str:
         "bankin": "single_stroke", "wire_distortion": "single_stroke",
         "coil_distortion": "single_stroke", "deform_wire": "single_stroke",
         "mesh_deformation": "single_stroke", "3d_print": "single_stroke",
+        "sphere": "single_stroke", "arbitrary_surface": "single_stroke",
+        "arbitrary-surface": "single_stroke", "curved_former": "single_stroke",
+        "former": "single_stroke", "fe_direct": "single_stroke",
+        "fe-direct": "single_stroke", "surface_fem": "single_stroke",
+        "nmr_shim": "single_stroke", "shim_coil": "single_stroke",
+        "conformal": "single_stroke", "z2": "single_stroke",
         # 2026-05-30 session summary
         "session": "session_2026_05_30",
         "summary": "session_2026_05_30",
