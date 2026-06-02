@@ -9,7 +9,7 @@ matplotlib.use("Agg")
 import pytest
 
 from radia_mcp.figure import (
-    lab_figure, save_lab_figure, audit_tex_figures,
+    lab_figure, save_lab_figure, legend_no_overlap, audit_tex_figures,
     scaling_loglog, bh_curve,
 )
 
@@ -91,3 +91,30 @@ def test_audit_flags_height_linewidth_and_missing(tmp_path):
     assert by["c"]["fixed_cm_width"] is True
     # all three referenced files are absent -> each flagged (FILE NOT FOUND)
     assert rep["n_flagged"] == 3
+
+
+# ------------------------------------------------------------------
+# legend placement + axes-to-the-limit
+# ------------------------------------------------------------------
+@requires_tnr
+def test_legend_no_overlap_returns_a_placement():
+    import numpy as np
+    import matplotlib.pyplot as plt
+    fig, ax = lab_figure(8.0)
+    x = np.linspace(0, 1, 50)
+    ax.plot(x, x, label="rising")
+    ax.plot(x, 1 - x, label="falling")
+    placed = legend_no_overlap(ax)
+    assert placed.startswith("inside") or placed == "outside-right"
+    assert ax.get_legend() is not None
+    plt.close(fig)
+
+
+@requires_tnr
+def test_save_reports_axes_fraction(tmp_path):
+    fig, ax = lab_figure(8.0)
+    ax.plot([0, 1], [0, 1]); ax.set_xlabel("x"); ax.set_ylabel("y")
+    info = save_lab_figure(fig, str(tmp_path / "eff"), 8.0, save_pdf=False)
+    # auto_tighten ran (default) -> the axes fill a healthy fraction
+    assert info["axes_fraction"] is not None
+    assert 0.4 < info["axes_fraction"] <= 1.0

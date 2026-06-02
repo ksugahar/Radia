@@ -89,6 +89,7 @@ from ._paper_figure import (  # noqa: F401
 from ._lab_api import (  # noqa: F401
     lab_figure,
     save_lab_figure,
+    legend_no_overlap,
     audit_tex_figures,
     _assert_times_new_roman,
 )

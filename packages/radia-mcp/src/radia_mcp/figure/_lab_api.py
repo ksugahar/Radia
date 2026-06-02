@@ -133,17 +133,21 @@ def lab_figure(embed_width_cm, aspect: float = 0.62, nrows: int = 1, ncols: int 
 def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
                     allow_in_figure_title: bool = False, check_cvd: bool = False,
                     save_pdf: bool = True, save_png: bool = True, dpi: int = 300,
-                    tight: bool = True) -> dict:
+                    tighten=True) -> dict:
     """Save a figure with FAIL-LOUD lab gates; return a dict whose ``latex``
-    key is the exact ``\\includegraphics`` snippet (embed at 100% -> 10 pt).
+    key is the exact ``\\includegraphics`` snippet (embed at 100% -> 10 pt)
+    and whose ``axes_fraction`` reports how much of the figure the axes fill.
 
     Gates (each raises on violation): no in-figure title (unless
     ``allow_in_figure_title``), Times New Roman actually used (pre + post),
     TrueType embedding, no Japanese, and optionally CVD-safe colors.
 
-    The authored width is preserved (``tight_layout`` keeps the figure size;
-    we deliberately do NOT use ``bbox_inches='tight'`` which would change the
-    width and break the 10 pt @ width guarantee).
+    ``tighten`` (True / a float target, default 0.80): push the axes box to
+    the limit WITHIN the fixed figure size (``auto_tighten`` -- overhang-safe,
+    so labels never clip).  This is the supported "bbox ぎりぎり" path: the
+    figure SIZE is preserved (embed width unchanged -> on-page font stays
+    10 pt).  We deliberately do NOT use ``bbox_inches='tight'``, which would
+    change the width and break that guarantee.
     """
     plt, _ = _get_mpl()
     ew = embed_width_cm if embed_width_cm is not None else getattr(fig, "_lab_embed_width_cm", None)
@@ -170,9 +174,18 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
                 "save_lab_figure: non-colorblind-safe colors:\n  "
                 + "\n  ".join(str(x) for x in cv))
 
-    # ---- save (preserve authored width) ----
-    if tight:
+    # ---- maximize the axes within the FIXED figure size (push the bbox to
+    #     the limit, overhang-safe).  Deliberately NOT bbox_inches='tight',
+    #     which would change the width and break the 10 pt @ width guarantee. ----
+    eff = None
+    if tighten:
+        from ._paper_figure import auto_tighten, measure_figure_efficiency
         fig.tight_layout(pad=0.3)
+        tgt = tighten if isinstance(tighten, float) else 0.80
+        try:
+            eff = auto_tighten(fig, target_axes_fraction=tgt)["final_efficiency"]
+        except Exception:
+            eff = measure_figure_efficiency(fig)["axes_area_fraction"]
     plt.rcParams["pdf.fonttype"] = 42
     wrote = []
     if save_pdf:
@@ -197,7 +210,58 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
         latex = (r"\includegraphics[width=\linewidth]{%s}  %% WARN: author width "
                  r"unknown -- pass embed_width_cm to guarantee 10 pt @ width" % base)
     plt.close(fig)
-    return {"wrote": wrote, "embed_width_cm": ew, "latex": latex, "gates": "passed"}
+    return {"wrote": wrote, "embed_width_cm": ew, "latex": latex,
+            "axes_fraction": eff, "gates": "passed"}
+
+
+def legend_no_overlap(ax, *, frameon=False, outside_threshold: float = 0.03,
+                      axes_shrink: float = 0.74, **legend_kw):
+    """Place the legend by the standard rule -- and never on top of the data.
+
+    Escalation (the established practice):
+      1. ``loc='best'`` -- matplotlib's own minimise-overlap placement
+         (considers lines, patches AND collections).
+      2. If a line still passes under the legend (> ``outside_threshold`` of
+         its sampled points), try the lab's exhaustive best-of-six in-axes
+         search (``find_best_legend_loc``).
+      3. If even that overlaps, move the legend OUTSIDE to the right and
+         shrink the axes so the legend fits within the SAME figure width
+         (no figure resize -> on-page font unchanged).
+
+    Returns the placement used: ``'inside:best'`` / ``'inside:<loc>'`` /
+    ``'outside-right'`` / ``'none'`` (no labelled artists).  For a legend
+    that simply will not fit, prefer direct labelling
+    (``label_curve_endpoints``) over an outside legend.
+    """
+    from .tools import check_legend_overlap, find_best_legend_loc
+    handles, labels = ax.get_legend_handles_labels()
+    if not labels:
+        return "none"
+
+    def _worst():
+        try:
+            return max((o["fraction"] for o in check_legend_overlap(ax)), default=0.0)
+        except Exception:
+            return 0.0
+
+    ax.legend(loc="best", frameon=frameon, **legend_kw)
+    if _worst() <= outside_threshold:
+        return "inside:best"
+
+    try:
+        best, summary = find_best_legend_loc(ax)
+        worst_best = max((o["fraction"] for o in summary[best]["overlaps"]), default=0.0)
+    except Exception:
+        best, worst_best = "best", 1.0
+    if worst_best <= outside_threshold:
+        ax.legend(loc=best, frameon=frameon, **legend_kw)
+        return f"inside:{best}"
+
+    pos = ax.get_position()
+    ax.set_position([pos.x0, pos.y0, pos.width * axes_shrink, pos.height])
+    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=frameon,
+              borderaxespad=0.0, **legend_kw)
+    return "outside-right"
 
 
 # ------------------------------------------------------------------
