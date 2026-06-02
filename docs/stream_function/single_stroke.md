@@ -294,6 +294,17 @@ distance.  Full `r+s+z` combines both and wins.  The Gauss-Newton framework
 picks the effective direction automatically — **the optimal sheet-metal
 direction is geometry-dependent**.
 
+> **The same reversal appears in surface-forming sheet-metal.**  This section
+> bends the manufactured *wire* (ψ + contour levels FIXED).  A *distinct*
+> sheet-metal lever FORMS the conductor *surface* and RE-SOLVES ψ to push the
+> **(homogeneity, peak current density)** Pareto front — and it shows the same
+> plane↔cylinder reversal (planar = out-of-surface bending; cylinder =
+> in-surface), plus a finer rule: within the cylinder, AXIAL vs AZIMUTHAL
+> in-surface forming is selected by the target's azimuthal order `m`
+> (`Gx` m=1 → axial; `C2`=x²−y² ellipse m=2 → azimuthal helps too).  See
+> [regularization.md § Pushing the front](regularization.md#pushing-the-homogeneity-peak-j-pareto-front)
+> and `demo_pareto_deform.py` / `demo_pareto_cylinder_deform.py`.
+
 **Compose with electric shims (`--distort --shim-loops K`).**  The geometric
 bend and the separate-feed shims cancel *different* parts of the residual, so
 they compose.  Critically, **the bend is far more feed-efficient**: one bent
