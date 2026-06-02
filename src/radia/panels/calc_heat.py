@@ -134,6 +134,12 @@ def _build_qsurf_cf(wp_mesh, args):
     """
     from ngsolve import (Mesh, H1, GridFunction, CoefficientFunction, BND)
 
+    if getattr(args, "q_phi_average", False) and args.q_uniform is not None:
+        raise ValueError(
+            "--q-phi-average averages the SPATIAL --qsurf-sol into an "
+            "axisymmetric q; it cannot be combined with --q-uniform "
+            "(a constant q is already azimuthally uniform).")
+
     if args.q_uniform is not None:
         _log(f"Q_SURF:uniform {args.q_uniform:.4e} W/m^2")
         return CoefficientFunction(float(args.q_uniform)), None
@@ -257,6 +263,58 @@ def _build_qsurf_cf(wp_mesh, args):
                 n_fail += 1
         return n_ok, n_fail
 
+    def _phi_average(n_angles: int) -> tuple[int, int]:
+        """Circumferential (phi) average of the spatial q_surf.
+
+        For each surface vertex, sample the EM q_surf at ``n_angles``
+        body-rotation angles evenly spaced over 2*pi (around
+        ``args.rotation_axis``) and average over the in-EM-mesh samples,
+        producing an AXISYMMETRIC (phi-independent) q_surf written into
+        gf_wp_q.  This is the steady limit a fast-spinning workpiece
+        converges to -- computed once, without rotation time-stepping.
+        """
+        m = max(1, int(n_angles))
+        accum = [0.0] * len(surf_vnrs_list)
+        cnt = [0] * len(surf_vnrs_list)
+        for kk in range(m):
+            th = 2.0 * math.pi * kk / m
+            c, s = math.cos(th), math.sin(th)
+            for i, (xb, yb, zb) in enumerate(surf_xyz):
+                if axis_str == "z":
+                    xw = xb * c - yb * s; yw = xb * s + yb * c; zw = zb
+                elif axis_str == "y":
+                    xw = xb * c + zb * s; yw = yb; zw = -xb * s + zb * c
+                else:  # x
+                    xw = xb; yw = yb * c - zb * s; zw = yb * s + zb * c
+                try:
+                    val = gf_q_em(em_mesh(xw, yw, zw))
+                    accum[i] += float(getattr(val, "real", val))
+                    cnt[i] += 1
+                except Exception:
+                    pass
+        gf_wp_q.vec[:] = 0
+        fv = gf_wp_q.vec.FV()
+        n_ok = 0
+        for i, vnr in enumerate(surf_vnrs_list):
+            if cnt[i] > 0:
+                fv[vnr] = accum[i] / cnt[i]
+                n_ok += 1
+        return n_ok, len(surf_vnrs_list) - n_ok
+
+    # uniform / phi-average path: write an axisymmetric q once and return
+    # resample_fn=None (the time loop treats a None resampler as a static
+    # source, exactly like --q-uniform).
+    if getattr(args, "q_phi_average", False):
+        n_avg = int(getattr(args, "q_phi_average_n", 48) or 48)
+        n_ok, n_fail = _phi_average(n_avg)
+        _log(f"Q_SURF:phi-averaged (uniform/axisymmetric) {n_ok}/"
+             f"{n_ok + n_fail} surface vertices over n={n_avg} angles "
+             f"around {axis_str} -- no rotation time-stepping.")
+        if n_fail > n_ok:
+            _log("Q_SURF:WARNING majority of wp surface vertices fell "
+                 "outside the EM mesh -- check the two .vol files.")
+        return gf_wp_q, None
+
     # Initial projection at theta=0 (original behaviour) so callers
     # that ignore the resampler get the same q_cf they had pre-2026-05-20.
     n_ok, n_fail = _project(0.0)
@@ -284,6 +342,7 @@ def solve_heat(wp_vol,
                surface_label="",
                q_uniform=None, qsurf_sol="", em_vol="",
                qsurf_order=1,
+               q_phi_average=False, q_phi_average_n=48,
                dt=0.5, t_end=5.0,
                time_scheme="backward-euler",
                linear_solver="sparsecholesky",
@@ -386,6 +445,8 @@ def solve_heat(wp_vol,
     a_local.qsurf_order = qsurf_order
     a_local.surface_label = surface_label_eff
     a_local.rotation_axis = rotation_axis
+    a_local.q_phi_average = q_phi_average
+    a_local.q_phi_average_n = q_phi_average_n
     surface_region = wp_mesh.Boundaries(surface_label_eff)
     q_cf, q_resample = _build_qsurf_cf(wp_mesh, a_local)
 
@@ -397,8 +458,9 @@ def solve_heat(wp_vol,
     omega_mech = (2.0 * math.pi / 60.0) * float(rotation_rpm)
     rotation_active = (omega_mech > 0.0) and (q_resample is not None)
     if float(rotation_rpm) > 0.0 and q_resample is None:
-        _log("ROTATION:rpm>0 with --q-uniform has no effect "
-             "(uniform q_surf is rotation-invariant).")
+        _log("ROTATION:rpm>0 has no effect here -- q_surf is azimuthally "
+             "uniform (--q-uniform constant, or --q-phi-average already "
+             "gives the rotation-averaged axisymmetric q).")
     elif rotation_active:
         _log(f"ROTATION:rpm={float(rotation_rpm):g} "
              f"omega={omega_mech:.4f} rad/s -- "
@@ -637,7 +699,10 @@ def solve_heat(wp_vol,
         "t_ext_C": float(t_ext),
         "surface_label": surface_label,
         "q_source": ("uniform" if q_uniform is not None
-                     else "qsurf_sol"),
+                     else ("qsurf_sol_phi_average" if q_phi_average
+                           else "qsurf_sol")),
+        "q_phi_average": bool(q_phi_average),
+        "q_phi_average_n": int(q_phi_average_n) if q_phi_average else 0,
         "qsurf_sol": qsurf_sol if not q_uniform else "",
         "em_vol": em_vol if not q_uniform else "",
         "T_sol_file": T_sol_file,
@@ -714,6 +779,20 @@ def main():
     parser.add_argument("--qsurf-order", type=int, default=1,
                         help="H1 order used when calc_fem_kelvin.py "
                              "saved qsurf.sol (must match).")
+    parser.add_argument("--q-phi-average", action="store_true",
+                        help="Circumferentially (phi) average the spatial "
+                             "--qsurf-sol into an AXISYMMETRIC q_surf "
+                             "(uniform in phi) on the 3D mesh, and solve "
+                             "without rotation time-stepping.  This is the "
+                             "steady limit a fast-spinning workpiece "
+                             "converges to.  Requires --qsurf-sol (not "
+                             "--q-uniform).  The complementary 'no-rotation' "
+                             "mode is simply --qsurf-sol with "
+                             "--rotation-rpm 0 (the spatial q applied as-is, "
+                             "non-axisymmetric).")
+    parser.add_argument("--q-phi-average-n", type=int, default=48,
+                        help="Number of azimuthal samples for "
+                             "--q-phi-average (default 48).")
 
     # Time integration.
     parser.add_argument("--dt", type=float, default=0.5,
@@ -792,6 +871,8 @@ def main():
             fes_order=args.fes_order,
             rotation_rpm=args.rotation_rpm,
             rotation_axis=args.rotation_axis,
+            q_phi_average=args.q_phi_average,
+            q_phi_average_n=args.q_phi_average_n,
             probe_point=probe_point,
             msh_output=args.msh_output,
             vtu_prefix=args.vtu_prefix,
