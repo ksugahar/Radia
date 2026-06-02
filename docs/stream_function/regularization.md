@@ -428,9 +428,21 @@ defaults to the zero-mean (pure-bending) constraint and optimises the shape
 warm-started across α, `|z| ≤ 5 cm`).  The genuine bending pushes the WHOLE
 front down ~ **−5 to −18 %** (best −17 % near exact homogeneity).  Note the
 planar field is distance-dominated, so the pure-bending benefit is bounded
-(richer DOF does not break it without raising the `|z|` cap); on a CYLINDER
-the in-surface bending is the *dominant* lever (opposite of the plane), where
-sheet-metal forming is expected to help more.
+(richer DOF does not break it without raising the `|z|` cap).
+
+**Cylinder — the lever flips.**  On a cylinder the *out-of-surface* (radial)
+forming is WEAK (~ −3 %, the optimiser barely uses the `|dr|` budget); the
+*in-surface* axial bending is the DOMINANT lever — opposite of the plane.  A
+length-preserving axial reparametrisation `Z(z) = z + Σ_k b_k sin(kπ(z+L/2)/L)`
+redistributes the loop spacing ALONG the surface at FIXED radius, so it is
+**100 % genuine forming with NO standoff component** (no zero-mean trick
+needed).  It pushes the whole cylinder Gx-fingerprint front down
+~ **−10 to −25 %** (best −25 %), done correctly (local-spacing peak +
+spacing-weighted seminorm `S`, monotone reparametrisation).  See
+[`demo_pareto_cylinder_deform.py`](../../examples/stream_function/demo_pareto_cylinder_deform.py).
+The optimal forming direction is geometry-dependent (out-of-surface on the
+plane, in-surface on the cylinder) — the same plane-vs-cylinder reversal seen
+for the single-stroke distortion lever in [single_stroke.md](single_stroke.md).
 
 Levers 1–2 reuse one ACA factorisation (the `+ α I` core + the cheap
 re-fold `S⁻¹V`); lever 3 rebuilds `A` + ACA per geometry — the EXPENSIVE
@@ -469,5 +481,9 @@ in [single_stroke.md](single_stroke.md)).  See
     [`demo_pareto_cylinder.py`](../../examples/stream_function/demo_pareto_cylinder.py)
     (cylinder Gx, length lever with an optimum),
     [`demo_pareto_deform.py`](../../examples/stream_function/demo_pareto_deform.py)
-    (sheet-metal / 板金 bending lever, zero-mean genuine-forming decomposition)
+    (planar sheet-metal / 板金 bending lever, zero-mean genuine-forming
+    decomposition),
+    [`demo_pareto_cylinder_deform.py`](../../examples/stream_function/demo_pareto_cylinder_deform.py)
+    (cylinder in-surface axial bending — the dominant cylinder lever, radius
+    fixed = 100 % genuine, −10…−25 %)
   - MCP topic: `aca_tsvd(topic=regularized)`
