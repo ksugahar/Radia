@@ -435,6 +435,59 @@ def _contour_segments(verts, fv, tris, level):
     return segs
 
 
+def _ref_subtriangulation(sub):
+    """Barycentric sub-lattice of the unit triangle + its micro-triangles."""
+    idx = {}
+    refpts = []
+    for i in range(sub + 1):
+        for j in range(sub + 1 - i):
+            idx[(i, j)] = len(refpts)
+            refpts.append((i / sub, j / sub))
+    subtris = []
+    for i in range(sub):
+        for j in range(sub - i):
+            subtris.append((idx[(i, j)], idx[(i + 1, j)], idx[(i, j + 1)]))
+            if i + j < sub - 1:
+                subtris.append((idx[(i + 1, j)], idx[(i + 1, j + 1)],
+                                idx[(i, j + 1)]))
+    return refpts, subtris
+
+
+def _contour_segments_hp(coil, gfu, levels, sub):
+    """Order-p ('high-p') iso-contours: subdivide each surface triangle into
+    sub^2 micro-triangles in reference coordinates and evaluate the FULL-order
+    psi GridFunction at every micro-vertex via ``GetTrafo`` (so the contour
+    follows the curved order-2/3 psi WITHIN each element, which vertex-linear
+    marching misses -- this is the FE analogue of the analytical flux-line
+    trace, Hirahatake/Noguchi/Igarashi/Yamashita).  sub=1 reduces exactly to
+    vertex-linear marching.  Returns {level: [segments]}."""
+    from ngsolve import BND, IntegrationRule
+    refpts, subtris = _ref_subtriangulation(sub)
+    out = {L: [] for L in levels}
+    for el in coil.Elements(BND):
+        if len([v for v in el.vertices]) != 3:
+            continue
+        tr = coil.GetTrafo(el)
+        P = np.empty((len(refpts), 3))
+        F = np.empty(len(refpts))
+        for k, (u, v) in enumerate(refpts):
+            mip = tr(IntegrationRule([(u, v)], [1.0])[0])
+            P[k] = [mip.point[0], mip.point[1], mip.point[2]]
+            F[k] = float(gfu(mip))
+        for L in levels:
+            for (a, b, c) in subtris:
+                fa, fb, fc = F[a] - L, F[b] - L, F[c] - L
+                pts = []
+                for i, j, fi_, fj_ in ((a, b, fa, fb), (b, c, fb, fc),
+                                       (c, a, fc, fa)):
+                    if (fi_ < 0.0) != (fj_ < 0.0):
+                        t = fi_ / (fi_ - fj_)
+                        pts.append(P[i] + t * (P[j] - P[i]))
+                if len(pts) == 2:
+                    out[L].append((pts[0], pts[1]))
+    return out
+
+
 def _segs_to_polylines(segs, tol):
     """Chain iso-segments into polylines (loops/arcs) by snapping shared
     endpoints (adjacent triangles emit identical crossing points on a shared
@@ -741,6 +794,76 @@ def _write_step_polylines(polylines, filename):
     Glue(edges).WriteStep(filename)
 
 
+def _bubble_seeds(pts2d, bmag, k_const, n_max=240):
+    """Bubble-system seed placement (Hirahatake/Noguchi/Igarashi/Yamashita):
+    greedily drop seeds, biggest |B| first, keeping a clearance radius
+    ``r = k_const / sqrt(|B|)`` -- so the resulting line DENSITY is
+    proportional to |B| (the bubble is small where the field is strong, so
+    more lines pack in).  Returns the seed coordinates (M, 2)."""
+    order = np.argsort(-bmag)
+    seeds = []
+    for idx in order:
+        b = bmag[idx]
+        if b <= 0.0:
+            continue
+        p = pts2d[idx]
+        r = k_const / np.sqrt(b)
+        if all(np.hypot(p[0] - s[0], p[1] - s[1]) > r for s in seeds):
+            seeds.append((p[0], p[1]))
+            if len(seeds) >= n_max:
+                break
+    return np.array(seeds) if seeds else np.zeros((0, 2))
+
+
+def _flux_line_plot(chain, current, out_path, plane="y", half=None,
+                    ngrid=64, n_lines=46):
+    """Bubble-system flux-line visualisation of the DESIGNED coil's field on a
+    cut-plane (default y=0, the x-z plane).  Traces the in-plane B direction
+    (matplotlib streamplot) seeded by the bubble system so the line density
+    reflects |B| (definition (i): density ~ |B|; (ii): tangent ~ B).  The same
+    'equal-flux-per-tube' principle as the stream-function contour wires."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    chain = np.asarray(chain, float)
+    if half is None:
+        half = 1.2 * float(np.max(np.abs(chain)))
+    axn = {"x": 0, "y": 1, "z": 2}[plane]
+    ia, ib = [c for c in (0, 1, 2) if c != axn]          # in-plane axes
+    g = np.linspace(-half, half, ngrid)
+    A, B = np.meshgrid(g, g)                              # in-plane grid
+    obs = np.zeros((A.size, 3))
+    obs[:, ia] = A.ravel(); obs[:, ib] = B.ravel()
+    Bvec = _segment_field_B(chain, obs, current)
+    Ba = Bvec[:, ia].reshape(ngrid, ngrid)
+    Bb = Bvec[:, ib].reshape(ngrid, ngrid)
+    bmag = np.hypot(Ba, Bb)
+    # bubble seeds: tune k so ~n_lines seeds land
+    bref = float(np.median(bmag[bmag > 0])) + 1e-30
+    k = 2.0 * half / np.sqrt(n_lines) * np.sqrt(bref)
+    seeds = _bubble_seeds(np.column_stack([A.ravel(), B.ravel()]),
+                          bmag.ravel(), k)
+    fig, ax = plt.subplots(figsize=(5.0, 5.0))
+    ax.imshow(bmag, extent=[-half, half, -half, half], origin="lower",
+              cmap="magma", alpha=0.35, aspect="equal")
+    lw = 0.6 + 2.4 * (bmag / (bmag.max() + 1e-30))
+    try:
+        ax.streamplot(g, g, Ba, Bb, color="white", linewidth=lw,
+                      density=2.5, arrowsize=0.6,
+                      start_points=seeds if len(seeds) else None)
+    except Exception:                              # start_points off-grid edge
+        ax.streamplot(g, g, Ba, Bb, color="white", linewidth=lw, density=2.0)
+    lbl = "xyz"
+    ax.set_xlabel(f"{lbl[ia]} [m]"); ax.set_ylabel(f"{lbl[ib]} [m]")
+    ax.set_title(f"coil flux lines on {lbl[axn]}=0 (bubble-seeded, "
+                 f"{len(seeds)} lines)")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+    return {"flux_plot": out_path, "plane": f"{lbl[axn]}=0",
+            "n_flux_lines": int(len(seeds))}
+
+
 def _peec_inductance(chain, diam, sigma, freq):
     """PEEC L, R of the single-stroke wire (one port across the two ends)."""
     from radia.peec_matrices import PEECBuilder
@@ -897,10 +1020,17 @@ def run_manufacture(args):
         clen = _char_len(verts, tris)
         tol = max(1e-12, 1e-6 * clen)
         levels = _contour_levels(psi_v, args.nlevels)
-        loops = []
-        for lev in levels:
-            loops.extend(_segs_to_polylines(
-                _contour_segments(verts, psi_v, tris, lev), tol))
+        sub = max(1, int(getattr(args, "contour_sub", 1)))
+        if sub > 1:                              # order-p curved contour
+            hp = _contour_segments_hp(coil, gfu, levels, sub)
+            loops = []
+            for lev in levels:
+                loops.extend(_segs_to_polylines(hp[lev], tol))
+        else:                                    # vertex-linear (fast default)
+            loops = []
+            for lev in levels:
+                loops.extend(_segs_to_polylines(
+                    _contour_segments(verts, psi_v, tris, lev), tol))
         if not loops:
             return {"method": "manufacture",
                     "error": "psi has no iso-contours at the requested levels "
@@ -960,6 +1090,7 @@ def run_manufacture(args):
             "homogeneity_rms": homo,             # continuous psi (design ref)
             "peak_J": peak_J,
             "n_levels": len(levels), "n_loops": int(len(loops)),
+            "contour_sub": sub,
             "n_open_contours": int(n_open),
             "n_wire_points": int(len(chain)),
             "wire_length_m": wire_len,
@@ -1004,6 +1135,14 @@ def run_manufacture(args):
         if args.peec:
             result["peec"] = _peec_inductance(
                 out_chain, args.wire_diam, 5.8e7, args.peec_freq)
+
+        if args.flux_plot:
+            try:
+                result.update(_flux_line_plot(
+                    out_chain, result["best_fit_current_A"], args.flux_plot,
+                    plane=args.flux_plane))
+            except Exception as e:                 # noqa: BLE001
+                result["flux_plot_error"] = str(e)
 
         if args.msh_output:
             try:
@@ -1079,6 +1218,11 @@ def build_argparser():
     # ---- manufacture mode ----
     ap.add_argument("--nlevels", type=int, default=12,
                     help="number of iso-contours = wire turns (manufacture)")
+    ap.add_argument("--contour-sub", type=int, default=1,
+                    help="order-p contour: subdivide each surface triangle "
+                         "sub x sub and evaluate the full-order psi (sub=1 = "
+                         "vertex-linear; sub=3 follows the curved order-2/3 "
+                         "psi within each element) (manufacture)")
     ap.add_argument("--chain", choices=["field_aware", "nn"],
                     default="field_aware",
                     help="single-stroke chaining: field_aware (min net "
@@ -1099,6 +1243,11 @@ def build_argparser():
                     help="PEEC wire cross-section size in m (manufacture)")
     ap.add_argument("--peec-freq", type=float, default=1e5,
                     help="PEEC evaluation frequency in Hz (manufacture)")
+    ap.add_argument("--flux-plot", default="",
+                    help="bubble-system flux-line PNG of the coil field on a "
+                         "cut-plane (manufacture)")
+    ap.add_argument("--flux-plane", choices=["x", "y", "z"], default="y",
+                    help="cut-plane normal for --flux-plot (manufacture)")
     # ---- output ----
     ap.add_argument("--msh-output", default="",
                     help="optional GMSH .msh of psi on the coil surface")
