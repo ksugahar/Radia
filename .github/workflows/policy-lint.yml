@@ -40,13 +40,20 @@ jobs:
 
       # ----------------------------------------------------------------
       # Policy 3: Green's Function (Laplace only)
-      #   No "Helmholtz" in C++ core source
+      #   Forbid the Helmholtz WAVE kernel (e^{-jkr}/r) in the C++ core.
+      #   The "Helmholtz-Hodge decomposition" (rad.SetLoopProjection loop
+      #   removal: subtracting the non-physical circulating-charge ker(N)
+      #   component from sigma) is a DIFFERENT, allowed vector-calculus
+      #   concept -- except it (and the generic "Helmholtz decomposition")
+      #   while still catching a real wave kernel.
       # ----------------------------------------------------------------
-      - name: "Policy 3: No Helmholtz in C++ core"
+      - name: "Policy 3: No Helmholtz kernel in C++ core"
         run: |
-          HITS=$(grep -rl -i 'Helmholtz' src/core/ --include='*.cpp' --include='*.h' 2>/dev/null || true)
-          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 3 failed: Laplace kernel only in C++ core"; exit 1; }
-          echo "PASS: No Helmholtz kernel in C++ core"
+          HITS=$(grep -rni 'helmholtz' src/core/ --include='*.cpp' --include='*.h' 2>/dev/null \
+                 | grep -viE 'helmholtz[- ]?hodge' \
+                 | grep -viE 'helmholtz[- ]?decomposition' || true)
+          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 3 failed: Laplace kernel only (Helmholtz WAVE kernel forbidden; Helmholtz-Hodge decomposition is allowed)"; exit 1; }
+          echo "PASS: No Helmholtz wave kernel in C++ core (Helmholtz-Hodge decomposition excepted)"
 
       # ----------------------------------------------------------------
       # Policy 4: Matrix Storage (Row-Major)
