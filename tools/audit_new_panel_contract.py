@@ -167,7 +167,6 @@ def _main_calls(tree: ast.Module, func: str) -> bool:
 # accept the legacy bug-class risk; remove an entry when you migrate
 # that file to the canonical pattern.
 LEGACY_CALC_EXEMPT = {
-    "calc_heating.py",        # uses different entry (no calc_main)
     "calc_heat.py",           # thermal legacy pattern
     "calc_heat_axisym.py",    # thermal sibling, legacy pattern
     "calc_heat_with_em_table.py",  # thermal sibling, legacy pattern

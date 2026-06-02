@@ -330,6 +330,5 @@ Then click "Add Kelvin" in the panel to auto-add the Kelvin sphere pair.
 | `src/radia/panels/calc_surface.py` | External Python | Surface area |
 | `src/radia/panels/calc_inductance.py` | External Python | BEM inductance |
 | `src/radia/panels/calc_fem_kelvin.py` | External Python | FEM-SIBC + Kelvin |
-| `src/radia/panels/calc_heating.py` | External Python | 2D axi heating |
 | `src/radia/panels/startup.py` | Cubit GUI Python | Entry point |
 | `install_panels.py` | System Python | Installer |
