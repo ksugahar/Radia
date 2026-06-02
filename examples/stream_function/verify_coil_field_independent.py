@@ -63,12 +63,13 @@ def _make_meshes(outdir, a=0.15, L=0.50, dsv=0.05):
     return coil_path, eval_path
 
 
-def _design_loops(coil_vol, eval_vol, target_cf, order, nlevels):
+def _design_loops(coil_vol, eval_vol, target_cf, order, nlevels,
+                  confine="off"):
     """Run the FE-direct SF design, contour psi into orientation-consistent
     equal-current turns, return (loops_closed, signs, design_homogeneity)."""
     args = types.SimpleNamespace(
         coil_vol=coil_vol, eval_vol=eval_vol, target_cf=target_cf,
-        order=order, regularize="h1", alpha=0.0, eval_max=400)
+        order=order, regularize="h1", alpha=0.0, eval_max=400, confine=confine)
     P = _build_problem(args)
     psi_f, _fit, homo = _solve_and_metrics(P, 0.0)
     psi = np.zeros(P["fes"].ndof)
@@ -161,9 +162,10 @@ def _gradient_linearity(obs, Bz):
 
 
 def run_case(name, target_cf, coil_vol, eval_vol, order, nlevels,
-             with_ngsolve=False):
-    print(f"\n=== case '{name}': target Bz = {target_cf} ===")
-    d = _design_loops(coil_vol, eval_vol, target_cf, order, nlevels)
+             with_ngsolve=False, confine="off"):
+    print(f"\n=== case '{name}': target Bz = {target_cf} "
+          f"(confine={confine}) ===")
+    d = _design_loops(coil_vol, eval_vol, target_cf, order, nlevels, confine)
     loops, signs, obs = d["loops"], d["signs"], d["obs"]
     print(f"  design homogeneity (continuous psi) = {d['design_homo']:.3e}")
     print(f"  turns = {len(loops)} (open contours closed: {d['n_open']})")
@@ -181,8 +183,9 @@ def run_case(name, target_cf, coil_vol, eval_vol, order, nlevels,
     print(f"  best-fit series current I = {I:.3f} A")
     print(f"  ENGINE AGREEMENT (vector-difference relative):")
     print(f"    segment(numpy, design) vs Radia C++  = {r_seg_rad:.3e}")
-    res = dict(case=name, target_cf=target_cf, n_turns=len(loops),
-               n_open=d["n_open"], design_homogeneity=d["design_homo"],
+    res = dict(case=name, target_cf=target_cf, confine=confine,
+               n_turns=len(loops), n_open=d["n_open"],
+               design_homogeneity=d["design_homo"],
                best_fit_current_A=I, rel_segment_vs_radia=r_seg_rad)
     if with_ngsolve:                          # optional 3rd independent impl
         Bng = _field_ngsolve(loops, signs, I, eval_vol, obs)
@@ -210,7 +213,7 @@ def main():
     ap.add_argument("--order", type=int, default=2)
     ap.add_argument("--nlevels", type=int, default=8)
     ap.add_argument("--outdir", default=os.path.join(_HERE, "_verify_vols"))
-    ap.add_argument("--cases", default="uniform,gradient")
+    ap.add_argument("--cases", default="uniform,gradient,gradient_confined")
     ap.add_argument("--with-ngsolve", action="store_true",
                     help="also run the NGSolve biot_savart_B_cf engine "
                          "(per-point CF eval; can fail point-location)")
@@ -220,15 +223,22 @@ def main():
     args = ap.parse_args()
 
     coil_vol, eval_vol = _make_meshes(args.outdir)
-    targets = {"uniform": "1", "gradient": "x"}
+    # name -> (target Bz expr, confine).  gradient_confined shows the
+    # method-completing boundary condition: psi=0 on the former edge -> the
+    # contours CLOSE on this short former (n_open 0), so the single-current
+    # coil is manufacturable AND still cross-validated by Radia C++.
+    cases = {"uniform": ("1", "off"),
+             "gradient": ("x", "off"),
+             "gradient_confined": ("x", "on")}
     results = []
     for name in args.cases.split(","):
         name = name.strip()
-        if name not in targets:
+        if name not in cases:
             continue
-        results.append(run_case(name, targets[name], coil_vol, eval_vol,
+        tgt, conf = cases[name]
+        results.append(run_case(name, tgt, coil_vol, eval_vol,
                                 args.order, args.nlevels,
-                                with_ngsolve=args.with_ngsolve))
+                                with_ngsolve=args.with_ngsolve, confine=conf))
 
     out = {"meshes": {"coil": os.path.basename(coil_vol),
                       "eval": os.path.basename(eval_vol),
