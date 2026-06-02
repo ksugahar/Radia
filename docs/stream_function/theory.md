@@ -45,10 +45,23 @@ which on a flat plane reduces to:
 
 In NGSolve this is one `LinearForm` per target.  See
 [`build_fem_matrix`](../../examples/stream_function/demo_planar_uniform_fem_psi.py)
-for the canonical assembly.
+for the canonical (planar) assembly.
+
+**Γ can be ANY surface, not just a plane.** Mesh a curved former
+(cylinder, **sphere**, conformal / 3D-printed) and assemble the *same*
+general kernel (line above) with the surface gradient `grad(u).Trace()`
+and the surface normal `specialcf.normal(3)`; surface FEM is done
+robustly via a solid mesh + `H1(mesh, order=p, definedon=mesh.Boundaries(".*"))`
++ `ds` + `mesh.Curve(p)` (isoparametric).  **This is exactly the capability
+the basis-loop path lacks** — it needs a structured `(φ, z)` grid and cannot
+be laid on a sphere.  See
+[`demo_sphere_fe_direct.py`](../../examples/stream_function/demo_sphere_fe_direct.py)
+(uniform Bz: cres 3e-15, single-stroke 0.24 %; Z2 shim: 0.36 % after
+sheet-metal distortion).
 
 Pros: continuous ψ, smooth contour family, Path-A iteration converges
-**monotonically**, arbitrary polynomial order via `H1(mesh, order=p)`.
+**monotonically** (on simple topologies), arbitrary polynomial order via
+`H1(mesh, order=p)`, **arbitrary former shape**.
 Cons: per-entry integration is more expensive than basis-loop kernel
 evaluation; without ACA+ the assembly is O(M × ndof × quad_pts).
 
@@ -138,11 +151,18 @@ bounded by its TOPOLOGY CLASS:
 | EASY   | axisym. / planar uniform  | 2–3 %         | < 1 %         | Path-A useful                |
 |        |   + FE-direct H¹          | 2 %           | **0.47 %**    | MONOTONE convergence         |
 | MEDIUM | cylindrical Gz            | already OK    | redundant     | smooth helix natural         |
-| HARD   | cylindrical Gx fingerprint| 16 %          | 15 %          | tier-bounded, no real gain   |
-| HARDER | shielded / biplanar / 3D  | --            | --            | needs FE-direct or D-path    |
+| HARD   | cylindrical Gx fingerprint| 9.3 % (field_aware) | oscillates | escape via geometry, below |
+| HARDER | shielded / biplanar / 3D  | --            | --            | FE-direct on the real former |
 
-Past EASY: needs FE-direct continuous ψ.  Past HARD: needs B-spline SFD
-(Kuijpers Methods 2/3) or multivalued-potential D-path (= research).
+Past EASY: FE-direct continuous ψ.  **Past HARD the practical escape is
+GEOMETRY, not more current DOFs**: the single-current **sheet-metal wire
+distortion** bends the manufactured wire (trade geometric DOF for current
+DOF) and takes the cylinder Gx fingerprint from 8.5 % → **1.4 %** with ONE
+feed (see [single_stroke.md](single_stroke.md)); a few separate-feed electric
+shims then refine to ~1.0 %.  The remaining classical routes are B-spline SFD
+(Kuijpers Methods 2/3) or a multivalued-potential D-path (research).  Note
+the tier is set by the COIL PATTERN topology, NOT the former shape — FE-direct
+solves an EASY uniform target on a *sphere* to 0.24 % single-stroke.
 
 ## Cross-reference
 
