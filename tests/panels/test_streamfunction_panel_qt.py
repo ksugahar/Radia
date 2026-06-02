@@ -97,7 +97,8 @@ class TestWidgetIsolation:
     def test_manufacture_has_wire_knobs_not_pareto(self, sf_panel):
         k = _keys(sf_panel, "Manufacture")
         assert {"nlevels", "contour_sub", "chain", "distort", "step_output",
-                "peec", "flux_plot", "flux_plane", "confine"} <= k
+                "peec", "flux_plot", "flux_plane", "steps_plot",
+                "confine"} <= k
         for absent in ("pareto_lever", "alpha_min", "geom_scale_min"):
             assert absent not in k, f"Manufacture leaks {absent}"
 

@@ -174,6 +174,11 @@ r ~ 1/sqrt|B|) enforces.  Two manufacture refinements:
   --flux-plane {x,y,z}   field on a cut-plane, bubble-seeded (density ~ |B|) +
                     matplotlib streamplot.  Physical check (the four-lobe Gx
                     gradient saddle renders correctly).
+  --steps-plot p.png  per-step manufacturing 2x2 3D view: (1) equal-current
+                    contours (N = --nlevels turns -- this sets the line count),
+                    (2) single-stroke (一筆書き) wire, (3) sheet-metal (板金)
+                    --distort wire, (4) wire WITH thickness (太さ, --wire-diam,
+                    twist-free parallel-transport tube) + distortion.
 
 CHAIN (--chain {field_aware, nn})
 ---------------------------------
