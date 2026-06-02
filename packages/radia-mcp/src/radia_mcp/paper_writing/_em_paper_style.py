@@ -373,7 +373,7 @@ the **PDF (vector)** output, NOT the PNG (raster) output:
 \\includegraphics[width=\\columnwidth]{fig/result.png}
 ```
 
-The lab figure pipeline (`mcp-server-graph` `emit_paper_figure`) emits
+The lab figure pipeline (`mcp-server-figure` `emit_paper_figure`) emits
 BOTH `<name>.pdf` and `<name>.png` at the journal's exact width.  The
 `.png` is for quick preview / slides / GitHub README ONLY.  The `.pdf`
 is the one that goes into the paper.
@@ -414,7 +414,7 @@ data hybrid PDF, the best of both).
 
 ## Cross-reference
 
-- `mcp-server-graph` `emit_paper_figure` — emits .pdf + .png at exact
+- `mcp-server-figure` `emit_paper_figure` — emits .pdf + .png at exact
   journal width; the .pdf is the manuscript figure.
 - The companion `lab-graph-style` skill documents the full figure
   pipeline.
@@ -721,7 +721,7 @@ recommended PRE-SUBMISSION check.
 ## 7. "The figure font is too small to read at print scale"
 
   Lab pattern: enforce the 10pt-at-8cm rule (see
-  `mcp-server-graph.paper_figure_quality_rules('font_rule')`).
+  `mcp-server-figure.paper_figure_quality_rules('font_rule')`).
   PRE-CHECK: use `paper_writing_layout_thumbnail_strip` and visually
   scan; or compute via `paper_writing_detect_page_whitespace_anomalies`.
 

@@ -1,0 +1,121 @@
+% Better Poster template (A0 landscape) — Morrison 2019 format adapted for
+% Japanese academic posters with bxjsarticle + tcolorbox.
+%
+% Layout: three vertical zones on A0 landscape (1189 × 841 mm):
+%   - Left bar (25%): TL;DR bullets + author + QR
+%   - Center billboard (50%): single plain-language main finding, ≥120pt
+%   - Right bar (25%): figures, methods, references
+%
+% Source: Mike Morrison, "How to design a better research poster" (2019).
+% Eye-tracking pilot (ScienceUX 2020) showed faster comprehension than
+% the traditional dense layout.
+\documentclass[a0paper,landscape,25pt]{bxjsarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage[dvipdfmx]{color,xcolor}
+\usepackage{geometry}
+\geometry{margin=1.5cm,top=1cm,bottom=1cm}
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable,skins}
+\usepackage{multicol}
+\usepackage{enumitem}
+\usepackage{anyfontsize}
+\usepackage{tikz}
+\usepackage{newtxtext,newtxmath}
+\renewcommand{\familydefault}{\sfdefault}
+
+% --- Palette: Morrison-style minimalism (3 colors + black/white) ----------
+\definecolor{billboardbg}{RGB}{255,255,255}
+\definecolor{billboardink}{RGB}{20,20,20}
+\definecolor{barbg}{RGB}{0,51,102}
+\definecolor{barink}{RGB}{255,255,255}
+\definecolor{accent}{RGB}{220,30,30}
+
+\pagestyle{empty}
+
+\begin{document}
+\noindent
+\begin{minipage}[t]{0.24\linewidth}
+    %% LEFT BAR — TL;DR + author + QR
+    \begin{tcolorbox}[
+        colback=barbg, coltext=barink, boxrule=0pt,
+        height=0.97\textheight, valign=top, arc=0pt,
+        left=12pt,right=12pt,top=12pt,bottom=12pt
+    ]
+        {\fontsize{34}{40}\selectfont\bfseries 一目で分かる要点}\\[6pt]
+        \rule{\linewidth}{0.5pt}\\[6pt]
+        {\fontsize{28}{38}\selectfont
+        \begin{itemize}[leftmargin=*, itemsep=4pt]
+            \item TL;DR bullet 1 — main mechanism
+            \item TL;DR bullet 2 — key result
+            \item TL;DR bullet 3 — implication
+            \item TL;DR bullet 4 — limitation
+        \end{itemize}}
+
+        \vspace{20pt}
+        \rule{\linewidth}{0.5pt}\\[10pt]
+        {\fontsize{24}{30}\selectfont\bfseries 著者}\\[4pt]
+        {\fontsize{22}{28}\selectfont 近畿大学 理工学部 電気電子工学科\\菅原賢悟}
+
+        \vspace{20pt}
+        \rule{\linewidth}{0.5pt}\\[10pt]
+        {\fontsize{24}{30}\selectfont\bfseries フルペーパー}\\[6pt]
+        \begin{center}
+        \fbox{\parbox[c][45mm][c]{45mm}{\centering [QR code\\here]}}\\[4pt]
+        {\fontsize{18}{22}\selectfont Scan for full paper}
+        \end{center}
+    \end{tcolorbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\linewidth}
+    %% CENTER BILLBOARD — single plain-language finding, ≥120pt
+    \begin{tcolorbox}[
+        colback=billboardbg, coltext=billboardink, boxrule=0pt,
+        height=0.97\textheight, valign=center, arc=0pt,
+        left=20pt,right=20pt,top=20pt,bottom=20pt
+    ]
+        \begin{center}
+        {\fontsize{120}{140}\selectfont\bfseries
+        \textcolor{accent}{Main finding}\\
+        in plain language}\\[40pt]
+        {\fontsize{50}{60}\selectfont
+        Subtitle: 1 sentence elaboration that\\
+        a non-specialist can understand}
+        \end{center}
+    \end{tcolorbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.24\linewidth}
+    %% RIGHT BAR — figure / method / refs
+    \begin{tcolorbox}[
+        colback=billboardbg, coltext=billboardink, boxrule=1pt,
+        colframe=barbg,
+        height=0.97\textheight, valign=top, arc=0pt,
+        left=12pt,right=12pt,top=12pt,bottom=12pt
+    ]
+        {\fontsize{30}{36}\selectfont\bfseries タイトル / Title}\\[4pt]
+        {\fontsize{22}{28}\selectfont サブタイトル}\\[12pt]
+        \rule{\linewidth}{0.5pt}\\[10pt]
+
+        {\fontsize{26}{32}\selectfont\bfseries 手法}\\[4pt]
+        {\fontsize{22}{28}\selectfont 簡潔な手法説明 (3-5 行)。専門用語は最小限に。}
+
+        \vspace{12pt}
+        \rule{\linewidth}{0.5pt}\\[10pt]
+
+        {\fontsize{26}{32}\selectfont\bfseries 結果図}\\[6pt]
+        \begin{center}
+        \fbox{\parbox[c][80mm][c]{80mm}{\centering [Key figure]}}\\[4pt]
+        {\fontsize{20}{24}\selectfont 図1: 結果の図 (軸+単位+凡例)}
+        \end{center}
+
+        \vspace{12pt}
+        \rule{\linewidth}{0.5pt}\\[10pt]
+
+        {\fontsize{26}{32}\selectfont\bfseries 参考文献}\\[4pt]
+        {\fontsize{18}{22}\selectfont
+        \begin{enumerate}[label={[\arabic*]}, leftmargin=*, itemsep=0pt]
+            \item Ref 1
+            \item Ref 2
+        \end{enumerate}}
+    \end{tcolorbox}
+\end{minipage}
+
+\end{document}

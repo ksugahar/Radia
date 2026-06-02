@@ -432,7 +432,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Mathematica recipes: vector calc, Kelvin transform, "
                        "symbolic Maxwell, evaluation pipeline",
         "primary_tools": ["mathematica_recipes", "mathematica_status"],
-        "related": ["differential-forms", "radia-ngsolve", "graph",
+        "related": ["differential-forms", "radia-ngsolve", "figure",
                       "md2html"],
         "tags": ["theory"],
     },
@@ -445,18 +445,19 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "fallback for legacy Japanese files.  Promoted "
                        "from mcp-server-document.",
         "primary_tools": ["md2html_convert"],
-        "related": ["mathematica", "graph", "literature-index"],
+        "related": ["mathematica", "figure", "literature-index"],
         "tags": ["meta"],
     },
-    "graph": {
-        "subpackage": "radia_mcp.graph",
-        "entry_point": "mcp-server-graph",
-        "description": "Sugahara Lab publication-figure style guide: "
-                       "IEEE / IEEJ font/size profiles, MATLAB + "
-                       "Matplotlib snippets, lab style rules (units in "
-                       "parentheses, no in-figure title, Times New Roman "
-                       "serif).  Promoted from mcp-server-document.",
-        "primary_tools": ["graph_style_guide", "graph_size_for_target",
+    "figure": {
+        "subpackage": "radia_mcp.figure",
+        "entry_point": "mcp-server-figure",
+        "description": "Sugahara Lab publication-figure toolkit "
+                       "(Times New Roman default): beamer/slide + "
+                       "IEEE/IEEJ paper profiles, MATLAB + Matplotlib "
+                       "snippets, lab style rules (units in parentheses, "
+                       "no in-figure title).  Promoted from "
+                       "mcp-server-document.",
+        "primary_tools": ["figure_style_guide", "figure_size_for_target",
                             "paper_figure_profiles", "paper_figure_recipe",
                             "paper_figure_quality_rules"],
         "related": ["mathematica", "literature-index", "chart2d",
@@ -475,11 +476,11 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "streamplot / imshow / polar / scatter / phase "
                        "(Nyquist).  Each accepts return_mode='recipe' "
                        "(Python text) | 'image' (MCP Image inline) | "
-                       "'both'.  Inherits radia_mcp.graph profile + "
+                       "'both'.  Inherits radia_mcp.figure profile + "
                        "gate stack.",
         "primary_tools": ["chart2d_catalog", "chart2d_line", "chart2d_bode",
                             "chart2d_scatter", "chart2d_contourf"],
-        "related": ["graph"],
+        "related": ["figure"],
         "tags": ["meta"],
     },
     "literature-index": {
@@ -490,7 +491,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["literature_search", "literature_by_folder",
                             "literature_folder_tree", "literature_stats",
                             "literature_semantic_search"],
-        "related": ["meta", "graph", "md2html"],
+        "related": ["meta", "figure", "md2html"],
         "tags": ["meta"],
     },
 

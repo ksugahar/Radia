@@ -52,6 +52,27 @@ Layout:
                             superconducting cyclotron Radia+TOSCA validation
                             (Pradhan 2007), rotating-coil multipole measurement
                             and 3D field reconstruction.
+  radia_mcp.presentation  — Research-talk slide lint + PPTX tools (promoted
+                            2026-06-02 from LAB-private mcp-server-document).
+  radia_mcp.poster        — Conference poster generation + lint (promoted
+                            2026-06-02 from mcp-server-document).
+  radia_mcp.pdf           — PDF manipulation: merge/split/metadata/watermark/
+                            compress (promoted 2026-06-02 from mcp-server-document).
+  radia_mcp.doc_convert   — Document format conversion: PPTX<->PDF, PDF->JPG,
+                            slide extraction (promoted 2026-06-02 from
+                            mcp-server-document).
+  radia_mcp.bibliography  — BibTeX / citation tooling: DOI/arXiv->bibtex,
+                            CrossRef search, parse/dedupe/lint (promoted
+                            2026-06-02 from mcp-server-document).
+  radia_mcp.document_meta — Cross-cutting helpers: deadline countdown, version
+                            diff, LaTeX templates, all-domain lint orchestration
+                            (promoted + REDESIGNED 2026-06-02 from
+                            mcp-server-document -- lint_all is now a registry
+                            over radia-mcp's own lints, no grant_writing dep).
+  radia_mcp.research_project — Project dashboard / scan: consistency, deadline
+                            gantt, cross-document-type health (promoted
+                            2026-06-02 from mcp-server-document; grant health is
+                            opportunistic via the private package, no hard dep).
 
 The radia_ngsolve / ih / peec / electromagnet servers reference radia
 from inside example snippets in their knowledge modules, but importing

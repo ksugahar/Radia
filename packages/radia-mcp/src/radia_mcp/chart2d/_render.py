@@ -1,8 +1,8 @@
-"""Render a chart spec to (fig, axes) using radia_mcp.graph profiles.
+"""Render a chart spec to (fig, axes) using radia_mcp.figure profiles.
 
 This is the matplotlib-backed implementation of the 22 chart types in
 _charts.py.  Every renderer:
-  1. calls radia_mcp.graph.paper_figure(profile, ...) so the figure
+  1. calls radia_mcp.figure.paper_figure(profile, ...) so the figure
      inherits the journal profile (10 pt @ 8 cm, Okabe-Ito CVD-safe
      palette, Type-42 font embed, etc.)
   2. delegates to matplotlib's per-chart-type method (ax.plot,
@@ -36,7 +36,7 @@ def render_chart(
 
     Args:
         chart_type: name or alias from radia_mcp.chart2d._charts.CHARTS.
-        profile: radia_mcp.graph PaperProfile name (default IEEE 1col).
+        profile: radia_mcp.figure PaperProfile name (default IEEE 1col).
         rel_width: fraction of profile width.
         xlabel: x-axis label.  Lab convention: units in parentheses,
             e.g. 'f (Hz)' not 'f [Hz]'.
@@ -50,10 +50,10 @@ def render_chart(
 
     Returns:
         (fig, axes) -- axes is an ndarray (1x1 for single panel,
-        2x1 for Bode pair) per radia_mcp.graph.paper_figure
+        2x1 for Bode pair) per radia_mcp.figure.paper_figure
         convention.
     """
-    from radia_mcp.graph import paper_figure
+    from radia_mcp.figure import paper_figure
     from ._charts import get_spec
 
     spec = get_spec(chart_type)
@@ -272,7 +272,7 @@ def _render_bode(*, profile, rel_width, xlabel, ylabel,
     Top:    semilogx of |H| (in dB if mag_db else linear).
     Bottom: semilogx of arg(H) (deg or rad).
     """
-    from radia_mcp.graph import paper_figure
+    from radia_mcp.figure import paper_figure
     import numpy as np
 
     fig, axes = paper_figure(profile, nrows=2, ncols=1,
@@ -318,7 +318,7 @@ def _render_polar(*, profile, rel_width, theta, r):
     """Polar plot: not a paper_figure() one-shot because polar axes need
     projection='polar' subplot kwarg.  Build manually."""
     import matplotlib.pyplot as plt
-    from radia_mcp.graph import paper_figure
+    from radia_mcp.figure import paper_figure
     import numpy as np
 
     # Set up rcParams via a throwaway paper_figure call, then close it.

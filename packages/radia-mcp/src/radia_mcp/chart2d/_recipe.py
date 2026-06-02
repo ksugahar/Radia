@@ -28,7 +28,7 @@ def chart_recipe(
         f"# profile = {profile}  (rel_width = {rel_width})\n"
         f"# Lab style: 10 pt @ 8 cm, Okabe-Ito CVD palette, no title in"
         f" figure, units in PARENTHESES (lab convention).\n\n"
-        "from radia_mcp.graph import paper_figure, emit_paper_figure\n"
+        "from radia_mcp.figure import paper_figure, emit_paper_figure\n"
     )
     if spec.notes:
         head += f"\n# {spec.notes}\n"
@@ -196,7 +196,7 @@ def _recipe_polar(profile, rel_width) -> str:
     return dedent(f"""
         import numpy as np
         import matplotlib.pyplot as plt
-        from radia_mcp.graph import paper_figure, emit_paper_figure
+        from radia_mcp.figure import paper_figure, emit_paper_figure
 
         # paper_figure() doesn't expose projection='polar' yet, so we
         # snapshot the profile rcParams + figsize via a throwaway call,

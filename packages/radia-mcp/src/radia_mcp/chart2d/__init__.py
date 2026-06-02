@@ -1,6 +1,6 @@
 """radia_mcp.chart2d — 22 paper-quality 2D charts as MCP tools.
 
-Companion to radia_mcp.graph (which handles styling / profiles /
+Companion to radia_mcp.figure (which handles styling / profiles /
 gates).  chart2d is the "data -> rendered 2D chart" layer: the AI
 calls `chart2d_line(x=..., y=..., return_mode='image'|'recipe')` and
 gets either a rendered PNG (MCP Image content type, viewable inline
@@ -25,7 +25,7 @@ in Claude Desktop) OR a copy-paste Python recipe.
     POINT (2):
         chart2d_scatter, chart2d_phase
 
-Every chart inherits radia_mcp.graph's profile system (10 pt @ 8 cm
+Every chart inherits radia_mcp.figure's profile system (10 pt @ 8 cm
 absolute font, Okabe-Ito CVD-safe palette, Type-42 PDF embed) AND
 goes through emit_paper_figure()'s 5-gate stack on save (no in-figure
 title, no legend overlap, axes-area fraction floor, font embedding
