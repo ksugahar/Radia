@@ -2,9 +2,12 @@
 
 This folder is the **canonical documentation** for the Radia stream-function
 coil-design framework: kernel-agnostic (ACA+)+TSVD least-norm solver,
-Kuijpers-style single-stroke chain construction, FE-direct ψ with H1 / σ-
-weighted / inductance / L∞ regularisation, Path-A compensated iteration,
-and Optuna CMA-ES surface-deformation outer loop.
+single-stroke chain construction (field_aware / Kuijpers), FE-direct ψ with
+H1 / σ-weighted / inductance / L∞ regularisation, Path-A compensated
+iteration, Optuna CMA-ES surface-deformation outer loop, **single-current
+"sheet-metal" wire distortion** (one bent conductor instead of separate shim
+feeds), and **FE-direct ψ on arbitrary curved formers** (sphere / conformal /
+3D-printed — the case the basis-loop representation cannot do).
 
 The single-file [`../stream_function.md`](../stream_function.md) is the
 short *entry point*; this folder is the detailed reference.
@@ -15,12 +18,21 @@ short *entry point*; this folder is the detailed reference.
 |----------------|------|
 | Understand the SFM and ACA+TSVD math | [theory.md](theory.md) |
 | Connect contours into one wire | [single_stroke.md](single_stroke.md) |
+| Bend that one wire into a manufacturable single-current shim (no extra feeds) | [single_stroke.md § sheet-metal distortion](single_stroke.md#single-current-sheet-metal-coil-distortion-bankin-ho--no-extra-feeds) |
+| Design on an arbitrary curved former (sphere / conformal) | [single_stroke.md § arbitrary curved formers](single_stroke.md#arbitrary-curved-formers-sphere--fe-direct-ψ-demo_sphere_fe_directpy) |
 | Pick a regularisation for your problem | [regularization.md](regularization.md) |
-| Optimise surface geometry too | [deformation.md](deformation.md) |
+| Optimise the coil SURFACE geometry (bilevel) | [deformation.md](deformation.md) |
 | Look up the Python API | [api.md](api.md) |
 | Reproduce a published benchmark | [benchmarks.md](benchmarks.md) |
 | Hook ngsolve.bem H-matrix (2604+) | [ngsbem_integration.md](ngsbem_integration.md) |
 | Cite / publish this work | [paper_outline.md](paper_outline.md) |
+
+> **Two different "deformations" — do not confuse them.**
+> [deformation.md](deformation.md) reshapes the coil *surface* and re-solves ψ
+> (bilevel geometry optimisation).  The *sheet-metal* distortion in
+> [single_stroke.md](single_stroke.md) keeps ψ + the contour levels fixed and
+> bends the manufactured *wire* (one current) to cancel the single-stroke
+> residual.
 
 ## Quick-start (5 lines)
 
@@ -72,6 +84,14 @@ python examples/stream_function/demo_planar_uniform_fem_psi_advanced.py \
 # Optimise the regularisation SHAPE (sigma) with the ACA+ base reused
 # across trials: 2.09% -> 0.73% chain RMS, no geometry change
 python examples/stream_function/demo_reg_hyperparam_aca.py --trials 30
+
+# Cylinder Gx: field_aware single-stroke + SINGLE-CURRENT sheet-metal distort
+# (8.5% -> 1.4% with one bent wire; + a few electric shims -> 1.0%)
+python examples/stream_function/demo_sf_to_peec_gx.py --distort --distort-comps rsz
+
+# Sphere former (ANY curved surface): FE-direct psi -> manufacturable 1-wire NMR
+# shim (Z2: 4.3% -> 0.36% at ~2mm bend, real inter-turn spacing 10.5mm)
+python examples/stream_function/demo_sphere_fe_direct.py --target z2 --distort --plot
 ```
 
 ## What this is, what it is not
@@ -110,6 +130,9 @@ What may be **new** (subject to literature search before publication):
 | Bilevel (inner SF, outer geom)   | Optuna CMA-ES               | Comsol Opt Module (commercial) |
 | Regularisation choices           | 5 (L2/H1/σ/L∞/L_diag)       | Liu-Hennig-Korvink 2012 (H²) |
 | High-order FE ψ                  | H¹ order p (any)            | NGSolve raw                |
+| **Single-current sheet-metal distortion** | plane/cyl/sphere, ONE feed | geometric shim — no separate-feed analogue |
+| **Arbitrary curved formers (FE-direct ψ)** | ANY surface (sphere/conformal) | CoilGen / basis-loop need a structured grid |
+| Manufacturability gate (inter-turn spacing) | yes (≥ conductor width)     | —                          |
 | Material-kernel extension        | callback ready (= TODO demo)| —                          |
 | ngsolve.bem 6.2.2604+ alignment  | callback contract matches   | Joachim Schöberl + Pierre Marchand upstream |
 
@@ -125,10 +148,18 @@ What may be **new** (subject to literature search before publication):
     - + bump deform 20 trial: RMS 0.77 %, p2p 3.12 %
     - + order=3 sweet spot:  RMS **0.51 %**, p2p **1.83 %**
   - Cylindrical Gx fingerprint (Hard tier):
-    - 3 chain methods benchmarked (greedy / lobe / kuijpers)
-    - kuijpers wins: RMS 16.24 %, 0.97 % x-axis nonlin
-    - Tier-bounded; Path-A stuck.
+    - chain methods: **field_aware (9.3 %)** beats kuijpers (16.24 %)
+    - + single-current **sheet-metal distort: 8.5 % → 1.4 %** (one bent wire,
+      ~30 mm radial bend) — beats 10 separate electric shims (2.3 %)
+    - + a few electric shims on the distorted residual: → **1.0 %** (11 feeds)
+    - Path-A oscillates here (tier-bounded; FE-direct does NOT unstick the
+      fingerprint topology — the win of FE-direct is generality, below)
   - Cylindrical Gz: smooth helix, trivial single-stroke, done.
+  - **SPHERE former** (FE-direct ψ — ANY curved surface, basis-loop cannot):
+    - uniform Bz: continuous cres 3e-15 (0 ppm), single-stroke **0.24 %**
+    - Z2 shim: continuous cres 5e-14, single-stroke 4.3 % → sheet-metal
+      distort **0.36 %** (one current, ~2 mm bend); real inter-turn spacing
+      **10.5 mm** ≥ conductor width (manufacturable single wire)
   - HACApK ACA+TSVD on FE-direct matrix: validated equivalent to lstsq.
 
 **PENDING VALIDATION** (industry benchmarks, see `benchmarks.md`):
@@ -150,4 +181,7 @@ What may be **new** (subject to literature search before publication):
     - ``feedback_path_a_naive_picard_negative``
     - ``feedback_fmm_vs_aca_distinction``
     - ``feedback_gmsh_gui_invisible_from_background``
-    - ``project_fe_direct_psi_path_a_converges``
+    - ``project_fe_direct_psi_path_a_converges`` (FE-direct on plane / cylinder
+      / **sphere**; the arbitrary-surface generalisation)
+    - ``project_coil_distortion_sheet_metal_2026_05_31`` (single-current
+      sheet-metal wire distortion: plane / cylinder / sphere)
