@@ -325,6 +325,33 @@ H1 is worse (it over-spreads the current → longer connectors).  This is the
 another geometry-dependence.  Practical recipe: pick the regularisation that
 minimises the **single-stroke RMS** (not the smoothest ψ), then distort.
 
+### Arbitrary curved formers (sphere) — FE-direct ψ ([`demo_sphere_fe_direct.py`](../../examples/stream_function/demo_sphere_fe_direct.py))
+
+The basis-loop representation needs a structured `(φ, z)` grid, so it is
+stuck on planes and cylinders.  **FE-direct ψ meshes ANY surface** — the
+real payoff of the high-order (cubic) FE stream function.  On a *sphere*
+former (NMR shim coil around the magnet), surface FEM done robustly (mesh
+the solid, `H1(mesh, order=3, definedon=mesh.Boundaries(".*"))`, `ds` +
+`grad(.).Trace()`, `mesh.Curve(3)` isoparametric) with the general kernel
+`K = n̂ × ∇_s ψ` (the curved-surface generalisation of the planar `ẑ × ∇ψ`):
+
+| target | continuous ψ | single-stroke | + sheet-metal distort |
+|--------|--------------|---------------|-----------------------|
+| uniform Bz (l=1) | cres 3e-15 (0 ppm) | **0.24 %** | — |
+| Z2 shim (l=2,m=0) | cres 5e-14 | 4.3 % | **0.36 %** (1 current, ~2 mm bend) |
+
+The full manufacturable pipeline runs on the curved former: FE-direct ψ →
+single-stroke (latitude-ring spiral, real inter-turn spacing **10.5 mm** ≥
+conductor width) → sphere sheet-metal distortion (radial `δr` + tangential)
+→ 0.36 %.  Why it matters: the *design-surface shape is not a
+manufacturability constraint* — any fabricable former (sphere / conformal /
+3D-printed) holds a coil; the real constraints are the **wire pattern**
+(single-stroke, min-spacing ≥ width, no self-cross), all handled here.  The
+easy/hard split is set by **target complexity** (uniform l=1 → 0.24 % clean;
+fingerprint → hard), NOT the surface shape.  Caveat: the supplied chainer is
+for *axisymmetric* (m=0: Z1/Z2/Z3…) shims; m≠0 tesserals need a general
+field-aware sphere chainer.
+
 ## Can single-stroke reach a 100 ppm-class spec? (No, for Gx)
 
 For a high-precision target (~100 ppm = 0.01 % degradation), single-stroking
