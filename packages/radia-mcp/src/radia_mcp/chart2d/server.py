@@ -9,7 +9,7 @@ plus a `chart2d_catalog` introspection tool.  Every tool accepts a
                               script and runs it locally.  Fast, no
                               matplotlib dependency on the MCP server.
     return_mode='image'   -> server-side rendering with matplotlib +
-                              radia_mcp.graph profile, save to a
+                              radia_mcp.figure profile, save to a
                               temp PDF/PNG, return the PNG bytes via
                               MCP Image content type.  Inline preview
                               in Claude Desktop / claude.ai.
@@ -90,7 +90,7 @@ def chart2d_catalog(group: str = "all") -> dict:
         "return_modes": ["recipe", "image", "both"],
         "hint":
             "Call chart2d_<name>(x=..., y=..., "
-            "return_mode='recipe'|'image'|'both').  See radia_mcp.graph"
+            "return_mode='recipe'|'image'|'both').  See radia_mcp.figure"
             " quality_rules for style policy.",
     }
 
@@ -119,7 +119,7 @@ def _dispatch(chart_type: str, return_mode: str, render_kwargs: dict,
         )
 
     if return_mode in ("image", "both"):
-        # Render to a temp PDF/PNG via radia_mcp.graph profile.
+        # Render to a temp PDF/PNG via radia_mcp.figure profile.
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
@@ -497,11 +497,11 @@ register_status_tool(
     server_name="mcp-server-chart2d",
     description=(
         "22 paper-quality 2D charts as MCP tools.  Recipe + MCP-Image "
-        "dual return.  Inherits radia_mcp.graph profile + gate stack "
+        "dual return.  Inherits radia_mcp.figure profile + gate stack "
         "(10 pt @ 8 cm, Okabe-Ito CVD palette, Type-42 PDF embed)."
     ),
     subpackage="radia_mcp.chart2d",
-    related_servers=["graph", "mathematica"],
+    related_servers=["figure", "mathematica"],
     optional_deps=["matplotlib"],
 )
 

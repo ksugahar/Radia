@@ -302,13 +302,13 @@ Note:
     ``Fig.~\\subref{fig:foo-left}`` (with the right
     ``subcaption`` options).
 
-## Cross-reference with radia_mcp.graph
+## Cross-reference with radia_mcp.figure
 
 The lab's matplotlib ``paper_figure_8cm(panels=1)`` already
 produces a single-column-friendly figure at ~5 cm axes.  When you
 ``\\includegraphics{out.pdf}`` the result, use ``width=\\columnwidth``
 in the figure environment so the absolute-size font scaling stays
-correct.  See ``mcp-server-graph`` ``paper_figure_8cm_recipe``.
+correct.  See ``mcp-server-figure`` ``paper_figure_8cm_recipe``.
 """
 
 

@@ -37,6 +37,12 @@ _CHROMA_DIR = Path(
                     os.path.expanduser("~/.cache"))
 ) / "radia_mcp_literature_index" / "chroma"
 
+# Embedding model for the lit_em index. multilingual-e5-base (768-dim) is
+# far stronger than the all-MiniLM default on the lab's Japanese-heavy EM
+# corpus, and is the model the index is BUILT with — query and index MUST
+# use the same model or ChromaDB raises a dimension mismatch (384 vs 768).
+_EMBED_MODEL = "intfloat/multilingual-e5-base"
+
 _retriever: ChromaRetriever | None = None
 _index_runner = AsyncRunner()
 
@@ -48,6 +54,7 @@ def _get_retriever() -> ChromaRetriever:
         _retriever = ChromaRetriever(
             db_dir=_CHROMA_DIR,
             collection="lit_em",
+            embedding_model=_EMBED_MODEL,
         )
     return _retriever
 

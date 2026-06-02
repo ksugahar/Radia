@@ -78,17 +78,17 @@ def test_meta_by_tag_optimization_finds_at_least_4():
         f"only {result['n_matches']} optimization servers"
 
 
-def test_meta_related_to_chart2d_includes_graph():
-    """Sanity: chart2d → graph cross-link (the canonical
+def test_meta_related_to_chart2d_includes_figure():
+    """Sanity: chart2d → figure cross-link (the canonical
     "use case A naturally suggests use case B" pattern).
     Previously used mcmc → optuna, but mcmc was removed from the
-    catalog 2026-05-26; chart2d/graph is the most stable pair to
+    catalog 2026-05-26; chart2d/figure is the most stable pair to
     pin here (both shipped 2026-05 and not at risk of removal).
     """
     from radia_mcp.meta.server import radia_mcp_related
     result = radia_mcp_related("chart2d")
     names = [r["name"] for r in result["related"]]
-    assert "graph" in names, f"chart2d related: {names}"
+    assert "figure" in names, f"chart2d related: {names}"
 
 
 def test_all_related_links_are_bidirectional():
