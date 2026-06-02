@@ -532,6 +532,94 @@ PATTERNS: list[dict] = [
                       "form that leaks the handle.",
         "related": [],
     },
+    {
+        "id": "pardiso-mkl-thread-dll-fails-in-pytest-subprocess",
+        "title": "A calc_*.py run with --solver pardiso FAILS in a "
+                 "subprocess spawned under pytest on LAB "
+                 "(mkl_intel_thread.dll cannot load).",
+        "topics": ["test", "pytest", "pardiso", "mkl", "ngsolve", "lab"],
+        "severity": "medium",
+        "first_seen": "2026-06-02",
+        "last_seen": "2026-06-02",
+        "what": "A golden test that subprocess-runs a calc script with "
+                "--solver pardiso fails (returncode 2) with 'Intel MKL "
+                "FATAL ERROR: Cannot load mkl_intel_thread.dll'.  The SAME "
+                "command run directly (no pytest) works fine.",
+        "root_cause": "pytest's conftest MKL add_dll_directory shadow "
+                      "poisons the DLL search path the subprocess "
+                      "inherits; MKL's threading layer fails to load.  "
+                      "sparsecholesky-based calcs are unaffected (no MKL "
+                      "threads).  Same family as the pytest+PySide6 DLL "
+                      "crash.",
+        "detection": "Golden test red on LAB only; CI ignores tests/panels "
+                     "so it does not run there either.",
+        "prevention": "Guard pardiso golden tests: if returncode != 0 and "
+                      "'MKL FATAL ERROR'/'Cannot load mkl' in output -> "
+                      "pytest.skip; verify via a DIRECT (non-pytest) run.  "
+                      "See tests/panels/test_fem_coilmesh_esim_golden.py.",
+        "related": ["tests/panels/test_fem_coilmesh_esim_golden.py"],
+    },
+
+    # =====================================================
+    # CI / GIT INFRASTRUCTURE BUGS
+    # =====================================================
+    {
+        "id": "stale-index-lock-in-shared-clone",
+        "title": "An interrupted background `git commit` in the shared "
+                 "NAS clone leaves a stale .git/index.lock; the next "
+                 "commit fails with 'a git process may have crashed'.",
+        "topics": ["git", "release", "worktree", "lab"],
+        "severity": "medium",
+        "first_seen": "2026-06-02",
+        "last_seen": "2026-06-02",
+        "what": "git commit fails: 'a git process may have crashed in "
+                "this repository earlier: remove the file manually to "
+                "continue'.  HEAD does not advance; the staged index "
+                "survives.",
+        "root_cause": "The LAB main clone is shared with ~7 "
+                      ".claude/worktrees/* sessions.  A backgrounded / "
+                      "interrupted git commit can leave a 0-byte "
+                      ".git/index.lock orphaned.  Worktree sessions use "
+                      "their OWN index, so the main-clone index.lock is "
+                      "safe to clear when no git process is running.",
+        "detection": "Commit output shows the lock message; HEAD unchanged "
+                     "and `git status` still shows the files staged (A).",
+        "prevention": "Confirm `Get-Process git` is empty, `rm "
+                      ".git/index.lock`, retry (staged index survives).  "
+                      "Prefer FOREGROUND commits here; commit to a branch "
+                      "you are not on via a dedicated worktree (its own "
+                      "index avoids the collision entirely).",
+        "related": [],
+    },
+    {
+        "id": "policy-lint-helmholtz-hodge-false-positive",
+        "title": "Policy Lint 'No Helmholtz in C++ core' false-positives "
+                 "on the Helmholtz-Hodge DECOMPOSITION.",
+        "topics": ["ci", "policy-lint", "greens-function", "hodge"],
+        "severity": "medium",
+        "first_seen": "2026-06-02",
+        "last_seen": "2026-06-02",
+        "what": "Policy Lint workflow red: 'Policy 3 failed: Laplace "
+                "kernel only in C++ core', listing rad_application.h, "
+                "rad_hacapk.{cpp,h}, rad_relaxation_methods.cpp.",
+        "root_cause": "Policy 3 was a blunt `grep -i helmholtz` over "
+                      "src/core.  The loop-projection-hodge merge "
+                      "(v4.89.0) added 'Helmholtz-Hodge decomposition' "
+                      "comments (SetLoopProjection ker(N) loop removal) "
+                      "-- a vector-calculus DECOMPOSITION, NOT the "
+                      "forbidden Helmholtz WAVE kernel (e^{-jkr}/r).  The "
+                      "core is still Laplace-only.",
+        "detection": ".github/workflows/policy-lint.yml Policy 3 step "
+                     "(runs on push to main / PRs to main).",
+        "prevention": "Policy 3 grep now excepts "
+                      "'helmholtz[- ]?hodge|decomposition' while still "
+                      "catching a real exp(-j*k*r) kernel (fixed on main "
+                      "48d5205f).  When adding a forbidden-term grep, "
+                      "scope it to the actual violation, not a substring "
+                      "a legitimate concept shares.",
+        "related": [".github/workflows/policy-lint.yml",
+                    "CLAUDE.md: Green's Function: Laplace Kernel Only"],
+    },
 ]
 
 
