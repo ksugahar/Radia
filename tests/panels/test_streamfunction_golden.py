@@ -168,5 +168,40 @@ def test_streamfunction_manufacture(sample_vols):
     assert r["peec"]["L_H"] > 0.0 and r["peec"]["R_ohm"] >= 0.0
 
 
+def test_streamfunction_field_cross_codebase(tmp_path):
+    """End-to-end (A): the SF design routine's coil field matches Radia's
+    INDEPENDENT C++ Biot-Savart (rad.ObjFlmCur) -- an external-codebase
+    confirmation, not self-consistency.  Runs the verify example which designs
+    a uniform-Bz cylindrical coil (MRI scale) and cross-checks the two
+    engines."""
+    import json as _json
+    script = os.path.join(REPO, "examples", "stream_function",
+                          "verify_coil_field_independent.py")
+    if not os.path.exists(script):
+        pytest.skip("verify example not present")
+    jpath = str(tmp_path / "vc.json")
+    cmd = [sys.executable, script, "--order", "1", "--nlevels", "8",
+           "--cases", "uniform", "--outdir", str(tmp_path), "--json", jpath]
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env,
+                       timeout=900)
+    if r.returncode != 0:
+        low = (r.stderr or "").lower()
+        if "mkl" in low or "dll" in low or "libiomp" in low:
+            pytest.skip("NGSolve/Radia subprocess env issue (LAB pytest)")
+        raise AssertionError(f"verify example failed (rc={r.returncode}):\n"
+                             f"{r.stderr[-1500:]}")
+    with open(jpath) as f:
+        d = _json.load(f)
+    case = d["cases"][0]
+    assert case["case"] == "uniform"
+    # INDEPENDENT-codebase field agreement (numpy design routine vs Radia C++)
+    assert case["rel_segment_vs_radia"] < 1.0e-6, \
+        f"design vs Radia C++ disagree: {case['rel_segment_vs_radia']}"
+    # the ~8-turn solenoid-equivalent is uniform over the DSV
+    assert case["bz_uniformity"] < 5.0e-2
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
