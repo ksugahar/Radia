@@ -760,6 +760,16 @@ connectors) -- OPPOSITE ranking from the planar uniform case (where H1
 was cleanest).  Recipe: pick the regularisation that minimises the
 SINGLE-STROKE RMS, then distort.
 
+COMPOSE with electric shims (``--distort --shim-loops K``): the bend and
+the separate-feed shims cancel DIFFERENT parts of the residual.  The bend
+is FAR more feed-efficient -- 1 bent wire (1 feed) reaches 1.4% where 10
+electric shims alone (10 feeds) only reach 2.3%.  distort + 10 shims (11
+feeds) -> 1.0%.  Recipe on the hard tier: distort first (1 printable
+part), then a few shims clean the high-freq residual.  Under --distort the
+[8] shim-only block is skipped; shims apply to the DISTORTED residual in
+[9].  The Gx 3D plot colours the wire by RADIAL bend (sheet-metal forming
+visible).
+
 ## Acceleration path for FE-direct: WAIT for Joachim H-matrix (2026-05-30)
 
 Decision: do NOT build a custom HACApK ↔ ngsolve.bem basis bridge to

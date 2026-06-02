@@ -71,6 +71,12 @@ extern "C" {
     int  cHACApK_hlu_get_accum_cap(void);
     void RadGetStarBasisStats(int* out);
     void RadGetKeepLoopStats(double* out);
+    void RadSetLoopStarHMatMode(int m);
+    void RadGetStarHMatStats(double* out);
+    void   RadSetStarHLUTruncTol(double t);
+    double RadGetStarHLUTruncTol(void);
+    void RadGetLoopDeflBlockJacobiStats(double* out);
+    void RadGetLoopProjStats(double* out);
     double cHACApK_harith_self_test_mixed_sibling_nonuniform(int n1, int n2, int m1, int m3);
     double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
     double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
@@ -1019,6 +1025,24 @@ void SetDeflateNullspace(bool enable, double alpha) {
 void SetLoopStarGauge(bool enable) {
     int n = 0;
     int err = RadSetLoopStarGauge(&n, enable ? 1 : 0);
+    check_error(err);
+}
+
+/**
+ * @brief Enable/disable the loop-deflated block-Jacobi BiCGSTAB gauge (HACApK).
+ */
+void SetLoopDeflBlockJacobiGauge(bool enable) {
+    int n = 0;
+    int err = RadSetLoopDeflBlockJacobiGauge(&n, enable ? 1 : 0);
+    check_error(err);
+}
+
+/**
+ * @brief Enable/disable Helmholtz-Hodge loop removal (HACApK post-solve).
+ */
+void SetLoopProjection(bool enable) {
+    int n = 0;
+    int err = RadSetLoopProjection(&n, enable ? 1 : 0);
     check_error(err);
 }
 
@@ -2967,6 +2991,43 @@ PYBIND11_MODULE(_radia_pybind, m) {
         cg_iters (total loop-block CG iterations), res_final (absolute final residual).
     )pbdoc");
 
+    m.def("SetLoopStarHMatMode", [](int mode){ RadSetLoopStarHMatMode(mode); },
+        py::arg("mode"),
+    R"pbdoc(
+        A_SS-as-H-matrix mode for the loop-star solve: 0 = off (dense K-dense LU,
+        default), 1 = build A_SS = S^T A S as a HACApK H-matrix inside SolveLoopStar
+        and verify its MatVec against the exact T^T A T sandwich (read via
+        GetStarHMatStats). This is the "HACApK-only star" path (tree-cotree loop-star
+        H-matrix) that replaces the dense K-dense LU at large scale.
+    )pbdoc");
+
+    m.def("GetStarHMatStats", []() -> py::dict {
+        double o[14] = {0};
+        RadGetStarHMatStats(o);
+        py::dict d;
+        d["n_star"] = o[0]; d["hmat_matvec_relerr"] = o[1];
+        d["build_rc"] = o[2]; d["build_time_s"] = o[3];
+        d["hlu_solve_relerr"] = o[4]; d["hlu_iters"] = o[5];
+        d["factor_time_s"] = o[6]; d["solve_time_s"] = o[7];
+        d["precond_resid"] = o[8]; d["trunc_tol"] = o[9];
+        d["nlf"] = o[10]; d["nlfkt"] = o[11];
+        d["ktmax"] = o[12]; d["compression"] = o[13];
+        return d;
+    },
+    R"pbdoc(
+        Diagnostics from the most recent A_SS H-matrix path (SetLoopStarHMatMode):
+        n_star (A_SS dimension), hmat_matvec_relerr (||A_SS_Hmat y - T^T A T y|| /
+        ||T^T A T y||, mode>=1), build_rc, build_time_s; and for mode 2:
+        hlu_solve_relerr (||y_hlu - y_kdense|| / ||y_kdense|| -- the A_SS-H-LU-
+        preconditioned reduced solve vs the dense K-dense reference; ~tol means it
+        solves correctly), hlu_iters (H-LU-preconditioned BiCGSTAB iteration count).
+    )pbdoc");
+
+    m.def("SetStarHLUTruncTol", [](double t){ RadSetStarHLUTruncTol(t); }, py::arg("tol"),
+          "Set H-ILU truncation tol for the A_SS H-LU factor (loop-star mode 2). "
+          "Larger = more aggressive rk truncation (cheaper -> H-ILU); smaller -> H-LU.");
+    m.def("GetStarHLUTruncTol", []() -> double { return RadGetStarHLUTruncTol(); });
+
     m.def("HLUMixedBreakdown", []() -> py::dict {
         long a[9] = {0}, l[9] = {0}, r[9] = {0};
         cHACApK_hlu_get_mixed_breakdown(a, l, r);
@@ -3260,6 +3321,85 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Args:
                   enable: True to enable, False to disable.
           )pbdoc");
+
+    m.def("SetLoopDeflBlockJacobiGauge", &radia_solver::SetLoopDeflBlockJacobiGauge,
+          py::arg("enable"),
+          R"pbdoc(
+              Enable/disable the LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB gauge (HACApK
+              method=2). Unlike loop-star (which changes basis to the star space and
+              destroys the element block structure), this STAYS in the original
+              element DOF space -- so the 6x6 block-Jacobi preconditioner still
+              applies -- and removes the ill-conditioned loop null space ker(N) by
+              DEFLATION (a two-level projector P = I - A W (W^T A W)^-1 W^T, W = the
+              sparse loop cycle basis), NOT by an operator shift. Fully O(N)
+              matrix-free except the coarse E = W^T A W factor (the benign
+              well-conditioned loop-loop block). The scalable alternative to
+              loop-star + K-dense at high permeability: no 15^3 / 8 GB cap and no
+              dependence on whether the reduced star operator compresses. Linear
+              regime (uniform chi). Diagnostics via GetLoopDeflBlockJacobiStats().
+
+              Args:
+                  enable: True to enable, False to disable.
+          )pbdoc");
+
+    m.def("SetLoopProjection", &radia_solver::SetLoopProjection,
+          py::arg("enable"),
+          R"pbdoc(
+              Enable/disable HELMHOLTZ-HODGE loop removal for the HACApK solve
+              (method=2). After the (plain) solve converges, subtract the
+              non-physical LOOP (circulating surface-charge) component from sigma by
+              a Hodge projection off the topological cycle space: c solves
+              (L^T L) c = L^T sigma (CG on the well-conditioned, mu_r-independent loop
+              Gram matrix L^T L), then sigma -= L c. The loop space is ker(N) (the
+              circulating charges), so N*sigma -- the on-element field -- is UNCHANGED;
+              only the non-physical circulation is removed. Cheap (CG converges in a
+              handful of iterations; no significant slowdown) and scalable (uses only
+              the O(N) topological cycle CSR). Use when a loop-free physical sigma /
+              magnetization is wanted. Diagnostics via GetLoopProjStats().
+
+              Args:
+                  enable: True to enable, False to disable.
+          )pbdoc");
+
+    m.def("GetLoopProjStats", []() -> py::dict {
+        double o[5] = {0};
+        RadGetLoopProjStats(o);
+        py::dict d;
+        d["n_loop"]      = o[0];
+        d["cg_iters"]    = o[1];
+        d["loop_before"] = o[2];
+        d["loop_after"]  = o[3];
+        d["loop_frac"]   = o[4];
+        return d;
+    },
+    R"pbdoc(
+        Diagnostics from the most recent Helmholtz-Hodge loop removal
+        (SetLoopProjection): n_loop (cycle basis dim), cg_iters (projection CG
+        iterations -- small = well-conditioned), loop_before / loop_after
+        (||L^T sigma|| before/after; after ~ 0 = loop-free), loop_frac
+        (||L c|| / ||sigma|| = fraction of sigma that was circulating/non-physical).
+    )pbdoc");
+
+    m.def("GetLoopDeflBlockJacobiStats", []() -> py::dict {
+        double o[7] = {0};
+        RadGetLoopDeflBlockJacobiStats(o);
+        py::dict d;
+        d["n_loop"]        = o[0];
+        d["iters"]         = o[1];
+        d["res_rel"]       = o[2];
+        d["coarse_time_s"] = o[3];
+        d["solve_time_s"]  = o[4];
+        d["block_jacobi"]  = o[5];
+        d["eff_rank"]      = o[6];
+        return d;
+    },
+    R"pbdoc(
+        Diagnostics from the most recent loop-deflated block-Jacobi BiCGSTAB solve
+        (SetLoopDeflBlockJacobiGauge): n_loop (deflation dim), iters (BiCGSTAB
+        iterations; -1 = coarse E factor singular), res_rel (||b - A sigma||/||b||),
+        coarse_time_s (E = W^T A W build + LU), solve_time_s, block_jacobi (1 if the
+        6x6 block-Jacobi preconditioner was used, else 0 = column-scale Jacobi).
+    )pbdoc");
 
     // ========================================================================
     // Utility
