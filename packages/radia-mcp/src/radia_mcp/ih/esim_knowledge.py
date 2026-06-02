@@ -645,9 +645,95 @@ locked-in for radia >= 4.55.3.
 """
 
 
+ESIM_USAGE_EM_TABLE_COUPLING = """
+sigma(T) / mu(T) thermal-EM coupling via a precomputed Z_s(|H_t|, T)
+table -- the engineering alternative to per-timestep Karl-FEM when the
+EM problem is quasi-static on the heat timescale (EM 1/omega ~ 100 us
+at 10 kHz vs heat tau ~ s -> ratio ~1e4).  Two CLI scripts (NOT yet
+wired into the radia-ih panel).
+
+## Step 1: build the table -- calc_em_table.py
+
+Solves the 1-D ESIM cell problem at each node of a log-spaced |H_t|
+grid x linear T grid, writes a .npz:
+
+    python calc_em_table.py \\
+        --material steel --frequency 50e3 \\
+        --H-grid-min 1e2 --H-grid-max 1e5 --n-H 20 \\
+        --T-grid-min 20  --T-grid-max 800 --n-T 20 \\
+        --sigma-T-curve sigma_T_steel.csv \\
+        --curie-temp 770 --curie-exp 0.5 \\
+        --em-table-output em_table_steel_50kHz.npz
+
+T-dependence flags (both OPT-IN; honest-uncertainty stance):
+  --sigma-T-curve CSV   2-col (T_celsius, sigma_S_per_m).  Clamped
+                        outside its T range (NO extrapolation).  Omit
+                        -> material preset constant sigma at all T.
+  --curie-temp Tc       Curie mu(T) collapse: scales the BH curve's
+                        MAGNETIC part by f(T) = (1 - T/Tc)^beta,
+                        clamped [0,1], so mu_r -> 1 at/above Tc.
+                        Default 0 = BH T-invariant.
+  --curie-exp beta      collapse exponent (default 0.5).
+
+These are USER-CHOSEN functional forms (CSV curve, (Tc, beta)) --
+T-dependent data is inherently uncertain, so it is supplied + clamped +
+recorded in the table meta, never hardcoded false certainty (CLAUDE.md
+"T-dependence: functionalize ...").  T-dependent BH SHAPE beyond the
+Curie mu-collapse is a known gap.
+
+.npz schema: H_grid, T_grid, Zs_re, Zs_im, q_surf (= 0.5 Re(Z_s) |H_t|^2),
+meta (material, frequency, sigma_T_curve, curie_temp, curie_exp, ...).
+
+## Step 2: runtime heat solve -- calc_heat_with_em_table.py
+
+Backward-Euler heat; per timestep scales |H_t_ref(r)| by I(t)/I_ref
+and bilinearly interpolates q_surf from the table at every surface DOF.
+Dominant simplification: the SPATIAL shape of |H_t(r)| is frozen at the
+reference solve; only the amplitude follows I(t).
+
+Reference field --ht-source:
+  kelvin (recommended)  --ht-sol <stem>_Jsurf.sol + --em-vol
+                        <stem>_fem.vol from a calc_fem_kelvin run.
+                        |J_s| = |H_t| on the SIBC face -- captures
+                        workpiece backreaction.  One upstream FEM solve.
+  biot                  --coil-step <coil.step>.  Walks the coil
+                        centerline (same extractor as PEEC), evaluates
+                        the incident Biot-Savart field at each surface
+                        DOF, projects onto the local tangent plane.  NO
+                        backreaction -> ~2x low for a good flat
+                        conductor (the eddy-current image that doubles
+                        H_t is absent).  --biot-image-factor 2.0 opts
+                        into that doubling EXPLICITLY (never silent;
+                        No-Fallbacks).  Needs no EM solve.
+
+    python calc_heat_with_em_table.py \\
+        --wp-vol workpiece.vol --em-table em_table_steel_50kHz.npz \\
+        --ht-source kelvin --ht-sol run_Jsurf.sol --em-vol run_fem.vol \\
+        --I-ref 1000 --coil-current 1200 --dt 0.5 --t-end 60
+
+--coil-current-csv <t_s,I_A> gives a time-varying current (clamped).
+
+## Tests
+  tests/panels/test_em_table_curie.py       Curie mu(T) helpers
+  tests/panels/test_heat_em_table_biot.py   biot |H_t| tangential
+                                            projection + image-factor
+                                            vs analytical circular loop
+
+## When to prefer this over --impedance esim (Karl)
+  - You need the WHOLE heat-up transient (many timesteps), not one EM
+    operating point.
+  - sigma(T) / mu(T) move enough during heating that a single Z_s is
+    wrong, but re-solving the EM per step is too expensive.
+  - The |H_t| spatial shape is roughly current-independent (true in the
+    weak-redistribution regime; re-run the kelvin reference at a
+    representative T if a Curie band sweeps across the part).
+"""
+
+
 TOPICS = {
     "all":                  None,
     "overview":             ESIM_USAGE_OVERVIEW,
+    "em_table_coupling":    ESIM_USAGE_EM_TABLE_COUPLING,
     "bh_file":              ESIM_USAGE_BH_FILE,
     "inductance_cli":       ESIM_USAGE_INDUCTANCE_CLI,
     "fem_kelvin_cli":       ESIM_USAGE_FEM_KELVIN_CLI,
