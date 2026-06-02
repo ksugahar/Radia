@@ -263,13 +263,73 @@ forms, primal/dual de Rham); loop-star / low-frequency EFIE (Wilton, Vecchi,
 Andriulli). See radia-mcp `differential_forms_homology` (tree_cotree),
 `fem_gauge_open_boundary`, `bem_low_freq`.
 
+## 8.5. Loop removal as a post-solve Hodge projection (`SetLoopProjection`, DEFAULT ON)
+
+Sections 6-8 deflate the loop modes *during* the iteration (to recondition the
+solve). But the loops are also **non-physical in the answer itself**: they are the
+solenoidal `curl(T)` part of the magnetization (Section 8) -- circulating surface
+charges that produce **no field**. If you want a physically clean `sigma` / `M`
+with zero loop content, the cleanest route is a **Helmholtz-Hodge projection of the
+converged solution** off the cycle space, independent of how the system was solved:
+
+```
+c solves (L^T L) c = L^T sigma        (CG; L = topological cycle basis = ker N)
+sigma  <-  sigma - L c                 (remove the span(L) = loop component)
+```
+
+This is **default ON** (`rad.SetLoopProjection(True)` is the default; pass `False`
+to keep the raw loop-containing `sigma`). Key properties:
+
+- **Field-exact / transparent.** `N L = 0`, so `N*sigma` -- the on-element field --
+  is unchanged: removing the loop does NOT change `rad.Fld()` (`dB/B ~ 1e-15`).
+  Only the non-physical circulating part of the magnetization distribution changes.
+  Verified: **102/102** core field + golden tests are unchanged with the default on.
+- **Cheap, no slowdown.** `L^T L` is the loop **Gram** matrix -- geometric, sparse,
+  `mu_r`-INDEPENDENT, and WELL-CONDITIONED (`cond ~ 1`, the cycle basis is
+  near-orthonormal), the OPPOSITE of the system matrix `A` (`cond ~ mu_r`). The CG
+  converges in a handful of iters (cube ~6-8, C-type ~54, `mu_r`-independent). Cost
+  is negligible vs the solve (`wall_proj ~ wall_plain`).
+- **Scalable.** Uses ONLY the `O(N)` topological cycle CSR (`BuildLoopBasis`) plus
+  matrix-free `L`/`L^T` -- no H-matrix, no `MatVec`, no dense null basis. NOTE this
+  uses the **topological** cycles (`E-V+C`), which is what "loop" means here; it is
+  NOT the full numerical `ker(N)` (on some geometries `ker N` exceeds the cycle
+  space by a few accidental near-null modes that GROW with `N` and are a separate,
+  non-scalable issue -- those are NOT loops and are deliberately left alone).
+- **All solver paths, consistently.** Method 2 (HACApK) projects in-manager after
+  convergence; methods 0 (LU) and 1 (dense BiCGSTAB) call the static
+  `RadHACApKMSCManager::ProjectOutLoopsStandalone` (a temporary manager bound to the
+  interaction runs the same pure-sparse projection on the element `sigma`). So LU,
+  dense BiCGSTAB, and HACApK all return the SAME loop-free `sigma`.
+- **Nonlinear-safe.** `L = ker(N)` is `chi`-independent (pure geometry), so the same
+  `L` projects at any `chi`. The projection is applied **ONCE after the nonlinear
+  iteration converges**, NOT per Picard/Newton step -- so the `chi(H)` iteration is
+  driven by the true (loop-included) `sigma` and only the final answer is made
+  loop-free. (Projecting every step instead fed a loop-free `sigma` into the `chi`
+  update and perturbed the field ~1%, and crashed on the multiply-connected 1/4
+  C-type -- both fixed by the post-convergence placement.) Verified on a C-type
+  nonlinear `MatSatIsoTab` solve (57 Picard iters): no crash, loop removed 8 orders,
+  field unchanged `dB/B = 8.7e-15`; `tests/test_hysteresis.py` (25 cases) green.
+- **Interaction with the gauges.** Auto-skipped when `SetLoopStarGauge` (keeps loops
+  by design) or the loop-deflated block-Jacobi gauge is active -- those already
+  handle the loop content, so the post-projection would double-process.
+
+Diagnostics: `rad.GetLoopProjStats()` -> `{n_loop, cg_iters, loop_before,
+loop_after, loop_frac}`. `loop_frac` (`||L c|| / ||sigma||`) reports how much of the
+solved `sigma` was circulating (non-physical): typically `~0.26` at `mu_r=2` rising
+to `~0.99` at `mu_r >= 1e4` -- i.e. at high permeability almost ALL of the raw
+`sigma` is loop content, which is exactly why the field is loop-robust but the raw
+magnetization distribution is not. Test: `tests/test_loop_projection.py`.
+
 ## 9. Practical guidance
 
-- At very high `mu_r` the converged discrete solution can be contaminated
-  by spurious loops; this is conditioning, not a code defect.
-- For trustworthy high-`mu_r` results: watch the condition number, prefer a
-  deflated / eigenvalue-shifted iteration, or keep `mu_r` physical.
-- HACApK's ACA does not regularize the spectrum — deflation must be added
+- The converged `sigma` is loop-free by default (`SetLoopProjection`, Section 8.5);
+  `rad.Fld()` is unchanged either way (`N L = 0`). Pass `SetLoopProjection(False)`
+  only if you specifically need the raw loop-containing magnetization.
+- At very high `mu_r` the *iteration* can still be slow / ill-conditioned (the
+  near-singular `1/(mu_r-1)` loop eigenvalues); the post-solve projection cleans the
+  ANSWER but does not speed the SOLVE. For solve speed at high `mu_r` use a deflated
+  / eigenvalue-shifted iteration (Sections 6-8) or keep `mu_r` physical.
+- HACApK's ACA does not regularize the spectrum — in-solve deflation must be added
   explicitly (a local cycle basis keeps it `O(N)`).
 
 ---
