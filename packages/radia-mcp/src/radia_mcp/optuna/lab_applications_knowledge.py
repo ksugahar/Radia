@@ -58,6 +58,7 @@ The two compose naturally:
 | `radia_mcp.wpt` | WPT design knowledge | Compensation topology pre-screening |
 | `radia_mcp.pinn` | surrogate model | Replace FEM in inner Optuna loop |
 | `radia_mcp.literature_index` | corpus search | Find similar BBO benchmarks |
+| `radia_mcp.radia_ngsolve` | `aca_tsvd(regularized)` | SF coil **(homogeneity, peak current density)** Pareto: NSGA-II over (geometry, Tikhonov alpha) + CMA-ES sheet-metal (板金) surface-forming shape optimisation (inner solve = cached folded-Tikhonov RegularizedTSVD) |
 """
 
 
