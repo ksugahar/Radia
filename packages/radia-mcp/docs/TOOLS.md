@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **326 tools** across 39 MCP servers.
+Total: **328 tools** across 40 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -10,7 +10,8 @@ Total: **326 tools** across 39 MCP servers.
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
 | [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 8 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 33 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 32 |
+| [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 12 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
@@ -178,7 +179,6 @@ Module: `radia_mcp.radia_ngsolve.server`
 
 | Tool | Description |
 |---|---|
-| `aca_tsvd` | (ACA+)+TSVD accelerated kernel-agnostic least-norm solver. |
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
 | `axifemm_documentation` | Get radia-axifemm documentation: Henrotte axisymmetric Q-element FE |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
@@ -211,6 +211,18 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
+
+## `mcp-server-radia-streamfunction`
+
+_Stream-function coil design: (ACA+)+TSVD least-norm, FE-direct psi, regularisation / folded-Tikhonov Pareto front, single-stroke chain, sheet-metal (板金) levers_
+
+Module: `radia_mcp.streamfunction.server`
+
+| Tool | Description |
+|---|---|
+| `radia_streamfunction_status` | (no description) |
+| `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 16 topics. |
+| `streamfunction` | Get Stream-Function (SF) coil-design documentation. |
 
 ## `mcp-server-fem`
 
