@@ -439,10 +439,27 @@ redistributes the loop spacing ALONG the surface at FIXED radius, so it is
 needed).  It pushes the whole cylinder Gx-fingerprint front down
 ~ **−10 to −25 %** (best −25 %), done correctly (local-spacing peak +
 spacing-weighted seminorm `S`, monotone reparametrisation).  See
-[`demo_pareto_cylinder_deform.py`](../../examples/stream_function/demo_pareto_cylinder_deform.py).
+[`demo_pareto_cylinder_deform.py`](../../examples/stream_function/demo_pareto_cylinder_deform.py)
+(`--target {gx,c2,s2,z2} [--azimuthal]`).
+
+The in-surface lever has TWO directions (axial `Z(z)` and azimuthal
+`Φ(φ)`), and **which one matters follows the target's azimuthal order `m`**:
+
+| target | `m` | axial-only | azimuthal benefit (2D vs axial) |
+|--------|-----|-----------|----------------------------------|
+| `Gx = x` | 1 | −16 % | **+0.0 %** (smooth `cos φ`, no azimuthal hot spot) |
+| `Z2 = 2z²−r²` | 0 | −20 % | −1.8 % (axisymmetric → axial dominates) |
+| `S2 = xy` | 2 | −11 % | −1.2 % |
+| `C2 = x²−y²` (ellipse) | 2 | −5 % | **−5.4 %** (2D ≈ DOUBLES it to ~ −10 %) |
+
+So **axial-only** is the right default for `Gx` / `Z2`; turn on
+`--azimuthal` for the high-`m` azimuthal shims (`C2` ellipse / `S2`), where
+the azimuthal current has genuine hot spots to redistribute.
+
 The optimal forming direction is geometry-dependent (out-of-surface on the
-plane, in-surface on the cylinder) — the same plane-vs-cylinder reversal seen
-for the single-stroke distortion lever in [single_stroke.md](single_stroke.md).
+plane, in-surface on the cylinder; and within the cylinder, axial vs
+azimuthal by target symmetry) — the same plane-vs-cylinder reversal seen for
+the single-stroke distortion lever in [single_stroke.md](single_stroke.md).
 
 Levers 1–2 reuse one ACA factorisation (the `+ α I` core + the cheap
 re-fold `S⁻¹V`); lever 3 rebuilds `A` + ACA per geometry — the EXPENSIVE

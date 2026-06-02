@@ -1807,13 +1807,21 @@ SHEET-METAL (板金) lever   [2026-06, radia 4.89.1+]
      derivative) + spacing-WEIGHTED graph Laplacian seminorm (z-edge
      a*dphi/dZ, phi-edge dZ/(a*dphi)) + monotone dZ/dz>0 penalty.
      demo_pareto_cylinder_deform.py.
-   - 2D in-surface (axial Z(z) + azimuthal Phi(phi)) was tested: it adds
-     only ~0.5 pp over axial-only at exact homogeneity (-18.0% vs -17.5%)
-     for the Gx fingerprint -- the azimuthal current is a smooth cos phi
-     with no hot spot to redistribute, so the AXIAL reparametrisation is
-     essentially the full in-surface lever.  Honest (mildly negative)
-     result: not integrated (not worth the periodic-azimuthal complexity
-     for +0.5 pp); azimuthal may matter for higher-order targets.
+   - 2D in-surface (axial Z(z) + azimuthal Phi(phi)): the AZIMUTHAL
+     component matters ONLY when the target has azimuthal structure
+     (m>=2).  Per-target exact-homogeneity test (axial-only vs 2D
+     axial+azimuthal, azimuthal benefit = 2D vs axial):
+       Gx        (m=1)  +0.0%  (smooth cos phi, no azimuthal hot spot)
+       Z2        (m=0)  -1.8%  (axisymmetric; axial dominates at -20%)
+       S2=xy     (m=2)  -1.2%
+       C2=x^2-y^2(m=2)  -5.4%  (axial-only is only -5.0% here, so 2D
+                                ~DOUBLES the in-surface benefit to ~-10%)
+     So the in-surface lever DIRECTION follows the target symmetry:
+     low-m / axisymmetric -> AXIAL; high-m azimuthal targets (C2 ellipse,
+     S2) -> AZIMUTHAL is a comparable lever.  Axial-only
+     (demo_pareto_cylinder_deform.py) is the right default for Gx/Z2; 2D
+     azimuthal pays off for m>=2 shims.  (Earlier "azimuthal marginal"
+     was Gx-specific.)
    Same plane-vs-cylinder reversal as the single-stroke distortion lever
    (out-of-surface lift on the plane, in-surface reroute on the
    cylinder) -- see topic "single_stroke".
