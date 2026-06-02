@@ -193,5 +193,5 @@ are the entry points users typically want:
 
   - Theory: [theory.md](theory.md)
   - Demos: [examples.md](examples.md)
-  - MCP topic: `aca_tsvd(topic=api)` for the formal SA-25-020 manuscript
+  - MCP topic: `streamfunction(topic=api)` for the formal SA-25-020 manuscript
     API.

@@ -14,9 +14,10 @@ SF-focused front door for the Radia stream-function coil-design framework:
   minimax, geometry (former size / cylinder length), SHEET-METAL (板金) forming
 - Single-stroke ("一筆書き") chain + sheet-metal wire distortion (one feed)
 
-The detailed knowledge is shared with the radia-ngsolve server's
-``aca_tsvd(<topic>)`` tool; this server is the SF-focused front door, adding a
-dedicated overview + topic map.
+The detailed knowledge lives in this server's own
+``radia_mcp.streamfunction.knowledge.aca_tsvd`` (moved from radia-ngsolve in
+2026-06: SF coil design is not a general NGSolve usage).  The ``streamfunction``
+tool adds a dedicated SF overview + topic map over that knowledge.
 
 Usage:
     mcp-server-radia-streamfunction              # Start MCP server (stdio)

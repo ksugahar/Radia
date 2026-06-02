@@ -263,5 +263,5 @@ and `demo_pareto_deform.py` / `demo_pareto_cylinder_deform.py`.
     [regularization.md § Pushing the front](regularization.md#pushing-the-homogeneity-peak-j-pareto-front)
   - Math: [theory.md](theory.md)
   - Optuna BBO recipes: MCP `optuna(topic=lab_applications)`
-  - SA-25-020 lineage: MCP `aca_tsvd(topic=cmaes)`
-  - Regularisation closed form + Pareto/板金: MCP `aca_tsvd(topic=regularized)`
+  - SA-25-020 lineage: MCP `streamfunction(topic=cmaes)`
+  - Regularisation closed form + Pareto/板金: MCP `streamfunction(topic=regularized)`

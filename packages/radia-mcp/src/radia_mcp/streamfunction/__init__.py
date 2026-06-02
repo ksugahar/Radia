@@ -1,7 +1,8 @@
 """radia_mcp.streamfunction -- Stream-Function (SF) coil-design MCP server.
 
-SF-focused front door over the kernel-agnostic (ACA+)+TSVD least-norm solver,
+SF-focused server over the kernel-agnostic (ACA+)+TSVD least-norm solver,
 FE-direct psi, regularisation / folded-Tikhonov Pareto front, single-stroke
-chain, and sheet-metal (板金) levers.  Detailed knowledge is shared with
-``radia_mcp.radia_ngsolve`` ``aca_tsvd(<topic>)``.
+chain, and sheet-metal (板金) levers.  The detailed knowledge lives in
+``radia_mcp.streamfunction.knowledge.aca_tsvd`` (moved from
+``radia_mcp.radia_ngsolve`` in 2026-06: SF is not a general NGSolve usage).
 """
