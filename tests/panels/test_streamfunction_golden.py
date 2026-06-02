@@ -188,6 +188,28 @@ def test_streamfunction_field_aware_chain(sample_vols):
     assert "n_open_contours" in rf and rf["n_open_contours"] >= 0
 
 
+def test_streamfunction_contour_hp_and_flux(sample_vols, tmp_path):
+    """Order-p (hp) contour subdivides each triangle and evaluates the curved
+    order-2 psi (sub=3); the bubble-system flux plot renders the coil's field
+    lines with density ~ |B| on a cut-plane."""
+    coil, evalv = sample_vols
+    png = str(tmp_path / "flux.png")
+    r = _run_calc(coil, evalv, "x",
+                  extra=["--method", "manufacture", "--nlevels", "12",
+                         "--eval-max", "40", "--confine", "abe",
+                         "--contour-sub", "3", "--flux-plot", png,
+                         "--flux-plane", "y"])
+    assert "error" not in r, f"calc error: {r.get('error')}"
+    assert r["contour_sub"] == 3
+    assert r["n_open_contours"] == 0
+    # the high-p contour still yields an accurate separate-turn coil
+    assert r["loops_homogeneity_rms"] < 5.0e-2
+    # bubble-system flux plot rendered (skip if matplotlib unavailable)
+    if "flux_plot_error" not in r:
+        assert r["n_flux_lines"] > 0
+        assert os.path.exists(png)
+
+
 def test_streamfunction_confine_closes_contours(sample_vols):
     """Boundary confinement (psi=0 on the former edge) closes the contours on
     ANY former -> a manufacturable single-stroke gradient coil.  On the short

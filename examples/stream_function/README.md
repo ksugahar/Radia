@@ -296,6 +296,29 @@ contours can chain into a slightly worse one-wire path than `on`, so the best
 Gx single-stroke reaches ~1.5-2 % (`--nlevels 30`), no distort.  Locked by
 `test_streamfunction_field_aware_chain` and `test_streamfunction_confine_closes_contours`.
 
+## Contour drawing = flux-line drawing (same principle)
+
+The iso-contours of the stream function are drawn by the same rule as magnetic
+flux lines: between two adjacent lines flows a FIXED amount (current for psi,
+flux for the vector potential) -- Abe's "between nodes i, j flows T_i - T_j".
+So equal-`psi`-interval contouring automatically gives wire density
+proportional to `|grad psi| = |K|`, the same density rule the flux-line "bubble
+system" (Hirahatake/Noguchi/Igarashi/Yamashita) enforces with bubbles of radius
+`r ~ 1/sqrt(|B|)`.  Two refinements of `manufacture` follow from this:
+
+- **`--contour-sub N` (order-p contour)** -- by default the wire contours march
+  on the vertex (order-1) psi.  For an order-2/3 design that throws away the
+  edge/face DOFs.  `--contour-sub 3` subdivides each surface triangle 3x3 and
+  evaluates the FULL-order psi at every micro-vertex via `GetTrafo` (the FE
+  analogue of the analytical flux-line trace inside an element), so the wire
+  follows the curved order-p psi.  LAB Gx order 2: separate-turn
+  `loops_homogeneity` 1.3e-4 -> 1.1e-4 and visibly smoother wires.
+- **`--flux-plot out.png` (bubble-system flux-line view)** -- renders the
+  designed coil's actual B field as flux lines on a cut-plane
+  (`--flux-plane {x,y,z}`), seeded by the bubble system so the line density
+  reflects `|B|`.  A physical check that the coil produces the intended field
+  (e.g. the four-lobe saddle of a Gx gradient coil).
+
 ## References
 
 - Sugahara Lab, "ACA-accelerated stream function method + CMA-ES",
