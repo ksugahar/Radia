@@ -1381,7 +1381,7 @@ def main():
     # currents of the K SF-basis loops that best cancel the residual
     # r = B_target - I_w*Bz_chain.  This is monotone (more shims -> better),
     # needs no step tuning, and trades K extra current feeds for accuracy.
-    if args.shim_loops > 0 or args.shim_tol > 0.0:
+    if (args.shim_loops > 0 or args.shim_tol > 0.0) and not args.distort:
         # full SF-basis kernel A[i, j] = Bz at DSV obs i from basis loop j
         A_full = np.array([[_loop_Hz(obs_dsv[i], corners_list[j])
                             for j in range(N)] for i in range(M)])
@@ -1426,6 +1426,31 @@ def main():
         print(f"    dense-DSV RMS {rms0_d:.3e} -> {rms_best_d:.3e}"
               f"  (SINGLE current I_w = {I_w_d:.4g}, no extra feeds;"
               f" max bend = {disp_mm:.1f} mm)")
+        # COMPOSE with a few electric shims on the DISTORTED residual: the
+        # geometric bend is the feed-efficient workhorse (1 feed already beats
+        # K electric shims), a few shims then refine.  Both compose because
+        # they cancel different parts of the residual.
+        if args.shim_loops > 0 or args.shim_tol > 0.0:
+            A_fit = np.array([[_loop_Hz(obs_dsv[i], corners_list[j])
+                               for j in range(N)] for i in range(M)])
+            Bd_fit = I_w_d * bz_fast(distorted_path, 1.0, obs_dsv)
+            k_max = args.shim_loops if args.shim_loops > 0 else N
+            support, I_shim, curve = shim_compensate(
+                A_fit, B_target, Bd_fit, k_max,
+                method=args.shim_method, tol=args.shim_tol)
+            # shim correction at the dense eval grid (only the support loops)
+            shim_eval = np.zeros(len(obs_eval))
+            for kk, jj in enumerate(support):
+                shim_eval += I_shim[kk] * np.array(
+                    [_loop_Hz(obs_eval[i], corners_list[jj])
+                     for i in range(len(obs_eval))])
+            Bc = I_w_d * bz_fast(distorted_path, 1.0, obs_eval) + shim_eval
+            rms_c = float(np.linalg.norm(Bc - B_eval)
+                          / (np.linalg.norm(B_eval) + 1e-30))
+            print(f"    + {len(support)} electric shims on the distorted "
+                  f"residual ({len(support)+1} feeds): dense-DSV RMS "
+                  f"{rms_best_d:.3e} -> {rms_c:.3e}  (1 bent wire + "
+                  f"{len(support)} shim loops)")
 
     if args.with_peec:
         run_peec_chain(path, I_w)
@@ -1437,8 +1462,28 @@ def main():
         import matplotlib.pyplot as plt
         fig = plt.figure(figsize=(12, 4))
         ax = fig.add_subplot(1, 3, 1, projection="3d")
-        ax.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, path[:, 2] * 1e3, lw=0.5)
-        ax.set_title("Single-stroke Gx coil")
+        if distorted_path is not None:
+            # distorted wire coloured by RADIAL bend (out of the cylinder
+            # surface = the sheet-metal forming); flat chain faint for ref
+            from mpl_toolkits.mplot3d.art3d import Line3DCollection
+            ax.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, path[:, 2] * 1e3,
+                    color="0.78", lw=0.3)
+            P = distorted_path
+            rr = (np.sqrt(P[:, 0] ** 2 + P[:, 1] ** 2) - a) * 1e3
+            pts3 = (P * 1e3).reshape(-1, 1, 3)
+            segs3 = np.concatenate([pts3[:-1], pts3[1:]], axis=1)
+            lc3 = Line3DCollection(segs3, cmap="coolwarm", linewidths=0.7)
+            lc3.set_array(0.5 * (rr[:-1] + rr[1:]))
+            ax.add_collection3d(lc3)
+            fig.colorbar(lc3, ax=ax, fraction=0.03, pad=0.12,
+                         label="radial bend [mm]")
+            lim = (a + 0.05) * 1e3
+            ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
+            ax.set_zlim(-L / 2 * 1e3, L / 2 * 1e3)
+            ax.set_title("Distorted Gx coil (1 current)")
+        else:
+            ax.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, path[:, 2] * 1e3, lw=0.5)
+            ax.set_title("Single-stroke Gx coil")
         ax.set_xlabel("x [mm]"); ax.set_ylabel("y [mm]"); ax.set_zlabel("z [mm]")
 
         ax2 = fig.add_subplot(1, 3, 2)

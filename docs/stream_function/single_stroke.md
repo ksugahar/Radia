@@ -294,6 +294,25 @@ distance.  Full `r+s+z` combines both and wins.  The Gauss-Newton framework
 picks the effective direction automatically — **the optimal sheet-metal
 direction is geometry-dependent**.
 
+**Compose with electric shims (`--distort --shim-loops K`).**  The geometric
+bend and the separate-feed shims cancel *different* parts of the residual, so
+they compose.  Critically, **the bend is far more feed-efficient**: one bent
+wire (1 feed) reaches 1.4 % where ten electric shims alone (10 feeds) only
+reach 2.3 %.  Adding shims on the *distorted* residual then refines it:
+
+| coil | feeds | DSV RMS |
+|------|-------|---------|
+| single-stroke | 1 | 8.5 % |
+| + 10 electric shims (no bend) | 11 | 2.3 % |
+| **+ sheet-metal distort** | **1** | **1.4 %** |
+| + distort **and** 10 shims | 11 | **1.0 %** |
+
+So the practical recipe on the hard tier: **distort first** (one printable
+part does the heavy lifting), then add a few electric shims only to clean the
+remaining high-spatial-frequency residual.  Under `--distort`, the `[8]`
+shim-only block is skipped and the shims are applied to the distorted residual
+in `[9]` instead.
+
 **ψ regularisation — `--regularize {tsvd, tikhonov, h1}`.**  The cylinder ψ
 solve also takes a Tikhonov family: `tsvd` (ACA+TSVD mode-truncation,
 default), `tikhonov` (ridge `(AᵀA + αI)ψ = AᵀB`, dense, `--alpha`), `h1`
