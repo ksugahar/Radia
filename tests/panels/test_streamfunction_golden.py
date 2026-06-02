@@ -188,6 +188,27 @@ def test_streamfunction_field_aware_chain(sample_vols):
     assert "n_open_contours" in rf and rf["n_open_contours"] >= 0
 
 
+def test_streamfunction_confine_closes_contours(sample_vols):
+    """Boundary confinement (psi=0 on the former edge) closes the contours on
+    ANY former -> a manufacturable single-stroke gradient coil.  On the short
+    fixture the unconfined Gx contours all run off the ends (n_open > 0);
+    --confine on closes them (n_open == 0) and lowers the delivered
+    single-stroke wire error.  This is the method-completing condition."""
+    coil, evalv = sample_vols
+    base = ["--order", "1", "--method", "manufacture", "--nlevels", "12",
+            "--eval-max", "40"]
+    roff = _run_calc(coil, evalv, "x", extra=base + ["--confine", "off"])
+    ron = _run_calc(coil, evalv, "x", extra=base + ["--confine", "on"])
+    assert "error" not in roff and "error" not in ron
+    assert roff["confine"] == "off" and ron["confine"] == "on"
+    # unconfined: contours run off the short former; confined: they all close
+    assert roff["n_open_contours"] > 0, "short former should leave open contours"
+    assert ron["n_open_contours"] == 0, "confine should close every contour"
+    # closing the contours lowers the delivered single-stroke wire error
+    assert ron["wire_homogeneity_rms"] < roff["wire_homogeneity_rms"], \
+        f"confine {ron['wire_homogeneity_rms']} !< off {roff['wire_homogeneity_rms']}"
+
+
 def test_streamfunction_field_cross_codebase(tmp_path):
     """End-to-end (A): the SF design routine's coil field matches Radia's
     INDEPENDENT C++ Biot-Savart (rad.ObjFlmCur) -- an external-codebase
