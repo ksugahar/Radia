@@ -34,6 +34,13 @@
 // Include C++ compatible HACApK wrapper header
 extern "C" {
 #include "../ext/HACApK/cHACApK_cpp.h"
+// H-LU preconditioner wrappers (defined in cHACApK_harith.c; declared in
+// cHACApK_harith.h, which is not included here): factor A_SS once, apply many.
+void* cHACApK_hlu_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc);
+int   cHACApK_hlu_apply(void* root_void, void* control_void,
+                        const double* r, double* z, int nd);
+void  cHACApK_hlu_free_factors(void* root_void);
+void  cHACApK_hlu_set_trunc_tol(double tol);
 }
 
 //=========================================================================
@@ -221,7 +228,16 @@ RadHACApKMSCManager::RadHACApKMSCManager(radTInteraction* interaction)
     // Hash-based cache is initialized automatically
 }
 
-RadHACApKMSCManager::~RadHACApKMSCManager() = default;
+void RadHACApKMSCManager::FreeStarHMatrix() {
+    if (m_star_hlu_root) { cHACApK_hlu_free_factors(m_star_hlu_root); m_star_hlu_root = nullptr; }
+    if (m_star_leafmtxp || m_star_control)
+        HACApK_free_hmatrix_wrapper(m_star_leafmtxp, m_star_control);
+    if (m_star_leafmtxp) { HACApK_free_leafmtxp(m_star_leafmtxp); m_star_leafmtxp = nullptr; }
+    if (m_star_control)  { HACApK_free_lcontrol(m_star_control);  m_star_control  = nullptr; }
+    m_star_hmat_built = false;
+}
+
+RadHACApKMSCManager::~RadHACApKMSCManager() { FreeStarHMatrix(); }
 
 void RadHACApKMSCManager::BuildLoopBasis(double alpha) {
     // Loop (cycle) deflation basis from the element-adjacency graph. The bulk is
@@ -523,6 +539,48 @@ extern "C" void RadGetKeepLoopStats(double* out /* len 6 */) {
     if (!out) return; for (int i=0;i<6;i++) out[i]=g_kl_dbg[i];
 }
 
+/* Diagnostic for loop-DEFLATED block-Jacobi BiCGSTAB (SolveLoopDeflatedBlockJacobi):
+ * [0]=n_loop (deflation basis dim = W columns), [1]=BiCGSTAB iters (-1 = coarse
+ * E factor failed), [2]=rel residual ||b - A sigma||/||b||, [3]=coarse-build time
+ * (s, E=W^T A W + SVD pseudo-inverse), [4]=solve time (s), [5]=block-Jacobi used
+ * (1/0), [6]=effective rank of E (= dim ker(N); < n_loop when W is redundant). */
+static double g_ldbj_dbg[7] = {0,0,0,0,0,0,0};
+extern "C" void RadGetLoopDeflBlockJacobiStats(double* out /* len 7 */) {
+    if (!out) return; for (int i=0;i<7;i++) out[i]=g_ldbj_dbg[i];
+}
+
+/* A_SS-as-H-matrix path. mode 0 = off (dense K-dense LU, the default);
+ * mode 1 = build A_SS as a HACApK H-matrix in SolveLoopStar and VERIFY its
+ * MatVec against the exact T^T A T (sandwich) operator (milestone: compression
+ * accuracy). g_ass_dbg: [0]=n_star, [1]=H-matrix rel MatVec error vs exact,
+ * [2]=BuildStarHMatrix return code, [3]=build time (s). */
+static int g_loopstar_hmat_mode = 0;
+extern "C" void RadSetLoopStarHMatMode(int m) { g_loopstar_hmat_mode = m; }
+extern "C" int  RadGetLoopStarHMatMode(void) { return g_loopstar_hmat_mode; }
+// H-ILU truncation tolerance for the A_SS H-LU factorization (mode 2). Larger =
+// more aggressive rk truncation during the Schur updates (cheaper, "incomplete"
+// -> H-ILU); smaller = more accurate (-> H-LU). Applied via
+// cHACApK_hlu_set_trunc_tol immediately before the factor.
+static double g_star_hlu_trunc_tol = 1.0e-3;
+extern "C" void   RadSetStarHLUTruncTol(double t) { g_star_hlu_trunc_tol = (t > 0.0) ? t : 1.0e-3; }
+extern "C" double RadGetStarHLUTruncTol(void)     { return g_star_hlu_trunc_tol; }
+// g_ass_dbg: [0]=n_star, [1]=A_SS H-matrix rel MatVec error vs exact T^T A T,
+// [2]=BuildStarHMatrix rc, [3]=A_SS H-build time (s), [4]=H-ILU-preconditioned
+// BiCGSTAB rel err vs K-dense y, [5]=BiCGSTAB iters (-1 = factor failed),
+// [6]=H-LU factor time (s), [7]=H-ILU BiCGSTAB solve time (s),
+// [8]=preconditioner residual ||A_SS (M^-1 b) - b||/||b||, [9]=trunc tol used,
+// [10]=A_SS nlf (total leaves), [11]=A_SS nlfkt (low-rank leaves),
+// [12]=A_SS ktmax (max rank), [13]=A_SS compression (H-bytes / dense-bytes).
+// Compression stats [10..13] are recorded by BuildStarHMatrix BEFORE the H-LU
+// factor converts the leaves (probe for "does A_SS actually compress?").
+static double g_ass_dbg[14] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+extern "C" void RadGetStarHMatStats(double* out /* len 14 */) {
+    if (!out) return; for (int i=0;i<14;i++) out[i]=g_ass_dbg[i];
+}
+// Recorded by BuildStarHMatrix so the probe survives even when SolveLoopStar
+// is not the entry point. Read into g_ass_dbg[10..13] in SolveLoopStar.
+static double g_star_compress[4] = {0,0,0,0};   // nlf, nlfkt, ktmax, compression
+
 int RadHACApKMSCManager::BuildStarBasis() {
     m_star_offsets.clear(); m_star_dofs.clear(); m_star_coeffs.clear(); m_n_star = 0;
     if (!m_interaction || m_n_elem <= 0) return 0;
@@ -613,7 +671,111 @@ int RadHACApKMSCManager::BuildStarBasis() {
     }
     m_n_star = (int)m_star_offsets.size() - 1;
     g_sb_nstar = m_n_star; g_sb_ncomp = ncomp;
+
+    // Star-column centroids (for the A_SS H-matrix cluster tree): each column's
+    // geometric center = average of its support faces' centers. dofCoord maps a
+    // sigma DOF -> its face center (faces still in scope).
+    std::vector<double> dofCoord((size_t)m_ndof * 3, 0.0);
+    for (const auto& fr : faces)
+        if (fr.dof >= 0 && fr.dof < m_ndof) {
+            dofCoord[3*(size_t)fr.dof+0] = fr.c[0];
+            dofCoord[3*(size_t)fr.dof+1] = fr.c[1];
+            dofCoord[3*(size_t)fr.dof+2] = fr.c[2];
+        }
+    m_star_coords.assign((size_t)m_n_star * 3, 0.0);
+    for (int k = 0; k < m_n_star; k++) {
+        double cx=0,cy=0,cz=0; int cnt=0;
+        for (int j = m_star_offsets[k]; j < m_star_offsets[k+1]; j++) {
+            int d = m_star_dofs[j];
+            if (d>=0 && d<m_ndof) { cx+=dofCoord[3*(size_t)d]; cy+=dofCoord[3*(size_t)d+1]; cz+=dofCoord[3*(size_t)d+2]; cnt++; }
+        }
+        if (cnt>0) { m_star_coords[3*(size_t)k]=cx/cnt; m_star_coords[3*(size_t)k+1]=cy/cnt; m_star_coords[3*(size_t)k+2]=cz/cnt; }
+    }
     return m_n_star;
+}
+
+//=========================================================================
+// A_SS = S^T A S as a HACApK H-matrix ("HACApK-only star" path).
+// The reduced star operator is built as its OWN HACApK leafmtxp via the ACA
+// entry-function override (StarSSEntry = S_i^T A S_j) on a cluster tree over the
+// star-column centroids m_star_coords. This replaces the dense K-dense LU (caps
+// ~15^3 / 8 GB) so the star block can be H-LU/H-ILU preconditioned and solved
+// with HACApK alone at 20^3+.  Tree-cotree loop-star H-matrix (Ida-endorsed).
+//=========================================================================
+
+// A_SS entry: small double sum over the sparse supports of star columns si, sj.
+double RadHACApKMSCManager::StarSSEntry(int si, int sj) const {
+    if (si < 0 || sj < 0 || si >= m_n_star || sj >= m_n_star) return 0.0;
+    double acc = 0.0;
+    for (int a = m_star_offsets[si]; a < m_star_offsets[si+1]; a++) {
+        int dp = m_star_dofs[a]; double cp = m_star_coeffs[a];
+        for (int b = m_star_offsets[sj]; b < m_star_offsets[sj+1]; b++)
+            acc += cp * m_star_coeffs[b] * ComputeSystemEntry(dp, m_star_dofs[b]);
+    }
+    return acc;
+}
+
+// Manager bound for the A_SS ACA entry override (set only during BuildStarHMatrix).
+// HACApK passes 1-based original indices (see ComputeEntry); convert to 0-based.
+static RadHACApKMSCManager* g_star_entry_mgr = nullptr;
+static double RadStarSSEntryOverride(int i, int j, int i_bemv) {
+    (void)i_bemv;
+    return g_star_entry_mgr ? g_star_entry_mgr->StarSSEntry(i - 1, j - 1) : 0.0;
+}
+
+int RadHACApKMSCManager::BuildStarHMatrix(double eps, int leaf, double eta) {
+    if (m_n_star <= 0) { if (BuildStarBasis() <= 0) return -1; }
+    if (m_star_hmat_built) return m_n_star;
+    if ((int)m_star_coords.size() != m_n_star * 3) return -1;
+    m_star_leafmtxp = HACApK_alloc_leafmtxp();
+    m_star_control  = HACApK_alloc_lcontrol();
+    if (!m_star_leafmtxp || !m_star_control) return -1;
+    // Build A_SS via the entry override. nffc=1 (each star column = one DOF at its
+    // centroid); ndim=3. ACA calls RadStarSSEntryOverride(i,j) = S_i^T A S_j.
+    g_star_entry_mgr = this;
+    HACApK_set_entry_func(RadStarSSEntryOverride);
+    int rc = HACApK_build_hmatrix_wrapper(
+        m_star_leafmtxp, m_star_control, m_star_coords.data(),
+        m_n_star, /*nffc=*/1, /*ndim=*/3, eps, leaf, eta, /*print=*/0);
+    HACApK_clear_entry_func();
+    g_star_entry_mgr = nullptr;
+    if (rc != 0) { return -1; }
+    m_star_hmat_built = true;
+    // Compression probe (read-only, BEFORE the H-LU factor converts the leaves):
+    // does A_SS actually compress as an H-matrix?  nlfkt/nlf near 0 -> near-dense
+    // -> H-LU degenerates to dense LU (the materialize wall).  H-bytes/dense-bytes
+    // is the storage ratio (1.0 = no compression).
+    {
+        int nlf   = HACApK_leafmtxp_get_nlf(m_star_leafmtxp);
+        int nlfkt = HACApK_leafmtxp_get_nlfkt(m_star_leafmtxp);
+        int ktmax = HACApK_leafmtxp_get_ktmax(m_star_leafmtxp);
+        int64_t hb = 0, db = 0;
+        HACApK_get_memory_stats(m_star_leafmtxp, &hb, &db);
+        g_star_compress[0] = (double)nlf;
+        g_star_compress[1] = (double)nlfkt;
+        g_star_compress[2] = (double)ktmax;
+        g_star_compress[3] = (db > 0) ? (double)hb / (double)db : 0.0;
+    }
+    return m_n_star;
+}
+
+void RadHACApKMSCManager::StarHMatVec(const std::vector<double>& x, std::vector<double>& y) {
+    y.assign(m_n_star, 0.0);
+    if (!m_star_hmat_built || !m_star_leafmtxp || !m_star_control) return;
+    int nd = HACApK_leafmtxp_get_nd(m_star_leafmtxp);
+    HACApK_matvec_wrapper(m_star_leafmtxp, m_star_control,
+                          const_cast<double*>(x.data()), y.data(), nd);
+}
+
+// z = A_SS^{-1} r (approx) via the cached A_SS H-LU factors. NOTE: the H-LU factor
+// (cHACApK_hlu_factor_leafmtxp) converts the leafmtxp leaves to internal layout, so
+// StarHMatVec must NOT be used after the H-LU is factored -- use the exact T-sandwich
+// (redMatVec) as the operator and this as the preconditioner.
+bool RadHACApKMSCManager::StarHLUApply(const std::vector<double>& r, std::vector<double>& z) {
+    z.assign(m_n_star, 0.0);
+    if (!m_star_hlu_root || !m_star_control || m_n_star <= 0) return false;
+    return cHACApK_hlu_apply(m_star_hlu_root, m_star_control,
+                             r.data(), z.data(), m_n_star) == 0;
 }
 
 // True iff the interaction has an ANTISYMMETRIC IMA plane (sign<0). These add a
@@ -791,6 +953,34 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
         applyT(z, ts); MatVec(ts, tAs); applyTt(tAs, out);   // out = T^T A T z
     };
 
+    // A_SS-as-H-matrix milestone (mode 1): build A_SS as its own HACApK H-matrix
+    // and VERIFY its MatVec vs the exact T^T A T sandwich. Deflation is not set
+    // yet here, so MatVec is the clean A. (mode 2 -- H-LU precondition + solve --
+    // is the next increment.)
+    if (g_loopstar_hmat_mode >= 1 && ns > 0) {
+        auto th0 = std::chrono::high_resolution_clock::now();
+        int rc = BuildStarHMatrix(1.0e-4, 10, 2.0);
+        auto th1 = std::chrono::high_resolution_clock::now();
+        g_ass_dbg[0] = (double)ns;
+        g_ass_dbg[2] = (double)rc;
+        g_ass_dbg[3] = std::chrono::duration<double>(th1 - th0).count();
+        // A_SS compression probe recorded by BuildStarHMatrix (before any factor).
+        for (int z=0; z<4; z++) g_ass_dbg[10+z] = g_star_compress[z];
+        // StarHMatVec is only valid BEFORE the H-LU factor converts the leafmtxp
+        // leaves to internal layout (mode 2).  Skip the verify on re-entry once the
+        // A_SS H-LU is already factored (m_star_hlu_root != null).
+        if (rc > 0 && !m_star_hlu_root) {
+            std::vector<double> yv(ns), hy(ns), ey(ns);
+            unsigned int rng = 2246822519u;
+            for (int k=0;k<ns;k++){ rng=rng*1664525u+1013904223u; yv[k]=(double)(rng>>9)/8388608.0-0.5; }
+            StarHMatVec(yv, hy);                                  // A_SS_Hmat * y
+            applyT(yv, ts); MatVec(ts, tAs); applyTt(tAs, ey);    // exact A_SS * y
+            double en=0.0, dn=0.0;
+            for (int k=0;k<ns;k++){ en+=ey[k]*ey[k]; double d=hy[k]-ey[k]; dn+=d*d; }
+            g_ass_dbg[1] = (en>0.0) ? std::sqrt(dn/en) : 0.0;
+        }
+    }
+
     // Preconditioner M^-1 for the reduced system T^T A T:
     //  (a) BLOCK-JACOBI SANDWICH  M^-1 = T^T M_bj^-1 T  (when blockInverse/blockOffsets
     //      supplied). EMPIRICALLY MUCH WORSE than (b) -- linear 50->902, nonlinear
@@ -957,6 +1147,82 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
         rho = rho_new;
     }
     if (antisymDefl) SetDeflation({}, {}, {}, 0.0);   // clear: deflation was per-solve
+
+    // A_SS-as-H-matrix MILESTONE 2 (mode 2): solve the star block with the A_SS
+    // H-matrix factored by H-ILU as the PRECONDITIONER (Ida's scalable path).  The
+    // dense K-dense LU caps at ~15^3 / 8 GB; H-ILU (low-rank-truncated H-LU of the
+    // A_SS H-matrix) is the only >15^3 option.  THE LAW: A_SS's ill-conditioning is
+    // the long-range 1/r demag coupling (non-local) -- a scalar threshold ILU(eps)
+    // on entries fails (entries are not individually small), but H-ILU thresholds the
+    // block SINGULAR VALUES (rank), which DO decay for the smooth 1/r kernel.  Steps:
+    //   1. factor the A_SS H-matrix in place -> H-ILU factors (trunc tol =
+    //      g_star_hlu_trunc_tol; larger = more aggressive truncation = cheaper),
+    //   2. right-preconditioned BiCGSTAB with operator = redMatVec (the EXACT T^T A T
+    //      sandwich, so the solution is field-exact, NOT the ACA-approx StarHMatVec)
+    //      and preconditioner = StarHLUApply (the H-ILU factors).
+    // The H-LU factor CONVERTS the leafmtxp leaves to internal layout, so StarHMatVec
+    // is invalid afterwards -- that is why the operator is redMatVec, not StarHMatVec.
+    // FreeStarHMatrix frees the H-LU root then the (converted) leafmtxp in order.
+    // Diagnostics: [4]=rel err vs K-dense y (field-exactness), [5]=BiCGSTAB iters
+    // (mu_r headline; -1 = factor failed), [6]=factor time, [7]=solve time,
+    // [8]=preconditioner residual ||A_SS (M^-1 b) - b||/||b||, [9]=trunc tol.
+    // Measurement side-channel: the production solution still uses the K-dense y
+    // (when available, <=15^3); >15^3 (no K-dense) is the H-ILU's production regime.
+    if (g_loopstar_hmat_mode >= 2 && m_star_hmat_built && ns > 0) {
+        g_ass_dbg[9] = g_star_hlu_trunc_tol;
+        // (1) H-ILU factorization of the A_SS H-matrix (factor once; reuse on re-entry)
+        cHACApK_hlu_set_trunc_tol(g_star_hlu_trunc_tol);
+        if (!m_star_hlu_root) {
+            auto tf0 = std::chrono::high_resolution_clock::now();
+            m_star_hlu_root = cHACApK_hlu_factor_leafmtxp(
+                m_star_leafmtxp, m_star_control, /*nffc=*/1);
+            auto tf1 = std::chrono::high_resolution_clock::now();
+            g_ass_dbg[6] = std::chrono::duration<double>(tf1 - tf0).count();
+        }
+        if (m_star_hlu_root) {
+            // (8) preconditioner quality probe: z = M^-1 b, resid = ||A_SS z - b||/||b||
+            {
+                std::vector<double> zp(ns), azp(ns);
+                StarHLUApply(bred, zp);
+                redMatVec(zp, azp);
+                double en=0.0, dn=0.0;
+                for (int i=0;i<ns;i++){ en+=bred[i]*bred[i]; double d=azp[i]-bred[i]; dn+=d*d; }
+                g_ass_dbg[8] = (en>0.0)? std::sqrt(dn/en):0.0;
+            }
+            // (2) right-preconditioned BiCGSTAB: operator=redMatVec (exact A_SS),
+            //     preconditioner=StarHLUApply (H-ILU factors).
+            auto ts0 = std::chrono::high_resolution_clock::now();
+            std::vector<double> yh(ns,0.0), rr(bred), rh(bred), vv(ns,0.0), pp(ns,0.0),
+                                ss(ns), tt2(ns), ph(ns), sh(ns);
+            double rho2=1.0, al2=1.0, om2=1.0; int it2=0;
+            for (; it2 < max_iter; it2++){
+                double rn2 = dot(rh, rr);
+                if (std::fabs(rn2) < 1e-300) break;
+                double beta2 = (rn2/rho2)*(al2/om2);
+                for(int i=0;i<ns;i++) pp[i]=rr[i]+beta2*(pp[i]-om2*vv[i]);
+                StarHLUApply(pp, ph); redMatVec(ph, vv);      // M^-1 then exact A_SS
+                double rv2=dot(rh,vv); if(std::fabs(rv2)<1e-300) break;
+                al2=rn2/rv2;
+                for(int i=0;i<ns;i++) ss[i]=rr[i]-al2*vv[i];
+                if(nrm(ss)/bnorm<tol){ for(int i=0;i<ns;i++) yh[i]+=al2*ph[i]; it2++; break; }
+                StarHLUApply(ss, sh); redMatVec(sh, tt2);
+                double ttd=dot(tt2,tt2); if(ttd<1e-300) break;
+                om2=dot(tt2,ss)/ttd;
+                for(int i=0;i<ns;i++){ yh[i]+=al2*ph[i]+om2*sh[i]; rr[i]=ss[i]-om2*tt2[i]; }
+                if(nrm(rr)/bnorm<tol){ it2++; break; }
+                rho2=rn2;
+            }
+            auto ts1 = std::chrono::high_resolution_clock::now();
+            g_ass_dbg[7] = std::chrono::duration<double>(ts1 - ts0).count();
+            double en=0.0, dn=0.0;
+            for(int i=0;i<ns;i++){ en+=y[i]*y[i]; double d=yh[i]-y[i]; dn+=d*d; }
+            g_ass_dbg[4] = (en>0.0)? std::sqrt(dn/en):0.0;
+            g_ass_dbg[5] = (double)it2;
+        } else {
+            g_ass_dbg[5] = -1.0;   // H-LU factorization failed
+        }
+    }
+
     applyT(y, sigma);                                 // sigma = sigma_S (loop-free star part)
 
     // KEEP-LOOPS via block Gauss-Seidel (star <-> loop). The reduced star solve
@@ -1039,6 +1305,326 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
         g_kl_dbg[0]=(double)nl; g_kl_dbg[1]=res0; g_kl_dbg[2]=resf/bn;
         g_kl_dbg[3]=(double)sweeps; g_kl_dbg[4]=(double)cg_tot; g_kl_dbg[5]=resf;
     }
+    return it;
+}
+
+//=========================================================================
+// LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB  (the "keep the element space, project out
+// the loops per iteration" path -- user's idea, 2026-06-01).
+//
+// Motivation: diag-Jacobi fails on the MSC system; block-Jacobi (the 6x6 element
+// diagonal block inverse) works because the ELEMENT is the natural unit. loop-star
+// CHANGES THE BASIS (S) and DESTROYS that element/block structure. Instead, stay in
+// the ORIGINAL element DOF space (block-Jacobi keeps working) and remove the
+// ill-conditioned loop null space ker(N) (eigenvalue 1/(mu_r-1) -> 0) by DEFLATION
+// (a projection), NOT by a basis change and NOT by the alpha L L^T operator shift.
+//
+// Two-level (deflated) preconditioned BiCGSTAB:
+//   W = loop basis (sparse cycle CSR = m_loop_*, same as SolveLoopStar; W ~ ker N)
+//   E = W^T A W            (coarse / loop-loop block; ~ (1/chi) W^T W on exact ker N,
+//                           well-conditioned -- the EASY block, unlike A_SS)
+//   P  = I - A W E^-1 W^T  (deflation projector; removes span(W) from the residual)
+//   Q  = W E^-1 W^T        (coarse correction)
+// Solve P A xhat = P b with block-Jacobi-preconditioned BiCGSTAB (element space
+// intact), then x = Q b + (I - Q A) xhat. The loops are removed by P each MatVec;
+// the surviving near-loop modes (cond(A_SS) ~ mu_r) are handled by block-Jacobi +
+// BiCGSTAB. Verified in Python (C:/temp/deflated_blockjacobi.py): at mu_r=1e5 plain
+// AND block-Jacobi CAP, this converges in ~338 iters field-exact. FULLY O(N)
+// matrix-free except the coarse E factor (m x m, m = n_loop); E is the benign
+// loop-loop block so the dense LU here is far cheaper than the K-dense A_SS LU.
+//
+// blockInverse/blockOffsets: optional 6x6 block-Jacobi (row-major per element, same
+// layout as SolveLoopStar's useBlock path). If absent, falls back to the
+// conservative column-scale Jacobi (dinv) used by loop-star. Returns BiCGSTAB iters,
+// or -1 on failure (no loops / coarse factor singular).
+//=========================================================================
+int RadHACApKMSCManager::SolveLoopDeflatedBlockJacobi(
+        const std::vector<double>& b, std::vector<double>& sigma,
+        double tol, int max_iter,
+        const std::vector<double>& blockInverse,
+        const std::vector<int>& blockOffsets) {
+    const int n = m_ndof;
+    sigma.assign(n, 0.0);
+
+    // Build the loop basis W (sparse cycle CSR), same construction as SolveLoopStar.
+    if (!m_loop_built) {
+        BuildLoopBasis(1.0);
+        m_loop_offsets = m_defl_offsets;
+        m_loop_dofs    = m_defl_dofs;
+        m_loop_coeffs  = m_defl_signs;
+        SetDeflation({}, {}, {}, 0.0);   // clear so MatVec stays the clean A
+        m_n_loop = m_loop_offsets.empty() ? 0 : (int)m_loop_offsets.size() - 1;
+        m_loop_built = true;
+    }
+    const int nl = m_n_loop;
+    if (nl <= 0) return -1;   // no loops -> nothing to deflate (caller should use plain)
+
+    auto th0 = std::chrono::high_resolution_clock::now();
+
+    // W apply: full = W yL  (scatter), and W^T: yL = W^T full  (gather).
+    auto applyW = [&](const std::vector<double>& yL, std::vector<double>& full){
+        std::fill(full.begin(), full.end(), 0.0);
+        for (int p=0; p<nl; p++){ double c=yL[p];
+            for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
+                full[m_loop_dofs[k]] += m_loop_coeffs[k]*c; }
+    };
+    auto applyWt = [&](const std::vector<double>& full, std::vector<double>& yL){
+        for (int p=0; p<nl; p++){ double acc=0.0;
+            for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
+                acc += m_loop_coeffs[k]*full[m_loop_dofs[k]];
+            yL[p]=acc; }
+    };
+
+    // Block-Jacobi (M^-1) in the element space: 6x6 inverse per element if supplied,
+    // else conservative column-scale Jacobi (1/d_i, d_i = |A_ii|) -- never singular.
+    bool useBlock = (!blockOffsets.empty() && !blockInverse.empty() && m_interaction);
+    std::vector<double> dinv(n, 1.0);
+    if (!useBlock) {
+        bool haveN = (m_diag_cached && (int)m_diag_N.size() == n);
+        for (int i=0;i<n;i++){
+            double Nii = haveN ? m_diag_N[i] : GetInteractionMatrixElement(i,i);
+            double ic  = (i<(int)m_inv_chi.size()) ? m_inv_chi[i] : 0.0;
+            double d = std::fabs(-Nii + ic);
+            dinv[i] = (d > 1e-300) ? 1.0/d : 1.0;
+        }
+    }
+    std::vector<double> mf(n);
+    auto applyMinv = [&](const std::vector<double>& x, std::vector<double>& y){
+        if (!useBlock){ for (int i=0;i<n;i++) y[i] = dinv[i]*x[i]; return; }
+        int ne = m_interaction->AmOfMainElem;
+        for (int e=0;e<ne;e++){
+            int dof = m_interaction->GetElementDOF(e);
+            int off = m_interaction->GetElementDOFOffset(e);
+            int boff = blockOffsets[e];
+            for (int i=0;i<dof;i++){ double acc=0.0;
+                for (int j=0;j<dof;j++) acc += blockInverse[boff + i*dof + j]*x[off+j];
+                y[off+i]=acc; }
+        }
+    };
+
+    auto dot = [](const std::vector<double>& a, const std::vector<double>& c){
+        double s=0; for(size_t i=0;i<a.size();i++) s+=a[i]*c[i]; return s; };
+    auto nrm = [&](const std::vector<double>& a){ return std::sqrt(dot(a,a)); };
+
+    // AW = A W  (one MatVec per loop column) and E = W^T A W = W^T (AW)  (nl x nl).
+    // E is column-major for LAPACK. AW is stored full (n x nl) so the projector
+    // P v = v - AW (E^-1 (W^T v)) is matrix-free thereafter.
+    std::vector<double> AW((size_t)n * (size_t)nl);
+    std::vector<double> E((size_t)nl * (size_t)nl, 0.0);
+    {
+        std::vector<double> wcol(n), awcol(n), ecol(nl);
+        for (int p=0;p<nl;p++){
+            std::fill(wcol.begin(), wcol.end(), 0.0);
+            for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
+                wcol[m_loop_dofs[k]] += m_loop_coeffs[k];
+            MatVec(wcol, awcol);                                  // awcol = A W[:,p]
+            std::copy(awcol.begin(), awcol.end(), AW.begin() + (size_t)p*n);
+            applyWt(awcol, ecol);                                 // ecol = W^T A W[:,p]
+            for (int q=0;q<nl;q++) E[(size_t)q + (size_t)p*nl] = ecol[q];
+        }
+    }
+    // E = W^T A W is RANK-DEFICIENT when the loop CSR W is a redundant cycle basis
+    // (short 3/4-cycles are linearly dependent: nl columns but rank = dim ker(N) <
+    // nl, e.g. C-type nl=2676 vs rank 1912). A plain LU (dgetrf) of a singular E is
+    // unstable -> the projector P breaks and BiCGSTAB diverges (C-type mu_r=100). Use
+    // the SVD PSEUDO-INVERSE: E = U Sigma V^T, E^+ = V Sigma^+ U^T with small singular
+    // values truncated. This is the rank-revealing, redundant-basis-safe coarse solve
+    // -- E^+ (W^T v) gives the minimum-norm loop coefficients, exactly what deflation
+    // needs (the loop component is defined modulo the redundancy). Cost O(nl^3) once.
+    std::vector<double> Es(E);                       // copy (dgesdd overwrites)
+    std::vector<double> svU((size_t)nl*nl), svVt((size_t)nl*nl), sval(nl);
+    {
+        // E is symmetric (A symmetric on the loop space) but use general SVD for safety.
+        int info = LAPACKE_dgesdd(LAPACK_COL_MAJOR, 'A', nl, nl, Es.data(), nl,
+                                  sval.data(), svU.data(), nl, svVt.data(), nl);
+        if (info != 0) { g_ldbj_dbg[1] = -1.0; return -1; }
+    }
+    // Effective rank: singular values > rtol * sigma_max.
+    double smax = (nl > 0) ? sval[0] : 0.0;
+    double rtol = 1.0e-10;
+    double sthresh = rtol * smax;
+    int erank = 0;
+    for (int i=0;i<nl;i++){ if (sval[i] > sthresh) erank++; else break; }
+    auto th1 = std::chrono::high_resolution_clock::now();
+    g_ldbj_dbg[0] = (double)nl;
+    g_ldbj_dbg[3] = std::chrono::duration<double>(th1 - th0).count();
+    g_ldbj_dbg[5] = useBlock ? 1.0 : 0.0;
+    if (erank <= 0) { g_ldbj_dbg[1] = -1.0; return -1; }
+
+    // coarseSolve: yL = E^+ (W^T v) = V Sigma^+ U^T (W^T v), Sigma^+ truncated at erank.
+    std::vector<double> wtv(nl), utv(nl);
+    auto Esolve = [&](const std::vector<double>& v, std::vector<double>& yL){
+        applyWt(v, wtv);                                  // wtv = W^T v   (length nl)
+        // utv = Sigma^+ (U^T wtv): project onto the first erank left singular vectors.
+        for (int i=0;i<erank;i++){
+            double acc=0.0;
+            for (int r=0;r<nl;r++) acc += svU[(size_t)i*nl + r]*wtv[r];   // U[:,i]^T wtv
+            utv[i] = acc / sval[i];
+        }
+        // yL = V (:, :erank) utv  =  (rows of Vt) ; Vt is erank x nl -> yL[c]=sum_i Vt[i,c] utv[i]
+        std::fill(yL.begin(), yL.end(), 0.0);
+        for (int i=0;i<erank;i++){
+            double ui = utv[i];
+            for (int c=0;c<nl;c++) yL[c] += svVt[(size_t)c*nl + i]*ui;     // Vt[i,c] = svVt[c*nl+i]
+        }
+    };
+    std::vector<double> qbuf(nl), tmpn(n);
+    // Q v = W E^-1 W^T v
+    auto applyQ = [&](const std::vector<double>& v, std::vector<double>& out){
+        Esolve(v, qbuf); applyW(qbuf, out);
+    };
+    // P v = v - AW (E^-1 W^T v)   (deflation projector; AW already materialized)
+    auto applyP = [&](const std::vector<double>& v, std::vector<double>& out){
+        Esolve(v, qbuf);
+        for (int i=0;i<n;i++){
+            double acc=0.0; const double* awrow = nullptr; (void)awrow;
+            // out = v - AW * qbuf
+            double s=0.0;
+            for (int p=0;p<nl;p++) s += AW[(size_t)p*n + i]*qbuf[p];
+            out[i] = v[i] - s; (void)acc;
+        }
+    };
+
+    // PA operator: z -> P (A z)
+    std::vector<double> az(n);
+    auto PAop = [&](const std::vector<double>& z, std::vector<double>& out){
+        MatVec(z, az); applyP(az, out);
+    };
+
+    auto ts0 = std::chrono::high_resolution_clock::now();
+    // right-preconditioned BiCGSTAB on  P A xhat = P b,  M^-1 = block-Jacobi.
+    std::vector<double> pb(n), r(n), rhat(n), v(n,0.0), p(n,0.0),
+                        s(n), t(n), phat(n), shat(n), xhat(n,0.0);
+    applyP(b, pb);
+    double bnorm = nrm(pb);
+    if (bnorm < 1e-300) { sigma.assign(n,0.0); applyQ(b, sigma); return 0; }
+    r = pb; rhat = pb;
+    double rho=1.0, alpha=1.0, omega=1.0; int it=0;
+    for (; it < max_iter; it++){
+        double rho_new = dot(rhat, r);
+        if (std::fabs(rho_new) < 1e-300) break;
+        double beta = (rho_new/rho)*(alpha/omega);
+        for (int i=0;i<n;i++) p[i] = r[i] + beta*(p[i]-omega*v[i]);
+        applyMinv(p, phat); PAop(phat, v);
+        double rv = dot(rhat, v); if (std::fabs(rv) < 1e-300) break;
+        alpha = rho_new/rv;
+        for (int i=0;i<n;i++) s[i] = r[i] - alpha*v[i];
+        if (nrm(s)/bnorm < tol){ for(int i=0;i<n;i++) xhat[i]+=alpha*phat[i]; it++; break; }
+        applyMinv(s, shat); PAop(shat, t);
+        double tt = dot(t,t); if (tt < 1e-300) break;
+        omega = dot(t,s)/tt;
+        for (int i=0;i<n;i++){ xhat[i] += alpha*phat[i] + omega*shat[i]; r[i] = s[i] - omega*t[i]; }
+        if (nrm(r)/bnorm < tol){ it++; break; }
+        rho = rho_new;
+    }
+    // Recover: sigma = Q b + (I - Q A) xhat = Q b + xhat - Q (A xhat)
+    applyQ(b, sigma);                       // sigma = Q b
+    MatVec(xhat, az);                       // az = A xhat
+    applyQ(az, tmpn);                       // tmpn = Q A xhat
+    for (int i=0;i<n;i++) sigma[i] += xhat[i] - tmpn[i];
+
+    auto ts1 = std::chrono::high_resolution_clock::now();
+    // true relative residual ||b - A sigma|| / ||b||
+    MatVec(sigma, az);
+    double rn=0.0, bn2=0.0;
+    for (int i=0;i<n;i++){ double d=b[i]-az[i]; rn+=d*d; bn2+=b[i]*b[i]; }
+    g_ldbj_dbg[1] = (double)it;
+    g_ldbj_dbg[2] = (bn2>0.0) ? std::sqrt(rn/bn2) : 0.0;
+    g_ldbj_dbg[4] = std::chrono::duration<double>(ts1 - ts0).count();
+    g_ldbj_dbg[6] = (double)erank;
+    return it;
+}
+
+//=========================================================================
+// HELMHOLTZ-HODGE LOOP REMOVAL: subtract the non-physical loop (circulating
+// surface-charge) component from a solved sigma.  This is NOT a solver/convergence
+// trick (plain BiCGSTAB already converges); it gives a PHYSICAL answer with zero
+// loop content.  The loop space is span(L), L = the topological cycle basis
+// (m_loop_*, = ker(N), the circulating charges).  Hodge projection off span(L):
+//   c solves (L^T L) c = L^T sigma   (CG; L^T L is the loop GRAM matrix)
+//   sigma <- sigma - L c
+// L^T L is geometric, sparse, mu_r-INDEPENDENT and WELL-CONDITIONED (cond ~ O(1),
+// the cycle basis is near-orthonormal) -- unlike A_SS (cond ~ mu_r) -- so the CG
+// converges in a handful of iterations: NO significant slowdown.  Because N L = 0,
+// removing the loop part does NOT change N*sigma (the on-element field identity is
+// preserved); only the non-physical circulation is removed.  Scalable: uses only
+// the O(N) cycle CSR (NOT the +3 non-topological near-null modes, which grow with N
+// and are NOT loops; NOT A_SL; NOT A).  Returns CG iters, or -1 if no loops.
+// g_loopproj_dbg: [0]=n_loop, [1]=CG iters, [2]=||L^T sigma|| before,
+// [3]=||L^T sigma|| after (loop residual), [4]=loop fraction ||L c||/||sigma||.
+//=========================================================================
+static double g_loopproj_dbg[5] = {0,0,0,0,0};
+extern "C" void RadGetLoopProjStats(double* out /* len 5 */) {
+    if (!out) return; for (int i=0;i<5;i++) out[i]=g_loopproj_dbg[i];
+}
+
+int RadHACApKMSCManager::ProjectOutLoops(std::vector<double>& sigma, double tol, int max_iter) {
+    const int n = m_ndof;
+    if ((int)sigma.size() != n) return -1;
+    // Build/cache the topological loop cycle CSR (same pattern as SolveLoopStar).
+    if (!m_loop_built) {
+        BuildLoopBasis(1.0);
+        m_loop_offsets = m_defl_offsets;
+        m_loop_dofs    = m_defl_dofs;
+        m_loop_coeffs  = m_defl_signs;
+        SetDeflation({}, {}, {}, 0.0);   // clear: keep MatVec the clean A
+        m_n_loop = m_loop_offsets.empty() ? 0 : (int)m_loop_offsets.size() - 1;
+        m_loop_built = true;
+    }
+    const int nl = m_n_loop;
+    if (nl <= 0) { g_loopproj_dbg[0]=0; return -1; }
+
+    auto applyL = [&](const std::vector<double>& yL, std::vector<double>& full){
+        std::fill(full.begin(), full.end(), 0.0);
+        for (int p=0;p<nl;p++){ double c=yL[p];
+            for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
+                full[m_loop_dofs[k]] += m_loop_coeffs[k]*c; }
+    };
+    auto applyLt = [&](const std::vector<double>& full, std::vector<double>& yL){
+        for (int p=0;p<nl;p++){ double acc=0.0;
+            for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
+                acc += m_loop_coeffs[k]*full[m_loop_dofs[k]];
+            yL[p]=acc; }
+    };
+    auto dot=[](const std::vector<double>&a,const std::vector<double>&b){
+        double s=0; for(size_t i=0;i<a.size();i++) s+=a[i]*b[i]; return s; };
+
+    // rhs = L^T sigma ; solve (L^T L) c = rhs by CG on the matrix-free Gram operator
+    // G z = L^T (L z).  G is SPD + well-conditioned (cycle basis near-orthonormal).
+    std::vector<double> rhs(nl), c(nl,0.0), r(nl), p(nl), Gp(nl), Lz(n);
+    applyLt(sigma, rhs);
+    double loop_before = std::sqrt(dot(rhs,rhs));
+    g_loopproj_dbg[0] = (double)nl;
+    g_loopproj_dbg[2] = loop_before;
+    if (loop_before < 1e-300) { g_loopproj_dbg[1]=0; g_loopproj_dbg[3]=0; g_loopproj_dbg[4]=0; return 0; }
+    auto Gapply = [&](const std::vector<double>& z, std::vector<double>& out){
+        applyL(z, Lz); applyLt(Lz, out);
+    };
+    r = rhs; p = rhs;     // c0 = 0 -> r0 = rhs
+    double rs = dot(r,r); double rs0 = rs;
+    int it = 0;
+    for (; it < max_iter; it++){
+        Gapply(p, Gp);
+        double pGp = dot(p,Gp);
+        if (std::fabs(pGp) < 1e-300) break;
+        double a = rs/pGp;
+        for (int i=0;i<nl;i++){ c[i]+=a*p[i]; r[i]-=a*Gp[i]; }
+        double rs_new = dot(r,r);
+        if (std::sqrt(rs_new) <= tol*std::sqrt(rs0)) { it++; break; }
+        double beta = rs_new/rs;
+        for (int i=0;i<nl;i++) p[i] = r[i] + beta*p[i];
+        rs = rs_new;
+    }
+    // sigma <- sigma - L c
+    applyL(c, Lz);
+    double lc_norm = std::sqrt(dot(Lz,Lz));
+    double sig_norm = std::sqrt(dot(sigma,sigma)) + 1e-300;
+    for (int i=0;i<n;i++) sigma[i] -= Lz[i];
+    // loop residual after
+    std::vector<double> rhs_after(nl); applyLt(sigma, rhs_after);
+    g_loopproj_dbg[1] = (double)it;
+    g_loopproj_dbg[3] = std::sqrt(dot(rhs_after,rhs_after));
+    g_loopproj_dbg[4] = lc_norm / sig_norm;
     return it;
 }
 

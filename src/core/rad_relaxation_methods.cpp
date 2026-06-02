@@ -2988,6 +2988,30 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 		return it_ls;
 	}
 
+	// LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB gauge: stay in the element DOF space (so the
+	// 6x6 block-Jacobi preconditioner applies) and deflate the loop null space via a
+	// two-level projector. Scalable alternative to loop-star + K-dense at high mu_r
+	// (no 15^3 cap, no A_SS-compression dependence). Enabled by
+	// rad.SetLoopDeflBlockJacobiGauge(True). Linear regime (uniform chi).
+	if(rad.m_loopdefl_gauge)
+	{
+		std::vector<double> ld_blockInverse;
+		std::vector<int>    ld_blockOffsets;
+#ifdef HAVE_LAPACK
+		BuildBlockJacobiPreconditioner_HMatrix(ld_blockInverse, ld_blockOffsets, inv_chi, totalDOF);
+#endif
+		std::vector<double> sigma_ld(totalDOF);
+		int it_ld = m_hacapk->SolveLoopDeflatedBlockJacobi(
+			rhs, sigma_ld, tol, max_iter, ld_blockInverse, ld_blockOffsets);
+		if(it_ld < 0) return 0;   // no loops / coarse factor singular -> fail loudly
+		for(int i = 0; i < totalDOF; i++) FlatMagn[i] = sigma_ld[i];
+		m_hacapk->MatVec(sigma_ld, v);            // true residual ||rhs - A*sigma||
+		this->Copy(rhs, r, totalDOF);
+		this->Axpy(-1.0, v, r, totalDOF);
+		residual = this->Norm2(r, totalDOF) / (this->Norm2(rhs, totalDOF) + 1.0e-300);
+		return it_ld;
+	}
+
 	// Initial guess
 	for(int i = 0; i < totalDOF; i++)
 	{
@@ -3142,6 +3166,18 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 		}
 	}
 	// else: ApplyLineSearchDamping already updated FlatMagn with damped solution
+
+	// HELMHOLTZ-HODGE loop removal (opt-in, rad.SetLoopProjection(True)): subtract the
+	// non-physical loop (circulating surface-charge) component from the converged
+	// sigma. Cheap, well-conditioned CG projection off the topological cycle space;
+	// N*sigma (the on-element field) is unchanged. Gives a loop-free physical answer.
+	if(rad.m_loop_projection)
+	{
+		std::vector<double> sig_lp(FlatMagn, FlatMagn + totalDOF);
+		int it_lp = m_hacapk->ProjectOutLoops(sig_lp, tol, max_iter);
+		if(it_lp >= 0)
+			for(int i = 0; i < totalDOF; i++) FlatMagn[i] = sig_lp[i];
+	}
 
 	return iter;
 }
