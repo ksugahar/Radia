@@ -3,6 +3,41 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.89.0 — Loop-free solution by default (Helmholtz-Hodge loop removal)
+
+Released 2026-06-02.
+
+The MSC/MMM solvers now return a **loop-free physical magnetization** by
+default.  The discrete operator `N` has an exact null space of circulating
+surface charges ("loops" = the cycle space of the element-adjacency graph);
+these are non-physical (they produce no field) but at high permeability they
+dominate the raw solved `sigma` (up to ~99% of its norm).  After the solve
+converges, a Helmholtz-Hodge projection removes the loop component:
+`c` solves `(L^T L) c = L^T sigma` (CG; `L` = topological cycle basis), then
+`sigma -= L c`.
+
+- **Default ON** (`rad.SetLoopProjection(True)` is the default; pass `False`
+  to keep the raw loop-containing `sigma`).
+- **Field-transparent.** `N L = 0`, so `N*sigma` -- the field -- is unchanged
+  (`rad.Fld` differs by `~1e-15`).  Verified: 102/102 core field + golden tests
+  unchanged with the default on.  Only the (non-physical) circulating part of
+  the magnetization distribution changes.
+- **Cheap.** `L^T L` is the geometric, sparse, `mu_r`-independent, well-
+  conditioned (`cond ~ 1`) loop Gram matrix; the CG converges in a handful of
+  iters with no measurable slowdown.
+- **All solver paths, consistent.** Method 0 (LU), 1 (dense BiCGSTAB), and 2
+  (HACApK) all return the same loop-free `sigma` (the non-HACApK paths use a
+  standalone pure-sparse cycle projection -- no H-matrix needed).
+- **Nonlinear-safe.** `L = ker(N)` is `chi`-independent; the projection is
+  applied once after the nonlinear iteration converges, so `chi(H)` is driven
+  by the true loop-included `sigma` and only the final answer is loop-free.
+  Auto-skipped when the loop-star / loop-deflated gauge is active.
+
+Diagnostics: `rad.GetLoopProjStats()`.  Test: `tests/test_loop_projection.py`.
+Docs: `docs/solver/MSC_NULLSPACE_DEFLATION.md` Section 8.5.  Also lands (opt-in,
+off by default) the loop-deflated block-Jacobi gauge and the A_SS H-ILU
+preconditioner as experimental reference paths.
+
 ## 4.88.0 — Cubit plugin command verb `radia_export` -> `export`
 
 Released 2026-06-01.
