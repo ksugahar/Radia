@@ -409,7 +409,28 @@ the same homogeneity):
 |-------|-----------|----------------------------------------------|
 | **1. Tikhonov α** | moves ALONG the front (misfit ↔ seminorm) | the front itself (free α-sweep) |
 | **2. L∞ seminorm** (IRLS) | redistributes current within a FIXED `A` | **−18 %** peak (median) at matched homogeneity |
-| **3. geometry** (former size / surface) | changes `A` itself — more room for the current | **−34 %** exact-homog peak (former 18 → 42 cm) |
+| **3. geometry** (former size) | changes `A` itself — more room for the current | **−34 %** exact-homog peak (former 18 → 42 cm) |
+| **4. sheet-metal** (板金) deform | FORM the surface `z=f(x,y)` (changes `A`), optimise the shape | **−17 %** exact-homog peak, whole front **−5…−18 %**, at FIXED average standoff |
+
+**Sheet-metal (板金) deformation — honest decomposition.** Forming the
+conductor surface lowers the peak two ways, and they must be separated to
+make an honest claim:
+
+  - **Standoff** — forming the sheet *closer* to the target (smaller average
+    gap).  Large (≈ −53 % here) but achievable by simply repositioning a
+    FLAT former, so it is **not** genuine forming.
+  - **Bending** — reshaping at **fixed average standoff** (a **zero-mean**
+    deformation).  This is the genuine sheet-metal contribution.
+
+[`demo_pareto_deform.py`](../../examples/stream_function/demo_pareto_deform.py)
+defaults to the zero-mean (pure-bending) constraint and optimises the shape
+**per homogeneity level** (CMA-ES over a Gaussian-localised polynomial basis,
+warm-started across α, `|z| ≤ 5 cm`).  The genuine bending pushes the WHOLE
+front down ~ **−5 to −18 %** (best −17 % near exact homogeneity).  Note the
+planar field is distance-dominated, so the pure-bending benefit is bounded
+(richer DOF does not break it without raising the `|z|` cap); on a CYLINDER
+the in-surface bending is the *dominant* lever (opposite of the plane), where
+sheet-metal forming is expected to help more.
 
 Levers 1–2 reuse one ACA factorisation (the `+ α I` core + the cheap
 re-fold `S⁻¹V`); lever 3 rebuilds `A` + ACA per geometry — the EXPENSIVE
@@ -446,5 +467,7 @@ in [single_stroke.md](single_stroke.md)).  See
     [`demo_pareto_geometry_nsga.py`](../../examples/stream_function/demo_pareto_geometry_nsga.py)
     (geometry lever + NSGA-II joint front),
     [`demo_pareto_cylinder.py`](../../examples/stream_function/demo_pareto_cylinder.py)
-    (cylinder Gx, length lever with an optimum)
+    (cylinder Gx, length lever with an optimum),
+    [`demo_pareto_deform.py`](../../examples/stream_function/demo_pareto_deform.py)
+    (sheet-metal / 板金 bending lever, zero-mean genuine-forming decomposition)
   - MCP topic: `aca_tsvd(topic=regularized)`
