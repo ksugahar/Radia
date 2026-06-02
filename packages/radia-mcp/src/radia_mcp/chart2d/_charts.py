@@ -6,7 +6,7 @@ Each ChartSpec describes:
   - a recipe template (Python code with placeholders) for the
     text-return mode
   - a renderer that converts the user kwargs into a (fig, axes)
-    via radia_mcp.graph.paper_figure so the output inherits the
+    via radia_mcp.figure.paper_figure so the output inherits the
     lab paper-quality style (CVD-safe Okabe-Ito palette, 10 pt @ 8 cm,
     Type-42 font embed, units-in-parentheses).
 
@@ -85,7 +85,7 @@ LOGLOG = ChartSpec(
     description="Log-log plot; both axes log10.",
     notes="Use for power-law data: y = k * x^alpha appears as a straight"
           " line of slope alpha.  Pair with add_slope_guide() from"
-          " radia_mcp.graph to annotate slope reference triangles.",
+          " radia_mcp.figure to annotate slope reference triangles.",
 )
 SEMILOGX = ChartSpec(
     name="semilogx",

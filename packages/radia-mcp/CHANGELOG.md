@@ -5,6 +5,34 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## [Unreleased]
+
+- **BREAKING**: renamed the `radia_mcp.graph` subpackage to
+  `radia_mcp.figure` (server `mcp-server-graph` -> `mcp-server-figure`;
+  tools `graph_style_guide` / `graph_size_for_target` /
+  `graph_matlab2tikz_recipe` -> `figure_style_guide` /
+  `figure_size_for_target` / `figure_matlab2tikz_recipe`).  Clean
+  rename, no backward-compat shim.
+- **figure**: added two beamer 16:9 talk profiles
+  (`beamer_169_full` 150 mm, `beamer_169_half` 72 mm) — 11 pt body
+  (1 pt above the paper rule, for projection), heavier strokes, and an
+  allowed in-figure title.  Times New Roman + Okabe-Ito remain the
+  defaults, so a slide figure matches the paper figures.
+- **presentation**: added reference-citation tools for talks —
+  `presentation_cite_format` (talk / bracket / numeric / full-IEEE from
+  a BibTeX entry or explicit fields), `presentation_references_slide`
+  (beamer `thebibliography` frame + plain numbered list for a PPTX text
+  box), `presentation_add_citation_footer` (insert a Times-New-Roman
+  footnote textbox on a .pptx slide), and `presentation_citation_audit`
+  (flag dangling `[N]` and never-cited references).
+- **figure (policy)**: codified two figure conventions in the quality
+  rules. (1) The no-in-figure-title rule is scoped to BODY-referenceable
+  (paper) figures — `emit_paper_figure` now auto-exempts the
+  `beamer_169_*` slide profiles (a slide has no LaTeX `\caption`).
+  (2) Made the font rule explicit: on-page **10 pt at 8 cm = 1.25 pt/cm**;
+  matplotlib authors at the embed size (→ 10 pt @ 8 cm), MATLAB authors
+  oversized (→ **20 pt @ 16 cm**, a 2× downscale to the 8 cm column).
+
 ## 0.99.1 — radia-ih knowledge sync + 3 new bug-patterns
 
 Released 2026-06-02.

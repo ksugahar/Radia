@@ -47,7 +47,7 @@ register_status_tool(
         " linking.  Promoted from mcp-server-document."
     ),
     subpackage="radia_mcp.md2html",
-    related_servers=["mathematica", "graph"],
+    related_servers=["mathematica", "figure"],
     optional_deps=["markdown"],
 )
 

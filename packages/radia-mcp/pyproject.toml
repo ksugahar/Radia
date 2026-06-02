@@ -67,9 +67,20 @@ rag = [
 md2html = [
     "markdown>=3.0",
 ]
+# document: presentation / poster / pdf / doc_convert / bibliography --
+# promoted 2026-06-02 from the LAB-private mcp-server-document.  PDF +
+# PPTX manipulation, poster rendering, bibliography fetch.
+#   pip install radia-mcp[document]
+document = [
+    "pymupdf>=1.24",
+    "python-pptx>=1.0",
+    "Pillow>=10.0",
+    "matplotlib>=3.8",
+    "requests>=2.0",
+]
 # All MCP servers including the radia-coupled knowledge base.
 full = [
-    "radia-mcp[build123d,cadquery,gmsh,youtube,radia,rag,md2html]",
+    "radia-mcp[build123d,cadquery,gmsh,youtube,radia,rag,md2html,document]",
 ]
 
 [project.urls]
@@ -132,15 +143,16 @@ mcp-server-paper-writing = "radia_mcp.paper_writing.server:main"
 # tools (line / loglog / semilog / step / errorbar / fill_between /
 # bode / histogram / bar / box / violin / ecdf / contour / contourf /
 # pcolormesh / quiver / streamplot / imshow / polar / scatter / phase).
-# Companion to mcp-server-graph; inherits its profiles + gate stack.
+# Companion to mcp-server-figure; inherits its profiles + gate stack.
 # Recipe (text) + MCP-Image (inline) dual return.
 mcp-server-chart2d = "radia_mcp.chart2d.server:main"
-# 2026-05-26: graph -- Sugahara Lab publication-figure style guide.
+# 2026-05-26: figure -- Sugahara Lab publication-figure toolkit
+# (Times New Roman default, IEEE/IEEJ/beamer profiles).
 # Promoted from s:/mcp-server/src/mcp_server_document/graph/ into
 # radia-mcp as a standalone subpackage.  Surfaces IEEE/IEEJ font/size
-# profiles + MATLAB/Matplotlib snippets via graph_style_guide /
-# graph_size_for_target tools.
-mcp-server-graph = "radia_mcp.graph.server:main"
+# profiles + MATLAB/Matplotlib snippets via figure_style_guide /
+# figure_size_for_target tools.
+mcp-server-figure = "radia_mcp.figure.server:main"
 # 2026-05-24 evening (radia-mcp 0.70.0): GUI panel review skill-chain.
 # Surfaces panel-cli-diff / panel-review / panel-qt-test / panel-preview /
 # panel-smoke + known bug catalogue (val()-checkbox-truthy, AMG-class
@@ -148,6 +160,24 @@ mcp-server-graph = "radia_mcp.graph.server:main"
 # panel_review(topic=...) query.  Triggered by IGTE 2026 ESIM digest
 # GUI reproducibility audit (kubota's per-element headline).
 mcp-server-panel-review = "radia_mcp.panel_review.server:main"
+# 2026-06-02: presentation / poster / pdf / doc_convert / bibliography --
+# promoted from s:/mcp-server/src/mcp_server_document/ (LAB-private) to
+# radia-mcp (public).  Slide + poster lint, PDF/PPTX conversion + PDF
+# manipulation, BibTeX/citation tooling.  deps: pip install radia-mcp[document]
+mcp-server-presentation = "radia_mcp.presentation.server:main"
+mcp-server-poster = "radia_mcp.poster.server:main"
+mcp-server-pdf = "radia_mcp.pdf.server:main"
+mcp-server-doc-convert = "radia_mcp.doc_convert.server:main"
+mcp-server-bibliography = "radia_mcp.bibliography.server:main"
+# document_meta -- cross-cutting helpers (deadline / diff / template / lint-all).
+# REDESIGNED on promotion: lint_all is now a declarative registry over
+# radia-mcp's own lints (presentation/paper_writing/poster) -- no grant_writing
+# dependency (grant lint stays in the LAB-private mcp-server-document).
+mcp-server-document-meta = "radia_mcp.document_meta.server:main"
+# research_project -- project dashboard / scan across document types.  Its
+# grant-health handler uses the LAB-private mcp-server-document opportunistically
+# (no hard dependency); all other domains come from radia-mcp.
+mcp-server-research-project = "radia_mcp.research_project.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
