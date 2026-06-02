@@ -229,18 +229,19 @@ VERIFIED (order 2, results in `verify_coil_field_independent.json`):
 | case | target | turns | design vs **Radia C++** | field over DSV |
 |------|--------|-------|-------------------------|----------------|
 | uniform  | `Bz = 1` | 10 | **3.5e-11** (vector-diff rel) | uniformity 0.46 % |
-| gradient | `Bz = x` | 35 | **1.1e-8** (vector-diff rel)  | G = 0.75 T/m, nonlinearity 4.8 % |
+| gradient | `Bz = x` | 35 | **1.1e-8** (vector-diff rel)  | G = 0.75 T/m, nonlinearity 4.8 % (35 contours open) |
+| gradient_confined | `Bz = x`, `--confine on` | 35 | **1.2e-8** | G = 0.99 T/m, nonlinearity **1.3 %** (0 open) |
 
-The two engines agree to **8-11 digits** -- the designer's field is
-confirmed by an independent C++ codebase, so it is not merely
-self-consistent.  The honest caveat lives in the *gradient* row: the
-continuous psi design is 5e-5, but the equal-current discretisation on a
-*finite* cylinder leaves every contour open at the ends (closed here with a
-straight rim chord) and degrades the delivered linearity to ~4.8 % -- a real
-discretisation / edge-current limitation (a longer former or an
-end-current-tapering constraint is the fix), not a solver error.  The
-`uniform` row is the clean cross-codebase check (full rings, no open-contour
-artifact).  Locked by `tests/panels/test_streamfunction_golden.py::test_streamfunction_field_cross_codebase`.
+The engines agree to **8-11 digits** -- the designer's field is confirmed by
+an independent C++ codebase, so it is not merely self-consistent.  The
+*gradient* (unconfined) row shows the honest pre-fix state: on a *finite*
+cylinder the equal-current contours run off the ends (35/35 open), closing
+them with a rim chord degrades the delivered linearity to 4.8 %.  The
+*gradient_confined* row is the **fix**: confining the current to the patch
+(`--confine on`, psi=0 on the former edge) closes every contour (0 open) and
+the SAME cross-validated coil reaches **1.3 %** nonlinearity on the same short
+former.  Locked by `tests/panels/test_streamfunction_golden.py::test_streamfunction_field_cross_codebase`
+and `::test_streamfunction_confine_closes_contours`.
 
 ### Field-aware single-stroke (no sheet-metal crutch)
 
@@ -267,10 +268,21 @@ floor with **no `--distort`**:
 | `nn`          | 0.213 | 0.246 |
 | `field_aware` | **0.031** | **0.180** |
 
-So the manufacture rule is: **size the former until `n_open_contours = 0`,
-then field-aware chaining gives a single-stroke, single-current wire without
-the sheet-metal `--distort` crutch** (which stays as an optional extra).
-Locked by `test_streamfunction_field_aware_chain`.
+So the manufacture rule is: **close the contours (`n_open_contours = 0`), then
+field-aware chaining gives a single-stroke, single-current wire without the
+sheet-metal `--distort` crutch** (which stays as an optional extra).  Two ways
+to close them:
+
+- `--confine on` -- enforce psi = 0 on the former edge so the current stays on
+  the patch.  Closes the contours on **any** former (the gradient_confined row
+  above: short L = 0.5 m former, 0 open, 1.3 % nonlinearity).  This is the
+  standard gradient/shim-coil boundary condition; leave it **off** for
+  solenoid-type targets where the two ends must sit at different psi.
+- or simply use a longer former (`L = 1.6 m` above) so they close on their own.
+
+With confinement + enough turns the short-former Gx single-stroke reaches
+~1.5-2 % (`--nlevels 30`), no distort.  Locked by
+`test_streamfunction_field_aware_chain` and `test_streamfunction_confine_closes_contours`.
 
 ## References
 

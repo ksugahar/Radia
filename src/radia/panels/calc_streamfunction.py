@@ -153,7 +153,16 @@ def _build_problem(args, eval_scale=1.0):
     from radia.stream_function import aca_tsvd, RegularizedTSVD
 
     coil = Mesh(args.coil_vol)
-    fes = H1(coil, order=args.order, definedon=coil.Boundaries(".*"))
+    # confine = enforce psi = 0 on the coil-surface boundary edges (BBND) so
+    # NO current crosses the former edge -> the iso-contours CLOSE on any
+    # former (manufacturable single-stroke) instead of running off the ends.
+    # This is the standard gradient/shim-coil BC (current returns within the
+    # patch).  NOT for solenoid-type targets where the two ends must sit at
+    # DIFFERENT psi (a net axial current) -- there ".*" zeroing kills the
+    # field; leave --confine off for those.
+    diri = ({"dirichlet_bbnd": ".*"}
+            if getattr(args, "confine", "off") == "on" else {})
+    fes = H1(coil, order=args.order, definedon=coil.Boundaries(".*"), **diri)
     n = specialcf.normal(3)
     fi = np.where(np.array(fes.FreeDofs()))[0]
 
@@ -845,6 +854,7 @@ def run_manufacture(args):
             "eval_vol": os.path.basename(args.eval_vol),
             "order": args.order, "regularize": args.regularize,
             "alpha": args.alpha, "nlevels": args.nlevels,
+            "confine": getattr(args, "confine", "off"),
             "chain_method": args.chain,
             "ndof": int(P["fes"].ndof), "n_measure": int(P["n_measure"]),
             "homogeneity_rms": homo,             # continuous psi (design ref)
@@ -937,6 +947,11 @@ def build_argparser():
     ap.add_argument("--regularize", choices=["l2", "h1"], default="h1",
                     help="seminorm: l2 (min |psi|) or h1 (min surface-current "
                          "energy)")
+    ap.add_argument("--confine", choices=["on", "off"], default="off",
+                    help="confine current to the coil patch (psi=0 on the "
+                         "former edge): closes the contours on ANY former for "
+                         "gradient/shim coils. Leave off for solenoid-type "
+                         "targets (net axial current).")
     ap.add_argument("--alpha", type=float, default=0.0,
                     help="Tikhonov weight (design; 0 = exact-fit min-seminorm)")
     ap.add_argument("--eval-max", type=int, default=400,
