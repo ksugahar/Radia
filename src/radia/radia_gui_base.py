@@ -27,6 +27,25 @@ _RESOURCES_DIR = os.path.join(_THIS_DIR, "resources")
 _PYTHON = sys.executable
 _SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".radia")
 
+
+def radia_version():
+    """Installed ``radia`` version string for the Output banner.
+
+    Lightweight: reads the package *dist metadata* via
+    ``importlib.metadata`` -- it does NOT ``import radia`` (which would
+    load the heavy MKL + C++ extension into the GUI process, violating
+    the Layer-3 "no radia import" boundary).  Returns ``"unknown"`` if
+    the metadata cannot be read.
+    """
+    try:
+        from importlib.metadata import version, PackageNotFoundError
+        try:
+            return version("radia")
+        except PackageNotFoundError:
+            return "unknown"
+    except Exception:
+        return "unknown"
+
 # ----------------------------------------------------------------------
 # Shared CoilBuilder starter template (written by the EM and IH panels'
 # "New..." buttons).  Self-contained: includes the sys.path bootstrap,
@@ -1033,6 +1052,7 @@ class AnalysisWindow(QMainWindow):
         # command..." button reproduces this without running.
         single, multi = self._format_cmd(cmd)
         self._output.appendPlainText("=== Launching ===")
+        self._output.appendPlainText(f"Radia version: {radia_version()}")
         self._output.appendPlainText(f"working dir: {self.working_folder}")
         self._output.appendPlainText(multi)
         self._output.appendPlainText(
@@ -1213,6 +1233,9 @@ class AnalysisWindow(QMainWindow):
         time, plus heat + temperature for the IH paths.
         """
         o = self._output.appendPlainText
+        rv = result.get("radia_version")
+        if rv:
+            o(f"  Radia version = {rv}")
         ne = (result.get("ne") or result.get("n_elements")
               or result.get("wp_mesh_n_tris"))
         if ne is not None:
