@@ -1098,6 +1098,24 @@ def calc_main(solve_func, parser):
             pass
     sys.stdout = real_stdout
 
+    # Stamp the radia version that actually ran this calc into the
+    # result dict (auditability: the persisted <base>_<suffix>.json
+    # next to the geometry records which radia produced the numbers).
+    # Prefer the already-imported module's __version__ (authoritative,
+    # free if solve_func imported radia); fall back to dist metadata.
+    if isinstance(result, dict) and "radia_version" not in result:
+        _rv = None
+        try:
+            _m = sys.modules.get("radia")
+            _rv = getattr(_m, "__version__", None) if _m is not None else None
+            if not _rv:
+                from importlib.metadata import version as _pkgver
+                _rv = _pkgver("radia")
+        except Exception:
+            _rv = None
+        if _rv:
+            result["radia_version"] = _rv
+
     _elapsed = _time.perf_counter() - _t0
     try:
         if isinstance(result, dict):
