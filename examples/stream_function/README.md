@@ -242,6 +242,36 @@ end-current-tapering constraint is the fix), not a solver error.  The
 `uniform` row is the clean cross-codebase check (full rings, no open-contour
 artifact).  Locked by `tests/panels/test_streamfunction_golden.py::test_streamfunction_field_cross_codebase`.
 
+### Field-aware single-stroke (no sheet-metal crutch)
+
+The gradient caveat above has a clean fix.  An error-budget sweep
+(`calc_streamfunction.py --method manufacture`) shows the ~0.5 single-current
+error is **entirely the open-contour rim-chord artifact**, not a fundamental
+single-current limit and not the connectors:
+
+| former L | n_open | single-current rms |
+|----------|--------|--------------------|
+| 0.5 m    | 42/42  | 0.54   |
+| 1.0 m    | 10/28  | 0.075  |
+| **1.6 m**| **0**  | **0.0073** |
+
+With the former long enough that the contours **close** (`n_open_contours = 0`),
+the equal-current discretisation reproduces the target to 0.7 % as SF theory
+predicts.  The connectors are then the next error, and `--chain field_aware`
+(default) chooses each loop's entry/exit cut to minimise the *full one-current
+wire error* `min_I ||I*(loops+connectors) - B||` -- reaching the separate-turns
+floor with **no `--distort`**:
+
+| chain | L=1.6 (closed) | L=0.5 (open) |
+|-------|----------------|--------------|
+| `nn`          | 0.213 | 0.246 |
+| `field_aware` | **0.031** | **0.180** |
+
+So the manufacture rule is: **size the former until `n_open_contours = 0`,
+then field-aware chaining gives a single-stroke, single-current wire without
+the sheet-metal `--distort` crutch** (which stays as an optional extra).
+Locked by `test_streamfunction_field_aware_chain`.
+
 ## References
 
 - Sugahara Lab, "ACA-accelerated stream function method + CMA-ES",
