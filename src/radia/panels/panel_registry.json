@@ -442,7 +442,7 @@
             "sibc",
             "esim"
           ],
-          "help": "sibc: linear Dowell (production). esim: Karl iteration (WIP, raises).",
+          "help": "sibc: linear Dowell (production). esim: nonlinear Karl iteration (requires --bh-file; re-assembles A-V per outer iter; converges in a few iters, verified 2026-06-02).",
           "ja": "インピーダンスモデル",
           "physics": "esim/dowell/sibc"
         },
@@ -450,7 +450,7 @@
           "cli": "--bh-file",
           "name": "bh_file",
           "default": "",
-          "help": "BH table for ESIM (WIP).",
+          "help": "BH table (2-col H[A/m] B[T]); required for --impedance-model esim.",
           "ja": "BH カーブファイル",
           "physics": "2列: H[A/m] B[T]"
         },
@@ -840,6 +840,167 @@
           "help": "SPICE netlist output path",
           "ja": "SPICE 出力",
           "physics": ""
+        },
+        {
+          "cli": "--output",
+          "name": "output",
+          "default": "",
+          "help": "JSON output file",
+          "ja": "出力 JSON ファイル",
+          "physics": ""
+        }
+      ]
+    },
+    "streamfunction": {
+      "script": "calc_streamfunction.py",
+      "function": "run",
+      "ja_name": "ストリーム関数コイル設計",
+      "ja_description": "コイル面 .vol + 評価領域 .vol + 目標磁場 (CoefficientFunction 式; スカラー→Bz / 3成分→ベクトルB) から表面電流ストリーム関数 ψ を設計。design (均一度・最大電流密度) / pareto (フロント α掃引) / manufacture (一筆書き+板金+STEP+PEEC) の3モード。",
+      "method": "FE-direct H1 psi on a surface .vol + surface Biot-Savart + folded-Tikhonov (ACA+TSVD RegularizedTSVD)",
+      "command_builder": "radia_streamfunction.py:StreamFunctionPanel.build_command",
+      "params": [
+        {
+          "cli": "--coil-vol",
+          "name": "coil_vol",
+          "required": true,
+          "help": "coil surface mesh (.vol, 2D-in-3D)"
+        },
+        {
+          "cli": "--eval-vol",
+          "name": "eval_vol",
+          "required": true,
+          "help": "evaluation region mesh (.vol; surface or volume)"
+        },
+        {
+          "cli": "--target-cf",
+          "name": "target_cf",
+          "required": true,
+          "help": "target field CoefficientFunction expr of x,y,z (scalar -> Bz; 3-vector -> B)"
+        },
+        {
+          "cli": "--method",
+          "name": "method",
+          "choices": [
+            "design",
+            "pareto",
+            "manufacture"
+          ],
+          "default": "design"
+        },
+        {
+          "cli": "--order",
+          "name": "order",
+          "type": "int",
+          "default": 3,
+          "help": "psi FE order",
+          "ja": "曲線次数",
+          "physics": "メッシュ高次要素次数 (1-5)"
+        },
+        {
+          "cli": "--regularize",
+          "name": "regularize",
+          "choices": [
+            "l2",
+            "h1"
+          ],
+          "default": "h1",
+          "help": "seminorm: l2 (min |psi|) or h1 (min surface-current energy)"
+        },
+        {
+          "cli": "--alpha",
+          "name": "alpha",
+          "type": "float",
+          "default": 0.0,
+          "help": "Tikhonov weight (design; 0 = exact-fit min-seminorm)"
+        },
+        {
+          "cli": "--eval-max",
+          "name": "eval_max",
+          "type": "int",
+          "default": 400,
+          "help": "cap on constraint / measure points (subsample)"
+        },
+        {
+          "cli": "--pareto-lever",
+          "name": "pareto_lever",
+          "choices": [
+            "alpha",
+            "linf",
+            "geometry",
+            "sheetmetal"
+          ],
+          "default": "alpha",
+          "help": "front-pushing lever (alpha = L-curve sweep; linf/geometry/sheetmetal: interface defined, follow-on bodies)"
+        },
+        {
+          "cli": "--alpha-min",
+          "name": "alpha_min",
+          "type": "float",
+          "default": 0.0001,
+          "help": "pareto alpha-sweep lower bound (relative)"
+        },
+        {
+          "cli": "--alpha-max",
+          "name": "alpha_max",
+          "type": "float",
+          "default": 30.0,
+          "help": "pareto alpha-sweep upper bound (relative)"
+        },
+        {
+          "cli": "--n-alpha",
+          "name": "n_alpha",
+          "type": "int",
+          "default": 12,
+          "help": "pareto alpha-sweep number of points"
+        },
+        {
+          "cli": "--nlevels",
+          "name": "nlevels",
+          "type": "int",
+          "default": 12,
+          "help": "number of iso-contours = wire turns (manufacture)"
+        },
+        {
+          "cli": "--chain-method",
+          "name": "chain_method",
+          "choices": [
+            "field_aware",
+            "kuijpers",
+            "lobe",
+            "greedy"
+          ],
+          "default": "field_aware",
+          "help": "single-stroke chain method (manufacture)"
+        },
+        {
+          "cli": "--distort",
+          "name": "distort",
+          "help": "single-current sheet-metal wire distortion (manufacture)"
+        },
+        {
+          "cli": "--distort-comps",
+          "name": "distort_comps",
+          "default": "rsz",
+          "help": "sheet-metal distortion components (manufacture)"
+        },
+        {
+          "cli": "--step-output",
+          "name": "step_output",
+          "default": "",
+          "help": "STEP CAD output path (manufacture)"
+        },
+        {
+          "cli": "--peec",
+          "name": "peec",
+          "help": "compute PEEC coil inductance (manufacture)"
+        },
+        {
+          "cli": "--msh-output",
+          "name": "msh_output",
+          "default": "",
+          "help": "optional GMSH .msh of psi on the coil surface",
+          "ja": "GMSH 出力パス",
+          "physics": "場の可視化用 .msh v4.1"
         },
         {
           "cli": "--output",
