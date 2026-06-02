@@ -76,7 +76,10 @@ class TestCalcMain:
 
         stdout, stderr = self._run_calc_main(solve)
         result = json.loads(stdout.strip())
-        assert result == {"value": 42}
+        assert result["value"] == 42
+        # calc_main stamps the radia version into every result dict
+        # (auditability of the persisted .json).
+        assert "radia_version" in result
         assert stderr == ""
 
     def test_error_returns_json(self):

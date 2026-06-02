@@ -81,6 +81,22 @@ def test_output_summary_temperature_mean_max_min(ih_window):
     assert "mean 85.3" in txt and "max 142.7" in txt and "min 23.9" in txt, txt
 
 
+def test_output_summary_shows_radia_version(ih_window):
+    """The Result block surfaces the radia version that produced the
+    numbers (calc_main stamps result['radia_version']; the panel renders
+    it) -- so the persisted .log / screenshot records which radia ran.
+    Absent the key (older calc), no version line is shown (no crash)."""
+    ih_window._output.clear()
+    ih_window._append_standard_summary({"radia_version": "4.89.1",
+                                        "wp_ndof": 100})
+    txt = ih_window._output.toPlainText()
+    assert "Radia version = 4.89.1" in txt, txt
+    # Gracefully absent when the calc did not stamp it.
+    ih_window._output.clear()
+    ih_window._append_standard_summary({"wp_ndof": 100})
+    assert "Radia version" not in ih_window._output.toPlainText()
+
+
 # ---- Panel Layout Policy (functional): short window scrolls, never compress ----
 
 def test_short_window_engages_scrollbar_no_compression(ih_window):
