@@ -172,6 +172,14 @@ PANELS = {
         "method": "PEEC (Loop-Star + MNA)",
         "command_builder": "radia_pcb.py:PCBPanel.build_command",
     },
+    "streamfunction": {
+        "script": "calc_streamfunction.py",
+        "function": "run",
+        "ja_name": "ストリーム関数コイル設計",
+        "ja_description": "コイル面 .vol + 評価領域 .vol + 目標磁場 (CoefficientFunction 式; スカラー→Bz / 3成分→ベクトルB) から表面電流ストリーム関数 ψ を設計。design (均一度・最大電流密度) / pareto (フロント α掃引) / manufacture (一筆書き+板金+STEP+PEEC) の3モード。",
+        "method": "FE-direct H1 psi on a surface .vol + surface Biot-Savart + folded-Tikhonov (ACA+TSVD RegularizedTSVD)",
+        "command_builder": "radia_streamfunction.py:StreamFunctionPanel.build_command",
+    },
 }
 
 
