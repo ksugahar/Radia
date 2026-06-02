@@ -204,6 +204,44 @@ ASCII summary only.  `demo_cmaes_magnet_design.py` additionally needs `optuna`
   accuracy = symmetric pairing of +x/-x lobes + CMA-ES connection
   routing (the "+CMA-ES" half of SA-25-020).
 
+## End-to-end validation vs an independent codebase
+
+`verify_coil_field_independent.py` closes the design loop on a **real
+engineering geometry** (MRI-gradient-coil scale: cylinder r = 0.15 m,
+L = 0.5 m, DSV sphere r = 0.05 m) and checks the result against an
+**independent field codebase**, not against itself:
+
+1. design a coil with the general FE-direct stream-function stack
+   (`calc_streamfunction.py`),
+2. discretise it into orientation-consistent equal-current contour turns,
+3. compute the designed coil's actual field over the DSV **two ways** --
+   the numpy straight-segment Biot-Savart used inside the designer
+   (`_segment_field_B`, itself checked vs the circular-loop analytic to
+   6 digits) **and** Radia's C++ `rad.ObjFlmCur` + `rad.Fld` (a separate
+   codebase).
+
+```
+python verify_coil_field_independent.py --order 2 --nlevels 10
+```
+
+VERIFIED (order 2, results in `verify_coil_field_independent.json`):
+
+| case | target | turns | design vs **Radia C++** | field over DSV |
+|------|--------|-------|-------------------------|----------------|
+| uniform  | `Bz = 1` | 10 | **3.5e-11** (vector-diff rel) | uniformity 0.46 % |
+| gradient | `Bz = x` | 35 | **1.1e-8** (vector-diff rel)  | G = 0.75 T/m, nonlinearity 4.8 % |
+
+The two engines agree to **8-11 digits** -- the designer's field is
+confirmed by an independent C++ codebase, so it is not merely
+self-consistent.  The honest caveat lives in the *gradient* row: the
+continuous psi design is 5e-5, but the equal-current discretisation on a
+*finite* cylinder leaves every contour open at the ends (closed here with a
+straight rim chord) and degrades the delivered linearity to ~4.8 % -- a real
+discretisation / edge-current limitation (a longer former or an
+end-current-tapering constraint is the fix), not a solver error.  The
+`uniform` row is the clean cross-codebase check (full rings, no open-contour
+artifact).  Locked by `tests/panels/test_streamfunction_golden.py::test_streamfunction_field_cross_codebase`.
+
 ## References
 
 - Sugahara Lab, "ACA-accelerated stream function method + CMA-ES",
