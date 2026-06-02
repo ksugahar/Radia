@@ -5,6 +5,23 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.99.1 — radia-ih knowledge sync + 3 new bug-patterns
+
+Released 2026-06-02.
+
+- `ih` / `radia_ngsolve` knowledge: removed the dangling `calc_heating.py`
+  references (the orphan was deleted in radia 4.89.1); reframed to the
+  EM -> q_surf -> Thermal flow.
+- `meta.bug_patterns`: +3 entries
+  (pardiso-mkl-thread-dll-fails-in-pytest-subprocess,
+  stale-index-lock-in-shared-clone,
+  policy-lint-helmholtz-hodge-false-positive); 20 total.
+
+## 0.99.0 — version bump alongside radia 4.89.0 (loop-free-by-default)
+
+Released 2026-06-02.  Bumped in lockstep with the radia 4.89.0 triple
+(Helmholtz-Hodge loop removal); see the radia CHANGELOG.
+
 ## 0.98.0 — Cubit knowledge updated for the `export` command verb
 
 Released 2026-06-01.

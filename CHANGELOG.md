@@ -3,6 +3,22 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.89.1 — radia-ih hardening + stream_function Tikhonov/Pareto
+
+Released 2026-06-02.
+
+- **radia-ih**: removed the orphan `calc_heating.py` (legacy 2D-axisym
+  FEM-ESIM that auto-generated its own mesh, violating the .vol-only
+  Layer-4 contract; unreachable from the panel).  Verified
+  `calc_fem_coilmesh --impedance-model esim` (nonlinear Karl) runs +
+  converges and dropped its stale "WIP, raises" labels (calc help +
+  panel combo).  Added Cubit-free axisym + esim regression goldens.
+- **stream_function**: `RegularizedTSVD` folds Tikhonov (alpha)
+  regularization; new Pareto-front demos (geometry / NSGA-II / cylinder)
+  for the (homogeneity, peak-J) trade-off.
+- Docs / radia-mcp knowledge reframed from the removed auto-mesh
+  "2-Stage" path to the current EM -> q_surf -> Thermal flow.
+
 ## 4.89.0 — Loop-free solution by default (Helmholtz-Hodge loop removal)
 
 Released 2026-06-02.
