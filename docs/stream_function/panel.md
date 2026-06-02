@@ -75,6 +75,12 @@ the same density rule the flux-line **bubble system**
   Renders the designed coil's actual `B` field as flux lines on a cut-plane,
   seeded by the bubble system (line density `~ |B|`) -- a physical check that
   the coil produces the intended field (the four-lobe Gx gradient saddle).
+- **`--steps-plot out.png` (per-step manufacturing view).** A 2×2 3D figure
+  showing the coil at each stage: (1) the equal-current iso-contours
+  (`N = --nlevels` turns -- this is how you set the number of lines),
+  (2) the single-stroke (一筆書き) wire, (3) the sheet-metal (板金) `--distort`
+  distorted wire, (4) the wire WITH thickness (太さ, `--wire-diam`, swept with a
+  twist-free parallel-transport frame) + distortion.
 
 ## Single-stroke chain (`--chain {field_aware, nn}`)
 

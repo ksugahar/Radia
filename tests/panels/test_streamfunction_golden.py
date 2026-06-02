@@ -194,11 +194,13 @@ def test_streamfunction_contour_hp_and_flux(sample_vols, tmp_path):
     lines with density ~ |B| on a cut-plane."""
     coil, evalv = sample_vols
     png = str(tmp_path / "flux.png")
+    steps = str(tmp_path / "steps.png")
     r = _run_calc(coil, evalv, "x",
                   extra=["--method", "manufacture", "--nlevels", "12",
                          "--eval-max", "40", "--confine", "abe",
-                         "--contour-sub", "3", "--flux-plot", png,
-                         "--flux-plane", "y"])
+                         "--contour-sub", "3", "--distort", "--distort-iter",
+                         "2", "--wire-diam", "2e-3", "--flux-plot", png,
+                         "--flux-plane", "y", "--steps-plot", steps])
     assert "error" not in r, f"calc error: {r.get('error')}"
     assert r["contour_sub"] == 3
     assert r["n_open_contours"] == 0
@@ -208,6 +210,10 @@ def test_streamfunction_contour_hp_and_flux(sample_vols, tmp_path):
     if "flux_plot_error" not in r:
         assert r["n_flux_lines"] > 0
         assert os.path.exists(png)
+    # per-step manufacturing plot (contours -> wire -> bankin -> thickness)
+    if "steps_plot_error" not in r:
+        assert r.get("steps_plot") == steps
+        assert os.path.exists(steps)
 
 
 def test_streamfunction_confine_closes_contours(sample_vols):
