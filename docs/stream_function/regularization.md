@@ -503,4 +503,4 @@ in [single_stroke.md](single_stroke.md)).  See
     [`demo_pareto_cylinder_deform.py`](../../examples/stream_function/demo_pareto_cylinder_deform.py)
     (cylinder in-surface axial bending — the dominant cylinder lever, radius
     fixed = 100 % genuine, −10…−25 %)
-  - MCP topic: `aca_tsvd(topic=regularized)`
+  - MCP topic: `streamfunction(topic=regularized)`

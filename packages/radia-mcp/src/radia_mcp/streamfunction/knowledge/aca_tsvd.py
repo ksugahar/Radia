@@ -14,7 +14,9 @@ C++ core src/core/rad_stream_function.cpp.  ACA+ is delegated to the in-repo
 HACApK C library (cHACApK_acaplus).  Docs: docs/stream_function.md.  Examples:
 examples/stream_function/.  Tests: tests/test_stream_function.py.
 
-The MCP server exposes this via ``aca_tsvd(topic=...)``.  Topics: overview,
+The MCP server exposes this via ``streamfunction(topic=...)`` on the
+radia-streamfunction server (moved from radia-ngsolve aca_tsvd in 2026-06).
+Topics: overview,
 method, api, kernel_agnostic, performance, cmaes, validation, literature
 (stream function method theory + Turner/Peeren/Abe-DUCAS lineage), workflow
 (SF -> CAD/STEP -> PEEC -> field demos), single_stroke (one-continuous-wire
@@ -673,7 +675,7 @@ topology jitter under small psi changes).  When psi is upgraded to a
 continuous FE function, Path A converges.
 
 This is the empirical justification for the
-``radia-mcp aca_tsvd(single_stroke)`` topic's recommendation
+``radia-mcp streamfunction(single_stroke)`` topic's recommendation
 to "switch to a B-spline SFD continuous representation" for
 non-trivial topologies -- the same effect (smooth chain field
 response) gives the same benefit (Path A actually contracts).
@@ -1737,8 +1739,8 @@ finds one specific point while NSGA-II explores the front.
   - ``docs/stream_function/deformation.md`` -- constrained reg-aware
     loop section + Pareto trade-off table
   - ``radia.stream_function.RegularizedTSVD`` -- implementation
-  - ``aca_tsvd(performance)`` -- ACA+ amortisation numbers
-  - ``aca_tsvd(session_2026_05_30)`` -- Section 10 (regularisation
+  - ``streamfunction(performance)`` -- ACA+ amortisation numbers
+  - ``streamfunction(session_2026_05_30)`` -- Section 10 (regularisation
     sweep + deformation) is the prior, non-folded form
   - Hansen 1998 "Rank-Deficient and Discrete Ill-Posed Problems"
     SIAM -- standard reference for TSVD + Tikhonov; the specific

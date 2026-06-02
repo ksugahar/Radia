@@ -185,9 +185,9 @@ What may be **new** (subject to literature search before publication):
 
 ## Cross-references
 
-  - MCP knowledge: ``aca_tsvd(topic=session_2026_05_30)``,
-    ``aca_tsvd(topic=single_stroke)`` for the full session-log narrative,
-    and ``aca_tsvd(topic=regularized)`` for the regularisation-folded
+  - MCP knowledge: ``streamfunction(topic=session_2026_05_30)``,
+    ``streamfunction(topic=single_stroke)`` for the full session-log narrative,
+    and ``streamfunction(topic=regularized)`` for the regularisation-folded
     closed form `ψ = S⁻¹V · W⁻¹ · Σ⁻¹ · UᵀB`.
   - Memory entries (LAB-private):
     - ``feedback_single_stroke_chain_orientation_traps``

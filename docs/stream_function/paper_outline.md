@@ -246,7 +246,7 @@ Each benchmark → row in a comparison table → discussion.
   - Multi-objective Pareto (RMS / inductance / peak current / wire
     length) via Optuna NSGA-II.
   - Multivalued-potential reformulation (D-path in
-    `aca_tsvd(topic=single_stroke)`).
+    `streamfunction(topic=single_stroke)`).
   - GPU acceleration of the per-entry kernel (CUDA Biot-Savart for
     massive-M targets).
 
@@ -308,5 +308,5 @@ later (target: ~1 month for arXiv, 2-3 months for journal submission).
 ## Cross-reference
 
   - All sub-docs in this folder
-  - MCP topic: `aca_tsvd(topic=session_2026_05_30)` section 11 +
-    `aca_tsvd(topic=single_stroke)` for full background
+  - MCP topic: `streamfunction(topic=session_2026_05_30)` section 11 +
+    `streamfunction(topic=single_stroke)` for full background

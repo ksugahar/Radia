@@ -1,17 +1,18 @@
 """Stream-function (SF) coil-design knowledge for the radia-streamfunction MCP
 server.
 
-The detailed, self-contained knowledge already lives in
-``radia_mcp.radia_ngsolve.knowledge.aca_tsvd`` (overview / method / api /
+The detailed, self-contained knowledge lives in THIS server's own
+``radia_mcp.streamfunction.knowledge.aca_tsvd`` (overview / method / api /
 kernel_agnostic / performance / cmaes / validation / literature / workflow /
 single_stroke / regularized -- the last carries the folded-Tikhonov + Pareto
-front + sheet-metal (板金) lever section).  This module adds a dedicated SF
-OVERVIEW that ties it together and a topic map, and delegates every other
-topic to ``get_aca_tsvd_knowledge`` (which has ~80 aliases) so there is NO
-content duplication.
+front + sheet-metal (板金) lever section).  It was MOVED here from
+``radia_mcp.radia_ngsolve`` in 2026-06 because SF coil design is not a general
+NGSolve usage and was making radia_ngsolve too large.  This module adds a
+dedicated SF OVERVIEW + topic map and dispatches every other topic to
+``get_aca_tsvd_knowledge`` (which has ~80 aliases).
 """
 
-from ..radia_ngsolve.knowledge.aca_tsvd import get_aca_tsvd_knowledge
+from .knowledge.aca_tsvd import get_aca_tsvd_knowledge
 
 
 SF_OVERVIEW = r"""
@@ -94,8 +95,9 @@ DOCS + DEMOS
     demos: demo_pareto_tikhonov_aca / demo_pareto_geometry_nsga /
     demo_pareto_cylinder / demo_pareto_deform / demo_pareto_cylinder_deform
 
-The detailed knowledge is shared with ``aca_tsvd(<topic>)`` on the
-radia-ngsolve server -- this server is the SF-focused front door.
+The detailed knowledge lives in this server's own knowledge module
+(``radia_mcp.streamfunction.knowledge.aca_tsvd``, moved from radia-ngsolve
+in 2026-06) -- this server is the SF-focused front door over it.
 """
 
 
@@ -132,8 +134,7 @@ def get_streamfunction_documentation(topic: str = "overview") -> str:
     """Return SF coil-design knowledge for ``topic``.
 
     ``overview`` returns this server's dedicated front-door page; every other
-    topic delegates to ``aca_tsvd(<topic>)`` (same self-contained knowledge,
-    ~80 aliases) so there is no content duplication.
+    topic dispatches to the local ``knowledge.aca_tsvd`` module (~80 aliases).
     """
     t = (topic or "overview").strip().lower()
     if t in ("overview", "index", "", "sf", "streamfunction", "stream_function",
