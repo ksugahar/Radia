@@ -199,14 +199,26 @@ def test_streamfunction_confine_closes_contours(sample_vols):
             "--eval-max", "40"]
     roff = _run_calc(coil, evalv, "x", extra=base + ["--confine", "off"])
     ron = _run_calc(coil, evalv, "x", extra=base + ["--confine", "on"])
-    assert "error" not in roff and "error" not in ron
+    rabe = _run_calc(coil, evalv, "x", extra=base + ["--confine", "abe"])
+    assert "error" not in roff and "error" not in ron and "error" not in rabe
     assert roff["confine"] == "off" and ron["confine"] == "on"
+    assert rabe["confine"] == "abe"
     # unconfined: contours run off the short former; confined: they all close
     assert roff["n_open_contours"] > 0, "short former should leave open contours"
     assert ron["n_open_contours"] == 0, "confine should close every contour"
+    assert rabe["n_open_contours"] == 0, "abe should close every contour"
     # closing the contours lowers the delivered single-stroke wire error
     assert ron["wire_homogeneity_rms"] < roff["wire_homogeneity_rms"], \
         f"confine {ron['wire_homogeneity_rms']} !< off {roff['wire_homogeneity_rms']}"
+    # Abe edge-equipotential: better/equal DESIGN accuracy than plain psi=0
+    # (free boundary constants -> larger function space).  The separate-turn
+    # coil is accurate.  (The single-stroke WIRE error is chaining-dependent --
+    # abe's boundary-hugging contours can chain worse -- so it is NOT asserted
+    # here; abe's value is the canonical BC + generality + design accuracy.)
+    assert rabe["homogeneity_rms"] <= ron["homogeneity_rms"] * 1.05, \
+        f"abe design {rabe['homogeneity_rms']} !<= on {ron['homogeneity_rms']}"
+    assert rabe["loops_homogeneity_rms"] < 5.0e-2, \
+        f"abe separate-turn coil inaccurate: {rabe['loops_homogeneity_rms']}"
 
 
 def test_streamfunction_field_cross_codebase(tmp_path):
