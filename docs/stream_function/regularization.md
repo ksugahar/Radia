@@ -399,6 +399,37 @@ the wall-clock win is modest.  The pattern is what matters: when each
 reusing it across a 30-trial Optuna sweep is the entire performance
 argument for the folded form.
 
+## Pushing the (homogeneity, peak-J) Pareto front
+
+The folded Tikhonov α-sweep traces the front for a **fixed** design.  Three
+**stackable levers** push the whole front toward the origin (lower peak at
+the same homogeneity):
+
+| Lever | Mechanism | Effect (planar gradient hot-spot, order-3 ψ) |
+|-------|-----------|----------------------------------------------|
+| **1. Tikhonov α** | moves ALONG the front (misfit ↔ seminorm) | the front itself (free α-sweep) |
+| **2. L∞ seminorm** (IRLS) | redistributes current within a FIXED `A` | **−18 %** peak (median) at matched homogeneity |
+| **3. geometry** (former size / surface) | changes `A` itself — more room for the current | **−34 %** exact-homog peak (former 18 → 42 cm) |
+
+Levers 1–2 reuse one ACA factorisation (the `+ α I` core + the cheap
+re-fold `S⁻¹V`); lever 3 rebuilds `A` + ACA per geometry — the EXPENSIVE
+outer loop wrapping the cheap inner front.  This is the natural nesting for
+a **multi-objective optimiser**: NSGA-II over (geometry, α) traces the
+3-objective (homogeneity, peak, **former size**) surface, autonomously
+finding that low peak at a given homogeneity *requires* a larger former
+(the geometry-peak coupling).  See
+[`demo_pareto_geometry_nsga.py`](../../examples/stream_function/demo_pareto_geometry_nsga.py).
+
+On the **cylinder** (Gx fingerprint, the standard MRI/shim geometry) the
+geometry lever is the cylinder **length**, and it behaves differently:
+instead of monotone diminishing returns it has an **optimum** (≈ 50 cm for a
+15 cm-radius former over a ±8 cm DSV, **−37 %** vs a 32 cm cylinder) — once
+the length covers the DSV, loops beyond ≈ ±2·DSV barely reach the target so
+a longer cylinder stops helping.  The optimal lever direction is
+geometry-dependent (cf. the planar vs cylinder sheet-metal-distortion lever
+in [single_stroke.md](single_stroke.md)).  See
+[`demo_pareto_cylinder.py`](../../examples/stream_function/demo_pareto_cylinder.py).
+
 ### Cross-reference
 
   - Theory: [theory.md](theory.md)
@@ -411,5 +442,9 @@ argument for the folded form.
     [`demo_pareto_tikhonov_aca.py`](../../examples/stream_function/demo_pareto_tikhonov_aca.py)
     (**(homogeneity, peak-J) Pareto front** via the folded Tikhonov α-sweep —
     the direct application of the `+ α I` core: one ACA factorisation, the
-    whole front swept at ≈ 50 µs/point)
+    whole front swept at ≈ 50 µs/point),
+    [`demo_pareto_geometry_nsga.py`](../../examples/stream_function/demo_pareto_geometry_nsga.py)
+    (geometry lever + NSGA-II joint front),
+    [`demo_pareto_cylinder.py`](../../examples/stream_function/demo_pareto_cylinder.py)
+    (cylinder Gx, length lever with an optimum)
   - MCP topic: `aca_tsvd(topic=regularized)`
