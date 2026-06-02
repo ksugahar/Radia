@@ -98,8 +98,8 @@ relaxed fixed-point iteration:
 - `--bh-file FILE`      required; 2-column [H[A/m] B[T]] table
 
 `calc_fem_kelvin.py` uses `--max-iter` (legacy name) and currently
-does NOT expose `--esim-tol`.  The other three Karl scripts
-(`calc_inductance`, `calc_fem_coilmesh`, `calc_heating`) use the
+does NOT expose `--esim-tol`.  The other two Karl scripts
+(`calc_inductance`, `calc_fem_coilmesh`) use the
 new flag names.
 
 ## Convergence pitfalls
