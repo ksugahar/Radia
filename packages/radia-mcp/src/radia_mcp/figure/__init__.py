@@ -80,3 +80,25 @@ from ._paper_figure import (  # noqa: F401
     # v0.80.0 additions (GitHub MCP plotting servers + tueplots + Wong 2011):
     OKABE_ITO,                       # CVD-safe palette
 )
+
+# Misuse-proof slide/paper API + audit (2026-06-03): author AT the embed
+# width, fail-loud gates on save (no in-figure title, Times New Roman
+# actually used, font embedding, no CJK), and emit the exact
+# \includegraphics[width=<cm>] snippet.
+#   from radia_mcp.figure import lab_figure, save_lab_figure, audit_tex_figures
+from ._lab_api import (  # noqa: F401
+    lab_figure,
+    save_lab_figure,
+    audit_tex_figures,
+    _assert_times_new_roman,
+)
+
+# One-call publication-figure builders (return fig+axes via lab_figure):
+#   from radia_mcp.figure import scaling_loglog, grouped_bars, convergence, ...
+from ._builders import (  # noqa: F401
+    scaling_loglog,
+    grouped_bars,
+    convergence,
+    quiver_pair,
+    bh_curve,
+)

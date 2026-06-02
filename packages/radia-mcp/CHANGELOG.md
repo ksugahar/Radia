@@ -14,10 +14,10 @@ crystallized as its own package.
   `figure_size_for_target` / `figure_matlab2tikz_recipe`).  Clean
   rename, no backward-compat shim.
 - **figure**: added two beamer 16:9 talk profiles
-  (`beamer_169_full` 150 mm, `beamer_169_half` 72 mm) — 11 pt body
-  (1 pt above the paper rule, for projection), heavier strokes, and an
-  allowed in-figure title.  Times New Roman + Okabe-Ito remain the
-  defaults, so a slide figure matches the paper figures.
+  (`beamer_169_full` 150 mm, `beamer_169_half` 72 mm) — 10 pt body
+  (on-page 10 pt @ 8 cm, same as paper), heavier strokes for projector
+  legibility, NO in-figure title (the beamer frametitle carries it).
+  Times New Roman + Okabe-Ito remain the defaults.
 - **presentation**: added reference-citation tools for talks —
   `presentation_cite_format` (talk / bracket / numeric / full-IEEE from
   a BibTeX entry or explicit fields), `presentation_references_slide`
@@ -34,6 +34,18 @@ crystallized as its own package.
   on-page **10 pt at 8 cm = 1.25 pt/cm**; matplotlib authors at the
   embed size (→ 10 pt @ 8 cm), MATLAB authors oversized (→ **20 pt @
   16 cm**, a 2× downscale to the 8 cm column).
+- **figure (API)**: misuse-proof slide/paper figure API, forged from the
+  CEFC-2026 incident (figures authored at 150 mm then
+  `\linewidth`-downscaled to ~6 pt, carrying in-figure titles, at risk of
+  a silent DejaVu fallback). `lab_figure(embed_width_cm)` authors AT the
+  on-page width with verified Times New Roman; `save_lab_figure` runs
+  FAIL-LOUD gates (no in-figure title, TNR actually used pre+post, font
+  embedding, no CJK) and returns the exact `\includegraphics[width=<cm>]`
+  snippet (embed at 100% → on-page 10 pt). Adds one-call builders
+  (`scaling_loglog` / `grouped_bars` / `convergence` / `quiver_pair` /
+  `bh_curve`), `_assert_times_new_roman` (catches the silent DejaVu
+  fallback), and a `figure_audit_embeds(tex)` MCP tool that lints a .tex
+  for height-constrained / `\linewidth` / DejaVu-embedding figures.
 
 ## 0.99.1 — radia-ih knowledge sync + 3 new bug-patterns
 
