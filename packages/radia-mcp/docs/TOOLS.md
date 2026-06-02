@@ -41,7 +41,7 @@ Total: **328 tools** across 40 MCP servers.
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
-| [`mcp-server-graph`](#mcp-server-graph) | `radia_mcp.graph` | 7 |
+| [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 7 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 8 |
@@ -639,25 +639,25 @@ Module: `radia_mcp.md2html.server`
 | `md2html_convert` | Convert a Markdown file to a self-contained HTML file. |
 | `md2html_status` | (no description) |
 
-## `mcp-server-graph`
+## `mcp-server-figure`
 
-_Sugahara Lab publication-figure style guide: IEEE / IEEJ font/size profiles, MATLAB + Matplotlib snippets, lab style rules (units in parentheses, no in-figure title, Times New Roman serif).  Promoted from mcp-server-document._
+_Sugahara Lab publication-figure toolkit (Times New Roman default): beamer/slide + IEEE/IEEJ paper profiles, MATLAB + Matplotlib snippets, lab style rules (units in parentheses, no in-figure title).  Promoted from mcp-server-document._
 
-Module: `radia_mcp.graph.server`
+Module: `radia_mcp.figure.server`
 
 | Tool | Description |
 |---|---|
-| `graph_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
-| `graph_size_for_target` | Recommend output figure size + font settings for a target embedding. |
-| `graph_status` | (no description) |
-| `graph_style_guide` | Return the lab-standard graph style guide. |
+| `figure_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
+| `figure_size_for_target` | Recommend output figure size + font settings for a target embedding. |
+| `figure_status` | (no description) |
+| `figure_style_guide` | Return the lab-standard graph style guide. |
 | `paper_figure_profiles` | List paper-quality figure profiles + their exact journal geometry. |
 | `paper_figure_quality_rules` | Why paper-quality figures need a margin-efficiency gate. |
 | `paper_figure_recipe` | Generate a self-contained Python recipe for a paper-quality figure. |
 
 ## `mcp-server-chart2d`
 
-_22 paper-quality 2D charts as MCP tools: line / loglog / semilog / step / errorbar / fill_between / bode / histogram / bar / box / violin / ecdf / contour / contourf / pcolormesh / quiver / streamplot / imshow / polar / scatter / phase (Nyquist).  Each accepts return_mode='recipe' (Python text) | 'image' (MCP Image inline) | 'both'.  Inherits radia_mcp.graph profile + gate stack._
+_22 paper-quality 2D charts as MCP tools: line / loglog / semilog / step / errorbar / fill_between / bode / histogram / bar / box / violin / ecdf / contour / contourf / pcolormesh / quiver / streamplot / imshow / polar / scatter / phase (Nyquist).  Each accepts return_mode='recipe' (Python text) | 'image' (MCP Image inline) | 'both'.  Inherits radia_mcp.figure profile + gate stack._
 
 Module: `radia_mcp.chart2d.server`
 

@@ -188,7 +188,7 @@ def test_render_polar_uses_polar_axes():
 
 def test_render_inherits_okabe_ito_palette():
     """Server-side render must use the lab CVD-safe palette by default."""
-    from radia_mcp.graph import OKABE_ITO
+    from radia_mcp.figure import OKABE_ITO
     fig, axes = render_chart("line",
                               x=np.linspace(0, 1, 10),
                               y=np.linspace(0, 1, 10))
