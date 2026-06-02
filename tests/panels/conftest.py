@@ -66,6 +66,18 @@ def ih_panel(qapp):
 
 
 @pytest.fixture
+def sf_panel(qapp):
+    """Fresh StreamFunctionPanel (Design / Pareto / Manufacture) per test.
+    Constructing it does NOT import ngsolve / radia (the calc_streamfunction
+    argparser is pure argparse), so this runs inside pytest unlike the
+    subprocess calc golden."""
+    from radia_streamfunction import StreamFunctionPanel
+    panel = StreamFunctionPanel()
+    yield panel
+    panel.deleteLater()
+
+
+@pytest.fixture
 def ih_window(qapp, tmp_path):
     """Fresh IHWindow with an empty .vol path. Useful when the test
     needs the full Run / Stop / Open GMSH button machinery from

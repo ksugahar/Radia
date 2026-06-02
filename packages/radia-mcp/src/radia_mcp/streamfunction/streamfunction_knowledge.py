@@ -86,6 +86,9 @@ TOPIC MAP  (query: streamfunction("<topic>"))
   validation        analytic-benchmark checks
   literature        SFM lineage (Turner / Peeren / current potential)
   workflow          end-to-end demo recipes
+  panel             the design/pareto/manufacture PANEL + calc_streamfunction.py
+  boundary_conditions  --confine off/on/abe (Abe edge-equipotential BC)
+  contour           contour=flux-line; --contour-sub order-p + --flux-plot bubble
 
 DOCS + DEMOS
 ------------
@@ -101,8 +104,101 @@ in 2026-06) -- this server is the SF-focused front door over it.
 """
 
 
+SF_PANEL = r"""
+================================================================
+SF coil-design PANEL + FE-direct calc  (calc_streamfunction.py)
+================================================================
+
+The GUI panel (radia_streamfunction.py, Layer 3) wraps the headless calc
+``src/radia/panels/calc_streamfunction.py`` (Layer 4).  ONE argparser drives
+both, with THREE modes (--method):
+
+  design       target -> A psi = B (folded-Tikhonov RegularizedTSVD) -> psi,
+               field homogeneity over the eval region, peak surface current.
+  pareto       (homogeneity, peak current density) front via --pareto-lever:
+                 alpha     Tikhonov L-curve (one factorisation, swept alpha)
+                 linf      minimax IRLS trajectory (peak down at ~const homo)
+                 geometry  eval-region (DSV) scale sweep (dual of former size)
+  manufacture  psi iso-contours -> orientation-consistent equal-current turns
+               -> field-aware single-stroke wire -> (sheet-metal --distort)
+               -> CAD STEP (--step-output) -> PEEC L,R (--peec).
+
+I/O: --coil-vol (a STANDALONE 2D surface .vol; psi = H1 on it, Setup-B
+``definedon=Boundaries('.*')`` + ``grad(v).Trace()`` + ``ds``), --eval-vol
+(surface OR volume), --target-cf (a CoefficientFunction expr of x,y,z;
+scalar -> Bz, 3-vector -> full B).
+
+CURRENT-CONFINEMENT BOUNDARY CONDITION  (--confine {off, on, abe})
+-----------------------------------------------------------------
+On a FINITE former the contours run off the edges; closing them with a rim
+chord injects a spurious edge current (LAB short cylinder Gx: single-current
+rms 0.54, 42/42 contours open).  Confine the current to the patch:
+
+  off   no constraint (default; fine when contours close on their own, e.g.
+        full-ring solenoid / long former).
+  on    psi = 0 on every boundary edge (H1 dirichlet_bbnd).  Simple gradient/
+        shim BC; BREAKS solenoid-type targets (the two ends are forced equal).
+  abe   the CANONICAL Abe edge-equipotential BC (M. Abe, IEEE Trans. Magn.,
+        DUCAS; Appendix eq.6 T = R.T_IN, A-1/A-3): each PHYSICAL boundary
+        component gets ONE FREE constant + one ground.  Closes the contours on
+        ANY former AND works for gradient AND solenoid (the two ends take
+        different free constants).  Implemented as a DOF-reduction matrix R
+        (off/on are the column-select special case); physical edges vs a CAD
+        seam are told apart by element adjacency (a boundary mesh-edge borders
+        ONE surface element, a seam two).
+
+abe is the best DESIGN + SEPARATE-TURN + GENERAL choice: LAB short cylinder
+Gx -> n_open 0, separate-loops single-current 0.022 (vs on's 0.149), and does
+NOT break uniform (vs on which degrades it).  CAVEAT: abe is NOT automatically
+best for the SINGLE-STROKE WIRE -- its edge equipotential makes a contour hug
+the boundary, so the field-aware chain can connect it worse than `on`; abe's
+value is the canonical BC + generality + design/separate-turn accuracy.
+
+CONTOUR DRAWING = FLUX-LINE DRAWING (same principle)
+----------------------------------------------------
+The psi iso-contours are drawn by the magnetic-flux-line rule: between two
+adjacent lines flows a FIXED amount (current for psi, flux for A_z) -- Abe's
+"between nodes i,j flows T_i - T_j".  Equal-psi-interval contouring therefore
+already gives wire density ~ |grad psi| = |K|, the same density rule the
+flux-line bubble system (Hirahatake/Noguchi/Igarashi/Yamashita, bubble
+r ~ 1/sqrt|B|) enforces.  Two manufacture refinements:
+
+  --contour-sub N   order-p contour: the default marches on the VERTEX
+                    (order-1) psi, dropping an order-2/3 design's edge DOFs.
+                    sub=3 subdivides each triangle 3x3 and evaluates the
+                    FULL-order psi via mesh.GetTrafo(el) + gfu(trafo(ip))
+                    (the element-trafo MeshPoint dodges the boundary-point-
+                    eval-returns-0 quirk) -- the FE analogue of the analytical
+                    flux-line trace.  LAB Gx o2: loops_homo 1.32e-4 -> 1.15e-4.
+  --flux-plot p.png  bubble-system flux-line view of the DESIGNED coil's B
+  --flux-plane {x,y,z}   field on a cut-plane, bubble-seeded (density ~ |B|) +
+                    matplotlib streamplot.  Physical check (the four-lobe Gx
+                    gradient saddle renders correctly).
+
+CHAIN (--chain {field_aware, nn})
+---------------------------------
+field_aware (default) chooses each loop's entry/exit CUT by coordinate descent
+to minimise the FULL one-current wire error min_I ||I (loops+connectors) - B||
+(NOT ||connectors|| alone -- that is worse on open contours).  Never worse than
+nn; with closed contours it reaches the separate-turns floor with no --distort.
+
+END-TO-END VALIDATION vs an INDEPENDENT codebase
+------------------------------------------------
+examples/stream_function/verify_coil_field_independent.py designs a coil
+(MRI-gradient scale: cylinder r=0.15 m, L=0.5 m, DSV r=0.05 m) and checks the
+field TWO ways: the numpy straight-segment Biot-Savart used in the designer AND
+Radia's C++ rad.ObjFlmCur + rad.Fld (a separate codebase).  They agree to
+8-11 digits (uniform 3.5e-11, Gx 1.1e-8); the abe-confined Gx coil reaches
+1.0 % nonlinearity on the short former, cross-validated.  Locked by
+tests/panels/test_streamfunction_golden.py and ..._panel_qt.py.
+"""
+
+
 TOPICS = {
     "overview": "SF coil-design framework + pipeline + topic map (this server's front door)",
+    "panel": "the design/pareto/manufacture PANEL + calc_streamfunction.py CLI",
+    "boundary_conditions": "current confinement BC --confine off/on/abe (Abe edge-equipotential)",
+    "contour": "contour=flux-line principle; --contour-sub order-p + --flux-plot bubble view",
     "theory": "SFM + (ACA+)+TSVD math (least-norm A psi = B, K = n x grad psi)",
     "method": "alias of theory",
     "api": "radia.stream_function API: aca_tsvd, RegularizedTSVD, pseudo_inverse_solve",
@@ -140,4 +236,11 @@ def get_streamfunction_documentation(topic: str = "overview") -> str:
     if t in ("overview", "index", "", "sf", "streamfunction", "stream_function",
              "stream-function", "front_door", "home"):
         return SF_OVERVIEW
+    if t in ("panel", "calc", "calc_streamfunction", "gui", "modes",
+             "design", "manufacture", "boundary_conditions", "boundary",
+             "bc", "confine", "confinement", "abe", "edge_equipotential",
+             "contour", "contours", "contour_sub", "order_p", "flux",
+             "flux_line", "flux_lines", "bubble", "bubble_system",
+             "cross_codebase", "validation_panel", "chain"):
+        return SF_PANEL
     return get_aca_tsvd_knowledge(_REMAP.get(t, t))
