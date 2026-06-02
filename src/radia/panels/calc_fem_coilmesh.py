@@ -723,9 +723,12 @@ def build_argparser():
     parser.add_argument("--impedance-model", default="sibc",
                         choices=["sibc", "esim"],
                         help="sibc: linear Dowell (production). "
-                             "esim: Karl iteration (WIP, raises).")
+                             "esim: nonlinear Karl iteration (requires "
+                             "--bh-file; re-assembles A-V per outer iter; "
+                             "converges in a few iters, verified 2026-06-02).")
     parser.add_argument("--bh-file", default="",
-                        help="BH table for ESIM (WIP).")
+                        help="BH table (2-col H[A/m] B[T]); required "
+                             "for --impedance-model esim.")
     parser.add_argument("--esim-max-iter", type=int, default=15,
                         help="ESIM Karl iteration max.")
     parser.add_argument("--esim-tol", type=float, default=1e-3,
