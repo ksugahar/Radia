@@ -236,6 +236,15 @@ double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
                                   const double *x_orig, const double *y_orig,
                                   int nffc);
 
+/* H-LU as a reusable PRECONDITIONER: factor a leafmtxp once (convert + build
+ * block-tree + hlu_decomp -> opaque block-tree root), apply the solve many
+ * times (permute via control->lod + hlu_solve_vec + un-permute; r,z in ORIGINAL
+ * ordering), then free. Used to H-LU-precondition the A_SS = S^T A S star block. */
+void* cHACApK_hlu_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc);
+int   cHACApK_hlu_apply(void* root_void, void* control_void,
+                        const double* r, double* z, int nd);
+void  cHACApK_hlu_free_factors(void* root_void);
+
 /* Phase 4 debug: materialize the post-convert tree as a dense matrix.
  * Returns the matrix in PERMUTED ordering (caller can apply lod to
  * compare with HMatrixDensify which gives original ordering).

@@ -302,6 +302,59 @@ public:
                       const std::vector<int>& blockOffsets = std::vector<int>());
     int GetStarDim() const { return m_n_star; }
 
+    /**
+     * LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB. Keeps the ORIGINAL element DOF space (so
+     * the 6x6 block-Jacobi preconditioner still applies -- the element is the natural
+     * unit) and removes the ill-conditioned loop null space ker(N) by DEFLATION (a
+     * two-level projector P = I - A W (W^T A W)^-1 W^T), NOT by a basis change
+     * (loop-star) and NOT by an operator shift (alpha L L^T). W = the sparse loop
+     * cycle basis (m_loop_*). Fully O(N) matrix-free except the coarse E = W^T A W
+     * factor (m x m, m = n_loop; the benign well-conditioned loop-loop block). The
+     * scalable, no-15^3-cap, no-A_SS-compression-dependence alternative to loop-star
+     * + K-dense at high mu_r. Returns BiCGSTAB iters, or -1 on failure. Linear regime
+     * (uniform chi). Diagnostics via RadGetLoopDeflBlockJacobiStats.
+     */
+    int SolveLoopDeflatedBlockJacobi(
+                      const std::vector<double>& b, std::vector<double>& sigma,
+                      double tol, int max_iter,
+                      const std::vector<double>& blockInverse = std::vector<double>(),
+                      const std::vector<int>& blockOffsets = std::vector<int>());
+
+    /**
+     * HELMHOLTZ-HODGE LOOP REMOVAL: subtract the non-physical loop (circulating
+     * surface-charge) component from a solved sigma, giving a physically clean
+     * answer with zero loop content. Projects sigma off span(L) (L = topological
+     * cycle basis = ker(N)) via CG on the well-conditioned, mu_r-independent loop
+     * Gram matrix L^T L: c solves (L^T L) c = L^T sigma; sigma -= L c. Cheap (CG
+     * converges in a handful of iters, cond ~ O(1)) -> no significant slowdown.
+     * N L = 0 so N*sigma (on-element field) is unchanged; only the circulation is
+     * removed. Scalable (only the O(N) cycle CSR). Returns CG iters, -1 if no loops.
+     * Diagnostics via RadGetLoopProjStats.
+     */
+    int ProjectOutLoops(std::vector<double>& sigma, double tol, int max_iter);
+
+    // A_SS = S^T A S entry (0-based star-column indices si, sj): the small double
+    // sum sum_{p in supp(S_si), q in supp(S_sj)} S_si[p] S_sj[q] A(p,q), where
+    // A(p,q) = ComputeSystemEntry(p,q) = -N(p,q) + delta/chi. Used as the ACA
+    // entry-function override when building the A_SS H-matrix.
+    double StarSSEntry(int si, int sj) const;
+
+    // Build A_SS as a HACApK H-matrix (cluster tree over m_star_coords + ACA fill
+    // via the StarSSEntry override). Caches m_star_leafmtxp/m_star_control. Returns
+    // the number of star columns (== A_SS dimension), or -1 on failure.
+    int BuildStarHMatrix(double eps, int leaf, double eta);
+
+    // y = A_SS_Hmatrix * x (length m_n_star). Requires BuildStarHMatrix first.
+    void StarHMatVec(const std::vector<double>& x, std::vector<double>& y);
+
+    // z = A_SS^{-1} r (approx) via the cached A_SS H-LU factors (preconditioner
+    // solve; r, z length m_n_star). Returns true on success. Requires
+    // BuildStarHMatrix to have factored the H-LU (m_star_hlu_root).
+    bool StarHLUApply(const std::vector<double>& r, std::vector<double>& z);
+
+    // Free the cached A_SS H-matrix (leafmtxp + control + H-LU root). Called by dtor.
+    void FreeStarHMatrix();
+
     // True iff an ANTISYMMETRIC IMA plane (sign<0) is active. These add a few
     // LOCAL "plane-coupled" null modes to ker(N_ima) beyond the topological loops;
     // ComputePlaneSlabAddedModes() finds them and they are deflated in SolveLoopStar.
@@ -376,6 +429,18 @@ private:
     std::vector<double> m_loop_coeffs;  // flat L entries (+/-1 per shared face)
     int m_n_loop = 0;                   // number of loop columns
     bool m_loop_built = false;          // cache guard
+
+    // A_SS-as-H-matrix (the "HACApK-only star" path). The reduced star operator
+    // A_SS = S^T A S is built as its OWN HACApK leafmtxp via the entry-function
+    // override (StarSSEntry = S_i^T A S_j) on a cluster tree over the star-column
+    // centroids m_star_coords. This replaces the dense K-dense LU (caps ~15^3) so
+    // the star block can be H-LU/H-ILU preconditioned and solved with HACApK alone
+    // at 20^3+. m_star_coords: [m_n_star * 3] centroid per star column.
+    std::vector<double> m_star_coords;  // [m_n_star*3] star-column centroids
+    void* m_star_leafmtxp = nullptr;    // A_SS H-matrix (st_cHACApK_leafmtxp*)
+    void* m_star_control  = nullptr;    // A_SS H-matrix control (st_cHACApK_lcontrol*)
+    void* m_star_hlu_root = nullptr;    // A_SS H-LU factored block-tree (preconditioner)
+    bool  m_star_hmat_built = false;
 
     // Antisym-IMA plane-slab added modes (orthonormal, CSR, sigma-DOF coords),
     // cached by ComputePlaneSlabAddedModes(). Deflated in SolveLoopStar via
