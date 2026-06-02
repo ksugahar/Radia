@@ -182,10 +182,26 @@ r ~ 1/sqrt|B|) enforces.  Two manufacture refinements:
 
 CHAIN (--chain {field_aware, nn})
 ---------------------------------
-field_aware (default) chooses each loop's entry/exit CUT by coordinate descent
-to minimise the FULL one-current wire error min_I ||I (loops+connectors) - B||
-(NOT ||connectors|| alone -- that is worse on open contours).  Never worse than
-nn; with closed contours it reaches the separate-turns floor with no --distort.
+The "extra lines" in the single-stroke view are the inter-loop CONNECTORS
+(rungs): chaining N contour loops into one wire needs N-1 bridges, and they
+carry the series current, so their stray field is real (not cosmetic).
+field_aware (default) keeps that field small two ways:
+  (1) CUT placement -- each loop's entry/exit cut by coordinate descent to
+      minimise the FULL one-current wire error min_I ||I (loops+connectors) - B||
+      (NOT ||connectors|| alone -- worse on open contours; the connectors are
+      routed to CANCEL the rim-chord residual, not merely to be short).
+  (2) VISIT ORDER -- the same wire-error objective is minimised over a small
+      candidate set {nearest-neighbour, 2-opt-shortened}, keeping whichever the
+      cut-opt drives lowest.  The 2-opt shortens the long "jump to a far lobe
+      and back" rungs (LAB Gx: max 372->289 mm, delivered +19..+70 %) but a
+      length-optimal reorder can break the rungs' symmetric stray-cancellation
+      and HURT some cases (abe nl=16: -78 %) -- the documented "shorter rungs
+      != better field" trap.  Selecting the lower-wire-error order makes the
+      2-opt GUARANTEED never worse than nearest-neighbour while capturing the
+      real gains.  (Pure --chain nn keeps NN order + naive closing, no cut-opt,
+      so it never sees the 2-opt -- which would only hurt a cut-opt-free chain.)
+field_aware is never worse than nn; with closed contours (--confine abe) it
+reaches the separate-turns floor with no --distort.
 
 END-TO-END VALIDATION vs an INDEPENDENT codebase
 ------------------------------------------------
