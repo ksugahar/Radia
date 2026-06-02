@@ -620,6 +620,53 @@ PATTERNS: list[dict] = [
         "related": [".github/workflows/policy-lint.yml",
                     "CLAUDE.md: Green's Function: Laplace Kernel Only"],
     },
+    {
+        "id": "mdx-pip-orphans-block-reinstall",
+        "title": "pip interrupted-uninstall orphans (~adia, ~gsolve, ...) "
+                 "in site-packages leave a package NOT importable after a "
+                 "force-reinstall.",
+        "topics": ["deploy", "pip", "mdx", "release", "lab"],
+        "severity": "medium",
+        "first_seen": "2026-06-02",
+        "last_seen": "2026-06-02",
+        "what": "release_triple phase8e reported radia not importable on "
+                "mdx (ModuleNotFoundError) even though pip 'Successfully "
+                "installed' earlier; cubit-smoke 'Cannot locate "
+                "ih_bem_sample.jou -- install the radia package'.",
+        "root_cause": "A previously interrupted pip uninstall left "
+                      "tilde-prefixed orphan dirs (~adia, ~adia-X.dist-info, "
+                      "~-mpy, ~pds, ~ryptography, ~ydantic_core) in "
+                      "site-packages; pip then skips / half-writes the real "
+                      "package and import fails.",
+        "detection": "import <pkg> raises on the target; "
+                     "Get-ChildItem site-packages -Filter '~*' lists them.",
+        "prevention": "rm the site-packages '~*' orphan dirs, THEN "
+                      "pip install --force-reinstall; the package then "
+                      "imports cleanly.",
+        "related": ["memory/project_radia_ih_june_completion_2026_06_02.md"],
+    },
+    {
+        "id": "radia-ih-exe-launcher-lock-on-force-reinstall",
+        "title": "pip --force-reinstall radia fails WinError 32 on "
+                 "Scripts/radia-ih.exe when a radia-ih panel is running.",
+        "topics": ["deploy", "pip", "windows", "release", "lab"],
+        "severity": "low",
+        "first_seen": "2026-06-02",
+        "last_seen": "2026-06-02",
+        "what": "pip ERROR: [WinError 32] ... 'radia-ih.exe' -> "
+                "'radia-ih.exe.deleteme' (file in use).  The PACKAGE still "
+                "installs + imports; only the entry-point launcher script "
+                "rewrite is blocked.",
+        "root_cause": "A running radia-ih panel process holds an open "
+                      "handle on Scripts/radia-ih.exe; pip cannot replace "
+                      "the launcher exe.",
+        "detection": "pip exits non-zero with WinError 32 on a "
+                     "Scripts/radia-*.exe at the end of the install.",
+        "prevention": "Kill radia-* (+ coreform_cubit / mcp-server*) "
+                      "processes, rm Scripts/radia-*.exe(.deleteme), then "
+                      "reinstall so the launcher writes cleanly.",
+        "related": [],
+    },
 ]
 
 
