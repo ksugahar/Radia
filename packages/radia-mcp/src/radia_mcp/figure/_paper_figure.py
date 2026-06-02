@@ -367,29 +367,30 @@ IGTE_DIGEST_SINGLE = PaperProfile(
 # --- Beamer 16:9 talk slides (CEFC / IGTE oral) --------------------------
 # A beamer ``aspectratio=169`` paper is 160 x 90 mm; the usable text width
 # is ~150 mm (full) or ~72 mm (a half-width column inside a two-column
-# frame).  Talk figures differ from paper figures in two ways:
-#   1. They are PROJECTED, so the body font is set 1 pt ABOVE the paper
-#      rule (11 pt) and strokes/markers are slightly heavier for screen
-#      legibility at the back of a room.
-#   2. An in-figure title is ALLOWED (a slide has no LaTeX caption to
-#      carry it).  Generate these with paper_figure() + fig.savefig(
-#      bbox_inches='tight'); do NOT run emit_paper_figure()'s no-title
-#      gate -- that is a PAPER rule and would (correctly, for papers)
-#      reject a slide title.
-# Times New Roman + Okabe-Ito remain the defaults (inherited from
-# paper_figure's rcParams), so a slide figure matches the paper figures.
+# frame).  Slide figures follow the SAME lab rules as paper figures:
+#   * Times New Roman, 10 pt body (the on-page 10 pt @ 8 cm rule -- a
+#     slide is read like a page), Okabe-Ito palette.
+#   * NO in-figure title.  The beamer frametitle / slide caption carries
+#     it; emit_paper_figure()'s no-title gate fires for these profiles too.
+#   * Strokes / markers a touch heavier than the paper default for
+#     projector legibility (this does NOT change the font rule).
+# IMPORTANT: author the figure at the width it will OCCUPY on the slide
+# (apply_lab_style(embed_width_cm=...) or these profiles' width_mm) and
+# \includegraphics[width=<that width>] at 100%.  Do NOT let
+# \includegraphics scale a 150 mm figure into an 8 cm column -- that
+# shrinks the on-page font below 10 pt (the v4 mistake).
 
 BEAMER_169_FULL = PaperProfile.from_base(
     name="beamer_169_full",
     full_name="Beamer 16:9 slide, full text width",
     width_mm=150.0,
     column="page",
-    base_pt=11.0,                 # 1 pt above the paper rule: projected.
+    base_pt=10.0,                 # on-page 10 pt, same as paper
     linewidth_pt=1.3,             # heavier strokes read better on screen
     axes_linewidth_pt=0.9,
-    marker_size_pt=5.5,
+    marker_size_pt=5.0,
     margin_left=0.085, margin_right=0.99,
-    margin_top=0.92, margin_bottom=0.16,   # top 0.92 leaves room for a title
+    margin_top=0.97, margin_bottom=0.16,
     wspace=0.20, hspace=0.30,
     default_aspect=0.50,          # a 16:9 slide favours WIDE figures
     spec_url="beamer aspectratio=169 (160 x 90 mm)",
@@ -400,12 +401,12 @@ BEAMER_169_HALF = PaperProfile.from_base(
     full_name="Beamer 16:9 slide, half column (two-column frame)",
     width_mm=72.0,
     column="single",
-    base_pt=11.0,
+    base_pt=10.0,
     linewidth_pt=1.3,
     axes_linewidth_pt=0.9,
-    marker_size_pt=5.5,
+    marker_size_pt=5.0,
     margin_left=0.175, margin_right=0.98,
-    margin_top=0.90, margin_bottom=0.20,
+    margin_top=0.97, margin_bottom=0.20,
     wspace=0.20, hspace=0.32,
     default_aspect=0.80,
     spec_url="beamer aspectratio=169 (160 x 90 mm)",
@@ -1294,17 +1295,15 @@ def _check_no_japanese_font_in_pdf(pdf_path) -> list[str]:
 
 
 def _check_no_in_figure_title(fig) -> list[str]:
-    """Lab rule: on a BODY-REFERENCEABLE (paper) figure, the title goes in
-    the LaTeX \\caption{}, NEVER inside the figure.
+    """Lab rule: the title goes in the LaTeX \\caption{} (or, for a talk
+    slide, the beamer frametitle / slide caption), NEVER inside the figure
+    -- on ANY figure, paper OR slide.
 
     Returns a list of violations (axis index + title text).  An empty
-    list means clean.  emit_paper_figure() escalates this to a raise
-    on `on_fail='raise'` since shipping a paper figure with an in-figure
-    title is a peer-review visible style break.
-
-    SCOPE: this is a PAPER rule.  SLIDE figures (the ``beamer_169_*``
-    profiles) have no LaTeX caption and SHOULD carry an in-figure title,
-    so emit_paper_figure() auto-skips this check for those profiles.
+    list means clean.  emit_paper_figure() escalates this to a raise on
+    `on_fail='raise'` since shipping a figure with an in-figure title is a
+    style break.  The ``beamer_169_*`` slide profiles are NOT exempt: a
+    slide's title is the beamer frametitle, not baked into the PNG.
     """
     bad = []
     # Per-axes titles
@@ -1447,12 +1446,10 @@ def emit_paper_figure(
     # figure itself.  This check is FIRST because if it fires the user
     # has a 1-line fix (delete the set_title call) before we even start
     # measuring efficiency.
-    # Slide profiles (beamer_*) intentionally carry an in-figure title:
-    # a talk slide has no LaTeX \caption to hold it.  The no-title rule
-    # is a PAPER (body-referenceable figure) rule, so auto-skip it here
-    # for slide profiles regardless of the check_title_in_figure default.
-    _is_slide_profile = str(getattr(prof, "name", "")).startswith("beamer")
-    if check_title_in_figure and not _is_slide_profile:
+    # No in-figure title on ANY figure -- paper OR slide.  The title goes
+    # in the LaTeX \caption / beamer frametitle, never inside the plot
+    # (the beamer_169_* slide profiles are NOT exempt).
+    if check_title_in_figure:
         title_violations = _check_no_in_figure_title(fig)
         if title_violations:
             msg = (
