@@ -713,6 +713,51 @@ Recipe pipeline:
     )
 
 
+@mcp.tool()
+def figure_audit_embeds(tex_path: str) -> str:
+    """Lint every \\includegraphics in a LaTeX file for figure embeds that
+    cannot guarantee on-page 10 pt @ 8 cm (the CEFC-2026 mistake class).
+
+    Flags:
+      * HEIGHT-constrained embeds (``\\includegraphics[height=Xcm]``) -- the
+        on-page font size is then uncontrolled.
+      * ``width=\\linewidth`` embeds -- the on-page font depends on the column
+        width; only safe if the figure was authored AT that exact width.
+      * figures not found next to the .tex.
+      * figure PDFs that embed DejaVu instead of Times New Roman.
+
+    The compliant pattern: author with ``radia_mcp.figure.lab_figure(
+    embed_width_cm=W)``, save with ``save_lab_figure`` (fail-loud gates), and
+    embed with the returned ``\\includegraphics[width=W cm]`` at 100%.
+
+    Args:
+        tex_path: path to the .tex file to audit.
+
+    Returns a multi-line report (figure count, flagged count, per-figure risks).
+    """
+    import os
+    if not os.path.isfile(tex_path):
+        return f"File not found: {tex_path}"
+    from ._lab_api import audit_tex_figures
+    rep = audit_tex_figures(tex_path)
+    lines = [f"figure-embed audit: {rep['tex']}",
+             f"  {rep['n_figures']} figures, {rep['n_flagged']} flagged", ""]
+    for r in rep["figures"]:
+        if r["risks"]:
+            lines.append(f"  [FLAG] {r['figure']}  (opts: {r['options'] or '-'})")
+            for rk in r["risks"]:
+                lines.append(f"         - {rk}")
+        else:
+            lines.append(f"  [ ok ] {r['figure']}")
+    if rep["n_flagged"] == 0:
+        lines.append("\nAll embeds use a fixed-cm width and a TNR figure -- clean.")
+    else:
+        lines.append("\nFix: author at the embed width with "
+                     "lab_figure(embed_width_cm=W) + save_lab_figure, then "
+                     "\\includegraphics[width=W cm] at 100%.")
+    return "\n".join(lines)
+
+
 # ============================================================
 # Self-introspection (uniform with other radia_mcp servers)
 # ============================================================

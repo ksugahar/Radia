@@ -1,0 +1,93 @@
+"""Tests for the misuse-proof radia_mcp.figure lab API + builders + audit.
+
+These lock the fail-loud behaviour that was missing when the CEFC 2026 oral
+figures slipped through with in-figure titles + \\linewidth downscaling.
+"""
+import os
+import matplotlib
+matplotlib.use("Agg")
+import pytest
+
+from radia_mcp.figure import (
+    lab_figure, save_lab_figure, audit_tex_figures,
+    scaling_loglog, bh_curve,
+)
+
+
+def _tnr_available():
+    import matplotlib.font_manager as fm
+    try:
+        p = fm.findfont("Times New Roman", fallback_to_default=False)
+        return "times" in os.path.basename(str(p)).lower()
+    except Exception:
+        return False
+
+
+requires_tnr = pytest.mark.skipif(
+    not _tnr_available(), reason="Times New Roman not installed in matplotlib")
+
+
+# ------------------------------------------------------------------
+# fail-loud gates
+# ------------------------------------------------------------------
+@requires_tnr
+def test_lab_figure_authors_at_embed_width():
+    import matplotlib.pyplot as plt
+    fig, ax = lab_figure(8.0, aspect=0.6)
+    # 8.0 cm = 3.150 in authored width (apply_lab_style returns inches)
+    assert abs(fig.get_size_inches()[0] - 8.0/2.54) < 0.05
+    assert getattr(fig, "_lab_embed_width_cm", None) == 8.0
+    plt.close(fig)
+
+
+@requires_tnr
+def test_save_raises_on_in_figure_title(tmp_path):
+    fig, ax = lab_figure(8.0)
+    ax.plot([0, 1], [0, 1])
+    ax.set_title("this belongs in the caption")
+    with pytest.raises(ValueError):
+        save_lab_figure(fig, str(tmp_path / "bad"), 8.0, save_pdf=False)
+
+
+@requires_tnr
+def test_save_ok_emits_exact_latex_width(tmp_path):
+    fig, ax = lab_figure(8.0)
+    ax.plot([0, 1], [0, 1]); ax.set_xlabel("x"); ax.set_ylabel("y")
+    info = save_lab_figure(fig, str(tmp_path / "good"), 8.0, save_pdf=True, save_png=True)
+    assert info["gates"] == "passed"
+    assert r"width=8.00cm" in info["latex"]
+    assert os.path.isfile(str(tmp_path / "good.png"))
+    assert os.path.isfile(str(tmp_path / "good.pdf"))
+
+
+@requires_tnr
+def test_builders_round_trip(tmp_path):
+    fig, ax = scaling_loglog([1e3, 1e4, 1e5],
+                             {"dense": [1.0, 10.0, None], "H": [0.5, 2.0, 6.0]},
+                             "memory (GB)", ram_line_gb=128)
+    info = save_lab_figure(fig, str(tmp_path / "scal"), 7.6, save_pdf=False)
+    assert "width=7.60cm" in info["latex"]
+    fig2, ax2 = bh_curve([0, 100, 300], [0.0, 1.8, 2.5])
+    info2 = save_lab_figure(fig2, str(tmp_path / "bh"), 6.0, save_pdf=False)
+    assert "width=6.00cm" in info2["latex"]
+
+
+# ------------------------------------------------------------------
+# .tex embed audit (no matplotlib font dependency)
+# ------------------------------------------------------------------
+def test_audit_flags_height_linewidth_and_missing(tmp_path):
+    tex = tmp_path / "deck.tex"
+    tex.write_text(
+        "\\graphicspath{{figures/}}\n"
+        "\\includegraphics[height=3cm]{a}\n"
+        "\\includegraphics[width=\\linewidth]{b}\n"
+        "\\includegraphics[width=8cm]{c}\n",
+        encoding="utf-8")
+    rep = audit_tex_figures(str(tex))
+    assert rep["n_figures"] == 3
+    by = {r["figure"]: r for r in rep["figures"]}
+    assert any("HEIGHT" in x for x in by["a"]["risks"])
+    assert any("linewidth" in x.lower() for x in by["b"]["risks"])
+    assert by["c"]["fixed_cm_width"] is True
+    # all three referenced files are absent -> each flagged (FILE NOT FOUND)
+    assert rep["n_flagged"] == 3
