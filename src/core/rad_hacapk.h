@@ -333,6 +333,15 @@ public:
      */
     int ProjectOutLoops(std::vector<double>& sigma, double tol, int max_iter);
 
+    // STANDALONE loop removal for the non-HACApK solvers (method 0 LU / 1 dense
+    // BiCGSTAB), which do not own a manager. Builds a temporary manager bound to the
+    // interaction, gathers sigma from the element objects, runs ProjectOutLoops (pure
+    // sparse cycle CG -- no H-matrix), writes the loop-free sigma back. Static so it
+    // can reach the protected ExtractCoordinates and the manager's friend access to
+    // the interaction. Returns CG iters, -1 if not applicable.
+    static int ProjectOutLoopsStandalone(radTInteraction* interaction,
+                                         double tol, int max_iter);
+
     // A_SS = S^T A S entry (0-based star-column indices si, sj): the small double
     // sum sum_{p in supp(S_si), q in supp(S_sj)} S_si[p] S_sj[q] A(p,q), where
     // A(p,q) = ComputeSystemEntry(p,q) = -N(p,q) + delta/chi. Used as the ACA

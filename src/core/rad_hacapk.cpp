@@ -1665,6 +1665,63 @@ void RadHACApKBase::FreeResources() {
     m_valid = false;
 }
 
+//=========================================================================
+// STANDALONE loop removal for the NON-HACApK solvers (method 0 = LU, method 1 =
+// dense BiCGSTAB). Those solver classes do not own a RadHACApKMSCManager, but the
+// Helmholtz-Hodge projection needs ONLY the cycle basis (BuildLoopBasis) + sparse
+// matrix-free CG on L^T L -- NO H-matrix, NO MatVec. So build a TEMPORARY manager
+// bound to the same interaction, run ExtractCoordinates() (cheap: just dof offsets)
+// + ProjectOutLoops on the element sigma gathered from the objects, write back.
+// This makes "loop is non-physical" consistent across ALL solver paths, not only
+// HACApK -- so method 0/1/2 all return the same loop-free sigma. Returns CG iters
+// (-1 if no loops / not applicable). Reads the loop-projection diagnostics into the
+// same g_loopproj_dbg as the HACApK path.
+int RadHACApKMSCManager::ProjectOutLoopsStandalone(radTInteraction* interaction,
+                                                   double tol, int max_iter)
+{
+    if (!interaction || interaction->GetAmOfMainElem() <= 0) return -1;
+    RadHACApKMSCManager mgr(interaction);
+    mgr.ExtractCoordinates();                  // populate m_n_elem, m_dof_offset, m_ndof
+    int n = mgr.GetNDOF();
+    if (n <= 0) return -1;
+
+    // Gather sigma from element objects into a flat vector (3DOF Magn / 6DOF Sigma[]).
+    std::vector<double> sigma(n, 0.0);
+    int ne = interaction->GetAmOfMainElem();
+    for (int e = 0; e < ne; e++) {
+        int dof = interaction->GetElementDOF(e);
+        int off = interaction->GetElementDOFOffset(e);
+        radTg3dRelax* g = interaction->GetElement(e);
+        if (!g) continue;
+        if (dof == 3) {
+            sigma[off+0] = g->Magn.x; sigma[off+1] = g->Magn.y; sigma[off+2] = g->Magn.z;
+        } else if (dof >= 5) {
+            radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g);
+            if (poly && poly->Use6DOF_MSC)
+                for (int k = 0; k < dof; k++) sigma[off+k] = poly->Sigma[k];
+        }
+    }
+
+    int it = mgr.ProjectOutLoops(sigma, tol, max_iter);
+    if (it < 0) return -1;
+
+    // Scatter the loop-free sigma back to the element objects.
+    for (int e = 0; e < ne; e++) {
+        int dof = interaction->GetElementDOF(e);
+        int off = interaction->GetElementDOFOffset(e);
+        radTg3dRelax* g = interaction->GetElement(e);
+        if (!g) continue;
+        if (dof == 3) {
+            g->Magn.x = sigma[off+0]; g->Magn.y = sigma[off+1]; g->Magn.z = sigma[off+2];
+        } else if (dof >= 5) {
+            radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g);
+            if (poly && poly->Use6DOF_MSC)
+                for (int k = 0; k < dof; k++) poly->Sigma[k] = sigma[off+k];
+        }
+    }
+    return it;
+}
+
 void RadHACApKMSCManager::ExtractCoordinates() {
     // Extract element center coordinates for clustering
     // Supports both 3DOF tetrahedra and 6DOF MSC hexahedra
