@@ -122,6 +122,10 @@ def ih_esim(topic: str = "all") -> str:
             "all"                  - All sections concatenated
             "overview"             - When to use ESIM vs linear SIBC
                                      (decision table, cost vs benefit)
+            "em_table_coupling"    - sigma(T)/mu(T) thermal-EM coupling
+                                     via a precomputed Z_s(|H_t|,T) table
+                                     (calc_em_table.py + calc_heat_with_
+                                     em_table.py; kelvin vs biot ht-source)
             "bh_file"              - BH-curve file format spec
             "inductance_cli"       - calc_inductance.py CLI flags + example
             "fem_kelvin_cli"       - calc_fem_kelvin.py CLI flags + example

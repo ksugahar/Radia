@@ -186,6 +186,108 @@ Same contract as qsurf.sol: the .sol is a coefficient vector only;
 the matching `.vol` + matching FES order are required to reconstruct
 the GridFunction.
 
+## Phase B (coupled): σ(T) / μ(T) thermal-EM coupling via a Z_s(H,T) table
+
+The Phase-B solvers above consume a *frozen* `q_surf.sol` from one EM
+solve.  When the workpiece properties move with temperature -- σ(T)
+rising resistivity, and the permeability collapse approaching the
+Curie point -- the surface impedance `Z_s` (and therefore `q_surf`)
+changes as the part heats.  Re-solving the full EM problem every
+thermal timestep is prohibitive, but it is also unnecessary: at IH
+frequencies the EM problem is quasi-static on the heat timescale
+(EM `1/ω ~ 100 µs` at 10 kHz vs heat `τ ~ seconds` → ratio ~10⁴).
+
+The coupled track precomputes `Z_s` once on a 2-D grid and looks it up
+per surface DOF, per timestep.  **CLI-only** (not yet wired into the
+radia-ih panel); two scripts:
+
+### Step 1 — build the table (`calc_em_table.py`)
+
+Precompute `Z_s(|H_t|, T)` on a log-spaced `|H_t|` grid × linear `T`
+grid by solving the 1-D ESIM cell problem at each grid node:
+
+```bash
+python calc_em_table.py \
+    --material steel --frequency 50e3 \
+    --H-grid-min 1e2 --H-grid-max 1e5 --n-H 20 \
+    --T-grid-min 20  --T-grid-max 800 --n-T 20 \
+    --sigma-T-curve sigma_T_steel.csv \
+    --curie-temp 770 --curie-exp 0.5 \
+    --em-table-output em_table_steel_50kHz.npz
+```
+
+* **σ(T)** — `--sigma-T-curve` is a 2-col CSV (`T_celsius,
+  sigma_S_per_m`).  Clamped outside its T range (no extrapolation).
+  Omit it to hold σ at the material preset constant.
+* **μ(T)** — `--curie-temp <Tc_celsius>` opts into a Curie collapse
+  that scales the BH curve's magnetic part by
+  `f(T) = (1 - T/Tc)^β` (`β = --curie-exp`, default 0.5), clamped to
+  `[0,1]`, so `μ_r → 1` (paramagnetic) at/above Tc.  Default
+  (`--curie-temp 0`) leaves BH T-invariant.
+* Output `.npz` schema: `H_grid`, `T_grid`, `Zs_re`, `Zs_im`,
+  `q_surf` (= ½·Re(Z_s)·|H_t|²), `meta` (material, frequency,
+  sigma_T_curve, curie_temp, curie_exp, ...).
+
+**Honest-uncertainty stance** (CLAUDE.md "T-dependence: functionalize
+as T-functions + honest uncertainty"): σ(T) and μ(T) data are
+inherently uncertain, so they are supplied as *user-chosen functions /
+tables* (CSV curve, `(Tc, β)` form), clamped beyond their data, and
+auditable from the table's `meta` — never hardcoded as false
+certainty.  T-dependent BH shape beyond the Curie μ-collapse remains a
+known gap.
+
+### Step 2 — runtime heat solve (`calc_heat_with_em_table.py`)
+
+Backward-Euler heat solve; each timestep scales the reference
+tangential field `|H_t_ref(r)|` by `I(t)/I_ref` and bilinearly
+interpolates `q_surf = table(|H_t|, T)` at every surface DOF (so the
+table itself carries all the `|H_t|`- and `T`-dependent nonlinearity).
+The dominant simplification: the *spatial shape* of `|H_t(r)|` is
+frozen at the reference solve; only its amplitude follows `I(t)`.
+
+Two sources for the reference `|H_t_ref(r)|`:
+
+| `--ht-source` | Needs | Captures backreaction? | Notes |
+|---|---|---|---|
+| `kelvin` (recommended) | `--ht-sol <stem>_Jsurf.sol` + `--em-vol <stem>_fem.vol` from a `calc_fem_kelvin` run | **Yes** (`\|J_s\| = \|H_t\|` on the SIBC face) | one upstream FEM solve at `I_ref` |
+| `biot` | `--coil-step <coil.step>` | **No** (pure incident field) | needs no EM solve |
+
+`biot` walks the coil centerline from the STEP (same extractor as the
+PEEC path), evaluates the incident Biot-Savart field at each workpiece
+surface DOF, and projects it onto the local tangent plane.  Because it
+omits the eddy-current image that roughly DOUBLES the tangential field
+at a good conductor, it under-predicts the surface field by ~2× for a
+flat surface.  `--biot-image-factor 2.0` lets an informed user opt into
+that doubling **explicitly** (never silently — No-Fallbacks); prefer
+`--ht-source kelvin` when the backreaction matters.
+
+```bash
+# kelvin (recommended): scale a calc_fem_kelvin reference by I(t)
+python calc_heat_with_em_table.py \
+    --wp-vol workpiece.vol --em-table em_table_steel_50kHz.npz \
+    --ht-source kelvin --ht-sol run_Jsurf.sol --em-vol run_fem.vol \
+    --I-ref 1000 --coil-current 1200 \
+    --material steel --dt 0.5 --t-end 60
+
+# biot: incident field straight from the coil STEP, no EM solve
+python calc_heat_with_em_table.py \
+    --wp-vol workpiece.vol --em-table em_table_steel_50kHz.npz \
+    --ht-source biot --coil-step coil.step --biot-image-factor 2.0 \
+    --I-ref 1000 --coil-current 1200 --dt 0.5 --t-end 60
+```
+
+`--coil-current-csv <t_s,I_A>` replaces the constant amplitude with a
+time-varying trajectory (clamped at the ends).
+
+### Coupled-track tests
+
+* `tests/panels/test_em_table_curie.py` — the Curie `μ(T)` helpers
+  (`curie_factor` endpoints/clamp/monotone, `curie_scaled_bh` blend).
+* `tests/panels/test_heat_em_table_biot.py` — the biot core
+  (`_biot_Ht_on_surface` tangential projection + `--biot-image-factor`
+  + current scaling) validated against the closed-form circular-loop
+  on-axis field; the centerline→filament wrap-around.
+
 ## Trouble shooting
 
 | Symptom | Cause | Fix |
@@ -195,6 +297,9 @@ the GridFunction.
 | `T_max ≈ T_initial` (no heating) | wp surface vertices fell outside the EM mesh → `n_fail` count in the log | Verify the EM and thermal meshes describe the same physical workpiece geometry (check coordinate origin + units) |
 | `T_max` jumps when switching `fes_order` to 2 | `qsurf_order` was not updated to match | Set `qsurf_order = 2` in the Thermal sub-panel to match the EM solve's basis order |
 | Rotation has no effect on `T(t)` | Heat source = Uniform (constant in space) OR `rotation_rpm` left at 0 | Set heat source = Spatial AND `rotation_rpm > 0` |
+| (coupled) `--ht-source biot` heats ~2× too little | the eddy-current image that doubles `H_t` at a good conductor is absent (pure incident field) | Use `--ht-source kelvin`, or set `--biot-image-factor 2.0` for a flat-surface estimate |
+| (coupled) `--ht-source biot` "coil centerline extraction failed" | the STEP swept cross-section is ambiguous to the walking-plane extractor | Regenerate the coil STEP with a cleaner single swept profile, or use `--ht-source kelvin` |
+| (coupled) `q_surf ≈ 0` everywhere | `\|H_t\|` below the table's `--H-grid-min` (clamped) OR T above the table's `--T-grid-max` (μ collapsed) | Widen the table H/T range to cover the operating point |
 
 ## Removed: `radia_heat` standalone (4.62.0+)
 
