@@ -76,6 +76,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "matrix-solvers",
             "mor",
             "peec",
+            "radia-streamfunction",
         ],
         "tags": ["fem", "solver"],
     },
@@ -93,7 +94,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "electromagnet",
             "peec",
         ],
-        "tags": ["coil-design", "solver"],
+        "tags": ["optimization", "solver"],
     },
     "fem": {
         "subpackage": "radia_mcp.fem",
@@ -176,6 +177,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "ih",
             "litz-transmission",
             "radia-ngsolve",
+            "radia-streamfunction",
             "wpt",
         ],
         "tags": ["application"],
@@ -193,6 +195,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "motor",
             "nmr-mri",
             "panel-review",
+            "radia-streamfunction",
         ],
         "tags": ["application"],
     },
@@ -299,6 +302,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [
             "bayesian-opt",
             "evolutionary",
+            "radia-streamfunction",
             "topology-optimization",
         ],
         "tags": ["optimization"],
@@ -389,7 +393,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "NMR/MRI: gradient coils, B0 shimming, RF coils, "
                        "field uniformity",
         "primary_tools": ["nmr_mri_usage"],
-        "related": ["electromagnet", "accelerator"],
+        "related": ["electromagnet", "accelerator", "radia-streamfunction"],
         "tags": ["application"],
     },
     "maglev-linear": {
