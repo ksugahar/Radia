@@ -170,4 +170,4 @@ solves an EASY uniform target on a *sphere* to 0.24 % single-stroke.
   - Regularisation choices: [regularization.md](regularization.md)
   - Chain construction: [single_stroke.md](single_stroke.md)
   - Deformation outer loop: [deformation.md](deformation.md)
-  - MCP topic: `aca_tsvd(topic=method)`, `aca_tsvd(topic=session_2026_05_30)`
+  - MCP topic: `streamfunction(topic=method)`, `streamfunction(topic=session_2026_05_30)`

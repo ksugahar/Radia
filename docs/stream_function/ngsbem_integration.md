@@ -158,7 +158,7 @@ def entry(i, j):
 ## Cross-reference
 
   - FMM vs ACA+ deep dive: MCP topic
-    `aca_tsvd(topic=session_2026_05_30)` sections 6–8
+    `streamfunction(topic=session_2026_05_30)` sections 6–8
   - Joachim's GitHub commit history: 2026-04-20 `d90c59e` (HTool bridge),
     April-May erdieee FMM work
   - Memory entry: `feedback_fmm_vs_aca_distinction`

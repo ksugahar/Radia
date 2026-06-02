@@ -163,4 +163,4 @@ proof-of-priority on any specific contribution is intended.
 
   - Capability matrix: [README.md](README.md)
   - Paper outline: [paper_outline.md](paper_outline.md)
-  - MCP topic: `aca_tsvd(topic=session_2026_05_30)` section 11
+  - MCP topic: `streamfunction(topic=session_2026_05_30)` section 11

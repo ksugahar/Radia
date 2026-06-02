@@ -46,7 +46,6 @@ from .knowledge.release_workflow import get_release_workflow_documentation
 from .knowledge.standalone_panels import get_standalone_panels_documentation
 from .knowledge.basis_functions import get_basis_functions_documentation
 from .knowledge.taskmanager import get_taskmanager_knowledge
-from .knowledge.aca_tsvd import get_aca_tsvd_knowledge
 from .knowledge.cln_sibc_orthogonal import (
     get_cln_sibc_orthogonal_documentation,
     get_cln_sibc_orthogonal_section,
@@ -413,54 +412,6 @@ def taskmanager(topic: str = "overview") -> str:
             "all"               - Everything concatenated
     """
     return get_taskmanager_knowledge(topic)
-
-
-@mcp.tool()
-def aca_tsvd(topic: str = "overview") -> str:
-    """
-    (ACA+)+TSVD accelerated kernel-agnostic least-norm solver.
-
-    Solves underdetermined field-synthesis / inverse-source problems
-    ``A phi = B`` (M field points x N basis sources, M < N) via a
-    TSVD-regularised pseudo-inverse, accelerated by ACA+ low-rank
-    recompression.  ACA+ is delegated to HACApK (cHACApK_acaplus, the single
-    source of truth); the matrix entry ``A(i,j)`` is a caller callback built
-    from Radia's existing field (Biot-Savart for coils, MMM/MSC for magnets)
-    via ``radia_field_kernel``.  This is the numerical core of the stream
-    function method of coil design (IEEJ SA-25-020), generalised to any source.
-
-    Production module: ``radia.stream_function``.  Measured ~10x speedup vs
-    naive dense TSVD at N=2048 (grows with N).  Pair with CMA-ES (Optuna) for
-    the nonlinear outer design loop.
-
-    Args:
-        topic: One of:
-            "overview"        - Problem, why ACA+TSVD, HACApK delegation (DEFAULT)
-            "method"          - ACA+ params + TSVD recompression Method 2/3
-                                (alias: "tsvd", "aca")
-            "api"             - radia.stream_function API (aca_tsvd,
-                                pseudo_inverse_solve, solve, radia_field_kernel)
-            "kernel_agnostic" - generic A(i,j) callback design; reuse Radia
-                                field for coils + magnets (alias: "kernel", "generic")
-            "performance"     - measured speedup table + (M/k)^2 scaling
-                                (alias: "speedup", "benchmark")
-            "cmaes"           - linear (TSVD) vs nonlinear (CMA-ES/Optuna) split
-                                (alias: "optuna", "cma-es")
-            "validation"      - vs coil_solver.f90 (1e-15) + magnet path
-                                (alias: "f90", "validate")
-            "literature"      - stream function method theory + lineage
-                                (Turner target-field, Peeren, Abe DUCAS=CP+TSVD,
-                                NESCOIL, Tomasi); alias "sfm", "lineage", "abe"
-            "workflow"        - end-to-end SF design -> CAD(STEP) -> PEEC ->
-                                field demos (Gz rings, Gx fingerprint,
-                                sf_to_peec); alias "cad", "peec", "gz", "gx"
-            "single_stroke"   - one-continuous-wire connection: Kuijpers/Lomonova
-                                (Compumag 2023) B-spline+blending prior art +
-                                our crossover-compensation/branch-cut research
-                                idea; alias "kuijpers", "crossover", "winding"
-            "all"             - Everything concatenated
-    """
-    return get_aca_tsvd_knowledge(topic)
 
 
 @mcp.tool()
