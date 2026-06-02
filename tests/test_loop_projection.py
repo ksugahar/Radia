@@ -131,3 +131,47 @@ def test_loop_projection_ctype(mu):
     dmax = max(np.linalg.norm(bj - bp) / (np.linalg.norm(bp) + 1e-30)
                for bp, bj in zip(Bp, Bj))
     assert dmax < 1e-3, f"loop removal changed C-type external field by {dmax:.2e} at mu={mu}"
+
+
+@pytest.mark.slow
+def test_loop_projection_ctype_nonlinear():
+    """C-type NONLINEAR (MatSatIsoTab): loop projection must (1) NOT crash and
+    (2) leave the field unchanged to machine precision.
+
+    Regression guard for the per-step-vs-post-convergence bug: applying the
+    projection inside every Picard step (a) segfaulted on the multiply-connected
+    1/4 C-type and (b) fed a loop-free sigma into the chi(H) update, perturbing the
+    field by ~1%. The fix projects ONCE after the nonlinear iteration converges, so
+    the chi iteration is driven by the true (loop-included) sigma and only the final
+    answer is made loop-free -> N*sigma unchanged -> field identical (dB/B ~ 1e-14).
+    """
+    mod = _load_ctype()
+    if mod is None:
+        pytest.skip("C-type mesh data not available")
+    nodes, elements = mod.load_geometry("6x6x6")
+    SCALE = mod.SCALE
+    bh = mod.load_bh()
+
+    def builder(_mu):
+        mat = rad.MatSatIsoTab(bh)
+        hexes = []
+        for nid in elements:
+            v = [[nodes[n][0] * SCALE, nodes[n][1] * SCALE, nodes[n][2] * SCALE] for n in nid]
+            o = rad.ObjHexahedron(v, [0, 0, 0])
+            rad.MatApl(o, mat)
+            hexes.append(o)
+        coil = rad.ObjRecCur([0, 0, 0], [0.30, 0.30, 0.20], [0, 0, 2.0e7])
+        return rad.ObjCnt(hexes + [coil])
+
+    pts = [[0, 0, 0.05], [0.03, 0, 0]]
+    Bp, _ = _solve(builder, 0.0, False, pts)     # plain nonlinear (must not be perturbed)
+    Bj, st = _solve(builder, 0.0, True, pts)     # + post-convergence loop projection
+    assert st["n_loop"] > 0
+    assert st["loop_after"] < 1e-6 * st["loop_before"], (
+        f"loop not removed: before={st['loop_before']:.2e} after={st['loop_after']:.2e}")
+    dmax = max(np.linalg.norm(bj - bp) / (np.linalg.norm(bp) + 1e-30)
+               for bp, bj in zip(Bp, Bj))
+    # Field must be unchanged to ~machine precision (NOT the ~1% of the per-step bug).
+    assert dmax < 1e-9, (
+        f"nonlinear loop removal perturbed the field by {dmax:.2e} "
+        f"(per-step regression?); must be ~1e-14")

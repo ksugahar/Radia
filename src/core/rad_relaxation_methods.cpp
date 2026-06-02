@@ -3167,17 +3167,11 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 	}
 	// else: ApplyLineSearchDamping already updated FlatMagn with damped solution
 
-	// HELMHOLTZ-HODGE loop removal (opt-in, rad.SetLoopProjection(True)): subtract the
-	// non-physical loop (circulating surface-charge) component from the converged
-	// sigma. Cheap, well-conditioned CG projection off the topological cycle space;
-	// N*sigma (the on-element field) is unchanged. Gives a loop-free physical answer.
-	if(rad.m_loop_projection)
-	{
-		std::vector<double> sig_lp(FlatMagn, FlatMagn + totalDOF);
-		int it_lp = m_hacapk->ProjectOutLoops(sig_lp, tol, max_iter);
-		if(it_lp >= 0)
-			for(int i = 0; i < totalDOF; i++) FlatMagn[i] = sig_lp[i];
-	}
+	// NOTE: Helmholtz-Hodge loop removal (rad.SetLoopProjection) is applied ONCE
+	// after the nonlinear iteration converges (in AutoRelax_VariableDOF), NOT per
+	// linear step -- projecting every step would feed a loop-free sigma into the
+	// chi(H) update and corrupt the nonlinear iteration. See the end of
+	// AutoRelax_VariableDOF.
 
 	return iter;
 }
@@ -3922,6 +3916,45 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	}
 
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
+
+	// HELMHOLTZ-HODGE loop removal (opt-in, rad.SetLoopProjection(True)): ONCE, after
+	// the nonlinear iteration has CONVERGED, subtract the non-physical loop
+	// (circulating surface-charge = ker(N)) component from the final sigma via a
+	// cheap, well-conditioned CG projection off the topological cycle space. Applied
+	// here (post-convergence) rather than per linear step, so the chi(H) iteration is
+	// driven by the true A^-1 b (loop-included) and only the FINAL answer is made
+	// loop-free. N L = 0 so N*sigma -- the on-element field -- is unchanged. The
+	// projected sigma is synced back to the element Magn so rad.Fld / rad.ObjM see it.
+	if(rad.m_loop_projection && m_hacapk && m_hacapk->IsValid())
+	{
+		std::vector<double> sig_lp(FlatMagn, FlatMagn + totalDOF);
+		int it_lp = m_hacapk->ProjectOutLoops(sig_lp, rad.m_bicg_tol, 10000);
+		if(it_lp >= 0)
+		{
+			for(int i = 0; i < totalDOF; i++) FlatMagn[i] = sig_lp[i];
+			// Sync the loop-free sigma back to element magnetization objects:
+			// 3DOF tetra -> Magn (Mx,My,Mz); 6DOF MSC -> per-face Sigma[k]
+			// (same flat->element layout the solver uses, e.g. lines ~363/504).
+			for(int elem = 0; elem < AmOfMainElem; elem++)
+			{
+				int dof = IntrctPtr->GetElementDOF(elem);
+				int offset = IntrctPtr->GetElementDOFOffset(elem);
+				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				if(dof == 3)
+				{
+					g3dRelaxPtr->Magn.x = FlatMagn[offset];
+					g3dRelaxPtr->Magn.y = FlatMagn[offset + 1];
+					g3dRelaxPtr->Magn.z = FlatMagn[offset + 2];
+				}
+				else if(dof >= 5)
+				{
+					radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
+					if(poly && poly->Use6DOF_MSC)
+						for(int k = 0; k < dof; k++) poly->Sigma[k] = FlatMagn[offset + k];
+				}
+			}
+		}
+	}
 
 	// Set statistics for GetSolveStats (ELF-compatible)
 	rad.m_solve_linear_iterations = rad.m_linear_iterations;  // Copy from HACApK-specific counter
