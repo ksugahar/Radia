@@ -199,6 +199,14 @@ class RegularizedTSVD:
     compensated iteration's inner solve cheap regardless of the FE
     DOF count.
 
+    ``solve(B, alpha)`` with ``alpha > 0`` is the **generalised Tikhonov**
+    (soft data fit) ``min ||A phi - B||^2 + alpha . phi^T S phi`` via the
+    SAME cached factorisation -- only an ``alpha I`` is added inside the
+    ``k x k`` core ``(alpha I + Sigma^2 W)``.  So an entire L-curve /
+    Pareto alpha-sweep re-uses one factorisation (the ``+ alpha I`` is the
+    whole cost of moving along the front); ``alpha = 0`` recovers the
+    exact-fit form above.
+
     Special case ``S = I``: ``W = V^T V = I_k`` since ACA+TSVD V columns
     are orthonormal, so ``phi = V Sigma^-1 U^T B`` -- reduces exactly to
     the standard L2 pseudo-inverse (see ``pseudo_inverse_solve``).
@@ -226,6 +234,7 @@ class RegularizedTSVD:
     base: StreamTSVD
     Sinv_V: np.ndarray         # (N, k)
     W_inv: np.ndarray          # (k, k)
+    W: np.ndarray = None       # (k, k) = V^T S^-1 V; needed for alpha > 0
 
     @classmethod
     def from_stiffness(cls, base: "StreamTSVD", S) -> "RegularizedTSVD":
@@ -264,12 +273,29 @@ class RegularizedTSVD:
             Sinv_V = np.linalg.solve(S_dense, V)
         W = V.T @ Sinv_V                            # (k, k)
         W_inv = np.linalg.inv(W)
-        return cls(base=base, Sinv_V=Sinv_V, W_inv=W_inv)
+        return cls(base=base, Sinv_V=Sinv_V, W_inv=W_inv, W=W)
 
-    def solve(self, B, k_mode=None) -> np.ndarray:
+    def solve(self, B, k_mode=None, alpha=0.0) -> np.ndarray:
         """Apply the cached regularised pseudo-inverse to ``B``.
 
+        ``alpha = 0`` (default) -- exact data fit, minimum ``S`` seminorm::
+
             phi = Sinv_V . W_inv . diag(1/Sigma) . U^T B
+
+        ``alpha > 0`` -- generalised **Tikhonov** (soft data fit), trading
+        misfit against the seminorm,
+        ``min ||A phi - B||^2 + alpha . phi^T S phi``::
+
+            phi(alpha) = Sinv_V . (alpha I + Sigma^2 W)^-1 . Sigma . U^T B
+                       == (A^T A + alpha S)^-1 A^T B
+
+        This is the SAME cached factorisation with a single ``alpha I``
+        added inside the ``k x k`` core, so an L-curve / Pareto alpha-sweep
+        re-solves only the small core (no re-factorisation).  Special case
+        ``S = I``: the core reduces to the classic Tikhonov filter factors
+        ``sigma / (sigma^2 + alpha)``.  See
+        ``docs/stream_function/regularization.md`` and
+        ``examples/stream_function/demo_pareto_tikhonov_aca.py``.
 
         Parameters
         ----------
@@ -279,11 +305,17 @@ class RegularizedTSVD:
             Truncate to first ``k_mode`` SVD modes (re-inverts the k_mode
             x k_mode top-left block of W since W_inv depends on k).
             Default = base.modes (use full cached factorisation).
+        alpha : float, optional
+            Tikhonov weight.  ``0`` (default) = exact-fit min-seminorm;
+            ``> 0`` = soft-fit Tikhonov in the ``S`` metric.  Composes
+            with ``k_mode`` (hard spectral truncation + smooth damping).
 
         Returns
         -------
         ndarray, shape (N,)
-            ``phi`` satisfying ``A phi = B`` with minimum ``phi^T S phi``.
+            ``alpha = 0``: ``phi`` satisfying ``A phi = B`` with minimum
+            ``phi^T S phi``.  ``alpha > 0``: the Tikhonov solution
+            ``(A^T A + alpha S)^-1 A^T B``.
         """
         B = np.asarray(B, dtype=float).ravel()
         if B.shape[0] != self.base.M:
@@ -298,16 +330,27 @@ class RegularizedTSVD:
         if k == k_full:
             Sinv_V = self.Sinv_V                    # (N, k_full)
             W_inv = self.W_inv                      # (k_full, k_full)
+            W = self.W if self.W is not None else np.linalg.inv(W_inv)
         else:
             Sinv_V = self.Sinv_V[:, :k]             # (N, k)
             V_k = self.base.V[:, :k]                # (N, k)
-            W_k = V_k.T @ Sinv_V                    # (k, k)
-            W_inv = np.linalg.inv(W_k)
+            W = V_k.T @ Sinv_V                      # (k, k)
+            W_inv = np.linalg.inv(W)
 
-        with np.errstate(divide="ignore", invalid="ignore"):
-            c = (U.T @ B) / Sigma                   # (k,)
-        c = np.where(Sigma > 0.0, c, 0.0)
-        return Sinv_V @ (W_inv @ c)
+        UtB = U.T @ B                               # (k,)
+
+        if alpha <= 0.0:
+            # exact-fit min-seminorm: phi = Sinv_V . W^-1 . Sigma^-1 . U^T B
+            with np.errstate(divide="ignore", invalid="ignore"):
+                c = UtB / Sigma                     # (k,)
+            c = np.where(Sigma > 0.0, c, 0.0)
+            return Sinv_V @ (W_inv @ c)
+
+        # generalised Tikhonov: (alpha I + Sigma^2 W) y = Sigma U^T B
+        #   phi = Sinv_V . y == (A^T A + alpha S)^-1 A^T B
+        core = alpha * np.eye(k) + (Sigma ** 2)[:, None] * W
+        y = np.linalg.solve(core, Sigma * UtB)
+        return Sinv_V @ y
 
 
 def pseudo_inverse_solve_regularized(result: StreamTSVD, B, S, k_mode=None):
