@@ -36,8 +36,9 @@ _BASE_SKIP = ("coil_vol", "output", "msh_output", "method")
 # mode-specific dest groups (so each sub-panel hides the other modes' knobs)
 _PARETO_DESTS = ("pareto_lever", "alpha_min", "alpha_max", "n_alpha",
                  "linf_iter", "geom_scale_min", "geom_scale_max")
-_MANUFACTURE_DESTS = ("nlevels", "distort", "distort_grid", "distort_iter",
-                      "step_output", "peec", "wire_diam", "peec_freq")
+_MANUFACTURE_DESTS = ("nlevels", "chain", "distort", "distort_grid",
+                      "distort_iter", "step_output", "peec", "wire_diam",
+                      "peec_freq")
 
 
 def _argparser():
