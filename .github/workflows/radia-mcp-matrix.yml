@@ -54,7 +54,7 @@ jobs:
       - name: Install minimal deps
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest "mcp>=1.0"
+          python -m pip install pytest pytest-rerunfailures "mcp>=1.0"
           python -m pip install -e packages/radia-mcp --no-deps
 
       - name: Compile check (catch SyntaxError on Py ${{ matrix.python-version }})
@@ -77,7 +77,13 @@ jobs:
       - name: Pytest (meta health + language features + versioning)
         run: |
           cd packages/radia-mcp
-          python -m pytest -v tests/
+          # --reruns 2: test_each_server_selftest spawns each of the ~40
+          # server console-scripts as a subprocess; the heavy-ML servers
+          # (e.g. gnn -> torch) can transiently crash (rc=-1, empty
+          # stdout/stderr) under the full-suite resource pressure, then
+          # pass on a clean rerun.  Mirrors build-test.yml's --reruns
+          # flaky-handling.  -r aR surfaces any rerun in the log.
+          python -m pytest -v -r aR --reruns 2 --reruns-delay 1 tests/
 
       # TOOLS.md drift gate — regenerate the auto-generated inventory
       # and fail if it differs from the committed copy. Catches the
