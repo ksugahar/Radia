@@ -33,6 +33,11 @@ _REG_CHOICES = {"regularize": [("L2 (min |psi|)", "l2"),
 
 # argparser dests that the top panel / build_command own, never a sub widget.
 _BASE_SKIP = ("coil_vol", "output", "msh_output", "method")
+# mode-specific dest groups (so each sub-panel hides the other modes' knobs)
+_PARETO_DESTS = ("pareto_lever", "alpha_min", "alpha_max", "n_alpha",
+                 "linf_iter", "geom_scale_min", "geom_scale_max")
+_MANUFACTURE_DESTS = ("nlevels", "distort", "distort_grid", "distort_iter",
+                      "step_output", "peec", "wire_diam", "peec_freq")
 
 
 def _argparser():
@@ -46,10 +51,7 @@ class _DesignPanel(ModePanel):
         super().__init__(parent)
         self.bind_argparser(
             _argparser(),
-            skip=_BASE_SKIP + (
-                "pareto_lever", "alpha_min", "alpha_max", "n_alpha",
-                "nlevels", "chain_method", "distort", "distort_comps",
-                "step_output", "peec"),
+            skip=_BASE_SKIP + _PARETO_DESTS + _MANUFACTURE_DESTS,
             file_browse=_EVAL_BROWSE,
             choice_map=_REG_CHOICES, labels=_REG_LABELS,
         )
@@ -70,9 +72,7 @@ class _ParetoPanel(ModePanel):
         super().__init__(parent)
         self.bind_argparser(
             _argparser(),
-            skip=_BASE_SKIP + (
-                "alpha", "nlevels", "chain_method", "distort",
-                "distort_comps", "step_output", "peec"),
+            skip=_BASE_SKIP + _MANUFACTURE_DESTS,
             file_browse=_EVAL_BROWSE,
             choice_map=_REG_CHOICES, labels=_REG_LABELS,
         )
@@ -92,10 +92,9 @@ class _ManufacturePanel(ModePanel):
         super().__init__(parent)
         self.bind_argparser(
             _argparser(),
-            skip=_BASE_SKIP + (
-                "regularize", "alpha", "eval_max", "pareto_lever",
-                "alpha_min", "alpha_max", "n_alpha"),
+            skip=_BASE_SKIP + _PARETO_DESTS,
             file_browse=_EVAL_BROWSE,
+            choice_map=_REG_CHOICES, labels=_REG_LABELS,
         )
 
     def build_command(self, vol_path):
@@ -103,7 +102,8 @@ class _ManufacturePanel(ModePanel):
             vol_path=vol_path, vol_flag="--coil-vol",
             script_path=calc_script("calc_streamfunction.py"),
             output_path=json_output(vol_path, "_sf_manufacture"),
-            extra=["--method", "manufacture"],
+            extra=["--method", "manufacture",
+                   "--msh-output", msh_output(vol_path, "_sf_manufacture")],
         )
 
 
