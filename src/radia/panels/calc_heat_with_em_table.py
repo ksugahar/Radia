@@ -26,11 +26,18 @@ surface:
         Recommended.  Requires one upstream calc_fem_kelvin run at
         the reference coil current.
 
-  --ht-source biot  --coil-step <step> ...
-        Pure Biot-Savart from the coil STEP (no workpiece
-        backreaction).  Not implemented in v1; raises with a clear
-        pointer to use --ht-source kelvin until the upstream PEEC
-        Biot-Savart-on-arbitrary-surface helper is wired through.
+  --ht-source biot  --coil-step <step> [--biot-image-factor 2.0]
+        Pure incident Biot-Savart |H_t| from the coil STEP, with NO
+        workpiece backreaction.  The coil centerline is walked from
+        the STEP solid (same extractor as the PEEC path) into one
+        filament; the incident field is evaluated at each workpiece
+        surface DOF and projected onto the local tangent plane.  Needs
+        no upstream calc_fem_kelvin run, but UNDER-predicts the surface
+        field by ~2x for a good flat conductor (the eddy-current image
+        that doubles H_t is absent).  --biot-image-factor lets an
+        informed user opt into that doubling explicitly; it is never
+        applied silently.  Prefer --ht-source kelvin when the
+        backreaction matters.
 
 Coil current trajectory:
   --coil-current <scalar>            Constant amplitude (A_peak)
@@ -162,10 +169,129 @@ def _project_Ht_ref(wp_mesh, dof_xyz, em_vol, ht_sol, ht_order):
     return Ht_ref, n_ok
 
 
+def _polyline_to_filament_segments(poly, closed):
+    """(M,3) centerline polyline -> (N_seg, 2, 3) filament endpoint pairs.
+
+    Consecutive points become straight filaments; when ``closed`` the
+    wrap-around segment ``(poly[-1], poly[0])`` is appended so the loop
+    carries a divergence-free current.  Pure NumPy -- the unit-testable
+    core of the STEP centerline -> Biot-Savart bridge.
+    """
+    poly = np.asarray(poly, dtype=float)
+    if poly.ndim != 2 or poly.shape[0] < 2 or poly.shape[1] != 3:
+        raise ValueError(
+            f"coil centerline has shape {poly.shape}; need >=2 points "
+            f"of (x,y,z).")
+    segs = np.stack([poly[:-1], poly[1:]], axis=1)        # (M-1, 2, 3)
+    if bool(closed):
+        wrap = np.array([[poly[-1], poly[0]]], dtype=float)
+        segs = np.concatenate([segs, wrap], axis=0)
+    return segs
+
+
+def _coil_segments_from_step(coil_step):
+    """Return ``(segments, closed)`` for the coil centerline.
+
+    ``segments`` is an (N_seg, 2, 3) float array of filament endpoints
+    suitable for ``radia.biot_savart.h_segments_batch``.  This reuses
+    the same ``extract_centerline`` walker the PEEC path uses, so the
+    coil is described by ONE filament tracing the conductor centerline
+    (a multi-turn solid traces all turns, giving the correct
+    amp-turns).
+    """
+    from radia.coil_from_step import extract_centerline
+
+    res = extract_centerline(coil_step)
+    closed = bool(res.closed)
+    return _polyline_to_filament_segments(res.polyline, closed), closed
+
+
+def _surface_vertex_normals(wp_mesh, surface_label_eff, dof_vnrs):
+    """Area-weighted unit surface normals aligned to ``dof_vnrs``.
+
+    Returns an (n, 3) array.  Each boundary polygon's Newell normal
+    (magnitude ~ 2*area) is accumulated to its vertices, then
+    normalized -- so this is the area-weighted average face normal at
+    each surface DOF.  Works for tri and quad boundary elements.
+
+    Only the tangent PLANE matters for |H_t| = |H - (H.n)n|, so the
+    normal SIGN (inward vs outward) is irrelevant.  A DOF with no
+    incident boundary polygon keeps a zero normal, which makes
+    |H_t| = |H| there (no tangent plane is known -- the full incident
+    magnitude is the safe choice).
+    """
+    from ngsolve import BND
+
+    nv = wp_mesh.nv
+    acc = np.zeros((nv, 3), dtype=float)
+    for el in wp_mesh.Elements(BND):
+        if surface_label_eff != ".*" and el.mat != surface_label_eff:
+            continue
+        vs = [v.nr for v in el.vertices]
+        m = len(vs)
+        if m < 3:
+            continue
+        pts = np.array([list(wp_mesh.vertices[v].point) for v in vs],
+                       dtype=float)
+        nrm = np.zeros(3)
+        for i in range(m):                       # Newell's method
+            a = pts[i]
+            b = pts[(i + 1) % m]
+            nrm[0] += (a[1] - b[1]) * (a[2] + b[2])
+            nrm[1] += (a[2] - b[2]) * (a[0] + b[0])
+            nrm[2] += (a[0] - b[0]) * (a[1] + b[1])
+        for v in vs:
+            acc[v] += nrm
+    out = np.zeros((len(dof_vnrs), 3), dtype=float)
+    for k, vnr in enumerate(dof_vnrs):
+        n = acc[int(vnr)]
+        ln = float(np.linalg.norm(n))
+        if ln > 1e-30:
+            out[k] = n / ln
+    return out
+
+
+def _biot_Ht_on_surface(segments, obs_xyz, obs_normals, current,
+                        image_factor=1.0):
+    """|H_t| [A/m] at each obs point from coil ``segments`` (carrying
+    ``current`` [A]), projected onto the tangent plane of ``obs_normals``.
+
+    This is the pure, mesh-free core of the biot ht-source: it is the
+    INCIDENT tangential field (no workpiece backreaction).  For a good
+    conductor the eddy currents cancel the normal component and roughly
+    double the tangential one (the perfect-conductor image), so the raw
+    incident |H_t| under-predicts the true surface field by ~2x for a
+    flat surface.  ``image_factor`` (default 1.0 = raw incident) lets an
+    informed caller opt into that doubling explicitly; it is NEVER
+    applied silently.
+
+    Parameters
+    ----------
+    segments : (N_seg, 2, 3) array of filament endpoints [m]
+    obs_xyz  : (n, 3) observation points [m]
+    obs_normals : (n, 3) unit surface normals (zero -> no projection)
+    current  : coil current [A]
+    image_factor : multiply the result by this (default 1.0)
+
+    Returns
+    -------
+    (n,) float |H_t| [A/m]
+    """
+    from radia.biot_savart import h_segments_batch
+
+    H = h_segments_batch(segments, np.asarray(obs_xyz, dtype=float),
+                         current=float(current))            # (n, 3)
+    n_hat = np.asarray(obs_normals, dtype=float)
+    Hn = np.sum(H * n_hat, axis=1)                          # (n,)
+    H_t = H - Hn[:, None] * n_hat                           # tangential
+    return float(image_factor) * np.linalg.norm(H_t, axis=1)
+
+
 def solve_heat_em_table(wp_vol, em_table_path,
                          ht_source, ht_sol, em_vol, ht_order,
                          coil_current, coil_current_csv,
                          I_ref,
+                         coil_step="", biot_image_factor=1.0,
                          material="steel", rho=None, cp=None, k=None,
                          h_conv=10.0, t_ext=20.0, t_initial=20.0,
                          surface_label="",
@@ -245,12 +371,35 @@ def solve_heat_em_table(wp_vol, em_table_path,
         # which gives ~0 q_surf for steel BH below the first tabulated H).
         Ht_ref_arr = np.where(np.isfinite(Ht_ref_arr), Ht_ref_arr, 0.0)
     elif ht_source == "biot":
-        return {"error":
-                "--ht-source biot (pure Biot-Savart from --coil-step) "
-                "is not implemented in v1.  Use --ht-source kelvin "
-                "with a calc_fem_kelvin reference run.  See module "
-                "docstring; v2 will wire the upstream PEEC "
-                "Biot-on-surface helper."}
+        if not coil_step:
+            return {"error":
+                    "--ht-source biot requires --coil-step <coil.step> "
+                    "(the coil centerline is walked from the STEP solid)."}
+        if not os.path.isfile(coil_step):
+            return {"error": f"--coil-step not found: {coil_step}"}
+        try:
+            segs, closed = _coil_segments_from_step(coil_step)
+        except Exception as e:
+            return {"error":
+                    f"coil centerline extraction failed for "
+                    f"{os.path.basename(coil_step)}: {type(e).__name__}: "
+                    f"{e}.  Use --ht-source kelvin, or regenerate the "
+                    f"coil STEP with a cleaner swept cross-section."}
+        _log(f"BIOT:centerline {segs.shape[0]} segments closed={closed} "
+             f"from {os.path.basename(coil_step)}")
+        normals = _surface_vertex_normals(
+            wp_mesh, surface_label_eff, dof_vnrs)
+        n_proj = int((np.linalg.norm(normals, axis=1) > 1e-9).sum())
+        Ht_ref_arr = _biot_Ht_on_surface(
+            segs, dof_xyz, normals, current=I_ref,
+            image_factor=biot_image_factor)
+        _log(f"HT_REF:biot incident |H_t| at {n_surf} surface DOFs "
+             f"({n_proj} tangent-projected) I_ref={I_ref:.3f} A "
+             f"image_factor={biot_image_factor:g}; |H_t| range "
+             f"[{float(np.min(Ht_ref_arr)):.3e},"
+             f"{float(np.max(Ht_ref_arr)):.3e}] A/m")
+        # Defensive: zero out any non-finite (degenerate geometry).
+        Ht_ref_arr = np.where(np.isfinite(Ht_ref_arr), Ht_ref_arr, 0.0)
     else:
         return {"error": f"Unknown --ht-source {ht_source!r}"}
 
@@ -402,6 +551,10 @@ def solve_heat_em_table(wp_vol, em_table_path,
         "t_end_s": float(t_end),
         "I_ref_A": float(I_ref),
         "ht_source": ht_source,
+        "coil_step": (os.path.abspath(coil_step)
+                      if (ht_source == "biot" and coil_step) else None),
+        "biot_image_factor": (float(biot_image_factor)
+                              if ht_source == "biot" else None),
         "em_table": os.path.abspath(em_table_path),
         "wp_vol": os.path.abspath(wp_vol),
         "material": material,
@@ -426,7 +579,10 @@ def main():
                              "surface.  kelvin: load <stem>_Jsurf.sol "
                              "from a calc_fem_kelvin reference run "
                              "(recommended -- captures backreaction).  "
-                             "biot: not yet implemented (raises).")
+                             "biot: pure incident Biot-Savart |H_t| from "
+                             "--coil-step (no backreaction; ~2x low for a "
+                             "good flat conductor unless --biot-image-factor "
+                             "is set).")
     parser.add_argument("--ht-sol", default="",
                         help="kelvin path: <stem>_Jsurf.sol from "
                              "calc_fem_kelvin.py (= |H_t| on the SIBC "
@@ -439,7 +595,20 @@ def main():
                              "<stem>_Jsurf.sol (must match fes-order of "
                              "that run).")
     parser.add_argument("--coil-step", default="",
-                        help="biot path: coil STEP (v1 not implemented).")
+                        help="biot path: coil STEP solid.  Its centerline "
+                             "is walked (same extractor as the PEEC path) "
+                             "into one filament; the incident Biot-Savart "
+                             "|H_t| on the workpiece surface is the "
+                             "reference field (NO workpiece backreaction).")
+    parser.add_argument("--biot-image-factor", type=float, default=1.0,
+                        help="biot path: multiply the incident |H_t| by "
+                             "this factor (default 1.0 = raw incident).  "
+                             "A good conductor's eddy currents roughly "
+                             "DOUBLE the tangential field (perfect-conductor "
+                             "image), so set 2.0 for a flat-surface "
+                             "good-conductor estimate.  Applied explicitly, "
+                             "never silently -- prefer --ht-source kelvin "
+                             "when backreaction matters.")
 
     parser.add_argument("--coil-current", type=float, default=None,
                         help="Constant coil current amplitude [A_peak].")
@@ -504,6 +673,8 @@ def main():
             coil_current=args.coil_current,
             coil_current_csv=args.coil_current_csv,
             I_ref=float(args.I_ref),
+            coil_step=args.coil_step,
+            biot_image_factor=float(args.biot_image_factor),
             material=args.material,
             rho=args.rho, cp=args.cp, k=args.k,
             h_conv=args.h_conv, t_ext=args.t_ext,
