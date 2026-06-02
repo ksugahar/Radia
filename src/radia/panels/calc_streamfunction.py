@@ -552,6 +552,56 @@ def _nn_order(cents):
     return order
 
 
+def _loop_gap_matrix(loops, sub=14):
+    """Pairwise minimum vertex-to-vertex distance between loops -- a cheap
+    proxy for the shortest connector that can bridge loop i to loop j (the
+    cut is placed at the nearest points).  Each loop is subsampled to <=
+    ``sub`` vertices so the O(n_loops^2 * sub^2) cost stays small."""
+    pts = []
+    for p in loops:
+        body = p[:-1] if (len(p) > 1 and
+                          np.linalg.norm(p[0] - p[-1]) < 1e-12) else p
+        if len(body) > sub:
+            body = body[np.linspace(0, len(body) - 1, sub).astype(int)]
+        pts.append(np.asarray(body, float))
+    n = len(loops)
+    D = np.zeros((n, n))
+    for i in range(n):
+        for j in range(i + 1, n):
+            g = float(np.min(np.linalg.norm(
+                pts[i][:, None, :] - pts[j][None, :, :], axis=2)))
+            D[i, j] = D[j, i] = g
+    return D
+
+
+def _two_opt_order(D, order, max_pass=8):
+    """2-opt local search shortening the OPEN tour
+    ``sum_k D[order[k], order[k+1]]`` (an open single stroke -- no wrap edge).
+    Untangles the long inter-loop crossings a greedy nearest-neighbour visit
+    leaves behind: starting from the NN order it repeatedly reverses a
+    sub-tour whenever doing so shortens the two boundary connectors, so the
+    long 'jump across the coil to a far lobe and back' rungs collapse into
+    short local hops.  Cheap (n_loops ~ tens) and never lengthens the tour."""
+    order = list(order)
+    n = len(order)
+    if n < 4:
+        return order
+    improved, npass = True, 0
+    while improved and npass < max_pass:
+        improved, npass = False, npass + 1
+        for i in range(1, n - 1):
+            a = order[i - 1]
+            for j in range(i + 1, n):
+                b, c = order[i], order[j]
+                d = order[j + 1] if j + 1 < n else None
+                before = D[a, b] + (D[c, d] if d is not None else 0.0)
+                after = D[a, c] + (D[b, d] if d is not None else 0.0)
+                if after + 1e-12 < before:
+                    order[i:j + 1] = order[i:j + 1][::-1]
+                    improved = True
+    return order
+
+
 def _single_stroke_chain(polylines):
     """Nearest-neighbour single stroke: visit contour loops in NN order, each
     closed into a full turn, opened at the point nearest the previous loop's
@@ -587,9 +637,9 @@ def _dedupe(path, tol=1e-10):
 def _field_aware_chain(loops, signs, mpts, target_flat, vector_b,
                        n_cut=24, passes=4):
     """Field-aware single-stroke chain (geometry-independent): visit the
-    sign-aligned contour loops in nearest-neighbour order, but choose each
-    loop's ENTRY/EXIT point (the cut) by coordinate descent to minimise the
-    full one-current WIRE field error ``min_I ||I*(loops + connectors) - B||``.
+    sign-aligned contour loops in a good order, then choose each loop's
+    ENTRY/EXIT point (the cut) by coordinate descent to minimise the full
+    one-current WIRE field error ``min_I ||I*(loops + connectors) - B||``.
 
     The loop field is fixed; only the inter-loop connectors (the 'rungs')
     depend on the cuts.  Minimising the TOTAL error (not the connectors in
@@ -597,14 +647,26 @@ def _field_aware_chain(loops, signs, mpts, target_flat, vector_b,
     ~0 -> it drives the connectors' net field to zero, reaching the
     separate-turns floor with NO --distort) and open contours (large residual
     from the rim-closing chords -> it at least uses the connectors to cancel
-    part of it, never worse than nearest-neighbour).
+    part of it).
+
+    Visit ORDER: the same wire-error objective is minimised over a small set
+    of candidate orders -- a nearest-neighbour seed and a 2-opt-shortened
+    variant (``_two_opt_order``) -- keeping whichever the cut-opt drives
+    lowest.  The 2-opt minimises connector LENGTH, which gives the cut-opt a
+    tidier, shorter-rung start and HELPS most cases (LAB Gx: +9..+70 %), but
+    a length-optimal reorder can break the rungs' symmetric stray-field
+    cancellation and HURT others (LAB Gx abe nl=16: -78 %) -- exactly the
+    documented 'shorter rungs != better field' trap (single_stroke.md).
+    Selecting the lower-wire-error order makes the 2-opt strictly an upside:
+    GUARANTEED never worse than nearest-neighbour, captures its gains where
+    they are real.  (The pure-NN ``--chain nn`` baseline keeps NN order with
+    no cut-opt, so it never sees the 2-opt -- which would only hurt it.)
 
     Returns (chain_xyz, n_connectors, connector_length)."""
     if not loops:
         return np.zeros((0, 3)), 0, 0.0
-    L = [_close_loop(p if s >= 0.0 else p[::-1]) for p, s in zip(loops, signs)]
-    order = _nn_order([p.mean(axis=0) for p in L])
-    L = [L[i] for i in order]
+    L0 = [_close_loop(p if s >= 0.0 else p[::-1])
+          for p, s in zip(loops, signs)]
     ncomp = len(target_flat)
     den = float(np.linalg.norm(target_flat)) + 1e-30
 
@@ -621,43 +683,64 @@ def _field_aware_chain(loops, signs, mpts, target_flat, vector_b,
         r = np.roll(body, -c, axis=0)
         return np.vstack([r, r[0]])
 
-    loops_field = np.sum([loop_fld(p) for p in L], axis=0)   # fixed (cuts-free)
-    cuts = [0] * len(L)
-    conn_f = [np.zeros(ncomp) for _ in range(max(0, len(L) - 1))]
+    lf_cache = [loop_fld(p) for p in L0]   # per-loop field (order-independent)
 
-    def set_conn(i):
-        if 0 <= i < len(L) - 1:
-            conn_f[i] = fld(rot(L[i], cuts[i])[0], rot(L[i + 1], cuts[i + 1])[0])
+    def optimize(order):
+        """Cut coordinate-descent for ONE visit order; returns
+        (chain, connector_length, final_wire_err)."""
+        L = [L0[i] for i in order]
+        loops_field = np.sum([lf_cache[i] for i in order], axis=0)
+        cuts = [0] * len(L)
+        conn_f = [np.zeros(ncomp) for _ in range(max(0, len(L) - 1))]
 
-    def wire_err():
-        ct = loops_field + (np.sum(conn_f, axis=0) if conn_f else 0.0)
-        I = _best_fit_current(ct, target_flat)
-        return float(np.linalg.norm(I * ct - target_flat) / den)
+        def set_conn(i):
+            if 0 <= i < len(L) - 1:
+                conn_f[i] = fld(rot(L[i], cuts[i])[0],
+                                rot(L[i + 1], cuts[i + 1])[0])
 
-    for i in range(len(L) - 1):
-        set_conn(i)
-    for _ in range(passes):
-        for i in range(len(L)):
-            nb = len(L[i]) - 1
-            if nb < 2:
-                continue
-            step = max(1, nb // n_cut)
-            best, beste = cuts[i], None
-            for c in range(0, nb, step):
-                cuts[i] = c
+        def wire_err():
+            ct = loops_field + (np.sum(conn_f, axis=0) if conn_f else 0.0)
+            I = _best_fit_current(ct, target_flat)
+            return float(np.linalg.norm(I * ct - target_flat) / den)
+
+        for i in range(len(L) - 1):
+            set_conn(i)
+        for _ in range(passes):
+            for i in range(len(L)):
+                nb = len(L[i]) - 1
+                if nb < 2:
+                    continue
+                step = max(1, nb // n_cut)
+                best, beste = cuts[i], None
+                for c in range(0, nb, step):
+                    cuts[i] = c
+                    set_conn(i - 1)
+                    set_conn(i)
+                    e = wire_err()
+                    if beste is None or e < beste:
+                        beste, best = e, c
+                cuts[i] = best
                 set_conn(i - 1)
                 set_conn(i)
-                e = wire_err()
-                if beste is None or e < beste:
-                    beste, best = e, c
-            cuts[i] = best
-            set_conn(i - 1)
-            set_conn(i)
-    chain = _dedupe(np.vstack([rot(L[i], cuts[i]) for i in range(len(L))]))
-    clen = sum(float(np.linalg.norm(rot(L[i + 1], cuts[i + 1])[0]
-                                    - rot(L[i], cuts[i])[0]))
-               for i in range(len(L) - 1))
-    return chain, max(0, len(L) - 1), clen
+        chain = _dedupe(np.vstack([rot(L[i], cuts[i])
+                                   for i in range(len(L))]))
+        clen = sum(float(np.linalg.norm(rot(L[i + 1], cuts[i + 1])[0]
+                                        - rot(L[i], cuts[i])[0]))
+                   for i in range(len(L) - 1))
+        return chain, clen, wire_err()
+
+    nn = _nn_order([p.mean(axis=0) for p in L0])
+    cands = [nn]
+    two = _two_opt_order(_loop_gap_matrix(L0), list(nn))
+    if two != nn:
+        cands.append(two)
+    best = None
+    for order in cands:
+        chain, clen, err = optimize(order)
+        if best is None or err < best[2]:
+            best = (chain, clen, err)
+    chain, clen, _ = best
+    return chain, max(0, len(L0) - 1), clen
 
 
 def _segment_field_B(path, obs, current=1.0):

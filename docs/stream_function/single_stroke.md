@@ -114,6 +114,19 @@ attempts to remove them both FAILED (2026-05-31):
     current paths (current can't start/stop mid-air; `div J ≠ 0`), so the
     Biot-Savart field is unphysical (9.3 % → 21 %).
 
+> **Reordering CAN help — but only if you keep the better order.** The FE-direct
+> calc (`calc_streamfunction.py`, `_field_aware_chain`) DOES reorder: it
+> 2-opt-shortens the visit order to untangle the long crossings, then runs the
+> field cut-opt and keeps whichever of {nearest-neighbour, 2-opt} order gives the
+> lower **full-wire-error** (`min_I ||I·(loops+connectors) − B||`).  Measured on
+> the FE-direct cylinder Gx (`--confine abe`/`off`, nlevels 10/12/16): 2-opt
+> helps 5/6 cases by +19…+70 %, but HURTS one (abe nl=16, −78 %) — *exactly* the
+> stray-cancellation break above.  Selecting the lower-error order discards that
+> one regression while keeping the five gains, so it is **guaranteed never worse
+> than nearest-neighbour**.  The lesson is unchanged: shortening rungs is not the
+> objective (field cancellation is) — but a reorder *evaluated against the field
+> objective and kept only when it wins* is a safe upside, not a trap.
+
 The only physical way to have NO bridges is for every independent wire to
 be a **closed loop** — i.e. drive each closed contour as its own
 conductor (multiple current feeds).  That is exactly

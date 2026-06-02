@@ -84,12 +84,31 @@ the same density rule the flux-line **bubble system**
 
 ## Single-stroke chain (`--chain {field_aware, nn}`)
 
-`field_aware` (default) chooses each loop's entry/exit cut by coordinate descent
-to minimise the **full** one-current wire error
-`min_I ||I·(loops + connectors) − B||` (not `||connectors||` alone -- that is
-worse on open contours).  Never worse than `nn`; with closed contours it reaches
-the separate-turns floor with **no** `--distort`.  The optional sheet-metal
-`--distort` (single-current 3D control-grid Gauss-Newton) remains an extra.
+The "extra lines" in the single-stroke view are the inter-loop **connectors**
+(rungs): chaining `N` contour loops into one conductor needs `N−1` bridges, and
+they carry the series current so their stray field is real, not cosmetic.
+`field_aware` (default) keeps that field small two ways:
+
+- **Cut placement.** Each loop's entry/exit cut is chosen by coordinate descent
+  to minimise the **full** one-current wire error
+  `min_I ||I·(loops + connectors) − B||` (not `||connectors||` alone -- that is
+  worse on open contours, because the connectors are routed to *cancel* the
+  rim-chord residual, not merely to be short).
+- **Visit order.** The same wire-error objective is also minimised over a small
+  set of candidate orders -- a nearest-neighbour seed and a 2-opt-shortened
+  variant (which untangles the long "jump to a far lobe and back" crossings) --
+  keeping whichever the cut-opt drives lowest.  The 2-opt **shortens** the
+  rungs, which helps most cases (LAB Gx: connectors max 372→289 mm, delivered
+  single-stroke +19…+70 %), but a length-optimal reorder can break the rungs'
+  symmetric stray-field cancellation and *hurt* some cases (the documented
+  "shorter rungs ≠ better field" trap, see [`single_stroke.md`](single_stroke.md)).
+  Selecting the lower-wire-error order makes it **guaranteed never worse than
+  nearest-neighbour** while capturing the real gains.
+
+`field_aware` is never worse than `nn`; with closed contours (use `--confine
+abe`) it reaches the separate-turns floor with **no** `--distort`.  The optional
+sheet-metal `--distort` (single-current 3D control-grid Gauss-Newton) remains an
+extra lever on top.
 
 ## End-to-end validation vs an independent codebase
 
