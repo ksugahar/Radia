@@ -466,7 +466,7 @@ class IHPanel(ModePanel):
         imp = self.add_combo(
             "impedance_model", "Model:",
             ["Linear SIBC",
-             "Nonlinear ESIM (experimental, WIP)"],
+             "Nonlinear ESIM (Karl iteration)"],
             default=0)
         imp.currentTextChanged.connect(self._on_impedance_changed)
         imp.setToolTip(
