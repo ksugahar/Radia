@@ -254,6 +254,21 @@ class HeatPanel(ModePanel):
             "still receives --em-vol explicitly (no silent fallback).")
         em_w.textChanged.connect(self._emit_validation)
         self.add_spin("qsurf_order", "qsurf H1 order:", 1, 1, 5)
+        qpa = self.add_check(
+            "q_phi_average",
+            "Azimuthal-average q_surf (uniform / axisymmetric):", False)
+        qpa.setToolTip(
+            "<b>3D solver only.</b>  Circumferentially (phi) average the "
+            "spatial q_surf into an AXISYMMETRIC heat input on the 3D "
+            "workpiece mesh, then solve WITHOUT rotation time-stepping. "
+            "This is the 'uniform' (fast-spinning) limit -- the "
+            "temperature comes out axisymmetric.<br>"
+            "<b>Leave UNCHECKED with Rotation = 0 rpm</b> for the "
+            "<b>no-rotation</b> mode: the spatial q_surf is applied as-is, "
+            "giving a non-axisymmetric temperature (hot where the coil is "
+            "close).<br>"
+            "(The 2D axisym mesh mode already phi-averages, so this "
+            "checkbox is hidden there.)")
 
         # Workpiece thermal mesh.
         self._add_section("Workpiece thermal mesh")
@@ -416,6 +431,16 @@ class HeatPanel(ModePanel):
         is_axisym = (name == MESH_TYPE_AXISYM)
         # n_phi_samples is meaningful only in axisym mode.
         self._set_row_visible("n_phi_samples", is_axisym)
+        self._update_q_phi_avg_visible()
+
+    def _update_q_phi_avg_visible(self):
+        """The 3D uniform / phi-average checkbox is meaningful only for a
+        3D mesh + spatial source: the axisym mesh already phi-averages,
+        and a uniform-constant q is already azimuthally uniform."""
+        is_axisym = (self.val("mesh_type") == MESH_TYPE_AXISYM)
+        is_uniform = (self.val("heat_source") == HEAT_SRC_UNIFORM)
+        self._set_row_visible(
+            "q_phi_average", (not is_axisym) and (not is_uniform))
 
     # ------- Handlers -------
 
@@ -553,6 +578,7 @@ class HeatPanel(ModePanel):
         self._set_row_visible("_sec_spatial", not is_uniform)
         for key in ("qsurf_sol", "em_vol", "qsurf_order"):
             self._set_row_visible(key, not is_uniform)
+        self._update_q_phi_avg_visible()
         # v4.78.0: rotation_rpm / rotation_axis are no-ops when source
         # is Uniform (a constant q_surf is rotation-invariant -- the
         # 3D solver's q_resample callback is None on that path).  Grey
@@ -696,6 +722,11 @@ class HeatPanel(ModePanel):
                     "--qsurf-order", str(self.val("qsurf_order"))]
             if is_axisym:
                 cmd += ["--n-phi-samples", str(self.val("n_phi_samples"))]
+            elif self._widgets["q_phi_average"].isChecked():
+                # 3D uniform / phi-average mode: axisymmetric q on the 3D
+                # mesh, no rotation time-stepping.  isChecked() -- NOT
+                # self.val() which returns "0"/"1" (both truthy).
+                cmd += ["--q-phi-average"]
 
         # Probe + CSV.
         probe = self.val("probe_point").strip()
