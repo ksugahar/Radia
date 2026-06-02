@@ -135,7 +135,12 @@ are the entry points users typically want:
     via `LinearForm` per target.
 
   - `solve_tikhonov(A, B, fes, alpha=0.0, regularize="h1")`
-    Three regularisation modes (L2, H1, Tikhonov).
+    Three regularisation modes (L2, H1, Tikhonov) via a dense
+    `(AᵀA + α S)⁻¹ AᵀB` solve.  Mathematically identical to folding the
+    same `α` into the ACA+TSVD core — `ψ(α) = S⁻¹V·(αI + Σ²W)⁻¹·Σ·UᵀB` —
+    which reuses one factorisation across an α-sweep; see
+    [regularization.md](regularization.md) § "Tikhonov is the SAME core
+    with `+ α I`".
 
   - `sample_psi_grid(psi_vec, fes, mesh, plane_half, n_sample)`
     Sample a GridFunction ψ on a regular grid for marching-squares.

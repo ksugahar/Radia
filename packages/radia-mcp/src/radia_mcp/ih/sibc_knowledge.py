@@ -722,10 +722,6 @@ report converged Z_s, iteration count, and convergence history in JSON:
 | `calc_fem_kelvin.py --impedance esim` | PEEC filament source | FEM-HCurl A with Robin | PEEC+FEM+Kelvin |
 | `calc_fem_coilmesh.py --impedance-model esim` | FEM A-V volumetric coil | FEM with Robin SIBC | Full FEM A-V; re-assembles per Karl iter |
 
-`calc_heating.py` is a separate standalone script that uses the same
-`ESIMFiniteSlabSolver` for a simple 2D-axisymmetric IH heating predictor
-(not part of the production Karl-coupled paths above).
-
 #### Common CLI flags
 
 ```

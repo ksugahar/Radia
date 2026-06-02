@@ -370,14 +370,10 @@ Scope: every `calc_*.py` script that `radia_ih.py` (IH panel) can launch.
 | `calc_heat.py` | YES (Heat tab, 3D) | ✅ OK — `with TaskManager():` wrap |
 | `calc_heat_axisym.py` | YES (Heat tab, axisym) | ✅ OK — `with TaskManager():` wrap |
 | `calc_heat_with_em_table.py` | YES (Heat tab w/ EM coupling) | ✅ OK — `with TaskManager():` wrap |
-| `calc_heating.py` | NO (orphan, not radia_ih) | ⚠️ wrap missing — but not exposed by IH panel |
 
 ## Conclusion
 
 **All radia_ih-exposed solver paths are correctly TaskManager-parallelised.**
-The lone orphan with a missing wrap (`calc_heating.py`) is not reachable
-from the radia_ih UI; it survives as a standalone 2D axi Stage-2 IH
-script unreferenced by the panel.
 
 ## Helper modules (also covered)
 
@@ -403,14 +399,6 @@ Any `Assemble()` line without a `with TaskManager():` ancestor in the
 same function = parallelism bug.  Re-run after every panel-touching
 PR; a static check is on the wishlist (`panel-cli-diff` skill could
 also add this).
-
-## Follow-up (low priority)
-
-`calc_heating.py` has `bf.Assemble()` (line 208) and
-`bf.mat.Inverse(...)` outside any TaskManager wrap.  If we keep the
-file, add a `with TaskManager():` around the FEM block.  If we
-de-orphan it, route via the IH panel.  Either way: not a radia_ih
-regression.
 """
 
 

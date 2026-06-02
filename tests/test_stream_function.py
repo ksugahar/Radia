@@ -359,6 +359,75 @@ def test_regularized_validates_S_shape():
 
 
 # --------------------------------------------------------------------------
+# RegularizedTSVD -- folded Tikhonov (alpha > 0, soft data fit)
+#   phi(alpha) = (S^-1 V) . (alpha I + Sigma^2 W)^-1 . Sigma . U^T B
+#              == (A^T A + alpha S)^-1 A^T B
+# Same cached factorisation as alpha=0; only an alpha I added to the core.
+# --------------------------------------------------------------------------
+def test_tikhonov_matches_dense_spd():
+    """solve(B, alpha>0) == dense (A^T A + alpha S)^-1 A^T B for SPD S,
+    across a range of alpha -- to ACA+ tolerance."""
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    S = _spd(N, seed=11)
+    reg = RegularizedTSVD.from_stiffness(res, S)
+    AtA, AtB = A.T @ A, A.T @ B
+    for alpha in (1.0e-3, 1.0e-1, 1.0, 1.0e1):
+        phi_fold = reg.solve(B, alpha=alpha)
+        phi_dense = np.linalg.solve(AtA + alpha * S, AtB)
+        rel = np.linalg.norm(phi_fold - phi_dense) / np.linalg.norm(phi_dense)
+        assert rel < 1.0e-6, f"alpha={alpha}: rel={rel:.2e}"
+
+
+def test_tikhonov_identity_reduces_to_filter_factors():
+    """For S = I the core collapses to the classic Tikhonov filter
+    factors:  phi = V . diag(sigma/(sigma^2+alpha)) . U^T B  (exact, since
+    W = V^T V = I and S^-1 V = V -- no S-solve, machine precision)."""
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    reg = RegularizedTSVD.from_stiffness(res, np.eye(N))
+    U, Sig, V = res.U, res.S, res.V
+    UtB = U.T @ B
+    for alpha in (1.0e-3, 1.0e-1, 1.0, 1.0e1):
+        phi_fold = reg.solve(B, alpha=alpha)
+        phi_filter = V @ ((Sig / (Sig ** 2 + alpha)) * UtB)
+        rel = np.linalg.norm(phi_fold - phi_filter) / np.linalg.norm(phi_filter)
+        assert rel < 1.0e-10, f"alpha={alpha}: rel={rel:.2e}"
+
+
+def test_tikhonov_alpha_zero_recovers_exact_fit():
+    """alpha=0 returns the exact-fit min-seminorm solution (== solve(B));
+    and alpha << sigma_min^2 converges to it."""
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    S = _spd(N, seed=12)
+    reg = RegularizedTSVD.from_stiffness(res, S)
+    phi0 = reg.solve(B)
+    assert np.linalg.norm(reg.solve(B, alpha=0.0) - phi0) < 1.0e-12
+    alpha_tiny = (float(res.S.min()) ** 2) * 1.0e-6
+    rel = np.linalg.norm(reg.solve(B, alpha=alpha_tiny) - phi0) \
+        / np.linalg.norm(phi0)
+    assert rel < 1.0e-4, f"alpha_tiny rel={rel:.2e}"
+
+
+def test_tikhonov_lcurve_monotone():
+    """Increasing alpha trades data misfit UP for seminorm DOWN -- the
+    L-curve / Pareto monotonicity that makes the alpha-sweep a front."""
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    S = _spd(N, seed=13)
+    reg = RegularizedTSVD.from_stiffness(res, S)
+    alphas = [1.0e-3, 1.0e-2, 1.0e-1, 1.0, 1.0e1]
+    misfit = [float(np.linalg.norm(A @ reg.solve(B, alpha=a) - B))
+              for a in alphas]
+    seminorm = [float(reg.solve(B, alpha=a) @ S @ reg.solve(B, alpha=a))
+                for a in alphas]
+    for i in range(len(alphas) - 1):
+        assert misfit[i] <= misfit[i + 1] + 1.0e-9
+        assert seminorm[i] >= seminorm[i + 1] - 1.0e-9
+
+
+# --------------------------------------------------------------------------
 # Generic path through Radia's OWN field computation (magnetic materials)
 # --------------------------------------------------------------------------
 def test_radia_field_kernel_magnets():
