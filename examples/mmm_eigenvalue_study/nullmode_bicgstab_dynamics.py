@@ -88,27 +88,37 @@ def main():
     print(f"plain  : {len(plain['nf'])} iters, final null-frac={plain['nf'][-1]:.3f}")
     print(f"shifted: {len(shifted['nf'])} iters, final null-frac={shifted['nf'][-1]:.3e}")
 
-    fig, ax = plt.subplots(1, 2, figsize=(11, 4.2))
+    # Lab publication-figure style: Times New Roman via radia_mcp.figure
+    # (renamed from graph 2026-06-02).  Sets TNR rcParams + mathtext=stix.
+    from radia_mcp.figure import apply_lab_style
+    apply_lab_style(use_times_roman=True)
+
+    fig, ax = plt.subplots(1, 2, figsize=(11, 4.0))
     kp = np.arange(1, len(plain["nf"])+1)
     ks = np.arange(1, len(shifted["nf"])+1)
-    ax[0].plot(kp, plain["nf"], "o-", ms=3, label="plain BiCGSTAB")
-    ax[0].plot(ks, shifted["nf"], "s-", ms=3, label="eigenvalue-shifted")
-    ax[0].set_xlabel("BiCGSTAB iteration"); ax[0].set_ylabel("null (loop) fraction  ||V^T x|| / ||x||")
-    ax[0].set_title("(a) loop content vs iteration"); ax[0].grid(alpha=0.3); ax[0].legend(fontsize=8)
+    # plain = blue, deflated/shifted = orange (matches the CEFC slide caption);
+    # panel (b) residual = blue, loop fraction = vermillion.
+    C_PLAIN, C_SHIFT, C_RES, C_NULL = "#0072B2", "#E69F00", "#0072B2", "#D55E00"
+    ax[0].plot(kp, plain["nf"], "o-", ms=3, color=C_PLAIN, label="plain BiCGSTAB")
+    ax[0].plot(ks, shifted["nf"], "s-", ms=3, color=C_SHIFT, label="deflated / shifted")
+    ax[0].set_xlabel("BiCGSTAB iteration")
+    ax[0].set_ylabel(r"loop fraction  $\|V^{\top} x\| / \|x\|$")
+    ax[0].set_title("(a) loop content vs iteration"); ax[0].grid(alpha=0.3); ax[0].legend()
 
     ax2 = ax[1]; ax3 = ax2.twinx()
-    l1, = ax2.semilogy(kp, plain["res"], "b-", label="rel. residual (plain)")
-    l2, = ax3.plot(kp, plain["nf"], "r-", label="null fraction (plain)")
-    ax2.set_xlabel("BiCGSTAB iteration"); ax2.set_ylabel("rel. residual", color="b")
-    ax3.set_ylabel("null (loop) fraction", color="r")
+    l1, = ax2.semilogy(kp, plain["res"], "-", color=C_RES, label="rel. residual (plain)")
+    l2, = ax3.plot(kp, plain["nf"], "-", color=C_NULL, label="loop fraction (plain)")
+    ax2.set_xlabel("BiCGSTAB iteration"); ax2.set_ylabel("rel. residual", color=C_RES)
+    ax3.set_ylabel("loop fraction", color=C_NULL)
     ax2.set_title("(b) residual is blind to the loop error")
-    ax2.legend(handles=[l1, l2], fontsize=8, loc="center right")
-    fig.suptitle(f"Null-mode dynamics in BiCGSTAB: {nx}x{ny}x{nz}, mu_r={mu_r:.0e}")
+    ax2.legend(handles=[l1, l2], loc="center right")
+    fig.suptitle(rf"Null-mode dynamics in BiCGSTAB:  ${nx}{{\times}}{ny}{{\times}}{nz}$,"
+                 rf"  $\mu_r = 10^{{{int(round(np.log10(mu_r)))}}}$")
     fig.tight_layout()
     import os
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        f"bicgstab_dynamics_{nx}x{ny}x{nz}_mu{int(mu_r)}.png")
-    fig.savefig(out, dpi=140); print("saved:", out)
+    fig.savefig(out, dpi=200); print("saved:", out)
     rad.UtiDelAll()
 
 
