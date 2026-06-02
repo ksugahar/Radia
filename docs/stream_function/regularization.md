@@ -205,6 +205,96 @@ to machine precision (relative diff `≈ 1e-15`) in
 `demo_regularized_aca.py` and the unit-test sanity script in the
 implementation history.
 
+### Tikhonov (soft data fit) is the SAME core with `+ α I`
+
+The closed form above hits `A ψ = B` **exactly** — it is the `α = 0`,
+equality-constrained limit.  Generalised **Tikhonov** instead trades
+data misfit against the seminorm,
+
+    min_ψ   ‖A ψ − B‖²  +  α · ψᵀ S ψ          (α > 0)
+
+with normal equation `(AᵀA + α S) ψ = Aᵀ B`.  In the demo
+([`demo_sf_to_peec_gx.py`](../../examples/stream_function/demo_sf_to_peec_gx.py))
+`--regularize tikhonov` currently solves this as a **separate dense**
+`(AᵀA + α I)⁻¹ AᵀB`, disjoint from the `tsvd` ACA+ path.  **It does not
+need to be a separate path.**  Substitute the same ACA+TSVD
+`A = U Σ Vᵀ` (so `AᵀA = V Σ² Vᵀ`) and look for the solution in the
+`S⁻¹V` subspace, `ψ = S⁻¹V y`.  Because `Aᵀ B = V Σ UᵀB ∈ range(V)` and
+`V` has orthonormal columns, the `N × N` system collapses to a `k × k`
+one (left-multiply by `Vᵀ`, use `VᵀV = I`):
+
+    (α I + Σ² W) y = Σ Uᵀ B,        W = Vᵀ S⁻¹ V      (k × k)
+
+> **`ψ(α) = (S⁻¹V) · (α I + Σ² W)⁻¹ · Σ · Uᵀ B`**
+
+— this is the `α = 0` exact-fit formula with a single `α I` added inside
+the small core.  Everything expensive (`U, Σ, V` from ACA+, and the fold
+`S⁻¹V`, `W`) is **computed once**; sweeping `α` for an L-curve re-solves
+only the `k × k` core (sub-millisecond), reusing the one ACA+
+factorisation that `tsvd` already built.  `α I + Σ² W` is invertible for
+every `α > 0` (it is similar to `α I + Σ W Σ`, SPD), so no extra care is
+needed.
+
+#### One filter, four special cases
+
+The core `(α I + Σ² W)⁻¹ Σ` is just a **spectral filter** on the shared
+ACA basis:
+
+| Case                | Reduces to                                       | Filter on mode `i`              |
+|---------------------|--------------------------------------------------|---------------------------------|
+| `α = 0`             | `S⁻¹V · W⁻¹ · Σ⁻¹ · UᵀB` (exact-fit seminorm)     | `1/σᵢ` (invert every mode)      |
+| `S = I`, `α > 0`    | `V · diag(σ/(σ²+α)) · UᵀB` (standard Tikhonov)    | `σᵢ/(σᵢ²+α)` (smooth roll-off)  |
+| `S = I`, `α = 0`    | `V · Σ⁻¹ · UᵀB` (plain TSVD pseudo-inverse)       | `1/σᵢ`                          |
+| `+ k_mode = r`      | hard-truncate to the top `r` modes               | step `1` (kept) / `0` (dropped) |
+
+So the three "different" regularisers are one object: **TSVD** is the
+**hard** spectral cut (drop `σ < tol`), **Tikhonov** is the **smooth**
+version of the same idea (`σ/(σ²+α)` rolls each mode off gradually), and
+the **seminorm** `S` rotates the filter into the `S`-metric via `W`.  Two
+knobs (`α` smooth, `k_mode` hard) and one metric (`S`) — not three
+solvers.
+
+#### Why fold it (vs the separate dense Tikhonov solve)
+
+  - **One factorisation for the whole L-curve.**  The α-sweep that locates
+    the L-curve corner re-solves only the `k × k` core per α; the dense
+    path re-factorises an `N × N` matrix per α.
+  - **Stability is explicit and free.**  `A` here is badly conditioned —
+    on the planar gradient case σ runs `[1.5e-10, 2.3e-6]`.  Exact-fit
+    (`α = 0`) inverts the `1.5e-10` mode (≈ 7e9 amplification of any
+    target noise); Tikhonov with `α ≫ σ_min²` **damps** it.  The fold
+    makes that a one-line knob: raise `α`, the tiny-σ modes roll off, no
+    re-factorise.
+  - **Composes with everything.**  Hard-truncate to `k_mode` modes AND
+    soft-damp the survivors with `α` AND measure the norm in the H¹ (or
+    `1/σ`, or inductance) metric — all on the one cached
+    `(U, Σ, V, S⁻¹V, W)`.
+
+Verified numerically: machine precision against the explicit filter
+`σ/(σ²+α)` for `S = I` (`≈ 1e-16`), the ACA tolerance against the dense
+`(AᵀA + α S)⁻¹ AᵀB` for general `S` (`≈ 2e-5`, = the ACA+ compression
+residual of `A`, **constant in α**), and the `α → 0` limit recovers
+`RegularizedTSVD.solve` once `α ≪ σ_min²` (`≈ 1e-12` at `α = 1e-30`).
+
+#### Code
+
+`RegularizedTSVD.solve(B)` implements the `α = 0` core
+(`Sinv_V @ (W_inv @ (UᵀB / Σ))`).  The Tikhonov core is the **same cached
+pieces** plus one `α`:
+
+```python
+# folded Tikhonov on the SAME cached ACA+TSVD factorisation (alpha > 0)
+U, Sigma, V = base.U, base.S, base.V          # from the ACA+TSVD of A
+W    = V.T @ reg.Sinv_V                        # k x k  (= inv(reg.W_inv))
+core = alpha * np.eye(k) + (Sigma**2)[:, None] * W
+y    = np.linalg.solve(core, Sigma * (U.T @ B))
+psi  = reg.Sinv_V @ y                          # == (A^T A + alpha S)^-1 A^T B
+```
+
+i.e. a ~6-line `solve(B, alpha=0.0)` extension of `RegularizedTSVD` —
+`alpha = 0` keeps the present exact-fit branch; `alpha > 0` swaps the
+`W⁻¹·Σ⁻¹` core for the `(αI + Σ²W)⁻¹·Σ` core.  No new factorisation.
+
 ### Why this matters
 
 The Path-A compensated iteration re-uses the same `A` and the same
@@ -317,5 +407,9 @@ argument for the folded form.
   - API: [`radia.stream_function.RegularizedTSVD`](../../src/radia/stream_function.py)
   - Demos: [`demo_regularized_aca.py`](../../examples/stream_function/demo_regularized_aca.py)
     (5-mode sweep), [`demo_reg_hyperparam_aca.py`](../../examples/stream_function/demo_reg_hyperparam_aca.py)
-    (σ-shape optimisation, ACA+ reused)
+    (σ-shape optimisation, ACA+ reused),
+    [`demo_pareto_tikhonov_aca.py`](../../examples/stream_function/demo_pareto_tikhonov_aca.py)
+    (**(homogeneity, peak-J) Pareto front** via the folded Tikhonov α-sweep —
+    the direct application of the `+ α I` core: one ACA factorisation, the
+    whole front swept at ≈ 50 µs/point)
   - MCP topic: `aca_tsvd(topic=regularized)`
