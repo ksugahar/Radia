@@ -16,7 +16,15 @@ next deck does not re-derive them:
 """
 from __future__ import annotations
 
-import numpy as np
+# numpy is an optional runtime dep (not installed in CI minimal env).
+# Import lazily inside each function so the module-level import succeeds
+# without numpy (radia_mcp servers must be importable without heavy deps).
+try:
+    import numpy as np
+    _HAS_NUMPY = True
+except ImportError:  # pragma: no cover
+    np = None  # type: ignore[assignment]
+    _HAS_NUMPY = False
 
 from ._paper_figure import _get_mpl, OKABE_ITO
 from ._lab_api import lab_figure, legend_no_overlap
