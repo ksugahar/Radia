@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-03T19:34:21",
+  "timestamp": "2026-06-03T20:18:46",
   "benchmark": "regcoil_fusion_advanced",
   "force_stress": {
     "check": "|f| = |K x B_avg| vs magnetic pressure B^2/(2 mu0)",
@@ -8,7 +8,7 @@
     "ratio_max": 1.0308535295709214,
     "peak_stress_Pa_per_unit_K2": 1.8245986489717834e-05,
     "peak_at_R": 0.18,
-    "inboard_over_outboard": 4.9752849738722436
+    "inboard_over_outboard": 4.975284973872243
   },
   "focus_standoff": {
     "sweep": [
@@ -16,50 +16,50 @@
         "gap": 0.025,
         "a_wind": 0.08499999999999999,
         "ndof": 1088,
-        "bn_residual_rel": 1.7145343807999547e-08,
-        "peak_grad_psi": 2008652.693895408
+        "bn_residual_rel": 1.714534384023869e-08,
+        "peak_grad_psi": 2008652.6816064802
       },
       {
         "gap": 0.04,
         "a_wind": 0.1,
         "ndof": 942,
-        "bn_residual_rel": 1.293692681428235e-08,
-        "peak_grad_psi": 2639367.0780875925
+        "bn_residual_rel": 1.293692668969122e-08,
+        "peak_grad_psi": 2639367.0651658108
       },
       {
         "gap": 0.06,
         "a_wind": 0.12,
         "ndof": 784,
-        "bn_residual_rel": 1.3233159601026627e-08,
-        "peak_grad_psi": 3329998.5548969195
+        "bn_residual_rel": 1.3233159007700594e-08,
+        "peak_grad_psi": 3329998.4740255587
       },
       {
         "gap": 0.09,
         "a_wind": 0.15,
         "ndof": 599,
-        "bn_residual_rel": 3.0553091097840824e-08,
-        "peak_grad_psi": 5463592.838634886
+        "bn_residual_rel": 3.055308941580755e-08,
+        "peak_grad_psi": 5463592.808551683
       },
       {
         "gap": 0.13,
         "a_wind": 0.19,
         "ndof": 483,
-        "bn_residual_rel": 4.446102585168237e-07,
-        "peak_grad_psi": 15535741.589360207
+        "bn_residual_rel": 4.446102489689746e-07,
+        "peak_grad_psi": 15535741.598602422
       },
       {
         "gap": 0.18,
         "a_wind": 0.24,
         "ndof": 482,
-        "bn_residual_rel": 1.0856014529283722e-05,
-        "peak_grad_psi": 104115044.47882546
+        "bn_residual_rel": 1.0856014733369477e-05,
+        "peak_grad_psi": 104115044.29189695
       }
     ],
     "d_min": 0.03,
     "optimum_gap": 0.04,
-    "optimum_peak_grad_psi": 2639367.0780875925,
+    "optimum_peak_grad_psi": 2639367.0651658108,
     "complexity_monotonic_in_gap": true,
-    "complexity_ratio_far_over_near": 51.833273514752676
+    "complexity_ratio_far_over_near": 51.83327373880677
   },
   "real_equilibrium": {
     "source": "wout_li383_low_res_reference.nc",
@@ -70,7 +70,48 @@
     "winding_R0": 1.3782,
     "winding_a": 0.8820039573590897,
     "winding_ndof": 399,
-    "bn_residual_rel": 4.380455798482358e-08,
-    "peak_grad_psi": 2452784.9638803583
+    "bn_residual_rel": 4.3804546486175016e-08,
+    "peak_grad_psi": 2452785.001168675
+  },
+  "focus_shape": {
+    "plasma_elongation": 2.0,
+    "standoff": 0.03,
+    "sweep": [
+      {
+        "blend": 0.0,
+        "bn_residual_rel": 2.0955884341233043e-09,
+        "peak_grad_psi": 2009544.79326
+      },
+      {
+        "blend": 0.2,
+        "bn_residual_rel": 1.6150474060262315e-09,
+        "peak_grad_psi": 1860510.9462927666
+      },
+      {
+        "blend": 0.4,
+        "bn_residual_rel": 1.28412980258107e-09,
+        "peak_grad_psi": 1718221.281671585
+      },
+      {
+        "blend": 0.6000000000000001,
+        "bn_residual_rel": 1.1049475554693832e-09,
+        "peak_grad_psi": 1571262.535077154
+      },
+      {
+        "blend": 0.8,
+        "bn_residual_rel": 1.130297300869206e-09,
+        "peak_grad_psi": 1399132.6397824625
+      },
+      {
+        "blend": 1.0,
+        "bn_residual_rel": 1.5616107020438115e-09,
+        "peak_grad_psi": 1332106.7591293757
+      }
+    ],
+    "circular_peak_grad_psi": 2009544.79326,
+    "conformal_peak_grad_psi": 1332106.7591293757,
+    "optimum_blend": 1.0,
+    "optimum_peak_grad_psi": 1332106.7591293757,
+    "complexity_reduction_vs_circular": 0.33711019351384797
   }
 }
