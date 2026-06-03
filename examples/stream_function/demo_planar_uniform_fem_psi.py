@@ -759,7 +759,7 @@ def main():
             lv = lo + (np.arange(args.nlevels) + 0.5) * (hi - lo) / args.nlevels
             ax1.contour(g_sample * 1e3, g_sample * 1e3, psi_grid.T,
                         levels=lv, colors="k", linewidths=0.5)
-        ax1.set_xlabel("x [mm]"); ax1.set_ylabel("y [mm]")
+        ax1.set_xlabel("$x$ (mm)"); ax1.set_ylabel("$y$ (mm)")
         ax1.set_aspect("equal")
         ax1.text(0.02, 0.96, "(a)", transform=ax1.transAxes, fontsize=10)
         fig.colorbar(cf, ax=ax1, fraction=0.045)
@@ -786,12 +786,12 @@ def main():
                      label="terminal (out)")
             lim = args.plane_half * 1.05e3
             ax2.set_xlim(-lim, lim); ax2.set_ylim(-lim, lim)
-            fig.colorbar(lc, ax=ax2, fraction=0.045, label="bend z [mm]")
+            fig.colorbar(lc, ax=ax2, fraction=0.045, label="bend $z$ (mm)")
             zmax = float(np.max(np.abs(P[:, 2]))) * 1e3
             ax2.legend(loc="upper right", fontsize=7)
         else:
             ax2.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, "b-", lw=0.5)
-        ax2.set_xlabel("x [mm]"); ax2.set_ylabel("y [mm]")
+        ax2.set_xlabel("$x$ (mm)"); ax2.set_ylabel("$y$ (mm)")
         ax2.set_aspect("equal")
         ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
         ax2.grid(alpha=0.3)
@@ -802,7 +802,7 @@ def main():
                     label=f"target {args.B0*1e3:.2f} mT")
         ax3.axvline(args.target_z * 1e3, color="g", ls=":",
                     alpha=0.5, label=f"target z={args.target_z*1e3:.0f}mm")
-        ax3.set_xlabel("z [mm]"); ax3.set_ylabel("Bz [mT]")
+        ax3.set_xlabel("$z$ (mm)"); ax3.set_ylabel("$B_z$ (mT)")
         ax3.text(0.02, 0.96, "(c)", transform=ax3.transAxes, fontsize=10)
         ax3.legend(loc="best", fontsize=8); ax3.grid(alpha=0.3)
 

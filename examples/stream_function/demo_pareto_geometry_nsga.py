@@ -149,8 +149,8 @@ def main():
                 [p["peak"] / 1e6 for p in env], "k--", lw=2.0,
                 label="envelope (geometry-pushed)")
         ax.set_xscale("log"); ax.grid(alpha=0.3); ax.legend(fontsize=7)
-        ax.set_xlabel("inhomogeneity ||A psi-B||/||B|| [%]")
-        ax.set_ylabel("peak max|grad psi| [x1e6]")
+        ax.set_xlabel("inhomogeneity ||A psi-B||/||B|| (%)")
+        ax.set_ylabel(r"peak $|\nabla\psi|$ ($\times10^6$ A/m)")
         if do_geo and do_nsga:
             ax.text(0.02, 0.96, "(a)", transform=ax.transAxes, fontsize=10)
 
@@ -170,10 +170,10 @@ def main():
                         lw=0.3)
         ax.plot([r[0] * 100 for r in env2], [r[1] / 1e6 for r in env2],
                 "k--", lw=2.0, label="lower envelope")
-        cb = fig.colorbar(sc, ax=ax); cb.set_label("former [cm] (cost)")
+        cb = fig.colorbar(sc, ax=ax); cb.set_label("former size (cm)")
         ax.set_xscale("log"); ax.grid(alpha=0.3); ax.legend(fontsize=8)
-        ax.set_xlabel("inhomogeneity ||A psi-B||/||B|| [%]")
-        ax.set_ylabel("peak max|grad psi| [x1e6]")
+        ax.set_xlabel("inhomogeneity ||A psi-B||/||B|| (%)")
+        ax.set_ylabel(r"peak $|\nabla\psi|$ ($\times10^6$ A/m)")
         if do_geo and do_nsga:
             ax.text(0.02, 0.96, "(b)", transform=ax.transAxes, fontsize=10)
 

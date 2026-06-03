@@ -1477,19 +1477,19 @@ def main():
             lc3.set_array(0.5 * (rr[:-1] + rr[1:]))
             ax.add_collection3d(lc3)
             fig.colorbar(lc3, ax=ax, fraction=0.03, pad=0.12,
-                         label="radial bend [mm]")
+                         label="radial bend (mm)")
             lim = (a + 0.05) * 1e3
             ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
             ax.set_zlim(-L / 2 * 1e3, L / 2 * 1e3)
         else:
             ax.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, path[:, 2] * 1e3, lw=0.5)
-        ax.set_xlabel("x [mm]"); ax.set_ylabel("y [mm]"); ax.set_zlabel("z [mm]")
+        ax.set_xlabel("$x$ (mm)"); ax.set_ylabel("$y$ (mm)"); ax.set_zlabel("$z$ (mm)")
         ax.text2D(0.02, 0.96, "(a)", transform=ax.transAxes, fontsize=10)
 
         ax2 = fig.add_subplot(1, 3, 2)
         ax2.plot(xv * 1e3, Bz_xaxis, "o-", ms=3, label="single-stroke coil Bz")
         ax2.plot(xv * 1e3, G_fit * xv, "k--", label="linear fit")
-        ax2.set_xlabel("x [mm]"); ax2.set_ylabel("Bz [T]")
+        ax2.set_xlabel("$x$ (mm)"); ax2.set_ylabel("$B_z$ (T)")
         ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
         ax2.legend(); ax2.grid(alpha=0.3)
 
@@ -1498,7 +1498,7 @@ def main():
                     label="coil Bz over DSV")
         xs = np.linspace(obs_dsv[:, 0].min(), obs_dsv[:, 0].max(), 50)
         ax3.plot(xs * 1e3, Gx * xs, "k--", label="target Gx*x")
-        ax3.set_xlabel("x [mm]"); ax3.set_ylabel("Bz [T]")
+        ax3.set_xlabel("$x$ (mm)"); ax3.set_ylabel("$B_z$ (T)")
         ax3.text(0.02, 0.96, "(c)", transform=ax3.transAxes, fontsize=10)
         ax3.legend(); ax3.grid(alpha=0.3)
 

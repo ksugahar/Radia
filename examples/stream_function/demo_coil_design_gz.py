@@ -190,12 +190,12 @@ def main():
                      label="stream fn psi(z) (norm.)")
             for zc0, cur in wires:
                 ax1.axvline(zc0 * 1e3, color="r" if cur > 0 else "b", alpha=0.3, lw=1)
-            ax1.set_xlabel("z [mm]")
+            ax1.set_xlabel("$z$ (mm)")
             ax1.text(0.02, 0.96, "(a)", transform=ax1.transAxes, fontsize=10)
             ax1.legend(); ax1.grid(alpha=0.3)
             ax2.plot(zc * 1e3, Bz, "o-", ms=3, label="discrete coil Bz")
             ax2.plot(zc * 1e3, G_fit * zc, "k--", label="linear fit")
-            ax2.set_xlabel("z [mm]"); ax2.set_ylabel("Bz [T]")
+            ax2.set_xlabel("$z$ (mm)"); ax2.set_ylabel("$B_z$ (T)")
             ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
             ax2.legend(); ax2.grid(alpha=0.3)
             out = HERE / "demo_coil_design_gz.png"
