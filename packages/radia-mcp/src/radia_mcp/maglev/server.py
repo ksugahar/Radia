@@ -1,19 +1,21 @@
 """MCP Server: radia_mcp.maglev  (magnetic levitation)
 
-Magnetic levitation knowledge -- transport / suspension / control.  The
-headline content is the lab's own Radia-based maglev research line
+Magnetic levitation knowledge -- UNIFIED.  Covers both the maglev
+SYSTEMS (EMS/EDS trains, SCMaglev, Halbach/Inductrack, magnetic wheels,
+PM/SC bearings) AND the levitation FORCE physics (induction/eddy-current
+lift, EML melting, active magnetic bearings, superconducting
+Meissner/pinning, diamagnetic, Earnshaw + loopholes, force computation).
+
+Headline content is the lab's own Radia-based maglev research line
 (CAE-AI Lab, Yano + Sugahara): Radia IEM <-> reduced-potential FEM weak
 coupling for moving-magnet eddy-current force (topic radia_iem_fem) and
 Cauer Ladder Network model-order reduction for real-time control-coupled
 maglev (topic cln_mor_control).  The former linear-drive material
-(LIM/LSM, end effects) was removed.
-
-For the levitation-FORCE physics (induction lift, EML melting, magnetic
-bearings, superconducting, diamagnetic, Earnshaw, force computation) see
-the sibling server `radia_mcp.levitation`.
+(LIM/LSM, end effects) was removed; the former separate
+radia_mcp.levitation server was consolidated into this one.
 
 Cross-references:
-- `radia_mcp.levitation` — levitation-force physics + bearings + EML
+- `radia_mcp.ih` — induction heating (EML = levitation + IH together)
 - `radia_mcp.mor` (mor_cln) — Cauer Ladder Network MOR theory
 - `radia_mcp.fem` (potential_formulations) — A-phi / T-Omega / A-T gauges
 - `radia_mcp.team_benchmark.force_motion.problem_28` — TEAM 28 levitation benchmark
@@ -34,11 +36,12 @@ mcp = FastMCP("mcp-server-maglev")
 @mcp.tool()
 def maglev(topic: str = "overview") -> str:
     """
-    Magnetic levitation knowledge (transport / suspension / control).
+    Magnetic levitation knowledge -- maglev systems + levitation force physics.
 
     Args:
         topic: One of:
-            "overview"            - Maglev landscape + the lab's research (DEFAULT)
+          maglev systems + the lab's Radia/CLN research --
+            "overview"            - Unified maglev landscape (DEFAULT)
             "radia_iem_fem"       - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
             "cln_mor_control"     - Cauer Ladder Network MOR for control-coupled maglev (Yano)
             "pm_maglev_zero_power"- Passive PM levitation, Maxwell-Earnshaw
@@ -47,6 +50,15 @@ def maglev(topic: str = "overview") -> str:
             "kansai_research"     - Saiki/Fujii magnetic-wheel lineage
             "scmaglev_eds"        - SCMaglev (Chuo Shinkansen) -- SC-EDS levitation
             "halbach_arrays"      - Halbach + Inductrack
+          levitation FORCE physics --
+            "induction_levitation"- Eddy-current (AC) lift; jumping/Thomson ring
+            "eml_melting"         - Electromagnetic levitation melting (ties to IH)
+            "magnetic_bearings"   - Active magnetic bearings (AMB), flywheels
+            "superconducting"     - Meissner vs flux pinning, HTS bulk
+            "diamagnetic"         - grad(B^2) levitation (graphite / water-frog)
+            "earnshaw_stability"  - Earnshaw's theorem + its 5 loopholes
+            "force_computation"   - Maxwell stress / virtual work / time-avg J x B
+            "benchmarks"          - TEAM 28, jumping-ring analytic, EML lift coeff
             "all"                 - Everything
     """
     return get_knowledge(topic)
@@ -57,9 +69,9 @@ def maglev(topic: str = "overview") -> str:
 register_status_tool(
     mcp,
     server_name='mcp-server-maglev',
-    description='Magnetic levitation (EMS/EDS/PM/SC/Halbach). Lab research line: Radia IEM<->FEM weak coupling for moving-magnet eddy-current force + Cauer Ladder Network MOR for control-coupled maglev (Yano, CAE-AI). Sibling: levitation (force physics).',
+    description='Magnetic levitation, UNIFIED: maglev systems (EMS/EDS/PM/SC/Halbach) + levitation FORCE physics (induction/EML/AMB/superconducting/diamagnetic/Earnshaw/force-computation). Lab research line: Radia IEM<->FEM weak coupling + Cauer Ladder Network MOR for control-coupled maglev (Yano, CAE-AI).',
     subpackage='radia_mcp.maglev',
-    related_servers=["levitation", "mor", "motor"],
+    related_servers=["mor", "motor", "ih"],
 )
 
 
