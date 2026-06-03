@@ -34,6 +34,7 @@ short *entry point*; this folder is the detailed reference.
 | Look up the Python API | [api.md](api.md) |
 | Reproduce a published benchmark | [benchmarks.md](benchmarks.md) |
 | Hook ngsolve.bem H-matrix (2604+) | [ngsbem_integration.md](ngsbem_integration.md) |
+| **Design a stellarator coil** (REGCOIL / NESCOIL / FOCUS: winding-surface current potential, net current, coil force/stress, VMEC boundary, winding-shape) | [**fusion.md**](fusion.md) |
 | Cite / publish this work | [paper_outline.md](paper_outline.md) |
 
 > **Three different "deformations" — do not confuse them.**
