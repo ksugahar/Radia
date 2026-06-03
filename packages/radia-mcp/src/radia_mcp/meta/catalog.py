@@ -417,6 +417,20 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": ["fem", "bem", "motor"],
         "tags": ["application"],
     },
+    "comsol-converter": {
+        "subpackage": "radia_mcp.comsol_converter",
+        "entry_point": "mcp-server-comsol-converter",
+        "description": "COMSOL <-> IR <-> NGSolve model translation "
+                       "(magnetostatic A-formulation v1): IR hub + mapping "
+                       "knowledge + NGSolve/COMSOL codegen + team-benchmark "
+                       "cross-check. Reuses interop/fem/bem; coordinates the "
+                       "external COMSOL MCP + radia-ngsolve",
+        "primary_tools": ["cc_ir_schema", "cc_mapping", "cc_ir_to_ngsolve",
+                          "cc_ir_to_comsol", "cc_verify"],
+        "related": ["radia-interop", "radia-ngsolve", "team-benchmark",
+                    "fem", "bem"],
+        "tags": ["interop", "fem"],
+    },
     "differential-forms": {
         "subpackage": "radia_mcp.differential_forms",
         "entry_point": "mcp-server-differential-forms",
