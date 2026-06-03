@@ -43,6 +43,10 @@ WHAT THIS FRAMEWORK PROVIDES
   * FE-direct psi as a continuous H1 GridFunction on ANY surface
     (plane / cylinder / sphere / conformal / 3D-printed former) -- the case
     the structured basis-loop grid cannot represent.  [topic: single_stroke]
+    MULTI-SURFACE works with no special-casing: a BIPLANAR coil (two plates in
+    ONE mesh) designs through the same path; abe groups EACH disconnected
+    component's edges into its own free constant (ndof_free < ndof) and the
+    contours close on every plate.  Locked by test_streamfunction_biplanar.
   * Regularisation menu: L2 / H1 (min surface-current energy) / sigma-weighted
     (ohmic) / inductance-diagonal / L-inf (peak cap).  All fold onto ONE ACA
     factorisation via RegularizedTSVD.  [topic: regularized]

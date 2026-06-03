@@ -24,7 +24,16 @@ single-stroke chaining theory is in [`single_stroke.md`](single_stroke.md).
 
 - `--coil-vol` — a **standalone 2D surface** `.vol`.  `psi` is an `H1`
   GridFunction on it (Setup B: `definedon=coil.Boundaries('.*')`,
-  `grad(v).Trace()`, `* ds`).
+  `grad(v).Trace()`, `* ds`).  **Any surface, including multi-surface.**
+  Because the FE-direct `psi` lives on `coil.Boundaries('.*')`, the same path
+  designs a cylinder, a sphere, a plane, or a **multi-component** former with
+  no special-casing — e.g. a **biplanar** coil (two parallel plates in ONE
+  mesh).  The `abe` BC groups *each* disconnected component's boundary edges
+  into its own free constant (so `ndof_free < ndof`), and the contours close
+  on every component.  Locked by
+  `tests/panels/test_streamfunction_golden.py::test_streamfunction_biplanar`
+  (two 0.3 m plates at z = ±0.1 m, Gx target: design 1.8e-3, contours close on
+  both plates).
 - `--eval-vol` — the evaluation region (surface **or** volume).
 - `--target-cf` — the target field as a CoefficientFunction expression of
   `x,y,z`.  Scalar `-> Bz` (e.g. `"x"` = Gx, `"1"` = uniform), 3-vector
