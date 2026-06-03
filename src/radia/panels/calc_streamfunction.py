@@ -1166,6 +1166,75 @@ def _peec_inductance(chain, diam, sigma, freq):
             "n_nodes": int(len(chain))}
 
 
+def _coil_L_at_nlevels(P, psi_v, verts, tris, tol, args, nlevels):
+    """Coil inductance at a given turn count: vertex-linear contours -> nearest-
+    neighbour single stroke -> PEEC L_coil.  The inductance-target search uses
+    nn for speed (L_coil is dominated by the turns, not the connector cuts); the
+    final manufacture re-chains with args.chain and reports the accurate L."""
+    levels = _contour_levels(psi_v, nlevels)
+    loops = []
+    for lev in levels:
+        loops.extend(_segs_to_polylines(
+            _contour_segments(verts, psi_v, tris, lev), tol))
+    if not loops:
+        return None
+    fields, signs = _loop_field_signs(loops, P["mpts"], P["Bm"], P["vector_b"])
+    loops_signed = [p if s >= 0.0 else p[::-1] for p, s in zip(loops, signs)]
+    chain, _nc, _cl = _single_stroke_chain(loops_signed)
+    chain = _dedupe(chain)
+    if len(chain) < 2:
+        return None
+    pe = _peec_inductance(chain, args.wire_diam, 5.8e7, args.peec_freq)
+    return float(pe["L_H"]), int(len(loops))
+
+
+def _search_nlevels_for_L(P, psi_v, verts, tris, tol, args, L_target,
+                          nl_min=4, nl_max=60):
+    """Find the turn count (nlevels) whose single-stroke coil inductance is
+    closest to ``L_target`` -- the IH resonance condition L_target = 1/(omega^2
+    C).  L_coil is monotone increasing in nlevels (~N^1.5..2) so bisect on the
+    integer turn count (memoised PEEC evals).  Returns the search result with
+    the achievable [L_min, L_max] range and an ``in_range`` flag: an
+    out-of-range target is REPORTED (No-Fallback), so the user fixes the
+    geometry / tank capacitor rather than getting a silently-clamped coil."""
+    trace, memo = [], {}
+
+    def L_of(n):
+        n = int(n)
+        if n in memo:
+            return memo[n]
+        r = _coil_L_at_nlevels(P, psi_v, verts, tris, tol, args, n)
+        L = r[0] if r else float("nan")
+        memo[n] = L
+        trace.append({"nlevels": n, "L_H": L})
+        return L
+
+    L_lo, L_hi = L_of(nl_min), L_of(nl_max)
+    in_range = (min(L_lo, L_hi) <= L_target <= max(L_lo, L_hi))
+    lo, hi = nl_min, nl_max
+    best_n, best_L = nl_min, L_lo
+    best_err = abs(L_lo - L_target)
+    while hi - lo > 1:                              # bisection (L monotone up)
+        mid = (lo + hi) // 2
+        Lm = L_of(mid)
+        if abs(Lm - L_target) < best_err:
+            best_n, best_L, best_err = mid, Lm, abs(Lm - L_target)
+        if Lm < L_target:
+            lo = mid
+        else:
+            hi = mid
+    for n in (lo, hi):
+        Ln = L_of(n)
+        if abs(Ln - L_target) < best_err:
+            best_n, best_L, best_err = n, Ln, abs(Ln - L_target)
+    return {"nlevels": int(best_n), "L_coil_search_H": float(best_L),
+            "L_target_H": float(L_target),
+            "rel_error_search": float(best_err / (abs(L_target) + 1e-30)),
+            "L_range_H": [float(min(L_lo, L_hi)), float(max(L_lo, L_hi))],
+            "nlevels_range": [int(nl_min), int(nl_max)],
+            "in_range": bool(in_range), "n_peec_evals": len(memo)}
+
+
 def run_design(args):
     from ngsolve import GridFunction, TaskManager
     t0 = time.perf_counter()
@@ -1307,6 +1376,26 @@ def run_manufacture(args):
         tris = _surface_triangles(coil)
         clen = _char_len(verts, tris)
         tol = max(1e-12, 1e-6 * clen)
+
+        # IH-resonance design: pick the turn count (nlevels) whose single-stroke
+        # coil inductance resonates -- L_target = 1/(omega^2 C).  Unlike the
+        # gradient-coil min-inductance objective, IH wants a SPECIFIC L (so the
+        # work coil + tank cap resonate at the inverter frequency).  L_coil is
+        # set by the turns (~N^2), so we search nlevels; the design (field) is
+        # nlevels-independent, so this re-uses the one psi solve.
+        resonance = None
+        tgt_L = getattr(args, "target_inductance", None)
+        cap = getattr(args, "resonance_cap", None)
+        if tgt_L or cap:
+            if cap:                                  # L from the tank cap + freq
+                w = 2.0 * np.pi * args.peec_freq
+                tgt_L = 1.0 / (w * w * cap)
+            resonance = _search_nlevels_for_L(
+                P, psi_v, verts, tris, tol, args, tgt_L,
+                nl_max=int(getattr(args, "nlevels_max", 60)))
+            args.nlevels = resonance["nlevels"]      # design AT the resonant N
+            args.peec = True                         # need the accurate final L
+
         levels = _contour_levels(psi_v, args.nlevels)
         sub = max(1, int(getattr(args, "contour_sub", 1)))
         if sub > 1:                              # order-p curved contour
@@ -1424,6 +1513,26 @@ def run_manufacture(args):
             result["peec"] = _peec_inductance(
                 out_chain, args.wire_diam, 5.8e7, args.peec_freq)
 
+        if resonance is not None:
+            # accurate achieved L from the FINAL chain (search used a fast nn L)
+            L_ach = float(result.get("peec", {}).get("L_H", float("nan")))
+            resonance["achieved_inductance_H"] = L_ach
+            resonance["achieved_rel_error"] = float(
+                abs(L_ach - resonance["L_target_H"])
+                / (abs(resonance["L_target_H"]) + 1e-30))
+            if cap is not None and L_ach > 0:
+                resonance["resonance_cap_F"] = float(cap)
+                resonance["resonance_freq_Hz"] = float(
+                    1.0 / (2.0 * np.pi * (L_ach * cap) ** 0.5))
+                resonance["operating_freq_Hz"] = float(args.peec_freq)
+            if not resonance["in_range"]:
+                resonance["note"] = (
+                    "L_target is OUTSIDE the achievable range "
+                    f"{resonance['L_range_H']} H over nlevels "
+                    f"{resonance['nlevels_range']}; the closest coil was kept. "
+                    "Change the former geometry or the tank capacitor C.")
+            result["resonance"] = resonance
+
         if args.steps_plot:
             try:
                 result.update(_steps_plot(
@@ -1518,6 +1627,18 @@ def build_argparser():
     # ---- manufacture mode ----
     ap.add_argument("--nlevels", type=int, default=12,
                     help="number of iso-contours = wire turns (manufacture)")
+    ap.add_argument("--target-inductance", type=float, default=None,
+                    help="IH-RESONANCE design: search the turn count (nlevels) "
+                         "so the single-stroke coil inductance equals this "
+                         "value in Henries (the field design is unchanged; "
+                         "L_coil ~ N^2 sets the resonance).  Forces --peec.")
+    ap.add_argument("--resonance-cap", type=float, default=None,
+                    help="IH-RESONANCE design via the tank capacitor in Farads: "
+                         "target L = 1/((2 pi f)^2 C) with f = --peec-freq "
+                         "(the inverter frequency).  Alternative to "
+                         "--target-inductance.")
+    ap.add_argument("--nlevels-max", type=int, default=60,
+                    help="upper bound for the IH-resonance nlevels search")
     ap.add_argument("--contour-sub", type=int, default=1,
                     help="order-p contour: subdivide each surface triangle "
                          "sub x sub and evaluate the full-order psi (sub=1 = "

@@ -54,6 +54,14 @@ WHAT THIS FRAMEWORK PROVIDES
     torus -0.6 %, Nagaoka solenoid 0.78; dense, moderate N) + L-inf peak cap
     (pareto lever).  All fold onto ONE ACA factorisation via
     RegularizedTSVD.from_stiffness(base, S).  [topic: regularized]
+  * INDUCTANCE: MINIMISE (gradient coil, fast slew) OR TARGET A VALUE (IH
+    resonance).  --target-inductance L_H (or --resonance-cap C with --peec-freq
+    f -> L_target = 1/((2 pi f)^2 C)) SEARCHES nlevels (turns, L_coil ~ N^2; the
+    field design is nlevels-independent) by bisection of single-stroke -> PEEC
+    L_coil for the turn count that resonates; reports `resonance` {nlevels,
+    achieved L, resonance_freq_Hz, L_range_H, in_range}.  Same BEM L machinery,
+    opposite goal.  LAB: C=22nF f=200kHz -> 28.8uH -> nlevels 13 -> 30.3uH ->
+    coil resonates 195kHz; connects SF designer to radia-ih.  [topic: panel]
   * Folded TIKHONOV (the "+ alpha I" core) -> the (field homogeneity, PEAK
     current density) PARETO FRONT swept at ~50 us/point, with FOUR stackable
     levers: Tikhonov alpha (L-curve), L-inf minimax, geometry (former size /

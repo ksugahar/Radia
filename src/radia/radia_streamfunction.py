@@ -42,7 +42,8 @@ _PARETO_DESTS = ("pareto_lever", "alpha_min", "alpha_max", "n_alpha",
 _MANUFACTURE_DESTS = ("nlevels", "contour_sub", "chain", "distort",
                       "distort_grid", "distort_iter", "step_output", "peec",
                       "wire_diam", "peec_freq", "flux_plot", "flux_plane",
-                      "steps_plot")
+                      "steps_plot", "target_inductance", "resonance_cap",
+                      "nlevels_max")
 
 
 def _argparser():
