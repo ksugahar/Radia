@@ -132,14 +132,24 @@ class MultiPortResult(AnalysisResult):
         return self.Z_matrix[:, i, j]
 
     def get_Y(self) -> np.ndarray:
-        """Get Y-parameters (Y = inv(Z))."""
+        """Get Y-parameters (Y = inv(Z)).
+
+        A singular Z at some frequency has no defined admittance: that row is
+        set to NaN and a warning is issued.  No-Fallback: this does NOT silently
+        substitute a pseudo-inverse (pinv gives a different, un-auditable
+        min-norm result that the caller could not distinguish from a true Y).
+        """
         n_freq = len(self.frequencies)
         Y = np.zeros_like(self.Z_matrix)
         for i in range(n_freq):
             try:
                 Y[i] = np.linalg.inv(self.Z_matrix[i])
             except np.linalg.LinAlgError:
-                Y[i] = np.linalg.pinv(self.Z_matrix[i])
+                warnings.warn(
+                    f"Singular Z-matrix at f={self.frequencies[i]:.6g} Hz; "
+                    "Y-parameters at this frequency set to NaN (no defined "
+                    "admittance).")
+                Y[i] = np.nan
         return Y
 
     def get_S(self, Z0: float = 50.0) -> np.ndarray:
@@ -161,10 +171,12 @@ class MultiPortResult(AnalysisResult):
             try:
                 S[i] = (Z - Z0 * I) @ np.linalg.inv(Z + Z0 * I)
             except np.linalg.LinAlgError:
+                # No-Fallback: NaN (clearly invalid), NOT 0 -- a zero S-matrix
+                # reads as a perfectly-absorbing port and would be trusted.
                 warnings.warn(
-                    f"Singular Z-matrix at f={self.frequencies[i]:.6g} Hz, "
-                    "S-parameters set to zero"
-                )
+                    f"Singular (Z + Z0*I) at f={self.frequencies[i]:.6g} Hz; "
+                    "S-parameters at this frequency set to NaN.")
+                S[i] = np.nan
         return S
 
 
