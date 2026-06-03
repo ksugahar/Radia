@@ -160,6 +160,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "workpiece coupling",
         "primary_tools": ["induction_heating", "ih_sibc", "ih_esim"],
         "related": [
+            "levitation",
             "litz-transmission",
             "magnetic-materials",
             "ndt",
@@ -178,6 +179,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [
             "bem",
             "ih",
+            "levitation",
             "litz-transmission",
             "radia-ngsolve",
             "radia-streamfunction",
@@ -194,6 +196,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [
             "accelerator",
             "fusion",
+            "levitation",
             "magnetic-materials",
             "motor",
             "nmr-mri",
@@ -408,7 +411,20 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "Network MOR for control-coupled maglev (Yano, "
                        "CAE-AI). Sibling: levitation (force physics).",
         "primary_tools": ["maglev"],
-        "related": ["motor", "wpt"],
+        "related": ["levitation", "motor", "wpt"],
+        "tags": ["application"],
+    },
+    "levitation": {
+        "subpackage": "radia_mcp.levitation",
+        "entry_point": "mcp-server-levitation",
+        "description": "Magnetic levitation FORCE-physics: induction/eddy "
+                       "lift, EML melting (ties to IH), magnetic bearings "
+                       "(AMB), superconducting (Meissner/pinning), "
+                       "diamagnetic, Earnshaw + loopholes, force "
+                       "computation. Force-physics counterpart to maglev "
+                       "(transport).",
+        "primary_tools": ["levitation"],
+        "related": ["maglev", "ih", "peec", "electromagnet"],
         "tags": ["application"],
     },
     # ============================================================
