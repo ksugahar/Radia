@@ -567,7 +567,7 @@ Module: `radia_mcp.maglev_linear.server`
 
 | Tool | Description |
 |---|---|
-| `maglev_linear` | Magnetic levitation + linear drive knowledge. |
+| `maglev_linear` | Magnetic levitation knowledge (transport / suspension / control). |
 | `maglev_linear_status` | (no description) |
 | `maglev_linear_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
 
