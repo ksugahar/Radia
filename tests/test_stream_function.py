@@ -331,8 +331,11 @@ def test_regularized_k_mode_truncation():
 
 
 def test_regularized_sparse_S_matches_dense():
-    """The scipy-sparse S path (spsolve column-by-column) matches the
-    dense path bit-for-bit (same S, two representations)."""
+    """The scipy-sparse S path (splu factor-once) matches the dense path
+    (np.linalg.solve) to ~1e-9 on a well-conditioned S (same S, two
+    representations).  The PRODUCTION folded seminorm is well-conditioned
+    (cond(W) ~ 1e2..1e7); the dangerous-ill-conditioning case is locked
+    separately in test_regularized_rejects_singular_and_illconditioned_S."""
     sparse = pytest.importorskip("scipy.sparse")
     A, B, res = _random_dense_problem()
     N = A.shape[1]
@@ -356,6 +359,47 @@ def test_regularized_validates_S_shape():
     N = A.shape[1]
     with pytest.raises(ValueError):
         RegularizedTSVD.from_stiffness(res, np.eye(N + 3))
+
+
+def test_regularized_rejects_singular_and_illconditioned_S():
+    """No-Fallback: from_stiffness must RAISE (not silently degrade) on an S
+    it cannot use, and the happy path must not regress.
+
+    (1) Singular S -- the dense path raises numpy LinAlgError and the sparse
+        splu path raises RuntimeError; BOTH are normalised to ONE ValueError
+        mentioning 'singular'.
+    (2) A catastrophically ill-conditioned core W = V^T S^-1 V (cond > 1e12,
+        where the exact-fit solve would silently lose most digits) raises a
+        ValueError mentioning 'ill-conditioned'.  (Production seminorms sit at
+        cond(W) ~ 1e2..1e7 and pass.)
+    (3) A well-conditioned S past the guards still gives an EXACT data fit to
+        machine precision via the factored W-solve (the explicit inverse is
+        gone)."""
+    sparse = pytest.importorskip("scipy.sparse")
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    V = res.V                                         # (N, k)
+
+    # (1) singular S: dense LinAlgError + sparse RuntimeError -> one ValueError
+    S_sing = np.zeros((N, N))
+    with pytest.raises(ValueError, match="singular"):
+        RegularizedTSVD.from_stiffness(res, S_sing)
+    with pytest.raises(ValueError, match="singular"):
+        RegularizedTSVD.from_stiffness(res, sparse.csr_matrix(S_sing))
+
+    # (2) SPD S acting as diag(d), d in [1, 1e-13], on span(V) (so
+    #     W = V^T S^-1 V has cond ~ 1e13 > 1e12) and identity off V.
+    d = np.logspace(0.0, -13.0, V.shape[1])
+    P = V @ V.T
+    S_ill = V @ np.diag(d) @ V.T + (np.eye(N) - P)
+    S_ill = 0.5 * (S_ill + S_ill.T)
+    with pytest.raises(ValueError, match="ill-conditioned"):
+        RegularizedTSVD.from_stiffness(res, S_ill)
+
+    # (3) well-conditioned S: exact data fit (alpha=0) to machine precision.
+    reg = RegularizedTSVD.from_stiffness(res, _spd(N, seed=11))
+    phi = reg.solve(B)
+    assert np.linalg.norm(A @ phi - B) / np.linalg.norm(B) < 1.0e-9
 
 
 # --------------------------------------------------------------------------
