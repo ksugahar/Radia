@@ -12,15 +12,34 @@ permissions:
 
 jobs:
   publish:
-    # Only publish when CI succeeded on a cubit-mesh-export tag
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'cubit-mesh-export-v')
+    # Only publish when CI succeeded AND a cubit-mesh-export-v* tag points at
+    # this commit.  Uses git ls-remote (not head_branch) to avoid the GitHub
+    # Actions quirk where head_branch = 'main' even for tag-triggered CI.
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
+      - name: Check if a cubit-mesh-export-v* tag points at this commit
+        id: tag_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          VTAG=$(git ls-remote --tags origin 'refs/tags/cubit-mesh-export-v*' \
+                 | awk -v sha="$SHA" '($1==sha) && /\^\{\}/ {print $2}' \
+                 | sed 's/\^{}//' | head -1)
+          if [ -n "$VTAG" ]; then
+            echo "found=true"  >> "$GITHUB_OUTPUT"
+            echo "tag=$VTAG"   >> "$GITHUB_OUTPUT"
+            echo "cubit-mesh-export-v* tag for $SHA: $VTAG"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No cubit-mesh-export-v* tag found for $SHA -- skipping"
+          fi
+
       - name: Download cubit-mesh-export wheel
+        if: steps.tag_check.outputs.found == 'true'
         uses: actions/download-artifact@v4
         with:
           name: cubit-mesh-export-wheel
@@ -29,6 +48,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify wheel (mandatory plugin binaries + version consistency)
+        if: steps.tag_check.outputs.found == 'true'
         run: |
           echo "=== cubit-mesh-export wheel ==="
           ls -la dist/
@@ -78,6 +98,7 @@ jobs:
           PY
 
       - name: Publish to PyPI
+        if: steps.tag_check.outputs.found == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
