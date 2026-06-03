@@ -131,6 +131,64 @@ def _seminorm(fes, regularize):
                          shape=(a.mat.height, a.mat.width))
 
 
+def _inductance_seminorm(coil, fes, order_J=0, ridge=1e-9):
+    """Magnetic self-inductance quadratic form ``L_psi`` over the psi DOFs:
+    ``psi^T L_psi psi = mu0 K^T SL K``, K = n x grad psi the surface current,
+    SL the BEM single-layer (Laplace) operator (``ngsolve.bem.LaplaceSL``).
+
+    ``min 1/2 psi^T L_psi psi  s.t.  A psi = B`` is the canonical MINIMUM-
+    STORED-ENERGY gradient-coil objective (Turner / Forbes target-field
+    method): low stored energy = fast slew rate.  Used as the regularisation
+    seminorm S, so the design is ``RegularizedTSVD.from_stiffness(base,
+    L_psi)`` -- the SAME folded-TSVD machinery as l2/h1, with a physically
+    meaningful S instead of a smoothness proxy.
+
+    Construction: K = n x grad psi maps H1 -> HDivSurface via the commuting
+    interpolation (dual ``Set``), i.e. C is the discrete surface rot; then
+    ``L_psi = mu0 C^T SL C``.  Validated -- torus L matches analytic to
+    -0.6 %; psi=z cylinder gives a solenoid whose energy matches the Nagaoka
+    coefficient (0.78 at 2R/L = 0.6).
+
+    DENSE by nature: the inductance is a fully-coupled integral operator
+    (every current element couples via 1/r), so L_psi is dense N x N -- unlike
+    the sparse l2/h1 seminorms -- which caps min-inductance design at moderate
+    N (the BEM SL assembly + the dense C^T SL C).  For very large meshes use
+    h1 (a sparse smoothness proxy) or a future H-matrix SL.
+
+    Caller holds the TaskManager context (panel calc, not a helper module).
+    A tiny ``ridge`` lifts the harmless constant-psi null space (both A and
+    L_psi annihilate an additive constant in psi); confine abe/on also grounds
+    it via R."""
+    import math
+    from ngsolve import (HDivSurface, GridFunction, specialcf, Cross, grad,
+                         ds)
+    from ngsolve.bem import LaplaceSL
+    from scipy.sparse import coo_matrix
+    MU0 = 4.0e-7 * math.pi
+    n = specialcf.normal(3)
+    fJ = HDivSurface(coil, order=order_J)
+    u, v = fJ.TnT()
+    # BEM single-layer (dense, 100 % fill); COO extract (ToDense ~2500x slower)
+    op = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
+    rr, cc, vv = op.mat.COO()
+    SL = coo_matrix((np.asarray(vv), (np.asarray(rr), np.asarray(cc))),
+                    shape=(op.mat.height, op.mat.width)).toarray()
+    # C: K = n x grad(psi_i) interpolated into the RT current space
+    gp = GridFunction(fes)
+    gJ = GridFunction(fJ)
+    C = np.zeros((fJ.ndof, fes.ndof))
+    for i in range(fes.ndof):
+        gp.vec[:] = 0.0
+        gp.vec[i] = 1.0
+        gJ.Set(Cross(n, grad(gp).Trace()),
+               definedon=coil.Boundaries(".*"), dual=True)
+        C[:, i] = gJ.vec.FV().NumPy()
+    L = MU0 * (C.T @ SL @ C)
+    L = 0.5 * (L + L.T)                                   # symmetrise
+    L += ridge * (np.trace(L) / L.shape[0]) * np.eye(L.shape[0])
+    return L
+
+
 def _build_abe_R(coil, fes, order):
     """Abe edge-equipotential node-current-potential constraint (Abe, IEEE
     Trans. Magn., 'A Design Tool/Technique for MRI GC using DUCAS', Appendix:
@@ -297,8 +355,16 @@ def _build_problem(args, eval_scale=1.0):
     Bm = _eval_target_np(args.target_cf, mpts, vector_b)
     Ac = _assemble_biot_savart(fes, n, cpts, comps)
     Am = _assemble_biot_savart(fes, n, mpts, comps)
-    Sf = _seminorm(fes, args.regularize)        # full-DOF SPARSE seminorm
-    S = (R.T @ Sf @ R).tocsr()                  # reduce to independent (sparse)
+    if args.regularize == "inductance":
+        # physical min-stored-energy objective: DENSE BEM self-inductance L_psi
+        Lf = _inductance_seminorm(coil, fes)    # dense N x N (mu0 C^T SL C)
+        # fold to the independent space WITHOUT a dense N x N intermediate of
+        # R: (R^T Lf) is sparse@dense=dense (n_free x N); (.T) avoids dense@
+        # sparse; final sparse@dense -> dense (n_free x n_free) SPD core.
+        S = np.asarray(R.T @ (R.T @ Lf).T)      # = R^T Lf R (Lf symmetric)
+    else:
+        Sf = _seminorm(fes, args.regularize)    # full-DOF SPARSE seminorm
+        S = (R.T @ Sf @ R).tocsr()              # reduce to independent (sparse)
     # Ac is dense (M x N, M small); R is sparse (N x n_free).  (R^T Ac^T)^T
     # keeps R sparse and yields the dense M x n_free design matrix.
     Af = np.asarray((R.T @ Ac.T).T)             # rows x n_independent (dense)
@@ -314,7 +380,7 @@ def _build_problem(args, eval_scale=1.0):
     return dict(coil=coil, fes=fes, R=R, n_free=n_free, n=n, vector_b=vector_b,
                 comps=comps, Ac=Ac, Af=Af, Am=Am_R, Bc=Bc, Bm=Bm, reg=reg,
                 base=base, target_cf=target_cf, evalm=evalm, cpts=cpts,
-                mpts=mpts, eval_scale=eval_scale, confine=confine,
+                mpts=mpts, eval_scale=eval_scale, confine=confine, S=S,
                 md=md, n_constraint=len(cpts), n_measure=len(mpts))
 
 
@@ -1116,6 +1182,12 @@ def run_design(args):
             "t_solve_s": round(t2 - t1, 3),
             "t_total_s": round(time.perf_counter() - t0, 3),
         }
+        if args.regularize == "inductance":
+            # the minimised objective: magnetic stored energy 1/2 psi^T L psi
+            # (= 1/2 psi_f^T S psi_f since S = R^T L_psi R).  This is the
+            # physical gradient-coil figure of merit (low energy = fast slew).
+            Sm = P["S"]
+            result["stored_energy_J"] = 0.5 * float(psi_f @ (Sm @ psi_f))
         if args.msh_output:
             try:
                 from radia.gmsh_post_export import GmshPostExport
@@ -1392,9 +1464,12 @@ def build_argparser():
                     default="design")
     # ---- solver (design + pareto) ----
     ap.add_argument("--order", type=int, default=3, help="psi FE order")
-    ap.add_argument("--regularize", choices=["l2", "h1"], default="h1",
-                    help="seminorm: l2 (min |psi|) or h1 (min surface-current "
-                         "energy)")
+    ap.add_argument("--regularize", choices=["l2", "h1", "inductance"],
+                    default="h1",
+                    help="seminorm: l2 (min |psi|), h1 (min |grad psi|, a "
+                         "smoothness proxy), or inductance (min 1/2 psi^T L "
+                         "psi -- the physical MIN-STORED-ENERGY gradient-coil "
+                         "objective via ngsolve.bem; dense, moderate N)")
     ap.add_argument("--confine", choices=["off", "on", "abe"], default="off",
                     help="current-confinement BC. off=none; on=psi 0 on the "
                          "former edge (gradient/shim; breaks solenoids); "

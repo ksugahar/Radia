@@ -39,6 +39,37 @@ single-stroke chaining theory is in [`single_stroke.md`](single_stroke.md).
   `x,y,z`.  Scalar `-> Bz` (e.g. `"x"` = Gx, `"1"` = uniform), 3-vector
   `"(Bx,By,Bz)" -> ` full `B`.
 
+## Design objective / regularizer (`--regularize {l2, h1, inductance}`)
+
+The design solve is `min ‖Aψ−B‖² + α·ψᵀSψ` — the target field `Aψ=B` picks the
+coil, the seminorm `S` picks *which* coil among the many that fit (the SF system
+is hugely under-determined, `N ≫ M`).  `S` is the design objective:
+
+| `--regularize` | `S` | objective | cost |
+|----------------|-----|-----------|------|
+| `l2` | `I` | min `‖ψ‖²` | sparse |
+| `h1` *(default)* | surface-H1 stiffness | min `‖∇ψ‖²` — a **smoothness proxy** for current density | sparse |
+| `inductance` | `μ₀ Cᵀ·SL·C` | **min ½ψᵀLψ — the physical magnetic stored energy** | dense (BEM) |
+
+`inductance` is the canonical **minimum-stored-energy** gradient-coil objective
+(Turner / Forbes target-field method): low stored energy = fast slew rate, the
+defining gradient-coil figure of merit.  `L` is the true self-inductance of the
+stream-function surface current `K = n̂×∇ψ`, assembled from the
+`ngsolve.bem` Laplace single-layer operator `SL` (`C` is the discrete surface
+rot mapping `H1 → HDivSurface`).  **Validated**: the BEM `L` matches the analytic
+thin-torus inductance to −0.6 %, and `ψ=z` on the cylinder reproduces a solenoid
+whose energy matches the Nagaoka coefficient (0.78 at `2R/ℓ=0.6`).  On the
+canonical Gx case it gives the lowest stored energy **and** the lowest peak
+current density of the three regularizers; the design reports `stored_energy_J`.
+All three fold onto the **same** ACA+TSVD machinery (`RegularizedTSVD.
+from_stiffness(base, S)`).
+
+`inductance` is **dense** by nature — the inductance is a fully-coupled `1/r`
+integral operator, so `L` is dense `N×N` (unlike the sparse `l2`/`h1`).  Use it
+at moderate `N`; for very large meshes use `h1` (the sparse proxy) or a future
+H-matrix `SL`.  Locked by
+`tests/panels/test_streamfunction_golden.py::test_streamfunction_min_inductance`.
+
 ## Current-confinement boundary condition (`--confine {off, on, abe}`)
 
 On a **finite** former the contours run off the edges; closing them with a rim

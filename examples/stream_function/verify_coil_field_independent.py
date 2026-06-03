@@ -52,14 +52,16 @@ from radia.panels.calc_streamfunction import (         # noqa: E402
 def _make_meshes(outdir, a=0.15, L=0.50, dsv=0.05):
     """Cylinder lateral surface (coil) + DSV sphere volume -> two .vol files."""
     from netgen.occ import Cylinder, Sphere, Pnt, Z, OCCGeometry
+    from ngsolve import TaskManager
     os.makedirs(outdir, exist_ok=True)
-    cyl = Cylinder(Pnt(0, 0, -L / 2), Z, r=a, h=L)
-    lateral = max(cyl.faces, key=lambda f: f.mass)
-    coil_path = os.path.join(outdir, "vc_coil_cyl.vol")
-    OCCGeometry(lateral).GenerateMesh(maxh=0.04).Save(coil_path)
-    sph = Sphere(Pnt(0, 0, 0), dsv)
-    eval_path = os.path.join(outdir, "vc_eval_dsv.vol")
-    OCCGeometry(sph).GenerateMesh(maxh=0.025).Save(eval_path)
+    with TaskManager():     # caller wraps mesh-gen (TaskManager-Only policy)
+        cyl = Cylinder(Pnt(0, 0, -L / 2), Z, r=a, h=L)
+        lateral = max(cyl.faces, key=lambda f: f.mass)
+        coil_path = os.path.join(outdir, "vc_coil_cyl.vol")
+        OCCGeometry(lateral).GenerateMesh(maxh=0.04).Save(coil_path)
+        sph = Sphere(Pnt(0, 0, 0), dsv)
+        eval_path = os.path.join(outdir, "vc_eval_dsv.vol")
+        OCCGeometry(sph).GenerateMesh(maxh=0.025).Save(eval_path)
     return coil_path, eval_path
 
 
