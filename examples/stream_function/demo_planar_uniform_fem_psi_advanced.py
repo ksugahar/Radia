@@ -948,7 +948,7 @@ def main():
                 reg_p = np.array([t.values[1] for t in pareto])
                 ax.plot(rms_p, reg_p, "o-", c="C0", lw=1.5, ms=7,
                         label="Pareto front")
-                ax.set_xlabel("target-plane RMS  [%]")
+                ax.set_xlabel("target-plane RMS  (%)")
                 ax.set_ylabel(r"$\psi^T S \psi$  (regularisation norm)")
                 ax.set_yscale("log" if reg_p.max() / max(reg_p.min(), 1e-30)
                               > 10 else "linear")

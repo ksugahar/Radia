@@ -217,7 +217,7 @@ def main():
             "s-", color="#1e8449",
             label=f"in-surface bending ({mode}, radius fixed)")
     ax.set_xscale("log")
-    ax.set_xlabel("inhomogeneity ||A psi - B|| / ||B|| [%]")
+    ax.set_xlabel("inhomogeneity ||A psi - B|| / ||B|| (%)")
     ax.set_ylabel("peak surface current density max|grad psi|")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
