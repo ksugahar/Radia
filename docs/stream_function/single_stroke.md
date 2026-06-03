@@ -349,6 +349,37 @@ H1 is worse (it over-spreads the current → longer connectors).  This is the
 another geometry-dependence.  Practical recipe: pick the regularisation that
 minimises the **single-stroke RMS** (not the smoothest ψ), then distort.
 
+### Min-inductance design ⊕ distort: same field, HALF the bend (2026-06-03)
+
+The physical **min-inductance** objective (`calc_streamfunction.py --regularize
+inductance`, `min ½ψᵀLψ` via the BEM self-inductance — see
+[panel.md](panel.md#design-objective--regularizer---regularize-l2-h1-inductance))
+gives a *smoother* surface current than `h1` / `l2`, so it single-strokes
+cleaner AND needs a smaller sheet-metal deformation for the same delivered
+field.  Measured on the cylinder Gx (`--confine abe`, nlevels 12, `--distort`):
+
+| design | single-stroke (pre-distort) | post-distort | max bend |
+|--------|-----------------------------|--------------|----------|
+| `h1` | 4.85 % | 2.27 % | 9.8 mm |
+| `inductance` | **2.61 %** | 2.26 % | **4.8 mm** |
+
+Same final homogeneity, **half the deformation** — the min-inductance coil is
+the more manufacturable 3D-printed / sheet-metal part.  So the maturity recipe
+on the HARD tier is: **design min-inductance → abe (close the contours) →
+field-aware single stroke → distort**.
+
+**EASY tier is production-grade (sub-500 ppm, no shims).**  A uniform-Bz
+(solenoid) target on the same cylinder has nested CLOSED rings (no irreducible
+bridges), so the field-aware single stroke is a clean spiral: **254 ppm with no
+distort, → 84 ppm after a 1.5 mm distort** (`--target-cf 1 --confine off
+--nlevels 16 --distort`).  Locked by
+`tests/panels/test_streamfunction_golden.py::
+test_streamfunction_easy_tier_single_stroke_sub500ppm`.  The repository-backed
+boundary is therefore explicit: **easy / nested targets reach the ~100 ppm
+class single-stroke; the hard multi-lobe Gx is intrinsically ~2 %**, where
+min-inductance + distort buys manufacturability (half the bend) rather than a
+lower floor.
+
 ### Arbitrary curved formers (sphere) — FE-direct ψ ([`demo_sphere_fe_direct.py`](../../examples/stream_function/demo_sphere_fe_direct.py))
 
 The basis-loop representation needs a structured `(φ, z)` grid, so it is
