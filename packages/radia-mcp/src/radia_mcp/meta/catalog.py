@@ -211,7 +211,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["motor_usage"],
         "related": [
             "electromagnet",
-            "maglev-linear",
+            "maglev",
             "magnetic-materials",
             "panel-review",
             "team-benchmark",
@@ -366,7 +366,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["wpt_usage"],
         "related": [
             "litz-transmission",
-            "maglev-linear",
+            "maglev",
             "metamaterial",
             "peec",
         ],
@@ -399,12 +399,15 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": ["electromagnet", "accelerator", "radia-streamfunction"],
         "tags": ["application"],
     },
-    "maglev-linear": {
-        "subpackage": "radia_mcp.maglev_linear",
-        "entry_point": "mcp-server-maglev-linear",
-        "description": "Maglev (EMS/EDS/SCMaglev/Halbach/bearingless ★) + "
-                       "linear drives (LIM/LSM). Lab specialty: bearingless + WPT",
-        "primary_tools": ["maglev_linear"],
+    "maglev": {
+        "subpackage": "radia_mcp.maglev",
+        "entry_point": "mcp-server-maglev",
+        "description": "Magnetic levitation (EMS/EDS/PM/SC/Halbach). Lab "
+                       "research line: Radia IEM<->FEM weak coupling for "
+                       "moving-magnet eddy-current force + Cauer Ladder "
+                       "Network MOR for control-coupled maglev (Yano, "
+                       "CAE-AI). Sibling: levitation (force physics).",
+        "primary_tools": ["maglev"],
         "related": ["motor", "wpt"],
         "tags": ["application"],
     },

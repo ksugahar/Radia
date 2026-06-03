@@ -1,10 +1,10 @@
 """Magnetic levitation FORCE-physics + stationary/industrial levitation.
 
-Scope split vs `radia_mcp.maglev_linear`:
+Scope split vs `radia_mcp.maglev`:
 
-  - `radia_mcp.maglev_linear`  -> TRANSPORT / PROPULSION (EMS/EDS trains,
-    SCMaglev, Halbach/Inductrack tracks, LIM/LSM linear motors, magnetic
-    wheels).  Vehicle-scale, motion along a track.
+  - `radia_mcp.maglev`  -> MAGNETIC LEVITATION as a system (EMS/EDS
+    trains, SCMaglev, Halbach/Inductrack, magnetic wheels) + the lab's
+    Radia-IEM/CLN maglev research line.  Vehicle / suspension scale.
 
   - `radia_mcp.levitation` (THIS server) -> the LEVITATION-FORCE PHYSICS
     and the STATIONARY / industrial / laboratory uses that Radia, PEEC and
@@ -22,7 +22,7 @@ Scope split vs `radia_mcp.maglev_linear`:
           NGSolve (Maxwell stress, virtual work, time-average Lorentz)
 
 The two servers cross-link freely; pick by intent (move a vehicle ->
-maglev_linear; suspend / melt / bear / compute a force -> levitation).
+maglev; suspend / melt / bear / compute a force -> levitation).
 
 References are standard open literature unless tagged "(lab PDF)".
 Equations are ASCII (cp932 console policy).  Key references:
@@ -49,7 +49,7 @@ Equations are ASCII (cp932 console policy).  Key references:
 # Authoritative topic enum for the dispatcher tool (wired into
 # `levitation_topics()` via common.register_topics_tool).
 TOPICS: dict[str, str] = {
-    "overview": "Levitation-force taxonomy; where Radia/PEEC/NGSolve fit; scope split vs maglev_linear",
+    "overview": "Levitation-force taxonomy; where Radia/PEEC/NGSolve fit; scope split vs maglev",
     "induction_levitation": "Eddy-current (AC) lift: jumping/Thomson ring, mutual-inductance circuit model, force vs frequency, perfect-conductor image limit",
     "eml_melting": "Electromagnetic levitation MELTING (EML): containerless molten metal, lift-vs-heat coupling, conical coils, microgravity TEMPUS/ISS-EML (ties to radia_mcp.ih)",
     "magnetic_bearings": "Active magnetic bearings (AMB): F = k_i*i + k_x*x linearization, negative position stiffness, bias current, radial/axial, flywheels; passive PM + SC bearings",
@@ -66,9 +66,9 @@ OVERVIEW = r"""
 # Magnetic levitation: the force-physics landscape
 
 This server is about the FORCE that lifts, and the stationary /
-industrial / laboratory uses of it.  For moving a vehicle along a track
-(EMS/EDS trains, SCMaglev, Inductrack, LIM/LSM) see
-`radia_mcp.maglev_linear` instead.
+industrial / laboratory uses of it.  For magnetic levitation as a
+SYSTEM (EMS/EDS trains, SCMaglev, Inductrack, magnetic wheels) see
+`radia_mcp.maglev` instead.
 
 ## The five levitation mechanisms (Brandt 1989 taxonomy)
 
@@ -83,9 +83,9 @@ industrial / laboratory uses of it.  For moving a vehicle along a track
 Hybrid / actively-controlled magnetic BEARINGS (AMB) sit on top of the
 EMS row: a permanent-magnet bias plus feedback-controlled current.
 
-## Why a separate server from maglev_linear
+## Why a separate server from maglev
 
-`maglev_linear` answers "how do I move a vehicle".  This server answers
+`maglev` answers "how do I move a vehicle".  This server answers
 four different questions the lab actually computes:
 
 1. **"How much lift does my AC coil exert on this conductor?"**
@@ -109,7 +109,7 @@ four different questions the lab actually computes:
 
 ## Cross-references
 
-- `radia_mcp.maglev_linear` -- TRANSPORT (EMS/EDS trains, LIM/LSM, wheels)
+- `radia_mcp.maglev` -- maglev SYSTEMS (EMS/EDS trains, SCMaglev, wheels) + Radia-IEM/CLN maglev research
 - `radia_mcp.ih` -- induction heating (EML is levitation + IH together)
 - `radia_mcp.peec` -- the eddy-current / SIBC engine for induction lift
 - `radia_mcp.electromagnet` -- DC magnet / pole-face B for EMS & AMB
@@ -127,7 +127,7 @@ induces eddy currents; by Lenz's law those currents oppose the change and
 the conductor is REPELLED.  This is the physics of:
 
 - the classroom **jumping ring / Thomson ring** (Elihu Thomson, ~1887),
-- **EDS** repulsion (the static-frequency analogue of maglev_linear's
+- **EDS** repulsion (the static-frequency analogue of maglev's
   moving-magnet EDS),
 - eddy-current **metal sorting** and **non-contact braking**,
 - the lift half of **EML melting** (see topic `eml_melting`).
@@ -199,7 +199,7 @@ cusped / multi-coil field is stable.
 
 ## Cross-references
 - `radia_mcp.peec` -- the eddy-current / SIBC solver
-- `radia_mcp.maglev_linear` (eddy_current_maglev) -- the MOVING-magnet
+- `radia_mcp.maglev` (eddy_current_maglev) -- the MOVING-magnet
   (velocity-driven) version of the same physics
 - `radia_mcp.team_benchmark` (force_motion.problem_28) -- benchmark
 - topic `eml_melting` -- when the levitated conductor is a molten sphere
@@ -350,7 +350,7 @@ superconducting.  This is a direct Earnshaw corollary; see
 AMBs enable contactless, low-loss flywheels: an evacuated rotor on
 magnetic bearings has no mechanical friction, so the only spin-down loss
 is residual eddy / windage.  PM-biased or HTS-pinned bearings minimize
-the standby power.  Cross-link `radia_mcp.maglev_linear` (bearingless
+the standby power.  Cross-link `radia_mcp.maglev` (bearingless
 motor) -- a bearingless machine merges the AMB and the motor windings.
 
 ## Computing it in Radia
@@ -365,7 +365,7 @@ motor) -- a bearingless machine merges the AMB and the motor windings.
 
 ## Cross-references
 - `radia_mcp.electromagnet` -- DC magnet / pole-face B design
-- `radia_mcp.maglev_linear` -- bearingless motor (AMB + motor in one)
+- `radia_mcp.maglev` -- bearingless motor (AMB + motor in one)
 - `radia_mcp.magnetic_materials` -- soft-iron B-H, PM bias data
 - topic `earnshaw_stability` -- why k_x is destabilizing
 - topic `force_computation` -- extracting F(i, g)
@@ -426,7 +426,7 @@ or PM-PM systems.
 - **HTS magnetic bearings / flywheels** -- passive, self-stable, near-zero
   standby power (Hull, Supercond. Sci. Technol. 2000, open literature).
 - **HTS maglev demonstrators** -- a YBCO sled over a PM Halbach guideway
-  (cross-link `radia_mcp.maglev_linear` halbach_arrays).
+  (cross-link `radia_mcp.maglev` halbach_arrays).
 - **Levitated rotors, vibration isolation, lab demos.**
 
 ## Computing it in Radia
@@ -438,7 +438,7 @@ For full critical-state (Bean model) vortex dynamics, couple to an
 external SC solver -- Radia supplies the applied field map.
 
 ## Cross-references
-- `radia_mcp.maglev_linear` (scmaglev_eds, halbach_arrays) -- SC transport
+- `radia_mcp.maglev` (scmaglev_eds, halbach_arrays) -- SC transport
 - topic `diamagnetic` -- Meissner is the chi = -1 diamagnetic limit
 - topic `force_computation` -- stress-tensor force from the image sources
 - topic `earnshaw_stability` -- pinning is loophole #5
@@ -580,7 +580,7 @@ controlled or superconducting (see `magnetic_bearings`).
 - topic `induction_levitation` -- loophole #2
 - topic `magnetic_bearings` -- loophole #3 + the 2-of-3-axes corollary
 - topic `superconducting` -- loophole #5
-- `radia_mcp.maglev_linear` -- EDS/EMS transport apply the same loopholes
+- `radia_mcp.maglev` -- EDS/EMS transport apply the same loopholes
 """
 
 

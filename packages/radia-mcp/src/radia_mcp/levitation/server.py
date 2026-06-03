@@ -3,12 +3,12 @@
 Magnetic levitation FORCE-physics + stationary / industrial / laboratory
 levitation knowledge.
 
-The force-physics counterpart to `radia_mcp.maglev_linear` (transport):
-pick by intent -- move a vehicle along a track -> maglev_linear; suspend,
+The force-physics counterpart to `radia_mcp.maglev` (transport):
+pick by intent -- move a vehicle along a track -> maglev; suspend,
 melt, bear, or COMPUTE a levitation force -> levitation.
 
 Cross-references:
-- `radia_mcp.maglev_linear` -- transport (EMS/EDS trains, LIM/LSM, wheels)
+- `radia_mcp.maglev` -- maglev systems (EMS/EDS trains, SCMaglev, wheels) + Radia-IEM/CLN research
 - `radia_mcp.ih` -- induction heating (EML = levitation + IH together)
 - `radia_mcp.peec` -- eddy-current / SIBC engine for induction lift
 - `radia_mcp.electromagnet` -- DC magnet / pole-face B (EMS & AMB)
@@ -54,9 +54,9 @@ register_status_tool(
     description='Magnetic levitation FORCE-physics: induction/eddy-current lift, '
                 'EML melting (ties to IH), magnetic bearings (AMB), superconducting '
                 '(Meissner/pinning), diamagnetic, Earnshaw + loopholes, force '
-                'computation. Force-physics counterpart to maglev_linear (transport).',
+                'computation. Force-physics counterpart to maglev (transport).',
     subpackage='radia_mcp.levitation',
-    related_servers=["maglev-linear", "ih", "peec", "electromagnet"],
+    related_servers=["maglev", "ih", "peec", "electromagnet"],
 )
 
 

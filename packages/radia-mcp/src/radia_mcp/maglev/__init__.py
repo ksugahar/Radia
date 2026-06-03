@@ -1,4 +1,4 @@
-"""radia_mcp.maglev_linear: Magnetic levitation knowledge.
+"""radia_mcp.maglev: Magnetic levitation knowledge.
 
 Scope: magnetic levitation for transport / suspension / control.  The
 former linear-drive (LIM/LSM, end-effect) material was removed; for the
