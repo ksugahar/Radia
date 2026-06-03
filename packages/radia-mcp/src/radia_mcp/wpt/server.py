@@ -222,7 +222,7 @@ register_status_tool(
     server_name='mcp-server-wpt',
     description='Wireless Power Transfer: coil + compensation (SS/LCC/LCL), efficiency, IEC 61980 / SAE J2954, FOD, dynamic EV / robot / bearingless...',
     subpackage='radia_mcp.wpt',
-    related_servers=["peec", "litz-transmission", "maglev-linear"],
+    related_servers=["peec", "litz-transmission", "maglev"],
 )
 
 

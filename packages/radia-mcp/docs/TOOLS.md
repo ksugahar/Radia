@@ -36,7 +36,7 @@ Total: **338 tools** across 41 MCP servers.
 | [`mcp-server-ndt`](#mcp-server-ndt) | `radia_mcp.ndt` | 4 |
 | [`mcp-server-metamaterial`](#mcp-server-metamaterial) | `radia_mcp.metamaterial` | 4 |
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
-| [`mcp-server-maglev-linear`](#mcp-server-maglev-linear) | `radia_mcp.maglev_linear` | 3 |
+| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 3 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-comsol-converter`](#mcp-server-comsol-converter) | `radia_mcp.comsol_converter` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
@@ -559,17 +559,17 @@ Module: `radia_mcp.nmr_mri.server`
 | `nmr_mri_bibliography` | Search the NMR/MRI bibliography catalog. |
 | `nmr_mri_status` | (no description) |
 
-## `mcp-server-maglev-linear`
+## `mcp-server-maglev`
 
-_Maglev (EMS/EDS/SCMaglev/Halbach/bearingless ★) + linear drives (LIM/LSM). Lab specialty: bearingless + WPT_
+_Magnetic levitation (EMS/EDS/PM/SC/Halbach). Lab research line: Radia IEM<->FEM weak coupling for moving-magnet eddy-current force + Cauer Ladder Network MOR for control-coupled maglev (Yano, CAE-AI). Sibling: levitation (force physics)._
 
-Module: `radia_mcp.maglev_linear.server`
+Module: `radia_mcp.maglev.server`
 
 | Tool | Description |
 |---|---|
-| `maglev_linear` | Magnetic levitation knowledge (transport / suspension / control). |
-| `maglev_linear_status` | (no description) |
-| `maglev_linear_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
+| `maglev` | Magnetic levitation knowledge (transport / suspension / control). |
+| `maglev_status` | (no description) |
+| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
 
 ## `mcp-server-team-benchmark`
 

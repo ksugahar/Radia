@@ -1,4 +1,4 @@
-"""MCP Server: radia_mcp.maglev_linear  (magnetic levitation)
+"""MCP Server: radia_mcp.maglev  (magnetic levitation)
 
 Magnetic levitation knowledge -- transport / suspension / control.  The
 headline content is the lab's own Radia-based maglev research line
@@ -20,19 +20,19 @@ Cross-references:
 - `radia_mcp.motor` — analogous rotary motor knowledge
 
 Usage:
-    mcp-server-maglev-linear              # stdio
-    mcp-server-maglev-linear --selftest   # self-test
+    mcp-server-maglev              # stdio
+    mcp-server-maglev --selftest   # self-test
 """
 import sys
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool, register_topics_tool
 from .knowledge import get_knowledge, TOPICS
 
-mcp = FastMCP("mcp-server-maglev-linear")
+mcp = FastMCP("mcp-server-maglev")
 
 
 @mcp.tool()
-def maglev_linear(topic: str = "overview") -> str:
+def maglev(topic: str = "overview") -> str:
     """
     Magnetic levitation knowledge (transport / suspension / control).
 
@@ -56,23 +56,23 @@ def maglev_linear(topic: str = "overview") -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-maglev-linear',
+    server_name='mcp-server-maglev',
     description='Magnetic levitation (EMS/EDS/PM/SC/Halbach). Lab research line: Radia IEM<->FEM weak coupling for moving-magnet eddy-current force + Cauer Ladder Network MOR for control-coupled maglev (Yano, CAE-AI). Sibling: levitation (force physics).',
-    subpackage='radia_mcp.maglev_linear',
+    subpackage='radia_mcp.maglev',
     related_servers=["levitation", "mor", "motor"],
 )
 
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-maglev-linear',
+    server_name='mcp-server-maglev',
     topics=TOPICS,
 )
 
 
 def main():
     if "--selftest" in sys.argv:
-        print("maglev_linear MCP server self-test:")
+        print("maglev MCP server self-test:")
         print(f"  knowledge: {len(get_knowledge('all'))} chars")
         print("OK")
         return
