@@ -258,6 +258,7 @@ def main():
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        plt.rcParams["pdf.fonttype"] = 42
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
 
         PHI, Z = np.meshgrid(np.degrees(phi_grid), z_grid * 1e3)
@@ -269,8 +270,7 @@ def main():
         fig.colorbar(cf, ax=ax1, label="psi (stream value)")
         ax1.set_xlabel("phi [deg]")
         ax1.set_ylabel("z [mm]")
-        ax1.set_title(f"Stream function psi(phi,z) fingerprint\n"
-                      f"(black = {n_wire} contour wires)")
+        ax1.text(0.02, 0.96, "(a)", transform=ax1.transAxes, fontsize=10)
 
         ax2.scatter(obs[:, 0] * 1e3, Bz_fit, s=14, alpha=0.6,
                     label="discrete coil Bz (gain-fit)")
@@ -278,7 +278,7 @@ def main():
         ax2.plot(xs * 1e3, Gx * xs, "k--", label="target Gx*x")
         ax2.set_xlabel("x [mm]")
         ax2.set_ylabel("Bz [arb]")
-        ax2.set_title(f"Transverse gradient (rel RMS {rms_err:.2e})")
+        ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
         ax2.legend()
         ax2.grid(alpha=0.3)
 

@@ -346,6 +346,7 @@ def main():
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        plt.rcParams["pdf.fonttype"] = 42
         fig = plt.figure(figsize=(13, 4))
 
         ax1 = fig.add_subplot(1, 3, 1)
@@ -355,17 +356,17 @@ def main():
             lv = lo + (np.arange(args.nlevels) + 0.5) * (hi - lo) / args.nlevels
             ax1.contour(g * 1e3, g * 1e3, psi_xy.T, levels=lv,
                         colors="k", linewidths=0.5)
-        ax1.set_title("Stream function psi(x,y)")
         ax1.set_xlabel("x [mm]")
         ax1.set_ylabel("y [mm]")
         ax1.set_aspect("equal")
+        ax1.text(0.02, 0.96, "(a)", transform=ax1.transAxes, fontsize=10)
         fig.colorbar(cf, ax=ax1, fraction=0.045)
 
         ax2 = fig.add_subplot(1, 3, 2)
         ax2.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, "b-", lw=0.5)
-        ax2.set_title(f"Spiral chain ({len(path)} pts, {length:.2f} m)")
         ax2.set_xlabel("x [mm]"); ax2.set_ylabel("y [mm]")
         ax2.set_aspect("equal")
+        ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
         ax2.grid(alpha=0.3)
 
         ax3 = fig.add_subplot(1, 3, 3)
@@ -375,7 +376,7 @@ def main():
         ax3.axvline(args.target_z * 1e3, color="g", linestyle=":",
                     alpha=0.5, label=f"target z={args.target_z*1e3:.0f}mm")
         ax3.set_xlabel("z [mm]"); ax3.set_ylabel("Bz [mT]")
-        ax3.set_title(f"On-axis Bz (target-plane RMS {rms:.1e})")
+        ax3.text(0.02, 0.96, "(c)", transform=ax3.transAxes, fontsize=10)
         ax3.legend(loc="best", fontsize=8); ax3.grid(alpha=0.3)
 
         out = HERE / "demo_planar_uniform_coil.png"

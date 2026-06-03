@@ -55,6 +55,8 @@ import argparse
 
 import numpy as np
 
+from radia_mcp.figure import lab_figure, save_lab_figure
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)                                    # sibling demos
 sys.path.insert(0, os.path.join(_HERE, "..", "..", "src"))   # radia package
@@ -283,8 +285,7 @@ def main():
     # ---- plot: non-dominated envelope (bold) over raw sweep (faint) ----
     import matplotlib
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(6.6, 5.0))
+    fig, ax = lab_figure(embed_width_cm=8.0)
 
     def draw(pts, color, marker, label):
         m = np.array([p["misfit"] * 100 for p in pts])
@@ -302,13 +303,9 @@ def main():
     ax.set_xscale("log")
     ax.set_xlabel("field inhomogeneity  ||A psi - B|| / ||B||  [%]")
     ax.set_ylabel("peak current density  max|grad psi|  [x1e6]")
-    ax.set_title("Pareto front via folded Tikhonov + ACA+TSVD\n"
-                 f"target={args.target};  ONE ACA factorisation, "
-                 "alpha-sweep ~50 us/point")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(args.out + ".png", dpi=130)
+    save_lab_figure(fig, args.out, embed_width_cm=8.0)
     print(f"\nsaved {args.out}.json / .png", flush=True)
 
 

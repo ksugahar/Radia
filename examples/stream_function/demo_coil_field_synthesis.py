@@ -97,16 +97,18 @@ def main():
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
+            plt.rcParams["pdf.fonttype"] = 42
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
             ax1.semilogy(np.arange(1, res.k_aca + 1), res.S[:res.k_aca], "o-")
             ax1.set_xlabel("mode index"); ax1.set_ylabel("singular value")
-            ax1.set_title(f"TSVD spectrum (k_aca={res.k_aca})")
+            ax1.text(0.02, 0.96, "(a)", transform=ax1.transAxes, fontsize=10)
             ax1.grid(True, which="both", alpha=0.3)
             kk = sorted(resid)
             ax2.semilogy(kk, [resid[k] for k in kk], "s-", label="residual")
             ax2.semilogy(kk, [solnorm[k] / max(solnorm.values()) for k in kk],
                          "^--", label="||phi|| (norm.)")
-            ax2.set_xlabel("modes kept"); ax2.set_title("TSVD L-curve")
+            ax2.set_xlabel("modes kept")
+            ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
             ax2.legend(); ax2.grid(True, which="both", alpha=0.3)
             out = HERE / "demo_coil_field_synthesis.png"
             fig.tight_layout(); fig.savefig(out, dpi=110)

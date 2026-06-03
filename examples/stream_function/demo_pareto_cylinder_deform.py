@@ -33,6 +33,8 @@ import argparse
 
 import numpy as np
 
+from radia_mcp.figure import lab_figure, save_lab_figure
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "..", "..", "src"))
@@ -208,8 +210,7 @@ def main():
 
     import matplotlib
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(6.6, 5.0))
+    fig, ax = lab_figure(embed_width_cm=8.0)
     ax.plot([p[0] * 100 for p in flat_front], [p[1] for p in flat_front],
             "o-", color="#c0392b", label="flat cylinder (baseline)")
     ax.plot([p[0] * 100 for p in opt_front], [p[1] for p in opt_front],
@@ -218,12 +219,9 @@ def main():
     ax.set_xscale("log")
     ax.set_xlabel("inhomogeneity ||A psi - B|| / ||B|| [%]")
     ax.set_ylabel("peak surface current density max|grad psi|")
-    ax.set_title(f"Cylinder in-surface sheet-metal, target={args.target}\n"
-                 "(radius fixed = 100% genuine forming, no standoff)")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(args.out + ".png", dpi=130)
+    save_lab_figure(fig, args.out, embed_width_cm=8.0)
     print(f"\nsaved {args.out}.json / .png", flush=True)
 
 

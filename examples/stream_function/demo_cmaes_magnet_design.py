@@ -121,11 +121,11 @@ def main():
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        plt.rcParams["pdf.fonttype"] = 42
         fig, ax = plt.subplots(figsize=(6, 4))
         ax.plot([h[0] for h in history], [h[1] for h in history], "o-", ms=2)
         ax.set_xlabel("trial"); ax.set_ylabel("best objective so far")
         ax.set_yscale("log")
-        ax.set_title("CMA-ES magnetization-angle optimization")
         ax.grid(True, which="both", alpha=0.3)
         out = HERE / "demo_cmaes_magnet_design.png"
         fig.tight_layout(); fig.savefig(out, dpi=110)

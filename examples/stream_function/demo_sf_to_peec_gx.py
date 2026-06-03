@@ -1460,6 +1460,7 @@ def main():
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        plt.rcParams["pdf.fonttype"] = 42
         fig = plt.figure(figsize=(12, 4))
         ax = fig.add_subplot(1, 3, 1, projection="3d")
         if distorted_path is not None:
@@ -1480,17 +1481,16 @@ def main():
             lim = (a + 0.05) * 1e3
             ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
             ax.set_zlim(-L / 2 * 1e3, L / 2 * 1e3)
-            ax.set_title("Distorted Gx coil (1 current)")
         else:
             ax.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, path[:, 2] * 1e3, lw=0.5)
-            ax.set_title("Single-stroke Gx coil")
         ax.set_xlabel("x [mm]"); ax.set_ylabel("y [mm]"); ax.set_zlabel("z [mm]")
+        ax.text2D(0.02, 0.96, "(a)", transform=ax.transAxes, fontsize=10)
 
         ax2 = fig.add_subplot(1, 3, 2)
         ax2.plot(xv * 1e3, Bz_xaxis, "o-", ms=3, label="single-stroke coil Bz")
         ax2.plot(xv * 1e3, G_fit * xv, "k--", label="linear fit")
         ax2.set_xlabel("x [mm]"); ax2.set_ylabel("Bz [T]")
-        ax2.set_title(f"On x-axis (nonlin {nonlin:.1e})")
+        ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
         ax2.legend(); ax2.grid(alpha=0.3)
 
         ax3 = fig.add_subplot(1, 3, 3)
@@ -1499,7 +1499,7 @@ def main():
         xs = np.linspace(obs_dsv[:, 0].min(), obs_dsv[:, 0].max(), 50)
         ax3.plot(xs * 1e3, Gx * xs, "k--", label="target Gx*x")
         ax3.set_xlabel("x [mm]"); ax3.set_ylabel("Bz [T]")
-        ax3.set_title(f"Full DSV (RMS {rms:.1e})")
+        ax3.text(0.02, 0.96, "(c)", transform=ax3.transAxes, fontsize=10)
         ax3.legend(); ax3.grid(alpha=0.3)
 
         out = HERE / "demo_sf_to_peec_gx.png"

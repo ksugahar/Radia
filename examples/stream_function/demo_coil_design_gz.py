@@ -182,6 +182,7 @@ def main():
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
+            plt.rcParams["pdf.fonttype"] = 42
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
             ax1.plot(z_ring * 1e3, I / np.abs(I).max(), "o-", ms=3,
                      label="ring current I(z) (norm.)")
@@ -189,12 +190,13 @@ def main():
                      label="stream fn psi(z) (norm.)")
             for zc0, cur in wires:
                 ax1.axvline(zc0 * 1e3, color="r" if cur > 0 else "b", alpha=0.3, lw=1)
-            ax1.set_xlabel("z [mm]"); ax1.set_title("Current density + wire rings")
+            ax1.set_xlabel("z [mm]")
+            ax1.text(0.02, 0.96, "(a)", transform=ax1.transAxes, fontsize=10)
             ax1.legend(); ax1.grid(alpha=0.3)
             ax2.plot(zc * 1e3, Bz, "o-", ms=3, label="discrete coil Bz")
             ax2.plot(zc * 1e3, G_fit * zc, "k--", label="linear fit")
             ax2.set_xlabel("z [mm]"); ax2.set_ylabel("Bz [T]")
-            ax2.set_title(f"On-axis gradient (nonlin {nonlin:.1e})")
+            ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
             ax2.legend(); ax2.grid(alpha=0.3)
             out = HERE / "demo_coil_design_gz.png"
             fig.tight_layout(); fig.savefig(out, dpi=110)
