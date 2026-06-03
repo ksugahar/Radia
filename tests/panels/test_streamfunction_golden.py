@@ -422,6 +422,8 @@ def test_streamfunction_min_inductance(sample_vols):
 
 DEMO_REGCOIL = os.path.join(REPO, "examples", "stream_function",
                             "demo_regcoil_fusion.py")
+DEMO_REGCOIL_ADV = os.path.join(REPO, "examples", "stream_function",
+                                "demo_regcoil_fusion_advanced.py")
 
 
 def test_regcoil_fusion_wout_and_vmec_boundary(tmp_path):
@@ -537,6 +539,64 @@ def test_regcoil_fusion_demo_invariants(tmp_path):
     vm = d["vmec_boundary"]
     assert vm["non_axisymmetric"] is True, vm
     assert vm["bn_residual_rel"] < 1e-6, vm
+
+
+def test_regcoil_fusion_advanced(tmp_path):
+    """Advanced fusion demo: (A) coil force/stress, (B) a real VMEC boundary,
+    (C) FOCUS standoff study.  Runs end to end against a SYNTHETIC multi-mode
+    (NFP=3) wout so Part B is deterministic + offline (--no-fetch).  Locks:
+      A  |f| = |K x B_avg| matches the magnetic pressure B^2/(2 mu0) (ratio ~1)
+         and concentrates on the INBOARD leg (inboard/outboard > 2);
+      C  coil complexity is MONOTONIC in the winding gap (closer = simpler) and
+         the constrained optimum is the minimum standoff;
+      B  the Stage-2 design runs on the (synthetic real-format) boundary to
+         machine precision."""
+    netCDF4 = pytest.importorskip("netCDF4")
+    # a synthetic stellarator-symmetric multi-mode wout (NFP=3, R0=1.0)
+    terms = [(0, 0, 1.0, 0.0), (1, 0, 0.18, 0.18), (1, 1, 0.05, -0.05),
+             (2, 1, 0.012, -0.012)]
+    nfp = 3
+    wp = str(tmp_path / "wout_synth.nc")
+    ds = netCDF4.Dataset(wp, "w")
+    ns, mn = 3, len(terms)
+    ds.createDimension("radius", ns)
+    ds.createDimension("mn_mode", mn)
+    ds.createVariable("nfp", "i4")[...] = nfp
+    ds.createVariable("xm", "f8", ("mn_mode",))[:] = [t[0] for t in terms]
+    ds.createVariable("xn", "f8", ("mn_mode",))[:] = [t[1] * nfp for t in terms]
+    ds.createVariable("rmnc", "f8", ("radius", "mn_mode"))[:] = 0.0
+    ds.createVariable("zmns", "f8", ("radius", "mn_mode"))[:] = 0.0
+    ds["rmnc"][ns - 1, :] = [t[2] for t in terms]
+    ds["zmns"][ns - 1, :] = [t[3] for t in terms]
+    ds.close()
+
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    cmd = [sys.executable, DEMO_REGCOIL_ADV, "--out-dir", str(tmp_path),
+           "--no-plot", "--no-fetch", "--wout", wp,
+           "--force-ntheta", "11", "--eval-max", "120"]
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env,
+                       cwd=str(tmp_path), timeout=600)
+    if r.returncode != 0:
+        low = (r.stderr or "").lower()
+        if "mkl" in low or "dll" in low or "libiomp" in low:
+            pytest.skip("NGSolve/MKL subprocess env issue (LAB pytest)")
+        raise AssertionError(f"advanced demo failed: {r.stderr[-1500:]}")
+    with open(os.path.join(str(tmp_path),
+                           "demo_regcoil_fusion_advanced.json")) as f:
+        d = json.load(f)
+    # A. force = magnetic pressure, inboard-concentrated
+    fr = d["force_stress"]
+    assert 0.85 < fr["ratio_mean"] < 1.15, fr
+    assert fr["inboard_over_outboard"] > 2.0, fr        # inboard stress peak
+    # C. FOCUS: monotonic complexity, constraint-bound optimum
+    fo = d["focus_standoff"]
+    assert fo["complexity_monotonic_in_gap"] is True, fo
+    assert fo["complexity_ratio_far_over_near"] > 5.0, fo
+    # B. design runs on the real-format boundary to machine precision
+    re_ = d["real_equilibrium"]
+    assert re_ is not None and re_["nfp"] == 3, re_
+    assert re_["bn_residual_rel"] < 1e-5, re_
 
 
 if __name__ == "__main__":
