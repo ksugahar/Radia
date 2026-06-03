@@ -59,6 +59,7 @@ ACA+ itself is delegated to the in-repo **HACApK** C library
 | `demo_planar_uniform_fem_psi.py` | **psi as DIRECT H1 FE unknown on an NGSolve 2D mesh**, same target as the basis-loop demo below.  ``--regularize h1`` (default) solves ``min psi^T S psi`` s.t. ``A psi = B_target`` for the smoothest psi that hits the target exactly.  Single-shot RMS = 2.09 %.  With ``--compensated-iter 100 --compensated-step 0.05`` the Path-A iteration CONVERGES MONOTONICALLY (iters 40-47 drop 0.62 % -> 0.49 % without backtracking) -> final RMS **0.47 %** (-84 % vs basis-loop), p2p/mean = 1.64 %.  This is the empirical proof that the "naive Picard doesn't converge" finding for the basis-loop case is SPECIFIC to grid-sampled psi -- a continuous FE psi gives a smooth chain-field response and Path A genuinely contracts.  Extends naturally to non-planar OCC surfaces (cylinder, sphere, conformal). |
 | `demo_planar_uniform_coil.py` | **Planar uniform-Bz coil (the easy end of single-stroke complexity)**.  Source = square plane at z=0; target = uniform Bz=B0 over a square region at z=h.  SF produces concentric closed contours; single-stroke = spiral (Kuijpers Method-1 with cut line at +x axis).  Baseline RMS = 2.99 %, peak-to-peak / mean = 9.59 %; with `--compensated-iter 100 --compensated-step 0.05` (Path A best-effort) RMS drops to **0.58 %** (-80 %), p2p/mean = 2.17 % (-77 %).  Validates that Path A IS effective on simpler topologies even though it failed for the Gx fingerprint -- a clean demonstration of the "complexity tier" framing in `radia-mcp aca_tsvd(single_stroke)`. |
 | `view_sf_coil_gx_gmsh.py` | **GMSH visualiser** for the Gx coil.  Three modes: `--mode contours` (default, **recommended**) writes the SF design's CLOSED CONTOUR FILAMENTS only (each fingerprint loop as its own 1D Physical Group, NO connection arcs) -- the true SF output, with the host cylinder as a 2D reference; `--mode chain` writes the lobe-aware single-stroke chain (= what PEEC sees, with 4-quadrant traversal + 3 inter-quadrant geodesic arcs; the same chain `demo_sf_to_peec_gx.py --chain-method lobe` builds); `--mode step` merges the loft-chain STEP from `--with-peec`.  Includes preventive code (`gmsh.initialize(["-noconfig"])` + explicit `General.GraphicsPositionX/Y` + `Width`/`Height`) so the GMSH window can't restore to an off-screen second-monitor coordinate.  Uses pip-gmsh blocking `fltk.run()` (CLAUDE.md GMSH policy). |
+| `demo_regcoil_fusion.py` | **Fusion (stellarator Stage-2) coil design -- mini-REGCOIL / NESCOIL**.  The SAME surface stream function the gradient/IH demos use, applied to the fusion winding-surface current-potential problem: given a target normal field `B.n` on a PLASMA boundary, solve for `psi` on a WINDING SURFACE around it whose Biot-Savart `n.B` reproduces it (iso-contours = the coils).  Two parts: (1) two PRODUCIBLE targets -- a uniform vertical field (PF / equilibrium coil) and a non-axisymmetric `sin(theta)cos(2 phi)` (stellarator-like) -- reproduced to MACHINE PRECISION (`B.n` residual ~2e-9), proving the SF designer does the Stage-2 forward map exactly; (2) the REGCOIL **L-curve** on a genuinely-hard high-mode target `sin(3 theta)cos(5 phi)` (decays across the plasma-coil gap), sweeping the regularisation weight `alpha` to trace the classic `(B.n residual, peak |grad psi|)` trade-off (knee at `alpha_rel ~ 2e-2`: peak current density saturates at ~7.9e6 while residual keeps falling).  **Honest scope**: single-valued `psi` (PF / RMP / shaping fields -- a net-current TF coil needs the multivalued `G*zeta + I*theta` secular term from `cohomology_cut.py`); `B.n` is an analytic model field (swap for free-boundary VMEC for production); coil force / stress and winding-surface optimisation (FOCUS) are the named next steps.  Writes `demo_regcoil_fusion.json` + a 2-panel lab figure (3D coil + L-curve). |
 
 ## Running
 
@@ -74,6 +75,8 @@ python demo_sf_to_peec_gx.py --with-peec  # full Gx SF -> single-stroke -> CAD -
 python view_sf_coil_gx_gmsh.py             # SF contour filaments (no connection arcs) -- the real design
 python view_sf_coil_gx_gmsh.py --mode chain # single-stroke chain (with connection arcs) -- what PEEC sees
 python view_sf_coil_gx_gmsh.py --mode step  # the loft-chain STEP file from --with-peec
+python demo_regcoil_fusion.py              # fusion Stage-2: winding-surface current potential -> plasma B.n
+python demo_regcoil_fusion.py --no-plot    # JSON only (no matplotlib / radia-mcp)
 ```
 
 Each script is standalone (no Cubit, no panel UI).  `matplotlib` is optional:
@@ -319,11 +322,62 @@ system" (Hirahatake/Noguchi/Igarashi/Yamashita) enforces with bubbles of radius
   reflects `|B|`.  A physical check that the coil produces the intended field
   (e.g. the four-lobe saddle of a Gx gradient coil).
 
+## Fusion (stellarator Stage-2) coil design -- mini-REGCOIL / NESCOIL
+
+The stellarator coil-design community calls the surface stream function a
+**winding-surface current potential** and uses it as the unknown of NESCOIL
+(Merkel 1987), REGCOIL (Landreman 2017) and the surface part of FOCUS (Zhu
+2018).  The "Stage-2" coil problem is mathematically the SAME object this
+package solves for MRI gradient / induction-heating coils:
+
+```
+given a target normal field  B.n  on the PLASMA boundary,
+find a current potential psi on a WINDING SURFACE around it whose
+Biot-Savart  n.B  reproduces it          (iso-contours of psi = the coils)
+```
+
+`demo_regcoil_fusion.py` runs that forward problem with the existing surface-FE
+stream function -- the rows of the design matrix are just the plasma-normal
+component `n.B` of the winding-surface Biot-Savart kernel we already assemble.
+Two results:
+
+1. **Forward map is exact.**  Two producible targets -- a uniform vertical field
+   (a PF / equilibrium / vertical-field coil) and a non-axisymmetric
+   `sin(theta) cos(2 phi)` (a stellarator-like shape) -- are reproduced to
+   `B.n` residual ~2e-9 (machine precision).  This is honest: the targets are
+   smooth and within the winding surface's reach, so the forward map is exact,
+   not hidden behind a tolerance.
+
+2. **The REGCOIL trade-off.**  On a genuinely-hard target `sin(3 theta) cos(5
+   phi)` (a high mode that decays across the plasma-coil gap, so it is NOT
+   cheaply producible), sweeping the regularisation weight `alpha` traces the
+   classic L-curve: large `alpha` -> smooth coil, high `B.n` residual; small
+   `alpha` -> low residual but the peak surface current density `|grad psi|`
+   saturates at the surface's representation limit (~7.9e6, the vertical leg of
+   the L-curve), with a knee at `alpha_rel ~ 2e-2`.  `(field error, coil
+   complexity)` is exactly the Stage-2 trade-off REGCOIL is built to expose.
+
+**Honest scope** (what this is and is NOT): the demo solves the forward problem
+with a SINGLE-VALUED `psi` -- correct for PF / RMP / shaping / shim fields (no
+net poloidal current through the winding-torus hole).  A net-current (TF-type)
+coil needs the MULTI-VALUED secular term `G*zeta + I*theta`; that is the
+cohomology generator the lab already has in `cohomology_cut.py` (GMSH
+cohomology), not wired into this demo.  A production stellarator run also needs
+`B.n` from a free-boundary VMEC equilibrium (here it is an analytic model
+field), winding-surface geometry optimisation (FOCUS), and coil force / stress.
+Those are the named next steps, not part of this PoC.
+
 ## References
 
 - Sugahara Lab, "ACA-accelerated stream function method + CMA-ES",
   IEEJ Joint Technical Meeting on Static Apparatus / Rotating Machinery,
   SA-25-020 (manuscript Method 2/3).
+- P. Merkel, "Solution of stellarator boundary value problems with external
+  currents", Nucl. Fusion 27, 867 (1987) -- NESCOIL.
+- M. Landreman, "An improved current potential method for fast computation of
+  stellarator coil shapes", Nucl. Fusion 57, 046003 (2017) -- REGCOIL.
+- C. Zhu et al., "New method to design stellarator coils without the winding
+  surface", Nucl. Fusion 58, 016008 (2018) -- FOCUS.
 - HACApK (ppOpen-HPC, MIT): `src/ext/HACApK/`.
 - Validation reference: the f2py-wrapped Fortran `coil_solver.f90`
   (`method_aca_tsvd_1/2`), matched bit-for-bit by
