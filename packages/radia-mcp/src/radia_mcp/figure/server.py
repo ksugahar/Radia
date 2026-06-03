@@ -706,17 +706,26 @@ in practice, not just paper PDF:
    (LaTeX includegraphics)    (Type-42)       .pdf  (this server default)
   LaTeX paper, exact font    TikZ            matlab2tikz / see the
                                              tikz_export topic
-  Word / PowerPoint          EMF (vector)    MATLAB print('-dmeta',
-   (Office embed)                            'f.emf') OR exportgraphics(
-                                             gcf,'f.emf','ContentType',
-                                             'vector').  EMF stays vector
-                                             inside Office + prints crisp.
+  Word / PowerPoint          EMF (vector)    MATLAB exportgraphics(gcf,
+   (Office embed)                            'f.emf','ContentType',
+                                             'vector') -- stays vector in
+                                             Office + prints crisp.
+                                             (figure_office_export_recipe)
   Draft / web / slide        PNG 400-600 dpi matplotlib savefig(dpi=400)
-   quick-look                 (raster)        / MATLAB print('-dpng').
+   quick-look                 (raster)        / MATLAB exportgraphics(gcf,
+                                             'f.png','Resolution',400).
 
-OBSERVED LAB HABIT (verbatim from S: scripts):
-  - FEMM MATLAB:   set(gca,'FontName','Times'); xlabel('{\\it X} (m)');
-                   print('-dmeta','f.emf');        % -> Office EMF
+MATLAB EXPORT: use exportgraphics (R2020a+), NOT print.  The old
+print('-dmeta','f.emf') / print('-dpng') idiom (seen in legacy FEMM
+scripts) is DEPRECATED -- exportgraphics is the modern, supported path
+and keeps EMF vector.  Ready-to-paste recipes:
+  - figure_office_export_recipe()  -> MATLAB exportgraphics EMF + PNG
+  - figure_everyday_recipe()       -> matplotlib everyday analysis figure
+
+OBSERVED LAB HABIT (from S: scripts):
+  - FEMM MATLAB (legacy): set(gca,'FontName','Times'); xlabel('{\\it X}
+                   (m)'); print('-dmeta','f.emf');  % print is DEPRECATED
+                   -> modern: exportgraphics(...,'ContentType','vector')
   - COMSOL/CoreformCubit matplotlib: figsize=(3,4), dpi=400, Times New
                    Roman 10 pt, inward ticks, savefig PNG.
 
