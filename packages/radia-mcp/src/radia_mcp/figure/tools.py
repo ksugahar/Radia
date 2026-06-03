@@ -471,6 +471,148 @@ def figure_matlab2tikz_recipe(target: str = "paper_single_column",
     )
 
 
+def figure_everyday_recipe(embed_width_cm: float = 8.0,
+                           aspect: float = 1.33,
+                           dpi: int = 400) -> str:
+    """Matplotlib recipe for the lab's EVERYDAY analysis figure.
+
+    This is the style the lab's day-to-day analysis scripts actually use
+    (extracted 2026-06 from real COMSOL / CoreformCubit matplotlib
+    scripts on S:): a compact, often PORTRAIT (3:4) figure with a subtle
+    two-level light-gray ('gainsboro') grid, minor ticks ON, Times New
+    Roman 10 pt, a small 6 pt frameless legend, inward ticks on all four
+    sides, and PNG output at 400 dpi for quick review / slides / Word.
+
+    It deliberately DIFFERS from the paper_figure() profiles (which are
+    camera-ready submission figures):
+      - PNG raster output (review/web/Office), NOT vector.  Re-render to
+        vector PDF via paper_figure_recipe() before submitting.
+      - explicit minor ticks + a denser gainsboro grid, to read values
+        off an exploratory plot.
+
+    Args:
+        embed_width_cm: figure width in cm (default 8.0; the real scripts
+            use figsize (3, 4) in = ~7.6 cm).
+        aspect: height / width.  Default 1.33 = the 3:4 PORTRAIT the lab
+            analysis scripts favour; use 0.75 for landscape.
+        dpi: raster resolution for the PNG (lab everyday default 400).
+
+    Returns:
+        A ready-to-paste matplotlib recipe string.
+    """
+    w_in = embed_width_cm / 2.54
+    h_in = w_in * aspect
+    body = "\n".join([
+        "# Lab EVERYDAY analysis figure (matplotlib) -- review / slide / Word.",
+        "# NOT camera-ready: re-render via paper_figure_recipe() (vector PDF)",
+        "# before submitting.  From the lab's real COMSOL/CoreformCubit scripts.",
+        "import matplotlib",
+        "import matplotlib.pyplot as plt",
+        "",
+        "matplotlib.rc('mathtext', rm='serif', it='serif:italic',",
+        "              bf='serif:bold', fontset='cm')   # serif math (lab)",
+        "plt.rcParams.update({",
+        "    'font.family': 'Times New Roman',",
+        "    'font.size': 10, 'axes.labelsize': 10,",
+        "    'xtick.labelsize': 10, 'ytick.labelsize': 10,",
+        "    'legend.fontsize': 6,                       # small everyday legend",
+        "    'axes.linewidth': 0.8, 'lines.linewidth': 0.8,",
+        "    'xtick.direction': 'in', 'ytick.direction': 'in',",
+        "    'xtick.top': True, 'ytick.right': True,",
+        "    'pdf.fonttype': 42, 'ps.fonttype': 42,",
+        "})",
+        "",
+        f"fig, ax = plt.subplots(figsize=({w_in:.2f}, {h_in:.2f}), dpi={dpi})",
+        "ax.minorticks_on()                              # minor ticks on",
+        "# subtle two-level light-gray grid (lab 'gainsboro' convention):",
+        "ax.grid(which='major', color='gainsboro', linestyle=':',  linewidth=0.2)",
+        "ax.grid(which='minor', color='gainsboro', linestyle='--', linewidth=0.1)",
+        "",
+        "# --- plot here ---",
+        "# ax.plot(x, y, label='...')",
+        r"# ax.set_xlabel(r'${\it z}$ (mm)')   # italic variable, unit in PARENS",
+        r"# ax.set_ylabel(r'${\it B}$ (T)')",
+        "# ax.legend(loc='best', framealpha=0.0, edgecolor='none')  # frameless",
+        "# NO ax.set_title(...) -- the caption goes in the document.",
+        "",
+        f"fig.savefig('out.png', dpi={dpi}, bbox_inches='tight')",
+    ])
+    return (
+        "Lab everyday analysis figure (matplotlib)\n"
+        f"  width   : {embed_width_cm:.1f} cm  "
+        f"(figsize {w_in:.2f} x {h_in:.2f} in, aspect h/w {aspect:.2f})\n"
+        "  font    : 10 pt body / 6 pt legend   grid: gainsboro 2-level\n"
+        f"  output  : PNG @ {dpi} dpi (review/slide/Word -- NOT a paper figure)\n"
+        "  papers  : use paper_figure_recipe(profile=...) for vector PDF\n"
+        "\n" + body
+    )
+
+
+def figure_office_export_recipe(basename: str = "figure",
+                                emf: bool = True,
+                                png: bool = True,
+                                png_dpi: int = 600) -> str:
+    """MATLAB recipe to export the current figure for Word / PowerPoint
+    via exportgraphics (R2020a+).
+
+    The legacy print('-dmeta', ...) / print('-dpng', ...) idiom (seen in
+    older lab scripts incl. the FEMM folder) is DEPRECATED.  exportgraphics
+    is the modern, supported MATLAB export and is what this recipe uses:
+      - EMF ('ContentType','vector') stays VECTOR inside Word/PowerPoint
+        -- text remains selectable and prints crisp at any zoom, unlike a
+        pasted PNG.
+      - PNG ('Resolution', dpi) for the raster fallback (slides / quick
+        look).
+
+    For a LaTeX paper do NOT use EMF/PNG: export vector PDF
+    (exportgraphics ...'.pdf','ContentType','vector') or use
+    figure_matlab2tikz_recipe() for an exact LaTeX-font match.
+
+    Args:
+        basename: output file basename (no extension).
+        emf: emit the EMF (Office vector) line (default True).
+        png: emit the PNG raster line (default True).
+        png_dpi: PNG resolution (default 600; 400 is fine for slides).
+
+    Returns:
+        A ready-to-paste MATLAB recipe string.
+    """
+    lines = [
+        "% --- Export current MATLAB figure for Office (Word / PowerPoint) ---",
+        "% exportgraphics (R2020a+).  print('-dmeta'/'-dpng') is the OLD way",
+        "% and is DEPRECATED -- do NOT use print for figure export.",
+        "fig = gcf;   % (or your figure handle)",
+    ]
+    if emf:
+        lines += [
+            "% EMF = vector inside Word/PowerPoint (selectable text, crisp print):",
+            f"exportgraphics(fig, '{basename}.emf', 'ContentType', 'vector', ...",
+            "               'BackgroundColor', 'white');",
+        ]
+    if png:
+        lines += [
+            f"% PNG raster fallback (slides / quick-look) at {png_dpi} dpi:",
+            f"exportgraphics(fig, '{basename}.png', 'Resolution', {png_dpi}, ...",
+            "               'BackgroundColor', 'white');",
+        ]
+    lines += [
+        "% For a LaTeX paper use vector PDF (or figure_matlab2tikz_recipe):",
+        f"%   exportgraphics(fig, '{basename}.pdf', 'ContentType', 'vector');",
+    ]
+    body = "\n".join(lines)
+    targets = ", ".join([t for t, on in (("EMF", emf), ("PNG", png)) if on]) \
+        or "(none)"
+    return (
+        "MATLAB Office-export recipe (exportgraphics, R2020a+)\n"
+        f"  targets : {targets}\n"
+        f"  basename: {basename}\n"
+        f"  png_dpi : {png_dpi}\n"
+        "  note    : print('-dmeta'/'-dpng') is DEPRECATED -- this uses\n"
+        "            exportgraphics; EMF keeps text vector inside Office.\n"
+        "\n" + body
+    )
+
+
 # ----- Python callable helpers (NEW) ---------------------------------------
 
 def lab_figsize(target: str = "digest_double_column_side_by_side",
