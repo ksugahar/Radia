@@ -149,15 +149,17 @@ def main():
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        plt.rcParams["pdf.fonttype"] = 42
         fig = plt.figure(figsize=(11, 4))
         ax = fig.add_subplot(1, 2, 1, projection="3d")
         ax.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, path[:, 2] * 1e3, lw=0.6)
-        ax.set_title("Single-stroke coil path"); ax.set_xlabel("x"); ax.set_ylabel("y")
+        ax.set_xlabel("x"); ax.set_ylabel("y")
+        ax.text2D(0.02, 0.96, "(a)", transform=ax.transAxes, fontsize=10)
         ax2 = fig.add_subplot(1, 2, 2)
         ax2.plot(zc * 1e3, Bz, "o-", ms=3, label="single-stroke coil Bz")
         ax2.plot(zc * 1e3, G_fit * zc, "k--", label="linear fit")
         ax2.set_xlabel("z [mm]"); ax2.set_ylabel("Bz [T]")
-        ax2.set_title(f"On-axis gradient (nonlin {nonlin:.1e})")
+        ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
         ax2.legend(); ax2.grid(alpha=0.3)
         out = HERE / "demo_sf_to_peec_gz.png"
         fig.tight_layout(); fig.savefig(out, dpi=110)

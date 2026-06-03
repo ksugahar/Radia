@@ -78,10 +78,10 @@ def main():
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
+            plt.rcParams["pdf.fonttype"] = 42
             fig, ax = plt.subplots(figsize=(5, 4))
             ax.semilogy(np.arange(1, res.k_aca + 1), res.S[:res.k_aca], "o-")
             ax.set_xlabel("mode index"); ax.set_ylabel("singular value")
-            ax.set_title(f"Magnet-array TSVD spectrum (k_aca={res.k_aca})")
             ax.grid(True, which="both", alpha=0.3)
             out = HERE / "demo_magnet_array.png"
             fig.tight_layout(); fig.savefig(out, dpi=110)

@@ -932,6 +932,7 @@ def main():
                 import matplotlib
                 matplotlib.use("Agg")
                 import matplotlib.pyplot as plt
+                plt.rcParams["pdf.fonttype"] = 42
                 fig, ax = plt.subplots(figsize=(7.0, 5.0))
                 # All trials (dominated + Pareto)
                 rms_all = [t.user_attrs.get("rms") for t in study.trials
@@ -951,8 +952,6 @@ def main():
                 ax.set_ylabel(r"$\psi^T S \psi$  (regularisation norm)")
                 ax.set_yscale("log" if reg_p.max() / max(reg_p.min(), 1e-30)
                               > 10 else "linear")
-                ax.set_title(f"NSGA-II Pareto front: RMS vs reg_norm"
-                             f"  ({args.regularize}, {args.deform_trials} trials)")
                 ax.legend(loc="best", fontsize=9)
                 ax.grid(alpha=0.3)
                 out_png = HERE / "demo_pareto_plot.png"

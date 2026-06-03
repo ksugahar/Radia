@@ -118,6 +118,7 @@ def main():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    plt.rcParams["pdf.fonttype"] = 42
 
     lams = np.concatenate([[0.0], np.logspace(-4, 1.5, 11)])
     result = {"target": args.target}
@@ -150,7 +151,8 @@ def main():
         ax.set_xscale("log"); ax.grid(alpha=0.3); ax.legend(fontsize=7)
         ax.set_xlabel("inhomogeneity ||A psi-B||/||B|| [%]")
         ax.set_ylabel("peak max|grad psi| [x1e6]")
-        ax.set_title("(a) geometry lever: bigger former -> lower peak")
+        if do_geo and do_nsga:
+            ax.text(0.02, 0.96, "(a)", transform=ax.transAxes, fontsize=10)
 
     if do_nsga:
         front = nsga_joint(0.16, 0.45, args.nsga_trials, args.nsga_pop,
@@ -172,7 +174,8 @@ def main():
         ax.set_xscale("log"); ax.grid(alpha=0.3); ax.legend(fontsize=8)
         ax.set_xlabel("inhomogeneity ||A psi-B||/||B|| [%]")
         ax.set_ylabel("peak max|grad psi| [x1e6]")
-        ax.set_title("(b) NSGA-II joint front (colour = former size)")
+        if do_geo and do_nsga:
+            ax.text(0.02, 0.96, "(b)", transform=ax.transAxes, fontsize=10)
 
     fig.tight_layout()
     fig.savefig(args.out + ".png", dpi=130)

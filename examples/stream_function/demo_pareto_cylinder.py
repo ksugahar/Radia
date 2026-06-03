@@ -22,6 +22,8 @@ import argparse
 
 import numpy as np
 
+from radia_mcp.figure import lab_figure, save_lab_figure
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "..", "..", "src"))
@@ -95,7 +97,7 @@ def main():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(6.8, 5.2))
+    fig, ax = lab_figure(embed_width_cm=8.0)
     cmap = plt.cm.viridis(np.linspace(0.1, 0.9, len(args.lengths)))
 
     per_L, allpts = {}, []
@@ -116,12 +118,9 @@ def main():
     ax.set_xscale("log")
     ax.set_xlabel("inhomogeneity ||A psi - B|| / ||B|| [%]")
     ax.set_ylabel("peak surface current density max|grad psi|")
-    ax.set_title("Cylinder Gx fingerprint front (folded Tikhonov + ACA)\n"
-                 "geometry lever = cylinder LENGTH (note the optimum)")
     ax.legend(fontsize=7, loc="upper right")
     ax.grid(alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(args.out + ".png", dpi=130)
+    save_lab_figure(fig, args.out, embed_width_cm=8.0)
 
     peaks0 = {L: nondominated(per_L[L])[0]["peak"] for L in args.lengths}
     Lbest = min(peaks0, key=peaks0.get)

@@ -309,6 +309,7 @@ def main():
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
+            plt.rcParams["pdf.fonttype"] = 42
             from mpl_toolkits.mplot3d.art3d import Line3DCollection
             P = (dist_path if dist_path is not None else path) * 1e3
             fig = plt.figure(figsize=(6, 6))
@@ -322,7 +323,6 @@ def main():
             lc = Line3DCollection(seg, cmap="viridis", lw=1.0)
             lc.set_array(np.linspace(0, 1, len(seg)))
             ax.add_collection3d(lc)
-            ax.set_title(f"{args.target} coil on sphere former (1 wire)")
             for s in "xyz":
                 getattr(ax, f"set_{s}lim")(-r3 * 1.1, r3 * 1.1)
             out = HERE / "demo_sphere_fe_direct.png"
