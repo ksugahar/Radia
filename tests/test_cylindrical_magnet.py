@@ -418,6 +418,29 @@ def test_vector_potential():
         assert all_reasonable, "TEST FAILED: unreasonable A values"
 
 
+def test_vector_potential_diametric_raises():
+    """No-Fallback: get_A() must RAISE on diametric (transverse) magnetization
+    rather than SILENTLY returning an axial-only (wrong) / zero A -- the
+    diametric contribution is not implemented.  (get_B handles all directions;
+    see test_diametric_cylinder.)"""
+    import pytest
+    # pure diametric (Mx) -> raise instead of silently returning zero A
+    cyl = CylindricalMagnet(center=[0, 0, 0], radius=10.0, height=20.0,
+                            magnetization=[1e6, 0, 0])
+    with pytest.raises(NotImplementedError, match="diametric"):
+        cyl.get_A([5.0, 0.0, 5.0])
+    # mixed axial + diametric -> still raise (the Mx part would be dropped)
+    cyl_mix = CylindricalMagnet(center=[0, 0, 0], radius=10.0, height=20.0,
+                                magnetization=[1e6, 0, 1e6])
+    with pytest.raises(NotImplementedError, match="diametric"):
+        cyl_mix.get_A([5.0, 0.0, 5.0])
+    # pure axial still works (regression guard)
+    cyl_ax = CylindricalMagnet(center=[0, 0, 0], radius=10.0, height=20.0,
+                               magnetization=[0, 0, 1e6])
+    A = cyl_ax.get_A([5.0, 0.0, 5.0])
+    assert abs(A[2]) < 1e-12          # Az = 0 for axial magnetization
+
+
 if __name__ == "__main__":
     print("Cylindrical Magnet Field Test Suite")
     print("=" * 60)

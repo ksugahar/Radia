@@ -578,8 +578,9 @@ class CylindricalMagnet:
         Get vector potential A at observation point.
 
         The vector potential has only an azimuthal component A_phi for
-        axially magnetized cylinders. For diametric magnetization,
-        A is not implemented (returns zero).
+        axially magnetized cylinders. For diametric (transverse)
+        magnetization, A is not implemented and get_A RAISES (No-Fallback:
+        it does not silently return a wrong / zero A).
 
         Parameters:
             point: [x, y, z] observation point (in constructor length units)
@@ -602,6 +603,19 @@ class CylindricalMagnet:
             p_local = np.array([p[2], p[0], p[1]])
             M_local = np.array([self.magnetization[2], self.magnetization[0], self.magnetization[1]])
 
+        # Diametric (transverse) magnetization contributes to A through a volume
+        # integral that is NOT implemented here.  Raise rather than SILENTLY
+        # return an axial-only (wrong) A or zero -- a plausible-but-wrong A is
+        # worse than a clear error (No-Fallback).  get_B()/get_H() are
+        # implemented for all magnetization directions.
+        if abs(M_local[0]) > 1.0e-15 or abs(M_local[1]) > 1.0e-15:
+            raise NotImplementedError(
+                "CylindricalMagnet.get_A() is implemented for AXIAL "
+                "magnetization only; this magnet has a diametric (transverse "
+                "Mx/My) component whose vector-potential contribution would be "
+                "silently dropped. Use get_B() / get_H() (implemented for all "
+                "directions), or implement the diametric A volume integral.")
+
         # Compute A in local coordinates
         rho = np.sqrt(p_local[0]**2 + p_local[1]**2)
         z_local = p_local[2]
@@ -621,8 +635,8 @@ class CylindricalMagnet:
             Ay_local = A_phi * np.cos(phi)
             # Az = 0 for axial magnetization
 
-        # Diametric magnetization: A not implemented
-        # (Would require integration over the volume, more complex)
+        # (Diametric magnetization was rejected above with a clear raise --
+        #  its A would require a volume integral, not implemented.)
 
         # Rotate back to global coordinates
         if self.axis == 'z':
