@@ -47,9 +47,13 @@ WHAT THIS FRAMEWORK PROVIDES
     ONE mesh) designs through the same path; abe groups EACH disconnected
     component's edges into its own free constant (ndof_free < ndof) and the
     contours close on every plate.  Locked by test_streamfunction_biplanar.
-  * Regularisation menu: L2 / H1 (min surface-current energy) / sigma-weighted
-    (ohmic) / inductance-diagonal / L-inf (peak cap).  All fold onto ONE ACA
-    factorisation via RegularizedTSVD.  [topic: regularized]
+  * Regularisation / DESIGN OBJECTIVE menu (--regularize): L2 (min |psi|) /
+    H1 (min |grad psi|, a smoothness proxy) / INDUCTANCE (min 1/2 psi^T L psi
+    -- the PHYSICAL min-stored-energy gradient-coil objective, Turner/Forbes;
+    L = mu0 C^T SL C from ngsolve.bem LaplaceSL, K = n x grad psi; validated
+    torus -0.6 %, Nagaoka solenoid 0.78; dense, moderate N) + L-inf peak cap
+    (pareto lever).  All fold onto ONE ACA factorisation via
+    RegularizedTSVD.from_stiffness(base, S).  [topic: regularized]
   * Folded TIKHONOV (the "+ alpha I" core) -> the (field homogeneity, PEAK
     current density) PARETO FRONT swept at ~50 us/point, with FOUR stackable
     levers: Tikhonov alpha (L-curve), L-inf minimax, geometry (former size /
