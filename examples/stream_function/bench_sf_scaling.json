@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-03T09:21:11",
+  "timestamp": "2026-06-03T09:59:35",
   "hostname": "lab",
   "benchmark": "sf_design_scaling",
   "problem": {
@@ -17,9 +17,9 @@
       "ndof": 355,
       "n_free": 308,
       "M": 58,
-      "t_assemble_s": 0.026,
-      "t_build_s": 0.0889,
-      "peak_memory_mb": 130.1
+      "t_assemble_s": 0.0233,
+      "t_build_s": 0.0766,
+      "peak_memory_mb": 130.5
     },
     {
       "maxh": 0.022,
@@ -27,9 +27,9 @@
       "ndof": 1179,
       "n_free": 1094,
       "M": 58,
-      "t_assemble_s": 0.0684,
-      "t_build_s": 0.2307,
-      "peak_memory_mb": 140.9
+      "t_assemble_s": 0.0564,
+      "t_build_s": 0.1878,
+      "peak_memory_mb": 141.3
     },
     {
       "maxh": 0.014,
@@ -37,9 +37,9 @@
       "ndof": 2842,
       "n_free": 2709,
       "M": 58,
-      "t_assemble_s": 0.163,
-      "t_build_s": 0.5147,
-      "peak_memory_mb": 159.8
+      "t_assemble_s": 0.1092,
+      "t_build_s": 0.4257,
+      "peak_memory_mb": 159.9
     },
     {
       "maxh": 0.009,
@@ -47,9 +47,9 @@
       "ndof": 6861,
       "n_free": 6652,
       "M": 58,
-      "t_assemble_s": 0.3436,
-      "t_build_s": 1.2039,
-      "peak_memory_mb": 200.3
+      "t_assemble_s": 0.3779,
+      "t_build_s": 0.9974,
+      "peak_memory_mb": 200.2
     },
     {
       "maxh": 0.006,
@@ -57,9 +57,9 @@
       "ndof": 15260,
       "n_free": 14947,
       "M": 58,
-      "t_assemble_s": 0.7362,
-      "t_build_s": 2.6792,
-      "peak_memory_mb": 281.0
+      "t_assemble_s": 0.59,
+      "t_build_s": 2.2116,
+      "peak_memory_mb": 281.5
     },
     {
       "maxh": 0.0045,
@@ -67,9 +67,9 @@
       "ndof": 26920,
       "n_free": 26503,
       "M": 58,
-      "t_assemble_s": 1.1679,
-      "t_build_s": 4.133,
-      "peak_memory_mb": 405.2
+      "t_assemble_s": 1.007,
+      "t_build_s": 3.9798,
+      "peak_memory_mb": 406.6
     }
   ]
 }

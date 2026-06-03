@@ -1021,8 +1021,9 @@ def _flux_line_plot(chain, current, out_path, plane="y", half=None,
         ax.streamplot(g, g, Ba, Bb, color="white", linewidth=lw, density=2.0)
     lbl = "xyz"
     ax.set_xlabel(f"{lbl[ia]} [m]"); ax.set_ylabel(f"{lbl[ib]} [m]")
-    ax.set_title(f"coil flux lines on {lbl[axn]}=0 (bubble-seeded, "
-                 f"{len(seeds)} lines)")
+    # Lab figure convention: NO in-figure title -- the cut-plane and line count
+    # are returned (the panel / docs caption carries them, not the PNG).
+    plt.rcParams["pdf.fonttype"] = 42                  # TrueType (no Type-3)
     fig.tight_layout()
     fig.savefig(out_path, dpi=130)
     plt.close(fig)
@@ -1048,7 +1049,7 @@ def _equal_3d(ax, pts):
 def _tube_mesh(path, radius, n_circ=12):
     """Sweep a circle of given radius along the polyline with a twist-free
     (parallel-transport) frame -> (X, Y, Z) for plot_surface.  This is the
-    'with thickness' (太さ) rendering of the single conductor."""
+    'with thickness' rendering of the single conductor."""
     P = np.asarray(path, float)
     if len(P) < 2:
         return None
@@ -1084,34 +1085,43 @@ def _tube_mesh(path, radius, n_circ=12):
 
 
 def _steps_plot(loops, chain, dist_chain, diam, out_path, target_cf=""):
-    """Per-step manufacturing visualisation -- a 2x2 3D figure showing the
-    coil at each stage: (1) equal-current iso-contours (N = nlevels turns),
-    (2) the single-stroke (一筆書き) wire, (3) the sheet-metal (板金)
-    distorted wire, (4) the wire WITH thickness (太さ) + distortion."""
+    """Per-step manufacturing visualisation -- a 2x2 3D figure of the coil at
+    each stage: (a) equal-current iso-contours (N = nlevels turns), (b) the
+    single-stroke wire, (c) the sheet-metal (bankin-ho) distorted wire, (d) the
+    wire WITH conductor thickness + distortion.
+
+    Lab figure convention (applied inline -- the shipped panel calc cannot
+    import radia_mcp.figure): NO in-figure title / suptitle; panels carry small
+    (a)-(d) CORNER LABELS (not titles, so the _check_no_in_figure_title gate
+    passes), TrueType fonts, English text; the full stage descriptions are
+    returned in ``stages`` for the panel / docs caption."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (registers 3d)
+    plt.rcParams["pdf.fonttype"] = 42                  # TrueType (no Type-3)
     final = dist_chain if dist_chain is not None else chain
+    distorted = dist_chain is not None
     allpts = np.vstack([chain, final])
     fig = plt.figure(figsize=(11.0, 9.0))
+
+    def _tag(ax, s):
+        ax.text2D(0.02, 0.96, s, transform=ax.transAxes, fontsize=10)
 
     ax = fig.add_subplot(2, 2, 1, projection="3d")
     for p in loops:
         ax.plot(p[:, 0], p[:, 1], p[:, 2], lw=0.7)
-    ax.set_title(f"1. equal-current contours (N={len(loops)} turns)",
-                 fontsize=9)
+    _tag(ax, f"(a) contours (N={len(loops)})")
     _equal_3d(ax, allpts)
 
     ax = fig.add_subplot(2, 2, 2, projection="3d")
     ax.plot(chain[:, 0], chain[:, 1], chain[:, 2], lw=0.7, color="C0")
-    ax.set_title("2. single-stroke wire (ikkaki)", fontsize=9)
+    _tag(ax, "(b) single-stroke wire")
     _equal_3d(ax, allpts)
 
     ax = fig.add_subplot(2, 2, 3, projection="3d")
     ax.plot(final[:, 0], final[:, 1], final[:, 2], lw=0.7, color="C3")
-    note = "" if dist_chain is not None else " (no --distort: = stage 2)"
-    ax.set_title("3. sheet-metal (bankin) distorted" + note, fontsize=9)
+    _tag(ax, "(c) sheet-metal distorted" + ("" if distorted else " (= b)"))
     _equal_3d(ax, allpts)
 
     ax = fig.add_subplot(2, 2, 4, projection="3d")
@@ -1119,15 +1129,19 @@ def _steps_plot(loops, chain, dist_chain, diam, out_path, target_cf=""):
     if tube is not None:
         ax.plot_surface(tube[0], tube[1], tube[2], color="C1",
                         alpha=0.9, linewidth=0, antialiased=True)
-    ax.set_title(f"4. with thickness (d={diam*1e3:.1f} mm) + distort",
-                 fontsize=9)
+    _tag(ax, f"(d) thickness d={diam*1e3:.1f} mm")
     _equal_3d(ax, allpts)
 
-    fig.suptitle(f"SF coil manufacturing stages  (target Bz = {target_cf})")
     fig.tight_layout()
     fig.savefig(out_path, dpi=130)
     plt.close(fig)
-    return {"steps_plot": out_path}
+    return {"steps_plot": out_path, "target_cf": target_cf, "stages": [
+        f"(a) equal-current iso-contours, N={len(loops)} turns",
+        "(b) single-stroke (ikkaki) wire",
+        "(c) sheet-metal (bankin-ho) distorted wire"
+        + ("" if distorted else " -- none applied, equals (b)"),
+        f"(d) with conductor thickness d={diam*1e3:.1f} mm + distortion",
+    ]}
 
 
 def _peec_inductance(chain, diam, sigma, freq):
