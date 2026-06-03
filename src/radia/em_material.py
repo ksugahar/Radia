@@ -169,10 +169,16 @@ class EMMaterial:
         delta = math.sqrt(2 * self.rho / (omega * mu_eff))
         xi = R / delta
         gamma_a = complex(1, 1) * xi
-        try:
-            return (self.rho / R) * gamma_a * np.tanh(gamma_a)
-        except OverflowError:
-            return complex(1, 1) * self.rho / delta
+        if xi > 30.0:
+            # Thick-conductor / high-frequency limit: tanh(gamma_a) -> 1 to far
+            # below machine precision (|tanh - 1| < 1e-26 at xi = 30).  Use it
+            # explicitly: np.tanh OVERFLOWS to nan past xi ~ 710 emitting only a
+            # RuntimeWarning (NOT an OverflowError), so the old `except
+            # OverflowError` never fired and dowell_Zs SILENTLY returned nan for
+            # thick conductors (e.g. an induction-heating steel workpiece at
+            # high frequency).
+            return (self.rho / R) * gamma_a          # = (1+1j) * rho / delta
+        return (self.rho / R) * gamma_a * np.tanh(gamma_a)
 
     def create_esim_solver(self, frequency: float, half_thickness: float,
                            geometry: str = "cylinder"):
