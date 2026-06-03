@@ -351,6 +351,36 @@ def test_streamfunction_figures_no_in_figure_title():
         "caption (lab rule, radia_mcp.figure); offenders: " + ", ".join(bad))
 
 
+def test_streamfunction_ih_resonance(sample_vols):
+    """IH-resonance design: pick the turn count (nlevels) so the single-stroke
+    coil inductance equals L_target = 1/(omega^2 C) -- the IH work coil + tank
+    capacitor resonate at the inverter frequency.  The SAME BEM inductance
+    machinery that MINIMISES L for a gradient coil here TARGETS a value for IH
+    (L_coil ~ N^2 is set by the turns; the field design is unchanged)."""
+    coil, evalv = sample_vols
+    # (a) target a specific inductance directly
+    r = _run_calc(coil, evalv, "1",
+                  extra=["--order", "1", "--method", "manufacture",
+                         "--confine", "off", "--target-inductance", "30e-6",
+                         "--peec-freq", "2e5"])
+    assert "error" not in r, f"resonance design error: {r.get('error')}"
+    res = r.get("resonance")
+    assert res is not None and res["in_range"], res
+    assert 4 <= res["nlevels"] <= 60
+    # achieved coil L near the 30 uH target (integer-turn quantised -> ~5-15 %)
+    assert res["achieved_rel_error"] < 0.15, res
+    assert r["peec"]["L_H"] > 0.0
+    # (b) tank-cap path: C + f -> L_target -> the coil resonates near f
+    r2 = _run_calc(coil, evalv, "1",
+                   extra=["--order", "1", "--method", "manufacture",
+                          "--confine", "off", "--resonance-cap", "22e-9",
+                          "--peec-freq", "2e5"])
+    res2 = r2.get("resonance")
+    assert res2 is not None and "resonance_freq_Hz" in res2, res2
+    # designed coil resonates within ~12 % of the 200 kHz inverter frequency
+    assert abs(res2["resonance_freq_Hz"] - 2.0e5) / 2.0e5 < 0.12, res2
+
+
 def test_streamfunction_easy_tier_single_stroke_sub500ppm(sample_vols):
     """Method completion (EASY tier): a uniform-Bz (solenoid) target single-
     strokes to SUB-500 ppm with NO --distort -- the nested closed rings have
