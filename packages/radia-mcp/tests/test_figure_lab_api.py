@@ -4,9 +4,14 @@ These lock the fail-loud behaviour that was missing when the CEFC 2026 oral
 figures slipped through with in-figure titles + \\linewidth downscaling.
 """
 import os
-import matplotlib
-matplotlib.use("Agg")
 import pytest
+
+# Skip the whole module if matplotlib is not installed (CI minimal env).
+# These tests need matplotlib at import time (Agg backend must be set before
+# any figure submodule uses it).  The radia-mcp-matrix CI installs only mcp;
+# this guard prevents collection-time ImportError.
+matplotlib = pytest.importorskip("matplotlib")
+matplotlib.use("Agg")
 
 from radia_mcp.figure import (
     lab_figure, save_lab_figure, legend_no_overlap, audit_tex_figures,
