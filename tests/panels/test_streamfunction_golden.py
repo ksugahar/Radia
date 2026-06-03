@@ -467,6 +467,22 @@ def test_regcoil_fusion_wout_and_vmec_boundary(tmp_path):
     with pytest.raises(ValueError):
         D._read_wout_boundary(bad)
 
+    # a non-stellarator-symmetric (lasym=T) wout carries rmns/zmnc; the symmetric
+    # reader must RAISE rather than silently truncate them to the symmetric part
+    asym = str(tmp_path / "wout_asym.nc")
+    d3 = netCDF4.Dataset(asym, "w")
+    d3.createDimension("radius", ns)
+    d3.createDimension("mn_mode", mn)
+    d3.createVariable("nfp", "i4")[...] = nfp0
+    d3.createVariable("xm", "f8", ("mn_mode",))[:] = [t[0] for t in terms0]
+    d3.createVariable("xn", "f8", ("mn_mode",))[:] = [t[1] * nfp0 for t in terms0]
+    d3.createVariable("rmnc", "f8", ("radius", "mn_mode"))[:] = 0.0
+    d3.createVariable("zmns", "f8", ("radius", "mn_mode"))[:] = 0.0
+    d3.createVariable("rmns", "f8", ("radius", "mn_mode"))[:] = 0.0   # asymmetric
+    d3.close()
+    with pytest.raises(ValueError, match="symmetric"):
+        D._read_wout_boundary(asym)
+
     # --- (2) rotating-ellipse boundary: non-axisymmetric + outward normals ---
     pts, nrm = D._vmec_points_normals(terms0, nfp0, 24, 24)
     axis = np.column_stack([
@@ -496,9 +512,12 @@ def test_regcoil_fusion_demo_invariants(tmp_path):
     r = subprocess.run(cmd, capture_output=True, text=True, env=env,
                        cwd=str(tmp_path), timeout=600)
     if r.returncode != 0:
-        if any(s in (r.stderr or "") for s in ("DLL", "MKL", "ImportError",
-                                               "libiomp", "gmsh")):
-            pytest.skip("NGSolve/MKL/gmsh subprocess env issue (LAB pytest)")
+        # tight env-skip (match _run_calc): only genuine MKL/DLL env breakage,
+        # NOT a bare ImportError/gmsh substring -- those would mask a real
+        # regression in the load-bearing cohomology / physics path as a skip.
+        low = (r.stderr or "").lower()
+        if "mkl" in low or "dll" in low or "libiomp" in low:
+            pytest.skip("NGSolve/MKL subprocess env issue (LAB pytest)")
         raise AssertionError(f"demo failed: {r.stderr[-1500:]}")
     with open(os.path.join(str(tmp_path), "demo_regcoil_fusion.json")) as f:
         d = json.load(f)
@@ -511,7 +530,9 @@ def test_regcoil_fusion_demo_invariants(tmp_path):
     assert nc["tf_field_BR_const_spread_rel"] < 0.02, nc       # Ampere 1/R
     assert nc["tf_field_outside_over_inside"] < 1e-2, nc       # ~0 outside
     fp = nc["secular_bn_footprint_rel"]
-    assert fp["net_poloidal_TF"] < 0.1 * fp["net_toroidal"], fp  # TF tangent
+    # TF field is tangent to the plasma: its B.n footprint is >100x smaller than
+    # the net-toroidal generator's (measured ~2400-2600x) -> prescribed, not fitted
+    assert fp["net_poloidal_TF"] < 0.01 * fp["net_toroidal"], fp
     # 4. VMEC boundary
     vm = d["vmec_boundary"]
     assert vm["non_axisymmetric"] is True, vm
