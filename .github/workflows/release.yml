@@ -61,17 +61,43 @@ jobs:
   # ==================================================================
   # Publish to PyPI (only on version tags: v*)
   # ==================================================================
+  # IMPORTANT: workflow_run.head_branch returns the BRANCH name ('main'),
+  # NOT the tag name, when the triggering commit is on both a branch and a
+  # tag simultaneously (GitHub Actions known quirk, 2026-06-03).
+  # Fix: first check CI success, then use the GitHub API to confirm a v*
+  # tag actually points at the triggering SHA before publishing.
   publish-pypi:
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'v')
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       id-token: write
 
     steps:
+      - name: Check if a v* release tag points at this commit
+        id: tag_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          # List all tags whose object SHA (direct for lightweight, or
+          # dereferenced ^{} for annotated) matches the triggering commit.
+          # The ^{} deref endpoint returns lines like:
+          #   refs/tags/v4.90.1^{} <sha>
+          VTAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+                 | awk -v sha="$SHA" '($1==sha) && /\^\{\}/ {print $2}' \
+                 | sed 's/\^{}//' | head -1)
+          if [ -n "$VTAG" ]; then
+            echo "found=true"  >> "$GITHUB_OUTPUT"
+            echo "tag=$VTAG"   >> "$GITHUB_OUTPUT"
+            echo "v* tag for $SHA: $VTAG"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No v* tag found for $SHA -- skipping PyPI publish"
+          fi
+
       - name: Download wheel artifact
+        if: steps.tag_check.outputs.found == 'true'
         uses: actions/download-artifact@v4
         with:
           name: radia-wheel
@@ -80,6 +106,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify wheel (exists + version consistency)
+        if: steps.tag_check.outputs.found == 'true'
         run: |
           echo "=== Wheel files ==="
           ls -la dist/
@@ -113,4 +140,5 @@ jobs:
           PY
 
       - name: Publish to PyPI
+        if: steps.tag_check.outputs.found == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
