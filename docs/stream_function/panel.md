@@ -120,6 +120,20 @@ codebase).  They agree to 8–11 digits (uniform 3.5e-11, Gx 1.1e-8); the
 `abe`-confined Gx coil reaches **1.0 %** nonlinearity on the short former,
 cross-validated.  See the [examples README](../../examples/stream_function/README.md).
 
+## Scaling (large surface meshes)
+
+The design solve is `min ‖Aψ−B‖² + α·ψᵀSψ`.  The regularisation seminorm `S`
+(the surface-H1 stiffness) and the DOF-reduction matrix `R` (`Sᵢₙd = RᵀSR`) are
+**naturally sparse** (the FE stiffness is ~2 % dense) and are kept sparse
+end-to-end; `RegularizedTSVD.from_stiffness` factors `S` once (`splu`) and
+back-solves the `k` ACA modes.  Densifying them (the historical `ToDense()`)
+was an O(N²) time + memory wall — **13.3 s and 3.75 GB at N = 15 260 DOF**.
+After the sparse fix the ACA fold is ~0.3 s and peak memory ~0.2 GB at the same
+N; the design now scales **linearly** past 27 000 surface DOF (the remaining
+cost is the Biot-Savart design-matrix assembly, itself linear in N).  Locked by
+[`bench_sf_scaling.py`](../../examples/stream_function/bench_sf_scaling.py)
+(+ committed `bench_sf_scaling.json` / `.png`).
+
 ## Tests
 
 - `tests/panels/test_streamfunction_golden.py` — the calc golden band (design /
