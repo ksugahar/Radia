@@ -263,7 +263,36 @@ Recent work (~2022-2024) combines CLN with machine-learning-
 enhanced reduced order models for magnetic bearings.  The CLN
 provides the physics-based skeleton; ML corrects the residual.
 
-## 4. Connection to PEEC
+## 4. TEAM 28 electrodynamic levitation force (lab, verified 2026-06-04)
+
+The first CLN reduction carried through to the actual TEAM Problem 28
+LEVITATION FORCE.  (Prior CLN-on-TEAM28 work extracted only the decay
+spectrum R_n / L_n on a generic test disk under a uniform field; this
+closes the gap to the coil-driven levitation force vs height.)
+
+Setup (axisymmetric): Al disk R=65mm, t=3mm, sigma=3.4e7; two
+counter-wound coils (960 turns / +20 A at r=41mm, 576 turns / -20 A at
+r=87.5mm) at 50 Hz.  The coil-driven eddy problem is `(K + s*N) X = F`
+(K = s-independent magnetostatic mixed phi-B operator, N = conductivity
+term `v*sigma*u/r`, F = coil source `v*Jz`).  The CLN / Cauer reduction is
+the Krylov subspace generated from the COIL SOURCE:
+    V_0     = K^{-1} F
+    V_{k+1} = orthonormalise( K^{-1} (N V_k) )
+and the levitation Lorentz force is evaluated from the N-stage reduced
+field at 50 Hz.
+
+Result: a 6-stage CLN reproduces the full-FEM levitation force vs height
+to < 0.1%, and recovers the levitation equilibrium dZ = +4.1 mm (lift ==
+disk weight ~1.055 N; lab full-FEM ~ +4 mm).  Fast convergence: stage 1
+= 97.8% err (DC, no eddy), stage 3 = 0.14%, stage 5 = 0.000%.
+
+Code: `examples/CLN/scripts/team28_levitation/` (`team28_axisym_fem.py`
+full-FEM baseline, 0.01% vs the lab ground truth; `team28_cln_force.py`
+convergence; `team28_cln_sweep.py` force-vs-height + equilibrium).  This
+is the worked example behind the `radia_mcp.maglev` `cln_mor_control`
+topic and the CLAUDE.md "Maglev Analysis: Radia + NGSolve" policy.
+
+## 5. Connection to PEEC
 
 PEEC = Partial Element Equivalent Circuit (Radia/Loop-Star method).
 Both PEEC and CLN produce circuit-level abstractions of EM problems,
