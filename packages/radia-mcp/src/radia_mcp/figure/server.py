@@ -262,6 +262,10 @@ def paper_figure_quality_rules(query: str = "all") -> str:
         'tikz_export'     - MATLAB -> matlab2tikz -> LaTeX TikZ:
                             preferred over PDF includegraphics for
                             LaTeX papers (font / math matches body)
+        'export_targets'  - format matrix: vector PDF (paper) / TikZ
+                            (LaTeX) / EMF (Word/PowerPoint, MATLAB
+                            -dmeta) / PNG 400 dpi (draft/web) -- which
+                            format for which venue, from real lab scripts
     """
     rules = {
         "efficiency": """\
@@ -687,6 +691,46 @@ CAVEATS:
   - For very wide / dense plots, increase
     cleanfigure(..., 'targetResolution', 600) and tune the
     'minimumPointsDistance' option.
+""",
+        "export_targets": """\
+[export_targets]
+
+LAB EXPORT-FORMAT MATRIX (extracted 2026-06 from the lab's real MATLAB
++ matplotlib scripts on S:, including the FEMM folder).  The correct
+format depends on WHERE the figure is embedded -- the lab uses three
+in practice, not just paper PDF:
+
+  Venue / embed              Format          How
+  -------------------------  --------------  --------------------------
+  IEEE/IEEJ/IGTE paper       vector PDF      emit_paper_figure(...) ->
+   (LaTeX includegraphics)    (Type-42)       .pdf  (this server default)
+  LaTeX paper, exact font    TikZ            matlab2tikz / see the
+                                             tikz_export topic
+  Word / PowerPoint          EMF (vector)    MATLAB print('-dmeta',
+   (Office embed)                            'f.emf') OR exportgraphics(
+                                             gcf,'f.emf','ContentType',
+                                             'vector').  EMF stays vector
+                                             inside Office + prints crisp.
+  Draft / web / slide        PNG 400-600 dpi matplotlib savefig(dpi=400)
+   quick-look                 (raster)        / MATLAB print('-dpng').
+
+OBSERVED LAB HABIT (verbatim from S: scripts):
+  - FEMM MATLAB:   set(gca,'FontName','Times'); xlabel('{\\it X} (m)');
+                   print('-dmeta','f.emf');        % -> Office EMF
+  - COMSOL/CoreformCubit matplotlib: figsize=(3,4), dpi=400, Times New
+                   Roman 10 pt, inward ticks, savefig PNG.
+
+RULE: NEVER embed a raster PNG in a CAMERA-READY paper -- re-render to
+vector PDF (or TikZ).  PNG/EMF are for drafts + Office.  EMF (not PNG)
+is the right Office format because it keeps the text vector inside Word.
+
+VERIFICATION (2026-06): the lab's real S: scripts AGREE with this
+server's core rules -- Times/TNR, italic variable + unit in PARENTHESES
+('{\\it X} (m)'), box-on + inward ticks, frameless legend, NO in-figure
+title.  The everyday matplotlib analysis style additionally uses a
+subtle two-level grid (major dotted, minor dashed, light-gray
+~gainsboro) with minor ticks on; the paper profiles deliberately keep
+the lighter single dotted grid (grid.alpha 0.4) to stay reviewer-clean.
 """,
     }
     q = (query or "all").strip().lower()
