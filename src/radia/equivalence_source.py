@@ -43,7 +43,6 @@ from __future__ import annotations
 
 import json
 import math
-import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Sequence
@@ -217,10 +216,12 @@ class NearFieldSource:
             surface_label: BND label of the extraction surface.
                     Must be CLOSED and enclose all primary sources.
             omega:  Angular frequency (rad/s); 0 means static.
-            quadrature_order: 1 = face centroid only (fast, OK for
-                    flat triangles); higher = Gauss quadrature
-                    (recommended for curved BND elements with
-                    mesh.Curve(order)).
+            quadrature_order: 1 (the only implemented mode) = per-element
+                    area-averaged sampling (Integrate element_wise; exact
+                    centroid for flat triangles, area-average for curved
+                    BND elements).  > 1 (Gauss quadrature) is NOT implemented
+                    and RAISES -- refine the mesh (mesh.Curve / smaller maxh)
+                    for higher accuracy instead.
 
         Returns:
             NearFieldSource instance.
@@ -233,6 +234,20 @@ class NearFieldSource:
 
         if gf_H is None:
             raise ValueError("gf_H must be provided")
+        if quadrature_order > 1:
+            # No-Fallback: Gauss quadrature (order > 1) is a planned extension,
+            # NOT implemented.  Raise rather than silently sample at order 1 and
+            # only warn -- the caller asked for higher accuracy and would get a
+            # different (lower-order) computation.  For higher accuracy on
+            # curved BND elements, refine the mesh (mesh.Curve / smaller maxh)
+            # and extract at quadrature_order=1, or pass externally-sampled
+            # dense points to from_surface_mesh().
+            raise NotImplementedError(
+                f"quadrature_order={quadrature_order} (> 1, Gauss quadrature) "
+                f"is not implemented in extract_ngsolve, which samples by "
+                f"area-average (order 1). Refine the mesh and extract at "
+                f"quadrature_order=1, or use from_surface_mesh() with "
+                f"externally-sampled dense points for higher accuracy.")
 
         # Vectorized per-element area-averaged sampling using
         # `Integrate(cf, mesh, BND, element_wise=True)`.  This is the
@@ -332,20 +347,9 @@ class NearFieldSource:
 
         metadata = {
             "source": f"ngsolve.extract({surface_label})",
-            "quadrature_order": quadrature_order,
+            "quadrature_order": quadrature_order,   # always 1 here (>1 raised)
             "n_faces": len(centroids),
         }
-        # NOTE: quadrature_order > 1 is a planned extension; currently
-        # always uses centroid sampling.  For curved BND elements with
-        # mesh.Curve(p>=2) consider denser sampling externally and pass
-        # via from_surface_mesh().
-        if quadrature_order > 1:
-            warnings.warn(
-                "quadrature_order > 1 is not yet implemented; using "
-                "centroid sampling.  Sample externally with a denser "
-                "mesh and use from_surface_mesh() if higher accuracy "
-                "is needed.", UserWarning)
-
         return cls(
             centroids=np.asarray(centroids),
             normals=np.asarray(normals),
