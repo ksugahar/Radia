@@ -351,6 +351,24 @@ def test_streamfunction_figures_no_in_figure_title():
         "caption (lab rule, radia_mcp.figure); offenders: " + ", ".join(bad))
 
 
+def test_streamfunction_easy_tier_single_stroke_sub500ppm(sample_vols):
+    """Method completion (EASY tier): a uniform-Bz (solenoid) target single-
+    strokes to SUB-500 ppm with NO --distort -- the nested closed rings have
+    no irreducible inter-lobe bridges, so the field-aware chain is a clean
+    spiral.  (The HARD Gx fingerprint is intrinsically ~1-2 %; the sheet-metal
+    --distort recovers it and min-inductance halves the required bend -- see
+    docs/stream_function/single_stroke.md.)  Locks the repository-backed claim
+    that the bankin-ho SF pipeline is production-grade on easy targets."""
+    coil, evalv = sample_vols
+    r = _run_calc(coil, evalv, "1",
+                  extra=["--order", "1", "--method", "manufacture",
+                         "--nlevels", "16", "--confine", "off", "--eval-max", "60"])
+    assert "error" not in r, f"uniform manufacture error: {r.get('error')}"
+    assert r["n_open_contours"] == 0, "solenoid rings should close on their own"
+    assert r["wire_homogeneity_rms"] < 5.0e-4, \
+        f"easy-tier single-stroke not sub-500 ppm: {r['wire_homogeneity_rms']}"
+
+
 def test_streamfunction_min_inductance(sample_vols):
     """Min-inductance regularizer: design min 1/2 psi^T L psi s.t. A psi = B
     where L is the ngsolve.bem single-layer self-inductance (K = n x grad psi).
