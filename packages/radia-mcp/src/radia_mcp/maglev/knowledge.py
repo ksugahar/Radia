@@ -94,6 +94,15 @@ TOPICS: dict[str, str] = {
 OVERVIEW = r"""
 # Magnetic levitation landscape
 
+> **POLICY (analysis method)**: solve maglev with **Radia (IEM) +
+> NGSolve (FEM) weak coupling**, NOT standalone FEM.  Pure FEM must mesh
+> the large PM<->conductor air gap and RE-MESH on every magnet move;
+> Radia supplies the open-boundary external field analytically (no air
+> mesh) and NGSolve reduced-potential FEM solves only the eddy reaction
+> field.  See topics `radia_iem_fem` (the weak coupling) and
+> `cln_mor_control` (CLN MOR for real-time control).  Mirrors the project
+> CLAUDE.md policy "Maglev Analysis: Radia + NGSolve, Not FEM Alone".
+
 ## Levitation principles
 
 | Method | Force source | Examples | Stability |
