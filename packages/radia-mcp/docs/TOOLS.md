@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **342 tools** across 42 MCP servers.
+Total: **339 tools** across 41 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -37,7 +37,6 @@ Total: **342 tools** across 42 MCP servers.
 | [`mcp-server-metamaterial`](#mcp-server-metamaterial) | `radia_mcp.metamaterial` | 4 |
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
 | [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 3 |
-| [`mcp-server-levitation`](#mcp-server-levitation) | `radia_mcp.levitation` | 3 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-comsol-converter`](#mcp-server-comsol-converter) | `radia_mcp.comsol_converter` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
@@ -563,27 +562,15 @@ Module: `radia_mcp.nmr_mri.server`
 
 ## `mcp-server-maglev`
 
-_Magnetic levitation (EMS/EDS/PM/SC/Halbach). Lab research line: Radia IEM<->FEM weak coupling for moving-magnet eddy-current force + Cauer Ladder Network MOR for control-coupled maglev (Yano, CAE-AI). Sibling: levitation (force physics)._
+_Magnetic levitation, UNIFIED: maglev systems (EMS/EDS/PM/SC/Halbach) + levitation FORCE physics (induction/EML/AMB/superconducting/diamagnetic/Earnshaw/force-computation). Lab research: Radia IEM<->FEM weak coupling + Cauer Ladder Network MOR for control-coupled maglev (Yano, CAE-AI)._
 
 Module: `radia_mcp.maglev.server`
 
 | Tool | Description |
 |---|---|
-| `maglev` | Magnetic levitation knowledge (transport / suspension / control). |
+| `maglev` | Magnetic levitation knowledge -- maglev systems + levitation force physics. |
 | `maglev_status` | (no description) |
-| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
-
-## `mcp-server-levitation`
-
-_Magnetic levitation FORCE-physics: induction/eddy lift, EML melting (ties to IH), magnetic bearings (AMB), superconducting (Meissner/pinning), diamagnetic, Earnshaw + loopholes, force computation. Force-physics counterpart to maglev (transport)._
-
-Module: `radia_mcp.levitation.server`
-
-| Tool | Description |
-|---|---|
-| `levitation` | Magnetic levitation FORCE-physics + stationary levitation knowledge. |
-| `levitation_status` | (no description) |
-| `levitation_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
+| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 18 topics. |
 
 ## `mcp-server-team-benchmark`
 

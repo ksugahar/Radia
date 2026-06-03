@@ -160,7 +160,6 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "workpiece coupling",
         "primary_tools": ["induction_heating", "ih_sibc", "ih_esim"],
         "related": [
-            "levitation",
             "litz-transmission",
             "magnetic-materials",
             "ndt",
@@ -179,7 +178,6 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [
             "bem",
             "ih",
-            "levitation",
             "litz-transmission",
             "radia-ngsolve",
             "radia-streamfunction",
@@ -196,7 +194,6 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [
             "accelerator",
             "fusion",
-            "levitation",
             "magnetic-materials",
             "motor",
             "nmr-mri",
@@ -405,26 +402,14 @@ CATALOG: dict[str, dict[str, Any]] = {
     "maglev": {
         "subpackage": "radia_mcp.maglev",
         "entry_point": "mcp-server-maglev",
-        "description": "Magnetic levitation (EMS/EDS/PM/SC/Halbach). Lab "
-                       "research line: Radia IEM<->FEM weak coupling for "
-                       "moving-magnet eddy-current force + Cauer Ladder "
-                       "Network MOR for control-coupled maglev (Yano, "
-                       "CAE-AI). Sibling: levitation (force physics).",
+        "description": "Magnetic levitation, UNIFIED: maglev systems "
+                       "(EMS/EDS/PM/SC/Halbach) + levitation FORCE physics "
+                       "(induction/EML/AMB/superconducting/diamagnetic/"
+                       "Earnshaw/force-computation). Lab research: Radia "
+                       "IEM<->FEM weak coupling + Cauer Ladder Network MOR "
+                       "for control-coupled maglev (Yano, CAE-AI).",
         "primary_tools": ["maglev"],
-        "related": ["levitation", "motor", "wpt"],
-        "tags": ["application"],
-    },
-    "levitation": {
-        "subpackage": "radia_mcp.levitation",
-        "entry_point": "mcp-server-levitation",
-        "description": "Magnetic levitation FORCE-physics: induction/eddy "
-                       "lift, EML melting (ties to IH), magnetic bearings "
-                       "(AMB), superconducting (Meissner/pinning), "
-                       "diamagnetic, Earnshaw + loopholes, force "
-                       "computation. Force-physics counterpart to maglev "
-                       "(transport).",
-        "primary_tools": ["levitation"],
-        "related": ["maglev", "ih", "peec", "electromagnet"],
+        "related": ["motor", "wpt"],
         "tags": ["application"],
     },
     # ============================================================
