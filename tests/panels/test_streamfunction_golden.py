@@ -574,7 +574,7 @@ def test_regcoil_fusion_advanced(tmp_path):
     env["PYTHONIOENCODING"] = "utf-8"
     cmd = [sys.executable, DEMO_REGCOIL_ADV, "--out-dir", str(tmp_path),
            "--no-plot", "--no-fetch", "--wout", wp,
-           "--force-ntheta", "11", "--eval-max", "120"]
+           "--force-ntheta", "11", "--eval-max", "120", "--shape-nblend", "3"]
     r = subprocess.run(cmd, capture_output=True, text=True, env=env,
                        cwd=str(tmp_path), timeout=600)
     if r.returncode != 0:
@@ -597,6 +597,11 @@ def test_regcoil_fusion_advanced(tmp_path):
     re_ = d["real_equilibrium"]
     assert re_ is not None and re_["nfp"] == 3, re_
     assert re_["bn_residual_rel"] < 1e-5, re_
+    # D. FOCUS winding-SHAPE: the conformal winding is substantially simpler
+    # (lower peak |grad psi|) than the circular one at the same min standoff
+    sh = d["focus_shape"]
+    assert sh["optimum_peak_grad_psi"] < sh["circular_peak_grad_psi"], sh
+    assert sh["complexity_reduction_vs_circular"] > 0.15, sh   # measured ~34%
 
 
 if __name__ == "__main__":

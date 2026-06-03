@@ -184,6 +184,74 @@ def _focus_standoff_sweep(base, C, plasma_pts, plasma_nrm, Bn, gaps, work_dir):
     return rows
 
 
+# --------------------------------------------------------------------------
+# D. FOCUS winding-SHAPE optimisation (conformal vs circular)
+# --------------------------------------------------------------------------
+def _surface_mesh_from_grid(grid):
+    """NGSolve surface mesh from an (ntheta, nphi, 3) point grid (periodic in
+    both, two triangles per quad).  Lets us mesh an ARBITRARY winding surface
+    (a conformal offset of a shaped plasma), not just an OCC-revolved circular
+    torus -- the enabler for the winding-SHAPE study."""
+    from netgen.meshing import (Mesh as NGMesh, MeshPoint, Element2D,
+                                FaceDescriptor)
+    from netgen.csg import Pnt
+    from ngsolve import Mesh as NGSMesh
+    nth, nph = grid.shape[:2]
+    m = NGMesh(dim=3)
+    fd = m.Add(FaceDescriptor(surfnr=1, domin=1, bc=1))
+    pid = {}
+    for i in range(nth):
+        for j in range(nph):
+            pid[(i, j)] = m.Add(MeshPoint(Pnt(float(grid[i, j, 0]),
+                                              float(grid[i, j, 1]),
+                                              float(grid[i, j, 2]))))
+    for i in range(nth):
+        for j in range(nph):
+            a00 = pid[(i, j)]; a10 = pid[((i + 1) % nth, j)]
+            a11 = pid[((i + 1) % nth, (j + 1) % nph)]; a01 = pid[(i, (j + 1) % nph)]
+            m.Add(Element2D(fd, [a00, a10, a11]))
+            m.Add(Element2D(fd, [a00, a11, a01]))
+    m.SetBCName(0, "coil")
+    return NGSMesh(m)
+
+
+def _focus_shape_study(base, C, eval_max, kappa, gap, nlam, nth, nph):
+    """At a FIXED minimum standoff, sweep a winding surface from CIRCULAR
+    (blend=0; encloses the elongated plasma with a varying gap) to CONFORMAL
+    (blend=1; the plasma offset by `gap` along its normals -> a uniform gap)
+    around an elongated (elongation kappa) plasma, designing a vertical-field
+    B.n on each.  The (near-)conformal shape needs LOWER coil complexity
+    peak|grad psi| -- FOCUS's winding-SHAPE result.  Returns the sweep rows."""
+    from ngsolve import H1, specialcf
+    R0, a = base.R_MAJOR, base.A_PLASMA
+    a_circ = kappa * a + gap                               # encloses the Z tips
+    TH = 2 * np.pi * np.arange(nth) / nth
+    PH = 2 * np.pi * np.arange(nph) / nph
+    TG, PG = np.meshgrid(TH, PH, indexing="ij")
+    circ = np.stack([(R0 + a_circ * np.cos(TG)) * np.cos(PG),
+                     (R0 + a_circ * np.cos(TG)) * np.sin(PG),
+                     a_circ * np.sin(TG)], axis=-1)
+    Rr = R0 + a * np.cos(TG); Zz = kappa * a * np.sin(TG)
+    dR = -a * np.sin(TG); dZ = kappa * a * np.cos(TG)
+    nl = np.hypot(dZ, -dR)
+    nR = dZ / nl; nZ = -dR / nl                            # plasma outward normal
+    conf = np.stack([(Rr + gap * nR) * np.cos(PG),
+                     (Rr + gap * nR) * np.sin(PG), Zz + gap * nZ], axis=-1)
+    ev = np.stack([Rr * np.cos(PG), Rr * np.sin(PG), Zz], axis=-1).reshape(-1, 3)
+    en = np.stack([nR * np.cos(PG), nR * np.sin(PG), nZ], axis=-1).reshape(-1, 3)
+    sel = np.linspace(0, len(ev) - 1, min(len(ev), eval_max)).astype(int)
+    ev, en, Bn = ev[sel], en[sel], en[sel, 2]
+    rows = []
+    for lam in np.linspace(0.0, 1.0, nlam):
+        cm = _surface_mesh_from_grid((1.0 - lam) * circ + lam * conf)
+        fes = H1(cm, order=1, definedon=cm.Boundaries(".*"))
+        A_n = base._A_normal(C, fes, specialcf.normal(3), ev, en)
+        _psi, res, pk = base._design(C, fes, cm, A_n, Bn, "h1", 1e-7)
+        rows.append({"blend": float(lam), "bn_residual_rel": res,
+                     "peak_grad_psi": pk})
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="advanced fusion coil design: force, real wout, FOCUS")
@@ -201,6 +269,10 @@ def main():
     ap.add_argument("--eval-max", type=int, default=200)
     ap.add_argument("--d-min", type=float, default=0.03,
                     help="minimum engineering standoff for the FOCUS optimum (m)")
+    ap.add_argument("--shape-kappa", type=float, default=2.0,
+                    help="elongation of the shaped plasma for the FOCUS-shape study")
+    ap.add_argument("--shape-nblend", type=int, default=6,
+                    help="circular->conformal blend steps")
     ap.add_argument("--no-plot", action="store_true")
     args = ap.parse_args()
 
@@ -268,12 +340,31 @@ def main():
             real, wterms, wnfp = None, None, None
             print("[real-wout] skipped (no wout file; --no-fetch and none cached)")
 
+        # ---- D. FOCUS winding-SHAPE optimisation (conformal vs circular) ----
+        shape_rows = _focus_shape_study(base, C, args.eval_max, args.shape_kappa,
+                                        args.d_min, args.shape_nblend, 44, 64)
+        circ_pk = shape_rows[0]["peak_grad_psi"]
+        opt = min(shape_rows, key=lambda r: r["peak_grad_psi"])
+        shape = {"plasma_elongation": args.shape_kappa, "standoff": args.d_min,
+                 "sweep": shape_rows, "circular_peak_grad_psi": circ_pk,
+                 "conformal_peak_grad_psi": shape_rows[-1]["peak_grad_psi"],
+                 "optimum_blend": opt["blend"],
+                 "optimum_peak_grad_psi": opt["peak_grad_psi"],
+                 "complexity_reduction_vs_circular":
+                     float(1.0 - opt["peak_grad_psi"] / circ_pk)}
+        print(f"[focus-shape] elongated (kappa={args.shape_kappa}) plasma, "
+              f"standoff {args.d_min} m: circular peak={circ_pk:.2e} -> optimum "
+              f"(blend={opt['blend']:.2f}, 1=conformal) "
+              f"peak={opt['peak_grad_psi']:.2e}  "
+              f"({shape['complexity_reduction_vs_circular']*100:.0f}% simpler)")
+
     data = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "benchmark": "regcoil_fusion_advanced",
         "force_stress": force,
         "focus_standoff": focus,
         "real_equilibrium": real,
+        "focus_shape": shape,
     }
     jpath = os.path.join(args.out_dir, "demo_regcoil_fusion_advanced.json")
     with open(jpath, "w", encoding="utf-8") as f:
@@ -282,38 +373,41 @@ def main():
 
     if not args.no_plot:
         _plot(args, thetas, Rloc, f_mag, p_ana, sweep, args.d_min,
-              wterms, wnfp)
+              wterms, wnfp, shape_rows)
 
 
-def _plot(args, thetas, Rloc, f_mag, p_ana, sweep, d_min, wterms, wnfp):
-    """1x3 lab figure: (a) TF coil stress vs poloidal angle (+ analytic
-    pressure); (b) the real li383 boundary; (c) FOCUS complexity vs gap."""
+def _plot(args, thetas, Rloc, f_mag, p_ana, sweep, d_min, wterms, wnfp,
+          shape_rows):
+    """2x2 lab figure: (a) TF coil stress vs poloidal angle (+ analytic
+    pressure); (b) the real li383 boundary; (c) FOCUS complexity vs standoff;
+    (d) FOCUS winding-SHAPE -- elongated plasma + circular vs conformal winding
+    cross-section, the conformal one simpler."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    import demo_regcoil_fusion as base
     try:
         from radia_mcp.figure import apply_lab_style, save_lab_figure
     except Exception as e:
         print(f"(plot skipped: radia-mcp figure unavailable: {e})")
         return
     plt.rcParams["pdf.fonttype"] = 42
-    w_in, h_in = apply_lab_style(embed_width_cm=16.0, aspect=0.40)
+    w_in, h_in = apply_lab_style(embed_width_cm=16.0, aspect=0.78)
     fig = plt.figure(figsize=(w_in, h_in))
 
     # (a) coil stress vs poloidal angle: |f| (points) vs B^2/2mu0 (line)
-    ax = fig.add_subplot(1, 3, 1)
+    ax = fig.add_subplot(2, 2, 1)
     deg = np.degrees(thetas)
     ax.plot(deg, p_ana, "-", color="0.5", label=r"$B^2/2\mu_0$ (analytic)")
     ax.plot(deg, f_mag, "o", ms=3, color="C3", label=r"$|K\times B_{\rm avg}|$")
     ax.set_xlabel(r"poloidal angle  (deg, 0=outboard)")
     ax.set_ylabel(r"magnetic stress  (per unit $K^2$)")
-    ax.text(0.30, 0.93, "(a) TF coil stress", transform=ax.transAxes)
+    ax.text(0.30, 0.92, "(a) TF coil stress", transform=ax.transAxes)
     ax.legend(fontsize=7, loc="lower right", frameon=False)
 
     # (b) the real li383 boundary surface
-    ax2 = fig.add_subplot(1, 3, 2, projection="3d")
+    ax2 = fig.add_subplot(2, 2, 2, projection="3d")
     if wterms is not None:
-        import demo_regcoil_fusion as base
         u = np.linspace(0, 2 * np.pi, 80); v = np.linspace(0, 2 * np.pi, 60)
         U, V = np.meshgrid(u, v)
         R, Z, *_ = base._vmec_boundary(wterms, wnfp, V, U)
@@ -321,23 +415,43 @@ def _plot(args, thetas, Rloc, f_mag, p_ana, sweep, d_min, wterms, wnfp):
                          alpha=0.5, linewidth=0, rstride=2, cstride=2)
     for s in ("x", "y", "z"):
         getattr(ax2, f"set_{s}ticks")([])
-    ax2.text2D(-0.05, 0.02, "(b) li383 plasma (real VMEC)",
+    ax2.text2D(-0.02, 0.02, "(b) li383 plasma (real VMEC)",
                transform=ax2.transAxes)
     ax2.set_box_aspect((1, 1, 0.4))
 
-    # (c) FOCUS: coil complexity vs winding gap (monotonic -> push to d_min)
-    ax3 = fig.add_subplot(1, 3, 3)
+    # (c) FOCUS distance: coil complexity vs winding gap (monotonic -> d_min)
+    ax3 = fig.add_subplot(2, 2, 3)
     g = [r["gap"] for r in sweep]; pk = [r["peak_grad_psi"] for r in sweep]
     ax3.semilogy(g, pk, "o-", color="C0")
     ax3.axvline(d_min, ls="--", lw=0.8, color="C2")
     ax3.set_xlabel(r"winding gap to plasma  (m)")
-    ax3.set_ylabel(r"peak $|\nabla\psi|$  (coil complexity)")
+    ax3.set_ylabel(r"peak $|\nabla\psi|$  (complexity)")
     ax3.text(0.04, 0.90, "(c) FOCUS standoff", transform=ax3.transAxes)
-    ax3.text(d_min, pk[0], r" $d_{\min}$", color="C2", fontsize=8,
-             va="top")
+    ax3.text(d_min, pk[0], r" $d_{\min}$", color="C2", fontsize=8, va="top")
 
-    fig.subplots_adjust(left=0.08, right=0.97, top=0.93, bottom=0.20,
-                        wspace=0.42)
+    # (d) FOCUS shape: R-Z cross-section, elongated plasma + circular/conformal
+    ax4 = fig.add_subplot(2, 2, 4)
+    R0, a, kap, d = base.R_MAJOR, base.A_PLASMA, args.shape_kappa, d_min
+    th = np.linspace(0, 2 * np.pi, 200)
+    a_circ = kap * a + d
+    ax4.plot(R0 + a * np.cos(th), kap * a * np.sin(th), "-", color="C1",
+             lw=1.5, label="plasma")
+    ax4.plot(R0 + a_circ * np.cos(th), a_circ * np.sin(th), "--", color="0.5",
+             lw=1.0, label="circular winding")
+    dR = -a * np.sin(th); dZ = kap * a * np.cos(th); nl = np.hypot(dZ, -dR)
+    ax4.plot(R0 + a * np.cos(th) + d * dZ / nl,
+             kap * a * np.sin(th) - d * dR / nl, "-", color="C0", lw=1.2,
+             label="conformal winding")
+    ax4.set_aspect("equal")
+    ax4.set_xlabel(r"$R$  (m)"); ax4.set_ylabel(r"$Z$  (m)")
+    red = 100.0 * (1.0 - min(r["peak_grad_psi"] for r in shape_rows)
+                   / shape_rows[0]["peak_grad_psi"])
+    ax4.text(0.02, 0.93, f"(d) FOCUS shape: conformal\n    {red:.0f}% simpler",
+             transform=ax4.transAxes, fontsize=8)
+    ax4.legend(fontsize=6.5, loc="lower right", frameon=False)
+
+    fig.subplots_adjust(left=0.085, right=0.97, top=0.96, bottom=0.09,
+                        hspace=0.32, wspace=0.30)
     info = save_lab_figure(fig, os.path.join(args.out_dir,
                                              "demo_regcoil_fusion_advanced"),
                            embed_width_cm=16.0, tighten=False)
