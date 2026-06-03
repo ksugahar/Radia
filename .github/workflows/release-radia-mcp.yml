@@ -12,16 +12,36 @@ permissions:
 
 jobs:
   publish:
-    # Only publish when CI succeeded on a radia-mcp tag
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'radia-mcp-v')
+    # Only publish when CI succeeded AND a radia-mcp-v* tag points at this commit.
+    # NOTE: workflow_run.head_branch returns 'main' (not the tag name) when the
+    # triggering commit is on both a branch and a tag (GitHub Actions quirk).
+    # Use git ls-remote to reliably detect the tag regardless of head_branch.
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: pypi
 
     steps:
+      - name: Check if a radia-mcp-v* tag points at this commit
+        id: tag_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          VTAG=$(git ls-remote --tags origin 'refs/tags/radia-mcp-v*' \
+                 | awk -v sha="$SHA" '($1==sha) && /\^\{\}/ {print $2}' \
+                 | sed 's/\^{}//' | head -1)
+          if [ -n "$VTAG" ]; then
+            echo "found=true"  >> "$GITHUB_OUTPUT"
+            echo "tag=$VTAG"   >> "$GITHUB_OUTPUT"
+            echo "radia-mcp-v* tag for $SHA: $VTAG"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No radia-mcp-v* tag found for $SHA -- skipping PyPI publish"
+          fi
+
       - name: Download radia-mcp wheel
+        if: steps.tag_check.outputs.found == 'true'
         uses: actions/download-artifact@v4
         with:
           name: radia-mcp-wheel
@@ -30,6 +50,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify wheel (exists + version consistency)
+        if: steps.tag_check.outputs.found == 'true'
         run: |
           echo "=== radia-mcp wheel ==="
           ls -la dist/
@@ -88,6 +109,7 @@ jobs:
           PY
 
       - name: Publish to PyPI
+        if: steps.tag_check.outputs.found == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
