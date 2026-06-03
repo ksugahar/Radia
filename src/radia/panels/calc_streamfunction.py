@@ -108,11 +108,17 @@ def _assemble_biot_savart(fes, n, pts, comps):
 
 
 def _seminorm(fes, regularize):
-    """SPD seminorm S over ALL DOFs: l2 = identity, h1 = surface H1 stiffness.
-    The caller reduces it to the independent-DOF space via the R matrix
-    (``S_ind = R^T S R``)."""
+    """SPD seminorm S over ALL DOFs as a SPARSE (scipy CSR) matrix: l2 =
+    identity, h1 = surface H1 stiffness.  The caller reduces it to the
+    independent-DOF space via the R matrix (``S_ind = R^T S R``).
+
+    Sparse end-to-end on purpose: the FE stiffness is ~2 % dense, so the old
+    ``np.array(a.mat.ToDense())`` was an O(N^2) memory/time wall (1.9 GB and
+    ~13 s of dense folding at N=15k DOF -- see bench_sf_scaling).  CSR keeps it
+    O(N); RegularizedTSVD.from_stiffness already has a scipy-sparse path."""
+    import scipy.sparse as sp
     if regularize == "l2":
-        return np.eye(fes.ndof)
+        return sp.identity(fes.ndof, format="csr")
     from ngsolve import BilinearForm, grad, ds, TaskManager
     u, v = fes.TnT()
     a = BilinearForm(fes, symmetric=True)
@@ -120,7 +126,9 @@ def _seminorm(fes, regularize):
     a += 1.0e-10 * u * v * ds
     with TaskManager():
         a.Assemble()
-    return np.array(a.mat.ToDense())
+    r, c, val = a.mat.COO()
+    return sp.csr_matrix((np.asarray(val), (np.asarray(r), np.asarray(c))),
+                         shape=(a.mat.height, a.mat.width))
 
 
 def _build_abe_R(coil, fes, order):
@@ -196,10 +204,11 @@ def _build_abe_R(coil, fes, order):
             if not bmask[d]:
                 cols.append([d])                     # interior higher-order
             # else: boundary higher-order -> zeroed (no column)
-    R = np.zeros((ndof, len(cols)))
-    for k, ds_ in enumerate(cols):
-        for d in ds_:
-            R[d, k] = 1.0
+    import scipy.sparse as sp
+    rows = [d for ds_ in cols for d in ds_]
+    cidx = [k for k, ds_ in enumerate(cols) for _ in ds_]
+    R = sp.csr_matrix((np.ones(len(rows)), (rows, cidx)),
+                      shape=(ndof, len(cols)))
     return R, ncomp
 
 
@@ -211,9 +220,10 @@ def _dof_reduction_R(args, coil, fes):
     if getattr(args, "confine", "off") == "abe":
         R, _ = _build_abe_R(coil, fes, args.order)
         return R
+    import scipy.sparse as sp
     fi = np.where(np.array(fes.FreeDofs()))[0]
-    R = np.zeros((fes.ndof, len(fi)))
-    R[fi, np.arange(len(fi))] = 1.0
+    R = sp.csr_matrix((np.ones(len(fi)), (fi, np.arange(len(fi)))),
+                      shape=(fes.ndof, len(fi)))
     return R
 
 
@@ -287,16 +297,20 @@ def _build_problem(args, eval_scale=1.0):
     Bm = _eval_target_np(args.target_cf, mpts, vector_b)
     Ac = _assemble_biot_savart(fes, n, cpts, comps)
     Am = _assemble_biot_savart(fes, n, mpts, comps)
-    Sf = _seminorm(fes, args.regularize)        # full-DOF seminorm
-    S = R.T @ Sf @ R                            # reduce to independent space
-    Af = Ac @ R                                 # rows x n_independent
-    Am_R = Am @ R
+    Sf = _seminorm(fes, args.regularize)        # full-DOF SPARSE seminorm
+    S = (R.T @ Sf @ R).tocsr()                  # reduce to independent (sparse)
+    # Ac is dense (M x N, M small); R is sparse (N x n_free).  (R^T Ac^T)^T
+    # keeps R sparse and yields the dense M x n_free design matrix.
+    Af = np.asarray((R.T @ Ac.T).T)             # rows x n_independent (dense)
+    Am_R = np.asarray((R.T @ Am.T).T)
     n_free = R.shape[1]
     base = aca_tsvd(Ac.shape[0], n_free, lambda i, j: float(Af[i, j]),
                     modes=Ac.shape[0], kmax=min(Ac.shape[0], n_free),
                     aca_eps=1e-10, method=3)
     reg = RegularizedTSVD.from_stiffness(base, S)
-    md = float(np.mean(np.diag(Af.T @ Af)))
+    # mean diag(Af^T Af) = mean of column norms^2 -- WITHOUT forming the
+    # n_free x n_free dense Af^T Af (the other O(N^2) wall).
+    md = float(np.mean(np.sum(Af * Af, axis=0)))
     return dict(coil=coil, fes=fes, R=R, n_free=n_free, n=n, vector_b=vector_b,
                 comps=comps, Ac=Ac, Af=Af, Am=Am_R, Bc=Bc, Bm=Bm, reg=reg,
                 base=base, target_cf=target_cf, evalm=evalm, cpts=cpts,
@@ -341,12 +355,15 @@ def _weighted_surface_stiffness(fes, coil, w_vertex):
     fes_w = H1(coil, order=1, definedon=coil.Boundaries(".*"))
     gw = GridFunction(fes_w)
     gw.vec.FV().NumPy()[:coil.nv] = w_vertex
+    import scipy.sparse as sp
     u, v = fes.TnT()
     a = BilinearForm(fes, symmetric=True)
     a += gw * grad(u).Trace() * grad(v).Trace() * ds
     a += 1.0e-12 * u * v * ds
     a.Assemble()
-    return np.array(a.mat.ToDense())
+    r, c, val = a.mat.COO()
+    return sp.csr_matrix((np.asarray(val), (np.asarray(r), np.asarray(c))),
+                         shape=(a.mat.height, a.mat.width))
 
 
 def _linf_irls_front(P, alpha, n_iter, weight_ratio_max=20.0, damping=0.5,
