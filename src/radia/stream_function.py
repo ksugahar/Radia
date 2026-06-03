@@ -246,9 +246,19 @@ class RegularizedTSVD:
             ACA+TSVD factorisation of the system matrix A.
         S : ndarray or scipy.sparse matrix, shape (N, N)
             SPD regularisation matrix (e.g. H1 stiffness on free DOFs).
-            Dense numpy arrays go through ``np.linalg.solve``; scipy
-            sparse matrices go through ``scipy.sparse.linalg.spsolve``
-            column-by-column.
+            Dense numpy arrays go through ``np.linalg.solve``; scipy sparse
+            matrices are factored ONCE with ``scipy.sparse.linalg.splu`` and
+            all columns of ``V`` are back-solved together.
+
+        Raises
+        ------
+        ValueError
+            If ``S`` is singular / not SPD (No-Fallback: the dense
+            ``LinAlgError`` and the sparse ``RuntimeError`` are normalised into
+            one clear error), or if the inverted core ``W = V^T S^-1 V`` is
+            catastrophically ill-conditioned (``cond > 1e12``, where the
+            exact-fit solve would silently lose most of its digits).  Add a
+            ridge / mass term to ``S`` or use a better-conditioned seminorm.
 
         Returns
         -------
@@ -256,22 +266,43 @@ class RegularizedTSVD:
             Cached factorisation; pass ``B`` to ``.solve(B)``.
         """
         V = base.V                                 # (N, k)
-        if hasattr(S, "tocsc"):
-            # scipy sparse path -- factor S ONCE (sparse LU) then back-solve
-            # all k columns of V together.  (Was k separate spsolve calls, each
-            # re-factorising S -- O(k) factorisations; this is O(1) + k solves,
-            # the win that lets N=15k-DOF designs build in ~1 s, not ~13 s.)
-            from scipy.sparse.linalg import splu
-            Sinv_V = splu(S.tocsc()).solve(np.asarray(V, dtype=float))
-        else:
-            S_dense = np.asarray(S, dtype=float)
-            if S_dense.shape != (V.shape[0], V.shape[0]):
-                raise ValueError(
-                    f"S shape {S_dense.shape} must be ({V.shape[0]}, "
-                    f"{V.shape[0]}) to match base.V")
-            Sinv_V = np.linalg.solve(S_dense, V)
-        W = V.T @ Sinv_V                            # (k, k)
-        W_inv = np.linalg.inv(W)
+        try:
+            if hasattr(S, "tocsc"):
+                # scipy sparse path -- factor S ONCE (sparse LU) then back-solve
+                # all k columns of V together.  (Was k separate spsolve calls,
+                # each re-factorising S; this is O(1) factorisation + k solves --
+                # the win that lets N=15k-DOF designs build in ~1 s, not ~13 s.)
+                from scipy.sparse.linalg import splu
+                Sinv_V = splu(S.tocsc()).solve(np.asarray(V, dtype=float))
+            else:
+                S_dense = np.asarray(S, dtype=float)
+                if S_dense.shape != (V.shape[0], V.shape[0]):
+                    raise ValueError(
+                        f"S shape {S_dense.shape} must be ({V.shape[0]}, "
+                        f"{V.shape[0]}) to match base.V")
+                Sinv_V = np.linalg.solve(S_dense, V)
+        except (np.linalg.LinAlgError, RuntimeError) as e:
+            # No-Fallback: the dense path raises numpy.linalg.LinAlgError and the
+            # sparse splu raises RuntimeError on a singular S -- normalise BOTH
+            # into ONE clear, actionable error rather than leaking two types.
+            raise ValueError(
+                f"regularisation matrix S is singular / not SPD "
+                f"({type(e).__name__}: {e}). Add a ridge / mass term to S (the "
+                f"_seminorm helper adds +1e-10 mass for exactly this), or use "
+                f"--confine abe/on to remove the constant-psi null space.") from e
+        W = V.T @ Sinv_V                            # (k, k) -- the inverted core
+        # No-Fallback: a catastrophically ill-conditioned core makes the exact-
+        # fit solve SILENTLY lose most of its digits.  Production paths sit at
+        # cond(W) ~ 1e2 (l2/abe) .. 1e7 (h1/off); only a genuinely broken S
+        # exceeds 1e12 (< ~4 good digits) -- raise rather than return garbage.
+        cond_W = float(np.linalg.cond(W))
+        if not np.isfinite(cond_W) or cond_W > 1e12:
+            raise ValueError(
+                f"regularised core W = V^T S^-1 V is too ill-conditioned "
+                f"(cond ~ {cond_W:.1e}); the exact-fit solve would lose most "
+                f"digits. Add a ridge / mass term to S, use --confine abe, or a "
+                f"better-conditioned --regularize.")
+        W_inv = np.linalg.inv(W)               # back-compat; W is sound past here
         return cls(base=base, Sinv_V=Sinv_V, W_inv=W_inv, W=W)
 
     def solve(self, B, k_mode=None, alpha=0.0) -> np.ndarray:
@@ -334,16 +365,18 @@ class RegularizedTSVD:
             Sinv_V = self.Sinv_V[:, :k]             # (N, k)
             V_k = self.base.V[:, :k]                # (N, k)
             W = V_k.T @ Sinv_V                      # (k, k)
-            W_inv = np.linalg.inv(W)
 
         UtB = U.T @ B                               # (k,)
 
         if alpha <= 0.0:
-            # exact-fit min-seminorm: phi = Sinv_V . W^-1 . Sigma^-1 . U^T B
+            # exact-fit min-seminorm: phi = Sinv_V . W^-1 . Sigma^-1 . U^T B.
+            # Solve W y = c (factored) instead of caching/applying inv(W): a
+            # factored solve is strictly more stable on an ill-conditioned W
+            # (No-Fallback: do not silently lose digits to an explicit inverse).
             with np.errstate(divide="ignore", invalid="ignore"):
                 c = UtB / Sigma                     # (k,)
             c = np.where(Sigma > 0.0, c, 0.0)
-            return Sinv_V @ (W_inv @ c)
+            return Sinv_V @ np.linalg.solve(W, c)
 
         # generalised Tikhonov: (alpha I + Sigma^2 W) y = Sigma U^T B
         #   phi = Sinv_V . y == (A^T A + alpha S)^-1 A^T B
