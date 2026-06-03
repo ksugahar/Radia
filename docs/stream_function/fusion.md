@@ -1,0 +1,191 @@
+# SF for fusion -- stellarator Stage-2 (NESCOIL / REGCOIL / FOCUS)
+
+The same surface stream function this framework uses for MRI-gradient and
+induction-heating coils **is** the object the stellarator-coil community calls
+the **winding-surface current potential** -- the unknown of NESCOIL
+(Merkel 1987), REGCOIL (Landreman 2017), and the surface part of FOCUS
+(Zhu 2018). The "Stage-2" coil problem is mathematically identical to the
+gradient/IH design:
+
+```
+given a target NORMAL field  B.n  on the PLASMA boundary,
+find a current potential psi on a WINDING SURFACE around it whose
+Biot-Savart  n.B  reproduces it          (iso-contours of psi = the coils)
+```
+
+The design-matrix rows are just the plasma-normal component `n.B` of the
+winding-surface Biot-Savart kernel the SF designer already assembles
+(`A3` = the 3-component field at the plasma points; `A_n = einsum('mc,mcj->mj',
+plasma_normal, A3)`). There is **no** fusion-specific solver code -- the
+gradient-coil machinery designs a stellarator coil unchanged.
+
+Two demos cover eight parts:
+
+| demo | parts |
+|------|-------|
+| [`examples/stream_function/demo_regcoil_fusion.py`](../../examples/stream_function/demo_regcoil_fusion.py) | forward map  /  REGCOIL L-curve  /  net current  /  VMEC boundary |
+| [`examples/stream_function/demo_regcoil_fusion_advanced.py`](../../examples/stream_function/demo_regcoil_fusion_advanced.py) | coil force/stress  /  real li383 wout  /  FOCUS standoff  /  FOCUS winding-shape |
+
+All numbers below are reproduced by the demos and locked by
+`tests/panels/test_streamfunction_golden.py::test_regcoil_fusion_*`.
+
+---
+
+## 1. The forward map is exact
+
+Two **producible** targets -- a uniform vertical field (a PF / equilibrium /
+vertical-field coil) and a non-axisymmetric `sin(theta) cos(2 phi)`
+(stellarator-like shaping) -- are reproduced to **`B.n` residual ~2e-9**
+(machine precision). This is honest: the targets are smooth and within the
+winding surface's reach, so the forward map is exact, not hidden behind a
+tolerance.
+
+## 2. The REGCOIL trade-off (L-curve)
+
+On a genuinely hard target `sin(3 theta) cos(5 phi)` -- a high mode that decays
+across the plasma-coil gap, so it is **not** cheaply producible -- sweeping the
+regularisation weight `alpha` traces the classic REGCOIL L-curve:
+
+- large `alpha` -> smooth coil, high `B.n` residual;
+- small `alpha` -> low residual, but the peak surface current density
+  `|grad psi|` saturates at the surface's representation limit (the vertical leg
+  of the L-curve), knee at `alpha_rel ~ 2e-2`.
+
+`(field error, coil complexity)` is exactly the Stage-2 trade-off REGCOIL is
+built to expose.
+
+## 3. Net current -- the multivalued / secular term
+
+A single-valued `psi` carries **zero** net current through each hole of the
+winding torus. A real coil set carries net current; the full current potential
+gains a **secular** term
+
+```
+Psi = psi + (G/2pi) zeta + (I/2pi) theta          (zeta toroidal, theta poloidal)
+```
+
+whose two extra degrees of freedom are the first cohomology generators of the
+winding surface.
+
+- **Their count is topology.** The surface's first Betti number `b1 = 2`
+  (genus 1) is **confirmed** with Gmsh's homology solver
+  (`addHomologyRequest('Cohomology', [pg], [], [1]); computeHomology()` -> 2) --
+  the same engine wrapped by [`src/radia/cohomology_cut.py`](../../src/radia/cohomology_cut.py)
+  (which is a *volume* scalar-potential solver, so the honest integration is
+  "same engine, analytic generators on the torus": `grad(zeta)`, `grad(theta)`
+  are single-valued vector fields even though the angles are multivalued).
+- **The TF secular field is verified.** `K_zeta = n x grad(zeta)` is the
+  net-**poloidal**-current (TF) sheet; it reproduces the textbook toroidal field
+  `B_tor * R = const` inside the tube (Ampere's `1/R`, to **0.2 %**) and `~0`
+  outside (no enclosed poloidal current).
+- **Key physics -- net current is a PRESCRIBED parameter.** The TF field is
+  **tangent** to the plasma boundary, so its `B.n` footprint is **>1000x
+  smaller** than the net-toroidal generator's. The net poloidal current is
+  therefore *not* fitted from `B.n` -- it is set for the desired on-axis toroidal
+  field (1 T at R = 0.30 m needs 1.5 MA). This is exactly why REGCOIL takes
+  `net_poloidal_current` as an **input**, not a fitted output.
+
+## 4. A VMEC-shaped plasma boundary
+
+The circular plasma torus is replaced by a non-axisymmetric **rotating-ellipse**
+boundary in the VMEC Fourier representation
+`R = sum RBC(m,n) cos(m th - n NFP ph)`, `Z = sum ZBS(m,n) sin(...)` (NFP = 3),
+with analytic surface normals from the parametric tangents. `--wout wout_*.nc`
+reads a real equilibrium's boundary (netCDF4 `rmnc`/`zmns`/`xm`/`xn`/`nfp`);
+**stellarator-symmetric only** -- a non-symmetric `lasym=T` file (with
+`rmns`/`zmnc`) is **rejected**, not silently truncated.
+
+---
+
+## A. Coil force / stress
+
+A surface current `K` experiences a Lorentz force per unit area
+
+```
+f = K x B_avg,        B_avg = 1/2 (B+ + B-)
+```
+
+where `B_avg` is the average of the coil's own field on the two sides of the
+current sheet (the tangential `B` jumps by `mu0 K` across it; the `+/-eps`
+normal average cancels the self-singularity). For the net-poloidal-current (TF)
+coil this is the classic magnetic stress: **`|f|` equals the magnetic pressure
+`B_tor^2/(2 mu0)`** (ratio ~0.99) and **concentrates on the INBOARD leg**
+(~5x the outboard, where `B_tor ~ 1/R` is largest) -- exactly why a tokamak /
+stellarator TF coil is inboard-stress-limited.
+
+*Honest scope:* this is the magnetic force per unit area (the stress **driver**,
+N/m^2), not a structural hoop-stress model of the conductor.
+
+## B. A real VMEC equilibrium (li383)
+
+The demo designs against the boundary of a genuine free-boundary equilibrium --
+the **li383** (NCSX-like, NFP = 3, quasi-axisymmetric) reference `wout` shipped
+by [simsopt](https://github.com/hiddenSymmetries/simsopt) (MIT). `--wout PATH`
+uses any VMEC output; with no path the demo fetches li383 (a 121 kB netCDF) to a
+cache. The Stage-2 forward map reproduces the vertical-field `B.n` on the
+genuine 25-mode (m in [0,3], n in [-3,3], R0 = 1.378 m) stellarator boundary to
+**~4e-8**. (That a real, strongly-shaped boundary is accepted at all validates
+the winding-normal logic: the outward orientation is decided by a majority vote
+against the boundary's own `m=0` centre, not a hardcoded major radius.)
+
+## C. FOCUS winding-standoff study
+
+FOCUS / REGCOIL also optimise the **winding surface**. Sweeping the
+winding-surface standoff (gap to the plasma) shows that a closer winding surface
+couples better, so it reproduces the target with **lower** `B.n` residual **and**
+lower peak current density `|grad psi|` (coil complexity) -- the curve is
+**monotonic** (~50x over the sweep). The distance optimum is therefore
+**constraint-bound**: push the winding surface to the minimum engineering
+standoff `d_min` (set by blanket / access / neutron shielding). A bounded
+minimisation of coil complexity lands on `d_min`.
+
+## D. FOCUS winding-shape (the core FOCUS contribution)
+
+The deeper FOCUS lever is the winding-surface **shape**, not just its distance.
+`_surface_mesh_from_grid` builds an NGSolve surface mesh from an **arbitrary**
+`(theta, phi)` point grid (manual netgen `Element2D` + `FaceDescriptor`, two
+triangles per quad, periodic in both directions). A manual-mesh SF design
+reproduces `B.n` to machine precision (2.6e-10), matching the OCC-revolved
+torus -- so the winding surface can be **conformal** to a shaped plasma, not just
+a circular torus.
+
+For an elongated (`kappa = 2`) plasma, blending the winding surface from
+**circular** (encloses the Z tips -> a large gap at the R sides) to
+**conformal** (the plasma offset by the standoff along its normals -> a uniform
+gap), at the **same** minimum standoff, cuts coil complexity `peak |grad psi|`
+by **~34 %** (circular 2.0e6 -> conformal 1.3e6) at the same `B.n` quality. The
+winding **shape**, not only its distance, is a real design lever -- which is
+exactly FOCUS's point.
+
+*Honest scope:* the study sweeps a 1-parameter circular->conformal blend; a full
+Fourier-mode winding-surface optimiser is the named next step. (The naive
+normal-offset can over-concentrate the surface at high-curvature tips, so the
+true optimum is *near*-conformal and grid-sensitive -- the committed claim is the
+robust "conformal << circular", locked at >15 % reduction.)
+
+---
+
+## Honest scope (summary)
+
+- Parts 1-2 use a single-valued `psi` (correct for PF / RMP / shaping / shim
+  fields); part 3 adds the multivalued secular term -- the generator **count** is
+  computed (Gmsh cohomology), the generators are analytic **on the torus**, and
+  a general winding surface takes them from `cohomology_cut.py`.
+- Force is the magnetic force per area, not a structural stress.
+- We do **not** run VMEC here (no simsopt/desc installed) -- the default
+  rotating-ellipse is an analytic model; `--wout` drops in a real equilibrium,
+  and the reader is round-trip-verified against the wout schema.
+- The winding-shape study is a 1-parameter blend; a full Fourier-mode
+  winding-surface optimiser and a structural hoop-stress model are the remaining
+  next steps.
+
+## References
+
+- P. Merkel, "Solution of stellarator boundary value problems with external
+  currents", *Nucl. Fusion* **27**, 867 (1987) -- NESCOIL.
+- M. Landreman, "An improved current potential method for fast computation of
+  stellarator coil shapes", *Nucl. Fusion* **57**, 046003 (2017) -- REGCOIL.
+- C. Zhu et al., "New method to design stellarator coils without the winding
+  surface", *Nucl. Fusion* **58**, 016008 (2018) -- FOCUS.
+
+MCP: `streamfunction("fusion")` (radia-streamfunction server).
