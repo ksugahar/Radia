@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-06-03T13:19:30",
+  "hostname": "lab",
+  "benchmark": "regcoil_fusion_forward",
+  "problem": {
+    "winding_torus": {
+      "R": 0.3,
+      "a": 0.12,
+      "maxh": 0.045
+    },
+    "plasma_torus": {
+      "R": 0.3,
+      "a": 0.06,
+      "maxh": 0.035
+    },
+    "winding_ndof": 884,
+    "plasma_eval_points": 220,
+    "regularize": "h1",
+    "note": "single-valued psi (no net-current secular term); B.n from analytic model fields (swap for free-boundary VMEC for a production run)."
+  },
+  "producible_targets": {
+    "uniform_vertical_PF": {
+      "bn_residual_rel": 2.2769275651206684e-09,
+      "peak_grad_psi": 1911484.2914312908,
+      "n_contours": 28
+    },
+    "stellarator_sinTheta_cos2phi": {
+      "bn_residual_rel": 2.8524702106954865e-09,
+      "peak_grad_psi": 1489098.9059103583,
+      "n_contours": 56
+    }
+  },
+  "regcoil_lcurve": {
+    "hard_target": "sin(3 theta) cos(5 phi)",
+    "points": [
+      {
+        "alpha_rel": 100.0,
+        "bn_residual_rel": 0.9545103310551417,
+        "peak_grad_psi": 313266.8483375399
+      },
+      {
+        "alpha_rel": 0.001,
+        "bn_residual_rel": 0.0005654783512986689,
+        "peak_grad_psi": 7921822.8617102355
+      },
+      {
+        "alpha_rel": 1e-08,
+        "bn_residual_rel": 5.6736080729686525e-09,
+        "peak_grad_psi": 7927547.673371006
+      }
+    ]
+  }
+}
