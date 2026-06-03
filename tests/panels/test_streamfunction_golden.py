@@ -604,5 +604,53 @@ def test_regcoil_fusion_advanced(tmp_path):
     assert sh["complexity_reduction_vs_circular"] > 0.15, sh   # measured ~34%
 
 
+def test_regcoil_fusion_parallel_ops_inside_taskmanager():
+    """Confirm (statically, no NGSolve) that EVERY NGSolve parallel op in the
+    fusion demos' main() is lexically inside a `with TaskManager():` block --
+    i.e. the parallelisation genuinely runs via TaskManager, not serially.
+
+    tools/audit_taskmanager.py is only a per-FILE presence check ('does the file
+    contain any TM wrap?'); it does NOT verify the wrap COVERS the parallel ops.
+    This locks the coverage so a future edit that moves a Mesh/H1/Integrate/
+    BilinearForm/etc. out of the TM block (-> serial) fails here."""
+    import ast
+    PARALLEL = {"H1", "HCurl", "HDiv", "L2", "VectorH1", "Integrate",
+                "BilinearForm", "LinearForm", "GridFunction", "Norm"}
+    for demo in (DEMO_REGCOIL, DEMO_REGCOIL_ADV):
+        with open(demo, encoding="utf-8") as _f:
+            tree = ast.parse(_f.read())
+        main = next(n for n in ast.walk(tree)
+                    if isinstance(n, ast.FunctionDef) and n.name == "main")
+        tm_ranges = []
+        for n in ast.walk(main):
+            if isinstance(n, ast.With):
+                for it in n.items:
+                    c = it.context_expr
+                    if isinstance(c, ast.Call) and (
+                        (isinstance(c.func, ast.Name)
+                         and c.func.id == "TaskManager")
+                        or (isinstance(c.func, ast.Attribute)
+                            and c.func.attr == "TaskManager")):
+                        tm_ranges.append((n.lineno, n.end_lineno))
+        assert tm_ranges, f"{os.path.basename(demo)}: main() has no TaskManager"
+
+        def _inside(ln, _r=tm_ranges):
+            return any(a <= ln <= b for a, b in _r)
+
+        outside = []
+        for n in ast.walk(main):
+            if isinstance(n, ast.Call):
+                fn = n.func
+                nm = (fn.id if isinstance(fn, ast.Name)
+                      else fn.attr if isinstance(fn, ast.Attribute) else "")
+                is_par = nm in PARALLEL or (
+                    nm == "Mesh" and n.args and isinstance(n.args[0], ast.Call))
+                if is_par and not _inside(n.lineno):
+                    outside.append((os.path.basename(demo), n.lineno, nm))
+        assert not outside, (
+            "NGSolve parallel op(s) OUTSIDE the TaskManager block (would run "
+            f"SERIALLY): {outside}")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
