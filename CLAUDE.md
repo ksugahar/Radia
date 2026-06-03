@@ -997,6 +997,41 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Maglev Analysis: Radia + NGSolve, Not FEM Alone
+
+**POLICY**: Magnetic levitation (maglev) analysis -- the eddy-current
+electromagnetic FORCE between a permanent magnet / coil and a (moving)
+conductor -- is solved with **Radia (IEM = MMM/MSC) + NGSolve (FEM) weak
+coupling**, NOT with standalone FEM.
+
+**Why pure FEM is the wrong tool for maglev**:
+- The PM<->conductor air gap is large and must be meshed; magnet MOTION
+  forces re-meshing every step (the dominant cost).
+- Air-region discretisation error degrades the force accuracy.
+- Open-boundary truncation needs PML or a large air box.
+
+**The Radia + NGSolve method** (lab research line, Yano & Sugahara,
+CAE-AI; see `radia_mcp.maglev` topics `radia_iem_fem` / `cln_mor_control`):
+- Radia IEM computes the open-boundary external field (A_ext, H_ext)
+  ANALYTICALLY -- no air mesh, exact open boundary.
+- NGSolve reduced-potential FEM (A-phi or T-Omega) solves ONLY the eddy
+  reaction field in the conductor; the Radia field is the source term.
+- Weak (sequential) coupling, fed back to demagnetisation.
+- **Magnet motion needs only an external-field UPDATE -> NO re-meshing.**
+- Optionally, Cauer Ladder Network (CLN) model-order reduction compresses
+  the eddy-current FEM into an equivalent circuit for real-time
+  control-coupled simulation (~1/500 full-FEM time; TEAM 28).
+
+Validated on the standard eddy-current levitation benchmarks (TEAM
+Problem 7, TEAM Problem 28). Refs: Chadebec 2006 (IEM open boundary),
+Biro 2000 (reduced potential), Kameari-Sugahara-Matsuo 2017 (CLN).
+
+This is the maglev-specific instance of the "Complement NGSolve" strategy
+above: FEM is weak at open boundary + moving magnets + thin conductors;
+Radia supplies exactly those (analytic open-boundary field, no air mesh)
+and NGSolve supplies the eddy-current solve. Do NOT solve maglev with a
+full-FEM air-box model when the Radia + NGSolve weak coupling applies.
+
 ### Accelerator Magnet Solver Architecture
 
 The complete pipeline for accelerator electromagnet analysis:
