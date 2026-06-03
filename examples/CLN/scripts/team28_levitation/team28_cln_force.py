@@ -111,33 +111,31 @@ def force_from_vec(xfull, fes, fesPhi, fesB, sig, p=2):
     return float(fz.real)
 
 
-def main():
-    mesh, fes, fesPhi, fesB, sig, K, Nmat, F = setup()
+def cln_forces(al_z=aluminium_z, max_stage=10):
+    """Return (fz_full, [fz_stage1, ..., fz_stageM]) for the disk at height al_z.
+
+    fz_full = direct (K+sN) solve force; the list is the N-stage CLN/Cauer
+    reduced force for N=1..M (M <= max_stage; the Krylov basis stops early
+    once it stops growing).
+    """
+    mesh, fes, fesPhi, fesB, sig, K, Nmat, F = setup(al_z)
     ndof = fes.ndof
     s = 2 * pi * FREQ * 1j
-    freedofs = fes.FreeDofs()
-    free = np.array([i for i in range(ndof) if freedofs[i]])
-    print(f"ndof={ndof}  free={len(free)}")
+    free = np.array([i for i in range(ndof) if fes.FreeDofs()[i]])
 
     Kf = to_csr(K.mat, ndof)[free][:, free].tocsc()
     Nf = to_csr(Nmat.mat, ndof)[free][:, free].tocsc()
     Ff = np.array(F.vec.FV().NumPy(), dtype=complex)[free]
 
-    # ---- direct full solve (consistency vs the verified baseline) ----
-    Klu = spla.splu(Kf.tocsc())              # K is s-independent -> factor once
-    Afull = (Kf + s * Nf).tocsc()
-    x_full_free = spla.spsolve(Afull, Ff)
-    xfull = np.zeros(ndof, dtype=complex); xfull[free] = x_full_free
+    Klu = spla.splu(Kf)                       # K s-independent -> factor once
+    xfull = np.zeros(ndof, dtype=complex)
+    xfull[free] = spla.spsolve((Kf + s * Nf).tocsc(), Ff)
     fz_full = force_from_vec(xfull, fes, fesPhi, fesB, sig)
-    print(f"\n direct full-FEM (split K+sN) force = {fz_full:+.4f} N  (ref -2.1928)")
 
-    # ---- CLN / Cauer Krylov basis from the coil source ----
+    # CLN / Cauer Krylov basis from the coil source
     V = []
-    v0 = Klu.solve(Ff)
-    v0 = v0 / np.sqrt(abs(v0 @ v0.conj()))
-    V.append(v0)
-    MAXST = 10
-    for k in range(MAXST - 1):
+    v0 = Klu.solve(Ff); v0 /= np.sqrt(abs(v0 @ v0.conj())); V.append(v0)
+    for _ in range(max_stage - 1):
         w = Klu.solve(Nf @ V[-1])
         for vv in V:                          # modified Gram-Schmidt
             w = w - (vv.conj() @ w) * vv
@@ -146,16 +144,21 @@ def main():
             break
         V.append(w / nrm)
 
-    print(f"\n stages  CLN force [N]   rel.err vs full")
+    stage_forces = []
     for m in range(1, len(V) + 1):
-        Vm = np.array(V[:m]).T                 # (nfree x m)
-        Kr = Vm.conj().T @ (Kf @ Vm)
-        Nr = Vm.conj().T @ (Nf @ Vm)
-        Fr = Vm.conj().T @ Ff
-        y = np.linalg.solve(Kr + s * Nr, Fr)
-        x_red_free = Vm @ y
-        xr = np.zeros(ndof, dtype=complex); xr[free] = x_red_free
-        fz = force_from_vec(xr, fes, fesPhi, fesB, sig)
+        Vm = np.array(V[:m]).T
+        y = np.linalg.solve(Vm.conj().T @ (Kf @ Vm) + s * (Vm.conj().T @ (Nf @ Vm)),
+                            Vm.conj().T @ Ff)
+        xr = np.zeros(ndof, dtype=complex); xr[free] = Vm @ y
+        stage_forces.append(force_from_vec(xr, fes, fesPhi, fesB, sig))
+    return fz_full, stage_forces
+
+
+def main():
+    fz_full, sf = cln_forces()
+    print(f"\n direct full-FEM (split K+sN) force = {fz_full:+.4f} N  (ref -2.1928)")
+    print(f"\n stages  CLN force [N]   rel.err vs full")
+    for m, fz in enumerate(sf, 1):
         print(f"   {m:2d}    {fz:+.5f}     {abs(fz - fz_full)/abs(fz_full)*100:8.3f} %")
 
 
