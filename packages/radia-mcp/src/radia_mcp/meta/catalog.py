@@ -48,7 +48,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-radia-interop",
         "description": "Cross-CAD interop (STEP/IGES/CadQuery <-> Cubit/Netgen)",
         "primary_tools": ["any_step_to_cubit_hex", "freecad_to_cubit_hex"],
-        "related": ["cubit", "build123d"],
+        "related": ["comsol-converter", "cubit", "build123d"],
         "tags": ["cad"],
     },
     "gmsh": {
@@ -71,6 +71,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "analytical_formulas", "peec_inductance"],
         "related": [
             "bem",
+            "comsol-converter",
             "fem",
             "mathematica",
             "matrix-solvers",
@@ -105,6 +106,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["fem_usage"],
         "related": [
             "bem",
+            "comsol-converter",
             "differential-forms",
             "gnn",
             "matrix-solvers",
@@ -121,6 +123,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "Loop-Star, Calderon, Radia MMM/MSC, HACApK, FEM-BEM",
         "primary_tools": ["bem_usage"],
         "related": [
+            "comsol-converter",
             "fem",
             "peec",
             "radia-ngsolve",
@@ -414,7 +417,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "TEAM Workshop benchmark problems reference layer "
                        "(30 problems × physics class). ★ Lab core: 13, 20, 23, 32, 33b",
         "primary_tools": ["team_benchmark"],
-        "related": ["fem", "bem", "motor"],
+        "related": ["comsol-converter", "fem", "bem", "motor"],
         "tags": ["application"],
     },
     "comsol-converter": {
@@ -427,9 +430,9 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "external COMSOL MCP + radia-ngsolve",
         "primary_tools": ["cc_ir_schema", "cc_mapping", "cc_ir_to_ngsolve",
                           "cc_ir_to_comsol", "cc_verify"],
-        "related": ["radia-interop", "radia-ngsolve", "team-benchmark",
+        "related": ["interop", "radia-ngsolve", "team-benchmark",
                     "fem", "bem"],
-        "tags": ["interop", "fem"],
+        "tags": ["application", "fem"],
     },
     "differential-forms": {
         "subpackage": "radia_mcp.differential_forms",
