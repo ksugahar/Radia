@@ -116,7 +116,7 @@ def main():
     ax.plot([p["misfit"] * 100 for p in env], [p["peak"] for p in env],
             "k--", lw=2.0, label="envelope (length-pushed)")
     ax.set_xscale("log")
-    ax.set_xlabel("inhomogeneity ||A psi - B|| / ||B|| [%]")
+    ax.set_xlabel("inhomogeneity ||A psi - B|| / ||B|| (%)")
     ax.set_ylabel("peak surface current density max|grad psi|")
     ax.legend(fontsize=7, loc="upper right")
     ax.grid(alpha=0.3)

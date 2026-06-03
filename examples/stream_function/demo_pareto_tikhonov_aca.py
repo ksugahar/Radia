@@ -301,8 +301,8 @@ def main():
     if fP is not None:
         draw(fP, "#2471a3", "s", "Tikhonov + L-inf IRLS (min peak)")
     ax.set_xscale("log")
-    ax.set_xlabel("field inhomogeneity  ||A psi - B|| / ||B||  [%]")
-    ax.set_ylabel("peak current density  max|grad psi|  [x1e6]")
+    ax.set_xlabel("field inhomogeneity  ||A psi - B|| / ||B||  (%)")
+    ax.set_ylabel(r"peak $|\nabla\psi|$ ($\times10^6$ A/m)")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
     save_lab_figure(fig, args.out, embed_width_cm=8.0)

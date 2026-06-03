@@ -1020,7 +1020,9 @@ def _flux_line_plot(chain, current, out_path, plane="y", half=None,
     except Exception:                              # start_points off-grid edge
         ax.streamplot(g, g, Ba, Bb, color="white", linewidth=lw, density=2.0)
     lbl = "xyz"
-    ax.set_xlabel(f"{lbl[ia]} [m]"); ax.set_ylabel(f"{lbl[ib]} [m]")
+    # lab rule 9 (units in PARENTHESES, not brackets) + rule 3 (italic math
+    # symbol, upright unit): "x (m)" with x italic, not "x [m]".
+    ax.set_xlabel(f"${lbl[ia]}$ (m)"); ax.set_ylabel(f"${lbl[ib]}$ (m)")
     # Lab figure convention: NO in-figure title -- the cut-plane and line count
     # are returned (the panel / docs caption carries them, not the PNG).
     plt.rcParams["pdf.fonttype"] = 42                  # TrueType (no Type-3)

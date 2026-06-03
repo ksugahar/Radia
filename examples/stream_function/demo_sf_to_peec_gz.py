@@ -158,7 +158,7 @@ def main():
         ax2 = fig.add_subplot(1, 2, 2)
         ax2.plot(zc * 1e3, Bz, "o-", ms=3, label="single-stroke coil Bz")
         ax2.plot(zc * 1e3, G_fit * zc, "k--", label="linear fit")
-        ax2.set_xlabel("z [mm]"); ax2.set_ylabel("Bz [T]")
+        ax2.set_xlabel("$z$ (mm)"); ax2.set_ylabel("$B_z$ (T)")
         ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
         ax2.legend(); ax2.grid(alpha=0.3)
         out = HERE / "demo_sf_to_peec_gz.png"
