@@ -70,6 +70,27 @@ at moderate `N`; for very large meshes use `h1` (the sparse proxy) or a future
 H-matrix `SL`.  Locked by
 `tests/panels/test_streamfunction_golden.py::test_streamfunction_min_inductance`.
 
+## IH-resonance design (`--target-inductance` / `--resonance-cap`)
+
+A gradient coil wants **minimum** inductance (fast slew); an **induction-heating
+work coil wants a SPECIFIC inductance** so the coil + tank capacitor resonate at
+the inverter frequency, `L_target = 1/((2π f)² C)`.  The SAME inductance physics
+serves both — minimise it (`--regularize inductance`) or TARGET it here.
+
+The field design (`ψ`) is independent of the turn count; `L_coil` is set by the
+turns (`~N²`).  So `--target-inductance <L_H>` (or `--resonance-cap <C_F>` with
+`--peec-freq <f>`, which computes `L_target = 1/((2πf)²C)`) **searches `nlevels`
+by bisection** — each candidate is a single-stroke → PEEC `L_coil` — for the
+turn count whose coil resonates, then designs at that `nlevels` and reports
+`resonance` (`nlevels`, achieved `L_coil`, `resonance_freq_Hz`, the achievable
+`L_range_H`, and an `in_range` flag — an out-of-range `L_target` is **reported**,
+not silently clamped).  LAB cylinder, `C = 22 nF`, `f = 200 kHz` → `L_target =
+28.8 µH` → `nlevels = 13` → `L_coil = 30.3 µH`, coil resonates at **195 kHz**
+(the integer-turn quantisation leaves a few %; the tank `C` trims the rest), and
+the uniform field is still hit (4.5e-4).  Locked by
+`tests/panels/test_streamfunction_golden.py::test_streamfunction_ih_resonance`;
+connects the SF designer to the `radia-ih` work-coil pipeline.
+
 ## Current-confinement boundary condition (`--confine {off, on, abe}`)
 
 On a **finite** former the contours run off the edges; closing them with a rim
