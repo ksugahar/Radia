@@ -302,6 +302,23 @@ control design.  (Sugahara et al. 2023 extended CLN to problems with
 CONDUCTOR MOVEMENT using constant basis functions, which is what makes
 the moving-magnet maglev tractable.)
 
+## Verified in-repo: CLN-reduced levitation FORCE vs height (2026-06-04)
+
+A worked, verified example lives in
+`examples/CLN/scripts/team28_levitation/`.  The coil-driven axisymmetric
+eddy problem is `(K + s*N) X = F` (K = s-independent magnetostatic
+operator, N = conductivity term, F = coil source); the CLN/Cauer
+reduction is the Krylov subspace built from the COIL SOURCE
+(`V0 = K^-1 F`, `V_{k+1} = orthonormalise(K^-1 (N V_k))`).  A **6-stage
+CLN reproduces the full-FEM levitation force vs height to < 0.1%** and
+recovers the levitation equilibrium **dZ = +4.1 mm** (lift == disk weight
+~1.055 N; lab full-FEM ~+4 mm); the force converges in ~5 stages
+(stage 3 = 0.14%, stage 5 = 0.000%).  The repo full-FEM baseline matches
+the lab axisymmetric ground truth to 0.01%.  This is the first CLN
+reduction carried through to the actual TEAM 28 levitation force (prior
+CLN-on-TEAM28 work was decay-spectrum-only).  See `radia_mcp.mor`
+mor_cln (applications) for the same example from the CLN-theory side.
+
 ## Multiport CLN (matrix Cauer ladder) -- for multi-axis maglev
 
 A real maglev needs more than the vertical axis: lateral (XY) guidance
