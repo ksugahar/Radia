@@ -1,6 +1,6 @@
 """radia_mcp.levitation: magnetic levitation FORCE-physics + stationary uses.
 
-The force-physics counterpart to `radia_mcp.maglev_linear` (transport).
+The force-physics counterpart to `radia_mcp.maglev` (transport).
 Covers the levitation mechanisms Radia / PEEC / NGSolve are built to
 compute:
 - induction (eddy-current) levitation -- jumping ring, EDS lift
@@ -12,7 +12,7 @@ compute:
 - how to compute the levitation force (Maxwell stress / virtual work /
   time-average Lorentz)
 
-Pick by intent: move a vehicle -> maglev_linear; suspend / melt / bear /
+Pick by intent: move a vehicle -> maglev; suspend / melt / bear /
 compute a force -> levitation.
 """
 

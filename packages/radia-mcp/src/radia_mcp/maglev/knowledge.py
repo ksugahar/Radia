@@ -56,7 +56,7 @@ against the unread lab PDFs when those become accessible.
 
 
 # Authoritative topic enum for the dispatcher tool (wired into
-# `maglev_linear_topics()` via common.register_topics_tool).
+# `maglev_topics()` via common.register_topics_tool).
 TOPICS: dict[str, str] = {
     "radia_iem_fem": "Radia IEM (MMM/MSC) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi/T-Omega; no re-mesh on magnet motion (Yano bachelor, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
