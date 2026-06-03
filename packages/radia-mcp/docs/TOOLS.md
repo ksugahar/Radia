@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **328 tools** across 40 MCP servers.
+Total: **331 tools** across 40 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -41,7 +41,7 @@ Total: **328 tools** across 40 MCP servers.
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
-| [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 7 |
+| [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 10 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 8 |
@@ -221,7 +221,7 @@ Module: `radia_mcp.streamfunction.server`
 | Tool | Description |
 |---|---|
 | `radia_streamfunction_status` | (no description) |
-| `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 16 topics. |
+| `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 19 topics. |
 | `streamfunction` | Get Stream-Function (SF) coil-design documentation. |
 
 ## `mcp-server-fem`
@@ -647,7 +647,10 @@ Module: `radia_mcp.figure.server`
 
 | Tool | Description |
 |---|---|
+| `figure_audit_embeds` | Lint every \includegraphics in a LaTeX file for figure embeds that |
+| `figure_everyday_recipe` | Matplotlib recipe for the lab's EVERYDAY analysis figure. |
 | `figure_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
+| `figure_office_export_recipe` | MATLAB recipe to export the current figure for Word / PowerPoint |
 | `figure_size_for_target` | Recommend output figure size + font settings for a target embedding. |
 | `figure_status` | (no description) |
 | `figure_style_guide` | Return the lab-standard graph style guide. |
