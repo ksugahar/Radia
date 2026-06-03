@@ -22,6 +22,7 @@ import os
 import sys
 
 from netgen.occ import WorkPlane, Axes, Pnt, Z, Sphere, OCCGeometry, Glue
+from ngsolve import TaskManager
 
 
 def _plate(zc, side=0.30):
@@ -31,17 +32,18 @@ def _plate(zc, side=0.30):
 def main(outdir):
     os.makedirs(outdir, exist_ok=True)
 
-    # coil: two parallel plates as ONE surface mesh (two components)
-    geo = OCCGeometry(Glue([_plate(0.10), _plate(-0.10)]))
-    coil_ng = geo.GenerateMesh(maxh=0.03)
-    coil_path = os.path.join(outdir, "biplanar_coil.vol")
-    coil_ng.Save(coil_path)
+    with TaskManager():     # caller wraps the mesh-gen (TaskManager-Only policy)
+        # coil: two parallel plates as ONE surface mesh (two components)
+        geo = OCCGeometry(Glue([_plate(0.10), _plate(-0.10)]))
+        coil_ng = geo.GenerateMesh(maxh=0.03)
+        coil_path = os.path.join(outdir, "biplanar_coil.vol")
+        coil_ng.Save(coil_path)
 
-    # eval: DSV sphere volume at the midplane between the plates
-    sph = Sphere(Pnt(0, 0, 0), 0.04)
-    eval_ng = OCCGeometry(sph).GenerateMesh(maxh=0.02)
-    eval_path = os.path.join(outdir, "biplanar_eval.vol")
-    eval_ng.Save(eval_path)
+        # eval: DSV sphere volume at the midplane between the plates
+        sph = Sphere(Pnt(0, 0, 0), 0.04)
+        eval_ng = OCCGeometry(sph).GenerateMesh(maxh=0.02)
+        eval_path = os.path.join(outdir, "biplanar_eval.vol")
+        eval_ng.Save(eval_path)
 
     print(f"coil_vol={coil_path}")
     print(f"eval_vol={eval_path}")
