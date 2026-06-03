@@ -183,10 +183,11 @@ def _secular_currents(n_cf):
             ("net_toroidal", Cross(n_cf, grad_theta))]
 
 
-def _assemble_secular_normal(coil, n_cf, pts, nrm, K_list):
+def _assemble_secular_normal(coil, pts, nrm, K_list):
     """B.n at the plasma points from each explicit secular surface current K
     (same Biot-Savart kernel as _assemble_biot_savart, but K is a CF, not a
-    per-DOF basis).  Returns (M, len(K_list))."""
+    per-DOF basis; the normal is already baked into each K = n x grad(...)).
+    Returns (M, len(K_list))."""
     from ngsolve import x, y, z, sqrt, Integrate, ds
     out = np.zeros((len(pts), len(K_list)))
     for k, (_name, K) in enumerate(K_list):
@@ -260,8 +261,10 @@ def _rotating_ellipse_terms():
 def _read_wout_boundary(path):
     """Boundary Fourier terms (m, n, RBC, ZBS) + NFP from a VMEC ``wout_*.nc``.
     Reads the standard schema (xm, xn, rmnc, zmns, nfp); the boundary is the
-    last flux surface.  No-Fallback: raises if the file lacks the VMEC
-    variables.  Verified by a round-trip against the schema in the golden."""
+    last flux surface.  STELLARATOR-SYMMETRIC only: a non-symmetric (lasym=T)
+    wout also carries rmns/zmnc -- this reader RAISES rather than silently drop
+    them (No-Fallback).  Also raises if the file lacks the VMEC variables.
+    Verified by a round-trip against the schema in the golden."""
     import netCDF4
     d = netCDF4.Dataset(path, "r")
     try:
@@ -270,6 +273,12 @@ def _read_wout_boundary(path):
         xn = np.asarray(d["xn"][:])
         rmnc = np.asarray(d["rmnc"][:])        # (ns, mn_mode)
         zmns = np.asarray(d["zmns"][:])
+        # a non-stellarator-symmetric (lasym=T) wout carries rmns/zmnc that this
+        # symmetric reader would silently truncate -> raise instead.
+        if "rmns" in d.variables or "zmnc" in d.variables:
+            raise ValueError(
+                f"{path}: non-stellarator-symmetric wout (rmns/zmnc present); "
+                "only the stellarator-symmetric rmnc/zmns boundary is supported")
     except (KeyError, IndexError) as e:
         raise ValueError(
             f"{path}: not a VMEC wout file (missing nfp/xm/xn/rmnc/zmns): {e}")
@@ -297,9 +306,11 @@ def _vmec_boundary(terms, nfp, theta, phi):
 
 def _vmec_points_normals(terms, nfp, ntheta, nphi):
     """Plasma-boundary sample points + OUTWARD unit normals from the parametric
-    tangents n ~ dr/dtheta x dr/dphi (sign-corrected to point away from the
-    magnetic axis).  Raises if the boundary is not star-shaped (mixed normal
-    orientation) -- No-Fallback."""
+    tangents n ~ dr/dtheta x dr/dphi.  The cross product is ALREADY consistently
+    oriented; we only pick the global sign (away from the boundary's own
+    phi-dependent m=0 centre) by majority vote -- NOT a star-shaped requirement,
+    so a strongly-shaped (non-star-shaped) real wout boundary is accepted.
+    Raises only on a degenerate (zero) normal (No-Fallback)."""
     th = np.linspace(0, 2 * np.pi, ntheta, endpoint=False)
     ph = np.linspace(0, 2 * np.pi, nphi, endpoint=False)
     TH, PH = np.meshgrid(th, ph, indexing="ij")
@@ -309,17 +320,22 @@ def _vmec_points_normals(terms, nfp, ntheta, nphi):
     dphi = np.stack([Rp * np.cos(PH) - R * np.sin(PH),
                      Rp * np.sin(PH) + R * np.cos(PH), Zp], axis=-1)
     nrm = np.cross(dtheta, dphi)
-    nrm /= np.linalg.norm(nrm, axis=-1, keepdims=True) + 1e-30
-    axis = np.stack([R_MAJOR * np.cos(PH), R_MAJOR * np.sin(PH),
-                     np.zeros_like(PH)], axis=-1)
-    rad = np.stack([x, y, z], axis=-1) - axis
-    outdot = np.sum(nrm * rad, axis=-1)
-    if (outdot > 0).mean() < 0.5:               # consistently inward -> flip
-        nrm = -nrm
-        outdot = -outdot
-    if not (outdot > 0).all():
-        raise ValueError("VMEC boundary normals are not consistently outward "
-                         "(boundary not star-shaped about the magnetic axis)")
+    nlen = np.linalg.norm(nrm, axis=-1, keepdims=True)
+    if (nlen < 1e-12).any():
+        raise ValueError("degenerate VMEC boundary normal (zero cross product) "
+                         "-- check the Fourier coefficients / parametrisation")
+    nrm = nrm / nlen
+    # the boundary's own m=0 centre R0(phi), Z0(phi) (NOT a hardcoded R_MAJOR --
+    # a real equilibrium's axis is Shafranov-shifted); an interior reference for
+    # the global outward-sign vote.
+    R0 = np.zeros_like(PH); Z0 = np.zeros_like(PH)
+    for m, n, rc, zs in terms:
+        if m == 0:
+            R0 += rc * np.cos(n * nfp * PH)
+            Z0 += -zs * np.sin(n * nfp * PH)      # Z = ZBS sin(-n NFP ph) at m=0
+    centre = np.stack([R0 * np.cos(PH), R0 * np.sin(PH), Z0], axis=-1)
+    if np.sum(nrm * (np.stack([x, y, z], axis=-1) - centre)) < 0:
+        nrm = -nrm                                # flip global sign -> outward
     pts = np.stack([x, y, z], axis=-1).reshape(-1, 3)
     nrm = nrm.reshape(-1, 3)
     return pts, nrm
@@ -358,7 +374,6 @@ def main():
     from ngsolve import Mesh, H1, specialcf, TaskManager
 
     os.makedirs(args.work_dir, exist_ok=True)
-    fig_data = {}
 
     with TaskManager():
         coil = Mesh(_torus_surface_vol(
@@ -403,7 +418,7 @@ def main():
 
         # ---- 3. NET CURRENT: the multivalued / secular term ----
         K_list = _secular_currents(n_cf)
-        sec_n = _assemble_secular_normal(coil, n_cf, pts, nrm, K_list)
+        sec_n = _assemble_secular_normal(coil, pts, nrm, K_list)
         col_scale = float(np.median(np.linalg.norm(A_n, axis=0)))
         # the TF (net-poloidal) secular current is ~tangent to the plasma, so its
         # B.n footprint is tiny -> it is a PRESCRIBED parameter, not fitted.
@@ -411,7 +426,6 @@ def main():
         by_in = _tf_field_1overR(coil, n_cf, radii)
         by_out = _tf_field_1overR(coil, n_cf, np.array([0.10, 0.55]))
         br = by_in * radii                       # B_tor * R (should be const)
-        unit_Ipol = 2.0 * math.pi               # net poloidal A per unit K_zeta
         # prescribe net poloidal current for the desired on-axis toroidal field
         Bphi0 = args.tf_axis_field
         Ipol_needed = 2.0 * math.pi * R_MAJOR * Bphi0 / _MU0
