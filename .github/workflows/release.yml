@@ -84,7 +84,12 @@ jobs:
           # dereferenced ^{} for annotated) matches the triggering commit.
           # The ^{} deref endpoint returns lines like:
           #   refs/tags/v4.90.1^{} <sha>
-          VTAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+          # NOTE: use the full HTTPS URL (not "origin") because no
+          # actions/checkout@v4 is done in this job -- "origin" is not
+          # defined without a .git checkout.  GITHUB_REPOSITORY is
+          # automatically set to "owner/repo" on every Actions runner.
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          VTAG=$(git ls-remote --tags "$REPO_URL" 'refs/tags/v*' \
                  | awk -v sha="$SHA" '($1==sha) && /\^\{\}/ {print $2}' \
                  | sed 's/\^{}//' | head -1)
           if [ -n "$VTAG" ]; then

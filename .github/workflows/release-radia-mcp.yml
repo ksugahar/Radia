@@ -28,7 +28,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          VTAG=$(git ls-remote --tags origin 'refs/tags/radia-mcp-v*' \
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          VTAG=$(git ls-remote --tags "$REPO_URL" 'refs/tags/radia-mcp-v*' \
                  | awk -v sha="$SHA" '($1==sha) && /\^\{\}/ {print $2}' \
                  | sed 's/\^{}//' | head -1)
           if [ -n "$VTAG" ]; then
