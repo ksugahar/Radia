@@ -329,5 +329,26 @@ def test_streamfunction_biplanar(biplanar_vols):
         f"biplanar separate-turn coil inaccurate: {rm['loops_homogeneity_rms']}"
 
 
+def test_streamfunction_min_inductance(sample_vols):
+    """Min-inductance regularizer: design min 1/2 psi^T L psi s.t. A psi = B
+    where L is the ngsolve.bem single-layer self-inductance (K = n x grad psi).
+    This is the canonical MIN-STORED-ENERGY gradient-coil objective.  Locks the
+    dense BEM assembly path: it runs, fits the Gx target, and reports a positive
+    finite physical stored energy."""
+    coil, evalv = sample_vols
+    r = _run_calc(coil, evalv, "x",
+                  extra=["--order", "1", "--confine", "abe",
+                         "--regularize", "inductance"])
+    assert "error" not in r, f"inductance design error: {r.get('error')}"
+    assert r["regularize"] == "inductance"
+    # still fits the target (the seminorm only picks among A psi = B solutions)
+    assert r["rms"] < 5.0e-2, f"inductance homogeneity too large: {r['rms']}"
+    # the minimised objective is reported and physical (positive, finite)
+    assert "stored_energy_J" in r, "min-inductance must report stored_energy_J"
+    assert 0.0 < r["stored_energy_J"] < 1.0e30, \
+        f"unphysical stored energy: {r['stored_energy_J']}"
+    assert r["peak_J"] > 0.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

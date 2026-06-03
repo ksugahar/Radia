@@ -16,24 +16,26 @@ import os
 import sys
 
 from netgen.occ import Cylinder, Sphere, Pnt, Z, OCCGeometry
+from ngsolve import TaskManager
 
 
 def main(outdir):
     os.makedirs(outdir, exist_ok=True)
 
-    # coil: cylinder lateral surface -> standalone surface mesh
-    a, L = 0.15, 0.50
-    cyl = Cylinder(Pnt(0, 0, -L / 2), Z, r=a, h=L)
-    lateral = max(cyl.faces, key=lambda f: f.mass)      # 2*pi*a*L > cap area
-    coil_ng = OCCGeometry(lateral).GenerateMesh(maxh=0.04)
-    coil_path = os.path.join(outdir, "coil_cyl_surf.vol")
-    coil_ng.Save(coil_path)
+    with TaskManager():     # caller wraps the mesh-gen (TaskManager-Only policy)
+        # coil: cylinder lateral surface -> standalone surface mesh
+        a, L = 0.15, 0.50
+        cyl = Cylinder(Pnt(0, 0, -L / 2), Z, r=a, h=L)
+        lateral = max(cyl.faces, key=lambda f: f.mass)    # 2*pi*a*L > cap area
+        coil_ng = OCCGeometry(lateral).GenerateMesh(maxh=0.04)
+        coil_path = os.path.join(outdir, "coil_cyl_surf.vol")
+        coil_ng.Save(coil_path)
 
-    # eval: DSV sphere volume
-    sph = Sphere(Pnt(0, 0, 0), 0.05)
-    eval_ng = OCCGeometry(sph).GenerateMesh(maxh=0.025)
-    eval_path = os.path.join(outdir, "eval_dsv.vol")
-    eval_ng.Save(eval_path)
+        # eval: DSV sphere volume
+        sph = Sphere(Pnt(0, 0, 0), 0.05)
+        eval_ng = OCCGeometry(sph).GenerateMesh(maxh=0.025)
+        eval_path = os.path.join(outdir, "eval_dsv.vol")
+        eval_ng.Save(eval_path)
 
     print(f"coil_vol={coil_path}")
     print(f"eval_vol={eval_path}")
