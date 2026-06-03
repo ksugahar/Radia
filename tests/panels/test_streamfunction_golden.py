@@ -332,15 +332,23 @@ def test_streamfunction_biplanar(biplanar_vols):
 def test_streamfunction_figures_no_in_figure_title():
     """Lab figure convention (radia_mcp.figure): NO in-figure title on ANY
     figure -- the caption carries it.  The shipped panel calc cannot import the
-    radia_mcp save-time gate, so lock it statically: the flux/steps helpers use
-    no ax.set_title / fig.suptitle (panels are identified by (a)-(d) corner
-    text via ax.text2D).  Fast (source scan; no NGSolve / fixture)."""
-    with open(CALC, encoding="utf-8") as f:
-        src = f.read()
-    assert ".set_title(" not in src, \
-        "in-figure title (ax.set_title) -- move it to the caption (lab rule)"
-    assert ".suptitle(" not in src, \
-        "in-figure suptitle -- move it to the caption (lab rule)"
+    radia_mcp save-time gate, and the examples/ demos that DON'T use
+    save_lab_figure have no runtime gate either, so lock the whole SF figure
+    suite statically: the shipped calc AND every examples/stream_function
+    demo use no ax.set_title / fig.suptitle (panels are identified by (a)-(d)
+    corner text via ax.text / ax.text2D).  Fast (source scan; no NGSolve)."""
+    import glob
+    targets = [CALC] + sorted(glob.glob(os.path.join(
+        REPO, "examples", "stream_function", "demo_*.py")))
+    bad = []
+    for path in targets:
+        with open(path, encoding="utf-8") as f:
+            src = f.read()
+        if ".set_title(" in src or ".suptitle(" in src:
+            bad.append(os.path.basename(path))
+    assert not bad, (
+        "in-figure title (ax.set_title / fig.suptitle) -- move it to the "
+        "caption (lab rule, radia_mcp.figure); offenders: " + ", ".join(bad))
 
 
 def test_streamfunction_min_inductance(sample_vols):
