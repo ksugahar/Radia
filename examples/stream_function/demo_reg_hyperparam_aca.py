@@ -278,6 +278,7 @@ def main():
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        plt.rcParams["pdf.fonttype"] = 42
 
         bp = study.best_params
         amp, cx, cy, width = (bp["sigma_amp"], bp["sigma_cx"],
@@ -298,10 +299,9 @@ def main():
 
         c0 = axes[0].contourf(GX * 1e3, GY * 1e3, sigma_map, levels=20,
                               cmap="viridis")
-        axes[0].set_title(f"optimised sigma(x,y)\n"
-                          f"amp={amp:+.2f}, w={width:.3f}")
         axes[0].set_xlabel("x [mm]"); axes[0].set_ylabel("y [mm]")
         axes[0].set_aspect("equal")
+        axes[0].text(0.02, 0.96, "(a)", transform=axes[0].transAxes, fontsize=10)
         fig.colorbar(c0, ax=axes[0], fraction=0.045)
 
         c1 = axes[1].contourf(g * 1e3, g * 1e3, psi_grid.T, levels=20,
@@ -311,10 +311,9 @@ def main():
             lv = lo + (np.arange(args.nlevels) + 0.5) * (hi - lo) / args.nlevels
             axes[1].contour(g * 1e3, g * 1e3, psi_grid.T, levels=lv,
                             colors="k", linewidths=0.5)
-        axes[1].set_title(f"psi contours (chain RMS "
-                          f"{bt.user_attrs['chain_rms']*100:.2f}%)")
         axes[1].set_xlabel("x [mm]"); axes[1].set_ylabel("y [mm]")
         axes[1].set_aspect("equal")
+        axes[1].text(0.02, 0.96, "(b)", transform=axes[1].transAxes, fontsize=10)
         fig.colorbar(c1, ax=axes[1], fraction=0.045)
 
         costs = [t.user_attrs.get("chain_rms") for t in study.trials
@@ -327,7 +326,7 @@ def main():
         axes[2].axhline(m_base["chain_rms"] * 100, color="k", ls="--",
                         label=f"uniform-sigma {m_base['chain_rms']*100:.2f}%")
         axes[2].set_xlabel("trial"); axes[2].set_ylabel("chain RMS [%]")
-        axes[2].set_title("CMA-ES convergence")
+        axes[2].text(0.02, 0.96, "(c)", transform=axes[2].transAxes, fontsize=10)
         axes[2].legend(loc="best", fontsize=8); axes[2].grid(alpha=0.3)
 
         out_png = HERE / "demo_reg_hyperparam_plot.png"
