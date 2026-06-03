@@ -40,6 +40,41 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 | `team28_axisym_fem.py` | Repo-clean port of the lab full-FEM axisymmetric TEAM 28 solve (mixed phi-B + anisotropic-nu infinite shell). Reproduces the lab `.mat` force to **0.01%** at dZ=0. The ground-truth baseline. |
 | `team28_cln_force.py`  | CLN/Cauer reduction at one height: builds K, N, F, shows the N-stage CLN force converging to full-FEM (golden). |
 | `team28_cln_sweep.py`  | CLN force **vs height**, compared to the lab full-FEM `Fz1(dZ)`; recovers the levitation equilibrium ~+4 mm. |
+| `cln_sibc_cuboid_3d.py` | Python port of the lab CLN-SIBC (Warburg-Schur) 3D cuboid core: Foster admittance + CLN reduction + Schur-F SIBC termination + polarizability `alpha(s)=V-Y/sigma`. The non-axisym building block. |
+| `levitation_sphere_force.py` | **Isotropic induced-dipole AC levitation force** on a conducting sphere, coefficient pinned by the analytic perfect-conductor limit, frequency response reduced by CLN/Cauer. See below. |
+
+## Isotropic levitation force (sphere) -- coefficient pinned, CLN-reduced
+
+`levitation_sphere_force.py` builds the AC levitation force from the
+induced magnetic dipole, with every constant verified.  A **sphere is
+isotropic**, so the scalar polarizability already ported (`cln_sibc_
+cuboid_3d.py`) applies directly -- no anisotropic tensor is needed to
+demonstrate (and verify) a real levitation force.
+
+The conducting sphere (Landau-Lifshitz ECM sec. 59) has magnetic response
+
+    G(x) = -1/2 [ 1 - 3/x^2 + (3/x) cot x ],   x = (1+i) a / delta,
+
+with `G(0)=0` (DC, no eddy response) and `G(inf)=-1/2` (perfect-conductor
+flux exclusion).  The time-averaged levitation force on the induced
+dipole in a field gradient is
+
+    <F> = (pi a^3 / mu0) Re[G(x)] grad(B0^2),     Re[G] < 0  =>  LIFT.
+
+| check | result |
+|---|---|
+| limits of G | DC `Re G -> 0`, HF `Re G -> -0.4997` |
+| sign | `Re G < 0` for all f in [1 Hz, 100 MHz] -> lift at every frequency |
+| CLN/Cauer reduction | stage 4 within **0.013%**, stage 6 **0.0000%** of the full modal system |
+| coefficient pin | HF lift `31.22 mN` vs perfect-conductor `(pi a^3/2 mu0)|grad B0^2| = 31.25 mN` (**0.09%**) |
+
+The same `(pi a^3 / 2 mu0) grad(B0^2)` coefficient is derived independently
+from the perfect-conductor energy `U = -1/2 m.B` and reproduced by the
+induced-dipole formula -- so the complex-AC sign and normalization are
+pinned, not guessed.  The lift rises from ~0 (DC) through the eddy-current
+transition (`a/delta ~ 1-5`) to the perfect-conductor saturation, exactly
+as expected.  Isotropic; the cuboid `a!=b!=c` anisotropic alpha tensor is
+a separable refinement (not required for the force).
 
 ## Source / provenance
 
@@ -56,7 +91,9 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 ## Run
 
 ```bash
-python team28_axisym_fem.py   # full-FEM baseline  -> -2.1925 N @ dZ=0
-python team28_cln_force.py    # CLN convergence    -> 5-stage golden
-python team28_cln_sweep.py    # CLN force vs height -> equilibrium +4.1mm
+python team28_axisym_fem.py      # full-FEM baseline  -> -2.1925 N @ dZ=0
+python team28_cln_force.py       # CLN convergence    -> 5-stage golden
+python team28_cln_sweep.py       # CLN force vs height -> equilibrium +4.1mm
+python cln_sibc_cuboid_3d.py     # CLN-SIBC 3D cuboid core (alpha, Schur-F)
+python levitation_sphere_force.py  # isotropic levitation force, coeff pinned
 ```
