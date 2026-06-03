@@ -356,6 +356,16 @@ def _build_problem(args, eval_scale=1.0):
     Ac = _assemble_biot_savart(fes, n, cpts, comps)
     Am = _assemble_biot_savart(fes, n, mpts, comps)
     if args.regularize == "inductance":
+        # DENSE BEM (SL ~ (3N)^2, plus an N-iteration Set loop): O(N^2) memory.
+        # No-Fallback: cap with a clear message instead of OOM/hanging on a big
+        # mesh (the sparse l2/h1 seminorms scale to N~15k; this does not).
+        if fes.ndof > 5000:
+            raise ValueError(
+                f"--regularize inductance is DENSE (BEM self-inductance, "
+                f"O(N^2) memory + an N-column assembly loop); N={fes.ndof} "
+                f"surface DOFs is too large (cap 5000). Use --regularize h1 "
+                f"(sparse, the smoothness proxy) for large meshes, or coarsen "
+                f"the mesh / lower --order.")
         # physical min-stored-energy objective: DENSE BEM self-inductance L_psi
         Lf = _inductance_seminorm(coil, fes)    # dense N x N (mu0 C^T SL C)
         # fold to the independent space WITHOUT a dense N x N intermediate of
@@ -547,8 +557,10 @@ def _contour_segments_hp(coil, gfu, levels, sub):
     from ngsolve import BND, IntegrationRule
     refpts, subtris = _ref_subtriangulation(sub)
     out = {L: [] for L in levels}
+    n_nontri = 0
     for el in coil.Elements(BND):
         if len([v for v in el.vertices]) != 3:
+            n_nontri += 1                    # quad/other: counted, raised below
             continue
         tr = coil.GetTrafo(el)
         P = np.empty((len(refpts), 3))
@@ -568,6 +580,12 @@ def _contour_segments_hp(coil, gfu, levels, sub):
                         pts.append(P[i] + t * (P[j] - P[i]))
                 if len(pts) == 2:
                     out[L].append((pts[0], pts[1]))
+    if n_nontri:                             # No-Fallback: do not silently drop
+        raise ValueError(
+            f"--contour-sub > 1 (high-order contour) needs a TRIANGULAR surface "
+            f"mesh; found {n_nontri} non-triangular (quad) BND element(s). Use "
+            f"--contour-sub 1 (vertex-linear marching handles quads), or remesh "
+            f"the coil surface with triangles.")
     return out
 
 
@@ -1210,6 +1228,12 @@ def _search_nlevels_for_L(P, psi_v, verts, tris, tol, args, L_target,
         return L
 
     L_lo, L_hi = L_of(nl_min), L_of(nl_max)
+    if np.isnan(L_lo) or np.isnan(L_hi):       # No-Fallback: nan poisons the
+        raise ValueError(                       # bisection -> raise, don't drift
+            f"cannot compute coil inductance at a search endpoint "
+            f"(nlevels={nl_min} -> {L_lo}, nlevels={nl_max} -> {L_hi}): the "
+            f"single-stroke chain is empty / too short at that turn count. "
+            f"Check the design / contours or adjust --nlevels-max.")
     in_range = (min(L_lo, L_hi) <= L_target <= max(L_lo, L_hi))
     lo, hi = nl_min, nl_max
     best_n, best_L = nl_min, L_lo
