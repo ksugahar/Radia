@@ -1,13 +1,18 @@
-"""radia_mcp.maglev_linear: Magnetic levitation + linear drive knowledge.
+"""radia_mcp.maglev_linear: Magnetic levitation knowledge.
 
-Covers maglev (磁気浮上) and linear drives (リニアドライブ):
-- Levitation principles (EMS attraction, EDS repulsion, superconducting)
-- Linear induction motor (LIM), linear synchronous motor (LSM)
-- Wheel motors, transit applications
-- Lab specialty: bearingless motor (cross-link to motor MCP)
+Scope: magnetic levitation for transport / suspension / control.  The
+former linear-drive (LIM/LSM, end-effect) material was removed; for the
+levitation-FORCE physics see the sibling `radia_mcp.levitation`.
 
-Distilled from W:/.../99_アプリケーション/07_磁気浮上/ (38 files, 634 MB)
-+ 09_リニアドライブ/ (32 files, 555 MB).
+Covers:
+- Levitation principles (EMS attraction, EDS repulsion, superconducting,
+  Halbach/Inductrack, passive PM axial bearings)
+- The lab's Radia-based maglev research line (CAE-AI Lab, Yano + Sugahara):
+  * radia_iem_fem   -- Radia IEM (MMM/MSC) <-> reduced-potential FEM weak
+    coupling for moving-magnet eddy-current levitation force
+  * cln_mor_control -- Cauer Ladder Network model-order reduction for
+    real-time control-coupled maglev (TEAM 28, ~1/500 speedup)
+- Magnetic-wheel EDS (Kansai), Sumitomo Heavy industrial PM bearings.
 """
 
 from .knowledge import get_knowledge
