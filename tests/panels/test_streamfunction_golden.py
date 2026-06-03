@@ -420,5 +420,103 @@ def test_streamfunction_min_inductance(sample_vols):
     assert r["peak_J"] > 0.0
 
 
+DEMO_REGCOIL = os.path.join(REPO, "examples", "stream_function",
+                            "demo_regcoil_fusion.py")
+
+
+def test_regcoil_fusion_wout_and_vmec_boundary(tmp_path):
+    """Part 4 (C): the VMEC-format boundary helpers, NO NGSolve needed.
+    (1) ``_read_wout_boundary`` round-trips the standard VMEC ``wout_*.nc``
+    schema (nfp/xm/xn/rmnc/zmns, boundary = last surface) -- this is the
+    verification the demo docstring promises for the reader.  (2) the
+    rotating-ellipse model boundary is genuinely non-axisymmetric and its
+    parametric normals are consistently OUTWARD."""
+    netCDF4 = pytest.importorskip("netCDF4")
+    import numpy as np
+    sys.path.insert(0, os.path.dirname(DEMO_REGCOIL))
+    import demo_regcoil_fusion as D
+
+    # --- (1) wout reader round-trip against the VMEC netCDF schema ---
+    terms0, nfp0 = D._rotating_ellipse_terms()
+    fp = str(tmp_path / "wout_roundtrip.nc")
+    ds = netCDF4.Dataset(fp, "w")
+    ns, mn = 4, len(terms0)
+    ds.createDimension("radius", ns)
+    ds.createDimension("mn_mode", mn)
+    ds.createVariable("nfp", "i4")[...] = nfp0
+    ds.createVariable("ns", "i4")[...] = ns
+    ds.createVariable("xm", "f8", ("mn_mode",))[:] = [t[0] for t in terms0]
+    ds.createVariable("xn", "f8", ("mn_mode",))[:] = [t[1] * nfp0 for t in terms0]
+    rmnc = ds.createVariable("rmnc", "f8", ("radius", "mn_mode"))
+    zmns = ds.createVariable("zmns", "f8", ("radius", "mn_mode"))
+    rmnc[:] = 0.0
+    zmns[:] = 0.0
+    rmnc[ns - 1, :] = [t[2] for t in terms0]      # boundary = last flux surface
+    zmns[ns - 1, :] = [t[3] for t in terms0]
+    ds.close()
+    terms_read, nfp_read = D._read_wout_boundary(fp)
+    assert nfp_read == nfp0
+    assert terms_read == terms0, (terms_read, terms0)
+
+    # a non-VMEC netCDF must RAISE (No-Fallback), not silently mis-read
+    bad = str(tmp_path / "not_wout.nc")
+    d2 = netCDF4.Dataset(bad, "w")
+    d2.createDimension("n", 1)
+    d2.createVariable("foo", "f8", ("n",))[:] = 1.0
+    d2.close()
+    with pytest.raises(ValueError):
+        D._read_wout_boundary(bad)
+
+    # --- (2) rotating-ellipse boundary: non-axisymmetric + outward normals ---
+    pts, nrm = D._vmec_points_normals(terms0, nfp0, 24, 24)
+    axis = np.column_stack([
+        D.R_MAJOR * pts[:, 0] / np.hypot(pts[:, 0], pts[:, 1]),
+        D.R_MAJOR * pts[:, 1] / np.hypot(pts[:, 0], pts[:, 1]),
+        np.zeros(len(pts))])
+    minor = np.linalg.norm(pts - axis, axis=1)
+    assert minor.max() - minor.min() > 1e-3, "boundary should be non-axisym"
+    assert (np.sum(nrm * (pts - axis), axis=1) > 0).all(), "normals not outward"
+
+
+def test_regcoil_fusion_demo_invariants(tmp_path):
+    """Parts 1-4 end to end (subprocess): the fusion demo's physics invariants.
+    Locks (B) the net-current secular term and (C) the VMEC boundary:
+      * forward (PF + stellarator) B.n reproduced to machine precision
+      * Gmsh cohomology b1(winding surface) == number of secular DOFs (== 2)
+      * the net-poloidal-current (TF) secular field obeys Ampere 1/R (B_tor*R
+        ~ const inside the tube, ~0 outside) and is TANGENT to the plasma
+        (its B.n footprint << the net-toroidal one)
+      * the VMEC rotating-ellipse boundary is non-axisymmetric and its vertical
+        -field B.n target is reproduced to machine precision."""
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    cmd = [sys.executable, DEMO_REGCOIL, "--out-dir", str(tmp_path),
+           "--no-plot", "--eval-max", "90", "--n-alpha", "3",
+           "--vmec-ntheta", "20", "--vmec-nphi", "20"]
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env,
+                       cwd=str(tmp_path), timeout=600)
+    if r.returncode != 0:
+        if any(s in (r.stderr or "") for s in ("DLL", "MKL", "ImportError",
+                                               "libiomp", "gmsh")):
+            pytest.skip("NGSolve/MKL/gmsh subprocess env issue (LAB pytest)")
+        raise AssertionError(f"demo failed: {r.stderr[-1500:]}")
+    with open(os.path.join(str(tmp_path), "demo_regcoil_fusion.json")) as f:
+        d = json.load(f)
+    # 1. forward = machine precision
+    for nm, dd in d["producible_targets"].items():
+        assert dd["bn_residual_rel"] < 1e-6, (nm, dd)
+    # 3. net-current secular term
+    nc = d["net_current"]
+    assert nc["betti1_winding_surface"] == nc["n_secular_dofs"] == 2, nc
+    assert nc["tf_field_BR_const_spread_rel"] < 0.02, nc       # Ampere 1/R
+    assert nc["tf_field_outside_over_inside"] < 1e-2, nc       # ~0 outside
+    fp = nc["secular_bn_footprint_rel"]
+    assert fp["net_poloidal_TF"] < 0.1 * fp["net_toroidal"], fp  # TF tangent
+    # 4. VMEC boundary
+    vm = d["vmec_boundary"]
+    assert vm["non_axisymmetric"] is True, vm
+    assert vm["bn_residual_rel"] < 1e-6, vm
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-03T13:19:30",
+  "timestamp": "2026-06-03T13:41:41",
   "hostname": "lab",
   "benchmark": "regcoil_fusion_forward",
   "problem": {
@@ -16,17 +16,17 @@
     "winding_ndof": 884,
     "plasma_eval_points": 220,
     "regularize": "h1",
-    "note": "single-valued psi (no net-current secular term); B.n from analytic model fields (swap for free-boundary VMEC for a production run)."
+    "note": "parts 1-2 single-valued psi; part 3 adds the multivalued secular (net-current) term; part 4 a VMEC-format boundary. B.n from analytic model fields (swap for free-boundary VMEC via --wout for a production run)."
   },
   "producible_targets": {
     "uniform_vertical_PF": {
-      "bn_residual_rel": 2.2769275651206684e-09,
-      "peak_grad_psi": 1911484.2914312908,
+      "bn_residual_rel": 2.2769276532945454e-09,
+      "peak_grad_psi": 1911484.307576684,
       "n_contours": 28
     },
     "stellarator_sinTheta_cos2phi": {
-      "bn_residual_rel": 2.8524702106954865e-09,
-      "peak_grad_psi": 1489098.9059103583,
+      "bn_residual_rel": 2.852470383985515e-09,
+      "peak_grad_psi": 1489098.7896428455,
       "n_contours": 56
     }
   },
@@ -36,18 +36,72 @@
       {
         "alpha_rel": 100.0,
         "bn_residual_rel": 0.9545103310551417,
-        "peak_grad_psi": 313266.8483375399
+        "peak_grad_psi": 313266.84833754
+      },
+      {
+        "alpha_rel": 5.623413251903491,
+        "bn_residual_rel": 0.6351922788380278,
+        "peak_grad_psi": 2626824.9778484427
+      },
+      {
+        "alpha_rel": 0.31622776601683794,
+        "bn_residual_rel": 0.12468070020065206,
+        "peak_grad_psi": 6637526.609509744
+      },
+      {
+        "alpha_rel": 0.01778279410038923,
+        "bn_residual_rel": 0.00960614628284515,
+        "peak_grad_psi": 7829304.088622155
       },
       {
         "alpha_rel": 0.001,
-        "bn_residual_rel": 0.0005654783512986689,
-        "peak_grad_psi": 7921822.8617102355
+        "bn_residual_rel": 0.0005654783512985651,
+        "peak_grad_psi": 7921822.861709871
+      },
+      {
+        "alpha_rel": 5.623413251903491e-05,
+        "bn_residual_rel": 3.1899002170362686e-05,
+        "peak_grad_psi": 7927223.908950538
+      },
+      {
+        "alpha_rel": 3.162277660168379e-06,
+        "bn_residual_rel": 1.7941333116390177e-06,
+        "peak_grad_psi": 7927528.35527665
+      },
+      {
+        "alpha_rel": 1.7782794100389227e-07,
+        "bn_residual_rel": 1.0089254519855011e-07,
+        "peak_grad_psi": 7927545.4784829365
       },
       {
         "alpha_rel": 1e-08,
-        "bn_residual_rel": 5.6736080729686525e-09,
-        "peak_grad_psi": 7927547.673371006
+        "bn_residual_rel": 5.6736079636621956e-09,
+        "peak_grad_psi": 7927546.416788759
       }
     ]
+  },
+  "net_current": {
+    "betti1_winding_surface": 2,
+    "n_secular_dofs": 2,
+    "tf_field_BR_const_mean": 1.2568569295918242e-06,
+    "tf_field_BR_const_spread_rel": 0.002298093951292542,
+    "tf_field_outside_over_inside": 0.00016702892239837323,
+    "secular_bn_footprint_rel": {
+      "net_poloidal_TF": 0.025196435530892503,
+      "net_toroidal": 65.28311490377614
+    },
+    "prescribed_on_axis_B_tor_T": 1.0,
+    "net_poloidal_current_needed_A": 1500000.0
+  },
+  "vmec_boundary": {
+    "source": "rotating_ellipse_model",
+    "nfp": 3,
+    "n_terms": 3,
+    "minor_radius_min": 0.034999999999999976,
+    "minor_radius_max": 0.07500000000000001,
+    "non_axisymmetric": true,
+    "bn_residual_rel": 6.6013737316407775e-09,
+    "peak_grad_psi": 1921130.7179443238,
+    "eval_points": 220
   }
 }

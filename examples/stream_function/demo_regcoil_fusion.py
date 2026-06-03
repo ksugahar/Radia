@@ -12,45 +12,63 @@ NESCOIL (Merkel 1987), REGCOIL (Landreman 2017) and the surface part of FOCUS
     whose Biot-Savart field reproduces that B.n  (its iso-contours = the coils).
 
 This demo runs that forward problem with Radia's existing surface-FE stream
-function.  ``A_n psi = B_n`` where the rows of ``A_n`` are the plasma-boundary
-normal component ``n.B`` of the winding-surface Biot-Savart kernel (we already
-assemble the 3-component ``A``; we just dot it with the plasma normal).  Two
-demonstrations:
+function, in four parts:
 
   1. FORWARD WORKS -- two producible targets reproduced to MACHINE PRECISION:
        * uniform vertical field B.n   (a PF / equilibrium / vertical-field coil)
        * non-axisymmetric  sin(theta) cos(2 phi)  (a stellarator-like shape)
-     Both give ||A_n psi - B_n|| / ||B_n|| ~ 1e-8 -- the SF designer does the
-     stellarator Stage-2 forward problem exactly.
+     ``A_n psi = B_n`` where the rows of ``A_n`` are the plasma-boundary normal
+     component ``n.B`` of the winding-surface Biot-Savart kernel (we already
+     assemble the 3-component ``A``; we just dot it with the plasma normal).
 
   2. THE REGCOIL TRADE-OFF -- on a GENUINELY HARD target the winding surface
      cannot reproduce cheaply (a high (theta, phi) mode that decays across the
      plasma-coil gap), sweeping the regularisation weight alpha traces the
-     classic REGCOIL L-curve: large alpha -> smooth coil, high B.n residual;
-     small alpha -> low residual, high peak current density |grad psi| (the
-     coil gets sharp / hard to wind).  (field error, coil complexity) is the
-     fundamental Stage-2 trade-off REGCOIL is built to expose.
+     classic REGCOIL L-curve: (field error, coil complexity).
+
+  3. NET CURRENT (the multivalued / secular term) -- a single-valued psi can
+     only carry currents that net to zero through each hole of the winding
+     torus.  A real coil set carries NET current: the current potential gains a
+     SECULAR term  Psi = psi + (G/2pi) zeta + (I/2pi) theta  (zeta toroidal,
+     theta poloidal angle).  The TWO extra degrees of freedom are the first
+     cohomology generators of the winding surface -- their COUNT is the surface
+     Betti number b1 = 2 (genus 1), which we CONFIRM with Gmsh's homology solver
+     (the same engine wrapped by ``src/radia/cohomology_cut.py``).  We verify the
+     net-poloidal-current (TF) secular term reproduces the textbook  B_tor ~ 1/R
+     toroidal field (Ampere's law) inside the tube and ~0 outside.  Key physics:
+     the TF field is TANGENT to the plasma boundary (n.B ~ 0), so the net
+     poloidal current is a PRESCRIBED engineering parameter (you set it for the
+     desired on-axis B_tor) -- exactly why REGCOIL takes net_poloidal_current as
+     an INPUT, not a fitted output.
+
+  4. A VMEC-SHAPED PLASMA BOUNDARY -- the circular plasma torus is replaced by a
+     genuinely non-axisymmetric **rotating-ellipse** boundary in the VMEC Fourier
+     representation  R = sum RBC(m,n) cos(m th - n NFP ph),  Z = sum ZBS(m,n)
+     sin(...) , with analytic surface normals from the parametric tangents.  A
+     real machine's free-boundary equilibrium can be dropped in with
+     ``--wout wout_*.nc`` (a standard VMEC output; the netCDF4 reader extracts
+     the boundary rmnc/zmns coefficients).
 
 HONEST SCOPE (what this is and is NOT):
-  * This is the FORWARD problem with a SINGLE-VALUED current potential psi --
-    correct for PF / RMP / shaping / shim fields (no net poloidal current
-    through the winding torus hole).  A net-current (TF-type) coil needs the
-    MULTI-VALUED secular term  G*zeta + I*theta ; that is the cohomology
-    generator the lab already has in ``cohomology_cut.py`` (GMSH cohomology),
-    not wired into this demo.
-  * The producible targets reproduce to ~1e-8 precisely BECAUSE they are smooth
-    and within the winding surface's reach; that is honest (the forward map is
-    exact), not a hidden tolerance.  The REGCOIL residual trade-off only appears
-    for a target the surface canNOT exactly produce (panel 2).
-  * A production stellarator run additionally needs: B.n from a free-boundary
-    VMEC equilibrium (here it is an analytic model field), the winding-surface
-    geometry optimisation (FOCUS), and coil force / stress.  Those are the named
-    next steps, not part of this PoC.
+  * Parts 1-2 use a SINGLE-VALUED psi -- correct for PF / RMP / shaping / shim
+    fields.  Part 3 adds the multivalued secular term for net-current (TF-type)
+    coils; the generator COUNT is computed (Gmsh cohomology), and on the torus
+    the generators themselves are analytic (exact).  For a general winding
+    surface the generators come from the cohomology cut
+    (``src/radia/cohomology_cut.py``), not analytic forms.
+  * The producible targets reproduce to ~1e-8 BECAUSE they are smooth and within
+    reach; that is honest (the forward map is exact), not a hidden tolerance.
+  * Part 4's default boundary is an ANALYTIC rotating-ellipse model, NOT a
+    converged equilibrium -- a stand-in with the genuine VMEC Fourier shape.  A
+    production run drops in a real ``wout_*.nc`` (reader provided, verified by a
+    round-trip against the VMEC netCDF schema) and additionally needs coil force
+    / stress and winding-surface geometry optimisation (FOCUS).
 
 Run (standalone -- no Cubit, no panel UI):
     python demo_regcoil_fusion.py
-    python demo_regcoil_fusion.py --no-plot          # JSON only
-    python demo_regcoil_fusion.py --n-alpha 12       # finer REGCOIL L-curve
+    python demo_regcoil_fusion.py --no-plot               # JSON only
+    python demo_regcoil_fusion.py --wout wout_w7x.nc      # real VMEC boundary
+    python demo_regcoil_fusion.py --no-cohomology         # skip the Gmsh b1 check
 
 Writes ``demo_regcoil_fusion.json`` (Data Persistence Policy) and, if matplotlib
 + radia-mcp are present, ``demo_regcoil_fusion.{png,pdf}`` next to this script.
@@ -59,6 +77,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import platform
 import sys
@@ -66,11 +85,13 @@ from datetime import datetime
 
 import numpy as np
 
-# major radius shared by the winding torus and the plasma torus (a simple,
-# reproducible stand-in for a VMEC boundary -- swap pts/nrm for a real one).
+# major radius shared by the winding torus and the (circular) plasma torus -- a
+# simple, reproducible stand-in for a VMEC boundary (Part 4 replaces it).
 R_MAJOR = 0.30
-A_PLASMA = 0.06       # plasma-boundary minor radius
+A_PLASMA = 0.06       # plasma-boundary minor radius (circular case, parts 1-3)
 A_WIND = 0.12         # winding-surface minor radius (the coil lives here)
+_MU0 = 4.0e-7 * math.pi
+_MU0_4PI = 1.0e-7
 
 
 def _src_paths():
@@ -90,7 +111,7 @@ def _torus_surface_vol(a, maxh, path):
 
 
 def _plasma_points_normals(plasma, eval_max):
-    """Plasma-boundary sample points + analytic outward normals (torus)."""
+    """Circular-plasma sample points + analytic outward normals (torus)."""
     pts = np.array([list(v.point) for v in plasma.vertices])
     if len(pts) > eval_max:
         pts = pts[np.linspace(0, len(pts) - 1, eval_max).astype(int)]
@@ -98,10 +119,17 @@ def _plasma_points_normals(plasma, eval_max):
     nrm = np.column_stack([pts[:, 0] - R_MAJOR * np.cos(phi),
                            pts[:, 1] - R_MAJOR * np.sin(phi), pts[:, 2]])
     nrm /= (np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-30)
-    # poloidal angle theta about the tube centre (for shaped targets)
     rho = np.hypot(pts[:, 0], pts[:, 1]) - R_MAJOR
     theta = np.arctan2(pts[:, 2], rho)
     return pts, nrm, theta, phi
+
+
+def _A_normal(C, fes, n_cf, pts, nrm):
+    """B.n design matrix rows: 3-component winding Biot-Savart dotted with the
+    plasma normal -> A_n[m, dof] = n . B at plasma point m from psi-dof."""
+    A3 = C._assemble_biot_savart(fes, n_cf, pts, [0, 1, 2]).reshape(
+        len(pts), 3, fes.ndof)
+    return np.einsum("mc,mcj->mj", nrm, A3)
 
 
 def _design(C, fes, coil, A_n, Bn, regularize, alpha_rel):
@@ -130,6 +158,173 @@ def _contours(C, coil, psi, n_levels):
     return loops
 
 
+# --------------------------------------------------------------------------
+# Part 3: net-current (multivalued / secular) term
+# --------------------------------------------------------------------------
+def _secular_currents(n_cf):
+    """The two net-current secular surface currents on the torus winding
+    surface, K = n x grad(angle):
+
+      K_zeta  = n x grad(zeta)   zeta = toroidal angle -> NET POLOIDAL current
+                (the TF solenoid; produces a toroidal B ~ 1/R inside the tube)
+      K_theta = n x grad(theta)  theta = poloidal angle -> NET TOROIDAL current
+                (a plasma-current-like ring; produces a poloidal / vertical B)
+
+    grad(zeta), grad(theta) are single-valued vector fields even though the
+    angles are multivalued -- they ARE the cohomology generators (analytic on a
+    torus).  Returns [(name, K_cf), ...]."""
+    from ngsolve import Cross, CoefficientFunction as CF, x, y, z, sqrt
+    rho = sqrt(x * x + y * y)
+    s = rho - R_MAJOR
+    den = s * s + z * z
+    grad_zeta = CF((-y, x, 0)) / (x * x + y * y)
+    grad_theta = CF((-z * x / (rho * den), -z * y / (rho * den), s / den))
+    return [("net_poloidal_TF", Cross(n_cf, grad_zeta)),
+            ("net_toroidal", Cross(n_cf, grad_theta))]
+
+
+def _assemble_secular_normal(coil, n_cf, pts, nrm, K_list):
+    """B.n at the plasma points from each explicit secular surface current K
+    (same Biot-Savart kernel as _assemble_biot_savart, but K is a CF, not a
+    per-DOF basis).  Returns (M, len(K_list))."""
+    from ngsolve import x, y, z, sqrt, Integrate, ds
+    out = np.zeros((len(pts), len(K_list)))
+    for k, (_name, K) in enumerate(K_list):
+        for m, p in enumerate(pts):
+            dxt, dyt, dzt = p[0] - x, p[1] - y, p[2] - z
+            r2 = dxt * dxt + dyt * dyt + dzt * dzt
+            r3 = r2 * sqrt(r2)
+            cr = (K[1] * dzt - K[2] * dyt,
+                  K[2] * dxt - K[0] * dzt,
+                  K[0] * dyt - K[1] * dxt)
+            bn = sum(nrm[m, c] * _MU0_4PI * Integrate(cr[c] / r3 * ds, coil)
+                     for c in range(3))
+            out[m, k] = bn
+    return out
+
+
+def _tf_field_1overR(coil, n_cf, radii):
+    """Toroidal field B_y of the unit net-poloidal-current (TF) secular term at
+    (r, 0, 0) for r in radii.  Inside the tube Ampere's law gives B_y * r =
+    const (~1/R); outside ~0.  Returns the B_y array."""
+    from ngsolve import x, y, z, sqrt, Integrate, ds
+    _name, K = _secular_currents(n_cf)[0]      # K_zeta = TF
+    by = np.zeros(len(radii))
+    for i, r in enumerate(radii):
+        dxt, dyt, dzt = r - x, -y, -z
+        r3 = (dxt * dxt + dyt * dyt + dzt * dzt) * sqrt(
+            dxt * dxt + dyt * dyt + dzt * dzt)
+        cy = K[2] * dxt - K[0] * dzt
+        by[i] = _MU0_4PI * Integrate(cy / r3 * ds, coil)
+    return by
+
+
+def _betti1_winding_surface(a, maxh):
+    """First Betti number b1 of the torus winding SURFACE via Gmsh's homology
+    solver (the engine wrapped by src/radia/cohomology_cut.py).  b1 = number of
+    independent net-current (secular) DOFs = 2 for a genus-1 torus.  No-Fallback:
+    raises if Gmsh's cohomology is unavailable / the cell complex is empty."""
+    import gmsh
+    gmsh.initialize(["-noconfig"])
+    try:
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.add("winding_b1")
+        gmsh.model.occ.addTorus(0, 0, 0, R_MAJOR, a)
+        gmsh.model.occ.synchronize()
+        surfs = [s[1] for s in gmsh.model.getEntities(2)]
+        pg = gmsh.model.addPhysicalGroup(2, surfs)
+        gmsh.option.setNumber("Mesh.MeshSizeMax", maxh)
+        gmsh.model.mesh.addHomologyRequest("Cohomology", [pg], [], [1])
+        gmsh.model.mesh.generate(2)
+        dimtags = gmsh.model.mesh.computeHomology()
+        return len([dt for dt in dimtags if dt[0] == 1])
+    finally:
+        gmsh.finalize()
+
+
+# --------------------------------------------------------------------------
+# Part 4: VMEC-format (rotating-ellipse) plasma boundary
+# --------------------------------------------------------------------------
+def _rotating_ellipse_terms():
+    """Default non-axisymmetric boundary: a rotating ellipse in the VMEC Fourier
+    representation.  terms = [(m, n, RBC, ZBS), ...]; the (1,1) term rotates the
+    elliptical cross-section as it goes around toroidally.  An analytic MODEL
+    (not a converged equilibrium) with the genuine VMEC boundary shape."""
+    nfp = 3
+    terms = [(0, 0, R_MAJOR, 0.0),
+             (1, 0, 0.055, 0.055),    # circular minor radius
+             (1, 1, 0.020, -0.020)]   # rotating elongation (n != 0)
+    return terms, nfp
+
+
+def _read_wout_boundary(path):
+    """Boundary Fourier terms (m, n, RBC, ZBS) + NFP from a VMEC ``wout_*.nc``.
+    Reads the standard schema (xm, xn, rmnc, zmns, nfp); the boundary is the
+    last flux surface.  No-Fallback: raises if the file lacks the VMEC
+    variables.  Verified by a round-trip against the schema in the golden."""
+    import netCDF4
+    d = netCDF4.Dataset(path, "r")
+    try:
+        nfp = int(np.asarray(d["nfp"][...]))
+        xm = np.asarray(d["xm"][:])
+        xn = np.asarray(d["xn"][:])
+        rmnc = np.asarray(d["rmnc"][:])        # (ns, mn_mode)
+        zmns = np.asarray(d["zmns"][:])
+    except (KeyError, IndexError) as e:
+        raise ValueError(
+            f"{path}: not a VMEC wout file (missing nfp/xm/xn/rmnc/zmns): {e}")
+    finally:
+        d.close()
+    rb, zb = rmnc[-1, :], zmns[-1, :]          # boundary = last surface
+    terms = [(int(xm[i]), int(round(xn[i] / nfp)), float(rb[i]), float(zb[i]))
+             for i in range(len(xm))]
+    return terms, nfp
+
+
+def _vmec_boundary(terms, nfp, theta, phi):
+    """Evaluate R, Z and their (theta, phi) derivatives from the Fourier terms.
+    R = sum RBC cos(m th - n NFP ph),  Z = sum ZBS sin(m th - n NFP ph)."""
+    R = np.zeros_like(theta); Z = np.zeros_like(theta)
+    Rt = np.zeros_like(theta); Zt = np.zeros_like(theta)
+    Rp = np.zeros_like(theta); Zp = np.zeros_like(theta)
+    for m, n, rc, zs in terms:
+        ang = m * theta - n * nfp * phi
+        R += rc * np.cos(ang); Z += zs * np.sin(ang)
+        Rt += -rc * m * np.sin(ang); Zt += zs * m * np.cos(ang)
+        Rp += rc * (n * nfp) * np.sin(ang); Zp += -zs * (n * nfp) * np.cos(ang)
+    return R, Z, Rt, Zt, Rp, Zp
+
+
+def _vmec_points_normals(terms, nfp, ntheta, nphi):
+    """Plasma-boundary sample points + OUTWARD unit normals from the parametric
+    tangents n ~ dr/dtheta x dr/dphi (sign-corrected to point away from the
+    magnetic axis).  Raises if the boundary is not star-shaped (mixed normal
+    orientation) -- No-Fallback."""
+    th = np.linspace(0, 2 * np.pi, ntheta, endpoint=False)
+    ph = np.linspace(0, 2 * np.pi, nphi, endpoint=False)
+    TH, PH = np.meshgrid(th, ph, indexing="ij")
+    R, Z, Rt, Zt, Rp, Zp = _vmec_boundary(terms, nfp, TH, PH)
+    x = R * np.cos(PH); y = R * np.sin(PH); z = Z
+    dtheta = np.stack([Rt * np.cos(PH), Rt * np.sin(PH), Zt], axis=-1)
+    dphi = np.stack([Rp * np.cos(PH) - R * np.sin(PH),
+                     Rp * np.sin(PH) + R * np.cos(PH), Zp], axis=-1)
+    nrm = np.cross(dtheta, dphi)
+    nrm /= np.linalg.norm(nrm, axis=-1, keepdims=True) + 1e-30
+    axis = np.stack([R_MAJOR * np.cos(PH), R_MAJOR * np.sin(PH),
+                     np.zeros_like(PH)], axis=-1)
+    rad = np.stack([x, y, z], axis=-1) - axis
+    outdot = np.sum(nrm * rad, axis=-1)
+    if (outdot > 0).mean() < 0.5:               # consistently inward -> flip
+        nrm = -nrm
+        outdot = -outdot
+    if not (outdot > 0).all():
+        raise ValueError("VMEC boundary normals are not consistently outward "
+                         "(boundary not star-shaped about the magnetic axis)")
+    pts = np.stack([x, y, z], axis=-1).reshape(-1, 3)
+    nrm = nrm.reshape(-1, 3)
+    return pts, nrm
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="mini-REGCOIL / NESCOIL fusion coil-design demo")
@@ -146,6 +341,15 @@ def main():
                     help="current-potential contours (= coil turns) to draw")
     ap.add_argument("--n-alpha", type=int, default=9,
                     help="REGCOIL L-curve points (alpha sweep)")
+    ap.add_argument("--wout", default=None,
+                    help="VMEC wout_*.nc; boundary replaces the rotating ellipse")
+    ap.add_argument("--vmec-ntheta", type=int, default=40)
+    ap.add_argument("--vmec-nphi", type=int, default=48)
+    ap.add_argument("--tf-axis-field", type=float, default=1.0,
+                    help="desired on-axis toroidal field [T] (prescribed net "
+                         "poloidal current for Part 3)")
+    ap.add_argument("--no-cohomology", action="store_true",
+                    help="skip the Gmsh homology b1 confirmation")
     ap.add_argument("--no-plot", action="store_true")
     args = ap.parse_args()
 
@@ -154,6 +358,7 @@ def main():
     from ngsolve import Mesh, H1, specialcf, TaskManager
 
     os.makedirs(args.work_dir, exist_ok=True)
+    fig_data = {}
 
     with TaskManager():
         coil = Mesh(_torus_surface_vol(
@@ -164,10 +369,7 @@ def main():
         n_cf = specialcf.normal(3)
 
         pts, nrm, theta, phi = _plasma_points_normals(plasma, args.eval_max)
-        # A (3-component) at the plasma points -> dot with plasma normal = A_n.
-        A3 = C._assemble_biot_savart(fes, n_cf, pts, [0, 1, 2]).reshape(
-            len(pts), 3, fes.ndof)
-        A_n = np.einsum("mc,mcj->mj", nrm, A3)
+        A_n = _A_normal(C, fes, n_cf, pts, nrm)
 
         # ---- 1. forward works: two producible targets -> machine precision ----
         targets = {
@@ -188,11 +390,6 @@ def main():
                   f"peak|grad psi|={peakJ:.2e}  contours={len(loops)}")
 
         # ---- 2. REGCOIL L-curve on a GENUINELY HARD target ----
-        # a high (theta, phi) mode decays across the plasma-coil gap, so it is
-        # NOT cheaply producible: alpha now genuinely trades B.n residual against
-        # peak |grad psi| (coil complexity).  alpha large -> smooth coil, high
-        # residual; alpha small -> low residual, current density saturates at the
-        # surface's representation limit (the vertical leg of the L-curve).
         Bn_hard = np.sin(3 * theta) * np.cos(5 * phi)
         alpha_rel_grid = np.logspace(2.0, -8.0, args.n_alpha)
         lcurve = []
@@ -204,6 +401,83 @@ def main():
             print(f"[L-curve] alpha_rel={a_rel:.1e}  B.n resid={res:.3e}  "
                   f"peak|grad psi|={peakJ:.3e}")
 
+        # ---- 3. NET CURRENT: the multivalued / secular term ----
+        K_list = _secular_currents(n_cf)
+        sec_n = _assemble_secular_normal(coil, n_cf, pts, nrm, K_list)
+        col_scale = float(np.median(np.linalg.norm(A_n, axis=0)))
+        # the TF (net-poloidal) secular current is ~tangent to the plasma, so its
+        # B.n footprint is tiny -> it is a PRESCRIBED parameter, not fitted.
+        radii = np.linspace(0.20, 0.40, 9)
+        by_in = _tf_field_1overR(coil, n_cf, radii)
+        by_out = _tf_field_1overR(coil, n_cf, np.array([0.10, 0.55]))
+        br = by_in * radii                       # B_tor * R (should be const)
+        unit_Ipol = 2.0 * math.pi               # net poloidal A per unit K_zeta
+        # prescribe net poloidal current for the desired on-axis toroidal field
+        Bphi0 = args.tf_axis_field
+        Ipol_needed = 2.0 * math.pi * R_MAJOR * Bphi0 / _MU0
+        net_current = {
+            "betti1_winding_surface": (None if args.no_cohomology else
+                                       _betti1_winding_surface(A_WIND, 0.06)),
+            "n_secular_dofs": len(K_list),
+            "tf_field_BR_const_mean": float(np.mean(br)),
+            "tf_field_BR_const_spread_rel":
+                float((br.max() - br.min()) / abs(np.mean(br))),
+            "tf_field_outside_over_inside":
+                float(np.max(np.abs(by_out)) / np.max(np.abs(by_in))),
+            "secular_bn_footprint_rel": {
+                K_list[k][0]: float(np.linalg.norm(sec_n[:, k]) / col_scale)
+                for k in range(len(K_list))},
+            "prescribed_on_axis_B_tor_T": Bphi0,
+            "net_poloidal_current_needed_A": Ipol_needed,
+        }
+        b1 = net_current["betti1_winding_surface"]
+        print(f"[net-current] Gmsh cohomology b1(winding surface)="
+              f"{b1}  -> {len(K_list)} secular DOFs"
+              + ("" if b1 is None else f"  (match: {b1 == len(K_list)})"))
+        print(f"[net-current] TF secular field: B_tor*R const to "
+              f"{net_current['tf_field_BR_const_spread_rel']*100:.2f}% inside, "
+              f"outside/inside={net_current['tf_field_outside_over_inside']:.1e}")
+        for k, (nm, _K) in enumerate(K_list):
+            print(f"[net-current] secular '{nm}' B.n footprint = "
+                  f"{net_current['secular_bn_footprint_rel'][nm]:.2e} "
+                  f"(rel. to a psi column)")
+        print(f"[net-current] prescribe B_tor={Bphi0:.1f} T on axis -> net "
+              f"poloidal current {Ipol_needed/1e3:.1f} kA")
+
+        # ---- 4. VMEC-shaped plasma boundary (rotating ellipse / wout) ----
+        if args.wout:
+            terms, nfp = _read_wout_boundary(args.wout)
+            vmec_src = os.path.basename(args.wout)
+        else:
+            terms, nfp = _rotating_ellipse_terms()
+            vmec_src = "rotating_ellipse_model"
+        vpts, vnrm = _vmec_points_normals(terms, nfp, args.vmec_ntheta,
+                                          args.vmec_nphi)
+        if len(vpts) > args.eval_max:
+            sel = np.linspace(0, len(vpts) - 1, args.eval_max).astype(int)
+            vpts, vnrm = vpts[sel], vnrm[sel]
+        A_n_v = _A_normal(C, fes, n_cf, vpts, vnrm)
+        Bn_v = vnrm[:, 2]                         # uniform vertical field B.n
+        _psiv, res_v, peakJ_v = _design(C, fes, coil, A_n_v, Bn_v, "h1", 1e-7)
+        minor = np.linalg.norm(
+            vpts - np.column_stack([R_MAJOR * vpts[:, 0] / np.hypot(vpts[:, 0],
+                                    vpts[:, 1]),
+                                    R_MAJOR * vpts[:, 1] / np.hypot(vpts[:, 0],
+                                    vpts[:, 1]),
+                                    np.zeros(len(vpts))]), axis=1)
+        vmec = {"source": vmec_src, "nfp": nfp, "n_terms": len(terms),
+                "minor_radius_min": float(minor.min()),
+                "minor_radius_max": float(minor.max()),
+                "non_axisymmetric": bool(minor.max() - minor.min() > 1e-3),
+                "bn_residual_rel": res_v, "peak_grad_psi": peakJ_v,
+                "eval_points": int(len(vpts))}
+        print(f"[vmec] boundary='{vmec_src}' NFP={nfp}  minor "
+              f"{minor.min():.3f}..{minor.max():.3f} m (non-axisym="
+              f"{vmec['non_axisymmetric']})  -> B.n resid={res_v:.2e}")
+
+    fig_data = {"lcurve": lcurve, "loops": ref_loops, "tf_radii": radii.tolist(),
+                "tf_BR": br.tolist(), "vmec_terms": terms, "vmec_nfp": nfp}
+
     data = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "hostname": platform.node(),
@@ -214,15 +488,16 @@ def main():
             "winding_ndof": int(fes.ndof),
             "plasma_eval_points": int(len(pts)),
             "regularize": "h1",
-            "note": "single-valued psi (no net-current secular term); "
-                    "B.n from analytic model fields (swap for free-boundary "
-                    "VMEC for a production run).",
+            "note": "parts 1-2 single-valued psi; part 3 adds the multivalued "
+                    "secular (net-current) term; part 4 a VMEC-format boundary. "
+                    "B.n from analytic model fields (swap for free-boundary VMEC "
+                    "via --wout for a production run).",
         },
         "producible_targets": designs,
-        "regcoil_lcurve": {
-            "hard_target": "sin(3 theta) cos(5 phi)",
-            "points": lcurve,
-        },
+        "regcoil_lcurve": {"hard_target": "sin(3 theta) cos(5 phi)",
+                           "points": lcurve},
+        "net_current": net_current,
+        "vmec_boundary": vmec,
     }
     jpath = os.path.join(args.out_dir, "demo_regcoil_fusion.json")
     with open(jpath, "w", encoding="utf-8") as f:
@@ -230,54 +505,49 @@ def main():
     print(f"\nResults -> {jpath}")
 
     if not args.no_plot:
-        _plot(args, ref_loops, lcurve)
+        _plot(args, fig_data)
 
 
-def _plot(args, loops, lcurve):
-    """(a) 3D current-potential coil around the plasma boundary;
-       (b) the REGCOIL L-curve (B.n residual vs peak current density)."""
+def _plot(args, fd):
+    """2x2 lab figure: (a) the current-potential coil + plasma; (b) the REGCOIL
+    L-curve; (c) the net-poloidal-current TF field B_tor*R vs R (Ampere 1/R);
+    (d) the VMEC rotating-ellipse boundary cross-sections."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    # Lab figure convention (radia_mcp.figure): authored AT the 16 cm embed
-    # width, 10 pt, Times New Roman, TrueType; NO in-figure title (the README /
-    # caption carries it).  apply_lab_style sets the fonts; a 3D panel is not
-    # served by the 2D-grid lab_figure() helper, so we build the mixed
-    # 3D + 2D figure ourselves and let save_lab_figure() gate + write it.
     try:
         from radia_mcp.figure import apply_lab_style, save_lab_figure
     except Exception as e:
         print(f"(plot skipped: radia-mcp figure unavailable: {e})")
         return
     plt.rcParams["pdf.fonttype"] = 42
-    w_in, h_in = apply_lab_style(embed_width_cm=16.0, aspect=0.46)
+    w_in, h_in = apply_lab_style(embed_width_cm=16.0, aspect=0.88)
     fig = plt.figure(figsize=(w_in, h_in))
 
     # (a) the designed coil = current-potential contours on the winding torus
-    ax = fig.add_subplot(1, 2, 1, projection="3d")
-    u = np.linspace(0, 2 * np.pi, 60)
-    v = np.linspace(0, 2 * np.pi, 40)
+    ax = fig.add_subplot(2, 2, 1, projection="3d")
+    u = np.linspace(0, 2 * np.pi, 60); v = np.linspace(0, 2 * np.pi, 40)
     U, V = np.meshgrid(u, v)
     X = (R_MAJOR + A_PLASMA * np.cos(V)) * np.cos(U)
     Yy = (R_MAJOR + A_PLASMA * np.cos(V)) * np.sin(U)
     Zz = A_PLASMA * np.sin(V)
     ax.plot_surface(X, Yy, Zz, color="orange", alpha=0.18, linewidth=0)
-    for p in loops:
+    for p in (fd["loops"] or []):
         ax.plot(p[:, 0], p[:, 1], p[:, 2], lw=0.8, color="C0")
-    ax.text2D(0.02, 0.97, "current-potential coil", transform=ax.transAxes)
-    ax.text2D(0.02, 0.90, "plasma boundary", transform=ax.transAxes,
-              color="darkorange")
+    ax.text2D(0.0, 0.97, "(a) current-potential coil + plasma",
+              transform=ax.transAxes)
     for s in ("x", "y", "z"):
         getattr(ax, f"set_{s}ticks")([])
     ax.set_box_aspect((1, 1, 0.5))
 
-    # (b) the REGCOIL L-curve: residual vs coil complexity as alpha sweeps
-    ax2 = fig.add_subplot(1, 2, 2)
-    res = [pt["bn_residual_rel"] for pt in lcurve]
-    pk = [pt["peak_grad_psi"] for pt in lcurve]
+    # (b) REGCOIL L-curve: residual vs coil complexity
+    ax2 = fig.add_subplot(2, 2, 2)
+    res = [pt["bn_residual_rel"] for pt in fd["lcurve"]]
+    pk = [pt["peak_grad_psi"] for pt in fd["lcurve"]]
     ax2.loglog(pk, res, "o-", color="C3")
     ax2.set_xlabel(r"peak $|\nabla\psi|$  (coil complexity)")
     ax2.set_ylabel(r"$B{\cdot}n$ residual  (rel.)")
+    ax2.text(0.04, 0.04, "(b) REGCOIL L-curve", transform=ax2.transAxes)
     ax2.grid(True, which="both", alpha=0.3)
     ax2.annotate(r"large $\alpha$", xy=(pk[0], res[0]),
                  xytext=(0.30, 0.85), textcoords="axes fraction",
@@ -286,9 +556,37 @@ def _plot(args, loops, lcurve):
                  xytext=(0.55, 0.18), textcoords="axes fraction",
                  arrowprops=dict(arrowstyle="->", lw=0.7))
 
+    # (c) net-poloidal-current (TF) field: B_tor * R vs R (Ampere 1/R, flat)
+    ax3 = fig.add_subplot(2, 2, 3)
+    rr = np.array(fd["tf_radii"]); br = np.array(fd["tf_BR"])
+    ax3.plot(rr, br / br.mean(), "o-", color="C2")
+    ax3.axhline(1.0, ls="--", lw=0.7, color="0.5")
+    ax3.set_xlabel(r"major radius $R$  (m)")
+    ax3.set_ylabel(r"$B_{\rm tor}\,R$  (normalised)")
+    ax3.text(0.04, 0.90, r"(c) TF secular term: Ampere $1/R$",
+             transform=ax3.transAxes)
+    ax3.set_ylim(0.95, 1.05)
+
+    # (d) VMEC rotating-ellipse boundary cross-sections at several phi
+    ax4 = fig.add_subplot(2, 2, 4)
+    th = np.linspace(0, 2 * np.pi, 120)
+    nfp = fd["vmec_nfp"]
+    for j, frac in enumerate(np.linspace(0, 1.0, 5)[:-1]):
+        ph = frac * 2 * np.pi / nfp
+        R, Z, *_ = _vmec_boundary(fd["vmec_terms"], nfp, th, np.full_like(th, ph))
+        ax4.plot(R, Z, lw=1.0, label=rf"$\phi={frac:.2f}\cdot2\pi/N_{{fp}}$")
+    ax4.set_aspect("equal")
+    ax4.set_xlabel(r"$R$  (m)"); ax4.set_ylabel(r"$Z$  (m)")
+    ax4.text(0.04, 0.92, rf"(d) VMEC boundary $N_{{fp}}={nfp}$",
+             transform=ax4.transAxes)
+    ax4.legend(fontsize=7, loc="upper right", frameon=False)
+
+    # explicit margins (a 3D subplot confuses tight_layout -> clipped x-labels)
+    fig.subplots_adjust(left=0.085, right=0.97, top=0.95, bottom=0.085,
+                        hspace=0.32, wspace=0.27)
     info = save_lab_figure(fig, os.path.join(args.out_dir,
                                              "demo_regcoil_fusion"),
-                           embed_width_cm=16.0)
+                           embed_width_cm=16.0, tighten=False)
     print(f"Plot    -> {', '.join(info['wrote'])}")
 
 

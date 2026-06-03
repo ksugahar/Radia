@@ -59,7 +59,7 @@ ACA+ itself is delegated to the in-repo **HACApK** C library
 | `demo_planar_uniform_fem_psi.py` | **psi as DIRECT H1 FE unknown on an NGSolve 2D mesh**, same target as the basis-loop demo below.  ``--regularize h1`` (default) solves ``min psi^T S psi`` s.t. ``A psi = B_target`` for the smoothest psi that hits the target exactly.  Single-shot RMS = 2.09 %.  With ``--compensated-iter 100 --compensated-step 0.05`` the Path-A iteration CONVERGES MONOTONICALLY (iters 40-47 drop 0.62 % -> 0.49 % without backtracking) -> final RMS **0.47 %** (-84 % vs basis-loop), p2p/mean = 1.64 %.  This is the empirical proof that the "naive Picard doesn't converge" finding for the basis-loop case is SPECIFIC to grid-sampled psi -- a continuous FE psi gives a smooth chain-field response and Path A genuinely contracts.  Extends naturally to non-planar OCC surfaces (cylinder, sphere, conformal). |
 | `demo_planar_uniform_coil.py` | **Planar uniform-Bz coil (the easy end of single-stroke complexity)**.  Source = square plane at z=0; target = uniform Bz=B0 over a square region at z=h.  SF produces concentric closed contours; single-stroke = spiral (Kuijpers Method-1 with cut line at +x axis).  Baseline RMS = 2.99 %, peak-to-peak / mean = 9.59 %; with `--compensated-iter 100 --compensated-step 0.05` (Path A best-effort) RMS drops to **0.58 %** (-80 %), p2p/mean = 2.17 % (-77 %).  Validates that Path A IS effective on simpler topologies even though it failed for the Gx fingerprint -- a clean demonstration of the "complexity tier" framing in `radia-mcp aca_tsvd(single_stroke)`. |
 | `view_sf_coil_gx_gmsh.py` | **GMSH visualiser** for the Gx coil.  Three modes: `--mode contours` (default, **recommended**) writes the SF design's CLOSED CONTOUR FILAMENTS only (each fingerprint loop as its own 1D Physical Group, NO connection arcs) -- the true SF output, with the host cylinder as a 2D reference; `--mode chain` writes the lobe-aware single-stroke chain (= what PEEC sees, with 4-quadrant traversal + 3 inter-quadrant geodesic arcs; the same chain `demo_sf_to_peec_gx.py --chain-method lobe` builds); `--mode step` merges the loft-chain STEP from `--with-peec`.  Includes preventive code (`gmsh.initialize(["-noconfig"])` + explicit `General.GraphicsPositionX/Y` + `Width`/`Height`) so the GMSH window can't restore to an off-screen second-monitor coordinate.  Uses pip-gmsh blocking `fltk.run()` (CLAUDE.md GMSH policy). |
-| `demo_regcoil_fusion.py` | **Fusion (stellarator Stage-2) coil design -- mini-REGCOIL / NESCOIL**.  The SAME surface stream function the gradient/IH demos use, applied to the fusion winding-surface current-potential problem: given a target normal field `B.n` on a PLASMA boundary, solve for `psi` on a WINDING SURFACE around it whose Biot-Savart `n.B` reproduces it (iso-contours = the coils).  Two parts: (1) two PRODUCIBLE targets -- a uniform vertical field (PF / equilibrium coil) and a non-axisymmetric `sin(theta)cos(2 phi)` (stellarator-like) -- reproduced to MACHINE PRECISION (`B.n` residual ~2e-9), proving the SF designer does the Stage-2 forward map exactly; (2) the REGCOIL **L-curve** on a genuinely-hard high-mode target `sin(3 theta)cos(5 phi)` (decays across the plasma-coil gap), sweeping the regularisation weight `alpha` to trace the classic `(B.n residual, peak |grad psi|)` trade-off (knee at `alpha_rel ~ 2e-2`: peak current density saturates at ~7.9e6 while residual keeps falling).  **Honest scope**: single-valued `psi` (PF / RMP / shaping fields -- a net-current TF coil needs the multivalued `G*zeta + I*theta` secular term from `cohomology_cut.py`); `B.n` is an analytic model field (swap for free-boundary VMEC for production); coil force / stress and winding-surface optimisation (FOCUS) are the named next steps.  Writes `demo_regcoil_fusion.json` + a 2-panel lab figure (3D coil + L-curve). |
+| `demo_regcoil_fusion.py` | **Fusion (stellarator Stage-2) coil design -- mini-REGCOIL / NESCOIL**.  The SAME surface stream function the gradient/IH demos use, applied to the fusion winding-surface current-potential problem: given a target normal field `B.n` on a PLASMA boundary, solve for `psi` on a WINDING SURFACE around it whose Biot-Savart `n.B` reproduces it (iso-contours = the coils).  **Four parts**: (1) two PRODUCIBLE targets -- a uniform vertical field (PF / equilibrium coil) and a non-axisymmetric `sin(theta)cos(2 phi)` (stellarator-like) -- reproduced to MACHINE PRECISION (`B.n` residual ~2e-9), proving the SF designer does the Stage-2 forward map exactly; (2) the REGCOIL **L-curve** on a genuinely-hard high-mode target `sin(3 theta)cos(5 phi)` (decays across the plasma-coil gap), sweeping `alpha` to trace the classic `(B.n residual, peak |grad psi|)` trade-off (knee at `alpha_rel ~ 2e-2`); (3) **NET CURRENT (the multivalued / secular term)** -- a single-valued `psi` carries zero net current through each torus hole; the full current potential gains `Psi = psi + (G/2pi)zeta + (I/2pi)theta`, whose TWO extra DOFs are the winding surface's first cohomology generators.  Their COUNT (`b1 = 2`, genus 1) is CONFIRMED with Gmsh's homology solver (the engine wrapped by `src/radia/cohomology_cut.py`); the net-poloidal-current (TF) secular term is verified to give the textbook `B_tor ~ 1/R` toroidal field (Ampere, `B_tor*R` const to 0.2% inside the tube, ~0 outside).  Key physics: the TF field is TANGENT to the plasma (`B.n` footprint ~2600x smaller than the net-toroidal one), so the net poloidal current is a PRESCRIBED engineering parameter (set it for the on-axis `B_tor`: 1 T -> 1.5 MA) -- exactly why REGCOIL takes `net_poloidal_current` as an INPUT; (4) a **VMEC-shaped plasma boundary** -- the circular torus is replaced by a non-axisymmetric **rotating-ellipse** boundary in the VMEC Fourier form (`R = sum RBC cos(m th - n NFP ph)`, `Z = sum ZBS sin(...)`, NFP=3) with analytic surface normals; a real machine's free-boundary equilibrium drops in with `--wout wout_*.nc` (netCDF4 reader, round-trip-verified against the VMEC schema in the golden).  **Honest scope**: parts 1-2 single-valued `psi`; part 3 adds the multivalued term (generator count computed, generators analytic on the torus -- general surfaces use `cohomology_cut.py`); part 4's default boundary is an analytic rotating-ellipse MODEL (not a converged equilibrium); coil force / stress and winding-surface optimisation (FOCUS) are the named next steps.  Writes `demo_regcoil_fusion.json` + a 2x2 lab figure (3D coil, L-curve, TF 1/R, VMEC boundary). |
 
 ## Running
 
@@ -339,7 +339,7 @@ Biot-Savart  n.B  reproduces it          (iso-contours of psi = the coils)
 `demo_regcoil_fusion.py` runs that forward problem with the existing surface-FE
 stream function -- the rows of the design matrix are just the plasma-normal
 component `n.B` of the winding-surface Biot-Savart kernel we already assemble.
-Two results:
+Four results:
 
 1. **Forward map is exact.**  Two producible targets -- a uniform vertical field
    (a PF / equilibrium / vertical-field coil) and a non-axisymmetric
@@ -357,15 +357,46 @@ Two results:
    the L-curve), with a knee at `alpha_rel ~ 2e-2`.  `(field error, coil
    complexity)` is exactly the Stage-2 trade-off REGCOIL is built to expose.
 
-**Honest scope** (what this is and is NOT): the demo solves the forward problem
-with a SINGLE-VALUED `psi` -- correct for PF / RMP / shaping / shim fields (no
-net poloidal current through the winding-torus hole).  A net-current (TF-type)
-coil needs the MULTI-VALUED secular term `G*zeta + I*theta`; that is the
-cohomology generator the lab already has in `cohomology_cut.py` (GMSH
-cohomology), not wired into this demo.  A production stellarator run also needs
-`B.n` from a free-boundary VMEC equilibrium (here it is an analytic model
-field), winding-surface geometry optimisation (FOCUS), and coil force / stress.
-Those are the named next steps, not part of this PoC.
+3. **Net current = the multivalued / secular term.**  A single-valued `psi`
+   carries zero net current through each hole of the winding torus, but a real
+   coil set carries NET current.  The full current potential gains a SECULAR
+   term `Psi = psi + (G/2pi) zeta + (I/2pi) theta` (`zeta` toroidal, `theta`
+   poloidal angle); the TWO extra degrees of freedom are the first cohomology
+   generators of the winding surface.  Their COUNT is the surface's first Betti
+   number `b1 = 2` (genus 1), which the demo CONFIRMS with Gmsh's homology
+   solver -- the same engine wrapped by `src/radia/cohomology_cut.py`
+   (`addHomologyRequest('Cohomology', ...) ; computeHomology()`).  On the torus
+   the generators themselves are analytic (`grad(zeta)`, `grad(theta)` are
+   single-valued vector fields), so the demo uses them directly and verifies the
+   net-poloidal-current (TF) secular term gives the textbook toroidal field:
+   `B_tor * R` is constant to ~0.2 % inside the tube (Ampere's `1/R`) and ~0
+   outside (no enclosed poloidal current).  **The key physics**: the TF field is
+   TANGENT to the plasma boundary, so its `B.n` footprint is ~2600x smaller than
+   the net-toroidal generator's -- i.e. the net poloidal current is NOT fitted
+   from `B.n`, it is a PRESCRIBED engineering parameter (set it for the on-axis
+   `B_tor`: 1 T at R=0.30 m needs 1.5 MA).  This is exactly why REGCOIL takes
+   `net_poloidal_current` as an INPUT, not a fitted output.
+
+4. **A VMEC-shaped plasma boundary.**  The circular plasma torus is replaced by
+   a genuinely non-axisymmetric **rotating-ellipse** boundary in the VMEC Fourier
+   representation `R = sum RBC(m,n) cos(m th - n NFP ph)`, `Z = sum ZBS(m,n)
+   sin(...)` (NFP = 3), with analytic surface normals from the parametric
+   tangents.  The vertical-field `B.n` target on this shaped boundary is
+   reproduced to ~7e-9.  A real machine's free-boundary equilibrium is dropped in
+   with `--wout wout_*.nc` (a standard VMEC output); the netCDF4 reader extracts
+   the boundary `rmnc` / `zmns` coefficients and is round-trip-verified against
+   the VMEC schema in `tests/panels/test_streamfunction_golden.py`.
+
+**Honest scope** (what this is and is NOT): parts 1-2 use a SINGLE-VALUED `psi`
+(correct for PF / RMP / shaping / shim fields); part 3 adds the multivalued
+secular term for net-current (TF-type) coils -- the generator COUNT is computed
+(Gmsh cohomology), and on the torus the generators are analytic (exact).  For a
+GENERAL winding surface the generators come from the cohomology cut
+(`src/radia/cohomology_cut.py`), not analytic forms.  Part 4's default boundary
+is an analytic rotating-ellipse MODEL (the genuine VMEC Fourier shape, not a
+converged equilibrium); a production run drops in a real `wout_*.nc` and
+additionally needs coil force / stress and winding-surface geometry optimisation
+(FOCUS).  Those are the named next steps.
 
 ## References
 
