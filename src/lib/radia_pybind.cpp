@@ -75,7 +75,6 @@ extern "C" {
     void RadGetStarHMatStats(double* out);
     void   RadSetStarHLUTruncTol(double t);
     double RadGetStarHLUTruncTol(void);
-    void RadGetLoopDeflBlockJacobiStats(double* out);
     void RadGetLoopProjStats(double* out);
     double cHACApK_harith_self_test_mixed_sibling_nonuniform(int n1, int n2, int m1, int m3);
     double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
@@ -1025,15 +1024,6 @@ void SetDeflateNullspace(bool enable, double alpha) {
 void SetLoopStarGauge(bool enable) {
     int n = 0;
     int err = RadSetLoopStarGauge(&n, enable ? 1 : 0);
-    check_error(err);
-}
-
-/**
- * @brief Enable/disable the loop-deflated block-Jacobi BiCGSTAB gauge (HACApK).
- */
-void SetLoopDeflBlockJacobiGauge(bool enable) {
-    int n = 0;
-    int err = RadSetLoopDeflBlockJacobiGauge(&n, enable ? 1 : 0);
     check_error(err);
 }
 
@@ -3322,25 +3312,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   enable: True to enable, False to disable.
           )pbdoc");
 
-    m.def("SetLoopDeflBlockJacobiGauge", &radia_solver::SetLoopDeflBlockJacobiGauge,
-          py::arg("enable"),
-          R"pbdoc(
-              Enable/disable the LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB gauge (HACApK
-              method=2). Unlike loop-star (which changes basis to the star space and
-              destroys the element block structure), this STAYS in the original
-              element DOF space -- so the 6x6 block-Jacobi preconditioner still
-              applies -- and removes the ill-conditioned loop null space ker(N) by
-              DEFLATION (a two-level projector P = I - A W (W^T A W)^-1 W^T, W = the
-              sparse loop cycle basis), NOT by an operator shift. Fully O(N)
-              matrix-free except the coarse E = W^T A W factor (the benign
-              well-conditioned loop-loop block). The scalable alternative to
-              loop-star + K-dense at high permeability: no 15^3 / 8 GB cap and no
-              dependence on whether the reduced star operator compresses. Linear
-              regime (uniform chi). Diagnostics via GetLoopDeflBlockJacobiStats().
-
-              Args:
-                  enable: True to enable, False to disable.
-          )pbdoc");
 
     m.def("SetLoopProjection", &radia_solver::SetLoopProjection,
           py::arg("enable"),
@@ -3378,27 +3349,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
         iterations -- small = well-conditioned), loop_before / loop_after
         (||L^T sigma|| before/after; after ~ 0 = loop-free), loop_frac
         (||L c|| / ||sigma|| = fraction of sigma that was circulating/non-physical).
-    )pbdoc");
-
-    m.def("GetLoopDeflBlockJacobiStats", []() -> py::dict {
-        double o[7] = {0};
-        RadGetLoopDeflBlockJacobiStats(o);
-        py::dict d;
-        d["n_loop"]        = o[0];
-        d["iters"]         = o[1];
-        d["res_rel"]       = o[2];
-        d["coarse_time_s"] = o[3];
-        d["solve_time_s"]  = o[4];
-        d["block_jacobi"]  = o[5];
-        d["eff_rank"]      = o[6];
-        return d;
-    },
-    R"pbdoc(
-        Diagnostics from the most recent loop-deflated block-Jacobi BiCGSTAB solve
-        (SetLoopDeflBlockJacobiGauge): n_loop (deflation dim), iters (BiCGSTAB
-        iterations; -1 = coarse E factor singular), res_rel (||b - A sigma||/||b||),
-        coarse_time_s (E = W^T A W build + LU), solve_time_s, block_jacobi (1 if the
-        6x6 block-Jacobi preconditioner was used, else 0 = column-scale Jacobi).
     )pbdoc");
 
     // ========================================================================

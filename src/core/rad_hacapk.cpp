@@ -26,6 +26,7 @@
 #include <cstring>
 #include <mkl.h>   // cblas_dgemm + LAPACKE_dsyevd for the antisym-IMA plane-slab null space (SVD-free)
 #include <cstdio>
+#include <cstdlib>  // std::getenv / std::atoi (RADIA_LS_BLOCK_CELLS research toggle)
 #include <iostream>
 #include <chrono>
 #include <atomic>
@@ -539,16 +540,6 @@ extern "C" void RadGetKeepLoopStats(double* out /* len 6 */) {
     if (!out) return; for (int i=0;i<6;i++) out[i]=g_kl_dbg[i];
 }
 
-/* Diagnostic for loop-DEFLATED block-Jacobi BiCGSTAB (SolveLoopDeflatedBlockJacobi):
- * [0]=n_loop (deflation basis dim = W columns), [1]=BiCGSTAB iters (-1 = coarse
- * E factor failed), [2]=rel residual ||b - A sigma||/||b||, [3]=coarse-build time
- * (s, E=W^T A W + SVD pseudo-inverse), [4]=solve time (s), [5]=block-Jacobi used
- * (1/0), [6]=effective rank of E (= dim ker(N); < n_loop when W is redundant). */
-static double g_ldbj_dbg[7] = {0,0,0,0,0,0,0};
-extern "C" void RadGetLoopDeflBlockJacobiStats(double* out /* len 7 */) {
-    if (!out) return; for (int i=0;i<7;i++) out[i]=g_ldbj_dbg[i];
-}
-
 /* A_SS-as-H-matrix path. mode 0 = off (dense K-dense LU, the default);
  * mode 1 = build A_SS as a HACApK H-matrix in SolveLoopStar and VERIFY its
  * MatVec against the exact T^T A T (sandwich) operator (milestone: compression
@@ -1023,6 +1014,25 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
     int                     kdense_n = 0;
     bool                    kdense_ready = false;
 
+    // (e) FEW-ELEMENT BLOCK-JACOBI reduced preconditioner (Ida's S-graph block,
+    // 2026-06-03).  Toggle via env RADIA_LS_BLOCK_CELLS:
+    //   > 0 : cells-per-element-edge for the spatial-cell blocks (3 = 3^3-element
+    //         clusters).  The cube study (C:/temp/test_ass_*.py) showed PER-element
+    //         blocks FAIL (1/chi-vs--N sign cancellation -> small blocks near-singular)
+    //         but FEW-element blocks WORK (2-3x over col-scale Jacobi, near
+    //         mesh-independent).  Scalable O(N) -- the alternative to the K-dense LU,
+    //         which caps ~15^3 / 8 GB.  Each block = A_SS restricted to a cell's star
+    //         columns (StarSSEntry = S_i^T A S_j, exact for no-IMA / symmetric IMA),
+    //         LAPACK LU.
+    //   = -1 : force the (b) col-scale Jacobi baseline (skip K-dense) -- for comparison.
+    //   0/unset : default (K-dense LU if it fits, else col-scale Jacobi).
+    int blockCells = 0;
+    if (const char* ev = std::getenv("RADIA_LS_BLOCK_CELLS")) blockCells = std::atoi(ev);
+    std::vector<std::vector<int>>        bjCols;
+    std::vector<std::vector<double>>     bjLU;
+    std::vector<std::vector<lapack_int>> bjIpiv;
+    bool bjReady = false;
+
     std::vector<double> mf(n), mg(n);
     auto applyMinv = [&](const std::vector<double>& rstar, std::vector<double>& zstar){
         if (kdense_ready) {
@@ -1031,6 +1041,20 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
             LAPACKE_dgetrs(LAPACK_COL_MAJOR, 'N', kdense_n, 1,
                            kdense_lu.data(), kdense_n, kdense_ipiv.data(),
                            zstar.data(), kdense_n);
+            return;
+        }
+        if (bjReady) {
+            // (e) few-element block-Jacobi: per spatial cell, dgetrs on the cell's
+            // reduced sub-vector (an empty LU = a singular cell -> identity).
+            for (size_t c = 0; c < bjCols.size(); c++) {
+                const std::vector<int>& cs = bjCols[c]; int m = (int)cs.size();
+                if (bjLU[c].empty()) { for (int i=0;i<m;i++) zstar[cs[i]] = rstar[cs[i]]; continue; }
+                std::vector<double> rb(m);
+                for (int i=0;i<m;i++) rb[i] = rstar[cs[i]];
+                LAPACKE_dgetrs(LAPACK_COL_MAJOR, 'N', m, 1, bjLU[c].data(),
+                               m, bjIpiv[c].data(), rb.data(), m);
+                for (int i=0;i<m;i++) zstar[cs[i]] = rb[i];
+            }
             return;
         }
         if (!useBlock) { for (int k=0;k<ns;k++) zstar[k] = dinv[k]*rstar[k]; return; }
@@ -1086,7 +1110,7 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
     //       for the symmetric / no-IMA / antisym-deflated reduced operator)
     //   Optimal at moderate scale: cube 4^3 (n=384) and C-type 6^3 (n=7200) factor in
     //   under a few seconds; iteration count drops to ~2 (BiCGSTAB direct-solve regime).
-    {
+    if (blockCells == 0) {
         const size_t KDENSE_BYTES_LIMIT = (size_t)8 * 1024 * 1024 * 1024;   // 8 GB
         size_t kdense_bytes = (size_t)ns * (size_t)ns * sizeof(double);
         if (ns > 0 && kdense_bytes <= KDENSE_BYTES_LIMIT) {
@@ -1122,30 +1146,80 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
         }
     }
 
-    // right-preconditioned BiCGSTAB on the reduced system T^T A T y = T^T b
-    std::vector<double> y(ns,0.0), r(bred), rhat(bred), v(ns,0.0), p(ns,0.0),
-                        s(ns), t(ns), phat(ns), shat(ns);
-    double rho=1.0, alpha=1.0, omega=1.0;
-    int it = 0;
-    for (; it < max_iter; it++){
-        double rho_new = dot(rhat, r);
-        if (std::fabs(rho_new) < 1e-300) break;
-        double beta = (rho_new/rho)*(alpha/omega);
-        for (int i=0;i<ns;i++) p[i] = r[i] + beta*(p[i]-omega*v[i]);
-        applyMinv(p, phat);
-        redMatVec(phat, v);
-        double rv = dot(rhat, v); if (std::fabs(rv) < 1e-300) break;
-        alpha = rho_new/rv;
-        for (int i=0;i<ns;i++) s[i] = r[i] - alpha*v[i];
-        if (nrm(s)/bnorm < tol){ for(int i=0;i<ns;i++) y[i]+=alpha*phat[i]; it++; break; }
-        applyMinv(s, shat);
-        redMatVec(shat, t);
-        double tt = dot(t,t); if (tt < 1e-300) break;
-        omega = dot(t,s)/tt;
-        for (int i=0;i<ns;i++){ y[i] += alpha*phat[i] + omega*shat[i]; r[i] = s[i] - omega*t[i]; }
-        if (nrm(r)/bnorm < tol){ it++; break; }
-        rho = rho_new;
+    // (e) FEW-ELEMENT BLOCK-JACOBI BUILD (when RADIA_LS_BLOCK_CELLS > 0): sort the
+    // star columns by a FINE (1-element) spatial cell, then chunk into BALANCED
+    // fixed-size blocks (spatially coherent AND balanced -- a graded mesh's dense
+    // region does NOT collapse into one huge block, which it does with uniform
+    // cells).  Each block = A_SS restricted to its columns via StarSSEntry (exact
+    // for no-IMA / symmetric IMA), LAPACK LU.  Scalable O(N): fixed block size.
+    if (blockCells > 0 && ns > 0) {
+        double mn[3] = {1e30,1e30,1e30}, mx[3] = {-1e30,-1e30,-1e30};
+        for (int k=0;k<ns;k++) for(int d=0;d<3;d++){ double vv=m_star_coords[3*(size_t)k+d];
+            if(vv<mn[d])mn[d]=vv; if(vv>mx[d])mx[d]=vv; }
+        int nelem = m_ndof/6; if (nelem < 1) nelem = 1;
+        double ex=std::max(1e-30,mx[0]-mn[0]), ey=std::max(1e-30,mx[1]-mn[1]), ez=std::max(1e-30,mx[2]-mn[2]);
+        double h = std::cbrt(ex*ey*ez/(double)nelem);     // typical element size
+        std::vector<std::tuple<long,long,long,int>> keyed; keyed.reserve(ns);
+        for (int k=0;k<ns;k++)
+            keyed.emplace_back((long)std::floor((m_star_coords[3*(size_t)k+0]-mn[0])/h),
+                               (long)std::floor((m_star_coords[3*(size_t)k+1]-mn[1])/h),
+                               (long)std::floor((m_star_coords[3*(size_t)k+2]-mn[2])/h), k);
+        std::sort(keyed.begin(), keyed.end());
+        int Bsz = std::max(32, blockCells*blockCells*blockCells*4);   // target block size (cols)
+        for (int start=0; start<ns; start+=Bsz){
+            int m = std::min(Bsz, ns-start);
+            std::vector<int> cols(m);
+            for (int i=0;i<m;i++) cols[i]=std::get<3>(keyed[start+i]);
+            std::vector<double> Bm((size_t)m*(size_t)m);
+            for (int j=0;j<m;j++) for(int i=0;i<m;i++)
+                Bm[(size_t)i + (size_t)j*(size_t)m] = StarSSEntry(cols[i], cols[j]);  // exact A_SS sub-block
+            std::vector<lapack_int> ip(m);
+            int info = LAPACKE_dgetrf(LAPACK_COL_MAJOR, m, m, Bm.data(), m, ip.data());
+            bjCols.push_back(cols);
+            if (info==0){ bjLU.push_back(std::move(Bm)); bjIpiv.push_back(std::move(ip)); }
+            else { bjLU.push_back({}); bjIpiv.push_back({}); }   // singular block -> identity
+        }
+        bjReady = true;
     }
+
+    // reducedSolve: right-preconditioned BiCGSTAB on the reduced system A_SS y = rhs
+    // (operator = redMatVec = the matrix-free T^T A T sandwich, preconditioner =
+    // applyMinv).  Wrapped in a lambda so the keep-loops star-correction below uses
+    // the SAME (converged) solve instead of a single applyMinv application -- critical
+    // for the few-element block-J, where one applyMinv is a WEAK preconditioner step,
+    // NOT the exact A_SS^-1 the keep-loops refinement assumes (a single application
+    // there amplifies the residual -> divergence).  For K-dense (applyMinv = exact
+    // A_SS^-1) this converges in 1 iter, so the production path is unchanged.
+    auto reducedSolve = [&](const std::vector<double>& rhs, std::vector<double>& yout)->int{
+        double bn = nrm(rhs);
+        if (bn < 1e-300){ yout.assign(ns, 0.0); return 0; }
+        std::vector<double> y(ns,0.0), r(rhs), rhat(rhs), v(ns,0.0), p(ns,0.0),
+                            s(ns), t(ns), phat(ns), shat(ns);
+        double rho=1.0, alpha=1.0, omega=1.0;
+        int it = 0;
+        for (; it < max_iter; it++){
+            double rho_new = dot(rhat, r);
+            if (std::fabs(rho_new) < 1e-300) break;
+            double beta = (rho_new/rho)*(alpha/omega);
+            for (int i=0;i<ns;i++) p[i] = r[i] + beta*(p[i]-omega*v[i]);
+            applyMinv(p, phat);
+            redMatVec(phat, v);
+            double rv = dot(rhat, v); if (std::fabs(rv) < 1e-300) break;
+            alpha = rho_new/rv;
+            for (int i=0;i<ns;i++) s[i] = r[i] - alpha*v[i];
+            if (nrm(s)/bn < tol){ for(int i=0;i<ns;i++) y[i]+=alpha*phat[i]; it++; break; }
+            applyMinv(s, shat);
+            redMatVec(shat, t);
+            double tt = dot(t,t); if (tt < 1e-300) break;
+            omega = dot(t,s)/tt;
+            for (int i=0;i<ns;i++){ y[i] += alpha*phat[i] + omega*shat[i]; r[i] = s[i] - omega*t[i]; }
+            if (nrm(r)/bn < tol){ it++; break; }
+            rho = rho_new;
+        }
+        yout = y; return it;
+    };
+    std::vector<double> y(ns, 0.0);
+    int it = reducedSolve(bred, y);
     if (antisymDefl) SetDeflation({}, {}, {}, 0.0);   // clear: deflation was per-solve
 
     // A_SS-as-H-matrix MILESTONE 2 (mode 2): solve the star block with the A_SS
@@ -1275,8 +1349,12 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
             if (sw==0) res0 = rn;
             resf = rn; sweeps = sw;
             if (rn <= tol*bn) break;
-            // (i) STAR correction d_S = A_SS^{-1} S^T r ; sigma += S d_S
-            applyTt(r, rstar); applyMinv(rstar, dyS); applyT(dyS, tmp);
+            // (i) STAR correction d_S = A_SS^{-1} S^T r ; sigma += S d_S.
+            // Use the CONVERGED reducedSolve (not a single applyMinv): for block-J,
+            // applyMinv is a weak step and a single application would leave d_S far
+            // from A_SS^{-1} S^T r, so the refinement amplifies (-> 1e88).  For
+            // K-dense (applyMinv exact) reducedSolve converges in 1 iter (unchanged).
+            applyTt(r, rstar); reducedSolve(rstar, dyS); applyT(dyS, tmp);
             for (int i=0;i<n;i++) sigma[i] += tmp[i];
             // (ii) LOOP correction y_L = A_LL^{-1} L^T r2 ; sigma += L y_L (CG)
             MatVec(sigma, As); for (int i=0;i<n;i++) r[i] = b[i]-As[i];
@@ -1305,233 +1383,6 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
         g_kl_dbg[0]=(double)nl; g_kl_dbg[1]=res0; g_kl_dbg[2]=resf/bn;
         g_kl_dbg[3]=(double)sweeps; g_kl_dbg[4]=(double)cg_tot; g_kl_dbg[5]=resf;
     }
-    return it;
-}
-
-//=========================================================================
-// LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB  (the "keep the element space, project out
-// the loops per iteration" path -- user's idea, 2026-06-01).
-//
-// Motivation: diag-Jacobi fails on the MSC system; block-Jacobi (the 6x6 element
-// diagonal block inverse) works because the ELEMENT is the natural unit. loop-star
-// CHANGES THE BASIS (S) and DESTROYS that element/block structure. Instead, stay in
-// the ORIGINAL element DOF space (block-Jacobi keeps working) and remove the
-// ill-conditioned loop null space ker(N) (eigenvalue 1/(mu_r-1) -> 0) by DEFLATION
-// (a projection), NOT by a basis change and NOT by the alpha L L^T operator shift.
-//
-// Two-level (deflated) preconditioned BiCGSTAB:
-//   W = loop basis (sparse cycle CSR = m_loop_*, same as SolveLoopStar; W ~ ker N)
-//   E = W^T A W            (coarse / loop-loop block; ~ (1/chi) W^T W on exact ker N,
-//                           well-conditioned -- the EASY block, unlike A_SS)
-//   P  = I - A W E^-1 W^T  (deflation projector; removes span(W) from the residual)
-//   Q  = W E^-1 W^T        (coarse correction)
-// Solve P A xhat = P b with block-Jacobi-preconditioned BiCGSTAB (element space
-// intact), then x = Q b + (I - Q A) xhat. The loops are removed by P each MatVec;
-// the surviving near-loop modes (cond(A_SS) ~ mu_r) are handled by block-Jacobi +
-// BiCGSTAB. Verified in Python (C:/temp/deflated_blockjacobi.py): at mu_r=1e5 plain
-// AND block-Jacobi CAP, this converges in ~338 iters field-exact. FULLY O(N)
-// matrix-free except the coarse E factor (m x m, m = n_loop); E is the benign
-// loop-loop block so the dense LU here is far cheaper than the K-dense A_SS LU.
-//
-// blockInverse/blockOffsets: optional 6x6 block-Jacobi (row-major per element, same
-// layout as SolveLoopStar's useBlock path). If absent, falls back to the
-// conservative column-scale Jacobi (dinv) used by loop-star. Returns BiCGSTAB iters,
-// or -1 on failure (no loops / coarse factor singular).
-//=========================================================================
-int RadHACApKMSCManager::SolveLoopDeflatedBlockJacobi(
-        const std::vector<double>& b, std::vector<double>& sigma,
-        double tol, int max_iter,
-        const std::vector<double>& blockInverse,
-        const std::vector<int>& blockOffsets) {
-    const int n = m_ndof;
-    sigma.assign(n, 0.0);
-
-    // Build the loop basis W (sparse cycle CSR), same construction as SolveLoopStar.
-    if (!m_loop_built) {
-        BuildLoopBasis(1.0);
-        m_loop_offsets = m_defl_offsets;
-        m_loop_dofs    = m_defl_dofs;
-        m_loop_coeffs  = m_defl_signs;
-        SetDeflation({}, {}, {}, 0.0);   // clear so MatVec stays the clean A
-        m_n_loop = m_loop_offsets.empty() ? 0 : (int)m_loop_offsets.size() - 1;
-        m_loop_built = true;
-    }
-    const int nl = m_n_loop;
-    if (nl <= 0) return -1;   // no loops -> nothing to deflate (caller should use plain)
-
-    auto th0 = std::chrono::high_resolution_clock::now();
-
-    // W apply: full = W yL  (scatter), and W^T: yL = W^T full  (gather).
-    auto applyW = [&](const std::vector<double>& yL, std::vector<double>& full){
-        std::fill(full.begin(), full.end(), 0.0);
-        for (int p=0; p<nl; p++){ double c=yL[p];
-            for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
-                full[m_loop_dofs[k]] += m_loop_coeffs[k]*c; }
-    };
-    auto applyWt = [&](const std::vector<double>& full, std::vector<double>& yL){
-        for (int p=0; p<nl; p++){ double acc=0.0;
-            for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
-                acc += m_loop_coeffs[k]*full[m_loop_dofs[k]];
-            yL[p]=acc; }
-    };
-
-    // Block-Jacobi (M^-1) in the element space: 6x6 inverse per element if supplied,
-    // else conservative column-scale Jacobi (1/d_i, d_i = |A_ii|) -- never singular.
-    bool useBlock = (!blockOffsets.empty() && !blockInverse.empty() && m_interaction);
-    std::vector<double> dinv(n, 1.0);
-    if (!useBlock) {
-        bool haveN = (m_diag_cached && (int)m_diag_N.size() == n);
-        for (int i=0;i<n;i++){
-            double Nii = haveN ? m_diag_N[i] : GetInteractionMatrixElement(i,i);
-            double ic  = (i<(int)m_inv_chi.size()) ? m_inv_chi[i] : 0.0;
-            double d = std::fabs(-Nii + ic);
-            dinv[i] = (d > 1e-300) ? 1.0/d : 1.0;
-        }
-    }
-    std::vector<double> mf(n);
-    auto applyMinv = [&](const std::vector<double>& x, std::vector<double>& y){
-        if (!useBlock){ for (int i=0;i<n;i++) y[i] = dinv[i]*x[i]; return; }
-        int ne = m_interaction->AmOfMainElem;
-        for (int e=0;e<ne;e++){
-            int dof = m_interaction->GetElementDOF(e);
-            int off = m_interaction->GetElementDOFOffset(e);
-            int boff = blockOffsets[e];
-            for (int i=0;i<dof;i++){ double acc=0.0;
-                for (int j=0;j<dof;j++) acc += blockInverse[boff + i*dof + j]*x[off+j];
-                y[off+i]=acc; }
-        }
-    };
-
-    auto dot = [](const std::vector<double>& a, const std::vector<double>& c){
-        double s=0; for(size_t i=0;i<a.size();i++) s+=a[i]*c[i]; return s; };
-    auto nrm = [&](const std::vector<double>& a){ return std::sqrt(dot(a,a)); };
-
-    // AW = A W  (one MatVec per loop column) and E = W^T A W = W^T (AW)  (nl x nl).
-    // E is column-major for LAPACK. AW is stored full (n x nl) so the projector
-    // P v = v - AW (E^-1 (W^T v)) is matrix-free thereafter.
-    std::vector<double> AW((size_t)n * (size_t)nl);
-    std::vector<double> E((size_t)nl * (size_t)nl, 0.0);
-    {
-        std::vector<double> wcol(n), awcol(n), ecol(nl);
-        for (int p=0;p<nl;p++){
-            std::fill(wcol.begin(), wcol.end(), 0.0);
-            for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
-                wcol[m_loop_dofs[k]] += m_loop_coeffs[k];
-            MatVec(wcol, awcol);                                  // awcol = A W[:,p]
-            std::copy(awcol.begin(), awcol.end(), AW.begin() + (size_t)p*n);
-            applyWt(awcol, ecol);                                 // ecol = W^T A W[:,p]
-            for (int q=0;q<nl;q++) E[(size_t)q + (size_t)p*nl] = ecol[q];
-        }
-    }
-    // E = W^T A W is RANK-DEFICIENT when the loop CSR W is a redundant cycle basis
-    // (short 3/4-cycles are linearly dependent: nl columns but rank = dim ker(N) <
-    // nl, e.g. C-type nl=2676 vs rank 1912). A plain LU (dgetrf) of a singular E is
-    // unstable -> the projector P breaks and BiCGSTAB diverges (C-type mu_r=100). Use
-    // the SVD PSEUDO-INVERSE: E = U Sigma V^T, E^+ = V Sigma^+ U^T with small singular
-    // values truncated. This is the rank-revealing, redundant-basis-safe coarse solve
-    // -- E^+ (W^T v) gives the minimum-norm loop coefficients, exactly what deflation
-    // needs (the loop component is defined modulo the redundancy). Cost O(nl^3) once.
-    std::vector<double> Es(E);                       // copy (dgesdd overwrites)
-    std::vector<double> svU((size_t)nl*nl), svVt((size_t)nl*nl), sval(nl);
-    {
-        // E is symmetric (A symmetric on the loop space) but use general SVD for safety.
-        int info = LAPACKE_dgesdd(LAPACK_COL_MAJOR, 'A', nl, nl, Es.data(), nl,
-                                  sval.data(), svU.data(), nl, svVt.data(), nl);
-        if (info != 0) { g_ldbj_dbg[1] = -1.0; return -1; }
-    }
-    // Effective rank: singular values > rtol * sigma_max.
-    double smax = (nl > 0) ? sval[0] : 0.0;
-    double rtol = 1.0e-10;
-    double sthresh = rtol * smax;
-    int erank = 0;
-    for (int i=0;i<nl;i++){ if (sval[i] > sthresh) erank++; else break; }
-    auto th1 = std::chrono::high_resolution_clock::now();
-    g_ldbj_dbg[0] = (double)nl;
-    g_ldbj_dbg[3] = std::chrono::duration<double>(th1 - th0).count();
-    g_ldbj_dbg[5] = useBlock ? 1.0 : 0.0;
-    if (erank <= 0) { g_ldbj_dbg[1] = -1.0; return -1; }
-
-    // coarseSolve: yL = E^+ (W^T v) = V Sigma^+ U^T (W^T v), Sigma^+ truncated at erank.
-    std::vector<double> wtv(nl), utv(nl);
-    auto Esolve = [&](const std::vector<double>& v, std::vector<double>& yL){
-        applyWt(v, wtv);                                  // wtv = W^T v   (length nl)
-        // utv = Sigma^+ (U^T wtv): project onto the first erank left singular vectors.
-        for (int i=0;i<erank;i++){
-            double acc=0.0;
-            for (int r=0;r<nl;r++) acc += svU[(size_t)i*nl + r]*wtv[r];   // U[:,i]^T wtv
-            utv[i] = acc / sval[i];
-        }
-        // yL = V (:, :erank) utv  =  (rows of Vt) ; Vt is erank x nl -> yL[c]=sum_i Vt[i,c] utv[i]
-        std::fill(yL.begin(), yL.end(), 0.0);
-        for (int i=0;i<erank;i++){
-            double ui = utv[i];
-            for (int c=0;c<nl;c++) yL[c] += svVt[(size_t)c*nl + i]*ui;     // Vt[i,c] = svVt[c*nl+i]
-        }
-    };
-    std::vector<double> qbuf(nl), tmpn(n);
-    // Q v = W E^-1 W^T v
-    auto applyQ = [&](const std::vector<double>& v, std::vector<double>& out){
-        Esolve(v, qbuf); applyW(qbuf, out);
-    };
-    // P v = v - AW (E^-1 W^T v)   (deflation projector; AW already materialized)
-    auto applyP = [&](const std::vector<double>& v, std::vector<double>& out){
-        Esolve(v, qbuf);
-        for (int i=0;i<n;i++){
-            double acc=0.0; const double* awrow = nullptr; (void)awrow;
-            // out = v - AW * qbuf
-            double s=0.0;
-            for (int p=0;p<nl;p++) s += AW[(size_t)p*n + i]*qbuf[p];
-            out[i] = v[i] - s; (void)acc;
-        }
-    };
-
-    // PA operator: z -> P (A z)
-    std::vector<double> az(n);
-    auto PAop = [&](const std::vector<double>& z, std::vector<double>& out){
-        MatVec(z, az); applyP(az, out);
-    };
-
-    auto ts0 = std::chrono::high_resolution_clock::now();
-    // right-preconditioned BiCGSTAB on  P A xhat = P b,  M^-1 = block-Jacobi.
-    std::vector<double> pb(n), r(n), rhat(n), v(n,0.0), p(n,0.0),
-                        s(n), t(n), phat(n), shat(n), xhat(n,0.0);
-    applyP(b, pb);
-    double bnorm = nrm(pb);
-    if (bnorm < 1e-300) { sigma.assign(n,0.0); applyQ(b, sigma); return 0; }
-    r = pb; rhat = pb;
-    double rho=1.0, alpha=1.0, omega=1.0; int it=0;
-    for (; it < max_iter; it++){
-        double rho_new = dot(rhat, r);
-        if (std::fabs(rho_new) < 1e-300) break;
-        double beta = (rho_new/rho)*(alpha/omega);
-        for (int i=0;i<n;i++) p[i] = r[i] + beta*(p[i]-omega*v[i]);
-        applyMinv(p, phat); PAop(phat, v);
-        double rv = dot(rhat, v); if (std::fabs(rv) < 1e-300) break;
-        alpha = rho_new/rv;
-        for (int i=0;i<n;i++) s[i] = r[i] - alpha*v[i];
-        if (nrm(s)/bnorm < tol){ for(int i=0;i<n;i++) xhat[i]+=alpha*phat[i]; it++; break; }
-        applyMinv(s, shat); PAop(shat, t);
-        double tt = dot(t,t); if (tt < 1e-300) break;
-        omega = dot(t,s)/tt;
-        for (int i=0;i<n;i++){ xhat[i] += alpha*phat[i] + omega*shat[i]; r[i] = s[i] - omega*t[i]; }
-        if (nrm(r)/bnorm < tol){ it++; break; }
-        rho = rho_new;
-    }
-    // Recover: sigma = Q b + (I - Q A) xhat = Q b + xhat - Q (A xhat)
-    applyQ(b, sigma);                       // sigma = Q b
-    MatVec(xhat, az);                       // az = A xhat
-    applyQ(az, tmpn);                       // tmpn = Q A xhat
-    for (int i=0;i<n;i++) sigma[i] += xhat[i] - tmpn[i];
-
-    auto ts1 = std::chrono::high_resolution_clock::now();
-    // true relative residual ||b - A sigma|| / ||b||
-    MatVec(sigma, az);
-    double rn=0.0, bn2=0.0;
-    for (int i=0;i<n;i++){ double d=b[i]-az[i]; rn+=d*d; bn2+=b[i]*b[i]; }
-    g_ldbj_dbg[1] = (double)it;
-    g_ldbj_dbg[2] = (bn2>0.0) ? std::sqrt(rn/bn2) : 0.0;
-    g_ldbj_dbg[4] = std::chrono::duration<double>(ts1 - ts0).count();
-    g_ldbj_dbg[6] = (double)erank;
     return it;
 }
 

@@ -303,24 +303,6 @@ public:
     int GetStarDim() const { return m_n_star; }
 
     /**
-     * LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB. Keeps the ORIGINAL element DOF space (so
-     * the 6x6 block-Jacobi preconditioner still applies -- the element is the natural
-     * unit) and removes the ill-conditioned loop null space ker(N) by DEFLATION (a
-     * two-level projector P = I - A W (W^T A W)^-1 W^T), NOT by a basis change
-     * (loop-star) and NOT by an operator shift (alpha L L^T). W = the sparse loop
-     * cycle basis (m_loop_*). Fully O(N) matrix-free except the coarse E = W^T A W
-     * factor (m x m, m = n_loop; the benign well-conditioned loop-loop block). The
-     * scalable, no-15^3-cap, no-A_SS-compression-dependence alternative to loop-star
-     * + K-dense at high mu_r. Returns BiCGSTAB iters, or -1 on failure. Linear regime
-     * (uniform chi). Diagnostics via RadGetLoopDeflBlockJacobiStats.
-     */
-    int SolveLoopDeflatedBlockJacobi(
-                      const std::vector<double>& b, std::vector<double>& sigma,
-                      double tol, int max_iter,
-                      const std::vector<double>& blockInverse = std::vector<double>(),
-                      const std::vector<int>& blockOffsets = std::vector<int>());
-
-    /**
      * HELMHOLTZ-HODGE LOOP REMOVAL: subtract the non-physical loop (circulating
      * surface-charge) component from a solved sigma, giving a physically clean
      * answer with zero loop content. Projects sigma off span(L) (L = topological

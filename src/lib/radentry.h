@@ -1056,13 +1056,6 @@ the loop null space without a shift parameter. Field-exact + well-conditioned
 for the LINEAR regime. @param n [out] dummy @param enable 1=on,0=off */
 EXP int CALL RadSetLoopStarGauge(int* n, int enable);
 
-/** Enables/disables the LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB gauge for the HACApK
-solver (method=2). Keeps the element DOF space (6x6 block-Jacobi preconditioner
-applies) and deflates the loop null space via a two-level projector -- the
-scalable alternative to loop-star + K-dense at high mu_r (no 15^3 cap, no A_SS
-compression dependence). Linear regime. @param n [out] dummy @param enable 1/0 */
-EXP int CALL RadSetLoopDeflBlockJacobiGauge(int* n, int enable);
-
 /** Enables/disables HELMHOLTZ-HODGE loop removal: after the HACApK solve, subtract
 the non-physical loop (circulating surface-charge) component from sigma via a cheap,
 well-conditioned CG projection off the topological cycle space. Gives a loop-free

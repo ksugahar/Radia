@@ -929,7 +929,7 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 	// solver paths -- not only method 2. Applied ONCE after convergence, via a
 	// standalone cycle-projection (no H-matrix needed; pure sparse CG on L^T L).
 #ifdef RADIA_USE_HACAPK
-	if(rad.m_loop_projection && !rad.m_loopstar_gauge && !rad.m_loopdefl_gauge)
+	if(rad.m_loop_projection && !rad.m_loopstar_gauge)
 		RadHACApKMSCManager::ProjectOutLoopsStandalone(IntrctPtr, rad.m_bicg_tol, 10000);
 #endif
 
@@ -2997,29 +2997,10 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 		return it_ls;
 	}
 
-	// LOOP-DEFLATED BLOCK-JACOBI BiCGSTAB gauge: stay in the element DOF space (so the
-	// 6x6 block-Jacobi preconditioner applies) and deflate the loop null space via a
-	// two-level projector. Scalable alternative to loop-star + K-dense at high mu_r
-	// (no 15^3 cap, no A_SS-compression dependence). Enabled by
-	// rad.SetLoopDeflBlockJacobiGauge(True). Linear regime (uniform chi).
-	if(rad.m_loopdefl_gauge)
-	{
-		std::vector<double> ld_blockInverse;
-		std::vector<int>    ld_blockOffsets;
-#ifdef HAVE_LAPACK
-		BuildBlockJacobiPreconditioner_HMatrix(ld_blockInverse, ld_blockOffsets, inv_chi, totalDOF);
-#endif
-		std::vector<double> sigma_ld(totalDOF);
-		int it_ld = m_hacapk->SolveLoopDeflatedBlockJacobi(
-			rhs, sigma_ld, tol, max_iter, ld_blockInverse, ld_blockOffsets);
-		if(it_ld < 0) return 0;   // no loops / coarse factor singular -> fail loudly
-		for(int i = 0; i < totalDOF; i++) FlatMagn[i] = sigma_ld[i];
-		m_hacapk->MatVec(sigma_ld, v);            // true residual ||rhs - A*sigma||
-		this->Copy(rhs, r, totalDOF);
-		this->Axpy(-1.0, v, r, totalDOF);
-		residual = this->Norm2(r, totalDOF) / (this->Norm2(rhs, totalDOF) + 1.0e-300);
-		return it_ld;
-	}
+	// (Loop handling is via the loop-star gauge above; the per-iteration loop-deflated
+	// block-Jacobi BiCGSTAB path was removed 2026-06-03 as redundant -- loop-star
+	// (SS-first reduction) and the deflation (block-J-first) orderings are equivalent
+	// when the matrix algebra is correct, so the single loop-star path is kept.)
 
 	// Initial guess
 	for(int i = 0; i < totalDOF; i++)
@@ -3934,9 +3915,9 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	// driven by the true A^-1 b (loop-included) and only the FINAL answer is made
 	// loop-free. N L = 0 so N*sigma -- the on-element field -- is unchanged. The
 	// projected sigma is synced back to the element Magn so rad.Fld / rad.ObjM see it.
-	// Skip when a loop-handling gauge is active (loop-star keeps loops by design;
-	// loop-deflated already removes them) -- do not double-process.
-	if(rad.m_loop_projection && !rad.m_loopstar_gauge && !rad.m_loopdefl_gauge
+	// Skip when the loop-star gauge is active (it keeps loops by design) -- do not
+	// double-process.
+	if(rad.m_loop_projection && !rad.m_loopstar_gauge
 	   && m_hacapk && m_hacapk->IsValid())
 	{
 		std::vector<double> sig_lp(FlatMagn, FlatMagn + totalDOF);
