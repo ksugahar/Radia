@@ -1023,8 +1023,11 @@ CAE-AI; see `radia_mcp.maglev` topics `radia_iem_fem` / `cln_mor_control`):
   control-coupled simulation (~1/500 full-FEM time; TEAM 28).
 
 Validated on the standard eddy-current levitation benchmarks (TEAM
-Problem 7, TEAM Problem 28). Refs: Chadebec 2006 (IEM open boundary),
-Biro 2000 (reduced potential), Kameari-Sugahara-Matsuo 2017 (CLN).
+Problem 7 = eddy-current "asymmetrical conductor with a hole" validating
+the force/loss solver; TEAM Problem 28 = the electrodynamic levitation
+device). Refs: Chadebec 2006 (IEM open boundary), Biro 2000 (reduced
+potential), Kameari-Ebrahimi-Sugahara-Shindo-Matsuo 2018 (CLN, IEEE TMag
+54(3):7201804).
 
 This is the maglev-specific instance of the "Complement NGSolve" strategy
 above: FEM is weak at open boundary + moving magnets + thin conductors;
