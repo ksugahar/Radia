@@ -1,7 +1,24 @@
-"""Maglev + linear drive knowledge.
+"""Magnetic levitation knowledge (incl. the lab's Radia-IEM + CLN maglev research).
 
-Distilled from W:/.../99_アプリケーション/07_磁気浮上/ + 09_リニアドライブ/
-plus open literature for standard maglev / linear-drive topics that the
+Scope: MAGNETIC LEVITATION for transport / suspension / control.  The
+former linear-drive (LIM/LSM, end-effect) material was removed -- this
+server is maglev-only; for the levitation-FORCE physics (induction lift,
+EML melting, magnetic bearings, superconducting, diamagnetic, Earnshaw)
+see the sibling `radia_mcp.levitation`.
+
+The lab's own maglev research line (CAE-AI Lab, Yano Takaaki + Sugahara)
+is the headline content -- two topics, `radia_iem_fem` and
+`cln_mor_control`, distilled from:
+  - Yano & Sugahara, conf. digest E-3-1 "Construction of an IEM-FEM
+    hybrid computation method toward high-accuracy magnetic levitation
+    analysis" (CAE-AI Lab) -- Radia IEM (MMM/MSC) <-> reduced-potential
+    FEM weak coupling for moving-magnet eddy-current levitation force.
+  - Yano, master poster "Implementation of a 3D Multiport Cauer Ladder
+    Network method for accelerating control-coupled analysis" -- CLN
+    model-order reduction for real-time control-coupled maglev (TEAM 28).
+
+Distilled from W:/.../99_アプリケーション/07_磁気浮上/
+plus open literature for standard maglev topics that the
 lab does not have direct PDFs for (those sections are clearly marked
 "open literature, not lab PDF" so users know to cross-check).
 
@@ -47,21 +64,21 @@ against the unread lab PDFs when those become accessible.
 # Authoritative topic enum for the dispatcher tool (wired into
 # `maglev_linear_topics()` via common.register_topics_tool).
 TOPICS: dict[str, str] = {
-    "overview": "Levitation principles + linear drive landscape (EMS/EDS/Halbach/SCMaglev, LIM/LSM)",
+    "overview": "Magnetic levitation landscape (EMS/EDS/PM/SC/Halbach) + the lab's Radia-IEM / CLN maglev research line",
+    "radia_iem_fem": "Radia IEM (MMM/MSC) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi/T-Omega; no re-mesh on magnet motion (Yano bachelor, lab research)",
+    "cln_mor_control": "Cauer Ladder Network (CLN) model-order reduction for real-time control-coupled maglev: ~1/500 speedup, multiport matrix-CLN, 3D gauge A-phi/T-Omega/A-T, TEAM 28 (Yano master, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
-    "eddy_current_maglev": "Eddy-current EDS: Arago-disk physics, Hsu-Hill repulsion, magnetic wheels (Fujii/Kansai), Inductrack",
+    "eddy_current_maglev": "Eddy-current EDS: Arago-disk physics, magnetic wheels (Fujii/Kansai 2D model), Inductrack",
     "sumitomo_heavy_industrial": "Sumitomo Heavy patents: PM axial bearing with brake ring (JP 7-327337); planar eddy-current mover (JP 2007-215264)",
     "kansai_research": "Kansai University Saiki/Fujii magnetic-wheel lineage: skin depth, F_L/P proportional to sqrt(pole pitch)",
-    "lim_lsm_propulsion": "Linear Induction Motor (LIM) and Linear Synchronous Motor (LSM) drives; end effects",
-    "scmaglev_eds": "Superconducting EDS (SCMaglev / Chuo Shinkansen) and ground-coil LSM propulsion",
+    "scmaglev_eds": "Superconducting EDS (SCMaglev / Chuo Shinkansen): null-flux figure-8 levitation + guidance",
     "halbach_arrays": "Halbach array maglev / Inductrack: passive track coils, threshold-velocity self-stability",
-    "end_effects": "Linear-motor end effects: entry/exit transients, end-effect compensators",
     "all": "Concatenation of every topic above",
 }
 
 
 OVERVIEW = r"""
-# Magnetic levitation + linear drive landscape
+# Magnetic levitation landscape
 
 ## Levitation principles
 
@@ -76,30 +93,231 @@ OVERVIEW = r"""
 | **Hybrid (PM + EM)**                 | Bias by PM, control by EM         | Modern industrial bearings        | Active near zero current |
 | **Passive PM (axial)**               | Repulsive (face-to-face PM)       | Sumitomo bearings (JP 7-327337)   | Axially stable, radially unstable (Earnshaw) |
 
-## Linear drive types
+## The lab's maglev research line (headline content)
 
-| Type | Principle | Example |
-|------|-----------|---------|
-| **LIM** (Linear Induction Motor)        | Stator AC traveling field, secondary plate eddy current | airport trams, JR Linimo |
-| **LSM** (Linear Synchronous Motor)      | Stator AC, mover PMs (or SC coils)                       | SCMaglev, magnetic launch |
-| **DC linear**                            | DC excitation                                            | small actuators |
-| **Linear stepper**                       | Pulse-fed                                                | precision positioning |
-| **PM planar mover** (Sumitomo style)     | Rotating PM in reluctance head over conductive base      | semiconductor handling, vacuum chambers |
+The Sugahara / CAE-AI lab attacks the hard part of maglev design --
+**fast, accurate eddy-current force between a moving magnet and a
+conductor** -- with two complementary methods built on Radia + NGSolve:
+
+| Topic | What | Why it matters for maglev |
+|-------|------|----------------------------|
+| `radia_iem_fem`   | Radia IEM (MMM/MSC) computes the open-boundary external field; reduced-potential FEM computes only the eddy reaction field; weak-coupled, fed back to demagnetisation | The magnet MOVES -> only the external field updates, **no re-mesh** of the air gap; IEM removes the air-region discretisation error |
+| `cln_mor_control` | Cauer Ladder Network (CLN) model-order reduction turns the 3D eddy-current FEM into a compact equivalent circuit | Real-time control-in-the-loop maglev design at **~1/500** of full-FEM time; TEAM 28 benchmark |
+
+These are validated on the standard eddy-current levitation benchmarks
+(TEAM Problem 7, TEAM Problem 28 = the 1-axis electrodynamic levitation
+device).
 
 ## Lab focus
 
-- **Bearingless motor + WPT** (cross-link `radia_mcp.motor`, `radia_mcp.wpt`)
+- **Radia-IEM + FEM weak coupling** for moving-magnet eddy-current force
+  (Yano & Sugahara) -- topic `radia_iem_fem`
+- **CLN model-order reduction** for control-coupled maglev (Yano) --
+  topic `cln_mor_control`
 - **Magnetic-wheel EDS** -- Kansai-Univ collaboration (Saiki et al. 2021)
 - **PM axial bearings** -- Sumitomo Heavy lineage (heavy-industrial)
-- **Linear induction motor (LIM)** end-effect studies (Sugahara group)
+- **Bearingless motor + WPT** (cross-link `radia_mcp.motor`, `radia_mcp.wpt`)
+
+## Sibling server: levitation-force physics
+
+For the levitation FORCE physics itself -- induction (eddy-current) lift,
+EML melting, magnetic bearings (AMB), superconducting (Meissner /
+pinning), diamagnetic, Earnshaw's theorem, and how to compute the force
+(Maxwell stress / virtual work / time-average Lorentz) -- see
+`radia_mcp.levitation`.  Split by intent: a maglev SYSTEM (this server)
+vs. the levitation FORCE (levitation server).
 
 ## Cross-references
 
-- `radia_mcp.motor` -- analogous rotary motor analysis
-- `radia_mcp.wpt.applications.robot_bearingless` -- bearingless motor + WPT detail
-- `radia_mcp.electromagnet` -- DC magnet design (EMS pole face B)
+- `radia_mcp.levitation` -- levitation-force physics + bearings + EML
+- `radia_mcp.mor` (mor_cln) -- the CLN / Cauer ladder MOR theory
+- `radia_mcp.fem` (potential_formulations) -- A-phi / T-Omega / A-T gauges
 - `radia_mcp.team_benchmark.force_motion.problem_28` -- TEAM 28 Electrodynamic Levitation benchmark
-- `radia_mcp.team_benchmark.special.motors_30b_34` -- IM analytic references
+- `radia_mcp.motor` -- analogous rotary motor analysis
+- `radia_mcp.electromagnet` -- DC magnet design (EMS pole face B)
+"""
+
+
+RADIA_IEM_FEM = r"""
+# Radia IEM <-> reduced-potential FEM weak coupling for moving-magnet maglev
+*(Lab research: Yano & Sugahara, CAE-AI Lab, conf. digest E-3-1.)*
+
+Maglev design hinges on the eddy-current ELECTROMAGNETIC FORCE between a
+permanent magnet and a moving conductor across a large air gap.  Neither
+standard method handles this well alone:
+
+| Method | Strength | Weakness for maglev |
+|--------|----------|---------------------|
+| **FEM** | eddy currents, nonlinear materials | large PM<->conductor air gap must be meshed; **magnet motion forces re-meshing**; air-region discretisation error |
+| **IEM** (integral element method = Radia MMM/MSC) | NO air mesh, exact open boundary [Chadebec 2006] | does not solve eddy currents efficiently |
+
+## The weak coupling (the lab's answer)
+
+Run IEM and FEM SEQUENTIALLY, exchanging fields (weak coupling):
+
+```
+  IEM (Radia MMM/MSC)                 reduced-potential FEM
+  magnet region                       conductor region Omega_c
+  --------------------                --------------------------
+  analytic external field      ---->  source term
+    A_ext, H_ext                        (reduced-potential RHS)
+                                      solve ONLY the reaction field
+                                        H_r, J  (eddy currents)
+  demagnetisation  <----  feedback  ----'
+```
+
+- IEM computes the external field (A_ext, H_ext) ANALYTICALLY from the
+  magnets -- no air mesh, open boundary handled exactly.
+- That external field becomes the FEM source term via the **reduced
+  (total-minus-external) potential** formulation [Biro 2000]; the FEM
+  solves only the unknown REACTION field.
+- The FEM reaction field (eddy current J, reaction H_r) feeds back to the
+  demagnetisation analysis.
+- **Because only the external field updates when the magnet moves, there
+  is NO re-meshing** -- the decisive advantage for the moving-magnet
+  maglev problem.
+
+## The two reduced-potential formulations (both validated)
+
+**A-phi method** [Biro 2000] -- uses the IEM A_ext.  Split the magnetic
+vector potential A = A_ext + A_r; in the conductor Omega_c:
+
+```
+  sigma * d(A_r)/dt + curl( (1/mu) curl A_r ) = -sigma * d(A_ext)/dt
+                                                  \_____ source _____/
+```
+
+**T-Omega method** [Biro 2000] -- uses the IEM H_ext.  Split H = H_ext +
+H_r, with the reaction field via an electric vector potential T and a
+magnetic scalar potential Omega:  J = curl T,  H_r = T - grad(Omega):
+
+```
+  curl( rho * curl T ) + mu * d/dt( T - grad Omega ) = -mu * d(H_ext)/dt
+                                                         \_____ source ____/
+```
+
+## Validation (Yano & Sugahara digest E-3-1)
+
+Test problem: a permanent magnet ROTATING + TRANSLATING above a copper
+plate (the magnet-wheel / Arago class), dt = 0.0111 s, 181 steps.  The
+two formulations are physically consistent but feed DIFFERENT physical
+quantities (A_ext vs H_ext) to the FEM -- so cross-checking them is an
+independent validation:
+
+| Quantity     | Mean rel. error | Max rel. error |
+|--------------|-----------------|----------------|
+| Joule heat   | 3.38 %          | 10.65 %        |
+| Lorentz force| 4.81 %          | 13.20 %        |
+
+All quantities agree within ~5 % mean -> the coupled method is sound.
+Also validated against the eddy-current levitation benchmarks TEAM
+Problem 7 and TEAM Problem 28.
+
+## Mapping to the Radia / NGSolve stack
+
+| Role | Tool |
+|------|------|
+| IEM external field A_ext, H_ext | **Radia MMM/MSC** (`rad.Fld(obj,'a'|'h',pts)`; ObjHexahedron/ObjTetrahedron magnets) -- exact analytic, open boundary |
+| reduced-potential FEM reaction field | **NGSolve** A-phi / T-Omega eddy-current solve on the conductor mesh |
+| coupling of Radia field into FEM | `radia_mcp.fem.equivalence_source` (NearFieldSource), `radia_mcp.radia_ngsolve` RadiaField CoefficientFunction |
+
+## Cross-references
+
+- `radia_mcp.fem` (potential_formulations) -- A-phi / T-Omega / A-T gauges
+- `radia_mcp.radia_ngsolve` -- Radia field -> NGSolve coupling
+- `radia_mcp.team_benchmark.force_motion.problem_28` -- TEAM 28 validation
+- topic `cln_mor_control` -- speeding the SAME eddy-current FEM up for control
+- topic `eddy_current_maglev` -- the moving-magnet-over-plate physics
+- Refs: Chadebec et al. 2006 (IEM open boundary); Biro 2000 (reduced
+  potential A-phi / T-Omega); Yano & Sugahara digest E-3-1.
+"""
+
+
+CLN_MOR_CONTROL = r"""
+# Cauer Ladder Network (CLN) model-order reduction for control-coupled maglev
+*(Lab research: Yano, CAE-AI Lab master thesis, "Implementation of a 3D
+Multiport Cauer Ladder Network method for accelerating control-coupled
+analysis".)*
+
+Magnetic levitation is OPEN-LOOP UNSTABLE, so it needs real-time feedback
+control.  Designing and tuning that controller requires an
+electromagnetic model running INSIDE the control loop -- and a full 3D
+eddy-current FEM is far too slow for that.  The lab's answer is
+model-order reduction (MOR) via the **Cauer Ladder Network**.
+
+## The Cauer ladder equivalent circuit
+
+CLN replaces the 3D eddy-current FEM model with a continued-fraction
+(Cauer ladder) equivalent circuit whose port impedance is:
+
+```
+  Z(s) = V(s)/I(s)
+       = R0 + 1 / ( 1/(s*L1) + 1 / ( R2 + 1 / ( 1/(s*L3) + ... ) ) )
+```
+
+The CLN basis is generated by an alternating recurrence (Kameari et al.
+2017) that produces orthogonal current/field modes directly from the FEM
+operators; truncating at N ladder stages gives an N-th-order reduced
+model, and the error decreases MONOTONICALLY with the number of stages.
+CLN is closely tied to matrix continued fractions.
+
+## Result: TEAM 28, ~1/500 the time
+
+The 1-axis (vertical, Z) control-coupled simulation of TEAM Workshop
+Problem 28 (the electrodynamic levitation device) was completed with CLN:
+dt = 0.1 ms, 20000 steps, at about **1/500** of the wall-clock time of a
+conventional full eddy-current analysis -- fast enough for desktop
+control design.  (Sugahara et al. 2023 extended CLN to problems with
+CONDUCTOR MOVEMENT using constant basis functions, which is what makes
+the moving-magnet maglev tractable.)
+
+## Multiport CLN (matrix Cauer ladder) -- for multi-axis maglev
+
+A real maglev needs more than the vertical axis: lateral (XY) guidance
+must be co-simulated.  CLN extends to a MATRIX continued fraction
+(multiport), with admittance:
+
+```
+  Y(s) = ( G0^-1 + ( (s*L1)^-1 + ( G2^-1 + (s*L3)^-1 + ... )^-1 )^-1 )^-1
+```
+
+The multiport Cauer ladder is realised in Simulink; the extracted
+Y-matrix converges monotonically to the truth value as ladder stages are
+added (8-stage CLN taken as reference).  Two enabling steps:
+- **CLN 3-dimensionalisation** (3D formulation)
+- **CLN multiport-isation** (matrix CLN)
+
+## 3D formulation: the gauge choice matters
+
+In 3D, B = curl A leaves A non-unique (gauge freedom); a Coulomb gauge
+(div A = 0) is imposed to reduce DOF.  Yano compared three Coulomb-gauged
+formulations -- **A-phi, T-Omega, and A-T** -- for the CLN circuit
+constants of a square-prism conductor against an accuracy-guaranteed
+analytic solution.  The **A-T method matched the analytic solution best**
+(Tanimoto, Yano, Sugahara & Nagamine 2025).  Picking the right gauge is
+what makes the 3D multiport CLN accurate.
+
+## Mapping to the Radia / NGSolve stack
+
+| Role | Tool |
+|------|------|
+| CLN / Cauer ladder MOR theory | `radia_mcp.mor` (mor_cln, mor_cln_multiport) |
+| Radia transient / reduced-order core | radia `cln_core`, `lanczos_reduction` (PRIMA) |
+| eddy-current FEM the CLN reduces | A-phi / T-Omega / A-T -- topic `radia_iem_fem` |
+| gauge formulations | `radia_mcp.fem` (potential_formulations) |
+| benchmark | TEAM 28 (`radia_mcp.team_benchmark.force_motion.problem_28`) |
+
+## Cross-references
+
+- `radia_mcp.mor` (mor_cln / mor_cln_multiport) -- the CLN MOR theory
+- topic `radia_iem_fem` -- the eddy-current FEM that CLN compresses
+- `radia_mcp.fem` (potential_formulations) -- A-phi / T-Omega / A-T
+- `radia_mcp.team_benchmark.force_motion.problem_28` -- TEAM 28
+- Refs: Kameari, Ebrahimi, Sugahara, Shindo & Matsuo 2017 (CLN
+  representation of eddy-current fields); Sugahara, Tanimoto, Takahashi &
+  Matsuo 2023 (CLN with constant basis for conductor movement); Matsuo,
+  Fujiwara, Kuriyama & Shindo 2019 (multiport matrix CLN); Tanimoto,
+  Yano, Sugahara & Nagamine 2025 (3D CLN gauge comparison).
 """
 
 
@@ -461,8 +679,7 @@ ferromagnetic ribs amplify the path.
 ## Cross-references
 
 - `eddy_current_maglev` -- shared physics (skin depth, JxB)
-- `lim_lsm_propulsion` -- variant 2 = LSM, variant 3 = linear stepper
-- `radia_mcp.motor` -- rotating PM core inside the drive head
+- `radia_mcp.motor` -- rotating PM core inside the drive head; linear-motor / LSM analysis
 - `radia_mcp.electromagnet` -- variant 4 (coiled teeth)
 """
 
@@ -518,98 +735,6 @@ KANSAI_RESEARCH = r"""
 - `halbach_arrays` -- Inductrack route to higher F_L / P
 - `radia_mcp.radia_ngsolve.analytical_formulas` topic
   `thin_plate_eddy_current` -- closed forms for plate eddy losses
-"""
-
-
-LIM_LSM_PROPULSION = r"""
-# Linear Induction Motor (LIM) + Linear Synchronous Motor (LSM)
-*(Open literature, not lab PDF.)*
-
-## Linear Induction Motor (LIM)
-
-A LIM unrolls a rotary induction motor: a slotted primary stator
-generates a travelling 3-phase magnetic wave; the secondary is a
-flat conductive plate (Al sheet on iron back-yoke) or a sheet
-secondary with no back iron.
-
-**Slip / thrust relation** (simplified):
-
-```
-F_thrust = (V_g^2 / R_2') * (s / (1 + s^2))
-          (textbook approximation)
-s = (v_s - v) / v_s                (slip)
-v_s = 2 * tau * f_s                (synchronous speed)
-```
-
-where `V_g` is induced air-gap EMF, `R_2'` the referred secondary
-resistance, `tau` the pole pitch, `f_s` the supply frequency.
-
-**Air gap is large** (5 to 30 mm vs. < 1 mm rotary IM) because
-mechanical clearance with the track is required. Large gap ->
-high magnetising current -> low power factor (~ 0.4-0.6 typical).
-
-**Efficiency is lower** (50-70 percent) than rotary IM because:
-1. **End effects** (see `end_effects` topic).
-2. **Large air gap** demands more magnetising MMF.
-3. **Single-sided LIM** has open magnetic circuit (one side is
-   the track plate, no back iron above).
-
-**Applications**:
-- Airport people-movers (Heathrow, Pittsburgh).
-- HSST / Linimo (Nagoya, JR Central) -- single-sided LIM with
-  controlled-gap EMS levitation.
-- Roller-coaster launches (Cedar Point, USJ).
-
-## Linear Synchronous Motor (LSM)
-
-The LSM unrolls a synchronous PM (or wound-field) motor. The
-stator is a long sequence of 3-phase coils along the track; the
-mover carries PMs (or, in SCMaglev, superconducting coils).
-
-```
-v = 2 * tau * f_s            (synchronous speed; locked, no slip)
-F_thrust = (3 * V_s * E_f / (omega_s * X_d)) * sin(delta)
-                                 (textbook EMF-torque analog)
-```
-
-LSM is **synchronous** by definition -- the mover speed is locked
-to the stator frequency. Variable-speed operation needs a
-variable-frequency inverter on the stator side.
-
-**Applications**:
-- SCMaglev (Chuo Shinkansen) -- ground-coil LSM, SC mover.
-- Magnetic launch systems (US Navy EMALS aircraft launcher;
-  experimental rail-launch / rocket-launch).
-- High-precision positioning stages (lithography, machine tools).
-
-## LIM vs. LSM comparison
-
-| Property              | LIM                                  | LSM                                    |
-|-----------------------|--------------------------------------|----------------------------------------|
-| Secondary on mover    | Conductive plate (passive)           | PM or SC coil (active)                 |
-| Slip required         | Yes (asynchronous)                   | No (synchronous)                       |
-| Cost of long track    | Low (just plate)                     | High (PM rails OR long stator coils)   |
-| Variable-frequency    | Optional                             | Required                               |
-| Efficiency            | 50-70 percent                        | 80-95 percent                          |
-| Air-gap sensitivity   | Lower (eddy averages out)            | Higher (cogging at PM gap variation)   |
-| Used in               | HSST, airport movers, roller coaster | SCMaglev, EMALS, lithography stage     |
-
-## Lab references (07_磁気浮上/, 09_リニアドライブ/)
-
-- 09_リニアドライブ/  (32 files, 555 MB) -- not read this pass
-  due to PDF size limits; expected topics include end-effect
-  compensators, secondary plate optimisation, and motor-control
-  schemes. See lab archive for primary sources.
-- "Basic Consideration of End Effect Compensator of Linear
-  Induction Motor for Transit" -- referenced in 06_非破壊検査
-  folder, related to LIM end effects.
-
-## Cross-references
-
-- `end_effects` -- finite-length primary distortions
-- `scmaglev_eds` -- ground-coil LSM in SCMaglev
-- `radia_mcp.motor` -- analogous rotary motor knowledge
-- `radia_mcp.team_benchmark.special.motors_30b_34` -- IM analytic reference benchmarks
 """
 
 
@@ -687,7 +812,6 @@ easier curve negotiation, safer derailment margin.
 ## Cross-references
 
 - `eddy_current_maglev` -- physics common to SCMaglev levitation
-- `lim_lsm_propulsion` -- LSM detail
 - `halbach_arrays` -- PM alternative to SC magnets
 - `radia_mcp.fusion` -- adjacent SC magnet design expertise
 """
@@ -794,110 +918,31 @@ Physics:
 """
 
 
-END_EFFECTS = r"""
-# Linear-motor end effects
-*(Open literature, the lab has work in this area but the specific
-PDFs were too large to read this pass.)*
-
-## What is the end effect?
-
-A rotary motor sees a magnetically infinite periodic structure
-(the stator wraps back on itself). A linear motor's primary has
-a finite length: the entry and exit ends terminate the magnetic
-circuit, distorting the air-gap flux distribution.
-
-**Entry-end effect**: secondary conductor entering the primary
-sees a sudden flux rise; large transient eddy current opposes
-flux build-up; flux density at the entry is depressed.
-
-**Exit-end effect**: secondary leaving the primary has trapped
-eddy currents that decay over distance; this gives a residual
-drag tail after the conductor leaves the primary.
-
-Both effects scale with the goodness factor:
-
-```
-G = (mu_0 * sigma * tau^2 * f_s) / (g * pi)
-```
-
-For G > 1 (typical transit LIM), end effects are non-negligible.
-
-## Mathematical description (Yamamura, 1972)
-
-Yamamura's classical analysis splits the air-gap flux into:
-
-- **Normal travelling wave** (well-behaved, as in rotary IM).
-- **Entry-end wave** (decaying away from the entry into the
-  primary, attenuation length proportional to G).
-- **Exit-end wave** (decaying away from the exit).
-
-The end waves carry the same fundamental period but with a
-phase that shifts the thrust profile.
-
-```
-F_thrust(end-effect) ~ -F_thrust(normal) * f(G, v)
-```
-
-with `f(G, v)` increasing with both goodness factor and slip
-velocity.
-
-## Practical consequences
-
-| Symptom               | Cause                          | Mitigation |
-|-----------------------|--------------------------------|------------|
-| Thrust drop at high v | Entry-end flux depression      | End-effect compensator coils |
-| Vibration / noise     | Phase shift in entry / exit waves | Skewed slots, fractional-pitch |
-| Power factor drop     | Higher magnetising current to refill flux | Cap compensation |
-| Asymmetric heat       | Trailing-end eddy decay        | Longer primary, end caps |
-
-## End-effect compensator schemes
-
-- **Extra compensation coil** at the entry: pre-excited to
-  pre-magnetise the gap before the secondary enters.
-- **End cap** (ferromagnetic extension beyond primary core):
-  short-circuits the residual flux path.
-- **Asymmetric winding**: more turns at the entry, fewer at the
-  exit, to balance the goodness-factor-induced phase shift.
-- **Variable air gap**: smaller gap at entry/exit ends to boost
-  flux locally.
-
-## Lab references (not read this pass)
-
-- "Basic Consideration of End Effect Compensator of Linear
-  Induction Motor for Transit" -- in W:/.../06_非破壊検査/
-  (sic, file mis-filed) -- LIM end effect study.
-- 09_リニアドライブ/ folder, 32 PDFs totalling 555 MB -- expected
-  to contain detailed end-effect treatments. Reading deferred
-  to a separate session with larger context budget.
-
-## Cross-references
-
-- `lim_lsm_propulsion` -- the canonical LIM derivation
-- `radia_mcp.team_benchmark.special.motors_30b_34` -- IM
-  analytical reference benchmarks
-- `radia_mcp.motor` -- the rotary analog (no end effects there)
-"""
-
-
 def get_knowledge(topic: str = "overview") -> str:
-    """Dispatch maglev / linear-drive topics.
+    """Dispatch magnetic-levitation topics.
 
     Topics:
-        overview                  - Levitation + linear drive landscape (DEFAULT)
+        overview                  - Magnetic levitation landscape + lab research (DEFAULT)
+        radia_iem_fem             - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
+        cln_mor_control           - Cauer Ladder Network MOR for control-coupled maglev (Yano)
         pm_maglev_zero_power      - Passive PM levitation, Maxwell-Earnshaw
         eddy_current_maglev       - Eddy-current EDS, Kansai 2D model, Arago
         sumitomo_heavy_industrial - JP 7-327337 PM bearing + JP 2007-215264 planar mover
         kansai_research           - Saiki/Fujii magnetic-wheel lineage
-        lim_lsm_propulsion        - Linear induction (LIM) + linear synchronous (LSM)
-        scmaglev_eds              - SCMaglev (Chuo Shinkansen) -- SC-EDS
+        scmaglev_eds              - SCMaglev (Chuo Shinkansen) -- SC-EDS levitation
         halbach_arrays            - Halbach + Inductrack
-        end_effects               - LIM end-effect compensators
         all                       - Everything
     """
     topic = topic.lower().strip()
 
     if topic in ("overview", "intro", ""):
         return OVERVIEW
+    if topic in ("radia_iem_fem", "iem_fem", "iem", "weak_coupling",
+                 "reduced_potential", "moving_magnet", "iem-fem"):
+        return RADIA_IEM_FEM
+    if topic in ("cln_mor_control", "cln", "cauer", "cauer_ladder", "mor",
+                 "model_order_reduction", "multiport_cln", "control_coupled"):
+        return CLN_MOR_CONTROL
     if topic in ("pm_maglev_zero_power", "pm", "passive_pm", "earnshaw",
                  "zero_power", "pm_bearing"):
         return PM_MAGLEV_ZERO_POWER
@@ -909,27 +954,22 @@ def get_knowledge(topic: str = "overview") -> str:
         return SUMITOMO_HEAVY_INDUSTRIAL
     if topic in ("kansai_research", "kansai", "saiki", "fujii"):
         return KANSAI_RESEARCH
-    if topic in ("lim_lsm_propulsion", "lim", "lsm", "linear_motor",
-                 "linear", "リニア"):
-        return LIM_LSM_PROPULSION
     if topic in ("scmaglev_eds", "scmaglev", "sc_eds", "chuo_shinkansen",
                  "chuo", "jr_maglev"):
         return SCMAGLEV_EDS
     if topic in ("halbach_arrays", "halbach", "inductrack"):
         return HALBACH_ARRAYS
-    if topic in ("end_effects", "end_effect", "end-effect", "compensator"):
-        return END_EFFECTS
     if topic == "all":
         return "\n\n".join([
             OVERVIEW,
+            RADIA_IEM_FEM,
+            CLN_MOR_CONTROL,
             PM_MAGLEV_ZERO_POWER,
             EDDY_CURRENT_MAGLEV,
             SUMITOMO_HEAVY_INDUSTRIAL,
             KANSAI_RESEARCH,
-            LIM_LSM_PROPULSION,
             SCMAGLEV_EDS,
             HALBACH_ARRAYS,
-            END_EFFECTS,
         ])
 
     return (
