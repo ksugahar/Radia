@@ -73,8 +73,20 @@ from the perfect-conductor energy `U = -1/2 m.B` and reproduced by the
 induced-dipole formula -- so the complex-AC sign and normalization are
 pinned, not guessed.  The lift rises from ~0 (DC) through the eddy-current
 transition (`a/delta ~ 1-5`) to the perfect-conductor saturation, exactly
-as expected.  Isotropic; the cuboid `a!=b!=c` anisotropic alpha tensor is
-a separable refinement (not required for the force).
+as expected.  Isotropic; the cuboid `a!=b!=c` alpha tensor is a separable
+refinement (not required for the force).
+
+**Note -- "anisotropy" here = SHAPE, not material.**  The cuboid
+`alpha = diag(alpha_x, alpha_y, alpha_z)` is direction-dependent because
+the dimensions `a, b, c` differ, not because the conductor is an
+anisotropic material -- copper stays a scalar `sigma`/`mu`.  A field along
+`z` drives eddy currents in the `a x b` cross-section, along `x` in the
+`b x c` cross-section, etc., so `a != b != c` gives three different eddy
+time constants and hence a direction-split response.  It is the AC /
+eddy-current generalization of the magnetostatic **demagnetizing-factor
+tensor** (sphere: isotropic `1/3`; ellipsoid / brick: direction-dependent,
+from shape alone).  Material anisotropy (tensor `sigma` / `mu`) is a
+separate, genuinely-material effect, not what this refinement is about.
 
 ## Source / provenance
 

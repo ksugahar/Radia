@@ -6,7 +6,15 @@ This is the isotropic levitation-FORCE primitive of the 3D CLN-SIBC route
 (examples/CLN/scripts/team28_levitation/cln_sibc_cuboid_3d.py).  A sphere
 is isotropic, so the scalar polarizability already ported applies directly
 -- no anisotropic alpha tensor is needed to demonstrate (and verify) a
-levitation force.  The cuboid a!=b!=c anisotropy is a separable refinement.
+levitation force.  The cuboid a!=b!=c anisotropy is a separable refinement
+-- and note it is SHAPE anisotropy (the dimensions a,b,c), NOT material
+anisotropy: copper stays a scalar sigma/mu.  A field along z drives eddy
+currents in the x-y cross-section (a x b), along x in the y-z cross-section
+(b x c), etc., so a!=b!=c gives three different eddy time constants and
+hence a direction-split alpha = diag(alpha_x, alpha_y, alpha_z).  It is the
+AC/eddy-current generalization of the magnetostatic demagnetizing-factor
+tensor (sphere: isotropic 1/3; ellipsoid/brick: direction-dependent, from
+shape alone).
 
 Physics (Landau-Lifshitz, Electrodynamics of Continuous Media, sec. 59):
   A conducting sphere radius a, conductivity sigma, in a uniform AC field
