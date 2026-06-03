@@ -268,16 +268,16 @@ def main():
             lv = lo + (np.arange(args.nlevels) + 0.5) * (hi - lo) / args.nlevels
             ax1.contour(PHI, Z, psi_zphi, levels=lv, colors="k", linewidths=0.7)
         fig.colorbar(cf, ax=ax1, label="psi (stream value)")
-        ax1.set_xlabel("phi [deg]")
-        ax1.set_ylabel("z [mm]")
+        ax1.set_xlabel(r"$\phi$ (deg)")
+        ax1.set_ylabel("$z$ (mm)")
         ax1.text(0.02, 0.96, "(a)", transform=ax1.transAxes, fontsize=10)
 
         ax2.scatter(obs[:, 0] * 1e3, Bz_fit, s=14, alpha=0.6,
                     label="discrete coil Bz (gain-fit)")
         xs = np.linspace(obs[:, 0].min(), obs[:, 0].max(), 50)
         ax2.plot(xs * 1e3, Gx * xs, "k--", label="target Gx*x")
-        ax2.set_xlabel("x [mm]")
-        ax2.set_ylabel("Bz [arb]")
+        ax2.set_xlabel("$x$ (mm)")
+        ax2.set_ylabel("$B_z$ (arb.)")
         ax2.text(0.02, 0.96, "(b)", transform=ax2.transAxes, fontsize=10)
         ax2.legend()
         ax2.grid(alpha=0.3)
