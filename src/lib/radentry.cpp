@@ -105,7 +105,6 @@ void SetHACApKParams( double, int, double );
 void SetHACApKDeflation( const int*, int, const int*, const double*, int, double );
 void SetDeflateNullspace( int, double );
 void SetLoopStarGauge( int );
-void SetLoopDeflBlockJacobiGauge( int );
 void SetLoopProjection( int );
 void GetHACApKStats( double*, int* );
 #endif
@@ -1429,13 +1428,6 @@ int CALL RadSetDeflateNullspace(int* n, int enable, double alpha)
 int CALL RadSetLoopStarGauge(int* n, int enable)
 {
 	SetLoopStarGauge(enable);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadSetLoopDeflBlockJacobiGauge(int* n, int enable)
-{
-	SetLoopDeflBlockJacobiGauge(enable);
 	*n = 1;
 	return ioBuffer.OutErrorStatus();
 }
