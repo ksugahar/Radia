@@ -105,6 +105,8 @@ TOPIC MAP  (query: streamfunction("<topic>"))
   panel             the design/pareto/manufacture PANEL + calc_streamfunction.py
   boundary_conditions  --confine off/on/abe (Abe edge-equipotential BC)
   contour           contour=flux-line; --contour-sub order-p + --flux-plot bubble
+  fusion            stellarator Stage-2 (REGCOIL/NESCOIL/FOCUS): winding-surface
+                    current potential, net current, force/stress, VMEC, winding-shape
 
 DOCS + DEMOS
 ------------
@@ -231,6 +233,109 @@ tests/panels/test_streamfunction_golden.py and ..._panel_qt.py.
 """
 
 
+SF_FUSION = r"""
+================================================================
+SF for FUSION -- stellarator Stage-2 (NESCOIL / REGCOIL / FOCUS)
+================================================================
+
+The SAME surface stream function (current potential psi on a conductor
+surface, K = n x grad psi) IS the object the stellarator-coil community calls
+the WINDING-SURFACE CURRENT POTENTIAL -- the unknown of NESCOIL (Merkel 1987),
+REGCOIL (Landreman 2017), and the surface part of FOCUS (Zhu 2018).  The
+"Stage-2" coil problem is mathematically identical to MRI-gradient / IH coil
+design:
+
+    given a target NORMAL field B.n on the PLASMA boundary,
+    find psi on a WINDING SURFACE around it whose Biot-Savart n.B reproduces it
+    (iso-contours of psi = the coils)
+
+The design-matrix rows are just the plasma-normal component n.B of the
+winding-surface Biot-Savart kernel we already assemble (A3 = 3-component A at
+the plasma points; A_n = einsum('mc,mcj->mj', plasma_normal, A3)).  No
+fusion-specific solver code.
+
+DEMOS
+-----
+  examples/stream_function/demo_regcoil_fusion.py            (4 parts)
+  examples/stream_function/demo_regcoil_fusion_advanced.py   (4 more parts)
+
+demo_regcoil_fusion.py
+  1. FORWARD MAP IS EXACT.  Producible targets -- uniform vertical (PF /
+     equilibrium coil) and non-axisym sin(th)cos(2ph) (stellarator-like) --
+     reproduce to B.n residual ~2e-9 (machine precision).
+  2. REGCOIL L-CURVE.  On a hard, NOT-cheaply-producible target sin(3th)cos(5ph)
+     (decays across the plasma-coil gap), sweeping alpha traces the classic
+     (B.n residual, peak|grad psi|) trade-off; knee at alpha_rel ~ 2e-2, peak
+     current density saturates at the surface representation limit.
+  3. NET CURRENT = the multivalued / SECULAR term.  A single-valued psi carries
+     ZERO net current through each torus hole; the full current potential is
+     Psi = psi + (G/2pi) zeta + (I/2pi) theta.  The TWO extra DOFs are the first
+     cohomology generators of the winding surface; their COUNT is the surface
+     Betti number b1 = 2 (genus 1), CONFIRMED via Gmsh homology
+     (addHomologyRequest('Cohomology',[pg],[],[1]); computeHomology() -> 2) --
+     the engine wrapped by src/radia/cohomology_cut.py (which is a VOLUME
+     scalar-potential solver, so the honest integration is "same engine,
+     analytic generators on the torus": grad(zeta), grad(theta) are
+     single-valued).  K_zeta = n x grad(zeta) = the net-POLOIDAL-current (TF)
+     sheet; VERIFIED to give the textbook toroidal field B_tor*R = const inside
+     the tube (Ampere 1/R, to 0.2 %) and ~0 outside.  KEY PHYSICS: the TF field
+     is TANGENT to the plasma, so its B.n footprint is >1000x smaller than the
+     net-toroidal generator's -> the net poloidal current is NOT fitted from
+     B.n, it is a PRESCRIBED engineering parameter (1 T on axis @ R=0.3 -> 1.5
+     MA).  This is exactly why REGCOIL takes net_poloidal_current as an INPUT.
+  4. VMEC-SHAPED BOUNDARY.  A non-axisym rotating-ellipse boundary in the VMEC
+     Fourier form R = sum RBC cos(m th - n NFP ph), Z = sum ZBS sin(...), with
+     analytic normals; --wout wout_*.nc reads a real equilibrium boundary
+     (netCDF4 rmnc/zmns/xm/xn/nfp, stellarator-symmetric only -- raises on
+     lasym=T).
+
+demo_regcoil_fusion_advanced.py
+  A. COIL FORCE / STRESS.  Lorentz force per area f = K x B_avg (B_avg = the
+     +/-eps average of the coil self-field across the sheet).  For the TF coil
+     |f| = magnetic pressure B_tor^2/(2 mu0) (ratio ~0.99) and CONCENTRATES on
+     the INBOARD leg (~5x outboard) -- why a TF coil is inboard-stress-limited.
+     Honest: the magnetic force per area (stress DRIVER, N/m^2), not a
+     structural hoop-stress model.
+  B. REAL EQUILIBRIUM.  Designs against the li383 (NCSX-like, NFP=3, QA)
+     reference wout from simsopt (MIT); --wout for any VMEC output, else fetches
+     li383 (121 kB).  B.n on the genuine 25-mode boundary to ~4e-8.
+  C. FOCUS STANDOFF.  Coil complexity peak|grad psi| is MONOTONIC in the winding
+     gap (closer = simpler), so the DISTANCE optimum is CONSTRAINT-BOUND (push to
+     the minimum engineering standoff d_min).
+  D. FOCUS WINDING-SHAPE (the core FOCUS contribution).  _surface_mesh_from_grid
+     builds an NGSolve surface mesh from an ARBITRARY (theta,phi) point grid
+     (manual netgen Element2D + FaceDescriptor; SF design machine-precision,
+     matches the OCC torus), so the winding can be CONFORMAL to a shaped plasma.
+     For an elongated (kappa=2) plasma, blending the winding circular (varying
+     gap) -> conformal (uniform gap) at the same min standoff cuts coil
+     complexity by ~34 %.  The winding SHAPE, not just distance, is a real lever.
+
+HONEST SCOPE
+------------
+  * Parts 1-2 single-valued psi (PF/RMP/shaping); part 3 the multivalued secular
+    term (generator COUNT computed, generators analytic ON THE TORUS -- a general
+    winding surface uses cohomology_cut.py).
+  * Force is magnetic force/area, not structural stress.
+  * The winding-shape study sweeps a 1-parameter circular->conformal blend; a
+    full Fourier-mode winding-surface optimiser is the named next step.
+  * Real VMEC: the reader is round-trip-verified against the wout schema; we do
+    NOT run VMEC (no simsopt/desc here) -- the default rotating-ellipse is an
+    analytic MODEL, --wout drops in a real equilibrium.
+
+Locked by tests/panels/test_streamfunction_golden.py
+(test_regcoil_fusion_* : forward machine precision, b1==2, TF Ampere 1/R +
+tangency, VMEC non-axisym, wout round-trip + lasym-raise, force=pressure,
+FOCUS monotonic + conformal<circular).
+
+REFERENCES
+----------
+  P. Merkel, Nucl. Fusion 27, 867 (1987)               -- NESCOIL
+  M. Landreman, Nucl. Fusion 57, 046003 (2017)         -- REGCOIL
+  C. Zhu et al., Nucl. Fusion 58, 016008 (2018)        -- FOCUS
+  docs/stream_function/fusion.md
+"""
+
+
 TOPICS = {
     "overview": "SF coil-design framework + pipeline + topic map (this server's front door)",
     "panel": "the design/pareto/manufacture PANEL + calc_streamfunction.py CLI",
@@ -251,6 +356,7 @@ TOPICS = {
     "validation": "analytic-benchmark validation",
     "literature": "SFM lineage (Turner / Peeren / current potential method)",
     "workflow": "end-to-end demo recipes",
+    "fusion": "stellarator Stage-2 (NESCOIL/REGCOIL/FOCUS): winding-surface current potential -> plasma B.n, net-current secular term (cohomology), coil force/stress, real VMEC boundary, FOCUS winding-distance + winding-SHAPE",
 }
 
 
@@ -280,4 +386,10 @@ def get_streamfunction_documentation(topic: str = "overview") -> str:
              "flux_line", "flux_lines", "bubble", "bubble_system",
              "cross_codebase", "validation_panel", "chain"):
         return SF_PANEL
+    if t in ("fusion", "regcoil", "nescoil", "focus", "stellarator",
+             "winding_surface", "winding_shape", "secular", "net_current",
+             "cohomology", "vmec", "wout", "coil_force", "coil_stress",
+             "force", "stress", "plasma", "stage2", "stage_2",
+             "current_potential"):
+        return SF_FUSION
     return get_aca_tsvd_knowledge(_REMAP.get(t, t))
