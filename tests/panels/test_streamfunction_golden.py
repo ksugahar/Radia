@@ -46,6 +46,25 @@ def sample_vols(tmp_path_factory):
     return coil, evalv
 
 
+@pytest.fixture(scope="module")
+def biplanar_vols(tmp_path_factory):
+    """Two-plate biplanar coil + midplane DSV (the multi-surface fixture)."""
+    d = str(tmp_path_factory.mktemp("sf_biplanar"))
+    fixture = os.path.join(HERE, "fixtures", "make_biplanar_vol.py")
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    r = subprocess.run([sys.executable, fixture, d],
+                       capture_output=True, text=True, env=env, timeout=600)
+    if r.returncode != 0:
+        pytest.skip(f"biplanar mesh gen failed (NGSolve/OCC unavailable?):\n"
+                    f"{r.stderr[-600:]}")
+    coil = os.path.join(d, "biplanar_coil.vol")
+    evalv = os.path.join(d, "biplanar_eval.vol")
+    if not (os.path.exists(coil) and os.path.exists(evalv)):
+        pytest.skip("biplanar .vol files not produced")
+    return coil, evalv
+
+
 def _run_calc(coil, evalv, target, extra=None):
     cmd = [sys.executable, CALC, "--coil-vol", coil, "--eval-vol", evalv,
            "--target-cf", target, "--order", "2"] + (extra or [])
@@ -282,6 +301,32 @@ def test_streamfunction_field_cross_codebase(tmp_path):
         f"design vs Radia C++ disagree: {case['rel_segment_vs_radia']}"
     # the ~8-turn solenoid-equivalent is uniform over the DSV
     assert case["bz_uniformity"] < 5.0e-2
+
+
+def test_streamfunction_biplanar(biplanar_vols):
+    """Multi-surface generality: a BIPLANAR coil (two disconnected plate
+    components in ONE surface mesh) designs + manufactures through the SAME
+    FE-direct path as the single-surface cylinder -- no special-casing.  abe
+    groups BOTH plates' boundary components (ndof_free < ndof) and the contours
+    close on each plate (n_open == 0)."""
+    coil, evalv = biplanar_vols
+    # design: fits the Gx target on the two-plate former
+    rd = _run_calc(coil, evalv, "x", extra=["--order", "1", "--confine", "abe"])
+    assert "error" not in rd, f"biplanar design error: {rd.get('error')}"
+    assert rd["method"] == "design"
+    # abe reduces DOFs (groups each plate's boundary component -> free constant)
+    assert rd["ndof_free"] < rd["ndof"], "abe should group the plate edges"
+    assert rd["rms"] < 1.0e-2, f"biplanar homogeneity too large: {rd['rms']}"
+    # manufacture: contours close on BOTH plates, separate-turn coil accurate
+    rm = _run_calc(coil, evalv, "x",
+                   extra=["--order", "1", "--method", "manufacture",
+                          "--nlevels", "8", "--confine", "abe"])
+    assert "error" not in rm, f"biplanar manufacture error: {rm.get('error')}"
+    assert rm["n_loops"] > 0 and rm["n_wire_points"] > 10
+    assert rm["n_open_contours"] == 0, \
+        "biplanar contours should close on each plate"
+    assert rm["loops_homogeneity_rms"] < 1.0e-2, \
+        f"biplanar separate-turn coil inaccurate: {rm['loops_homogeneity_rms']}"
 
 
 if __name__ == "__main__":
