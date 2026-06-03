@@ -141,20 +141,31 @@ def main():
         try:
             import matplotlib
             matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
+            # Lab figure convention (radia_mcp.figure): authored AT the 16 cm
+            # embed width, 10 pt, Times New Roman, TrueType; NO in-figure title
+            # (the docs / LaTeX caption carry it -- save_lab_figure RAISES on a
+            # baked-in title).  examples/ may depend on radia-mcp; the shipped
+            # panel calc cannot, so its diagnostic plots apply the same
+            # conventions inline instead.
+            from radia_mcp.figure import lab_figure, save_lab_figure
             nd = [r["ndof"] for r in rows]
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 3.4))
-            ax1.loglog(nd, [r["t_build_s"] for r in rows], "o-", label="build (total)")
-            ax1.loglog(nd, [r["t_assemble_s"] for r in rows], "s--", label="assemble A")
-            ax1.set_xlabel("surface FE DOF"); ax1.set_ylabel("time (s)")
-            ax1.set_title("SF _build_problem time"); ax1.legend(); ax1.grid(True, which="both", alpha=0.3)
+            fig, (ax1, ax2) = lab_figure(embed_width_cm=16.0, aspect=0.42, ncols=2)
+            ax1.loglog(nd, [r["t_build_s"] for r in rows], "o-",
+                       label="build (total)")
+            ax1.loglog(nd, [r["t_assemble_s"] for r in rows], "s--",
+                       label="assemble A")
+            ax1.set_xlabel("surface FE DOF")
+            ax1.set_ylabel("build time (s)")
+            ax1.legend()
+            ax1.grid(True, which="both", alpha=0.3)
             ax2.loglog(nd, [r["peak_memory_mb"] for r in rows], "o-", color="C3")
-            ax2.set_xlabel("surface FE DOF"); ax2.set_ylabel("peak memory (MB)")
-            ax2.set_title("peak RSS (sparse seminorm)"); ax2.grid(True, which="both", alpha=0.3)
-            fig.tight_layout()
-            ppath = os.path.join(args.out_dir, "bench_sf_scaling.png")
-            fig.savefig(ppath, dpi=110)
-            print(f"Plot    -> {ppath}")
+            ax2.set_xlabel("surface FE DOF")
+            ax2.set_ylabel("peak memory (MB)")
+            ax2.grid(True, which="both", alpha=0.3)
+            info = save_lab_figure(
+                fig, os.path.join(args.out_dir, "bench_sf_scaling"),
+                embed_width_cm=16.0)
+            print(f"Plot    -> {', '.join(info['wrote'])}")
         except Exception as e:
             print(f"(plot skipped: {e})")
 

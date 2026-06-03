@@ -329,6 +329,20 @@ def test_streamfunction_biplanar(biplanar_vols):
         f"biplanar separate-turn coil inaccurate: {rm['loops_homogeneity_rms']}"
 
 
+def test_streamfunction_figures_no_in_figure_title():
+    """Lab figure convention (radia_mcp.figure): NO in-figure title on ANY
+    figure -- the caption carries it.  The shipped panel calc cannot import the
+    radia_mcp save-time gate, so lock it statically: the flux/steps helpers use
+    no ax.set_title / fig.suptitle (panels are identified by (a)-(d) corner
+    text via ax.text2D).  Fast (source scan; no NGSolve / fixture)."""
+    with open(CALC, encoding="utf-8") as f:
+        src = f.read()
+    assert ".set_title(" not in src, \
+        "in-figure title (ax.set_title) -- move it to the caption (lab rule)"
+    assert ".suptitle(" not in src, \
+        "in-figure suptitle -- move it to the caption (lab rule)"
+
+
 def test_streamfunction_min_inductance(sample_vols):
     """Min-inductance regularizer: design min 1/2 psi^T L psi s.t. A psi = B
     where L is the ngsolve.bem single-layer self-inductance (K = n x grad psi).
