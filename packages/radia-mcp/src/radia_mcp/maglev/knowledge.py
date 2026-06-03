@@ -20,18 +20,19 @@ is the headline content -- two topics, `radia_iem_fem` and
     Network method for accelerating control-coupled analysis" -- CLN
     model-order reduction for real-time control-coupled maglev (TEAM 28).
 
-Distilled from W:/.../99_アプリケーション/07_磁気浮上/
+Distilled from the lab archive (W:/.../99_applications/07_magnetic-levitation/;
+folder/file names below are English translations of the Japanese originals)
 plus open literature for standard maglev topics that the
 lab does not have direct PDFs for (those sections are clearly marked
 "open literature, not lab PDF" so users know to cross-check).
 
 Primary lab PDFs read for this revision:
 
-  - 07_磁気浮上/research/渦電流で磁気浮上.pdf
+  - 07_magnetic-levitation/research/magnetic-levitation-by-eddy-currents.pdf
       (Murata, Yamagata HS) - 1-page Arago-disk demo, NdFeB array
       over rotating Al disk, eddy currents lift small NdFeB pendulum.
 
-  - 07_磁気浮上/04_関西大学/永久磁石を用いた磁気浮上 原本.pdf
+  - 07_magnetic-levitation/04_Kansai-Univ/PM-based-magnetic-levitation_original.pdf
       Saiki, Ino, Inada (Kansai Univ., 2021): "Optimization on Pole
       Pitch of Magnetic Wheels and Thickness of Metal Plate for
       Floating and Propulsion System using Permanent Magnets". 2D
@@ -40,22 +41,22 @@ Primary lab PDFs read for this revision:
       pitch tau). Builds on Fujii (1995, 1997) IEEJ "Revolving
       Permanent Magnet Type Magnet Wheel" lineage.
 
-  - 07_磁気浮上/01_特許/磁気浮上_住重特許1.pdf
-      JP 公開特許 7-327337 (Sumitomo Heavy Industries): PM-repulsion
+  - 07_magnetic-levitation/01_patents/maglev_Sumitomo-Heavy-patent-1.pdf
+      JP Pub. Patent 7-327337 (Sumitomo Heavy Industries): PM-repulsion
       axial magnetic bearing with eddy-current brake ring (Al
       annulus) for overspeed prevention. Glass-wool thermal
       insulator between magnet and ring.
 
-  - 07_磁気浮上/01_特許/磁気浮上_住重特許2.pdf
-      JP 公開特許 2007-215264 (Sumitomo Heavy Industries): planar
+  - 07_magnetic-levitation/01_patents/maglev_Sumitomo-Heavy-patent-2.pdf
+      JP Pub. Patent 2007-215264 (Sumitomo Heavy Industries): planar
       mover with rotating-PM "drive head" (9 reluctance paths),
       air-bearing levitation, eddy currents in conductive base
       plate provide thrust. 4-head omnidirectional version with
       wireless DC-motor control. Stepper / LSM variants.
 
 NOT read on this pass (size budget):
-  - 09_リニアドライブ/*.pdf  (each 10-44 MB)
-  - 03_教科書/磁気浮上と磁気軸受.pdf  (155 MB textbook)
+  - 09_linear-drive/*.pdf  (each 10-44 MB)
+  - 03_textbooks/magnetic-levitation-and-magnetic-bearings.pdf  (155 MB textbook)
   - research/RocketScience_Dec2014.pdf  and other > 2 MB items
 
 Sections marked "(open literature)" are textbook-level summaries
@@ -367,10 +368,10 @@ Concretely for PMs:
 | Rotating PMs (gyroscopic) | Angular momentum stabilises radial drift | Levitron toy |
 | Eddy-current EDS | Motion-induced repulsion | See `eddy_current_maglev` topic |
 
-## Axial PM bearing -- Sumitomo Heavy lineage (★ lab PDF)
+## Axial PM bearing -- Sumitomo Heavy lineage (lab PDF)
 
-Reference: JP 公開特許 7-327337 "永久磁石式磁気浮上回転装置"
-(Sumitomo Heavy Industries, 1995).
+Reference: JP Pub. Patent 7-327337 "Permanent-Magnet Magnetic-Levitation
+Rotating Device" (Sumitomo Heavy Industries, 1995).
 
 ```
    stator coil-pack
@@ -434,6 +435,9 @@ for arbitrary shape.
 
 ## Cross-references
 
+- topic `earnshaw_stability` -- the FULL theorem, all 5 loopholes, and
+  the stability stiffness matrix; the "Routes around Earnshaw" section
+  here is the PM-bearing-specific view of that general result
 - `radia_mcp.radia_ngsolve.analytical_formulas` -- PM force closed forms
 - `radia_mcp.electromagnet` -- compare to EMS (active attractive)
 - `eddy_current_maglev` -- active route around Earnshaw via motion
@@ -466,9 +470,10 @@ Below v_crit the response is resistive (mostly drag). Above v_crit
 the response is reactive (lift dominates). For Al plates of a few
 mm thickness, v_crit is on the order of 10-100 m/s.
 
-## Lab demonstration (★ lab PDF)
+## Lab demonstration (lab PDF)
 
-Reference: 渦電流で磁気浮上 (Murata Kenji, Yamagata HS).
+Reference: "Magnetic Levitation by Eddy Currents" (Murata Kenji,
+Yamagata HS).
 
 Cheap kit:
 1. 100-yen-shop USB fan (2x AA, ~3 V)
@@ -483,7 +488,7 @@ The same principle scales up to: induction maglev, magnetic
 braking on roller coasters, retarder brakes on trucks, and (with
 much larger magnetic wheels) experimental EDS vehicles.
 
-## Magnetic-wheel EDS -- Kansai University lineage (★ lab PDF)
+## Magnetic-wheel EDS -- Kansai University lineage (lab PDF)
 
 Reference: Saiki, Ino, Inada (Kansai Univ., 2021), "Optimization
 on Pole Pitch of Magnetic Wheels and Thickness of Metal Plate
@@ -592,7 +597,7 @@ They show the design-engineering pragmatics of PM levitation in
 production-grade equipment.
 
 ## Patent 1: PM axial bearing with eddy-current brake ring
-(JP 公開特許 7-327337, 1995)
+(JP Pub. Patent 7-327337, 1995)
 
 **Application**: magnetic bearings, flywheels.
 
@@ -638,7 +643,7 @@ the rotor; 7 mm glass-wool isolator; 7 mm thick Al brake ring.
 - Brake ring inside the cylindrical core inner bore.
 
 ## Patent 2: Eddy-current planar mover
-(JP 公開特許 2007-215264, 2007)
+(JP Pub. Patent 2007-215264, 2007)
 
 **Application**: semiconductor handling, vacuum-chamber transport,
 clean-room positioning. Air-bearing floats the mover; eddy currents
@@ -829,6 +834,9 @@ easier curve negotiation, safer derailment margin.
 
 ## Cross-references
 
+- topic `superconducting` -- the Meissner-vs-flux-pinning FORCE physics
+  behind SC levitation (SCMaglev uses the null-flux figure-8 EDS variant;
+  HTS-bulk pinning is the stationary-bearing variant)
 - `eddy_current_maglev` -- physics common to SCMaglev levitation
 - `halbach_arrays` -- PM alternative to SC magnets
 - `radia_mcp.fusion` -- adjacent SC magnet design expertise
@@ -1397,6 +1405,8 @@ controlled or superconducting (see `magnetic_bearings`).
 - topic `induction_levitation` -- loophole #2
 - topic `magnetic_bearings` -- loophole #3 + the 2-of-3-axes corollary
 - topic `superconducting` -- loophole #5
+- topic `pm_maglev_zero_power` -- the passive-PM-bearing application
+  (axial-stable / radially-unstable; the 2-of-3-axes corollary in practice)
 - topics `eddy_current_maglev` / `scmaglev_eds` -- EDS/EMS maglev
   transport apply the same loopholes
 """
