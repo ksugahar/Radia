@@ -308,7 +308,7 @@ def run_axisym_linear(args):
     from ngsolve import (
         CoefficientFunction, BilinearForm, LinearForm, GridFunction,
         Integrate, dx, ds, grad, InnerProduct, Periodic, x as r_cf,
-        FESpace,
+        FESpace, TaskManager,
     )
     import radia.radia_axifemm   # registers axihenrotte FESpace
 
@@ -381,22 +381,29 @@ def run_axisym_linear(args):
     f = LinearForm(fes)
     f += J_phi * r_cf * v * dx
 
-    t0 = time.perf_counter()
-    a.Assemble()
-    f.Assemble()
-    print(f"assembled in {time.perf_counter()-t0:.2f}s")
+    # TaskManager-Only policy: wrap the heavy FE work (assembly + pardiso
+    # solve + power integral) so it runs PARALLEL on the NGSolve threadpool,
+    # like run_axisym_nonlinear (L178).  Without this the LINEAR solver ran
+    # SERIALLY -- calc_main does not open a TaskManager context, and this
+    # function's wrap was missing (run_axisym_nonlinear had it, the linear
+    # twin did not).
+    with TaskManager():
+        t0 = time.perf_counter()
+        a.Assemble()
+        f.Assemble()
+        print(f"assembled in {time.perf_counter()-t0:.2f}s")
 
-    gfu = GridFunction(fes)
-    t0 = time.perf_counter()
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
-    print(f"solved in {time.perf_counter()-t0:.2f}s")
+        gfu = GridFunction(fes)
+        t0 = time.perf_counter()
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+        print(f"solved in {time.perf_counter()-t0:.2f}s")
 
-    # P_wp = (1/2) Re( int_workpiece sigma |jw A_phi|^2 2 pi r dr dz )
-    A_norm_sq = InnerProduct(gfu, gfu)   # |A|^2 = A . conj(A)
-    P_wp_density = 0.5 * sigma_cf * (omega ** 2) * A_norm_sq * 2 * math.pi * r_cf
-    P_wp = float(Integrate(P_wp_density.real, mesh,
-                            definedon=mesh.Materials("workpiece")))
-    print(f"P_wp_volumetric = {P_wp:.6e} W")
+        # P_wp = (1/2) Re( int_workpiece sigma |jw A_phi|^2 2 pi r dr dz )
+        A_norm_sq = InnerProduct(gfu, gfu)   # |A|^2 = A . conj(A)
+        P_wp_density = 0.5 * sigma_cf * (omega ** 2) * A_norm_sq * 2 * math.pi * r_cf
+        P_wp = float(Integrate(P_wp_density.real, mesh,
+                                definedon=mesh.Materials("workpiece")))
+        print(f"P_wp_volumetric = {P_wp:.6e} W")
 
     # Extract |H_t| at the cylinder side wall (r = R_wp, z varies)
     # H_t in axisymmetric = H_z on the lateral surface (r=R, z) =
