@@ -43,6 +43,7 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 | `cln_sibc_cuboid_3d.py` | Python port of the lab CLN-SIBC (Warburg-Schur) 3D cuboid core: Foster admittance + CLN reduction + Schur-F SIBC termination + polarizability `alpha(s)=V-Y/sigma`. The non-axisym building block. |
 | `levitation_sphere_force.py` | **Isotropic induced-dipole AC levitation force** on a conducting sphere, coefficient pinned by the analytic perfect-conductor limit, frequency response reduced by CLN/Cauer. See below. |
 | `ellipsoid_alpha_tensor.py` | **Shape-anisotropic polarizability tensor** of a conducting ellipsoid (analytic demag tensor + high-freq perfect-conductor `kappa_i = -V/(1-N_i)` + orientation-dependent lift). The analytic non-axisym anchor. See below. |
+| `ellipsoid_alpha_omega_axisym.py` | **Full-frequency** axial `alpha_c(omega)` of a spheroid by axisymmetric FEM (uniform-field eddy solve), validated on the sphere vs `4 pi a^3 G(x)` and anchored at HF by `-V/(1-N_c)`. The eddy leg between the DC and HF analytic limits. See below. |
 | `coil_levitation_equilibrium.py` | **Real-coil levitation equilibrium**: Radia open-boundary coil field x the verified sphere force -> stable equilibrium height + vertical stability. The Radia+NGSolve maglev workflow in action. See below. |
 
 ## Isotropic levitation force (sphere) -- coefficient pinned, CLN-reduced
@@ -110,10 +111,31 @@ verifies it analytically.  Two limits are closed-form:
 
 The full-frequency eddy `alpha_i(omega)` tensor *between* `alpha=0` (DC)
 and `-V/(1-N_i)` (HF) has no simple closed form for a triaxial body (the
-sphere is special); it is the per-direction numerical Foster / FEM
-extension.  What is locked here is the analytic shape-anisotropy: the
-demag tensor, the high-frequency polarizability tensor, and its
-orientation-dependent levitation-force consequence.
+sphere is special) -- it is computed numerically; see the axial component
+below.
+
+### Full-frequency axial `alpha_c(omega)` -- axisymmetric FEM
+
+`ellipsoid_alpha_omega_axisym.py` computes the whole `alpha_c(omega)` curve
+between those analytic anchors with an axisymmetric FEM eddy-current solve
+(reusing the lab-verified TEAM 28 mixed phi-B machinery): a conducting body
+of revolution in a uniform axial AC field (Dirichlet `phi = B0 r^2/2` on the
+far boundary), induced moment `m_z = -pi s sigma int r phi dr dz`,
+`alpha_c = m_z mu0/B0`.
+
+| check | result |
+|---|---|
+| sphere validation | FEM `alpha_c(omega)` reproduces the analytic `4 pi a^3 G(x)` to **1.8%** over 2-200 kHz (BC + moment extractor correct) |
+| HF anchor | reaches `-V/(1-N_c)`: sphere 1.3%, prolate 1:2 0.7%, oblate 2:1 3.0% |
+| shape split | per-volume `1/(1-N_c)`: prolate 1.20 < sphere 1.48 < oblate 2.05 |
+| full curve | `alpha_c` rises from DC toward the HF plateau, shape-dependent |
+
+This is the AXIAL (`m=0`) component; the transverse (`m=1`) component
+completes the full tensor (the remaining numerical extension).  Convention
+note: the FEM uses `s = +j omega` (engineering); `G_exact` uses
+`e^{-j omega t}` (physics), so the FEM result is conjugated to match the
+folder's convention (`Re[alpha]` -- the part the levitation force uses --
+is unaffected).
 
 ## Real-coil levitation equilibrium -- the Radia + NGSolve workflow
 
