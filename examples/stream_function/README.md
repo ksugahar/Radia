@@ -59,6 +59,8 @@ ACA+ itself is delegated to the in-repo **HACApK** C library
 | `demo_planar_uniform_fem_psi.py` | **psi as DIRECT H1 FE unknown on an NGSolve 2D mesh**, same target as the basis-loop demo below.  ``--regularize h1`` (default) solves ``min psi^T S psi`` s.t. ``A psi = B_target`` for the smoothest psi that hits the target exactly.  Single-shot RMS = 2.09 %.  With ``--compensated-iter 100 --compensated-step 0.05`` the Path-A iteration CONVERGES MONOTONICALLY (iters 40-47 drop 0.62 % -> 0.49 % without backtracking) -> final RMS **0.47 %** (-84 % vs basis-loop), p2p/mean = 1.64 %.  This is the empirical proof that the "naive Picard doesn't converge" finding for the basis-loop case is SPECIFIC to grid-sampled psi -- a continuous FE psi gives a smooth chain-field response and Path A genuinely contracts.  Extends naturally to non-planar OCC surfaces (cylinder, sphere, conformal). |
 | `demo_planar_uniform_coil.py` | **Planar uniform-Bz coil (the easy end of single-stroke complexity)**.  Source = square plane at z=0; target = uniform Bz=B0 over a square region at z=h.  SF produces concentric closed contours; single-stroke = spiral (Kuijpers Method-1 with cut line at +x axis).  Baseline RMS = 2.99 %, peak-to-peak / mean = 9.59 %; with `--compensated-iter 100 --compensated-step 0.05` (Path A best-effort) RMS drops to **0.58 %** (-80 %), p2p/mean = 2.17 % (-77 %).  Validates that Path A IS effective on simpler topologies even though it failed for the Gx fingerprint -- a clean demonstration of the "complexity tier" framing in `radia-mcp aca_tsvd(single_stroke)`. |
 | `demo_shim_coil_purity.py` | **Spherical-harmonic shim/gradient coil purity**.  Designs SF coils on ONE cylindrical former for a sequence of NAMED harmonic targets (Gz, Gx, Z2, X2-Y2, ZX, **Z4**) via `calc_streamfunction.py --target-harmonic`, then decomposes the achieved DSV field back into solid harmonics (`--harmonic-lmax 4`) to report the target-harmonic PURITY + the named largest CONTAMINANT -- the canonical MRI gradient/shim quality metrics.  The SAME solid-harmonic table builds the target and analyses the result (exact round-trip).  All targets fit to near-unit purity; the difficulty grows with order (l<=3 residual <0.1 %, the 4th-order Z4 shim ~1.5 % with a named Z3 contaminant -- the field of an l-th harmonic scales as r^l, so high-l shims are intrinsically harder over a fixed DSV).  Mesh-gen + each design run in subprocesses (orchestrator stays NGSolve-free).  Writes `demo_shim_coil_purity.{json,png}`. |
+| `demo_active_shield.py` | **Active shielding (primary + shield), Turner 1986**.  Designs a Gz coil two ways -- UNSHIELDED (inner primary only) and SHIELDED (primary + an outer shield cylinder designed JOINTLY via `calc_streamfunction.py --shield-vol`, so primary+shield together hit the DSV target while nulling the field over a LARGE external region) -- and compares the stray field at INDEPENDENT external points.  Genuine **~86x (39 dB)** stray reduction (100-1700x in the well-covered far field), DSV homogeneity preserved.  Documents the CRITICAL lesson (measured): the external null region must COVER the exterior -- a thin mid-plane slice overfits locally (~4x) and worsens the field at larger z; the un-sampled gap between shield and null region stays unshielded.  Writes `demo_active_shield.{json,png}`. |
+| `demo_fmm_biot_savart.py` | **FMM Biot-Savart benchmark** -- `ngsolve.bem.BiotSavartCF` (spherical-harmonic multipole expansion, NGSolve 6.2.2604+) vs the LinearForm design-matrix path, evaluating a designed coil's field at EXTERIOR points.  The surface current K = n x grad(psi) is discretised into per-triangle K-dipole filaments (`AddCurrent`); both kernels evaluate the same psi at the same exterior shell.  Honest finding: they agree to ~5 % (the dipole-discretisation error), but BiotSavartCF is **slower at small N** (large multipole setup overhead) and is **EXTERIOR-ONLY** (returns nan inside the source sphere -- so it CANNOT replace the LinearForm path for the DSV-interior design matrix).  Useful only for far-field post-evaluation at very large N.  Writes `demo_fmm_biot_savart.{json,png}`. |
 | `view_sf_coil_gx_gmsh.py` | **GMSH visualiser** for the Gx coil.  Three modes: `--mode contours` (default, **recommended**) writes the SF design's CLOSED CONTOUR FILAMENTS only (each fingerprint loop as its own 1D Physical Group, NO connection arcs) -- the true SF output, with the host cylinder as a 2D reference; `--mode chain` writes the lobe-aware single-stroke chain (= what PEEC sees, with 4-quadrant traversal + 3 inter-quadrant geodesic arcs; the same chain `demo_sf_to_peec_gx.py --chain-method lobe` builds); `--mode step` merges the loft-chain STEP from `--with-peec`.  Includes preventive code (`gmsh.initialize(["-noconfig"])` + explicit `General.GraphicsPositionX/Y` + `Width`/`Height`) so the GMSH window can't restore to an off-screen second-monitor coordinate.  Uses pip-gmsh blocking `fltk.run()` (CLAUDE.md GMSH policy). |
 | `demo_regcoil_fusion.py` | **Fusion (stellarator Stage-2) coil design -- mini-REGCOIL / NESCOIL**.  The SAME surface stream function the gradient/IH demos use, applied to the fusion winding-surface current-potential problem: given a target normal field `B.n` on a PLASMA boundary, solve for `psi` on a WINDING SURFACE around it whose Biot-Savart `n.B` reproduces it (iso-contours = the coils).  **Four parts**: (1) two PRODUCIBLE targets -- a uniform vertical field (PF / equilibrium coil) and a non-axisymmetric `sin(theta)cos(2 phi)` (stellarator-like) -- reproduced to MACHINE PRECISION (`B.n` residual ~2e-9), proving the SF designer does the Stage-2 forward map exactly; (2) the REGCOIL **L-curve** on a genuinely-hard high-mode target `sin(3 theta)cos(5 phi)` (decays across the plasma-coil gap), sweeping `alpha` to trace the classic `(B.n residual, peak |grad psi|)` trade-off (knee at `alpha_rel ~ 2e-2`); (3) **NET CURRENT (the multivalued / secular term)** -- a single-valued `psi` carries zero net current through each torus hole; the full current potential gains `Psi = psi + (G/2pi)zeta + (I/2pi)theta`, whose TWO extra DOFs are the winding surface's first cohomology generators.  Their COUNT (`b1 = 2`, genus 1) is CONFIRMED with Gmsh's homology solver (the engine wrapped by `src/radia/cohomology_cut.py`); the net-poloidal-current (TF) secular term is verified to give the textbook `B_tor ~ 1/R` toroidal field (Ampere, `B_tor*R` const to 0.2% inside the tube, ~0 outside).  Key physics: the TF field is TANGENT to the plasma (`B.n` footprint >1000x smaller than the net-toroidal one), so the net poloidal current is a PRESCRIBED engineering parameter (set it for the on-axis `B_tor`: 1 T -> 1.5 MA) -- exactly why REGCOIL takes `net_poloidal_current` as an INPUT; (4) a **VMEC-shaped plasma boundary** -- the circular torus is replaced by a non-axisymmetric **rotating-ellipse** boundary in the VMEC Fourier form (`R = sum RBC cos(m th - n NFP ph)`, `Z = sum ZBS sin(...)`, NFP=3) with analytic surface normals; a real machine's free-boundary equilibrium drops in with `--wout wout_*.nc` (netCDF4 reader, round-trip-verified against the VMEC schema in the golden; stellarator-symmetric wout only -- a non-symmetric `lasym=T` file is rejected, not silently truncated).  **Honest scope**: parts 1-2 single-valued `psi`; part 3 adds the multivalued term (generator count computed, generators analytic on the torus -- general surfaces use `cohomology_cut.py`); part 4's default boundary is an analytic rotating-ellipse MODEL (not a converged equilibrium); coil force / stress and winding-surface optimisation (FOCUS) are the named next steps.  Writes `demo_regcoil_fusion.json` + a 2x2 lab figure (3D coil, L-curve, TF 1/R, VMEC boundary). |
 | `demo_regcoil_fusion_advanced.py` | **Advanced fusion: coil force/stress, a REAL VMEC equilibrium, FOCUS standoff + winding-SHAPE** -- the four "named next steps" of `demo_regcoil_fusion.py`, reusing its helpers.  (A) **Coil force/stress**: the Lorentz force per area `f = K x B_avg` (B_avg = the +/-eps average of the coil's own field across the current sheet); for the net-poloidal-current (TF) coil this is verified to equal the magnetic pressure `B_tor^2/(2 mu0)` (ratio ~0.99) and to CONCENTRATE on the INBOARD leg (~5x the outboard) -- why a TF coil is inboard-stress-limited.  (B) **A real equilibrium**: designs against the boundary of the li383 (NCSX-like, NFP=3, quasi-axisymmetric) reference `wout` from simsopt -- `--wout PATH` for any VMEC output, else it fetches li383 (121 kB) to a cache; the Stage-2 forward map reproduces the vertical-field `B.n` on the genuine stellarator boundary to ~4e-8.  (C) **FOCUS standoff study**: sweeping the winding-surface gap shows coil complexity `peak |grad psi|` is MONOTONIC in the gap (closer = simpler, ~50x over the sweep), so the distance optimum is CONSTRAINT-BOUND (push to the minimum engineering standoff `d_min`).  (D) **FOCUS winding-SHAPE** (the core FOCUS contribution): a `_surface_mesh_from_grid` builds an ARBITRARY winding surface (any (theta,phi) point grid) so the winding can be CONFORMAL to the plasma, not just a circular torus.  For an elongated (kappa=2) plasma, blending the winding from CIRCULAR (varying gap) to CONFORMAL (uniform gap, plasma offset along its normals) at the SAME min standoff cuts coil complexity `peak |grad psi|` by **~34%** -- the winding shape, not just distance, is a real design lever.  **Honest scope**: force is the magnetic force per area (the stress DRIVER, N/m^2), not a structural hoop-stress model; the shape study sweeps a 1-parameter circular->conformal blend (a full Fourier-mode winding-surface optimiser is the next step).  Writes `demo_regcoil_fusion_advanced.json` + a 2x2 lab figure (TF stress, li383 boundary, FOCUS standoff, conformal-vs-circular cross-section). |
@@ -75,6 +77,8 @@ python demo_sf_to_peec_gz.py --with-peec  # full SF -> CAD(STEP) -> PEEC -> fiel
 python demo_coil_design_gx.py             # transverse Gx gradient (2D surface SF)
 python demo_sf_to_peec_gx.py --with-peec  # full Gx SF -> single-stroke -> CAD -> PEEC
 python demo_shim_coil_purity.py           # spherical-harmonic shim/gradient coil purity (l<=4)
+python demo_active_shield.py              # active shielding (primary+shield Gz coil, ~86x stray reduction)
+python demo_fmm_biot_savart.py            # FMM Biot-Savart (ngsolve.bem) vs LinearForm, exterior eval
 python view_sf_coil_gx_gmsh.py             # SF contour filaments (no connection arcs) -- the real design
 python view_sf_coil_gx_gmsh.py --mode chain # single-stroke chain (with connection arcs) -- what PEEC sees
 python view_sf_coil_gx_gmsh.py --mode step  # the loft-chain STEP file from --with-peec
@@ -335,6 +339,60 @@ spans `l <= 4` (1+3+5+7+9 = 25 harmonics); each entry is a Laplacian-zero
 polynomial (the precondition for a valid current-free Bz component), golden-
 locked in `tests/panels/test_streamfunction_golden.py`
 (`test_harmonic_basis_is_harmonic`, `test_harmonic_l4_forms_and_decompose`).
+
+## Active shielding -- primary + shield gradient coil (`--shield-vol`)
+
+An actively-shielded gradient coil (Mansfield & Chapman 1986; Turner 1986)
+adds a second, OUTER cylindrical surface (the **shield**) whose current
+cancels the **stray field** outside the assembly -- essential in MRI so the
+switching gradients do not induce eddy currents in the cryostat.
+`calc_streamfunction.py --shield-vol SHIELD.vol --shield-eval-vol EXT.vol`
+designs the primary and shield JOINTLY: one stacked least-squares system fits
+the Gz target inside the DSV **and** nulls the field at external sample points
+(block-diagonal seminorm, the `RegularizedTSVD` machinery unchanged).
+
+`demo_active_shield.py` compares an unshielded (primary-only) and a shielded
+(primary+shield) Gz coil at INDEPENDENT external points (so the stray is the
+HONEST generalising field, not the circular constraint-point residual):
+
+| design | DSV homogeneity | stray @ external | factor |
+|--------|-----------------|------------------|--------|
+| unshielded (primary only)  | 4.0e-05 | 1.65   | --   |
+| shielded (primary + shield)| 9.5e-05 | 0.019  | **86x (39 dB)** |
+
+The stray-vs-radius profile shows **100-1700x** suppression in the
+well-covered far field (r > 0.25 m).  **Critical lesson (measured)**: the
+external null region must COVER the exterior, not a thin mid-plane slice -- a
+too-small region overfits locally (~4x) and makes the field WORSE at larger z;
+the un-sampled gap between the shield and the null region stays unshielded
+(~2-3x).  The honest reported metric is `stray_rms` (field at independent
+external measure points); the `stray_fit_rms` at the constraint points is the
+circular fit residual and is NOT the shielding quality.  An analytic external-
+multipole-moment constraint (vs point sampling) is the documented next step.
+Golden-locked: `test_streamfunction_active_shielding`.
+
+## FMM Biot-Savart -- `ngsolve.bem.BiotSavartCF` vs LinearForm
+
+NGSolve 6.2.2604+ ships an FMM-style hierarchical Biot-Savart in
+`ngsolve.bem` (`BiotSavartCF`, a spherical-harmonic MULTIPOLE expansion).
+`demo_fmm_biot_savart.py` benchmarks it against the LinearForm design-matrix
+path for evaluating a designed coil's field, with the honest conclusion:
+
+- **Accuracy**: discretising K = n x grad(psi) into per-triangle K-dipole
+  filaments and expanding gives ~5 % vs the exact LinearForm surface integral
+  (the dipole-discretisation error).
+- **Speed**: BiotSavartCF is SLOWER at small N (~1 s multipole setup vs ~0.1 s
+  for the LinearForm matvec at N~60); it would only amortise its setup for
+  N >> 1000 far-field points.
+- **Hard limitation**: BiotSavartCF is a multipole expansion for sources
+  ENCLOSED in a sphere -- it returns nan for points INSIDE that sphere.  The
+  SF **design matrix** lives at the DSV INTERIOR (inside the coil), where
+  BiotSavartCF cannot evaluate at all, so it **cannot replace** the LinearForm
+  path for design; it is only a far-field post-evaluation tool.
+
+This is the scope-clarification in the "FMM Removed from Radia core" policy in
+practice: FMM math fits free-space far-field Biot-Savart, not the near-field
+interior design problem.
 
 ## Contour drawing = flux-line drawing (same principle)
 
