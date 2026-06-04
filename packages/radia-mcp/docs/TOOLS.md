@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **338 tools** across 41 MCP servers.
+Total: **340 tools** across 41 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -10,7 +10,7 @@ Total: **338 tools** across 41 MCP servers.
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
 | [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 8 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 32 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 34 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 12 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
@@ -189,6 +189,8 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `cln_sibc_orthogonal` | Get CLN expansion-point + SIBC orthogonal-residual theory documentation. |
 | `cln_sphere_dd_pipeline` | Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network |
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
+| `femm_parity_documentation` | Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics, |
+| `force_validation` | EM force extraction in NGSolve + COMSOL <-> NGSolve cross-validation. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `install_deploy` | Radia install / deploy policy and recipes — 3-tier configuration |
@@ -222,7 +224,7 @@ Module: `radia_mcp.streamfunction.server`
 | Tool | Description |
 |---|---|
 | `radia_streamfunction_status` | (no description) |
-| `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 20 topics. |
+| `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 22 topics. |
 | `streamfunction` | Get Stream-Function (SF) coil-design documentation. |
 
 ## `mcp-server-fem`
@@ -723,7 +725,7 @@ Module: `radia_mcp.literature_index.server`
 | `literature_index_job_status` | Status of the most recent indexing job (idle / running / |
 | `literature_index_status` | (no description) |
 | `literature_search` | Search the lab literature corpus by filename keywords. |
-| `literature_semantic_search` | Semantic search over indexed PDF text via ChromaDB + sentence- |
+| `literature_semantic_search` | Semantic search over indexed text via ChromaDB + sentence-transformers |
 | `literature_stats` | Index statistics + cache info. |
 
 ## `mcp-server-radia-meta`
