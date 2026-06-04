@@ -147,17 +147,28 @@ def _harmonic_lookup(token):
     if tu in _HARMONIC_BY_NAME:
         return _HARMONIC_BY_NAME[tu]
     s = t.replace("(", "").replace(")", "").replace(" ", "")
+    bad = ValueError(                       # one clear, actionable message
+        f"unknown harmonic '{token}'. Names: "
+        f"{sorted({nm for nm, _ in _SOLID_HARMONICS.values()})}; "
+        f"or 'l=L,m=M' / '(L,M)' with integer L,M.")
+    # Fail LOUD but CLEARLY: a malformed pair ('l=4' with no m, '(4,)',
+    # 'l=x,m=y') must give the actionable message above, NOT a raw KeyError
+    # or int() ValueError.  (No-Fallback: this converts the parse exception
+    # into one clear user error -- it does not try another path.)
     if s.lower().startswith("l="):
-        d = dict(kv.split("=") for kv in s.split(","))
-        lm = (int(d["l"]), int(d["m"]))
+        try:
+            d = dict(kv.split("=") for kv in s.split(","))
+            lm = (int(d["l"]), int(d["m"]))
+        except (KeyError, ValueError, IndexError):
+            raise bad from None
     elif "," in s:
-        a, b = s.split(",")[:2]
-        lm = (int(a), int(b))
+        try:
+            a, b = s.split(",")[:2]
+            lm = (int(a), int(b))
+        except (ValueError, IndexError):
+            raise bad from None
     else:
-        raise ValueError(
-            f"unknown harmonic '{token}'. Names: "
-            f"{sorted({nm for nm, _ in _SOLID_HARMONICS.values()})}; "
-            f"or 'l=L,m=M' / '(L,M)'.")
+        raise bad
     if lm not in _SOLID_HARMONICS:
         raise ValueError(f"harmonic {lm} not in the table (l<=4 supported).")
     return lm
