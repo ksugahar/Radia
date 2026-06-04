@@ -16,10 +16,11 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
+from scipy.optimize import brentq
 from ngsolve import Mesh, CoefficientFunction, TaskManager
 from netgen.occ import OCCGeometry, MoveTo, WorkPlane, X, Y
 from radia_mcp.radia_ngsolve.scalar_fem2d import (
-    EPS0, solve_thermal, solve_current_flow_ac, admittance_ac)
+    EPS0, SIGMA_SB, solve_thermal, solve_current_flow_ac, admittance_ac)
 
 
 def check_robin_convection():
@@ -73,12 +74,34 @@ def check_ac_current_flow():
     assert abs(eG) < 1e-2 and abs(eB) < 1e-2, "AC admittance off >1%"
 
 
+def check_radiation():
+    k, L, Wy, T0, eps, Tinf = 20.0, 0.05, 0.02, 800.0, 0.8, 300.0  # T in Kelvin
+    slab = MoveTo(0, 0).Rectangle(L, Wy).Face()
+    slab.faces.name = "wall"
+    slab.edges.Min(X).name = "hot"
+    slab.edges.Max(X).name = "rad"
+    mesh = Mesh(OCCGeometry(slab, dim=2).GenerateMesh(maxh=Wy / 3))
+
+    T = solve_thermal(mesh, CoefficientFunction(k), {"hot": T0},
+                      radiation={"rad": (eps, Tinf)})
+
+    # conduction flux k(T0-T_L)/L  ==  radiation eps*sigma*(T_L^4 - Tinf^4)
+    TL_exact = brentq(lambda t: k * (T0 - t) / L - eps * SIGMA_SB * (t**4 - Tinf**4),
+                      Tinf, T0)
+    TL_fem = T(mesh(0.9999 * L, Wy / 2))
+    e = (TL_fem - TL_exact) / TL_exact
+    print(f"  [Radiation] T_L FEM={TL_fem:.3f} K  exact(brentq)={TL_exact:.3f} K "
+          f"({100*e:+.3f}%)")
+    assert abs(e) < 5e-3, f"radiation BC off {100*e:.3f}% (>0.5%)"
+
+
 def main():
     with TaskManager():
         check_robin_convection()
+        check_radiation()
         check_ac_current_flow()
-    print("\n[OK] scalar extensions validated: convection (Robin) BC + AC "
-          "current flow (complex admittance) vs closed forms.")
+    print("\n[OK] scalar extensions validated: convection (Robin) + radiation (T^4) "
+          "BC + AC current flow (complex admittance) vs closed forms.")
 
 
 if __name__ == "__main__":

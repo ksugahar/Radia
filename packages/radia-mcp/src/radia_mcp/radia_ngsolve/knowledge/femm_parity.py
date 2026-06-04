@@ -34,6 +34,7 @@ FEMM_MATRIX = """\
 |------------------------|:------:|:------:|-------------------------------------|
 | magnetostatic (A_z/A_phi)| yes  | yes*   | sphere/cyl -0.05%                   |
 | permanent magnet        | yes   | yes*   | sphere/cyl -0.05%                   |
+| nonlinear magnet recoil | yes   | (*)    | self-consistent mu_r(B)  0.05%      |
 | nonlinear B-H (Picard)  | yes   | yes*   | Ampere x B-H  <0.05% (planar)       |
 | eddy current / AC       | yes   | yes*   | Kelvin Rac +0.07%; Cu-disk 0.27%    |
 | current-driven circuit  | yes   | yes*   | net-current constraint exact        |
@@ -50,6 +51,7 @@ FEMM_MATRIX = """\
 | stranded / litz wire    | yes   | yes    | uniform-J DC field  0.14%           |
 | AC current flow (cmplx) | yes   | (same) | coaxial Y=G+j w C  0.34%            |
 | convection BC (Robin)   | yes   | yes    | slab L/k + 1/h  0.003%              |
+| radiation BC (T^4)      | yes   | yes    | slab cond/rad balance  0.000%       |
 | FEMM open-bdry x-check  | (—)   | yes    | vs FEMM rad=100.mat 0.78% of peak   |
 
 (*) axisymmetric magnetics / eddy / nonlinear use H1Henrotte (axihenrotte FESpace)
@@ -150,9 +152,11 @@ Vc= solve_current_flow(mesh, sigma, {"a": V0, "b": 0.0}); G = conductance(...)
 V = solve_poisson_axi(mesh, eps, {"inner": V0, "outer": 0.0})
 C = capacitance_axi(V, mesh, eps, V0)                        # Farads (4 pi eps ab/(b-a))
 
-# CONVECTION / Robin BC for heat (FEMM hsolv mixed boundary): -k dT/dn = h(T-Tinf)
+# CONVECTION / RADIATION BC for heat (FEMM hsolv mixed boundary):
+#   -k dT/dn = h(T-Tinf)  and/or  eps*sigma_SB*(T^4 - Tinf^4)  [T in KELVIN]
 T = solve_thermal(mesh, k, {"hot": T0},                      # fixed-T walls
-                  convection={"surf": (h, Tinf)})            # convective walls
+                  convection={"surf": (h, Tinf)},            # Robin walls
+                  radiation={"surf2": (eps, Tinf)})          # T^4 (Picard, Kelvin)
 # AC current flow (complex sigma+j w eps); terminal admittance Y = G + j w C
 from radia_mcp.radia_ngsolve.scalar_fem2d import solve_current_flow_ac, admittance_ac
 V = solve_current_flow_ac(mesh, sigma, eps, omega, {"a": V0, "b": 0.0})
@@ -258,6 +262,8 @@ FEMM_VALIDATION = """\
 | test_stranded                       | uniform-J B(a/2)=mu0 I/(4 pi a)   | +0.14% |
 | test_planar_eddy_nonlinear (lin)    | reduces to linear solve_planar_eddy| 3e-11 |
 | test_axi_force                      | coaxial loops I1 I2 dM/dz (ellip.)| +0.93% |
+| test_scalar_fem2d_ext (radiation)   | slab k(T0-TL)/L = eps sig(TL^4-..) | 0.000% |
+| test_nonlinear_magnet               | B_op = mu0 mu_r(B_op)Hc/(mu_r+1)  | -0.05% |
 
 Axi eddy (solve_axi_eddy) validated via Cu-disk tau_1; planar eddy validated via
 Kelvin Rac. The laminated DC/AC checks are exact (uniform-field & 1D-eddy have
