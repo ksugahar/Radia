@@ -76,6 +76,37 @@ pure `Z2`; the 4th-order `Z4` shim → purity 0.99983 with a named ~1 % `Z3`
 contaminant (high-`l` shims are harder because an `l`-th harmonic's field
 scales as `rˡ` over a fixed DSV).
 
+## Active shielding — primary + shield coil (`--shield-vol`)
+
+An actively-shielded gradient coil (Mansfield & Chapman 1986; Turner 1986)
+adds a second, OUTER cylindrical surface (the **shield**) whose current cancels
+the **stray field** outside the assembly — essential in MRI so the switching
+gradients do not induce eddy currents in the cryostat.
+
+- `--shield-vol SHIELD.vol` — the outer shield coil surface mesh.
+- `--shield-eval-vol EXT.vol` — the **external region where the stray field
+  must vanish** (a large annular shell OUTSIDE the shield).
+- `--shield-weight w` *(default 1.0)* — weight on the stray-null constraint
+  rows relative to the DSV target rows.
+
+The primary and shield are designed JOINTLY: one stacked least-squares system
+fits the target inside the DSV **and** nulls the field at the external sample
+points, with a block-diagonal seminorm `diag(Sₚ, Sₛ)` — the `RegularizedTSVD`
+machinery is unchanged, just a bigger system.  `design` mode only.
+
+Reported (shielded run): `homogeneity_rms` (DSV), `stray_rms` (the HONEST
+combined field at **independent** external measure points, relative to the DSV
+target), `stray_fit_rms` (the circular constraint-point residual, info only),
+and per-coil `peak_J_primary` / `peak_J_shield`.
+
+**Coverage is everything (measured)**: the external null region must COVER the
+exterior, not a thin mid-plane slice.  With a large full-length shell the
+shielding is genuine — `demo_active_shield.py` measures **~86× (39 dB)** stray
+reduction (100–1700× in the far field), DSV homogeneity preserved.  A too-small
+region overfits locally (~4×) and makes the field WORSE at larger `z`; the
+un-sampled gap between shield and null region stays unshielded (~2–3×).  Locked
+by `test_streamfunction_active_shielding`.
+
 ## Design objective / regularizer (`--regularize {l2, h1, inductance}`)
 
 The design solve is `min ‖Aψ−B‖² + α·ψᵀSψ` — the target field `Aψ=B` picks the
