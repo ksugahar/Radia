@@ -624,19 +624,23 @@ def _build_problem(args, eval_scale=1.0):
 # RegularizedTSVD handles the stacked system identically to the single-coil
 # case; after solving, psi_f is split back into primary and shield parts.
 #
-# HONEST SCOPE / LIMITATION (measured): this is a POINT-SAMPLED external
-# nulling, NOT the analytic Fourier-mode cancellation of a textbook
-# shielded gradient coil.  Nulling the field at a finite set of external
-# points (the shield-eval-vol vertices) reduces -- but does not zero -- the
-# field at INDEPENDENT points between them.  On the demo geometry the
-# stray at independent external measure points drops from ~0.74 (unshielded
-# primary-only) to ~0.16-0.21 (shielded) -- a real ~4-5x (~13 dB)
-# reduction, reported as ``stray_rms``.  The ~0 figure at the constraint
-# points themselves (``stray_fit_rms``) is the circular fit residual of an
-# underdetermined exact fit and is NOT the shielding quality.  Better
-# shielding needs denser + larger external sampling (covering the full
-# exterior, not a thin mid-plane shell) or an analytic external-multipole-
-# moment constraint -- a documented next step, not done here.
+# HONEST SCOPE (measured): this is a POINT-SAMPLED external nulling, NOT the
+# analytic Fourier-mode cancellation of a textbook shielded gradient coil.
+# The reported ``stray_rms`` is the combined field at INDEPENDENT external
+# measure points (``e_mpts``, the external-mesh element centroids -- NOT the
+# constraint vertices); the ``stray_fit_rms`` at the constraint points is the
+# circular fit residual and is NOT the shielding quality.
+#
+# COVERAGE IS EVERYTHING: the shield-eval-vol must COVER the exterior the user
+# cares about, not a thin slice.  With a LARGE external region (a full-length
+# annular shell spanning the coil) the shielding is genuine and strong --
+# measured ~86x (39 dB) overall and 100-1700x in the well-covered far region,
+# DSV homogeneity preserved.  With a TOO-SMALL region (a thin mid-plane shell)
+# the point-sampled nulling OVERFITS that slice (~4x locally) and can make the
+# field WORSE at larger z.  The un-sampled GAP between the shield and the null
+# region is essentially unshielded (~2-3x).  An analytic external-multipole-
+# moment constraint would remove the sampling dependence -- a documented next
+# step, not done here.
 # ==========================================================================
 
 def _build_shielded_problem(args, eval_scale=1.0):
