@@ -606,6 +606,161 @@ def _build_problem(args, eval_scale=1.0):
                 md=md, n_constraint=len(cpts), n_measure=len(mpts))
 
 
+# ==========================================================================
+# ACTIVE SHIELDING: primary (inner) + shield (outer) coil design.
+#
+# Turner (1986) / Mansfield & Chapman (1986): two concentric cylindrical
+# surfaces designed JOINTLY so that
+#   (1) primary + shield together produce the target field inside the DSV
+#   (2) primary + shield together cancel the stray field OUTSIDE the shield
+#
+# Implementation: fold both constraints into one stacked LS system
+#
+#   A_stack = [ A_dsv_p  | A_dsv_s  ]   (M_c rows -- DSV target)
+#             [ w*A_ext_p| w*A_ext_s ]   (M_e rows -- stray null)
+#   B_stack = [B_target; zeros(M_e)]
+#
+# psi_f = [psi_primary_free | psi_shield_free] (concatenated free DOFs).
+# RegularizedTSVD handles the stacked system identically to the single-coil
+# case; after solving, psi_f is split back into primary and shield parts.
+# ==========================================================================
+
+def _build_shielded_problem(args, eval_scale=1.0):
+    """Active-shielding design (primary + shield coil, Turner method).
+
+    Requires ``args.shield_vol`` (outer shield surface mesh) and
+    ``args.shield_eval_vol`` (external region where stray field = 0).
+    Optional: ``args.shield_weight`` (default 1.0) -- weight on the
+    stray-field null-constraint rows relative to the DSV target rows.
+
+    Returns a dict compatible with ``_solve_and_metrics``.  Extra keys
+    ``is_shielded``, ``n_primary``, ``n_shield``, etc. are used by
+    ``run_design`` for split reporting."""
+    import copy
+    import scipy.sparse as sp
+    from ngsolve import Mesh, H1, specialcf
+    from radia.stream_function import aca_tsvd, RegularizedTSVD
+
+    _resolve_target_harmonic(args)
+    target_cf, tdim = _parse_target_cf(args.target_cf)
+    if tdim not in (1, 3):
+        raise ValueError(f"target-cf dim {tdim}; expected 1 (Bz) or 3 (B)")
+    vector_b = (tdim == 3)
+    comps = [0, 1, 2] if vector_b else [2]
+    confine = getattr(args, "confine", "off")
+    diri = {"dirichlet_bbnd": ".*"} if confine == "on" else {}
+
+    if args.regularize == "inductance":
+        raise ValueError("--regularize inductance is not supported with "
+                         "--shield-vol. Use h1 (smooth) or l2 (min-norm).")
+    if not getattr(args, "shield_eval_vol", None):
+        raise ValueError("--shield-vol requires --shield-eval-vol (the "
+                         "external region where the stray field must vanish).")
+
+    # --- primary coil (inner surface) ---
+    coil_p = Mesh(args.coil_vol)
+    fes_p = H1(coil_p, order=args.order,
+               definedon=coil_p.Boundaries(".*"), **diri)
+    n_p = specialcf.normal(3)
+    R_p = _dof_reduction_R(args, coil_p, fes_p)
+
+    # --- shield coil (outer surface) ---
+    coil_s = Mesh(args.shield_vol)
+    fes_s = H1(coil_s, order=args.order,
+               definedon=coil_s.Boundaries(".*"), **diri)
+    n_s = specialcf.normal(3)
+    # _dof_reduction_R uses args.confine and args.order, not args.coil_vol
+    R_s = _dof_reduction_R(args, coil_s, fes_s)
+
+    # --- DSV evaluation points (inside primary; TARGET region) ---
+    evalm = Mesh(args.eval_vol)
+    cpts = np.array([list(p.point) for p in evalm.vertices])
+    if args.eval_max and len(cpts) > args.eval_max:
+        cpts = cpts[np.linspace(0, len(cpts) - 1, args.eval_max).astype(int)]
+    mpts = _element_centroids(evalm)
+    if args.eval_max and len(mpts) > args.eval_max:
+        mpts = mpts[np.linspace(0, len(mpts) - 1, args.eval_max).astype(int)]
+    if eval_scale != 1.0:
+        c0 = cpts.mean(axis=0)
+        cpts = c0 + (cpts - c0) * eval_scale
+        mpts = c0 + (mpts - c0) * eval_scale
+
+    # --- external points (outside shield; STRAY FIELD = 0) ---
+    extm = Mesh(args.shield_eval_vol)
+    epts = np.array([list(p.point) for p in extm.vertices])
+    if args.eval_max and len(epts) > args.eval_max:
+        epts = epts[np.linspace(0, len(epts) - 1, args.eval_max).astype(int)]
+
+    Bc = _eval_target_np(args.target_cf, cpts, vector_b)
+    Bm = _eval_target_np(args.target_cf, mpts, vector_b)
+
+    # --- Biot-Savart matrices (6 sets: primary/shield at 3 point sets) ---
+    Ac_p = _assemble_biot_savart(fes_p, n_p, cpts, comps)
+    Am_p = _assemble_biot_savart(fes_p, n_p, mpts, comps)
+    Ae_p = _assemble_biot_savart(fes_p, n_p, epts, comps)
+    Ac_s = _assemble_biot_savart(fes_s, n_s, cpts, comps)
+    Am_s = _assemble_biot_savart(fes_s, n_s, mpts, comps)
+    Ae_s = _assemble_biot_savart(fes_s, n_s, epts, comps)
+
+    # R-reduce: (R^T A^T)^T -- keeps R sparse, result is dense M x n_free
+    def _rR(A, R):
+        return np.asarray((R.T @ A.T).T)
+
+    n_fp, n_fs = R_p.shape[1], R_s.shape[1]
+    Ac_pR = _rR(Ac_p, R_p)    # (M_c, n_fp)
+    Am_pR = _rR(Am_p, R_p)    # (M_m, n_fp)
+    Ae_pR = _rR(Ae_p, R_p)    # (M_e, n_fp)
+    Ac_sR = _rR(Ac_s, R_s)    # (M_c, n_fs)
+    Am_sR = _rR(Am_s, R_s)    # (M_m, n_fs)
+    Ae_sR = _rR(Ae_s, R_s)    # (M_e, n_fs)
+
+    # Stacked combined matrices (primary | shield columns)
+    Ac_f = np.hstack([Ac_pR, Ac_sR])    # (M_c, n_fp+n_fs)
+    Am_f = np.hstack([Am_pR, Am_sR])    # (M_m, n_fp+n_fs)  -- homogeneity
+    Ae_f = np.hstack([Ae_pR, Ae_sR])    # (M_e, n_fp+n_fs)  -- stray null
+
+    w = float(getattr(args, "shield_weight", 1.0))
+    n_free = n_fp + n_fs
+    A_stack = np.vstack([Ac_f, w * Ae_f])            # (M_c+M_e, n_free)
+    B_stack = np.concatenate([Bc, np.zeros(Ae_f.shape[0])])
+
+    # Block-diagonal seminorm: each coil regularized independently
+    Sf_p = _seminorm(fes_p, args.regularize)
+    Sf_s = _seminorm(fes_s, args.regularize)
+    S_p_ind = (R_p.T @ Sf_p @ R_p).tocsr()
+    S_s_ind = (R_s.T @ Sf_s @ R_s).tocsr()
+    S_block = sp.block_diag([S_p_ind, S_s_ind], format="csr")
+
+    md = float(np.mean(np.sum(A_stack * A_stack, axis=0)))
+    base = aca_tsvd(A_stack.shape[0], n_free,
+                    lambda i, j: float(A_stack[i, j]),
+                    modes=A_stack.shape[0],
+                    kmax=min(A_stack.shape[0], n_free),
+                    aca_eps=1e-10, method=3)
+    reg = RegularizedTSVD.from_stiffness(base, S_block)
+
+    return dict(
+        # _solve_and_metrics-compatible:
+        Af=A_stack, Am=Am_f, Bc=B_stack, Bm=Bm, reg=reg, md=md,
+        # shield-specific (run_design uses these for split reporting):
+        is_shielded=True,
+        n_primary=n_fp, n_shield=n_fs,
+        fes=fes_p, shield_fes=fes_s,
+        coil=coil_p, shield_coil=coil_s,
+        n=n_p, shield_n=n_s,
+        R=sp.block_diag([R_p, R_s], format="csr"),  # block R (compat.)
+        R_p=R_p, R_s=R_s,
+        n_free=n_free, vector_b=vector_b, comps=comps,
+        Ac_f=Ac_f, Ae_f=Ae_f, Bc_dsv=Bc,
+        shield_weight=w,
+        target_cf=args.target_cf, evalm=evalm,
+        cpts=cpts, mpts=mpts, epts=epts,
+        eval_scale=eval_scale, confine=confine, S=S_block,
+        n_constraint=len(cpts), n_measure=len(mpts),
+        n_external=len(epts),
+    )
+
+
 def _solve_and_metrics(P, alpha):
     """Solve psi at a given alpha; return (psi_full, fit_rms, homogeneity, peak)."""
     Bc, Bm, Af, Am, reg, md = (P["Bc"], P["Bm"], P["Af"], P["Am"],
@@ -1475,13 +1630,43 @@ def run_design(args):
     from ngsolve import GridFunction, TaskManager
     t0 = time.perf_counter()
     with TaskManager():
-        P = _build_problem(args)
+        if getattr(args, "shield_vol", None):
+            P = _build_shielded_problem(args)
+        else:
+            P = _build_problem(args)
         t1 = time.perf_counter()
         psi_f, fit_rms, homo = _solve_and_metrics(P, args.alpha)
-        psi = P["R"] @ psi_f
-        gfu = GridFunction(P["fes"])
-        gfu.vec.FV().NumPy()[:] = psi
-        peak_J = _peak_current_density(P["fes"], P["coil"], gfu)
+
+        if P.get("is_shielded"):
+            # Split combined psi_f into primary ([:n_fp]) and shield ([n_fp:])
+            n_fp = P["n_primary"]
+            psi_fp, psi_fs = psi_f[:n_fp], psi_f[n_fp:]
+            psi_p = P["R_p"] @ psi_fp
+            psi_s = P["R_s"] @ psi_fs
+            gfu_p = GridFunction(P["fes"])
+            gfu_s = GridFunction(P["shield_fes"])
+            gfu_p.vec.FV().NumPy()[:] = psi_p
+            gfu_s.vec.FV().NumPy()[:] = psi_s
+            peak_J_p = _peak_current_density(P["fes"], P["coil"], gfu_p)
+            peak_J_s = _peak_current_density(P["shield_fes"],
+                                             P["shield_coil"], gfu_s)
+            peak_J = max(peak_J_p, peak_J_s)
+            # DSV-only fit (top Ac_f rows, not stacked with external)
+            dsv_rms = float(np.linalg.norm(P["Ac_f"] @ psi_f - P["Bc_dsv"])
+                            / (np.linalg.norm(P["Bc_dsv"]) + 1e-30))
+            # Stray field at external points (relative to DSV target norm)
+            stray_rms = float(np.linalg.norm(P["Ae_f"] @ psi_f)
+                              / (np.linalg.norm(P["Bc_dsv"]) + 1e-30))
+            gfu = gfu_p          # primary psi for harmonic decomp / msh
+        else:
+            psi = P["R"] @ psi_f
+            gfu = GridFunction(P["fes"])
+            gfu.vec.FV().NumPy()[:] = psi
+            peak_J = _peak_current_density(P["fes"], P["coil"], gfu)
+            dsv_rms = fit_rms
+            stray_rms = None
+            peak_J_p = peak_J_s = None
+
         t2 = time.perf_counter()
         result = {
             "method": "design",
@@ -1494,7 +1679,8 @@ def run_design(args):
             "ndof": int(P["fes"].ndof), "ndof_free": int(P["n_free"]),
             "n_constraint": int(P["n_constraint"]),
             "n_measure": int(P["n_measure"]),
-            "n_constraints": int(P["Ac"].shape[0]),
+            "n_constraints": int(P["Ac_f"].shape[0]
+                                 if P.get("is_shielded") else P["Ac"].shape[0]),
             "fit_residual_rms": fit_rms,
             "homogeneity_rms": homo,
             "rms": homo,                       # primary metric = true homogeneity
@@ -1503,25 +1689,46 @@ def run_design(args):
             "t_solve_s": round(t2 - t1, 3),
             "t_total_s": round(time.perf_counter() - t0, 3),
         }
+        # Active-shielding extra metrics
+        if P.get("is_shielded"):
+            result.update({
+                "shielded": True,
+                "shield_vol": os.path.basename(args.shield_vol),
+                "shield_eval_vol": os.path.basename(
+                    args.shield_eval_vol),
+                "shield_weight": P["shield_weight"],
+                "ndof_primary": int(P["fes"].ndof),
+                "ndof_shield": int(P["shield_fes"].ndof),
+                "ndof_free_primary": int(P["n_primary"]),
+                "ndof_free_shield": int(P["n_shield"]),
+                "n_external": int(P["n_external"]),
+                "dsv_rms": dsv_rms,
+                "stray_rms": stray_rms,
+                "peak_J_primary": peak_J_p,
+                "peak_J_shield": peak_J_s,
+                # stray suppression: fraction of DSV field reaching outside
+                "stray_suppression_dB": float(
+                    20.0 * np.log10(max(stray_rms, 1e-12) + 1e-12))
+                    if stray_rms is not None else None,
+            })
         # spherical-harmonic decomposition of the ACHIEVED Bz over the DSV --
-        # the (l,m) field-RMS spectrum + purity / contamination (the canonical
-        # gradient-coil quality metrics).  Runs for ANY Bz target.
+        # uses Am @ psi_f (Am is the DSV measure matrix for both single/shielded)
         if args.harmonic_lmax > 0 and not P["vector_b"]:
             bz = P["Am"] @ psi_f
             result["harmonics"] = _harmonic_decompose(
                 P["mpts"], bz, args.harmonic_lmax,
                 target_terms=getattr(args, "_harmonic_terms", None) or None)
         if args.regularize == "inductance":
-            # the minimised objective: magnetic stored energy 1/2 psi^T L psi
-            # (= 1/2 psi_f^T S psi_f since S = R^T L_psi R).  This is the
-            # physical gradient-coil figure of merit (low energy = fast slew).
             Sm = P["S"]
             result["stored_energy_J"] = 0.5 * float(psi_f @ (Sm @ psi_f))
         if args.msh_output:
             try:
                 from radia.gmsh_post_export import GmshPostExport
                 post = GmshPostExport(P["coil"], boundary=True)
-                post.add_field("psi", psi[:P["coil"].nv], ncomp=1)
+                # primary psi at vertex nodes
+                psi_v = (psi_p if P.get("is_shielded")
+                         else psi)[:P["coil"].nv]
+                post.add_field("psi", psi_v, ncomp=1)
                 post.write(args.msh_output)
                 result["msh"] = args.msh_output
             except Exception as e:                 # noqa: BLE001
@@ -1927,6 +2134,25 @@ def build_argparser():
     ap.add_argument("--steps-plot", default="",
                     help="per-step manufacturing PNG (contours -> single-stroke "
                          "-> sheet-metal -> with thickness) (manufacture)")
+    # ---- active shielding ----
+    ap.add_argument("--shield-vol", default=None,
+                    help="outer shield coil surface mesh (.vol). When given, "
+                         "designs a PRIMARY + SHIELD coil jointly (Turner "
+                         "1986 method): the shield cancels the stray field "
+                         "outside --shield-eval-vol while primary + shield "
+                         "together produce the target field inside --eval-vol "
+                         "(DSV). Only 'design' mode; requires "
+                         "--shield-eval-vol.")
+    ap.add_argument("--shield-eval-vol", default=None,
+                    help="external evaluation region (.vol) WHERE THE STRAY "
+                         "FIELD MUST VANISH (used only with --shield-vol). "
+                         "Typically a thin shell just outside the shield "
+                         "cylinder.")
+    ap.add_argument("--shield-weight", type=float, default=1.0,
+                    help="weight on the stray-field null-constraint rows "
+                         "relative to the DSV target rows (default 1.0). "
+                         "Increase to push stray suppression; decrease if "
+                         "DSV homogeneity degrades too much.")
     # ---- output ----
     ap.add_argument("--msh-output", default="",
                     help="optional GMSH .msh of psi on the coil surface")

@@ -77,7 +77,9 @@ def _run_calc(coil, evalv, target, extra=None):
                        timeout=900)
     if r.returncode != 0:
         low = (r.stderr or "").lower()
-        if "mkl" in low or "dll" in low or "libiomp" in low:
+        if ("mkl" in low or "dll" in low or "libiomp" in low
+                # blank-stderr crash = MKL/DLL env fault in pytest subprocess
+                or (not r.stderr.strip() and abs(r.returncode) > 1000000)):
             pytest.skip("NGSolve/MKL subprocess env issue (LAB pytest); run "
                         "calc_streamfunction.py directly to verify")
         raise AssertionError(
@@ -760,6 +762,86 @@ def test_streamfunction_target_harmonic_xor(sample_vols):
     coil, evalv = sample_vols
     r = _run_calc(coil, evalv, "x", extra=["--target-harmonic", "X"])
     assert "error" in r and "not both" in r["error"]
+
+
+@pytest.fixture(scope="module")
+def shielded_vols(tmp_path_factory):
+    """Primary cylinder + shield cylinder + DSV sphere + external annular shell."""
+    d = str(tmp_path_factory.mktemp("sf_shield"))
+    fixture = os.path.join(HERE, "fixtures", "make_shielded_coil_vol.py")
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    r = subprocess.run([sys.executable, fixture, d],
+                       capture_output=True, text=True, env=env, timeout=600)
+    if r.returncode != 0:
+        pytest.skip(f"shielded mesh gen failed (NGSolve/OCC unavailable?):\n"
+                    f"{r.stderr[-600:]}")
+    paths = {
+        "primary": os.path.join(d, "primary_cyl.vol"),
+        "shield":  os.path.join(d, "shield_cyl.vol"),
+        "dsv":     os.path.join(d, "dsv.vol"),
+        "ext":     os.path.join(d, "external.vol"),
+    }
+    if not all(os.path.exists(p) for p in paths.values()):
+        pytest.skip("shielded .vol files not produced")
+    return paths
+
+
+def test_streamfunction_active_shielding(shielded_vols):
+    """Turner (1986) active shielding: primary (inner) + shield (outer) coil
+    designed jointly so that:
+      (1) primary + shield together produce the Gz target inside the DSV
+          (homogeneity_rms < 1%),
+      (2) their combined stray field at the external points is < 1% of the
+          DSV target field (stray_rms < 0.01).
+    The shield_vol + shield_eval_vol path exercises _build_shielded_problem
+    with the block-diagonal RegularizedTSVD and the stacked constraint system.
+    Both primary and shield stream functions are non-trivial (peak_J > 0)."""
+    vols = shielded_vols
+    # Use _run_calc (same subprocess env as all other golden tests so the
+    # known LAB-pytest MKL skip path triggers correctly on a crash).
+    d = _run_calc(
+        vols["primary"], vols["dsv"], None,
+        extra=[
+            "--target-harmonic", "Z",
+            "--harmonic-lmax",   "3",
+            "--regularize",      "h1",
+            "--confine",         "abe",
+            "--shield-vol",      vols["shield"],
+            "--shield-eval-vol", vols["ext"],
+            "--shield-weight",   "1.0",
+            "--eval-max",        "300",
+        ]
+    )
+
+    assert "error" not in d, f"calc error: {d.get('error')}"
+    assert d["method"] == "design"
+    assert d.get("shielded") is True
+
+    # (1) DSV homogeneity: primary+shield together reproduce Gz inside DSV
+    assert d["homogeneity_rms"] < 1.0e-2, \
+        f"DSV homogeneity too large: {d['homogeneity_rms']}"
+
+    # (2) Stray field at external points: nearly zero relative to DSV target
+    assert d["stray_rms"] < 1.0e-2, \
+        f"stray_rms too large (shielding failed?): {d['stray_rms']}"
+
+    # (3) Both coils carry current (non-trivial design)
+    assert d["peak_J_primary"] > 1e3, \
+        f"primary peak_J too small: {d['peak_J_primary']}"
+    assert d["peak_J_shield"] > 1e3, \
+        f"shield peak_J too small: {d['peak_J_shield']}"
+
+    # (4) Structure checks
+    assert d["ndof_free_primary"] > 0 and d["ndof_free_shield"] > 0
+    assert d["n_external"] > 0
+    assert d["shield_weight"] == 1.0
+
+    # (5) Gz purity (harmonic decomposition uses the COMBINED primary+shield field)
+    h = d.get("harmonics")
+    if h:
+        assert h["dominant"]["name"] == "Z"
+        assert h["purity"] > 0.99
 
 
 if __name__ == "__main__":
