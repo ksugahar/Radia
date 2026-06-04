@@ -1,14 +1,11 @@
 {
-  "status": "WIP probe: isotropy + low-freq limit VERIFIED; finite-freq magnitude FORMULATION-limited (NOT verified)",
-  "solver": "CompactAMS + COCR (swap done; order-2 affordable, no OOM)",
+  "status": "VERIFIED: 3D transverse alpha matches analytic sphere to ~2-3%, isotropic, triaxial splits with the analytic ordering",
+  "solver": "CompactAMS + COCR on a graded fine-air-shell mesh",
+  "key_fix": "fine AIR shell around the body (Re set by the air reaction dipole); order-1 suffices",
   "sigma": 58000000.0,
-  "order": 2,
-  "sphere_isotropy_worst": 0.0007161922912498313,
-  "finite_freq_magnitude_gap_range": [
-    0.22011657877293522,
-    0.48902197021830524
-  ],
-  "magnitude_gap_invariant_to": "order(1==2), mesh, box, eps",
+  "order": 1,
+  "sphere_worst_relerr": 0.029935564849767345,
+  "sphere_isotropy_worst": 0.0002918193132488758,
   "triaxial_semi_m": [
     0.005,
     0.003,
@@ -20,15 +17,14 @@
     0.5869962917145561
   ],
   "triaxial_alpha_re_m3": {
-    "x": -1.5506798667797378e-09,
-    "y": -6.783482860670524e-09,
-    "z": -3.4073827964127285e-09
+    "x": -1.4701954181779862e-09,
+    "y": -1.689792994119629e-09,
+    "z": -8.84782656414173e-09
   },
   "triaxial_kappa_hf_analytic_m3": {
     "x": -1.0945910750826641e-07,
     "y": -1.2982423971759774e-07,
     "z": -2.2820080720087692e-07
   },
-  "reproduces_analytic_ordering": false,
-  "path_to_full_verification": "A-phi (scalar-potential) eddy formulation or far-field moment extraction (NOT a solver change)"
+  "reproduces_analytic_ordering": true
 }
