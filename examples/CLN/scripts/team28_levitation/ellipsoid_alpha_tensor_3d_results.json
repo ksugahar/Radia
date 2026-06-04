@@ -1,0 +1,32 @@
+{
+  "status": "WIP probe: isotropy VERIFIED, magnitude order-1-limited (NOT verified)",
+  "sigma": 58000000.0,
+  "order": 1,
+  "sphere_isotropy_worst": 0.0017100094002644184,
+  "order1_magnitude_gap_range": [
+    0.23595790813685685,
+    0.5264777381275736
+  ],
+  "triaxial_semi_m": [
+    0.005,
+    0.003,
+    0.0015
+  ],
+  "triaxial_N": [
+    0.13896813382498913,
+    0.27403557446045684,
+    0.5869962917145561
+  ],
+  "triaxial_alpha_re_m3_order1": {
+    "x": -1.4451669678371632e-09,
+    "y": -6.624893616475744e-09,
+    "z": -3.023824455063441e-09
+  },
+  "triaxial_kappa_hf_analytic_m3": {
+    "x": -1.0945910750826641e-07,
+    "y": -1.2982423971759774e-07,
+    "z": -2.2820080720087692e-07
+  },
+  "order1_reproduces_analytic_ordering": false,
+  "path_to_full_verification": "order-2 HCurl + CompactAMS iterative solver"
+}
