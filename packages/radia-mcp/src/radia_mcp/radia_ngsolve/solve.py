@@ -149,6 +149,32 @@ def laminated_reluctivity_tensor(mesh, lam_by_material, default_mu_r=1.0,
     return CoefficientFunction((Mxx, 0.0, 0.0, Myy), dims=(2, 2))
 
 
+def stranded_source(mesh, currents_by_region):
+    """FEMM "stranded" conductor source: a UNIFORM current density Jz = I/area in
+    each region (the conductor is finely stranded / litz, so eddy currents cannot
+    redistribute -- the current stays uniform and Rac = Rdc, no skin/proximity in
+    the bundle itself).
+
+    ``currents_by_region`` maps material -> total current I [A].  Returns the Jz
+    CoefficientFunction [A/m^2] to feed :func:`solve_planar_eddy` (or the static
+    solver) WITH ``sigma = 0`` in those regions (the stranded conductor carries
+    an imposed current, not an eddy reaction).  The total current per region is
+    preserved exactly: int Jz dA = I.
+
+    Contrast with a SOLID conductor (driven_region/total_current and sigma>0),
+    whose current redistributes (skin effect) -- see tests/test_stranded.py.
+    """
+    comp = []
+    for m in mesh.GetMaterials():
+        if m in currents_by_region:
+            area = Integrate(CoefficientFunction(1.0), mesh,
+                             definedon=mesh.Materials(m))
+            comp.append(currents_by_region[m] / area)
+        else:
+            comp.append(0.0)
+    return CoefficientFunction(comp)
+
+
 def solve_planar_magnetostatic(mesh, nu, Jz=None, magnets=None, order=2,
                                dirichlet="outer"):
     """2D PLANAR (Cartesian) A_z magnetostatics -- the FEMM ``prob1big`` analog
@@ -395,6 +421,58 @@ def solve_planar_eddy_multi(mesh, nu, sigma, omega, conductors,
         fv[fes.Range(k + 1).start] += complex(currents[k])
     gfu = GridFunction(fes)
     gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+    return gfu
+
+
+def solve_planar_eddy_nonlinear(mesh, nu_of_B, sigma, omega, Jz=None, order=3,
+                                dirichlet="outer", relax=0.5, max_iter=80,
+                                tol=1e-5, min_iter=3):
+    """2D PLANAR NONLINEAR time-harmonic eddy currents (FEMM nonlinear AC) --
+    Picard fixed point with an amplitude-dependent reluctivity nu(|B|).
+
+    Solves  -div(nu(|B|) grad A_z) + j w sigma A_z = Jz  where the saturating
+    material reluctivity is evaluated at the PHASOR AMPLITUDE
+    ``|B| = sqrt(B . conj(B))`` (the effective-permeability harmonic-balance
+    approximation FEMM uses for nonlinear AC -- one complex solve per Picard
+    sweep, the standard amplitude-based effective mu).
+
+    ``nu_of_B`` : callable(Bmag_cf) -> nu_cf, taking the SCALAR amplitude
+    ``Bmag`` (not the vector, unlike the static nonlinear solver), e.g.::
+
+        def nu_of_B(Bmag):
+            Bc = IfPos(Bmag - 0.98*Bsat, 0.98*Bsat, Bmag)
+            return iron_ind * alpha/(1 - beta*Bc) + (1 - iron_ind) * NU0
+
+    ``relax`` under-relaxes (0.3-0.5 for hard saturation). Reduces EXACTLY to
+    :func:`solve_planar_eddy` (Jz mode) when nu_of_B is constant; saturation
+    makes |B| grow sub-linearly with drive (tests/test_planar_eddy_nonlinear.py).
+
+    Returns the converged complex H1 GridFunction ``A_z``.
+    """
+    fes = H1(mesh, order=order, complex=True, dirichlet=dirichlet)
+    u, v = fes.TnT()
+    gfu = GridFunction(fes)
+    gfu.vec[:] = 0.0
+    prev = None
+    for it in range(max_iter):
+        B = CoefficientFunction((grad(gfu)[1], -grad(gfu)[0]))
+        Bmag = sqrt((B[0] * Conj(B[0]) + B[1] * Conj(B[1])).real + 1e-30)
+        a = BilinearForm(fes)
+        a += nu_of_B(Bmag) * grad(u) * grad(v) * dx
+        a += 1j * omega * sigma * u * v * dx
+        f = LinearForm(fes)
+        if Jz is not None:
+            f += Jz * v * dx
+        a.Assemble()
+        f.Assemble()
+        gnew = GridFunction(fes)
+        gnew.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+        gfu.vec.data = (1.0 - relax) * gfu.vec + relax * gnew.vec
+        Bc = CoefficientFunction((grad(gfu)[1], -grad(gfu)[0]))
+        cur = Integrate((Bc[0] * Conj(Bc[0]) + Bc[1] * Conj(Bc[1])).real * dx, mesh)
+        if prev is not None and it + 1 >= min_iter and abs(cur - prev) < tol * max(abs(cur), 1e-30):
+            break
+        prev = cur
     return gfu
 
 

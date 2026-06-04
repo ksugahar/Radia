@@ -108,6 +108,36 @@ def eggshell_torque_2d(B, mesh, center, r_inner, r_outer, pivot=(0.0, 0.0),
     return -Integrate(integ * dx(definedon=mesh.Materials(air_region)), mesh)
 
 
+def eggshell_force_axi(B, mesh, center, r_inner, r_outer, air_region="air"):
+    """AXISYMMETRIC net AXIAL force [N] (full 3D torus) on the body whose
+    meridional cross-section lies inside ``r_inner`` of ``center=(rc, zc)``,
+    via the weighted Maxwell-stress ("eggshell") band in the (r, z) half-plane.
+
+    ``B`` = ``CF((B_r, B_z))`` is the meridional flux density
+    (``B_r = -grad(u)[1]``, ``B_z = grad(u)[0] + u/r`` from
+    :func:`solve_axi_magnetostatic`).  The band ``r_inner < rho < r_outer``,
+    ``rho = |(r, z) - center|``, must lie in the air enclosing the body's
+    cross-section.  Only the AXIAL force is returned -- an axisymmetric body has
+    no net radial force.  The ``2*pi*r`` toroidal weight makes this a 3D force:
+
+        F_z = -2 pi int_band [ (1/mu0) B_z (B.grad g)
+                               - (1/2mu0)|B|^2 d_z g ] r dr dz,
+
+    g = 1 at r_inner, 0 at r_outer.  Validated on two coaxial loops against the
+    exact mutual-inductance force I1 I2 dM/dz (M via elliptic integrals)
+    (tests/test_axi_force.py)."""
+    rc, zc = center
+    rho = sqrt((x - rc)**2 + (y - zc)**2)
+    band = IfPos(rho - r_inner, IfPos(r_outer - rho, 1.0, 0.0), 0.0)
+    gscale = -1.0 / (r_outer - r_inner)
+    gradg = band * CoefficientFunction((x - rc, y - zc)) / rho * gscale
+    Bdg = InnerProduct(B, gradg)          # B.grad g
+    B2 = InnerProduct(B, B)
+    integ_z = (1.0 / MU0) * B[1] * Bdg - (1.0 / (2.0 * MU0)) * B2 * gradg[1]
+    return -2.0 * math.pi * Integrate(
+        integ_z * x * dx(definedon=mesh.Materials(air_region)), mesh)
+
+
 def maxwell_surface_force(B, mesh, surface):
     """Maxwell-stress force as a surface integral over a named closed boundary
     ``surface`` in air enclosing the body (outward normal):
