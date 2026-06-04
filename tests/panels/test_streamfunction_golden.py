@@ -67,7 +67,10 @@ def biplanar_vols(tmp_path_factory):
 
 def _run_calc(coil, evalv, target, extra=None):
     cmd = [sys.executable, CALC, "--coil-vol", coil, "--eval-vol", evalv,
-           "--target-cf", target, "--order", "2"] + (extra or [])
+           "--order", "2"]
+    if target is not None:
+        cmd += ["--target-cf", target]
+    cmd += (extra or [])
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     r = subprocess.run(cmd, capture_output=True, text=True, env=env,
@@ -650,6 +653,81 @@ def test_regcoil_fusion_parallel_ops_inside_taskmanager():
         assert not outside, (
             "NGSolve parallel op(s) OUTSIDE the TaskManager block (would run "
             f"SERIALLY): {outside}")
+
+
+def _import_calc():
+    if PANELS not in sys.path:
+        sys.path.insert(0, PANELS)
+    import calc_streamfunction as C
+    return C
+
+
+def test_harmonic_basis_is_harmonic():
+    """Every solid-harmonic table entry is a HARMONIC polynomial (Laplacian 0)
+    -- the precondition for it to be a valid current-free Bz component."""
+    import numpy as np
+    C = _import_calc()
+    rng = np.random.default_rng(1)
+    pts = rng.normal(size=(6, 3))
+    h = 1e-4
+    for (l, m), (nm, expr) in C._SOLID_HARMONICS.items():
+        def f(q):
+            return float(eval(expr, {"__builtins__": {}},
+                              {"x": q[0], "y": q[1], "z": q[2]}))
+        worst = 0.0
+        for p in pts:
+            lap = -6.0 * f(p)
+            for k in range(3):
+                for s in (+1.0, -1.0):
+                    q = p.copy(); q[k] += s * h; lap += f(q)
+            scale = abs(f(p)) + 1e-9
+            worst = max(worst, abs(lap / h / h) / scale)
+        assert worst < 1e-3, f"{nm} {l},{m} not harmonic (lap/scale={worst:.1e})"
+
+
+def test_harmonic_target_expr_and_decompose_roundtrip():
+    """--target-harmonic builds the right polynomial, and the decomposition
+    recovers a pure harmonic (purity 1, machine-precision residual)."""
+    import numpy as np
+    C = _import_calc()
+    expr, terms = C._harmonic_target_expr("Z2:1.0,Z:0.1")
+    assert terms == [(2, 0, 1.0), (1, 0, 0.1)]
+    assert "z*z - 0.5*(x*x + y*y)" in expr and "(z)" in expr
+    rng = np.random.default_rng(2)
+    pts = rng.normal(size=(400, 3)) * 0.05
+    bz = eval(C._SOLID_HARMONICS[(2, 0)][1], {"__builtins__": {}},
+              {"x": pts[:, 0], "y": pts[:, 1], "z": pts[:, 2]})
+    d = C._harmonic_decompose(pts, bz, 3, target_terms=[(2, 0, 1.0)])
+    assert d["dominant"]["name"] == "Z2"
+    assert d["purity"] > 0.999
+    assert d["residual_fraction"] < 1e-9
+    # unknown harmonic name raises (No-Fallback)
+    with pytest.raises(ValueError, match="unknown harmonic"):
+        C._harmonic_lookup("Q9")
+
+
+def test_streamfunction_design_target_harmonic(sample_vols):
+    """--target-harmonic X (Gx) designs and the achieved-Bz harmonic spectrum
+    is dominated by X with high purity + a reported contaminant."""
+    coil, evalv = sample_vols
+    r = _run_calc(coil, evalv, None,
+                  extra=["--target-harmonic", "X"])
+    assert "error" not in r, f"calc error: {r.get('error')}"
+    assert r["target_cf"] == "(1.0)*(x)"
+    h = r["harmonics"]
+    assert h["dominant"]["name"] == "X"
+    assert h["purity"] > 0.99
+    assert h["residual_fraction"] < 1e-2
+    assert h["max_contaminant"] is not None
+    # the spectrum lists per-(l,m) field fractions, sorted, X first
+    assert h["spectrum"][0]["name"] == "X"
+
+
+def test_streamfunction_target_harmonic_xor(sample_vols):
+    """Giving both --target-cf and --target-harmonic is a loud error."""
+    coil, evalv = sample_vols
+    r = _run_calc(coil, evalv, "x", extra=["--target-harmonic", "X"])
+    assert "error" in r and "not both" in r["error"]
 
 
 if __name__ == "__main__":
