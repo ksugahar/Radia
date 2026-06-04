@@ -739,6 +739,16 @@ def test_harmonic_l4_forms_and_decompose():
     # l<=3 cannot represent a pure Z4 -> large residual (depth is load-bearing)
     assert C._harmonic_decompose(pts, bz, 3)["residual_fraction"] > 0.5
 
+    # MALFORMED inputs FAIL LOUD but CLEARLY: a missing m ('l=4'), an empty
+    # tuple slot ('(4,)') or a non-integer ('l=x,m=y') must raise a clean
+    # "unknown harmonic" ValueError -- NOT a raw KeyError / int() ValueError.
+    for bad in ("l=4", "(4,)", "(,4)", "l=x,m=y", "m=2,l=4"):
+        with pytest.raises(ValueError, match="unknown harmonic"):
+            C._harmonic_lookup(bad)
+    # a well-FORMED but out-of-table pair gets the range message instead
+    with pytest.raises(ValueError, match="not in the table"):
+        C._harmonic_lookup("l=9,m=0")
+
 
 def test_streamfunction_design_target_harmonic(sample_vols):
     """--target-harmonic X (Gx) designs and the achieved-Bz harmonic spectrum
