@@ -105,6 +105,8 @@ TOPIC MAP  (query: streamfunction("<topic>"))
   panel             the design/pareto/manufacture PANEL + calc_streamfunction.py
   boundary_conditions  --confine off/on/abe (Abe edge-equipotential BC)
   contour           contour=flux-line; --contour-sub order-p + --flux-plot bubble
+  harmonics         spherical-harmonic target (--target-harmonic Z2/X/..) +
+                    achieved-field (l,m) decomposition: purity / contamination
   fusion            stellarator Stage-2 (REGCOIL/NESCOIL/FOCUS): winding-surface
                     current potential, net current, force/stress, VMEC, winding-shape
 
@@ -336,8 +338,51 @@ REFERENCES
 """
 
 
+SF_HARMONICS = r"""
+SPHERICAL-HARMONIC TARGET + FIELD DECOMPOSITION (MRI gradient / shim basis)
+==========================================================================
+In a current-free region Bz is harmonic, so it expands in REAL REGULAR SOLID
+HARMONICS R_l^m(x,y,z) -- homogeneous harmonic polynomials (Laplace nabla^2
+R = 0).  These ARE the named MRI gradients/shims; the SF designer speaks them
+natively for BOTH the target and the analysis of the achieved field.
+
+NAMED BASIS (l <= 3; one poly-string table = the single source of truth):
+  l=0  Z0 = 1
+  l=1  Z = z (Gz),  X = x (Gx),  Y = y (Gy)
+  l=2  Z2 = z^2 - (x^2+y^2)/2,  ZX = xz,  ZY = yz,  C2 = x^2-y^2,  S2 = xy
+  l=3  Z3 = z^3 - 1.5 z(x^2+y^2),  Z2X, Z2Y, ZC2, ZS2, C3, S3
+  m>0 = cos(m.phi) (C);  m<0 = sin(|m|.phi) (S).
+
+TARGET -- ``--target-harmonic`` (alternative to ``--target-cf``):
+  a name, or ``l=L,m=M``, optionally weighted and summed:
+    --target-harmonic X            Gx gradient
+    --target-harmonic Z2           pure 2nd-order shim
+    --target-harmonic "Z2:1.0,Z:0.1"   Z2 with a Z offset
+  It generates the solid-harmonic ``--target-cf`` polynomial (so the whole
+  pipeline -- design / pareto / manufacture / single-stroke -- is unchanged).
+  Give ``--target-cf`` OR ``--target-harmonic`` (loud error on both).
+
+ANALYSIS -- the achieved Bz over the DSV is decomposed in DESIGN mode
+(``result["harmonics"]``, depth ``--harmonic-lmax`` default 3):
+  * spectrum   per-(l,m) field RMS over the DSV (the harmonic content, in T),
+               sorted; each with its LSQ coefficient and field fraction
+  * residual_fraction   how completely harmonics up to lmax capture the field
+  * purity     (with a --target-harmonic) the target-harmonic field fraction
+               -- the standard "gradient purity" gradient-coil quality metric
+  * max_contaminant   the largest non-target harmonic (e.g. a Gx coil's Z2)
+
+VERIFIED (cylinder fixture): --target-harmonic X -> dominant X, purity 1.000,
+residual 5e-5, ZX contaminant 7e-6; --target-harmonic Z2 --confine abe ->
+dominant Z2, purity 1.000.  The named-basis harmonicity (Laplacian 0) and the
+target<->decompose round-trip are golden-locked
+(tests/panels/test_streamfunction_golden.py).  The panel auto-generates the
+two flags (cli-diff clean).
+"""
+
+
 TOPICS = {
     "overview": "SF coil-design framework + pipeline + topic map (this server's front door)",
+    "harmonics": "spherical-harmonic target (--target-harmonic Z2/X/..) + achieved-field (l,m) decomposition: purity / contamination (MRI gradient/shim basis)",
     "panel": "the design/pareto/manufacture PANEL + calc_streamfunction.py CLI",
     "boundary_conditions": "current confinement BC --confine off/on/abe (Abe edge-equipotential)",
     "contour": "contour=flux-line principle; --contour-sub order-p + --flux-plot bubble view",
@@ -386,6 +431,11 @@ def get_streamfunction_documentation(topic: str = "overview") -> str:
              "flux_line", "flux_lines", "bubble", "bubble_system",
              "cross_codebase", "validation_panel", "chain"):
         return SF_PANEL
+    if t in ("harmonics", "harmonic", "spherical_harmonic", "spherical_harmonics",
+             "spherical", "solid_harmonic", "solid_harmonics", "target_harmonic",
+             "gradient", "gradients", "shim", "shims", "purity", "contamination",
+             "mri", "z2", "decompose", "decomposition", "lm", "ylm"):
+        return SF_HARMONICS
     if t in ("fusion", "regcoil", "nescoil", "focus", "stellarator",
              "winding_surface", "winding_shape", "secular", "net_current",
              "cohomology", "vmec", "wout", "coil_force", "coil_stress",
