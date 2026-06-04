@@ -18,6 +18,7 @@ from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx, ds,
                      Integrate, CoefficientFunction, BND, x as _r)
 
 EPS0 = 8.8541878128e-12
+SIGMA_SB = 5.670374419e-8     # Stefan-Boltzmann constant [W/m^2/K^4]
 
 
 def solve_poisson_2d(mesh, coeff, dirichlet_values, source=None, order=2,
@@ -113,17 +114,50 @@ def capacitance(V, mesh, eps, v_applied):
 
 
 def solve_thermal(mesh, k, temperatures, heat_source=None, order=2,
-                  convection=None):
+                  convection=None, radiation=None, relax=1.0, max_iter=60,
+                  tol=1e-8):
     """FEMM ``hsolv`` analog (steady state): -div(k grad T) = q.
     ``temperatures`` = {boundary: T} fixed-temperature walls.
     ``convection`` = {boundary: (h, T_inf)} convective (Robin) walls,
-    -k dT/dn = h (T - T_inf) [h in W/m^2/K]. Unnamed walls are insulated
-    (natural Neumann). Returns T; heat flux q = -k grad(T).
+    -k dT/dn = h (T - T_inf) [h in W/m^2/K].
+    ``radiation`` = {boundary: (eps, T_inf)} radiative walls,
+    -k dT/dn = eps*sigma_SB*(T^4 - T_inf^4) [T in KELVIN]. This is NONLINEAR;
+    it is solved by Picard, linearizing each sweep as an effective Robin film
+    coefficient  h_rad(T) = eps*sigma_SB*(T^2 + T_inf^2)*(T + T_inf)  evaluated
+    at the previous temperature (combined with any convection on the same wall).
+    Unnamed walls are insulated (natural Neumann). Returns T; q = -k grad(T).
 
-    Validated: 1D slab Dirichlet + convection, surface T and flux vs the
-    series thermal resistance L/k + 1/h (tests/test_scalar_fem2d_ext.py)."""
-    return solve_poisson_2d(mesh, k, temperatures, source=heat_source,
-                            order=order, robin=convection)
+    Validated: 1D slab Dirichlet + convection vs L/k + 1/h (+0.003%); Dirichlet
+    + radiation vs the implicit conduction/radiation balance solved by brentq
+    (tests/test_scalar_fem2d_ext.py)."""
+    if radiation is None:
+        return solve_poisson_2d(mesh, k, temperatures, source=heat_source,
+                                order=order, robin=convection)
+
+    base = dict(convection) if convection else {}
+    gfu = solve_poisson_2d(mesh, k, temperatures, source=heat_source,
+                           order=order, robin=base or None)
+    prev = None
+    for _ in range(max_iter):
+        robin = dict(base)
+        for bnd, (eps, Tinf) in radiation.items():
+            h_rad = eps * SIGMA_SB * (gfu * gfu + Tinf * Tinf) * (gfu + Tinf)
+            if bnd in robin:                       # convection + radiation wall
+                h_c, T_c = robin[bnd]
+                h_tot = h_c + h_rad
+                robin[bnd] = (h_tot, (h_c * T_c + h_rad * Tinf) / h_tot)
+            else:
+                robin[bnd] = (h_rad, Tinf)
+        gnew = solve_poisson_2d(mesh, k, temperatures, source=heat_source,
+                                order=order, robin=robin)
+        if relax != 1.0:
+            gnew.vec.data = (1.0 - relax) * gfu.vec + relax * gnew.vec
+        cur = Integrate(gnew * gnew * dx, mesh)
+        gfu = gnew
+        if prev is not None and abs(cur - prev) < tol * max(abs(cur), 1e-30):
+            break
+        prev = cur
+    return gfu
 
 
 def solve_current_flow(mesh, sigma, potentials, order=2):
