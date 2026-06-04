@@ -41,6 +41,7 @@ from .knowledge.peec_inductance import get_peec_inductance_documentation
 from .knowledge.esim import get_esim_documentation
 from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
 from .knowledge.analytical_formulas import get_analytical_formulas_documentation
+from .knowledge.force_validation import get_force_validation_documentation
 from .knowledge.install_deploy import get_install_deploy_documentation
 from .knowledge.release_workflow import get_release_workflow_documentation
 from .knowledge.standalone_panels import get_standalone_panels_documentation
@@ -57,6 +58,7 @@ from .knowledge.cln_3d import (
 from .knowledge.bem_cln import get_bem_cln_documentation
 from .knowledge.cln_sphere_dd import get_cln_sphere_dd_documentation
 from .knowledge.mmm_core import get_mmm_core_documentation
+from .knowledge.femm_parity import get_femm_parity_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -897,10 +899,35 @@ def axifemm_documentation(topic: str = "all") -> str:
             "validation"      - cross-validation references; Hessian-of-W convention
             "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
                                 sphere -0.001 % vs Stoll, mu-vs-nu factor & Curve(2) gotchas)
+            "magnet"          - permanent-magnet source term (FEMM prob3big.cpp port):
+                                weak-form RHS + magnetized-sphere validation (-0.05%)
             "file_layout"     - where each piece lives (C++, Mathematica, tests)
             "why_dropped_p3"  - why p=3 was attempted and reverted (Vandermonde cond ~ 1e30)
     """
     return get_axifemm_documentation(topic)
+
+
+@mcp.tool()
+def femm_parity_documentation(topic: str = "all") -> str:
+    """
+    Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics,
+    D. Meeker) analyses are reproduced as EXECUTABLE + TESTED NGSolve capability
+    in radia-ngsolve, with the function to call and the analytical benchmark each
+    was validated against (all <2%, most <0.2%).
+
+    Use this when designing an FEM analysis that a FEMM user would run in FEMM 4.2,
+    to find the equivalent radia-ngsolve function and its API.
+
+    Args:
+        topic: Documentation section. Options:
+            "all"        - all sections concatenated
+            "overview"   - design rule: build capability not a number
+            "matrix"     - planar / axisymmetric capability matrix (11 analyses)
+            "magnetics"  - magnetostatic / nonlinear / eddy / circuit + axi API
+            "scalar"     - electrostatic / heat / current-flow (csolv/hsolv) API
+            "validation" - regression test list and per-test error bounds
+    """
+    return get_femm_parity_documentation(topic)
 
 
 @mcp.tool()
@@ -983,6 +1010,35 @@ def analytical_formulas(topic: str = "all") -> str:
         - PDFs themselves: lab-internal, not redistributed with the repo.
     """
     return get_analytical_formulas_documentation(topic)
+
+
+@mcp.tool()
+def force_validation(topic: str = "all") -> str:
+    """
+    EM force extraction in NGSolve + COMSOL <-> NGSolve cross-validation.
+
+    Records how the radia-ngsolve FEM path computes electromagnetic force
+    (eggshell / weighted Maxwell stress) and the cross-validation results that
+    make the NGSolve magnetostatic path trustworthy: solved independently in
+    COMSOL (via MATLAB LiveLink) and NGSolve on the same geometry and compared
+    to the analytic answer.
+
+    Validated (linear magnetostatics, A-form, HCurl order 2):
+      * uniformly magnetized sphere: COMSOL == NGSolve to 0.11 %, both <0.5 %
+        of the analytic (2/3)Br interior field.
+      * coil + linear-iron sphere force: COMSOL == NGSolve to ~3 %, both near
+        the dipole-in-gradient analytic.
+
+    Read this when: implementing/validating an EM force computation, deciding
+    whether to trust an NGSolve magnetostatic result, or reproducing the COMSOL
+    A-form recipe (the comsol_recipe topic has the live-verified LiveLink
+    settings: material sigma=0, per-domain mur via Ampere's Law, GaugeFixingA,
+    direct-solver swap, ExternalCurrentDensity coil, ForceCalculation readout).
+
+    Args:
+        topic: all (default) | eggshell | comsol_xval | comsol_recipe
+    """
+    return get_force_validation_documentation(topic)
 
 
 @mcp.tool()
