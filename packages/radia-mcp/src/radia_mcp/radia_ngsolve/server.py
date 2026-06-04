@@ -922,7 +922,7 @@ def femm_parity_documentation(topic: str = "all") -> str:
         topic: Documentation section. Options:
             "all"        - all sections concatenated
             "overview"   - design rule: build capability not a number
-            "matrix"     - planar / axisymmetric capability matrix (19 analyses)
+            "matrix"     - planar / axisymmetric capability matrix (21 analyses)
             "magnetics"  - magnetostatic / nonlinear / eddy / circuit + axi API
             "scalar"     - electrostatic / heat / current-flow (csolv/hsolv) API
             "lamination" - laminated steel (anisotropic + complex-mu), multi-
