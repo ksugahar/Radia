@@ -45,6 +45,7 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 | `ellipsoid_alpha_tensor.py` | **Shape-anisotropic polarizability tensor** of a conducting ellipsoid (analytic demag tensor + high-freq perfect-conductor `kappa_i = -V/(1-N_i)` + orientation-dependent lift). The analytic non-axisym anchor. See below. |
 | `ellipsoid_alpha_omega_axisym.py` | **Full-frequency** axial `alpha_c(omega)` of a spheroid by axisymmetric FEM (uniform-field eddy solve), validated on the sphere vs `4 pi a^3 G(x)` and anchored at HF by `-V/(1-N_c)`. The eddy leg between the DC and HF analytic limits. See below. |
 | `coil_levitation_equilibrium.py` | **Real-coil levitation equilibrium**: Radia open-boundary coil field x the verified sphere force -> stable equilibrium height + vertical stability. The Radia+NGSolve maglev workflow in action. See below. |
+| `coil_sphere_eddy_force.py` | **Dipole-approximation error**: the FULL axisymmetric eddy-current Lorentz force on a sphere-in-coil vs the dipole force at `a/L ~ 0.5` (resolves the `coil_levitation` caveat). See below. |
 
 ## Isotropic levitation force (sphere) -- coefficient pinned, CLN-reduced
 
@@ -161,7 +162,30 @@ the point-dipole force is approximate that close to the coil.  CHECK 5
 shows the approximation is freely controllable (a smaller sphere gives a
 clean `a/L << 1` at essentially the same height); a full Radia+NGSolve
 eddy-current reaction-field solve would refine the force in the `a/L ~ 0.5`
-regime.
+regime.  That refinement is `coil_sphere_eddy_force.py` (below).
+
+## Dipole-approximation error -- full eddy force vs the dipole force
+
+`coil_sphere_eddy_force.py` quantifies exactly how good the point-dipole
+levitation force is, by computing the FULL axisymmetric eddy-current
+Lorentz force on the conducting sphere (the lab-verified TEAM 28 mixed
+phi-B `(K+sN)` solver) and comparing it to the induced-dipole force at the
+SAME height, using the SAME FEM coil field -- so the only difference is the
+approximation.
+
+| check | result |
+|---|---|
+| coil-only on-axis field vs analytic loop | 0.03% |
+| `a/L = 0.50` (5 mm sphere) | `F_full/F_dipole = 1.019` (**+1.9%**: the dipole slightly under-predicts the true eddy force this close to the coil) |
+| `a/L = 0.10` (1 mm sphere) | ratio `= 0.998` (**-0.2%**): the gap collapses -- confirming it is genuinely the finite-size point-dipole approximation |
+
+**Force convention** (the load-bearing point): the full force uses the
+standard time average `<f_z> = (1/2) Re[Jt conj(B_r)]`, the same
+`1/2`-peak-amplitude convention as the Landau dipole coefficient, so the
+two are directly comparable; the `ratio -> 1` limit as `a/L -> 0` validates
+it.  The verbatim TEAM 28 integral `Re[B_r*Jt]` (a lab-`.mat` normalization)
+is exactly `2x` this for the sphere (measured 2.0000; the `Im*Im` cross term
+is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
 
 ## Source / provenance
 
