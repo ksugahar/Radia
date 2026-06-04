@@ -13,6 +13,17 @@ I/O (per the 2026-06 design decisions):
                SCALAR expr -> Bz target (e.g. "x" = Gx, "1" = uniform Bz,
                "x*x-y*y" = C2 ellipse shim).  3-VECTOR expr "(Bx,By,Bz)" ->
                full vector-B target.
+  --target-harmonic  target as a SPHERICAL HARMONIC (MRI gradient/shim basis):
+               a name (Z0,X,Y,Z,Z2,ZX,ZY,C2,S2,Z3,..) or 'l=L,m=M', optionally
+               weighted and summed, e.g. 'Z2' (pure 2nd-order shim), 'X' (Gx),
+               'Z2:1.0,Z:0.1'.  Generates the solid-harmonic --target-cf
+               polynomial.  Give --target-cf OR --target-harmonic.
+
+In design mode the ACHIEVED Bz over the DSV is decomposed into solid
+spherical harmonics (``result["harmonics"]``): the per-(l,m) field-RMS
+spectrum, the LSQ residual, and -- when a --target-harmonic is given --
+the PURITY (target-harmonic field fraction) and the largest CONTAMINANT.
+These are the canonical gradient-coil quality metrics.
 
 THREE MODES (--method):
   design       target -> A psi = B (folded-Tikhonov RegularizedTSVD) -> psi,
@@ -80,6 +91,174 @@ def _eval_target_np(expr, pts, vector_b):
         v = eval(expr, {"__builtins__": {}}, scope)            # noqa: S307
         out.extend([float(c) for c in v] if vector_b else [float(v)])
     return np.array(out, dtype=float)
+
+
+# ==========================================================================
+# Spherical-harmonic target + field decomposition (MRI gradient / shim basis).
+#
+# In a current-free region Bz is harmonic, so it expands in REAL REGULAR SOLID
+# HARMONICS R_l^m(x,y,z) -- homogeneous harmonic polynomials (Laplace nabla^2
+# R = 0).  These ARE the named MRI gradients/shims (Z0, X, Y, Z, Z2, ZX, ..).
+# We store each as a Cartesian polynomial STRING and use the SAME table for
+# BOTH the target (--target-harmonic) and the analysis of the achieved field
+# (purity / contamination), so the round-trip is exact.  m>0 = cos(m.phi) (C),
+# m<0 = sin(|m|.phi) (S); the leading (unnormalised) Cartesian form is used
+# consistently throughout, so normalisation cancels in every reported ratio.
+# ==========================================================================
+_SOLID_HARMONICS = {
+    (0, 0):  ("Z0",  "(1.0 + 0.0*x)"),
+    (1, 0):  ("Z",   "(z)"),
+    (1, 1):  ("X",   "(x)"),
+    (1, -1): ("Y",   "(y)"),
+    (2, 0):  ("Z2",  "(z*z - 0.5*(x*x + y*y))"),
+    (2, 1):  ("ZX",  "(x*z)"),
+    (2, -1): ("ZY",  "(y*z)"),
+    (2, 2):  ("C2",  "(x*x - y*y)"),
+    (2, -2): ("S2",  "(x*y)"),
+    (3, 0):  ("Z3",  "(z*z*z - 1.5*z*(x*x + y*y))"),
+    (3, 1):  ("Z2X", "(x*(4.0*z*z - x*x - y*y))"),
+    (3, -1): ("Z2Y", "(y*(4.0*z*z - x*x - y*y))"),
+    (3, 2):  ("ZC2", "(z*(x*x - y*y))"),
+    (3, -2): ("ZS2", "(x*y*z)"),
+    (3, 3):  ("C3",  "(x*(x*x - 3.0*y*y))"),
+    (3, -3): ("S3",  "(y*(3.0*x*x - y*y))"),
+}
+_HARMONIC_BY_NAME = {nm.upper(): lm for lm, (nm, _) in _SOLID_HARMONICS.items()}
+_HARMONIC_BY_NAME.update({"X2Y2": (2, 2), "XY": (2, -2), "GX": (1, 1),
+                          "GY": (1, -1), "GZ": (1, 0), "Z1": (1, 0)})
+
+
+def _harmonic_lookup(token):
+    """Resolve one harmonic token -> (l, m).  Accepts a name (Z2, ZX, ..), an
+    ``l=L,m=M`` pair, or a ``(L,M)`` tuple string.  Raises (No-Fallback) with
+    the available names on an unknown token."""
+    t = token.strip()
+    tu = t.upper()
+    if tu in _HARMONIC_BY_NAME:
+        return _HARMONIC_BY_NAME[tu]
+    s = t.replace("(", "").replace(")", "").replace(" ", "")
+    if s.lower().startswith("l="):
+        d = dict(kv.split("=") for kv in s.split(","))
+        lm = (int(d["l"]), int(d["m"]))
+    elif "," in s:
+        a, b = s.split(",")[:2]
+        lm = (int(a), int(b))
+    else:
+        raise ValueError(
+            f"unknown harmonic '{token}'. Names: "
+            f"{sorted({nm for nm, _ in _SOLID_HARMONICS.values()})}; "
+            f"or 'l=L,m=M' / '(L,M)'.")
+    if lm not in _SOLID_HARMONICS:
+        raise ValueError(f"harmonic {lm} not in the table (l<=3 supported).")
+    return lm
+
+
+def _harmonic_target_expr(spec):
+    """Build the target-cf polynomial STRING for a spherical-harmonic spec.
+
+    ``spec`` = comma-separated terms ``NAME`` or ``NAME:coeff`` (or
+    ``l=L,m=M:coeff`` / ``(L,M):coeff``), e.g. ``Z2`` (pure Z2 shim),
+    ``X`` (Gx gradient), ``Z2:1.0,Z:0.1`` (Z2 with a Z offset).  Returns
+    ``(expr_string, [(l, m, coeff), ...])``."""
+    terms, parts = [], []
+    for chunk in spec.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        # a coeff is the part after the LAST ':' only if it parses as a float
+        coeff = 1.0
+        token = chunk
+        if ":" in chunk:
+            head, tail = chunk.rsplit(":", 1)
+            try:
+                coeff = float(tail)
+                token = head
+            except ValueError:
+                token = chunk            # ':' belonged to the token (none today)
+        lm = _harmonic_lookup(token)
+        terms.append((lm[0], lm[1], coeff))
+        parts.append(f"({coeff})*{_SOLID_HARMONICS[lm][1]}")
+    if not terms:
+        raise ValueError(f"empty --target-harmonic spec '{spec}'")
+    return " + ".join(parts), terms
+
+
+def _solid_harmonic_matrix(pts, lmax):
+    """(H, labels): H[i, j] = R_lj(pts[i]); labels[j] = (l, m, name).  Columns
+    are every table harmonic with l <= lmax."""
+    xs, ys, zs = pts[:, 0], pts[:, 1], pts[:, 2]
+    cols, labels = [], []
+    for (l, m), (nm, expr) in sorted(_SOLID_HARMONICS.items()):
+        if l > lmax:
+            continue
+        val = eval(expr, {"__builtins__": {}},                 # noqa: S307
+                   {"x": xs, "y": ys, "z": zs})
+        cols.append(np.broadcast_to(np.asarray(val, float), xs.shape))
+        labels.append((l, m, nm))
+    return np.column_stack(cols), labels
+
+
+def _harmonic_decompose(pts, bz, lmax, target_terms=None):
+    """Least-squares decomposition of an achieved Bz sample into solid
+    harmonics over the eval points.  Returns the per-term field RMS spectrum,
+    the LSQ residual fraction, and (if a target is given) the purity and the
+    largest contaminant -- the canonical gradient-coil quality metrics.
+
+    purity = RMS of the target harmonic's field / RMS of the full fit field
+    (an energy fraction; the solid harmonics are orthogonal over a sphere, so
+    over a roughly-spherical DSV this is the standard practical measure)."""
+    H, labels = _solid_harmonic_matrix(pts, lmax)
+    coeff, *_ = np.linalg.lstsq(H, bz, rcond=None)
+    fit = H @ coeff
+    total = float(np.sqrt(np.mean(fit * fit))) + 1e-300
+    bz_rms = float(np.sqrt(np.mean(bz * bz))) + 1e-300
+    term_rms = np.array([float(np.sqrt(np.mean((H[:, j] * coeff[j]) ** 2)))
+                         for j in range(len(labels))])
+    spectrum = []
+    for j, (l, m, nm) in enumerate(labels):
+        spectrum.append({"l": l, "m": m, "name": nm,
+                         "coeff": float(coeff[j]),
+                         "field_rms_T": term_rms[j],
+                         "fraction": float(term_rms[j] / total)})
+    spectrum.sort(key=lambda d: -d["field_rms_T"])
+    out = {"lmax": lmax,
+           "residual_fraction": float(np.linalg.norm(bz - fit)
+                                      / (np.linalg.norm(bz) + 1e-300)),
+           "spectrum": spectrum,
+           "dominant": {"name": spectrum[0]["name"], "l": spectrum[0]["l"],
+                        "m": spectrum[0]["m"], "coeff": spectrum[0]["coeff"]}}
+    if target_terms:
+        tset = {(l, m) for (l, m, _c) in target_terms}
+        e_tot = float(np.sum(term_rms ** 2))
+        e_tgt = float(np.sum([term_rms[j] ** 2 for j, (l, m, _n)
+                              in enumerate(labels) if (l, m) in tset]))
+        contam = [(labels[j][2], term_rms[j] / total) for j in range(len(labels))
+                  if (labels[j][0], labels[j][1]) not in tset]
+        contam.sort(key=lambda t: -t[1])
+        out["purity"] = float(np.sqrt(e_tgt / (e_tot + 1e-300)))
+        out["max_contaminant"] = ({"name": contam[0][0], "fraction": contam[0][1]}
+                                  if contam else None)
+    return out
+
+
+def _resolve_target_harmonic(args):
+    """If ``--target-harmonic`` is given, fill ``args.target_cf`` with the
+    generated polynomial (idempotent).  Stores the parsed (l,m,coeff) terms on
+    ``args._harmonic_terms`` for the analysis stage.  Exactly one of
+    ``--target-cf`` / ``--target-harmonic`` must be set."""
+    spec = getattr(args, "target_harmonic", "") or ""
+    if getattr(args, "_harmonic_terms", None) is not None:
+        return                                                  # already resolved
+    if spec:
+        if args.target_cf:
+            raise ValueError("give --target-cf OR --target-harmonic, not both.")
+        expr, terms = _harmonic_target_expr(spec)
+        args.target_cf = expr
+        args._harmonic_terms = terms
+    else:
+        args._harmonic_terms = []
+        if not args.target_cf:
+            raise ValueError("need --target-cf or --target-harmonic.")
 
 
 def _assemble_biot_savart(fes, n, pts, comps):
@@ -315,6 +494,7 @@ def _build_problem(args, eval_scale=1.0):
     from ngsolve import Mesh, H1, specialcf
     from radia.stream_function import aca_tsvd, RegularizedTSVD
 
+    _resolve_target_harmonic(args)          # --target-harmonic -> args.target_cf
     coil = Mesh(args.coil_vol)
     # confine = the stream-function (current-potential) boundary condition.
     #   off : none (current may cross the former edge -> contours can run off
@@ -1291,6 +1471,14 @@ def run_design(args):
             "t_solve_s": round(t2 - t1, 3),
             "t_total_s": round(time.perf_counter() - t0, 3),
         }
+        # spherical-harmonic decomposition of the ACHIEVED Bz over the DSV --
+        # the (l,m) field-RMS spectrum + purity / contamination (the canonical
+        # gradient-coil quality metrics).  Runs for ANY Bz target.
+        if args.harmonic_lmax > 0 and not P["vector_b"]:
+            bz = P["Am"] @ psi_f
+            result["harmonics"] = _harmonic_decompose(
+                P["mpts"], bz, args.harmonic_lmax,
+                target_terms=getattr(args, "_harmonic_terms", None) or None)
         if args.regularize == "inductance":
             # the minimised objective: magnetic stored energy 1/2 psi^T L psi
             # (= 1/2 psi_f^T S psi_f since S = R^T L_psi R).  This is the
@@ -1606,9 +1794,19 @@ def build_argparser():
                     help="coil surface mesh (.vol, 2D-in-3D)")
     ap.add_argument("--eval-vol", required=True,
                     help="evaluation region mesh (.vol; surface or volume)")
-    ap.add_argument("--target-cf", required=True,
+    ap.add_argument("--target-cf", default="",
                     help="target field CoefficientFunction expr of x,y,z "
-                         "(scalar -> Bz; 3-vector -> B)")
+                         "(scalar -> Bz; 3-vector -> B). Give this OR "
+                         "--target-harmonic.")
+    ap.add_argument("--target-harmonic", default="",
+                    help="target as a spherical harmonic (MRI gradient/shim "
+                         "basis): a name (Z0,X,Y,Z,Z2,ZX,ZY,C2,S2,Z3,Z2X,..) "
+                         "or 'l=L,m=M', optionally weighted/summed, e.g. 'Z2', "
+                         "'X' (Gx), 'Z2:1.0,Z:0.1'. Generates the solid-harmonic "
+                         "--target-cf polynomial.")
+    ap.add_argument("--harmonic-lmax", type=int, default=3,
+                    help="max degree l for the achieved-Bz spherical-harmonic "
+                         "decomposition (purity/contamination). 0 = off.")
     ap.add_argument("--method", choices=["design", "pareto", "manufacture"],
                     default="design")
     # ---- solver (design + pareto) ----
