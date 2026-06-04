@@ -42,6 +42,8 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 | `team28_cln_sweep.py`  | CLN force **vs height**, compared to the lab full-FEM `Fz1(dZ)`; recovers the levitation equilibrium ~+4 mm. |
 | `cln_sibc_cuboid_3d.py` | Python port of the lab CLN-SIBC (Warburg-Schur) 3D cuboid core: Foster admittance + CLN reduction + Schur-F SIBC termination + polarizability `alpha(s)=V-Y/sigma`. The non-axisym building block. |
 | `levitation_sphere_force.py` | **Isotropic induced-dipole AC levitation force** on a conducting sphere, coefficient pinned by the analytic perfect-conductor limit, frequency response reduced by CLN/Cauer. See below. |
+| `ellipsoid_alpha_tensor.py` | **Shape-anisotropic polarizability tensor** of a conducting ellipsoid (analytic demag tensor + high-freq perfect-conductor `kappa_i = -V/(1-N_i)` + orientation-dependent lift). The analytic non-axisym anchor. See below. |
+| `coil_levitation_equilibrium.py` | **Real-coil levitation equilibrium**: Radia open-boundary coil field x the verified sphere force -> stable equilibrium height + vertical stability. The Radia+NGSolve maglev workflow in action. See below. |
 
 ## Isotropic levitation force (sphere) -- coefficient pinned, CLN-reduced
 
@@ -87,6 +89,57 @@ eddy-current generalization of the magnetostatic **demagnetizing-factor
 tensor** (sphere: isotropic `1/3`; ellipsoid / brick: direction-dependent,
 from shape alone).  Material anisotropy (tensor `sigma` / `mu`) is a
 separate, genuinely-material effect, not what this refinement is about.
+
+## Shape-anisotropic ellipsoid tensor -- analytic anchor
+
+`ellipsoid_alpha_tensor.py` makes the shape anisotropy quantitative and
+verifies it analytically.  Two limits are closed-form:
+
+- **DC**: `alpha_i(0) = 0` (no eddy response).
+- **High frequency** (perfect-conductor flux exclusion): the induced
+  moment along principal axis `i` is `m_i = kappa_i B_i / mu0` with
+  `kappa_i = -V/(1 - N_i)`, where `N_i` is the demagnetizing factor
+  (exact Osborn integral, `sum_i N_i = 1`).
+
+| check | result |
+|---|---|
+| demag tensor | `sum N_i = 1`; Osborn integral == spheroid closed form (< 1e-10); sphere `1/3`; 2:1 prolate `N_c = 0.1736` |
+| triaxial 5x3x1.5 mm | three DISTINCT `kappa = (-109, -130, -228) mm^3`, anisotropy `|kappa_z|/|kappa_x| = 2.09` |
+| sphere limit | reduces to the verified `-2 pi a^3` exactly |
+| orientation lift | `<F_z> = -(V/4mu0)/(1-N_i) grad(B0^2)` -- a body lifts **2.08x** more with `B` along its SHORT axis (most flux excluded); reduces to the verified sphere coefficient exactly |
+
+The full-frequency eddy `alpha_i(omega)` tensor *between* `alpha=0` (DC)
+and `-V/(1-N_i)` (HF) has no simple closed form for a triaxial body (the
+sphere is special); it is the per-direction numerical Foster / FEM
+extension.  What is locked here is the analytic shape-anisotropy: the
+demag tensor, the high-frequency polarizability tensor, and its
+orientation-dependent levitation-force consequence.
+
+## Real-coil levitation equilibrium -- the Radia + NGSolve workflow
+
+`coil_levitation_equilibrium.py` composes Radia's open-boundary coil field
+with the verified sphere force to find an actual levitation equilibrium --
+the "Maglev = Radia + NGSolve" policy reduced to the part that needs Radia
+(the sphere reaction is the analytic `G`, so no air mesh is required).  A
+30 mm circular coil (`ObjFlmCur`, 10000 At) at 50 kHz lifts a 5 mm Cu
+sphere; the equilibrium is the height where the lift `F_z(z) = (pi a^3/
+mu0) Re[G] d|B0|^2/dz` balances gravity on the stable (descending) branch.
+
+| check | result |
+|---|---|
+| Radia coil field vs analytic loop `Bz = mu0 NI R^2/(2(R^2+z^2)^1.5)` | max error 0.005% |
+| sphere response | `a/delta = 16.9`, `Re[G] = -0.456` (diamagnetic lift) |
+| equilibrium | `z* = 35.2 mm`, lift `46.02 mN` vs weight `46.02 mN` (residual -0.004%) |
+| vertical stability | `dF/dz = -4.75 N/m < 0` (restoring; small-oscillation `f ~ 5 Hz`) |
+| dipole-approximation control | `a^3` cancels in `F=weight` so `z*` depends on size only through `Re[G(a/delta)]`; shrinking the sphere drives `a/L` 0.49 -> 0.10 (clean point dipole), `z*` shifting only 15% (`Re[G]` desaturation) |
+
+**Honest caveat** (reported in the JSON, not asserted): at `a = 5 mm` the
+sphere sits where the field-gradient scale `L ~ 10 mm`, so `a/L ~ 0.5` --
+the point-dipole force is approximate that close to the coil.  CHECK 5
+shows the approximation is freely controllable (a smaller sphere gives a
+clean `a/L << 1` at essentially the same height); a full Radia+NGSolve
+eddy-current reaction-field solve would refine the force in the `a/L ~ 0.5`
+regime.
 
 ## Source / provenance
 
