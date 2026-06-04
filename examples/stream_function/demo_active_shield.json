@@ -1,0 +1,40 @@
+{
+  "order": 2,
+  "shield_weight": 1.0,
+  "geometry": {
+    "primary_r_m": 0.15,
+    "shield_r_m": 0.2,
+    "dsv_r_m": 0.05
+  },
+  "homogeneity_unshielded": 4.000436134301767e-05,
+  "homogeneity_shielded": 9.489793510694874e-05,
+  "stray_unshielded": 1.6461873062315038,
+  "stray_shielded": 0.01912232143704904,
+  "shielding_factor": 86.08721026109598,
+  "n_external_measure": 400,
+  "profile_radii_m": [
+    0.21,
+    0.25,
+    0.3,
+    0.4,
+    0.55,
+    0.75
+  ],
+  "profile_stray_unshielded": [
+    0.14954157624278352,
+    0.09154228977487354,
+    0.0538938260388875,
+    0.021475946588782185,
+    0.006702918650388469,
+    0.0018777047793102392
+  ],
+  "profile_stray_shielded": [
+    0.05453757711818857,
+    0.0007491110945516946,
+    3.04125034003728e-05,
+    1.6487225856075256e-05,
+    1.1247700032446909e-05,
+    5.244026292019721e-06
+  ],
+  "note": "Genuine ~86x (39 dB) stray reduction with a LARGE external null region (full-length shell r=0.235-0.27).  Reported stray is at INDEPENDENT external points (centroids), the honest generalising field -- NOT the circular constraint-point residual.  The external region MUST cover the exterior: a thin mid-plane slice overfits locally (~4x) and worsens the field at larger z.  The un-sampled gap between shield (r=0.20) and null region (r=0.235) is only ~2-3x shielded (not constrained)."
+}
