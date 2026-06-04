@@ -38,7 +38,7 @@ FEMM_MATRIX = """\
 | eddy current / AC       | yes   | yes*   | Kelvin Rac +0.07%; Cu-disk 0.27%    |
 | current-driven circuit  | yes   | yes*   | net-current constraint exact        |
 | voltage-driven circuit  | yes   | yes*   | Z=V/I  +0.07% (planar)              |
-| force & torque (Maxwell)| yes   | (3D)   | two-wire mu0 I^2/2pi d  1.6%        |
+| force & torque (Maxwell)| yes   | yes    | 2-wire 1.6%; coaxial dM/dz 0.93%   |
 | inductance (energy)     | yes   | yes*   | L_int = mu0/8pi  -0.06% (planar)    |
 | electrostatics (csolv)  | yes   | yes    | coaxial/sphere -0.19/-0.15%         |
 | heat flow (hsolv)       | yes   | yes    | coaxial/sphere -0.19/-0.15%         |
@@ -46,6 +46,10 @@ FEMM_MATRIX = """\
 | laminated steel (AC)    | yes   | (mat)  | complex mu_eff tanh; 1D-FE 0.00%    |
 | laminated steel (DC)    | yes   | (mat)  | anisotropic; resolved stack 0.00%   |
 | multi-conductor circuit | yes   | (—)    | series=2x single 0.34%; prox +20%   |
+| nonlinear AC (eff. mu)  | yes   | (*)    | ->linear 3e-11; saturation sub-lin  |
+| stranded / litz wire    | yes   | yes    | uniform-J DC field  0.14%           |
+| AC current flow (cmplx) | yes   | (same) | coaxial Y=G+j w C  0.34%            |
+| convection BC (Robin)   | yes   | yes    | slab L/k + 1/h  0.003%              |
 | FEMM open-bdry x-check  | (—)   | yes    | vs FEMM rad=100.mat 0.78% of peak   |
 
 (*) axisymmetric magnetics / eddy / nonlinear use H1Henrotte (axihenrotte FESpace)
@@ -145,6 +149,14 @@ Vc= solve_current_flow(mesh, sigma, {"a": V0, "b": 0.0}); G = conductance(...)
 # TWO off-axis points (upper+lower); leave the r=0 axis unnamed (Neumann).
 V = solve_poisson_axi(mesh, eps, {"inner": V0, "outer": 0.0})
 C = capacitance_axi(V, mesh, eps, V0)                        # Farads (4 pi eps ab/(b-a))
+
+# CONVECTION / Robin BC for heat (FEMM hsolv mixed boundary): -k dT/dn = h(T-Tinf)
+T = solve_thermal(mesh, k, {"hot": T0},                      # fixed-T walls
+                  convection={"surf": (h, Tinf)})            # convective walls
+# AC current flow (complex sigma+j w eps); terminal admittance Y = G + j w C
+from radia_mcp.radia_ngsolve.scalar_fem2d import solve_current_flow_ac, admittance_ac
+V = solve_current_flow_ac(mesh, sigma, eps, omega, {"a": V0, "b": 0.0})
+Y = admittance_ac(V, mesh, sigma, eps, omega, V0)            # S/m (per length)
 ```
 """
 
@@ -190,6 +202,26 @@ Proximity (each conductor sees the others' AC field) is captured by the shared
 A_z + per-conductor net-current constraints; it raises Rac above the isolated
 sum (measured +20% for two wires at 2.4 a spacing).
 
+## Stranded / litz conductor, nonlinear AC, axisymmetric force
+
+```python
+from radia_mcp.radia_ngsolve.solve import stranded_source, solve_planar_eddy_nonlinear
+from radia_mcp.radia_ngsolve.force import eggshell_force_axi
+
+# STRANDED / litz (FEMM "stranded" wire): imposed UNIFORM current, sigma=0 there
+# -> Rac=Rdc, current stays uniform at any frequency (no skin/proximity in bundle)
+Jz = stranded_source(mesh, {"bundle": I})                # Jz = I/area, int Jz = I
+Az = solve_planar_eddy(mesh, nu, sigma=0, omega=w, Jz=Jz)   # sigma=0 in the bundle
+
+# NONLINEAR AC (FEMM nonlinear harmonic, amplitude-based effective mu): Picard on
+# nu(|B|) where |B| is the phasor amplitude. nu_of_B takes the SCALAR |B|.
+Az = solve_planar_eddy_nonlinear(mesh, nu_of_B, sigma, omega, Jz=Jz, relax=0.4)
+
+# AXISYMMETRIC net axial force [N] (full torus): meridional eggshell, 2*pi*r weight
+B = CoefficientFunction((-grad(u)[1], grad(u)[0] + u/x))    # (B_r, B_z)
+Fz = eggshell_force_axi(B, mesh, center=(rc, zc), r_inner=.., r_outer=..)
+```
+
 ## FEMM open-boundary cross-check (ground truth = D. Meeker's FEMM)
 
 ``tests/test_femm_xcheck_kelvin_magnet.py`` loads a real FEMM Kelvin-transform
@@ -221,6 +253,11 @@ FEMM_VALIDATION = """\
 | test_planar_proximity (single)      | round-wire Kelvin Rac/Rdc         | +0.07% |
 | test_planar_proximity (2 far)       | series = 2x isolated Rac          | +0.34% |
 | test_femm_xcheck_kelvin_magnet      | FEMM rad=100.mat B_z(r=7), open   |  0.78% |
+| test_scalar_fem2d_ext (Robin)       | slab T_L = T_inf+dT/(1+hL/k)      | +0.003%|
+| test_scalar_fem2d_ext (AC I-flow)   | coaxial Y = 2pi(sig+jwe)/ln(b/a)  | -0.34% |
+| test_stranded                       | uniform-J B(a/2)=mu0 I/(4 pi a)   | +0.14% |
+| test_planar_eddy_nonlinear (lin)    | reduces to linear solve_planar_eddy| 3e-11 |
+| test_axi_force                      | coaxial loops I1 I2 dM/dz (ellip.)| +0.93% |
 
 Axi eddy (solve_axi_eddy) validated via Cu-disk tau_1; planar eddy validated via
 Kelvin Rac. The laminated DC/AC checks are exact (uniform-field & 1D-eddy have
