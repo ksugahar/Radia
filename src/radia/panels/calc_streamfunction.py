@@ -623,6 +623,20 @@ def _build_problem(args, eval_scale=1.0):
 # psi_f = [psi_primary_free | psi_shield_free] (concatenated free DOFs).
 # RegularizedTSVD handles the stacked system identically to the single-coil
 # case; after solving, psi_f is split back into primary and shield parts.
+#
+# HONEST SCOPE / LIMITATION (measured): this is a POINT-SAMPLED external
+# nulling, NOT the analytic Fourier-mode cancellation of a textbook
+# shielded gradient coil.  Nulling the field at a finite set of external
+# points (the shield-eval-vol vertices) reduces -- but does not zero -- the
+# field at INDEPENDENT points between them.  On the demo geometry the
+# stray at independent external measure points drops from ~0.74 (unshielded
+# primary-only) to ~0.16-0.21 (shielded) -- a real ~4-5x (~13 dB)
+# reduction, reported as ``stray_rms``.  The ~0 figure at the constraint
+# points themselves (``stray_fit_rms``) is the circular fit residual of an
+# underdetermined exact fit and is NOT the shielding quality.  Better
+# shielding needs denser + larger external sampling (covering the full
+# exterior, not a thin mid-plane shell) or an analytic external-multipole-
+# moment constraint -- a documented next step, not done here.
 # ==========================================================================
 
 def _build_shielded_problem(args, eval_scale=1.0):
@@ -686,21 +700,33 @@ def _build_shielded_problem(args, eval_scale=1.0):
         mpts = c0 + (mpts - c0) * eval_scale
 
     # --- external points (outside shield; STRAY FIELD = 0) ---
+    # epts (vertices)   = the null CONSTRAINTS that drive the solve.
+    # e_mpts (centroids)= INDEPENDENT measure points (NOT in the constraint
+    #   set) used to report the HONEST generalising stray field -- the exact
+    #   analogue of cpts (DSV constraints) vs mpts (DSV measure).  Reporting
+    #   the stray at the constraint points themselves would be circular (an
+    #   exact-fit underdetermined solve nulls its own constraints to ~0).
     extm = Mesh(args.shield_eval_vol)
     epts = np.array([list(p.point) for p in extm.vertices])
     if args.eval_max and len(epts) > args.eval_max:
         epts = epts[np.linspace(0, len(epts) - 1, args.eval_max).astype(int)]
+    e_mpts = _element_centroids(extm)
+    if args.eval_max and len(e_mpts) > args.eval_max:
+        e_mpts = e_mpts[np.linspace(0, len(e_mpts) - 1,
+                                    args.eval_max).astype(int)]
 
     Bc = _eval_target_np(args.target_cf, cpts, vector_b)
     Bm = _eval_target_np(args.target_cf, mpts, vector_b)
 
-    # --- Biot-Savart matrices (6 sets: primary/shield at 3 point sets) ---
+    # --- Biot-Savart matrices (primary/shield at 4 point sets) ---
     Ac_p = _assemble_biot_savart(fes_p, n_p, cpts, comps)
     Am_p = _assemble_biot_savart(fes_p, n_p, mpts, comps)
     Ae_p = _assemble_biot_savart(fes_p, n_p, epts, comps)
+    Aem_p = _assemble_biot_savart(fes_p, n_p, e_mpts, comps)   # ext measure
     Ac_s = _assemble_biot_savart(fes_s, n_s, cpts, comps)
     Am_s = _assemble_biot_savart(fes_s, n_s, mpts, comps)
     Ae_s = _assemble_biot_savart(fes_s, n_s, epts, comps)
+    Aem_s = _assemble_biot_savart(fes_s, n_s, e_mpts, comps)   # ext measure
 
     # R-reduce: (R^T A^T)^T -- keeps R sparse, result is dense M x n_free
     def _rR(A, R):
@@ -710,14 +736,17 @@ def _build_shielded_problem(args, eval_scale=1.0):
     Ac_pR = _rR(Ac_p, R_p)    # (M_c, n_fp)
     Am_pR = _rR(Am_p, R_p)    # (M_m, n_fp)
     Ae_pR = _rR(Ae_p, R_p)    # (M_e, n_fp)
+    Aem_pR = _rR(Aem_p, R_p)  # (M_em, n_fp)
     Ac_sR = _rR(Ac_s, R_s)    # (M_c, n_fs)
     Am_sR = _rR(Am_s, R_s)    # (M_m, n_fs)
     Ae_sR = _rR(Ae_s, R_s)    # (M_e, n_fs)
+    Aem_sR = _rR(Aem_s, R_s)  # (M_em, n_fs)
 
     # Stacked combined matrices (primary | shield columns)
-    Ac_f = np.hstack([Ac_pR, Ac_sR])    # (M_c, n_fp+n_fs)
-    Am_f = np.hstack([Am_pR, Am_sR])    # (M_m, n_fp+n_fs)  -- homogeneity
-    Ae_f = np.hstack([Ae_pR, Ae_sR])    # (M_e, n_fp+n_fs)  -- stray null
+    Ac_f = np.hstack([Ac_pR, Ac_sR])      # (M_c, n_fp+n_fs)
+    Am_f = np.hstack([Am_pR, Am_sR])      # (M_m, n_fp+n_fs)  -- DSV homogeneity
+    Ae_f = np.hstack([Ae_pR, Ae_sR])      # (M_e, n_fp+n_fs)  -- stray CONSTRAINT
+    Aem_f = np.hstack([Aem_pR, Aem_sR])   # (M_em,n_fp+n_fs)  -- stray MEASURE
 
     w = float(getattr(args, "shield_weight", 1.0))
     n_free = n_fp + n_fs
@@ -751,13 +780,13 @@ def _build_shielded_problem(args, eval_scale=1.0):
         R=sp.block_diag([R_p, R_s], format="csr"),  # block R (compat.)
         R_p=R_p, R_s=R_s,
         n_free=n_free, vector_b=vector_b, comps=comps,
-        Ac_f=Ac_f, Ae_f=Ae_f, Bc_dsv=Bc,
+        Ac_f=Ac_f, Ae_f=Ae_f, Aem_f=Aem_f, Bc_dsv=Bc,
         shield_weight=w,
         target_cf=args.target_cf, evalm=evalm,
-        cpts=cpts, mpts=mpts, epts=epts,
+        cpts=cpts, mpts=mpts, epts=epts, e_mpts=e_mpts,
         eval_scale=eval_scale, confine=confine, S=S_block,
         n_constraint=len(cpts), n_measure=len(mpts),
-        n_external=len(epts),
+        n_external=len(epts), n_external_measure=len(e_mpts),
     )
 
 
@@ -1654,9 +1683,15 @@ def run_design(args):
             # DSV-only fit (top Ac_f rows, not stacked with external)
             dsv_rms = float(np.linalg.norm(P["Ac_f"] @ psi_f - P["Bc_dsv"])
                             / (np.linalg.norm(P["Bc_dsv"]) + 1e-30))
-            # Stray field at external points (relative to DSV target norm)
-            stray_rms = float(np.linalg.norm(P["Ae_f"] @ psi_f)
-                              / (np.linalg.norm(P["Bc_dsv"]) + 1e-30))
+            B_dsv_norm = np.linalg.norm(P["Bc_dsv"]) + 1e-30
+            # HONEST stray = combined field at INDEPENDENT external measure
+            # points (e_mpts, NOT the constraint vertices) -- relative to the
+            # DSV target field.  This is the generalising metric (the
+            # constraint-point residual is ~machine-zero and circular).
+            stray_rms = float(np.linalg.norm(P["Aem_f"] @ psi_f) / B_dsv_norm)
+            # the (circular) fit residual at the null-constraint points, kept
+            # for transparency only -- NOT the headline shielding number
+            stray_fit_rms = float(np.linalg.norm(P["Ae_f"] @ psi_f) / B_dsv_norm)
             gfu = gfu_p          # primary psi for harmonic decomp / msh
         else:
             psi = P["R"] @ psi_f
@@ -1702,14 +1737,15 @@ def run_design(args):
                 "ndof_free_primary": int(P["n_primary"]),
                 "ndof_free_shield": int(P["n_shield"]),
                 "n_external": int(P["n_external"]),
+                "n_external_measure": int(P["n_external_measure"]),
                 "dsv_rms": dsv_rms,
+                # HONEST stray = field at INDEPENDENT external measure points,
+                # relative to the DSV target field (a real generalisation
+                # metric, NOT the circular constraint-point residual below).
                 "stray_rms": stray_rms,
+                "stray_fit_rms": stray_fit_rms,   # circular fit residual (info)
                 "peak_J_primary": peak_J_p,
                 "peak_J_shield": peak_J_s,
-                # stray suppression: fraction of DSV field reaching outside
-                "stray_suppression_dB": float(
-                    20.0 * np.log10(max(stray_rms, 1e-12) + 1e-12))
-                    if stray_rms is not None else None,
             })
         # spherical-harmonic decomposition of the ACHIEVED Bz over the DSV --
         # uses Am @ psi_f (Am is the DSV measure matrix for both single/shielded)
