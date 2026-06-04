@@ -71,7 +71,7 @@ if _panels_dir not in sys.path:
 
 from calc_common import setup_paths, progress, calc_main  # noqa: E402
 from em_table import load_em_table, interp_qsurf  # noqa: E402
-from calc_heat import THERMAL_PRESETS, _resolve_material  # noqa: E402
+from calc_heat import THERMAL_PRESETS, _resolve_material, SIGMA_SB  # noqa: E402
 
 
 def _log(msg):
@@ -293,7 +293,7 @@ def solve_heat_em_table(wp_vol, em_table_path,
                          I_ref,
                          coil_step="", biot_image_factor=1.0,
                          material="steel", rho=None, cp=None, k=None,
-                         h_conv=10.0, t_ext=20.0, t_initial=20.0,
+                         h_conv=10.0, t_ext=20.0, t_initial=20.0, emissivity=0.0,
                          surface_label="",
                          dt=0.5, t_end=60.0,
                          fes_order=1,
@@ -475,6 +475,10 @@ def solve_heat_em_table(wp_vol, em_table_path,
         f_form = LinearForm(fes_T)
         f_form += gf_q * v * ds(surface_label_eff)
         f_form += float(h_conv) * float(t_ext) * v * ds(surface_label_eff)
+        if float(emissivity) > 0.0:        # radiation (explicit, prev-step T, in K)
+            _TK = gfT + 273.15
+            f_form += -float(emissivity) * SIGMA_SB \
+                * (_TK**4 - (float(t_ext) + 273.15)**4) * v * ds(surface_label_eff)
         f_form.Assemble()
         with TaskManager():
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
@@ -631,6 +635,10 @@ def main():
     # BCs / IC.
     parser.add_argument("--h-conv", type=float, default=10.0)
     parser.add_argument("--t-ext", type=float, default=20.0)
+    parser.add_argument("--emissivity", type=float, default=0.0,
+                        help="Surface emissivity for radiation "
+                             "eps*sigma*(T^4-T_ext^4) [0..1]; 0 = off "
+                             "(radiation ambient = --t-ext).")
     parser.add_argument("--t-initial", type=float, default=20.0,
                         help="Initial workpiece temperature [degC].  "
                              "Same flag name as the --initial-T in the "
@@ -678,7 +686,7 @@ def main():
             material=args.material,
             rho=args.rho, cp=args.cp, k=args.k,
             h_conv=args.h_conv, t_ext=args.t_ext,
-            t_initial=args.t_initial,
+            t_initial=args.t_initial, emissivity=args.emissivity,
             surface_label=args.surface_label,
             dt=args.dt, t_end=args.t_end,
             fes_order=args.fes_order,

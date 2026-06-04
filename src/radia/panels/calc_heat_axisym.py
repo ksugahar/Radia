@@ -51,7 +51,7 @@ if _this_dir not in sys.path:
 from calc_common import setup_paths, progress, calc_main  # noqa: E402
 
 # Axisym shares its thermal preset table with the 3D solver.
-from calc_heat import THERMAL_PRESETS, _resolve_material  # noqa: E402
+from calc_heat import THERMAL_PRESETS, _resolve_material, SIGMA_SB  # noqa: E402
 
 
 def _log(msg):
@@ -158,7 +158,7 @@ def _build_axisym_qsurf_gf(wp_mesh, surface_label, args):
 
 def solve_heat_axisym(wp_vol,
                       material="steel", rho=None, cp=None, k=None,
-                      h_conv=10.0, t_ext=20.0, t_initial=20.0,
+                      h_conv=10.0, t_ext=20.0, t_initial=20.0, emissivity=0.0,
                       surface_label="",
                       q_uniform=None, qsurf_sol="", em_vol="",
                       qsurf_order=1, n_phi_samples=8,
@@ -339,6 +339,11 @@ def solve_heat_axisym(wp_vol,
         f_form += q_cf * v * weight * ds(surface_label_eff)
         f_form += float(h_conv) * float(t_ext) * v * weight \
             * ds(surface_label_eff)
+        if float(emissivity) > 0.0:        # radiation (explicit, prev-step T, in K)
+            _TK = gfT + 273.15
+            f_form += -float(emissivity) * SIGMA_SB \
+                * (_TK**4 - (float(t_ext) + 273.15)**4) * v * weight \
+                * ds(surface_label_eff)
         f_form.Assemble()
         with TaskManager():
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
@@ -473,6 +478,7 @@ def solve_heat_axisym(wp_vol,
         "rotation_rpm": float(rotation_rpm),
         "h_conv_W_m2K": float(h_conv),
         "t_ext_C": float(t_ext),
+        "emissivity": float(emissivity),
         "surface_label": surface_label,
         "q_source": ("uniform" if q_uniform is not None
                      else "qsurf_sol"),
@@ -512,6 +518,10 @@ def main():
                         help="Conductivity [W/(m.K)] (overrides preset).")
     parser.add_argument("--h-conv", type=float, default=10.0)
     parser.add_argument("--t-ext", type=float, default=20.0)
+    parser.add_argument("--emissivity", type=float, default=0.0,
+                        help="Surface emissivity for radiation "
+                             "eps*sigma*(T^4-T_ext^4) [0..1]; 0 = off "
+                             "(radiation ambient = --t-ext).")
     parser.add_argument("--t-initial", type=float, default=20.0)
     parser.add_argument("--q-uniform", type=float, default=None,
                         help="Uniform surface heat flux [W/m^2].")
@@ -570,6 +580,7 @@ def main():
             wp_vol=args.wp_vol,
             material=args.material, rho=args.rho, cp=args.cp, k=args.k,
             h_conv=args.h_conv, t_ext=args.t_ext, t_initial=args.t_initial,
+            emissivity=args.emissivity,
             surface_label=args.surface_label,
             q_uniform=args.q_uniform,
             qsurf_sol=args.qsurf_sol,
