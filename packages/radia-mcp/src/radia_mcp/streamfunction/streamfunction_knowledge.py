@@ -346,37 +346,46 @@ HARMONICS R_l^m(x,y,z) -- homogeneous harmonic polynomials (Laplace nabla^2
 R = 0).  These ARE the named MRI gradients/shims; the SF designer speaks them
 natively for BOTH the target and the analysis of the achieved field.
 
-NAMED BASIS (l <= 3; one poly-string table = the single source of truth):
+NAMED BASIS (l <= 4 -> 1+3+5+7+9 = 25 harmonics; one poly-string table =
+the single source of truth):
   l=0  Z0 = 1
   l=1  Z = z (Gz),  X = x (Gx),  Y = y (Gy)
   l=2  Z2 = z^2 - (x^2+y^2)/2,  ZX = xz,  ZY = yz,  C2 = x^2-y^2,  S2 = xy
   l=3  Z3 = z^3 - 1.5 z(x^2+y^2),  Z2X, Z2Y, ZC2, ZS2, C3, S3
+  l=4  Z4, Z3X, Z3Y, Z2C2, Z2S2, ZC3, ZS3, C4 (= x^4-6x^2y^2+y^4), S4
   m>0 = cos(m.phi) (C);  m<0 = sin(|m|.phi) (S).
 
 TARGET -- ``--target-harmonic`` (alternative to ``--target-cf``):
-  a name, or ``l=L,m=M``, optionally weighted and summed:
+  a name, ``l=L,m=M``, or ``(L,M)``, optionally weighted and summed:
     --target-harmonic X            Gx gradient
     --target-harmonic Z2           pure 2nd-order shim
+    --target-harmonic Z4           4th-order zonal shim
     --target-harmonic "Z2:1.0,Z:0.1"   Z2 with a Z offset
+    --target-harmonic "l=4,m=-4"   == S4  (the comma inside l=L,m=M /
+                                    (L,M) is rejoined, not split into terms)
   It generates the solid-harmonic ``--target-cf`` polynomial (so the whole
   pipeline -- design / pareto / manufacture / single-stroke -- is unchanged).
   Give ``--target-cf`` OR ``--target-harmonic`` (loud error on both).
 
 ANALYSIS -- the achieved Bz over the DSV is decomposed in DESIGN mode
-(``result["harmonics"]``, depth ``--harmonic-lmax`` default 3):
+(``result["harmonics"]``, depth ``--harmonic-lmax`` default 3, max 4):
   * spectrum   per-(l,m) field RMS over the DSV (the harmonic content, in T),
                sorted; each with its LSQ coefficient and field fraction
   * residual_fraction   how completely harmonics up to lmax capture the field
   * purity     (with a --target-harmonic) the target-harmonic field fraction
                -- the standard "gradient purity" gradient-coil quality metric
-  * max_contaminant   the largest non-target harmonic (e.g. a Gx coil's Z2)
+  * max_contaminant   the largest non-target harmonic (e.g. a Gx coil's Z2X)
 
-VERIFIED (cylinder fixture): --target-harmonic X -> dominant X, purity 1.000,
-residual 5e-5, ZX contaminant 7e-6; --target-harmonic Z2 --confine abe ->
-dominant Z2, purity 1.000.  The named-basis harmonicity (Laplacian 0) and the
-target<->decompose round-trip are golden-locked
-(tests/panels/test_streamfunction_golden.py).  The panel auto-generates the
-two flags (cli-diff clean).
+VERIFIED (cylinder fixture, order 2, confine abe;
+examples/stream_function/demo_shim_coil_purity.py): --target-harmonic X ->
+dominant X, purity 1.000, residual 1.5e-4, Z2X contaminant 7e-5; Z2 ->
+purity 1.000; the 4th-order Z4 shim -> purity 0.99983, residual 1.5e-2,
+named Z3 contaminant 9.5e-3 (high-l shims are harder: an l-th harmonic's
+field scales as r^l over a fixed DSV).  The named-basis harmonicity
+(Laplacian 0, all 25 entries) and the target<->decompose round-trip are
+golden-locked (tests/panels/test_streamfunction_golden.py
+test_harmonic_basis_is_harmonic / test_harmonic_l4_forms_and_decompose).
+The panel auto-generates the two flags (cli-diff clean).
 """
 
 

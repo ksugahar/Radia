@@ -53,20 +53,28 @@ them natively.
 | Gx, Gy, Gz | `X`, `Y`, `Z` | `x`, `y`, `z` |
 | 2nd-order shims | `Z2`, `ZX`, `ZY`, `C2`, `S2` | `z²−(x²+y²)/2`, `xz`, `yz`, `x²−y²`, `xy` |
 | 3rd-order shims | `Z3`, `Z2X`, `Z2Y`, `ZC2`, `ZS2`, `C3`, `S3` | … |
+| 4th-order shims | `Z4`, `Z3X`, `Z3Y`, `Z2C2`, `Z2S2`, `ZC3`, `ZS3`, `C4`, `S4` | … |
 
-A name, an `l=L,m=M` pair, or a weighted sum is accepted — e.g. `Z2`
-(pure 2nd-order shim), `X` (Gx), `Z2:1.0,Z:0.1` (Z2 with a Z offset).  It
+The table spans **`l ≤ 4`** (`1+3+5+7+9 = 25` harmonics).  A name, an
+`l=L,m=M` pair, a `(L,M)` pair, or a weighted sum is accepted — e.g. `Z2`
+(pure 2nd-order shim), `X` (Gx), `Z2:1.0,Z:0.1` (Z2 with a Z offset),
+`l=4,m=-4` (≡ `S4`).  The comma inside `l=L,m=M` / `(L,M)` is handled, so
+those forms work alongside the comma-separated weighted-sum syntax.  It
 generates the solid-harmonic `--target-cf` polynomial, so the whole pipeline
 (design / pareto / manufacture / single-stroke) is unchanged.
 
 **Achieved-field decomposition** (design mode, `result["harmonics"]`, depth
-`--harmonic-lmax`, default 3): the designed `Bz` over the DSV is least-squares
-decomposed into solid harmonics — the per-`(l,m)` field-RMS **spectrum**, the
-LSQ **residual**, and (with a `--target-harmonic`) the **purity** (target-
-harmonic field fraction — the standard gradient-coil quality metric) and the
-largest **contaminant**.  One poly-string table is the single source of truth
-for both target and analysis, so the round-trip is exact.  Verified: Gx → pure
-`X` (purity 1.000, ZX contaminant 7e-6); `Z2` → pure `Z2`.
+`--harmonic-lmax`, default 3, max 4): the designed `Bz` over the DSV is
+least-squares decomposed into solid harmonics — the per-`(l,m)` field-RMS
+**spectrum**, the LSQ **residual**, and (with a `--target-harmonic`) the
+**purity** (target-harmonic field fraction — the standard gradient-coil
+quality metric) and the largest **contaminant**.  One poly-string table is the
+single source of truth for both target and analysis, so the round-trip is
+exact.  Verified (`examples/stream_function/demo_shim_coil_purity.py`, order 2,
+confine abe): Gx → pure `X` (purity 1.000, `Z2X` contaminant 7e-6); `Z2` →
+pure `Z2`; the 4th-order `Z4` shim → purity 0.99983 with a named ~1 % `Z3`
+contaminant (high-`l` shims are harder because an `l`-th harmonic's field
+scales as `rˡ` over a fixed DSV).
 
 ## Design objective / regularizer (`--regularize {l2, h1, inductance}`)
 
