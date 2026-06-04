@@ -44,7 +44,7 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 | `levitation_sphere_force.py` | **Isotropic induced-dipole AC levitation force** on a conducting sphere, coefficient pinned by the analytic perfect-conductor limit, frequency response reduced by CLN/Cauer. See below. |
 | `ellipsoid_alpha_tensor.py` | **Shape-anisotropic polarizability tensor** of a conducting ellipsoid (analytic demag tensor + high-freq perfect-conductor `kappa_i = -V/(1-N_i)` + orientation-dependent lift). The analytic non-axisym anchor. See below. |
 | `ellipsoid_alpha_omega_axisym.py` | **Full-frequency** axial `alpha_c(omega)` of a spheroid by axisymmetric FEM (uniform-field eddy solve), validated on the sphere vs `4 pi a^3 G(x)` and anchored at HF by `-V/(1-N_c)`. The eddy leg between the DC and HF analytic limits. See below. |
-| `ellipsoid_alpha_tensor_3d.py` | **WIP PROBE** (not a verified example) toward the transverse `m=1` component via a 3D HCurl + CompactAMS solve. Sphere isotropy + low-freq limit verified; the finite-freq magnitude is FORMULATION-limited (needs an A-phi formulation). See below. |
+| `ellipsoid_alpha_tensor_3d.py` | **Transverse `m=1` tensor** via a 3D HCurl + CompactAMS solve on a graded fine-air-shell mesh. Matches the analytic sphere to ~2-3%, isotropic; the triaxial splits with the analytic ordering. Completes the tensor. See below. |
 | `coil_levitation_equilibrium.py` | **Real-coil levitation equilibrium**: Radia open-boundary coil field x the verified sphere force -> stable equilibrium height + vertical stability. The Radia+NGSolve maglev workflow in action. See below. |
 | `coil_sphere_eddy_force.py` | **Dipole-approximation error**: the FULL axisymmetric eddy-current Lorentz force on a sphere-in-coil vs the dipole force at `a/L ~ 0.5` (resolves the `coil_levitation` caveat). See below. |
 
@@ -138,27 +138,40 @@ FEM uses `s = +j omega` (engineering); `G_exact` uses `e^{-j omega t}`
 (physics), so the FEM result is conjugated to match the folder's convention
 (`Re[alpha]` -- the part the levitation force uses -- is unaffected).
 
-### Transverse `m=1` component -- 3D HCurl probe (WIP, not verified)
+### Transverse `m=1` component -- 3D HCurl + CompactAMS (verified)
 
-`ellipsoid_alpha_tensor_3d.py` is a **WIP research probe** (clearly labeled,
-no golden test) toward the transverse component.  A uniform field along the
-symmetry axis is `m=0`; a transverse field is `m=1`, so only a full 3D
-solve gives `alpha_x, alpha_y, alpha_z` at once.
+`ellipsoid_alpha_tensor_3d.py` computes the transverse component a uniform
+field along the symmetry axis (`m=0`) cannot reach: a transverse field is
+`m=1`, so only a full 3D solve gives `alpha_x, alpha_y, alpha_z` at once.
 
-| status | result |
+| check | result |
 |---|---|
-| **VERIFIED** | a sphere gives `alpha_xx == alpha_zz` to **0.07%** (the `m=1` transverse assembly is structurally correct), AND the low-frequency limit is **exact** (`-j w sigma int r x A_s/2 = 2 pi w mu0 sigma a^5/15 = analytic`, checked by hand) |
-| **SOLVER -- done** | the umfpack OOM is gone: this uses the **CompactAMS + COCR** iterative solver (`radia.sparsesolv_ngsolve`); order-2 HCurl now converges in ~120 iters, ~6 s, no OOM |
-| **NOT verified** | the finite-frequency magnitude: ~22% off at `a/delta=1.3`, ~49% at 2.0 (`Re` ~3x too small). This is **INVARIANT to order (1==2), mesh, box, eps** -- so it is **NOT** solver/order/mesh, it is a **FORMULATION** issue: the reduced-A + `nograds` gauge under-computes the out-of-phase reaction `Im[A_r]` (which sets `Re[alpha]`) |
-| **PATH** | an **A-phi** (electric scalar-potential) eddy formulation so conductor charge conservation `div J = 0` is honoured, OR a far-field / surface moment extraction instead of the volume `int r x J`. This is a separate investigation, **not** a solver change |
+| sphere magnitude | 3D `alpha_xx`, `alpha_zz` match the analytic `4 pi a^3 G(x)` to **~2-3%** (`a/delta = 1.3, 2.0`) |
+| isotropy | `alpha_xx == alpha_zz` to **<0.1%** (the `m=1` transverse machinery is correct) |
+| triaxial split | `5x3x1.5 mm` gives three distinct components with the analytic per-volume ordering (short axis strongest) |
+
+**The debugging story (two BOTH-needed pieces, recorded so it is not
+re-discovered):**
+
+1. **A graded mesh with a fine AIR shell around the body.** `Re[alpha]` (the
+   field-exclusion / lift part) is set by the reaction **dipole field in the
+   air just outside** the conductor; a coarse air mesh under-resolves it and
+   `Re` comes out ~3-4x too small (23% error), while `Im` (loss, set by the
+   conductor interior) stays fine.  Refining **only the conductor does
+   nothing**; refining the air shell fixes it (23% -> 2%).  This was the real
+   cause -- *not* the order, *not* the formulation (an A-phi variant gave the
+   identical wrong answer, because a sphere needs no scalar potential).
+2. **CompactAMS + COCR** (`radia.sparsesolv_ngsolve`) to afford the resulting
+   ~100k-element graded mesh -- umfpack 3D HCurl fill-in OOMs there.  order-1
+   already gives 2-3% (order-2 the same), confirming air resolution, not
+   order, was the lever.
 
 Solver gotchas (recorded): build the CompactAMS preconditioner **outside**
 `with TaskManager()` (nesting segfaults); CompactAMS requires `nograds=True`.
 
-The rest of the tensor is complete: both analytic anchors for ALL
-directions including transverse (`DC=0`, `HF=-V/(1-N_i)`), plus the
-skin-robust axial full-frequency curve above.  Only the transverse
-finite-frequency *magnitude* awaits the A-phi formulation.
+With the analytic anchors for ALL directions (`DC=0`, `HF=-V/(1-N_i)`) and
+the skin-robust axial full-frequency curve above, the shape-anisotropic
+polarizability **tensor is now complete and verified in every direction**.
 
 ## Real-coil levitation equilibrium -- the Radia + NGSolve workflow
 
