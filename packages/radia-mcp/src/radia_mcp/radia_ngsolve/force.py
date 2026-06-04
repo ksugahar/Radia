@@ -1,0 +1,201 @@
+"""Executable electromagnetic force / energy extractors for the radia-ngsolve
+A-formulation FEM path.
+
+These are the COMSOL-cross-validated methods, as RUNNABLE code (not just the
+theory in ``differential_forms``). Each function takes ``B`` -- the magnetic
+flux density CoefficientFunction, ``B = curl(gfu)`` for an HCurl GridFunction
+``gfu`` -- plus the NGSolve mesh, and returns an SI quantity (force [N],
+energy [J], inductance [H]).
+
+Validated against COMSOL (LiveLink) and analytics; see the ``force_validation``
+MCP tool for the agreement table (sphere 0.11 %, coil+iron force ~3 %,
+self-inductance 0.01 %, ...). The regression tests in
+``tests/test_force_xval.py`` assert these keep matching.
+
+#25 lesson baked in: for a HIGH-permeability body do NOT carve a separate nested
+"shell" material around it -- the nested-sphere interface isolates the body and
+zeroes its interior B. Put the body directly in the surrounding air;
+``eggshell_force`` integrates a radial weight band over that plain air, so no
+extra material region is required.
+"""
+import math
+
+from ngsolve import (CoefficientFunction, InnerProduct, sqrt, dx, ds, Integrate,
+                     IfPos, specialcf, Conj, x, y, z)
+
+MU0 = 4.0e-7 * math.pi
+
+
+def eggshell_force(B, mesh, center, r_inner, r_outer, air_region="air"):
+    """Weighted Maxwell-stress ("eggshell") force on the body inside ``r_inner``.
+
+    Robust on unstructured meshes: replaces the sharp surface integral by a
+    volume integral over a radial band ``r_inner < |r-center| < r_outer`` with a
+    smooth weight g (=1 at r_inner, 0 at r_outer):
+
+        F_k = - int_band [ (1/mu0) B_k (B.grad g) - (1/2mu0) |B|^2 d_k g ] dV
+
+    The band must lie in the air surrounding the body (choose ``r_inner`` >= the
+    body radius). Returns (Fx, Fy, Fz) in newtons.
+    """
+    cx, cy, cz = center
+    rho = sqrt((x - cx)**2 + (y - cy)**2 + (z - cz)**2)
+    band = IfPos(rho - r_inner, IfPos(r_outer - rho, 1.0, 0.0), 0.0)
+    gscale = -1.0 / (r_outer - r_inner)
+    gradg = band * CoefficientFunction((x - cx, y - cy, z - cz)) / rho * gscale
+    Bdg = InnerProduct(B, gradg)
+    B2 = InnerProduct(B, B)
+    region = dx(definedon=mesh.Materials(air_region))
+    F = []
+    for k in range(3):
+        integ = (1.0 / MU0) * B[k] * Bdg - (1.0 / (2.0 * MU0)) * B2 * gradg[k]
+        F.append(-Integrate(integ * region, mesh))
+    return tuple(F)
+
+
+def eggshell_force_2d(B, mesh, center, r_inner, r_outer, air_region="air"):
+    """2D PLANAR weighted Maxwell-stress ("eggshell") force [N/m] on the body
+    inside ``r_inner`` (force PER UNIT LENGTH in the out-of-plane direction).
+
+    Same identity as :func:`eggshell_force` but in the (x, y) plane with the
+    2-vector ``B = (Bx, By)`` (e.g. from the A_z solver,
+    ``B = CF((grad(gfu)[1], -grad(gfu)[0]))``):
+
+        F_k = - int_band [ (1/mu0) B_k (B.grad g) - (1/2mu0) |B|^2 d_k g ] dA
+
+    The radial band ``r_inner < |r-center| < r_outer`` must lie in the air
+    surrounding the body and enclose it. Validated on the two-parallel-wire
+    benchmark F/L = mu0 I1 I2 / (2 pi d) to ~1 % (see tests/test_planar_force.py).
+    Returns (Fx, Fy) in N/m.
+    """
+    cx, cy = center
+    rho = sqrt((x - cx)**2 + (y - cy)**2)
+    band = IfPos(rho - r_inner, IfPos(r_outer - rho, 1.0, 0.0), 0.0)
+    gscale = -1.0 / (r_outer - r_inner)
+    gradg = band * CoefficientFunction((x - cx, y - cy)) / rho * gscale
+    Bdg = InnerProduct(B, gradg)
+    B2 = InnerProduct(B, B)
+    region = dx(definedon=mesh.Materials(air_region))
+    F = []
+    for k in range(2):
+        integ = (1.0 / MU0) * B[k] * Bdg - (1.0 / (2.0 * MU0)) * B2 * gradg[k]
+        F.append(-Integrate(integ * region, mesh))
+    return tuple(F)
+
+
+def eggshell_torque_2d(B, mesh, center, r_inner, r_outer, pivot=(0.0, 0.0),
+                       air_region="air"):
+    """2D PLANAR weighted Maxwell-stress torque [N] (per unit length) about
+    ``pivot``, on the body inside ``r_inner``:
+
+        tau_z = - int_band [ x' S_y - y' S_x ] dA,
+        S_k = (1/mu0) B_k (B.grad g) - (1/2mu0)|B|^2 d_k g,   r' = r - pivot.
+
+    Same eggshell band convention as :func:`eggshell_force_2d`. The lever-arm
+    weighting is validated to reproduce r' x F of the validated force.
+    """
+    cx, cy = center
+    px, py = pivot
+    rho = sqrt((x - cx)**2 + (y - cy)**2)
+    band = IfPos(rho - r_inner, IfPos(r_outer - rho, 1.0, 0.0), 0.0)
+    gscale = -1.0 / (r_outer - r_inner)
+    gradg = band * CoefficientFunction((x - cx, y - cy)) / rho * gscale
+    Bdg = InnerProduct(B, gradg)
+    B2 = InnerProduct(B, B)
+    Sx = (1.0 / MU0) * B[0] * Bdg - (1.0 / (2.0 * MU0)) * B2 * gradg[0]
+    Sy = (1.0 / MU0) * B[1] * Bdg - (1.0 / (2.0 * MU0)) * B2 * gradg[1]
+    integ = (x - px) * Sy - (y - py) * Sx
+    return -Integrate(integ * dx(definedon=mesh.Materials(air_region)), mesh)
+
+
+def maxwell_surface_force(B, mesh, surface):
+    """Maxwell-stress force as a surface integral over a named closed boundary
+    ``surface`` in air enclosing the body (outward normal):
+
+        F_k = oint (1/mu0) [ B_k (B.n) - 1/2 |B|^2 n_k ] dS
+
+    Use ``eggshell_force`` instead unless you have a clean meshed surface --
+    point/surface traces are noisier than the volume-band method. (Fx, Fy, Fz) [N].
+    """
+    n = specialcf.normal(mesh.dim)
+    Bn = InnerProduct(B, n)
+    B2 = InnerProduct(B, B)
+    bnd = ds(definedon=mesh.Boundaries(surface))
+    F = []
+    for k in range(3):
+        integ = (1.0 / MU0) * B[k] * Bn - (1.0 / (2.0 * MU0)) * B2 * n[k]
+        F.append(Integrate(integ * bnd, mesh))
+    return tuple(F)
+
+
+def ohmic_loss_2d(Ez, mesh, sigma, region=None):
+    """Time-averaged ohmic loss PER UNIT LENGTH [W/m] for a 2D planar harmonic
+    eddy problem:  P = 1/2 int sigma |E_z|^2 dA  (E_z = -j w A_z (+ Vc)).
+
+    With a current-driven conductor (net current I), the AC resistance per length
+    is ``Rac = 2 P / |I|^2``. Validated on the round-wire skin effect (Rac/Rdc vs
+    Kelvin functions, 0.07 %; see tests/test_planar_eddy.py)."""
+    integrand = 0.5 * sigma * (Ez * Conj(Ez)).real
+    dom = dx if region is None else dx(definedon=mesh.Materials(region))
+    return Integrate(integrand * dom, mesh)
+
+
+def magnetic_energy(B, mesh, region=None):
+    """Field energy  W = 1/2 integral |B|^2 / mu0 dV  [J].
+    ``region=None`` integrates the whole domain; else a material name."""
+    integrand = 0.5 * InnerProduct(B, B) / MU0
+    if region is None:
+        return Integrate(integrand * dx, mesh)
+    return Integrate(integrand * dx(definedon=mesh.Materials(region)), mesh)
+
+
+def self_inductance(B, mesh, i_terminal):
+    """Self-inductance  L = 2W / I^2  [H] from the field energy (I = terminal
+    current = ampere-turns / N)."""
+    return 2.0 * magnetic_energy(B, mesh) / (i_terminal * i_terminal)
+
+
+def inductance_2d(B, mesh, nu, current, region=None):
+    """2D PLANAR inductance PER UNIT LENGTH [H/m] via the energy method
+    L = 2W/I^2,  W = 1/2 int nu |B|^2 dA  (``nu`` = reluctivity CF, B in-plane).
+
+    ``region=None`` integrates the whole domain (total L); pass a material name
+    for a partial energy (e.g. a conductor's internal inductance). Validated:
+    round-wire internal inductance L_int = mu0/(8 pi) = 5.0e-8 H/m, radius-
+    independent, to 0.06 % (tests/test_planar_inductance.py)."""
+    dom = dx if region is None else dx(definedon=mesh.Materials(region))
+    W = 0.5 * Integrate(nu * InnerProduct(B, B) * dom, mesh)
+    return 2.0 * W / (current * current)
+
+
+def inductance_axi(B, mesh, nu, current, region=None):
+    """3D INDUCTANCE [H] of an axisymmetric coil via the energy method.
+
+    L = 2 W_3D / I^2,  W_3D = 2*pi * int_half-plane  nu/2 |B|^2 r dr dz
+
+    where the factor 2*pi converts the meridional-plane energy to the full
+    toroidal (3D) energy.  B = (B_z, B_r) = (grad(u)[0]+u/r, -grad(u)[1])
+    from ``solve_axi_magnetostatic``; ``nu`` = reluctivity; ``current`` = total
+    current through the coil cross-section [A].
+
+    ``region=None`` uses the whole domain; pass a material name to restrict."""
+    dom = dx if region is None else dx(definedon=mesh.Materials(region))
+    W_half = 0.5 * Integrate(nu * InnerProduct(B, B) * x * dom, mesh)
+    W_3D = 2.0 * math.pi * W_half
+    return 2.0 * W_3D / (current * current)
+
+
+def ohmic_loss_axi(E_phi, mesh, sigma, region=None):
+    """Time-averaged ohmic loss [W] (full 3D torus) for an axisymmetric
+    time-harmonic eddy problem:
+
+        P = 2*pi * int_half-plane  sigma/2 |E_phi|^2 r dr dz
+
+    E_phi = -j*omega*A_phi (+ Vc/r for a driven conductor with NumberSpace Vc).
+    AC resistance of a ring conductor: Rac = 2*P / |I|^2.
+
+    Analogous to ``ohmic_loss_2d`` but accounts for the toroidal (2*pi*r) volume.
+    """
+    integrand = 0.5 * sigma * (E_phi * Conj(E_phi)).real * x
+    dom = dx if region is None else dx(definedon=mesh.Materials(region))
+    return 2.0 * math.pi * Integrate(integrand * dom, mesh)
