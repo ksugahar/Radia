@@ -922,9 +922,11 @@ def femm_parity_documentation(topic: str = "all") -> str:
         topic: Documentation section. Options:
             "all"        - all sections concatenated
             "overview"   - design rule: build capability not a number
-            "matrix"     - planar / axisymmetric capability matrix (11 analyses)
+            "matrix"     - planar / axisymmetric capability matrix (15 analyses)
             "magnetics"  - magnetostatic / nonlinear / eddy / circuit + axi API
             "scalar"     - electrostatic / heat / current-flow (csolv/hsolv) API
+            "lamination" - laminated steel (anisotropic + complex-mu), multi-
+                           conductor proximity circuit, FEMM open-bdry cross-check
             "validation" - regression test list and per-test error bounds
     """
     return get_femm_parity_documentation(topic)
