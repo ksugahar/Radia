@@ -122,6 +122,16 @@ _SOLID_HARMONICS = {
     (3, -2): ("ZS2", "(x*y*z)"),
     (3, 3):  ("C3",  "(x*(x*x - 3.0*y*y))"),
     (3, -3): ("S3",  "(y*(3.0*x*x - y*y))"),
+    (4, 0):  ("Z4",   "(z*z*z*z - 3.0*z*z*(x*x + y*y) "
+                      "+ 0.375*(x*x + y*y)*(x*x + y*y))"),
+    (4, 1):  ("Z3X",  "(x*z*(4.0*z*z - 3.0*x*x - 3.0*y*y))"),
+    (4, -1): ("Z3Y",  "(y*z*(4.0*z*z - 3.0*x*x - 3.0*y*y))"),
+    (4, 2):  ("Z2C2", "((x*x - y*y)*(6.0*z*z - x*x - y*y))"),
+    (4, -2): ("Z2S2", "(x*y*(6.0*z*z - x*x - y*y))"),
+    (4, 3):  ("ZC3",  "(z*x*(x*x - 3.0*y*y))"),
+    (4, -3): ("ZS3",  "(z*y*(3.0*x*x - y*y))"),
+    (4, 4):  ("C4",   "(x*x*x*x - 6.0*x*x*y*y + y*y*y*y)"),
+    (4, -4): ("S4",   "(x*y*(x*x - y*y))"),
 }
 _HARMONIC_BY_NAME = {nm.upper(): lm for lm, (nm, _) in _SOLID_HARMONICS.items()}
 _HARMONIC_BY_NAME.update({"X2Y2": (2, 2), "XY": (2, -2), "GX": (1, 1),
@@ -149,8 +159,30 @@ def _harmonic_lookup(token):
             f"{sorted({nm for nm, _ in _SOLID_HARMONICS.values()})}; "
             f"or 'l=L,m=M' / '(L,M)'.")
     if lm not in _SOLID_HARMONICS:
-        raise ValueError(f"harmonic {lm} not in the table (l<=3 supported).")
+        raise ValueError(f"harmonic {lm} not in the table (l<=4 supported).")
     return lm
+
+
+def _split_harmonic_terms(spec):
+    """Split a --target-harmonic spec into its terms.  Commas separate terms,
+    BUT a comma also appears INSIDE the ``l=L,m=M`` and ``(L,M)`` single-
+    harmonic forms; this merges those back so e.g. ``l=4,m=-4`` and
+    ``(2,0),Z:0.1`` parse correctly (names like ``Z2`` never contain a comma)."""
+    raw = spec.split(",")
+    out, i = [], 0
+    while i < len(raw):
+        frag = raw[i]
+        while frag.count("(") > frag.count(")") and i + 1 < len(raw):
+            i += 1
+            frag += "," + raw[i]                 # rejoin a split (L,M) pair
+        low = frag.lower().replace(" ", "")
+        if low.startswith("l=") and "m=" not in low and i + 1 < len(raw):
+            i += 1
+            frag += "," + raw[i]                 # rejoin a split l=L,m=M pair
+        if frag.strip():
+            out.append(frag.strip())
+        i += 1
+    return out
 
 
 def _harmonic_target_expr(spec):
@@ -161,7 +193,7 @@ def _harmonic_target_expr(spec):
     ``X`` (Gx gradient), ``Z2:1.0,Z:0.1`` (Z2 with a Z offset).  Returns
     ``(expr_string, [(l, m, coeff), ...])``."""
     terms, parts = [], []
-    for chunk in spec.split(","):
+    for chunk in _split_harmonic_terms(spec):
         chunk = chunk.strip()
         if not chunk:
             continue
@@ -1800,13 +1832,14 @@ def build_argparser():
                          "--target-harmonic.")
     ap.add_argument("--target-harmonic", default="",
                     help="target as a spherical harmonic (MRI gradient/shim "
-                         "basis): a name (Z0,X,Y,Z,Z2,ZX,ZY,C2,S2,Z3,Z2X,..) "
-                         "or 'l=L,m=M', optionally weighted/summed, e.g. 'Z2', "
-                         "'X' (Gx), 'Z2:1.0,Z:0.1'. Generates the solid-harmonic "
+                         "basis, l<=4): a name (Z0,X,Y,Z,Z2,ZX,ZY,C2,S2,Z3,"
+                         "Z2X,..,Z4,Z3X,Z2C2,ZC3,C4,..) or 'l=L,m=M', "
+                         "optionally weighted/summed, e.g. 'Z2', 'X' (Gx), "
+                         "'Z2:1.0,Z:0.1'. Generates the solid-harmonic "
                          "--target-cf polynomial.")
     ap.add_argument("--harmonic-lmax", type=int, default=3,
                     help="max degree l for the achieved-Bz spherical-harmonic "
-                         "decomposition (purity/contamination). 0 = off.")
+                         "decomposition (purity/contamination; l<=4). 0 = off.")
     ap.add_argument("--method", choices=["design", "pareto", "manufacture"],
                     default="design")
     # ---- solver (design + pareto) ----

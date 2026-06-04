@@ -706,6 +706,38 @@ def test_harmonic_target_expr_and_decompose_roundtrip():
         C._harmonic_lookup("Q9")
 
 
+def test_harmonic_l4_forms_and_decompose():
+    """l=4 extension: the table carries all 9 order-4 solid harmonics; the
+    --target-harmonic parser accepts names, 'l=L,m=M', '(L,M)', ':coeff' and
+    mixed sums (the comma INSIDE l=4,m=-4 / (4,-4) is rejoined, not mistaken
+    for a term separator); and the decomposition DEPTH matters -- a pure l=4
+    zonal is machine-precision pure at lmax=4 but unrepresentable at lmax=3."""
+    import numpy as np
+    C = _import_calc()
+    # all 9 order-4 (l, m) present
+    assert sorted(m for (l, m) in C._SOLID_HARMONICS if l == 4) == \
+        [-4, -3, -2, -1, 0, 1, 2, 3, 4]
+    # parser resolves name / l=,m= / parens / :coeff / mixed correctly
+    assert C._harmonic_target_expr("Z4")[1] == [(4, 0, 1.0)]
+    assert C._harmonic_target_expr("l=4,m=-4")[1] == [(4, -4, 1.0)]
+    assert C._harmonic_target_expr("(4,-4)")[1] == [(4, -4, 1.0)]
+    assert C._harmonic_target_expr("l=4,m=-4:0.5")[1] == [(4, -4, 0.5)]
+    assert C._harmonic_target_expr("Z4:1.0,l=4,m=4:0.3")[1] == \
+        [(4, 0, 1.0), (4, 4, 0.3)]
+    # lmax fit space: 1+3+5+7+9 = 25 harmonics at l<=4, 16 at l<=3
+    rng = np.random.default_rng(11)
+    pts = rng.normal(size=(600, 3)) * 0.05
+    assert len(C._solid_harmonic_matrix(pts, 4)[1]) == 25
+    assert len(C._solid_harmonic_matrix(pts, 3)[1]) == 16
+    bz = eval(C._SOLID_HARMONICS[(4, 0)][1], {"__builtins__": {}},
+              {"x": pts[:, 0], "y": pts[:, 1], "z": pts[:, 2]})
+    d4 = C._harmonic_decompose(pts, bz, 4, target_terms=[(4, 0, 1.0)])
+    assert d4["dominant"]["name"] == "Z4" and d4["purity"] > 0.999
+    assert d4["residual_fraction"] < 1e-9
+    # l<=3 cannot represent a pure Z4 -> large residual (depth is load-bearing)
+    assert C._harmonic_decompose(pts, bz, 3)["residual_fraction"] > 0.5
+
+
 def test_streamfunction_design_target_harmonic(sample_vols):
     """--target-harmonic X (Gx) designs and the achieved-Bz harmonic spectrum
     is dominated by X with high purity + a reported contaminant."""
