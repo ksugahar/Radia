@@ -31,32 +31,72 @@ from ..common.chroma_retriever import ChromaRetriever, extract_pdf_chunks
 mcp = FastMCP("mcp-server-literature-index")
 
 
-# Persistent ChromaDB location (per-user, off the NAS)
-_CHROMA_DIR = Path(
-    os.environ.get("LOCALAPPDATA",
-                    os.path.expanduser("~/.cache"))
-) / "radia_mcp_literature_index" / "chroma"
+# Literature corpus root. Defaults to the Sugahara-Lab NAS path but is
+# overridable via RADIA_LIT_ROOT, so the server is usable on any machine
+# (keyword + semantic search degrade gracefully when the corpus is absent).
+_LIT_ROOT = Path(os.environ.get(
+    "RADIA_LIT_ROOT", r"W:\03_文献・論文\00_電磁界解析"))
+
+# Persistent ChromaDB location (per-user, off the NAS).
+# Override with RADIA_LIT_CHROMA_DIR.
+_CHROMA_DIR = Path(os.environ.get(
+    "RADIA_LIT_CHROMA_DIR",
+    str(Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~/.cache")))
+        / "radia_mcp_literature_index" / "chroma")))
 
 # Embedding model for the lit_em index. multilingual-e5-base (768-dim) is
 # far stronger than the all-MiniLM default on the lab's Japanese-heavy EM
 # corpus, and is the model the index is BUILT with — query and index MUST
 # use the same model or ChromaDB raises a dimension mismatch (384 vs 768).
-_EMBED_MODEL = "intfloat/multilingual-e5-base"
+# Override with RADIA_LIT_EMBED_MODEL (must match the built index).
+_EMBED_MODEL = os.environ.get(
+    "RADIA_LIT_EMBED_MODEL", "intfloat/multilingual-e5-base")
 
-_retriever: ChromaRetriever | None = None
+_retrievers: dict[str, ChromaRetriever] = {}
 _index_runner = AsyncRunner()
 
 
-def _get_retriever() -> ChromaRetriever:
-    """Lazy-init the ChromaDB retriever (only when first asked)."""
-    global _retriever
-    if _retriever is None:
-        _retriever = ChromaRetriever(
+def _get_retriever(collection: str = "lit_em") -> ChromaRetriever:
+    """Lazy-init a ChromaDB retriever per collection (only when first asked).
+
+    Default ``lit_em`` is the main literature corpus. Other collections in the
+    same store (e.g. ``femm_kelvin`` -- the FEMM Kelvin/open-boundary materials)
+    are accessed by name and cached separately. All share the one embedding
+    model so the 768-dim vectors stay compatible across collections."""
+    r = _retrievers.get(collection)
+    if r is None:
+        r = ChromaRetriever(
             db_dir=_CHROMA_DIR,
-            collection="lit_em",
+            collection=collection,
             embedding_model=_EMBED_MODEL,
         )
-    return _retriever
+        _retrievers[collection] = r
+    return r
+
+
+def _rag_available() -> tuple[bool, str]:
+    """Check the optional ``[rag]`` dependencies.
+
+    Returns ``(True, "")`` when chromadb / sentence-transformers / pymupdf
+    are importable, else ``(False, hint)`` with a markdown install message.
+    Lets the semantic tools degrade gracefully instead of raising
+    ImportError when the RAG extras are not installed; keyword search via
+    ``literature_search`` is unaffected.
+    """
+    import importlib.util
+    missing = [pip for mod, pip in (
+        ("chromadb", "chromadb"),
+        ("sentence_transformers", "sentence-transformers"),
+        ("fitz", "pymupdf"),
+    ) if importlib.util.find_spec(mod) is None]
+    if missing:
+        return False, (
+            "**Semantic search unavailable** — optional RAG dependencies "
+            f"not installed ({', '.join(missing)}).\n\n"
+            "```\npip install radia-mcp[rag]\n```\n\n"
+            "Keyword search via `literature_search` works without these."
+        )
+    return True, ""
 
 
 @mcp.tool()
@@ -119,9 +159,10 @@ def literature_semantic_search(
     n_results: int = 5,
     source_filter: str = "",
     language_filter: str = "",
+    collection: str = "lit_em",
 ) -> str:
-    """Semantic search over indexed PDF text via ChromaDB + sentence-
-    transformers (all-MiniLM-L6-v2).
+    """Semantic search over indexed text via ChromaDB + sentence-transformers
+    (intfloat/multilingual-e5-base).
 
     Returns markdown-formatted hits with source, page, similarity score,
     language tag (if any), and the matching text chunk.
@@ -134,6 +175,11 @@ def literature_semantic_search(
         query: free-text query (Japanese or English; the embedding model
                is multilingual-friendly).
         n_results: top N hits to return (default 5).
+        collection: which vector collection to search. ``"lit_em"`` (default)
+               is the main EM literature corpus; ``"femm_kelvin"`` is the
+               FEMM 4.2 manual + Kelvin / open-boundary (大地模擬) materials
+               (prose + pyfemm example scripts). All collections share the
+               768-dim multilingual-e5-base embedding.
         source_filter: optional filename substring filter (exact match
                        on source filename).
         language_filter: optional ISO 639-1 tag (e.g. "ja", "en", "zh")
@@ -150,13 +196,20 @@ def literature_semantic_search(
         literature_semantic_search("Hayaho MCTS PM motor", n_results=10)
         literature_semantic_search("ヒステリシス", language_filter="ja")
     """
-    rag = _get_retriever()
+    ok, hint = _rag_available()
+    if not ok:
+        return hint
+    rag = _get_retriever(collection)
     stats = rag.stats()
     if stats.get("n_docs", 0) == 0:
+        if collection != "lit_em":
+            return (f"**Collection `{collection}` is empty or does not exist.**\n\n"
+                    "Available collections include `lit_em` (main corpus) and "
+                    "`femm_kelvin` (FEMM Kelvin materials).")
         return (
             "**No documents indexed yet.**\n\n"
             "Run `literature_build_vector_index` to index PDFs from "
-            "W:/03_文献・論文/00_電磁界解析/ into the vector store. "
+            f"`{_LIT_ROOT}` into the vector store. "
             "First-time build can take 30-90 min depending on # PDFs."
         )
 
@@ -224,13 +277,16 @@ def literature_build_vector_index(
     Returns:
         Job status message.
     """
+    ok, hint = _rag_available()
+    if not ok:
+        return hint
     if _index_runner.is_running:
         s = _index_runner.get_status()
         return (f"Already running: {s.get('label')}, "
                 f"progress {s.get('progress', 0):.1%}, "
                 f"elapsed {s.get('elapsed_seconds', 0):.0f}s.")
 
-    base = Path(r"W:\03_文献・論文\00_電磁界解析")
+    base = _LIT_ROOT
     target = base / folder if folder else base
     if not target.exists():
         return f"Target folder does not exist: {target}"

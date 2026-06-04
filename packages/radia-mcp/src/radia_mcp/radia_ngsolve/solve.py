@@ -7,9 +7,10 @@ COMSOL cross-validation tests build on.
 tool. Cross-validated against COMSOL (sphere field 0.11 %, solenoid B <0.35 %,
 inductance 0.01 %, ...).
 """
+import cmath
 import math
 
-from ngsolve import (HCurl, H1, NumberSpace, BilinearForm, LinearForm,
+from ngsolve import (HCurl, H1, NumberSpace, FESpace, BilinearForm, LinearForm,
                      GridFunction, CoefficientFunction, InnerProduct, curl, grad,
                      dx, Integrate, Conj, Variation, Preconditioner, x, y, sqrt)
 
@@ -73,6 +74,79 @@ def planar_magnet_source(mesh, magnets):
     sx = CoefficientFunction([c[0] for c in comp])
     sy = CoefficientFunction([c[1] for c in comp])
     return CoefficientFunction((sx, sy))
+
+
+def laminated_mu_eff(mu_r, sigma, omega, d_lam, fill=1.0):
+    """Complex effective permeability of IN-PLANE laminated steel (FEMM AC
+    lamination model -- the ``Lamination & Wire Type`` material).
+
+    A stack of laminations (each steel sheet of thickness ``d_lam``, relative
+    permeability ``mu_r``, conductivity ``sigma``, stacking/fill factor
+    ``fill``) excited by a field PARALLEL to the sheets develops eddy currents
+    that circulate within each sheet -> a 1D skin effect across the lamination
+    thickness.  Homogenized, the stack behaves as a single block of complex
+    permeability
+
+        mu_eff = mu0 * [ fill * mu_r * tanh(b)/b + (1 - fill) ],
+        b      = (d_lam/2) * sqrt(1j*omega*mu0*mu_r*sigma)
+
+    The ``tanh(b)/b`` factor is the lamination flux-exclusion + eddy loss
+    (Im(mu_eff) < 0 carries the loss); the ``(1-fill)`` term is the
+    non-conducting insulation volume fraction (mu0) in parallel.  ``omega=0`` or
+    ``sigma=0`` returns the real static value ``mu0*(fill*mu_r + 1 - fill)``.
+
+    Returns a complex python scalar.  Use ``1/laminated_mu_eff(...)`` as the
+    (uniform, complex) reluctivity ``nu`` of the laminated region in
+    :func:`solve_planar_eddy`, with ``sigma = 0`` there (the eddy loss is
+    already captured by ``Im(mu_eff)`` -- do NOT also mesh-resolve the sheets).
+    """
+    if omega == 0 or sigma == 0:
+        return MU0 * (fill * mu_r + (1.0 - fill))
+    b = (d_lam / 2.0) * cmath.sqrt(1j * omega * MU0 * mu_r * sigma)
+    factor = cmath.tanh(b) / b
+    return MU0 * (fill * mu_r * factor + (1.0 - fill))
+
+
+def laminated_reluctivity_tensor(mesh, lam_by_material, default_mu_r=1.0,
+                                 lam_normal="y"):
+    """Static ANISOTROPIC reluctivity matrix CF for laminated regions (FEMM
+    lamination, DC / low-frequency).
+
+    Laminations make the steel magnetically anisotropic via the stacking
+    (fill) factor: flux PARALLEL to the sheets sees steel and insulation in
+    parallel, flux NORMAL to the stack sees them in series:
+
+        mu_par  = mu0 * (fill*mu_r + 1 - fill)        (along the sheets)
+        mu_perp = mu0 / (fill/mu_r + 1 - fill)        (across the stack)
+
+    ``lam_by_material`` maps ``material -> (mu_r, fill)``.  ``lam_normal`` is the
+    stacking direction (the sheet normal), ``"x"`` or ``"y"``.  Materials not
+    listed are isotropic with ``default_mu_r``.
+
+    Returns a 2x2 matrix CoefficientFunction to pass as ``nu`` to
+    :func:`solve_planar_magnetostatic` (whose ``nu*grad(u)*grad(v)`` term reads
+    a matrix ``nu`` as the anisotropic form ``(nu grad A).grad v``).  Because
+    ``B = (dA/dy, -dA/dx)``, the matrix diagonal is the reluctivity felt by
+    ``(B from dA/dx, B from dA/dy)`` -- i.e. swapped relative to B, which this
+    helper handles: ``lam_normal="y"`` -> diag(1/mu_perp, 1/mu_par).
+    """
+    mxx, myy = [], []
+    for m in mesh.GetMaterials():
+        if m in lam_by_material:
+            mu_r, fill = lam_by_material[m]
+            mu_par = MU0 * (fill * mu_r + (1.0 - fill))
+            mu_perp = MU0 / (fill / mu_r + (1.0 - fill))
+            nu_par, nu_perp = 1.0 / mu_par, 1.0 / mu_perp
+            if lam_normal == "y":      # stack along y: B_y normal, B_x parallel
+                mxx.append(nu_perp); myy.append(nu_par)
+            else:                       # stack along x: B_x normal, B_y parallel
+                mxx.append(nu_par); myy.append(nu_perp)
+        else:
+            nu_iso = NU0 / float(default_mu_r)
+            mxx.append(nu_iso); myy.append(nu_iso)
+    Mxx = CoefficientFunction(mxx)
+    Myy = CoefficientFunction(myy)
+    return CoefficientFunction((Mxx, 0.0, 0.0, Myy), dims=(2, 2))
 
 
 def solve_planar_magnetostatic(mesh, nu, Jz=None, magnets=None, order=2,
@@ -227,6 +301,98 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
         f += sigma * applied_Ez * v * dx
     a.Assemble()
     f.Assemble()
+    gfu = GridFunction(fes)
+    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+    return gfu
+
+
+def solve_planar_eddy_multi(mesh, nu, sigma, omega, conductors,
+                            connection="series", total_current=None,
+                            currents=None, Jz=None, order=3, dirichlet="outer"):
+    """2D PLANAR time-harmonic eddy currents with a MULTI-CONDUCTOR circuit --
+    skin AND proximity effect (FEMM "circuit" grouping several solid conductors).
+
+    The conductors share the SAME complex A_z field, so each one's eddy currents
+    are driven by the field of all the others -> proximity effect, on top of each
+    one's own skin effect. The net current of each conductor is constrained by an
+    axial-E (``Vc = -dV/dz``) NumberSpace unknown, exactly as in the single-
+    conductor :func:`solve_planar_eddy`, but one unknown per conductor.
+
+    Parameters
+    ----------
+    conductors : list of material names, each a solid conductor (sigma > 0 there).
+    connection :
+        * ``"series"``  -- every conductor carries the SAME net current
+          ``total_current`` (one Vc_k per conductor; the per-conductor voltages
+          differ). Typical multi-turn winding / adjacent bus-bars.
+        * ``"parallel"`` -- all conductors share ONE Vc (one common voltage); the
+          net currents redistribute and SUM to ``total_current``. (Equivalent to
+          :func:`solve_planar_eddy` with sigma covering every conductor.)
+    total_current : circuit current I (series: per conductor; parallel: the sum).
+    currents      : optional per-conductor net currents [list, len==conductors],
+                    overriding the equal-current series default (independent
+                    forced currents, one Vc each).
+    Jz            : optional imposed source current density CF [A/m^2].
+    order, dirichlet : as in :func:`solve_planar_eddy`.
+
+    Returns the compound GridFunction. Components:
+        * series / independent : ``(A_z, Vc_0, Vc_1, ...)`` -- one Vc per conductor;
+          conductor k field  E_z = -j w A_z + Vc_k, loss
+          ``ohmic_loss_2d(E_z, mesh, sigma, region=conductors[k])``.
+        * parallel : ``(A_z, Vc)`` -- shared Vc.
+    The circuit AC resistance is ``Rac = 2*sum_k P_k / |I|^2``.
+
+    Validated (tests/test_planar_proximity.py): reduces to the single-wire
+    Kelvin Rac; two well-separated wires in series give 2x the isolated Rac; and
+    bringing them together raises Rac (proximity), all against the exact ber/bei
+    round-wire reference.
+    """
+    if connection == "parallel":
+        fes = H1(mesh, order=order, complex=True, dirichlet=dirichlet) \
+            * NumberSpace(mesh, complex=True)
+        (Az, Vc), (dA, dV) = fes.TnT()
+        cond_cf = dx(definedon=mesh.Materials("|".join(conductors)))
+        a = BilinearForm(fes)
+        a += nu * grad(Az) * grad(dA) * dx
+        a += 1j * omega * sigma * Az * dA * dx
+        a += -sigma * Vc * dA * cond_cf
+        a += -1j * omega * sigma * Az * dV * cond_cf
+        a += sigma * Vc * dV * cond_cf
+        f = LinearForm(fes)
+        if Jz is not None:
+            f += Jz * dA * dx
+        a.Assemble()
+        f.Assemble()
+        f.vec.FV().NumPy()[fes.Range(1).start] += complex(total_current)
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+        return gfu
+
+    # series / independent: one NumberSpace per conductor
+    if currents is None:
+        currents = [total_current] * len(conductors)
+    h1 = H1(mesh, order=order, complex=True, dirichlet=dirichlet)
+    fes = FESpace([h1] + [NumberSpace(mesh, complex=True) for _ in conductors])
+    trials = fes.TrialFunction()
+    tests = fes.TestFunction()
+    Az, dA = trials[0], tests[0]
+    a = BilinearForm(fes)
+    a += nu * grad(Az) * grad(dA) * dx
+    a += 1j * omega * sigma * Az * dA * dx
+    for k, reg in enumerate(conductors):
+        Vc_k, dV_k = trials[k + 1], tests[k + 1]
+        dxr = dx(definedon=mesh.Materials(reg))
+        a += -sigma * Vc_k * dA * dxr            # Vc_k drives A only in conductor k
+        a += -1j * omega * sigma * Az * dV_k * dxr  # net-current constraint of k
+        a += sigma * Vc_k * dV_k * dxr
+    f = LinearForm(fes)
+    if Jz is not None:
+        f += Jz * dA * dx
+    a.Assemble()
+    f.Assemble()
+    fv = f.vec.FV().NumPy()
+    for k in range(len(conductors)):
+        fv[fes.Range(k + 1).start] += complex(currents[k])
     gfu = GridFunction(fes)
     gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
     return gfu
@@ -583,3 +749,113 @@ def solve_magnetostatic_newton(mesh, source, energy_density, steel_region,
             if verbose:
                 print(f"  [load {step}/{load_steps}] it{it+1} err={err:.2e} tau={tau:.3g}", flush=True)
     return gfu
+
+
+def solve_eddy_current_harmonic_APhi(
+    mesh, nu, sigma, omega, add_source,
+    order=5, precond="local", dirichlet="", dirichlet_bbbnd="GND",
+    periodic=True,
+    tol=1e-8, maxsteps=2000, restart=200, reg=1e-10,
+):
+    """3-D frequency-domain eddy current via A-Φ formulation.
+
+    Governing equations (weak form, e^{jωt} convention):
+      ∫ν curl A·curl v dx  +  jωσ(A+∇Φ)·v dx_cond  =  F_source   [A eq.]
+      jωσ(A+∇Φ)·∇ψ dx_cond  =  0                                  [Φ eq.]
+
+    Two open-boundary modes:
+
+    ``periodic=True`` (default, Kelvin transform):
+      The mesh carries an outer domain whose dome faces are identified with
+      ``face.Identify(..., IdentificationType.PERIODIC)``.  ``nu`` must encode
+      the Kelvin scaling (ν_outer = (r'/R)² ν₀).  A GND point vertex fixes the
+      Φ gauge (``dirichlet_bbbnd``).  TEAM-7 uses this mode.
+
+    ``periodic=False`` (Dirichlet box):
+      The outer boundary carries a Dirichlet tag given by ``dirichlet``.  No
+      Kelvin transform and no GND vertex are needed; ``dirichlet_bbbnd`` is
+      ignored.  TEAM-21 uses this mode.
+
+    ``sigma`` is zero outside conductors — the bilinear form integrates over all
+    of dx, which is equivalent to restricting to conductor regions.
+
+    Parameters
+    ----------
+    mesh     : NGSolve Mesh.
+    nu       : reluctivity CF [m/H].
+    sigma    : conductivity CF [S/m] (0 outside conductors).
+    omega    : angular frequency [rad/s].
+    add_source : ``add_source(lf, (v_A, psi))`` appends source terms to LinearForm
+                 ``lf``.  ``v_A`` is the HCurl test function, ``psi`` the H1 test
+                 function.  Example for a stranded rectangular coil::
+
+                     def add_source(lf, test_fn):
+                         v_A, _ = test_fn
+                         lf += -N/L * tau_coil * v_A.Trace() * ds("coili")
+                         lf += N/(dw*L) * pot_coil * curl(v_A) * dx("coil")
+
+    order    : HCurl / H1 polynomial order (default 5; order=3 is ~4-5x faster).
+    precond  : Preconditioner type for GMRes.  "local" (block Jacobi) is required
+               for complex=True — "bddc" triggers a Cholesky complex-number failure.
+    dirichlet       : Dirichlet boundary tag for HCurl and (when periodic=False)
+                      H1 (default "" = none).
+    dirichlet_bbbnd : H1 point tag for Φ gauge fixing (default "GND").
+                      Only used when ``periodic=True``.
+    periodic : If True (default), wrap FE spaces with Periodic() for Kelvin BC.
+               If False, use plain Dirichlet box (``dirichlet`` tag on outer faces).
+    tol, maxsteps, restart : GMRes convergence parameters.
+    reg      : Φ regularisation coefficient (×ν) preventing a singular kernel
+               outside the conductor; default 1e-10.
+
+    Returns
+    -------
+    gfAPhi : compound GridFunction with components ``(gfA, gfPhi)``.
+             ``B = curl(gfAPhi.components[0])``
+             ``J = -1j*omega*sigma*(gfAPhi.components[0]
+                                   + grad(gfAPhi.components[1]))``
+    """
+    from ngsolve import Periodic, H1, HCurl, BilinearForm, LinearForm, \
+        GridFunction, Preconditioner, TaskManager, curl, grad, dx
+    from ngsolve.krylovspace import GMRes
+
+    fes_A_base  = HCurl(mesh, order=order, complex=True,
+                        dirichlet=dirichlet, nograds=True)
+    fes_A       = Periodic(fes_A_base) if periodic else fes_A_base
+
+    if periodic:
+        fes_Ph_base = H1(mesh, order=order, complex=True,
+                         dirichlet=dirichlet, dirichlet_bbbnd=dirichlet_bbbnd)
+    else:
+        fes_Ph_base = H1(mesh, order=order, complex=True,
+                         dirichlet=dirichlet)
+    fes_Phi     = Periodic(fes_Ph_base) if periodic else fes_Ph_base
+
+    fes         = fes_A * fes_Phi
+    (A_h, Ph_h) = fes.TrialFunction()
+    (v,   psi)  = fes.TestFunction()
+
+    a = BilinearForm(fes)
+    a += nu           * curl(A_h)  * curl(v)     * dx
+    a += 1j * omega   * sigma      * A_h         * v         * dx
+    a += 1j * omega   * sigma      * grad(Ph_h)  * v         * dx
+    a += 1j * omega   * sigma      * A_h         * grad(psi) * dx
+    a += 1j * omega   * sigma      * grad(Ph_h)  * grad(psi) * dx
+    a += reg * nu     * grad(Ph_h) * grad(psi)   * dx
+
+    pre = Preconditioner(a, precond)
+
+    f = LinearForm(fes)
+    add_source(f, (v, psi))
+
+    gf = GridFunction(fes)
+    gf.vec[:] = 0
+
+    with TaskManager():
+        a.Assemble()
+        pre.Update()
+        f.Assemble()
+
+    GMRes(a.mat, f.vec, pre=pre.mat, x=gf.vec,
+          tol=tol, maxsteps=maxsteps, restart=restart, printrates=False)
+
+    return gf
