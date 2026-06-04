@@ -5,8 +5,15 @@ Writes four .vol meshes into the directory given as argv[1]:
   primary_cyl.vol   -- PRIMARY coil lateral surface (inner, r=0.15m, L=0.50m)
   shield_cyl.vol    -- SHIELD coil lateral surface  (outer, r=0.20m, L=0.55m)
   dsv.vol           -- DSV sphere volume (target region, r=0.05m)
-  external.vol      -- thin shell OUTSIDE the shield (r=0.22..0.24m, L=0.18m)
-                       -- where stray field must vanish
+  external.vol      -- LARGE annular shell OUTSIDE the shield
+                       (r=0.235..0.27m, z=+-0.32m -> spans the full coil
+                       length and beyond) -- where the stray field must
+                       vanish.  CRITICAL: the external null region must
+                       COVER the exterior, not just a thin mid-plane slice;
+                       a too-small region only nulls the field locally and
+                       can make it WORSE elsewhere (measured -- see the
+                       active-shielding demo).  With this coverage the shield
+                       gives a genuine ~25-140x stray reduction.
 
 Run inside a SUBPROCESS (the golden test does this) so the NGSolve / Netgen
 import stays out of the pytest process.  Deterministic for fixed geometry +
@@ -42,14 +49,15 @@ def main(outdir):
         OCCGeometry(Sphere(Pnt(0, 0, 0), 0.05)).GenerateMesh(
             maxh=0.025).Save(os.path.join(outdir, "dsv.vol"))
 
-        # External region: thin annular shell just outside the shield.
-        # Build as (outer cylinder) - (inner cylinder) volume, short in z
-        # so it samples the midplane stray field.
-        a_ext_in, a_ext_out, L_ext = 0.21, 0.23, 0.18
+        # External region: LARGE annular shell outside the shield, spanning
+        # the full coil length and beyond (z=+-0.32, longer than shield
+        # L=0.55 -> z=+-0.275).  Nulling the field over this whole exterior
+        # (not a thin mid-plane slice) is what makes the shielding genuine.
+        a_ext_in, a_ext_out, L_ext = 0.235, 0.27, 0.64
         cyl_out = Cylinder(Pnt(0, 0, -L_ext / 2), Z, r=a_ext_out, h=L_ext)
         cyl_in  = Cylinder(Pnt(0, 0, -L_ext / 2), Z, r=a_ext_in,  h=L_ext)
         shell = cyl_out - cyl_in
-        OCCGeometry(shell).GenerateMesh(maxh=0.035).Save(
+        OCCGeometry(shell).GenerateMesh(maxh=0.055).Save(
             os.path.join(outdir, "external.vol"))
 
     print(f"primary_vol={os.path.join(outdir, 'primary_cyl.vol')}")
