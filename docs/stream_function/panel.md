@@ -38,6 +38,35 @@ single-stroke chaining theory is in [`single_stroke.md`](single_stroke.md).
 - `--target-cf` — the target field as a CoefficientFunction expression of
   `x,y,z`.  Scalar `-> Bz` (e.g. `"x"` = Gx, `"1"` = uniform), 3-vector
   `"(Bx,By,Bz)" -> ` full `B`.
+- `--target-harmonic` — the target as a **spherical harmonic** (see below).
+  Give `--target-cf` **or** `--target-harmonic` (loud error on both).
+
+## Spherical-harmonic target + field decomposition (`--target-harmonic`)
+
+In a current-free region `Bz` is harmonic, so it expands in **real regular
+solid harmonics** `R_l^m(x,y,z)` — homogeneous harmonic polynomials
+(`∇²R = 0`).  These are the named MRI gradients/shims, and the designer speaks
+them natively.
+
+| target | `--target-harmonic` | polynomial |
+|---|---|---|
+| Gx, Gy, Gz | `X`, `Y`, `Z` | `x`, `y`, `z` |
+| 2nd-order shims | `Z2`, `ZX`, `ZY`, `C2`, `S2` | `z²−(x²+y²)/2`, `xz`, `yz`, `x²−y²`, `xy` |
+| 3rd-order shims | `Z3`, `Z2X`, `Z2Y`, `ZC2`, `ZS2`, `C3`, `S3` | … |
+
+A name, an `l=L,m=M` pair, or a weighted sum is accepted — e.g. `Z2`
+(pure 2nd-order shim), `X` (Gx), `Z2:1.0,Z:0.1` (Z2 with a Z offset).  It
+generates the solid-harmonic `--target-cf` polynomial, so the whole pipeline
+(design / pareto / manufacture / single-stroke) is unchanged.
+
+**Achieved-field decomposition** (design mode, `result["harmonics"]`, depth
+`--harmonic-lmax`, default 3): the designed `Bz` over the DSV is least-squares
+decomposed into solid harmonics — the per-`(l,m)` field-RMS **spectrum**, the
+LSQ **residual**, and (with a `--target-harmonic`) the **purity** (target-
+harmonic field fraction — the standard gradient-coil quality metric) and the
+largest **contaminant**.  One poly-string table is the single source of truth
+for both target and analysis, so the round-trip is exact.  Verified: Gx → pure
+`X` (purity 1.000, ZX contaminant 7e-6); `Z2` → pure `Z2`.
 
 ## Design objective / regularizer (`--regularize {l2, h1, inductance}`)
 
