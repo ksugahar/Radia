@@ -666,9 +666,25 @@ Solves the unsteady heat equation in the workpiece:
 
     rho * c * dT/dt = div(kappa * grad(T)) + Q
 
-with convection boundary condition on work surface:
+with convection and/or radiation boundary conditions on the work surface:
 
-    -kappa * dT/dn = h * (T - T_ext)
+    -kappa * dT/dn = h * (T - T_ext)                    (convection)
+                   + eps * sigma_SB * (T^4 - T_ext^4)   (radiation, T in KELVIN)
+
+Radiation matters at IH temperatures (steel hardening ~900-1100 deg C, where
+eps*sigma*T^4 rivals or exceeds convection). The Heat panel exposes an
+``Emissivity [0..1]`` field (0 = off, the default -> convection-only, unchanged);
+``calc_heat.py`` / ``calc_heat_axisym.py`` take ``--emissivity`` and add the
+radiation flux EXPLICITLY (previous-step T, internally converted to Kelvin) to
+the per-step RHS, so the cached ``mstar = M + theta*dt*K`` factorisation is kept:
+
+    if emissivity > 0:                       # T in Kelvin internally
+        f_T += -emissivity * 5.670374419e-8 \\
+               * ((T+273.15)**4 - (T_ext+273.15)**4) * v * ds("work_surface")
+
+Validated by the eps-sigma steady-state balance
+T_ss = (q/(eps*sigma) + T_ext_K^4)^(1/4)  (tests/panels/test_heat_radiation.py,
+0.02 %).  Radiation ambient = ``--t-ext`` (shared with convection).
 
 ## Complete Thermal Implementation
 
