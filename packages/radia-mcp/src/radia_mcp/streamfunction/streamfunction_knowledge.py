@@ -107,6 +107,8 @@ TOPIC MAP  (query: streamfunction("<topic>"))
   contour           contour=flux-line; --contour-sub order-p + --flux-plot bubble
   harmonics         spherical-harmonic target (--target-harmonic Z2/X/..) +
                     achieved-field (l,m) decomposition: purity / contamination
+  shielding         active shielding (--shield-vol): primary+shield joint
+                    design (Turner 1986), ~86x stray reduction; coverage lesson
   fusion            stellarator Stage-2 (REGCOIL/NESCOIL/FOCUS): winding-surface
                     current potential, net current, force/stress, VMEC, winding-shape
 
@@ -389,9 +391,63 @@ The panel auto-generates the two flags (cli-diff clean).
 """
 
 
+SF_SHIELDING = r"""
+ACTIVE SHIELDING -- primary + shield coil (Turner 1986 / Mansfield-Chapman)
+==========================================================================
+An actively-shielded gradient coil adds a second, OUTER cylindrical surface
+(the SHIELD) whose current cancels the STRAY field outside the assembly --
+essential in MRI so the switching gradients do not induce eddy currents in
+the cryostat.
+
+CLI (calc_streamfunction.py, design mode only):
+  --shield-vol SHIELD.vol        outer shield coil surface mesh
+  --shield-eval-vol EXT.vol      external region where stray field -> 0
+                                 (a LARGE annular shell OUTSIDE the shield)
+  --shield-weight w  (def 1.0)   weight on stray-null rows vs DSV target rows
+
+METHOD: primary + shield designed JOINTLY in one stacked LS system
+  A_stack = [ A_dsv_p  | A_dsv_s  ]   (DSV target rows)
+            [ w*A_ext_p| w*A_ext_s ]  (stray-null rows)
+  B_stack = [B_target; 0]
+  block-diagonal seminorm diag(S_primary, S_shield); RegularizedTSVD
+  unchanged.  psi_f = [primary_free | shield_free] is split after solving.
+  (_build_shielded_problem in calc_streamfunction.py.)
+
+REPORTED (shielded run JSON):
+  homogeneity_rms   DSV field error (target preserved)
+  stray_rms         HONEST combined field at INDEPENDENT external measure
+                    points (e_mpts = external-mesh centroids), relative to
+                    the DSV target -- the generalising shielding metric
+  stray_fit_rms     circular fit residual at the constraint VERTICES (info
+                    only -- NOT the shielding quality)
+  peak_J_primary / peak_J_shield
+
+COVERAGE IS EVERYTHING (measured, the key lesson): the external null region
+must COVER the exterior, not a thin mid-plane slice.
+  * LARGE full-length shell (r=0.235-0.27, spans the coil) -> GENUINE
+    ~86x (39 dB) stray reduction, 100-1700x in the far field, DSV
+    homogeneity preserved (examples/stream_function/demo_active_shield.py).
+  * TOO-SMALL thin slice -> point-sampled nulling OVERFITS the slice (~4x
+    locally) and makes the field WORSE at larger z.
+  * the un-sampled GAP between shield (r=0.20) and null region (r=0.235)
+    stays unshielded (~2-3x).
+An analytic external-multipole-moment constraint (vs point sampling) would
+remove the sampling dependence -- documented next step, not done.
+
+VERIFIED: test_streamfunction_active_shielding (golden, large-shell fixture
+make_shielded_coil_vol.py).  Panel auto-emits the 3 flags (cli-diff clean).
+
+HONESTY NOTE: the first implementation reported stray at the CONSTRAINT
+points (circular -> ~machine-zero "-184 dB"); verify-first caught it and the
+headline is now the independent-point measure.  Repository-first: a real
+~86x beats a perfect-looking circular artifact.
+"""
+
+
 TOPICS = {
     "overview": "SF coil-design framework + pipeline + topic map (this server's front door)",
     "harmonics": "spherical-harmonic target (--target-harmonic Z2/X/..) + achieved-field (l,m) decomposition: purity / contamination (MRI gradient/shim basis)",
+    "shielding": "active shielding (--shield-vol): primary+shield joint design (Turner 1986), ~86x stray reduction; coverage-is-everything lesson",
     "panel": "the design/pareto/manufacture PANEL + calc_streamfunction.py CLI",
     "boundary_conditions": "current confinement BC --confine off/on/abe (Abe edge-equipotential)",
     "contour": "contour=flux-line principle; --contour-sub order-p + --flux-plot bubble view",
@@ -445,6 +501,11 @@ def get_streamfunction_documentation(topic: str = "overview") -> str:
              "gradient", "gradients", "shim", "shims", "purity", "contamination",
              "mri", "z2", "decompose", "decomposition", "lm", "ylm"):
         return SF_HARMONICS
+    if t in ("shielding", "shield", "active_shield", "active_shielding",
+             "shielded", "primary_shield", "primary_and_shield", "stray",
+             "stray_field", "turner", "mansfield", "shield_vol", "cryostat",
+             "eddy_shield"):
+        return SF_SHIELDING
     if t in ("fusion", "regcoil", "nescoil", "focus", "stellarator",
              "winding_surface", "winding_shape", "secular", "net_current",
              "cohomology", "vmec", "wout", "coil_force", "coil_stress",
