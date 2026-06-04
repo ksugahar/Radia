@@ -381,6 +381,7 @@ class HeatPanel(ModePanel):
         self._add_section("Boundary conditions")
         self.add_line("h_conv", "h_conv [W/(m^2.K)]:", "10")
         self.add_line("t_ext",  "T_ext [degC]:",       "20")
+        self.add_line("emissivity", "Emissivity [0..1]:", "0")
         self.add_line("t_init", "T_initial [degC]:",   "20")
 
         # Time integration (the second solver-switch).
@@ -681,6 +682,7 @@ class HeatPanel(ModePanel):
                "--material", material_cli,
                "--h-conv",   self.val("h_conv"),
                "--t-ext",    self.val("t_ext"),
+               "--emissivity", self.val("emissivity"),
                "--t-initial",self.val("t_init"),
                "--dt",       self.val("dt"),
                "--t-end",    self.val("t_end"),
