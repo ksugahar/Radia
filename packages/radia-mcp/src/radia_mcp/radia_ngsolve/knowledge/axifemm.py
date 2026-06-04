@@ -715,6 +715,62 @@ escape hatch.
 """
 
 
+AXIFEMM_MAGNET = """\
+# Permanent-magnet source term (FEMM prob3big.cpp port)
+
+axihenrotte solves linear/eddy-current problems; a **permanent magnet** is
+added purely as a `LinearForm` RHS — no FESpace/C++ change needed. This is
+the FEMM `fkn/prob3big.cpp` magnetization edge-loop
+(`H_c * (cos t * dr + sin t * dz)`) written as a continuous Galerkin form.
+
+## Weak form
+
+Magnetostatics with remanence: `curl(nu*B - nu*B_rem) = J`, so the magnet
+contributes `RHS += int nu*B_rem . (curl v) dV`. In the A_phi convention
+(DOFs store A_phi; `B_z = grad(u)[0] + u/r`, `B_r = -grad(u)[1]`), with
+`nu*B_rem = H_c*(cos th, sin th)` and `th` measured from the r-axis
+(`th = 90 deg` => axial magnetization):
+
+    f += [ H_c*sin(th)*(r*grad(v)[0] + v) - H_c*cos(th)*r*grad(v)[1] ] dx_magnet
+
+Stiffness (static, sigma=0):
+    a += nu*(1/r)*(r*grad(u)[0]+u)*(r*grad(v)[0]+v)*dx + nu*r*grad(u)[1]*grad(v)[1]*dx
+
+```python
+th = math.radians(theta_deg)
+reg = mesh.MaterialCF({"magnet": 1.0}, default=0.0)
+f += reg * Hc * math.sin(th) * (x * grad(v)[0] + v) * dx
+f += -reg * Hc * math.cos(th) * (x * grad(v)[1]) * dx
+```
+
+## Validation (uniformly-magnetized linear sphere, analytical)
+
+Sphere radius a, rel. perm. mu_r, coercivity Hc, axial mag.:
+    B_in = 2*mu0*mu_r*Hc/(mu_r+2)   (uniform inside)   ;  external = dipole.
+For mu_r=2, Hc=3e5 -> B_in = 0.376991 T. The verified test
+(`tests/test_magnetized_sphere.py`) gives, on H1Henrotte p=2:
+    <B_z>_magnet (vol-avg)  = 0.376802 T   (-0.050 %)
+    interior |B_r|          < 1.1e-4 T     (purely axial, as expected)
+    external equator r=5a   = -1.497e-3 T  vs dipole -1.508e-3 (0.73 %)
+Cross-checks: standard NGSolve H1 gives -0.010 % (same source term);
+FEMM `02_大地模擬/axis_magnet*` Kelvin runs use the same a/mu_r/Hc.
+
+## Gotchas
+
+* **Axis MUST be Dirichlet** (`dirichlet="axis|outer"`). A_phi=0 on r=0 is
+  physical; without it the Henrotte {1,r²,z} basis leaves A_phi(0)!=0 and
+  `B_z = grad(u)[0]+u/r` blows up at the axis. Name the FULL r=0 line
+  (both magnet and air faces' `edges.Min(X)`) "axis".
+* **On-axis B recovery** (r->0) via the `grad(gfu)` CoefficientFunction is
+  unreliable for H1Henrotte (the `AxiHenrotteDiffOpGradient::Apply/ApplyTrans`
+  fall back to the base-class stub — see the runtime "called base class
+  apply" message). Sample interior fields OFF-axis (r>=0.3a) or use the
+  volume-averaged metric; the SOLVE itself is correct on-axis.
+* For an OPEN domain use the Kelvin reluctivity warp (see the "kelvin"
+  topic): `nu_ext = (rho'/R)^2 * nu_0`. Truncation (Dirichlet far box)
+  distorts the external dipole by O((a/R_far)^3)+mesh error.
+"""
+
 def get_axifemm_documentation(topic: str = "all") -> str:
     """
     Return radia-axifemm documentation for the requested topic.
@@ -730,6 +786,8 @@ def get_axifemm_documentation(topic: str = "all") -> str:
       "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
                           sphere -0.001 % vs Stoll, with gotchas: mu vs nu factor,
                           element-centroid mu sampling, Curve(2) trade-off)
+      "magnet"          - Permanent-magnet source term (FEMM prob3big.cpp port):
+                          weak-form RHS, magnetized-sphere validation, axis-BC gotcha
       "file_layout"     - Where to find each piece (C++, Mathematica, tests)
       "why_dropped_p3"  - Why `p=3` was attempted, completed, and reverted
     """
@@ -741,13 +799,14 @@ def get_axifemm_documentation(topic: str = "all") -> str:
         "vs_standard_h1": AXIFEMM_VS_STANDARD_H1,
         "validation":     AXIFEMM_VALIDATION,
         "kelvin":         AXIFEMM_KELVIN,
+        "magnet":         AXIFEMM_MAGNET,
         "file_layout":    AXIFEMM_FILE_LAYOUT,
         "why_dropped_p3": AXIFEMM_WHY_DROPPED_P3,
     }
     if topic == "all":
         return "\n\n".join(sections[k] for k in [
             "overview", "api", "basis_p1", "basis_p2",
-            "vs_standard_h1", "validation", "kelvin",
+            "vs_standard_h1", "validation", "kelvin", "magnet",
             "file_layout", "why_dropped_p3"
         ])
     if topic in sections:
