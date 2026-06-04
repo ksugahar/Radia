@@ -44,6 +44,7 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 | `levitation_sphere_force.py` | **Isotropic induced-dipole AC levitation force** on a conducting sphere, coefficient pinned by the analytic perfect-conductor limit, frequency response reduced by CLN/Cauer. See below. |
 | `ellipsoid_alpha_tensor.py` | **Shape-anisotropic polarizability tensor** of a conducting ellipsoid (analytic demag tensor + high-freq perfect-conductor `kappa_i = -V/(1-N_i)` + orientation-dependent lift). The analytic non-axisym anchor. See below. |
 | `ellipsoid_alpha_omega_axisym.py` | **Full-frequency** axial `alpha_c(omega)` of a spheroid by axisymmetric FEM (uniform-field eddy solve), validated on the sphere vs `4 pi a^3 G(x)` and anchored at HF by `-V/(1-N_c)`. The eddy leg between the DC and HF analytic limits. See below. |
+| `ellipsoid_alpha_tensor_3d.py` | **WIP PROBE** (not a verified example) toward the transverse `m=1` component via a 3D HCurl solve. Sphere isotropy `alpha_xx==alpha_zz` is verified (0.17%); the absolute magnitude is order-1-limited (needs order-2 + CompactAMS). See below. |
 | `coil_levitation_equilibrium.py` | **Real-coil levitation equilibrium**: Radia open-boundary coil field x the verified sphere force -> stable equilibrium height + vertical stability. The Radia+NGSolve maglev workflow in action. See below. |
 | `coil_sphere_eddy_force.py` | **Dipole-approximation error**: the FULL axisymmetric eddy-current Lorentz force on a sphere-in-coil vs the dipole force at `a/L ~ 0.5` (resolves the `coil_levitation` caveat). See below. |
 
@@ -132,11 +133,29 @@ far boundary), induced moment `m_z = -pi s sigma int r phi dr dz`,
 | full curve | `alpha_c` rises from DC toward the HF plateau, shape-dependent |
 
 This is the AXIAL (`m=0`) component; the transverse (`m=1`) component
-completes the full tensor (the remaining numerical extension).  Convention
-note: the FEM uses `s = +j omega` (engineering); `G_exact` uses
-`e^{-j omega t}` (physics), so the FEM result is conjugated to match the
-folder's convention (`Re[alpha]` -- the part the levitation force uses --
-is unaffected).
+completes the full tensor (see the 3D probe below).  Convention note: the
+FEM uses `s = +j omega` (engineering); `G_exact` uses `e^{-j omega t}`
+(physics), so the FEM result is conjugated to match the folder's convention
+(`Re[alpha]` -- the part the levitation force uses -- is unaffected).
+
+### Transverse `m=1` component -- 3D HCurl probe (WIP, not verified)
+
+`ellipsoid_alpha_tensor_3d.py` is a **WIP research probe** (clearly labeled,
+no golden test) toward the transverse component.  A uniform field along the
+symmetry axis is `m=0`; a transverse field is `m=1`, so only a full 3D
+solve gives `alpha_x, alpha_y, alpha_z` at once.
+
+| status | result |
+|---|---|
+| **VERIFIED** | a sphere gives `alpha_xx == alpha_zz` to **0.17%** -- the `m=1` transverse assembly + moment extraction are structurally correct |
+| **NOT verified** | the absolute magnitude: order-1 HCurl + a direct (umfpack) solve is 24-53% off `4 pi a^3 G(x)`, and refining the mesh does **not** close it (27k->118k dof: 23.2->22.7%) -- an ORDER limitation, not skin/box; the triaxial per-volume ordering is also wrong at order 1 |
+| **PATH** | order-2 HCurl + an iterative solver (CompactAMS / shifted preconditioner, `radia.sparsesolv_ngsolve`); order-2 here is ~280k complex dof and umfpack 3D HCurl fill-in OOMs. The `m=1` full-frequency curve is the remaining open piece |
+
+The rest of the tensor is complete: both analytic anchors for ALL
+directions including transverse (`DC=0`, `HF=-V/(1-N_i)`), plus the
+skin-robust axial full-frequency curve above.  Only the transverse
+full-frequency *curve* between the anchors awaits the order-2 + iterative
+build.
 
 ## Real-coil levitation equilibrium -- the Radia + NGSolve workflow
 
