@@ -239,6 +239,54 @@ tests/test_stream_function.py (10 tests):
   to < 1e-5 (test_radia_field_kernel_magnets).
 
 f2py reference (LAB): W:\04_..\046_伊藤海人\2026_01_06_f2py_matlab比較\f2py.
+
+The checks above validate the SOLVER (the matrix A, the ACA+ factorisation, the
+TSVD least-norm solve). The checks below validate the DESIGN -- that the psi the
+solver returns actually reproduces the target field as a real coil. Run at least
+one analytic-coil benchmark whenever the kernel, former, or regularisation menu
+changes; a clean reconstruction error does NOT by itself prove a correct coil.
+
+## Analytic-coil benchmarks (design-level, forward check)
+
+Design psi for a textbook target, then FORWARD-evaluate B = A psi over the design
+volume (DSV/FOV) and compare to the closed form. Reference fields:
+
+- Uniform axial Bz on a CYLINDER former (radius a, length L) -> the ideal
+  SOLENOID. The least-norm psi is ~linear in z (psi ~ z => K_phi = -dpsi/dz =
+  const turns density). Check: central Bz vs mu0 * (dI per contour) * turns/length;
+  field uniformity 1 - Bz(r,z)/Bz(0) over the DSV (a long former -> sub-% ripple).
+- Transverse MRI GRADIENT Gx (target Bz = Gx * x over the DSV) on a cylinder ->
+  the Golay / fingerprint saddle pattern. Check: gradient LINEARITY
+  (max |Bz/x - Gx|/Gx over the DSV) and efficiency Gx per amp-turn. The Gy design
+  is the same pattern rotated 90 deg; Gz (= Maxwell/anti-Helmholtz pair) targets
+  Bz = Gz * z.
+- Uniform-region pair: Helmholtz (uniform Bz) / Maxwell (uniform dBz/dz) give
+  closed-form on-axis fields to anchor the magnitude.
+
+Spherical-harmonic TARGETS and the achieved-(l,m) PURITY / contamination check are
+their own topic -- see streamfunction("harmonics") (MRI gradient/shim basis). The
+active-shield stray-reduction benchmark (~86x at INDEPENDENT points, not the
+constraint points) is in streamfunction("shielding"); read its honesty note --
+measuring residual at the constraint nodes flatters the result.
+
+## Forward (discretized-wire) consistency
+
+The continuous K = n x grad(psi) is exact; the WOUND coil is a finite set of
+equal-increment iso-contours. After contouring, re-run Biot-Savart on the actual
+wire POLYLINES and compare to the continuous-psi field over the DSV: this isolates
+the DISCRETISATION (finite number-of-turns) error from the TSVD residual. Halving
+dI (doubling turns) should drop the discretisation error ~linearly until it hits
+the TSVD/target-reachability floor.
+
+## TSVD truncation convergence (L-curve)
+
+Sweep the retained singular-value count k (or Tikhonov alpha -- folded Tikhonov
+traces it at ~50 us/point): the target-residual ||A psi - B|| falls then PLATEAUS
+at the field's achievable-on-this-surface floor, while ||psi|| (and peak current
+density) rises. The L-curve corner is the design point; report BOTH residual and
+peak J so a "perfect" residual obtained with an unphysical peak J is visible. A
+residual that never plateaus = target not in range(A) for that former (enlarge /
+reshape the surface -- see streamfunction("deformation")).
 """
 
 
