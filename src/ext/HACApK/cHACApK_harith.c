@@ -1303,10 +1303,42 @@ static int h_addmul(double alpha,
                 free(B_dense);
                 if (rc == CHACAPK_HARITH_OK) rc = add_dense_to_node(D, m, m, n, C);
                 free(D);
+            } else if (!leaf_is_dense(B) && !leaf_is_rk(B)) {
+                /* A dense leaf, B INTERNAL (densexinternal -- the MEASURED
+                 * dominant materialize trigger, 2026-06-04). Compute
+                 * D = A*B = (B^T A^T)^T via node_matmat_trans_local THROUGH B,
+                 * so B's internal subtree is NEVER densified.  The old path
+                 * materialize_node_as_dense(B) on an internal B was the bulk of
+                 * the 2.0e9-elem / 1.21M-call materialize wall that made the
+                 * factor scale ~N^5.  A is a dense leaf -> A^T is cheap; tmp =
+                 * B^T A^T is (n x m) with m leaf-bounded (= A's row cluster). */
+                const double *Ad = leaf_dense_data(A);            /* m x inner, ld m */
+                double *At  = (double*)malloc(sizeof(double) * (size_t)inner * (size_t)m);
+                double *tmp = (double*)calloc((size_t)n * (size_t)m, sizeof(double));
+                double *D   = (double*)malloc(sizeof(double) * (size_t)m * (size_t)n);
+                if (!Ad || !At || !tmp || !D) {
+                    free(At); free(tmp); free(D);
+                    return CHACAPK_HARITH_ERR_NULL;
+                }
+                /* At = A^T  (inner x m) */
+                for (int jj = 0; jj < inner; jj++)
+                    for (int ii = 0; ii < m; ii++)
+                        At[jj + (size_t)ii * (size_t)inner] = Ad[ii + (size_t)jj * (size_t)m];
+                /* tmp(n x m) = alpha * B^T * At  (B stays compressed) */
+                rc = node_matmat_trans_local(B, alpha, At, inner, m, tmp, n);
+                free(At);
+                if (rc == CHACAPK_HARITH_OK) {
+                    /* D(m x n) = tmp^T, then C += D */
+                    for (int bcol = 0; bcol < n; bcol++)
+                        for (int arow = 0; arow < m; arow++)
+                            D[arow + (size_t)bcol * (size_t)m] =
+                                tmp[bcol + (size_t)arow * (size_t)n];
+                    rc = add_dense_to_node(D, m, m, n, C);
+                }
+                free(tmp); free(D);
             } else {
-                /* A is a dense leaf (small): dense x internal / dense*dense->rk.
-                 * Materialize both (A is a leaf -> cheap; B's inner dim is
-                 * leaf-bounded because A's col cluster is at leaf level). */
+                /* A is a dense leaf, B a dense leaf (dense*dense->rk): both
+                 * small, plain dgemm. */
                 double *A_dense = materialize_node_as_dense(A);
                 double *B_dense = materialize_node_as_dense(B);
                 double *D = (double*)malloc(sizeof(double) * (size_t)m * (size_t)n);
@@ -1368,6 +1400,82 @@ static int h_addmul(double alpha,
 }
 
 
+/* Materialize-free forward solve  L * Z = Z  (overwrite), L unit-lower, applied
+ * to a DENSE rhs block Z (L->dof_nrows x k, leading dim ldZ).  Recurses through
+ * an internal L using node_matmat_local for the off-diagonal updates so L's
+ * subtree is NEVER densified -- replaces the materialize_node_as_dense(L)
+ * triangular-solve fallback that was ~half the H-LU materialize wall
+ * (2026-06-04: lln = 966 of 1982 Me at C-type 6^3). */
+static int htrsm_lln_dense_rhs(const st_cHACApK_block_node_t *L,
+                               double *Z, int ldZ, int k)
+{
+    if (!L) return CHACAPK_HARITH_ERR_NULL;
+    if (k <= 0) return CHACAPK_HARITH_OK;
+    if (leaf_is_rk(L)) return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
+    if (leaf_is_dense(L)) {
+        int m = leaf_rows(L);
+        cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit,
+                    m, k, 1.0, leaf_dense_data(L), m, Z, ldZ);
+        return CHACAPK_HARITH_OK;
+    }
+    /* internal L: block forward substitution. row partition == col partition. */
+    int s = L->nrsons;
+    if (L->ncsons != s) return CHACAPK_HARITH_ERR_TOPOLOGY;
+    int rb = L->dof_row_start, cb = L->dof_col_start;
+    for (int i = 0; i < s; i++) {
+        const st_cHACApK_block_node_t *Lii = L->sons[i + i * s];
+        int ri = Lii->dof_row_start - rb;
+        for (int kk = 0; kk < i; kk++) {
+            const st_cHACApK_block_node_t *Lik = L->sons[i + kk * s];
+            int ck = Lik->dof_col_start - cb;   /* local row of already-solved Z block kk */
+            int rr = Lik->dof_row_start - rb;   /* local row of Z block i (== ri) */
+            int rc = node_matmat_local(Lik, -1.0, Z + ck, ldZ, k, Z + rr, ldZ);
+            if (rc != CHACAPK_HARITH_OK) return rc;
+        }
+        int rc = htrsm_lln_dense_rhs(Lii, Z + ri, ldZ, k);
+        if (rc != CHACAPK_HARITH_OK) return rc;
+    }
+    return CHACAPK_HARITH_OK;
+}
+
+/* Materialize-free solve  U^T * V = V  (overwrite), U non-unit UPPER (so U^T is
+ * lower), applied to a DENSE rhs block V (U->dof_nrows x k, ld ldV).  Recurses
+ * through an internal U via node_matmat_trans_local.  This is the backward
+ * (run) triangular solve building block: the rk case (Y U = U_x V_x^T) reduces
+ * to U^T V_y = V_x, and the dense case (X U = X) reduces to U^T X^T = X^T. */
+static int htrsm_lUTn_dense_rhs(const st_cHACApK_block_node_t *U,
+                                double *V, int ldV, int k)
+{
+    if (!U) return CHACAPK_HARITH_ERR_NULL;
+    if (k <= 0) return CHACAPK_HARITH_OK;
+    if (leaf_is_rk(U)) return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
+    if (leaf_is_dense(U)) {
+        int n = leaf_rows(U);   /* square */
+        cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasTrans, CblasNonUnit,
+                    n, k, 1.0, leaf_dense_data(U), n, V, ldV);
+        return CHACAPK_HARITH_OK;
+    }
+    /* internal U: forward substitution on U^T (lower). */
+    int s = U->nrsons;
+    if (U->ncsons != s) return CHACAPK_HARITH_ERR_TOPOLOGY;
+    int rb = U->dof_row_start;
+    for (int i = 0; i < s; i++) {
+        const st_cHACApK_block_node_t *Uii = U->sons[i + i * s];
+        int ri = Uii->dof_row_start - rb;
+        for (int kk = 0; kk < i; kk++) {
+            const st_cHACApK_block_node_t *Uki = U->sons[kk + i * s];  /* U[kk,i] */
+            const st_cHACApK_block_node_t *Ukk = U->sons[kk + kk * s];
+            int rkk = Ukk->dof_row_start - rb;   /* local row of V block kk */
+            /* V_i -= U[kk,i]^T * V_kk */
+            int rc = node_matmat_trans_local(Uki, -1.0, V + rkk, ldV, k, V + ri, ldV);
+            if (rc != CHACAPK_HARITH_OK) return rc;
+        }
+        int rc = htrsm_lUTn_dense_rhs(Uii, V + ri, ldV, k);
+        if (rc != CHACAPK_HARITH_OK) return rc;
+    }
+    return CHACAPK_HARITH_OK;
+}
+
 /* Solve L * X' = X  (X overwrites itself).
  * L is unit-lower (Doolittle: L_diag implicit unit, L_below stored).
  * X must have the same row partition as L. */
@@ -1403,26 +1511,34 @@ static int htrsm_lln(const st_cHACApK_block_node_t *L,
         return CHACAPK_HARITH_OK;
     }
 
-    /* Phase 3.6 mixed fallback: materialize L and X, dtrsm, write back. */
+    /* L INTERNAL x X leaf: solve materialize-FREE by recursing the forward
+     * substitution through L (was: materialize the internal L, ~half the H-LU
+     * materialize wall).  (L leaf x X internal cannot occur: a dense-leaf L has
+     * leaf-level rows, so X -- same row partition -- is also a leaf.) */
     {
         int L_is_leaf = leaf_is_dense(L) || leaf_is_rk(L);  /* rk-L unreachable above */
         int X_is_leaf = leaf_is_dense(X) || leaf_is_rk(X);
         int mixed = (!L_is_leaf || !X_is_leaf) && (L_is_leaf || X_is_leaf);
         if (mixed) {
             g_dbg_mixed_lln[node_kind_idx(L)*3 + node_kind_idx(X)]++;
-            int m = L->dof_nrows;  /* == L->dof_ncols (square) */
-            int n = X->dof_ncols;
-            double *L_dense = materialize_node_as_dense(L);
-            double *X_dense = materialize_node_as_dense(X);
-            if (!L_dense || !X_dense) {
+            int rc;
+            if (!L_is_leaf) {
+                if (leaf_is_rk(X))
+                    /* L Y = U_x V_x^T -> Y = (L^-1 U_x) V_x^T; solve L U_x = U_x. */
+                    rc = htrsm_lln_dense_rhs(L, leaf_rk_U(X), leaf_rows(X), leaf_rk_rank(X));
+                else
+                    rc = htrsm_lln_dense_rhs(L, leaf_dense_data(X), leaf_rows(X), leaf_cols(X));
+            } else {
+                /* Defensive (L leaf, X internal -- not expected): materialize. */
+                int m = L->dof_nrows, n = X->dof_ncols;
+                double *L_dense = materialize_node_as_dense(L);
+                double *X_dense = materialize_node_as_dense(X);
+                if (!L_dense || !X_dense) { free(L_dense); free(X_dense); return CHACAPK_HARITH_ERR_NULL; }
+                cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit,
+                            m, n, 1.0, L_dense, m, X_dense, m);
+                rc = set_node_from_dense(X_dense, m, m, n, X);
                 free(L_dense); free(X_dense);
-                return CHACAPK_HARITH_ERR_NULL;
             }
-            /* L * Y = X (overwrite X_dense with Y). L is unit-lower (Doolittle). */
-            cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit,
-                        m, n, 1.0, L_dense, m, X_dense, m);
-            int rc = set_node_from_dense(X_dense, m, m, n, X);
-            free(L_dense); free(X_dense);
             g_stats.n_dense_trsm++;
             return rc;
         }
@@ -1489,26 +1605,46 @@ static int htrsm_run(const st_cHACApK_block_node_t *U,
         return CHACAPK_HARITH_OK;
     }
 
-    /* Phase 3.6 mixed fallback: materialize U and X, dtrsm right-upper, write back. */
+    /* U INTERNAL x X leaf: solve materialize-FREE via the U^T forward solver
+     * (was: materialize the internal U -- the other ~half of the materialize
+     * wall).  rk X: Y U = U_x V_x^T -> U_y=U_x, solve U^T V_y = V_x.  dense X:
+     * X U = X <=> U^T X^T = X^T (transpose, solve, transpose back). */
     {
         int U_is_leaf = leaf_is_dense(U) || leaf_is_rk(U);  /* rk-U unreachable above */
         int X_is_leaf = leaf_is_dense(X) || leaf_is_rk(X);
         int mixed = (!U_is_leaf || !X_is_leaf) && (U_is_leaf || X_is_leaf);
         if (mixed) {
             g_dbg_mixed_run[node_kind_idx(U)*3 + node_kind_idx(X)]++;
-            int n_u = U->dof_nrows;  /* U is square */
-            int m_x = X->dof_nrows;
-            double *U_dense = materialize_node_as_dense(U);
-            double *X_dense = materialize_node_as_dense(X);
-            if (!U_dense || !X_dense) {
+            int rc;
+            if (!U_is_leaf) {
+                if (leaf_is_rk(X)) {
+                    rc = htrsm_lUTn_dense_rhs(U, leaf_rk_V(X), leaf_cols(X), leaf_rk_rank(X));
+                } else {
+                    int m = leaf_rows(X), n = leaf_cols(X);
+                    double *Xt = (double*)malloc(sizeof(double) * (size_t)n * (size_t)m);
+                    if (!Xt) return CHACAPK_HARITH_ERR_NULL;
+                    double *Xd = leaf_dense_data(X);
+                    for (int b = 0; b < n; b++)
+                        for (int a = 0; a < m; a++)
+                            Xt[b + (size_t)a * (size_t)n] = Xd[a + (size_t)b * (size_t)m];
+                    rc = htrsm_lUTn_dense_rhs(U, Xt, n, m);
+                    if (rc == CHACAPK_HARITH_OK)
+                        for (int b = 0; b < n; b++)
+                            for (int a = 0; a < m; a++)
+                                Xd[a + (size_t)b * (size_t)m] = Xt[b + (size_t)a * (size_t)n];
+                    free(Xt);
+                }
+            } else {
+                /* Defensive (U leaf, X internal -- not expected): materialize. */
+                int n_u = U->dof_nrows, m_x = X->dof_nrows;
+                double *U_dense = materialize_node_as_dense(U);
+                double *X_dense = materialize_node_as_dense(X);
+                if (!U_dense || !X_dense) { free(U_dense); free(X_dense); return CHACAPK_HARITH_ERR_NULL; }
+                cblas_dtrsm(CblasColMajor, CblasRight, CblasUpper, CblasNoTrans, CblasNonUnit,
+                            m_x, n_u, 1.0, U_dense, n_u, X_dense, m_x);
+                rc = set_node_from_dense(X_dense, m_x, m_x, n_u, X);
                 free(U_dense); free(X_dense);
-                return CHACAPK_HARITH_ERR_NULL;
             }
-            /* X * U = X (overwrite). U non-unit upper. */
-            cblas_dtrsm(CblasColMajor, CblasRight, CblasUpper, CblasNoTrans, CblasNonUnit,
-                        m_x, n_u, 1.0, U_dense, n_u, X_dense, m_x);
-            int rc = set_node_from_dense(X_dense, m_x, m_x, n_u, X);
-            free(U_dense); free(X_dense);
             g_stats.n_dense_trsm++;
             return rc;
         }
