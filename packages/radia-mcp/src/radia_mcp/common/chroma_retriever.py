@@ -391,12 +391,53 @@ def _flatten_metadata(meta: dict) -> dict:
 # PDF helpers (optional pymupdf dependency)
 # ============================================================
 
+def _text_readability(s: str) -> float:
+    """Fraction of chars that are alphanumeric (unicode/CJK-aware) or whitespace.
+
+    A CORRUPT PDF text layer (CID font with a missing/wrong ToUnicode CMap --
+    e.g. the Zienkiewicz FEM volumes) DISPLAYS fine but ``get_text()`` extracts
+    control-char garbage -> very low ratio.  Clean text in ANY script (Latin,
+    Japanese, ...) -> high ratio.  Used as the quality gate that triggers OCR.
+    """
+    if not s:
+        return 0.0
+    return sum(1 for c in s if c.isalnum() or c.isspace()) / len(s)
+
+
+_EASYOCR_READER = None
+_EASYOCR_LANGS = None
+
+
+def _ocr_pdf_page(page, languages, dpi: int) -> str:
+    """Rasterize a PDF page and OCR it with easyocr -> text.  Used as a fallback
+    when the embedded text layer is missing or garbage.  The easyocr Reader is
+    cached module-wide (its construction is expensive / loads models)."""
+    global _EASYOCR_READER, _EASYOCR_LANGS
+    import fitz  # pymupdf
+    import numpy as np
+    langs = tuple(languages)
+    if _EASYOCR_READER is None or _EASYOCR_LANGS != langs:
+        import easyocr
+        # verbose=False: suppress easyocr's progress bar (its U+2588 block char
+        # crashes on a cp932 console) -- the model download still runs silently.
+        _EASYOCR_READER = easyocr.Reader(list(langs), verbose=False)  # GPU if torch.cuda
+        _EASYOCR_LANGS = langs
+    pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB)
+    img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+    lines = _EASYOCR_READER.readtext(img, detail=0, paragraph=True)
+    return "\n".join(lines)
+
+
 def extract_pdf_chunks(
     pdf_path: str | Path,
     chunk_size: int = 1000,
     overlap: int = 100,
     default_language: Optional[str] = None,
     auto_detect_language: bool = False,
+    ocr_fallback: bool = False,
+    ocr_languages: tuple = ("en",),
+    ocr_dpi: int = 200,
+    ocr_min_readability: float = 0.6,
 ) -> list[dict]:
     """Extract text chunks from a PDF, ready to feed `add_chunks`.
 
@@ -445,6 +486,23 @@ def extract_pdf_chunks(
     for page_idx in range(len(doc)):
         page = doc[page_idx]
         text = page.get_text() or ""
+        ocr_used = False
+        if ocr_fallback:
+            has_text = bool(text.strip())
+            readable = _text_readability(text) if has_text else 0.0
+            # OCR when the text layer is GARBAGE (corrupt CID font) or is absent
+            # on an image page; keep the OCR text only if it is actually cleaner.
+            need_ocr = (has_text and readable < ocr_min_readability) or \
+                       (not has_text and bool(page.get_images()))
+            if need_ocr:
+                try:
+                    ocr_text = _ocr_pdf_page(page, ocr_languages, ocr_dpi)
+                    if (len(ocr_text.strip()) > 50
+                            and _text_readability(ocr_text) > max(readable, ocr_min_readability)):
+                        text = ocr_text
+                        ocr_used = True
+                except Exception:
+                    pass  # OCR is best-effort; fall back to the extracted text
         if not text.strip():
             continue
         # Sliding-window chunks per page
@@ -461,6 +519,8 @@ def extract_pdf_chunks(
                 }
                 if per_file_language:
                     meta["language"] = per_file_language
+                if ocr_used:
+                    meta["ocr"] = True
                 chunks.append({
                     "id": f"{stem}__p{page_idx + 1}__{chunk_in_page}",
                     "text": chunk_text,
