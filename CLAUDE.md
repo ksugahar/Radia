@@ -1693,6 +1693,40 @@ the detection tool.
 ci_preflight is the everyday "before any push" gate — run it even for a
 non-release push to `main`.
 
+### No GitHub CLI (gh) Policy (2026-06-05)
+
+**POLICY**: Do NOT use the GitHub CLI (`gh`) anywhere in the repo's
+committed tooling, scripts, workflows, or knowledge recipes.  `gh` is
+NOT installed on LAB (retired 2026-05-24) and must not be assumed
+present on any machine (fresh clone, CI runner, 100号機, mdx).  Use the
+**raw GitHub REST API** (via `urllib`, no extra dependency) instead.
+
+**Established gh-free replacements** (use these, never `gh`):
+
+| `gh` command | gh-free replacement |
+|---|---|
+| `gh run list` / `gh run view` / `gh run watch` | `python tools/check_ci.py [--sha X] [--branch main] [--watch]` |
+| `gh release download -p PAT` | `python tools/download_release_asset.py --pattern PAT --dest D` |
+| `gh release download NAME`   | `python tools/download_release_asset.py --name NAME --dest D` |
+| `gh release upload`          | `python tools/upload_release_asset.py --tag T --file F` |
+| `gh api <path>`              | `tools/gh_api.py::gh_get(path)` (token-aware) |
+| `gh auth token`              | read `$GH_TOKEN` / `$GITHUB_TOKEN` / `~/.radia/gh_token` directly |
+
+**Auth**: the REST helpers (`tools/gh_api.py`, `check_ci.py`,
+`download/upload_release_asset.py`) read a Personal Access Token from
+`$GH_TOKEN` / `$GITHUB_TOKEN` (or `~/.radia/gh_token`) to get the
+authenticated **5000 req/hr** limit; with no token they fall back to the
+anonymous **60 req/hr** (enough for occasional checks on this public
+repo).  Setting the token does NOT require installing `gh` — a PAT is
+just a string.  `python tools/check_ci.py --rate` shows the current
+limit + whether a token was found.
+
+**Escape hatch**: if `gh` is ever genuinely unavoidable for a one-off
+local task, it MAY be installed — but the **committed** tooling MUST
+stay gh-free so a fresh clone / CI runner never depends on it.  When you
+catch yourself reaching for `gh`, add the missing capability to the REST
+helpers above instead.
+
 ### Cubit Batch Self-Testing Policy
 
 **POLICY**: Claude は Cubit を **完全ヘッドレス** (`-batch -nographics -nojournal`) で起動し、自力で機能試験を走らせること。GUI や人間の操作は不要。
