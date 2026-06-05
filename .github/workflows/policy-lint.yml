@@ -12,101 +12,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ----------------------------------------------------------------
-      # Policy 1: Unit System
-      #   FldUnits is removed. No example should call it.
-      # ----------------------------------------------------------------
-      - name: "Policy 1: No FldUnits() calls (removed)"
-        run: |
-          FAIL=0
-          while IFS= read -r -d '' file; do
-            if grep -q 'FldUnits' "$file"; then
-              echo "FAIL: $file contains removed FldUnits() call"
-              FAIL=1
-            fi
-          done < <(find examples/ -name '*.py' -print0 2>/dev/null)
-          [ "$FAIL" -eq 0 ] || { echo "::error::Policy 1 failed: FldUnits is removed, delete all calls"; exit 1; }
-          echo "PASS: No example scripts contain FldUnits() calls"
-
-      # ----------------------------------------------------------------
-      # Policy 2: Binary Files
-      #   No .pyd/.dll/.so/.lib/.exe/.obj tracked in git
-      # ----------------------------------------------------------------
-      - name: "Policy 2: No binary files in git"
-        run: |
-          BINS=$(git ls-files -- '*.pyd' '*.dll' '*.so' '*.lib' '*.exe' '*.obj')
-          [ -z "$BINS" ] || { echo "$BINS"; echo "::error::Policy 2 failed: binary files must not be tracked in git"; exit 1; }
-          echo "PASS: No binary files tracked in git"
-
-      # ----------------------------------------------------------------
-      # Policy 3: Green's Function (Laplace only)
-      #   Forbid the Helmholtz WAVE kernel (e^{-jkr}/r) in the C++ core.
-      #   The "Helmholtz-Hodge decomposition" (rad.SetLoopProjection loop
-      #   removal: subtracting the non-physical circulating-charge ker(N)
-      #   component from sigma) is a DIFFERENT, allowed vector-calculus
-      #   concept -- except it (and the generic "Helmholtz decomposition")
-      #   while still catching a real wave kernel.
-      # ----------------------------------------------------------------
-      - name: "Policy 3: No Helmholtz kernel in C++ core"
-        run: |
-          HITS=$(grep -rni 'helmholtz' src/core/ --include='*.cpp' --include='*.h' 2>/dev/null \
-                 | grep -viE 'helmholtz[- ]?hodge' \
-                 | grep -viE 'helmholtz[- ]?decomposition' || true)
-          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 3 failed: Laplace kernel only (Helmholtz WAVE kernel forbidden; Helmholtz-Hodge decomposition is allowed)"; exit 1; }
-          echo "PASS: No Helmholtz wave kernel in C++ core (Helmholtz-Hodge decomposition excepted)"
-
-      # ----------------------------------------------------------------
-      # Policy 4: Matrix Storage (Row-Major)
-      #   No CblasColMajor in core source.
-      #   Exceptions (all genuine LAPACK / Fortran-library interop where
-      #   the storage layout is dictated by the upstream library):
-      #     rad_mmm_matrices.cpp        -- LAPACK dgetrf / dgetri
-      #     rad_relaxation_methods.cpp  -- LAPACK dgetrf / dgetri
-      #     rad_hacapk.cpp              -- HACApK (Fortran, column-major)
-      #     rad_stream_function.cpp     -- LAPACK SVD output (column-major)
-      # ----------------------------------------------------------------
-      - name: "Policy 4: No CblasColMajor in core (except LAPACK / HACApK users)"
-        run: |
-          HITS=$(grep -rn 'CblasColMajor' src/core/ --include='*.cpp' --include='*.h' 2>/dev/null \
-                 | grep -v 'rad_mmm_matrices.cpp' \
-                 | grep -v 'rad_relaxation_methods.cpp' \
-                 | grep -v 'rad_hacapk.cpp' \
-                 | grep -v 'rad_stream_function.cpp' || true)
-          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 4 failed: use CblasRowMajor in core"; exit 1; }
-          echo "PASS: No CblasColMajor in core (MMM / LAPACK / HACApK excepted)"
-
-      # ----------------------------------------------------------------
-      # Policy 5: File Placement
-      #   No generated files at repo root
-      # ----------------------------------------------------------------
-      - name: "Policy 5: No generated files at repo root"
-        run: |
-          HITS=$(find . -maxdepth 1 \( -name '*.msh' -o -name '*.vtu' -o -name '*.vtk' -o -name '*.vol' -o -name '*.vts' \) 2>/dev/null)
-          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 5 failed: no generated files at repo root"; exit 1; }
-          echo "PASS: No generated files at repository root"
-
-      # ----------------------------------------------------------------
-      # Policy 6: Import Path
-      #   No sys.path.insert with 'src/python' (should be 'src/radia')
-      # ----------------------------------------------------------------
-      - name: "Policy 6: No legacy src/python path"
-        run: |
-          HITS=$(grep -rn 'src/python' --include='*.py' . 2>/dev/null | grep 'sys\.path' || true)
-          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 6 failed: use src/radia not src/python"; exit 1; }
-          echo "PASS: No legacy src/python import path"
-
-      # ----------------------------------------------------------------
-      # Policy 7: Example README Coverage
-      #   Every examples/*/ subdirectory must have a README.md
-      # ----------------------------------------------------------------
-      - name: "Policy 7: README.md in every example directory"
-        run: |
-          FAIL=0
-          for dir in examples/*/; do
-            if [ ! -f "${dir}README.md" ]; then
-              echo "FAIL: $dir missing README.md"
-              FAIL=1
-            fi
-          done
-          [ "$FAIL" -eq 0 ] || { echo "::error::Policy 7 failed: every examples/ subdirectory must have README.md"; exit 1; }
-          echo "PASS: All example directories have README.md"
+      # The 7 source policies live in ONE module, tools/policy_lint.py, which
+      # is ALSO what tools/ci_preflight.py runs locally before a push -- so the
+      # CI gate and the local pre-push gate can never drift.  See CLAUDE.md
+      # "CI Preflight Policy".  The script prints PASS/FAIL per policy and
+      # exits non-zero on any violation.
+      #   1 no FldUnits() in examples        5 no generated files at repo root
+      #   2 no tracked binaries              6 no legacy src/python import path
+      #   3 no Helmholtz WAVE kernel in core 7 README.md in every examples/ dir
+      #   4 no CblasColMajor in core (allowlist: rad_mmm_matrices /
+      #     rad_relaxation_methods / rad_hacapk / rad_stream_function .cpp)
+      - name: Policy lint (7 policies)
+        run: python tools/policy_lint.py
