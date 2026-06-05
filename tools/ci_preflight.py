@@ -233,7 +233,8 @@ def gate_radia_mcp_matrix():
     # 4c the FULL radia-mcp pytest, UNDER minimal-dep simulation -- this is
     #     exactly the ubuntu matrix "Pytest" step (the 30x top failure).
     rc, out = _sh([sys.executable, "-m", "pytest", "tests/", "-q",
-                   "-p", "no:cacheprovider", "--no-header"],
+                   "-p", "no:cacheprovider", "--no-header",
+                   "--reruns", "1", "--reruns-delay", "1"],  # match matrix flaky-retry
                   cwd=MCP, env={"RADIA_MCP_FORCE_MINIMAL": "1"})
     tail = out.strip().splitlines()[-1] if out.strip() else "(no output)"
     if rc != 0:
