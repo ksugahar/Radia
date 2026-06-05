@@ -667,6 +667,85 @@ PATTERNS: list[dict] = [
                       "reinstall so the launcher writes cleanly.",
         "related": [],
     },
+    {
+        "id": "tools-md-drift-wip-contamination",
+        "title": "docs/TOOLS.md committed out-of-sync with radia_mcp code -- "
+                 "regenerated WITH uncommitted WIP tools, or NOT regenerated "
+                 "after adding tools -- radia-mcp matrix drift gate goes red.",
+        "topics": ["ci", "release", "tools-md", "radia-mcp"],
+        "severity": "high",
+        "first_seen": "2026-06-04",
+        "last_seen": "2026-06-05",
+        "what": "The radia-mcp matrix 'TOOLS.md drift gate' (and the "
+                "self-hosted CI 'Run basic tests' -> tests/mcp_server/"
+                "test_tools_doc.py) fail: committed docs/TOOLS.md != "
+                "gen_tools_doc.py regenerated from the COMMITTED code.  Two "
+                "directions seen 2026-06-04/05: (a) a session regenerated "
+                "TOOLS.md while ANOTHER session's force_validation tool was "
+                "uncommitted WIP, baking a 339/force_validation row into the "
+                "commit while committed code had only 338 (06003d40, 24f13628); "
+                "(b) the SF/FEMM sessions ADDED femm_parity_documentation + "
+                "force_validation + SF topics in committed code but never "
+                "regenerated TOOLS.md, leaving it at the 338 snapshot "
+                "(5c4b0216).",
+        "root_cause": "gen_tools_doc.py imports the LIVE radia_mcp packages, so "
+                      "regenerating on a dirty working tree captures UNCOMMITTED "
+                      "tools; conversely, adding a tool without regenerating "
+                      "leaves TOOLS.md behind.  CI regenerates from the clean "
+                      "checked-out commit, so any mismatch with the committed "
+                      "TOOLS.md fails the gate.",
+        "detection": "python tools/ci_preflight.py (TOOLS.md drift gate is "
+                     "WIP-aware: it WARNS when radia_mcp/src has uncommitted "
+                     ".py changes); radia-mcp-matrix.yml 'TOOLS.md drift gate'; "
+                     "tests/mcp_server/test_tools_doc.py.",
+        "prevention": "Regenerate from CLEAN committed code: commit the "
+                      "tool-adding code FIRST then regenerate, OR regenerate in "
+                      "a detached worktree at HEAD (no WIP).  ALWAYS commit the "
+                      "tool code + regenerated docs/TOOLS.md TOGETHER in one "
+                      "commit.  Run `python tools/ci_preflight.py` before push.",
+        "related": ["tools/ci_preflight.py",
+                    "packages/radia-mcp/scripts/gen_tools_doc.py",
+                    ".github/workflows/radia-mcp-matrix.yml",
+                    "tests/mcp_server/test_tools_doc.py"],
+    },
+    {
+        "id": "heavy-import-collection-break-minimal-dep-matrix",
+        "title": "A new radia-mcp test imports ngsolve/netgen at MODULE level "
+                 "-> pytest COLLECTION fails on the minimal-dep ubuntu matrix "
+                 "-> the whole `pytest tests/` step goes red.",
+        "topics": ["ci", "radia-mcp", "test-infrastructure", "ngsolve"],
+        "severity": "high",
+        "first_seen": "2026-06-05",
+        "last_seen": "2026-06-05",
+        "what": "radia-mcp matrix 'Pytest (meta health + ... + versioning)' "
+                "failed on Python 3.10/3.11/3.12: the FEMM-parity + axisym FEM "
+                "cross-validation tests (test_axi_*, test_planar_*, "
+                "test_scalar_fem2d*, test_stranded, test_laminated_steel, "
+                "test_nonlinear_magnet, test_femm_xcheck_*) do "
+                "`from ngsolve import ...` / `from netgen.occ import ...` at "
+                "module top.  The matrix installs only mcp + pytest + radia-mcp "
+                "(--no-deps): no ngsolve/netgen, so COLLECTION raises "
+                "ModuleNotFoundError and the entire suite errors out before any "
+                "test runs (origin/main 5c4b0216).",
+        "root_cause": "The radia-mcp matrix is intentionally lightweight "
+                      "(knowledge servers must import without the heavy FEM "
+                      "stack).  A heavy test imported at module level is "
+                      "collected even when it cannot run, and a collection "
+                      "ImportError is fatal to the whole pytest invocation.",
+        "detection": "python tools/ci_preflight.py (the radia-mcp gate runs the "
+                     "suite under RADIA_MCP_FORCE_MINIMAL=1, reproducing the "
+                     "ubuntu minimal-dep collection on a full-env LAB box BEFORE "
+                     "push); radia-mcp-matrix.yml 'Pytest' step.",
+        "prevention": "packages/radia-mcp/tests/conftest.py skips collecting "
+                      "any test module that imports ngsolve/netgen when ngsolve "
+                      "is absent (or RADIA_MCP_FORCE_MINIMAL=1) -- a source-scan "
+                      "covers future heavy tests automatically.  Keep heavy FEM "
+                      "cross-validation behind that guard; run ci_preflight "
+                      "before push.",
+        "related": ["tools/ci_preflight.py",
+                    "packages/radia-mcp/tests/conftest.py",
+                    ".github/workflows/radia-mcp-matrix.yml"],
+    },
 ]
 
 
