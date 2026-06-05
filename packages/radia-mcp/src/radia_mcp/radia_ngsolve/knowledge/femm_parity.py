@@ -53,12 +53,32 @@ FEMM_MATRIX = """\
 | convection BC (Robin)   | yes   | yes    | slab L/k + 1/h  0.003%              |
 | radiation BC (T^4)      | yes   | yes    | slab cond/rad balance  0.000%       |
 | FEMM open-bdry x-check  | (—)   | yes    | vs FEMM rad=100.mat 0.78% of peak   |
+| axi forced eddy (BFI)   | (—)   | yes    | P_eddy(w): BFI+scipy; w^2 onset OK  |
+| SIBC eddy force (3D)    | (3D)  | (3D)   | time-avg Maxwell on hole; 0.5*static|
 
 (*) axisymmetric magnetics / eddy / nonlinear use H1Henrotte (axihenrotte FESpace)
 "(mat)" = a material model (anisotropic / complex-mu CF) usable in either path.
--- see `axifemm_documentation`. "(3D)" = available via the 3D eggshell force.
-API: solve_axi_magnetostatic / solve_axi_eddy / solve_axi_magnetostatic_nonlinear
-in solve.py; inductance_axi / ohmic_loss_axi in force.py.
+-- see `axifemm_documentation`. "(3D)" = available via the 3D eggshell / SIBC force.
+API: solve_axi_magnetostatic / solve_axi_eddy / solve_axi_eddy_harmonic /
+solve_axi_magnetostatic_nonlinear in solve.py; inductance_axi / ohmic_loss_axi /
+maxwell_surface_force / maxwell_surface_force_harmonic in force.py.
+
+NOTE on the axi FORCED-harmonic eddy: the generic grad-weak-form solve_axi_eddy
+canNOT assemble the complex (nu-stiffness + j w sigma-mass) system -- H1Henrotte's
+AxiHenrotte DiffOps are real-coefficient only. The working path is
+solve_axi_eddy_harmonic: assemble the REAL closed-form C++ integrators
+AxiHenrotteStiffnessBFI(mu) + AxiHenrotteSigmaMassBFI(sigma) (the same ones behind
+the validated Cu-disk tau_1 eigenvalue), symmetrise, form S=K+j w M in scipy and
+solve. order=1 only (P2 AxiHenrotte has an axis-singularity NaN). Use the
+matrix-based loss P_eddy=0.5 w^2 Re(x^H M x) -- the COMPLEX H1Henrotte field
+value-eval is unreliable (base-class Id stub). The nonlinear mu(|B|) Picard layer
+needs that complex field eval, so it awaits an AxiHenrotte complex DiffOp in C++.
+
+NOTE on the SIBC eddy FORCE: in calc_fem_kelvin the workpiece is a HOLE (no volume
+mesh), so the only force handle is the time-averaged Maxwell stress over its
+"sibc" surface: maxwell_surface_force_harmonic(curl(A_total), mesh, "sibc"). The
+panel reports it as result["F_sibc"] (negated, since specialcf.normal points out
+of the air mesh = into the hole). Reduces to 0.5*static maxwell_surface_force.
 """
 
 FEMM_MAGNETICS = """\
@@ -264,13 +284,21 @@ FEMM_VALIDATION = """\
 | test_axi_force                      | coaxial loops I1 I2 dM/dz (ellip.)| +0.93% |
 | test_scalar_fem2d_ext (radiation)   | slab k(T0-TL)/L = eps sig(TL^4-..) | 0.000% |
 | test_nonlinear_magnet               | B_op = mu0 mu_r(B_op)Hc/(mu_r+1)  | -0.05% |
+| test_axi_eddy_harmonic              | P_eddy(w)>0, rising, w^2-onset    | physics|
+| test_maxwell_surface_harmonic       | harmonic = 0.5*static (box face)  | machine|
 
 Axi eddy (solve_axi_eddy) validated via Cu-disk tau_1; planar eddy validated via
-Kelvin Rac. The laminated DC/AC checks are exact (uniform-field & 1D-eddy have
-closed forms representable to machine precision). Gotchas: eggshell force needs a
-mesh-resolved band; nonlinear point-B overshoots at interface (sample away);
-axisym arc boundaries split -> Nearest at 2 points (upper + lower); for laminated
-AC set sigma=0 in the homogenized core (eddy is in Im(mu_eff), not re-meshed).
+Kelvin Rac. The FORCED-harmonic axi eddy (solve_axi_eddy_harmonic, BFI+scipy) is
+validated by the eddy-loss physics P_eddy(w) (positive, rising with w, w^2 at low
+f); its scalar loss is reliable but the complex field eval is not (use P_eddy).
+The harmonic Maxwell surface force (maxwell_surface_force_harmonic, the SIBC-hole
+force handle) is validated by reduction to the COMSOL-cross-validated static force
+(harmonic = 0.5*static, machine precision). The laminated DC/AC checks are exact
+(uniform-field & 1D-eddy have closed forms representable to machine precision).
+Gotchas: eggshell force needs a mesh-resolved band; nonlinear point-B overshoots
+at interface (sample away); axisym arc boundaries split -> Nearest at 2 points
+(upper + lower); for laminated AC set sigma=0 in the homogenized core (eddy is in
+Im(mu_eff), not re-meshed); axi forced-harmonic eddy is order=1 only (P2 axis NaN).
 """
 
 
