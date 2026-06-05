@@ -722,6 +722,95 @@ def solve_axi_eddy_harmonic(mesh, mu_cf, sigma_cf, omega, applied_A,
     return gfu, P_eddy
 
 
+def solve_axi_eddy_harmonic_nonlinear(mesh, mu_of_B, sigma_cf, omega, applied_A,
+                                      order=1, dirichlet="axis|outer",
+                                      relax=0.5, max_iter=60, tol=1e-4):
+    """NONLINEAR (saturating mu(|B|)) forced time-harmonic axisymmetric eddy
+    currents -- a Picard fixed point on top of :func:`solve_axi_eddy_harmonic`.
+
+    Each sweep reassembles the closed-form stiffness ``K = AxiHenrotteStiffnessBFI(mu)``
+    with the permeability updated from the CURRENT complex A_phi solution, keeps the
+    sigma-mass ``M = AxiHenrotteSigmaMassBFI(sigma)`` fixed, and re-solves the complex
+    ``S = K + j*w*M`` in scipy.  This is the FEMM "effective-mu" harmonic-balance
+    approximation for nonlinear AC -- the axisymmetric analog of
+    :func:`solve_planar_eddy_nonlinear`.
+
+    ``mu_of_B`` : callable(Bmag_cf) -> mu_cf, taking the SCALAR amplitude |B| and
+    returning a PERMEABILITY CF.  NOTE the convention is PERMEABILITY mu (what
+    AxiHenrotteStiffnessBFI expects) -- the RECIPROCAL of the planar solver's
+    ``nu_of_B`` reluctivity.  The amplitude is built from the complex A_phi
+    (``B_r = -dA/dz``, ``B_z = dA/dr + A/r``, ``|B| = sqrt(|B_r|^2 + |B_z|^2)``)::
+
+        def mu_of_B(Bmag):                       # Frohlich/Kennelly soft saturation
+            return MU0 * (1.0 + (mu_r - 1.0) / (1.0 + (Bmag / Bsat) ** 2))
+
+    This RELIES on the complex H1Henrotte field eval (the src/ext/axifemm complex
+    CalcMatrix fix): the BFI samples ``mu_of_B(|B(A)|)`` at element centroids, which
+    evaluates the complex A_phi value AND gradient there.  ``relax`` under-relaxes
+    the DOF vector (0.3-0.5 for hard saturation).  ORDER=1 ONLY (P2 AxiHenrotte has
+    an axis-singularity NaN).  Reduces EXACTLY to :func:`solve_axi_eddy_harmonic`
+    when ``mu_of_B`` is constant.  Returns ``(gfu, P_eddy)`` with
+    ``P_eddy = 0.5 w^2 Re(x^H M x)`` the reliable matrix-based eddy loss [W].
+    """
+    import numpy as np
+    import scipy.sparse as sp
+    import scipy.sparse.linalg as spla
+    from radia.radia_axifemm import (H1Henrotte, AxiHenrotteStiffnessBFI,
+                                     AxiHenrotteSigmaMassBFI)
+
+    fes = H1Henrotte(mesh, order=order, complex=True, dirichlet=dirichlet)
+    n = fes.ndof
+    free = np.array([i for i in range(n) if fes.FreeDofs()[i]], dtype=int)
+
+    def _coo(mat):
+        rr, cc, vv = mat.COO()
+        return sp.csr_matrix((np.asarray(vv, dtype=float),
+                              (np.asarray(rr, dtype=int), np.asarray(cc, dtype=int))),
+                             shape=(n, n))
+
+    # sigma-mass M and the RHS are FIXED across Picard sweeps.
+    aM = BilinearForm(fes, symmetric=True)
+    aM += AxiHenrotteSigmaMassBFI(sigma_cf)
+    aM.Assemble()
+    M = _coo(aM.mat)[free[:, None], free[None, :]]; M = (M + M.T) * 0.5
+
+    bf = LinearForm(fes)
+    bf += sigma_cf * applied_A * fes.TestFunction() * dx
+    bf.Assemble()
+    bv = np.asarray(bf.vec, dtype=float)[free].astype(complex)
+
+    gfu = GridFunction(fes)
+    arr = gfu.vec.FV().NumPy()
+    arr[:] = 0.0
+
+    # |B| amplitude CF from the current complex A_phi (gfu holds the iterate; the
+    # CF re-evaluates with gfu's updated values each sweep).  x == r in axisym.
+    dA = grad(gfu)
+    Br = -dA[1]
+    Bz = dA[0] + gfu / x
+    Bmag = sqrt((Br * Conj(Br) + Bz * Conj(Bz)).real + 1e-30)
+    mu_cf = mu_of_B(Bmag)
+
+    xf = np.zeros(free.shape[0], dtype=complex)
+    sweeps = 0
+    for it in range(max_iter):
+        aK = BilinearForm(fes, symmetric=True)
+        aK += AxiHenrotteStiffnessBFI(mu_cf)          # mu sampled from |B(gfu)| at centroids
+        aK.Assemble()
+        K = _coo(aK.mat)[free[:, None], free[None, :]]; K = (K + K.T) * 0.5
+        xnew = spla.spsolve((K + 1j * omega * M).tocsc(), bv)
+        dnorm = float(np.linalg.norm(xnew - xf) / (np.linalg.norm(xnew) + 1e-30))
+        xf = xnew if it == 0 else (1.0 - relax) * xf + relax * xnew
+        arr[:] = 0.0
+        arr[free] = xf                                # update gfu for the next |B|
+        sweeps = it + 1
+        if it > 0 and dnorm < tol:
+            break
+
+    P_eddy = 0.5 * omega * omega * float(np.real(np.conj(xf) @ (M @ xf)))
+    return gfu, P_eddy
+
+
 def solve_magnetostatic_Aform(mesh, nu, source=None, curl_source=None, order=2,
                               dirichlet="outer", reg=1e-6):
     """Solve the A-formulation magnetostatic problem  curl(nu curl A) = J.
