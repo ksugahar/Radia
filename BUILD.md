@@ -55,6 +55,8 @@ Builds `radia.pyd` (which includes `RadiaField` NGSolve integration) using MSVC 
 | `-Rebuild` | switch | false | Clean + Configure + Build |
 | `-Test` | switch | false | Run import tests after build |
 | `-RadiaOnly` | switch | false | Build only radia.pyd (legacy flag, no longer needed since RadiaField is integrated) |
+| `-AxiFemmOnly` | switch | false | Rebuild ONLY the `radia_axifemm` C++ extension via direct cl/link (no CMake, no MKL) — fast C++ iteration |
+| `-InstallToSitePackages` | switch | false | After building, also copy the rebuilt `.pyd`(s) into the importable `site-packages\radia` |
 | `-Verbose` | switch | false | Show detailed build output |
 | `-NoParallel` | switch | false | Disable TaskManager parallelization (for debugging) |
 | `-NoExaFMM` | switch | false | Disable ExaFMM (for debugging) |
@@ -76,6 +78,36 @@ Builds `radia.pyd` (which includes `RadiaField` NGSolve integration) using MSVC 
 - Automatically copies required DLLs to output directory
 - Build log saved to `build_log.txt` for debugging
 - Shows PYD file size and timestamp on success
+
+### Rebuilding only `radia_axifemm` (C++ extension iteration)
+
+When iterating on the axisymmetric FEMM C++ (`src/ext/axifemm/`: the AxiHenrotte
+FESpace / DiffOps / integrators), a full build is overkill. `-AxiFemmOnly`
+compiles just the four `radia_axifemm` sources and links them directly against the
+installed NGSolve/Netgen + Python — it does **not** need Intel MKL and does **not**
+run a CMake configure (so it also sidesteps a stale `build-msvc` cache):
+
+```powershell
+# Rebuild radia_axifemm and refresh the importable package in one step
+.\Build.ps1 -AxiFemmOnly -InstallToSitePackages
+```
+
+**Why `-InstallToSitePackages` matters**: the normal build (and CMake's
+`POST_BUILD`) only refresh `src/radia/` and `build-msvc/`. If `radia` is
+pip-installed **non-editable** — i.e. `import radia` resolves to
+`…\site-packages\radia\…`, the common case — a rebuilt `.pyd` is **not** picked up
+until it is copied into site-packages, so the rebuild silently has no effect.
+`-InstallToSitePackages` does that copy. (An editable `pip install -e .` install
+reads `src/radia/` directly and does not need this.)
+
+> **Stale `build-msvc` / 8.3 short paths**: a `build-msvc` configured on another
+> machine can bake in 8.3 short paths (e.g. `…\1450~1.357\…\cl.exe`,
+> `PROGRA~1\PYTHON~1\ninja.exe`) that do **not** resolve when 8dot3 name creation
+> is disabled on the volume (check: `fsutil 8dot3name query C:`). A CMake **full**
+> build or reconfigure then fails with `CreateProcess failed: The system cannot
+> find the file specified`. Fix once with `.\Build.ps1 -Rebuild` (a clean
+> reconfigure regenerates resolvable long paths). `-AxiFemmOnly` bypasses CMake
+> entirely, so it is unaffected by this.
 
 ---
 
