@@ -5,7 +5,7 @@ name: radia-mcp matrix (lightweight selftest)
 #   - Runs on the FREE GitHub-hosted ubuntu-latest
 #   - Across Python 3.10 / 3.11 / 3.12
 #   - With minimal deps (no radia C++ ext, no ngsolve, no Cubit)
-#   - Checks: (a) all 35 subpackages import (b) every server has
+#   - Checks: (a) all cataloged subpackages import (b) every server has
 #     register_status_tool wired (c) per-server --selftest runs
 #
 # Why a separate workflow:
@@ -61,7 +61,7 @@ jobs:
         run: |
           python -m compileall -q packages/radia-mcp/src
 
-      - name: Meta health (all 35 subpackages must import)
+      - name: Meta health (all cataloged subpackages must import)
         run: |
           python -c "
           from radia_mcp.meta.server import radia_mcp_health

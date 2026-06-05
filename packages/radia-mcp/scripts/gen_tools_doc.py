@@ -1,12 +1,12 @@
-"""Generate docs/TOOLS.md — single-file inventory of all radia-mcp tools.
+"""Generate docs/TOOLS.md -- single-file inventory of all radia-mcp tools.
 
-radia-mcp ships 8 separate MCP servers (cubit / build123d / radia-ngsolve /
-gmsh / electromagnet / ih / peec / interop), each with its own
-FastMCP instance and console-script entry point.  ELF was extracted to
-the standalone PyPI package mcp-server-elf as of radia-mcp 0.39.0.
-This script imports each server module, enumerates its tools, and
-writes a unified markdown inventory so an AI agent can grep one file
-to find any tool across the 8 servers.
+radia-mcp ships one MCP server per subpackage listed in
+radia_mcp.meta.catalog (cubit / build123d / radia-ngsolve / gmsh / ih /
+peec / electromagnet / ... -- the count grows over time and is derived
+dynamically below, never hardcoded).  Each has its own FastMCP instance
+and console-script entry point.  This script imports each server module,
+enumerates its tools, and writes a unified markdown inventory so an AI
+agent can grep one file to find any tool across all servers.
 
 Usage:
     python scripts/gen_tools_doc.py            # write docs/TOOLS.md
