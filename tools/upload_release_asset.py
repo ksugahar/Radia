@@ -1,4 +1,4 @@
-"""Upload one or more files to a GitHub Release — gh-CLI-free.
+"""Upload one or more files to a GitHub Release -- gh-CLI-free.
 
 Mirror of tools/download_release_asset.py for the WRITE side: replaces
 `gh release upload <tag> <file>... --clobber`.
@@ -9,7 +9,7 @@ that the developer sets in their shell rc or .git/safe.directory
 config; the workflow uses ${{ secrets.GITHUB_TOKEN }} as usual.
 
 If no token is set, this exits 0 with a warning (so it never blocks
-push) — same graceful-fail semantics as the original bash hook.
+push) -- same graceful-fail semantics as the original bash hook.
 
 Usage:
     python tools/upload_release_asset.py \
@@ -62,6 +62,19 @@ def fetch_release(repo: str, tag: str) -> dict | None:
         return None
 
 
+def create_release(repo: str, tag: str, title: str = "Binary Files",
+                   notes: str = "Pre-built modules. Updated by CI.") -> dict:
+    """POST /repos/{repo}/releases -- gh-free `gh release create`."""
+    url = f"{API_BASE}/repos/{repo}/releases"
+    body = json.dumps({"tag_name": tag, "name": title, "body": notes,
+                       "make_latest": "false"}).encode()
+    headers = _headers()
+    headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=body, method="POST", headers=headers)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
+
+
 def delete_asset(repo: str, asset_id: int) -> None:
     """DELETE /repos/{repo}/releases/assets/{id}."""
     url = f"{API_BASE}/repos/{repo}/releases/assets/{asset_id}"
@@ -86,7 +99,7 @@ def upload_asset(release: dict, file_path: Path) -> None:
                             + release["url"].split("/repos/")[1].split("/")[1],
                             existing["id"])
 
-    # GitHub upload_url has a template suffix like "{?name,label}" — strip it.
+    # GitHub upload_url has a template suffix like "{?name,label}" -- strip it.
     upload_template = release["upload_url"]
     base = upload_template.split("{")[0]
     upload_url = f"{base}?name={urllib_quote(name)}"
@@ -115,6 +128,9 @@ def main() -> int:
                     help="owner/repo (e.g. ksugahar/Radia)")
     p.add_argument("--tag",  required=True,
                     help="release tag name (e.g. 'binaries')")
+    p.add_argument("--create-if-missing", action="store_true",
+                    help="create the release (POST /releases) if the tag has "
+                         "no release yet -- gh-free `gh release create`")
     p.add_argument("files", nargs="+", help="one or more files to upload")
     args = p.parse_args()
 
@@ -126,11 +142,18 @@ def main() -> int:
 
     release = fetch_release(args.repo, args.tag)
     if release is None:
-        print(f"::warning::Release '{args.tag}' on {args.repo} not found. "
-                f"Create it with: python tools/create_release.py "
-                f"--tag {args.tag} --title 'Binary Files'  "
-                f"(then re-run push)")
-        return 0  # graceful, don't block push
+        if args.create_if_missing:
+            print(f"Release '{args.tag}' not found -- creating it")
+            try:
+                release = create_release(args.repo, args.tag)
+            except urllib.error.HTTPError as e:
+                print(f"::error::failed to create release '{args.tag}': "
+                        f"{e.code} {e.reason}")
+                return 1
+        else:
+            print(f"::warning::Release '{args.tag}' on {args.repo} not found. "
+                    f"Re-run with --create-if-missing to create it.")
+            return 0  # graceful, don't block push
 
     failed = []
     for f in args.files:
