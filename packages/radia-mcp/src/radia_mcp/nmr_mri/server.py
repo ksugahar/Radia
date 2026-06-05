@@ -27,7 +27,7 @@ register_status_tool(
     server_name='mcp-server-nmr-mri',
     description='NMR/MRI: gradient coils, B0 shimming, RF coils, field uniformity',
     subpackage='radia_mcp.nmr_mri',
-    related_servers=["electromagnet", "accelerator"],
+    related_servers=["electromagnet", "accelerator", "radia-ngsolve"],
 )
 
 
