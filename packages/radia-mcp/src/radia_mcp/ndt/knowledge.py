@@ -143,7 +143,15 @@ The W: drive holds approximately 145 NDT papers, dominated by:
 - `radia_mcp.magnetic_materials`  -- BH curve, vector hysteresis
 - `radia_mcp.fem.potential_formulations.t_omega`  -- ECT formulation
 - `radia_mcp.bem` -- BEM for unbounded geometry (open NDT)
-- `radia_mcp.radia_ngsolve` -- Kelvin transformation, PML
+- `radia_mcp.radia_ngsolve` -- Kelvin transformation, PML, AND validated
+  eddy-current FEM solvers usable directly as ECT forward models:
+  `solve.solve_planar_eddy` (complex A_z, current/voltage-driven probe coil;
+  validated vs round-wire Kelvin Rac to 0.07%), `solve.solve_planar_eddy_multi`
+  (multi-conductor skin + PROXIMITY -- array probes / litz windings),
+  `solve.solve_eddy_current_harmonic_APhi` (3-D A-Phi).  The FEMM Kelvin corpus
+  (`literature_semantic_search(collection="femm_kelvin")`) bundles
+  planar_coil_sigma crack-scan examples (50-5000 Hz, crack 0-2 mm) -- a
+  ready-made ECT lift-off / crack-depth benchmark set.
 """
 
 
