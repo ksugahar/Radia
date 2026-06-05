@@ -1643,6 +1643,56 @@ PyPI install には反映されない**。C++ 変更を 100号機 / mdx で試�
 
 CI が通っても Cubit テストに通らなければリリースしない。
 
+### CI Preflight Policy: commit → CI check → push (2026-06-05)
+
+**POLICY**: Run the CI gates **LOCALLY before every push to `main`**, not
+after.  CI must not be the FIRST place a catchable error surfaces.  The
+single command is:
+
+```bash
+python tools/ci_preflight.py          # ~2-3 min; exit 0 = safe to push
+python tools/ci_preflight.py --fix    # also auto-regenerate a stale TOOLS.md
+python tools/ci_preflight.py --full   # also run the full top-level pytest (slow)
+```
+
+**Why** (empirical, 2026-06-05 analysis of the last 80 failed GitHub
+Actions runs): the failures are concentrated and *all locally
+detectable before push* —
+
+| count | workflow / step | class |
+|---|---|---|
+| 30x | radia-mcp matrix `Pytest` | heavy-import collection / meta-health / version |
+| 16x | CI `Run basic tests` | top-level pytest import / golden / flaky |
+| 9x | radia-mcp matrix `TOOLS.md drift gate` | committed TOOLS.md ≠ regenerated |
+| 7x | Policy Lint `Policy 4 CblasColMajor` | C++ allowlist miss |
+| 3x | radia-mcp matrix `Meta health` | catalog import / links / tags |
+
+`tools/ci_preflight.py` mirrors the three CI workflows
+(`policy-lint.yml`, `radia-mcp-matrix.yml`, `build-test.yml` "Run basic
+tests"), fast-first: policy-lint (7 policies) → version consistency →
+TOOLS.md drift (**WIP-aware**: warns when `radia_mcp/src` has uncommitted
+`.py` changes that would contaminate the regenerated inventory) →
+**radia-mcp matrix under minimal-dep simulation** (`RADIA_MCP_FORCE_MINIMAL=1`,
+which reproduces the ubuntu collection on a full-env box — this catches the
+ngsolve/netgen module-import collection break) → top-level collect-only.
+
+**Enforcement (pre-push hook)**: `python tools/install_git_hooks.py`
+installs `tools/git-hooks/pre-push`, which runs `ci_preflight --since
+<remote-sha>` on every push to `main` (path-aware, so a non-radia-mcp
+push stays fast) and **aborts the push if a gate is red**.  Emergency
+bypass: `CI_PREFLIGHT_SKIP=1 git push`.  Run the installer once per clone
+(it is worktree-safe and idempotent).
+
+**The recurring CI failure classes are cataloged** in `bug_patterns.py`
+(`bug_patterns_lookup(topic="ci")`): `tools-md-drift-wip-contamination`,
+`heavy-import-collection-break-minimal-dep-matrix`,
+`init-py-version-mismatch-vs-pyproject`, etc. — each names ci_preflight as
+the detection tool.
+
+**Release flow** (release-triple) keeps its own Phase 2.5 gates, but
+ci_preflight is the everyday "before any push" gate — run it even for a
+non-release push to `main`.
+
 ### Cubit Batch Self-Testing Policy
 
 **POLICY**: Claude は Cubit を **完全ヘッドレス** (`-batch -nographics -nojournal`) で起動し、自力で機能試験を走らせること。GUI や人間の操作は不要。
