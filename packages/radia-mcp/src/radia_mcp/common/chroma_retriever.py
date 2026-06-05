@@ -408,24 +408,63 @@ _EASYOCR_READER = None
 _EASYOCR_LANGS = None
 
 
-def _ocr_pdf_page(page, languages, dpi: int) -> str:
-    """Rasterize a PDF page and OCR it with easyocr -> text.  Used as a fallback
-    when the embedded text layer is missing or garbage.  The easyocr Reader is
-    cached module-wide (its construction is expensive / loads models)."""
+def _ocr_page_easyocr(page, languages, dpi: int) -> str:
+    """OCR a rendered PDF page with easyocr (in-process; GPU if torch.cuda).
+    Reader cached module-wide (construction loads models)."""
     global _EASYOCR_READER, _EASYOCR_LANGS
     import fitz  # pymupdf
     import numpy as np
     langs = tuple(languages)
     if _EASYOCR_READER is None or _EASYOCR_LANGS != langs:
         import easyocr
-        # verbose=False: suppress easyocr's progress bar (its U+2588 block char
-        # crashes on a cp932 console) -- the model download still runs silently.
-        _EASYOCR_READER = easyocr.Reader(list(langs), verbose=False)  # GPU if torch.cuda
+        # verbose=False: easyocr's U+2588 progress bar crashes a cp932 console.
+        _EASYOCR_READER = easyocr.Reader(list(langs), verbose=False)
         _EASYOCR_LANGS = langs
     pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB)
     img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
-    lines = _EASYOCR_READER.readtext(img, detail=0, paragraph=True)
-    return "\n".join(lines)
+    return "\n".join(_EASYOCR_READER.readtext(img, detail=0, paragraph=True))
+
+
+def _ocr_page_ndlocr(page, dpi: int) -> str:
+    """OCR a rendered PDF page with NDLOCR-Lite (the LAB'S PREFERRED OCR:
+    layout-aware reading order, CPU-fast ~1.6s/page, handles Latin + Japanese --
+    e.g. recovers the Zienkiewicz FEM volumes' garbled text layer to clean
+    English).  Runs the ``ndlocr-lite`` CLI on a temp PNG.  Point NDLOCR_LITE_DIR
+    at its ``src`` dir (default ``C:\\Tools\\ndlocr-lite\\src``)."""
+    import fitz  # pymupdf
+    import os
+    import sys
+    import shutil
+    import tempfile
+    import subprocess
+    src = os.environ.get("NDLOCR_LITE_DIR", r"C:\Tools\ndlocr-lite\src")
+    if not os.path.isfile(os.path.join(src, "ocr.py")):
+        raise FileNotFoundError(
+            f"NDLOCR-Lite not found at {src!r} (set env NDLOCR_LITE_DIR)")
+    tmp = tempfile.mkdtemp(prefix="ndlocr_")
+    try:
+        png = os.path.join(tmp, "page.png")
+        out = os.path.join(tmp, "out")
+        os.makedirs(out, exist_ok=True)
+        page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB).save(png)
+        subprocess.run([sys.executable, "ocr.py", "--sourceimg", png, "--output", out],
+                       cwd=src, check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        txt = os.path.join(out, "page.txt")
+        if os.path.isfile(txt):
+            with open(txt, encoding="utf-8", errors="replace") as fh:
+                return fh.read()
+        return ""
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _ocr_pdf_page(page, languages, dpi: int, engine: str = "ndlocr") -> str:
+    """Rasterize + OCR a PDF page -> text.  engine='ndlocr' (default; the lab
+    standard, layout-aware) or 'easyocr' (in-process, GPU)."""
+    if engine == "easyocr":
+        return _ocr_page_easyocr(page, languages, dpi)
+    return _ocr_page_ndlocr(page, dpi)
 
 
 def extract_pdf_chunks(
@@ -435,6 +474,7 @@ def extract_pdf_chunks(
     default_language: Optional[str] = None,
     auto_detect_language: bool = False,
     ocr_fallback: bool = False,
+    ocr_engine: str = "ndlocr",
     ocr_languages: tuple = ("en",),
     ocr_dpi: int = 200,
     ocr_min_readability: float = 0.6,
@@ -496,7 +536,7 @@ def extract_pdf_chunks(
                        (not has_text and bool(page.get_images()))
             if need_ocr:
                 try:
-                    ocr_text = _ocr_pdf_page(page, ocr_languages, ocr_dpi)
+                    ocr_text = _ocr_pdf_page(page, ocr_languages, ocr_dpi, ocr_engine)
                     if (len(ocr_text.strip()) > 50
                             and _text_readability(ocr_text) > max(readable, ocr_min_readability)):
                         text = ocr_text
