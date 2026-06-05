@@ -114,3 +114,96 @@ def test_loopstar_ctype_field_exact(mu):
     assert dmax < 1e-3, (
         f"loop-star C-type field deviates from plain by {dmax:.2e} at mu={mu} "
         f"(keep-loops recovery may be broken): {kl}")
+
+
+# ----------------------------------------------------------------------------
+# H-ILU golden: the A_SS H-LU-preconditioned BiCGStab path (SetLoopStarHMatMode 2)
+# replaces the dense K-dense LU at large scale (>15^3, where K-dense's ns^2 caps
+# at 8 GB).  Two locks:
+#   1. (CI-safe) cube: H-ILU reproduces the K-dense loop-star solve -- a broken
+#      H-LU factor (e.g. the materialize-free triangular solves htrsm_lln_dense_rhs
+#      / htrsm_lUTn_dense_rhs) makes hlu_solve_relerr blow up.
+#   2. (LAB-only) C-type: H-ILU is field-exact AND the factor materialize scratch
+#      stays LOW.  Pre-fix (2026-06-04) the htrsm mixed fallback densified the
+#      internal L/U factor (~2000 Me at 6^3); the materialize-free recursive solves
+#      cut it to ~50 Me.  This subtest fails if that de-materialize is reverted.
+# Background: memory/project_ass_scalable_solver_2026_06_04.md.
+# ----------------------------------------------------------------------------
+def _hilu_stats(builder, mu, tol):
+    """Run the A_SS H-ILU path (mode 2); return (GetStarHMatStats, HLUMaterializeStats,
+    GetKeepLoopStats).  The keep-loops res_final_rel is the FIELD-correctness gate: it is
+    the relative residual of the FULL system after the loop recovery, so res_final_rel<1e-4
+    means the loop-star+H-ILU field matches the plain solve WITHOUT needing K-dense/ELF
+    (the only viable correctness anchor at >15^3).  res>1 means the keep-loops GS diverged
+    (as it does on the distorted C-type at the unphysical mu_r=1e5)."""
+    rad.SetDeflateNullspace(False, 0.0)
+    rad.SetLoopStarGauge(True)
+    rad.SetLoopStarHMatMode(2)
+    rad.SolverConfig(bicgstab_tol=1e-8, hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
+    rad.SetStarHLUTruncTol(tol)
+    try:
+        rad.HLUSetTruncTol(tol)
+    except Exception:
+        pass
+    model = builder(mu)
+    rad.Solve(model, 0.0001, 200, 2)            # method=2 (HACApK); mode 2 -> H-LU precond
+    st = rad.GetStarHMatStats()
+    try:
+        ms = rad.HLUMaterializeStats()
+    except Exception:
+        ms = {}
+    try:
+        kl = rad.GetKeepLoopStats()
+    except Exception:
+        kl = {}
+    rad.SetLoopStarHMatMode(0)
+    rad.SetLoopStarGauge(False)
+    rad.UtiDelAll()
+    return st, ms, kl
+
+
+@pytest.mark.slow
+def test_hilu_cube_matches_kdense():
+    """H-ILU (mode 2) reproduces the K-dense loop-star solve on a cube (mu=1e5).
+
+    The cube is REGULAR hexes -> its loops ARE ker(N) -> keep-loops converges even at
+    mu=1e5 (the divergence is a DISTORTED-hex phenomenon).  This locks the H-LU factor."""
+    st, _, _ = _hilu_stats(lambda m: _build_cube(6, m), 1e5, 1e-5)
+    assert st["n_star"] > 10, f"A_SS too small to exercise the H-LU tree: {st}"
+    assert st["factor_time_s"] >= 0.0, f"H-LU factor failed (factor_time_s<0): {st}"
+    assert st["hlu_solve_relerr"] < 1e-5, (
+        f"H-ILU solve deviates from K-dense by {st['hlu_solve_relerr']:.2e} "
+        f"-- the H-LU factor (materialize-free htrsm) may be broken: {st}")
+
+
+@pytest.mark.slow
+def test_hilu_ctype_dematerialized():
+    """C-type (distorted hex) at mu_r=1e4: H-ILU star solve matches K-dense, the
+    keep-loops field recovery CONVERGES (field-correct), AND the factor materialize
+    stays low.  Three locks in one: (1) relerr<1e-5 = correct H-LU factor; (2)
+    keep-loops res_final_rel<1e-4 = field-exact (the >15^3 anchor); (3) materialize
+    band <200 Me = the triangular-solve de-materialize (htrsm_lln_dense_rhs /
+    htrsm_lUTn_dense_rhs) is not reverted (pre-fix ~2000 Me at 6^3; post-fix ~50 Me).
+    Skipped where C-type data is absent.
+    """
+    mod = _load_ctype()
+    if mod is None:
+        pytest.skip("C-type mesh data not available")
+    nodes, elements = mod.load_geometry("6x6x6")
+    builder = lambda m: mod.build_model(nodes, elements, ("linear", m))[0]
+    # mu_r=1e4 is the field-correct regime (real soft iron): the keep-loops GS converges,
+    # so the loop-star+H-ILU field matches the plain solve.  (At the unphysical mu_r=1e5 the
+    # keep-loops DIVERGES on the distorted C-type -- a loop-star limit, not an H-ILU bug;
+    # see memory/project_ass_scalable_solver_2026_06_04.md.)
+    st, ms, kl = _hilu_stats(builder, 1e4, 1e-4)
+    assert st["hlu_solve_relerr"] < 1e-5, (
+        f"H-ILU star solve not matching K-dense: relerr={st['hlu_solve_relerr']:.2e}: {st}")
+    klr = kl.get("res_final_rel", 1e9)
+    assert klr < 1e-4, (
+        f"keep-loops did NOT converge (res_final_rel={klr:.2e}) -- the loop-star field is "
+        f"wrong; the full loop-star+H-ILU pipeline is only field-exact for mu_r<=1e4: {kl}")
+    n_elems = ms.get("n_elems", -1)
+    assert 0 <= n_elems < 200e6, (
+        f"H-LU materialize scratch {n_elems/1e6:.0f} Me exceeds the de-materialize "
+        f"band (pre-fix ~2000 Me; post-fix ~50 Me) -- the htrsm materialize-free "
+        f"triangular solve may be reverted: n_elems={n_elems}")
