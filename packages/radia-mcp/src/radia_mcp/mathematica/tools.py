@@ -253,15 +253,32 @@ def mathematica_status() -> dict:
             "license_msg": "wolframscript.exe not found",
         }
 
-    # 1+1 で license check
-    test = mathematica_evaluate("1 + 1", timeout=15)
+    # 1+1 license check.  The FIRST wolframscript call after the MCP server
+    # boots is a COLD START (kernel launch + license activation) that can take
+    # 20-30 s -- far over the old 15 s budget -- and a single-seat license
+    # already held by an interactive Wolfram Kernel / Mathematica GUI makes
+    # wolframscript WAIT for the seat.  Both surface as an EMPTY result, which
+    # must NOT be misreported as a license failure (the symptom was
+    # available=False, license_msg="no output" even though `wolframscript -code
+    # "1+1"` returns 2 in ~5 s once warm).  Use a generous timeout and label a
+    # timeout distinctly from a genuine license/output error.
+    test = mathematica_evaluate("1 + 1", timeout=60)
     license_ok = test["result"].strip() == "2"
     license_msg = ""
     if not license_ok:
-        license_msg = test["stderr"] or test["result"] or "no output"
+        if test.get("timed_out"):
+            license_msg = (
+                "wolframscript produced no output within 60 s -- usually a slow "
+                "cold-start (kernel + license activation) or a single-seat license "
+                "already held by an open Wolfram Kernel / Mathematica GUI, NOT a "
+                "license failure. Close other kernels and retry, or call "
+                "mathematica_evaluate directly (it has its own timeout)."
+            )
+        else:
+            license_msg = test["stderr"] or test["result"] or "no output"
 
-    # version 取得
-    ver_result = mathematica_evaluate("$Version", timeout=15)
+    # version (kernel is warm now if 1+1 passed; keep headroom anyway)
+    ver_result = mathematica_evaluate("$Version", timeout=30)
     version = ver_result["result"].strip().strip('"') if ver_result["exit_code"] == 0 else ""
 
     return {
