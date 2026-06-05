@@ -66,6 +66,16 @@ def main():
         sys.exit(1)
     print()
 
+    # Step 2 (repo clones only): install the developer git hooks so that
+    # pushes to main run tools/ci_preflight.py via the pre-push gate.  A pure
+    # PyPI install has no clone (no .git), so this is skipped there.
+    here = os.path.dirname(os.path.abspath(__file__))
+    hook_installer = os.path.join(here, "tools", "install_git_hooks.py")
+    if os.path.exists(os.path.join(here, ".git")) and os.path.isfile(hook_installer):
+        print("[hooks] install pre-push CI-preflight gate")
+        subprocess.run([sys.executable, hook_installer])   # best-effort
+        print()
+
     print("Verify:")
     print('  python -c "import radia; print(radia.__version__)"')
 

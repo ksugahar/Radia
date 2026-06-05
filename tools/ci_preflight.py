@@ -81,12 +81,6 @@ TOPLEVEL_IGNORES = [
     "tests/test_scalar_bie_sibc.py",
 ]
 
-# Policy 4 allowlist (genuine LAPACK / HACApK column-major interop).
-CBLAS_COLMAJOR_ALLOW = (
-    "rad_mmm_matrices.cpp", "rad_relaxation_methods.cpp",
-    "rad_hacapk.cpp", "rad_stream_function.cpp",
-)
-
 GREEN, RED, YEL, DIM, RST = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m"
 
 
@@ -101,89 +95,19 @@ def _sh(cmd, cwd=REPO, env=None, timeout=None):
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
-def _git_grep(pattern, pathspecs, extra=()):
-    """git grep -n in the working tree; return list of matching lines."""
-    cmd = ["git", "grep", "-n", *extra, pattern, "--", *pathspecs]
-    rc, out = _sh(cmd)
-    # git grep: 0 = matches, 1 = no matches, >1 = error
-    if rc not in (0, 1):
-        return None  # error (e.g. pathspec doesn't exist)
-    return [ln for ln in out.splitlines() if ln.strip()]
-
-
 # ======================================================================
-# Gate 1: policy lint  (mirror .github/workflows/policy-lint.yml)
+# Gate 1: policy lint  (delegates to tools/policy_lint.py)
 # ======================================================================
 def gate_policy_lint():
-    fails = []
-
-    # Policy 1: no FldUnits() in examples/*.py
-    hits = _git_grep("FldUnits", ["examples/*.py", "examples/**/*.py"])
-    if hits:
-        fails.append("Policy 1 (FldUnits removed): " + hits[0])
-
-    # Policy 2: no tracked binaries
-    rc, out = _sh(["git", "ls-files", "*.pyd", "*.dll", "*.so",
-                   "*.lib", "*.exe", "*.obj"])
-    bins = [b for b in out.splitlines() if b.strip()]
-    if bins:
-        fails.append(f"Policy 2 (no tracked binaries): {bins[:3]}")
-
-    # Policy 3: no Helmholtz WAVE kernel in src/core (hodge/decomp excepted)
-    hits = _git_grep("helmholtz", ["src/core/*.cpp", "src/core/*.h",
-                                   "src/core/**/*.cpp", "src/core/**/*.h"],
-                     extra=["-i"])
-    if hits:
-        bad = [h for h in hits
-               if "helmholtz-hodge" not in h.lower()
-               and "helmholtz hodge" not in h.lower()
-               and "helmholtz-decomposition" not in h.lower()
-               and "helmholtz decomposition" not in h.lower()]
-        if bad:
-            fails.append("Policy 3 (no Helmholtz wave kernel): " + bad[0])
-
-    # Policy 4: no CblasColMajor in src/core (LAPACK/HACApK allowlisted)
-    hits = _git_grep("CblasColMajor", ["src/core/*.cpp", "src/core/*.h",
-                                       "src/core/**/*.cpp", "src/core/**/*.h"])
-    if hits:
-        bad = [h for h in hits
-               if not any(a in h for a in CBLAS_COLMAJOR_ALLOW)]
-        if bad:
-            fails.append("Policy 4 (use CblasRowMajor): " + bad[0])
-
-    # Policy 5: no generated files at repo root.  TRACKED only -- CI runs on
-    # a fresh checkout, so untracked local scratch (.msh/.vtu left by a demo
-    # run) is NOT what the workflow's `find` sees; checking os.listdir here
-    # would be a false positive for "will CI fail".
-    rc, out = _sh(["git", "ls-files", "*.msh", "*.vtu", "*.vtk",
-                   "*.vol", "*.vts"])
-    root_gen = [f for f in out.splitlines() if f.strip() and "/" not in f.strip()]
-    if root_gen:
-        fails.append(f"Policy 5 (no tracked generated files at root): {root_gen}")
-
-    # Policy 6: forbid the legacy import path (use src/radia instead).
-    # Build the needle from fragments so this gate never flags its OWN
-    # source: CI's Policy 6 greps for that literal token together with a
-    # sys.path line, and a contiguous occurrence here would self-match.
-    _legacy = "src/" + "python"
-    hits = _git_grep(_legacy, ["*.py", "**/*.py"])
-    if hits:
-        bad = [h for h in hits if "sys.path" in h]
-        if bad:
-            fails.append(f"Policy 6 (use src/radia not {_legacy}): " + bad[0])
-
-    # Policy 7: every examples/*/ has README.md
-    ex = os.path.join(REPO, "examples")
-    missing = []
-    if os.path.isdir(ex):
-        for d in sorted(os.listdir(ex)):
-            dp = os.path.join(ex, d)
-            if os.path.isdir(dp) and not os.path.exists(os.path.join(dp, "README.md")):
-                missing.append(f"examples/{d}/")
-    if missing:
-        fails.append(f"Policy 7 (README.md per example dir): {missing[:3]}")
-
-    return (not fails), "; ".join(fails) if fails else "7 policies pass"
+    # SINGLE SOURCE OF TRUTH: tools/policy_lint.py is also what
+    # .github/workflows/policy-lint.yml runs, so the local gate and CI can
+    # never drift (previously the 7 policies were re-implemented inline here).
+    rc, out = _sh([sys.executable, os.path.join(REPO, "tools", "policy_lint.py"),
+                   "--quiet"])
+    if rc == 0:
+        return True, "7 policies pass"
+    fails = [ln[6:].strip() for ln in out.splitlines() if ln.startswith("FAIL")]
+    return False, "; ".join(fails) if fails else (out.strip()[-200:] or "policy lint failed")
 
 
 # ======================================================================
@@ -226,32 +150,63 @@ def gate_tools_md(fix=False):
     gen = os.path.join("packages", "radia-mcp", "scripts", "gen_tools_doc.py")
     doc = "packages/radia-mcp/docs/TOOLS.md"
 
-    # WIP-awareness: regenerating with uncommitted radia_mcp/src changes
-    # produces a TOOLS.md that reflects WIP tools.  If you then commit only
-    # TOOLS.md (not the WIP code), CI's drift gate goes red against the
-    # committed code.  Warn loudly.
-    rc, out = _sh(["git", "status", "--porcelain", "--",
-                   "packages/radia-mcp/src"])
+    rc, out = _sh(["git", "status", "--porcelain", "--", "packages/radia-mcp/src"])
     wip = [ln for ln in out.splitlines() if ln.strip()]
-    warn = ""
-    if wip:
-        warn = (f" [WARN: {len(wip)} uncommitted radia_mcp/src file(s); "
-                "commit code + regenerated TOOLS.md TOGETHER or CI will drift]")
 
-    rc, out = _sh([sys.executable, gen])
-    if rc != 0:
-        return False, f"gen_tools_doc.py failed: {out[-200:]}"
-    rc, _ = _sh(["git", "diff", "--exit-code", "--", doc])
-    if rc == 0:
-        return True, "docs/TOOLS.md matches generated inventory" + warn
-    # drifted
-    if fix:
-        return True, "docs/TOOLS.md was STALE -- regenerated (stage it before commit)" + warn
-    _sh(["git", "checkout", "--", doc])  # restore (don't leave dirty)
-    return False, ("docs/TOOLS.md is STALE vs code -- run "
-                   "`python tools/ci_preflight.py --fix` (or "
-                   "`python packages/radia-mcp/scripts/gen_tools_doc.py`) "
-                   "and commit it" + warn)
+    if not wip:
+        # Fast path: working tree == committed; regenerate in place + diff.
+        rc, out = _sh([sys.executable, os.path.join(REPO, gen)])
+        if rc != 0:
+            return False, f"gen_tools_doc.py failed: {out[-200:]}"
+        rc, _ = _sh(["git", "diff", "--exit-code", "--", doc])
+        if rc == 0:
+            return True, "docs/TOOLS.md matches generated inventory"
+        if fix:
+            return True, "docs/TOOLS.md was STALE -- regenerated (stage it before commit)"
+        _sh(["git", "checkout", "--", doc])  # restore (don't leave dirty)
+        return False, ("docs/TOOLS.md is STALE vs code -- run "
+                       "`python tools/ci_preflight.py --fix` and commit it")
+
+    # WIP present: CI checks out the COMMITTED code, so check the COMMITTED
+    # state (HEAD), NOT the working tree -- otherwise uncommitted radia_mcp/src
+    # changes (this or another concurrent session) false-positive this gate.
+    # Extract HEAD's radia-mcp to a temp dir, regenerate from that committed
+    # code, and compare to HEAD's committed TOOLS.md (exactly what CI does).
+    import io
+    import shutil
+    import tarfile
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="radia_toolsmd_")
+    try:
+        ar = subprocess.run(["git", "archive", "HEAD", "packages/radia-mcp"],
+                            cwd=REPO, capture_output=True)
+        if ar.returncode != 0:
+            return False, "git archive HEAD failed: " + ar.stderr[-200:].decode(errors="replace")
+        with tarfile.open(fileobj=io.BytesIO(ar.stdout)) as tf:
+            tf.extractall(tmp, filter="data")  # filter: Py3.12+ safe-extract
+        gen_tmp = os.path.join(tmp, "packages", "radia-mcp", "scripts", "gen_tools_doc.py")
+        rc, out = _sh([sys.executable, gen_tmp])  # regen from COMMITTED code
+        if rc != 0:
+            return False, f"gen_tools_doc.py (committed) failed: {out[-200:]}"
+        with open(os.path.join(tmp, "packages", "radia-mcp", "docs", "TOOLS.md"),
+                  encoding="utf-8") as f:
+            regen = f.read()
+        show = subprocess.run(["git", "show", f"HEAD:{doc}"], cwd=REPO,
+                              capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+        committed = show.stdout
+        note = f" (checked HEAD; {len(wip)} working-tree WIP file(s) ignored)"
+        if regen.replace("\r\n", "\n") == committed.replace("\r\n", "\n"):
+            return True, "committed docs/TOOLS.md matches committed code" + note
+        if fix:
+            with open(os.path.join(REPO, doc), "w", encoding="utf-8", newline="") as f:
+                f.write(regen)
+            return True, "committed docs/TOOLS.md was STALE -- regenerated from HEAD (stage it)" + note
+        return False, ("committed docs/TOOLS.md is STALE vs COMMITTED code (HEAD): a "
+                       "tool was added/removed without regenerating -- run "
+                       "`python tools/ci_preflight.py --fix` and commit it" + note)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 # ======================================================================
