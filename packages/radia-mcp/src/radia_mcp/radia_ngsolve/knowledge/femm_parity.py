@@ -70,9 +70,12 @@ solve_axi_eddy_harmonic: assemble the REAL closed-form C++ integrators
 AxiHenrotteStiffnessBFI(mu) + AxiHenrotteSigmaMassBFI(sigma) (the same ones behind
 the validated Cu-disk tau_1 eigenvalue), symmetrise, form S=K+j w M in scipy and
 solve. order=1 only (P2 AxiHenrotte has an axis-singularity NaN). Use the
-matrix-based loss P_eddy=0.5 w^2 Re(x^H M x) -- the COMPLEX H1Henrotte field
-value-eval is unreliable (base-class Id stub). The nonlinear mu(|B|) Picard layer
-needs that complex field eval, so it awaits an AxiHenrotte complex DiffOp in C++.
+matrix-based loss P_eddy=0.5 w^2 Re(x^H M x). The COMPLEX H1Henrotte field
+value/gradient eval is now RELIABLE (fixed in src/ext/axifemm: the FESpace is
+complex-capable and the DiffOps got complex CalcMatrix overloads; validated to
+machine precision in test_axi_henrotte_complex_eval.py), so |A|/B post-processing
+of the complex solution works -- this unblocks the nonlinear mu(|B|) Picard layer
+(update mu per element from |B| at centroids, reassemble K each sweep, M fixed).
 
 NOTE on the SIBC eddy FORCE: in calc_fem_kelvin the workpiece is a HOLE (no volume
 mesh), so the only force handle is the time-averaged Maxwell stress over its
