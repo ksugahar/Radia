@@ -667,10 +667,13 @@ def solve_axi_eddy_harmonic(mesh, mu_cf, sigma_cf, omega, applied_A,
         ( = 0.5 sigma w^2 int |A|^2 2 pi r dr dz ), straight from the matrix M.
         This is the RELIABLE scalar output (matrix-based, no field eval).
       * ``gfu`` -- complex H1Henrotte GridFunction holding the solution DOFs.
-        CAVEAT: H1Henrotte's COMPLEX value-eval falls back to a base-class Id
-        stub and is NOT reliable for post-processing |A|/B pointwise; use
-        ``P_eddy`` for the loss.  (A correct complex field eval would need the
-        AxiHenrotte DiffOp Apply implemented in C++.)
+        Its pointwise value/gradient eval is now RELIABLE: the AxiHenrotte
+        FESpace is complex-capable (iscomplex from the ``complex`` flag) and the
+        DiffOps implement the complex ``CalcMatrix`` overloads (src/ext/axifemm),
+        validated to machine precision in tests/test_axi_henrotte_complex_eval.py
+        -- so |A|/B post-processing of this complex solution works (this is what
+        unblocks the nonlinear mu(|B|) Picard layer).  Requires the rebuilt
+        radia_axifemm extension.  ``P_eddy`` remains the matrix-based reference.
 
     Validated (tests/test_axi_eddy_harmonic.py): for a Cu disk in a uniform
     applied B0, the eddy loss P_eddy(w) is positive, rises with w, and is
