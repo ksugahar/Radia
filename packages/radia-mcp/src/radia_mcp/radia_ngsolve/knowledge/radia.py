@@ -3520,9 +3520,10 @@ git push origin main vX.Y.Z
 ### 4. Monitor
 
 ```bash
-gh run list --limit 5        # Check CI status
-gh run watch <run-id>         # Watch build
-pip install radia==X.Y.Z     # Verify after publish
+# gh-free (No GitHub CLI policy): use the REST helper, not `gh run`
+python tools/check_ci.py --branch main        # Check CI status
+python tools/check_ci.py --sha <sha> --watch  # Watch a commit to completion
+pip install radia==X.Y.Z                       # Verify after publish
 ```
 
 ## Wheel Build Details (Build_Wheel.ps1)
