@@ -158,6 +158,36 @@ def maxwell_surface_force(B, mesh, surface):
     return tuple(F)
 
 
+def maxwell_surface_force_harmonic(B, mesh, surface):
+    """TIME-AVERAGED Maxwell-stress force [N] over a closed boundary ``surface``
+    for a COMPLEX time-harmonic flux density ``B`` (phasor).  The time-average of
+    the quadratic Maxwell stress is
+
+        <F_k> = oint_S [ (1/(2 mu0)) Re( B_k conj(B.n) )
+                          - (1/(4 mu0)) |B|^2 n_k ] dS ,
+
+    where the extra 1/2 vs the static :func:`maxwell_surface_force` is the
+    time-average of cos^2(wt).  For a field oscillating with REAL peak amplitude
+    B0 this equals exactly ``0.5 * maxwell_surface_force(B0)``.
+
+    Intended for the time-harmonic eddy force on a body enclosed by an air
+    surface -- in particular the ``"sibc"`` hole boundary of
+    ``calc_fem_kelvin`` (the workpiece is a HOLE, so the only force handle is the
+    Maxwell stress over its surface; ``B = curl(gfu)`` from the SIBC A-solve).
+    Returns (Fx, Fy, Fz) in newtons.  Validated by reduction to the
+    COMSOL-cross-validated :func:`maxwell_surface_force` (tests/test_maxwell_surface_harmonic.py).
+    """
+    n = specialcf.normal(mesh.dim)
+    Bn = sum(B[k] * n[k] for k in range(3))                  # B . n  (n real)
+    B2 = sum((B[k] * Conj(B[k])).real for k in range(3))     # |B|^2 (real)
+    bnd = ds(definedon=mesh.Boundaries(surface))
+    F = []
+    for k in range(3):
+        integ = (0.5 / MU0) * (B[k] * Conj(Bn)).real - (0.25 / MU0) * B2 * n[k]
+        F.append(Integrate(integ * bnd, mesh))
+    return tuple(F)
+
+
 def ohmic_loss_2d(Ez, mesh, sigma, region=None):
     """Time-averaged ohmic loss PER UNIT LENGTH [W/m] for a 2D planar harmonic
     eddy problem:  P = 1/2 int sigma |E_z|^2 dA  (E_z = -j w A_z (+ Vc)).
