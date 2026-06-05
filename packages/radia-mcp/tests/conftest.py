@@ -11,29 +11,76 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-# The radia-mcp matrix CI ("lightweight selftest") installs ONLY
-# mcp + pytest + radia-mcp (--no-deps): NO ngsolve / netgen / scipy.
-# The FEMM-parity + axisymmetric FEM cross-validation tests import
-# ngsolve / netgen at MODULE level, so pytest's COLLECTION of them fails
-# with ModuleNotFoundError on that runner and breaks the whole suite.
-# When ngsolve is unavailable, skip collecting exactly those modules
-# (detected by a source scan, so future heavy tests are covered
-# automatically).  On LAB / the self-hosted runner (ngsolve present)
-# nothing is skipped and every test runs.
+# The radia-mcp matrix CI ("lightweight selftest") installs ONLY mcp + pytest
+# + radia-mcp (--no-deps): NO ngsolve / netgen / scipy / numpy / matplotlib /
+# gmsh / chromadb / ...  A test that imports ANY such module AT MODULE LEVEL
+# crashes pytest COLLECTION there (ModuleNotFoundError) and reddens the whole
+# suite.  So skip collecting any test file whose module-level imports include a
+# module that is not importable -- detected GENERICALLY (find_spec per imported
+# module), so ANY future heavy dependency is covered without editing a list.
+# On LAB / the self-hosted runner (everything installed) nothing is skipped and
+# every test runs (no coverage lost: a present dependency is never "absent").
 #
-# RADIA_MCP_FORCE_MINIMAL=1 forces the same skip path even when ngsolve
-# IS installed, so `tools/ci_preflight.py` can faithfully reproduce the
-# ubuntu minimal-dep matrix collection on a full-env LAB box BEFORE push
-# (this is what would have caught the 2026-06-05 heavy-import CI break).
-if (os.environ.get("RADIA_MCP_FORCE_MINIMAL") == "1"
-        or importlib.util.find_spec("ngsolve") is None):
-    collect_ignore = []
-    _HEAVY_IMPORTS = ("import ngsolve", "from ngsolve",
-                      "import netgen", "from netgen")
-    for _f in sorted(Path(__file__).resolve().parent.glob("test_*.py")):
-        try:
-            _src = _f.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-        if any(_tok in _src for _tok in _HEAVY_IMPORTS):
-            collect_ignore.append(_f.name)
+# RADIA_MCP_FORCE_MINIMAL=1 reproduces the matrix's minimal env on a full-env
+# box (for tools/ci_preflight.py): treat everything OUTSIDE the minimal
+# baseline (stdlib + mcp + pytest + radia_mcp) as absent.  This is what catches
+# a heavy-import CI break (the 2026-06-05 ngsolve incident class) BEFORE push.
+_FORCE_MINIMAL = os.environ.get("RADIA_MCP_FORCE_MINIMAL") == "1"
+_MINIMAL_BASELINE = set(getattr(sys, "stdlib_module_names", ())) | {
+    "mcp", "pytest", "_pytest", "pluggy", "iniconfig", "packaging",
+    "anyio", "attr", "attrs", "typing_extensions", "radia_mcp", "__future__",
+}
+
+
+def _module_absent(top_module: str) -> bool:
+    """Is this top-level module unavailable in the env that will collect the
+    tests?  Baseline modules are always present; under FORCE_MINIMAL anything
+    outside the baseline is treated absent (matrix sim); otherwise probe."""
+    if not top_module or top_module in _MINIMAL_BASELINE:
+        return False
+    # A local sibling helper (tests/<mod>.py or tests/<mod>/) is resolvable at
+    # test runtime (pytest puts the test dir on sys.path) and ships with the
+    # repo, so it is present in EVERY env -- never "absent".
+    _here = Path(__file__).resolve().parent
+    if (_here / f"{top_module}.py").exists() or (_here / top_module).is_dir():
+        return False
+    if _FORCE_MINIMAL:
+        return True
+    try:
+        return importlib.util.find_spec(top_module) is None
+    except (ImportError, ValueError):
+        return True
+
+
+def _imported_modules(text: str) -> set:
+    """Every top-level module name imported ANYWHERE in the file (module level
+    OR inside a function -- e.g. a lazy `from ngsolve import ...` in a helper).
+    Both forms make the test unrunnable when the module is absent: a
+    module-level import crashes COLLECTION, an in-function import errors the
+    TEST.  So scan the whole file (matches the prior whole-source behavior).
+    Relative imports (`from . import x`) are intra-package and skipped;
+    `pytest.importorskip("x")` is intentionally NOT matched (those tests are
+    collected and self-skip, which is correct)."""
+    mods = set()
+    for _line in text.splitlines():
+        s = _line.strip()
+        if s.startswith("from "):
+            target = s[5:].split()[0]
+            if not target.startswith("."):          # skip relative imports
+                mods.add(target.split(".")[0])
+        elif s.startswith("import "):
+            for _part in s[len("import "):].split(","):
+                tok = _part.strip().split()[0].split(".")[0]
+                if tok:
+                    mods.add(tok)
+    return mods
+
+
+collect_ignore = []
+for _f in sorted(Path(__file__).resolve().parent.glob("test_*.py")):
+    try:
+        _src = _f.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        continue
+    if any(_module_absent(_m) for _m in _imported_modules(_src)):
+        collect_ignore.append(_f.name)
