@@ -55,6 +55,23 @@ public:
         for (size_t i = 0; i < afel.GetNDof(); ++i)
             mat(0, i) = shape(i);
     }
+
+    // COMPLEX overload: the shape values are real, but a COMPLEX GridFunction
+    // (time-harmonic A_phi) evaluates through this overload.  Without it NGSolve
+    // falls back to the base-class stub and returns wrong values ("base class
+    // apply").  Body mirrors the real CalcMatrix; double -> Complex is implicit.
+    void CalcMatrix(const FiniteElement & fel,
+                    const BaseMappedIntegrationPoint & mip,
+                    BareSliceMatrix<Complex, ColMajor> mat,
+                    LocalHeap & lh) const override
+    {
+        const auto & afel = static_cast<const AxiHenrotteBaseFE&>(fel);
+        IntegrationPoint ip = mip.IP();
+        FlatVector<double> shape(afel.GetNDof(), lh);
+        afel.CalcShape(ip, shape);
+        for (size_t i = 0; i < afel.GetNDof(); ++i)
+            mat(0, i) = shape(i);
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -83,6 +100,21 @@ public:
     void CalcMatrix(const FiniteElement & fel,
                     const BaseMappedIntegrationPoint & mip,
                     BareSliceMatrix<double, ColMajor> mat,
+                    LocalHeap & lh) const override
+    {
+        const auto & afel = static_cast<const AxiHenrotteBaseFE&>(fel);
+        IntegrationPoint ip = mip.IP();
+        FlatVector<double> shape(afel.GetNDof(), lh);
+        afel.CalcShape(ip, shape);
+        for (size_t i = 0; i < afel.GetNDof(); ++i)
+            mat(0, i) = shape(i);
+    }
+
+    // COMPLEX overload (see AxiHenrotteDiffOpId): boundary-trace value eval for
+    // a complex GridFunction.  Mirrors the real CalcMatrix above.
+    void CalcMatrix(const FiniteElement & fel,
+                    const BaseMappedIntegrationPoint & mip,
+                    BareSliceMatrix<Complex, ColMajor> mat,
                     LocalHeap & lh) const override
     {
         const auto & afel = static_cast<const AxiHenrotteBaseFE&>(fel);
@@ -123,6 +155,32 @@ public:
 
         // dphi/dx_a = sum_b (J^{-1})_{a,b}^T * dphi/dxi_b
         //           = sum_b (J^{-1})_{b,a} * dphi/dxi_b
+        for (size_t i = 0; i < afel.GetNDof(); ++i) {
+            mat(0, i) = jac_inv(0, 0) * dshape_ref(i, 0)
+                      + jac_inv(1, 0) * dshape_ref(i, 1);
+            mat(1, i) = jac_inv(0, 1) * dshape_ref(i, 0)
+                      + jac_inv(1, 1) * dshape_ref(i, 1);
+        }
+    }
+
+    // COMPLEX overload: gradient (-> B) of a complex time-harmonic A_phi.  The
+    // shape derivatives and Jacobian are real; only the DOF coefficients are
+    // complex, so the matrix entries are identical to the real CalcMatrix.
+    // Required so curl/grad of a COMPLEX GridFunction evaluates correctly
+    // instead of hitting the base-class stub.
+    void CalcMatrix(const FiniteElement & fel,
+                    const BaseMappedIntegrationPoint & mip,
+                    BareSliceMatrix<Complex, ColMajor> mat,
+                    LocalHeap & lh) const override
+    {
+        const auto & afel = static_cast<const AxiHenrotteBaseFE&>(fel);
+        IntegrationPoint ip = mip.IP();
+        FlatMatrix<double> dshape_ref(afel.GetNDof(), 2, lh);
+        afel.CalcDShape(ip, dshape_ref);
+
+        const auto & mip2d = static_cast<const MappedIntegrationPoint<2,2>&>(mip);
+        Mat<2,2> jac_inv = mip2d.GetJacobianInverse();
+
         for (size_t i = 0; i < afel.GetNDof(); ++i) {
             mat(0, i) = jac_inv(0, 0) * dshape_ref(i, 0)
                       + jac_inv(1, 0) * dshape_ref(i, 1);
