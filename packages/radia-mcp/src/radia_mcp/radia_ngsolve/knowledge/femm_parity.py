@@ -293,7 +293,11 @@ FEMM_VALIDATION = """\
 Axi eddy (solve_axi_eddy) validated via Cu-disk tau_1; planar eddy validated via
 Kelvin Rac. The FORCED-harmonic axi eddy (solve_axi_eddy_harmonic, BFI+scipy) is
 validated by the eddy-loss physics P_eddy(w) (positive, rising with w, w^2 at low
-f); its scalar loss is reliable but the complex field eval is not (use P_eddy).
+f). Its matrix loss P_eddy=0.5 w^2 Re(x^H M x) is reliable, AND -- since the
+complex H1Henrotte field eval was fixed (complex-capable FESpace + complex
+CalcMatrix DiffOp overloads, validated to machine precision in
+test_axi_henrotte_complex_eval.py) -- the complex |A|/B field post-processing of
+the solution is now reliable too (this unblocks the nonlinear mu(|B|) Picard layer).
 The harmonic Maxwell surface force (maxwell_surface_force_harmonic, the SIBC-hole
 force handle) is validated by reduction to the COMSOL-cross-validated static force
 (harmonic = 0.5*static, machine precision). The laminated DC/AC checks are exact
