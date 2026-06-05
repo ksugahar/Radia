@@ -639,6 +639,86 @@ def solve_axi_magnetostatic_nonlinear(mesh, nu_of_B, Jr=None, order=2,
     return gfu
 
 
+def solve_axi_eddy_harmonic(mesh, mu_cf, sigma_cf, omega, applied_A,
+                            order=1, dirichlet="axis|outer"):
+    """Forced time-harmonic axisymmetric eddy currents via the closed-form C++
+    AxiHenrotte integrators + a complex scipy solve -- the CORRECT axi eddy path.
+
+    H1Henrotte's symbolic NGSolve weak-form assembly CANNOT build the complex
+    ``nu*stiffness + j*w*sigma*mass`` system: the AxiHenrotte DiffOps are
+    real-coefficient only, so mixing a real stiffness with the complex j*w*sigma
+    mass in one BilinearForm fails (this is why the grad-weak-form solve_axi_eddy
+    only works at sigma=0 / via the K,M eigenvalue path).  Instead we assemble the
+    REAL closed-form element matrices
+
+        K = AxiHenrotteStiffnessBFI(mu_cf)      (note: PERMEABILITY mu, not nu)
+        M = AxiHenrotteSigmaMassBFI(sigma_cf)
+
+    -- the SAME validated integrators behind the Cu-disk tau_1 eigenvalue --
+    symmetrise them (BFI stores one triangle), form the complex
+    ``S = K + j*w*M`` in scipy and solve  S x = b  with
+    ``b_i = int sigma * applied_A * v_i`` (eddy driven by an imposed A_phi field,
+    e.g. ``applied_A = B0*x/2`` for a uniform axial B0 -- the Kameari convention).
+
+    ORDER=1 ONLY: the P2 AxiHenrotte element has an axis-singularity NaN.
+
+    Returns ``(gfu, P_eddy)``:
+      * ``P_eddy`` -- time-averaged 3-D eddy loss [W] = 0.5*w^2 * Re(x^H M x)
+        ( = 0.5 sigma w^2 int |A|^2 2 pi r dr dz ), straight from the matrix M.
+        This is the RELIABLE scalar output (matrix-based, no field eval).
+      * ``gfu`` -- complex H1Henrotte GridFunction holding the solution DOFs.
+        CAVEAT: H1Henrotte's COMPLEX value-eval falls back to a base-class Id
+        stub and is NOT reliable for post-processing |A|/B pointwise; use
+        ``P_eddy`` for the loss.  (A correct complex field eval would need the
+        AxiHenrotte DiffOp Apply implemented in C++.)
+
+    Validated (tests/test_axi_eddy_harmonic.py): for a Cu disk in a uniform
+    applied B0, the eddy loss P_eddy(w) is positive, rises with w, and is
+    w^2-suppressed at low frequency (the eddy onset) -- and the raw conductor-DOF
+    solution shows flux expelled (|A| -> 0) as w rises past 1/(2 pi tau_1),
+    tau_1 = 224 us.  The K, M are the SAME integrators behind the validated
+    Cu-disk tau_1 eigenvalue, now in a forced harmonic solve.
+    """
+    import numpy as np
+    import scipy.sparse as sp
+    import scipy.sparse.linalg as spla
+    from radia.radia_axifemm import (H1Henrotte, AxiHenrotteStiffnessBFI,
+                                     AxiHenrotteSigmaMassBFI)
+
+    fes = H1Henrotte(mesh, order=order, dirichlet=dirichlet)
+    aK = BilinearForm(fes, symmetric=True)
+    aK += AxiHenrotteStiffnessBFI(mu_cf)
+    aK.Assemble()
+    aM = BilinearForm(fes, symmetric=True)
+    aM += AxiHenrotteSigmaMassBFI(sigma_cf)
+    aM.Assemble()
+    bf = LinearForm(fes)
+    bf += sigma_cf * applied_A * fes.TestFunction() * dx
+    bf.Assemble()
+
+    n = fes.ndof
+
+    def _coo(mat):
+        rr, cc, vv = mat.COO()
+        return sp.csr_matrix((np.asarray(vv, dtype=float),
+                              (np.asarray(rr, dtype=int), np.asarray(cc, dtype=int))),
+                             shape=(n, n))
+
+    free = np.array([i for i in range(n) if fes.FreeDofs()[i]], dtype=int)
+    K = _coo(aK.mat)[free[:, None], free[None, :]]; K = (K + K.T) * 0.5
+    M = _coo(aM.mat)[free[:, None], free[None, :]]; M = (M + M.T) * 0.5
+    bv = np.asarray(bf.vec, dtype=float)[free].astype(complex)
+    xf = spla.spsolve((K + 1j * omega * M).tocsc(), bv)
+    P_eddy = 0.5 * omega * omega * float(np.real(np.conj(xf) @ (M @ xf)))
+
+    fes_c = H1Henrotte(mesh, order=order, complex=True, dirichlet=dirichlet)
+    gfu = GridFunction(fes_c)
+    arr = gfu.vec.FV().NumPy()
+    arr[:] = 0.0
+    arr[free] = xf
+    return gfu, P_eddy
+
+
 def solve_magnetostatic_Aform(mesh, nu, source=None, curl_source=None, order=2,
                               dirichlet="outer", reg=1e-6):
     """Solve the A-formulation magnetostatic problem  curl(nu curl A) = J.
