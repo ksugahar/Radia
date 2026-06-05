@@ -325,6 +325,28 @@ This is the most pragmatic path to add lamination losses to the
 Lange-Henrotte-Hameyer transient framework.  Add the
 `(jω σ_eff_imag)` term to `L_inc` and let the per-step macro solve
 do the rest.
+
+### Cross-validation with radia-ngsolve `laminated_mu_eff` (2026-06-05, 横展開)
+
+radia-ngsolve ships the analytic complex effective permeability of the LINEAR
+in-plane lamination as `radia_mcp.radia_ngsolve.solve.laminated_mu_eff`:
+
+    mu_eff = mu0 [ fill*mu_r*tanh(b)/b + (1-fill) ],   b = (d/2) sqrt(j w mu0 mu_r sigma)
+
+Use it as the analytic ground truth for `solve_cell_problem`'s effective
+permeability in the linear regime.  An independent 1D FE (symmetric cell, iron
+centered between insulation halves) reproduces it to < 2.2 % from |b| = 0.5 to
+|b| ~ 10 (packages/radia-mcp/tests/test_laminated_mu_eff_freqsweep.py).
+
+PITFALL (verified the hard way during 横展開): the eddy LOSS is NOT
+`0.5*w*B^2*Im(1/mu_eff)`.  `mu_eff = <B>/H_s` is the FLUX-AVERAGING permeability
+(correct for the macro FE's B-H relation), but the lamination eddy loss is
+RESISTIVE -- it must come from the direct Joule integral `0.5*sigma*|E|^2` (=
+the cell's `ECL_density`, validated by the Bertotti limit) or the surface
+impedance, NOT from `Im(mu_eff)`.  The two coincide only at low frequency; at
+|b| ~ 5 the `Im(mu_eff)` route under-predicts the loss by ~70 %.  This is exactly
+why the EM method keeps `RP` (-> nu_eff, the field part) and `ECL` (the loss
+part) as SEPARATE cell outputs -- do not derive one from the other.
 """
 
 ERROR_ESTIMATOR = """\
