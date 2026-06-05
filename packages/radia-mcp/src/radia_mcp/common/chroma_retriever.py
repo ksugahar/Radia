@@ -404,6 +404,25 @@ def _text_readability(s: str) -> float:
     return sum(1 for c in s if c.isalnum() or c.isspace()) / len(s)
 
 
+def chunk_garble_fraction(chunks: list[dict],
+                          readability_threshold: float = 0.55) -> float:
+    """Fraction of ``chunks`` whose text reads as garble (corrupt text layer).
+
+    Post-extraction quality gate: a born-digital PDF with a corrupt CID /
+    ToUnicode text layer (the Zienkiewicz FEM class) extracts text that is
+    non-empty but meaningless -- ``_text_readability`` near zero. Computing the
+    fraction of such chunks lets the ingestion path FLAG these books (so they
+    can be re-OCR'd) instead of silently storing garbage. Returns 0.0 for empty
+    input. Each chunk is a dict with a ``"text"`` key (as produced by
+    :func:`extract_pdf_chunks`).
+    """
+    if not chunks:
+        return 0.0
+    g = sum(1 for c in chunks
+            if _text_readability(c.get("text", "")) < readability_threshold)
+    return g / len(chunks)
+
+
 _EASYOCR_READER = None
 _EASYOCR_LANGS = None
 
