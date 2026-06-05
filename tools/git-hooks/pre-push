@@ -1,0 +1,60 @@
+#!/bin/bash
+# Radia pre-push hook.
+#
+# TRACKED SOURCE: tools/git-hooks/pre-push
+# Installed into .git/hooks/pre-push by `python tools/install_git_hooks.py`
+# (run once per clone).  Edit THIS file, not the installed copy, then re-run
+# the installer.
+#
+# Two duties:
+#   1. CI preflight gate -- on a push to main, run `tools/ci_preflight.py`
+#      (the same gates the GitHub Actions workflows run) and ABORT the push
+#      if a gate CI would fail is red locally.  This is the enforcement half
+#      of "commit -> CI check -> push": it stops the push-then-discover loop.
+#      Bypass for an emergency with:   CI_PREFLIGHT_SKIP=1 git push
+#   2. Upload .pyd binaries to the GitHub 'binaries' Release (NEVER blocks).
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -z "$REPO_ROOT" ] && exit 0
+cd "$REPO_ROOT" || exit 0
+
+ZERO="0000000000000000000000000000000000000000"
+
+# ---- Duty 1: CI preflight on pushes to main -------------------------------
+if [ "${CI_PREFLIGHT_SKIP:-}" != "1" ] && [ -f tools/ci_preflight.py ]; then
+    while read -r local_ref local_sha remote_ref remote_sha; do
+        # Gate ONLY updates to main (skip deletes + feature branches).
+        [ "$remote_ref" = "refs/heads/main" ] || continue
+        [ "$local_sha" = "$ZERO" ] && continue          # branch delete
+        if [ "$remote_sha" = "$ZERO" ]; then
+            SINCE=()                                     # new branch: gate all
+        else
+            SINCE=(--since "$remote_sha")               # only what changed
+        fi
+        echo "pre-push: CI preflight before pushing to main"
+        echo "          (bypass with: CI_PREFLIGHT_SKIP=1 git push)"
+        if ! python tools/ci_preflight.py "${SINCE[@]}"; then
+            echo "" >&2
+            echo "pre-push: CI preflight is RED -- push ABORTED." >&2
+            echo "          Fix the failing gate locally (that is exactly what" >&2
+            echo "          CI would fail on), or override with" >&2
+            echo "          CI_PREFLIGHT_SKIP=1 git push" >&2
+            exit 1
+        fi
+    done
+fi
+
+# ---- Duty 2: upload binaries (never blocks the push) ----------------------
+UPLOAD_FILES=()
+for f in src/radia/*.pyd; do
+    [ -f "$f" ] && UPLOAD_FILES+=("$f")
+done
+[ -f "src/ext/fmm3d/lib/fmm3d.lib" ] && UPLOAD_FILES+=("src/ext/fmm3d/lib/fmm3d.lib")
+
+if [ ${#UPLOAD_FILES[@]} -gt 0 ] && [ -f tools/upload_release_asset.py ]; then
+    echo "Uploading ${#UPLOAD_FILES[@]} binary files to GitHub Releases..."
+    python tools/upload_release_asset.py --repo ksugahar/Radia --tag binaries \
+        "${UPLOAD_FILES[@]}" || true
+fi
+
+exit 0

@@ -56,11 +56,16 @@ import sys
 # joins keep the drive letter the script was invoked with.
 _THIS = os.path.abspath(__file__)
 REPO = os.path.dirname(os.path.dirname(_THIS))
-for _unc in ("\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub",
-             "//192.168.11.100/work/00_CAE/Radia/01_GitHub"):
-    if REPO.replace("\\", "/").lower().startswith(_unc.replace("\\", "/").lower()):
-        REPO = "S:" + REPO.replace("\\", "/")[len(_unc):]
-        break
+# LAB: the repo is an S: drive mapped onto a \\192.168.11.100\... UNC share.
+# When invoked from the pre-push hook, git's cwd (and abspath(__file__)) come
+# back in the UNC form, and Python file reads on that form fail.  Remap to the
+# S: drive (what every manual run uses + what open() handles) by anchoring on
+# the repo's known path suffix -- robust even when REPO == the UNC base
+# exactly (the earlier `len(prefix)` slice produced a bare "S:").
+_norm = REPO.replace("\\", "/")
+_anchor = "/Radia/01_GitHub"
+if "192.168.11.100" in _norm and _anchor in _norm:
+    REPO = "S:" + _norm[_norm.index(_anchor):]
 MCP = os.path.join(REPO, "packages", "radia-mcp")
 
 # CI ignore-set for the self-hosted "Run basic tests" step
@@ -332,6 +337,27 @@ FULL_GATES = [
 ]
 
 
+def _changed_since(ref):
+    """Files changed between <ref> and HEAD; None if range can't be resolved."""
+    rc, out = _sh(["git", "diff", "--name-only", f"{ref}..HEAD"])
+    if rc != 0:
+        return None
+    return [ln.strip().replace("\\", "/") for ln in out.splitlines() if ln.strip()]
+
+
+def _gates_for_changes(changed):
+    """Path-aware gate selection (used by the pre-push hook so most pushes
+    stay fast): policy + version ALWAYS; the radia-mcp gates only when
+    packages/radia-mcp changed; the top-level collect gate only when tests/
+    or src/ changed."""
+    sel = {"policy", "version"}
+    if any(f.startswith("packages/radia-mcp/") for f in changed):
+        sel |= {"tools-md", "radia-mcp"}
+    if any(f.startswith("tests/") or f.startswith("src/") for f in changed):
+        sel |= {"toplevel-collect"}
+    return [g for g in ALL_GATES if g[0] in sel]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -341,11 +367,26 @@ def main(argv=None):
                     help="auto-regenerate TOOLS.md if drifted (stage it yourself)")
     ap.add_argument("--only", default="",
                     help="comma-separated gate keys to run (default: all fast gates)")
+    ap.add_argument("--since", default="",
+                    help="select gates by what changed since REF (e.g. "
+                         "origin/main); used by the pre-push hook to stay fast")
     args = ap.parse_args(argv)
 
     gates = list(ALL_GATES)
     if args.full:
         gates += FULL_GATES
+    if args.since:
+        changed = _changed_since(args.since)
+        if changed is None:
+            print(f"{YEL}--since {args.since}: range unresolved -> running ALL "
+                  f"gates (safe default){RST}")
+        elif not changed:
+            print(f"{DIM}--since {args.since}: nothing changed -> no gates{RST}")
+            gates = []
+        else:
+            gates = _gates_for_changes(changed)
+            print(f"{DIM}--since {args.since}: {len(changed)} file(s) changed "
+                  f"-> {len(gates)} gate(s){RST}")
     if args.only:
         keys = {k.strip() for k in args.only.split(",")}
         gates = [g for g in (ALL_GATES + FULL_GATES) if g[0] in keys]

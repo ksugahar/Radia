@@ -105,6 +105,7 @@ if _cubit_path and _cubit_path not in sys.path:
 
 _OPTIONAL_DEPS = {
     "ngsolve": _check_module("ngsolve"),
+    "netgen": _check_module("netgen"),
     # radia_ngsolve is no longer a separate module; RadiaField is in radia
     "magpylib": _check_module("magpylib"),
     "cubit": _check_module("cubit"),
@@ -129,7 +130,10 @@ for _tf in sorted(_tests_dir.glob("test_*.py")):
         # Check for imports of unavailable modules at any top-level indent
         # (including inside try/except, because DLL load can segfault)
         for _mod, _avail in _OPTIONAL_DEPS.items():
+            # `from {_mod}.` catches submodule imports (e.g. `from netgen.occ
+            # import ...`) that the trailing-space form `from {_mod} ` misses.
             if not _avail and (f"from {_mod} " in _stripped or
+                               f"from {_mod}." in _stripped or
                                f"import {_mod}" in _stripped):
                 _skip = True
                 break
