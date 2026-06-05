@@ -762,9 +762,20 @@ double ApplyLineSearchDamping(NonlinearContext& ctx, radTInteraction* IntrctPtr,
 
 			if(dof == 3)
 			{
-				// 3DOF: compute B from current FlatMagn
+				// 3DOF: compute B from current FlatMagn.
+				// FIX (line-search metric): use the FRESH secant chi(H) -- the same chi the
+				// outer convergence test recomputes -- NOT the stale ctx.CurrentChiArray.
+				// With the stale chi the damping minimized a different quantity than the
+				// convergence metric and green-lit Newton steps that convergence then judged
+				// WORSE -> Newton diverged after activation.
 				TVector3d M(ctx.FlatMagn[offset], ctx.FlatMagn[offset+1], ctx.FlatMagn[offset+2]);
-				TVector3d H(M.x / chi, M.y / chi, M.z / chi);
+				double chi_b = chi;
+				if(NonlinMater != nullptr) {
+					double H_mag_ls = std::sqrt(M.x*M.x + M.y*M.y + M.z*M.z) / chi;
+					chi_b = NonlinMater->ComputeChiDualMethod(H_mag_ls, chi + 1.0, rad.m_relax);
+					if(chi_b < 1.0e-6) chi_b = 1.0e-6;
+				}
+				TVector3d H(M.x / chi_b, M.y / chi_b, M.z / chi_b);
 				TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
 				double B_new_norm = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
 
@@ -779,7 +790,14 @@ double ApplyLineSearchDamping(NonlinearContext& ctx, radTInteraction* IntrctPtr,
 				if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
 				{
 					TVector3d M = poly->Magn;
-					TVector3d H(M.x / chi, M.y / chi, M.z / chi);
+					// FIX (line-search metric): fresh secant chi(H), mirroring convergence (see 3DOF note).
+					double chi_b = chi;
+					if(NonlinMater != nullptr) {
+						double H_mag_ls = std::sqrt(M.x*M.x + M.y*M.y + M.z*M.z) / chi;
+						chi_b = NonlinMater->ComputeChiDualMethod(H_mag_ls, chi + 1.0, rad.m_relax);
+						if(chi_b < 1.0e-6) chi_b = 1.0e-6;
+					}
+					TVector3d H(M.x / chi_b, M.y / chi_b, M.z / chi_b);
 					TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
 					double B_new_norm = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
 
@@ -808,9 +826,12 @@ double ApplyLineSearchDamping(NonlinearContext& ctx, radTInteraction* IntrctPtr,
 				return omega;
 			}
 		}
-		else if(residual < best_residual * 0.99)
+		else if(ctx.max_B_rel_change > 1.0e-12 && residual < ctx.max_B_rel_change * 0.99)
 		{
-			// Accept damped step (at least 1% improvement over previous omega)
+			// FIX (acceptance reference): accept a damped step only when it beats the
+			// PREVIOUS ITERATE (ctx.max_B_rel_change), not merely the undamped full Newton
+			// step (best_residual).  The old reference accepted steps that beat the bad full
+			// step yet still WORSENED the residual vs where we were -> monotonic divergence.
 			ctx.accepted_omegas.push_back(omega);
 			return omega;
 		}
