@@ -26,7 +26,8 @@ from mcp.server.fastmcp import FastMCP
 
 from .index_tools import lit_search, lit_by_folder, lit_folder_tree, lit_stats
 from ..common import AsyncRunner, register_status_tool
-from ..common.chroma_retriever import ChromaRetriever, extract_pdf_chunks
+from ..common.chroma_retriever import (
+    ChromaRetriever, extract_pdf_chunks, chunk_garble_fraction)
 
 mcp = FastMCP("mcp-server-literature-index")
 
@@ -250,11 +251,23 @@ def literature_build_vector_index(
     overlap: int = 100,
     default_language: str = "",
     auto_detect_language: bool = True,
+    ocr_fallback: bool = False,
+    ocr_engine: str = "ndlocr",
 ) -> str:
     """Build / extend the ChromaDB vector index from PDFs.
 
     Runs ASYNCHRONOUSLY (via radia_mcp.common.AsyncRunner). Returns
     immediately with a job ID; poll with `literature_index_job_status`.
+
+    QUALITY GATE (always on): every PDF's extracted chunks are scored for
+    readability; books that come out mostly-garble (a corrupt born-digital
+    CID/ToUnicode text layer -- the Zienkiewicz FEM class) are reported in the
+    job result under ``broken_text_layer`` so they can be re-OCR'd, instead of
+    silently storing garbage. Set ``ocr_fallback=True`` to auto-OCR such pages
+    inline (slower: rasterize + OCR each bad page). Default off keeps bulk runs
+    fast and avoids needless OCR on benign symbol-dense pages (indexes, math);
+    the recommended workflow is a fast default run, then a TARGETED re-OCR of
+    whatever lands in ``broken_text_layer``.
 
     Args:
         folder: subfolder of W:/.../00_電磁界解析/ to ingest
@@ -273,6 +286,12 @@ def literature_build_vector_index(
                   (radia_mcp.common.detect_filename_language). Enables
                   ``literature_semantic_search(..., language_filter=)``
                   filtering on the bilingual lab corpus.
+        ocr_fallback: when True, OCR pages whose text layer is garbage or
+                  absent (best-effort; kept only if the OCR is cleaner).
+                  Default False -- broken books are still DETECTED and
+                  reported, just not auto-fixed.
+        ocr_engine: OCR engine when ocr_fallback=True: "ndlocr" (default,
+                  the lab standard, layout-aware, CPU) or "easyocr".
 
     Returns:
         Job status message.
@@ -302,6 +321,7 @@ def literature_build_vector_index(
         rag.initialize()
         total_added = 0
         failed = []
+        broken = []   # PDFs whose extracted text is mostly garble (corrupt layer)
         for i, p in enumerate(pdfs):
             if _cancel_check and _cancel_check():
                 break
@@ -314,8 +334,17 @@ def literature_build_vector_index(
                     overlap=overlap,
                     default_language=lang_default,
                     auto_detect_language=auto_detect_language,
+                    ocr_fallback=ocr_fallback,
+                    ocr_engine=ocr_engine,
                 )
                 if chunks:
+                    # Quality gate (always on): flag corrupt-text-layer books so
+                    # they surface for re-OCR instead of silently storing garbage.
+                    frac = chunk_garble_fraction(chunks)
+                    if len(chunks) >= 8 and frac >= 0.40:
+                        broken.append({"name": p.name,
+                                       "garble_frac": round(frac, 2),
+                                       "chunks": len(chunks)})
                     total_added += rag.add_chunks(chunks)
             except Exception as e:
                 failed.append((p.name, str(e)))
@@ -324,6 +353,9 @@ def literature_build_vector_index(
             "n_pdfs": len(pdfs),
             "n_failed": len(failed),
             "failed_samples": failed[:5],
+            "n_broken": len(broken),
+            "broken_text_layer": broken[:20],
+            "ocr_fallback": ocr_fallback,
         }
 
     started = _index_runner.start(
@@ -361,6 +393,17 @@ def literature_index_job_status() -> str:
             lines.append(f"**Added chunks**: {r.get('added', 0)} "
                          f"from {r.get('n_pdfs', 0)} PDFs "
                          f"({r.get('n_failed', 0)} failed)")
+            nb = r.get("n_broken", 0)
+            if nb:
+                lines.append(
+                    f"**⚠ Corrupt text layer (re-OCR recommended)**: {nb} book(s)"
+                    + ("" if r.get("ocr_fallback") else
+                       " — re-run with `ocr_fallback=True`, or targeted "
+                       "re-OCR via the ndlocr batch"))
+                for b in r.get("broken_text_layer", [])[:10]:
+                    lines.append(f"  - {b.get('name')} "
+                                 f"({int(100*b.get('garble_frac', 0))}% garble, "
+                                 f"{b.get('chunks')} chunks)")
     # Vector store stats
     try:
         stats = _get_retriever().stats()
