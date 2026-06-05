@@ -746,6 +746,37 @@ PATTERNS: list[dict] = [
                     "packages/radia-mcp/tests/conftest.py",
                     ".github/workflows/radia-mcp-matrix.yml"],
     },
+    {
+        "id": "flaky-test-rerun-masked-no-rootcause",
+        "title": "Intermittent test absorbed by --reruns but never "
+                 "root-caused -- a 1-attempt CI red looks identical to a real "
+                 "regression dismissed as 'probably flaky'.",
+        "topics": ["ci", "test-infrastructure", "flaky"],
+        "severity": "medium",
+        "first_seen": "2026-05-20",
+        "last_seen": "2026-06-05",
+        "what": "The self-hosted 'Run basic tests' step is the 2nd-most common "
+                "CI failure (16 of the last 80 runs).  Some are genuine "
+                "regressions; some are known flakes (test_omega_reduced_omega, "
+                "test_B_accuracy_inside_iron) a rerun would have saved.  With "
+                "no registry the two are indistinguishable, so a real "
+                "regression gets waved off as 'flaky', OR a flake burns a "
+                "fix-forward cycle.",
+        "root_cause": "Iterative-solver tolerance near a golden band edge / "
+                      "MMM dipole-in-material sampling sensitivity makes a few "
+                      "assertions non-deterministic.  --reruns 2 masks them "
+                      "but records neither WHICH tests flake nor WHY.",
+        "detection": "tests/known_flaky.md (the registry); the workflow log's "
+                     "-r aR RERUN lines.  When CI reds in 'Run basic tests', "
+                     "check known_flaky.md BEFORE assuming a regression.",
+        "prevention": "Keep tests/known_flaky.md current; every listed test "
+                      "MUST be under --reruns.  Listing is a STOPGAP -- "
+                      "root-cause it (tighten tolerance, pin seed, stabilize "
+                      "mesh) and delete the row.  NEVER list a "
+                      "deterministically-failing test -- that is a bug.",
+        "related": ["tests/known_flaky.md",
+                    ".github/workflows/build-test.yml"],
+    },
 ]
 
 
