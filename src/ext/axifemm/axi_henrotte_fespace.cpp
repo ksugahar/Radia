@@ -15,6 +15,14 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
 {
     type = "axihenrotte";
     needs_transform_vec = false;
+    // Honor complex=True (time-harmonic A_phi): the base 2-arg FESpace ctor does
+    // not auto-set iscomplex for this custom space, so reflect the flag here.
+    // Accept either the boolean DEFINE flag (pybind now passes complex=True as
+    // such) or a legacy "True" string flag.  With iscomplex set, GridFunctions
+    // store COMPLEX DOFs (needed for solve_axi_eddy_harmonic post-processing);
+    // the complex CalcMatrix overloads in the DiffOps then evaluate them.
+    iscomplex = flags.GetDefineFlag("complex") ||
+                (flags.GetStringFlag("complex", "") == string("True"));
     axi_order = int(flags.GetNumFlag("order", 1.0));
     if (axi_order != 1 && axi_order != 2)
         throw Exception("AxiHenrotteFESpace: only order=1 (Q1/P1) and order=2 "
@@ -287,9 +295,25 @@ void ExportAxiHenrotteFESpace(pybind11::module & m) {
               -> shared_ptr<FESpace> {
               Flags flags;
               flags.SetFlag("order", double(order));
-              for (auto item : kwargs)
-                  flags.SetFlag(py::cast<std::string>(item.first),
-                                py::cast<std::string>(py::str(item.second)));
+              for (auto item : kwargs) {
+                  std::string key = py::cast<std::string>(item.first);
+                  py::handle val = item.second;
+                  // Type-correct flag conversion.  The previous code stringified
+                  // EVERY value, so complex=True became the STRING flag
+                  // "complex"="True" -- which GetDefineFlag("complex") (a boolean
+                  // DEFINE flag) does not see, leaving the space REAL.  bool must
+                  // become a define flag, numbers a num flag (note: Python bool is
+                  // a subclass of int, so test bool FIRST).
+                  if (py::isinstance<py::bool_>(val)) {
+                      if (py::cast<bool>(val))
+                          flags.SetFlag(key);                 // boolean define flag
+                  } else if (py::isinstance<py::int_>(val) ||
+                             py::isinstance<py::float_>(val)) {
+                      flags.SetFlag(key, py::cast<double>(val));
+                  } else {
+                      flags.SetFlag(key, py::cast<std::string>(py::str(val)));
+                  }
+              }
               auto fes = make_shared<AxiHenrotteFESpace>(ma, flags);
               fes->Update();
               fes->FinalizeUpdate();
