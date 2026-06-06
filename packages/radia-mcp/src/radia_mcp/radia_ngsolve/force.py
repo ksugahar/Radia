@@ -24,6 +24,27 @@ from ngsolve import (CoefficientFunction, InnerProduct, sqrt, dx, ds, Integrate,
                      IfPos, specialcf, Conj, x, y, z)
 
 MU0 = 4.0e-7 * math.pi
+EPS0 = 8.8541878128e-12
+
+
+def electrostatic_eggshell_force(E, mesh, gradg, air_region="air"):
+    """Weighted Maxwell-stress ("eggshell") ELECTROSTATIC force -- the electric twin
+    of :func:`eggshell_force` (ε0 E in place of B/μ0). ``E`` is the electric field
+    CoefficientFunction (``E = -grad(gfV)``); ``gradg`` = grad(g) of a smooth weight g
+    (=1 on the body side, 0 on the far side of a band that lies in air), a vector CF
+    nonzero only inside the band:
+
+        F_k = - int_air [ eps0 E_k (E.gradg) - (eps0/2) |E|^2 d_k g ] dV
+
+    Returns (Fx, Fy, Fz) in newtons. For a compact body use a spherical band
+    (gradg = band * (r-center)/|r-center| * -1/(r_outer-r_inner)); for a plate/gap use
+    an axis-aligned ramp (e.g. gradg = (0,0,g'(z)) across the gap).
+    """
+    Edg = InnerProduct(E, gradg)
+    E2 = InnerProduct(E, E)
+    region = dx(definedon=mesh.Materials(air_region))
+    return tuple(-Integrate((EPS0 * E[k] * Edg - 0.5 * EPS0 * E2 * gradg[k]) * region, mesh)
+                 for k in range(3))
 
 
 def eggshell_force(B, mesh, center, r_inner, r_outer, air_region="air"):
@@ -51,6 +72,35 @@ def eggshell_force(B, mesh, center, r_inner, r_outer, air_region="air"):
         integ = (1.0 / MU0) * B[k] * Bdg - (1.0 / (2.0 * MU0)) * B2 * gradg[k]
         F.append(-Integrate(integ * region, mesh))
     return tuple(F)
+
+
+def eggshell_torque(B, mesh, center, r_inner, r_outer, pivot=(0.0, 0.0, 0.0),
+                    air_region="air"):
+    """3D weighted Maxwell-stress ("eggshell") TORQUE [N m] about ``pivot`` on
+    the body inside ``r_inner``.  3D analogue of :func:`eggshell_torque_2d`:
+
+        tau = - int_band  r' x S  dV,   r' = r - pivot,
+        S_k = (1/mu0) B_k (B.grad g) - (1/2mu0) |B|^2 d_k g,
+
+    same radial weight band (g=1 at r_inner, 0 at r_outer) in the air around the
+    body. Returns (Tx, Ty, Tz). Use the same band as :func:`eggshell_force`;
+    validated on a magnetised cylinder in a uniform field (tau = m x B0,
+    examples/comsol_class/motor_torque.py)."""
+    cx, cy, cz = center
+    px, py, pz = pivot
+    rho = sqrt((x - cx)**2 + (y - cy)**2 + (z - cz)**2)
+    band = IfPos(rho - r_inner, IfPos(r_outer - rho, 1.0, 0.0), 0.0)
+    gscale = -1.0 / (r_outer - r_inner)
+    gradg = band * CoefficientFunction((x - cx, y - cy, z - cz)) / rho * gscale
+    Bdg = InnerProduct(B, gradg)
+    B2 = InnerProduct(B, B)
+    S = [(1.0 / MU0) * B[k] * Bdg - (1.0 / (2.0 * MU0)) * B2 * gradg[k] for k in range(3)]
+    rp = (x - px, y - py, z - pz)
+    cross = ((rp[1] * S[2] - rp[2] * S[1]),     # r' x S
+             (rp[2] * S[0] - rp[0] * S[2]),
+             (rp[0] * S[1] - rp[1] * S[0]))
+    region = dx(definedon=mesh.Materials(air_region))
+    return tuple(-Integrate(c * region, mesh) for c in cross)
 
 
 def eggshell_force_2d(B, mesh, center, r_inner, r_outer, air_region="air"):
@@ -198,6 +248,23 @@ def ohmic_loss_2d(Ez, mesh, sigma, region=None):
     integrand = 0.5 * sigma * (Ez * Conj(Ez)).real
     dom = dx if region is None else dx(definedon=mesh.Materials(region))
     return Integrate(integrand * dom, mesh)
+
+
+def lorentz_force_2d(Jz, B, mesh, region):
+    """2D PLANAR Lorentz force PER UNIT LENGTH [N/m] on the conductor ``region``
+    carrying out-of-plane current density ``Jz`` [A/m^2] in flux density
+    ``B = (Bx, By)``:
+
+        F = int J x B dA = int Jz (zhat x B) dA   ->   Fx = -int Jz By,  Fy = int Jz Bx.
+
+    Pass the TOTAL field B (the conductor's own self-field exerts ZERO net force by
+    symmetry, so it drops out). The direct current-source twin of the Maxwell-stress
+    :func:`eggshell_force_2d`. Returns ``(Fx, Fy)`` [N/m]. Validated on parallel
+    busbars: |F| = mu0 I1 I2/(2 pi d) (examples/comsol_class/busbar_force.py)."""
+    dom = dx(definedon=mesh.Materials(region))
+    Fx = -Integrate(Jz * B[1] * dom, mesh)
+    Fy = Integrate(Jz * B[0] * dom, mesh)
+    return Fx, Fy
 
 
 def magnetic_energy(B, mesh, region=None):

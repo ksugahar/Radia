@@ -5325,9 +5325,530 @@ G_matrix, fes_H1 = fes_HCurl.CreateGradient()
 """
 
 
+NGSOLVE_MULTIPHYSICS = r"""
+# Multiphysics couplings in NGSolve (COMSOL-class problems)
+
+Reusable building blocks live in ``radia_mcp.radia_ngsolve.multiphysics``;
+worked, validated demos in ``examples/comsol_class/``.
+
+## Induction heating (magneto-thermal, one-way EM -> heat)
+
+The canonical COMSOL induction-heating tutorial, reproduced and validated.
+Pipeline:
+
+    eddy solve (A-Phi harmonic)  ->  joule_loss_density()  ->  solve_heat_steady()
+
+```python
+from radia_mcp.radia_ngsolve.solve import solve_eddy_current_harmonic_APhi
+from radia_mcp.radia_ngsolve.multiphysics import joule_loss_density, solve_heat_steady
+
+# 1) EM: scattered harmonic eddy in a conductor, axial background B0
+A0 = CoefficientFunction((-B0*y/2, B0*x/2, 0))          # curl A0 = B0 z_hat
+gfAPhi = solve_eddy_current_harmonic_APhi(mesh, nu, sigma_cf, omega, add_source, ...)
+gfA, gfPhi = gfAPhi.components
+
+# 2) Joule loss density q = 1/2 sigma |E|^2  (W/m^3)
+q = joule_loss_density(gfA, gfPhi, sigma_cf, omega, A0=A0)   # <-- A0 is essential, see below
+
+# 3) Steady heat -div(k grad T) = q on the conductor, T=0 on its surface
+gT = solve_heat_steady(mesh, q, k_thermal, conductor="cyl", dirichlet="cyl_surf")
+```
+
+### THE gotcha: scattered-field E must add back A0 (cost ~10x error)
+
+In the SCATTERED eddy formulation the source is a background potential A0
+(curl A0 = applied B0) and the solved ``gfA`` is the SCATTERED potential --
+that is why field probes write ``curl(gfA) + B0``. By the same token the TOTAL
+electric field is
+
+    E = -j omega (A0 + A_scattered + grad Phi)
+
+NOT ``-j omega (gfA + grad Phi)``. Omitting A0 overestimates the Joule loss by
+about an order of magnitude. (The TEAM-21 eddy-loss tests use a COIL source, so
+their ``gfA`` is already the TOTAL field and they correctly use A0=None -- do not
+copy that pattern for background-field problems.) ``joule_loss_density`` takes
+``A0=`` precisely so this is not forgotten.
+
+### Validation (examples/comsol_class/induction_heating.py)
+
+Non-magnetic cylinder (R=20mm, sigma=1.6e7, f=500Hz, B0=0.1T axial, R/delta=3.6)
+vs closed forms:
+  * P/L (central section) vs exact cylinder eddy loss (complex I0/I1 Bessel,
+    power-series -- scipy.special.iv is unreliable for complex args): 8.9 %
+  * T_centre vs the 1-D radial heat equation driven by the same q(r): 9.6 %
+Compare the *central* section's P/L (not the finite-cylinder total) against the
+infinite-cylinder analytic -- the caps carry end-effect power.
+
+## Rotating-machine / motor torque (air-gap Maxwell stress)
+
+Electromagnetic torque on a rotor via the weighted Maxwell-stress (eggshell)
+band, ``radia_ngsolve.force.eggshell_torque`` (3D) / ``eggshell_torque_2d``:
+
+```python
+from radia_mcp.radia_ngsolve.force import eggshell_torque
+Tx, Ty, Tz = eggshell_torque(B, mesh, center, r_inner, r_outer, pivot=(0,0,0))
+# band r_inner<|r-center|<r_outer must lie in the AIR GAP enclosing the rotor.
+```
+
+Core physics validated (examples/comsol_class/motor_torque.py): a HARD PM
+rotor (Br along x) in a uniform applied field B0 at angle theta gives the
+torque-angle characteristic tau_z = m B0 sin(theta), m=(Br/mu0)*V, reproduced
+to 1-3 % at theta=15..90 deg.
+
+KEY efficiency: a HARD magnet (mu_r=1) does not respond to the applied field,
+so fields SUPERPOSE -- ONE magnetostatic solve of the PM gives B_PM, then the
+whole angle sweep is B_total = B_PM + B0(theta) with no re-solve. (For a soft
+or saturating rotor this breaks; re-solve per angle.) Slotted stators / windings
+/ cogging extend the same air-gap-torque method; the validated piece is the
+torque operator itself.
+
+## Magnetic shielding (high-mu shell, scattered-field uniform applied field)
+
+Shielding factor S = B_applied/B_cavity of a permeable shell in a uniform field --
+the COMSOL AC/DC "magnetic shielding" benchmark. Driven by the PERMEABILITY JUMP
+(no coil): ``solve_scattered_uniform_field`` solves curl(nu curl A~) =
+curl(nu_pert B0) with nu_pert = nu0(1-1/mu_r) in the shell; total B = curl(A~)+B0.
+
+```python
+from radia_mcp.radia_ngsolve.solve import (solve_scattered_uniform_field,
+                                           shell_shielding_factor)
+# 3 regions: cavity (r<a) / shell (a<r<b, the only permeable mat) / air
+gfA  = solve_scattered_uniform_field(mesh, {"shell": mu_r}, (0, 0, B0))
+B_in = Integrate((curl(gfA)[2] + B0) * dx("cavity"), mesh) / vol_cavity  # VOLUME AVERAGE
+S_fem   = B0 / B_in
+S_exact = shell_shielding_factor(mu_r, a, b, "sphere")                   # closed form
+```
+
+Exact (sphere): S = [(2 mu_r+1)(mu_r+2) - 2(a/b)^3(mu_r-1)^2]/(9 mu_r);
+(cylinder, transverse): S = [(mu_r+1)^2 - (a/b)^2(mu_r-1)^2]/(4 mu_r). Both -> 1 at
+mu_r=1. Validated (examples/comsol_class/magnetic_shielding.py): mu_r=50/100/200,
+a/b=2/3 -> S=8.5/16.3/32.0, FEM matches to **0.9 %**. KEY: read the cavity field as
+a VOLUME AVERAGE, never a point eval -- at high mu_r the interior is a small residual
+of B0 + curl(A~) (near cancellation), so point values are noisy. Same scattered-field
+machinery as the permeable-sphere demag check (N=1/3).
+
+## Halbach cylinder (PM dipole, 2D planar)
+
+Ideal dipole Halbach PM cylinder -- the accelerator/undulator workhorse. Remanence Br
+with the easy axis rotating as 2*phi over the annulus Ri<r<Ro gives a UNIFORM bore
+field B = Br ln(Ro/Ri) (and ZERO field outside, so the box BC is nearly exact).
+
+```python
+from radia_mcp.radia_ngsolve.solve import (solve_planar_magnetostatic,
+    halbach_dipole_magnetization, halbach_bore_field, NU0)
+M_cf = halbach_dipole_magnetization(mesh, Br, region="magnet")   # rotating in-plane M
+gfu  = solve_planar_magnetostatic(mesh, NU0, magnet_cf=M_cf, order=3)   # 2D A_z
+B     = CF((grad(gfu)[1], -grad(gfu)[0]))
+B_ref = halbach_bore_field(Br, Ri, Ro)        # = Br ln(Ro/Ri)
+```
+
+The new ``magnet_cf`` arg of solve_planar_magnetostatic accepts ANY spatially-varying
+in-plane magnetization s = nu0*Br (source += (Mx*dv/dy - My*dv/dx)). cos2phi/sin2phi
+are built as (x^2-y^2)/r^2, 2xy/r^2 -- no atan2 branch cut. Validated
+(examples/comsol_class/halbach_cylinder.py): Br=1.2, Ri/Ro=20/40 mm -> 0.832 T uniform
+to 0.3 % across the bore. A finite-LENGTH 3D Halbach has end effects (B < the 2D ln
+formula); this exact result is the 2D / infinite-length limit.
+
+## Roadmap (same pattern, more couplings)
+  * magneto-mechanical (Maxwell-stress body force -> linear elasticity)
+  * temperature-dependent sigma(T) -> two-way EM<->thermal Picard loop
+  * Joule + convective/radiative surface BC (Robin) instead of fixed T.
+  * slotted PM machine: cogging torque vs angle (re-solve per step).
+"""
+
+
+NGSOLVE_ELECTROSTATICS_3D = r"""
+# 3D electrostatics & capacitance (COMSOL AC/DC "Computing Capacitance")
+
+The 2D/axisymmetric electrostatics is in ``scalar_fem2d`` (FEMM csolv analog). The
+genuine 3D capability is ``radia_ngsolve.electrostatic3d``: conductors as Dirichlet
+boundaries, capacitance from the field ENERGY (the route COMSOL uses for the
+capacitance matrix).
+
+```python
+from radia_mcp.radia_ngsolve.electrostatic3d import (
+    solve_electrostatic_3d, capacitance_from_energy, spherical_capacitor_C, EPS0)
+# conductors = named boundaries; eps_cf = EPS0 (or mesh.MaterialCF for dielectrics)
+gfV = solve_electrostatic_3d(mesh, EPS0, {"inner": V0, "outer": 0.0}, order=2)
+C   = capacitance_from_energy(gfV, EPS0, V0, mesh)      # C = 2 W / V0^2
+```
+
+-div(eps grad V) = rho ;  E = -grad V ;  W = 1/2 integral eps |grad V|^2 ;  C = 2W/V^2.
+
+GOTCHA (baked into solve_electrostatic_3d): ``gf.Set(cf, definedon=region)`` ZEROS the
+whole vector first, so setting conductor potentials in a per-boundary LOOP wipes each
+previous boundary (energy -> 0). Set ALL Dirichlet potentials in ONE call via
+``mesh.BoundaryCF({"inner":V0,"outer":0}, default=0)``.
+
+Validated (examples/comsol_class/capacitance_3d.py): spherical capacitor
+C = 4 pi eps0 a b/(b-a), FEM matches to <0.2 % over a gap-ratio sweep. DIELECTRICS
+(eps_cf = mesh.MaterialCF({mat: eps0*eps_r})): layered spherical capacitor
+C = 4 pi eps0 / [(1/er1)(1/a-1/c) + (1/er2)(1/c-1/b)] matches to 0.1 %
+(capacitance_dielectric.py). ISOLATED
+conductor self-capacitance: put the ground boundary far away (C_sphere -> 4 pi eps0 R
+as the box -> infinity).
+
+Capacitance MATRIX: ``capacitance_matrix(mesh, eps_cf, [names], order)`` energises each
+conductor to 1 V (others grounded) and reads EVERY conductor's charge from the FEM
+REACTION  Q_i = <K V, chi_i>  (chi_i = the FE function 1 on conductor i) -- more
+accurate/robust than surface-integrating eps dV/dn, and it comes out exactly symmetric.
+C[i,j]=Q_i when V_j=1; C_ii>0, C_ij<0, each row sums to the conductor's capacitance to
+ground (0 for a closed system). Validated (examples/comsol_class/capacitance_matrix.py):
+closed spherical capacitor -> C = [[C0,-C0],[-C0,C0]] to 0.03 % with 0 % asymmetry and
+0 % row-sum (charge conservation).
+
+Electrostatic FORCE (MEMS actuator): ``force.electrostatic_eggshell_force(E, mesh,
+gradg)`` -- the electric twin of the magnetic eggshell, F_k = -int_air[eps0 E_k(E.gradg)
+- eps0/2 |E|^2 d_k g]. ``E = -grad(gfV)``; ``gradg`` is grad of a smooth weight band in
+air (axis-aligned ramp across a gap, or spherical for a compact body). Validated
+(examples/comsol_class/parallel_plate_force.py): a parallel-plate capacitor with NEUMANN
+side walls (exact 1-D field) gives |F| = eps0 A V^2/(2 d^2), matched to 0.4 %, attractive.
+"""
+
+
+NGSOLVE_FIELD_QUALITY = r"""
+# Multipole / FIELD-QUALITY analysis of a 2D magnet (accelerator post-processing)
+
+What an accelerator-magnet designer runs after every solve: decompose B on a
+reference circle into NORMAL/SKEW multipoles (b_n, a_n), then read the main
+harmonic and the field errors (allowed + forbidden harmonics, in 1e-4 units).
+Module ``radia_ngsolve.fieldquality``.
+
+Convention (CERN / "European", used in beam dynamics):
+
+    B_y(z) + i B_x(z) = sum_{n>=1} (b_n + i a_n) (z/R_ref)^{n-1},  z = x + i y
+
+so n=1 dipole, n=2 quadrupole, n=3 sextupole; b_n NORMAL, a_n SKEW, each [T]
+(the field that pole produces at R_ref). (The US convention shifts the index by
+one -- their n-1 is this n.)
+
+```python
+from radia_mcp.radia_ngsolve.fieldquality import (
+    multipole_coefficients, line_current_multipoles, superpose_multipoles, field_errors)
+B = CF((grad(gfu)[1], -grad(gfu)[0]))                       # planar A_z flux density
+mp = multipole_coefficients(B, R_ref, n_max=10, mesh=mesh)  # samples |z|=R_ref, DFT
+fe = field_errors(mp)        # fe['main_n']==2 for a quad; fe['rel_C'][n] in 1e-4 units
+```
+
+The extractor is a DFT: sample f_k = By + i Bx around the circle, then
+(b_n + i a_n) is the (n-1)-th bin. ``multipole_coefficients`` takes either an
+NGSolve CF (+ ``mesh``, sampled via ``B(mesh(px,py))``) OR a python callable
+``phi->(Bx,By)`` (so it works with no FEM, e.g. on measured field).
+
+EXACT reference (no FEM, no convention ambiguity): a line current ``I`` at
+``z0 = r0 e^{i phi0}`` gives ``By + i Bx = (mu0 I)/(2 pi)/(z - z0)``, whose
+expansion about the origin (R_ref < r0) is
+``b_n + i a_n = -(mu0 I)/(2 pi) R_ref^{n-1}/z0^n`` -- ``line_current_multipoles``.
+``superpose_multipoles`` sums several wires -> the exact free-space content of any
+current arrangement (the analytic the FEM is held to). A current ON the +x axis is
+purely NORMAL (a_n=0); rotating the magnet rotates normal<->skew.
+
+ENGINEERING GOTCHAS:
+  * Current SOURCE normalization. A wire region driven by ``Jz = I/(pi rw^2)``
+    delivers ``J * (discrete material area)``, and the meshed area != pi*rw^2 on a
+    coarse mesh -> the MAIN harmonic comes out several % low. Fix: normalize on
+    the ACTUAL area, ``J_k = I / Integrate(MaterialCF({wire:1}) * dx)`` so
+    ``int Jz = I`` exactly. (By the exterior theorem the bore field depends only on
+    each wire's TOTAL current, not its shape, so finite wires == line currents for
+    R_ref < r0 -- only the net current must be right.)
+  * R_ref must lie in a SOURCE-FREE annulus (no currents/iron between the centre
+    and R_ref); harmonics are only defined there.
+  * Use n_samples > 2*n_max (guarded) and a high element order (order 4 here) --
+    the harmonics are derivatives of A, so they need the field shape resolved.
+
+ALLOWED harmonics from symmetry: a 2N-pole with the matching 2N-fold sign pattern
+keeps only n = N, 3N, 5N, ...  A normal quadrupole (4 wires +,-,+,- at
+0/90/180/270 deg) -> n = 2, 6, 10; the 12-pole (n=6) sits at exactly (R_ref/r0)^4
+of the main; all "forbidden" n (1,3,4,5,7,...) must vanish. This symmetry table is
+the first sanity check on any magnet design.
+
+Validated (examples/comsol_class/multipole_field_quality.py + tests/test_fieldquality.py,
+tests/test_force_xval.py::test_multipole_quadrupole_fem): the DFT reproduces
+line_current_multipoles to ~1e-15; an air-cored FEM quadrupole gives main b2 to
+**0.02 %**, the allowed 12-pole at 256 units (== (R_ref/r0)^4) vs 256.00 exact, and
+forbidden leakage below **0.3 units** (1e-4) -- numerical noise.
+"""
+
+
+NGSOLVE_PM_AXIAL = r"""
+# Cylinder permanent magnet: on-axis field (axisymmetric) + the axi extraction recipe
+
+The PM-design workhorse: on-axis B_z of a uniformly axially-magnetized cylinder
+(radius R, length L, remanence Br), the start of every pull/holding-force and gap
+estimate. Closed form (surface-charge model, recoil mu_r=1):
+
+    B_z(z) = (Br/2)[ (z+L/2)/sqrt(R^2+(z+L/2)^2) - (z-L/2)/sqrt(R^2+(z-L/2)^2) ]
+
+``solve.cylinder_magnet_axial_field(Br,R,L,z)`` is the closed form; centre value
+Br L/(2 sqrt(R^2+(L/2)^2)), far field -> the dipole Br R^2 L/(2 z^3).
+
+```python
+from radia_mcp.radia_ngsolve.solve import solve_axi_magnetostatic, cylinder_magnet_axial_field, NU0, MU0
+# axisymmetric (r,z): magnet rectangle in air; rigid axial M = Br/mu0 via theta=90 deg
+gfu = solve_axi_magnetostatic(mesh, CoefficientFunction(NU0),
+                              magnets={"magnet": (Br/MU0, 90.0)}, order=2)
+```
+
+AXI EXTRACTION RECIPE (hard-won; reuse for ANY axisymmetric post-processing):
+  * The H1Henrotte axi space gives B_z = dA/dr + A/r, RELIABLE INSIDE AN INTEGRAL
+    but its GridFunction GRADIENT is NOT point-evaluable (it falls back to a base
+    diffop -> wrong/noisy point values; you'll see "called base class apply ...
+    AxiHenrotteDiffOpGradient"). So PROJECT the derived field onto a standard space
+    first -- ``bzgf = GridFunction(L2(mesh,order=2)); bzgf.Set(grad(gfu)[0]+gfu/x)``
+    (the .Set uses the working integral path) -- then point-sample ``bzgf``.
+  * On-axis fields: sample JUST OFF axis (r>0), never exactly r=0 (there
+    dA/dr and A/r each -> B_z0/2; an exact-axis eval double-counts/zeros). Average a
+    few near-axis radii (e.g. R/25..R/16) to wash out the L2 inter-element jump that
+    can spike one unlucky sample ~10 %. (Equivalent flux view: 2 A_phi(rho)/rho =
+    <B_z>_disk(rho) -> B_z(0) as rho->0.)
+  * Mesh: refine the r=0 AXIS edge (``face.edges.Min(X).maxh = ...``) so the first
+    element row is finer than the sampling radius, and keep all sample points inside
+    a uniformly-fine NEAR region (away from the coarse-far interface) -- the EXTERNAL
+    on-axis field is the sensitive part (a too-coarse near gives a uniform ~10 % low).
+
+DEAD ENDS (tried, FAILED -- don't repeat; "learn from failures too"):
+  * Point-evaluating ``grad(gfu)`` directly -> wrong/noisy (the diffop fallback).
+  * Richardson-extrapolating the disk average ``(4*davg(rho)-davg(2*rho))/3`` ->
+    AMPLIFIES the L2 sampling noise, made every point 8-15 % worse.
+  * H1 (continuous) global projection instead of L2 -> SPREADS the pole-corner
+    singularity error over a wide z-band (z/L=0.75..1.5 got worse). L2 keeps it local.
+  The winner is the plain L2 projection + near-axis radial MEAN above.
+
+Validated (examples/comsol_class/cylinder_magnet.py; tests/test_force_xval.py::
+test_cylinder_magnet_axial_field): centre field to **0.01 %**, on-axis profile to a
+few % out to z=3L. THE ONE caveat: right at the pole exit (z ~ L) a sharp-cornered
+magnet has a charge SINGULARITY at the (R,L/2) corner and the field bulges off-axis,
+so the on-axis value there is ~8-10 % sensitive (refine the pole corner, or read the
+centre/far field which are robust). Same magnets={mat:(Hc,theta)} source as the
+validated magnetized-sphere (B_in = 2 mu0 mu_r Hc/(mu_r+2)); here Hc = Br/mu0, mu_r=1.
+"""
+
+
+NGSOLVE_SOLENOID = r"""
+# Finite air-core SOLENOID: on-axis field + self-inductance (axisymmetric)
+
+Air-cored coil design. A solenoid (radius a, length L, n turns/m, current I) is an
+azimuthal current sheet K = nI -> model the winding as a thin annulus carrying
+J_phi = nI/t, solved with ``solve_axi_magnetostatic(mesh, NU0, Jr=J_phi_cf)``.
+
+```python
+from radia_mcp.radia_ngsolve.solve import (solve_axi_magnetostatic,
+    solenoid_axial_field, solenoid_inductance_long, NU0)
+from radia_mcp.radia_ngsolve.force import inductance_axi
+Jr  = mesh.MaterialCF({"coil": n*I/t}, default=0.0)
+gfu = solve_axi_magnetostatic(mesh, CF(NU0), Jr=Jr, order=2)
+B   = CF((grad(gfu)[0] + gfu/x, -grad(gfu)[1]))          # (B_z, B_r)
+L_ind = inductance_axi(B, mesh, NU0, I)                  # 2 W / I^2  (per-turn I !)
+```
+
+Two validated outputs (examples/comsol_class/solenoid_coil.py;
+tests/test_force_xval.py::test_solenoid_field_and_inductance):
+  * ON-AXIS B_z(z) = (mu0 nI/2)[(L/2-z)/sqrt((L/2-z)^2+a^2)+(L/2+z)/sqrt((L/2+z)^2+a^2)]
+    (``solenoid_axial_field``). Smooth on axis (no pole corner like the bar magnet
+    #14), so the L2-project + near-axis radial-mean extraction is clean: centre
+    **0.7 %**, whole profile **<1.7 %**. Centre = mu0 nI L/sqrt(L^2+D^2); long limit
+    mu0 nI; coil end (z=L/2) ~ half centre.
+  * SELF-INDUCTANCE by the field ENERGY (``inductance_axi``, 2W/I^2 -- robust, NO
+    axis sampling). Pass the PER-TURN current I (not nI): the source already carries
+    the n turns, so 2W/I^2 ~ N^2. Ratio L_ind/L_long (L_long = mu0 n^2 pi a^2 L =
+    ``solenoid_inductance_long``) is the Nagaoka coefficient k_N(2a/L) < 1, matched
+    to Wheeler 1/(1+0.9 a/L) to **0.5 %**.
+
+KEYS: (1) capture the EXTERNAL flux energy -- a too-small box truncates W and reads L
+~3 % low (use a box several coil-lengths out). (2) a thin winding (t/a small) sits on
+the thin-sheet Nagaoka value; a thick multilayer winding is a few % below it (real
+effect, not error). (3) per-turn current in inductance_axi, as above.
+"""
+
+
+NGSOLVE_BUSBAR_LORENTZ = r"""
+# Parallel busbar / conductor Lorentz force (short-circuit / fault force)
+
+The force between two long parallel conductors d apart carrying I1, I2:
+``F/L = mu0 I1 I2/(2 pi d)`` (attractive if parallel, repulsive if anti-parallel) --
+the force that mechanically wrecks busbars during a short circuit.
+
+```python
+from radia_mcp.radia_ngsolve.force import lorentz_force_2d
+B = CF((grad(gfu)[1], -grad(gfu)[0]))               # planar A_z flux density
+Fx, Fy = lorentz_force_2d(Jz, B, mesh, "w2")        # N/m on conductor w2
+```
+
+``lorentz_force_2d(Jz, B, mesh, region)`` = the J x B volume integral
+``Fx=-int Jz By, Fy=int Jz Bx`` over the conductor -- the direct current-source twin
+of the Maxwell-stress ``eggshell_force_2d``. Use the TOTAL field B: a conductor's own
+self-field exerts ZERO net force (symmetry), so it drops out automatically.
+
+KEY: area-normalize the current source ``Jz = I/Integrate(MaterialCF({wire:1})*dx)``
+so int Jz = I exactly on the discrete wire (same gotcha as the multipole quad). Use a
+fine-enough wire and d >> rw so B1 is ~uniform across wire 2. Validated
+(examples/comsol_class/busbar_force.py; tests/test_force_xval.py::test_busbar_lorentz_force):
+both attractive (parallel) and repulsive (anti-parallel) match mu0 I1 I2/(2 pi d) to
+~1 %, correct signs, transverse force ~0.
+"""
+
+
+NGSOLVE_HELMHOLTZ = r"""
+# Helmholtz coil pair: uniform-field generation + uniformity (axisymmetric)
+
+Two coaxial N-turn loops (radius a) at z = +/- a/2 in the SAME sense -> a maximally
+UNIFORM field at the centre (d^2B/dz^2 = 0, the Helmholtz condition). The design tool
+for uniform fields (NMR shim, sensor/magnetometer calibration, beam optics).
+
+``coil_pair_axial_field(N, I, a, separation, z)`` is the exact on-axis field
+``B_z = (mu0 N I a^2/2)[((z-s/2)^2+a^2)^-3/2 + ((z+s/2)^2+a^2)^-3/2]``; Helmholtz =
+``separation == a``, centre ``B0 = (4/5)^(3/2) mu0 N I/a = 0.7155 mu0 NI/a``. (Pass
+``-I`` to one loop for ANTI-Helmholtz: a linear gradient / magnetic bottle / axial
+quadrupole.) Solve with ``solve_axi_magnetostatic(Jr=...)`` (two loop regions), extract
+on-axis B_z with the L2-project + near-axis radial-mean recipe.
+
+KEY (uniformity): the figure of merit is the field FLATNESS over the central working
+volume -- ``max|B(z)/B0 - 1|`` over ``|z| <= a/4`` is ~0.42 % for an ideal Helmholtz pair.
+To measure it from FEM, the centre value must be clean: average the near-axis radii AND a
+small +/-dz pair, because the EXACT symmetry plane (z=0) is a sampling-artifact hot spot
+(a lone z=0 sample can read ~1.5 % high). Validated
+(examples/comsol_class/helmholtz_coil.py; tests/test_force_xval.py::test_helmholtz_uniformity):
+on-axis B_z <0.5 %, centre 0.38 %, FEM uniformity 0.84 % (= the 0.42 % ideal + sub-%
+numerical scatter) -- the field is flat to <1 % across the bore.
+"""
+
+
+NGSOLVE_C_MAGNET = r"""
+# Iron-yoke window-frame DIPOLE: air-gap field (magnetic circuit / reluctance)
+
+The accelerator-dipole / actuator / relay workhorse: an iron yoke (mu_r) closes the
+coil's flux and forces it across a small air gap. Reluctance model (Ampere loop, B
+continuous): ``B_gap = mu0 N I/(gap + iron_path/mu_r)`` -> ``magnetic_circuit_gap_field``;
+``mu_r -> inf`` gives ``mu0 NI/gap``.
+
+```python
+from radia_mcp.radia_ngsolve.solve import solve_planar_magnetostatic, magnetic_circuit_gap_field
+nu = mesh.MaterialCF({"iron": NU0/mu_r}, default=NU0)      # high-mu yoke
+gfu = solve_planar_magnetostatic(mesh, nu, Jz=Jz, order=3, dirichlet="outer")
+B = CF((grad(gfu)[1], -grad(gfu)[0]))
+Bx_gap = Integrate(MaterialCF({"gap":1})*B[0]*dx)/gap_area  # average over the gap
+```
+
+BUILD: 2D planar A_z, iron = ``big - window - gap`` (OCC boolean), a coil threading one
+leg as +NI inside the window and -NI outside the frame (area-normalize ``Jz = I/Integrate
+(MaterialCF({coil:1})*dx)`` so int Jz = NI exactly). Read the gap field as the gap-AVERAGE
+of the across-gap B component (not a point). Validated
+(examples/comsol_class/c_magnet_gap.py; tests/test_force_xval.py::test_c_magnet_gap_field):
+g=6 mm, mu_r=2000 -> B_gap matches the reluctance model to **0.5 %**, sitting just below
+the mu_r->inf ideal (the deficit = gap fringing/leakage -- the lumped model's blind spot,
+and exactly what a COMSOL cross-check resolves). Wider gaps -> more fringing -> bigger
+deficit; that trend IS the engineering content (effective gap > geometric gap).
+"""
+
+
+NGSOLVE_JOULE_ELECTROTHERMAL = r"""
+# Electro-thermal (Joule heating) multiphysics -- chaining the two solvers
+
+The canonical COMSOL "Joule Heating" coupling: current dissipates ohmic heat, which sets
+the temperature. radia-ngsolve does it by CHAINING the existing solvers (not hand-imposing
+the heat):
+
+    solve_current_flow  ->  joule_heat_source(q = sigma|grad V|^2)  ->  solve_heat_steady
+
+```python
+from radia_mcp.radia_ngsolve.scalar_fem2d import solve_current_flow
+from radia_mcp.radia_ngsolve.multiphysics import (solve_heat_steady, joule_heat_source,
+                                                  joule_bar_temperature_rise)
+V  = solve_current_flow(mesh, sigma, {"left": V0, "right": 0.0})   # -div(sigma grad V)=0
+q  = joule_heat_source(V, sigma)                                   # sigma |grad V|^2 [W/m^3]
+dT = solve_heat_steady(mesh, q, k, conductor="bar", dirichlet="left|right")  # T=0 -> RISE
+```
+
+``joule_heat_source`` is the DC twin of ``joule_loss_density`` (AC induction heating, #1).
+``solve_heat_steady`` returns the temperature RISE (T=0 on the cooled ``dirichlet``).
+
+Validated (examples/comsol_class/joule_heating.py; tests/test_force_xval.py::
+test_joule_heating_electrothermal): a uniform bar (voltage V over length L, both ends cold,
+sides insulated) -> uniform q = sigma(V/L)^2 and the EXACT parabolic rise
+``dT(x) = (q/2k) x (L-x)``, peak ``sigma V^2/(8k)`` (length-INDEPENDENT). FEM matches to
+**0.00 %** -- order-2 H1 represents the quadratic profile and uniform source exactly. The
+clean two-physics chain; for AC/eddy use ``joule_loss_density`` instead of the DC source,
+and for temperature-dependent sigma(T)/k(T) wrap the chain in a Picard loop (two-way).
+"""
+
+
+NGSOLVE_ELASTICITY = r"""
+# Linear ELASTICITY + thermo/electro-mechanical coupling (structural multiphysics)
+
+The structural half of the couplings (thermal stress, magneto/electro-mechanical force ->
+deflection). ``radia_ngsolve.elasticity``: 2D small-strain isotropic, plane stress/strain,
+with body force, boundary tractions, and an optional thermal pre-strain.
+
+```python
+from radia_mcp.radia_ngsolve.elasticity import solve_linear_elasticity, stress_2d
+u = solve_linear_elasticity(mesh, E, nu, dirichletx="left", dirichlety="bottom",
+                            traction={"right": (s0, 0.0)}, plane="stress")   # uniaxial
+sig = stress_2d(u, E, nu, "stress")          # sig[0]=sigma_xx, sig[3]=sigma_yy
+```
+
+sigma = 2 mu eps(u) + lam tr(eps) I - 2(mu+lam) alpha dT I; mu=E/2(1+nu), plane-stress
+lam=E nu/(1-nu^2), plane-strain lam=E nu/((1+nu)(1-2nu)). Per-component clamps:
+``dirichletx``/``dirichlety`` fix u_x/u_y=0 (use dirichletx="left", dirichlety="bottom"
+for the statically-determinate uniaxial setup; clamp u_y on a full edge only when the
+thermal expansion there is genuinely zero). ``thermal=(alpha, dT)`` adds the thermal load.
+
+Validated EXACT (order-2 captures the linear/quadratic fields):
+  * uniaxial tension: u_x(L)=s0 L/E, lateral u_y=-nu s0/E y, sigma_xx=s0 (0.00 %).
+  * thermal stress, bar clamped in x both ends, uniform dT: sigma_xx=-E alpha dT (0.00 %).
+  * ELECTRO-THERMO-MECHANICAL chain (examples/comsol_class/electro_thermo_mech.py;
+    tests/test_force_xval.py::test_electro_thermo_mechanical_chain): solve_current_flow ->
+    joule_heat_source -> solve_heat_steady -> solve_linear_elasticity. A Joule-heated bar
+    bolted at both ends -> peak rise sigma V^2/(8k), then axial stress
+    ``constrained_bar_thermal_stress = -E alpha <dT>`` (<dT>=2/3 dT_max for the parabola),
+    both to 0.00 %. The same boundaries are electrode = heat sink = clamp.
+
+MAGNETO-MECHANICAL (examples/comsol_class/magneto_mechanical.py;
+tests/test_force_xval.py::test_magneto_mechanical_beam): a current-carrying cantilever in
+a transverse field B0 -> Lorentz body force ``f_y = -J_x B0`` -> deflection. Tip matches
+Euler-Bernoulli ``cantilever_tip_deflection = w L^4/(8EI)`` (w = I B0, I = h^3/12) to
+**0.02 %** for a slender beam (L/h=25). The magnetic-actuator / loudspeaker / galvanometer
+principle. For a distributed Maxwell-stress load use the ``force.eggshell_*`` body force;
+for MEMS, the electrostatic force. Two-way (large deflection / moving mesh) needs a
+Picard/ALE loop on top.
+"""
+
+
 def get_ngsolve_documentation(topic: str = "all") -> str:
     """Return NGSolve usage documentation by topic."""
     topics = {
+        "multiphysics": NGSOLVE_MULTIPHYSICS,
+        "induction_heating": NGSOLVE_MULTIPHYSICS,
+        "electrostatics": NGSOLVE_ELECTROSTATICS_3D,
+        "capacitance": NGSOLVE_ELECTROSTATICS_3D,
+        "field_quality": NGSOLVE_FIELD_QUALITY,
+        "multipole": NGSOLVE_FIELD_QUALITY,
+        "harmonics": NGSOLVE_FIELD_QUALITY,
+        "field_errors": NGSOLVE_FIELD_QUALITY,
+        "permanent_magnet": NGSOLVE_PM_AXIAL,
+        "cylinder_magnet": NGSOLVE_PM_AXIAL,
+        "axi_extraction": NGSOLVE_PM_AXIAL,
+        "solenoid": NGSOLVE_SOLENOID,
+        "coil": NGSOLVE_SOLENOID,
+        "inductance": NGSOLVE_SOLENOID,
+        "busbar": NGSOLVE_BUSBAR_LORENTZ,
+        "lorentz_force": NGSOLVE_BUSBAR_LORENTZ,
+        "helmholtz": NGSOLVE_HELMHOLTZ,
+        "uniform_field": NGSOLVE_HELMHOLTZ,
+        "coil_pair": NGSOLVE_HELMHOLTZ,
+        "c_magnet": NGSOLVE_C_MAGNET,
+        "magnetic_circuit": NGSOLVE_C_MAGNET,
+        "reluctance": NGSOLVE_C_MAGNET,
+        "dipole_magnet": NGSOLVE_C_MAGNET,
+        "joule_heating": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "electrothermal": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "electro_thermal": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "elasticity": NGSOLVE_ELASTICITY,
+        "thermal_stress": NGSOLVE_ELASTICITY,
+        "thermo_mechanical": NGSOLVE_ELASTICITY,
+        "structural": NGSOLVE_ELASTICITY,
+        "magneto_mechanical": NGSOLVE_ELASTICITY,
+        "beam_deflection": NGSOLVE_ELASTICITY,
+        "actuator": NGSOLVE_ELASTICITY,
         "overview": NGSOLVE_OVERVIEW,
         "spaces": NGSOLVE_FE_SPACES,
         "maxwell": NGSOLVE_MAXWELL,

@@ -10,12 +10,68 @@ inductance 0.01 %, ...).
 import cmath
 import math
 
-from ngsolve import (HCurl, H1, NumberSpace, FESpace, BilinearForm, LinearForm,
-                     GridFunction, CoefficientFunction, InnerProduct, curl, grad,
-                     dx, Integrate, Conj, Variation, Preconditioner, x, y, sqrt)
+from ngsolve import (HCurl, H1, Periodic, NumberSpace, FESpace, BilinearForm,
+                     LinearForm, GridFunction, CoefficientFunction, InnerProduct,
+                     curl, grad, dx, Integrate, Conj, Variation, Preconditioner,
+                     x, y, sqrt)
 
 MU0 = 4.0e-7 * math.pi
 NU0 = 1.0 / MU0
+
+
+def _direct_inverse(matrix, freedofs, inverse, where=""):
+    """Direct sparse factorization with an actionable message on the 3D curl-curl
+    integer-overflow ceiling.
+
+    NGSolve's sparsecholesky/umfpack factorisation of a 3D HCurl (curl-curl) system
+    overflows around ~84k order-2 elements, surfacing as a cryptic
+    "bad array new length". That is INTEGER OVERFLOW in the factorisation fill-in,
+    NOT out-of-RAM -- it triggers with tens of GB still free. Re-raise with the fix
+    rather than letting the opaque message escape. (Bug -> permanent guard, runtime
+    layer: see the note in rules.py for why this is not a static lint.)
+    """
+    try:
+        return matrix.Inverse(freedofs, inverse=inverse)
+    except Exception as e:
+        msg = str(e).lower()
+        if "array new length" in msg:
+            raise RuntimeError(
+                "Direct solver '{}' overflowed the factorization index space{} -- "
+                "this is the ~84k order-2 3D HCurl (curl-curl) ceiling: integer "
+                "overflow in the sparse fill-in, NOT out-of-RAM. Switch to an "
+                "iterative solver -- CG with a BDDC/AMG preconditioner "
+                "(Preconditioner(a, 'bddc') registered BEFORE a.Assemble()) -- or "
+                "coarsen the mesh / lower the element order.".format(
+                    inverse, (" in " + where) if where else "")
+            ) from e
+        raise
+
+
+def periodic_h1(mesh, order=2, dirichlet="", antiperiodic=False):
+    """H1 space whose DOFs on a netgen-identified PERIODIC boundary pair are tied
+    together -- the FEMM "periodic / anti-periodic" BC for motor / machine SECTOR
+    models (solve one pole or slot pitch instead of the whole machine).
+
+    The MESH must carry the periodic identification: in 2D netgen
+    ``SplineGeometry`` append the SLAVE edge with ``copy=<master_segment>`` (and
+    define the boundary loop CCW so the mesher does not stall); in OCC use
+    ``edge.Identify(other, name, IdentificationType.PERIODIC, trafo)``. This helper
+    only wraps the resulting ``H1`` with :class:`ngsolve.Periodic`.
+
+    antiperiodic=True flips the sign across the seam (A_slave = -A_master) for a
+    HALF-period sector (the usual motor case). It is implemented as a phase = -1
+    identification, which requires a COMPLEX space, so the returned space is
+    complex -- assemble/solve as usual and take ``gfu.real`` for the physical
+    field.
+
+    Drop-in for the ``H1(mesh, order, dirichlet=...)`` line in the planar solvers
+    (e.g. :func:`solve_planar_magnetostatic`): the identification ties A_z across
+    the sector cut, reproducing the cyclic machine from one sector. Validated to
+    machine precision against a closed-form periodic strip
+    (tests/test_planar_periodic.py: periodic 2e-7, anti-periodic 2e-8 rel L2).
+    """
+    base = H1(mesh, order=order, dirichlet=dirichlet, complex=antiperiodic)
+    return Periodic(base, phase=[-1]) if antiperiodic else Periodic(base)
 
 
 def reluctivity(mesh, mu_r_by_material):
@@ -176,7 +232,7 @@ def stranded_source(mesh, currents_by_region):
 
 
 def solve_planar_magnetostatic(mesh, nu, Jz=None, magnets=None, order=2,
-                               dirichlet="outer"):
+                               dirichlet="outer", magnet_cf=None):
     """2D PLANAR (Cartesian) A_z magnetostatics -- the FEMM ``prob1big`` analog
     on standard NGSolve H1 (no axihenrotte needed; planar has no 1/r singularity).
 
@@ -208,11 +264,119 @@ def solve_planar_magnetostatic(mesh, nu, Jz=None, magnets=None, order=2,
     if magnets is not None:
         s = planar_magnet_source(mesh, magnets)
         f += (s[0] * grad(v)[1] - s[1] * grad(v)[0]) * dx
+    if magnet_cf is not None:
+        # spatially-varying in-plane magnetization s = nu0*Br (e.g. a Halbach array)
+        f += (magnet_cf[0] * grad(v)[1] - magnet_cf[1] * grad(v)[0]) * dx
     a.Assemble()
     f.Assemble()
     gfu = GridFunction(fes)
     gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
     return gfu
+
+
+def halbach_dipole_magnetization(mesh, Br, region="magnet"):
+    """In-plane magnetization CF for an ideal k=1 (dipole) HALBACH cylinder over
+    ``region``: the easy axis rotates as 2*phi, M = (Br/mu0)(cos 2phi, sin 2phi),
+    producing a UNIFORM transverse bore field B = Br ln(Ro/Ri). Hand it to the
+    ``magnet_cf`` argument of :func:`solve_planar_magnetostatic`; zero outside
+    ``region``. (cos 2phi = (x^2-y^2)/r^2, sin 2phi = 2xy/r^2 -- no atan2 / branch cut.)
+    """
+    ind = mesh.MaterialCF({region: 1.0}, default=0.0)
+    r2 = x * x + y * y + 1e-18
+    return ind * (Br / MU0) * CoefficientFunction(((x * x - y * y) / r2, 2.0 * x * y / r2))
+
+
+def halbach_bore_field(Br, Ri, Ro):
+    """Exact uniform bore field of an ideal dipole Halbach cylinder: B = Br ln(Ro/Ri)."""
+    return Br * math.log(Ro / Ri)
+
+
+def cylinder_magnet_axial_field(Br, R, L, z):
+    """On-axis B_z of a uniformly axially-magnetized CYLINDER magnet (radius R,
+    length L, remanence Br, recoil mu_r = 1), with ``z`` measured from the magnet
+    CENTRE. Surface-charge (Coulombian) model:
+
+        B_z(z) = (Br/2) [ (z+L/2)/sqrt(R^2+(z+L/2)^2)
+                          - (z-L/2)/sqrt(R^2+(z-L/2)^2) ].
+
+    Centre field B_z(0) = Br L / (2 sqrt(R^2 + (L/2)^2)); far field -> the dipole
+    Br R^2 L /(2 z^3). Exact for rigid magnetization (mu_r=1); the bread-and-butter
+    closed form for PM pull/holding-force and gap-field estimates. ``z`` may be a
+    scalar or any iterable (returns a list)."""
+    def _bz(zz):
+        zp, zm = zz + 0.5 * L, zz - 0.5 * L
+        return 0.5 * Br * (zp / math.sqrt(R * R + zp * zp)
+                           - zm / math.sqrt(R * R + zm * zm))
+    try:
+        return [_bz(float(zz)) for zz in z]
+    except TypeError:
+        return _bz(float(z))
+
+
+def solenoid_axial_field(n_turns_per_m, current, radius, length, z):
+    """On-axis B_z of a finite air-core SOLENOID (current sheet K = n*I), radius a,
+    length L, with ``z`` from the CENTRE. Exact:
+
+        B_z(z) = (mu0 n I / 2) [ (L/2 - z)/sqrt((L/2-z)^2+a^2)
+                                + (L/2 + z)/sqrt((L/2+z)^2+a^2) ].
+
+    Centre B_z(0) = mu0 n I (L/2)/sqrt((L/2)^2+a^2) = mu0 n I L/sqrt(L^2+D^2) (D=2a);
+    long-coil limit (L>>a) -> mu0 n I; the coil end (z=L/2) -> half the centre value.
+    ``z`` may be a scalar or any iterable (returns a list). Smooth on axis (no pole
+    corner), so the axi L2-projection extraction recovers it cleanly."""
+    a, h = radius, 0.5 * length
+
+    def _bz(zz):
+        t1 = (h - zz) / math.sqrt((h - zz) ** 2 + a * a)
+        t2 = (h + zz) / math.sqrt((h + zz) ** 2 + a * a)
+        return 0.5 * MU0 * n_turns_per_m * current * (t1 + t2)
+    try:
+        return [_bz(float(zz)) for zz in z]
+    except TypeError:
+        return _bz(float(z))
+
+
+def solenoid_inductance_long(n_turns_per_m, radius, length):
+    """Long-solenoid inductance L = mu0 n^2 (pi a^2) L (the Nagaoka coefficient -> 1
+    as 2a/L -> 0). The exact finite value is k_Nagaoka(2a/L) < 1 times this; use this
+    as the L>>a reference and read the true finite value from the FEM energy 2W/I^2."""
+    return MU0 * n_turns_per_m ** 2 * math.pi * radius ** 2 * length
+
+
+def magnetic_circuit_gap_field(N, current, gap, iron_path, mu_r):
+    """Reluctance-model gap flux density of an iron magnetic circuit (C/H-frame
+    dipole, pot core, relay): Ampere's law around the loop with B continuous gives
+
+        B_gap = mu0 N I / (gap + iron_path / mu_r).
+
+    ``gap`` = total air-gap length [m], ``iron_path`` = mean iron path length [m],
+    ``N*current`` = amp-turns. For mu_r -> inf the iron carries no MMF and
+    B_gap -> mu0 NI / gap. The FEM value sits a few % BELOW this (fringing/leakage
+    widen the effective gap) -- that gap is the physical content the reluctance model
+    misses, and what a COMSOL cross-check pins down."""
+    return MU0 * N * current / (gap + iron_path / mu_r)
+
+
+def coil_pair_axial_field(N, current, radius, separation, z):
+    """On-axis B_z of a coaxial PAIR of N-turn circular loops (radius a) on the
+    z-axis at z = +/- separation/2, each carrying ``current`` in the SAME sense:
+
+        B_z(z) = (mu0 N I a^2/2)[((z-s/2)^2+a^2)^-3/2 + ((z+s/2)^2+a^2)^-3/2].
+
+    HELMHOLTZ pair = separation == radius (s = a): d^2B/dz^2 = 0 at the centre, so
+    the field is maximally uniform, with centre value B0 = (4/5)^(3/2) mu0 N I/a =
+    0.7155 mu0 N I/a. (Anti-Helmholtz = opposite senses -> a linear gradient, for a
+    quadrupole/magnetic-bottle; pass -current to one loop.) ``z`` from the mid-plane;
+    scalar or iterable."""
+    a, s = radius, separation
+    def _bz(zz):
+        zm, zp = zz - 0.5 * s, zz + 0.5 * s
+        return 0.5 * MU0 * N * current * a * a * (
+            (zm * zm + a * a) ** -1.5 + (zp * zp + a * a) ** -1.5)
+    try:
+        return [_bz(float(zz)) for zz in z]
+    except TypeError:
+        return _bz(float(z))
 
 
 def solve_planar_magnetostatic_nonlinear(mesh, nu_of_B, Jz=None, magnets=None,
@@ -842,8 +1006,62 @@ def solve_magnetostatic_Aform(mesh, nu, source=None, curl_source=None, order=2,
     a.Assemble()
     f.Assemble()
     gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    gfu.vec.data = _direct_inverse(a.mat, fes.FreeDofs(), "sparsecholesky",
+                                   "solve_magnetostatic_Aform") * f.vec
     return gfu
+
+
+def solve_scattered_uniform_field(mesh, mu_r_by_material, B0_vec, order=2,
+                                  dirichlet="outer", reg=1e-8):
+    """Scattered-field A-form magnetostatics for permeable bodies in a UNIFORM
+    applied field ``B0`` (no coil source). The source is the permeability jump::
+
+        curl(nu curl A~) = -curl(nu B0) = curl(nu_pert B0),
+        nu_pert = nu0 (1 - 1/mu_r)   inside each permeable body, 0 elsewhere
+
+    and the TOTAL field is ``B = curl(A~) + B0``. This is the validated machinery
+    behind the permeable-sphere / shell cross-checks (demagnetisation N=1/3 sphere
+    to <6 %, spherical-shell shielding factor to ~1 %).
+
+    ``mu_r_by_material`` maps material name -> relative permeability (default 1 =
+    vacuum for any other region). ``B0_vec`` is a 3-tuple or CoefficientFunction.
+    Returns the SCATTERED GridFunction ``A~`` (read total B as ``curl(A~)+B0``).
+    """
+    B0cf = B0_vec if isinstance(B0_vec, CoefficientFunction) else CoefficientFunction(tuple(B0_vec))
+    nu_cf = mesh.MaterialCF({m: NU0 / mr for m, mr in mu_r_by_material.items()}, default=NU0)
+    nu_pert = mesh.MaterialCF({m: NU0 * (1.0 - 1.0 / mr) for m, mr in mu_r_by_material.items()},
+                              default=0.0)
+    fes = HCurl(mesh, order=order, dirichlet=dirichlet)
+    u, v = fes.TnT()
+    a = BilinearForm(fes)
+    a += nu_cf * InnerProduct(curl(u), curl(v)) * dx + reg * NU0 * InnerProduct(u, v) * dx
+    f = LinearForm(fes)
+    f += InnerProduct(nu_pert * B0cf, curl(v)) * dx
+    a.Assemble(); f.Assemble()
+    gfA = GridFunction(fes)
+    gfA.vec.data = _direct_inverse(a.mat, fes.FreeDofs(), "sparsecholesky",
+                                   "solve_scattered_uniform_field") * f.vec
+    return gfA
+
+
+def shell_shielding_factor(mu_r, a, b, geometry="sphere"):
+    """Exact magnetic shielding factor S = B_applied / B_cavity for a permeable
+    shell (inner radius ``a``, outer ``b``, relative permeability ``mu_r``) in a
+    uniform applied field -- the COMSOL AC/DC "magnetic shielding" benchmark.
+
+        sphere   : S = [(2 mu_r+1)(mu_r+2) - 2 (a/b)^3 (mu_r-1)^2] / (9 mu_r)
+        cylinder : S = [(mu_r+1)^2 - (a/b)^2 (mu_r-1)^2] / (4 mu_r)   (transverse)
+
+    Both -> 1 at mu_r=1 (no shielding) and -> (k mu_r)(1-(a/b)^d) for large mu_r
+    (thin-shell limit, d=3/2 sphere, k=2/9 and 1/4 resp.). Larger S = better
+    shielding (smaller interior field).
+    """
+    r = a / b
+    if geometry == "sphere":
+        return ((2 * mu_r + 1) * (mu_r + 2) - 2 * r**3 * (mu_r - 1)**2) / (9 * mu_r)
+    if geometry == "cylinder":
+        return ((mu_r + 1)**2 - r**2 * (mu_r - 1)**2) / (4 * mu_r)
+    raise ValueError("geometry must be 'sphere' or 'cylinder'")
 
 
 def solve_magnetostatic_nonlinear(mesh, nu_of_B, source=None, order=2,
@@ -910,7 +1128,8 @@ def solve_magnetostatic_nonlinear(mesh, nu_of_B, source=None, order=2,
         a += nu_of_B(curl(gfu)) * curl(u) * curl(v) * dx + reg * NU0 * u * v * dx
         a.Assemble()
         gnew = GridFunction(fes)
-        gnew.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        gnew.vec.data = _direct_inverse(a.mat, fes.FreeDofs(), "sparsecholesky",
+                                        "solve_magnetostatic_nonlinear") * f.vec
         gfu.vec.data = (1.0 - relax) * gfu.vec + relax * gnew.vec
         cur = probe(curl(gfu))
         if (prev is not None and it + 1 >= min_iter
