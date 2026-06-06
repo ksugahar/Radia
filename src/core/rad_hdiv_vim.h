@@ -64,5 +64,11 @@ void AssembleCoulombGram(const Mesh& m, std::vector<double>& G, int& n_charge);
 /* Assemble the symmetric demag operator N = B^T G B, row-major (n_face x n_face). */
 void AssembleN(const Mesh& m, std::vector<double>& N);
 
+/* Lowest-order RT0 HDiv mass matrix M_mass = int phi_i . phi_j, row-major (n_face x n_face).
+ * Unit-flux basis -> per-cell per-axis 2x2 block (1/h)[[1/3,1/6],[1/6,1/3]] on (lo_face, hi_face);
+ * shared faces accumulate from both adjacent cells.  The material system is A = (1/chi) M_mass - N
+ * (symmetric indefinite); the generalized eigenvalues of (N, M_mass) are the demag factors. */
+void AssembleMass(const Mesh& m, std::vector<double>& M_mass);
+
 } // namespace rad_hdiv
 #endif

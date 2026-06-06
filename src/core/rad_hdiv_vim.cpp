@@ -86,8 +86,15 @@ void AssembleChargeMap(const Mesh& m, std::vector<double>& B, int& n_charge, int
         // cell on the HI side: this face is that cell's LO face -> normal points IN -> -1 div;
         // rho = -(-1) = +1, per unit volume.
         if (fc.hi >= 0) B[(size_t)fc.hi * nf + f] += -(-1.0) / m.cell_V[fc.hi];
-        // boundary face: sigma = M.n = unit flux / area.
-        if (fc.bnd)     B[(size_t)brow[f] * nf + f] += 1.0 / fc.area;
+        // boundary face: sigma = M . n_OUTWARD.  Global face normal is +axis; outward (out of the
+        // domain) is +global if the cell sits on the LO side (domain HIGH boundary), -global if on
+        // the HI side (domain LOW boundary).  Using the global normal for all boundary faces flips
+        // sigma on the low boundary -> a spurious monopole surface charge -> unphysical demag
+        // factors (>1).  (Symmetry + loop-nullity do NOT catch this; the physics test does.)
+        if (fc.bnd) {
+            double out_sign = (fc.lo >= 0) ? 1.0 : -1.0;
+            B[(size_t)brow[f] * nf + f] += out_sign / fc.area;
+        }
     }
 }
 
@@ -144,6 +151,35 @@ void AssembleN(const Mesh& m, std::vector<double>& N)
             if (bi == 0.0) continue;
             double* Nrow = &N[(size_t)i * nf];
             for (int j = 0; j < nf; ++j) Nrow[j] += bi * GBrow[j];
+        }
+    }
+}
+
+void AssembleMass(const Mesh& m, std::vector<double>& M_mass)
+{
+    const int nf = m.n_face();
+    M_mass.assign((size_t)nf * nf, 0.0);
+    // per cell, per axis: the (lo_face, hi_face) pair gets the 2x2 block (1/h)[[1/3,1/6],[1/6,1/3]].
+    // Find each cell's lo/hi face per axis from the face table (a face is its lo-cell's HI face and
+    // its hi-cell's LO face).
+    std::vector<std::array<int, 2>> cell_axis_faces((size_t)m.n_cell * 3, {-1, -1});
+    auto CAF = [&](int c, int ax) -> std::array<int, 2>& { return cell_axis_faces[(size_t)c * 3 + ax]; };
+    for (int f = 0; f < nf; ++f) {
+        const Face& fc = m.faces[f];
+        if (fc.lo >= 0) CAF(fc.lo, fc.ax)[1] = f;   // cell on LO side -> face is its HI face
+        if (fc.hi >= 0) CAF(fc.hi, fc.ax)[0] = f;   // cell on HI side -> face is its LO face
+    }
+    for (int c = 0; c < m.n_cell; ++c) {
+        // cell size h from its volume (structured cubic cell): h = V^{1/3}
+        double h = std::cbrt(m.cell_V[c]);
+        double d = (1.0 / h) * (1.0 / 3.0), o = (1.0 / h) * (1.0 / 6.0);
+        for (int ax = 0; ax < 3; ++ax) {
+            std::array<int, 2> idx = CAF(c, ax);
+            int lo = idx[0], hi = idx[1];
+            M_mass[(size_t)lo * nf + lo] += d;
+            M_mass[(size_t)hi * nf + hi] += d;
+            M_mass[(size_t)lo * nf + hi] += o;
+            M_mass[(size_t)hi * nf + lo] += o;
         }
     }
 }
