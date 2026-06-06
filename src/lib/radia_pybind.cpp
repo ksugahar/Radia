@@ -94,6 +94,7 @@ extern "C" {
 #include "rad_average_field.h" // Closed-form cuboid average B (Wakao Part 6 §7)
 #include "rad_stream_function.h" // (ACA+)+TSVD stream-function coil solver
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
+#include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -2578,6 +2579,29 @@ public:
 
 
 // ============================================================================
+// HDiv-type VIM demag operator (N = B^T G B) -- thin binding for golden testing.
+// Returns the assembled N and charge map B as flat row-major lists; the Python golden
+// test (tests/feec/) reshapes and checks symmetry + loops-field-null (loops = ker B).
+// ============================================================================
+namespace radia_hdivvim {
+py::dict HDivVimAssemble(int nx, int ny, int nz) {
+    rad_hdiv::Mesh m = rad_hdiv::BuildStructuredRT0(nx, ny, nz, 1.0);
+    std::vector<double> B, N;
+    int n_charge = 0, n_bnd = 0;
+    rad_hdiv::AssembleChargeMap(m, B, n_charge, n_bnd);
+    rad_hdiv::AssembleN(m, N);
+    py::dict d;
+    d["nf"]       = m.n_face();
+    d["n_cell"]   = m.n_cell;
+    d["n_charge"] = n_charge;
+    d["n_bnd"]    = n_bnd;
+    d["N"]        = N;   // row-major (nf x nf)
+    d["B"]        = B;   // row-major (n_charge x nf)
+    return d;
+}
+} // namespace radia_hdivvim
+
+// ============================================================================
 // Module Definition
 // ============================================================================
 
@@ -2600,6 +2624,18 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     // Version info
     m.attr("__version__") = "1.4.0";
+
+    // ========================================================================
+    // HDiv-type VIM (symmetric demag operator) -- golden-test entry
+    // ========================================================================
+    m.def("_hdiv_vim_assemble", &radia_hdivvim::HDivVimAssemble,
+          py::arg("nx"), py::arg("ny"), py::arg("nz"),
+          R"pbdoc(
+              Assemble the symmetric HDiv-type VIM demag operator N = B^T G B on a structured
+              nx*ny*nz hex grid (RT0 faces).  Returns a dict with nf, n_cell, n_charge, n_bnd, and
+              the row-major flat lists N (nf x nf) and B (n_charge x nf).  For testing the symmetric
+              VIM core: symmetry (||N-N^T||) + loops field-null (loops = ker B).
+          )pbdoc");
 
     // ========================================================================
     // Object Creation
