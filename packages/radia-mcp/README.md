@@ -81,6 +81,50 @@ Blender):
 
 ---
 
+## Validated EM & multiphysics engineering (`radia-ngsolve`)
+
+Most CAE-MCP servers stop at *generating* a script. `radia-ngsolve` goes further: an
+AI assistant can **solve a real electromagnetics / multiphysics engineering problem in
+open-source [NGSolve](https://ngsolve.org), and every capability is cross-checked against
+a closed-form analytic solution**. The result is a library you can trust an AI to drive.
+
+### 20+ "COMSOL-class" problems, each validated and baked in
+
+Each model ships as a **reusable helper + runnable example + regression test + queryable
+knowledge** (`examples/comsol_class/`, `ngsolve_usage(...)`), so the server gets smarter,
+not just a pile of scripts. Agreement with the closed form is typically **well under 1 %**:
+
+| Domain | Examples (validation vs closed form) |
+|--------|--------------------------------------|
+| **Electrostatics** | 3-D capacitance (<0.2 %), layered dielectrics (0.1 %), capacitance matrix (0.03 %), electrostatic force (0.4 %), two-wire line (0.1 %) |
+| **Magnetostatics** | μ-metal shielding sphere/cylinder (0.9–1.3 %), Halbach PM dipole (0.3 %), cylinder magnet on-axis (centre 0.01 %), finite solenoid + Nagaoka inductance (0.5 %), Helmholtz uniformity (<1 %), iron-yoke dipole gap field (0.5 %) |
+| **Field quality** | accelerator-magnet **multipoles** b_n / a_n — normal-quad main term **0.02 %**, allowed/forbidden harmonics resolved |
+| **Eddy / AC** | round-wire skin effect R_ac/R_dc vs Kelvin ber/bei (0.07 %), induction heating |
+| **Force / torque** | weighted Maxwell-stress ("eggshell") force & torque, busbar Lorentz force (~1 %) |
+| **Multiphysics** | **electro-thermal** Joule heating (exact), **electro-thermo-mechanical** thermal-stress chain (exact), **magneto-mechanical** Lorentz→beam deflection vs Euler-Bernoulli (0.02 %) |
+
+Many cases are additionally cross-checked, internally, against a reference commercial FEM
+solver (three-way agreement analytic = open-source = commercial); the published numbers
+above are all against the **closed-form analytic**, the unimpeachable reference.
+
+### Designer-facing, not textbook
+
+The helpers take what an engineer actually has — material, geometry, excitation — and
+return what they want: capacitance, shielding factor, multipole spectrum, inductance,
+force/torque, temperature rise, thermal stress, deflection. Ask the MCP server
+`ngsolve_usage("field_quality")`, `("solenoid")`, `("c_magnet")`, `("elasticity")`, … for
+the validated recipe (70+ topics), or `lint_radia_script` to catch the known FEM traps
+before they cost a debug session.
+
+### How it's built
+
+Pure-Python NGSolve (H1 / HCurl / axisymmetric H1Henrotte / VectorH1 elasticity), small
+reusable solvers chained for couplings, and a regression suite (`pytest -m xval`) that
+locks every number above. Open source (BSD-3); validated against closed-form analytics,
+with commercial solvers used only as an internal benchmark.
+
+---
+
 ## Demo (placeholder — recordings to be added)
 
 `build123d_to_cubit_hex(script=generate_build123d_script("helix_coil")["script"], target_size=1.0)`

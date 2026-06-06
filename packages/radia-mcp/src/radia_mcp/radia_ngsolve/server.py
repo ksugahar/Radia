@@ -355,6 +355,29 @@ def get_radia_lint_rules() -> str:
             'fix': 'Use: 0.5 * sigma * InnerProduct(E, Conj(E)).real',
         },
         {
+            'rule': 'scattered-eddy-missing-a0',
+            'severity': 'HIGH',
+            'description': (
+                'joule_loss_density() called WITHOUT A0= in a file that sets a '
+                'background/applied field. The FE unknown gfA is the SCATTERED '
+                'potential; total E = -jw (A0 + gfA + grad(Phi)), so dropping A0 '
+                'overestimates the loss ~10x. (Coil/total-field sources where gfA '
+                'is already total correctly use A0=None and are not flagged.)'
+            ),
+            'fix': 'Pass A0=<background>: joule_loss_density(gfA, gfPhi, sigma, omega, A0=A0).',
+        },
+        {
+            'rule': 'ngsolve-set-definedon-in-loop',
+            'severity': 'HIGH',
+            'description': (
+                'GridFunction.Set(..., definedon=...) called inside a loop. Set() '
+                'zeros the whole vector first, so looping over boundaries/materials '
+                'leaves only the LAST region (prior ones wiped -> e.g. conductor '
+                'potentials collapse to 0, energy 0).'
+            ),
+            'fix': 'Set all regions in ONE call: gf.Set(mesh.BoundaryCF({...}, default=0), definedon=mesh.Boundaries("a|b")).',
+        },
+        {
             'rule': 'peec-low-nseg',
             'severity': 'MODERATE',
             'description': (
@@ -453,6 +476,7 @@ def ngsolve_usage(topic: str = "all") -> str:
             "ironloss"         - Iron loss estimation: decomposition, FEM computation, steel grades
             "practical"        - Practical techniques: voltage source, force/torque, rotation, coupling
             "team7"            - TEAM Problem 7: eddy current benchmark (A-formulation, OCC geometry, BDDC/AMS solver)
+            "multiphysics"     - COMSOL-class couplings: induction heating EM->thermal (joule_loss_density + solve_heat_steady), the scattered-field A0 gotcha
     """
     return get_ngsolve_documentation(topic)
 
