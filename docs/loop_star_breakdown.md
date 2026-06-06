@@ -161,8 +161,46 @@ Jacobi keeps it bounded for `μ_r ≤ 1e4` at moderate meshes, the HDiv-type nee
 **no H-matrix factor** — which would make it not only correctness-equivalent but
 *cheaper* than the yano-type + H-ILU, i.e. a genuine **compute-time superset**
 (the switch criterion). If a weak-demag continuum survives even with exact loops
-(thin/elongated geometry, very fine meshes), the H-ILU / Calderón-analogue
-remains the fallback.
+(thin/elongated geometry, very fine meshes), a stronger rung is needed.
+
+### The preconditioner ladder — where Jacobi, AMS, and Calderón sit
+
+**Loop-Star is the lowest-order auxiliary-space decomposition.** Its systematic
+generalization is **AMS / ADS** (Hiptmair–Xu 2007 for H(curl); Kolev–Vassilevski
+for H(div)) = "loop-star + algebraic multigrid on the auxiliary gradient/curl
+spaces". The FEEC/HDiv basis here *is* that decomposition — the loops are
+`curl(H(curl))`, the curl-auxiliary space.
+
+Two features make the VIM **easier** than the sparse-FEM curl-curl problem AMS
+was built for:
+
+1. The loops are **field-null** (`N M_loop = 0`). In sparse FEM the gradient
+   kernel is *coupled* and AMS must actively correct it; here the loop /
+   curl-auxiliary block is **decoupled** — the demag operator ignores it,
+   `(1/χ)I` handles it trivially. **Only the star (charge) block needs a real
+   preconditioner.**
+2. That star block is a **dense** `1/r` integral operator stored as an
+   **H-matrix** (HACApK).
+
+AMS/ADS are formulated for **sparse** FEM operators. An *"H-matrix AMS/ADS"* —
+the auxiliary-space construction applied to a dense H-matrix integral operator —
+**does not appear to be in the literature**: the dense-operator world
+preconditions with **Calderón / operator preconditioning** instead (Hiptmair
+2006; Andriulli et al. 2008), and even those are for *boundary* integral
+equations — *volume*-IE preconditioning is less settled. So an H-matrix-AMS for
+this volume VIM would be genuinely new.
+
+Ladder for the HDiv-type star block, cheapest first — **repo-first: use the
+simplest rung that works; the novelty is not the goal, a conditioned solver is:**
+
+1. **Jacobi** (diagonal) — try first; may suffice once the exact de-Rham loops
+   are removed (the weak-demag cluster leaves with them).
+2. **Auxiliary-space / operator preconditioning** — the principled next step; the
+   lab's HYPRE-free **Compact AMS** (`radia.sparsesolv_ngsolve`) already provides
+   the sparse-auxiliary machinery to build on, and a dense (H-matrix) variant
+   would be the novel "H-matrix AMS".
+3. **H-ILU** (HACApK H-matrix factor) — the current fallback, validated
+   `μ_r ≤ 1e4`.
 
 ---
 
