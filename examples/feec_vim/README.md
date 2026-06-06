@@ -41,22 +41,32 @@ basis's fragile (collocation-only) field-null that breaks under distortion.
 - The symbolic twin: `radia_mcp/mathematica/basis_functions/vim_loopfree.wls` (+ the full
   FEEC suite: `h1`, `hcurl`, `hdiv`, `simplex_ho`, `derham`, `cohomology`, `vim_field`).
 
-## Status / honest next steps (before any C++)
+## Plan: build the HDiv-type MMM/MSC; if it works, retire the yano-type (2026-06-06)
 
-Problem A is **settled at the formulation level** (symbolic + real NGSolve). Problem A is
-*also* already handled in production Radia by the local-null-vector `installCycle` fix — so
-the FEEC VIM's marginal value is **high-order accuracy + a principled (not patched) loop
-space**, not fixing an open production defect.
+The **HDiv-type MMM/MSC** uses NGSolve's H(div) basis for the magnetization; its loops are
+field-null **by construction** (de Rham), replacing the **yano-type** element-engineering
+(Yano's hand-crafted elements that suppress the A_ls / loop-star component on distorted
+hexes). Plan: build the HDiv-type; **if it works**, retire the yano-type from public Radia
+and **preserve it in the ELF repo**. (Lowest-order HDiv-type == the shipped Radia MSC +
+`installCycle` de-Rham loops, which already works; the new build is the **high-order** VIM.)
 
-Remaining formulation work (all in Python/NGSolve, before C++):
+Progress:
 
-1. **loop/star Hodge split + star-block conditioning** — confirm the charge-free loop
-   space is exactly `curl(interior H(curl)) ⊕ cohomology H¹` (dimension count) and that the
-   star (charge-carrying) block is well-posed once loops are removed.
-2. **VIM RHS / collocation correspondence** — the evaluation points must match the
-   high-order basis (the "矢野 element" lesson).
-3. **a small end-to-end VIM solve** on a distorted multi-element patch vs a trusted
-   reference — the genuine remaining build, whose hard part is **singular near-field
-   quadrature** of the 1/r kernel for the high-order basis.
+1. ✅ **loop/star (Hodge) split on the real HDiv space** — `hdiv_loop_star_split.py`:
+   the charge map `Q : M ↦ (−div M, M·n|_bnd)` splits HDiv into **star(charge-carrying) ⊕
+   loop(charge-free)** (distorted 2×2×2, HDiv order 1: 240 = 159 star + 81 loop; `rank Q =
+   160 charge-dofs − 1` Gauss charge-conservation). Loops from `ker Q` are charge-free
+   (`div`, `M·n` ~1e-16) and **field-null** (`|H|`~3e-17) — the **operator-level**
+   loop-mode-free statement: loops are in `ker(N_demag)` exactly, no element engineering.
+   The 159-dim **star** space is where the VIM is solved. (The loop space is defined by the
+   charge map directly; a naive `curl(HCurl_p)` count does not apply — that lands in HDiv
+   order *p−1*, a different space.)
+2. **next — assemble the demag operator on the star space + a small validated solve**:
+   the genuine remaining build, whose hard part is the **weakly-singular 1/r charge-Galerkin
+   self/near term** (Duffy / Graglia surface + volume moments). Validate against a known
+   demag (e.g. sphere factor 1/3) and against Radia MSC at lowest order.
+3. **RHS / collocation correspondence** — evaluation points matched to the high-order basis
+   (the "矢野 element" lesson).
 
-Problem B (high-μr conditioning / scaling) is orthogonal and not addressed by the basis.
+Problem B (high-μr conditioning / scaling) is orthogonal and not addressed by the basis;
+H-ILU handles μr≤1e4 (shipped).
