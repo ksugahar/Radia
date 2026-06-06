@@ -172,6 +172,46 @@ Instead of clicking through nested menus to find a "Halbach Array" button, you s
 
 ---
 
+## 🧠 AI-Native Knowledge: the `radia-mcp` Server Suite
+
+**The hard part of FEM/BEM is not the API — it is knowing _which_ formulation, preconditioner, or closed-form check to use.** The companion package [`radia-mcp`](packages/radia-mcp/) packages that expertise as **40+ Model Context Protocol (MCP) servers (340+ tools)**, so an AI assistant (Claude Code, Cursor, Continue, …) drives the Radia + NGSolve workflow *correctly* — not just plausibly.
+
+```bash
+pip install radia-mcp
+```
+
+### `radia-ngsolve` — the NGSolve FEM/BEM brain (34 tools)
+
+The flagship server for this repository turns the Radia ↔ NGSolve hybrid (FEM + BEM + PEEC) from tribal knowledge into queryable, version-controlled, **offline** documentation **plus live diagnostic tools**:
+
+| Theme | Representative tools | What you get |
+| :--- | :--- | :--- |
+| **Validation oracle** | `analytical_formulas` | _"Given analysis X, which closed form is the trusted reference?"_ — Wakao-Igarashi-Fujiwara-Kameari Part 1–9, cuboid average-$B$ (sympy-derived C++ kernel), full Bessel cylindrical AC impedance, ellipsoid demagnetization, thin-plate eddy current, … |
+| **Open boundary** | `kelvin_transformation`, `kelvin_identify_post_hoc` | Kelvin-inversion theory for exact open-boundary FEM — **plus a live tool** that patches Kelvin Periodic Identifications into an existing `.vol` |
+| **HCurl preconditioning** | `sparsesolv` | Compact AMS / Hiptmair-Xu (HYPRE-free, TaskManager-native) for curl-curl eddy-current systems |
+| **Model-order reduction** | `cln_3d`, `cln_sibc_orthogonal`, `cln_sphere_dd_pipeline`, `bem_cln` | Cauer Ladder Network MOR, incl. a double-double (~32-digit) VIM pipeline |
+| **Circuit extraction** | `peec_inductance`, `ngsbem_inductance` | PEEC-from-STEP and `ngsolve.bem` inductance recipes |
+| **Surface impedance** | `esim` | ESIM nonlinear cell problem for induction-heating workpieces |
+| **Axisymmetric FE** | `axifemm_documentation`, `femm_parity_documentation` | Henrotte $Q$-element axisymmetric basis + the FEMM-canonical convention split |
+| **Force & cross-validation** | `force_validation` | EM force extraction with COMSOL ↔ NGSolve cross-checks |
+| **Parallelism** | `taskmanager` | The caller-wraps TaskManager policy + repo audit |
+| **Live linting** | `lint_radia_script`, `lint_radia_directory` | Flags NGSolve/Radia convention violations before they ship |
+| **Panel development** | `panel_schema`, `panel_add_param`, `panel_widget_locations` | Introspect and extend the PySide6 analysis panels |
+
+### Self-describing — start at `radia-meta`
+
+The suite is a catalog: call **`mcp-server-radia-meta`** first and it tells you which of the 40+ servers covers your concept — NGSolve, Cubit hex meshing, build123d CAD authoring, Gmsh post-processing, differential-forms + Mathematica symbolic verification, PEEC, motors, MOR, optimization (Optuna / Bayesian / evolutionary), TEAM benchmarks, and more.
+
+```python
+radia_mcp_overview()            # every server + tag
+radia_mcp_by_tag("ngsolve")     # which servers cover NGSolve?
+radia_ngsolve_status()          # live tool list + dependency probe
+```
+
+See [`packages/radia-mcp/README.md`](packages/radia-mcp/README.md) for the full catalog and MCP client config snippets.
+
+---
+
 ## 💡 Architecture: Source (IEM) + Material (FEM) + Eddy Current (BEM)
 
 We define our unique approach as a hybrid of **Integral Element Method (IEM)**, **Finite Element Method (FEM)**, and **Boundary Element Method (BEM)**.
@@ -294,7 +334,7 @@ The 3 PyPI packages above are the **full lab-standard install**:
 | Package | What it ships | Required? |
 |---------|--------------|-----------|
 | `radia[cubit,gui]` | C++ core + NGSolve integration + PySide6 panels + Cubit plugin binaries | Yes |
-| `radia-mcp` | 7 MCP servers (radia, ngsolve, cubit, gmsh, build123d, electromagnet, ih) for Claude / IDE integration | Optional (only for AI-assisted workflows) |
+| `radia-mcp` | 40+ MCP knowledge servers (340+ tools) led by `radia-ngsolve` (NGSolve FEM/BEM) for Claude / IDE integration | Optional (only for AI-assisted workflows) |
 | `cubit-mesh-export` | High-order curved mesh export Cubit -> NGSolve `.vol` | Bundled by `radia[cubit]`; pin separately for explicit version control |
 
 **`[cubit,gui]` extras are MANDATORY for production**:
@@ -332,7 +372,7 @@ The Cubit launcher (`Solve -> Radia-NGSolve`) surfaces the same panels inside Cu
 
 ### MCP servers (`radia-mcp`)
 
-If you use Claude Code or another MCP-aware IDE, `pip install radia-mcp` registers 7 MCP servers — `radia-ngsolve`, `cubit`, `gmsh`, `build123d`, `electromagnet`, `ih`, `peec` — that give the LLM read-only access to FEM/BEM/PEEC knowledge bases and live diagnostic tools (e.g. `peec_inductance(topic="step_authoring")` returns Cubit + build123d recipes for auto-detect-friendly STEPs).  See `packages/radia-mcp/README.md` for MCP client config snippets.
+If you use Claude Code or another MCP-aware IDE, `pip install radia-mcp` registers **40+ MCP servers (340+ tools)** — led by **`radia-ngsolve`** (the NGSolve FEM/BEM brain, 34 tools) plus `cubit`, `gmsh`, `build123d`, `peec`, `electromagnet`, `ih`, and more — giving the LLM read-only access to FEM/BEM/PEEC knowledge bases and live diagnostic tools (e.g. `analytical_formulas(...)` returns the trusted closed-form solution to validate a result against; `kelvin_identify_post_hoc(...)` patches Kelvin BCs into a `.vol`).  Start with `mcp-server-radia-meta`, which catalogs every server.  See the **🧠 AI-Native Knowledge** section above and [`packages/radia-mcp/README.md`](packages/radia-mcp/README.md) for details and client config.
 
 ### Updating
 
