@@ -1,0 +1,158 @@
+# The Loop-Star Breakdown: high-μ magnetostatics ↔ low-frequency MoM
+
+**One sentence:** the high-`μ_r` conditioning breakdown of the magnetization
+integral equation (Radia MMM/MSC) is the *exact* magnetostatic analogue of the
+classic **low-frequency breakdown** of the Electric Field Integral Equation
+(EFIE / Method of Moments with RWG basis) — same cause (a "loop" subspace
+pinned only by a term that vanishes in the limit), same first remedy
+(**Loop-Star** decomposition).
+
+---
+
+## 1. Low-frequency EFIE breakdown (the classic MoM story)
+
+The EFIE for a surface current `J` on a conductor, tested with RWG functions,
+assembles to
+
+```
+Z J = E_inc ,     Z = jωμ₀ L  +  (1/(jωε₀)) S
+```
+
+- `L` — the magnetic **vector-potential** operator; acts on `J` directly
+  ("inductive").
+- `S` — the **scalar-potential** operator; acts on the charge `ρ = (1/jω)∇·J`
+  ("capacitive").
+
+Split the current into **loop** (solenoidal, `∇·J = 0`) and **star/tree**
+(`∇·J ≠ 0`, charge-carrying):
+
+- `S` annihilates the loops: `S·J_loop = 0` (no charge → no scalar potential).
+- A loop current is therefore seen **only** by the inductive term:
+  `Z·J_loop = jωμ₀ L·J_loop  ~ ω`.
+- A star current is dominated by the charge term: `Z·J_star ~ 1/ω`.
+
+As `ω → 0` the loop block scales like `ω` and the star block like `1/ω`; their
+ratio is `~ω²` and `cond(Z) ~ 1/ω²` → the matrix is numerically singular. The
+loop currents are constrained **only** by the vanishing `jωL` term, so they are
+nearly free and the solve (iterative or direct) breaks down.
+
+**Fix — Loop-Star / Loop-Tree:** change basis to `{loops, stars}`, which
+block-separates the `ω`-scaling, and rescale each block to an `O(1)` dynamic
+range. (Wilton–Glisson RWG 1982; Vecchi, *IEEE TAP* 1999; Zhao–Chew 2000;
+Andriulli et al. Calderón, *IEEE TAP* 2008.)
+
+---
+
+## 2. High-μ magnetostatic breakdown (Radia MMM/MSC)
+
+The magnetization integral equation for a linear soft magnet
+(susceptibility `χ = μ_r − 1`) is
+
+```
+( (1/χ) I  −  N ) M = H_ext ,     N = the demagnetising operator (M ↦ H_demag)
+```
+
+where `N` acts **through the magnetic charges** of `M`:
+`ρ = −div M` (volume), `σ = M·n` (surface). Split `M` into **loop**
+(charge-free: `div M = 0` **and** `M·n = 0`) and **star** (charge-carrying):
+
+- `N` annihilates the loops: `N·M_loop = 0` (no charge → no field). The loops
+  are exactly `ker N`.
+- A loop magnetization is therefore seen **only** by the regularising term:
+  `A·M_loop = (1/χ) M_loop`.
+- A star magnetization is dominated by the demag term:
+  `A·M_star ≈ −N·M_star ~ O(1)`.
+
+As `μ_r → ∞`, `1/χ → 0`: the loop block has eigenvalue `1/χ → 0` while the star
+block is `O(1)`; `cond(A) ~ χ ~ μ_r` → the matrix becomes singular. The loop
+magnetizations are constrained **only** by the vanishing `(1/χ)I` term — exactly
+as the EFIE loops are constrained only by the vanishing `jωL`.
+
+---
+
+## 3. The correspondence (the dictionary)
+
+| | EFIE, `ω → 0` | MMM/MSC, `μ_r → ∞` |
+|---|---|---|
+| unknown | surface current `J` | magnetization `M` |
+| **loop** modes | solenoidal `J`, `∇·J = 0` | charge-free `M`, `div M = 0` & `M·n = 0` |
+| loops produce | no charge → no scalar potential | no charge → no field (`M_loop ∈ ker N`) |
+| operator | `Z = jωμ L + (1/jωε) S` | `A = (1/χ) I − N` |
+| term that **pins the loops** | `jωμ L`  (`~ω`) | `(1/χ) I`  (`~1/χ`) |
+| dominant term | `(1/jωε) S`  (`~1/ω`) | `−N`  (`~O(1)`) |
+| conditioning | `cond ~ 1/ω²` | `cond ~ μ_r` |
+| null operator | charge op `S` (`S J_loop = 0`) | demag op `N` (`N M_loop = 0`) |
+| first remedy | **Loop-Star / Loop-Tree** | **Loop-Star** (de-Rham loops) |
+
+The dictionary is **(solenoidal current, frequency ω) ↔ (charge-free
+magnetization, 1/χ)**. The EFIE charge operator `S` plays the role of the
+magnetostatic demag operator `N`; both have the loops as their exact null space,
+and in both the loop-pinning term vanishes in the limit.
+
+---
+
+## 4. Why the loops must be EXACTLY field-null — yano-type vs HDiv-type element
+
+Loop-Star only works if the **discrete** loops are exactly in the null space
+(`S J_loop = 0`; `N M_loop = 0`). For RWG on a flat triangulation this is
+automatic — the RWG loop functions are exactly solenoidal. For the magnetostatic
+**volume** problem on **distorted hexes** it is *not* automatic:
+
+> the naive constant-magnetization / `±1`-cycle "loops" are field-null only on
+> **affine** elements; on a **non-affine (distorted)** hex they carry residual
+> charge → `N M_loop ≠ 0` → the Loop-Star separation leaks and the field is
+> wrong (Radia's "C-type" magnet: ~28 % `B_z` error at `μ_r = 1e5`).
+
+Two ways to restore exactly field-null loops on distorted elements:
+
+- **yano-type** — engineer the element shape functions so the loop component
+  produces no field (Yano's distortion-handling MMM/MSC elements).
+- **HDiv-type** — use the NGSolve **H(div) (FEEC)** basis, where the loops
+  `= curl(interior H(curl))` are charge-free (`div = 0` **and** `M·n = 0`) **by
+  construction**: the contravariant **Piola** map preserves *both* the
+  divergence and the normal trace, so the loops stay field-null under *any*
+  distortion. This is the discrete **de Rham** analogue of RWG's exactly
+  solenoidal loops. (Verified to machine precision on distorted hexes —
+  `examples/feec_vim/`.)
+
+Either way, the H-matrix acceleration is unchanged: the demag operator is the
+same dense `1/r` (Laplace) integral operator, so it is compressed by **HACApK**
+(ACA⁺) exactly as the present MSC is.
+
+---
+
+## 5. The honest limit — Loop-Star fixes the loops, not the whole conditioning
+
+Loop-Star removes the loop-induced singularity (the `1/χ → 0` mode), which fixes
+field **correctness** — the loops no longer pollute the solution (the
+magnetostatic *Problem A*). It does **not**, by itself, bound the conditioning of
+the remaining **star** block: the demag operator `N` carries a near-continuum of
+small singular values (weak-demag, charge-carrying modes) *above* the exact loop
+kernel, so the star-block conditioning can still grow with `μ_r` (the
+magnetostatic *Problem B*; empirically deflating only `ker N` barely moves
+`cond`). This is the magnetostatic counterpart of the EFIE **dense-mesh
+(h-refinement) breakdown** that survives Loop-Star and needs a second-kind /
+**Calderón** preconditioner. In Radia the residual high-`μ_r` conditioning is
+carried by the **H-ILU** preconditioner (the HACApK H-matrix `A_SS` factor),
+validated for `μ_r ≤ 1e4`; a scalable spectral coarse space (GenEO-type) is open.
+
+---
+
+## Takeaways
+
+1. The **high-μ breakdown IS the low-frequency breakdown**, with
+   `(charge-free M, 1/χ)` in the role of `(solenoidal J, ω)`.
+2. **Loop-Star** restores field correctness — *provided the discrete loops are
+   exactly field-null* (de-Rham/HDiv basis, or Yano-engineered elements). On
+   distorted hexes the naive `±1` loops are **not** exact, which is the whole
+   reason the distortion-robust element exists.
+3. The **residual conditioning** is a separate, preconditioner-level problem
+   (H-ILU / HACApK), analogous to EFIE's post-Loop-Star dense-mesh breakdown —
+   not something the loop basis alone can fix.
+
+---
+
+*See also:* `examples/feec_vim/` (the HDiv-type loop/star split, loops field-null
+on distorted hexes), `src/core/rad_hacapk.cpp` (`BuildLoopBasis` /
+`SolveLoopStar`, the de-Rham-exact loop basis + H-ILU `A_SS` solve),
+`docs/HMATRIX_EVALUATION.md` (HACApK ACA⁺).
