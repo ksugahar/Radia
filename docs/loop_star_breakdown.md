@@ -136,6 +136,34 @@ magnetostatic *Problem B*; empirically deflating only `ker N` barely moves
 carried by the **H-ILU** preconditioner (the HACApK H-matrix `A_SS` factor),
 validated for `μ_r ≤ 1e4`; a scalable spectral coarse space (GenEO-type) is open.
 
+### Does it have to be H-ILU? — the loop-quality hypothesis
+
+How strong a preconditioner the **star** block needs depends on **how exactly
+the loops were removed**:
+
+- With **inexact** loops (the yano `±1` cycles on distorted hexes), the
+  un-removed *near-loop* modes — charge-carrying magnetizations with a tiny,
+  nonzero demag eigenvalue — stay **inside** the star block as a weak-demag
+  near-null cluster. That cluster is what forces a strong preconditioner
+  (**H-ILU**). Empirically, deflating only the exact `ker N` of that matrix
+  barely moved `cond` — consistent with the near-null mass being *near*-loops,
+  not the exact kernel.
+- With **exactly** field-null loops (de-Rham / HDiv, `N M_loop = 0` to machine
+  precision), the Loop-Star separation removes that cluster **as part of the
+  loops**, so the star block may be well-conditioned enough for a **plain
+  diagonal (Jacobi)** preconditioner — the same way EFIE Loop-Star + diagonal
+  rescaling tames the low-frequency breakdown without a Calderón operator at
+  moderate mesh density.
+
+**This is a concrete, testable hypothesis**, not yet established: measure the
+HDiv-type star-block iteration count under **Jacobi** vs `μ_r` and mesh size. If
+Jacobi keeps it bounded for `μ_r ≤ 1e4` at moderate meshes, the HDiv-type needs
+**no H-matrix factor** — which would make it not only correctness-equivalent but
+*cheaper* than the yano-type + H-ILU, i.e. a genuine **compute-time superset**
+(the switch criterion). If a weak-demag continuum survives even with exact loops
+(thin/elongated geometry, very fine meshes), the H-ILU / Calderón-analogue
+remains the fallback.
+
 ---
 
 ## Takeaways
