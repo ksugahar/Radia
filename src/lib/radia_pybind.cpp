@@ -2586,17 +2586,19 @@ public:
 namespace radia_hdivvim {
 py::dict HDivVimAssemble(int nx, int ny, int nz) {
     rad_hdiv::Mesh m = rad_hdiv::BuildStructuredRT0(nx, ny, nz, 1.0);
-    std::vector<double> B, N;
+    std::vector<double> B, N, M_mass;
     int n_charge = 0, n_bnd = 0;
     rad_hdiv::AssembleChargeMap(m, B, n_charge, n_bnd);
     rad_hdiv::AssembleN(m, N);
+    rad_hdiv::AssembleMass(m, M_mass);
     py::dict d;
     d["nf"]       = m.n_face();
     d["n_cell"]   = m.n_cell;
     d["n_charge"] = n_charge;
     d["n_bnd"]    = n_bnd;
-    d["N"]        = N;   // row-major (nf x nf)
-    d["B"]        = B;   // row-major (n_charge x nf)
+    d["N"]        = N;        // row-major (nf x nf)
+    d["B"]        = B;        // row-major (n_charge x nf)
+    d["M_mass"]   = M_mass;   // row-major (nf x nf), RT0 HDiv mass
     return d;
 }
 } // namespace radia_hdivvim

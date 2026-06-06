@@ -78,7 +78,13 @@ def charge_map(faces, n_cell, cell_V):
         if fc["hi"] >= 0:
             B[fc["hi"], f] += -(-1.0) / cell_V[fc["hi"]]     # -(-1) = +1
         if fc["bnd"]:
-            B[bnd_row[f], f] += 1.0 / fc["area"]             # sigma = M.n (unit flux / area)
+            # sigma = M . n_OUTWARD.  Global face normal is +axis; outward (out of the domain) is
+            # +global if the cell sits on the LO side (this is the domain's HIGH boundary) and
+            # -global if the cell sits on the HI side (domain's LOW boundary).  Using the global
+            # normal for all boundary faces (the earlier bug) flips sigma on the low boundary ->
+            # a spurious monopole surface charge -> unphysical demag factors (>1).
+            out_sign = 1.0 if fc["lo"] >= 0 else -1.0
+            B[bnd_row[f], f] += out_sign / fc["area"]
     return B, n_charge, len(bnd_faces)
 
 def coulomb_gram(faces, n_cell, cell_c, cell_V):
@@ -94,6 +100,30 @@ def coulomb_gram(faces, n_cell, cell_c, cell_V):
     diag[n_cell:] = 2.97321 * np.array([faces[f]["area"] for f in bnd_faces])**1.5 / (4*pi)
     np.fill_diagonal(G, diag)
     return G
+
+def cell_faces(faces, n_cell):
+    """per cell -> {axis: [lo_face, hi_face]} (the two faces normal to each axis)."""
+    cf = [{0: [None, None], 1: [None, None], 2: [None, None]} for _ in range(n_cell)]
+    for fi, f in enumerate(faces):
+        a = f["ax"]
+        if f["lo"] >= 0: cf[f["lo"]][a][1] = fi   # cell is on the LO side -> face is its HI face
+        if f["hi"] >= 0: cf[f["hi"]][a][0] = fi   # cell is on the HI side -> face is its LO face
+    return cf
+
+def assemble_mass(faces, n_cell, h=1.0):
+    """Lowest-order RT0 HDiv mass matrix (regular hex grid), dense (nf x nf).  Unit-flux basis ->
+    per-cell per-axis 2x2 block (1/h)[[1/3,1/6],[1/6,1/3]] on (lo_face, hi_face); shared faces
+    accumulate from both adjacent cells (interior diag 2/(3h), boundary 1/(3h))."""
+    nf = len(faces); M = np.zeros((nf, nf))
+    cf = cell_faces(faces, n_cell)
+    blk = (1.0/h) * np.array([[1/3., 1/6.], [1/6., 1/3.]])
+    for c in range(n_cell):
+        for a in (0, 1, 2):
+            idx = cf[c][a]
+            for p in range(2):
+                for q in range(2):
+                    M[idx[p], idx[q]] += blk[p, q]
+    return M
 
 def run(nx, ny, nz, tag):
     faces, n_cell, cell_c, cell_V = build_structured_rt0(nx, ny, nz)
@@ -114,14 +144,15 @@ def run(nx, ny, nz, tag):
     return dict(tag=tag, ndof=ndof, n_cell=n_cell, n_bnd=n_bnd, n_charge=n_charge,
                 rankB=rankB, n_loop=n_loop, asym=float(asym), loop_res=float(loop_res))
 
-print("=== hand-built structured-hex RT0 (C++ design spec) -- structural validation ===")
-res = [run(1, 1, 1, "1x1x1"), run(2, 2, 2, "2x2x2"), run(3, 3, 3, "3x3x3")]
-print("\nGOLDEN cross-check (NGSolve prototype, hdiv_demag_quad_self.json): 3x3x3 -> ndof=108, "
-      "n_loop=28, asym~3.9e-16, loop_res~4.8e-16")
-r3 = res[-1]
-ok = (r3["ndof"] == 108 and r3["n_loop"] == 28 and r3["asym"] < 1e-12 and r3["loop_res"] < 1e-10)
-print(f"MATCH: ndof {r3['ndof']}==108 {r3['ndof']==108}, n_loop {r3['n_loop']}==28 {r3['n_loop']==28}, "
-      f"asym<1e-12 {r3['asym']<1e-12}, loop_res<1e-10 {r3['loop_res']<1e-10}  => {'PASS' if ok else 'FAIL'}")
-with open(os.path.join(HERE, "hdiv_vim_structured.json"), "w") as f:
-    json.dump({"cases": res, "golden_match_3x3x3": bool(ok)}, f, indent=2)
-print("saved", os.path.join(HERE, "hdiv_vim_structured.json"))
+if __name__ == "__main__":
+    print("=== hand-built structured-hex RT0 (C++ design spec) -- structural validation ===")
+    res = [run(1, 1, 1, "1x1x1"), run(2, 2, 2, "2x2x2"), run(3, 3, 3, "3x3x3")]
+    print("\nGOLDEN cross-check (NGSolve prototype, hdiv_demag_quad_self.json): 3x3x3 -> ndof=108, "
+          "n_loop=28, asym~3.9e-16, loop_res~4.8e-16")
+    r3 = res[-1]
+    ok = (r3["ndof"] == 108 and r3["n_loop"] == 28 and r3["asym"] < 1e-12 and r3["loop_res"] < 1e-10)
+    print(f"MATCH: ndof {r3['ndof']}==108 {r3['ndof']==108}, n_loop {r3['n_loop']}==28 {r3['n_loop']==28}, "
+          f"asym<1e-12 {r3['asym']<1e-12}, loop_res<1e-10 {r3['loop_res']<1e-10}  => {'PASS' if ok else 'FAIL'}")
+    with open(os.path.join(HERE, "hdiv_vim_structured.json"), "w") as f:
+        json.dump({"cases": res, "golden_match_3x3x3": bool(ok)}, f, indent=2)
+    print("saved", os.path.join(HERE, "hdiv_vim_structured.json"))
