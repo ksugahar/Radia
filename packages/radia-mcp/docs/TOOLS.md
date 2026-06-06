@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **340 tools** across 41 MCP servers.
+Total: **341 tools** across 41 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -19,7 +19,7 @@ Total: **340 tools** across 41 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 11 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 12 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 3 |
 | [`mcp-server-fusion`](#mcp-server-fusion) | `radia_mcp.fusion` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 7 |
@@ -355,6 +355,7 @@ Module: `radia_mcp.motor.server`
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
+| `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM <-> JMAG <-> radia-ngsolve (相互学習). |
 
 ## `mcp-server-accelerator`
 
