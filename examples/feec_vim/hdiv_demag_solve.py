@@ -10,6 +10,16 @@ piecewise-constant charge (value rho_i|el = Bv[el,i]/vol_el, sig_i|face = Bb[fac
 Each element -> 8 interior subpoints (4 per bnd face), constant charge, sub-cell self-patch.
 Star solve: change to the loop-free basis S (right-singular vecs of the charge map Q with
 nonzero sigma); A_sb = (1/chi) I - S^T N S; Jacobi(diag)-GMRES.
+
+CONVERGENCE WARNING (verify-first, 2026-06-06): the crude centroid+ball-self-patch quadrature
+here is NOT convergent -- refining 8->16 subpoints/hex (NSUB_SHELLS=2) makes cond/iters WORSE
+(min|mu| 3.9e-3->2.1e-3, mu_r=1e4 iters 222->1245), because the per-subcell ball self-patch is
+inconsistent across refinements.  => the cond / Jacobi-iter numbers from THIS script are
+quadrature ARTIFACTS, NOT the true operator's conditioning.  Only the loop-null result
+(||N.loop||/||N|| ~ 4e-16) is robust (quadrature-independent).  The TRUSTWORTHY conditioning
+evidence is demag_spectrum_jacobi.py (Radia EXACT field, no quadrature: Jacobi 10-84 iters,
+bounded).  A reliable HDiv star-block iter count needs proper Duffy/Graglia singular quadrature
+(the real remaining build for the yano-vs-HDiv benchmark).
 """
 import json, os
 import numpy as np
@@ -55,14 +65,16 @@ with ng.TaskManager():
 
     # subpoints: 8 interior per (hex) element, 4 per (quad) bnd face; constant charge each
     pts, w, rself, Crows = [], [], [], []
+    NSUB = int(os.environ.get("NSUB_SHELLS", "1"))     # 1 -> 8 pts/hex; 2 -> 16; convergence knob
+    shells = [0.5] if NSUB == 1 else [0.4, 0.8]
     for k, el in enumerate(mesh.Elements(ng.VOL)):
         V = np.array([mesh[v].point for v in el.vertices]); c = V.mean(0)
-        sub = c + 0.5*(V - c); ws = el_vol[k]/len(sub)
+        sub = np.vstack([c + f*(V - c) for f in shells]); ws = el_vol[k]/len(sub)
         for s in sub:
             pts.append(s); w.append(ws); rself.append(0.62*ws**(1/3.)); Crows.append(rho[k])
     for k, el in enumerate(mesh.Elements(ng.BND)):
         V = np.array([mesh[v].point for v in el.vertices]); c = V.mean(0)
-        sub = c + 0.5*(V - c); ws = bf_area[k]/len(sub)
+        sub = np.vstack([c + f*(V - c) for f in shells]); ws = bf_area[k]/len(sub)
         for s in sub:
             pts.append(s); w.append(ws); rself.append(0.5*ws**0.5); Crows.append(sig[k])
     pts = np.array(pts); w = np.array(w); rself = np.array(rself); C = np.array(Crows)  # (nsp x ndof)
