@@ -149,6 +149,32 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 - After cloning, run `./download_binaries.sh` to fetch binaries
 - `.png`, `.pdf` allowed in repository; `.msh`, `.vtu`, `.vtk`, `.vol` are gitignored
 
+### Mathematica Content: `.wls` Not `.nb` (2026-06-06)
+
+**POLICY**: All Mathematica content in the repository is managed as
+**`.wls`** (WolframScript, plain text) — NEVER as **`.nb`** (binary
+notebooks). `.nb` files are NOT committed.
+
+**Why**: `.wls` is version-controllable and diffable, runs headless via
+`wolframscript -file` (the `radia_mcp.mathematica` bridge), and ships clean
+in the PyPI wheel. `.nb` is binary: not diffable, bloats git and the wheel
+(the lab's FEM-basis notebooks are 3–10 MB each), and needs the Mathematica
+front end. Auto-converting `.nb` → `.wls` is NOT clean (`HoldForm`-wrapped,
+tens of MB, section titles in Text cells dropped), so the `.wls` is
+**authored clean** (from the `.nb` and/or the upstream source) and
+**self-tested** (each `.wls` carries a `wolframscript -file` self-test),
+with any `.nb` kept only LAB-local as an authoring reference.
+
+**Home**: general-purpose Mathematica `.wls` lives in
+`packages/radia-mcp/src/radia_mcp/mathematica/` (per the MCP Knowledge
+Placement Policy), not buried in an application directory (e.g.
+`examples/CLN/`).
+
+**Reference example**: the NGSolve high-order FEM shape functions
+(`mathematica/basis_functions/recursive_pol.wls`, `h1.wls`, …) — clean,
+self-tested ports of NGSolve's `fem/*hofe*` C++ source; the symbolic
+building block for a VIM (Volume Integral Method) field operator.
+
 ### Cubit Plugin Binary: cubit-mesh-export is the Sole Shipper (Tier-2, 2026-06-01)
 
 **POLICY**: The Cubit plugin binaries (`cubit_mesh_export.ccm` +
@@ -583,6 +609,41 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 ### Naming Policy: External Project References
 
 **POLICY**: Do NOT use "ELF" or "ELF_MAGIC" in Radia source code, documentation, or comments. Radia is an independent project. Academic citations are allowed.
+
+### Publish Boundary: Commercial-Tool Content Stays Private — COMSOL / FEMM / JMAG (2026-06-06)
+
+**POLICY**: COMSOL, FEMM, and JMAG are **commercial tools used INTERNALLY to
+learn and benchmark** radia-mcp (their docs, behaviour, and cross-validation
+inform the knowledge), but the **public GitHub repository must NOT explicitly
+expose them**. This is the radia-repo statement of the lab "公開境界" already
+enforced by `packages/radia-mcp/tools/policy_lint.py`.
+
+- **Commercial-tool MCP servers / wrappers / converters stay LAB-PRIVATE**,
+  regardless of authorship ("it's my own code" is NOT an exemption):
+  - `comsol_converter` → `S:\COMSOL\mcp-server` (relocated 2026-06-06)
+  - FEMM server → `S:\FEMM`; JMAG server → `S:\JMAG`
+- **Their content / models / docs / benchmark numbers / proprietary formats
+  must NOT be mixed into public artifacts.** The public showcase is
+  **analytic-solution-led** (TEAM benchmarks, closed-form references), never a
+  commercial-tool bench dump.
+- **What IS public**: open-system servers (radia-ngsolve / cubit / gmsh /
+  build123d / …) + the **distilled, tool-agnostic physics** learned from the
+  commercial tools (e.g. "FEMM 4.2 axisymmetric heat uses standard P1 with a
+  `2πr` Jacobian" is a general FE fact; **academic citation by name is
+  allowed**). What is NOT public is the tool-specific wrapper/converter code
+  and any proprietary content.
+
+**Why**: a commercial-tool wrapper in a public OSS repo is a licensing / IP
+hazard and dilutes the "open-system, analytic-led" identity of the public
+Radia stack. **The knowledge gained from the tools is the asset; the
+tool-coupling code is not for publication.**
+
+**Enforced by** `tools/policy_lint.py` (part of `tools/ci_preflight.py`,
+run before any public commit/push): ERROR if a commercial-wrapper server is
+wired for publication (public entry point / shipped in wheel); WARN if wrapper
+source still lives under the public `src/` tree. This generalizes the
+2026-06-06 `comsol_converter` relocation (converter + test + catalog/TOOLS.md
+entries moved to `S:\COMSOL\mcp-server`) to FEMM and JMAG.
 
 ### No Console Output from C++ Code
 
