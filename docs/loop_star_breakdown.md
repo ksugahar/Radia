@@ -202,6 +202,31 @@ simplest rung that works; the novelty is not the goal, a conditioned solver is:*
 3. **H-ILU** (HACApK H-matrix factor) — the current fallback, validated
    `μ_r ≤ 1e4`.
 
+### Evidence so far (favours Jacobi for `μ_r ≤ 1e4`)
+
+`examples/feec_vim/demag_spectrum_jacobi.py` measures the demag operator's spectrum
+with Radia's **exact** `ObjRecMag` field on a compact body (3×3×3 cube grid,
+constant-M = an *all-star*, loop-free operator):
+
+| grid | smallest `\|μ\|` | `cond(A)` @ `μ_r=1e4` | Jacobi-GMRES iters @ `μ_r=1e4` |
+|---|---|---|---|
+| regular | 0.051 | 17 | 10 |
+| distorted (30 % jitter) | 0.0076 | 1.1e2 | 84 |
+
+In both, `cond(A)` is **`μ_r`-independent** (no `~μ_r` blowup) and Jacobi-GMRES is
+**bounded**, because the smallest charge `|μ| (≈0.01–0.05) ≫ 1/χ (=1e-4` at
+`μ_r=1e4)` — a large spectral gap. So **the charge-carrying (star) demag operator
+of a moderate compact body is Jacobi-solvable at `μ_r ≤ 1e4`**; the `~μ_r`
+breakdown needs `μ_min < 1/χ`, which on the C-type came from the **yano `±1` loops
+not being exactly field-null** (spurious `μ≈1/χ` modes) rather than a physical
+weak-demag continuum. This **supports the hypothesis**: with the HDiv-type's
+*exactly* field-null loops removed, the star block should be Jacobi-solvable for
+`μ_r ≤ 1e4` (no H-matrix factor → also the compute-time superset). Caveat: this is
+the constant-M proxy on a moderate body; the **stress test** — the HDiv-type star
+block on the genuinely distorted C-type (thin gap) with Jacobi — remains, and an
+ultra-weak-demag mode (extreme thin features, very fine meshes) would still need
+the H-ILU fallback.
+
 ---
 
 ## Takeaways
