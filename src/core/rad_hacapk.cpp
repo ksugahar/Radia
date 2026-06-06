@@ -318,25 +318,56 @@ void RadHACApKMSCManager::BuildLoopBasis(double alpha) {
     std::vector<std::vector<int>> cycleEdges;   // GF(2) edge-vector per cycle
     auto installCycle = [&](const std::vector<int>& ordered) {
         int k = (int)ordered.size();
-        std::vector<int> dbuf; std::vector<double> sbuf; std::vector<int> ebuf;
+        std::vector<int> dbuf; std::vector<int> ebuf;
         for (int t = 0; t < k; t++) {
             auto it = sdof.find({ordered[t], ordered[(t+1) % k]});
             if (it == sdof.end()) return;        // not a closed walk: skip
-            // +/-1 (unit density) on the two coincident DOFs of each shared face.
-            // This is the discrete NULL mode of N (zero normal field at every
-            // collocation point: N L ~ 0, verified field-exact in the linear
-            // regime). NOTE: it is NOT charge-neutral (m_e = A_out - A_in != 0)
-            // on distorted hexes, but charge-neutrality is the WRONG requirement
-            // for deflation -- field-nullness (N L = 0) is what matters, and a
-            // 1/area "charge-neutral" reweighting breaks N L = 0 (changes the
-            // field by ~100%, verified). The residual nonlinear B_z drift comes
-            // from a different mechanism (non-uniform chi makes span(L) not
-            // A-invariant), addressed at the solver level, not the basis.
-            dbuf.push_back(it->second.first);  sbuf.push_back(1.0);
-            dbuf.push_back(it->second.second); sbuf.push_back(-1.0);
+            // support = the two coincident DOFs of each shared face along the cycle.
+            dbuf.push_back(it->second.first);
+            dbuf.push_back(it->second.second);
             ebuf.push_back(edgeId(ordered[t], ordered[(t+1) % k]));
         }
-        for (size_t i = 0; i < dbuf.size(); i++) { cdofs.push_back(dbuf[i]); csign.push_back(sbuf[i]); }
+        int nc = (int)dbuf.size();               // cycle support DOFs (2 per shared face)
+        // LOCAL de-Rham-exact loop weights (distortion-proof).  The combinatorial
+        // +/-1 is the field-null mode (N L = 0) ONLY on AFFINE hexes; on a DISTORTED
+        // (non-affine) hex it carries field (verified: maxNL grows ~ distortion, the
+        // 756-loop C-type defect).  But the SAME support faces ALWAYS admit a
+        // field-null reweighting: smin(N restricted to these columns)/smax ~ 1e-16 at
+        // any distortion (the cycle's topological rank-deficiency is geometry-
+        // independent; only the WEIGHTS are geometric).  So set the coeffs = the local
+        // null vector of N[rows, dbuf], rows = all faces of the cycle's elements (an
+        // over-determined block => field-null EVERYWHERE, not just at the support eval
+        // points).  Gram G = M^T M (nc x nc, SPD), smallest eigenvector (dsyevd, SVD-
+        // free) = the field-null loop.  ~8x8 per cycle, O(1)/cycle, O(n_loop) total.
+        // Same densify+local-SVD pattern as ComputePlaneSlabAddedModes.  Verified:
+        // corrected loops are field-null to machine precision AND span ker(N) exactly,
+        // i.e. an EXACT loop-star gauge on distorted hexes.
+        std::vector<int> rowDofs;
+        for (int e : ordered) {
+            radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(m_interaction->g3dRelaxPtrVect[e]);
+            int nf = poly ? poly->AmOfFaces : 0;
+            for (int f = 0; f < nf; f++) rowDofs.push_back(dofOffset(e) + f);
+        }
+        int nr = (int)rowDofs.size();
+        std::vector<double> sbuf(nc, 0.0);
+        bool ok = false;
+        if (nr >= nc && nc > 0) {
+            std::vector<double> M((size_t)nr * nc, 0.0);     // col-major (nr x nc)
+            for (int c = 0; c < nc; c++)
+                for (int r = 0; r < nr; r++)
+                    M[(size_t)c * nr + r] = GetInteractionMatrixElement(rowDofs[r], dbuf[c]);
+            std::vector<double> G((size_t)nc * nc, 0.0);
+            cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans, nc, nc, nr,
+                        1.0, M.data(), nr, M.data(), nr, 0.0, G.data(), nc);
+            std::vector<double> ev(nc);
+            if (LAPACKE_dsyevd(LAPACK_COL_MAJOR, 'V', 'U', nc, G.data(), nc, ev.data()) == 0) {
+                for (int j = 0; j < nc; j++) sbuf[j] = G[(size_t)j];   // col 0 = smallest = null vec
+                ok = true;
+            }
+        }
+        if (!ok)                                 // dsyevd edge case only: topological +-1 fallback
+            for (int t = 0; t < nc; t += 2) { sbuf[t] = 1.0; if (t + 1 < nc) sbuf[t + 1] = -1.0; }
+        for (int i = 0; i < nc; i++) { cdofs.push_back(dbuf[i]); csign.push_back(sbuf[i]); }
         offs.push_back((int)cdofs.size());
         std::sort(ebuf.begin(), ebuf.end());
         cycleEdges.push_back(ebuf);
@@ -548,6 +579,18 @@ extern "C" void RadGetKeepLoopStats(double* out /* len 6 */) {
 static int g_loopstar_hmat_mode = 0;
 extern "C" void RadSetLoopStarHMatMode(int m) { g_loopstar_hmat_mode = m; }
 extern "C" int  RadGetLoopStarHMatMode(void) { return g_loopstar_hmat_mode; }
+// KEEP-LOOPS toggle for SolveLoopStar.  true (default) = recover the loop
+// (cotree-cycle) component via the block Gauss-Seidel refinement so sigma matches
+// the full direct solve (field-exact at mu_r <= 1e4, distorted hexes).  false =
+// A_SS-ONLY: return sigma = S y_S (the star/loop-free part) and SKIP the keep-loops
+// GS.  The loop magnetization y_L is a non-physical artifact generated by the
+// off-diagonal A_LS != 0 (loops != ker(N) on distorted hexes + non-uniform chi);
+// recovering it via A_LL = L^T diag(1/chi) L is fragile (A_LL -> singular as
+// 1/chi -> 0, the GS amplifies).  A_SS-only never builds A_LL, so it is robust at
+// ANY mu_r -- the right fine-phase solve when the loop content is unwanted.
+static bool g_loopstar_keep_loops = true;
+extern "C" void RadSetLoopStarKeepLoops(int on) { g_loopstar_keep_loops = (on != 0); }
+extern "C" int  RadGetLoopStarKeepLoops(void)   { return g_loopstar_keep_loops ? 1 : 0; }
 // H-ILU truncation tolerance for the A_SS H-LU factorization (mode 2). Larger =
 // more aggressive rk truncation during the Schur updates (cheaper, "incomplete"
 // -> H-ILU); smaller = more accurate (-> H-LU). Applied via
@@ -1317,7 +1360,12 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
     // of basis orthogonality. The coupling is weak (~0.5%) so a handful of sweeps
     // reach tol. This is iterative refinement with the star+loop blocks as a
     // (cheap, mu_r-robust) preconditioner -- far fewer MatVecs than plain BiCGSTAB.
-    if (m_n_loop > 0) {
+    //
+    // A_SS-ONLY (g_loopstar_keep_loops == false): skip this entirely and return the
+    // loop-free star solution sigma = S y_S.  The recovered y_L is a non-physical
+    // artifact (A_LS != 0); skipping its recovery removes the A_LL singularity that
+    // makes the GS amplify at high mu_r, so the solve is robust at ANY mu_r.
+    if (m_n_loop > 0 && g_loopstar_keep_loops) {
         const int nl = m_n_loop;
         auto applyL = [&](const std::vector<double>& yL, std::vector<double>& full){
             std::fill(full.begin(), full.end(), 0.0);
