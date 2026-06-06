@@ -124,7 +124,6 @@ mcp-server-bem = "radia_mcp.bem.server:main"
 mcp-server-fem = "radia_mcp.fem.server:main"
 mcp-server-wpt = "radia_mcp.wpt.server:main"
 mcp-server-team-benchmark = "radia_mcp.team_benchmark.server:main"
-mcp-server-comsol-converter = "radia_mcp.comsol_converter.server:main"
 mcp-server-litz-transmission = "radia_mcp.litz_transmission.server:main"
 mcp-server-maglev = "radia_mcp.maglev.server:main"
 mcp-server-fusion = "radia_mcp.fusion.server:main"
@@ -182,3 +181,8 @@ mcp-server-research-project = "radia_mcp.research_project.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "xval: heavy COMSOL<->NGSolve cross-validation regression (FEM solve, minutes; needs ngsolve/netgen). Run the cross-validation suite with -m xval, or skip it with -m 'not xval'.",
+]
