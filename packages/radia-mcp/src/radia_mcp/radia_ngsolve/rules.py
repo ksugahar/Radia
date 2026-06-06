@@ -1017,6 +1017,125 @@ def check_msc_eval_face_center(filepath: str, lines: List[str]) -> List[Dict]:
     return findings
 
 
+def check_scattered_eddy_missing_a0(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: Scattered-field eddy/Joule loss must include the background A0 in E.
+
+    In a scattered-field harmonic eddy solve the FE unknown gfA is the SCATTERED
+    vector potential; the total electric field is E = -jw (A0 + gfA + grad(Phi)).
+    Computing the Joule loss from the scattered gfA alone (omitting the background
+    A0) overestimates the loss by ~10x (observed in COMSOL<->NGSolve induction-
+    heating cross-validation). Coil-source (total-field) problems carry no
+    background A0 and correctly pass A0=None -- those files do not define an A0
+    and are therefore not flagged.
+    """
+    findings = []
+    text = '\n'.join(lines)
+    # The helper's own definition legitimately references gfA without A0 in the
+    # "A0 is None" branch; never flag the definition file itself.
+    if 'def joule_loss_density' in text:
+        return findings
+    low = text.lower()
+    if not any(k in low for k in ['joule', 'eddy', 'induction_heating', 'loss_density']):
+        return findings
+    # Only a scattered/background-field problem needs A0 added; coil/total-field
+    # sources correctly use A0=None and must NOT be flagged. Gate on a background
+    # marker so those files are excluded.
+    has_background = (
+        any(k in low for k in ['background', 'applied field', 'incident', 'scattered'])
+        or any(re.search(r'\bB0\b', l) for l in lines)
+    )
+    if not has_background:
+        return findings
+
+    in_docstring = False
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        # Skip triple-quoted blocks -- knowledge/doc text shows these patterns as prose.
+        if stripped.count('"""') == 1 or stripped.count("'''") == 1:
+            in_docstring = not in_docstring
+            continue
+        if in_docstring or stripped.startswith('#'):
+            continue
+        code = stripped.split('#', 1)[0]   # ignore inline comments
+        # Unambiguous signature: the joule_loss_density() helper called WITHOUT A0=.
+        # (Hand-rolled E = -jw(gfA + grad(Phi)) is deliberately NOT flagged: it is
+        # correct for total-field/coil-source formulations where gfA is already the
+        # total potential, which is statically indistinguishable from scattered.)
+        if re.search(r'joule_loss_density\s*\(', code):
+            call_ctx = ' '.join(l.split('#', 1)[0] for l in lines[i - 1:i + 2])
+            if not re.search(r'\bA0\s*=', call_ctx):
+                findings.append({
+                    'line': i, 'severity': 'HIGH',
+                    'rule': 'scattered-eddy-missing-a0',
+                    'message': (
+                        'joule_loss_density() called without A0= but this file sets a '
+                        'background/applied field. In a scattered-field eddy solve the '
+                        'FE unknown gfA is the SCATTERED potential, so the total '
+                        'E = -jw (A0 + gfA + grad(Phi)); omitting A0 overestimates the '
+                        'Joule loss by ~10x. Pass A0=<background> (A0=None ONLY for '
+                        'coil/total-field sources, where gfA is already total).'
+                    ),
+                })
+    return findings
+
+
+# NOTE: the "direct solver on 3D HCurl hits the ~84k order-2 ceiling" footgun is
+# NOT a static lint -- "uses a direct solver" is correct the vast majority of the
+# time (every 2D-H1 and small 3D solve), so a static check floods correct library
+# code with false positives. It is instead enforced as a RUNTIME guard in solve.py
+# (`_direct_inverse`), which turns the cryptic "bad array new length" overflow into
+# an actionable "switch to CG+BDDC" message. Right guard, right layer.
+
+
+def check_gridfunction_set_definedon_in_loop(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: GridFunction.Set(..., definedon=...) inside a loop.
+
+    NGSolve's GridFunction.Set() ZEROS the entire vector before projecting onto the
+    definedon region. Looping over boundaries/materials and calling Set() once per
+    region therefore leaves ONLY the LAST region's data -- every prior region is wiped
+    (e.g. a capacitor whose conductor potentials are set in a loop collapses to V=0,
+    energy 0). Set ALL regions in ONE call via mesh.BoundaryCF / mesh.MaterialCF.
+    """
+    findings = []
+    if not any(('ngsolve' in l) or ('GridFunction' in l) for l in lines):
+        return findings
+    set_pat = re.compile(r'\b(\w+)\.Set\s*\(.*\bdefinedon\s*=')
+    loop_pat = re.compile(r'^(\s*)(?:for|while)\b')
+    loop_stack = []          # (indent, lineno) of currently-open loops
+    in_docstring = False
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.count('"""') == 1 or stripped.count("'''") == 1:
+            in_docstring = not in_docstring
+            continue
+        if in_docstring or stripped.startswith('#'):
+            continue
+        indent = len(line) - len(line.lstrip())
+        while loop_stack and indent <= loop_stack[-1][0]:
+            loop_stack.pop()
+        code = stripped.split('#', 1)[0]
+        sm = set_pat.search(code)
+        if sm and loop_stack:
+            findings.append({
+                'line': i, 'severity': 'HIGH',
+                'rule': 'ngsolve-set-definedon-in-loop',
+                'message': (
+                    f"'{sm.group(1)}.Set(..., definedon=...)' is inside the loop at "
+                    f"line {loop_stack[-1][1]}. GridFunction.Set() ZEROS the whole "
+                    "vector first, so each iteration wipes the previous region -- only "
+                    "the LAST survives (e.g. conductor potentials collapse to 0). Set "
+                    "ALL regions in ONE call: gf.Set(mesh.BoundaryCF({...}, default=0), "
+                    "definedon=mesh.Boundaries('a|b'))."
+                ),
+            })
+        lm = loop_pat.match(line)
+        if lm:
+            loop_stack.append((len(lm.group(1)), i))
+    return findings
+
+
 # All rules in execution order
 ALL_RULES = [
     # NGSolve FEM rules
@@ -1031,6 +1150,8 @@ ALL_RULES = [
     check_ngsolve_pinvit_no_projection,
     check_eddy_current_missing_complex,
     check_joule_heat_missing_conj,
+    check_scattered_eddy_missing_a0,
+    check_gridfunction_set_definedon_in_loop,
     check_ngsolve_kelvin_missing_bonus_intorder,
     check_axisymmetric_h1_over_r,
     # Shared PEEC/BEM rules
