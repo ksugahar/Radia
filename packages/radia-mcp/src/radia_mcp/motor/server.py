@@ -26,6 +26,7 @@ from .femm_transient_knowledge import get_femm_transient_knowledge
 from .henrotte_lineage_knowledge import get_henrotte_lineage_knowledge
 from .hollaus_eddy_knowledge import get_hollaus_eddy_knowledge
 from .hollaus_genealogy_knowledge import get_hollaus_genealogy
+from .tritool_cross_reference_knowledge import get_tritool_cross_reference
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -274,6 +275,29 @@ def motor_bibliography(query: str = "") -> str:
     return get_bibliography_index(query)
 
 
+@mcp.tool()
+def motor_tritool_cross_reference(topic: str = "overview") -> str:
+    """
+    Tri-tool cross-reference: FEMM <-> JMAG <-> radia-ngsolve (相互学習).
+
+    Cross-learning that ties the lab's three motor-FEA tools together so each
+    strengthens the others. Mirrors the shared cross_ref.json carried by the
+    two dedicated knowledge servers mcp-server-femm (S:\\FEMM\\mcp-server) and
+    mcp-server-jmag (S:\\JMAG\\mcp-server).
+
+    Args:
+        topic: One of:
+            "overview"          - The ecosystem + the two new MCP servers
+            "capability_matrix" - Per-capability FEMM/JMAG/radia table + strongest
+            "radia_can_exceed"  - Where radia-ngsolve matches or beats the others
+            "jmag_only"         - Genuine JMAG-only capabilities (gaps)
+            "femm_role"         - FEMM as ground-truth yardstick + .fem strategy
+            "roadmap"           - radia-motor strengthening roadmap (ranked)
+            "all"               - Everything
+    """
+    return get_tritool_cross_reference(topic)
+
+
 # ============================================================
 # MCP Prompts
 # ============================================================
@@ -365,6 +389,7 @@ def main():
         from .femm_transient_knowledge import SECTIONS as F_SEC
         from .henrotte_lineage_knowledge import SECTIONS as H_SEC
         from .hollaus_eddy_knowledge import SECTIONS as E_SEC
+        from .tritool_cross_reference_knowledge import SECTIONS as X_SEC
         for k in O_SEC:
             r = motor_onelab(k)
             print(f"  motor_onelab({k!r}): {len(r)} chars")
@@ -389,6 +414,10 @@ def main():
             r = motor_hollaus_eddy(k)
             print(f"  motor_hollaus_eddy({k!r}): {len(r)} chars")
             assert len(r) > 100, f"Hollaus eddy topic {k} too short"
+        for k in X_SEC:
+            r = motor_tritool_cross_reference(k)
+            print(f"  motor_tritool_cross_reference({k!r}): {len(r)} chars")
+            assert len(r) > 100, f"Tri-tool topic {k} too short"
         p = new_motor_simulation("synrm")
         print(f"  new_motor_simulation('synrm'): {len(p)} chars")
         assert "wakao_ae_ls" in p
