@@ -57,6 +57,10 @@ radia-*/
 *.o
 *.obj
 
+# Mathematica notebooks: manage as .wls, never .nb
+# (CLAUDE.md policy "Mathematica Content: .wls Not .nb")
+*.nb
+
 # But DO track the Cubit plugin .ccm/.ccl — they ship in the
 # cubit-mesh-export wheel and CI does not rebuild them. .pyd is
 # intentionally NOT tracked (Policy 2 bans .pyd in git, and it is an
