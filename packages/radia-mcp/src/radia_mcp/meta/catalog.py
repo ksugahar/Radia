@@ -48,7 +48,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-radia-interop",
         "description": "Cross-CAD interop (STEP/IGES/CadQuery <-> Cubit/Netgen)",
         "primary_tools": ["any_step_to_cubit_hex", "freecad_to_cubit_hex"],
-        "related": ["comsol-converter", "cubit", "build123d"],
+        "related": ["cubit", "build123d"],
         "tags": ["cad"],
     },
     "gmsh": {
@@ -71,7 +71,6 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "analytical_formulas", "peec_inductance"],
         "related": [
             "bem",
-            "comsol-converter",
             "fem",
             "mathematica",
             "matrix-solvers",
@@ -106,7 +105,6 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["fem_usage"],
         "related": [
             "bem",
-            "comsol-converter",
             "differential-forms",
             "gnn",
             "matrix-solvers",
@@ -123,7 +121,6 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "Loop-Star, Calderon, Radia MMM/MSC, HACApK, FEM-BEM",
         "primary_tools": ["bem_usage"],
         "related": [
-            "comsol-converter",
             "fem",
             "peec",
             "radia-ngsolve",

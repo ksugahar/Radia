@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **341 tools** across 41 MCP servers.
+Total: **334 tools** across 40 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -38,7 +38,6 @@ Total: **341 tools** across 41 MCP servers.
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
 | [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 3 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
-| [`mcp-server-comsol-converter`](#mcp-server-comsol-converter) | `radia_mcp.comsol_converter` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
@@ -589,22 +588,6 @@ Module: `radia_mcp.team_benchmark.server`
 | `team_magnetostatic` | TEAM magnetostatic problems: 6 (sphere), 13 (nonlinear yoke). |
 | `team_ndt_inverse` | TEAM NDT and inverse / optimization problems. |
 | `team_special` | TEAM special problems: hysteresis (32), motors (30b/34), HF (18/19/29). |
-
-## `mcp-server-comsol-converter`
-
-_COMSOL <-> IR <-> NGSolve model translation (magnetostatic A-formulation v1): IR hub + mapping knowledge + NGSolve/COMSOL codegen + team-benchmark cross-check. Reuses interop/fem/bem; coordinates the external COMSOL MCP + radia-ngsolve_
-
-Module: `radia_mcp.comsol_converter.server`
-
-| Tool | Description |
-|---|---|
-| `cc_comsol_to_ir` | Guide building an IR from a COMSOL model extraction. |
-| `cc_ir_schema` | Neutral IR schema (COMSOL <-> IR <-> NGSolve hub) + a worked example. |
-| `cc_ir_to_comsol` | Generate a COMSOL Model Builder Java skeleton from an IR. |
-| `cc_ir_to_ngsolve` | Generate an NGSolve magnetostatic A-formulation script from an IR. |
-| `cc_mapping` | COMSOL <-> IR <-> NGSolve correspondence knowledge (magnetostatic_A). |
-| `cc_verify` | Plan a COMSOL-vs-NGSolve cross-check against a TEAM reference solution. |
-| `comsol_converter_status` | (no description) |
 
 ## `mcp-server-differential-forms`
 
