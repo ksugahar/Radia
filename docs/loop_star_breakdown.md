@@ -221,11 +221,20 @@ breakdown needs `μ_min < 1/χ`, which on the C-type came from the **yano `±1` 
 not being exactly field-null** (spurious `μ≈1/χ` modes) rather than a physical
 weak-demag continuum. This **supports the hypothesis**: with the HDiv-type's
 *exactly* field-null loops removed, the star block should be Jacobi-solvable for
-`μ_r ≤ 1e4` (no H-matrix factor → also the compute-time superset). Caveat: this is
-the constant-M proxy on a moderate body; the **stress test** — the HDiv-type star
-block on the genuinely distorted C-type (thin gap) with Jacobi — remains, and an
-ultra-weak-demag mode (extreme thin features, very fine meshes) would still need
-the H-ILU fallback.
+`μ_r ≤ 1e4` (no H-matrix factor → also the compute-time superset).
+
+A stress sweep (`demag_jacobi_stress.py`: cube / rods up to 1×1×16 / 4×4×1 slab /
+C-yoke, regular **and** 30 %-distorted) confirms the regime: in **every** case
+`|μ|_min ≈ 0.007–0.12 ≫ 1/χ`, `cond(A)` stays **bounded (≤ ~270)** with **no `~μ_r`
+blowup**, and Jacobi-GMRES converges in **≤ ~200 iters** at `μ_r = 1e4`. A subtle
+point: the conditioning is *worst* where `1/χ ≈ μ_min` (gap ≈ 1) — at *moderate*
+`μ_r` (~1e2–1e3) — and *improves* as `μ_r → ∞` (the gap opens). So for the
+charge-carrying star block of a moderate body, Jacobi is fine across `μ_r`.
+
+Caveats: this is the constant-M proxy on moderate bodies; the **stress test that
+remains** is the HDiv-type star block on the genuinely distorted C-type with a
+*thin* magnet gap, and an ultra-weak-demag mode (extreme thin features, very fine
+meshes — where `μ_min` drops below `1/χ`) would still need the H-ILU fallback.
 
 ---
 
