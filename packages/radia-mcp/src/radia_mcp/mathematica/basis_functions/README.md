@@ -1,0 +1,148 @@
+# NGSolve-style FEM basis functions — Mathematica symbolic reference
+
+General-purpose, symbolic (Mathematica/wls) implementation of the
+**NGSolve high-order hierarchical FEM shape functions** (H1 / H(curl) /
+H(div)), ported from NGSolve's C++ element library.  Kept here (not in an
+application directory such as `examples/CLN/`) because the basis is a
+**reusable building block**: the `mathematica_*` MCP tools and any future
+work that needs the *analytical* form of a shape function — e.g. the
+analytical solid-angle / `1/r` integral for an MSC/IEM integral-equation
+kernel built on the FEEC basis — draws on it here.
+
+## Why this matters (the loopless MSC/IEM solver)
+
+The discrete de Rham structure of these bases is exactly what removes the
+"loop" problem from a surface-charge / integral-equation magnetostatic or
+eddy-current solver:
+
+- `curl(H(curl))` is **div-free to machine precision** (verified on
+  distorted hexes, NGSolve, order 1–3).  So the div-free magnetization /
+  current circulations ("loops", `ker N`) are **machine-zero field-null by
+  construction** — no hand-built null vectors, no over-counting, no
+  per-element ad-hoc element engineering (the thing that hand-crafted
+  "distorted-element" formulations were doing to suppress the spurious
+  loop-star component).
+- **High order is one line** (`order = p`), so the low-order
+  Raviart–Thomas / Nédélec accuracy loss on distorted hexes (Naff–Russell–
+  Wilson) is removed by raising `p`, not by engineering the element.
+
+To build the integral-equation **field operator** on this basis, the only
+new ingredient is the field of each shape function: the solid-angle / `1/r`
+integral of its (rational, Piola-mapped) density over the volume/face
+element.  Two routes:
+
+1. **Analytical** — integrate the *symbolic* shape function (this package)
+   against the `1/r` kernel in Mathematica.  Where it closes, it is exact
+   and fast.
+2. **Gaussian quadrature** — needs no symbolic basis at all: evaluate the
+   NGSolve shape function at quadrature points (NGSolve Python API) and sum
+   against `1/r`.  Always available; the safe fallback.
+
+(The CLN/Foster work used **arbitrary-precision adaptive integration**,
+above machine double, when converting a transfer function to Foster form —
+the same `NIntegrate[..., WorkingPrecision -> n, Method -> "GlobalAdaptive"]`
+discipline applies when the analytical route is taken numerically.)
+
+## Construction (Zaglmayr hierarchical)
+
+```
+l[i, x]        = LegendreP[i, x]                       (* Legendre        *)
+L[i, x]        = Integrate[l[i-1, z], {z, -1, x}]      (* integrated Legendre *)
+lS[n, s, t]    = t^n  l[n, s/t]                        (* scaled Legendre  *)
+LS[n, s, t]    = t^n  L[n, s/t]                        (* scaled int. Leg. *)
+```
+then barycentric coordinates `lamda[i]` per element, and the
+vertex / edge / face / interior shape functions assembled so the
+H(curl) gradient block (`ker curl`) is explicit at the shape-function level
+(`nograds` drops it).  Ref: Zaglmayr PhD (JKU 2006) §5–6; Schöberl &
+Zaglmayr, COMPEL 24 (2005).  See `../notes_fem_hcurl.md`.
+
+## Coverage (current `.wls`)
+
+| space | high-order (any p) — Hex/Quad | high-order (any p) — Tet/Trig | rational |
+|-------|-------------------------------|-------------------------------|----------|
+| H1      | Segm, Trig, Tet, Quad, Hex, Prism (hierarchical) | (= H1 columns)   | **Pyramid** (p=1) |
+| H(curl) | **Hex, Quad** (tensor de Rham) | **Tet, Trig** (classical Nédélec `N_k`) | Pyramid TODO |
+| H(div)  | **Hex, Quad** (tensor de Rham) | **Tet, Trig** (classical Raviart–Thomas `RT_k`) | Pyramid TODO |
+
+- **Hex / Quad** vector spaces: tensor de Rham construction (`Q`=Legendre/L2,
+  `W`=integrated-Legendre/H1, `d: W→Q`) — spans NGSolve's order-`p`
+  `H(curl)`/`H(div)` exactly; clean explicit polynomials for the VIM `1/r` integral.
+- **Tet / Trig** vector spaces (`simplex_ho.wls`): the classical
+  `RT_k = [P_k]^d ⊕ x̃·P̃_k` and `N_k = [P_k]^d ⊕ {p∈[P̃_{k+1}]^d : p·x̃=0}`.
+  NGSolve uses a Zaglmayr integrated-Jacobi *hierarchical basis* of these same
+  spaces; the complete-polynomial form is basis-equivalent and what the VIM
+  field operator needs (it integrates whatever spans the space).
+- **Pyramid `p≥2`** (rational edge/face bubbles) is the remaining gap.
+
+## Source of truth
+
+- **NGSolve C++**: `fem/recursive_pol.hpp` (Legendre/Jacobi recursions),
+  `fem/h1hofe*`, `fem/hcurlhofe*`, `fem/hdivhofe*` (per-element high-order
+  shape functions).  Re-derivable from these directly.
+- **Original working notebooks (LAB-local, not shipped)**:
+  `S:\NGSolve\EMPY\EMPY_Analysis\Elements\Shapr functions\*.nb`
+  (`H1 Shape functions.nb`, `Hcurl Shape Functions.nb`,
+  `High Order Nédélec Elements 3D.nb`, ...; 2026-02 vintage).  These are
+  large binary `.nb` and are **not** committed here (PyPI size + diff
+  hygiene); the clean `.wls` in this directory are the version-controlled,
+  shippable form.
+
+## NGSolve C++ source (the porting reference)
+
+The authoritative per-element shape-function source is NGSolve's
+`fem/h1hofe_*.cpp`, `fem/hcurlhofe_*.cpp`, `fem/hdivhofe_impl.hpp`,
+`fem/recursive_pol.hpp` — covering **all** element types incl.
+`h1hofe_pyramid.cpp`, `h1hofe_prism.cpp`, `hcurlhofe_pyramid.cpp`,
+`hcurlhofe_prism.cpp` (the hard rational pyramid/prism cases).  A local
+copy is kept at **`C:/temp/ngsolve_fem_src/`** (recovered LAB-local; NOT
+committed — it is NGSolve's own GPL source, kept only as the porting
+reference).  Each clean `.wls` here is authored from these, then
+self-tested.
+
+## Status / plan
+
+| file | element(s) / content | status |
+|------|----------------------|--------|
+| `recursive_pol.wls` | Legendre / integrated-Legendre / scaled | done, self-test PASS |
+| `h1.wls`            | H1 Trig, Tet, Quad, Hex, Prism          | done, self-test PASS (dim, PoU, edge-vanish, independence) |
+| `h1.wls`            | H1 **Pyramid** (rational, p=1 vertices) | done, self-test PASS (PoU, rationality, independence); p>=2 edge/face bubbles TODO |
+| `derham.wls`        | Whitney de Rham complex on tet (W0/W1/W2/W3) | done, self-test PASS (`d∘d=0`, `div(curl W1)=0` = loops div-free, Whitney dof) — the cohomology / loop foundation |
+| `hcurl.wls`         | H(curl) Nedelec: **Hex/Quad tensor (high-order p)** + tet/trig Whitney W1 + grad-block (ker curl) + SZ helpers | done, self-test PASS (dims, `grad H1 c H(curl)` curl-free, `curl H(curl) c H(div)` div-free, Whitney tangential dof) |
+| `hdiv.wls`          | H(div) RT/BDM: **Hex/Quad tensor (high-order p)** + tet/trig Whitney RT0 + SZ covariant helpers | done, self-test PASS (dims, `div(H(div)) = L2`, RT0 face dof, **de Rham `curl H(curl) c H(div)` showcase**) |
+| `simplex_ho.wls`    | high-order **Tet/Trig** H(curl)/H(div): classical Nédélec `N_k` + Raviart–Thomas `RT_k` | done, self-test PASS (dims, `S_k·x̃=0`, `grad P c N_k`, `curl N_k c RT_k` div-free, `div RT_k = P_k`) |
+| `cohomology.wls`    | discrete de Rham complex (d0/d1 incidence), Betti b0/b1/b2, **harmonic H^1 generator** (tree-cotree, `b1=E-V+C`) | done, self-test PASS (filled-disk/cycle/annulus/figure-eight; generator is a cycle but not a gradient) — the GLOBAL loops |
+| `vim_field.wls`     | **VIM field operator**: charge extraction (sigma=M.n, rho=-div M), 1/r field, van Oosterom-Strackee solid angle (MSC analytic kernel) | done, self-test PASS (div-free M -> rho=0 = loop field-null; VIM -> dipole far-field O(1/R^2); VOS solid angle = quadrature) |
+| `vim_loopfree.wls`  | **THE loop-mode question**: is the FEEC VIM formulated so no spurious loop modes arise? | done, self-test PASS -- loops = curl(interior H(curl)) (+) cohomology are CHARGE-FREE (div=0 AND M.n=0) => field-null **by construction on any element** (Piola preserves div + normal-trace); constant-M misses them (avg=0) -> its tree-cotree loops only approx ker(N) on distorted hexes = the defect |
+
+**The de Rham complex `H1 →grad→ H(curl) →curl→ H(div) →div→ L2` is now verified
+symbolically** (both maps exact: `curl∘grad=0`, `div∘curl=0`, each image lands in
+the next space), and the **cohomology `H^1`** (global loops on multiply-connected
+bodies) is connected to the tree-cotree count `rad_hacapk.cpp::BuildLoopBasis` uses.
+
+**What is settled at the `.wls` level** (the right gate BEFORE any C++): the FEEC VIM is
+**loop-mode-free by construction** (`vim_loopfree.wls`) — the field-null loops are exactly
+the charge-free space `curl(interior H(curl)) ⊕ cohomology H^1`, and the Piola map keeps
+them charge-free (div=0 AND M·n=0) on *any* distorted element, so no spurious loop modes
+arise and no per-geometry numerical null-vector patch is needed.  This is the formulation
+question that had to be answered symbolically first.  The full de Rham complex + cohomology
++ VIM field operator are covered for every element Radia's solver uses (MMM=tet,
+MSC=hex/wedge; plus quad/trig/prism) — 9 files, 100+ self-test assertions, all PASS.
+
+Still to settle at the `.wls`/formulation level before C++:
+- the loop/star (Hodge) SPLIT of the assembled high-order system — confirm the star
+  (charge-carrying) block is well-conditioned once the loops are removed;
+- the VIM right-hand side / collocation correspondence (the evaluation points must match
+  the high-order basis, per the lab's "矢野 element" experience);
+- a small end-to-end VIM solve on a distorted multi-element patch, loops removed, vs a
+  trusted reference — entirely in `.wls`/Python before committing to a C++ kernel.
+
+Deferred (NOT on the solver's critical path):
+- **pyramid** p>=2 (rational edge/face bubbles): Radia has **no pyramid element**
+  (MSC=hex/wedge, MMM=tet), so this is a completeness item only.  The space is the
+  rational collapsed-coordinate bubbles (`xt=x/(1-z)`, scaled integrated-Legendre +
+  triangle bubbles); NGSolve's `EdgeOrthoPol`/`TrigOrthoPol` are dual-shape
+  optimizations, not needed for the primal space.
+- (optional) the NGSolve Zaglmayr integrated-Jacobi *hierarchical* simplex basis,
+  if a bit-exact match to NGSolve's dof ordering is ever needed (the spaces are
+  already covered by `simplex_ho.wls`).
