@@ -202,6 +202,24 @@ simplest rung that works; the novelty is not the goal, a conditioned solver is:*
 3. **H-ILU** (HACApK H-matrix factor) — the current fallback, validated
    `μ_r ≤ 1e4`.
 
+### H-matrix preconditioner roadmap
+
+The HACApK H-matrix (`O(N log N)` operator apply) is the shared substrate; the
+preconditioners on it form a suite with graceful escalation (repo-first: use the
+lightest that works — Jacobi where the evidence below allows):
+
+- **H-LU / H-ILU** — *keep* (current factor preconditioner + scalable fallback;
+  validated `μ_r ≤ 1e4`). Not deleted even if Jacobi handles the main path.
+- **H-QR** (A. Ida's proposal) — *future*. An H-matrix QR factorization: more
+  numerically stable than H-LU (no pivot growth on ill-conditioned high-`μ`
+  systems), enables least-squares / overdetermined solves, and — being
+  **rank-revealing** — can expose the operator's null space (the **loops**)
+  directly from the factorization, i.e. a factorization-level loop/star split.
+- **H-AMS** — *future*. The auxiliary-space (Hiptmair–Xu) preconditioner applied
+  to the dense H-matrix operator, with the de-Rham loop/star as its lowest-order
+  auxiliary decomposition. Appears unpublished for dense integral operators (see
+  "Does it have to be H-ILU?" above) — a genuine novelty.
+
 ### Evidence so far (favours Jacobi for `μ_r ≤ 1e4`)
 
 `examples/feec_vim/demag_spectrum_jacobi.py` measures the demag operator's spectrum
