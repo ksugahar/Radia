@@ -1,0 +1,172 @@
+"""hdiv_demag_tet.py -- HDiv-type VIM demag on UNSTRUCTURED TET meshes (production step #1a).
+
+The structured-hex prototype (hdiv_demag_quad_self.py) is generalized to real tet RT0 meshes from
+NGSolve.  The NGSolve HDiv(order=0) extraction is element-AGNOSTIC:
+  B = [ -div(u) tested on L2 (volume charge rho) ;  u.Trace().n tested on SurfaceL2 (surface charge sigma) ]
+  M_mass = the HDiv(0) mass (the physical demag factors are eig(N, M_mass), basis-invariant).
+Only the Gram self-energy geometry is element-specific -> here TET (barycentric sub-points) and
+TRIANGLE faces, with the self constants c_tet / c_tri (the tet/tri analogs of c_cube / c_sq).
+
+Verification (the physics gate): a tet-meshed SPHERE has demag factor EXACTLY 1/3 (isotropic);
+a CUBE has the three axis demag factors equal to 1/3 each (sum to 1 by symmetry).  We compute the
+demag factor of a UNIFORM M_z as the Rayleigh quotient (m^T N m)/(m^T M_mass m) with m = the RT0
+L2-projection of (0,0,1).  Sphere -> ~1/3 confirms the unstructured tet operator is physical.
+
+This is the Python reference; production step #1b moves the dense Gram G to the C++ HACApK charge
+H-matrix (scalable) and checks it reproduces this.
+"""
+import json
+import os
+from math import pi, sqrt
+
+import numpy as np
+import scipy.sparse as sp
+
+import ngsolve as ng
+from netgen.csg import CSGeometry, Sphere, Pnt, OrthoBrick
+
+ng.SetNumThreads(4)
+HERE = os.path.dirname(os.path.abspath(__file__))
+EPS = 1e-6
+
+# ---- self constants c = INT INT_{unit-measure shape} 1/|x-y| (sub-cell self correction) ----
+# cube/square via exact quadrature (as the hex prototype); tet/tri extrapolated (compute_self_constants.py)
+from scipy import integrate  # noqa: E402
+_c_sq, _ = integrate.dblquad(lambda v, u: (1 - u) * (1 - v) / sqrt(u * u + v * v + 1e-300), 0, 1, 0, 1)
+C_SQ = 4.0 * _c_sq
+C_TET = 1.77   # INT INT 1/|x-y| over a unit-volume regular tet (Richardson, ~0.3% uncertainty)
+C_TRI = 2.89   # INT INT 1/|x-y| over a unit-area equilateral triangle
+
+
+def _bary_tet(nsub):
+    """barycentric sub-cell centroids of a reference tet (lambda weights), uniform sub-weights."""
+    lam = []
+    for i in range(nsub):
+        for j in range(nsub - i):
+            for k in range(nsub - i - j):
+                L = np.array([i + 0.5, j + 0.5, k + 0.5, nsub - i - j - k - 0.5]) / nsub
+                if L.min() > 0:
+                    lam.append(L)
+    return np.array(lam)   # (m, 4) barycentric
+
+
+def _bary_tri(nsub):
+    lam = []
+    for i in range(nsub):
+        for j in range(nsub - i):
+            L = np.array([i + 0.5, j + 0.5, nsub - i - j - 0.5]) / nsub
+            if L.min() > 0:
+                lam.append(L)
+    return np.array(lam)   # (m, 3)
+
+
+def tet_self_energy(V, vol, nsub):
+    """G_aa for a tet (4 verts V) of volume `vol`: cross sub-point sum + sub-cell self (c_tet)."""
+    lam = _bary_tet(nsub)
+    C = lam @ V                                   # (m,3) sub-point positions
+    w = np.full(len(C), vol / len(C))             # equal sub-weights, sum = vol
+    D = np.linalg.norm(C[:, None] - C[None, :], axis=2)
+    np.fill_diagonal(D, np.inf)
+    cross = np.sum(np.outer(w, w) / (4 * pi * D))
+    selfsub = np.sum(C_TET * w ** (5.0 / 3.0) / (4 * pi))
+    return cross + selfsub
+
+
+def tri_self_energy(V, area, nsub):
+    lam = _bary_tri(nsub)
+    C = lam @ V
+    w = np.full(len(C), area / len(C))
+    D = np.linalg.norm(C[:, None] - C[None, :], axis=2)
+    np.fill_diagonal(D, np.inf)
+    cross = np.sum(np.outer(w, w) / (4 * pi * D))
+    selfsub = np.sum(C_TRI * w ** 1.5 / (4 * pi))
+    return cross + selfsub
+
+
+def _csr(bf):
+    m = bf.mat
+    r, c, v = m.COO()
+    return sp.csr_matrix((np.array(v), (np.array(r), np.array(c))), shape=(m.height, m.width)).toarray()
+
+
+def build_demag(mesh, nsub=4):
+    """Assemble the HDiv-type VIM demag operator N = B^T G B on a tet mesh + the HDiv mass M_mass.
+    Returns N, M_mass, the charge map B, the loop basis, and diagnostics."""
+    with ng.TaskManager():
+        fes = ng.HDiv(mesh, order=0)
+        ndof = fes.ndof
+        nn = ng.specialcf.normal(mesh.dim)
+        L2v, L2b = ng.L2(mesh, order=0), ng.SurfaceL2(mesh, order=0)
+        u = fes.TrialFunction()
+        bv = ng.BilinearForm(trialspace=fes, testspace=L2v)
+        bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx
+        bv.Assemble()
+        bb = ng.BilinearForm(trialspace=fes, testspace=L2b)
+        bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds
+        bb.Assemble()
+        Bv_m, Bb_m = _csr(bv), _csr(bb)
+        massv = ng.BilinearForm(L2v); massv += L2v.TrialFunction() * L2v.TestFunction() * ng.dx; massv.Assemble()
+        massb = ng.BilinearForm(L2b); massb += L2b.TrialFunction() * L2b.TestFunction() * ng.ds; massb.Assemble()
+        el_vol = np.diag(_csr(massv)); bf_area = np.diag(_csr(massb))
+        # HDiv mass (the physical demag-factor metric)
+        vh = fes.TestFunction()
+        mh = ng.BilinearForm(fes); mh += u * vh * ng.dx; mh.Assemble()
+        M_mass = _csr(mh)
+        el_V = [np.array([mesh[v].point for v in el.vertices]) for el in mesh.Elements(ng.VOL)]
+        bf_V = [np.array([mesh[v].point for v in el.vertices]) for el in mesh.Elements(ng.BND)]
+        # uniform M_z, L2-projected onto RT0 (for the demag Rayleigh quotient)
+        gfu = ng.GridFunction(fes); gfu.Set(ng.CoefficientFunction((0, 0, 1))); m_unit = np.array(gfu.vec)
+    el_c = np.array([V.mean(0) for V in el_V]); bf_c = np.array([V.mean(0) for V in bf_V])
+    n_el, n_bf = len(el_c), len(bf_c)
+    cent = np.vstack([el_c, bf_c]); meas = np.concatenate([el_vol, bf_area])
+    B = np.vstack([Bv_m / el_vol[:, None], Bb_m / bf_area[:, None]])
+
+    Dd = np.linalg.norm(cent[:, None, :] - cent[None, :, :], axis=2); np.fill_diagonal(Dd, np.inf)
+    G = (meas[:, None] * meas[None, :]) / (4 * pi * Dd)
+    diagG = np.empty(n_el + n_bf)
+    for k, V in enumerate(el_V):
+        diagG[k] = tet_self_energy(V, el_vol[k], nsub)
+    for k, V in enumerate(bf_V):
+        diagG[n_el + k] = tri_self_energy(V, bf_area[k], nsub)
+    np.fill_diagonal(G, diagG)
+    N = B.T @ G @ B
+
+    Q = np.vstack([Bv_m, Bb_m])
+    sv = np.linalg.svd(Q, compute_uv=False)
+    rankQ = int(np.sum(sv > 1e-9 * sv.max()))
+    n_loop = ndof - rankQ
+    _, _, Vt = np.linalg.svd(Q)
+    loops = Vt[rankQ:, :]
+    return dict(N=N, M_mass=M_mass, B=B, ndof=ndof, n_loop=n_loop, loops=loops, m_unit=m_unit)
+
+
+def demag_factor(d):
+    m = d["m_unit"]
+    return float((m @ d["N"] @ m) / (m @ d["M_mass"] @ m))
+
+
+def report(mesh, tag, nsub=4):
+    d = build_demag(mesh, nsub)
+    Nn = np.linalg.norm(d["N"], 2)
+    asym = np.linalg.norm(d["N"] - d["N"].T) / Nn
+    loop_res = (max(np.linalg.norm(d["N"] @ d["loops"][k]) for k in range(d["n_loop"])) / Nn
+                if d["n_loop"] else 0.0)
+    Dz = demag_factor(d)
+    print(f"[{tag}] ndof={d['ndof']} n_loop={d['n_loop']} asym={asym:.1e} loop_res={loop_res:.1e} "
+          f"demag_z={Dz:.4f}")
+    return {"tag": tag, "ndof": d["ndof"], "n_loop": d["n_loop"], "asym": asym,
+            "loop_res": loop_res, "demag_z": Dz}
+
+
+if __name__ == "__main__":
+    res = {}
+    # cube (tet-meshed): each axis demag factor ~ 1/3
+    geo = CSGeometry(); geo.Add(OrthoBrick(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5)))
+    res["cube"] = report(ng.Mesh(geo.GenerateMesh(maxh=0.25)), "cube tet", nsub=4)
+    # sphere (tet-meshed): demag factor EXACTLY 1/3
+    for h in (0.5, 0.35, 0.25):
+        geo = CSGeometry(); geo.Add(Sphere(Pnt(0, 0, 0), 1.0))
+        res[f"sphere_h{h}"] = report(ng.Mesh(geo.GenerateMesh(maxh=h)), f"sphere tet h={h}", nsub=4)
+    with open(os.path.join(HERE, "hdiv_demag_tet.json"), "w") as f:
+        json.dump(res, f, indent=2)
+    print("saved", os.path.join(HERE, "hdiv_demag_tet.json"))
