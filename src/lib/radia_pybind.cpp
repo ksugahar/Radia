@@ -2761,6 +2761,48 @@ PYBIND11_MODULE(_radia_pybind, m) {
               and symmetry_relerr (|x^T N y - y^T N x| from the H-matvec).  Golden sizes only (forms dense N).
           )pbdoc");
 
+    // Build-once HACApK H-matrix operator for the HDiv-type VIM demag operator -- the production
+    // API: build N as an H-matrix ONCE, then drive a scalable symmetric solve (MINRES) over the
+    // O(N log N) matvec.  matvec(x)=N x; apply_system(x,inv_chi)=inv_chi M_mass x - N x (the
+    // material system operator); diag_system(inv_chi) is the Jacobi preconditioner diagonal.
+    py::class_<RadHACApKHDivManager>(m, "_HDivVimHMatrix")
+        .def(py::init([](int nx, int ny, int nz, int nsub, double distort,
+                         double eps, int leaf, double eta) {
+                 auto mgr = std::unique_ptr<RadHACApKHDivManager>(
+                     new RadHACApKHDivManager(nx, ny, nz, 1.0, distort, nsub));
+                 RadHACApKParams p;
+                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("HDiv VIM H-matrix build failed");
+                 return mgr;
+             }),
+             py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0, py::arg("distort") = 0.0,
+             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+             "Build the HDiv-type VIM demag operator N as a HACApK H-matrix on a structured "
+             "nx*ny*nz RT0 hex grid (nsub Gram quadrature, optional distortion; ACA eps/leaf/eta).")
+        .def("ndof", [](RadHACApKHDivManager& s) { return s.GetNDOF(); })
+        .def("matvec", [](RadHACApKHDivManager& s, const std::vector<double>& x) {
+                 std::vector<double> y((size_t)s.GetNDOF(), 0.0);
+                 s.MatVec(x, y);
+                 return y;
+             }, py::arg("x"), "N x (the O(N log N) H-matvec).")
+        .def("apply_system", [](RadHACApKHDivManager& s, const std::vector<double>& x, double inv_chi) {
+                 std::vector<double> y;
+                 s.ApplySystem(x, inv_chi, y);
+                 return y;
+             }, py::arg("x"), py::arg("inv_chi"),
+             "A x = inv_chi * (M_mass x) - (N x), the symmetric-indefinite material system operator.")
+        .def("diag_system", [](RadHACApKHDivManager& s, double inv_chi) { return s.DiagSystem(inv_chi); },
+             py::arg("inv_chi"), "diag(A) = inv_chi M_mass_ff - N_ff (Jacobi preconditioner).")
+        .def("stats", [](RadHACApKHDivManager& s) {
+                 const RadHACApKStats& st = s.GetStats();
+                 py::dict d;
+                 d["n_dof"] = st.n_dof; d["n_leaves"] = st.n_leaves; d["n_lowrank"] = st.n_lowrank;
+                 d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
+                 d["compression"] = st.compression; d["build_time"] = st.build_time;
+                 d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
+                 return d;
+             }, "H-matrix stats dict (n_dof, n_leaves, n_lowrank, compression, build_time, ...).");
+
     // ========================================================================
     // Object Creation
     // ========================================================================

@@ -330,4 +330,32 @@ void AssembleMass(const Mesh& m, std::vector<double>& M_mass)
     }
 }
 
+void BuildMassCOO(const Mesh& m, std::vector<int>& I, std::vector<int>& J,
+                  std::vector<double>& V, std::vector<double>& diag)
+{
+    const int nf = m.n_face();
+    I.clear(); J.clear(); V.clear();
+    diag.assign(nf, 0.0);
+    std::vector<std::array<int, 2>> cell_axis_faces((size_t)m.n_cell * 3, {-1, -1});
+    auto CAF = [&](int c, int ax) -> std::array<int, 2>& { return cell_axis_faces[(size_t)c * 3 + ax]; };
+    for (int f = 0; f < nf; ++f) {
+        const Face& fc = m.faces[f];
+        if (fc.lo >= 0) CAF(fc.lo, fc.ax)[1] = f;
+        if (fc.hi >= 0) CAF(fc.hi, fc.ax)[0] = f;
+    }
+    auto push = [&](int i, int j, double v) { I.push_back(i); J.push_back(j); V.push_back(v); };
+    for (int c = 0; c < m.n_cell; ++c) {
+        double h = std::cbrt(m.cell_V[c]);
+        double d = (1.0 / h) * (1.0 / 3.0), o = (1.0 / h) * (1.0 / 6.0);
+        for (int ax = 0; ax < 3; ++ax) {
+            std::array<int, 2> idx = CAF(c, ax);
+            int lo = idx[0], hi = idx[1];
+            push(lo, lo, d); diag[lo] += d;
+            push(hi, hi, d); diag[hi] += d;
+            push(lo, hi, o);
+            push(hi, lo, o);
+        }
+    }
+}
+
 } // namespace rad_hdiv
