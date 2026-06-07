@@ -42,6 +42,16 @@ public:
     // +N(i,j) for 0-based ORIGINAL face indices (the charge-cluster Coulomb sum).
     double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
 
+    // Material system apply: y = A x = inv_chi * (M_mass x) - (N x), where N x is the O(N log N)
+    // H-matvec and M_mass is the sparse local RT0 mass.  This is the operator a symmetric Krylov
+    // solver (MINRES) iterates on; A is symmetric indefinite (its generalized eigenvalues vs
+    // M_mass are inv_chi - demag_factor, demag_factor in [0,1]).
+    void ApplySystem(const std::vector<double>& x, double inv_chi, std::vector<double>& y);
+
+    // Jacobi preconditioner diagonal: diag(A)_f = inv_chi * M_mass_ff - N_ff (N_ff via the
+    // O(1) entry function).  For preconditioned MINRES (M = |diag(A)|).
+    std::vector<double> DiagSystem(double inv_chi) const;
+
     const rad_hdiv::Mesh& GetMesh() const { return m_mesh; }
 
 protected:
@@ -57,6 +67,9 @@ private:
     rad_hdiv::Mesh        m_mesh;
     rad_hdiv::ChargeMapCSC m_csc;    // per-face charge support (B columns)
     rad_hdiv::ChargeQuad   m_quad;   // centroids/measures (+ sub-points) for on-demand G
+    // sparse RT0 mass M_mass (COO) + its per-face diagonal, for the scalable system apply
+    std::vector<int>     m_mI, m_mJ;
+    std::vector<double>  m_mV, m_mass_diag;
 };
 
 #endif // __RAD_HACAPK_HDIV_H
