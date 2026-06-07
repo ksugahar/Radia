@@ -238,6 +238,17 @@ int cHACApK_hldlt_decomp(st_cHACApK_block_node_t *root);
 int cHACApK_hldlt_solve_vec(const st_cHACApK_block_node_t *root,
                             const double *b, double *x, int n);
 
+/* Symmetric H-LDL^T as a reusable factorization on a real HACApK leafmtxp (the symmetric
+ * counterpart of cHACApK_hlu_factor_leafmtxp / _apply / _free).  factor returns an opaque
+ * block-tree root (NULL on error; *out_rc gets the hldlt_decomp code -- e.g. NEED_RECURSIVE
+ * when the tree has an internal off-diagonal block).  apply solves A x = b (r,z ORIGINAL
+ * order, permuted via control->lod).  free releases the block-tree. */
+void* cHACApK_hldlt_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc,
+                                    int* out_rc);
+int   cHACApK_hldlt_apply(void* root_void, void* control_void,
+                          const double* r, double* z, int nd);
+void  cHACApK_hldlt_free_factors(void* root_void);
+
 /* Storage accounting for the most recent LDL^T decomp: count of stored
  * doubles in the LOWER-triangle off-diagonal blocks + diagonal factor
  * buffers (what LDL^T actually keeps), vs the count an equivalent H-LU

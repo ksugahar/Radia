@@ -2698,6 +2698,60 @@ void cHACApK_hlu_free_factors(void* root_void)
 }
 
 
+/* ---------- Symmetric H-LDL^T as a reusable factorization (factor once, apply many) ----
+ * The symmetric counterpart of cHACApK_hlu_factor_leafmtxp / _apply / _free.  For a
+ * SYMMETRIC (indefinite) leafmtxp -- e.g. the HDiv-type VIM system A = (1/chi) M_mass - N,
+ * or the charge-charge Coulomb Gram G -- this factors with cHACApK_hldlt_decomp (rk-aware
+ * off-diagonal leaves) at ~half the off-diagonal storage + FLOPs of the non-symmetric H-LU.
+ *   factor : convert leaves + build block-tree + hldlt_decomp -> opaque root (NULL if the
+ *            decomp returns an error -- e.g. CHACAPK_HARITH_ERR_NEED_RECURSIVE when the tree
+ *            has an INTERNAL off-diagonal block, which the lower-only LDL^T does not yet recurse).
+ *   apply  : permute(lod) + hldlt_solve_vec + un-permute   (r,z in ORIGINAL order)
+ *   free   : free the block-tree
+ * Returns the hldlt_decomp return code via the out-param so the caller can distinguish a clean
+ * NEED_RECURSIVE (tree shape) from an allocation failure. */
+void* cHACApK_hldlt_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc,
+                                    int* out_rc)
+{
+    (void)control_void;
+    if (out_rc) *out_rc = CHACAPK_HARITH_ERR_NULL;
+    if (!leafmtxp_void || nffc <= 0) return NULL;
+    st_cHACApK_leafmtxp_t *lp = (st_cHACApK_leafmtxp_t*)leafmtxp_void;
+    if (lp->nd <= 0 || !lp->st_clt_root) return NULL;
+    cHACApK_convert_leafmtxp_to_internal(lp);
+    st_cHACApK_block_node_t *root = cHACApK_build_block_tree_nffc(
+        lp, lp->st_clt_root, lp->st_clt_root, nffc);
+    if (!root) return NULL;
+    int rc = cHACApK_hldlt_decomp(root);
+    if (out_rc) *out_rc = rc;
+    if (rc != CHACAPK_HARITH_OK) { cHACApK_free_block_tree(root); return NULL; }
+    return (void*)root;
+}
+
+int cHACApK_hldlt_apply(void* root_void, void* control_void,
+                        const double* r, double* z, int nd)
+{
+    if (!root_void || !control_void || !r || !z || nd <= 0) return -1;
+    st_cHACApK_block_node_t *root = (st_cHACApK_block_node_t*)root_void;
+    st_cHACApK_lcontrol_t   *lc   = (st_cHACApK_lcontrol_t*)control_void;
+    if (!lc->lod) return -1;
+    double *rp = (double*)malloc(sizeof(double) * (size_t)nd);
+    double *zp = (double*)malloc(sizeof(double) * (size_t)nd);
+    if (!rp || !zp) { free(rp); free(zp); return -2; }
+    for (int i = 0; i < nd; i++) rp[i] = r[lc->lod[i + 1] - 1];        /* permute */
+    int rc = cHACApK_hldlt_solve_vec(root, rp, zp, nd);
+    if (rc == CHACAPK_HARITH_OK)
+        for (int i = 0; i < nd; i++) z[lc->lod[i + 1] - 1] = zp[i];    /* un-permute */
+    free(rp); free(zp);
+    return (rc == CHACAPK_HARITH_OK) ? 0 : -3;
+}
+
+void cHACApK_hldlt_free_factors(void* root_void)
+{
+    if (root_void) cHACApK_free_block_tree((st_cHACApK_block_node_t*)root_void);
+}
+
+
 /* ---------- Phase 4 debug: mixed-sibling synthetic test ---------------- *
  *
  * Mimics Radia's nx=3 leaf=10 tree shape (10 dense leaves, 3 internal,
