@@ -2588,8 +2588,8 @@ public:
 // test (tests/feec/) reshapes and checks symmetry + loops-field-null (loops = ker B).
 // ============================================================================
 namespace radia_hdivvim {
-py::dict HDivVimAssemble(int nx, int ny, int nz, int nsub) {
-    rad_hdiv::Mesh m = rad_hdiv::BuildStructuredRT0(nx, ny, nz, 1.0);
+py::dict HDivVimAssemble(int nx, int ny, int nz, int nsub, double distort) {
+    rad_hdiv::Mesh m = rad_hdiv::BuildStructuredRT0(nx, ny, nz, 1.0, distort);
     std::vector<double> B, N, M_mass;
     int n_charge = 0, n_bnd = 0;
     rad_hdiv::AssembleChargeMap(m, B, n_charge, n_bnd);
@@ -2654,7 +2654,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // HDiv-type VIM (symmetric demag operator) -- golden-test entry
     // ========================================================================
     m.def("_hdiv_vim_assemble", &radia_hdivvim::HDivVimAssemble,
-          py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0,
+          py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0, py::arg("distort") = 0.0,
           R"pbdoc(
               Assemble the symmetric HDiv-type VIM demag operator N = B^T G B on a structured
               nx*ny*nz hex grid (RT0 faces).  nsub=0 (default) uses the fast centroid-monopole Gram;

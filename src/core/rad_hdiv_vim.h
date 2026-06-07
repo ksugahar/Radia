@@ -31,9 +31,10 @@ typedef std::array<double, 3> Vec3;
  * The face separates cell `lo` (on the -normal side; this face is that cell's HI face) from cell
  * `hi` (on the +normal side; this face is that cell's LO face); -1 == domain boundary on that side. */
 struct Face {
-    int    ax;        // normal axis: 0=x, 1=y, 2=z
-    double area;      // |F|
-    Vec3   c;         // centroid
+    int    ax;        // normal axis: 0=x, 1=y, 2=z (global orientation; topological role of the face)
+    double area;      // |F| (true area, distortion-aware)
+    Vec3   c;         // centroid (mean of the 4 corner vertices)
+    Vec3   v[4];      // 4 corner vertices (for bilinear sub-points on distorted faces)
     int    lo, hi;    // adjacent cell ids (-1 if boundary)
     bool   bnd;       // on the domain boundary
 };
@@ -43,13 +44,18 @@ struct Mesh {
     std::vector<Face>   faces;     // size = ndof (one normal-flux DOF per face)
     int                 n_cell;
     std::vector<Vec3>   cell_c;    // cell centroids
-    std::vector<double> cell_V;    // cell volumes
+    std::vector<double> cell_V;    // cell volumes (true volume, distortion-aware)
+    std::vector<std::array<Vec3, 8>> cell_verts;  // 8 corner vertices per cell (NGSolve hex order:
+                                   // v0(000) v1(001) v2(011) v3(010) v4(100) v5(101) v6(111) v7(110))
     int n_face() const { return (int)faces.size(); }
 };
 
 /* Build the structured nx*ny*nz hex grid (cell size h), enumerating x-, y-, z-faces in that order
- * (matches the Python design spec hdiv_vim_structured.py).  For 3x3x3: ndof=108, n_cell=27. */
-Mesh BuildStructuredRT0(int nx, int ny, int nz, double h = 1.0);
+ * (matches the Python design spec hdiv_vim_structured.py).  For 3x3x3: ndof=108, n_cell=27.
+ * distort != 0 applies a smooth node displacement (x + d sin(pi y/L) z, y + 0.83 d x z,
+ * z + 0.67 d x sin(pi y/L); L = domain size) so the cells become distorted hexes -- cell volumes,
+ * face areas/centroids, and vertices are then derived from the displaced nodes (vertex-based). */
+Mesh BuildStructuredRT0(int nx, int ny, int nz, double h = 1.0, double distort = 0.0);
 
 /* Dense charge map B, row-major [charge][face], shape (n_charge x n_face).  Charge rows are the
  * n_cell volume charges (rho = -div M, normalized per unit volume) followed by the n_bnd boundary
