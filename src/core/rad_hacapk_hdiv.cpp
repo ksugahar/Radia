@@ -3,6 +3,8 @@
  * this file supplies only the HDiv kernel hooks (coordinates = face centroids, entry = the
  * charge-cluster Coulomb sum N[i][j] = sum_a sum_b B[a][i] G[a][b] B[b][j]). */
 #include "rad_hacapk_hdiv.h"
+#include <cmath>
+#include <utility>
 
 RadHACApKHDivManager::RadHACApKHDivManager(int nx, int ny, int nz,
                                            double h, double distort, int nsub)
@@ -79,4 +81,34 @@ double RadHACApKHDivManager::GetInteractionMatrixElement(int dof_i, int dof_j) c
         }
     }
     return acc;
+}
+
+//=========================================================================
+// RadHACApKChargeGram -- charge-charge Coulomb Gram G as a HACApK H-matrix
+//=========================================================================
+
+static const double RAD_INV_FOUR_PI = 0.07957747154594766788;   // 1/(4 pi)
+
+RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> centroids,
+                                         std::vector<double> measures,
+                                         std::vector<double> self_energy)
+    : m_cent(std::move(centroids)), m_meas(std::move(measures)), m_self(std::move(self_energy))
+{
+    m_n = (int)m_meas.size();
+}
+
+void RadHACApKChargeGram::ExtractCoordinates()
+{
+    m_n_elem = m_n;
+    m_ndof   = m_n;
+    m_coordinates = m_cent;   // [n*3] charge centroids (the cluster-tree points)
+}
+
+double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
+{
+    if (a == b) return m_self[a];
+    double dx = m_cent[3 * a + 0] - m_cent[3 * b + 0];
+    double dy = m_cent[3 * a + 1] - m_cent[3 * b + 1];
+    double dz = m_cent[3 * a + 2] - m_cent[3 * b + 2];
+    return m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI / std::sqrt(dx * dx + dy * dy + dz * dz);
 }

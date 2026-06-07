@@ -2803,6 +2803,41 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  return d;
              }, "H-matrix stats dict (n_dof, n_leaves, n_lowrank, compression, build_time, ...).");
 
+    // Charge-charge Coulomb Gram G as a HACApK H-matrix -- the UNSTRUCTURED / general-mesh path.
+    // Charges (cell rho + boundary-face sigma) extracted from ANY RT0 mesh (e.g. NGSolve tet
+    // HDiv(0)); pass charge centroids/measures + the caller-computed diagonal self-energies.  The
+    // demag operator N = B^T G B is applied as B^T (matvec(B m)) with B the sparse charge map.
+    py::class_<RadHACApKChargeGram>(m, "_ChargeGramHMatrix")
+        .def(py::init([](std::vector<double> centroids, std::vector<double> measures,
+                         std::vector<double> self_energy, double eps, int leaf, double eta) {
+                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
+                     new RadHACApKChargeGram(std::move(centroids), std::move(measures),
+                                             std::move(self_energy)));
+                 RadHACApKParams p;
+                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("charge Gram H-matrix build failed");
+                 return mgr;
+             }),
+             py::arg("centroids"), py::arg("measures"), py::arg("self_energy"),
+             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+             "Build the n_charge x n_charge Coulomb Gram G as a HACApK H-matrix over the charge "
+             "centroids (G[a!=b] = meas_a meas_b/(4pi r), G[a][a] = self_energy[a]).")
+        .def("ndof", [](RadHACApKChargeGram& s) { return s.GetNDOF(); })
+        .def("matvec", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
+                 std::vector<double> y((size_t)s.GetNDOF(), 0.0);
+                 s.MatVec(x, y);
+                 return y;
+             }, py::arg("x"), "G q (the O(N log N) Gram H-matvec).")
+        .def("stats", [](RadHACApKChargeGram& s) {
+                 const RadHACApKStats& st = s.GetStats();
+                 py::dict d;
+                 d["n_dof"] = st.n_dof; d["n_leaves"] = st.n_leaves; d["n_lowrank"] = st.n_lowrank;
+                 d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
+                 d["compression"] = st.compression; d["build_time"] = st.build_time;
+                 d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
+                 return d;
+             }, "H-matrix stats dict.");
+
     // ========================================================================
     // Object Creation
     // ========================================================================
