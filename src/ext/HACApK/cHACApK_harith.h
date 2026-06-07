@@ -189,6 +189,83 @@ double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
  * update inside off-diagonal sub-blocks). */
 double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank);
 
+
+/* ============================================================== *
+ *  Symmetric H-LDL^T factorization (A = L D L^T, indefinite)
+ * ============================================================== *
+ *
+ * Block-recursive LDL^T on the SAME block-tree view used by H-LU
+ * (cHACApK_block_tree.h).  For a SYMMETRIC INDEFINITE H-matrix this
+ * factors with only the LOWER triangle of off-diagonal blocks stored
+ * + a factored diagonal -- roughly HALF the off-diagonal storage and
+ * trailing-update FLOPs of the non-symmetric H-LU (which computes both
+ * the upper U_ik and lower L_ji blocks, and the full trailing square).
+ *
+ * Block formulation (validated; see the self-test):
+ *   A_ii = L_ii D_ii L_ii^T            (dense leaf: LAPACKE_dsytrf,
+ *                                       Bunch-Kaufman indefinite pivoting)
+ *   W_ji = A_ji A_ii^{-1}      (j>i)   (the unit-lower block factor; the
+ *                                       upper block W_ij^T is NOT formed)
+ *   A_jk -= W_ji A_ii W_ki^T   (j>=k)  (trailing update, LOWER triangle only)
+ * Reconstruction:  A = (I+W) blkdiag(A_ii) (I+W)^T.
+ *
+ * SCOPE (this revision): off-diagonal blocks must be DENSE leaves; diagonal
+ * blocks may be DENSE leaves OR internal sub-trees (the factorization recurses
+ * through internal diagonals -- validated to depth 5).  This is the realistic
+ * admissibility-driven H-matrix shape (refined near-field diagonal + dense
+ * far-field off-diagonal) the self-test exercises (build_diag_refined_tree).
+ * An rk (low-rank) leaf, or an INTERNAL off-diagonal block, returns
+ * CHACAPK_HARITH_ERR_LOWRANK_LEAF / CHACAPK_HARITH_ERR_NEED_RECURSIVE
+ * respectively -- a fully internal-off-diagonal symmetric H-arith (rk-aware,
+ * like H-LU's htrsm/h_addmul) is future work.
+ * The diagonal dsytrf factor + ipiv are kept in a side registry keyed on the
+ * diagonal leaf; cHACApK_hldlt_decomp clears it on entry and the factors
+ * persist until the next decomp (single-decomp lifetime, like the H-LU stats).
+ * NOT thread-safe across concurrent decomps. */
+
+/* Factor A = L D L^T in place over the block tree (dense leaves only).
+ * Diagonal leaves: dsytrf on a retained copy (ipiv saved in registry),
+ * the leaf's own data keeps the ORIGINAL A_ii for the trailing update.
+ * Off-diagonal LOWER leaves: overwritten with W_ji.  Off-diagonal UPPER
+ * leaves are left UNTOUCHED (never read by the LDL^T solve).
+ * Returns CHACAPK_HARITH_OK, or CHACAPK_HARITH_ERR_LOWRANK_LEAF / _LAPACK
+ * / _TOPOLOGY. */
+int cHACApK_hldlt_decomp(st_cHACApK_block_node_t *root);
+
+/* Apply the H-LDL^T factorization: solve A x = b (in-place safe, x==b ok).
+ * Three sweeps: (I+W) y = b ; D z = y (per-diagonal dsytrs) ; (I+W)^T x = z.
+ * Returns CHACAPK_HARITH_OK or an error code. */
+int cHACApK_hldlt_solve_vec(const st_cHACApK_block_node_t *root,
+                            const double *b, double *x, int n);
+
+/* Storage accounting for the most recent LDL^T decomp: count of stored
+ * doubles in the LOWER-triangle off-diagonal blocks + diagonal factor
+ * buffers (what LDL^T actually keeps), vs the count an equivalent H-LU
+ * would keep (all off-diagonal blocks + diagonal).  Lets the self-test
+ * report the ~2x off-diagonal storage saving with REAL numbers. */
+void cHACApK_hldlt_get_storage(long *out_ldlt_lower_doubles,
+                               long *out_ldlt_diag_doubles,
+                               long *out_hlu_offdiag_doubles);
+
+/* Self-test: build a SYMMETRIC INDEFINITE dense-leaf block-tree of the
+ * given depth (2^depth x 2^depth dense leaves, each n_per_block square),
+ * symmetrize 0.5*(A+A^T) and shift to be indefinite-but-nonsingular,
+ * factor with cHACApK_hldlt_decomp + solve, and compare ||A x - b||/||b||
+ * against (a) a dense LAPACKE_dsysv reference and (b) the existing H-LU
+ * (cHACApK_hlu_decomp) on the SAME matrix.
+ *
+ * Returns the LDL^T solve relative residual (should be ~1e-10 or better
+ * for the dense-leaf case).  Negative sentinels on internal error
+ * (-1 null, -2 alloc, -3 reference dsysv failed, -4+rc*0.001 decomp,
+ * -5+rc*0.001 solve).
+ *
+ * After the call, cHACApK_hldlt_get_storage() and the H-LU comparison
+ * residual are available via the out-params. */
+double cHACApK_harith_self_test_hldlt_symmetric(
+    int depth, int n_per_block,
+    double *out_hlu_residual,        /* H-LU residual on the same matrix */
+    int    *out_n_2x2_pivots);       /* # of 2x2 Bunch-Kaufman pivots used */
+
 /* --------- Phase 4: storage-convention conversion + driver --------- *
  *
  * HACApK stores dense leaves ROW-MAJOR (a1[col + row*ndt] = M[row, col])
