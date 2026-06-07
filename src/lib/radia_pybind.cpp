@@ -2584,12 +2584,12 @@ public:
 // test (tests/feec/) reshapes and checks symmetry + loops-field-null (loops = ker B).
 // ============================================================================
 namespace radia_hdivvim {
-py::dict HDivVimAssemble(int nx, int ny, int nz) {
+py::dict HDivVimAssemble(int nx, int ny, int nz, int nsub) {
     rad_hdiv::Mesh m = rad_hdiv::BuildStructuredRT0(nx, ny, nz, 1.0);
     std::vector<double> B, N, M_mass;
     int n_charge = 0, n_bnd = 0;
     rad_hdiv::AssembleChargeMap(m, B, n_charge, n_bnd);
-    rad_hdiv::AssembleN(m, N);
+    rad_hdiv::AssembleN(m, N, nsub);   // nsub=0 centroid-monopole (fast); >=1 accurate sub-point
     rad_hdiv::AssembleMass(m, M_mass);
     py::dict d;
     d["nf"]       = m.n_face();
@@ -2631,12 +2631,14 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // HDiv-type VIM (symmetric demag operator) -- golden-test entry
     // ========================================================================
     m.def("_hdiv_vim_assemble", &radia_hdivvim::HDivVimAssemble,
-          py::arg("nx"), py::arg("ny"), py::arg("nz"),
+          py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0,
           R"pbdoc(
               Assemble the symmetric HDiv-type VIM demag operator N = B^T G B on a structured
-              nx*ny*nz hex grid (RT0 faces).  Returns a dict with nf, n_cell, n_charge, n_bnd, and
-              the row-major flat lists N (nf x nf) and B (n_charge x nf).  For testing the symmetric
-              VIM core: symmetry (||N-N^T||) + loops field-null (loops = ker B).
+              nx*ny*nz hex grid (RT0 faces).  nsub=0 (default) uses the fast centroid-monopole Gram;
+              nsub>=1 uses accurate sub-point quadrature (positive semi-definite N, true demag
+              factors -- O(n_charge^2 nsub^6), golden sizes only).  Returns a dict with nf, n_cell,
+              n_charge, n_bnd, and the row-major flat lists N (nf x nf), B (n_charge x nf), M_mass
+              (nf x nf).  For testing: symmetry, loops field-null (ker B), demag factors (N, M_mass).
           )pbdoc");
 
     // ========================================================================

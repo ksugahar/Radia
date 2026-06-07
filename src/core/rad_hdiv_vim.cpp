@@ -98,7 +98,7 @@ void AssembleChargeMap(const Mesh& m, std::vector<double>& B, int& n_charge, int
     }
 }
 
-void AssembleCoulombGram(const Mesh& m, std::vector<double>& G, int& n_charge)
+void AssembleCoulombGram(const Mesh& m, std::vector<double>& G, int& n_charge, int nsub)
 {
     int n_bnd; std::vector<int> brow = bnd_charge_rows(m, n_bnd);
     n_charge = m.n_cell + n_bnd;
@@ -110,27 +110,85 @@ void AssembleCoulombGram(const Mesh& m, std::vector<double>& G, int& n_charge)
         if (m.faces[f].bnd) { int r = brow[f]; cent[r] = m.faces[f].c; meas[r] = m.faces[f].area; }
 
     G.assign((size_t)n_charge * n_charge, 0.0);
-    for (int a = 0; a < n_charge; ++a) {
-        for (int b = 0; b < n_charge; ++b) {
-            if (a == b) continue;
-            double dx = cent[a][0]-cent[b][0], dy = cent[a][1]-cent[b][1], dz = cent[a][2]-cent[b][2];
-            double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-            G[(size_t)a*n_charge + b] = meas[a]*meas[b] * INV_FOUR_PI / r;   // centroid monopole
+
+    if (nsub <= 0) {
+        // ---- fast: centroid-monopole off-diagonal + cube/square self-energy ----
+        for (int a = 0; a < n_charge; ++a) {
+            for (int b = 0; b < n_charge; ++b) {
+                if (a == b) continue;
+                double dx = cent[a][0]-cent[b][0], dy = cent[a][1]-cent[b][1], dz = cent[a][2]-cent[b][2];
+                double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+                G[(size_t)a*n_charge + b] = meas[a]*meas[b] * INV_FOUR_PI / r;
+            }
+            double self = (a < m.n_cell) ? C_CUBE * std::pow(meas[a], 5.0/3.0) * INV_FOUR_PI
+                                         : C_SQ   * std::pow(meas[a], 1.5)     * INV_FOUR_PI;
+            G[(size_t)a*n_charge + a] = self;
         }
-        // diagonal self-energy (placeholder): cube for volume cells, square for boundary faces
-        double self;
-        if (a < m.n_cell) self = C_CUBE * std::pow(meas[a], 5.0/3.0) * INV_FOUR_PI;
-        else              self = C_SQ   * std::pow(meas[a], 1.5)     * INV_FOUR_PI;
-        G[(size_t)a*n_charge + a] = self;
+        return;
+    }
+
+    // ---- accurate: sub-point quadrature (volume cell -> nsub^3, boundary face -> nsub^2) ----
+    std::vector<std::vector<Vec3>> sp(n_charge);   // sub-point positions per charge cell
+    std::vector<double>            sw(n_charge);   // sub-point weight (uniform within a cell)
+    for (int c = 0; c < m.n_cell; ++c) {
+        double h = std::cbrt(m.cell_V[c]);
+        sw[c] = m.cell_V[c] / (double)(nsub*nsub*nsub);
+        sp[c].reserve((size_t)nsub*nsub*nsub);
+        for (int i = 0; i < nsub; ++i)
+            for (int j = 0; j < nsub; ++j)
+                for (int k = 0; k < nsub; ++k)
+                    sp[c].push_back({cent[c][0] + ((i+0.5)/nsub - 0.5)*h,
+                                     cent[c][1] + ((j+0.5)/nsub - 0.5)*h,
+                                     cent[c][2] + ((k+0.5)/nsub - 0.5)*h});
+    }
+    for (int f = 0; f < m.n_face(); ++f) {
+        if (!m.faces[f].bnd) continue;
+        const Face& fc = m.faces[f]; int r = brow[f];
+        double hs = std::sqrt(fc.area); int u0 = (fc.ax+1)%3, u1 = (fc.ax+2)%3;
+        sw[r] = fc.area / (double)(nsub*nsub);
+        sp[r].reserve((size_t)nsub*nsub);
+        for (int i = 0; i < nsub; ++i)
+            for (int j = 0; j < nsub; ++j) {
+                Vec3 p = fc.c;
+                p[u0] += ((i+0.5)/nsub - 0.5)*hs;
+                p[u1] += ((j+0.5)/nsub - 0.5)*hs;
+                sp[r].push_back(p);
+            }
+    }
+    for (int a = 0; a < n_charge; ++a) {
+        const std::vector<Vec3>& pa = sp[a]; double wa = sw[a];
+        // diagonal: cross sub-points + analytic sub-cell self
+        double diag = 0.0;
+        for (size_t p = 0; p < pa.size(); ++p) {
+            for (size_t q = 0; q < pa.size(); ++q) {
+                if (p == q) continue;
+                double dx = pa[p][0]-pa[q][0], dy = pa[p][1]-pa[q][1], dz = pa[p][2]-pa[q][2];
+                diag += wa*wa * INV_FOUR_PI / std::sqrt(dx*dx + dy*dy + dz*dz);
+            }
+            diag += (a < m.n_cell ? C_CUBE * std::pow(wa, 5.0/3.0) : C_SQ * std::pow(wa, 1.5)) * INV_FOUR_PI;
+        }
+        G[(size_t)a*n_charge + a] = diag;
+        // off-diagonal (b > a), symmetric
+        for (int b = a+1; b < n_charge; ++b) {
+            const std::vector<Vec3>& pb = sp[b]; double g = 0.0;
+            for (size_t p = 0; p < pa.size(); ++p)
+                for (size_t q = 0; q < pb.size(); ++q) {
+                    double dx = pa[p][0]-pb[q][0], dy = pa[p][1]-pb[q][1], dz = pa[p][2]-pb[q][2];
+                    g += INV_FOUR_PI / std::sqrt(dx*dx + dy*dy + dz*dz);
+                }
+            g *= wa * sw[b];
+            G[(size_t)a*n_charge + b] = g;
+            G[(size_t)b*n_charge + a] = g;
+        }
     }
 }
 
-void AssembleN(const Mesh& m, std::vector<double>& N)
+void AssembleN(const Mesh& m, std::vector<double>& N, int nsub)
 {
     std::vector<double> B, G;
     int n_charge, n_bnd, n_charge_g;
     AssembleChargeMap(m, B, n_charge, n_bnd);
-    AssembleCoulombGram(m, G, n_charge_g);
+    AssembleCoulombGram(m, G, n_charge_g, nsub);
     const int nf = m.n_face();
     // N = B^T G B, row-major (nf x nf).  GB (n_charge x nf) first, then B^T (GB).
     std::vector<double> GB((size_t)n_charge * nf, 0.0);

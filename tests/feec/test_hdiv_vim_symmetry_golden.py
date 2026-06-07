@@ -61,18 +61,32 @@ def test_hdiv_vim_charge_conservation_gauss():
 
 
 def test_hdiv_vim_demag_factors_physical():
-    """PHYSICS lock: generalized eig (N, M_mass) = demag factors must be <= 1 (a demag factor > 1 is
-    unphysical) and the top ~0.886 (matches the NGSolve prototype 0.887 to ~0.2%; the residual vs the
-    true cube 1/3 is the crude centroid-monopole G, a later Wilton-kernel phase).  This test catches
-    the surface-charge SIGN bug (M.n must use the OUTWARD normal; the global-normal bug gave spurious
-    demag factors up to 19.5) -- which the symmetry/loop-nullity structural tests do NOT catch
-    (a row sign-flip in B preserves ker B + N's symmetry)."""
+    """PHYSICS lock (Phase 4 accurate Gram, nsub>=1): the generalized eigenvalues of (N, M_mass) are
+    the demag factors and must be PHYSICAL -- positive semi-definite (>= -1e-6; a negative demag
+    factor is unphysical) and all <= 1.  The accurate sub-point Gram makes N PSD and drives the
+    uniform mode to the true cube 1/3 (uniform M_z demag -> 0.32 -> 1/3 with nsub, validated in
+    examples/feec_vim/hdiv_vim_accurate_g.py).  Also catches the surface-charge SIGN bug (M.n must
+    use the OUTWARD normal; the global-normal bug gave demag factors up to 19.5) -- which the
+    symmetry/loop-nullity structural tests do NOT catch (a row sign-flip in B preserves ker B +
+    N's symmetry)."""
     import scipy.linalg as sla
-    d, N, _ = _assemble(3, 3, 3)
+    d = _rp._hdiv_vim_assemble(3, 3, 3, 4)         # nsub=4 -> accurate, positive-semidefinite Gram
     nf = d["nf"]
+    N = np.asarray(d["N"], float).reshape(nf, nf)
     M = np.asarray(d["M_mass"], float).reshape(nf, nf)
     assert np.allclose(M, M.T) and np.all(np.linalg.eigvalsh(M) > 0), "M_mass not SPD"
+    asym = np.linalg.norm(N - N.T) / np.linalg.norm(N, 2)
+    assert asym < 1e-12, f"accurate N not symmetric: {asym:.2e}"
     df = np.sort(sla.eigh(N, M, eigvals_only=True))
-    assert df[-1] < 1.0 + 1e-3, f"unphysical demag factor > 1: max={df[-1]:.3f} (surface-charge sign bug?)"
-    assert 0.85 < df[-1] < 0.92, f"top demag factor {df[-1]:.4f} not ~0.886 (NGSolve 0.887)"
-    assert df[0] > -0.6, f"min demag factor {df[0]:.3f} too negative (centroid-G non-PD is ~-0.49)"
+    assert df[0] > -1e-6, f"accurate Gram not PSD: min demag factor {df[0]:.3e} (should be >= 0)"
+    assert df[-1] < 1.0 + 1e-6, f"unphysical demag factor > 1: max={df[-1]:.4f} (surface-charge sign bug?)"
+    assert 0.80 < df[-1] < 0.95, f"top demag factor {df[-1]:.4f} not ~0.874"
+
+
+def test_hdiv_vim_centroid_gram_fast_baseline():
+    """The fast centroid-monopole Gram (nsub=0, default) stays symmetric + loop-null (G-agnostic
+    properties) and is ~7% off / slightly non-PD -- a documented crudeness used for the structural
+    tests; the accurate Gram (nsub>=1) is the physical one (test above)."""
+    d, N, _ = _assemble(3, 3, 3)                    # nsub=0 default
+    nf = d["nf"]
+    assert np.linalg.norm(N - N.T) / np.linalg.norm(N, 2) < 1e-12
