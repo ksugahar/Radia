@@ -48,6 +48,7 @@ from .knowledge.standalone_panels import get_standalone_panels_documentation
 from .knowledge.basis_functions import get_basis_functions_documentation
 from .knowledge.taskmanager import get_taskmanager_knowledge
 from .knowledge.mmm_core import get_mmm_core_documentation
+from .knowledge.hdiv_vim import get_hdiv_vim_documentation
 from .knowledge.femm_parity import get_femm_parity_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
@@ -583,6 +584,37 @@ def mmm_core(topic: str = "chubar_1998") -> str:
             "all"                - Everything
     """
     return get_mmm_core_documentation(topic)
+
+
+@mcp.tool()
+def hdiv_vim(topic: str = "overview") -> str:
+    """
+    HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT0
+    alternative to the collocation MMM/MSC kernel.  Records the CURRENT implementation
+    (main @ feaade25, 2026-06-07) so it can be extended (esp. to NONLINEAR materials).
+
+    Key idea: SYMMETRIC demag operator N = B^T G B with the loop modes FIELD-NULL BY
+    CONSTRUCTION (loops = ker B) -> mu_r-INDEPENDENT iterative convergence (the high-mu_r
+    conditioning wall of the collocation MSC loop-star solver is ABSENT).  Material system
+    A = (1/chi) M_mass - N, solved by MINRES or rk-aware symmetric H-LDL^T.  Scalable via
+    a charge-Gram HACApK H-matrix (far, monopole) + a sparse near-field correction (exact).
+    Verified: sphere demag -> analytic 1/3; feec suite 45/45.
+
+    Args:
+        topic: One of:
+            "overview"       - what it is + why (symmetric, loops field-null, mu_r-independent) [DEFAULT]
+            "implementation" - the CURRENT C++/pybind/Python files + APIs (rad_hdiv_vim,
+                               rad_hacapk_hdiv, cHACApK_harith hldlt, _HDivVimHMatrix,
+                               _ChargeGramHMatrix, examples/feec_vim/hdiv_demag_tet.py)
+            "scaling"        - charge-Gram H-matrix + sparse near-field correction
+            "hldlt"          - rk-aware symmetric H-LDL^T (factor compressed H-matrices) + boundary
+            "verification"   - golden tests (tests/feec/, 45/45) + the verify-first bug catch
+            "nonlinear"      - THE NEXT STEP: extend to nonlinear materials (Picard / Hantila /
+                               Newton plan; N is geometry-only so reusable)
+            "status"         - done / open summary
+            "all"            - everything
+    """
+    return get_hdiv_vim_documentation(topic)
 
 
 @mcp.tool()
