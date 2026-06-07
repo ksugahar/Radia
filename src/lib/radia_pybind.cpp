@@ -93,6 +93,11 @@ extern "C" {
     void cHACApK_hldlt_get_combo_counts(long out_combo[4]);
     void cHACApK_hldlt_get_storage(long *out_ldlt_lower_doubles, long *out_ldlt_diag_doubles,
                                    long *out_hlu_offdiag_doubles);
+    void* cHACApK_hldlt_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc,
+                                        int* out_rc);
+    int   cHACApK_hldlt_apply(void* root_void, void* control_void,
+                              const double* r, double* z, int nd);
+    void  cHACApK_hldlt_free_factors(void* root_void);
 }
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
@@ -2896,7 +2901,26 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  d["compression"] = st.compression; d["build_time"] = st.build_time;
                  d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
                  return d;
-             }, "H-matrix stats dict.");
+             }, "H-matrix stats dict.")
+        .def("factor_solve_hldlt", [](RadHACApKChargeGram& s, const std::vector<double>& b) {
+                 // Factor the (symmetric) Gram H-matrix with the rk-aware H-LDL^T and solve G x = b.
+                 // NOTE: factoring CONVERTS + OVERWRITES the leaves -> matvec() is invalid afterward.
+                 // out_rc surfaces the decomp code (e.g. NEED_RECURSIVE if the tree has an internal
+                 // off-diagonal block the lower-only LDL^T does not yet recurse).
+                 int n = s.GetNDOF();
+                 int rc = 0;
+                 void* root = cHACApK_hldlt_factor_leafmtxp(s.GetLeafmtxp(), s.GetLcontrol(), 1, &rc);
+                 py::dict d;
+                 d["factor_rc"] = rc;
+                 if (!root) { d["ok"] = false; return d; }
+                 std::vector<double> x((size_t)n, 0.0);
+                 int rcs = cHACApK_hldlt_apply(root, s.GetLcontrol(), b.data(), x.data(), n);
+                 cHACApK_hldlt_free_factors(root);
+                 d["ok"] = (rcs == 0);
+                 d["x"] = x;
+                 return d;
+             }, py::arg("b"),
+             "Factor G with rk-aware H-LDL^T and solve G x = b (destroys matvec). Returns {ok, x, factor_rc}.");
 
     // ========================================================================
     // Object Creation
