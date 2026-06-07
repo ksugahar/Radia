@@ -85,6 +85,10 @@ extern "C" {
     double cHACApK_harith_self_test_radia_exact_diag(double diag_boost);
     double cHACApK_harith_self_test_radia_exact_with_matrix(
         const double *A_full, const double *b);
+    double cHACApK_harith_self_test_hldlt_symmetric(
+        int depth, int n_per_block, double *out_hlu_residual, int *out_n_2x2_pivots);
+    void cHACApK_hldlt_get_storage(long *out_ldlt_lower_doubles, long *out_ldlt_diag_doubles,
+                                   long *out_hlu_offdiag_doubles);
 }
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
@@ -2601,6 +2605,25 @@ py::dict HDivVimAssemble(int nx, int ny, int nz, int nsub) {
     d["M_mass"]   = M_mass;   // row-major (nf x nf), RT0 HDiv mass
     return d;
 }
+
+// Symmetric H-LDL^T factorization self-test (the symmetric H-matrix factorization that the HDiv
+// VIM operator will use once it is an H-matrix).  Builds a symmetric-indefinite dense-leaf block
+// tree, factors A = (I+W) D (I+W)^T, solves, and reports the residual vs LAPACKE_dsysv + vs H-LU,
+// the storage (lower-only vs H-LU's lower+upper => ~half), and the # of Bunch-Kaufman 2x2 pivots.
+py::dict HLDLTSelfTest(int depth, int n_per_block) {
+    double hlu_resid = 0.0; int n_2x2 = 0;
+    double ldlt_resid = cHACApK_harith_self_test_hldlt_symmetric(depth, n_per_block, &hlu_resid, &n_2x2);
+    long ldlt_lower = 0, ldlt_diag = 0, hlu_off = 0;
+    cHACApK_hldlt_get_storage(&ldlt_lower, &ldlt_diag, &hlu_off);
+    py::dict d;
+    d["ldlt_residual"]      = ldlt_resid;
+    d["hlu_residual"]       = hlu_resid;
+    d["n_2x2_pivots"]       = n_2x2;
+    d["ldlt_lower_doubles"] = ldlt_lower;
+    d["ldlt_diag_doubles"]  = ldlt_diag;
+    d["hlu_offdiag_doubles"]= hlu_off;
+    return d;
+}
 } // namespace radia_hdivvim
 
 // ============================================================================
@@ -2639,6 +2662,17 @@ PYBIND11_MODULE(_radia_pybind, m) {
               factors -- O(n_charge^2 nsub^6), golden sizes only).  Returns a dict with nf, n_cell,
               n_charge, n_bnd, and the row-major flat lists N (nf x nf), B (n_charge x nf), M_mass
               (nf x nf).  For testing: symmetry, loops field-null (ker B), demag factors (N, M_mass).
+          )pbdoc");
+
+    m.def("_hldlt_self_test", &radia_hdivvim::HLDLTSelfTest,
+          py::arg("depth"), py::arg("n_per_block"),
+          R"pbdoc(
+              Self-test of the symmetric H-LDL^T factorization (the symmetric H-matrix factorization
+              for the HDiv VIM operator).  Builds a symmetric-indefinite dense-leaf block tree of the
+              given depth (2^depth x 2^depth leaves, each n_per_block square), factors A = (I+W)D(I+W)^T,
+              solves A x = b, and returns a dict: ldlt_residual (||Ax-b||/||b|| vs LAPACKE_dsysv),
+              hlu_residual (the non-symmetric H-LU on the same matrix), n_2x2_pivots (Bunch-Kaufman),
+              and ldlt_lower_doubles / hlu_offdiag_doubles (storage: H-LU stores ~2x the off-diagonal).
           )pbdoc");
 
     // ========================================================================
