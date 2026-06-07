@@ -87,6 +87,10 @@ extern "C" {
         const double *A_full, const double *b);
     double cHACApK_harith_self_test_hldlt_symmetric(
         int depth, int n_per_block, double *out_hlu_residual, int *out_n_2x2_pivots);
+    double cHACApK_harith_self_test_hldlt_symmetric_rk(int n_per_block, int rk_rank);
+    double cHACApK_harith_self_test_hldlt_symmetric_rk_deep(int n_per_block, int rk_rank);
+    double cHACApK_harith_self_test_hldlt_symmetric_rk_mixed(int n_per_block, int rk_rank, int s);
+    void cHACApK_hldlt_get_combo_counts(long out_combo[4]);
     void cHACApK_hldlt_get_storage(long *out_ldlt_lower_doubles, long *out_ldlt_diag_doubles,
                                    long *out_hlu_offdiag_doubles);
 }
@@ -2626,6 +2630,41 @@ py::dict HLDLTSelfTest(int depth, int n_per_block) {
     return d;
 }
 
+// Rk-aware symmetric H-LDL^T self-test: a symmetric-indefinite block tree whose
+// OFF-DIAGONAL leaves are EXACTLY rank-rk_rank (rk arithmetic exact, no ACA
+// truncation) and whose DIAGONAL leaves are dense indefinite with saddle 2x2
+// pivots.  depth=1 (rk off-diagonal at the root only) or depth=2 (rk off-diagonal
+// leaves at two levels).  Returns the ||A x - b||/||b|| residual + storage.
+py::dict HLDLTSelfTestRk(int n_per_block, int rk_rank, int depth) {
+    double resid = (depth >= 2)
+        ? cHACApK_harith_self_test_hldlt_symmetric_rk_deep(n_per_block, rk_rank)
+        : cHACApK_harith_self_test_hldlt_symmetric_rk(n_per_block, rk_rank);
+    long ldlt_lower = 0, ldlt_diag = 0, hlu_off = 0;
+    cHACApK_hldlt_get_storage(&ldlt_lower, &ldlt_diag, &hlu_off);
+    py::dict d;
+    d["ldlt_residual"]      = resid;
+    d["ldlt_lower_doubles"] = ldlt_lower;
+    d["ldlt_diag_doubles"]  = ldlt_diag;
+    return d;
+}
+
+// Mixed dense/rk off-diagonal symmetric H-LDL^T self-test: exercises ALL FOUR
+// trailing-update operand-kind combos on a flat s x s tree.  Reports the
+// residual + how many times each combo fired (so a test can assert full
+// combo coverage).
+py::dict HLDLTSelfTestRkMixed(int n_per_block, int rk_rank, int s) {
+    double resid = cHACApK_harith_self_test_hldlt_symmetric_rk_mixed(n_per_block, rk_rank, s);
+    long combo[4] = {0,0,0,0};
+    cHACApK_hldlt_get_combo_counts(combo);
+    py::dict d;
+    d["ldlt_residual"]   = resid;
+    d["combo_dense_dense"] = combo[0];
+    d["combo_rk_dense"]    = combo[1];
+    d["combo_dense_rk"]    = combo[2];
+    d["combo_rk_rk"]       = combo[3];
+    return d;
+}
+
 // Build the HDiv-type VIM demag operator N as a HACApK H-matrix and PROBE it against the dense
 // reference (rad_hdiv::AssembleN) -- the production verification that the symmetric operator now
 // scales as an H-matrix.  Self-contained (the C++ holds both the H-matrix and the dense N, and
@@ -2747,6 +2786,27 @@ PYBIND11_MODULE(_radia_pybind, m) {
               solves A x = b, and returns a dict: ldlt_residual (||Ax-b||/||b|| vs LAPACKE_dsysv),
               hlu_residual (the non-symmetric H-LU on the same matrix), n_2x2_pivots (Bunch-Kaufman),
               and ldlt_lower_doubles / hlu_offdiag_doubles (storage: H-LU stores ~2x the off-diagonal).
+          )pbdoc");
+
+    m.def("_hldlt_self_test_rk", &radia_hdivvim::HLDLTSelfTestRk,
+          py::arg("n_per_block"), py::arg("rk_rank"), py::arg("depth") = 1,
+          R"pbdoc(
+              Rk-aware self-test of the symmetric H-LDL^T factorization: a symmetric-indefinite block
+              tree whose OFF-DIAGONAL leaves are EXACTLY rank-rk_rank (so the rk arithmetic is exact,
+              no ACA truncation) and whose DIAGONAL leaves are dense indefinite with saddle 2x2 pivots.
+              depth=1 puts an rk off-diagonal leaf at the root only; depth=2 puts rk off-diagonal leaves
+              at two levels (refined diagonal sub-trees + a full-size rk root off-diagonal).  Returns a
+              dict: ldlt_residual (||Ax-b||/||b|| vs LAPACKE_dsysv) + ldlt_lower_doubles / ldlt_diag_doubles.
+          )pbdoc");
+
+    m.def("_hldlt_self_test_rk_mixed", &radia_hdivvim::HLDLTSelfTestRkMixed,
+          py::arg("n_per_block"), py::arg("rk_rank"), py::arg("s") = 4,
+          R"pbdoc(
+              Mixed dense/rk off-diagonal symmetric H-LDL^T self-test: a flat s x s block tree whose
+              off-diagonal leaves are a DELIBERATE mix of dense and rk, so the trailing update exercises
+              ALL FOUR operand-kind combos (dense*dense, rk*dense, dense*rk, rk*rk).  rk blocks are EXACT
+              rank rk_rank (no truncation).  Returns a dict: ldlt_residual (||Ax-b||/||b|| vs LAPACKE_dsysv)
+              + combo_dense_dense / combo_rk_dense / combo_dense_rk / combo_rk_rk (how many times each fired).
           )pbdoc");
 
     m.def("_hdiv_vim_hmatrix_probe", &radia_hdivvim::HDivVimHMatrixProbe,

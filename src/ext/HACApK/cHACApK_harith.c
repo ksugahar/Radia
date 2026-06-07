@@ -2097,7 +2097,10 @@ static void deep_cleanup(deep_state_t *s)
         if (s->bn_log[i]->sons) free(s->bn_log[i]->sons);
         free(s->bn_log[i]);
     }
-    for (int i = 0; i < s->n_lf; i++) { free(s->lf_log[i]->a1); free(s->lf_log[i]); }
+    /* Free a1 always; a2 only for rk leaves (it is NULL for dense leaves, so
+     * free(NULL) is harmless -- but a possibly-recompressed rk a2 must be
+     * released to avoid a leak when a tree contains rk off-diagonal leaves). */
+    for (int i = 0; i < s->n_lf; i++) { free(s->lf_log[i]->a1); free(s->lf_log[i]->a2); free(s->lf_log[i]); }
     for (int i = 0; i < s->n_clt; i++) free(s->clt_log[i]);
     free(s->bn_log); free(s->lf_log); free(s->clt_log);
 }
@@ -3997,6 +4000,9 @@ static long g_hldlt_n2x2 = 0;            /* count of 2x2 pivots, diagnostic */
 static long g_hldlt_lower_doubles = 0;   /* sum of W_ji block elements      */
 static long g_hldlt_diag_doubles  = 0;   /* sum of diag factor-buffer elems */
 static long g_hldlt_hlu_offdiag    = 0;  /* what H-LU would keep (all offdiag)*/
+/* trailing-update operand-kind combo counters (diagnostic; reset per decomp):
+ * [0] dense*dense, [1] rk*dense, [2] dense*rk, [3] rk*rk. */
+static long g_hldlt_combo[4] = {0,0,0,0};
 
 static void hldlt_registry_clear(void)
 {
@@ -4009,6 +4015,15 @@ static void hldlt_registry_clear(void)
     g_hldlt_nfac = g_hldlt_capfac = 0;
     g_hldlt_n2x2 = 0;
     g_hldlt_lower_doubles = g_hldlt_diag_doubles = g_hldlt_hlu_offdiag = 0;
+    g_hldlt_combo[0] = g_hldlt_combo[1] = g_hldlt_combo[2] = g_hldlt_combo[3] = 0;
+}
+
+/* Diagnostic getter: copy the 4 trailing-update combo counters from the most
+ * recent decomp ([0]=dense*dense, [1]=rk*dense, [2]=dense*rk, [3]=rk*rk). */
+void cHACApK_hldlt_get_combo_counts(long out_combo[4])
+{
+    if (!out_combo) return;
+    for (int i = 0; i < 4; i++) out_combo[i] = g_hldlt_combo[i];
 }
 
 static hldlt_diag_fac_t *hldlt_registry_add(const st_cHACApK_block_node_t *node, int n)
@@ -4176,16 +4191,37 @@ static int hldlt_apply_diag_inv_block(const st_cHACApK_block_node_t *Aii,
 }
 
 /* General off-diagonal LOWER solve W_ji = A_ji A_ii^{-1}, where A_ii is a
- * factored sub-tree (dense leaf OR internal).  Xnode is the DENSE lower
- * off-diagonal leaf holding A_ji on entry, overwritten with W_ji.
- *   W_ji = A_ji A_ii^{-1}  <=>  A_ii (W_ji)^T = (A_ji)^T  (A_ii symmetric)
- * so build (A_ji)^T as an (ndiag x m) block, apply A_ii^{-1}, transpose back. */
+ * factored sub-tree (dense leaf OR internal).  Xnode is the lower off-diagonal
+ * leaf holding A_ji on entry, overwritten with W_ji.  Handles BOTH a DENSE
+ * leaf and an rk (low-rank) leaf:
+ *
+ *  DENSE: W_ji = A_ji A_ii^{-1}  <=>  A_ii (W_ji)^T = (A_ji)^T  (A_ii symmetric)
+ *    so build (A_ji)^T as an (ndiag x m) block, apply A_ii^{-1}, transpose back.
+ *
+ *  rk  (A_ji = U V^T, U is m x kt, V is ndiag x kt):
+ *    W_ji = U V^T A_ii^{-1} = U (A_ii^{-T} V)^T = U (A_ii^{-1} V)^T   (A_ii sym)
+ *    so apply A_ii^{-1} to V's columns IN PLACE; U (a1) is unchanged.  The
+ *    leaf stays rk = (U, A_ii^{-1} V) = W_ji -- no transpose, no densification.
+ *    V is (ndiag x kt) column-major (ld=ndiag), exactly the block layout
+ *    hldlt_apply_diag_inv_block expects (ndiag rows, kt columns). */
 static int hldlt_offdiag_solve(const st_cHACApK_block_node_t *Aii,
                                st_cHACApK_block_node_t *Xnode)
 {
     int m  = leaf_rows(Xnode);             /* j-block size            */
     int nd = leaf_cols(Xnode);             /* == A_ii size            */
     if (nd != Aii->dof_nrows) return CHACAPK_HARITH_ERR_TOPOLOGY;
+
+    if (leaf_is_rk(Xnode)) {
+        int kt = leaf_rk_rank(Xnode);
+        if (kt <= 0) return CHACAPK_HARITH_OK;   /* nothing to solve */
+        double *V = leaf_rk_V(Xnode);            /* ndiag x kt, col-major */
+        /* V <- A_ii^{-1} V  (kt right-hand sides of length ndiag). */
+        int rc = hldlt_apply_diag_inv_block(Aii, V, nd, kt);
+        if (rc != CHACAPK_HARITH_OK) return rc;
+        g_stats.n_dense_trsm++;
+        return CHACAPK_HARITH_OK;
+    }
+
     double *Aji = leaf_dense_data(Xnode);  /* column-major m x nd     */
     double *Bt = (double*)malloc(sizeof(double) * (size_t)nd * (size_t)m);
     if (!Bt) return CHACAPK_HARITH_ERR_NULL;
@@ -4205,38 +4241,159 @@ static int hldlt_offdiag_solve(const st_cHACApK_block_node_t *Aii,
     return CHACAPK_HARITH_OK;
 }
 
+/* Per-block snapshot of the ORIGINAL (pre-solve) off-diagonal block A_ki.
+ * For a DENSE A_ki we keep the full m_k x ndiag block; for an rk A_ki we keep
+ * ONLY V_k (a2, ndiag x kt) -- U_k (a1) is left UNCHANGED by hldlt_offdiag_
+ * solve, so it is read fresh from the leaf at update time.  `is_rk` selects
+ * which branch the trailing update takes; `kt` is the rk rank. */
+typedef struct hldlt_snap_t {
+    int     is_rk;   /* 1 if the snapshotted block was rk, 0 if dense          */
+    int     kt;      /* rk rank (rk only)                                      */
+    double *data;    /* dense: full m_k x ndiag copy ; rk: V_k copy (ndiag x kt) */
+} hldlt_snap_t;
+
 /* Trailing update with the SNAPSHOT-original-A_ki formulation (works for
  * any A_ii, leaf or internal):  A_jk -= W_ji * (orig A_ki)^T  for j>=k>i.
  * Identity: W_ji A_ii W_ki^T = W_ji A_ki^T  with A_ki the ORIGINAL block.
- * Here Wji = node->sons[j+i*s] is already overwritten with W_ji (a DENSE
- * leaf); Aki_orig is the pre-overwrite snapshot of node->sons[k+i*s].
- * The target Cjk may be a DENSE leaf (off-diagonal, j>k) OR an INTERNAL
- * sub-tree (the diagonal block k==j, whose symmetric Schur update we push
- * recursively via add_lowrank_to_node, which splits the dense increment
- * into the child blocks).  For j==k the increment -W_ki A_ki^T is symmetric,
- * so updating the full A_kk block keeps it symmetric for hldlt_rec(A_kk). */
+ *
+ * Both W_ji (node->sons[j+i*s], already overwritten with the solved W_ji) and
+ * A_ki may be DENSE or rk leaves, so the increment -W_ji A_ki^T is formed as a
+ * rank-kinc factor (U_inc mj x kinc, W_inc mk x kinc) and pushed via
+ * add_lowrank_to_node (which handles a dense / rk / internal target Cjk, with
+ * recompression).  The four operand-kind combos:
+ *
+ *   1. W dense, A dense:  U_inc = W_ji  (mj x ndiag),  W_inc = A_ki  (mk x ndiag),
+ *                         kinc = ndiag.                       [the original path]
+ *   2. W rk (Uw,Vw),  A dense:  AVw = A_ki(mk x ndiag) Vw(ndiag x kw)  (mk x kw);
+ *                         U_inc = Uw (mj x kw),  W_inc = AVw,  kinc = kw.
+ *   3. W dense,  A rk (Ua,Va):  WVa = W_ji(mj x ndiag) Va(ndiag x ka)  (mj x ka);
+ *                         U_inc = WVa,  W_inc = Ua (mk x ka),  kinc = ka.
+ *   4. W rk (Uw,Vw),  A rk (Ua,Va):  M = Vw^T(kw x ndiag) Va(ndiag x ka) (kw x ka),
+ *                         UwM = Uw(mj x kw) M(kw x ka)  (mj x ka);
+ *                         U_inc = UwM,  W_inc = Ua (mk x ka),  kinc = ka.
+ *
+ * Wji = the (j,i) leaf node; Aki_node = the (k,i) leaf node (read U_k from it
+ * for the rk case -- it is unchanged by the solve); Aki_snap = the snapshot of
+ * A_ki (full dense copy, or V_k copy for rk).  The target Cjk may be a DENSE
+ * leaf (off-diagonal, j>k) OR an INTERNAL sub-tree (the diagonal block k==j,
+ * whose symmetric Schur update is pushed recursively).  For j==k the increment
+ * -W_ki A_ki^T is symmetric, so updating the full A_kk block keeps it symmetric
+ * for hldlt_rec(A_kk). */
 static int hldlt_trailing_update_snap(st_cHACApK_block_node_t *Cjk,
                                        const st_cHACApK_block_node_t *Wji,
-                                       const double *Aki_orig,
+                                       const st_cHACApK_block_node_t *Aki_node,
+                                       const hldlt_snap_t *Aki_snap,
                                        int mk, int ndiag)
 {
     int mj = Cjk->dof_nrows;
     if (Cjk->dof_ncols != mk) return CHACAPK_HARITH_ERR_TOPOLOGY;
-    if (leaf_rows(Wji) != mj || leaf_cols(Wji) != ndiag) return CHACAPK_HARITH_ERR_TOPOLOGY;
-    /* C_jk += (-1) * W_ji * (Aki_orig)^T  : U=W_ji (mj x ndiag), W=Aki_orig
-     * (mk x ndiag), k=ndiag.  add_lowrank_to_node handles dense + internal C. */
-    return add_lowrank_to_node(-1.0,
-                               leaf_dense_data(Wji), mj,    /* U, ldU */
-                               Aki_orig, mk,                /* W, ldW */
-                               mj, mk, ndiag, Cjk);
+    if (Wji->dof_nrows != mj || Wji->dof_ncols != ndiag) return CHACAPK_HARITH_ERR_TOPOLOGY;
+
+    int W_rk = leaf_is_rk(Wji);
+    int A_rk = Aki_snap->is_rk;
+
+    /* Combo 1: W dense, A dense -- direct rank-ndiag increment (original path). */
+    if (!W_rk && !A_rk) {
+        g_hldlt_combo[0]++;
+        return add_lowrank_to_node(-1.0,
+                                   leaf_dense_data(Wji), mj,    /* U_inc, ldU */
+                                   Aki_snap->data, mk,          /* W_inc, ldW */
+                                   mj, mk, ndiag, Cjk);
+    }
+
+    /* Combo 2: W rk (Uw mj x kw, Vw ndiag x kw), A dense (mk x ndiag).
+     *   -W_ji A_ki^T = -(Uw Vw^T)(A_ki)^T = -Uw (A_ki Vw)^T
+     *   AVw = A_ki(mk x ndiag) Vw(ndiag x kw)  ->  U_inc=Uw, W_inc=AVw, kinc=kw. */
+    if (W_rk && !A_rk) {
+        int kw = leaf_rk_rank(Wji);
+        if (kw <= 0) return CHACAPK_HARITH_OK;
+        g_hldlt_combo[1]++;
+        double *AVw = (double*)malloc(sizeof(double) * (size_t)mk * (size_t)kw);
+        if (!AVw) return CHACAPK_HARITH_ERR_NULL;
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    mk, kw, ndiag, 1.0,
+                    Aki_snap->data, mk,        /* A_ki  (mk x ndiag) */
+                    leaf_rk_V(Wji), ndiag,     /* Vw    (ndiag x kw) */
+                    0.0, AVw, mk);
+        int rc = add_lowrank_to_node(-1.0,
+                                     leaf_rk_U(Wji), mj,    /* U_inc=Uw, ldU=mj */
+                                     AVw, mk,               /* W_inc=AVw, ldW=mk */
+                                     mj, mk, kw, Cjk);
+        free(AVw);
+        return rc;
+    }
+
+    /* Combo 3: W dense (mj x ndiag), A rk (Ua mk x ka, Va ndiag x ka).
+     *   -W_ji A_ki^T = -W_ji (Ua Va^T)^T = -W_ji (Va Ua^T) = -(W_ji Va) Ua^T
+     *   WVa = W_ji(mj x ndiag) Va(ndiag x ka)  ->  U_inc=WVa, W_inc=Ua, kinc=ka. */
+    if (!W_rk && A_rk) {
+        int ka = Aki_snap->kt;
+        if (ka <= 0) return CHACAPK_HARITH_OK;
+        g_hldlt_combo[2]++;
+        double *WVa = (double*)malloc(sizeof(double) * (size_t)mj * (size_t)ka);
+        if (!WVa) return CHACAPK_HARITH_ERR_NULL;
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    mj, ka, ndiag, 1.0,
+                    leaf_dense_data(Wji), mj,  /* W_ji  (mj x ndiag) */
+                    Aki_snap->data, ndiag,     /* Va    (ndiag x ka) */
+                    0.0, WVa, mj);
+        int rc = add_lowrank_to_node(-1.0,
+                                     WVa, mj,               /* U_inc=WVa, ldU=mj */
+                                     leaf_rk_U(Aki_node), mk, /* W_inc=Ua, ldW=mk */
+                                     mj, mk, ka, Cjk);
+        free(WVa);
+        return rc;
+    }
+
+    /* Combo 4: W rk (Uw mj x kw, Vw ndiag x kw), A rk (Ua mk x ka, Va ndiag x ka).
+     *   -W_ji A_ki^T = -(Uw Vw^T)(Ua Va^T)^T = -Uw (Vw^T Va) Ua^T
+     *   M = Vw^T(kw x ndiag) Va(ndiag x ka)  (kw x ka);  UwM = Uw(mj x kw) M;
+     *   U_inc=UwM, W_inc=Ua, kinc=ka. */
+    {
+        int kw = leaf_rk_rank(Wji);
+        int ka = Aki_snap->kt;
+        if (kw <= 0 || ka <= 0) return CHACAPK_HARITH_OK;
+        g_hldlt_combo[3]++;
+        double *M   = (double*)malloc(sizeof(double) * (size_t)kw * (size_t)ka);
+        double *UwM = (double*)malloc(sizeof(double) * (size_t)mj * (size_t)ka);
+        if (!M || !UwM) { free(M); free(UwM); return CHACAPK_HARITH_ERR_NULL; }
+        /* M = Vw^T Va  (kw x ka) */
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    kw, ka, ndiag, 1.0,
+                    leaf_rk_V(Wji), ndiag,     /* Vw  (ndiag x kw) */
+                    Aki_snap->data, ndiag,     /* Va  (ndiag x ka) */
+                    0.0, M, kw);
+        /* UwM = Uw M  (mj x ka) */
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    mj, ka, kw, 1.0,
+                    leaf_rk_U(Wji), mj,        /* Uw  (mj x kw) */
+                    M, kw,                     /* M   (kw x ka) */
+                    0.0, UwM, mj);
+        int rc = add_lowrank_to_node(-1.0,
+                                     UwM, mj,               /* U_inc=UwM, ldU=mj */
+                                     leaf_rk_U(Aki_node), mk, /* W_inc=Ua, ldW=mk */
+                                     mj, mk, ka, Cjk);
+        free(M); free(UwM);
+        return rc;
+    }
+}
+
+/* Free an array of per-block snapshots. */
+static void hldlt_snap_free(hldlt_snap_t *snap, int s)
+{
+    if (!snap) return;
+    for (int t = 0; t < s; t++) free(snap[t].data);
+    free(snap);
 }
 
 /* Recursive H-LDL^T factorization.
  * Diagonal blocks may be dense leaves (dsytrf) OR internal sub-trees
- * (recursive LDL^T -- validated to depth 5).  Off-diagonal blocks must be
- * DENSE leaves (rk -> LOWRANK_LEAF; internal off-diagonal -> NEED_RECURSIVE).
- * This covers the diagonal-refined H-matrix shape (refined near-field diagonal
- * + dense far-field off-diagonal) the self-test builds, at ANY depth. */
+ * (recursive LDL^T -- validated to depth 5).  Off-diagonal LEAVES may be DENSE
+ * or rk (low-rank) -- the rk arithmetic (offdiag-solve + the 4 trailing-update
+ * combos) keeps far-field blocks compressed.  An INTERNAL off-diagonal block is
+ * still rejected (-> NEED_RECURSIVE; a fully internal-off-diagonal symmetric
+ * H-arith is future work).  This covers the diagonal-refined H-matrix shape
+ * (refined near-field diagonal + dense/rk far-field off-diagonal) at ANY depth. */
 static int hldlt_rec(st_cHACApK_block_node_t *node)
 {
     if (!node) return CHACAPK_HARITH_ERR_NULL;
@@ -4264,46 +4421,64 @@ static int hldlt_rec(st_cHACApK_block_node_t *node)
         /* Snapshot the ORIGINAL lower off-diagonal blocks of column i
          * (A_ji, j>i) BEFORE they are overwritten with W_ji -- the trailing
          * update needs A_ki (original) via the identity W A_ii W^T = W A_ki^T.
-         * Off-diagonal blocks are dense leaves; snapshot is m_j x ndiag. */
-        double **snap = (double**)calloc((size_t)s, sizeof(double*));
+         * DENSE leaf -> snapshot the full m_j x ndiag block.  rk leaf -> snapshot
+         * ONLY V (ndiag x kt); U (a1) is left unchanged by the solve, so it is
+         * read fresh from the leaf at update time.  INTERNAL -> NEED_RECURSIVE. */
+        hldlt_snap_t *snap = (hldlt_snap_t*)calloc((size_t)s, sizeof(hldlt_snap_t));
         if (!snap) return CHACAPK_HARITH_ERR_NULL;
         for (int j = i + 1; j < s; j++) {
             st_cHACApK_block_node_t *Aji = node->sons[j + i * s];
-            if (leaf_is_rk(Aji)) { for(int t=0;t<s;t++)free(snap[t]); free(snap);
-                                   g_stats.n_lowrank_skip++; return CHACAPK_HARITH_ERR_LOWRANK_LEAF; }
-            if (!leaf_is_dense(Aji)) { for(int t=0;t<s;t++)free(snap[t]); free(snap);
-                                       return CHACAPK_HARITH_ERR_NEED_RECURSIVE; }
-            int mj = leaf_rows(Aji);
-            snap[j] = (double*)malloc(sizeof(double) * (size_t)mj * (size_t)ndiag);
-            if (!snap[j]) { for(int t=0;t<s;t++)free(snap[t]); free(snap); return CHACAPK_HARITH_ERR_NULL; }
-            memcpy(snap[j], leaf_dense_data(Aji), sizeof(double) * (size_t)mj * (size_t)ndiag);
+            if (leaf_is_rk(Aji)) {
+                int kt = leaf_rk_rank(Aji);
+                snap[j].is_rk = 1;
+                snap[j].kt    = kt;
+                if (kt > 0) {
+                    snap[j].data = (double*)malloc(sizeof(double) * (size_t)ndiag * (size_t)kt);
+                    if (!snap[j].data) { hldlt_snap_free(snap, s); return CHACAPK_HARITH_ERR_NULL; }
+                    memcpy(snap[j].data, leaf_rk_V(Aji), sizeof(double) * (size_t)ndiag * (size_t)kt);
+                }
+            } else if (leaf_is_dense(Aji)) {
+                int mj = leaf_rows(Aji);
+                snap[j].is_rk = 0;
+                snap[j].data = (double*)malloc(sizeof(double) * (size_t)mj * (size_t)ndiag);
+                if (!snap[j].data) { hldlt_snap_free(snap, s); return CHACAPK_HARITH_ERR_NULL; }
+                memcpy(snap[j].data, leaf_dense_data(Aji), sizeof(double) * (size_t)mj * (size_t)ndiag);
+            } else {
+                hldlt_snap_free(snap, s);
+                return CHACAPK_HARITH_ERR_NEED_RECURSIVE;
+            }
         }
 
         /* (2) for j>i: solve LOWER block W_ji = A_ji A_ii^{-1} (overwrite).
-         *     Only the lower blocks -- the upper W_ij^T is never formed. */
+         *     Only the lower blocks -- the upper W_ij^T is never formed.
+         *     hldlt_offdiag_solve handles dense and rk leaves. */
         for (int j = i + 1; j < s; j++) {
             st_cHACApK_block_node_t *Wji = node->sons[j + i * s];
             int rc2 = hldlt_offdiag_solve(Aii, Wji);
-            if (rc2 != CHACAPK_HARITH_OK) { for(int t=0;t<s;t++)free(snap[t]); free(snap); return rc2; }
-            g_hldlt_lower_doubles += (long)leaf_rows(Wji) * (long)leaf_cols(Wji);
+            if (rc2 != CHACAPK_HARITH_OK) { hldlt_snap_free(snap, s); return rc2; }
+            /* Storage of the stored W_ji factor: dense = m*nd; rk = (m+nd)*kt. */
+            if (leaf_is_rk(Wji))
+                g_hldlt_lower_doubles += (long)(leaf_rows(Wji) + leaf_cols(Wji)) * (long)leaf_rk_rank(Wji);
+            else
+                g_hldlt_lower_doubles += (long)leaf_rows(Wji) * (long)leaf_cols(Wji);
         }
 
         /* (3) trailing update, LOWER triangle only (j>=k>i):
          *     A_jk -= W_ji (orig A_ki)^T.  The diagonal target (j==k) is an
          *     internal sub-tree; hldlt_trailing_update_snap pushes the
-         *     symmetric dense increment into it recursively. */
+         *     symmetric increment into it recursively.  Both W_ji and A_ki may
+         *     be dense or rk leaves (4 combos handled in the update). */
         for (int k = i + 1; k < s; k++) {
-            int mk = node->sons[k + i * s]->dof_nrows;
-            const double *Aki_orig = snap[k];
+            st_cHACApK_block_node_t *Aki = node->sons[k + i * s];
+            int mk = Aki->dof_nrows;
             for (int j = k; j < s; j++) {
                 st_cHACApK_block_node_t *Cjk = node->sons[j + k * s];
                 st_cHACApK_block_node_t *Wji = node->sons[j + i * s];
-                int rc2 = hldlt_trailing_update_snap(Cjk, Wji, Aki_orig, mk, ndiag);
-                if (rc2 != CHACAPK_HARITH_OK) { for(int t=0;t<s;t++)free(snap[t]); free(snap); return rc2; }
+                int rc2 = hldlt_trailing_update_snap(Cjk, Wji, Aki, &snap[k], mk, ndiag);
+                if (rc2 != CHACAPK_HARITH_OK) { hldlt_snap_free(snap, s); return rc2; }
             }
         }
-        for (int t = 0; t < s; t++) free(snap[t]);
-        free(snap);
+        hldlt_snap_free(snap, s);
     }
     return CHACAPK_HARITH_OK;
 }
@@ -4495,4 +4670,433 @@ double cHACApK_harith_self_test_hldlt_symmetric(
     if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
     if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
     return rel_ldlt;
+}
+
+
+/* =================================================================== *
+ *  Rk-aware self-test: symmetric indefinite block tree with EXACT-rank
+ *  off-diagonal leaves (depth 1 and depth 2).
+ *
+ *  The matrix is built FROM the tree (each leaf's data is also written into
+ *  A_full at the same offsets), so A_full == the matrix the tree represents,
+ *  exactly.  Off-diagonal leaves are rk = U V^T with EXACT rank rk_rank, so the
+ *  4 rk trailing-update combos are exercised with NO ACA truncation error.
+ *  Diagonal leaves are dense indefinite with saddle pairs every 4th index,
+ *  forcing genuine Bunch-Kaufman 2x2 pivots.
+ * =================================================================== */
+
+/* Shared PRNG state for the rk-tree builder (LCG, reproducible). */
+typedef struct { unsigned long seed; } hldlt_rk_rng_t;
+static double hldlt_rk_rnd(hldlt_rk_rng_t *r)
+{
+    r->seed = r->seed * 6364136223846793005UL + 1442695040888963407UL;
+    return (double)((r->seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5;
+}
+
+/* Write a dense indefinite saddle-diagonal block into BOTH the leaf data and
+ * the A_full diagonal block at (off,off).  The block is n x n, column-major.
+ * The pattern matches cHACApK_harith_self_test_hldlt_symmetric: random
+ * symmetrized off-diagonals + a mixed-sign dominant diagonal with a near-zero
+ * saddle pair [[~0,c],[c,~0]] every 4th index pair (forces dsytrf 2x2 pivots).
+ * Symmetric by construction (a diagonal block is square on the global diag). */
+static void hldlt_rk_fill_dense_diag(hldlt_rk_rng_t *rng, double *leaf,
+                                     double *A_full, int N, int off, int n)
+{
+    /* random symmetric off-diagonal part */
+    for (int j = 0; j < n; j++)
+        for (int i = j + 1; i < n; i++) {
+            double v = hldlt_rk_rnd(rng);
+            leaf[i + (size_t)j * n] = v;  leaf[j + (size_t)i * n] = v;
+        }
+    /* indefinite diagonal with saddle pairs */
+    for (int i = 0; i < n; i++) {
+        if ((i % 4) == 0 && i + 1 < n) {
+            double c = 0.8 * (double)n + 4.0;     /* strong coupling (>0) */
+            leaf[i     + (size_t)i     * n] = 1e-3 * hldlt_rk_rnd(rng);
+            leaf[(i+1) + (size_t)(i+1) * n] = 1e-3 * hldlt_rk_rnd(rng);
+            leaf[(i+1) + (size_t)i     * n] = c;
+            leaf[i     + (size_t)(i+1) * n] = c;
+            i++;
+        } else {
+            double sgn = (i % 2 == 0) ? 1.0 : -1.0;
+            leaf[i + (size_t)i * n] = sgn * (0.6 * (double)n + 0.5 * hldlt_rk_rnd(rng));
+        }
+    }
+    /* mirror the leaf block into A_full at (off,off) */
+    for (int j = 0; j < n; j++)
+        for (int i = 0; i < n; i++)
+            A_full[(off+i) + (size_t)(off+j) * N] = leaf[i + (size_t)j * n];
+}
+
+/* Recursive builder: symmetric diagonal-refined tree with EXACT-rank rk
+ * off-diagonal leaves.  Writes every leaf's data into A_full so the dense
+ * matrix matches the tree exactly.
+ *   is_diag = 1 -> this node spans a diagonal block (row span == col span).
+ *     depth>0  -> 2x2 internal: the two diagonal children recurse (is_diag=1);
+ *                 the (1,0) lower off-diagonal child is an rk leaf (U V^T,
+ *                 written symmetrically into A_full lower+upper); the (0,1)
+ *                 upper child is a DENSE copy of V U^T (never read by the
+ *                 lower-only LDL^T, kept for materialize/safety).
+ *     depth==0 -> dense diagonal leaf (saddle-pivot indefinite).
+ * The off-diagonal children are created by the PARENT (so the symmetric pairing
+ * is explicit); this function is only ever called with is_diag=1. */
+static st_cHACApK_block_node_t *build_sym_rk_tree(
+    deep_state_t *s, hldlt_rk_rng_t *rng, double *A_full, int N,
+    st_cHACApK_cluster_t *row_clt, st_cHACApK_cluster_t *col_clt,
+    int depth, int rk, int *err);
+
+/* Build an off-diagonal rk leaf for the LOWER block (rows = row_clt, cols =
+ * col_clt), generate U (rows x rk), V (cols x rk), write U V^T into A_full's
+ * lower block and V U^T into A_full's upper block (symmetry), and return the
+ * rk leaf node. */
+static st_cHACApK_block_node_t *build_sym_rk_offdiag_lower(
+    deep_state_t *s, hldlt_rk_rng_t *rng, double *A_full, int N,
+    st_cHACApK_cluster_t *row_clt, st_cHACApK_cluster_t *col_clt, int rk)
+{
+    int m = row_clt->nsize, n = col_clt->nsize;
+    int r0 = row_clt->nstrt - 1, c0 = col_clt->nstrt - 1;
+    int k = (rk > m) ? m : rk; if (k > n) k = n; if (k < 1) k = 1;
+
+    st_cHACApK_block_node_t *bn = log_bn(s, (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn)));
+    bn->row_cluster = row_clt; bn->col_cluster = col_clt;
+    bn->dof_nrows = m; bn->dof_ncols = n;
+    bn->dof_row_start = r0; bn->dof_col_start = c0;
+
+    st_cHACApK_leafmtx_t *L = log_lf(s, (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*L)));
+    L->ltmtx = 1; L->kt = k; L->ndl = m; L->ndt = n;
+    L->nstrtl = row_clt->nstrt; L->nstrtt = col_clt->nstrt;
+    L->a1 = (double*)malloc(sizeof(double) * (size_t)m * (size_t)k);   /* U */
+    L->a2 = (double*)malloc(sizeof(double) * (size_t)n * (size_t)k);   /* V */
+    for (int j = 0; j < k; j++) {
+        for (int i = 0; i < m; i++) L->a1[i + (size_t)j*m] = hldlt_rk_rnd(rng);
+        for (int i = 0; i < n; i++) L->a2[i + (size_t)j*n] = hldlt_rk_rnd(rng);
+    }
+    /* A_full lower block = U V^T ; A_full upper block = V U^T (symmetry). */
+    for (int j = 0; j < n; j++)
+        for (int i = 0; i < m; i++) {
+            double sij = 0.0;
+            for (int p = 0; p < k; p++) sij += L->a1[i + (size_t)p*m] * L->a2[j + (size_t)p*n];
+            A_full[(r0+i) + (size_t)(c0+j) * N] = sij;   /* lower (r0+i, c0+j) */
+            A_full[(c0+j) + (size_t)(r0+i) * N] = sij;   /* upper (c0+j, r0+i) */
+        }
+    bn->leaf_mtx = L; bn->leaf_kind = 1;
+    return bn;
+}
+
+/* Build the UPPER off-diagonal child as a DENSE copy of A_full's upper block
+ * (rows = row_clt, cols = col_clt with row span ABOVE col span).  Never read by
+ * the lower-only LDL^T -- present so the tree is structurally complete. */
+static st_cHACApK_block_node_t *build_sym_dense_offdiag_upper(
+    deep_state_t *s, double *A_full, int N,
+    st_cHACApK_cluster_t *row_clt, st_cHACApK_cluster_t *col_clt)
+{
+    int m = row_clt->nsize, n = col_clt->nsize;
+    int r0 = row_clt->nstrt - 1, c0 = col_clt->nstrt - 1;
+    st_cHACApK_block_node_t *bn = log_bn(s, (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn)));
+    bn->row_cluster = row_clt; bn->col_cluster = col_clt;
+    bn->dof_nrows = m; bn->dof_ncols = n;
+    bn->dof_row_start = r0; bn->dof_col_start = c0;
+    st_cHACApK_leafmtx_t *L = log_lf(s, (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*L)));
+    L->ltmtx = 2; L->ndl = m; L->ndt = n;
+    L->nstrtl = row_clt->nstrt; L->nstrtt = col_clt->nstrt;
+    L->a1 = (double*)malloc(sizeof(double) * (size_t)m * (size_t)n);
+    for (int j = 0; j < n; j++)
+        for (int i = 0; i < m; i++)
+            L->a1[i + (size_t)j*m] = A_full[(r0+i) + (size_t)(c0+j) * N];
+    bn->leaf_mtx = L; bn->leaf_kind = 2;
+    return bn;
+}
+
+static st_cHACApK_block_node_t *build_sym_rk_tree(
+    deep_state_t *s, hldlt_rk_rng_t *rng, double *A_full, int N,
+    st_cHACApK_cluster_t *row_clt, st_cHACApK_cluster_t *col_clt,
+    int depth, int rk, int *err)
+{
+    st_cHACApK_block_node_t *bn = log_bn(s, (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn)));
+    bn->row_cluster = row_clt; bn->col_cluster = col_clt;
+    bn->dof_nrows = row_clt->nsize; bn->dof_ncols = col_clt->nsize;
+    bn->dof_row_start = row_clt->nstrt - 1; bn->dof_col_start = col_clt->nstrt - 1;
+
+    if (depth == 0) {
+        int n = row_clt->nsize;
+        st_cHACApK_leafmtx_t *L = log_lf(s, (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*L)));
+        L->ltmtx = 2; L->ndl = n; L->ndt = n;
+        L->nstrtl = row_clt->nstrt; L->nstrtt = col_clt->nstrt;
+        L->a1 = (double*)malloc(sizeof(double) * (size_t)n * (size_t)n);
+        if (!L->a1) { *err = 1; return bn; }
+        hldlt_rk_fill_dense_diag(rng, L->a1, A_full, N, row_clt->nstrt - 1, n);
+        bn->leaf_mtx = L; bn->leaf_kind = 2;
+        return bn;
+    }
+
+    /* internal diagonal node: 2x2 split */
+    int half_r = row_clt->nsize / 2;
+    int half_c = col_clt->nsize / 2;
+    st_cHACApK_cluster_t *rc0 = log_clt(s, (st_cHACApK_cluster_t*)calloc(1, sizeof(*rc0)));
+    st_cHACApK_cluster_t *rc1 = log_clt(s, (st_cHACApK_cluster_t*)calloc(1, sizeof(*rc1)));
+    st_cHACApK_cluster_t *cc0 = log_clt(s, (st_cHACApK_cluster_t*)calloc(1, sizeof(*cc0)));
+    st_cHACApK_cluster_t *cc1 = log_clt(s, (st_cHACApK_cluster_t*)calloc(1, sizeof(*cc1)));
+    rc0->nstrt = row_clt->nstrt;          rc0->nsize = half_r;
+    rc1->nstrt = row_clt->nstrt + half_r; rc1->nsize = row_clt->nsize - half_r;
+    cc0->nstrt = col_clt->nstrt;          cc0->nsize = half_c;
+    cc1->nstrt = col_clt->nstrt + half_c; cc1->nsize = col_clt->nsize - half_c;
+
+    bn->nrsons = 2; bn->ncsons = 2;
+    bn->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*bn->sons));
+    /* (0,0) and (1,1) diagonal children recurse */
+    bn->sons[0 + 0*2] = build_sym_rk_tree(s, rng, A_full, N, rc0, cc0, depth - 1, rk, err);
+    bn->sons[1 + 1*2] = build_sym_rk_tree(s, rng, A_full, N, rc1, cc1, depth - 1, rk, err);
+    /* (1,0) lower off-diagonal = rk leaf (writes lower+upper of A_full) */
+    bn->sons[1 + 0*2] = build_sym_rk_offdiag_lower(s, rng, A_full, N, rc1, cc0, rk);
+    /* (0,1) upper off-diagonal = dense copy of the (already written) upper block */
+    bn->sons[0 + 1*2] = build_sym_dense_offdiag_upper(s, A_full, N, rc0, cc1);
+    return bn;
+}
+
+/* Common driver for the rk-aware symmetric self-test at a given tree depth. */
+static double hldlt_self_test_symmetric_rk_depth(int n_per_block, int rk_rank, int depth)
+{
+    if (n_per_block <= 0 || rk_rank <= 0 || depth < 1 || depth > 6) return -1.0;
+    int nb = n_per_block;
+    int N = (1 << depth) * nb;
+
+    double *A_full = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *A_ref  = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *b      = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ldlt = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ref  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *Ax     = (double*)malloc(sizeof(double) * (size_t)N);
+    if (!A_full || !A_ref || !b || !x_ldlt || !x_ref || !Ax) {
+        free(A_full); free(A_ref); free(b); free(x_ldlt); free(x_ref); free(Ax);
+        return -2.0;
+    }
+    /* zero A_full -- the builder writes diagonal blocks + symmetric off-diagonal
+     * blocks; any block not covered stays 0 (all blocks ARE covered for the
+     * diag-refined shape, but zeroing is cheap insurance). */
+    for (size_t i = 0; i < (size_t)N * (size_t)N; i++) A_full[i] = 0.0;
+
+    deep_state_t st; memset(&st, 0, sizeof(st));
+    st.A_full = A_full; st.N_global = N;
+    hldlt_rk_rng_t rng; rng.seed = 246813579UL;
+
+    st_cHACApK_cluster_t *root_clt =
+        log_clt(&st, (st_cHACApK_cluster_t*)calloc(1, sizeof(*root_clt)));
+    root_clt->nstrt = 1; root_clt->nsize = N;
+    int berr = 0;
+    st_cHACApK_block_node_t *root =
+        build_sym_rk_tree(&st, &rng, A_full, N, root_clt, root_clt, depth, rk_rank, &berr);
+    if (berr) { deep_cleanup(&st);
+        free(A_full); free(A_ref); free(b); free(x_ldlt); free(x_ref); free(Ax); return -2.0; }
+
+    for (int j = 0; j < N; j++) b[j] = hldlt_rk_rnd(&rng) * 10.0;
+    memcpy(A_ref, A_full, sizeof(double) * (size_t)N * (size_t)N);
+
+    /* reference solve via LAPACKE_dsysv on the dense A_full. */
+    int *ref_ipiv = (int*)malloc(sizeof(int) * (size_t)N);
+    memcpy(x_ref, b, sizeof(double) * (size_t)N);
+    lapack_int info = LAPACKE_dsysv(LAPACK_COL_MAJOR, 'L', N, 1, A_ref, N, ref_ipiv, x_ref, N);
+    free(ref_ipiv);
+    if (info != 0) { deep_cleanup(&st);
+        free(A_full); free(A_ref); free(b); free(x_ldlt); free(x_ref); free(Ax); return -3.0; }
+
+    int rc_dec = cHACApK_hldlt_decomp(root);
+    int rc_slv = (rc_dec == CHACAPK_HARITH_OK)
+                  ? cHACApK_hldlt_solve_vec(root, b, x_ldlt, N) : -99;
+
+    double rel = -1.0;
+    if (rc_slv == CHACAPK_HARITH_OK) {
+        cblas_dgemv(CblasColMajor, CblasNoTrans, N, N, 1.0, A_full, N, x_ldlt, 1, 0.0, Ax, 1);
+        double nr = 0.0, nb2 = 0.0;
+        for (int i = 0; i < N; i++) { double r = Ax[i] - b[i]; nr += r*r; nb2 += b[i]*b[i]; }
+        rel = (nb2 > 0.0) ? sqrt(nr / nb2) : sqrt(nr);
+    }
+
+    deep_cleanup(&st);
+    hldlt_registry_clear();
+    free(A_full); free(A_ref); free(b); free(x_ldlt); free(x_ref); free(Ax);
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
+
+double cHACApK_harith_self_test_hldlt_symmetric_rk(int n_per_block, int rk_rank)
+{
+    return hldlt_self_test_symmetric_rk_depth(n_per_block, rk_rank, 1);
+}
+
+double cHACApK_harith_self_test_hldlt_symmetric_rk_deep(int n_per_block, int rk_rank)
+{
+    return hldlt_self_test_symmetric_rk_depth(n_per_block, rk_rank, 2);
+}
+
+/* =================================================================== *
+ *  Mixed-kind self-test: a FLAT s x s block tree (s >= 4) whose
+ *  off-diagonal LEAVES are a deliberate MIX of dense and rk, so the
+ *  trailing update exercises ALL FOUR operand-kind combos
+ *  (dense*dense, rk*dense, dense*rk, rk*rk) AND both target kinds
+ *  (the dense diagonal targets + dense/rk off-diagonal targets).
+ *
+ *  The kind of the lower block (i_son, j_son) (i_son > j_son) is set by
+ *  parity of (i_son + 2*j_son): a checkerboard-ish pattern guaranteeing
+ *  that column 0 (the first eliminated) contains BOTH dense and rk
+ *  off-diagonals, so the W_ji * A_ki^T pairing hits every combo.  rk
+ *  blocks are EXACT rank rk_rank so there is no truncation error.
+ * =================================================================== */
+static double hldlt_self_test_symmetric_rk_mixed(int n_per_block, int rk_rank, int s)
+{
+    if (n_per_block <= 0 || rk_rank <= 0 || s < 2 || s > 8) return -1.0;
+    int nb = n_per_block;
+    int N = s * nb;
+    int k = (rk_rank > nb) ? nb : rk_rank;
+
+    double *A_full = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *A_ref  = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *b      = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ldlt = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ref  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *Ax     = (double*)malloc(sizeof(double) * (size_t)N);
+    if (!A_full || !A_ref || !b || !x_ldlt || !x_ref || !Ax) {
+        free(A_full); free(A_ref); free(b); free(x_ldlt); free(x_ref); free(Ax);
+        return -2.0;
+    }
+    for (size_t i = 0; i < (size_t)N * (size_t)N; i++) A_full[i] = 0.0;
+
+    deep_state_t st; memset(&st, 0, sizeof(st));
+    st.A_full = A_full; st.N_global = N;
+    hldlt_rk_rng_t rng; rng.seed = 13572468UL;
+
+    /* clusters: root + s diagonal sub-clusters */
+    st_cHACApK_cluster_t *root_clt =
+        log_clt(&st, (st_cHACApK_cluster_t*)calloc(1, sizeof(*root_clt)));
+    root_clt->nstrt = 1; root_clt->nsize = N;
+    st_cHACApK_cluster_t **clt = (st_cHACApK_cluster_t**)calloc((size_t)s, sizeof(*clt));
+    for (int t = 0; t < s; t++) {
+        clt[t] = log_clt(&st, (st_cHACApK_cluster_t*)calloc(1, sizeof(**clt)));
+        clt[t]->nstrt = 1 + t * nb; clt[t]->nsize = nb;
+    }
+
+    st_cHACApK_block_node_t *root =
+        log_bn(&st, (st_cHACApK_block_node_t*)calloc(1, sizeof(*root)));
+    root->row_cluster = root_clt; root->col_cluster = root_clt;
+    root->nrsons = s; root->ncsons = s;
+    root->sons = (st_cHACApK_block_node_t**)calloc((size_t)s * (size_t)s, sizeof(*root->sons));
+    root->dof_nrows = N; root->dof_ncols = N;
+    root->dof_row_start = 0; root->dof_col_start = 0;
+
+    /* diagonal dense leaves (indefinite saddle pivots) */
+    for (int t = 0; t < s; t++) {
+        st_cHACApK_block_node_t *bn = log_bn(&st, (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn)));
+        bn->row_cluster = clt[t]; bn->col_cluster = clt[t];
+        bn->dof_nrows = nb; bn->dof_ncols = nb;
+        bn->dof_row_start = clt[t]->nstrt - 1; bn->dof_col_start = clt[t]->nstrt - 1;
+        st_cHACApK_leafmtx_t *L = log_lf(&st, (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*L)));
+        L->ltmtx = 2; L->ndl = nb; L->ndt = nb;
+        L->nstrtl = clt[t]->nstrt; L->nstrtt = clt[t]->nstrt;
+        L->a1 = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)nb);
+        hldlt_rk_fill_dense_diag(&rng, L->a1, A_full, N, clt[t]->nstrt - 1, nb);
+        bn->leaf_mtx = L; bn->leaf_kind = 2;
+        root->sons[t + t * s] = bn;
+    }
+
+    /* off-diagonal leaves: lower (i>j) chosen dense/rk by pattern; upper its
+     * symmetric counterpart (rk transpose for an rk lower, dense for dense). */
+    for (int j = 0; j < s; j++) {
+        for (int i = j + 1; i < s; i++) {
+            int want_rk = ((i + 2 * j) % 2) == 0;   /* mix; col 0 has both kinds */
+            int r0 = clt[i]->nstrt - 1, c0 = clt[j]->nstrt - 1;
+            st_cHACApK_block_node_t *lo = log_bn(&st, (st_cHACApK_block_node_t*)calloc(1, sizeof(*lo)));
+            lo->row_cluster = clt[i]; lo->col_cluster = clt[j];
+            lo->dof_nrows = nb; lo->dof_ncols = nb;
+            lo->dof_row_start = r0; lo->dof_col_start = c0;
+            st_cHACApK_leafmtx_t *L = log_lf(&st, (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*L)));
+            L->ndl = nb; L->ndt = nb; L->nstrtl = clt[i]->nstrt; L->nstrtt = clt[j]->nstrt;
+            if (want_rk) {
+                L->ltmtx = 1; L->kt = k;
+                L->a1 = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)k); /* U */
+                L->a2 = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)k); /* V */
+                for (int c = 0; c < k; c++) {
+                    for (int rr = 0; rr < nb; rr++) L->a1[rr + (size_t)c*nb] = hldlt_rk_rnd(&rng);
+                    for (int rr = 0; rr < nb; rr++) L->a2[rr + (size_t)c*nb] = hldlt_rk_rnd(&rng);
+                }
+                for (int cc = 0; cc < nb; cc++)
+                    for (int rr = 0; rr < nb; rr++) {
+                        double sij = 0.0;
+                        for (int p = 0; p < k; p++) sij += L->a1[rr+(size_t)p*nb] * L->a2[cc+(size_t)p*nb];
+                        A_full[(r0+rr) + (size_t)(c0+cc)*N] = sij;
+                        A_full[(c0+cc) + (size_t)(r0+rr)*N] = sij;
+                    }
+                lo->leaf_kind = 1;
+            } else {
+                L->ltmtx = 2;
+                L->a1 = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)nb);
+                for (int cc = 0; cc < nb; cc++)
+                    for (int rr = 0; rr < nb; rr++) {
+                        double v = hldlt_rk_rnd(&rng);
+                        L->a1[rr + (size_t)cc*nb] = v;
+                        A_full[(r0+rr) + (size_t)(c0+cc)*N] = v;
+                        A_full[(c0+cc) + (size_t)(r0+rr)*N] = v;
+                    }
+                lo->leaf_kind = 2;
+            }
+            lo->leaf_mtx = L;
+            root->sons[i + j * s] = lo;
+
+            /* upper (j,i) = dense copy of the (already symmetric) upper block;
+             * never read by the lower-only LDL^T but completes the tree. */
+            st_cHACApK_block_node_t *up = log_bn(&st, (st_cHACApK_block_node_t*)calloc(1, sizeof(*up)));
+            up->row_cluster = clt[j]; up->col_cluster = clt[i];
+            up->dof_nrows = nb; up->dof_ncols = nb;
+            up->dof_row_start = c0; up->dof_col_start = r0;
+            st_cHACApK_leafmtx_t *U = log_lf(&st, (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*U)));
+            U->ltmtx = 2; U->ndl = nb; U->ndt = nb; U->nstrtl = clt[j]->nstrt; U->nstrtt = clt[i]->nstrt;
+            U->a1 = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)nb);
+            for (int cc = 0; cc < nb; cc++)
+                for (int rr = 0; rr < nb; rr++)
+                    U->a1[rr + (size_t)cc*nb] = A_full[(c0+rr) + (size_t)(r0+cc)*N];
+            up->leaf_mtx = U; up->leaf_kind = 2;
+            root->sons[j + i * s] = up;
+        }
+    }
+    free(clt);
+
+    for (int j = 0; j < N; j++) b[j] = hldlt_rk_rnd(&rng) * 10.0;
+    memcpy(A_ref, A_full, sizeof(double) * (size_t)N * (size_t)N);
+
+    int *ref_ipiv = (int*)malloc(sizeof(int) * (size_t)N);
+    memcpy(x_ref, b, sizeof(double) * (size_t)N);
+    lapack_int info = LAPACKE_dsysv(LAPACK_COL_MAJOR, 'L', N, 1, A_ref, N, ref_ipiv, x_ref, N);
+    free(ref_ipiv);
+    if (info != 0) { deep_cleanup(&st);
+        free(A_full); free(A_ref); free(b); free(x_ldlt); free(x_ref); free(Ax); return -3.0; }
+
+    int rc_dec = cHACApK_hldlt_decomp(root);
+    /* capture the 4 combo counters from THIS decomp before any clear. */
+    long combo_cap[4]; cHACApK_hldlt_get_combo_counts(combo_cap);
+    int rc_slv = (rc_dec == CHACAPK_HARITH_OK)
+                  ? cHACApK_hldlt_solve_vec(root, b, x_ldlt, N) : -99;
+
+    double rel = -1.0;
+    if (rc_slv == CHACAPK_HARITH_OK) {
+        cblas_dgemv(CblasColMajor, CblasNoTrans, N, N, 1.0, A_full, N, x_ldlt, 1, 0.0, Ax, 1);
+        double nr = 0.0, nb2 = 0.0;
+        for (int i = 0; i < N; i++) { double r = Ax[i] - b[i]; nr += r*r; nb2 += b[i]*b[i]; }
+        rel = (nb2 > 0.0) ? sqrt(nr / nb2) : sqrt(nr);
+    }
+
+    deep_cleanup(&st);
+    hldlt_registry_clear();
+    /* restore the captured combo counts so cHACApK_hldlt_get_combo_counts()
+     * (read by the test driver) returns this decomp's real coverage. */
+    for (int i = 0; i < 4; i++) g_hldlt_combo[i] = combo_cap[i];
+    free(A_full); free(A_ref); free(b); free(x_ldlt); free(x_ref); free(Ax);
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
+
+double cHACApK_harith_self_test_hldlt_symmetric_rk_mixed(int n_per_block, int rk_rank, int s)
+{
+    return hldlt_self_test_symmetric_rk_mixed(n_per_block, rk_rank, s);
 }

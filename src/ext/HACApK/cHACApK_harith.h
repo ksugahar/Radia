@@ -266,6 +266,39 @@ double cHACApK_harith_self_test_hldlt_symmetric(
     double *out_hlu_residual,        /* H-LU residual on the same matrix */
     int    *out_n_2x2_pivots);       /* # of 2x2 Bunch-Kaufman pivots used */
 
+/* Rk-aware self-test for the symmetric H-LDL^T: build a SYMMETRIC INDEFINITE
+ * block tree whose OFF-DIAGONAL LEAVES are EXACTLY rank-rk_rank (so the rk
+ * arithmetic is EXACT, no ACA truncation), DIAGONAL leaves are dense indefinite
+ * with saddle pairs (forcing genuine Bunch-Kaufman 2x2 pivots).  Depth-1 builds
+ * a 2x2 root with dense diagonal leaves + an rk (1,0) off-diagonal leaf (the
+ * (0,1) upper is a dense copy of its transpose, never read by the lower-only
+ * LDL^T).  Depth-2 builds rk off-diagonal leaves at BOTH levels (refined
+ * diagonal sub-trees with rk sub-off-diagonals + a full-size rk root
+ * off-diagonal).  Factor with cHACApK_hldlt_decomp, solve cHACApK_hldlt_solve_vec,
+ * return ||A_full x - b||/||b|| against a LAPACKE_dsysv reference (using the
+ * ORIGINAL A_full).
+ *
+ * Returns the relative residual (should be < 1e-8 for the EXACT-rank case),
+ * or a negative sentinel on internal error (-1 args, -2 alloc, -3 reference
+ * dsysv failed, -4+rc*0.001 decomp, -5+rc*0.001 solve). */
+double cHACApK_harith_self_test_hldlt_symmetric_rk(int n_per_block, int rk_rank);
+
+/* Depth-2 variant of the rk-aware symmetric self-test (off-diagonal rk leaves
+ * at two levels).  Same return convention. */
+double cHACApK_harith_self_test_hldlt_symmetric_rk_deep(int n_per_block, int rk_rank);
+
+/* MIXED-kind variant: a FLAT s x s block tree (s >= 4 recommended) whose
+ * off-diagonal leaves are a DELIBERATE mix of dense and rk, so the trailing
+ * update exercises ALL FOUR operand-kind combos (dense*dense, rk*dense,
+ * dense*rk, rk*rk).  Same return convention; after the call,
+ * cHACApK_hldlt_get_combo_counts() reports how many times each combo fired. */
+double cHACApK_harith_self_test_hldlt_symmetric_rk_mixed(int n_per_block, int rk_rank, int s);
+
+/* Diagnostic: copy the 4 trailing-update operand-kind combo counters from the
+ * most recent decomp into out_combo:
+ *   [0] dense*dense, [1] rk*dense, [2] dense*rk, [3] rk*rk. */
+void cHACApK_hldlt_get_combo_counts(long out_combo[4]);
+
 /* --------- Phase 4: storage-convention conversion + driver --------- *
  *
  * HACApK stores dense leaves ROW-MAJOR (a1[col + row*ndt] = M[row, col])
