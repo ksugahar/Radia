@@ -287,6 +287,18 @@ VOLUME Gram (cell-cell, cell-face still monopole+sub-point).  HONEST: the Wilton
 clean win for the demag factor (surface-charge-dominated, exact); the full sharp-body NON-UNIFORM
 accuracy additionally needs the analytic VOLUME (tet) Gram -- the next refinement.
 
+tri_potential is VECTORIZED over observation points (r as (M,3) -> (M,)), and wilton_surface_block
+loops O(n_bf) (one batched potential eval per SOURCE triangle) not O(n_bf^2) -> the wilton_gram golden
+test went 73s -> 2s.
+
+## NON-SPHERE smooth body (production #3) -- ellipsoid, DONE (golden-locked)
+A prolate spheroid has an ANALYTIC demag factor != 1/3, so it checks the Wilton Gram on a non-1/3
+smooth body.  2:1 prolate (long axis z), maxh=0.6:
+    monopole N_z = 0.1693 (2.5%)   Wilton N_z = 0.1742 (0.3%)   analytic N_z = 0.1736
+-> the Wilton surface integral is correct for a general curved-surface triangulation, not just the
+isotropic 1/3.  Golden: tests/feec/test_hdiv_vim_ellipsoid.py.  (Remaining #3 options: a real
+rad.MatSatIsoTab steel TABLE -- needs table-based M(H)/M'(H) in the Newton -- and a C-yoke.)
+
 ## SCALABLE nonlinear (production #2) -- DONE (2026-06-07, golden-locked)
 solve_nonlinear_newton_scalable (examples/feec_vim/hdiv_demag_tet_nonlinear.py) replaces the dense
 O(N^3)/O(N^2) demag of the dense Newton with the C++ HACApK charge-Gram H-matrix
@@ -374,13 +386,15 @@ DONE + golden-locked (feec 54/54):
   SCALABLE   scalable nonlinear Newton via the C++ Gram H-matrix (O(N log N) apply) + GMRES, NO dense
   (#2 of     factorization; reproduces the dense Newton to ~machine precision at saturation
   new seq)   (examples/...::solve_nonlinear_newton_scalable, tests/feec/test_hdiv_vim_newton_scalable.py).
+  #3 of new  ellipsoid (non-1/3 smooth demag): 2:1 prolate N_z Wilton 0.1742 (0.3%) vs analytic 0.1736
+  sequence   (monopole 2.5%) -- tests/feec/test_hdiv_vim_ellipsoid.py.  + Wilton vectorized (golden 73s->2s).
 
 OPEN (honest boundaries / next increments):
   - analytic VOLUME (tet) Gram: the surface Wilton is done; the residual nonlinear SHARP-body
     non-uniform gap (cube moderate ~8.7% vs Radia) is the cell-cell / cell-face Gram (still
-    monopole+sub-point).  Next refinement after the new sequence's #3.
-  - new-sequence #3 (more nonlinear validation): ellipsoid (D!=1/3 smooth), real rad.MatSatIsoTab
-    material table, C-yoke.
+    monopole+sub-point).  The next refinement.
+  - further #3 validation options: a real rad.MatSatIsoTab steel TABLE (needs table-based M(H)/M'(H)
+    in the Newton) and a C-yoke.
   - BH-knee stiffness: Newton converges to the correct answer but slowly there (scalar Picard is the
     practical tool at the knee); operator-accuracy-limited (finer/analytic Gram reduces it).
   - the scalable C++ nonlinear path (reuse #2 H-LDL^T for the factor-once tangent solve) -- new #2.
