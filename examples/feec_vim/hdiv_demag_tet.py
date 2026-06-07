@@ -105,51 +105,59 @@ _DUN5 = np.array(_DUN5)
 
 
 def tri_potential(V, r):
-    """Exact INT_T 1/|r - r'| dA' over a flat triangle T (vertices V, 3x3) at observation point r
+    """Exact INT_T 1/|r - r'| dA' over a flat triangle T (vertices V, 3x3) at observation point(s) r
     (constant unit density) -- the Wilton/Graglia analytic potential integral.  Verified vs fine
     numerical quadrature to the reference's own accuracy (~1e-4, limited by the reference near the
-    plane).  Handles r on either side of / on the triangle plane."""
+    plane).  Handles r on either side of / on the triangle plane.
+
+    Vectorized: r may be a single point (3,) -> float, or a batch (M,3) -> (M,) -- the batch form is
+    what makes the O(n_bf^2) surface Gram practical."""
+    r = np.asarray(r, float)
+    single = (r.ndim == 1)
+    R = r.reshape(1, 3) if single else r            # (M,3)
     v0, v1, v2 = V[0], V[1], V[2]
     n = np.cross(v1 - v0, v2 - v0)
     n = n / np.linalg.norm(n)
-    d = float(np.dot(r - v0, n))            # signed height above the triangle plane
-    p = r - d * n                           # projection of r onto the plane
-    ad = abs(d)
-    I = 0.0
+    d = (R - v0) @ n                                # (M,) signed heights above the plane
+    p = R - d[:, None] * n                          # (M,3) projections onto the plane
+    ad = np.abs(d)
+    I = np.zeros(len(R))
     vs = (v0, v1, v2)
     for i in range(3):
         a = vs[i]
         b = vs[(i + 1) % 3]
-        lv = b - a
-        lh = lv / np.linalg.norm(lv)
-        uh = np.cross(lh, n)                # in-plane unit normal to the edge
-        P0 = float(np.dot(a - p, uh))       # signed perpendicular distance projection -> edge line
-        sm = float(np.dot(a - p, lh))       # endpoint projections along the edge
-        sp = float(np.dot(b - p, lh))
-        Rm = sqrt(float(np.dot(a - r, a - r)))
-        Rp = sqrt(float(np.dot(b - r, b - r)))
+        lh = (b - a) / np.linalg.norm(b - a)
+        uh = np.cross(lh, n)                         # in-plane unit normal to the edge
+        P0 = (a - p) @ uh                            # (M,) signed perp distance projection -> edge
+        sm = (a - p) @ lh                            # (M,) endpoint projections along the edge
+        sp = (b - p) @ lh
+        Rm = np.linalg.norm(R - a, axis=1)           # (M,) = |r - a|
+        Rp = np.linalg.norm(R - b, axis=1)
         R0sq = P0 * P0 + d * d
-        denom_m, denom_p = Rm + sm, Rp + sp
-        f = log(denom_p / denom_m) if denom_p > 1e-300 and denom_m > 1e-300 else 0.0
-        beta = atan2(P0 * sp, R0sq + ad * Rp) - atan2(P0 * sm, R0sq + ad * Rm)
+        dm, dp = Rm + sm, Rp + sp
+        safe = (dp > 1e-300) & (dm > 1e-300)
+        ratio = np.where(safe, dp, 1.0) / np.where(safe, dm, 1.0)
+        f = np.where(safe, np.log(ratio), 0.0)
+        beta = np.arctan2(P0 * sp, R0sq + ad * Rp) - np.arctan2(P0 * sm, R0sq + ad * Rm)
         I += P0 * f - ad * beta
-    return I
+    return float(I[0]) if single else I
 
 
 def wilton_surface_block(bf_V):
     """Surface-surface Gram block (n_bf x n_bf) by the Wilton analytic inner integral + a Dunavant
     outer rule: G[a][b] = (1/4pi) INT_{tri_a} (INT_{tri_b} 1/|r-r'| dA') dA.  Symmetric; the diagonal
-    here is the Dunavant-outer self (the caller overwrites it with the validated tri_self_energy)."""
+    here is the Dunavant-outer self (shape-exact for any triangle).  Vectorized over the observation
+    points: for each SOURCE triangle b, evaluate its Wilton potential at ALL outer quad points at once
+    -> the Python loop is O(n_bf), not O(n_bf^2)."""
     nb = len(bf_V)
     area = np.array([0.5 * np.linalg.norm(np.cross(V[1] - V[0], V[2] - V[0])) for V in bf_V])
-    qp = [_DUN5[:, :3] @ V for V in bf_V]    # outer quadrature points on each triangle
-    wq = _DUN5[:, 3]
+    QP = np.array([_DUN5[:, :3] @ V for V in bf_V])  # (nb, 7, 3) outer quad points per triangle
+    allP = QP.reshape(-1, 3)                          # (nb*7, 3)
+    wq = _DUN5[:, 3]                                  # (7,)
     G = np.zeros((nb, nb))
-    for a in range(nb):
-        Pa = qp[a]
-        wa = wq * area[a]
-        for b in range(nb):
-            G[a, b] = float(np.sum(wa * np.array([tri_potential(bf_V[b], P) for P in Pa]))) / (4 * pi)
+    for b in range(nb):
+        phi = tri_potential(bf_V[b], allP).reshape(nb, 7)   # potential of source b at every outer point
+        G[:, b] = (phi * wq[None, :]).sum(axis=1) * area / (4 * pi)
     return 0.5 * (G + G.T)
 
 
