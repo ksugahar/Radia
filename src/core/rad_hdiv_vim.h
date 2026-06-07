@@ -56,13 +56,20 @@ Mesh BuildStructuredRT0(int nx, int ny, int nz, double h = 1.0);
  * charges (sigma = M.n, per unit area).  Matches the prototype Bv/V, Bb/area normalization. */
 void AssembleChargeMap(const Mesh& m, std::vector<double>& B, int& n_charge, int& n_bnd);
 
-/* Dense symmetric Coulomb Gram G, row-major (n_charge x n_charge).  Off-diagonal = centroid
- * monopole meas_a meas_b/(4pi r); diagonal = cube/square self-energy (placeholder; the accurate
- * distorted-hex self-energy / Wilton self-integral is a later phase). */
-void AssembleCoulombGram(const Mesh& m, std::vector<double>& G, int& n_charge);
+/* Dense symmetric Coulomb Gram G, row-major (n_charge x n_charge).
+ *   nsub == 0 : centroid-monopole off-diagonal meas_a meas_b/(4pi r) + cube/square self-energy
+ *               (fast, but ~7% off the true demag factor and slightly NON-PD; matches the NGSolve
+ *               prototype).  Use for the structural tests (symmetry / loop-nullity are G-agnostic).
+ *   nsub >= 1 : ACCURATE -- each charge cell -> nsub^3 (volume) / nsub^2 (boundary face) sub-points,
+ *               G_ab = sum_{p,q} w_p w_q/(4pi r_pq), coincident sub-point -> analytic sub-cell self.
+ *               Converges to the true Coulomb integral; makes N positive semi-definite and drives
+ *               the uniform demag factor to the true 1/3.  Cost is O(n_charge^2 * nsub^6) (golden
+ *               sizes only; the production path is the Wilton analytic face integral + H-matrix). */
+void AssembleCoulombGram(const Mesh& m, std::vector<double>& G, int& n_charge, int nsub = 0);
 
-/* Assemble the symmetric demag operator N = B^T G B, row-major (n_face x n_face). */
-void AssembleN(const Mesh& m, std::vector<double>& N);
+/* Assemble the symmetric demag operator N = B^T G B, row-major (n_face x n_face).  nsub passed to
+ * AssembleCoulombGram (0 = centroid-monopole, >=1 = accurate sub-point quadrature). */
+void AssembleN(const Mesh& m, std::vector<double>& N, int nsub = 0);
 
 /* Lowest-order RT0 HDiv mass matrix M_mass = int phi_i . phi_j, row-major (n_face x n_face).
  * Unit-flux basis -> per-cell per-axis 2x2 block (1/h)[[1/3,1/6],[1/6,1/3]] on (lo_face, hi_face);
