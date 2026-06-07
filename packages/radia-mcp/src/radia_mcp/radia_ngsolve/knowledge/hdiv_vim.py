@@ -227,10 +227,23 @@ Picard is well-conditioned there, so the practical recipe is: scalar Picard hand
 is the tool for the SATURATION regime where per-element accuracy matters and Picard fails.  The golden
 test therefore locks the saturation WIN (fast + accurate at H0>=1) and the near-correction ingredient.
 
-## NEXT (open): NON-UNIFORM body + cross-check
-The sphere validates the uniform-M case (= scalar analytic).  Still to do: a NON-UNIFORM saturating
-body (cube / C-yoke) where the per-element Newton genuinely earns its keep, CROSS-CHECKED against
-rad.Solve + rad.MatSatIsoTab (trusted Radia MMM/MSC nonlinear).  THEN the scalable C++ path (the
+## CROSS-CHECK vs Radia MMM/MSC -- DONE + golden-locked
+The HDiv-VIM Newton is cross-validated against a COMPLETELY INDEPENDENT codebase: Radia's trusted
+MMM/MSC C++ tetrahedral solver (rad.Solve + rad.MatSatIsoTab) with the SAME saturating BH curve,
+chi0/Msat, sphere, and applied field B0 = mu0 H0.  At deep saturation (chi0=1000, Msat=1e6 A/m):
+    H0(A/m)   HDiv-VIM M    Radia M     analytic   HDiv rel   Radia rel
+    5.0e5     993620        994080      994105     4.9e-4     2.5e-5
+    1.0e6     998384        998472      998503     1.2e-4     3.1e-5
+    3.0e6     999612        999621      999625     1.3e-5     4.3e-6
+Two independent solvers agree with each other AND the analytic to <0.05%.  (At saturation M->Msat
+regardless of the demag factor, so the operator's ~2%-at-low-drive demag-D systematic is irrelevant
+-- this isolates the nonlinear SATURATION behaviour, exactly what Newton had to get right.)
+Golden test: tests/feec/test_hdiv_vim_newton_vs_radia.py.
+
+## NEXT (open): NON-UNIFORM body + scalable C++
+The sphere validates the uniform-M case (= scalar analytic, = Radia MMM/MSC).  Still to do: a
+NON-UNIFORM saturating body (cube / C-yoke) where the per-element Newton genuinely earns its keep over
+the scalar Picard, cross-checked against rad.Solve on the same mesh.  THEN the scalable C++ path (the
 tensor tangent is a per-element 3x3; the factor-once structure reuses the #2 H-LDL^T for the constant
 M_mass + the diagonal/tangent update).
 
@@ -287,9 +300,11 @@ DONE + golden-locked (feec 50/50):
              warmstart) -- robust + fast at deep saturation where per-element Picard/Hantila failed
              (examples/feec_vim/hdiv_demag_tet_nonlinear.py::solve_nonlinear_newton,
              tests/feec/test_hdiv_vim_tet_newton.py, +the scalar-Picard moderate-drive foundation).
+             CROSS-VALIDATED vs Radia MMM/MSC (rad.Solve+MatSatIsoTab) to <0.05% at saturation
+             (tests/feec/test_hdiv_vim_newton_vs_radia.py).
 
 OPEN (honest boundaries / next increments):
-  - NONLINEAR on a NON-UNIFORM body (cube/C-yoke) + cross-check vs rad.Solve + rad.MatSatIsoTab.
+  - NONLINEAR on a NON-UNIFORM body (cube/C-yoke) where per-element Newton beats scalar Picard.
   - BH-knee stiffness: Newton converges to the correct answer but slowly there (scalar Picard is the
     practical tool at the knee); operator-accuracy-limited (finer/analytic Gram reduces it).
   - the scalable C++ nonlinear path (reuse #2 H-LDL^T for the factor-once tangent solve).
