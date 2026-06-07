@@ -39,25 +39,28 @@ C_TRI = 2.89   # INT INT 1/|x-y| over a unit-area equilateral triangle
 
 
 def _bary_tet(nsub):
-    """barycentric sub-cell centroids of a reference tet (lambda weights), uniform sub-weights."""
+    """Barycentric sub-point lattice of a reference tet: (i,j,k,l) lattice nodes with i+j+k+l=nsub-1,
+    point (i+1/4, j+1/4, k+1/4, l+1/4)/nsub.  The 4 coords sum to EXACTLY 1 (inside the tet) and
+    nsub=1 -> the centroid (1/4,1/4,1/4,1/4).  Equal sub-weights.  (The earlier [.+0.5,...]/nsub form
+    summed to 1+1/nsub -> sub-points OUTSIDE the tet -- a quadrature bug; fixed 2026-06-07.)"""
     lam = []
     for i in range(nsub):
         for j in range(nsub - i):
             for k in range(nsub - i - j):
-                L = np.array([i + 0.5, j + 0.5, k + 0.5, nsub - i - j - k - 0.5]) / nsub
-                if L.min() > 0:
-                    lam.append(L)
-    return np.array(lam)   # (m, 4) barycentric
+                l = nsub - 1 - i - j - k
+                lam.append([(i + 0.25) / nsub, (j + 0.25) / nsub, (k + 0.25) / nsub, (l + 0.25) / nsub])
+    return np.array(lam)   # (m, 4) barycentric, each row sums to 1
 
 
 def _bary_tri(nsub):
+    """Barycentric sub-point lattice of a reference triangle: (i,j,k) with i+j+k=nsub-1, point
+    (i+1/3, j+1/3, k+1/3)/nsub (sums to EXACTLY 1; nsub=1 -> centroid).  Equal sub-weights."""
     lam = []
     for i in range(nsub):
         for j in range(nsub - i):
-            L = np.array([i + 0.5, j + 0.5, nsub - i - j - 0.5]) / nsub
-            if L.min() > 0:
-                lam.append(L)
-    return np.array(lam)   # (m, 3)
+            k = nsub - 1 - i - j
+            lam.append([(i + 1.0 / 3) / nsub, (j + 1.0 / 3) / nsub, (k + 1.0 / 3) / nsub])
+    return np.array(lam)   # (m, 3), each row sums to 1
 
 
 def tet_self_energy(V, vol, nsub):
