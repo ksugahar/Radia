@@ -72,4 +72,41 @@ private:
     std::vector<double>  m_mV, m_mass_diag;
 };
 
+//-------------------------------------------------------------------------
+// RadHACApKChargeGram: the charge-charge Coulomb Gram G as a HACApK H-matrix.
+//-------------------------------------------------------------------------
+
+/* The UNSTRUCTURED / general-mesh production path.  Charges = volume cells (rho = -div M) +
+ * boundary faces (sigma = M.n) extracted from ANY RT0 mesh (e.g. NGSolve HDiv(order=0) on a tet
+ * mesh -- see examples/feec_vim/hdiv_demag_tet.py).  This manager builds the n_charge x n_charge
+ * Coulomb Gram G as a HACApK H-matrix (a clean 1/r kernel over the charge centroids):
+ *   G[a][b] = meas_a meas_b / (4pi |c_a - c_b|)   (a != b, centroid monopole)
+ *   G[a][a] = self_energy[a]                       (the accurate sub-divided self, computed by the
+ *                                                   caller per element shape -- tet/tri/hex/quad).
+ * The demag operator N = B^T G B is then applied matrix-free as B^T (G-Hmatvec (B m)) with B the
+ * sparse charge map; the H-matrix gives the O(N log N) Gram matvec that makes the solve scalable
+ * on real geometry.  Stores +G (ComputeSystemEntry = default); MatVec/stats from RadHACApKBase. */
+class RadHACApKChargeGram : public RadHACApKBase {
+public:
+    // centroids: [n*3] charge centroids; measures: [n] cell volumes / face areas; self_energy: [n]
+    // the diagonal G[a][a] (caller-computed accurate self-energy, element-shape-aware).
+    RadHACApKChargeGram(std::vector<double> centroids,
+                        std::vector<double> measures,
+                        std::vector<double> self_energy);
+    ~RadHACApKChargeGram() override {}
+
+    double GetInteractionMatrixElement(int a, int b) const override;
+
+protected:
+    void ExtractCoordinates() override;
+    void OnBeforeBuild() override {}
+    void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }
+    bool IsVariableDOF() const override { return false; }
+    int  GetUniformNFFC() const override { return 1; }
+
+private:
+    std::vector<double> m_cent, m_meas, m_self;
+    int m_n;
+};
+
 #endif // __RAD_HACAPK_HDIV_H
