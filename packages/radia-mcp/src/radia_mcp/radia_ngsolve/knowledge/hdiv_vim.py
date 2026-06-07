@@ -154,12 +154,34 @@ robust to the scheme (cross-sum extrapolation -> same INT INT 1/r).
 """
 
 _NONLINEAR = r"""
-# NONLINEAR HDiv-type VIM -- the NEXT step (plan, NOT yet implemented)
+# NONLINEAR HDiv-type VIM -- FOUNDATION VALIDATED (2026-06-07), per-element/cross-check NEXT
 
-Goal: make the HDiv-type VIM work for NONLINEAR soft-magnetic materials (BH curve / saturation),
-not just linear demag.
+Goal: make the HDiv-type VIM work for NONLINEAR soft-magnetic materials (BH curve / saturation).
 
-## Why it should be clean
+## DONE + golden-tested (examples/feec_vim/hdiv_demag_tet_nonlinear.py, tests/feec/test_hdiv_vim_tet_nonlinear.py)
+- **Applied-field formulation RESOLVED (verify-first)**: the eigenvalue framing A_eig = (1/chi)M_mass
+  - N is NOT the applied-field system.  The physical applied-field weak form is
+        A+ m = M_mass h_ext ,   A+ = (1/chi) M_mass + N        (PLUS N)
+  (since M = chi(H_ext + H_demag), H_demag,weak = -N m).  For a sphere this reproduces the analytic
+  M/H = chi/(1 + chi D) -- VERIFIED <=2.5% for mu_r<=100; the MINUS system gives nonsense (negative/
+  divergent).  This is the key gotcha: do NOT reuse the demag-factor A_eig sign for an applied-field solve.
+- **BH-curve Picard works**: secant susceptibility chi^{k+1} = M(H_int)/H_int with H_int = H0 - D M_avg;
+  CONVERGES (15-25 iters) and SATURATES (M -> M_sat) on the tet sphere.
+- **Near-correction closes the accuracy gap**: the centroid-monopole UNDER-estimates D (0.315 vs 1/3),
+  so the high-chi nonlinear M is ~12% off analytic; folding in the #3 near-field correction (N_eff =
+  B^T (G + corr) B) raises D to 0.328 -> nonlinear M within ~2% of the analytic uniform-sphere answer
+  (H0=0.1: monopole 0.334, near-corrected 0.305, analytic(1/3) 0.299).  Residual ~2% is RT0/mesh
+  discretization (finer mesh / proper distorted M_mass -> closer).
+
+## NEXT (per-element non-uniform + cross-check)
+- The prototype uses the SCALAR (uniform-M sphere) chi update.  The general nonlinear body needs the
+  PER-ELEMENT field reconstruction (RT0 -> per-cell H magnitude) to set chi_e(H_e); then Picard per
+  element.  Validate on a NON-UNIFORM saturating body (cube / C-yoke) and CROSS-CHECK against the
+  trusted Radia nonlinear path (rad.Solve with rad.MatSatIsoTab BH curve) on the same geometry.
+- Then Hantila factor-once (below) for speed; then the scalable C++ path (the near-correction in the
+  C++ ChargeGram entry).
+
+## Why the operator is reusable (the structural win)
 The demag operator N = B^T G B is GEOMETRY-ONLY (constant, mu_r-independent) -- it is assembled ONCE.
 The ONLY nonlinearity is in the material term (1/chi) M_mass of A = (1/chi) M_mass - N, where chi
 becomes chi(H) (or M(H) from a BH curve), evaluated PER ELEMENT PER ITERATION.  So the nonlinear
