@@ -137,7 +137,11 @@ def build_demag(mesh, nsub=4):
     n_loop = ndof - rankQ
     _, _, Vt = np.linalg.svd(Q)
     loops = Vt[rankQ:, :]
-    return dict(N=N, M_mass=M_mass, B=B, ndof=ndof, n_loop=n_loop, loops=loops, m_unit=m_unit)
+    # charge geometry (for the C++ HACApK charge-Gram H-matrix path, #1b): centroids, measures,
+    # diagonal self-energies, the dense Gram G, and the sparse charge map B as scipy CSR.
+    return dict(N=N, M_mass=M_mass, B=B, ndof=ndof, n_loop=n_loop, loops=loops, m_unit=m_unit,
+                cent=cent, meas=meas, self_energy=diagG, G=G,
+                B_csr=sp.csr_matrix(B), n_charge=n_el + n_bf)
 
 
 def demag_factor(d):
