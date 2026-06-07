@@ -123,7 +123,7 @@ def _tensor_tangent_cfs(gfH, chi0, Msat, Id):
 
 
 def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
-                           picard_warmstart=8, maxit=200, tol=1e-10):
+                           picard_warmstart=8, maxit=200, tol=1e-10, wilton_surface=False):
     """Robust NONLINEAR HDiv-VIM solve via damped (line-search) Newton-Raphson.
 
     Newton on the constitutive residual in RT0 coefficient form
@@ -152,13 +152,18 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
     Returns (M_avg, n_newton_iter, D_used).  The caller must open `with ng.TaskManager():`.
     """
     Mof = _bh_curve(chi0, Msat)
-    d = tet.build_demag(mesh, nsub)
+    d = tet.build_demag(mesh, nsub, wilton_surface=wilton_surface)
     M_mass = d["M_mass"]
     mu = d["m_unit"]
     denom = mu @ M_mass @ mu
     N = d["N"].copy()
     if near_correction:
-        corr = tet.build_near_correction(mesh, d, nsub=nsub, near_factor=2.0)
+        # near-field correction.  With wilton_surface the surface-surface block is already exact, so
+        # correct only the VOLUME-involving (cell-cell, cell-face) near pairs (skip_surface_surface)
+        # -- the per-element nonlinear Newton needs the volume near-field, and double-correcting the
+        # surface would over-count.  Without wilton_surface, correct all near pairs (the old path).
+        corr = tet.build_near_correction(mesh, d, nsub=nsub, near_factor=2.0,
+                                         skip_surface_surface=wilton_surface)
         B = d["B_csr"]
         N = N + np.asarray((B.T @ corr @ B).todense())
     Dop = np.linalg.solve(M_mass, N)
