@@ -39,10 +39,21 @@ import hdiv_demag_tet as tet
 
 def _bf_to_dense(bf):
     """NGSolve BilinearForm -> dense numpy (prototype-scale matrices only)."""
+    return _bf_to_csr(bf).toarray()
+
+
+def _bf_to_csr(bf):
+    """NGSolve BilinearForm -> scipy CSR (sparse; for the scalable matrix-free Jacobian apply)."""
     m = bf.mat
     r, c, val = m.COO()
-    return sp.csr_matrix((np.array(val), (np.array(r), np.array(c))),
-                         shape=(m.height, m.width)).toarray()
+    return sp.csr_matrix((np.array(val), (np.array(r), np.array(c))), shape=(m.height, m.width))
+
+
+# scipy renamed the Krylov tolerance kwarg 'tol' -> 'rtol' (scipy >= 1.12); detect it once.
+import inspect as _inspect  # noqa: E402
+import scipy.sparse.linalg as _spla_probe  # noqa: E402
+_GMRES_TOL = "rtol" if "rtol" in _inspect.signature(_spla_probe.gmres).parameters else "tol"
+_MINRES_TOL = "rtol" if "rtol" in _inspect.signature(_spla_probe.minres).parameters else "tol"
 
 
 def _sphere(h):
@@ -225,6 +236,118 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
         # Physically meaningful convergence: the quantity of interest (M_avg) has stopped moving.
         # Near the knee the line search takes tiny steps, so the tight residual tol is never met even
         # though M_avg is already correct -- key on the observable, not the raw residual norm.
+        M_now = Mavg(m)
+        if abs(M_now - M_prev) < 1e-8 * (abs(M_now) + 1e-30):
+            break
+        M_prev = M_now
+    return Mavg(m), nit, Dscal
+
+
+def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
+                                    picard_warmstart=8, maxit=200, gmres_tol=1e-8):
+    """SCALABLE damped Newton (production #2): the dense O(N^3)/O(N^2) demag is replaced by the C++
+    HACApK charge-Gram H-matrix (O(N log N) apply) + a sparse near-correction, and the Newton system
+    is solved ITERATIVELY (GMRES) -- no dense factorization anywhere.
+
+    The demag apply is  N v = B^T ( H.matvec(B v) + corr (B v) )  with H = _ChargeGramHMatrix (monopole
+    far field, compressed) and corr = the sparse near-field correction (exact local) -- the textbook
+    H-matrix far+near split, here driving the per-element tensor-tangent Newton.  The Jacobian
+    J v = M_mass v + T M_mass^{-1} N v is applied matrix-free (M_mass factored once, sparse); GMRES
+    (M_mass-preconditioned) solves each Newton step; Armijo line search + Picard warmstart as in the
+    dense solver.  Reproduces the dense solve_nonlinear_newton (same monopole+near-corr operator) ->
+    the nonlinear HDiv-VIM solve is scalable.  Returns (M_avg, n_newton_iter, D_used).
+
+    NOTE: the C++ Gram H-matrix is MONOPOLE far field, so this matches the dense MONOPOLE+near-corr
+    Newton (not the dense Wilton path); putting the Wilton surface integral into the C++ near-field
+    correction is the remaining step for scalable + Wilton-accurate together."""
+    import scipy.sparse as sp
+    import scipy.sparse.linalg as spla
+    import radia._radia_pybind as _rp
+
+    Mof = _bh_curve(chi0, Msat)
+    d = tet.build_demag(mesh, nsub)
+    M_mass = d["M_mass"]
+    mu = d["m_unit"]
+    denom = mu @ M_mass @ mu
+    B = d["B_csr"]
+    corr = tet.build_near_correction(mesh, d, nsub=nsub, near_factor=2.0)
+    Hg = _rp._ChargeGramHMatrix(list(d["cent"].ravel()), list(d["meas"]),
+                                list(d["self_energy"]), gram_eps, 32, 2.0)
+    Mcsc = sp.csc_matrix(M_mass)
+    Mfac = spla.splu(Mcsc)                       # factor the HDiv mass ONCE (sparse, well-conditioned)
+
+    def N_apply(v):                              # scalable demag: H-matrix far + sparse near correction
+        q = B @ v
+        return B.T @ (np.asarray(Hg.matvec(q.tolist()), float) + corr @ q)
+
+    def Dop_apply(v):                            # M_mass^{-1} N v  (the weak demag field)
+        return Mfac.solve(N_apply(v))
+
+    ndof = d["ndof"]
+    Dscal = float((mu @ N_apply(mu)) / denom)    # demag factor via the H-matrix apply
+    b0 = M_mass @ mu
+
+    def Mavg(m):
+        return float((mu @ (M_mass @ m)) / denom)
+
+    fes = ng.HDiv(mesh, order=0)
+    uf, vf = fes.TnT()
+    gfH = ng.GridFunction(fes)
+    Id = ng.Id(3)
+
+    def set_field(m):
+        gfH.vec.FV().NumPy()[:] = H0 * mu - Dop_apply(m)
+
+    def constit(m):
+        set_field(m)
+        return _tensor_tangent_cfs(gfH, chi0, Msat, Id)
+
+    def bM(Mcf):
+        lf = ng.LinearForm(fes)
+        lf += Mcf * vf * ng.dx
+        lf.Assemble()
+        return lf.vec.FV().NumPy().copy()
+
+    def Fnorm(m):
+        Mcf, _ = constit(m)
+        return np.linalg.norm(M_mass @ m - bM(Mcf))
+
+    Mprec = spla.LinearOperator((ndof, ndof), matvec=lambda v: Mfac.solve(np.asarray(v, float)))
+
+    # scalar-chi Picard warmstart via the scalable apply (CG on the symmetric A+ = (1/chi)M_mass + N)
+    chi = chi0
+    m = np.zeros(ndof)
+    Aplus_diag = np.maximum(np.abs((1.0 / chi) * np.diag(M_mass)) + 1e-30, 1e-30)
+    for _ in range(picard_warmstart):
+        Aop = spla.LinearOperator((ndof, ndof), matvec=lambda v, c=chi: (1.0 / c) * (M_mass @ np.asarray(v, float)) + N_apply(np.asarray(v, float)))
+        m, _ = spla.minres(Aop, H0 * b0, M=Mprec, maxiter=2000, **{_MINRES_TOL: gmres_tol})
+        Hi = H0 - Dscal * Mavg(m)
+        chi = 0.5 * chi + 0.5 * (Mof(Hi) / Hi if abs(Hi) > 1e-30 else chi)
+
+    nit = 0
+    M_prev = Mavg(m)
+    for it in range(maxit):
+        nit = it + 1
+        Mcf, tang = constit(m)
+        F = M_mass @ m - bM(Mcf)
+        nF = np.linalg.norm(F)
+        if nF < 1e-10 * (np.linalg.norm(M_mass @ m) + 1e-30):
+            break
+        T = ng.BilinearForm(fes)
+        T += ng.InnerProduct(tang * uf, vf) * ng.dx
+        T.Assemble()
+        Tcsr = _bf_to_csr(T)
+
+        def Japply(v):                           # J v = M_mass v + T M_mass^{-1} N v (matrix-free)
+            v = np.asarray(v, float)
+            return M_mass @ v + Tcsr @ Dop_apply(v)
+
+        Jop = spla.LinearOperator((ndof, ndof), matvec=Japply)
+        dm, _ = spla.gmres(Jop, -F, M=Mprec, maxiter=500, restart=50, **{_GMRES_TOL: gmres_tol})
+        lam = 1.0
+        while lam > 1e-7 and Fnorm(m + lam * dm) >= nF:
+            lam *= 0.5
+        m = m + lam * dm
         M_now = Mavg(m)
         if abs(M_now - M_prev) < 1e-8 * (abs(M_now) + 1e-30):
             break

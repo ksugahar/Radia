@@ -287,11 +287,29 @@ VOLUME Gram (cell-cell, cell-face still monopole+sub-point).  HONEST: the Wilton
 clean win for the demag factor (surface-charge-dominated, exact); the full sharp-body NON-UNIFORM
 accuracy additionally needs the analytic VOLUME (tet) Gram -- the next refinement.
 
-## NEXT (open): analytic VOLUME (tet) Gram; scalable C++
+## SCALABLE nonlinear (production #2) -- DONE (2026-06-07, golden-locked)
+solve_nonlinear_newton_scalable (examples/feec_vim/hdiv_demag_tet_nonlinear.py) replaces the dense
+O(N^3)/O(N^2) demag of the dense Newton with the C++ HACApK charge-Gram H-matrix
+(radia._radia_pybind._ChargeGramHMatrix, O(N log N) apply) + a sparse near-correction, and solves each
+Newton step ITERATIVELY (GMRES, M_mass-preconditioned) -- NO dense factorization anywhere:
+    N v = B^T ( H.matvec(B v) + corr (B v) )        # textbook H-matrix far + sparse near split
+    J v = M_mass v + T M_mass^{-1} N v               # matrix-free Jacobian (M_mass factored once)
+It reproduces the dense solve_nonlinear_newton (same monopole+near-corr operator) to ~MACHINE PRECISION
+at saturation (sphere, rel D-vs-S: 1.1e-12 @ H0=5e5, 5.2e-14 @ 1e6, 0 @ 5e6; ~1.8e-3 at moderate drive
+= the ACA/GMRES tolerance) and matches the analytic to <0.06% at saturation.  Golden:
+tests/feec/test_hdiv_vim_newton_scalable.py.  The heavy cost (the Gram apply) is the C++ H-matrix
+(O(N log N), established for the linear case in production #1/#2); the Newton outer loop is Python (an
+O(N)-per-iteration overhead dominated by the C++ H-matvec).
+
+## NEXT (open): analytic VOLUME (tet) Gram; full-C++ Newton loop; Wilton-in-C++
 - analytic VOLUME Gram (uniform-tet potential: cell-cell + cell-face) -> closes the residual nonlinear
   sharp-body non-uniform gap (the surface Wilton is done).
-- scalable C++ nonlinear path: the tensor tangent is a per-element 3x3; the factor-once structure
-  reuses the #2 H-LDL^T for the constant M_mass + the diagonal/tangent update.
+- the C++ Gram H-matrix is MONOPOLE far field, so the scalable path matches the dense MONOPOLE+near-corr
+  Newton, NOT the dense Wilton path; putting the Wilton surface integral into the C++ near-field
+  correction gives scalable + Wilton-accurate together.
+- a full C++ Newton OUTER loop (the tangent + line search in C++ too) removes the Python-loop overhead
+  (minor: each iteration is dominated by the C++ H-matvec); reuse the #2 H-LDL^T for a factor-once
+  variant of the per-iteration solve.
 
 ## Why the operator is reusable (the structural win)
 The demag operator N = B^T G B is GEOMETRY-ONLY (constant, mu_r-independent) -- it is assembled ONCE.
@@ -353,11 +371,16 @@ DONE + golden-locked (feec 54/54):
   of new     could NOT fix); the new sequence's #1.  tet.tri_potential / tet.wilton_surface_block;
   sequence)  golden tests/feec/test_hdiv_vim_wilton_gram.py.  Combined w/ a VOLUME-only near-correction
              for the nonlinear path (cube moderate gap 13% -> 8.7%).
+  SCALABLE   scalable nonlinear Newton via the C++ Gram H-matrix (O(N log N) apply) + GMRES, NO dense
+  (#2 of     factorization; reproduces the dense Newton to ~machine precision at saturation
+  new seq)   (examples/...::solve_nonlinear_newton_scalable, tests/feec/test_hdiv_vim_newton_scalable.py).
 
 OPEN (honest boundaries / next increments):
   - analytic VOLUME (tet) Gram: the surface Wilton is done; the residual nonlinear SHARP-body
     non-uniform gap (cube moderate ~8.7% vs Radia) is the cell-cell / cell-face Gram (still
-    monopole+sub-point).  Next refinement after the new sequence's #2/#3.
+    monopole+sub-point).  Next refinement after the new sequence's #3.
+  - new-sequence #3 (more nonlinear validation): ellipsoid (D!=1/3 smooth), real rad.MatSatIsoTab
+    material table, C-yoke.
   - BH-knee stiffness: Newton converges to the correct answer but slowly there (scalar Picard is the
     practical tool at the knee); operator-accuracy-limited (finer/analytic Gram reduces it).
   - the scalable C++ nonlinear path (reuse #2 H-LDL^T for the factor-once tangent solve) -- new #2.
