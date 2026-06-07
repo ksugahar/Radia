@@ -240,12 +240,35 @@ regardless of the demag factor, so the operator's ~2%-at-low-drive demag-D syste
 -- this isolates the nonlinear SATURATION behaviour, exactly what Newton had to get right.)
 Golden test: tests/feec/test_hdiv_vim_newton_vs_radia.py.
 
-## NEXT (open): NON-UNIFORM body + scalable C++
-The sphere validates the uniform-M case (= scalar analytic, = Radia MMM/MSC).  Still to do: a
-NON-UNIFORM saturating body (cube / C-yoke) where the per-element Newton genuinely earns its keep over
-the scalar Picard, cross-checked against rad.Solve on the same mesh.  THEN the scalable C++ path (the
-tensor tangent is a per-element 3x3; the factor-once structure reuses the #2 H-LDL^T for the constant
-M_mass + the diagonal/tangent update).
+## NON-UNIFORM body (cube) cross-check -- characterized open boundary (honest, NOT a clean win)
+Cube in a uniform field, HDiv-VIM Newton vs Radia MMM/MSC (same chi0=1000, Msat=1e6, same BH curve):
+    H0(A/m)   HDiv Mavg   Radia Mavg   Radia Mstd   rel(H-R)
+    2.0e5     642207      734557       162824       1.3e-1     <- moderate drive: 13% gap
+    5.0e5     935369      985670         9573       5.1e-2
+    1.0e6     986986      996728         1539       9.8e-3     <- saturation: agree to ~1%
+At SATURATION the cube agrees with Radia to ~1% (M->Msat, demag-D-independent -- consistent with the
+sphere result).  At MODERATE drive there is a ~13% gap, and Radia shows the cube M is GENUINELY very
+non-uniform there (std = 162824 = 22% of mean: corners saturate, centre does not).
+CAUSE (diagnosed, NOT convergence / NOT knee):
+  - converged: maxit 120 vs 400 give the SAME M_avg (642207) -- the Newton is at its fixed point;
+  - near-corr-insensitive: cube monopole+nearcorr D = 0.3125 for near_factor 2/3/4 (analytic cube
+    D_uniform = 1/3 = 0.3333); the near correction helps local fields but does NOT lift the cube's
+    uniform-mode D;
+  - the HDiv-VIM cube is DEMAG-LIMITED at M_avg ~ H0/D_monopole = 2e5/0.3125 = 640000 (= the 642207
+    observed), while Radia's non-uniform MMM/MSC solution redistributes M to a LOWER effective demag
+    (2e5/734557 = 0.272) -> higher M_avg.
+=> the gap is the centroid-MONOPOLE operator's PER-ELEMENT field accuracy on a SHARP-CORNERED body at
+   moderate drive (where M is highly non-uniform).  The same operator-accuracy limit as the linear
+   demag, exposed by non-smooth geometry; the FIX is higher-order Gram accuracy (analytic Wilton
+   face-integral, the #3 production direction) -- NOT a solver change.  So: the HDiv-VIM nonlinear
+   Newton is production-grade at saturation and on smooth bodies, but NOT yet a moderate-drive
+   sharp-geometry non-uniform solver -- that waits on the Wilton Gram.
+
+## NEXT (open): higher-order Gram (Wilton) for sharp non-uniform bodies; scalable C++
+- Wilton analytic face-integral Gram -> per-element field accuracy on sharp corners (closes the cube
+  moderate-drive gap above).
+- scalable C++ nonlinear path: the tensor tangent is a per-element 3x3; the factor-once structure
+  reuses the #2 H-LDL^T for the constant M_mass + the diagonal/tangent update.
 
 ## Why the operator is reusable (the structural win)
 The demag operator N = B^T G B is GEOMETRY-ONLY (constant, mu_r-independent) -- it is assembled ONCE.
@@ -304,7 +327,9 @@ DONE + golden-locked (feec 50/50):
              (tests/feec/test_hdiv_vim_newton_vs_radia.py).
 
 OPEN (honest boundaries / next increments):
-  - NONLINEAR on a NON-UNIFORM body (cube/C-yoke) where per-element Newton beats scalar Picard.
+  - NON-UNIFORM SHARP body (cube) at MODERATE drive: ~13% gap vs Radia (diagnosed as the centroid-
+    monopole operator's per-element field accuracy on sharp corners -- converged, near-corr-insensitive;
+    agrees with Radia to ~1% at saturation).  FIX = higher-order Wilton Gram, NOT a solver change.
   - BH-knee stiffness: Newton converges to the correct answer but slowly there (scalar Picard is the
     practical tool at the knee); operator-accuracy-limited (finer/analytic Gram reduces it).
   - the scalable C++ nonlinear path (reuse #2 H-LDL^T for the factor-once tangent solve).
