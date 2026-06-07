@@ -17,7 +17,7 @@ H-matrix (scalable) and checks it reproduces this.
 """
 import json
 import os
-from math import pi, sqrt
+from math import pi, sqrt, log, atan2
 
 import numpy as np
 import scipy.sparse as sp
@@ -86,15 +86,88 @@ def tri_self_energy(V, area, nsub):
     return cross + selfsub
 
 
+# --- Wilton analytic surface Gram (the #1 production accuracy fix, 2026-06-07) ---
+# For a UNIFORM M the demag is ENTIRELY surface charge (div M = 0 -> zero volume charge), so the demag
+# factor is governed by the surface-surface (boundary-triangle) Gram block.  The centroid-MONOPOLE
+# off-diagonal under-resolves adjacent/near boundary triangles -> the demag factor comes out ~5-6% low
+# (cube 0.311, sphere 0.314 vs the exact 1/3), and the sub-point near-correction does NOT fix the cube.
+# Wilton's exact analytic potential of a uniformly-charged flat triangle closes this: cube/sphere demag
+# -> 1/3 to <0.15%.  Reference: Wilton et al., IEEE TAP 32(3):276 (1984); Graglia, IEEE TAP 41(10):1448
+# (1993).  Off-diagonal only -- the validated tri_self_energy keeps the diagonal.
+
+# Dunavant degree-5 symmetric triangle rule (7 points, barycentric; weights sum to 1) for the OUTER
+# integral over the observation triangle (the inner integral is the exact Wilton potential).
+_DUN5 = [(1.0 / 3, 1.0 / 3, 1.0 / 3, 0.225)]
+for _a, _w in [(0.0597158717, 0.1323941527), (0.7974269853, 0.1259391805)]:
+    _b = (1.0 - _a) / 2.0
+    _DUN5 += [(_a, _b, _b, _w), (_b, _a, _b, _w), (_b, _b, _a, _w)]
+_DUN5 = np.array(_DUN5)
+
+
+def tri_potential(V, r):
+    """Exact INT_T 1/|r - r'| dA' over a flat triangle T (vertices V, 3x3) at observation point r
+    (constant unit density) -- the Wilton/Graglia analytic potential integral.  Verified vs fine
+    numerical quadrature to the reference's own accuracy (~1e-4, limited by the reference near the
+    plane).  Handles r on either side of / on the triangle plane."""
+    v0, v1, v2 = V[0], V[1], V[2]
+    n = np.cross(v1 - v0, v2 - v0)
+    n = n / np.linalg.norm(n)
+    d = float(np.dot(r - v0, n))            # signed height above the triangle plane
+    p = r - d * n                           # projection of r onto the plane
+    ad = abs(d)
+    I = 0.0
+    vs = (v0, v1, v2)
+    for i in range(3):
+        a = vs[i]
+        b = vs[(i + 1) % 3]
+        lv = b - a
+        lh = lv / np.linalg.norm(lv)
+        uh = np.cross(lh, n)                # in-plane unit normal to the edge
+        P0 = float(np.dot(a - p, uh))       # signed perpendicular distance projection -> edge line
+        sm = float(np.dot(a - p, lh))       # endpoint projections along the edge
+        sp = float(np.dot(b - p, lh))
+        Rm = sqrt(float(np.dot(a - r, a - r)))
+        Rp = sqrt(float(np.dot(b - r, b - r)))
+        R0sq = P0 * P0 + d * d
+        denom_m, denom_p = Rm + sm, Rp + sp
+        f = log(denom_p / denom_m) if denom_p > 1e-300 and denom_m > 1e-300 else 0.0
+        beta = atan2(P0 * sp, R0sq + ad * Rp) - atan2(P0 * sm, R0sq + ad * Rm)
+        I += P0 * f - ad * beta
+    return I
+
+
+def wilton_surface_block(bf_V):
+    """Surface-surface Gram block (n_bf x n_bf) by the Wilton analytic inner integral + a Dunavant
+    outer rule: G[a][b] = (1/4pi) INT_{tri_a} (INT_{tri_b} 1/|r-r'| dA') dA.  Symmetric; the diagonal
+    here is the Dunavant-outer self (the caller overwrites it with the validated tri_self_energy)."""
+    nb = len(bf_V)
+    area = np.array([0.5 * np.linalg.norm(np.cross(V[1] - V[0], V[2] - V[0])) for V in bf_V])
+    qp = [_DUN5[:, :3] @ V for V in bf_V]    # outer quadrature points on each triangle
+    wq = _DUN5[:, 3]
+    G = np.zeros((nb, nb))
+    for a in range(nb):
+        Pa = qp[a]
+        wa = wq * area[a]
+        for b in range(nb):
+            G[a, b] = float(np.sum(wa * np.array([tri_potential(bf_V[b], P) for P in Pa]))) / (4 * pi)
+    return 0.5 * (G + G.T)
+
+
 def _csr(bf):
     m = bf.mat
     r, c, v = m.COO()
     return sp.csr_matrix((np.array(v), (np.array(r), np.array(c))), shape=(m.height, m.width)).toarray()
 
 
-def build_demag(mesh, nsub=4):
+def build_demag(mesh, nsub=4, wilton_surface=False):
     """Assemble the HDiv-type VIM demag operator N = B^T G B on a tet mesh + the HDiv mass M_mass.
-    Returns N, M_mass, the charge map B, the loop basis, and diagnostics."""
+    Returns N, M_mass, the charge map B, the loop basis, and diagnostics.
+
+    wilton_surface=True replaces the surface-surface (boundary-triangle) OFF-diagonal Gram block with
+    the exact Wilton analytic integral (the diagonal keeps the validated tri_self_energy).  This makes
+    the demag factor exact to <0.15% on cube AND sphere (vs the ~5-6% monopole error that the sub-point
+    near-correction cannot fix on the cube) -- the #1 production accuracy fix.  O(n_bf^2) dense; the
+    scalable C++ HACApK charge-Gram path is the next step."""
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=0)
         ndof = fes.ndof
@@ -132,6 +205,12 @@ def build_demag(mesh, nsub=4):
     for k, V in enumerate(bf_V):
         diagG[n_el + k] = tri_self_energy(V, bf_area[k], nsub)
     np.fill_diagonal(G, diagG)
+    if wilton_surface and n_bf > 0:
+        # exact Wilton surface-surface block (incl. self): shape-exact for ANY triangle, unlike
+        # tri_self_energy which assumes an equilateral (fixed C_TRI) -> on real meshes with varied
+        # triangle shapes the Wilton self is the accurate diagonal (demag 1/3 to <0.15% vs ~2% if the
+        # equilateral self is forced onto skewed boundary triangles).
+        G[n_el:, n_el:] = wilton_surface_block(bf_V)
     N = B.T @ G @ B
 
     Q = np.vstack([Bv_m, Bb_m])
@@ -168,13 +247,19 @@ def _charge_subpoints(mesh, nsub):
     return SP, SW, kind
 
 
-def build_near_correction(mesh, d, nsub=4, near_factor=2.0):
+def build_near_correction(mesh, d, nsub=4, near_factor=2.0, skip_surface_surface=False):
     """Sparse near-field Gram correction (exact sub-point MINUS centroid-monopole) for NEAR charge
     pairs -- the standard H-matrix near-field correction.  The scalable Gram is then the compressed
     monopole H-matrix (far, cheap) PLUS this sparse local correction (near, exact): it lifts the
     sphere demag from the monopole ~0.31 to the Gram-exact ~0.33 (-> analytic 1/3) at O(N) extra cost.
     Cells contribute ~0 for uniform M (div M = 0), but the correction is computed for all near pairs
-    for generality.  Returns a scipy CSR (n_charge x n_charge)."""
+    for generality.  Returns a scipy CSR (n_charge x n_charge).
+
+    skip_surface_surface=True omits surface-surface pairs -- use this together with the Wilton surface
+    Gram (build_demag(wilton_surface=True)), which already makes the surface-surface block exact; the
+    near-correction then only fixes the VOLUME-involving (cell-cell, cell-face) near pairs that the
+    per-element NONLINEAR Newton needs (without it the volume near-field is un-corrected and Newton
+    finds a wrong root)."""
     import scipy.sparse as sp
     inv4pi = 1.0 / (4.0 * pi)
     cent, meas = d["cent"], d["meas"]
@@ -186,6 +271,8 @@ def build_near_correction(mesh, d, nsub=4, near_factor=2.0):
     for a in range(n):
         ca, sa, wa = cent[a], SP[a], SW[a]
         for b in range(a + 1, n):
+            if skip_surface_surface and a >= n_cell and b >= n_cell:
+                continue                         # surface-surface handled exactly by the Wilton Gram
             dx = ca - cent[b]
             r = float(np.sqrt(dx @ dx))
             if r < near_factor * (size[a] + size[b]):

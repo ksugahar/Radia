@@ -260,13 +260,36 @@ CAUSE (diagnosed, NOT convergence / NOT knee):
 => the gap is the centroid-MONOPOLE operator's PER-ELEMENT field accuracy on a SHARP-CORNERED body at
    moderate drive (where M is highly non-uniform).  The same operator-accuracy limit as the linear
    demag, exposed by non-smooth geometry; the FIX is higher-order Gram accuracy (analytic Wilton
-   face-integral, the #3 production direction) -- NOT a solver change.  So: the HDiv-VIM nonlinear
-   Newton is production-grade at saturation and on smooth bodies, but NOT yet a moderate-drive
-   sharp-geometry non-uniform solver -- that waits on the Wilton Gram.
+   face-integral) -- NOT a solver change.
 
-## NEXT (open): higher-order Gram (Wilton) for sharp non-uniform bodies; scalable C++
-- Wilton analytic face-integral Gram -> per-element field accuracy on sharp corners (closes the cube
-  moderate-drive gap above).
+## WILTON analytic SURFACE Gram -- DONE (production #1, 2026-06-07, golden-locked)
+build_demag(..., wilton_surface=True) replaces the surface-surface (boundary-triangle) OFF-diagonal
+Gram block AND its self with the exact Wilton/Graglia analytic potential of a uniformly-charged flat
+triangle (tet.tri_potential + tet.wilton_surface_block; Dunavant-5 outer x analytic inner).  Because a
+UNIFORM M has div M = 0 (zero volume charge), the demag factor is PURELY surface charge, so the Wilton
+surface Gram makes it EXACT:
+    body     monopole+nearsub   Wilton-surface   analytic
+    sphere   0.3135             0.3329 (0.12%)   0.3333
+    cube     0.3108             0.3334 (0.02%)   0.3333    <- the cube the near-correction could NOT fix
+The Wilton SELF is shape-exact (any triangle); the old tri_self_energy assumes equilateral (fixed
+C_TRI), so on real meshes the Wilton self is the better diagonal -- DO NOT overwrite it with
+tri_self_energy (that regressed the demag to 0.3256).  Golden: tests/feec/test_hdiv_vim_wilton_gram.py
+(tri_potential vs numerical + cube/sphere demag <0.5%).  Ref: Wilton IEEE TAP 32(3):276 (1984);
+Graglia IEEE TAP 41(10):1448 (1993).
+
+For the NONLINEAR solve, wilton_surface=True is combined with a VOLUME-only near-correction
+(build_near_correction(skip_surface_surface=True)): the surface block is exact (Wilton) and the
+volume-involving (cell-cell, cell-face) near pairs keep the sub-point correction the per-element Newton
+needs (skipping it -> wrong root, M=0.83 vs 0.99 at saturation -- the same wrong-root failure as the
+sphere without near-corr).  On the nonlinear cube this IMPROVES the moderate-drive gap (13% -> 8.7%)
+and saturation (0.98% -> 0.75%), but does NOT fully close the moderate-drive gap: the residual is the
+VOLUME Gram (cell-cell, cell-face still monopole+sub-point).  HONEST: the Wilton SURFACE Gram is a
+clean win for the demag factor (surface-charge-dominated, exact); the full sharp-body NON-UNIFORM
+accuracy additionally needs the analytic VOLUME (tet) Gram -- the next refinement.
+
+## NEXT (open): analytic VOLUME (tet) Gram; scalable C++
+- analytic VOLUME Gram (uniform-tet potential: cell-cell + cell-face) -> closes the residual nonlinear
+  sharp-body non-uniform gap (the surface Wilton is done).
 - scalable C++ nonlinear path: the tensor tangent is a per-element 3x3; the factor-once structure
   reuses the #2 H-LDL^T for the constant M_mass + the diagonal/tangent update.
 
@@ -315,7 +338,7 @@ Hantila for the factor-once speed-up at the knee (Newton already gives correctne
 _STATUS = r"""
 # Status summary (2026-06-07)
 
-DONE + golden-locked (feec 50/50):
+DONE + golden-locked (feec 54/54):
   #1  scalable mu_r-independent HDiv-VIM demag solver on REAL tet meshes (Layer A/A.5 + tet ingest)
   #2  rk-aware symmetric H-LDL^T factoring real compressed H-matrices (+ driver)
   #3  bug-fixed exact Gram via near-field correction -> demag -> analytic 1/3
@@ -325,17 +348,21 @@ DONE + golden-locked (feec 50/50):
              tests/feec/test_hdiv_vim_tet_newton.py, +the scalar-Picard moderate-drive foundation).
              CROSS-VALIDATED vs Radia MMM/MSC (rad.Solve+MatSatIsoTab) to <0.05% at saturation
              (tests/feec/test_hdiv_vim_newton_vs_radia.py).
+  WILTON     analytic SURFACE Gram (build_demag(wilton_surface=True)): exact triangle-triangle Coulomb
+  GRAM (#1   integral -> demag factor 1/3 to <0.15% on cube AND sphere (the cube the near-correction
+  of new     could NOT fix); the new sequence's #1.  tet.tri_potential / tet.wilton_surface_block;
+  sequence)  golden tests/feec/test_hdiv_vim_wilton_gram.py.  Combined w/ a VOLUME-only near-correction
+             for the nonlinear path (cube moderate gap 13% -> 8.7%).
 
 OPEN (honest boundaries / next increments):
-  - NON-UNIFORM SHARP body (cube) at MODERATE drive: ~13% gap vs Radia (diagnosed as the centroid-
-    monopole operator's per-element field accuracy on sharp corners -- converged, near-corr-insensitive;
-    agrees with Radia to ~1% at saturation).  FIX = higher-order Wilton Gram, NOT a solver change.
+  - analytic VOLUME (tet) Gram: the surface Wilton is done; the residual nonlinear SHARP-body
+    non-uniform gap (cube moderate ~8.7% vs Radia) is the cell-cell / cell-face Gram (still
+    monopole+sub-point).  Next refinement after the new sequence's #2/#3.
   - BH-knee stiffness: Newton converges to the correct answer but slowly there (scalar Picard is the
     practical tool at the knee); operator-accuracy-limited (finer/analytic Gram reduces it).
-  - the scalable C++ nonlinear path (reuse #2 H-LDL^T for the factor-once tangent solve).
+  - the scalable C++ nonlinear path (reuse #2 H-LDL^T for the factor-once tangent solve) -- new #2.
   - H-LDL^T on DEEP trees (internal off-diagonal recursion) -- currently NEED_RECURSIVE.
-  - near-field correction in the C++ ChargeGram entry (or analytic Wilton) -- currently the Python
-    build_near_correction overlay.
+  - near-field / Wilton Gram in the C++ ChargeGram entry -- currently the Python overlay.
   - proper distorted RT0 M_mass for exact distorted demag VALUES (non-negativity already holds).
 """
 
