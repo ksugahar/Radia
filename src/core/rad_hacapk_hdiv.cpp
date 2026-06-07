@@ -29,6 +29,7 @@ void RadHACApKHDivManager::OnBeforeBuild()
 {
     rad_hdiv::BuildChargeMapCSC(m_mesh, m_csc);
     rad_hdiv::BuildChargeQuad(m_mesh, m_nsub, m_quad);
+    rad_hdiv::BuildMassCOO(m_mesh, m_mI, m_mJ, m_mV, m_mass_diag);
 }
 
 void RadHACApKHDivManager::InitializeInvChi()
@@ -36,6 +37,26 @@ void RadHACApKHDivManager::InitializeInvChi()
     // The +N H-matrix does not fold in 1/chi (ComputeSystemEntry = default = +N); the material
     // system A = (1/chi) M_mass - N is applied by the caller.  Still must size m_inv_chi.
     m_inv_chi.assign(m_ndof, 0.0);
+}
+
+void RadHACApKHDivManager::ApplySystem(const std::vector<double>& x, double inv_chi,
+                                       std::vector<double>& y)
+{
+    // y = N x  (O(N log N) H-matvec via the base)
+    y.assign(m_ndof, 0.0);
+    MatVec(x, y);
+    // y = inv_chi * (M_mass x) - N x
+    for (int f = 0; f < m_ndof; ++f) y[f] = -y[f];
+    for (size_t k = 0; k < m_mV.size(); ++k)
+        y[m_mI[k]] += inv_chi * m_mV[k] * x[m_mJ[k]];
+}
+
+std::vector<double> RadHACApKHDivManager::DiagSystem(double inv_chi) const
+{
+    std::vector<double> d((size_t)m_ndof, 0.0);
+    for (int f = 0; f < m_ndof; ++f)
+        d[f] = inv_chi * m_mass_diag[f] - GetInteractionMatrixElement(f, f);
+    return d;
 }
 
 double RadHACApKHDivManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
