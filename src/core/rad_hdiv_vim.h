@@ -83,6 +83,13 @@ void AssembleN(const Mesh& m, std::vector<double>& N, int nsub = 0);
  * (symmetric indefinite); the generalized eigenvalues of (N, M_mass) are the demag factors. */
 void AssembleMass(const Mesh& m, std::vector<double>& M_mass);
 
+/* Sparse (COO triplet) form of the same RT0 mass M_mass, for the scalable system apply
+ * y += inv_chi * M_mass * x (the material system A = (1/chi) M_mass - N is applied as the
+ * H-matvec N*x plus this sparse local mass).  Appends (I[k], J[k], V[k]); diag is the per-face
+ * accumulated diagonal (length n_face).  Same per-cell per-axis 2x2 blocks as AssembleMass. */
+void BuildMassCOO(const Mesh& m, std::vector<int>& I, std::vector<int>& J,
+                  std::vector<double>& V, std::vector<double>& diag);
+
 //-------------------------------------------------------------------------
 // Reusable charge quadrature + per-pair Gram + per-face charge support.
 // These are the building blocks SHARED by the dense AssembleCoulombGram / AssembleN
