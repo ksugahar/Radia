@@ -35,3 +35,47 @@ def test_hldlt_more_accurate_than_nopivot_hlu_on_indefinite():
     r = _rp._hldlt_self_test(3, 16)
     assert r["ldlt_residual"] <= r["hlu_residual"] + 1e-12, (
         f"LDL^T {r['ldlt_residual']:.2e} worse than H-LU {r['hlu_residual']:.2e}")
+
+
+# --- rk-aware H-LDL^T (low-rank / ACA-compressed off-diagonal leaves) ---------
+# A real ACA-compressed H-matrix stores the admissible far-field blocks as rk
+# (U V^T) leaves.  These tests lock the rk-aware factorization: the off-diagonal
+# leaves are built EXACTLY rank-rk_rank so the rk arithmetic (offdiag-solve +
+# the 4 trailing-update combos) is EXACT (no truncation), giving a near-machine
+# residual when the rk path is correct.
+
+@pytest.mark.parametrize("nb,rk", [
+    (24, 4),
+    (32, 8),
+])
+def test_hldlt_rk_offdiagonal_depth1(nb, rk):
+    """depth-1: dense indefinite diagonal leaves + an EXACT-rank rk off-diagonal leaf."""
+    r = _rp._hldlt_self_test_rk(nb, rk, 1)
+    assert 0.0 <= r["ldlt_residual"] < 1e-8, (
+        f"rk LDL^T residual {r['ldlt_residual']:.2e} too large (rk path bug)")
+
+
+@pytest.mark.parametrize("nb,rk", [
+    (24, 4),
+    (32, 8),
+])
+def test_hldlt_rk_offdiagonal_depth2(nb, rk):
+    """depth-2: rk off-diagonal leaves at TWO levels (rk*rk trailing update into an
+    internal sub-tree)."""
+    r = _rp._hldlt_self_test_rk(nb, rk, 2)
+    assert 0.0 <= r["ldlt_residual"] < 1e-8, (
+        f"rk depth-2 LDL^T residual {r['ldlt_residual']:.2e} too large (rk path bug)")
+
+
+@pytest.mark.parametrize("s", [4, 5])
+def test_hldlt_rk_mixed_all_four_combos(s):
+    """Mixed dense/rk off-diagonal leaves: the trailing update must exercise ALL FOUR
+    operand-kind combos (dense*dense, rk*dense, dense*rk, rk*rk) AND stay machine-exact."""
+    r = _rp._hldlt_self_test_rk_mixed(20, 4, s)
+    assert 0.0 <= r["ldlt_residual"] < 1e-8, (
+        f"mixed rk LDL^T residual {r['ldlt_residual']:.2e} too large")
+    # every combo path must actually fire (otherwise the test gives false coverage)
+    assert r["combo_dense_dense"] > 0, "combo dense*dense never fired"
+    assert r["combo_rk_dense"]    > 0, "combo rk*dense never fired"
+    assert r["combo_dense_rk"]    > 0, "combo dense*rk never fired"
+    assert r["combo_rk_rk"]       > 0, "combo rk*rk never fired"
