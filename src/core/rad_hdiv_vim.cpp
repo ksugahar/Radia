@@ -11,53 +11,104 @@ static const double INV_FOUR_PI = 1.0 / (4.0 * PI);
 static const double C_CUBE = 1.88231;   // <1/r>_unitcube  (cube self-energy constant)
 static const double C_SQ   = 2.97321;   // <1/r>_unitsquare (square self-energy constant)
 
-Mesh BuildStructuredRT0(int nx, int ny, int nz, double h)
+// ---- trilinear hex geometry (NGSolve vertex order v0(000)..v7(110) in (x,y,z) local) ----
+static void hex_shape(double xi, double eta, double ze, double N[8], double dN[8][3])
+{
+    double x0=1-xi, x1=xi, y0=1-eta, y1=eta, z0=1-ze, z1=ze;
+    N[0]=x0*y0*z0; N[1]=x0*y0*z1; N[2]=x0*y1*z1; N[3]=x0*y1*z0;
+    N[4]=x1*y0*z0; N[5]=x1*y0*z1; N[6]=x1*y1*z1; N[7]=x1*y1*z0;
+    dN[0][0]=-y0*z0; dN[1][0]=-y0*z1; dN[2][0]=-y1*z1; dN[3][0]=-y1*z0;
+    dN[4][0]= y0*z0; dN[5][0]= y0*z1; dN[6][0]= y1*z1; dN[7][0]= y1*z0;
+    dN[0][1]=-x0*z0; dN[1][1]=-x0*z1; dN[2][1]= x0*z1; dN[3][1]= x0*z0;
+    dN[4][1]=-x1*z0; dN[5][1]=-x1*z1; dN[6][1]= x1*z1; dN[7][1]= x1*z0;
+    dN[0][2]=-x0*y0; dN[1][2]= x0*y0; dN[2][2]= x0*y1; dN[3][2]=-x0*y1;
+    dN[4][2]=-x1*y0; dN[5][2]= x1*y0; dN[6][2]= x1*y1; dN[7][2]=-x1*y1;
+}
+static Vec3 hex_map(const std::array<Vec3,8>& V, double xi, double eta, double ze)
+{
+    double N[8], dN[8][3]; hex_shape(xi, eta, ze, N, dN);
+    Vec3 p{0,0,0};
+    for (int i=0;i<8;i++) for (int a=0;a<3;a++) p[a]+=N[i]*V[i][a];
+    return p;
+}
+static double hex_detJ(const std::array<Vec3,8>& V, double xi, double eta, double ze)
+{
+    double N[8], dN[8][3]; hex_shape(xi, eta, ze, N, dN);
+    double J[3][3]={{0,0,0},{0,0,0},{0,0,0}};
+    for (int i=0;i<8;i++) for (int a=0;a<3;a++) for (int b=0;b<3;b++) J[a][b]+=V[i][a]*dN[i][b];
+    return J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1])
+         - J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])
+         + J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
+}
+static const double GP2[2] = {0.5 - 0.5/1.7320508075688772, 0.5 + 0.5/1.7320508075688772};
+static double hex_volume(const std::array<Vec3,8>& V)
+{
+    double vol = 0.0;
+    for (int a=0;a<2;a++) for (int b=0;b<2;b++) for (int c=0;c<2;c++)
+        vol += 0.125 * std::fabs(hex_detJ(V, GP2[a], GP2[b], GP2[c]));
+    return vol;
+}
+// ---- bilinear quad geometry (corner order v0(0,0) v1(0,1) v2(1,1) v3(1,0)) ----
+static Vec3 quad_map(const Vec3 W[4], double u, double v)
+{
+    double a0=(1-u)*(1-v), a1=(1-u)*v, a2=u*v, a3=u*(1-v);
+    Vec3 p; for (int a=0;a<3;a++) p[a]=a0*W[0][a]+a1*W[1][a]+a2*W[2][a]+a3*W[3][a];
+    return p;
+}
+static double quad_area(const Vec3 W[4])
+{
+    double A=0.0; const double e=1e-6;
+    for (int a=0;a<2;a++) for (int b=0;b<2;b++) {
+        Vec3 xu, xv, pu0=quad_map(W,GP2[a]-e,GP2[b]), pu1=quad_map(W,GP2[a]+e,GP2[b]);
+        Vec3 pv0=quad_map(W,GP2[a],GP2[b]-e), pv1=quad_map(W,GP2[a],GP2[b]+e);
+        for (int d=0;d<3;d++){ xu[d]=(pu1[d]-pu0[d])/(2*e); xv[d]=(pv1[d]-pv0[d])/(2*e); }
+        Vec3 cr{ xu[1]*xv[2]-xu[2]*xv[1], xu[2]*xv[0]-xu[0]*xv[2], xu[0]*xv[1]-xu[1]*xv[0] };
+        A += 0.25 * std::sqrt(cr[0]*cr[0]+cr[1]*cr[1]+cr[2]*cr[2]);
+    }
+    return A;
+}
+
+Mesh BuildStructuredRT0(int nx, int ny, int nz, double h, double distort)
 {
     Mesh m; m.nx = nx; m.ny = ny; m.nz = nz; m.n_cell = nx*ny*nz;
     auto cell_id = [=](int i, int j, int k) { return (i*ny + j)*nz + k; };
-    auto node = [=](int i, int j, int k) -> Vec3 { return {i*h, j*h, k*h}; };
+    const double L = nx * h, d = distort;
+    auto node = [=](int i, int j, int k) -> Vec3 {
+        double x=i*h, y=j*h, z=k*h;
+        if (d == 0.0) return {x, y, z};
+        double sy = std::sin(PI*y/L);
+        return { x + d*sy*z, y + 0.83*d*x*z, z + 0.67*d*x*sy };   // smooth node displacement
+    };
+    auto mean = [](const Vec3* w, int n) -> Vec3 {
+        Vec3 c{0,0,0}; for (int t=0;t<n;t++) for (int a=0;a<3;a++) c[a]+=w[t][a]/n; return c; };
 
-    // x-faces: i in [0,nx], j in [0,ny), k in [0,nz); normal +x
-    for (int i = 0; i <= nx; ++i)
-        for (int j = 0; j < ny; ++j)
-            for (int k = 0; k < nz; ++k) {
-                Vec3 nd = node(i, j, k);
-                Face f; f.ax = 0; f.area = h*h;
-                f.c = {nd[0], nd[1] + 0.5*h, nd[2] + 0.5*h};
-                f.lo = (i > 0)  ? cell_id(i-1, j, k) : -1;
-                f.hi = (i < nx) ? cell_id(i,   j, k) : -1;
-                f.bnd = (i == 0 || i == nx);
-                m.faces.push_back(f);
-            }
-    // y-faces: i in [0,nx), j in [0,ny], k in [0,nz); normal +y
-    for (int i = 0; i < nx; ++i)
-        for (int j = 0; j <= ny; ++j)
-            for (int k = 0; k < nz; ++k) {
-                Vec3 nd = node(i, j, k);
-                Face f; f.ax = 1; f.area = h*h;
-                f.c = {nd[0] + 0.5*h, nd[1], nd[2] + 0.5*h};
-                f.lo = (j > 0)  ? cell_id(i, j-1, k) : -1;
-                f.hi = (j < ny) ? cell_id(i, j,   k) : -1;
-                f.bnd = (j == 0 || j == ny);
-                m.faces.push_back(f);
-            }
-    // z-faces: i in [0,nx), j in [0,ny), k in [0,nz]; normal +z
-    for (int i = 0; i < nx; ++i)
-        for (int j = 0; j < ny; ++j)
-            for (int k = 0; k <= nz; ++k) {
-                Vec3 nd = node(i, j, k);
-                Face f; f.ax = 2; f.area = h*h;
-                f.c = {nd[0] + 0.5*h, nd[1] + 0.5*h, nd[2]};
-                f.lo = (k > 0)  ? cell_id(i, j, k-1) : -1;
-                f.hi = (k < nz) ? cell_id(i, j, k)   : -1;
-                f.bnd = (k == 0 || k == nz);
-                m.faces.push_back(f);
-            }
-    m.cell_c.resize(m.n_cell); m.cell_V.assign(m.n_cell, h*h*h);
-    for (int i = 0; i < nx; ++i)
-        for (int j = 0; j < ny; ++j)
-            for (int k = 0; k < nz; ++k)
-                m.cell_c[cell_id(i, j, k)] = {(i+0.5)*h, (j+0.5)*h, (k+0.5)*h};
+    // cells: 8 corner vertices (NGSolve order), centroid, volume
+    m.cell_verts.resize(m.n_cell); m.cell_c.resize(m.n_cell); m.cell_V.resize(m.n_cell);
+    static const int CV[8][3] = {{0,0,0},{0,0,1},{0,1,1},{0,1,0},{1,0,0},{1,0,1},{1,1,1},{1,1,0}};
+    for (int i=0;i<nx;i++) for (int j=0;j<ny;j++) for (int k=0;k<nz;k++) {
+        int c = cell_id(i,j,k);
+        for (int t=0;t<8;t++) m.cell_verts[c][t] = node(i+CV[t][0], j+CV[t][1], k+CV[t][2]);
+        m.cell_c[c] = mean(m.cell_verts[c].data(), 8);
+        m.cell_V[c] = hex_volume(m.cell_verts[c]);
+    }
+    // faces: 4 corner vertices (around the quad), centroid, area; topological lo/hi/bnd by axis
+    auto add_face = [&](int ax, int i, int j, int k, int lo, int hi) {
+        Face f; f.ax = ax; f.lo = lo; f.hi = hi; f.bnd = (lo < 0 || hi < 0);
+        int u0=(ax+1)%3, u1=(ax+2)%3;
+        static const int Q[4][2] = {{0,0},{0,1},{1,1},{1,0}};
+        for (int t=0;t<4;t++) {
+            int off[3]={0,0,0}; off[u0]=Q[t][0]; off[u1]=Q[t][1];
+            f.v[t] = node(i+off[0], j+off[1], k+off[2]);
+        }
+        f.c = mean(f.v, 4); f.area = quad_area(f.v);
+        m.faces.push_back(f);
+    };
+    for (int i=0;i<=nx;i++) for (int j=0;j<ny;j++) for (int k=0;k<nz;k++)
+        add_face(0, i, j, k, (i>0)?cell_id(i-1,j,k):-1, (i<nx)?cell_id(i,j,k):-1);
+    for (int i=0;i<nx;i++) for (int j=0;j<=ny;j++) for (int k=0;k<nz;k++)
+        add_face(1, i, j, k, (j>0)?cell_id(i,j-1,k):-1, (j<ny)?cell_id(i,j,k):-1);
+    for (int i=0;i<nx;i++) for (int j=0;j<ny;j++) for (int k=0;k<=nz;k++)
+        add_face(2, i, j, k, (k>0)?cell_id(i,j,k-1):-1, (k<nz)?cell_id(i,j,k):-1);
     return m;
 }
 
@@ -127,56 +178,64 @@ void AssembleCoulombGram(const Mesh& m, std::vector<double>& G, int& n_charge, i
         return;
     }
 
-    // ---- accurate: sub-point quadrature (volume cell -> nsub^3, boundary face -> nsub^2) ----
-    std::vector<std::vector<Vec3>> sp(n_charge);   // sub-point positions per charge cell
-    std::vector<double>            sw(n_charge);   // sub-point weight (uniform within a cell)
+    // ---- accurate: sub-point quadrature on the ACTUAL geometry (trilinear hex / bilinear quad).
+    // Volume cell -> nsub^3 trilinear sub-points (|detJ| sub-weights); boundary face -> nsub^2
+    // bilinear sub-points (|x_u x x_v| sub-weights).  Per-sub-point weights (not uniform) -> the
+    // sub-point cloud fills the actual DISTORTED cell, making the self-energy + G geometry-exact. --
+    std::vector<std::vector<Vec3>>   sp(n_charge);   // sub-point positions per charge cell
+    std::vector<std::vector<double>> sw(n_charge);   // per-sub-point weight (|detJ| or |x_u x x_v|)
     for (int c = 0; c < m.n_cell; ++c) {
-        double h = std::cbrt(m.cell_V[c]);
-        sw[c] = m.cell_V[c] / (double)(nsub*nsub*nsub);
-        sp[c].reserve((size_t)nsub*nsub*nsub);
+        double inv = 1.0 / (double)(nsub*nsub*nsub);
+        const std::array<Vec3,8>& V = m.cell_verts[c];
+        sp[c].reserve((size_t)nsub*nsub*nsub); sw[c].reserve((size_t)nsub*nsub*nsub);
         for (int i = 0; i < nsub; ++i)
             for (int j = 0; j < nsub; ++j)
-                for (int k = 0; k < nsub; ++k)
-                    sp[c].push_back({cent[c][0] + ((i+0.5)/nsub - 0.5)*h,
-                                     cent[c][1] + ((j+0.5)/nsub - 0.5)*h,
-                                     cent[c][2] + ((k+0.5)/nsub - 0.5)*h});
+                for (int k = 0; k < nsub; ++k) {
+                    double xi=(i+0.5)/nsub, eta=(j+0.5)/nsub, ze=(k+0.5)/nsub;
+                    sp[c].push_back(hex_map(V, xi, eta, ze));
+                    sw[c].push_back(std::fabs(hex_detJ(V, xi, eta, ze)) * inv);
+                }
     }
+    const double e = 1e-6;
     for (int f = 0; f < m.n_face(); ++f) {
         if (!m.faces[f].bnd) continue;
         const Face& fc = m.faces[f]; int r = brow[f];
-        double hs = std::sqrt(fc.area); int u0 = (fc.ax+1)%3, u1 = (fc.ax+2)%3;
-        sw[r] = fc.area / (double)(nsub*nsub);
-        sp[r].reserve((size_t)nsub*nsub);
+        double inv = 1.0 / (double)(nsub*nsub);
+        sp[r].reserve((size_t)nsub*nsub); sw[r].reserve((size_t)nsub*nsub);
         for (int i = 0; i < nsub; ++i)
             for (int j = 0; j < nsub; ++j) {
-                Vec3 p = fc.c;
-                p[u0] += ((i+0.5)/nsub - 0.5)*hs;
-                p[u1] += ((j+0.5)/nsub - 0.5)*hs;
-                sp[r].push_back(p);
+                double u=(i+0.5)/nsub, v=(j+0.5)/nsub;
+                sp[r].push_back(quad_map(fc.v, u, v));
+                Vec3 pu0=quad_map(fc.v,u-e,v), pu1=quad_map(fc.v,u+e,v);
+                Vec3 pv0=quad_map(fc.v,u,v-e), pv1=quad_map(fc.v,u,v+e);
+                Vec3 xu, xv; for (int d=0;d<3;d++){ xu[d]=(pu1[d]-pu0[d])/(2*e); xv[d]=(pv1[d]-pv0[d])/(2*e); }
+                Vec3 cr{ xu[1]*xv[2]-xu[2]*xv[1], xu[2]*xv[0]-xu[0]*xv[2], xu[0]*xv[1]-xu[1]*xv[0] };
+                sw[r].push_back(std::sqrt(cr[0]*cr[0]+cr[1]*cr[1]+cr[2]*cr[2]) * inv);
             }
     }
     for (int a = 0; a < n_charge; ++a) {
-        const std::vector<Vec3>& pa = sp[a]; double wa = sw[a];
-        // diagonal: cross sub-points + analytic sub-cell self
+        const std::vector<Vec3>& pa = sp[a]; const std::vector<double>& wa = sw[a];
+        bool a_vol = (a < m.n_cell);
+        // diagonal: cross sub-points + analytic per-sub-cell self
         double diag = 0.0;
         for (size_t p = 0; p < pa.size(); ++p) {
             for (size_t q = 0; q < pa.size(); ++q) {
                 if (p == q) continue;
                 double dx = pa[p][0]-pa[q][0], dy = pa[p][1]-pa[q][1], dz = pa[p][2]-pa[q][2];
-                diag += wa*wa * INV_FOUR_PI / std::sqrt(dx*dx + dy*dy + dz*dz);
+                diag += wa[p]*wa[q] * INV_FOUR_PI / std::sqrt(dx*dx + dy*dy + dz*dz);
             }
-            diag += (a < m.n_cell ? C_CUBE * std::pow(wa, 5.0/3.0) : C_SQ * std::pow(wa, 1.5)) * INV_FOUR_PI;
+            diag += (a_vol ? C_CUBE * std::pow(wa[p], 5.0/3.0) : C_SQ * std::pow(wa[p], 1.5)) * INV_FOUR_PI;
         }
         G[(size_t)a*n_charge + a] = diag;
         // off-diagonal (b > a), symmetric
         for (int b = a+1; b < n_charge; ++b) {
-            const std::vector<Vec3>& pb = sp[b]; double g = 0.0;
+            const std::vector<Vec3>& pb = sp[b]; const std::vector<double>& wb = sw[b];
+            double g = 0.0;
             for (size_t p = 0; p < pa.size(); ++p)
                 for (size_t q = 0; q < pb.size(); ++q) {
                     double dx = pa[p][0]-pb[q][0], dy = pa[p][1]-pb[q][1], dz = pa[p][2]-pb[q][2];
-                    g += INV_FOUR_PI / std::sqrt(dx*dx + dy*dy + dz*dz);
+                    g += wa[p]*wb[q] * INV_FOUR_PI / std::sqrt(dx*dx + dy*dy + dz*dz);
                 }
-            g *= wa * sw[b];
             G[(size_t)a*n_charge + b] = g;
             G[(size_t)b*n_charge + a] = g;
         }

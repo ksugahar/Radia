@@ -83,6 +83,33 @@ def test_hdiv_vim_demag_factors_physical():
     assert 0.80 < df[-1] < 0.95, f"top demag factor {df[-1]:.4f} not ~0.874"
 
 
+def test_hdiv_vim_distorted_trilinear_psd():
+    """Phase 3: on a DISTORTED grid the accurate Gram uses TRILINEAR (hex) / BILINEAR (quad)
+    sub-points that follow the actual cell geometry, keeping N positive semi-definite (demag factors
+    in [0,1]).  The regular cube-grid sub-points do NOT follow the distorted cell -> unphysical demag
+    factors (negative AND > 1).  Symmetry + loops-field-null still hold on the distorted grid."""
+    import scipy.linalg as sla
+    nf_ref = None
+    d = _rp._hdiv_vim_assemble(3, 3, 3, 4, 0.18)        # nsub=4 accurate (trilinear), distort=0.18
+    nf = d["nf"]
+    N = np.asarray(d["N"], float).reshape(nf, nf)
+    M = np.asarray(d["M_mass"], float).reshape(nf, nf)
+    B = np.asarray(d["B"], float).reshape(d["n_charge"], nf)
+    assert np.linalg.norm(N - N.T) / np.linalg.norm(N, 2) < 1e-12, "not symmetric on distorted"
+    s = np.linalg.svd(B, compute_uv=False); rankB = int(np.sum(s > 1e-9 * s.max()))
+    Vt = np.linalg.svd(B)[2]; loops = Vt[rankB:]
+    lres = max(np.linalg.norm(N @ loops[k]) for k in range(nf - rankB)) / np.linalg.norm(N, 2)
+    assert lres < 1e-10, f"loops not field-null on distorted: {lres:.1e}"
+    df = np.sort(sla.eigh(N, M, eigvals_only=True))
+    assert df[0] > -1e-6, f"accurate (trilinear) Gram not PSD on distorted: min demag {df[0]:.2e}"
+    assert df[-1] < 1.0 + 1e-6, f"unphysical demag factor > 1 on distorted: {df[-1]:.4f}"
+    # contrast: the cube-grid sub-points (nsub=0 centroid-monopole) are non-PD on the distorted grid
+    d0 = _rp._hdiv_vim_assemble(3, 3, 3, 0, 0.18)
+    N0 = np.asarray(d0["N"], float).reshape(nf, nf)
+    df0 = np.sort(sla.eigh(N0, M, eigvals_only=True))
+    assert df0[0] < -1e-3, "expected the cube-grid Gram to be non-PD on the distorted grid (contrast)"
+
+
 def test_hdiv_vim_centroid_gram_fast_baseline():
     """The fast centroid-monopole Gram (nsub=0, default) stays symmetric + loop-null (G-agnostic
     properties) and is ~7% off / slightly non-PD -- a documented crudeness used for the structural
