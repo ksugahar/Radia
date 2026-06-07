@@ -154,9 +154,18 @@ robust to the scheme (cross-sum extrapolation -> same INT INT 1/r).
 """
 
 _NONLINEAR = r"""
-# NONLINEAR HDiv-type VIM -- FOUNDATION VALIDATED (2026-06-07), per-element/cross-check NEXT
+# NONLINEAR HDiv-type VIM -- ROBUST SOLVER = DAMPED NEWTON-RAPHSON (SOLVED 2026-06-07)
 
 Goal: make the HDiv-type VIM work for NONLINEAR soft-magnetic materials (BH curve / saturation).
+
+## HEADLINE (2026-06-07): the robust strong-saturation solver is DAMPED NEWTON-RAPHSON.
+The earlier sessions' simple per-element Picard / Hantila FAILED at deep saturation (NaN, wrong root);
+damped Newton-Raphson with the CONSISTENT TENSOR tangent SOLVES it -- fast (4-11 iters) and accurate
+(rel 1e-4 to 1e-6 vs the analytic uniform sphere) at every saturation level.  This is the Newton
+counterpart of Radia's existing MMM/MSC newton_damping=True path: the OUTER Newton machinery (tangent
+susceptibility + line-search damping) is SHARED; only the demag operator N = B^T G B differs.
+Implemented as solve_nonlinear_newton (examples/feec_vim/hdiv_demag_tet_nonlinear.py), golden-locked in
+tests/feec/test_hdiv_vim_tet_newton.py (3 tests, feec suite 50/50).
 
 ## DONE + golden-tested (examples/feec_vim/hdiv_demag_tet_nonlinear.py, tests/feec/test_hdiv_vim_tet_nonlinear.py)
 - **Applied-field formulation RESOLVED (verify-first)**: the eigenvalue framing A_eig = (1/chi)M_mass
@@ -182,27 +191,48 @@ Goal: make the HDiv-type VIM work for NONLINEAR soft-magnetic materials (BH curv
   ~0.3% at moderate drive (H0 <= 1e-2).  So the per-element machinery (weighted mass + per-cell field
   + per-element chi) is CORRECT.
 
-## OPEN RESEARCH PROBLEM: robust STRONG-SATURATION solver (verify-first findings, NOT yet solved)
-At strong drive (deep-saturation onset) EVERY simple nonlinear iteration tried FAILS -- this is a
-genuinely STIFF problem (high chi0 ~ 1e3 + saturation), recorded so the next session does not re-walk it:
-  - SCALAR Picard: works H0<=1e-1, but at H0=1.0 returns an UNPHYSICAL M=3.2 > Msat=1 (converges to
-    the near-linear branch, not the saturated one).  So the committed scalar foundation is only valid
-    at MODERATE drive (its golden test uses H0=1e-1).
-  - PER-ELEMENT Picard: diverges at H0=1e-1 (transient |M_e|>Msat -> chi_e->0 -> ill-conditioned A+).
-  - H0 CONTINUATION (ramp + warm-start) + damping: still oscillates at intermediate H0; H0=1.0 only
-    ~5% close after 400 iters.  Not robust.
-  - HANTILA polarization (M = alpha H + R, R=(chi-alpha)H; constant SPD LHS (M_mass + alpha N)
-    factored ONCE -- the structurally-right method): alpha=chi0/2 -> NaN; under-relaxed (alpha=chi0,
-    w=0.3/0.6) -> DIVERGES (~1e88).  Two causes: (a) chi_min->0 at saturation makes the Hantila
-    contraction (chi_max-chi_min)/(chi_max+chi_min) -> 1; (b) the RT0 per-element polarization update
-    r = Set((chi_e - alpha) * H_field) (L2-projecting a per-element-scaled RT0 field) is SUBTLE and
-    the naive projection amplifies.
-=> ROBUST SOLVER = the careful next step: (i) correct RT0 Hantila -- derive the polarization update
-   consistently in the RT0 metric (the (chi-alpha)H projection, not naive Set), reuse the constant
-   (M_mass + alpha N) factor-once via the #2 H-LDL^T; OR (ii) Newton with the analytic tangent
-   dM/dH (per element), line-searched; OR (iii) a provably-convergent fixed-point (energy/B-input
-   formulation).  THEN validate on a NON-UNIFORM saturating body (cube/C-yoke) CROSS-CHECKED against
-   rad.Solve + rad.MatSatIsoTab (trusted Radia MMM/MSC nonlinear).  THEN the scalable C++ path.
+## ROBUST SOLVER -- DAMPED NEWTON-RAPHSON (solve_nonlinear_newton, golden-locked)
+Newton on the constitutive residual in RT0 coefficient form:
+    F(m) = M_mass m - b_M(H) ,   H = h_ext - D_op m ,  D_op = M_mass^{-1} N ,
+    b_M(H) = INT M(H).v dx   (L2 projection of the constitutive M onto RT0) ,
+with the CONSISTENT TENSOR Jacobian  J = M_mass + T D_op ,  T = INT (dM/dH) u.v dx .
+
+THREE ingredients are all required (each isolated verify-first):
+  (a) CONSISTENT TENSOR tangent  dM/dH = chi_diff Hhat(x)Hhat + chi_sec (I - Hhat(x)Hhat)
+      (slope along H, secant perpendicular).  The naive SCALAR tangent chi_diff*I STALLS at moderate
+      drive: e.g. at |H|~4e-4 the saturating curve has chi_sec=725 but chi_diff=510, so omitting the
+      perpendicular secant term gives a badly wrong Jacobian (Newton crawls / converges to M=0.08).
+  (b) the #3 NEAR-FIELD CORRECTION on N.  Without it the PER-ELEMENT Newton converges to a WRONG
+      root (M~0.09 vs 0.30 on the sphere at H0=0.1): the centroid-monopole N is accurate in AVERAGE
+      (far field) but POOR per-element (local field), and Newton consumes the local field per cell.
+      Folding in N_eff = B^T (G + corr) B restores the local fields -> correct root (M=0.29901 vs
+      analytic 0.29872).  [Picard's SCALAR field hid this -- it only ever used the AVERAGE demag.]
+  (c) line-search DAMPING (Armijo) + a scalar-chi PICARD WARMSTART.  Damping gives global robustness;
+      the warmstart lands inside the Newton basin at the stiff BH-knee.
+
+RESULTS (sphere, chi0=1000, Msat=1, near-corrected D=0.328):
+    H0     Newton M    iters    analytic(1/3)   rel
+    0.01   0.03052      3        0.02991        2.0e-2   (rel = operator demag-D systematic, not Newton)
+    0.10   0.30413    ~slow      0.29872        1.8e-2
+    0.30   0.88669    ~slow      0.87834        9.5e-3   (BH knee, stiff)
+    1.00   0.99840     11        0.99850        1.1e-4   <- per-element Picard/Hantila FAILED here
+    5.00   0.99978      4        0.99979        4.2e-6   <- deep saturation, Newton trivial
+The ~2% at LOW drive is the operator's demag-factor accuracy (monopole+near-corr D=0.328 vs 1/3),
+SHARED with Picard -- NOT a Newton failure (finer/analytic Gram -> closer; the #3 / Wilton path).
+
+## Honest limitation: the BH knee is stiff (slow, not wrong)
+At the knee (H0~0.1-0.3, chi_sec/chi_diff ~ 8x) Newton converges to the CORRECT answer but slowly
+(line-search takes tiny steps; per-element field noise x high chi = genuine stiffness).  The scalar
+Picard is well-conditioned there, so the practical recipe is: scalar Picard handles the knee, Newton
+is the tool for the SATURATION regime where per-element accuracy matters and Picard fails.  The golden
+test therefore locks the saturation WIN (fast + accurate at H0>=1) and the near-correction ingredient.
+
+## NEXT (open): NON-UNIFORM body + cross-check
+The sphere validates the uniform-M case (= scalar analytic).  Still to do: a NON-UNIFORM saturating
+body (cube / C-yoke) where the per-element Newton genuinely earns its keep, CROSS-CHECKED against
+rad.Solve + rad.MatSatIsoTab (trusted Radia MMM/MSC nonlinear).  THEN the scalable C++ path (the
+tensor tangent is a per-element 3x3; the factor-once structure reuses the #2 H-LDL^T for the constant
+M_mass + the diagonal/tangent update).
 
 ## Why the operator is reusable (the structural win)
 The demag operator N = B^T G B is GEOMETRY-ONLY (constant, mu_r-independent) -- it is assembled ONCE.
@@ -217,15 +247,18 @@ solve is an OUTER material iteration around the SAME (reusable) linear HDiv solv
     3. re-solve the (updated-diagonal) symmetric system for M
   until ||Delta M|| small
 
-## Concrete options to evaluate (verify-first before committing)
-- **Picard / fixed-point**: cheapest.  Per iteration, update (1/chi_e) on the M_mass diagonal and
-  re-solve A m = b.  N (and its H-matrix) is UNCHANGED -> only the diagonal term changes; MINRES with
-  the updated Jacobi diag (DiagSystem(inv_chi_e)) re-solves.  The H-matrix is built ONCE.
-- **Hantila polarization** (already in Radia for MMM, src/radia/hantila_solver.py): split B =
-  mu_0(1+alpha)H + mu_0 R; the LHS (I - alpha N) is CONSTANT -> factor ONCE (LU/H-LDL^T), back-
-  substitute per iteration.  The HDiv symmetric N + H-LDL^T factor is a natural fit (factor once,
-  apply many) -- this is likely the strongest path and reuses the #2 H-LDL^T payload.
-- **Newton**: per-element tangent dM/dH; faster convergence, needs the Jacobian assembly.
+## Solvers evaluated (verify-first outcomes)
+- **Newton-Raphson (CHOSEN, SOLVED)**: per-element CONSISTENT TENSOR tangent dM/dH, line-searched +
+  Picard-warmstarted.  Robust + fast at saturation; the winner.  See the HEADLINE / ingredients above.
+- **Scalar Picard**: cheapest, well-conditioned, but assumes uniform M (uses the AVERAGE demag only).
+  Valid + useful at MODERATE drive / the BH knee; the committed scalar foundation
+  (solve_nonlinear, test_hdiv_vim_tet_nonlinear.py).  Hid the per-element near-field issue.
+- **Per-element Picard**: diverges at saturation (transient |M_e|>Msat -> chi_e->0 -> ill-conditioned).
+- **Hantila polarization** (constant (M_mass + alpha N) factored once -- structurally attractive,
+  reuses the #2 H-LDL^T): DIVERGED in the RT0 face metric (alpha=chi0/2 -> NaN; under-relaxed -> ~1e88).
+  Two causes: chi_min->0 at saturation drives the contraction ->1, and the naive RT0 polarization
+  projection r = Set((chi_e-alpha) H) amplifies.  Could be revisited with a consistent RT0 projection,
+  but Newton already solves the problem -- not pursued.
 
 ## What exists to build on
 - The per-element field/charge machinery (B, N, M_mass) is all in place + golden-tested (linear).
@@ -236,26 +269,33 @@ solve is an OUTER material iteration around the SAME (reusable) linear HDiv solv
 - Validate against: a known nonlinear demag (e.g. a saturating sphere/cube in a strong applied field),
   and/or the existing MMM/MSC nonlinear solve on the same geometry.
 
-## First increment suggestion
-Pick ONE material model (Picard + rad.MatSatIsoTab BH curve), wire the per-element chi(H) update around
-the existing _HDivVimHMatrix.apply_system / diag_system, on the STRUCTURED hex path first (golden-
-testable), verify the saturated demag against MMM/MSC; THEN the tet path; THEN Hantila/H-LDL^T factor-
-once for speed.
+## Next increment (the Newton path is done; what is left)
+The Python operator Newton is solved + golden-locked.  Remaining: (1) a NON-UNIFORM saturating body
+(cube / C-yoke) cross-checked against rad.Solve + rad.MatSatIsoTab; (2) the scalable C++ path -- the
+per-element tensor tangent + factor-once M_mass reuses the #2 H-LDL^T; (3) optionally a consistent-RT0
+Hantila for the factor-once speed-up at the knee (Newton already gives correctness).
 """
 
 _STATUS = r"""
-# Status summary (main @ feaade25, 2026-06-07)
+# Status summary (2026-06-07)
 
-DONE + golden-locked (feec 45/45), the production sequence #1 -> #2 -> #3:
+DONE + golden-locked (feec 50/50):
   #1  scalable mu_r-independent HDiv-VIM demag solver on REAL tet meshes (Layer A/A.5 + tet ingest)
   #2  rk-aware symmetric H-LDL^T factoring real compressed H-matrices (+ driver)
   #3  bug-fixed exact Gram via near-field correction -> demag -> analytic 1/3
+  NONLINEAR  damped Newton-Raphson (consistent tensor tangent + near-corr + line search + Picard
+             warmstart) -- robust + fast at deep saturation where per-element Picard/Hantila failed
+             (examples/feec_vim/hdiv_demag_tet_nonlinear.py::solve_nonlinear_newton,
+             tests/feec/test_hdiv_vim_tet_newton.py, +the scalar-Picard moderate-drive foundation).
 
 OPEN (honest boundaries / next increments):
-  - NONLINEAR materials (see topic "nonlinear") -- the user's next direction.
+  - NONLINEAR on a NON-UNIFORM body (cube/C-yoke) + cross-check vs rad.Solve + rad.MatSatIsoTab.
+  - BH-knee stiffness: Newton converges to the correct answer but slowly there (scalar Picard is the
+    practical tool at the knee); operator-accuracy-limited (finer/analytic Gram reduces it).
+  - the scalable C++ nonlinear path (reuse #2 H-LDL^T for the factor-once tangent solve).
   - H-LDL^T on DEEP trees (internal off-diagonal recursion) -- currently NEED_RECURSIVE.
-  - near-field correction in the C++ ChargeGram entry (needs cell/face geometry in the manager;
-    or analytic Wilton) -- currently the Python build_near_correction overlay.
+  - near-field correction in the C++ ChargeGram entry (or analytic Wilton) -- currently the Python
+    build_near_correction overlay.
   - proper distorted RT0 M_mass for exact distorted demag VALUES (non-negativity already holds).
 """
 
