@@ -173,13 +173,36 @@ Goal: make the HDiv-type VIM work for NONLINEAR soft-magnetic materials (BH curv
   (H0=0.1: monopole 0.334, near-corrected 0.305, analytic(1/3) 0.299).  Residual ~2% is RT0/mesh
   discretization (finer mesh / proper distorted M_mass -> closer).
 
-## NEXT (per-element non-uniform + cross-check)
-- The prototype uses the SCALAR (uniform-M sphere) chi update.  The general nonlinear body needs the
-  PER-ELEMENT field reconstruction (RT0 -> per-cell H magnitude) to set chi_e(H_e); then Picard per
-  element.  Validate on a NON-UNIFORM saturating body (cube / C-yoke) and CROSS-CHECK against the
-  trusted Radia nonlinear path (rad.Solve with rad.MatSatIsoTab BH curve) on the same geometry.
-- Then Hantila factor-once (below) for speed; then the scalable C++ path (the near-correction in the
-  C++ ChargeGram entry).
+## PER-ELEMENT machinery DONE + validated at MODERATE drive (2026-06-07)
+- Per-element chi_e(H_e): weighted RT0 mass M_chi = BilinearForm(HDiv) with a piecewise-constant
+  (1/chi_e) CoefficientFunction, A+ = M_chi + N, RHS = M_mass h_ext.  Per-cell |M_e| via an
+  L2(order=0) projection of |gfM|; with the BH curve M(H)=chi0 H/(1+chi0|H|/Msat) the inverse gives
+  the clean update chi_e = chi0(1 - |M_e|/Msat).
+- VALIDATED: run on the SPHERE (uniform M) the per-element solve reproduces the scalar answer to
+  ~0.3% at moderate drive (H0 <= 1e-2).  So the per-element machinery (weighted mass + per-cell field
+  + per-element chi) is CORRECT.
+
+## OPEN RESEARCH PROBLEM: robust STRONG-SATURATION solver (verify-first findings, NOT yet solved)
+At strong drive (deep-saturation onset) EVERY simple nonlinear iteration tried FAILS -- this is a
+genuinely STIFF problem (high chi0 ~ 1e3 + saturation), recorded so the next session does not re-walk it:
+  - SCALAR Picard: works H0<=1e-1, but at H0=1.0 returns an UNPHYSICAL M=3.2 > Msat=1 (converges to
+    the near-linear branch, not the saturated one).  So the committed scalar foundation is only valid
+    at MODERATE drive (its golden test uses H0=1e-1).
+  - PER-ELEMENT Picard: diverges at H0=1e-1 (transient |M_e|>Msat -> chi_e->0 -> ill-conditioned A+).
+  - H0 CONTINUATION (ramp + warm-start) + damping: still oscillates at intermediate H0; H0=1.0 only
+    ~5% close after 400 iters.  Not robust.
+  - HANTILA polarization (M = alpha H + R, R=(chi-alpha)H; constant SPD LHS (M_mass + alpha N)
+    factored ONCE -- the structurally-right method): alpha=chi0/2 -> NaN; under-relaxed (alpha=chi0,
+    w=0.3/0.6) -> DIVERGES (~1e88).  Two causes: (a) chi_min->0 at saturation makes the Hantila
+    contraction (chi_max-chi_min)/(chi_max+chi_min) -> 1; (b) the RT0 per-element polarization update
+    r = Set((chi_e - alpha) * H_field) (L2-projecting a per-element-scaled RT0 field) is SUBTLE and
+    the naive projection amplifies.
+=> ROBUST SOLVER = the careful next step: (i) correct RT0 Hantila -- derive the polarization update
+   consistently in the RT0 metric (the (chi-alpha)H projection, not naive Set), reuse the constant
+   (M_mass + alpha N) factor-once via the #2 H-LDL^T; OR (ii) Newton with the analytic tangent
+   dM/dH (per element), line-searched; OR (iii) a provably-convergent fixed-point (energy/B-input
+   formulation).  THEN validate on a NON-UNIFORM saturating body (cube/C-yoke) CROSS-CHECKED against
+   rad.Solve + rad.MatSatIsoTab (trusted Radia MMM/MSC nonlinear).  THEN the scalable C++ path.
 
 ## Why the operator is reusable (the structural win)
 The demag operator N = B^T G B is GEOMETRY-ONLY (constant, mu_r-independent) -- it is assembled ONCE.
