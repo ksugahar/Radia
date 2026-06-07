@@ -83,5 +83,44 @@ void AssembleN(const Mesh& m, std::vector<double>& N, int nsub = 0);
  * (symmetric indefinite); the generalized eigenvalues of (N, M_mass) are the demag factors. */
 void AssembleMass(const Mesh& m, std::vector<double>& M_mass);
 
+//-------------------------------------------------------------------------
+// Reusable charge quadrature + per-pair Gram + per-face charge support.
+// These are the building blocks SHARED by the dense AssembleCoulombGram / AssembleN
+// and the ON-DEMAND HACApK H-matrix entry function (rad_hacapk_hdiv): the H-matrix
+// never forms the dense G/N, it evaluates N[i][j] = sum_a sum_b B[a][i] G[a][b] B[b][j]
+// per (face i, face j) using exactly these helpers, so the H-matrix and the dense
+// reference agree entry-by-entry (verified in tests/feec/test_hdiv_vim_hmatrix.py).
+//-------------------------------------------------------------------------
+
+/* Charge quadrature: centroid + measure per charge (n_cell volume charges then n_bnd
+ * boundary charges, in the SAME row order as AssembleChargeMap), plus -- when nsub>=1 --
+ * the per-charge sub-point cloud (trilinear hex / bilinear quad) with |detJ| / |x_u x x_v|
+ * sub-weights.  nsub<=0 leaves sp/sw empty (centroid-monopole mode). */
+struct ChargeQuad {
+    int n_charge = 0;
+    int n_cell   = 0;
+    std::vector<Vec3>                cent;  // [n_charge] centroid
+    std::vector<double>              meas;  // [n_charge] measure (cell volume or face area)
+    std::vector<std::vector<Vec3>>   sp;    // [n_charge] sub-points (empty if nsub<=0)
+    std::vector<std::vector<double>> sw;    // [n_charge] sub-weights (empty if nsub<=0)
+};
+void BuildChargeQuad(const Mesh& m, int nsub, ChargeQuad& q);
+
+/* G[a][b]: the exact Coulomb Gram entry between charges a, b under quadrature q
+ * (== AssembleCoulombGram(nsub)[a][b]).  a==b -> self-energy; centroid-monopole when
+ * q has no sub-points, accurate sub-point quadrature otherwise. */
+double CoulombGramEntry(const ChargeQuad& q, int a, int b);
+
+/* Per-face charge support (CSC by face): each RT0 face feeds exactly two charges --
+ * interior face -> (lo cell, hi cell); boundary face -> (its one cell, its sigma charge).
+ * rows[f] = the (<=2) charge-row indices (-1 if unused), coef[f] = the matching B entries
+ * (-1/V_lo, +1/V_hi, out_sign/area).  This is AssembleChargeMap stored column-wise. */
+struct ChargeMapCSC {
+    int n_charge = 0;
+    std::vector<std::array<int, 2> >    rows;  // [n_face]
+    std::vector<std::array<double, 2> > coef;  // [n_face]
+};
+void BuildChargeMapCSC(const Mesh& m, ChargeMapCSC& csc);
+
 } // namespace rad_hdiv
 #endif

@@ -99,6 +99,7 @@ extern "C" {
 #include "rad_stream_function.h" // (ACA+)+TSVD stream-function coil solver
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
+#include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -2624,6 +2625,79 @@ py::dict HLDLTSelfTest(int depth, int n_per_block) {
     d["hlu_offdiag_doubles"]= hlu_off;
     return d;
 }
+
+// Build the HDiv-type VIM demag operator N as a HACApK H-matrix and PROBE it against the dense
+// reference (rad_hdiv::AssembleN) -- the production verification that the symmetric operator now
+// scales as an H-matrix.  Self-contained (the C++ holds both the H-matrix and the dense N, and
+// returns the comparison): for a few deterministic probe vectors x, compares H-matvec(x) vs
+// N_dense*x (matvec_relerr) and checks H-matvec symmetry (x^T N y == y^T N x).  Returns the
+// H-matrix stats (compression / n_lowrank / build_time) too.  Golden sizes only (dense N formed).
+py::dict HDivVimHMatrixProbe(int nx, int ny, int nz, int nsub, double distort,
+                             double eps, int leaf, double eta) {
+    rad_hdiv::Mesh m = rad_hdiv::BuildStructuredRT0(nx, ny, nz, 1.0, distort);
+    const int nf = m.n_face();
+    std::vector<double> Nd;
+    rad_hdiv::AssembleN(m, Nd, nsub);                 // dense reference (same nsub)
+
+    RadHACApKHDivManager mgr(nx, ny, nz, 1.0, distort, nsub);
+    RadHACApKParams prm;
+    prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
+    bool ok = mgr.BuildHMatrix(prm);
+
+    py::dict d;
+    d["ok"] = ok;
+    d["nf"] = nf;
+    if (!ok) return d;
+
+    const RadHACApKStats& st = mgr.GetStats();
+    d["n_dof"]           = st.n_dof;
+    d["n_leaves"]        = st.n_leaves;
+    d["n_lowrank"]       = st.n_lowrank;
+    d["n_dense"]         = st.n_dense;
+    d["max_rank"]        = st.max_rank;
+    d["compression"]     = st.compression;
+    d["build_time"]      = st.build_time;
+    d["memory_mb"]       = st.memory_mb;
+    d["dense_memory_mb"] = st.dense_memory_mb;
+
+    auto densemv = [&](const std::vector<double>& x, std::vector<double>& y) {
+        y.assign(nf, 0.0);
+        for (int i = 0; i < nf; ++i) {
+            const double* Nr = &Nd[(size_t)i * nf];
+            double s = 0.0;
+            for (int j = 0; j < nf; ++j) s += Nr[j] * x[j];
+            y[i] = s;
+        }
+    };
+
+    // matvec relerr vs dense N over a few deterministic probe vectors
+    double max_rel = 0.0;
+    for (int k = 0; k < 4; ++k) {
+        std::vector<double> x(nf);
+        for (int f = 0; f < nf; ++f)
+            x[f] = std::sin(0.7 * (f + 1) + 1.3 * k) + 0.3 * std::cos(0.21 * (f + 1) * (k + 1));
+        std::vector<double> yd, yh(nf, 0.0);
+        densemv(x, yd);
+        mgr.MatVec(x, yh);
+        double num = 0.0, den = 0.0;
+        for (int f = 0; f < nf; ++f) {
+            num = std::max(num, std::fabs(yh[f] - yd[f]));
+            den = std::max(den, std::fabs(yd[f]));
+        }
+        if (den > 0.0) max_rel = std::max(max_rel, num / den);
+    }
+    d["matvec_relerr"] = max_rel;
+
+    // symmetry of the H-matvec: |x^T (N y) - y^T (N x)| / |x^T (N y)|
+    std::vector<double> xv(nf), yv(nf), Nx(nf, 0.0), Ny(nf, 0.0);
+    for (int f = 0; f < nf; ++f) { xv[f] = std::sin(0.3 * (f + 1)); yv[f] = std::cos(0.17 * (f + 1)); }
+    mgr.MatVec(xv, Nx);
+    mgr.MatVec(yv, Ny);
+    double xtNy = 0.0, ytNx = 0.0;
+    for (int f = 0; f < nf; ++f) { xtNy += xv[f] * Ny[f]; ytNx += yv[f] * Nx[f]; }
+    d["symmetry_relerr"] = std::fabs(xtNy - ytNx) / (std::fabs(xtNy) + 1e-300);
+    return d;
+}
 } // namespace radia_hdivvim
 
 // ============================================================================
@@ -2673,6 +2747,18 @@ PYBIND11_MODULE(_radia_pybind, m) {
               solves A x = b, and returns a dict: ldlt_residual (||Ax-b||/||b|| vs LAPACKE_dsysv),
               hlu_residual (the non-symmetric H-LU on the same matrix), n_2x2_pivots (Bunch-Kaufman),
               and ldlt_lower_doubles / hlu_offdiag_doubles (storage: H-LU stores ~2x the off-diagonal).
+          )pbdoc");
+
+    m.def("_hdiv_vim_hmatrix_probe", &radia_hdivvim::HDivVimHMatrixProbe,
+          py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0, py::arg("distort") = 0.0,
+          py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+          R"pbdoc(
+              Build the HDiv-type VIM demag operator N = B^T G B as a HACApK H-matrix (DOFs = RT0
+              faces; ACA entry function = on-demand charge-cluster Coulomb sum) and probe it against
+              the dense rad_hdiv::AssembleN(nsub) reference.  Returns a dict: ok, nf, n_dof, n_leaves,
+              n_lowrank, n_dense, max_rank, compression (H-bytes/dense-bytes), build_time, memory_mb,
+              dense_memory_mb, matvec_relerr (max over deterministic probe vectors of ||H x - N x||/||N x||),
+              and symmetry_relerr (|x^T N y - y^T N x| from the H-matvec).  Golden sizes only (forms dense N).
           )pbdoc");
 
     // ========================================================================
