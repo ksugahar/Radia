@@ -36,8 +36,12 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib                       # Python 3.11+ (stdlib)
+except ModuleNotFoundError:              # Python 3.10: tomllib is not in stdlib
+    import tomli as tomllib              # drop-in backport (CI installs it on 3.10)
 
 # --- policy data -----------------------------------------------------------
 # Subpackages that WRAP a commercial tool -> must never be published.
