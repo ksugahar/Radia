@@ -13,7 +13,6 @@ yano-type handles, behind a clean Radia API. Honest scope, milestone-based, with
 | Charge map B + HDiv mass | structured **hex** (`rad_hdiv_vim.cpp`) | unstructured **tet** (NGSolve HDiv extraction, `examples/feec_vim/`) |
 | Coulomb Gram G | monopole + sub-point (`CoulombGramEntry`); **analytic Wilton `TriPotential` + `PhiTet` WIRED into the `_ChargeGramHMatrix` analytic entry (M2a+M2b, golden-locked == dense `analytic_gram` ~1e-9)** | Wilton surface + `phi_tet` volume (analytic), dense `build_demag` |
 | Scalable Gram H-matrix | **`_ChargeGramHMatrix`** monopole **+ analytic mode (M2b)**, `_HDivVimHMatrix` (hex) | (assembly driven from Python) |
-| H-LDLᵀ factorization | cHACApK (`_hldlt_self_test*`, `factor_solve_hldlt`) — **TO DELETE (消去, see M3)** | (not wired into the material-system apply) |
 | Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)** | scipy MINRES / CG |
 | Nonlinear demag | **scalar-chi Picard `SolveNonlinearPicard` in C++ (M3): isotropic nonlinear demag M=Mof(H0−Dscal·M), golden vs Python Picard <1e-5 + analytic fixed point <1%**; per-element tensor-tangent Newton (non-uniform M) still NGSolve | `solve_nonlinear_newton` (dense + scalable; scalable uses the analytic C++ Gram, M2b) |
 | Curved + high-order Gram | — (uses NGSolve) | `ngsolve.bem` single-layer (sphere/spheroid/ellipsoid validation) |
@@ -90,22 +89,15 @@ production-representative numbers). This sizes the C++ lift and fixes the "done"
     in pure C++ = duplicating NGSolve HDiv assembly), so the honest path is to keep the constitutive/tangent
     assembly in NGSolve and — if the M0 speed number demands it — move only the tangent GMRES loop to C++
     on the `SolveLinearMaterial` Krylov. Gated by M0.
-  > **H-LDLᵀ TO BE DELETED — 消去 confirmed 2026-06-08.** The direct symmetric H-LDLᵀ factorization of
-  > the H-matrix is **not** on the production path: the HDiv-VIM is μr-INDEPENDENT by construction, so
-  > the iterative solve (MINRES linear / GMRES nonlinear) is cheap and well-conditioned — a direct
-  > factorization buys little and adds a C++ component to mature. Decision: **remove it from the
-  > codebase entirely** (not just off-path). This is its own focused cleanup commit with a rebuild +
-  > suite (feec drops ~13 tests, 88 → 75), best done with clean context (it touches an external-lib
-  > header). Scope (8 code files + 3 doc files):
-  > - C++: the `Symmetric H-LDL^T factorization` section of `src/ext/HACApK/cHACApK_harith.h`
-  >   (`cHACApK_hldlt_decomp` / `_solve_vec` / `_factor_leafmtxp` / `_apply` / `_free_factors` /
-  >   `_get_storage` + self-test) **and its `.cpp` implementations**; `factor_solve_hldlt` in
-  >   `src/core/rad_hacapk_hdiv.{h,cpp}`; the `HLDLTSelfTest*` helpers + `_hldlt_self_test` / `_rk`
-  >   registrations in `src/lib/radia_pybind.cpp`.
-  > - tests: `tests/feec/test_hldlt_factorization.py`, `test_hldlt_real_gram.py`.
-  > - examples: `examples/feec_vim/hldlt_block_flops.py`; strip the H-LDLᵀ paths from
-  >   `hdiv_demag_speedup.py` + `hdiv_demag_twolevel.py`.
-  > - docs/knowledge: this note → "deleted"; `radia_mcp …/knowledge/hdiv_vim.py` + `server.py`.
+  > **H-LDLᵀ DELETED — 消去 done 2026-06-08.** The direct symmetric H-LDLᵀ factorization was removed from
+  > the codebase entirely: the HDiv-VIM is μr-INDEPENDENT by construction, so the iterative solve
+  > (MINRES linear / GMRES/Picard nonlinear) is cheap and well-conditioned — a direct factorization
+  > bought little and was unused (only self-tests + HDiv-VIM research called it). Removed: the
+  > `Symmetric H-LDL^T` section of `cHACApK_harith.{c,h}` (1188 + 119 lines), the `_hldlt_self_test*` +
+  > `factor_solve_hldlt` pybind, `tests/feec/test_hldlt_*.py` (feec 94 → 81), the hldlt examples.
+  > **H-LU / H-ILU were NOT touched** — they are the SAME `cHACApK_hlu_*` subsystem (the rk-truncation
+  > tol switches accurate-H-LU ↔ incomplete-H-ILU), load-bearing as the MMM/MSC solver's A_SS
+  > preconditioner (a separate solver layer from the yano-type element formulation).
 - **M4 — curved/high-order + symmetry production + the curved-nonlinear-volume gap.** Wire the
   `ngsolve.bem` single-layer (curved Gram) + the symmetry image method + a true reduced-DOF symmetry-BC
   solve into the API. Build the genuine method gap: the curved nonlinear **volume** charge (`phi_tet` on

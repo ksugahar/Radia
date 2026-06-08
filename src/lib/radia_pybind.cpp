@@ -85,19 +85,6 @@ extern "C" {
     double cHACApK_harith_self_test_radia_exact_diag(double diag_boost);
     double cHACApK_harith_self_test_radia_exact_with_matrix(
         const double *A_full, const double *b);
-    double cHACApK_harith_self_test_hldlt_symmetric(
-        int depth, int n_per_block, double *out_hlu_residual, int *out_n_2x2_pivots);
-    double cHACApK_harith_self_test_hldlt_symmetric_rk(int n_per_block, int rk_rank);
-    double cHACApK_harith_self_test_hldlt_symmetric_rk_deep(int n_per_block, int rk_rank);
-    double cHACApK_harith_self_test_hldlt_symmetric_rk_mixed(int n_per_block, int rk_rank, int s);
-    void cHACApK_hldlt_get_combo_counts(long out_combo[4]);
-    void cHACApK_hldlt_get_storage(long *out_ldlt_lower_doubles, long *out_ldlt_diag_doubles,
-                                   long *out_hlu_offdiag_doubles);
-    void* cHACApK_hldlt_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc,
-                                        int* out_rc);
-    int   cHACApK_hldlt_apply(void* root_void, void* control_void,
-                              const double* r, double* z, int nd);
-    void  cHACApK_hldlt_free_factors(void* root_void);
 }
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
@@ -2616,59 +2603,6 @@ py::dict HDivVimAssemble(int nx, int ny, int nz, int nsub, double distort) {
     return d;
 }
 
-// Symmetric H-LDL^T factorization self-test (the symmetric H-matrix factorization that the HDiv
-// VIM operator will use once it is an H-matrix).  Builds a symmetric-indefinite dense-leaf block
-// tree, factors A = (I+W) D (I+W)^T, solves, and reports the residual vs LAPACKE_dsysv + vs H-LU,
-// the storage (lower-only vs H-LU's lower+upper => ~half), and the # of Bunch-Kaufman 2x2 pivots.
-py::dict HLDLTSelfTest(int depth, int n_per_block) {
-    double hlu_resid = 0.0; int n_2x2 = 0;
-    double ldlt_resid = cHACApK_harith_self_test_hldlt_symmetric(depth, n_per_block, &hlu_resid, &n_2x2);
-    long ldlt_lower = 0, ldlt_diag = 0, hlu_off = 0;
-    cHACApK_hldlt_get_storage(&ldlt_lower, &ldlt_diag, &hlu_off);
-    py::dict d;
-    d["ldlt_residual"]      = ldlt_resid;
-    d["hlu_residual"]       = hlu_resid;
-    d["n_2x2_pivots"]       = n_2x2;
-    d["ldlt_lower_doubles"] = ldlt_lower;
-    d["ldlt_diag_doubles"]  = ldlt_diag;
-    d["hlu_offdiag_doubles"]= hlu_off;
-    return d;
-}
-
-// Rk-aware symmetric H-LDL^T self-test: a symmetric-indefinite block tree whose
-// OFF-DIAGONAL leaves are EXACTLY rank-rk_rank (rk arithmetic exact, no ACA
-// truncation) and whose DIAGONAL leaves are dense indefinite with saddle 2x2
-// pivots.  depth=1 (rk off-diagonal at the root only) or depth=2 (rk off-diagonal
-// leaves at two levels).  Returns the ||A x - b||/||b|| residual + storage.
-py::dict HLDLTSelfTestRk(int n_per_block, int rk_rank, int depth) {
-    double resid = (depth >= 2)
-        ? cHACApK_harith_self_test_hldlt_symmetric_rk_deep(n_per_block, rk_rank)
-        : cHACApK_harith_self_test_hldlt_symmetric_rk(n_per_block, rk_rank);
-    long ldlt_lower = 0, ldlt_diag = 0, hlu_off = 0;
-    cHACApK_hldlt_get_storage(&ldlt_lower, &ldlt_diag, &hlu_off);
-    py::dict d;
-    d["ldlt_residual"]      = resid;
-    d["ldlt_lower_doubles"] = ldlt_lower;
-    d["ldlt_diag_doubles"]  = ldlt_diag;
-    return d;
-}
-
-// Mixed dense/rk off-diagonal symmetric H-LDL^T self-test: exercises ALL FOUR
-// trailing-update operand-kind combos on a flat s x s tree.  Reports the
-// residual + how many times each combo fired (so a test can assert full
-// combo coverage).
-py::dict HLDLTSelfTestRkMixed(int n_per_block, int rk_rank, int s) {
-    double resid = cHACApK_harith_self_test_hldlt_symmetric_rk_mixed(n_per_block, rk_rank, s);
-    long combo[4] = {0,0,0,0};
-    cHACApK_hldlt_get_combo_counts(combo);
-    py::dict d;
-    d["ldlt_residual"]   = resid;
-    d["combo_dense_dense"] = combo[0];
-    d["combo_rk_dense"]    = combo[1];
-    d["combo_dense_rk"]    = combo[2];
-    d["combo_rk_rk"]       = combo[3];
-    return d;
-}
 
 // Build the HDiv-type VIM demag operator N as a HACApK H-matrix and PROBE it against the dense
 // reference (rad_hdiv::AssembleN) -- the production verification that the symmetric operator now
@@ -2802,37 +2736,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
           "M2 verify: tet Newtonian potential INT_tet 1/|P-r'| dV' (V = 12 flat doubles = 4 verts, "
           "P = 3) via the divergence theorem.  Should match radia.hdiv_vim._core.phi_tet.");
 
-    m.def("_hldlt_self_test", &radia_hdivvim::HLDLTSelfTest,
-          py::arg("depth"), py::arg("n_per_block"),
-          R"pbdoc(
-              Self-test of the symmetric H-LDL^T factorization (the symmetric H-matrix factorization
-              for the HDiv VIM operator).  Builds a symmetric-indefinite dense-leaf block tree of the
-              given depth (2^depth x 2^depth leaves, each n_per_block square), factors A = (I+W)D(I+W)^T,
-              solves A x = b, and returns a dict: ldlt_residual (||Ax-b||/||b|| vs LAPACKE_dsysv),
-              hlu_residual (the non-symmetric H-LU on the same matrix), n_2x2_pivots (Bunch-Kaufman),
-              and ldlt_lower_doubles / hlu_offdiag_doubles (storage: H-LU stores ~2x the off-diagonal).
-          )pbdoc");
-
-    m.def("_hldlt_self_test_rk", &radia_hdivvim::HLDLTSelfTestRk,
-          py::arg("n_per_block"), py::arg("rk_rank"), py::arg("depth") = 1,
-          R"pbdoc(
-              Rk-aware self-test of the symmetric H-LDL^T factorization: a symmetric-indefinite block
-              tree whose OFF-DIAGONAL leaves are EXACTLY rank-rk_rank (so the rk arithmetic is exact,
-              no ACA truncation) and whose DIAGONAL leaves are dense indefinite with saddle 2x2 pivots.
-              depth=1 puts an rk off-diagonal leaf at the root only; depth=2 puts rk off-diagonal leaves
-              at two levels (refined diagonal sub-trees + a full-size rk root off-diagonal).  Returns a
-              dict: ldlt_residual (||Ax-b||/||b|| vs LAPACKE_dsysv) + ldlt_lower_doubles / ldlt_diag_doubles.
-          )pbdoc");
-
-    m.def("_hldlt_self_test_rk_mixed", &radia_hdivvim::HLDLTSelfTestRkMixed,
-          py::arg("n_per_block"), py::arg("rk_rank"), py::arg("s") = 4,
-          R"pbdoc(
-              Mixed dense/rk off-diagonal symmetric H-LDL^T self-test: a flat s x s block tree whose
-              off-diagonal leaves are a DELIBERATE mix of dense and rk, so the trailing update exercises
-              ALL FOUR operand-kind combos (dense*dense, rk*dense, dense*rk, rk*rk).  rk blocks are EXACT
-              rank rk_rank (no truncation).  Returns a dict: ldlt_residual (||Ax-b||/||b|| vs LAPACKE_dsysv)
-              + combo_dense_dense / combo_rk_dense / combo_dense_rk / combo_rk_rk (how many times each fired).
-          )pbdoc");
 
     m.def("_hdiv_vim_hmatrix_probe", &radia_hdivvim::HDivVimHMatrixProbe,
           py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0, py::arg("distort") = 0.0,
@@ -2974,26 +2877,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  d["compression"] = st.compression; d["build_time"] = st.build_time;
                  d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
                  return d;
-             }, "H-matrix stats dict.")
-        .def("factor_solve_hldlt", [](RadHACApKChargeGram& s, const std::vector<double>& b) {
-                 // Factor the (symmetric) Gram H-matrix with the rk-aware H-LDL^T and solve G x = b.
-                 // NOTE: factoring CONVERTS + OVERWRITES the leaves -> matvec() is invalid afterward.
-                 // out_rc surfaces the decomp code (e.g. NEED_RECURSIVE if the tree has an internal
-                 // off-diagonal block the lower-only LDL^T does not yet recurse).
-                 int n = s.GetNDOF();
-                 int rc = 0;
-                 void* root = cHACApK_hldlt_factor_leafmtxp(s.GetLeafmtxp(), s.GetLcontrol(), 1, &rc);
-                 py::dict d;
-                 d["factor_rc"] = rc;
-                 if (!root) { d["ok"] = false; return d; }
-                 std::vector<double> x((size_t)n, 0.0);
-                 int rcs = cHACApK_hldlt_apply(root, s.GetLcontrol(), b.data(), x.data(), n);
-                 cHACApK_hldlt_free_factors(root);
-                 d["ok"] = (rcs == 0);
-                 d["x"] = x;
-                 return d;
-             }, py::arg("b"),
-             "Factor G with rk-aware H-LDL^T and solve G x = b (destroys matvec). Returns {ok, x, factor_rc}.");
+             }, "H-matrix stats dict.");
 
     // ========================================================================
     // Object Creation
