@@ -47,3 +47,17 @@ def test_curved_p_convergence():
     e0 = abs(d0 / (1.0 / 3.0) - 1)
     e2 = abs(d2 / (1.0 / 3.0) - 1)
     assert e2 < 0.1 * e0, f"curved p-convergence weak: o0 err {e0:.2e} -> o2 err {e2:.2e}"
+
+
+def test_prolate_nonisotropic_shape_exact():
+    """The non-isotropic SHAPE test: a 2:1 prolate spheroid has N_z != 1/3 (~0.1736).  curved + order-2
+    single-layer nails the ANALYTIC N_z (<0.05%) while the flat faceted ellipsoid floors (order-
+    insensitive) -- confirming the single-layer gets the anisotropic demag right, not just isotropy."""
+    Nz = bem.prolate_Nz_analytic(2.0)
+    assert 0.15 < Nz < 0.20, f"analytic prolate N_z sanity {Nz:.4f}"
+    d_flat0, _ = bem.demag_prolate(2.0, 0.6, 0, 0)
+    d_flat2, _ = bem.demag_prolate(2.0, 0.6, 0, 2)
+    d_curv2, _ = bem.demag_prolate(2.0, 0.6, 3, 2)
+    assert abs(d_curv2 / Nz - 1) < 5e-4, f"curved o2 prolate N_z {d_curv2:.5f} not within 0.05% of {Nz:.5f}"
+    assert abs(d_flat0 - d_flat2) < 1e-4, "flat order should not change the (faceted) prolate demag"
+    assert abs(d_curv2 / Nz - 1) < abs(d_flat0 / Nz - 1), "curved o2 must beat flat on the analytic N_z"
