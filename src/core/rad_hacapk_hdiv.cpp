@@ -101,13 +101,15 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> centroids,
 
 RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
                                          std::vector<double> face_verts,
-                                         int n_el)
-    : m_n_el(n_el), m_analytic(true),
+                                         int n_el, double near_factor)
+    : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor),
       m_cellV(std::move(cell_verts)), m_faceV(std::move(face_verts))
 {
     const int n_bf = (int)(m_faceV.size() / 9);
     m_n = n_el + n_bf;
     m_cent.assign((size_t)m_n * 3, 0.0);
+    m_meas.assign((size_t)m_n, 0.0);    // measure (cell vol / face area) -- for the near/far split monopole
+    m_size.assign((size_t)m_n, 0.0);    // characteristic size (vol^1/3 / area^1/2) -- for the near criterion
     m_qp.resize(m_n);
     m_qw.resize(m_n);
 
@@ -143,6 +145,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
         for (int k = 0; k < 3; ++k) { e1[k] = V[3+k]-V[k]; e2[k] = V[6+k]-V[k]; e3[k] = V[9+k]-V[k]; }
         double cr[3] = {e2[1]*e3[2]-e2[2]*e3[1], e2[2]*e3[0]-e2[0]*e3[2], e2[0]*e3[1]-e2[1]*e3[0]};
         double vol = std::fabs(e1[0]*cr[0] + e1[1]*cr[1] + e1[2]*cr[2]) / 6.0;
+        m_meas[a] = vol; m_size[a] = std::cbrt(vol);
         m_qp[a].resize(nT);
         m_qw[a].assign(nT, vol / nT);
         for (int q = 0; q < nT; ++q) {
@@ -161,6 +164,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
         for (int k = 0; k < 3; ++k) { e1[k] = V[3+k]-V[k]; e2[k] = V[6+k]-V[k]; }
         double cr[3] = {e1[1]*e2[2]-e1[2]*e2[1], e1[2]*e2[0]-e1[0]*e2[2], e1[0]*e2[1]-e1[1]*e2[0]};
         double area = 0.5 * std::sqrt(cr[0]*cr[0] + cr[1]*cr[1] + cr[2]*cr[2]);
+        m_meas[a] = area; m_size[a] = std::sqrt(area);
         m_qp[a].resize(7);
         m_qw[a].resize(7);
         for (int q = 0; q < 7; ++q) {
@@ -208,11 +212,20 @@ void RadHACApKChargeGram::ExtractCoordinates()
 double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
 {
     if (m_analytic) {
-        // Exact analytic charge Gram: G[a][b] = (1/4pi) INT_a Phi_b (Phi_b = PhiTet/TriPotential of
-        // source b).  Symmetrize the quadrature: 0.5*(outer-quad on a . Phi_b + outer-quad on b . Phi_a).
         // Diagonal = the analytic self (the Wilton/phi_tet potential is exact through the 1/r singularity).
         if (a == b) return QuadDot(a, a);
-        return 0.5 * (QuadDot(a, b) + QuadDot(b, a));
+        // NEAR/FAR split (build speedup): the analytic entry 0.5*(outer-quad_a . Phi_b + outer-quad_b .
+        // Phi_a) is EXPENSIVE (PhiTet/TriPotential per outer point) and only matters for NEAR pairs
+        // (the non-uniform-M / div M != 0 interaction); FAR pairs use the cheap centroid-monopole.
+        // near_factor = 1e30 (default) => all pairs NEAR => all-analytic (matches the dense
+        // build_demag(analytic_gram=True) golden); near_factor ~ 2 gives the fast split.
+        const double dx = m_cent[3*a]     - m_cent[3*b];
+        const double dy = m_cent[3*a + 1] - m_cent[3*b + 1];
+        const double dz = m_cent[3*a + 2] - m_cent[3*b + 2];
+        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (r <= m_near_factor * (m_size[a] + m_size[b]))
+            return 0.5 * (QuadDot(a, b) + QuadDot(b, a));        // NEAR: exact analytic
+        return m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI / r;      // FAR: cheap centroid-monopole
     }
     if (a == b) return m_self[a];
     double dx = m_cent[3 * a + 0] - m_cent[3 * b + 0];
