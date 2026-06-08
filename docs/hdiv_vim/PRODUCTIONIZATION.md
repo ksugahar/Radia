@@ -11,18 +11,19 @@ yano-type handles, behind a clean Radia API. Honest scope, milestone-based, with
 | Layer | C++ (compiled, `_radia_pybind.pyd`) | Python-only (prototype) |
 |---|---|---|
 | Charge map B + HDiv mass | structured **hex** (`rad_hdiv_vim.cpp`) | unstructured **tet** (NGSolve HDiv extraction, `examples/feec_vim/`) |
-| Coulomb Gram G | monopole + sub-point (`CoulombGramEntry`); **Wilton `TriPotential` + `PhiTet` ported (M2a, golden-locked vs Python ~1e-15), not yet wired into the entry** | Wilton surface + `phi_tet` volume (analytic), wired in `build_demag` |
-| Scalable Gram H-matrix | **`_ChargeGramHMatrix`** (general/unstructured), `_HDivVimHMatrix` (hex) | (assembly driven from Python) |
-| H-LDLᵀ factorization | cHACApK (`_hldlt_self_test*`, `factor_solve_hldlt`) | (not wired into the material-system apply) |
-| Linear solve (MINRES) | — | scipy / hand-coded |
-| Nonlinear damped Newton | — | `solve_nonlinear_newton` |
-| Curved + high-order Gram | — (uses NGSolve) | `ngsolve.bem` single-layer |
-| Symmetry image method | — | `hdiv_demag_symmetry_image.py` |
-| **Public Radia API** | **none** (only `_hdiv_vim_*` test symbols) | examples/feec_vim scripts |
+| Coulomb Gram G | monopole + sub-point (`CoulombGramEntry`); **analytic Wilton `TriPotential` + `PhiTet` WIRED into the `_ChargeGramHMatrix` analytic entry (M2a+M2b, golden-locked == dense `analytic_gram` ~1e-9)** | Wilton surface + `phi_tet` volume (analytic), dense `build_demag` |
+| Scalable Gram H-matrix | **`_ChargeGramHMatrix`** monopole **+ analytic mode (M2b)**, `_HDivVimHMatrix` (hex) | (assembly driven from Python) |
+| H-LDLᵀ factorization | cHACApK (`_hldlt_self_test*`, `factor_solve_hldlt`) — **TO DELETE (消去, see M3)** | (not wired into the material-system apply) |
+| Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)** | scipy MINRES / CG |
+| Nonlinear damped Newton | — (the per-element constitutive + nonsymmetric tangent GMRES + Newton loop still Python) | `solve_nonlinear_newton` (dense + scalable; scalable uses the analytic C++ Gram, M2b) |
+| Curved + high-order Gram | — (uses NGSolve) | `ngsolve.bem` single-layer (sphere/spheroid/ellipsoid validation) |
+| Symmetry image method | — | `hdiv_demag_symmetry_image.py` (sphere 1/2,1/4,1/8 validation, crude Gram) |
+| **Public Radia API** | analytic `_ChargeGramHMatrix` + `SolveLinearMaterial` (scalable demag + linear solve) | `radia.hdiv_vim` package (build_demag / solve_nonlinear_newton[_scalable]) |
 
-So the **scalable Gram + H-LDLᵀ foundation is already C++**; the gap is the unstructured production
-pipeline (assembly orchestration, accurate Gram entries, the solve loop) + a shipped API + the parity
-gate (esp. **speed**, never measured).
+Progress (2026-06-08): **M2 DONE** (the accurate analytic charge Gram is in the C++ scalable path,
+golden-locked; the scalable nonlinear Newton rewired onto it). **M3 partial** (the iterative linear
+solve is in C++; the full nonlinear Newton-in-C++ remains). The remaining gap to seal yano-type: the
+full C++ Newton (M3), the M4 production pieces, and the **speed** parity number (M0, never measured).
 
 ## Definition of done — the parity gate (M0)
 
@@ -53,35 +54,35 @@ production-representative numbers). This sizes the C++ lift and fixes the "done"
   into `src/radia/` with a clean entry (e.g. `rad.hdiv_demag_solve(mesh, materials, source)`), driving
   the existing C++ `_ChargeGramHMatrix` + the Newton. Golden-test against the examples' validated
   numbers. Makes HDiv-VIM a usable Radia feature (first shippable step).
-- **M2 — accurate Gram in the C++ scalable path** *(C++ build task; concrete spec, 2026-06-08).* Today
-  `RadHACApKChargeGram` holds only `(centroids, measures, self_energy)` and its off-diagonal entry
-  (`GetInteractionMatrixElement`, rad_hacapk_hdiv.cpp:107) is **pure monopole**
-  `m_meas[a]·m_meas[b]·(1/4π)/r` (centroid distance); the accurate Wilton/`phi_tet` Gram lives only in
-  the Python `build_demag`. Steps:
-  - **M2a — DONE (commit 8f25788a, 2026-06-08).** Ported `tri_potential` (Wilton: the `log`/`atan2`
-    exact triangle 1/r surface potential) + `phi_tet` (the divergence-theorem tet Newtonian volume
-    potential reusing `tri_potential`) to C++ as `rad_hdiv::TriPotential` / `PhiTet` (rad_hdiv_vim.cpp),
-    exposed as the `_hdiv_tri_potential` / `_hdiv_phi_tet` pybind probes and **golden-locked vs the
-    Python reference to ~machine precision** (tests/feec/test_hdiv_vim_cpp_potentials.py: TriPotential
-    7.6e-16, PhiTet 2.3e-15). The geometric kernels of the accurate Gram are now C++.
-  - **M2b — remaining (the wiring).** (1) Thread **element vertices + per-charge type (surface tri /
-    volume tet)** into the `RadHACApKChargeGram` ctor + the `_ChargeGramHMatrix` pybind + the Python
-    caller (the scalable path in `_nonlinear.solve_nonlinear_newton_scalable`). (2) In
-    `GetInteractionMatrixElement(a,b)` (rad_hacapk_hdiv.cpp:107) use `TriPotential`/`PhiTet` for **near**
-    pairs (monopole stays for **far** — ACA-compressed); keep the validated diagonal self-energy.
-    (3) Rebuild (`Build.ps1`) + a new golden: the C++ H-matrix Gram demag matches the dense Python
-    `build_demag(analytic_gram=True)` reference (and the scalable nonlinear C-yoke matches the dense one
-    it currently under-resolves — memory: "scalable path = monopole accuracy").
-  NOTE: M2b is a C++ ctor/pybind/entry edit + rebuild + verify — execute with clean context (not at the
-  tail of a long session) to protect a working build. M2a (the rebuild-gated port) is already landed.
-  GOTCHA learned in M2a: on the NAS-mounted `S:` source, `Build.ps1`'s freshness check
+- **M2 — DONE (2026-06-08): accurate Gram in the C++ scalable path.** `RadHACApKChargeGram` gained an
+  ANALYTIC mode so its entry is the exact Wilton/`phi_tet` charge Gram (was pure centroid-monopole),
+  and the scalable nonlinear Newton was rewired onto it. Both sub-steps landed + golden-locked:
+  - **M2a — DONE (commit 8f25788a).** Ported `tri_potential` (Wilton `log`/`atan2` exact triangle 1/r
+    surface potential) + `phi_tet` (divergence-theorem tet Newtonian volume potential) to C++ as
+    `rad_hdiv::TriPotential` / `PhiTet`, exposed as `_hdiv_tri_potential` / `_hdiv_phi_tet` and
+    **golden-locked vs Python to ~machine precision** (test_hdiv_vim_cpp_potentials.py: 7.6e-16 / 2.3e-15).
+  - **M2b — DONE (commits c31e1501 core + 6e8aa494 nonlinear).** Threaded per-charge vertices + type into
+    the `RadHACApKChargeGram` analytic ctor + `_ChargeGramHMatrix(cell_verts,face_verts,n_el)` pybind; the
+    analytic entry `G[a][b] = 0.5(QuadDot(a,b)+QuadDot(b,a))` (PhiTet/TriPotential inner × tet-subpoint /
+    Dunavant-5 outer) matches dense `build_demag(analytic_gram=True)` entry-by-entry (all-dense <1e-9;
+    test_hdiv_vim_chargegram_analytic.py). The scalable nonlinear Newton now applies `N v = B^T(H.matvec(B v))`
+    with the analytic H-matrix (no Python near-correction) → reproduces the dense ANALYTIC Newton on the
+    NON-uniform cube (test_hdiv_vim_newton_scalable.py).
+  GOTCHA (learned M2a/M2b, keep): on the NAS-mounted `S:` source, `Build.ps1`'s freshness check
   (`src.LastWriteTime -le dst.LastWriteTime`) can skip the `.pyd` copy AND a fresh `import radia` can
   briefly read the pre-copy `.pyd` (NAS read-cache lag). Workaround: `Copy-Item -Force
-  build-msvc\_radia_pybind.cp312-win_amd64.pyd src\radia\_radia_pybind.pyd` then verify in a new process.
-- **M3 — nonlinear Newton in C++.** The per-cell tensor-tangent damped Newton loop (or its hot parts)
-  in C++. The tangent solve is **iterative** (GMRES, matrix-free with the H-matrix), as in the scalable
-  prototype — **no direct factorization**. Removes the Python per-iteration overhead (the main speed
-  lever for nonlinear).
+  build-msvc\_radia_pybind.cp312-win_amd64.pyd src\radia\_radia_pybind.pyd` then verify in a NEW process.
+- **M3 — nonlinear Newton in C++. PARTIAL (2026-06-08).**
+  - **DONE — the iterative-solve hot kernel in C++ (commit 029236d8).** `RadHACApKChargeGram::SolveLinearMaterial`
+    solves the SPD material system `((1/chi)M_mass + B^T G B) m = rhs` by Jacobi-PCG with G applied as the
+    analytic H-matvec — the linear demag solve + the symmetric Picard warmstart, no Python per-iteration
+    glue (pybind `solve_linear_material`; golden test_hdiv_vim_cpp_linear_solve.py: vs scipy MINRES on the
+    identical operator <1e-6, vs dense analytic <5e-4).
+  - **REMAINING — the full nonlinear Newton-in-C++.** The per-element tensor-tangent constitutive
+    (M(H) + dM/dH from the B-H curve) + the RT0 field reconstruction + the NONSYMMETRIC tangent GMRES +
+    the damped Newton loop, all in C++ (reusing the `SolveLinearMaterial` Krylov + the analytic H-matvec).
+    This is the main speed lever; it is a substantial port and its value is gated by the M0 speed number,
+    so it is the right next deliberate (clean-context) C++ task — not a session-tail rush.
   > **H-LDLᵀ TO BE DELETED — 消去 confirmed 2026-06-08.** The direct symmetric H-LDLᵀ factorization of
   > the H-matrix is **not** on the production path: the HDiv-VIM is μr-INDEPENDENT by construction, so
   > the iterative solve (MINRES linear / GMRES nonlinear) is cheap and well-conditioned — a direct
