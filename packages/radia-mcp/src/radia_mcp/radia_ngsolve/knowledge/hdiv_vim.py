@@ -411,6 +411,16 @@ DONE + golden-locked (feec 54/54):
              to Radia not converging at low drive on the coarse mesh (M/H0=11.8 is impossible for a
              sphere D=1/3); HDiv matched the analytic, so HDiv was correct.  Use the analytic fixed
              point (not a coarse-mesh Radia run) as the low-field reference.
+  C-YOKE     real non-convex engineering geometry (OCC box-box-box C-shape, ~1300 tets) + the real BH
+  (real      table + uniform applied field: HDiv-VIM assembles, loops FIELD-NULL 5.92e-16 on the real
+  geometry)  shape, the nonlinear Newton converges, and the VOLUME-AVERAGED Mz matches Radia (same mesh
+             + same table) to ~4% at maxh=0.02 (H0 5e4/2e5: 4.1%/3.8%).  MESH-DEPENDENT: 13% at
+             maxh=0.03 -- the monopole+near-corr operator accuracy on the CORNERS (same gap class as
+             the cube; tightens with finer mesh + the volume Gram).  GOTCHA: use the volume-averaged Mz
+             over the iron for BOTH (point-sampling lands in the window/gap air + Mz direction varies
+             spatially in a C-yoke -> apples-to-oranges, spurious 170%/negative-M disagreement).
+             DEMONSTRATED (not golden-locked: the dense build_demag SVD on ~3000 DOF is too slow +
+             mesh-sensitive for CI; the scalable C++ path is the route to a lockable C-yoke).
 
 OPEN (honest boundaries / next increments):
   - analytic VOLUME (tet) Gram: the surface Wilton is done; the residual nonlinear SHARP-body
