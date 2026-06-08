@@ -286,9 +286,14 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False):
     loops = Vt[rankQ:, :]
     # charge geometry (for the C++ HACApK charge-Gram H-matrix path, #1b): centroids, measures,
     # diagonal self-energies, the dense Gram G, and the sparse charge map B as scipy CSR.
+    # cell_verts [n_el*12] (tets, 4 verts) + face_verts [n_bf*9] (tris, 3 verts) feed the ANALYTIC
+    # C++ charge Gram (M2b: _ChargeGramHMatrix analytic mode == this dense analytic_gram path).
+    cell_verts = np.asarray(el_V, float).ravel() if n_el else np.zeros(0)
+    face_verts = np.asarray(bf_V, float).ravel() if n_bf else np.zeros(0)
     return dict(N=N, M_mass=M_mass, B=B, ndof=ndof, n_loop=n_loop, loops=loops, m_unit=m_unit,
                 cent=cent, meas=meas, self_energy=diagG, G=G,
-                B_csr=sp.csr_matrix(B), n_charge=n_el + n_bf)
+                B_csr=sp.csr_matrix(B), n_charge=n_el + n_bf,
+                cell_verts=cell_verts, face_verts=face_verts, n_el=n_el)
 
 
 def demag_factor(d):
