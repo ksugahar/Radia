@@ -468,6 +468,22 @@ accessible stand-in for the also-flat yano-type; reference = the analytic dipole
 curved -- it facets).  This is the quantitative basis for the curved accuracy-per-DOF advantage over the
 flat production solver; the remaining lift to a TOTAL win (incl. speed) is the C++ productionization.
 
+## SYMMETRY MODELS (1/2, 1/4, 1/8) -- the loop handling is AUTOMATIC (2026-06-08)
+The painful part of symmetry models in MSC/yano-type is the LOOP handling: the loop-star basis must be
+built with a cohomology-aware installCycle on the CUT domain (the symmetry planes introduce new cycles).
+In HDiv-VIM the loops are simply ker(B) (B = charge map), so on ANY cut/reduced mesh they are field-null
+BY CONSTRUCTION (N = B^T G B => N.loop = 0 for loop in ker B) -- NO hand-crafted loop-star basis, NO
+cohomology bookkeeping.  VERIFIED (golden test_hdiv_vim_symmetry_loops.py): a sphere as full / 1/2 / 1/4
+/ 1/8 -> the loop count adapts AUTOMATICALLY (58 / 54 / 18 / 6) and the loop field-null residual
+||N.loop||/||N|| ~ 4e-16 (machine zero) on EVERY reduced mesh.  => the "loop-jokyo (loop removal) is
+metsuky-doi / mendokusai" problem is ELIMINATED -- ker(B) handles the cut topology for free.
+SCOPE (honest 2-part split, do NOT conflate): (1) the LOOP machinery on cut meshes = automatic (verified
+here).  (2) the demag VALUE of a symmetry MODEL additionally needs the symmetry BC on the HDiv space
+(NGSolve HDiv dirichlet: M.n=0 on a field-PARALLEL mirror, M.n free on a field-PERPENDICULAR mirror) PLUS
+the IMAGE-augmented Gram (image interactions, like Radia's IMA) -- conceptually straightforward (add the
+image kernels, or mesh the symmetry planes and apply BC) but NOT yet built; the probe's demag is the
+octant-as-standalone (no images), so "1/8 model demag = full demag" awaits the image Gram.
+
 ## REFERENCE HONESTY for the accuracy numbers (verify-first, 2026-06-07)
 What the quoted accuracies are measured against, precisely:
 - SPHERE / ELLIPSOID demag + nonlinear: vs ANALYTIC truth (D=1/3 or the prolate N_z; the scalar fixed
