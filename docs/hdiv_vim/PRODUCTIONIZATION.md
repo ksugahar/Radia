@@ -77,6 +77,17 @@ real risk, not the matvec). The μr-independent C++ material solver for the head
 `SolveMaterialMINRES` (commit 87c6591f; iters FLAT ~120 for μr 100–1e6). REMAINING for a real wall-clock
 head-to-head: set up the C-type geometry for HDiv-VIM (mesh + charges) and time build + solve against
 these JSONs — the core M0 deliverable.
+
+**Build-time measured (2026-06-08, `examples/feec_vim/hdiv_demag_buildtime_scaling.py` + .json).** The
+analytic charge-Gram H-matrix build (charges straight from a tet mesh, KELVIN-LESS — iron only, the 1/r
+Gram is the open boundary, no air/Kelvin): n_charge 281→7278 → t_build 0.19→24 s, compr 1.0→0.21,
+matvec 8.5 ms @ 7278 (O(N log N)). Build scales ~N^1.1–1.3 at large N → extrapolated to C-type scale
+(~30k–150k charges) ~150–1200 s, the **same order as yano's 582 s** (comparable, NOT a clear win). So
+**the BUILD is the bottleneck, not the solve**: the SOLVE wins big (5–6 Newton iters vs 214 → ~tens of s
+vs 1953 s). Total estimate ~**2–6× faster, build-limited**. The build cost is the ALWAYS-analytic entry
+(every pair pays PhiTet/TriPotential); the **lever is a near/far split** (cheap monopole for ACA-far
+pairs, analytic only for near) — that would make the build a clear win too. (KELVIN-LESS throughout: the
+HDiv-VIM is a volume integral method like MMM/MSC; only the iron is meshed — Kelvin is a FEM-only need.)
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
