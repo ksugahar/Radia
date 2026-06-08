@@ -75,6 +75,7 @@ solver but NOT ground truth on a coarse mesh):
 | Distorted μr-independence | `test_hdiv_vim_solve.py` | iters bounded vs μr 10→1e4 | ✅ golden-locked |
 | **Curved-mesh win** (elementary) | `hdiv_demag_curved.py` | **ANALYTIC** dipole / volume | ✅ external field flat `−10%` → Curve(3) `−0.26%` (~38× at same ndof) |
 | **Curved + high-order demag** (production) | `hdiv_demag_bem_singlelayer.py` | **ANALYTIC** sphere 1/3 + spheroid + triaxial tensor | ✅ flat floored → curved + order-2 EXACT: sphere `~1e-4%`; prolate & oblate polar+transverse `<0.05%`; **triaxial ellipsoid** (a≠b≠c) all three distinct factors EXACT vs Osborn integral; sum rule `N_x+N_y+N_z=1` to `~1e-6`; Gram = `ngsolve.bem` single-layer |
+| **Curved × nonlinear** (honest finding) | `test_hdiv_vim_curved_nonlinear.py` | **ANALYTIC** spheroid M-H fixed point | ✅ curved nonlinear M exact (`<0.05%`); ⚠ but the curved win on the **magnetization** is MODEST (`~0.3%`) — the demag *ratio* cancels the volume faceting error. The large curved win (`~10%`) lives in the **field** output, not M. (Radia can't referee curved geometry — it facets; so curved nonlinear is validatable only on spheroids.) |
 
 **Which quantity discriminates the curved win, and why it matters:** with the *crude
 sub-point* Gram (`hdiv_demag_curved.py`) the demag FACTOR does NOT cleanly discriminate — its
@@ -87,10 +88,11 @@ non-discrimination to "near-isotropy"; the verify-first single-layer result corr
 
 ## Golden tests
 
-`tests/feec/test_hdiv_vim_*.py` (full feec suite **71 passing**) — Newton, Newton-vs-Radia,
+`tests/feec/test_hdiv_vim_*.py` (full feec suite **73 passing**) — Newton, Newton-vs-Radia,
 Wilton Gram, volume Gram, scalable, ellipsoid, BH table, distorted robustness, curved win
 (elementary), curved + high-order demag exact on sphere + full spheroid tensor + general triaxial
-ellipsoid (three distinct factors, sum rule) via the `ngsolve.bem` single-layer.
+ellipsoid (three distinct factors, sum rule) via the `ngsolve.bem` single-layer, and the honest
+curved × nonlinear finding (modest magnetization win, big field win).
 
 ## Detailed home
 
