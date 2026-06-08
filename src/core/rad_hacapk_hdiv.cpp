@@ -6,6 +6,7 @@
 #include <cmath>
 #include <utility>
 #include <algorithm>
+#include <core/taskmanager.hpp>   // ngcore::RegionTaskManager (parallel H-matvec under TaskManager)
 
 RadHACApKHDivManager::RadHACApKHDivManager(int nx, int ny, int nz,
                                            double h, double distort, int nsub)
@@ -268,6 +269,82 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         rz = rz_new;
     }
     iters_out = it;
+    return x;
+}
+
+std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
+    const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+    const std::vector<double>& B_data, int n_face,
+    const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+    double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
+    double tol, int maxit, int& iters_out)
+{
+    const int n_charge = (int)B_indptr.size() - 1;
+    // Stand up (or reuse the caller's) TaskManager pool so the HACApK H-matvec runs multi-threaded.
+    ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+
+    // A x = inv_chi*(M_mass x) - B^T (G (B x))  -- symmetric INDEFINITE -> MINRES.
+    std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
+    auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
+        std::fill(q.begin(), q.end(), 0.0);
+        for (int a = 0; a < n_charge; ++a) {
+            double s = 0.0;
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
+            q[a] = s;
+        }
+        std::fill(Gq.begin(), Gq.end(), 0.0);
+        MatVec(q, Gq);                                              // O(N log N) HACApK H-matvec (parallel)
+        y.assign((size_t)n_face, 0.0);
+        for (int a = 0; a < n_charge; ++a) {                        // y = -B^T (G B x)
+            double ga = Gq[a];
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) y[B_indices[k]] -= B_data[k] * ga;
+        }
+        for (size_t k = 0; k < mV.size(); ++k) y[mI[k]] += inv_chi * mV[k] * x[mJ[k]];  // + inv_chi M_mass x
+    };
+    auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
+        double s = 0.0; for (int f = 0; f < n_face; ++f) s += a[f] * b[f]; return s;
+    };
+
+    // ---- Jacobi-preconditioned MINRES (Paige-Saunders 1975; scipy.sparse.linalg.minres recurrence) ----
+    std::vector<double> x((size_t)n_face, 0.0), r1 = rhs, r2 = rhs, y((size_t)n_face);
+    for (int f = 0; f < n_face; ++f) y[f] = r1[f] / prec[f];        // y = M^{-1} b
+    double beta1 = dot(r1, y);                                      // b . M^{-1} b
+    iters_out = 0;
+    if (beta1 <= 0.0) return x;                                     // b = 0 (or M not SPD) -> x = 0
+    beta1 = std::sqrt(beta1);
+    double oldb = 0.0, beta = beta1, dbar = 0.0, epsln = 0.0, phibar = beta1, cs = -1.0, sn = 0.0;
+    std::vector<double> v((size_t)n_face), Av((size_t)n_face),
+                        w((size_t)n_face, 0.0), w1((size_t)n_face, 0.0), w2((size_t)n_face, 0.0);
+    int it = 0;
+    for (; it < maxit; ++it) {
+        const double s = 1.0 / beta;
+        for (int f = 0; f < n_face; ++f) v[f] = s * y[f];           // Lanczos vector
+        applyA(v, Av);
+        if (it >= 1) { const double c = beta / oldb; for (int f = 0; f < n_face; ++f) Av[f] -= c * r1[f]; }
+        const double alfa = dot(v, Av);
+        { const double c = alfa / beta; for (int f = 0; f < n_face; ++f) Av[f] -= c * r2[f]; }
+        r1 = r2; r2 = Av;
+        for (int f = 0; f < n_face; ++f) y[f] = r2[f] / prec[f];    // y = M^{-1} r2
+        oldb = beta; beta = dot(r2, y);
+        if (beta < 0.0) break;                                      // preconditioner not SPD
+        beta = std::sqrt(beta);
+        // previous + next Givens rotation
+        const double oldeps = epsln;
+        const double delta  = cs * dbar + sn * alfa;
+        const double gbar   = sn * dbar - cs * alfa;
+        epsln = sn * beta;
+        dbar  = -cs * beta;
+        double gamma = std::sqrt(gbar * gbar + beta * beta);
+        if (gamma < 1e-300) gamma = 1e-300;
+        cs = gbar / gamma; sn = beta / gamma;
+        const double phi = cs * phibar; phibar = sn * phibar;
+        const double denom = 1.0 / gamma;
+        w1 = w2; w2 = w;
+        for (int f = 0; f < n_face; ++f) w[f] = (v[f] - oldeps * w1[f] - delta * w2[f]) * denom;
+        for (int f = 0; f < n_face; ++f) x[f] += phi * w[f];
+        iters_out = it + 1;
+        if (phibar <= tol * beta1) break;                          // relative preconditioned residual
+    }
     return x;
 }
 
