@@ -213,10 +213,16 @@ def analytic_charge_gram(el_V, bf_V, el_vol, bf_area, nsub_tet=3):
     return 0.5 * (G + G.T)
 
 
-def _csr(bf):
+def _csr_sp(bf):
+    """NGSolve BilinearForm.mat -> scipy CSR (SPARSE). The scalable (skip_dense_gram) build keeps the
+    charge maps + HDiv mass sparse; only the dense reference path densifies via _csr()."""
     m = bf.mat
     r, c, v = m.COO()
-    return sp.csr_matrix((np.array(v), (np.array(r), np.array(c))), shape=(m.height, m.width)).toarray()
+    return sp.csr_matrix((np.array(v), (np.array(r), np.array(c))), shape=(m.height, m.width))
+
+
+def _csr(bf):
+    return _csr_sp(bf).toarray()
 
 
 def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_dense_gram=False):
@@ -240,14 +246,14 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
         bb = ng.BilinearForm(trialspace=fes, testspace=L2b)
         bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds
         bb.Assemble()
-        Bv_m, Bb_m = _csr(bv), _csr(bb)
+        Bv_sp, Bb_sp = _csr_sp(bv), _csr_sp(bb)   # charge maps as sparse CSR (densified only on the ref path)
         massv = ng.BilinearForm(L2v); massv += L2v.TrialFunction() * L2v.TestFunction() * ng.dx; massv.Assemble()
         massb = ng.BilinearForm(L2b); massb += L2b.TrialFunction() * L2b.TestFunction() * ng.ds; massb.Assemble()
-        el_vol = np.diag(_csr(massv)); bf_area = np.diag(_csr(massb))
-        # HDiv mass (the physical demag-factor metric)
+        el_vol = _csr_sp(massv).diagonal(); bf_area = _csr_sp(massb).diagonal()   # L2-0 mass is diagonal == measures
+        # HDiv mass (the physical demag-factor metric) -- kept SPARSE; the skip_dense_gram path never densifies it
         vh = fes.TestFunction()
         mh = ng.BilinearForm(fes); mh += u * vh * ng.dx; mh.Assemble()
-        M_mass = _csr(mh)
+        M_mass_sp = _csr_sp(mh)
         el_V = [np.array([mesh[v].point for v in el.vertices]) for el in mesh.Elements(ng.VOL)]
         bf_V = [np.array([mesh[v].point for v in el.vertices]) for el in mesh.Elements(ng.BND)]
         # uniform M_z, L2-projected onto RT0 (for the demag Rayleigh quotient)
@@ -255,7 +261,12 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
     el_c = np.array([V.mean(0) for V in el_V]); bf_c = np.array([V.mean(0) for V in bf_V])
     n_el, n_bf = len(el_c), len(bf_c)
     cent = np.vstack([el_c, bf_c]); meas = np.concatenate([el_vol, bf_area])
-    B = np.vstack([Bv_m / el_vol[:, None], Bb_m / bf_area[:, None]])
+    # scaled charge map B (each row / its measure) as sparse CSR -- the single source for both B_csr and,
+    # on the dense reference path, the dense B.  (sparse: each charge cell touches only its own faces.)
+    _Brows = [sp.diags(1.0 / el_vol) @ Bv_sp]
+    if n_bf:
+        _Brows.append(sp.diags(1.0 / bf_area) @ Bb_sp)
+    B_sp = sp.vstack(_Brows).tocsr()
 
     # diagonal charge self-energies (O(N); kept even on the scalable path, for the preconditioner)
     diagG = np.empty(n_el + n_bf)
@@ -267,12 +278,15 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
         # SCALABLE path: SKIP the O(N^2) dense G/N and the O(N^2) loop SVD (the biggest dense costs;
         # G/N are n_charge^2).  The C++ analytic _ChargeGramHMatrix + SolveMaterialMINRES use
         # cent / meas / cell_verts / face_verts / diagG + the sparse B_csr only -- never the dense G.
-        # NOTE: M_mass + the dense B (n_face^2, via _csr().toarray()) are NOT yet sparse here -- making
-        # those sparse is the remaining build_demag refactor for full large-N (the dense-Gram-free
-        # analytic-Gram BUILD itself needs only the verts, which can be extracted straight from the mesh).
+        # M_mass + B are kept SPARSE here (no n_charge^2 dense), so this path has NO dense N^2 object at
+        # all -- the analytic-Gram BUILD needs only the verts (straight from the mesh).
         G = N = loops = None
         n_loop = None
+        M_mass = M_mass_sp        # sparse CSR (RT0 HDiv mass is local -> sparse)
+        B = B_sp                  # sparse CSR scaled charge map
     else:
+        M_mass = M_mass_sp.toarray()                       # dense reference path: small N
+        B = B_sp.toarray()
         Dd = np.linalg.norm(cent[:, None, :] - cent[None, :, :], axis=2); np.fill_diagonal(Dd, np.inf)
         G = (meas[:, None] * meas[None, :]) / (4 * pi * Dd)
         np.fill_diagonal(G, diagG)
@@ -284,7 +298,7 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
             # exact Wilton surface-surface block (shape-exact for ANY triangle; demag 1/3 to <0.15%).
             G[n_el:, n_el:] = wilton_surface_block(bf_V)
         N = B.T @ G @ B
-        Q = np.vstack([Bv_m, Bb_m])
+        Q = np.vstack([Bv_sp.toarray(), Bb_sp.toarray()]) if n_bf else Bv_sp.toarray()
         sv = np.linalg.svd(Q, compute_uv=False)
         rankQ = int(np.sum(sv > 1e-9 * sv.max()))
         n_loop = ndof - rankQ
@@ -298,7 +312,7 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
     face_verts = np.asarray(bf_V, float).ravel() if n_bf else np.zeros(0)
     return dict(N=N, M_mass=M_mass, B=B, ndof=ndof, n_loop=n_loop, loops=loops, m_unit=m_unit,
                 cent=cent, meas=meas, self_energy=diagG, G=G,
-                B_csr=sp.csr_matrix(B), n_charge=n_el + n_bf,
+                B_csr=B_sp, n_charge=n_el + n_bf,
                 cell_verts=cell_verts, face_verts=face_verts, n_el=n_el)
 
 

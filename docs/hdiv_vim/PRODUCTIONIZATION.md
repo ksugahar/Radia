@@ -102,6 +102,20 @@ far-pair entry. Accuracy preserved: the split demag (near_factor=2.0) matches de
 near-correction failed — so near_factor=2.0 does NOT revert to that). Extrapolated: at C-type scale the
 ~150–1200 s all-analytic build drops to ~**25–250 s**, now **below yano's 582 s** → HDiv-VIM becomes a
 clear win on BOTH build AND solve. feec 84/84.
+
+**Scalable path is now dense-N²-FREE (2026-06-09, `build_demag(..., skip_dense_gram=True)` returns sparse
+M_mass/B; golden `tests/feec/test_hdiv_vim_build_sparse.py`).** A hidden non-scalability remained: the
+"scalable" Newton (`solve_nonlinear_newton_scalable`) called `build_demag(mesh)` with DEFAULT flags,
+which built the dense O(N²) Gram G, the dense demag N, AND the O(N²) loop SVD, then ignored almost all
+of it (the demag apply is driven by the analytic C++ charge-Gram H-matvec). At C-type scale a 150k-charge
+dense `M_mass`/`N` is ~180 GB → OOM. Fix: (1) `build_demag`'s `skip_dense_gram` branch now returns
+`M_mass`, `B`, `B_csr` as scipy SPARSE (the RT0 HDiv mass + the L2/SurfaceL2 charge map are LOCAL → sparse)
+and `N`/`G`/`loops`/`n_loop` as `None` — no dense N² object is ever formed; (2) `solve_nonlinear_newton_scalable`
+now requests `skip_dense_gram=True` and its two M_mass uses are sparse-safe (`mu @ (M_mass @ mu)`,
+`M_mass.diagonal()`). The C++ solvers already took B as CSR + M_mass as COO, so no C++ change was needed.
+Bit-for-bit identical to the dense reference (sparse M_mass == dense, Rayleigh denom to machine precision);
+the dense REFERENCE path (small-N `demag_factor` + dense Newton) is unchanged. feec 88/88. With this, the
+scalable Newton's BUILD is genuinely O(N log N) analytic-Gram + sparse FE assembly — no dense N² anywhere.
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
