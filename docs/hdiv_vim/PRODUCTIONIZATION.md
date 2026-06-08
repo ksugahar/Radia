@@ -67,6 +67,16 @@ ACA works on it. Benchmark: `examples/feec_vim/hdiv_demag_hacapk_scaling.py` (+ 
 shown to n~3560 (build_demag's dense-G reference is O(N²) and caps N); the trend is clear + favorable;
 larger-N (10k+) confirmation needs a dense-G-free charge extraction — the remaining M0 scalability item.
 
+**Head-to-head target — the saved yano-type C-type benchmarks (M0).** `examples/c_type_electromagnet/
+nonlinear/quarter/hacapk/*.json` record the SHIPPED Radia MMM/MSC (HACApK, nonlinear Newton) on the
+C-type electromagnet: at **165600 DOF, 214 nonlinear iterations, t_solve = 2607 s** (= 582 s H-matrix
+build [22%, once] + 1953 s linear solve over 2686 linear iters); at 18900 DOF, 174 iters, 99 s. The
+HDiv-VIM Newton converges in **5–6 iters** (sphere/cube) → ~35–40× fewer nonlinear iterations, so the
+solve phase should win big; the H-matrix BUILD (582 s) is the cost to beat ("h-matrix化が遅い" is the
+real risk, not the matvec). The μr-independent C++ material solver for the head-to-head is
+`SolveMaterialMINRES` (commit 87c6591f; iters FLAT ~120 for μr 100–1e6). REMAINING for a real wall-clock
+head-to-head: set up the C-type geometry for HDiv-VIM (mesh + charges) and time build + solve against
+these JSONs — the core M0 deliverable.
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
