@@ -86,8 +86,22 @@ matvec 8.5 ms @ 7278 (O(N log N)). Build scales ~N^1.1–1.3 at large N → extr
 **the BUILD is the bottleneck, not the solve**: the SOLVE wins big (5–6 Newton iters vs 214 → ~tens of s
 vs 1953 s). Total estimate ~**2–6× faster, build-limited**. The build cost is the ALWAYS-analytic entry
 (every pair pays PhiTet/TriPotential); the **lever is a near/far split** (cheap monopole for ACA-far
-pairs, analytic only for near) — that would make the build a clear win too. (KELVIN-LESS throughout: the
+pairs, analytic only for near). (KELVIN-LESS throughout: the
 HDiv-VIM is a volume integral method like MMM/MSC; only the iron is meshed — Kelvin is a FEM-only need.)
+
+**Near/far split DONE + measured (2026-06-09, `_ChargeGramHMatrix(..., near_factor)` + golden
+`tests/feec/test_hdiv_vim_chargegram_nearfar.py` + demo `C:/temp/demo_nearfar_speedup.py`).** The
+analytic entry `0.5(QuadDot(a,b)+QuadDot(b,a))` (PhiTet/TriPotential) is now used ONLY for NEAR pairs
+(`|c_a−c_b| ≤ near_factor·(size_a+size_b)`, size = `cbrt(vol)`/`sqrt(area)`); FAR pairs use the cheap
+centroid monopole `meas_a·meas_b/(4π r)`. `near_factor` default **1e30 = all-analytic** (preserves the
+M2b golden); `near_factor=2.0` = the split. Measured build speedup on the non-uniform cube:
+**n_charge 901→3.6×, 1541→5.2×, 4225→5.0×, 7278→6.7×** (20.95 s → 3.13 s @ 7278), with **identical
+compression** (0.206 vs 0.206) — the H-matrix STRUCTURE is unchanged, the speedup is purely the cheaper
+far-pair entry. Accuracy preserved: the split demag (near_factor=2.0) matches dense FULL-analytic within
+**3 % on BOTH the uniform sphere AND the non-uniform cube** (the cube being where the old surface-only
+near-correction failed — so near_factor=2.0 does NOT revert to that). Extrapolated: at C-type scale the
+~150–1200 s all-analytic build drops to ~**25–250 s**, now **below yano's 582 s** → HDiv-VIM becomes a
+clear win on BOTH build AND solve. feec 84/84.
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The

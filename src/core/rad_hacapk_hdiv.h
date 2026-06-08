@@ -101,9 +101,17 @@ public:
     //   G[a][b] = (1/4pi) INT_a Phi_b   (Phi_b = PhiTet/TriPotential of source b, exact analytic),
     // the outer INT_a by tet barycentric sub-points (cells) / Dunavant-5 (faces), symmetrized; the
     // diagonal is the analytic self (the Wilton/phi_tet potential is exact through the 1/r singularity).
+    //
+    // near_factor: the NEAR/FAR split that makes the BUILD fast.  A pair (a,b) is NEAR when
+    // |c_a - c_b| <= near_factor*(size_a + size_b) and uses the expensive analytic entry; FAR pairs use
+    // the cheap centroid-monopole meas_a*meas_b/(4pi r).  Physically correct: the analytic entry only
+    // matters for the NEAR (non-uniform-M, div M != 0) interaction; the far field is monopole to
+    // O((size/r)^2) (the validated monopole+near-correction split).  near_factor defaults to a HUGE
+    // value => ALL pairs near => all-analytic (matches the dense build_demag(analytic_gram=True) golden);
+    // pass near_factor ~= 2 for the fast split.
     RadHACApKChargeGram(std::vector<double> cell_verts,
                         std::vector<double> face_verts,
-                        int n_el);
+                        int n_el, double near_factor = 1e30);
     ~RadHACApKChargeGram() override {}
 
     double GetInteractionMatrixElement(int a, int b) const override;
@@ -178,6 +186,8 @@ private:
     std::vector<double> m_cellV, m_faceV;              // [n_el*12], [n_bf*9]
     std::vector<std::vector<rad_hdiv::Vec3>> m_qp;     // [n] outer-quad points per charge
     std::vector<std::vector<double>>          m_qw;    // [n] outer-quad weights per charge
+    std::vector<double> m_size;                        // [n] characteristic size: vol^(1/3) / area^(1/2)
+    double m_near_factor = 1e30;                       // near/far split: NEAR if |c_a-c_b| <= nf*(size_a+size_b)
 };
 
 #endif // __RAD_HACAPK_HDIV_H
