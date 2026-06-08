@@ -1,11 +1,18 @@
-# FEEC VIM — does NGSolve's basis solve the loop-mode problem?
+# FEEC VIM — the HDiv-type MMM/MSC (replacing the yano-type distortion elements)
 
 Research demonstration of the **FEEC (Finite Element Exterior Calculus) Volume Integral
-Method** for the MMM/MSC magnetization problem, focused on **one question**:
+Method** for the MMM/MSC magnetization problem. The goal: build an **HDiv-type** demag
+operator whose magnetization "loops" are **field-null by construction**, and — if it matches
+or beats the **yano-type** element-engineering (Yano's hand-crafted elements that suppress
+the loop-star / `A_ls` component on distorted hexes, preserved in the private ELF repo) —
+retire the yano-type from public Radia.
 
-> Using NGSolve's H(curl)/H(div) basis inside the volume integral, are the magnetization
-> "loops" (div-free circulations, `ker N`) FIELD-NULL — so no spurious loop modes arise,
-> even on distorted elements at high μr?
+> **The question:** using NGSolve's H(div) basis inside the volume integral, are the
+> magnetization loops (div-free circulations, `ker N`) FIELD-NULL — so no spurious loop
+> modes arise, even on distorted elements at high μr?
+>
+> **The answer (this directory): YES, by construction** — and the resulting operator is
+> symmetric, works on general/distorted/curved elements, and is high-order-capable.
 
 ## The two problems must be separated (see `memory/`)
 
@@ -27,46 +34,67 @@ tangential trace) has **both**:
 ⇒ **charge-free ⇒ field-null everywhere, at any μr, on any element** — the contravariant
 Piola map preserves *both* div and normal-trace (the de Rham commuting diagram), so
 distortion cannot break it. This is the strong (everywhere) field-null vs the constant-M
-basis's fragile (collocation-only) field-null that breaks under distortion.
+basis's fragile (collocation-only) field-null that breaks under distortion. The operator
+`N = BᵀGB` (B = charge map, G = Coulomb Gram) inherits `N·loop = 0` for **any** G.
 
-## Files
+## HDiv-type vs yano-type — the clean win
 
-- `ngsolve_loopfree_verify.py` — builds a genuinely distorted hex mesh in **real NGSolve
-  6.2.2604**, forms `M = curl(interior H(curl))`, and confirms charge-free → field-null:
-  - `||div M|| / ||M|| = 1.05e-13`
-  - `||M·n||_bnd / ||M|| = 0` (exact)
-  - charge-form demag field at external points `= 3.7e-16` (machine zero) → **field-null**
-  - (contrast) uniform `M=(0,0,1)`: charge `σ=0.58`, field `1.8e-2` — a "star", not a loop
-  - `ngsolve_loopfree_verify.json` — the recorded numbers
-- The symbolic twin: `radia_mcp/mathematica/basis_functions/vim_loopfree.wls` (+ the full
-  FEEC suite: `h1`, `hcurl`, `hdiv`, `simplex_ho`, `derham`, `cohomology`, `vim_field`).
+**No fundamental inferiority.** The HDiv-type N is **symmetric**, works on **general**
+elements (tet/hex/wedge), is **distorted-robust by construction**, and its accuracy is
+comparable to yano-type. On top of parity, it has three accuracy-per-DOF advantages the
+flat, hand-crafted yano-type **structurally cannot match**:
 
-## Plan: build the HDiv-type MMM/MSC; if it works, retire the yano-type (2026-06-06)
+1. **de-Rham-exact on ANY mesh** — loops are field-null by construction (`4e-16`) on
+   distorted hexes, vs the MSC retrofit's `6e-9`; no per-mesh element engineering.
+2. **curved (isoparametric) geometry** — `mesh.Curve(p)`; the external field of a coarse
+   sphere goes from flat `−10%` to `<0.3%` at the SAME ndof (`hdiv_demag_curved.py`). Flat
+   `ObjHexahedron/ObjTetrahedron` cannot represent a curved boundary.
+3. **polynomial high-order** — the FEEC construction is order-agnostic (loops stay
+   field-null at all orders); the p-convergence speed win is the major continuation.
 
-The **HDiv-type MMM/MSC** uses NGSolve's H(div) basis for the magnetization; its loops are
-field-null **by construction** (de Rham), replacing the **yano-type** element-engineering
-(Yano's hand-crafted elements that suppress the A_ls / loop-star component on distorted
-hexes). Plan: build the HDiv-type; **if it works**, retire the yano-type from public Radia
-and **preserve it in the ELF repo**. (Lowest-order HDiv-type == the shipped Radia MSC +
-`installCycle` de-Rham loops, which already works; the new build is the **high-order** VIM.)
+## What is built + validated — with REFERENCE HONESTY
 
-Progress:
+What each accuracy number is measured against, precisely (this matters — Radia is a *trusted*
+solver but NOT ground truth on a coarse mesh):
 
-1. ✅ **loop/star (Hodge) split on the real HDiv space** — `hdiv_loop_star_split.py`:
-   the charge map `Q : M ↦ (−div M, M·n|_bnd)` splits HDiv into **star(charge-carrying) ⊕
-   loop(charge-free)** (distorted 2×2×2, HDiv order 1: 240 = 159 star + 81 loop; `rank Q =
-   160 charge-dofs − 1` Gauss charge-conservation). Loops from `ker Q` are charge-free
-   (`div`, `M·n` ~1e-16) and **field-null** (`|H|`~3e-17) — the **operator-level**
-   loop-mode-free statement: loops are in `ker(N_demag)` exactly, no element engineering.
-   The 159-dim **star** space is where the VIM is solved. (The loop space is defined by the
-   charge map directly; a naive `curl(HCurl_p)` count does not apply — that lands in HDiv
-   order *p−1*, a different space.)
-2. **next — assemble the demag operator on the star space + a small validated solve**:
-   the genuine remaining build, whose hard part is the **weakly-singular 1/r charge-Galerkin
-   self/near term** (Duffy / Graglia surface + volume moments). Validate against a known
-   demag (e.g. sphere factor 1/3) and against Radia MSC at lowest order.
-3. **RHS / collocation correspondence** — evaluation points matched to the high-order basis
-   (the "矢野 element" lesson).
+| Result | Script | Validated against | Status |
+|---|---|---|---|
+| Loops field-null on distorted hex | `ngsolve_loopfree_verify.py` | exact (charge-form field `3.7e-16`) | ✅ machine zero |
+| Loop/star (Hodge) split | `hdiv_loop_star_split.py` | exact (`ker Q` charge-free `~1e-16`) | ✅ |
+| Linear demag (sphere/cube → 1/3) | `hdiv_demag_tet.py` | **ANALYTIC** 1/3 | ✅ `<0.15%` (Wilton surface Gram) |
+| Nonlinear (damped Newton) | `hdiv_demag_tet_nonlinear.py` | **ANALYTIC** sphere fixed point | ✅ `<0.05%` deep-saturation |
+| Nonlinear cross-check | `test_hdiv_vim_newton_vs_radia.py` | Radia MMM/MSC (`MatSatIsoTab`) | ✅ agree `<0.05%` (sphere) |
+| Real BH table | `test_hdiv_vim_newton_table.py` | **ANALYTIC** uniform-sphere | ✅ `<0.2%` |
+| Ellipsoid (D≠1/3) | `test_hdiv_vim_ellipsoid.py` | **ANALYTIC** prolate `N_z` | ✅ 2:1 `0.3%` |
+| Volume Gram (`phi_tet`) | `test_hdiv_vim_volume_gram.py` | Radia (cube nonlinear) | ⚠ 13%→6.2% **agreement** (no analytic truth; cross-method difference, not a verified error) |
+| Scalable (C++ H-matrix + GMRES) | `test_hdiv_vim_newton_scalable.py` | dense reference | ✅ machine precision |
+| Distorted μr-independence | `test_hdiv_vim_solve.py` | iters bounded vs μr 10→1e4 | ✅ golden-locked |
+| **Curved-mesh win** | `hdiv_demag_curved.py` | **ANALYTIC** dipole / volume | ✅ external field flat `−10%` → Curve(3) `−0.26%` (~38× at same ndof) |
 
-Problem B (high-μr conditioning / scaling) is orthogonal and not addressed by the basis;
-H-ILU handles μr≤1e4 (shipped).
+The **demag FACTOR does NOT discriminate the curved win** (a coarse inscribed polyhedron is
+already near-isotropic → `D_z ≈ 1/3` regardless of faceting); the win lives in
+geometry-derived field quantities (external field/flux/force) — see `hdiv_demag_curved.py`'s
+docstring and `test_hdiv_vim_curved.py`'s `test_demag_factor_does_not_discriminate`.
+
+## Golden tests
+
+`tests/feec/test_hdiv_vim_*.py` (full feec suite **65 passing**) — Newton, Newton-vs-Radia,
+Wilton Gram, volume Gram, scalable, ellipsoid, BH table, distorted robustness, curved win.
+
+## Detailed home
+
+The narrative + decisions live in the radia-mcp **`hdiv_vim`** MCP knowledge
+(`overview` / `status` / `nonlinear`); `memory/` holds the Problem-A/B investigation record.
+
+## Honest open items (the productionization to actually retire yano-type)
+
+1. **Curved demag OPERATOR** — `build_demag`/`wilton_surface_block`/`phi_tet` still use FLAT
+   vertices; the accurate curved Gram reuses `src/radia/bem/sibc_hacapk.py::_ss_block_curved_trafo`
+   (Galerkin single-layer, proper singular self/near on curved elements). An **integration,
+   not research** — the curved-sampling primitive (`_trafo_sample`) and the geometry-win
+   proof (vs analytic truth) are already done in `hdiv_demag_curved.py`.
+2. **High-order Gram** — Graglia polynomial-density weakly-singular quadrature; the
+   p-convergence accuracy-per-DOF win over lowest-order yano-type.
+3. **C++ maturity** — Wilton + `phi_tet` + curved in the C++ HACApK charge Gram, the full
+   Newton loop in C++, and a Radia API. This is the big lift that turns the validated
+   prototype into the shipped replacement.
