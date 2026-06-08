@@ -29,10 +29,11 @@ RESULT (2026-06-07, DECISIVE -- H-AMS / coarse-space preconditioning is NOT prom
   construction (field-null).  The remaining near-field-null STAR modes GROW IN NUMBER with N, so
   no FIXED low-dim coarse space keeps up -> AMS-style coarse preconditioning cannot bound the
   N-growth.  => the right tool is a HIERARCHICAL factorization (H-ILU/H-LU) that captures the FULL
-  operator, NOT a coarse-space auxiliary.  For the SYMMETRIC HDiv form, a symmetric H-LDL^T is the
-  cheaper natural variant -- exploiting symmetry in the H-FACTORIZATION is the worthwhile direction,
-  not H-AMS.  (This is NOT a sparse-vs-dense issue: AMS's sparse auxiliary operators exist, but the
-  spectral STRUCTURE AMS exploits is absent.)
+  operator, NOT a coarse-space auxiliary -- not H-AMS.  (This is NOT a sparse-vs-dense issue: AMS's
+  sparse auxiliary operators exist, but the spectral STRUCTURE AMS exploits is absent.)  NOTE: the
+  production HDiv-VIM path is the mu_r-independent ITERATIVE solve (MINRES/CG/Picard); a symmetric
+  H-LDL^T direct-factorization variant was prototyped but REMOVED 2026-06-08 -- N-scalability, if it
+  proves necessary, goes via the kept H-LU/H-ILU or a better preconditioner (the open M0 question).
 """
 import json, os
 import numpy as np

@@ -16,8 +16,8 @@
  *
  * Stores +N (ComputeSystemEntry left at the base default).  The material system
  * A = (1/chi) M_mass - N is applied by the caller (N via this H-matvec + the sparse local
- * M_mass).  The symmetric H-LDL^T factorization of the COMPRESSED H-matrix needs rk-aware
- * symmetric H-arith (cHACApK_harith.c calls that "future work") and is a separate layer.
+ * M_mass).  It is solved iteratively (SolveLinearMaterial Jacobi-PCG / SolveNonlinearPicard); the
+ * operator is mu_r-independent by construction, so no direct factorization is used.
  *
  * Conventions (CLAUDE.md): row-major [target][source]; +N physical sign; HACApK ACA+ only.
  */
