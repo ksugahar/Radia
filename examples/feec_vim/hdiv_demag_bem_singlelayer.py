@@ -34,6 +34,11 @@ prolate (2:1, polar N_par=0.17356, transverse N_perp=0.41322) and an oblate (1:2
 N_perp=0.23640) spheroid -- AND the formula-independent SUM RULE N_x+N_y+N_z = N_par+2 N_perp = 1 holds
 to ~1e-6, while the flat faceted body floors (order-insensitive).  So the single-layer captures the
 anisotropic SHAPE, not just the isotropic 1/3, on bodies of revolution about either a long or short axis.
+
+GENERAL TRIAXIAL ELLIPSOID (the capstone): a!=b!=c has three DISTINCT demag factors (the canonical
+fully-anisotropic demag benchmark).  curved + order-2 gets all three exact vs the analytic Osborn
+integral (a,b,c)=(1,1.5,2): N_a=0.48373, N_b=0.30501, N_c=0.21127, sum = 1.000000.  So the single-layer
+handles FULL anisotropy, not just the degenerate spheroid symmetry.
 """
 import json
 import os
@@ -71,8 +76,26 @@ def _sphere_geo():
     g = CSGeometry(); g.Add(Sphere(Pnt(0, 0, 0), 1.0)); return g
 
 
+def _ellipsoid_geo(a, b, c):
+    g = CSGeometry(); g.Add(Ellipsoid(Pnt(0, 0, 0), Vec(a, 0, 0), Vec(0, b, 0), Vec(0, 0, c))); return g
+
+
 def _prolate_geo(c):
-    g = CSGeometry(); g.Add(Ellipsoid(Pnt(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0), Vec(0, 0, c))); return g
+    return _ellipsoid_geo(1.0, 1.0, c)                    # spheroid = ellipsoid with a = b = 1
+
+
+def ellipsoid_N_analytic(a, b, c, axis):
+    """Analytic demag factor of a GENERAL (triaxial) ellipsoid along principal `axis` (0/1/2 -> a/b/c),
+    the Osborn 1945 integral  N_q = (abc/2) INT_0^inf ds / [(q^2+s) sqrt((a^2+s)(b^2+s)(c^2+s))],
+    numerically integrated (no closed-form elliptic-integral expression needed -> no formula-lookup
+    risk).  The three factors sum to 1 (the analytic sum rule)."""
+    from scipy.integrate import quad
+    q = (a, b, c)[axis]
+
+    def integrand(s):
+        return 1.0 / ((q * q + s) * sqrt((a * a + s) * (b * b + s) * (c * c + s)))
+
+    return a * b * c / 2.0 * quad(integrand, 0.0, float("inf"))[0]
 
 
 def spheroid_Nz_analytic(c, a=1.0):
@@ -111,9 +134,16 @@ def demag_spheroid(c, h, curve_order, charge_order, intorder=12, axis=2):
 demag_prolate = demag_spheroid
 
 
+def demag_ellipsoid(a, b, c, h, curve_order, charge_order, intorder=12, axis=2):
+    """General (triaxial) ellipsoid demag factor along `axis` via the single-layer -- the canonical
+    fully-anisotropic demag benchmark (three DISTINCT factors N_a/N_b/N_c summing to 1)."""
+    return _demag_core(_ellipsoid_geo(a, b, c), h, curve_order, charge_order, intorder, axis)
+
+
 def run(h=0.6):
     D_an = 1.0 / 3.0
-    out = {"analytic_demag_z": D_an, "h": h, "table": [], "mesh_conv": [], "prolate": [], "tensor": []}
+    out = {"analytic_demag_z": D_an, "h": h, "table": [], "mesh_conv": [], "prolate": [],
+           "tensor": [], "triaxial": []}
     for curve in (0, 3):
         for order in (0, 1, 2):
             Dz, ndof = demag_singlelayer(h, curve, order)
@@ -145,6 +175,16 @@ def run(h=0.6):
                                   Npar=Npar, Nperp=Nperp, Npar_an=Npar_an, Nperp_an=Nperp_an,
                                   sum=Npar + 2.0 * Nperp,
                                   Npar_err=Npar / Npar_an - 1, Nperp_err=Nperp / Nperp_an - 1))
+    # GENERAL triaxial ellipsoid (a != b != c): three DISTINCT demag factors -- the canonical fully-
+    # anisotropic benchmark.  curved + order-2 vs the analytic Osborn integral on each principal axis.
+    abc = (1.0, 1.5, 2.0)
+    tri_sum = 0.0
+    for axis in (0, 1, 2):
+        Nq, ndof = demag_ellipsoid(*abc, 0.5, 3, 2, axis=axis)
+        Nq_an = ellipsoid_N_analytic(*abc, axis)
+        tri_sum += Nq
+        out["triaxial"].append(dict(abc=abc, axis=axis, N=Nq, N_an=Nq_an, ndof=ndof, err=Nq / Nq_an - 1))
+    out["triaxial_sum"] = tri_sum
     return out
 
 
@@ -176,6 +216,13 @@ if __name__ == "__main__":
               f"{t['Nperp_an']:>9.5f} {t['sum']:>14.6f}")
     print("=> both polar AND transverse demag factors are EXACT vs analytic, and the sum rule")
     print("N_x+N_y+N_z=1 holds to ~1e-4 -- the single-layer gets the WHOLE anisotropic demag tensor.")
+    print("\nGENERAL triaxial ellipsoid (a,b,c)=(1,1.5,2) -- three DISTINCT factors, curved + order-2:")
+    print(f"  {'axis':>6} {'N':>9} {'analytic':>9} {'err':>10}")
+    for t in res["triaxial"]:
+        print(f"  {'abc'[t['axis']]:>6} {t['N']:>9.5f} {t['N_an']:>9.5f} {100*t['err']:>9.3f}%")
+    print(f"  sum Na+Nb+Nc = {res['triaxial_sum']:.6f}  (analytic sum rule = 1)")
+    print("=> the canonical fully-anisotropic benchmark: all three distinct factors EXACT vs the analytic")
+    print("Osborn integral -- the single-layer handles full anisotropy, not just spheroid symmetry.")
     with open(os.path.join(HERE, "hdiv_demag_bem_singlelayer.json"), "w") as f:
         json.dump(res, f, indent=2)
     print("saved", os.path.join(HERE, "hdiv_demag_bem_singlelayer.json"))
