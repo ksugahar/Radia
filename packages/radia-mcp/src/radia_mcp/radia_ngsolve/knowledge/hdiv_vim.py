@@ -371,25 +371,37 @@ mesh.Curve(3) gives area 12.5683 (-0.015%) / volume 4.1897 (+0.02%) at the SAME 
 faceting error VANISHES to ~0.02% at no DOF cost -- exact geometry.  For curved bodies (magnets/coils/
 poles = most of them) this is a large accuracy-per-DOF advantage, ORTHOGONAL to the polynomial
 high-order win, and unavailable to flat yano-type (which needs many more elements to resolve a curve).
-FOUNDATION confirmed (HDiv + mesh.Curve assembles; B and M_mass are NGSolve curved-aware).  TO REALIZE
-the curved DEMAG accuracy the GRAM must use the CURVED geometry (NGSolve-mapped quadrature points) --
-build_demag / wilton_surface_block / phi_tet currently use FLAT vertices.  That curved Gram is the
-build; arguably HIGHER value than polynomial high-order since curved bodies are ubiquitous.
+FOUNDATION confirmed (HDiv + mesh.Curve assembles; B and M_mass are NGSolve curved-aware).
 
-CURVED DEMAG BUILD -- FEASIBLE + DE-RISKED (the machinery already exists in the repo):
-  - GetTrafo API (working pattern from src/radia/bem/sibc_hacapk.py::_trafo_eval): map a ref-triangle
-    rule through the curved element --
-        ir = IntegrationRule(points=[(xi,eta,0),...], weights=[...]);  trafo = mesh.GetTrafo(ElementId(BND,i))
-        for ip in ir: mip = trafo(ip); mip.point[0:3] (curved pos); mip.measure (surface |J|);
-                      jac = np.asarray(mip.jacobi) (3x2); n_hat = cross(jac[:,0],jac[:,1]) normalized.
-    (Beware: it is mip.JACOBI and mip.MEASURE, not .jacobian/.weight.)
-  - The CURVED surface Coulomb Gram already exists: src/radia/bem/sibc_hacapk.py::_ss_block_curved_trafo
-    builds the Galerkin SINGLE-LAYER (1/4pi/r) block on curved geometry with the proper singular
-    self/near treatment.  The HDiv-VIM surface demag IS a single-layer Coulomb of the surface charge
-    sigma = M.n, so this is directly reusable -> the curved demag is an INTEGRATION, not research.
-  - VALIDATE vs the sphere ANALYTIC 1/3 (NOT Radia): coarse curved sphere demag -> 1/3 where the flat
-    coarse mesh is off (the geometry-exactness win, measured against TRUTH).  Verified geometry already:
-    coarse sphere area 11.85(-5.7%)->12.5683(-0.015%) with mesh.Curve(3) at the same ndof.
+CURVED SAMPLING BUILT + the win MEASURED vs TRUTH (2026-06-08, examples/feec_vim/hdiv_demag_curved.py,
+golden tests/feec/test_hdiv_vim_curved.py):
+  - Reusable primitive _trafo_sample(mesh, i_bnd, xi, eta, center) -> curved position / surface |J| /
+    OUTWARD normal-z, via mesh.GetTrafo (same pattern as bem/sibc_hacapk.py::_trafo_eval; works on a
+    linear mesh = flat AND a Curve(p) mesh = curved -- the SAME code, only mesh.Curve toggled, so a
+    flat-vs-curved A/B at FIXED ndof isolates the geometry).  (Beware: it is mip.JACOBI / mip.MEASURE,
+    NOT .jacobian/.weight -- the GetTrafo API gotcha that cost two probe iterations.)
+  - VERIFY-FIRST FINDING that CORRECTS the earlier plan ("curved sphere demag -> 1/3"): the sphere demag
+    FACTOR does NOT discriminate the curved win.  A coarse inscribed polyhedron is already near-ISOTROPIC,
+    so its demag RATIO is ~1/3 regardless of faceting (flat Wilton already 1/3 to 0.15%).  nsub sweep at
+    h=0.8: FLAT -1.68%->-0.39% (nsub 4->12), curved -2.87%->-1.34% -- flat is even "closer" to 1/3; both
+    are quadrature-limited near-isotropic ratios, NOT a geometry test.  Do NOT use the demag factor to
+    judge curved geometry (and do NOT mistake its ~2-3% sub-point-quadrature offset for a curved bug --
+    the golden test locks this non-result).
+  - THE DISCRIMINATOR (where the win IS real, vs ANALYTIC truth): the EXTERNAL field of a uniform-M
+    sphere = the EXACT point dipole phi=(1/4pi)V cos(theta)/r^2.  It is a surface-charge integral at an
+    EXTERNAL point -> NO singular quadrature -> the ONLY error is the geometry.  MEASURED at (0,0,2)
+    [exact = 1/12]: h=0.8 FLAT -10.00%, Curve(3) -0.26% at the SAME ndof (= ~38x); h=0.5 FLAT -8.28%,
+    curved -0.25%.  The flat error is the VOLUME error (V -10.25% flat -> +0.02% curved) inherited
+    directly by the dipole moment m = M V.  THIS is the curved win, against truth.
+  - So the curved win lives in GEOMETRY-DERIVED quantities (volume, normals -> external field, flux,
+    force) and -- the real payoff -- p-CONVERGENCE (high-order basis on EXACT geometry converges past
+    the flat faceting floor), NOT in the near-isotropic demag factor.
+  - STILL TO BUILD for the curved demag OPERATOR (N on curved geometry): build_demag / wilton_surface_block
+    / phi_tet still use FLAT vertices.  The accurate curved Gram reuses bem/sibc_hacapk.py::
+    _ss_block_curved_trafo (Galerkin single-layer with proper singular self/near on curved elements) --
+    an INTEGRATION, not research.  The external-field probe already proves the geometry-exactness win
+    against truth; the curved operator N is the productionization step (with high-order, the compounding
+    accuracy-per-DOF win over flat yano-type).
 
 ## REFERENCE HONESTY for the accuracy numbers (verify-first, 2026-06-07)
 What the quoted accuracies are measured against, precisely:
