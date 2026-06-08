@@ -74,7 +74,7 @@ solver but NOT ground truth on a coarse mesh):
 | Scalable (C++ H-matrix + GMRES) | `test_hdiv_vim_newton_scalable.py` | dense reference | ✅ machine precision |
 | Distorted μr-independence | `test_hdiv_vim_solve.py` | iters bounded vs μr 10→1e4 | ✅ golden-locked |
 | **Curved-mesh win** (elementary) | `hdiv_demag_curved.py` | **ANALYTIC** dipole / volume | ✅ external field flat `−10%` → Curve(3) `−0.26%` (~38× at same ndof) |
-| **Curved + high-order demag** (production) | `hdiv_demag_bem_singlelayer.py` | **ANALYTIC** 1/3 | ✅ flat `+0.25%` (floored) → curved + order-2 `~1e-4%` (exact); Gram = `ngsolve.bem` single-layer |
+| **Curved + high-order demag** (production) | `hdiv_demag_bem_singlelayer.py` | **ANALYTIC** sphere 1/3 + prolate `N_z≈0.1736` | ✅ flat floored → curved + order-2 EXACT (sphere `~1e-4%`, 2:1 prolate `~1e-3%`); Gram = `ngsolve.bem` single-layer |
 
 **Which quantity discriminates the curved win, and why it matters:** with the *crude
 sub-point* Gram (`hdiv_demag_curved.py`) the demag FACTOR does NOT cleanly discriminate — its
@@ -87,9 +87,9 @@ non-discrimination to "near-isotropy"; the verify-first single-layer result corr
 
 ## Golden tests
 
-`tests/feec/test_hdiv_vim_*.py` (full feec suite **68 passing**) — Newton, Newton-vs-Radia,
+`tests/feec/test_hdiv_vim_*.py` (full feec suite **69 passing**) — Newton, Newton-vs-Radia,
 Wilton Gram, volume Gram, scalable, ellipsoid, BH table, distorted robustness, curved win
-(elementary), curved + high-order demag exact (`ngsolve.bem` single-layer).
+(elementary), curved + high-order demag exact on sphere AND prolate (`ngsolve.bem` single-layer).
 
 ## Detailed home
 
