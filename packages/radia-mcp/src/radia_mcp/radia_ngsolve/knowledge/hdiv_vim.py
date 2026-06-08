@@ -326,6 +326,23 @@ tests/feec/test_hdiv_vim_newton_scalable.py.  The heavy cost (the Gram apply) is
 (O(N log N), established for the linear case in production #1/#2); the Newton outer loop is Python (an
 O(N)-per-iteration overhead dominated by the C++ H-matvec).
 
+## VOLUME (tet) Gram -- DONE (#B, closes the nonlinear sharp-body residual, 2026-06-07, golden-locked)
+The surface Wilton Gram makes the demag FACTOR exact (uniform M = pure surface charge), but the
+NONLINEAR sharp body (cube/C-yoke) left a residual from the VOLUME-involving (cell-cell, cell-face)
+Gram blocks (div M != 0 -> volume charge).  The analytic tet Newtonian potential closes it WITHOUT new
+singular quadrature, by reusing the Wilton triangle potential via the divergence theorem:
+
+    phi_tet(V, P) = INT_tet 1/|P-r'| dV' = (1/2) sum_{4 faces} d_face * tri_potential(face, P)
+                    (nabla'^2 R = 2/R ; d_face = (r'-P).n_hat const on a flat face)
+
+build_demag(analytic_gram=True) (and solve_nonlinear_newton(analytic_gram=True)) builds the FULL
+analytic charge Gram (tet.analytic_charge_gram: cell sources via phi_tet, face sources via
+tri_potential, outer tet/Dunavant quadrature) -- every block exact, no monopole/near-correction.
+RESULT: cube nonlinear vs Radia 13% -> 6.2% (H0=2e5), 5.1% -> 1.5% (H0=5e5); linear demag stays exact
+(sphere 0.3329, cube 0.3335).  Substantially closes the gap (the residual ~6% at the stiff moderate
+KNEE is the coarse mesh + outer-quadrature order + knee stiffness, not the Gram).  phi_tet verified vs
+fine volume quadrature; golden tests/feec/test_hdiv_vim_volume_gram.py.
+
 ## HIGH-ORDER VIM -- SCOPED (the speed-win task; build not started)
 The FEEC structure is ORDER-AGNOSTIC: HDiv(order>=1) assembles, the charge map B = (rho=-div M tested
 on L2(p), sigma=M.n tested on SurfaceL2(p)) builds, and loops = ker(B) are FIELD-NULL BY CONSTRUCTION
@@ -340,10 +357,10 @@ accuracy-per-DOF -> for a target accuracy, far fewer DOFs than lowest-order => t
 over lowest-order yano-type (which cannot go high-order).  Major build; verify-first scope confirmed
 2026-06-07.
 
-## NEXT (open): higher-order charge Gram (high-order build); analytic VOLUME (tet) Gram; Wilton-in-C++
+## NEXT (open): higher-order charge Gram (high-order build); Wilton/phi_tet-in-C++
 - HIGH-ORDER charge Gram (the speed-win build above): polynomial-density singular quadrature.
-- analytic VOLUME Gram (uniform-tet potential: cell-cell + cell-face) -> closes the residual nonlinear
-  sharp-body non-uniform gap (the surface Wilton is done; the C-yoke ~4% / cube ~8.7% residual).
+- analytic VOLUME Gram: DONE (#B above) -- analytic phi_tet, cube residual 13%->6.2%; the residual ~6%
+  at the moderate knee is coarse mesh + outer-quadrature order, refine if a tighter cube is needed.
 - the C++ Gram H-matrix is MONOPOLE far field, so the scalable path matches the dense MONOPOLE+near-corr
   Newton, NOT the dense Wilton path; putting the Wilton surface integral into the C++ near-field
   correction gives scalable + Wilton-accurate together.
