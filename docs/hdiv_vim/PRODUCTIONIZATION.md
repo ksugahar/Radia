@@ -116,6 +116,30 @@ now requests `skip_dense_gram=True` and its two M_mass uses are sparse-safe (`mu
 Bit-for-bit identical to the dense reference (sparse M_mass == dense, Rayleigh denom to machine precision);
 the dense REFERENCE path (small-N `demag_factor` + dense Newton) is unchanged. feec 88/88. With this, the
 scalable Newton's BUILD is genuinely O(N log N) analytic-Gram + sparse FE assembly — no dense N² anywhere.
+
+**HONEST CORRECTION (2026-06-09): the scalable nonlinear Newton is NOT yet mesh-robust — the "5–6 iters →
+clear win on SOLVE" above held only at COARSE mesh.** The first real C-yoke wall-clock head-to-head
+(`examples/feec_vim/hdiv_cyoke_headtohead.py`) measured the SOLVE degrading sharply with refinement:
+iters 6 (h=0.008) → 27 (h=0.006) → 37 (h=0.005), with Mz appearing to "drift" 589k → 509k. A full
+instrumented diagnosis (per-iter ‖F‖/λ/Mavg trajectory) found:
+  1. **The method + tangent are CORRECT** — once in the basin the Newton converges QUADRATICALLY
+     (relF 0.035 → 6e-8, λ=1.0) to the right Mz=587566 (matches the mesh trend); verified at h=0.006.
+  2. **The "drift" was a FALSE-CONVERGENCE BUG** — the old break test `|M_now-M_prev|<1e-8` (Mavg
+     stagnation) fires during the slow globalization phase while relF is still ~0.1, silently returning
+     an under-converged M. **Fix A (committed): break on relF=‖F‖/‖M_mass m‖ < newton_tol, and RAISE
+     if maxit is hit (fail loud, CLAUDE.md "No Fallbacks") — never silently return.** golden
+     `tests/feec/test_hdiv_vim_newton_scalable.py::test_scalable_newton_fails_loud_*`.
+  3. **The slowness (27 vs 5–6 iters) is the INEFFECTIVE WARMSTART** — the +N MINRES
+     (`A+ = (1/chi)M_mass + N`) NEVER converges (`info=2000`) because the field-null loops (ker B) are
+     near-null modes (eig ~1/chi), so cond(A+) ~ chi·‖N‖. Newton then starts at relF≈1.4 and needs ~22
+     globalization steps before the quadratic basin. This is **Fix B (NOT yet done): reformulate the
+     inner solve on the −N mu_r-INDEPENDENT material system (the C++ `SolveMaterialMINRES`) and/or a
+     loop-space (Calderón) preconditioner.** Confirmed NOT the near/far split (all-analytic gives the
+     same behavior) and NOT a GMRES bug (the Newton step's GMRES converges, `info=0`).
+
+So the corrected status: **BUILD is scalable + a clear win; SOLVE converges to the CORRECT answer (Fix A)
+but its iteration count is NOT yet mesh-independent (Fix B pending).** The head-to-head JSON will be
+regenerated only after Fix B, so it never reports the buggy false-convergence numbers.
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
