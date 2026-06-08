@@ -128,3 +128,32 @@ def test_minres_iters_bounded_vs_mu_r():
     lo, hi = min(iters.values()), max(iters.values())
     assert hi < 200, f"MINRES iteration count too high: {iters}"
     assert hi <= 4 * lo + 30, f"iteration count not mu_r-bounded (blows up with mu_r): {iters}"
+
+
+def test_minres_iters_bounded_vs_mu_r_distorted():
+    """The mu_r-INDEPENDENCE SURVIVES MESH DISTORTION -- the practical payoff of the HDiv formulation.
+
+    On a DISTORTED grid (distort=0.18, accurate trilinear Gram) the preconditioned-MINRES iteration
+    count stays BOUNDED as mu_r ranges 10 -> 1e4 (all real soft iron).  This works because the loops are
+    field-null BY CONSTRUCTION on ANY mesh (N = B^T G B, so any ker(B) loop gives N.loop = 0 exactly,
+    affine OR distorted) -- distortion does NOT create a growing near-null space.  This is the de-Rham
+    HDiv advantage over the yano-type combinatorial +/-1 loops, which are field-null ONLY on affine
+    hexes and carry field on distorted ones (the de-Rham defect the hand-crafted Yano elements / the
+    shipped MSC's installCycle retrofit have to work around).  Here the iters even DECREASE with mu_r
+    (the loops, which would otherwise blow up, sit exactly at field-null)."""
+    nx = ny = nz = 4
+    H = _rp._HDivVimHMatrix(nx, ny, nz, 4, 0.18, 1e-6, 32, 2.0)   # nsub=4 accurate Gram, distort=0.18
+    nf = H.ndof()
+    rng = np.random.default_rng(3)
+    b = rng.standard_normal(nf)
+    iters = {}
+    for mu_r in (1e1, 1e2, 1e3, 1e4):
+        inv_chi = 1.0 / (mu_r - 1.0)
+        A, Minv = _op(H, inv_chi)
+        c = _Counter()
+        minres(A, b, M=Minv, callback=c, maxiter=5000, **{_TOLKW: 1e-8})
+        iters[mu_r] = c.n
+    print(f"  distorted MINRES iters vs mu_r: {iters}")
+    assert max(iters.values()) < 200, f"distorted MINRES iters too high: {iters}"
+    # high mu_r must not blow up the count relative to low mu_r (the mu_r-independence statement)
+    assert iters[1e4] <= 2.0 * iters[1e1], f"distorted iters blow up with mu_r: {iters}"
