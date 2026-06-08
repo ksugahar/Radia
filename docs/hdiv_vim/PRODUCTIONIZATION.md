@@ -53,9 +53,23 @@ production-representative numbers). This sizes the C++ lift and fixes the "done"
   into `src/radia/` with a clean entry (e.g. `rad.hdiv_demag_solve(mesh, materials, source)`), driving
   the existing C++ `_ChargeGramHMatrix` + the Newton. Golden-test against the examples' validated
   numbers. Makes HDiv-VIM a usable Radia feature (first shippable step).
-- **M2 — accurate Gram in the C++ scalable path.** Move the Wilton surface + `phi_tet` volume Gram into
-  the C++ `_ChargeGramHMatrix` entry function (currently monopole in C++, accurate Gram is a Python
-  overlay). The scalable H-matrix path must be as accurate as the dense Python reference.
+- **M2 — accurate Gram in the C++ scalable path** *(C++ build task; concrete spec, 2026-06-08).* Today
+  `RadHACApKChargeGram` holds only `(centroids, measures, self_energy)` and its off-diagonal entry
+  (`GetInteractionMatrixElement`, rad_hacapk_hdiv.cpp:107) is **pure monopole**
+  `m_meas[a]·m_meas[b]·(1/4π)/r` (centroid distance); the accurate Wilton/`phi_tet` Gram lives only in
+  the Python `build_demag`. Steps:
+  1. Thread **element vertices + per-charge type (surface tri / volume tet)** into the
+     `RadHACApKChargeGram` ctor + the `_ChargeGramHMatrix` pybind + the Python caller (the scalable
+     path in `_nonlinear.solve_nonlinear_newton_scalable`).
+  2. Port `tri_potential` (Wilton: the `log`/`atan2` exact triangle potential) + `phi_tet` (the
+     divergence-theorem tet sum reusing `tri_potential`) to C++ (rad_hdiv_vim.cpp or a new TU).
+  3. In `GetInteractionMatrixElement(a,b)` use the analytic Wilton/`phi_tet` for **near** pairs (monopole
+     stays for **far** — ACA-compressed); keep the validated diagonal self-energy.
+  4. Rebuild (`Build.ps1`) + a new golden: the C++ H-matrix Gram demag matches the dense Python
+     `build_demag(analytic_gram=True)` reference (and the scalable nonlinear C-yoke matches the dense one
+     it currently under-resolves — memory: "scalable path = monopole accuracy").
+  NOTE: a C++ port + rebuild + verify — execute with clean context (not at the tail of a long session)
+  to protect a working build.
 - **M3 — nonlinear Newton in C++.** The per-cell tensor-tangent damped Newton loop (or its hot parts)
   in C++. The tangent solve is **iterative** (GMRES, matrix-free with the H-matrix), as in the scalable
   prototype — **no direct factorization**. Removes the Python per-iteration overhead (the main speed
