@@ -123,6 +123,23 @@ public:
         double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
         double tol, int maxit, int& iters_out);
 
+    // The mu_r-INDEPENDENT production MATERIAL solve in C++: Jacobi-preconditioned MINRES for the
+    // SYMMETRIC INDEFINITE system A m = rhs, A = inv_chi*M_mass - B^T G B (eigenvalues vs M_mass =
+    // inv_chi - demag_factor, demag_factor in [0,1] -> indefinite -> MINRES, not CG).  G applied as
+    // the analytic charge-Gram H-matvec.  This is the loop-field-null payoff: the iteration count is
+    // mu_r-INDEPENDENT (golden test_hdiv_vim_solve.py: ~80 flat, even decreasing on distorted meshes),
+    // unlike the +N Picard CG (SolveLinearMaterial) whose near-null loop modes ill-condition at high
+    // mu_r.  TaskManager: wrapped in ngcore::RegionTaskManager so the HACApK H-matvec runs parallel
+    // (multi-thread) under the caller's `with TaskManager():` (or stands up its own pool); the O(N)
+    // vector ops are serial (negligible vs the O(N log N) matvec).  prec = the SPD Jacobi
+    // preconditioner (length n_face, e.g. |inv_chi*M_mass_diag - N_diag|).
+    std::vector<double> SolveMaterialMINRES(
+        const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+        const std::vector<double>& B_data, int n_face,
+        const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+        double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
+        double tol, int maxit, int& iters_out);
+
     // M3 (the NONLINEAR solve in C++): scalar-chi Picard for the isotropic nonlinear demag.
     // Each Picard step is a SolveLinearMaterial solve of ((1/chi) M_mass + B^T G B) m = H0*(M_mass mu),
     // then chi <- 0.5 chi + 0.5*chi_sec(|H|) with the closed-form saturating curve

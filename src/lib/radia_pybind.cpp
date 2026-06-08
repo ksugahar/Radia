@@ -2847,6 +2847,24 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("rhs"), py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
              "M3: solve the SPD HDiv-VIM linear material system ((1/chi)M_mass + B^T G B) m = rhs by "
              "Jacobi-preconditioned CG (G applied as the charge-Gram H-matvec). Returns {m, iters}.")
+        .def("solve_material_minres",
+             [](RadHACApKChargeGram& s,
+                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
+                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                double inv_chi, std::vector<double> prec, std::vector<double> rhs,
+                double tol, int maxit) {
+                 int iters = 0;
+                 std::vector<double> m = s.SolveMaterialMINRES(B_indptr, B_indices, B_data, n_face,
+                                                               mI, mJ, mV, inv_chi, prec, rhs,
+                                                               tol, maxit, iters);
+                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("prec"),
+             py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000,
+             "mu_r-INDEPENDENT material solve: Jacobi-preconditioned MINRES for the SYMMETRIC INDEFINITE "
+             "A m = rhs, A = inv_chi*M_mass - B^T G B (G via the analytic charge-Gram H-matvec, "
+             "HACApK-parallel under ngcore::RegionTaskManager). Returns {m, iters}.")
         .def("solve_nonlinear_picard",
              [](RadHACApKChargeGram& s,
                 std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
