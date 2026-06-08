@@ -477,12 +477,18 @@ cohomology bookkeeping.  VERIFIED (golden test_hdiv_vim_symmetry_loops.py): a sp
 / 1/8 -> the loop count adapts AUTOMATICALLY (58 / 54 / 18 / 6) and the loop field-null residual
 ||N.loop||/||N|| ~ 4e-16 (machine zero) on EVERY reduced mesh.  => the "loop-jokyo (loop removal) is
 metsuky-doi / mendokusai" problem is ELIMINATED -- ker(B) handles the cut topology for free.
-SCOPE (honest 2-part split, do NOT conflate): (1) the LOOP machinery on cut meshes = automatic (verified
-here).  (2) the demag VALUE of a symmetry MODEL additionally needs the symmetry BC on the HDiv space
-(NGSolve HDiv dirichlet: M.n=0 on a field-PARALLEL mirror, M.n free on a field-PERPENDICULAR mirror) PLUS
-the IMAGE-augmented Gram (image interactions, like Radia's IMA) -- conceptually straightforward (add the
-image kernels, or mesh the symmetry planes and apply BC) but NOT yet built; the probe's demag is the
-octant-as-standalone (no images), so "1/8 model demag = full demag" awaits the image Gram.
+SCOPE (honest 2-part split): (1) the LOOP machinery on cut meshes = automatic (verified here).  (2) the
+demag VALUE of a symmetry MODEL = the IMAGE method -- NOW BUILT + verified (examples/feec_vim/
+hdiv_demag_symmetry_image.py, golden test_hdiv_vim_symmetry_image.py).  Only the REAL surface (spherical
+cap) carries sigma = M.n = n_z; the flat cut faces are symmetry planes (no real charge).  Reflecting the
+cap charge over the reduction planes -- sign = (-1)^(#z-reflections), since sigma = n_z flips under a
+z-mirror (the IMA sign rule: field-PARALLEL mirror x=0/y=0 keeps sign, field-PERPENDICULAR z=0 flips it)
+-- reconstructs the full sphere's sigma = cos(theta).  RESULT (M=z_hat, vs the full-sphere demag from the
+same crude Gram): 1/2 +0.08%, 1/4 +0.11%, 1/8 -0.32% -- i.e. the reduced models reproduce the FULL demag
+from ~1/2, 1/4, 1/8 the surface DOF (108 / 52 / 20 cap-tris vs the full 192).  So 1/4 and 1/8 models are
+SUPPORTED: loops automatic (ker B) + demag via the image method, no hand-crafted loop-star.  (Production
+note: this uses the elementary sub-point Gram; the ngsolve.bem single-layer with image kernels is the
+high-order/curved/scalable production version of the same image method.)
 
 ## NON-UNIFORM NONLINEAR needs analytic_gram; C-YOKE VERIFIED vs Radia (2026-06-08, the 1/8-gate audit)
 The gate before symmetry models: confirm nonlinear + C-yoke + distorted-mesh are solid.  Outcome:
