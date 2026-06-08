@@ -129,5 +129,19 @@ struct ChargeMapCSC {
 };
 void BuildChargeMapCSC(const Mesh& m, ChargeMapCSC& csc);
 
+//-------------------------------------------------------------------------
+// M2: analytic charge-Gram potentials (the accurate Wilton surface + phi_tet volume integrals,
+// for the C++ scalable ChargeGram H-matrix entry; reused from the dense Python reference).
+//-------------------------------------------------------------------------
+
+/* Exact INT_T 1/|r-r'| dA' over a flat triangle (V = 3 verts, [3][3]) at obs r -- the Wilton/Graglia
+ * analytic triangle potential (pure 1/r integral, NO 1/4pi).  Matches the dense Python
+ * radia.hdiv_vim._core.tri_potential to ~1e-12 and rad_poly_analytical's I_scalar Wilton edge formula. */
+double TriPotential(const double V[3][3], const double r[3]);
+
+/* Newtonian potential INT_tet 1/|P-r'| dV' of a uniform tetrahedron (V = 4 verts, [4][3]) at P, via the
+ * divergence theorem reusing TriPotential.  Matches radia.hdiv_vim._core.phi_tet. */
+double PhiTet(const double V[4][3], const double P[3]);
+
 } // namespace rad_hdiv
 #endif

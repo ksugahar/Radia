@@ -11,6 +11,75 @@ static const double INV_FOUR_PI = 1.0 / (4.0 * PI);
 static const double C_CUBE = 1.88231;   // <1/r>_unitcube  (cube self-energy constant)
 static const double C_SQ   = 2.97321;   // <1/r>_unitsquare (square self-energy constant)
 
+// ---- analytic charge-Gram potentials (M2: the Wilton surface + phi_tet volume integrals) ----
+// Small raw-double3 vector helpers (local; the file's Vec3 is std::array<double,3>).
+static inline double v3dot(const double a[3], const double b[3]) { return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+static inline void   v3cross(const double a[3], const double b[3], double o[3])
+{ o[0]=a[1]*b[2]-a[2]*b[1]; o[1]=a[2]*b[0]-a[0]*b[2]; o[2]=a[0]*b[1]-a[1]*b[0]; }
+static inline double v3nrm(const double a[3]) { return std::sqrt(v3dot(a,a)); }
+
+// Exact INT_T 1/|r-r'| dA' over a flat triangle (V0,V1,V2) at obs r -- the Wilton/Graglia analytic
+// triangle potential (Wilton-Rao-Glisson, IEEE TAP 32(3):276, 1984).  Pure 1/r integral (NO 1/4pi).
+// Port of examples reference radia.hdiv_vim._core.tri_potential (scalar form); same edge formula as
+// rad_poly_analytical.cpp::RadScalarPotentialFromTriangleFaceGlobal's I_scalar.
+double TriPotential(const double V[3][3], const double r[3])
+{
+    double e1[3], e2[3], n[3];
+    for (int k=0;k<3;k++){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
+    v3cross(e1,e2,n); double nl=v3nrm(n); if (nl<1e-300) return 0.0;
+    for (int k=0;k<3;k++) n[k]/=nl;
+    double rmv0[3]; for (int k=0;k<3;k++) rmv0[k]=r[k]-V[0][k];
+    double d = v3dot(rmv0,n);                                   // signed height above the plane
+    double p[3]; for (int k=0;k<3;k++) p[k]=r[k]-d*n[k];         // projection onto the plane
+    double ad = std::fabs(d);
+    double I = 0.0;
+    for (int i=0;i<3;i++){
+        const double* a = V[i];
+        const double* b = V[(i+1)%3];
+        double lh[3]; for (int k=0;k<3;k++) lh[k]=b[k]-a[k];
+        double ll=v3nrm(lh); if (ll<1e-300) continue; for (int k=0;k<3;k++) lh[k]/=ll;
+        double uh[3]; v3cross(lh,n,uh);                         // in-plane unit normal to the edge
+        double ap[3]; for (int k=0;k<3;k++) ap[k]=a[k]-p[k];
+        double bp[3]; for (int k=0;k<3;k++) bp[k]=b[k]-p[k];
+        double P0 = v3dot(ap,uh);
+        double sm = v3dot(ap,lh), sp = v3dot(bp,lh);
+        double ra[3], rb[3]; for (int k=0;k<3;k++){ ra[k]=r[k]-a[k]; rb[k]=r[k]-b[k]; }
+        double Rm = v3nrm(ra), Rp = v3nrm(rb);
+        double R0sq = P0*P0 + d*d;
+        double dm = Rm+sm, dp = Rp+sp;
+        double f = (dp>1e-300 && dm>1e-300) ? std::log(dp/dm) : 0.0;
+        double beta = std::atan2(P0*sp, R0sq+ad*Rp) - std::atan2(P0*sm, R0sq+ad*Rm);
+        I += P0*f - ad*beta;
+    }
+    return I;
+}
+
+// Newtonian potential INT_tet 1/|P-r'| dV' of a uniform tetrahedron (4 verts) at P, via the divergence
+// theorem (nabla'^2 R = 2/R): INT_V 1/R dV = (1/2) sum_{4 faces} d_face * INT_face 1/R dA', reusing
+// TriPotential.  Port of radia.hdiv_vim._core.phi_tet.
+double PhiTet(const double V[4][3], const double P[3])
+{
+    double cen[3]={0,0,0};
+    for (int i=0;i<4;i++) for (int k=0;k<3;k++) cen[k]+=V[i][k]*0.25;
+    static const int FACES[4][3] = {{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    double tot=0.0;
+    for (int fi=0;fi<4;fi++){
+        double Fv[3][3];
+        for (int j=0;j<3;j++) for (int k=0;k<3;k++) Fv[j][k]=V[FACES[fi][j]][k];
+        double e1[3], e2[3], nrm[3];
+        for (int k=0;k<3;k++){ e1[k]=Fv[1][k]-Fv[0][k]; e2[k]=Fv[2][k]-Fv[0][k]; }
+        v3cross(e1,e2,nrm); double nl=v3nrm(nrm); if (nl<1e-300) continue;
+        for (int k=0;k<3;k++) nrm[k]/=nl;
+        double fc[3]={0,0,0}; for (int j=0;j<3;j++) for (int k=0;k<3;k++) fc[k]+=Fv[j][k]/3.0;
+        double ov[3]; for (int k=0;k<3;k++) ov[k]=fc[k]-cen[k];
+        if (v3dot(ov,nrm)<0) for (int k=0;k<3;k++) nrm[k]=-nrm[k];   // outward
+        double fv0mP[3]; for (int k=0;k<3;k++) fv0mP[k]=Fv[0][k]-P[k];
+        double dd = v3dot(fv0mP,nrm);
+        tot += dd * TriPotential(Fv, P);
+    }
+    return 0.5*tot;
+}
+
 // ---- trilinear hex geometry (NGSolve vertex order v0(000)..v7(110) in (x,y,z) local) ----
 static void hex_shape(double xi, double eta, double ze, double N[8], double dN[8][3])
 {
