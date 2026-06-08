@@ -76,3 +76,18 @@ def test_spheroid_full_tensor_and_sum_rule():
         assert abs(Npar / Npar_an - 1) < 1e-3, f"c={c}: polar N_par {Npar:.5f} vs analytic {Npar_an:.5f}"
         assert abs(Nperp / Nperp_an - 1) < 1e-3, f"c={c}: transverse N_perp {Nperp:.5f} vs {Nperp_an:.5f}"
         assert abs(Npar + 2.0 * Nperp - 1.0) < 2e-3, f"c={c}: sum rule N_par+2N_perp = {Npar+2*Nperp:.5f} != 1"
+
+
+def test_triaxial_ellipsoid_full_anisotropy():
+    """The canonical fully-anisotropic benchmark: a general triaxial ellipsoid (a!=b!=c) has three
+    DISTINCT demag factors.  curved + order-2 single-layer gets each exact vs the analytic Osborn
+    integral, and the three sum to 1 -- confirming the operator handles full anisotropy, not just the
+    degenerate spheroid symmetry."""
+    a, b, c = 1.0, 1.5, 2.0
+    tot = 0.0
+    for axis in (0, 1, 2):
+        Nq, _ = bem.demag_ellipsoid(a, b, c, 0.5, 3, 2, axis=axis)
+        Nq_an = bem.ellipsoid_N_analytic(a, b, c, axis)
+        assert abs(Nq / Nq_an - 1) < 2e-3, f"axis {axis}: N {Nq:.5f} vs analytic {Nq_an:.5f}"
+        tot += Nq
+    assert abs(tot - 1.0) < 2e-3, f"triaxial sum rule Na+Nb+Nc = {tot:.5f} != 1"
