@@ -7,7 +7,8 @@
  * The magnetisation M lives in lowest-order HDiv (RT0): one signed normal-flux DOF per face.
  * Loops = ker(B) (charge-free fields) are FIELD-NULL BY CONSTRUCTION: B.loop = 0 => N.loop =
  * B^T G (B loop) = 0 for ANY G.  The material system is A = (1/chi) M_mass - N (symmetric
- * INDEFINITE), solved by MINRES (symmetric Krylov) and the future symmetric H-LDL^T.
+ * INDEFINITE), solved iteratively by MINRES (symmetric Krylov); mu_r-independent by construction, so
+ * no direct factorization is needed (a symmetric H-LDL^T was prototyped and removed 2026-06-08).
  *
  * This first increment builds the structured-hex RT0 topology + charge map B + a DENSE Coulomb
  * Gram G + assembles N, by hand (no NGSolve), validated against the NGSolve prototype golden

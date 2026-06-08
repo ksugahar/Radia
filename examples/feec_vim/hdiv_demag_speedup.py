@@ -1,5 +1,5 @@
 """
-hdiv_demag_speedup.py -- root-cause finish + H-LDL^T prototype, on the SYMMETRIC HDiv demag op.
+hdiv_demag_speedup.py -- root-cause finish: Calderon operator preconditioning of the SYMMETRIC HDiv demag op.
 
 PART A (root cause / operator preconditioning, the RIGHT direction):
   Riesz-map R^{-1}=(mass+a*divdiv)^{-1} FAILED because it INVERTS -> it DAMPS the high-freq
@@ -9,14 +9,11 @@ PART A (root cause / operator preconditioning, the RIGHT direction):
   (+ mass) as a MATVEC, which is LARGE on high-freq (where A is near-null).  alpha-sweep per N;
   pulse = best iters BOUNDED across N (vs point-Jacobi's ~linear growth).
 
-PART B (H-LDL^T): A is symmetric -> the shipped NON-sym H-LU can be a symmetric H-LDL^T
-  (Bunch-Kaufman).  Prototype the dense analog: (1) LDL^T solves the real operator accurately
-  (stability on a symmetric INDEFINITE A), (2) factor-time ratio LU vs LDL^T (~2x theory) on a
-  larger synthetic symmetric-indefinite matrix.
+(A H-LDL^T direct-factorization prototype was removed 2026-06-08: the HDiv-VIM is mu_r-independent, so
+ the iterative solve is the production path; the symmetric H-LDL^T H-factorization was deleted.)
 """
-import json, os, time
+import json, os
 import numpy as np
-import scipy.linalg as sla
 from scipy.sparse.linalg import gmres, LinearOperator
 from hdiv_demag_quad_self import build
 
@@ -52,31 +49,6 @@ print(f"\n  point-Jacobi   : {pj[0]} -> {pj[-1]} ({pj[-1]/pj[0]:.1f}x)")
 print(f"  Calderon best  : {cb[0]} -> {cb[-1]} ({cb[-1]/cb[0]:.1f}x)   "
       f"{'<- PULSE (bounded/sublinear)!' if cb[-1]/cb[0] < pj[-1]/pj[0]*0.6 else '<- still grows like point-Jacobi'}")
 
-# ---------------- PART B: H-LDL^T prototype (symmetric factorization) ----------------
-print("\n=== PART B: H-LDL^T feasibility (symmetric indefinite direct factorization) ===")
-d = cache[6]; S = d["Sstar"]
-A_real = (1.0/CHI)*(S.T @ d["mass_hdiv"] @ S) - S.T @ d["N"] @ S   # the real symmetric indefinite op
-b = np.ones(A_real.shape[0])
-# (1) stability/accuracy: LDL^T solve vs LU solve on the REAL operator
-lu, piv = sla.lu_factor(A_real); x_lu = sla.lu_solve((lu, piv), b)
-L, Dd, perm = sla.ldl(A_real); x_ldl = sla.solve(A_real, b, assume_a="sym")  # sym solver = LDL^T path
-err_ldl = np.linalg.norm(A_real @ x_ldl - b) / np.linalg.norm(b)
-err_lu = np.linalg.norm(A_real @ x_lu - b) / np.linalg.norm(b)
-sym = np.linalg.norm(A_real - A_real.T)/np.linalg.norm(A_real)
-print(f"  real operator (rankQ={A_real.shape[0]}): ||A-A^T||/||A||={sym:.1e}; "
-      f"solve rel.res: LU={err_lu:.1e}, LDL^T(sym)={err_ldl:.1e}  (LDL^T stable on indefinite A)")
-# (2) factor-time ratio on a larger synthetic symmetric-indefinite matrix (clean timing)
-rng = np.random.default_rng(0)
-for m in (1500, 3000):
-    Q, _ = np.linalg.qr(rng.standard_normal((m, m)))
-    ev = np.concatenate([rng.uniform(-1, -1e-3, m//2), rng.uniform(1e-3, 1, m - m//2)])  # indefinite
-    Asym = (Q * ev) @ Q.T; Asym = 0.5*(Asym + Asym.T)
-    t0 = time.perf_counter(); sla.lu_factor(Asym); t_lu = time.perf_counter() - t0
-    t0 = time.perf_counter(); sla.ldl(Asym); t_ldl = time.perf_counter() - t0
-    print(f"  m={m}: LU factor {t_lu*1e3:.0f} ms, LDL^T factor {t_ldl*1e3:.0f} ms  -> LDL^T/LU = {t_ldl/t_lu:.2f}x")
-print("  (dense theory: LU ~ 2n^3/3, LDL^T ~ n^3/3 -> ~0.5x; same ratio carries to the H-matrix")
-print("   block factorization -> a symmetric H-LDL^T roughly halves the shipped H-LU factor cost.)")
-
 with open(os.path.join(HERE, "hdiv_demag_speedup.json"), "w") as f:
-    json.dump({"partA_calderon": rowsA, "partB_ldl_err": {"lu": float(err_lu), "ldl": float(err_ldl)}}, f, indent=2)
+    json.dump({"partA_calderon": rowsA}, f, indent=2)
 print("\nsaved", os.path.join(HERE, "hdiv_demag_speedup.json"))
