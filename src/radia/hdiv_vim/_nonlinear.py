@@ -319,7 +319,8 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
 
 
 def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
-                                    picard_warmstart=8, maxit=200, gmres_tol=1e-8):
+                                    picard_warmstart=8, maxit=200, gmres_tol=1e-8, newton_tol=1e-6,
+                                    near_factor=1e30, return_timing=False, verbose=False):
     """SCALABLE damped Newton (production #2): the dense O(N^3)/O(N^2) demag is replaced by the C++
     HACApK charge-Gram H-matrix (O(N log N) apply), and the Newton system is solved ITERATIVELY
     (GMRES) -- no dense factorization anywhere.
@@ -336,7 +337,9 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
     import scipy.sparse as sp
     import scipy.sparse.linalg as spla
     import radia._radia_pybind as _rp
+    import time
 
+    _t0 = time.perf_counter()
     Mof = _bh_curve(chi0, Msat)
     # SCALABLE build: skip the dense O(N^2) G/N and the loop SVD; M_mass + B come back SPARSE.  The demag
     # apply is the analytic charge-Gram H-matvec (Hg) below, so the dense N is never needed here.
@@ -349,8 +352,10 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
     # entry-by-entry), so the demag apply is just B^T (G_analytic-Hmatvec (B v)) -- NO separate Python
     # near-correction.  This closes the non-uniform-M (div M != 0: cube, C-yoke) scalable gap that the
     # old monopole-far + sparse-near split left, while staying O(N log N).
+    # near_factor=1e30 (default) = all-analytic (the tight scalable golden); a finite near_factor (e.g. 2.0)
+    # enables the near/far split (analytic near, monopole far) -> the BUILD speedup, accurate to ~3% Gram.
     Hg = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
-                                n_el=int(d["n_el"]), eps=gram_eps, leaf=32, eta=2.0)
+                                n_el=int(d["n_el"]), eps=gram_eps, leaf=32, eta=2.0, near_factor=near_factor)
     Mcsc = sp.csc_matrix(M_mass)
     Mfac = spla.splu(Mcsc)                       # factor the HDiv mass ONCE (sparse, well-conditioned)
 
@@ -392,24 +397,36 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
 
     Mprec = spla.LinearOperator((ndof, ndof), matvec=lambda v: Mfac.solve(np.asarray(v, float)))
 
+    _t_build = time.perf_counter()        # end of one-time setup (build_demag + Hg + splu); solve phase follows
     # scalar-chi Picard warmstart via the scalable apply (CG on the symmetric A+ = (1/chi)M_mass + N)
     chi = chi0
     m = np.zeros(ndof)
     Aplus_diag = np.maximum(np.abs((1.0 / chi) * M_mass.diagonal()) + 1e-30, 1e-30)
-    for _ in range(picard_warmstart):
+    for _pw in range(picard_warmstart):
         Aop = spla.LinearOperator((ndof, ndof), matvec=lambda v, c=chi: (1.0 / c) * (M_mass @ np.asarray(v, float)) + N_apply(np.asarray(v, float)))
-        m, _ = spla.minres(Aop, H0 * b0, M=Mprec, maxiter=2000, **{_MINRES_TOL: gmres_tol})
+        m, _info = spla.minres(Aop, H0 * b0, M=Mprec, maxiter=2000, **{_MINRES_TOL: gmres_tol})
         Hi = H0 - Dscal * Mavg(m)
         chi = 0.5 * chi + 0.5 * (Mof(Hi) / Hi if abs(Hi) > 1e-30 else chi)
+        if verbose:
+            print(f"    [warmstart {_pw}] minres_info={_info} chi={chi:.3e} Mavg={Mavg(m):.1f}", flush=True)
 
     nit = 0
-    M_prev = Mavg(m)
+    converged = False
+    relF = float("inf")
     for it in range(maxit):
         nit = it + 1
         Mcf, tang = constit(m)
         F = M_mass @ m - bM(Mcf)
         nF = np.linalg.norm(F)
-        if nF < 1e-10 * (np.linalg.norm(M_mass @ m) + 1e-30):
+        # SOUND convergence: the actual nonlinear residual relF = ||F|| / ||M_mass m|| is small.  Do NOT
+        # break on Mavg stagnation (|M_now - M_prev| small) -- during the slow globalization phase Mavg
+        # plateaus while relF is still O(0.1), so an Mavg-stagnation break silently returns an
+        # under-converged (wrong) M.  That was the "drift to 509k" bug; the operator/tangent are correct.
+        relF = nF / (np.linalg.norm(M_mass @ m) + 1e-30)
+        if relF < newton_tol:
+            converged = True
+            if verbose:
+                print(f"    [newton {it:2d}] relF={relF:.2e} CONVERGED", flush=True)
             break
         T = ng.BilinearForm(fes)
         T += ng.InnerProduct(tang * uf, vf) * ng.dx
@@ -421,15 +438,25 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
             return M_mass @ v + Tcsr @ Dop_apply(v)
 
         Jop = spla.LinearOperator((ndof, ndof), matvec=Japply)
-        dm, _ = spla.gmres(Jop, -F, M=Mprec, maxiter=500, restart=50, **{_GMRES_TOL: gmres_tol})
+        dm, ginfo = spla.gmres(Jop, -F, M=Mprec, maxiter=500, restart=50, **{_GMRES_TOL: gmres_tol})
         lam = 1.0
         while lam > 1e-7 and Fnorm(m + lam * dm) >= nF:
             lam *= 0.5
         m = m + lam * dm
-        M_now = Mavg(m)
-        if abs(M_now - M_prev) < 1e-8 * (abs(M_now) + 1e-30):
-            break
-        M_prev = M_now
+        if verbose:
+            print(f"    [newton {it:2d}] relF={relF:.2e} gmres_info={ginfo} lam={lam:.3e} Mavg={Mavg(m):.1f}",
+                  flush=True)
+    if not converged:
+        # FAIL LOUD (CLAUDE.md "No Fallbacks"): never silently return an under-converged M.  Slow
+        # convergence here is the ill-conditioned +N warmstart (loop near-null modes); raise maxit or
+        # improve the warmstart / preconditioner (the -N mu_r-independent material formulation).
+        raise RuntimeError(
+            f"solve_nonlinear_newton_scalable did NOT converge: relF={relF:.2e} > newton_tol={newton_tol:.1e} "
+            f"after {nit} Newton iters. Returning M now would be a silent wrong result.")
+    if return_timing:
+        _now = time.perf_counter()
+        return Mavg(m), nit, Dscal, {"t_build_s": _t_build - _t0, "t_solve_s": _now - _t_build,
+                                     "t_total_s": _now - _t0, "ndof": int(d["ndof"]), "n_charge": int(d["n_charge"])}
     return Mavg(m), nit, Dscal
 
 
