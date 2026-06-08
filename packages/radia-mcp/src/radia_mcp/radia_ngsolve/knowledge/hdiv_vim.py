@@ -343,19 +343,36 @@ RESULT: cube nonlinear vs Radia 13% -> 6.2% (H0=2e5), 5.1% -> 1.5% (H0=5e5); lin
 KNEE is the coarse mesh + outer-quadrature order + knee stiffness, not the Gram).  phi_tet verified vs
 fine volume quadrature; golden tests/feec/test_hdiv_vim_volume_gram.py.
 
-## HIGH-ORDER VIM -- SCOPED (the speed-win task; build not started)
+## HIGH-ORDER VIM -- STRUCTURE CONFIRMED at order 1; accuracy win is the continuation (2026-06-07)
 The FEEC structure is ORDER-AGNOSTIC: HDiv(order>=1) assembles, the charge map B = (rho=-div M tested
 on L2(p), sigma=M.n tested on SurfaceL2(p)) builds, and loops = ker(B) are FIELD-NULL BY CONSTRUCTION
 at EVERY order (B.loop=0 => N.loop=B^T G(B loop)=0, any G) -- no element engineering, automatic.
 DOF/charge/loop growth (tet 2x2x2): order 0 -> 120/96/25, order 1 -> 360/336/169, order 2 ->
-1008/768/529.  So the high-order CAPABILITY is real + free (yano-type is lowest-order only).
-THE BUILD = the higher-order CHARGE GRAM: at order>=1 the charge densities (rho=-div M, sigma=M.n) are
-POLYNOMIALS per cell/face (not piecewise-constant), so G[i][j] = INT INT charge_i charge_j / |x-x'|
-needs singular quadrature for POLYNOMIAL densities -- the higher-order analog of the Wilton/Graglia
-surface Gram (tri_potential) already built for the constant case.  PAYOFF = p-convergence
-accuracy-per-DOF -> for a target accuracy, far fewer DOFs than lowest-order => the genuine SPEED win
-over lowest-order yano-type (which cannot go high-order).  Major build; verify-first scope confirmed
-2026-06-07.
+1008/768/529.  CONFIRMED end-to-end: the order=1 demag operator BUILDS (charge field of each HDiv basis
+-- -div in cells, gfu.n at boundary points -- sub-point Coulomb Gram) and its loops are field-null to
+2.1e-15 (sphere coarse: ndof 288->864 order 0->1, loops 55->391).  So the high-order CAPABILITY is real
+(yano-type is lowest-order only).
+
+TWO things remain for the p-convergence SPEED WIN:
+  (1) the accurate higher-order CHARGE GRAM: at order>=1 rho/sigma are POLYNOMIALS per cell/face, so
+      G[i][j] = INT INT charge_i charge_j/|x-x'| needs singular quadrature for POLYNOMIAL densities --
+      the higher-order analog of the Wilton/Graglia surface Gram (tri_potential / phi_tet built for the
+      CONSTANT case).  The crude sub-point Gram limits accuracy (caps the structural probe).
+  (2) a NON-uniform benchmark: the demag FACTOR (uniform M) is order-INSENSITIVE -- M.n is constant per
+      face regardless of order, so order 0 and 1 give the SAME demag (0.3044/0.3044 on the probe).  The
+      high-order benefit shows in a FIELD / non-uniform-M error, not the uniform-M demag factor.
+Both are the major continuation (the p-convergence accuracy-per-DOF beats lowest-order yano-type).
+
+## HDiv on PYRAMIDS -- a genuine mathematical difficulty (verify-first, 2026-06-07)
+NGSolve 6.2.2604 supports pyramids in HCurl + H1 (confirmed: ndof 8/20/57 and 5/5/14 across orders 0-2)
+but NOT HDiv ("HDivHighOrderFESpace: Pyramid elements not implemented yet!").  This is NOT an oversight:
+a pyramid is a DEGENERATE element (image of a collapsed hex, top quad -> apex), so the Piola map
+(normal-flux-preserving, for H(div)) has a RATIONAL/singular Jacobian at the apex, and the
+H(div)-conforming (Raviart-Thomas) pyramid space CANNOT be polynomial -- it needs RATIONAL basis
+functions (Nigam-Phillips 2012; Bergot-Cohen-Durufle 2010).  H1/HCurl pyramids need rational functions
+too but were implemented first; HDiv is the HARDEST of the three because the normal-flux continuity must
+match adjacent tet(RT)/hex(RT) traces AND keep the de Rham sequence exact.  => HDiv-VIM pyramids are an
+NGSolve-version-upgrade away (FAVORABLE: Radia MSC has NO ObjPyramid at all), not a VIM design flaw.
 
 ## NEXT (open): higher-order charge Gram (high-order build); Wilton/phi_tet-in-C++
 - HIGH-ORDER charge Gram (the speed-win build above): polynomial-density singular quadrature.
