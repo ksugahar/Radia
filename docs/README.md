@@ -32,6 +32,11 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 - [IMA_SYMMETRY_DESIGN.md](solver/IMA_SYMMETRY_DESIGN.md) - Image symmetry implementation for MSC hexahedra
 - [NGBEM_INTEGRATION_DESIGN.md](solver/NGBEM_INTEGRATION_DESIGN.md) - Unified PEEC Loop-Star + MMM + MSC architecture with ngbem
 
+## FEEC / HDiv-type VIM (the yano-type replacement)
+
+- [hdiv_vim/README.md](hdiv_vim/README.md) - The **HDiv-type Volume Integral Method**: a symmetric FEEC H(div) demag operator `N = BᵀGB` whose loop modes are **field-null by construction** (de Rham), the candidate replacement for the **yano-type** distortion elements. Validated (feec 85/85): linear demag (sphere/spheroid/triaxial exact vs analytic), nonlinear (damped Newton; cube/C-yoke `<1%` vs shipped Radia; `analytic_gram` required for `div M ≠ 0`), distorted-mesh μr-independence, **curved + high-order** (`~10-30×` accuracy-per-DOF vs flat Radia), and **symmetry models** (1/2, 1/4, 1/8). The runnable layer is the radia-mcp `hdiv_vim(topic=...)` tool.
+- [loop_star_breakdown.md](loop_star_breakdown.md) - The *problem* the HDiv-type VIM solves: the high-μ magnetostatic loop-mode breakdown ↔ the low-frequency EFIE/MoM breakdown (same cause, same Loop-Star remedy).
+
 ## Kelvin Transformation
 
 - [KELVIN_TRANSFORMATION.md](kelvin/KELVIN_TRANSFORMATION.md) - Theory, API, workflow, and references for open boundary magnetostatics
