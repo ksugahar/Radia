@@ -2742,6 +2742,19 @@ py::dict HDivVimHMatrixProbe(int nx, int ny, int nz, int nsub, double distort,
     d["symmetry_relerr"] = std::fabs(xtNy - ytNx) / (std::fabs(xtNy) + 1e-300);
     return d;
 }
+
+// M2 verification probes: the C++ analytic charge-Gram potentials vs the dense Python reference.
+double TriPotentialProbe(const std::vector<double>& V, const std::vector<double>& r) {
+    double Vv[3][3], rr[3];
+    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
+    return rad_hdiv::TriPotential(Vv, rr);
+}
+double PhiTetProbe(const std::vector<double>& V, const std::vector<double>& P) {
+    double Vv[4][3], PP[3];
+    for (int i = 0; i < 3; ++i) PP[i] = P[i];
+    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
+    return rad_hdiv::PhiTet(Vv, PP);
+}
 } // namespace radia_hdivvim
 
 // ============================================================================
@@ -2781,6 +2794,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
               n_charge, n_bnd, and the row-major flat lists N (nf x nf), B (n_charge x nf), M_mass
               (nf x nf).  For testing: symmetry, loops field-null (ker B), demag factors (N, M_mass).
           )pbdoc");
+
+    m.def("_hdiv_tri_potential", &radia_hdivvim::TriPotentialProbe, py::arg("V"), py::arg("r"),
+          "M2 verify: Wilton triangle 1/r potential INT_T 1/|r-r'| dA' (V = 9 flat doubles = 3 verts, "
+          "r = 3).  Pure 1/r integral (no 1/4pi).  Should match radia.hdiv_vim._core.tri_potential.");
+    m.def("_hdiv_phi_tet", &radia_hdivvim::PhiTetProbe, py::arg("V"), py::arg("P"),
+          "M2 verify: tet Newtonian potential INT_tet 1/|P-r'| dV' (V = 12 flat doubles = 4 verts, "
+          "P = 3) via the divergence theorem.  Should match radia.hdiv_vim._core.phi_tet.");
 
     m.def("_hldlt_self_test", &radia_hdivvim::HLDLTSelfTest,
           py::arg("depth"), py::arg("n_per_block"),
