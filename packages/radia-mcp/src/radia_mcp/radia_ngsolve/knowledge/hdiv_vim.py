@@ -10,7 +10,7 @@ required for div M != 0), distorted-mesh mu_r-independence, CURVED + high-order 
 Python+NGSolve prototype; the remaining lift to RETIRE yano-type in production is the C++
 productionization.  Canonical reference: docs/hdiv_vim/README.md.
 
-Exposed as the radia-ngsolve MCP tool `hdiv_vim(topic=...)`: overview, implementation, scaling, hldlt,
+Exposed as the radia-ngsolve MCP tool `hdiv_vim(topic=...)`: overview, implementation, scaling,
 verification, nonlinear, curved, symmetry, status, all.
 """
 
@@ -46,12 +46,12 @@ operator is the SYMMETRIC Galerkin form
   shipped MSC (same demag spectrum), the win being correctness + no hand-crafting.  Golden-locked:
   tests/feec/test_hdiv_vim_symmetry_golden.py (loops field-null + PSD on distorted) and
   test_hdiv_vim_solve.py::test_minres_iters_bounded_vs_mu_r_distorted (mu_r-independence on distorted).
-- **SYMMETRIC** => MINRES (symmetric indefinite Krylov) + symmetric H-LDL^T factorization.
+- **SYMMETRIC** => MINRES (symmetric indefinite Krylov); mu_r-independent, no direct factorization.
 
 ## The material system
     A = (1/chi) M_mass - N       (symmetric INDEFINITE)
   M_mass = RT0 H(div) mass.  The generalized eigenvalues of (N, M_mass) are the demag factors,
-  bounded in [0,1] (basis-invariant physics).  Solved by MINRES (Jacobi precond) or H-LDL^T.
+  bounded in [0,1] (basis-invariant physics).  Solved by MINRES / Jacobi-PCG (mu_r-independent).
 
 ## Origin
 NGSolve FEEC prototype (examples/feec_vim/hdiv_demag_quad_self.py) -> productionised into the Radia
@@ -78,18 +78,19 @@ _IMPLEMENTATION = r"""
     - `RadHACApKChargeGram` -- the CHARGE-based Coulomb Gram G as an H-matrix (the unstructured path):
       entry G[a!=b] = meas_a meas_b/(4pi r) (centroid monopole), G[a][a] = self_energy[a] (caller-
       computed, shape-aware).  N = B^T G B applied as B^T (G-Hmatvec (B m)).
-- **src/ext/HACApK/cHACApK_harith.{c,h}** -- rk-aware symmetric **H-LDL^T** (factor compressed
-  H-matrices): cHACApK_hldlt_decomp / _solve_vec, the cHACApK_hldlt_factor_leafmtxp / _apply / _free
-  driver (symmetric mirror of the H-LU driver).
+- **src/core/rad_hacapk_hdiv.cpp** -- RadHACApKChargeGram::SolveLinearMaterial (Jacobi-PCG, SPD
+  material system) + SolveNonlinearPicard (scalar-chi nonlinear demag), both in C++ -- the
+  mu_r-independent iterative solve (the symmetric H-LDL^T was removed 2026-06-08).
 
 ## pybind (radia._radia_pybind)
 - `_hdiv_vim_assemble(nx,ny,nz,nsub=0,distort=0)` -> dict{nf,n_cell,n_charge,n_bnd, N, B, M_mass}
 - `_hdiv_vim_hmatrix_probe(nx,ny,nz,nsub,distort,eps,leaf,eta)` -> stats + matvec_relerr vs dense N
 - class `_HDivVimHMatrix(nx,ny,nz,nsub,distort,eps,leaf,eta)` -- build-once: .ndof() / .matvec(x) (N x)
   / .apply_system(x,inv_chi) / .diag_system(inv_chi) / .stats()
-- class `_ChargeGramHMatrix(centroids, measures, self_energy, eps,leaf,eta)` -- .ndof() / .matvec(q)
-  (G q) / .stats() / .factor_solve_hldlt(b) (factor G with H-LDL^T + solve G x=b)
-- `_hldlt_self_test(depth,nb)` / `_hldlt_self_test_rk(nb,rk,depth)` / `_hldlt_self_test_rk_mixed(...)`
+- class `_ChargeGramHMatrix(...)` -- monopole ctor (centroids,measures,self_energy) OR analytic ctor
+  (cell_verts,face_verts,n_el, M2); .ndof() / .matvec(q) / .stats() / .solve_linear_material(...) /
+  .solve_nonlinear_picard(...) (M3, iterative solves in C++)
+- `_hdiv_tri_potential(V,r)` / `_hdiv_phi_tet(V,P)` -- analytic Wilton/phi_tet charge-Gram potentials (M2)
 
 ## Python (unstructured tet ingest -- the real-geometry path)
 - **examples/feec_vim/hdiv_demag_tet.py** -- NGSolve HDiv(order=0) tet ingest.  Element-AGNOSTIC
@@ -122,33 +123,6 @@ RadScalarPotentialFromTriangleFaceGlobal) + the volume-potential reduction INT_V
 (1/2) SUM_faces d_face(x) * Wilton_face(x) (since lap(r)=2/r) -- exact, no nsub.
 """
 
-_HLDLT = r"""
-# rk-aware symmetric H-LDL^T (factor the compressed H-matrix)
-
-cHACApK_hldlt_* factors a SYMMETRIC (indefinite) H-matrix as A = (I+W) D (I+W)^T (Bunch-Kaufman 2x2
-pivots, lower triangle only -> ~half the off-diagonal storage + FLOPs of the non-symmetric H-LU).
-
-rk-aware off-diagonal LEAVES (the ACA-compressed far blocks):
-  (A) rk offdiag solve W_ji = U (A_ii^{-1} V)^T  (apply A_ii^{-1} to V in place; U unchanged)
-  (B) snapshot V before the solve overwrites it (U read live)
-  (C) trailing update -W_ji A_ki^T as a rank-kinc increment via add_lowrank_to_node, 4 operand combos
-      (dense*dense rank ndiag, rk*dense AVw=A_ki Vw, dense*rk WVa=W_ji Va, rk*rk M=Vw^T Va then Uw M)
-Self-tests: MACHINE precision (rk depth-1 6.4e-16, depth-2 7.0e-16, mixed-flat all-4-combos 2.4e-15).
-
-Driver: cHACApK_hldlt_factor_leafmtxp(leafmtxp, control, nffc, *out_rc) -> opaque root;
-cHACApK_hldlt_apply(root, control, r, z, nd); cHACApK_hldlt_free_factors.  Exposed as
-_ChargeGramHMatrix.factor_solve_hldlt(b).
-
-VERIFIED: factors a real HACApK Gram H-matrix end-to-end (single leaf + 7-leaf diagonal-refined tree),
-solve G x=b rel err ~1.6e-15.
-
-HONEST BOUNDARY (the remaining increment): a DEEP tree (small leaf -> the natural HACApK build creates
-INTERNAL off-diagonal blocks) returns NEED_RECURSIVE (-5), fail-loud no-fallback.  The lower-only
-H-LDL^T does NOT yet recurse internal off-diagonal blocks -- the symmetric analog of the H-LU's
-recursive htrsm/h_addmul is future work for fully-compressed deep trees.  (Not blocking: MINRES
-already solves the system mu_r-independently; the direct factor is an optimization.)
-"""
-
 _VERIFICATION = r"""
 # Verification (golden tests, tests/feec/, 45/45)
 
@@ -162,8 +136,6 @@ _VERIFICATION = r"""
   converging to 1/3.
 - test_hdiv_vim_tet_hmatrix.py -- charge-Gram H-matrix on tets matches dense + demag survives compression.
 - test_hdiv_vim_tet_nearcorr.py -- near-field-corrected scalable demag == dense, lifts toward 1/3.
-- test_hldlt_factorization.py -- dense + rk-aware H-LDL^T self-tests (machine precision, all 4 combos).
-- test_hldlt_real_gram.py -- H-LDL^T factors a real Gram H-matrix; deep tree -> NEED_RECURSIVE (boundary).
 
 Bug caught by verify-first (2026-06-07, commit 5d7a9823): the Python tet/tri barycentric sub-point
 lattice summed to 1+c/nsub (sub-points OUTSIDE the simplex).  Fixed to proper lattices (sum to 1,
@@ -549,8 +521,8 @@ NGSolve-version-upgrade away (FAVORABLE: Radia MSC has NO ObjPyramid at all), no
   Newton, NOT the dense Wilton path; putting the Wilton surface integral into the C++ near-field
   correction gives scalable + Wilton-accurate together.
 - a full C++ Newton OUTER loop (the tangent + line search in C++ too) removes the Python-loop overhead
-  (minor: each iteration is dominated by the C++ H-matvec); reuse the #2 H-LDL^T for a factor-once
-  variant of the per-iteration solve.
+  (minor: each iteration is dominated by the C++ H-matvec); the tangent solve is the iterative GMRES
+  on the analytic H-matvec (no direct factorization).
 
 ## Why the operator is reusable (the structural win)
 The demag operator N = B^T G B is GEOMETRY-ONLY (constant, mu_r-independent) -- it is assembled ONCE.
@@ -573,7 +545,7 @@ solve is an OUTER material iteration around the SAME (reusable) linear HDiv solv
   (solve_nonlinear, test_hdiv_vim_tet_nonlinear.py).  Hid the per-element near-field issue.
 - **Per-element Picard**: diverges at saturation (transient |M_e|>Msat -> chi_e->0 -> ill-conditioned).
 - **Hantila polarization** (constant (M_mass + alpha N) factored once -- structurally attractive,
-  reuses the #2 H-LDL^T): DIVERGED in the RT0 face metric (alpha=chi0/2 -> NaN; under-relaxed -> ~1e88).
+  would need a factored solve): DIVERGED in the RT0 face metric (alpha=chi0/2 -> NaN; under-relaxed -> ~1e88).
   Two causes: chi_min->0 at saturation drives the contraction ->1, and the naive RT0 polarization
   projection r = Set((chi_e-alpha) H) amplifies.  Could be revisited with a consistent RT0 projection,
   but Newton already solves the problem -- not pursued.
@@ -590,7 +562,7 @@ solve is an OUTER material iteration around the SAME (reusable) linear HDiv solv
 ## Next increment (the Newton path is done; what is left)
 The Python operator Newton is solved + golden-locked.  Remaining: (1) a NON-UNIFORM saturating body
 (cube / C-yoke) cross-checked against rad.Solve + rad.MatSatIsoTab; (2) the scalable C++ path -- the
-per-element tensor tangent + factor-once M_mass reuses the #2 H-LDL^T; (3) optionally a consistent-RT0
+per-element tensor tangent + the iterative GMRES tangent solve; (3) optionally a consistent-RT0
 Hantila for the factor-once speed-up at the knee (Newton already gives correctness).
 """
 
@@ -599,7 +571,7 @@ _STATUS = r"""
 
 DONE + golden-locked (feec 85/85):
   #1  scalable mu_r-independent HDiv-VIM demag solver on REAL tet meshes (Layer A/A.5 + tet ingest)
-  #2  rk-aware symmetric H-LDL^T factoring real compressed H-matrices (+ driver)
+  #2  analytic Wilton/phi_tet charge Gram in the C++ scalable path (_ChargeGramHMatrix analytic mode, M2)
   #3  bug-fixed exact Gram via near-field correction -> demag -> analytic 1/3
   NONLINEAR  damped Newton-Raphson (consistent tensor tangent + near-corr + line search + Picard
              warmstart) -- robust + fast at deep saturation where per-element Picard/Hantila failed
@@ -659,10 +631,10 @@ OPEN (honest boundaries / next increments) -- the lift to RETIRE yano-type in pr
     elementary sub-point image method is the prototype).
   - BH-knee stiffness; near-field/Wilton Gram in the C++ ChargeGram entry; proper distorted RT0 M_mass
     for exact distorted demag VALUES (non-negativity already holds).
-DROPPED (decision 2026-06-08): the direct symmetric H-LDL^T factorization is NOT on the production path
-  -- HDiv-VIM is mu_r-INDEPENDENT by construction, so the ITERATIVE solve (MINRES linear / GMRES
-  nonlinear) is cheap + well-conditioned; a direct factorization buys little.  The C++ H-LDL^T
-  (_hldlt_self_test*, factor_solve_hldlt) stays as research code, off the critical path (see
+DELETED (2026-06-08): the direct symmetric H-LDL^T factorization was REMOVED from the codebase
+  -- HDiv-VIM is mu_r-INDEPENDENT by construction, so the ITERATIVE solve (MINRES linear / GMRES/Picard
+  nonlinear) is cheap + well-conditioned; a direct factorization bought little.  The C++ symmetric
+  factorization + its self-tests are gone; H-LU/H-ILU kept (MSC solver A_SS preconditioner) (see
   docs/hdiv_vim/PRODUCTIONIZATION.md M3).  PRODUCTIONIZATION = M1 (DONE: core promoted to the
   radia.hdiv_vim package + public API, feec 85/85) -> M2 (Wilton/phi_tet into the C++ ChargeGram) ->
   M3 (nonlinear Newton in C++, iterative tangent solve) -> M4 (curved/high-order + symmetry + curved
@@ -723,7 +695,6 @@ _SECTIONS = {
     "overview": _OVERVIEW,
     "implementation": _IMPLEMENTATION,
     "scaling": _SCALING,
-    "hldlt": _HLDLT,
     "verification": _VERIFICATION,
     "nonlinear": _NONLINEAR,
     "curved": _CURVED,
@@ -737,7 +708,7 @@ def get_hdiv_vim_documentation(topic: str = "overview") -> str:
     t = (topic or "overview").strip().lower()
     if t == "all":
         return "\n\n".join(_SECTIONS[k] for k in
-                           ("overview", "implementation", "scaling", "hldlt",
+                           ("overview", "implementation", "scaling",
                             "verification", "nonlinear", "curved", "symmetry", "status"))
     if t in _SECTIONS:
         return _SECTIONS[t]
