@@ -796,28 +796,31 @@ def mmm_core(topic: str = "chubar_1998") -> str:
 @mcp.tool()
 def hdiv_vim(topic: str = "overview") -> str:
     """
-    HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT0
-    alternative to the collocation MMM/MSC kernel.  Records the CURRENT implementation
-    (main @ feaade25, 2026-06-07) so it can be extended (esp. to NONLINEAR materials).
+    HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT
+    alternative to the collocation MMM/MSC kernel, and the candidate replacement for the
+    yano-type distortion elements.  Canonical reference: docs/hdiv_vim/README.md.
 
     Key idea: SYMMETRIC demag operator N = B^T G B with the loop modes FIELD-NULL BY
-    CONSTRUCTION (loops = ker B) -> mu_r-INDEPENDENT iterative convergence (the high-mu_r
-    conditioning wall of the collocation MSC loop-star solver is ABSENT).  Material system
-    A = (1/chi) M_mass - N, solved by MINRES or rk-aware symmetric H-LDL^T.  Scalable via
-    a charge-Gram HACApK H-matrix (far, monopole) + a sparse near-field correction (exact).
-    Verified: sphere demag -> analytic 1/3; feec suite 45/45.
+    CONSTRUCTION (loops = ker B) -> mu_r-INDEPENDENT convergence + NO hand-crafted loop-star.
+    VALIDATED (feec suite 85/85, 2026-06-08): linear demag (sphere/spheroid/triaxial EXACT vs
+    analytic), NONLINEAR (damped Newton; cube & C-yoke <1% vs shipped Radia in 6 iters; needs
+    analytic_gram for div M != 0, fail-loud otherwise), distorted-mesh mu_r-independence, CURVED
+    + high-order (demag exact; field accuracy-per-DOF ~10-30x vs flat Radia), and SYMMETRY models
+    1/2,1/4,1/8 (loops automatic + image-method demag).  Python+NGSolve prototype; C++
+    productionization is the remaining lift to actually retire yano-type.
 
     Args:
         topic: One of:
             "overview"       - what it is + why (symmetric, loops field-null, mu_r-independent) [DEFAULT]
-            "implementation" - the CURRENT C++/pybind/Python files + APIs (rad_hdiv_vim,
-                               rad_hacapk_hdiv, cHACApK_harith hldlt, _HDivVimHMatrix,
-                               _ChargeGramHMatrix, examples/feec_vim/hdiv_demag_tet.py)
+            "implementation" - C++/pybind/Python files + APIs (rad_hdiv_vim, _ChargeGramHMatrix, ...)
             "scaling"        - charge-Gram H-matrix + sparse near-field correction
-            "hldlt"          - rk-aware symmetric H-LDL^T (factor compressed H-matrices) + boundary
-            "verification"   - golden tests (tests/feec/, 45/45) + the verify-first bug catch
-            "nonlinear"      - THE NEXT STEP: extend to nonlinear materials (Picard / Hantila /
-                               Newton plan; N is geometry-only so reusable)
+            "hldlt"          - rk-aware symmetric H-LDL^T (factor compressed H-matrices)
+            "verification"   - golden tests (tests/feec/, 85/85) + the verify-first bug catches
+            "nonlinear"      - damped Newton; analytic_gram REQUIRED for non-uniform M; C-yoke vs Radia;
+                               fail-loud on non-convergence; the honest reference distinctions
+            "curved"         - curved + high-order demag (ngsolve.bem single-layer): sphere/spheroid/
+                               triaxial exact; accuracy-per-DOF ~10-30x vs flat Radia; curved x nonlinear
+            "symmetry"       - 1/2, 1/4, 1/8 models: loops automatic (ker B) + image-method demag value
             "status"         - done / open summary
             "all"            - everything
     """

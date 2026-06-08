@@ -1,12 +1,17 @@
 """HDiv-type VIM (Volume Integral Method) demag operator -- knowledge module.
 
-The HDiv-type VIM is the lab's FEEC (H(div) RT0) alternative to the collocation MMM/MSC kernel: a
-SYMMETRIC demag operator N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving
-mu_r-INDEPENDENT iterative convergence (no near-null blow-up).  This module records the CURRENT
-implementation (as of 2026-06-07, on main @ feaade25) so a later session can extend it -- in
-particular to NONLINEAR materials -- without re-discovering the architecture.
+The HDiv-type VIM is the lab's FEEC (H(div) RT) alternative to the collocation MMM/MSC kernel and the
+candidate replacement for the yano-type distortion elements: a SYMMETRIC demag operator N = B^T G B
+whose loop modes are FIELD-NULL BY CONSTRUCTION, giving mu_r-INDEPENDENT convergence with no hand-crafted
+loop-star.  As of 2026-06-08 (feec suite 85/85) it is validated on: linear demag (sphere/spheroid/
+triaxial exact vs analytic), NONLINEAR (damped Newton; cube & C-yoke <1% vs shipped Radia; analytic_gram
+required for div M != 0), distorted-mesh mu_r-independence, CURVED + high-order (accuracy-per-DOF
+~10-30x vs flat Radia), and SYMMETRY models 1/2,1/4,1/8 (loops automatic + image-method demag).  It is a
+Python+NGSolve prototype; the remaining lift to RETIRE yano-type in production is the C++
+productionization.  Canonical reference: docs/hdiv_vim/README.md.
 
-Exposed as the radia-ngsolve MCP tool `hdiv_vim(topic=...)`.
+Exposed as the radia-ngsolve MCP tool `hdiv_vim(topic=...)`: overview, implementation, scaling, hldlt,
+verification, nonlinear, curved, symmetry, status, all.
 """
 
 _OVERVIEW = r"""
@@ -590,9 +595,9 @@ Hantila for the factor-once speed-up at the knee (Newton already gives correctne
 """
 
 _STATUS = r"""
-# Status summary (2026-06-07)
+# Status summary (2026-06-08)
 
-DONE + golden-locked (feec 54/54):
+DONE + golden-locked (feec 85/85):
   #1  scalable mu_r-independent HDiv-VIM demag solver on REAL tet meshes (Layer A/A.5 + tet ingest)
   #2  rk-aware symmetric H-LDL^T factoring real compressed H-matrices (+ driver)
   #3  bug-fixed exact Gram via near-field correction -> demag -> analytic 1/3
@@ -622,29 +627,88 @@ DONE + golden-locked (feec 54/54):
              to Radia not converging at low drive on the coarse mesh (M/H0=11.8 is impossible for a
              sphere D=1/3); HDiv matched the analytic, so HDiv was correct.  Use the analytic fixed
              point (not a coarse-mesh Radia run) as the low-field reference.
-  C-YOKE     real non-convex engineering geometry (OCC box-box-box C-shape, ~1300 tets) + the real BH
-  (real      table + uniform applied field: HDiv-VIM assembles, loops FIELD-NULL 5.92e-16 on the real
-  geometry)  shape, the nonlinear Newton converges, and the VOLUME-AVERAGED Mz matches Radia (same mesh
-             + same table) to ~4% at maxh=0.02 (H0 5e4/2e5: 4.1%/3.8%).  MESH-DEPENDENT: 13% at
-             maxh=0.03 -- the monopole+near-corr operator accuracy on the CORNERS (same gap class as
-             the cube; tightens with finer mesh + the volume Gram).  GOTCHA: use the volume-averaged Mz
-             over the iron for BOTH (point-sampling lands in the window/gap air + Mz direction varies
-             spatially in a C-yoke -> apples-to-oranges, spurious 170%/negative-M disagreement).
-             DEMONSTRATED (not golden-locked: the dense build_demag SVD on ~3000 DOF is too slow +
-             mesh-sensitive for CI; the scalable C++ path is the route to a lockable C-yoke).
+  C-YOKE     real non-convex engineering geometry (OCC box-box-box C-shape) -- VERIFIED + golden-locked
+  (real      (2026-06-08, the 1/8-gate audit): with analytic_gram (the REQUIRED volume Gram for
+  geometry)  div M != 0) the nonlinear Newton converges in 6 iters, the volume-averaged Mz is mesh-stable
+             (572062/576970/580981 over maxh 0.020/0.016/0.013) and matches shipped Radia MMM to <1% at
+             EVERY mesh (-0.25%/+0.71%/-0.37%); cube likewise -0.08%/-0.15% (H0=2e5/5e5).  The OLD
+             "~4%@0.02 / 13%@0.03 / not-golden-locked" was the WRONG (surface-only wilton_surface) Gram
+             that does NOT converge for non-uniform M -- now FAIL-LOUD (solve_nonlinear_newton raises,
+             pointing at analytic_gram).  GOTCHA kept: compare the volume-averaged Mz (not point-sample).
+             examples/feec_vim/hdiv_cyoke_nonlinear.py, golden test_hdiv_vim_cyoke_nonlinear.py.
+  CURVED+HO  curved + high-order demag via the ngsolve.bem Laplace single-layer: sphere/spheroid/triaxial
+             EXACT vs analytic; field accuracy-per-DOF ~10-30x vs the shipped flat Radia solver
+             (compare_curved_vs_radia_field.py).  See topic "curved".
+  SYMMETRY   1/2, 1/4, 1/8 models: loops AUTOMATIC (ker B, no loop-star) + image-method demag value
+             (reproduces the full demag from ~1/N DOF).  See topic "symmetry".
 
-OPEN (honest boundaries / next increments):
-  - analytic VOLUME (tet) Gram: the surface Wilton is done; the residual nonlinear SHARP-body
-    non-uniform gap (cube moderate ~8.7% vs Radia) is the cell-cell / cell-face Gram (still
-    monopole+sub-point).  The next refinement.
-  - further #3 validation options: a real rad.MatSatIsoTab steel TABLE (needs table-based M(H)/M'(H)
-    in the Newton) and a C-yoke.
-  - BH-knee stiffness: Newton converges to the correct answer but slowly there (scalar Picard is the
-    practical tool at the knee); operator-accuracy-limited (finer/analytic Gram reduces it).
-  - the scalable C++ nonlinear path (reuse #2 H-LDL^T for the factor-once tangent solve) -- new #2.
-  - H-LDL^T on DEEP trees (internal off-diagonal recursion) -- currently NEED_RECURSIVE.
-  - near-field / Wilton Gram in the C++ ChargeGram entry -- currently the Python overlay.
-  - proper distorted RT0 M_mass for exact distorted demag VALUES (non-negativity already holds).
+CLOSED since the 2026-06-07 status (do NOT re-open):
+  - analytic VOLUME (tet) Gram: DONE (analytic_gram / phi_tet) -- the cube/C-yoke non-uniform nonlinear
+    gap closed (cube -0.08%, C-yoke <1% vs Radia, volume-avg); the old "~8.7%/13%" were the wrong Gram.
+  - real BH table + C-yoke validation: DONE (see DONE list).
+
+OPEN (honest boundaries / next increments) -- the lift to RETIRE yano-type in production:
+  - C++ PRODUCTIONIZATION (the big one): the charge Gram (Wilton surface / phi_tet volume / ngsolve.bem
+    single-layer) + the Newton loop in C++ behind a Radia API.  This also enables a fair WALL-CLOCK
+    comparison -- all present wins are accuracy-per-DOF (geometry-driven); the Python prototype is not
+    time-optimized.  Until this lands, "retire yano-type" is conference-ready (validated method) but not
+    production-sealed.
+  - CURVED nonlinear VOLUME charge: ngsolve.bem is boundary-only, so non-uniform nonlinear on CURVED
+    cells still needs the Newtonian volume potential (phi_tet) on curved geometry.
+  - symmetry-model demag at HIGH ORDER / CURVED via the ngsolve.bem single-layer + image kernels (the
+    elementary sub-point image method is the prototype).
+  - BH-knee stiffness; H-LDL^T on DEEP trees; near-field/Wilton Gram in the C++ ChargeGram entry;
+    proper distorted RT0 M_mass for exact distorted demag VALUES (non-negativity already holds).
+"""
+
+_CURVED = r"""
+# Curved + high-order geometry -- a win HDiv has and yano-type (flat) CANNOT (2026-06-08)
+Canonical reference: docs/hdiv_vim/README.md sec.2-3.  HDiv lives natively on curved (isoparametric)
+meshes (mesh.Curve(p), Piola map); flat ObjHexahedron/ObjTetrahedron cannot represent a curved boundary.
+
+## The production Gram = the ngsolve.bem Laplace single-layer
+The uniform-M surface demag Gram IS the Laplace single-layer of sigma = M.n; NGSolve 6.2.2604
+`ngsolve.bem` supplies it HIGH-ORDER + CURVED + FMM, with NO hand-rolled singular quadrature.
+D_axis = <sigma, V.mat sigma>/V_vol, sigma = GridFunction.Set(specialcf.normal(3)[axis],
+definedon=mesh.Boundaries(".*")); kernel 1/(4pi r) (no extra factor -> sphere gives 1/3).
+Example hdiv_demag_bem_singlelayer.py; golden test_hdiv_vim_bem_demag.py.
+
+## Verified vs ANALYTIC truth: curved + order-2 EXACT, flat floored
+- SPHERE demag: FLAT +0.25% at order 0/1/2 (order-insensitive faceting floor) -> CURVE(3) o2 ~1e-4%.
+- SPHEROID full tensor: prolate(2:1) N_par 0.17356 + N_perp 0.41322; oblate(1:2) 0.52720 + 0.23640 --
+  all EXACT vs Osborn 1945; sum rule N_x+N_y+N_z=1 to ~1e-6.
+- GENERAL TRIAXIAL ellipsoid (a!=b!=c): three DISTINCT factors all exact vs the Osborn integral.
+
+## The FIELD win + head-to-head vs the SHIPPED Radia solver
+- External field of a uniform / nonlinear soft-iron sphere = the exact dipole; FLAT ~-10% (the volume
+  faceting error enters m=M V) -> CURVE(3) <0.4% (~23-38x).  hdiv_demag_curved.py,
+  hdiv_curved_nonlinear_field.py.
+- HEAD-TO-HEAD (compare_curved_vs_radia_field.py): HDiv CURVED at the COARSEST mesh beats shipped
+  Radia-FLAT at the FINEST -> ~10-30x ACCURACY-PER-RESOLUTION.  HONEST SCOPE: accuracy-per-DOF
+  (geometry-driven, fair), NOT wall-clock -- the Python prototype is not time-optimized; a fair speed
+  comparison needs the C++ productionization.
+
+## CURVED x NONLINEAR (honest magnitude)
+The curved win on the MAGNETIZATION is MODEST (~0.3% -- the demag factor is a volume-normalized ratio
+that cancels the ~10% volume faceting error).  The win is LARGE on the FIELD (~23x).  Radia cannot
+referee curved geometry (it facets), so curved nonlinear is validatable ONLY vs analytic = spheroids.
+"""
+
+_SYMMETRY = r"""
+# Symmetry models 1/2, 1/4, 1/8 (2026-06-08) -- canonical: docs/hdiv_vim/README.md sec.5
+Two pieces make a symmetry model; the HDiv-VIM gets BOTH cheaply (so 1/4 and 1/8 are SUPPORTED):
+- LOOPS: AUTOMATIC.  loops = ker(B) on the cut mesh, field-null ~4e-16 BY CONSTRUCTION, count adapts to
+  the cut topology (sphere full / 1/2 / 1/4 / 1/8 -> 58 / 54 / 18 / 6).  NO cohomology-aware loop-star
+  installCycle -- the "loop removal is painful" problem of MSC/yano-type is ELIMINATED.
+  Golden: test_hdiv_vim_symmetry_loops.py.
+- DEMAG VALUE: the IMAGE method.  Only the real surface (spherical cap) carries sigma = M.n = n_z; the
+  flat cut faces are symmetry planes (no real charge).  Reflect the cap charge over the reduction planes
+  with sign = (-1)^(#z-reflections) (sigma = n_z flips under a z-mirror = the IMA sign rule:
+  field-PARALLEL mirror keeps sign, field-PERPENDICULAR flips) -> reconstructs the full sphere.  The
+  reduced models reproduce the FULL demag from ~1/N the surface DOF: 1/2 +0.08%, 1/4 +0.11%, 1/8 -0.32%
+  (108 / 52 / 20 cap-tris vs the full 192).  Example hdiv_demag_symmetry_image.py; golden
+  test_hdiv_vim_symmetry_image.py.  Production version = the ngsolve.bem single-layer + image kernels
+  (high-order / curved / scalable).
 """
 
 _SECTIONS = {
@@ -654,6 +718,8 @@ _SECTIONS = {
     "hldlt": _HLDLT,
     "verification": _VERIFICATION,
     "nonlinear": _NONLINEAR,
+    "curved": _CURVED,
+    "symmetry": _SYMMETRY,
     "status": _STATUS,
 }
 
@@ -664,7 +730,7 @@ def get_hdiv_vim_documentation(topic: str = "overview") -> str:
     if t == "all":
         return "\n\n".join(_SECTIONS[k] for k in
                            ("overview", "implementation", "scaling", "hldlt",
-                            "verification", "nonlinear", "status"))
+                            "verification", "nonlinear", "curved", "symmetry", "status"))
     if t in _SECTIONS:
         return _SECTIONS[t]
     return (f"Unknown topic '{topic}'. Options: " + ", ".join(_SECTIONS.keys()) + ", all.\n\n"
