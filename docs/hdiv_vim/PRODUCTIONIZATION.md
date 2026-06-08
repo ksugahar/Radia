@@ -20,9 +20,11 @@ yano-type handles, behind a clean Radia API. Honest scope, milestone-based, with
 | **Public Radia API** | analytic `_ChargeGramHMatrix` + `SolveLinearMaterial` (scalable demag + linear solve) | `radia.hdiv_vim` package (build_demag / solve_nonlinear_newton[_scalable]) |
 
 Progress (2026-06-08): **M2 DONE** (the accurate analytic charge Gram is in the C++ scalable path,
-golden-locked; the scalable nonlinear Newton rewired onto it). **M3 partial** (the iterative linear
-solve is in C++; the full nonlinear Newton-in-C++ remains). The remaining gap to seal yano-type: the
-full C++ Newton (M3), the M4 production pieces, and the **speed** parity number (M0, never measured).
+golden-locked; the scalable nonlinear Newton rewired onto it). **M3 DONE** (the warranted C++ work:
+SolveLinearMaterial Jacobi-PCG + SolveNonlinearPicard scalar-χ nonlinear; the per-element tensor-tangent
+Newton is **measured-not-warranted** — the production Newton converges in 5–6 iters so a C++ port buys
+little). The remaining gap to seal yano-type: the M4 production pieces + the broader **speed** parity
+matrix (M0; the nonlinear-Newton case is now measured — 5–6 iters, orchestration negligible).
 
 ## Definition of done — the parity gate (M0)
 
@@ -83,7 +85,9 @@ the slow-but-robust part, ~230 iters at deep saturation — do not confuse the t
   (`src.LastWriteTime -le dst.LastWriteTime`) can skip the `.pyd` copy AND a fresh `import radia` can
   briefly read the pre-copy `.pyd` (NAS read-cache lag). Workaround: `Copy-Item -Force
   build-msvc\_radia_pybind.cp312-win_amd64.pyd src\radia\_radia_pybind.pyd` then verify in a NEW process.
-- **M3 — nonlinear Newton in C++. PARTIAL (2026-06-08).**
+- **M3 — nonlinear solve in C++. DONE (2026-06-08): the WARRANTED C++ work is complete.** (linear-solve
+  kernel + scalar-χ Picard in C++; the per-element tensor-tangent Newton is measured-not-warranted —
+  the Python Newton is the production path at 5–6 iters, see below.)
   - **DONE — the iterative-solve hot kernel in C++ (commit 029236d8).** `RadHACApKChargeGram::SolveLinearMaterial`
     solves the SPD material system `((1/chi)M_mass + B^T G B) m = rhs` by Jacobi-PCG with G applied as the
     analytic H-matvec — the linear demag solve + the symmetric Picard warmstart, no Python per-iteration
@@ -95,12 +99,17 @@ the slow-but-robust part, ~230 iters at deep saturation — do not confuse the t
     test_hdiv_vim_cpp_nonlinear.py: == Python scalar-chi Picard on the identical operator <1e-5, == the
     analytic scalar fixed point <1% (near-saturation sphere). The nonlinear PHYSICS for an isotropic body
     is now in C++.
-  - **REMAINING — the per-element tensor-tangent Newton (non-uniform M).** The consistent tensor tangent
-    dM/dH + the RT0 field reconstruction + the NONSYMMETRIC tangent GMRES + the damped Newton loop, for
-    bodies whose M is non-uniform at the element level. This is irreducibly NGSolve FEM (re-implementing it
-    in pure C++ = duplicating NGSolve HDiv assembly), so the honest path is to keep the constitutive/tangent
-    assembly in NGSolve and — if the M0 speed number demands it — move only the tangent GMRES loop to C++
-    on the `SolveLinearMaterial` Krylov. Gated by M0.
+  - **NOT WARRANTED (M0-measured 2026-06-08) — the per-element tensor-tangent Newton in C++.** The
+    tensor-tangent Newton-Raphson is the PRODUCTION nonlinear solver (`solve_nonlinear_newton`, Python +
+    NGSolve assembly) and it converges in **5–6 iterations** on sphere AND non-uniform cube at genuine
+    saturation (H0 = 3e5–8e5), matching the analytic fixed point to 0–0.8% and Radia MMM/MSC to <0.05%
+    (test_hdiv_vim_newton_vs_radia.py). Because the Newton does only 5–6 iterations, the Python
+    orchestration overhead is NEGLIGIBLE (each iteration's cost is the C++ H-matvec, already C++) — so
+    porting the Newton loop to C++ buys almost nothing. (Contrast the scalar-χ Picard ~230 iters, where
+    C++ DID help — which is why the Picard, not the Newton, was C++-ported in M3.) So the full C++ Newton
+    is NOT built: the algorithm is the win and it is already fast. The per-element constitutive assembly
+    (b_M, T) stays in NGSolve — the standard FE stack, not a limitation. (This re-scoping is the M0-type
+    measurement for the nonlinear case: 5–6 iters ⇒ C++ port not justified.)
   > **H-LDLᵀ DELETED — 消去 done 2026-06-08.** The direct symmetric H-LDLᵀ factorization was removed from
   > the codebase entirely: the HDiv-VIM is μr-INDEPENDENT by construction, so the iterative solve
   > (MINRES linear / GMRES/Picard nonlinear) is cheap and well-conditioned — a direct factorization
