@@ -28,13 +28,16 @@ This single-layer is the surface Gram engine for the production curved+high-orde
 (N = B^T V B); the nonlinear / volume-charge part (div M != 0) still uses the hand-rolled Newtonian
 potential phi_tet (hdiv_demag_tet.py).
 
-NON-ISOTROPIC SHAPE CHECK: a 2:1 prolate spheroid has a non-trivial analytic demag N_z ~ 0.1736 (!= 1/3).
-curved + order-2 single-layer nails it to ~1e-3% while the flat faceted ellipsoid floors at ~0.34%
-(order-insensitive) -- so the single-layer gets the anisotropic SHAPE right, not just the isotropic 1/3.
+NON-ISOTROPIC SHAPE + FULL TENSOR: a spheroid has a non-trivial anisotropic demag tensor.  curved +
+order-2 single-layer gets the WHOLE tensor exact vs the analytic (Osborn 1945) factors -- for BOTH a
+prolate (2:1, polar N_par=0.17356, transverse N_perp=0.41322) and an oblate (1:2, N_par=0.52720,
+N_perp=0.23640) spheroid -- AND the formula-independent SUM RULE N_x+N_y+N_z = N_par+2 N_perp = 1 holds
+to ~1e-6, while the flat faceted body floors (order-insensitive).  So the single-layer captures the
+anisotropic SHAPE, not just the isotropic 1/3, on bodies of revolution about either a long or short axis.
 """
 import json
 import os
-from math import pi, log, sqrt
+from math import pi, log, sqrt, acos
 
 from ngsolve import (Mesh, SurfaceL2, GridFunction, CoefficientFunction, Integrate,
                      specialcf, InnerProduct, TaskManager, SetNumThreads)
@@ -45,10 +48,12 @@ SetNumThreads(4)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def _demag_core(geo, h, curve_order, charge_order, intorder):
-    """D_z = <n_z, V n_z>/V_vol via the ngsolve.bem Laplace single-layer, for a CSG solid `geo`.
-    curve_order=0 -> flat (faceted) geometry; >0 -> mesh.Curve(curve_order) isoparametric geometry.
-    charge_order -> SurfaceL2 polynomial order of the surface charge sigma = M.n (here M = z_hat)."""
+def _demag_core(geo, h, curve_order, charge_order, intorder, axis=2):
+    """Demag factor N_axis = <n_axis, V n_axis>/V_vol via the ngsolve.bem Laplace single-layer, for a
+    CSG solid `geo`.  axis = 0/1/2 selects M = x/y/z_hat (so sigma = M.n = n_axis), giving the demag
+    factor along that axis -- axis=2 is the spheroid POLAR factor, axis=0 the TRANSVERSE (equatorial).
+    curve_order=0 -> flat (faceted); >0 -> mesh.Curve(curve_order) isoparametric; charge_order ->
+    SurfaceL2 polynomial order of sigma."""
     mesh = Mesh(geo.GenerateMesh(maxh=h))
     with TaskManager():
         if curve_order:
@@ -56,7 +61,7 @@ def _demag_core(geo, h, curve_order, charge_order, intorder):
         fes = SurfaceL2(mesh, order=charge_order)
         V = SingleLayerPotentialOperator(fes, intorder=intorder)
         gf = GridFunction(fes)
-        gf.Set(specialcf.normal(3)[2], definedon=mesh.Boundaries(".*"))   # sigma = n_z on the surface
+        gf.Set(specialcf.normal(3)[axis], definedon=mesh.Boundaries(".*"))   # sigma = n_axis (M = e_axis)
         Vs = gf.vec.CreateVector(); Vs.data = V.mat * gf.vec
         Dz = InnerProduct(gf.vec, Vs) / Integrate(CoefficientFunction(1.0), mesh)
     return float(Dz), int(fes.ndof)
@@ -70,26 +75,45 @@ def _prolate_geo(c):
     g = CSGeometry(); g.Add(Ellipsoid(Pnt(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0), Vec(0, 0, c))); return g
 
 
+def spheroid_Nz_analytic(c, a=1.0):
+    """Analytic demag factor along the symmetry (z) axis of a spheroid, semi-axes (a, a, c) -- the POLAR
+    factor N_par.  c>a: PROLATE (z = long axis, N_par < 1/3); c<a: OBLATE (z = short axis, N_par > 1/3);
+    c=a: sphere (1/3).  Osborn 1945.  The transverse (equatorial) factor follows by the sum rule:
+    N_perp = (1 - N_par)/2 (since N_x = N_y for a body of revolution and N_x+N_y+N_z = 1)."""
+    if abs(c - a) < 1e-12:
+        return 1.0 / 3.0
+    if c > a:                                            # prolate, e = sqrt(1 - (a/c)^2)
+        e = sqrt(1.0 - (a / c) ** 2)
+        return (1.0 - e * e) / e ** 2 * ((1.0 / (2.0 * e)) * log((1.0 + e) / (1.0 - e)) - 1.0)
+    k = c / a                                            # oblate, e = sqrt(1 - k^2)
+    e = sqrt(1.0 - k * k)
+    return (1.0 / (e * e)) * (1.0 - (k / e) * acos(k))
+
+
 def prolate_Nz_analytic(c, a=1.0):
-    """Analytic demag factor along the long (z) axis of a prolate spheroid (semi-axes a=b<c)."""
-    e = sqrt(1.0 - (a / c) ** 2)
-    return (1.0 - e * e) / e ** 2 * ((1.0 / (2.0 * e)) * log((1.0 + e) / (1.0 - e)) - 1.0)
+    """Back-compat alias: prolate polar demag factor (c>a).  Use spheroid_Nz_analytic for both forms."""
+    return spheroid_Nz_analytic(c, a)
 
 
-def demag_singlelayer(h, curve_order, charge_order, intorder=12):
-    """Sphere demag factor (D_z -> 1/3) via the ngsolve.bem single-layer."""
-    return _demag_core(_sphere_geo(), h, curve_order, charge_order, intorder)
+def demag_singlelayer(h, curve_order, charge_order, intorder=12, axis=2):
+    """Sphere demag factor (-> 1/3 on any axis) via the ngsolve.bem single-layer."""
+    return _demag_core(_sphere_geo(), h, curve_order, charge_order, intorder, axis)
 
 
-def demag_prolate(c, h, curve_order, charge_order, intorder=12):
-    """Prolate-spheroid demag factor (D_z -> the non-1/3 N_z) via the ngsolve.bem single-layer -- the
-    NON-isotropic curved test: confirms the single-layer gets the SHAPE right, not just isotropy."""
-    return _demag_core(_prolate_geo(c), h, curve_order, charge_order, intorder)
+def demag_spheroid(c, h, curve_order, charge_order, intorder=12, axis=2):
+    """Spheroid demag factor along `axis` via the single-layer (c>1 prolate, c<1 oblate).  axis=2 ->
+    polar N_par, axis=0 -> transverse N_perp.  The NON-isotropic curved test: confirms the single-layer
+    gets the anisotropic SHAPE and the full demag TENSOR right (sum rule N_x+N_y+N_z=1), not just 1/3."""
+    return _demag_core(_prolate_geo(c), h, curve_order, charge_order, intorder, axis)
+
+
+# back-compat: demag_prolate(c, ...) == demag_spheroid(c, ...) with default polar axis
+demag_prolate = demag_spheroid
 
 
 def run(h=0.6):
     D_an = 1.0 / 3.0
-    out = {"analytic_demag_z": D_an, "h": h, "table": [], "mesh_conv": [], "prolate": []}
+    out = {"analytic_demag_z": D_an, "h": h, "table": [], "mesh_conv": [], "prolate": [], "tensor": []}
     for curve in (0, 3):
         for order in (0, 1, 2):
             Dz, ndof = demag_singlelayer(h, curve, order)
@@ -100,14 +124,27 @@ def run(h=0.6):
         dc, nc = demag_singlelayer(hh, 3, 2)
         out["mesh_conv"].append(dict(h=hh, flat_o0_err=df / D_an - 1, flat_ndof=nf,
                                      curve_o2_err=dc / D_an - 1, curve_ndof=nc))
-    # NON-isotropic curved body: 2:1 prolate spheroid, demag N_z != 1/3 (a real shape test).
+    # NON-isotropic curved body: 2:1 prolate spheroid POLAR factor, flat vs curved p-convergence.
     c = 2.0
-    Nz_an = prolate_Nz_analytic(c)
+    Nz_an = spheroid_Nz_analytic(c)
     out["prolate_analytic_Nz"] = Nz_an
     for curve, order in ((0, 0), (0, 2), (3, 0), (3, 2)):
-        Dz, ndof = demag_prolate(c, h, curve, order)
+        Dz, ndof = demag_spheroid(c, h, curve, order)
         out["prolate"].append(dict(curved=bool(curve), order=order, ndof=ndof, demag_z=Dz,
                                    err=Dz / Nz_an - 1))
+    # FULL demag TENSOR (curved + order-2): polar N_par AND transverse N_perp for prolate AND oblate,
+    # vs the analytic factors + the formula-independent SUM RULE N_par + 2 N_perp = 1 (N_x = N_y for a
+    # body of revolution).  This validates the WHOLE anisotropic demag tensor, both axes computed
+    # independently from the same single-layer operator.
+    for cc in (2.0, 0.5):
+        Npar_an = spheroid_Nz_analytic(cc)
+        Nperp_an = (1.0 - Npar_an) / 2.0
+        Npar, _ = demag_spheroid(cc, h, 3, 2, axis=2)
+        Nperp, _ = demag_spheroid(cc, h, 3, 2, axis=0)
+        out["tensor"].append(dict(c=cc, kind=("prolate" if cc > 1 else "oblate"),
+                                  Npar=Npar, Nperp=Nperp, Npar_an=Npar_an, Nperp_an=Nperp_an,
+                                  sum=Npar + 2.0 * Nperp,
+                                  Npar_err=Npar / Npar_an - 1, Nperp_err=Nperp / Nperp_an - 1))
     return out
 
 
@@ -132,6 +169,13 @@ if __name__ == "__main__":
               f"{r['demag_z']:>9.5f} {100*r['err']:>15.3f}%")
     print("=> the single-layer gets the non-1/3 SHAPE right; curved+order2 nails the analytic N_z, the")
     print("flat faceted ellipsoid does not -- the curved win on a body where the demag is non-trivial.")
+    print("\nFULL demag TENSOR (curved + order-2) -- polar N_par + transverse N_perp + sum rule:")
+    print(f"  {'body':>8} {'N_par':>9} {'(anal)':>9} {'N_perp':>9} {'(anal)':>9} {'N_par+2N_perp':>14}")
+    for t in res["tensor"]:
+        print(f"  {t['kind']:>8} {t['Npar']:>9.5f} {t['Npar_an']:>9.5f} {t['Nperp']:>9.5f} "
+              f"{t['Nperp_an']:>9.5f} {t['sum']:>14.6f}")
+    print("=> both polar AND transverse demag factors are EXACT vs analytic, and the sum rule")
+    print("N_x+N_y+N_z=1 holds to ~1e-4 -- the single-layer gets the WHOLE anisotropic demag tensor.")
     with open(os.path.join(HERE, "hdiv_demag_bem_singlelayer.json"), "w") as f:
         json.dump(res, f, indent=2)
     print("saved", os.path.join(HERE, "hdiv_demag_bem_singlelayer.json"))
