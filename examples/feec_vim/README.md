@@ -45,7 +45,12 @@ comparable to yano-type. On top of parity, it has three accuracy-per-DOF advanta
 flat, hand-crafted yano-type **structurally cannot match**:
 
 1. **de-Rham-exact on ANY mesh** — loops are field-null by construction (`4e-16`) on
-   distorted hexes, vs the MSC retrofit's `6e-9`; no per-mesh element engineering.
+   distorted hexes, vs the MSC retrofit's `6e-9`; no per-mesh element engineering. This also
+   makes **symmetry models (1/2, 1/4, 1/8) automatic**: on a cut/reduced mesh the loops are
+   just `ker(B)` (field-null `~4e-16`, count adapts 58→54→18→6 for sphere full→1/8), with **no
+   cohomology-aware loop-star `installCycle`** — the "loop-removal is painful" problem of
+   MSC/yano-type is eliminated (`test_hdiv_vim_symmetry_loops.py`). (The symmetry *demag value*
+   additionally needs the image-augmented Gram — Radia-IMA-style — which is not yet built.)
 2. **curved (isoparametric) geometry** — `mesh.Curve(p)`; the external field of a coarse
    sphere goes from flat `−10%` to `<0.3%` at the SAME ndof (`hdiv_demag_curved.py`). Flat
    `ObjHexahedron/ObjTetrahedron` cannot represent a curved boundary.
@@ -90,7 +95,7 @@ non-discrimination to "near-isotropy"; the verify-first single-layer result corr
 
 ## Golden tests
 
-`tests/feec/` (full feec suite **77 passing**) — Newton, Newton-vs-Radia, Wilton Gram, volume Gram,
+`tests/feec/` (full feec suite **81 passing**) — Newton, Newton-vs-Radia, Wilton Gram, volume Gram,
 scalable, ellipsoid, BH table, distorted robustness, curved win (elementary), curved + high-order demag
 exact on sphere + full spheroid tensor + general triaxial ellipsoid (sum rule) via the `ngsolve.bem`
 single-layer, curved × nonlinear (honest modest magnetization win + the ~23× field win), and the
