@@ -58,6 +58,15 @@ tangent — the head-to-head Newton-iteration count is the headline parity numbe
 HDiv-VIM *Newton* is the fast part, <30 iters at saturation; the 0.5-damped scalar Picard warmstart is
 the slow-but-robust part, ~230 iters at deep saturation — do not confuse the two.)
 
+**HACApK scalability — DEMONSTRATED for the charge Gram (M0 partial, 2026-06-08).** The charge-Gram
+1/r H-matrix (`_ChargeGramHMatrix`) genuinely compresses: on spheres n_charge 322 → 3560, the ACA
+low-rank blocks grow 0 → 1780 and the H-matrix/dense memory ratio falls 1.00 → 0.37, with H-matrix
+memory growing ~N^1.6 (vs dense N²) — **sub-quadratic, trending O(N log N)**. This is BETTER than the
+compact MMM/MSC "materialize-fallback" caveat: the charge Gram is a cleaner far-field 1/r kernel, so
+ACA works on it. Benchmark: `examples/feec_vim/hdiv_demag_hacapk_scaling.py` (+ `.json`). Honest scope:
+shown to n~3560 (build_demag's dense-G reference is O(N²) and caps N); the trend is clear + favorable;
+larger-N (10k+) confirmation needs a dense-G-free charge extraction — the remaining M0 scalability item.
+
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
