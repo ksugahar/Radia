@@ -185,7 +185,7 @@ def _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id):
 
 def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
                            picard_warmstart=8, maxit=200, tol=1e-10, wilton_surface=False,
-                           bh_table=None):
+                           bh_table=None, analytic_gram=False):
     """Robust NONLINEAR HDiv-VIM solve via damped (line-search) Newton-Raphson.
 
     Newton on the constitutive residual in RT0 coefficient form
@@ -221,16 +221,17 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
     else:
         Mof = _bh_curve(chi0, Msat)
         chi_init = chi0
-    d = tet.build_demag(mesh, nsub, wilton_surface=wilton_surface)
+    d = tet.build_demag(mesh, nsub, wilton_surface=wilton_surface, analytic_gram=analytic_gram)
     M_mass = d["M_mass"]
     mu = d["m_unit"]
     denom = mu @ M_mass @ mu
     N = d["N"].copy()
-    if near_correction:
+    if near_correction and not analytic_gram:
         # near-field correction.  With wilton_surface the surface-surface block is already exact, so
         # correct only the VOLUME-involving (cell-cell, cell-face) near pairs (skip_surface_surface)
         # -- the per-element nonlinear Newton needs the volume near-field, and double-correcting the
         # surface would over-count.  Without wilton_surface, correct all near pairs (the old path).
+        # analytic_gram makes the WHOLE Gram exact -> no near-correction needed (skip it).
         corr = tet.build_near_correction(mesh, d, nsub=nsub, near_factor=2.0,
                                          skip_surface_surface=wilton_surface)
         B = d["B_csr"]

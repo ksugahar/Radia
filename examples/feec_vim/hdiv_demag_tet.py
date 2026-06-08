@@ -161,13 +161,65 @@ def wilton_surface_block(bf_V):
     return 0.5 * (G + G.T)
 
 
+def phi_tet(V, P):
+    """Newtonian potential INT_tet 1/|P - r'| dV' of a uniform tetrahedron (vertices V, 4x3) at P --
+    the VOLUME analog of tri_potential, via the divergence theorem (nabla'^2 R = 2/R):
+        INT_V 1/R dV = (1/2) sum_{4 faces} d_face * INT_face 1/R dA'
+    with d_face = (r' - P).n_hat (constant on a flat face) and the inner face integral = tri_potential.
+    Reuses the exact Wilton triangle potential -> the volume Gram needs NO new singular quadrature.
+    P: (3,) -> float, or (M,3) -> (M,).  Verified vs fine volume quadrature to the reference's accuracy."""
+    P = np.asarray(P, float)
+    single = (P.ndim == 1)
+    R = P.reshape(1, 3) if single else P
+    cen = V.mean(0)
+    tot = np.zeros(len(R))
+    for f in ((1, 2, 3), (0, 2, 3), (0, 1, 3), (0, 1, 2)):
+        Fv = V[list(f)]
+        n = np.cross(Fv[1] - Fv[0], Fv[2] - Fv[0])
+        n = n / np.linalg.norm(n)
+        if np.dot(Fv.mean(0) - cen, n) < 0:
+            n = -n                                          # outward face normal
+        d = (Fv[0] - R) @ n                                 # (M,) signed distance P -> face plane
+        tot += d * tri_potential(Fv, R)
+    tot *= 0.5
+    return float(tot[0]) if single else tot
+
+
+def analytic_charge_gram(el_V, bf_V, el_vol, bf_area, nsub_tet=3):
+    """FULL analytic charge Gram (n_charge x n_charge, cells then boundary faces): every block via the
+    EXACT analytic potential -- cell sources via phi_tet, face sources via tri_potential -- integrated
+    against an outer quadrature on the target cell (tet sub-points) / face (Dunavant).  Replaces the
+    centroid-monopole G everywhere, so the vol-vol and vol-surf (cell-cell, cell-face) blocks -- which
+    matter for NON-uniform M (nonlinear, div M != 0) -- are analytic, not monopole+sub-point.  This is
+    the #B 'volume Gram' that closes the residual sharp-body non-uniform gap (cube ~8.7%, C-yoke ~4%).
+    Symmetric; O(n_charge) Python loop (vectorized over target points)."""
+    n_el, n_bf = len(el_V), len(bf_V)
+    n = n_el + n_bf
+    lam_t = _bary_tet(nsub_tet)                              # tet outer sub-points
+    QP, QW = [], []
+    for k, V in enumerate(el_V):
+        P = lam_t @ V
+        QP.append(P); QW.append(np.full(len(P), el_vol[k] / len(P)))
+    for k, V in enumerate(bf_V):
+        QP.append(_DUN5[:, :3] @ V); QW.append(_DUN5[:, 3] * bf_area[k])
+    allP = np.vstack(QP)
+    allW = np.concatenate(QW)
+    tidx = np.concatenate([np.full(len(QP[i]), i) for i in range(n)])
+    inv4pi = 1.0 / (4.0 * pi)
+    G = np.zeros((n, n))
+    for s in range(n):
+        pot = phi_tet(el_V[s], allP) if s < n_el else tri_potential(bf_V[s - n_el], allP)
+        G[:, s] = np.bincount(tidx, weights=allW * pot * inv4pi, minlength=n)
+    return 0.5 * (G + G.T)
+
+
 def _csr(bf):
     m = bf.mat
     r, c, v = m.COO()
     return sp.csr_matrix((np.array(v), (np.array(r), np.array(c))), shape=(m.height, m.width)).toarray()
 
 
-def build_demag(mesh, nsub=4, wilton_surface=False):
+def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False):
     """Assemble the HDiv-type VIM demag operator N = B^T G B on a tet mesh + the HDiv mass M_mass.
     Returns N, M_mass, the charge map B, the loop basis, and diagnostics.
 
@@ -213,7 +265,12 @@ def build_demag(mesh, nsub=4, wilton_surface=False):
     for k, V in enumerate(bf_V):
         diagG[n_el + k] = tri_self_energy(V, bf_area[k], nsub)
     np.fill_diagonal(G, diagG)
-    if wilton_surface and n_bf > 0:
+    if analytic_gram:
+        # FULL analytic charge Gram (#B volume Gram): every block (vol-vol, vol-surf, surf-surf) via the
+        # exact phi_tet / tri_potential potentials -- closes the NON-uniform-M (nonlinear) sharp-body gap
+        # the monopole+sub-point leaves on the cell-cell / cell-face blocks.  Supersedes wilton_surface.
+        G = analytic_charge_gram(el_V, bf_V, el_vol, bf_area)
+    elif wilton_surface and n_bf > 0:
         # exact Wilton surface-surface block (incl. self): shape-exact for ANY triangle, unlike
         # tri_self_energy which assumes an equilateral (fixed C_TRI) -> on real meshes with varied
         # triangle shapes the Wilton self is the accurate diagonal (demag 1/3 to <0.15% vs ~2% if the
