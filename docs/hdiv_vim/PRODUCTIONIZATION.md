@@ -57,8 +57,15 @@ production-representative numbers). This sizes the C++ lift and fixes the "done"
   the C++ `_ChargeGramHMatrix` entry function (currently monopole in C++, accurate Gram is a Python
   overlay). The scalable H-matrix path must be as accurate as the dense Python reference.
 - **M3 — nonlinear Newton in C++.** The per-cell tensor-tangent damped Newton loop (or its hot parts)
-  in C++, reusing the C++ H-LDLᵀ for the factor-once tangent solve. Removes the Python per-iteration
-  overhead — the main speed lever for nonlinear.
+  in C++. The tangent solve is **iterative** (GMRES, matrix-free with the H-matrix), as in the scalable
+  prototype — **no direct factorization**. Removes the Python per-iteration overhead (the main speed
+  lever for nonlinear).
+  > **H-LDLᵀ DROPPED (decision 2026-06-08).** The direct symmetric H-LDLᵀ factorization of the
+  > H-matrix is **not** on the production path: the HDiv-VIM is μr-INDEPENDENT by construction, so the
+  > iterative solve (MINRES linear / GMRES nonlinear) is cheap and well-conditioned — a direct
+  > factorization buys little and adds a C++ component to mature. The existing C++ H-LDLᵀ
+  > (`_hldlt_self_test*`, `factor_solve_hldlt`) stays as research code but is removed from M3 / the
+  > critical path.
 - **M4 — curved/high-order + symmetry production + the curved-nonlinear-volume gap.** Wire the
   `ngsolve.bem` single-layer (curved Gram) + the symmetry image method + a true reduced-DOF symmetry-BC
   solve into the API. Build the genuine method gap: the curved nonlinear **volume** charge (`phi_tet` on
