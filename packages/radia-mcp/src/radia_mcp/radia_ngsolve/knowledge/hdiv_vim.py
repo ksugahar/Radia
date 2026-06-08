@@ -657,8 +657,16 @@ OPEN (honest boundaries / next increments) -- the lift to RETIRE yano-type in pr
     cells still needs the Newtonian volume potential (phi_tet) on curved geometry.
   - symmetry-model demag at HIGH ORDER / CURVED via the ngsolve.bem single-layer + image kernels (the
     elementary sub-point image method is the prototype).
-  - BH-knee stiffness; H-LDL^T on DEEP trees; near-field/Wilton Gram in the C++ ChargeGram entry;
-    proper distorted RT0 M_mass for exact distorted demag VALUES (non-negativity already holds).
+  - BH-knee stiffness; near-field/Wilton Gram in the C++ ChargeGram entry; proper distorted RT0 M_mass
+    for exact distorted demag VALUES (non-negativity already holds).
+DROPPED (decision 2026-06-08): the direct symmetric H-LDL^T factorization is NOT on the production path
+  -- HDiv-VIM is mu_r-INDEPENDENT by construction, so the ITERATIVE solve (MINRES linear / GMRES
+  nonlinear) is cheap + well-conditioned; a direct factorization buys little.  The C++ H-LDL^T
+  (_hldlt_self_test*, factor_solve_hldlt) stays as research code, off the critical path (see
+  docs/hdiv_vim/PRODUCTIONIZATION.md M3).  PRODUCTIONIZATION = M1 (DONE: core promoted to the
+  radia.hdiv_vim package + public API, feec 85/85) -> M2 (Wilton/phi_tet into the C++ ChargeGram) ->
+  M3 (nonlinear Newton in C++, iterative tangent solve) -> M4 (curved/high-order + symmetry + curved
+  nonlinear volume) -> M5 (the seal, AFTER the summer 静止器・回転機 meeting).
 """
 
 _CURVED = r"""
