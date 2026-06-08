@@ -21,7 +21,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
-import hdiv_demag_tet_nonlinear as nl  # noqa: E402
+from radia.hdiv_vim import _nonlinear as nl  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
 
