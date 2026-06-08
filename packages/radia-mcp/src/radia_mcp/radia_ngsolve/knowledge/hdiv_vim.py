@@ -326,9 +326,24 @@ tests/feec/test_hdiv_vim_newton_scalable.py.  The heavy cost (the Gram apply) is
 (O(N log N), established for the linear case in production #1/#2); the Newton outer loop is Python (an
 O(N)-per-iteration overhead dominated by the C++ H-matvec).
 
-## NEXT (open): analytic VOLUME (tet) Gram; full-C++ Newton loop; Wilton-in-C++
+## HIGH-ORDER VIM -- SCOPED (the speed-win task; build not started)
+The FEEC structure is ORDER-AGNOSTIC: HDiv(order>=1) assembles, the charge map B = (rho=-div M tested
+on L2(p), sigma=M.n tested on SurfaceL2(p)) builds, and loops = ker(B) are FIELD-NULL BY CONSTRUCTION
+at EVERY order (B.loop=0 => N.loop=B^T G(B loop)=0, any G) -- no element engineering, automatic.
+DOF/charge/loop growth (tet 2x2x2): order 0 -> 120/96/25, order 1 -> 360/336/169, order 2 ->
+1008/768/529.  So the high-order CAPABILITY is real + free (yano-type is lowest-order only).
+THE BUILD = the higher-order CHARGE GRAM: at order>=1 the charge densities (rho=-div M, sigma=M.n) are
+POLYNOMIALS per cell/face (not piecewise-constant), so G[i][j] = INT INT charge_i charge_j / |x-x'|
+needs singular quadrature for POLYNOMIAL densities -- the higher-order analog of the Wilton/Graglia
+surface Gram (tri_potential) already built for the constant case.  PAYOFF = p-convergence
+accuracy-per-DOF -> for a target accuracy, far fewer DOFs than lowest-order => the genuine SPEED win
+over lowest-order yano-type (which cannot go high-order).  Major build; verify-first scope confirmed
+2026-06-07.
+
+## NEXT (open): higher-order charge Gram (high-order build); analytic VOLUME (tet) Gram; Wilton-in-C++
+- HIGH-ORDER charge Gram (the speed-win build above): polynomial-density singular quadrature.
 - analytic VOLUME Gram (uniform-tet potential: cell-cell + cell-face) -> closes the residual nonlinear
-  sharp-body non-uniform gap (the surface Wilton is done).
+  sharp-body non-uniform gap (the surface Wilton is done; the C-yoke ~4% / cube ~8.7% residual).
 - the C++ Gram H-matrix is MONOPOLE far field, so the scalable path matches the dense MONOPOLE+near-corr
   Newton, NOT the dense Wilton path; putting the Wilton surface integral into the C++ near-field
   correction gives scalable + Wilton-accurate together.
