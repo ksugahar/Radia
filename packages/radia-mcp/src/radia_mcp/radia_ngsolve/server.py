@@ -814,8 +814,7 @@ def hdiv_vim(topic: str = "overview") -> str:
             "overview"       - what it is + why (symmetric, loops field-null, mu_r-independent) [DEFAULT]
             "implementation" - C++/pybind/Python files + APIs (rad_hdiv_vim, _ChargeGramHMatrix, ...)
             "scaling"        - charge-Gram H-matrix + sparse near-field correction
-            "hldlt"          - rk-aware symmetric H-LDL^T (factor compressed H-matrices)
-            "verification"   - golden tests (tests/feec/, 85/85) + the verify-first bug catches
+            "verification"   - golden tests (tests/feec/) + the verify-first bug catches
             "nonlinear"      - damped Newton; analytic_gram REQUIRED for non-uniform M; C-yoke vs Radia;
                                fail-loud on non-convergence; the honest reference distinctions
             "curved"         - curved + high-order demag (ngsolve.bem single-layer): sphere/spheroid/
