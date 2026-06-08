@@ -61,3 +61,18 @@ def test_prolate_nonisotropic_shape_exact():
     assert abs(d_curv2 / Nz - 1) < 5e-4, f"curved o2 prolate N_z {d_curv2:.5f} not within 0.05% of {Nz:.5f}"
     assert abs(d_flat0 - d_flat2) < 1e-4, "flat order should not change the (faceted) prolate demag"
     assert abs(d_curv2 / Nz - 1) < abs(d_flat0 / Nz - 1), "curved o2 must beat flat on the analytic N_z"
+
+
+def test_spheroid_full_tensor_and_sum_rule():
+    """The full demag TENSOR: for BOTH a prolate (c=2) and an oblate (c=0.5) spheroid, curved + order-2
+    single-layer gets the POLAR N_par AND the TRANSVERSE N_perp exact vs analytic (Osborn), and the
+    formula-independent SUM RULE N_par + 2 N_perp = 1 holds (N_x=N_y for a body of revolution).  This
+    validates the WHOLE anisotropic demag tensor, both axes computed independently from the operator."""
+    for c in (2.0, 0.5):
+        Npar_an = bem.spheroid_Nz_analytic(c)
+        Nperp_an = (1.0 - Npar_an) / 2.0
+        Npar, _ = bem.demag_spheroid(c, 0.6, 3, 2, axis=2)     # polar (z) factor
+        Nperp, _ = bem.demag_spheroid(c, 0.6, 3, 2, axis=0)    # transverse (x) factor
+        assert abs(Npar / Npar_an - 1) < 1e-3, f"c={c}: polar N_par {Npar:.5f} vs analytic {Npar_an:.5f}"
+        assert abs(Nperp / Nperp_an - 1) < 1e-3, f"c={c}: transverse N_perp {Nperp:.5f} vs {Nperp_an:.5f}"
+        assert abs(Npar + 2.0 * Nperp - 1.0) < 2e-3, f"c={c}: sum rule N_par+2N_perp = {Npar+2*Nperp:.5f} != 1"

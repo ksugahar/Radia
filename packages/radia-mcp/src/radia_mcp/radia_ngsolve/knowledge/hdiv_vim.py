@@ -401,8 +401,11 @@ golden tests/feec/test_hdiv_vim_curved.py):
     CURVE(3) order 0 -1.89% (piecewise-const sigma under-resolves the n_z that VARIES on a curved face) ->
     order 1 -0.06% -> order 2 **-0.0002% EXACT**; mesh+intorder converged.  NON-ISOTROPIC shape check (2:1 prolate spheroid,
     analytic N_z=0.17356 != 1/3): curved+order2 0.17356 (-0.001% EXACT) vs flat 0.17415 (+0.34%, order-
-    insensitive) -> the single-layer gets the anisotropic SHAPE right, not just isotropy (golden
-    test_hdiv_vim_bem_demag.py::test_prolate_nonisotropic_shape_exact).  => curved+high-order converges
+    insensitive) -> the single-layer gets the anisotropic SHAPE right, not just isotropy.  FULL demag
+    TENSOR (curved+o2, axis=0/2 -> sigma=n_x/n_z): prolate(2:1) N_par 0.17356 + N_perp 0.41322; oblate(1:2)
+    N_par 0.52720 + N_perp 0.23640 -- all EXACT vs analytic (Osborn 1945), and the formula-independent SUM
+    RULE N_x+N_y+N_z=1 holds to ~1e-6 (golden test_hdiv_vim_bem_demag.py::{test_prolate_nonisotropic_shape_exact,
+    test_spheroid_full_tensor_and_sum_rule}).  => curved+high-order converges
     the demag to exactness AT COARSE MESH, fixed small ndof = the accuracy-per-DOF win over flat
     lowest-order yano-type, ON THE DEMAG FACTOR (corrects the crude-method "doesn't discriminate").  Reuses
     NGSolve, NO hand-rolled singular quadrature -- supersedes the Wilton/phi_tet SURFACE block for the
