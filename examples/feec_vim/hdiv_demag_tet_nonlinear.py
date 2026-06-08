@@ -185,7 +185,7 @@ def _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id):
 
 def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
                            picard_warmstart=8, maxit=200, tol=1e-10, wilton_surface=False,
-                           bh_table=None, analytic_gram=False):
+                           bh_table=None, analytic_gram=False, require_convergence=True):
     """Robust NONLINEAR HDiv-VIM solve via damped (line-search) Newton-Raphson.
 
     Newton on the constitutive residual in RT0 coefficient form
@@ -279,6 +279,7 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
     # damped operator Newton on the constitutive residual
     nit = 0
     M_prev = Mavg(m)
+    converged = False
     for it in range(maxit):
         nit = it + 1
         set_field(m)
@@ -289,7 +290,7 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
         F = M_mass @ m - lf.vec.FV().NumPy()
         nF = np.linalg.norm(F)
         if nF < tol * (np.linalg.norm(M_mass @ m) + 1e-30):
-            break
+            converged = True; break
         T = ng.BilinearForm(fes)
         T += ng.InnerProduct(tang * u, v) * ng.dx
         T.Assemble()
@@ -303,8 +304,17 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
         # though M_avg is already correct -- key on the observable, not the raw residual norm.
         M_now = Mavg(m)
         if abs(M_now - M_prev) < 1e-8 * (abs(M_now) + 1e-30):
-            break
+            converged = True; break
         M_prev = M_now
+    if require_convergence and not converged:
+        # fail loud (no silent non-converged result): the most common cause is the WRONG Gram for a
+        # NON-uniform-M nonlinear problem -- the surface-only wilton_surface leaves the volume (cell)
+        # blocks crude so Newton stalls; div M != 0 bodies (cube, C-yoke, ...) need analytic_gram=True.
+        raise RuntimeError(
+            f"solve_nonlinear_newton did NOT converge in maxit={maxit} iters (last M_avg={Mavg(m):.1f}). "
+            f"For NON-uniform-M nonlinear problems (div M != 0: cube, C-yoke, any non-ellipsoid) pass "
+            f"analytic_gram=True -- the surface-only wilton_surface Gram leaves the volume blocks crude "
+            f"and Newton cannot converge. Pass require_convergence=False to inspect the non-converged iterate.")
     return Mavg(m), nit, Dscal
 
 
