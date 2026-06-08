@@ -123,6 +123,25 @@ public:
         double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
         double tol, int maxit, int& iters_out);
 
+    // M3 (the NONLINEAR solve in C++): scalar-chi Picard for the isotropic nonlinear demag.
+    // Each Picard step is a SolveLinearMaterial solve of ((1/chi) M_mass + B^T G B) m = H0*(M_mass mu),
+    // then chi <- 0.5 chi + 0.5*chi_sec(|H|) with the closed-form saturating curve
+    //   M(H) = chi0 H / (1 + chi0 |H|/Msat)   ->   chi_sec(|H|) = chi0/(1 + chi0|H|/Msat),
+    // and the scalar self-consistent field H = H0 - Dscal*M_avg, Dscal = mu.(B^T G B mu)/denom,
+    // M_avg = mu.(M_mass m)/denom.  Converges to the scalar fixed point M_avg = M(H0 - Dscal*M_avg)
+    // -- the full nonlinear physics for an isotropic body, with NO NGSolve per iteration (the
+    // per-element tensor-tangent refinement for non-uniform M stays NGSolve).  All sparse inputs as in
+    // SolveLinearMaterial; Mmass_diag + N_diag build the per-chi Jacobi preconditioner.
+    struct PicardResult { std::vector<double> m; double Mavg; double chi; double Dscal; int iters; };
+    PicardResult SolveNonlinearPicard(
+        const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+        const std::vector<double>& B_data, int n_face,
+        const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+        const std::vector<double>& Mmass_diag, const std::vector<double>& N_diag,
+        const std::vector<double>& mu, double denom,
+        double chi0, double Msat, double H0,
+        int picard_iters, double cg_tol, int cg_maxit);
+
 protected:
     void ExtractCoordinates() override;
     void OnBeforeBuild() override {}
