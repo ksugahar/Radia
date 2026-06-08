@@ -484,16 +484,40 @@ the IMAGE-augmented Gram (image interactions, like Radia's IMA) -- conceptually 
 image kernels, or mesh the symmetry planes and apply BC) but NOT yet built; the probe's demag is the
 octant-as-standalone (no images), so "1/8 model demag = full demag" awaits the image Gram.
 
+## NON-UNIFORM NONLINEAR needs analytic_gram; C-YOKE VERIFIED vs Radia (2026-06-08, the 1/8-gate audit)
+The gate before symmetry models: confirm nonlinear + C-yoke + distorted-mesh are solid.  Outcome:
+- GRAM REQUIREMENT (a trap, now fail-loud): a NON-uniform-M nonlinear solve (div M != 0: cube, C-yoke,
+  any non-ellipsoid) REQUIRES analytic_gram=True (the full volume Gram via phi_tet).  The surface-only
+  wilton_surface Gram leaves the volume (cell) blocks crude -> wrong per-element fields -> Newton does
+  NOT converge (stalls at maxit, M_avg drifts).  Only UNIFORM-M nonlinear (sphere/spheroid) converges
+  with wilton_surface.  solve_nonlinear_newton now RAISES on non-convergence (require_convergence=True
+  default) with a message pointing at analytic_gram -- NO silent wrong result (this trap previously made
+  the C-yoke look "mesh-dependent / non-converging" when it was just the wrong Gram).
+- C-YOKE VERIFIED (examples/feec_vim/hdiv_cyoke_nonlinear.py, golden test_hdiv_vim_cyoke_nonlinear.py):
+  non-convex reentrant-corner C-yoke, nonlinear (chi0=1000/Msat=1e6/H0=2e5), analytic_gram -> converges
+  in 6 Newton iters, volume-avg M_z MESH-STABLE (572062/576970/580981 over maxh 0.020/0.016/0.013) and
+  matches shipped Radia MMM (same flat mesh / M-H law / applied field) to <1% at EVERY mesh
+  (-0.25%/+0.71%/-0.37%).  Cube likewise -0.08%/-0.15% (H0=2e5/5e5).  C-yoke is FLAT so Radia is a valid
+  cross-reference.  CLOSES the C-yoke accuracy gate.
+- ITERATION COUNT also dropped: analytic_gram converges in 5-6 iters where wilton_surface stalled at
+  maxit (120-400) for non-uniform M -- the right Gram is both correct AND fast.
+- DISTORTED-MESH: mu_r-independence (bounded iters vs mu_r 10->1e4) golden-locked
+  (test_hdiv_vim_solve.py::test_minres_iters_bounded_vs_mu_r_distorted); the nonlinear ACCURACY on the
+  non-convex C-yoke is now also verified (above).  => all three 1/8-gate items pass.
+
 ## REFERENCE HONESTY for the accuracy numbers (verify-first, 2026-06-07)
 What the quoted accuracies are measured against, precisely:
 - SPHERE / ELLIPSOID demag + nonlinear: vs ANALYTIC truth (D=1/3 or the prolate N_z; the scalar fixed
   point M = M(H0 - D M)).  These are REAL verified errors (sphere nonlinear <0.2%, demag <0.15%).
-- CUBE NONLINEAR (the 13% -> 6.2% volume-Gram numbers) + C-YOKE (~4%): vs RADIA MMM/MSC on the SAME
-  coarse mesh.  There is NO analytic solution for the cube/C-yoke nonlinear, and Radia is the mature
-  TRUSTED solver but NOT ground truth (it has its own discretization error on a coarse mesh).  So
-  "6.2%" is a CROSS-METHOD DIFFERENCE that improved with the volume Gram, NOT a verified error vs truth.
-  A true accuracy claim needs a MESH-CONVERGENCE study (refine until HDiv and Radia agree on the same
-  value) or a benchmark -- NOT done.  State it as "agreement with Radia", not "error".
+- CUBE / C-YOKE NONLINEAR: vs RADIA MMM/MSC on the SAME flat mesh (no analytic truth; Radia is the
+  mature TRUSTED solver, valid here because BOTH are flat).  **CORRECTED 2026-06-08 (mesh-convergence
+  study DONE)**: with analytic_gram + VOLUME-AVG M_z the agreement is <1% at every mesh -- cube -0.08%
+  (H0=2e5) / -0.15% (H0=5e5) at maxh 0.28; C-yoke -0.25%/+0.71%/-0.37% over maxh 0.020/0.016/0.013, both
+  converging in 5-6 Newton iters and mesh-stable.  The earlier "13% / 6.2% / ~4%" were STALE -- either
+  the wrong (surface-only wilton_surface) Gram that does NOT converge for non-uniform M, or a stricter
+  per-element metric (M std), NOT the volume-avg with the volume Gram.  So the honest current statement
+  is "volume-avg M_z agrees with shipped Radia to <1% (cross-method, both flat)".  (A stricter
+  per-element/pointwise field match would be larger and is a separate, harder claim -- not made.)
 
 ## HDiv on PYRAMIDS -- a genuine mathematical difficulty (verify-first, 2026-06-07)
 NGSolve 6.2.2604 supports pyramids in HCurl + H1 (confirmed: ndof 8/20/57 and 5/5/14 across orders 0-2)

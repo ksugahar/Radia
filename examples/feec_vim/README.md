@@ -75,7 +75,8 @@ solver but NOT ground truth on a coarse mesh):
 | Nonlinear cross-check | `test_hdiv_vim_newton_vs_radia.py` | Radia MMM/MSC (`MatSatIsoTab`) | ✅ agree `<0.05%` (sphere) |
 | Real BH table | `test_hdiv_vim_newton_table.py` | **ANALYTIC** uniform-sphere | ✅ `<0.2%` |
 | Ellipsoid (D≠1/3) | `test_hdiv_vim_ellipsoid.py` | **ANALYTIC** prolate `N_z` | ✅ 2:1 `0.3%` |
-| Volume Gram (`phi_tet`) | `test_hdiv_vim_volume_gram.py` | Radia (cube nonlinear) | ⚠ 13%→6.2% **agreement** (no analytic truth; cross-method difference, not a verified error) |
+| Volume Gram (`phi_tet`) | `test_hdiv_vim_volume_gram.py` | **ANALYTIC** (linear demag → 1/3) | ✅ the full volume Gram (`analytic_gram`); required for non-uniform nonlinear |
+| **Non-uniform nonlinear vs Radia** (cube + C-yoke) | `hdiv_cyoke_nonlinear.py`, `test_hdiv_vim_cyoke_nonlinear.py` | shipped **Radia** (both flat → valid) | ✅ volume-avg M_z agrees **<1% at every mesh** (cube −0.08%, C-yoke −0.25%/+0.71%/−0.37%), 5–6 iters, mesh-stable. **Needs `analytic_gram`** for div M≠0 (`wilton_surface` stalls → now fail-loud). The old "13%/6.2%/4%" were stale wrong-Gram/metric artifacts. |
 | Scalable (C++ H-matrix + GMRES) | `test_hdiv_vim_newton_scalable.py` | dense reference | ✅ machine precision |
 | Distorted μr-independence | `test_hdiv_vim_solve.py` | iters bounded vs μr 10→1e4 | ✅ golden-locked |
 | **Curved-mesh win** (elementary) | `hdiv_demag_curved.py` | **ANALYTIC** dipole / volume | ✅ external field flat `−10%` → Curve(3) `−0.26%` (~38× at same ndof) |
@@ -95,7 +96,7 @@ non-discrimination to "near-isotropy"; the verify-first single-layer result corr
 
 ## Golden tests
 
-`tests/feec/` (full feec suite **81 passing**) — Newton, Newton-vs-Radia, Wilton Gram, volume Gram,
+`tests/feec/` (full feec suite **83 passing**) — Newton, Newton-vs-Radia, Wilton Gram, volume Gram,
 scalable, ellipsoid, BH table, distorted robustness, curved win (elementary), curved + high-order demag
 exact on sphere + full spheroid tensor + general triaxial ellipsoid (sum rule) via the `ngsolve.bem`
 single-layer, curved × nonlinear (honest modest magnetization win + the ~23× field win), and the
