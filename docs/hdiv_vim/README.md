@@ -106,6 +106,10 @@ in **6 Newton iters** and matches Radia to `<1%`.
 
 ## 7. Honest status & open work
 
+> **The concrete milestone roadmap to retire yano-type is [PRODUCTIONIZATION.md](PRODUCTIONIZATION.md)**
+> — current C++/Python inventory, the parity-gate definition-of-done (incl. the unmeasured speed gap),
+> and milestones M0 (parity + speed measurement) → M5 (the seal).
+
 The HDiv-type VIM is a **validated research prototype** (Python + NGSolve) with a quantified
 accuracy-per-DOF win over the shipped flat solver on curved problems, and parity on the flat cases. The
 remaining lift to **retire yano-type in production**:
