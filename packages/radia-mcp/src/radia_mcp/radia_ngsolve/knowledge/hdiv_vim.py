@@ -401,6 +401,16 @@ DONE + golden-locked (feec 54/54):
   new seq)   (examples/...::solve_nonlinear_newton_scalable, tests/feec/test_hdiv_vim_newton_scalable.py).
   #3 of new  ellipsoid (non-1/3 smooth demag): 2:1 prolate N_z Wilton 0.1742 (0.3%) vs analytic 0.1736
   sequence   (monopole 2.5%) -- tests/feec/test_hdiv_vim_ellipsoid.py.  + Wilton vectorized (golden 73s->2s).
+  REAL BH    solve_nonlinear_newton(..., bh_table=(Harr,Barr)) drives the operator Newton from a REAL
+  TABLE      [[H,B]] table (PCHIP M(H)=B/mu0-H, saturation-clamped beyond Hmax -- the physical mu_r->1
+  (real      extension Radia's MatSatIsoTab also uses; raw PCHIP extrapolation blows up).  Matches the
+  material)  analytic uniform-sphere fixed point (same table, Wilton D->1/3) to <0.2% across
+             H0 10^4->3e6, saturating to the table Msat.  tests/feec/test_hdiv_vim_newton_table.py.
+             (Also fixed _scalar_fixed_point's hi<1e6 bisection cap -> 1e12 so a real Msat~1.5e6 is
+             reachable.)  NOTE: a Radia cross-check on a COARSE sphere disagreed at LOW field -- traced
+             to Radia not converging at low drive on the coarse mesh (M/H0=11.8 is impossible for a
+             sphere D=1/3); HDiv matched the analytic, so HDiv was correct.  Use the analytic fixed
+             point (not a coarse-mesh Radia run) as the low-field reference.
 
 OPEN (honest boundaries / next increments):
   - analytic VOLUME (tet) Gram: the surface Wilton is done; the residual nonlinear SHARP-body

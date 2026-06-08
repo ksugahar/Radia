@@ -71,8 +71,9 @@ def _scalar_fixed_point(Mof, D, H0):
     """Correct analytic uniform-sphere root: solve M = M(H0 - D M) by bisection on f(M)=M-M(H0-DM)."""
     lo, hi = -1.0, 1.0
     f = lambda M: M - Mof(H0 - D * M)
-    # widen until sign change
-    while f(lo) * f(hi) > 0 and hi < 1e6:
+    # widen until sign change (cap 1e12 so a REAL-table Msat ~ 1.5e6 is reachable, not just the
+    # analytic curve's Msat=1)
+    while f(lo) * f(hi) > 0 and hi < 1e12:
         lo *= 2; hi *= 2
     for _ in range(200):
         mid = 0.5 * (lo + hi)
@@ -133,8 +134,58 @@ def _tensor_tangent_cfs(gfH, chi0, Msat, Id):
     return sec * gfH, dif * par + sec * (Id - par)
 
 
+_MU0 = 4e-7 * pi
+
+
+def _bh_table_funcs(Harr, Barr):
+    """Build M(H) + the PCHIP B(H)/B'(H) from a REAL [[H,B]] table (the same data Radia's MatSatIsoTab
+    consumes): monotone C1 interpolation -> smooth dM/dH for Newton.  M(H) = B(|H|)/mu0 - |H|.
+
+    BEYOND the table (|H| > H_max) the curve SATURATES: B extends with slope mu0 (mu_r -> 1), so
+    M -> M(H_max) = const and dM/dH -> 0 -- the physical saturation, matching Radia's MatSatIsoTab
+    linear-B extension.  (Without this, PCHIP polynomial extrapolation blows up: M >> M_sat.)
+    Returns (Mof, Bpch, Bder, Hmax, Mmax)."""
+    from scipy.interpolate import PchipInterpolator
+    Harr = np.asarray(Harr, float)
+    Barr = np.asarray(Barr, float)
+    Bpch = PchipInterpolator(Harr, Barr)
+    Bder = Bpch.derivative()
+    Hmax = float(Harr[-1])
+    Mmax = float(Bpch(Hmax) / _MU0 - Hmax)
+
+    def Mof(H):
+        a = abs(H)
+        m = (float(Bpch(a)) / _MU0 - a) if a <= Hmax else Mmax
+        return float(np.sign(H) * m)
+
+    return Mof, Bpch, Bder, Hmax, Mmax
+
+
+def _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id):
+    """Table version of _tensor_tangent_cfs: per-element chi_sec / chi_diff from the PCHIP BH table,
+    set as L2(0) element-constant fields (chi_sec = M(|H|)/|H|, chi_diff = dM/d|H| = B'(|H|)/mu0 - 1).
+    Beyond the table (|H| > Hmax) M saturates to Mmax (chi_diff = 0)."""
+    l2 = ng.L2(mesh, order=0)
+    gfm = ng.GridFunction(l2)
+    gfm.Set(ng.sqrt(ng.InnerProduct(gfH, gfH) + 1e-30))
+    Hmag = np.maximum(gfm.vec.FV().NumPy(), 1e-30)         # per-element |H|
+    sat = Hmag > Hmax
+    a_cl = np.minimum(Hmag, Hmax)
+    m_e = np.where(sat, Mmax, Bpch(a_cl) / _MU0 - a_cl)    # M(|H|), saturated beyond table
+    sec_e = m_e / Hmag                                     # chi_sec = M/|H| (decreases beyond sat)
+    dif_e = np.where(sat, 0.0, Bder(a_cl) / _MU0 - 1.0)    # chi_diff = dM/d|H| (0 beyond sat)
+    gf_sec = ng.GridFunction(l2)
+    gf_sec.vec.FV().NumPy()[:] = sec_e
+    gf_dif = ng.GridFunction(l2)
+    gf_dif.vec.FV().NumPy()[:] = dif_e
+    H2 = ng.InnerProduct(gfH, gfH) + 1e-30
+    par = ng.OuterProduct(gfH, gfH) / H2
+    return gf_sec * gfH, gf_dif * par + gf_sec * (Id - par)
+
+
 def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
-                           picard_warmstart=8, maxit=200, tol=1e-10, wilton_surface=False):
+                           picard_warmstart=8, maxit=200, tol=1e-10, wilton_surface=False,
+                           bh_table=None):
     """Robust NONLINEAR HDiv-VIM solve via damped (line-search) Newton-Raphson.
 
     Newton on the constitutive residual in RT0 coefficient form
@@ -162,7 +213,14 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
 
     Returns (M_avg, n_newton_iter, D_used).  The caller must open `with ng.TaskManager():`.
     """
-    Mof = _bh_curve(chi0, Msat)
+    # constitutive: analytic saturating curve (chi0, Msat) OR a REAL tabulated BH curve (bh_table =
+    # (Harr, Barr), the same data Radia's MatSatIsoTab consumes).
+    if bh_table is not None:
+        Mof, _Bpch, _Bder, _Hmax, _Mmax = _bh_table_funcs(bh_table[0], bh_table[1])
+        chi_init = max(float(_Bder(0.0)) / _MU0 - 1.0, 1.0)   # table's zero-field susceptibility
+    else:
+        Mof = _bh_curve(chi0, Msat)
+        chi_init = chi0
     d = tet.build_demag(mesh, nsub, wilton_surface=wilton_surface)
     M_mass = d["M_mass"]
     mu = d["m_unit"]
@@ -189,11 +247,17 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
     gfH = ng.GridFunction(fes)
     Id = ng.Id(3)
 
+    def constit():
+        """(M(H) field, consistent tensor tangent) at the current gfH -- analytic or table."""
+        if bh_table is not None:
+            return _table_tensor_tangent(gfH, mesh, _Bpch, _Bder, _Hmax, _Mmax, Id)
+        return _tensor_tangent_cfs(gfH, chi0, Msat, Id)
+
     def set_field(m):
         gfH.vec.FV().NumPy()[:] = H0 * mu - Dop @ m
 
     def bM():
-        Mcf, _ = _tensor_tangent_cfs(gfH, chi0, Msat, Id)
+        Mcf, _ = constit()
         lf = ng.LinearForm(fes)
         lf += Mcf * v * ng.dx
         lf.Assemble()
@@ -204,7 +268,7 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
         return np.linalg.norm(M_mass @ m - bM())
 
     # (c) scalar-chi Picard warmstart: cheap, robust, lands inside the Newton basin (matters at the knee).
-    chi = chi0
+    chi = chi_init
     m = np.zeros(M_mass.shape[0])
     for _ in range(picard_warmstart):
         m = np.linalg.solve((1.0 / chi) * M_mass + N, H0 * b0)
@@ -217,7 +281,7 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
     for it in range(maxit):
         nit = it + 1
         set_field(m)
-        Mcf, tang = _tensor_tangent_cfs(gfH, chi0, Msat, Id)
+        Mcf, tang = constit()
         lf = ng.LinearForm(fes)
         lf += Mcf * v * ng.dx
         lf.Assemble()
