@@ -420,6 +420,28 @@ golden tests/feec/test_hdiv_vim_curved.py):
     volume potential phi_tet (built) on curved cells; (3) C++ maturity (single-layer surface + phi_tet
     volume Gram + Newton loop behind a Radia API) = the lift to actually retire yano-type.
 
+## CURVED x NONLINEAR -- the honest magnitude (verify-first, 2026-06-08; golden test_hdiv_vim_curved_nonlinear.py)
+The curved win on the nonlinear MAGNETIZATION is MODEST (~0.3%), NOT a dramatic differentiator -- an
+important honest finding that redirects where to expect the curved payoff.
+- WHY: a spheroid in a uniform field magnetises UNIFORMLY for ANY M-H law (linear or nonlinear), so the
+  nonlinear M is the scalar fixed point M = M(H_ext - N_par M) with N_par the demag factor.  The demag
+  factor is a VOLUME-NORMALISED RATIO, so it CANCELS the ~10% volume faceting error -> flat nonlinear M
+  is only ~0.3% off.  curved+o2 N_par is exact -> M matches the analytic-demag fixed point <0.05%.
+- It does NOT grow with severe curvature: thin oblate disks facet BETTER on the demag (flat M err 1:2
+  0.20% -> 1:5 0.024% -> 1:10 0.004%; their surface is dominated by near-flat caps).  Probed prolate
+  2:1/5:1 + oblate 1:2/1:5/1:10, chi0=5000/Msat=1.6e6, H_ext 1e3-1e5.
+- WHERE the big curved win (~10%) IS: the FIELD output (the volume error is NOT cancelled there --
+  external field flat -10% vs curved -0.26%, hdiv_demag_curved.py); the nonlinearity merely SCALES that
+  field by M (no amplification).
+- VALIDATION CONSTRAINT (important): RADIA IS NOT A CLEAN REFERENCE FOR CURVED geometry -- Radia's
+  ObjHexahedron/ObjTetrahedron are FLAT, so Radia facets the body; comparing curved-HDiv-VIM vs flat-
+  Radia confounds the geometry win with any bug.  So curved nonlinear is validatable ONLY vs ANALYTIC =
+  spheroids (uniform M).  The genuinely NON-UNIFORM (volume-charge, div M != 0) curved nonlinear case
+  has NO clean reference -- a mesh-convergence / self-consistency study at best, NOT a verified win.
+- CONCLUSION: curved is a real yano-type-impossible CAPABILITY, but its accuracy benefit on the
+  MAGNETIZATION (the primary solve output) is modest; the benefit is large on FIELD outputs.  Do NOT
+  claim a dramatic curved-nonlinear magnetization win.
+
 ## REFERENCE HONESTY for the accuracy numbers (verify-first, 2026-06-07)
 What the quoted accuracies are measured against, precisely:
 - SPHERE / ELLIPSOID demag + nonlinear: vs ANALYTIC truth (D=1/3 or the prolate N_z; the scalar fixed
