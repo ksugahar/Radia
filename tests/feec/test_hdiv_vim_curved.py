@@ -6,8 +6,10 @@ cannot.  The win is measured against the EXACT uniform-sphere dipole / volume (N
   - the external field of a uniform-M sphere is the exact point dipole; a FLAT coarse mesh gets it ~10%
     WRONG (volume-inherited), mesh.Curve(3) at the SAME ndof is <1% -> a >10x accuracy win vs truth;
   - the geometry (volume) is ~10% low flat, <0.5% curved;
-  - the demag FACTOR (D_z -> 1/3) does NOT discriminate (a coarse inscribed polyhedron is already
-    near-isotropic) -- locked so a future contributor does not mistake it for a curved-mesh bug.
+  - with THIS elementary method's crude sub-point Gram the demag FACTOR does NOT cleanly discriminate
+    (its ~2% quadrature bias masks the ~0.25% geometry signal) -- a limitation of the crude Gram, NOT
+    of the demag factor: the proper ngsolve.bem single-layer (test_hdiv_vim_bem_demag.py) DOES
+    discriminate + p-converges.  Locked so the crude offset is not mistaken for a curved-mesh bug.
 
 See examples/feec_vim/hdiv_demag_curved.py for the full derivation + table.
 """
@@ -52,9 +54,11 @@ def test_curved_geometry_exact(cases):
 
 
 def test_demag_factor_does_not_discriminate(cases):
-    """HONEST non-result: the sphere demag FACTOR is a near-isotropic ratio insensitive to faceting --
-    BOTH flat and curved land within a few % of 1/3 and curved is NOT meaningfully better.  Locked so
-    nobody mistakes the (correct) ~2-3% demag-factor quadrature offset for a curved-mesh defect."""
+    """The crude sub-point Gram's ~2% quadrature bias masks the ~0.25% geometry signal, so with THIS
+    elementary method both flat and curved land within a few % of 1/3 and the demag factor is NOT a
+    clean discriminator (use ext_potential, or the proper ngsolve.bem single-layer in
+    test_hdiv_vim_bem_demag.py which DOES discriminate + p-converges).  Locked so the crude offset is
+    not mistaken for a curved-mesh defect -- it is a Gram-quadrature limitation, not near-isotropy."""
     flat, curved = cases
     assert abs(flat["demag_err"]) < 0.05, "flat demag factor should already be near 1/3 (near-isotropic)"
     assert abs(curved["demag_err"]) < 0.05, "curved demag factor also near 1/3 (same near-isotropy)"
