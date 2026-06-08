@@ -451,6 +451,23 @@ important honest finding that redirects where to expect the curved payoff.
   engineering deliverable (stray field around a nonlinear part) is ~9% wrong with flat yano-type and
   exact with curved -- the genuine curved x nonlinear payoff is HERE, on the field.
 
+## (B) HEAD-TO-HEAD vs the SHIPPED Radia solver -- accuracy-per-resolution (2026-06-08)
+The FIRST quantitative head-to-head of HDiv-VIM (curved) vs the PRODUCTION code (examples/feec_vim/
+compare_curved_vs_radia_field.py, golden test_curved_vs_radia_field.py).  Shipped Radia (rad.Fld on a
+flat-tet uniform-M sphere built via netgen_mesh_to_radia) vs HDiv-VIM curved surface-charge field, both
+vs the ANALYTIC dipole.  Max external-field relative error:
+    h=0.6:  Radia FLAT 114 tets  8.92%  |  HDiv CURVED 120 tris  0.386%
+    h=0.4:  Radia FLAT 260 tets  5.87%  |  HDiv CURVED 192 tris  0.229%
+    h=0.3:  Radia FLAT 477 tets  3.48%  |  HDiv CURVED 318 tris  0.147%
+    h=0.2:  Radia FLAT 2042 tets 1.71%  |  HDiv CURVED 658 tris  0.072%
+=> HDiv CURVED at the COARSEST mesh (0.386%) BEATS shipped-Radia-FLAT at the FINEST (1.71%, 2042 tets);
+~10-30x accuracy-per-resolution at every h.  HONEST SCOPE: ACCURACY-PER-DOF (geometry-driven, fair),
+NOT wall-clock -- the HDiv-VIM here is a Python dense surface-charge prototype, not time-optimized; a
+fair SPEED comparison needs the C++ productionization (NOT done).  Radia's ObjTet are FLAT = the
+accessible stand-in for the also-flat yano-type; reference = the analytic dipole (Radia cannot referee
+curved -- it facets).  This is the quantitative basis for the curved accuracy-per-DOF advantage over the
+flat production solver; the remaining lift to a TOTAL win (incl. speed) is the C++ productionization.
+
 ## REFERENCE HONESTY for the accuracy numbers (verify-first, 2026-06-07)
 What the quoted accuracies are measured against, precisely:
 - SPHERE / ELLIPSOID demag + nonlinear: vs ANALYTIC truth (D=1/3 or the prolate N_z; the scalar fixed
