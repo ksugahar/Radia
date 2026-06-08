@@ -338,10 +338,12 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
     import radia._radia_pybind as _rp
 
     Mof = _bh_curve(chi0, Msat)
-    d = tet.build_demag(mesh, nsub)
-    M_mass = d["M_mass"]
+    # SCALABLE build: skip the dense O(N^2) G/N and the loop SVD; M_mass + B come back SPARSE.  The demag
+    # apply is the analytic charge-Gram H-matvec (Hg) below, so the dense N is never needed here.
+    d = tet.build_demag(mesh, nsub, skip_dense_gram=True)
+    M_mass = d["M_mass"]                         # sparse CSR
     mu = d["m_unit"]
-    denom = mu @ M_mass @ mu
+    denom = float(mu @ (M_mass @ mu))            # sparse-safe Rayleigh denominator
     B = d["B_csr"]
     # M2b: the C++ ANALYTIC charge Gram H-matrix is exact near AND far (matches dense analytic_gram
     # entry-by-entry), so the demag apply is just B^T (G_analytic-Hmatvec (B v)) -- NO separate Python
@@ -393,7 +395,7 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
     # scalar-chi Picard warmstart via the scalable apply (CG on the symmetric A+ = (1/chi)M_mass + N)
     chi = chi0
     m = np.zeros(ndof)
-    Aplus_diag = np.maximum(np.abs((1.0 / chi) * np.diag(M_mass)) + 1e-30, 1e-30)
+    Aplus_diag = np.maximum(np.abs((1.0 / chi) * M_mass.diagonal()) + 1e-30, 1e-30)
     for _ in range(picard_warmstart):
         Aop = spla.LinearOperator((ndof, ndof), matvec=lambda v, c=chi: (1.0 / c) * (M_mass @ np.asarray(v, float)) + N_apply(np.asarray(v, float)))
         m, _ = spla.minres(Aop, H0 * b0, M=Mprec, maxiter=2000, **{_MINRES_TOL: gmres_tol})
