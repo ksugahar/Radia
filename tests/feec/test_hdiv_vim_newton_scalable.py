@@ -54,6 +54,18 @@ def test_scalable_newton_matches_dense_analytic_sphere():
     assert nit < 30, f"scalable Newton not fast at saturation: {nit} iters"
 
 
+def test_scalable_newton_fails_loud_not_silent_underconverged():
+    """Fix A (2026-06-09): with too few Newton iters the scalable solver MUST raise (fail loud), never
+    silently return an under-converged M.  The old code broke on Mavg stagnation (|M_now-M_prev|<1e-8),
+    which fires during the slow globalization phase while relF is still O(0.1) -> it returned a WRONG
+    (drifted) Mz (the C-yoke "drift to 509k" was this false convergence, NOT an operator error).  The
+    sound test is relF = ||F||/||M_mass m|| < newton_tol, with a hard raise if maxit is hit first."""
+    mesh = _sphere(0.6)
+    with ng.TaskManager():
+        with pytest.raises(RuntimeError, match="did NOT converge"):
+            nl.solve_nonlinear_newton_scalable(mesh, 1000.0, 1.0e6, 1.0e6, maxit=1, picard_warmstart=1)
+
+
 def test_scalable_newton_matches_dense_analytic_cube():
     """NON-uniform-M body (cube, div M != 0 near corners -> volume charge): the scalable analytic
     Newton reproduces the dense analytic Newton.  This is the C-yoke-class case the old monopole-far +
