@@ -219,7 +219,7 @@ def _csr(bf):
     return sp.csr_matrix((np.array(v), (np.array(r), np.array(c))), shape=(m.height, m.width)).toarray()
 
 
-def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False):
+def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_dense_gram=False):
     """Assemble the HDiv-type VIM demag operator N = B^T G B on a tet mesh + the HDiv mass M_mass.
     Returns N, M_mass, the charge map B, the loop basis, and diagnostics.
 
@@ -257,33 +257,39 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False):
     cent = np.vstack([el_c, bf_c]); meas = np.concatenate([el_vol, bf_area])
     B = np.vstack([Bv_m / el_vol[:, None], Bb_m / bf_area[:, None]])
 
-    Dd = np.linalg.norm(cent[:, None, :] - cent[None, :, :], axis=2); np.fill_diagonal(Dd, np.inf)
-    G = (meas[:, None] * meas[None, :]) / (4 * pi * Dd)
+    # diagonal charge self-energies (O(N); kept even on the scalable path, for the preconditioner)
     diagG = np.empty(n_el + n_bf)
     for k, V in enumerate(el_V):
         diagG[k] = tet_self_energy(V, el_vol[k], nsub)
     for k, V in enumerate(bf_V):
         diagG[n_el + k] = tri_self_energy(V, bf_area[k], nsub)
-    np.fill_diagonal(G, diagG)
-    if analytic_gram:
-        # FULL analytic charge Gram (#B volume Gram): every block (vol-vol, vol-surf, surf-surf) via the
-        # exact phi_tet / tri_potential potentials -- closes the NON-uniform-M (nonlinear) sharp-body gap
-        # the monopole+sub-point leaves on the cell-cell / cell-face blocks.  Supersedes wilton_surface.
-        G = analytic_charge_gram(el_V, bf_V, el_vol, bf_area)
-    elif wilton_surface and n_bf > 0:
-        # exact Wilton surface-surface block (incl. self): shape-exact for ANY triangle, unlike
-        # tri_self_energy which assumes an equilateral (fixed C_TRI) -> on real meshes with varied
-        # triangle shapes the Wilton self is the accurate diagonal (demag 1/3 to <0.15% vs ~2% if the
-        # equilateral self is forced onto skewed boundary triangles).
-        G[n_el:, n_el:] = wilton_surface_block(bf_V)
-    N = B.T @ G @ B
-
-    Q = np.vstack([Bv_m, Bb_m])
-    sv = np.linalg.svd(Q, compute_uv=False)
-    rankQ = int(np.sum(sv > 1e-9 * sv.max()))
-    n_loop = ndof - rankQ
-    _, _, Vt = np.linalg.svd(Q)
-    loops = Vt[rankQ:, :]
+    if skip_dense_gram:
+        # SCALABLE path: SKIP the O(N^2) dense G/N and the O(N^2) loop SVD (the biggest dense costs;
+        # G/N are n_charge^2).  The C++ analytic _ChargeGramHMatrix + SolveMaterialMINRES use
+        # cent / meas / cell_verts / face_verts / diagG + the sparse B_csr only -- never the dense G.
+        # NOTE: M_mass + the dense B (n_face^2, via _csr().toarray()) are NOT yet sparse here -- making
+        # those sparse is the remaining build_demag refactor for full large-N (the dense-Gram-free
+        # analytic-Gram BUILD itself needs only the verts, which can be extracted straight from the mesh).
+        G = N = loops = None
+        n_loop = None
+    else:
+        Dd = np.linalg.norm(cent[:, None, :] - cent[None, :, :], axis=2); np.fill_diagonal(Dd, np.inf)
+        G = (meas[:, None] * meas[None, :]) / (4 * pi * Dd)
+        np.fill_diagonal(G, diagG)
+        if analytic_gram:
+            # FULL analytic charge Gram (#B volume Gram): every block (vol-vol, vol-surf, surf-surf) via
+            # the exact phi_tet / tri_potential potentials -- closes the NON-uniform-M (nonlinear) gap.
+            G = analytic_charge_gram(el_V, bf_V, el_vol, bf_area)
+        elif wilton_surface and n_bf > 0:
+            # exact Wilton surface-surface block (shape-exact for ANY triangle; demag 1/3 to <0.15%).
+            G[n_el:, n_el:] = wilton_surface_block(bf_V)
+        N = B.T @ G @ B
+        Q = np.vstack([Bv_m, Bb_m])
+        sv = np.linalg.svd(Q, compute_uv=False)
+        rankQ = int(np.sum(sv > 1e-9 * sv.max()))
+        n_loop = ndof - rankQ
+        _, _, Vt = np.linalg.svd(Q)
+        loops = Vt[rankQ:, :]
     # charge geometry (for the C++ HACApK charge-Gram H-matrix path, #1b): centroids, measures,
     # diagonal self-energies, the dense Gram G, and the sparse charge map B as scipy CSR.
     # cell_verts [n_el*12] (tets, 4 verts) + face_verts [n_bf*9] (tris, 3 verts) feed the ANALYTIC
