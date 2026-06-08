@@ -376,6 +376,21 @@ the curved DEMAG accuracy the GRAM must use the CURVED geometry (NGSolve-mapped 
 build_demag / wilton_surface_block / phi_tet currently use FLAT vertices.  That curved Gram is the
 build; arguably HIGHER value than polynomial high-order since curved bodies are ubiquitous.
 
+CURVED DEMAG BUILD -- FEASIBLE + DE-RISKED (the machinery already exists in the repo):
+  - GetTrafo API (working pattern from src/radia/bem/sibc_hacapk.py::_trafo_eval): map a ref-triangle
+    rule through the curved element --
+        ir = IntegrationRule(points=[(xi,eta,0),...], weights=[...]);  trafo = mesh.GetTrafo(ElementId(BND,i))
+        for ip in ir: mip = trafo(ip); mip.point[0:3] (curved pos); mip.measure (surface |J|);
+                      jac = np.asarray(mip.jacobi) (3x2); n_hat = cross(jac[:,0],jac[:,1]) normalized.
+    (Beware: it is mip.JACOBI and mip.MEASURE, not .jacobian/.weight.)
+  - The CURVED surface Coulomb Gram already exists: src/radia/bem/sibc_hacapk.py::_ss_block_curved_trafo
+    builds the Galerkin SINGLE-LAYER (1/4pi/r) block on curved geometry with the proper singular
+    self/near treatment.  The HDiv-VIM surface demag IS a single-layer Coulomb of the surface charge
+    sigma = M.n, so this is directly reusable -> the curved demag is an INTEGRATION, not research.
+  - VALIDATE vs the sphere ANALYTIC 1/3 (NOT Radia): coarse curved sphere demag -> 1/3 where the flat
+    coarse mesh is off (the geometry-exactness win, measured against TRUTH).  Verified geometry already:
+    coarse sphere area 11.85(-5.7%)->12.5683(-0.015%) with mesh.Curve(3) at the same ndof.
+
 ## REFERENCE HONESTY for the accuracy numbers (verify-first, 2026-06-07)
 What the quoted accuracies are measured against, precisely:
 - SPHERE / ELLIPSOID demag + nonlinear: vs ANALYTIC truth (D=1/3 or the prolate N_z; the scalar fixed
