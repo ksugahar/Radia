@@ -363,6 +363,30 @@ TWO things remain for the p-convergence SPEED WIN:
       high-order benefit shows in a FIELD / non-uniform-M error, not the uniform-M demag factor.
 Both are the major continuation (the p-convergence accuracy-per-DOF beats lowest-order yano-type).
 
+## CURVED MESHES (mesh.Curve) -- a big accuracy-per-DOF win HDiv has and yano-type CANNOT (2026-06-07)
+NGSolve HDiv supports mesh.Curve(p) (isoparametric/curved elements via the Piola transform).  yano-type
+CANNOT: Radia's ObjHexahedron/ObjTetrahedron are FLAT-faced.  CONFIRMED dramatic: a COARSE sphere
+(maxh=0.8, ndof=258) flat has surface area 11.85 (-5.7%) / volume 3.76 (-10.3%) vs the true 4pi/4pi/3;
+mesh.Curve(3) gives area 12.5683 (-0.015%) / volume 4.1897 (+0.02%) at the SAME ndof.  So the ~6-10%
+faceting error VANISHES to ~0.02% at no DOF cost -- exact geometry.  For curved bodies (magnets/coils/
+poles = most of them) this is a large accuracy-per-DOF advantage, ORTHOGONAL to the polynomial
+high-order win, and unavailable to flat yano-type (which needs many more elements to resolve a curve).
+FOUNDATION confirmed (HDiv + mesh.Curve assembles; B and M_mass are NGSolve curved-aware).  TO REALIZE
+the curved DEMAG accuracy the GRAM must use the CURVED geometry (NGSolve-mapped quadrature points) --
+build_demag / wilton_surface_block / phi_tet currently use FLAT vertices.  That curved Gram is the
+build; arguably HIGHER value than polynomial high-order since curved bodies are ubiquitous.
+
+## REFERENCE HONESTY for the accuracy numbers (verify-first, 2026-06-07)
+What the quoted accuracies are measured against, precisely:
+- SPHERE / ELLIPSOID demag + nonlinear: vs ANALYTIC truth (D=1/3 or the prolate N_z; the scalar fixed
+  point M = M(H0 - D M)).  These are REAL verified errors (sphere nonlinear <0.2%, demag <0.15%).
+- CUBE NONLINEAR (the 13% -> 6.2% volume-Gram numbers) + C-YOKE (~4%): vs RADIA MMM/MSC on the SAME
+  coarse mesh.  There is NO analytic solution for the cube/C-yoke nonlinear, and Radia is the mature
+  TRUSTED solver but NOT ground truth (it has its own discretization error on a coarse mesh).  So
+  "6.2%" is a CROSS-METHOD DIFFERENCE that improved with the volume Gram, NOT a verified error vs truth.
+  A true accuracy claim needs a MESH-CONVERGENCE study (refine until HDiv and Radia agree on the same
+  value) or a benchmark -- NOT done.  State it as "agreement with Radia", not "error".
+
 ## HDiv on PYRAMIDS -- a genuine mathematical difficulty (verify-first, 2026-06-07)
 NGSolve 6.2.2604 supports pyramids in HCurl + H1 (confirmed: ndof 8/20/57 and 5/5/14 across orders 0-2)
 but NOT HDiv ("HDivHighOrderFESpace: Pyramid elements not implemented yet!").  This is NOT an oversight:
