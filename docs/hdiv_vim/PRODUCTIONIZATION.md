@@ -15,7 +15,7 @@ yano-type handles, behind a clean Radia API. Honest scope, milestone-based, with
 | Scalable Gram H-matrix | **`_ChargeGramHMatrix`** monopole **+ analytic mode (M2b)**, `_HDivVimHMatrix` (hex) | (assembly driven from Python) |
 | H-LDLᵀ factorization | cHACApK (`_hldlt_self_test*`, `factor_solve_hldlt`) — **TO DELETE (消去, see M3)** | (not wired into the material-system apply) |
 | Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)** | scipy MINRES / CG |
-| Nonlinear damped Newton | — (the per-element constitutive + nonsymmetric tangent GMRES + Newton loop still Python) | `solve_nonlinear_newton` (dense + scalable; scalable uses the analytic C++ Gram, M2b) |
+| Nonlinear demag | **scalar-chi Picard `SolveNonlinearPicard` in C++ (M3): isotropic nonlinear demag M=Mof(H0−Dscal·M), golden vs Python Picard <1e-5 + analytic fixed point <1%**; per-element tensor-tangent Newton (non-uniform M) still NGSolve | `solve_nonlinear_newton` (dense + scalable; scalable uses the analytic C++ Gram, M2b) |
 | Curved + high-order Gram | — (uses NGSolve) | `ngsolve.bem` single-layer (sphere/spheroid/ellipsoid validation) |
 | Symmetry image method | — | `hdiv_demag_symmetry_image.py` (sphere 1/2,1/4,1/8 validation, crude Gram) |
 | **Public Radia API** | analytic `_ChargeGramHMatrix` + `SolveLinearMaterial` (scalable demag + linear solve) | `radia.hdiv_vim` package (build_demag / solve_nonlinear_newton[_scalable]) |
@@ -78,11 +78,18 @@ production-representative numbers). This sizes the C++ lift and fixes the "done"
     analytic H-matvec — the linear demag solve + the symmetric Picard warmstart, no Python per-iteration
     glue (pybind `solve_linear_material`; golden test_hdiv_vim_cpp_linear_solve.py: vs scipy MINRES on the
     identical operator <1e-6, vs dense analytic <5e-4).
-  - **REMAINING — the full nonlinear Newton-in-C++.** The per-element tensor-tangent constitutive
-    (M(H) + dM/dH from the B-H curve) + the RT0 field reconstruction + the NONSYMMETRIC tangent GMRES +
-    the damped Newton loop, all in C++ (reusing the `SolveLinearMaterial` Krylov + the analytic H-matvec).
-    This is the main speed lever; it is a substantial port and its value is gated by the M0 speed number,
-    so it is the right next deliberate (clean-context) C++ task — not a session-tail rush.
+  - **DONE — the scalar-chi nonlinear solve in C++ (commit ae81ec23).** `RadHACApKChargeGram::SolveNonlinearPicard`
+    solves the isotropic nonlinear demag `M = Mof(H0 − Dscal·M)` entirely in C++: each Picard step is a
+    `SolveLinearMaterial` solve + the closed-form `chi_sec` update (no NGSolve per iteration). Golden
+    test_hdiv_vim_cpp_nonlinear.py: == Python scalar-chi Picard on the identical operator <1e-5, == the
+    analytic scalar fixed point <1% (near-saturation sphere). The nonlinear PHYSICS for an isotropic body
+    is now in C++.
+  - **REMAINING — the per-element tensor-tangent Newton (non-uniform M).** The consistent tensor tangent
+    dM/dH + the RT0 field reconstruction + the NONSYMMETRIC tangent GMRES + the damped Newton loop, for
+    bodies whose M is non-uniform at the element level. This is irreducibly NGSolve FEM (re-implementing it
+    in pure C++ = duplicating NGSolve HDiv assembly), so the honest path is to keep the constitutive/tangent
+    assembly in NGSolve and — if the M0 speed number demands it — move only the tangent GMRES loop to C++
+    on the `SolveLinearMaterial` Krylov. Gated by M0.
   > **H-LDLᵀ TO BE DELETED — 消去 confirmed 2026-06-08.** The direct symmetric H-LDLᵀ factorization of
   > the H-matrix is **not** on the production path: the HDiv-VIM is μr-INDEPENDENT by construction, so
   > the iterative solve (MINRES linear / GMRES nonlinear) is cheap and well-conditioned — a direct
