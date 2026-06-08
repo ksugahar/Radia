@@ -44,6 +44,18 @@ time the C++ `_ChargeGramHMatrix` demag MatVec + the iteration count vs the ship
 MatVec at matched N (the orchestration becomes C++ in production, so the per-MatVec + iters are the
 production-representative numbers). This sizes the C++ lift and fixes the "done" bar.
 
+**The comparison headline — LOOPS (not A_SS, not H-LDLᵀ).** Frame the HDiv-VIM advantage at the LOOP
+level: HDiv-VIM's loops are ker(B), FIELD-NULL BY CONSTRUCTION (de Rham / Piola) — no loop-star, no
+cohomology, μr-INDEPENDENT iterations. In the conventional MMM/MSC path the loops are NOT field-null,
+so they are the OBSTRUCTION: they need explicit loop-star handling, which on the solver side becomes
+the A_SS "star block" that must be H-LU/H-ILU-preconditioned. (Keep the layers distinct: yano-type is
+the distortion-ELEMENT formulation; A_SS is the loop-star SOLVER block — do not conflate them.) The
+payoff to MEASURE (M0): because the HDiv-VIM tangent stays well-conditioned, Newton-Raphson should
+converge in far fewer iterations than the conventional path whose loops can ill-condition / stall the
+tangent — the head-to-head Newton-iteration count is the headline parity number. (Precise: the
+HDiv-VIM *Newton* is the fast part, <30 iters at saturation; the 0.5-damped scalar Picard warmstart is
+the slow-but-robust part, ~230 iters at deep saturation — do not confuse the two.)
+
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
