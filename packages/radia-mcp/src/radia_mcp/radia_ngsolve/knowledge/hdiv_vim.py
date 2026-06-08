@@ -441,6 +441,15 @@ important honest finding that redirects where to expect the curved payoff.
 - CONCLUSION: curved is a real yano-type-impossible CAPABILITY, but its accuracy benefit on the
   MAGNETIZATION (the primary solve output) is modest; the benefit is large on FIELD outputs.  Do NOT
   claim a dramatic curved-nonlinear magnetization win.
+- (A) THE FIELD WIN -- BUILT + validated (examples/feec_vim/hdiv_curved_nonlinear_field.py, golden
+  test_hdiv_vim_curved_nonlinear_field.py): the external H field of a nonlinear soft-iron sphere
+  (M_s=29982 A/m from the fixed point at H_ext=1e4) reconstructed from the curved-aware surface charge
+  H(r)=(1/4pi) INT sigma (r-r')/|r-r'|^3, sigma=M.n, vs the ANALYTIC dipole (m=M V).  At 5 external
+  points: FLAT ~+8.8% at EVERY point (the dipole moment inherits the ~9% volume faceting error) vs
+  Curve(3) <0.4% -- a ~23x field win at the SAME ndof, vs analytic truth.  The nonlinearity SETS the
+  field magnitude (physical M) but does NOT amplify the ~9% geometry error (scales it).  So the
+  engineering deliverable (stray field around a nonlinear part) is ~9% wrong with flat yano-type and
+  exact with curved -- the genuine curved x nonlinear payoff is HERE, on the field.
 
 ## REFERENCE HONESTY for the accuracy numbers (verify-first, 2026-06-07)
 What the quoted accuracies are measured against, precisely:
