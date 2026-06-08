@@ -321,20 +321,18 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
 def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
                                     picard_warmstart=8, maxit=200, gmres_tol=1e-8):
     """SCALABLE damped Newton (production #2): the dense O(N^3)/O(N^2) demag is replaced by the C++
-    HACApK charge-Gram H-matrix (O(N log N) apply) + a sparse near-correction, and the Newton system
-    is solved ITERATIVELY (GMRES) -- no dense factorization anywhere.
+    HACApK charge-Gram H-matrix (O(N log N) apply), and the Newton system is solved ITERATIVELY
+    (GMRES) -- no dense factorization anywhere.
 
-    The demag apply is  N v = B^T ( H.matvec(B v) + corr (B v) )  with H = _ChargeGramHMatrix (monopole
-    far field, compressed) and corr = the sparse near-field correction (exact local) -- the textbook
-    H-matrix far+near split, here driving the per-element tensor-tangent Newton.  The Jacobian
+    M2b: the C++ Gram is the ANALYTIC charge Gram (PhiTet/TriPotential, exact near AND far), so the
+    demag apply is simply  N v = B^T ( H.matvec(B v) )  with H = the analytic _ChargeGramHMatrix --
+    no separate sparse near-correction.  This matches the dense solve_nonlinear_newton(analytic_gram=
+    True) operator entry-by-entry, so the scalable solver reproduces the dense ANALYTIC Newton (the
+    correct reference for NON-uniform M: cube, C-yoke, any div M != 0 body), closing the under-
+    resolution the old monopole-far + sparse-near split left.  The Jacobian
     J v = M_mass v + T M_mass^{-1} N v is applied matrix-free (M_mass factored once, sparse); GMRES
     (M_mass-preconditioned) solves each Newton step; Armijo line search + Picard warmstart as in the
-    dense solver.  Reproduces the dense solve_nonlinear_newton (same monopole+near-corr operator) ->
-    the nonlinear HDiv-VIM solve is scalable.  Returns (M_avg, n_newton_iter, D_used).
-
-    NOTE: the C++ Gram H-matrix is MONOPOLE far field, so this matches the dense MONOPOLE+near-corr
-    Newton (not the dense Wilton path); putting the Wilton surface integral into the C++ near-field
-    correction is the remaining step for scalable + Wilton-accurate together."""
+    dense solver.  Returns (M_avg, n_newton_iter, D_used)."""
     import scipy.sparse as sp
     import scipy.sparse.linalg as spla
     import radia._radia_pybind as _rp
@@ -345,15 +343,18 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
     mu = d["m_unit"]
     denom = mu @ M_mass @ mu
     B = d["B_csr"]
-    corr = tet.build_near_correction(mesh, d, nsub=nsub, near_factor=2.0)
-    Hg = _rp._ChargeGramHMatrix(list(d["cent"].ravel()), list(d["meas"]),
-                                list(d["self_energy"]), gram_eps, 32, 2.0)
+    # M2b: the C++ ANALYTIC charge Gram H-matrix is exact near AND far (matches dense analytic_gram
+    # entry-by-entry), so the demag apply is just B^T (G_analytic-Hmatvec (B v)) -- NO separate Python
+    # near-correction.  This closes the non-uniform-M (div M != 0: cube, C-yoke) scalable gap that the
+    # old monopole-far + sparse-near split left, while staying O(N log N).
+    Hg = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
+                                n_el=int(d["n_el"]), eps=gram_eps, leaf=32, eta=2.0)
     Mcsc = sp.csc_matrix(M_mass)
     Mfac = spla.splu(Mcsc)                       # factor the HDiv mass ONCE (sparse, well-conditioned)
 
-    def N_apply(v):                              # scalable demag: H-matrix far + sparse near correction
+    def N_apply(v):                              # scalable demag: the analytic charge-Gram H-matvec
         q = B @ v
-        return B.T @ (np.asarray(Hg.matvec(q.tolist()), float) + corr @ q)
+        return B.T @ np.asarray(Hg.matvec(q.tolist()), float)
 
     def Dop_apply(v):                            # M_mass^{-1} N v  (the weak demag field)
         return Mfac.solve(N_apply(v))
