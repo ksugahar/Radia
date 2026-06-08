@@ -270,3 +270,67 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     iters_out = it;
     return x;
 }
+
+RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
+    const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+    const std::vector<double>& B_data, int n_face,
+    const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+    const std::vector<double>& Mmass_diag, const std::vector<double>& N_diag,
+    const std::vector<double>& mu, double denom,
+    double chi0, double Msat, double H0,
+    int picard_iters, double cg_tol, int cg_maxit)
+{
+    const int n_charge = (int)B_indptr.size() - 1;
+    auto mmass_apply = [&](const std::vector<double>& x, std::vector<double>& y) {  // y = M_mass x
+        y.assign((size_t)n_face, 0.0);
+        for (size_t k = 0; k < mV.size(); ++k) y[mI[k]] += mV[k] * x[mJ[k]];
+    };
+    auto N_apply = [&](const std::vector<double>& x, std::vector<double>& y) {        // y = B^T G (B x)
+        std::vector<double> q((size_t)n_charge, 0.0), Gq((size_t)n_charge, 0.0);
+        for (int a = 0; a < n_charge; ++a) {
+            double s = 0.0;
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
+            q[a] = s;
+        }
+        MatVec(q, Gq);
+        y.assign((size_t)n_face, 0.0);
+        for (int a = 0; a < n_charge; ++a) {
+            double ga = Gq[a];
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) y[B_indices[k]] += B_data[k] * ga;
+        }
+    };
+    // b0 = M_mass mu ; Dscal = mu.(N mu)/denom (the uniform-mode demag factor, Rayleigh quotient).
+    std::vector<double> b0, Nmu, Mmm, rhs((size_t)n_face), prec((size_t)n_face);
+    mmass_apply(mu, b0);
+    N_apply(mu, Nmu);
+    double Dscal = 0.0;
+    for (int f = 0; f < n_face; ++f) Dscal += mu[f] * Nmu[f];
+    Dscal /= denom;
+
+    std::vector<double> m((size_t)n_face, 0.0);
+    double chi = chi0, Mavg = 0.0, Mprev = 0.0;
+    int it = 0, done = 0;
+    for (; it < picard_iters; ++it) {
+        const double inv_chi = 1.0 / chi;
+        for (int f = 0; f < n_face; ++f) {
+            prec[f] = inv_chi * Mmass_diag[f] + N_diag[f];
+            rhs[f]  = H0 * b0[f];
+        }
+        int cg_iters = 0;
+        m = SolveLinearMaterial(B_indptr, B_indices, B_data, n_face, mI, mJ, mV,
+                                inv_chi, prec, rhs, cg_tol, cg_maxit, cg_iters);
+        mmass_apply(m, Mmm);
+        Mavg = 0.0;
+        for (int f = 0; f < n_face; ++f) Mavg += mu[f] * Mmm[f];
+        Mavg /= denom;
+        const double Hi = H0 - Dscal * Mavg;
+        const double chi_sec = chi0 / (1.0 + chi0 * std::fabs(Hi) / Msat);   // M(H)=chi0 H/(1+chi0|H|/Msat)
+        chi = 0.5 * chi + 0.5 * chi_sec;
+        done = it + 1;
+        if (it > 0 && std::fabs(Mavg - Mprev) < 1e-10 * (std::fabs(Mavg) + 1e-30)) break;
+        Mprev = Mavg;
+    }
+    PicardResult r;
+    r.m = m; r.Mavg = Mavg; r.chi = chi; r.Dscal = Dscal; r.iters = done;
+    return r;
+}

@@ -2944,6 +2944,28 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("rhs"), py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
              "M3: solve the SPD HDiv-VIM linear material system ((1/chi)M_mass + B^T G B) m = rhs by "
              "Jacobi-preconditioned CG (G applied as the charge-Gram H-matvec). Returns {m, iters}.")
+        .def("solve_nonlinear_picard",
+             [](RadHACApKChargeGram& s,
+                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
+                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                std::vector<double> Mmass_diag, std::vector<double> N_diag, std::vector<double> mu,
+                double denom, double chi0, double Msat, double H0,
+                int picard_iters, double cg_tol, int cg_maxit) {
+                 auto r = s.SolveNonlinearPicard(B_indptr, B_indices, B_data, n_face, mI, mJ, mV,
+                                                 Mmass_diag, N_diag, mu, denom, chi0, Msat, H0,
+                                                 picard_iters, cg_tol, cg_maxit);
+                 py::dict d;
+                 d["m"] = r.m; d["Mavg"] = r.Mavg; d["chi"] = r.chi; d["Dscal"] = r.Dscal;
+                 d["iters"] = r.iters;
+                 return d;
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("Mmass_diag"), py::arg("N_diag"),
+             py::arg("mu"), py::arg("denom"), py::arg("chi0"), py::arg("Msat"), py::arg("H0"),
+             py::arg("picard_iters") = 100, py::arg("cg_tol") = 1e-10, py::arg("cg_maxit") = 5000,
+             "M3 (nonlinear): scalar-chi Picard solve of the isotropic nonlinear demag M=Mof(H0-Dscal M) "
+             "entirely in C++ (each step a SolveLinearMaterial + closed-form chi update; G via the analytic "
+             "H-matvec). Returns {m, Mavg, chi, Dscal, iters}.")
         .def("stats", [](RadHACApKChargeGram& s) {
                  const RadHACApKStats& st = s.GetStats();
                  py::dict d;
