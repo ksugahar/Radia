@@ -5,6 +5,7 @@
 #include "rad_hacapk_hdiv.h"
 #include <cmath>
 #include <utility>
+#include <algorithm>
 
 RadHACApKHDivManager::RadHACApKHDivManager(int nx, int ny, int nz,
                                            double h, double distort, int nsub)
@@ -217,4 +218,55 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
     double dy = m_cent[3 * a + 1] - m_cent[3 * b + 1];
     double dz = m_cent[3 * a + 2] - m_cent[3 * b + 2];
     return m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI / std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
+    const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+    const std::vector<double>& B_data, int n_face,
+    const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+    double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
+    double tol, int maxit, int& iters_out)
+{
+    const int n_charge = (int)B_indptr.size() - 1;     // B is n_charge x n_face (CSR over charges)
+    // A x = inv_chi*(M_mass x) + B^T (G (B x)), with G applied as the charge-Gram H-matvec.
+    std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
+    auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
+        std::fill(q.begin(), q.end(), 0.0);
+        for (int a = 0; a < n_charge; ++a) {
+            double s = 0.0;
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
+            q[a] = s;
+        }
+        std::fill(Gq.begin(), Gq.end(), 0.0);
+        MatVec(q, Gq);                                 // O(N log N) Gram H-matvec
+        y.assign((size_t)n_face, 0.0);
+        for (int a = 0; a < n_charge; ++a) {
+            double ga = Gq[a];
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) y[B_indices[k]] += B_data[k] * ga;
+        }
+        for (size_t k = 0; k < mV.size(); ++k) y[mI[k]] += inv_chi * mV[k] * x[mJ[k]];
+    };
+    // Jacobi-preconditioned conjugate gradients (the SPD system M^{-1} = 1/prec).
+    std::vector<double> x((size_t)n_face, 0.0), r = rhs, z((size_t)n_face), p((size_t)n_face), Ap;
+    for (int f = 0; f < n_face; ++f) z[f] = r[f] / prec[f];
+    p = z;
+    double rz = 0.0; for (int f = 0; f < n_face; ++f) rz += r[f] * z[f];
+    double bnorm = 0.0; for (int f = 0; f < n_face; ++f) bnorm += rhs[f] * rhs[f];
+    bnorm = std::sqrt(bnorm); if (bnorm == 0.0) bnorm = 1.0;
+    int it = 0;
+    for (; it < maxit; ++it) {
+        double rnorm = 0.0; for (int f = 0; f < n_face; ++f) rnorm += r[f] * r[f];
+        if (std::sqrt(rnorm) <= tol * bnorm) break;
+        applyA(p, Ap);
+        double pAp = 0.0; for (int f = 0; f < n_face; ++f) pAp += p[f] * Ap[f];
+        double alpha = rz / pAp;
+        for (int f = 0; f < n_face; ++f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; }
+        for (int f = 0; f < n_face; ++f) z[f] = r[f] / prec[f];
+        double rz_new = 0.0; for (int f = 0; f < n_face; ++f) rz_new += r[f] * z[f];
+        double beta = rz_new / rz;
+        for (int f = 0; f < n_face; ++f) p[f] = z[f] + beta * p[f];
+        rz = rz_new;
+    }
+    iters_out = it;
+    return x;
 }

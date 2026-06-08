@@ -2927,6 +2927,23 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  s.MatVec(x, y);
                  return y;
              }, py::arg("x"), "G q (the O(N log N) Gram H-matvec).")
+        .def("solve_linear_material",
+             [](RadHACApKChargeGram& s,
+                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
+                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                double inv_chi, std::vector<double> prec, std::vector<double> rhs,
+                double tol, int maxit) {
+                 int iters = 0;
+                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
+                                                               mI, mJ, mV, inv_chi, prec, rhs,
+                                                               tol, maxit, iters);
+                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("prec"),
+             py::arg("rhs"), py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
+             "M3: solve the SPD HDiv-VIM linear material system ((1/chi)M_mass + B^T G B) m = rhs by "
+             "Jacobi-preconditioned CG (G applied as the charge-Gram H-matvec). Returns {m, iters}.")
         .def("stats", [](RadHACApKChargeGram& s) {
                  const RadHACApKStats& st = s.GetStats();
                  py::dict d;
