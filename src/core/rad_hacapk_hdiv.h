@@ -88,11 +88,22 @@ private:
  * on real geometry.  Stores +G (ComputeSystemEntry = default); MatVec/stats from RadHACApKBase. */
 class RadHACApKChargeGram : public RadHACApKBase {
 public:
-    // centroids: [n*3] charge centroids; measures: [n] cell volumes / face areas; self_energy: [n]
-    // the diagonal G[a][a] (caller-computed accurate self-energy, element-shape-aware).
+    // MONOPOLE mode: centroids [n*3] charge centroids; measures [n] cell volumes / face areas;
+    // self_energy [n] the diagonal G[a][a] (caller-computed accurate self-energy, element-shape-aware).
     RadHACApKChargeGram(std::vector<double> centroids,
                         std::vector<double> measures,
                         std::vector<double> self_energy);
+
+    // ANALYTIC mode (M2b): the EXACT charge Gram from per-charge GEOMETRY -- matches the dense Python
+    // build_demag(analytic_gram=True) entry-by-entry.  cell_verts [n_el*12] (tets, 4 verts) then
+    // face_verts [n_bf*9] (triangles, 3 verts); the n_charge charges are the n_el volume cells
+    // (rho = -div M) followed by the n_bf boundary faces (sigma = M.n).  Entry
+    //   G[a][b] = (1/4pi) INT_a Phi_b   (Phi_b = PhiTet/TriPotential of source b, exact analytic),
+    // the outer INT_a by tet barycentric sub-points (cells) / Dunavant-5 (faces), symmetrized; the
+    // diagonal is the analytic self (the Wilton/phi_tet potential is exact through the 1/r singularity).
+    RadHACApKChargeGram(std::vector<double> cell_verts,
+                        std::vector<double> face_verts,
+                        int n_el);
     ~RadHACApKChargeGram() override {}
 
     double GetInteractionMatrixElement(int a, int b) const override;
@@ -105,8 +116,17 @@ protected:
     int  GetUniformNFFC() const override { return 1; }
 
 private:
-    std::vector<double> m_cent, m_meas, m_self;
-    int m_n;
+    double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
+    double QuadDot(int tgt, int src) const;            // (1/4pi) sum_p w_p PhiAt(src, p) over tgt's outer quad
+
+    std::vector<double> m_cent, m_meas, m_self;        // monopole mode (m_cent also = the cluster-tree points)
+    int  m_n = 0;
+    // analytic mode (M2b)
+    bool m_analytic = false;
+    int  m_n_el = 0;
+    std::vector<double> m_cellV, m_faceV;              // [n_el*12], [n_bf*9]
+    std::vector<std::vector<rad_hdiv::Vec3>> m_qp;     // [n] outer-quad points per charge
+    std::vector<std::vector<double>>          m_qw;    // [n] outer-quad weights per charge
 };
 
 #endif // __RAD_HACAPK_HDIV_H
