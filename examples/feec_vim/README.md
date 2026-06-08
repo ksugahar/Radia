@@ -77,6 +77,7 @@ solver but NOT ground truth on a coarse mesh):
 | **Curved + high-order demag** (production) | `hdiv_demag_bem_singlelayer.py` | **ANALYTIC** sphere 1/3 + spheroid + triaxial tensor | ✅ flat floored → curved + order-2 EXACT: sphere `~1e-4%`; prolate & oblate polar+transverse `<0.05%`; **triaxial ellipsoid** (a≠b≠c) all three distinct factors EXACT vs Osborn integral; sum rule `N_x+N_y+N_z=1` to `~1e-6`; Gram = `ngsolve.bem` single-layer |
 | **Curved × nonlinear** — magnetization (honest) | `test_hdiv_vim_curved_nonlinear.py` | **ANALYTIC** spheroid M-H fixed point | ✅ curved nonlinear M exact (`<0.05%`); ⚠ but the curved win on the **magnetization** is MODEST (`~0.3%`) — the demag *ratio* cancels the volume faceting error. (Radia can't referee curved geometry — it facets; so curved nonlinear is validatable only on spheroids.) |
 | **Curved × nonlinear** — field (the big win) | `hdiv_curved_nonlinear_field.py` | **ANALYTIC** dipole | ✅ external H field of a nonlinear soft-iron sphere: **flat `~+8.8%` at every point → Curve(3) `<0.4%` (~23×)**. The field inherits the ~9% volume error (dipole moment m=M·V); THIS is where curved × nonlinear pays off — the engineering deliverable (stray field), not M. |
+| **Head-to-head vs shipped Radia** (B) | `compare_curved_vs_radia_field.py` | **ANALYTIC** dipole + shipped **Radia** | ✅ HDiv curved at the *coarsest* mesh (0.39%) beats shipped‑Radia‑**flat** at the *finest* (1.71%, 2042 tets); **~10–30× accuracy‑per‑resolution** at every h. Honest: accuracy‑per‑DOF (geometry‑driven); wall‑clock = the C++ lift (not done); Radia‑flat stands in for the also‑flat yano‑type. |
 
 **Which quantity discriminates the curved win, and why it matters:** with the *crude
 sub-point* Gram (`hdiv_demag_curved.py`) the demag FACTOR does NOT cleanly discriminate — its
@@ -89,11 +90,11 @@ non-discrimination to "near-isotropy"; the verify-first single-layer result corr
 
 ## Golden tests
 
-`tests/feec/test_hdiv_vim_*.py` (full feec suite **76 passing**) — Newton, Newton-vs-Radia,
-Wilton Gram, volume Gram, scalable, ellipsoid, BH table, distorted robustness, curved win
-(elementary), curved + high-order demag exact on sphere + full spheroid tensor + general triaxial
-ellipsoid (three distinct factors, sum rule) via the `ngsolve.bem` single-layer, and curved × nonlinear
-(honest modest magnetization win + the ~23× field win on the engineering deliverable).
+`tests/feec/` (full feec suite **77 passing**) — Newton, Newton-vs-Radia, Wilton Gram, volume Gram,
+scalable, ellipsoid, BH table, distorted robustness, curved win (elementary), curved + high-order demag
+exact on sphere + full spheroid tensor + general triaxial ellipsoid (sum rule) via the `ngsolve.bem`
+single-layer, curved × nonlinear (honest modest magnetization win + the ~23× field win), and the
+head-to-head accuracy-per-resolution win vs the shipped Radia solver (`test_curved_vs_radia_field.py`).
 
 ## Detailed home
 
