@@ -2907,6 +2907,20 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
              "Build the n_charge x n_charge Coulomb Gram G as a HACApK H-matrix over the charge "
              "centroids (G[a!=b] = meas_a meas_b/(4pi r), G[a][a] = self_energy[a]).")
+        .def(py::init([](std::vector<double> cell_verts, std::vector<double> face_verts,
+                         int n_el, double eps, int leaf, double eta) {
+                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
+                     new RadHACApKChargeGram(std::move(cell_verts), std::move(face_verts), n_el));
+                 RadHACApKParams p;
+                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("analytic charge Gram H-matrix build failed");
+                 return mgr;
+             }),
+             py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
+             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+             "ANALYTIC mode (M2b): build the EXACT charge Gram as a HACApK H-matrix from per-charge "
+             "geometry (cell_verts [n_el*12] tets, face_verts [n_bf*9] triangles). Entry = analytic "
+             "PhiTet/TriPotential inner x outer quadrature (matches dense build_demag(analytic_gram=True)).")
         .def("ndof", [](RadHACApKChargeGram& s) { return s.GetNDOF(); })
         .def("matvec", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
                  std::vector<double> y((size_t)s.GetNDOF(), 0.0);
