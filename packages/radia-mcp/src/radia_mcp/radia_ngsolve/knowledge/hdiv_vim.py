@@ -380,28 +380,35 @@ golden tests/feec/test_hdiv_vim_curved.py):
     linear mesh = flat AND a Curve(p) mesh = curved -- the SAME code, only mesh.Curve toggled, so a
     flat-vs-curved A/B at FIXED ndof isolates the geometry).  (Beware: it is mip.JACOBI / mip.MEASURE,
     NOT .jacobian/.weight -- the GetTrafo API gotcha that cost two probe iterations.)
-  - VERIFY-FIRST FINDING that CORRECTS the earlier plan ("curved sphere demag -> 1/3"): the sphere demag
-    FACTOR does NOT discriminate the curved win.  A coarse inscribed polyhedron is already near-ISOTROPIC,
-    so its demag RATIO is ~1/3 regardless of faceting (flat Wilton already 1/3 to 0.15%).  nsub sweep at
-    h=0.8: FLAT -1.68%->-0.39% (nsub 4->12), curved -2.87%->-1.34% -- flat is even "closer" to 1/3; both
-    are quadrature-limited near-isotropic ratios, NOT a geometry test.  Do NOT use the demag factor to
-    judge curved geometry (and do NOT mistake its ~2-3% sub-point-quadrature offset for a curved bug --
-    the golden test locks this non-result).
-  - THE DISCRIMINATOR (where the win IS real, vs ANALYTIC truth): the EXTERNAL field of a uniform-M
-    sphere = the EXACT point dipole phi=(1/4pi)V cos(theta)/r^2.  It is a surface-charge integral at an
-    EXTERNAL point -> NO singular quadrature -> the ONLY error is the geometry.  MEASURED at (0,0,2)
-    [exact = 1/12]: h=0.8 FLAT -10.00%, Curve(3) -0.26% at the SAME ndof (= ~38x); h=0.5 FLAT -8.28%,
-    curved -0.25%.  The flat error is the VOLUME error (V -10.25% flat -> +0.02% curved) inherited
-    directly by the dipole moment m = M V.  THIS is the curved win, against truth.
-  - So the curved win lives in GEOMETRY-DERIVED quantities (volume, normals -> external field, flux,
-    force) and -- the real payoff -- p-CONVERGENCE (high-order basis on EXACT geometry converges past
-    the flat faceting floor), NOT in the near-isotropic demag factor.
-  - STILL TO BUILD for the curved demag OPERATOR (N on curved geometry): build_demag / wilton_surface_block
-    / phi_tet still use FLAT vertices.  The accurate curved Gram reuses bem/sibc_hacapk.py::
-    _ss_block_curved_trafo (Galerkin single-layer with proper singular self/near on curved elements) --
-    an INTEGRATION, not research.  The external-field probe already proves the geometry-exactness win
-    against truth; the curved operator N is the productionization step (with high-order, the compounding
-    accuracy-per-DOF win over flat yano-type).
+  - ELEMENTARY DISCRIMINATOR (vs ANALYTIC truth): the EXTERNAL field of a uniform-M sphere = the EXACT
+    point dipole phi=(1/4pi)V cos(theta)/r^2.  A surface-charge integral at an EXTERNAL point -> NO
+    singular quadrature -> the ONLY error is the geometry.  MEASURED at (0,0,2) [exact 1/12]: h=0.8 FLAT
+    -10.00%, Curve(3) -0.26% at the SAME ndof (~38x); h=0.5 FLAT -8.28%, curved -0.25%.  The flat error
+    IS the volume error (V -10.25% flat -> +0.02% curved) inherited by m = M V.  THIS is the curved win.
+  - CAVEAT (self-corrected, do NOT repeat the mistake): with the CRUDE sub-point Gram the demag FACTOR
+    does NOT cleanly discriminate -- but the reason is the crude Gram's ~2% quadrature BIAS masking the
+    ~0.25% geometry signal, NOT "near-isotropy" (an earlier write-up wrongly said near-isotropy).  With
+    the PROPER Gram the demag factor DOES discriminate + p-CONVERGES (next bullet).  So for the crude
+    elementary method use the external field; the demag factor needs the proper single-layer Gram.
+  - PROPER curved + HIGH-ORDER demag Gram = SOLVED by ngsolve.bem (2026-06-08, the architectural unlock,
+    examples/feec_vim/hdiv_demag_bem_singlelayer.py + golden test_hdiv_vim_bem_demag.py): the surface
+    demag Gram (uniform M -> pure surface charge sigma=M.n) IS the Laplace SINGLE-LAYER V; NGSolve
+    6.2.2604 ngsolve.bem ships it high-order + CURVED-aware + FMM-accelerated.  `V =
+    SingleLayerPotentialOperator(SurfaceL2(mesh,order=p), intorder=...)`; demag D_z = <sigma,V sigma>/V_vol
+    with sigma=GridFunction.Set(specialcf.normal(3)[2]).  Kernel is 1/(4pi r) (no extra factor -- gives
+    1/3).  MEASURED sphere demag [exact 1/3], h=0.6 coarse: FLAT +0.247% at order 0/1/2 IDENTICAL
+    (order-insensitive: sigma=M.n is constant per FLAT face) -> faceting floor, only mesh-refinement helps;
+    CURVE(3) order 0 -1.89% (piecewise-const sigma under-resolves the n_z that VARIES on a curved face) ->
+    order 1 -0.06% -> order 2 **-0.0002% EXACT**; mesh+intorder converged.  => curved+high-order converges
+    the demag to exactness AT COARSE MESH, fixed small ndof = the accuracy-per-DOF win over flat
+    lowest-order yano-type, ON THE DEMAG FACTOR (corrects the crude-method "doesn't discriminate").  Reuses
+    NGSolve, NO hand-rolled singular quadrature -- supersedes the Wilton/phi_tet SURFACE block for the
+    curved/high-order/scalable path.
+  - STILL TO BUILD: (1) the full operator N=B^T V B + a self-consistent linear solve on curved/high-order
+    geometry (demag-factor proof done; operator+solve is next); (2) the VOLUME charge (div M != 0,
+    nonlinear) on curved/high-order -- ngsolve.bem is boundary-only so this still needs the Newtonian
+    volume potential phi_tet (built) on curved cells; (3) C++ maturity (single-layer surface + phi_tet
+    volume Gram + Newton loop behind a Radia API) = the lift to actually retire yano-type.
 
 ## REFERENCE HONESTY for the accuracy numbers (verify-first, 2026-06-07)
 What the quoted accuracies are measured against, precisely:

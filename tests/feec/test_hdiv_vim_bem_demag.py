@@ -1,0 +1,49 @@
+"""Golden test: the PRODUCTION curved + high-order surface demag Gram via ngsolve.bem (Laplace
+single-layer), validated vs the sphere ANALYTIC 1/3.
+
+The HDiv-VIM surface demag Gram IS the Laplace single-layer of sigma = M.n; ngsolve.bem supplies it
+high-order + curved + FMM-accelerated.  This locks the combined curved + high-order win on the demag
+factor ITSELF (the proper Gram, unlike the crude sub-point method whose quadrature bias masks it):
+
+  - curved + order-2 -> demag EXACT (~1e-4%) at a COARSE mesh;
+  - flat is floored (~0.25%) and ORDER-INSENSITIVE (sigma constant per flat face);
+  - curved p-convergence: order-2 error is >>10x smaller than order-0.
+
+See examples/feec_vim/hdiv_demag_bem_singlelayer.py.
+"""
+import os
+import sys
+
+import pytest
+
+pytest.importorskip("ngsolve")
+pytest.importorskip("ngsolve.bem")
+pytest.importorskip("netgen.csg")
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
+import hdiv_demag_bem_singlelayer as bem  # noqa: E402
+
+
+def test_curved_highorder_demag_exact():
+    """curved + order-2 single-layer demag is EXACT (within 0.05%) of 1/3 at a coarse mesh."""
+    Dz, _ = bem.demag_singlelayer(h=0.6, curve_order=3, charge_order=2)
+    assert abs(Dz / (1.0 / 3.0) - 1) < 5e-4, f"curved o2 demag {Dz:.5f} not within 0.05% of 1/3"
+
+
+def test_flat_is_order_insensitive():
+    """On a FLAT mesh sigma=M.n is constant per face, so order does NOT help -- the demag factor is the
+    SAME (to 1e-4) at order 0/1/2 and floored ~0.25% by the faceting."""
+    d0, _ = bem.demag_singlelayer(0.6, 0, 0)
+    d2, _ = bem.demag_singlelayer(0.6, 0, 2)
+    assert abs(d0 - d2) < 1e-4, f"flat order should not change demag: o0 {d0:.5f} vs o2 {d2:.5f}"
+    assert 1e-3 < abs(d0 / (1.0 / 3.0) - 1) < 0.02, "flat should floor at a small but nonzero faceting error"
+
+
+def test_curved_p_convergence():
+    """The high-order win on CURVED geometry: order-2 error is >10x smaller than order-0 (the n_z that
+    varies across a curved face is under-resolved by piecewise-constant charge)."""
+    d0, _ = bem.demag_singlelayer(0.6, 3, 0)
+    d2, _ = bem.demag_singlelayer(0.6, 3, 2)
+    e0 = abs(d0 / (1.0 / 3.0) - 1)
+    e2 = abs(d2 / (1.0 / 3.0) - 1)
+    assert e2 < 0.1 * e0, f"curved p-convergence weak: o0 err {e0:.2e} -> o2 err {e2:.2e}"

@@ -15,12 +15,14 @@ ANALYTIC truth (the exact uniform-sphere dipole / volume), NOT against Radia:
              coarse mesh gets it ~10% WRONG (it inherits the volume error directly); curved at the same
              ndof is <0.3% -- a 30-40x accuracy win vs analytic truth.
 
-  DEMAG FACTOR  (honest non-result):  the sphere demag FACTOR (D_z -> 1/3) does NOT show the curved win.
-             A coarse inscribed polyhedron is already near-ISOTROPIC, so its demag RATIO is ~1/3
-             regardless of faceting (the flat Wilton Gram already gives 1/3 to 0.15%).  The demag factor
-             is a ratio insensitive to faceting; the curved win lives in geometry-derived quantities
-             (volume, normals -> external field, flux, force) and -- the real payoff -- in p-convergence,
-             where a high-order basis on EXACT geometry converges past the flat faceting floor.
+  DEMAG FACTOR  (a CAVEAT about THIS elementary method):  with the crude sub-point Gram used HERE the
+             demag FACTOR does NOT cleanly discriminate the curved win -- its ~2% sub-point-quadrature
+             BIAS masks the ~0.25% geometry signal (and a coarse polyhedron's demag happens to sit near
+             1/3 too).  This is a limitation of the elementary sub-point Gram, NOT a property of the demag
+             factor: with the PROPER Gram (the ngsolve.bem Laplace single-layer in
+             hdiv_demag_bem_singlelayer.py) the demag factor DOES discriminate cleanly AND p-converges
+             (flat floors ~0.25%, curved + order-2 is EXACT).  For THIS self-contained elementary method,
+             the EXTERNAL FIELD above is the clean geometry-only discriminator.
 
 Reference (uniform M = z_hat, unit sphere):  V = 4pi/3,  area = 4pi,  D_z = 1/3,
 external scalar potential at (0,0,2) = (1/4pi) V / 2^2 = 1/12.
@@ -82,8 +84,9 @@ def _surface_samples(mesh, nsub, center):
 def demag_z_surface(mesh, nsub, center=np.zeros(3)):
     """Demag factor D_z via the uniform-M surface double integral
         D_z = (1/4pi V) INT_S INT_S n_z(r) n_z(r')/|r-r'| dS dS'
-    sub-point quadrature + C_TRI sub-cell self.  Identical treatment flat/curved.  NB this is the
-    operator-physical check; it is NOT a curved discriminator (near-isotropic, see module docstring)."""
+    sub-point quadrature + C_TRI sub-cell self.  Identical treatment flat/curved.  NB this crude Gram has
+    a ~2% quadrature bias that masks the geometry signal -> use ext_potential (or the ngsolve.bem
+    single-layer in hdiv_demag_bem_singlelayer.py) to see the curved win, not this."""
     P, w, nz, n_bnd = _surface_samples(mesh, nsub, center)
     V = float(Integrate(CoefficientFunction(1.0), mesh))
     D = np.linalg.norm(P[:, None, :] - P[None, :, :], axis=2)

@@ -49,8 +49,12 @@ flat, hand-crafted yano-type **structurally cannot match**:
 2. **curved (isoparametric) geometry** — `mesh.Curve(p)`; the external field of a coarse
    sphere goes from flat `−10%` to `<0.3%` at the SAME ndof (`hdiv_demag_curved.py`). Flat
    `ObjHexahedron/ObjTetrahedron` cannot represent a curved boundary.
-3. **polynomial high-order** — the FEEC construction is order-agnostic (loops stay
-   field-null at all orders); the p-convergence speed win is the major continuation.
+3. **polynomial high-order + curved → EXACT** — the surface demag Gram is the Laplace
+   single-layer of `σ=M·n`, supplied high-order + curved + FMM by `ngsolve.bem`. On a coarse
+   sphere the demag factor goes flat `+0.25%` (order-insensitive, faceting-floored) →
+   **curved + order-2 `~1e-4%` (exact)** at fixed small ndof (`hdiv_demag_bem_singlelayer.py`).
+   This is the accuracy-per-DOF win over flat lowest-order yano-type, on the demag factor
+   directly — and it reuses NGSolve, no hand-rolled singular quadrature.
 
 ## What is built + validated — with REFERENCE HONESTY
 
@@ -69,17 +73,23 @@ solver but NOT ground truth on a coarse mesh):
 | Volume Gram (`phi_tet`) | `test_hdiv_vim_volume_gram.py` | Radia (cube nonlinear) | ⚠ 13%→6.2% **agreement** (no analytic truth; cross-method difference, not a verified error) |
 | Scalable (C++ H-matrix + GMRES) | `test_hdiv_vim_newton_scalable.py` | dense reference | ✅ machine precision |
 | Distorted μr-independence | `test_hdiv_vim_solve.py` | iters bounded vs μr 10→1e4 | ✅ golden-locked |
-| **Curved-mesh win** | `hdiv_demag_curved.py` | **ANALYTIC** dipole / volume | ✅ external field flat `−10%` → Curve(3) `−0.26%` (~38× at same ndof) |
+| **Curved-mesh win** (elementary) | `hdiv_demag_curved.py` | **ANALYTIC** dipole / volume | ✅ external field flat `−10%` → Curve(3) `−0.26%` (~38× at same ndof) |
+| **Curved + high-order demag** (production) | `hdiv_demag_bem_singlelayer.py` | **ANALYTIC** 1/3 | ✅ flat `+0.25%` (floored) → curved + order-2 `~1e-4%` (exact); Gram = `ngsolve.bem` single-layer |
 
-The **demag FACTOR does NOT discriminate the curved win** (a coarse inscribed polyhedron is
-already near-isotropic → `D_z ≈ 1/3` regardless of faceting); the win lives in
-geometry-derived field quantities (external field/flux/force) — see `hdiv_demag_curved.py`'s
-docstring and `test_hdiv_vim_curved.py`'s `test_demag_factor_does_not_discriminate`.
+**Which quantity discriminates the curved win, and why it matters:** with the *crude
+sub-point* Gram (`hdiv_demag_curved.py`) the demag FACTOR does NOT cleanly discriminate — its
+~2% quadrature *bias* masks the ~0.25% geometry signal — so for that elementary method use the
+EXTERNAL FIELD (geometry-only error). This is a limitation of the crude Gram, **not** of the
+demag factor: with the **proper** Gram (the `ngsolve.bem` Laplace single-layer) the demag
+factor discriminates cleanly **and p-converges** — flat floors at `+0.25%`, curved + order-2
+is exact (`hdiv_demag_bem_singlelayer.py`). (An earlier note here wrongly attributed the
+non-discrimination to "near-isotropy"; the verify-first single-layer result corrected it.)
 
 ## Golden tests
 
-`tests/feec/test_hdiv_vim_*.py` (full feec suite **65 passing**) — Newton, Newton-vs-Radia,
-Wilton Gram, volume Gram, scalable, ellipsoid, BH table, distorted robustness, curved win.
+`tests/feec/test_hdiv_vim_*.py` (full feec suite **68 passing**) — Newton, Newton-vs-Radia,
+Wilton Gram, volume Gram, scalable, ellipsoid, BH table, distorted robustness, curved win
+(elementary), curved + high-order demag exact (`ngsolve.bem` single-layer).
 
 ## Detailed home
 
@@ -88,13 +98,18 @@ The narrative + decisions live in the radia-mcp **`hdiv_vim`** MCP knowledge
 
 ## Honest open items (the productionization to actually retire yano-type)
 
-1. **Curved demag OPERATOR** — `build_demag`/`wilton_surface_block`/`phi_tet` still use FLAT
-   vertices; the accurate curved Gram reuses `src/radia/bem/sibc_hacapk.py::_ss_block_curved_trafo`
-   (Galerkin single-layer, proper singular self/near on curved elements). An **integration,
-   not research** — the curved-sampling primitive (`_trafo_sample`) and the geometry-win
-   proof (vs analytic truth) are already done in `hdiv_demag_curved.py`.
-2. **High-order Gram** — Graglia polynomial-density weakly-singular quadrature; the
-   p-convergence accuracy-per-DOF win over lowest-order yano-type.
-3. **C++ maturity** — Wilton + `phi_tet` + curved in the C++ HACApK charge Gram, the full
-   Newton loop in C++, and a Radia API. This is the big lift that turns the validated
-   prototype into the shipped replacement.
+The **surface** Gram, curved + high-order + FMM-scalable, is now SOLVED by reusing the
+`ngsolve.bem` Laplace single-layer (`hdiv_demag_bem_singlelayer.py`) — no hand-rolled singular
+quadrature needed. The remaining work:
+
+1. **Full operator on the single-layer** — wire `N = BᵀVB` (`B` = HDiv charge map, `V` =
+   `ngsolve.bem` single-layer) and run a self-consistent linear solve on a curved/high-order
+   body, validated vs analytic. The demag-factor proof (`<σ,Vσ>/V_vol` → 1/3) is done; the
+   operator + solve is the next assembly.
+2. **Volume charge for non-uniform M** — `ngsolve.bem` is boundary-only, so the nonlinear case
+   (`div M ≠ 0` → volume charge `ρ`) still needs the Newtonian volume potential (`phi_tet`,
+   already built) on curved/high-order cells; combine with the single-layer for the full
+   curved+high-order nonlinear operator.
+3. **C++ maturity** — the production charge Gram (single-layer surface + `phi_tet` volume) and
+   the Newton loop in C++ behind a Radia API. The big lift that turns the validated prototype
+   into the shipped replacement.
