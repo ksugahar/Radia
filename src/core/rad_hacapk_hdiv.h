@@ -108,6 +108,21 @@ public:
 
     double GetInteractionMatrixElement(int a, int b) const override;
 
+    // M3 (the iterative-solve hot kernel in C++): solve the SPD HDiv-VIM linear material system
+    //   ((1/chi) M_mass + B^T G B) m = rhs
+    // by Jacobi-preconditioned conjugate gradients, with G applied as THIS charge-Gram H-matvec
+    // (O(N log N)) -- no dense N, no Python per-iteration glue.  This is the linear soft-iron demag
+    // solve AND the symmetric Picard warmstart of the nonlinear Newton.  Sparse inputs are caller-
+    // provided: B as CSR over charges (B_indptr [n_charge+1], B_indices/B_data = face columns, so
+    // (B x)[charge] = sum data*x[face]); M_mass as COO (mI,mJ,mV) on the n_face DOFs; prec = the
+    // Jacobi diagonal of the system (length n_face).  Returns m (length n_face); iters_out = CG iters.
+    std::vector<double> SolveLinearMaterial(
+        const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+        const std::vector<double>& B_data, int n_face,
+        const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+        double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
+        double tol, int maxit, int& iters_out);
+
 protected:
     void ExtractCoordinates() override;
     void OnBeforeBuild() override {}
