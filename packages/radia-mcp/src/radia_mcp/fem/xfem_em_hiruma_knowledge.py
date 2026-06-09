@@ -1,7 +1,7 @@
 """EM-XFEM (Hiruma 2023) — electromagnetic XFEM enrichment for eddy currents.
 
 Knowledge layer for the Hiruma EM-XFEM, which is structurally distinct
-from the solid-mechanics XFEM covered in xfem_comsol_knowledge.py:
+from solid-mechanics / fracture XFEM (Jafari et al. 2021):
 
   - Hiruma 2023 (IEEE TMag 59(5)): enrich H_1 trial space with
     psi(x) = exp(-gamma*xi(x)),  gamma = sqrt(j*omega*mu*sigma)
@@ -119,8 +119,8 @@ Do NOT use EM-XFEM if:
 
   - `radia_mcp.fem.fem_xfem_em_hiruma` (this tool):
        EM-XFEM as an FE-level technique
-  - `radia_mcp.fem.fem_xfem_comsol`:
-       solid-mechanics XFEM (Jafari et al. 2021) for crack growth
+  - Solid-mechanics / fracture XFEM (Jafari et al. 2021): a separate
+       family of XFEM for crack growth — different problem, same name
   - `radia_mcp.radia_ngsolve.cln_sibc_orthogonal`:
        decision framework: when XFEM vs SIBC vs augmented CLN
        (topic 'xfem_vs_sibc')
@@ -598,7 +598,7 @@ Q4. Pure industrial high-f only (DC accuracy not needed)?
 | Time-domain transient + port-driven                  | Augmented CLN    |
 | Multi-conductor IH coil + workpiece                  | BEM-CLN + Augmented CLN per element (Paper II) |
 | Plain industrial high-f, no DC                       | classical SIBC   |
-| Crack growth (mechanical XFEM, not EM)               | xfem_comsol (different module) |
+| Crack growth (mechanical XFEM, not EM)               | fracture XFEM (Jafari et al. 2021) — different problem |
 """
 
 
@@ -649,9 +649,9 @@ Typical applications:
   - Optimization with moving design domains
   - Crack growth where the crack is treated as a level-set
 
-The IEEE-MAG fracture-mechanics XFEM (Jafari et al. 2021,
-``fem_xfem_comsol`` sibling tool) is one application that would
-naturally map onto ngsxfem, but Jafari et al. used COMSOL + MATLAB.
+The fracture-mechanics XFEM (Jafari et al. 2021) is one application
+that would naturally map onto ngsxfem, but that paper used a different
+solver stack.
 
 ## Why ngsxfem is NOT needed for Hiruma EM-XFEM
 
@@ -801,7 +801,7 @@ print(f"Area inside circle: {result:.4f}  (analytic: {math.pi*0.16:.4f})")
 |----------|--------|
 | Hiruma 2023 EM skin-depth enrichment (Phase 2 reproduction) | vanilla NGSolve compound space ✓ |
 | Cut-FEM with moving interface, two-phase flow, evolving levelsets | ngsxfem library |
-| Solid-mech crack growth | xfem_comsol sibling tool (COMSOL workflow) or ngsxfem with level-set |
+| Solid-mech crack growth | fracture XFEM (Jafari et al. 2021) or ngsxfem with level-set |
 
 The three "XFEM"s share the name but solve different problems.  Be
 explicit about which one you mean.
