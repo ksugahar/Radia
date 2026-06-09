@@ -320,7 +320,7 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
 
 def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-10,
                                     picard_warmstart=8, maxit=200, gmres_tol=1e-8, newton_tol=1e-6,
-                                    near_factor=1e30, return_timing=False, verbose=False):
+                                    near_factor=1e30, gmres_restart=400, return_timing=False, verbose=False):
     """SCALABLE damped Newton (production #2): the dense O(N^3)/O(N^2) demag is replaced by the C++
     HACApK charge-Gram H-matrix (O(N log N) apply), and the Newton system is solved ITERATIVELY
     (GMRES) -- no dense factorization anywhere.
@@ -410,7 +410,13 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-10
         # (the warmstart used to hit its 2000-iter cap, info=2000); GMRES is asymmetry-robust and
         # converges in ~100-150 iters (the Newton step below already uses GMRES for the same reason).
         # Warm-restart from the previous Picard iterate (x0=m).
-        m, _info = spla.gmres(Aop, H0 * b0, M=Mprec, x0=m, maxiter=20, restart=50, **{_GMRES_TOL: gmres_tol})
+        # restart MUST exceed the inner-iteration count or GMRES STAGNATES (restarting throws away the
+        # Krylov subspace).  The +N inner solve grows mildly with N (~31 @ ndof 8573 -> ~115 @ 38383, the
+        # star-space demag spectrum -- NOT the loops, which M_mass^{-1} already deflates).  restart=50 was
+        # the entire "44k scaling wall": at ndof 38383 it needs 115 iters and restart=50 never converged
+        # (info=20); restart>=200 converges in 115.  Default 400 covers ~100k ndof; very large N benefits
+        # from a star-space preconditioner (to BOUND the iters) rather than an ever-larger restart.
+        m, _info = spla.gmres(Aop, H0 * b0, M=Mprec, x0=m, maxiter=20, restart=gmres_restart, **{_GMRES_TOL: gmres_tol})
         Hi = H0 - Dscal * Mavg(m)
         chi = 0.5 * chi + 0.5 * (Mof(Hi) / Hi if abs(Hi) > 1e-30 else chi)
         if verbose:
@@ -444,7 +450,7 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-10
             return M_mass @ v + Tcsr @ Dop_apply(v)
 
         Jop = spla.LinearOperator((ndof, ndof), matvec=Japply)
-        dm, ginfo = spla.gmres(Jop, -F, M=Mprec, maxiter=500, restart=50, **{_GMRES_TOL: gmres_tol})
+        dm, ginfo = spla.gmres(Jop, -F, M=Mprec, maxiter=20, restart=gmres_restart, **{_GMRES_TOL: gmres_tol})
         lam = 1.0
         while lam > 1e-7 and Fnorm(m + lam * dm) >= nF:
             lam *= 0.5
