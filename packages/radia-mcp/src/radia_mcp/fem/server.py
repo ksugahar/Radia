@@ -32,7 +32,6 @@ from .gauge_open_boundary_knowledge import get_gauge_open_boundary_knowledge
 from .time_domain_axisym_knowledge import get_time_domain_axisym_knowledge
 from .large_scale_special_knowledge import get_large_scale_special_knowledge
 from .ngsolve_hierarchy_knowledge import get_ngsolve_hierarchy_knowledge
-from .xfem_comsol_knowledge import get_xfem_knowledge
 from .xfem_em_hiruma_knowledge import get_em_xfem_knowledge
 # Non-conforming mesh coupling (mortar / Nitsche / FETI-DP / DG /
 # HFSS Mesh Fusion analogs).  2026-05-26: distilled from
@@ -157,35 +156,10 @@ def fem_ngsolve_hierarchy(topic: str = "decision_tree") -> str:
 
 
 @mcp.tool()
-def fem_xfem_comsol(topic: str = "overview") -> str:
-    """
-    XFEM in COMSOL Multiphysics (Jafari-Broumand-Vahab-Khalili 2021).
-
-    Reference paper:
-        "An eXtended Finite Element Method Implementation in Solid Mechanics"
-        (arXiv:2109.03153v1 [cs.CE], Sep 2021)
-
-    Args:
-        topic: One of:
-            "overview"          - High-level summary + paper context (DEFAULT)
-            "theory"            - PU enrichment, shifted Heaviside, asymptotic tip
-            "comsol_workflow"   - Six Solid Mechanics modules + LiveLink pattern
-            "worked_examples"   - 5 paper benchmarks (2D/3D)
-            "crack_propagation" - SIF -> theta_c (MTS) -> K_eq vs K_IC
-            "lab_integration"   - Where this fits in radia-mcp + reproducer
-            "glossary"          - Notation and symbols
-            "lab_files"         - Absolute paths to PDF / .mph / .m bundle
-            "all"               - Everything (concatenated)
-    """
-    return get_xfem_knowledge(topic)
-
-
-@mcp.tool()
 def fem_xfem_em_hiruma(topic: str = "overview") -> str:
     """
     EM-XFEM (Hiruma 2023): electromagnetic XFEM for eddy-current
-    skin-depth resolution.  Distinct from solid-mechanics XFEM
-    (fem_xfem_comsol).  Lab-verified implementation in
+    skin-depth resolution.  Lab-verified implementation in
     examples/hiruma_xfem_comparison/ (beta-1 Phase 1-4, 2026-05-25).
 
     Reference:
@@ -455,7 +429,6 @@ def main():
         print(f"  time_domain_axisym: {len(get_time_domain_axisym_knowledge('all'))} chars")
         print(f"  large_scale_special: {len(get_large_scale_special_knowledge('all'))} chars")
         print(f"  ngsolve_hierarchy: {len(get_ngsolve_hierarchy_knowledge('all'))} chars")
-        print(f"  xfem_comsol: {len(get_xfem_knowledge('all'))} chars")
         print(f"  xfem_em_hiruma: {len(get_em_xfem_knowledge('all'))} chars")
         print(f"  nonconforming_mesh_coupling: {len(get_nonconforming_mesh_coupling_documentation('all'))} chars")
         print(f"  equivalence_source: {len(get_equivalence_source_knowledge('all'))} chars")
