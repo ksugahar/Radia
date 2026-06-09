@@ -1023,7 +1023,7 @@ def check_scattered_eddy_missing_a0(filepath: str, lines: List[str]) -> List[Dic
     In a scattered-field harmonic eddy solve the FE unknown gfA is the SCATTERED
     vector potential; the total electric field is E = -jw (A0 + gfA + grad(Phi)).
     Computing the Joule loss from the scattered gfA alone (omitting the background
-    A0) overestimates the loss by ~10x (observed in COMSOL<->NGSolve induction-
+    A0) overestimates the loss by ~10x (observed in an independent induction-
     heating cross-validation). Coil-source (total-field) problems carry no
     background A0 and correctly pass A0=None -- those files do not define an A0
     and are therefore not flagged.

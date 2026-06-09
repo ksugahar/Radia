@@ -1,11 +1,11 @@
 """ONELAB/GetDP electric-machine knowledge for radia_mcp.motor.
 
-Distilled from S:/ONELAB/ElectricMachines/ (Sabariego-Gyselinck-Geuzaine,
+Distilled from the ONELAB ElectricMachines bundle (Sabariego-Gyselinck-Geuzaine,
 ULiège-ULB; COPYING.txt is copyright-only with no explicit license text —
 treat as academic/research code and cite the papers).  The bundle is
 the canonical open-source reference for 2D rotating-machine FEA, and is
-the basis for Liu Xinyao's 2025 thesis (W:/04_卒論論文関係/2025年度/
-136_劉馨遙) comparing ONELAB vs JMAG torque waveforms.
+the basis for a 2025 student thesis that benchmarks the ONELAB torque
+waveforms against an independent reference.
 
 Reading this knowledge is the prerequisite for translating an ONELAB
 GetDP model (.pro + .geo) into a radia_mcp.radia_ngsolve workflow.
@@ -24,7 +24,7 @@ Section map:
   analysis_modes — Static / FreqDomain (slip) / TimeDomain (transient)
   circuit        — Coupled circuit (im_circuit.pro pattern)
   post           — Torque / iron loss / phase-current / FFT post-pro
-  liu_thesis     — Liu Xinyao 2025 JMAG vs ONELAB comparison notes
+  liu_thesis     — 2025 thesis: ONELAB torque vs an independent reference
 """
 
 from __future__ import annotations
@@ -36,10 +36,10 @@ from __future__ import annotations
 OVERVIEW = """\
 ## ONELAB/GetDP ElectricMachines — overview
 
-Location (LAB): `S:/ONELAB/ElectricMachines/`
+Source: the ONELAB `ElectricMachines` bundle (open-source).
 Maintainers: Ruth Sabariego, Johan Gyselinck, Christophe Geuzaine
             (ULiège-ULB, WBGreen FEDO, WIST3 ONELAB).
-License: see `COPYING.txt`.
+License: see the bundle's `COPYING.txt`.
 
 Quick start: open `main.pro` in Gmsh; the GUI picks a model and a
 case from the dropdown `Flag_AnalysisType` (Static / Time-Domain /
@@ -579,15 +579,13 @@ one electrical period.  The fundamental gives `K_e` (V/rpm); harmonics
 """
 
 LIU_THESIS = """\
-## Liu Xinyao 2025 thesis — JMAG vs ONELAB cross-validation
-
-Location: `W:/04_卒論論文関係/2025年度/136_劉馨遙/`
+## 2025 thesis — ONELAB torque vs an independent reference
 
 ### Topic
 
-Cross-validation of ONELAB GetDP vs commercial JMAG-Designer torque
-waveforms on a **synchronous reluctance motor (SynRM)**.  Liu Xinyao
-used the result to bootstrap a topology-optimization study based on
+Cross-validation of ONELAB GetDP torque waveforms against an independent
+torque reference on a **synchronous reluctance motor (SynRM)**.  The
+result was used to bootstrap a topology-optimization study based on
 Kishi-Wakao-Murata 2025 IEEJ (autoencoder + LS method, see
 `topology_opt_knowledge`).
 
@@ -595,24 +593,24 @@ Kishi-Wakao-Murata 2025 IEEJ (autoencoder + LS method, see
 
 | File | Content |
 |------|---------|
-| `JMAGとONELABのトルク波形比較.pptx` | Side-by-side T(θ) waveforms for the same SynRM geometry, time domain |
-| `卒論/宮村1.pdf`, `谷本.pdf` | Senior theses (background reading on SynRM, IPM, motor FEA) |
-| Wakao group papers (in `モーター/`) | Autoencoder + LS topology-opt, Darwin TD model |
+| torque-waveform comparison | Side-by-side T(θ) waveforms for the same SynRM geometry, time domain |
+| senior theses (SynRM/IPM)  | Background reading on SynRM, IPM, motor FEA |
+| Wakao group papers         | Autoencoder + LS topology-opt, Darwin TD model |
 
 ### Lesson learned
 
 ONELAB's machine_magstadyn_a.pro using **A-formulation + moving
-band** reproduces JMAG torque to within plotting accuracy on a
-production SynRM design.  This validates the path: GetDP semantics
-are correct, the moving-band sliding interface is numerically clean
-(no spurious tangential force on the air-gap mid-circle).  Any port
-to NGSolve should be benchmarked against the **same** ONELAB run, not
-against JMAG directly (JMAG and ONELAB already agree).
+band** reproduces the independent torque reference to within plotting
+accuracy on a production SynRM design.  This validates the path: GetDP
+semantics are correct, the moving-band sliding interface is numerically
+clean (no spurious tangential force on the air-gap mid-circle).  Any port
+to NGSolve should be benchmarked against the **same** ONELAB run, which is
+open and reproducible.
 
 ### Implications for radia_mcp.motor
 
-1. The "correct" reference for an NGSolve port is the ONELAB result,
-   not a commercial code.  This removes one layer of licensing /
+1. The "correct" reference for an NGSolve port is the open, reproducible
+   ONELAB result.  This removes one layer of licensing /
    reproducibility friction.
 2. For SynRM specifically, the dominant validation metric is
    **average torque T_ave** + **ripple T_rip = (T_max-T_min)/T_ave**.

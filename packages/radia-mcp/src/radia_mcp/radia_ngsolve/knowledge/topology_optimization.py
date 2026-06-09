@@ -10,12 +10,10 @@ Source bundles (2026-05-26):
      - Part II numerical realisation in NGSolve+ngsxfem (Strobl 2019)
      - IPM motor case study (SIAM SISC 2015, 37, B1002-B1025)
 
-This module is the NGSolve-implementation mirror of the same content
-absorbed at `S:/COMSOL/mcp-server/docs/TOPOLOGY_OPTIMIZATION.md`
-(long-form tutorial) and `S:/COMSOL/mcp-server/src/knowledge/prompts/
-topology_optimization.md` (RAG-indexed concise version).  Continuous-
-learning pattern: each new textbook / paper absorbed gets reflected
-into BOTH the COMSOL MCP and this NGSolve-side module.
+This module is the NGSolve-implementation mirror of the same topology-
+optimization content, distilled from the textbook + Gangl-Sturm bundle above
+into a concise, RAG-indexable form.  Continuous-learning pattern: each new
+textbook / paper absorbed gets reflected into this NGSolve-side module.
 
 Companion modules in radia_ngsolve.knowledge:
   - kelvin.py — needed for Gangl-Sturm's W/Q exterior cell problem
@@ -24,9 +22,6 @@ Companion modules in radia_ngsolve.knowledge:
   - basis_functions.py — Nedelec HCurl edge elements (state space)
   - esim.py — SIBC / nonlinear surface impedance (related sensitivity
               framework for fluid-conductor TopOpt extensions)
-
-For the COMSOL Topology Optimization Module mapping, see
-`S:/COMSOL/mcp-server/docs/TOPOLOGY_OPTIMIZATION.md`.
 """
 
 
