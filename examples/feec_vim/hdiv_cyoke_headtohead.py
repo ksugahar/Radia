@@ -17,16 +17,19 @@ wall-clock, so the HDiv-VIM curve can be read directly against the two yano poin
 the geometry/charge setup is identical to the validated hdiv_cyoke_nonlinear.py cross-check vs Radia MMM;
 this script measures TIME, not accuracy -- accuracy is locked by tests/feec/test_hdiv_vim_*.)
 
-HONEST STATUS (2026-06-09, see docs/hdiv_vim/PRODUCTIONIZATION.md): the first runs of THIS script exposed
-that the scalable nonlinear SOLVE is NOT yet mesh-robust.  BUILD is scalable + a clear win, and the SOLVE
-converges to the CORRECT Mz (the method + tangent are correct -- quadratic convergence verified), BUT the
-Newton iteration COUNT grows with refinement (6 -> 27 -> 37 over h 0.008 -> 0.005) because the +N MINRES
-warmstart is ill-conditioned (the field-null loops ker B are near-null modes, eig ~1/chi).  The "5-6 iters"
-holds only at COARSE mesh.  Fix A (committed) made the convergence test sound + fail-loud (the earlier
-"Mz drift to 509k" was a FALSE-CONVERGENCE bug, now impossible -- it raises instead of returning a wrong M).
-Fix B (the -N mu_r-independent material formulation / loop-space preconditioner for a mesh-independent
-iteration count) is NOT done.  So this script's SOLVE timings are real but reflect the pre-Fix-B (slow,
-warmstart-limited) solve; do NOT read them as the final head-to-head until Fix B lands.
+STATUS (2026-06-09, RESOLVED -- see docs/hdiv_vim/PRODUCTIONIZATION.md): the first runs of THIS script
+exposed two bugs, both now FIXED, after which the SOLVE is mesh-INDEPENDENT (6-iter quadratic convergence):
+  - Fix A: the convergence test was unsound (an Mavg-stagnation break declared "converged" mid-globalization
+    -> the apparent "Mz drift to 509k" was a FALSE convergence).  Now breaks on the true residual relF and
+    RAISES if maxit is hit -- never silently returns a wrong M.
+  - Fix B: the iteration count grew with refinement (6 -> 27 -> 37) because the DEFAULT ACA tolerance
+    gram_eps=1e-7 was too loose -> the charge-Gram H-matrix was ~5% inaccurate/asymmetric -> the Newton
+    tangent was inconsistent.  Tightening the default to 1e-10 restores 6-iter convergence at EVERY mesh.
+    (NEITHER the -N material formulation NOR a loop-space preconditioner was needed -- both were red herrings.)
+This script now runs with near_factor=2.0 (fast near/far build) + gram_eps=1e-10 (default; accurate): on the
+C-yoke it is ~6 iters and ~16 s total at ndof~10759 vs yano's 99 s / 174 iters at 18900 DOF -- a clear win
+on BOTH build and solve.  (A C-yoke is FLAT, so Radia/the dense path is a valid accuracy cross-reference;
+this script measures TIME -- accuracy is locked by tests/feec/test_hdiv_vim_*.)
 """
 import json
 import os
@@ -77,10 +80,10 @@ if __name__ == "__main__":
     out = {"geometry": "C-yoke (Kelvin-less, iron-only volume integral -- no air, no Kelvin)",
            "chi0": 1000.0, "Msat": 1.0e6, "H0": 2.0e5, "near_factor": 2.0,
            "hdiv_vim": rows, "yano_reference": YANO_REF,
-           "status_2026_06_09": ("BUILD scalable + clear win; SOLVE converges to the CORRECT Mz (Fix A: "
-                                 "sound relF break + fail-loud) but iter COUNT grows with refinement "
-                                 "(ill-conditioned +N warmstart) -- Fix B (-N material formulation / loop "
-                                 "preconditioner) pending. NOT the final head-to-head until Fix B.")}
+           "status_2026_06_09": ("RESOLVED. Fix A (sound relF break + fail-loud) + Fix B (default "
+                                 "gram_eps 1e-7->1e-10; the loose ACA tolerance was the root cause, NOT "
+                                 "the -N material formulation or a loop preconditioner). SOLVE now "
+                                 "mesh-INDEPENDENT 6-iter quadratic convergence; clear win on build AND solve.")}
     with open(os.path.join(HERE, "hdiv_cyoke_headtohead.json"), "w") as f:
         json.dump(out, f, indent=2)
     print("saved", os.path.join(HERE, "hdiv_cyoke_headtohead.json"))
