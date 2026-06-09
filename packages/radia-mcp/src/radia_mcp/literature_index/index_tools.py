@@ -4,8 +4,10 @@ import os
 from pathlib import Path
 from typing import Optional
 
-# Source root (lab NAS)
-LIT_ROOT = Path(r"W:\03_文献・論文\00_電磁界解析")
+# Source root. Defaults to the Sugahara-Lab NAS path; override with
+# RADIA_LIT_ROOT so the server works on any machine (degrades gracefully
+# to an empty index when the corpus is absent -- see _build_index).
+LIT_ROOT = Path(os.environ.get("RADIA_LIT_ROOT", r"W:\03_文献・論文\00_電磁界解析"))
 
 # Cache location
 CACHE_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / ".cache"))) / "radia_mcp_literature_index"

@@ -52,6 +52,8 @@ def motor_onelab(topic: str = "overview") -> str:
             "overview"        - Bundle layout + reference machine table
             "groups"          - Region / FunctionSpace / Constraint vocab
             "formulation"     - 2D A-formulation weak form + non-linear ν
+            "magstadyn_source"- VERIFIED weak form/torque/slip/Park from .pro source
+            "twod_corrections"- 2D→3D corrections: end-effects/skew/lamination/etc
             "motor_types"     - PMSM, IM, SRM, WFSM, shaded-pole table
             "ngsolve_xlate"   - GetDP → NGSolve translation patterns
             "analysis_modes"  - Static / Time-Domain / Frequency-Domain

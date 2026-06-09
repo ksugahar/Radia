@@ -75,6 +75,18 @@ def annular_dtn_matrix(n, ri, ro):
     return ((d_ri_in, d_ri_out), (d_ro_in, d_ro_out))
 
 
+def airgap_dtn_modes(ri, ro, harmonics):
+    """Stator-ring (M21, M22) of the gap DtN for each harmonic n in ``harmonics``.
+
+    The gap couples each Fourier mode INDEPENDENTLY (it is current-free / linear), so
+    the multi-harmonic AGE boundary block is the sum over n of the rank-1 spectral
+    projector ``(M22(n)/norm) c_n c_n^T`` (c_n = the boundary integral of cos/sin n*theta),
+    with rotor-ring forcing ``-M21(n) A_in,n c_n``.  This is what lets a SINGLE FE solve
+    carry the full air-gap spectrum (slot / pole harmonics) across the un-meshed gap.
+    Returns ``{n: (M21, M22)}``."""
+    return {n: annular_dtn_matrix(n, ri, ro)[1] for n in harmonics}
+
+
 def airgap_harmonic_torque(n, ri, ro, A_in, A_out, axial_length=1.0, mu0=MU0):
     """Mesh-independent torque [N*m] transmitted across the gap by harmonic n:
 
