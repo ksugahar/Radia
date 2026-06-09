@@ -80,10 +80,14 @@ if __name__ == "__main__":
     out = {"geometry": "C-yoke (Kelvin-less, iron-only volume integral -- no air, no Kelvin)",
            "chi0": 1000.0, "Msat": 1.0e6, "H0": 2.0e5, "near_factor": 2.0,
            "hdiv_vim": rows, "yano_reference": YANO_REF,
-           "status_2026_06_09": ("RESOLVED. Fix A (sound relF break + fail-loud) + Fix B (default "
-                                 "gram_eps 1e-7->1e-10; the loose ACA tolerance was the root cause, NOT "
-                                 "the -N material formulation or a loop preconditioner). SOLVE now "
-                                 "mesh-INDEPENDENT 6-iter quadratic convergence; clear win on build AND solve.")}
+           "status_2026_06_09": ("Fix A (sound relF break + fail-loud) + Fix B (default gram_eps "
+                                 "1e-7->1e-10; the loose ACA tolerance degraded the OUTER Newton). SOLVE "
+                                 "is mesh-INDEPENDENT 6-iter + accurate + a clear win UP TO ndof~15726 "
+                                 "(the rows above). SCALE CAVEAT: the INNER +N GMRES solve does NOT yet "
+                                 "scale past ~20-40k ndof (at ndof~44k it fails to converge in 1000 iters) "
+                                 "-- a real inner-solve preconditioner (Calderon/loop-aware/H-ILU) or the "
+                                 "Picard/修正反復法 is needed for the 165600 scale. Do NOT read this as a "
+                                 "165600-DOF result.")}
     with open(os.path.join(HERE, "hdiv_cyoke_headtohead.json"), "w") as f:
         json.dump(out, f, indent=2)
     print("saved", os.path.join(HERE, "hdiv_cyoke_headtohead.json"))

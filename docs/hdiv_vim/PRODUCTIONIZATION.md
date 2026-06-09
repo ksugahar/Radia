@@ -166,12 +166,26 @@ instrumented diagnosis (per-iter ‖F‖/λ/Mavg trajectory) found:
 
        Mz is now monotonic + converging (584.6k→585.5k→586.0k, the dense trend), no false-convergence
        drift. (The GMRES warmstart from the prior commit stays as robustness; the near/far `near_factor`
-       offsets the modestly-higher tight-eps build cost.) **NEITHER B1 (−N material) NOR B2 (loop/Calderón
-       preconditioner) was the fix — both were red herrings; the real cause was the ACA tolerance.**
+       offsets the modestly-higher tight-eps build cost.) The ACA tolerance was the cause of the
+       OUTER-Newton (tangent-consistency) degradation — NOT B1 (−N material, non-physical).
 
-So the corrected status: **BUILD is scalable + a clear win; SOLVE is now mesh-INDEPENDENT (6-iter quadratic
-convergence) and accurate (Fix A + Fix B).** The head-to-head JSON can now be regenerated honestly (accurate,
-fast, mesh-independent numbers) — pending the full C-type source/symmetry setup.
+     - **SCALE CAVEAT (2026-06-09, found by a cautious intermediate point BEFORE attempting 165600 DOF):
+       the OUTER Newton is mesh-independent (6 iters) and accurate, but the INNER +N linear solve does
+       NOT yet scale.** At ndof=10759 the warmstart's M_mass⁻¹-preconditioned GMRES converged in ~150
+       iters; at ndof≈44k (cyoke h=0.004) it does NOT converge in 1000 iters (`gmres_info=20`) — the
+       inner iteration count grows SUPER-linearly with N. So Fix A+B are validated only to **ndof ≈
+       15726**; the head-to-head numbers below hold at that scale, and the earlier "extrapolate to
+       165600" is **NOT supported**. **B2 was therefore NOT a full red herring** — a real inner-solve
+       preconditioner is genuinely required at scale; it just wasn't needed at the ≤15726 scale where
+       plain M_mass⁻¹ sufficed. The lever is a proper preconditioner for the +N system (loop-aware /
+       Calderón / auxiliary-space, or an H-ILU like the yano-type's linear solve, which DID scale to
+       165600 at 2686 linear iters) — OR switch the nonlinear loop to the 修正反復法 / Picard
+       (fixed-point, robust to the inner conditioning like yano, at the cost of many outer iters).
+
+So the corrected status: **BUILD is scalable + a clear win; SOLVE is mesh-INDEPENDENT (6-iter) + accurate
+up to ndof ≈ 15726 (Fix A + Fix B), but the INNER +N solve needs a real preconditioner to go past ~20–40k
+ndof toward the 165600 scale.** The head-to-head JSON is honest at the measured scale; do NOT read it as a
+165600-DOF result.
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
