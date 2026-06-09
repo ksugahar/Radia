@@ -1,8 +1,10 @@
 """NGSolve NONLINEAR TEAM-20 (B-H steel) with the circular coil + azimuthal
-current -- the relay partner for the COMSOL nonlinear solve. Same geometry as
-t20_ngsolve.py but solve_magnetostatic_newton with the 38-pt B-H curve."""
-import sys, time
-sys.path.insert(0, r"W:\00_CAE\Radia\01_GitHub\packages\radia-mcp\src")
+current -- the nonlinear partner of t20_ngsolve.py (an independent reference
+solve provides the cross-check). solve_magnetostatic_newton with the 38-pt B-H
+curve."""
+import os, sys, time
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "src")))
 import numpy as np
 from ngsolve import *
 from netgen.occ import Box, Cylinder, Pnt, Dir, Glue, OCCGeometry

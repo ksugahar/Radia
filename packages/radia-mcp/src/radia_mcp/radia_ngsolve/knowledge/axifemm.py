@@ -2,7 +2,7 @@
 radia-axifemm knowledge base for the Radia + NGSolve MCP server.
 
 `radia-axifemm` is an NGSolve add-on (registered FESpace `axihenrotte`) that
-adds a FEMM/Henrotte axisymmetric Q-element family which NGSolve does not
+adds a Henrotte axisymmetric Q-element family which NGSolve does not
 ship out of the box: polynomial basis in `s = r²` (not `r`) representing the
 flux function `ψ = 2π r A_φ` (not `A_φ` itself). On the Cu-disk eddy-current
 benchmark the `p=2` Q-element matches BEM-Foster to 0.27 % with ~6× fewer
@@ -33,8 +33,9 @@ AXIFEMM_OVERVIEW = """\
 | `p=2` Q-element | 9 (4 vertex + 4 edge + 1 face) | 223.69 µs (0.27 %, ~6× fewer DOFs than `p=1` for higher accuracy) |
 | `p=3` Q-element | dropped — raw-monomial Vandermonde cond ≈ 10³⁰ exceeds double precision; would require shifted-Legendre basis to ship safely. Not on the roadmap. |
 
-There is also a `p=1` triangle path (3 DOFs, FEMM `prob3big.cpp` direct
-port) that matches FEMM `.mat` outputs to 0.1 % on the FEMM NMR benchmark.
+There is also a `p=1` triangle path (3 DOFs, a direct C++ axisymmetric
+port) that matches a stored axisymmetric-magnet reference to 0.1 % on an
+NMR-style benchmark.
 
 ## Key idea (why this is "an NGSolve feature NGSolve does not have")
 
@@ -716,11 +717,11 @@ escape hatch.
 
 
 AXIFEMM_MAGNET = """\
-# Permanent-magnet source term (FEMM prob3big.cpp port)
+# Permanent-magnet source term (axisymmetric magnetization edge-loop)
 
 axihenrotte solves linear/eddy-current problems; a **permanent magnet** is
-added purely as a `LinearForm` RHS — no FESpace/C++ change needed. This is
-the FEMM `fkn/prob3big.cpp` magnetization edge-loop
+added purely as a `LinearForm` RHS — no FESpace/C++ change needed. This is the
+standard axisymmetric magnetization edge-loop
 (`H_c * (cos t * dr + sin t * dz)`) written as a continuous Galerkin form.
 
 ## Weak form
@@ -753,7 +754,7 @@ For mu_r=2, Hc=3e5 -> B_in = 0.376991 T. The verified test
     interior |B_r|          < 1.1e-4 T     (purely axial, as expected)
     external equator r=5a   = -1.497e-3 T  vs dipole -1.508e-3 (0.73 %)
 Cross-checks: standard NGSolve H1 gives -0.010 % (same source term);
-FEMM `02_大地模擬/axis_magnet*` Kelvin runs use the same a/mu_r/Hc.
+a stored axisymmetric Kelvin reference uses the same a/mu_r/Hc.
 
 ## Gotchas
 
@@ -786,7 +787,7 @@ def get_axifemm_documentation(topic: str = "all") -> str:
       "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
                           sphere -0.001 % vs Stoll, with gotchas: mu vs nu factor,
                           element-centroid mu sampling, Curve(2) trade-off)
-      "magnet"          - Permanent-magnet source term (FEMM prob3big.cpp port):
+      "magnet"          - Permanent-magnet source term (axisym magnetization edge-loop):
                           weak-form RHS, magnetized-sphere validation, axis-BC gotcha
       "file_layout"     - Where to find each piece (C++, Mathematica, tests)
       "why_dropped_p3"  - Why `p=3` was attempted, completed, and reverted

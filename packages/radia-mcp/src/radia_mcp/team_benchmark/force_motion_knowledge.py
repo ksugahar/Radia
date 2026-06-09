@@ -207,8 +207,8 @@ dominated by gap fringing -- robust to body-flux error but sensitive to the surf
 trace (hence the air-side L2 + BoundaryFromVolumeCF). The force normal/sign follow
 Yano's -oint T_z ds('pole_surface'). NEXT: saturating cases (3000/4500/5000 AT) need
 the nonlinear B-H + a FAST solver -- direct sparse-Cholesky is 185 s/solve (46k
-order-2 tets) so Picard x ~30 iters ~ hours; use iterative CG+BDDC + Newton (as Yano)
-to make nonlinear TEAM-20 tractable. Validation script: C:\temp\cc_lab\team20_*.py.
+order-2 tets) so Picard x ~30 iters ~ hours; use iterative CG+BDDC + Newton
+to make nonlinear TEAM-20 tractable.
 
 ## radia-mcp NONLINEAR cross-validation (2026-06-04) -- COMPLETE, all NI <4.1 %
 The shipped solve_magnetostatic_newton (Newton energy-min + CG/BDDC + load

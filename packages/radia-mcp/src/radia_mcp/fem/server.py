@@ -40,10 +40,11 @@ from .xfem_em_hiruma_knowledge import get_em_xfem_knowledge
 from .nonconforming_mesh_coupling_knowledge import (
     get_nonconforming_mesh_coupling_documentation,
 )
-# Equivalence-theorem near-field source (CST NFS equivalent).
-# 2026-05-26: distilled from S:\FEMM\等価定理の基礎原理\, S:\FEMM\2015_05_21_等価定理\,
-# S:\99_調査済\Femtet\2015_04_12_IABC_recnstruct\.  IABC / SDI content
-# intentionally excluded -- Kelvin transformation is the lab BC.
+# Equivalence-theorem near-field source (near-field-source equivalent).
+# 2026-05-26: distilled from lab background on the equivalence theorem
+# (axisymmetric basics, the 2015 open-domain generalization, a WPT
+# reconstruction study).  IABC / SDI content intentionally excluded --
+# Kelvin transformation is the lab BC.
 from .equivalence_source_knowledge import (
     get_equivalence_source_knowledge,
 )
@@ -161,8 +162,7 @@ def fem_xfem_comsol(topic: str = "overview") -> str:
     XFEM in COMSOL Multiphysics (Jafari-Broumand-Vahab-Khalili 2021).
 
     Reference paper:
-        S:/COMSOL/2022_05_12_XFEM/An eXtended Finite Element Method
-        Implementation in COMSOL Multiphysics Solid Mechanics.pdf
+        "An eXtended Finite Element Method Implementation in Solid Mechanics"
         (arXiv:2109.03153v1 [cs.CE], Sep 2021)
 
     Args:
@@ -318,10 +318,10 @@ def fem_equivalence_source(topic: str = "overview") -> str:
           SEPARATE case when the user computes (E, H) on the surface
           from a BEM solve instead of an FEM solve.
 
-    Distilled from three Sugahara Lab dirs:
-        S:\\FEMM\\等価定理の基礎原理\\軸対称\\        (2007-2008 axisym basics)
-        S:\\FEMM\\2015_05_21_等価定理\\                (2015 generalization)
-        S:\\99_調査済\\Femtet\\2015_04_12_IABC_recnstruct\\  (Femtet WPT)
+    Distilled from lab background on the equivalence theorem:
+        - 2007-2008 axisymmetric basics
+        - 2015 generalization (open-domain via the equivalence theorem)
+        - a related WPT reconstruction study
 
     IABC / SDI content intentionally excluded -- Radia's Kelvin
     transformation is the canonical inner BC, and the 2015 lab work

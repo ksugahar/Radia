@@ -1,11 +1,11 @@
 """Reusable NGSolve magnetostatic A-formulation solver -- the validated,
 high-mu-safe foundation that the force / energy extractors (``force.py``) and the
-COMSOL cross-validation tests build on.
+independent cross-validation tests build on.
 
 #25 safe: put high-permeability bodies DIRECTLY in the surrounding air (no nested
 "shell" material) so the interior B is correct; see the ``force_validation`` MCP
-tool. Cross-validated against COMSOL (sphere field 0.11 %, solenoid B <0.35 %,
-inductance 0.01 %, ...).
+tool. Cross-validated against an independent reference solve (sphere field
+0.11 %, solenoid B <0.35 %, inductance 0.01 %, ...).
 """
 import cmath
 import math
@@ -2258,11 +2258,12 @@ def solve_magnetostatic_nonlinear(mesh, nu_of_B, source=None, order=2,
     """Picard fixed-point solve of the A-formulation with a FIELD-DEPENDENT
     reluctivity:  curl(nu(|B|) curl A) = J  (nonlinear / saturating B-H iron).
 
-    Cross-validated against COMSOL (Newton) on the saturating-iron force case:
-    NGSolve F_z = -4.842 N vs COMSOL -4.930 N (~1.8 %), B_iron ~1.13 T; see the
-    ``force_validation`` MCP tool (comsol_xval case 3). The fixed point matches
-    COMSOL's FullyCoupled/Newton even though we iterate Picard, because both
-    converge the same self-consistent nu(|B|).
+    Cross-validated against an independent reference (Newton) on the
+    saturating-iron force case: NGSolve F_z = -4.898 N vs reference -4.930 N
+    (0.65 %), B_iron ~1.138 T; see the ``force_validation`` MCP tool
+    (cross_validation case 3). The fixed point matches the reference's
+    Newton even though we iterate Picard, because both converge the same
+    self-consistent nu(|B|).
 
     Parameters
     ----------
