@@ -2776,6 +2776,29 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "PhiTet/TriPotential inner x outer quadrature (matches dense build_demag(analytic_gram=True)). "
              "near_factor (default 1e30 = all-analytic) gives the NEAR/FAR build speedup: pass ~2 to use "
              "the cheap centroid-monopole for far pairs, analytic only for near (non-uniform-M) pairs.")
+        .def(py::init([](std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
+                         std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                         double eps, int leaf, double eta) {
+                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
+                     new RadHACApKChargeGram(std::move(cell_verts), std::move(face_verts), n_el,
+                                             std::move(charge_host), std::move(charge_kind),
+                                             std::move(charge_expo), std::move(ref_tet_pts),
+                                             std::move(ref_tet_w), std::move(ref_tri_pts), std::move(ref_tri_w)));
+                 RadHACApKParams p;
+                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("high-order charge Gram H-matrix build failed");
+                 return mgr;
+             }),
+             py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
+             py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
+             py::arg("ref_tet_pts"), py::arg("ref_tet_w"), py::arg("ref_tri_pts"), py::arg("ref_tri_w"),
+             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+             "HIGH-ORDER (order-p) mode: POLYNOMIAL charges (monomial basis per host). charge_host[c]/"
+             "charge_kind[c] (0=cell,1=face)/charge_expo[3c] define each charge; ref_tet_pts[nqt*3]/ref_tet_w "
+             "(sum 1/6) + ref_tri_pts[nqr*2]/ref_tri_w (sum 1/2) are the reference Gauss-Duffy rules. Entry = "
+             "monomial-weighted outer quad x the subtraction inner potential (matches dense build_demag_highorder).")
         .def("ndof", [](RadHACApKChargeGram& s) { return s.GetNDOF(); })
         .def("matvec", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
                  std::vector<double> y((size_t)s.GetNDOF(), 0.0);
