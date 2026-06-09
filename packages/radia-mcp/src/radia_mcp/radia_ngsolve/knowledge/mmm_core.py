@@ -723,66 +723,41 @@ eigenvalues BELOW 1/(mu_r-1), worsening cond 7.7e5 -> 1.08e6 at eps=1e-4
 NOT spectral regularization -- the "H-matrix suppresses the bad modes"
 hypothesis is refuted by both the SVD proxy and the real ACA+.
 
-### Removing the loop modes (deflation)
+### Loop modes: RESOLVED by consolidating on HDiv-VIM (deflation removed 2026-06-09)
 
-1. Projection: sigma_clean = sigma - V(V^T sigma) removes the loops; since
-   N V = 0 the collocation field N*sigma is preserved exactly.
-2. Eigenvalue shift (recommended): A_s = A + alpha V (W^T V)^-1 W^T moves
-   the near-zero cluster from 1/(mu_r-1) to 1/(mu_r-1)+alpha; alpha~O(1)
-   drops cond from 7.7e5 to 46 and makes a converged solve loop-free
-   (`nullmode_removal.py`).
+The loop null space above is a genuine property of A = diag(1/(mu_r-1)) - N:
+the div-side tree-cotree gauge (dual of FEM-A's gradient gauge). Helmholtz
+curl(T) = solenoidal "loop" magnetization, invisible to the field (N L = 0);
+the cotree faces of the element-adjacency graph form the loop basis. A lifts it
+only to 1/(mu_r-1), so high-mu_r is a low-frequency (loop-star) breakdown.
 
-V/W = right/left null spaces. A dense full basis is ~17-21% of DOF
-(O(N^2)), BUT the local plaquette / SCDM basis above makes a matrix-free
-deflated/shifted BiCGSTAB feasible inside HACApK (O(N)). HACApK's ACA does
-NOT regularize by itself -- deflation must be added explicitly.
+An earlier C++ effort added RUNTIME loop handling to the MSC/MMM solver:
+matrix-free deflation (SetHACApKDeflation / SetDeflateNullspace via the
+BuildLoopBasis cycle basis), an alpha-free loop-star gauge (SolveLoopStar:
+the reduced A_SS = S^T A S star block with an H-LU preconditioner), and a
+post-solve Helmholtz-Hodge loop projection (SetLoopProjection). ALL of these
+were REMOVED on 2026-06-09 -- the project consolidated on the HDiv-VIM operator.
 
-SHIPPED (C++): `rad.SetHACApKDeflation(offsets, dofs, signs, alpha)` passes
-the sparse plaquette basis L; the HACApK MatVec then applies the matrix-free
-symmetric shift `A x + alpha L(L^T x)` (RAW L, no SVD / no inverse / no
-orthonormalization; L L^T hits only span(L)=null space, O(N)). Validated:
-converged-solution alignment 0.22 -> 0.94 (4x4x2, mu_r=1e5); alpha=0 (default)
-= no change.
+WHY HDiv-VIM instead: the FEEC H(div) RT0 demag operator N = B^T G B builds the
+charge map B (rho = -div M on L2, sigma = M.n on SurfaceL2) so the loop space is
+exactly ker(B) -- field-null BY CONSTRUCTION via the de Rham complex,
+mu_r-INDEPENDENT, with no runtime deflation / gauge / projection. M^{-1} mass
+preconditioning already deflates the loops, so a plain symmetric Krylov is
+well-conditioned at every mu_r. See `radia.hdiv_vim` and `tests/feec/test_hdiv_vim_*`.
 
-GENERAL (C++): `rad.SetDeflateNullspace(True, alpha)` auto-builds the cycle
-basis IN C++ from the mesh (RadHACApKMSCManager::BuildLoopBasis: adjacency +
-shared-face DOF from coincident FaceCenter[f], short 3-/4-cycles), so the
-HACApK solve self-deflates for ANY conforming mesh -- validated on SHEARED
-blocks (align 0.07->0.88) where Python column-cosine fails. The installed
-cycle count is reported in `rad.GetSolveStats()['deflation_cycles']`.
-
-MULTIPLY-CONNECTED (C++, belted tree -- SHIPPED): BuildLoopBasis completes the
-short cycles with the b1 global "belt" loops for closed cores / rings (b1 =
-first Betti number). A BFS spanning forest gives the graph cycle rank
-b1_graph = E - V + C; a sparse GF(2) basis seeded with the short cycles finds
-the deficit, and the GF(2)-independent cotree fundamental cycles supply exactly
-b1 belt loops (each an exact divergence-free null mode). Simply-connected
-bodies hit an early exit (rankShort==b1_graph) so the installed vectors and
-timings are UNCHANGED (zero regression). Verified
-(`belt_loop_validation.py`): a thin 1-element ring (single C_N graph cycle,
-ZERO short cycles) installs deflation_cycles==1==null_dim -- the belt loop is
-the sole cycle, proving the completion is active; a tube installs 9==null_dim
-(align 0.19->0.89); cube controls unchanged.
-
-THEORY: the null space is the div-side tree-cotree gauge (dual of FEM-A's
-gradient gauge): Helmholtz curl(T) = solenoidal "loop" magnetization, invisible
-to the field; cotree faces of the element-adjacency graph = the loop basis.
-A=diag(1/(mu_r-1))-N lifts it to 1/(mu_r-1) -> high-mu_r = low-frequency
-(loop-star) breakdown; deflation = loop-star/tree-cotree gauge removal. For
-multiply-connected bodies the local short cycles are completed by b1 belt loops
-(belted tree, now implemented -- see above). See
-`docs/solver/MSC_NULLSPACE_DEFLATION.md`, tests `test_deflated_hacapk.py` /
-`test_deflate_auto.py` / `belt_loop_validation.py`.
+Effect on the MSC/MMM default solver (Block-Jacobi BiCGSTAB, HACApK Method 2):
+it no longer projects out loops. Fields are UNAFFECTED (N L = 0) -- rad.Fld is
+identical -- only the sigma/M gauge may carry a field-null loop component at very
+high mu_r. (The nullspace THEORY above stands: it is exactly why HDiv-VIM, which
+makes loops ker(B), is the right consolidation.)
 
 ### Practical guidance
 
-- At very high mu_r the converged discrete solution can be contaminated
-  by spurious loops; this is a formulation/conditioning property, NOT a
-  solver bug (LU shows it too).
-- For trustworthy high-mu_r results watch the condition number, prefer
-  a deflated / eigenvalue-shifted iteration, or keep mu_r physical.
-
-Full treatment: `docs/solver/MSC_NULLSPACE_DEFLATION.md`.
+- At very high mu_r the converged discrete MSC solution can carry spurious loops;
+  this is a formulation/conditioning property, NOT a solver bug (LU shows it too),
+  and it does not change the computed field.
+- For a loop-free-by-construction formulation use HDiv-VIM (`radia.hdiv_vim`);
+  otherwise keep mu_r physical for trustworthy high-mu_r MSC results.
 """
 
 SECTIONS = {
