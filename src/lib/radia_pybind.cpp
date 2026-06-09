@@ -69,15 +69,6 @@ extern "C" {
     int  chacapk_max_threads(void);
     void cHACApK_hlu_set_accum_cap(int c);
     int  cHACApK_hlu_get_accum_cap(void);
-    void RadGetStarBasisStats(int* out);
-    void RadGetKeepLoopStats(double* out);
-    void RadSetLoopStarHMatMode(int m);
-    void RadSetLoopStarKeepLoops(int on);
-    int  RadGetLoopStarKeepLoops(void);
-    void RadGetStarHMatStats(double* out);
-    void   RadSetStarHLUTruncTol(double t);
-    double RadGetStarHLUTruncTol(void);
-    void RadGetLoopProjStats(double* out);
     double cHACApK_harith_self_test_mixed_sibling_nonuniform(int n1, int n2, int m1, int m3);
     double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
     double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
@@ -998,47 +989,6 @@ py::tuple HLUDebugMaterialize(int intrc_handle) {
     return py::make_tuple(A_result, lod_result);
 }
 
-/**
- * @brief Set the HACApK loop-mode deflation basis (sparse plaquette/cycle L).
- */
-void SetHACApKDeflation(py::array_t<int, py::array::c_style | py::array::forcecast> offsets,
-                        py::array_t<int, py::array::c_style | py::array::forcecast> dofs,
-                        py::array_t<double, py::array::c_style | py::array::forcecast> signs,
-                        double alpha) {
-    int n = 0;
-    int err = RadSetHACApKDeflation(&n,
-                                    offsets.data(), static_cast<int>(offsets.size()),
-                                    dofs.data(), signs.data(), static_cast<int>(dofs.size()),
-                                    alpha);
-    check_error(err);
-}
-
-/**
- * @brief Enable/disable automatic loop-mode deflation for the HACApK solver.
- */
-void SetDeflateNullspace(bool enable, double alpha) {
-    int n = 0;
-    int err = RadSetDeflateNullspace(&n, enable ? 1 : 0, alpha);
-    check_error(err);
-}
-
-/**
- * @brief Enable/disable the ALPHA-FREE loop-star gauge for the HACApK solver.
- */
-void SetLoopStarGauge(bool enable) {
-    int n = 0;
-    int err = RadSetLoopStarGauge(&n, enable ? 1 : 0);
-    check_error(err);
-}
-
-/**
- * @brief Enable/disable Helmholtz-Hodge loop removal (HACApK post-solve).
- */
-void SetLoopProjection(bool enable) {
-    int n = 0;
-    int err = RadSetLoopProjection(&n, enable ? 1 : 0);
-    check_error(err);
-}
 
 } // namespace radia_solver
 
@@ -3248,93 +3198,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
           "every update = previous behavior). Default 64.");
     m.def("HLUGetAccumCap", []() { return cHACApK_hlu_get_accum_cap(); });
 
-    m.def("GetStarBasisStats", []() -> py::dict {
-        int o[8] = {0};
-        RadGetStarBasisStats(o);
-        py::dict d;
-        d["ndof"] = o[0]; d["nface"] = o[1]; d["boundary"] = o[2];
-        d["internal"] = o[3]; d["skip_ge3"] = o[4]; d["skip_same"] = o[5];
-        d["n_star"] = o[6]; d["ncomp"] = o[7];
-        return d;
-    },
-    R"pbdoc(
-        Diagnostics from the most recent loop-star BuildStarBasis: ndof, nface,
-        boundary-face count, internal-pair count, skip_ge3 (centroids with >=3
-        coincident faces -> non-conforming, silently dropped), skip_same
-        (size-2 same-element), n_star (star dim), ncomp (connected components).
-        Expected n_star = ndof - loop_null_dim; a mismatch (or skip_ge3>0) means
-        the star basis is incomplete on this geometry.
-    )pbdoc");
-
-    m.def("GetKeepLoopStats", []() -> py::dict {
-        double o[6] = {0};
-        RadGetKeepLoopStats(o);
-        py::dict d;
-        d["n_loop"] = o[0]; d["res0"] = o[1]; d["res_final_rel"] = o[2];
-        d["sweeps"] = o[3]; d["cg_iters"] = o[4]; d["res_final"] = o[5];
-        return d;
-    },
-    R"pbdoc(
-        Diagnostics from the most recent SolveLoopStar keep-loops block Gauss-Seidel:
-        n_loop (loop basis dim), res0 (||b - A sigma_S|| after the initial star solve),
-        res_final_rel (||b - A sigma||/||b|| after GS), sweeps (GS sweep count),
-        cg_iters (total loop-block CG iterations), res_final (absolute final residual).
-    )pbdoc");
-
-    m.def("SetLoopStarHMatMode", [](int mode){ RadSetLoopStarHMatMode(mode); },
-        py::arg("mode"),
-    R"pbdoc(
-        A_SS-as-H-matrix mode for the loop-star solve: 0 = off (dense K-dense LU,
-        default), 1 = build A_SS = S^T A S as a HACApK H-matrix inside SolveLoopStar
-        and verify its MatVec against the exact T^T A T sandwich (read via
-        GetStarHMatStats). This is the "HACApK-only star" path (tree-cotree loop-star
-        H-matrix) that replaces the dense K-dense LU at large scale.
-    )pbdoc");
-
-    m.def("SetLoopStarKeepLoops", [](bool on){ RadSetLoopStarKeepLoops(on ? 1 : 0); },
-        py::arg("on"),
-    R"pbdoc(
-        Keep-loops toggle for the loop-star solve (SolveLoopStar).
-
-        True (default): recover the loop (cotree-cycle) magnetization via the block
-        Gauss-Seidel refinement so sigma matches the full direct solve (field-exact at
-        mu_r <= 1e4 on distorted hexes).
-
-        False: A_SS-ONLY -- return sigma = S y_S (the loop-free star part) and skip
-        the keep-loops GS.  The loop magnetization y_L is a non-physical artifact
-        generated by the off-diagonal A_LS != 0 (loops != ker(N) on distorted hexes
-        plus non-uniform chi).  Recovering it needs A_LL = L^T diag(1/chi) L, which
-        goes singular as 1/chi -> 0 (high-mu_r pockets) and makes the GS amplify
-        (-> divergence).  A_SS-only never forms A_LL, so it is robust at ANY mu_r --
-        the correct fine-phase solve when the spurious loop content is unwanted.
-    )pbdoc");
-
-    m.def("GetStarHMatStats", []() -> py::dict {
-        double o[14] = {0};
-        RadGetStarHMatStats(o);
-        py::dict d;
-        d["n_star"] = o[0]; d["hmat_matvec_relerr"] = o[1];
-        d["build_rc"] = o[2]; d["build_time_s"] = o[3];
-        d["hlu_solve_relerr"] = o[4]; d["hlu_iters"] = o[5];
-        d["factor_time_s"] = o[6]; d["solve_time_s"] = o[7];
-        d["precond_resid"] = o[8]; d["trunc_tol"] = o[9];
-        d["nlf"] = o[10]; d["nlfkt"] = o[11];
-        d["ktmax"] = o[12]; d["compression"] = o[13];
-        return d;
-    },
-    R"pbdoc(
-        Diagnostics from the most recent A_SS H-matrix path (SetLoopStarHMatMode):
-        n_star (A_SS dimension), hmat_matvec_relerr (||A_SS_Hmat y - T^T A T y|| /
-        ||T^T A T y||, mode>=1), build_rc, build_time_s; and for mode 2:
-        hlu_solve_relerr (||y_hlu - y_kdense|| / ||y_kdense|| -- the A_SS-H-LU-
-        preconditioned reduced solve vs the dense K-dense reference; ~tol means it
-        solves correctly), hlu_iters (H-LU-preconditioned BiCGSTAB iteration count).
-    )pbdoc");
-
-    m.def("SetStarHLUTruncTol", [](double t){ RadSetStarHLUTruncTol(t); }, py::arg("tol"),
-          "Set H-ILU truncation tol for the A_SS H-LU factor (loop-star mode 2). "
-          "Larger = more aggressive rk truncation (cheaper -> H-ILU); smaller -> H-LU.");
-    m.def("GetStarHLUTruncTol", []() -> double { return RadGetStarHLUTruncTol(); });
 
     m.def("HLUMixedBreakdown", []() -> py::dict {
         long a[9] = {0}, l[9] = {0}, r[9] = {0};
@@ -3378,64 +3241,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
                             max-elementwise relative error vs the test vector.
                             Expected ~ aca_eps + machine-precision rounding.
           )pbdoc");
-
-    m.def("SetHACApKDeflation", &radia_solver::SetHACApKDeflation,
-          py::arg("offsets"), py::arg("dofs"), py::arg("signs"), py::arg("alpha"),
-          R"pbdoc(
-              Set the loop-mode deflation basis L for the HACApK solver.
-
-              L is a sparse plaquette/cycle basis (CSR-like): for plaquette p,
-              offsets[p]:offsets[p+1] index into (dofs, signs). The HACApK MatVec
-              then applies (A + alpha * L L^T), lifting the near-null (loop) modes
-              so the converged BiCGSTAB solution is loop-free. Pass empty arrays
-              / alpha=0 to disable. L must be in the original DOF ordering.
-          )pbdoc");
-
-    m.def("SetDeflateNullspace", &radia_solver::SetDeflateNullspace,
-          py::arg("enable"), py::arg("alpha") = 0.0,
-          R"pbdoc(
-              Enable/disable AUTOMATIC loop-mode deflation for the HACApK solver.
-
-              When enabled, the HACApK solve (method=2) builds the loop (cycle)
-              basis from the mesh topology -- local short cycles plus, for
-              multiply-connected bodies, the b1 global belt loops -- and applies
-              the matrix-free shift (A + alpha * L L^T), so the converged
-              solution is free of the spurious near-null "loop" modes. No manual
-              basis is needed -- works for any conforming mesh and any topology.
-
-              Args:
-                  enable: True to enable, False to disable.
-                  alpha: shift magnitude. Pass alpha <= 0 (the DEFAULT, 0.0) to
-                      AUTO-SCALE it from the mesh as alpha = mean|N_ii| / d_max
-                      (the self-demagnetization scale over the maximum loop
-                      overlap). Auto-scaling is mesh-robust: a fixed alpha=1 is
-                      fine on a regular cube but over-shoots on irregular meshes
-                      (chamfers, varying connectivity) and worsens conditioning.
-                      Pass a positive alpha only to override the auto value.
-                      The value actually used is reported in
-                      GetSolveStats()['deflation_alpha'].
-          )pbdoc");
-
-    // -- PCA cluster strategy (HACApK admissibility for flat / elongated meshes) --
-    // (C symbols forward-declared at file scope below the includes; see top of file)
-    m.def("SetClusterStrategy", [](int strategy) {
-        cHACApK_set_cluster_strategy(strategy);
-    },
-    py::arg("strategy"),
-    R"pbdoc(
-        Choose the HACApK cluster-tree split strategy for the H-matrix build.
-
-        Args:
-            strategy: 0 = BBOX (default, historical; axis-aligned bbox-midpoint split),
-                      1 = PCA (split perpendicular to the dominant covariance
-                              eigenvector at the center of mass; handles flat /
-                              elongated meshes -- thin plates, beam-pipe liners,
-                              pancake coils -- much better than BBOX).
-
-        Effect on subsequent ``rad.BuildMatrix`` / ``rad.Solve`` calls. Does NOT
-        retroactively change matrices already built. PCA falls back to BBOX
-        automatically per node when covariance is singular (e.g. collinear).
-    )pbdoc");
 
     m.def("GetClusterStrategy", []() -> int {
         return cHACApK_get_cluster_strategy();
@@ -3608,66 +3413,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
         plus ACA recompression. Returns max relative error vs LAPACK dgesv.
     )pbdoc");
 
-    m.def("SetLoopStarGauge", &radia_solver::SetLoopStarGauge,
-          py::arg("enable"),
-          R"pbdoc(
-              Enable/disable the ALPHA-FREE loop-star gauge for the HACApK solver.
-
-              When enabled, the HACApK solve (method=2) restricts to the STAR
-              (non-loop) subspace via a sparse basis T (boundary face DOFs +
-              symmetric internal sigma_A+sigma_B + per-element divergence) and
-              solves the reduced, NON-SINGULAR system T^T A T y = T^T b, with
-              sigma = T y. The H-matrix is UNCHANGED (kept on the original sigma
-              DOFs); each reduced matrix-vector product sandwiches the HACApK
-              MatVec with the sparse T / T^T. This removes the loop null space
-              that makes A ill-conditioned at high permeability, with NO shift
-              parameter (unlike SetDeflateNullspace). Field-exact and
-              well-conditioned for the LINEAR regime (uniform permeability); for
-              strongly non-uniform chi (saturated nonlinear) the loop and star
-              subspaces couple, so use this in the linear regime.
-
-              Args:
-                  enable: True to enable, False to disable.
-          )pbdoc");
-
-
-    m.def("SetLoopProjection", &radia_solver::SetLoopProjection,
-          py::arg("enable"),
-          R"pbdoc(
-              Enable/disable HELMHOLTZ-HODGE loop removal for the HACApK solve
-              (method=2). After the (plain) solve converges, subtract the
-              non-physical LOOP (circulating surface-charge) component from sigma by
-              a Hodge projection off the topological cycle space: c solves
-              (L^T L) c = L^T sigma (CG on the well-conditioned, mu_r-independent loop
-              Gram matrix L^T L), then sigma -= L c. The loop space is ker(N) (the
-              circulating charges), so N*sigma -- the on-element field -- is UNCHANGED;
-              only the non-physical circulation is removed. Cheap (CG converges in a
-              handful of iterations; no significant slowdown) and scalable (uses only
-              the O(N) topological cycle CSR). Use when a loop-free physical sigma /
-              magnetization is wanted. Diagnostics via GetLoopProjStats().
-
-              Args:
-                  enable: True to enable, False to disable.
-          )pbdoc");
-
-    m.def("GetLoopProjStats", []() -> py::dict {
-        double o[5] = {0};
-        RadGetLoopProjStats(o);
-        py::dict d;
-        d["n_loop"]      = o[0];
-        d["cg_iters"]    = o[1];
-        d["loop_before"] = o[2];
-        d["loop_after"]  = o[3];
-        d["loop_frac"]   = o[4];
-        return d;
-    },
-    R"pbdoc(
-        Diagnostics from the most recent Helmholtz-Hodge loop removal
-        (SetLoopProjection): n_loop (cycle basis dim), cg_iters (projection CG
-        iterations -- small = well-conditioned), loop_before / loop_after
-        (||L^T sigma|| before/after; after ~ 0 = loop-free), loop_frac
-        (||L c|| / ||sigma|| = fraction of sigma that was circulating/non-physical).
-    )pbdoc");
 
     // ========================================================================
     // Utility

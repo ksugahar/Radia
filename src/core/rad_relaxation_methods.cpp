@@ -945,14 +945,6 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
 
-	// HELMHOLTZ-HODGE loop removal for the NON-HACApK solvers (method 0 = LU,
-	// method 1 = dense BiCGSTAB), so "loop is non-physical" is consistent across ALL
-	// solver paths -- not only method 2. Applied ONCE after convergence, via a
-	// standalone cycle-projection (no H-matrix needed; pure sparse CG on L^T L).
-#ifdef RADIA_USE_HACAPK
-	if(rad.m_loop_projection && !rad.m_loopstar_gauge)
-		RadHACApKMSCManager::ProjectOutLoopsStandalone(IntrctPtr, rad.m_bicg_tol, 10000);
-#endif
 
 	return iterCount;
 }
@@ -2992,36 +2984,6 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 	// Update H-matrix diagonal with current inv_chi
 	m_hacapk->UpdateDiagonal(inv_chi);
 
-	// ALPHA-FREE loop-star gauge (tree-cotree split): solve the reduced star
-	// system T^T A T y = T^T rhs (H-matrix unchanged, sandwiched with the sparse
-	// star T), then KEEP the loop content via block Gauss-Seidel iterative
-	// refinement (star <-> loop on the true residual). The result matches the
-	// direct LU/FEM solution (FIELD-EXACT, loops kept) at every mu_r -- the
-	// principled, alpha-free replacement for the fragile alpha-shift deflation.
-	// Linear regime (uniform chi). Enabled by rad.SetLoopStarGauge(True).
-	if(rad.m_loopstar_gauge)
-	{
-		// SolveLoopStar: K-dense reduced solve of A_SS (the star block), then the
-		// keep-loops block Gauss-Seidel recovers the loop part so sigma == the
-		// direct solution. (An earlier remove-loops variant -- sigma = T y only --
-		// dropped the loops AND, because the sparse star and loop bases are not
-		// exactly orthogonal, left a ~0.5% external-field error on the C-type;
-		// the Gauss-Seidel refinement fixes both. See rad_hacapk.cpp::SolveLoopStar.)
-		std::vector<double> sigma_ls(totalDOF);
-		int it_ls = m_hacapk->SolveLoopStar(rhs, sigma_ls, tol, max_iter);
-		if(it_ls < 0) return 0;   // star basis unavailable -> fail loudly
-		for(int i = 0; i < totalDOF; i++) FlatMagn[i] = sigma_ls[i];
-		m_hacapk->MatVec(sigma_ls, v);            // true residual ||rhs - A*sigma||
-		this->Copy(rhs, r, totalDOF);
-		this->Axpy(-1.0, v, r, totalDOF);
-		residual = this->Norm2(r, totalDOF) / (this->Norm2(rhs, totalDOF) + 1.0e-300);
-		return it_ls;
-	}
-
-	// (Loop handling is via the loop-star gauge above; the per-iteration loop-deflated
-	// block-Jacobi BiCGSTAB path was removed 2026-06-03 as redundant -- loop-star
-	// (SS-first reduction) and the deflation (block-J-first) orderings are equivalent
-	// when the matrix algebra is correct, so the single loop-star path is kept.)
 
 	// Initial guess
 	for(int i = 0; i < totalDOF; i++)
@@ -3177,12 +3139,6 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 		}
 	}
 	// else: ApplyLineSearchDamping already updated FlatMagn with damped solution
-
-	// NOTE: Helmholtz-Hodge loop removal (rad.SetLoopProjection) is applied ONCE
-	// after the nonlinear iteration converges (in AutoRelax_VariableDOF), NOT per
-	// linear step -- projecting every step would feed a loop-free sigma into the
-	// chi(H) update and corrupt the nonlinear iteration. See the end of
-	// AutoRelax_VariableDOF.
 
 	return iter;
 }
@@ -3423,17 +3379,6 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		// We recompute diag_inv = 1/(N_ii - inv_chi[i]) each iteration (ELF-compatible)
 	}
 
-	// Loop-mode deflation: the HACApK MatVec then returns (A + alpha L L^T) x,
-	// lifting the near-null (loop) modes so the converged solution is loop-free.
-	// Auto-build the local cycle basis from mesh topology when enabled via
-	// rad.SetDeflateNullspace(True); otherwise use a manually-supplied basis.
-	if(rad.m_deflate_nullspace)
-		m_hacapk->BuildLoopBasis(rad.m_deflate_alpha);
-	else
-		m_hacapk->SetDeflation(rad.m_hacapk_defl_offsets, rad.m_hacapk_defl_dofs,
-		                       rad.m_hacapk_defl_signs, rad.m_hacapk_defl_alpha);
-	rad.m_solve_defl_nplaq = m_hacapk->GetDeflationCycleCount();  // diagnostic: cycles installed
-	rad.m_solve_defl_alpha = m_hacapk->GetDeflationAlpha();       // diagnostic: shift alpha used (auto)
 
 	// NOTE: 3DOF tetrahedra use PrecomputeFlatInteractMatrix() for fast O(1) access
 	// 6DOF hexahedra use PrecomputeGeometry() + Compute6x6BlockFast()
@@ -3928,47 +3873,6 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
 
-	// HELMHOLTZ-HODGE loop removal (opt-in, rad.SetLoopProjection(True)): ONCE, after
-	// the nonlinear iteration has CONVERGED, subtract the non-physical loop
-	// (circulating surface-charge = ker(N)) component from the final sigma via a
-	// cheap, well-conditioned CG projection off the topological cycle space. Applied
-	// here (post-convergence) rather than per linear step, so the chi(H) iteration is
-	// driven by the true A^-1 b (loop-included) and only the FINAL answer is made
-	// loop-free. N L = 0 so N*sigma -- the on-element field -- is unchanged. The
-	// projected sigma is synced back to the element Magn so rad.Fld / rad.ObjM see it.
-	// Skip when the loop-star gauge is active (it keeps loops by design) -- do not
-	// double-process.
-	if(rad.m_loop_projection && !rad.m_loopstar_gauge
-	   && m_hacapk && m_hacapk->IsValid())
-	{
-		std::vector<double> sig_lp(FlatMagn, FlatMagn + totalDOF);
-		int it_lp = m_hacapk->ProjectOutLoops(sig_lp, rad.m_bicg_tol, 10000);
-		if(it_lp >= 0)
-		{
-			for(int i = 0; i < totalDOF; i++) FlatMagn[i] = sig_lp[i];
-			// Sync the loop-free sigma back to element magnetization objects:
-			// 3DOF tetra -> Magn (Mx,My,Mz); 6DOF MSC -> per-face Sigma[k]
-			// (same flat->element layout the solver uses, e.g. lines ~363/504).
-			for(int elem = 0; elem < AmOfMainElem; elem++)
-			{
-				int dof = IntrctPtr->GetElementDOF(elem);
-				int offset = IntrctPtr->GetElementDOFOffset(elem);
-				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
-				if(dof == 3)
-				{
-					g3dRelaxPtr->Magn.x = FlatMagn[offset];
-					g3dRelaxPtr->Magn.y = FlatMagn[offset + 1];
-					g3dRelaxPtr->Magn.z = FlatMagn[offset + 2];
-				}
-				else if(dof >= 5)
-				{
-					radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
-					if(poly && poly->Use6DOF_MSC)
-						for(int k = 0; k < dof; k++) poly->Sigma[k] = FlatMagn[offset + k];
-				}
-			}
-		}
-	}
 
 	// Set statistics for GetSolveStats (ELF-compatible)
 	rad.m_solve_linear_iterations = rad.m_linear_iterations;  // Copy from HACApK-specific counter
