@@ -1,0 +1,216 @@
+"""radia.hdiv_vim._vim -- an ngsolve.bem-STYLE API for the HDiv-type VIM demag operator.
+
+Mirrors the ngsolve.bem design (SingleLayerPotentialOperator etc.): construct the operator from an NGSolve
+FESpace -- the polynomial ORDER comes from the fes, exactly like `HDiv(mesh, order=p)` -- and expose
+`.mat`, an H-matrix-backed NGSolve `BaseMatrix` that composes with NGSolve's solvers / BlockMatrix just
+like `SingleLayerPotentialOperator(fes, ...).mat`.  RT0 (order=0) and order=p go through ONE call (order=0
+is the degenerate constant-monomial case):
+
+    from ngsolve import *
+    from ngsolve.krylovspace import GMRes
+    from radia.hdiv_vim import DemagOperator
+
+    mesh = Mesh(...)
+    fes  = HDiv(mesh, order=p)                       # order from the fes (NGSolve idiom)
+    with TaskManager():
+        N = DemagOperator(fes, intorder=3*p+6, eps=1e-7)   # like SingleLayerPotentialOperator(fes, ...)
+        # N.mat : BaseMatrix == the demag operator B^T G B (G = the C++ charge-Gram H-matrix)
+        u, v = fes.TnT()
+        M = BilinearForm(u*v*dx).Assemble()          # the HDiv mass
+        A = (1.0/chi)*M.mat - N.mat                  # BaseMatrix composition (NGSolve)
+        gfm = GridFunction(fes)
+        gfm.vec.data = GMRes(A=A, b=rhs.vec, tol=1e-8, maxsteps=400)
+
+Convenience: ``N.DemagFactor(CF((0,0,1)))`` -> the Rayleigh quotient (the demag factor, ~1/3 for a sphere).
+
+Backend: the C++ charge-Gram H-matrix (radia._radia_pybind._ChargeGramHMatrix, the order-p mode merged in
+a27d1a5c).  The charge basis is element-local monomials (host reference coords); N = B^T G B is
+basis-invariant, so the demag matches the NGSolve-L2-basis dense reference.  Pure Python glue -- no dense
+O(N^2) operator is ever formed (the H-matrix gives the O(N log N) matvec).
+
+TaskManager: per the caller-wraps policy, this module does NOT open a TaskManager; the CALLER wraps the
+DemagOperator construction + DemagFactor / solve in `with TaskManager():` (the ngsolve.bem idiom).
+"""
+import numpy as np
+import scipy.sparse as sp
+import ngsolve as ng
+
+import radia._radia_pybind as _rp
+
+
+# ------------------------------------------------------------------ reference Gauss-Duffy quadrature
+def _g01(n):
+    x, w = np.polynomial.legendre.leggauss(n)
+    return 0.5 * (x + 1.0), 0.5 * w
+
+
+def _tet_ref(o):
+    s, ws = _g01(o)
+    P, W = [], []
+    for a, wa in zip(s, ws):
+        for b, wb in zip(s, ws):
+            for c, wc in zip(s, ws):
+                P.append((a, b * (1 - a), c * (1 - a) * (1 - b)))
+                W.append(wa * wb * wc * (1 - a) ** 2 * (1 - b))
+    return np.array(P), np.array(W)            # ref-tet pts (lam1,lam2,lam3); weights sum 1/6
+
+
+def _tri_ref(o):
+    s, ws = _g01(o)
+    P, W = [], []
+    for u, wu in zip(s, ws):
+        for v, wv in zip(s, ws):
+            P.append((u, v * (1 - u)))
+            W.append(wu * wv * (1 - u))
+    return np.array(P), np.array(W)            # ref-tri pts (lam1,lam2); weights sum 1/2
+
+
+def _monos_vol(pv):
+    return [(i, j, k) for i in range(pv + 1) for j in range(pv + 1 - i) for k in range(pv + 1 - i - j)]
+
+
+def _monos_surf(p):
+    return [(i, j) for i in range(p + 1) for j in range(p + 1 - i)]
+
+
+def _change_of_basis(fe, mons, refP, refW, dim):
+    """universal L2->monomial change-of-basis on the reference element: S = Mmono^{-1} C (the affine |J|
+    cancels, so S is the same for all elements of a type).  C[a][k] = INT_ref m_a phi_k, Mmono[a][b] =
+    INT_ref m_a m_b, evaluated with the reference rule + the NGSolve shapes (CalcShape on the ref element)."""
+    nm, nsh = len(mons), fe.ndof
+    M = np.zeros((nm, nm))
+    C = np.zeros((nm, nsh))
+    for pt, w in zip(refP, refW):
+        if dim == 3:
+            mv = np.array([pt[0] ** i * pt[1] ** j * pt[2] ** k for (i, j, k) in mons])
+            sh = np.array(fe.CalcShape(pt[0], pt[1], pt[2]))
+        else:
+            mv = np.array([pt[0] ** i * pt[1] ** j for (i, j) in mons])
+            sh = np.array(fe.CalcShape(pt[0], pt[1]))
+        M += w * np.outer(mv, mv)
+        C += w * np.outer(mv, sh)
+    return np.linalg.solve(M, C)
+
+
+def _csr(bf):
+    r, c, v = bf.mat.COO()
+    return sp.csr_matrix((np.array(v), (np.array(r), np.array(c))), shape=(bf.mat.height, bf.mat.width))
+
+
+def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=32, eta=2.0):
+    """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
+    B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
+    order=0 is the degenerate constant-monomial case (== RT0).  The CALLER wraps in TaskManager."""
+    mesh = fes.mesh
+    p = fes.globalorder
+    pv = max(p - 1, 0)
+    quad = max(p + 2, (intorder + 1) // 2) if intorder is not None else max(6, p + 4)  # Gauss pts / dim
+    nn = ng.specialcf.normal(mesh.dim)
+    L2v, L2b = ng.L2(mesh, order=pv), ng.SurfaceL2(mesh, order=p)
+    u = fes.TrialFunction()
+    bv = ng.BilinearForm(trialspace=fes, testspace=L2v); bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx; bv.Assemble()
+    bb = ng.BilinearForm(trialspace=fes, testspace=L2b); bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds; bb.Assemble()
+    mv = ng.BilinearForm(L2v); mv += L2v.TrialFunction() * L2v.TestFunction() * ng.dx; mv.Assemble()
+    mb = ng.BilinearForm(L2b); mb += L2b.TrialFunction() * L2b.TestFunction() * ng.ds; mb.Assemble()
+    mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
+    Bv_d = np.linalg.solve(_csr(mv).toarray(), _csr(bv).toarray())   # NGSolve-L2 density map (vol)
+    Bb_d = np.linalg.solve(_csr(mb).toarray(), _csr(bb).toarray())   # (surf)
+    M_mass = _csr(mh)
+
+    vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
+    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    vV = [np.array([mesh[v].point for v in mesh[e].vertices]) for e in vels]
+    bV = [np.array([mesh[v].point for v in mesh[e].vertices]) for e in bels]
+    vdof = [list(L2v.GetDofNrs(e)) for e in vels]
+    bdof = [list(L2b.GetDofNrs(e)) for e in bels]
+    mons_v, mons_s = _monos_vol(pv), _monos_surf(p)
+    Sv = _change_of_basis(L2v.GetFE(vels[0]), mons_v, *_tet_ref(quad), dim=3)
+    Ss = _change_of_basis(L2b.GetFE(bels[0]), mons_s, *_tri_ref(quad), dim=2)
+
+    Brows, host, kind, expo = [], [], [], []
+    for c in range(len(vels)):
+        blk = Sv @ Bv_d[vdof[c], :]
+        for a, (i, j, k) in enumerate(mons_v):
+            Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
+    for f in range(len(bels)):
+        blk = Ss @ Bb_d[bdof[f], :]
+        for a, (i, j) in enumerate(mons_s):
+            Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
+    B = sp.csr_matrix(np.array(Brows))                          # (n_charge, ndof)
+
+    rtp, rtw = _tet_ref(quad)
+    rsp, rsw = _tri_ref(quad)
+    G = _rp._ChargeGramHMatrix(
+        cell_verts=np.concatenate([V.ravel() for V in vV]).tolist(),
+        face_verts=np.concatenate([V.ravel() for V in bV]).tolist(),
+        n_el=len(vels), charge_host=host, charge_kind=kind, charge_expo=expo,
+        ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
+        ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
+        eps=eps, leaf=leafsize, eta=eta)
+    return B, G, M_mass
+
+
+class _DemagMat(ng.BaseMatrix):
+    """NGSolve BaseMatrix for N = B^T G B (HDiv-VIM demag): N x = B^T (G (B x)), G the C++ charge-Gram
+    H-matvec.  Symmetric (Mult == its own transpose).  Composes with NGSolve solvers / BlockMatrix."""
+    def __init__(self, fes, B, G):
+        super().__init__()
+        self._fes = fes
+        self._gf = ng.GridFunction(fes)          # template for CreateColVector/RowVector (HDiv has none)
+        self._B = B.tocsr()
+        self._BT = B.T.tocsr()
+        self._G = G
+
+    def IsComplex(self):
+        return False
+
+    def Height(self):
+        return self._fes.ndof
+
+    def Width(self):
+        return self._fes.ndof
+
+    def CreateRowVector(self):
+        return self._gf.vec.CreateVector()
+
+    def CreateColVector(self):
+        return self._gf.vec.CreateVector()
+
+    def _apply(self, xv):
+        c = self._B @ xv
+        Gc = np.asarray(self._G.matvec(c.tolist()))
+        return self._BT @ Gc
+
+    def Mult(self, x, y):
+        y.FV().NumPy()[:] = self._apply(x.FV().NumPy())
+
+    def MultAdd(self, scal, x, y):
+        y.FV().NumPy()[:] += scal * self._apply(x.FV().NumPy())
+
+    def MultTransAdd(self, scal, x, y):          # N symmetric -> transpose == itself
+        self.MultAdd(scal, x, y)
+
+
+class DemagOperator:
+    """ngsolve.bem-style HDiv-type VIM demag operator.  Construct from an HDiv FESpace; `.mat` is the
+    H-matrix-backed NGSolve BaseMatrix N = B^T G B.  See the module docstring for the idiom.  The CALLER
+    wraps construction + DemagFactor in `with TaskManager():`."""
+
+    def __init__(self, fes, intorder=None, eps=1e-7, leafsize=32, eta=2.0):
+        self.space = fes
+        self._B, self._G, self._Mmass = build_charge_gram(fes, intorder, eps, leafsize, eta)
+        self.mat = _DemagMat(fes, self._B, self._G)
+
+    @property
+    def ndof(self):
+        return self.space.ndof
+
+    def DemagFactor(self, M_cf):
+        """Rayleigh quotient (the demag factor) for a magnetization CoefficientFunction M_cf:
+        <c, G c> / <m, M_mass m>, c = B m, m = the HDiv projection of M_cf.  ~1/3 for a sphere/cube."""
+        gfu = ng.GridFunction(self.space)
+        gfu.Set(M_cf)
+        m = np.asarray(gfu.vec)
+        c = self._B @ m
+        Gc = np.asarray(self._G.matvec(c.tolist()))
+        return float(c @ Gc) / float(m @ (self._Mmass @ m))
