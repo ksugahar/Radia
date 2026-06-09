@@ -55,6 +55,7 @@ FEMM_MATRIX = """\
 | FEMM open-bdry x-check  | (—)   | yes    | vs FEMM rad=100.mat 0.78% of peak   |
 | axi forced eddy (BFI)   | (—)   | yes    | P_eddy(w): BFI+scipy; w^2 onset OK  |
 | SIBC eddy force (3D)    | (3D)  | (3D)   | time-avg Maxwell on hole; 0.5*static|
+| periodic/anti-periodic BC| yes  | (—)    | strip closed form  2e-7 / 2e-8     |
 
 (*) axisymmetric magnetics / eddy / nonlinear use H1Henrotte (axihenrotte FESpace)
 "(mat)" = a material model (anisotropic / complex-mu CF) usable in either path.
@@ -62,6 +63,12 @@ FEMM_MATRIX = """\
 API: solve_axi_magnetostatic / solve_axi_eddy / solve_axi_eddy_harmonic /
 solve_axi_magnetostatic_nonlinear in solve.py; inductance_axi / ohmic_loss_axi /
 maxwell_surface_force / maxwell_surface_force_harmonic in force.py.
+Periodic / anti-periodic SECTOR BC (FEMM motor/machine cyclic symmetry):
+periodic_h1(mesh, order, dirichlet, antiperiodic=False) wraps H1 with
+ngsolve.Periodic -- the mesh must carry the netgen periodic identification (2D
+SplineGeometry slave edge ``copy=master`` with a CCW loop, or OCC
+``edge.Identify(.., IdentificationType.PERIODIC, trafo)``). antiperiodic=True =
+phase -1 (A_slave=-A_master, half-period sector) -> complex space, take .real.
 
 NOTE on the axi FORCED-harmonic eddy: the generic grad-weak-form solve_axi_eddy
 canNOT assemble the complex (nu-stiffness + j w sigma-mass) system -- H1Henrotte's
@@ -272,6 +279,7 @@ FEMM_VALIDATION = """\
 | test_planar_eddy_voltage            | same, voltage-driven Z             | +0.07% |
 | test_planar_nonlinear               | Ampere H=I/2 pi r, B=BH(H)        | <0.05% |
 | test_planar_inductance              | L_int = mu0/(8 pi)                | -0.06% |
+| test_planar_periodic                | strip closed form (periodic+anti) | ~1e-7  |
 | test_scalar_fem2d                   | coaxial 2 pi c/ln(b/a) (eps/sig/k)| -0.19% |
 | test_axi_scalar                     | sphere 4 pi c ab/(b-a) (eps,k)    | -0.15% |
 | radia-axifemm/test_disk_eigenvalue  | Cu-disk tau_1 = 224.31 us (BEM)   |  0.27% |

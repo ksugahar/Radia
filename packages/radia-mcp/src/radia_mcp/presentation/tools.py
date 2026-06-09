@@ -55,6 +55,14 @@ from .plans.T28 import presentation_speaking_pace_estimate  # noqa: F401
 from .plans.T29 import presentation_qa_anticipation_list  # noqa: F401
 from .plans.T30 import presentation_script_vs_slide_coverage  # noqa: F401
 
+# Talk feedback loop (CEFC/Compumag field notes) — learned Q&A catalog,
+# the presentation analog of meta/bug_patterns.py (2026-06)
+from .talk_feedback import (  # noqa: F401
+    presentation_talk_feedback_lookup,
+    presentation_qa_from_history,
+    presentation_talk_feedback_stats,
+)
+
 # Cross-module JA-lint (v0.13.0) — 台本・スライドテキストに grant の和文 lint
 from .cross_lint import (  # noqa: F401
     presentation_check_notation_variants,

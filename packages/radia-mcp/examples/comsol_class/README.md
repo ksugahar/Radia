@@ -28,6 +28,8 @@ gets smarter, not just a pile of scripts.
 | 19 | **Electro-thermal Joule heating** (multiphysics) | ✅ done | `joule_heating.py` ; chain `solve_current_flow`→`joule_heat_source`→`solve_heat_steady` ; `ngsolve_usage("joule_heating")` | bar rise `dT(x)=(q/2k)x(L−x)`, peak `σV²/8k`, **0.00 %** (exact) |
 | 20 | **Electro-thermo-mechanical** (3-physics chain) | ✅ done | `electro_thermo_mech.py` ; NEW `radia_ngsolve.elasticity` + chain to `solve_linear_elasticity` ; `ngsolve_usage("elasticity")` | constrained-bar thermal stress `σ_xx=−Eα⟨ΔT⟩` + tension `δ=σ₀L/E`, **0.00 %** |
 | 21 | **Magneto-mechanical** (Lorentz force → deflection) | ✅ done | `magneto_mechanical.py` ; `solve_linear_elasticity(body_force=J×B)` + `cantilever_tip_deflection` ; `ngsolve_usage("magneto_mechanical")` | cantilever tip vs Euler-Bernoulli `wL⁴/8EI`, **0.02 %** |
+| 22 | **MEMS electro-mechanical** (electrostatic pull → deflection) | ✅ done | `mems_electro_mechanical.py` ; NEW `force.electrostatic_eggshell_force_2d` + chain to `solve_linear_elasticity` ; `ngsolve_usage("electro_mechanical")` | pressure `½ε₀(V₀/d)²` **0.00 %** + cantilever tip vs Euler `wL⁴/8EI` **0.05 %** (electric twin of #21) |
+| 23 | **Frozen-permeability superposition** (saturated Ld/Lq engine) | ✅ done | `frozen_permeability.py` ; NEW `solve.frozen_reluctivity` ; `ngsolve_usage("frozen_perm")` | nonlinear λ decomposes into superposable frozen-ν parts, **0.51 %** recombination (iron μ_r 1000→45); self-validating, no external data |
 
 **COMSOL AC/DC blog series** (task #24): #5 onward reproduce canonical COMSOL AC/DC
 blog models. Each is grounded in the ingested COMSOL blog KB (`comsol_docs`,

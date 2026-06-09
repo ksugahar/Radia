@@ -1,7 +1,8 @@
 """ONELAB/GetDP electric-machine knowledge for radia_mcp.motor.
 
 Distilled from S:/ONELAB/ElectricMachines/ (Sabariego-Gyselinck-Geuzaine,
-ULiège-ULB, BSD-style license).  The ONELAB ElectricMachines bundle is
+ULiège-ULB; COPYING.txt is copyright-only with no explicit license text —
+treat as academic/research code and cite the papers).  The bundle is
 the canonical open-source reference for 2D rotating-machine FEA, and is
 the basis for Liu Xinyao's 2025 thesis (W:/04_卒論論文関係/2025年度/
 136_劉馨遙) comparing ONELAB vs JMAG torque waveforms.
@@ -13,6 +14,11 @@ Section map:
   overview       — bundle layout, motor types, file pattern
   groups         — Region / FunctionSpace / Constraint vocabulary
   formulation    — A-formulation (2D), magnetodynamics_a, moving-band
+  magstadyn_source — VERIFIED weak form / 3 torque methods / slip-σ trick /
+                   v×B motional term / Park dq0, read from .pro (2026-06-09)
+  twod_corrections — 2D→3D corrections actually IN GetDP: axial length, (anti)
+                   periodicity scaling, end-effect lumped circuit, skew multi-
+                   slice, lamination-loss homogenisation, shape-sensitivity
   motor_types    — IM, PMSM, SRM, WFSM, shaded-pole reference table
   ngsolve_xlate  — GetDP → NGSolve material/boundary/source mapping
   analysis_modes — Static / FreqDomain (slip) / TimeDomain (transient)
@@ -215,10 +221,12 @@ coupled (N×NbrDOF) algebraic system is solved by Newton.
 
 ### Iron loss
 
-Bertotti decomposition (hysteresis + classical eddy + excess) is
-evaluated **a-posteriori** from the time-stepped `B(t)`.  More
-sophisticated models (Jiles-Atherton, dynamic Preisach) can be plugged
-in via `machine_post_a.pro`.
+This bundle carries only the **classical-eddy** lamination term
+`(d²/12)·σ_eq·⟨(dB/dt)²⟩` (order-0 homogenisation, OFF by default since
+`sigma_fe=0`; see `twod_corrections` #6).  Hysteresis + excess (the full Bertotti
+decomposition), Jiles-Atherton and dynamic Preisach are NOT included here, and
+there is **no `machine_post_a.pro`** in the bundle — plug such models in
+a-posteriori from the time-stepped `B(t)` if you need them.
 """
 
 MOTOR_TYPES = """\
@@ -518,16 +526,20 @@ POST = """\
 Maxwell stress tensor integrated on a circle in the air gap:
 
 ```getdp
-PostOperation Torque_T {
-  ElectricalForce_MS[Air_Gap_Mvg] ; // ∫ T_M · r dr on air-gap centerline
-  Print[ T_torque[Air_Gap_Mvg], OnElementsOf Air_Gap_Mvg,
-         File StrCat[Dir_Res,"T_torque.txt"] ];
-}
+// VERIFIED names (machine_magstadyn_a.pro): Torque_Maxwell + PostOperation Get_Torque
+PostOperation Get_Torque UsingPost MagStaDyn_a_2D {
+  Print[ Torque_Maxwell[Rotor_Airgap],  OnGlobal, StoreInVariable $Trotor  ];
+  Print[ Torque_Maxwell[Stator_Airgap], OnGlobal, StoreInVariable $Tstator ];
+}   // rotor- and stator-side air-gap integrals must agree (sanity check)
+// Torque_Maxwell = CompZ[ XYZ[] cross (T_max[{d a}]*XYZ[]) ] * 2*Pi*AxialLength/SurfaceArea[]
 ```
 
-The integrand is `T_M = (1/μ₀) [B (B·n) - (1/2) |B|² n]`, evaluated on
-a virtual cylindrical surface in the mid-air-gap.  This is the
-**Arkkio formula** (Arkkio 1987 PhD).
+The integrand `T_max = (1/μ₀) [B (B·n) - (1/2) |B|² n]` is **volume-averaged over
+the whole air-gap annulus** by the `2*Pi*AxialLength/SurfaceArea[]` factor (Arkkio
+band average) — NOT a single mid-gap contour, which is what makes it mesh-robust.
+This is the **Arkkio formula** (Arkkio 1987 PhD).  (The earlier `Torque_T` /
+`ElectricalForce_MS` sketch was illustrative — these are the actual GetDP names;
+see `magstadyn_source`.)
 
 Sanity check: torque computed on **any** circle inside the air-gap
 should give the same value (cancellation of the radial-tangential
@@ -540,14 +552,16 @@ T = Integrate(
     definedon=mesh.Boundaries("air_gap_mid_circle"))
 ```
 
-### Iron loss
+### Iron loss (accurate to this bundle)
 
-Bertotti decomposition computed per element from `B(t)` time series:
-
-  P_iron = k_hys · f · B_pk^α + σ d²/12 · ⟨(dB/dt)²⟩ + k_excess · f^1.5 · B_pk^1.5
-
-The Bertotti coefficients (`k_hys`, `α`, `k_excess`) are material-
-specific and live in `M_data.geo`.
+The bundle computes only the **classical-eddy** loss, via the order-0 lamination
+homogenisation term `(d²/12)·σ_eq·⟨(dB/dt)²⟩` (see `twod_corrections` #6; the iron
+is non-conducting in the solve, `sigma_fe=0` by default — the σ_eq is carried only
+to evaluate this loss a-posteriori).  A FULL Bertotti decomposition (the hysteresis
+`k_hys·f·B_pk^α` and excess `k_excess·f^1.5·B_pk^1.5` terms) is **NOT** in this
+bundle, there are no `k_hys/k_excess` in any `M_data.geo`, and there is no
+`machine_post_a.pro` — add those from an external IronLoss model if required.
+`JouleLosses` (σ|∂A/∂t+∇V|²) covers the real conductors (cage bars, solid parts).
 
 ### Phase current / back-EMF
 
@@ -610,6 +624,188 @@ against JMAG directly (JMAG and ONELAB already agree).
    SynRM design loop.
 """
 
+MAGSTADYN_SOURCE = r"""## machine_magstadyn_a.pro — VERIFIED weak form & techniques (read from source 2026-06-09)
+
+The `formulation`/`post` sections above were written from general knowledge and
+carried a few idealisations.  THIS section is transcribed directly from the actual
+shared template `machine_magstadyn_a.pro` and the `im.pro` induction case, so the
+GetDP term and PostOperation names below are exact.
+
+### One formulation, three regimes (Flag_AnalysisType)
+
+A single 2D vector-potential formulation `MagStaDyn_a_2D` (a = A_z) serves all of:
+  0 = Static, 1 = Time-domain (`TimeLoopTheta`, implicit Euler θ=1), 2 = Frequency
+  (`Type ComplexValue; Frequency Freq`).  No re-derivation between regimes — the
+  time-derivative term `DtDof[...]` is exactly what becomes `jω` in the complex solve.
+
+### Exact Galerkin terms (Equation block)
+
+```getdp
+Galerkin { [ nu[{d a}] * Dof{d a} , {d a} ] ; In Domain ; }             // curl-curl ν
+Galerkin { JacNL[ dhdb_NL[{d a}] * Dof{d a} , {d a} ] ; In DomainNL ; } // Newton (nonlin Fe)
+Galerkin { [ -nu[] * br[] , {d a} ] ; In DomainM ; }                    // PM remanence (-ν·Br)
+Galerkin { DtDof[ sigma[] * Dof{a} , {a} ] ; In DomainC ; }             // EDDY  σ ∂A/∂t
+Galerkin { [ sigma[] * Dof{ur} , {a} ] ; In DomainC ; }                // grad V (loop voltage)
+Galerkin { [ -sigma[]*(Velocity[] *^ Dof{d a}) , {a} ] ; In DomainV ; } // MOTIONAL −σ(v×B)
+Galerkin { [ -js[] , {a} ] ; In DomainS ; }                            // stranded source
+```
+
+plus circuit `GlobalTerm`s (U/I, Ub/Ib, Uz/Iz) and a `GlobalEquation Network`.
+Reading notes:
+- PM magnets are NOT a current source — they enter as `−ν·br` tested with `{d a}` (= ∇×a').
+- `DtDof[σ Dof{a}]` is the eddy term; in frequency mode it becomes `jω σ` automatically.
+
+### Motion — TWO coexisting techniques (the key takeaway for radia-motor)
+
+1. **Moving band** (default): `MB = MovingBand2D[MovingBand_PhysicalNb,
+   Stator_Bnd_MB, Rotor_Bnd_MB, SymmetryFactor]`.  Each step:
+   `ChangeOfCoordinates[NodesOf[Rotor_Moving], RotatePZ[delta_theta[]]]` then
+   `MeshMovingBand2D[MB]` re-connects ONLY the thin band layer.  Works WITH eddy
+   currents and in the frequency domain — this is the open-source counterpart of the
+   "eddy × moving gap" capability a magnetostatic air-gap element cannot give.
+2. **v×B motional term** (optional, `Term_vxb`): keep the mesh fixed and add
+   `−σ(Velocity[] *^ ∇×A)` on `DomainV = RotorC`, with
+   `Velocity[] = wr * XYZ[] /\ Vector[0,0,-1]`.  Cheaper (no re-mesh) but valid only
+   for the steady rotating-field regime.
+
+### Frequency-domain induction — the slip-σ trick (im.pro:165)
+
+```getdp
+sigma[Rotor_Bars] = (Flag_AnalysisType==2 ? slip : 1.) * sigma_bars ;
+wr = (Flag_AnalysisType==2) ? (1-slip)*2*Pi*Freq/NbrPolePairs : rpm/60*2*Pi ;
+```
+
+In frequency domain the rotor is NOT moved; the rotor-bar conductivity is scaled by
+slip s so one complex phasor solve at the stator frequency captures the
+slip-frequency rotor currents.  `slip` is swept (Onelab `Loop`) to trace the
+torque–slip curve.  Standard steady-state IM phasor model.
+
+### Torque — THREE methods actually provided (exact names)
+
+- `Torque_Maxwell` (PostOperation `Get_Torque`): Maxwell stress, Arkkio-averaged
+  over the WHOLE air-gap annulus:
+  `CompZ[ XYZ[] /\ (T_max[{d a}]*XYZ[]) ] * 2*Pi*AxialLength/SurfaceArea[]`,
+  integrated `In Domain`.  The `/SurfaceArea[]` (= 2π·r_avg band average) is what
+  makes it mesh-robust — NOT a single contour.
+- `Torque_vw` (virtual work):
+  `CompZ[ 0.5*nu[]*XYZ[] /\ VirtualWork[{d a}] ]*AxialLength`
+  `In ElementsOf[Rotor_Airgap, OnOneSideOf Rotor_Bnd_MB]` (GetDP built-in VirtualWork).
+- `Torque_Maxwell_cplx` / `_cplx_2f`: frequency-domain mean torque + the 2ω
+  pulsating component.
+Both rotor-side `Torque_Maxwell[Rotor_Airgap]` and stator-side `[Stator_Airgap]`
+are printed and must agree (built-in sanity check).
+
+### Park / dq0 (Flag_ParkTransformation) — the hook for Ld/Lq + MTPA
+
+`Pinv[]`/`P[]` tensors implement abc↔dq0; `Flux_dq0[] = P[]*Vector[Flux_a,b,c]`.
+Drive `Idq0=[ID,IQ,I0]`, read `Flux_d/Flux_q` ⇒ Ld=Φ_d/I_d, Lq=Φ_q/I_q.  This is the
+GetDP basis for the Ld-Lq / MTPA tests already in radia-motor.
+
+### Losses
+
+`JouleLosses = ∫ σ |∂A/∂t + ∇V|²` (and the `−v×B` form on DomainV), split into
+`Rotor`, `Rotor_Fe` ⇒ rotor cage loss + iron eddy.  Exactly the rotor eddy-current
+loss the moving-band + DtDof formulation gives and a magnetostatic harmonic gap
+element cannot.
+
+### radia-ngsolve port checklist (verified mapping)
+
+| GetDP | NGSolve |
+|-------|---------|
+| a = A_z (Form1P) | `H1(order=p)` scalar A_z (2D curl-curl ⇒ grad-grad on A_z) |
+| `nu[{d a}]*Dof{d a}` | `nu*grad(Az)*grad(vz)*dx` |
+| `DtDof[σ Dof{a}]` | implicit-Euler `σ/Δt·(Az−Az_prev)`, or `1j*ω*σ` (complex H1) |
+| `−nu·br` (PM) | `−nu*(Br_perp)·grad(vz)*dx`, Br a MaterialCF rotated by θ(t) |
+| moving band | re-mesh thin annulus + `mesh.Identify(PERIODIC, sign=±1)` (antiperiodic) |
+| slip-IM | scale rotor-bar σ by slip, complex solve (no motion) |
+| Arkkio torque | band-average over air-gap annulus (matches radia force_validation) |
+
+Benchmark target = the ONELAB run itself (open, reproducible).  Refs:
+Ferreira-da-Luz/Dular/Sadowski/Geuzaine/Bastos, IEEE Trans. Mag. 2002 (periodicity
++ moving band); Gyselinck et al., IEEE Trans. Mag. 2003 (frequency-domain modelling
+of motion).
+"""
+
+TWOD_CORRECTIONS = r"""## 2D-analysis corrections actually in ONELAB/GetDP (verified from source 2026-06-09)
+
+A 2D (x, y) machine slice ignores axial / end / skew / lamination physics.  The
+ONELAB bundle carries a stack of corrections that put the 2D answer back onto the
+3D reality.  Each entry below is grounded in the actual files — not general knowledge.
+
+### 1. Axial length & per-unit-depth scaling  (machine_magstadyn_a.pro)
+Everything 2D is per metre of depth.  `AxialLength` (stack length L_stk) multiplies
+flux linkage, torque, loss, circuit coupling.  E.g. `Flux` =
+`SymmetryFactor*AxialLength*Idir[]*NbWires[]/SurfCoil[]*CompZ[{a}]`; inductor term
+`DtDof[ AxialLength*NbWires/SurfCoil*Dof{a}, {ir} ]`.
+→ radia-ngsolve: carry L_stk as a scalar on every global (flux, torque, R, L).
+
+### 2. Symmetry / (anti)periodicity scaling  (Constraint MVP_2D + SymmetryFactor)
+Model only `NbrPolesInModel` of `NbrPolesTot`.  The sector cut is linked by
+`RotatePZ[-NbrPolesInModel*2*Pi/NbrPolesTot]` with `Coefficient ((#poles odd)?-1:1)`
+(antiperiodic = −1, periodic = +1), and globals are scaled by `SymmetryFactor`
+(`Dof{Ub}/SymmetryFactor`, `Flux` ×SymmetryFactor).
+→ radia-ngsolve: `mesh.Identify(PERIODIC)` + sign; multiply globals by SymmetryFactor.
+
+### 3. End-effects = lumped circuit, NOT in the FE domain  (im_circuit.pro)
+The 2D slice has no end-windings / end-rings (a genuinely 3D region).  They are added
+as LUMPED circuit elements:
+- stator end-winding leakage reactance: `Inductance[L1,L2,L3] = Ls` (per phase);
+- squirrel-cage end-ring: per-segment `Resistance[Rers_k]=R_endring_segment`,
+  `Inductance[Lers_k]=L_endring_segment`, wired bar→bar as a ring network.
+→ radia-ngsolve: add to the per-conductor circuit Schur block (Z_circ), not the mesh.
+
+### 4. 3D winding-resistance factor  (Rb[], Factor_R_3DEffects, FillFactor_Winding)
+`Rb[] = Factor_R_3DEffects * AxialLength * FillFactor_Winding * NbWires^2 / SurfCoil / sigma`.
+`Factor_R_3DEffects` (>1) inflates the slot DC resistance to include the end-turn
+copper length the 2D model cannot see; `FillFactor_Winding` (e.g. 0.96) is packing.
+
+### 5. Skew = multi-slice  (generate_3d.geo: Model3D = Multi-slice)
+Skewed slots cannot exist in one 2D plane.  `Model3D = {0=2D, 1=Multi-slice, 2=3D}`,
+`NumSlices`, `SliceZOffset`: stack `NumSlices` z-translated copies of the 2D mesh;
+the skew is realised by giving each slice's rotor a different angular offset, then the
+torque / EMF are averaged over slices.  This is THE skew correction (Gyselinck
+multi-slice).  → radia-ngsolve: solve N rotated sector copies (cheap, embarrassingly
+parallel) and average — no true 3D mesh needed.
+
+### 6. Lamination iron eddy = homogenisation of order 0  (im_3kW_data.geo:60-68)
+Laminated iron is modelled as **non-conducting in the field solve** (`sigma_fe = 0`) —
+resolving each lamina in 2D is impossible.  The classical eddy loss is recovered
+a-posteriori by the homogenised term, quoted verbatim from the source:
+
+    "value of sigma with homogenization of order zero ... it only makes sense when
+     adding a term in the formulation:  d^2/12 * sigma * d_t b
+     so that we can account for losses in the laminated domain, which is still
+     non-conducting"
+
+i.e. `P_lam = (d^2/12) * sigma_eq * <(dB/dt)^2>`, d = lamina thickness.  This is the
+CLASSICAL eddy term ONLY (= Bertotti's middle term).  Hysteresis and excess are NOT
+in this bundle and there is no `machine_post_a.pro`.  → radia-ngsolve (coreloss): use
+B(t) post-hoc with the same `d^2/12·σ` term; add hyst/excess from a separate model.
+
+### 7. Frequency-domain motion folded into a coefficient = slip-σ  (see magstadyn_source)
+Scale rotor-bar σ by slip; one complex solve replaces a transient run-up.  A
+"correction" in the sense of folding rotor motion into a material coefficient.
+
+### 8. Numerical relaxation startup  (im.pro: Frelax[])
+`Frelax[] = 0.5*(1 − Cos[Pi*t/Trelax])` smoothly ramps a nonlinear voltage source over
+the first `NbTrelax` periods to avoid an inrush transient shock — a solver-robustness
+correction, not physics.  → radia-ngsolve: same smooth ramp on the source.
+
+### 9. Shape-sensitivity = mesh velocity field  (perturb.geo)
+For shape / topology optimisation: perturb one geometric parameter by ε, remesh,
+difference the node coordinates → a **mesh velocity field** `(x_pert − x)/ε` that
+feeds the design derivative of torque/loss (semi-analytic shape gradient).  Ties
+directly to the topology_opt work.  → radia-ngsolve: a velocity `GridFunction` used
+with the shape-derivative of the torque functional.
+
+### Adoption priority for radia-motor
+(a) #1, #2, #4 are trivial scalings — adopt immediately.
+(b) #3 end-effect circuit — needed for any voltage-driven / induction accuracy.
+(c) #5 multi-slice skew — high value, cheap in NGSolve (N rotated solves averaged).
+(d) #6 lamination loss — adopt the classical `d^2/12` term in radia coreloss, and be
+    honest that hysteresis/excess need a separate model.
+"""
+
 # -----------------------------------------------------------------
 # Dispatch
 # -----------------------------------------------------------------
@@ -618,6 +814,8 @@ SECTIONS = {
     "overview": OVERVIEW,
     "groups": GROUPS,
     "formulation": FORMULATION,
+    "magstadyn_source": MAGSTADYN_SOURCE,
+    "twod_corrections": TWOD_CORRECTIONS,
     "motor_types": MOTOR_TYPES,
     "ngsolve_xlate": NGSOLVE_XLATE,
     "analysis_modes": ANALYSIS_MODES,

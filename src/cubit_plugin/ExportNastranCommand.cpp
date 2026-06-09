@@ -59,6 +59,15 @@ ExportNastranCommand::~ExportNastranCommand() {}
 std::vector<std::string> ExportNastranCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
+  // Primary, tool-neutral command name.
+  syntax_list.push_back(
+    "export nastran_bdf <string:label='filename',help='<filename>'> "
+    "[order <value:label='order',help='<1 or 2>'>] "
+    "[dimension <value:label='dimension',help='<2 or 3>'>] "
+    "[nopyramid] "
+    "[overwrite]"
+  );
+  // Deprecated alias kept for backward compatibility with existing .jou scripts.
   syntax_list.push_back(
     "export jmag_nastran <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1 or 2>'>] "
@@ -73,7 +82,10 @@ std::vector<std::string> ExportNastranCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "export jmag_nastran \"filename\" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]"
+    "export nastran_bdf \"filename\" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]"
+  );
+  help.push_back(
+    "export jmag_nastran \"filename\" ...   (deprecated alias of nastran_bdf)"
   );
   return help;
 }
@@ -90,7 +102,7 @@ std::vector<std::string> ExportNastranCommand::get_help()
     "  order 2       2nd-order elements with geometry projection\n"
     "  dimension 3   3D solid mesh output (default)\n"
     "  dimension 2   2D shell mesh output\n"
-    "  nopyramid     Convert pyramid to degenerate hex (JMAG compatible)\n"
+    "  nopyramid     Convert pyramid to degenerate hex (solver-compatible)\n"
     "  overwrite     Overwrite existing file without warning\n"
   );
   return help;

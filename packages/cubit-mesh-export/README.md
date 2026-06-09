@@ -187,17 +187,25 @@ Omega-reduced FEM formulations.
 ## Python API
 
 ```python
-import netgen          # must import before cubit
-import ngsolve
+import netgen          # must import before cubit (DLL load order)
 import cubit
 
 cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd('open "model.cub5"')
+cubit.cmd('mesh volume all')
+cubit.cmd('block 1 add hex all')                          # elements must be in a block to export
+cubit.cmd('export netgen "model.vol" order 3 overwrite')  # high-order CURVED .vol (order 1-5)
 
-from cubit_mesh_export import extract_curved_mesh
-ng_mesh = extract_curved_mesh(cubit, order=3)
-ng_mesh.Save("model.vol")
+# Load it in NGSolve.  A high-order .vol already carries its curved mid-side nodes:
+# load AS-IS and do NOT call mesh.Curve() -- mesh.Curve() re-curves from CAD geometry
+# (absent in a loaded .vol) and would RESET every element to straight-sided.
+from ngsolve import Mesh
+mesh = Mesh("model.vol")
 ```
+
+See `examples/cubit_mesh_export/hex_sphere_highorder/` for a runnable demo (a curved
+hex sphere whose NGSolve volume converges to 4/3 pi r^3 as the order rises: order 1
+-23 % -> order 2 -0.2 % -> order 3 +0.1 %).
 
 The Cubit-side Python helpers (Kelvin transformation, etc.) live in
 `cubit_mesh_export.cubit_helpers`:
