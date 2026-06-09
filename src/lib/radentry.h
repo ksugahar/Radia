@@ -1025,43 +1025,6 @@ Must be called before RadSolve with method=2 (BiCGSTAB+HACApK).
 */
 EXP int CALL RadSetHACApKParams(int* n, double eps, int leaf_size, double eta);
 
-/** Sets the HACApK loop-mode deflation basis L (sparse plaquette/cycle, CSR-like).
-The HACApK MatVec then applies (A + alpha * L L^T), lifting the near-null (loop)
-modes so the converged solution is loop-free.
-@param n [out] dummy
-@param offsets [in] CSR row pointers (size n_off = n_plaq+1), or nullptr to disable
-@param n_off [in] length of offsets (n_plaq+1), 0 to disable
-@param dofs [in] flat DOF indices (size n_nz)
-@param signs [in] flat +/-1 entries (size n_nz)
-@param n_nz [in] number of nonzeros
-@param alpha [in] shift magnitude (0 to disable)
-@return integer error code
-*/
-EXP int CALL RadSetHACApKDeflation(int* n, const int* offsets, int n_off, const int* dofs, const double* signs, int n_nz, double alpha);
-
-/** Enable/disable AUTOMATIC loop-mode deflation for the HACApK solver: the
-solve builds the local cycle (plaquette) basis from the mesh topology and
-applies (A + alpha * L L^T), so the converged solution is loop-free. No
-manual basis needed.
-@param n [out] dummy
-@param enable [in] 1 to enable, 0 to disable
-@param alpha [in] shift magnitude (e.g. 1.0)
-@return integer error code
-*/
-EXP int CALL RadSetDeflateNullspace(int* n, int enable, double alpha);
-
-/** Enable/disable the ALPHA-FREE loop-star gauge for the HACApK solver: solve
-the reduced star-subspace system T^T A T y = T^T b (H-matrix unchanged), removing
-the loop null space without a shift parameter. Field-exact + well-conditioned
-for the LINEAR regime. @param n [out] dummy @param enable 1=on,0=off */
-EXP int CALL RadSetLoopStarGauge(int* n, int enable);
-
-/** Enables/disables HELMHOLTZ-HODGE loop removal: after the HACApK solve, subtract
-the non-physical loop (circulating surface-charge) component from sigma via a cheap,
-well-conditioned CG projection off the topological cycle space. Gives a loop-free
-physical answer; N*sigma (on-element field) is unchanged. Scalable, mu_r-independent.
-@param n [out] dummy @param enable 1/0 */
-EXP int CALL RadSetLoopProjection(int* n, int enable);
 
 /** Sets only the H-matrix ACA epsilon (tolerance) for HACApK solver.
 ELF-compatible API: magic.set_hmatrix_epsilon(eps)

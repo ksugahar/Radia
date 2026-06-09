@@ -102,10 +102,6 @@ void SolveGenNonl( int, double, int, int, int, const char* );
 int BuildMatrix( int, const char* );
 #ifdef RADIA_USE_HACAPK
 void SetHACApKParams( double, int, double );
-void SetHACApKDeflation( const int*, int, const int*, const double*, int, double );
-void SetDeflateNullspace( int, double );
-void SetLoopStarGauge( int );
-void SetLoopProjection( int );
 void GetHACApKStats( double*, int* );
 #endif
 void GetSolveStats( double*, int* );
@@ -1407,34 +1403,6 @@ int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int
 int CALL RadSetHACApKParams(int* n, double eps, int leaf_size, double eta)
 {
 	SetHACApKParams(eps, leaf_size, eta);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadSetHACApKDeflation(int* n, const int* offsets, int n_off, const int* dofs, const double* signs, int n_nz, double alpha)
-{
-	SetHACApKDeflation(offsets, n_off, dofs, signs, n_nz, alpha);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadSetDeflateNullspace(int* n, int enable, double alpha)
-{
-	SetDeflateNullspace(enable, alpha);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadSetLoopStarGauge(int* n, int enable)
-{
-	SetLoopStarGauge(enable);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadSetLoopProjection(int* n, int enable)
-{
-	SetLoopProjection(enable);
 	*n = 1;
 	return ioBuffer.OutErrorStatus();
 }

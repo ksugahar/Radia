@@ -140,45 +140,6 @@ public:
 	double m_hacapk_dense_memory_mb;  // Dense matrix memory [MB]
 	bool m_hacapk_stats_valid;
 
-	// HACApK loop-mode deflation basis (sparse plaquette/cycle L, CSR-like).
-	// The HACApK MatVec then applies (A + m_hacapk_defl_alpha * L L^T).
-	std::vector<int> m_hacapk_defl_offsets;   // CSR row pointers, size n_plaq+1
-	std::vector<int> m_hacapk_defl_dofs;      // flat DOF indices
-	std::vector<double> m_hacapk_defl_signs;  // flat +/-1 entries
-	double m_hacapk_defl_alpha;
-	void SetHACApKDeflation(const int* offsets, int n_off, const int* dofs,
-	                        const double* signs, int n_nz, double alpha) {
-		m_hacapk_defl_offsets.assign(offsets, offsets + (n_off > 0 ? n_off : 0));
-		m_hacapk_defl_dofs.assign(dofs, dofs + (n_nz > 0 ? n_nz : 0));
-		m_hacapk_defl_signs.assign(signs, signs + (n_nz > 0 ? n_nz : 0));
-		m_hacapk_defl_alpha = alpha;
-	}
-
-	// Auto loop-mode deflation: when enabled, the HACApK solve builds the local
-	// cycle (plaquette) basis from the mesh topology and applies (A + alpha L L^T).
-	bool m_deflate_nullspace;
-	double m_deflate_alpha;
-	void SetDeflateNullspace(bool enable, double alpha) {
-		m_deflate_nullspace = enable;
-		m_deflate_alpha = alpha;
-	}
-
-	// ALPHA-FREE loop-star gauge: when enabled, the HACApK solve restricts to the
-	// star (non-loop) subspace via a sparse basis T, solving T^T A T y = T^T b
-	// (H-matrix unchanged). Field-exact + well-conditioned for the LINEAR regime.
-	bool m_loopstar_gauge;
-	void SetLoopStarGauge(bool enable) { m_loopstar_gauge = enable; }
-
-	// HELMHOLTZ-HODGE loop removal: after the solve, subtract the non-physical loop
-	// (circulating-charge = ker(N)) component from sigma via a cheap, well-conditioned
-	// CG projection off the topological cycle space. Gives a loop-free physical answer
-	// without changing N*sigma (the field). Scalable, mu_r-independent. Applied across
-	// ALL solver paths (method 0 LU / 1 dense BiCGSTAB / 2 HACApK) for consistency.
-	// DEFAULT ON: loops are non-physical circulating surface charges; the physical
-	// answer is loop-free. Skipped automatically when the loop-star gauge is active
-	// (loop-star already handles the loop content -- do not double-process).
-	bool m_loop_projection;
-	void SetLoopProjection(bool enable) { m_loop_projection = enable; }
 
 	// Detailed timing statistics (ELF-compatible)
 	double m_timing_hmatrix_build;   // H-matrix construction time
@@ -253,11 +214,6 @@ public:
 		m_hacapk_build_time = 0.0;
 		m_hacapk_memory_mb = 0.0;
 		m_hacapk_dense_memory_mb = 0.0;
-		m_hacapk_defl_alpha = 0.0;
-		m_deflate_nullspace = false;
-		m_deflate_alpha = 1.0;
-		m_loopstar_gauge = false;
-		m_loop_projection = true;   // DEFAULT ON: return loop-free (physical) sigma
 		m_timing_hmatrix_build = 0.0;
 		m_timing_linear_solve = 0.0;
 		m_linear_iterations = 0;
