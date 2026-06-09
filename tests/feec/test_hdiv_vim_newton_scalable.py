@@ -54,6 +54,21 @@ def test_scalable_newton_matches_dense_analytic_sphere():
     assert nit < 30, f"scalable Newton not fast at saturation: {nit} iters"
 
 
+def test_scalable_newton_default_gram_eps_is_tight():
+    """Fix B (2026-06-09): the DEFAULT gram_eps must stay tight (<=1e-9).  The ACA charge-Gram H-matrix
+    asymmetry scales DIRECTLY with eps (1e-6->15%, 1e-8->1.6%, 1e-10->3e-5); the old default 1e-7 gave
+    a ~5% asymmetric/INACCURATE operator at scale (n_charge~few-thousand) -> the nonlinear Newton's
+    tangent was inconsistent -> slow LINEAR convergence (iters 6->27->37 over a mesh sweep) + a 0.6%
+    wrong Mz.  Tightening the default to 1e-10 restores a mesh-INDEPENDENT 6-iter quadratic convergence
+    (verified C-yoke h=0.008/0.006/0.005 -> 6/6/6 iters).  Lock the default so it cannot silently
+    regress to the too-loose value.  (NOT the loops/-N: B1 and B2 were both red herrings; the root
+    cause was the ACA tolerance -- see docs/hdiv_vim/PRODUCTIONIZATION.md.)"""
+    import inspect
+    eps = inspect.signature(nl.solve_nonlinear_newton_scalable).parameters["gram_eps"].default
+    assert eps <= 1e-9, (f"default gram_eps={eps:.0e} too loose -> the nonlinear Newton degrades to "
+                         f"non-mesh-independent linear convergence (need <=1e-9, was the buggy 1e-7)")
+
+
 def test_scalable_newton_fails_loud_not_silent_underconverged():
     """Fix A (2026-06-09): with too few Newton iters the scalable solver MUST raise (fail loud), never
     silently return an under-converged M.  The old code broke on Mavg stagnation (|M_now-M_prev|<1e-8),
