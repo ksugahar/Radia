@@ -1,0 +1,83 @@
+{
+  "geometry": "C-yoke (Kelvin-less, iron-only volume integral -- no air, no Kelvin)",
+  "chi0": 1000.0,
+  "Msat": 1000000.0,
+  "H0": 200000.0,
+  "near_factor": 2.0,
+  "hdiv_vim": [
+    {
+      "h": 0.02,
+      "ne": 130,
+      "n_charge": 270,
+      "ndof": 330,
+      "Mz": 572588.655762106,
+      "iters": 6,
+      "t_build_s": 0.1754916000063531,
+      "t_solve_s": 0.1717816999880597,
+      "t_total_s": 0.3472732999944128
+    },
+    {
+      "h": 0.012,
+      "ne": 734,
+      "n_charge": 1206,
+      "ndof": 1704,
+      "Mz": 583465.9039671414,
+      "iters": 6,
+      "t_build_s": 0.8677660000394098,
+      "t_solve_s": 1.2184092999668792,
+      "t_total_s": 2.086175300006289
+    },
+    {
+      "h": 0.008,
+      "ne": 2715,
+      "n_charge": 3753,
+      "ndof": 5949,
+      "Mz": 585446.2558870018,
+      "iters": 6,
+      "t_build_s": 2.8542243000119925,
+      "t_solve_s": 5.33936939999694,
+      "t_total_s": 8.193593700008933
+    },
+    {
+      "h": 0.006,
+      "ne": 4902,
+      "n_charge": 6812,
+      "ndof": 10759,
+      "Mz": 586301.8553808195,
+      "iters": 6,
+      "t_build_s": 5.100678300019354,
+      "t_solve_s": 11.58421639999142,
+      "t_total_s": 16.684894700010773
+    },
+    {
+      "h": 0.005,
+      "ne": 7158,
+      "n_charge": 9978,
+      "ndof": 15726,
+      "Mz": 586791.4843860704,
+      "iters": 6,
+      "t_build_s": 7.767935699957889,
+      "t_solve_s": 19.50129859999288,
+      "t_total_s": 27.269234299950767
+    }
+  ],
+  "yano_reference": {
+    "method": "yano-type distortion elements + loop-star (LAB machine, saved)",
+    "points": [
+      {
+        "ndof": 18900,
+        "nonlinear_iters": 174,
+        "t_total_s": 99.0
+      },
+      {
+        "ndof": 165600,
+        "nonlinear_iters": 214,
+        "t_total_s": 2607.0,
+        "t_build_s": 582.0,
+        "t_solve_s": 1953.0,
+        "linear_iters": 2686
+      }
+    ]
+  },
+  "status_2026_06_09": "RESOLVED. Fix A (sound relF break + fail-loud) + Fix B (default gram_eps 1e-7->1e-10; the loose ACA tolerance was the root cause, NOT the -N material formulation or a loop preconditioner). SOLVE now mesh-INDEPENDENT 6-iter quadratic convergence; clear win on build AND solve."
+}
