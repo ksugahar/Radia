@@ -14,11 +14,13 @@ ANALYTIC transfer (instead of meshing the gap) gives the AGE's two gems:
   * the transmitted torque is computed from the gap harmonics in CLOSED FORM and is
     RADIUS-INDEPENDENT (mesh-independent), unlike a Maxwell-stress contour.
 
-This module is the analytic GATE (step 1): the harmonic transfer, the radial-trace
-(Dirichlet-to-Neumann / Steklov) action that will border the NGSolve system, and the
+This module is the analytic CORE: the harmonic transfer, the radial-trace
+(Dirichlet-to-Neumann / Steklov) action that borders the NGSolve system, and the
 closed-form harmonic torque -- all validated against direct Maxwell-stress quadrature
-in tests/test_airgap_element.py.  The NGSolve assembly (the Schur block) and the
-complex (eddy-current) extension build on this.
+in tests/test_airgap_element.py.  The reusable NGSolve assembly that couples a ROTOR and a
+STATOR FE region across the un-meshed gap -- real OR eddy-current (jw*mu*sigma), with rotor
+rotation as a pure phase and the mesh-free closed-form torque -- is :mod:`airgap_machine`,
+which builds on this core (validated to machine precision in tests/test_airgap_eddy_machine.py).
 
 Open method (Abdel-Razek/Konrad 1982; Davat 1985 air-gap macro-element); analytic,
 publishable.
