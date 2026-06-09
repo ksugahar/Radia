@@ -169,13 +169,20 @@ instrumented diagnosis (per-iter ‖F‖/λ/Mavg trajectory) found:
        offsets the modestly-higher tight-eps build cost.) The ACA tolerance was the cause of the
        OUTER-Newton (tangent-consistency) degradation — NOT B1 (−N material, non-physical).
 
-     - **SCALE CAVEAT (2026-06-09, found by a cautious intermediate point BEFORE attempting 165600 DOF):
-       the OUTER Newton is mesh-independent (6 iters) and accurate, but the INNER +N linear solve does
-       NOT yet scale.** At ndof=10759 the warmstart's M_mass⁻¹-preconditioned GMRES converged in ~150
-       iters; at ndof≈44k (cyoke h=0.004) it does NOT converge in 1000 iters (`gmres_info=20`) — the
-       inner iteration count grows SUPER-linearly with N. So Fix A+B are validated only to **ndof ≈
-       15726**; the head-to-head numbers below hold at that scale, and the earlier "extrapolate to
-       165600" is **NOT supported as a 165600 number** — and the framing was wrong twice (see below).
+     - **"SCALE WALL at 44k" — RESOLVED (2026-06-09): it was a GMRES `restart=50` artifact, NOT a wall,
+       NOT the loops.** A cautious intermediate point (cyoke h=0.004, ndof 38383) first showed the
+       warmstart not converging (`gmres_info=20`). Investigation (`C:/temp/validate_calderon.py`,
+       `resolve_44k.py`, clean per-inner confirm): (i) at `gram_eps=1e-10` the inner +N GMRES with plain
+       `M_mass⁻¹` is mesh/mu_r-INDEPENDENT — the loops are deflated by `M_mass⁻¹` (a loop-aware/Calderón
+       preconditioner gives **ZERO** benefit, measured: identical iters → **B2 ruled out**); (ii) the
+       inner-iter count grows only MILDLY (star-space demag spectrum): 31 @ ndof 8573 → **115 @ 38383**;
+       (iii) the stall was purely that `restart=50` < 115 needed → restarted GMRES STAGNATES (at 38383:
+       restart=50 → 1000 iters res 1.4e-3 fail; restart=200 → 115 iters res 7e-9 converged). **Fix:
+       `gmres_restart` default 50 → 400** (warmstart + Newton step). With it, ndof 38383 completes in
+       **7 Newton iters** (Mz 586732, on the trend), build 19.4 s + solve 119.6 s. So Fix A + B + the
+       restart fix scale to **ndof ≈ 38383 confirmed**; for very large N the inner iters keep growing
+       (~star-space), so the lever there is a **STAR-space preconditioner** (NOT the loops) or a larger
+       restart — but no auxiliary-space machinery is needed at ≤ ~100k.
 
      - **CORRECTED COMPARISON (2026-06-09): the yano-type reference is NO-loop-star + BLOCK JACOBI, NOT
        H-ILU.** H-ILU is the SEPARATE loop-star `A_SS` "star block" solver (`RadHACApKMSCManager` mode 2)
