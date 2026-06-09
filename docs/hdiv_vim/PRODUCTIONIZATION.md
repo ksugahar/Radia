@@ -151,15 +151,27 @@ instrumented diagnosis (per-iter ‖F‖/λ/Mavg trajectory) found:
      - **Fix B (partial, committed): warmstart MINRES → GMRES.** The warmstart now converges
        (`info=0`), Newton starts at relF≈0.5 (not 1.4), iters drop **27 → 19**, solve **113 → 82 s** on
        cyoke h=0.006. NOT a full mesh-independence fix — the globalization still costs ~14 iters.
-     - **Fix B (remaining, the REAL lever): make the charge-Gram H-matrix SYMMETRIC** (HACApK symmetric
-       ACA mode, or symmetrize the matvec `0.5(Nv + Nᵀv)`). That would (a) remove the ~0.6% solution
-       uncertainty the asymmetry causes (587566 vs 591357 for the same problem), (b) re-enable the
-       faster symmetric Krylov methods, (c) is the prerequisite for a genuinely mesh-independent solve.
-       Plus a better globalization (H0 continuation / trust region) for the remaining ~14 outer iters.
+     - **Fix B RESOLVED (the asymmetry was just a too-LOOSE ACA tolerance).** Measured: the Hg asymmetry
+       scales directly with `eps` (`1e-6`→15%, `1e-8`→1.6%, `1e-10`→3e-5, `1e-12`→1.5e-6). The default
+       `gram_eps=1e-7` gave the ~5% asymmetric/inaccurate operator → the Newton tangent was inconsistent
+       → slow LINEAR convergence (19–37 iters) + the 0.6% wrong Mz. **Fix: default `gram_eps` 1e-7 →
+       1e-10** in `solve_nonlinear_newton_scalable`. End-to-end on the C-yoke this gives a **mesh-INDEPENDENT
+       6-iter quadratic convergence** and the drift vanishes:
 
-So the corrected status: **BUILD is scalable + a clear win; SOLVE converges to the CORRECT answer (Fix A)
-but its iteration count is NOT yet mesh-independent (Fix B pending).** The head-to-head JSON will be
-regenerated only after Fix B, so it never reports the buggy false-convergence numbers.
+       | maxh | ndof | Mz | iters (1e-7→1e-10) | solve (1e-7→1e-10) |
+       |---|---|---|---|---|
+       | 0.008 | 5949 | 584635 | 6 → 6 | — → 4.1 s |
+       | 0.006 | 10759 | 585538 | 27 → **6** | 87 → **10.4 s** (8×) |
+       | 0.005 | 15726 | 586032 | 37 → **6** | — → 23.9 s |
+
+       Mz is now monotonic + converging (584.6k→585.5k→586.0k, the dense trend), no false-convergence
+       drift. (The GMRES warmstart from the prior commit stays as robustness; the near/far `near_factor`
+       offsets the modestly-higher tight-eps build cost.) **NEITHER B1 (−N material) NOR B2 (loop/Calderón
+       preconditioner) was the fix — both were red herrings; the real cause was the ACA tolerance.**
+
+So the corrected status: **BUILD is scalable + a clear win; SOLVE is now mesh-INDEPENDENT (6-iter quadratic
+convergence) and accurate (Fix A + Fix B).** The head-to-head JSON can now be regenerated honestly (accurate,
+fast, mesh-independent numbers) — pending the full C-type source/symmetry setup.
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
