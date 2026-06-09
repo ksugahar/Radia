@@ -318,7 +318,7 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
     return Mavg(m), nit, Dscal
 
 
-def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
+def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-10,
                                     picard_warmstart=8, maxit=200, gmres_tol=1e-8, newton_tol=1e-6,
                                     near_factor=1e30, return_timing=False, verbose=False):
     """SCALABLE damped Newton (production #2): the dense O(N^3)/O(N^2) demag is replaced by the C++
