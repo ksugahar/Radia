@@ -404,11 +404,17 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-7,
     Aplus_diag = np.maximum(np.abs((1.0 / chi) * M_mass.diagonal()) + 1e-30, 1e-30)
     for _pw in range(picard_warmstart):
         Aop = spla.LinearOperator((ndof, ndof), matvec=lambda v, c=chi: (1.0 / c) * (M_mass @ np.asarray(v, float)) + N_apply(np.asarray(v, float)))
-        m, _info = spla.minres(Aop, H0 * b0, M=Mprec, maxiter=2000, **{_MINRES_TOL: gmres_tol})
+        # GMRES, NOT MINRES/CG.  N is applied via the ACA H-matrix, which is symmetric only to ~ACA tol
+        # -- MEASURED ~2-5% asymmetric at scale (each off-diagonal block + its transpose get independent
+        # ACA pivots; the asymmetry grows with N).  Symmetric Krylov (MINRES/CG) STALL or DIVERGE on it
+        # (the warmstart used to hit its 2000-iter cap, info=2000); GMRES is asymmetry-robust and
+        # converges in ~100-150 iters (the Newton step below already uses GMRES for the same reason).
+        # Warm-restart from the previous Picard iterate (x0=m).
+        m, _info = spla.gmres(Aop, H0 * b0, M=Mprec, x0=m, maxiter=20, restart=50, **{_GMRES_TOL: gmres_tol})
         Hi = H0 - Dscal * Mavg(m)
         chi = 0.5 * chi + 0.5 * (Mof(Hi) / Hi if abs(Hi) > 1e-30 else chi)
         if verbose:
-            print(f"    [warmstart {_pw}] minres_info={_info} chi={chi:.3e} Mavg={Mavg(m):.1f}", flush=True)
+            print(f"    [warmstart {_pw}] gmres_info={_info} chi={chi:.3e} Mavg={Mavg(m):.1f}", flush=True)
 
     nit = 0
     converged = False
