@@ -17,7 +17,6 @@ first.
       cubit/          — mcp-server-cubit (52 tools)
       build123d/      — mcp-server-build123d (37 tools)
       gmsh_post/      — mcp-server-gmsh-post (21 tools)
-      interop/        — mcp-server-radia-interop (4 tools)
       common/         — failure_log, web_docs, examples (scrape index)
     pyproject.toml    — entry points + extras
     CHANGELOG.md      — append a release entry
@@ -31,14 +30,7 @@ first.
 
 ## High-value contribution areas
 
-### 1. New CAD-MCP adapters in `radia_mcp.interop.server`
-
-Pattern: take an upstream CAD tool's script or export, produce a STEP
-file, hand to `any_step_to_cubit_hex`. See `freecad_to_cubit_hex` and
-`openscad_to_cubit_hex` for the template. Targets without adapters yet:
-Blender, Onshape, KiCad, AutoCAD, SolidWorks. Each adds about 80 lines.
-
-### 2. New scrape sub-sources in `radia_mcp.common.examples`
+### 1. New scrape sub-sources in `radia_mcp.common.examples`
 
 Pattern: write `refresh_<source>(...) -> dict` that fetches, indexes
 to `_examples_dir(<source>) / *.md`, and writes the index.json.
@@ -49,7 +41,7 @@ transcripts via `youtube-transcript-api`. Targets: mailing list
 archives (mailman / Pipermail), more YouTube channels, blog posts via
 RSS.
 
-### 3. Cookbook KB topics
+### 2. Cookbook KB topics
 
 Both `radia_mcp.build123d.build123d_knowledge._TOPICS` and
 `radia_mcp.gmsh_post.spec.SPEC` are dictionaries of markdown strings
@@ -59,7 +51,7 @@ unified retrieval picks it up automatically (`build123d_lookup` /
 boundary-layer mesh recipes, sideset/nodeset conventions for specific
 solvers (Abaqus / Sierra / OpenFOAM).
 
-### 4. Lint rules
+### 3. Lint rules
 
 `radia_mcp.cubit.rules` (cubit) and `radia_mcp.build123d.rules`
 (build123d) both follow the same shape: a function taking
@@ -68,7 +60,7 @@ solvers (Abaqus / Sierra / OpenFOAM).
 append it to `ALL_RULES`. Keep `severity` to one of
 `CRITICAL | HIGH | MODERATE | LOW`.
 
-### 5. New starter templates in `generate_build123d_script`
+### 4. New starter templates in `generate_build123d_script`
 
 Add a key to `_B3D_TEMPLATES` (raw Python source string) and update
 the docstring on `generate_build123d_script`. Lab-relevant patterns

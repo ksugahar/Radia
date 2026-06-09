@@ -211,7 +211,6 @@ shown below for reference; everything else is discoverable via meta.
 | **Cubit** | `mcp-server-cubit` | 52 | `cubit_mesh_auto`, `cubit_exec_safely`, `cubit_ask`, scheme ladder + geometry split, .cub5 checkpoint/restore, scrape index over Coreform forum + S:\\CoreformCubit lab archive (787 files) + YouTube + Coreform training |
 | **build123d** | `mcp-server-build123d` | 37 | `build123d_to_cubit_hex`, `lint_build123d_script` (7 rules), `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, 13 Radia/general templates, CadQuery + bd_warehouse interop |
 | **gmsh-post** | `mcp-server-gmsh-post` | 21 | `gmsh_post_inspect/validate/convert` (MSH v4.1 only), `gmsh_post_quality`, scrape over GitLab issues + StackOverflow + YouTube |
-| **radia-interop** | `mcp-server-radia-interop` | 4 | `any_step_to_cubit_hex` + `freecad_to_cubit_hex` + `openscad_to_cubit_hex` + `list_cad_mcp_interop` |
 | **differential-forms** | `mcp-server-differential-forms` | 8 | Differential geometry for computational EM: tangent spaces, k-forms, wedge product, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC (Arnold-Falk-Winther 2006)**, Mathematica recipes for symbolic verification. Distilled from Bossavit 1998 + Whitney 1957 + Kameari 2011 + 新しい計算電磁気学 2003 + Codecasa 2010. |
 | **mathematica** | `mcp-server-mathematica` | 10 | Wolfram Mathematica subprocess bridge: `mathematica_evaluate` + 9 high-level helpers (simplify, to_tex, vector_calc, unit_convert, solve, integrate, differentiate, check_identity, status). Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
 
@@ -239,7 +238,6 @@ Continue, …):
     "cubit":               {"command": "mcp-server-cubit"},
     "build123d":           {"command": "mcp-server-build123d"},
     "gmsh-post":           {"command": "mcp-server-gmsh-post"},
-    "radia-interop":       {"command": "mcp-server-radia-interop"},
     "differential-forms":  {"command": "mcp-server-differential-forms"},
     "mathematica":         {"command": "mcp-server-mathematica"}
   }
@@ -401,8 +399,6 @@ gmsh_post_add_view_from_csv(
 
 Bug reports + PRs welcome — particularly for:
 
-- **New CAD-MCP adapters** in `radia_mcp.interop.server` (Blender,
-  Onshape, KiCad, AutoCAD via `any_step_to_cubit_hex` plumbing).
 - **Additional scrape sub-sources** under `radia_mcp.common.examples`
   (mailing list archives, more YouTube channels, blog posts).
 - **Cookbook topics** for `build123d_usage` / `gmsh_post_spec` —

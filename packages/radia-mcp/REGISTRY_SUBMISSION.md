@@ -58,15 +58,13 @@ electromagnetism, scientific-computing
 | Install | `pip install radia-mcp` (core) / `pip install radia-mcp[full]` (everything) |
 | License | BSD-3-Clause |
 
-## Entry points (4 MCP servers shipped in one wheel)
+## Entry points (3 MCP servers shipped in one wheel)
 
 ```
 mcp-server-cubit         # Coreform Cubit (mesh generation, hex/tet, plugins)
 mcp-server-build123d     # Python-native parametric CAD (OCCT)
 mcp-server-gmsh-post     # Gmsh post-processing (v4.1 inspect/validate/convert,
                          # quality, boundary, $NodeData/$ElementData writers)
-mcp-server-radia-interop # Universal STEP → Cubit-hex dispatcher for other
-                         # CAD MCPs (Blender, FreeCAD, OpenSCAD, Onshape, ...)
 ```
 
 ## Installation snippet (for "MCP client config" section)
@@ -82,9 +80,6 @@ mcp-server-radia-interop # Universal STEP → Cubit-hex dispatcher for other
     },
     "gmsh-post": {
       "command": "mcp-server-gmsh-post"
-    },
-    "radia-interop": {
-      "command": "mcp-server-radia-interop"
     }
   }
 }
