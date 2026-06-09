@@ -37,6 +37,9 @@ import cubit
 cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
             '-commandplugindir', _plugin_dir or ''])
 
+OUT_DIR = os.path.join(_test_dir, "ngsolve_hex_sphere_test")
+os.makedirs(OUT_DIR, exist_ok=True)
+
 RADIUS = 0.05
 V_EXACT = (4.0 / 3.0) * math.pi * RADIUS**3
 
@@ -87,22 +90,20 @@ def test_volume(mesh_type, build_func, mesh_size, orders):
     cad_err = (cad_vol - V_EXACT) / V_EXACT * 100
     print(f"  CAD volume: {cad_vol:.6e} (err={cad_err:+.4f}%)")
 
-    from cubit_mesh_export import extract_curved_mesh
+    # Assign a block (elements must be in a block to be exported), then export a
+    # high-order Netgen .vol per order and load it AS-IS.  A high-order .vol already
+    # carries its curved mid-side nodes -- do NOT call mesh.Curve() on a loaded .vol
+    # (that re-curves from absent CAD and resets every element to straight-sided).
+    elem = "hex" if n_hex else "tet"
+    cubit.cmd("delete block all")
+    cubit.cmd(f"block 1 add {elem} all")
 
     results = []
     for order in orders:
+        out = os.path.join(OUT_DIR, f"{mesh_type.lower()}_sphere_o{order}.vol")
         try:
-            if order == 1:
-                # Order 1: extract linear mesh (no curving)
-                ng_mesh = extract_curved_mesh(cubit, order=2)
-                # Use order=2 extraction but integrate with order=1
-                # (the linear nodes are identical)
-                mesh = NGMesh(ng_mesh)
-                with TaskManager():
-                    mesh.Curve(1)  # force linear
-            else:
-                ng_mesh = extract_curved_mesh(cubit, order=order)
-                mesh = NGMesh(ng_mesh)
+            cubit.cmd(f'export netgen "{out.replace(os.sep, "/")}" order {order} overwrite')
+            mesh = NGMesh(out)
             vol = Integrate(CF(1), mesh)
             err = (vol - V_EXACT) / V_EXACT * 100
             status = "OK"

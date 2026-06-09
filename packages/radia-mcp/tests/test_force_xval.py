@@ -2551,3 +2551,94 @@ def test_magneto_mechanical_beam():
     tip_eb = -cantilever_tip_deflection(abs(Jx * B0) * h, L, E, h ** 3 / 12.0)
     assert abs(tip_fem - tip_eb) / abs(tip_eb) < 0.03
     assert tip_fem < 0                                     # deflects in the force direction
+
+
+@pytest.mark.xval
+def test_mems_electro_mechanical():
+    """COMSOL-class #22: MEMS electro-mechanical chain -- solve_electrostatic ->
+    electrostatic_eggshell_force_2d (P = 1/2 eps0 (V0/d)^2, EXACT with a whole-gap
+    CONSTANT weight ramp gradg=(0,1/d)) -> solve_linear_elasticity (the pull deflects a
+    cantilever, tip vs Euler-Bernoulli). The electric twin of #21. A boundary trace of
+    grad(V) would read ~0 (V=const on the conductor); the volume band is the fix."""
+    from netgen.occ import OCCGeometry, MoveTo, X, Y
+    from radia_mcp.radia_ngsolve.scalar_fem2d import solve_electrostatic
+    from radia_mcp.radia_ngsolve.force import electrostatic_eggshell_force_2d, EPS0
+    from radia_mcp.radia_ngsolve.elasticity import (solve_linear_elasticity,
+                                                    cantilever_tip_deflection)
+    W, d, V0 = 20e-3, 1e-3, 500.0
+    face = MoveTo(0, 0).Rectangle(W, d).Face(); face.faces.name = "air"
+    face.edges.Max(Y).name = "top"; face.edges.Min(Y).name = "bottom"
+    mesh = Mesh(OCCGeometry(face, dim=2).GenerateMesh(maxh=d / 6))
+    V = solve_electrostatic(mesh, EPS0, {"top": V0, "bottom": 0.0}, order=2)
+    E = CoefficientFunction((-grad(V)[0], -grad(V)[1]))
+    Fx, Fy = electrostatic_eggshell_force_2d(E, mesh, CoefficientFunction((0.0, 1.0 / d)),
+                                             air_region="air")
+    P_fem = abs(Fy) / W
+    P_exact = 0.5 * EPS0 * (V0 / d) ** 2
+    assert abs(P_fem - P_exact) / P_exact < 1e-3           # constant ramp -> exact
+
+    Lb, h, Emod, nu = 10e-3, 0.4e-3, 1.0e8, 0.3
+    beam = MoveTo(0, 0).Rectangle(Lb, h).Face(); beam.faces.name = "beam"
+    beam.edges.Min(X).name = "clamp"; beam.edges.Max(Y).name = "loaded"
+    meshB = Mesh(OCCGeometry(beam, dim=2).GenerateMesh(maxh=h / 3))
+    u = solve_linear_elasticity(meshB, Emod, nu, dirichlet="clamp",
+                                traction={"loaded": (0.0, -P_fem)}, plane="stress", order=2)
+    tip_fem = abs(u(meshB(Lb, h / 2))[1])
+    tip_eb = cantilever_tip_deflection(P_fem, Lb, Emod, h ** 3 / 12.0)
+    assert abs(tip_fem - tip_eb) / tip_eb < 0.03
+
+
+@pytest.mark.xval
+def test_electrothermal_sigmaT_2way():
+    """COMSOL-class #24: TWO-WAY temperature-dependent sigma(T) electro-thermal.
+    sigma(T)=sigma0/(1+alpha T) -> Joule q=(J^2/sigma0)(1+alpha T) feeds back into the heat;
+    solve_heat_steady_nonlinear (Picard) matches the exact closed form
+    T_max=(1/alpha)(sec(sqrt(b)L/2)-1), b=alpha J^2/(sigma0 k), and shows the feedback raising
+    the peak above the constant-sigma parabola."""
+    from netgen.occ import OCCGeometry, MoveTo, X
+    from radia_mcp.radia_ngsolve.multiphysics import solve_heat_steady_nonlinear
+    L, hbar, sigma0, k, alpha, J = 0.10, 0.01, 1.0e6, 50.0, 0.005, 8.0e5
+    s = math.sqrt(alpha * J * J / (sigma0 * k))
+    Tmax_cf = (1.0/alpha)*(1.0/math.cos(s*L/2.0) - 1.0)
+    Tmax_parab = J*J*L*L/(8.0*sigma0*k)
+    face = MoveTo(0, 0).Rectangle(L, hbar).Face(); face.faces.name = "bar"
+    face.edges.Min(X).name = "ends"; face.edges.Max(X).name = "ends"
+    mesh = Mesh(OCCGeometry(face, dim=2).GenerateMesh(maxh=L/60))
+    T = solve_heat_steady_nonlinear(mesh, lambda Tcf: (J*J/sigma0)*(1.0 + alpha*Tcf),
+                                    k, conductor="bar", dirichlet="ends", order=2)
+    Tmax = T(mesh(L/2, hbar/2))
+    print(f"[sigma(T) 2-way] T_max FE={Tmax:.4f} K  closed={Tmax_cf:.4f} K  "
+          f"(parabola={Tmax_parab:.4f})  err={100*abs(Tmax-Tmax_cf)/Tmax_cf:.3f}%")
+    assert abs(Tmax - Tmax_cf) / Tmax_cf < 0.01, "FE vs closed-form sigma(T) mismatch"
+    assert Tmax > 1.03 * Tmax_parab, "2-way feedback should raise the peak above the parabola"
+
+
+@pytest.mark.xval
+def test_coax_line_inductance():
+    """COMSOL-class #25: coaxial-line external inductance from the FE magnetic energy
+    matches (mu0/2pi) ln(b/a); with the analytic coax C it gives Z0 = 60 ln(b/a) and v=c."""
+    from netgen.occ import OCCGeometry, WorkPlane, Glue
+    from radia_mcp.radia_ngsolve.solve import reluctivity
+    from radia_mcp.radia_ngsolve.force import magnetic_energy_2d
+    EPS0 = 8.8541878128e-12
+    a, b, cc, Rout, I = 0.002, 0.008, 0.010, 0.030, 1.0
+    da = WorkPlane().Circle(0, 0, a).Face(); da.faces.name = "inner"
+    db = WorkPlane().Circle(0, 0, b).Face(); diel = db - da; diel.faces.name = "diel"
+    dc = WorkPlane().Circle(0, 0, cc).Face(); shield = dc - db; shield.faces.name = "shield"
+    box = WorkPlane().Circle(0, 0, Rout).Face(); box.edges.name = "outer"
+    air = box - dc; air.faces.name = "air"
+    da.faces.maxh = a/8; diel.faces.maxh = (b-a)/24; shield.faces.maxh = (cc-b)/4; air.faces.maxh = Rout/8
+    mesh = Mesh(OCCGeometry(Glue([da, diel, shield, air]), dim=2).GenerateMesh(maxh=Rout/6))
+    Jz = CoefficientFunction([{"inner": I/(math.pi*a*a),
+                              "shield": -I/(math.pi*(cc*cc-b*b))}.get(m, 0.0)
+                             for m in mesh.GetMaterials()])
+    A = solve_planar_magnetostatic(mesh, reluctivity(mesh, {}), Jz=Jz, order=3, dirichlet="outer")
+    B = CoefficientFunction((grad(A)[1], -grad(A)[0]))
+    L_fe = 2.0 * magnetic_energy_2d(B, mesh, "diel") / (I*I)
+    L_cf = MU0/(2*math.pi)*math.log(b/a)
+    C_cf = 2*math.pi*EPS0/math.log(b/a)
+    Z0_fe, Z0_cf = math.sqrt(L_fe/C_cf), 60.0*math.log(b/a)
+    print(f"[coax] L_ext FE={L_fe:.4e} closed={L_cf:.4e} ({100*abs(L_fe-L_cf)/L_cf:.2f}%)  "
+          f"Z0 {Z0_fe:.2f} vs {Z0_cf:.2f} ohm")
+    assert abs(L_fe - L_cf)/L_cf < 0.01, "coax L_ext vs (mu0/2pi)ln(b/a)"
+    assert abs(Z0_fe - Z0_cf)/Z0_cf < 0.01, "coax Z0 vs 60 ln(b/a)"

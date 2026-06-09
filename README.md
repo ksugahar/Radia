@@ -1,4 +1,4 @@
-# Radia - Electromagnetic Simulation Framework for Magnetic Levitation Systems
+# Radia — Open-Space Electromagnetics, Python-Native
 
 [![CI](https://github.com/ksugahar/Radia/actions/workflows/build-test.yml/badge.svg)](https://github.com/ksugahar/Radia/actions/workflows/build-test.yml)
 [![Policy Lint](https://github.com/ksugahar/Radia/actions/workflows/policy-lint.yml/badge.svg)](https://github.com/ksugahar/Radia/actions/workflows/policy-lint.yml)
@@ -8,6 +8,62 @@
 **A Python-native electromagnetic source framework for [NGSolve](https://ngsolve.org/) and [ngsolve.bem](https://docu.ngsolve.org/latest/i-tutorials/unit-8.1-ngbem/ngbem.html).**
 
 Radia provides **analytical field sources** ($B$, $H$, $A$, $\Phi$) as native C++ `CoefficientFunction` objects that NGSolve and ngsolve.bem consume directly during finite element assembly. Where FEM needs boundary conditions and source terms, Radia delivers them — analytically, without meshing the source region.
+
+> **For:** magnetic levitation · wireless power transfer · induction heating · particle accelerators & undulators — any problem where the **field source** (coils, magnets, conductors) defines the performance and the surrounding space is mostly air.
+
+## 🌟 What makes this unique
+
+Three things in this repository do not, as far as we know, exist anywhere else:
+
+1. **Analytic EM sources *inside* NGSolve's assembly loop.** `rad.RadiaField()` hands Radia's coils and magnets to NGSolve as a native C++ `CoefficientFunction`, evaluated by a GIL-free Fast Multipole Method *during* finite-element assembly — an **exact** source term, with no air mesh and no grid interpolation.
+2. **Curved high-order *hex* meshes in NGSolve — [`cubit-mesh-export`](packages/cubit-mesh-export/).** Netgen gives NGSolve high-order curved *tetrahedra*; high-order **hexahedral** meshes have had no path in. This exports Coreform Cubit hex meshes to NGSolve `.vol` with ACIS geometry projection at **order 1–5** — the only route we know of to **high-order hex FEM in the NGSolve / Netgen ecosystem**. A curved hex sphere's NGSolve volume converges to the analytic value as the order rises — order 1 **−23 %** → order 2 **−0.2 %** → order 3 **+0.1 %** ([runnable demo](examples/cubit_mesh_export/hex_sphere_highorder/), no Cubit needed to reproduce).
+3. **The first public MCP server suite for CAE meshing — [`radia-mcp`](packages/radia-mcp/).** The first and only [Model Context Protocol](https://modelcontextprotocol.io/) servers for Coreform Cubit, Gmsh, and build123d: an AI agent can generate real meshes, author CAD, and run FEM / BEM / PEEC *correctly* — not just describe them.
+
+## ✨ Why Radia?
+
+**General-purpose FEM makes you mesh the air around your device. Radia doesn't.**
+
+- 🌬️ **No air mesh** — open boundaries and large gaps are handled analytically; the condition at infinity is satisfied exactly, with no truncation boundary.
+- 🧲 **Moving magnets are trivial** — translate or rotate a source with one `rad.Trsf`; no re-meshing, no sliding interfaces, no numerical noise.
+- 📐 **Exact source geometry** — analytic arcs, race-track coils, Halbach arrays, and helical undulators, not coarse filament approximations.
+- 🪞 **Surface-based skin effect** — SIBC + PEEC solve conductors *on the surface*, instead of a micron-scale volume mesh inside every wire.
+- 🔗 **A source provider for FEM, not a replacement** — Radia fields plug into [NGSolve](https://ngsolve.org/) as native C++ `CoefficientFunction`s, so FEM does what it is best at (saturation, eddy currents, thermal coupling).
+- 🐍 **Python-native & GUI-free** — geometry and physics are readable Python: scriptable, version-controllable, and ready for gradient-based or Bayesian optimization.
+- 🤖 **LLM-agent-ready** — the companion [`radia-mcp`](#-ai-native-knowledge-the-radia-mcp-server-suite) servers let an AI assistant (Claude Code, Cursor, …) drive the Radia + NGSolve workflow *correctly*, not just plausibly.
+
+## ⚡ Try Radia in 60 seconds
+
+```bash
+pip install radia          # Windows + Python 3.12 — C++ core + NGSolve + Intel MKL
+```
+
+```python
+import radia as rad
+
+# A 10 mm NdFeB cube, magnetized +z at 1.2 T — defined analytically, no mesh
+magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1.2])
+
+# Evaluate B 20 mm above the magnet — exact, at any point in space
+print(rad.Fld(magnet, 'b', [0, 0, 20]), "T")   # -> [0.0, 0.0, +Bz]  (on-axis Bx=By=0 by symmetry)
+```
+
+No mesh, no artificial boundary, no solver setup: the field is an **analytic object** you can evaluate anywhere, move with a transform, or hand to NGSolve as a source.
+**Next:** [full install + GUI panels](#quick-start) · [worked examples](examples/) · [AI-assisted workflows](#-ai-native-knowledge-the-radia-mcp-server-suite).
+
+## 🖼️ Gallery
+
+| Permanent-magnet field | Solenoid axial field | Three-phase line field |
+|:--:|:--:|:--:|
+| ![Rectangular magnet 2D field](examples/analytical_formulas/rect_magnet_2d_field.png) | ![Solenoid axial field](examples/analytical_formulas/solenoid_axial_field.png) | ![Three-phase line field](examples/analytical_formulas/three_phase_line_field.png) |
+
+Every plot above is reproduced by a self-contained script in [`examples/analytical_formulas/`](examples/analytical_formulas/) and checked against a closed-form reference. More worked examples — Halbach arrays, eddy-current shielding, induction heating, accelerator magnets — live throughout [`examples/`](examples/).
+
+## 👤 Who is this for?
+
+- **MagLev / levitation researchers** — drag & lift on Halbach arrays over conductive tracks (EDS), differential-inductance matrices for EMS control loops, and high-precision force-vs-gap curves.
+- **Wireless-power & induction-heating engineers** — surface-impedance (SIBC) skin/proximity modeling and PEEC circuit extraction (L, R, C, M) straight from conductor geometry, with SPICE-ready output.
+- **Accelerator & undulator designers** — Radia's original use case at the ESRF: insertion devices, Halbach undulators, and beamline magnets with analytic field fidelity.
+- **Anyone fighting "air mesh"** in a general-purpose FEM tool for an open-boundary or moving-source problem.
 
 ## 🚀 Mission: The Design Tool for Open-Space Magnetics
 
@@ -174,7 +230,7 @@ Instead of clicking through nested menus to find a "Halbach Array" button, you s
 
 ## 🧠 AI-Native Knowledge: the `radia-mcp` Server Suite
 
-**The hard part of FEM/BEM is not the API — it is knowing _which_ formulation, preconditioner, or closed-form check to use.** The companion package [`radia-mcp`](packages/radia-mcp/) packages that expertise as **40+ Model Context Protocol (MCP) servers (340+ tools)**, so an AI assistant (Claude Code, Cursor, Continue, …) drives the Radia + NGSolve workflow *correctly* — not just plausibly.
+**The hard part of FEM/BEM is not the API — it is knowing _which_ formulation, preconditioner, or closed-form check to use.** The companion package [`radia-mcp`](packages/radia-mcp/) — **the first and only public MCP server suite for Coreform Cubit, Gmsh, and build123d** — packages that expertise as **40+ Model Context Protocol (MCP) servers (340+ tools)**, so an AI assistant (Claude Code, Cursor, Continue, …) drives the Radia + NGSolve workflow *correctly* — not just plausibly.
 
 ```bash
 pip install radia-mcp
@@ -192,8 +248,8 @@ The flagship server for this repository turns the Radia ↔ NGSolve hybrid (FEM 
 | **Model-order reduction** | `cln_3d`, `cln_sibc_orthogonal`, `cln_sphere_dd_pipeline`, `bem_cln` | Cauer Ladder Network MOR, incl. a double-double (~32-digit) VIM pipeline |
 | **Circuit extraction** | `peec_inductance`, `ngsbem_inductance` | PEEC-from-STEP and `ngsolve.bem` inductance recipes |
 | **Surface impedance** | `esim` | ESIM nonlinear cell problem for induction-heating workpieces |
-| **Axisymmetric FE** | `axifemm_documentation`, `femm_parity_documentation` | Henrotte $Q$-element axisymmetric basis + the FEMM-canonical convention split |
-| **Force & cross-validation** | `force_validation` | EM force extraction with COMSOL ↔ NGSolve cross-checks |
+| **Axisymmetric FE** | `axifemm_documentation` | Henrotte $Q$-element axisymmetric basis for 2D axisymmetric magnetics |
+| **Force & cross-validation** | `force_validation` | EM force extraction (Maxwell stress / virtual work) with closed-form cross-checks |
 | **Parallelism** | `taskmanager` | The caller-wraps TaskManager policy + repo audit |
 | **Live linting** | `lint_radia_script`, `lint_radia_directory` | Flags NGSolve/Radia convention violations before they ship |
 | **Panel development** | `panel_schema`, `panel_add_param`, `panel_widget_locations` | Introspect and extend the PySide6 analysis panels |
@@ -323,8 +379,8 @@ We provide built-in formulations for the unique physics of magnetic levitation:
 ### Production install (recommended)
 
 ```bash
-pip install --no-cache-dir 'radia[cubit,gui]==4.55.0' \
-    'radia-mcp==0.55.0' 'cubit-mesh-export==0.10.1'
+pip install --no-cache-dir 'radia[cubit,gui]==4.90.2' \
+    'radia-mcp==1.0.1' 'cubit-mesh-export==0.11.0'
 cubit-plugin-install --all-users      # Deploy Cubit plugin (skip if no Cubit)
 cubit-plugin-install --verify-only    # Confirm SHA-256 of every deployed binary
 ```
@@ -341,7 +397,7 @@ The 3 PyPI packages above are the **full lab-standard install**:
 - `[cubit]` brings in `cubit-mesh-export` (curved mesh export + `cubit-plugin-install` CLI)
 - `[gui]` brings in PySide6 (without this, `radia-em` / `radia-ih` / `radia-pcb` / `radia-heat` standalone panels die with `ModuleNotFoundError: No module named 'PySide6'`)
 
-**Pinning versions** (e.g. `==4.55.0`) is recommended for production / lab deploys so all team machines run an identical, audited combination.  Drop the `==` to track latest.
+**Pinning versions** (e.g. `==4.90.2`) is recommended for production / lab deploys so all team machines run an identical, audited combination.  Drop the `==` to track latest.
 
 ### Minimal install (Python API only, no panels)
 
@@ -397,8 +453,8 @@ For shared Windows boxes (lab seats, multi-user workstations), install once as A
 
 ```powershell
 # As Administrator
-pip install --upgrade --no-cache-dir 'radia[cubit,gui]==4.55.0' \
-    'radia-mcp==0.55.0' 'cubit-mesh-export==0.10.1'
+pip install --upgrade --no-cache-dir 'radia[cubit,gui]==4.90.2' \
+    'radia-mcp==1.0.1' 'cubit-mesh-export==0.11.0'
 cubit-plugin-install --all-users      # Updates every C:\Users\*\.cubit profile
 cubit-plugin-install --verify-only    # Confirms SHA-256 across all destinations
 ```
@@ -414,12 +470,12 @@ After install, confirm everything is wired correctly:
 python -c "import radia, radia_mcp, cubit_mesh_export; \
            print(f'radia={radia.__version__} radia_mcp={radia_mcp.__version__} \
 cubit_mesh_export={cubit_mesh_export.__version__}')"
-# Expected: radia=4.55.0 radia_mcp=0.55.0 cubit_mesh_export=0.10.1
+# Expected: radia=4.90.2 radia_mcp=1.0.1 cubit_mesh_export=0.11.0
 
 # 2. Cubit plugin binaries SHA-verified
 cubit-plugin-install --verify-only
 # Expected: [OK] every expected binary present and matches package source.
-#           compat: radia 4.55.0 <-> cubit-mesh-export 0.10.1 compatible
+#           compat: radia 4.90.2 <-> cubit-mesh-export 0.11.0 compatible
 ```
 
 ### Troubleshooting
@@ -449,9 +505,9 @@ coil = rad.ObjRaceTrk(
     'man'          # Manually defined rectangular cross-section
 )
 
-# Export field to VTS for ParaView visualization
-           [-50, 50], [-150, 150], [-20, 30],  # x, y, z ranges [mm]
-           21, 31, 11)  # grid points
+# Evaluate B on-axis, 50 mm above the coil centre — analytic, no mesh
+B = rad.Fld(coil, 'b', [0, 0, 50])
+print(f"B = {B} T")
 ```
 
 ### Example 2: PEEC Circuit Parameter Extraction
@@ -515,7 +571,7 @@ print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
 
 ## Cubit Mesh Export
 
-Radia includes a Cubit plugin for [Coreform Cubit](https://coreform.com/products/coreform-cubit/), providing APREPRO commands for mesh export and coil generation.
+Radia includes a Cubit plugin for [Coreform Cubit](https://coreform.com/products/coreform-cubit/) that exports **curved high-order (order 1–5) meshes** — including the **hexahedral** meshes NGSolve otherwise cannot consume at high order — plus APREPRO commands for mesh export and coil generation.
 
 ### APREPRO Commands
 
@@ -523,12 +579,12 @@ Radia includes a Cubit plugin for [Coreform Cubit](https://coreform.com/products
 # In Cubit command line or .jou files:
 export netgen "mesh.vol" order 3 overwrite      # Netgen .vol (order 1-5)
 export gmsh "mesh.msh" order 2 overwrite        # GMSH v4.1 (order 1-3)
-export jmag_nastran "mesh.bdf" order 2 overwrite     # Nastran BDF (order 1-2)
+export nastran_bdf "mesh.bdf" order 2 overwrite      # Nastran BDF (order 1-2)
 export vtk "mesh.vtk" order 2 overwrite         # VTK Legacy (order 1-2)
 coil "my_coil.py"                                   # CoilBuilder STEP + import
 ```
 
-> **Note**: Use `export jmag_nastran`, not `export nastran` (Cubit built-in conflict).
+> **Note**: Use `export nastran_bdf`, not `export nastran` (avoids the Cubit built-in conflict).
 
 ### Python API
 

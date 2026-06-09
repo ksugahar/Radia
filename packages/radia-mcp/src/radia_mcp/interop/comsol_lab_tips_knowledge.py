@@ -105,6 +105,7 @@ The single most important meta-tip:
 | heat_transfer_bc_dimcheck | Heat-Transfer-in-Solids BC dimensional bug |
 | square_coil_mesh_study    | 2024-03-08 ObjectLayer vs AirLayer vs hex study |
 | cubit_to_comsol_handoff   | Nastran .bdf pitfalls (compress, hanging nodes) |
+| livelink_matlab           | LiveLink/MATLAB codegen trip-wires (coord unit, FreeSpace mur, solenoidal Je) |
 | lab_file_index            | Where every quoted source lives on S:/COMSOL/ |
 
 For the long-form bilingual version with full Japanese quotes, see
@@ -1144,6 +1145,182 @@ If you are debugging or extending a tip:
 
 
 # ---------------------------------------------------------------------------
+# Section 20: LiveLink for MATLAB -- magnetostatic codegen trip-wires
+# ---------------------------------------------------------------------------
+
+LAB_TIPS_LIVELINK_MATLAB = """
+# LiveLink for MATLAB -- magnetostatic model-build trip-wires (COMSOL 6.4)
+
+Source: radia-mcp comsol-converter P1 work (2026-06-05). A full TEAM-20
+lifting-magnet magnetostatic model was built from scratch through the
+COMSOL Java API driven from MATLAB (mphstart) and cross-validated against
+NGSolve. Reference build script: comsol_converter examples t20_comsol.m.
+Every item below cost real debugging time; they are the non-obvious ones.
+
+## 0. Connecting an external MATLAB to the running COMSOL server
+
+  "COMSOL Multiphysics 6.4 with MATLAB" starts a COMSOL *server* (default
+  port 2036) plus its own MATLAB. To drive COMSOL from a DIFFERENT MATLAB
+  (e.g. an MCP-attached session), connect that MATLAB as a 2nd client:
+
+    addpath('C:\\Program Files\\COMSOL\\COMSOL64\\Multiphysics\\mli');
+    mphstart(2036);                 % reuses the already-licensed server
+    import com.comsol.model.*; import com.comsol.model.util.*;
+
+  Reusing the existing server needs NO extra license (the Desktop already
+  holds one -- cf. the "Desktop open avoids license -103" rule).
+  CAVEAT: models live on the server tied to the CLIENT session. If the
+  MATLAB session drops, ModelUtil.tags() goes empty -- the model is gone.
+  Persist with `mphsave(model,'foo.mph')` after every working build.
+  `import` does NOT persist across separate MATLAB eval calls -- re-import
+  (or use fully-qualified com.comsol.model.util.ModelUtil) every call.
+
+  ## 0a. RDP / Terminal Services + the single license -- READ BEFORE TOUCHING PROCESSES
+
+  On INTEL11 the COMSOL license is an UNCOUNTED (single named-user) seat that
+  FlexNet refuses to check out inside a Windows Terminal Services / Remote
+  Desktop guest session:
+    "License error: -103 Terminal Server remote client not allowed.
+     Cannot checkout an uncounted license within a Windows Terminal Services
+     guest session."
+  Consequences (all verified the hard way, 2026-06):
+   * You CANNOT start a fresh COMSOL server (comsolmphserver) or a 2nd server
+     on another port from an RDP session -- every new checkout hits -103.
+   * The ONLY licensed COMSOL is the one the USER launched (console/pre-RDP);
+     LiveLink works ONLY by connecting (mphstart) to THAT existing server,
+     which SHARES its already-checked-out license. This is the real content
+     of the "run COMSOL Java while the Desktop is open" rule.
+   * That server is SINGLE-CLIENT. If a stale MATLAB holds the slot, do NOT
+     "free" it by killing the MATLAB: the bundled "COMSOL with MATLAB" server
+     process is tied to its launching MATLAB and DIES with it -- taking the
+     license session down. You then cannot restart it from RDP (-103), i.e.
+     you have bricked COMSOL until the user relaunches it from the console.
+   * Therefore: NEVER kill the COMSOL-connected MATLAB or its server to
+     resolve a "Server is in use by another client" error. Instead, get the
+     matlab-MCP session to BE that one client (reconnect the MCP), or ask the
+     user to relaunch "COMSOL Multiphysics with MATLAB". comsolbatch on a
+     saved .mph has the same -103 constraint under RDP.
+
+## 1. mphinterp / mpheval 'coord' is in the GEOMETRY UNIT, not metres (!!)
+
+  THE biggest time-sink. If geom.lengthUnit('mm'), then
+
+    mphinterp(m,'mf.normB','coord',[63.5;12.5;75])   % mm -> pole centre  CORRECT
+    mphinterp(m,'mf.normB','coord',[0.0635;0.0125;0.075])  % read as 0.06 mm ~ ORIGIN
+
+  Passing SI metre values silently samples a point ~origin (air) and you
+  get a tiny "B~0" that looks like the solve failed. Meanwhile the SPATIAL
+  COORDINATE VARIABLES x,y,z INSIDE expressions ARE in metres. So an
+  External Current Density expression uses metres, but the probe coord you
+  pass to mphinterp uses mm. This asymmetry is not flagged anywhere.
+  Sanity check: `mphmax(m,'mf.normB','volume')` is coordinate-free -- if
+  max|B| is sane but every point probe is ~0, you are probing in the
+  wrong unit.
+
+## 2. Default domain feature is 'FreeSpace' -- it IGNORES material mu_r
+
+  In COMSOL 6.4 Magnetic Fields (internal interface id 'InductionCurrents',
+  NOT 'MagneticFields'), the default domain feature is 'FreeSpace', which
+  uses vacuum permeability and does NOT read the material relative
+  permeability. Assigning a steel material with mur=1000 has NO effect ->
+  no flux concentration, force ~0. Symptom: B/(mu0*H) == 1.0 in the iron.
+  Fix: add an explicit Ampere's Law feature on the magnetic domains:
+
+    al = mf.create('al1','AmperesLaw',3); al.selection.named('selSteel');
+
+  AmperesLaw overrides FreeSpace on its selection and reads the material
+  mur. (With this added: mur_eff=1000, |B|@pole 0.001->0.68 T, Fz 0->7.8 N.)
+
+## 3. External Current Density must be SOLENOIDAL or it is cancelled
+
+  The stationary mf solver does a divergence-cleaning of the source current
+  (gauge handling). A NON-solenoidal Je gets projected out and you get
+  B~0 with no warning. Verified failure modes:
+    * uniform Jz in a finite block (current enters/exits faces) -> B~0
+    * azimuthal current over a RECTANGULAR annulus -> non-solenoidal at the
+      corners (current crosses the straight hole boundary) -> B~0
+  Working: azimuthal current over a CIRCULAR (cylindrical) annulus is
+  tangent to both radii -> solenoidal -> correct solenoid field. For a
+  wound coil that MUST be rectangular, use the Coil feature (Numeric +
+  Coil Geometry Analysis, topic coil_geometry_analysis) which builds a
+  solenoidal current internally. Do not expect a hand-written non-solenoidal
+  Je to match an NGSolve impressed-J solve (NGSolve's HCurl weak form does
+  NOT clean divergence, so it tolerates what COMSOL rejects).
+
+## 4. Gauge fixing -- auto for LINEAR, MANDATORY for NONLINEAR
+
+  LINEAR stationary mf (sigma=0): no explicit gauge node needed -- the
+  default iterative solver auto-cleans the gauge for a solenoidal source.
+  (Forcing a direct MUMPS solver instead FAILS: "relative residual 1.6e3,
+  not converged" -- singular in the gradient null-space. Keep iterative.)
+
+  NONLINEAR stationary mf (B-H curve, sigma=0): the auto-clean is DISABLED
+  and the solve dies at assembly with
+    "Singular matrix. NNNNN void equations (empty rows) for comp1.A10/A20/A21"
+  REGARDLESS of solver (direct OR iterative both error -- the void rows are
+  detected before iteration). FIX: add the "Gauge Fixing for A-Field" domain
+  feature, selection=all. The Java feature id is **'GaugeFixingA'** (NOT
+  'GaugeFixing' / 'GaugeFixing_Acomp' / 'GaugeFixingAField' -- all "Unknown
+  feature ID" in 6.4). Found by scanning the module jar
+  plugins/com.comsol.acdc_1.0.0.jar for the GaugeFixing class + trying the
+  string ids near it.
+    gf = mf.create('gfix1','GaugeFixingA',3); gf.selection.all;
+  This removes the void-equation/singular-matrix error completely.
+
+  REMAINING nonlinear detail (after gauge fixing): with a 'userdef' normH
+  B-H curve, Newton hits "NaN or Inf ... MUMPS" because COMSOL forms
+  H = normH(|B|) * B/|B| and the B/|B| direction is singular at the initial
+  |B|=0. A 'userdef' normH does NOT regularise this; COMSOL's native B-H
+  material (B-as-function-of-H magnetization curve) does. So for the
+  nonlinear build, set the B-H curve on the MATERIAL (B(H) interpolation +
+  normH_mat='from_mat'), not via al.set('normH','BHf(mf.normB)'). Also ramp
+  the load: stat step useparam=on, pname='Ldf', plistarr='0.15 0.3 .. 1',
+  with the coil Je scaled by Ldf (continuation; mirrors NGSolve load_steps).
+
+  B-H setup that DID assemble (userdef, but NaNs in Newton -- keep for ref):
+  Interpolation BHf (arg=|B| T, value=|H| A/m, extrap='linear'),
+  al.set('ConstitutiveRelationBH','BHCurve'); al.set('normH_mat','userdef');
+  al.set('normH','BHf(mf.normB)').  Status: LINEAR COMSOL<->NGSolve done
+  (field 1.3%); nonlinear NGSolve done (9.40 N circular / 8.23 N rectangular
+  = measured 8.1 N); nonlinear COMSOL = gauge SOLVED, native-B-H material is
+  the last step.
+
+## 5. Robust domain identification: Box selections, not mphselectcoords
+
+  mphselectcoords(...,'domain',...) returned empty for interior points in
+  6.4. Use a Box selection feature instead -- deterministic and reads
+  cleanly for material/feature assignment:
+
+    s = m.selection.create('selPole','Box'); s.set('entitydim',3);
+    s.set('xmin',50); s.set('xmax',77); ... ; s.set('condition','inside');
+    al.selection.named('selPole');     % features bind to the named selection
+
+  'inside' selects domains fully inside the box; pick boxes that uniquely
+  bound each region (a tight box around the pole; a box that excludes the
+  coil's y-overhang for the steel; etc.).
+
+## 6. TEAM-20 cross-validation result (the payoff)
+
+  COMSOL (linear mur=1000, circular coil NI=1000, 83k tets):
+    Fz_pole = -7.76 N,  |B|@pole = 0.681 T
+  NGSolve (same geometry/material/current, 57k tets):
+    Fz_pole =  9.24 N,  |B|@pole = 0.690 T
+  Field agrees to 1.3%. Force differs ~16%: it is dominated by the 1.5 mm
+  pole-yoke bottom gap, which neither mesh resolves (steel maxh 4-8 mm >>
+  1.5 mm); both bracket the measured 8.1 N. Lesson for force cross-checks:
+  refine the working AIR GAP, not the bulk iron.
+
+## See also
+
+  homogenized_multiturn_coil / coil_geometry_analysis -- the supported way
+    to drive a non-solenoidal wound coil (avoids trip-wire #3)
+  coil_current_scaling -- symmetry-plane factors (orthogonal gotcha)
+  radia-ngsolve solve_magnetostatic_Aform -- the NGSolve side of the
+    cross-check (tolerates non-solenoidal impressed J)
+"""
+
+
+# ---------------------------------------------------------------------------
 # Topic registry
 # ---------------------------------------------------------------------------
 
@@ -1168,6 +1345,7 @@ TOPICS = {
     "heat_transfer_bc_dimcheck":    LAB_TIPS_HEAT_TRANSFER_BC_DIMCHECK,
     "square_coil_mesh_study":       LAB_TIPS_SQUARE_COIL_MESH_STUDY,
     "cubit_to_comsol_handoff":      LAB_TIPS_CUBIT_TO_COMSOL_HANDOFF,
+    "livelink_matlab":              LAB_TIPS_LIVELINK_MATLAB,
     "lab_file_index":               LAB_TIPS_LAB_FILE_INDEX,
 }
 

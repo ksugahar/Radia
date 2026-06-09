@@ -159,13 +159,19 @@ def _check_plugin_freshness():
     Note: the Qt5 .ccl is gone (radia 4.80.0).  Only .ccm (APREPRO
     commands) and the .pyd (cubit_mesh_curver) are deployed now.
     """
+    # install_panels.py lives in the PARENT of this panels/ dir.  Import it
+    # STANDALONE (put src/radia on sys.path) -- NEVER `from radia.install_panels
+    # import ...`, which imports the radia PACKAGE and loads its Python-3.12
+    # C++ extension into Cubit's bundled Python 3.10, CRASHING Cubit on startup
+    # (CLAUDE.md: Layer 2 must NOT import radia / ngsolve -- DLL conflict; the
+    # crash is a hard DLL-load failure that try/except CANNOT catch).
     try:
+        _src = os.path.dirname(_this_dir)   # src/radia (parent of panels/)
+        if _src and _src not in sys.path:
+            sys.path.insert(0, _src)
         from install_panels import find_cubit_bin
-    except ImportError:
-        try:
-            from radia.install_panels import find_cubit_bin
-        except Exception:
-            return
+    except Exception:
+        return   # cannot locate install_panels standalone -> skip the check
     try:
         cubit_bin = find_cubit_bin()
     except Exception:
