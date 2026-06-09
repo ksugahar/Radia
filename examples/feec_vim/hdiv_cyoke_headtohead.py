@@ -84,10 +84,14 @@ if __name__ == "__main__":
                                  "1e-7->1e-10; the loose ACA tolerance degraded the OUTER Newton). SOLVE "
                                  "is mesh-INDEPENDENT 6-iter + accurate + a clear win UP TO ndof~15726 "
                                  "(the rows above). SCALE CAVEAT: the INNER +N GMRES solve does NOT yet "
-                                 "scale past ~20-40k ndof (at ndof~44k it fails to converge in 1000 iters) "
-                                 "-- a real inner-solve preconditioner (Calderon/loop-aware/H-ILU) or the "
-                                 "Picard/修正反復法 is needed for the 165600 scale. Do NOT read this as a "
-                                 "165600-DOF result.")}
+                                 "scale past ~20-40k ndof (at ndof~44k Newton's warmstart fails in 1000 "
+                                 "inner iters) -- but this is NOT a fundamental wall. CORRECTED COMPARISON: "
+                                 "the yano-type reference is NO-loop-star + BLOCK JACOBI (NOT H-ILU; H-ILU "
+                                 "is the separate loop-star A_SS solver), which ALSO needs growing inner "
+                                 "iters (2686 lin @165600) absorbed by its Picard/修正反復法 outer loop. "
+                                 "The FAIR head-to-head is SAME solver (Picard + Block Jacobi) for both, "
+                                 "where HDiv's de-Rham field-null loops should beat yano-type distortion "
+                                 "loops -- NOT YET RUN. Do NOT read this as a 165600-DOF result.")}
     with open(os.path.join(HERE, "hdiv_cyoke_headtohead.json"), "w") as f:
         json.dump(out, f, indent=2)
     print("saved", os.path.join(HERE, "hdiv_cyoke_headtohead.json"))

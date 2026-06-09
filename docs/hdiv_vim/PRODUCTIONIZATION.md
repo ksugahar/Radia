@@ -175,12 +175,23 @@ instrumented diagnosis (per-iter ‖F‖/λ/Mavg trajectory) found:
        iters; at ndof≈44k (cyoke h=0.004) it does NOT converge in 1000 iters (`gmres_info=20`) — the
        inner iteration count grows SUPER-linearly with N. So Fix A+B are validated only to **ndof ≈
        15726**; the head-to-head numbers below hold at that scale, and the earlier "extrapolate to
-       165600" is **NOT supported**. **B2 was therefore NOT a full red herring** — a real inner-solve
-       preconditioner is genuinely required at scale; it just wasn't needed at the ≤15726 scale where
-       plain M_mass⁻¹ sufficed. The lever is a proper preconditioner for the +N system (loop-aware /
-       Calderón / auxiliary-space, or an H-ILU like the yano-type's linear solve, which DID scale to
-       165600 at 2686 linear iters) — OR switch the nonlinear loop to the 修正反復法 / Picard
-       (fixed-point, robust to the inner conditioning like yano, at the cost of many outer iters).
+       165600" is **NOT supported as a 165600 number** — and the framing was wrong twice (see below).
+
+     - **CORRECTED COMPARISON (2026-06-09): the yano-type reference is NO-loop-star + BLOCK JACOBI, NOT
+       H-ILU.** H-ILU is the SEPARATE loop-star `A_SS` "star block" solver (`RadHACApKMSCManager` mode 2)
+       — conflating it with yano-type is the exact mistake this doc earlier warned against. yano-type
+       scaled to 165600 at 2686 linear iters with **Block Jacobi** + the robust **修正反復法 / Picard**
+       outer loop, which TOLERATES a loose inner solve (it does not need the inner solve to converge
+       tightly). So my earlier "HDiv Newton + M_mass⁻¹ vs yano + H-ILU" comparison was apples-to-oranges
+       on BOTH axes (outer method Newton-vs-Picard AND preconditioner M⁻¹-vs-Block-Jacobi — and H-ILU was
+       the wrong solver anyway). A growing inner-iter count is EXPECTED for a simple preconditioner —
+       yano-type has it too (2686 @ 165600); it just absorbs it via Picard. HDiv-VIM's Newton is LESS
+       forgiving (the warmstart needs a converged inner solve), which together with my too-low maxiter
+       cap (1000) is why it stalled at ndof~44k — NOT a fundamental wall. **The FAIR head-to-head is the
+       SAME solver — 修正反復法/Picard + Block Jacobi for both — where HDiv-VIM's de-Rham loops (EXACTLY
+       field-null on ANY mesh, ker B) should beat yano-type's distortion-element loops (field-null only
+       on affine hexes; they carry field on distorted ones).** That comparison has NOT been run yet; it
+       is the right next experiment.
 
 So the corrected status: **BUILD is scalable + a clear win; SOLVE is mesh-INDEPENDENT (6-iter) + accurate
 up to ndof ≈ 15726 (Fix A + Fix B), but the INNER +N solve needs a real preconditioner to go past ~20–40k
