@@ -91,6 +91,24 @@ double RadHACApKHDivManager::GetInteractionMatrixElement(int dof_i, int dof_j) c
 
 static const double RAD_INV_FOUR_PI = 0.07957747154594766788;   // 1/(4 pi)
 
+// --- high-order helpers: integer power + small matrix inverses (row-major) ---
+static inline double rad_ipow(double b, int e) { double r = 1.0; for (int i = 0; i < e; ++i) r *= b; return r; }
+
+static void rad_inv3x3(const double A[9], double Ai[9])   // inverse of a row-major 3x3 (A[r*3+c])
+{
+    const double det = A[0]*(A[4]*A[8]-A[5]*A[7]) - A[1]*(A[3]*A[8]-A[5]*A[6]) + A[2]*(A[3]*A[7]-A[4]*A[6]);
+    const double iv = 1.0 / det;
+    Ai[0] =  (A[4]*A[8]-A[5]*A[7])*iv; Ai[1] = -(A[1]*A[8]-A[2]*A[7])*iv; Ai[2] =  (A[1]*A[5]-A[2]*A[4])*iv;
+    Ai[3] = -(A[3]*A[8]-A[5]*A[6])*iv; Ai[4] =  (A[0]*A[8]-A[2]*A[6])*iv; Ai[5] = -(A[0]*A[5]-A[2]*A[3])*iv;
+    Ai[6] =  (A[3]*A[7]-A[4]*A[6])*iv; Ai[7] = -(A[0]*A[7]-A[1]*A[6])*iv; Ai[8] =  (A[0]*A[4]-A[1]*A[3])*iv;
+}
+
+static void rad_inv2x2(const double A[4], double Ai[4])    // inverse of a row-major 2x2
+{
+    const double iv = 1.0 / (A[0]*A[3] - A[1]*A[2]);
+    Ai[0] =  A[3]*iv; Ai[1] = -A[1]*iv; Ai[2] = -A[2]*iv; Ai[3] =  A[0]*iv;
+}
+
 RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> centroids,
                                          std::vector<double> measures,
                                          std::vector<double> self_energy)
@@ -176,6 +194,153 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
     }
 }
 
+// HIGH-ORDER constructor: polynomial charges (monomial basis per host).  See the header for the contract.
+RadHACApKChargeGram::RadHACApKChargeGram(
+    std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
+    std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+    std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+    std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w)
+    : m_n_el(n_el), m_highorder(true),
+      m_cellV(std::move(cell_verts)), m_faceV(std::move(face_verts)),
+      m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
+{
+    const int n_cell = n_el;
+    const int n_bf   = (int)(m_faceV.size() / 9);
+    m_n = (int)m_host.size();                       // number of polynomial CHARGES (the H-matrix dofs)
+    const int nqt = (int)ref_tet_w.size();
+    const int nqr = (int)ref_tri_w.size();
+
+    // per-CELL host: ref->phys affine inverse + mapped quadrature (outer & inner share this rule)
+    m_cellInv.assign((size_t)n_cell * 9, 0.0);
+    std::vector<std::vector<rad_hdiv::Vec3>> cellQP(n_cell);
+    std::vector<std::vector<double>>          cellQW(n_cell);
+    std::vector<rad_hdiv::Vec3> cellCent(n_cell);
+    std::vector<double>         cellSize(n_cell);
+    for (int c = 0; c < n_cell; ++c) {
+        const double* V = &m_cellV[(size_t)c * 12];
+        double E[9];                                // E[r*3+col] = e_{col}[r] = V[col+1][r]-V[0][r]
+        for (int r = 0; r < 3; ++r) for (int col = 0; col < 3; ++col) E[r*3+col] = V[3*(col+1)+r] - V[r];
+        rad_inv3x3(E, &m_cellInv[(size_t)c*9]);
+        const double det = E[0]*(E[4]*E[8]-E[5]*E[7]) - E[1]*(E[3]*E[8]-E[5]*E[6]) + E[2]*(E[3]*E[7]-E[4]*E[6]);
+        cellSize[c] = std::cbrt(std::fabs(det) / 6.0);
+        rad_hdiv::Vec3 cen = {0, 0, 0};
+        for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) cen[k] += V[3*i+k] / 4.0;
+        cellCent[c] = cen;
+        cellQP[c].resize(nqt); cellQW[c].resize(nqt);
+        for (int q = 0; q < nqt; ++q) {
+            const double a = ref_tet_pts[3*q], b = ref_tet_pts[3*q+1], cc = ref_tet_pts[3*q+2];
+            rad_hdiv::Vec3 P;
+            for (int k = 0; k < 3; ++k) P[k] = V[k] + a*(V[3+k]-V[k]) + b*(V[6+k]-V[k]) + cc*(V[9+k]-V[k]);
+            cellQP[c][q] = P;
+            cellQW[c][q] = ref_tet_w[q] * std::fabs(det);   // phys weight = ref_w * |J|, |J| = det = 6*vol
+        }
+    }
+    // per-FACE host: 2x2 in-plane Gram inverse + mapped quadrature
+    m_faceGinv.assign((size_t)n_bf * 4, 0.0);
+    std::vector<std::vector<rad_hdiv::Vec3>> faceQP(n_bf);
+    std::vector<std::vector<double>>          faceQW(n_bf);
+    std::vector<rad_hdiv::Vec3> faceCent(n_bf);
+    std::vector<double>         faceSize(n_bf);
+    for (int f = 0; f < n_bf; ++f) {
+        const double* V = &m_faceV[(size_t)f * 9];
+        double a1[3], a2[3];
+        for (int k = 0; k < 3; ++k) { a1[k] = V[3+k]-V[k]; a2[k] = V[6+k]-V[k]; }
+        const double a1a2 = a1[0]*a2[0]+a1[1]*a2[1]+a1[2]*a2[2];
+        double g[4] = { a1[0]*a1[0]+a1[1]*a1[1]+a1[2]*a1[2], a1a2,
+                        a1a2,                                a2[0]*a2[0]+a2[1]*a2[1]+a2[2]*a2[2] };
+        rad_inv2x2(g, &m_faceGinv[(size_t)f*4]);
+        double cr[3] = {a1[1]*a2[2]-a1[2]*a2[1], a1[2]*a2[0]-a1[0]*a2[2], a1[0]*a2[1]-a1[1]*a2[0]};
+        const double area = 0.5 * std::sqrt(cr[0]*cr[0]+cr[1]*cr[1]+cr[2]*cr[2]);
+        faceSize[f] = std::sqrt(area);
+        rad_hdiv::Vec3 cen = {0, 0, 0};
+        for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) cen[k] += V[3*i+k] / 3.0;
+        faceCent[f] = cen;
+        faceQP[f].resize(nqr); faceQW[f].resize(nqr);
+        for (int q = 0; q < nqr; ++q) {
+            const double u = ref_tri_pts[2*q], v = ref_tri_pts[2*q+1];
+            rad_hdiv::Vec3 P;
+            for (int k = 0; k < 3; ++k) P[k] = V[k] + u*a1[k] + v*a2[k];
+            faceQP[f][q] = P;
+            faceQW[f][q] = ref_tri_w[q] * (2.0 * area);     // phys weight = ref_w * |J|, |J| = 2*area
+        }
+    }
+    // per-CHARGE: host geometry + monomial-folded outer weights + the inner subtraction table
+    m_cent.assign((size_t)m_n * 3, 0.0);
+    m_size.assign((size_t)m_n, 0.0);
+    m_qp.resize(m_n); m_qw.resize(m_n);
+    m_inP.resize(m_n); m_inW.resize(m_n);
+    for (int a = 0; a < m_n; ++a) {
+        const int host = m_host[a];
+        const std::vector<rad_hdiv::Vec3>& QP = (m_kind[a] == 0) ? cellQP[host] : faceQP[host];
+        const std::vector<double>&         QW = (m_kind[a] == 0) ? cellQW[host] : faceQW[host];
+        const rad_hdiv::Vec3& cen = (m_kind[a] == 0) ? cellCent[host] : faceCent[host];
+        m_cent[3*a] = cen[0]; m_cent[3*a+1] = cen[1]; m_cent[3*a+2] = cen[2];
+        m_size[a] = (m_kind[a] == 0) ? cellSize[host] : faceSize[host];
+        m_qp[a] = QP;
+        m_qw[a].resize(QP.size());
+        for (size_t q = 0; q < QP.size(); ++q) {
+            const double p[3] = {QP[q][0], QP[q][1], QP[q][2]};
+            m_qw[a][q] = QW[q] * EvalMono(a, p);            // fold m_a(x_q) into the outer weight
+        }
+        m_inP[a] = QP;            // inner subtraction table = the host's quadrature (same rule)
+        m_inW[a] = QW;
+    }
+}
+
+// monomial m_charge at physical point p, via the host's REFERENCE barycentric coords (extrapolates for p
+// outside the host -- the subtraction needs m_src(p) at the target's outer points)
+double RadHACApKChargeGram::EvalMono(int charge, const double p[3]) const
+{
+    const int host = m_host[charge];
+    const int* e = &m_expo[(size_t)3*charge];
+    if (m_kind[charge] == 0) {                              // tet cell: lam1^i lam2^j lam3^k
+        const double* V0 = &m_cellV[(size_t)host*12];
+        const double* Inv = &m_cellInv[(size_t)host*9];
+        const double d[3] = {p[0]-V0[0], p[1]-V0[1], p[2]-V0[2]};
+        const double l0 = Inv[0]*d[0]+Inv[1]*d[1]+Inv[2]*d[2];
+        const double l1 = Inv[3]*d[0]+Inv[4]*d[1]+Inv[5]*d[2];
+        const double l2 = Inv[6]*d[0]+Inv[7]*d[1]+Inv[8]*d[2];
+        return rad_ipow(l0, e[0]) * rad_ipow(l1, e[1]) * rad_ipow(l2, e[2]);
+    }
+    const double* V = &m_faceV[(size_t)host*9];             // tri face: lam1^i lam2^j (in-plane ref coords)
+    const double* Gi = &m_faceGinv[(size_t)host*4];
+    const double d[3] = {p[0]-V[0], p[1]-V[1], p[2]-V[2]};
+    const double a1d = (V[3]-V[0])*d[0]+(V[4]-V[1])*d[1]+(V[5]-V[2])*d[2];
+    const double a2d = (V[6]-V[0])*d[0]+(V[7]-V[1])*d[1]+(V[8]-V[2])*d[2];
+    const double l0 = Gi[0]*a1d + Gi[1]*a2d;
+    const double l1 = Gi[2]*a1d + Gi[3]*a2d;
+    return rad_ipow(l0, e[0]) * rad_ipow(l1, e[1]);
+}
+
+// polynomial-charge inner potential INT_host(src) m_src(y)/|p-y| dy by singularity SUBTRACTION reusing the
+// exact constant-charge PhiTet/TriPotential: = m_src(p) Phi_host(p) + sum_q W_q (m_src(y_q) - m_src(p))/|p-y_q|.
+double RadHACApKChargeGram::PhiAtHO(int src, const double p[3]) const
+{
+    const double msrc_p = EvalMono(src, p);
+    const int host = m_host[src];
+    double base;
+    if (m_kind[src] == 0) {
+        double V[4][3]; const double* s = &m_cellV[(size_t)host*12];
+        for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) V[i][k] = s[3*i+k];
+        base = msrc_p * rad_hdiv::PhiTet(V, p);
+    } else {
+        double V[3][3]; const double* s = &m_faceV[(size_t)host*9];
+        for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) V[i][k] = s[3*i+k];
+        base = msrc_p * rad_hdiv::TriPotential(V, p);
+    }
+    const std::vector<rad_hdiv::Vec3>& Y = m_inP[src];
+    const std::vector<double>&         W = m_inW[src];
+    double rem = 0.0;
+    for (size_t q = 0; q < Y.size(); ++q) {
+        const double dx = p[0]-Y[q][0], dy = p[1]-Y[q][1], dz = p[2]-Y[q][2];
+        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (r < 1e-300) continue;                          // p coincides with a node (self block) -> Phi term covers it
+        const double yq[3] = {Y[q][0], Y[q][1], Y[q][2]};
+        rem += W[q] * (EvalMono(src, yq) - msrc_p) / r;
+    }
+    return base + rem;
+}
+
 double RadHACApKChargeGram::PhiAt(int src, const double p[3]) const
 {
     if (src < m_n_el) {
@@ -197,7 +362,7 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
     double s = 0.0;
     for (size_t k = 0; k < P.size(); ++k) {
         const double p[3] = {P[k][0], P[k][1], P[k][2]};
-        s += W[k] * PhiAt(src, p);
+        s += W[k] * (m_highorder ? PhiAtHO(src, p) : PhiAt(src, p));
     }
     return s * RAD_INV_FOUR_PI;
 }
@@ -211,6 +376,12 @@ void RadHACApKChargeGram::ExtractCoordinates()
 
 double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
 {
+    if (m_highorder) {
+        // polynomial charges: NO monopole far (zero-mean modes have zero monopole) -- all pairs analytic,
+        // symmetrized; the HACApK ACA compresses the well-separated low-rank blocks.
+        if (a == b) return QuadDot(a, a);
+        return 0.5 * (QuadDot(a, b) + QuadDot(b, a));
+    }
     if (m_analytic) {
         // Diagonal = the analytic self (the Wilton/phi_tet potential is exact through the 1/r singularity).
         if (a == b) return QuadDot(a, a);

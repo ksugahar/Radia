@@ -112,6 +112,27 @@ public:
     RadHACApKChargeGram(std::vector<double> cell_verts,
                         std::vector<double> face_verts,
                         int n_el, double near_factor = 1e30);
+
+    // HIGH-ORDER (order-p) mode: POLYNOMIAL charges (a monomial basis on each host element), the order-p
+    // extension validated against the dense Python build_demag_highorder.  charge_host[c] = host element
+    // index (a cell when charge_kind[c]==0, a boundary face when ==1); charge_expo[3*c+{0,1,2}] = the
+    // monomial exponents in the host's REFERENCE barycentric coords (tet cell: lam1^i lam2^j lam3^k;
+    // face: lam1^i lam2^j, the 3rd exponent ignored).  The SAME reference convention is used by the
+    // Python charge-density map B (so B and G share the basis; N = B^T G B is then basis-invariant and
+    // matches the NGSolve-L2-basis dense reference's demag).  Entry
+    //   G[a][b] = (1/4pi) INT_ha INT_hb m_a(x) m_b(y)/|x-y|
+    // = the monomial-WEIGHTED outer quad (m_a folded into the outer weights) x the polynomial-charge
+    // inner potential PhiAt(b,.) by singularity SUBTRACTION reusing the exact PhiTet/TriPotential through
+    // the 1/r singularity.  ref_tet_pts[nqt*3]/ref_tet_w[nqt] (weights sum to 1/6) + ref_tri_pts[nqr*2]/
+    // ref_tri_w[nqr] (sum to 1/2) are the REFERENCE-element Gauss-Duffy rules (Python-supplied), mapped per
+    // host and used for BOTH the monomial-weighted outer quad and the FIXED inner-potential subtraction
+    // table.  No monopole far split (the zero-mean high-order modes have zero monopole) -- ALL pairs
+    // analytic; the HACApK ACA compresses the well-separated low-rank blocks.
+    RadHACApKChargeGram(std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
+                        std::vector<int> charge_host, std::vector<int> charge_kind,
+                        std::vector<int> charge_expo,
+                        std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+                        std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w);
     ~RadHACApKChargeGram() override {}
 
     double GetInteractionMatrixElement(int a, int b) const override;
@@ -188,6 +209,16 @@ private:
     std::vector<std::vector<double>>          m_qw;    // [n] outer-quad weights per charge
     std::vector<double> m_size;                        // [n] characteristic size: vol^(1/3) / area^(1/2)
     double m_near_factor = 1e30;                       // near/far split: NEAR if |c_a-c_b| <= nf*(size_a+size_b)
+
+    // HIGH-ORDER (polynomial-charge) mode
+    bool m_highorder = false;
+    std::vector<int> m_host, m_kind, m_expo;           // [n] host elem, [n] 0=cell/1=face, [n*3] monomial exponents
+    std::vector<double> m_cellInv;                     // [n_el*9] physical->ref affine inverse per cell (row-major)
+    std::vector<double> m_faceGinv;                    // [n_bf*4] 2x2 (a.a) Gram inverse per face (for 2D ref coords)
+    std::vector<std::vector<rad_hdiv::Vec3>> m_inP;    // [n] FIXED inner-potential Gauss points per HOST (cell/face)
+    std::vector<std::vector<double>>          m_inW;   // [n] inner-potential Gauss weights (sum = host measure)
+    double EvalMono(int charge, const double p[3]) const;   // charge's monomial at physical p (host ref-coord map)
+    double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction)
 };
 
 #endif // __RAD_HACAPK_HDIV_H
