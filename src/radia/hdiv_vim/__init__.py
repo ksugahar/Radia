@@ -17,6 +17,11 @@ Public API (validated solve primitives):
       -> (M_avg, n_iter, D): damped Newton (fail-loud on non-convergence).
   Gram building blocks: tri_potential, phi_tet, wilton_surface_block, analytic_charge_gram.
 
+  ngsolve.bem-STYLE API (._vim): DemagOperator(fes, intorder=, eps=) -- construct from an HDiv FESpace
+      (the order comes from the fes); `.mat` is the H-matrix-backed NGSolve BaseMatrix N = B^T G B, which
+      composes with NGSolve's solvers / BlockMatrix exactly like ngsolve.bem's SingleLayerPotentialOperator.
+      order=0 (RT0) and order=p go through ONE call.  `.DemagFactor(M_cf)` -> the demag factor (~1/3).
+
 NOTE: importing this package imports `radia` (the C++ core).  The NGSolve-side HDiv-VIM solve itself does
 not require the C++ core, but the production home is the radia package.
 """
@@ -36,10 +41,12 @@ from ._nonlinear import (  # noqa: F401
     solve_nonlinear_newton_scalable,
     solve_nonlinear,
 )
+from ._vim import DemagOperator, build_charge_gram  # noqa: F401  (ngsolve.bem-style operator + .mat)
 
 __all__ = [
     "build_demag", "demag_factor", "tri_potential", "phi_tet", "wilton_surface_block",
     "analytic_charge_gram", "build_near_correction", "C_TRI",
     "solve_nonlinear_newton", "solve_nonlinear_newton_scalable", "solve_nonlinear",
-    "_core", "_nonlinear",
+    "DemagOperator", "build_charge_gram",
+    "_core", "_nonlinear", "_vim",
 ]
