@@ -1075,28 +1075,27 @@ def analytical_formulas(topic: str = "all") -> str:
 @mcp.tool()
 def force_validation(topic: str = "all") -> str:
     """
-    EM force extraction in NGSolve + COMSOL <-> NGSolve cross-validation.
+    EM force extraction in NGSolve + independent <-> NGSolve cross-validation.
 
     Records how the radia-ngsolve FEM path computes electromagnetic force
     (eggshell / weighted Maxwell stress) and the cross-validation results that
-    make the NGSolve magnetostatic path trustworthy: solved independently in
-    COMSOL (via MATLAB LiveLink) and NGSolve on the same geometry and compared
-    to the analytic answer.
+    make the NGSolve magnetostatic path trustworthy: solved independently by a
+    reference solver and by NGSolve on the same geometry and compared to the
+    analytic answer (the reference values are kept as a stored reference).
 
     Validated (linear magnetostatics, A-form, HCurl order 2):
-      * uniformly magnetized sphere: COMSOL == NGSolve to 0.11 %, both <0.5 %
+      * uniformly magnetized sphere: reference == NGSolve to 0.11 %, both <0.5 %
         of the analytic (2/3)Br interior field.
-      * coil + linear-iron sphere force: COMSOL == NGSolve to ~3 %, both near
+      * coil + linear-iron sphere force: reference == NGSolve to ~3 %, both near
         the dipole-in-gradient analytic.
 
     Read this when: implementing/validating an EM force computation, deciding
-    whether to trust an NGSolve magnetostatic result, or reproducing the COMSOL
-    A-form recipe (the comsol_recipe topic has the live-verified LiveLink
-    settings: material sigma=0, per-domain mur via Ampere's Law, GaugeFixingA,
-    direct-solver swap, ExternalCurrentDensity coil, ForceCalculation readout).
+    whether to trust an NGSolve magnetostatic result, or reviewing the
+    reference-solve note (the reference_note topic summarises the shared
+    geometry / material / source / force-method contract of the cross-check).
 
     Args:
-        topic: all (default) | eggshell | comsol_xval | comsol_recipe
+        topic: all (default) | eggshell | cross_validation | reference_note
     """
     return get_force_validation_documentation(topic)
 

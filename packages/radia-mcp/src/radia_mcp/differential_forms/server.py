@@ -295,10 +295,10 @@ def differential_forms_kelvin_lab_studies(topic: str = "overview") -> str:
 
     Goes beyond the theory in `differential_forms_mathematica_recipes('kelvin')`
     and `fem_gauge_open_boundary('kelvin_transform')` by documenting seven
-    real COMSOL case studies under `S:/COMSOL/88_ケルビン変換/`:
-    basic practice, ECT + earth, forced-periodic-BC MATLAB script,
+    practical Kelvin-transform case studies (kept lab-private):
+    basic practice, ECT + earth, forced-periodic-BC script,
     WPT + earth + PML + Kelvin, ECT eddy-current post-processing,
-    HF Hertz-dipole validity check, and a worked example mph.
+    HF Hertz-dipole validity check, and a worked example.
 
     Each topic returns a deep-dive section: lab convention, geometry,
     physics setup, exact COMSOL commands used, file paths on the NAS,

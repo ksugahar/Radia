@@ -1,9 +1,10 @@
-"""NGSolve counterpart of t20_comsol.m -- TEAM-20 lifting force, LINEAR steel
-mur=1000, circular (cylindrical-annulus) coil with the SAME azimuthal current
-density as the COMSOL side. Cross-check: Fz and |B|@pole vs COMSOL
+"""NGSolve TEAM-20 lifting force, LINEAR steel mur=1000, circular
+(cylindrical-annulus) coil with an azimuthal current density. Cross-check:
+Fz and |B|@pole vs a stored independent reference
 (Fz=-7.76 N, |B|@pole=0.681 T)."""
-import sys, time
-sys.path.insert(0, r"W:\00_CAE\Radia\01_GitHub\packages\radia-mcp\src")
+import os, sys, time
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "src")))
 import numpy as np
 from ngsolve import *
 from netgen.occ import Box, Cylinder, Pnt, Dir, Glue, OCCGeometry
@@ -62,4 +63,4 @@ n = specialcf.normal(3)
 Tz = (1.0/MU0)*(Ba[2]*InnerProduct(Ba,n) - 0.5*InnerProduct(Ba,Ba)*n[2])
 Fz = -Integrate(Tz*ds(definedon=mesh.Boundaries('pole_surface')), mesh)
 print(f"NGSolve TEAM20 (linear mur=1000, circular coil): Fz={Fz:.4f} N  |B|@pole={bp:.4f} T")
-print(f"COMSOL ref: Fz=-7.76 N  |B|@pole=0.681 T")
+print(f"stored reference: Fz=-7.76 N  |B|@pole=0.681 T")

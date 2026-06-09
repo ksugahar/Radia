@@ -1,8 +1,8 @@
 """FEM post-processing plot recipes (Sugahara Lab).
 
-Promoted on 2026-05-26 from ``S:\\FEMM\\2020_01_06_磁束線\\`` (MATLAB
-+ FEMM workflow, 2020-01).  The originals were a small MATLAB pipeline
-that drove FEMM's ``mo_getb`` / ``mo_geta`` via ``ode45`` to trace a
+Promoted on 2026-05-26 from a lab flux-line MATLAB workflow (2020-01).
+The originals were a small MATLAB pipeline that drove an axisymmetric FE
+field-probe (``getb`` / ``geta``-style) via ``ode45`` to trace a
 charged-particle / flux-line trajectory through an axisymmetric magnet,
 overlay the trajectory on the FEM mesh, and inspect the field along a
 sample line with element-boundary tick marks.
@@ -103,8 +103,7 @@ def trace_flux_line(B_func: Callable,
     """Integrate the magnetic flux line dx/ds = B(x,y) from x0.
 
     Modern scipy replacement for the lab's MATLAB ``ode45(@velocity,
-    [0,10000], [5,0])`` pattern from ``S:\\FEMM\\2020_01_06_磁束線\\
-    main.m``.
+    [0,10000], [5,0])`` flux-line tracing pattern.
 
     Args:
         B_func: callable ``(x, y) -> (Bx, By)``.  Both inputs may be
@@ -209,8 +208,8 @@ def plot_flux_line_trajectory(ax,
                               ) -> dict:
     """Plot a flux-line trajectory over the FEM mesh + source marker.
 
-    Reproduces the layout of ``flux_line.png`` from
-    ``S:\\FEMM\\2020_01_06_磁束線\\``: thin blue mesh wireframe
+    Reproduces the layout of the lab's ``flux_line.png``: thin blue mesh
+    wireframe
     underneath, black trajectory line on top, red filled dot at the
     source.
 
@@ -310,8 +309,7 @@ def plot_field_probe_line(ax,
                           ) -> dict:
     """Plot Bx(y), By(y) along a sample line with element-boundary ticks.
 
-    Reproduces ``B_in_elements.png`` from
-    ``S:\\FEMM\\2020_01_06_磁束線\\``: red Bx, blue By, both with
+    Reproduces the lab's ``B_in_elements.png``: red Bx, blue By, both with
     small markers, and vertical dotted lines wherever the probe
     crossed an element boundary.
 
@@ -412,9 +410,8 @@ def plot_field_vs_arclength(ax,
                             ) -> dict:
     """Plot B-field components (and optionally A_z) versus arc-length s.
 
-    Reproduces ``s-B.png`` and ``s-Az.png`` from
-    ``S:\\FEMM\\2020_01_06_磁束線\\``.  Either pass just (Bx, By) to
-    get the ``s-B.png`` style or just Az to get the ``s-Az.png``
+    Reproduces the lab's ``s-B.png`` and ``s-Az.png``.  Either pass just
+    (Bx, By) to get the ``s-B.png`` style or just Az to get the ``s-Az.png``
     style; pass all three to get a twin-axis plot with B on the
     primary y-axis and A_z on a twin y-axis.
 
@@ -523,10 +520,10 @@ _FLUX_LINE_KNOWLEDGE = """\
 
 LAB FLUX-LINE TRACING + VISUALIZATION RECIPE (2020-01-06, Sugahara Lab)
 
-Promoted from S:\\FEMM\\2020_01_06_磁束線\\ — MATLAB driving FEMM's
-mo_getb / mo_geta to trace flux lines through a 2D magnet and inspect
-the field along sample lines / along the trajectory.  All three plot
-recipes are now reproducible in matplotlib via radia_mcp.figure:
+Promoted from a lab flux-line MATLAB workflow — MATLAB driving an
+axisymmetric FE field-probe to trace flux lines through a 2D magnet and
+inspect the field along sample lines / along the trajectory.  All three
+plot recipes are now reproducible in matplotlib via radia_mcp.figure:
 
   trace_flux_line(B_func, x0, s_span, ...)
   plot_flux_line_trajectory(ax, traj_x, traj_y, mesh_*, source_xy)

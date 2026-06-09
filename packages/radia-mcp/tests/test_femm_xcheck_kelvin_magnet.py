@@ -1,30 +1,28 @@
-"""Cross-check the axisymmetric H1Henrotte solver against a REAL FEMM
-open-boundary (Kelvin) solution -- not an analytical formula, but D. Meeker's
-FEMM itself as the ground truth.
+"""Cross-check the axisymmetric H1Henrotte solver against a stored open-boundary
+(Kelvin) regression reference -- not an analytical formula, but an independent
+open-region FE solution kept as an opaque stored reference data file.
 
-Provenance (W:\\00_CAE\\FEMM\\2020_05_05_大地模擬_Kelvin\\01_軸対称KelvinTransの練習):
-    GenFEMM1.py builds an axisymmetric permanent magnet -- a cylinder
-    r in [0, 10] mm, z in [-10, 10] mm, material Hc = 3e5 A/m, mu_r = 1,
-    magnetized axially (+z, theta = 90 deg) -- inside a circular air domain
-    closed by FEMM's built-in Kelvin transformation (mi_defineouterspace /
-    mi_attachouterspace), i.e. a genuine OPEN boundary.  It then samples
-    B_z along r = 7 mm, z in [-50, 50] mm (100 points) and writes rad=R.mat
-    {Z, B} for domain radii R = 20, 50, 100 mm.
-
-    rad=100.mat is the converged reference: its 100 mm domain contains the
-    whole z in [-50, 50] sample line, whereas rad=20 clips to B=0 past its
-    own 20 mm radius (24 % tail error) and rad=50 still carries ~1.2 %.
+Reference data (stored regression reference):
+    An axisymmetric permanent magnet -- a cylinder r in [0, 10] mm,
+    z in [-10, 10] mm, material Hc = 3e5 A/m, mu_r = 1, magnetized axially
+    (+z, theta = 90 deg) -- inside a circular air domain closed by a Kelvin
+    (open-boundary) transformation.  The reference samples B_z along r = 7 mm,
+    z in [-50, 50] mm (100 points) on a converged 100 mm domain and stores
+    {Z, B} in a .mat data file.
 
 The permanent-magnet field of a mu_r = 1 body is SCALE-INVARIANT (depends only
 on shape ratios and M, not absolute size), so we reproduce the identical
 geometry numerically in SI (lengths used as-is, mu0 = 4 pi e-7, Hc = 3e5) and
-the B values match FEMM's millimeter problem in tesla directly.
+the B values match the reference's millimeter problem in tesla directly.
 
 We solve the same magnet with solve_axi_magnetostatic on a large truncated
 domain (open-boundary approximation, R_out = 500 >> 50 so truncation < 0.2 %),
-sample B_z at the same (r=7, z) points, and require agreement with FEMM to
-within 3 % of the peak field.  This validates the axihenrotte open-region
-magnetostatics end-to-end against an independent FE code.
+sample B_z at the same (r=7, z) points, and require agreement with the stored
+reference to within 3 % of the peak field.  This validates the axihenrotte
+open-region magnetostatics end-to-end against an independent FE reference.
+
+The reference .mat is loaded from RADIA_REGRESSION_DATA (or tests/data/) and is
+treated as opaque; the test SKIPS cleanly if the file is not present.
 """
 import math
 import os
@@ -34,15 +32,20 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-FEMM_DIR = r"W:\00_CAE\FEMM\2020_05_05_大地模擬_Kelvin\01_軸対称KelvinTransの練習"
-REF_MAT = os.path.join(FEMM_DIR, "rad=100.mat")
+# Stored open-boundary regression reference (opaque data file). Location is
+# configurable; defaults to a local tests/data/ directory. The test skips if
+# the file is absent, so it is portable and carries no internal path.
+REF_DATA_DIR = os.environ.get(
+    "RADIA_REGRESSION_DATA",
+    os.path.join(os.path.dirname(__file__), "data"))
+REF_MAT = os.path.join(REF_DATA_DIR, "axi_kelvin_magnet_ref.mat")
 
 MU0 = 4e-7 * math.pi
 A_MAG = 10.0     # magnet radius
 H_MAG = 10.0     # magnet half-height
 HC = 3.0e5       # coercivity [A/m]; B_rem = mu0*Hc = 0.377 T (mu_r = 1)
 R_OUT = 500.0    # truncated open-domain radius
-R_SAMPLE = 7.0   # FEMM sampling radius
+R_SAMPLE = 7.0   # reference sampling radius
 
 
 def build_mesh(maxh_mag=0.4, maxh_near=2.0, maxh_far=50.0,
@@ -78,12 +81,12 @@ def main():
     import numpy as np
 
     if not os.path.exists(REF_MAT):
-        print(f"[SKIP] FEMM reference not found: {REF_MAT}")
+        print(f"[SKIP] stored regression reference not found: {REF_MAT}")
         return
     import scipy.io as sio
     d = sio.loadmat(REF_MAT)
     Z = np.asarray(d["Z"], dtype=float).ravel()
-    B_femm = np.asarray(d["B"], dtype=float).ravel()
+    B_ref = np.asarray(d["B"], dtype=float).ravel()
 
     from ngsolve import (Mesh, CoefficientFunction, grad, TaskManager)
     from ngsolve import x as r_cf
@@ -98,24 +101,24 @@ def main():
 
     B_z = grad(gfu)[0] + gfu / r_cf
 
-    # Sample B_z at the FEMM points (r = 7, z in [-50, 50]); off-axis so the
+    # Sample B_z at the reference points (r = 7, z in [-50, 50]); off-axis so the
     # H1Henrotte gradient is reliable.
-    B_ng = np.empty_like(B_femm)
+    B_ng = np.empty_like(B_ref)
     for i, z in enumerate(Z):
         B_ng[i] = B_z(mesh(R_SAMPLE, float(z)))
 
-    peak = np.max(np.abs(B_femm))
-    dev = np.abs(B_ng - B_femm)
+    peak = np.max(np.abs(B_ref))
+    dev = np.abs(B_ng - B_ref)
     max_rel = np.max(dev) / peak
     rms_rel = np.sqrt(np.mean(dev**2)) / peak
     i0 = int(np.argmin(np.abs(Z)))
 
-    print(f"  B_z@(r=7,z=0):  FEMM {B_femm[i0]:.6f} T   NGSolve {B_ng[i0]:.6f} T")
-    print(f"  peak|B_femm| = {peak:.6f} T")
+    print(f"  B_z@(r=7,z=0):  ref {B_ref[i0]:.6f} T   NGSolve {B_ng[i0]:.6f} T")
+    print(f"  peak|B_ref| = {peak:.6f} T")
     print(f"  max dev / peak = {100*max_rel:.3f} %   rms dev / peak = {100*rms_rel:.3f} %")
-    assert max_rel < 3e-2, f"axihenrotte vs FEMM off by {100*max_rel:.2f}% of peak (>3%)"
-    print(f"\n[OK] axihenrotte open-region magnet cross-checked against FEMM "
-          f"(rad=100.mat) to {100*max_rel:.2f}% of peak.")
+    assert max_rel < 3e-2, f"axihenrotte vs stored ref off by {100*max_rel:.2f}% of peak (>3%)"
+    print(f"\n[OK] axihenrotte open-region magnet cross-checked against the stored "
+          f"open-boundary reference to {100*max_rel:.2f}% of peak.")
 
 
 if __name__ == "__main__":
