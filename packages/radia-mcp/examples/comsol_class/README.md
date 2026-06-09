@@ -1,9 +1,9 @@
-# COMSOL-class problems, reproduced in NGSolve
+# Commercial-class multiphysics problems, reproduced in NGSolve
 
-Complex problems of the kind COMSOL is normally reached for, solved with the
-radia-ngsolve stack and validated against closed forms. Each one is also baked
-back into the mcp-server (reusable helpers + queryable knowledge), so the server
-gets smarter, not just a pile of scripts.
+Complex problems of the kind a commercial multiphysics package is normally
+reached for, solved with the radia-ngsolve stack and validated against closed
+forms. Each one is also baked back into the mcp-server (reusable helpers +
+queryable knowledge), so the server gets smarter, not just a pile of scripts.
 
 | # | Problem | Status | Where | Validation |
 |---|---------|--------|-------|------------|
@@ -19,7 +19,7 @@ gets smarter, not just a pile of scripts.
 | 10 | **Electrostatic force** (MEMS actuator — AC/DC electrostatics) | ✅ done | `parallel_plate_force.py` ; `force.electrostatic_eggshell_force` (E-field Maxwell stress) ; `ngsolve_usage("capacitance")` | parallel-plate |F|=ε₀AV²/(2d²) (Neumann sides, exact), **0.4 %** + attractive |
 | 11 | **Cylinder magnetic shielding** (2D transverse — twin of #5) | ✅ done | `magnetic_shielding_cylinder.py` ; `solve_planar_magnetostatic(magnet_cf=…)` + `shell_shielding_factor(…,"cylinder")` | S(μr) vs exact `[(μr+1)²−(a/b)²(μr−1)²]/(4μr)`, **1.3 %** |
 | 12 | **Two-wire transmission line** (capacitance/length — AC/DC) | ✅ done | `two_wire_line.py` ; `scalar_fem2d.solve_electrostatic` + `capacitance` (2D) | C/length vs exact `πε₀/cosh⁻¹(D/2a)`, **0.1 %** |
-| 13 | **Multipole / field-quality** (accelerator-magnet post-processing) | ✅ done | `multipole_field_quality.py` ; module `radia_ngsolve.fieldquality` (`multipole_coefficients`, `line_current_multipoles`, `superpose_multipoles`, `field_errors`) ; `ngsolve_usage("field_quality")` | normal-quad bₙ vs exact line-current superposition: main **b₂ 0.02 %**, allowed 12-pole (n=6) = 256 units = (R_ref/r0)⁴, forbidden < 0.3 units (1e-4) ; **+ real COMSOL 3-way (b₂ 0.0005 %)** |
+| 13 | **Multipole / field-quality** (accelerator-magnet post-processing) | ✅ done | `multipole_field_quality.py` ; module `radia_ngsolve.fieldquality` (`multipole_coefficients`, `line_current_multipoles`, `superpose_multipoles`, `field_errors`) ; `ngsolve_usage("field_quality")` | normal-quad bₙ vs exact line-current superposition: main **b₂ 0.02 %**, allowed 12-pole (n=6) = 256 units = (R_ref/r0)⁴, forbidden < 0.3 units (1e-4) ; **+ independent 3-way reference (b₂ 0.0005 %)** |
 | 14 | **Cylinder permanent magnet** (on-axis field — PM design) | ✅ done | `cylinder_magnet.py` ; `solve_axi_magnetostatic(magnets=…)` + `cylinder_magnet_axial_field` ; `ngsolve_usage("permanent_magnet")` | on-axis B_z vs `(Br/2)[…]`: **centre 0.01 %**, profile few-% to z=3L (pole-exit z≈L ~8 %, corner singularity) |
 | 15 | **Finite solenoid** (air-core coil — field + inductance) | ✅ done | `solenoid_coil.py` ; `solve_axi_magnetostatic(Jr=…)` + `solenoid_axial_field` / `solenoid_inductance_long` + `force.inductance_axi` ; `ngsolve_usage("solenoid")` | on-axis B_z **<1.7 %** (centre 0.7 %) ; self-L (2W/I²) = Nagaoka k_N vs Wheeler **0.5 %** |
 | 16 | **Busbar Lorentz force** (parallel conductors — fault force) | ✅ done | `busbar_force.py` ; `force.lorentz_force_2d` (J×B integral) on planar A_z ; `ngsolve_usage("busbar")` | F/L vs `μ₀I₁I₂/2πd`, attract+repel, **~1 %** + correct signs |
@@ -31,21 +31,19 @@ gets smarter, not just a pile of scripts.
 | 22 | **MEMS electro-mechanical** (electrostatic pull → deflection) | ✅ done | `mems_electro_mechanical.py` ; NEW `force.electrostatic_eggshell_force_2d` + chain to `solve_linear_elasticity` ; `ngsolve_usage("electro_mechanical")` | pressure `½ε₀(V₀/d)²` **0.00 %** + cantilever tip vs Euler `wL⁴/8EI` **0.05 %** (electric twin of #21) |
 | 23 | **Frozen-permeability superposition** (saturated Ld/Lq engine) | ✅ done | `frozen_permeability.py` ; NEW `solve.frozen_reluctivity` ; `ngsolve_usage("frozen_perm")` | nonlinear λ decomposes into superposable frozen-ν parts, **0.51 %** recombination (iron μ_r 1000→45); self-validating, no external data |
 
-**COMSOL AC/DC blog series** (task #24): #5 onward reproduce canonical COMSOL AC/DC
-blog models. Each is grounded in the ingested COMSOL blog KB (`comsol_docs`,
-e.g. "magnetic shielding" = 84 chunks) and cross-checked against a closed form.
+**AC/DC canonical series** (task #24): #5 onward reproduce canonical AC/DC
+field-analysis models, each cross-checked against a closed form.
 
-**ALL of #5–#12 directly confirmed against REAL COMSOL** (MATLAB LiveLink, 2026-06-05) —
-a complete 8/8 sweep, every one a three-way agreement COMSOL == analytic == NGSolve:
+**ALL of #5–#12 additionally confirmed against an independent reference solver**
+(2026-06-05) — a complete 8/8 sweep, every one a three-way agreement
+reference == analytic == NGSolve:
 #5 sphere shielding (S=16.6, 1.5%), #6 spherical cap (0.03%), #7 dielectric cap (0.7%),
 #8 Halbach (0.832 T uniform, 0.0%), #9 capacitance matrix (exact), #10 electrostatic
 force (2.0%), #11 cylinder shielding (0.9%), #12 two-wire line (0.12%). Spans
 electrostatics, dielectrics, capacitance matrices, electrostatic force, permeable
-magnetostatics, and permanent magnets. Recipes/harnesses in `S:\COMSOL\_crossval\` +
-`C:\temp\comsol_xval_*.m`; trip-wires in [[reference_comsol_rdp_license]]. So these reproductions are validated against both a
-closed form *and* the reference commercial code. Recipes + harnesses:
-`S:\COMSOL\_crossval\` and `C:\temp\comsol_xval_*.m`; trip-wires in
-[[reference_comsol_rdp_license]] (COMSOL `FreeSpace` default ignores material εr/μr).
+magnetostatics, and permanent magnets. The reference numbers are kept as a stored
+regression reference (the reference setup is lab-private). So these reproductions
+are validated against both a closed form *and* an independent reference solve.
 
 **Already in the lab** (not re-done here, per "avoid reinventing the wheel"):
 *skin effect / AC resistance* of a round wire — `solve_planar_eddy` current-driven,

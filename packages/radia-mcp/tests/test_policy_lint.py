@@ -77,7 +77,9 @@ def test_commercial_named_module_in_public_sub_warns(tmp_path):
 
 def test_benchmark_mention_not_flagged(tmp_path):
     # a plain mention of .mph / JMAG-Designer in a normally-named module is OK
+    # for BOTH guards (structure + provenance): no tool-attributed number, no
+    # "vs <tool>", no internal path -- just a bare format mention.
     _make_repo(tmp_path, {"mcp-server-motor": "radia_mcp.motor.server:main"},
-               token_files={"motor/notes.py": "# compare vs COMSOL .mph and JMAG-Designer\n"})
+               token_files={"motor/notes.py": "# supports the .mph and JMAG-Designer formats\n"})
     assert _run(tmp_path) == 0
     assert _run(tmp_path, strict=True) == 0   # mention alone is not a violation

@@ -59,7 +59,7 @@ def motor_onelab(topic: str = "overview") -> str:
             "analysis_modes"  - Static / Time-Domain / Frequency-Domain
             "circuit"         - External-circuit coupling (MNA)
             "post"            - Torque (Arkkio), iron-loss, FFT recipes
-            "liu_thesis"      - Liu Xinyao 2025 JMAG-vs-ONELAB SynRM
+            "liu_thesis"      - 2025 SynRM thesis: ONELAB vs an independent ref
             "all"             - Everything
     """
     return get_onelab_knowledge(topic)
@@ -280,12 +280,12 @@ def motor_bibliography(query: str = "") -> str:
 @mcp.tool()
 def motor_tritool_cross_reference(topic: str = "overview") -> str:
     """
-    Tri-tool cross-reference: FEMM <-> JMAG <-> radia-ngsolve (相互学習).
+    Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習).
 
     Cross-learning that ties the lab's three motor-FEA tools together so each
     strengthens the others. Mirrors the shared cross_ref.json carried by the
-    two dedicated knowledge servers mcp-server-femm (S:\\FEMM\\mcp-server) and
-    mcp-server-jmag (S:\\JMAG\\mcp-server).
+    two dedicated lab-internal knowledge servers (mcp-server-femm and
+    mcp-server-jmag), whose commercial-tool specifics stay lab-private.
 
     Args:
         topic: One of:
@@ -293,7 +293,7 @@ def motor_tritool_cross_reference(topic: str = "overview") -> str:
             "capability_matrix" - Per-capability FEMM/JMAG/radia table + strongest
             "radia_can_exceed"  - Where radia-ngsolve matches or beats the others
             "jmag_only"         - Genuine JMAG-only capabilities (gaps)
-            "femm_role"         - FEMM as ground-truth yardstick + .fem strategy
+            "femm_role"         - FEMM as the open-source 2D yardstick + .fem strategy
             "roadmap"           - radia-motor strengthening roadmap (ranked)
             "all"               - Everything
     """

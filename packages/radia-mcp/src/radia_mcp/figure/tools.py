@@ -477,8 +477,8 @@ def figure_everyday_recipe(embed_width_cm: float = 8.0,
     """Matplotlib recipe for the lab's EVERYDAY analysis figure.
 
     This is the style the lab's day-to-day analysis scripts actually use
-    (extracted 2026-06 from real COMSOL / CoreformCubit matplotlib
-    scripts on S:): a compact, often PORTRAIT (3:4) figure with a subtle
+    (extracted 2026-06 from the lab's everyday matplotlib analysis
+    scripts): a compact, often PORTRAIT (3:4) figure with a subtle
     two-level light-gray ('gainsboro') grid, minor ticks ON, Times New
     Roman 10 pt, a small 6 pt frameless legend, inward ticks on all four
     sides, and PNG output at 400 dpi for quick review / slides / Word.
@@ -505,7 +505,7 @@ def figure_everyday_recipe(embed_width_cm: float = 8.0,
     body = "\n".join([
         "# Lab EVERYDAY analysis figure (matplotlib) -- review / slide / Word.",
         "# NOT camera-ready: re-render via paper_figure_recipe() (vector PDF)",
-        "# before submitting.  From the lab's real COMSOL/CoreformCubit scripts.",
+        "# before submitting.  From the lab's everyday analysis scripts.",
         "import matplotlib",
         "import matplotlib.pyplot as plt",
         "",
