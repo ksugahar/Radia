@@ -129,13 +129,33 @@ instrumented diagnosis (per-iter ‖F‖/λ/Mavg trajectory) found:
      an under-converged M. **Fix A (committed): break on relF=‖F‖/‖M_mass m‖ < newton_tol, and RAISE
      if maxit is hit (fail loud, CLAUDE.md "No Fallbacks") — never silently return.** golden
      `tests/feec/test_hdiv_vim_newton_scalable.py::test_scalable_newton_fails_loud_*`.
-  3. **The slowness (27 vs 5–6 iters) is the INEFFECTIVE WARMSTART** — the +N MINRES
-     (`A+ = (1/chi)M_mass + N`) NEVER converges (`info=2000`) because the field-null loops (ker B) are
-     near-null modes (eig ~1/chi), so cond(A+) ~ chi·‖N‖. Newton then starts at relF≈1.4 and needs ~22
-     globalization steps before the quadratic basin. This is **Fix B (NOT yet done): reformulate the
-     inner solve on the −N mu_r-INDEPENDENT material system (the C++ `SolveMaterialMINRES`) and/or a
-     loop-space (Calderón) preconditioner.** Confirmed NOT the near/far split (all-analytic gives the
-     same behavior) and NOT a GMRES bug (the Newton step's GMRES converges, `info=0`).
+  3. **The slowness (27 vs 5–6 iters) is the INEFFECTIVE WARMSTART — and the root cause is a 2.5–5%
+     ASYMMETRIC charge-Gram H-matrix, NOT the loop conditioning.** The warmstart's MINRES on the +N
+     system hit its 2000-iter cap (`info=2000`). The diagnosis went deeper than "loop near-null modes":
+     - **B1 (−N material formulation) is RULED OUT.** The −N MINRES (`(1/chi)M_mass − N`, the golden
+       `test_hdiv_vim_solve.py` mu_r-independent solve) is **non-physical** — measured: for the sphere it
+       gives `m_avg` of the WRONG sign/value (−4.503 at mu_r=10 vs the physical +2.250). The **physical**
+       magnetization system is **+N** (`((1/chi)M_mass + N)m = M_mass h_ext`, matches the analytic
+       demag-limited M exactly); only its CG count grows with mu_r (36→133). You cannot substitute the
+       −N solver — different operator. (`C:/temp/check_pmN.py`.)
+     - **With the FULL `M_mass⁻¹` preconditioner, +N CG is already mu_r-bounded at coarse mesh (37 iters
+       flat to mu_r=1e6)** — so the loop conditioning is NOT the blocker (`C:/temp/proto_B2.py`).
+     - **The real blocker: the ACA charge-Gram `Hg` is 2.5–5% ASYMMETRIC at scale** (n_charge=6812:
+       `vᵀNw` vs `wᵀNv` rel 5.2e-2). The dense analytic entry `0.5(QuadDot(a,b)+QuadDot(b,a))` is
+       symmetric, and the M2b golden checks Hg==dense `<1e-9` — but only at COARSE mesh; the ACA
+       symmetric-part stays accurate (demag factor right) while a spurious ANTISYMMETRIC part **grows
+       with N** (independent ACA pivots on block (I,J) vs (J,I)). That asymmetry makes **CG/MINRES
+       DIVERGE** (residual 8e1–1e3 at 3000 iters) while **GMRES converges** (92–151 iters) — which is
+       exactly why the Newton step (GMRES) always worked but the warmstart (MINRES) failed.
+       (`C:/temp/char_plusN.py`, `char_sym.py`.)
+     - **Fix B (partial, committed): warmstart MINRES → GMRES.** The warmstart now converges
+       (`info=0`), Newton starts at relF≈0.5 (not 1.4), iters drop **27 → 19**, solve **113 → 82 s** on
+       cyoke h=0.006. NOT a full mesh-independence fix — the globalization still costs ~14 iters.
+     - **Fix B (remaining, the REAL lever): make the charge-Gram H-matrix SYMMETRIC** (HACApK symmetric
+       ACA mode, or symmetrize the matvec `0.5(Nv + Nᵀv)`). That would (a) remove the ~0.6% solution
+       uncertainty the asymmetry causes (587566 vs 591357 for the same problem), (b) re-enable the
+       faster symmetric Krylov methods, (c) is the prerequisite for a genuinely mesh-independent solve.
+       Plus a better globalization (H0 continuation / trust region) for the remaining ~14 outer iters.
 
 So the corrected status: **BUILD is scalable + a clear win; SOLVE converges to the CORRECT answer (Fix A)
 but its iteration count is NOT yet mesh-independent (Fix B pending).** The head-to-head JSON will be
