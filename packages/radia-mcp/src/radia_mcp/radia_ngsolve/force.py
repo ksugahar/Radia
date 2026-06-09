@@ -47,6 +47,44 @@ def electrostatic_eggshell_force(E, mesh, gradg, air_region="air"):
                  for k in range(3))
 
 
+def electrostatic_eggshell_force_2d(E, mesh, gradg, air_region="air"):
+    """2D weighted Maxwell-stress ("eggshell") ELECTROSTATIC force [N/m] -- the 2D
+    twin of :func:`electrostatic_eggshell_force` (range 2, per unit out-of-plane
+    depth). ``E`` = ``-grad(V)`` (a 2-vector CF); ``gradg`` = grad of a smooth weight
+    ``g`` (=1 on the body side, 0 on the far side across a band lying in the
+    dielectric), a 2-vector CF nonzero only inside the band:
+
+        F_k = - int [ eps0 E_k (E.gradg) - (eps0/2) |E|^2 d_k g ] dA .
+
+    For a plate/gap use an axis-aligned ramp ``gradg = (0, g'(y))`` (a horizontal
+    band in the gap); for a compact body a radial band. Returns (Fx, Fy) in N/m.
+
+    WHY a volume band, not a boundary trace of ``grad(V)``: on a CONDUCTOR face
+    ``V`` is constant, so the boundary trace of ``grad(V)`` (in a ``ds`` integral)
+    keeps only the TANGENTIAL derivative (=0) and DROPS the normal field -- the
+    surface-stress integral then reads ~0. The volume gradient is the true field, so
+    the eggshell band (integrating in the dielectric AROUND the conductor) is the
+    correct, robust extractor. (DEAD END recorded in ngsolve_usage("electro_mechanical").)
+    """
+    Edg = InnerProduct(E, gradg)
+    E2 = InnerProduct(E, E)
+    region = dx(definedon=mesh.Materials(air_region))
+    return tuple(-Integrate((EPS0 * E[k] * Edg - 0.5 * EPS0 * E2 * gradg[k]) * region, mesh)
+                 for k in range(2))
+
+
+def magnetic_energy_2d(B, mesh, region=None):
+    """2D magnetic field energy PER UNIT LENGTH [J/m]:  W = int |B|^2/(2 mu0) dA  over
+    ``region`` (a material name; whole mesh if None).  For a current-driven problem the
+    inductance is ``L = 2 W / I^2`` [H/m].  ``B`` = ``CF((grad(A)[1], -grad(A)[0]))``.
+
+    NOTE: for a 1/r field (e.g. a coaxial line) the |B|^2 integrand is sharply peaked at
+    small r, so refine the mesh near the inner radius -- the coax energy converged
+    1.8 % -> 0.5 % under such refinement (examples/comsol_class/coax_line.py)."""
+    dom = dx if region is None else dx(definedon=mesh.Materials(region))
+    return Integrate(InnerProduct(B, B) / (2.0 * MU0) * dom, mesh)
+
+
 def eggshell_force(B, mesh, center, r_inner, r_outer, air_region="air"):
     """Weighted Maxwell-stress ("eggshell") force on the body inside ``r_inner``.
 
