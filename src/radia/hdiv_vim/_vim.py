@@ -33,6 +33,7 @@ DemagOperator construction + DemagFactor / solve in `with TaskManager():` (the n
 """
 import numpy as np
 import scipy.sparse as sp
+import scipy.sparse.linalg as spla
 import ngsolve as ng
 
 import radia._radia_pybind as _rp
@@ -113,8 +114,12 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=32, eta=2.0):
     mv = ng.BilinearForm(L2v); mv += L2v.TrialFunction() * L2v.TestFunction() * ng.dx; mv.Assemble()
     mb = ng.BilinearForm(L2b); mb += L2b.TrialFunction() * L2b.TestFunction() * ng.ds; mb.Assemble()
     mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
-    Bv_d = np.linalg.solve(_csr(mv).toarray(), _csr(bv).toarray())   # NGSolve-L2 density map (vol)
-    Bb_d = np.linalg.solve(_csr(mb).toarray(), _csr(bb).toarray())   # (surf)
+    # block-diagonal change-of-basis: mv (L2) and mb (SurfaceL2) are DG mass matrices -> BLOCK-DIAGONAL, so
+    # sparse spsolve on the CSC is O(N).  The old np.linalg.solve(mv.toarray(), bv.toarray()) was DENSE
+    # O(n_cells^3) AND materialized an (n_cells x ndof) dense array -> >300s + GBs at ~5000 tets (the build
+    # did NOT scale, even though the matvec does).  spsolve keeps Bv_d/Bb_d SPARSE and the build scalable.
+    Bv_d = spla.spsolve(sp.csc_matrix(_csr(mv)), sp.csc_matrix(_csr(bv))).tocsr()   # sparse (vol density map)
+    Bb_d = spla.spsolve(sp.csc_matrix(_csr(mb)), sp.csc_matrix(_csr(bb))).tocsr()   # sparse (surf)
     M_mass = _csr(mh)
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
@@ -127,26 +132,37 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=32, eta=2.0):
     Sv = _change_of_basis(L2v.GetFE(vels[0]), mons_v, *_tet_ref(quad), dim=3)
     Ss = _change_of_basis(L2b.GetFE(bels[0]), mons_s, *_tri_ref(quad), dim=2)
 
+    Sv_sp, Ss_sp = sp.csr_matrix(Sv), sp.csr_matrix(Ss)         # change-of-basis kept sparse (block x block)
     Brows, host, kind, expo = [], [], [], []
     for c in range(len(vels)):
-        blk = Sv @ Bv_d[vdof[c], :]
+        blk = Sv_sp @ Bv_d[vdof[c], :]                          # sparse (nmons_v x ndof)
         for a, (i, j, k) in enumerate(mons_v):
             Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
     for f in range(len(bels)):
-        blk = Ss @ Bb_d[bdof[f], :]
+        blk = Ss_sp @ Bb_d[bdof[f], :]                          # sparse (nmons_s x ndof)
         for a, (i, j) in enumerate(mons_s):
             Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
-    B = sp.csr_matrix(np.array(Brows))                          # (n_charge, ndof)
+    B = sp.vstack(Brows).tocsr()                                # (n_charge, ndof)
 
     rtp, rtw = _tet_ref(quad)
     rsp, rsw = _tri_ref(quad)
-    G = _rp._ChargeGramHMatrix(
-        cell_verts=np.concatenate([V.ravel() for V in vV]).tolist(),
-        face_verts=np.concatenate([V.ravel() for V in bV]).tolist(),
-        n_el=len(vels), charge_host=host, charge_kind=kind, charge_expo=expo,
-        ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
-        ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
-        eps=eps, leaf=leafsize, eta=eta)
+    cell_verts = np.concatenate([V.ravel() for V in vV]).tolist()
+    face_verts = np.concatenate([V.ravel() for V in bV]).tolist()
+    if p == 0:
+        # order-0 = CONSTANT charges -> use the FAST ANALYTIC Gram (Wilton/PhiTet, exact), NOT quadrature.
+        # The high-order QUADRATURE constructor (Sauter-Schwab over charge pairs) is ~100x slower per
+        # H-matrix entry and is pure waste for constant charges -- it was THE DemagOperator build bottleneck
+        # (>195s @ 5310 tets; the change-of-basis is only ~4s).  Charge order [cells..., faces...] matches B's
+        # row order, so this is the same B^T G B as the validated solve_nonlinear_newton_scalable order-0 path.
+        G = _rp._ChargeGramHMatrix(cell_verts=cell_verts, face_verts=face_verts, n_el=len(vels),
+                                   eps=eps, leaf=leafsize, eta=eta, near_factor=1e30)
+    else:
+        G = _rp._ChargeGramHMatrix(
+            cell_verts=cell_verts, face_verts=face_verts,
+            n_el=len(vels), charge_host=host, charge_kind=kind, charge_expo=expo,
+            ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
+            ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
+            eps=eps, leaf=leafsize, eta=eta)
     return B, G, M_mass
 
 
