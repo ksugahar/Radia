@@ -476,26 +476,26 @@ def main():
     mesh = _sphere(0.35)
     chi0, Msat = 1000.0, 1.0
     Mof = _bh_curve(chi0, Msat)
-    with ng.TaskManager():
-        print(f"Nonlinear HDiv-VIM sphere demag (chi0={chi0}, Msat={Msat})")
-        print(f"{'H0':>8} {'Picard M':>10} {'+nearcorr':>10} {'analytic(1/3)':>14} {'M/Msat':>8}")
-        for H0 in (1e-4, 1e-3, 1e-2, 1e-1):
-            Mmono, it1, Dm = solve_nonlinear(mesh, Mof, H0, near_correction=False)
-            Mcorr, it2, Dc = solve_nonlinear(mesh, Mof, H0, near_correction=True)
-            Mana = _scalar_fixed_point(Mof, 1.0 / 3.0, H0)   # analytic uses the EXACT sphere D=1/3
-            print(f"{H0:8.0e} {Mmono:10.5f} {Mcorr:10.5f} {Mana:14.5f} {Mcorr/Msat:8.3f}")
-        print(f"  (monopole D={Dm:.4f}, near-corrected D={Dc:.4f}, analytic D=0.3333)")
-        print("  => Picard converges + saturates; near-correction moves D toward 1/3 -> closer to analytic.\n")
+    # self-test runs serial: per the caller-wraps policy this HELPER module contains NO `with TaskManager()`.
+    print(f"Nonlinear HDiv-VIM sphere demag (chi0={chi0}, Msat={Msat})")
+    print(f"{'H0':>8} {'Picard M':>10} {'+nearcorr':>10} {'analytic(1/3)':>14} {'M/Msat':>8}")
+    for H0 in (1e-4, 1e-3, 1e-2, 1e-1):
+        Mmono, it1, Dm = solve_nonlinear(mesh, Mof, H0, near_correction=False)
+        Mcorr, it2, Dc = solve_nonlinear(mesh, Mof, H0, near_correction=True)
+        Mana = _scalar_fixed_point(Mof, 1.0 / 3.0, H0)   # analytic uses the EXACT sphere D=1/3
+        print(f"{H0:8.0e} {Mmono:10.5f} {Mcorr:10.5f} {Mana:14.5f} {Mcorr/Msat:8.3f}")
+    print(f"  (monopole D={Dm:.4f}, near-corrected D={Dc:.4f}, analytic D=0.3333)")
+    print("  => Picard converges + saturates; near-correction moves D toward 1/3 -> closer to analytic.\n")
 
-        # ---- damped Newton-Raphson (robust at ALL drive incl. deep saturation) ----
-        print("Damped Newton-Raphson (tensor tangent + near corr + line search + Picard warmstart):")
-        print(f"{'H0':>8} {'Newton M':>10} {'newton it':>10} {'analytic(1/3)':>14} {'rel':>9}")
-        for H0 in (1e-2, 1e-1, 3e-1, 1.0, 5.0):
-            Mn, nit, Dn = solve_nonlinear_newton(mesh, chi0, Msat, H0)
-            Mana = _scalar_fixed_point(Mof, 1.0 / 3.0, H0)
-            print(f"{H0:8.0e} {Mn:10.5f} {nit:10d} {Mana:14.5f} {abs(Mn - Mana) / Mana:9.1e}")
-        print("  => Newton matches the analytic at every drive (where the scalar-Picard saturates but"
-              " the simple per-element Picard/Hantila of earlier sessions failed).")
+    # ---- damped Newton-Raphson (robust at ALL drive incl. deep saturation) ----
+    print("Damped Newton-Raphson (tensor tangent + near corr + line search + Picard warmstart):")
+    print(f"{'H0':>8} {'Newton M':>10} {'newton it':>10} {'analytic(1/3)':>14} {'rel':>9}")
+    for H0 in (1e-2, 1e-1, 3e-1, 1.0, 5.0):
+        Mn, nit, Dn = solve_nonlinear_newton(mesh, chi0, Msat, H0)
+        Mana = _scalar_fixed_point(Mof, 1.0 / 3.0, H0)
+        print(f"{H0:8.0e} {Mn:10.5f} {nit:10d} {Mana:14.5f} {abs(Mn - Mana) / Mana:9.1e}")
+    print("  => Newton matches the analytic at every drive (where the scalar-Picard saturates but"
+          " the simple per-element Picard/Hantila of earlier sessions failed).")
 
 
 if __name__ == "__main__":
