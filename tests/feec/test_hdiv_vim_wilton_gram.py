@@ -57,7 +57,8 @@ def _demag(geo_kind):
     else:
         g.Add(OrthoBrick(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5)))
         h = 0.25
-    mesh = ng.Mesh(g.GenerateMesh(maxh=h))
+    with ng.TaskManager():
+        mesh = ng.Mesh(g.GenerateMesh(maxh=h))
     Dm = tet.demag_factor(tet.build_demag(mesh, 4))
     Dw = tet.demag_factor(tet.build_demag(mesh, 4, wilton_surface=True))
     return Dm, Dw
