@@ -21,11 +21,15 @@ from netgen.csg import CSGeometry, Sphere, OrthoBrick, Pnt  # noqa: E402
 
 
 def _sphere(h=0.5):
-    g = CSGeometry(); g.Add(Sphere(Pnt(0, 0, 0), 1.0)); return ng.Mesh(g.GenerateMesh(maxh=h))
+    g = CSGeometry(); g.Add(Sphere(Pnt(0, 0, 0), 1.0))
+    with ng.TaskManager():
+        return ng.Mesh(g.GenerateMesh(maxh=h))
 
 
 def _cube(h=0.5):
-    g = CSGeometry(); g.Add(OrthoBrick(Pnt(-.5, -.5, -.5), Pnt(.5, .5, .5))); return ng.Mesh(g.GenerateMesh(maxh=h))
+    g = CSGeometry(); g.Add(OrthoBrick(Pnt(-.5, -.5, -.5), Pnt(.5, .5, .5)))
+    with ng.TaskManager():
+        return ng.Mesh(g.GenerateMesh(maxh=h))
 
 
 def _split_demag(d, near_factor):
