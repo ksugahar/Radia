@@ -609,13 +609,25 @@ IMPLEMENTATION STATUS (tests/ -> examples/ -> panels/)  [Stage A DONE 2026-06-11
            lambda -> per-cylinder equal-Delta-lambda contours -> 59 equal-current
            wires (I=dlam*dmu) -> Biot-Savart reproduces uniform Bz to 4.7%, AGREES
            WITH RADIA rad.ObjFlmCur+rad.Fld to 3.4e-10 (two-codebase invariant).
-  FRONTIER (recorded, NOT fake-completed): F1 foliation choice for an arbitrary
-           non-axisym target = non-convex outer loop (CMA-ES/Anderson, untested);
-           F2 Clebsch recovery of (lambda,mu) FROM a general H~0 J = non-unique,
-           local, singular at field nulls; F3 NONZERO-helicity currents = NO global
-           Clebsch -> NO clean level-set wires (only a multi-patch atlas with
-           cohomology cuts, or accept the vector-T distribution).  Session golden
-           total: Stage A 14 + B1 4 + B2 5 = 23, all green.
+  FRONTIER F1/F2/F3 -- DEMONSTRATED as fundamental walls (golden-locked, honest
+           partly-negative results; NOT fake-completed, NOT fake-failed):
+    F1     foliation_choice_wall.py + test (4): foliation choice = bilevel
+           CONVEX-inner/NON-convex-outer.  Field fit ~1e-15 at every tilt, so the
+           non-convexity is in COIL COMPLEXITY (||J||, REGCOIL measure), invisible
+           to the field residual.  g(t): single-axis 1 min (convex), two-axis 2
+           mins + 18% barrier.  = stellarator winding-surface choice (Merkel/
+           Landreman/Kaptanoglu arXiv:2408.08267).  Remedy = global opt or vector-T.
+    F2     clebsch_recovery_wall.py + test (5): recovery of (lambda,mu) from J is
+           ILL-POSED.  WALL1 non-unique (transport J.grad(mu)=0: mu0=x vs x^2 both
+           valid, mu_b=mu_a^2 -> infinite-dim area-preserving-diffeo gauge); WALL2
+           cond ~1/|J|^2 slope -4.00 at field nulls (Yoshida 2009, Qin 2018).
+    F3     helical_current_no_clebsch.py + test (6): nonzero helicity = topological
+           obstruction.  ABC target H_rel~1; convex Clebsch fit FORCED to H_rel~0
+           -> helicity GAP ~1.000 (foliation+mesh-independent; the L2 residual is
+           the WRONG metric).  Clebsch streamline closes (2e-3), ABC does not (143
+           ring-lengths, ergodic).  Moffatt 1969, Enciso-Peralta-Salas 2020.  Only
+           honest outputs: vector-T bulk distribution OR multi-patch atlas + cuts.
+  Session golden total: Stage A 14 + Stage B 9 + frontier 15 = 38, all green.
 
 Files: src/radia/clebsch_potential.py (ClebschSolver, AxisymStreamFunctionSolver),
 src/radia/cohomology_cut.py (Gmsh cohomology generators), src/radia/
