@@ -68,6 +68,10 @@ def streamfunction(topic: str = "overview") -> str:
             "validation"      - analytic-benchmark checks
             "literature"      - SFM lineage (Turner / Peeren / current potential)
             "workflow"        - end-to-end demo recipes
+            "fusion"          - stellarator Stage-2 (REGCOIL/NESCOIL/FOCUS)
+            "clebsch_3d"      - [IN PROGRESS] 3D stream function + cohomology:
+                                de Rham unification, ACA+TSVD on current-Clebsch,
+                                Tampere bidirectional map, honest 3D frontier
 
     Returns:
         Markdown/plain-text documentation for the requested topic.
@@ -135,7 +139,7 @@ def main():
         for t in ["overview", "theory", "api", "kernel_agnostic",
                   "regularized", "pareto", "single_stroke", "fe_direct",
                   "deformation", "cmaes", "performance", "validation",
-                  "literature", "workflow"]:
+                  "literature", "workflow", "fusion", "clebsch_3d"]:
             result = streamfunction(t)
             print(f"  streamfunction('{t}'): {len(result)} chars")
             assert len(result) > 100, f"Topic '{t}' too short"
