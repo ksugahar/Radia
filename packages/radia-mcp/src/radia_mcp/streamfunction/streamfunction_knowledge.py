@@ -444,6 +444,186 @@ headline is now the independent-point measure.  Repository-first: a real
 """
 
 
+SF_CLEBSCH_3D = r"""
+================================================================
+3D STREAM FUNCTION + COHOMOLOGY (Clebsch volume extension)  [IN PROGRESS]
+================================================================
+STATUS 2026-06-11: verified-conceptual + math; implementation Phase 1-3 gated on
+golden tests (two derivation/verification workflows in flight).  Honestly marked:
+the GENERAL non-axisymmetric 3D inverse designer is a non-convex + helicity-
+obstructed FRONTIER, NOT a shipped capability.  Repository-first: a clearly
+marked frontier is a real result, not a failure.
+
+WHY (CEFC 2026 WA-O1, Thessaloniki -- corrected attribution)
+------------------------------------------------------------
+  * Talk #1 (presented by Z. Ren as proxy): "Dual Formulations of Multi-Port EM
+    Field Problem Using Cohomology Modeling", Zhou/Yan/Xu/Ren (IEE-CAS + GeePs
+    Sorbonne).  de Rham cohomology for non-local port excitations; thick cuts /
+    thick links; H1<->MMF, H2<->flux; dual h/b formulations + complementary
+    energy bounds.  = "Ren's cohomology".
+  * Talk #2 (Tampere -- the interesting one, NOT Ren, NOT cohomology):
+    "Bidirectional Coordinate Transformation ... 2-D Magnetic Field Problems",
+    Dervisha/Marjamaki/Rasilo/Tarhasaari.  Exterior-calculus "potential
+    coordinates" (A, phi): A = vector-potential z-component = the 2D stream/flux
+    function; bidirectional forward (x,y)->(A,phi) and inverse (A,phi)->(x,y)
+    (redraw geometry in potential coordinates).
+  * Cohomology-cut citation stack: Kotiuga (theory) -> Pellikka 2013 (the Gmsh
+    algorithm cohomology_cut.py calls) -> Ren 2002 / talk#1 (T-Omega dual, 2ndary).
+
+THE UNIFICATION (the payoff)
+----------------------------
+Everything here lives on ONE NGSolve de Rham / FEEC complex:
+    H1 --grad--> H(curl) --curl--> H(div) --div--> L2
+  * H1 (0-forms): stream/Clebsch scalars psi, chi; scalar potential phi; 2D flux
+    function A.  (The single-stroke deformation field is VectorH1.)
+  * H(curl) (1-forms): cohomology generators h_k; grad of the multivalued chi;
+    H field.  H1 cohomology = curl-free-but-not-gradient (harmonic) subspace.
+  * H(div) (2-forms): B, and J = grad(psi) x grad(chi) = grad(lambda) x grad(mu).
+    H2 cohomology = div-free-but-not-curl subspace.
+Consequence: Clebsch, cohomology, the stream function and the single-stroke
+deformation are ALL native NGSolve/Netgen FEEC objects -> the stack can drop
+Gmsh.  Cohomology generators are computable natively as the Hodge-Laplacian
+zero-eigenspace on H(curl) (replaces Gmsh computeHomology; reuses the Compact HX
+H(curl) regular decomposition).
+
+FIELD-CLEBSCH vs CURRENT-CLEBSCH (do not confuse)
+-------------------------------------------------
+  * FIELD-Clebsch  B = grad(psi) x grad(chi) -- the field rep
+    (clebsch_potential.py ClebschSolver, forward analysis).  BILINEAR in
+    (psi,chi).
+  * CURRENT-Clebsch J = grad(lambda) x grad(mu) -- the design bridge.
+    div J = 0 identically.  wires = {lambda=const} INT {mu=const}; per-tube
+    current dI = Dlambda * Dmu (signed flux = Jacobian; valid where the
+    (lambda,mu) chart is non-degenerate, i.e. grad lambda not || grad mu).
+
+ACA+TSVD ON CLEBSCH (the key result)
+------------------------------------
+ACA+TSVD solves LINEAR least-norm A x = b.
+  * FIELD-Clebsch is bilinear -> ACA+TSVD does NOT directly apply to inverse
+    design.
+  * CURRENT-Clebsch with the foliation mu FIXED is LINEAR in lambda:
+    lambda = sum_j lambda_j phi_j -> J = sum_j lambda_j (grad(phi_j) x grad(mu)),
+    so B = A lambda is linear and the EXISTING kernel-agnostic ACA+TSVD engine
+    (radia.stream_function aca_tsvd / RegularizedTSVD) applies UNCHANGED -- only
+    the per-DOF basis current changes from the surface n x grad(phi_j) to the
+    volume grad(phi_j) x grad(mu).
+  * The surface SF is the SINGLE-SURFACE special case (mu = one surface); the
+    volume version = a STACK / foliation = a true 3D bulk winding.  The ONLY
+    nonconvex part is choosing the foliation mu (outer loop); the surface method
+    dodges it by mu = the winding surface.  ACA+'s relative win is LARGER in 3D
+    (volume Biot-Savart kernel is more expensive; ACA+ speed is kernel-cost-
+    driven, measured 1.6x->10.8x as N grows for the surface case).
+
+CLEBSCH <-> COHOMOLOGY (the connection)
+---------------------------------------
+  * axisym Clebsch (psi = r*A_phi, chi = phi) IS a stream-function rep; chi =
+    atan2(y,x) has grad = (-y/r^2, x/r^2, 0) = a de Rham 1-cohomology GENERATOR
+    (= 2*pi * the Gmsh/Pellikka h_1: SAME class, DIFFERENT representative + 2*pi
+    normalization, NOT literally equal).  The atan2 branch cut IS the cohomology
+    cut -- a topological feature, not a numerical bug.
+  * Net current => one Clebsch scalar MUST be multivalued = a cohomology
+    generator (REGCOIL-style: prescribe net current as the secular term, fit the
+    single-valued remainder).  See the 'fusion' topic for the surface b1=2 case
+    already shipped.
+  * TWO DISTINCT global obstructions, do NOT conflate: (a) domain topology b1
+    (net current); (b) field helicity / Hopf (linked field lines, no global
+    single-valued Clebsch under B.n=0).  Axisym is helicity-zero, so the repo has
+    only hit (a).
+
+BIDIRECTIONAL POTENTIAL-COORDINATE MAP (Tampere -> 3D)  [VERIFIED sympy 2026-06-11]
+----------------------------------------------------------------------------------
+  * 2D inverse-map PDE (Tampere): d/dA(mu dx/dA) + d/dphi((1/mu) dx/dphi) = 0
+    (and for y).  Forward = geometry->potentials; inverse = potentials->geometry
+    -- the design lever ("design in flux coordinates, manufacture in physical").
+  * 2D Jacobian: d(x,y)/d(A,phi) = +-1/(|B||H|) (Lagrange identity, VERIFIED).
+  * 3D flux coordinates (psi, chi, phi): SEMI-orthogonal -- grad(phi) perp
+    grad(psi) AND grad(phi) perp grad(chi) (from grad psi x grad chi = -mu grad
+    phi); (psi,chi) skew within the flux surface.  (VERIFIED)
+  * 3D Jacobian (VERIFIED sympy): det[grad psi; grad chi; grad phi]
+    = -(1/mu)|B|^2 = -|B||H| -> inverse = -1/(|B||H|), UNIFYING 2D and 3D under
+    |B||H| != 0; degeneracy locus = field nulls.
+
+VECTOR-T CONVEX INVERSE + HELICITY OBSTRUCTION (VERIFIED sympy 2026-06-11)
+-------------------------------------------------------------------------
+  * "Problem with T = lambda*grad(mu)": t=lambda d mu has t^dt=0 (Frobenius),
+    i.e. T.curl T = 0 pointwise (VERIFIED) -> CURRENT helicity H = int T.curl T = 0
+    for any Clebsch current; with J.n=0 on dOmega it is gauge-invariant.
+    CONTRAPOSITIVE: a NONZERO-helicity current (linked/knotted lines, force-free-
+    like) has NO global Clebsch J=grad(lambda)x grad(mu).  Ordinary coils (nested
+    loops / solenoid) are helicity ~ 0 so Clebsch is fine; the obstruction bites
+    only for topologically nontrivial (linked) current designs.
+  * REFRAME: non-convexity is SPECIFIC to the Clebsch (bilinear) form, NOT to
+    volume inverse design.  With the FULL VECTOR T (HCurl), J=curl T is LINEAR in
+    T -> A T = B_target is a CONVEX least-norm the existing ACA+TSVD solves
+    UNCHANGED; the gauge null space (T=grad chi -> curl=0, VERIFIED) is in ker(A)
+    and TSVD truncates it automatically (NO tree-cotree).  Helicity does NOT
+    obstruct the vector-T form.
+  * TRADE-OFF: vector-T = convex / no-direct-wires / no-helicity-limit;
+    Clebsch mu-free = nonconvex / wires / zero-helicity; Clebsch mu-fixed
+    (foliated) = convex / wires / zero-helicity.  The REAL frontier is (i) WIRE
+    EXTRACTION from a general T/J, (ii) the Clebsch FOLIATION choice -- NOT
+    "non-convex helicity".  Stage A (buildable) = vector-T convex inverse golden;
+    Stage B (frontier) = wire extraction / foliation.
+
+SINGLE-STROKE ERROR CORRECTION via DEFORM (already shipped; VectorH1 upgrade)
+----------------------------------------------------------------------------
+  * _distort_wire (calc_streamfunction.py; inner closure literally deform())
+    bends the ONE single-stroke wire (psi/levels fixed, one current) to cancel
+    the connector residual.  Framed as "control-grid bilinear = the discrete
+    realisation of an NGSolve VectorH1 mesh deformation".  Measured: plane
+    12290->340 ppm; cylinder Gx 8.5-9.3%->1.4%; sphere Z2 4.3%->0.36%.  See
+    'single_stroke'.
+  * Clean upgrade: replace the control-grid bilinear with a proper VectorH1
+    deformation field on the FE-direct surface mesh (H1-regularised bends,
+    manufacturability via BC, arbitrary surfaces).  VectorH1 is the deformation
+    FIELD REPRESENTATION + shape derivative; the field eval stays Biot-Savart
+    (NOT a SetDeformation-then-PDE-solve loop).
+
+IMPLEMENTATION STATUS (tests/ -> examples/ -> panels/)  [Stage A DONE 2026-06-11]
+--------------------------------------------------------------------------------
+  Phase 0  record the unification (memory/clebsch_cohomology_streamfunction_
+           unification.md) -- DONE.
+  Phase 1  2D bidirectional map (Tampere) -- DONE: examples/feec_vim/
+           bidirectional_map_2d.py + tests/feec/test_bidirectional_map_2d.py (5).
+           w=zeta^2: forward A,phi 1e-15; orthogonality 2.6e-14; Jacobian
+           det=|B||H| 1.6e-16; inverse x,y harmonic in (A,phi) 1.6e-8; round-trip
+           6e-8.  Pure NGSolve, no Gmsh.
+  #2       vector-T convex inverse (general form) -- DONE: examples/feec_vim/
+           vector_t_inverse.py + tests/feec/test_vector_t_inverse.py (5).
+           J=curl T (HCurl), ACA+TSVD min-norm: convex fit 6e-16; div J=5.7e-16;
+           GAUGE T=grad(chi)->field 2.2e-20, TSVD truncates (k_aca=9<=M<<ndof=3360).
+  Phase 3  foliated-Clebsch ACA+TSVD solenoid -- DONE: examples/feec_vim/
+           foliated_clebsch_solenoid.py + tests/feec/test_foliated_clebsch_solenoid.py
+           (4).  mu=r fixed -> J linear in lambda -> radia.stream_function
+           aca_tsvd UNCHANGED; uniform Bz to 3.3e-5, weak div J 8.5e-6.
+  Phase 2  axisym 3D probe (psi,phi) flux coords in (r,z) -- the 2D map covers
+           the meridian case; not separately built.
+  STAGE B  WIRE EXTRACTION (continuous volume current -> windable wires) -- the
+           BUILDABLE part DONE:
+    B1     helicity diagnostic -- examples/feec_vim/helicity_diagnostic.py +
+           tests/feec/test_helicity_diagnostic.py (4).  H_rel=|int T.curlT|/
+           (||T|| ||curlT||) in [0,1]: axial 9e-5, ABC/Beltrami 1.000.  Gates
+           whether a clean Clebsch/level-set extraction is even possible.
+    B2     wire extractor -- examples/feec_vim/foliated_solenoid_wires.py +
+           tests/feec/test_foliated_solenoid_wires.py (5).  Foliated solenoid
+           lambda -> per-cylinder equal-Delta-lambda contours -> 59 equal-current
+           wires (I=dlam*dmu) -> Biot-Savart reproduces uniform Bz to 4.7%, AGREES
+           WITH RADIA rad.ObjFlmCur+rad.Fld to 3.4e-10 (two-codebase invariant).
+  FRONTIER (recorded, NOT fake-completed): F1 foliation choice for an arbitrary
+           non-axisym target = non-convex outer loop (CMA-ES/Anderson, untested);
+           F2 Clebsch recovery of (lambda,mu) FROM a general H~0 J = non-unique,
+           local, singular at field nulls; F3 NONZERO-helicity currents = NO global
+           Clebsch -> NO clean level-set wires (only a multi-patch atlas with
+           cohomology cuts, or accept the vector-T distribution).  Session golden
+           total: Stage A 14 + B1 4 + B2 5 = 23, all green.
+
+Files: src/radia/clebsch_potential.py (ClebschSolver, AxisymStreamFunctionSolver),
+src/radia/cohomology_cut.py (Gmsh cohomology generators), src/radia/
+stream_function.py + panels/calc_streamfunction.py (ACA+TSVD engine),
+memory/clebsch_cohomology_streamfunction_unification.md (full record).
+"""
+
+
 TOPICS = {
     "overview": "SF coil-design framework + pipeline + topic map (this server's front door)",
     "harmonics": "spherical-harmonic target (--target-harmonic Z2/X/..) + achieved-field (l,m) decomposition: purity / contamination (MRI gradient/shim basis)",
@@ -467,6 +647,7 @@ TOPICS = {
     "literature": "SFM lineage (Turner / Peeren / current potential method)",
     "workflow": "end-to-end demo recipes",
     "fusion": "stellarator Stage-2 (NESCOIL/REGCOIL/FOCUS): winding-surface current potential -> plasma B.n, net-current secular term (cohomology), coil force/stress, real VMEC boundary, FOCUS winding-distance + winding-SHAPE",
+    "clebsch_3d": "[IN PROGRESS] 3D stream function + cohomology: NGSolve de Rham unification (Clebsch/cohomology/SF/deform on H1->HCurl->HDiv); ACA+TSVD on CURRENT-Clebsch J=grad(lambda)xgrad(mu) with mu fixed; Tampere bidirectional (A,phi) map -> 3D flux coords, Jacobian=1/(|B||H|); honest non-convex+helicity frontier",
 }
 
 
@@ -512,4 +693,13 @@ def get_streamfunction_documentation(topic: str = "overview") -> str:
              "force", "stress", "plasma", "stage2", "stage_2",
              "current_potential"):
         return SF_FUSION
+    if t in ("clebsch_3d", "clebsch", "clebsch_potential", "3d", "3d_sf",
+             "3d_stream_function", "3d_streamfunction", "volume_clebsch",
+             "current_clebsch", "field_clebsch", "bidirectional",
+             "bidirectional_map", "potential_coordinates", "flux_coordinates",
+             "flux_coords", "de_rham", "derham", "feec", "feec_unification",
+             "unification", "aca_clebsch", "aca_tsvd_clebsch", "tampere",
+             "clebsch_cohomology", "cohomology_3d", "foliation",
+             "foliated_clebsch", "helicity"):
+        return SF_CLEBSCH_3D
     return get_aca_tsvd_knowledge(_REMAP.get(t, t))
