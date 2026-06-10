@@ -33,7 +33,8 @@ INV4PI = 1.0 / (4.0 * pi)
 def _sphere(h):
     geo = CSGeometry()
     geo.Add(Sphere(Pnt(0, 0, 0), 1.0))
-    return ng.Mesh(geo.GenerateMesh(maxh=h))
+    with ng.TaskManager():                               # caller wraps (build_demag is a helper, no internal TM)
+        return ng.Mesh(geo.GenerateMesh(maxh=h))
 
 
 def _tri_area(V):

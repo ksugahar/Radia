@@ -31,7 +31,8 @@ from netgen.csg import CSGeometry, Sphere, Pnt, OrthoBrick  # noqa: E402
 def _sphere(h):
     geo = CSGeometry()
     geo.Add(Sphere(Pnt(0, 0, 0), 1.0))
-    return ng.Mesh(geo.GenerateMesh(maxh=h))
+    with ng.TaskManager():
+        return ng.Mesh(geo.GenerateMesh(maxh=h))
 
 
 def test_tet_demag_symmetry_and_loop_null():
