@@ -31,7 +31,8 @@ def _reduced_sphere(box_lo):
     """Sphere intersected with a box -> full / 1/2 / 1/4 / 1/8 octant by the box lower corner."""
     g = CSGeometry()
     g.Add(Sphere(Pnt(0, 0, 0), 1.0) * OrthoBrick(Pnt(*box_lo), Pnt(2, 2, 2)))
-    return ng.Mesh(g.GenerateMesh(maxh=0.5))
+    with ng.TaskManager():
+        return ng.Mesh(g.GenerateMesh(maxh=0.5))
 
 
 @pytest.mark.parametrize("tag,box_lo", [

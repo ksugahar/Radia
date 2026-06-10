@@ -58,7 +58,8 @@ def _demag_analytic(geo_kind):
         g.Add(Sphere(Pnt(0, 0, 0), 1.0)); h = 0.4
     else:
         g.Add(OrthoBrick(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))); h = 0.3
-    mesh = ng.Mesh(g.GenerateMesh(maxh=h))
+    with ng.TaskManager():
+        mesh = ng.Mesh(g.GenerateMesh(maxh=h))
     return tet.demag_factor(tet.build_demag(mesh, 4, analytic_gram=True))
 
 

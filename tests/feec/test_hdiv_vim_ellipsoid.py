@@ -34,9 +34,10 @@ def test_wilton_prolate_spheroid_demag_factor():
     c = 2.0                                              # 2:1 prolate, long axis = z
     geo = CSGeometry()
     geo.Add(Ellipsoid(Pnt(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0), Vec(0, 0, c)))
-    mesh = ng.Mesh(geo.GenerateMesh(maxh=0.6))
-    Dm = tet.demag_factor(tet.build_demag(mesh, 4))
-    Dw = tet.demag_factor(tet.build_demag(mesh, 4, wilton_surface=True))
+    with ng.TaskManager():                               # caller wraps (build_demag is a helper, no internal TM)
+        mesh = ng.Mesh(geo.GenerateMesh(maxh=0.6))
+        Dm = tet.demag_factor(tet.build_demag(mesh, 4))
+        Dw = tet.demag_factor(tet.build_demag(mesh, 4, wilton_surface=True))
     Na = _prolate_Nz_analytic(c)
     assert 0.15 < Na < 0.20, f"analytic prolate N_z sanity: {Na:.4f}"
     assert abs(Dw - Na) < 1.5e-2 * Na, f"Wilton prolate N_z {Dw:.4f} not within 1.5% of analytic {Na:.4f}"
