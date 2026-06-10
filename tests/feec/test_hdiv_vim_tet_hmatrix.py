@@ -36,7 +36,8 @@ _TOLKW = "rtol" if "rtol" in inspect.signature(minres).parameters else "tol"
 def _sphere(h=0.45):
     geo = CSGeometry()
     geo.Add(Sphere(Pnt(0, 0, 0), 1.0))
-    return ng.Mesh(geo.GenerateMesh(maxh=h))
+    with ng.TaskManager():
+        return ng.Mesh(geo.GenerateMesh(maxh=h))
 
 
 def _gram(d, eps=1e-5):
