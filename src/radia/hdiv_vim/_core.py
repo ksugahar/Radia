@@ -234,30 +234,32 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
     the demag factor exact to <0.15% on cube AND sphere (vs the ~5-6% monopole error that the sub-point
     near-correction cannot fix on the cube) -- the #1 production accuracy fix.  O(n_bf^2) dense; the
     scalable C++ HACApK charge-Gram path is the next step."""
-    with ng.TaskManager():
-        fes = ng.HDiv(mesh, order=0)
-        ndof = fes.ndof
-        nn = ng.specialcf.normal(mesh.dim)
-        L2v, L2b = ng.L2(mesh, order=0), ng.SurfaceL2(mesh, order=0)
-        u = fes.TrialFunction()
-        bv = ng.BilinearForm(trialspace=fes, testspace=L2v)
-        bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx
-        bv.Assemble()
-        bb = ng.BilinearForm(trialspace=fes, testspace=L2b)
-        bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds
-        bb.Assemble()
-        Bv_sp, Bb_sp = _csr_sp(bv), _csr_sp(bb)   # charge maps as sparse CSR (densified only on the ref path)
-        massv = ng.BilinearForm(L2v); massv += L2v.TrialFunction() * L2v.TestFunction() * ng.dx; massv.Assemble()
-        massb = ng.BilinearForm(L2b); massb += L2b.TrialFunction() * L2b.TestFunction() * ng.ds; massb.Assemble()
-        el_vol = _csr_sp(massv).diagonal(); bf_area = _csr_sp(massb).diagonal()   # L2-0 mass is diagonal == measures
-        # HDiv mass (the physical demag-factor metric) -- kept SPARSE; the skip_dense_gram path never densifies it
-        vh = fes.TestFunction()
-        mh = ng.BilinearForm(fes); mh += u * vh * ng.dx; mh.Assemble()
-        M_mass_sp = _csr_sp(mh)
-        el_V = [np.array([mesh[v].point for v in el.vertices]) for el in mesh.Elements(ng.VOL)]
-        bf_V = [np.array([mesh[v].point for v in el.vertices]) for el in mesh.Elements(ng.BND)]
-        # uniform M_z, L2-projected onto RT0 (for the demag Rayleigh quotient)
-        gfu = ng.GridFunction(fes); gfu.Set(ng.CoefficientFunction((0, 0, 1))); m_unit = np.array(gfu.vec)
+    # NGSolve assembly (FES, charge-map BilinearForms, HDiv mass).  Per the caller-wraps policy this HELPER
+    # does NOT open a TaskManager; the CALLER wraps build_demag in `with ng.TaskManager():` (CLAUDE.md
+    # "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT").
+    fes = ng.HDiv(mesh, order=0)
+    ndof = fes.ndof
+    nn = ng.specialcf.normal(mesh.dim)
+    L2v, L2b = ng.L2(mesh, order=0), ng.SurfaceL2(mesh, order=0)
+    u = fes.TrialFunction()
+    bv = ng.BilinearForm(trialspace=fes, testspace=L2v)
+    bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx
+    bv.Assemble()
+    bb = ng.BilinearForm(trialspace=fes, testspace=L2b)
+    bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds
+    bb.Assemble()
+    Bv_sp, Bb_sp = _csr_sp(bv), _csr_sp(bb)   # charge maps as sparse CSR (densified only on the ref path)
+    massv = ng.BilinearForm(L2v); massv += L2v.TrialFunction() * L2v.TestFunction() * ng.dx; massv.Assemble()
+    massb = ng.BilinearForm(L2b); massb += L2b.TrialFunction() * L2b.TestFunction() * ng.ds; massb.Assemble()
+    el_vol = _csr_sp(massv).diagonal(); bf_area = _csr_sp(massb).diagonal()   # L2-0 mass is diagonal == measures
+    # HDiv mass (the physical demag-factor metric) -- kept SPARSE; the skip_dense_gram path never densifies it
+    vh = fes.TestFunction()
+    mh = ng.BilinearForm(fes); mh += u * vh * ng.dx; mh.Assemble()
+    M_mass_sp = _csr_sp(mh)
+    el_V = [np.array([mesh[v].point for v in el.vertices]) for el in mesh.Elements(ng.VOL)]
+    bf_V = [np.array([mesh[v].point for v in el.vertices]) for el in mesh.Elements(ng.BND)]
+    # uniform M_z, L2-projected onto RT0 (for the demag Rayleigh quotient)
+    gfu = ng.GridFunction(fes); gfu.Set(ng.CoefficientFunction((0, 0, 1))); m_unit = np.array(gfu.vec)
     el_c = np.array([V.mean(0) for V in el_V]); bf_c = np.array([V.mean(0) for V in bf_V])
     n_el, n_bf = len(el_c), len(bf_c)
     cent = np.vstack([el_c, bf_c]); meas = np.concatenate([el_vol, bf_area])
