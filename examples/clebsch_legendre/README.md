@@ -183,14 +183,29 @@ B = grad(phi) x grad(psi)
 
 Note `phi_psi` drops out of `B` entirely (verified): only the
 in-surface gradient of `phi` carries the field, so `phi` is the
-**stream function of the field within each flux surface**. In the 2D
-limit (planar field, `B_z = 0`, no z-dependence) the Clebsch pair is
-`(phi, psi) = (A_z, z)`: the surface unknown becomes trivial
-(`z = psi`) and `phi` IS the magnetic vector potential component
-`A_z(x, y)` — this formulation is its 3D generalization. (Indeed
+**stream function of the field within each flux surface**. (Indeed
 `A = phi grad(psi)` is a vector potential for `B`; in the
 `(x, y, psi)` coordinates its only covariant component is
 `a_psi = phi`.)
+
+**`psi` is the flux-function label** — the 3D counterpart of the 2D
+vector-potential flux function. In the 2D cross-section limit (field
+in the x-z plane, translation-invariant along y, `B = (B_x, 0, B_z)`)
+the admissible Clebsch pair is `phi = y`, `psi = -A_y(x, z)`: the
+independent variable `psi` IS the flux function whose level lines are
+the field lines, `phi` is trivial, and the single remaining unknown
+`z(x, psi)` is the **field-line shape as a graph over (x, psi)** with
+
+```
+B_x = 1/z_psi,    B_z = z_x/z_psi          (dz/dx along a line = z_x)
+
+W = 1/(2 mu_0) Int (1 + z_x^2)/z_psi dx dpsi      (per unit y)
+
+d/dx( 2 z_x / z_psi ) = d/dpsi( (1 + z_x^2) / z_psi^2 )
+```
+
+— the classical inverse (pole-face design) equation: prescribe flux
+surfaces, solve for the geometry.
 
 Covariant components of `B`:
 
