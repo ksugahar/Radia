@@ -22,6 +22,49 @@ magnet-gap / pole-face design — was **not found in any of the five
 literature directions searched**. Novelty should be claimed at the level of
 the combination/application, never at the level of the mechanism.
 
+**Update (2026-06-12, read directly from the CEFC 2026 proceedings):** the
+**2-D case of Variant 1 IS published** (Tampere, below). The 3-D extension is
+the originating group's *announced but unpublished* program. See next section.
+
+## Most directly relevant: Dervisha, Marjamaki, Rasilo & Tarhasaari (CEFC 2026)
+
+"Bidirectional Coordinate Transformation and Its Application to 2-D Magnetic
+Field Problems", Tampere University (Tarhasaari = Bossavit school). Read
+directly from the CEFC 2026 proceedings (not web-indexed; the web survey above
+missed it).
+
+- **This is exactly the 2-D case of Variant 1.** It builds the bidirectional
+  map between Cartesian `(x,y)` and the **potential coordinates `(A, phi)`**
+  (`A` = vector-potential flux function, `B = d(A dz)`; `phi` = scalar
+  potential, `H = -dphi`) and solves *both* directions by FE. Their inverse map
+  (potentials -> geometry) is
+  ```
+  d/dA( mu dx/dA ) + d/dphi( (1/mu) dx/dphi ) = 0      (their Eq. 8)
+  d/dA( mu dy/dA ) + d/dphi( (1/mu) dy/dphi ) = 0      (their Eq. 10)
+  ```
+  with `mu = mu(A,phi)`. This is the **Euler-Lagrange form of Variant 1's
+  energy in 2-D** (drop `z`; at `mu = mu0` they are Laplace in `(A,phi)` = the
+  classical conformal `w = phi + i*psi` map). Their `(A, phi)` are the 2-D
+  Clebsch pair; their `A` plays the role of our `psi`.
+- **Different derivation, same result.** They use **exterior calculus
+  (Hodge star, Bossavit)**; we use **Clebsch `B = grad(phi) x grad(psi)` +
+  chain-rule covariant components**. They allow **nonlinear `mu(A,phi)`** (iron);
+  our derivation is current-free vacuum (`mu0`). We additionally give the
+  explicit **3-D** systems (E1)-(E3)/(F1)-(F3), the variational energy, and
+  sympy-verified 3-D exact solutions.
+- **They have announced the 3-D / general extension.** Their conclusion:
+  this 2-D paper is "*the introduction part for a long story* of ... the
+  *manifold-theoretic concept of coordinate transformations; especially between
+  field-associated charts and geometry-associated charts*", with more "in the
+  full paper." So the **3-D generalization is the originating group's active,
+  announced program -- not yet published.**
+
+Honest consequence: Variant 1 **2-D** is published (Tampere 2026 + the older
+conformal tradition). Variant 1 **3-D** overlaps the Tampere/Bossavit program
+(announced, unpublished) -> claim only an *independent, complementary* 3-D
+derivation. **Variant 2 (partial `z<->psi` swap) in 3-D** remains the most
+distinctive piece (2-D twin = von Mises, for flows).
+
 ## What is established (cite this lineage)
 
 ### 2D potential-plane methods (full swap) — classical and standard
@@ -94,8 +137,13 @@ nothing of the kind.
 3. **Variant 1's specific form**: raw Clebsch pair + Cartesian `z` (slab
    topology) with the vacuum energy functional
    `Int (1+x_z^2+y_z^2)/(2 mu0 J)`. The idea is the `p = 0` limit of
-   VMEC/BETA transplanted out of the toroidal angle representation; that
-   transplant is unclaimed.
+   VMEC/BETA transplanted out of the toroidal angle representation. **Caveat
+   (2026-06-12): the 2-D case is now known to be published** (Dervisha et al.,
+   CEFC 2026 -- see "Most directly relevant" above), and that group has
+   *announced* the manifold/3-D extension. So Variant 1's novelty is at most an
+   *independent, complementary* 3-D derivation (Clebsch/vector-calculus +
+   variational + verification), in overlap/contention with the Bossavit-school
+   program -- not a first.
 
 ## Verification caveats (do before citing in print)
 
