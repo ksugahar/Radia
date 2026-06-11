@@ -7,6 +7,13 @@ or beats the **yano-type** element-engineering (Yano's hand-crafted elements tha
 the loop-star / `A_ls` component on distorted hexes, preserved in the private ELF repo) —
 retire the yano-type from public Radia.
 
+> **Sibling research line in this directory:** a separate set of examples builds a **3D
+> stream-function + cohomology COIL-DESIGN method** (Clebsch / vector-T potentials on the same
+> FEEC de Rham complex, ACA+TSVD inverse, wire extraction, and an honest map of the
+> non-convex / helicity frontier) — see
+> [`README_streamfunction_cohomology.md`](README_streamfunction_cohomology.md). Same FEEC
+> foundation, different application (coil design vs the demag operator above).
+
 > **The question:** using NGSolve's H(div) basis inside the volume integral, are the
 > magnetization loops (div-free circulations, `ker N`) FIELD-NULL — so no spurious loop
 > modes arise, even on distorted elements at high μr?
