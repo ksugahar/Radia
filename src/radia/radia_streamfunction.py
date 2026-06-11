@@ -51,6 +51,23 @@ def _argparser():
     return build_argparser()
 
 
+def _volume_argparser():
+    from radia.panels.calc_streamfunction_volume import build_argparser
+    return build_argparser()
+
+
+# Volume-3D mode (foliated-Clebsch volume stream function) uses its OWN calc
+# script + argparser, so its skip/label sets are independent of the surface
+# modes above.  Routed inputs: --vol via wp_vol; --output / --msh-output via
+# build_command; --foliation / --n-threads kept at calc defaults.
+_VOLUME_SKIP = ("vol", "output", "msh_output", "foliation", "n_threads")
+_VOLUME_LABELS = {"target_bz": "Target Bz [T]:", "n_leaves": "mu-leaves:",
+                  "fes_order": "lambda H1 order:", "aca_eps": "ACA+ eps:",
+                  "rings_per_span": "Rings / lambda span:",
+                  "n_targets": "Axial targets:",
+                  "nphi": "Contour nphi:", "nz": "Contour nz:"}
+
+
 class _DesignPanel(ModePanel):
     """target -> psi -> homogeneity + peak current density."""
     def __init__(self, parent=None):
@@ -113,10 +130,31 @@ class _ManufacturePanel(ModePanel):
         )
 
 
+class _Volume3DPanel(ModePanel):
+    """3D VOLUME stream function (foliated Clebsch J=grad(lambda)xgrad(mu)):
+    conductor tube .vol + target axial Bz -> equal-current windable wires."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.bind_argparser(
+            _volume_argparser(),
+            skip=_VOLUME_SKIP,
+            labels=_VOLUME_LABELS,
+        )
+
+    def build_command(self, vol_path):
+        return self.build_command_from_parser(
+            vol_path=vol_path, vol_flag="--vol",
+            script_path=calc_script("calc_streamfunction_volume.py"),
+            output_path=json_output(vol_path, "_sf_volume"),
+            extra=["--msh-output", msh_output(vol_path, "_sf_volume")],
+        )
+
+
 _METHOD_FACTORIES = [
     ("Design", _DesignPanel),
     ("Pareto", _ParetoPanel),
     ("Manufacture", _ManufacturePanel),
+    ("Volume 3D", _Volume3DPanel),
 ]
 
 
@@ -125,7 +163,8 @@ class StreamFunctionPanel(ModePanel):
     def __init__(self, parent=None):
         super().__init__(parent)
         # primary input = the COIL surface .vol (AnalysisWindow.wp_vol contract)
-        self.add_browse("wp_vol", "Coil surface .vol:",
+        # surface modes -> coil SURFACE .vol; Volume 3D -> conductor VOLUME .vol
+        self.add_browse("wp_vol", "Coil / conductor .vol:",
                         filter_str="Netgen Vol (*.vol);;All (*)")
         self._method_combo = self.add_combo(
             "method", "Method:", [name for name, _ in _METHOD_FACTORIES])

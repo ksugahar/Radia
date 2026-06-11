@@ -417,8 +417,8 @@
           "name": "fes_order",
           "type": "int",
           "default": 1,
-          "ja": "基底関数次数",
-          "physics": "0=RWG, 1+=高次"
+          "ja": "lambda H1 次数",
+          "physics": ""
         },
         {
           "cli": "--solver",
@@ -606,8 +606,8 @@
           "type": "int",
           "default": 1,
           "help": "FE polynomial order",
-          "ja": "基底関数次数",
-          "physics": "0=RWG, 1+=高次"
+          "ja": "lambda H1 次数",
+          "physics": ""
         },
         {
           "cli": "--n-steps",
@@ -874,8 +874,21 @@
         {
           "cli": "--target-cf",
           "name": "target_cf",
-          "required": true,
-          "help": "target field CoefficientFunction expr of x,y,z (scalar -> Bz; 3-vector -> B)"
+          "default": "",
+          "help": "target field CoefficientFunction expr of x,y,z (scalar -> Bz; 3-vector -> B). Give this OR --target-harmonic."
+        },
+        {
+          "cli": "--target-harmonic",
+          "name": "target_harmonic",
+          "default": "",
+          "help": "target as a spherical harmonic (MRI gradient/shim basis, l<=4): a name (Z0,X,Y,Z,Z2,ZX,ZY,C2,S2,Z3,Z2X,..,Z4,Z3X,Z2C2,ZC3,C4,..) or 'l=L,m=M', optionally weighted/summed, e.g. 'Z2', 'X' (Gx), 'Z2:1.0,Z:0.1'. Generates the solid-harmonic --target-cf polynomial."
+        },
+        {
+          "cli": "--harmonic-lmax",
+          "name": "harmonic_lmax",
+          "type": "int",
+          "default": 3,
+          "help": "max degree l for the achieved-Bz spherical-harmonic decomposition (purity/contamination; l<=4). 0 = off."
         },
         {
           "cli": "--method",
@@ -901,10 +914,22 @@
           "name": "regularize",
           "choices": [
             "l2",
-            "h1"
+            "h1",
+            "inductance"
           ],
           "default": "h1",
-          "help": "seminorm: l2 (min |psi|) or h1 (min surface-current energy)"
+          "help": "seminorm: l2 (min |psi|), h1 (min |grad psi|, a smoothness proxy), or inductance (min 1/2 psi^T L psi -- the physical MIN-STORED-ENERGY gradient-coil objective via ngsolve.bem; dense, moderate N)"
+        },
+        {
+          "cli": "--confine",
+          "name": "confine",
+          "choices": [
+            "off",
+            "on",
+            "abe"
+          ],
+          "default": "off",
+          "help": "current-confinement BC. off=none; on=psi 0 on the former edge (gradient/shim; breaks solenoids); abe=Abe edge-equipotential (one free constant per boundary + ground) -- closes the contours AND works for gradient and solenoid (recommended)."
         },
         {
           "cli": "--alpha",
@@ -926,11 +951,10 @@
           "choices": [
             "alpha",
             "linf",
-            "geometry",
-            "sheetmetal"
+            "geometry"
           ],
           "default": "alpha",
-          "help": "front-pushing lever (alpha = L-curve sweep; linf/geometry/sheetmetal: interface defined, follow-on bodies)"
+          "help": "front-pushing lever: alpha (Tikhonov L-curve), linf (minimax IRLS peak-current trajectory), geometry (eval-region scale sweep)"
         },
         {
           "cli": "--alpha-min",
@@ -951,7 +975,28 @@
           "name": "n_alpha",
           "type": "int",
           "default": 12,
-          "help": "pareto alpha-sweep number of points"
+          "help": "pareto sweep number of points (alpha/geometry)"
+        },
+        {
+          "cli": "--linf-iter",
+          "name": "linf_iter",
+          "type": "int",
+          "default": 8,
+          "help": "linf lever IRLS iterations (pareto)"
+        },
+        {
+          "cli": "--geom-scale-min",
+          "name": "geom_scale_min",
+          "type": "float",
+          "default": 0.6,
+          "help": "geometry lever: eval-region scale lower bound"
+        },
+        {
+          "cli": "--geom-scale-max",
+          "name": "geom_scale_max",
+          "type": "float",
+          "default": 1.6,
+          "help": "geometry lever: eval-region scale upper bound"
         },
         {
           "cli": "--nlevels",
@@ -961,16 +1006,42 @@
           "help": "number of iso-contours = wire turns (manufacture)"
         },
         {
-          "cli": "--chain-method",
-          "name": "chain_method",
+          "cli": "--target-inductance",
+          "name": "target_inductance",
+          "type": "float",
+          "default": null,
+          "help": "IH-RESONANCE design: search the turn count (nlevels) so the single-stroke coil inductance equals this value in Henries (the field design is unchanged; L_coil ~ N^2 sets the resonance).  Forces --peec."
+        },
+        {
+          "cli": "--resonance-cap",
+          "name": "resonance_cap",
+          "type": "float",
+          "default": null,
+          "help": "IH-RESONANCE design via the tank capacitor in Farads: target L = 1/((2 pi f)^2 C) with f = --peec-freq (the inverter frequency).  Alternative to --target-inductance."
+        },
+        {
+          "cli": "--nlevels-max",
+          "name": "nlevels_max",
+          "type": "int",
+          "default": 60,
+          "help": "upper bound for the IH-resonance nlevels search"
+        },
+        {
+          "cli": "--contour-sub",
+          "name": "contour_sub",
+          "type": "int",
+          "default": 1,
+          "help": "order-p contour: subdivide each surface triangle sub x sub and evaluate the full-order psi (sub=1 = vertex-linear; sub=3 follows the curved order-2/3 psi within each element) (manufacture)"
+        },
+        {
+          "cli": "--chain",
+          "name": "chain",
           "choices": [
             "field_aware",
-            "kuijpers",
-            "lobe",
-            "greedy"
+            "nn"
           ],
           "default": "field_aware",
-          "help": "single-stroke chain method (manufacture)"
+          "help": "single-stroke chaining: field_aware (min net connector field; reaches the separate-turns floor for closed contours, no distort) or nn (nearest neighbour)"
         },
         {
           "cli": "--distort",
@@ -978,21 +1049,85 @@
           "help": "single-current sheet-metal wire distortion (manufacture)"
         },
         {
-          "cli": "--distort-comps",
-          "name": "distort_comps",
-          "default": "rsz",
-          "help": "sheet-metal distortion components (manufacture)"
+          "cli": "--distort-grid",
+          "name": "distort_grid",
+          "type": "int",
+          "default": 3,
+          "help": "sheet-metal 3D control-grid size per axis (manufacture)"
+        },
+        {
+          "cli": "--distort-iter",
+          "name": "distort_iter",
+          "type": "int",
+          "default": 5,
+          "help": "sheet-metal Gauss-Newton iterations (manufacture)"
         },
         {
           "cli": "--step-output",
           "name": "step_output",
           "default": "",
-          "help": "STEP CAD output path (manufacture)"
+          "help": "STEP CAD output path for the wire (manufacture)"
         },
         {
           "cli": "--peec",
           "name": "peec",
-          "help": "compute PEEC coil inductance (manufacture)"
+          "help": "compute PEEC coil inductance L, R (manufacture)"
+        },
+        {
+          "cli": "--wire-diam",
+          "name": "wire_diam",
+          "type": "float",
+          "default": 0.001,
+          "help": "PEEC wire cross-section size in m (manufacture)"
+        },
+        {
+          "cli": "--peec-freq",
+          "name": "peec_freq",
+          "type": "float",
+          "default": 100000.0,
+          "help": "PEEC evaluation frequency in Hz (manufacture)"
+        },
+        {
+          "cli": "--flux-plot",
+          "name": "flux_plot",
+          "default": "",
+          "help": "bubble-system flux-line PNG of the coil field on a cut-plane (manufacture)"
+        },
+        {
+          "cli": "--flux-plane",
+          "name": "flux_plane",
+          "choices": [
+            "x",
+            "y",
+            "z"
+          ],
+          "default": "y",
+          "help": "cut-plane normal for --flux-plot (manufacture)"
+        },
+        {
+          "cli": "--steps-plot",
+          "name": "steps_plot",
+          "default": "",
+          "help": "per-step manufacturing PNG (contours -> single-stroke -> sheet-metal -> with thickness) (manufacture)"
+        },
+        {
+          "cli": "--shield-vol",
+          "name": "shield_vol",
+          "default": null,
+          "help": "outer shield coil surface mesh (.vol). When given, designs a PRIMARY + SHIELD coil jointly (Turner 1986 method): the shield cancels the stray field outside --shield-eval-vol while primary + shield together produce the target field inside --eval-vol (DSV). Only 'design' mode; requires --shield-eval-vol."
+        },
+        {
+          "cli": "--shield-eval-vol",
+          "name": "shield_eval_vol",
+          "default": null,
+          "help": "external evaluation region (.vol) WHERE THE STRAY FIELD MUST VANISH (used only with --shield-vol). Typically a thin shell just outside the shield cylinder."
+        },
+        {
+          "cli": "--shield-weight",
+          "name": "shield_weight",
+          "type": "float",
+          "default": 1.0,
+          "help": "weight on the stray-field null-constraint rows relative to the DSV target rows (default 1.0). Increase to push stray suppression; decrease if DSV homogeneity degrades too much."
         },
         {
           "cli": "--msh-output",
@@ -1007,6 +1142,130 @@
           "name": "output",
           "default": "",
           "help": "JSON output file",
+          "ja": "出力 JSON ファイル",
+          "physics": ""
+        }
+      ]
+    },
+    "streamfunction_volume": {
+      "script": "calc_streamfunction_volume.py",
+      "function": "run",
+      "ja_name": "体積ストリーム関数コイル設計 (3D)",
+      "ja_description": "中空円筒導体 .vol + 目標軸方向 Bz から、葉層化カレント・クレブシュ体積ストリーム関数 J=grad(lambda)xgrad(mu) (mu=r 固定) を線形最小ノルム逆問題 (ACA+TSVD) で解き、等電流の巻線ワイヤに等高線抽出。ワイヤの Biot-Savart を Radia と二重コード照合。radia_streamfunction パネルの 'Volume 3D' モード。",
+      "method": "Foliated current-Clebsch volume stream function (H1 lambda on a conductor volume) + ACA+TSVD least-norm + equal-current contour extraction + two-codebase Biot-Savart check",
+      "command_builder": "radia_streamfunction.py:StreamFunctionPanel.build_command",
+      "params": [
+        {
+          "cli": "--vol",
+          "name": "vol",
+          "required": true,
+          "help": "Hollow cylindrical CONDUCTOR volume mesh (.vol).",
+          "ja": ".vol メッシュファイル",
+          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
+        },
+        {
+          "cli": "--target-bz",
+          "name": "target_bz",
+          "type": "float",
+          "default": 0.001,
+          "help": "Target uniform axial field Bz in the bore [T].",
+          "ja": "目標軸方向磁場 Bz",
+          "physics": "[T]"
+        },
+        {
+          "cli": "--foliation",
+          "name": "foliation",
+          "choices": [
+            "radial"
+          ],
+          "default": "radial",
+          "help": "Foliation mu.  'radial' = nested cylinders mu=r.",
+          "ja": "葉層化 mu",
+          "physics": "radial = 入れ子円筒 mu=r"
+        },
+        {
+          "cli": "--n-leaves",
+          "name": "n_leaves",
+          "type": "int",
+          "default": 3,
+          "help": "Number of mu-leaf cylinders (radial shells).",
+          "ja": "mu 葉層数",
+          "physics": ""
+        },
+        {
+          "cli": "--fes-order",
+          "name": "fes_order",
+          "type": "int",
+          "default": 2,
+          "help": "H1 polynomial order for the lambda field.",
+          "ja": "lambda H1 次数",
+          "physics": ""
+        },
+        {
+          "cli": "--aca-eps",
+          "name": "aca_eps",
+          "type": "float",
+          "default": 1e-10,
+          "help": "ACA+ stopping tolerance for the response factorisation.",
+          "ja": "ACA+ 許容誤差",
+          "physics": ""
+        },
+        {
+          "cli": "--rings-per-span",
+          "name": "rings_per_span",
+          "type": "int",
+          "default": 14,
+          "help": "Equal-current rings across the lambda range (wire density; larger = more, finer wires).",
+          "ja": "リング数/lambda 範囲",
+          "physics": ""
+        },
+        {
+          "cli": "--n-targets",
+          "name": "n_targets",
+          "type": "int",
+          "default": 9,
+          "help": "Number of axial field-target points along the bore.",
+          "ja": "軸方向ターゲット点数",
+          "physics": ""
+        },
+        {
+          "cli": "--nphi",
+          "name": "nphi",
+          "type": "int",
+          "default": 49,
+          "help": "Azimuthal samples for contour extraction.",
+          "ja": "等高線 方位サンプル数",
+          "physics": "ワイヤ抽出の方位方向サンプル数"
+        },
+        {
+          "cli": "--nz",
+          "name": "nz",
+          "type": "int",
+          "default": 41,
+          "help": "Axial samples for contour extraction.",
+          "ja": "等高線 軸方向サンプル数",
+          "physics": "ワイヤ抽出の軸方向サンプル数"
+        },
+        {
+          "cli": "--n-threads",
+          "name": "n_threads",
+          "type": "int",
+          "default": 4,
+          "help": "NGSolve TaskManager thread count."
+        },
+        {
+          "cli": "--msh-output",
+          "name": "msh_output",
+          "default": null,
+          "help": "GMSH .msh (v4.1) wire overlay to write.  Panel sets it.",
+          "ja": "GMSH 出力パス",
+          "physics": "場の可視化用 .msh v4.1"
+        },
+        {
+          "cli": "--output",
+          "name": "output",
+          "default": null,
+          "help": "Result JSON.  calc_main writes the return dict here.",
           "ja": "出力 JSON ファイル",
           "physics": ""
         }
