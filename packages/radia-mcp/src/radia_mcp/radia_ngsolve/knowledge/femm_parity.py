@@ -52,9 +52,10 @@ FEMM_MATRIX = """\
 | AC current flow (cmplx) | yes   | (same) | coaxial Y=G+j w C  0.34%            |
 | convection BC (Robin)   | yes   | yes    | slab L/k + 1/h  0.003%              |
 | radiation BC (T^4)      | yes   | yes    | slab cond/rad balance  0.000%       |
-| FEMM open-bdry x-check  | (—)   | yes    | vs FEMM rad=100.mat 0.78% of peak   |
+| open-bdry x-check       | (—)   | yes    | vs stored open-bdry ref 0.78% of peak|
 | axi forced eddy (BFI)   | (—)   | yes    | P_eddy(w): BFI+scipy; w^2 onset OK  |
 | SIBC eddy force (3D)    | (3D)  | (3D)   | time-avg Maxwell on hole; 0.5*static|
+| periodic/anti-periodic BC| yes  | (—)    | strip closed form  2e-7 / 2e-8     |
 
 (*) axisymmetric magnetics / eddy / nonlinear use H1Henrotte (axihenrotte FESpace)
 "(mat)" = a material model (anisotropic / complex-mu CF) usable in either path.
@@ -62,6 +63,12 @@ FEMM_MATRIX = """\
 API: solve_axi_magnetostatic / solve_axi_eddy / solve_axi_eddy_harmonic /
 solve_axi_magnetostatic_nonlinear in solve.py; inductance_axi / ohmic_loss_axi /
 maxwell_surface_force / maxwell_surface_force_harmonic in force.py.
+Periodic / anti-periodic SECTOR BC (FEMM motor/machine cyclic symmetry):
+periodic_h1(mesh, order, dirichlet, antiperiodic=False) wraps H1 with
+ngsolve.Periodic -- the mesh must carry the netgen periodic identification (2D
+SplineGeometry slave edge ``copy=master`` with a CCW loop, or OCC
+``edge.Identify(.., IdentificationType.PERIODIC, trafo)``). antiperiodic=True =
+phase -1 (A_slave=-A_master, half-period sector) -> complex space, take .real.
 
 NOTE on the axi FORCED-harmonic eddy: the generic grad-weak-form solve_axi_eddy
 canNOT assemble the complex (nu-stiffness + j w sigma-mass) system -- H1Henrotte's
@@ -249,14 +256,14 @@ B = CoefficientFunction((-grad(u)[1], grad(u)[0] + u/x))    # (B_r, B_z)
 Fz = eggshell_force_axi(B, mesh, center=(rc, zc), r_inner=.., r_outer=..)
 ```
 
-## FEMM open-boundary cross-check (ground truth = D. Meeker's FEMM)
+## Open-boundary cross-check (independent open-region reference)
 
-``tests/test_femm_xcheck_kelvin_magnet.py`` loads a real FEMM Kelvin-transform
-(open-boundary) axisymmetric magnet solution (rad=100.mat: B_z at r=7 mm) and
+``tests/test_femm_xcheck_kelvin_magnet.py`` loads a stored Kelvin-transform
+(open-boundary) axisymmetric-magnet regression reference (B_z at r=7 mm) and
 reproduces it with ``solve_axi_magnetostatic`` on a large truncated domain --
 agreement 0.78 % of peak. A permanent magnet's field (mu_r=1) is scale-invariant,
-so the SI solve matches FEMM's millimeter problem in tesla directly. The source
-materials are searchable via ``literature_semantic_search(collection="femm_kelvin")``.
+so the SI solve matches the millimeter reference problem in tesla directly. The
+reference is treated as an opaque stored data file.
 """
 
 FEMM_VALIDATION = """\
@@ -272,6 +279,7 @@ FEMM_VALIDATION = """\
 | test_planar_eddy_voltage            | same, voltage-driven Z             | +0.07% |
 | test_planar_nonlinear               | Ampere H=I/2 pi r, B=BH(H)        | <0.05% |
 | test_planar_inductance              | L_int = mu0/(8 pi)                | -0.06% |
+| test_planar_periodic                | strip closed form (periodic+anti) | ~1e-7  |
 | test_scalar_fem2d                   | coaxial 2 pi c/ln(b/a) (eps/sig/k)| -0.19% |
 | test_axi_scalar                     | sphere 4 pi c ab/(b-a) (eps,k)    | -0.15% |
 | radia-axifemm/test_disk_eigenvalue  | Cu-disk tau_1 = 224.31 us (BEM)   |  0.27% |
@@ -279,7 +287,7 @@ FEMM_VALIDATION = """\
 | test_laminated_steel (DC)           | resolved stack vs anisotropic ten.|  0.00% |
 | test_planar_proximity (single)      | round-wire Kelvin Rac/Rdc         | +0.07% |
 | test_planar_proximity (2 far)       | series = 2x isolated Rac          | +0.34% |
-| test_femm_xcheck_kelvin_magnet      | FEMM rad=100.mat B_z(r=7), open   |  0.78% |
+| test_femm_xcheck_kelvin_magnet      | stored open-bdry ref B_z(r=7)     |  0.78% |
 | test_scalar_fem2d_ext (Robin)       | slab T_L = T_inf+dT/(1+hL/k)      | +0.003%|
 | test_scalar_fem2d_ext (AC I-flow)   | coaxial Y = 2pi(sig+jwe)/ln(b/a)  | -0.34% |
 | test_stranded                       | uniform-J B(a/2)=mu0 I/(4 pi a)   | +0.14% |
@@ -299,8 +307,8 @@ CalcMatrix DiffOp overloads, validated to machine precision in
 test_axi_henrotte_complex_eval.py) -- the complex |A|/B field post-processing of
 the solution is now reliable too (this unblocks the nonlinear mu(|B|) Picard layer).
 The harmonic Maxwell surface force (maxwell_surface_force_harmonic, the SIBC-hole
-force handle) is validated by reduction to the COMSOL-cross-validated static force
-(harmonic = 0.5*static, machine precision). The laminated DC/AC checks are exact
+force handle) is validated by reduction to the independently cross-validated
+static force (harmonic = 0.5*static, machine precision). The laminated DC/AC checks are exact
 (uniform-field & 1D-eddy have closed forms representable to machine precision).
 Gotchas: eggshell force needs a mesh-resolved band; nonlinear point-B overshoots
 at interface (sample away); axisym arc boundaries split -> Nearest at 2 points

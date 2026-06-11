@@ -6,9 +6,15 @@ coefficient ``c`` and a different post-processing (capacitance / thermal
 resistance / conductance). This module ships that shared core plus thin,
 physics-named wrappers, each validated against an analytical benchmark:
 
-    electrostatics : -div(eps grad V) = rho ,  E=-grad V , C = 2W/V^2
-    heat (steady)  : -div(k   grad T) = q   ,  q_flux=-k grad T
-    current flow   : -div(sig grad V) = 0   ,  J=-sig grad V , G=2P/V^2
+    electrostatics  : -div(eps grad V)    = rho ,  E=-grad V    , C = 2W/V^2
+    heat (steady)   : -div(k   grad T)    = q   ,  q_flux=-k grad T , G_th=2P/dT^2
+    current flow    : -div(sig grad V)    = 0   ,  J=-sig grad V , G = 2P/V^2
+    magnetic scalar : -div(mu  grad phi_m)= 0   ,  H=-grad phi_m, B=mu H , P = 2W/F^2
+
+The last is the current-free magnetic scalar potential (COMSOL 'Magnetic Fields,
+No Currents' / mfnc) -- the magnetic-circuit / reluctance-network primitive, with
+mu = mu0*mu_r in place of eps / k / sigma. On the coaxial annulus all four give the
+SAME radial-Laplace lumped value  2 pi c / ln(b/a)  (c = eps, k, sigma, mu).
 
 All are 2D planar (quantities per unit length in the out-of-plane direction).
 """
@@ -171,6 +177,36 @@ def conductance(V, mesh, sigma, v_applied):
     P = 1/2 int sigma |grad V|^2 dA (DC, real)."""
     P = 0.5 * Integrate(sigma * grad(V) * grad(V) * dx, mesh)
     return 2.0 * P / (v_applied * v_applied)
+
+
+def thermal_conductance(T, mesh, k, delta_T):
+    """Thermal conductance per length [W/m/K] from the conduction dissipation: G_th = 2P/dT^2,
+    P = 1/2 int k |grad T|^2 dA -- the heat member of the Laplace-operator triad alongside electric
+    :func:`conductance` and :func:`capacitance` (same -div(c grad u)=0, c = sigma / eps / k).
+    Validated on the coaxial annulus: G_th/L = 2 pi k / ln(b/a) (tests/test_scalar_fem2d.py)."""
+    P = 0.5 * Integrate(k * grad(T) * grad(T) * dx, mesh)
+    return 2.0 * P / (delta_T * delta_T)
+
+
+def solve_magnetic_scalar(mesh, mu, scalar_potentials, order=2):
+    """Current-free magnetic scalar potential (COMSOL 'Magnetic Fields, No Currents' / mfnc analog):
+    -div(mu grad phi_m) = 0, with H = -grad(phi_m) and B = mu H (mu = mu0*mu_r). ``scalar_potentials``
+    = {boundary: magnetomotive potential [A]} fixed-MMF boundaries. The fourth member of the FEMM-style
+    scalar-Laplace family (electrostatic / current-flow / thermal): the reduced scalar potential for
+    CURRENT-FREE magnetics (gaps, PM exteriors) where a full vector potential A is unnecessary -- the
+    magnetic-circuit / reluctance-network primitive. Returns phi_m; the permeance via :func:`permeance`."""
+    return solve_poisson_2d(mesh, mu, scalar_potentials, source=None, order=order)
+
+
+def permeance(phi, mesh, mu, mmf):
+    """Magnetic permeance per length [H/m] from the field co-energy: P' = 2W/F^2,
+    W = 1/2 int mu |grad phi_m|^2 dA -- the magnetic member of the scalar-Laplace family alongside
+    electric :func:`conductance`, :func:`capacitance` and :func:`thermal_conductance` (same
+    -div(c grad u)=0, c = sigma / eps / k / mu). For a finite axial length L the magnetic-circuit
+    reluctance is R_m = 1/(P' L).  Validated on the coaxial annulus: P'/L = 2 pi mu / ln(b/a)
+    (tests/test_scalar_fem2d.py) -- the radial-gap reluctance used in magnetic-equivalent-circuit models."""
+    W = 0.5 * Integrate(mu * grad(phi) * grad(phi) * dx, mesh)
+    return 2.0 * W / (mmf * mmf)
 
 
 def solve_current_flow_ac(mesh, sigma, eps, omega, potentials, order=2):

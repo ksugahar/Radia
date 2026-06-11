@@ -5685,6 +5685,15 @@ fine-enough wire and d >> rw so B1 is ~uniform across wire 2. Validated
 (examples/comsol_class/busbar_force.py; tests/test_force_xval.py::test_busbar_lorentz_force):
 both attractive (parallel) and repulsive (anti-parallel) match mu0 I1 I2/(2 pi d) to
 ~1 %, correct signs, transverse force ~0.
+
+METHOD OF IMAGES (wire above an iron plane): a wire (current I) a height h above an IRON
+(mu->inf) half-plane is attracted with ``F = mu0 I^2/(4 pi h)`` (``image_force_wire_iron``)
+-- the iron mirrors a SAME-sign image current at -h (perpendicular field lines), so it's the
+two-parallel-currents force at separation 2h. (A perfect CONDUCTOR mirrors an OPPOSITE-sign
+image -> equal repulsion.) Same recipe: ``lorentz_force_2d(Jz, B, mesh, "wire")`` (the wire's
+self-field nets to zero). With a large-but-FINITE iron block the FE force is ~4 % below the
+infinite-half-plane ideal (-> exact as the block grows); validated
+examples/comsol_class/image_force.py; tests/test_image_force.py.
 """
 
 
@@ -5738,6 +5747,44 @@ g=6 mm, mu_r=2000 -> B_gap matches the reluctance model to **0.5 %**, sitting ju
 the mu_r->inf ideal (the deficit = gap fringing/leakage -- the lumped model's blind spot,
 and exactly what a COMSOL cross-check resolves). Wider gaps -> more fringing -> bigger
 deficit; that trend IS the engineering content (effective gap > geometric gap).
+
+HOLDING FORCE (the force companion -- relay / solenoid / electromagnet pull): the pole faces
+attract with the Maxwell-stress holding force ``F = B_gap^2 * A_face/(2 mu0)`` (A_face =
+pole-face area = face height * stack depth). ``magnetic_circuit_gap_force(N,I,gap,iron_path,
+mu_r,area)`` = mu0(NI)^2 A/[2(gap+iron_path/mu_r)^2] ~ 1/gap^2. The FE force (B_gap_FE^2
+A/2mu0 from the solved gap field) matches the reluctance model to **<1.4 %**, and
+F*(gap+iron_path/mu_r)^2 is constant to **<1 %** across a 2.25x gap range -- the 1/g^2
+reluctance force law. Validated examples/comsol_class/reluctance_actuator.py;
+tests/test_reluctance_actuator.py.
+
+GAPPED-CORE INDUCTANCE (#39) -- the inductance twin of the actuator force, SAME window
+frame: ``magnetic_circuit_inductance(N,A,gap,iron_path,mu_r)`` = N^2/R =
+``N^2 mu0 A/(gap + iron_path/mu_r)`` (the gap-force effective gap, again; mu_r->inf =>
+gap-limited L -> N^2 mu0 A/gap). radia reads the true L with ``inductance_2d`` (lambda/I on
+the coil bundles). KEY CONTRAST WITH THE FORCE: the gap FORCE reads only B_gap, so the
+leakage-free reluctance model is good to <1.4 %; but the coil INDUCTANCE also LINKS THE
+WINDOW LEAKAGE FLUX, so the FE L sits WELL ABOVE the reluctance model -- **~1.27x at
+g=4 mm growing to ~1.52x at g=9 mm** (more flux short-cuts the window as the gap opens).
+That excess IS the physical content the lumped model misses. Tool-independent gate: the FE
+L bounded BELOW by L0 (and < ~1.8 L0), L falling with g, and L/L0 RISING with g; a radia
+self-regression pins the values and an independent 2D FE solver matches them to ~0.4 %
+(capability parity, recorded in the internal cross-val). Validated
+examples/comsol_class/gapped_core_inductor.py; tests/test_gapped_core_inductance.py.
+
+PM LOAD LINE / operating point (#42) -- the PERMANENT-MAGNET-driven member, completing the
+magnetic-circuit trilogy (coil force #27, coil inductance #39, PM operating point now). A
+magnet (Br, recoil mu_r=1) in one leg drives flux across the gap; Ampere's law + the recoil
+line B=Br+mu0 mu_rec H give ``pm_circuit_loadline_gap_field`` =
+``Br l_m/(l_m + mu_rec g + l_fe/mu_r)`` (the NI of #27 replaced by the magnet's Br l_m/mu_rec
+MMF). A larger gap is a STEEPER load line -> lower B_gap (more demagnetisation). radia drives
+it with ``solve_planar_magnetostatic(magnets={"magnet":(Br/mu0, phi_deg)})``, the magnet
+magnetised ALONG its leg (phi 90 deg = +y), and reads the gap Bx. LEAKAGE (opposite sign to
+the inductance #39): magnet flux short-cuts the window instead of reaching the gap, so the FE
+B_gap is BELOW the leakage-free load line, ~0.86x (g=2 mm) -> ~0.68x (g=8 mm), the deficit
+GROWING with the gap. Tool-independent gate: FE below the load line (upper bound), B_gap and
+B_gap/loadline both FALLING with the gap, + a radia self-regression; an independent 2D FE
+solver matches radia to ~0.3 % (capability parity, internal cross-val). Validated
+examples/comsol_class/pm_loadline.py; tests/test_pm_loadline.py.
 """
 
 
@@ -5769,6 +5816,63 @@ sides insulated) -> uniform q = sigma(V/L)^2 and the EXACT parabolic rise
 **0.00 %** -- order-2 H1 represents the quadratic profile and uniform source exactly. The
 clean two-physics chain; for AC/eddy use ``joule_loss_density`` instead of the DC source,
 and for temperature-dependent sigma(T)/k(T) wrap the chain in a Picard loop (two-way).
+
+CYLINDRICAL sibling (#41) -- a round conductor (radius a) carrying a uniform DC current density
+J: uniform Joule source q=J^2/sigma, surface held at the coolant temperature, steady RADIAL
+conduction -div(k grad T)=q gives the parabolic rise dT(r)=q(a^2-r^2)/(4k), centre
+``dT_peak = q a^2/(4 k)`` (``multiphysics.joule_heated_cylinder_peak_dT``) -- the classic
+current-carrying-wire / ampacity temperature rise, the cylindrical analog of the slab's
+sigma V^2/(8k). solve_heat_steady on a disk (face "wire", edge "surf") reproduces dT(r) to
+**0.00 %**. VALIDATED LIVE 3-way (the corrected COMSOL policy: `comsol_preflight` -> gate1
+LiveLink up + gate2 module licensed [core ht, no add-on] -> live): COMSOL 6.4 LiveLink
+**25.0000 K == NGSolve == analytic q a^2/4k, 0.000 %** (COMSOL number internal/unattributed;
+public gate is the closed form). examples/comsol_class/cylinder_joule_heating.py;
+tests/test_cylinder_joule_heating.py.
+
+CONVECTIVE cooling (#44) -- the realistic BC. Instead of a fixed surface temperature, the slab
+is cooled by CONVECTION (Newton cooling, film coefficient h): a ROBIN boundary
+``-k dT/dn = h(T - T_inf)`` so the surface FLOATS to balance the convected heat.
+``solve_heat_steady_robin(mesh, q, k, conductor, robin, h, T_inf)`` adds ``h*T*s`` to the
+stiffness and ``h*T_inf*s`` to the load on the ``robin`` boundary (other boundaries natural =
+insulated). For a slab (thickness L, both faces convective) the centre rise is
+``convective_slab_peak_dT`` = ``qL^2/(8k) + qL/(2h)`` = conduction parabola PLUS the convective
+FILM rise qL/(2h); the surface sits qL/(2h) above the coolant, and h->inf recovers the fixed-T
+parabola qL^2/8k. VALIDATED LIVE 3-way (`comsol_preflight` gates core ht -> live): COMSOL 6.4
+LiveLink **22.5000 K == NGSolve == analytic, 0.000 %** (the convective BC = ht `HeatFluxBoundary`
+with `HeatFluxType='ConvectiveHeatFlux'`, `h`, `Text`; COMSOL number internal, public gate is the
+closed form). examples/comsol_class/convective_electrothermal.py; tests/test_convective_electrothermal.py.
+
+COOLING FIN / extended surface (#47) -- conduction ALONG a thin fin + distributed surface
+convection: the 1-D fin equation, dT(x) = dT_base cosh(m(L-x))/cosh(mL), m = sqrt(2h/(k t))
+(``fin_parameter``), adiabatic tip dT_tip = dT_base/cosh(mL) (``fin_tip_temperature_rise``), and
+the FIN EFFICIENCY eta = tanh(mL)/(mL) (``fin_efficiency``) = actual heat / heat-if-all-at-base
+(eta->1 short/fat/conductive, ->0 long/thin -- the heat-sink design trade-off). radia uses
+``solve_heat_steady_robin`` with the fin BASE as an inhomogeneous Dirichlet (``dirichlet_value``)
++ convective long faces; the fin efficiency comes from the convected heat
+``Integrate(h*T*ds(conv))/(h*P*L*dT_base)``. VALIDATED LIVE 3-way (`comsol_preflight` gates core
+ht -> live): COMSOL 6.4 LiveLink tip **16.3307 K == NGSolve 16.3307 == 1-D analytic 16.307**
+(0.14 %, the 2-D-vs-1-D fin approximation), eta FE 0.3945 vs tanh(mL)/(mL) 0.3946 (0.04 %).
+COMSOL recipe: base `TemperatureBoundary` + long-face `HeatFluxBoundary`/`ConvectiveHeatFlux`.
+Generalises the convective slab (#44, no along-fin gradient). examples/comsol_class/cooling_fin.py;
+tests/test_cooling_fin.py.
+
+MULTILAYER thermal resistance / DIE-STACK junction temperature (#50) -- the electronics-cooling
+junction-to-ambient metric. A heat-generating top layer conducts DOWN through a passive layer
+stack to a cooled base; the heat flux Q=q*L1 flows through the SERIES thermal resistances
+R_i = L_i/k_i (``thermal_resistance_series`` = sum L_i/k_i, the thermal-circuit analog of series
+electrical R). The temperature DROP across passive layer i is Q*L_i/k_i, and within the active
+top layer the self-heating drop is q*L1^2/(2 k1), so
+
+    T_junction = q L1^2/(2 k1) + Q*(L2/k2 + L3/k3),   Q = q L1.
+
+Low-k layers (solder, TIM) dominate the rise; high-k spreaders (Cu) drop little. radia uses
+``solve_heat_steady`` with a region-wise k CF (``mesh.MaterialCF({lay1:k1,...})``) + the source
+only in the active layer. VALIDATED LIVE 3-way (`comsol_preflight` gates core ht -> live): COMSOL
+6.4 LiveLink == NGSolve == analytic, **0.000 %** at every interface (the conduction profile is
+piecewise-linear/parabolic, represented exactly). COMSOL recipe: per-layer k via
+`SolidHeatTransferModel` features (one per domain, `k_mat='userdef'`) + `HeatSource` in the
+active layer + base `TemperatureBoundary`. examples/comsol_class/die_stack_thermal.py;
+tests/test_die_stack_thermal.py.
 """
 
 
@@ -5810,14 +5914,1177 @@ Euler-Bernoulli ``cantilever_tip_deflection = w L^4/(8EI)`` (w = I B0, I = h^3/1
 principle. For a distributed Maxwell-stress load use the ``force.eggshell_*`` body force;
 for MEMS, the electrostatic force. Two-way (large deflection / moving mesh) needs a
 Picard/ALE loop on top.
+
+THERMAL BENDING (bimorph / bimetallic actuator): a LINEAR through-thickness gradient
+T(y)=dT*(y/h-1/2) on a free cantilever bends it STRESS-FREE into constant curvature
+kappa=alpha*dT/h; tip delta=kappa L^2/2 = alpha*dT*L^2/(2h) (``thermal_bending_tip_deflection``).
+Pass the y-linear field as ``thermal=(alpha, dT*(y/h-1/2))`` and clamp one end; FE matches beam
+theory to **0.24 %** (examples/comsol_class/thermal_bending.py; tests/test_thermal_bending.py).
+Distinct from the AXIAL blocked-bar stress above: a through-thickness GRADIENT -> curvature
+(stress-free), whereas a uniform/parabolic dT in a CLAMPED bar -> stress (no bending).
+
+BIMETALLIC STRIP (thermostat / thermal-switch): TWO bonded layers of equal thickness/modulus
+but different expansion (alpha1, alpha2) under a UNIFORM rise dT curve with Timoshenko (1925)
+``kappa = 3(alpha2-alpha1)dT/(2h)`` (h=total thickness); cantilever tip delta=kappa L^2/2
+(``bimetal_tip_deflection``). Pass alpha as a region-wise CF ``mesh.MaterialCF({lay1:a1,
+lay2:a2})`` to ``solve_linear_elasticity(thermal=(alpha, dT))``. FE vs Timoshenko **1.5 %**
+(examples/comsol_class/bimetallic_strip.py; tests/test_bimetallic_strip.py). The TWO-MATERIAL
+Delta-alpha bending -- vs thermal_bending's ONE-material through-thickness gradient.
+
+BIAXIAL thermal stress (fully in-plane-constrained plate, uniform dT): u=0 is exact, so
+sigma_x=sigma_y = -E alpha dT/(1-nu) (PLANE STRESS, ``biaxial_thermal_stress``) -- the 2D
+constraint factor 1/(1-nu) vs the 1D uniaxial -E alpha dT (constrained_bar_thermal_stress).
+Validated to **0.000 %** (examples/comsol_class/biaxial_thermal_stress.py;
+tests/test_biaxial_thermal_stress.py). KNOWN BUG (found here): radia's plane='strain' thermal
+load is (1+nu) TOO SMALL -- a fully-constrained plane-strain plate should give -E alpha dT/(1-2nu)
+but yields -E alpha dT/((1+nu)(1-2nu)). Plane-strain thermal problems need the effective
+alpha* = (1+nu) alpha (or the thermal coefficient (3 lam + 2 mu) instead of 2(mu+lam)); flagged
+for a separate fix. Plane STRESS is correct; use plane='stress' for thermal stress until fixed.
+
+LAMINATE / COMPOSITE RESIDUAL stress (FREE bonded bar, uniform dT, NO external constraint):
+the layers are forced to a common strain by the bond, so a CTE mismatch alone builds internal
+stress. Stiffness-weighted rule of mixtures (``rule_of_mixtures_cte``):
+``alpha_eff = sum(E_i A_i alpha_i)/sum(E_i A_i)``; per-layer ``sigma_i = E_i (alpha_eff - alpha_i)
+dT`` (``laminate_residual_stress``) -- high-alpha layers COMPRESSED, low-alpha in tension, the
+section self-equilibrated sum(A_i sigma_i)=0. The FREE-bar counterpart of the externally blocked
+``constrained_bar_thermal_stress``; the coating / die-attach / composite-laminate workhorse.
+Build a SYMMETRIC stack (e.g. face|core|face) so it does NOT bend (asymmetric -> bimetal curl,
+above), make it long (L>>h) and read sigma_xx in the uniform CENTRAL window (Saint-Venant away
+from the ends), passing region-wise E and alpha CFs to solve_linear_elasticity(thermal=(alpha,dT)).
+Validated to **0.000 %** (sigma per layer AND the common central strain = alpha_eff*dT)
+(examples/comsol_class/laminate_thermal_stress.py; tests/test_laminate_thermal_stress.py).
+"""
+
+
+NGSOLVE_RELUCTANCE_TORQUE = r"""
+# Cogging / reluctance TORQUE by rotor-sweep -- validated against a regression reference
+
+The classic rotating-machine workflow: ROTATE the rotor and read the air-gap
+Maxwell-stress torque at each angle. radia-ngsolve does it with EXISTING capability
+and NO new solver code -- rotate the magnet's ``phi_deg`` (no remesh) and integrate
+``eggshell_torque_2d`` (weighted Maxwell stress, Henrotte) over an air-gap band:
+
+```python
+from radia_mcp.radia_ngsolve.solve import reluctivity, solve_planar_magnetostatic
+from radia_mcp.radia_ngsolve.force import eggshell_torque_2d
+nu = reluctivity(mesh, {"iron": 1000.0})
+for th in thetas:                                   # "rotate" = re-aim the PM, no remesh
+    A = solve_planar_magnetostatic(mesh, nu, magnets={"rotor": (Br/MU0, th)}, order=3)
+    B = CF((grad(A)[1], -grad(A)[0]))
+    tau_mm = eggshell_torque_2d(B, mesh, (0,0), r_in, r_out)   # band INSIDE the air gap
+```
+
+UNITS: meshed in mm, ``eggshell_torque_2d`` returns a 2D stress-torque in mm-units. To
+the N*m of a depth-``d`` stack, the 2D torque scales as length^2 (lever-arm * area):
+``tau[N*m] = tau_mm * 1e-6 * d_m`` (mm^2->m^2 = 1e-6, then * depth). The PM field is
+SCALE-INVARIANT, so the mm mesh gives the right B; only the torque needs this geometric
+factor.
+
+VALIDATION: a diametric PM rotor (R=10 mm, Br=1 T) in a clean two-teeth salient iron
+stator (mu_r=1000), 1 mm gap; the radia eggshell band (10.2->10.8) over theta=0..180 vs a
+stored regression reference (an independent weighted-stress-tensor solve):
+  * amplitude T0 = 7.6296e-3 (radia) vs 7.5919e-3 N*m (reference) -> **0.50 %**
+  * normalised tau(theta) shape -> **1.3 % RMS**, both clean ``T0 sin(2 theta)``
+    (reluctance torque: the diametric magnet is pulled to align with the low-reluctance
+    iron axis; zeros at 0/90/180, antisymmetric extrema at +-45/135).
+Two FULLY INDEPENDENT torque methods + independent meshes agreeing sub-percent also
+validates the unit conversion. Locked in:
+``tests/test_motor_cogging_torque.py::test_reluctance_torque_amplitude`` (the reference
+number is stored -> CI-portable).
+
+EXTEND to true slotted cogging (multi-tooth stator x PM poles): same method, period
+360/LCM(slots,poles), >=4 air-gap mesh layers, band fully inside the gap. For a soft/
+saturating rotor you must RE-SOLVE per angle (superposition breaks); a hard PM (mu_r=1)
+in a LINEAR stator could superpose, but the salient-iron case here is re-solved per angle
+anyway (the iron responds). GOTCHA avoided: do not let the salient iron pinch to a zero-
+thickness tangency (rect-minus-bore with height = bore diameter) -- it meshes badly and
+will not cross-validate; use clearly separated teeth.
+"""
+
+
+NGSOLVE_MEMS_ELECTROMECH = r"""
+# MEMS electro-mechanical chain (electrostatic force -> deflection) -- the electric twin of magneto-mechanical
+
+The electrostatic actuator: a parallel-plate pull deflects a movable electrode. ONE-WAY
+chain from existing solvers (no new physics):
+
+    solve_electrostatic  ->  electrostatic_eggshell_force_2d  ->  solve_linear_elasticity
+
+```python
+from radia_mcp.radia_ngsolve.scalar_fem2d import solve_electrostatic
+from radia_mcp.radia_ngsolve.force import electrostatic_eggshell_force_2d, EPS0
+from radia_mcp.radia_ngsolve.elasticity import solve_linear_elasticity, cantilever_tip_deflection
+V  = solve_electrostatic(mesh, EPS0, {"top": V0, "bottom": 0.0}, order=2)  # gap, sides Neumann
+E  = CF((-grad(V)[0], -grad(V)[1]))
+Fx, Fy = electrostatic_eggshell_force_2d(E, mesh, CF((0, 1.0/d)), air_region="air")  # gradg=(0,1/d)
+P  = abs(Fy)/W                                   # electrostatic pressure [Pa]
+u  = solve_linear_elasticity(beam, E_mod, nu, dirichlet="clamp",
+                             traction={"loaded": (0, -P)}, plane="stress")  # -> deflection
+```
+
+Validated EXACT (examples/comsol_class/mems_electro_mechanical.py;
+tests/test_force_xval.py::test_mems_electro_mechanical): parallel plate (sides = natural-
+Neumann symmetry -> 1-D field, no fringing) gives P = 1/2 eps0 (V0/d)^2 to **0.00 %**, and
+the clamped-cantilever tip under that uniform pressure matches Euler-Bernoulli
+``w L^4/(8EI)`` (w = P, unit depth) to **0.05 %**.
+
+DEAD END (recorded so it is not repeated): computing the electrostatic force as a BOUNDARY
+trace ``oint 1/2 eps0 |E|^2 n dS`` over the electrode FAILS -- on a conductor V = const, so the
+boundary trace of ``grad(V)`` in a ``ds`` integral keeps only the TANGENTIAL derivative (=0)
+and DROPS the normal field; ``avg|E|^2`` on the face reads ~1e-17 while the interior is ~1e11,
+so the surface stress integrates to ~0. FIX: the VOLUME weighted-stress ("eggshell") band --
+the interior ``grad(V)`` is the true field. (Same reason the magnetic eggshell beats a B.n
+surface trace.)
+
+QUADRATURE GOTCHA: a discontinuous band weight (IfPos: g=0/1/(y1-y0) over y0<y<y1) whose edges
+STRADDLE coarse elements integrates inexactly -- 4.9 % error at maxh=d/4, 1.3 % at d/12. FIX:
+span the ramp over the WHOLE source-free gap, ``g = y/d`` so ``gradg = (0, 1/d)`` is CONSTANT
+and the ramp edges sit on the (mesh-aligned) conductor surfaces -> exact at any mesh. Two-way
+pull-in (deformation changes the gap changes the force) is NONLINEAR -> Picard/moving-mesh loop.
+"""
+
+
+NGSOLVE_BACKEMF_FLUX = r"""
+# No-load FLUX LINKAGE lambda(theta) / back-EMF -- validated against a regression reference
+
+The other half of PMSM characterisation (the torque pair is ngsolve_usage("cogging")).
+Rotate the PM (phi_deg, no remesh), read a stator/search coil's flux linkage at each
+angle; for a 2-pole machine lambda(theta)=lambda0 cos(theta) and the no-load back-EMF is
+e = -d(lambda)/dt = -omega d(lambda)/d(theta) = omega lambda0 sin(theta).
+
+```python
+from radia_mcp.radia_ngsolve.solve import (reluctivity, solve_planar_magnetostatic,
+                                           coil_flux_linkage_2d)
+nu = reluctivity(mesh, {"iron": 1000.0})
+for th in thetas:
+    A = solve_planar_magnetostatic(mesh, nu, magnets={"rotor": (Br/MU0, th)}, order=3)
+    lam = coil_flux_linkage_2d(A, mesh, "coilpos", "coilneg", n_turns, depth=1.0) * 1e-6
+```
+
+``coil_flux_linkage_2d`` = ``N*depth*(<A_z>_pos - <A_z>_neg)``, the AREA-AVERAGE of A_z over
+the two coil sides -- the standard circuit "flux linkage" of an N-turn coil (the magnetic
+vector potential integrated over the go/return coil sides).
+
+UNITS (same mm->SI factor as the torque): meshed in mm, A_z(mm-solve) = 1000*A_phys (B is
+scale-invariant so the mm B-field is right, but A_z is a factor 1e3 too big); so
+``lambda[Wb] = coil_flux_linkage_2d(depth=1) * 1e-6`` (depth 1 mm = 1e-3 m; A_z /1e3).
+
+VALIDATION: 2-pole PM rotor + iron stator + air-gap search coil (N=100), theta=0..360 vs a
+stored regression reference: lambda0 **0.10 %**, normalised lambda(theta) shape **0.00 % RMS**
+(perfect cos(theta) at every angle). Locked in:
+``tests/test_motor_backemf.py::test_flux_linkage_amplitude`` (reference number stored -> CI-portable).
+For a real winding sum the per-phase coil sides (distributed/short-pitch -> winding factor);
+the back-EMF constant ke = omega lambda0.
+
+Kt = Ke (TORQUE CONSTANT == BACK-EMF CONSTANT): by energy conservation a current I in the coil
+feels the co-energy torque T = I dlambda_m/dtheta, so Kt = (T(I)-T(0))/I = dlambda_m/dtheta = Ke
+[Nm/A == Wb/rad == V s]. ``pm_machine_constant(lam_plus, lam_minus, dtheta)`` gives Ke from the
+no-load flux-linkage FD; the FE torque-per-amp (eggshell torque WITH coil current, minus the
+PM-only cogging, /I) matches it to **1.5 %**. This MIXES a PM with a CURRENT source -> mesh in
+SI METRES (current-driven B is not scale-invariant; depth cancels in Kt=Ke). Validated
+examples/comsol_class/kt_ke.py; tests/test_kt_ke.py.
+"""
+
+
+NGSOLVE_LDLQ = r"""
+# Ld / Lq synchronous inductance + frozen-permeability dq -- validated vs a regression reference
+
+The third PMSM quantity (with torque = ngsolve_usage("cogging") and back-EMF =
+ngsolve_usage("back_emf")). Drive a stator coil with current, read its inductance
+``L = lambda/I`` (``solve.inductance_2d``); the rotor SALIENCY makes Ld (rotor d-axis / iron
+along the coil flux) != Lq (rotor q-axis). Ld/Lq is the basis of reluctance torque + MTPA.
+
+```python
+from radia_mcp.radia_ngsolve.solve import reluctivity, solve_planar_magnetostatic, inductance_2d
+nu = reluctivity(mesh, {"rotor": 1000.0, "stator": 1000.0})
+Jz = CF([{"coilpos": j0, "coilneg": -j0}.get(m, 0.0) for m in mesh.GetMaterials()])  # j0=N*I/area
+A  = solve_planar_magnetostatic(mesh, nu, Jz=Jz, order=3)
+L  = inductance_2d(A, mesh, "coilpos", "coilneg", n_turns=N, current=I, depth=d)   # = lambda/I
+# Ld from a mesh with the rotor d-axis along the coil-flux axis; Lq from the rotor rotated 90 deg.
+```
+
+MESH IN METRES: a current-driven B is NOT scale-invariant (unlike the PM cases), so solve in
+SI metres and L is in henries directly (no mm fudge factor).
+
+FROZEN-PERMEABILITY (standard FE dq method, for a SATURATED machine):
+in saturation lambda is NOT a linear PM+armature sum (superposition broken), so you cannot
+difference. Instead: (1) full NONLINEAR solve at the operating point (magnet + dq currents) ->
+per-element converged mu; (2) FREEZE that mu to a fixed CF; (3) linear dq-perturbation solves
+give lambda_pm, Ld=dlambda_d/di_d, Lq=dlambda_q/di_q, cross-coupling Ldq (lambda Park->dq).
+These feed the control layer: T=(3/2)p[lambda_pm i_q + (Ld-Lq) i_d i_q], MTPA / field-weakening.
+
+VALIDATION: salient iron rotor + stator coil, radia inductance lambda/I vs a stored regression
+reference: **Ld 0.20 %, Lq 0.05 %, saliency Ld/Lq 0.26 %**. Locked in:
+tests/test_motor_ldlq.py::test_ldlq_saliency. LESSON: inductance is sensitive to the IN-COIL
+field (self/internal inductance) -- a coarse coil mesh undershoots L by ~2 %; refine the coil
+region (~7 elements across the wire) to converge. (For a linear machine like this no freeze is
+needed; the freeze matters once the iron saturates.)
+"""
+
+
+NGSOLVE_MTPA = r"""
+# MTPA (Maximum-Torque-Per-Ampere) -- the dq control capstone of a salient PM machine
+
+Given the FE-extracted machine parameters -- PM flux linkage ``lambda_m`` (from a PM-only
+``coil_flux_linkage_2d``) and the d-/q-axis inductances ``Ld``/``Lq`` (from ``inductance_2d``
+along the rotor d-/q-axis; use the FROZEN-PERMEABILITY values once the iron saturates,
+ngsolve_usage("ld_lq")) -- MTPA picks the stator-current ANGLE that maximises torque per amp.
+
+```python
+from radia_mcp.radia_ngsolve.solve import dq_torque, mtpa_operating_point
+# dq torque (motor convention), current angle g from the q-axis (id=-I sin g, iq=I cos g):
+#   T = (3/2) p [ lambda_m iq + (Ld - Lq) id iq ]   (magnet/alignment + reluctance torque)
+g, id_, iq, T = mtpa_operating_point(lambda_m, Ld, Lq, current=I, pole_pairs=p)
+```
+
+CLOSED FORM: dT/dg=0 -> lambda_m sin g + (Ld-Lq) I cos 2g = 0, a quadratic in s=sin g:
+``2(Ld-Lq) I s^2 - lambda_m s - (Ld-Lq) I = 0``; the T-maximising real root is taken, so it is
+ROBUST TO BOTH SALIENCY SIGNS:
+  * IPM (Ld < Lq): g > 0 (id < 0, demagnetising) exploits the reluctance torque.
+  * salient-iron / inverse saliency (Ld > Lq): g < 0 (id > 0) -- e.g. the radia ld_lq rotor.
+  * synchronous reluctance (lambda_m = 0): g = -/+45 deg (pure reluctance).
+  * non-salient (Ld = Lq): g = 0 (pure q-axis; all torque is magnet torque).
+Behaviour: at low current the magnet term dominates (g ~ 0); as I rises the reluctance term is
+increasingly worth exploiting (|g| grows) and MTPA beats pure-q-axis by a widening margin.
+
+VALIDATION:
+  * tests/test_motor_mtpa.py -- closed form == independent NUMERICAL argmax over the current
+    angle (0.000 %), the stationarity residual ~ 0, current magnitude honoured, MTPA >= pure-q,
+    and the limits above. PURE dq theory -> tool-independent (no FE solve, no reference values).
+  * examples/comsol_class/mtpa_locus.py -- FE-extracts (lambda_m, Ld, Lq) with radia then sweeps
+    I; for the small salient rotor the MTPA torque exceeds pure-q-axis by up to ~37 % at high
+    current (Ld/Lq=1.23). PITFALL (found building it): the (0,+/-rc) coil links X-directed flux,
+    so its d-axis is x -- magnetise the PM along the d-axis (+x), not +y, or lambda_m reads ~0
+    (a +y magnet gives A_z ~ x/r^2 = 0 on the x=0 coil axis).
+"""
+
+
+NGSOLVE_FIELD_WEAKENING = r"""
+# Field weakening -- the dq operating-region map above base speed (MTPA -> FW -> MTPV)
+
+MTPA (ngsolve_usage("mtpa")) is the LOW-speed answer. Above base speed the inverter VOLTAGE
+limit caps the reachable dq flux, so torque-max must trade flux for speed. Two constraints
+bound the (id,iq) plane (stator R neglected, electrical speed omega_e):
+
+    current:  id^2 + iq^2 <= Imax^2                                   (a circle)
+    voltage:  (Ld id + lambda_m)^2 + (Lq iq)^2 <= (Vmax/omega_e)^2    (an ellipse, centre
+              id = -lambda_m/Ld = -Ich, shrinking as omega_e rises)
+
+```python
+from radia_mcp.radia_ngsolve.solve import (field_weakening_operating_point,
+                                           base_speed_electrical)
+wb = base_speed_electrical(lambda_m, Ld, Lq, Imax, Vmax, p)        # MTPA@Imax hits the V limit
+op = field_weakening_operating_point(lambda_m, Ld, Lq, Imax, Vmax, omega_e, p)
+# op = (id, iq, torque, region) or None (None = omega_e beyond the machine's max speed)
+```
+
+THREE REGIONS (the optimum is always on the feasible boundary, so it is the best of three
+closed-form candidates):
+  * "MTPA" -- omega_e <= base speed: the MTPA-at-Imax point is still voltage-feasible
+    (constant torque). base speed = Vmax / |(Ld id_mtpa + lambda_m, Lq iq_mtpa)|.
+  * "FW"   -- on the current circle INTERSECT voltage ellipse (constant ~power; torque falls
+    as id is driven more negative). Solve iq^2=Imax^2-id^2 into the ellipse -> a quadratic in id.
+  * "MTPV" -- max-torque-per-voltage tangent point INSIDE the current circle. Appears IFF the
+    characteristic current Ich = lambda_m/Ld < Imax (wide CPSR). Found by the change of variables
+    X = Ld id + lambda_m, Y = Lq iq, which turns the voltage ellipse into a circle X^2+Y^2=Vlim^2
+    and the torque into Y*(lambda_m Lq + (Ld-Lq) X); maximising on the circle -> a quadratic in
+    cos(theta). If Ich >= Imax there is NO MTPV region and a FINITE max speed (feasible set goes
+    empty -> the helper returns None) -- the rule of thumb Ich = Imax is the "infinite max speed"
+    design target.
+
+VALIDATION (tests/test_field_weakening.py, examples/comsol_class/field_weakening.py): the
+closed-form operating point == an INDEPENDENT brute-force numeric constrained argmax of T over
+the feasible (id,iq) to **0.000 %**, across a wide-CPSR IPM (Ich<Imax, exercises MTPV), a
+current-limited IPM (Ich>Imax, finite max speed -- helper-None == numeric-None), and a
+non-salient PMSM. Torque is monotone-decreasing through FW; MTPV presence matches the Ich<Imax
+criterion. PURE dq theory -> tool-independent. The high-speed sequel to MTPA (#26); feeds the
+T-N envelope / efficiency-map layer.
+"""
+
+
+NGSOLVE_INDUCTION_MACHINE = r"""
+# Induction machine -- torque-slip curve + breakdown (single-cage equivalent circuit)
+
+A NEW motor class beside the PM dq blocks (MTPA, field weakening): the 3-phase induction
+machine. The single-cage equivalent circuit, reduced by Thevenin (shunt Xm -> source):
+
+```python
+from radia_mcp.radia_ngsolve.solve import (induction_machine_thevenin,
+    induction_machine_torque, induction_machine_breakdown)
+Vth, Rth, Xth = induction_machine_thevenin(V1, R1, X1, Xm)
+T  = induction_machine_torque(V1, R1, X1, R2, X2, Xm, omega_s, slip)   # air-gap torque [N.m]
+s_max, T_max = induction_machine_breakdown(V1, R1, X1, R2, X2, Xm, omega_s)
+```
+
+    T(s) = (3/omega_s) Vth^2 (R2/s) / [(Rth+R2/s)^2 + (Xth+X2)^2]   (omega_s = SYNC mech. speed)
+
+with the BREAKDOWN (pull-out) maximum at
+    s_max = R2 / sqrt(Rth^2 + (Xth+X2)^2),
+    T_max = 3 Vth^2 / (2 omega_s [Rth + sqrt(Rth^2 + (Xth+X2)^2)]).
+
+KEY INVARIANT: T_max is INDEPENDENT of the rotor resistance R2 -- only the breakdown SLIP
+scales with R2 (s_max ∝ R2). That is exactly how wound-rotor / deep-bar designs push peak
+torque toward standstill for high starting torque WITHOUT changing its height. Curve: T -> 0
+at synchronism (s->0), rises to T_max at s_max, the s=1 value is the starting torque.
+
+VALIDATION (tests/test_induction_machine.py, examples/comsol_class/induction_machine_torque.py):
+the closed-form (s_max, T_max) == an INDEPENDENT numeric slip sweep argmax to <1e-3 / <1e-4,
+and the R2-invariance of T_max (with s_max ∝ R2) holds exactly. PURE circuit theory ->
+tool-independent. The analytic basis for the JMAG-roadmap IM 1/4-model FE study (anti-periodic
++ slip + cage), the induction-machine companion to dq_torque for PM machines.
+"""
+
+
+NGSOLVE_POWER_ANGLE = r"""
+# Synchronous machine power-angle (delta) curve + pull-out -- the grid/voltage frame
+
+The voltage-frame characteristic of a synchronous machine, COMPLEMENT to the current-frame
+MTPA (#26) / field weakening (#37): torque vs the LOAD ANGLE delta (between terminal voltage V
+and excitation EMF E).
+
+```python
+from radia_mcp.radia_ngsolve.solve import synchronous_power_angle_torque, synchronous_pullout
+T = synchronous_power_angle_torque(V, E, Xd, Xq, omega_e, p, delta)   # [N.m]
+d_max, T_max = synchronous_pullout(V, E, Xd, Xq, omega_e, p)          # stability limit
+```
+
+    T(d) = (3 p/omega_e) [ V E/Xd sin d  +  (V^2/2)(1/Xq - 1/Xd) sin 2d ]
+
+= FIELD/excitation torque (~ sin d, from the EMF E = omega_e*lambda_m for a PM rotor) + the
+RELUCTANCE torque (~ sin 2d, from the saliency Xd != Xq). The steady-state stability limit is
+the PULL-OUT (the peak); beyond it the rotor slips poles.
+
+PULL-OUT closed form (dT/dd=0 -> (V E/Xd) cos d + V^2(1/Xq-1/Xd) cos 2d = 0, a quadratic in
+cos d). LIMITS that anchor it: NON-salient (Xd=Xq) -> pull-out at exactly 90 deg (the classic
+round-rotor result, all field torque); pure RELUCTANCE (E=0, synchronous reluctance machine) ->
+45 deg; a salient field machine sits BETWEEN (the reluctance term advances the peak below 90 deg,
+e.g. 67 deg for Xd/Xq=1.67). Stronger saliency advances it further.
+
+VALIDATION (tests/test_synchronous_power_angle.py, examples/comsol_class/synchronous_power_angle.py):
+closed-form (d_max, T_max) == an INDEPENDENT numeric angle sweep argmax to <1e-3/<1e-4; the
+non-salient -> 90 deg and reluctance-only -> 45 deg limits hold exactly; field+reluctance
+decomposition is exact. PURE circuit theory -> tool-independent. Same torque as dq_torque (#26)
+re-expressed in the (V, E, delta) grid frame; the synchronous-machine companion to the
+induction-machine torque-slip (#40) -- together they span the AC-machine torque characteristics.
+"""
+
+
+NGSOLVE_DQ_OPERATING_POINT = r"""
+# dq steady-state operating point -- terminal voltage, power, power factor, efficiency
+
+Where MTPA (#26) / field weakening (#37) CHOOSE the dq currents, this EVALUATES the terminal
+quantities the inverter sees at (id, iq, omega_e) -- the voltage/power layer of the dq model:
+
+```python
+from radia_mcp.radia_ngsolve.solve import dq_voltages, dq_operating_point
+vd, vq = dq_voltages(R, Ld, Lq, lambda_m, id, iq, omega_e)
+op = dq_operating_point(R, Ld, Lq, lambda_m, id, iq, omega_e, p)   # dict: Vmag, P_in, PF, ...
+```
+
+    lambda_d = Ld id + lambda_m,  lambda_q = Lq iq
+    v_d = R id - omega_e lambda_q,   v_q = R iq + omega_e lambda_d
+    P_in = (3/2)(v_d i_d + v_q i_q),  P_em = (3/2) omega_e (lambda_d i_q - lambda_q i_d) = T omega_mech,
+    P_cu = (3/2) R |I|^2,  power_factor = P_in/((3/2)|V||I|),  efficiency = P_em/P_in.
+
+Identities (the self-consistency, all to machine precision): **P_in = P_cu + P_em** (energy
+balance), **P_em = torque*omega_mech** (air-gap power), and the torque equals dq_torque (#26).
+At R=0 (lossless) P_in = P_em and efficiency = 1. |V| rises ~linearly with speed (back-EMF) --
+when it hits the inverter ceiling you are at the field-weakening limit (#37); |I| vs the device
+rating. The terminal (V, I, P, PF) layer for inverter/drive SIZING; closes the dq loop
+currents (MTPA/FW) -> terminals. Validated tests/test_dq_operating_point.py,
+examples/comsol_class/dq_operating_point.py.
+"""
+
+
+NGSOLVE_SHORT_CIRCUIT = r"""
+# PM machine 3-phase short circuit -- fault current, braking torque, demagnetisation
+
+The FAULT / protection regime (vs the operating point above). With the terminals SHORTED
+(v_d = v_q = 0) at electrical speed omega_e, the dq voltage equations give
+
+```python
+from radia_mcp.radia_ngsolve.solve import (short_circuit_dq_currents, characteristic_current,
+                                           dq_torque)
+id, iq = short_circuit_dq_currents(R, Ld, Lq, lambda_m, omega_e)
+T_brake = dq_torque(lambda_m, Ld, Lq, id, iq, p)
+Ich = characteristic_current(lambda_m, Ld)          # = lambda_m/Ld
+```
+
+    id = -we^2 Lq lm /(R^2 + we^2 Ld Lq),   iq = -we R lm /(R^2 + we^2 Ld Lq).
+
+HIGH-SPEED limit (we -> inf, or R -> 0): id -> -lambda_m/Ld = -Ich (the CHARACTERISTIC current,
+PURE d-axis DEMAGNETISING -- it cancels the magnet flux, lambda_d = 0), iq -> 0, so the steady
+short-circuit current |Isc| -> Ich. Two design checks fall out: (1) the DEMAG current Ich vs the
+magnet knee (a machine with small Ich = lambda_m/Ld survives a short), and (2) the BRAKING TORQUE
+= dq_torque(id, iq), which rises from 0, PEAKS near the critical speed (exactly we = R/Ls for a
+non-salient machine, Ld=Lq=Ls), then decays to 0 at high speed (iq -> 0). Note Ich = Imax is also
+the wide-CPSR / 'infinite max speed' field-weakening target (#37).
+
+VALIDATION (tests/test_short_circuit.py, examples/comsol_class/short_circuit_demag.py): the
+shorted dq equations hold exactly, |Isc| -> Ich to <1e-3, the braking torque peaks then decays,
+and the non-salient critical speed we=R/Ls is reproduced. PURE dq theory -> tool-independent.
+"""
+
+
+NGSOLVE_WINDING_FACTOR = r"""
+# AC winding factor k_w = k_d * k_p -- what scales the back-EMF and shapes its harmonics
+
+The winding-geometry factor behind the back-EMF / torque constant (Kt=Ke, #34, F3): the n-th
+harmonic EMF is k_w,n times the concentrated-full-pitch value.
+
+```python
+from radia_mcp.radia_ngsolve.solve import (winding_distribution_factor, winding_pitch_factor,
+                                           winding_factor)
+kw1 = winding_factor(1, q=slots_per_pole_per_phase, slot_angle_elec_deg=gamma, pitch_fraction=beta)
+```
+
+    DISTRIBUTION  k_d,n = sin(n q gamma/2)/(q sin(n gamma/2)) = |sum_{i<q} exp(j n i gamma)|/q
+    PITCH         k_p,n = sin(n beta pi/2)              (beta = coil span / pole pitch)
+    k_w,n = k_d,n * k_p,n
+
+q = slots per pole per phase, gamma = electrical slot angle (= p*360/Q deg). LIMITS: q=1
+(concentrated) -> k_d=1; beta=1 (full pitch) -> k_p,1=1. The fundamental k_w,1 ~ 0.92-0.96 for a
+good 3-phase winding (it scales the useful EMF/torque a bit below 1). The POINT is harmonic
+suppression: distributing (q>1) and SHORT-PITCHING (beta<1) kill the low harmonics -- the classic
+5/6 pitch makes |k_p,5| = |k_p,7| = sin(pi/12) = 0.259, so the 5th & 7th EMF harmonics (and their
+parasitic torques) nearly vanish while k_w,1 stays ~0.93.
+
+VALIDATION (tests/test_winding_factor.py, examples/comsol_class/winding_factor.py): k_d == the
+direct phasor sum of the q slot EMFs (exact), the q=1 / beta=1 limits, and the 5/6-pitch 5th/7th
+suppression. PURE winding geometry -> tool-independent; feeds the back-EMF amplitude (F3) and its
+harmonic content.
+"""
+
+
+NGSOLVE_FROZEN_PERM = r"""
+# Frozen-permeability superposition (saturated-machine Ld/Lq engine)
+
+In a SATURATED magnetic circuit the flux linkage is NOT a linear sum of its sources --
+nu(|B|) couples them -- so you cannot separate PM / d-axis / q-axis flux by differencing.
+The frozen-permeability method restores superposition: take a CONVERGED nonlinear solve,
+FREEZE nu at its operating-point field, and the linear frozen-nu problem superposes exactly.
+
+```python
+from radia_mcp.radia_ngsolve.solve import (solve_planar_magnetostatic_nonlinear,
+    solve_planar_magnetostatic, coil_flux_linkage_2d, frozen_reluctivity)
+A0 = solve_planar_magnetostatic_nonlinear(mesh, nu_of_B, Jz=JzA+JzB, order=2)  # operating point
+nu_fz = frozen_reluctivity(A0, nu_of_B)                       # snapshot nu(|B0|), DIRECT CF
+A_a = solve_planar_magnetostatic(mesh, nu_fz, Jz=JzA)         # linear, source A only
+A_b = solve_planar_magnetostatic(mesh, nu_fz, Jz=JzB)         # linear, source B only
+# lambda_A(nonlinear) == lambda_A(frozen, A) + lambda_A(frozen, B)
+```
+
+Self-validating, NO external data (examples/comsol_class/frozen_permeability.py;
+tests/test_frozen_permeability.py): a 2-winding saturable window-frame core at a strongly
+nonlinear operating point (iron mu_r 1000 -> ~45) -- the nonlinear coil flux linkage
+decomposes into superposable frozen-nu parts to **0.51 %** (and the frozen-nu solve
+reproduces the nonlinear operating point to the same 0.51 %, which IS the convergence check).
+Extends to dq: freeze at (id,iq,PM), perturb each axis -> Ld(id,iq), Lq, Ldq, lambda_pm maps
+-> the MTPA / T-N control layer (ngsolve_usage("ld_lq")).
+
+DEAD ENDS / lessons:
+  * L2-projecting a clamped/discontinuous nu SMEARS it -> the freeze stops reproducing the
+    operating point (saw ~20 % error). FIX: use the DIRECT CF nu_of_B(curl A0) (frozen_reluctivity).
+  * A HARD clamp (IfPos at Bsat) makes Picard non-convergent (the fixed point oscillates;
+    freeze-reproduces blew to >100 %). FIX: a SMOOTH BOUNDED nu(B) (mu_r0 -> 1 via
+    B^n/(B^n+Bk^n)) -- Picard converges and the freeze is exact. The freeze-reproduces-nonlinear
+    check is the built-in correctness gate: if it is off, the nonlinear solve has not converged.
+
+SATURATING INDUCTANCE CURVE L(I): the SECANT inductance L_sec(I)=lambda_nl(I)/I (one nonlinear
+solve per current -- ``solve.saturated_secant_inductance``) falls below the unsaturated linear
+L0 as the iron saturates -- the Ld(i) knee underlying saturated dq / MTPA maps. Self-consistent:
+low-I L_sec -> L0 (nu=nu0); L_sec monotone-decreasing; deep saturation pulls it well below L0
+(mu_r_op << mu_r0). Validated examples/comsol_class/saturating_inductance.py;
+tests/test_saturating_inductance.py. NB the frozen-perm APPARENT inductance (freeze the SECANT
+nu(B)) reproduces L_sec at the operating point; the INCREMENTAL dlambda/di needs the TANGENT
+reluctivity dH/dB (not the secant nu) -- freezing the secant nu gives the apparent/secant L,
+NOT the differential -- a noted refinement for the incremental dq map.
+
+INCREMENTAL inductance + CO-ENERGY (the differential refinement): on the saturating lambda(I),
+L_inc = dlambda/dI (``incremental_inductance``, central FD across nonlinear solves at I0+/-dI)
+is the small-signal/control inductance; the co-energy W'(I)=int_0^I lambda dI'
+(``magnetic_coenergy``) and energy W=lambda*I-W'. Robust self-consistent physics of a CONCAVE
+lambda(I): **L_inc < L_sec everywhere**, both fall monotonically (saturation), **co-energy W' >
+energy W** once saturating, and the exact identity **W+W'=lambda*I**. Validated
+examples/comsol_class/incremental_inductance.py; tests/test_incremental_inductance.py. (FD is
+the ground-truth L_inc; the frozen-perm L_inc would freeze the tangent differential-reluctivity
+TENSOR dH/dB -- isotropic ALONG B, secant PERPENDICULAR -- still a future tensor refinement.)
+
+INCREMENTAL inductance MATRIX + cross-saturation + RECIPROCITY (#52, the multi-port version):
+``incremental_inductance_matrix(flux_linkages, currents, di)`` builds the n x n
+L_jk = dlambda_j/di_k by central FD of the nonlinear flux-linkage map (one nonlinear solve per
++-perturbation). Two exact properties on a SHARED SATURABLE core (two windings / dq axes):
+  * **RECIPROCITY L_jk = L_kj** -- the matrix is SYMMETRIC (the magnetic co-energy Hessian
+    d^2 W'/di_j di_k); the off-diagonals are the cross-(saturation) inductances (L_dq, ZERO
+    without saturation, growing as shared iron saturates). FE gives |L_AB-L_BA|/L_AB < 0.01 %.
+  * **INCREMENTAL << APPARENT(secant)**: the frozen-perm secant inductance (freeze nu at the
+    operating |B|) is ~4x the tangent incremental in deep saturation (mu_r 1000->45), and the
+    incremental cross inductance COLLAPSES (~0.04x the unsaturated linear mutual). Use the
+    tangent matrix for small-signal / dq-current-loop / control design, the secant for the
+    operating flux. Resolves the #28/#31 secant-vs-incremental note for the MATRIX. Validated
+    examples/comsol_class/cross_saturation_tensor.py; tests/test_cross_saturation_tensor.py.
+"""
+
+
+NGSOLVE_ELECTROTHERMAL_2WAY = r"""
+# Two-way temperature-dependent sigma(T) electro-thermal
+
+The genuinely 2-way electro-thermal coupling: electrical conductivity falls with temperature,
+sigma(T)=sigma0/(1+alpha T), so the Joule density q = J^2/sigma(T) = (J^2/sigma0)(1+alpha T)
+RISES with T and feeds back into the heat (thermal <-> electrical).  Solved by a Picard fixed
+point with the temperature-dependent source:
+
+```python
+from radia_mcp.radia_ngsolve.multiphysics import solve_heat_steady_nonlinear
+T = solve_heat_steady_nonlinear(mesh, lambda Tcf: (J*J/sigma0)*(1.0 + alpha*Tcf),
+                                k, conductor="bar", dirichlet="ends", order=2)
+```
+
+``q_of_T(T_cf) -> q_cf`` builds the source from the current temperature; the loop re-solves
+``solve_heat_steady`` until ||T|| converges (a few iters for mild feedback).
+
+EXACT closed form (1-D bar, uniform J, cooled ends): the ODE -k T'' = (J^2/sigma0)(1+alpha T)
+is LINEAR -> T(x)=(1/alpha)[cos(s x)+((1-cos sL)/sin sL) sin(s x)-1], T_max=(1/alpha)(sec(sL/2)-1),
+s=sqrt(alpha J^2/(sigma0 k)); as alpha->0 this recovers the constant-sigma parabola peak
+J^2 L^2/(8 sigma0 k).  Validated **0.00 %** (examples/comsol_class/electrothermal_sigmaT.py;
+tests/test_force_xval.py::test_electrothermal_sigmaT_2way) -- the feedback raises the peak ~7 %
+over the no-feedback parabola (alpha*T_max ~ 0.09), so the 2-way effect is real and captured.
+
+``solve_heat_steady_nonlinear`` is GENERAL (any T-dependent volumetric source: sigma(T) Joule,
+volumetric reaction/radiative terms).  The 2-way twin of the one-way ``solve_heat_steady``.  For
+full 2-D 2-way with current redistribution, also put sigma(T) in ``solve_current_flow`` inside the
+loop; in 1-D the current density is uniform (conservation) so q=J^2/sigma(T) is exact.
+"""
+
+
+NGSOLVE_COAX_LINE = r"""
+# Coaxial transmission line: external inductance + characteristic impedance
+
+The magnetic companion to the coax capacitance.  Inner conductor carries +I, shield -I; in
+the dielectric a<r<b the field is exactly the Ampere field B = mu0 I/(2 pi r), so the external
+inductance per unit length is L_ext = 2W/I^2 = (mu0/2pi) ln(b/a),  W = int_diel |B|^2/(2mu0) dA.
+
+```python
+from radia_mcp.radia_ngsolve.force import magnetic_energy_2d
+A = solve_planar_magnetostatic(mesh, reluctivity(mesh, {}), Jz=Jz_coax, order=3)  # inner +I, shield -I
+B = CF((grad(A)[1], -grad(A)[0]))
+L = 2*magnetic_energy_2d(B, mesh, "diel")/I**2          # = (mu0/2pi) ln(b/a)
+```
+
+With the coax capacitance C = 2 pi eps0/ln(b/a): Z0 = sqrt(L/C) = (1/2pi) sqrt(mu0/eps0) ln(b/a)
+= **60 ln(b/a) ohm**, and the wave speed v = 1/sqrt(LC) = **c**.  Validated
+(examples/comsol_class/coax_line.py; tests/test_force_xval.py::test_coax_line_inductance):
+L_ext **0.46 %**, Z0 0.30 %, v=c to 0.2 %.
+
+LESSON: the |B|^2 energy of a 1/r field peaks at small r -> refine the mesh near the inner
+radius (energy converged 1.8 % -> 0.46 % under refinement).  ``magnetic_energy_2d`` is the
+general energy->inductance helper (L = 2W/I^2), the energy twin of the lambda/I ``inductance_2d``.
+
+TWO-WIRE LINE (the parallel-wire dual): two wires radius a, centre separation D carrying +-I
+form a 2D LINE-DIPOLE whose field energy CONVERGES (B ~ 1/r^2 far field), so the external
+inductance L_ext = 2W/I^2 = (mu0/pi) acosh(D/2a) = ``two_wire_external_inductance`` -- the
+energy is taken over the WHOLE air with NO outer-boundary dependence (unlike a single wire's
+log-divergent energy). With C = pi eps0/acosh(D/2a): v = 1/sqrt(LC) = c, Z0 = 120 acosh(D/2a) ohm.
+Validated examples/comsol_class/two_wire_inductance.py; tests/test_two_wire_inductance.py:
+L_ext **1.8 %**, v=c 0.9 % -- the magnetic twin of the two-wire capacitance.
+
+WIRE OVER GROUND (#63) -- the single-ended / microstrip-style line: a wire (radius a) at height h
+above a PERFECT GROUND. The IMAGE METHOD: the ground (A=0 plane) reflects a -I image at -h, so the
+field above is the +I/-I pair at separation 2h but only HALF the energy is above the plane ->
+``wire_over_ground_inductance(h, a) = (mu0/2 pi) acosh(h/a) = 0.5*two_wire_external_inductance(2h, a)``.
+radia reads it from ``magnetic_energy_2d`` over the air ABOVE the Dirichlet-A=0 ground (L=2W/I^2);
+Z0 = c L_ext is the single-conductor line. FE vs closed form to a few % (open-domain truncation,
+FE BELOW the h->inf-domain value, same as the two-wire) -- examples/comsol_class/wire_over_ground.py;
+tests/test_wire_over_ground.py. The MAGNETIC image method (-I image) on the SAME footing as the
+current-wire-above-iron force (#33) and the coax/two-wire family.
+
+TOTAL LOOP inductance (#48) -- what a meter reads: the external field inductance PLUS BOTH
+wires' internal: ``two_wire_loop_inductance`` = ``(mu0/pi) acosh(D/2a) + 2*(mu0/8pi)`` =
+L_ext + mu0/(4 pi). radia PARTITIONS the FE field energy: air -> external, the two wire
+interiors -> internal. The internal term mu0/4pi (radius-independent, the DC value -- rolls off
+via the skin effect, ``skin_effect_internal_inductance_ratio``) is got to **0.18 %** (exact,
+Ampere fixes the interior B), the external acosh to ~1.8 % (energy truncation), the total loop
+to **1.6 %**. examples/comsol_class/two_wire_loop_inductance.py; tests/test_two_wire_loop_inductance.py.
+
+INTERNAL inductance (the energy stored INSIDE the conductor): a round wire with a UNIFORM (DC)
+current has B(r)=mu0 I r/(2 pi R^2) for r<R, so the interior energy gives
+L_int = 2 W_in/I^2 = **mu0/(8 pi)** [H/m] = ``internal_inductance_round_wire()`` -- INDEPENDENT
+of the radius. radia reads it straight off the wire-region field energy, which is
+boundary-independent (Ampere fixes the interior B from the enclosed current):
+
+```python
+A = solve_planar_magnetostatic(mesh, reluctivity(mesh, {}), Jz=I/(pi*R**2) on "wire", order=3)
+B = CF((grad(A)[1], -grad(A)[0]))
+L_int = 2*magnetic_energy_2d(B, mesh, "wire")/I**2     # = mu0/(8 pi), any R
+```
+
+The total low-frequency line inductance is L_ext + L_int; L_int is what ROLLS OFF as the skin
+effect expels the current to the surface at high frequency (the AC-resistance companion).
+Validated examples/comsol_class/internal_inductance.py; tests/test_internal_inductance.py:
+**0.24 %** at two radii (radius-independence confirmed). Completes the inductance set:
+external coax (mu0/2pi)ln(b/a), external two-wire (mu0/pi)acosh(D/2a), internal mu0/(8pi).
+
+AC ROLL-OFF (#45) -- mu0/(8 pi) is the DC limit; at frequency the skin effect expels current
+from the core, so the INTERNAL inductance ROLLS OFF while the AC RESISTANCE rises. For a round
+wire at q = a sqrt(omega mu0 sigma) = sqrt(2) a/delta, the Kelvin (ber/bei) ratios are
+
+    skin_effect_resistance_ratio(q)          = Rac/Rdc        = (q/2)(ber bei'-bei ber')/(ber'^2+bei'^2)
+    skin_effect_internal_inductance_ratio(q) = L_int/L_int_dc = (4/q)(ber ber'+bei bei')/(ber'^2+bei'^2)
+
+so Z_internal(omega) = Rdc*Rac_ratio + j*omega*(mu0/8pi)*Lint_ratio. q->0: both ->1 (DC,
+mu0/8pi); q>>1: Rac/Rdc -> q/(2 sqrt2)+1/4, L_int/L_dc -> 2 sqrt2/q (->0). radia gets BOTH from
+ONE current-driven `solve_planar_eddy` on the WIRE ALONE with A_z=0 on its surface (so Vc/I is
+the pure INTERNAL impedance, no external term to subtract): Rac=Re(Vc/I), L_int=Im(Vc/I)/omega.
+FE vs Kelvin **<0.06 %** L_int and **<1 %** Rac over q=0.5..8 (examples/comsol_class/
+ac_internal_inductance.py; tests/test_ac_internal_inductance.py). The high-frequency complement
+to the DC internal inductance (#36); the AC resistance is the existing skin-effect test
+(tests/test_planar_eddy.py), also vs the Kelvin closed form.
+"""
+
+
+NGSOLVE_WAVEGUIDE = r"""
+# Waveguide / cavity cutoff modes -- the 2D Helmholtz EIGENVALUE problem
+
+The wave-physics entry: a hollow metallic waveguide's modes solve the TRANSVERSE Helmholtz
+eigenproblem on the cross-section,
+
+    -nabla_t^2 psi = k_c^2 psi ,
+
+an EIGENVALUE problem (not a source-driven BVP). The wall BC picks the mode family (PEC walls):
+
+    * TM modes (E_z != 0): E_z = 0 on the wall      ->  DIRICHLET Laplacian
+    * TE modes (H_z != 0): dH_z/dn = 0 on the wall  ->  NEUMANN  Laplacian
+
+The eigenvalues are the squared cutoff wavenumbers k_c^2; below the cutoff frequency
+f_c = c k_c/(2 pi) a mode is evanescent. ``radia_ngsolve.waveguide``:
+
+```python
+from radia_mcp.radia_ngsolve.waveguide import (
+    rectangular_waveguide_cutoff, cutoff_frequency, helmholtz_cutoff_wavenumbers_2d)
+
+# closed form (rectangle a x b): f_c,mn = (c/2) sqrt((m/a)^2 + (n/b)^2)
+f10 = rectangular_waveguide_cutoff(a, b, 1, 0)      # dominant TE10 = c/(2a)
+
+# FE eigensolve on ANY cross-section (rectangular, ridged, circular, L-shaped):
+te = helmholtz_cutoff_wavenumbers_2d(mesh, 3, bc="neumann")    # TE modes (k_c, ascending)
+tm = helmholtz_cutoff_wavenumbers_2d(mesh, 2, bc="dirichlet")  # TM modes
+f = cutoff_frequency(te[0])                                    # c k_c/(2 pi)
+```
+
+Rectangular guide spectrum (EXACT): k_c^2 = (m pi/a)^2 + (n pi/b)^2. TE needs m,n>=0 (not 0,0),
+TM needs m,n>=1. With a>b the dominant mode is TE10 (f_c=c/2a); the gap up to the next mode
+(TE20 at c/a, or TE01 at c/2b) is the SINGLE-MODE bandwidth. WR-90 X-band (22.86x10.16 mm):
+TE10 6.557, TE20 13.11, TE01 14.75, TE11/TM11 16.14 GHz.
+
+EIGENSOLVE recipe (``helmholtz_cutoff_wavenumbers_2d``): assemble stiffness ``grad(u).grad(v)``
+and mass ``u v``, solve the generalised eigenproblem with NGSolve's ``ArnoldiSolver`` using a
+small NEGATIVE shift -- then A - shift*M = A + |shift|*M is SPD and never singular, and the
+eigenvalues NEAREST the shift are the algebraically smallest (the lowest cutoffs). The Neumann
+(TE) space always carries a trivial CONSTANT null mode (k_c ~ 0, no field) -- it is discarded;
+pad ``nev`` to recover the wanted count after the drop. Order-3 H1 on maxh=min(a,b)/16 gives the
+cutoffs to <0.1 %.
+
+The SAME eigenproblem is the 2D cavity TM resonance and the vibrating-membrane (drum) spectrum;
+only the reading of k_c changes (cutoff wavenumber / resonance / mode shape). Validated
+examples/comsol_class/waveguide_cutoff.py; tests/test_waveguide_cutoff.py: TE10/TE20/TE01/TM11
+all match the exact spectrum to FE accuracy, and TM11 lies above every TE mode (the BC is the
+physics). Stored regression reference cross-checked against an independent eigenvalue solver.
+
+3-D CAVITY (full-wave Maxwell, #59): a closed PEC box a x b x d resonates at
+``f_mnp = (c/2) sqrt((m/a)^2+(n/b)^2+(p/d)^2)`` -- the genuine VECTOR-EM cavity, ``curl curl E =
+(omega/c)^2 E`` with ``n x E = 0`` on the walls, on an HCurl (edge) space:
+
+```python
+from radia_mcp.radia_ngsolve.waveguide import rectangular_cavity_frequency, maxwell_cavity_modes_3d
+f101 = rectangular_cavity_frequency(a, b, d, 1, 0, 1)              # dominant TE101 = (c/2)sqrt(1/a^2+1/d^2)
+shift = (pi/a)**2 + (pi/d)**2                                       # ~ fundamental k^2
+freqs = maxwell_cavity_modes_3d(mesh, 4, shift)                     # HCurl curl-curl eigenvalue
+```
+
+CRITICAL (the vector trap): the curl-curl operator has a HUGE GRADIENT KERNEL (curl grad = 0 -> a
+cloud of spurious ZERO modes). Do NOT search near 0 -- give ``ArnoldiSolver`` a ``shift`` near the
+target k^2 so shift-invert amplifies the PHYSICAL resonances and starves the null space (then drop
+any residual eigenvalue << shift). This is why an EM cavity needs HCurl + a shift, unlike the 2-D
+scalar H1 cutoff above. Validated (examples/comsol_class/cavity_resonance.py): TE101/TM110/TE011/
+TE111 of a 40x20x30 mm box to < 0.1 % (order-2 HCurl), gradient modes cleanly suppressed.
+
+CIRCULAR waveguide (#61): a ROUND guide's modes solve the SAME 2D Helmholtz eigenproblem on the
+DISK cross-section, so ``helmholtz_cutoff_wavenumbers_2d`` runs on a disk mesh unchanged -- only
+the closed form differs (Bessel zeros, not sin):
+
+    TM_mn: k_c = j_mn/a  (n-th zero of J_m),   TE_mn: k_c = j'_mn/a  (n-th zero of J'_m).
+
+``circular_waveguide_cutoff(a, 'TE'|'TM', m, n)`` (scipy ``jn_zeros``/``jnp_zeros``). Dominant TE11
+(j'_11 = 1.8412 -> f_c = 0.293 c/a); next TM01 (j_01 = 2.4048). Circular guides have the famous
+DEGENERACY TE_0n / TM_1n (because j'_0n = j_1n), and TE11 is a degenerate POLARISATION pair -- both
+appear in the FE spectrum. Validated examples/comsol_class/circular_waveguide.py;
+tests/test_circular_waveguide.py: TE11/TM01/TE21/TM11 == the Bessel-zero cutoffs to 0.017 %. The
+circular sibling of the rectangular cutoff (#53) -- one eigensolver, two cross-sections.
+
+DISPERSION above cutoff (#65): a cutoff EIGENVALUE only says WHETHER a mode propagates; the
+propagation sequel says HOW. Above f_c the axial constant is beta = (2 pi/c) sqrt(f^2 - f_c^2), so
+the GUIDE WAVELENGTH lambda_g = lambda0/sqrt(1-(f_c/f)^2) > lambda0 (obeying 1/lambda_g^2 =
+1/lambda0^2 - 1/lambda_c^2), the PHASE velocity v_p = c/sqrt(1-(f_c/f)^2) > c (carries no energy),
+the GROUP velocity v_g = c sqrt(1-(f_c/f)^2) < c (energy/signal), with the reciprocal identity
+v_p * v_g = c^2. At cutoff v_g -> 0, v_p -> inf, lambda_g -> inf (a standing wave, no axial
+transport); for f >> f_c both -> c (TEM-like). BELOW cutoff the mode is evanescent, exp(-alpha z),
+alpha = (2 pi/c) sqrt(f_c^2 - f^2) -- the guide as a HIGH-PASS FILTER (alpha -> k_c as f -> 0).
+``waveguide_dispersion(f, fc)`` (dict: beta, lambda_g, v_phase, v_group), ``guide_wavelength(f, fc)``,
+``waveguide_evanescent_attenuation(f, fc)`` -- pure closed forms, while the cutoff fc itself is read
+from the FE eigensolver above (the analytic dispersion curve rides on the FE-computed cutoff).
+Validated examples/comsol_class/waveguide_dispersion.py; tests/test_waveguide_dispersion.py:
+v_p*v_g = c^2 and the lambda_g relation exact, v_g == d omega/d beta numerically, FE-anchored
+fc to +0.000 %. Sets lambda_g/4 transformers, iris/slot spacings, and pulse-spreading (v_g) in
+waveguide components.
+
+QUALITY FACTOR / wall loss (#68): the lossless resonance (#59) only gives WHERE a cavity rings; the
+finite-conductivity walls give HOW SHARPLY. The unloaded Q = omega U / P_wall (stored energy over
+per-cycle wall dissipation). For the TE101 rectangular cavity
+
+    Q = (k a d)^3 b eta / (2 pi^2 R_s (2 a^3 b + 2 b d^3 + a^3 d + a d^3)),
+
+R_s = sqrt(omega mu/(2 sigma)) = 1/(sigma*delta) the wall surface resistance, eta = mu0 c. So
+Q ~ (volume/surface)/delta ~ sqrt(sigma) -- a better conductor or a colder/SC wall (smaller R_s)
+sharpens the resonance; copper X-band cavities sit at Q ~ 1e4, superconducting RF cavities reach 1e9+.
+``rectangular_cavity_q(a, b, d, sigma)`` with ``surface_resistance(f, sigma)`` / ``skin_depth(f, sigma)``
+-- the BRIDGE from the wave family to the skin depth (#45/#55: same delta = sqrt(2/(omega mu sigma))).
+Validated: the closed form == the numerically-integrated TE101 field energy U and wall loss P to
+machine precision, and Q(4 sigma) = 2 Q(sigma) (examples/comsol_class/cavity_quality_factor.py;
+tests/test_cavity_quality_factor.py). The figure of merit for resonators, filters, and accelerator /
+NMR RF cavities.
+"""
+
+
+NGSOLVE_SLOT_LEAKAGE = r"""
+# Slot-leakage inductance of a machine slot (the leakage reactance)
+
+The flux that crosses a stator/rotor slot from tooth to tooth and links the conductor WITHOUT
+reaching the air gap -- the leakage reactance X_sigma=omega L every winding carries on top of
+the magnetising reactance. Set by the slot GEOMETRY (not the iron), it limits the short-circuit
+current and shapes the transient response. For a rectangular slot the specific (per-axial-metre)
+permeance is
+
+    lambda_s = h_c/(3 w_s)  +  h_o/w_o ,     L = mu0 N^2 l_stk lambda_s ,
+
+h_c=conductor height, w_s=slot width, (h_o,w_o)=tooth-tip opening above the conductor.
+
+```python
+from radia_mcp.radia_ngsolve.solve import slot_leakage_permeance, slot_leakage_inductance
+lam = slot_leakage_permeance(h_c, w_s, opening_height=h_o, opening_width=w_o)
+L   = slot_leakage_inductance(h_c, w_s, axial_length=l_stk, turns=N, opening_height=h_o, opening_width=w_o)
+```
+
+The **1/3 factor is exact** and is the whole point: a uniform-current conductor builds the
+cross-slot MMF LINEARLY (0 at the slot bottom to NI at the conductor top), so
+B_x(y)=mu0(NI/w_s)(y/h_c); integrating B^2 over that TRIANGULAR field gives 1/3 (vs 1 for a
+current-free region of the same shape -> the opening's h_o/w_o series term).
+
+FE recipe (the well-posed 1-D-equivalent BVP, examples/comsol_class/slot_leakage.py): solve
+``solve_planar_magnetostatic`` on the slot rectangle with uniform Jz; the high-permeability tooth
+walls become NEUMANN edges (B enters the iron perpendicular -> natural BC), and the yoke flux
+line at the slot TOP is DIRICHLET A=0. Then L' = 2*magnetic_energy_2d(B)/I^2. The 1/3 conductor
+term and a SAME-WIDTH current-free extension reproduce the closed form to **0.000 %**; a NARROWED
+opening (w_o<w_s) makes the FE sit a few % ABOVE the simple series form (tooth-shoulder fringing
+the lumped permeance omits), so the closed form is then a documented LOWER bound -- the same
+signed-leakage story as the gapped-core inductance (coil links extra window flux) and the PM
+load-line (magnet flux short-cuts the gap). tests/test_slot_leakage.py.
+
+KEY GOTCHA: do NOT model the slot as an isolated current in a closed iron block -- a net slot
+current with no return path produces a global field (and a meaningless energy). The leakage flux
+must CLOSE through the teeth/yoke; the Neumann-walls + Dirichlet-top BVP encodes exactly that.
+The motor-design companion to the winding factor (#51, the EMF) and the magnetic-circuit
+inductance (#39, the air-gap term).
+"""
+
+
+NGSOLVE_DEEP_BAR = r"""
+# Deep-bar (slot-conductor) AC resistance & reactance -- the deep-bar / double-cage effect
+
+The AC sequel to the slot-leakage inductance (#54): a SOLID conductor filling an iron slot, at
+frequency, has its current pushed toward the slot OPENING by the slot-leakage field -- a 1-D skin
+effect over the slot DEPTH. Field's closed form (xi = h/delta, delta the skin depth):
+
+    k_R = Rac/Rdc = xi (sinh2xi + sin2xi)/(cosh2xi - cos2xi)
+    k_X = Lac/Ldc = (3/2xi)(sinh2xi - sin2xi)/(cosh2xi - cos2xi)
+
+```python
+from radia_mcp.radia_ngsolve.solve import (deep_bar_skin_ratio,
+    deep_bar_resistance_factor, deep_bar_reactance_factor, slot_leakage_permeance, MU0)
+xi  = deep_bar_skin_ratio(h, f, sigma)            # = h sqrt(pi f mu0 mu_r sigma)
+Rac = deep_bar_resistance_factor(xi) / (sigma*w*h)             # per metre
+Lac = deep_bar_reactance_factor(xi) * MU0*slot_leakage_permeance(h, w)   # mu0 h/3w * k_X
+```
+
+LIMITS: xi->0 -> k_R,k_X -> 1 (DC: Rdc=1/(sigma w h), the #54 slot leakage mu0 h/3w). xi>>1 ->
+k_R -> xi (Rac ~ sqrt(f), current in a one-skin-depth surface layer) and k_X -> 3/(2 xi) -> 0.
+
+This is the DEEP-BAR / double-cage rotor effect: at high slip the rotor frequency is high, so the
+bar Rac RISES (high STARTING resistance/torque, #40 deep-bar IM) while the slot-leakage reactance
+FALLS; near synchronous speed the frequency -> 0 and the bar reverts to its DC resistance (high
+running efficiency). Also the AC copper loss of stator slot conductors at high electrical
+frequency (high-speed machines).
+
+FE recipe (current-driven eddy on the iron-slot 1-D BVP, examples/comsol_class/deep_bar.py):
+``solve_planar_eddy(mesh, NU0, sigma, omega, driven_region="bar", total_current=I,
+dirichlet="top")`` -- the SAME slot BVP as #54 (top edge Dirichlet yoke / Neumann tooth walls)
+but time-harmonic; read Z = Vc/I from the NumberSpace, Rac=Re(Z), Lac=Im(Z)/omega. radia FE ==
+Field's k_R/k_X to **0.00 %** over xi = 0.7..4.3 (tests/test_deep_bar.py). The rectangular-bar /
+slot sibling of the round-wire Kelvin skin effect (#45, ber/bei) -- different geometry, the
+sinh/sin (not ber/bei) functions; both are the AC frequency axis of the DC inductance set.
+
+DOWELL (#60, the m-LAYER winding): stack m foils in series in the window and the leakage field
+builds up layer by layer -> the outer layers sit in a large field and dissipate heavily (PROXIMITY
+loss on top of each foil's skin loss):
+
+    F_R = Rac/Rdc = Delta[ (sinh2D+sin2D)/(cosh2D-cos2D) + (2/3)(m^2-1)(sinhD-sinD)/(coshD+cosD) ]
+
+(Delta = h/delta, m = layers). ``dowell_resistance_factor(skin_ratio, layers)``; the first term is
+exactly ``deep_bar_resistance_factor`` (m=1), the second is proximity, growing ~m^2 -- why thick
+multi-layer windings are AC-loss disasters (m=6 at Delta=1.5 -> F_R=17.7) and why litz wire / thin
+foils exist. FE = an m-conductor SERIES eddy circuit (``solve_planar_eddy_multi(..., connection=
+'series', total_current=I)``, Rac=2*sum_k P_k/I^2) on the SAME slot BVP (top Dirichlet yoke / Neumann
+walls); matches Dowell to **0.00 %** for m=1..6, Delta=1.0/1.5 (examples/comsol_class/dowell_winding.py;
+tests/test_dowell.py). The transformer/inductor winding-loss workhorse; the multi-layer generalisation
+of the deep-bar (#55).
+"""
+
+
+NGSOLVE_PHI_THETA = r"""
+# phi-theta (voltage-temperature) relation -- constriction supertemperature
+
+A current-carrying conductor / electrical CONSTRICTION whose two terminals (at potentials U and 0)
+are both held at T0 develops a hot spot whose temperature is GEOMETRY-INDEPENDENT:
+
+    T(V)^2 = T0^2 + V (U - V)/L ,      T_max^2 - T0^2 = U^2/(4 L)   (at the V = U/2 surface),
+
+L = Wiedemann-Franz Lorenz number = 2.44e-8 V^2/K^2. The temperature is a function of the local
+POTENTIAL ALONE -- independent of the conductor's shape, size, conductivity, or current.
+
+```python
+from radia_mcp.radia_ngsolve.multiphysics import (
+    phi_theta_max_temperature, phi_theta_local_temperature, melting_voltage)
+Tmax = phi_theta_max_temperature(U, T0)          # sqrt(T0^2 + U^2/4L)
+U_soft = melting_voltage(463.0, T0)              # ~0.11 V softens copper; ~0.43 V melts it (1356 K)
+```
+
+WHY it works (the elegant bit): under Wiedemann-Franz (k = L sigma T) the Kirchhoff transform
+psi = L sigma T^2/2 turns the coupled electro-thermal problem into a LINEAR Poisson problem,
+-lap(psi) = sigma|grad V|^2, whose solution is QUADRATIC in V -- so T^2 is quadratic in V with the
+boundary values pinned to T0, giving T^2 = T0^2 + V(U-V)/L exactly.
+
+FE recipe (examples/comsol_class/phi_theta_supertemperature.py): solve V with
+``scalar_fem2d.solve_poisson_2d(mesh, sigma, {"hi":U, "lo":0})`` (insulated sides), then the
+Kirchhoff potential ``solve_poisson_2d(mesh, 1.0, {"hi":psi0,"lo":psi0}, source=sigma*|grad V|^2)``
+with psi0 = L sigma T0^2/2, then T = sqrt(2 psi/(L sigma)). radia FE matches the closed form to
+**0.000 %** on BOTH a uniform bar AND a dog-bone constriction -- the SAME U gives the SAME T_max
+(the geometry independence) -- tests/test_phi_theta.py. The Wiedemann-Franz-exact generalisation
+of the constant-property Joule bar peak sigma V^2/8k (#19); the basis of contact-voltage limits
+(connectors, relays, fuses, motor terminals -- a metal softens/melts at a voltage set by the
+material alone).
+"""
+
+
+NGSOLVE_CARTER = r"""
+# Carter coefficient -- slotting makes the air gap magnetically larger
+
+The slot openings of a machine make the air gap behave LARGER: as the flux crosses a slot opening
+it spreads (adding reluctance), so the average gap flux for a given MMF drops as if the gap were
+k_C * g. The standard machine-design correction (Carter 1901):
+
+    gamma = (b_o/g)^2/(5 + b_o/g),   k_C = tau_s/(tau_s - gamma g),   g_eff = k_C g,
+
+tau_s = slot pitch, g = gap, b_o = slot opening.
+
+```python
+from radia_mcp.radia_ngsolve.solve import carter_coefficient, effective_air_gap
+kc   = carter_coefficient(tau_s, g, b_o)     # >= 1
+geff = effective_air_gap(tau_s, g, b_o)      # kc * g -> use in the magnetising-permeance/L_m calc
+```
+
+k_C feeds the magnetising inductance, the no-load flux, and (via 1/k_C) the slot-ripple permeance;
+typical openings lengthen the gap a few % to ~30-40 %.
+
+FE validation (the gap PERMEANCE, examples/comsol_class/carter_coefficient.py): a SCALAR magnetic
+potential phi_m solves Laplace on the air region (gap + a deep slot) with phi_m = F on the stator
+iron surface (tooth face + slot walls/top), 0 on the rotor, and NEUMANN on the tooth-centre and
+slot-centre symmetry planes (a half slot pitch). The permeance P = integral|grad phi_m|^2 (F=1,
+the magnetic analogue of capacitance C=2W/V^2), and k_C = P_smooth/P_slot with P_smooth = (tau_s/2)/g.
+``scalar_fem2d.solve_poisson_2d`` matches Carter's k_C to **< 0.3 %** over b_o/g = 1..6
+(tests/test_carter.py). The static slotting companion to the slot-leakage inductance (#54, the
+conductor-in-slot) and the deep-bar slot AC resistance (#55); the reluctance source of cogging.
+"""
+
+
+NGSOLVE_SKEW = r"""
+# Skew factor -- axial skew suppresses EMF harmonics and cancels cogging
+
+Skewing the stator slots (or rotor magnets) continuously over an electrical angle theta_sk
+averages the n-th air-gap harmonic along the STACK, scaling the n-th EMF / torque harmonic by
+
+    k_sk,n = sin(n theta_sk/2)/(n theta_sk/2)        (the sinc / averaging factor).
+
+The AXIAL twin of the distribution factor (#51, which spreads a phase over slots in the slot
+plane); here the conductor is spread along the stack length.
+
+```python
+from radia_mcp.radia_ngsolve.solve import (skew_factor, slot_pitch_skew_angle,
+                                           skewed_winding_factor)
+th = slot_pitch_skew_angle(Q, p)           # one slot pitch elec = 2 pi p/Q (the usual skew)
+k_sk1 = skew_factor(1, th)                  # small fundamental cost (<1)
+k_w_sk = skewed_winding_factor(n, q, slot_angle_deg, th)   # total = k_w,n * k_sk,n
+```
+
+KEY: a harmonic whose period equals the skew (n theta_sk = 2 pi) is NULLED. Skewing by ONE SLOT
+PITCH (theta_sk = 2 pi p/Q) makes the SLOT-PASSING / cogging harmonic (order Q/p) see k_sk = 0 ->
+the cogging torque is cancelled, at a small fundamental cost (e.g. 36-slot/4-pole: k_sk,1 = 0.995,
+only 0.5 %, while the 5th/7th/11th/13th are further suppressed on top of the distribution factor).
+
+Validated self-consistently against the phasor average |(1/theta_sk) integral exp(j n phi) dphi|
+to 1e-3 and the exact null at n theta_sk = 2 pi (tests/test_skew_factor.py). Completes the
+harmonic-mitigation set: distribution + pitch (#51, slot plane), Carter slotting (#57, gap),
+skew (#58, stack). Skew is a 1-D axial AVERAGING, so it has no 2-D FE -- the phasor integral is
+the ground truth (as for the winding factor #51).
+"""
+
+
+NGSOLVE_CORE_LOSS = r"""
+LAMINATION EDDY-CURRENT LOSS / CORE LOSS (#66) -- why iron cores are laminated, and the f^2 'eddy'
+term of the Steinmetz core-loss separation P_core = P_hyst(k_h f B^a) + P_eddy(k_e f^2 B^2).
+
+A steel sheet of thickness d carrying a sinusoidal flux of peak B at frequency f dissipates the
+CLASSICAL eddy loss (uniform flux, thin sheet d << skin depth):
+
+    P_eddy = pi^2 sigma d^2 f^2 B_peak^2 / 6   [W/m^3]   (= sigma omega^2 d^2 B^2 / 24).
+
+The d^2 law is the whole reason for lamination: halve the sheet thickness and you QUARTER the eddy
+loss. ``classical_eddy_loss_density(sigma, d, f, B_peak)``.
+
+SKIN-EFFECT roll-off: once d is no longer thin vs the skin depth delta = sqrt(2/(omega mu sigma)),
+the flux cannot fully penetrate and the loss is reduced by the exact 1-D magnetic-diffusion factor
+
+    F(xi) = (3/xi) (sinh xi - sin xi)/(cosh xi - cos xi),   xi = d/delta,
+
+with F -> 1 as xi -> 0 (the classical d^2 law) and F -> 3/xi as xi -> inf (heavy skin effect: flux
+excluded, loss grows only as d, so the classical formula OVER-predicts). Helpers
+``lamination_eddy_skin_factor(d, delta)`` and ``lamination_eddy_loss_density(sigma, d, f, B_peak,
+mu_r)`` (= classical * F, with delta from mu = mu0 mu_r).
+
+This is the FIELD-DRIVEN counterpart of the CURRENT-DRIVEN deep-bar / Dowell AC-resistance family
+(#55/#60): the SAME magnetic-diffusion equation, opposite drive (imposed flux vs imposed current), so
+the same sinh/sin special functions appear -- here as a LOSS reduction rather than an R_ac rise.
+Validated tool-independently: the closed-form F == the numerically-integrated exact slab loss to 1e-6,
+and the thin limit == the classical formula (tests/test_lamination_eddy_loss.py;
+examples/comsol_class/lamination_eddy_loss.py). Typical 0.35 mm electrical steel at 50/60 Hz sits in
+the thin regime (xi ~ 0.5, F ~ 1); thick sheets or PWM-harmonic frequencies push xi up and F down.
+For full motor core loss, add the hysteresis term (a material B-H model, not a field solve).
+"""
+
+
+NGSOLVE_NONLINEAR_CIRCUIT = r"""
+NONLINEAR MAGNETIC CIRCUIT / SATURATING IRON-FRAME ELECTROMAGNET (#67) -- the saturating counterpart
+of the constant-mu reluctance circuits (#27 gap force, #39 inductance, #42 PM load line).
+
+A closed iron loop wound with N turns at current I reaches an operating flux density B set by
+Ampere's law around the loop together with the iron B->H curve:
+
+    NI = H_iron(B) * l_fe + (B/mu0) * gap .
+
+With gap=0 every ampere-turn drops in the iron, so B sits on the BH KNEE (no air-gap term to hold it
+back); a gap adds the large linear term B*gap/mu0 that DE-SATURATES the iron fast (a few tenths of a
+millimetre of gap collapses B -- the leakage-free #27/#39/#42 story, now with a real saturating BH).
+``magnetic_circuit_bh_operating_point(mmf, iron_path, h_of_b, gap)`` bisects for B (the right side is
+monotone in B); ``h_of_b`` is the iron curve, e.g. H = 51 B + 2.5 B^15 (mu_r ~ 15600 unsaturated,
+hard saturation above ~1.5 T).
+
+Validated: self-consistent (Ampere residual -> 0), the constant-mu limit reproduces the linear
+reluctance NI/(l_fe/mu0/mu_r + gap/mu0) to machine precision, and -- as a CROSS-TOOL anchor -- a live
+nonlinear FE of a closed iron-frame electromagnet with this BH curve drives the iron to B ~ 1.56 T at
+NI = 32 A-turns over a ~15.6 mm mean path (a stored regression reference), exactly the operating point
+the lumped solver returns. The lumped B is the loop average; a 2-D FE adds corner/leakage detail (the
+two legs carry +-B in opposite directions around the frame). The nonlinear-FE companion to the
+constant-mu circuits and to the saturating-inductance knee (#28). examples/comsol_class/
+nonlinear_magnetic_circuit.py; tests/test_nonlinear_magnetic_circuit.py.
+"""
+
+
+NGSOLVE_MAGNETIZING_INDUCTANCE = r"""
+MAGNETIZING (AIR-GAP) INDUCTANCE (#69) -- the dominant part of the dq L_md / L_mq: the per-phase
+main-flux inductance an AC winding builds across the air gap.
+
+From the fundamental MMF -> air-gap flux density -> flux per pole -> flux-linkage chain, the per-phase
+SELF magnetizing inductance is
+
+    L_mu = (2 mu0/pi) (kw1 N_ph)^2 D L_stk / (p^2 g_eff),
+
+D = air-gap diameter, L_stk = stack length, g_eff = effective (Carter) gap, p = pole PAIRS, kw1 = the
+fundamental winding factor, N_ph = series turns per phase. The SYNCHRONOUS magnetizing inductance
+L_m = (m/2) L_mu (3/2 for three phases) adds the mutual coupling of the m phases sharing the common
+rotating air-gap field; L_m is the dq L_md (= L_mq for a non-salient machine), and the terminal
+Ld = L_m + L_leakage (slot leakage #54 + end-winding + harmonic leakage).
+
+``magnetizing_inductance_per_phase(D, L_stk, g_eff, p, kw1, N_ph)`` /
+``synchronous_magnetizing_inductance(..., phases=3)``. This block SYNTHESISES the campaign: kw1 from
+the winding factor (#51), g_eff from Carter (#57); it scales as 1/g_eff (slotting lowers it), 1/p^2,
+and (kw1 N_ph)^2 -- the machine-design levers. Validated against the explicit derivation chain to
+machine precision (examples/comsol_class/magnetizing_inductance.py; tests/test_magnetizing_inductance.py).
+The air-gap (main) counterpart of the leakage inductances (slot #54, gapped-core #39).
+"""
+
+
+NGSOLVE_DEMAG_FACTOR = r"""
+DEMAGNETIZING FACTOR & INTERNAL FIELD OF A MAGNETIZED BODY (#71) -- a permanent magnet sets up a
+self-demagnetizing field H = -N M inside itself, so it only holds
+
+    B_in = Br (1 - N),   H_in = -N Br/mu0,   N = demagnetizing factor (Nx+Ny+Nz = 1 for any ellipsoid).
+
+Exact limiting shapes: sphere (N = 1/3 -> 2 Br/3); infinite cylinder TRANSVERSE (N = 1/2 -> Br/2) vs
+AXIAL (N = 0 -> full Br); thin slab through-thickness (N = 1 -> ~0). So an axially-magnetized ROD
+keeps its remanence while a transversely-magnetized DISC loses half -- the basis of shape anisotropy
+and of the PM operating point / load line (#42, where the permeance coefficient plays N's role; the
+larger N, the deeper into the second quadrant, the closer to the demag knee).
+``demagnetizing_factor(shape)`` (1st component = the magnetized axis), ``magnetized_body_internal_field(
+Br, N)``, ``demagnetizing_field(Br, N)``. Validated: a transverse-magnetized infinite cylinder solved
+with radia ``magnets=`` (mu_r = 1) holds a UNIFORM internal B = Br/2 to ~0.2 % (open-domain
+truncation, FE below); examples/comsol_class/demagnetizing_factor.py; tests/test_demagnetizing_factor.py.
+The uniform-magnetization counterpart of the iron magnetic circuits (#42 PM load line, #67 nonlinear).
+"""
+
+
+NGSOLVE_MMF_HARMONICS = r"""
+WINDING MMF SPACE HARMONICS & ROTATING-FIELD SYNTHESIS (#72) -- the air-gap MMF a polyphase winding
+lays down, and how its harmonics rotate. The n-th SPACE harmonic of one phase's MMF is
+
+    F_phi,n = (4/pi) (k_w,n / n) (N_ph I / 2p),
+
+the (4/pi)/n square-wave envelope of a full-pitch coil scaled by the winding factor k_w,n (#51). In a
+balanced m-phase winding the harmonics combine (the rotating-field theorem) into ROTATING waves of
+amplitude (m/2) F_phi,n: the fundamental rotates FORWARD, the triplen (n a multiple of m: 3rd, 9th)
+CANCEL, and the rest split into forward (when n-1 is a multiple of m) and backward (when n+1 is). For
+the 3-phase winding the ODD harmonics it carries are n = 6k +/- 1: forward 6k+1 (1, 7, 13), backward
+6k-1 (5, 11). The rotating fundamental (3/2) F_phi,1 is the per-phase MMF behind the magnetizing
+inductance L_m = (3/2) L_mu (#69); the backward 5th / forward 7th drive the parasitic asynchronous
+torques and the rotor-surface / magnet-eddy losses. ``single_phase_mmf_harmonic(n, kw_n, N_ph, I, p)``,
+``rotating_mmf_amplitude(n, m, F)``, ``mmf_harmonic_direction(n, m)``. Validated against the direct
+rotating-field trig sum to machine precision (examples/comsol_class/mmf_harmonics.py;
+tests/test_mmf_harmonics.py). The MMF (excitation) companion of the winding factor (#51, EMF) and skew
+(#58); the source term of the air-gap field that drives the magnetizing inductance and torque.
 """
 
 
 def get_ngsolve_documentation(topic: str = "all") -> str:
     """Return NGSolve usage documentation by topic."""
     topics = {
+        "coax": NGSOLVE_COAX_LINE,
+        "transmission_line": NGSOLVE_COAX_LINE,
+        "two_wire": NGSOLVE_COAX_LINE,
+        "two_wire_inductance": NGSOLVE_COAX_LINE,
+        "internal_inductance": NGSOLVE_COAX_LINE,
+        "wire_inductance": NGSOLVE_COAX_LINE,
+        "skin_effect": NGSOLVE_COAX_LINE,
+        "ac_internal_inductance": NGSOLVE_COAX_LINE,
+        "ac_resistance": NGSOLVE_COAX_LINE,
+        "loop_inductance": NGSOLVE_COAX_LINE,
+        "two_wire_loop_inductance": NGSOLVE_COAX_LINE,
+        "wire_over_ground": NGSOLVE_COAX_LINE,
+        "microstrip": NGSOLVE_COAX_LINE,
+        "single_ended_line": NGSOLVE_COAX_LINE,
+        "ground_plane": NGSOLVE_COAX_LINE,
+        "transmission_line_inductance": NGSOLVE_COAX_LINE,
+        "skin_effect_inductance": NGSOLVE_COAX_LINE,
+        "kelvin_functions": NGSOLVE_COAX_LINE,
+        "proximity_skin": NGSOLVE_COAX_LINE,
+        "characteristic_impedance": NGSOLVE_COAX_LINE,
+        "magnetic_energy": NGSOLVE_COAX_LINE,
+        "inductance_energy": NGSOLVE_COAX_LINE,
+        "waveguide": NGSOLVE_WAVEGUIDE,
+        "cutoff_frequency": NGSOLVE_WAVEGUIDE,
+        "cutoff": NGSOLVE_WAVEGUIDE,
+        "rectangular_waveguide": NGSOLVE_WAVEGUIDE,
+        "circular_waveguide": NGSOLVE_WAVEGUIDE,
+        "bessel_cutoff": NGSOLVE_WAVEGUIDE,
+        "te11": NGSOLVE_WAVEGUIDE,
+        "round_waveguide": NGSOLVE_WAVEGUIDE,
+        "te_mode": NGSOLVE_WAVEGUIDE,
+        "tm_mode": NGSOLVE_WAVEGUIDE,
+        "te10": NGSOLVE_WAVEGUIDE,
+        "helmholtz_eigenvalue": NGSOLVE_WAVEGUIDE,
+        "helmholtz_equation": NGSOLVE_WAVEGUIDE,
+        "waveguide_mode": NGSOLVE_WAVEGUIDE,
+        "eigenmode": NGSOLVE_WAVEGUIDE,
+        "eigenmodes": NGSOLVE_WAVEGUIDE,
+        "cavity_resonance": NGSOLVE_WAVEGUIDE,
+        "cavity_mode": NGSOLVE_WAVEGUIDE,
+        "rectangular_cavity": NGSOLVE_WAVEGUIDE,
+        "resonant_cavity": NGSOLVE_WAVEGUIDE,
+        "maxwell_eigenvalue": NGSOLVE_WAVEGUIDE,
+        "curl_curl_eigenvalue": NGSOLVE_WAVEGUIDE,
+        "hcurl_eigenvalue": NGSOLVE_WAVEGUIDE,
+        "te101": NGSOLVE_WAVEGUIDE,
+        "microwave_cavity": NGSOLVE_WAVEGUIDE,
+        "membrane_mode": NGSOLVE_WAVEGUIDE,
+        "drum": NGSOLVE_WAVEGUIDE,
+        "single_mode_bandwidth": NGSOLVE_WAVEGUIDE,
+        "waveguide_dispersion": NGSOLVE_WAVEGUIDE,
+        "dispersion": NGSOLVE_WAVEGUIDE,
+        "guide_wavelength": NGSOLVE_WAVEGUIDE,
+        "group_velocity": NGSOLVE_WAVEGUIDE,
+        "phase_velocity": NGSOLVE_WAVEGUIDE,
+        "evanescent": NGSOLVE_WAVEGUIDE,
+        "propagation_constant": NGSOLVE_WAVEGUIDE,
+        "cutoff_attenuation": NGSOLVE_WAVEGUIDE,
+        "quality_factor": NGSOLVE_WAVEGUIDE,
+        "cavity_q": NGSOLVE_WAVEGUIDE,
+        "q_factor": NGSOLVE_WAVEGUIDE,
+        "surface_resistance": NGSOLVE_WAVEGUIDE,
+        "skin_depth": NGSOLVE_WAVEGUIDE,
+        "cavity_loss": NGSOLVE_WAVEGUIDE,
+        "core_loss": NGSOLVE_CORE_LOSS,
+        "eddy_loss": NGSOLVE_CORE_LOSS,
+        "eddy_current_loss": NGSOLVE_CORE_LOSS,
+        "lamination": NGSOLVE_CORE_LOSS,
+        "lamination_loss": NGSOLVE_CORE_LOSS,
+        "iron_loss": NGSOLVE_CORE_LOSS,
+        "steinmetz": NGSOLVE_CORE_LOSS,
+        "classical_eddy_loss": NGSOLVE_CORE_LOSS,
+        "nonlinear_magnetic_circuit": NGSOLVE_NONLINEAR_CIRCUIT,
+        "saturating_circuit": NGSOLVE_NONLINEAR_CIRCUIT,
+        "saturating_iron_frame": NGSOLVE_NONLINEAR_CIRCUIT,
+        "bh_operating_point": NGSOLVE_NONLINEAR_CIRCUIT,
+        "magnetic_circuit_operating_point": NGSOLVE_NONLINEAR_CIRCUIT,
+        "magnetizing_inductance": NGSOLVE_MAGNETIZING_INDUCTANCE,
+        "magnetising_inductance": NGSOLVE_MAGNETIZING_INDUCTANCE,
+        "air_gap_inductance": NGSOLVE_MAGNETIZING_INDUCTANCE,
+        "main_inductance": NGSOLVE_MAGNETIZING_INDUCTANCE,
+        "l_md": NGSOLVE_MAGNETIZING_INDUCTANCE,
+        "lmd": NGSOLVE_MAGNETIZING_INDUCTANCE,
+        "demagnetizing_factor": NGSOLVE_DEMAG_FACTOR,
+        "demag_factor": NGSOLVE_DEMAG_FACTOR,
+        "demagnetizing_field": NGSOLVE_DEMAG_FACTOR,
+        "magnetized_body": NGSOLVE_DEMAG_FACTOR,
+        "shape_anisotropy": NGSOLVE_DEMAG_FACTOR,
+        "mmf_harmonics": NGSOLVE_MMF_HARMONICS,
+        "mmf": NGSOLVE_MMF_HARMONICS,
+        "rotating_field": NGSOLVE_MMF_HARMONICS,
+        "space_harmonics": NGSOLVE_MMF_HARMONICS,
+        "magnetomotive_force": NGSOLVE_MMF_HARMONICS,
+        "rotating_mmf": NGSOLVE_MMF_HARMONICS,
+        "electrothermal_2way": NGSOLVE_ELECTROTHERMAL_2WAY,
+        "sigma_of_t": NGSOLVE_ELECTROTHERMAL_2WAY,
+        "two_way_coupling": NGSOLVE_ELECTROTHERMAL_2WAY,
+        "temperature_dependent": NGSOLVE_ELECTROTHERMAL_2WAY,
         "multiphysics": NGSOLVE_MULTIPHYSICS,
         "induction_heating": NGSOLVE_MULTIPHYSICS,
+        "phi_theta": NGSOLVE_PHI_THETA,
+        "voltage_temperature": NGSOLVE_PHI_THETA,
+        "supertemperature": NGSOLVE_PHI_THETA,
+        "constriction": NGSOLVE_PHI_THETA,
+        "contact_resistance_heating": NGSOLVE_PHI_THETA,
+        "melting_voltage": NGSOLVE_PHI_THETA,
+        "wiedemann_franz": NGSOLVE_PHI_THETA,
+        "kohlrausch": NGSOLVE_PHI_THETA,
+        "holm_contact": NGSOLVE_PHI_THETA,
+        "hot_spot": NGSOLVE_PHI_THETA,
+        "kirchhoff_transform": NGSOLVE_PHI_THETA,
         "electrostatics": NGSOLVE_ELECTROSTATICS_3D,
         "capacitance": NGSOLVE_ELECTROSTATICS_3D,
         "field_quality": NGSOLVE_FIELD_QUALITY,
@@ -5832,23 +7099,180 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "inductance": NGSOLVE_SOLENOID,
         "busbar": NGSOLVE_BUSBAR_LORENTZ,
         "lorentz_force": NGSOLVE_BUSBAR_LORENTZ,
+        "method_of_images": NGSOLVE_BUSBAR_LORENTZ,
+        "image_force": NGSOLVE_BUSBAR_LORENTZ,
+        "image_method": NGSOLVE_BUSBAR_LORENTZ,
         "helmholtz": NGSOLVE_HELMHOLTZ,
         "uniform_field": NGSOLVE_HELMHOLTZ,
         "coil_pair": NGSOLVE_HELMHOLTZ,
         "c_magnet": NGSOLVE_C_MAGNET,
         "magnetic_circuit": NGSOLVE_C_MAGNET,
         "reluctance": NGSOLVE_C_MAGNET,
+        "reluctance_actuator": NGSOLVE_C_MAGNET,
+        "holding_force": NGSOLVE_C_MAGNET,
+        "gapped_core_inductance": NGSOLVE_C_MAGNET,
+        "magnetic_circuit_inductance": NGSOLVE_C_MAGNET,
+        "core_inductor": NGSOLVE_C_MAGNET,
+        "leakage_inductance": NGSOLVE_C_MAGNET,
+        "pm_loadline": NGSOLVE_C_MAGNET,
+        "load_line": NGSOLVE_C_MAGNET,
+        "permeance_coefficient": NGSOLVE_C_MAGNET,
+        "operating_point": NGSOLVE_C_MAGNET,
+        "demagnetization": NGSOLVE_C_MAGNET,
+        "electromagnet": NGSOLVE_C_MAGNET,
+        "solenoid_force": NGSOLVE_C_MAGNET,
         "dipole_magnet": NGSOLVE_C_MAGNET,
         "joule_heating": NGSOLVE_JOULE_ELECTROTHERMAL,
         "electrothermal": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "cylinder_joule_heating": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "wire_heating": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "ampacity": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "convective_cooling": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "robin_bc": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "newton_cooling": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "convective_electrothermal": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "film_coefficient": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "cooling_fin": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "fin_efficiency": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "extended_surface": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "heat_sink": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "thermal_resistance": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "die_stack": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "junction_temperature": NGSOLVE_JOULE_ELECTROTHERMAL,
+        "multilayer_thermal": NGSOLVE_JOULE_ELECTROTHERMAL,
         "electro_thermal": NGSOLVE_JOULE_ELECTROTHERMAL,
         "elasticity": NGSOLVE_ELASTICITY,
         "thermal_stress": NGSOLVE_ELASTICITY,
         "thermo_mechanical": NGSOLVE_ELASTICITY,
         "structural": NGSOLVE_ELASTICITY,
+        "thermal_bending": NGSOLVE_ELASTICITY,
+        "bimorph": NGSOLVE_ELASTICITY,
+        "bimetal": NGSOLVE_ELASTICITY,
+        "bimetallic": NGSOLVE_ELASTICITY,
+        "thermostat": NGSOLVE_ELASTICITY,
+        "biaxial_thermal_stress": NGSOLVE_ELASTICITY,
+        "biaxial": NGSOLVE_ELASTICITY,
+        "laminate": NGSOLVE_ELASTICITY,
+        "laminate_residual_stress": NGSOLVE_ELASTICITY,
+        "rule_of_mixtures": NGSOLVE_ELASTICITY,
+        "composite_thermal_stress": NGSOLVE_ELASTICITY,
+        "residual_stress": NGSOLVE_ELASTICITY,
         "magneto_mechanical": NGSOLVE_ELASTICITY,
         "beam_deflection": NGSOLVE_ELASTICITY,
         "actuator": NGSOLVE_ELASTICITY,
+        "reluctance_torque": NGSOLVE_RELUCTANCE_TORQUE,
+        "cogging": NGSOLVE_RELUCTANCE_TORQUE,
+        "cogging_torque": NGSOLVE_RELUCTANCE_TORQUE,
+        "motor_torque": NGSOLVE_RELUCTANCE_TORQUE,
+        "rotor_sweep": NGSOLVE_RELUCTANCE_TORQUE,
+        "stress_tensor_torque": NGSOLVE_RELUCTANCE_TORQUE,
+        "electro_mechanical": NGSOLVE_MEMS_ELECTROMECH,
+        "mems": NGSOLVE_MEMS_ELECTROMECH,
+        "electrostatic_actuator": NGSOLVE_MEMS_ELECTROMECH,
+        "pull_in": NGSOLVE_MEMS_ELECTROMECH,
+        "electrostatic_force": NGSOLVE_MEMS_ELECTROMECH,
+        "back_emf": NGSOLVE_BACKEMF_FLUX,
+        "kt_ke": NGSOLVE_BACKEMF_FLUX,
+        "torque_constant": NGSOLVE_BACKEMF_FLUX,
+        "machine_constant": NGSOLVE_BACKEMF_FLUX,
+        "backemf": NGSOLVE_BACKEMF_FLUX,
+        "flux_linkage": NGSOLVE_BACKEMF_FLUX,
+        "emf": NGSOLVE_BACKEMF_FLUX,
+        "ld_lq": NGSOLVE_LDLQ,
+        "ldlq": NGSOLVE_LDLQ,
+        "inductance_saliency": NGSOLVE_LDLQ,
+        "saliency": NGSOLVE_LDLQ,
+        "mtpa": NGSOLVE_MTPA,
+        "maximum_torque_per_ampere": NGSOLVE_MTPA,
+        "current_angle": NGSOLVE_MTPA,
+        "field_weakening": NGSOLVE_FIELD_WEAKENING,
+        "mtpv": NGSOLVE_FIELD_WEAKENING,
+        "maximum_torque_per_voltage": NGSOLVE_FIELD_WEAKENING,
+        "base_speed": NGSOLVE_FIELD_WEAKENING,
+        "constant_power": NGSOLVE_FIELD_WEAKENING,
+        "operating_region": NGSOLVE_FIELD_WEAKENING,
+        "cpsr": NGSOLVE_FIELD_WEAKENING,
+        "induction_machine": NGSOLVE_INDUCTION_MACHINE,
+        "induction_motor": NGSOLVE_INDUCTION_MACHINE,
+        "torque_slip": NGSOLVE_INDUCTION_MACHINE,
+        "breakdown_torque": NGSOLVE_INDUCTION_MACHINE,
+        "slip": NGSOLVE_INDUCTION_MACHINE,
+        "equivalent_circuit": NGSOLVE_INDUCTION_MACHINE,
+        "power_angle": NGSOLVE_POWER_ANGLE,
+        "load_angle": NGSOLVE_POWER_ANGLE,
+        "pull_out": NGSOLVE_POWER_ANGLE,
+        "synchronous_machine": NGSOLVE_POWER_ANGLE,
+        "delta_curve": NGSOLVE_POWER_ANGLE,
+        "reluctance_torque": NGSOLVE_POWER_ANGLE,
+        "dq_operating_point": NGSOLVE_DQ_OPERATING_POINT,
+        "operating_point_dq": NGSOLVE_DQ_OPERATING_POINT,
+        "power_factor": NGSOLVE_DQ_OPERATING_POINT,
+        "dq_voltage": NGSOLVE_DQ_OPERATING_POINT,
+        "terminal_voltage": NGSOLVE_DQ_OPERATING_POINT,
+        "motor_efficiency": NGSOLVE_DQ_OPERATING_POINT,
+        "short_circuit": NGSOLVE_SHORT_CIRCUIT,
+        "characteristic_current": NGSOLVE_SHORT_CIRCUIT,
+        "demagnetization_current": NGSOLVE_SHORT_CIRCUIT,
+        "braking_torque": NGSOLVE_SHORT_CIRCUIT,
+        "fault_current": NGSOLVE_SHORT_CIRCUIT,
+        "winding_factor": NGSOLVE_WINDING_FACTOR,
+        "distribution_factor": NGSOLVE_WINDING_FACTOR,
+        "pitch_factor": NGSOLVE_WINDING_FACTOR,
+        "chording": NGSOLVE_WINDING_FACTOR,
+        "harmonic_winding": NGSOLVE_WINDING_FACTOR,
+        "slot_leakage": NGSOLVE_SLOT_LEAKAGE,
+        "leakage_inductance": NGSOLVE_SLOT_LEAKAGE,
+        "leakage_reactance": NGSOLVE_SLOT_LEAKAGE,
+        "slot_permeance": NGSOLVE_SLOT_LEAKAGE,
+        "slot_inductance": NGSOLVE_SLOT_LEAKAGE,
+        "slot_reactance": NGSOLVE_SLOT_LEAKAGE,
+        "tooth_leakage": NGSOLVE_SLOT_LEAKAGE,
+        "deep_bar": NGSOLVE_DEEP_BAR,
+        "deep_bar_effect": NGSOLVE_DEEP_BAR,
+        "double_cage": NGSOLVE_DEEP_BAR,
+        "slot_ac_resistance": NGSOLVE_DEEP_BAR,
+        "ac_resistance_factor": NGSOLVE_DEEP_BAR,
+        "skin_effect_slot": NGSOLVE_DEEP_BAR,
+        "field_formula": NGSOLVE_DEEP_BAR,
+        "starting_torque": NGSOLVE_DEEP_BAR,
+        "rotor_bar": NGSOLVE_DEEP_BAR,
+        "dowell": NGSOLVE_DEEP_BAR,
+        "dowell_equation": NGSOLVE_DEEP_BAR,
+        "proximity_effect": NGSOLVE_DEEP_BAR,
+        "winding_ac_resistance": NGSOLVE_DEEP_BAR,
+        "winding_loss": NGSOLVE_DEEP_BAR,
+        "foil_winding": NGSOLVE_DEEP_BAR,
+        "litz": NGSOLVE_DEEP_BAR,
+        "transformer_winding": NGSOLVE_DEEP_BAR,
+        "carter": NGSOLVE_CARTER,
+        "carter_coefficient": NGSOLVE_CARTER,
+        "carter_factor": NGSOLVE_CARTER,
+        "effective_air_gap": NGSOLVE_CARTER,
+        "slotting": NGSOLVE_CARTER,
+        "slot_opening": NGSOLVE_CARTER,
+        "air_gap_permeance": NGSOLVE_CARTER,
+        "magnetising_inductance": NGSOLVE_CARTER,
+        "skew": NGSOLVE_SKEW,
+        "skew_factor": NGSOLVE_SKEW,
+        "skewing": NGSOLVE_SKEW,
+        "cogging_cancellation": NGSOLVE_SKEW,
+        "skewed_winding": NGSOLVE_SKEW,
+        "stack_skew": NGSOLVE_SKEW,
+        "harmonic_suppression": NGSOLVE_SKEW,
+        "frozen_permeability": NGSOLVE_FROZEN_PERM,
+        "frozen_perm": NGSOLVE_FROZEN_PERM,
+        "saturated_inductance": NGSOLVE_FROZEN_PERM,
+        "saturating_inductance": NGSOLVE_FROZEN_PERM,
+        "saturation_knee": NGSOLVE_FROZEN_PERM,
+        "incremental_inductance": NGSOLVE_FROZEN_PERM,
+        "incremental_inductance_matrix": NGSOLVE_FROZEN_PERM,
+        "cross_saturation": NGSOLVE_FROZEN_PERM,
+        "ldq": NGSOLVE_FROZEN_PERM,
+        "reciprocity": NGSOLVE_FROZEN_PERM,
+        "inductance_matrix": NGSOLVE_FROZEN_PERM,
+        "coenergy": NGSOLVE_FROZEN_PERM,
+        "co_energy": NGSOLVE_FROZEN_PERM,
+        "superposition": NGSOLVE_FROZEN_PERM,
         "overview": NGSOLVE_OVERVIEW,
         "spaces": NGSOLVE_FE_SPACES,
         "maxwell": NGSOLVE_MAXWELL,

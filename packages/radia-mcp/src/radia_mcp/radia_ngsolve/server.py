@@ -60,6 +60,9 @@ from .knowledge.cln_sphere_dd import get_cln_sphere_dd_documentation
 from .knowledge.mmm_core import get_mmm_core_documentation
 from .knowledge.hdiv_vim import get_hdiv_vim_documentation
 from .knowledge.femm_parity import get_femm_parity_documentation
+from .knowledge.fem_bem_schur import get_fem_bem_schur_documentation
+from .knowledge.airgap_motor_workflow import get_airgap_motor_workflow_documentation
+from .knowledge.dtn_coarse_mesh import get_dtn_coarse_mesh_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -820,6 +823,8 @@ def hdiv_vim(topic: str = "overview") -> str:
             "curved"         - curved + high-order demag (ngsolve.bem single-layer): sphere/spheroid/
                                triaxial exact; accuracy-per-DOF ~10-30x vs flat Radia; curved x nonlinear
             "symmetry"       - 1/2, 1/4, 1/8 models: loops automatic (ker B) + image-method demag value
+            "cross_method"   - the demag tensor cross-validated by 3 independent discretizations
+                               (FEEC surface-charge VIM == volume-FE A-formulation == BEM == Osborn)
             "status"         - done / open summary
             "all"            - everything
     """
@@ -1075,28 +1080,27 @@ def analytical_formulas(topic: str = "all") -> str:
 @mcp.tool()
 def force_validation(topic: str = "all") -> str:
     """
-    EM force extraction in NGSolve + COMSOL <-> NGSolve cross-validation.
+    EM force extraction in NGSolve + independent <-> NGSolve cross-validation.
 
     Records how the radia-ngsolve FEM path computes electromagnetic force
     (eggshell / weighted Maxwell stress) and the cross-validation results that
-    make the NGSolve magnetostatic path trustworthy: solved independently in
-    COMSOL (via MATLAB LiveLink) and NGSolve on the same geometry and compared
-    to the analytic answer.
+    make the NGSolve magnetostatic path trustworthy: solved independently by a
+    reference solver and by NGSolve on the same geometry and compared to the
+    analytic answer (the reference values are kept as a stored reference).
 
     Validated (linear magnetostatics, A-form, HCurl order 2):
-      * uniformly magnetized sphere: COMSOL == NGSolve to 0.11 %, both <0.5 %
+      * uniformly magnetized sphere: reference == NGSolve to 0.11 %, both <0.5 %
         of the analytic (2/3)Br interior field.
-      * coil + linear-iron sphere force: COMSOL == NGSolve to ~3 %, both near
+      * coil + linear-iron sphere force: reference == NGSolve to ~3 %, both near
         the dipole-in-gradient analytic.
 
     Read this when: implementing/validating an EM force computation, deciding
-    whether to trust an NGSolve magnetostatic result, or reproducing the COMSOL
-    A-form recipe (the comsol_recipe topic has the live-verified LiveLink
-    settings: material sigma=0, per-domain mur via Ampere's Law, GaugeFixingA,
-    direct-solver swap, ExternalCurrentDensity coil, ForceCalculation readout).
+    whether to trust an NGSolve magnetostatic result, or reviewing the
+    reference-solve note (the reference_note topic summarises the shared
+    geometry / material / source / force-method contract of the cross-check).
 
     Args:
-        topic: all (default) | eggshell | comsol_xval | comsol_recipe
+        topic: all (default) | eggshell | cross_validation | reference_note
     """
     return get_force_validation_documentation(topic)
 
@@ -1180,6 +1184,101 @@ def peec_inductance(topic: str = "all") -> str:
             "japanese_path"   - Unicode / Japanese path support
     """
     return get_peec_inductance_documentation(topic)
+
+
+@mcp.tool()
+def fem_bem_schur(topic: str = "all") -> str:
+    """
+    Get FEM-BEM Schur coupling documentation -- exact open boundary for interior FEM.
+
+    The exterior Laplace DtN assembled from ngsolve.bem replaces the unbounded
+    exterior domain with a boundary operator on the coupling surface, giving an
+    EXACT transparent BC without mesh truncation, PML, or Kelvin transformation.
+
+    Coupled system:  (K_FEM + P^T Λ_ext P) u = f
+    where Λ_ext = V⁻¹ (−½M + K)  [exterior BIE, NGSolve sign convention]
+    and P is the H1 volume → SurfaceL2 boundary projection.
+
+    Verification: spherical shell with inner Dirichlet u=cosθ, BEM DtN at outer
+    sphere; exact solution u = R_inner² cosθ / r²; L2 rel_err < 2% at order=2.
+
+    Companion code: radia_ngsolve.fem_bem_coupling
+      - laplace_fem_bem_schur():  coupled solve (dense, for verification)
+      - sphere_shell_fem_bem():   verification on spherical shell
+
+    Args:
+        topic: Documentation topic. Options:
+            "all"          - Complete documentation
+            "overview"     - Concept, DtN operator, coupling matrix
+            "api"          - laplace_fem_bem_schur and sphere_shell_fem_bem usage
+            "applications" - Open BC magnetostatics, motor models, AGE + BEM
+    """
+    return get_fem_bem_schur_documentation(topic)
+
+
+@mcp.tool()
+def airgap_motor_workflow(topic: str = "all") -> str:
+    """
+    Get AGE rotating machine workflow documentation -- nonlinear iron + AGE coupling.
+
+    Wraps the linear AGE core (airgap_machine.py) in a Picard fixed-point iteration
+    for machines with saturating iron B-H characteristics.  The air-gap element stays
+    analytic (no gap mesh); only the iron FE stiffness is updated each iteration.
+
+    Key validation:
+      - nu_cf_fn=None (or constant nu) → 1 iteration, identical to direct airgap_solve
+      - Froelich saturation model → converges in 5-15 iterations
+      - age_motor_rotation_sweep → torque-angle curve, all angles converged
+
+    Companion code: radia_ngsolve.airgap_motor_workflow
+      - age_motor_nonlinear_solve(): Picard loop for one rotor position
+      - age_motor_rotation_sweep():  torque–angle curve
+
+    Args:
+        topic: Documentation topic. Options:
+            "all"               - Complete documentation
+            "overview"          - AGE core, Picard iteration, linear limit
+            "api"               - age_motor_nonlinear_solve and rotation_sweep usage
+            "saturation_models" - Froelich, piecewise linear, NGSolve BSpline B-H
+            "validated"         - Test patterns: linear limit, saturation, sweep
+    """
+    return get_airgap_motor_workflow_documentation(topic)
+
+
+@mcp.tool()
+def dtn_coarse_mesh(topic: str = "all") -> str:
+    """
+    Why open-boundary methods stay accurate on COARSE meshes -- a spectral
+    (DtN-matrix) explanation of the Kelvin-transformation coarse-mesh accuracy.
+
+    Kameari demonstrated the Kelvin transform's coarse-mesh accuracy empirically,
+    by mesh refinement.  This reframes it as a PROPERTY OF THE DtN MATRIX across
+    mesh sizes: every open-BC closure (Kelvin / BEM / PML / Robin) approximates
+    the one exterior DtN operator Λ_ext, whose sphere eigenvalues are the
+    mesh-independent ladder λ_n = −(n+1)/R.  The discrete matrix Λ_h reproduces
+    the LOW-degree eigenvalues accurately and almost independently of h even on
+    the coarsest mesh; the per-mode error grows with degree n.  Since a compact
+    source's field is dominated by low multipoles, the coarse mesh already
+    resolves everything that matters -- Kameari's result, read off the spectrum.
+
+    Companion code (both sides MEASURED -- two discretisations of the one Λ_ext):
+      - bem_integral.exterior_dtn_spectrum():  eigenvalues of the BEM Λ_h matched
+                                  to −(n+1)/R (boundary operator spectrum)
+      - bem_integral.dtn_spectrum_vs_mesh():   per-degree error vs mesh size,
+                                  with coarse-low-mode and accurate-band summary
+      - fem_bem_coupling.kelvin_dtn_eigenvalue(): the Kelvin closure's effective
+                                  DtN (volume FEM); mode n exact iff FEM order≥n
+                                  (the dominant dipole inverts to a linear field)
+
+    Args:
+        topic: Documentation topic. Options:
+            "all"          - Complete documentation
+            "overview"     - One operator behind every open BC; the spectral argument
+            "numerics"     - Measured DtN spectrum vs mesh table + how to read it
+            "api"          - exterior_dtn_spectrum / dtn_spectrum_vs_mesh usage
+            "applications" - Air-box sizing, method choice, trusting coarse Kelvin, debugging
+    """
+    return get_dtn_coarse_mesh_documentation(topic)
 
 
 # ============================================================

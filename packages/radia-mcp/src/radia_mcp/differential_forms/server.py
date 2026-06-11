@@ -45,7 +45,6 @@ from .mathematica_recipes_knowledge import get_mathematica_recipes_documentation
 from .forces_knowledge import get_forces_documentation
 from .em_force_ngsolve_recipe_knowledge import get_em_force_ngsolve_recipe
 from .em_force_extras_knowledge import get_em_force_extras
-from .kelvin_lab_studies_knowledge import get_kelvin_lab_studies
 
 mcp = FastMCP("mcp-server-differential-forms")
 
@@ -289,49 +288,6 @@ def differential_forms_em_force_extras(topic: str = "all") -> str:
 
 
 @mcp.tool()
-def differential_forms_kelvin_lab_studies(topic: str = "overview") -> str:
-    """
-    Sugahara Lab practical Kelvin-transform case studies (2020-2023).
-
-    Goes beyond the theory in `differential_forms_mathematica_recipes('kelvin')`
-    and `fem_gauge_open_boundary('kelvin_transform')` by documenting seven
-    real COMSOL case studies under `S:/COMSOL/88_ケルビン変換/`:
-    basic practice, ECT + earth, forced-periodic-BC MATLAB script,
-    WPT + earth + PML + Kelvin, ECT eddy-current post-processing,
-    HF Hertz-dipole validity check, and a worked example mph.
-
-    Each topic returns a deep-dive section: lab convention, geometry,
-    physics setup, exact COMSOL commands used, file paths on the NAS,
-    pitfalls hit, workarounds adopted.  ALL paths are quoted verbatim
-    (Japanese folder names preserved) so the user can re-open the .mph
-    files cold.
-
-    Topics:
-        overview                  - catalog + lab convention (DEFAULT)
-        basic_practice            - case #1: 2020-06 sphere practice
-        ect_earth                 - case #2: 2021-06 ECT + earth
-        forced_periodic_bc_script - case #3: 2021-09 MATLAB pairing script
-        wpt_earth                 - case #4: 2021-10 WPT + earth + PML
-        ect_post                  - case #5: 2021-11 ECT post-processing
-        hf_dipole_sphere          - case #6: 2023-03 HF Kelvin validity
-        lessons_learned           - cross-cutting pitfalls (L1-L11)
-        robin_like_pattern        - genext-as-Robin physical picture
-        cross_reference           - how each maps to Radia pipeline
-        lab_files                 - NAS path catalog with sizes
-        all                       - everything concatenated
-
-    Cross-reference:
-        - differential_forms_mathematica_recipes('kelvin') for the
-          symbolic Kelvin-factor derivation
-        - fem_gauge_open_boundary('kelvin_transform') for the general
-          NGSolve recipe
-        - electromagnet_em_knowledge for the accelerator-magnet
-          Kelvin workflow (calc_em.py)
-    """
-    return get_kelvin_lab_studies(topic)
-
-
-@mcp.tool()
 def differential_forms_bibliography(topic: str = "all") -> str:
     """
     Bibliography of the source PDFs distilled into this server.
@@ -514,7 +470,6 @@ def main():
             ("forces", differential_forms_forces),
             ("bibliography", differential_forms_bibliography),
             ("mathematica_recipes", differential_forms_mathematica_recipes),
-            ("kelvin_lab_studies", differential_forms_kelvin_lab_studies),
         ]
         for name, fn in tools:
             n_chars = len(fn("all"))

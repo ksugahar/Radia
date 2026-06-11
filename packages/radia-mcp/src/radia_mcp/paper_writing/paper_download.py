@@ -2,7 +2,7 @@
 
 Provides programmatic PDF fetching for academic papers from
 publishers that rely on cookie-seeded session anti-bot (IEEE Xplore,
-Emerald Publishing).  Works from a lab IP with institutional
+Emerald Publishing).  Works from a host that already has institutional
 access — no proxy / auth setup needed beyond what the publisher
 sees from the calling host.
 
@@ -215,7 +215,7 @@ def paper_writing_ieee_download_pdf(
     """Download an IEEE Xplore PDF via cookie-seeded curl-like session.
 
     Requires the caller's IP to have institutional access to IEEE
-    Xplore (e.g. Kindai University LAB).  The cookie-seeded pattern:
+    Xplore (i.e. a subscribing institution's network).  The cookie-seeded pattern:
 
     1. Visit the abstract page → publisher sets session cookies
     2. Request stampPDF/getPDF.jsp with Referer header → PDF returned
@@ -333,8 +333,8 @@ def paper_writing_sciencedirect_download_pdf(
     """Download an Elsevier ScienceDirect PDF.
 
     Same cookie-seeded session pattern as IEEE / Emerald.  Requires
-    the caller's IP to have institutional access (e.g. Kindai
-    University ScienceDirect subscription).
+    the caller's IP to have institutional access (i.e. a subscribing
+    institution's ScienceDirect entitlement).
 
     Args:
         article_pdf_url:     The article PDF URL.  Find via the article

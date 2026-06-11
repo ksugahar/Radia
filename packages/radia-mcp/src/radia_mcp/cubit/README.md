@@ -74,8 +74,6 @@ Guess"):
 
 ## Cross-references
 
-- `mcp-server-radia-interop` — STEP boundary between Cubit and other
-  CAD (CadQuery, build123d, FreeCAD)
 - `mcp-server-gmsh` — alternative mesh post (`.msh v4.1`)
 - `mcp-server-build123d` — Pythonic OCCT front-end → STEP → Cubit
 - `mcp-server-fem` — what FEM formulations consume the resulting
