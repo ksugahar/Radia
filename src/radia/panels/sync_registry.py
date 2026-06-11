@@ -119,6 +119,23 @@ PARAM_JA = {
     "max-order": {"ja": "最大次数", "physics": ""},
     "cub5": {"ja": "Cubit モデル", "physics": ".cub5 ファイル (メッシュ生成に Cubit 必要)"},
     "step": {"ja": "STEP 形状", "physics": "OCC 経由で Netgen メッシュ生成"},
+
+    # --- Stream-function volume (calc_streamfunction_volume) ---
+    "target_bz": {"ja": "目標軸方向磁場 Bz", "physics": "ボア中心の一様 Bz [T]"},
+    "target-bz": {"ja": "目標軸方向磁場 Bz", "physics": "[T]"},
+    "foliation": {"ja": "葉層化 mu", "physics": "radial = 入れ子円筒 mu=r"},
+    "n_leaves": {"ja": "mu 葉層数", "physics": "径方向シェル数 (円筒葉)"},
+    "n-leaves": {"ja": "mu 葉層数", "physics": ""},
+    "fes_order": {"ja": "lambda H1 次数", "physics": "体積ストリーム関数 lambda の H1 多項式次数"},
+    "fes-order": {"ja": "lambda H1 次数", "physics": ""},
+    "aca_eps": {"ja": "ACA+ 許容誤差", "physics": "応答行列 ACA+ 分解の停止許容誤差"},
+    "aca-eps": {"ja": "ACA+ 許容誤差", "physics": ""},
+    "rings_per_span": {"ja": "リング数/lambda 範囲", "physics": "等電流ワイヤ密度 (大きいほど細かい)"},
+    "rings-per-span": {"ja": "リング数/lambda 範囲", "physics": ""},
+    "n_targets": {"ja": "軸方向ターゲット点数", "physics": "ボア軸上の磁場制約点数"},
+    "n-targets": {"ja": "軸方向ターゲット点数", "physics": ""},
+    "nphi": {"ja": "等高線 方位サンプル数", "physics": "ワイヤ抽出の方位方向サンプル数"},
+    "nz": {"ja": "等高線 軸方向サンプル数", "physics": "ワイヤ抽出の軸方向サンプル数"},
 }
 
 
@@ -178,6 +195,14 @@ PANELS = {
         "ja_name": "ストリーム関数コイル設計",
         "ja_description": "コイル面 .vol + 評価領域 .vol + 目標磁場 (CoefficientFunction 式; スカラー→Bz / 3成分→ベクトルB) から表面電流ストリーム関数 ψ を設計。design (均一度・最大電流密度) / pareto (フロント α掃引) / manufacture (一筆書き+板金+STEP+PEEC) の3モード。",
         "method": "FE-direct H1 psi on a surface .vol + surface Biot-Savart + folded-Tikhonov (ACA+TSVD RegularizedTSVD)",
+        "command_builder": "radia_streamfunction.py:StreamFunctionPanel.build_command",
+    },
+    "streamfunction_volume": {
+        "script": "calc_streamfunction_volume.py",
+        "function": "run",
+        "ja_name": "体積ストリーム関数コイル設計 (3D)",
+        "ja_description": "中空円筒導体 .vol + 目標軸方向 Bz から、葉層化カレント・クレブシュ体積ストリーム関数 J=grad(lambda)xgrad(mu) (mu=r 固定) を線形最小ノルム逆問題 (ACA+TSVD) で解き、等電流の巻線ワイヤに等高線抽出。ワイヤの Biot-Savart を Radia と二重コード照合。radia_streamfunction パネルの 'Volume 3D' モード。",
+        "method": "Foliated current-Clebsch volume stream function (H1 lambda on a conductor volume) + ACA+TSVD least-norm + equal-current contour extraction + two-codebase Biot-Savart check",
         "command_builder": "radia_streamfunction.py:StreamFunctionPanel.build_command",
     },
 }
