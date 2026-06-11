@@ -66,3 +66,18 @@ open-boundary toolkit (true periodic-BC inversion, not concentric shells). The
 right move per the lab's own "avoid reinventing the wheel" policy is to reuse it
 (`radia.kelvin_solver`, recipe in the `kelvin` knowledge module) rather than
 rebuild a worse copy. The reluctivity rule (HCurl A): `nu_kelvin = (r'/R)^2 nu_0`.
+
+**Companion (why #3 works on coarse meshes), the spectral angle, not a re-impl:**
+[`../dtn_spectrum_coarse_mesh_demo.py`](../dtn_spectrum_coarse_mesh_demo.py)
+explains Kameari's coarse-mesh accuracy of the Kelvin transform as a *property of
+the DtN operator*: every open-BC closure (Kelvin/BEM/PML) discretizes the one
+exterior Steklov-Poincaré operator Λ_ext, whose sphere eigenvalues are the
+mesh-independent ladder −(n+1)/R. The demo **measures both discretizations**:
+(A) the BEM matrix Λ_h reproduces the low (physically-dominant) modes accurately
+already on the coarsest mesh (dipole −2/R to 0.07 %), so refining only widens the
+accurate band; (B) `kelvin_dtn_eigenvalue` measures the Kelvin closure's effective
+DtN by volume FEM — mode n inverts to a degree-n polynomial, exact iff FEM
+order≥n, so the dominant dipole (→ linear) is coarse-accurate at order 1. Knowledge
+baked into the `dtn_coarse_mesh` MCP tool and gated by
+`tests/test_dtn_spectrum_coarse.py`. It does **not** reimplement Kelvin — it
+measures the effective DtN of both the BEM and Kelvin realizations of the shared Λ_ext.

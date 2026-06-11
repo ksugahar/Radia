@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **325 tools** across 39 MCP servers.
+Total: **328 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 44 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 35 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 38 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
@@ -161,6 +161,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 
 | Tool | Description |
 |---|---|
+| `airgap_motor_workflow` | Get AGE rotating machine workflow documentation -- nonlinear iron + AGE coupling. |
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
 | `axifemm_documentation` | Get radia-axifemm documentation: Henrotte axisymmetric Q-element FE |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
@@ -169,9 +170,11 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `cln_3d_notebook` | Retrieve Tanimoto's raw 3D CLN notebook Python code. |
 | `cln_sibc_orthogonal` | Get CLN expansion-point + SIBC orthogonal-residual theory documentation. |
 | `cln_sphere_dd_pipeline` | Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network |
+| `dtn_coarse_mesh` | Why open-boundary methods stay accurate on COARSE meshes -- a spectral |
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
+| `fem_bem_schur` | Get FEM-BEM Schur coupling documentation -- exact open boundary for interior FEM. |
 | `femm_parity_documentation` | Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics, |
-| `force_validation` | EM force extraction in NGSolve + COMSOL <-> NGSolve cross-validation. |
+| `force_validation` | EM force extraction in NGSolve + independent <-> NGSolve cross-validation. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
@@ -206,7 +209,7 @@ Module: `radia_mcp.streamfunction.server`
 | Tool | Description |
 |---|---|
 | `radia_streamfunction_status` | (no description) |
-| `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 22 topics. |
+| `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 23 topics. |
 | `streamfunction` | Get Stream-Function (SF) coil-design documentation. |
 
 ## `mcp-server-fem`
@@ -336,7 +339,7 @@ Module: `radia_mcp.motor.server`
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
-| `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM <-> JMAG <-> radia-ngsolve (相互学習). |
+| `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
 
 ## `mcp-server-accelerator`
 
