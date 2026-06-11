@@ -62,6 +62,7 @@ least-norm (`#2`), with the gauge null space (`curl grad χ = 0`) truncated by T
 |---|---|---|---|---|
 | B1 | `helicity_diagnostic.py` | `H_rel = |∫T·curl T| / (‖T‖‖curl T‖) ∈ [0,1]` — gates whether a clean Clebsch/level-set extraction is even possible | **ANALYTIC** axial vs Beltrami | axial (Clebsch-type) `9e-5`; ABC/Beltrami (`curl T = kT`) `1.000` |
 | B2 | `foliated_solenoid_wires.py` | foliated `λ` → per-cylinder equal-Δλ contours → equal-current wires → Biot-Savart | target `Bz` + **two-codebase** (Radia `ObjFlmCur`+`Fld`) | 59 equal-current wires (`I=Δλ·Δμ`); `Bz` to `4.7%` (discretisation); **agrees with Radia to `3.4e-10`** |
+| B3 | `line_topology_gate.py` | the **second** extraction gate — do the lines *close*? rotation-number closure-defect of a torus winding (robust closure metric, **not** a fragile chaotic-Poincaré 2-D-fill) | **ANALYTIC** rational vs irrational `ι` | `ι=1/5, 2/5` **close at turn 5** (defect `0.068` minor-radii → windable); `ι=1/φ` **never closes** (`0.572`); **8.4× margin** |
 
 `H_rel ~ 0` for `#2`/`#3` (so Stage A is extractable); the two-codebase invariant (`3.4e-10`) means
 the golden cannot pass on a wrong Biot-Savart formula.
