@@ -1,12 +1,15 @@
 """Headless Qt behaviour tests for the Stream-Function coil-design panel.
 
 Instantiates the real PySide6 ``StreamFunctionPanel`` (a composite ModePanel:
-a coil-.vol Browse + a Method combo + a QStackedWidget over the Design /
-Pareto / Manufacture sub-panels) via the offscreen Qt platform plugin and
-verifies the user-visible behaviour that the calc golden (a subprocess) and
-the static contract audit cannot:
+a coil/conductor-.vol Browse + a Method combo + a QStackedWidget over the
+Design / Pareto / Manufacture surface sub-panels AND the Volume 3D sub-panel)
+via the offscreen Qt platform plugin and verifies the user-visible behaviour
+that the calc golden (a subprocess) and the static contract audit cannot:
 
-  - the Method combo defaults to Design and lists exactly the 3 modes;
+  - the Method combo defaults to Design and lists all 4 modes (3 surface +
+    Volume 3D);
+  - Volume 3D is backed by a DIFFERENT calc (calc_streamfunction_volume.py)
+    with its own knobs and no surface confine/regularize;
   - each mode's sub-panel exposes ONLY its own argparse knobs (so a hidden
     widget can't silently feed build_command, and a mode can't drop a flag);
   - the choice combos (regularise / confine / pareto-lever / chain) carry the
@@ -29,7 +32,8 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src" / "radia"))
 
-MODES = ["Design", "Pareto", "Manufacture"]
+MODES = ["Design", "Pareto", "Manufacture"]        # surface modes (shared knobs)
+ALL_MODES = MODES + ["Volume 3D"]                  # full Method combo
 
 
 def _sub(panel, name):
@@ -62,11 +66,11 @@ class TestMethodCombo:
     def test_default_is_design(self, sf_panel):
         assert sf_panel._method_combo.currentText() == "Design"
 
-    def test_three_modes_present(self, sf_panel):
-        assert _combo_items(sf_panel._method_combo) == MODES
+    def test_modes_present(self, sf_panel):
+        assert _combo_items(sf_panel._method_combo) == ALL_MODES
 
     def test_switch_changes_stacked_widget(self, sf_panel):
-        for name in MODES:
+        for name in ALL_MODES:
             sf_panel._method_combo.setCurrentText(name)
             assert sf_panel._stack.currentWidget() is _sub(sf_panel, name)
             assert sf_panel._current_sub() is _sub(sf_panel, name)
@@ -106,7 +110,7 @@ class TestWidgetIsolation:
         # primary coil .vol + method live on the composite, not in the subs
         assert "wp_vol" in sf_panel._widgets
         assert "method" in sf_panel._widgets
-        for name in MODES:
+        for name in ALL_MODES:
             assert "wp_vol" not in _keys(sf_panel, name)
             assert "coil_vol" not in _keys(sf_panel, name)
 
@@ -197,6 +201,37 @@ class TestBuildCommand:
         _set_choice(_sub(sf_panel, "Manufacture"), "confine", "abe")
         cmd = sf_panel.build_command(coil)
         assert cmd[cmd.index("--confine") + 1] == "abe"
+
+
+# ============================================================
+# Volume 3D mode (foliated-Clebsch volume SF -- a DIFFERENT calc)
+# ============================================================
+class TestVolume3D:
+
+    def test_volume_has_own_knobs_not_surface(self, sf_panel):
+        k = _keys(sf_panel, "Volume 3D")
+        assert {"target_bz", "n_leaves", "fes_order", "aca_eps",
+                "rings_per_span", "n_targets", "nphi", "nz"} <= k
+        # the Volume mode uses calc_streamfunction_volume, NOT the surface calc:
+        for absent in ("confine", "regularize", "nlevels", "pareto_lever",
+                       "coil_vol", "target_cf"):
+            assert absent not in k, f"Volume 3D leaks surface knob {absent}"
+
+    def test_volume_command_targets_volume_calc(self, sf_panel, tmp_path):
+        tube = tmp_path / "tube.vol"
+        tube.write_text("mesh3d 1\n")
+        sf_panel._method_combo.setCurrentText("Volume 3D")
+        cmd = sf_panel.build_command(str(tube))
+        assert cmd[1].endswith("calc_streamfunction_volume.py"), cmd[1]
+        # conductor volume mesh via --vol (NOT the surface --coil-vol / --method)
+        assert "--vol" in cmd and str(tube) in cmd
+        assert "--coil-vol" not in cmd
+        assert "--method" not in cmd
+        # design knobs reach argv; same _sf_volume suffix on json + msh (P4)
+        assert "--target-bz" in cmd and "--n-leaves" in cmd
+        out = cmd[cmd.index("--output") + 1]
+        msh = cmd[cmd.index("--msh-output") + 1]
+        assert out.endswith("_sf_volume.json") and msh.endswith("_sf_volume.msh")
 
 
 # ============================================================
