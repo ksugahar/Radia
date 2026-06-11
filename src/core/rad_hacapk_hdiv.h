@@ -228,6 +228,8 @@ private:
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;
     std::vector<int> m_host, m_kind, m_expo;           // [n] host elem, [n] 0=cell/1=face, [n*3] monomial exponents
+    std::vector<int> m_nmono;                          // [n] # co-located charges per (kind,host) group -- QuadDot memo gating (skip groups of 1)
+    long long m_build_id = 0;                          // monotonic per-build id -> the QuadDot thread_local memo owner key (pointer-reuse-safe)
     std::vector<double> m_cellInv;                     // [n_el*9] physical->ref affine inverse per cell (row-major)
     std::vector<double> m_faceGinv;                    // [n_bf*4] 2x2 (a.a) Gram inverse per face (for 2D ref coords)
     std::vector<std::vector<rad_hdiv::Vec3>> m_inP;    // [n] FIXED inner-potential Gauss points per HOST (cell/face)

@@ -7,6 +7,12 @@
 #include <utility>
 #include <algorithm>
 #include <core/taskmanager.hpp>   // ngcore::RegionTaskManager (parallel H-matvec under TaskManager)
+#include <unordered_map>
+#include <atomic>
+// Per-thread memo for the high-order QuadDot lives inside QuadDot (a function-local static thread_local map):
+// PhiAtHO(src, m_qp[tgt][k]) (the expensive analytic base + inner subtraction loop) depends ONLY on
+// (kind,host of tgt, src) -- IDENTICAL across the co-located monomials that share a host's outer points -- so
+// the H-matrix fill otherwise recomputes it n_mono(host) times per source.  See QuadDot for the rationale.
 
 RadHACApKHDivManager::RadHACApKHDivManager(int nx, int ny, int nz,
                                            double h, double distort, int nsub)
@@ -212,6 +218,15 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     const int n_cell = n_el;
     const int n_bf   = (int)(m_faceV.size() / 9);
     m_n = (int)m_host.size();                       // number of polynomial CHARGES (the H-matrix dofs)
+    { static std::atomic<long long> s_id{0}; m_build_id = s_id.fetch_add(1) + 1; }   // unique id for the QuadDot memo
+    // per-(kind,host) co-located charge count -> the QuadDot memo engages only where n_mono>1 (reuse exists);
+    // skips e.g. p=1 volume (1 monomial/cell) so the cache never adds overhead where there is nothing to reuse.
+    m_nmono.assign(m_n, 1);
+    {
+        std::unordered_map<long long, int> cnt;
+        for (int a = 0; a < m_n; ++a) cnt[(long long)m_host[a]*2 + m_kind[a]]++;
+        for (int a = 0; a < m_n; ++a) m_nmono[a] = cnt[(long long)m_host[a]*2 + m_kind[a]];
+    }
     const int nqt = (int)ref_tet_w.size();
     const int nqr = (int)ref_tri_w.size();
 
@@ -504,6 +519,36 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
 {
     const std::vector<rad_hdiv::Vec3>& P = m_qp[tgt];
     const std::vector<double>&         W = m_qw[tgt];
+    if (m_highorder && m_nmono[tgt] > 1) {
+        // CO-LOCATED MEMO (non-HACApK-path build speedup): the host carries m_nmono>1 monomials sharing these
+        // outer points, so PhiAtHO(src, P[k]) is identical across them -> cache the Qout-length potential
+        // vector per (kind,host,src) and reuse it BIT-EXACT for the host's other monomials.  Keyed on
+        // (host,src) DIRECTLY (NOT cleared on host change): GetInteractionMatrixElement's symmetrization
+        // 0.5*(QuadDot(a,b)+QuadDot(b,a)) alternates the tgt-host (host_a then host_b), so a clear-on-host
+        // cache would thrash to zero hits.  With the (host,src) key both directions reuse: the row direction
+        // across the co-located rows of a leaf, the col direction across the consecutive co-located cols.
+        // Cap-based eviction bounds the per-thread working set; cleared on a new build (owner id).
+        static thread_local long long cache_owner = -1;
+        static thread_local std::unordered_map<long long, std::vector<double>> cache;
+        if (cache_owner != m_build_id) { cache.clear(); cache_owner = m_build_id; }
+        const long long key = ((long long)(m_host[tgt]*2 + m_kind[tgt]) << 32) | (long long)(unsigned)src;
+        auto it = cache.find(key);
+        const std::vector<double>* phi;
+        if (it != cache.end()) {
+            phi = &it->second;
+        } else {
+            if (cache.size() > 32768u) cache.clear();   // memory cap (~16 MB/thread at Qout~64); rare flush
+            std::vector<double> v(P.size());
+            for (size_t k = 0; k < P.size(); ++k) {
+                const double p[3] = {P[k][0], P[k][1], P[k][2]};
+                v[k] = PhiAtHO(src, p);
+            }
+            phi = &cache.emplace(key, std::move(v)).first->second;
+        }
+        double s = 0.0;
+        for (size_t k = 0; k < P.size(); ++k) s += W[k] * (*phi)[k];
+        return s * RAD_INV_FOUR_PI;
+    }
     double s = 0.0;
     for (size_t k = 0; k < P.size(); ++k) {
         const double p[3] = {P[k][0], P[k][1], P[k][2]};
