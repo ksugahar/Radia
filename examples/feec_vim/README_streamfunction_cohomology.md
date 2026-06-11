@@ -73,7 +73,7 @@ partly-negative results (repo-first: a clearly-demonstrated wall is a real resul
 
 | # | script | the wall | honest remedy |
 |---|---|---|---|
-| F1 | `foliation_choice_wall.py` | choosing the foliation `μ` for a general target = **bilevel convex-inner / non-convex-outer**. Field is fit to `~1e-15` at every tilt → the non-convexity lives in **coil complexity** `‖J‖` (the REGCOIL measure), *invisible to the field residual*. single-axis target = 1 min (convex); two-axis = **2 minima + 18% barrier** (mesh-stable). = the stellarator winding-surface problem (Merkel/Landreman/**Kaptanoglu arXiv:2408.08267**). | global opt (multistart / CMA-ES) **or** accept vector-T |
+| F1 | `foliation_choice_wall.py` | choosing the foliation `μ` for a general target = **bilevel convex-inner / non-convex-outer**. Field is fit to `~1e-15` at every tilt → the non-convexity lives in **coil complexity** `‖J‖` (the REGCOIL measure), *invisible to the field residual*. single-axis target = 1 min (convex); two-axis = **2 minima + 18% barrier** (mesh-stable). = the stellarator winding-surface problem (Merkel/Landreman/**Kaptanoglu arXiv:2408.08267**). | **REMEDY IMPLEMENTED**: `cmaes_foliation_gauge.py` — CMA-ES (Optuna `CmaEsSampler`) over a 2-param foliation normal; finds the global basin (4-basin landscape) where a local optimizer sticks at **1.7×** higher `‖J‖`. **or** accept vector-T |
 | F2 | `clebsch_recovery_wall.py` | recovering `(λ,μ)` **from** a general `J` is **ill-posed**: WALL1 non-unique (transport `J·grad μ = 0`: seeds `μ₀=x` vs `x²` both valid, `μ_b=μ_a²` → infinite-dim **area-preserving-diffeo gauge orbit**); WALL2 conditioning `~1/|J|²`, log-log slope **−4.00** at field nulls (**Yoshida 2009**, Qin 2018) | local, seed-dependent recovery only |
 | F3 | `helical_current_no_clebsch.py` | **nonzero helicity = topological obstruction**. ABC/Beltrami target `H_rel~1`; any convex Clebsch fit is FORCED to `H_rel~0` → the **helicity gap `~1.000`** (foliation- AND mesh-independent; the L2 residual is the *wrong* metric). Clebsch streamline closes (`2e-3`), ABC does **not** (`143` ring-lengths, ergodic; **Moffatt 1969**, Enciso–Peralta-Salas 2020) | vector-T bulk distribution **or** a multi-patch Clebsch atlas + cohomology cuts |
 
@@ -85,10 +85,22 @@ shape of the method. There is **no fake "general 3D solver"** here, by design.
 
 ```
 zero helicity + closed lines + chosen foliation   →   clean equal-current wires   (Stage A/B ✅)
-general foliation / arbitrary target               →   non-convex outer loop        (F1 wall)
+general foliation / arbitrary target               →   non-convex outer loop        (F1 wall → CMA-ES ✅)
 recover Clebsch from an arbitrary J                 →   ill-posed (non-unique/null)  (F2 wall)
 nonzero helicity (linked/knotted lines)            →   no clean wires at all        (F3 wall)
 ```
+
+## Net-current (cohomology) + the F1 remedy — now implemented
+
+The two remaining "finish" pieces of the coil designer are shipped + golden-locked:
+
+| piece | what | files |
+|---|---|---|
+| **net current (cohomology)** | a single-valued `ψ`/`λ` carries zero net current around a winding-surface cycle; the secular term `Σ c_k h_k` (H¹, dim = b1) supplies it, INTEGRATED into the design solve | `../stream_function/cohomology_net_current.py` (+ golden) |
+| **harmonic generators from scratch** | the canonical (min-norm) generators `h_k` computed via the **matched Whitney complex** (`H1₁ →grad→ HCurl₀`, `curl∘grad=0` to `1.4e-14`) — no analytic ansatz; 2 forms drop out of the Hodge-Laplacian kernel (gap `1.2e13`), class-matched to the net current (`2.3e-3`) | `../stream_function/cohomology_generators_whitney.py` (+ golden) |
+| **F1 gauge choice (CMA-ES)** | global optimization over the foliation gauge escapes the non-convex wall; a local optimizer sticks at `1.7×` higher `‖J‖` | `cmaes_foliation_gauge.py` (+ golden) |
+
+So the cohomology-and-gauge "finish" of the stream-function coil designer is complete; F2/F3 remain genuine frontier walls (by design).
 
 ## Run + golden tests
 
