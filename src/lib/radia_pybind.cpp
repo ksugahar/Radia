@@ -2780,12 +2780,21 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
                          std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
                          std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                         std::vector<double> ref_tet_pts_lo, std::vector<double> ref_tet_w_lo,
+                         std::vector<double> ref_tri_pts_lo, std::vector<double> ref_tri_w_lo,
+                         double ho_far_factor,
+                         std::vector<double> ref_tet_pts_in, std::vector<double> ref_tet_w_in,
+                         std::vector<double> ref_tri_pts_in, std::vector<double> ref_tri_w_in,
                          double eps, int leaf, double eta) {
                  auto mgr = std::unique_ptr<RadHACApKChargeGram>(
                      new RadHACApKChargeGram(std::move(cell_verts), std::move(face_verts), n_el,
                                              std::move(charge_host), std::move(charge_kind),
                                              std::move(charge_expo), std::move(ref_tet_pts),
-                                             std::move(ref_tet_w), std::move(ref_tri_pts), std::move(ref_tri_w)));
+                                             std::move(ref_tet_w), std::move(ref_tri_pts), std::move(ref_tri_w),
+                                             std::move(ref_tet_pts_lo), std::move(ref_tet_w_lo),
+                                             std::move(ref_tri_pts_lo), std::move(ref_tri_w_lo), ho_far_factor,
+                                             std::move(ref_tet_pts_in), std::move(ref_tet_w_in),
+                                             std::move(ref_tri_pts_in), std::move(ref_tri_w_in)));
                  RadHACApKParams p;
                  p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
                  if (!mgr->BuildHMatrix(p)) throw std::runtime_error("high-order charge Gram H-matrix build failed");
@@ -2794,11 +2803,18 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
              py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
              py::arg("ref_tet_pts"), py::arg("ref_tet_w"), py::arg("ref_tri_pts"), py::arg("ref_tri_w"),
+             py::arg("ref_tet_pts_lo") = std::vector<double>{}, py::arg("ref_tet_w_lo") = std::vector<double>{},
+             py::arg("ref_tri_pts_lo") = std::vector<double>{}, py::arg("ref_tri_w_lo") = std::vector<double>{},
+             py::arg("ho_far_factor") = 1e30,
+             py::arg("ref_tet_pts_in") = std::vector<double>{}, py::arg("ref_tet_w_in") = std::vector<double>{},
+             py::arg("ref_tri_pts_in") = std::vector<double>{}, py::arg("ref_tri_w_in") = std::vector<double>{},
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
              "HIGH-ORDER (order-p) mode: POLYNOMIAL charges (monomial basis per host). charge_host[c]/"
              "charge_kind[c] (0=cell,1=face)/charge_expo[3c] define each charge; ref_tet_pts[nqt*3]/ref_tet_w "
              "(sum 1/6) + ref_tri_pts[nqr*2]/ref_tri_w (sum 1/2) are the reference Gauss-Duffy rules. Entry = "
-             "monomial-weighted outer quad x the subtraction inner potential (matches dense build_demag_highorder).")
+             "monomial-weighted outer quad x the subtraction inner potential (matches dense build_demag_highorder). "
+             "ref_*_lo + ho_far_factor (<inf) enable the accuracy-preserving NEAR/FAR adaptive quadrature: far "
+             "pairs (|c_a-c_b| > ho_far_factor*(size_a+size_b)) use the cheap LOW-quad plain double-Gauss.")
         .def("ndof", [](RadHACApKChargeGram& s) { return s.GetNDOF(); })
         .def("matvec", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
                  std::vector<double> y((size_t)s.GetNDOF(), 0.0);
