@@ -2,17 +2,16 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **335 tools** across 40 MCP servers.
+Total: **328 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 44 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
-| [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 8 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 35 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 38 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
-| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 12 |
+| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
@@ -38,7 +37,7 @@ Total: **335 tools** across 40 MCP servers.
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
 | [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 3 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
-| [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
+| [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 12 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 10 |
@@ -138,23 +137,6 @@ Module: `radia_mcp.build123d.server`
 | `preview_text` | Generate 3D extruded text and send it to the live Cubit viewer. |
 | `section_along_path` | Section a STEP/BREP coil solid along a discrete path and extract |
 
-## `mcp-server-radia-interop`
-
-_Cross-CAD interop (STEP/IGES/CadQuery <-> Cubit/Netgen)_
-
-Module: `radia_mcp.interop.server`
-
-| Tool | Description |
-|---|---|
-| `any_step_to_cubit_hex` | Universal CAD-MCP mesh backend: accept ANY STEP file and run it |
-| `freecad_exec_safely` | Cubit-style safety pattern for FreeCAD: snapshot → batch dry-run |
-| `freecad_to_cubit_hex` | Execute a FreeCAD script in a FreeCADCmd subprocess, export the |
-| `interop_comsol_lab_tips` | Sugahara Lab (Kindai University) COMSOL practical tips compendium. |
-| `interop_comsol_livelink` | COMSOL LiveLink (Java + MATLAB + MPh Python) knowledge. |
-| `list_cad_mcp_interop` | List registered CAD-MCP interop adapters + their availability. |
-| `openscad_to_cubit_hex` | Execute OpenSCAD code, export STEP, run through `cubit_mesh_auto`. |
-| `radia_interop_status` | (no description) |
-
 ## `mcp-server-gmsh`
 
 _GMSH MSH v4.1 inspect/validate/convert/write_node_data_
@@ -179,6 +161,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 
 | Tool | Description |
 |---|---|
+| `airgap_motor_workflow` | Get AGE rotating machine workflow documentation -- nonlinear iron + AGE coupling. |
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
 | `axifemm_documentation` | Get radia-axifemm documentation: Henrotte axisymmetric Q-element FE |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
@@ -187,9 +170,11 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `cln_3d_notebook` | Retrieve Tanimoto's raw 3D CLN notebook Python code. |
 | `cln_sibc_orthogonal` | Get CLN expansion-point + SIBC orthogonal-residual theory documentation. |
 | `cln_sphere_dd_pipeline` | Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network |
+| `dtn_coarse_mesh` | Why open-boundary methods stay accurate on COARSE meshes -- a spectral |
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
+| `fem_bem_schur` | Get FEM-BEM Schur coupling documentation -- exact open boundary for interior FEM. |
 | `femm_parity_documentation` | Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics, |
-| `force_validation` | EM force extraction in NGSolve + COMSOL <-> NGSolve cross-validation. |
+| `force_validation` | EM force extraction in NGSolve + independent <-> NGSolve cross-validation. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
@@ -245,7 +230,6 @@ Module: `radia_mcp.fem.server`
 | `fem_potential_formulations` | Potential formulations: A-Omega, T-Omega, H, Reduced, Darwin. |
 | `fem_status` | (no description) |
 | `fem_time_domain_axisym` | Time-domain, axisymmetric (Henrotte), harmonic balance, HF, circuit coupling. |
-| `fem_xfem_comsol` | XFEM in COMSOL Multiphysics (Jafari-Broumand-Vahab-Khalili 2021). |
 | `fem_xfem_em_hiruma` | EM-XFEM (Hiruma 2023): electromagnetic XFEM for eddy-current |
 
 ## `mcp-server-bem`
@@ -355,7 +339,7 @@ Module: `radia_mcp.motor.server`
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
-| `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM <-> JMAG <-> radia-ngsolve (相互学習). |
+| `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
 
 ## `mcp-server-accelerator`
 
@@ -606,7 +590,6 @@ Module: `radia_mcp.differential_forms.server`
 | `differential_forms_feec` | Finite Element Exterior Calculus (Arnold-Falk-Winther 2006). |
 | `differential_forms_forces` | Electromagnetic forces in differential-form language. |
 | `differential_forms_homology` | Chain complex, homology, Betti numbers, tree-cotree gauge. |
-| `differential_forms_kelvin_lab_studies` | Sugahara Lab practical Kelvin-transform case studies (2020-2023). |
 | `differential_forms_mathematica_recipes` | Wolfram Language recipes for symbolic verification, pairing |
 | `differential_forms_maxwell` | Maxwell's equations in differential-form language. |
 | `differential_forms_status` | (no description) |

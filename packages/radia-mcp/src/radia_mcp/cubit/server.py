@@ -4759,7 +4759,7 @@ register_status_tool(
     server_name='mcp-server-cubit',
     description='Cubit mesh scripting, hex/tet workflow, export formats',
     subpackage='radia_mcp.cubit',
-    related_servers=["build123d", "interop"],
+    related_servers=["build123d"],
 )
 
 

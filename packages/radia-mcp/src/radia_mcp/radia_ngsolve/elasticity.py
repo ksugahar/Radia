@@ -100,3 +100,76 @@ def constrained_bar_thermal_stress(E, alpha, mean_dT):
     (2/3) dT_max). Compressive (negative) for heating. The structural end of the
     electro-thermo-mechanical chain (examples/comsol_class/electro_thermo_mech.py)."""
     return -E * alpha * mean_dT
+
+
+def thermal_bending_tip_deflection(alpha, dT_thickness, thickness, length):
+    """Euler-Bernoulli tip deflection of a CANTILEVER with a LINEAR through-thickness
+    temperature gradient ``dT_thickness`` (top-to-bottom difference) over ``thickness`` h.
+    It bends STRESS-FREE into the constant curvature kappa = alpha*dT_thickness/h, so
+
+        delta_tip = kappa L^2/2 = alpha * dT_thickness * length^2 / (2 h).
+
+    The thermal-bimorph / bimetallic-strip actuator principle (homogeneous beam, linear
+    gradient). Distinct from :func:`constrained_bar_thermal_stress` (AXIAL blocked expansion
+    -> stress, no bending). Validated examples/comsol_class/thermal_bending.py to 0.24 %."""
+    return alpha * dT_thickness * length ** 2 / (2.0 * thickness)
+
+
+def bimetal_tip_deflection(alpha1, alpha2, dT, thickness, length):
+    """Cantilever tip deflection of a BIMETALLIC STRIP -- two bonded layers of EQUAL
+    thickness and modulus but different expansion (alpha1 bottom, alpha2 top) under a
+    UNIFORM rise dT (Timoshenko 1925). The strip curves with
+
+        kappa = 3 (alpha2 - alpha1) dT / (2 h)   (h = total thickness),
+
+    so the cantilever tip delta = kappa L^2/2 = 3(alpha2-alpha1) dT L^2/(4 h). The
+    thermostat / thermal-switch / thermal-relay principle. Distinct from
+    :func:`thermal_bending_tip_deflection` (ONE material, through-thickness GRADIENT):
+    here a uniform dT + a material Delta-alpha drives the bending. Pass alpha as a
+    region-wise CF to solve_linear_elasticity(thermal=(alpha, dT)). Validated
+    examples/comsol_class/bimetallic_strip.py to 1.5 %."""
+    kappa = 3.0 * (alpha2 - alpha1) * dT / (2.0 * thickness)
+    return kappa * length ** 2 / 2.0
+
+
+def biaxial_thermal_stress(E, alpha, dT, nu):
+    """Biaxial thermal stress of a plate fully constrained in-plane (u=0 on all edges)
+    under a UNIFORM rise dT, PLANE STRESS:
+
+        sigma_x = sigma_y = -E alpha dT / (1 - nu)     [Pa]  (compressive).
+
+    The 2D constraint factor 1/(1-nu) -- vs the 1D uniaxial blocked bar
+    -E alpha dT (:func:`constrained_bar_thermal_stress`). Exact (u=0 is the solution for a
+    uniform eigenstrain with all edges clamped). (PLANE STRAIN fully constrained is
+    -E alpha dT/(1-2 nu); NOTE radia's plane='strain' thermal load is currently (1+nu) too
+    small -- flagged for fix -- so this helper/validation covers plane STRESS.)"""
+    return -E * alpha * dT / (1.0 - nu)
+
+
+def rule_of_mixtures_cte(moduli, areas, alphas):
+    """Effective (stiffness-weighted) coefficient of thermal expansion of a bonded
+    composite whose layers co-strain axially:
+
+        alpha_eff = sum(E_i A_i alpha_i) / sum(E_i A_i).
+
+    ``areas`` are the cross-sectional shares A_i (per unit depth: layer widths). The
+    common free-expansion strain of the laminate is alpha_eff*dT. Stiffer / larger
+    layers pull alpha_eff toward their own alpha (Voigt / iso-strain mixing rule)."""
+    den = sum(E * A for E, A in zip(moduli, areas))
+    return sum(E * A * al for E, A, al in zip(moduli, areas, alphas)) / den
+
+
+def laminate_residual_stress(E_i, alpha_i, alpha_eff, dT):
+    """INTERNAL (residual) axial stress in layer i of a FREE bonded composite under a
+    uniform temperature rise ``dT`` -- no external constraint, the stress comes purely
+    from the CTE mismatch forcing a common strain alpha_eff*dT (:func:`rule_of_mixtures_cte`):
+
+        sigma_i = E_i (alpha_eff - alpha_i) dT.
+
+    Layers with alpha_i > alpha_eff (want to expand more) end in COMPRESSION, the rest in
+    tension; the cross-section is self-equilibrated, sum(A_i sigma_i) = 0. The composite-
+    laminate / die-attach / coating residual-stress and bimetal-internal-stress workhorse;
+    the FREE-bar counterpart of the externally blocked :func:`constrained_bar_thermal_stress`.
+    Pass region-wise E and alpha CFs to solve_linear_elasticity(thermal=(alpha, dT)) and read
+    sigma_xx per layer. Validated examples/comsol_class/laminate_thermal_stress.py to 0.00 %."""
+    return E_i * (alpha_eff - alpha_i) * dT

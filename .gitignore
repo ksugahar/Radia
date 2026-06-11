@@ -470,3 +470,9 @@ step_export.log
 # VTU output files (use NGSolve VTKOutput or GMSH post instead)
 *.vtu
 docs/research/
+
+# Private working memory / project notes -- never publish
+memory/
+# Throwaway debug/presentation scripts dropped at repo root
+/*.py
+

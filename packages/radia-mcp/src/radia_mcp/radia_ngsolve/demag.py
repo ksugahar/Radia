@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """Per-element permanent-magnet demagnetization (knee) post-processor.
 
-Cross-learning capability (FEMM / JMAG -> radia-ngsolve). FEMM checks the demag
-operating point MANUALLY after a solve ("is every point above the knee?");
-JMAG tracks it with a variable-magnet user-subroutine. radia-ngsolve does it
-natively as a post-processor on ANY planar PM solve: it projects the per-point
-operating field onto the local magnetization direction and reports the AREA
-FRACTION whose H falls below the knee (irreversible-demag risk) -- the
-JMAG-style demag *distribution*, not a single bulk permeance coefficient.
+A demag-distribution capability for radia-ngsolve. The classic 2D approach
+checks the demag operating point MANUALLY after a solve ("is every point above
+the knee?"), or tracks it with a variable-magnet user-subroutine. radia-ngsolve
+does it natively as a post-processor on ANY planar PM solve: it projects the
+per-point operating field onto the local magnetization direction and reports the
+AREA FRACTION whose H falls below the knee (irreversible-demag risk) -- a full
+demag *distribution*, not a single bulk permeance coefficient.
 
-Model (matches ``solve.planar_magnet_source``, FEMM convention). The magnet
+Model (matches ``solve.planar_magnet_source`` convention). The magnet
 source is ``s = nu*B_rem = Hc*(cos phi, sin phi)`` and the constitutive law in
 the magnet is ``H = nu*B - s``. Projected on the easy axis
 ``m_hat = (cos phi, sin phi)``:
@@ -82,7 +82,7 @@ def demag_knee_report(gfu, mesh, magnets, mu_r, H_knee, region=None, area_tol=1e
     Returns
     -------
     dict with: ``region``, ``area``, ``mean_Bm``, ``mean_Hm``, ``H_knee``,
-    ``area_fraction_below_knee`` (the JMAG-style demag distribution metric) and
+    ``area_fraction_below_knee`` (the demag-distribution metric) and
     ``safe`` (bool).
     """
     B_m, H_m = demag_operating_field(gfu, mesh, magnets, mu_r)

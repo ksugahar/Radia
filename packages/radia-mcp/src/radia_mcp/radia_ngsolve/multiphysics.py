@@ -12,7 +12,7 @@ Bessel) and the 1-D radial heat equation (P/L 8.9 %, T_centre 9.6 %; see
 examples/comsol_class/induction_heating.py).
 """
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, InnerProduct,
-                     Conj, grad, dx)
+                     Conj, CoefficientFunction, grad, dx, ds)
 
 
 def joule_loss_density(gfA, gfPhi, sigma_cf, omega, A0=None):
@@ -66,6 +66,150 @@ def solve_heat_steady(mesh, q, k, conductor, dirichlet, order=2,
     return gT
 
 
+def joule_heated_cylinder_peak_dT(q, a, k):
+    """Peak (centre) temperature RISE of a round conductor (radius ``a``) carrying a UNIFORM
+    DC Joule source ``q`` [W/m^3] (q = J^2/sigma, uniform current density), with the surface
+    held at the coolant temperature. Steady radial conduction -div(k grad T)=q gives the
+    PARABOLIC profile dT(r) = q (a^2 - r^2)/(4 k), so the centre rise is
+
+        dT_peak = q a^2 / (4 k).
+
+    The cylindrical sibling of the slab electro-thermal (#19, dT_peak = sigma V^2/(8 k)); the
+    classic current-carrying-wire / ampacity temperature rise. Validated LIVE 3-way (NGSolve
+    :func:`solve_heat_steady` on a disk == this closed form == the reference commercial FE
+    code, all 0.00 %) -- examples/comsol_class/cylinder_joule_heating.py,
+    tests/test_cylinder_joule_heating.py."""
+    return q * a * a / (4.0 * k)
+
+
+def solve_heat_steady_robin(mesh, q, k, conductor, robin, h, T_inf=0.0, order=2,
+                            dirichlet="", dirichlet_value=0.0, inverse="sparsecholesky"):
+    """Steady heat conduction with a CONVECTIVE (Robin / Newton-cooling) boundary on ``robin``:
+
+        -k dT/dn = h (T - T_inf)        (film coefficient ``h`` [W/(m^2 K)]),
+
+    i.e. the cooled surface is NOT held at a fixed temperature -- it FLOATS to balance the
+    convected heat, so the surface sits a film rise q*(half-thickness)/h above the coolant.
+    The realistic cooling BC (vs the idealised T=0 of :func:`solve_heat_steady`). Weak form
+    adds ``h T s`` to the stiffness and ``h T_inf s`` to the load on ``robin``; the remaining
+    boundaries are natural (insulated) unless named in ``dirichlet`` (T=0). Returns the
+    temperature (rise above ``T_inf``, which defaults to 0).
+    """
+    fesT = H1(mesh, order=order, definedon=mesh.Materials(conductor), dirichlet=dirichlet)
+    T, s = fesT.TnT()
+    a = BilinearForm(fesT)
+    a += k * grad(T) * grad(s) * dx
+    a += h * T * s * ds(definedon=mesh.Boundaries(robin))
+    f = LinearForm(fesT)
+    f += q * s * dx
+    if T_inf != 0.0:
+        f += h * T_inf * s * ds(definedon=mesh.Boundaries(robin))
+    a.Assemble(); f.Assemble()
+    gT = GridFunction(fesT)
+    if dirichlet and dirichlet_value != 0.0:               # inhomogeneous Dirichlet (e.g. fin base)
+        gT.Set(CoefficientFunction(dirichlet_value), definedon=mesh.Boundaries(dirichlet))
+        r = f.vec.CreateVector()
+        r.data = f.vec - a.mat * gT.vec
+        gT.vec.data += a.mat.Inverse(fesT.FreeDofs(), inverse=inverse) * r
+    else:
+        gT.vec.data = a.mat.Inverse(fesT.FreeDofs(), inverse=inverse) * f.vec
+    return gT
+
+
+def convective_slab_peak_dT(q, thickness, k, h):
+    """Centre temperature RISE of a slab (thickness ``L``) with a UNIFORM volumetric source
+    ``q`` [W/m^3] cooled by CONVECTION (film coefficient ``h``) on BOTH faces:
+
+        dT_centre = q L^2/(8 k)  +  q L/(2 h),
+
+    the CONDUCTION parabola (#19/#41, q L^2/8k) PLUS the convective FILM rise q L/(2 h) (the
+    surface floats this far above the coolant). The surface rise alone is q L/(2 h); as
+    h -> inf the film vanishes and the fixed-T result q L^2/8k is recovered. The realistic
+    Joule-heated / cooled-device temperature rise. Validated LIVE 3-way (NGSolve
+    :func:`solve_heat_steady_robin` == this closed form == the reference commercial FE code)
+    -- examples/comsol_class/convective_electrothermal.py, tests/test_convective_electrothermal.py."""
+    return q * thickness * thickness / (8.0 * k) + q * thickness / (2.0 * h)
+
+
+def thermal_resistance_series(thicknesses, conductivities):
+    """Series thermal resistance per unit area of a MULTILAYER stack (1-D conduction):
+
+        R_total = sum_i L_i / k_i   [m^2 K / W],
+
+    the thermal-circuit analog of series electrical resistances. The temperature DROP across
+    layer i carrying a heat flux Q [W/m^2] is Q*L_i/k_i, so the junction-to-base rise of a
+    die stack is Q * R_total (plus q*L1^2/(2 k1) for self-heating WITHIN a uniformly
+    heat-generating top layer). The electronics-cooling / multilayer-wall workhorse:
+    high-k layers (Cu spreader) drop little, low-k layers (solder, TIM) dominate. Validated
+    LIVE 3-way (NGSolve solve_heat_steady region-wise k == this network == the reference FE
+    code) -- examples/comsol_class/die_stack_thermal.py, tests/test_die_stack_thermal.py."""
+    return sum(L / k for L, k in zip(thicknesses, conductivities))
+
+
+def fin_parameter(h, k, thickness):
+    """Fin parameter m = sqrt(h P /(k A)) for a thin straight fin convecting from BOTH faces
+    (per unit depth: perimeter P = 2*depth, cross-section A = thickness*depth), so
+
+        m = sqrt(2 h /(k * thickness))   [1/m].
+
+    Sets the conduction-vs-convection length scale 1/m; valid when the Biot number
+    h*thickness/k << 1 (the fin is thin enough to be ~isothermal across its thickness)."""
+    import math as _m
+    return _m.sqrt(2.0 * h / (k * thickness))
+
+
+def fin_tip_temperature_rise(dT_base, m, length):
+    """Tip temperature RISE of a straight fin with an ADIABATIC (insulated) tip:
+
+        dT(x) = dT_base * cosh(m (L - x))/cosh(m L)   ->   dT_tip = dT_base / cosh(m L).
+
+    ``dT_base`` = base rise above coolant, ``m`` = :func:`fin_parameter`. The fin temperature
+    falls from base to tip as the surface convects heat away."""
+    import math as _m
+    return dT_base / _m.cosh(m * length)
+
+
+def fin_efficiency(m, length):
+    """Straight-fin EFFICIENCY (adiabatic tip):
+
+        eta_fin = tanh(m L)/(m L)
+
+    = actual heat dissipated / the heat if the WHOLE fin were at the base temperature. eta -> 1
+    for a short/fat/conductive fin (mL -> 0) and -> 1/(mL) -> 0 for a long/thin/insulating one
+    -- the classic heat-sink design trade-off. Validated LIVE 3-way (NGSolve
+    :func:`solve_heat_steady_robin` with a base Dirichlet + convective faces == this closed form
+    == the reference FE code) -- examples/comsol_class/cooling_fin.py, tests/test_cooling_fin.py."""
+    import math as _m
+    return _m.tanh(m * length) / (m * length)
+
+
+def solve_heat_steady_nonlinear(mesh, q_of_T, k, conductor, dirichlet, order=2,
+                                relax=1.0, max_iter=60, tol=1e-7):
+    """Steady heat with a TEMPERATURE-DEPENDENT volumetric source -- Picard fixed point on
+    ``-div(k grad T) = q(T)``.  ``q_of_T`` is callable(T_cf) -> q_cf (the source given the
+    current temperature), e.g. a TWO-WAY electro-thermal sigma(T) Joule density
+    ``q = J^2/sigma(T) = (J^2/sigma0)(1+alpha T)`` (electrical resistivity rises with T, so
+    Joule heating feeds back into the temperature), or a radiative/reaction volumetric term.
+
+    The 2-way twin of :func:`solve_heat_steady`.  Returns the converged temperature
+    GridFunction (T=0 on ``dirichlet``).  Validated EXACT (0.00 %) against the closed form
+    for sigma(T)=sigma0/(1+alpha T): T_max=(1/alpha)(sec(sqrt(b) L/2)-1), b=alpha J^2/(sigma0 k)
+    (examples/comsol_class/electrothermal_sigmaT.py)."""
+    from ngsolve import CoefficientFunction, Integrate, dx as _dx
+    Tprev = CoefficientFunction(0.0)
+    gT = None
+    last = None
+    dom = _dx(definedon=mesh.Materials(conductor))
+    for it in range(max_iter):
+        gT = solve_heat_steady(mesh, q_of_T(Tprev), k, conductor, dirichlet, order=order)
+        cur = Integrate(gT * gT * dom, mesh)
+        if last is not None and abs(cur - last) <= tol * max(1.0, abs(cur)) and it >= 2:
+            break
+        last = cur
+        Tprev = gT if relax >= 1.0 else (1.0 - relax) * Tprev + relax * gT
+    return gT
+
+
 def joule_heat_source(gfV, sigma_cf):
     """DC Joule heat density  q = sigma |grad V|^2 = |J|^2 / sigma  [W/m^3] from a
     conduction solution ``gfV`` (J = -sigma grad V, e.g. from
@@ -92,3 +236,49 @@ def joule_bar_temperature_rise(sigma, voltage, length, k, x):
         return [_dt(float(xx)) for xx in x]
     except TypeError:
         return _dt(float(x))
+
+
+LORENZ = 2.44e-8          # Wiedemann-Franz Lorenz number [V^2/K^2] (k/(sigma T))
+
+
+def phi_theta_local_temperature(V, U, T0=293.15, lorenz=LORENZ):
+    """The phi-theta (voltage-temperature) relation -- the temperature at the point of local
+    potential ``V`` in a current-carrying conductor whose two terminals (at potentials U and 0)
+    are both held at ``T0``:
+
+        T(V)^2 = T0^2 + V (U - V)/L                  (L = Wiedemann-Franz Lorenz number).
+
+    A REMARKABLE result: under the Wiedemann-Franz law (k = L sigma T) the temperature is a
+    function of the POTENTIAL ALONE -- INDEPENDENT of the conductor's geometry, conductivity, or
+    current. Derived by the Kirchhoff transform psi = L sigma T^2/2 (linearises the coupled
+    electro-thermal problem: -lap(psi) = sigma|grad V|^2, with psi quadratic in V)."""
+    import math as _m
+    return _m.sqrt(T0 * T0 + V * (U - V) / lorenz)
+
+
+def phi_theta_max_temperature(U, T0=293.15, lorenz=LORENZ):
+    """Maximum (hot-spot) temperature of a current-carrying conductor / electrical CONSTRICTION
+    with both terminals at ``T0`` and total voltage ``U`` between them:
+
+        T_max^2 - T0^2 = U^2/(4 L),   at the V = U/2 surface.
+
+    The constriction "supertemperature" -- geometry-INDEPENDENT (Kohlrausch / Diesselhorst /
+    Holm contact theory). The Wiedemann-Franz-exact generalisation of the constant-property bar
+    peak sigma V^2/8k (:func:`joule_bar_temperature_rise`): at small rise
+    T_max^2-T0^2 ~ 2 T0 (T_max-T0) -> T_max-T0 ~ U^2/(8 L T0). Use :func:`melting_voltage` for the
+    inverse (the contact voltage that softens/melts the metal)."""
+    return phi_theta_local_temperature(0.5 * U, U, T0, lorenz)
+
+
+def melting_voltage(T_melt, T0=293.15, lorenz=LORENZ):
+    """The geometry-INDEPENDENT contact VOLTAGE at which an electrical constriction reaches the
+    temperature ``T_melt`` (e.g. the softening or melting point of the metal):
+
+        U = sqrt(4 L (T_melt^2 - T0^2)).
+
+    The inverse of :func:`phi_theta_max_temperature`. The classic contact result that a metal
+    softens/melts at a CHARACTERISTIC voltage set only by the material (Lorenz number + melting
+    point), NOT by the contact size or force -- e.g. copper softens ~0.12 V, melts ~0.43 V; the
+    basis of contact-voltage limits in connectors, relays, and motor terminals."""
+    import math as _m
+    return _m.sqrt(4.0 * lorenz * (T_melt * T_melt - T0 * T0))

@@ -1774,6 +1774,50 @@ working through pullback derivations:
 These are the kind of exercises the Nagamine CEFC 2026 paper goes
 through in its appendix and the Sugahara 2022 IEEE TransMag paper
 uses to validate the two-sphere Kelvin implementation.
+
+## Differential-geometry essence (H 1-form / B 2-form / mu Hodge)
+
+The slide-level statement of the same fact, started from the field-
+intensity side (H, B) rather than the potential side (Omega, A). Under
+the sphere inversion r' = a^2/r:
+
+| Object         | Invariant            | Pullback                       |
+|----------------|----------------------|--------------------------------|
+| H  (1-form) h  | r' h' = r h          | h' = (r/r') h = (a/r')^2 h     |
+| B  (2-form) b  | r'^2 b' = r^2 b      | b' = (r/r')^2 b = (a/r')^4 b   |
+| mu (Hodge)     | mu' = b'/h'          | mu' = (a/r')^2 mu              |
+| energy 3-form  | invariant            | r'^3 mu' h'.h' = r^3 mu h.h    |
+
+Two principles this language makes explicit -- the whole reason to write
+Kelvin transformation in differential-form terms:
+
+  1. **Differential forms are coordinate-transformation INVARIANT.**
+     h and b are natural cochains; they pull back cleanly, and the field
+     DOFs (Whitney edge/face) on the two identified spheres at r = a match
+     1:1, with tangential-H / normal-B continuity automatic. The field
+     representation needs no "fix-up" across the interface.
+
+  2. **mu (the Hodge star) is the ONLY metric-dependent object.** All of
+     the geometric distortion of the inversion is absorbed into the
+     constitutive Hodge operator: mu' = (a/r')^2 mu (equivalently the
+     reciprocal nu' = (r'/a)^2 nu). So "map infinity into a finite ball"
+     reduces operationally to "solve the SAME problem with a position-
+     dependent material mu'(r')" -- no far-field elements, no truncation.
+     The energy 3-form invariance r'^3 mu' h'.h' = r^3 mu h.h guarantees
+     the variational (FEM stiffness) problem is preserved exactly.
+
+Consistency with the A/B/Omega table above: with a == R and r' == rho',
+mu' = (a/r')^2 mu == (R/rho')^2 mu_0 (H1 / Omega side) and
+nu' = (r'/a)^2 nu == (rho'/R)^2 nu_0 (HCurl / A side) -- the same statement.
+
+References for this field-side view:
+  - K. Sugahara, "Electromagnetic Analysis of Eddy Current Testing With
+    Kelvin Transformation," IEEE Trans. Magn., 2022.  [lab origin; = Sugahara
+    2022 IEEE TransMag 58(9) in the module header]
+  - Q. Chen, "A Review of Finite Element Open Boundary Techniques for
+    Static and Quasi-Static EM Field Problems," IEEE Trans. Magn., 1997.
+  - Nagamine/Yamaguchi/Sugahara CEFC 2026 (pullback) + Sugahara 2022
+    IEEE TransMag 58(9) -- see the convention header at top of module.
 """
 
 

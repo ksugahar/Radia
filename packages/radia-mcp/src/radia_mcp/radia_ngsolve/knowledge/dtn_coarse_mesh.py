@@ -1,0 +1,516 @@
+r"""Why open-boundary methods stay accurate on COARSE meshes -- a spectral
+(DtN-matrix) explanation of the Kelvin-transformation coarse-mesh accuracy.
+
+Kameari's classic demonstration shows, by mesh REFINEMENT, that the Kelvin
+transformation already gives good accuracy on relatively coarse meshes.  This
+module reframes that *empirical* observation as a *property of the DtN matrix*
+measured across mesh sizes:
+
+  * Every open-boundary closure targets ONE continuous operator on the
+    truncation surface Γ -- the exterior Dirichlet-to-Neumann (Steklov-Poincaré)
+    map Λ_ext.  Kelvin transform and BEM coupling are DISCRETIZATIONS of Λ_ext
+    (exact in the continuum, h→0); PML / infinite elements / asymptotic Robin BC
+    are MODEL surrogates with a fixed (mesh-independent) modal error.
+  * On a sphere of radius R, the CONTINUOUS Λ_ext is diagonalised by the
+    spherical harmonics with the mesh-independent eigenvalue ladder
+    λ_n = −(n+1)/R  (degree n, multiplicity 2n+1).  (This ladder is the
+    yardstick; the DISCRETE matrix Λ_h does not share its mesh-independence.)
+  * The discrete DtN matrix Λ_h reproduces the LOW-degree eigenvalues accurately
+    already on the coarsest mesh (from a tiny floor that still falls steeply,
+    ~O(h⁴), under refinement); the per-mode error grows with degree n.  Because
+    the exterior field of a compact source is dominated by the low multipoles,
+    the coarse mesh already resolves everything that matters -- which matches the
+    accuracy Kameari saw, now stated as a spectral fact rather than a refinement
+    curve.  Measured BOTH ways: the BEM Λ_h spectrum directly, AND the Kelvin
+    closure's effective DtN (volume FEM on the inverted ball) -- two
+    discretisations of the one Λ_ext, both coarse-mesh accurate for the low modes.
+
+Companion code:
+  radia_ngsolve.bem_integral (BEM side -- the boundary operator spectrum)
+    - laplace_exterior_dtn():     assemble Λ_h = V⁻¹(−½M + K)
+    - exterior_dtn_spectrum():    eigenvalues of Λ_h matched to −(n+1)/R
+    - dtn_spectrum_vs_mesh():     per-degree eigenvalue error vs mesh size
+  radia_ngsolve.fem_bem_coupling (Kelvin side -- the volume-FEM realisation)
+    - kelvin_dtn_eigenvalue():    effective DtN of the Kelvin closure for mode n,
+                                  exact iff FEM order >= n (dipole inverts to linear);
+                                  dim=3 (sphere, −(n+1)/R) or dim=2 (circle, −n/R,
+                                  the static-apparatus / rotating-machine cross-section)
+    - kelvin_vs_exact_open_bc_error(): the Kelvin open-BC error ISOLATED from the
+                                  interior FEM error (shared mesh, swap only Γ op)
+    - kelvin_openbc_error_vs_exterior_mesh(): the isolated open-BC error vs the
+                                  EXTERIOR (Kelvin ball) mesh size, interior fixed
+    - kelvin_twosphere_shell_dipole(): the lab's REAL two-sphere periodic Kelvin
+                                  (validation: reproduces the exact dipole)
+
+Related knowledge: kelvin_transformation (Kelvin material modulation),
+fem_bem_schur (using Λ_ext as an exact open BC).
+"""
+
+DTN_COARSE_MESH_OVERVIEW = r"""
+# Coarse-Mesh Accuracy of Open BCs = a Property of the DtN Matrix
+
+## The question (Kameari, reframed)
+
+Kameari demonstrated the Kelvin transformation's accuracy the empirical way:
+take a problem with a known answer, solve it on a sequence of meshes, and show
+the error is already small on a relatively COARSE mesh (and merely polishes as
+you refine).  The question this module answers:
+
+> Can that coarse-mesh accuracy be stated directly from the **properties of the
+> DtN matrix at various mesh sizes**, instead of from a refinement experiment?
+
+Yes.  The accuracy is a **spectral** fact about the discrete
+Dirichlet-to-Neumann operator, visible without ever solving the field problem.
+
+## One operator behind every open-boundary method
+
+Truncate the unbounded exterior at a surface Γ and impose the EXACT transparent
+condition there.  That condition is
+
+    ∂u/∂n |_Γ  =  Λ_ext u |_Γ ,
+
+where Λ_ext is the exterior Steklov-Poincaré (Dirichlet-to-Neumann) operator:
+it returns, for any boundary trace u|_Γ, the outward normal derivative of the
+unique exterior harmonic function that decays at infinity.  Every practical
+open-boundary technique realises some operator S_h on Γ targeting this single
+Λ_ext -- but in two distinct fidelity classes:
+
+  | Method                | How it realises an S_h on Γ        | Fidelity         |
+  |-----------------------|------------------------------------|------------------|
+  | Kelvin transformation | FEM on the inverted ball; trace Γ  | →Λ_ext as h→0    |
+  | BEM coupling          | S_h = Λ_h = V⁻¹(−½M+K) (bnd only)  | →Λ_ext as h→0    |
+  | PML                   | absorbing layer; trace on Γ        | fixed-error model|
+  | Infinite elements     | decaying shape functions; trace Γ  | →Λ_ext (basis)   |
+  | Asymptotic Robin BC   | S_h = −(1/R) I                     | exact n=0 only   |
+
+Two classes: Kelvin / BEM / (rich-enough) infinite elements are DISCRETIZATIONS
+that CONVERGE to the exact Λ_ext for every degree as h→0; PML and the asymptotic
+Robin BC are MODEL surrogates with a fixed, mesh-independent modal error (the
+plain Robin S_h = −(1/R)I reproduces the n=0 eigenvalue exactly and applies that
+same −1/R to ALL higher modes -- exact n=0, wrong n≥1, independent of h).  This
+module is about the first class: there the open-BC error is governed by how well
+the DISCRETE S_h reproduces Λ_ext **on the modes the solution contains**.
+
+On the truncation surface Γ: the KELVIN transformation IS a spherical inversion
+(r ↦ R²/r about a centre), so its Γ is NECESSARILY the inversion sphere of radius
+R -- there is no non-spherical Kelvin.  Hence the spherical eigenvalue ladder
+−(n+1)/R below is NOT a special case for Kelvin; it is the COMPLETE, general
+spectral structure of any Kelvin coupling (the interior physical domain may be any
+shape, but it sits inside the Kelvin sphere and the coupling is on that sphere).
+BEM / PML / infinite elements, by contrast, admit ANY closed Γ -- on a non-sphere
+the relevant spectrum is that surface's own Steklov spectrum, not the −(n+1)/R
+ladder.  So for the Kelvin question this module answers, the sphere is the whole
+story.
+
+## The CONTINUOUS DtN spectrum is mesh-independent and known in closed form
+
+On a sphere of radius R the spherical harmonics Y_n^m diagonalise Λ_ext:
+
+    Λ_ext Y_n^m = −(n+1)/R · Y_n^m ,     m = −n … n   (multiplicity 2n+1)
+
+    n = 0 monopole   : λ₀ = −1/R
+    n = 1 dipole     : λ₁ = −2/R     (validated, sphere_exterior_dtn_eigenvalue)
+    n = 2 quadrupole : λ₂ = −3/R
+    n = 3 octupole   : λ₃ = −4/R
+    …
+
+These eigenvalues are properties of the CONTINUOUS operator -- no mesh, no h.
+They are the yardstick: a discrete DtN matrix Λ_h is "good for mode n" exactly
+when its corresponding eigenvalue matches −(n+1)/R.
+
+## The matrix property that explains coarse-mesh accuracy
+
+Assemble the dense DtN matrix Λ_h on a sphere at several mesh sizes and read off
+its eigenvalues (exterior_dtn_spectrum / dtn_spectrum_vs_mesh).  Three facts
+fall out (measured numbers in the NUMERICS topic):
+
+  1. **The low modes are already accurate on the COARSEST mesh.**  On the
+     coarsest admissible sphere mesh the n=0,1,2 eigenvalues match −(n+1)/R to
+     <~0.25 % (the n=2 quadrupole is the worst at 0.21 %), because the
+     eigenfunctions (low spherical harmonics) are SMOOTH: a coarse surface mesh
+     interpolates them with tiny error, and the Galerkin eigenvalue (which for an
+     analytic eigenfunction superconverges as the SQUARED L2 trace error)
+     inherits an even smaller error.  This is the coarse-mesh accuracy itself --
+     visible in the matrix, before any solve.
+
+  2. **At EVERY mesh size the error is ordered by degree n** (the spectral
+     signature).  rel_err increases SMOOTHLY and monotonically with n -- not a
+     cliff.  A surface mesh can represent at most ~√ndof harmonic degrees (the
+     angular Nyquist ceiling: (n+1)² harmonics in ndof≈1/h² DOFs; ~18 at
+     ndof=336), but the per-degree eigenvalue error degrades gradually as a
+     smooth h-power with an n-growing constant FAR below that ceiling -- the
+     engineering-accurate band (n≤2 at 0.5 %) sits well under the ~18 it could
+     nominally resolve.  So a fixed mesh is "accurate up to some low degree,
+     progressively worse above."
+
+  3. **Refinement lowers every mode steeply and WIDENS the accurate band.**
+     Each refinement level cuts the per-degree error ~×2.6 here (measured rate
+     p≈3.9, an order-1 Galerkin eigenvalue superconvergence ~O(h⁴); slightly
+     slower, ~×2.5, by n=4 as the eigenfunction gets less smooth relative to h),
+     pushing the resolution limit up so more degrees fall below any fixed
+     tolerance.  But the low modes were already below engineering tolerance on
+     the coarse mesh -- refining buys you HIGHER modes, not materially better
+     low ones.
+
+The honest distinction (not "the low modes are mesh-independent"): the low-mode
+error *does* fall under refinement, but it starts from such a small floor on the
+coarse mesh that there is nothing of engineering value to gain there.  What
+refinement actually adds is bandwidth -- accuracy for higher multipoles.
+
+## Why this matches Kameari's observation
+
+For a COMPACT source inside Γ the exterior field is a multipole series whose
+n-th term decays like r^{−(n+1)}.  At a truncation radius a few times the source
+size the boundary data is dominated by the lowest harmonics; the high-n content
+is small.  Therefore:
+
+  * the OPEN-BC part of the error depends on (S_h − Λ_ext) only through its
+    LOW-degree block -- the very block that fact (1) says is already accurate on
+    a coarse mesh, and fact (2) says is the most accurate part of the spectrum;
+  * Kameari's field-refinement curve is the per-degree convergences of fact (3)
+    superposed and weighted by the source's multipole content.  Because that
+    content is low-degree dominated and those modes are already accurate coarse,
+    the open-BC contribution to the field error is already small on the coarse
+    mesh and merely polishes.
+
+This is an EXPLANATION (implication), not a strict equivalence -- it rests on
+three premises, all of which the spectrum lets you check:
+  (i)   the boundary data is low-degree dominated (truncation a few source-radii
+        out, and no sharply-structured source sitting near Γ -- see Applications);
+  (ii)  the OPEN-BC error is not the bottleneck: the total field error also
+        carries the INTERIOR FEM discretisation error, which is typically the
+        larger term on a coarse mesh (e.g. ~5 % L2 from the interior FEM solve
+        while the dipole DtN eigenvalue is already 0.07 %).  The spectrum isolates the
+        boundary contribution from this interior error -- which a field-only
+        refinement study conflates;
+  (iii) for the Kelvin transform specifically, that its S_h shares the low-mode
+        fidelity -- now MEASURED directly (kelvin_dtn_eigenvalue), see below.
+
+With those premises the refinement experiment and the spectral statement are two
+views of the same continuous operator.  The spectral one is stronger: it tells
+you the answer is good BEFORE you refine -- and exactly which degrees a given
+mesh can be trusted for -- and it isolates the open-BC error from the interior
+FEM error, without solving the field problem at all.
+
+## The Kelvin bridge (now MEASURED, not just argued)
+
+The Kelvin inversion r ↦ R²/r' maps the slowly-decaying low-n exterior modes to
+BOUNDED solid harmonics on the Kelvin ball.  With the 3D conformal weight
+(R/r')^(d−2) = R/r' the material modulation carries (see knowledge:
+kelvin_transformation):
+
+    u*_n(r') = (R/r') · u_n(R²/r') = (R/r')·(R²/r')^{−(n+1)} Y_n  ∝  r'^{n} Y_n
+
+so the exterior r^{−(n+1)} Y_n becomes the SOLID HARMONIC r'^{n} Y_n on the ball
+-- a DEGREE-n POLYNOMIAL.  Order-p Lagrange FEM represents a degree-n polynomial
+EXACTLY iff p ≥ n.  That is the mechanism, and it is measured directly by
+`kelvin_dtn_eigenvalue` (a volume-FEM solve on the inverted ball, reading the
+effective DtN eigenvalue λ_eff = −1/R − ∫_Ω|∇u*|² / ∮_Γ u*² and comparing to
+−(n+1)/R).  Measured on a sphere R=1:
+
+  Kelvin closure effective DtN, rel_err vs −(n+1)/R  (volume FEM):
+
+   mode          inverts to | order 1            order 2     order 3
+   --------------------------|---------------------------------------
+   dipole    n=1   linear    | 0.5% -> 0.03%      --          --
+                             | (maxh 0.6->0.25, converges ~O(h³))
+   quadrupole n=2  quadratic | 18%  (maxh 0.4)    0.03%       --
+   octupole  n=3   cubic     | 40%  (maxh 0.4)    --          4e-5
+
+Reading it: the DOMINANT dipole inverts to a LINEAR field, so even order-1 FEM
+nails its DtN eigenvalue on the coarsest mesh -- the residual is only GEOMETRY
+(curved-sphere) error, converging fast; nothing about the dipole needs refining.
+The quadrupole inverts to a quadratic and needs order ≥ 2; the octupole a cubic,
+order ≥ 3.  So the Kelvin closure is coarse-mesh accurate for exactly the low
+modes a compact source radiates -- now a MEASURED fact, matching the BEM Λ_h
+table, via the shared continuous Λ_ext.
+
+Two complementary mechanisms for the SAME conclusion:
+  * BEM Λ_h (boundary): all low SURFACE harmonics are smooth, so a coarse surface
+    mesh resolves them; error grows SMOOTHLY with degree n.
+  * Kelvin (volume): mode n inverts to a degree-n polynomial; the closure is
+    exact up to FEM order, a SHARP threshold at n = p.
+Both put the dominant low modes inside the accurate set on a coarse mesh.
+
+This also explains the failure mode at the BOTTOM of the table: a fixed-potential
+or single-eigenvalue truncation (asymptotic Robin BC, S_h = −(1/R) I) gets only
+the n=0 mode right and mis-handles the dipole and up -- which is why a plain
+truncation needs a far larger air box than a Kelvin / DtN closure for the same
+accuracy.
+"""
+
+DTN_COARSE_MESH_NUMERICS = r"""
+# Measured DtN Spectrum vs Mesh Size  (sphere R=1, BEM SurfaceL2 order=1)
+
+`exterior_dtn_spectrum` assembles Λ_h = V⁻¹(−½M+K) and matches its eigenvalues,
+degree by degree, to the analytic ladder λ_n = −(n+1)/R.  `dtn_spectrum_vs_mesh`
+runs it across mesh sizes.  Measured on a sphere R=1, BEM SurfaceL2 order=1,
+intorder=10 (NGSolve 6.2.26xx).  NB the sphere mesh FLOORS at ndof=336 -- every
+maxh ≥ 0.5 gives that same coarsest mesh -- so the three columns below are the
+three genuinely distinct refinement levels:
+
+  per-degree relative eigenvalue error  |λ_h,n − λ_n| / |λ_n|
+
+   degree n      | ndof=336    ndof=564    ndof=924      refines →
+                 | (maxh 0.5)  (maxh 0.4)  (maxh 0.3)
+   --------------|--------------------------------------------------
+    0  monopole  | 2.6e-04     9.9e-05     3.6e-05
+    1  dipole    | 7.4e-04     2.9e-04     1.0e-04
+    2  quadrupole| 2.1e-03     8.0e-04     3.0e-04
+    3  octupole  | 5.2e-03     2.1e-03     7.8e-04
+    4           | 1.1e-02     4.6e-03     1.8e-03
+   --------------|--------------------------------------------------
+   accurate band | n ≤ 2       n ≤ 4       n ≤ 4
+   (rel_err<0.5%)|
+
+Reading the table:
+
+  * **The dipole/quadrupole are already correct to ~0.07 % / ~0.2 % on the
+    COARSEST mesh** (left column, ndof=336).  Nothing was refined to get there.
+    This single fact IS the coarse-mesh accuracy -- read straight off Λ_h.
+  * **Down each column the error grows monotonically with degree n** (≈ ×2–3 per
+    degree) -- the spectral signature: accurate at the bottom, degraded toward
+    the resolution limit.  A given mesh is trustworthy only up to some degree.
+  * **Across each row the error falls steeply under refinement** (≈ ×2.6 per
+    level on average, ~7× over ndof 336→924; measured rate p≈3.9, an order-1
+    ~O(h⁴) Galerkin eigenvalue superconvergence -- slightly slower, ~×2.5, by
+    n=4 as the eigenfunction gets less smooth relative to h) -- so the low modes
+    are NOT mesh-independent; they simply start from a tiny floor.  What
+    refinement materially adds is BANDWIDTH: the band widens n≤2 → n≤4.
+
+Interpretation: the physically dominant low multipoles are captured on the
+coarsest mesh, so an open-boundary closure built on this DtN is already accurate
+there -- which matches Kameari's coarse-mesh result, read off the matrix spectrum
+instead of a field-refinement study.  The numbers above are the BEM Λ_h spectrum;
+the Kelvin-FEM realisation is measured SEPARATELY (kelvin_dtn_eigenvalue; see the
+"Kelvin bridge" section in the overview) and shows the same coarse-mesh accuracy
+for the low modes via a complementary, polynomial-order mechanism.  Refining is
+for sources that carry high-degree content, which the spectrum flags as the
+still-inaccurate high-n band.
+"""
+
+DTN_COARSE_MESH_API = r"""
+# DtN Spectrum API (bem_integral.py)
+
+## exterior_dtn_spectrum -- one mesh
+
+```python
+from radia_mcp.radia_ngsolve.bem_integral import exterior_dtn_spectrum
+
+res = exterior_dtn_spectrum(R=1.0, maxh=0.6, order=1, intorder=10, nmax=4)
+res["ndof"]          # boundary unknowns
+res["modes"]         # list of per-degree dicts:
+#   {"n":0, "multiplicity":1, "lambda_exact":-1.0,
+#    "lambda_mean":-0.998, "rel_err":2.1e-3, "spread":0.0}
+res["eigenvalues"]   # leading real eigenvalues, descending (closest-to-0 first)
+```
+
+The matched `modes` are obtained by taking the leading negative eigenvalues
+(sorted toward zero first), bucketing them by the analytic multiplicity 2n+1,
+and comparing each bucket mean to −(n+1)/R.
+
+## dtn_spectrum_vs_mesh -- mesh sweep + summary metrics
+
+```python
+from radia_mcp.radia_ngsolve.bem_integral import dtn_spectrum_vs_mesh
+
+# NB the sphere mesh FLOORS at maxh~0.5 (R=1): use maxh <= 0.5 for distinct meshes
+study = dtn_spectrum_vs_mesh(R=1.0, maxh_list=(0.5, 0.4, 0.3),
+                             order=1, intorder=10, nmax=4, band_tol=0.005)
+study["per_mesh"]                 # list of exterior_dtn_spectrum() results
+study["ndof_list"]                # [336, 564, 924]
+study["error_table"]              # error_table[n] = [rel_err at each mesh]
+study["coarse_low_mode_max_err"]  # max rel_err over n<=2 on the COARSEST mesh
+study["low_mode_max_err"]         # ... over n<=2 across ALL meshes (worst low-mode
+                                  #     error in the sweep, set by the coarsest mesh)
+study["degree_monotonic"]         # per mesh: rel_err strictly increases with n?
+study["degree_growth"]            # per mesh: rel_err(top n)/rel_err(n=0)
+study["accurate_band"]            # per mesh: highest n with rel_err < band_tol
+```
+
+Key summary numbers (and what they assert):
+
+  * `coarse_low_mode_max_err` -- small (~2e-3): the low modes are already
+    accurate on the COARSEST mesh.  The headline coarse-mesh-accuracy number.
+  * `degree_monotonic` = [True, …] and `degree_growth` ≫ 1 -- at every mesh the
+    error is ordered by degree (the spectral signature: accurate low, poor high).
+  * `accurate_band`  -- increases as maxh decreases (e.g. 2 → 4 → 4): refinement
+    WIDENS the band of well-resolved modes (Kameari's refinement, mode-resolved).
+    It does NOT mean the low modes were inaccurate before -- they were already
+    inside the band on the coarsest mesh.
+
+## kelvin_dtn_eigenvalue -- the Kelvin (volume-FEM) companion measurement
+
+```python
+from radia_mcp.radia_ngsolve.fem_bem_coupling import kelvin_dtn_eigenvalue
+
+r = kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=1, dim=3)
+r["lam"]       # measured effective DtN eigenvalue of the Kelvin closure
+r["lam_exact"] # -(degree + dim - 2)/R   (3D: -(n+1)/R ; 2D: -n/R)
+r["rel_err"]   # dipole order=1: ~1e-3 (linear -> geometry-limited, converges)
+               # quadrupole order=1: ~0.18 (needs order>=2); order=2: ~3e-4
+```
+
+Solves Laplace on the inverted Kelvin ball/disk with the mode's solid-harmonic
+datum and reads λ_eff = offset − ∫|∇u*|² / ∮u*², offset = −(dim−2)/R.  Mode n is
+exact iff FEM `order >= n` (the dipole inverts to a LINEAR field -> order-1 coarse
+accurate).  Fast (no densification) -- the complement of the BEM
+`exterior_dtn_spectrum`.
+
+**`dim=2` (circle inversion)** -- the cross-section case for STATIC APPARATUS /
+ROTATING MACHINES.  The Kelvin transform is a spherical inversion, so in 2D the
+truncation surface is a CIRCLE and there is no conformal prefactor (offset=0):
+the eigenvalue is **−n/R** (not −(n+1)/R), and the order-threshold (mode n exact
+iff order≥n; dipole → linear → order-1 coarse accurate) is IDENTICAL to 3D.
+Verified: 2D dipole −1/R to 0.06 % at order 1 / coarse mesh; quadrupole needs
+order≥2.
+
+## kelvin_twosphere_shell_dipole -- the lab's REAL Kelvin (validation)
+
+```python
+from radia_mcp.radia_ngsolve.fem_bem_coupling import kelvin_twosphere_shell_dipole
+r = kelvin_twosphere_shell_dipole(maxh=0.25, order=2)
+r["rel_err"]   # ~5.2e-2 shell L2 vs exact dipole (mostly interior FEM)
+```
+
+The genuine two-offset-sphere periodic-BC Kelvin (Nagamine convention, material
+μ'=(R/r')², GND at the Kelvin centre) solved for the shell dipole -- NOT the
+single-ball effective-DtN equivalent.  Reproduces the exact u=R_in²z/r³ to ~5.5 %
+at maxh=0.3 order=2, matching the analytic-DtN shell solve -- so the real Kelvin
+coupling = the analytic exterior = the single-ball effective DtN.  Confirms the
+whole picture on the actual implementation.
+
+## kelvin_vs_exact_open_bc_error -- ISOLATE the Kelvin open-BC error from FEM error
+
+```python
+from radia_mcp.radia_ngsolve.fem_bem_coupling import kelvin_vs_exact_open_bc_error
+
+ev = kelvin_vs_exact_open_bc_error(R_inner=0.5, R_outer=1.0, maxh=0.4, order=2,
+                                   degree=1, kelvin_maxh=0.6, kelvin_order=1,
+                                   include_bem=True)
+ev["interior_fem_error"]   # ~5.3e-2  shared FEM error (open BC EXACT here)
+ev["kelvin_openbc_error"]  # ~1.2e-3  ISOLATED Kelvin open-BC error (FEM error cancelled)
+ev["bem_openbc_error"]     # ~1.7e-3  ISOLATED BEM open-BC error (if include_bem)
+```
+
+On ONE shared shell mesh it swaps only the Γ operator -- exact-DtN Robin
+(λ=−(n+1)/R, zero open-BC error), Kelvin-DtN Robin (λ=`kelvin_dtn_eigenvalue`),
+and the BEM-DtN Schur -- so the interior FEM error CANCELS and
+``||u_method − u_exactDtN||`` is the method's PURE open-boundary error.  For a
+single-mode shell problem the Kelvin closure acts on Γ as multiplication by its
+effective DtN eigenvalue, so Robin-with-λ_Kelvin IS the Kelvin field (no separate
+Kelvin mesh / periodic BC).  This is the quantitative evaluation of the Kelvin
+method's OWN numerical error, separated from the universal FEM error: ~0.1 %,
+~45× below the ~5 % interior FEM error even on a coarse Kelvin mesh -- Kameari's
+coarse-mesh accuracy as a SEPARATED ERROR BUDGET rather than a refinement curve.
+
+## kelvin_openbc_error_vs_exterior_mesh -- accuracy vs the EXTERIOR mesh size
+
+```python
+from radia_mcp.radia_ngsolve.fem_bem_coupling import kelvin_openbc_error_vs_exterior_mesh
+
+sw = kelvin_openbc_error_vs_exterior_mesh(kelvin_maxh_list=(0.7,0.5,0.35,0.25),
+                                          maxh=0.4, order=2, degree=1)
+sw["interior_fem_error"]  # FIXED ~5.3e-2 (independent of the exterior mesh)
+sw["per_mesh"]            # per exterior mesh: kelvin_ndof, kelvin_openbc_error,
+                          #   ratio_fem_over_openbc, kelvin_dtn_rel_err
+sw["converges"]           # open-BC error non-increasing as exterior refines
+sw["always_below_fem"]    # open-BC error < interior FEM error at EVERY exterior mesh
+```
+
+In the Kelvin transform the unbounded exterior IS the Kelvin ball, so the
+"exterior-region mesh size" is ``kelvin_maxh``.  This sweeps it with the INTERIOR
+mesh held FIXED, so the (fixed) interior FEM error cancels and the reported
+open-BC error is purely the EXTERIOR-discretisation contribution.  Measured: the
+open-BC error converges ~×4/level (1.2e-3 → 7.5e-5 over kelvin_ndof 58→301) while
+the interior FEM error stays at 5.3e-2 and dominates (45×→709×).  So a COARSE
+exterior mesh already suffices -- Kameari's exterior-refinement accuracy check,
+ISOLATED (refine the exterior, watch the open-BC error converge below the fixed
+interior floor).  (The Kelvin ball mesh FLOORS at ndof=58 for maxh ≳ 0.5, the
+volume analogue of the sphere-surface floor.)
+
+## Cost / limits
+
+`exterior_dtn_spectrum` DENSIFIES the BEM operators (O(ndof²) memory, O(ndof²)
+applies) and runs a dense eigensolve, so keep it to ndof ≲ 1200 (order=1, sphere
+maxh ≳ 0.3).  It is a diagnostic / explanatory tool, not a production solver --
+the production open BC uses the operator directly (fem_bem_schur) without ever
+forming the spectrum.
+"""
+
+DTN_COARSE_MESH_APPLICATIONS = r"""
+# Using the DtN-spectrum view
+
+## 1. Sizing the air box / truncation radius without a convergence sweep
+
+Decide which multipoles your source carries (a compact magnet/coil is dipole-
+dominated; a symmetric one starts at quadrupole).  You only need the DtN to be
+accurate up to that degree.  `dtn_spectrum_vs_mesh` tells you the coarsest mesh
+whose `accurate_band` already covers it -- no field-level mesh-refinement study
+required.  This replaces "refine until the field stops moving" with "resolve the
+DtN modes the source excites."
+
+## 2. Choosing an open-BC method
+
+The table at the bottom of the OVERVIEW ranks methods by which DtN modes they
+capture.  A plain fixed-potential / asymptotic-Robin truncation keeps only n=0
+(or n=0,1) and therefore needs a large air box; Kelvin and BEM DtN capture the
+whole low-mode ladder and stay accurate on a compact, coarse mesh.  The spectrum
+makes the trade-off quantitative.
+
+## 3. Trusting a coarse Kelvin model
+
+If a Kelvin (or BEM) model looks "too coarse to be right," the spectrum is the
+reassurance: as long as the low-degree DtN eigenvalues are on the −(n+1)/R
+ladder (and they are, even on coarse meshes), the open boundary is faithful for
+the multipoles your source actually radiates.  Do NOT refine reflexively --
+refine only if your source carries high-degree content (a sharply structured
+source near Γ), which the spectrum will flag as an under-resolved band.
+
+For a hard number, `kelvin_vs_exact_open_bc_error` ISOLATES the Kelvin open-BC
+error from the interior FEM error (shared mesh, swap only the Γ operator): the
+Kelvin closure's own error is ~0.1 %, ~45× below the ~5 % interior FEM error even
+on a coarse Kelvin mesh -- so refining the Kelvin region is wasted effort, the
+interior is the bottleneck.  This is the quantitative form of "trust the coarse
+Kelvin model": Kameari's accuracy as a separated error budget.
+
+## 4. Diagnosing an open-BC bug
+
+If an open-BC result is wrong, check the DtN spectrum first.  Low-mode
+eigenvalues far off −(n+1)/R indicate a real operator/sign/scaling bug (e.g. the
+P^TΛP sign, the −½M exterior jump, or a wrong R), NOT a mesh-resolution
+problem -- because mesh resolution only POLISHES the low-mode eigenvalues from an
+already-tiny coarse-mesh floor (a few ×10⁻³); they sit FAR off the ladder only
+when the operator is wrong, not when the mesh is merely coarse.  This separates
+"the operator is wrong" from "the mesh is too coarse," which a pure
+field-refinement study cannot.
+
+## Relation to the radia-ngsolve DtN hierarchy
+
+  | DtN type      | Approximates           | Coarse-mesh behaviour (measured) |
+  |---------------|------------------------|----------------------------------|
+  | Asymptotic Robin | exterior, n=0 only  | exact n=0, wrong n≥1             |
+  | Kelvin transform | exterior, all n     | mode n exact iff FEM order≥n     |
+  | BEM DtN (Λ_h) | exterior, all n        | low-n accurate, error smooth in n|
+  | SIBC / GIBC   | conductor interior     | curvature-corrected (separate)   |
+  | AGE           | annular air gap        | analytic per harmonic            |
+
+The Kelvin transform and BEM DtN share the SAME continuous operator Λ_ext, and
+both are MEASURED here to be coarse-mesh accurate for the low modes -- by
+complementary mechanisms: BEM by surface-harmonic smoothness (error grows
+smoothly with degree), Kelvin by polynomial representability (mode n exact once
+the FEM order reaches n; the dominant dipole inverts to a linear field).
+"""
+
+
+def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
+    """Return DtN-spectrum / coarse-mesh-accuracy documentation."""
+    topics = {
+        "overview": DTN_COARSE_MESH_OVERVIEW,
+        "numerics": DTN_COARSE_MESH_NUMERICS,
+        "api": DTN_COARSE_MESH_API,
+        "applications": DTN_COARSE_MESH_APPLICATIONS,
+    }
+    if topic == "all":
+        return "\n\n".join(topics.values())
+    return topics.get(topic, f"Unknown topic '{topic}'. Options: {list(topics)}")
