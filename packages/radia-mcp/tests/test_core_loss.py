@@ -27,7 +27,8 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.coreloss import (
     lamination_kc, classical_eddy_loss_density, bertotti_loss_density,
     steinmetz_loss_density, fft_amplitudes, harmonic_loss_density,
-    core_loss_in_region)
+    core_loss_in_region, lamination_eddy_skin_factor,
+    classical_eddy_loss_density_skin)
 
 SIGMA, D = 2.0e6, 0.5e-3          # electrical steel ~2 MS/m, 0.5 mm lamination
 K_H, K_E = 150.0, 1.0             # representative hysteresis / excess coeffs
@@ -78,6 +79,41 @@ def test_two_harmonic_classical_sum():
     h = harmonic_loss_density(A, f1, k_h=0.0, k_c=kc, k_e=0.0)
     expected = kc * ((f1 * B1) ** 2 + (2 * f1 * B2) ** 2)
     assert math.isclose(h["P_class"], expected, rel_tol=1e-6)
+
+
+def test_skin_factor_thin_and_asymptotic():
+    # F -> 1 for a thin lamination (d << delta); F -> 3/xi when skin-limited; strictly decreasing
+    assert abs(lamination_eddy_skin_factor(1e-3, 1.0) - 1.0) < 1e-6        # d/delta ~ 0
+    for xi in (8.0, 12.0, 20.0):
+        assert abs(lamination_eddy_skin_factor(xi, 1.0) - 3.0 / xi) < 0.02  # asymptote 3/xi
+    Fs = [lamination_eddy_skin_factor(x, 1.0) for x in (0.5, 1, 2, 3, 5, 8)]
+    assert all(Fs[i] > Fs[i + 1] for i in range(len(Fs) - 1))
+
+
+def test_skin_factor_exact_values():
+    # exact closed form F(xi) = (3/xi)(sinh xi - sin xi)/(cosh xi - cos xi)
+    for xi, Fexp in ((1.0, 0.998417), (2.0, 0.975589), (5.0, 0.610030), (8.0, 0.374714)):
+        assert math.isclose(lamination_eddy_skin_factor(xi, 1.0), Fexp, rel_tol=1e-4), xi
+
+
+def test_classical_skin_reduces_to_thin_limit():
+    # d << delta (thin, low f) -> the skin-corrected density equals the thin-limit classical one
+    Bpk, f, sigma, d, mu = 1.0, 50.0, 2.0e6, 0.5e-3, 4e-7 * math.pi      # mu_r = 1
+    thin = classical_eddy_loss_density(Bpk, f, sigma, d)
+    skin = classical_eddy_loss_density_skin(Bpk, f, sigma, d, mu)
+    assert math.isclose(skin, thin, rel_tol=2e-3)                        # xi ~ 0.01 -> F ~ 1
+
+
+def test_classical_skin_matches_fe_regression():
+    # stored regression reference: corrected/thin loss-density ratio at the validated d/delta points
+    # matches an independent eddy-current FE solve to < 1.1 % (FE ratios stored as the reference).
+    sigma, d, mu = 2.0e6, 0.5e-3, 4e-7 * math.pi
+    REF = {1.0: 0.99851, 2.0: 0.97701, 3.0: 0.89722, 5.0: 0.61532, 8.0: 0.37864}
+    for xi, r_fe in REF.items():
+        f = xi ** 2 / (math.pi * d ** 2 * mu * sigma)                    # xi = d*sqrt(pi f mu sigma)
+        ratio = (classical_eddy_loss_density_skin(1.0, f, sigma, d, mu)
+                 / classical_eddy_loss_density(1.0, f, sigma, d))
+        assert abs(ratio / r_fe - 1.0) < 0.011, (xi, ratio, r_fe)
 
 
 def test_core_loss_in_region_integrates_density():
