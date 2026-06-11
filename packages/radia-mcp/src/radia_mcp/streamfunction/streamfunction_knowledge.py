@@ -628,6 +628,15 @@ IMPLEMENTATION STATUS (tests/ -> examples/ -> panels/)  [Stage A DONE 2026-06-11
            ring-lengths, ergodic).  Moffatt 1969, Enciso-Peralta-Salas 2020.  Only
            honest outputs: vector-T bulk distribution OR multi-patch atlas + cuts.
   Session golden total: Stage A 14 + Stage B 9 + frontier 15 = 38, all green.
+  PANELIZED (examples -> panels, 2026-06-11): Stage A/B shipped as the
+           radia_streamfunction "Volume 3D" mode.  shipped pipeline
+           src/radia/streamfunction_volume.py (design_volume_coil); headless
+           calc src/radia/panels/calc_streamfunction_volume.py (conductor .vol +
+           --target-bz -> equal-current wires + GMSH wire overlay); PySide6
+           _Volume3DPanel in radia_streamfunction.py; golden
+           tests/panels/test_streamfunction_volume_golden.py reproduces n_wires=59,
+           field 4.7%, two-codebase 3.4e-10 on a frozen tube fixture.  Panel
+           covers the CLEAN regime only; F1/F2/F3 stay research demos by design.
 
 Files: src/radia/clebsch_potential.py (ClebschSolver, AxisymStreamFunctionSolver),
 src/radia/cohomology_cut.py (Gmsh cohomology generators), src/radia/
