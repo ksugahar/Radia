@@ -18,28 +18,25 @@ Scope (intentionally narrow):
       source so I can probe the far field, or hand the result off to a
       MoM/BEM tool, without re-running the FEM."
 
-Lab background (the source of this knowledge — three FEMM/Femtet dirs):
+Lab background (the source of this knowledge — three lab studies):
 
-    S:\\FEMM\\等価定理の基礎原理\\軸対称\\
-        2007/2008 axisymmetric foundations.  MATLAB analytical
-        (elliptic integrals + Biot-Savart).  Established the static
-        reduction:  J_s = n x H, rho_m = n . B  (the rho_m term is
-        easy to miss when E = 0, but is required by the continuity
+    (a) axisymmetric foundations (2007/2008)
+        MATLAB analytical (elliptic integrals + Biot-Savart).  Established
+        the static reduction:  J_s = n x H, rho_m = n . B  (the rho_m term
+        is easy to miss when E = 0, but is required by the continuity
         relation jw rho_m + div(M_s) = 0).
 
-    S:\\FEMM\\2015_05_21_等価定理\\
-        2015 generalization.  "Open-domain solution via equivalence
-        theorem" thesis: regardless of the inner FEM boundary condition
-        (Dirichlet / Neumann / IABC / radiation), the Stratton-Chu
-        surface integral reconstructs the exterior field correctly,
-        so long as the FEM truncation is not extremely close to the
-        material.
+    (b) generalization (2015)
+        "Open-domain solution via equivalence theorem": regardless of the
+        inner FEM boundary condition (Dirichlet / Neumann / IABC /
+        radiation), the Stratton-Chu surface integral reconstructs the
+        exterior field correctly, so long as the FEM truncation is not
+        extremely close to the material.
 
-    S:\\99_調査済\\Femtet\\2015_04_12_IABC_recnstruct\\
-        Femtet implementation + WPT application.  FEMTET VBA macro
-        extracts (E, H) on a user-defined closed surface, MATLAB
-        post normalises node ordering to outward CCW, writes a
-        Nastran-style Near_Field_Area_*.dat for EMCoS Antenna Vlab
+    (c) implementation + WPT application
+        A VBA macro extracts (E, H) on a user-defined closed surface, a
+        MATLAB post normalises node ordering to outward CCW, and writes a
+        Nastran-style Near_Field_Area_*.dat for an antenna near-field tool
         to replay.  Table 1 of 2015_05_11 report documents the
         critical empirical fact: reconstruction OUTSIDE the surface
         is CORRECT for all four tested inner BCs (IABC, Z=120pi rad,

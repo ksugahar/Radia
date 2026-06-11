@@ -47,8 +47,8 @@ packages to PyPI:
 |-------------------|-------------------------|---------------------------------------------------|
 | radia             | `v`                     | C++ core (.pyd) + Python (panels, MCP, BEM, PEEC) |
 | cubit-mesh-export | `cubit-mesh-export-v`   | Cubit plugin .ccm/.ccl/.pyd + check-vol CLI       |
-| radia-mcp         | `radia-mcp-v`           | 8 MCP servers (radia-ngsolve, cubit, build123d,   |
-|                   |                         | gmsh, electromagnet, ih, peec, interop)           |
+| radia-mcp         | `radia-mcp-v`           | MCP servers (radia-ngsolve, cubit, build123d,     |
+|                   |                         | gmsh, electromagnet, ih, peec, ...)               |
 
 All three are released in lock-step from one composite git commit
 because:
@@ -149,8 +149,7 @@ import importlib
 servers = ['radia_mcp.radia_ngsolve.server',
            'radia_mcp.cubit.server',
            'radia_mcp.build123d.server',
-           'radia_mcp.gmsh.server',
-           'radia_mcp.interop.server']
+           'radia_mcp.gmsh.server']
 for s in servers:
     try: importlib.import_module(s); print(f'OK   {s}')
     except Exception as e: print(f'FAIL {s}: {e}')"

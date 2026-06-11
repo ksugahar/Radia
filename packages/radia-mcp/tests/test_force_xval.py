@@ -1,7 +1,7 @@
 """Regression tests for radia_mcp.radia_ngsolve.force -- the executable EM force
 / energy extractors. They ASSERT that the NGSolve magnetostatic force pipeline
-keeps reproducing the values cross-validated against COMSOL (LiveLink) on
-2026-06-04 (see the ``force_validation`` MCP tool for the agreement table).
+keeps reproducing the values cross-validated against an independent reference
+solve (see the ``force_validation`` MCP tool for the agreement table).
 
 Skipped automatically if ngsolve / netgen are not installed. These are heavy FEM
 solves (sparse-Cholesky on ~40-50k tets), all marked ``@pytest.mark.xval``: run
@@ -72,7 +72,7 @@ def _solve_Aform(mesh, nu, J0):
 @pytest.mark.xval
 def test_coil_linear_iron_force():
     """Case 2: coil + linear-iron sphere (mu_r=1000), force via eggshell.
-    Recorded: NGSolve F_z = -0.1937 N, COMSOL -0.1995 N (dipole -0.207)."""
+    Recorded: NGSolve F_z = -0.1937 N, ref -0.1995 N (dipole -0.207)."""
     geo = CSGeometry()
     coil = _ring(50 * MM, 2 * MM, 0, 2 * MM).mat("coil").maxh(3 * MM)
     c = Pnt(0, 0, 30 * MM)
@@ -100,7 +100,7 @@ def test_coil_linear_iron_force():
 @pytest.mark.xval
 def test_solenoid_self_inductance():
     """Cases 4-5: finite solenoid, self-inductance via field energy.
-    Recorded: NGSolve L = 269.60 uH, COMSOL 269.62 uH (Nagaoka 279.8)."""
+    Recorded: NGSolve L = 269.60 uH, ref 269.62 uH (Nagaoka 279.8)."""
     geo = CSGeometry()
     coil = _ring(30 * MM, 1 * MM, 0, 50 * MM).mat("coil").maxh(4 * MM)
     box = OrthoBrick(Pnt(-150 * MM, -150 * MM, -150 * MM),
@@ -121,13 +121,13 @@ def test_coil_nonlinear_iron_force():
     """Case 3: coil + NONLINEAR saturating-iron sphere, force via the shipped
     Picard solver ``solve_magnetostatic_nonlinear``. Iron permeability follows
     the saturation law mu_r(B) = 1 + 999/(1 + (|B|/1 T)^8) (mur0=1000) -- the SAME
-    curve COMSOL used (FullyCoupled Newton, Itot = 50000 A-turns).
+    curve ref used (FullyCoupled Newton, Itot = 50000 A-turns).
 
     The iron sits DIRECTLY in air (NO nested 'shell' material): a nested shell
     isolates the iron interior (B_iron -> 0 at every sweep) so the saturation law
     never engages -- that #25 artifact is what produced the old, wrong -4.842 N.
     Recorded (iron-in-air, relax 0.35): NGSolve B_iron = 1.138 T, F_z = -4.898 N;
-    COMSOL B_iron = 1.13 T, F_z = -4.930 N => agree 0.65 %. ~20 Picard sweeps on
+    ref B_iron = 1.13 T, F_z = -4.930 N => agree 0.65 %. ~20 Picard sweeps on
     ~37k tets -> multi-minute (hence xval-marked).
     """
     geo = CSGeometry()
@@ -166,7 +166,7 @@ def test_coil_nonlinear_iron_force():
                                 r_inner=5 * MM, r_outer=10 * MM, air_region="air")
     assert 1.05 < Biron < 1.25                        # iron saturated (~1.138 T): law engaged
     assert Fz < 0.0                                   # attractive toward the coil
-    assert abs(Fz - (-4.898)) < 0.2                   # regression band vs recorded (COMSOL -4.930)
+    assert abs(Fz - (-4.898)) < 0.2                   # regression band vs recorded (ref -4.930)
     assert abs(Fx) < 0.1 * abs(Fz)                    # transverse ~0 by axisymmetry
     assert abs(Fy) < 0.1 * abs(Fz)
 
@@ -176,7 +176,7 @@ def test_helmholtz_center_field():
     """Case 6: Helmholtz pair (R = 50 mm coils at z = +/-25 mm, separation = R,
     NI = 10000 A-turns each, SAME sense), center field + flat-field uniformity,
     via the shipped ``solve_magnetostatic_Aform`` + ``azimuthal_coil_current``.
-    Recorded: NGSolve B_center = 0.17407 T, COMSOL 0.17420 T (agree 0.075 %);
+    Recorded: NGSolve B_center = 0.17407 T, ref 0.17420 T (agree 0.075 %);
     ideal thin-coil analytic (4/5)^1.5 mu0 NI/R = 0.17984 T (both ~3.2 % below,
     finite 4x4 mm section). The Helmholtz flat-field gives B_z/B_center ~ 0.998
     out to r = 10 mm and z = 10 mm. Linear iron-free single solve (~1-2 min)."""
@@ -195,7 +195,7 @@ def test_helmholtz_center_field():
     bz_c = B(mesh(0, 0, 0))[2]
     bz_z = B(mesh(0, 0, 10 * MM))[2]
     bz_r = B(mesh(10 * MM, 0, 0))[2]
-    assert abs(bz_c - 0.1741) < 0.012                 # regression band vs recorded (COMSOL 0.17420)
+    assert abs(bz_c - 0.1741) < 0.012                 # regression band vs recorded (ref 0.17420)
     assert bz_z / bz_c > 0.99                          # flat field along axis (Helmholtz)
     assert bz_r / bz_c > 0.99                          # flat field off axis
 
@@ -204,12 +204,12 @@ def test_helmholtz_center_field():
 def test_solenoid_axis_field():
     """Case 4: finite solenoid (mean R = 30 mm, 2 mm radial, length 100 mm,
     NI = 10000 A-turns) on-axis B_z(z), via the shipped ``solve_magnetostatic_Aform``
-    + ``azimuthal_coil_current``. Recorded NGSolve / COMSOL / analytic [T]:
+    + ``azimuthal_coil_current``. Recorded NGSolve / ref / analytic [T]:
         z=0 : 0.10701 / 0.10721 / 0.10776
         z=15: 0.10401 / 0.10406 / 0.10475
         z=30: 0.09300 / 0.09274 / 0.09368
         z=45: 0.06947 / 0.06923 / 0.07025
-    COMSOL <-> NGSolve agree <0.35 %; both ~0.7 % below the thin-solenoid formula
+    reference <-> NGSolve agree <0.35 %; both ~0.7 % below the thin-solenoid formula
     (finite coil thickness). Same solenoid as test_solenoid_self_inductance."""
     geo = CSGeometry()
     coil = _ring(30 * MM, 1 * MM, 0, 50 * MM).mat("coil").maxh(4 * MM)
@@ -224,7 +224,7 @@ def test_solenoid_axis_field():
     recorded = {0: 0.10701, 15: 0.10401, 30: 0.09300, 45: 0.06947}
     for zmm, b_rec in recorded.items():
         bz = B(mesh(0, 0, zmm * MM))[2]
-        assert abs(bz - b_rec) < 0.006                 # regression band vs recorded (COMSOL agrees <0.35%)
+        assert abs(bz - b_rec) < 0.006                 # regression band vs recorded (ref agrees <0.35%)
 
 
 @pytest.mark.xval
@@ -233,7 +233,7 @@ def test_magnetized_sphere_field():
     200 mm air cube, via the shipped permanent-magnet source ``remanent_source``
     -> ``solve_magnetostatic_Aform(curl_source=...)``. The interior field is
     uniform and analytic:  B_z = (2/3) Br = 0.66667 T. Recorded: NGSolve volume-
-    averaged <B_z> = 0.66391 T, COMSOL 0.66466 T (agree 0.11 %). This is the
+    averaged <B_z> = 0.66391 T, ref 0.66466 T (agree 0.11 %). This is the
     canonical analytic warm-up -- it pins the A-form PM source sign + scaling."""
     geo = CSGeometry()
     magnet = Sphere(Pnt(0, 0, 0), 10 * MM).mat("magnet").maxh(2 * MM)
@@ -247,7 +247,7 @@ def test_magnetized_sphere_field():
     B = curl(solve_magnetostatic_Aform(mesh, NU0, curl_source=curl_src))
     vol = Integrate(CoefficientFunction(1) * dx(definedon=mesh.Materials("magnet")), mesh)
     bz_avg = Integrate(B[2] * dx(definedon=mesh.Materials("magnet")), mesh) / vol
-    assert abs(bz_avg - 0.6667) < 0.02                 # interior (2/3)Br; recorded NGSolve 0.6639 / COMSOL 0.6647
+    assert abs(bz_avg - 0.6667) < 0.02                 # interior (2/3)Br; recorded NGSolve 0.6639 / ref 0.6647
 
 
 @pytest.mark.xval
@@ -291,7 +291,7 @@ def test_single_loop_axis_field():
     ``azimuthal_coil_current``. Thin-filament analytic
     B_z = mu0 NI R^2 / (2 (R^2+z^2)^1.5) = 0.12566 / 0.05983 T at z = 0 / 40 mm;
     the finite 4x4 mm section puts NGSolve ~2-5 % under (measured 0.12278 /
-    0.05702, ratio 0.977 / 0.953). COMSOL agrees with NGSolve <0.8 % for z<=40mm."""
+    0.05702, ratio 0.977 / 0.953). ref agrees with NGSolve <0.8 % for z<=40mm."""
     geo = CSGeometry()
     coil = _ring(50 * MM, 2 * MM, 0, 2 * MM).mat("coil").maxh(3 * MM)
     box = OrthoBrick(Pnt(-150 * MM, -150 * MM, -150 * MM),
@@ -417,17 +417,22 @@ def test_team13_bflux():
     1.308 / 1.231 / 0.657 T -- all within 2 % of measured.
     Skipped if Yano's Problem13 geometry module is unavailable on this machine.
     """
+    import os
     import sys
     import numpy as np
     from ngsolve import TaskManager
 
-    YANO_PATH = r"W:\00_CAE\NGSolve\矢野\2026_03_30_TEAM_benchmark\Problem13"
-    if YANO_PATH not in sys.path:
-        sys.path.insert(0, YANO_PATH)
+    # The external TEAM-13 geometry module is a local, machine-specific asset;
+    # its location is taken from an env var (no internal path hardcoded). The
+    # test skips cleanly if it is not available on this machine.
+    GEO_PATH = os.environ.get("RADIA_TEAM13_GEOMETRY", "")
+    if GEO_PATH and GEO_PATH not in sys.path:
+        sys.path.insert(0, GEO_PATH)
     try:
         from geometry import generateGeometry, getMeshingParameters
     except ImportError:
-        pytest.skip("Yano TEAM-13 geometry module not available at " + YANO_PATH)
+        pytest.skip("TEAM-13 geometry module not available "
+                    "(set RADIA_TEAM13_GEOMETRY to its directory)")
 
     geo  = generateGeometry(maxh_iron=100, fullProblem=False)
     mp   = getMeshingParameters(maxh_global=100)
@@ -2036,7 +2041,7 @@ def test_coaxial_loops_mutual_parametric():
 @pytest.mark.xval
 def test_magnetic_shielding_spherical_shell():
     """Magnetic shielding factor of a mu-metal SPHERICAL SHELL (a=40, b=60 mm) in a
-    uniform applied field B0 -- COMSOL AC/DC "magnetic shielding" benchmark (#5).
+    uniform applied field B0 -- ref AC/DC "magnetic shielding" benchmark (#5).
 
     Exact cavity field:
         B_in/B0 = 9 mu_r / [(2 mu_r+1)(mu_r+2) - 2 (a/b)^3 (mu_r-1)^2]
@@ -2070,7 +2075,7 @@ def test_magnetic_shielding_spherical_shell():
 @pytest.mark.xval
 def test_capacitance_3d_spherical():
     """3D capacitance of a SPHERICAL CAPACITOR (inner a, outer b, vacuum gap) --
-    COMSOL AC/DC "Computing Capacitance" benchmark (#6).
+    ref AC/DC "Computing Capacitance" benchmark (#6).
 
     Exact:  C = 4 pi eps0 a b / (b - a). Method: 3D electrostatics on H1 with the
     conductors as Dirichlet boundaries, capacitance from the field energy
@@ -2093,7 +2098,7 @@ def test_capacitance_3d_spherical():
 @pytest.mark.xval
 def test_capacitance_dielectric_layered():
     """Layered-dielectric spherical capacitor (eps_r1 in a<r<c, eps_r2 in c<r<b) --
-    COMSOL "Computing Capacitance" with dielectric materials (#7). Validates the
+    ref "Computing Capacitance" with dielectric materials (#7). Validates the
     piecewise-permittivity (mesh.MaterialCF) path of electrostatic3d. Exact:
     C = 4 pi eps0 / [(1/er1)(1/a-1/c) + (1/er2)(1/c-1/b)]. <0.2 % on 2026-06-05.
     """
@@ -2144,7 +2149,7 @@ def test_halbach_cylinder_bore_field():
 @pytest.mark.xval
 def test_capacitance_matrix_spherical():
     """Maxwell capacitance MATRIX of a closed 2-conductor spherical capacitor (#9) --
-    COMSOL "Computing Capacitance" matrix. Exact C = [[C0,-C0],[-C0,C0]],
+    ref "Computing Capacitance" matrix. Exact C = [[C0,-C0],[-C0,C0]],
     C0 = 4 pi eps0 ab/(b-a). Validates the FEM reaction charge extraction, symmetry,
     and zero row-sum (charge conservation). <0.5 % on 2026-06-05.
     """
@@ -2229,7 +2234,7 @@ def test_two_wire_line_capacitance():
 
 @pytest.mark.xval
 def test_multipole_quadrupole_fem():
-    """COMSOL-class #13: an air-cored NORMAL quadrupole (4 line currents
+    """ref-class #13: an air-cored NORMAL quadrupole (4 line currents
     +I,-I,+I,-I at 0/90/180/270 deg, radius r0) solved as planar A_z; the
     multipoles extracted from the FEM field on R_ref must match the exact
     free-space superposition -- main b2 to <1 %, the allowed 12-pole (n=6) at
@@ -2271,7 +2276,7 @@ def test_multipole_quadrupole_fem():
 
 @pytest.mark.xval
 def test_cylinder_magnet_axial_field():
-    """COMSOL-class #14: on-axis B_z of an axially-magnetized CYLINDER permanent
+    """ref-class #14: on-axis B_z of an axially-magnetized CYLINDER permanent
     magnet vs the closed form B_z(z)=(Br/2)[(z+L/2)/sqrt(R^2+(z+L/2)^2) -
     (z-L/2)/sqrt(R^2+(z-L/2)^2)]. Axisymmetric A_phi with a rigid magnetization
     M=Br/mu0. The CENTRE field (the headline magnet spec) and the FAR field
@@ -2314,7 +2319,7 @@ def test_cylinder_magnet_axial_field():
 
 @pytest.mark.xval
 def test_solenoid_field_and_inductance():
-    """COMSOL-class #15: finite air-core SOLENOID. On-axis B_z vs the exact closed
+    """ref-class #15: finite air-core SOLENOID. On-axis B_z vs the exact closed
     form B_z=(mu0 n I/2)[(L/2-z)/sqrt(..)+(L/2+z)/sqrt(..)] (centre + bore), and the
     self-inductance L=2W/I^2 (energy method) vs the long limit times the Nagaoka
     coefficient (Wheeler 1/(1+0.9 a/L)). Smooth on axis -> clean L2 extraction."""
@@ -2355,7 +2360,7 @@ def test_solenoid_field_and_inductance():
 
 @pytest.mark.xval
 def test_busbar_lorentz_force():
-    """COMSOL-class #16: Lorentz force per length between two parallel busbars vs
+    """ref-class #16: Lorentz force per length between two parallel busbars vs
     F = mu0 I1 I2/(2 pi d), both attractive (parallel) and repulsive (anti-parallel),
     via the J x B volume integral (force.lorentz_force_2d) on the planar A_z field."""
     from netgen.geom2d import SplineGeometry
@@ -2383,7 +2388,7 @@ def test_busbar_lorentz_force():
 
 @pytest.mark.xval
 def test_helmholtz_uniformity():
-    """COMSOL-class #17: HELMHOLTZ pair (loops radius a at z=+/-a/2). On-axis B_z vs
+    """ref-class #17: HELMHOLTZ pair (loops radius a at z=+/-a/2). On-axis B_z vs
     the closed form, centre B0 vs (4/5)^(3/2) mu0 NI/a, and the field UNIFORMITY over
     the central |z|<=a/4 working region (the Helmholtz figure of merit)."""
     from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
@@ -2427,7 +2432,7 @@ def test_helmholtz_uniformity():
 
 @pytest.mark.xval
 def test_c_magnet_gap_field():
-    """COMSOL-class #18: iron window-frame DIPOLE air-gap field vs the reluctance
+    """ref-class #18: iron window-frame DIPOLE air-gap field vs the reluctance
     model B_gap = mu0 NI/(g + l_fe/mu_r). 2D planar A_z, high-mu yoke, coil threading
     the left leg; gap field = avg |B_x| over the gap. FEM sits just below the lumped
     model (fringing) and below the mu_r->inf ideal mu0 NI/g."""
@@ -2467,7 +2472,7 @@ def test_c_magnet_gap_field():
 
 @pytest.mark.xval
 def test_joule_heating_electrothermal():
-    """COMSOL-class #19: ELECTRO-THERMAL Joule heating, chaining the two NGSolve
+    """ref-class #19: ELECTRO-THERMAL Joule heating, chaining the two NGSolve
     solvers solve_current_flow -> joule_heat_source -> solve_heat_steady. A uniform
     bar (voltage V across length L, ends cold, sides insulated) has q=sigma(V/L)^2 and
     the exact parabolic rise dT(x)=(q/2k)x(L-x), peak sigma V^2/(8k)."""
@@ -2493,7 +2498,7 @@ def test_joule_heating_electrothermal():
 
 @pytest.mark.xval
 def test_electro_thermo_mechanical_chain():
-    """COMSOL-class #20: 3-physics chain solve_current_flow -> solve_heat_steady ->
+    """ref-class #20: 3-physics chain solve_current_flow -> solve_heat_steady ->
     solve_linear_elasticity. Validates dT_max = sigma V^2/(8k) and the constrained-bar
     axial thermal stress sigma_xx = -E alpha <dT>. Also locks the new elasticity solver
     on a pure uniaxial-tension case (delta = sigma0 L/E exactly)."""
@@ -2533,7 +2538,7 @@ def test_electro_thermo_mechanical_chain():
 
 @pytest.mark.xval
 def test_magneto_mechanical_beam():
-    """COMSOL-class #21: magneto-mechanical -- a current-carrying cantilever in a
+    """ref-class #21: magneto-mechanical -- a current-carrying cantilever in a
     transverse field B0 feels a Lorentz body force f_y=-J_x B0 and deflects; the tip
     deflection matches Euler-Bernoulli w L^4/(8EI), w=I B0, for a slender beam."""
     from netgen.occ import OCCGeometry, MoveTo, X, Y
@@ -2551,3 +2556,94 @@ def test_magneto_mechanical_beam():
     tip_eb = -cantilever_tip_deflection(abs(Jx * B0) * h, L, E, h ** 3 / 12.0)
     assert abs(tip_fem - tip_eb) / abs(tip_eb) < 0.03
     assert tip_fem < 0                                     # deflects in the force direction
+
+
+@pytest.mark.xval
+def test_mems_electro_mechanical():
+    """ref-class #22: MEMS electro-mechanical chain -- solve_electrostatic ->
+    electrostatic_eggshell_force_2d (P = 1/2 eps0 (V0/d)^2, EXACT with a whole-gap
+    CONSTANT weight ramp gradg=(0,1/d)) -> solve_linear_elasticity (the pull deflects a
+    cantilever, tip vs Euler-Bernoulli). The electric twin of #21. A boundary trace of
+    grad(V) would read ~0 (V=const on the conductor); the volume band is the fix."""
+    from netgen.occ import OCCGeometry, MoveTo, X, Y
+    from radia_mcp.radia_ngsolve.scalar_fem2d import solve_electrostatic
+    from radia_mcp.radia_ngsolve.force import electrostatic_eggshell_force_2d, EPS0
+    from radia_mcp.radia_ngsolve.elasticity import (solve_linear_elasticity,
+                                                    cantilever_tip_deflection)
+    W, d, V0 = 20e-3, 1e-3, 500.0
+    face = MoveTo(0, 0).Rectangle(W, d).Face(); face.faces.name = "air"
+    face.edges.Max(Y).name = "top"; face.edges.Min(Y).name = "bottom"
+    mesh = Mesh(OCCGeometry(face, dim=2).GenerateMesh(maxh=d / 6))
+    V = solve_electrostatic(mesh, EPS0, {"top": V0, "bottom": 0.0}, order=2)
+    E = CoefficientFunction((-grad(V)[0], -grad(V)[1]))
+    Fx, Fy = electrostatic_eggshell_force_2d(E, mesh, CoefficientFunction((0.0, 1.0 / d)),
+                                             air_region="air")
+    P_fem = abs(Fy) / W
+    P_exact = 0.5 * EPS0 * (V0 / d) ** 2
+    assert abs(P_fem - P_exact) / P_exact < 1e-3           # constant ramp -> exact
+
+    Lb, h, Emod, nu = 10e-3, 0.4e-3, 1.0e8, 0.3
+    beam = MoveTo(0, 0).Rectangle(Lb, h).Face(); beam.faces.name = "beam"
+    beam.edges.Min(X).name = "clamp"; beam.edges.Max(Y).name = "loaded"
+    meshB = Mesh(OCCGeometry(beam, dim=2).GenerateMesh(maxh=h / 3))
+    u = solve_linear_elasticity(meshB, Emod, nu, dirichlet="clamp",
+                                traction={"loaded": (0.0, -P_fem)}, plane="stress", order=2)
+    tip_fem = abs(u(meshB(Lb, h / 2))[1])
+    tip_eb = cantilever_tip_deflection(P_fem, Lb, Emod, h ** 3 / 12.0)
+    assert abs(tip_fem - tip_eb) / tip_eb < 0.03
+
+
+@pytest.mark.xval
+def test_electrothermal_sigmaT_2way():
+    """ref-class #24: TWO-WAY temperature-dependent sigma(T) electro-thermal.
+    sigma(T)=sigma0/(1+alpha T) -> Joule q=(J^2/sigma0)(1+alpha T) feeds back into the heat;
+    solve_heat_steady_nonlinear (Picard) matches the exact closed form
+    T_max=(1/alpha)(sec(sqrt(b)L/2)-1), b=alpha J^2/(sigma0 k), and shows the feedback raising
+    the peak above the constant-sigma parabola."""
+    from netgen.occ import OCCGeometry, MoveTo, X
+    from radia_mcp.radia_ngsolve.multiphysics import solve_heat_steady_nonlinear
+    L, hbar, sigma0, k, alpha, J = 0.10, 0.01, 1.0e6, 50.0, 0.005, 8.0e5
+    s = math.sqrt(alpha * J * J / (sigma0 * k))
+    Tmax_cf = (1.0/alpha)*(1.0/math.cos(s*L/2.0) - 1.0)
+    Tmax_parab = J*J*L*L/(8.0*sigma0*k)
+    face = MoveTo(0, 0).Rectangle(L, hbar).Face(); face.faces.name = "bar"
+    face.edges.Min(X).name = "ends"; face.edges.Max(X).name = "ends"
+    mesh = Mesh(OCCGeometry(face, dim=2).GenerateMesh(maxh=L/60))
+    T = solve_heat_steady_nonlinear(mesh, lambda Tcf: (J*J/sigma0)*(1.0 + alpha*Tcf),
+                                    k, conductor="bar", dirichlet="ends", order=2)
+    Tmax = T(mesh(L/2, hbar/2))
+    print(f"[sigma(T) 2-way] T_max FE={Tmax:.4f} K  closed={Tmax_cf:.4f} K  "
+          f"(parabola={Tmax_parab:.4f})  err={100*abs(Tmax-Tmax_cf)/Tmax_cf:.3f}%")
+    assert abs(Tmax - Tmax_cf) / Tmax_cf < 0.01, "FE vs closed-form sigma(T) mismatch"
+    assert Tmax > 1.03 * Tmax_parab, "2-way feedback should raise the peak above the parabola"
+
+
+@pytest.mark.xval
+def test_coax_line_inductance():
+    """ref-class #25: coaxial-line external inductance from the FE magnetic energy
+    matches (mu0/2pi) ln(b/a); with the analytic coax C it gives Z0 = 60 ln(b/a) and v=c."""
+    from netgen.occ import OCCGeometry, WorkPlane, Glue
+    from radia_mcp.radia_ngsolve.solve import reluctivity
+    from radia_mcp.radia_ngsolve.force import magnetic_energy_2d
+    EPS0 = 8.8541878128e-12
+    a, b, cc, Rout, I = 0.002, 0.008, 0.010, 0.030, 1.0
+    da = WorkPlane().Circle(0, 0, a).Face(); da.faces.name = "inner"
+    db = WorkPlane().Circle(0, 0, b).Face(); diel = db - da; diel.faces.name = "diel"
+    dc = WorkPlane().Circle(0, 0, cc).Face(); shield = dc - db; shield.faces.name = "shield"
+    box = WorkPlane().Circle(0, 0, Rout).Face(); box.edges.name = "outer"
+    air = box - dc; air.faces.name = "air"
+    da.faces.maxh = a/8; diel.faces.maxh = (b-a)/24; shield.faces.maxh = (cc-b)/4; air.faces.maxh = Rout/8
+    mesh = Mesh(OCCGeometry(Glue([da, diel, shield, air]), dim=2).GenerateMesh(maxh=Rout/6))
+    Jz = CoefficientFunction([{"inner": I/(math.pi*a*a),
+                              "shield": -I/(math.pi*(cc*cc-b*b))}.get(m, 0.0)
+                             for m in mesh.GetMaterials()])
+    A = solve_planar_magnetostatic(mesh, reluctivity(mesh, {}), Jz=Jz, order=3, dirichlet="outer")
+    B = CoefficientFunction((grad(A)[1], -grad(A)[0]))
+    L_fe = 2.0 * magnetic_energy_2d(B, mesh, "diel") / (I*I)
+    L_cf = MU0/(2*math.pi)*math.log(b/a)
+    C_cf = 2*math.pi*EPS0/math.log(b/a)
+    Z0_fe, Z0_cf = math.sqrt(L_fe/C_cf), 60.0*math.log(b/a)
+    print(f"[coax] L_ext FE={L_fe:.4e} closed={L_cf:.4e} ({100*abs(L_fe-L_cf)/L_cf:.2f}%)  "
+          f"Z0 {Z0_fe:.2f} vs {Z0_cf:.2f} ohm")
+    assert abs(L_fe - L_cf)/L_cf < 0.01, "coax L_ext vs (mu0/2pi)ln(b/a)"
+    assert abs(Z0_fe - Z0_cf)/Z0_cf < 0.01, "coax Z0 vs 60 ln(b/a)"

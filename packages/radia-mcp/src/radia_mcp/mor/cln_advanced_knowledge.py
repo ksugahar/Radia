@@ -402,10 +402,10 @@ for n = [1:N]; for m = [1:M]
 end; end
 ```
 
-This is the most useful 06_非線形 file for understanding *how the
-lab validates a CLN basis on a real FEM mesh* -- precompute the
-basis symbolically, push it into COMSOL as Analytic functions, do
-the integrations in COMSOL, compare to the symbolic ground truth.
+This is the most useful reference for understanding *how the lab
+validates a CLN basis on a real FEM mesh* -- precompute the basis
+symbolically, push it into an FE tool as analytic functions, do the
+integrations there, and compare to the symbolic ground truth.
 """
 
 ELECTRODYNAMIC_CIRCUIT = """

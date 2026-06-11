@@ -31,7 +31,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-cubit",
         "description": "Cubit mesh scripting, hex/tet workflow, export formats",
         "primary_tools": ["cubit_exec", "cubit_mesh_auto", "cubit_docs"],
-        "related": ["build123d", "gmsh", "interop"],
+        "related": ["build123d", "gmsh"],
         "tags": ["cad", "mesh"],
     },
     "build123d": {
@@ -40,15 +40,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "build123d STEP authoring (CAD-as-code) + Cubit interop",
         "primary_tools": ["build123d_api", "execute_build123d",
                             "build123d_to_cubit_hex"],
-        "related": ["cubit", "interop"],
-        "tags": ["cad"],
-    },
-    "interop": {
-        "subpackage": "radia_mcp.interop",
-        "entry_point": "mcp-server-radia-interop",
-        "description": "Cross-CAD interop (STEP/IGES/CadQuery <-> Cubit/Netgen)",
-        "primary_tools": ["any_step_to_cubit_hex", "freecad_to_cubit_hex"],
-        "related": ["cubit", "build123d"],
+        "related": ["cubit"],
         "tags": ["cad"],
     },
     "gmsh": {
@@ -591,9 +583,7 @@ EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
 _ALIASES = {
     # CLI-name -> catalog key
     "radia-meta": "meta",
-    "radia-interop": "interop",
     "radia_meta": "meta",
-    "radia_interop": "interop",
 }
 # Auto-generate underscore variants for every hyphenated catalog key
 # (e.g. 'magnetic-materials' resolves from both 'magnetic-materials' and

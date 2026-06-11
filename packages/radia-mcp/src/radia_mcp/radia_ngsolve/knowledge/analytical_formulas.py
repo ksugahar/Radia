@@ -489,6 +489,31 @@ practical mapping from "what kind of analysis am I running" to
 * ``examples/analytical_formulas/cross_validation_3d_vs_2d.py``
 * ``examples/analytical_formulas/cross_validation_solenoid_currentloop.py``
 
+## NGSolve (FEM) cross-validation suite -- tests/test_force_xval.py
+
+The radia-ngsolve A-form / A-Phi solvers are checked against these
+closed-forms (``pytest -m xval``; each is a real 3D solve). Besides the
+TEAM problems (6/7/13/20/21) and COMSOL-recorded values, the analytic
+cases include:
+  - magnetised / permeable sphere demag: B_in = 3 mu_r/(mu_r+2) B0
+    (mu_r=10 AND mu_r=1000 extreme-contrast, scattered-field A-form, ~1%)
+  - permeable cylinder transverse: B_in = 2 mu_r/(mu_r+1) B0
+  - coaxial-loop MUTUAL INDUCTANCE via the vector-potential flux linkage
+    M = 2 pi a2 A_phi(a2,z2)/I1  vs Maxwell elliptic M (~2.4%)
+  - coaxial-loop AXIAL FORCE via the Lorentz relation
+    F_z = -2 pi a2 I2 B_r1(a2,z2)  vs I1 I2 dM/dz (elliptic) (~1%)
+  - eddy diffusion closed-forms: slab B/cosh(kh), solid sphere B0 p/sinh(p),
+    solid cylinder B0/I0(kR)  (kappa = sqrt(j w sigma mu0))
+  - Helmholtz centre 8/(5 sqrt5) mu0 NI/R; annular-solenoid Biot-Savart;
+    PM-sphere exterior dipole mu0/(4pi) 2m/z^3.
+  - anti-Helmholtz central axial GRADIENT
+    G = 3 mu0 NI a^2 s/(a^2+s^2)^(5/2) (opposed coils, finite-diff of B_z)
+  - current-loop OFF-AXIS field (both B_r and B_z) vs the exact
+    elliptic-integral loop field (Simpson/Jackson), not just on-axis.
+These reuse the shielding / elliptic_integrals / demag formulas above as
+the trusted reference, extending the cross-validation from radia's own
+analytic+CurrentLoop layer to the FEM solver.
+
 These two patterns -- 2D bar limit and stacked-CurrentLoop reference --
 are reproducible templates. When you add a new closed-form to
 :mod:`radia.analytical_formulas`, mirror them in a new
