@@ -99,8 +99,9 @@ The two remaining "finish" pieces of the coil designer are shipped + golden-lock
 | **net current (cohomology)** | a single-valued `ψ`/`λ` carries zero net current around a winding-surface cycle; the secular term `Σ c_k h_k` (H¹, dim = b1) supplies it, INTEGRATED into the design solve | `../stream_function/cohomology_net_current.py` (+ golden) |
 | **harmonic generators from scratch** | the canonical (min-norm) generators `h_k` computed via the **matched Whitney complex** (`H1₁ →grad→ HCurl₀`, `curl∘grad=0` to `1.4e-14`) — no analytic ansatz; 2 forms drop out of the Hodge-Laplacian kernel (gap `1.2e13`), class-matched to the net current (`2.3e-3`) | `../stream_function/cohomology_generators_whitney.py` (+ golden) |
 | **F1 gauge choice (CMA-ES)** | global optimization over the foliation gauge escapes the non-convex wall; a local optimizer sticks at `1.7×` higher `‖J‖` | `cmaes_foliation_gauge.py` (+ golden) |
+| **single-stroke (rigorous)** | the manufacturing single-stroke = the **level-set of `Ψ = ψ + secular`** (one connected helix, vs N disconnected rings); the connection IS the cohomology secular term (net axial `I`), **distributed** axisymmetrically — vs the heuristic **localised** rung (near-join stray `2.94×` less). Puts the `single-stroke-chain` skill's heuristic on a rigorous cohomology footing. | `single_stroke_clebsch.py` (+ golden) |
 
-So the cohomology-and-gauge "finish" of the stream-function coil designer is complete; F2/F3 remain genuine frontier walls (by design).
+So the cohomology-and-gauge "finish" of the stream-function coil designer is complete; F2/F3 remain genuine frontier walls (by design).  The single-stroke is the **clean solenoid case** of the rigorous construction; arbitrary-pattern routing is the F1-like open part (rigorous parameterisation, non-convex routing).
 
 ## Run + golden tests
 
