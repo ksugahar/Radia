@@ -7,6 +7,31 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- **radia-ngsolve**: new `dtn_coarse_mesh` tool + `bem_integral` /
+  `fem_bem_coupling` measurements that reframe Kameari's coarse-mesh
+  accuracy of the Kelvin transformation as a **DtN-matrix spectral
+  property**. The exterior Dirichlet-to-Neumann operator `Λ_ext` has the
+  closed-form ladder `−(n+1)/R` (3D) / `−n/R` (2D); the discrete `Λ_h`
+  lands the low multipoles on that ladder on the coarsest mesh (dipole
+  0.07 %), and the **isolated** Kelvin open-BC error (~0.1 %) sits ~45×
+  below the interior FEM error. New code: `exterior_dtn_spectrum`,
+  `dtn_spectrum_vs_mesh` (`bem_integral`); `kelvin_dtn_eigenvalue`
+  (`dim=3`/`dim=2`), `kelvin_vs_exact_open_bc_error`,
+  `kelvin_openbc_error_vs_exterior_mesh`, `kelvin_twosphere_shell_dipole`
+  (`fem_bem_coupling`). Knowledge module `dtn_coarse_mesh`, example
+  `dtn_spectrum_coarse_mesh_demo.py`, tests `test_dtn_spectrum_coarse.py`
+  + extended `test_fem_bem_coupling.py`, and the academic reference
+  `docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`. Supports the IEEJ
+  static-apparatus / rotating-machinery joint technical meeting.
+- **radia-ngsolve (fix)**: `laplace_fem_bem_schur` corrected — the
+  boundary Schur term is `K_FEM − Pᵀ M_bnd Λ_ext P` (three bugs fixed:
+  the `K +` → `K −` sign, the missing `SurfaceL2` mass `M_bnd` that turns
+  the coefficient→coefficient `Λ` into a weak-form contribution, and the
+  free-DOF restriction of the densified `V` solve). Also fixed a
+  nondeterministic NGSolve teardown crash: a `definedon`-restricted
+  `SurfaceL2` used as the **test** space corrupts the heap on a volume
+  mesh — the coupling matrix now uses it as the **trial** space.
+  Validated `< 6 %` L2 on the spherical shell at order 2.
 - **BREAKING**: renamed the `radia_mcp.graph` subpackage to
   `radia_mcp.figure` (server `mcp-server-graph` -> `mcp-server-figure`;
   tools `graph_style_guide` / `graph_size_for_target` /

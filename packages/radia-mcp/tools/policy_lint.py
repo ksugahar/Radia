@@ -56,6 +56,7 @@ except ModuleNotFoundError:              # Python 3.10: tomllib is not in stdlib
 # Subpackages that WRAP a commercial tool -> must never be published.
 HARD_DENY = {
     "comsol_converter",   # COMSOL .mph -> NGSolve/Java converter (named in policy)
+    "cst_converter",      # CST .cst -> ngsolve.bem converter (non-public; lives in S:\CST)
 }
 # Subpackages that CONTAIN commercial-tool content and need a human call on
 # whether they belong in the public package (warn, don't hard-fail).
@@ -67,7 +68,7 @@ REVIEW = {
 # a free-text token scan flags the legitimate benchmark *mentions* (".mph",
 # "JMAG-Designer", "COMSOL multilingual RAG") that pervade an open, FEMM-parity
 # tool -- those are allowed; only their content / models / bench numbers are not.
-COMMERCIAL_NAME_RE = re.compile(r"(comsol|jmag)", re.IGNORECASE)
+COMMERCIAL_NAME_RE = re.compile(r"(comsol|jmag|cst_)", re.IGNORECASE)
 
 
 def _subpackage_of(target: str) -> str | None:
@@ -157,7 +158,7 @@ def check_packaging(root: Path) -> tuple[list[str], list[str]]:
 # verification (a commercial tool adjacent to a number / another solver / a
 # ground-truth claim) or on an internal filesystem path -- NOT on a bare
 # capability mention, an open-source tool, or a published author/method.
-_TOOL = r"(?:FEMM|JMAG|COMSOL)"          # commercial / licensed tools
+_TOOL = r"(?:FEMM|JMAG|COMSOL|CST)"          # commercial / licensed tools
 # A "value" token that signals a benchmark NUMBER (a MEASUREMENT), NOT a
 # capability label ("prob1-4big") nor a VERSION ("FEMM 4.2", "COMSOL 6.2").
 # A measurement is: signed; or %-suffixed; or a physical unit (T/H/us/...); or a
@@ -212,11 +213,11 @@ PROVENANCE_RULES: list[tuple[re.Pattern, str]] = [
     # W:\00_CAE\<TOOL>, plus a deeper S:\..\<TOOL>\ component. Open-tool paths
     # (S:\cubit, W:\00_CAE\NGSolve, literature dirs) are deliberately NOT matched
     # here -- that broader lab-path cleanup is out of this guard's scope.
-    (re.compile(r"[SW]:[\\/](?:FEMM|JMAG|COMSOL)\b", re.IGNORECASE),
+    (re.compile(r"[SW]:[\\/](?:FEMM|JMAG|COMSOL|CST)\b", re.IGNORECASE),
      "internal commercial-tool drive path (S:/W: \\<tool>)"),
-    (re.compile(r"W:[\\/]00_CAE[\\/](?:FEMM|JMAG|COMSOL)\b", re.IGNORECASE),
+    (re.compile(r"W:[\\/]00_CAE[\\/](?:FEMM|JMAG|COMSOL|CST)\b", re.IGNORECASE),
      "internal commercial-tool path (W:\\00_CAE\\<tool>)"),
-    (re.compile(r"[SW]:[\\/][^\n\"']*[\\/](?:FEMM|JMAG|COMSOL)[\\/]",
+    (re.compile(r"[SW]:[\\/][^\n\"']*[\\/](?:FEMM|JMAG|COMSOL|CST)[\\/]",
                 re.IGNORECASE),
      "internal path with a commercial-tool directory component"),
     (re.compile(r"\b_crossval\b", re.IGNORECASE),
@@ -237,6 +238,9 @@ PROVENANCE_RULES: list[tuple[re.Pattern, str]] = [
 _ALLOW_SUBSTR = (
     "wjc9011/COMSOL_Multiphysics_MCP",      # cited open pattern source (GitHub)
     "COMSOL_Multiphysics_MCP",
+    "EED/CST London",                       # quoted paper affiliation (CST = a London
+                                            # institution, NOT the CST software) in a
+                                            # bibliography abstract -- not an attribution
 )
 
 # File globs to scan under each tree.
@@ -314,7 +318,11 @@ def selftest() -> int:
         "against the COMSOL values in comsol_xval, so the",
         "harness lives in C:\\temp\\cc_lab (lab machine)",
         "trip-wires in [[reference_comsol_rdp_license]]",
-        "FEMM itself as the ground truth",
+        "a convergence study vs CST plus mesh-dependence",       # CST attribution (HF tool)
+        "the proposed method matches CST to 0.5 %",
+        "validated against REAL CST Studio Suite",
+        r"the lab's CST corpus (S:\CST).",                        # CST internal path
+        r"FEMM itself as the ground truth",
         "**radia** (0.2512 vs FEMM 0.2498)",
         "validated against ... the reference commercial code",
         r"distilled from S:\FEMM\等価定理の基礎原理\, S:\FEMM\2015_05_21",
@@ -346,6 +354,9 @@ def selftest() -> int:
         "Created in COMSOL Multiphysics 6.2",
         "licensed under the COMSOL Software License Agreement 6.2.",
         "matches FEMM 4.2 production",
+        "Created in CST Studio Suite 2026.0",                    # CST version, not a benchmark
+        "EMF is at the EED/CST London, UK, e-mail 10016.3130",   # quoted paper affiliation (allowlisted)
+        "high-frequency tools (HFSS, FEKO) exist",               # competitor landscape (not in _TOOL)
     ]
     fails = []
     for s in must_flag:

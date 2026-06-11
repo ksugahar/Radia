@@ -13,7 +13,7 @@ import math
 from ngsolve import (HCurl, H1, Periodic, NumberSpace, FESpace, BilinearForm,
                      LinearForm, GridFunction, CoefficientFunction, InnerProduct,
                      curl, grad, dx, Integrate, Conj, Variation, Preconditioner,
-                     x, y, sqrt)
+                     x, y, sqrt, BND)
 
 MU0 = 4.0e-7 * math.pi
 NU0 = 1.0 / MU0
@@ -384,6 +384,28 @@ def dq_torque(lambda_m, Ld, Lq, id_, iq, pole_pairs):
     torque RIPPLES about this value at the pole harmonic (6*theta_e), and the single-instant
     fundamental :func:`dq_flux_torque` matches exactly (tests/test_dq_torque.py)."""
     return 1.5 * pole_pairs * (lambda_m * iq + (Ld - Lq) * id_ * iq)
+
+
+def dq_torque_components(lambda_m, Ld, Lq, id_, iq, pole_pairs):
+    """Split the dq electromagnetic torque into its magnet and reluctance parts [N.m]:
+
+        T_magnet     = (3/2) p  lambda_m iq             (alignment torque from the PM flux)
+        T_reluctance = (3/2) p (Ld - Lq) id iq          (saliency torque, 0 if Ld == Lq)
+        T_total      = T_magnet + T_reluctance  ==  :func:`dq_torque`.
+
+    The standard interior-/salient-PM design decomposition: how much of a salient PM machine's
+    torque comes from the magnet vs from the rotor saliency. At the MTPA operating point
+    (:func:`mtpa_operating_point`) both terms are positive and the reluctance share grows with
+    the saliency |Ld - Lq| and the current. Returns ``(T_magnet, T_reluctance, T_total)``.
+
+    Force-anchored: on a salient-pole PM FEA the magnet linkage lambda_m (open-circuit Park-d) and
+    the saliency Ld/Lq (current injection) reconstruct, through this split, the Maxwell-stress-tensor
+    torque whose argmax over the current angle lands on :func:`mtpa_operating_point` (the magnet term
+    alone gives the pure-q torque, the reluctance term the angle-dependent gain)."""
+    k = 1.5 * pole_pairs
+    t_mag = k * lambda_m * iq
+    t_rel = k * (Ld - Lq) * id_ * iq
+    return t_mag, t_rel, t_mag + t_rel
 
 
 def mtpa_operating_point(lambda_m, Ld, Lq, current, pole_pairs):
@@ -1354,6 +1376,22 @@ def two_wire_loop_inductance(separation, radius):
     return two_wire_external_inductance(separation, radius) + 2.0 * internal_inductance_round_wire()
 
 
+def two_wire_force_per_length(current1, current2, separation):
+    """Force per unit length between two infinitely-long parallel wires carrying ``current1`` and
+    ``current2`` a distance ``separation`` d apart -- Ampere's force law:
+
+        F = mu0 I1 I2 / (2 pi d)   [N/m].
+
+    Parallel LIKE currents (I1 I2 > 0) ATTRACT, opposite currents repel; the returned value is the
+    signed force-per-length with the convention that a positive product is an attractive force of
+    this magnitude. The Lorentz body force int J x B over one wire: only the OTHER wire's field
+    contributes the net force (the symmetric self-field integrates to zero). The building block of
+    the image-wire force (:func:`image_force_wire_iron` is this with the iron's image at separation
+    2h -> mu0 I^2/(4 pi h)). Validated to 0.001 % against an independent 2D magnetostatic Lorentz-
+    force solve (a stored regression reference)."""
+    return MU0 * current1 * current2 / (2.0 * math.pi * separation)
+
+
 def image_force_wire_iron(current, height):
     """Attractive force per unit length on a current wire a distance ``height`` h above an
     IRON (mu -> inf) half-plane, by the METHOD OF IMAGES: the iron mirrors the wire as a
@@ -1623,7 +1661,7 @@ def solve_planar_magnetostatic_nonlinear(mesh, nu_of_B, Jz=None, magnets=None,
 
 def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
                       total_current=None, applied_Ez=None, Jz=None, order=3,
-                      dirichlet="outer"):
+                      dirichlet="outer", dirichlet_value=0.0):
     """2D PLANAR time-harmonic eddy currents (complex A_z) -- FEMM ``prob2big`` analog.
 
     Solves  -div(nu grad A_z) + j w sigma A_z = J_src .  The eddy current in
@@ -1631,6 +1669,11 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
     modes:
 
     * ``Jz`` : imposed source current density CF [A/m^2] (e.g. a stranded coil).
+    * ``dirichlet_value`` : DRIVEN-SURFACE phasor -- a NON-zero Dirichlet A_z =
+      dirichlet_value imposed on the ``dirichlet`` boundary (default 0 = magnetic
+      insulation). The slab skin-effect (surface flux A0 driven on the conductor
+      faces, the eddy reaction attenuating it inward) is A_z(0)/A0 = 1/cosh(gamma a),
+      gamma=(1+j)/delta, delta=sqrt(2/(w mu sigma)).
     * ``driven_region`` + ``total_current`` : CURRENT-DRIVEN solid conductor. A
       NumberSpace scalar Vc (axial driving field -dV/dz) is added and constrained
       so  int_region sigma (-j w A_z + Vc) dA = total_current -- net current is
@@ -1680,7 +1723,13 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
     a.Assemble()
     f.Assemble()
     gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+    if dirichlet_value:                  # DRIVEN-SURFACE: A_z = dirichlet_value on `dirichlet` (skin slab)
+        gfu.Set(CoefficientFunction(complex(dirichlet_value)), BND,
+                definedon=mesh.Boundaries(dirichlet))
+        r = f.vec - a.mat * gfu.vec
+        gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * r
+    else:
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
     return gfu
 
 

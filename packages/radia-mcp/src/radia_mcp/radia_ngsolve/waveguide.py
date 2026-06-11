@@ -22,6 +22,7 @@ The Neumann problem always has a trivial constant (k_c = 0) eigenmode (no field)
 PHYSICAL cutoff wavenumbers. Validated against the exact rectangular-guide
 spectrum (examples/comsol_class/waveguide_cutoff.py).
 """
+import cmath
 import math
 
 from ngsolve import (H1, HCurl, BilinearForm, GridFunction, grad, curl, dx, ArnoldiSolver)
@@ -117,6 +118,164 @@ def waveguide_evanescent_attenuation(frequency, fc, c=C0):
     if frequency >= fc:
         raise ValueError("frequency must be below the cutoff fc (use waveguide_dispersion above it)")
     return (2.0 * math.pi / c) * math.sqrt(fc * fc - frequency * frequency)
+
+
+def waveguide_dielectric_slab_sparams(frequency, width_a, eps_r, slab_length, c=C0):
+    r"""The 2-port SCATTERING MATRIX (S11, S21) of a rectangular waveguide TE10 section loaded with a
+    DIELECTRIC SLAB (relative permittivity ``eps_r``, axial length ``slab_length``, air on both sides) --
+    the MISMATCHED-2-port sequel to the matched-line propagation (:func:`waveguide_dispersion`): a real
+    reflection appears where the wave impedance steps.
+
+    The TE10 transverse cutoff wavenumber ``k_c = pi/a`` is set by the width ``a`` alone, so the axial
+    propagation constants in the air and slab regions are
+
+        beta_air  = sqrt(k0^2 - k_c^2) = (2 pi/c) sqrt(f^2 - fc^2),   fc = c/(2a),
+        beta_slab = sqrt(eps_r k0^2 - k_c^2),                          k0 = 2 pi f/c.
+
+    The TE wave impedance Z_TE = omega mu0 / beta scales as 1/beta, so the air<->slab interface reflects
+    with ``Gamma = (Z_slab - Z_air)/(Z_slab + Z_air) = (beta_air - beta_slab)/(beta_air + beta_slab)``.  For
+    a finite slab the two interfaces + the in-slab phase ``theta = beta_slab * slab_length`` cascade to the
+    exact transmission-line S-matrix (reference planes at the slab faces)
+
+        S11 = Gamma (1 - e^{-2 i theta}) / (1 - Gamma^2 e^{-2 i theta}),
+        S21 = (1 - Gamma^2) e^{-i theta} / (1 - Gamma^2 e^{-2 i theta}).
+
+    LOSSLESS UNITARITY ``|S11|^2 + |S21|^2 = 1`` holds exactly.  Limits: slab_length -> 0 or eps_r -> 1
+    give ``S11 = 0, |S21| = 1`` (matched); a QUARTER-WAVE slab (theta = pi/2) maximises the reflection at
+    ``|S11| = 2|Gamma|/(1+Gamma^2)``.  Returns ``{frequency, fc, eps_r, slab_length, beta_air, beta_slab,
+    gamma, theta, S11, S21, S11_mag, S21_mag, unitarity}``.  Textbook transmission-line theory; the closed
+    form is the analytic gate a full-wave port (S-parameter) solve is checked against.  Raises ValueError
+    at/below the TE10 cutoff."""
+    f = float(frequency); a = float(width_a); er = float(eps_r); d = float(slab_length)
+    if a <= 0.0:
+        raise ValueError("width_a must be > 0 (got %r)" % (width_a,))
+    if d < 0.0:
+        raise ValueError("slab_length must be >= 0 (got %r)" % (slab_length,))
+    if er <= 0.0:
+        raise ValueError("eps_r must be > 0 (got %r)" % (eps_r,))
+    fc = 0.5 * c / a                                            # TE10 cutoff (air)
+    if f <= fc:
+        raise ValueError("frequency must exceed the TE10 cutoff fc=c/2a (the mode is evanescent in air)")
+    k0 = 2.0 * math.pi * f / c
+    kc = math.pi / a                                           # transverse cutoff wavenumber
+    beta_air = math.sqrt(k0 * k0 - kc * kc)
+    arg = er * k0 * k0 - kc * kc
+    if arg <= 0.0:                                             # slab below cutoff (only if eps_r small)
+        raise ValueError("frequency below the slab cutoff fc/sqrt(eps_r); the slab mode is evanescent")
+    beta_slab = math.sqrt(arg)
+    gamma = (beta_air - beta_slab) / (beta_air + beta_slab)    # TE interface reflection (Z ~ 1/beta)
+    theta = beta_slab * d
+    e2 = cmath.exp(-2j * theta)
+    den = 1.0 - gamma * gamma * e2
+    S11 = gamma * (1.0 - e2) / den
+    S21 = (1.0 - gamma * gamma) * cmath.exp(-1j * theta) / den
+    return {"frequency": f, "fc": fc, "eps_r": er, "slab_length": d,
+            "beta_air": beta_air, "beta_slab": beta_slab, "gamma": gamma, "theta": theta,
+            "S11": S11, "S21": S21, "S11_mag": abs(S11), "S21_mag": abs(S21),
+            "unitarity": abs(S11) ** 2 + abs(S21) ** 2}
+
+
+def waveguide_cascade_sparams(frequency, width_a, sections, c=C0):
+    r"""The 2-port SCATTERING MATRIX (S11, S21) of a rectangular waveguide TE10 line loaded with an
+    ARBITRARY CASCADE of uniform dielectric sections -- the N-section generalisation of the single
+    :func:`waveguide_dielectric_slab_sparams` (which is exactly the one-section case). The input and
+    output ports are air-filled, so the reference impedance is the air-guide TE10 impedance.
+
+    Each section ``(length_i, eps_r_i)`` is a uniform TE10 transmission line of axial constant
+    ``beta_i = sqrt(eps_r_i k0^2 - k_c^2)`` (k_c = pi/a, k0 = 2 pi f/c) and wave impedance
+    ``Z_i ~ 1/beta_i``; its ABCD (chain) matrix is
+
+        [[cos theta_i,        j Z_i sin theta_i],
+         [j sin theta_i/Z_i,  cos theta_i      ]],     theta_i = beta_i * length_i.
+
+    The whole structure is the ORDERED PRODUCT of the section ABCDs, converted to S-parameters with
+    the air reference impedance ``Z0 ~ 1/beta_air`` on both ports:
+
+        S11 = (A + B/Z0 - C Z0 - D)/(A + B/Z0 + C Z0 + D),   S21 = 2/(A + B/Z0 + C Z0 + D).
+
+    A section BELOW its own cutoff (eps_r_i k0^2 < k_c^2) is handled automatically as an EVANESCENT
+    (below-cutoff) attenuator: ``beta_i`` becomes imaginary and the cos/sin turn into cosh/sinh. The
+    ABCD entries are INVARIANT under the sqrt branch sign (cos is even; the B and C entries each pair
+    sin with a compensating 1/beta or beta), so no branch bookkeeping is needed. The result is
+    reciprocal (``A D - B C = 1``) and, for purely propagating lossless sections, unitary
+    (|S11|^2 + |S21|^2 = 1). With a single section it reproduces
+    :func:`waveguide_dielectric_slab_sparams` to machine precision (its internal consistency gate),
+    and a short-terminated equivalent reproduces :func:`waveguide_offset_short_s11`.
+
+    ``sections`` is a non-empty list of ``(length_m, eps_r)`` pairs (the air ports are implicit).
+    Returns ``{frequency, fc, n_sections, S11, S21, S11_mag, S21_mag, unitarity, abcd_det}``.
+    Textbook transmission-line (ABCD-cascade) theory; the closed form is the analytic gate a
+    full-wave port solve of a MULTI-section guide is checked against. Raises ValueError at/below the
+    air TE10 cutoff or for a malformed section list."""
+    f = float(frequency); a = float(width_a)
+    if a <= 0.0:
+        raise ValueError("width_a must be > 0 (got %r)" % (width_a,))
+    if not sections:
+        raise ValueError("sections must be a non-empty list of (length, eps_r) pairs")
+    fc = 0.5 * c / a                                           # air TE10 cutoff
+    if f <= fc:
+        raise ValueError("frequency must exceed the air TE10 cutoff fc=c/2a")
+    k0 = 2.0 * math.pi * f / c
+    kc = math.pi / a
+    beta_air = math.sqrt(k0 * k0 - kc * kc)
+    z0 = 1.0 / beta_air                                        # air-guide reference impedance (~1/beta)
+    A, B, Cc, D = 1.0 + 0j, 0j, 0j, 1.0 + 0j                   # total chain matrix (start = identity)
+    for (length_i, eps_i) in sections:
+        li = float(length_i); eri = float(eps_i)
+        if li < 0.0:
+            raise ValueError("section length must be >= 0 (got %r)" % (length_i,))
+        if eri <= 0.0:
+            raise ValueError("section eps_r must be > 0 (got %r)" % (eps_i,))
+        beta = cmath.sqrt(eri * k0 * k0 - kc * kc)             # complex => evanescent section
+        zc = 1.0 / beta
+        th = beta * li
+        ct = cmath.cos(th); st = cmath.sin(th)
+        a11 = ct; a12 = 1j * zc * st; a21 = 1j * st / zc; a22 = ct
+        nA = A * a11 + B * a21                                 # [A B; C D] := [A B; C D] * section
+        nB = A * a12 + B * a22
+        nC = Cc * a11 + D * a21
+        nD = Cc * a12 + D * a22
+        A, B, Cc, D = nA, nB, nC, nD
+    den = A + B / z0 + Cc * z0 + D
+    S11 = (A + B / z0 - Cc * z0 - D) / den
+    S21 = 2.0 / den
+    return {"frequency": f, "fc": fc, "n_sections": len(sections),
+            "S11": S11, "S21": S21, "S11_mag": abs(S11), "S21_mag": abs(S21),
+            "unitarity": abs(S11) ** 2 + abs(S21) ** 2, "abcd_det": A * D - B * Cc}
+
+
+def waveguide_offset_short_s11(frequency, width_a, offset_length, c=C0):
+    r"""The 1-port reflection S11 of an OFFSET SHORT -- a length ``offset_length`` of air-filled
+    rectangular TE10 waveguide terminated in a PEC short (the classic 1-port calibration standard;
+    the reflection sibling of the antenna 1-port and the transmission slab 2-port
+    :func:`waveguide_dielectric_slab_sparams`).
+
+    A short has load reflection ``Gamma_L = -1``; an air section of length d transforms it to the
+    port reference plane by the round-trip phase:
+
+        S11 = -exp(-2 j beta_air d),   beta_air = sqrt(k0^2 - (pi/a)^2),   k0 = 2 pi f/c.
+
+    Lossless, so ``|S11| = 1`` exactly; the OBSERVABLE is the reflection PHASE
+    ``arg(S11) = pi - 2 beta_air d``, whose frequency slope is the round-trip GROUP DELAY
+    ``tau = 2 d / v_group``. Returns ``{frequency, fc, beta_air, offset_length, S11, S11_mag,
+    phase_rad, group_delay}``. The analytic gate a full-wave 1-port (port + PEC end) solve is checked
+    against. Raises ValueError at/below the TE10 cutoff."""
+    f = float(frequency); a = float(width_a); d = float(offset_length)
+    if a <= 0.0:
+        raise ValueError("width_a must be > 0 (got %r)" % (width_a,))
+    if d < 0.0:
+        raise ValueError("offset_length must be >= 0 (got %r)" % (offset_length,))
+    fc = 0.5 * c / a
+    if f <= fc:
+        raise ValueError("frequency must exceed the TE10 cutoff fc=c/2a")
+    k0 = 2.0 * math.pi * f / c
+    kc = math.pi / a
+    beta_air = math.sqrt(k0 * k0 - kc * kc)
+    S11 = -cmath.exp(-2j * beta_air * d)
+    vg = c * math.sqrt(1.0 - (fc / f) ** 2)                    # TE10 group velocity
+    return {"frequency": f, "fc": fc, "beta_air": beta_air, "offset_length": d,
+            "S11": S11, "S11_mag": abs(S11), "phase_rad": cmath.phase(S11),
+            "group_delay": 2.0 * d / vg}
 
 
 def helmholtz_cutoff_wavenumbers_2d(mesh, n_modes, bc="neumann", wall="wall",

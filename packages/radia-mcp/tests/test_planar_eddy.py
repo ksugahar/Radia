@@ -68,5 +68,26 @@ def main():
           f"Kelvin Rac/Rdc ({100*abs(err):.2f}%).")
 
 
+def test_skin_slab_driven_surface():
+    # #130: solve_planar_eddy DRIVEN-SURFACE mode (dirichlet_value=A0) reproduces the slab skin-effect
+    # A_z(0)/A0 = 1/cosh(gamma a), gamma=(1+j)/delta -- the complex analytic, to machine precision.
+    import cmath
+    a, b, sigma, f, A0 = 0.03, 0.02, 1.0e7, 60.0, 1.0
+    omega = 2 * math.pi * f
+    delta = math.sqrt(2.0 / (omega * MU0 * sigma))
+    gamma = (1 + 1j) / delta
+    slab = MoveTo(-a, 0).Rectangle(2 * a, b).Face()
+    slab.faces.name = "c"
+    slab.edges.Nearest((-a, b / 2)).name = "driven"
+    slab.edges.Nearest((a, b / 2)).name = "driven"
+    mesh = Mesh(OCCGeometry(slab, dim=2).GenerateMesh(maxh=(2 * a) / 30))
+    A = solve_planar_eddy(mesh, CoefficientFunction(1.0 / MU0), sigma, omega,
+                          dirichlet="driven", dirichlet_value=A0, order=3)
+    atten = complex(A(mesh(0.0, b / 2))) / A0
+    atten_ref = 1.0 / cmath.cosh(gamma * a)
+    assert abs(atten / atten_ref - 1.0) < 1e-3, (atten, atten_ref)
+
+
 if __name__ == "__main__":
     main()
+    test_skin_slab_driven_surface()

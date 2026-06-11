@@ -109,6 +109,10 @@ public:
     // O((size/r)^2) (the validated monopole+near-correction split).  near_factor defaults to a HUGE
     // value => ALL pairs near => all-analytic (matches the dense build_demag(analytic_gram=True) golden);
     // pass near_factor ~= 2 for the fast split.
+    // The CELL outer-quad uses a built-in 4-pt Gauss-Duffy tet rule (64 nodes) -- the order-0 charge is
+    // constant so the inner is the EXACT analytic PhiTet and INT_T PhiTet dx is smooth, integrated to
+    // ~machine precision.  (The old hardcoded equal-weight _bary_tet(3) under-integrated the volume self-
+    // energy by ~6.5% -- golden-invisible because every uniform-M demag golden has div M = 0.)
     RadHACApKChargeGram(std::vector<double> cell_verts,
                         std::vector<double> face_verts,
                         int n_el, double near_factor = 1e30);
@@ -126,13 +130,28 @@ public:
     // the 1/r singularity.  ref_tet_pts[nqt*3]/ref_tet_w[nqt] (weights sum to 1/6) + ref_tri_pts[nqr*2]/
     // ref_tri_w[nqr] (sum to 1/2) are the REFERENCE-element Gauss-Duffy rules (Python-supplied), mapped per
     // host and used for BOTH the monomial-weighted outer quad and the FIXED inner-potential subtraction
-    // table.  No monopole far split (the zero-mean high-order modes have zero monopole) -- ALL pairs
-    // analytic; the HACApK ACA compresses the well-separated low-rank blocks.
+    // table.
+    //
+    // NEAR/FAR adaptive quadrature (build speedup, ACCURACY-PRESERVING): the per-entry cost is the nested
+    // outer x inner quadrature (~O(quad^6) for vol-vol).  The expensive HIGH-quad subtraction is only needed
+    // for NEAR/self pairs (through the 1/r singularity); for a well-separated (FAR) pair the kernel 1/|x-y|
+    // is SMOOTH, so a CHEAP LOW-quad PLAIN double-Gauss (no PhiTet, no subtraction) is already accurate.  If
+    // the optional ref_*_lo LOW-quad rules are supplied (and ho_far_factor < inf), a pair (a,b) with
+    // |c_a-c_b| > ho_far_factor*(size_a+size_b) uses QuadDotFar (the low-quad plain double sum); NEAR/self
+    // pairs keep the full high-quad subtraction.  This is NOT FMM/multipole (the zero-mean high-order modes
+    // have zero monopole, so a monopole far is WRONG); it is just adaptive quadrature order, and the HACApK
+    // ACA still compresses the well-separated low-rank blocks (now from cheap entries).  ho_far_factor
+    // defaults to 1e30 (=> all pairs NEAR => the original all-high-quad behavior, golden-equivalent).
     RadHACApKChargeGram(std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
                         std::vector<int> charge_host, std::vector<int> charge_kind,
                         std::vector<int> charge_expo,
                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
-                        std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w);
+                        std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                        std::vector<double> ref_tet_pts_lo = {}, std::vector<double> ref_tet_w_lo = {},
+                        std::vector<double> ref_tri_pts_lo = {}, std::vector<double> ref_tri_w_lo = {},
+                        double ho_far_factor = 1e30,
+                        std::vector<double> ref_tet_pts_in = {}, std::vector<double> ref_tet_w_in = {},
+                        std::vector<double> ref_tri_pts_in = {}, std::vector<double> ref_tri_w_in = {});
     ~RadHACApKChargeGram() override {}
 
     double GetInteractionMatrixElement(int a, int b) const override;
@@ -213,12 +232,23 @@ private:
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;
     std::vector<int> m_host, m_kind, m_expo;           // [n] host elem, [n] 0=cell/1=face, [n*3] monomial exponents
+    std::vector<int> m_nmono;                          // [n] # co-located charges per (kind,host) group -- QuadDot memo gating (skip groups of 1)
+    long long m_build_id = 0;                          // monotonic per-build id -> the QuadDot thread_local memo owner key (pointer-reuse-safe)
     std::vector<double> m_cellInv;                     // [n_el*9] physical->ref affine inverse per cell (row-major)
     std::vector<double> m_faceGinv;                    // [n_bf*4] 2x2 (a.a) Gram inverse per face (for 2D ref coords)
     std::vector<std::vector<rad_hdiv::Vec3>> m_inP;    // [n] FIXED inner-potential Gauss points per HOST (cell/face)
     std::vector<std::vector<double>>          m_inW;   // [n] inner-potential Gauss weights (sum = host measure)
+    std::vector<std::vector<double>>          m_srcval; // [n] PRECOMPUTED m_src(y_q) at the FIXED m_inP points -- bit-exact hoist of EvalMono out of the PhiAtHO inner loop (value depends only on (src,q))
+    // near/far adaptive quadrature: LOW-quad tables for the cheap FAR plain double-Gauss (empty => disabled)
+    double m_ho_far_factor = 1e30;                     // FAR if |c_a-c_b| > m_ho_far_factor*(size_a+size_b)
+    std::vector<std::vector<rad_hdiv::Vec3>> m_qp_lo;  // [n] LOW-quad outer points (m_a folded into m_qw_lo)
+    std::vector<std::vector<double>>          m_qw_lo; // [n] LOW-quad outer weights (monomial-folded)
+    std::vector<std::vector<rad_hdiv::Vec3>> m_inP_lo; // [n] LOW-quad inner points (plain)
+    std::vector<std::vector<double>>          m_inW_lo;// [n] LOW-quad inner weights (plain, NOT monomial-folded)
+    std::vector<std::vector<double>>          m_srcval_lo; // [n] PRECOMPUTED m_src(y_q) at the FIXED m_inP_lo points (for QuadDotFar)
     double EvalMono(int charge, const double p[3]) const;   // charge's monomial at physical p (host ref-coord map)
-    double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction)
+    double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR)
+    double QuadDotFar(int tgt, int src) const;              // cheap LOW-quad plain double-Gauss (FAR, no subtraction)
 };
 
 #endif // __RAD_HACAPK_HDIV_H

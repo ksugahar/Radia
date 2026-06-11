@@ -15,7 +15,7 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.solve import (park_transform, inverse_park,
-                                           dq_flux_torque, dq_torque)
+                                           dq_flux_torque, dq_torque, dq_torque_components)
 
 
 def test_park_roundtrip():
@@ -57,6 +57,22 @@ def test_reluctance_torque_sign_and_optimum():
     assert abs(best - 45) <= 1                                 # peak reluctance torque at 45 deg
     assert dq_torque(0.0, Ld, Lq, 5.0, 5.0, p) > 0            # same sign -> motoring
     assert dq_torque(0.0, Ld, Lq, 5.0, -5.0, p) < 0          # opposite sign -> reverses
+
+
+def test_torque_components_split():
+    # dq_torque_components splits T into magnet + reluctance; the parts sum to dq_torque, the
+    # magnet part is the pure-q (saliency-free) torque, and the reluctance part carries all the
+    # id dependence (the salient PM design decomposition).
+    p, lam_m, Ld, Lq = 3, 0.08, 3.6e-5, 2.95e-5
+    for (idc, iqc) in ((-4.0, 5.0), (0.0, 6.0), (3.0, 3.0), (-7.0, 0.0)):
+        t_mag, t_rel, t_tot = dq_torque_components(lam_m, Ld, Lq, idc, iqc, p)
+        assert abs(t_tot - dq_torque(lam_m, Ld, Lq, idc, iqc, p)) < 1e-15, (idc, iqc)
+        assert abs(t_mag - 1.5 * p * lam_m * iqc) < 1e-15           # magnet term ~ iq only
+        assert abs(t_rel - 1.5 * p * (Ld - Lq) * idc * iqc) < 1e-15  # reluctance term ~ (Ld-Lq) id iq
+        assert abs(t_mag - dq_torque(lam_m, Ld, Lq, 0.0, iqc, p)) < 1e-15   # magnet == pure-q torque
+    # non-salient PM: the reluctance share is exactly zero at every operating point
+    _, t_rel0, _ = dq_torque_components(0.15, 1e-3, 1e-3, -5.0, 6.0, 4)
+    assert t_rel0 == 0.0
 
 
 def test_ipm_mtpa_runs_into_second_quadrant():

@@ -44,8 +44,42 @@ def lamination_kc(sigma, d):
 
 def classical_eddy_loss_density(Bpk, f, sigma, d):
     """Closed-form classical eddy-current loss density of a lamination [W/m^3]:
-    ``P = pi^2 sigma d^2 f^2 Bpk^2 / 6``."""
+    ``P = pi^2 sigma d^2 f^2 Bpk^2 / 6``.  This is the THIN-lamination limit (d << skin depth);
+    for d ~ delta multiply by :func:`lamination_eddy_skin_factor` (see
+    :func:`classical_eddy_loss_density_skin`)."""
     return math.pi ** 2 * sigma * d ** 2 * f ** 2 * Bpk ** 2 / 6.0
+
+
+def lamination_eddy_skin_factor(d, delta):
+    """Skin-effect correction factor for the classical lamination eddy loss, thickness ``d`` [m]
+    and skin depth ``delta`` [m] (``delta = sqrt(2/(omega mu sigma))``):
+
+        F(xi) = (3/xi) (sinh xi - sin xi)/(cosh xi - cos xi),    xi = d/delta,
+
+    the ratio of the ACTUAL eddy loss (imposed surface flux) to the thin-limit classical value.
+    F -> 1 as xi -> 0 (thin lamination) and F -> 3/xi as xi -> infinity (skin-limited), so the
+    classical formula OVERESTIMATES once d >~ delta (e.g. F(5)=0.61, F(8)=0.37).  This is the
+    standard slab/lamination skin-effect result (Stoll, 1974; Lammeraner & Stafl); validated to
+    < 1.1 % over xi = 1..8 against an independent eddy-current FE solve (stored regression reference)."""
+    xi = d / delta
+    if xi < 1e-4:
+        return 1.0
+    return (3.0 / xi) * (math.sinh(xi) - math.sin(xi)) / (math.cosh(xi) - math.cos(xi))
+
+
+def classical_eddy_loss_density_skin(Bpk, f, sigma, d, mu):
+    """Classical lamination eddy loss density WITH the skin-effect correction [W/m^3]:
+
+        P = (pi^2 sigma d^2 f^2 Bpk^2 / 6) * F(d/delta),   delta = sqrt(2/(omega mu sigma)),
+
+    where ``Bpk`` is the imposed peak SURFACE flux density [T], ``sigma`` [S/m], ``d`` the lamination
+    thickness [m], and ``mu = mu0*mu_r`` [H/m] (the skin depth, hence the correction, depends on mu --
+    the thin-limit term does not).  Reduces to :func:`classical_eddy_loss_density` for d << delta and
+    rolls off as ~1/d at high frequency (flux no longer penetrates).  Validated to < 1.1 % over
+    d/delta = 1..8 against an independent eddy-current FE reference (stored regression reference)."""
+    omega = 2.0 * math.pi * f
+    delta = math.sqrt(2.0 / (omega * mu * sigma))
+    return classical_eddy_loss_density(Bpk, f, sigma, d) * lamination_eddy_skin_factor(d, delta)
 
 
 def steinmetz_loss_density(Bpk, f, k_h, alpha=1.0, beta=2.0):
