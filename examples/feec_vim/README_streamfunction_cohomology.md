@@ -115,6 +115,24 @@ returns `(dict, ok)` so the goldens import it directly. Reuses `src/radia/stream
 (`aca_tsvd`, `pseudo_inverse_solve`) and Radia (`ObjFlmCur`+`Fld`) ground truth — **no new solver
 code**, only new basis-current callbacks on the existing engine.
 
+## Shipped as a panel (examples -> panels)
+
+Stage A/B (the foliated-Clebsch volume designer) is promoted to a Layer-3 panel:
+the **`radia_streamfunction` "Volume 3D" mode** -- a hollow-cylinder conductor
+`.vol` + a target axial `Bz` -> equal-current windable wires + a GMSH wire overlay.
+
+| tier | file |
+|---|---|
+| shipped pipeline | `src/radia/streamfunction_volume.py` (`design_volume_coil`) |
+| headless calc (Stage 2) | `src/radia/panels/calc_streamfunction_volume.py` |
+| PySide6 mode (Stage 3) | `src/radia/radia_streamfunction.py` (`_Volume3DPanel`) |
+| golden lock | `tests/panels/test_streamfunction_volume_golden.py` (+ frozen `.vol` fixture) |
+
+The golden reproduces this example's numbers (n_wires=59, field residual 4.7%,
+two-codebase Biot-Savart `3.4e-10`).  The panel mode covers the **clean regime
+only** (Stage A/B); the F1/F2/F3 frontier walls stay research demos, not panel
+modes, by design.
+
 ## Detailed home
 
 - MCP knowledge: `streamfunction("clebsch_3d")` (and `cohomology` / `fusion` for the surface
