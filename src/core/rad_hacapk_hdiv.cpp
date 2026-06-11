@@ -137,18 +137,28 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
     m_qp.resize(m_n);
     m_qw.resize(m_n);
 
-    // Outer-quad rule on a CELL: tet barycentric sub-points _bary_tet(3) (10 nodes, equal weights,
-    // sum = cell volume).  Matches radia.hdiv_vim._core.analytic_charge_gram nsub_tet=3.
-    double lamT[10][4];
-    int nT = 0;
-    for (int i = 0; i < 3; ++i)
-        for (int j = 0; j < 3 - i; ++j)
-            for (int k = 0; k < 3 - i - j; ++k) {
-                int l = 2 - i - j - k;
-                lamT[nT][0] = (i + 0.25) / 3.0; lamT[nT][1] = (j + 0.25) / 3.0;
-                lamT[nT][2] = (k + 0.25) / 3.0; lamT[nT][3] = (l + 0.25) / 3.0;
-                ++nT;
+    // Outer-quad rule on a CELL: a built-in 4-pt Gauss-Duffy collapsed-cube tet rule (4^3 = 64 nodes; ref-tet
+    // barycentric (lam1,lam2,lam3) flat in ref_tet_pts, weights summing to 1/6 in ref_tet_w).  The order-0
+    // charge is CONSTANT so the inner is the EXACT analytic PhiTet and the cell self-integral INT_T PhiTet dx
+    // is smooth -- 4 pts/dim integrates it to ~1e-4.  (The old hardcoded equal-weight _bary_tet(3) rule
+    // under-integrated the volume self-energy by ~6.5% -- invisible to every uniform-M demag golden because
+    // div M = 0 there.  This is the same rule as radia.hdiv_vim._vim._tet_ref(4).)
+    static const double GL4x[4] = {0.06943184420297371, 0.33000947820757187,
+                                   0.66999052179242813, 0.93056815579702629};   // 4-pt Gauss-Legendre on [0,1]
+    static const double GL4w[4] = {0.17392742256872693, 0.32607257743127307,
+                                   0.32607257743127307, 0.17392742256872693};
+    std::vector<double> ref_tet_pts, ref_tet_w;
+    ref_tet_pts.reserve(64 * 3); ref_tet_w.reserve(64);
+    for (int ia = 0; ia < 4; ++ia)
+        for (int ib = 0; ib < 4; ++ib)
+            for (int ic = 0; ic < 4; ++ic) {
+                const double aa = GL4x[ia], bb = GL4x[ib], cc = GL4x[ic];
+                ref_tet_pts.push_back(aa);
+                ref_tet_pts.push_back(bb * (1.0 - aa));
+                ref_tet_pts.push_back(cc * (1.0 - aa) * (1.0 - bb));
+                ref_tet_w.push_back(GL4w[ia] * GL4w[ib] * GL4w[ic] * (1.0 - aa) * (1.0 - aa) * (1.0 - bb));
             }
+    const int nqt = (int)ref_tet_w.size();   // 64
     // Outer-quad rule on a FACE: Dunavant degree-5 symmetric triangle rule (7 nodes; weights sum to 1).
     static const double DUN[7][4] = {
         {1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0, 0.225},
@@ -170,12 +180,16 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
         double cr[3] = {e2[1]*e3[2]-e2[2]*e3[1], e2[2]*e3[0]-e2[0]*e3[2], e2[0]*e3[1]-e2[1]*e3[0]};
         double vol = std::fabs(e1[0]*cr[0] + e1[1]*cr[1] + e1[2]*cr[2]) / 6.0;
         m_meas[a] = vol; m_size[a] = std::cbrt(vol);
-        m_qp[a].resize(nT);
-        m_qw[a].assign(nT, vol / nT);
-        for (int q = 0; q < nT; ++q) {
-            rad_hdiv::Vec3 P = {0, 0, 0};
-            for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) P[k] += lamT[q][i] * V[3*i+k];
+        m_qp[a].resize(nqt);
+        m_qw[a].resize(nqt);
+        const double absJ = 6.0 * vol;     // |J| = 6*vol; ref_tet_w sums to 1/6 -> phys weights sum to vol
+        for (int q = 0; q < nqt; ++q) {
+            const double l1 = ref_tet_pts[3*q], l2 = ref_tet_pts[3*q+1], l3 = ref_tet_pts[3*q+2];
+            rad_hdiv::Vec3 P;
+            for (int k = 0; k < 3; ++k)
+                P[k] = V[k] + l1*(V[3+k]-V[k]) + l2*(V[6+k]-V[k]) + l3*(V[9+k]-V[k]);
             m_qp[a][q] = P;
+            m_qw[a][q] = ref_tet_w[q] * absJ;
         }
     }
     for (int b = 0; b < n_bf; ++b) {
