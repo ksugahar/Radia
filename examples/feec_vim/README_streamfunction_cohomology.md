@@ -47,6 +47,7 @@ identity, the unified Jacobian, gauge null space) before any FEM is run.
 | # | script | does | validated against | numbers |
 |---|---|---|---|---|
 | 1 | `bidirectional_map_2d.py` | Tampere potential-coordinate map `(A,φ)`; forward geometry→potentials, inverse potentials→geometry (`x,y` harmonic in `(A,φ)` at `μ=1`) | **ANALYTIC** `w=ζ²` conjugate pair | forward `A,φ` `1e-15`; orthogonality `grad A·grad φ = 2.6e-14`; **Jacobian `det = |B||H|` to `1.6e-16`**; inverse `1.6e-8`; round-trip `6e-8` |
+| 1b | `bidirectional_map_axisym.py` | **axisymmetric** (helicity-0) map `(ψ=rA_φ, Φ)`; forward GS + axisym-Laplace, inverse pointwise Newton. **Finding**: the `1/r` Stokes metric breaks conformality → map is only *r-conformal* (`\|∇ψ\|=r\|∇Φ\|`), so the inverse is **not** a plain harmonic image solve (`z(ψ,Φ)` is cubic, non-harmonic) | **ANALYTIC** `l=2` zonal gradient field `ψ=r²z, Φ=z²−r²/2` | forward `ψ,Φ` `1e-15`; axisym CR conj. `1.2e-14`; **Jacobian `det = r\|∇Φ\|² = r\|B\|²` to `9.8e-15`**; round-trip `7e-16` |
 | 2 | `vector_t_inverse.py` | `J = curl T` (HCurl) **convex** inverse via ACA+TSVD | self-consistency + **Radia** recompute | fit `6e-16`; `div J = 5.7e-16` (curl T exact); **gauge `T=grad χ → field 2.2e-20`** (TSVD truncates; `k_aca=9 ≤ M ≪ ndof=3360`) |
 | 3 | `foliated_clebsch_solenoid.py` | foliated `J=grad(λ)×grad(μ)`, `μ=r` fixed → linear in `λ` → existing ACA+TSVD **unchanged** | **ANALYTIC** uniform `Bz` + weak div | uniform `Bz` to `3.3e-5`; independent Biot-Savart recompute matches; weak `div J = 8.5e-6` |
 
