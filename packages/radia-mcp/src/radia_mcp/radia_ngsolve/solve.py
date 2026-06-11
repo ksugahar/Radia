@@ -1,11 +1,11 @@
 """Reusable NGSolve magnetostatic A-formulation solver -- the validated,
 high-mu-safe foundation that the force / energy extractors (``force.py``) and the
-COMSOL cross-validation tests build on.
+independent cross-validation tests build on.
 
 #25 safe: put high-permeability bodies DIRECTLY in the surrounding air (no nested
 "shell" material) so the interior B is correct; see the ``force_validation`` MCP
-tool. Cross-validated against COMSOL (sphere field 0.11 %, solenoid B <0.35 %,
-inductance 0.01 %, ...).
+tool. Cross-validated against an independent reference solve (sphere field
+0.11 %, solenoid B <0.35 %, inductance 0.01 %, ...).
 """
 import cmath
 import math
@@ -13,7 +13,7 @@ import math
 from ngsolve import (HCurl, H1, Periodic, NumberSpace, FESpace, BilinearForm,
                      LinearForm, GridFunction, CoefficientFunction, InnerProduct,
                      curl, grad, dx, Integrate, Conj, Variation, Preconditioner,
-                     x, y, sqrt)
+                     x, y, sqrt, BND)
 
 MU0 = 4.0e-7 * math.pi
 NU0 = 1.0 / MU0
@@ -231,6 +231,894 @@ def stranded_source(mesh, currents_by_region):
     return CoefficientFunction(comp)
 
 
+def coil_flux_linkage_2d(A, mesh, pos_region, neg_region, n_turns, depth=1.0):
+    """2D flux linkage [Wb] of an ``n_turns`` search coil whose 'go' side lies in
+    ``pos_region`` and 'return' side in ``neg_region`` (named mesh materials), from
+    the planar A_z solution ``A``:
+
+        lambda = n_turns * depth * ( <A_z>_pos - <A_z>_neg ),
+
+    ``<A_z>`` the AREA-AVERAGE of A_z over each coil side -- exactly FEMM's circuit
+    "flux linkage" (``mo_getcircuitproperties``) for an N-turn coil. The motor
+    back-EMF follows for rotation at omega: ``e(theta) = -d(lambda)/dt =
+    -omega * d(lambda)/d(theta)`` (read lambda(theta) over a rotor-angle sweep and
+    differentiate). Validated on a 2-pole PMSM against an independent reference
+    (lambda(theta) sinusoid, amplitude + shape)."""
+    def mean_over(reg):
+        dom = dx(definedon=mesh.Materials(reg))
+        area = Integrate(CoefficientFunction(1.0) * dom, mesh)
+        return Integrate(A * dom, mesh) / area
+    return n_turns * depth * (mean_over(pos_region) - mean_over(neg_region))
+
+
+def inductance_2d(A, mesh, pos_region, neg_region, n_turns, current, depth=1.0):
+    """2D coil INDUCTANCE [H] from a current-driven A_z solution: L = lambda/current,
+    lambda = :func:`coil_flux_linkage_2d`.  For synchronous-machine Ld/Lq, drive the
+    stator coil along the rotor d- or q-axis and re-solve; the saliency gives Ld != Lq.
+    For a SATURATED machine use the frozen-permeability dq method (standard FE technique):
+    converge a nonlinear solve at the operating point, FREEZE nu(|B|) to a fixed CF, then
+    take these linear dq-perturbation inductances (superposition only holds with frozen nu).
+
+    UNIT caveat (same as coil_flux_linkage_2d): a mm-meshed solve has A_z = 1e3*A_phys,
+    so multiply the result by 1e-6 for henries of a 1 mm stack (1e-3 m depth, A /1e3)."""
+    return coil_flux_linkage_2d(A, mesh, pos_region, neg_region, n_turns, depth) / current
+
+
+def saturated_secant_inductance(mesh, nu_of_B, Jz, pos_region, neg_region, n_turns,
+                                current, depth=1.0, **solve_kw):
+    """SECANT (apparent) winding inductance L = lambda(I)/I at a SATURATED operating
+    current: a nonlinear ``solve_planar_magnetostatic_nonlinear`` at the given current,
+    then ``coil_flux_linkage_2d / current``. As the iron saturates with current, L falls
+    below its unsaturated (linear) value -- the Ld(i) saturation knee that underlies
+    saturated dq / MTPA maps. ``nu_of_B`` is the callable reluctivity (smooth bounded so
+    Picard converges); ``**solve_kw`` -> relax/max_iter/tol/order of the nonlinear solve.
+    Validated examples/comsol_class/saturating_inductance.py."""
+    A = solve_planar_magnetostatic_nonlinear(mesh, nu_of_B, Jz=Jz, **solve_kw)
+    return coil_flux_linkage_2d(A, mesh, pos_region, neg_region, n_turns, depth) / current
+
+
+def incremental_inductance(lam_plus, lam_minus, dI):
+    """Differential (INCREMENTAL) inductance L_inc = dlambda/dI by central finite difference,
+    ``(lam_plus - lam_minus)/(2 dI)``, from nonlinear flux linkages at I0 +/- dI. For a
+    SATURATING (concave) lambda(I), L_inc < L_sec = lambda/I and both fall as the iron
+    saturates -- the small-signal / control inductance (vs the apparent
+    :func:`saturated_secant_inductance`). NB the PROPER frozen-permeability L_inc uses the
+    tangent differential-reluctivity TENSOR dH/dB; this FD is the ground truth."""
+    return (lam_plus - lam_minus) / (2.0 * dI)
+
+
+def incremental_inductance_matrix(flux_linkages, currents, di):
+    """INCREMENTAL (small-signal) inductance MATRIX L_jk = d lambda_j / d i_k of a multi-winding
+    (or dq) machine, by CENTRAL finite difference of the nonlinear flux-linkage map -- the
+    multi-port generalisation of :func:`incremental_inductance`.
+
+    ``flux_linkages`` is a callable: current-vector (list) -> list of flux linkages
+    ``[lambda_0, lambda_1, ...]`` (e.g. one nonlinear FE solve per call). ``currents`` is the
+    operating-point vector; ``di`` the perturbation. Returns the n x n matrix (list of lists),
+    column k = d(all lambda)/d i_k from +-di on i_k (so n calls of 2 solves each).
+
+    The matrix is SYMMETRIC -- L_jk = L_kj (RECIPROCITY, from the magnetic co-energy Hessian
+    d^2 W'/(di_j di_k)); the OFF-DIAGONALS are the cross-(saturation) inductances (e.g. L_dq,
+    which is ZERO without saturation but grows as a shared iron path saturates). The frozen-
+    permeability APPARENT/secant inductance (:func:`saturated_secant_inductance`, the freeze of
+    nu at the operating |B|) is LARGER than this incremental value in saturation -- use THIS
+    tangent matrix for small-signal / control / dq-current-loop design. Validated
+    examples/comsol_class/cross_saturation_tensor.py (reciprocity + secant-vs-incremental)."""
+    n = len(currents)
+    L = [[0.0] * n for _ in range(n)]
+    for k in range(n):
+        ip, im = list(currents), list(currents)
+        ip[k] += di
+        im[k] -= di
+        lam_p, lam_m = flux_linkages(ip), flux_linkages(im)
+        for j in range(n):
+            L[j][k] = (lam_p[j] - lam_m[j]) / (2.0 * di)
+    return L
+
+
+def magnetic_coenergy(currents, fluxes):
+    """Magnetic CO-ENERGY W'(I) = int_0^I lambda dI' (cumulative trapezoidal) from a sampled
+    lambda(I) curve (``currents`` ascending from ~0). Returns the cumulative co-energy at each
+    sample. The stored energy is W = lambda*I - W'; for a SATURATING (concave) lambda(I),
+    W' > W. Co-energy gives the force F = dW'/dx at constant current (the energy method)."""
+    cur = [0.0] + list(currents)
+    flx = [0.0] + list(fluxes)
+    out, cum = [], 0.0
+    for i in range(1, len(cur)):
+        cum += 0.5 * (flx[i] + flx[i - 1]) * (cur[i] - cur[i - 1])
+        out.append(cum)
+    return out
+
+
+def pm_machine_constant(lam_plus, lam_minus, dtheta):
+    """The PM-machine CONSTANT from the PM flux-linkage derivative (central finite
+    difference), ``(lam_plus - lam_minus)/(2 dtheta)`` with ``dtheta`` in radians. By energy
+    conservation the back-EMF constant equals the torque constant:
+
+        Ke = dlambda_m/dtheta [Wb/rad = V s/rad]  ==  Kt = T/I [Nm/A]   (Kt = Ke),
+
+    because a current I in a winding with PM flux linkage lambda_m(theta) feels the co-energy
+    torque T = I dlambda_m/dtheta. Compute Ke here from the no-load back-EMF (PM-only coil
+    flux linkage at theta +/- dtheta); the FE torque-per-amp Kt = (T(I) - T(0))/I (eggshell
+    torque, current minus cogging) matches it. Validated examples/comsol_class/kt_ke.py."""
+    return (lam_plus - lam_minus) / (2.0 * dtheta)
+
+
+def frozen_reluctivity(A, nu_of_B):
+    """FROZEN-PERMEABILITY reluctivity: snapshot nu(|B|) at the field of a CONVERGED
+    nonlinear solution ``A`` (planar A_z), returning a FIXED reluctivity CF.
+
+    With nu frozen at the operating point the problem becomes LINEAR, so SUPERPOSITION is
+    restored -- the basis of saturated-machine Ld/Lq(id,iq) maps and PM/armature flux
+    decomposition. Pass the result as the ``nu`` of linear :func:`solve_planar_magnetostatic`
+    solves for each source separately; their flux linkages then sum to the nonlinear total.
+
+    ``A`` : converged H1 A_z from :func:`solve_planar_magnetostatic_nonlinear`.
+    ``nu_of_B`` : the SAME callable(B_cf) -> nu_cf used for that nonlinear solve.
+
+    Returns ``nu_of_B(curl A)`` as a DIRECT CF (A is fixed, so it is frozen). Two lessons:
+    use the direct CF -- do NOT L2-project a clamped/discontinuous nu (projection smears it
+    and the freeze stops reproducing the operating point); and the freeze only reproduces a
+    CONVERGED nonlinear solve, so a smooth bounded nu(B) (Picard converges) is required --
+    re-solving one linear step with the frozen nu and comparing flux linkage is the
+    built-in convergence + correctness check. Validated to 0.5 %
+    (examples/comsol_class/frozen_permeability.py)."""
+    B = CoefficientFunction((grad(A)[1], -grad(A)[0]))
+    return nu_of_B(B)
+
+
+def dq_torque(lambda_m, Ld, Lq, id_, iq, pole_pairs):
+    """Synchronous-machine dq electromagnetic torque [N.m] (motor convention):
+
+        T = (3/2) p [ lambda_m * iq + (Ld - Lq) * id * iq ].
+
+    First term = magnet/alignment torque; second = reluctance torque from the
+    saliency (Ld != Lq). ``lambda_m`` is the PM flux linkage (e.g. from
+    :func:`coil_flux_linkage_2d` on a PM-only solve), Ld/Lq from
+    :func:`inductance_2d` along the rotor d-/q-axis (use the frozen-permeability
+    values for a saturated machine). ``p`` = pole pairs.
+
+    Force-anchored against an independent salient-rotor FEA: the (Ld,Lq) extracted by
+    projecting the FE phase flux linkages through :func:`park_transform` reproduce the
+    MEAN Maxwell-stress-tensor torque over a rotor period; the instantaneous stress-tensor
+    torque RIPPLES about this value at the pole harmonic (6*theta_e), and the single-instant
+    fundamental :func:`dq_flux_torque` matches exactly (tests/test_dq_torque.py)."""
+    return 1.5 * pole_pairs * (lambda_m * iq + (Ld - Lq) * id_ * iq)
+
+
+def dq_torque_components(lambda_m, Ld, Lq, id_, iq, pole_pairs):
+    """Split the dq electromagnetic torque into its magnet and reluctance parts [N.m]:
+
+        T_magnet     = (3/2) p  lambda_m iq             (alignment torque from the PM flux)
+        T_reluctance = (3/2) p (Ld - Lq) id iq          (saliency torque, 0 if Ld == Lq)
+        T_total      = T_magnet + T_reluctance  ==  :func:`dq_torque`.
+
+    The standard interior-/salient-PM design decomposition: how much of a salient PM machine's
+    torque comes from the magnet vs from the rotor saliency. At the MTPA operating point
+    (:func:`mtpa_operating_point`) both terms are positive and the reluctance share grows with
+    the saliency |Ld - Lq| and the current. Returns ``(T_magnet, T_reluctance, T_total)``.
+
+    Force-anchored: on a salient-pole PM FEA the magnet linkage lambda_m (open-circuit Park-d) and
+    the saliency Ld/Lq (current injection) reconstruct, through this split, the Maxwell-stress-tensor
+    torque whose argmax over the current angle lands on :func:`mtpa_operating_point` (the magnet term
+    alone gives the pure-q torque, the reluctance term the angle-dependent gain)."""
+    k = 1.5 * pole_pairs
+    t_mag = k * lambda_m * iq
+    t_rel = k * (Ld - Lq) * id_ * iq
+    return t_mag, t_rel, t_mag + t_rel
+
+
+def mtpa_operating_point(lambda_m, Ld, Lq, current, pole_pairs):
+    """MAXIMUM-TORQUE-PER-AMPERE operating point of a salient PM synchronous
+    machine at stator current magnitude ``current``.
+
+    Returns ``(gamma, id, iq, torque)`` where ``gamma`` is the current angle from
+    the q-axis [rad] (id = -I sin gamma, iq = I cos gamma) and ``torque`` =
+    :func:`dq_torque`. MTPA maximises T at fixed |I|; d/dgamma T = 0 gives
+
+        lambda_m sin g + (Ld - Lq) I cos 2g = 0,
+
+    a quadratic in s = sin g:  2(Ld-Lq) I s^2 - lambda_m s - (Ld-Lq) I = 0. The
+    T-maximising real root in [-1, 1] is selected, so this is robust to BOTH
+    saliency signs (IPM Ld<Lq -> gamma>0; synchronous reluctance lambda_m=0,
+    Ld>Lq -> gamma=-45 deg) and to the non-salient limit (Ld=Lq -> gamma=0, pure
+    q-axis). Validated against a numerical argmax (tests/test_motor_mtpa.py)."""
+    if current == 0:
+        return (0.0, 0.0, 0.0, 0.0)
+    cands = [0.0]                                   # pure q-axis is always a candidate
+    dL = Ld - Lq
+    if abs(dL) > 1e-300:
+        a, b, c = 2.0 * dL * current, -lambda_m, -dL * current
+        disc = b * b - 4.0 * a * c
+        if disc >= 0.0:
+            root = math.sqrt(disc)
+            for s in ((-b + root) / (2.0 * a), (-b - root) / (2.0 * a)):
+                if -1.0 <= s <= 1.0:
+                    cands.append(math.asin(s))
+    best = None
+    for g in cands + [-g for g in cands]:
+        id_, iq = -current * math.sin(g), current * math.cos(g)
+        T = dq_torque(lambda_m, Ld, Lq, id_, iq, pole_pairs)
+        if best is None or T > best[3]:
+            best = (g, id_, iq, T)
+    return best
+
+
+def base_speed_electrical(lambda_m, Ld, Lq, Imax, Vmax, pole_pairs):
+    """Electrical speed [rad/s] at which the MTPA-at-Imax operating point first
+    reaches the inverter voltage limit ``Vmax`` (stator R neglected):
+
+        omega_base = Vmax / |(Ld*id_mtpa + lambda_m, Lq*iq_mtpa)|.
+
+    Below it the machine runs at constant torque (MTPA, current-limited); above
+    it field weakening begins. (id,iq)_mtpa come from :func:`mtpa_operating_point`
+    at |I| = Imax."""
+    _, idm, iqm, _ = mtpa_operating_point(lambda_m, Ld, Lq, Imax, pole_pairs)
+    return Vmax / math.hypot(Ld * idm + lambda_m, Lq * iqm)
+
+
+def field_weakening_operating_point(lambda_m, Ld, Lq, Imax, Vmax, omega_e, pole_pairs):
+    """Torque-maximising dq operating point of a salient PM synchronous machine at
+    electrical speed ``omega_e`` [rad/s], subject to BOTH the inverter limits
+
+        current:  id^2 + iq^2 <= Imax^2
+        voltage:  (Ld*id + lambda_m)^2 + (Lq*iq)^2 <= (Vmax/omega_e)^2     (R neglected)
+
+    Returns ``(id, iq, torque, region)`` with ``region`` one of:
+
+      * ``"MTPA"`` — below base speed; the :func:`mtpa_operating_point` at Imax is
+        still voltage-feasible (constant-torque region).
+      * ``"FW"``   — field weakening on the current circle: the optimum is the
+        current-circle ∩ voltage-ellipse corner (constant ~power; torque falls).
+      * ``"MTPV"`` — deep field weakening: the max-torque-per-voltage tangent point
+        lies inside the current circle (only when characteristic current
+        Ich = lambda_m/Ld < Imax). The optimum leaves the current circle.
+
+    Returns ``None`` when no point satisfies both limits — i.e. ``omega_e`` exceeds
+    the machine's maximum speed (a finite max speed exists when Ich >= Imax).
+
+    The optimum always lies on the feasible-region boundary, so it is the best of
+    three closed-form candidates (MTPA point, current∩voltage corner, MTPV tangent).
+    The MTPV point uses the change of variables X = Ld*id + lambda_m, Y = Lq*iq,
+    which turns the voltage ellipse into the circle X^2+Y^2=(Vmax/omega_e)^2 and the
+    torque into Y*(lambda_m*Lq + (Ld-Lq)*X); maximising on the circle gives a
+    quadratic in cos(theta). Continues :func:`mtpa_operating_point` into the
+    constant-power / high-speed regions (drive operating-region / efficiency-map
+    foundation). Validated to 0.000 % against an independent numeric constrained
+    argmax across all three regions (tests/test_field_weakening.py)."""
+    Vlim = Vmax / omega_e
+
+    def _volt_ok(id_, iq):
+        return (Ld * id_ + lambda_m) ** 2 + (Lq * iq) ** 2 <= Vlim * Vlim * (1 + 1e-6)
+
+    cand = []
+    # 1) MTPA at Imax (constant-torque region) — valid only if voltage-feasible
+    _, idm, iqm, Tm = mtpa_operating_point(lambda_m, Ld, Lq, Imax, pole_pairs)
+    if _volt_ok(idm, iqm):
+        cand.append((idm, iqm, Tm, "MTPA"))
+
+    # 2) current circle ∩ voltage ellipse (substitute iq^2 = Imax^2 - id^2):
+    #    (Ld^2-Lq^2) id^2 + 2 Ld lambda_m id + (lambda_m^2 + Lq^2 Imax^2 - Vlim^2) = 0
+    A = Ld * Ld - Lq * Lq
+    B = 2.0 * Ld * lambda_m
+    C = lambda_m * lambda_m + Lq * Lq * Imax * Imax - Vlim * Vlim
+    ids = []
+    if abs(A) < 1e-300:
+        if abs(B) > 1e-300:
+            ids = [-C / B]
+    else:
+        disc = B * B - 4.0 * A * C
+        if disc >= 0.0:
+            r = math.sqrt(disc)
+            ids = [(-B + r) / (2.0 * A), (-B - r) / (2.0 * A)]
+    for id_ in ids:
+        s = Imax * Imax - id_ * id_
+        if s < -1e-12:
+            continue
+        iq = math.sqrt(max(0.0, s))           # motoring branch iq >= 0
+        cand.append((id_, iq, dq_torque(lambda_m, Ld, Lq, id_, iq, pole_pairs), "FW"))
+
+    # 3) MTPV tangent point on the voltage ellipse (X=Ld id+lambda_m, Y=Lq iq):
+    #    maximise Y*(lambda_m Lq + (Ld-Lq) X) on X^2+Y^2=Vlim^2
+    a, b = Ld - Lq, lambda_m * Lq
+    mtpv = None
+    if abs(a) < 1e-300:                        # non-salient: max at X=0 (id=-lambda_m/Ld)
+        mtpv = (-lambda_m / Ld, Vlim / Lq)
+    else:
+        aa, bb, cc = 2.0 * a * Vlim, b, -a * Vlim   # 2 a Vlim c^2 + b c - a Vlim = 0
+        disc = bb * bb - 4.0 * aa * cc
+        if disc >= 0.0:
+            r = math.sqrt(disc)
+            best = None
+            for cth in ((-bb + r) / (2.0 * aa), (-bb - r) / (2.0 * aa)):
+                if abs(cth) > 1.0:
+                    continue
+                sth = math.sqrt(max(0.0, 1.0 - cth * cth))
+                for Y in (Vlim * sth, -Vlim * sth):
+                    idv, iqv = (Vlim * cth - lambda_m) / Ld, Y / Lq
+                    T = dq_torque(lambda_m, Ld, Lq, idv, iqv, pole_pairs)
+                    if best is None or T > best[2]:
+                        best = (idv, iqv, T)
+            if best is not None:
+                mtpv = (best[0], best[1])
+    if mtpv is not None and mtpv[0] ** 2 + mtpv[1] ** 2 <= Imax * Imax * (1 + 1e-6):
+        cand.append((mtpv[0], mtpv[1],
+                     dq_torque(lambda_m, Ld, Lq, mtpv[0], mtpv[1], pole_pairs), "MTPV"))
+
+    feasible = [c for c in cand if c[1] >= -1e-9
+                and c[0] ** 2 + c[1] ** 2 <= Imax * Imax * (1 + 1e-6)
+                and _volt_ok(c[0], c[1])]
+    return max(feasible, key=lambda c: c[2]) if feasible else None
+
+
+def induction_machine_thevenin(V1, R1, X1, Xm):
+    """Thevenin source the rotor branch sees in a 3-phase induction-machine single-cage
+    equivalent circuit (the shunt magnetizing reactance ``Xm`` moved to the source):
+
+        Vth = V1 * Xm / sqrt(R1^2 + (X1+Xm)^2),
+        Zth = Rth + j Xth = (j Xm)(R1 + j X1) / (R1 + j(X1+Xm)).
+
+    Returns ``(Vth, Rth, Xth)``. ``V1`` = stator phase voltage, ``R1``/``X1`` = stator
+    resistance/leakage reactance, ``Xm`` = magnetizing reactance [all SI]. The reduction
+    that makes the torque-slip curve closed-form (:func:`induction_machine_torque`)."""
+    Vth = V1 * Xm / math.hypot(R1, X1 + Xm)
+    Zth = (complex(0.0, Xm) * complex(R1, X1)) / complex(R1, X1 + Xm)
+    return Vth, Zth.real, Zth.imag
+
+
+def induction_machine_torque(V1, R1, X1, R2, X2, Xm, omega_s, slip):
+    """Air-gap electromagnetic torque [N.m] of a 3-phase induction machine at ``slip``
+    from the single-cage equivalent circuit (Thevenin form):
+
+        T(s) = (3/omega_s) * Vth^2 * (R2/s) / [ (Rth + R2/s)^2 + (Xth + X2)^2 ],
+
+    ``omega_s`` = SYNCHRONOUS MECHANICAL speed [rad/s] (= 2 pi f / pole_pairs), ``R2``/``X2``
+    = rotor resistance/leakage referred to the stator. T>0 motoring (0<s<1), peaks at the
+    breakdown slip (:func:`induction_machine_breakdown`), -> 0 as s -> 0 (synchronism) and
+    is the starting torque at s=1. The induction-machine analog of the PM dq torque
+    :func:`dq_torque`. Validated against a numeric slip sweep (tests/test_induction_machine.py)."""
+    Vth, Rth, Xth = induction_machine_thevenin(V1, R1, X1, Xm)
+    r2s = R2 / slip
+    return (3.0 / omega_s) * Vth * Vth * r2s / ((Rth + r2s) ** 2 + (Xth + X2) ** 2)
+
+
+def induction_machine_breakdown(V1, R1, X1, R2, X2, Xm, omega_s):
+    """Breakdown (pull-out) point of an induction machine -- the maximum of
+    :func:`induction_machine_torque` over slip:
+
+        s_max = R2 / sqrt(Rth^2 + (Xth + X2)^2),
+        T_max = 3 Vth^2 / ( 2 omega_s [ Rth + sqrt(Rth^2 + (Xth + X2)^2) ] ).
+
+    Returns ``(s_max, T_max)``. The classic INVARIANT: T_max is INDEPENDENT of the rotor
+    resistance R2 -- only the breakdown SLIP scales with R2 (s_max ∝ R2), which is how
+    rotor resistance (wound-rotor / deep-bar) shifts peak torque toward standstill for
+    starting without changing its height. Closed form == numeric argmax (validated)."""
+    Vth, Rth, Xth = induction_machine_thevenin(V1, R1, X1, Xm)
+    root = math.hypot(Rth, Xth + X2)
+    return R2 / root, 3.0 * Vth * Vth / (2.0 * omega_s * (Rth + root))
+
+
+def synchronous_power_angle_torque(V, E, Xd, Xq, omega_e, pole_pairs, delta):
+    """Electromagnetic torque [N.m] of a SALIENT synchronous machine vs the LOAD ANGLE
+    ``delta`` (the angle between the terminal voltage V and the excitation EMF E) -- the
+    grid/voltage-frame characteristic (vs the current-frame :func:`dq_torque`/MTPA):
+
+        T(d) = (3 p/omega_e) [ V E/Xd sin d  +  (V^2/2)(1/Xq - 1/Xd) sin 2d ].
+
+    First term = FIELD/excitation torque (~ sin d); second = RELUCTANCE torque (~ sin 2d) from
+    the saliency Xd != Xq. ``V``/``E`` per-phase RMS, ``Xd``/``Xq`` synchronous reactances,
+    ``omega_e`` electrical speed [rad/s], ``p`` pole pairs. For a PM machine E = omega_e*lambda_m.
+    Generating for d>0, motoring for d<0 (mirror)."""
+    field = V * E / Xd * math.sin(delta)
+    rel = 0.5 * V * V * (1.0 / Xq - 1.0 / Xd) * math.sin(2.0 * delta)
+    return (3.0 * pole_pairs / omega_e) * (field + rel)
+
+
+def synchronous_pullout(V, E, Xd, Xq, omega_e, pole_pairs):
+    """Pull-out (steady-state stability limit) of a salient synchronous machine -- the maximum
+    of :func:`synchronous_power_angle_torque` over the load angle. dT/dd=0 gives
+    ``(V E/Xd) cos d + V^2(1/Xq-1/Xd) cos 2d = 0``, a quadratic in cos d (cos 2d = 2cos^2 d - 1).
+
+    Returns ``(delta_max, T_max)`` [rad, N.m]. LIMITS: NON-salient (Xd=Xq) -> delta_max = 90 deg
+    (classic round-rotor pull-out at the quadrature point); RELUCTANCE-only (E=0) -> delta_max =
+    45 deg; salient field machine -> 45 < delta_max < 90 deg (the reluctance term advances the
+    peak). Closed form == numeric argmax (validated)."""
+    sal = V * V * (1.0 / Xq - 1.0 / Xd)
+    B = V * E / Xd
+    if abs(sal) < 1e-300:                       # non-salient: cos d = 0 -> 90 deg
+        d = math.pi / 2.0
+        return d, synchronous_power_angle_torque(V, E, Xd, Xq, omega_e, pole_pairs, d)
+    A, C = 2.0 * sal, -sal
+    disc = B * B - 4.0 * A * C
+    best = None
+    if disc >= 0.0:
+        root = math.sqrt(disc)
+        for c in ((-B + root) / (2.0 * A), (-B - root) / (2.0 * A)):
+            if -1.0 <= c <= 1.0:
+                d = math.acos(c)
+                T = synchronous_power_angle_torque(V, E, Xd, Xq, omega_e, pole_pairs, d)
+                if best is None or T > best[1]:
+                    best = (d, T)
+    return best
+
+
+def dq_voltages(R, Ld, Lq, lambda_m, id_, iq, omega_e):
+    """Steady-state dq terminal voltages of a PM synchronous machine (per-phase, motor
+    convention):
+
+        v_d = R*id - omega_e*lambda_q ,   v_q = R*iq + omega_e*lambda_d ,
+        lambda_d = Ld*id + lambda_m ,     lambda_q = Lq*iq.
+
+    ``omega_e`` electrical speed [rad/s], ``R`` per-phase resistance. Returns ``(vd, vq)``;
+    the terminal voltage magnitude is hypot(vd, vq). The voltage side of the dq model that the
+    field-weakening limit (:func:`field_weakening_operating_point`) constrains."""
+    lam_d = Ld * id_ + lambda_m
+    lam_q = Lq * iq
+    return R * id_ - omega_e * lam_q, R * iq + omega_e * lam_d
+
+
+def dq_operating_point(R, Ld, Lq, lambda_m, id_, iq, omega_e, pole_pairs):
+    """Full dq steady-state OPERATING POINT of a PM synchronous machine at (id, iq, omega_e):
+    the terminal voltage, currents, power split, power factor and efficiency. Where MTPA
+    (:func:`mtpa_operating_point`) / field weakening choose the currents, this EVALUATES the
+    terminal quantities the inverter sees there. Returns a dict:
+
+        vd, vq, Vmag, Imag, torque, P_in, P_em, P_cu, power_factor, efficiency, omega_mech.
+
+    P_in = (3/2)(vd id + vq iq) (electrical input), P_em = (3/2)omega_e(lambda_d iq -
+    lambda_q id) = torque*omega_mech (air-gap power), P_cu = (3/2)R|I|^2 (copper loss);
+    P_in = P_cu + P_em exactly, and the torque matches :func:`dq_torque`. power_factor =
+    P_in/((3/2)|V||I|); efficiency = P_em/P_in (motoring; copper loss only). The terminal
+    (V, I, P, PF) layer of the dq machine model -- inverter/drive sizing."""
+    vd, vq = dq_voltages(R, Ld, Lq, lambda_m, id_, iq, omega_e)
+    lam_d, lam_q = Ld * id_ + lambda_m, Lq * iq
+    Vmag, Imag = math.hypot(vd, vq), math.hypot(id_, iq)
+    P_in = 1.5 * (vd * id_ + vq * iq)
+    P_em = 1.5 * omega_e * (lam_d * iq - lam_q * id_)
+    P_cu = 1.5 * R * Imag * Imag
+    T = dq_torque(lambda_m, Ld, Lq, id_, iq, pole_pairs)
+    denom = 1.5 * Vmag * Imag
+    return {
+        "vd": vd, "vq": vq, "Vmag": Vmag, "Imag": Imag, "torque": T,
+        "P_in": P_in, "P_em": P_em, "P_cu": P_cu,
+        "power_factor": (P_in / denom) if denom > 0 else 0.0,
+        "efficiency": (P_em / P_in) if P_in > 0 else float("nan"),
+        "omega_mech": omega_e / pole_pairs,
+    }
+
+
+def characteristic_current(lambda_m, Ld):
+    """Characteristic current of a PM machine, Ich = lambda_m/Ld [A]. The HIGH-SPEED steady
+    3-phase short-circuit current, and the d-axis current that exactly cancels the magnet flux
+    (lambda_d = 0). The wide-CPSR / 'infinite max speed' design target is Ich = Imax
+    (:func:`field_weakening_operating_point`); Ich < Imax enables the MTPV region. Also the
+    worst-case DEMAGNETISING current to check against the magnet knee."""
+    return lambda_m / Ld
+
+
+def short_circuit_dq_currents(R, Ld, Lq, lambda_m, omega_e):
+    """Steady-state dq currents of a PM synchronous machine with the 3-phase terminals SHORTED
+    (v_d = v_q = 0) at electrical speed ``omega_e``. The dq voltage equations give
+
+        0 = R id - omega_e Lq iq ,   0 = R iq + omega_e (Ld id + lambda_m)
+        =>  id = -omega_e^2 Lq lambda_m /(R^2 + omega_e^2 Ld Lq),
+            iq = -omega_e R   lambda_m /(R^2 + omega_e^2 Ld Lq).
+
+    Returns ``(id, iq)``. HIGH-SPEED limit (omega_e -> inf, or R -> 0): id -> -lambda_m/Ld =
+    -:func:`characteristic_current` (pure d-axis DEMAGNETISING), iq -> 0, so |Isc| -> Ich.
+    The BRAKING torque is :func:`dq_torque` of these currents -- it rises from 0, peaks near the
+    critical speed (omega_e = R/Ls for a non-salient machine, Ld=Lq=Ls), then -> 0 at high speed.
+    The fault / demagnetisation-risk regime (vs the operating-point :func:`dq_operating_point`)."""
+    den = R * R + omega_e * omega_e * Ld * Lq
+    return (-omega_e * omega_e * Lq * lambda_m / den,
+            -omega_e * R * lambda_m / den)
+
+
+def winding_distribution_factor(harmonic, slots_per_pole_per_phase, slot_angle_elec_deg):
+    """DISTRIBUTION factor k_d,n of a distributed AC winding -- the reduction of the n-th
+    harmonic EMF because the ``q = slots_per_pole_per_phase`` coils of a phase belt are spread
+    over consecutive slots (electrical angle ``slot_angle_elec_deg`` = gamma apart):
+
+        k_d,n = sin(n q gamma/2) / (q sin(n gamma/2))   = |sum_{i<q} exp(j n i gamma)| / q.
+
+    q=1 (concentrated) -> 1. The phasor-sum form is the geometric series of the q slot EMFs."""
+    q = slots_per_pole_per_phase
+    g = math.radians(slot_angle_elec_deg)
+    den = q * math.sin(harmonic * g / 2.0)
+    if abs(den) < 1e-14:                       # n*gamma a multiple of 2pi (slot harmonic) -> |kd|=1
+        return 1.0
+    return math.sin(harmonic * q * g / 2.0) / den
+
+
+def winding_pitch_factor(harmonic, pitch_fraction):
+    """PITCH (chording) factor k_p,n = sin(n * beta * pi/2), ``beta = pitch_fraction`` = coil span
+    / pole pitch (<=1). beta=1 (full pitch) -> k_p,1 = 1. SHORT-PITCHING kills harmonics: a 5/6
+    pitch gives |k_p,5| = |k_p,7| = sin(5pi/12) = 0.259, suppressing the 5th and 7th."""
+    return math.sin(harmonic * pitch_fraction * math.pi / 2.0)
+
+
+def winding_factor(harmonic, slots_per_pole_per_phase, slot_angle_elec_deg, pitch_fraction=1.0):
+    """AC-winding factor k_w,n = k_d,n * k_p,n (:func:`winding_distribution_factor` *
+    :func:`winding_pitch_factor`) -- the n-th harmonic EMF is k_w,n times the
+    concentrated-full-pitch value. The fundamental k_w,1 (~0.92-0.96 for a good 3-phase winding)
+    scales the back-EMF / torque constant (#34, F3); the harmonic k_w,n (small for a
+    distributed, short-pitched winding) set the EMF harmonic content and the parasitic torques.
+    Validated against the direct phasor sum (tests/test_winding_factor.py)."""
+    return (winding_distribution_factor(harmonic, slots_per_pole_per_phase, slot_angle_elec_deg)
+            * winding_pitch_factor(harmonic, pitch_fraction))
+
+
+def single_phase_mmf_harmonic(harmonic, winding_factor_n, turns_per_phase, current, pole_pairs):
+    """Peak amplitude [A] of the n-th SPACE harmonic of one phase's air-gap MMF:
+
+        F_phi,n = (4/pi) (k_w,n / n) (N_ph I / 2p),
+
+    the (4/pi)/n square-wave envelope of a full-pitch coil, reduced by the winding factor k_w,n
+    (:func:`winding_factor`) of the distributed / short-pitched belt. ``turns_per_phase`` = N_ph
+    series turns, ``current`` = peak phase current, ``pole_pairs`` = p. The fundamental
+    F_phi,1 = (2/pi) k_w,1 N_ph I / p is the per-phase MMF that drives the magnetizing inductance
+    (#69) and the air-gap field; the harmonics drive parasitic torques and rotor losses."""
+    return (4.0 / math.pi) * (winding_factor_n / harmonic) * (turns_per_phase * current / (2.0 * pole_pairs))
+
+
+def rotating_mmf_amplitude(harmonic, phases, single_phase_amplitude):
+    """Amplitude of the ROTATING air-gap MMF wave that the n-th space harmonic forms in a balanced
+    ``phases``-phase winding: the m phases (spaced 2 pi/m in both space and time) combine to
+    (m/2) F_phi,n for the harmonics that form a rotating wave (:func:`mmf_harmonic_direction` != 0)
+    and to exactly ZERO for the triplen (n a multiple of m -- e.g. the 3rd / 9th cancel in a 3-phase
+    machine). So the rotating fundamental is (3/2) F_phi,1 (:func:`single_phase_mmf_harmonic`); this
+    is the (m/2) factor behind the synchronous magnetizing inductance L_m = (m/2) L_mu (#69)."""
+    return 0.0 if mmf_harmonic_direction(harmonic, phases) == 0 else 0.5 * phases * single_phase_amplitude
+
+
+def mmf_harmonic_direction(harmonic, phases):
+    """Rotation sense of the n-th MMF space harmonic in a balanced ``phases``-phase winding (the
+    rotating-field theorem): +1 FORWARD (with the fundamental) if (n-1) is a multiple of m, -1
+    BACKWARD if (n+1) is, and 0 if the harmonic CANCELS (n a multiple of m, or -- for m>=5 -- any n
+    that is neither +-1 mod m). For the 3-phase machine the ODD harmonics a symmetric winding
+    actually carries are n = 6k +/- 1: forward for 6k+1 (1, 7, 13, ...), backward for 6k-1 (5, 11,
+    ...), while the triplen (3, 9, ...) cancel (even harmonics are absent by half-wave symmetry).
+    The backward 5th / forward 7th family drive the dominant parasitic asynchronous torques and the
+    rotor-surface / magnet-eddy losses."""
+    if harmonic % phases == 0:
+        return 0
+    if (harmonic - 1) % phases == 0:
+        return +1
+    if (harmonic + 1) % phases == 0:
+        return -1
+    return 0
+
+
+def skew_factor(harmonic, skew_angle_elec):
+    """Skew factor k_sk,n of a winding/magnet SKEWED continuously over an electrical angle
+    ``skew_angle_elec`` (theta_sk):
+
+        k_sk,n = sin(n theta_sk/2)/(n theta_sk/2)        (the sinc / averaging factor).
+
+    Skewing averages the n-th harmonic of the air-gap flux over the skew, so the n-th EMF and the
+    n-th torque harmonic are scaled by k_sk,n. The axial twin of the distribution factor (#51,
+    which spreads a phase over slots); here the conductor is spread along the STACK. A harmonic
+    whose period equals the skew (n theta_sk = 2 pi) is NULLED -- skewing by ONE SLOT PITCH
+    (:func:`slot_pitch_skew_angle`) cancels the slot-passing / cogging ripple. The fundamental
+    pays a small cost k_sk,1 < 1. Validated against the phasor average (tests/test_skew_factor.py)."""
+    x = harmonic * skew_angle_elec / 2.0
+    return 1.0 if abs(x) < 1e-12 else math.sin(x) / x
+
+
+def slot_pitch_skew_angle(slots, pole_pairs):
+    """Electrical angle of ONE SLOT PITCH = 2 pi * pole_pairs / slots [rad] -- the usual skew for
+    cogging cancellation (the cogging/slot-passing harmonic then sees k_sk = 0,
+    :func:`skew_factor`). ``slots`` = stator slots Q, ``pole_pairs`` = p."""
+    return 2.0 * math.pi * pole_pairs / slots
+
+
+def skewed_winding_factor(harmonic, slots_per_pole_per_phase, slot_angle_elec_deg,
+                          skew_angle_elec, pitch_fraction=1.0):
+    """Total n-th-harmonic winding factor WITH skew: k_w,n * k_sk,n = (:func:`winding_factor`) *
+    (:func:`skew_factor`). The complete EMF-scaling of a distributed, chorded AND skewed winding
+    -- distribution + pitch suppress harmonics in the slot plane, skew suppresses them along the
+    stack (and cancels cogging), at a small fundamental cost."""
+    return (winding_factor(harmonic, slots_per_pole_per_phase, slot_angle_elec_deg, pitch_fraction)
+            * skew_factor(harmonic, skew_angle_elec))
+
+
+def skew_average(theta, values, skew_span, n_slices=0):
+    """Multi-slice SKEW of a rotor-angle sweep -- the FE-multislice 2D->3D skew
+    correction (the ONELAB ``generate_3d.geo`` ``Model3D = Multi-slice`` technique).
+
+    Given a quantity ``values`` (torque, back-EMF, cogging, ...) sampled at UNIFORM,
+    PERIODIC rotor angles ``theta`` over exactly one full period, return the curve a
+    machine SKEWED by ``skew_span`` (same angle units as ``theta``) would produce --
+    the axial average of the rotor field over the skew:
+
+        f_skew(t) = (1/skew_span) int_0^{skew_span} f(t + s) ds          (n_slices=0, exact)
+        f_skew(t) = (1/N) sum_{k=0}^{N-1} f(t + (k+0.5) skew_span/N)     (N discrete slices)
+
+    A harmonic of order n is thereby scaled by the sinc factor
+    sin(n*skew_span/2)/(n*skew_span/2) = :func:`skew_factor` (EXACT in the continuous
+    n_slices=0 mode), and the slot-passing / cogging harmonic is NULLED at one
+    slot-pitch skew (:func:`slot_pitch_skew_angle`).  Unlike the analytic
+    ``skew_factor``, this operates on the ACTUAL (possibly saturated, non-sinusoidal)
+    swept curve -- the FE counterpart that captures every harmonic at once.
+
+    ``values`` must cover EXACTLY one period (so the periodic continuation is valid).
+    n_slices=0 uses the spectral (FFT) form (exact continuous skew); n_slices=N
+    mimics N physical slices and converges to it as N grows.  Returns an array like
+    ``values``.  numpy-only (no FE solve).
+    """
+    import numpy as np
+    v = np.asarray(values, dtype=float)
+    th = np.asarray(theta, dtype=float)
+    Ns = v.size
+    dth = (th[-1] - th[0]) / (Ns - 1)
+    if n_slices and n_slices > 0:
+        out = np.zeros_like(v)
+        idx0 = (th - th[0]) / dth                       # = [0, 1, ..., Ns-1]
+        for k in range(int(n_slices)):
+            shift = (k + 0.5) * skew_span / n_slices    # midpoint of slice k
+            idx = (idx0 + shift / dth) % Ns
+            lo = np.floor(idx).astype(int); fr = idx - lo
+            out += (1.0 - fr) * v[lo % Ns] + fr * v[(lo + 1) % Ns]
+        return out / n_slices
+    # spectral (FFT-exact) continuous skew: each mode k -> e^{ik s/2} sinc(k s/2)
+    C = np.fft.fft(v)
+    k = 2.0 * np.pi * np.fft.fftfreq(Ns, d=dth)          # angular frequency per bin
+    x = k * skew_span / 2.0
+    sinc = np.where(np.abs(x) < 1e-12, 1.0, np.sin(x) / np.where(x == 0.0, 1.0, x))
+    return np.real(np.fft.ifft(C * (np.exp(1j * x) * sinc)))
+
+
+def slot_leakage_permeance(conductor_height, slot_width, opening_height=0.0, opening_width=None):
+    """Specific (per-unit-axial-length) SLOT-LEAKAGE permeance of a rectangular machine slot:
+
+        lambda_s = h_c/(3 w_s)  +  h_o/w_o   [dimensionless],
+
+    the leakage flux that crosses the slot from tooth to tooth and links the conductor without
+    reaching the air gap. ``h_c`` = conductor height, ``w_s`` = slot (conductor) width. The
+    **1/3 factor** is exact: a uniform-current conductor builds the cross-slot MMF LINEARLY from
+    0 at the slot bottom to NI at the conductor top, and integrating B^2 over that triangular
+    field gives 1/3 (vs 1 for a current-free region of the same shape). The optional second term
+    is the tooth-tip OPENING above the conductor (height ``h_o``, width ``w_o`` <= w_s) -- a
+    current-free series air permeance h_o/w_o (defaults to the slot width if not given).
+
+    Use ``slot_leakage_inductance`` for the inductance. The 1/3 conductor term and the
+    same-width opening term are EXACT (validated to 0.000 %, examples/comsol_class/
+    slot_leakage.py); a NARROWED opening (w_o < w_s) adds a few % of tooth-shoulder fringing the
+    simple series form omits, so the closed form is then a slight LOWER bound."""
+    lam = conductor_height / (3.0 * slot_width)
+    if opening_height > 0.0:
+        lam += opening_height / (opening_width if opening_width else slot_width)
+    return lam
+
+
+def slot_leakage_inductance(conductor_height, slot_width, axial_length, turns=1,
+                            opening_height=0.0, opening_width=None):
+    """Slot-leakage INDUCTANCE [H] of one slot: L = mu0 * N^2 * l_stk * lambda_s, with
+    ``lambda_s`` from :func:`slot_leakage_permeance` (``turns`` N, ``axial_length`` l_stk).
+
+    The leakage-reactance contribution X_sigma = omega L that every machine winding carries on
+    top of the magnetising reactance -- it limits the short-circuit current and shapes the
+    transient response, and (unlike the air-gap inductance) is set by the slot GEOMETRY, not the
+    iron. For a single bulk conductor (N=1) per unit length this is exactly mu0 * lambda_s [H/m]."""
+    return MU0 * turns * turns * axial_length * slot_leakage_permeance(
+        conductor_height, slot_width, opening_height, opening_width)
+
+
+def deep_bar_skin_ratio(height, f, sigma, mu_r=1.0):
+    """Deep-bar skin parameter xi = h/delta of a solid conductor of height ``height`` in a slot,
+    delta = sqrt(2/(omega mu sigma)) the skin depth at frequency ``f`` [Hz] (mu = mu_r*mu0):
+
+        xi = height * sqrt(pi f mu0 mu_r sigma).
+
+    The leakage field in an iron slot is purely transverse, so the AC current redistribution is a
+    1-D skin effect over the slot DEPTH -- xi sets how deep the deep-bar effect runs (xi<<1 DC,
+    xi>>1 strongly skin-limited)."""
+    return height * math.sqrt(math.pi * f * MU0 * mu_r * sigma)
+
+
+def deep_bar_resistance_factor(xi):
+    """Deep-bar AC/DC RESISTANCE factor k_R = Rac/Rdc of a solid conductor filling an iron slot
+    (Field's formula):
+
+        k_R = xi (sinh 2xi + sin 2xi)/(cosh 2xi - cos 2xi),   xi = h/delta = deep_bar_skin_ratio.
+
+    The slot-leakage field crowds the AC current toward the slot opening, raising the resistance.
+    xi->0: k_R->1 (DC); xi>>1: k_R->xi (Rac ~ sqrt(f), current in a one-skin-depth surface layer).
+    The DEEP-BAR / double-cage rotor effect that gives induction motors their high STARTING
+    resistance (#40), and the AC copper loss of a conductor in a slot at high frequency."""
+    if xi < 1e-2:
+        return 1.0
+    den = math.cosh(2 * xi) - math.cos(2 * xi)
+    return xi * (math.sinh(2 * xi) + math.sin(2 * xi)) / den
+
+
+def deep_bar_reactance_factor(xi):
+    """Deep-bar AC/DC slot-leakage REACTANCE (inductance) factor k_X = Lac/Ldc of a solid
+    conductor filling an iron slot:
+
+        k_X = (3/2xi)(sinh 2xi - sin 2xi)/(cosh 2xi - cos 2xi),   xi = deep_bar_skin_ratio.
+
+    The same skin redistribution REDUCES the slot-leakage inductance (the lower conductor no
+    longer links the full slot flux). xi->0: k_X->1 (the DC slot leakage mu0 h/3w,
+    :func:`slot_leakage_permeance`); xi>>1: k_X->3/(2 xi)->0. The reactance companion of
+    :func:`deep_bar_resistance_factor` -- together they are the deep-bar circuit Z(slip)."""
+    if xi < 1e-2:
+        return 1.0
+    den = math.cosh(2 * xi) - math.cos(2 * xi)
+    return (3.0 / (2.0 * xi)) * (math.sinh(2 * xi) - math.sin(2 * xi)) / den
+
+
+def dowell_resistance_factor(skin_ratio, layers):
+    """Dowell AC/DC resistance factor F_R of an ``layers``-layer (m-layer) winding -- the
+    transformer / inductor winding-loss workhorse:
+
+        F_R = Delta [ (sinh2D + sin2D)/(cosh2D - cos2D)
+                       + (2/3)(m^2 - 1)(sinhD - sinD)/(coshD + cosD) ],   D = Delta = h/delta,
+
+    ``skin_ratio`` = Delta = foil thickness / skin depth (:func:`deep_bar_skin_ratio`), ``layers`` = m.
+    The first (skin) term is the single-conductor deep-bar factor (:func:`deep_bar_resistance_factor`,
+    m=1); the second is the PROXIMITY loss, which grows as ~m^2 -- the field from the other layers
+    builds up across the stack, so the outer layers see a large field and dissipate heavily. The
+    reason multi-layer (and litz vs solid) winding design is dominated by AC loss: halving the foil
+    thickness or splitting layers cuts F_R fast. Validated against the m-foil eddy FE to 0.00 %
+    (examples/comsol_class/dowell_winding.py)."""
+    if skin_ratio < 1e-2:
+        return 1.0
+    D = skin_ratio
+    skin = (math.sinh(2 * D) + math.sin(2 * D)) / (math.cosh(2 * D) - math.cos(2 * D))
+    prox = (math.sinh(D) - math.sin(D)) / (math.cosh(D) + math.cos(D))
+    return D * (skin + (2.0 / 3.0) * (layers * layers - 1) * prox)
+
+
+def classical_eddy_loss_density(sigma, thickness, frequency, B_peak):
+    """Classical (thin-lamination) eddy-current loss VOLUME density [W/m^3] of a steel sheet of
+    thickness ``d`` carrying a sinusoidal flux density of peak ``B_peak`` at ``frequency``:
+
+        P_eddy = pi^2 sigma d^2 f^2 B_peak^2 / 6   (= sigma omega^2 d^2 B_peak^2 / 24).
+
+    The d^2 law is WHY cores are laminated: halving the sheet thickness quarters the eddy loss. It
+    is the f^2 ('eddy') term of the Steinmetz core-loss separation P = P_hyst(f) + P_eddy(f^2). Valid
+    in the THIN limit d << skin depth (uniform flux across the sheet); the skin-effect roll-off at
+    higher f / thicker sheets is :func:`lamination_eddy_skin_factor`. ``sigma`` [S/m], ``thickness``
+    [m], ``frequency`` [Hz], ``B_peak`` [T]."""
+    return math.pi ** 2 * sigma * thickness ** 2 * frequency ** 2 * B_peak ** 2 / 6.0
+
+
+def lamination_eddy_skin_factor(thickness, skin_depth):
+    """Skin-effect REDUCTION factor F(xi) (<= 1) of the lamination eddy loss vs the classical d^2
+    value (:func:`classical_eddy_loss_density`), from the exact 1-D magnetic-diffusion solution of a
+    slab in a fixed average AC flux:
+
+        F(xi) = (3/xi) (sinh xi - sin xi)/(cosh xi - cos xi),    xi = d/delta,
+
+    delta = sqrt(2/(omega mu sigma)) the skin depth. F -> 1 as xi -> 0 (thin sheet, the classical
+    law) and F -> 3/xi as xi -> inf (heavy skin effect: the flux cannot penetrate, so the loss grows
+    only as d, not d^2, and the classical formula over-predicts). The field-driven counterpart of the
+    current-driven deep-bar k_R (:func:`deep_bar_resistance_factor`) -- same diffusion, different
+    drive. Validated against the numerically-integrated exact slab loss to 1e-6
+    (examples/comsol_class/lamination_eddy_loss.py)."""
+    xi = thickness / skin_depth
+    if xi < 0.1:
+        return 1.0 - xi ** 4 / 630.0              # series (the direct form loses precision near 0)
+    if xi > 30.0:
+        return 3.0 / xi                            # cosh/sinh overflow guard; F -> 3/xi
+    return (3.0 / xi) * (math.sinh(xi) - math.sin(xi)) / (math.cosh(xi) - math.cos(xi))
+
+
+def lamination_eddy_loss_density(sigma, thickness, frequency, B_peak, mu_r=1.0):
+    """Skin-corrected lamination eddy-loss VOLUME density [W/m^3]:
+
+        P = (pi^2 sigma d^2 f^2 B_peak^2 / 6) * F(d/delta),
+
+    the classical loss :func:`classical_eddy_loss_density` times the reduction factor
+    :func:`lamination_eddy_skin_factor` with delta = sqrt(2/(omega mu0 mu_r sigma)). ``mu_r`` is the
+    sheet's relative permeability (large for steel -> thinner skin depth -> bigger xi). In the thin
+    limit (typical 0.35 mm sheet at 50/60 Hz) F ~ 1 and this equals the classical value; it rolls off
+    for thick sheets or high frequency (PWM harmonics)."""
+    omega = 2.0 * math.pi * frequency
+    delta = math.sqrt(2.0 / (omega * MU0 * mu_r * sigma))
+    return classical_eddy_loss_density(sigma, thickness, frequency, B_peak) \
+        * lamination_eddy_skin_factor(thickness, delta)
+
+
+def carter_coefficient(slot_pitch, gap, slot_opening):
+    """Carter coefficient k_C of a slotted air gap -- the factor by which the slot openings make
+    the gap behave MAGNETICALLY LARGER:
+
+        gamma = (b_o/g)^2/(5 + b_o/g),   k_C = tau_s/(tau_s - gamma * g)   (>= 1),
+
+    tau_s = slot pitch, g = gap length, b_o = slot opening. A slot opening adds reluctance (the
+    flux spreads as it crosses the opening), so the AVERAGE gap flux for a given MMF drops as if
+    the gap were k_C*g (:func:`effective_air_gap`). The standard machine-design correction that
+    feeds the magnetising inductance, the no-load flux, and the slot-ripple permeance. Carter's
+    1901 conformal-mapping result; the (b_o/g)^2/(5+b_o/g) form is the textbook fit (validated
+    against the scalar-potential gap permeance to < 0.3 %, examples/comsol_class/carter_coefficient.py)."""
+    gamma = (slot_opening / gap) ** 2 / (5.0 + slot_opening / gap)
+    return slot_pitch / (slot_pitch - gamma * gap)
+
+
+def effective_air_gap(slot_pitch, gap, slot_opening):
+    """Effective (Carter) air gap g_eff = k_C * g of a slotted machine -- the SMOOTH gap that has
+    the same magnetising permeance as the real slotted gap (:func:`carter_coefficient`). Use it in
+    place of the physical gap in the air-gap permeance / magnetising-inductance / no-load-flux
+    calculations; the slot openings effectively lengthen the gap by a few to ~30 %."""
+    return carter_coefficient(slot_pitch, gap, slot_opening) * gap
+
+
+def magnetizing_inductance_per_phase(gap_diameter, stack_length, effective_gap, pole_pairs,
+                                     kw1, turns_per_phase):
+    """Per-phase (self) MAGNETISING inductance L_mu of an AC machine -- the air-gap main-flux
+    inductance, the dominant part of the dq L_md / L_mq (the remainder is leakage, e.g. slot
+    leakage #54):
+
+        L_mu = (2 mu0/pi) (kw1 N_ph)^2 D L_stk / (p^2 g_eff),
+
+    D = air-gap diameter [m], L_stk = stack length [m], g_eff = effective (Carter #57) gap [m],
+    p = pole PAIRS, kw1 = fundamental winding factor (#51), N_ph = series turns per phase. Follows
+    from the fundamental MMF -> air-gap B -> flux/pole -> flux-linkage chain. SYNTHESISES the
+    campaign -- kw1 from :func:`winding_factor`, g_eff from :func:`effective_air_gap` -- and scales
+    as 1/g_eff (Carter slotting lowers it), 1/p^2, and (kw1 N_ph)^2. Validated against the explicit
+    derivation chain (examples/comsol_class/magnetizing_inductance.py)."""
+    return (2.0 * MU0 / math.pi) * (kw1 * turns_per_phase) ** 2 * gap_diameter * stack_length \
+        / (pole_pairs ** 2 * effective_gap)
+
+
+def synchronous_magnetizing_inductance(gap_diameter, stack_length, effective_gap, pole_pairs,
+                                       kw1, turns_per_phase, phases=3):
+    """Synchronous (per-phase) MAGNETISING inductance L_m = (m/2) L_mu of an m-phase machine -- the
+    per-phase self :func:`magnetizing_inductance_per_phase` raised by m/2 (3/2 for three phases) by
+    the mutual coupling of the m phases sharing the common rotating air-gap field. This is the L_md
+    (= L_mq for a non-salient machine) of the dq model; the terminal Ld = L_m + L_leakage (slot
+    leakage #54 + end-winding + harmonic leakage)."""
+    return 0.5 * phases * magnetizing_inductance_per_phase(
+        gap_diameter, stack_length, effective_gap, pole_pairs, kw1, turns_per_phase)
+
+
+# Convention: the FIRST component is the MAGNETIZED-axis factor; all three sum to 1.
+_DEMAG_FACTORS = {
+    "sphere": (1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0),
+    "cylinder_transverse": (0.5, 0.5, 0.0),         # magnetized across an infinite cylinder: N=1/2
+    "cylinder_axial": (0.0, 0.5, 0.5),              # magnetized along the infinite axis:   N=0
+    "thin_slab": (1.0, 0.0, 0.0),                   # magnetized through the thin dimension: N=1
+}
+
+
+def demagnetizing_factor(shape):
+    """Demagnetizing factor tuple (N_mag, N_b, N_c) of a uniformly magnetized body -- the geometry
+    factor that sets the self-demagnetizing field H = -N M inside it. The FIRST component is the
+    factor along the MAGNETIZED axis; for ANY ellipsoid the three sum to one (Nx + Ny + Nz = 1).
+    Exact closed forms for the limiting shapes:
+
+        sphere (1/3, 1/3, 1/3); infinite cylinder transverse (1/2, 1/2, 0) / axial (0, 1/2, 1/2);
+        thin slab through-thickness (1, 0, 0).
+
+    ``shape`` in {'sphere','cylinder_transverse','cylinder_axial','thin_slab'}. The basis of the PM
+    operating point / load line (#42) and of shape-anisotropy design (an axially-magnetized rod
+    keeps its remanence; a transversely-magnetized disc loses half)."""
+    try:
+        return _DEMAG_FACTORS[shape]
+    except KeyError:
+        raise ValueError("shape must be one of %s" % sorted(_DEMAG_FACTORS))
+
+
+def magnetized_body_internal_field(remanence, demag_factor):
+    """Internal flux density B_in = Br (1 - N) [T] of a uniformly magnetized body (remanence
+    Br = mu0 M) along its magnetized axis with demagnetizing factor ``demag_factor`` = N: a sphere
+    (N = 1/3) holds 2 Br/3, a transverse-magnetized infinite cylinder (N = 1/2) holds Br/2, a thin
+    slab magnetized through-thickness (N = 1) holds ~0. The accompanying internal field is the
+    self-demagnetizing :func:`demagnetizing_field`. Validated against an NGSolve transverse-cylinder
+    solve to ~0.2 % (open-domain truncation; examples/comsol_class/demagnetizing_factor.py)."""
+    return remanence * (1.0 - demag_factor)
+
+
+def demagnetizing_field(remanence, demag_factor):
+    """Internal (self-)demagnetizing field H_in = -N Br/mu0 [A/m] of a uniformly magnetized body
+    (remanence Br, demag factor N) -- the field the magnet applies to itself; the larger N (the
+    'fatter' the magnet across its magnetization), the deeper into the second quadrant the operating
+    point sits, i.e. the closer to the demag knee (#42). Negative (opposes M)."""
+    return -demag_factor * remanence / MU0
+
+
 def solve_planar_magnetostatic(mesh, nu, Jz=None, magnets=None, order=2,
                                dirichlet="outer", magnet_cf=None):
     """2D PLANAR (Cartesian) A_z magnetostatics -- the FEMM ``prob1big`` analog
@@ -357,6 +1245,344 @@ def magnetic_circuit_gap_field(N, current, gap, iron_path, mu_r):
     return MU0 * N * current / (gap + iron_path / mu_r)
 
 
+def magnetic_circuit_gap_force(N, current, gap, iron_path, mu_r, area):
+    """Reluctance HOLDING force of an iron magnetic-circuit air gap (electromagnet /
+    relay / solenoid actuator) -- Maxwell stress on the pole face:
+
+        F = B_gap^2 * area / (2 mu0),   B_gap = magnetic_circuit_gap_field(...),
+
+    so  F = mu0 (N I)^2 area / [2 (gap + iron_path/mu_r)^2]  ~ 1/gap^2 (small gap /
+    high mu). ``area`` = pole-face area [m^2] (= face height * stack depth in 2D). The
+    FE force (B_gap_FE^2 * area / 2mu0 from the solved gap field) tracks this to a few %
+    (fringing/leakage), and F*(gap+iron_path/mu_r)^2 is constant across gaps -- the
+    1/g^2 reluctance force law. Validated examples/comsol_class/reluctance_actuator.py."""
+    B_gap = magnetic_circuit_gap_field(N, current, gap, iron_path, mu_r)
+    return B_gap * B_gap * area / (2.0 * MU0)
+
+
+def magnetic_circuit_inductance(N, area, gap, iron_path, mu_r):
+    """Reluctance-model INDUCTANCE of an N-turn coil on a gapped iron magnetic circuit
+    (inductor / transformer / actuator winding):
+
+        L = N^2 / R = N^2 mu0 area / (gap + iron_path / mu_r),
+
+    R the magnetic reluctance of the series gap+iron path (``area`` = core/gap
+    cross-section [m^2] = leg width * stack depth in 2D). The inductance twin of
+    :func:`magnetic_circuit_gap_force` (same effective gap ``gap + iron_path/mu_r``);
+    for mu_r -> inf it is gap-limited, L -> N^2 mu0 area / gap.
+
+    IMPORTANT -- this is the LEAKAGE-FREE estimate (a LOWER BOUND). Unlike the gap
+    FORCE (which reads only B_gap, so the reluctance model is good to a few %), the
+    coil inductance also links the WINDOW LEAKAGE flux, so a 2D FE solve (radia
+    ``inductance_2d``) gives L well ABOVE this -- and the excess GROWS as the gap
+    opens (more flux short-cuts the window). On the #27 window frame the FE L is
+    ~1.27x (g=4 mm) -> ~1.52x (g=9 mm) this model: the gap that leakage adds is
+    exactly the physical content the lumped model misses. Validated
+    examples/comsol_class/gapped_core_inductor.py (radia FE vs an independent 2D FE
+    reference to ~0.4 %; vs this leakage-free model as the documented lower bound)."""
+    return N * N * MU0 * area / (gap + iron_path / mu_r)
+
+
+def magnetic_circuit_bh_operating_point(mmf, iron_path, h_of_b, gap=0.0):
+    """Operating flux density B [T] of a NONLINEAR series magnetic circuit -- the saturating
+    counterpart of the constant-mu :func:`magnetic_circuit_inductance` / :func:`magnetic_circuit_gap_force`.
+    Ampere's law around the loop, with flux continuity (B the same in iron and gap of equal area):
+
+        NI = H_iron(B) * l_fe + (B/mu0) * gap ,
+
+    ``h_of_b`` is the iron B->H curve [A/m] (a callable, e.g. ``lambda B: 51*B + 2.5*B**15``), ``mmf``
+    = N I [A-turns], ``iron_path`` = mean iron path length l_fe [m], ``gap`` = total air-gap length
+    [m]. Solved for B by bisection (the right side increases monotonically in B). For ``gap=0`` (a
+    closed iron loop) every ampere-turn drops in the iron, so B is fixed by the BH KNEE alone; any
+    gap adds the large linear term B*gap/mu0 that quickly de-saturates the iron (the leakage-free
+    #27/#39/#42 story, now with a real saturating BH). Validated self-consistently (residual -> 0,
+    the constant-mu limit reproduces NI/(l_fe/mu0/mu_r + gap/mu0) exactly) and against a live
+    nonlinear FE of a closed iron-frame electromagnet (examples/comsol_class/nonlinear_magnetic_circuit.py)."""
+    def rhs(B):
+        return h_of_b(B) * iron_path + (B / MU0) * gap
+    lo, hi = 0.0, 10.0                                   # B bracket [T]; rhs(0)=0 <= mmf <= rhs(10)
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if rhs(mid) > mmf:
+            hi = mid
+        else:
+            lo = mid
+    return 0.5 * (lo + hi)
+
+
+def pm_circuit_loadline_gap_field(Br, magnet_len, gap, iron_path, mu_r, mu_rec=1.0):
+    """PM operating point -- the air-gap flux density of a PERMANENT-MAGNET-driven iron
+    circuit (magnet length ``magnet_len`` and the gap/iron in series, equal cross-section).
+    Ampere's law around the loop (no current) with B continuous and the recoil line
+    B = Br + mu0 mu_rec H in the magnet gives the LOAD-LINE gap field
+
+        B_gap = Br * magnet_len / (magnet_len + mu_rec*gap + iron_path/mu_r).
+
+    The PM counterpart of the coil-driven reluctance circuit (:func:`magnetic_circuit_gap_field`,
+    NI replaced by the magnet's Br*magnet_len/mu_rec MMF). The magnet operating point lies on
+    its demag/recoil line; a larger gap is a steeper load line -> lower B_gap (more demag).
+
+    LEAKAGE -- this is the leakage-FREE estimate (an UPPER bound): some magnet flux leaks
+    across the window instead of reaching the gap, so a 2D FE solve gives B_gap BELOW this,
+    and the deficit GROWS as the gap opens (the gap reluctance rises, flux prefers the leak
+    path). On the #27 window frame the FE B_gap is ~0.86x (g=2 mm) -> ~0.68x (g=8 mm) this
+    model. Validated examples/comsol_class/pm_loadline.py (radia FE vs an independent 2D FE
+    reference to ~0.3 %; vs this leakage-free load line as the documented upper bound)."""
+    return Br * magnet_len / (magnet_len + mu_rec * gap + iron_path / mu_r)
+
+
+def two_wire_external_inductance(separation, radius):
+    """External inductance per unit length of a TWO-WIRE line (parallel wires, radius a,
+    centre separation D) -- the magnetic dual of the two-wire capacitance:
+
+        L_ext = (mu0/pi) acosh(D/2a)   [H/m]   (-> (mu0/pi) ln(D/a) for D >> a).
+
+    With the two-wire C = pi eps0/acosh(D/2a): v = 1/sqrt(LC) = c and
+    Z0 = sqrt(L/C) = (1/pi) sqrt(mu0/eps0) acosh(D/2a) = 120 acosh(D/2a) [ohm]. radia gets L
+    from the FE field energy 2W/I^2 (``force.magnetic_energy_2d`` over the air -- the +-I
+    pair's line-dipole field energy CONVERGES, no outer-boundary dependence, unlike a single
+    wire). Validated examples/comsol_class/two_wire_inductance.py."""
+    return MU0 / math.pi * math.acosh(separation / (2.0 * radius))
+
+
+def wire_over_ground_inductance(height, radius):
+    """External inductance per unit length of a single wire (radius a) at ``height`` h above a
+    PERFECT CONDUCTING GROUND PLANE -- the single-ended / microstrip-style line:
+
+        L_ext = (mu0/2 pi) acosh(h/a)   [H/m]   (-> (mu0/2 pi) ln(2h/a) for h >> a).
+
+    The IMAGE METHOD: the ground (A = 0 on the plane) reflects a -I image wire at -h, so the field
+    above the ground is that of the +I/-I pair separated by 2h -- but only HALF the energy lives
+    above the plane, so L is exactly HALF the two-wire value at separation 2h:
+    ``wire_over_ground_inductance(h, a) = 0.5 * two_wire_external_inductance(2 h, a)``. radia reads
+    it from the FE energy ABOVE the ground (Dirichlet A=0 plane); with Z0 = c L_ext it is the
+    single-conductor transmission line. Validated examples/comsol_class/wire_over_ground.py (FE vs
+    closed form to a few %, the open-domain energy truncation, FE below the h->inf-domain value)."""
+    return MU0 / (2.0 * math.pi) * math.acosh(height / radius)
+
+
+def two_wire_loop_inductance(separation, radius):
+    """TOTAL (loop) inductance per unit length of a two-wire line at DC -- the EXTERNAL
+    field inductance PLUS the INTERNAL inductance of BOTH conductors:
+
+        L_loop = (mu0/pi) acosh(D/2a)  +  2 * mu0/(8 pi)  =  L_ext + mu0/(4 pi).
+
+    This is the inductance a meter reads for the loop (external + both wires' internal),
+    vs the external-only :func:`two_wire_external_inductance` (#30). The internal term
+    2*:func:`internal_inductance_round_wire` is radius-independent (mu0/4pi) and is the
+    LOW-frequency value -- it rolls off via the skin effect (see
+    :func:`skin_effect_internal_inductance_ratio`). radia gets it from the FE field energy
+    2(W_air + W_wire1 + W_wire2)/I^2. Validated examples/comsol_class/two_wire_loop_inductance.py."""
+    return two_wire_external_inductance(separation, radius) + 2.0 * internal_inductance_round_wire()
+
+
+def two_wire_force_per_length(current1, current2, separation):
+    """Force per unit length between two infinitely-long parallel wires carrying ``current1`` and
+    ``current2`` a distance ``separation`` d apart -- Ampere's force law:
+
+        F = mu0 I1 I2 / (2 pi d)   [N/m].
+
+    Parallel LIKE currents (I1 I2 > 0) ATTRACT, opposite currents repel; the returned value is the
+    signed force-per-length with the convention that a positive product is an attractive force of
+    this magnitude. The Lorentz body force int J x B over one wire: only the OTHER wire's field
+    contributes the net force (the symmetric self-field integrates to zero). The building block of
+    the image-wire force (:func:`image_force_wire_iron` is this with the iron's image at separation
+    2h -> mu0 I^2/(4 pi h)). Validated to 0.001 % against an independent 2D magnetostatic Lorentz-
+    force solve (a stored regression reference)."""
+    return MU0 * current1 * current2 / (2.0 * math.pi * separation)
+
+
+def image_force_wire_iron(current, height):
+    """Attractive force per unit length on a current wire a distance ``height`` h above an
+    IRON (mu -> inf) half-plane, by the METHOD OF IMAGES: the iron mirrors the wire as a
+    SAME-sign current at -h (field lines enter the iron perpendicularly), so two parallel
+    same-direction currents at separation 2h give
+
+        F = mu0 I^2 / (4 pi h)   [N/m]   (toward the iron).
+
+    (A perfect CONDUCTOR plane mirrors an OPPOSITE-sign current -> repulsion of the same
+    magnitude.) radia gets F as the Lorentz body force int J x B over the wire (its symmetric
+    self-field nets to zero; the iron's image field provides F). With a large-but-FINITE iron
+    block F is ~4 % below this (finite block != infinite half-plane); -> exact as the block
+    grows. Validated examples/comsol_class/image_force.py."""
+    return MU0 * current * current / (4.0 * math.pi * height)
+
+
+def internal_inductance_round_wire():
+    """INTERNAL inductance per unit length of a round wire with a UNIFORM (DC) current,
+    from the field energy stored INSIDE the conductor:
+
+        L_int = mu0/(8 pi)   [H/m]   -- independent of the wire radius.
+
+    (B(r)=mu0 I r/(2 pi R^2) inside -> W_in = mu0 I^2/(16 pi) -> L_int = 2 W_in/I^2.) The
+    internal companion to the EXTERNAL inductances (coax (mu0/2pi)ln(b/a),
+    :func:`two_wire_external_inductance`); it sets the DC/low-frequency inductance and rolls
+    OFF as the skin effect expels current at high frequency. radia gets it from the wire-interior
+    field energy ``2*force.magnetic_energy_2d(B, mesh, 'wire')/I^2`` (boundary-independent --
+    Ampere fixes the interior B from the enclosed current). Validated
+    examples/comsol_class/internal_inductance.py."""
+    return MU0 / (8.0 * math.pi)
+
+
+def skin_effect_resistance_ratio(q):
+    """AC/DC RESISTANCE ratio Rac/Rdc of a round wire at skin-effect parameter
+    ``q = a*sqrt(omega*mu0*sigma) = sqrt(2)*a/delta`` (a = radius, delta = skin depth):
+
+        Rac/Rdc = (q/2) [ber(q) bei'(q) - bei(q) ber'(q)] / [ber'(q)^2 + bei'(q)^2]
+
+    (Kelvin ber/bei). q -> 0 : Rac/Rdc -> 1 (uniform DC current); q >> 1 : -> q/2 + ... (current
+    crowds into the ~delta-thick skin). The real part of the round-wire INTERNAL impedance.
+    Needs scipy. Validated vs the radia eddy solve (tests/test_planar_eddy.py)."""
+    from scipy.special import kelvin
+    be, ke, bep, kep = kelvin(q)
+    ber, bei, berp, beip = be.real, be.imag, bep.real, bep.imag
+    return (q / 2.0) * (ber * beip - bei * berp) / (berp ** 2 + beip ** 2)
+
+
+def skin_effect_internal_inductance_ratio(q):
+    """AC INTERNAL-inductance ROLL-OFF ratio L_int(omega)/L_int(0) of a round wire at
+    ``q = a*sqrt(omega*mu0*sigma) = sqrt(2)*a/delta`` (L_int(0) = mu0/(8 pi),
+    :func:`internal_inductance_round_wire`):
+
+        L_int/L_int_dc = (4/q) [ber(q) ber'(q) + bei(q) bei'(q)] / [ber'(q)^2 + bei'(q)^2]
+
+    (Kelvin ber/bei). q -> 0 : -> 1 (the DC mu0/8pi, #36); q >> 1 : -> 4/q -> 0 (the skin effect
+    expels current from the core, so the interior stores less magnetic energy). The imaginary
+    part /omega of the round-wire INTERNAL impedance -- the inductive twin of
+    :func:`skin_effect_resistance_ratio`; together Z_internal(omega) = Rdc*Rac_ratio +
+    j*omega*(mu0/8pi)*Lint_ratio. Needs scipy. Validated vs the radia eddy solve
+    (examples/comsol_class/ac_internal_inductance.py)."""
+    from scipy.special import kelvin
+    be, ke, bep, kep = kelvin(q)
+    ber, bei, berp, beip = be.real, be.imag, bep.real, bep.imag
+    return (4.0 / q) * (ber * berp + bei * beip) / (berp ** 2 + beip ** 2)
+
+
+def skin_effect_slab_attenuation(sigma, frequency, half_thickness, mu_r=1.0):
+    r"""Mid-plane field attenuation A_z(0)/A_z(surface) of a conducting slab x in [-a, a]
+    in a tangential AC field (skin effect) -- the closed form of the eddy diffusion
+    ``lap(A_z) = j*omega*mu0*mu_r*sigma*A_z`` with the surface phasor A_z=A0 on x=+/-a:
+
+        A_z(0)/A0 = 1 / cosh(gamma a),   gamma = (1+j)/delta,
+        delta = sqrt(2 / (omega mu0 mu_r sigma))    (skin depth).
+
+    Complex: magnitude = attenuation, phase = the eddy phase lag.  a << delta -> ~1 (the
+    field penetrates); a >> delta -> ~2 exp(-a/delta) (expelled to the ~delta-thick skin).
+    The slab counterpart of the round-wire Kelvin-function ratios
+    (:func:`skin_effect_resistance_ratio`), relevant to lamination / sheet eddy loss.
+    Validated against the complex NGSolve eddy solve (tests/test_skin_effect_slab.py) and
+    an independent frequency-domain magnetics cross-check."""
+    import cmath
+    mu0 = 4e-7 * math.pi
+    omega = 2.0 * math.pi * frequency
+    delta = math.sqrt(2.0 / (omega * mu0 * mu_r * sigma))
+    gamma = (1 + 1j) / delta
+    return 1.0 / cmath.cosh(gamma * half_thickness)
+
+
+def cogging_torque_order(slots, poles):
+    r"""Spatial order (cycles per MECHANICAL revolution) of the fundamental cogging torque of a
+    slotted PM machine: ``N_c = LCM(slots, poles)`` (poles = pole COUNT = 2p).  The cogging
+    PERIOD is 360/N_c degrees (:func:`cogging_period_deg`); a higher LCM (fractional-slot, e.g.
+    12-slot/10-pole -> 60) gives smaller, higher-frequency cogging.  Design rule: slots != poles
+    (equal -> huge cogging).  Confirmed against an independent slotted 4-pole / 6-slot rotor FEA
+    -- the cogging waveform is dominated by exactly one cycle per 360/LCM degrees."""
+    from math import gcd
+    return slots * poles // gcd(slots, poles)
+
+
+def cogging_period_deg(slots, poles):
+    """Mechanical-angle period [deg] of the cogging torque = 360 / LCM(slots, poles)
+    (:func:`cogging_torque_order`).  One cogging cycle spans this angle; a one-slot-pitch skew
+    (360/slots) nulls the fundamental (sinc(pi)=0, :func:`skew_factor`)."""
+    return 360.0 / cogging_torque_order(slots, poles)
+
+
+def annular_radial_resistance(sigma, r_inner, r_outer, length=1.0):
+    r"""DC resistance [ohm] of an annular conductor carrying RADIAL current between the inner
+    ring (r_inner) and the outer ring (r_outer), axial length ``length``, conductivity ``sigma``:
+
+        R = ln(r_outer / r_inner) / (2 pi sigma length),
+
+    the closed form of -div(sigma grad V)=0 with V fixed on the two rings (V(r) ~ ln r).  The
+    radial-conduction counterpart of the axial L/(sigma A) -- relevant to disc/annulus electrodes
+    and radial busbars.  Validated against an NGSolve conduction solve and an independent
+    cross-check (tests/test_annular_resistance.py)."""
+    import math
+    return math.log(r_outer / r_inner) / (2.0 * math.pi * sigma * length)
+
+
+def demag_operating_field(Br, demag_factor, mu_r=1.0):
+    r"""Internal operating field H_op along the magnetization [A/m] of a permanent magnet at its
+    no-load operating point: with demagnetizing factor N (=1/2 transverse cylinder, 1/3 sphere),
+    remanence Br and recoil mu_r,
+
+        B_in = Br (1-N) / (1 + N (mu_r-1)),    H_op = (B_in - Br) / (mu0 mu_r).
+
+    For mu_r=1 this is H_op = -N Br/mu0 = -N M (e.g. -Br/(2 mu0) for the transverse cylinder).
+    In a 2-D field the operating point is DISTRIBUTED -- corners of non-ellipsoidal magnets
+    deviate -- so evaluate H.m_hat PER ELEMENT and compare each to the knee
+    (:func:`demag_margin`).  Confirmed vs a transverse PM-cylinder FEA (bulk H_x == -Hc/2)."""
+    import math
+    mu0 = 4e-7 * math.pi
+    B_in = Br * (1.0 - demag_factor) / (1.0 + demag_factor * (mu_r - 1.0))
+    return (B_in - Br) / (mu0 * mu_r)
+
+
+def demag_margin(H_operating, H_knee):
+    """Irreversible-demagnetization margin [A/m] = H_operating - H_knee (both the m_hat component,
+    negative = demagnetizing).  Positive => the operating point sits ABOVE the knee (safe); a
+    stator / short-circuit field that drives the WORST element's H.m_hat below H_knee causes
+    permanent loss of magnetization.  Pair with the per-element worst H.m_hat, not just the bulk
+    :func:`demag_operating_field` (corners reach the knee first)."""
+    return H_operating - H_knee
+
+
+def park_transform(a, b, c, theta_e):
+    r"""Amplitude-invariant (peak-preserving) Park transform of three phase quantities a,b,c into
+    the rotor (d,q) frame at electrical angle theta_e [rad]:
+
+        d = (2/3)[a cos(th) + b cos(th-2pi/3) + c cos(th+2pi/3)]
+        q = -(2/3)[a sin(th) + b sin(th-2pi/3) + c sin(th+2pi/3)]
+
+    theta_e is the rotor d-axis position measured FROM the phase-A MAGNETIC axis (the centre of
+    phase A's coil span, NOT the slot where the A conductors sit -- for a full-pitch belt the axis
+    leads the belt by 90 elec).  Inverse: :func:`inverse_park`.  Applied to FE phase flux linkages
+    it yields lambda_d, lambda_q (-> Ld=lambda_d/i_d at i_q=0, Lq=lambda_q/i_q at i_d=0)."""
+    import math
+    d = (2.0 / 3.0) * (a * math.cos(theta_e) + b * math.cos(theta_e - 2 * math.pi / 3)
+                       + c * math.cos(theta_e + 2 * math.pi / 3))
+    q = -(2.0 / 3.0) * (a * math.sin(theta_e) + b * math.sin(theta_e - 2 * math.pi / 3)
+                        + c * math.sin(theta_e + 2 * math.pi / 3))
+    return d, q
+
+
+def inverse_park(d, q, theta_e):
+    r"""Inverse amplitude-invariant Park: (d,q) at electrical angle theta_e [rad] -> phase a,b,c
+    (peak amplitudes).  ``a = d cos(th) - q sin(th)``, etc.  Round-trips with :func:`park_transform`
+    (park(inverse_park(d,q,th),th) == (d,q)).  Use to set the three phase currents that realise a
+    commanded (i_d,i_q) operating point in an FE saliency/torque extraction."""
+    import math
+    a = d * math.cos(theta_e) - q * math.sin(theta_e)
+    b = d * math.cos(theta_e - 2 * math.pi / 3) - q * math.sin(theta_e - 2 * math.pi / 3)
+    c = d * math.cos(theta_e + 2 * math.pi / 3) - q * math.sin(theta_e + 2 * math.pi / 3)
+    return a, b, c
+
+
+def dq_flux_torque(pole_pairs, lam_d, lam_q, i_d, i_q):
+    r"""Instantaneous electromagnetic torque [N.m] from the dq flux linkages, general (no linear-
+    decomposition assumption):
+
+        T = (3/2) p (lambda_d i_q - lambda_q i_d).
+
+    This is the co-energy route -- it uses the FE flux linkages directly, so it captures the
+    FUNDAMENTAL dq interaction exactly.  Compare with the lumped :func:`dq_torque` (which assumes
+    lambda_d = lambda_pm + Ld i_d, lambda_q = Lq i_q) and with a Maxwell-stress-tensor torque: for
+    a salient machine the stress-tensor torque RIPPLES about this value at the pole-harmonic
+    frequency, and its mean over one rotor period equals it."""
+    return 1.5 * pole_pairs * (lam_d * i_q - lam_q * i_d)
+
+
 def coil_pair_axial_field(N, current, radius, separation, z):
     """On-axis B_z of a coaxial PAIR of N-turn circular loops (radius a) on the
     z-axis at z = +/- separation/2, each carrying ``current`` in the SAME sense:
@@ -435,7 +1661,7 @@ def solve_planar_magnetostatic_nonlinear(mesh, nu_of_B, Jz=None, magnets=None,
 
 def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
                       total_current=None, applied_Ez=None, Jz=None, order=3,
-                      dirichlet="outer"):
+                      dirichlet="outer", dirichlet_value=0.0):
     """2D PLANAR time-harmonic eddy currents (complex A_z) -- FEMM ``prob2big`` analog.
 
     Solves  -div(nu grad A_z) + j w sigma A_z = J_src .  The eddy current in
@@ -443,6 +1669,11 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
     modes:
 
     * ``Jz`` : imposed source current density CF [A/m^2] (e.g. a stranded coil).
+    * ``dirichlet_value`` : DRIVEN-SURFACE phasor -- a NON-zero Dirichlet A_z =
+      dirichlet_value imposed on the ``dirichlet`` boundary (default 0 = magnetic
+      insulation). The slab skin-effect (surface flux A0 driven on the conductor
+      faces, the eddy reaction attenuating it inward) is A_z(0)/A0 = 1/cosh(gamma a),
+      gamma=(1+j)/delta, delta=sqrt(2/(w mu sigma)).
     * ``driven_region`` + ``total_current`` : CURRENT-DRIVEN solid conductor. A
       NumberSpace scalar Vc (axial driving field -dV/dz) is added and constrained
       so  int_region sigma (-j w A_z + Vc) dA = total_current -- net current is
@@ -492,7 +1723,13 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
     a.Assemble()
     f.Assemble()
     gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+    if dirichlet_value:                  # DRIVEN-SURFACE: A_z = dirichlet_value on `dirichlet` (skin slab)
+        gfu.Set(CoefficientFunction(complex(dirichlet_value)), BND,
+                definedon=mesh.Boundaries(dirichlet))
+        r = f.vec - a.mat * gfu.vec
+        gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * r
+    else:
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
     return gfu
 
 
@@ -1070,11 +2307,12 @@ def solve_magnetostatic_nonlinear(mesh, nu_of_B, source=None, order=2,
     """Picard fixed-point solve of the A-formulation with a FIELD-DEPENDENT
     reluctivity:  curl(nu(|B|) curl A) = J  (nonlinear / saturating B-H iron).
 
-    Cross-validated against COMSOL (Newton) on the saturating-iron force case:
-    NGSolve F_z = -4.842 N vs COMSOL -4.930 N (~1.8 %), B_iron ~1.13 T; see the
-    ``force_validation`` MCP tool (comsol_xval case 3). The fixed point matches
-    COMSOL's FullyCoupled/Newton even though we iterate Picard, because both
-    converge the same self-consistent nu(|B|).
+    Cross-validated against an independent reference (Newton) on the
+    saturating-iron force case: NGSolve F_z = -4.898 N vs reference -4.930 N
+    (0.65 %), B_iron ~1.138 T; see the ``force_validation`` MCP tool
+    (cross_validation case 3). The fixed point matches the reference's
+    Newton even though we iterate Picard, because both converge the same
+    self-consistent nu(|B|).
 
     Parameters
     ----------

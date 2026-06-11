@@ -1,4 +1,4 @@
-"""Tri-tool cross-reference: FEMM <-> JMAG <-> radia-ngsolve (相互学習).
+"""Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習).
 
 Cross-learning knowledge that ties the Sugahara-lab's three motor-FEA tools
 together so each strengthens the others:
@@ -23,14 +23,15 @@ it tells radia_mcp.motor where each capability maps across the three tools and
 which strengthening steps have the highest payoff for radia-motor.
 
 Built 2026-06 from: groups.io/g/femm member browsing (synthesis, no verbatim
-bulk ingest) + pyFEMM 0.1.3 cross-checks + the lab's JMAG corpus (S:\\JMAG).
+bulk ingest) + pyFEMM 0.1.3 cross-checks + the lab's internal commercial-tool
+corpus (kept lab-private).
 """
 
 from __future__ import annotations
 
 
 OVERVIEW = """\
-## Tri-tool cross-learning — FEMM <-> JMAG <-> radia-ngsolve
+## Tri-tool cross-learning — FEMM / JMAG / radia-ngsolve
 
 The lab runs three motor-FEA tools. The point of cross-learning (相互学習) is
 to import each tool's strengths into the others and use all three to raise the
@@ -43,7 +44,8 @@ verification bar:
 - Use **radia-ngsolve's high-order accuracy** (order-2 H1) and **EM<->thermal
   auto-coupling** to complement and, where possible, exceed the others.
 - Triangulate every result across the three tools (e.g. transverse-magnetized
-  cylinder: analytic 0.2513 T / radia -0.05% / FEMM -0.60%).
+  cylinder: analytic 0.2513 T / radia -0.05%; a stored independent 2D reference
+  lands at -0.60%).
 
 ### Two new dedicated knowledge servers
 
@@ -69,7 +71,7 @@ CAPABILITY_MATRIX = """\
 
 | Capability | FEMM | JMAG | radia-ngsolve | Strongest |
 |---|---|---|---|---|
-| 2D magnetostatic (A_z) | planar, 1st-order tri | Static2D | solve_planar_magnetostatic (order-2 H1) | **radia** (0.2512 vs FEMM 0.2498) |
+| 2D magnetostatic (A_z) | planar, 1st-order tri | Static2D | solve_planar_magnetostatic (order-2 H1) | **radia** (0.2512 vs stored ref 0.2498) |
 | Nonlinear B-H | BH table + N-R | BhTable + N-R | _nonlinear (Picard ν(\\|B\\|)) | tie |
 | Eddy / time-harmonic | complex A_z | freq-response + FEMコンダクタ | solve_planar_eddy (jωσ) | tie |
 | Torque / force | mo_blockintegral(22/18/19/11) | nodal-force / Maxwell-stress | eggshell_torque_2d | tie |
@@ -89,8 +91,8 @@ CAPABILITY_MATRIX = """\
 RADIA_CAN_EXCEED = """\
 ## Where radia-ngsolve can match or exceed FEMM / JMAG
 
-1. **2D magnetostatic accuracy** — order-2 H1 beats FEMM's 1st-order triangles
-   (transverse-magnet cross-check: radia -0.05% vs FEMM -0.60%).
+1. **2D magnetostatic accuracy** — order-2 H1 beats 1st-order triangles
+   (transverse-magnet cross-check: radia -0.05% vs a stored 2D ref at -0.60%).
 2. **Rotating-machine core loss** — per-element FFT over a rotor sweep ->
    Bertotti/Steinmetz/iGSE (the lab magnetic-materials/electromagnet loss
    models) replaces FEMM's .ans hand-edit hack; competitive with JMAG.
@@ -123,9 +125,9 @@ study, not a near-term capability.
 """
 
 FEMM_ROLE = """\
-## FEMM's role — the ground-truth yardstick
+## FEMM's role — the open-source 2D yardstick
 
-FEMM is the open-source, Compumag-standard reference. Even though radia's
+FEMM is the open-source, Compumag-standard 2D reference. Even though radia's
 order-2 H1 can be more accurate, FEMM's value is as a **widely-validated
 implementation** for cross-checking, plus its rich **.fem model asset base**.
 
