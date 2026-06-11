@@ -109,6 +109,10 @@ public:
     // O((size/r)^2) (the validated monopole+near-correction split).  near_factor defaults to a HUGE
     // value => ALL pairs near => all-analytic (matches the dense build_demag(analytic_gram=True) golden);
     // pass near_factor ~= 2 for the fast split.
+    // The CELL outer-quad uses a built-in 4-pt Gauss-Duffy tet rule (64 nodes) -- the order-0 charge is
+    // constant so the inner is the EXACT analytic PhiTet and INT_T PhiTet dx is smooth, integrated to
+    // ~machine precision.  (The old hardcoded equal-weight _bary_tet(3) under-integrated the volume self-
+    // energy by ~6.5% -- golden-invisible because every uniform-M demag golden has div M = 0.)
     RadHACApKChargeGram(std::vector<double> cell_verts,
                         std::vector<double> face_verts,
                         int n_el, double near_factor = 1e30);

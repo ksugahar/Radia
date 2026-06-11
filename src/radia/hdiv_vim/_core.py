@@ -63,8 +63,33 @@ def _bary_tri(nsub):
     return np.array(lam)   # (m, 3), each row sums to 1
 
 
+def _gauss_duffy_tet(o):
+    """Gauss-Duffy collapsed-cube tet rule: o Gauss-Legendre pts/dim (o^3 nodes), ref-tet coords
+    (lam1,lam2,lam3) + weights summing to 1/6.  For the SMOOTH outer integral of an EXACT analytic inner
+    (phi_tet/tri_potential) this converges to ~machine precision -- it REPLACES the crude equal-weight
+    _bary_tet outer rule, which under-integrated the volume self-energy by ~6.5% (golden-invisible because
+    every uniform-M demag has div M = 0).  Same rule as radia.hdiv_vim._vim._tet_ref(o)."""
+    x, w = np.polynomial.legendre.leggauss(o)
+    s, ws = 0.5 * (x + 1.0), 0.5 * w
+    P, W = [], []
+    for a, wa in zip(s, ws):
+        for b, wb in zip(s, ws):
+            for c, wc in zip(s, ws):
+                P.append((a, b * (1 - a), c * (1 - a) * (1 - b)))
+                W.append(wa * wb * wc * (1 - a) ** 2 * (1 - b))
+    return np.array(P), np.array(W)   # (m,3) ref pts (lam1,lam2,lam3), weights sum 1/6
+
+
 def tet_self_energy(V, vol, nsub):
-    """G_aa for a tet (4 verts V) of volume `vol`: cross sub-point sum + sub-cell self (c_tet)."""
+    """G_aa for a tet (4 verts V) of volume `vol`: cross sub-point sum + sub-cell self (c_tet).
+
+    NOTE (2026-06-12): this empirical cross-subpoint + C_TET*w^(5/3) self is ~10-15% LOW -- the same
+    volume-self quadrature defect that was fixed in the C++ analytic ctor (the production order-0 Gram) and
+    in analytic_charge_gram (the dense reference).  It is NOT fixed here because it feeds only the dense-path
+    PRECONDITIONER diagonal + the monopole-path Gram diagonal, never the production scalable operator (which
+    uses the C++ ctor's own QuadDot(a,a)).  Correcting it makes the wilton_surface=True non-uniform solve
+    CONVERGE (to ~0.6% of analytic_gram) instead of diverging, which retires the surface-only fail-loud
+    guard (test_hdiv_vim_cyoke_nonlinear) -- a behaviour change deferred for a separate decision."""
     lam = _bary_tet(nsub)
     C = lam @ V                                   # (m,3) sub-point positions
     w = np.full(len(C), vol / len(C))             # equal sub-weights, sum = vol
@@ -195,11 +220,11 @@ def analytic_charge_gram(el_V, bf_V, el_vol, bf_area, nsub_tet=3):
     Symmetric; O(n_charge) Python loop (vectorized over target points)."""
     n_el, n_bf = len(el_V), len(bf_V)
     n = n_el + n_bf
-    lam_t = _bary_tet(nsub_tet)                              # tet outer sub-points
-    QP, QW = [], []
+    lam_t, w_t = _gauss_duffy_tet(4)                         # Gauss-Duffy tet outer rule (nsub_tet now unused:
+    QP, QW = [], []                                          # the old _bary_tet outer under-integrated vol-self ~6.5%)
     for k, V in enumerate(el_V):
-        P = lam_t @ V
-        QP.append(P); QW.append(np.full(len(P), el_vol[k] / len(P)))
+        P = V[0] + lam_t @ (V[1:] - V[0])                    # physical outer pts (V0 + l1 e1 + l2 e2 + l3 e3)
+        QP.append(P); QW.append(w_t * 6.0 * el_vol[k])       # phys weight = w_ref * |J|, |J| = 6*vol
     for k, V in enumerate(bf_V):
         QP.append(_DUN5[:, :3] @ V); QW.append(_DUN5[:, 3] * bf_area[k])
     allP = np.vstack(QP)
