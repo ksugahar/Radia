@@ -199,8 +199,13 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
     std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
     std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
-    std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w)
-    : m_n_el(n_el), m_highorder(true),
+    std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+    std::vector<double> ref_tet_pts_lo, std::vector<double> ref_tet_w_lo,
+    std::vector<double> ref_tri_pts_lo, std::vector<double> ref_tri_w_lo,
+    double ho_far_factor,
+    std::vector<double> ref_tet_pts_in, std::vector<double> ref_tet_w_in,
+    std::vector<double> ref_tri_pts_in, std::vector<double> ref_tri_w_in)
+    : m_n_el(n_el), m_highorder(true), m_ho_far_factor(ho_far_factor),
       m_cellV(std::move(cell_verts)), m_faceV(std::move(face_verts)),
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
@@ -222,10 +227,21 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         for (int r = 0; r < 3; ++r) for (int col = 0; col < 3; ++col) E[r*3+col] = V[3*(col+1)+r] - V[r];
         rad_inv3x3(E, &m_cellInv[(size_t)c*9]);
         const double det = E[0]*(E[4]*E[8]-E[5]*E[7]) - E[1]*(E[3]*E[8]-E[5]*E[6]) + E[2]*(E[3]*E[7]-E[4]*E[6]);
-        cellSize[c] = std::cbrt(std::fabs(det) / 6.0);
         rad_hdiv::Vec3 cen = {0, 0, 0};
         for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) cen[k] += V[3*i+k] / 4.0;
         cellCent[c] = cen;
+        // FAR/NEAR size = bounding radius (max centroid->vertex distance), NOT cbrt(vol): the isotropic
+        // cbrt(vol) UNDERESTIMATES the extent of high-aspect-ratio (needle/sliver) tets, so a TOUCHING pair
+        // could satisfy r > ho_far_factor*(size_a+size_b) and be misclassified FAR -> routed to the
+        // subtraction-free QuadDotFar on a near-SINGULAR integrand (wrong by ~1-5%, growing with aspect
+        // ratio).  The bounding radius captures the long extent so touching pairs always stay NEAR.
+        double rmax = 0.0;
+        for (int i = 0; i < 4; ++i) {
+            const double dvx = V[3*i] - cen[0], dvy = V[3*i+1] - cen[1], dvz = V[3*i+2] - cen[2];
+            const double rr = std::sqrt(dvx*dvx + dvy*dvy + dvz*dvz);
+            if (rr > rmax) rmax = rr;
+        }
+        cellSize[c] = rmax;
         cellQP[c].resize(nqt); cellQW[c].resize(nqt);
         for (int q = 0; q < nqt; ++q) {
             const double a = ref_tet_pts[3*q], b = ref_tet_pts[3*q+1], cc = ref_tet_pts[3*q+2];
@@ -251,10 +267,18 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         rad_inv2x2(g, &m_faceGinv[(size_t)f*4]);
         double cr[3] = {a1[1]*a2[2]-a1[2]*a2[1], a1[2]*a2[0]-a1[0]*a2[2], a1[0]*a2[1]-a1[1]*a2[0]};
         const double area = 0.5 * std::sqrt(cr[0]*cr[0]+cr[1]*cr[1]+cr[2]*cr[2]);
-        faceSize[f] = std::sqrt(area);
         rad_hdiv::Vec3 cen = {0, 0, 0};
         for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) cen[k] += V[3*i+k] / 3.0;
         faceCent[f] = cen;
+        // FAR/NEAR size = bounding radius (max centroid->vertex distance), NOT sqrt(area) -- same reason as
+        // the cell loop: a thin/elongated boundary face's sqrt(area) underestimates its extent.
+        double rmax = 0.0;
+        for (int i = 0; i < 3; ++i) {
+            const double dvx = V[3*i] - cen[0], dvy = V[3*i+1] - cen[1], dvz = V[3*i+2] - cen[2];
+            const double rr = std::sqrt(dvx*dvx + dvy*dvy + dvz*dvz);
+            if (rr > rmax) rmax = rr;
+        }
+        faceSize[f] = rmax;
         faceQP[f].resize(nqr); faceQW[f].resize(nqr);
         for (int q = 0; q < nqr; ++q) {
             const double u = ref_tri_pts[2*q], v = ref_tri_pts[2*q+1];
@@ -264,6 +288,49 @@ RadHACApKChargeGram::RadHACApKChargeGram(
             faceQW[f][q] = ref_tri_w[q] * (2.0 * area);     // phys weight = ref_w * |J|, |J| = 2*area
         }
     }
+    // INNER subtraction rule (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
+    // singular part is carried EXACTLY by base = m_src(p)*PhiTet/TriPotential), so the inner sum tolerates a
+    // COARSER rule than the outer (which must resolve the degree-p target monomial folded into m_qw).  When
+    // the caller supplies ref_*_in, m_inP/m_inW use it; else they fall back to the outer rule (inner=outer).
+    const int nqt_in = (int)ref_tet_w_in.size();
+    const int nqr_in = (int)ref_tri_w_in.size();
+    const bool use_inner = (nqt_in > 0 && nqr_in > 0);
+    std::vector<std::vector<rad_hdiv::Vec3>> cellQP_in, faceQP_in;
+    std::vector<std::vector<double>>          cellQW_in, faceQW_in;
+    if (use_inner) {
+        cellQP_in.resize(n_cell); cellQW_in.resize(n_cell);
+        for (int c = 0; c < n_cell; ++c) {
+            const double* V = &m_cellV[(size_t)c * 12];
+            double E[9];
+            for (int r = 0; r < 3; ++r) for (int col = 0; col < 3; ++col) E[r*3+col] = V[3*(col+1)+r] - V[r];
+            const double det = E[0]*(E[4]*E[8]-E[5]*E[7]) - E[1]*(E[3]*E[8]-E[5]*E[6]) + E[2]*(E[3]*E[7]-E[4]*E[6]);
+            cellQP_in[c].resize(nqt_in); cellQW_in[c].resize(nqt_in);
+            for (int q = 0; q < nqt_in; ++q) {
+                const double a = ref_tet_pts_in[3*q], b = ref_tet_pts_in[3*q+1], cc = ref_tet_pts_in[3*q+2];
+                rad_hdiv::Vec3 P;
+                for (int k = 0; k < 3; ++k) P[k] = V[k] + a*(V[3+k]-V[k]) + b*(V[6+k]-V[k]) + cc*(V[9+k]-V[k]);
+                cellQP_in[c][q] = P;
+                cellQW_in[c][q] = ref_tet_w_in[q] * std::fabs(det);
+            }
+        }
+        faceQP_in.resize(n_bf); faceQW_in.resize(n_bf);
+        for (int f = 0; f < n_bf; ++f) {
+            const double* V = &m_faceV[(size_t)f * 9];
+            double a1[3], a2[3];
+            for (int k = 0; k < 3; ++k) { a1[k] = V[3+k]-V[k]; a2[k] = V[6+k]-V[k]; }
+            double cr[3] = {a1[1]*a2[2]-a1[2]*a2[1], a1[2]*a2[0]-a1[0]*a2[2], a1[0]*a2[1]-a1[1]*a2[0]};
+            const double area = 0.5 * std::sqrt(cr[0]*cr[0]+cr[1]*cr[1]+cr[2]*cr[2]);
+            faceQP_in[f].resize(nqr_in); faceQW_in[f].resize(nqr_in);
+            for (int q = 0; q < nqr_in; ++q) {
+                const double u = ref_tri_pts_in[2*q], v = ref_tri_pts_in[2*q+1];
+                rad_hdiv::Vec3 P;
+                for (int k = 0; k < 3; ++k) P[k] = V[k] + u*a1[k] + v*a2[k];
+                faceQP_in[f][q] = P;
+                faceQW_in[f][q] = ref_tri_w_in[q] * (2.0 * area);
+            }
+        }
+    }
+
     // per-CHARGE: host geometry + monomial-folded outer weights + the inner subtraction table
     m_cent.assign((size_t)m_n * 3, 0.0);
     m_size.assign((size_t)m_n, 0.0);
@@ -282,8 +349,87 @@ RadHACApKChargeGram::RadHACApKChargeGram(
             const double p[3] = {QP[q][0], QP[q][1], QP[q][2]};
             m_qw[a][q] = QW[q] * EvalMono(a, p);            // fold m_a(x_q) into the outer weight
         }
-        m_inP[a] = QP;            // inner subtraction table = the host's quadrature (same rule)
-        m_inW[a] = QW;
+        if (use_inner) {          // B2: COARSER inner subtraction rule (smooth remainder, separate from outer)
+            m_inP[a] = (m_kind[a] == 0) ? cellQP_in[host] : faceQP_in[host];
+            m_inW[a] = (m_kind[a] == 0) ? cellQW_in[host] : faceQW_in[host];
+        } else {
+            m_inP[a] = QP;        // inner = outer (original behavior)
+            m_inW[a] = QW;
+        }
+    }
+    // precompute m_src(y_q) at the FIXED inner subtraction points -> bit-exact hoist of EvalMono out of the
+    // hot PhiAtHO inner loop (the value depends only on (src,q), not on the outer point nor the tgt monomial,
+    // yet was recomputed quad^3 times per entry AND for every entry / co-located monomial sharing the source).
+    m_srcval.resize(m_n);
+    for (int a = 0; a < m_n; ++a) {
+        m_srcval[a].resize(m_inP[a].size());
+        for (size_t q = 0; q < m_inP[a].size(); ++q) {
+            const double y[3] = {m_inP[a][q][0], m_inP[a][q][1], m_inP[a][q][2]};
+            m_srcval[a][q] = EvalMono(a, y);
+        }
+    }
+
+    // ---- LOW-quad tables for the cheap FAR plain double-Gauss (near/far adaptive quadrature) ----
+    // Built only when the caller supplies the LOW reference rules AND a finite far factor; otherwise the
+    // far split is disabled and every pair uses the full high-quad subtraction (original behavior).
+    const int nqt_lo = (int)ref_tet_w_lo.size();
+    const int nqr_lo = (int)ref_tri_w_lo.size();
+    if (m_ho_far_factor < 1e29 && nqt_lo > 0 && nqr_lo > 0) {
+        std::vector<std::vector<rad_hdiv::Vec3>> cellQP_lo(n_cell), faceQP_lo(n_bf);
+        std::vector<std::vector<double>>          cellQW_lo(n_cell), faceQW_lo(n_bf);
+        for (int c = 0; c < n_cell; ++c) {
+            const double* V = &m_cellV[(size_t)c * 12];
+            double E[9];
+            for (int r = 0; r < 3; ++r) for (int col = 0; col < 3; ++col) E[r*3+col] = V[3*(col+1)+r] - V[r];
+            const double det = E[0]*(E[4]*E[8]-E[5]*E[7]) - E[1]*(E[3]*E[8]-E[5]*E[6]) + E[2]*(E[3]*E[7]-E[4]*E[6]);
+            cellQP_lo[c].resize(nqt_lo); cellQW_lo[c].resize(nqt_lo);
+            for (int q = 0; q < nqt_lo; ++q) {
+                const double a = ref_tet_pts_lo[3*q], b = ref_tet_pts_lo[3*q+1], cc = ref_tet_pts_lo[3*q+2];
+                rad_hdiv::Vec3 P;
+                for (int k = 0; k < 3; ++k) P[k] = V[k] + a*(V[3+k]-V[k]) + b*(V[6+k]-V[k]) + cc*(V[9+k]-V[k]);
+                cellQP_lo[c][q] = P;
+                cellQW_lo[c][q] = ref_tet_w_lo[q] * std::fabs(det);
+            }
+        }
+        for (int f = 0; f < n_bf; ++f) {
+            const double* V = &m_faceV[(size_t)f * 9];
+            double a1[3], a2[3];
+            for (int k = 0; k < 3; ++k) { a1[k] = V[3+k]-V[k]; a2[k] = V[6+k]-V[k]; }
+            double cr[3] = {a1[1]*a2[2]-a1[2]*a2[1], a1[2]*a2[0]-a1[0]*a2[2], a1[0]*a2[1]-a1[1]*a2[0]};
+            const double area = 0.5 * std::sqrt(cr[0]*cr[0]+cr[1]*cr[1]+cr[2]*cr[2]);
+            faceQP_lo[f].resize(nqr_lo); faceQW_lo[f].resize(nqr_lo);
+            for (int q = 0; q < nqr_lo; ++q) {
+                const double u = ref_tri_pts_lo[2*q], v = ref_tri_pts_lo[2*q+1];
+                rad_hdiv::Vec3 P;
+                for (int k = 0; k < 3; ++k) P[k] = V[k] + u*a1[k] + v*a2[k];
+                faceQP_lo[f][q] = P;
+                faceQW_lo[f][q] = ref_tri_w_lo[q] * (2.0 * area);
+            }
+        }
+        m_qp_lo.resize(m_n); m_qw_lo.resize(m_n); m_inP_lo.resize(m_n); m_inW_lo.resize(m_n);
+        for (int a = 0; a < m_n; ++a) {
+            const int host = m_host[a];
+            const std::vector<rad_hdiv::Vec3>& QPl = (m_kind[a] == 0) ? cellQP_lo[host] : faceQP_lo[host];
+            const std::vector<double>&         QWl = (m_kind[a] == 0) ? cellQW_lo[host] : faceQW_lo[host];
+            m_qp_lo[a] = QPl;
+            m_qw_lo[a].resize(QPl.size());
+            for (size_t q = 0; q < QPl.size(); ++q) {
+                const double p[3] = {QPl[q][0], QPl[q][1], QPl[q][2]};
+                m_qw_lo[a][q] = QWl[q] * EvalMono(a, p);   // fold m_a into the LOW outer weight
+            }
+            m_inP_lo[a] = QPl;       // LOW inner points (plain; m_b evaluated on the fly in QuadDotFar)
+            m_inW_lo[a] = QWl;
+        }
+        m_srcval_lo.resize(m_n);     // precompute m_src(y_q) at the FIXED LOW inner points (bit-exact, for QuadDotFar)
+        for (int a = 0; a < m_n; ++a) {
+            m_srcval_lo[a].resize(m_inP_lo[a].size());
+            for (size_t q = 0; q < m_inP_lo[a].size(); ++q) {
+                const double y[3] = {m_inP_lo[a][q][0], m_inP_lo[a][q][1], m_inP_lo[a][q][2]};
+                m_srcval_lo[a][q] = EvalMono(a, y);
+            }
+        }
+    } else {
+        m_ho_far_factor = 1e30;     // no LOW rule supplied -> disable the far split (every pair NEAR)
     }
 }
 
@@ -335,8 +481,7 @@ double RadHACApKChargeGram::PhiAtHO(int src, const double p[3]) const
         const double dx = p[0]-Y[q][0], dy = p[1]-Y[q][1], dz = p[2]-Y[q][2];
         const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
         if (r < 1e-300) continue;                          // p coincides with a node (self block) -> Phi term covers it
-        const double yq[3] = {Y[q][0], Y[q][1], Y[q][2]};
-        rem += W[q] * (EvalMono(src, yq) - msrc_p) / r;
+        rem += W[q] * (m_srcval[src][q] - msrc_p) / r;     // m_srcval[src][q] == EvalMono(src, Y[q]) (precomputed)
     }
     return base + rem;
 }
@@ -367,6 +512,32 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
     return s * RAD_INV_FOUR_PI;
 }
 
+double RadHACApKChargeGram::QuadDotFar(int tgt, int src) const
+{
+    // cheap FAR evaluation (near/far adaptive quadrature): plain LOW-quad double Gauss of
+    //   (1/4pi) INT_tgt INT_src m_t(x) m_s(y) / |x-y|.
+    // Only called for WELL-SEPARATED pairs, where 1/|x-y| is SMOOTH -> low-order Gauss is accurate and the
+    // singularity-subtraction (PhiTet + inner subtraction) of the NEAR QuadDot is unnecessary.  m_t(x) is
+    // folded into m_qw_lo (outer); m_s(y) is evaluated on the fly for the plain inner sum.
+    const std::vector<rad_hdiv::Vec3>& Px = m_qp_lo[tgt];
+    const std::vector<double>&         Wx = m_qw_lo[tgt];
+    const std::vector<rad_hdiv::Vec3>& Py = m_inP_lo[src];
+    const std::vector<double>&         Wy = m_inW_lo[src];
+    double s = 0.0;
+    for (size_t i = 0; i < Px.size(); ++i) {
+        const double x0 = Px[i][0], x1 = Px[i][1], x2 = Px[i][2];
+        double inner = 0.0;
+        for (size_t j = 0; j < Py.size(); ++j) {
+            const double dx = x0 - Py[j][0], dy = x1 - Py[j][1], dz = x2 - Py[j][2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r < 1e-300) continue;                        // far pairs are well-separated; defensive only
+            inner += Wy[j] * m_srcval_lo[src][j] / r;        // m_srcval_lo[src][j] == EvalMono(src, Py[j]) (precomputed)
+        }
+        s += Wx[i] * inner;                                  // Wx folds m_t(x)
+    }
+    return s * RAD_INV_FOUR_PI;
+}
+
 void RadHACApKChargeGram::ExtractCoordinates()
 {
     m_n_elem = m_n;
@@ -377,10 +548,22 @@ void RadHACApKChargeGram::ExtractCoordinates()
 double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
 {
     if (m_highorder) {
-        // polynomial charges: NO monopole far (zero-mean modes have zero monopole) -- all pairs analytic,
-        // symmetrized; the HACApK ACA compresses the well-separated low-rank blocks.
-        if (a == b) return QuadDot(a, a);
-        return 0.5 * (QuadDot(a, b) + QuadDot(b, a));
+        // polynomial charges, symmetrized; the HACApK ACA compresses the well-separated low-rank blocks.
+        // NEAR/FAR adaptive quadrature: a well-separated pair uses the cheap LOW-quad plain double-Gauss
+        // (QuadDotFar) -- the kernel is smooth there so the expensive HIGH-quad singularity-subtraction is
+        // unnecessary; NEAR/self pairs keep the full QuadDot.  This is NOT a monopole far (zero-mean modes
+        // have zero monopole) -- it is just a lower quadrature order where the integrand is smooth.
+        // m_ho_far_factor = 1e30 (no LOW rule supplied) => every pair NEAR => original all-high-quad path.
+        if (a == b) return QuadDot(a, a);                        // self: always the full high-quad subtraction
+        if (m_ho_far_factor < 1e29) {
+            const double dx = m_cent[3*a]     - m_cent[3*b];
+            const double dy = m_cent[3*a + 1] - m_cent[3*b + 1];
+            const double dz = m_cent[3*a + 2] - m_cent[3*b + 2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r > m_ho_far_factor * (m_size[a] + m_size[b]))
+                return 0.5 * (QuadDotFar(a, b) + QuadDotFar(b, a));   // FAR: cheap low-quad plain double-Gauss
+        }
+        return 0.5 * (QuadDot(a, b) + QuadDot(b, a));            // NEAR: full high-quad subtraction
     }
     if (m_analytic) {
         // Diagonal = the analytic self (the Wilton/phi_tet potential is exact through the 1/r singularity).
