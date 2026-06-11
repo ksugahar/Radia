@@ -270,6 +270,32 @@ phi = B0 (y^2 - x^2) / (2 psi)
 
 satisfies (F1)-(F3) identically and reconstructs `B = (y, x, B0)`.
 
+## 7. Relation to prior work
+
+This formulation is **not claimed as novel in concept**. The variable-swap
+mechanism (flux/potential labels as coordinates, geometry as the unknown,
+energy minimization) is classical across several fields; see
+[`LITERATURE.md`](LITERATURE.md) for the full survey. Most directly:
+
+- **The 2-D case is published**: A. Dervisha, A. Marjamaki, P. Rasilo,
+  T. Tarhasaari, "Bidirectional Coordinate Transformation and Its Application
+  to 2-D Magnetic Field Problems", CEFC 2026 (Tampere University; Bossavit
+  school) -- the exact 2-D case of the full swap (`(x,y) <-> (A, phi)`
+  potential coordinates), derived via exterior calculus, with nonlinear
+  `mu(A,phi)`. Their conclusion explicitly announces the manifold/3-D
+  generalization as ongoing work ("the introduction part for a long story").
+- **Lineage**: Clebsch/Euler potentials (Stern 1970); inverse flux-coordinate
+  equilibrium (VMEC, Hirshman & Whitson 1983; inverse Grad-Shafranov; BETA,
+  Bauer-Betancourt-Garabedian); curl-free fields with position-as-unknown
+  (Boozer 2019); the partial-swap twin in fluid mechanics (von Mises 1927;
+  Stanitz); conformal pole design (Rogowski 1923 / Halbach).
+
+What this directory adds is an **independent, complementary 3-D derivation**
+via the Clebsch pair `B = grad(phi) x grad(psi)` (vs. exterior calculus), with
+explicit 3-D equations (E1)-(E3)/(F1)-(F3), a variational form, and
+sympy-verified exact solutions -- a verified repository capability, regardless
+of publication priority.
+
 ## Run the verification
 
 ```
@@ -288,3 +314,24 @@ nonzero on any failure.
 - W. D. D'haeseleer, W. N. G. Hitchon, J. D. Callan, J. L. Shohet,
   "Flux Coordinates and Magnetic Field Structure", Springer (1991) —
   inverse (flux-coordinate) formulations of magnetostatic equilibria.
+- A. Dervisha, A. Marjamaki, P. Rasilo, T. Tarhasaari, "Bidirectional
+  Coordinate Transformation and Its Application to 2-D Magnetic Field
+  Problems", CEFC 2026 — the 2-D case of the full swap (potential coordinates
+  `(A, phi)`), exterior-calculus derivation, nonlinear `mu`; announces the 3-D
+  generalization as ongoing work.
+- A. Bossavit, "Computational Electromagnetism: Variational Formulations,
+  Complementarity, Edge Elements", Academic Press (1998) — the exterior-calculus
+  formalism underlying the Tampere derivation.
+- S. P. Hirshman, J. C. Whitson, "Steepest-descent moment method for
+  three-dimensional magnetohydrodynamic equilibria" (VMEC), Phys. Fluids 26,
+  3553 (1983) — inverse-coordinate equilibrium `x = x(rho, theta, zeta)`;
+  the toroidal `p=0` parent of Variant 1.
+- A. H. Boozer, "Curl-free magnetic fields for stellarator optimization",
+  Phys. Plasmas 26, 102504 (2019) — curl-free field with position as the
+  unknown in flux/angle coordinates (closest single prior line).
+- R. von Mises, "Bemerkungen zur Hydrodynamik", ZAMM 7, 425 (1927) — the
+  `(x, psi)` partial-swap with `y(x, psi)` unknown; the 2-D fluid twin of
+  Variant 2.
+
+See [`LITERATURE.md`](LITERATURE.md) for the full prior-art survey and the
+honest novelty assessment.
