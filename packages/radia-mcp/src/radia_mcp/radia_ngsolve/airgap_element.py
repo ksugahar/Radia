@@ -117,3 +117,118 @@ def maxwell_torque_numeric(n, ri, ro, A_in, A_out, r, axial_length=1.0, mu0=MU0,
         e = cmath.exp(1j * n * k * dth)
         acc += (Br_hat * e).real * (Bth_hat * e).real * dth
     return r * r * axial_length / mu0 * acc
+
+
+# ---------------------------------------------------------------------------
+# Planar gap (linear motor / axial-flux machine -- the planar analogue of the annular AGE)
+# ---------------------------------------------------------------------------
+#
+# In the current-free planar gap 0 < z < g each transverse Fourier mode with
+# wavenumber k satisfies Laplace → d²A/dz² = k²A, so
+#
+#     A(z)  =  a sinh(k z) + b sinh(k (g-z)),    S = sinh(k g)
+#     A(0) = b S  →  b = A_bottom / S
+#     A(g) = a S  →  a = A_top    / S
+#
+# DtN (Steklov) matrix M,  [dA/dz|_0 ; dA/dz|_g] = M @ [A_bottom ; A_top]:
+#
+#     M = (k/S) [[ -cosh(k g),  1          ],
+#                [ -1,          cosh(k g)  ]]
+#
+# Thrust force (spatial average over one period in x, on the bottom plane z=0):
+#
+#     F_x = (k² x_period y_depth / (2 μ₀ S)) Im(A_bottom conj(A_top))
+#
+# POSITION-INDEPENDENT: verified by maxwell_thrust_numeric at every z ∈ [0, g]
+# (the planar gem, exactly analogous to the radius-independence of the rotary torque).
+#
+# Correspondence with the annular AGE:
+#   r^n  ↔  sinh(k z)         (basis function in the gap)
+#   angular index n  ↔  wavenumber k = n π / W (or 2π n / W)
+#   rotary torque T  ↔  linear thrust F_x
+#
+# Open method (Abdel-Razek/Konrad 1982 generalised); analytic, publishable.
+
+
+def planar_harmonic_coeffs(k, g, A_bottom, A_top):
+    """Complex (a, b) with A(z) = a sinh(kz) + b sinh(k(g-z)), normalised by S = sinh(kg).
+
+    From A(0) = b S = A_bottom and A(g) = a S = A_top:
+        a = A_top    / sinh(k g)
+        b = A_bottom / sinh(k g)"""
+    S = cmath.sinh(k * g)
+    return A_top / S, A_bottom / S
+
+
+def planar_field(k, g, A_bottom, A_top, z):
+    """The planar harmonic potential A(z) [real] at gap position z ∈ [0, g]."""
+    a, b = planar_harmonic_coeffs(k, g, A_bottom, A_top)
+    return (a * cmath.sinh(k * z) + b * cmath.sinh(k * (g - z))).real
+
+
+def planar_radial_trace(k, g, A_bottom, A_top):
+    """DtN action: (dA/dz|_{z=0}, dA/dz|_{z=g}) from (A_bottom, A_top).
+
+    dA/dz|_0 = k (a - b cosh(kg)) = k/S (A_top - A_bottom cosh(kg))
+    dA/dz|_g = k (a cosh(kg) - b) = k/S (A_top cosh(kg) - A_bottom)"""
+    a, b = planar_harmonic_coeffs(k, g, A_bottom, A_top)
+    ckg = cmath.cosh(k * g)
+    d_bottom = k * (a - b * ckg)
+    d_top    = k * (a * ckg - b)
+    return d_bottom, d_top
+
+
+def planar_dtn_matrix(k, g):
+    """2×2 Dirichlet-to-Neumann (Steklov) matrix M for the planar gap,
+
+        [dA/dz|_0 ; dA/dz|_g]  =  M @ [A_bottom ; A_top]
+
+        M = (k/S) [[ -cosh(kg),  1         ],
+                   [ -1,          cosh(kg) ]]
+
+    Returned as ((M11, M12), (M21, M22)).  Direct planar analogue of
+    :func:`annular_dtn_matrix`; assembles into the NGSolve stiffness exactly
+    as the annular DtN does (same Woodbury low-rank structure).
+
+    The bottom-plane row (M[0]) borders the lower FE region; the top-plane
+    row (M[1]) borders the upper FE region."""
+    d_b_in,  d_t_in  = planar_radial_trace(k, g, 1.0, 0.0)  # A_bottom=1, A_top=0
+    d_b_out, d_t_out = planar_radial_trace(k, g, 0.0, 1.0)  # A_bottom=0, A_top=1
+    return ((d_b_in, d_b_out), (d_t_in, d_t_out))
+
+
+def planar_dtn_modes(g, wavenumbers):
+    """Bottom-plane (M[0][0], M[0][1]) of the gap DtN for each wavenumber k in
+    ``wavenumbers``.  Returns ``{k: (M01, M00)}`` (coupling, self-term) -- direct
+    analogue of :func:`airgap_dtn_modes`."""
+    return {k: planar_dtn_matrix(k, g)[0] for k in wavenumbers}
+
+
+def planar_harmonic_thrust(k, g, A_bottom, A_top, x_period, y_depth=1.0, mu0=MU0):
+    """Position-independent thrust force [N] on the bottom plane (z=0) in the +x direction,
+    over the area x_period × y_depth:
+
+        F_x = (k² x_period y_depth / (2 μ₀ sinh(kg)))  Im(A_bottom conj(A_top)).
+
+    POSITION-INDEPENDENT: the same force results at every z in the gap (verified by
+    :func:`maxwell_thrust_numeric`).  Sign: F_x > 0 when Im(A_bottom conj(A_top)) > 0,
+    i.e. when A_top leads A_bottom in phase by an angle δ ∈ (π, 2π) (or lags by δ ∈ (0,π)).
+    This is the exact planar analogue of :func:`airgap_harmonic_torque`."""
+    S = math.sinh(k * g)
+    return (k * k * x_period * y_depth / (2.0 * mu0 * S)) * (A_bottom * A_top.conjugate()).imag
+
+
+def maxwell_thrust_numeric(k, g, A_bottom, A_top, z, x_period, y_depth=1.0, mu0=MU0):
+    """Independent check: Maxwell-stress thrust at height z ∈ [0, g] via closed-form
+    spatial average.
+
+    <T_xz>_x = (k / 2μ₀) Im[A(z) conj(dA/dz)(z)]
+
+    and the total force F_x = <T_xz>_x × x_period × y_depth.  This must equal
+    :func:`planar_harmonic_thrust` at EVERY z (the planar gem / position-independence).
+    Uses the exact phasor formula (no quadrature), so the comparison is analytic."""
+    a, b = planar_harmonic_coeffs(k, g, A_bottom, A_top)
+    Az  = a * cmath.sinh(k * z) + b * cmath.sinh(k * (g - z))
+    dAz = k * (a * cmath.cosh(k * z) - b * cmath.cosh(k * (g - z)))
+    # <Bx Bz>_x = (k/2) Im[Az dAz*], force on bottom = <T_xz> = (1/mu0)<Bx Bz>
+    return (k * x_period * y_depth / (2.0 * mu0)) * (Az * dAz.conjugate()).imag

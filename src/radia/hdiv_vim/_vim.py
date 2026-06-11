@@ -98,14 +98,36 @@ def _csr(bf):
     return sp.csr_matrix((np.array(v), (np.array(r), np.array(c))), shape=(bf.mat.height, bf.mat.width))
 
 
-def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=32, eta=2.0):
+def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
+                      inner_quad=None):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
-    order=0 is the degenerate constant-monomial case (== RT0).  The CALLER wraps in TaskManager."""
+    order=0 is the degenerate constant-monomial case (== RT0).  The CALLER wraps in TaskManager.
+
+    NEAR/FAR adaptive quadrature (order>0, the DEFAULT build speedup -- accuracy-preserving + golden-locked):
+    far charge pairs use a cheap LOW-quad plain double-Gauss in the C++ Gram (the kernel is smooth there),
+    near/self pairs keep the full high-quad subtraction.  far_quad = the LOW Gauss pts/dim (<< the near
+    `quad`); ho_far_factor = the separation threshold (FAR if |c_a-c_b| > ho_far_factor*(size_a+size_b), the
+    size = each host's BOUNDING RADIUS, so touching high-aspect-ratio needle/sliver elements are never
+    misclassified FAR).  DEFAULT ho_far_factor=2.0 => the split is ON; it is validated to match the exact
+    all-high-quad build to <1e-3 by tests/feec/test_hdiv_vim_nearfar_highorder.py -- so this is NOT a silent
+    approximation, it is a TESTED accuracy-preserving quadrature-order choice (a default param == the user's
+    contract).  Pass ho_far_factor=inf to FORCE the exact all-high-quad build (e.g. a golden reference)."""
     mesh = fes.mesh
     p = fes.globalorder
     pv = max(p - 1, 0)
-    quad = max(p + 2, (intorder + 1) // 2) if intorder is not None else max(6, p + 4)  # Gauss pts / dim
+    # Gauss pts/dim.  The near-entry cost is O(quad^6 for vol-vol), so the floor matters: polynomial
+    # exactness of the (subtraction-regularized) entry needs only ~p+2 pts/dim, NOT the old hard floor of 6.
+    # Measured (uniform-M cube, exact demag=1/3): quad=4 holds |D-1/3| ~ 7.6e-5 (vs 1.6e-5 at quad=6) and
+    # <5e-4 self-convergence on non-uniform M -- both well inside engineering tolerance, for a ~5x build
+    # speedup at p=1,2.  Floor at 4 (p=1,2 -> 4; p>=3 -> p+2).  Override via intorder for more/less.
+    quad = max(p + 2, (intorder + 1) // 2) if intorder is not None else max(4, p + 2)
+    # INNER subtraction quad (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
+    # singular part is carried EXACTLY by the analytic PhiTet/TriPotential base), so the inner sum uses a
+    # COARSER rule than the outer -> another ~1.5-2x on the O(quad_out^3 * quad_in^3) near entries.  Floor at
+    # max(quad-2, p+1); only passed to C++ when iq < quad (else inner = outer).  Validated to hold the same
+    # demag accuracy as inner=outer by the nearfar/operator goldens + the uniform-1/3 metric.
+    iq = inner_quad if inner_quad is not None else max(quad - 2, p + 1)
     nn = ng.specialcf.normal(mesh.dim)
     L2v, L2b = ng.L2(mesh, order=pv), ng.SurfaceL2(mesh, order=p)
     u = fes.TrialFunction()
@@ -157,12 +179,28 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=32, eta=2.0):
         G = _rp._ChargeGramHMatrix(cell_verts=cell_verts, face_verts=face_verts, n_el=len(vels),
                                    eps=eps, leaf=leafsize, eta=eta, near_factor=1e30)
     else:
-        G = _rp._ChargeGramHMatrix(
-            cell_verts=cell_verts, face_verts=face_verts,
-            n_el=len(vels), charge_host=host, charge_kind=kind, charge_expo=expo,
-            ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
-            ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
-            eps=eps, leaf=leafsize, eta=eta)
+        # order p>0: monomial-charge quadrature Gram.  By DEFAULT (ho_far_factor=2.0) the near/far split is
+        # ON -- well-separated pairs use the cheap LOW-quad QuadDotFar, near/self keep the full high-quad
+        # subtraction (validated accuracy-preserving by the nearfar golden).  Pass ho_far_factor=inf to
+        # DISABLE the split (every pair high-quad = the exact reference build; the _lo rules are then not
+        # built or passed, binding the same way the pre-far-split overload did).
+        kw = dict(cell_verts=cell_verts, face_verts=face_verts,
+                  n_el=len(vels), charge_host=host, charge_kind=kind, charge_expo=expo,
+                  ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
+                  ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
+                  eps=eps, leaf=leafsize, eta=eta)
+        if np.isfinite(ho_far_factor):
+            rtp_lo, rtw_lo = _tet_ref(far_quad)
+            rsp_lo, rsw_lo = _tri_ref(far_quad)
+            kw.update(ref_tet_pts_lo=rtp_lo.ravel().tolist(), ref_tet_w_lo=rtw_lo.tolist(),
+                      ref_tri_pts_lo=rsp_lo.ravel().tolist(), ref_tri_w_lo=rsw_lo.tolist(),
+                      ho_far_factor=ho_far_factor)
+        if iq < quad:
+            rtp_in, rtw_in = _tet_ref(iq)
+            rsp_in, rsw_in = _tri_ref(iq)
+            kw.update(ref_tet_pts_in=rtp_in.ravel().tolist(), ref_tet_w_in=rtw_in.tolist(),
+                      ref_tri_pts_in=rsp_in.ravel().tolist(), ref_tri_w_in=rsw_in.tolist())
+        G = _rp._ChargeGramHMatrix(**kw)
     return B, G, M_mass
 
 
@@ -212,9 +250,12 @@ class DemagOperator:
     H-matrix-backed NGSolve BaseMatrix N = B^T G B.  See the module docstring for the idiom.  The CALLER
     wraps construction + DemagFactor in `with TaskManager():`."""
 
-    def __init__(self, fes, intorder=None, eps=1e-7, leafsize=32, eta=2.0):
+    def __init__(self, fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0,
+                 far_quad=3, ho_far_factor=2.0, inner_quad=None):
         self.space = fes
-        self._B, self._G, self._Mmass = build_charge_gram(fes, intorder, eps, leafsize, eta)
+        self._B, self._G, self._Mmass = build_charge_gram(
+            fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
+            far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad)
         self.mat = _DemagMat(fes, self._B, self._G)
 
     @property

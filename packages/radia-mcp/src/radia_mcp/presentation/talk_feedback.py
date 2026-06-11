@@ -164,13 +164,14 @@ FIELD_NOTES: list[dict] = [
         "questions": [
             {
                 "q": "How do accuracy / convergence compare with the "
-                     "commercial standards (CST, OPERA-3D)?",
+                     "commercial standards (OPERA-3D)?",
                 "a": "The whole talk is built on it: a convergence study on a "
-                     "T-shaped magnet (N=1..10) vs CST, plus C-shaped and "
-                     "quadrupole mesh-dependence -- the proposed method "
-                     "converges far faster than plain MMM and matches CST.",
+                     "T-shaped magnet (N=1..10) vs a stored commercial reference, "
+                     "plus C-shaped and quadrupole mesh-dependence -- the proposed "
+                     "method converges far faster than plain MMM and matches that "
+                     "reference.",
                 "lesson": "Position vs the SPECIFIC tools the audience uses "
-                          "(CST/OPERA-3D/Radia) and SHOW a convergence study "
+                          "(OPERA-3D / Radia) and SHOW a convergence study "
                           "against them, over several example geometries.",
             },
             {
