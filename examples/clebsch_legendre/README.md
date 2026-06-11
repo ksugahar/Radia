@@ -1,14 +1,18 @@
-# Clebsch-Potential Magnetostatics: Legendre (Hodograph) Transformation to Flux Coordinates
+# Clebsch-Potential Magnetostatics: Legendre (Hodograph) Transformations to Flux Coordinates
 
-Derivation of the magnetostatic equations with two Clebsch potentials
-`phi`, `psi` as independent variables: the roles of dependent and
-independent variables are swapped from `(x, y, z)` with unknowns
-`phi(x,y,z)`, `psi(x,y,z)` to `(phi, psi, z)` with unknowns
-`x(phi,psi,z)`, `y(phi,psi,z)`.
+Derivation of the magnetostatic equations with Clebsch potentials as
+independent variables. Two transformations of the forward problem
+(`B = grad(phi) x grad(psi)`, unknowns `phi(x,y,z)`, `psi(x,y,z)`):
 
-All equations below are verified symbolically by
-[`verify_clebsch_legendre_transform.py`](verify_clebsch_legendre_transform.py)
-(sympy, 27 checks).
+1. **Full swap** `(x, y, z) -> (phi, psi, z)`: unknowns
+   `x(phi,psi,z)`, `y(phi,psi,z)` — sections 1-5, verified by
+   [`verify_clebsch_legendre_transform.py`](verify_clebsch_legendre_transform.py)
+   (sympy, 27 checks).
+2. **Partial swap** `(x, y, z) -> (x, y, psi)`: unknowns
+   `z(x,y,psi)`, `phi(x,y,psi)` — section 6, verified by
+   [`verify_clebsch_partial_legendre_transform.py`](verify_clebsch_partial_legendre_transform.py)
+   (sympy, 26 checks). In the 2D limit `phi` reduces to the magnetic
+   vector potential component `A_z`.
 
 ## 1. Forward formulation (independent variables x, y, z)
 
@@ -160,14 +164,106 @@ y = [ phi exp(z/B0) + (2 psi/B0) exp(-z/B0) ] / 2
 The inverse map satisfies (E1)-(E3) identically and `1/J = B0`
 (verified symbolically).
 
+## 6. Partial Legendre transformation: swap only z <-> psi
+
+Independent variables `(x, y, psi)`, unknowns `z(x, y, psi)` and
+`phi(x, y, psi)`. Admissible where `psi_z != 0`, i.e. the flux
+surfaces `psi = const` are graphs `z = z(x, y, psi)` over the
+horizontal plane (complementary to the full swap, which requires
+`B_z != 0`).
+
+The chain rule gives (`J = z_psi`)
+
+```
+grad(psi) = ( -z_x, -z_y, 1 ) / z_psi
+
+B = grad(phi) x grad(psi)
+  = (1/z_psi) ( phi_y, -phi_x, z_x phi_y - z_y phi_x )
+```
+
+Note `phi_psi` drops out of `B` entirely (verified): only the
+in-surface gradient of `phi` carries the field, so `phi` is the
+**stream function of the field within each flux surface**. In the 2D
+limit (planar field, `B_z = 0`, no z-dependence) the Clebsch pair is
+`(phi, psi) = (A_z, z)`: the surface unknown becomes trivial
+(`z = psi`) and `phi` IS the magnetic vector potential component
+`A_z(x, y)` — this formulation is its 3D generalization. (Indeed
+`A = phi grad(psi)` is a vector potential for `B`; in the
+`(x, y, psi)` coordinates its only covariant component is
+`a_psi = phi`.)
+
+Covariant components of `B`:
+
+```
+b_x   = [ (1 + z_x^2) phi_y - z_x z_y phi_x ] / z_psi
+b_y   = [ z_x z_y phi_y - (1 + z_y^2) phi_x ] / z_psi
+b_psi = z_x phi_y - z_y phi_x
+```
+
+**Transformed governing equations** (`curl B = 0`):
+
+```
+(F1)  d(b_y)/dx   = d(b_x)/dy
+(F2)  d(b_psi)/dy = d(b_y)/dpsi
+(F3)  d(b_psi)/dx = d(b_x)/dpsi
+```
+
+Again only two are independent (same differential identity on
+`C_x = d(b_psi)/dy - d(b_y)/dpsi`, `C_y = d(b_x)/dpsi - d(b_psi)/dx`,
+`C_psi = d(b_y)/dx - d(b_x)/dy`) — two equations for the two unknowns
+`z`, `phi`.
+
+**Variational structure**: with `dV = z_psi dx dy dpsi` and
+`D = z_x phi_y - z_y phi_x`,
+
+```
+W[z, phi] = 1/(2 mu_0) Int [ phi_x^2 + phi_y^2 + D^2 ] / z_psi  dx dy dpsi
+```
+
+whose Euler-Lagrange equations are (verified symbolically)
+
+```
+EL_phi:  d/dx[ (phi_x - D z_y)/z_psi ] + d/dy[ (phi_y + D z_x)/z_psi ] = 0
+         == -2 C_psi        (exactly (F1):  (phi_x - D z_y)/z_psi = -b_y,
+                                            (phi_y + D z_x)/z_psi =  b_x)
+EL_z:    d/dx[ 2 D phi_y/z_psi ] - d/dy[ 2 D phi_x/z_psi ]
+         - d/dpsi[ (phi_x^2 + phi_y^2 + D^2)/z_psi^2 ] = 0
+         == -2 ( C_x phi_x + C_y phi_y ) / z_psi
+```
+
+i.e. stationarity of `W` is again the force-free condition
+`(curl B) x B = 0`; vacuum is the subset where additionally (F2)/(F3)
+hold individually.
+
+**Solution procedure**: `psi` spans the flux-label interval, so a
+stack of flux surfaces becomes a slab in `(x, y, psi)`. Prescribe the
+bounding flux surfaces `z(x, y, psi_0)`, `z(x, y, psi_1)` (e.g. pole
+faces of a magnet gap are exact flux surfaces of the ideal field) and
+`phi` on the side boundary (field-line entry/exit positions within
+each surface); start from the uniform-field solution `z = psi/...`,
+`phi = B0 y` and iterate Newton/Picard on the discretized `W`,
+keeping `z_psi > 0` (surfaces must not cross).
+
+**Exact solutions (sanity checks)**: uniform transverse field
+`B = (B0, 0, 0)`: `z = psi`, `phi = B0 y`. Hyperbolic field
+`B = (y, x, B0)` with `psi = (B0/2)(y - x) exp(z/B0)`:
+
+```
+z   = B0 log( 2 psi / (B0 (y - x)) )
+phi = B0 (y^2 - x^2) / (2 psi)
+```
+
+satisfies (F1)-(F3) identically and reconstructs `B = (y, x, B0)`.
+
 ## Run the verification
 
 ```
-python verify_clebsch_legendre_transform.py
+python verify_clebsch_legendre_transform.py          # full swap (27 checks)
+python verify_clebsch_partial_legendre_transform.py  # partial swap (26 checks)
 ```
 
-Requires only `sympy`. Prints PASS/FAIL for each of the 27 identities
-above and exits nonzero on any failure.
+Requires only `sympy`. Prints PASS/FAIL for each identity and exits
+nonzero on any failure.
 
 ## References
 
