@@ -1277,6 +1277,18 @@ def dtn_coarse_mesh(topic: str = "all") -> str:
             "numerics"     - Measured DtN spectrum vs mesh table + how to read it
             "api"          - exterior_dtn_spectrum / dtn_spectrum_vs_mesh usage
             "applications" - Air-box sizing, method choice, trusting coarse Kelvin, debugging
+            "p_method"     - Kelvin is a p-method not an h-method (measured p-vs-h,
+                             ~20-80x DOF gap); polyhedron faceting error scales with
+                             multipole degree (dipole robust); (R,p) design rule
+            "formulation"  - Differential-geometry view: Omega vs A as Hodge-dual,
+                             complementary dual bracketing (certified bounds), DtN
+                             gradient block is formulation-independent, conformal
+                             pullback material (scalar 0-form / tensor 1-form),
+                             infinity = one-point conformal compactification, FEEC
+            "datasheet"    - Problem-INDEPENDENT performance: open-BC error factors
+                             into source multipoles x method eigenvalue-defect; the
+                             Kelvin closure has an analytic, universal "datasheet"
+                             (certify once, predict any problem by multipole content)
     """
     return get_dtn_coarse_mesh_documentation(topic)
 
