@@ -227,6 +227,26 @@ coarse-mesh accurate for exactly the low modes a compact source radiates — a
 - **Kelvin (volume):** mode `n` inverts to a degree-`n` polynomial; the closure
   is exact up to FEM order — a **sharp threshold** at `n = p`.
 
+### The floor IS geometry — proof by raising only the Curve order
+
+The 5–6 digit floor that remains at `order ≥ n` is the **curved-sphere geometry**,
+not the multipole or the method. Proof: hold the FE order `p ≥ n` **and** the
+coarse mesh fixed, and raise ONLY the isoparametric geometry order `k`
+(`mesh.Curve(k)`):
+
+```
+   Curve (geometry) order k :   1 (flat)    2          3
+   n=2 (p=3) rel_err        :   1.33e-2     3.8e-4     1.30e-5
+   n=3 (p=4) rel_err        :   1.48e-2     4.4e-4     3.42e-5
+```
+
+Raising only the geometry order from `k=1` (flat polyhedron, ~1 % faceting) to
+`k=3` drops the error **~1000×** to the 5–6 digit floor — the polynomial image and
+the FE order untouched. A flat truncation is ~1 % off; an isoparametric (curved)
+one reaches 5–6 digits. (Past `k ≥ 3` it plateaus ~1e-5: the residual
+conformal-weight quadrature / energy-quotient limit.) Script:
+`examples/kelvin_transformation/DtN_spectrum/floor_vs_curve.py`.
+
 ### Isolating the Kelvin open-BC error from the interior FEM error
 
 On **one shared shell mesh**, swap only the `Γ` operator — exact-DtN Robin
@@ -357,6 +377,16 @@ dominant dipole inverts to a linear field, accurate at order 1).
 > separated from the interior discretisation that a field-refinement study
 > conflates.
 
+### Connection to the Cauer Ladder Network (CLN)
+
+The `−(n+1)/R` DtN eigenvalue ladder is a **spectral** object of the same kind as
+the Cauer-Ladder-Network (CLN) eigenmode decomposition: each characterises a
+closure by how it transmits the modes a source excites. CLN folds the **interior**
+response by circuit order `{R_n, L_n}`; the Kelvin closure folds the **exterior**
+response by element order `p`. Same idea — decompose the physics into eigenmodes
+and resolve only the modes that matter — applied to the interior network vs the
+open boundary.
+
 ---
 
 ## 10. Runnable layer (source of truth)
@@ -364,7 +394,7 @@ dominant dipole inverts to a linear field, accurate at order 1).
 The numbers and mechanisms above are produced by the `radia-mcp` code; query the
 MCP knowledge tool for the live recipe.
 
-- **MCP tool:** `dtn_coarse_mesh(topic="overview" | "numerics" | "api" | "applications")`
+- **MCP tool:** `dtn_coarse_mesh(topic="overview" | "numerics" | "api" | "applications" | "p_method" | "formulation" | "datasheet")`
   (server `mcp-server-radia-ngsolve`). Companion: `fem_bem_schur(...)`,
   `kelvin_transformation(...)`.
 - **BEM side** — `radia_mcp.radia_ngsolve.bem_integral`:
