@@ -1,23 +1,25 @@
-"""Total scalar potential solver with Gmsh cohomology cuts.
+"""Total scalar potential solver with cohomology cuts (GMSH-FREE).
 
 Implements the total scalar potential formulation for magnetostatics:
 
     H = -grad(phi) + sum_k I_k h_k
 
-where phi is the scalar potential (H1), h_k are cohomology basis
-functions (HCurl, curl-free), and I_k = N_k * I_coil are the
-ampere-turns for each coil.
+where phi is the scalar potential (H1), h_k are cohomology basis functions (HCurl, curl-free) with unit
+circulation around the k-th coil loop, and I_k = N_k * I_coil are the ampere-turns for each coil.
 
-The cohomology basis functions h_k are computed automatically by Gmsh's
-built-in homology/cohomology solver.  Each h_k satisfies:
+The cohomology basis functions h_k are computed by the pure-Python ``radia.cohomology`` engine (no Gmsh, no
+.msh -> .vol transfer): given an NGSolve/Netgen mesh of the multiply-connected domain (air + iron, with each
+coil region left as a through-hole), it returns one curl-free, unit-circulation h_k per independent loop.
+Each h_k satisfies:
 
-    curl(h_k) = 0          (irrotational)
-    oint h_k . dl = delta_jk   (unit circulation around loop j)
+    curl(h_k) = 0                  (irrotational)
+    oint_{loop j} h_k . dl = delta_jk   (unit circulation around loop j)
 
 This eliminates the need for:
     - Biot-Savart source field computation
     - VoxelCoefficient interpolation (no Gibbs artifacts at coil surfaces)
     - Explicit cut surface definition (automatic via cohomology)
+    - Gmsh (homology solver + mesh transfer) -- the engine is now radia.cohomology
 
 Weak form (I_k known):
     integral(mu * grad(phi) . grad(v)) = sum_k I_k * integral(mu * h_k . grad(v))
@@ -25,17 +27,21 @@ Weak form (I_k known):
 This is a standard H1 Poisson problem with a topological source term.
 
 Usage:
-    import gmsh
+    import ngsolve as ng
     from radia.cohomology_cut import CohomologyCutSolver
 
+    mesh = ng.Mesh(...)               # air + iron, each coil region a through-hole (multiply-connected)
     solver = CohomologyCutSolver()
-    solver.setup_from_gmsh()      # after user defines Gmsh geometry
+    n = solver.setup_from_mesh(mesh)  # n = number of independent coil loops (= b1)
     solver.solve([100.0], {'iron': 1000.0})  # NI=100, mu_r=1000
     B_cf = solver.get_B()
 
+For MULTIPLE coils, pass ``loop_circles`` -- one (cx, cy, rho[, z]) test circle threading each coil -- so the
+basis is tied to the physical coils (oint_{circle j} h_k = delta_jk); then NI_list[j] is the j-th coil.
+
 Reference:
-    Pellikka et al., "Homology and Cohomology Computation in Finite
-    Element Modeling," SIAM J. Sci. Comput., 2013.
+    Pellikka et al., "Homology and Cohomology Computation in Finite Element Modeling," SIAM J. Sci. Comput.,
+    2013.  (The radia.cohomology engine realises the same H^1 cut basis via the combinatorial Hodge Laplacian.)
 """
 
 import numpy as np
@@ -44,13 +50,14 @@ MU_0 = 4 * np.pi * 1e-7
 
 
 class CohomologyCutSolver:
-    """Total scalar potential solver with automatic cohomology cuts.
+    """Total scalar potential solver with automatic cohomology cuts (gmsh-free).
 
     Workflow:
-        1. User creates Gmsh geometry (with coil holes, iron regions)
-        2. Call setup_from_gmsh() to mesh, compute cohomology, transfer to NGSolve
-        3. Call solve() with ampere-turns and material properties
-        4. Access results via get_H(), get_B(), get_phi()
+        1. Build an NGSolve mesh of the domain (air + iron) with each coil region left as a through-hole
+           (so the domain is multiply-connected; b1 = number of coils).
+        2. Call setup_from_mesh() to compute the cohomology cut basis (via radia.cohomology, no gmsh).
+        3. Call solve() with ampere-turns and material properties.
+        4. Access results via get_H(), get_B(), get_phi().
     """
 
     def __init__(self):
@@ -60,59 +67,54 @@ class CohomologyCutSolver:
         self._H_cf = None
         self._B_cf = None
         self._mu_cf = None
-        self._gmsh_to_ngs_vertex = None
+        self._loops = None
 
-    def setup_from_gmsh(self, domain_physical_name='domain',
-                        boundary_physical_name='outer'):
-        """Mesh, compute cohomology, and transfer to NGSolve.
-
-        Call this after defining Gmsh geometry and physical groups.
-        The Gmsh model must have:
-          - A 3D physical group for the domain (air + iron, excluding coil)
-          - 2D physical groups for boundary surfaces
+    def setup_from_mesh(self, mesh, loop_circles=None):
+        """Compute the cohomology cut basis on an NGSolve mesh -- pure Python, no gmsh.
 
         Parameters
         ----------
-        domain_physical_name : str
-            Name of the 3D physical group defining the computation domain.
-        boundary_physical_name : str
-            Name of the 2D physical group for outer boundary (Dirichlet BC).
+        mesh : ngsolve.Mesh
+            Mesh of the multiply-connected domain (air + iron, each coil region a through-hole).
+        loop_circles : list of (cx, cy, rho[, z]) or None
+            One test circle threading each coil.  When given (length must equal b1), the basis is recombined so
+            that oint_{circle j} h_k = delta_jk -- i.e. h_j is tied to the j-th physical coil and NI_list[j] is
+            its ampere-turns.  When None, the b1 cut functions come in the engine's natural (topological) order
+            with unit circulation around an internal homology-generator basis (fine for a single coil).
 
         Returns
         -------
         int
-            Number of cohomology generators (= number of independent coils).
+            Number of cohomology generators (= number of independent coil loops, b1).
         """
-        import gmsh
+        from ngsolve import GridFunction
+        from radia.cohomology import cohomology_basis, circulation
 
-        # Find domain physical group tag
-        domain_tag = self._find_physical_group(3, domain_physical_name)
+        basis, b1, fes, _ctx, loops = cohomology_basis(mesh)
+        self._mesh = mesh
+        self._loops = loops
 
-        # Request cohomology (H^1 generators)
-        gmsh.model.mesh.addHomologyRequest('Cohomology', [domain_tag], [], [1])
+        if loop_circles is not None and b1 > 0:
+            if len(loop_circles) != b1:
+                raise ValueError(
+                    f"{len(loop_circles)} loop_circles supplied but b1={b1} cohomology generators were found")
+            # C[k][j] = circulation of basis[k] around test circle j; recombine h_j = sum_k a[k,j] basis[k]
+            # with a = inv(C^T) so that oint_{circle i} h_j = delta_ij (tie each cut to its physical coil).
+            C = np.array([[circulation(basis[k], mesh, *loop_circles[j]) for j in range(b1)]
+                          for k in range(b1)])
+            a = np.linalg.inv(C.T)
+            tied = []
+            for j in range(b1):
+                gf = GridFunction(fes)
+                acc = np.zeros(fes.ndof)
+                for k in range(b1):
+                    acc += a[k, j] * basis[k].vec.FV().NumPy()
+                gf.vec.FV().NumPy()[:] = acc
+                tied.append(gf)
+            basis = tied
 
-        # Mesh
-        gmsh.model.mesh.generate(3)
-
-        # Compute cohomology
-        dimTags = gmsh.model.mesh.computeHomology()
-
-        if not dimTags:
-            raise RuntimeError(
-                "No cohomology generators found. "
-                "The domain may be simply connected (no coil holes).")
-
-        # Extract cohomology edge chains from Gmsh
-        cohom_chains = self._extract_cohomology_chains(dimTags)
-
-        # Transfer mesh to NGSolve
-        self._transfer_mesh_to_ngsolve()
-
-        # Map cohomology edges to NGSolve HCurl DOFs
-        self._build_hcurl_basis(cohom_chains)
-
-        n_coils = len(self._h_basis)
-        return n_coils
+        self._h_basis = basis
+        return b1
 
     def solve(self, NI_list, mu_r_dict=None, order=2,
               dirichlet='outer', kelvin_region=None, kelvin_radius=None,
@@ -143,7 +145,7 @@ class CohomologyCutSolver:
                              grad, dx, x, y, z, sqrt)
 
         if self._mesh is None:
-            raise RuntimeError("Call setup_from_gmsh() first")
+            raise RuntimeError("Call setup_from_mesh() first")
 
         if len(NI_list) != len(self._h_basis):
             raise ValueError(
@@ -254,7 +256,7 @@ class CohomologyCutSolver:
                              grad, dx, Integrate, InnerProduct, CF)
 
         if self._mesh is None:
-            raise RuntimeError("Call setup_from_gmsh() first")
+            raise RuntimeError("Call setup_from_mesh() first")
 
         bh = np.array(bh_data)
         H_data, B_data = bh[:, 0], bh[:, 1]
@@ -374,137 +376,6 @@ class CohomologyCutSolver:
     # ------------------------------------------------------------------
     # Internal methods
     # ------------------------------------------------------------------
-
-    def _find_physical_group(self, dim, name):
-        """Find Gmsh physical group tag by name."""
-        import gmsh
-        pgs = gmsh.model.getPhysicalGroups(dim)
-        for d, tag in pgs:
-            pg_name = gmsh.model.getPhysicalName(d, tag)
-            if pg_name == name:
-                return tag
-        raise ValueError(f"Physical group '{name}' (dim={dim}) not found")
-
-    def _extract_cohomology_chains(self, dimTags):
-        """Extract cohomology edge chains from Gmsh.
-
-        Returns list of lists of (node1, node2) tuples.
-        """
-        import gmsh
-
-        chains = []
-        for dim, tag in dimTags:
-            if dim != 1:
-                continue
-            entities = gmsh.model.getEntitiesForPhysicalGroup(dim, tag)
-            edges = []
-            for ent in entities:
-                elem_types, _, node_tags_list = gmsh.model.mesh.getElements(1, ent)
-                for i, _ in enumerate(elem_types):
-                    nt = node_tags_list[i]
-                    n_elems = len(nt) // 2
-                    for j in range(n_elems):
-                        edges.append((int(nt[2*j]), int(nt[2*j+1])))
-            chains.append(edges)
-        return chains
-
-    def _transfer_mesh_to_ngsolve(self):
-        """Export Gmsh mesh and import into NGSolve via .vol file."""
-        import gmsh
-        import tempfile
-        import os
-
-        tmpfile = os.path.join(tempfile.gettempdir(), '_cohom_mesh.vol')
-        gmsh.option.setNumber('Mesh.MshFileVersion', 2.2)
-        # Write .msh, convert to .vol via Netgen, then load
-        msh_tmp = os.path.join(tempfile.gettempdir(), '_cohom_mesh.msh')
-        gmsh.write(msh_tmp)
-
-        try:
-            from netgen.meshing import Mesh as NetgenMesh
-            from ngsolve import Mesh
-            ngmesh = NetgenMesh()
-            ngmesh.Load(msh_tmp)
-            ngmesh.Save(tmpfile)
-            self._mesh = Mesh(tmpfile)
-        finally:
-            for f in [msh_tmp, tmpfile]:
-                if os.path.exists(f):
-                    os.remove(f)
-
-        # Build Gmsh -> NGSolve vertex mapping
-        self._build_vertex_map()
-
-    def _build_vertex_map(self):
-        """Build Gmsh node ID -> NGSolve vertex index mapping."""
-        import gmsh
-        from scipy.spatial import cKDTree
-
-        # Gmsh node coordinates
-        node_ids, coords, _ = gmsh.model.mesh.getNodes()
-        gmsh_coords = {}
-        for i, nid in enumerate(node_ids):
-            gmsh_coords[int(nid)] = np.array(
-                [coords[3*i], coords[3*i+1], coords[3*i+2]])
-
-        # NGSolve vertex coordinates
-        ngs_coords = np.zeros((self._mesh.nv, 3))
-        for i, v in enumerate(self._mesh.vertices):
-            pt = v.point
-            ngs_coords[i] = [pt[0], pt[1], pt[2]]
-
-        # KDTree matching
-        tree = cKDTree(ngs_coords)
-        self._gmsh_to_ngs_vertex = {}
-        for gmsh_id, coord in gmsh_coords.items():
-            dist, idx = tree.query(coord)
-            if dist < 1e-8:
-                self._gmsh_to_ngs_vertex[gmsh_id] = idx
-
-        n_mapped = len(self._gmsh_to_ngs_vertex)
-        n_total = len(gmsh_coords)
-        if n_mapped < n_total:
-            raise RuntimeError(
-                f"Only {n_mapped}/{n_total} Gmsh nodes mapped to NGSolve. "
-                "Mesh transfer may have failed.")
-
-    def _build_hcurl_basis(self, cohom_chains):
-        """Map Gmsh cohomology edge chains to NGSolve HCurl GridFunctions."""
-        from ngsolve import HCurl, GridFunction
-
-        # Build NGSolve edge lookup: (min_v, max_v) -> edge_nr
-        ngs_edge_map = {}
-        for edge in self._mesh.edges:
-            verts = edge.vertices
-            v0, v1 = int(verts[0].nr), int(verts[1].nr)
-            key = (min(v0, v1), max(v0, v1))
-            ngs_edge_map[key] = int(edge.nr)
-
-        fes_hcurl = HCurl(self._mesh, order=0)
-
-        self._h_basis = []
-        for chain in cohom_chains:
-            h_gf = GridFunction(fes_hcurl)
-            h_gf.vec[:] = 0
-
-            mapped = 0
-            for gn1, gn2 in chain:
-                if gn1 in self._gmsh_to_ngs_vertex and gn2 in self._gmsh_to_ngs_vertex:
-                    nv1 = self._gmsh_to_ngs_vertex[gn1]
-                    nv2 = self._gmsh_to_ngs_vertex[gn2]
-                    key = (min(nv1, nv2), max(nv1, nv2))
-                    if key in ngs_edge_map:
-                        edge_nr = ngs_edge_map[key]
-                        sign = 1.0 if nv1 < nv2 else -1.0
-                        h_gf.vec[edge_nr] = sign
-                        mapped += 1
-
-            if mapped < len(chain):
-                raise RuntimeError(
-                    f"Only {mapped}/{len(chain)} cohomology edges mapped. "
-                    "Gmsh-NGSolve edge matching failed.")
-
-            self._h_basis.append(h_gf)
 
     def _build_mu_cf(self, mu_r_dict):
         """Build domain-wise mu CoefficientFunction."""
