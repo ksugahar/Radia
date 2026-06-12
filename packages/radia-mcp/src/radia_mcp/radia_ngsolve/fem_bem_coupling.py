@@ -347,10 +347,15 @@ def kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=1, intorder=10, dim=3
         λ_exact = −(n + dim − 2)/R   ( 3D: −(n+1)/R ;  2D: −n/R )
 
     The ``offset`` is the conformal weight (R/r)^{d−2} of the Kelvin map (present in
-    3D, ABSENT in 2D).  Mode n is polynomial-exact iff FEM ``order ≥ n`` (the dipole
+    3D, ABSENT in 2D).  At FEM ``order ≥ n`` the degree-n polynomial image is captured
+    in the REFERENCE space, so the POLYNOMIAL-approximation error vanishes (the dipole
     inverts to a LINEAR field -> order-1 coarse accurate); ``order < n`` is
-    polynomial-approximation limited.  ``dim=2`` is the cross-section case for
-    static apparatus / rotating machines.
+    polynomial-approximation limited.  NB on the curved 3D sphere the REALISED accuracy
+    then FLOORS at the isoparametric-geometry + conformal-weight error (~5-6 digits at
+    order = n, e.g. n=2 -> 2.5e-3, n=3 -> 8.4e-4, both -> ~1e-5 as order rises) -- this
+    is Kameari's "5-6 digits", NOT machine-exact; in 2D (no conformal weight) the floor
+    is deeper (~1e-7…1e-9).  ``dim=2`` is the cross-section case for static apparatus /
+    rotating machines.
 
     Returns dict ``{ndof, degree, order, maxh, dim, lam, lam_exact, rel_err}``."""
     if dim not in (2, 3):
