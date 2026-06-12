@@ -200,6 +200,34 @@ For bounded D:  b_3 = 0.  For connected D:  b_0 = 1.  So:
 - Spanning-Tree-of-Cotree algorithm: alternate spanning tree
   construction.
 
+## radia implementation (gmsh-free) — the T-Omega cut engine
+The lab realises the b_1 cuts WITHOUT gmsh.  `radia.cohomology`
+(`src/radia/cohomology.py`) computes the first cohomology of a tetrahedral
+NGSolve/Netgen mesh via the combinatorial Hodge Laplacian
+`L1 = G G^T + Curl^T Curl`  (nullity = b_1), and returns one curl-free,
+UNIT-circulation HCurl(order 0) generator `h_k` per loop — the discrete
+`H^1` representative, i.e. exactly a T-Omega "cut" / one-ampere-turn loop
+field.  This drops the Gmsh `computeHomology` + `.msh -> .vol` dependency
+(the Pellikka 2013 path) entirely; NGSolve/Netgen ship no homology solver,
+so this is the lab's standalone engine.
+
+The total-scalar-potential (T-Omega) solver
+`radia.cohomology_cut.CohomologyCutSolver` consumes it:
+
+    H = -grad(phi) + sum_k NI_k h_k ,
+    int mu grad(phi).grad(v) = sum_k NI_k int mu h_k . grad(v) ,
+
+making the otherwise MULTI-valued magnetic scalar potential single-valued in
+a current-linking (multiply-connected) region.  `oint H.dl = NI` holds
+EXACTLY (by the unit-circulation cut).  This is the **primary** use of
+cohomology in radia — the T-Omega cut; the Clebsch-hodograph current-linking
+case is one instance of the SAME `H^1` obstruction (the scalar coordinate is
+multi-valued iff a current threads a hole, period != 0).  Verified:
+`tests/feec/test_cohomology.py` (b_1 + the curl-free unit-circulation cut
+basis) and `tests/feec/test_tomega_cohomology_cut.py` (the straight-wire
+T-Omega solve: `H_phi = I/(2 pi r)`, `oint H.dl = NI`).  Example:
+`examples/cohomology/tomega_wire.py`.
+
 ## Sanity check for meshes
 Before running a curl-curl solver, compute χ from your mesh.  If it
 doesn't match the expected topology (1 for a contractible volume),
