@@ -7,6 +7,24 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- **radia-ngsolve (dtn_coarse_mesh, accuracy)**: tightened the `p`-method
+  claim after an adversarial methodology review. "mode `n` exact iff order
+  `p ≥ n`" is precise only in the **reference space** / 2-D; on the curved
+  3-D sphere `p ≥ n` removes the *polynomial* error but the realized
+  accuracy then **floors at the curved-geometry + conformal-weight error**
+  (`n=2`→`2.5e-3`, `n=3`→`8.4e-4`, both →`~1e-5` as order rises = ~5–6
+  digits — *exactly Kameari's observation*, not machine-exact; 2-D floors
+  deeper, `~1e-7…1e-9`). New "REALIZED floor" section + softened headline
+  wording across `p_method` / `api` / overview, `fem_bem_coupling` and
+  `server` docstrings, the docs page, and the manuscript. Also added the
+  missing source-factor numbers (`c_5/c_1 = (4/15)(a/R)^4`, `n≡1 mod 4`;
+  optimal `R/a ~ 3`) and explicit **domain-of-validity caveats**: the
+  `Σ c_n·defect_n` factorisation needs spherical truncation + linear
+  materials + interior source + interior/closure error separation; Kelvin's
+  `defect_n` is a *discretisation* error (→0) vs PML/Robin's *model* floor;
+  "formulation-independent" qualifies the operator eigenvalue, not the
+  discrete defect. The 8 verified experiments moved into
+  `examples/kelvin_transformation/DtN_spectrum/`.
 - **radia-ngsolve**: new `dtn_coarse_mesh` tool + `bem_integral` /
   `fem_bem_coupling` measurements that reframe Kameari's coarse-mesh
   accuracy of the Kelvin transformation as a **DtN-matrix spectral
