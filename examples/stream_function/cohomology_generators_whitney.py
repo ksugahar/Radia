@@ -22,7 +22,8 @@ smallest generalised eigenpairs K x = lam M x.  They are the canonical
 Validation: (1) the complex is exact (curl of a gradient ~ 0); (2) exactly b1
 near-zero eigenvalues with a huge gap; (3) each generator is div-free AND
 curl-free (harmonic); (4) they reproduce the analytic generators' NET-CURRENT
-(TF Ampere) field -- the SAME cohomology class; (5) Gmsh homology confirms b1.
+(TF Ampere) field -- the SAME cohomology class; (5) the surface Euler
+characteristic (gmsh-free) confirms b1.
 
 Run:  python examples/stream_function/cohomology_generators_whitney.py
 """
@@ -128,8 +129,8 @@ def main(no_cohomology=False):
         class_resid = float(np.linalg.norm(Hfields @ coef - tf_analytic)
                             / (np.linalg.norm(tf_analytic) + 1e-30))
 
-        b1_gmsh = None if no_cohomology else D._betti1_winding_surface(D.A_WIND,
-                                                                       0.06)
+        b1_euler = None if no_cohomology else D._betti1_winding_surface(D.A_WIND,
+                                                                        0.06)
 
     print(f"[exact ] curl-energy of a gradient = {exact_resid:.2e}  (~0)")
     print(f"[eigs  ] lam = {', '.join(f'{v:.2e}' for v in vals[:4])} ...")
@@ -138,12 +139,12 @@ def main(no_cohomology=False):
         print(f"[gen {j} ] curl-energy={c['curl_e']:.2e}  div-energy={c['div_e']:.2e}"
               f"  (both ~0 = harmonic)")
     print(f"[class ] analytic TF net-current fit by numeric gens = {class_resid:.2e}")
-    print(f"[gmsh  ] b1 = {b1_gmsh}  (expect 2)")
+    print(f"[euler ] b1 = {b1_euler}  (expect 2)")
 
     result = {
         "n_edges": int(fes_h.ndof), "n_nodes": int(fes_0.ndof),
         "exactness_resid": exact_resid,
-        "eig_gap": float(gap), "b1_numeric": b1_numeric, "b1_gmsh": b1_gmsh,
+        "eig_gap": float(gap), "b1_numeric": b1_numeric, "b1_euler": b1_euler,
         "gen_curl_energy": [c["curl_e"] for c in gen_checks],
         "gen_div_energy": [c["div_e"] for c in gen_checks],
         "class_match_resid": class_resid,
@@ -152,7 +153,7 @@ def main(no_cohomology=False):
           and b1_numeric == 2 and gap > 1e6
           and all(c["curl_e"] < 1e-6 and c["div_e"] < 1e-6 for c in gen_checks)
           and class_resid < 0.05
-          and (no_cohomology or b1_gmsh == 2))
+          and (no_cohomology or b1_euler == 2))
     print(f"\n=== PASS: {ok} ===")
     return result, ok
 

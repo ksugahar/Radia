@@ -505,7 +505,7 @@ def test_regcoil_fusion_demo_invariants(tmp_path):
     """Parts 1-4 end to end (subprocess): the fusion demo's physics invariants.
     Locks (B) the net-current secular term and (C) the VMEC boundary:
       * forward (PF + stellarator) B.n reproduced to machine precision
-      * Gmsh cohomology b1(winding surface) == number of secular DOFs (== 2)
+      * b1(winding surface) [Euler char, gmsh-free] == number of secular DOFs (== 2)
       * the net-poloidal-current (TF) secular field obeys Ampere 1/R (B_tor*R
         ~ const inside the tube, ~0 outside) and is TANGENT to the plasma
         (its B.n footprint << the net-toroidal one)

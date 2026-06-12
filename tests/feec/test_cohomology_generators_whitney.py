@@ -10,9 +10,9 @@ the harmonic 1-form generators come out of the EXACT discrete de Rham complex
   - the generators reproduce the analytic generators' NET-CURRENT (TF Ampere)
     field -- the SAME cohomology class -- with no analytic ansatz used to build
     them;
-  - Gmsh's homology solver independently confirms b1 = 2.
+  - the surface Euler characteristic (gmsh-free) independently confirms b1 = 2.
 
-Marked slow: a torus surface mesh + a small sparse eigensolve + a Gmsh homology.
+Marked slow: a torus surface mesh + a small sparse eigensolve + an Euler-char count.
 """
 import os
 import sys
@@ -28,7 +28,7 @@ def test_cohomology_generators_whitney_golden():
     sys.path.insert(0, EXDIR)
     try:
         import cohomology_generators_whitney as M
-    except Exception as e:  # pragma: no cover - env-dependent (gmsh/ngsolve)
+    except Exception as e:  # pragma: no cover - env-dependent (ngsolve)
         pytest.skip(f"Whitney generators example not importable: {e}")
 
     res, ok = M.main()
@@ -55,5 +55,5 @@ def test_cohomology_generators_whitney_golden():
         f"numeric generators wrong cohomology class: TF net-current fit "
         f"residual = {res['class_match_resid']:.2e}")
 
-    # --- Gmsh confirms the generator count ---
-    assert res["b1_gmsh"] == 2, f"Gmsh b1 != 2: {res['b1_gmsh']}"
+    # --- the Euler characteristic (gmsh-free) confirms the generator count ---
+    assert res["b1_euler"] == 2, f"Euler-char b1 != 2: {res['b1_euler']}"
