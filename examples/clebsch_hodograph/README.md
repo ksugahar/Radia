@@ -5,6 +5,10 @@ formulation of magnetostatics, extending the verified forward **"Clebsch
 hodograph"** mode shipped in the `radia-electromagnet` panel
 (`src/radia/panels/calc_clebsch_hodograph.py`).
 
+> The design methodology these examples support (accelerator magnet design
+> via the A–φ duality + reduced potential) is in
+> [`docs/clebsch_hodograph/DESIGN_METHODOLOGY.md`](../../docs/clebsch_hodograph/DESIGN_METHODOLOGY.md).
+
 These scripts are **research examples, not panel modes.** Per the repo-first
 "Don't Publish the Unfinished" policy, only the verified *forward* mode is in
 the panel; the *inverse* pole-design (3-D geometry-as-unknown hodograph PDE)
