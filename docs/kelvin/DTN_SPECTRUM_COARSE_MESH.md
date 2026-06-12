@@ -194,7 +194,10 @@ weight `(R/r')^{d−2} = R/r'`:
 
 so the exterior `r^{−(n+1)} Y_n` becomes the **solid harmonic** `r'^{n} Y_n` on
 the ball — a **degree-`n` polynomial**. Order-`p` Lagrange FEM represents a
-degree-`n` polynomial **exactly iff `p ≥ n`**. That is the mechanism, measured
+degree-`n` polynomial **exactly iff `p ≥ n`** (in the reference space; on the
+curved 3-D sphere the realized accuracy then floors at the geometry + conformal-
+weight error, ~5–6 digits — exactly Kameari's observation, not machine-exact).
+That is the mechanism, measured
 directly by `kelvin_dtn_eigenvalue` (a volume-FEM solve on the inverted ball,
 reading `λ_eff = −1/R − ∫_Ω|∇u*|² / ∮_Γ u*²` and comparing to `−(n+1)/R`):
 
@@ -265,9 +268,11 @@ fixed interior floor. (The Kelvin-ball mesh floors at `ndof = 58` for
 
 The Kelvin transform is a spherical inversion, so in 2-D the truncation surface
 is a **circle** and there is no conformal prefactor (offset `0`): the eigenvalue
-ladder is **`−n/R`** (not `−(n+1)/R`), while the order-threshold rule (mode `n`
-exact iff order `≥ n`; the dipole inverts to a **linear** field → order-1
-coarse-accurate) is **identical** to 3-D.
+ladder is **`−n/R`** (not `−(n+1)/R`), while the order-threshold mechanism (order
+`≥ n` removes the polynomial error; the dipole inverts to a **linear** field →
+order-1 coarse-accurate) is the **same** as 3-D — but with no conformal weight the
+realized geometry floor is **deeper** than 3-D (~`1e-7`…`1e-9` vs the 3-D sphere's
+~5–6 digits).
 
 ```
    2-D circle inversion, effective DtN rel_err vs −n/R  (R=1):
@@ -328,7 +333,7 @@ confirmed on the actual implementation.
 | DtN type          | Approximates          | Coarse-mesh behaviour (measured)   |
 |-------------------|-----------------------|------------------------------------|
 | Asymptotic Robin  | exterior, `n=0` only  | exact `n=0`, wrong `n≥1`           |
-| Kelvin transform  | exterior, all `n`     | mode `n` exact iff FEM order `≥ n` |
+| Kelvin transform  | exterior, all `n`     | order `≥ n` kills poly error, then geom floor |
 | BEM DtN (`Λ_h`)   | exterior, all `n`     | low-`n` accurate, error smooth in `n` |
 | SIBC / GIBC       | conductor interior    | curvature-corrected (separate)     |
 | AGE               | annular air gap       | analytic per harmonic              |
@@ -336,8 +341,9 @@ confirmed on the actual implementation.
 The Kelvin transform and BEM DtN share the **same** continuous operator `Λ_ext`,
 and both are measured here to be coarse-mesh accurate for the low modes — by
 complementary mechanisms: BEM by surface-harmonic smoothness, Kelvin by
-polynomial representability (mode `n` exact once FEM order reaches `n`; the
-dominant dipole inverts to a linear field).
+polynomial representability (order `≥ n` removes the polynomial error and drops
+onto the curved-geometry floor — ~5–6 digits in 3-D = Kameari's result; the
+dominant dipole inverts to a linear field, accurate at order 1).
 
 ---
 
