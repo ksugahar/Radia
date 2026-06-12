@@ -615,6 +615,21 @@ Practical caveats:
     simpler to implement / adapt.  For the smooth Kelvin sphere both a coarse mesh
     and high-order geometry are trivial, so p's win there is clean.
 
+## MEASURED: the hp claim on the L-shape corner benchmark
+
+2D L-shape, 270-deg re-entrant corner, exact u = r^(2/3) sin(2 theta/3)
+(singularity lambda = 2/3); H1-seminorm error vs DOF N:
+  * h-version (order 1):  fitted rate alpha_h = 0.357 (-> 1/3 asymptotically;
+    finest pairs 0.335).
+  * p-version (fixed coarse mesh, order 1..6):  fitted rate alpha_p = 0.661 (~2/3),
+    with FLAT pairwise slopes (0.65-0.68, no upward trend) = ALGEBRAIC, not
+    exponential.
+  * ratio alpha_p / alpha_h = 1.85 (~2).
+CONFIRMS: a corner singularity caps BOTH h and p at algebraic rates (p ~ twice h);
+neither is exponential -- only hp (geometric grading) is.  So REGULARITY, not the
+method name, sets the rate; the Kelvin region (analytic) is where p goes exact.
+(hp's own exponential rate is asserted from theory, not run here.)
+
 ## p-path vs h-path (measured, kelvin_dtn_eigenvalue, sphere R=1, dim=3)
 
   quadrupole n=2 (image = quadratic):
@@ -725,9 +740,16 @@ so the exact open-boundary solution lies BETWEEN the scalar and vector results,
 and the gap  W_Omega - W_A  is the constitutive (Hodge-star) discretisation error
 = a GUARANTEED, computable a-posteriori bound.  Running BOTH dual Kelvin solves on
 a coarse mesh therefore CERTIFIES the open-boundary accuracy, not just observes
-it.  [Established theory; a direct two-sphere numerical demonstration is a clean
-TODO -- compute W_Omega and W_A on a coarse Kelvin mesh and show they bracket the
-exact dipole energy, the gap being the error bound.]
+it.  MEASURED (the bracketing PRINCIPLE, Prager-Synge on Poisson -div grad u = f,
+u_ex = sin(pi x) sin(pi y), E_ex = pi^2/4): the primal H1 energy and an
+equilibrated RT-flux complementary energy bracket the exact energy
+E_primal <= E(f_h) <= E_comp on EVERY mesh, gap ~ O(h^2), equilibration residual
+~1e-15, and gap >= the true energy error (GUARANTEED bound).  CAVEAT: the strict
+bound needs EXACT equilibration div sigma + f = 0; with mixed RT/L2 this holds for
+the projected data f_h = Pi_h f, and a RAW flux for transcendental f can dip below
+E_ex by the data-oscillation amount (so bracket the consistent-data energy E(f_h),
+which -> E_ex).  A direct two-sphere Omega-vs-A Kelvin bracket is the remaining
+TODO.
 
 ## The DtN gradient block is formulation-INDEPENDENT
 
@@ -740,6 +762,15 @@ The EXACT (gradient) block is exactly the scalar Omega DtN -- the SAME ladder
 which in a current-free, simply-connected exterior is non-physical gauge and
 removable (A reduces to Omega there).  Hence the coarse-mesh / p-threshold result
 is formulation-INDEPENDENT on the physical (gradient) block.
+
+MEASURED (partial): the scalar exterior DtN ladder -(n+1)/R is reproduced
+(exterior_dtn_spectrum: n=0..3, dipole -2/R to rel_err 7.4e-4).  A-side check on
+the dipole A = m x r/(4 pi r^3) (tangential on Gamma): its normal flux
+B.n = curl_Gamma(A_t) matches the n=1 zonal harmonic to rel_L2 3.2e-5, and feeding
+that harmonic through the scalar exterior DtN returns eigenvalue -2/R (rel_err
+2.5e-4).  So the A-side normal flux IS an eigenvector of the SAME scalar DtN with
+the SAME -(n+1)/R eigenvalue -- formulation-independence verified for the dipole.
+(Assembling a full independent vector H(curl) exterior DtN operator is a TODO.)
 
 ## Material modulation = conformal pullback of the Hodge star (depends on degree)
 
