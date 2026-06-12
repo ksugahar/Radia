@@ -116,12 +116,18 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     mesh = fes.mesh
     p = fes.globalorder
     pv = max(p - 1, 0)
-    # Gauss pts/dim.  The near-entry cost is O(quad^6 for vol-vol), so the floor matters: polynomial
-    # exactness of the (subtraction-regularized) entry needs only ~p+2 pts/dim, NOT the old hard floor of 6.
-    # Measured (uniform-M cube, exact demag=1/3): quad=4 holds |D-1/3| ~ 7.6e-5 (vs 1.6e-5 at quad=6) and
-    # <5e-4 self-convergence on non-uniform M -- both well inside engineering tolerance, for a ~5x build
-    # speedup at p=1,2.  Floor at 4 (p=1,2 -> 4; p>=3 -> p+2).  Override via intorder for more/less.
-    quad = max(p + 2, (intorder + 1) // 2) if intorder is not None else max(4, p + 2)
+    # Gauss pts/dim for the NEAR/SELF singular entries (the far/smooth pairs use the cheaper far_quad).  N =
+    # B^T G B is a demag SELF-ENERGY and MUST be positive-semidefinite; UNDER-integrating the near/self pairs
+    # makes N NON-PSD (a spurious negative eigenvalue) -- harmless for the demag FACTOR / linear solve (the
+    # negative eig is ~1e-3 relative and M_mass dominates ((1/chi)M_mass+N) anyway), but it SILENTLY CORRUPTS
+    # any ENERGY / EIGENVALUE use of N (the nonlinear energy-min solve slides down the negative mode -> garbage
+    # high-order M).  Measured PSD floor (sphere, min eig of N): quad >= 3*p -- p=1 PSD at quad=3, p=2 needs
+    # quad>=6 (quad=4,5 give min eig -3.2e-4 NON-PSD), p=3 needs quad>=9 (quad=8 still NON-PSD).  So the floor
+    # is 3*p, NOT the old max(4,p+2) (a prior "floor 6->4" speed opt traded away PSD at p=2).  near cost is
+    # O(quad^6) but only on NEAR pairs (far pairs keep far_quad); intorder OVERRIDES (intorder < 2*(3p)-1 may be
+    # NON-PSD -- use only for a fast demag-factor estimate, NEVER for an energy/eigenvalue solve).  See
+    # tests/feec/test_hdiv_vim_psd.py.
+    quad = max(p + 2, (intorder + 1) // 2) if intorder is not None else max(3 * p, 4)
     # INNER subtraction quad (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
     # singular part is carried EXACTLY by the analytic PhiTet/TriPotential base), so the inner sum uses a
     # COARSER rule than the outer -> another ~1.5-2x on the O(quad_out^3 * quad_in^3) near entries.  Floor at
