@@ -156,4 +156,4 @@ modes, by design.
 - `memory/clebsch_cohomology_streamfunction_unification.md` — the full record, verified-math
   provenance, and the honest-frontier delineation.
 - Related: `src/radia/clebsch_potential.py` (the axisymmetric `ClebschSolver`),
-  `src/radia/cohomology_cut.py` (Gmsh cohomology generators, the Ren/Pellikka layer).
+  `src/radia/cohomology_cut.py` (gmsh-free cohomology cut via `radia.cohomology`, the Ren/Pellikka layer).

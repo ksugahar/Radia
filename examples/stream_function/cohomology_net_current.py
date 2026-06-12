@@ -23,7 +23,7 @@ removed).  It also VALIDATES the generators numerically:
   * h_k is NOT a single-valued gradient   (non-exact => genuine cohomology, not
                                            reproducible by any psi)
   * the TF generator's field obeys Ampere  B_tor * R = const inside, ~0 outside
-  * Gmsh's homology solver confirms b1 = 2 (the generator COUNT)
+  * the surface Euler characteristic (gmsh-free) confirms b1 = 2 (the COUNT)
 
 Builds on demo_regcoil_fusion.py (analytic torus generators) + the surface-FE
 stream function in calc_streamfunction.py.  Reuses radia.stream_function only
@@ -142,7 +142,7 @@ def main(no_cohomology=False):
               f"{Ipol/1e3:.0f} kA")
 
     result = {
-        "b1_gmsh": b1,
+        "b1_euler": b1,
         "n_secular_dofs": len(K_list),
         "gen_div_rel": {k: gen[k]["div_rel"] for k in gen},
         "gen_nonexactness": {k: gen[k]["nonexactness"] for k in gen},
