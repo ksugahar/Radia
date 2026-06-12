@@ -298,13 +298,25 @@ of publication priority.
 
 ## Run the verification
 
+**Symbolic** (sympy only) -- the governing equations and exact solutions:
 ```
 python verify_clebsch_legendre_transform.py          # full swap (27 checks)
 python verify_clebsch_partial_legendre_transform.py  # partial swap (26 checks)
 ```
+Prints PASS/FAIL for each identity and exits nonzero on any failure.
 
-Requires only `sympy`. Prints PASS/FAIL for each identity and exits
-nonzero on any failure.
+**Numerical solver** (NGSolve) -- the Variant-2 (partial-swap) **3-D vacuum
+field-geometry solver**: minimises `W = Int (phi_x^2+phi_y^2+D^2)/z_psi` over
+`z(x,y,psi)`, `phi(x,y,psi)` by Newton, on a box in `(x,y,psi)`:
+```
+python solve_clebsch_legendre_3d.py
+```
+Manufactured-solution verified (golden `tests/feec/test_clebsch_legendre_3d.py`):
+the polynomial vacuum case (uniform field) is recovered to machine precision and
+the non-polynomial case (hyperbolic field `B=(y,x,B0)`) at the FE convergence
+rate (order ~3 in `h`) -- confirming the energy minimiser on Clebsch fields is
+the **vacuum** field (not merely force-free). This is the 3-D field-side piece
+that the Tampere 2-D map (Sec. 7) had only announced.
 
 ## References
 
