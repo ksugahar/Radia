@@ -859,9 +859,10 @@ netgen の I/O は常に **`.vol` 経由** を研究室の正式な運用プロ�
   (2026-05-29): the `version` keyword is ABOLISHED and v2.2-route NGSolve
   loading is NOT supported.**  Do NOT restore accept-and-ignore; v4.1 is the
   only emitted `.msh` format and NGSolve interchange is `.vol`-only (no
-  `ReadGmsh`).  (`cohomology_cut.py` still writes a temporary v2.2 mesh for
-  GMSH's own cohomology-cut computation -- that is a GMSH-internal use, not
-  an NGSolve-load path, and is unaffected.)
+  `ReadGmsh`).  (The gmsh-based cohomology path was abolished 2026-06-13:
+  `cohomology_cut.py` no longer writes any temporary `.msh` -- the T-Omega
+  cohomology CUT is computed gmsh-free by the pure-Python `radia.cohomology`
+  engine.  GMSH stays allowed only for visualization / `.msh v4.1` post.)
 
 ### Mesh Export Consistency Check Policy
 
