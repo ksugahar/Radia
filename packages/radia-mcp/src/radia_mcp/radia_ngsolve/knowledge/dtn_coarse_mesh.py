@@ -32,7 +32,8 @@ Companion code:
     - dtn_spectrum_vs_mesh():     per-degree eigenvalue error vs mesh size
   radia_ngsolve.fem_bem_coupling (Kelvin side -- the volume-FEM realisation)
     - kelvin_dtn_eigenvalue():    effective DtN of the Kelvin closure for mode n,
-                                  exact iff FEM order >= n (dipole inverts to linear);
+                                  order>=n kills the poly error -> geometry floor
+                                  (~5-6 digits in 3D, deeper in 2D);
                                   dim=3 (sphere, −(n+1)/R) or dim=2 (circle, −n/R,
                                   the static-apparatus / rotating-machine cross-section)
     - kelvin_vs_exact_open_bc_error(): the Kelvin open-BC error ISOLATED from the
@@ -424,10 +425,11 @@ accurate).  Fast (no densification) -- the complement of the BEM
 **`dim=2` (circle inversion)** -- the cross-section case for STATIC APPARATUS /
 ROTATING MACHINES.  The Kelvin transform is a spherical inversion, so in 2D the
 truncation surface is a CIRCLE and there is no conformal prefactor (offset=0):
-the eigenvalue is **−n/R** (not −(n+1)/R), and the order-threshold (mode n exact
-iff order≥n; dipole → linear → order-1 coarse accurate) is IDENTICAL to 3D.
-Verified: 2D dipole −1/R to 0.06 % at order 1 / coarse mesh; quadrupole needs
-order≥2.
+the eigenvalue is **−n/R** (not −(n+1)/R), and the order-threshold MECHANISM
+(order≥n kills the polynomial error; dipole → linear → order-1 coarse accurate) is
+the SAME as 3D -- but with NO conformal weight the realized geometry floor is DEEPER
+than 3D (measured ~1e-7…1e-9 at order≥n, vs the 3D sphere's ~5-6 digits).  Verified:
+2D dipole −1/R to 0.06 % at order 1 / coarse mesh; quadrupole needs order≥2.
 
 ## kelvin_twosphere_shell_dipole -- the lab's REAL Kelvin (validation)
 
@@ -554,7 +556,7 @@ field-refinement study cannot.
   | DtN type      | Approximates           | Coarse-mesh behaviour (measured) |
   |---------------|------------------------|----------------------------------|
   | Asymptotic Robin | exterior, n=0 only  | exact n=0, wrong n≥1             |
-  | Kelvin transform | exterior, all n     | mode n exact iff FEM order≥n     |
+  | Kelvin transform | exterior, all n     | order≥n kills poly error; then geom floor |
   | BEM DtN (Λ_h) | exterior, all n        | low-n accurate, error smooth in n|
   | SIBC / GIBC   | conductor interior     | curvature-corrected (separate)   |
   | AGE           | annular air gap        | analytic per harmonic            |
@@ -572,8 +574,11 @@ DTN_COARSE_MESH_P_METHOD = r"""
 
 The coarse-mesh accuracy is usually told as an h-refinement story (Kameari).
 But the polynomial-image mechanism makes the Kelvin closure a **p-method**: mode
-n inverts to the degree-n solid harmonic, and order-p Lagrange FEM captures it
-EXACTLY iff p >= n.  So the efficient lever is element ORDER, not mesh density.
+n inverts to the degree-n solid harmonic, and order-p Lagrange FEM captures that
+polynomial image EXACTLY iff p >= n (in the REFERENCE space; on the curved 3D
+sphere the realized accuracy then floors at the geometry error, ~5-6 digits -- see
+"The REALIZED floor" below).  So the efficient lever is element ORDER, not mesh
+density.
 
 ## Theory FIRST: regularity decides h vs p -- so this is really an hp question
 
@@ -664,6 +669,62 @@ sphere geometry -- which is why the p-path is so steep.  Note the tension:
     polynomial under a nonlinear map), so "order>=n exact" is only APPROACHED.
 
 p-refinement relaxes both at once; h-refinement only chips at geometry, slowly.
+
+## The REALIZED floor: order>=n is exact in REFERENCE space, geometry-limited in 3D
+
+Be precise about what "exact iff p>=n" means.  It is a statement about the
+REFERENCE-space polynomial: order p>=n captures the degree-n solid-harmonic image,
+killing the POLYNOMIAL-approximation error.  What then REMAINS is the curved-boundary
+(isoparametric) geometry error and the conformal-weight quadrature -- and in 3D that
+floor is NOT machine zero.  MEASURED at the threshold order p = n (kelvin_dtn_
+eigenvalue, coarse mesh, raising order):
+
+   3D sphere :  n=2 at order 2 -> rel 2.5e-3, then ~1e-5 as order rises further
+                n=3 at order 3 -> rel 8.4e-4, then ~3e-5
+                => realized accuracy FLOORS at ~5-6 significant digits.
+   2D circle :  n=2 at order 2 -> rel 5.7e-5, deepening to ~1e-7
+                n=3 at order 3 -> rel 1.2e-3, deepening to ~3.6e-9
+                => no conformal weight (offset = -(d-2)/R = 0 in 2D) + higher curve
+                   order -> the floor is DEEPER.
+
+This is exactly Kameari's empirical "order 3 on the sphere gives 5-6 digits": that
+5-6 digits is the curved-GEOMETRY floor, REACHED once p >= n_src (octupole n=3 ->
+order 3) -- it is NOT a limit of the multipole/DtN argument and NOT multipole
+"reflection".  So the honest p-method statement is: **order >= n removes the
+POLYNOMIAL error and drops you onto the geometry floor; curve the geometry (higher
+isoparametric order, or a little h) to go below it.**  For the 2D cross-sections this
+committee studies (static apparatus / rotating machines) the floor is deeper still --
+the closure is even MORE p-favorable in 2D than the 3D-sphere numbers suggest.
+(Scripts: examples/kelvin_transformation/DtN_spectrum/p_vs_h_study.py is the 3D
+sweep; the 2D numbers are kelvin_dtn_eigenvalue(dim=2).)
+
+## Corollary: the exterior VOLUME mesh is irrelevant -- only Gamma matters (p>=n)
+
+A sharp, practically important consequence: with the truncation-surface Gamma fixed,
+refining the EXTERIOR (Kelvin-ball) VOLUME mesh does NOTHING for the open-BC accuracy.
+
+  * The open-BC contribution enters the field ONLY through the discrete DtN operator
+    Lambda_h on Gamma -- a property of the Gamma TRACE (surface mesh + order) and the
+    exterior solution, NOT of the volume tessellation.
+  * For mode n the exterior solution is the polynomial P_n = rho^n Y_n.  At order
+    p>=n it lies in V_h, so by Galerkin orthogonality the FE solution EQUALS P_n on
+    ANY volume mesh.  MEASURED: ||u_h - P_n||_L2 ~ 1.5e-15 (machine zero) at every
+    density from 107 to 54,784 tets -- the volume solve is already exact; there is
+    nothing for refinement to improve.
+  * Then the effective DtN
+        lambda = -1/R - integral_Omega|grad P_n|^2 / oint_Gamma P_n^2
+    is an integral of a FIXED polynomial over a FIXED domain: it depends on Gamma's
+    GEOMETRY alone, the volume mesh enters nowhere.  Every lambda change under
+    "exterior refinement" is the boundary mesh re-projecting toward the true sphere
+    (a SURFACE effect) -- not the interior density.
+  * CONTRAST p<n: the polynomial is not captured (||u_h-P_n|| = 1.36 -> 0.028 under
+    refinement), so refining DOES help -- but that signals ORDER deficiency, fixed by
+    raising p, not by refining the exterior volume.
+
+PRACTICE: do not waste DOF refining the air-box interior.  Spend DOF on (i) order
+p>=n_src and (ii) the Gamma surface mesh/geometry; keep the exterior volume coarse.
+(Scripts: examples/kelvin_transformation/DtN_spectrum/kelvin_exterior_mesh.py and
+kelvin_exterior_mesh3.py.)
 
 ## Polyhedral (flat) truncation: the faceting error SCALES WITH MULTIPOLE DEGREE
 
@@ -789,6 +850,14 @@ that harmonic through the scalar exterior DtN returns eigenvalue -2/R (rel_err
 2.5e-4).  So the A-side normal flux IS an eigenvector of the SAME scalar DtN with
 the SAME -(n+1)/R eigenvalue -- formulation-independence verified for the dipole.
 (Assembling a full independent vector H(curl) exterior DtN operator is a TODO.)
+
+SCOPE of "formulation-independent": it is the continuum OPERATOR / eigenvalue
+-(n+1)/R that is shared by Omega and A -- they see the one exterior problem.  The
+DISCRETE defects are NOT identical: the A-side 3.2e-5 above is the A-discretisation's
+OWN approximation error, generally different from the Omega defect at the same mesh.
+So "formulation-independent" qualifies the physics (operator, gradient block), not
+the numerics (per-formulation discrete defect).  The dual bracket exploits exactly
+this: the two formulations' DIFFERING discrete energies bound the one true energy.
 
 ## Material modulation = conformal pullback of the Hodge star (depends on degree)
 
@@ -970,15 +1039,45 @@ on an arbitrary surface is also source-independent but lacks the closed-form
 yardstick; PML / asymptotic Robin have fixed modal defects.  Kelvin's spherical
 structure is exactly what makes the datasheet clean and universal.)
 
+TWO ERROR SPECIES ON ONE AXIS (important when comparing methods): defect_n means
+different things for Kelvin vs PML/Robin.  For KELVIN (and BEM) the closure is EXACT
+in the continuum, so defect_n is a DISCRETISATION error that -> 0 as p / h / curve-
+order improve (the 5-6-digit 3D floor in P_METHOD is just where geometry takes over).
+For PML / asymptotic-Robin the closure is a MODEL approximation, so defect_n has a
+non-zero FLOOR that survives h -> 0 (only enlarging the layer / box lowers it).  The
+common per-mode axis is still fair for RANKING fidelity, but Kelvin's defect is
+order-controllable while PML/Robin's is a modelling floor -- do not read them as the
+same kind of number.
+
 ## The Kelvin datasheet (measured in this module)
 
   * eigenvalue-defect spectrum  defect_n vs degree n        -> NUMERICS topic
-  * order-threshold             mode n exact iff p >= n      -> P_METHOD topic
+  * order-threshold             order>=n kills poly error,   -> P_METHOD topic
+                                then a geometry floor (~5-6 digits 3D, deeper 2D);
                                 (p is the efficient axis, ~20-80x fewer DOF than h)
   * geometry-sensitivity        flat-polyhedron error grows  -> P_METHOD topic
                                 steeply with n (dipole robust, quadrupole 369x)
   * formulation-independence    gradient block -(n+1)/R same -> FORMULATION topic
                                 for Omega and A
+
+## When the diagonal factorisation BREAKS (the fine print)
+
+The clean diagonal "SUM_n c_n x defect_n" needs four assumptions; state them so the
+datasheet is not oversold:
+  1. SPHERICAL (circular) truncation -- so harmonics diagonalise Lambda_ext.  On a
+     non-spherical air-box the operator is NOT diagonal in any fixed basis; the
+     factorisation becomes a (still source-independent) MATRIX, not a per-mode scalar.
+  2. LINEAR materials -- superposition of modes.  Saturating iron COUPLES modes; the
+     datasheet then applies to the linearised/operating-point problem, not globally.
+  3. The source is INTERIOR to the truncation sphere with no near-field overlap
+     (a pure multipole region at R); a source hugging Gamma injects high-n content
+     that the (a/R)^{n+1} decay no longer suppresses.
+  4. The closure error is SEPARABLE from the interior FE discretisation error (the
+     error-isolation result).  They are orthogonal axes only to leading order; they
+     can couple when the interior mesh is too coarse to feed the closure a clean trace.
+Within these (the usual open-boundary magnetostatics setting) the factorisation and
+the "certify the method once" claim hold; outside them, "problem-independent" refers
+to the CLOSURE operator's modal fidelity, not the realised total error.
 
 ## What problem-independence buys you
 
