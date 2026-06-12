@@ -68,12 +68,13 @@ whose two extra degrees of freedom are the first cohomology generators of the
 winding surface.
 
 - **Their count is topology.** The surface's first Betti number `b1 = 2`
-  (genus 1) is **confirmed** with Gmsh's homology solver
-  (`addHomologyRequest('Cohomology', [pg], [], [1]); computeHomology()` -> 2) --
-  the same engine wrapped by [`src/radia/cohomology_cut.py`](../../src/radia/cohomology_cut.py)
-  (which is a *volume* scalar-potential solver, so the honest integration is
-  "same engine, analytic generators on the torus": `grad(zeta)`, `grad(theta)`
-  are single-valued vector fields even though the angles are multivalued).
+  (genus 1) is **confirmed gmsh-free** via the Euler characteristic of the
+  triangulated torus (`b1 = 2 - chi = 2g`).  The *volume* T-Omega cohomology
+  CUT engine [`src/radia/cohomology_cut.py`](../../src/radia/cohomology_cut.py)
+  is itself gmsh-free (the pure-Python `radia.cohomology` combinatorial Hodge
+  Laplacian); on the torus the surface generators are analytic: `grad(zeta)`,
+  `grad(theta)` are single-valued vector fields even though the angles are
+  multivalued.
 - **The TF secular field is verified.** `K_zeta = n x grad(zeta)` is the
   net-**poloidal**-current (TF) sheet; it reproduces the textbook toroidal field
   `B_tor * R = const` inside the tube (Ampere's `1/R`, to **0.2 %**) and `~0`
@@ -169,8 +170,9 @@ robust "conformal << circular", locked at >15 % reduction.)
 
 - Parts 1-2 use a single-valued `psi` (correct for PF / RMP / shaping / shim
   fields); part 3 adds the multivalued secular term -- the generator **count** is
-  computed (Gmsh cohomology), the generators are analytic **on the torus**, and
-  a general winding surface takes them from `cohomology_cut.py`.
+  computed gmsh-free (Euler characteristic), the generators are analytic **on the
+  torus**, and a general winding surface takes them from the gmsh-free
+  `cohomology_cut.py` (`radia.cohomology`).
 - Force is the magnetic force per area, not a structural stress.
 - We do **not** run VMEC here (no simsopt/desc installed) -- the default
   rotating-ellipse is an analytic model; `--wout` drops in a real equilibrium,

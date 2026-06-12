@@ -4,14 +4,14 @@ Runs examples/stream_function/cohomology_net_current.py (torus b1=2) and asserts
 
   - the analytic secular generators h_k = n x grad(angle) are div-free
     (a valid surface current) and NON-EXACT (genuine cohomology, not any psi);
-  - Gmsh's homology solver confirms b1 = 2 (the secular-DOF count);
+  - the surface Euler characteristic (gmsh-free) confirms b1 = 2 (the count);
   - the net-poloidal (TF) generator obeys Ampere (B_tor * R const inside, ~0
     outside);
   - the JOINT design (prescribe net current -> fit psi to the residual)
     reproduces the target B.n to machine precision -- the secular term is now
     INTEGRATED into the design solve.
 
-Marked slow: builds two torus surface meshes + a Gmsh homology solve.
+Marked slow: builds two torus surface meshes + an Euler-characteristic count.
 """
 import os
 import sys
@@ -43,7 +43,7 @@ def test_cohomology_net_current_golden():
         assert nx > 0.8, f"generator {k} too exact (not cohomology): {nx:.3f}"
 
     # --- Gmsh confirms the secular-DOF count = b1 = 2 ---
-    assert res["b1_gmsh"] == 2, f"b1 != 2: {res['b1_gmsh']}"
+    assert res["b1_euler"] == 2, f"b1 != 2: {res['b1_euler']}"
     assert res["n_secular_dofs"] == 2
 
     # --- TF generator obeys Ampere (B_tor R const inside, ~0 outside) ---
