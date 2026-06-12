@@ -1,31 +1,48 @@
-# BEM-CLN: Per-Element Multipole CLN with Warburg–Schur Termination
+# BEM-CLN: Per-Element Multipole CLN with Mixed Galerkin Termination
 
-A multi-element extension of the single-conductor hierarchical Cauer
-(Warburg–Schur terminated) Cauer Ladder Network (CLN) representation,
-suitable for assembling fast eddy-current ROMs of small clusters of
-conductors using natural open-boundary integral-equation coupling.
+A multi-element extension of the single-conductor Mixed Galerkin
+(CLN bulk + HOIBC surface envelope, Schur-coupled) Cauer Ladder
+Network (CLN) representation, suitable for assembling fast
+eddy-current ROMs of small clusters of conductors using natural
+open-boundary integral-equation coupling.
 
-Companion to [HIERARCHICAL_CAUER_SIBC.md](HIERARCHICAL_CAUER_SIBC.md)
-(single-conductor Paper 1 academic reference).
+> **History note (2026-06-12)**: This document originally described
+> the *Warburg-Schur termination* (`Y_CLN + K √s/(s+d)`, with `d`
+> tuned).  That single-DOF construction was superseded by the Mixed
+> Galerkin reduction (multi-DOF HOIBC surface envelope, no `d`).
+> The Warburg block appears below as the rank-(1,1) specialization of
+> the Mixed Galerkin framework.  See
+> `memory/project_warburg_schur_deprecated_2026_06_12.md` for the
+> deprecation context.
+
+Companion to Paper 1 (Sugahara, Nagamine, Hane, 2026:
+"Mixed Galerkin Reduction for Eddy-Current Admittance").
 
 This document collects the polarizability-based assembly framework
-that backs the Paper 2 manuscript on multi-conductor BEM-CLN
-(Sugahara, Nagamine, Hane, 2026), with engineering applications to
-induction-heating workpieces and accelerator-magnet conductor
-clusters.
+that backs the Paper 2 manuscript on multi-conductor BEM-CLN,
+with engineering applications to induction-heating workpieces and
+accelerator-magnet conductor clusters.
 
 ## 1. Motivation
 
-The single-conductor Warburg–Schur augmentation
+The single-conductor Mixed Galerkin reduction (Theorem 1, Paper 1) at
+its rank-(1,1) specialization gives
 ```
 Y_R(s) = Y_CLN(s) + K_SIBC sqrt(s) / (s + d)
 K_SIBC  = S sqrt(sigma / mu)
 ```
-preserves $Y(0)$, the bulk Taylor structure at $s\!=\!0$, and the
+preserving $Y(0)$, the bulk Taylor structure at $s\!=\!0$, and the
 non-rational SIBC asymptote $Y\!\to\!K_{\rm SIBC}/\sqrt{s}$ as
-$s\!\to\!\infty$ for any single conductor (Theorem 1, Paper 1).  The
-surface-area-only scaling makes the augmentation parameter readable
-directly from CAD metadata.
+$s\!\to\!\infty$ for any single conductor.  The surface-area-only
+scaling makes the augmentation parameter readable directly from CAD
+metadata.  The full Mixed Galerkin reduction promotes the rank-1
+surface to the closed-form Senior $\gamma_k$ tower (smooth bodies) or
+the planar SIBC tensor product (polyhedra), removing the wall-band
+crossover parameter `d` and reducing the wall-band error by 1–4
+orders of magnitude.  The remaining content of this document keeps
+the Warburg-block notation for compactness; everywhere the symbol
+$z(s) = (s+d)/(K_{\rm SIBC}\sqrt{s})$ appears, it may be replaced by
+the multi-DOF HOIBC envelope to remove `d`.
 
 For systems with multiple conductors --- induction-heating workpieces
 + coils, paired transformer windings, accelerator-magnet yokes near

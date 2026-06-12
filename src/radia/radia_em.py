@@ -230,6 +230,49 @@ class _KelvinBenchPanel(ModePanel):
         )
 
 
+class _ClebschPanel(ModePanel):
+    """Clebsch hodograph (reduced-potential) forward mode.  Self-meshes a
+    verified 2-D / axisymmetric geometry (cylinder / sphere) in a uniform
+    applied field, solves the reduced scalar potential Omega, and
+    post-processes the field into its conjugate Clebsch potentials -- the
+    flux function psi and the scalar potential Phi -- reporting the
+    bidirectional consistency (an a-posteriori field-quality metric) and a
+    flux-line / equipotential .msh.  No coil script, no wp_vol: the mode
+    self-meshes the verified demonstration geometry.
+
+    The 3-D inverse pole-design (geometry-as-unknown hodograph PDE) is a
+    separate research line and is NOT exposed here (repo-first: it stays on
+    the branch until verified on a real device)."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from radia.panels.calc_clebsch_hodograph import build_argparser
+        self.bind_argparser(
+            build_argparser(),
+            skip=("output", "msh_output"),     # no "vol" -- self-meshes
+            labels={
+                "geometry":  "Geometry:",
+                "mu_r":      "mu_r:",
+                "maxh":      "Mesh size maxh:",
+                "fes_order": "FES order:",
+            },
+        )
+
+    def is_runnable(self):
+        return True       # self-meshes; no wp_vol required
+
+    def build_command(self, vol_path):
+        # Self-meshing: vol_path is ignored; outputs are keyed on the
+        # geometry name (no input file to anchor next to).
+        geom = self.val("geometry") or "cylinder"
+        return self.build_command_from_parser(
+            vol_path="",
+            vol_flag=None,
+            script_path=calc_script("calc_clebsch_hodograph.py"),
+            output_path=json_output(geom, "_clebsch"),
+            extra=["--msh-output", msh_output(geom, "_clebsch")],
+        )
+
+
 # ============================================================
 # Top-level EMPanel: wp_vol + Method combo + QStackedWidget
 # ============================================================
@@ -240,12 +283,14 @@ FORM_OMEGA = "Omega"
 FORM_APHI  = "A-Phi"
 FORM_MSC   = "MSC"
 FORM_KELVIN_BENCH = "Kelvin Benchmark"
+FORM_CLEBSCH = "Clebsch hodograph"
 
 _METHOD_FACTORIES = [
     (FORM_OMEGA,        lambda: _AccelMagnetPanel("omega")),
     (FORM_APHI,         lambda: _AccelMagnetPanel("a")),
     (FORM_MSC,          lambda: _MSCPanel()),
     (FORM_KELVIN_BENCH, lambda: _KelvinBenchPanel()),
+    (FORM_CLEBSCH,      lambda: _ClebschPanel()),
 ]
 
 
