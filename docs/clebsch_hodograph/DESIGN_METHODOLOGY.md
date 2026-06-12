@@ -95,6 +95,31 @@ This turns the conventionally *empirical / iterative* end-shimming into a
 **principled equipotential-following design**. It is the part this method
 aims to **establish** (track A, §5).
 
+**Established analytically (rung 1, `accel_pole_ends_3d.py`, golden-tested).**
+The claim has an exact backbone, provable with no FEM:
+
+1. The **integrated** transverse field `B̄⊥(x,y) = ∫B⊥ dz` is *always* a 2-D
+   multipole field — in the current-free aperture `∫(∂ₓBx+∂_yBy)dz = −∫∂_zBz dz
+   = 0` and `∫(∇×B)_z dz = 0`, so `B̄⊥` is 2-D div- **and** curl-free. The
+   *integrated* multipole analyzer (what beam optics actually sees) is therefore
+   well defined regardless of the per-slice fringe.
+2. A **Maxwellian** (symmetry-preserving, equipotential-following) end:
+   **(a)** the gradient's radial Maxwell corrections `∝ G″(z), G⁗(z)` (the
+   pseudo-multipoles, in the *same* m=2 channel) are **total z-derivatives** ⇒
+   they integrate to zero ⇒ the integrated quad is *exact and radially
+   undistorted* (`b̄₂ = (∫G)·r_ref` to ~5e-7); **(b)** the preserved m=2
+   symmetry generates **no** azimuthal `b₆` (`|b̄₆/b̄₂| ~ 3e-17`, machine).
+3. A **non-equipotential** end **breaks the m=2 symmetry**, injecting a genuine,
+   one-signed `b₆` whose z-integral is nonzero ⇒ a spurious integrated `b̄₆`
+   growing **linearly** with the deviation.
+
+So "follow the 3-D equipotential at the end" = *keep the symmetry and let the
+radial fringe corrections cancel, so the integrated field stays the pure
+designed multipole.* **Next rung:**
+replace the analytic Maxwellian field with the **reduced-potential + CoilBuilder
+FEM** end and read the solved 3-D equipotential surface as the end-iron contour
+(then close the loop: re-shape, re-solve, converge the integrated harmonics).
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -154,12 +179,17 @@ coil = A-side), so the framework is one method, not two.
 - Kelvin exact open boundary (field_error ~1e-7);
 - cohomology current-linking (radia.cohomology, gmsh-free);
 - the multipole harmonic analyzer (machine-precision);
+- the **3-D end-field *integrated* multipole theorem** (§3.2 rung 1,
+  `accel_pole_ends_3d.py`): the integrated field is always a 2-D multipole; a
+  symmetry-preserving (equipotential) end ⇒ exact integrated quad (radial
+  corrections ∝G″ integrate away) with no `b̄₆` (~3e-17); a non-equipotential
+  end ⇒ spurious `b̄₆` linear in the deviation;
 - the stream-function coil (A-side), vs Radia to 3.4e-10;
 - the reduced-potential + CoilBuilder forward engine (the panel).
 
 **Research program (named, not claimed done):**
-- the self-consistent *iron = equipotential* end-design loop (§3.2);
-- the 3-D end-field *integrated* multipole insight;
+- the self-consistent *iron = equipotential* end-design loop (§3.2) — the FEM
+  rung: read the solved 3-D equipotential as the end-iron contour and converge;
 - the 1-turn coil stream-function design (§5 B);
 - nonlinear µ(B) (saturation) inside the potential framework — the elegant
   "design sophistication", done within the reduced potential / hodograph
@@ -179,5 +209,6 @@ coil = A-side), so the framework is one method, not two.
 | exact open boundary | `examples/clebsch_hodograph/hodograph_kelvin_axisym.py` |
 | cohomology (current-linking) | `src/radia/cohomology.py` |
 | pole geometry + multipole analyzer | `examples/clebsch_hodograph/accel_pole_design.py` |
+| 3-D ends: integrated analyzer + end rule | `examples/clebsch_hodograph/accel_pole_ends_3d.py` |
 | forward (reduced potential + CoilBuilder) | `src/radia/panels/calc_accel_magnet.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/feec_vim/foliated_solenoid_wires.py` |
