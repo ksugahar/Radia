@@ -90,15 +90,56 @@ that is the research frontier, not covered here.
 > (a harmonic-1-form extractor in `ngsolve.comp`) would be the proper place —
 > `radia.cohomology` is structured to be upstreamable.
 
+## Design track — accelerator pole (the "iron face = equipotential" lever)
+
+These quantify the design methodology (§3–5 of `DESIGN_METHODOLOGY.md`): the
+iron pole face is a scalar-potential **equipotential**, and *deviation from it
+= field harmonics*. They are analytic (no FEM), so each is machine-exact.
+
+- **`accel_pole_design.py`** — the **multipole analyzer** `multipoles(B, r_ref)`
+  (FFT → normal `b_n` / skew `a_n`) + the hodograph quad pole geometry
+  (`Φ = G·xy` ⇒ pole `xy = r₀²/2`, hyperbola). Verified: a pure quad gives only
+  `b₂` (spurious ~4e-17); an injected octupole is recovered to ~1e-15.
+- **`accel_pole_harmonics.py`** — the **2-D cross-section lever**: the ideal
+  hyperbola pole → pure quad; a shim off the equipotential → sextupole `a₆`
+  grows ~linearly with the shim.
+- **`accel_pole_ends_3d.py`** — the **3-D ENDS** (the July main goal, §3.2). The
+  **integrated** transverse field `∫B⊥ dz` is *always* a 2-D multipole (it is
+  2-D div- and curl-free), so the integrated analyzer is what beam optics sees.
+  A **Maxwellian** (symmetry-preserving, equipotential-following) end has two
+  honest properties: **(a)** the gradient's radial Maxwell corrections
+  `∝ G″(z), G⁗(z)` are total z-derivatives → they **integrate to zero** → the
+  integrated quad strength is *exact and radially undistorted*
+  (`b̄₂ = (∫G)·r_ref` to ~5e-7); **(b)** the preserved m=2 symmetry generates no
+  azimuthal `b₆` at all (`|b̄₆/b̄₂| ~ 3e-17`). A **non-equipotential** end
+  **breaks the symmetry**, injecting a genuine one-signed `b₆` whose integral
+  is nonzero → a spurious integrated `b̄₆` growing **linearly** with the
+  deviation (slope spread 0.0%). So "follow the 3-D equipotential at the end" =
+  *keep the symmetry and let the radial fringe corrections cancel, so the
+  integrated field stays the pure designed multipole.* Figure:
+  `accel_pole_ends_3d.png` (left: the radial correction ∝ G″(z) oscillates and
+  integrates to zero; right: `b₆(z)` is flat for the equipotential end, a
+  one-signed bump for the defect). **Next rung:** replace the analytic
+  Maxwellian field with the reduced-potential + CoilBuilder FEM end and read
+  the 3-D equipotential surface as the end-iron contour.
+- **`one_turn_coil_streamfunction.py`** — the A-side **(B) track**: a 1-turn
+  coil is the coarsest stream-function discretization (one contour = one wire);
+  the task is the single best wire path, and the script shows the honest 1-turn
+  limit vs the full multi-turn stream-function current.
+
 ## Run
 
 ```bash
 python a_method_clebsch_2d.py                 # A-method net figure
 python hodograph_kelvin_axisym.py             # Kelvin exact-open-boundary flux figure
 python cohomology_hodograph_currentlink.py    # when the hodograph needs cohomology
+python accel_pole_design.py                   # multipole analyzer + quad pole geometry
+python accel_pole_harmonics.py                # 2-D equipotential lever (shim → harmonics)
+python accel_pole_ends_3d.py                  # 3-D ends: integrated analyzer + end rule
+python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (3 tests).
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (7 tests).
 
 ## Prior art (honest)
 

@@ -84,3 +84,20 @@ def test_one_turn_streamfunction_limit():
     assert r["err_multiturn"] < 0.05, r               # full SF current is good
     assert r["err_one_turn"] > r["err_multiturn"], r  # 1 turn is coarser
     assert 0.0 < r["one_turn_radius"], r              # a real wire came out
+
+
+def test_accel_pole_ends_3d_integrated():
+    """(A) the magnet ENDS in 3-D: the INTEGRATED multipole analyzer + the
+    equipotential-following end rule (DESIGN_METHODOLOGY sec 3.2).  A
+    Maxwellian (equipotential-following) end -> the integrated field is a PURE
+    quad (fringe pseudo-multipoles are total z-derivatives -> integrate to 0);
+    a non-equipotential end defect -> spurious integrated b_6 growing linearly
+    with the deviation."""
+    import accel_pole_ends_3d as ae
+    r = ae.solve()
+    # Maxwellian end: integrated quad strength is exact, NO spurious harmonic.
+    assert r["good_b2_rel_err"] < 1e-4, r              # bbar_2 = (INT G) r_ref
+    assert r["good_spurious_b6_rel"] < 1e-10, r        # fringe integrates away
+    # Non-equipotential end defect: spurious integrated b_6 ~ linear in deviation.
+    assert r["bad_b6_rel_at_c6"]["8000"] > 1e-6, r     # defect -> nonzero bbar_6
+    assert r["bad_b6_slope_spread"] < 0.05, r          # linear in the deviation
