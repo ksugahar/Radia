@@ -32,8 +32,10 @@ function, in four parts:
      SECULAR term  Psi = psi + (G/2pi) zeta + (I/2pi) theta  (zeta toroidal,
      theta poloidal angle).  The TWO extra degrees of freedom are the first
      cohomology generators of the winding surface -- their COUNT is the surface
-     Betti number b1 = 2 (genus 1), which we CONFIRM with Gmsh's homology solver
-     (the same engine wrapped by ``src/radia/cohomology_cut.py``).  We verify the
+     Betti number b1 = 2 (genus 1), which we CONFIRM gmsh-free via the Euler
+     characteristic of the triangulated torus (b1 = 2 - chi; the volume T-Omega
+     cut engine ``src/radia/cohomology_cut.py`` is itself gmsh-free,
+     ``radia.cohomology``).  We verify the
      net-poloidal-current (TF) secular term reproduces the textbook  B_tor ~ 1/R
      toroidal field (Ampere's law) inside the tube and ~0 outside.  Key physics:
      the TF field is TANGENT to the plasma boundary (n.B ~ 0), so the net
@@ -52,7 +54,7 @@ function, in four parts:
 HONEST SCOPE (what this is and is NOT):
   * Parts 1-2 use a SINGLE-VALUED psi -- correct for PF / RMP / shaping / shim
     fields.  Part 3 adds the multivalued secular term for net-current (TF-type)
-    coils; the generator COUNT is computed (Gmsh cohomology), and on the torus
+    coils; the generator COUNT is computed (Euler characteristic, gmsh-free), and on the torus
     the generators themselves are analytic (exact).  For a general winding
     surface the generators come from the cohomology cut
     (``src/radia/cohomology_cut.py``), not analytic forms.
@@ -68,7 +70,7 @@ Run (standalone -- no Cubit, no panel UI):
     python demo_regcoil_fusion.py
     python demo_regcoil_fusion.py --no-plot               # JSON only
     python demo_regcoil_fusion.py --wout wout_w7x.nc      # real VMEC boundary
-    python demo_regcoil_fusion.py --no-cohomology         # skip the Gmsh b1 check
+    python demo_regcoil_fusion.py --no-cohomology         # skip the b1 (Euler-char) check
 
 Writes ``demo_regcoil_fusion.json`` (Data Persistence Policy) and, if matplotlib
 + radia-mcp are present, ``demo_regcoil_fusion.{png,pdf}`` next to this script.
@@ -221,26 +223,36 @@ def _tf_field_1overR(coil, n_cf, radii):
 
 
 def _betti1_winding_surface(a, maxh):
-    """First Betti number b1 of the torus winding SURFACE via Gmsh's homology
-    solver (the engine wrapped by src/radia/cohomology_cut.py).  b1 = number of
-    independent net-current (secular) DOFs = 2 for a genus-1 torus.  No-Fallback:
-    raises if Gmsh's cohomology is unavailable / the cell complex is empty."""
-    import gmsh
-    gmsh.initialize(["-noconfig"])
-    try:
-        gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.model.add("winding_b1")
-        gmsh.model.occ.addTorus(0, 0, 0, R_MAJOR, a)
-        gmsh.model.occ.synchronize()
-        surfs = [s[1] for s in gmsh.model.getEntities(2)]
-        pg = gmsh.model.addPhysicalGroup(2, surfs)
-        gmsh.option.setNumber("Mesh.MeshSizeMax", maxh)
-        gmsh.model.mesh.addHomologyRequest("Cohomology", [pg], [], [1])
-        gmsh.model.mesh.generate(2)
-        dimtags = gmsh.model.mesh.computeHomology()
-        return len([dt for dt in dimtags if dt[0] == 1])
-    finally:
-        gmsh.finalize()
+    """First Betti number b1 of the torus winding SURFACE -- gmsh-free.
+
+    Computed from the surface's OWN triangulation via the Euler characteristic
+    chi = V - E + F.  For a connected closed orientable surface b0 = 1, b2 = 1,
+    so b1 = 2 - chi (= 2g, the genus count).  b1 = number of independent
+    net-current (secular) DOFs = 2 for the genus-1 torus winding surface.
+
+    This drops the Gmsh ``computeHomology`` dependency: the count is a direct
+    combinatorial property of the closed triangulated torus (no homology solver
+    needed).  The T-Omega cohomology CUT engine for general (volume) domains is
+    likewise gmsh-free (``radia.cohomology`` / ``cohomology_cut.py``)."""
+    nu = max(6, int(round(2 * np.pi * R_MAJOR / maxh)))   # toroidal divisions
+    nv = max(6, int(round(2 * np.pi * a / maxh)))         # poloidal divisions
+
+    def vid(i, j):
+        return (i % nu) * nv + (j % nv)
+
+    edges = set()
+    nfaces = 0
+    for i in range(nu):
+        for j in range(nv):
+            v00, v10 = vid(i, j), vid(i + 1, j)
+            v01, v11 = vid(i, j + 1), vid(i + 1, j + 1)
+            for tri in ((v00, v10, v11), (v00, v11, v01)):   # split each quad
+                nfaces += 1
+                for e in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
+                    edges.add(frozenset(e))
+    V, E, F = nu * nv, len(edges), nfaces
+    chi = V - E + F                                          # = 0 for the torus
+    return 2 - chi                                          # b1 = 2 - chi = 2
 
 
 # --------------------------------------------------------------------------
@@ -365,7 +377,7 @@ def main():
                     help="desired on-axis toroidal field [T] (prescribed net "
                          "poloidal current for Part 3)")
     ap.add_argument("--no-cohomology", action="store_true",
-                    help="skip the Gmsh homology b1 confirmation")
+                    help="skip the b1 (Euler-characteristic) confirmation")
     ap.add_argument("--no-plot", action="store_true")
     args = ap.parse_args()
 
@@ -445,7 +457,7 @@ def main():
             "net_poloidal_current_needed_A": Ipol_needed,
         }
         b1 = net_current["betti1_winding_surface"]
-        print(f"[net-current] Gmsh cohomology b1(winding surface)="
+        print(f"[net-current] b1(winding surface) [Euler char, gmsh-free]="
               f"{b1}  -> {len(K_list)} secular DOFs"
               + ("" if b1 is None else f"  (match: {b1 == len(K_list)})"))
         print(f"[net-current] TF secular field: B_tor*R const to "
