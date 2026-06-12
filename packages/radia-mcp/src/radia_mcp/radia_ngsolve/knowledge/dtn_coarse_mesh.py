@@ -698,6 +698,33 @@ the closure is even MORE p-favorable in 2D than the 3D-sphere numbers suggest.
 (Scripts: examples/kelvin_transformation/DtN_spectrum/p_vs_h_study.py is the 3D
 sweep; the 2D numbers are kelvin_dtn_eigenvalue(dim=2).)
 
+## PROOF the floor IS geometry: hold p>=n + mesh, raise ONLY the Curve order
+
+The decisive evidence that the 3D floor is the curved-sphere GEOMETRY (not the
+multipole, not the method, not the polynomial): fix the FE order p>=n AND the
+(coarse) mesh, and raise ONLY the isoparametric geometry order k (mesh.Curve(k)).
+MEASURED (floor_vs_curve.py, coarse maxh=0.5):
+
+   Curve (geometry) order k :   1 (flat)    2          3
+   n=2 (p=3) rel_err        :   1.33e-2     3.8e-4     1.30e-5
+   n=3 (p=4) rel_err        :   1.48e-2     4.4e-4     3.42e-5
+
+Raising ONLY the geometry order from k=1 (flat polyhedron, ~1% faceting error) to
+k=3 drops the error ~1000x to the 5-6 digit floor -- with the polynomial image and
+the FE order p UNTOUCHED.  That isolates the floor as curved-sphere geometry: a flat
+truncation is ~1% off, an isoparametric (curved) one reaches 5-6 digits.  (Past k>=3
+it plateaus ~1e-5: the residual conformal-weight quadrature / energy-quotient limit.)
+Script: examples/kelvin_transformation/DtN_spectrum/floor_vs_curve.py.
+
+## Connection to Cauer Ladder Network (CLN): both are spectral closures
+
+The DtN eigenvalue ladder -(n+1)/R is a SPECTRAL object of the same kind as the
+Cauer-Ladder-Network (CLN) eigenmode decomposition: each characterises a closure by
+how it transmits the modes a source excites.  CLN folds the INTERIOR response by
+circuit order {R_n, L_n}; the Kelvin closure folds the EXTERIOR response by element
+order p.  Same idea -- decompose the physics into eigenmodes and resolve only the
+modes that matter -- applied to the interior network vs the open boundary.
+
 ## Corollary: the exterior VOLUME mesh is irrelevant -- only Gamma matters (p>=n)
 
 A sharp, practically important consequence: with the truncation-surface Gamma fixed,

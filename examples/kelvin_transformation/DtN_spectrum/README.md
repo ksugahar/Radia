@@ -29,6 +29,7 @@ Every script PRINTS its result (no files written) and depends only on
 | `demo_e_optimal_R.py` | Optimal Kelvin/truncation radius (Kameari Q-e) | `p_method` | disk/sphere = monotone → smallest R; square/cuboid → interior optimum `R/a ≈ 3` (DOF proxy `(R/a)²·p(R)²`) |
 | `kelvin_exterior_mesh.py` | Does refining the exterior VOLUME mesh help? | `p_method` | `‖u_h−P_n‖≈1.5e-15` on every volume mesh (p≥n): the volume solve is Galerkin-exact → refining the exterior interior does nothing; only Γ's geometry (a surface effect) moves λ |
 | `kelvin_exterior_mesh3.py` | Isolate Γ-surface vs interior volume | `p_method` | with the Γ surface fixed, λ is set by `∫_Ω|∇P_n|²/∮_Γ P_n²` — a fixed polynomial over a fixed domain; the exterior volume mesh enters nowhere. p=1<n control shows refinement only helps when the order is deficient |
+| `floor_vs_curve.py` | Is the 5–6 digit floor really *geometry*? | `p_method` | fix FE order `p≥n` + mesh, raise only the isoparametric Curve order `k`: error drops ~1000× (`k=1` flat ~1% → `k=3` ~1e-5) → the floor is the curved-sphere **geometry**, not the multipole/method |
 
 ## Running
 
