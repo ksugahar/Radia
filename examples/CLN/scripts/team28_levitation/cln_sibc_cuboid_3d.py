@@ -1,10 +1,11 @@
-"""cln_sibc_cuboid_3d.py -- Python port of the lab CLN-SIBC (Warburg-Schur)
+"""cln_sibc_cuboid_3d.py -- Python port of the lab CLN-SIBC (rank-(1,1) Mixed Galerkin)
 3D cuboid polarizability, for the 3D non-axisymmetric levitation route.
 
 Ports examples/CLN/scripts/cuboid3D_schur_F.wls (Mathematica) to Python and
 reproduces its documented checks, so the 3D CLN-SIBC building block is
 runnable in-repo (it was Mathematica-only).  Method (Sugahara-Nagamine-Hane
-2026, "Universal Cauer-SIBC Composition via Schur Complement"):
+2026, "Mixed Galerkin Reduction for Eddy-Current Admittance:
+CLN Bulk + HOIBC Surface Envelope via Schur Composition"):
 
   Foster admittance (scalar 3D diffusion, odd m,n,p):
       lam   = (m*pi/a)^2 + (n*pi/b)^2 + (p*pi/c)^2
