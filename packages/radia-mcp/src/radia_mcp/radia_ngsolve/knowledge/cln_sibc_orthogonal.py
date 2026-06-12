@@ -1,5 +1,15 @@
 """CLN expansion-point + SIBC orthogonal-residual theory.
 
+POLICY NOTE (2026-06-12): The Warburg-Schur termination described in
+this module was SUPERSEDED by the Mixed Galerkin (CLN bulk + HOIBC
+surface envelope, Schur-coupled, no `d` parameter) framework.  The
+Warburg-Schur code was hard-deleted from the repo on 2026-06-12; see
+`memory/project_warburg_schur_deprecated_2026_06_12.md` for the
+history.  This knowledge module is kept for context but its
+"Warburg-block closure" approach is deprecated.  New work should
+reference `examples/mixed_galerkin/` and use the s-dependent HOIBC
+envelope, not the rational K √s/(s+d) Warburg block.
+
 Knowledge module for the new CLN theory established in IGTE 2026 work
 (Sugahara session 2026-05-16): N stages of Cauer ladder + SIBC analytical
 residual form an L^2-orthogonal complement that spans the full frequency
