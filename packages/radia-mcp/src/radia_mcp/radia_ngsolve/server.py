@@ -1267,8 +1267,10 @@ def dtn_coarse_mesh(topic: str = "all") -> str:
       - bem_integral.dtn_spectrum_vs_mesh():   per-degree error vs mesh size,
                                   with coarse-low-mode and accurate-band summary
       - fem_bem_coupling.kelvin_dtn_eigenvalue(): the Kelvin closure's effective
-                                  DtN (volume FEM); mode n exact iff FEM order≥n
-                                  (the dominant dipole inverts to a linear field)
+                                  DtN (volume FEM); order≥n kills the polynomial
+                                  error, then a curved-geometry floor (~5-6 digits
+                                  in 3D = Kameari's result; the dominant dipole
+                                  inverts to a linear field, accurate at order 1)
 
     Args:
         topic: Documentation topic. Options:
