@@ -74,19 +74,51 @@ def _monos_surf(p):
     return [(i, j) for i in range(p + 1) for j in range(p + 1 - i)]
 
 
-def _change_of_basis(fe, mons, refP, refW, dim):
-    """universal L2->monomial change-of-basis on the reference element: S = Mmono^{-1} C (the affine |J|
-    cancels, so S is the same for all elements of a type).  C[a][k] = INT_ref m_a phi_k, Mmono[a][b] =
-    INT_ref m_a m_b, evaluated with the reference rule + the NGSolve shapes (CalcShape on the ref element)."""
+def _ngsolve_affine(trafo, eltype, ndim):
+    """Reconstruct the (affine) NGSolve element map P = P0 + Jng @ pt from its ElementTransformation, by fitting
+    a few IntegrationRule evaluations.  pt is in NGSolve's reference frame."""
+    ir = ng.IntegrationRule(eltype, 2)
+    rp = np.array([list(p.point)[:ndim] for p in ir])
+    Pp = np.array([list(trafo(p).point) for p in ir])
+    A = np.hstack([rp, np.ones((len(rp), 1))])
+    X, *_ = np.linalg.lstsq(A, Pp, rcond=None)             # [Jng^T (ndim rows) ; P0]
+    return X[ndim, :], X[:ndim, :].T                        # (P0, Jng 3xndim)
+
+
+def _change_of_basis(fe, mons, refP, refW, dim, trafo, Vmesh):
+    """L2/SurfaceL2 -> monomial change-of-basis, in the GRAM's cell_verts geometry frame.
+
+    CRITICAL (root cause of the high-order demag bug, 2026-06-13): NGSolve's L2/SurfaceL2 `CalcShape` uses its
+    OWN reference-element frame (ref(0,0,0)->the LAST mesh vertex, the standard Netgen ordering), but the C++
+    charge-Gram interprets the resulting monomials via `cell_verts` in MESH-VERTEX order (ref(0,0,0)->V0).  If
+    the monomials are built in NGSolve's frame (the old code evaluated m_a and CalcShape at the same pt), the
+    charge B feeds the Gram is geometrically scrambled by a fixed vertex permutation -- INVISIBLE to every
+    uniform-M / demag-factor test (uniform M has div M = 0 => no volume charge) but it makes non-uniform
+    (high-order) solves diverge: the demag operator under-counts divM-heavy modes, which the chi*(...) solve
+    then amplifies.  So we evaluate the MONOMIAL at the cell_verts-frame coord `g` that corresponds to the
+    same physical point as the NGSolve-ref point `pt` (via GetTrafo), keeping CalcShape at `pt`.  This lands
+    the monomial coefficients in the Gram's frame.  The map is a fixed reference permutation (NGSolve orders
+    local vertices consistently), so computing it from one element of each type is exact for all.
+
+    C[a][k] = INT m_a(g(pt)) phi_k(pt), Mmono[a][b] = INT m_a(g(pt)) m_b(g(pt)); S = Mmono^{-1} C.  The
+    quadrature is exact for the polynomial degree, so integrating over pt (vs g) is immaterial."""
+    P0, Jng = _ngsolve_affine(trafo, ng.TET if dim == 3 else ng.TRIG, dim)
+    if dim == 3:
+        Jm = np.array([Vmesh[1] - Vmesh[0], Vmesh[2] - Vmesh[0], Vmesh[3] - Vmesh[0]]).T
+    else:
+        Jm = np.array([Vmesh[1] - Vmesh[0], Vmesh[2] - Vmesh[0]]).T
+    Jm_pinv = np.linalg.pinv(Jm)                            # 3x3 (tet) or 2x3 (tri) -> maps phys offset to ref
     nm, nsh = len(mons), fe.ndof
     M = np.zeros((nm, nm))
     C = np.zeros((nm, nsh))
     for pt, w in zip(refP, refW):
+        P = P0 + Jng @ np.array(pt[:dim])                   # physical point NGSolve maps pt to
+        g = Jm_pinv @ (P - Vmesh[0])                        # same point's coord in the cell_verts (Gram) frame
         if dim == 3:
-            mv = np.array([pt[0] ** i * pt[1] ** j * pt[2] ** k for (i, j, k) in mons])
+            mv = np.array([g[0] ** i * g[1] ** j * g[2] ** k for (i, j, k) in mons])
             sh = np.array(fe.CalcShape(pt[0], pt[1], pt[2]))
         else:
-            mv = np.array([pt[0] ** i * pt[1] ** j for (i, j) in mons])
+            mv = np.array([g[0] ** i * g[1] ** j for (i, j) in mons])
             sh = np.array(fe.CalcShape(pt[0], pt[1]))
         M += w * np.outer(mv, mv)
         C += w * np.outer(mv, sh)
@@ -116,12 +148,18 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     mesh = fes.mesh
     p = fes.globalorder
     pv = max(p - 1, 0)
-    # Gauss pts/dim.  The near-entry cost is O(quad^6 for vol-vol), so the floor matters: polynomial
-    # exactness of the (subtraction-regularized) entry needs only ~p+2 pts/dim, NOT the old hard floor of 6.
-    # Measured (uniform-M cube, exact demag=1/3): quad=4 holds |D-1/3| ~ 7.6e-5 (vs 1.6e-5 at quad=6) and
-    # <5e-4 self-convergence on non-uniform M -- both well inside engineering tolerance, for a ~5x build
-    # speedup at p=1,2.  Floor at 4 (p=1,2 -> 4; p>=3 -> p+2).  Override via intorder for more/less.
-    quad = max(p + 2, (intorder + 1) // 2) if intorder is not None else max(4, p + 2)
+    # Gauss pts/dim for the NEAR/SELF singular entries (the far/smooth pairs use the cheaper far_quad).  N =
+    # B^T G B is a demag SELF-ENERGY and MUST be positive-semidefinite; UNDER-integrating the near/self pairs
+    # makes N NON-PSD (a spurious negative eigenvalue) -- harmless for the demag FACTOR / linear solve (the
+    # negative eig is ~1e-3 relative and M_mass dominates ((1/chi)M_mass+N) anyway), but it SILENTLY CORRUPTS
+    # any ENERGY / EIGENVALUE use of N (the nonlinear energy-min solve slides down the negative mode -> garbage
+    # high-order M).  Measured PSD floor (sphere, min eig of N): quad >= 3*p -- p=1 PSD at quad=3, p=2 needs
+    # quad>=6 (quad=4,5 give min eig -3.2e-4 NON-PSD), p=3 needs quad>=9 (quad=8 still NON-PSD).  So the floor
+    # is 3*p, NOT the old max(4,p+2) (a prior "floor 6->4" speed opt traded away PSD at p=2).  near cost is
+    # O(quad^6) but only on NEAR pairs (far pairs keep far_quad); intorder OVERRIDES (intorder < 2*(3p)-1 may be
+    # NON-PSD -- use only for a fast demag-factor estimate, NEVER for an energy/eigenvalue solve).  See
+    # tests/feec/test_hdiv_vim_psd.py.
+    quad = max(p + 2, (intorder + 1) // 2) if intorder is not None else max(3 * p, 4)
     # INNER subtraction quad (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
     # singular part is carried EXACTLY by the analytic PhiTet/TriPotential base), so the inner sum uses a
     # COARSER rule than the outer -> another ~1.5-2x on the O(quad_out^3 * quad_in^3) near entries.  Floor at
@@ -151,8 +189,14 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     vdof = [list(L2v.GetDofNrs(e)) for e in vels]
     bdof = [list(L2b.GetDofNrs(e)) for e in bels]
     mons_v, mons_s = _monos_vol(pv), _monos_surf(p)
-    Sv = _change_of_basis(L2v.GetFE(vels[0]), mons_v, *_tet_ref(quad), dim=3)
-    Ss = _change_of_basis(L2b.GetFE(bels[0]), mons_s, *_tri_ref(quad), dim=2)
+    # change-of-basis built in the GRAM's cell_verts frame (see _change_of_basis docstring): pass element 0's
+    # NGSolve transform + its mesh-order vertices so the monomial coeffs land in the same frame the C++ Gram
+    # interprets `charge_expo` in.  The ref-corner->local-vertex permutation is constant per element type, so
+    # one element of each type is exact for all.
+    Sv = _change_of_basis(L2v.GetFE(vels[0]), mons_v, *_tet_ref(quad), dim=3,
+                          trafo=mesh.GetTrafo(vels[0]), Vmesh=vV[0])
+    Ss = _change_of_basis(L2b.GetFE(bels[0]), mons_s, *_tri_ref(quad), dim=2,
+                          trafo=mesh.GetTrafo(bels[0]), Vmesh=bV[0])
 
     Sv_sp, Ss_sp = sp.csr_matrix(Sv), sp.csr_matrix(Ss)         # change-of-basis kept sparse (block x block)
     Brows, host, kind, expo = [], [], [], []
