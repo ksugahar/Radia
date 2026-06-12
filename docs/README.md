@@ -62,7 +62,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 ## Cauer Ladder Network (CLN)
 
 - [CAUER_LADDER_NETWORK.md](cln/CAUER_LADDER_NETWORK.md) - Foundational CLN (Tanimoto-Kameari method): iterative orthogonalization, Cauer-II ladder synthesis, three formulations (A-T, T-Ω, A-Φ), 2D / 3D variants, gauge / constraint options, Kelvin transformation coupling
-- [HIERARCHICAL_CAUER_SIBC.md](cln/HIERARCHICAL_CAUER_SIBC.md) - **Hierarchical Cauer with Warburg-Schur termination for SIBC** (Paper 1): bulk CLN + single Warburg DOF closure that recovers the non-rational $f^{-1/2}$ SIBC asymptote while preserving DC. Single-conductor theory, Theorem 1 (minimality), cylinder + sphere + cuboid verification, time-domain via diffusive Foster (50-pt) + closed-form Dawson, field reconstruction
+- **Mixed Galerkin (CLN + HOIBC)** — bulk CLN Krylov modes + HOIBC surface envelope, coupled via the Schur complement. Single conductor admittance Y(s) with **no `d` parameter** and wall-band error 0.001–0.33% (geometry dependent). Scripts: `examples/mixed_galerkin/`. **Superseded the Warburg-Schur termination as of 2026-06-12** (see `memory/project_warburg_schur_deprecated_2026_06_12.md` for the history).
 - [BEM_CLN.md](cln/BEM_CLN.md) - Multi-conductor BEM-CLN: per-element polarizability + integral-equation coupling for N-conductor clusters (Paper 2, IH workpiece + coils, paired transformer windings)
 - [CLN_3D_CUBOID.md](cln/CLN_3D_CUBOID.md) - 3D Cu cuboid benchmark: HCurl FEM + BEM Cauer 3-way validation
 

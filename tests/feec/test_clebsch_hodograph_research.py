@@ -1,0 +1,103 @@
+"""Golden lock for the Clebsch hodograph RESEARCH examples
+(examples/clebsch_hodograph/): the A-method (vector-potential primary) dual
+and the Kelvin (exact open boundary) variant.  Imports each script's
+solve() and asserts the headline accuracy + bidirectional consistency bands.
+
+These are research demonstrations (not panel modes); the verified FORWARD
+panel mode is locked separately by tests/panels/test_clebsch_golden.py.
+
+Verified 2026-06-12:
+  A-method 2-D   field_error ~3e-5  consistency ~4e-4
+  Kelvin axisym  field_error ~1e-7  consistency ~2e-5  (exact open boundary)
+"""
+import sys
+from pathlib import Path
+
+EXDIR = Path(__file__).resolve().parents[2] / "examples" / "clebsch_hodograph"
+sys.path.insert(0, str(EXDIR))
+
+
+def test_a_method_clebsch_2d():
+    import a_method_clebsch_2d as am
+    r = am.solve(mu_r=1000.0, order=3, maxh=0.10)   # coarser for CI speed
+    # Vector-potential A-method recovers the 2-D interior field 2 mu_r/(mu_r+1).
+    assert r["field_error"] < 2e-3, r
+    # A_z / V accuracy vs the exact conjugate pair.
+    assert r["Az_error"] < 2e-3 and r["V_error"] < 2e-3, r
+    # Hodograph self-consistency B(from A_z) vs B(from V).
+    assert 0.0 < r["consistency"] < 2e-3, r
+
+
+def test_hodograph_kelvin_axisym():
+    import hodograph_kelvin_axisym as hk
+    r = hk.solve(mu_r=100.0, order=3, maxh=0.05)    # coarser for CI speed
+    # Kelvin open boundary is EXACT -> field_error must be tiny (<< the
+    # ~3e-3 of the far-truncated panel-mode sphere).
+    assert r["field_error"] < 1e-3, r
+    assert 0.0 < r["consistency"] < 5e-3, r
+
+
+def test_cohomology_currentlink():
+    """The hodograph's scalar coordinate is a 1st-cohomology class iff a
+    current threads a hole (period != 0).  Locks the radia.cohomology
+    generator + the grad-fit obstruction contrast."""
+    import cohomology_hodograph_currentlink as ch
+    r = ch.solve(maxh=0.025)
+    assert r["b1_solid"] == 0 and r["b1_washer"] == 1, r
+    assert r["curl_rel"] < 1e-6, r                       # generator is curl-free
+    assert abs(abs(r["oint_hole"]) - 1.0) < 0.05, r      # unit circulation
+    assert abs(r["oint_contractible"]) < 1e-2, r
+    # current-linking field is NOT a gradient -> cohomology required.
+    assert r["residual_cohomology_field"] > 0.5, r
+    # zero-period field IS a gradient -> single-valued scalar coordinate.
+    assert r["residual_gradient_field"] < 1e-3, r
+
+
+def test_accel_pole_design_multipole_analyzer():
+    """The design+measurement foundation for the hodograph + HDiv-MMM
+    combination: the multipole analyzer returns ONLY the quad for a pure
+    quad field and detects an injected octupole to machine precision."""
+    import accel_pole_design as apd
+    r = apd.solve()
+    assert r["quad_spurious_rel"] < 1e-10, r          # pure quad -> only b_2
+    assert r["qo_b4_rel_err"] < 1e-9, r               # octupole b_4 exact
+    assert abs(r["pole_hyperbola_xy_const"] - 0.5) < 1e-12, r   # xy = r0^2/2
+
+
+def test_accel_pole_harmonics_design_lever():
+    """(A) 'iron face off the equipotential = harmonics': ideal hyperbola
+    pole -> pure quad; a shim -> sextupole a_6 grows ~linearly with it."""
+    import accel_pole_harmonics as aph
+    r = aph.solve()
+    assert r["ideal_spurious_rel"] < 1e-10, r         # ideal pole -> pure quad
+    assert r["ideal_residual"] < 1e-10, r             # exact equipotential
+    assert r["a6_at_shim"]["0.04"] > 1e-2, r          # shim -> nonzero a_6
+    assert r["a6_slope_spread"] < 0.1, r              # a_6 linear in the shim
+
+
+def test_one_turn_streamfunction_limit():
+    """(B) 1-turn coil via the stream function: the single best wire (one
+    contour) is the coarsest realization -- worse than the multi-turn
+    stream-function current, the honest 1-turn limit."""
+    import one_turn_coil_streamfunction as otc
+    r = otc.solve()
+    assert r["err_multiturn"] < 0.05, r               # full SF current is good
+    assert r["err_one_turn"] > r["err_multiturn"], r  # 1 turn is coarser
+    assert 0.0 < r["one_turn_radius"], r              # a real wire came out
+
+
+def test_accel_pole_ends_3d_integrated():
+    """(A) the magnet ENDS in 3-D: the INTEGRATED multipole analyzer + the
+    equipotential-following end rule (DESIGN_METHODOLOGY sec 3.2).  A
+    Maxwellian (equipotential-following) end -> the integrated field is a PURE
+    quad (fringe pseudo-multipoles are total z-derivatives -> integrate to 0);
+    a non-equipotential end defect -> spurious integrated b_6 growing linearly
+    with the deviation."""
+    import accel_pole_ends_3d as ae
+    r = ae.solve()
+    # Maxwellian end: integrated quad strength is exact, NO spurious harmonic.
+    assert r["good_b2_rel_err"] < 1e-4, r              # bbar_2 = (INT G) r_ref
+    assert r["good_spurious_b6_rel"] < 1e-10, r        # fringe integrates away
+    # Non-equipotential end defect: spurious integrated b_6 ~ linear in deviation.
+    assert r["bad_b6_rel_at_c6"]["8000"] > 1e-6, r     # defect -> nonzero bbar_6
+    assert r["bad_b6_slope_spread"] < 0.05, r          # linear in the deviation
