@@ -240,6 +240,70 @@ accuracy.
 """
 
 DTN_COARSE_MESH_NUMERICS = r"""
+# Theory FIRST: why low modes are accurate, and the sufficient-mesh criterion
+
+(The measured table further down VERIFIES this; the theory comes first.)
+
+## Control parameter (heuristic): facets per wavelength,  q = n h / R
+
+A degree-n spherical harmonic Y_n oscillates with angular wavenumber n (surface
+Laplace-Beltrami eigenvalue n(n+1)/R^2), wavelength ~ 2*pi*R/n.  A surface mesh of
+element size h resolves it with ~ R/(n h) elements per wavelength, so
+
+    q = n h / R   ~   1 / (facets per wavelength of Y_n)
+
+is a useful RESOLUTION HEURISTIC.  CAVEAT: it is ONLY a heuristic -- the
+experiment below shows n and h enter the defect with DIFFERENT powers, so the
+defect is NOT a pure function of q.  The angular-Nyquist WALL is q ~ 1
+(n_Nyq ~ R/h ~ sqrt(N_surf)); beyond it the mode is unresolved.
+
+## Superconvergence law (theory) + what the experiment CORRECTED
+
+The DtN/Steklov eigenvalue is variational, so for a SMOOTH eigenfunction the
+Galerkin eigenvalue error is the SQUARED best finite-element approximation error
+of Y_n.  Order-p_s surface elements approximate the smooth Y_n to O(h^{p_s+1}),
+so the h-law is
+
+    defect_n  ~  h^{2(p_s+1)}  x  C(n),     C(n) growing with the degree n.
+
+MEASURED (dtn_spectrum_vs_mesh, SurfaceL2 p_s=1, R=1; ndof 336/564/882/1080):
+
+  * h-power CONFIRMED:  defect ~ h^{2(p_s+1)} = O(h^4), rate p ~ 3.9
+    (n=2: 2.1e-3 -> 8.0e-4 -> 3.2e-4 -> 2.2e-4 as ndof rises).
+  * n-power MEASURED ~ n^2 at fixed mesh (per-degree rel_err grows ~x2.5/degree,
+    log-log slope ~ 2.1) -- this CORRECTS a naive "pure q^4" reading: the clean
+    part is the h^4 superconvergence, the degree growth is a SEPARATE, milder
+    ~n^2 (its exact power is a subtle Steklov question; the datasheet carries the
+    constants).
+
+So for p_s=1 the empirical law is  defect_n ~ n^2 (h/R)^4  -- NOT n and h together
+as q^4.  Theory fixes the h-power 2(p_s+1) and the sub-Nyquist structure; the
+spectrum fixes the n-growth and the constants.
+
+## Sufficient-mesh criterion (from the measured law defect ~ n^2 (h/R)^4)
+
+A surface mesh is sufficient for a source whose highest SIGNIFICANT multipole is
+n_src, at tolerance eps, when defect_{n_src} <~ eps:
+
+    (h/R)  <~  eps^{1/4} / sqrt(n_src)
+    <=>  N_surf ~ (R/h)^2   >~   n_src / sqrt(eps)     (LINEAR in n_src!).
+
+So the surface DOF grows only ~LINEARLY with the top multipole (x eps^{-1/2}).
+You resolve the top significant harmonic to a few facets per wavelength -- you do
+NOT "refine to convergence".
+
+MEASURED band vs Nyquist (rel_err < 0.5%): the accurate band sits at a small,
+roughly FIXED fraction of the angular-Nyquist ceiling --
+
+    ndof  336 :  n_acc <= 2,  n_Nyq ~ 17   (0.12)
+    ndof  564 :  n_acc <= 4,  n_Nyq ~ 23   (0.18)
+    ndof  882 :  n_acc <= 5,  n_Nyq ~ 29   (0.17)
+    ndof 1080 :  n_acc <= 5,  n_Nyq ~ 32   (0.16)
+
+-- ~0.12-0.18 of Nyquist: you never approach the resolution wall.  A
+dipole-dominated source (n_src = 1) is already sufficient on the COARSEST
+admissible sphere mesh (low-mode error 2.1e-3 there).
+
 # Measured DtN Spectrum vs Mesh Size  (sphere R=1, BEM SurfaceL2 order=1)
 
 `exterior_dtn_spectrum` assembles Λ_h = V⁻¹(−½M+K) and matches its eigenvalues,
@@ -503,6 +567,367 @@ the FEM order reaches n; the dominant dipole inverts to a linear field).
 """
 
 
+DTN_COARSE_MESH_P_METHOD = r"""
+# Kelvin is a p-method, not an h-method (measured) -- and the polyhedron question
+
+The coarse-mesh accuracy is usually told as an h-refinement story (Kameari).
+But the polynomial-image mechanism makes the Kelvin closure a **p-method**: mode
+n inverts to the degree-n solid harmonic, and order-p Lagrange FEM captures it
+EXACTLY iff p >= n.  So the efficient lever is element ORDER, not mesh density.
+
+## Theory FIRST: regularity decides h vs p -- so this is really an hp question
+
+Whether p or h wins is set by the SOLUTION REGULARITY (classical approximation
+theory), NOT by the method name:
+  * ANALYTIC (smooth) solution -> p-refinement converges EXPONENTIALLY (~e^{-b p}),
+    h only ALGEBRAICALLY (~h^{p+1} = N^{-(p+1)/d}).  p wins.
+  * CORNER-SINGULAR solution (u ~ r^s near a re-entrant corner) -> pure p stalls
+    at an algebraic rate (~N^{-2 s}); h-grading toward the corner is needed; hp-FEM
+    (geometric mesh grading + linear p increase) converges EXPONENTIALLY.  hp wins.
+
+The KELVIN region is the MOST p-favorable part of any open-boundary problem:
+  * its image is a degree-n POLYNOMIAL (solid harmonic) -> p does better than
+    exponential, it TERMINATES EXACTLY at p = n;
+  * its geometry is a smooth sphere (handled by high-order isoparametric elements);
+  * it contains NO source and NO singularity -- infinity becomes the smooth GND.
+So the Kelvin transform's gift is that it renders the far-field / infinity part
+ANALYTIC, removing exactly the difficulty that would otherwise demand h.  In the
+exterior, p is decisively advantageous.
+
+The h-vs-p verdict for the WHOLE machine is therefore decided by the INTERIOR
+physical region, not by the open boundary:
+  * smooth interior (no re-entrant corners)         -> p throughout;
+  * slots / re-entrant corners / PM-iron edges      -> singular -> use hp
+    (geometric h-grading toward the singularity, p elsewhere).
+"Kelvin is a p-method" is precise for the CLOSURE; the full solver is
+hp = (high p in the smooth Kelvin ball + smooth interior) + (h-grading toward
+interior singularities).  Pure p is NOT globally optimal when the interior is
+singular.
+
+Practical caveats:
+  * conditioning grows with p and per-element cost is O(p^{2d}); the useful order
+    is a moderate sweet spot (~2-4) -- beyond it conditioning erodes the DOF win
+    (the order-4 quadrupole below is already conditioning-limited).
+  * if the source sits NEAR Gamma (high-n boundary content) p would have to be
+    large -- instead enlarge the air-box R to push significant modes to low n and
+    keep p moderate (the (R, p) trade).  h enters the EXTERIOR only through this.
+  * "advantageous" depends on the metric: p wins on error-per-DOF; low-order h is
+    simpler to implement / adapt.  For the smooth Kelvin sphere both a coarse mesh
+    and high-order geometry are trivial, so p's win there is clean.
+
+## p-path vs h-path (measured, kelvin_dtn_eigenvalue, sphere R=1, dim=3)
+
+  quadrupole n=2 (image = quadratic):
+    p-path (maxh=0.5 FIXED, raise order):
+        order 1  ndof  58  rel_err 9.5e-01
+        order 2  ndof 278  rel_err 2.5e-03      <- ONE order step = 374x drop
+        order 3  ndof 768  rel_err 1.2e-05
+    h-path (order 1 FIXED, refine mesh):
+        ndof 58 -> 1075   rel_err 9.5e-01 -> 1.4e-02   (algebraic ~O(h^2), never < 1e-2)
+
+  octupole n=3 (image = cubic):
+    p-path: order 1/2/3, ndof 58/278/768   rel_err 2.1 / 0.196 / 8.4e-04
+    h-path (order 1):    ndof 58 -> 1075    rel_err 2.1 -> 4.4e-02
+
+Reading: p-refinement is **exact-terminating** (the polynomial image is captured
+once p >= n); h-refinement is merely **algebraic** (order 1 can never represent
+the degree-n image, only approach it ~O(h^2)).  To hit a target accuracy, p uses
+**~20-80x fewer DOF** than h for the higher multipoles (quadrupole ~22x, octupole
+~77x).  The dominant dipole (linear image) is already exact at order 1.
+
+## The DOUBLE benefit of raising p (subtle, from the implementation)
+
+`kelvin_dtn_eigenvalue` curves the mesh isoparametrically (Curve(min(order+1,3))).
+So raising the order improves BOTH the polynomial field representation AND the
+sphere geometry -- which is why the p-path is so steep.  Note the tension:
+
+  * AFFINE (flat) elements represent a physical-space polynomial EXACTLY (order>=n
+    is then strictly exact) but mesh the sphere as a FACETED polyhedron (geometry
+    error);
+  * CURVED (isoparametric) elements fix the geometry but BREAK exact polynomial
+    representation (a physical-space polynomial is not a reference-space
+    polynomial under a nonlinear map), so "order>=n exact" is only APPROACHED.
+
+p-refinement relaxes both at once; h-refinement only chips at geometry, slowly.
+
+## Polyhedral (flat) truncation: the faceting error SCALES WITH MULTIPOLE DEGREE
+
+Does a FLAT polyhedron truncation (Curve 1) work, or must the sphere be exact?
+Measured (effective DtN eigenvalue rel_err, flat Curve-1 vs curved):
+
+  dipole n=1 (order 1, LINEAR image):
+    flat   (C1)  maxh 0.6->0.14   rel_err 1.14e-2 -> 8.7e-4   (~O(h^2), small)
+    curved (C2)                    5.1e-3  -> 6.6e-5
+    flat/curved ratio  2.2 -> 13      => dipole is geometry-ROBUST (polyhedron fine)
+
+  quadrupole n=2 (order 2, QUADRATIC image):
+    flat   (C1)  maxh 0.6->0.20   rel_err 1.33e-2 -> 2.86e-3  (~O(h^2), slow)
+    curved (C3)                    2.55e-3 -> 7.8e-6
+    flat/curved ratio  5 -> 369       => quadrupole is geometry-SENSITIVE
+
+So it is NOT that faceting is globally irrelevant -- its IMPORTANCE GROWS STEEPLY
+WITH MULTIPOLE DEGREE.  Why (spectral): the polyhedral faceting is a boundary
+perturbation that is HIGH spatial frequency (angular degree ~ R/h, the facet
+rate) and SMALL amplitude (chord sagitta ~ h^2/R).  By spherical-harmonic
+orthogonality such a perturbation couples a mode n mainly to FAR high modes; the
+diagonal (eigenvalue) defect it induces is suppressed for low n and grows with n
+(higher Y_n carry more high-frequency content that overlaps the faceting).  PLUS
+a benign degree-0 part: an inscribed polyhedron sits uniformly inside the sphere
+-> an O(h^2) "effective radius" shift that rescales the WHOLE ladder -(n+1)/R_eff
+equally (not mode-mixing; removable by area/radius matching).
+
+CONSEQUENCE for p=1: the only mode captured exactly at order 1 is the dipole
+(linear image), which is precisely the geometry-ROBUST mode -- so a flat
+polyhedron truncation is fine at p=1.  Raise the order to capture higher
+multipoles and you must ALSO curve the surface, because those modes are
+geometry-sensitive: **p and geometry-order should rise together.**  (In the
+two-sphere periodic Kelvin the interior and Kelvin-image share the SAME discrete
+surface -- facet-to-facet identification -- so faceting is not an interface
+MISMATCH, only "discrete surface vs ideal sphere", i.e. the benign high-n +
+uniform-shift error above.)
+
+## Design rule (the inversion of "refine until converged")
+
+Choose element ORDER p >= (source's highest significant multipole); keep the
+exterior (Kelvin) MESH coarse; use the air-box RADIUS R only to LOWER the
+required p (boundary multipole content ~ M_n / R^{n+1}, so a larger box pushes
+significant modes to lower n).  Optimise the PAIR (R, p) for minimum total DOF --
+a third axis beyond "enlarge the box" and "refine the mesh".
+"""
+
+DTN_COARSE_MESH_FORMULATION = r"""
+# Formulation (Omega vs A) and infinity -- a differential-geometry view
+
+Does the open-boundary / DtN treatment depend on the potential variable (scalar
+Omega vs vector A)?  And how is infinity best treated?  The de Rham complex
+answers both.
+
+## The exterior field is one object; Omega and A are dual potentials
+
+  Lambda^0  --d(grad)-->  Lambda^1  --d(curl)-->  Lambda^2
+
+  * scalar potential Omega is a 0-form: H = -grad Omega (H a 1-form); enforces
+    curl H = 0 STRONGLY, div B = 0 weakly.
+  * vector potential A is a 1-form: B = curl A (B a 2-form); enforces div B = 0
+    STRONGLY, curl H = 0 weakly.
+
+They are the HODGE-DUAL pair; the constitutive law (Hodge star *, the material)
+links H (1-form) and B (2-form).
+
+## "The exterior is between Omega and A" = complementary (dual) bracketing
+
+The two dual formulations BRACKET the true energy (classical complementary
+variational principles):
+
+    W_Omega  >=  W_true  >=  W_A
+
+so the exact open-boundary solution lies BETWEEN the scalar and vector results,
+and the gap  W_Omega - W_A  is the constitutive (Hodge-star) discretisation error
+= a GUARANTEED, computable a-posteriori bound.  Running BOTH dual Kelvin solves on
+a coarse mesh therefore CERTIFIES the open-boundary accuracy, not just observes
+it.  [Established theory; a direct two-sphere numerical demonstration is a clean
+TODO -- compute W_Omega and W_A on a coarse Kelvin mesh and show they bracket the
+exact dipole energy, the gap being the error bound.]
+
+## The DtN gradient block is formulation-INDEPENDENT
+
+On the truncation sphere Gamma, Hodge-decompose the boundary 1-form trace:
+
+    Lambda^1(S^2) = d Lambda^0  (+)  *d Lambda^0  (+)  H^1,     H^1(S^2) = 0.
+
+The EXACT (gradient) block is exactly the scalar Omega DtN -- the SAME ladder
+-(n+1)/R -- in EVERY formulation.  A merely adds the coexact (solenoidal) block,
+which in a current-free, simply-connected exterior is non-physical gauge and
+removable (A reduces to Omega there).  Hence the coarse-mesh / p-threshold result
+is formulation-INDEPENDENT on the physical (gradient) block.
+
+## Material modulation = conformal pullback of the Hodge star (depends on degree)
+
+The Kelvin inversion is the SAME conformal map regardless of variable, but the
+material it induces is the pullback of *, which depends on the FORM DEGREE:
+
+  * 0-form Omega -> isotropic SCALAR weight   mu' = (R/rho')^{d-2}
+        (3D: R/rho';  2D: 1, i.e. ABSENT -> the -n/R vs -(n+1)/R difference)
+  * 1-form A     -> anisotropic TENSOR        mu' = (rho'/R)^2 (I - 2 n n^T)
+        (Householder) = the Kelvin pullback Jacobian J = (rho'/R)^2 H
+        (see knowledge: kelvin_transformation)
+
+The 2D-vs-3D weight difference is the conformal covariance of the 0-form
+Laplacian (conformally INVARIANT in 2D, weight d-2=1 in 3D).
+
+## Infinity = one-point conformal compactification
+
+The "right" treatment of infinity is to compactify (adjoin the point at
+infinity); the Kelvin inversion realises this, sending infinity to a regular
+INTERIOR point (the GND, rho'=0).  The OPTIMAL variable is the one whose
+Hodge-star weight is simplest: in a current-free, simply-connected exterior the
+SCALAR Omega is canonical and ISOTROPIC -- the differential-geometry reason the
+classic "scalar potential in the exterior air, vector potential inside
+iron/conductor" hybrid is optimal.  For certified bounds, use BOTH (the dual
+bracket above).
+
+## Edge-element A and the point at infinity: let the DtN ABSORB it
+
+A real practical pain: in the A-formulation with EDGE (Nedelec / Whitney 1-form)
+elements, the Kelvin map sends infinity to the BALL CENTRE (rho'=0), which is
+awkward -- there is no nodal DOF to pin there (edge DOFs live on edges, not
+points), and the pulled-back 1-form material is SINGULAR at the centre
+(nu' ~ (R/rho')^2 -> infinity).  For nodal Omega this is trivial (Dirichlet GND
+at the centre node); for edge A it is not.
+
+DtN dissolves the problem by REMOVING the point at infinity from the
+discretisation:
+
+  1. Do NOT mesh the exterior as a Kelvin ball.  Truncate at Gamma and impose the
+     exterior operator Lambda_ext as a (nonlocal) boundary condition on Gamma
+     (FEM-BEM coupling).  Then there is NO exterior mesh, NO centre point, NO
+     singular material -- the decay-at-infinity condition lives INSIDE Lambda_ext.
+
+  2. The exterior is current-free and simply-connected, so its DtN reduces to the
+     SCALAR ladder -(n+1)/R (the gradient block; the A-specific coexact block is
+     removable gauge).  Couple the interior edge-A to this scalar exterior DtN
+     through the surface relation  B.n = curl_Gamma A_t  on Gamma (the normal flux
+     is the surface-curl of the tangential A trace -- a natural edge-DOF
+     quantity).  This is an A(interior, edge)–Omega(exterior, DtN) hybrid on Gamma.
+
+  3. What "the value at infinity" BECOMES for A: it is the n=0 (monopole) mode.
+     For magnetostatics there is no magnetic monopole, so  oint_Gamma B.n = 0
+     identically -- the n=0 mode carries ZERO net flux.  So the infinity condition
+     for edge-A is exactly the GLOBAL zero-net-flux constraint on Gamma, which the
+     DtN carries in its monopole block and which is a clean CONSTRAINT on edge DOFs
+     (a surface-flux condition) -- NOT a point condition at a singular centre.
+
+So for edge-element A, prefer the DtN / BEM boundary coupling on Gamma over the
+Kelvin-ball mesh: infinity is integrated out into Lambda_ext, and its only trace
+is the (automatically satisfied) zero-net-flux monopole constraint.  The
+edge-element infinity difficulty simply disappears.  [Scalar FEM-BEM is
+implemented -- see knowledge: fem_bem_schur; the edge-A curl-curl coupling, or the
+flux-coupled scalar-exterior variant, is the natural extension and a clean TODO.]
+
+## Unifying statement (FEEC)
+
+The Kelvin pullback is a CHAIN MAP of the de Rham complex (commutes with d up to
+the conformal weight), carrying exterior harmonic forms (decaying at infinity) to
+POLYNOMIAL (solid-harmonic) forms on the ball.  The order-threshold p >= n is the
+statement that the order-p polynomial FEEC de Rham complex reproduces solid
+harmonics of degree <= p exactly.  So coarse-mesh / p-method accuracy is a
+COHOMOLOGICAL property of the complex -- formulation-independent on the gradient
+block, and dual-bracketable for certified error.
+
+## The PERFORMANCE theory is differential geometry too: DtN = sqrt(Delta_Gamma)
+
+The mesh-resolution / superconvergence / h-vs-p analysis (NUMERICS, P_METHOD
+topics) was stated in plain approximation theory.  Its differential-geometry
+content unifies it with everything above:
+
+  * The exterior DtN is, to leading order, MINUS THE SQUARE ROOT of the boundary
+    Hodge-Laplace-Beltrami operator:  Lambda_ext = -sqrt(Delta_Gamma) + lower
+    order  (a first-order pseudodifferential operator; principal symbol |xi'|).
+    Its eigenFUNCTIONS are the Laplace eigenFORMS on Gamma -- 0-forms Y_n for the
+    scalar (Omega) DtN, vector spherical harmonics (1-forms) for the A DtN.  On
+    the sphere Delta_Gamma Y_n = n(n+1)/R^2 Y_n, and the exact eigenvalue -(n+1)/R
+    equals -sqrt(n(n+1))/R up to the O(1/R) curvature term.  The "facets per
+    wavelength" q = n h/R is literally the mesh resolution of the Laplace eigenform
+    of eigenvalue ~ (n/R)^2.
+
+  * PERFORMANCE = FEEC eigenvalue approximation of Delta_Gamma.  How well the
+    discrete de Rham complex (Whitney / high-order polynomial differential forms,
+    Arnold-Falk-Winther FEEC) approximates the Laplace eigenforms governs the
+    defect.  The measured superconvergence "eigenvalue error ~ (best
+    form-approximation)^2 ~ O(h^{2(p_s+1)})" is exactly the FEEC eigenvalue
+    superconvergence, controlled by the bounded COMMUTING COCHAIN PROJECTION pi_h
+    (the discrete complex's approximation property) -- not an accident.
+
+  * h vs p = Whitney vs the HIGH-ORDER POLYNOMIAL de Rham complex.  The Kelvin
+    image is a POLYNOMIAL FORM (solid harmonic: polynomial 0-form for Omega,
+    polynomial 1-form for A); the order-r polynomial complex (P_r^- Lambda^k /
+    P_r Lambda^k) CONTAINS it exactly iff r >= n -- so p-refinement is
+    exact-terminating in the de Rham sense, Whitney (h) only approximates
+    algebraically.  Interior forms of limited regularity (corner singularities)
+    need the Whitney complex with geometric grading (hp).  "Kelvin is a p-method"
+    = "the exterior image lies in the polynomial de Rham complex".
+
+  * PROBLEM-INDEPENDENCE (the datasheet) is the geometric intrinsicness of the
+    Laplace spectrum: Delta_Gamma depends only on the Riemannian geometry of Gamma
+    (the sphere -> n(n+1)/R^2), NOT on the source.  The datasheet is the spectral
+    approximation property of the discrete de Rham complex for Delta_Gamma -- a
+    cohomological / geometric invariant of (Gamma, mesh, order), not of any
+    boundary value problem.
+
+So every strand -- spectrum, superconvergence, sufficient mesh, h-vs-p, dual
+bracket -- is ONE differential-geometry statement: the discrete de Rham complex
+approximating the boundary Hodge Laplacian whose square root is the DtN, with the
+Kelvin conformal CHAIN MAP placing the exterior data in the polynomial complex.
+"""
+
+
+DTN_COARSE_MESH_DATASHEET = r"""
+# Problem-INDEPENDENT performance: the Kelvin closure has a DATASHEET
+
+The deepest consequence of the spectral view: you can state the open-boundary
+method's PERFORMANCE without reference to any particular problem.  A field
+refinement study (Kameari) certifies ONE chosen problem; the DtN spectrum
+certifies the METHOD.
+
+## The error factorises: method (operator) x problem (source)
+
+For a compact source the exterior field is a multipole series, and on the sphere
+the open-BC error is DIAGONAL in that basis.  So the open-boundary contribution
+to the error of ANY problem factorises:
+
+    open-BC error  =  SUM_n  c_n(source)  x  defect_n(method)
+
+  * defect_n(method) = the discrete closure's eigenvalue error at degree n,
+    |lambda_h,n - (-(n+1)/R)| / |-(n+1)/R| -- a property of the METHOD ALONE
+    (order p, mesh h, geometry/curving).  PROBLEM-INDEPENDENT.
+  * c_n(source) = the source's n-th multipole content and its r^{-(n+1)} decay to
+    the truncation radius.  The ONLY problem-dependent factor.
+
+Kameari's refinement measures the SUM for one problem; the DtN spectrum measures
+the per-mode factor defect_n DIRECTLY -- once, for the method -- never solving a
+boundary value problem.
+
+## Why Kelvin gives a clean, ANALYTIC, universal datasheet
+
+Kelvin IS a spherical inversion, so its truncation surface is ALWAYS a sphere;
+the exterior DtN is therefore ALWAYS diagonalised by the same spherical harmonics
+with the same closed-form ladder -(n+1)/R (3D) / -n/R (2D).  The eigenBASIS and
+the exact eigenVALUES are known analytically and are the SAME for every Kelvin
+problem -- so the datasheet (per-degree eigenvalue defect vs order/mesh/geometry)
+is an absolute specification with a built-in analytic yardstick.  (A BEM closure
+on an arbitrary surface is also source-independent but lacks the closed-form
+yardstick; PML / asymptotic Robin have fixed modal defects.  Kelvin's spherical
+structure is exactly what makes the datasheet clean and universal.)
+
+## The Kelvin datasheet (measured in this module)
+
+  * eigenvalue-defect spectrum  defect_n vs degree n        -> NUMERICS topic
+  * order-threshold             mode n exact iff p >= n      -> P_METHOD topic
+                                (p is the efficient axis, ~20-80x fewer DOF than h)
+  * geometry-sensitivity        flat-polyhedron error grows  -> P_METHOD topic
+                                steeply with n (dipole robust, quadrupole 369x)
+  * formulation-independence    gradient block -(n+1)/R same -> FORMULATION topic
+                                for Omega and A
+
+## What problem-independence buys you
+
+  1. A-PRIORI certification: certify a (mesh, order, R) BEFORE solving anything --
+     no per-problem convergence study.
+  2. TRANSFERABILITY: one datasheet covers every problem on that truncation
+     (motor, transformer, accelerator magnet); just check the source's multipole
+     content against the accurate band -- no re-verification per problem.
+  3. METHOD COMPARISON on a common axis: Kelvin / BEM / PML / Robin ranked by the
+     SAME per-mode fidelity (the OVERVIEW table), independent of any problem.
+  4. SEPARATION OF CONCERNS: method (operator defect)  _|_  problem (source
+     multipoles)  _|_  interior FEM error (the error-isolation result).  Three
+     orthogonal axes, each measurable alone.
+
+In short: the spectral reframing lifts open-boundary assessment from a per-problem
+EMPIRICAL exercise to a problem-independent OPERATOR DATASHEET -- specify the
+method once, predict any problem from its multipole content.
+"""
+
+
 def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
     """Return DtN-spectrum / coarse-mesh-accuracy documentation."""
     topics = {
@@ -510,6 +935,9 @@ def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
         "numerics": DTN_COARSE_MESH_NUMERICS,
         "api": DTN_COARSE_MESH_API,
         "applications": DTN_COARSE_MESH_APPLICATIONS,
+        "p_method": DTN_COARSE_MESH_P_METHOD,
+        "formulation": DTN_COARSE_MESH_FORMULATION,
+        "datasheet": DTN_COARSE_MESH_DATASHEET,
     }
     if topic == "all":
         return "\n\n".join(topics.values())
