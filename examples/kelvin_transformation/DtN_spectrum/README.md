@@ -20,13 +20,15 @@ Every script PRINTS its result (no files written) and depends only on
 | Script | Question | Knowledge topic | Verified result |
 |---|---|---|---|
 | `sufficient_mesh.py` | How fine must the truncation mesh be? | `numerics` | sufficient-mesh criterion `N_surf ≳ n_src/√ε`; accurate band ≈ 0.12–0.18 of angular Nyquist; per-degree defect `~ n²(h/R)⁴` |
-| `p_vs_h_study.py` | Is Kelvin an h-method or a p-method? | `p_method` | mode `n` exact iff order `p ≥ n`; raising `p` beats refining `h` by ~20–80× DOF |
+| `p_vs_h_study.py` | Is Kelvin an h-method or a p-method? | `p_method` | order `p ≥ n` kills the polynomial error (then a curved-geometry floor: ~5–6 digits in 3D = Kameari's result, deeper in 2D); raising `p` beats refining `h` by ~20–80× DOF |
 | `poly_vs_sphere.py` | Does a faceted (polyhedron) truncation hurt? | `p_method` | dipole robust flat-or-curved (2–13×); quadrupole faceting error ~369× → `p` and geometry-order must rise together |
 | `demo1_hp_lshape.py` | h vs p when the interior has a corner singularity | `p_method` | L-shape `r^{2/3}` corner: measured `α_h = 0.357`, `α_p = 0.661` (`α_p/α_h = 1.85`) → regularity decides; Kelvin region is the p-favourable analytic part |
 | `demo2_dual_bracket.py` | Can we CERTIFY the open-BC error, not just estimate it? | `formulation` | complementary (Prager–Synge) bracket `E_primal ≤ E(f_h) ≤ E_comp`, gap `O(h²)`, equilibration residual ~1e-15 |
 | `demo3_A_dtn_gradient.py` | Is the DtN gradient block formulation-dependent (Ω vs A)? | `formulation` | the gradient block `−(n+1)/R` is the SAME for the vector-potential A formulation (dipole `−2/R`; `B·n = curl_Γ A_t`, rel-L2 3.2e-5) |
 | `demo_d_multipole_spectrum.py` | Source factor `c_n` for a magnetised square (Kameari Q-d) | `datasheet` | edge-charge spectrum has only `n ≡ 1 (mod 4)`; `n=3` FORBIDDEN by symmetry (single-resolution false-positive trap); leading correction `a₅/a₁ = (4/15)(a/R)⁴` |
 | `demo_e_optimal_R.py` | Optimal Kelvin/truncation radius (Kameari Q-e) | `p_method` | disk/sphere = monotone → smallest R; square/cuboid → interior optimum `R/a ≈ 3` (DOF proxy `(R/a)²·p(R)²`) |
+| `kelvin_exterior_mesh.py` | Does refining the exterior VOLUME mesh help? | `p_method` | `‖u_h−P_n‖≈1.5e-15` on every volume mesh (p≥n): the volume solve is Galerkin-exact → refining the exterior interior does nothing; only Γ's geometry (a surface effect) moves λ |
+| `kelvin_exterior_mesh3.py` | Isolate Γ-surface vs interior volume | `p_method` | with the Γ surface fixed, λ is set by `∫_Ω|∇P_n|²/∮_Γ P_n²` — a fixed polynomial over a fixed domain; the exterior volume mesh enters nowhere. p=1<n control shows refinement only helps when the order is deficient |
 
 ## Running
 
