@@ -388,7 +388,12 @@ class GmshPostExport:
         n_nodes = len(nodes)
         mat_elem_map, _elem_id_map, n_elems = _assign_element_ids(
             mat_names, elem_data)
-        dim = 2 if is_surface else 3
+        # Top-element dimension: 2 for a BEM surface export OR a native 2-D
+        # domain mesh (its VOL elements ARE triangles); 3 only for a real
+        # 3-D volume mesh.  Without the mesh.dim==2 check a 2-D mesh wrote
+        # Tri3 elements into a dim-3 "volume" entity and GMSH rejected the
+        # file ("Trying to add unsupported element in volume 1").
+        dim = 2 if (is_surface or mesh.dim == 2) else 3
         mat_bboxes = _compute_material_bboxes(nodes, mat_names, elem_data)
 
         payload = self._build_single_mesh_payload(
