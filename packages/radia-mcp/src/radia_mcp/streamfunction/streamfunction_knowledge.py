@@ -275,12 +275,12 @@ demo_regcoil_fusion.py
      ZERO net current through each torus hole; the full current potential is
      Psi = psi + (G/2pi) zeta + (I/2pi) theta.  The TWO extra DOFs are the first
      cohomology generators of the winding surface; their COUNT is the surface
-     Betti number b1 = 2 (genus 1), CONFIRMED via Gmsh homology
-     (addHomologyRequest('Cohomology',[pg],[],[1]); computeHomology() -> 2) --
-     the engine wrapped by src/radia/cohomology_cut.py (which is a VOLUME
-     scalar-potential solver, so the honest integration is "same engine,
-     analytic generators on the torus": grad(zeta), grad(theta) are
-     single-valued).  K_zeta = n x grad(zeta) = the net-POLOIDAL-current (TF)
+     Betti number b1 = 2 (genus 1), CONFIRMED gmsh-free via the Euler
+     characteristic of the triangulated torus (b1 = 2 - chi = 2g).  The
+     volume T-Omega cohomology CUT engine src/radia/cohomology_cut.py is
+     itself gmsh-free (radia.cohomology); on the torus the surface
+     generators are analytic: grad(zeta), grad(theta) are single-valued.
+     K_zeta = n x grad(zeta) = the net-POLOIDAL-current (TF)
      sheet; VERIFIED to give the textbook toroidal field B_tor*R = const inside
      the tube (Ampere 1/R, to 0.2 %) and ~0 outside.  KEY PHYSICS: the TF field
      is TANGENT to the plasma, so its B.n footprint is >1000x smaller than the
@@ -639,7 +639,7 @@ IMPLEMENTATION STATUS (tests/ -> examples/ -> panels/)  [Stage A DONE 2026-06-11
            covers the CLEAN regime only; F1/F2/F3 stay research demos by design.
 
 Files: src/radia/clebsch_potential.py (ClebschSolver, AxisymStreamFunctionSolver),
-src/radia/cohomology_cut.py (Gmsh cohomology generators), src/radia/
+src/radia/cohomology_cut.py (gmsh-free cohomology cut via radia.cohomology), src/radia/
 stream_function.py + panels/calc_streamfunction.py (ACA+TSVD engine),
 memory/clebsch_cohomology_streamfunction_unification.md (full record).
 """
