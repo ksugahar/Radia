@@ -51,3 +51,36 @@ def test_cohomology_currentlink():
     assert r["residual_cohomology_field"] > 0.5, r
     # zero-period field IS a gradient -> single-valued scalar coordinate.
     assert r["residual_gradient_field"] < 1e-3, r
+
+
+def test_accel_pole_design_multipole_analyzer():
+    """The design+measurement foundation for the hodograph + HDiv-MMM
+    combination: the multipole analyzer returns ONLY the quad for a pure
+    quad field and detects an injected octupole to machine precision."""
+    import accel_pole_design as apd
+    r = apd.solve()
+    assert r["quad_spurious_rel"] < 1e-10, r          # pure quad -> only b_2
+    assert r["qo_b4_rel_err"] < 1e-9, r               # octupole b_4 exact
+    assert abs(r["pole_hyperbola_xy_const"] - 0.5) < 1e-12, r   # xy = r0^2/2
+
+
+def test_accel_pole_harmonics_design_lever():
+    """(A) 'iron face off the equipotential = harmonics': ideal hyperbola
+    pole -> pure quad; a shim -> sextupole a_6 grows ~linearly with it."""
+    import accel_pole_harmonics as aph
+    r = aph.solve()
+    assert r["ideal_spurious_rel"] < 1e-10, r         # ideal pole -> pure quad
+    assert r["ideal_residual"] < 1e-10, r             # exact equipotential
+    assert r["a6_at_shim"]["0.04"] > 1e-2, r          # shim -> nonzero a_6
+    assert r["a6_slope_spread"] < 0.1, r              # a_6 linear in the shim
+
+
+def test_one_turn_streamfunction_limit():
+    """(B) 1-turn coil via the stream function: the single best wire (one
+    contour) is the coarsest realization -- worse than the multi-turn
+    stream-function current, the honest 1-turn limit."""
+    import one_turn_coil_streamfunction as otc
+    r = otc.solve()
+    assert r["err_multiturn"] < 0.05, r               # full SF current is good
+    assert r["err_one_turn"] > r["err_multiturn"], r  # 1 turn is coarser
+    assert 0.0 < r["one_turn_radius"], r              # a real wire came out
