@@ -708,6 +708,24 @@ exterior (Kelvin) MESH coarse; use the air-box RADIUS R only to LOWER the
 required p (boundary multipole content ~ M_n / R^{n+1}, so a larger box pushes
 significant modes to lower n).  Optimise the PAIR (R, p) for minimum total DOF --
 a third axis beyond "enlarge the box" and "refine the mesh".
+
+## Worked (R, p) optimum: sphere vs faceted source (MEASURED, demo_e_optimal_R.py)
+
+Where the (R, p) optimum SITS depends on the source's own multipole content:
+
+  * a DISK / SPHERE source is a PURE dipole on its truncation circle -> the required
+    order p never grows with R, so total DOF ~ (R/a)^2 is MONOTONE: the optimum is
+    the SMALLEST admissible R (hug the source; the sphere is the minimal-DOF
+    truncation -- exactly Kameari's "order 3 on the sphere is enough" regime).
+  * a SQUARE / cuboid source carries higher harmonics, so shrinking R raises the
+    required p faster than it saves area.  With the DOF proxy (R/a)^2 * p(R)^2 and
+    p(R) = ceil(log eps / log(a/R)), total DOF has an INTERIOR minimum at
+    R/a ~ 3 (eps = 1e-4..1e-6) -- NOT the smallest box.
+
+So "sphere => minimal R" and "non-sphere => R/a ~ 3" are the two ends of the same
+(R, p) optimisation, with the source shape (its multipole content) deciding which.
+(DOF proxy = area x order^2; the (a/R)^4 source decay used here is exact -- see the
+square-magnet c_n worked example in the DATASHEET topic.)
 """
 
 DTN_COARSE_MESH_FORMULATION = r"""
@@ -917,6 +935,28 @@ to the error of ANY problem factorises:
 Kameari's refinement measures the SUM for one problem; the DtN spectrum measures
 the per-mode factor defect_n DIRECTLY -- once, for the method -- never solving a
 boundary value problem.
+
+## The source factor c_n, worked: a uniformly magnetised square (MEASURED)
+
+c_n(source) is set by the source geometry AND its symmetry -- and symmetry can make
+whole BANDS of c_n vanish, which the eigenvalue defect alone can never tell you.
+For a 2D uniformly magnetised square (M || x, half-edge a), the edge-charge field on
+a concentric circle of radius R contains ONLY harmonics n == 1 (mod 4):
+
+  * the dipole n=1 dominates; n=3 is FORBIDDEN BY SYMMETRY -- c_3 == 0 EXACTLY, not
+    merely small.  A single-resolution decomposition shows a spurious tiny non-zero
+    n=3 that is pure quadrature noise and DECAYS under refinement (the false-positive
+    trap); the true leading correction is n=5.
+  * c_5 / c_1  =  (4/15) (a/R)^4   (exact; measured a5/a1 = 1/60 at R = 2a), i.e. the
+    problem-dependent source content falls off as (a/R)^4 to the truncation radius --
+    NOT the (a/R)^2 one might naively guess.
+
+Lesson: defect_n is problem-INDEPENDENT, but turning it into an actual open-BC error
+needs the source's TRUE c_n -- here a quartic onset gated by a 4-fold symmetry.  This
+is also why the (R, p) optimum for a faceted source sits at finite R/a ~ 3 (P_METHOD
+topic) while a pure-dipole disk wants the smallest R.  (demo_d_multipole_spectrum.py
+reproduces the n == 1 mod 4 selection and the 4/15 constant; demo_e_optimal_R.py the
+radius optimum -- both in examples/kelvin_transformation/DtN_spectrum/.)
 
 ## Why Kelvin gives a clean, ANALYTIC, universal datasheet
 
