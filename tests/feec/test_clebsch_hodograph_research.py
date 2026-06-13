@@ -13,6 +13,8 @@ Verified 2026-06-12:
 import sys
 from pathlib import Path
 
+import pytest
+
 EXDIR = Path(__file__).resolve().parents[2] / "examples" / "clebsch_hodograph"
 sys.path.insert(0, str(EXDIR))
 
@@ -101,3 +103,24 @@ def test_accel_pole_ends_3d_integrated():
     # Non-equipotential end defect: spurious integrated b_6 ~ linear in deviation.
     assert r["bad_b6_rel_at_c6"]["8000"] > 1e-6, r     # defect -> nonzero bbar_6
     assert r["bad_b6_slope_spread"] < 0.05, r          # linear in the deviation
+
+
+@pytest.mark.slow
+@pytest.mark.filterwarnings("ignore::UserWarning")   # benign CoilBuilder gimbal-lock
+def test_accel_pole_ends_fem_forward():
+    """(A) the FEM rung: reduced-Omega + CoilBuilder finite-length dipole
+    (netgen.occ, no Cubit) fed to the SAME integrated analyzer.  Loose
+    qualitative bands (a forward FEM solve, not a precision benchmark): a clean
+    flat-top dipole with a real end fringe and a sane integrated dipole."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import accel_pole_ends_fem as af
+    # faster-than-default knobs for CI; bands are loose so tuning won't break it.
+    r = af.solve(maxh_air=0.06, maxh_iron=0.03, n_beam=61, n_theta=24)
+    assert 0.08 < abs(r["bz_body_T"]) < 0.30, r            # a real flat-top dipole
+    assert r["bx_over_bz_centre"] < 0.15, r                # x-symmetric -> small skew
+    assert r["L_eff_m"] > 0.001 + 0.120, r                 # L_eff > iron L (fringe)
+    assert r["end_overshoot"] > 0.02, r                    # pole-end flux concentration
+    assert r["integrated_dipole_bbar1_Tm"] > 0.01, r       # sane integrated dipole
+    assert r["integrated_spurious_rel"] < 0.25, r          # ends + finite pole width
