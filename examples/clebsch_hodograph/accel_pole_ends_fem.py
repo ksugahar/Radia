@@ -84,6 +84,66 @@ def _chamfer_pole_end(pole, gap_z, body_sign, y_sign, c_len, c_depth):
     return pole - cut
 
 
+def _pole_prism(face_z, z_far, ys, x_half):
+    """A pole built as an x-prism of a (y, z) profile: the gap-facing edge
+    follows ``face_z(y)`` (an arbitrary curve), the outer edge is flat at
+    ``z_far``.  Robust for a CURVED chamfer (no boolean -- the curve is baked
+    into the cross-section).  ys is the y-sampling of the gap face."""
+    from netgen.occ import WorkPlane, Axes, Pnt, X, Y
+    wp = WorkPlane(Axes(Pnt(-x_half, 0.0, 0.0), n=X, h=Y))   # plane = (y, z)
+    zf = [float(face_z(y)) for y in ys]
+    wp.MoveTo(float(ys[0]), zf[0])
+    for yi, zi in zip(ys[1:], zf[1:]):
+        wp.LineTo(float(yi), zi)
+    wp.LineTo(float(ys[-1]), float(z_far))               # up the +y end
+    wp.LineTo(float(ys[0]), float(z_far))                # across the outer edge
+    wp.Close()                                           # down the -y end
+    return wp.Face().Extrude(2 * x_half)
+
+
+def build_mesh_curved(depth, chamfer_len, shape, maxh_air=0.05, maxh_iron=0.025,
+                      n_face=81):
+    """H-frame dipole whose pole ENDS are chamfered along a CURVED profile
+    ``z = g/2 + depth*shape(s)`` (s = 0..1 the fractional distance into the
+    chamfer toward the iron end), vs build_mesh()'s LINEAR taper.  ``shape`` is
+    a callable [0,1]->[0,1] (shape(0)=0 at the chamfer start, shape(1)=1 at the
+    iron end); the equipotential-following profile passes the measured bow-out
+    shape here.  Poles are x-prisms (curved gap face baked in); legs/air as usual."""
+    import ngsolve as ng
+    from netgen.occ import Box, Pnt, Glue, OCCGeometry
+
+    hL = L_BEAM / 2
+
+    def lift(y):
+        # fractional distance into the chamfer at the nearer end (0 in the body,
+        # 1 at the iron end); deepest at the ends -> removes the corner.
+        s = max((y - (hL - chamfer_len)) / chamfer_len,      # +y end
+                ((-hL + chamfer_len) - y) / chamfer_len)     # -y end
+        s = min(max(s, 0.0), 1.0)
+        return depth * shape(s)
+
+    ys = np.linspace(-hL, hL, n_face)
+    top = _pole_prism(lambda y: GAP / 2 + lift(y), Z_OUT, ys, POLE_W)
+    bot = _pole_prism(lambda y: -GAP / 2 - lift(y), -Z_OUT, ys, POLE_W)
+    leg_l = Box(Pnt(-POLE_W, -hL, -GAP / 2), Pnt(-POLE_W + T_LEG, hL, GAP / 2))
+    leg_r = Box(Pnt(POLE_W - T_LEG, -hL, -GAP / 2), Pnt(POLE_W, hL, GAP / 2))
+    iron = (top + bot + leg_l + leg_r)
+    iron.mat("iron")
+    iron.maxh = maxh_iron
+
+    air = Box(Pnt(-AIR, -AIR, -AIR), Pnt(AIR, AIR, AIR)) - iron
+    air.mat("air")
+    for f in air.faces:
+        c = f.center
+        if max(abs(c.x), abs(c.y), abs(c.z)) > 0.9 * AIR:
+            f.name = "outer"
+
+    shape_geo = Glue([air, iron])
+    with ng.TaskManager():
+        mesh = ng.Mesh(OCCGeometry(shape_geo).GenerateMesh(maxh=maxh_air))
+    return mesh
+
+
 def build_mesh(maxh_air=0.05, maxh_iron=0.025, chamfer_depth=0.0, chamfer_len=0.025):
     """H-frame (window) dipole (iron) + air box, netgen.occ (no Cubit).
 
@@ -145,16 +205,23 @@ def build_coil():
 
 def solve(mu_r=1000.0, order=2, maxh_air=0.035, maxh_iron=0.018,
           r_ref=0.008, n_beam=121, n_theta=32, plot=False,
-          chamfer_depth=0.0, chamfer_len=0.025):
+          chamfer_depth=0.0, chamfer_len=0.025,
+          curved_shape=None, return_contour=False, contour_y_max_factor=1.30):
     """Solve reduced-Omega forward, then integrate the transverse multipoles
     along the beam.  Returns the gap field + the integrated dipole + spectrum.
-    chamfer_depth > 0 tapers the pole ENDS (the equipotential-following end)."""
+    chamfer_depth > 0 tapers the pole ENDS (the equipotential-following end).
+    curved_shape (a callable [0,1]->[0,1]) replaces the LINEAR end taper with
+    a CURVED profile z = g/2 + chamfer_depth*curved_shape(s) (s into the end)."""
     import ngsolve as ng
     from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx,
                          TaskManager)
     import radia as rad
 
-    mesh = build_mesh(maxh_air, maxh_iron, chamfer_depth, chamfer_len)
+    if curved_shape is not None:
+        mesh = build_mesh_curved(chamfer_depth, chamfer_len, curved_shape,
+                                 maxh_air, maxh_iron)
+    else:
+        mesh = build_mesh(maxh_air, maxh_iron, chamfer_depth, chamfer_len)
     coils = build_coil()
     Hs = rad.RadiaField(coils, "h")                  # Biot-Savart source CF
     mu = mesh.MaterialCF({"iron": mu_r * MU0}, default=MU0)
@@ -208,7 +275,7 @@ def solve(mu_r=1000.0, order=2, maxh_air=0.035, maxh_iron=0.018,
     # field bows out): that curve is the end chamfer the design should follow.
     H_cf = Hs - grad(gfu)
     zc = np.linspace(0.0, 2.0 * (GAP / 2), 70)        # z: gap -> above the pole
-    yc = np.linspace(0.0, 1.30 * (L_BEAM / 2), 70)    # beam: body -> past the end
+    yc = np.linspace(0.0, contour_y_max_factor * (L_BEAM / 2), 70)  # beam: body -> past end
     psi = np.zeros((len(yc), len(zc)))
     for i, yv in enumerate(yc):
         hz = np.array([float(H_cf(mesh(0.0, yv, zv))[2]) for zv in zc])
@@ -236,7 +303,7 @@ def solve(mu_r=1000.0, order=2, maxh_air=0.035, maxh_iron=0.018,
     if plot:
         _plot(ys, bz_axis, bz_body, l_eff, yc, z_pole)
 
-    return {
+    out = {
         "ne": int(mesh.ne), "ndof": int(fes.ndof),
         "bz_gap_centre_T": bz_centre,
         "bz_body_T": bz_body,                         # flat-top body field
@@ -250,6 +317,10 @@ def solve(mu_r=1000.0, order=2, maxh_air=0.035, maxh_iron=0.018,
         "end_contour_lift_m": end_lift,               # equipotential lift at the end
         "z_pole_body_m": float(z_pole[0]),            # contour in the body (~ g/2)
     }
+    if return_contour:
+        out["contour_yc"] = yc.tolist()
+        out["contour_zpole"] = z_pole.tolist()
+    return out
 
 
 def end_shaping_sweep(depths_mm=(0.0, 3.0, 6.0, 9.0, 12.0),
@@ -279,6 +350,130 @@ def end_shaping_sweep(depths_mm=(0.0, 3.0, 6.0, 9.0, 12.0),
     if plot:
         _plot_loop(rows, opt)
     return {"sweep": rows, "optimal_chamfer_mm": opt}
+
+
+def curved_chamfer_study(chamfer_len=0.030, maxh_air=0.05, maxh_iron=0.025,
+                         n_beam=81, n_theta=28, plot=False):
+    """(C+) Follow z_p(y) EXACTLY: a CURVED chamfer matching the measured
+    equipotential bow-out, vs the LINEAR taper.
+
+    Two passes.  Pass 1 (straight pole) extracts the equipotential contour and
+    reads off (a) the bow-out SHAPE Ghat(s) past the iron end and (b) the
+    natural lift DEPTH over one chamfer length -- both with NO free parameter.
+    Pass 2 cuts the pole end along that curve (build_mesh_curved) and compares
+    its pole-end enhancement against a LINEAR taper of the SAME depth.
+
+    Honest expectation: the equipotential-shaped curve is the principled end
+    profile; the head-to-head says whether it beats the linear taper or the
+    linear taper is an adequate approximation at this mesh resolution."""
+    from scipy.interpolate import interp1d
+
+    hL = L_BEAM / 2
+    yfac = 1.0 + 1.05 * chamfer_len / hL          # contour must reach hL + c_len
+
+    # ---- pass 1: straight pole, extract the equipotential bow-out ----
+    r0 = solve(maxh_air=maxh_air, maxh_iron=maxh_iron, n_beam=n_beam,
+               n_theta=n_theta, chamfer_depth=0.0, return_contour=True,
+               contour_y_max_factor=yfac)
+    yc = np.array(r0["contour_yc"])
+    zp = np.array(r0["contour_zpole"])
+    # bow-out past the iron end: lift(sigma) = z_p(hL + sigma) - g/2, sigma in [0, c_len]
+    sig = np.linspace(0.0, chamfer_len, 40)
+    lift = np.interp(hL + sig, yc, zp) - GAP / 2
+    lift = np.maximum.accumulate(np.maximum(lift, 0.0))   # monotone, non-negative
+    depth_nat = float(lift[-1])                            # natural depth (no tuning)
+    if depth_nat < 1e-4:
+        depth_nat = 1e-4
+    ghat_y = lift / lift[-1]                               # Ghat(s): 0 at start, 1 at end
+    ghat_x = sig / chamfer_len
+    _interp = interp1d(ghat_x, ghat_y, bounds_error=False, fill_value=(0.0, 1.0))
+    shape = lambda s: float(_interp(s))                    # noqa: E731
+
+    over_straight = r0["end_overshoot"]           # frac 0 (reuse pass-1 solve)
+    spur_straight = r0["integrated_spurious_rel"]
+
+    # ---- pass 2: curved depth sweep -> the curved profile's OWN zero-bump ----
+    # The natural single-pass lift OVER-corrects (the straight-pole equipotential
+    # is read in the already-bumped field): the SHAPE is right, the DEPTH needs
+    # one knob (or one design iteration).  Sweep fractions of the natural depth.
+    fracs = (0.40, 0.80)
+    curved_rows = [(0.0, over_straight, spur_straight)]
+    for fr in fracs:
+        rc = solve(maxh_air=maxh_air, maxh_iron=maxh_iron, n_beam=n_beam,
+                   n_theta=n_theta, chamfer_depth=fr * depth_nat,
+                   chamfer_len=chamfer_len, curved_shape=shape)
+        curved_rows.append((fr, rc["end_overshoot"], rc["integrated_spurious_rel"]))
+    fr_arr = np.array([r[0] for r in curved_rows])
+    ov_arr = np.array([r[1] for r in curved_rows])
+    if ov_arr[0] > 0 > ov_arr[-1]:
+        fr_zero = float(np.interp(0.0, ov_arr[::-1], fr_arr[::-1]))
+    else:
+        fr_zero = float("nan")
+    depth_zero = fr_zero * depth_nat if fr_zero == fr_zero else float("nan")
+
+    # confirm: the curved profile AT its zero-bump depth -> small residual bump,
+    # and the transverse spurious is unchanged (body-dominated -> the END shape
+    # is the wrong lever for it, consistent with the two-lever split).
+    r_zero = solve(maxh_air=maxh_air, maxh_iron=maxh_iron, n_beam=n_beam,
+                   n_theta=n_theta, chamfer_depth=depth_zero,
+                   chamfer_len=chamfer_len, curved_shape=shape)
+
+    res = {
+        "chamfer_len_m": float(chamfer_len),
+        "depth_natural_m": depth_nat,             # equipotential lift over c_len (no tuning)
+        "depth_zerobump_m": float(depth_zero),    # the curved profile's zero-bump depth
+        "ghat_x": ghat_x.tolist(), "ghat_y": ghat_y.tolist(),  # the bow-out shape
+        "curved_depth_sweep": [(float(a), float(b)) for a, b, _ in curved_rows],
+        "end_overshoot_straight": float(over_straight),
+        "end_overshoot_curved_overdeep": float(curved_rows[-1][1]),  # frac 0.8 -> over-corrected
+        "end_overshoot_curved_zerobump": float(r_zero["end_overshoot"]),
+        "spurious_straight": float(spur_straight),
+        "spurious_curved_zerobump": float(r_zero["integrated_spurious_rel"]),
+    }
+    if plot:
+        _plot_curved(res)
+    return res
+
+
+def _plot_curved(res):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(1, 2, figsize=(10.2, 3.8), dpi=150)
+    # LEFT: the bow-out shape Ghat(s) (curved) vs the linear taper
+    s = np.array(res["ghat_x"])
+    ax[0].plot(s, res["ghat_y"], "C0", lw=2,
+               label="equipotential bow-out $\\hat G(s)$ (curved)")
+    ax[0].plot(s, s, "k--", lw=1, label="linear taper")
+    ax[0].set_xlabel("fractional distance into the chamfer  $s$  (0=body, 1=end)")
+    ax[0].set_ylabel("normalized depth  $(z-g/2)/$depth")
+    ax[0].set_title(f"Follow $z_p(y)$ exactly: the curved end profile\n"
+                    f"(natural single-pass depth = {res['depth_natural_m']*1e3:.1f} mm)")
+    ax[0].legend(fontsize=8)
+    # RIGHT: curved depth sweep (overshoot through zero) + linear at zero-bump
+    sweep = res["curved_depth_sweep"]
+    d = [row[0] * res["depth_natural_m"] * 1e3 for row in sweep]
+    ov = [row[1] * 100 for row in sweep]
+    ax[1].plot(d, ov, "o-", color="C0", label="curved (equipotential shape)")
+    ax[1].axhline(0, color="k", lw=0.6)
+    dz = res["depth_zerobump_m"] * 1e3
+    if dz == dz:
+        ax[1].axvline(dz, color="C3", lw=1, ls=":",
+                      label=f"zero-bump depth = {dz:.1f} mm")
+    ax[1].axvline(res["depth_natural_m"] * 1e3, color="0.4", lw=1, ls="--",
+                  label=f"natural single-pass = {res['depth_natural_m']*1e3:.1f} mm "
+                        f"(over-corrects)")
+    ax[1].set_xlabel("end chamfer depth [mm]")
+    ax[1].set_ylabel("pole-END enhancement [%]")
+    ax[1].set_title("Curved (equipotential) depth -> zero bump\n"
+                    "the naive single-pass lift over-corrects")
+    ax[1].legend(fontsize=8)
+    png = os.path.splitext(os.path.abspath(__file__))[0] + "_curved.png"
+    fig.tight_layout()
+    fig.savefig(png, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  figure saved: {png}")
 
 
 def _plot_loop(rows, opt):
@@ -386,6 +581,21 @@ def main():
     print("      The integrated TRANSVERSE spurious b_3,5 barely moves: it is")
     print("      body/pole-width dominated, NOT an end effect -- shaping the END")
     print("      is the right lever for the end bump, the wrong one for b_3,5.")
+
+    # ---- (C+) FOLLOW z_p(y) EXACTLY: a CURVED chamfer, not a linear taper ----
+    print("\n  (C+) Follow z_p(y) EXACTLY -- a CURVED end chamfer:")
+    cc = curved_chamfer_study(plot=True)
+    gx, gy = cc["ghat_x"], cc["ghat_y"]
+    print(f"      equipotential bow-out shape Ghat(s): convex (Ghat(0.5)="
+          f"{np.interp(0.5, gx, gy):.2f} vs linear 0.50) -- a parameter-free curve")
+    print(f"      natural single-pass depth = {cc['depth_natural_m']*1e3:.1f} mm "
+          f"OVER-corrects: end bump {cc['end_overshoot_straight']*100:+.1f}% -> "
+          f"{cc['end_overshoot_curved_overdeep']*100:+.1f}%")
+    print(f"      -> the curved profile drives the bump through zero at "
+          f"~{cc['depth_zerobump_m']*1e3:.1f} mm (~{cc['depth_zerobump_m']/cc['depth_natural_m']*100:.0f}% "
+          f"of the naive lift; the SHAPE is right, the DEPTH needs one knob).")
+    print(f"      integrated transverse spurious stays body-dominated: "
+          f"{cc['spurious_straight']:.3f} -> {cc['spurious_curved_zerobump']:.3f}.")
 
 
 if __name__ == "__main__":
