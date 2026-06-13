@@ -68,7 +68,12 @@ def test_clebsch_kelvin_3d():
     pytest.importorskip("radia")
     import clebsch_kelvin_3d as ck
     r = ck.solve(mu_r=100.0, order=3, maxh=0.08, with_airbox=True)
-    assert r["field_error"] < 2e-3, r                        # Kelvin = exact open bdry
+    assert r["field_error"] < 2e-3, r                        # interior (boundary-insensitive)
+    # STRONG test: the EXTERIOR field matches the exact uniform+induced-dipole --
+    # this is what actually stresses the Kelvin open boundary (mesh-limited here;
+    # the example at maxh 0.045 reaches ~1.4e-3).  Confirms the Kelvin transform
+    # is interpreted correctly, not just the boundary-insensitive interior.
+    assert r["exterior_error"] < 1.2e-2, r
     assert r["airbox_error"] > 5e-3, r                       # truncated box is worse
     assert r["airbox_error"] > 10.0 * r["field_error"], r    # the Kelvin win
     assert abs(r["Hx_in"]) < 1e-3, r                         # no transverse field (symmetry)
