@@ -86,6 +86,35 @@ def _interior_H(mesh, H):
     return (Integrate(m * H[0], mesh) / vol, Integrate(m * H[2], mesh) / vol)
 
 
+def _exact_uniform_plus_dipole(px, py, pz, H0, a, mu_r):
+    """The EXACT exterior H of a mu_r sphere (radius a) in a uniform H0 z-hat:
+    the applied field + the induced point dipole (m/4pi = a^3 (mu_r-1)/(mu_r+2) H0).
+    Used to STRESS the Kelvin open boundary -- the exterior field is what the
+    Kelvin treatment determines (the interior is boundary-insensitive)."""
+    r = math.sqrt(px * px + py * py + pz * pz)
+    c = a ** 3 * (mu_r - 1.0) / (mu_r + 2.0) * H0           # = m / (4 pi)
+    mr = c * pz / r                                         # (m/4pi . r_hat)
+    hx = (3.0 * mr * px / r) / r ** 3
+    hy = (3.0 * mr * py / r) / r ** 3
+    hz = H0 + (3.0 * mr * pz / r - c) / r ** 3
+    return (hx, hy, hz)
+
+
+def _exterior_field_error(mesh, H, H0, a, mu_r):
+    """Max relative error of the SOLVED exterior field vs the exact uniform+dipole
+    at a set of air-region points -- the strong test of the Kelvin open boundary."""
+    import numpy as np
+    pts = [(0, 0, 0.30), (0, 0, 0.40), (0.30, 0, 0.0), (0.0, 0.25, 0.20),
+           (0.20, 0.20, 0.20), (0.15, 0, 0.35)]
+    err = 0.0
+    for px, py, pz in pts:
+        hv = H(mesh(px, py, pz))
+        num = np.array([float(hv[0]), float(hv[1]), float(hv[2])])
+        ex = np.array(_exact_uniform_plus_dipole(px, py, pz, H0, a, mu_r))
+        err = max(err, float(np.linalg.norm(num - ex) / np.linalg.norm(ex)))
+    return err
+
+
 def solve(mu_r=100.0, order=3, maxh=0.05, a=0.2, R_K=0.5, offset=(2.0, 0.0, 0.0),
           H0=1.0, r_eval=0.28, with_airbox=True, maxh_airbox=None, plot=False):
     """Reduced-Omega + 3-D Kelvin solve, the Clebsch net, and (optionally) the
@@ -117,6 +146,9 @@ def solve(mu_r=100.0, order=3, maxh=0.05, a=0.2, R_K=0.5, offset=(2.0, 0.0, 0.0)
         Hx_in, Hz_in = _interior_H(mesh, H)
         Hz_analytic = 3.0 / (mu_r + 2.0) * H0
         field_error = abs(Hz_in - Hz_analytic) / abs(Hz_analytic)
+        # STRONG test: the EXTERIOR field vs the exact uniform+induced-dipole
+        # (the interior is boundary-insensitive; the exterior stresses Kelvin).
+        exterior_error = _exterior_field_error(mesh, H, H0, a, mu_r)
 
         # ---- Clebsch net: chi = atan2(y,x) EXACT azimuthal; recover psi (flux) ----
         # B = grad(psi) x grad(chi).  grad(chi) = (-y, x, 0)/r^2 (exact, avoids
@@ -171,7 +203,8 @@ def solve(mu_r=100.0, order=3, maxh=0.05, a=0.2, R_K=0.5, offset=(2.0, 0.0, 0.0)
         "mu_r": mu_r, "order": order, "ne": int(mesh.ne),
         "Hz_in": float(Hz_in), "Hx_in": float(Hx_in),
         "Hz_analytic": float(Hz_analytic),
-        "field_error": float(field_error),          # ~1.5e-5 (Kelvin, exact)
+        "field_error": float(field_error),          # ~1.5e-5 (Kelvin, interior)
+        "exterior_error": float(exterior_error),     # ~1e-3 (EXTERIOR vs exact dipole)
         "airbox_error": float(airbox_error),         # ~8e-3 (truncated r/a=5)
         "consistency": float(consistency),           # Clebsch B(psi,chi) vs B
     }
@@ -218,8 +251,10 @@ def main():
     print(f"  mu_r={r['mu_r']:.0f}  ne={r['ne']}  order={r['order']}")
     print(f"  interior Hz = {r['Hz_in']:.6e}  (analytic 3/(mu_r+2)H0 = "
           f"{r['Hz_analytic']:.6e}),  Hx = {r['Hx_in']:.1e}")
-    print(f"  Kelvin field_error  = {r['field_error']:.2e}   (EXACT open boundary)")
-    print(f"  air-box field_error = {r['airbox_error']:.2e}   (truncated r/a=5 "
+    print(f"  Kelvin interior field_error = {r['field_error']:.2e}  (boundary-insensitive)")
+    print(f"  Kelvin EXTERIOR field_error = {r['exterior_error']:.2e}  (vs exact "
+          f"uniform+dipole -- the STRONG test of the open boundary)")
+    print(f"  air-box interior field_error = {r['airbox_error']:.2e}  (truncated r/a=5 "
           f"Dirichlet -- the thing Kelvin replaces)")
     print(f"  -> Kelvin is ~{r['airbox_error']/r['field_error']:.0e}x more "
           f"accurate.")
