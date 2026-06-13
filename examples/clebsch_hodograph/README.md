@@ -134,8 +134,51 @@ the loop found the *true* solution, not a false fixed point. Open boundary: a
 large domain (`R/a = 10`, < 1% truncation) stands in for the exact one
 (saturation is a *local* effect, orthogonal to the rung 1-2 open-boundary
 treatment; the two compose). Figure: `saturation_loop_2d.png` (the saturation
-S-curve). *Next rung: the Chaplygin hodograph reproduces this curve in one
-linear solve.*
+S-curve). *Next rung — `chaplygin_hodograph_2d.py` below — reproduces the
+saturation curve in one shot, no loop.*
+
+### `chaplygin_hodograph_2d.py` — the hodograph linearises saturation (1-shot vs loop)
+
+**The Chaplygin rung** (the user's *"hodograph 変換をすると どーせ反復が
+必要なので 非線形ループと混ぜて短くできないか?"*). 2-D current-free
+nonlinear magnetostatics **is** 2-D steady irrotational compressible gas flow
+(`H↔v`, `B↔ρv`, `μ(|H|)↔ρ(q)`, scalar potential `Φ↔φ`, flux function `A↔ψ`).
+Taking `q=|H|, θ=arg(H)` as the **independent** coordinates (the hodograph
+plane; Molenbroek 1890, Chaplygin 1902) turns the nonlinear PDE into a
+**linear, variable-coefficient** one: `μ(q)` is now a **coefficient** (a known
+function of the independent coordinate `q`), **not** a nonlinearity in an
+unknown field. The whole nonlinearity is absorbed — *one* linear solve, no
+outer Picard over the constitutive law.
+
+**Honest caveat (a correction to the naive "Chaplygin = transonic" framing):**
+the operator `div(μ(|H|)∇Φ)` is **elliptic everywhere** for ordinary
+saturation — `μ` falls but `μq = |B|` still rises, so `d(μq)/dq > 0` always.
+There is **no limiting line, no shock, no hyperbolic hard part** (that
+type-change needs falling `|B|` vs `|H|`, unphysical for a passive magnet). So
+the linear Chaplygin equation is an elliptic boundary-value problem on the
+**hodograph image** of the region — a clean 1-shot **iff that image is a
+simple, fixed domain** (special geometries); general geometry gives a
+free-boundary (unknown image), the genuinely hard case, deferred.
+
+**The special geometry** (simple image): a slender saturable **flux guide**
+pinched to a throat. The field is nearly axial, so the hodograph image is a
+thin **band** about `θ=0` (a "simple wave" → segment), on which the Chaplygin
+system collapses to a single quadrature:
+`ΔΦ(Ψ) = ∫₀ᴸ ν(|B|(x)) |B|(x) dx` with `|B|(x) = Ψ/w(x)` (flux conservation,
+geometry-only) — evaluated **once, no iteration**. Compared to the full 2-D
+nonlinear FEM loop `div(ν(|∇A|)∇A)=0` on the actual curved-wall guide
+(μ_r0=200, B_k=1 T): the 1-shot matches the loop to **1.0–1.5 %** across
+`|B|_throat` = 0.25 → 2 T, and the saturation **bend** of drive/flux agrees
+(**×2.78** loop vs **×2.77** 1-shot). The image is a band (max **21°** off-axis
+at the throat shoulders, *not* a tautological 0 nor a 2-D blob); the 1-shot
+holds because the drive integral is throat-**centre** dominated, where the
+field is axial. And it is the **slender limit**: rel.err **8.7e-3 → 2.1e-3** as
+the throat is made more gradual (slenderness 3 → 9). Figure:
+`chaplygin_hodograph_2d.png` (1-shot vs loop + the rel.err). *Convergence
+needs **under-relaxation** — undamped Picard oscillates under the throat's
+strong reluctivity contrast even though the problem is convex.* **Next rung: a
+guide that *turns* (`θ` varies) → a real 2-D hodograph image needing a linear
+PDE solve; then rung 3 = the 3-D merged geometry+material single Picard.*
 
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
@@ -318,9 +361,10 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (16 tests; the five
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (17 tests; the six
 FEM rungs — forward+contour, the design loop, the curved chamfer, the open-
-boundary convergence, and the quadrupole — are `@pytest.mark.slow`).
+boundary convergence, the quadrupole, and the Chaplygin 1-shot-vs-loop — are
+`@pytest.mark.slow`).
 
 ## Prior art (honest)
 

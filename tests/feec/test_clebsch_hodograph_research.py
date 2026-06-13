@@ -314,3 +314,31 @@ def test_accel_quad_ends_fem():
     assert 2e-3 < r["b6_rel"] < 8e-3, r
     assert r["b6_rel"] > 2.0 * r["forbidden_max_rel"], r        # allowed >> forbidden
     assert r["b6_rel"] > r["b10_rel"], r                        # b_6 the leading allowed spurious
+
+
+@pytest.mark.slow
+def test_chaplygin_hodograph_2d():
+    """Chaplygin rung 1.5b: the 2-D hodograph LINEARISES saturation.  On a
+    simple-hodograph geometry (a saturable tapered flux guide) the nonlinearity
+    becomes a COEFFICIENT mu(q), so a single 1-shot quadrature reproduces the
+    full 2-D nonlinear FEM loop -- and the agreement tightens toward the segment
+    (lubrication) limit as the throat is made more slender."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_hodograph_2d as ch
+    r = ch.solve_chaplygin(Psi_list=(0.008, 0.016, 0.032), order=2, maxh=0.010)
+    # 1-shot quadrature matches the nonlinear loop across the saturation range.
+    assert r["max_relerr"] < 3e-2, r
+    # the magnetomotive drive rises monotonically with flux (physical solve).
+    fem = [row[3] for row in r["rows"]]
+    assert all(fem[i] < fem[i + 1] for i in range(len(fem) - 1)), r
+    # the SATURATION BEND of drive/flux agrees between 1-shot and loop.
+    assert abs(r["bend_fem"] - r["bend_1shot"]) / r["bend_fem"] < 0.05, r
+    assert r["bend_fem"] > 1.5, r                               # genuinely saturating
+    # the hodograph image is a thin BAND about theta=0 (not a tautological 0,
+    # not a 2-D blob): off-axis throat tilt is bounded and nonzero.
+    assert 1.0 < r["hodo_theta_max_deg"] < 45.0, r
+    # the segment 1-shot is the slender limit: rel.err shrinks as the throat
+    # gets more gradual (larger notch radius).
+    trend = ch.slenderness_trend(Rcs=(0.11, 0.30), order=2, maxh=0.010)
+    assert trend[1][1] < trend[0][1], trend                    # gentler -> tighter
