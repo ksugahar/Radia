@@ -32,13 +32,26 @@ EXTERIOR field must match the exact uniform + induced-dipole of the equivalent
 mu_r_eff sphere -- the strong test of the Kelvin open boundary, now on the
 nonlinear solution.
 
-Honest scope: this is the STABLE saturation regime.  The reduced-Omega
-H-input Picard fixed point H = 3H0/(mu_r(H)+2) is contractive only while
-|d RHS/dH| < 1; for a *very steep* B-H curve that derivative exceeds 1 and the
-H-input loop goes unstable (NO under-relaxation cures a positive-slope unstable
-fixed point) -- the general cure is the convex B-input nu(|B|) formulation
-(rung 1.5a's lesson, here in 3-D a vector-potential form).  We stay in the
-stable regime and report the contraction factor so the limit is explicit.
+Honest scope: this is the STABLE saturation regime, and the SPHERE always
+lives in it.  Its strong demagnetisation (N = 1/3) pulls the interior field
+BELOW the saturating knee, so mu_r stays near mu_r0 and the H-input Picard
+contraction |d RHS/dH| stays small (measured: 0.67 at mu_r0=20, and it DROPS
+toward 0 as the B-H curve is made steeper -- the demag self-stabilises the
+sphere; the instability is simply not reachable for it).
+
+The reduced-Omega H-input Picard DOES fail for a LOW-demag body driven INTO
+saturation (a prolate spheroid, N ~ 0.05-0.1, where the field penetrates to the
+knee): seeded from the linear (high-mu) state it sticks in a spurious SHIELDED
+basin (interior H ~ 0) and OSCILLATES, never reaching the true (unique,
+penetrated) solution -- and neither under-relaxation NOR seeding from the
+saturated state robustly cures it (both collapse back to the shielded basin).
+The robust cure is the convex B-input formulation: for a physical, monotone B-H
+curve the energy INT W(|B|) is convex (dH/dB > 0), so its minimiser is unique
+and gradient-stable.  In 2-D that is the A-formulation (rung 1.5a, done); in
+3-D it is the HCurl vector-potential nu(|B|) formulation (a substantial build,
+genuinely open here -- the axisymmetric spheroid could instead use the 2-D
+A_phi Henrotte form as a cheaper convex route).  This file stays with the
+sphere, where the merged Picard is unconditionally well-behaved.
 
 Verified (mu_r0=20, Hk=0.25, sphere a=0.2, Kelvin R=0.5, order 3, maxh 0.06,
 ne 14301): the single Picard converges in 42 iters to the scalar demag fixed
