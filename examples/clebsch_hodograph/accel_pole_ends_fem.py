@@ -168,6 +168,25 @@ def solve(mu_r=1000.0, order=2, maxh_air=0.05, maxh_iron=0.025,
     mp = integrated_multipoles(B_perp, r_ref, (-y_int, y_int),
                                n_z=n_beam, n_theta=n_theta, n_max=8)
 
+    # ---- (B) the equipotential END contour: read Psi=Psi_pole as the end edge ----
+    # In the current-free gap H = -grad(Psi_total); along z at fixed (x=0, y):
+    #   Psi(y, z) = - INT_0^z H_z dz'   (Psi(y,0)=0 by the dipole's up-down antisym).
+    # The iron face is an equipotential: in the body Psi_pole = Psi(0, g/2).  The
+    # curve z_p(y) with Psi(y, z_p) = Psi_pole is the ideal end-iron contour --
+    # in the body z_p = g/2, and past the iron end (y > L/2) it CURVES (the
+    # field bows out): that curve is the end chamfer the design should follow.
+    H_cf = Hs - grad(gfu)
+    zc = np.linspace(0.0, 2.0 * (GAP / 2), 70)        # z: gap -> above the pole
+    yc = np.linspace(0.0, 1.30 * (L_BEAM / 2), 70)    # beam: body -> past the end
+    psi = np.zeros((len(yc), len(zc)))
+    for i, yv in enumerate(yc):
+        hz = np.array([float(H_cf(mesh(0.0, yv, zv))[2]) for zv in zc])
+        psi[i, 1:] = -np.cumsum(0.5 * (hz[1:] + hz[:-1]) * np.diff(zc))
+    psi_pole = float(np.interp(GAP / 2, zc, psi[0]))  # body iron-face value at z=g/2
+    # Psi decreases in z (H_z > 0) -> interp on (-Psi), which increases in z.
+    z_pole = np.array([float(np.interp(-psi_pole, -psi[i], zc)) for i in range(len(yc))])
+    end_lift = float(np.max(z_pole) - GAP / 2)        # how far the equipotential lifts
+
     rad.UtiDelAll()
 
     main = abs(complex(*mp[1]))                       # integrated dipole bbar_1
@@ -184,7 +203,7 @@ def solve(mu_r=1000.0, order=2, maxh_air=0.05, maxh_iron=0.025,
     end_overshoot = float(np.max(np.abs(bz_axis[end])) / abs(bz_body)) - 1.0
 
     if plot:
-        _plot(ys, bz_axis, bz_body, l_eff)
+        _plot(ys, bz_axis, bz_body, l_eff, yc, z_pole)
 
     return {
         "ne": int(mesh.ne), "ndof": int(fes.ndof),
@@ -196,27 +215,46 @@ def solve(mu_r=1000.0, order=2, maxh_air=0.05, maxh_iron=0.025,
         "integrated_spurious_rel": float(spurious),   # higher harmonics (ends + finite pole)
         "L_eff_m": l_eff,
         "end_overshoot": end_overshoot,               # pole-end flux concentration
+        "psi_pole": psi_pole,                          # iron-face equipotential value
+        "end_contour_lift_m": end_lift,               # equipotential lift at the end
+        "z_pole_body_m": float(z_pole[0]),            # contour in the body (~ g/2)
     }
 
 
-def _plot(ys, bz_axis, bz_body, l_eff):
+def _plot(ys, bz_axis, bz_body, l_eff, yc, z_pole):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(6.4, 3.6), dpi=150)
-    ax.plot(ys * 1e3, bz_axis, "C0")
-    ax.fill_between(ys * 1e3, bz_axis, 0, alpha=0.2, color="C0")
-    ax.axvspan(-L_BEAM / 2 * 1e3, L_BEAM / 2 * 1e3, color="0.85", zorder=0,
-               label="iron length L")
-    ax.axhline(bz_body, color="C3", lw=0.8, ls="--",
-               label=f"$B_z$(body)={bz_body:.4f} T")
-    ax.set_xlabel("beam  y [mm]")
-    ax.set_ylabel("$B_z$ on axis [T]")
-    ax.set_title(f"Finite-length dipole (reduced-$\\Omega$ + CoilBuilder):\n"
-                 f"flat body + pole-END enhancement + fringe  "
-                 f"($L_{{eff}}={l_eff*1e3:.0f}$ mm, iron $L={L_BEAM*1e3:.0f}$ mm)")
-    ax.legend(fontsize=8, loc="center")
+    fig, ax = plt.subplots(1, 2, figsize=(10.4, 3.8), dpi=150)
+
+    # LEFT: on-axis B_z(y) -- flat body + pole-end enhancement + fringe
+    ax[0].plot(ys * 1e3, bz_axis, "C0")
+    ax[0].fill_between(ys * 1e3, bz_axis, 0, alpha=0.2, color="C0")
+    ax[0].axvspan(-L_BEAM / 2 * 1e3, L_BEAM / 2 * 1e3, color="0.85", zorder=0,
+                  label="iron length L")
+    ax[0].axhline(bz_body, color="C3", lw=0.8, ls="--",
+                  label=f"$B_z$(body)={bz_body:.4f} T")
+    ax[0].set_xlabel("beam  y [mm]")
+    ax[0].set_ylabel("$B_z$ on axis [T]")
+    ax[0].set_title(f"Forward solve: flat body + pole-END enhancement + fringe\n"
+                    f"($L_{{eff}}={l_eff*1e3:.0f}$ mm, iron $L={L_BEAM*1e3:.0f}$ mm)")
+    ax[0].legend(fontsize=8, loc="center")
+
+    # RIGHT: the equipotential END contour z_p(y) -- the ideal end-iron edge
+    ax[1].plot(yc * 1e3, z_pole * 1e3, "C0", lw=2,
+               label="equipotential $\\Psi=\\Psi_{pole}$ (ideal end edge)")
+    ax[1].plot([0, L_BEAM / 2 * 1e3], [GAP / 2 * 1e3, GAP / 2 * 1e3], "k--", lw=1,
+               label="straight pole face $z=g/2$")
+    ax[1].axvline(L_BEAM / 2 * 1e3, color="0.6", lw=0.8, ls=":")
+    ax[1].annotate("iron end", (L_BEAM / 2 * 1e3, GAP / 2 * 1e3 * 1.02),
+                   fontsize=8, color="0.4")
+    ax[1].set_xlabel("beam  y [mm]")
+    ax[1].set_ylabel("pole edge  z [mm]")
+    ax[1].set_title("Read the 3-D equipotential as the end-iron contour\n"
+                    "(curves past the iron end = the chamfer to follow)")
+    ax[1].legend(fontsize=8, loc="upper left")
+
     png = os.path.splitext(os.path.abspath(__file__))[0] + ".png"
     fig.tight_layout()
     fig.savefig(png, bbox_inches="tight")
@@ -240,10 +278,16 @@ def main():
           f"{r['integrated_dipole_bbar1_Tm']:.5f} T.m")
     print(f"  integrated spurious |bbar_n/bbar_1| (n=3,5) = "
           f"{r['integrated_spurious_rel']:.2e}  (ends + finite pole width)")
+    print(f"\n  (B) equipotential END contour (the ideal end-iron edge):")
+    print(f"      body contour z_p = {r['z_pole_body_m']*1e3:.2f} mm "
+          f"(= g/2 = {GAP/2*1e3:.1f} mm, recovers the flat pole face)")
+    print(f"      equipotential LIFT at the end = {r['end_contour_lift_m']*1e3:.2f} mm "
+          f"-- the field bows out past the iron end (the chamfer to follow)")
     print("\n  => the reduced-Omega + CoilBuilder forward engine feeds the SAME")
-    print("     INTEGRATED analyzer as the analytic theorem (accel_pole_ends_3d).")
-    print("     NEXT: read the 3-D equipotential surface at the end as the")
-    print("     end-iron contour, then re-shape -> re-solve to flatten bbar_n.")
+    print("     INTEGRATED analyzer as the analytic theorem (accel_pole_ends_3d),")
+    print("     and the solved 3-D equipotential gives the end-iron contour.")
+    print("     NEXT: re-shape the end iron to that contour -> re-solve -> the")
+    print("     integrated spurious bbar_n drops (closes the DESIGN loop).")
 
 
 if __name__ == "__main__":
