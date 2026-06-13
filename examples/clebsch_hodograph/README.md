@@ -77,8 +77,32 @@ Verified (μ_r = 100, a = 0.3, Kelvin R = 1.0, order 3, maxh 0.04): interior
 for a truncated air box at `r/a = 6` — **~10⁶× more accurate**; `Bx ~ 1e-17`
 (no transverse field by symmetry); hodograph consistency `B(A_z)` vs `B(V)`
 ~3e-5. Figure: `hodograph_kelvin_2d.png` (the orthogonal flux/equipotential net
-on the exact field). *Next rungs: 1.5 = 2-D Chaplygin (the hodograph linearises
-the saturation nonlinearity); 2 = the 3-D Clebsch pullback under Kelvin.*
+on the exact field).
+
+### `clebsch_kelvin_3d.py` — Kelvin in the hodograph (3-D, the real formulation)
+
+**rung 2 of "Kelvin in the hodograph."** The genuine 3-D case: the **Clebsch
+potentials** (`B = ∇ψ × ∇χ`) on the **3-D Cartesian Kelvin two-sphere domain**
+(Sugahara 2022; `radia.kelvin_geometry.add_kelvin_exterior_domain`), the air box
+abolished. The 3-D Kelvin pullback (de Rham / Nagamine CEFC 2026): the inversion
+`T: x′ = R²x/|x|²` maps the physical exterior to the offset Kelvin sphere; the
+Clebsch potentials `ψ, χ` are **0-forms** so they pull back trivially
+(`ψ′ = ψ∘T`); the field `B` is a **2-form** so it carries `−(R/ρ′)⁴`; and — unlike
+2-D — the 3-D Jacobian is **not** conformally invariant, so the reduced-Ω material
+gets `μ′ = (R/ρ′)²·μ₀` (the standard 3-D Kelvin weight, *not* weight-free).
+
+Verified on the canonical 3-D test (a magnetisable sphere in a uniform field,
+exact interior `H = 3/(μ_r+2)·H₀`): reduced-Ω on the two-sphere domain (periodic
+`kelvin_int ↔ kelvin_ext`, GND at the Kelvin centre = ∞, background via
+`make_reduced_potential_background_cf(dim=3)`); the Clebsch net `χ = atan2(y,x)`
+(the exact azimuthal coordinate) + `ψ` recovered as the Stokes flux, checked
+`B = ∇ψ × ∇χ`. Result (μ_r=100, a=0.2, R_K=0.5, order 3, maxh 0.05):
+**field_error ~1.5e-5** vs **~8e-3** for a truncated air box at `r/a=5`
+(~10³× more accurate); `Hx ~7e-9`; Clebsch consistency `B(ψ,χ)` vs `B` ~6e-4
+(off-axis, away from the `χ` branch cut). Figure: `clebsch_kelvin_3d.png` (the
+Clebsch flux `ψ` field lines on a meridional slice). *Next rungs: 1.5 = 2-D
+Chaplygin (the hodograph **linearises** the saturation nonlinearity —
+Molenbroek–Chaplygin); 3 = the 3-D merged geometry+material single Picard.*
 
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
@@ -249,6 +273,7 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
 python a_method_clebsch_2d.py                 # A-method net figure
 python hodograph_kelvin_axisym.py             # Kelvin exact-open-boundary flux figure
 python hodograph_kelvin_2d.py                 # Kelvin in the hodograph (2-D Cartesian, no air box)
+python clebsch_kelvin_3d.py                   # Kelvin in the hodograph (3-D Clebsch, no air box)
 python cohomology_hodograph_currentlink.py    # when the hodograph needs cohomology
 python accel_pole_design.py                   # multipole analyzer + quad pole geometry
 python accel_pole_harmonics.py                # 2-D equipotential lever (shim → harmonics)
@@ -259,7 +284,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (14 tests; the five
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (15 tests; the five
 FEM rungs — forward+contour, the design loop, the curved chamfer, the open-
 boundary convergence, and the quadrupole — are `@pytest.mark.slow`).
 

@@ -57,6 +57,24 @@ def test_hodograph_kelvin_2d():
     assert 0.0 < r["consistency"] < 1e-2, r                  # conjugate net consistent
 
 
+def test_clebsch_kelvin_3d():
+    """rung 2 of 'Kelvin in the hodograph': the 3-D CARTESIAN Kelvin two-sphere
+    (mu'=(R/rho')^2 mu0 -- NOT weight-free, unlike 2-D) gives an EXACT open
+    boundary -- interior H = 3/(mu_r+2)H0 to a small field error, far better
+    than a truncated air box -- and the 3-D CLEBSCH potentials
+    B = grad(psi) x grad(chi) (psi,chi 0-forms) reproduce the field."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import clebsch_kelvin_3d as ck
+    r = ck.solve(mu_r=100.0, order=3, maxh=0.08, with_airbox=True)
+    assert r["field_error"] < 2e-3, r                        # Kelvin = exact open bdry
+    assert r["airbox_error"] > 5e-3, r                       # truncated box is worse
+    assert r["airbox_error"] > 10.0 * r["field_error"], r    # the Kelvin win
+    assert abs(r["Hx_in"]) < 1e-3, r                         # no transverse field (symmetry)
+    assert 0.0 < r["consistency"] < 2e-2, r                  # Clebsch net reproduces B
+
+
 def test_cohomology_currentlink():
     """The hodograph's scalar coordinate is a 1st-cohomology class iff a
     current threads a hole (period != 0).  Locks the radia.cohomology
