@@ -153,6 +153,18 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   dominated, not an end effect** (that is a Rogowski pole-shape problem, a
   separate lever). So end shaping is the right knob for the end bump, the wrong
   knob for `b₃,₅`.
+- **`accel_pole_dipole_body_2d.py`** — the **BODY lever** (the *other* half of
+  the two-lever split): the transverse `b₃,₅` are a pole-**shape** knob, not an
+  end effect. A 2-D cross-section solve (the body is translationally invariant
+  → no ends) of the pole-as-equipotential Laplace problem. A finite **flat**
+  pole droops at its edges (`b₃ < 0`); two body levers fix it: **(1) width** —
+  a wider flat pole flattens the field over a fixed aperture (`|b₃|` falls
+  ~100× from `w=30→60 mm`); **(2) curvature** — the dipole "shim"/Rogowski
+  analog `z_face = g/2 − δ(x/w)²` (narrow the gap toward the edges to boost the
+  drooped field) drives `b₃` *through zero* at `δ ≈ 0.4 mm`, leaving `|b₅|` as
+  the residual (spurious `8e-4 → 1e-4`). This is the finite-aperture analog of
+  the quad hyperbola: the ideal finite-width dipole pole is slightly concave,
+  not flat — and it is the lever the end chamfer (above) cannot move.
 - **`one_turn_coil_streamfunction.py`** — the A-side **(B) track**: a 1-turn
   coil is the coarsest stream-function discretization (one contour = one wire);
   the task is the single best wire path, and the script shows the honest 1-turn
@@ -168,10 +180,11 @@ python accel_pole_design.py                   # multipole analyzer + quad pole g
 python accel_pole_harmonics.py                # 2-D equipotential lever (shim → harmonics)
 python accel_pole_ends_3d.py                  # 3-D ends: integrated analyzer + end rule
 python accel_pole_ends_fem.py                 # FEM rung: reduced-Omega + CoilBuilder dipole
+python accel_pole_dipole_body_2d.py           # the BODY lever: pole width + curvature -> b3,5
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (9 tests; the two FEM
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (10 tests; the two FEM
 rungs — forward+contour and the design loop — are `@pytest.mark.slow`).
 
 ## Prior art (honest)
