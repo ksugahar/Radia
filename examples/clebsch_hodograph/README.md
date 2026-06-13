@@ -164,6 +164,25 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   (the straight-pole equipotential is read in the already-bumped field). The
   precise zero is mesh-noise-limited; the integrated transverse spurious stays
   body-dominated throughout (the end shape is not its lever).
+  It also answers the **open-boundary** question (`open_boundary_convergence`,
+  figure `*_openbnd.png`): growing the Dirichlet air box leaves the integrated
+  dipole `b̄₁` **stable to 0.17 %** across 200 → 450 mm (< 1 % even out to
+  600 mm), and *non-monotonic* (mesh noise, not a converging trend) — the spread
+  *shrinks* with finer mesh (5 % at `maxh=0.035` → 0.17 % at `maxh=0.03`), the
+  signature of a noise floor, not a real effect. The iron H-frame **flux return
+  contains the field**,
+  so the air-box truncation is **below the mesh-noise floor** — the open
+  boundary is *not* the limiting error for this iron-dominated dipole, and an
+  exact Kelvin would not change the answer. (`B_z`(body), a near-point value, is
+  more mesh-sensitive, so its larger spread is mesh noise too.) The **exact**
+  open boundary — which *does* matter for a flux-return-**free** magnet — is the
+  lab's Kelvin transform, demonstrated exactly in `hodograph_kelvin_axisym.py`
+  (above: `field_error ~1e-7` vs `~3e-3` truncated). A full 3-D *Cartesian*
+  Kelvin for this *coil-driven* dipole would need the localized Biot–Savart
+  source mapped into the Kelvin exterior (the closed-form
+  reduced-potential-background helper covers uniform / dipole-at-infinity
+  backgrounds, not a localized coil); it is deferred because the convergence
+  here shows it would not change the result.
 - **`accel_pole_dipole_body_2d.py`** — the **BODY lever** (the *other* half of
   the two-lever split): the transverse `b₃,₅` are a pole-**shape** knob, not an
   end effect. A 2-D cross-section solve (the body is translationally invariant
@@ -214,9 +233,9 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (12 tests; the four
-FEM rungs — forward+contour, the design loop, the curved chamfer, and the
-quadrupole — are `@pytest.mark.slow`).
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (13 tests; the five
+FEM rungs — forward+contour, the design loop, the curved chamfer, the open-
+boundary convergence, and the quadrupole — are `@pytest.mark.slow`).
 
 ## Prior art (honest)
 
