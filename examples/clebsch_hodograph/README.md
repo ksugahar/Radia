@@ -144,8 +144,15 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   end edge. Verified: in the body `z_p = g/2` *exactly* (self-consistency — the
   equipotential sits on the iron face), and it **lifts ~10 mm past the iron
   end** (the field bows out → the chamfer to follow). The figure's right panel is
-  this contour. **Next rung:** re-shape the end iron to that contour → re-solve →
-  drive the integrated spurious `b̄ₙ` down (closes the §3.2 design loop).
+  this contour. It then **closes the §3.2 design loop** (`end_shaping_sweep`):
+  re-shape the pole END (chamfer it, following the equipotential lift) →
+  re-solve → the longitudinal **pole-end enhancement is driven through zero**
+  (optimal chamfer ~4–6 mm), shown in `*_loop.png`. **Honest two-lever finding:**
+  the chamfer controls the *longitudinal* end bump, but the integrated
+  *transverse* spurious `b₃,₅` (~9 %) barely moves — it is **body/pole-width
+  dominated, not an end effect** (that is a Rogowski pole-shape problem, a
+  separate lever). So end shaping is the right knob for the end bump, the wrong
+  knob for `b₃,₅`.
 - **`one_turn_coil_streamfunction.py`** — the A-side **(B) track**: a 1-turn
   coil is the coarsest stream-function discretization (one contour = one wire);
   the task is the single best wire path, and the script shows the honest 1-turn
@@ -164,8 +171,8 @@ python accel_pole_ends_fem.py                 # FEM rung: reduced-Omega + CoilBu
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (8 tests; the FEM rung
-is `@pytest.mark.slow`).
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (9 tests; the two FEM
+rungs — forward+contour and the design loop — are `@pytest.mark.slow`).
 
 ## Prior art (honest)
 
