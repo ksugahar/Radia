@@ -153,6 +153,17 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   dominated, not an end effect** (that is a Rogowski pole-shape problem, a
   separate lever). So end shaping is the right knob for the end bump, the wrong
   knob for `b₃,₅`.
+  Finally it **follows `z_p(y)` *exactly*** with a **CURVED** end chamfer
+  (`curved_chamfer_study`, figure `*_curved.png`) instead of the linear taper:
+  the measured equipotential bow-out is a **parameter-free convex shape**
+  `Ĝ(s)` (rises faster than linear near the body, then saturates); cutting the
+  pole end along it drives the end bump from `+` through zero to negative, so
+  the curved profile zeros it. Honest caveat: the **naive single-pass depth**
+  (the raw equipotential lift, ~10 mm) **over-corrects** — the shape is right,
+  the depth needs one knob (~25 % of the naive lift) or one design iteration
+  (the straight-pole equipotential is read in the already-bumped field). The
+  precise zero is mesh-noise-limited; the integrated transverse spurious stays
+  body-dominated throughout (the end shape is not its lever).
 - **`accel_pole_dipole_body_2d.py`** — the **BODY lever** (the *other* half of
   the two-lever split): the transverse `b₃,₅` are a pole-**shape** knob, not an
   end effect. A 2-D cross-section solve (the body is translationally invariant
@@ -184,8 +195,9 @@ python accel_pole_dipole_body_2d.py           # the BODY lever: pole width + cur
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (10 tests; the two FEM
-rungs — forward+contour and the design loop — are `@pytest.mark.slow`).
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (11 tests; the three
+FEM rungs — forward+contour, the design loop, and the curved chamfer — are
+`@pytest.mark.slow`).
 
 ## Prior art (honest)
 
