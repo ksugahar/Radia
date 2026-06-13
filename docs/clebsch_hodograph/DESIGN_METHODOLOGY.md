@@ -126,9 +126,13 @@ flat-top dipole (`B_z ≈ 0.15 T`), the effective magnetic length `L_eff > L_iro
 (the two fringes), a **+11 % pole-END enhancement** (the flux concentration at
 the iron ends), and the integrated dipole + spurious (n=3,5 ≈ 9 %). This is the
 forward-engine bridge "analytic ⇒ FEM" and exposes the ends the design step
-acts on. **Next rung:** extract the solved 3-D equipotential surface
-`Ψ = Ψ_pole` at the end as the end-iron contour, then close the loop
-(re-shape, re-solve, converge the integrated harmonics).
+acts on. It also **reads the equipotential as the end-iron contour**: in the
+current-free gap `H = −∇Ψ`, so `Ψ(y,z) = −∫₀ᶻ H_z dz'`; the iron face is
+`Ψ_pole = Ψ(0, g/2)`, and `z_p(y)` with `Ψ(y,z)=Ψ_pole` is the ideal end edge —
+verified to recover `z_p = g/2` *exactly* in the body (self-consistency) and to
+**lift ~8.5 mm past the iron end** (the field bows out ⇒ the chamfer to follow).
+**Next rung:** re-shape the end iron to that contour, re-solve, and converge the
+integrated harmonics (close the §3.2 loop).
 
 ---
 

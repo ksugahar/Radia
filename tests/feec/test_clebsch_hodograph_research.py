@@ -124,3 +124,7 @@ def test_accel_pole_ends_fem_forward():
     assert r["end_overshoot"] > 0.02, r                    # pole-end flux concentration
     assert r["integrated_dipole_bbar1_Tm"] > 0.01, r       # sane integrated dipole
     assert r["integrated_spurious_rel"] < 0.25, r          # ends + finite pole width
+    # (B) the equipotential end contour: body recovers the flat pole face g/2
+    # (self-consistency), and the equipotential lifts past the iron end (chamfer).
+    assert abs(r["z_pole_body_m"] - af.GAP / 2) < 0.001, r  # body z_p == g/2
+    assert r["end_contour_lift_m"] > 0.002, r               # equipotential lift at the end
