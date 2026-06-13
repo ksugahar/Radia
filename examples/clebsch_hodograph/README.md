@@ -111,6 +111,32 @@ Clebsch flux `ψ` field lines on a meridional slice). *Next rungs: 1.5 = 2-D
 Chaplygin (the hodograph **linearises** the saturation nonlinearity —
 Molenbroek–Chaplygin); 3 = the 3-D merged geometry+material single Picard.*
 
+### `saturation_loop_2d.py` — the nonlinear saturation loop (Chaplygin reference)
+
+The **nonlinear half** of the program (the user's "非線形のループ"), and the
+reference the **Chaplygin** rung will reproduce *without* iteration. A
+magnetisable cylinder whose permeability **saturates**, solved by a nonlinear
+FEM loop. Formulation = the standard **stable** one: the **A-formulation with a
+B-input reluctivity** `ν(|B|)` (`B = (∂A_z/∂y, −∂A_z/∂x)`, `|B| = |∇A_z|`),
+Fröhlich `μ_r(B) = 1 + (μ_r0−1)/(1+(B/B_k)²)`. Plain Picard + a `B₀`
+continuation. Result (μ_r0=10, B_k=1 T): the interior ratio `B_in/B₀` falls from
+the **unsaturated demag value** `2μ_r0/(μ_r0+1) ≈ 1.82` toward **1** (saturated
+cylinder, "transparent"), monotone, respecting the demag limit `[1, 1.82]`.
+
+**Why this formulation** (the lesson worth keeping): the *reduced-Ω* `μ(|H|)`
+loop is **ill-conditioned** for a saturable cylinder (`μ_r` steepest at small
+H, exactly at the cylinder boundary) — its Picard converges to a **spurious,
+non-physical** fixed point (interior B *exceeding* the demag limit `2B₀`,
+impossible). The B-input `ν(|B|)` A-formulation has a **convex** energy, so
+plain Picard converges cleanly **to machine precision**: the converged iterate
+is its own frozen re-solve (`|blend − frozen| ~ 1e-12`) — the diagnostic that
+the loop found the *true* solution, not a false fixed point. Open boundary: a
+large domain (`R/a = 10`, < 1% truncation) stands in for the exact one
+(saturation is a *local* effect, orthogonal to the rung 1-2 open-boundary
+treatment; the two compose). Figure: `saturation_loop_2d.png` (the saturation
+S-curve). *Next rung: the Chaplygin hodograph reproduces this curve in one
+linear solve.*
+
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
 Answers *"is cohomology needed for the hodograph?"*. The hodograph's **scalar
@@ -281,6 +307,7 @@ python a_method_clebsch_2d.py                 # A-method net figure
 python hodograph_kelvin_axisym.py             # Kelvin exact-open-boundary flux figure
 python hodograph_kelvin_2d.py                 # Kelvin in the hodograph (2-D Cartesian, no air box)
 python clebsch_kelvin_3d.py                   # Kelvin in the hodograph (3-D Clebsch, no air box)
+python saturation_loop_2d.py                  # the nonlinear saturation loop (Chaplygin reference)
 python cohomology_hodograph_currentlink.py    # when the hodograph needs cohomology
 python accel_pole_design.py                   # multipole analyzer + quad pole geometry
 python accel_pole_harmonics.py                # 2-D equipotential lever (shim → harmonics)
@@ -291,7 +318,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (15 tests; the five
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (16 tests; the five
 FEM rungs — forward+contour, the design loop, the curved chamfer, the open-
 boundary convergence, and the quadrupole — are `@pytest.mark.slow`).
 

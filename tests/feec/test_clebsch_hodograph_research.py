@@ -80,6 +80,27 @@ def test_clebsch_kelvin_3d():
     assert 0.0 < r["consistency"] < 2e-2, r                  # Clebsch net reproduces B
 
 
+def test_saturation_loop_2d():
+    """The nonlinear saturation LOOP (the reference for the Chaplygin rung):
+    the A-formulation nu(|B|) Picard.  B_in/B0 falls from the unsaturated demag
+    value 2mu_r0/(mu_r0+1) toward 1 (saturated), monotone, respecting the demag
+    limit -- and the iterate is its OWN frozen re-solve to machine precision (the
+    diagnostic that the B-input loop found the TRUE solution, not the spurious
+    fixed point the ill-conditioned H-input mu(|H|) Picard converges to)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import saturation_loop_2d as sl
+    r = sl.solve_saturation(B0_list=(0.05, 0.5, 5.0), mur0=10.0, Bk=1.0,
+                            order=2, maxh=0.12, R=3.0)
+    # unsaturated low field -> the demag limit; clearly saturating at high field.
+    assert 0.96 * r["demag_linear"] < r["ratio_lowfield"] <= r["demag_linear"] + 1e-2, r
+    assert r["ratio_highfield"] < 1.25, r
+    assert r["monotone"], r                                # B_in/B0 monotone decreasing
+    assert r["respects_demag"], r                          # all in [1, 2mu_r0/(mu_r0+1)]
+    # the clean-Picard diagnostic: the iterate IS the solution (true fixed point).
+    assert r["max_inconsistency"] < 1e-5, r
+
+
 def test_cohomology_currentlink():
     """The hodograph's scalar coordinate is a 1st-cohomology class iff a
     current threads a hole (period != 0).  Locks the radia.cohomology
