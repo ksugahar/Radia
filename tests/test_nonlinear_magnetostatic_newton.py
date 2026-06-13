@@ -69,9 +69,12 @@ def test_newton_recovers_manufactured():
     assert err < 1e-5, "Newton did not recover A_ex: ||A-A_ex||=%.2e" % err
 
 
-def test_tighter_tolerance_reduces_error():
-    """A tighter Newton residual tolerance brings the solution CLOSER to A_ex --
-    confirming A_ex is the exact root and the only gap is the solver tolerance."""
+def test_tighter_tolerance_reaches_discretization_floor():
+    """Newton converges BELOW the FEM discretization floor, so the L2 error vs
+    A_ex is tol-INDEPENDENT: both a loose and a tight residual tolerance reach
+    the same discrete root.  The gap to A_ex is the mesh/order discretization
+    error, not the solver tolerance -- confirming A_ex is recovered to
+    discretization accuracy (and tightening the tolerance does not worsen it)."""
     from ngsolve.solvers import Newton
     mesh = _mesh(16)
     fes = H1(mesh, order=3, dirichlet=".*")
@@ -80,7 +83,10 @@ def test_tighter_tolerance_reduces_error():
         a, gfu, Aex = _build(fes)
         Newton(a, gfu, maxit=40, maxerr=tol, printing=False)
         errs.append(_l2(gfu, Aex, mesh))
-    assert errs[1] < errs[0], "tighter tol did not reduce error: %s" % errs
+    # both at the small discretization floor; tighter tol does not increase it.
+    assert errs[0] < 1e-5, "error not at the discretization floor: %s" % errs
+    assert errs[1] <= errs[0] * (1 + 1e-6), \
+        "tighter tol changed the discrete root: %s" % errs
 
 
 def test_saturation_is_active():
