@@ -122,9 +122,10 @@ analytic field is replaced by a real **reduced-Ω + CoilBuilder** forward solve
 of a finite-length dipole — x-symmetric H-frame iron (netgen.occ, no Cubit) + a
 CoilBuilder racetrack Biot-Savart source (no coil mesh); `∫μ∇Ω·∇v = ∫μ Hₛ·∇v`,
 `H = Hₛ − ∇Ω` — fed to the **same** integrated analyzer. It reproduces a clean
-flat-top dipole (`B_z ≈ 0.15 T`), the effective magnetic length `L_eff > L_iron`
-(the two fringes), a **+11 % pole-END enhancement** (the flux concentration at
-the iron ends), and the integrated dipole + spurious (n=3,5 ≈ 9 %). This is the
+flat-top dipole (`B_z ≈ 0.14 T`, `B_x/B_z ≈ 0.3 %` at centre on a refined mesh),
+the effective magnetic length `L_eff > L_iron` (the two fringes), a small
+(mesh-sensitive) pole-end enhancement, and the integrated dipole + spurious
+(n=3,5 ≈ 8 %, the ends + finite pole width). This is the
 forward-engine bridge "analytic ⇒ FEM" and exposes the ends the design step
 acts on. It also **reads the equipotential as the end-iron contour**: in the
 current-free gap `H = −∇Ψ`, so `Ψ(y,z) = −∫₀ᶻ H_z dz'`; the iron face is
@@ -200,8 +201,9 @@ coil = A-side), so the framework is one method, not two.
   end ⇒ spurious `b̄₆` linear in the deviation;
 - the **3-D end-field FEM rung** (§3.2 rung 2, `accel_pole_ends_fem.py`): a real
   reduced-Ω + CoilBuilder finite-length dipole (netgen.occ, no Cubit) reproduces
-  a flat-top dipole + `L_eff > L_iron` + a +11 % pole-end enhancement through the
-  same integrated analyzer;
+  a clean flat-top dipole (`B_x/B_z ≈ 0.3 %`) + `L_eff > L_iron` through the same
+  integrated analyzer, and reads the solved equipotential as the end-iron contour
+  (body `z_p = g/2` exactly; lifts ~10 mm past the iron end);
 - the stream-function coil (A-side), vs Radia to 3.4e-10;
 - the reduced-potential + CoilBuilder forward engine (the panel).
 
