@@ -128,3 +128,29 @@ def test_accel_pole_ends_fem_forward():
     # (self-consistency), and the equipotential lifts past the iron end (chamfer).
     assert abs(r["z_pole_body_m"] - af.GAP / 2) < 0.001, r  # body z_p == g/2
     assert r["end_contour_lift_m"] > 0.002, r               # equipotential lift at the end
+
+
+@pytest.mark.slow
+@pytest.mark.filterwarnings("ignore::UserWarning")   # benign CoilBuilder gimbal-lock
+def test_accel_pole_ends_fem_design_loop():
+    """(C) close the §3.2 design loop: re-shape the pole END (chamfer it) ->
+    re-solve -> the longitudinal pole-end enhancement is driven DOWN (through
+    zero).  Honest: the integrated TRANSVERSE spurious b_3,5 is body-dominated
+    and is NOT the end-shaping lever."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import accel_pole_ends_fem as af
+    straight = af.solve(maxh_air=0.06, maxh_iron=0.03, n_beam=61, n_theta=24,
+                        chamfer_depth=0.0)
+    chamfered = af.solve(maxh_air=0.06, maxh_iron=0.03, n_beam=61, n_theta=24,
+                         chamfer_depth=0.012)
+    # the chamfer drives the longitudinal end enhancement clearly DOWN (the
+    # magnitude is mesh-dependent; the CI mesh is coarse, so assert a clear
+    # >2 pt reduction -- finer meshes drive it through zero to negative).
+    assert chamfered["end_overshoot"] < straight["end_overshoot"] - 0.02, \
+        (straight["end_overshoot"], chamfered["end_overshoot"])
+    # ... while the integrated transverse spurious stays body-dominated (small change).
+    assert abs(chamfered["integrated_spurious_rel"]
+               - straight["integrated_spurious_rel"]) < 0.05, \
+        (straight["integrated_spurious_rel"], chamfered["integrated_spurious_rel"])
