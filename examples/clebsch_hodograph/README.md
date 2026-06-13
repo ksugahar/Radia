@@ -107,9 +107,10 @@ material weight `μ′=(R/ρ′)²μ₀` is the exact conformal change-of-variab
 the reduced-potential background (an *engineering* convention, not the
 naive covariant pullback which is singular at ∞) reproduces the right exterior.
 Figure: `clebsch_kelvin_3d.png` (the
-Clebsch flux `ψ` field lines on a meridional slice). *Next rungs: 1.5 = 2-D
-Chaplygin (the hodograph **linearises** the saturation nonlinearity —
-Molenbroek–Chaplygin); 3 = the 3-D merged geometry+material single Picard.*
+Clebsch flux `ψ` field lines on a meridional slice). *Later rungs (both below
+and DONE): 1.5 = 2-D Chaplygin (the hodograph **linearises** the saturation
+nonlinearity — Molenbroek–Chaplygin); 3 = the 3-D merged geometry+material
+single Picard.*
 
 ### `saturation_loop_2d.py` — the nonlinear saturation loop (Chaplygin reference)
 
@@ -178,7 +179,46 @@ the throat is made more gradual (slenderness 3 → 9). Figure:
 needs **under-relaxation** — undamped Picard oscillates under the throat's
 strong reluctivity contrast even though the problem is convex.* **Next rung: a
 guide that *turns* (`θ` varies) → a real 2-D hodograph image needing a linear
-PDE solve; then rung 3 = the 3-D merged geometry+material single Picard.*
+PDE solve; rung 3 = the 3-D merged geometry+material single Picard (next section).*
+
+### `clebsch_kelvin_nonlinear_3d.py` — rung 3: the 3-D merge (saturation + exact open boundary, one Picard)
+
+**The capstone.** Rungs 1–2 put the Kelvin open boundary in the
+hodograph/Clebsch frame (linear); rung 1.5b showed the 2-D hodograph
+*linearises* saturation (1-shot, no loop). **3-D does NOT auto-linearise** —
+the Clebsch pair (ψ,χ) is two potentials for three coordinates (a gauge/helicity
+freedom), so there is no clean (x,y,z)↔hodograph interchange. So the honest 3-D
+form of *"混ぜて短く"* is a **single Picard that updates the geometry (the exact
+Kelvin open boundary, rung 2) and the material (μ(|H|) saturation, rung 1.5a)
+TOGETHER** — instead of nesting an air-box-truncation loop inside a material
+loop. The geometry (open boundary) lives in the *fixed* Kelvin weight
+`μ'=(R/ρ')²μ₀`; only the magnet's μ changes per step. There is no air-box loop
+to converge — it is exact, once.
+
+A saturable **sphere** in a uniform field has a *uniform* interior, so its
+nonlinear solution is exactly a linear sphere with the self-consistent
+`μ_r_eff` — the exact reference is the scalar demag fixed point
+`H_int = 3H₀/(μ_r(H_int)+2)`. The single reduced-Ω Picard on the Kelvin
+two-sphere (μ_r0=20, H_k=0.25, order 3, maxh 0.06, ne 14301) converges in
+**42 iters** to:
+- interior `field_error` **2.5e-4** vs the exact fixed point (saturated to
+  `μ_r_eff`≈**11.9** < μ_r0=20);
+- **EXTERIOR** `field_error` **3.1e-3** vs the equivalent induced dipole (the
+  strong Kelvin test, now on the *nonlinear* solution) — vs **6.7e-3** for a
+  truncated r/a=5 air box (the Kelvin win, ~26×);
+- self-consistency **3.2e-9** (the iterate IS its own frozen re-solve = a true
+  fixed point; the residual 2.5e-4 is *mesh* error, not iteration error).
+
+**Honest scope:** the STABLE saturation regime. The H-input reduced-Ω fixed
+point `H=3H₀/(μ_r(H)+2)` is contractive only while `|dRHS/dH|<1` (here ρ≈0.67);
+for a *very steep* B-H curve that exceeds 1 and the H-input loop goes unstable —
+and **no under-relaxation cures a positive-slope unstable fixed point** (the
+general cure is the convex B-input ν(|B|) form, rung 1.5a's lesson, in 3-D a
+vector-potential formulation). The figure reports ρ so the limit is explicit.
+Figure: `clebsch_kelvin_nonlinear_3d.png` (Picard convergence to the exact
+fixed point + the self-consistent BH operating point). *This closes the
+program: 1–2 (exact open boundary), 1.5a (nonlinear loop), 1.5b (2-D 1-shot),
+3 (3-D merge).*
 
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
@@ -361,10 +401,10 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (17 tests; the six
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (18 tests; the seven
 FEM rungs — forward+contour, the design loop, the curved chamfer, the open-
-boundary convergence, the quadrupole, and the Chaplygin 1-shot-vs-loop — are
-`@pytest.mark.slow`).
+boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, and the
+3-D nonlinear Kelvin merge — are `@pytest.mark.slow`).
 
 ## Prior art (honest)
 
