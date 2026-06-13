@@ -33,17 +33,22 @@ So ``B = mu(|H|) H`` IS the constitutive law of a gas with density
 THE CHAPLYGIN LINEARISATION (why the nonlinearity disappears)
 -------------------------------------------------------------
 Take ``q = |H|`` and ``theta = arg(H)`` as the INDEPENDENT variables (the
-hodograph plane), and ``phi = Phi``, ``psi = A`` as the unknowns.  Inverting
-``dPhi`` and ``dA`` (Molenbroek 1890, Chaplygin 1902) gives the *linear*
-first-order system
+hodograph plane), with ``Phi`` (scalar potential) and ``A`` (flux function) the
+unknowns.  Inverting (Molenbroek 1890, Chaplygin 1902)
 
-    dPhi = (cos th / q) dx + (sin th / q) dy     -> Phi_q , Phi_theta
-    dA   = -mu q sin th dx + mu q cos th dy       -> A_q , A_theta
+    dPhi = q cos th dx + q sin th dy
+    dA   = -mu q sin th dx + mu q cos th dy
 
-whose integrability conditions are the **linear, variable-coefficient** pair
+(``H = grad Phi``, ``|H|=q``; ``B = mu H``, ``B = (A_y, -A_x)``), the
+integrability of dx, dy gives the **linear, variable-coefficient** first-order
+pair (derived + verified against the linear Laplace limit; see the genuine 2-D
+PDE solver in chaplygin_turning_guide_2d.py)
 
-    A_theta   = -(mu q) Phi_q
-    A_q       =  (1/q) d(mu q)/dq  *  Phi_theta            (Chaplygin eqns)
+    Phi_q = -q (mu q)' / (mu q)^2  A_theta ,     A_q = (mu / q)  Phi_theta ,
+
+whose elimination is the self-adjoint elliptic Chaplygin equation for A,
+
+    d/dq( (q/mu) A_q ) + ((mu q)'/(mu^2 q)) A_theta_theta = 0 .
 
 The point: ``mu(q)`` is now a COEFFICIENT (a known function of the independent
 coordinate ``q``), NOT a nonlinearity in an unknown field.  The PDE is linear.

@@ -368,3 +368,28 @@ def test_clebsch_kelvin_nonlinear_3d():
     # mesh ~2.6e-3; the headline order 3 maxh 0.06 reaches 2.5e-4).
     assert r["field_error"] < 5e-3, r
     assert abs(r["Hx_in"]) < 0.05 * abs(r["Hz_in"]), r         # axial by symmetry
+
+
+@pytest.mark.slow
+def test_chaplygin_turning_guide_2d():
+    """The Chaplygin frontier: a TURNING field (theta varies over a 2-D range)
+    solved by ONE LINEAR elliptic PDE on the genuine 2-D hodograph plane (NOT a
+    quadrature like the slender-guide 1-shot).  Verified: the solver reproduces
+    the exact Laplace harmonic A=ln(q)*theta for mu_r=const; the saturating case
+    is the SAME single linear solve with mu(q) as a coefficient; and it back-maps
+    single-valued to a realisable physical turning field."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_turning_guide_2d as tg
+    # solver verification: reproduce the EXACT Laplace harmonic (genuinely 2-D).
+    v = tg.verify_solver()
+    assert v["laplace_error"] < 1e-5, v                        # solver correct (order 3)
+    assert v["lin_residual"] < 1e-10, v                        # ONE direct linear solve
+    # nonlinear: same turning data through the saturating operator = one solve,
+    # genuinely 2-D (deviates from the linear harmonic), realisable back-map.
+    r, mesh, gf = tg.nonlinear_turn(mur0=20.0, qk=1.0, maxh=0.06)
+    assert r["lin_residual"] < 1e-10, r                        # still ONE linear solve
+    assert r["twoD_deviation"] > 0.05, r                       # genuine saturation bend
+    bm = tg.back_map(mesh, gf, r["mur0"], r["qk"], *r["q_range"],
+                     r["theta_range"][1], Nq=31, Nth=31)
+    assert bm["closure"] < 5e-2, bm                            # single-valued physical field
