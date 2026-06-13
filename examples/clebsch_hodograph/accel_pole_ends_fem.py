@@ -61,11 +61,36 @@ COIL_R = 0.020         # (coil end-turns sit OUTSIDE the iron ends)
 NI = 10000.0           # ampere-turns
 
 
-def build_mesh(maxh_air=0.05, maxh_iron=0.025):
+def _chamfer_pole_end(pole, gap_z, body_sign, y_sign, c_len, c_depth):
+    """Chamfer one gap-facing END corner of a pole: cut the wedge near
+    (y = y_sign*(L/2 - c_len) .. y_sign*L/2, z = gap_z) so the gap WIDENS by
+    c_depth over the last c_len toward that end -- the equipotential-following
+    end taper.  body_sign = +1 if the pole body is at z > gap_z (top pole),
+    -1 if below (bottom pole)."""
+    import math
+    from netgen.occ import Box, Pnt, Axis, X
+    hL = L_BEAM / 2
+    ang = body_sign * math.degrees(math.atan2(c_depth, c_len))
+    yh = y_sign * (hL - c_len)
+    # cut box flush on the GAP side of the face (z from gap_z back into the gap
+    # by 0.08), covering this end; rotate about the hinge (yh, gap_z) so it
+    # tilts c_depth INTO the pole corner.
+    z0, z1 = (gap_z - 0.08, gap_z) if body_sign > 0 else (gap_z, gap_z + 0.08)
+    if y_sign > 0:
+        cut = Box(Pnt(-POLE_W * 1.4, hL - c_len, z0), Pnt(POLE_W * 1.4, hL + 0.08, z1))
+    else:
+        cut = Box(Pnt(-POLE_W * 1.4, -hL - 0.08, z0), Pnt(POLE_W * 1.4, -(hL - c_len), z1))
+    cut = cut.Rotate(Axis(Pnt(0, yh, gap_z), X), y_sign * ang)
+    return pole - cut
+
+
+def build_mesh(maxh_air=0.05, maxh_iron=0.025, chamfer_depth=0.0, chamfer_len=0.025):
     """H-frame (window) dipole (iron) + air box, netgen.occ (no Cubit).
 
     x-SYMMETRIC (legs on both +-x) so the dipole field is clean (B_x ~ 0 at
     centre by symmetry).  Finite length L along the beam (y) -> real ENDS.
+    chamfer_depth > 0 tapers the gap-facing pole END corners (the gap widens by
+    chamfer_depth over the last chamfer_len) -- the equipotential-following end.
     """
     import ngsolve as ng
     from netgen.occ import Box, Pnt, Glue, OCCGeometry
@@ -73,6 +98,10 @@ def build_mesh(maxh_air=0.05, maxh_iron=0.025):
     hL = L_BEAM / 2
     top = Box(Pnt(-POLE_W, -hL, GAP / 2), Pnt(POLE_W, hL, Z_OUT))
     bot = Box(Pnt(-POLE_W, -hL, -Z_OUT), Pnt(POLE_W, hL, -GAP / 2))
+    if chamfer_depth > 0:
+        for ys in (+1, -1):
+            top = _chamfer_pole_end(top, GAP / 2, +1, ys, chamfer_len, chamfer_depth)
+            bot = _chamfer_pole_end(bot, -GAP / 2, -1, ys, chamfer_len, chamfer_depth)
     leg_l = Box(Pnt(-POLE_W, -hL, -GAP / 2), Pnt(-POLE_W + T_LEG, hL, GAP / 2))
     leg_r = Box(Pnt(POLE_W - T_LEG, -hL, -GAP / 2), Pnt(POLE_W, hL, GAP / 2))
     iron = (top + bot + leg_l + leg_r)
@@ -115,15 +144,17 @@ def build_coil():
 
 
 def solve(mu_r=1000.0, order=2, maxh_air=0.035, maxh_iron=0.018,
-          r_ref=0.008, n_beam=121, n_theta=32, plot=False):
+          r_ref=0.008, n_beam=121, n_theta=32, plot=False,
+          chamfer_depth=0.0, chamfer_len=0.025):
     """Solve reduced-Omega forward, then integrate the transverse multipoles
-    along the beam.  Returns the gap field + the integrated dipole + spectrum."""
+    along the beam.  Returns the gap field + the integrated dipole + spectrum.
+    chamfer_depth > 0 tapers the pole ENDS (the equipotential-following end)."""
     import ngsolve as ng
     from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx,
                          TaskManager)
     import radia as rad
 
-    mesh = build_mesh(maxh_air, maxh_iron)
+    mesh = build_mesh(maxh_air, maxh_iron, chamfer_depth, chamfer_len)
     coils = build_coil()
     Hs = rad.RadiaField(coils, "h")                  # Biot-Savart source CF
     mu = mesh.MaterialCF({"iron": mu_r * MU0}, default=MU0)
@@ -221,6 +252,63 @@ def solve(mu_r=1000.0, order=2, maxh_air=0.035, maxh_iron=0.018,
     }
 
 
+def end_shaping_sweep(depths_mm=(0.0, 3.0, 6.0, 9.0, 12.0),
+                      maxh_air=0.045, maxh_iron=0.022, plot=False):
+    """Close the §3.2 DESIGN loop: re-shape the pole END (chamfer it, following
+    the equipotential lift) -> re-solve -> the pole-end field enhancement is
+    driven through zero.  Sweeps the chamfer depth and finds the optimal
+    (zero-overshoot) end taper.
+
+    Honest scope: the chamfer controls the LONGITUDINAL end-field bump
+    (end_overshoot); the INTEGRATED TRANSVERSE harmonics (b_3, b_5) are
+    body/pole-width dominated and barely move -- shaping the ENDS is the wrong
+    lever for those (that is a body-pole-shape / Rogowski problem)."""
+    rows = []
+    for d in depths_mm:
+        r = solve(maxh_air=maxh_air, maxh_iron=maxh_iron,
+                  chamfer_depth=d * 1e-3, plot=False)
+        rows.append((float(d), r["end_overshoot"], r["integrated_spurious_rel"],
+                     r["bz_body_T"]))
+    d_arr = np.array([x[0] for x in rows])
+    over = np.array([x[1] for x in rows])
+    # optimal chamfer = zero-crossing of end_overshoot (over is decreasing in d)
+    if over[0] > 0 > over[-1]:
+        opt = float(np.interp(0.0, over[::-1], d_arr[::-1]))
+    else:
+        opt = float("nan")
+    if plot:
+        _plot_loop(rows, opt)
+    return {"sweep": rows, "optimal_chamfer_mm": opt}
+
+
+def _plot_loop(rows, opt):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    d = [r[0] for r in rows]
+    over = [r[1] * 100 for r in rows]
+    spur = [r[2] * 100 for r in rows]
+    fig, ax = plt.subplots(figsize=(6.2, 3.8), dpi=150)
+    ax.plot(d, over, "o-", color="C0", label="pole-END enhancement (longitudinal)")
+    ax.plot(d, spur, "s--", color="C1", label="integrated spurious $b_{3,5}$ (transverse)")
+    ax.axhline(0, color="k", lw=0.6)
+    if opt == opt:  # not nan
+        ax.axvline(opt, color="C3", lw=1, ls=":",
+                   label=f"optimal chamfer = {opt:.1f} mm (zero bump)")
+    ax.set_xlabel("end chamfer depth [mm]")
+    ax.set_ylabel("[%]")
+    ax.set_title("Close the design loop: re-shape the end -> re-solve\n"
+                 "the chamfer zeroes the longitudinal end bump "
+                 "(transverse $b_{3,5}$ is body-dominated)")
+    ax.legend(fontsize=8)
+    png = os.path.splitext(os.path.abspath(__file__))[0] + "_loop.png"
+    fig.tight_layout()
+    fig.savefig(png, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  figure saved: {png}")
+
+
 def _plot(ys, bz_axis, bz_body, l_eff, yc, z_pole):
     import matplotlib
     matplotlib.use("Agg")
@@ -286,8 +374,18 @@ def main():
     print("\n  => the reduced-Omega + CoilBuilder forward engine feeds the SAME")
     print("     INTEGRATED analyzer as the analytic theorem (accel_pole_ends_3d),")
     print("     and the solved 3-D equipotential gives the end-iron contour.")
-    print("     NEXT: re-shape the end iron to that contour -> re-solve -> the")
-    print("     integrated spurious bbar_n drops (closes the DESIGN loop).")
+
+    # ---- (C) CLOSE THE LOOP: re-shape the end (chamfer) -> re-solve ----
+    print("\n  (C) DESIGN loop -- re-shape the pole END (chamfer) -> re-solve:")
+    s = end_shaping_sweep(plot=True)
+    for d, ov, sp, bz in s["sweep"]:
+        print(f"      chamfer {d:4.0f} mm:  end enhancement {ov*100:+5.1f} %  "
+              f"|  integrated spurious b_3,5 {sp*100:4.1f} %  |  B_z(body) {bz:.4f} T")
+    print(f"      -> OPTIMAL chamfer ~ {s['optimal_chamfer_mm']:.1f} mm zeroes the "
+          f"longitudinal end bump (following the equipotential lift).")
+    print("      The integrated TRANSVERSE spurious b_3,5 barely moves: it is")
+    print("      body/pole-width dominated, NOT an end effect -- shaping the END")
+    print("      is the right lever for the end bump, the wrong one for b_3,5.")
 
 
 if __name__ == "__main__":
