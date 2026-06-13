@@ -115,10 +115,20 @@ The claim has an exact backbone, provable with no FEM:
 
 So "follow the 3-D equipotential at the end" = *keep the symmetry and let the
 radial fringe corrections cancel, so the integrated field stays the pure
-designed multipole.* **Next rung:**
-replace the analytic Maxwellian field with the **reduced-potential + CoilBuilder
-FEM** end and read the solved 3-D equipotential surface as the end-iron contour
-(then close the loop: re-shape, re-solve, converge the integrated harmonics).
+designed multipole.*
+
+**Established (rung 2, FEM, `accel_pole_ends_fem.py`, golden-tested).** The
+analytic field is replaced by a real **reduced-Ω + CoilBuilder** forward solve
+of a finite-length dipole — x-symmetric H-frame iron (netgen.occ, no Cubit) + a
+CoilBuilder racetrack Biot-Savart source (no coil mesh); `∫μ∇Ω·∇v = ∫μ Hₛ·∇v`,
+`H = Hₛ − ∇Ω` — fed to the **same** integrated analyzer. It reproduces a clean
+flat-top dipole (`B_z ≈ 0.15 T`), the effective magnetic length `L_eff > L_iron`
+(the two fringes), a **+11 % pole-END enhancement** (the flux concentration at
+the iron ends), and the integrated dipole + spurious (n=3,5 ≈ 9 %). This is the
+forward-engine bridge "analytic ⇒ FEM" and exposes the ends the design step
+acts on. **Next rung:** extract the solved 3-D equipotential surface
+`Ψ = Ψ_pole` at the end as the end-iron contour, then close the loop
+(re-shape, re-solve, converge the integrated harmonics).
 
 ---
 
@@ -184,6 +194,10 @@ coil = A-side), so the framework is one method, not two.
   symmetry-preserving (equipotential) end ⇒ exact integrated quad (radial
   corrections ∝G″ integrate away) with no `b̄₆` (~3e-17); a non-equipotential
   end ⇒ spurious `b̄₆` linear in the deviation;
+- the **3-D end-field FEM rung** (§3.2 rung 2, `accel_pole_ends_fem.py`): a real
+  reduced-Ω + CoilBuilder finite-length dipole (netgen.occ, no Cubit) reproduces
+  a flat-top dipole + `L_eff > L_iron` + a +11 % pole-end enhancement through the
+  same integrated analyzer;
 - the stream-function coil (A-side), vs Radia to 3.4e-10;
 - the reduced-potential + CoilBuilder forward engine (the panel).
 
@@ -210,5 +224,6 @@ coil = A-side), so the framework is one method, not two.
 | cohomology (current-linking) | `src/radia/cohomology.py` |
 | pole geometry + multipole analyzer | `examples/clebsch_hodograph/accel_pole_design.py` |
 | 3-D ends: integrated analyzer + end rule | `examples/clebsch_hodograph/accel_pole_ends_3d.py` |
+| 3-D ends: FEM rung (reduced-Ω + CoilBuilder) | `examples/clebsch_hodograph/accel_pole_ends_fem.py` |
 | forward (reduced potential + CoilBuilder) | `src/radia/panels/calc_accel_magnet.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/feec_vim/foliated_solenoid_wires.py` |
