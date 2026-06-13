@@ -177,3 +177,33 @@ def test_accel_pole_ends_fem_design_loop():
     assert abs(chamfered["integrated_spurious_rel"]
                - straight["integrated_spurious_rel"]) < 0.05, \
         (straight["integrated_spurious_rel"], chamfered["integrated_spurious_rel"])
+
+
+@pytest.mark.slow
+@pytest.mark.filterwarnings("ignore::UserWarning")   # benign CoilBuilder gimbal-lock
+def test_accel_pole_ends_fem_curved_chamfer():
+    """(C+) follow z_p(y) EXACTLY: a CURVED end chamfer matching the measured
+    equipotential bow-out (a parameter-free shape), vs the linear taper.  The
+    robust, mesh-noise-tolerant facts: the bow-out shape is CONVEX (rises faster
+    than linear); following it drives the end bump from + through zero to
+    negative, so the curved profile zeros the bump; the naive SINGLE-PASS depth
+    OVER-corrects (shape right, depth needs one knob); and the integrated
+    transverse spurious stays body-dominated (the end shape is not its lever)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    pytest.importorskip("scipy")
+    import numpy as np
+    import accel_pole_ends_fem as af
+    r = af.curved_chamfer_study(maxh_air=0.06, maxh_iron=0.03, n_beam=61, n_theta=22)
+    # the equipotential bow-out is a real, convex curve (not the linear taper).
+    assert np.interp(0.5, r["ghat_x"], r["ghat_y"]) > 0.6, r   # Ghat(0.5) >> 0.5
+    # the straight pole has an end bump, and the curved chamfer drives it through
+    # zero: at the over-deep (~natural) depth it is clearly reduced/over-corrected.
+    assert r["end_overshoot_straight"] > 0.02, r
+    assert r["end_overshoot_curved_overdeep"] < r["end_overshoot_straight"] - 0.04, r
+    # the naive single-pass equipotential depth OVER-corrects (zero-bump depth is
+    # a fraction of it): the shape is right, the depth needs one knob/iteration.
+    assert 0.0 < r["depth_zerobump_m"] < r["depth_natural_m"] / 1.5, r
+    # the END shape does not move the body-dominated transverse spurious.
+    assert abs(r["spurious_curved_zerobump"] - r["spurious_straight"]) < 0.05, r
