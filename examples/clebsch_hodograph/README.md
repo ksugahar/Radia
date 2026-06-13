@@ -96,10 +96,17 @@ exact interior `H = 3/(μ_r+2)·H₀`): reduced-Ω on the two-sphere domain (per
 `kelvin_int ↔ kelvin_ext`, GND at the Kelvin centre = ∞, background via
 `make_reduced_potential_background_cf(dim=3)`); the Clebsch net `χ = atan2(y,x)`
 (the exact azimuthal coordinate) + `ψ` recovered as the Stokes flux, checked
-`B = ∇ψ × ∇χ`. Result (μ_r=100, a=0.2, R_K=0.5, order 3, maxh 0.05):
+`B = ∇ψ × ∇χ`. Result (μ_r=100, a=0.2, R_K=0.5, order 3, maxh 0.05): interior
 **field_error ~1.5e-5** vs **~8e-3** for a truncated air box at `r/a=5`
 (~10³× more accurate); `Hx ~7e-9`; Clebsch consistency `B(ψ,χ)` vs `B` ~6e-4
-(off-axis, away from the `χ` branch cut). Figure: `clebsch_kelvin_3d.png` (the
+(off-axis, away from the `χ` branch cut). **The STRONG test** (the interior is
+boundary-*insensitive*, so it does not prove the open boundary is right): the
+**exterior** field matches the **exact uniform + induced-dipole** to **~1.4e-3**
+(mesh-limited), confirming the Kelvin transform is interpreted correctly — the
+material weight `μ′=(R/ρ′)²μ₀` is the exact conformal change-of-variables, and
+the reduced-potential background (an *engineering* convention, not the
+naive covariant pullback which is singular at ∞) reproduces the right exterior.
+Figure: `clebsch_kelvin_3d.png` (the
 Clebsch flux `ψ` field lines on a meridional slice). *Next rungs: 1.5 = 2-D
 Chaplygin (the hodograph **linearises** the saturation nonlinearity —
 Molenbroek–Chaplygin); 3 = the 3-D merged geometry+material single Picard.*
