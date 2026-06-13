@@ -220,6 +220,40 @@ fixed point + the self-consistent BH operating point). *This closes the
 program: 1–2 (exact open boundary), 1.5a (nonlinear loop), 1.5b (2-D 1-shot),
 3 (3-D merge).*
 
+### `chaplygin_turning_guide_2d.py` — the Chaplygin frontier: a TURNING field, ONE linear PDE (not a quadrature)
+
+One step past rung 1.5b. There the slender guide's hodograph image was a thin
+**segment** (θ≈const) → the Chaplygin system collapsed to a 1-shot **quadrature**.
+Here the field **turns**, so θ varies over a genuine 2-D range and the hodograph
+image is a 2-D **region** → the Chaplygin equation is a genuine **linear,
+variable-coefficient elliptic PDE that must be SOLVED** (one linear solve), not
+integrated. For the flux function `A(q,θ)` it is the self-adjoint form
+
+```
+d/dq( (q/μ) A_q ) + ((μq)′/(μ²q)) A_θθ = 0,
+```
+
+with `μ(q)` a **known coefficient** (the linearised nonlinearity). The μ_r=const
+limit is `A_qq+(1/q)A_q+(1/q²)A_θθ=0` = **Laplace in (ln q, θ)**, so `A=ln(q)·θ`
+is an exact solution — the solver verification: the FEM reproduces it to
+**6.3e-8**. The saturating case (μ_r0=20, q spanning q_k) is the **same single
+linear solve** (residual ~2e-15) with the saturating coefficient; the solution
+bends ~34% away from the linear harmonic (genuine 2-D content). The result
+**back-maps** to physical space (integrate `dx,dy`, recover `Φ` from the
+first-order pair `Φ_q=-q(μq)′/(μq)²·A_θ`, `A_q=(μ/q)Φ_θ`) **single-valued to
+1.1e-2** — a realisable, genuine 2-D nonlinear **turning** field from one linear
+solve. Figure: `chaplygin_turning_guide_2d.png` (the 2-D hodograph image + the
+back-mapped physical turning region).
+
+**Honest scope / remaining frontier:** a turning flux *guide* (iron walls = flux
+lines) on a **fixed** hodograph rectangle is exactly the **constant-width** bend,
+which is θ-independent (1-D, self-linearising — `|H|~1/r` is forced by geometry,
+μ only reshapes B). A genuinely turning+tapering guide has θ-**dependent** wall
+positions → a **θ-dependent hodograph image = a free boundary**. So this file
+does the *forward* construction (prescribe 2-D hodograph data → one linear solve
+→ back-map to *a* physical patch); the **free-boundary closure** (prescribe the
+physical guide, solve for its hodograph image) is the genuine open frontier.
+
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
 Answers *"is cohomology needed for the hodograph?"*. The hodograph's **scalar
@@ -401,10 +435,11 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (18 tests; the seven
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (19 tests; the eight
 FEM rungs — forward+contour, the design loop, the curved chamfer, the open-
-boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, and the
-3-D nonlinear Kelvin merge — are `@pytest.mark.slow`).
+boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
+3-D nonlinear Kelvin merge, and the turning-guide hodograph PDE — are
+`@pytest.mark.slow`).
 
 ## Prior art (honest)
 
