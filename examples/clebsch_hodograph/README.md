@@ -55,6 +55,31 @@ Verified (μ_r = 100, order 3, maxh 0.03): interior `Hz = 3/(μ_r+2)·H₀`,
 **field_error ~1e-7** (vs ~3e-3 truncated — the Kelvin open boundary is the
 win); hodograph consistency ~2e-5. Figure: `hodograph_kelvin_axisym.png`.
 
+### `hodograph_kelvin_2d.py` — Kelvin in the hodograph (2-D Cartesian, no air box)
+
+**rung 1 of "Kelvin in the hodograph."** The dipole FEM rung truncates the
+exterior with a Dirichlet air box; this replaces it with the **2-D Cartesian
+Kelvin transformation**, which is especially clean: in 2-D the Dirichlet energy
+`∫|∇u|²` is **conformally invariant** and the Kelvin inversion `z → R²/z̄` is
+conformal, so the Kelvin exterior is **weight-free** (`μ′ = μ₀`, *no* `(R/ρ′)²`
+factor — unlike the axisymmetric case above). The open boundary at infinity maps
+to a single interior point (`GND`). In a current-free 2-D region the flux
+function `A_z` and scalar `V` are **Cauchy–Riemann conjugates** (`W = A_z + iμ₀V`
+analytic), so "Kelvin in the hodograph" is literally **analytic continuation of
+`W` across the conformal inversion** — the classical complex-potential pole-design
+picture with an exact open boundary.
+
+A magnetisable cylinder (`μ_r`) in a uniform field, reduced-Ω, the uniform
+background carried into the Kelvin exterior by the **2-D** reduced-potential rule
+(`-F_s`, `radia.kelvin_material.make_reduced_potential_background_cf(dim=2)`).
+Verified (μ_r = 100, a = 0.3, Kelvin R = 1.0, order 3, maxh 0.04): interior
+`B = 2μ_r/(μ_r+1)·B₀`, **field_error ~2e-8** (machine precision) vs **~2.8e-2**
+for a truncated air box at `r/a = 6` — **~10⁶× more accurate**; `Bx ~ 1e-17`
+(no transverse field by symmetry); hodograph consistency `B(A_z)` vs `B(V)`
+~3e-5. Figure: `hodograph_kelvin_2d.png` (the orthogonal flux/equipotential net
+on the exact field). *Next rungs: 1.5 = 2-D Chaplygin (the hodograph linearises
+the saturation nonlinearity); 2 = the 3-D Clebsch pullback under Kelvin.*
+
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
 Answers *"is cohomology needed for the hodograph?"*. The hodograph's **scalar
@@ -223,6 +248,7 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
 ```bash
 python a_method_clebsch_2d.py                 # A-method net figure
 python hodograph_kelvin_axisym.py             # Kelvin exact-open-boundary flux figure
+python hodograph_kelvin_2d.py                 # Kelvin in the hodograph (2-D Cartesian, no air box)
 python cohomology_hodograph_currentlink.py    # when the hodograph needs cohomology
 python accel_pole_design.py                   # multipole analyzer + quad pole geometry
 python accel_pole_harmonics.py                # 2-D equipotential lever (shim → harmonics)
@@ -233,7 +259,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (13 tests; the five
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (14 tests; the five
 FEM rungs — forward+contour, the design loop, the curved chamfer, the open-
 boundary convergence, and the quadrupole — are `@pytest.mark.slow`).
 

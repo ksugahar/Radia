@@ -39,6 +39,24 @@ def test_hodograph_kelvin_axisym():
     assert 0.0 < r["consistency"] < 5e-3, r
 
 
+def test_hodograph_kelvin_2d():
+    """rung 1 of 'Kelvin in the hodograph': the 2-D CARTESIAN Kelvin transform
+    (conformal -> WEIGHT-FREE, mu'=mu0) gives an EXACT open boundary -- interior
+    B = 2mu_r/(mu_r+1)B0 to a tiny field error, vastly better than a truncated
+    air box (r/a=6) -- and the flux/scalar conjugate net W = A_z + i mu0 V is
+    self-consistent."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import hodograph_kelvin_2d as hk
+    r = hk.solve(mu_r=100.0, order=2, maxh=0.07)
+    assert r["field_error"] < 1e-3, r                        # Kelvin = exact open bdry
+    assert r["airbox_error"] > 1e-2, r                       # truncated box is bad
+    assert r["airbox_error"] > 50.0 * r["field_error"], r    # the Kelvin win
+    assert abs(r["Bx_in"]) < 1e-6, r                         # no transverse field (symmetry)
+    assert 0.0 < r["consistency"] < 1e-2, r                  # conjugate net consistent
+
+
 def test_cohomology_currentlink():
     """The hodograph's scalar coordinate is a 1st-cohomology class iff a
     current threads a hole (period != 0).  Locks the radia.cohomology
