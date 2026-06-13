@@ -176,6 +176,24 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   the residual (spurious `8e-4 → 1e-4`). This is the finite-aperture analog of
   the quad hyperbola: the ideal finite-width dipole pole is slightly concave,
   not flat — and it is the lever the end chamfer (above) cannot move.
+- **`accel_quad_ends_fem.py`** — the **QUADRUPOLE FEM rung** (the analyzer
+  handles *any* multipole). The dipole work built the method; this is its
+  quadrupole instance — a real finite-length **4-pole hyperbola** quad solved by
+  the forward engine and fed to the **same** integrated analyzer. Excitation =
+  the 3-D scalar-potential high-μ model (the 3-D form of the 2-D body lever
+  above): the four hodograph poles `xy = ±r₀²/2` (the `n=2` equipotential, from
+  `accel_pole_design.py`) held at alternating `±Φ₀`, Laplace-solved in the
+  current-free aperture; the finite iron bars give real ends. Verified (FEM,
+  `ne ≈ 70 k`, refined axis core for clean harmonics): a **clean integrated
+  quadrupole** — main `b₂`; the symmetry-**forbidden** normals `n=1,3,5`
+  suppressed to `~6e-4` (≈ 5× below) the first **allowed** spurious, the 12-pole
+  `b₆ ≈ 3e-3`. A length comparison (`b₆/b₂` changes only ~16 % over 2× length)
+  shows `b₆` is **body-dominated** (the finite pole angular width), not the ends
+  — the **same** two-lever picture the dipole found for `b₃,₅` (the ends drive
+  the longitudinal profile; the body pole shape drives the transverse harmonics;
+  the analytic theorem in `accel_pole_ends_3d.py` shows an ideal Maxwellian end
+  contributes *zero* integrated `b₆`). Figure: `accel_quad_ends_fem.png` (the
+  4-pole hyperbola geometry + the integrated harmonic spectrum).
 - **`one_turn_coil_streamfunction.py`** — the A-side **(B) track**: a 1-turn
   coil is the coarsest stream-function discretization (one contour = one wire);
   the task is the single best wire path, and the script shows the honest 1-turn
@@ -192,12 +210,13 @@ python accel_pole_harmonics.py                # 2-D equipotential lever (shim �
 python accel_pole_ends_3d.py                  # 3-D ends: integrated analyzer + end rule
 python accel_pole_ends_fem.py                 # FEM rung: reduced-Omega + CoilBuilder dipole
 python accel_pole_dipole_body_2d.py           # the BODY lever: pole width + curvature -> b3,5
+python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any multipole)
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (11 tests; the three
-FEM rungs — forward+contour, the design loop, and the curved chamfer — are
-`@pytest.mark.slow`).
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (12 tests; the four
+FEM rungs — forward+contour, the design loop, the curved chamfer, and the
+quadrupole — are `@pytest.mark.slow`).
 
 ## Prior art (honest)
 
