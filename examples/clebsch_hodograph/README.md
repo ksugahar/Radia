@@ -126,11 +126,14 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   finite-length dipole — an x-symmetric H-frame iron yoke (netgen.occ, *no
   Cubit*) + a CoilBuilder racetrack pair as a Biot-Savart source (*no coil
   mesh*); `∫μ∇Ω·∇v = ∫μ Hₛ·∇v`, `H = Hₛ − ∇Ω` — and feeds the SAME integrated
-  analyzer. Verified: a flat-top dipole `B_z(body) ≈ 0.15 T`, effective length
-  `L_eff ≈ 165 mm` (iron 120 mm + ~23 mm fringe each end), a **+11 % pole-END
-  enhancement** (the flux concentration at the iron ends — the design-relevant
-  end effect), integrated dipole `b̄₁ ≈ 0.026 T·m`, integrated spurious
-  (n=3,5) ≈ 9 %. Figure: the on-axis `B_z(y)` (flat body + end bumps + fringe).
+  analyzer. Verified (finer mesh, ne ≈ 32 k): a **clean flat-top dipole**
+  `B_z(body) ≈ 0.14 T` with `B_x/B_z ≈ 0.3 %` at centre (the x-symmetric H-frame;
+  the residual shrinks with mesh refinement — 5.6 % → 0.3 %), effective length
+  `L_eff ≈ 153 mm` (iron 120 mm + ~17 mm fringe each end), a small
+  (mesh-sensitive ~3 %) pole-end enhancement, integrated dipole `b̄₁ ≈ 0.026
+  T·m`, integrated spurious (n=3,5) ≈ 8 % (the ends + finite pole width — the
+  part the next rung's re-shaping targets). Figure left: the on-axis `B_z(y)`
+  (flat body + fringe).
   Two engineering notes baked in: **RadiaField (Biot-Savart) is not thread-safe
   under TaskManager** — the source LinearForm + field readout assemble serially,
   only the stiffness+solve are wrapped; and the CoilBuilder racetrack arcs curve
@@ -139,7 +142,7 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   scalar potential is `Ψ(y,z) = −∫₀ᶻ H_z dz'`; the iron face is the equipotential
   `Ψ_pole = Ψ(0, g/2)`, and the curve `z_p(y)` where `Ψ(y,z)=Ψ_pole` is the ideal
   end edge. Verified: in the body `z_p = g/2` *exactly* (self-consistency — the
-  equipotential sits on the iron face), and it **lifts ~8.5 mm past the iron
+  equipotential sits on the iron face), and it **lifts ~10 mm past the iron
   end** (the field bows out → the chamfer to follow). The figure's right panel is
   this contour. **Next rung:** re-shape the end iron to that contour → re-solve →
   drive the integrated spurious `b̄ₙ` down (closes the §3.2 design loop).

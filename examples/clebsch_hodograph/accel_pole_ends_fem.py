@@ -114,7 +114,7 @@ def build_coil():
     return coils
 
 
-def solve(mu_r=1000.0, order=2, maxh_air=0.05, maxh_iron=0.025,
+def solve(mu_r=1000.0, order=2, maxh_air=0.035, maxh_iron=0.018,
           r_ref=0.008, n_beam=121, n_theta=32, plot=False):
     """Solve reduced-Omega forward, then integrate the transverse multipoles
     along the beam.  Returns the gap field + the integrated dipole + spectrum."""
