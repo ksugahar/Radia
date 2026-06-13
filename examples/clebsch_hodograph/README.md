@@ -119,9 +119,24 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   integrated field stays the pure designed multipole.* Figure:
   `accel_pole_ends_3d.png` (left: the radial correction ∝ G″(z) oscillates and
   integrates to zero; right: `b₆(z)` is flat for the equipotential end, a
-  one-signed bump for the defect). **Next rung:** replace the analytic
-  Maxwellian field with the reduced-potential + CoilBuilder FEM end and read
-  the 3-D equipotential surface as the end-iron contour.
+  one-signed bump for the defect). **Rung 2 (FEM) below** replaces the analytic
+  field with a real reduced-Ω solve.
+- **`accel_pole_ends_fem.py`** — the **FEM rung** (§3.2, rung 2). Replaces the
+  analytic Maxwellian field with a real **reduced-Ω + CoilBuilder** solve of a
+  finite-length dipole — an x-symmetric H-frame iron yoke (netgen.occ, *no
+  Cubit*) + a CoilBuilder racetrack pair as a Biot-Savart source (*no coil
+  mesh*); `∫μ∇Ω·∇v = ∫μ Hₛ·∇v`, `H = Hₛ − ∇Ω` — and feeds the SAME integrated
+  analyzer. Verified: a flat-top dipole `B_z(body) ≈ 0.15 T`, effective length
+  `L_eff ≈ 165 mm` (iron 120 mm + ~23 mm fringe each end), a **+11 % pole-END
+  enhancement** (the flux concentration at the iron ends — the design-relevant
+  end effect), integrated dipole `b̄₁ ≈ 0.026 T·m`, integrated spurious
+  (n=3,5) ≈ 9 %. Figure: the on-axis `B_z(y)` (flat body + end bumps + fringe).
+  Two engineering notes baked in: **RadiaField (Biot-Savart) is not thread-safe
+  under TaskManager** — the source LinearForm + field readout assemble serially,
+  only the stiffness+solve are wrapped; and the CoilBuilder racetrack arcs curve
+  toward −x (start at +R to centre it). **Next rung:** extract the solved 3-D
+  equipotential surface `Ψ = Ψ_pole` at the end as the end-iron contour, then
+  re-shape → re-solve to drive the integrated spurious down.
 - **`one_turn_coil_streamfunction.py`** — the A-side **(B) track**: a 1-turn
   coil is the coarsest stream-function discretization (one contour = one wire);
   the task is the single best wire path, and the script shows the honest 1-turn
@@ -136,10 +151,12 @@ python cohomology_hodograph_currentlink.py    # when the hodograph needs cohomol
 python accel_pole_design.py                   # multipole analyzer + quad pole geometry
 python accel_pole_harmonics.py                # 2-D equipotential lever (shim → harmonics)
 python accel_pole_ends_3d.py                  # 3-D ends: integrated analyzer + end rule
+python accel_pole_ends_fem.py                 # FEM rung: reduced-Omega + CoilBuilder dipole
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (7 tests).
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (8 tests; the FEM rung
+is `@pytest.mark.slow`).
 
 ## Prior art (honest)
 
