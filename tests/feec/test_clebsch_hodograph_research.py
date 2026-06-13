@@ -210,6 +210,29 @@ def test_accel_pole_ends_fem_curved_chamfer():
 
 
 @pytest.mark.slow
+@pytest.mark.filterwarnings("ignore::UserWarning")   # benign CoilBuilder gimbal-lock
+def test_accel_pole_ends_fem_open_boundary():
+    """Open boundary: for this iron-FLUX-RETURN dipole the Dirichlet air-box
+    truncation is below the mesh-noise floor -- the integrated dipole bbar_1 is
+    stable across box sizes, so the open boundary is NOT the limiting error
+    (an exact Kelvin would not change the answer; Kelvin matters for a
+    flux-return-FREE magnet, demonstrated exactly in hodograph_kelvin_axisym.py)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import accel_pole_ends_fem as af
+    ob = af.open_boundary_convergence(air_halves=(0.20, 0.34), maxh_air=0.04,
+                                      maxh_iron=0.02, n_beam=61, n_theta=22)
+    # bbar_1 is stable across box sizes -> the air-box truncation is small
+    # (below the mesh-noise floor; the example at a finer mesh shows < 1%): the
+    # open boundary is adequate here.  Loose band to tolerate coarse-mesh noise.
+    assert ob["bbar1_box_spread"] < 0.06, ob
+    # both boxes give a sane integrated dipole (same flat-top magnet).
+    for a, ne, bz, bb in ob["rows"]:
+        assert 0.015 < bb < 0.035, (a, bb)
+
+
+@pytest.mark.slow
 def test_accel_quad_ends_fem():
     """(A) the QUADRUPOLE FEM rung: the integrated analyzer handles any
     multipole.  A real finite-length 4-pole hyperbola quad (scalar-potential
