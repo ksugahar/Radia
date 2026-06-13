@@ -342,3 +342,29 @@ def test_chaplygin_hodograph_2d():
     # gets more gradual (larger notch radius).
     trend = ch.slenderness_trend(Rcs=(0.11, 0.30), order=2, maxh=0.010)
     assert trend[1][1] < trend[0][1], trend                    # gentler -> tighter
+
+
+@pytest.mark.slow
+def test_clebsch_kelvin_nonlinear_3d():
+    """Rung 3: the 3-D MERGE -- one Picard handles the exact Kelvin open boundary
+    (geometry) AND the mu(|H|) saturation (material) together.  3-D does NOT
+    auto-linearise (helicity), so this is a single loop, not the 2-D 1-shot.
+    Verified against the exact scalar demag fixed point of a saturable sphere
+    (whose nonlinear interior is uniform == a linear mu_r_eff sphere)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import clebsch_kelvin_nonlinear_3d as nk
+    r = nk.solve_nonlinear(order=3, maxh=0.09, tol=1e-7, with_airbox=False)
+    # the single Picard CONVERGED (did not hit the cap) ...
+    assert r["n_iter"] < 120, r
+    # ... to a TRUE fixed point: the iterate is its own frozen re-solve
+    # (mesh-independent diagnostic -- this is the scheme correctness lock).
+    assert r["self_consistency"] < 1e-6, r
+    # genuinely SATURATING (mu_r_eff well below mu_r0) in the STABLE regime.
+    assert r["mur_eff_ref"] < 0.85 * r["mur0"], r
+    assert r["contraction"] < 1.0, r                           # H-input Picard stable
+    # interior field matches the EXACT scalar demag fixed point (order 3, this
+    # mesh ~2.6e-3; the headline order 3 maxh 0.06 reaches 2.5e-4).
+    assert r["field_error"] < 5e-3, r
+    assert abs(r["Hx_in"]) < 0.05 * abs(r["Hz_in"]), r         # axial by symmetry
