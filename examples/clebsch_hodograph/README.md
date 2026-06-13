@@ -134,9 +134,15 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   Two engineering notes baked in: **RadiaField (Biot-Savart) is not thread-safe
   under TaskManager** — the source LinearForm + field readout assemble serially,
   only the stiffness+solve are wrapped; and the CoilBuilder racetrack arcs curve
-  toward −x (start at +R to centre it). **Next rung:** extract the solved 3-D
-  equipotential surface `Ψ = Ψ_pole` at the end as the end-iron contour, then
-  re-shape → re-solve to drive the integrated spurious down.
+  toward −x (start at +R to centre it). It also **reads the equipotential as the
+  end-iron contour**: in the current-free gap `H = −∇Ψ`, so along z the total
+  scalar potential is `Ψ(y,z) = −∫₀ᶻ H_z dz'`; the iron face is the equipotential
+  `Ψ_pole = Ψ(0, g/2)`, and the curve `z_p(y)` where `Ψ(y,z)=Ψ_pole` is the ideal
+  end edge. Verified: in the body `z_p = g/2` *exactly* (self-consistency — the
+  equipotential sits on the iron face), and it **lifts ~8.5 mm past the iron
+  end** (the field bows out → the chamfer to follow). The figure's right panel is
+  this contour. **Next rung:** re-shape the end iron to that contour → re-solve →
+  drive the integrated spurious `b̄ₙ` down (closes the §3.2 design loop).
 - **`one_turn_coil_streamfunction.py`** — the A-side **(B) track**: a 1-turn
   coil is the coarsest stream-function discretization (one contour = one wire);
   the task is the single best wire path, and the script shows the honest 1-turn
