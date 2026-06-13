@@ -132,8 +132,14 @@ current-free gap `H = −∇Ψ`, so `Ψ(y,z) = −∫₀ᶻ H_z dz'`; the iron f
 `Ψ_pole = Ψ(0, g/2)`, and `z_p(y)` with `Ψ(y,z)=Ψ_pole` is the ideal end edge —
 verified to recover `z_p = g/2` *exactly* in the body (self-consistency) and to
 **lift ~8.5 mm past the iron end** (the field bows out ⇒ the chamfer to follow).
-**Next rung:** re-shape the end iron to that contour, re-solve, and converge the
-integrated harmonics (close the §3.2 loop).
+And it **closes the loop**: re-shaping the pole END (a chamfer following the
+equipotential lift) and re-solving drives the *longitudinal* pole-end
+enhancement **through zero** (optimal chamfer ~4–6 mm). **Honest two-lever
+result:** the chamfer controls the longitudinal end bump, but the integrated
+*transverse* harmonics `b₃,₅` (~9 %) are **body/pole-width dominated** and barely
+move — end shaping is the right lever for the end bump, a Rogowski body-pole
+shape is the lever for `b₃,₅`. The §3.2 loop is closed for the end-field; the
+transverse-harmonic lever is a separate (body) problem.
 
 ---
 
@@ -202,14 +208,18 @@ coil = A-side), so the framework is one method, not two.
 - the **3-D end-field FEM rung** (§3.2 rung 2, `accel_pole_ends_fem.py`): a real
   reduced-Ω + CoilBuilder finite-length dipole (netgen.occ, no Cubit) reproduces
   a clean flat-top dipole (`B_x/B_z ≈ 0.3 %`) + `L_eff > L_iron` through the same
-  integrated analyzer, and reads the solved equipotential as the end-iron contour
-  (body `z_p = g/2` exactly; lifts ~10 mm past the iron end);
+  integrated analyzer, reads the solved equipotential as the end-iron contour
+  (body `z_p = g/2` exactly; lifts ~10 mm past the iron end), and **closes the
+  design loop** — a chamfer following that lift drives the longitudinal pole-end
+  enhancement through zero (the transverse `b₃,₅` stays body-dominated);
 - the stream-function coil (A-side), vs Radia to 3.4e-10;
 - the reduced-potential + CoilBuilder forward engine (the panel).
 
 **Research program (named, not claimed done):**
-- the self-consistent *iron = equipotential* end-design loop (§3.2) — the FEM
-  rung: read the solved 3-D equipotential as the end-iron contour and converge;
+- the end-design loop is **closed for the longitudinal end-field** (§3.2 rung 2);
+  what remains is the **transverse** integrated-harmonic lever — a Rogowski /
+  body-pole-shape problem (a separate, body-not-end design knob), plus a
+  *curved* (not linear) end chamfer that follows the equipotential contour exactly;
 - the 1-turn coil stream-function design (§5 B);
 - nonlinear µ(B) (saturation) inside the potential framework — the elegant
   "design sophistication", done within the reduced potential / hodograph
