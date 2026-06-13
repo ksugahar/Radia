@@ -105,6 +105,29 @@ def test_accel_pole_ends_3d_integrated():
     assert r["bad_b6_slope_spread"] < 0.05, r          # linear in the deviation
 
 
+def test_accel_pole_dipole_body_2d():
+    """(A) the dipole BODY lever: the transverse b_3,5 are a pole-SHAPE lever
+    (width + curvature) -- the honest other half of the two-lever split, the
+    lever the END chamfer cannot move.  A finite flat pole droops at its edges
+    (b_3 < 0); a wider pole flattens it; a concave shim z_face = g/2-delta(x/w)^2
+    drives b_3 through zero, leaving |b_5| as the residual."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import accel_pole_dipole_body_2d as bd
+    r = bd.solve()
+    # WIDTH lever: a finite flat pole droops (b_3 < 0), a wider pole flattens it.
+    assert r["b3_flat"] < 0, r                              # edge droop
+    w_b3 = [abs(row[1]) for row in r["width_sweep"]]
+    assert w_b3[-1] < w_b3[0] / 10.0, r                     # widening cuts |b3| >10x
+    assert r["wide_spurious_rel"] < r["narrow_spurious_rel"], r
+    # CURVATURE lever: b_3 crosses zero at a finite in-range concavity, and
+    # zeroing it genuinely improves field quality (residual ~ |b5| < |b3_flat|).
+    assert 0.0 < r["delta_opt_m"] < 0.0024, r
+    cs = r["curvature_sweep"]
+    assert cs[0][1] < 0 < cs[-1][1], r                      # flat<0, max-delta>0
+    assert r["spurious_at_opt_rel"] < abs(r["b3_flat"]), r  # genuine improvement
+
+
 @pytest.mark.slow
 @pytest.mark.filterwarnings("ignore::UserWarning")   # benign CoilBuilder gimbal-lock
 def test_accel_pole_ends_fem_forward():
