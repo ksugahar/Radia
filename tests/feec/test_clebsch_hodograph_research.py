@@ -207,3 +207,25 @@ def test_accel_pole_ends_fem_curved_chamfer():
     assert 0.0 < r["depth_zerobump_m"] < r["depth_natural_m"] / 1.5, r
     # the END shape does not move the body-dominated transverse spurious.
     assert abs(r["spurious_curved_zerobump"] - r["spurious_straight"]) < 0.05, r
+
+
+@pytest.mark.slow
+def test_accel_quad_ends_fem():
+    """(A) the QUADRUPOLE FEM rung: the integrated analyzer handles any
+    multipole.  A real finite-length 4-pole hyperbola quad (scalar-potential
+    high-mu model, netgen.occ) fed to the SAME integrated analyzer gives a CLEAN
+    integrated quadrupole: main b_2; the symmetry-forbidden normals n=1,3,5
+    suppressed well below the first ALLOWED spurious, the 12-pole b_6."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import accel_quad_ends_fem as aq
+    r = aq.solve()
+    assert r["rel_harmonics"][2] == 1.0, r                      # main = b_2 (the quad)
+    # the hodograph pole face is the hyperbola xy = r0^2/2.
+    assert abs(r["hyperbola_xy_const"] - aq.R0 ** 2 / 2) < 1e-12, r
+    # the symmetry-forbidden normals (n=1,3,5) are suppressed near the numerical floor.
+    assert r["forbidden_max_rel"] < 1.5e-3, r
+    # the 12-pole b_6 is the dominant ALLOWED spurious, clearly above that floor.
+    assert 2e-3 < r["b6_rel"] < 8e-3, r
+    assert r["b6_rel"] > 2.0 * r["forbidden_max_rel"], r        # allowed >> forbidden
+    assert r["b6_rel"] > r["b10_rel"], r                        # b_6 the leading allowed spurious
