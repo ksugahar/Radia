@@ -1,0 +1,42 @@
+# radia-mmm — the LEGACY collocation MMM/MSC demag solver: examples, the legacy Python API namespace,
+# and tests.  The Radia core is MIGRATING to the FEEC HDiv-VIM (radia.hdiv_vim) as the DEFAULT demag
+# path; the collocation Magnetic Moment Method (MMM, tetrahedra) and Magnetic Surface Charge (MSC,
+# hexahedra/wedges -- including the Yano-Sugahara distortion elements) are the LEGACY path, homed here so
+# they can be maintained / deprecated / removed independently of the new core.
+#
+# The MMM/MSC C++ kernels stay in the `radia` wheel (this package DEPENDS on `radia`); only the Python
+# API namespace, examples, and tests live here.  Pure-Python -- no compiled extension.
+#
+# Part of the Sugahara-lab Radia public family.  See https://github.com/ksugahar/Radia
+[project]
+name = "radia-mmm"
+version = "0.1.0"
+description = "Legacy MMM/MSC (Magnetic Moment / Surface Charge) demag examples + API namespace — superseded by the FEEC HDiv-VIM (radia.hdiv_vim)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Kengo Sugahara", email = "ksugahar@ele.kindai.ac.jp"},
+]
+keywords = ["radia", "mmm", "msc", "magnetic-moment-method", "surface-charge",
+            "demagnetization", "permanent-magnet", "soft-iron"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = ["radia"]
+
+[project.urls]
+Homepage = "https://github.com/ksugahar/Radia"
+Repository = "https://github.com/ksugahar/Radia"
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
