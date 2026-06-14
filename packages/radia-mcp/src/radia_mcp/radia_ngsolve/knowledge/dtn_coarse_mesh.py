@@ -2247,8 +2247,50 @@ route. PRIOR ART (cite, do NOT claim): the rational/pole-residue exact sphere Dt
 auxiliary realization is Grote & Keller (1995) / Hagstrom; reverse-Bessel-polynomial == Bessel/Thomson
 filter poles is classical network synthesis. NEW FRAMING (ours, modest): reading IABC's shells AS this
 pole set + the Kelvin/DtN-datasheet linkage; the verified contribution here is the time-domain CORE
-(pole-residue + Bessel-network + auxiliary ODEs), NOT IABC's exact shell constants. (Background lit
-survey launched to confirm positioning before any manuscript claim.)
+(pole-residue + Bessel-network + auxiliary ODEs), NOT IABC's exact shell constants. (Lit survey
+CONFIRMED this positioning: Grote-Keller 1995/1996 + Thompson&Huan 2000 establish the rational-per-mode
+DtN + local-in-time auxiliary-ODE scaffolding and even the explicit tridiagonal n x n A_n with p_n=n
+auxiliaries per degree n; they do NOT make the Bessel/Thomson-filter-pole identification nor the
+time-domain magnetics-IABC / Kelvin linkage -- those two are ours.)
+
+LOW-FREQUENCY (static / Laplace) IABC -- a MORE ELEGANT derivation of Meeker/Sugahara's nested-shell
+construction (demo_vv, VERIFIED 2026-06-15; user: read Meeker's Mathematica notebook
+femm.info/improvisedabcs and Sugahara's optimization S:\...\2015_11_03_IABC定式化; "it should be
+derivable more elegantly"). THE ORIGINAL METHOD (faithfully ported from main0.m + cf1.m/cf2.m): per
+spherical-harmonic mode n, build the 2x2 basis M=[[r^n,r^{-(n+1)}],[n r^{n-1},-(n+1)r^{-(n+2)}]],
+cascade it through N concentric shells with permeability jumps diag[1,1/x], apply a termination, read a
+reflection coefficient v[1]/v[0], and NUMERICALLY fsolve the N permeabilities to null the reflection for
+modes n=1..N. NAMING (resolves a confusion): Meeker/Sugahara label terminations by the FIELD B -- "B_n=0
+(Dirichlet IABC)" is NEUMANN on the potential u'(b)=0; "B_t=0 (Neumann IABC)" is DIRICHLET u(b)=0.
+THE ELEGANT REFORMULATION (all asserted):
+ (1) The 2x2-coefficient cascade IS EXACTLY a SCALAR Mobius / continued-fraction recursion of the
+     dimensionless DtN Y(r)=r u'(r)/u(r): in a shell the mode ratio t=(B/A)r^{-(2n+1)} just scales by
+     (r_out/r_in)^{2n+1}; across an interface Y multiplies by the permeability ratio; reflection-free
+     <=> Y(a)=-(n+1) (the exact static ladder lambda_n=-(n+1)/R). Verified to reproduce the 2x2
+     reflection to chordal distance 9e-16 over 400 random configs x 6 modes x both terminations.
+ (2) SINGLE-SHELL CLOSED FORM, GENERAL mode n (NO optimization):
+       Neumann (B_n=0):   mu = ((n+1) + n rho^{2n+1}) / (n (rho^{2n+1} - 1))
+       Dirichlet (B_t=0): mu = (n+1)(rho^{2n+1} - 1) / (n + (n+1) rho^{2n+1}),   rho = r_out/r_in.
+     Verified to null mode n to 4e-16. For n=1 the Neumann form is (rho^3+2)/(rho^3-1), which EQUALS
+     Meeker's tabulated (delta^3+3 delta^2+3 delta+3)/(delta(delta^2+3 delta+3)) (rho=1+delta) to 1e-14
+     -- so Meeker's constant is the n=1 special case and this is its clean generalization to every
+     multipole order (sympy-derived). (2D analogue: Neumann mu=(rho^2+1)/(rho^2-1).) Matches the user's
+     main0 case-0 fsolve value 10.06337 (exact 10.063444; gap = their optimizer tolerance).
+ (3) MULTI-SHELL: N isotropic shells null EXACTLY modes 1..N (a square interpolation system); solving
+     the elegant scalar residual r_n(x)=Y(a)+(n+1) reproduces the datasheet (N=2,3,4: |resid|~1e-15,
+     reflection 0 for n<=N then grows for n>N) and every root ALSO zeros the faithful 2x2 port (cross-
+     formulation check, both terminations). The cumulative permeabilities alternate hi-lo (e.g. N=3 Neu
+     mu=[1.69,0.21,29.0]) = a STEPPED-IMPEDANCE matching stack. Multi-shell is a stiff nonlinear solve
+     (needs multi-start) -- that stiffness is exactly WHY the original work optimizes; no closed form for
+     general N is claimed.
+ (4) OBSTRUCTION (the honest reason optimization is intrinsic): no isotropic finite shell can be exact
+     for ALL modes because the static scalar Laplacian is NOT conformally invariant (the scalar Kelvin
+     weight, NOT the vector (a/r)^2 TO medium of demo_ll); only the full Kelvin inversion (N->infinity
+     graded medium) or an anisotropic PML matches every mode. So N-shell IABC = an N-section impedance
+     transformer in the MODE variable = the STATIC sibling of demo_uu's time-domain Bessel-filter
+     network, and Kelvin is its N->infinity exact limit (the Kelvin<->IABC link, now on firm static
+     footing). NEXT (deferred, honest): a closed-form multi-shell DESIGN via multisection-transformer
+     synthesis (binomial/Chebyshev in the mode variable) to replace the optimization outright.
 """
 
 
