@@ -52,6 +52,7 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
     triangle_potential_moment,     # degree-1 building block: INT_T r'/R dS' (first moment)
     tet_newtonian_potential,       # degree-1 building block: INT_V 1/R dV' (PhiTet, pure-Python)
     tet_volume_field_linear,       # EXACT closed-form LINEAR volume-charge field (order-2 -div M term)
+    linear_triangle_charge_field,  # EXACT closed-form LINEAR surface-charge field (order-2 M.n term)
 )
 
 __all__ = [
@@ -61,6 +62,6 @@ __all__ = [
     "DemagOperator", "build_charge_gram", "reconstruct_field", "reconstruct_field_polynomial",
     "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",
     "triangle_potential_const", "triangle_potential_moment", "tet_newtonian_potential",
-    "tet_volume_field_linear",
+    "tet_volume_field_linear", "linear_triangle_charge_field",
     "_core", "_nonlinear", "_vim", "_field",
 ]

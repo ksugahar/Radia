@@ -32,6 +32,7 @@ from radia.hdiv_vim import (  # noqa: E402
     triangle_potential_moment,
     tet_newtonian_potential,
     tet_volume_field_linear,
+    linear_triangle_charge_field,
 )
 
 
@@ -365,3 +366,45 @@ def test_tet_volume_field_linear_interior_vs_spherical():
                                                nth=64, nph=128, ns=12)
         rel = np.linalg.norm(Fc - Fs) / np.linalg.norm(Fs)
         assert rel < 2e-3, f"linear volume field interior vs spherical r={r}: {rel:.2e}"
+
+
+# ---------------------------------------------------------------------------------------------------
+# Analytic LINEAR surface-charge field (linear_triangle_charge_field): EXACT closed form, the order-2
+# M.n term.  H_surf = -grad_r phi_sigma with phi_sigma = sigma0 I0 + s.M1 (the degree-1 triangle
+# potential).  Validated vs off-plane Gauss (machine); the s=0 case reproduces the constant field.
+# ---------------------------------------------------------------------------------------------------
+def _lin_tri_field_gauss(P, r, sigma0, s, nq=44):
+    P = np.asarray(P, float); r = np.asarray(r, float); s = np.asarray(s, float)
+    J = np.linalg.norm(np.cross(P[1] - P[0], P[2] - P[0]))
+    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+    F = np.zeros(3)
+    for i in range(nq):
+        for j in range(nq):
+            u, v = xs[i], xs[j]; jac = (1 - u)
+            p = P[0] + u * (P[1] - P[0]) + v * (1 - u) * (P[2] - P[0])
+            d = r - p
+            F += ws[i] * ws[j] * jac * J * (sigma0 + np.dot(s, p)) * d / np.linalg.norm(d) ** 3
+    return F
+
+
+def test_linear_triangle_charge_field_vs_gauss():
+    """Linear-sigma triangle field == off-plane Gauss to machine precision (near AND far)."""
+    P = _TET[[0, 1, 2]]
+    s = np.array([0.6, -0.4, 0.3]); sigma0 = 0.5
+    for r in [[0.3, 0.3, 0.7], [0.3, 0.3, 0.2], [1.5, 0.5, 0.4], [0.2, 0.2, 0.3], [-0.5, 0.4, 0.6]]:
+        r = np.array(r, float)
+        Fc = linear_triangle_charge_field(P, r, sigma0, s)
+        Fg = _lin_tri_field_gauss(P, r, sigma0, s, 44)
+        rel = np.linalg.norm(Fc - Fg) / np.linalg.norm(Fg)
+        assert rel < 1e-10, f"linear-sigma tri field vs Gauss r={r}: {rel:.2e}"
+
+
+def test_linear_triangle_charge_field_constant_reduces():
+    """s = 0 reproduces sigma0 * flat_triangle_charge_field exactly (bit-identical)."""
+    P = _TET[[0, 1, 2]]
+    sigma0 = 0.5
+    for r in [[0.3, 0.3, 0.7], [1.5, 0.5, 0.4], [0.2, 0.2, 0.3]]:
+        r = np.array(r, float)
+        a = linear_triangle_charge_field(P, r, sigma0, np.zeros(3))
+        b = sigma0 * flat_triangle_charge_field(P, r)
+        assert np.linalg.norm(a - b) < 1e-13, f"s=0 vs sigma0*const r={r}"
