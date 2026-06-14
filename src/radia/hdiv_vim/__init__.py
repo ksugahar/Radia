@@ -73,6 +73,8 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
     curved_tet_volume_field,          # CURVED-tet VOLUME-charge field (1->8 subdivision + flat closed form)
     assemble_demag_field,             # Step 2: fast charge-coefficient assembly (analytic C++ kernels)
     solve_demag_picard,               # Step 3: field-based nonlinear demag solve (under-relaxed Picard)
+    solve_demag_newton,               # (4 step 2): matrix-free Newton-Krylov on the analytic field (robust stiff)
+    saturating_tangent,               # (M_of_H, dM_of_H) for the saturating isotropic law (rank-1 tangent)
 )
 
 __all__ = [
@@ -91,6 +93,6 @@ __all__ = [
     "hex_volume_field_linear", "hex_volume_field_quadratic",
     "make_t6_surface_map", "curved_triangle_charge_field",
     "make_t10_tet_map", "curved_tet_volume_field", "assemble_demag_field",
-    "solve_demag_picard",
+    "solve_demag_picard", "solve_demag_newton", "saturating_tangent",
     "_core", "_nonlinear", "_vim", "_field",
 ]
