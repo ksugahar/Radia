@@ -279,6 +279,35 @@ from the prescribed physical boundary — the inverse hodograph solve / free-
 boundary iteration — remains the open frontier (a Newton/mixed free-boundary
 scheme); this file establishes its structure.*
 
+### `chaplygin_inverse_vonmises_2d.py` — dissolving the free boundary (von Mises inverse)
+
+The inverse direction, attacked. The free boundary is an artefact of the
+**coordinate choice**: take the potential `Φ` and the flux function `A` as the
+**independent** variables (von Mises). A flux guide is bounded by two flux lines
+(`A=0,Ψ` = walls) and two equipotentials (`Φ=const` = ports), so in `(Φ,A)` the
+domain is **always the fixed rectangle** `[0,Φ1]×[0,A1]` — the free boundary is
+**gone**. One solves instead for the physical map `(x,y)(Φ,A)` from the same
+first-order Chaplygin pair, here `x_A=-y_Φ/μ(q)`, `y_A=x_Φ/μ(q)`,
+`q=1/|∇_Φ(x,y)|`, in **least squares**. For `μ=1` this is Cauchy–Riemann
+(`x+iy` analytic in `Φ+iA`), so the exact annular-bend map is the conformal
+`f=e^{i(Φ+iA)}` — and the solver **recovers it to 3.6e-9** (residual `J→0`): the
+free boundary is dissolved into a fixed-domain solve. Figure:
+`chaplygin_inverse_vonmises_2d.png` (the fixed `(Φ,A)` rectangle + the recovered
+physical map).
+
+**The nonlinear wall (honest, the genuinely open part).** With `μ=μ(q)` the
+A-spacing `1/(μq)` changes, so the consistent `Φ,A` distribution *along the
+walls* is μ-dependent. Prescribing the full boundary map from a fixed geometric
+parametrisation then over-constrains it and the nonlinear map **folds**
+(Jacobian < 0). The correct BC is a **slip condition** — the boundary point lies
+*on* the wall curve with its tangential position free — which for **curved**
+walls is a **nonlinear constraint** (e.g. `x²+y²=r_in²`). Combined with the
+`μ(q)` Picard this is a nonlinear PDE with nonlinear boundary constraints: the
+genuine nonlinear free-boundary inverse, still open. (Straight-wall guides have
+*linear* slip constraints but are self-linearising = trivial image.) So this
+file **solves the inverse in the linear case and pins down exactly what makes
+the nonlinear case hard.**
+
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
 Answers *"is cohomology needed for the hodograph?"*. The hodograph's **scalar
@@ -460,11 +489,12 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (20 tests; the nine
-FEM rungs — forward+contour, the design loop, the curved chamfer, the open-
-boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (21 tests; the nine
+heavy FEM rungs — forward+contour, the design loop, the curved chamfer, the
+open-boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
 3-D nonlinear Kelvin merge, the turning-guide hodograph PDE, and the
-free-boundary image — are `@pytest.mark.slow`).
+free-boundary image — are `@pytest.mark.slow`; the von Mises inverse is a fast
+linear solve).
 
 ## Prior art (honest)
 
