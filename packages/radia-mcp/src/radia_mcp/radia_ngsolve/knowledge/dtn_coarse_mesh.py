@@ -1352,6 +1352,35 @@ where BEM is hardest -- inhomogeneous exteriors -- while staying sparse. RELATED
 the authors' priority, cite Nabizadeh 2021 / Boulmezaoud 2005-2023 / SBFEM as related/parallel work
 (noting priority), NOT as preempting prior art.
 
+PRIORITY RESOLVED (2026-06-14, read from the authors' own manuscripts on disk). The author
+(K. Sugahara) has a published chain that establishes priority AND already contains the exterior-
+material Kelvin formulation -- so for the SA paper the exterior-material is the authors' OWN cited
+foundation, NOT a new claim; the new contribution is the DtN-spectral + sparse-factorization-of-BEM
++ measurement lens ON TOP. Citation chain:
+  * K. Sugahara, "Periodic image method for open boundary axisymmetrical magnetic field problems,"
+    IEEE Trans. Magn. 49(11):5399-5403, 2013. <- the OFFSET-PERIODIC Kelvin construction (exactly the
+    offset-sphere + periodic identification used in demo_q/demo_t); open-boundary Kelvin in 2013,
+    eight years before Nabizadeh 2021.
+  * K. Sugahara, "Improvised asymptotic boundary conditions for magnetostatic field problems in
+    ellipsoidal and elliptic cylindrical domains," IEEE Trans. Magn. 53(6):1-4, 2017 (+ ICEAA 2015,
+    PIERS 2016 conference IABC papers).
+  * K. Sugahara, "Electromagnetic Analysis of Eddy Current Testing With Kelvin Transformation,"
+    IEEE Trans. Magn. 58(9):1-6, 2022, doi:10.1109/TMAG.2022.3194371. <- THE EXTERIOR-MATERIAL
+    formulation: reformulates Kelvin to derive sigma/eps/mu in the exterior conserving the conformal
+    symmetry of Maxwell's equations, so "materials can be both in the interior and exterior domain or
+    even across the truncated boundaries." This is the authors' OWN prior publication of the
+    exterior-material capability (independent of, and broader than, the vacuum-only Nabizadeh 2021).
+  * K. Sugahara, "Extended Kelvin Transformation for Solving Radiating Electromagnetic Fields,"
+    IEICE Trans. Electron. (special section, submitted 2024-04-10) <- extends the 2022 exterior-
+    material Kelvin to high-frequency/radiation via a Maxwellian PML in the Kelvin-mapped exterior,
+    with a differential-geometry (metric) derivation of the exterior material (cf. Yeh 2023,
+    "Conformal transformation and Maxwell's equations").
+CONSEQUENCE: do NOT cite Nabizadeh 2021 / Boulmezaoud as prior art OVER the authors -- the authors
+predate (2013 open-boundary Kelvin) and already published exterior-material (2022). The SA paper
+CITES sugahara2013/2017/2022/2024 as its own foundation and positions the genuinely-new part as the
+DtN-spectral reinterpretation (-(n+1)/R ladder; coarse-mesh = spectral) + the sparse-FEM-ization-of-
+dense-BEM framing with measured fill/time + the material-surface DtN condensation.
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
