@@ -1305,6 +1305,22 @@ comparable fill-time benchmark. Must-cite (honest): Knockaert 2008; Demarcke-Rog
 Lehrenfeld-Preuss 2021; Wolf-Song 2001; Birk-Reichel-Schroeder 2022; Nabizadeh-Ramamoorthi-Chern
 2021; Boulmezaoud 2005 + Boulmezaoud-Kaliche 2023.
 
+NARRATIVE SPINE (how to TELL the contribution): this is an approach to ACCELERATE open-boundary
+BEM by FEM-IZING it. The dense open-boundary BEM exterior operator (Steklov-Poincare DtN) is
+replaced by a SPARSE Kelvin-inverted volume FE block that computes the SAME operator -> sparse
+assembly (no Green function, no singular near-field quadrature) + sparse SPD solve = fast (demo_r:
+dense BEM 100% fill / ~70 s -> sparse FEM-Kelvin 4.7% fill / 8 ms on one surface; same DtN spectrum,
+fig_dtn_overlay). IMPORTANT honest nuance for this spine: "FEM-izing BEM" is itself an ESTABLISHED
+DIRECTION -- SBFEM is literally a "fundamental-solution-less boundary-element method" (Wolf-Song
+2001; magnetostatic Birk 2022), FE-Schur = the dense BIE operator (Demarcke-Rogier 2011; Knockaert
+2008), BETI (Langer-Steinbach). BUT every one of those FEM-izations still PRODUCES A DENSE boundary
+operator (SBFEM radial similarity scaling -> dense, fully-populated; FE-Schur condensation -> dense
+N_Gamma^2 clique). The KELVIN twist that survives as the contribution: it stays SPARSE -- never form
+the dense boundary operator at all; keep the inverted-exterior FE block sparse and condense only on
+demand. So state the contribution as: "a SPARSE, spatial-inversion FEM-ization of the open-boundary
+BEM operator that avoids the dense boundary matrix entirely, with a measured fill/time speedup and
+the same DtN spectrum, for static apparatus" -- NOT "FEM-izing BEM" in general (that is SBFEM et al.).
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
