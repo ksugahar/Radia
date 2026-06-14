@@ -53,6 +53,7 @@ import radia.sparsesolv_ngsolve as ssn
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "..", "sphere"))  # levitation_sphere_force
 from levitation_sphere_force import G_exact, delta  # noqa: E402
 import ellipsoid_alpha_tensor as ET  # noqa: E402
 
