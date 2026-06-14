@@ -13,8 +13,10 @@ That closure has TWO requirements, and this script isolates both:
       charge/star part `eps*grad(phi)` (the de Rham complement) destroys the
       conserved A_z and the line SPIRALS.  [the de Rham / edge-FE requirement --
       flux lines computed from an edge (H(curl)) potential `B = curl A` are
-      exactly divergence-free; cf. Noguchi, "Flux-line computation from
-      hexahedral edge-finite-element results / bubble placement", IEEJ (JP).]
+      exactly divergence-free; cf. Hirahatake, Noguchi, Igarashi & Yamashita,
+      "Analytical Calculation of Magnetic Flux Line from Hexahedral Edge FE
+      Analysis and its Allocation using the Bubble System", IEEJ pp.1205-1212,
+      which solves dxi/Bxi = deta/Beta = dzeta/Bzeta on the normalised hexahedron.]
 
   (2) the INTEGRATOR must be SYMPLECTIC (conserve the Hamiltonian A_z) --
       a non-symplectic step (RK4) drifts A_z and the line spirals even for a
