@@ -43,14 +43,20 @@ is the same clean linear inverse as in free space, but with the correct **materi
 | `demo_cc` | it is still **FEM** (condensed substructure / SBFEM), not BEM — the Green-function criterion |
 | `demo_dd` | **when** to form the matrix: only when the operator is the deliverable (not to solve one field) |
 | `demo_ee` | coil + iron shield: free-space kernel off by up to **~16x**; material-aware matches ~1e-4 |
-| `demo_ff` | **design inverts M**: with the material-aware M the target is hit (2e-16); the free-space-designed coil misses by **77%** in the iron system |
+| `demo_ff` | **design inverts M** (concentric, MODAL): with the material-aware M the target is hit (2e-16); the free-space-designed coil misses by **77%** in the iron system |
+| `demo_hh` | **the GENERAL next step** (this track's deliverable): a REAL winding-surface stream function `psi` (the order-p H1 trace, 378 nodal DoFs -- not 3 modes) + ARBITRARY (NON-concentric) iron blob, where no Sommerfeld Green function exists. M[target, psi-dof] assembled directly (one factorisation + a back-sub per coil DoF). Concentric sub-case ANCHORS M to the analytic layered transfer (rel 3e-3..2e-2; M@psi == a fresh FEM solve to 1e-15). Non-concentric: the iron-aware design HITS the target in a fresh full Kelvin-FEM solve (1e-14), the free-space design MISSES by ~43% (stable 31-39% across mesh refinement -- a real shield effect, not a coarse artifact) |
 
 ## To turn into a contribution (next steps)
-1. **General (arbitrary iron) coil-design demo**: non-concentric / non-spherical iron -> a genuinely
-   coupled dense M; design a real surface-current `psi` (not just modal amplitudes); forward-verify the
-   designed coil in an independent full Kelvin-FEM solve (and show free-space design fails).
+1. **General (arbitrary iron) coil-design demo** — **DONE: `demo_hh_general_iron_design.py`** (2026-06,
+   on the `streamfunction` branch). Non-concentric iron blob -> a genuinely coupled M; a REAL surface-
+   current `psi` (the order-p H1 nodal trace on the coil, 378 DoFs, not modal amplitudes); the designed
+   coil forward-verified in a fresh full Kelvin-FEM solve (hits 1e-14) while the free-space design MISSES
+   by ~43% (stable across mesh). Concentric sub-case anchors M to the analytic transfer (rel 3e-3..2e-2).
+   *Open refinements:* a non-spherical coil former (cylinder), a m≠0 tesseral target, and wiring the
+   inverse through `radia.streamfunction`'s ACA-TSVD rather than a dense numpy TSVD.
 2. **Benchmark** M-build (sparse Kelvin-FEM Schur) vs the dense layered-Green / FE-BEM baseline
    (conditioning, sparsity, FE-coupling) — the selling point is "sparse, material-aware, no Green fn".
+   **(still open — the immediate next task.)**
 3. **Manuscript**: position as a *formulation* contribution; cite the free-space transformed-FE prior art
    (Brunotte 1992, Meeker 2013), the stream-function/target-field design lineage, and the author's own
    Sugahara 2022 (uniform specimen) as the foundation extended.

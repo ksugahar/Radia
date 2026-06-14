@@ -46,19 +46,26 @@ See `PATHWAY_streamfunction_with_iron.md` for the full table. The load-bearing d
 Run: `pip install -e packages/radia-mcp` then `python demo_ff_streamfunction_design_matrix.py`
 (needs numpy, scipy, ngsolve 6.2.2604, netgen.occ; uses `radia_mcp.radia_ngsolve.fem_bem_coupling`).
 
-## The concrete NEXT task
+## The concrete NEXT task — steps 1-4 DONE (`demo_hh_general_iron_design.py`, streamfunction branch)
 Promote `demo_ff` from the concentric/modal toy to a **general coil inverse design with arbitrary
 (non-concentric) iron**, wired to the existing stream-function module:
-1. Take a real winding-surface stream function psi (triangle-mesh piecewise-linear, as in
-   `calc_streamfunction.py`), not just spherical-harmonic modal amplitudes.
-2. Build the material-aware transfer matrix `M[target, psi-dof]` by Schur-condensing the Kelvin-FEM with
-   the iron meshed (arbitrary geometry) — generalise `demo_v`/`demo_bb`/`demo_ff`'s assembly.
-3. Solve the inverse design (reuse the ACA-TSVD / regularisation already in `radia.streamfunction`) with M.
-4. **Independent forward check** (non-tautological): simulate the designed psi in a fresh full Kelvin-FEM
-   solve with the iron, read the target — confirm it hits B_target, and that a free-space-designed psi
-   MISSES it. (This is the verification that M is the right design operator.)
-5. Benchmark M-build (sparse Kelvin-FEM Schur) vs the dense layered-Green / FE-BEM baseline (sparsity,
-   conditioning, FE-coupling) — the selling point is "sparse, material-aware, no Green function".
+1. **[DONE]** Real winding-surface stream function psi — the order-p H1 nodal trace on the coil surface
+   (378 DoFs), not spherical-harmonic modal amplitudes.
+2. **[DONE]** Material-aware transfer matrix `M[target, psi-dof]` built directly from the Kelvin-FEM with
+   the iron meshed as an arbitrary (non-concentric) blob: ONE sparse factorisation of the Kelvin-FEM +
+   one back-substitution per coil DoF (the Dirichlet(coil)->field(target) specialisation of demo_v's Schur
+   condensation). Targets sit in the PHYSICAL vacuum region (read directly -> no dependence on the
+   inverse-Kelvin map convention).
+3. **[DONE]** Inverse design psi = M^+ B_target (folded TSVD; a dense numpy TSVD here — wiring through
+   `radia.streamfunction`'s ACA-TSVD is the remaining polish).
+4. **[DONE]** Forward check: a fresh full Kelvin-FEM solve of the designed psi (`gf.Set(psi)+solve`, does
+   NOT touch M) HITS the target (1e-14) while the free-space-designed psi MISSES by ~43% (stable 31-39%
+   across mesh refinement). Physics anchored on the concentric sub-case vs the analytic layered transfer
+   (rel 3e-3..2e-2), and M@psi == a fresh solve to 1e-15 (assembly).
+5. **[OPEN — the immediate next task]** Benchmark M-build (sparse Kelvin-FEM Schur) vs the dense
+   layered-Green / FE-BEM baseline (sparsity, conditioning, FE-coupling) — the selling point is "sparse,
+   material-aware, no Green function". Also: a non-spherical coil former (cylinder) and an m≠0 tesseral
+   target to drop the residual spherical symmetry.
 
 ## CRITICAL Kelvin-FEM gotchas (each is a ~1e7x blow-up or silent error if missed)
 1. **Gauge:** the open Kelvin compactification has a constant near-null mode; a single ground POINT has
