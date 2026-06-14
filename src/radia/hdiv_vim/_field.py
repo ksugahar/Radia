@@ -117,3 +117,89 @@ def reconstruct_field_polynomial(mesh, gfM, points, quad=4, quantity="h", includ
     if quantity.lower() == "b":
         return (4e-7 * np.pi) * H                        # external point: B = MU0 * H (no M present)
     return H
+
+
+# ---------------------------------------------------------------------------------------------------
+# Step 2 building blocks -- the SINGULAR / near-singular field at INTERNAL points.  Each is an EXACT
+# (or singularity-removed) kernel, validated standalone; assembling them into a near-surface-accurate
+# internal-field call (and the curved-face case) is the next step.  See docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md.
+# ---------------------------------------------------------------------------------------------------
+def flat_triangle_charge_field(P, r):
+    """EXACT field of a UNIFORM (sigma=1) charge on a flat triangle: INT_T (r-r')/|r-r'|^3 dS'
+    (no 1/4pi), via the Wilton/Graglia closed form (solid-angle normal term + per-edge log tangential
+    term).  Valid for ANY r (near, far, on-face principal value) -- this is the analytic surface
+    near-field base.  P = (3,3) vertices; returns (3,).  Validated to machine precision vs fine Gauss
+    (tests/feec/test_hdiv_vim_poly_field.py)."""
+    P = np.asarray(P, float)
+    n = np.cross(P[1] - P[0], P[2] - P[0])
+    n = n / np.linalg.norm(n)
+    h = float(np.dot(r - P[0], n))                       # signed height of r above the plane
+    r0 = r - h * n                                       # projection onto the plane
+    F = np.zeros(3)
+    omega = 0.0
+    ah = abs(h)
+    for i in range(3):
+        a, b = P[i], P[(i + 1) % 3]
+        u = (b - a) / np.linalg.norm(b - a)              # edge tangent
+        m = np.cross(u, n)                               # in-plane edge normal
+        t0 = float(np.dot(a - r0, m))
+        sm = float(np.dot(a - r0, u))
+        sp = float(np.dot(b - r0, u))
+        R0sq = t0 * t0 + h * h
+        Rm = np.sqrt(sm * sm + R0sq)
+        Rp = np.sqrt(sp * sp + R0sq)
+        denom_m = Rm + sm
+        F += m * (-(np.log((Rp + sp) / denom_m) if denom_m > 1e-300 else 0.0))
+        omega += np.arctan2(t0 * sp, R0sq + ah * Rp) - np.arctan2(t0 * sm, R0sq + ah * Rm)
+    F += -n * np.sign(h) * omega
+    return -F                                            # global sign fixed by the fine-Gauss validation
+
+
+def _tet_face_planes(verts):
+    """4 (n, d) half-space planes of a tet (n outward unit, interior satisfies n.x <= d)."""
+    V = np.asarray(verts, float)
+    c = V.mean(0)
+    faces = [(1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1)]   # vertex triples (opposite vertex 0,1,2,3)
+    planes = []
+    for (i, j, k) in faces:
+        n = np.cross(V[j] - V[i], V[k] - V[i])
+        n = n / np.linalg.norm(n)
+        if np.dot(n, c - V[i]) > 0:                        # orient OUTWARD (interior on the n.x<=d side)
+            n = -n
+        planes.append((n, float(np.dot(n, V[i]))))
+    return planes
+
+
+def tet_self_volume_field(verts, r, rho_fn, nth=40, nph=80, ns=8):
+    """SELF-element field of a tet's VOLUME charge rho at an INTERIOR point r, via the spherical
+    ray-trace that removes the 1/r^2 singularity analytically:
+
+        H = (1/4pi) INT_tet rho (r-r')/|r-r'|^3 dV' = -(1/4pi) INT_S2 s_hat [INT_0^smax rho(r+s s_hat) ds] dOmega
+
+    (the s^2 volume Jacobian cancels 1/s^3).  smax(s_hat) = ray distance from r to the tet boundary;
+    the inner s-integral is exact for polynomial rho via Gauss.  rho_fn(point)->charge density.
+    Validated vs -(rho/4pi) grad(phi_tet) (the analytic Newtonian potential) to ~1e-3."""
+    planes = _tet_face_planes(verts)
+    xth, wth = np.polynomial.legendre.leggauss(nth)
+    th = 0.5 * (xth + 1) * np.pi
+    wth = wth * 0.5 * np.pi
+    xph, wph = np.polynomial.legendre.leggauss(nph)
+    ph = 0.5 * (xph + 1) * 2 * np.pi
+    wph = wph * 0.5 * 2 * np.pi
+    xs, ws = np.polynomial.legendre.leggauss(ns)
+    r = np.asarray(r, float)
+    H = np.zeros(3)
+    for it in range(nth):
+        sth = np.sin(th[it])
+        for ip in range(nph):
+            shat = np.array([sth * np.cos(ph[ip]), sth * np.sin(ph[ip]), np.cos(th[it])])
+            cand = [(d - np.dot(nrm, r)) / np.dot(nrm, shat)
+                    for (nrm, d) in planes if np.dot(nrm, shat) > 1e-12]
+            if not cand:
+                continue
+            sm = min(cand)
+            ss = 0.5 * (xs + 1) * sm
+            wss = ws * 0.5 * sm
+            integ_s = sum(wk * rho_fn(r + sk * shat) for sk, wk in zip(ss, wss))
+            H += -(wth[it] * wph[ip] * sth) * shat * integ_s
+    return H / (4.0 * np.pi)
