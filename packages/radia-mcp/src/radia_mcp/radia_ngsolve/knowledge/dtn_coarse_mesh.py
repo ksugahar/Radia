@@ -2079,6 +2079,33 @@ free by Kelvin. Risk MODERATE -> safe if hedged and the preemptions (Hohage axis
 Gomez-Revuelto 3-way / BEM-folklore / Johnson) are cited. DO NOT claim the per-mode-DtN axis, "PML=DtN
 approx", a generic 3-way comparison, or BEM-as-DtN as new. Sugahara IEICE 2025 (the Kelvin<->PML
 transformation-optics derivation) is OUR launch point, not a competitor.
+
+ABC PERFORMANCE = TERMINATION ORDER x PLACEMENT; what Kelvin buys each absorber (demo_qq, verified
+2026-06-15). The DtN spectrum evaluates ANY open boundary by how well its truncation DtN matches the
+exact Lambda_n(ka) across the multipole band. Two independent ingredients:
+  ORDER of the termination's impedance: radiation BC (1st-order ABC / Leontovich SIBC, d_n u=ik u) is
+  FIXED-ORDER -- matches Lambda_n(kb) only for low n, error GROWS with n (verified at kb=8: 0.12 at n=1
+  -> 3.05 at n=6). A PML is ALL-ORDER -- its termination impedance matches Lambda_n(kb) for EVERY n
+  (~6e-4 flat) because it absorbs the outgoing wave regardless of mode.
+  PLACEMENT b: Kelvin maps the exterior into the ball so an absorber at the image centre sits
+  effectively at b->infinity (cheaply, a finite image shell).
+VERIFIED truncation-DtN performance (a=1, ka=4, per mode): radiation BC AT the truncation (b=a) is POOR
+(0.06..1.1, grows with n) = the well-known fact; Kelvin+radiation-BC (placed far) is much better than
+radBC@a but a FIXED-ORDER FLOOR remains (SIBC ~1e-2..0.1; HOIBC ~2e-3..1.7e-2); Kelvin+PML is ~exact
+(7e-5..1e-4, all-order) on par with a well-resolved plain PML. KEY NUANCE -- what DISTANCE does (n=3,
+sweep b): farther placement HELPS a radiation BC strongly (error ~1/kb: 0.15@b=1.5 -> 0.009@b=6, because
+the high multipoles have decayed so a fixed-order impedance then suffices) but barely changes a PML
+(~flat 1e-4, all-order absorbs at any distance). NET (answers the user precisely):
+  - radiation境界 alone = poor (fixed-order, at b=a). [known]
+  - Kelvin+radiation-BC IS limited: a fixed-order BC NEEDS far placement, which Kelvin provides but not
+    for free (near-centre resolution, demo_kk b-optimum) AND a floor remains -> NOT as good as Kelvin+PML.
+  - Kelvin+PML is best (all-order + effectively at infinity -> ~exact), BUT its edge over a plain PML is
+    QUALITATIVE: infinity baked in (no truncation-distance choice) AND it carries Kelvin-mapped EXTERIOR
+    SCATTERERS (the IEICE-2024 use case) -- a PML's all-order absorption already makes distance nearly
+    irrelevant for VACUUM accuracy, so "Kelvin+PML beats plain PML because it's farther" is only weakly
+    true on accuracy; the real win is qualitative + the radiation-BC case where distance genuinely helps.
+PAPER POINT: separate ORDER (radiation-BC fixed vs PML all-order) from PLACEMENT (Kelvin -> infinity);
+the DtN spectrum exhibits both axes at once.
 """
 
 
