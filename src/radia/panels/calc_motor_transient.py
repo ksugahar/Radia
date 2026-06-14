@@ -536,7 +536,7 @@ def solve_motor_transient(
     }
 
 
-def main():
+def build_argparser():
     parser = argparse.ArgumentParser(
         description="Transient motor solver -- Lange-Henrotte-Hameyer 2009")
     parser.add_argument("--vol", required=True, help="Netgen .vol mesh")
@@ -585,6 +585,11 @@ def main():
     parser.add_argument("--dt-circ", type=float, default=1e-5,
                         help="s, circuit ODE step (fine)")
     parser.add_argument("--n-steps-per-FE", type=int, default=10)
+    return parser
+
+
+def main():
+    parser = build_argparser()
 
     def run(args):
         global _LINEAR_SOLVER
