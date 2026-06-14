@@ -904,6 +904,43 @@ def test_clebsch_dipole_saturation_3d_throat_fem():
     assert out["fem_throat_slope_drop"] > 20.0, out                # STRONG channeled knee
 
 
+def test_clebsch_dipole_saturation_3d_throat_inverse_sizing():
+    """飽和の3D化: 3-D INVERSE design (spec -> geometry), the 3-D analog of the 2-D
+    flux-limiter sizing.  Size the throat thickness so the magnet's SATURATION ONSET
+    (the knee drive) hits a target, by the 1-shot circuit -- the knee drive is monotone
+    in throat thickness, so a handful of closed-form circuit evals (no mesh) hit the
+    target to machine precision; a higher target onset needs a thicker throat."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import clebsch_dipole_saturation_3d_throat as t3
+    sz = t3.size_throat_for_knee(4000.0)
+    assert sz["rel_err"] < 1e-6, sz                      # hits the target knee drive
+    assert sz["sizing_seconds"] < 1.0, sz                # mesh-free, sub-second
+    lo, hi = sz["feasible_NI_range"]
+    assert lo < sz["target_knee_NI"] < hi, sz            # target in feasible range
+    assert 0.0 < sz["sized_tt"] < t3.T, sz               # throat thinner than the limb
+    assert (t3.size_throat_for_knee(2500.0)["sized_tt"]
+            < t3.size_throat_for_knee(6000.0)["sized_tt"])   # monotone: higher -> thicker
+
+
+@pytest.mark.slow
+def test_clebsch_dipole_saturation_3d_throat_inverse_fem():
+    """Close the 3-D design loop: the circuit-sized throat is verified by the adaptive
+    B-input A-formulation FEM at the SIZED geometry.  The throat field crosses J_sat (a
+    real saturation knee at the sized throat), and the FEM onset is EARLIER than the
+    circuit target by the flux-funneling factor (the lumped-circuit correction -- the
+    linking coil funnels more flux than the geometric area ratio) -- reported, not
+    hidden."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import clebsch_dipole_saturation_3d_throat as t3
+    out = t3.run_inverse_3d(4000.0, with_fem=True)
+    assert out["fem_max_resid"] < 1e-3, out              # FEM converges at the sized throat
+    assert out["fem_knee_NI"] is not None, out           # B_throat crosses J_sat (a knee)
+    assert 1.2 < out["funneling_factor"] < 2.5, out      # the lumped-circuit funneling factor
+
+
 def test_bidirectional_coordinate_transform_2d():
     """The Tampere bidirectional coordinate transformation, made concrete + unifying the
     lab's 2-D Kelvin and hodograph maps.  Exterior calculus pulls the 2-D magnetostatic
