@@ -1086,6 +1086,8 @@ same kind of number.
                                 steeply with n (dipole robust, quadrupole 369x)
   * formulation-independence    gradient block -(n+1)/R same -> FORMULATION topic
                                 for Omega and A
+  * scalar readouts             C <- defect_0 (exact), L_ext <- this section below
+                                defect_1 (dipole) -- the C/L dual pair
 
 ## When the diagonal factorisation BREAKS (the fine print)
 
@@ -1119,9 +1121,201 @@ to the CLOSURE operator's modal fidelity, not the realised total error.
      multipoles)  _|_  interior FEM error (the error-isolation result).  Three
      orthogonal axes, each measurable alone.
 
+## Computational cost: measured by the DoF INCREMENT (not solve time)
+
+The right cost metric for an open-boundary closure is the DoF INCREMENT it adds to
+the FE system -- machine-independent and reproducible -- NOT wall-clock solve time
+(solver/hardware/implementation dependent).  Measured that way the Kelvin closure is
+CHEAP:
+
+  * The closure adds the inverted Kelvin ball = ΔDoF unknowns.  Meshed as fine as the
+    interior it is ΔDoF ≈ N_interior (total ~2x; measured 1.72-2.03x).  But the
+    exterior is VOLUME-IRRELEVANT (the Γ-only result), so the ball can be a COARSE,
+    Γ-scale sphere.
+  * MEASURED (kelvin_openbc_error_vs_exterior_mesh, shell dipole): the COARSEST ball
+    -- ΔDoF = 58, about the size of the truncation surface Γ -- already leaves the
+    closure error at 1.2e-3, ~1/45 of the interior FE error (5.3e-2).  Refining the
+    ball (ΔDoF 58 -> 301) lowers the closure error (1.2e-3 -> 7.5e-5) but it is
+    ALREADY a non-bottleneck.  So the open boundary costs ~a Γ-scale coarse ball of
+    DoF and NEVER limits accuracy -- the precise sense in which Kelvin is "cheap".
+  * The DtN spectrum is the MEASURE: the order-threshold (p>=n_src) + the defect law
+    (defect_n ~ n^2 (h/R)^4) give the MINIMUM ΔDoF that still reaches a target
+    accuracy a priori -- size the cheapest admissible exterior without a sweep.
+
+KEEP KELVIN SPARSE -- do NOT condense it into the explicit DtN operator.  Condensing
+the exterior into the Steklov-Poincare DtN removes the ball's DoF but turns Γ into a
+DENSE N_Γ^2 clique: MEASURED nnz 10-20x the sparse extension and growing as N^{4/3}
+(vs the sparse extension's N).  Condensation pays off only when N_Γ is small, the
+exterior is reused across many solves (factor once), or the dense block is
+H-matrix/FMM-compressed.  For a one-off sparse FE solve, keep the Kelvin ball sparse.
+
+MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
+advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
+(a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
+polyhedron`/manual O-grid fail but `scheme sphere` is the right built-in tool; only the
+1/4 & 1/8 symmetry SECTORS are not covered, where tet wins by default).  The geometry FLOOR
+is TWO-REGIME: at LOW curving order it tracks the curved-mesh VOLUME (geometry) accuracy
+(floor ~ vol_err/6..10); but at HIGH curving order (export order 4+) the volume error keeps
+falling (hex 1.4e-5, tet 8e-7) while the FLOOR PLATEAUS at the FE/mesh-discretization level
+of the FIXED mesh (tet ~1e-5, hex ~9e-4).  So floor = max(geometry-curving error,
+FE-discretization error); curving order lowers the first, only mesh REFINEMENT lowers the
+second.  At MATCHED DoF the two are COMPARABLE (export order 2, N~2.3k: hex 1.6e-5 vs tet
+1.9e-5); hex's apparently higher floor was mostly its coarser element count (32 vs 827),
+NOT worse geometry (hex geometry at order 4 is a fine 1.4e-5).  CONCLUSION: for the Kelvin
+truncation sphere, hex offers no real gain over tet -- the "hex lowers the floor / cuts ΔDoF"
+hypothesis is NOT supported.  TET stays the practical default (simpler `scheme tetmesh`, and
+the only option for 1/4 & 1/8 symmetry sectors).  High-order HEX's genuine strength remains
+the SWEEPABLE bodies (bricks/cylinders/coils), not the spherical truncation.
+
+## The two scalar readouts: capacitance (n=0) and external inductance (n=1)
+
+The two most familiar lumped quantities are each ONE Steklov mode of the SAME
+exterior scalar Laplace DtN -- so each inherits the datasheet directly, but from a
+DIFFERENT rung of the -(n+1)/R ladder:
+
+  * CAPACITANCE  C  <->  n=0 (MONOPOLE).  An isolated charged conductor's exterior
+    potential leads with the monopole Q/4 pi eps r; C is the n=0 Steklov mode.  The
+    n=0 image is the CONSTANT solid harmonic, captured exactly at EVERY order
+    (defect_0 = 0 to machine zero; sphere C = 4 pi machine-precision, bem_integral).
+  * EXTERNAL INDUCTANCE  L_ext  <->  n=1 (DIPOLE).  A current loop / magnetised body
+    has NO magnetic monopole (oint_Gamma B.n = 0 identically), so its leading
+    exterior multipole is the DIPOLE.  The exterior field energy obeys the IDENTITY
+
+        W_ext = 1/2 mu0 * (n+1)/R * oint_Gamma phi^2 dS        (decaying mode r^-(n+1))
+
+    i.e. the DtN eigenvalue (n+1)/R IS the exterior-energy coefficient (checked to
+    machine zero: 1/2 (2/R) oint phi^2 == integral_{r>R}|H|^2 == m^2/(6 pi R^3)).
+    Hence L_ext = 2 W_ext / I^2 inherits the n=1 defect EXACTLY.
+
+So the datasheet's first two rows are the dual pair  C <- defect_0,  L_ext <- defect_1.
+MEASURED (inductance_dtn.py), dipole (L_ext) open-BC defect:
+  * vs order:   p=1 -> 1.4e-3,  p=2 -> 2.4e-5,  p=3 -> 7.6e-6  (captured at p>=1)
+  * floor=GEOMETRY: mesh+order fixed, raise only Curve k:  k=1 4.7e-3 -> k=3 2.4e-5
+  * mesh-independent: 1.2e-4 on the coarse mesh, -> 1.3e-6 only on refinement
+  * exterior-VOLUME-irrelevant: openbc 1.2e-3 -> 7.5e-5 stays far below the interior
+    FEM error 5.3e-2 at every exterior mesh (always_below_fem = True).
+C (n=0) is exact; L_ext (n=1) is the dipole story of P_METHOD/NUMERICS, one rung up.
+
+WHICH OPERATOR certifies L_ext (and which does NOT):
+  * IN-CERTIFICATE: a FIELD-ENERGY inductance computed with a Kelvin / air-box open
+    boundary, via the magnetic POTENTIAL exterior.  Scalar Omega is single-valued for
+    a MAGNETISATION source (no cut); a FREE-CURRENT loop needs a cohomology cut to make
+    Omega single-valued, OR use the vector potential A (no cut) -- whose exterior DtN
+    gradient block is the SAME -(n+1)/R (FORMULATION topic; demo3 dipole -2/R, rel_err
+    2.5e-4).  The exterior energy / L_ext is formulation-agnostic.
+  * NOT IN-CERTIFICATE: the repo's BEM inductance path (knowledge: ngsbem_inductance)
+    extracts L from the VECTOR single-layer energy  L = mu0 J^T (LaplaceSL) J  on RT0
+    surface currents.  That is a DIFFERENT integral operator (the single-layer
+    POTENTIAL, kernel 1/4 pi r), NOT the scalar exterior Steklov-Poincaré DtN: it has
+    no -(n+1)/R ladder, uses an order-0 current basis, and sits in its own
+    accuracy/conditioning regime (TaskManager non-determinism, curvaturesafety).  So
+    "C and L are both DtN-certified" is only HALF true -- the certificate is the
+    open-boundary TRUNCATION accuracy of a field-energy inductance, NOT the BEM
+    single-layer extraction.  Keep the two operators distinct.
+
+SCOPE caveat: L_ext is the EXTERNAL inductance (energy beyond Gamma).  A thin loop's
+FULL self-inductance is near-field / log-dominated -- that share is interior FEM
+accuracy, not a DtN question.  DtN certifies only the EXTERIOR-energy share that the
+truncation could corrupt, which is exactly what air-box / Kelvin sizing controls.
+
 In short: the spectral reframing lifts open-boundary assessment from a per-problem
 EMPIRICAL exercise to a problem-independent OPERATOR DATASHEET -- specify the
 method once, predict any problem from its multipole content.
+"""
+
+
+DTN_COARSE_MESH_SYMMETRY_HEX = r"""
+# Symmetry models, hex meshing, and the curving pipeline (verified)
+
+The coarse-mesh accuracy is a SPECTRAL property of Λ_ext on Γ, so it is agnostic
+to (a) how much of the domain you model under symmetry, (b) whether the Kelvin
+ball is meshed with tet or hex, and (c) how the exterior interior is layered.
+What it is NOT agnostic to is how Γ's CURVATURE is represented. The verified
+facts below pin all four down. (NGSolve 6.2.2604, R=1 unit sphere.)
+
+## 1. Symmetry reduction (1/4, 1/8, pole sectors) preserves the DtN spectrum
+
+The Kelvin map is a radial inversion centred at Γ's centre, so any mirror plane /
+rotation axis / periodic boundary THROUGH that centre maps to itself: the exterior
+symmetric sub-region maps to the corresponding Kelvin-ball sector. Λ_ext is
+diagonal in the harmonic basis, so symmetry merely SELECTS the parity/periodicity-
+compatible sub-basis -- same eigenvalues λ_n, same p>=n exactness threshold per
+mode. For a single zonal mode u = ρ^n P_n the energy and Γ surface-mass integrals
+over the octant are each exactly 1/8 of the full-sphere values, so λ_eff is
+identical.
+
+  Octant (1/8) reduced solve, tet, maxh=0.4, vs the full ball (rel error):
+    n=1 (dipole) order1 (>=n):  full 1.4e-3   oct 1.8e-3      <- same floor
+    n=2          order1 (<n) :  full 1.8e-1   oct 7.6e-2      <- both order-limited
+    n=2          order2 (=n) :  full 3.5e-4   oct 3.8e-4
+    n=3          order3 (=n) :  full 4.0e-5   oct 4.5e-4      (gap closes as Γ resolves)
+  DoF drops ~4-8x (boundary-dominated at coarse mesh -> 8x asymptotically).
+
+  Octant BCs for the zonal (m=0) harmonics (even in x,y; parity (-1)^n in z):
+    Γ (curved sphere face) : Dirichlet = datum
+    x=0, y=0 planes         : Neumann (natural -- flux-parallel, even mode)
+    z=0 plane               : Dirichlet u=0 for ODD n (datum vanishes there),
+                              Neumann for EVEN n
+  CONDITION: Γ (the inversion centre) must be concentric with the symmetry centre;
+  the symmetry-plane BCs are the natural ones (Neumann flux-parallel / Dirichlet
+  flux-normal). The 2D cross-section (static apparatus / rotating machine, λ_n=−n/R)
+  extends to ROTATIONAL/periodic symmetry: a circular Γ inversion commutes with
+  rotation about the centre, so a 1-pole / 1-pole-pair sector with periodic /
+  anti-periodic boundaries preserves the spectrum, with λ_n restricted to the
+  periodicity-compatible harmonics (e.g. odd multiples of the pole-pair number for
+  anti-periodicity).
+
+## 2. Hex Kelvin ball -- works, and is equivalent to tet ("hex-vs-tet wash")
+
+Cubit O-grid sphere (`volume <id> scheme sphere`) -> high-order netgen export
+(`export netgen "<f>" order N`) -> `ngsolve.Mesh(...)` -> Kelvin DtN reproduces the
+floor end-to-end. Full hex ball (256 hex, geometry order 2):
+    n=1 order1 (>=n)                hex 1.9e-3    (tet 7.0e-4)
+    n=1 order3                      hex 1.6e-5    (tet 4.6e-6)   <- same ~1e-5 floor
+    n=2 order1 (<n)                 hex 3.3e-2    (tet 1.0e-1)   <- both order-limited
+    n=3 order3                      hex 3.6e-5    (tet 2.2e-6)
+The hex floor tracks tet to within the same order of magnitude (the "wash"); the
+interior element TYPE barely matters -- only Γ's resolution + order p do.
+
+  1/8 hex octant is a CLEAN carve, not a meshing problem: a standalone 1/8-sphere
+  geometry does NOT hex-mesh (tet topology -- 4 faces), but the FULL O-grid is
+  octahedrally symmetric, so deleting the negative-coordinate hexes leaves a
+  conforming octant. Verified: 32 of 256 hexes = exactly 1/8, ZERO straddling
+  vertices, 19 nodes on each of x=0/y=0/z=0. The (+,+,+) octant of the full hex
+  ball carries the full DtN eigenvalue (E_oct/E_full = 0.12500 exactly,
+  oct rel error == full rel error).
+
+  hex<->tet HYBRID: glue with PYRAMIDs (quad base on the hex side, triangular
+  faces on the tet side). NGSolve high-order H1 on a hex+pyramid+tet mesh PRESERVES
+  p>=n polynomial exactness: a degree-2 harmonic is reproduced to 6e-16 at order 2
+  (order 1 fails at 1.2e-1). The conforming high-order pyramid (rational /
+  Nigam-Phillips basis) contains P_p, so it composes with hex Q_p and tet P_p.
+  Keep pyramids as a thin interior transition layer -- not on the curved Γ.
+
+## 3. Layering the exterior (PML / infinite-element shells) is unnecessary
+
+The exterior volume mesh is irrelevant; only Γ + order p matter. "Add radial
+layers" = the h-path (slow, algebraic); "raise order on ONE coarse layer" = the
+p-path (exact at p>=n). For n=2: layering to 2305 DoF still gives 7.9e-3, while a
+single coarse layer at order 3 (768 DoF) gives 1.3e-5. PML is for RADIATING (wave)
+problems with a Sommerfeld condition; a magnetostatic field decays algebraically
+(no outgoing wave to absorb), and the Kelvin inversion is the EXACT "infinite
+element" -- it maps the whole exterior (incl. infinity -> ball centre) in one
+shot, so a single coarse closure at p>=n beats any graded multi-layer shell.
+
+## 4. Curving MUST come from the external mesher -- never .Curve() an imported .vol
+
+NGSolve never builds hex from geometry, so hex curving HAS to be baked in by the
+mesher (Cubit `export netgen ... order N`). An imported .vol carries no CAD
+geometry, so `mesh.Curve(k)` rebuilds the curved nodes FLAT and collapses Γ to the
+inscribed polytope. Verified (NGSolve 6.2.2604, the order-2 hex ball):
+`Curve(1)==Curve(2)==Curve(3)` all degrade the DtN floor 1.6e-5 -> 5.3e-3 (~320x)
+and the Γ deviation 5.7e-5 -> 2.3e-2 (~400x), IDENTICAL for every k (the requested
+order is irrelevant once the geometry is gone). `GetCurveOrder()` then reports the
+new order while the geometry is flat -- a SILENT trap. (Contrast: on an OCCGeometry
+mesh, which has faces to project onto, Curve(k) correctly IMPROVES Γ.) So: set the
+FE order with `H1(mesh, order=k)`; change the GEOMETRY order only by re-exporting
+the .vol. Guarded by the static lint rule `ngsolve-curve-after-vol-import`.
 """
 
 
@@ -1135,6 +1329,7 @@ def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
         "p_method": DTN_COARSE_MESH_P_METHOD,
         "formulation": DTN_COARSE_MESH_FORMULATION,
         "datasheet": DTN_COARSE_MESH_DATASHEET,
+        "symmetry_hex": DTN_COARSE_MESH_SYMMETRY_HEX,
     }
     if topic == "all":
         return "\n\n".join(topics.values())
