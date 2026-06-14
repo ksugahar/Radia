@@ -98,6 +98,15 @@ now holds only the two genuine PyPI packages above.
 | **FEEC HDiv-VIM** (the VIM) | `radia.vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) -- the SOLE VIM. The separate Newton-kernel Galerkin VIM prototype (`src/ext/radia_vim/`) was deleted 2026-06-14 as unnecessary (recover from git history if ever needed). | `examples/vim/` |
 | **DtN / FEM-Kelvin operator** (compute core) | the FEM-Kelvin sparse generator of the layered (Sommerfeld-type) Green's operator -- a **core** capability, NOT an application. Currently research-stage under `examples/kelvin_transformation/DtN_spectrum/` + `radia_mcp.radia_ngsolve` knowledge (`dtn_coarse_mesh`); promotes into `src/radia/` (like `hdiv_vim` did) when stable. | `examples/kelvin_transformation/DtN_spectrum/`, `packages/radia-mcp/tests/test_dtn_*` |
 | **PEEC** (Partial Element Equivalent Circuit) | `peec_matrices.pyd` (`src/core/rad_peec_matrices.*` + `src/lib/rad_peec_matrices_api.cpp`) + `radia.peec_topology` / `peec_coupled` / `peec_msc_schur` / `fasthenry_parser` -- filament/panel (FastImp-style) L,R,C,M circuit extraction, SIBC/ESIM surface impedance, PRIMA/Lanczos MOR. A **core** integral-equation / circuit-extraction method (same rank as MMM/MSC), consumed by the PCB and IH application domains; **never** a `radia-peec` package. | `examples/peec_integration/`, PEEC `tests/` suite |
+| **BEM** (boundary integral / surface IE) | `radia.bem` (`sibc_hacapk` = HACApK-backed Laplace-kernel Galerkin BEM; `coil_inductance_ngsolve` = `ngsolve.bem` Weggler-EFIE integration, the `--coil-solver bem-a` path) + the top-level `radia.bem_sibc_solver` helper. A **core** surface-integral-equation solver (HACApK ACA backend ships in the radia wheel), consumed by the PCB and IH domains; **never** a `radia-bem` package. | `examples/peec_integration/ngsbem_peec_demo/`, BEM `tests/` |
+
+**Core support infrastructure** (also ships in the radia wheel, also **never**
+a `radia-<X>` package, but not standalone *solver* methods so they are not in
+the table above): the Compact HX / AMS / COCR preconditioners
+(`radia.sparsesolv_ngsolve`, C++ `src/ext/sparsesolv/`); the closed-form
+reference layer (`radia.analytical_formulas`, Wakao-Igarashi-Fujiwara et al.);
+the Biot-Savart coil-source builder (`radia.coil_builder`, consumed by the
+electromagnet / accelerator-magnet workflows).
 
 **Application domains inside `radia`** (NOT standalone packages -- they
 ship in the `radia` wheel as `radia.<domain>` subpackages + panels, with
@@ -109,7 +118,7 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 | Electromagnet | `radia_em.py` panel + `calc_em_table.py` | `radia_mcp.electromagnet` | Omega-reduced, hysteresis; **Clebsch-hodograph pole-face inverse design** (`examples/clebsch_hodograph/`, `docs/clebsch_hodograph/`) is part of this domain |
 | **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifemm/CLN incl.)** under `examples/levitation/` (research_cln/ corpus + IGTE 2026 paper). radia-cln is NOT a separate package. |
 | Motor | `radia_motor.py` panel + `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
-| PCB | `radia_pcb.py` panel + `calc_pcb_peec.py` | `radia_mcp.pcb` | planar coils -- **consumes the core PEEC solver AND `ngsolve.bem`** (two user-selectable backends; the application owns neither method); **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
+| PCB | `radia_pcb.py` panel + `calc_pcb_peec.py` | `radia_mcp.pcb` | planar coils -- **consumes the core PEEC and BEM solvers** (`--coil-solver peec | bem-a`, user-selectable; the application owns neither method); **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
 | Stream-function | `radia_streamfunction.py` panel + `calc_streamfunction.py` / `calc_streamfunction_volume.py` | `radia_mcp.streamfunction` | SF coil design (Design / Pareto / Manufacture); ACA-TSVD |
 
 **Installation**:
