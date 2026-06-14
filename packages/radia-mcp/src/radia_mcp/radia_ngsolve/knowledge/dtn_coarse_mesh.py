@@ -1321,6 +1321,24 @@ demand. So state the contribution as: "a SPARSE, spatial-inversion FEM-ization o
 BEM operator that avoids the dense boundary matrix entirely, with a measured fill/time speedup and
 the same DtN spectrum, for static apparatus" -- NOT "FEM-izing BEM" in general (that is SBFEM et al.).
 
+EXTERIOR-WITH-MATERIAL = the genuine BEM differentiator (and a scope beyond Nabizadeh/Boulmezaoud).
+Because the FEM-ized exterior is a MESHED (inverted) FE region, any exterior material mu(x) is just a
+transformed coefficient there -- an INHOMOGENEOUS exterior or a far material body is captured
+natively, with NO Green function. The free-space-Green BEM cannot do this (a non-constant exterior
+breaks the free-space kernel); the vacuum-exterior Kelvin/inverted-FE papers (Nabizadeh 2021;
+Boulmezaoud 2005/2023) do not formulate it either. VERIFIED (demo_t): (1) uniform mu_ext -> body
+DtN scales as mu_ext*(n+1)/R_in (mechanism; NB a CONSTANT mu keeps the exterior Laplacian so BEM with
+a scaled kernel can also do this trivial case -- do NOT cite uniform mu as the BEM differentiator);
+(2) INHOMOGENEOUS exterior -- a magnetic shell mu_s in a real sub-shell, vacuum elsewhere -- shifts
+the body-surface DtN off the vacuum ladder and FEM-Kelvin MATCHES the layered-sphere analytic
+transfer relation (mu_s=5 -> 5.268 vs 5.268; mu_s=20 -> 6.414 vs 6.414; rel ~5e-5..3e-4). THIS is the
+real differentiator: surrounding iron / tank / layered media in the exterior are carried by the
+sparse inverted FE, which a free-space-Green BEM cannot represent. PRIORITY NOTE: the authors
+(Sugahara et al.) state their own Kelvin/inverted-FE-with-exterior-material work PREDATES Nabizadeh
+2021 -- if a dated publication exists it is the authors' OWN prior art (so Nabizadeh is parallel/
+later, NOT prior art over them) and the exterior-material formulation is their scope advantage; the
+citation (date/venue, likely a Japanese IEEJ venue) must be pinned down before final positioning.
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
