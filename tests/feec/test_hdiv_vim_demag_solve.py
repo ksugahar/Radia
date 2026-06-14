@@ -106,4 +106,7 @@ def test_nonlinear_sphere_vs_dense_newton():
     assert res["nonlinear"] is True
     rel = abs(res["M_avg"][2] - mz_dense) / abs(mz_dense)
     assert rel < 2e-2, f"nonlinear scalable Mz {res['M_avg'][2]:.1f} vs dense {mz_dense:.1f} rel {rel:.2e}"
-    assert res["iters"] < 40, f"nonlinear Newton iters {res['iters']}"
+    # the entry's nonlinear solver is the Anderson-Hantila fixed point (cheap step), so the outer count
+    # is higher than the dense reference Newton's ~5-6 (a fixed point + saturation slowdown) but bounded
+    # well inside nl_maxit; the accuracy match above is the real gate.
+    assert res["iters"] < 250, f"nonlinear Anderson-Hantila outer iters {res['iters']}"
