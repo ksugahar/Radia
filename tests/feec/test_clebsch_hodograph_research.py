@@ -521,6 +521,34 @@ def test_flux_line_closure_symplectic():
     assert r["drift_mix"] / r["drift_sym"] > 100.0, r      # the field must be a closed 2-form
 
 
+def test_flux_line_realfield_ngsolve():
+    """The dynamical face on a REAL solved NGSolve field: trace ONE flux line of three
+    reconstructions of the SAME 2-D magnetostatic solve with the SAME RK4 integrator, so
+    the only variable is the reconstruction.  The de Rham field rot(grad A_z) (= the
+    edge-FE B = curl A, Noguchi) is a CLOSED 2-form exactly tangent to the flux surfaces
+    A_z = const, so its flux line closes; a nodal-averaged reconstruction and an explicit
+    charge (de Rham-complement) admixture both leak off the flux surface and spiral.  This
+    is the field-reconstruction-quality diagnostic for the HDiv-VIM migration: a spiralling
+    flux line reveals a solenoidal leak (the M_mass^-1 N m reconstruction bug)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.geom2d")
+    import flux_line_realfield_ngsolve as fr
+    r = fr.analyze(order=2, maxh=0.07, turns=3.0, steps_per_turn=360)
+    # de Rham rot(grad A_z): exactly tangent (closed 2-form) -> the flux line CLOSES.
+    assert r["mis_closed"] < 1e-6, r                       # B . grad(A_z) = 0 pointwise
+    assert r["drift_closed"] < 5e-3, r                     # A_z bounded (integrator floor)
+    assert r["ret_closed"] < 1e-3, r                       # returns to the start
+    # explicit charge leak (the controlled de Rham-complement admixture): SPIRALS, robustly.
+    assert r["mis_leaky"] > 3e-2, r                        # off the flux surface
+    assert r["drift_leaky"] > 0.1, r                       # A_z drifts secularly
+    assert r["ret_leaky"] > 1e-2, r                        # never returns
+    assert r["drift_leaky"] / r["drift_closed"] > 50.0, r  # the reconstruction is the variable
+    assert r["ret_leaky"] > 10.0 * r["ret_closed"], r
+    # nodal-averaged (the realistic edge-vs-nodal leak, Noguchi): leaks measurably too.
+    assert r["mis_nodal"] > 1e-2, r
+    assert r["drift_nodal"] > 5.0 * r["drift_closed"], r
+
+
 @pytest.mark.slow
 def test_clebsch_3d_closing_condition():
     """The 3-D closing condition = vanishing HELICITY = existence of a global Clebsch pair (Moffatt).
