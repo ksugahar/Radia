@@ -657,6 +657,37 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   coil is the coarsest stream-function discretization (one contour = one wire);
   the task is the single best wire path, and the script shows the honest 1-turn
   limit vs the full multi-turn stream-function current.
+- **`clebsch_dipole_design_workflow.py`** — the **end-to-end workflow** that ties
+  the track together: a 3-D dipole designed by a **Clebsch / scalar-potential
+  LEVEL SET** carried from the 2-D cross-section into the 3-D magnet. One
+  geometric object at three places — the iron pole **surface** is the
+  equipotential `Ω = const` (the scalar potential conjugate to the flux function
+  `A_z` of the flux-line work).
+  **Stage A** (2-D, fast): the cross-section pole face `z_p(x)` is the level set;
+  a finite flat pole droops (`b₃ < 0`), and a curvature shim
+  `z_p = g/2 − δ(x/w)²` drives `b₃` through zero. The **width knob**: a wider
+  pole needs less shim (`δ_opt` 1.12 → 0.04 mm as `w` 30 → 60 mm). This is the
+  cheap, *exact* instrument for the transverse harmonics.
+  **Stage B**: reflect the level set into the 3-D pole **surface** — body = the
+  2-D contour **extruded** along the beam (body field = the 2-D field, `B =
+  ∇A_z × ŷ`); end = the **equipotential / Maxwellian** end so the fringe
+  integrates away.
+  **Stage C** (3-D reduced-Ω FEM, slow): a real finite-length H-frame solve
+  confirms a clean flat-top dipole (`B_z ≈ 0.16 T`, `B_x/B_z ≈ 7 %` coarse), a
+  clean integrated dipole (`b̄₁ ≈ 0.027 T·m`, `L_eff ≈ 159 mm`), and reads back
+  the equipotential **end contour** `z_p(y)` (= `g/2` in the body, lifting ~9 mm
+  past the iron end = the Maxwellian end to cut). **Honest scope**: the
+  transverse harmonics are designed *and* verified in 2-D (cheap, exact); the 3-D
+  integrated transverse spurious at a golden-feasible mesh is **mesh-noise-limited
+  (~8e-2)**, well above the cross-section's intrinsic `b₃` — so 2-D is the
+  instrument for it, exactly how accelerator dipoles are designed (2-D
+  cross-section optimisation + 3-D end correction). The design chooses the width
+  so the residual shim is negligible (`δ_opt < 0.05 mm`), so the flat-body 3-D IS
+  the reflected design; reflecting a non-negligible body shim and resolving its
+  sub-mesh-noise integrated improvement is a fine-mesh study, deferred. Figure:
+  `clebsch_dipole_design_workflow.png` (the cross-section level set | the width
+  knob | the level set carried into 3-D). Goldens `test_clebsch_dipole_workflow_*`
+  (design fast, FEM slow).
 
 ## Run
 
@@ -674,6 +705,7 @@ python accel_pole_ends_fem.py                 # FEM rung: reduced-Omega + CoilBu
 python accel_pole_dipole_body_2d.py           # the BODY lever: pole width + curvature -> b3,5
 python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any multipole)
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
+python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python chaplygin_free_boundary_2d.py          # Frontier 2: the turning-guide free boundary (image)
 python chaplygin_inverse_vonmises_2d.py       # Frontier 2 inverse: von Mises dissolves it (linear)
 python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inverse, flux (lambda) freed
