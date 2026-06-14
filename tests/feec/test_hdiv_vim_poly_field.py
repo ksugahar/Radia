@@ -220,3 +220,43 @@ def test_internal_field_assembly_uniform_sphere():
     rel_s1 = abs(Hstep1[1, 2] + Mval / 3) / (Mval / 3)
     assert rel_int < 0.05, f"assembled near-surface relZ {rel_int:.2e} not < 5%"
     assert rel_int < 0.3 * rel_s1, f"assembled ({rel_int:.2e}) should beat Step-1 ({rel_s1:.2e}) >3x near surface"
+
+
+# --------------------------------------------------------------------------------------------------
+# C++ field kernels (the order>=2 field accelerated in C++) vs the Python goldens -- the lab pattern
+# (C++ probe validated entry-by-entry against the Python reference, like _hdiv_phi_tet vs phi_tet).
+# --------------------------------------------------------------------------------------------------
+def test_cpp_tri_field_matches_python():
+    """C++ _hdiv_tri_field (Wilton triangle field) == Python flat_triangle_charge_field to ~machine
+    precision (same closed form)."""
+    import radia._radia_pybind as rp
+    P = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], float)
+    Vflat = P.ravel().tolist()
+    for r in [[0.3, 0.3, 0.5], [0.3, 0.3, -0.5], [1.0, 1.0, 0.3], [0.2, 0.2, 0.05]]:
+        Fc = np.array(rp._hdiv_tri_field(Vflat, r))
+        Fp = flat_triangle_charge_field(P, np.array(r))
+        rel = np.linalg.norm(Fc - Fp) / np.linalg.norm(Fp)
+        assert rel < 1e-12, f"C++ tri_field vs Python r={r}: rel {rel:.2e}"
+
+
+def test_cpp_tet_field_matches_grad_phitet():
+    """C++ _hdiv_tet_field (= -grad PhiTet, the analytic tet volume-charge field) matches a central FD
+    of the analytic _hdiv_phi_tet to ~machine precision (valid near AND far), and matches the Python
+    spherical ray-trace (tet_self_volume_field*4pi) to the spherical method's ~1e-3 at interior points."""
+    import radia._radia_pybind as rp
+    Vtet = [0.0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]
+    Varr = np.array(Vtet, float).reshape(4, 3)
+    d = 1e-5
+    for r in [[0.25, 0.25, 0.25], [0.4, 0.3, 0.1], [2.0, 0.0, 0.0]]:
+        Fc = np.array(rp._hdiv_tet_field(Vtet, r))
+        g = np.zeros(3)
+        for k in range(3):
+            rpp, rmm = list(r), list(r)
+            rpp[k] += d; rmm[k] -= d
+            g[k] = (rp._hdiv_phi_tet(Vtet, rpp) - rp._hdiv_phi_tet(Vtet, rmm)) / (2 * d)
+        rel_fd = np.linalg.norm(Fc + g) / np.linalg.norm(g)         # Fc == -grad(phi_tet)
+        assert rel_fd < 1e-6, f"C++ tet_field vs -grad(phi_tet) FD r={r}: rel {rel_fd:.2e}"
+        if max(r) < 1 and min(r) >= 0 and sum(r) < 1:               # interior: vs the spherical golden
+            Fsph = 4 * np.pi * tet_self_volume_field(Varr, np.array(r), lambda p: 1.0, nth=48, nph=96)
+            rel_sph = np.linalg.norm(Fc - Fsph) / np.linalg.norm(Fsph)
+            assert rel_sph < 8e-3, f"C++ tet_field vs spherical r={r}: rel {rel_sph:.2e}"
