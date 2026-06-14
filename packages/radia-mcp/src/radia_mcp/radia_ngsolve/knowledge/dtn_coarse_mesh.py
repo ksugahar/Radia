@@ -1277,6 +1277,34 @@ equivalence as new." Best single evidencing figure: eigenvalue-ladder overlay (a
 dense BEM vs FEM-Kelvin Schur) on one surface -- coincide to n~p, then peel off (shows same operator
 + why coarse suffices + Schur=dense-DtN in one plot). Closest single prior work: Demarcke-Rogier 2011.
 
+CORRECTION (2026-06-14 deep-read of the flagged PDFs -- the note ABOVE OVERCLAIMED: "Kelvin
+hitherto only geometric" is WRONG). Two closest-competitor papers the first scan missed:
+  * Nabizadeh, Ramamoorthi & Chern, "Kelvin transformations for simulations on infinite domains,"
+    ACM TOG 40(4):97 (2021): the KELVIN transform IS already used for unbounded FEM (Poisson/
+    Laplace/Helmholtz incl. EM) -- so "Kelvin for open-boundary FEM" is NOT new (graphics audience;
+    no DtN/spectral/sparse-vs-BEM framing).
+  * Boulmezaoud, "Inverted finite elements," ESAIM:M2AN 39(1):109-145 (2005); Boulmezaoud & Kaliche,
+    "Stray field computation by inverted finite elements," arXiv:2301.10544 (2023): inverted-FE
+    (Kelvin-type) truncation-free MAGNETOSTATICS, and the harmonic (r/r0)^{-(l+1)} decay appears as
+    an analytic benchmark (their Appendix A) -- but NOT framed as the DtN spectrum, and with no
+    Schur=BEM identity and no sparse-vs-dense table. THIS IS THE CLOSEST COMPETITOR (full text read).
+What is now KILLED as individually-new (cite + disclaim): the FE-Schur=dense-DtN/BIE identity
+(Knockaert 2008; Demarcke-Rogier 2011; Hohage-Lehrenfeld-Preuss 2021 "Schur complement = best DtN
+approximation"); the exterior-DtN/static-stiffness reduction for magnetostatics (SBFEM Wolf-Song
+2001; Birk-Reichel-Schroeder 2022 -- but DENSE boundary operator via RADIAL SIMILARITY scaling, NOT
+Kelvin inversion); Kelvin/inverted-FE for unbounded fields (Nabizadeh 2021; Boulmezaoud 2005/2023);
+the harmonic decay ladder (Boulmezaoud; exterior-Steklov literature).
+NARROWED DEFENSIBLE NOVELTY = the CONJUNCTION only: (a) explicitly identifying the Kelvin-inverted
+exterior FE block AS a discrete exterior DtN with the -(n+1)/R ladder, (b) a MEASURED sparse-FE-
+Kelvin vs dense-BEM fill/time benchmark, (c) for the static-apparatus magnetics-audit audience. No
+single source does this conjunction (Boulmezaoud has (a)'s harmonic decay but not the DtN/Schur/
+sparse-vs-dense packaging). Frame the paper as a UNIFYING REINTERPRETATION + measurement, NOT a new
+method. RESIDUAL RISK: Birk-Reichel-Schroeder 2022 (CMAME 399:115362) full text was paywalled
+(abstract only) -- get the PDF before any journal submission to confirm it has no Kelvin link / no
+comparable fill-time benchmark. Must-cite (honest): Knockaert 2008; Demarcke-Rogier 2011; Hohage-
+Lehrenfeld-Preuss 2021; Wolf-Song 2001; Birk-Reichel-Schroeder 2022; Nabizadeh-Ramamoorthi-Chern
+2021; Boulmezaoud 2005 + Boulmezaoud-Kaliche 2023.
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
