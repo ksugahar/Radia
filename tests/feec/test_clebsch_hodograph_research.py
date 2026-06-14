@@ -430,3 +430,29 @@ def test_chaplygin_inverse_vonmises_2d():
     assert r["J"] < 1e-9, r                                    # LS residual -> 0
     span = r["theta_range_deg"][1] - r["theta_range_deg"][0]
     assert span > 30.0, r                                      # the field genuinely turns
+
+
+def test_chaplygin_inverse_nonlinear_2d():
+    """Frontier 2 CLOSED: the NONLINEAR von Mises free-boundary inverse, by
+    freeing the rectangle height A1=lambda (the mu-dependent saturable flux) as a
+    global NumberSpace unknown -- this removes the over-determination that stalled
+    the earlier attempt at J~0.24.  Verified: (a) const-width closes to ~machine
+    zero with a valid map and a rectangle image; (b) the tapered guide closes to
+    J~1e-6 with the on-curve wall fit satisfied, a valid map, AND a genuinely
+    theta-dependent hodograph image = the free boundary recovered; (c) the
+    saturable flux lambda grows far above its linear (conformal) value."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_inverse_nonlinear_2d as nl
+    # const-width: the inverse closes to ~machine zero, rectangle image, valid map
+    rc = nl.solve_inverse(taper=0.0, Ms_target=12.0, order=2, maxh=0.07)
+    assert rc["J"] < 1e-9, rc                                  # closed to ~machine zero
+    assert rc["free_measure"] < 0.10, rc                       # rectangle (self-linearising)
+    assert rc["jac_min"] > 0.0, rc                             # globally valid map
+    assert rc["lambda"] > 2.0 * rc["lambda_lin"], rc           # high-mu flux >> linear flux
+    # tapered: the free boundary is recovered (theta-dependent image), J->0, wall fit ok
+    rt = nl.solve_inverse(taper=0.3, Ms_target=12.0, order=2, maxh=0.07)
+    assert rt["J"] < 1e-4, rt                                  # PDE residual -> 0
+    assert rt["wall_fit"] < 1e-5, rt                           # on-curve slip penalty met
+    assert rt["jac_min"] > 0.0, rt                             # valid (no fold) at 30% taper
+    assert rt["free_measure"] > 5.0 * rc["free_measure"], (rc, rt)   # theta-dependent = free bdry

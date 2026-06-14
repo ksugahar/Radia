@@ -295,18 +295,42 @@ free boundary is dissolved into a fixed-domain solve. Figure:
 `chaplygin_inverse_vonmises_2d.png` (the fixed `(Φ,A)` rectangle + the recovered
 physical map).
 
-**The nonlinear wall (honest, the genuinely open part).** With `μ=μ(q)` the
-A-spacing `1/(μq)` changes, so the consistent `Φ,A` distribution *along the
-walls* is μ-dependent. Prescribing the full boundary map from a fixed geometric
-parametrisation then over-constrains it and the nonlinear map **folds**
-(Jacobian < 0). The correct BC is a **slip condition** — the boundary point lies
-*on* the wall curve with its tangential position free — which for **curved**
-walls is a **nonlinear constraint** (e.g. `x²+y²=r_in²`). Combined with the
-`μ(q)` Picard this is a nonlinear PDE with nonlinear boundary constraints: the
-genuine nonlinear free-boundary inverse, still open. (Straight-wall guides have
-*linear* slip constraints but are self-linearising = trivial image.) So this
-file **solves the inverse in the linear case and pins down exactly what makes
-the nonlinear case hard.**
+**The nonlinear wall — now CLOSED in `chaplygin_inverse_nonlinear_2d.py`.** With
+`μ=μ(q)` the A-spacing `1/(μq)` changes, so the consistent `Φ,A` distribution
+*along the walls* is μ-dependent, and the correct BC is a **slip condition** (the
+boundary point lies *on* the wall curve, tangential position free — a nonlinear
+constraint for curved walls). The remaining obstacle was an **over-determination**:
+the von Mises rectangle has two dimensions, `Φ1` (the MMF) and `A1` (the flux `Ψ`),
+and a guide of fixed geometry+material cannot have **both** prescribed (its
+permeance fixes one once the other is chosen). This file solves the linear case;
+the companion closes the nonlinear case.
+
+### `chaplygin_inverse_nonlinear_2d.py` — the nonlinear free-boundary inverse, CLOSED
+
+The fix for the over-determination: **prescribe `Φ1=ψmax` (the drive/MMF) and
+free `A1=λ`** — the μ-dependent saturable flux — as a single **global
+`NumberSpace` unknown**. Polar physical unknowns `(r,ψ)` make the arc walls
+coordinate lines, so the slip BCs are clean (`r=r_in` inner Dirichlet, `ψ=0,ψmax`
+ports, the tapered outer wall via an on-curve penalty `β(r−r_out(ψ))²`). Damped
+Newton with continuation in `Ms`. Verified:
+
+| case | `J` (PDE residual) | wall fit | `free_measure` | map |
+|---|---|---|---|---|
+| const-width | **2.6e-18** (machine zero) | — | 0.04 (rectangle) | valid (det>0) |
+| tapered 30% | **1.4e-07** | 2.3e-09 | 1.18 (θ-dependent) | valid (det>0) |
+| extreme 50% | 1e-3 | — | — | **folds** (throat limit) |
+
+The saturable flux grows far above its linear value (`λ: 0.69→9.4`, ~14× — a
+high-μ guide carries much more flux for the same MMF). Three independent checks:
+the PDE residual `J→0`, the on-curve **wall fit ~1e-9** (the map's outer edge
+*does* lie on the prescribed tapered wall), and `free_measure≈1.18` vs `0.04`
+(the hodograph image is genuinely **θ-dependent = the free boundary recovered**,
+not collapsed to a rectangle). The previous `J~0.24` plateau is gone (6 orders
+better). Only the extreme 50% taper folds — the throat narrows until the
+saturable guide can no longer carry monotone flux, a **geometric** limit
+reported honestly, not a formulation failure. Figure:
+`chaplygin_inverse_nonlinear_2d.png` (const-width annular bend + tapered spiral,
+both with `det>0`).
 
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
@@ -487,14 +511,17 @@ python accel_pole_ends_fem.py                 # FEM rung: reduced-Omega + CoilBu
 python accel_pole_dipole_body_2d.py           # the BODY lever: pole width + curvature -> b3,5
 python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any multipole)
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
+python chaplygin_free_boundary_2d.py          # Frontier 2: the turning-guide free boundary (image)
+python chaplygin_inverse_vonmises_2d.py       # Frontier 2 inverse: von Mises dissolves it (linear)
+python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inverse, flux (lambda) freed
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (21 tests; the nine
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (22 tests; the nine
 heavy FEM rungs — forward+contour, the design loop, the curved chamfer, the
 open-boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
 3-D nonlinear Kelvin merge, the turning-guide hodograph PDE, and the
-free-boundary image — are `@pytest.mark.slow`; the von Mises inverse is a fast
-linear solve).
+free-boundary image — are `@pytest.mark.slow`; the von Mises inverses, linear
+and nonlinear, are fast least-squares solves).
 
 ## Prior art (honest)
 
