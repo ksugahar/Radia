@@ -39,6 +39,12 @@ This is the linear (kinematic) level of the connection.  The nonlinear payoff
 where the Chaplygin hodograph linearises saturation) is the next frontier; see
 `saturation_loop_2d.py` / `chaplygin_hodograph_2d.py` for the hodograph side.
 
+The de Rham view of this bridge is classical: P. Robert, "Clebsch Potentials and
+the Visualization of Three-Dimensional Solenoidal Vector Fields", IEEE Trans.
+Magn. 27(5), 1991 -- B is a 2-form, the loop modes are the closed 2-forms, and a
+GLOBAL Clebsch pair B = grad(alpha) x grad(beta) exists iff the helicity vanishes.
+Full references in docs/clebsch_hodograph/HDIV_VIM_CLEBSCH_BRIDGE.md.
+
 run:  python hdiv_vim_clebsch_loopstar.py
 """
 import os
