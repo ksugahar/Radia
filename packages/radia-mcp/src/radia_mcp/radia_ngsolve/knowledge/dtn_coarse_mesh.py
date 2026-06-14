@@ -2370,6 +2370,43 @@ Defensible-new = the IABC reading + the static-to-high-frequency DtN cost-accura
 SA/Kelvin context, with FEM-BEM as the cited exact-but-expensive reference. The reduced fit here uses
 exact-pole subsets (clean & verifiable); a free-pole vector fit could do better per M (noted, not
 claimed). Cost comparison is STRUCTURAL (state dimension / locality / sparsity), not benchmarked.
+
+PARABOLIC (eddy-current / magnetic-diffusion) TIME-DOMAIN IABC -- the SA-NATIVE regime (demo_xx,
+VERIFIED 2026-06-15; user picked "(a)" = the diffusion version after the wave case demo_ww). This
+completes development-direction D's parabolic branch. PHYSICS (important, SA-correct): in an
+eddy-current (magneto-quasistatic) problem the EXTERIOR AIR is non-conducting -> instantaneously
+Laplace (the static ladder, demo_vv), NO time dynamics. A genuinely PARABOLIC truncation DtN appears
+where the adjacent region is a CONDUCTOR (tank/core/shield skin effect = SIBC / the open boundary of a
+diffusive region). Per spherical-harmonic mode n, the exterior modified-Helmholtz decaying solution is
+K_{n+1/2}(gamma r), gamma=sqrt(s*mu*sigma), giving
+   Lambda_n(s) = -a*gamma*K_{n-1/2}(gamma a)/K_{n+1/2}(gamma a) - (n+1).
+VERIFIED (all asserted):
+ (A) it INTERPOLATES the two regimes: s->0 (DC/thick skin) -> -(n+1) (the STATIC multipole ladder,
+     1e-12) ; s->inf (high freq/thin skin) -> -a*gamma = -a*sqrt(s*mu*sigma) (the sqrt(s) SIBC, 1.1e-2).
+     One per-mode operator bridging the DC multipole ladder and the skin-effect surface impedance.
+ (B) sqrt(s) is a BRANCH CUT at s=0 (infinite memory; t^{-3/2}/t^{-1/2} kernel), NOT rational: a
+     finite-pole fit error FLOORS algebraically (M=2..32 -> 0.14..4.9e-3, never ~1e-15). THE KEY
+     CONTRAST vs the WAVE DtN (demo_ww, rational, finite n poles, EXACT at M=n): magnetic diffusion has
+     no finite exact pole set -- its DtN spectrum literally shows the diffusion memory.
+ (C) TIME-DOMAIN IABC = a Foster M-pole fit d + sum r_j s/(s+p_j) (real poles p_j>0 = passive RL
+     ladder) over a frequency band: stable; band error decreases OVERALL with M (not step-monotone --
+     the simple fixed-log-pole fit is sub-optimal; a vector-fit would be monotone/better). The M
+     auxiliary ODEs psi_j'=p_j(u-psi_j), g=(d+sum r_j)u - sum r_j psi_j reproduce it by transient
+     integration (3.8e-9) = a recursive-convolution / RL-ladder realization.
+ (D) cost-accuracy datasheet: band rel.err vs M (=#poles=#aux ODEs/mode). Structural cost: time-domain
+     FEM-BEM = the EXACT diffusion DtN (dense Gamma + FULL t^{-1/2} history convolution) = most
+     accurate, costliest; parabolic IABC = M aux ODEs/mode, local+sparse = cheap, band-limited.
+PRIOR ART (cite, not claim): the sqrt(s*mu*sigma) SIBC + Foster/Cauer + recursive-convolution
+time-domain realization is the eddy-current SIBC literature -- Valdivieso-Meunier-Ramdane-Gyselinck
+(IEEE T-Magn 2020, Foster networks + recursive convolution) and time-domain SIBC (Yuferev & Ida) --
+but for INTERIOR material / conductor truncation. Defensible-new = the per-mode DIFFUSION DtN SPECTRUM
+(static-ladder <-> sqrt(s) SIBC interpolation) read as an open-boundary IABC + the cost datasheet + the
+wave(finite-pole)-vs-diffusion(branch-cut) contrast, in the SA/Kelvin context. Cost STRUCTURAL, not
+wall-clock. ARC NOW CLOSED: demo_uu (exact = Bessel pole net) -> demo_vv (static IABC, elegant closed
+form) -> demo_ww (high-freq/wave IABC = reduced rational, finite poles) -> demo_xx (eddy-current/
+diffusion IABC = Foster ladder, branch cut). NEXT (deferred): harden the cost claim with a real
+time-domain FE solve (M-aux-ODE boundary vs large-truncation/FEM-BEM reference), and a free-pole
+vector fit for monotone optimal M.
 """
 
 
