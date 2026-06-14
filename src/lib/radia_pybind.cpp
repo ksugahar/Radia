@@ -87,6 +87,7 @@ extern "C" {
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
+#include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -2705,6 +2706,45 @@ std::vector<double> QuadTriFieldProbe(const std::vector<double>& V, const std::v
     rad_hdiv::QuadTriField(Vv, rr, sigma0, ss, SS, out);
     return {out[0], out[1], out[2]};
 }
+
+// Batched HDiv-VIM demag field: the analytic charge field of ALL volume (linear-rho tet) + surface
+// (quadratic-sigma tri) sources summed at ALL obs points, ngcore::ParallelFor OVER OBS (each obs is an
+// independent sum -> no race).  This is the order_p / assemble_demag_field hot loop moved out of Python:
+// one C++ call instead of O(n_obs x n_src) per-pair pybind crossings, and it honours the CALLER's
+// `with TaskManager()` (bare ParallelFor falls back to serial when there is no active TaskManager -- per
+// the caller-wraps policy, this function does NOT create its own RegionTaskManager).
+//   vol  : n_vol  blocks of 16 doubles  [v0x..v3z (12), rho0 (1), gx,gy,gz (3)]
+//   surf : n_surf blocks of 22 doubles  [v0x..v2z (9),  sigma0 (1), sx,sy,sz (3), S00..S22 (9 row-major)]
+//   obs  : n_obs * 3.  Returns n_obs * 3, NO 1/(4pi) (applied in Python, matching the per-pair kernels).
+std::vector<double> HDivDemagFieldBatch(const std::vector<double>& vol, const std::vector<double>& surf,
+                                        const std::vector<double>& obs) {
+    const long n_vol  = (long)(vol.size()  / 16);
+    const long n_surf = (long)(surf.size() / 22);
+    const long n_obs  = (long)(obs.size()  / 3);
+    std::vector<double> out((size_t)n_obs * 3, 0.0);
+    ngcore::ParallelFor(ngcore::IntRange((size_t)n_obs), [&](size_t jj) {
+        const long j = (long)jj;
+        double r[3] = { obs[3*j], obs[3*j+1], obs[3*j+2] };
+        double acc[3] = {0.0, 0.0, 0.0};
+        for (long e = 0; e < n_vol; ++e) {
+            const double* b = &vol[(size_t)e * 16];
+            double V[4][3]; for (int i=0;i<4;++i) for(int k=0;k<3;++k) V[i][k] = b[3*i+k];
+            double g[3] = { b[13], b[14], b[15] };
+            double o[3]; rad_hdiv::TetVolFieldLinear(V, r, b[12], g, o);
+            acc[0]+=o[0]; acc[1]+=o[1]; acc[2]+=o[2];
+        }
+        for (long e = 0; e < n_surf; ++e) {
+            const double* b = &surf[(size_t)e * 22];
+            double V[3][3]; for (int i=0;i<3;++i) for(int k=0;k<3;++k) V[i][k] = b[3*i+k];
+            double s[3] = { b[10], b[11], b[12] };
+            double S[3][3]; for (int i=0;i<3;++i) for(int k=0;k<3;++k) S[i][k] = b[13 + 3*i + k];
+            double o[3]; rad_hdiv::QuadTriField(V, r, b[9], s, S, o);
+            acc[0]+=o[0]; acc[1]+=o[1]; acc[2]+=o[2];
+        }
+        out[3*j+0] = acc[0]; out[3*j+1] = acc[1]; out[3*j+2] = acc[2];
+    });
+    return out;
+}
 } // namespace radia_hdivvim
 
 // ============================================================================
@@ -2775,6 +2815,12 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("_hdiv_quad_tri_field", &radia_hdivvim::QuadTriFieldProbe,
           py::arg("V"), py::arg("r"), py::arg("sigma0"), py::arg("s"), py::arg("S"),
           "Quadratic surface-charge field (V=9, r=3, sigma0, s=3, S=9 row-major) -> 3-vector.  == quadratic_triangle_charge_field.");
+    m.def("_hdiv_demag_field_batch", &radia_hdivvim::HDivDemagFieldBatch,
+          py::arg("vol"), py::arg("surf"), py::arg("obs"),
+          "Batched HDiv-VIM demag field, ngcore::ParallelFor OVER OBS (honours the caller's TaskManager; "
+          "serial fallback if none).  vol = n_vol x 16 [verts12, rho0, g3], surf = n_surf x 22 "
+          "[verts9, sigma0, s3, S9 row-major], obs = n_obs x 3 -> n_obs x 3 (NO 1/4pi).  == the per-pair "
+          "sum of _hdiv_tet_volfield_linear + _hdiv_quad_tri_field, the assemble_demag_field hot loop in C++.");
 
 
     m.def("_hdiv_vim_hmatrix_probe", &radia_hdivvim::HDivVimHMatrixProbe,
