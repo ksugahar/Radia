@@ -122,11 +122,27 @@ ray-trace (**~1e-3**, the spherical method's own accuracy — confirming the clo
 value the spherical method converges to). All building blocks are pure-Python (no debug-probe runtime
 dependency); the C++ probes are used only as test oracles.
 
-**Remaining Step-2 work:** (a) **polynomial surface charge** σ (the triangle field is exact for the
-constant per-face part; the linear/quadratic remainder needs the **triangle-field first/second moment**
-— the surface analog of `triangle_potential_moment`, decomposing the kernel into the in-plane
-`∇'_s(1/R)` part (reducible by the surface divergence theorem to edge `∫σ/R dl`) plus the normal
-solid-angle `1/R³` moment); (b) **higher-degree volume charge** (quadratic+ ρ needs the *volume*
+## The polynomial surface-charge field — degree 1 (DONE, closed form)
+
+The order-2 surface charge `σ = M·n` is **linear** per face. Since `(r-r')/R³ = −∇_r(1/R)`, the field
+of a linear σ is exactly `−∇_r φ_σ` with `φ_σ = ∫_T σ/R dS' = σ0·I0 + s·M1` — the **degree-1 triangle
+potential** we already have. Differentiating in closed form:
+
+```
+∫_T (σ0 + s·r')(r-r')/R³ dS'  =  (σ0 + s·r_p) F_const  −  Σ_edges (s·m_e) G_e  −  I0 · s_∥
+```
+
+needing only `F_const` = `flat_triangle_charge_field` (the constant-σ field), `I0` =
+`triangle_potential_const`, `s_∥` = in-plane part of `s`, and one new elementary building block
+`G_e = ∫_edge (r-r')/R dl` (`_edge_field_integral`, closed-form `asinh`/`sqrt`). `linear_triangle_charge_field`
+assembles these — validated vs off-plane Gauss to **machine precision** (`test_linear_triangle_charge_field_vs_gauss`),
+and `s = 0` reproduces `σ0·flat_triangle_charge_field` bit-identically. This is the surface companion of
+`tet_volume_field_linear` — together they are the **complete degree-1 (linear) charge field**, exact and
+closed-form for both the volume `−div M` and the surface `M·n` terms.
+
+**Remaining Step-2 work:** (a) **quadratic+ surface charge** (the linear σ is done; a quadratic σ
+needs the *second* moment `∫_T r'⊗(r-r')/R³ dS'` — `−∇_r` of the second potential moment `∫_T r'⊗r'/R dS'`,
+the same surface-div-theorem machinery one degree up); (b) **higher-degree volume charge** (quadratic+ ρ needs the *volume*
 potential first moment `∫_V r'/R dV'` — the same `½∇'²R` trick gives `∫_V r'/R dV' = ½Σ_f ∮...`, a
 clean next derivation); (c) **curved faces** (flat-triangle only) — note ngsolve.bem's `LaplaceSL` is
 curved+triangle but gives the **potential**, not the field gradient (`grad G` is a documented
