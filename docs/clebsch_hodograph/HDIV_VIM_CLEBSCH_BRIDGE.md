@@ -79,6 +79,18 @@ potential = flux-line-flow Hamiltonian is the single object behind both the fiel
 reconstruction quality directly to whether its flux lines close — a leaky
 (`M_mass⁻¹ N m`) reconstruction is *not* a closed 2-form and its flux lines spiral.
 
+That diagnostic is made concrete on a **real solved FE field** in
+`flux_line_realfield_ngsolve.py` (golden `test_flux_line_realfield_ngsolve`): a 2-D
+magnetostatic solve `−div(grad A_z) = J`, one flux line traced for three
+reconstructions of the *same* solve with the *same* RK4 integrator. The de Rham
+field `rot(grad A_z)` (the edge-FE `B = curl A`) is exactly tangent to the flux
+surfaces (`B·∇A_z = 0`, misalignment `0.0`) and its line **closes**; a
+nodal-averaged reconstruction (`3.7e-2`) and an explicit charge admixture
+`B + ε∇A_z` (`6e-2`) both leak off the flux surface and **spiral** (`A_z` drift
+`21×` / `~2000×` worse). So *"trace a flux line; if it spirals, the reconstruction
+leaked solenoidal content"* is a directly usable field-quality test for the
+HDiv-VIM migration.
+
 ## The open frontier (3-D helicity) — now characterised
 
 In 3-D the Clebsch representation needs **two** potentials `(α,β)` for three
@@ -120,7 +132,9 @@ foliated fields). The concrete open questions:
     (`saturation_loop_2d.py` / `chaplygin_hodograph_2d.py`);
   - the dynamical face — flux-line closure needs a closed 2-form *and* a
     symplectic integrator (`flux_line_closure_symplectic.py`; Noguchi / Sugahara
-    2020);
+    2020), and the same diagnostic **on a real solved NGSolve field**: the de Rham
+    `rot(grad A_z)` reconstruction's flux line closes while nodal-averaged / charge-
+    admixed reconstructions spiral (`flux_line_realfield_ngsolve.py`);
   - the 3-D closing condition — **helicity** is the obstruction to a global
     Clebsch pair (`clebsch_3d_closing_condition.py`: Clebsch `h = −7e-17`, ABC
     `h = 3(2π)³ ≠ 0` + chaotic Poincaré).
