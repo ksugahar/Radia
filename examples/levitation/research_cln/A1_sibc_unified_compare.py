@@ -133,7 +133,7 @@ def load_vim_rungs_from_foster(
     rungs (list of dicts) and the raw J-fraction p_array.
     """
     sys.path.insert(0, str(Path(
-        "S:/Radia/01_GitHub/packages/radia-vim/scripts"
+        "S:/Radia/01_GitHub/src/ext/radia_vim/scripts"
     ).resolve()))
     from extract_tau_A1_square_mp import (
         cauer_from_spectrum_mp, load_foster_spectrum_json,

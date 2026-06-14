@@ -175,7 +175,7 @@ def dd_evaluate_basis(x_hi, x_lo, y_hi, y_lo, z_hi, z_lo, p, xp_mod=None):
 def main():
     """Validate DD HDiv basis against C++ FP64 reference + mpmath 60-digit ref."""
     sys.path.insert(0,
-        str(Path("S:/Radia/01_GitHub/packages/radia-vim/src")))
+        str(Path("S:/Radia/01_GitHub/src/ext/radia_vim/src")))
     import radia_vim
     import mpmath as mp
     mp.mp.dps = 60

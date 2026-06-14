@@ -2,7 +2,7 @@
 magnetized linear sphere.
 
 Same geometry and analytical reference as
-packages/radia-axifemm/tests/test_magnetized_sphere.py, but exercises the
+examples/axifemm/research/verification/test_magnetized_sphere.py, but exercises the
 reusable API function rather than the raw weak form:
 
     B_in = 2 mu0 mu_r Hc / (mu_r + 2)     [uniform axial, inside sphere]

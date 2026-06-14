@@ -356,7 +356,7 @@
    - `ngsolve_validation/sphere_analytical_cln_highstage.wls` (Stoll Bessel + Mathematica 240-digit Cauer-I)
 4. **BEM-to-Kameari 変換**: `ngsolve_validation/bem_to_kameari_cauer.py` (mpmath 60 digit, Hankel-Padé)
 5. **3D Kameari + snapshot fix**: `ngsolve_validation/cln_team28_kelvin.py` (HCurl + tree-cotree + Kelvin two-sphere)
-6. **radia-vim Phase F-4 (VIM)**: `S:/Radia/01_GitHub/packages/radia-vim/scripts/extract_tau_cuboid_521.py` (Spherical Duffy quadrature + HDiv div-free)
+6. **radia-vim Phase F-4 (VIM)**: `S:/Radia/01_GitHub/src/ext/radia_vim/scripts/extract_tau_cuboid_521.py` (Spherical Duffy quadrature + HDiv div-free)
 7. **Theory note**: `2026_05_05_kameari_vs_hiruma_orthogonalization.md`
 
 → これらを zip / GitHub repo URL でまとめて送付するのが理想
