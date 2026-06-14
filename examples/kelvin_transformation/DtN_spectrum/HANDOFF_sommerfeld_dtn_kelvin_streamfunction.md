@@ -70,8 +70,8 @@ Promote `demo_ff` from the concentric/modal toy to a **general coil inverse desi
    (same operator); **(C3)** a non-concentric blob builds at identical sparse cost where no closed-form
    Green function exists. Selling point confirmed: sparse, material-aware, no Green function.
    **Remaining open refinements:** a non-spherical coil former (cylinder) and an m≠0 tesseral target to
-   drop the residual spherical symmetry; wiring the inverse through `radia.streamfunction`'s ACA-TSVD
-   with the solve-oracle (applicability already settled by `demo_jj`).
+   drop the residual spherical symmetry. (Wiring the inverse through `radia.streamfunction`'s ACA-TSVD is
+   now DONE -- `demo_kk`, below.)
    - **[SETTLED, `demo_jj_aca_tsvd_on_dtn_matrix.py`]** *Can ACA-TSVD be applied to M?* **Yes.** TSVD
      applies to the global inverse design `psi = M^+ B_target` unchanged and is necessary (M is the
      compact forward map psi->field; its SVs decay; measured cond(1e-6) ~ 9.5e3). ACA applies
@@ -82,9 +82,18 @@ Promote `demo_ff` from the concentric/modal toy to a **general coil inverse desi
      -> 5e-6) while a near block stays dense (18/20). This is the **same near/far split HACApK already
      runs** on the MMM/MSC matrix. The only change vs free-space ACA is the entry oracle: one column of
      M = one Kelvin-FEM back-substitution (a fast matvec of M), one row = one adjoint solve — so a
-     randomized SVD / Lanczos is even more natural than entrywise ACA. The remaining engineering is
-     calling `radia.streamfunction`'s ACA-TSVD with that solve-oracle instead of a closed-form
-     Biot-Savart entry.
+     randomized SVD / Lanczos is even more natural than entrywise ACA.
+   - **[DONE, `demo_kk_streamfunction_ridge_with_dtn.py`]** *The wiring made real.* The cheap DtN
+     material-aware M is handed to the EXISTING kernel-agnostic `radia.stream_function.aca_tsvd(M_rows,
+     N_cols, entry)` (entry = array lookup -- the cheap-build path the benchmark justifies; ACA+
+     reproduces the formed M to **1e-14**), then designed by `RegularizedTSVD.from_stiffness(res, S)`
+     with `S` = the coil **surface current-density seminorm** (`psi^T S psi = ||K||^2`). Verified
+     (non-concentric blob, mu_r=50, order 2, 378 coil DoFs, 24 targets): TSVD (min-L2) and the **ridge
+     (min current density)** both HIT the iron-system target in a fresh Kelvin-FEM solve, the ridge with
+     **23% less current density**; an alpha L-curve trades accuracy for ||K|| re-solving only the small
+     core; the **free-space-designed coil misses by 22.5%** through the same solver. No DtN-specific
+     design code -- only the `entry` callback changes.  This settles the user's point ("行列がある状態で
+     (ACA+)+TSVD は可能; 構築コストが安いなら ACA+TSVD でよい") in code.
 
 ## CRITICAL Kelvin-FEM gotchas (each is a ~1e7x blow-up or silent error if missed)
 1. **Gauge:** the open Kelvin compactification has a constant near-null mode; a single ground POINT has
