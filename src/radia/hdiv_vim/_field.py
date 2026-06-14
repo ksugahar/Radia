@@ -1098,6 +1098,75 @@ def curved_triangle_charge_field(surf_map, r, sigma_fn, nq=16):
 
 
 # ---------------------------------------------------------------------------------------------------
+# Curved-element VOLUME-charge field (the order>=2 / #3 piece -- the curved SURFACE charge is above).
+# A curved tet (mesh.Curve(p), T10 quadratic map) is NOT its flat 4-corner approximation: the edge
+# bowing changes the volume charge -div M field by O(curvature).  The volume self-field is only MILDLY
+# singular (the s^2 volume Jacobian cancels (r-x)/R^3 -> a finite integrand), so the robust route is
+# SUBDIVISION: 1->8 (Bey "red") refine the reference tet, map each reference sub-tet's 4 corners through
+# the curved map to a FLAT physical sub-tet, and sum the EXACT closed-form tet_volume_field_linear over
+# the sub-tets (each flat piece is machine-exact; the sum -> the curved-tet field as depth grows).  This
+# reuses the validated flat kernel and avoids a ray-curved-surface Newton.
+# ---------------------------------------------------------------------------------------------------
+def make_t10_tet_map(nodes10):
+    """Build a tet_map(xi, eta, zeta) -> physical point for a 10-node QUADRATIC (T10) curved tet.
+    nodes10 = (10,3): 4 corners (0,0,0),(1,0,0),(0,1,0),(0,0,1) then 6 edge mids in the edge order
+    (0,1),(0,2),(0,3),(1,2),(1,3),(2,3).  (For an NGSolve curved tet, sample mesh.GetTrafo(el) at the
+    reference corner + edge-mid points to get nodes10.)"""
+    X = np.asarray(nodes10, float)
+
+    def tet_map(xi, eta, zeta):
+        L = (1.0 - xi - eta - zeta, xi, eta, zeta)
+        N = np.array([L[0] * (2 * L[0] - 1), L[1] * (2 * L[1] - 1), L[2] * (2 * L[2] - 1),
+                      L[3] * (2 * L[3] - 1), 4 * L[0] * L[1], 4 * L[0] * L[2], 4 * L[0] * L[3],
+                      4 * L[1] * L[2], 4 * L[1] * L[3], 4 * L[2] * L[3]])
+        return N @ X
+    return tet_map
+
+
+_TET8_REF = np.array([[0.0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+_TET8_EDGES = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]   # -> nodes 4..9 = m01,m02,m03,m12,m13,m23
+_TET8_SUB = [(0, 4, 5, 6), (4, 1, 7, 8), (5, 7, 2, 9), (6, 8, 9, 3),      # 4 corner sub-tets
+             (4, 9, 5, 7), (4, 9, 7, 8), (4, 9, 8, 6), (4, 9, 6, 5)]      # 4 octahedron tets (diag m01-m23)
+
+
+def _subdivide_ref_tet(corners, depth):
+    """Recursively 1->8 (Bey red) split a reference tet (corners = (4,3)) `depth` times -> list of
+    8^depth reference sub-tets.  Edge mids = corner-pair averages; the 8-way split exactly partitions
+    the parent (volume-conservation verified in the golden)."""
+    if depth <= 0:
+        return [corners]
+    nodes = list(corners) + [0.5 * (corners[i] + corners[j]) for (i, j) in _TET8_EDGES]
+    out = []
+    for sub in _TET8_SUB:
+        out += _subdivide_ref_tet(np.array([nodes[k] for k in sub]), depth - 1)
+    return out
+
+
+def curved_tet_volume_field(tet_map, r, rho_fn, depth=2):
+    """Field INT_V_curved rho(x) (r-x)/|r-x|^3 dV (NO 1/4pi) over a CURVED tet given by tet_map(xi,eta,
+    zeta) -> physical point on the reference unit tet.  rho_fn(x) -> scalar charge density.
+
+    Curved geometry via SUBDIVISION: the reference tet is 1->8 (Bey red) refined `depth` times; each
+    reference sub-tet's 4 corners are mapped through tet_map to a FLAT physical sub-tet, over which the
+    EXACT closed-form tet_volume_field_linear is summed (rho fit linear per sub-tet from its 4 mapped,
+    slightly-interiorised corners).  depth=0 is the flat 4-corner tet (ignores the edge bowing);
+    increasing depth -> the true curved-tet field.  The volume self-field is only mildly singular, so it
+    converges for interior r too.  r=(3,); returns (3,)."""
+    r = np.asarray(r, float)
+    H = np.zeros(3)
+    for ref in _subdivide_ref_tet(_TET8_REF, depth):
+        phys = np.array([tet_map(p[0], p[1], p[2]) for p in ref])      # flat physical sub-tet (4,3)
+        cen = phys.mean(0)
+        A = np.empty((4, 4)); b = np.empty(4)
+        for i in range(4):
+            p = 0.7 * phys[i] + 0.3 * cen                              # interiorise (avoid shared verts)
+            A[i] = [1.0, p[0], p[1], p[2]]; b[i] = float(rho_fn(p))
+        sol = np.linalg.solve(A, b)
+        H += np.asarray(tet_volume_field_linear(phys, r, float(sol[0]), sol[1:4]))
+    return H
+
+
+# ---------------------------------------------------------------------------------------------------
 # Charge-coefficient ASSEMBLY (Step 2 fast path): the internal/near demag field of a solved HDiv-VIM
 # magnetization at arbitrary points, summed from the ANALYTIC degree-1/2 C++ kernels.  Because those
 # kernels are exact for ANY r (inside / on / outside an element), the assembly is a single uniform sum

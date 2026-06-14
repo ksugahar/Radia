@@ -69,6 +69,8 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
     hex_volume_field_quadratic,       # quadratic volume-charge field over an (affine) hex
     make_t6_surface_map,              # build a T6 (quadratic) curved-triangle parametrization
     curved_triangle_charge_field,     # CURVED-face surface-charge field (singularity subtraction + Duffy)
+    make_t10_tet_map,                 # build a T10 (quadratic) curved-tet parametrization
+    curved_tet_volume_field,          # CURVED-tet VOLUME-charge field (1->8 subdivision + flat closed form)
     assemble_demag_field,             # Step 2: fast charge-coefficient assembly (analytic C++ kernels)
     solve_demag_picard,               # Step 3: field-based nonlinear demag solve (under-relaxed Picard)
 )
@@ -87,7 +89,8 @@ __all__ = [
     "tet_boundary_triangles", "hex_boundary_triangles", "polytope_newtonian_potential",
     "polytope_newtonian_moment", "polytope_volume_field_quadratic",
     "hex_volume_field_linear", "hex_volume_field_quadratic",
-    "make_t6_surface_map", "curved_triangle_charge_field", "assemble_demag_field",
+    "make_t6_surface_map", "curved_triangle_charge_field",
+    "make_t10_tet_map", "curved_tet_volume_field", "assemble_demag_field",
     "solve_demag_picard",
     "_core", "_nonlinear", "_vim", "_field",
 ]
