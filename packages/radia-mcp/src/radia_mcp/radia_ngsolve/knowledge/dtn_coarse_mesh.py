@@ -1376,6 +1376,36 @@ layer with only a one-vertex gauge blows the constant mode up ~1e5x, so inject t
 Dirichlet body surface. FRAMING for the audience: "FEM-Kelvin is a sparse numerical GENERATOR of the
 layered (Sommerfeld-type) Green's operator" is the positive way to state demo_t's BEM differentiator.
 
+DIRECT ASSEMBLY OF THE MATERIAL-LOADED EXTERIOR DtN MATRIX (demo_v, verified 2026-06-14). "Can the
+matrix be made directly?" YES. The dense exterior DtN / Green matrix Lambda on a body surface Gamma is
+the SCHUR COMPLEMENT of the sparse SPD Kelvin-FEM operator A: keep the Gamma DoFs, eliminate the rest,
+  Lambda = A_GG - A_GR (A_RR)^{-1} A_RG    (ONE sparse factorization of A_RR + a back-sub per Gamma DoF).
+Lambda is small, DENSE, symmetric, SPD (on n>=1), size = #Gamma surface DoFs -- a reusable boundary
+operator (impedance / macro-element / numerical Green matrix) mapping Dirichlet data on Gamma to the
+exterior+open Neumann flux, infinity baked in (Kelvin), NO free-space/Sommerfeld Green's function ever
+formed. Because A carries the exterior mu(x) as an FE coefficient, Lambda is the MATERIAL-LOADED
+exterior DtN -- the layered/Sommerfeld Green operator AS A MATRIX -- which a free-space-Green BEM cannot
+assemble without the (expensive) layered Green's function. VERIFIED: magnetic shell mu_s in [0.7,0.9]
+outside a body r=a=0.5 -> Lambda is 452x452 dense (from 12119 sparse DoF, A fill 0.35%, built ~8s,
+sym 0.0); its generalized spectrum (Lambda, M_Gamma) reproduces the analytic vacuum ladder (n+1)/a AND
+its layered shift, with correct 2n+1 multiplicities:
+  mu_s=1 : n=1 4.0005/4.0,   n=2 6.003/6.0,    n=3 8.015/8.0
+  mu_s=10: n=1 5.8655/5.8649, n=2 7.608/7.604,  n=3 9.140/9.123
+  mu_s=50: n=1 6.937/6.936,  n=2 8.115/8.111,  n=3 9.405/9.387   (rel 1e-4..2e-3 = geometry/order floor).
+HONEST SCOPE: n>=1 only (dipole/inductance, quadrupole -- the magnetostatically relevant modes). The
+n=0 MONOPOLE is spurious (~0): a single ground POINT has ZERO capacity in 3D H1, so a Gamma-constant
+extends as a near-free global constant (energy ~0) instead of the decaying (a/r) monopole; ad-hoc
+constant-deflation lands ~3.0, not 2/a. Net-charge/monopole problems need a FINITE ground (small grounded
+ball at the Kelvin centre) or the demo_p weighted convention; magnetostatic apparatus has no monopole,
+so n>=1 is the whole spectrum. The full dense kernel is still O(N^2) entries (== this Lambda) -- cheap to
+GENERATE (sparse factor + back-subs, no Green fn / singular quadrature), NOT made smaller.
+PAPER FRAMING (constructive headline): "a directly-assembled, MATERIAL-AWARE exterior DtN (Green) matrix
+from sparse Kelvin-FEM, with a closed-form DtN-spectrum datasheet for its rank/accuracy, valid for
+inhomogeneous exteriors where the free-space-Green BEM fails." Schur=DtN itself is standard (Demarcke
+2011 / Knockaert 2008 / SBFEM); the genuinely-new COMBINATION = exterior-MATERIAL loading (sugahara2022)
++ the -(n+1)/R spectral a-priori + the sparse-Kelvin realization. Cite those as related work, claim the
+combination, not the bare Schur=DtN.
+
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
 sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
