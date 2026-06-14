@@ -738,3 +738,40 @@ def test_chaplygin_turning_design_sweep_cost():
     cost = out["cost"]
     assert out["picard_reference"]["mean_picard_iters"] > 3.0, out   # physical FEM needs a loop
     assert cost["fem_equiv_linear_solves"] > 5 * cost["designs"], cost
+
+
+def test_clebsch_dipole_saturation_circuit():
+    """Saturation in the dipole, at linear cost: the iron flux RETURN path is a saturable
+    Chaplygin guide, so the gap-field operating curve B_gap(NI) is a magnetic-circuit
+    1-shot (gap + iron segments incl. a saturable THROAT).  The gap field softens as the
+    iron saturates; a thinner iron throat saturates the magnet EARLIER (the saturation
+    knee moves to a lower drive).  Pure circuit (no FEM) -- the whole map is milliseconds."""
+    import clebsch_dipole_saturation_2d as sat
+    out = sat.run(with_fem=False)
+    mp = out["design_map"]
+    assert mp["n_points"] == 120, mp
+    assert mp["map_seconds"] < 1.0, mp                            # milliseconds (linear cost)
+    cs = mp["curves"]
+    for c in cs:
+        assert c["B_gap"][-1] > c["B_gap"][0], c                  # gap field rises with drive
+        assert min(c["NI"]) < c["knee_NI"] < max(c["NI"]), c      # a real saturation knee
+    # the design knob: a thinner throat saturates EARLIER (lower knee drive + onset field).
+    assert cs[0]["knee_NI"] < cs[1]["knee_NI"] < cs[2]["knee_NI"], cs
+    assert cs[0]["Bgap_knee_pred"] < cs[1]["Bgap_knee_pred"] < cs[2]["Bgap_knee_pred"], cs
+
+
+@pytest.mark.slow
+def test_clebsch_dipole_saturation_vs_fem():
+    """Validate the magnetic-circuit B_gap(NI) against a real 2-D nonlinear FEM (an
+    A-formulation Froehlich-iron window-frame electromagnet, under-relaxed Picard).  The
+    lumped circuit matches the FEM to ~20% (the lumped-circuit error: gap fringing +
+    corner flux crowding), and each FEM point costs ~20 Picard iterations -- the per-point
+    cost the circuit replaces with one root-find, so the whole map is at linear cost."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import clebsch_dipole_saturation_2d as sat
+    out = sat.run(with_fem=True)
+    val, cost = out["validation"], out["cost"]
+    assert val["max_rel_err"] < 0.30, val                        # lumped circuit ~ FEM (~20%)
+    assert val["mean_iters"] > 5.0, val                          # FEM needs a Picard loop
+    assert cost["fem_equiv_linear_solves"] > 5 * cost["one_shot_solves"], cost
