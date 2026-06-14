@@ -55,12 +55,28 @@ is the same clean linear inverse as in free space, but with the correct **materi
    (Brunotte 1992, Meeker 2013), the stream-function/target-field design lineage, and the author's own
    Sugahara 2022 (uniform specimen) as the foundation extended.
 
-## Honest novelty status
-- The broad survey found the **transformed-FE-open-boundary** and **stream-function-coil-design**
-  literatures **never meet**; the closest "material in the Kelvin exterior" is the author's **own
-  Sugahara 2022** (uniform specimen, eddy-current — NOT stream-function design). So the specific
-  combination here is **plausibly original to Sugahara**.
-- A **targeted novelty check is running** (stream-function x Kelvin/transformed-FE DtN x magnetic
-  material). Coverage gaps remain (IEEE/grey-lit/Japanese proceedings; broad-survey confidence ~0.78).
-- **Phrasing for the paper: "to our knowledge / we are not aware of ..."** — not a bare "world-first"
-  until the targeted check + a Sugahara-2022 forward-citation-graph + 和文 grey-lit scan are done.
+## Honest novelty status — VERDICT (targeted check, 2026-06-15)
+**NOVEL, confidence 0.83** — 5 search agents + 4 adversarial refuters, ALL "not preempted". The specific
+combination (Kelvin/shell-transformed FE open boundary → Schur-condensed DtN/transfer matrix carrying
+finite-permeability iron in the transformed exterior → used AS the stream-function coil-design
+sensitivity kernel) was not found anywhere.
+- **It FUSES Sugahara's OWN two threads** (which exist only separately): his Kelvin open-boundary FEM
+  (Extended Kelvin, IEICE E108-C 2024/25; ECT-with-Kelvin, IEEE TMAG 58(9) 2022 — forward solvers) vs
+  his free-space stream-function coil design (Koiso/Sugahara/Ida, TSVD+ACA CEFC 2024; ACA+CMA-ES 3D coil
+  IEEJ 2025). Frame the contribution as the FUSION, not as new over either half (defuses self-citation).
+- Where coil design DOES carry iron elsewhere, the kernel is categorically DIFFERENT — BEM/μ→∞
+  equipotential (bfieldtools, Mäkinen–Zetter 2020), image/modified-Green, saturated dipole (Landreman
+  2025), linearized magnetization-response (passive shimming) — never a transformed-FE DtN material
+  operator. Closest (non-preempting): Wang et al., *Measurement* 2024 (gradient coil + ferromagnetic
+  shield via Green/image); bfieldtools.
+- **Recommended phrasing (NOT a bare "first"):** "To the best of our knowledge, this is the first method
+  to use a Kelvin/shell-transformed FE open boundary, condensed by a Schur complement into a DtN
+  (transfer) matrix that carries the finite-permeability iron in the transformed exterior, directly as
+  the sensitivity kernel of a stream-function coil-design inverse problem. We are not aware of any prior
+  work fusing these two ingredients ..."
+- **Residual checks before a 'first' claim:** (1) full texts of paywalled shield/coil papers (esp. Wang
+  2024 *Measurement* S0263224124008339); (2) Japanese grey-lit (IEEJ 静止器/マグネティックス研究会,
+  J-STAGE, CEFC/COMPUMAG 2022-26, in Japanese: Sugahara/Koiso/Sato/Ida + ケルビン変換 + 電流ポテンシャル);
+  (3) 2025-26 preprints + the stellarator REGCOIL/current-potential line; (4) confirm no in-press Sugahara
+  paper already fuses them; (5) match wording to the exact construction (total vs reduced scalar potential;
+  transfer vs DtN; finite vs infinite μ); (6) accelerator-magnet (ROXIE/CERN) field-quality design re-scan.
