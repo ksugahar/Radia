@@ -241,13 +241,30 @@ parallelepiped) hexes; a trilinear (distorted) hex has **bilinear (non-planar) f
 curved case below. (The hex *surface* charge field needs no new code — a boundary quad is two triangles,
 each handled by the existing `linear_/quadratic_triangle_charge_field`.)
 
-**Remaining work:** (a) **curved faces / distorted (trilinear) hex** — needs singularity subtraction
-(flat-triangle analytic part at the singular point + smooth curved-minus-flat remainder by ordinary
-Gauss); note ngsolve.bem's `LaplaceSL` is curved+triangle but gives the **potential**, not the field
-gradient (`grad G` is a documented ngsolve.bem gap, so it cannot be reused here). (c) the
-**charge-coefficient assembly** (sum the C++ kernels over elements/faces weighted by the polynomial
-charge coeffs from `build_charge_gram`'s B, H-matrix accelerated) + a C++ port of the arbitrary-degree
-general recursion. Then **Step 3** wires the (fast) internal field into the nonlinear `set_field`.
+## Curved triangular faces (DONE — surface, singularity subtraction)
+
+A curved face has **no closed form**, so `curved_triangle_charge_field(surf_map, r, sigma_fn, nq)` uses
+**singularity subtraction**: at the surface projection `(u0,v0)` of `r` (clamped into the reference
+simplex so the fan is valid), the flat **tangent triangle** (image of the reference corners under the
+affine map `x0 + x_u(u−u0) + x_v(v−v0)`) carries the **exact `1/r²` singularity** → its field is the
+analytic `flat_triangle_charge_field`; the smooth **(curved − tangent)** remainder is integrated by a
+**Duffy-refined** rule (3 sub-triangles fanned from `(u0,v0)`, each collapse-mapped so the Jacobian `~ s`
+kills the residual `1/ρ`). `surf_map(u,v) → (x, x_u, x_v)` (build from NGSolve `GetTrafo`: `mip.point` +
+the two Jacobian columns; `make_t6_surface_map` builds it for a 6-node quadratic patch).
+
+This is **quadrature-refined**, not closed-form (curved has no closed form): rel err **~1e-6 at nq=20**,
+controllable by `nq` — validated vs a Duffy-refined reference **far and very near** the surface
+(`test_curved_triangle_charge_field_converges_vs_reference`), and the **zero-curvature limit reproduces
+`flat_triangle_charge_field`** (`..._flat_limit`). *Lesson:* a naïve brute-force Gauss reference does
+**not** converge near a curved surface (it looked like a 65 % kernel error at one near point — it was the
+unconverged *reference*); the Duffy fan is needed for both the kernel and its reference.
+
+**Remaining work:** (a) **curved / distorted-hex VOLUME** — the curved analogue of the self-volume:
+the spherical ray-trace `smax(ŝ)` needs ray–curved-boundary intersection (the surface case above is
+done; the volume case is the harder remaining piece). (b) the **charge-coefficient assembly** (sum the
+C++ kernels over elements/faces weighted by the polynomial charge coeffs from `build_charge_gram`'s B,
+H-matrix accelerated) + a C++ port of the arbitrary-degree / curved kernels. Then **Step 3** wires the
+(fast) internal field into the nonlinear `set_field`.
 
 ## Step 1 — validated (`reconstruct_field_polynomial`)
 
