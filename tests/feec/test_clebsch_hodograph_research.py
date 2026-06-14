@@ -456,3 +456,31 @@ def test_chaplygin_inverse_nonlinear_2d():
     assert rt["wall_fit"] < 1e-5, rt                           # on-curve slip penalty met
     assert rt["jac_min"] > 0.0, rt                             # valid (no fold) at 30% taper
     assert rt["free_measure"] > 5.0 * rc["free_measure"], (rc, rt)   # theta-dependent = free bdry
+
+
+@pytest.mark.slow
+def test_hdiv_vim_clebsch_loopstar():
+    """The de Rham CAPSTONE: the HDiv-VIM demag operator's LOOP modes ARE Clebsch
+    (solenoidal) magnetizations grad(alpha) x grad(beta).  On a sphere an azimuthal
+    Clebsch field M=(y,-x,0) is (a) machine-zero divergence (charge-free) and
+    ~field-null in the demag operator N=B^T G B (D ~ 0 vs the gradient's D ~ 1 and
+    the uniform sphere's D = 1/3); (b) makes ~no external field vs the uniform
+    dipole; (c) is a GAUGE -- adding it to a charged magnetization does not change
+    the external field.  This bridges the HDiv-VIM solver (operator side) and the
+    Clebsch hodograph design line (potential side): loop-star = Clebsch-gradient =
+    Hodge = pole / flux-guide."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.csg")
+    pytest.importorskip("radia")
+    import hdiv_vim_clebsch_loopstar as br
+    r = br.analyze(maxh=0.6, order=1)               # coarser for CI speed
+    # (1) field-null: the Clebsch (loop) mode carries ~no demag; the gradient does.
+    assert r["divM_clebsch"] < 1e-9, r              # exactly charge-free in the volume
+    assert r["D_clebsch"] < 1e-2, r                 # ~field-null (residual = faceting M.n)
+    assert r["ratio_D"] < 1e-2, r                   # D_Clebsch << D_gradient
+    assert r["D_gradient"] > 0.9, r                 # a pure gradient carries the demag
+    assert 0.28 < r["D_uniform"] < 0.38, r          # the textbook sphere demag factor 1/3
+    # (2) no stray field: the Clebsch external field is tiny vs the uniform dipole.
+    assert r["ratio_ext"] < 2e-2, r
+    # (3) gauge: adding t*Clebsch to the uniform star barely changes the external field.
+    assert all(dev < 3e-2 for _, dev in r["gauge"]), r
