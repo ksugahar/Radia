@@ -449,6 +449,27 @@ edge-finite-element results / bubble-system placement", IEEJ (JP); Sugahara
 2020, "Implicit symplectic flux-line tracking" (noting the circular-accelerator
 beam-orbit-tracking analogy).*
 
+### `clebsch_3d_closing_condition.py` — the 3-D frontier: helicity is the obstruction
+
+The 2-D flux line always has a conserved `A_z` (1.5 DOF → always integrable, always
+closes). In **3-D** a *global* Clebsch pair `B = ∇α×∇β` need not exist, and the
+fundamental obstruction is the **helicity** `h = ∫A·B` (the topological
+linking/knotting of field lines — Moffatt 1969). A Clebsch field is helicity-free
+**pointwise** (`A = α∇β` ⟹ `A·B = α∇β·(∇α×∇β) = 0`), so **`h ≠ 0` ⟹ no global
+Clebsch pair** ⟹ flux lines are linked/chaotic and do **not** close. This is the
+3-D "closing condition": *flux lines close (lie on flux surfaces) iff a global
+Clebsch pair exists iff the helicity vanishes.*
+
+Verified on the 3-torus: a Clebsch field `∇α×∇β` has `h = −7e-17` (machine zero,
+rel `4e-19`) → global Clebsch exists; the **ABC** Beltrami field
+(`∇×B = B`, `A = B`) has `h = ∫|B|² = 744.15 = 3(2π)³` exactly → no global Clebsch,
+and a single ABC flux line's **Poincaré section fills a 2-D region** (occupancy
+`0.55` — the famous ABC chaos, never closing onto a curve). This pins the open
+frontier: the saturable 3-D HDiv-VIM solve admits the Chaplygin/Clebsch
+linearisation only where the helicity obstruction vanishes (integrable / foliated
+fields). *Ref (concept): Moffatt, "The degree of knottedness of tangled vortex
+lines", JFM 1969; Arnold; Dombre et al., JFM 1986 (ABC chaos).*
+
 ## Design track — accelerator pole (the "iron face = equipotential" lever)
 
 These quantify the design methodology (§3–5 of `DESIGN_METHODOLOGY.md`): the
@@ -599,9 +620,10 @@ python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inv
 python hdiv_vim_clebsch_loopstar.py           # de Rham capstone: HDiv-VIM loop modes ARE Clebsch fields
 python hdiv_vim_clebsch_2d_az.py              # 2-D unification: A_z IS the Clebsch potential
 python flux_line_closure_symplectic.py        # dynamical face: flux-line closure (de Rham + symplectic)
+python clebsch_3d_closing_condition.py        # 3-D frontier: helicity obstructs the global Clebsch pair
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (25 tests; the nine
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (26 tests; the nine
 heavy FEM rungs — forward+contour, the design loop, the curved chamfer, the
 open-boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
 3-D nonlinear Kelvin merge, the turning-guide hodograph PDE, and the
