@@ -483,6 +483,62 @@ print(f"Area error: {area_error:.4f}%")
 ```
 """
 
+WORKFLOW_FIELD_SOLVE = """
+# High-Order Hex in an Actual FIELD Solve (not just volume)
+
+Curving improves not only the VOLUME integral but a solved FIELD quantity. Verified on the
+coaxial-capacitor Laplace problem: a hex-meshed annular TUBE (inner radius a, outer b,
+length L), exported `order N`, carried into an NGSolve Laplace solve, gives the per-length
+capacitance against the exact closed form
+
+    C/L = 2 pi eps / ln(b/a)        (eps = 1 here).
+
+Because the exact solution is purely radial V(r)=ln(b/r)/ln(b/a), the flat ends are exact
+Neumann (dV/dz = 0) -- NO end effects -- so the only error is the hex geometry's chord error
+on the CURVED cylindrical electrodes, which curving removes.
+
+## Result (a=1, b=2, L=2; 707 hexes; FIELD order fixed, GEOMETRY order varied)
+
+| geom order | volume err | C/L err  |
+|------------|------------|----------|
+| 1 (faceted)| +0.049%    | +0.854%  |
+| 2 (curved) | +0.001%    | +0.002%  |
+| 3 (curved) | +0.000%    | +0.000%  |
+
+Faceted hex mis-states the capacitance by ~0.85% (chord error on the round electrodes);
+curved hex (order 2-3) nails it. Curving matters for FIELDS, not just geometry checks.
+
+## Boundary conditions without exported sideset names
+
+`export netgen` may not carry your Cubit sidesets as named NGSolve boundaries. Robust trick:
+select boundaries by GEOMETRY in NGSolve and impose Dirichlet by a penalty. For the tube,
+pick the cylindrical electrodes by their RADIAL normal (|n_z| < 0.5) -- this excludes the
+flat ends (|n_z| ~ 1), which must stay Neumann. Do NOT select the electrodes by radius alone:
+the flat-end corner rings also have r ~ a or b and pinning them to V=1/0 over a finite width
+wrongly distorts the field (gave a stuck +7.5% error until switched to the normal selector).
+
+```python
+from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction, grad, dx, ds,
+                     Integrate, IfPos, sqrt, x, y, specialcf)
+mesh = Mesh("tube_o3.vol")                 # high-order hex from Cubit
+r = sqrt(x*x + y*y); n = specialcf.normal(3)
+cyl    = IfPos(0.25 - n[2]*n[2], 1.0, 0.0) # |n_z|<0.5 -> cylindrical face only
+on_in  = cyl*IfPos(0.5*(a+b) - r, 1.0, 0.0)
+mask   = cyl                               # penalise both electrodes
+fes = H1(mesh, order=3); u, v = fes.TnT(); alpha = 1e7
+A = BilinearForm(fes, symmetric=True); A += grad(u)*grad(v)*dx + alpha*mask*u*v*ds
+f = LinearForm(fes); f += alpha*on_in*v*ds  # target V=1 inner, 0 outer
+A.Assemble(); f.Assemble()
+gfu = GridFunction(fes)
+gfu.vec.data = A.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")*f.vec
+C_per_L = Integrate(grad(gfu)*grad(gfu), mesh, order=10) / L   # = 2W/V^2 / L, V=1
+```
+
+Same pattern (swap eps->mu/sigma/k, or curl-curl for magnetics) carries any FEMM-style field
+solve onto curved high-order hex. Loader rule from `troubleshooting` still applies: read the
+curving with `Mesh()` + high `order=` quadrature, never `m.Curve()` (no CAD ref in the .vol).
+"""
+
 TROUBLESHOOTING = """
 # Troubleshooting High-Order Curving
 
@@ -820,6 +876,8 @@ sideset 2 add surface <gap2>; sideset 2 name "sink"
 		"complex": WORKFLOW_COMPLEX,
 		"complex_named": WORKFLOW_COMPLEX,  # Alias for backward compat
 		"accuracy": WORKFLOW_ACCURACY,
+		"field_solve": WORKFLOW_FIELD_SOLVE,
+		"capacitance": WORKFLOW_FIELD_SOLVE,
 		"kelvin_auto": KELVIN_AUTO,
 		"gmsh_2nd_order": WORKFLOW_GMSH_2ND_ORDER,
 		"troubleshooting": TROUBLESHOOTING,
@@ -840,7 +898,7 @@ sideset 2 add surface <gap2>; sideset 2 name "sink"
 			WORKFLOW_OVERVIEW, WORKFLOW_EXPORT_CURVED,
 			WORKFLOW_CYLINDER, WORKFLOW_SPHERE, WORKFLOW_TORUS,
 			WORKFLOW_COMPLEX, WORKFLOW_GMSH_2ND_ORDER,
-			WORKFLOW_ACCURACY, TROUBLESHOOTING, DELETED_APIS,
+			WORKFLOW_ACCURACY, WORKFLOW_FIELD_SOLVE, TROUBLESHOOTING, DELETED_APIS,
 		]
 		return "\n\n".join(main_topics)
 	elif workflow in topics:
