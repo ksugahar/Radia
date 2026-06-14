@@ -1425,6 +1425,34 @@ demo_o) is MET HERE by condensing onto the arbitrary body surface; the exterior 
 Kelvin ball. Net: a sparse, material-aware, BEM-STYLE boundary operator for an arbitrary body, no
 Green's function ever formed -- BEM's arbitrary-Gamma parity PLUS exterior material BEM cannot carry.
 
+SOMMERFELD HALF-SPACE ISOMORPHISM (demo_x, verified 2026-06-14). The GENUINE Sommerfeld case is a
+PLANAR half-space (not the spherically-layered demo_t/u). Put the Kelvin inversion CENTRE ON the
+interface (origin on z=0): a plane through the centre maps to ITSELF; Kelvin inversion x->R^2 x/|x|^2
+PRESERVES sign(z) so the two media z>0(c1)/z<0(c2) are preserved; infinity->the centre. Hence the
+UNBOUNDED half-space problem is CONFORMALLY ISOMORPHIC to a BOUNDED two-region ball problem with the
+SAME planar interface and media; the Sommerfeld radiation/decay condition becomes a single point
+condition at the centre. The Kelvin-FEM IS the Sommerfeld problem in inverted coordinates -- isomorphic,
+not merely analogous. VERIFIED vs the closed-form STATIC Sommerfeld (image) Green's function: a
+net-neutral vertical dipole (+q@0.40,-q@0.20) in medium 1 (c1=1) over c2=4 -> image charges
+beta=(c1-c2)/(c1+c2)=-0.6 in z>0, transmitted 2/(c1+c2) in z<0; Kelvin-FEM matches in BOTH media AND
+the far field (inverse Kelvin) to max rel 2.6e-3 (order 3, IfPos interface, maxh 0.13).
+CRUCIAL GOTCHAS (each a ~1e7x blow-up if missed): (1) the open Kelvin compactification has a CONSTANT
+near-null mode (the non-decaying gauge); a single ground POINT has ZERO capacity in 3D H1 and cannot
+hold it -> use a mean-zero NumberSpace constraint (int_Omega u dx=0; gauge offset then ~1e-3, well
+conditioned, umfpack) OR a finite ground ball; a bare point ground leaves the gauge ~1e4x the signal
+(usable only if the source is exactly neutral, then subtract the offset). (2) the SOURCE must be EXACTLY
+discretely neutral -- normalise by the MESHED ball volumes (net charge ~1e-15), else a tiny net-charge
+residual excites the n=0 mode ~1e7x. (3) keep the truncation sphere as ONE face (single periodic
+Identify) and carry the interface by IfPos(z,c1,c2); a geometric z=0 hemisphere split = two Identify
+calls glued imperfectly -> a weakly-coupled Kelvin ball = yet another near-null mode that blows up.
+HONEST: this is the STATIC Sommerfeld (image limit). The full WAVE Sommerfeld integral (branch cuts,
+surface-wave poles) is the time-harmonic case = the authors' extended-Kelvin radiating regime
+(sugahara2025, Maxwellian PML in the Kelvin-mapped exterior); the centre-on-interface isomorphism is
+IDENTICAL, only the per-region operator becomes Helmholtz. PAPER VALUE: the strongest BEM-differentiator
+statement -- Kelvin-FEM is provably the SAME operator as the Sommerfeld layered-media problem
+(isomorphic), realised sparsely and WITHOUT the layered Green's function that is the hard part of BEM
+for stratified media.
+
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
 sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
