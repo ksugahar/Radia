@@ -2183,6 +2183,37 @@ box (no corner reflections, conforms to spherical wavefronts, diagonal in the sp
 Kelvin-vs-PML differentiator (box-vs-sphere needs a genuine 3D test). DISCIPLINE NOTE: this block
 records a corrected claim -- the first thin-PML probe over-confirmed the user's intuition; the fuller
 thickness-sweep + Kelvin-only test is the verified result.
+
+IABC (IMPROVISED ABSORBING / ASYMPTOTIC BOUNDARY CONDITIONS) -- a DtN-spectral view and DEVELOPMENT
+DIRECTIONS (ANALYSIS, not yet a numerical verification; read Sugahara PIERS 2016 Shanghai, building on
+Meeker IEEE TMAG 2013/2014 + Sugahara ICEAA 2015). WHAT IT IS: surround the region of interest with N
+ISOTROPIC spherical shells, each with special complex (eps,mu) constants, terminated by a PEC; "order N"
+= number of layers. The shells emulate the open boundary WITHOUT modifying the FEM solver (isotropic =
+any code). Verified in that paper: works at LOW frequency / near-field (WPT 13.56 MHz, where PML and
+radiation BC fail); 3/4/5-layer IABC are nearly identical (converged) while radiation BC varies wildly
+with domain size; "highest multipole = sextupole -> 3 layers enough". (Companion 2016 method: a
+Perturbation / equivalence-theorem post-hoc correction -- reconstruct the field from the truncation
+surface via equivalent currents J=n x H, M=E x n to add the 1st-order reflection correction; no matrix
+inversion; also a BC-error visualizer.) DtN-SPECTRAL CONNECTION (the key insight + the gap): "N layers
+-> multipoles to order N" and "sextupole -> 3 layers" are LITERALLY the DtN datasheet (order = multipole
+reach), the SAME statement as the Kelvin ladder lambda_n=-(n+1)/R climbed to degree N (demo_g closure
+hierarchy / demo_m multipole ceiling). YET IABC has never been analyzed via the DtN spectrum (as PML
+hadn't, per the lit survey). DEVELOPMENT DIRECTIONS (room for development = YES, and they extend Track A):
+ (1) a DtN-SPECTRAL THEORY OF IABC: the N-layer IABC = a rational/staircase approximation of the
+     exterior DtN matched to degree N; formalize -> PREDICT the needed N from the source's multipole
+     content (replace the heuristic) and derive the shell constants as the per-mode impedance match;
+     IABC becomes a 4th arm on the Kelvin/PML/BEM DtN-spectrum comparison.
+ (2) KELVIN <-> IABC: nested piecewise-constant isotropic shells = a STAIRCASE of the continuous Kelvin
+     medium -> Kelvin is the N->infinity limit of IABC (unifies Sugahara's two open-boundary families);
+     verifiable: DtN -> exact ladder as N grows. (Caveat: the STATIC SCALAR Kelvin medium is NOT (a/r)^2
+     -- that gives -n/a, not -(n+1)/a; (a/r)^2 is the Maxwell/vector TO medium of demo_ll. So a scalar
+     IABC<->Kelvin demo must use the correct scalar (R/rho)-weight convention, not the vector (a/r)^2.)
+ (3) exterior material / scatterers in IABC (the demo_rr capability for Kelvin); (4) eddy-current /
+     diffusive (SA) extension (demo_aa analog); (5) IABC as a 4th method in the Hachinohe SA paper
+     (isotropic, low-freq, no-code-modification), unified with Kelvin via the DtN spectrum.
+DISCIPLINE: the exact IABC shell constants (Table 1) come from Sugahara ICEAA 2015 (not in hand), so the
+verified demo for (1)/(2) is deferred until that derivation is incorporated OR re-derived from DtN
+matching -- no shaky example committed. This block is documented analysis, not a numerical result.
 """
 
 
