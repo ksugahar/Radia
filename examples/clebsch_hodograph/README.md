@@ -474,6 +474,41 @@ reconstruction has leaked solenoidal content — the visible symptom of the
 `M_mass⁻¹ N m` leak. The 3-D generalisation is helicity-obstructed (next file).
 *Same refs as the symplectic example (Noguchi edge-FE flux lines).*
 
+### `derham_closure_order_sweep.py` — order vs representation: which one closes the flux line?
+
+Two old questions answered with an order sweep. **(Q1, extending Noguchi)** can the
+edge-FE flux line (de Rham, exactly `div B = 0`) be *extended* — "if the field is
+de Rham, a symplectic tracker can be built on it"? **(Q2, Kameari's remark)** "2nd-order
+elements — the flux lines don't close" — is that because they are *not de Rham*?
+Would a de Rham 2nd-order element close?
+
+The measured answer (this script reproduces the table):
+
+- **`B = curl A` is divergence-free for ANY conforming `A`** — edge `H(curl)` *or*
+  nodal Lagrange `[H1]³` — at **every order** (weak interior divergence `~1e-15` at
+  `p = 1, 2, 3`). So "edge vs nodal `A`" is **not** the closure discriminator (it is
+  the spurious-eigenmode / interface-continuity one — the classical edge-element
+  motivation). A first guess that "nodal curl leaks through normal jumps" is **wrong**:
+  `(curl A)·n` depends only on the *tangential* trace of `A`, continuous for nodal `A`
+  too.
+- **The closure-breaker is leaving the de Rham representation — nodally *smoothing* `B`**
+  (the legacy "evaluate at nodes and interpolate" post-processing). The smoothed field
+  acquires a spurious divergence that **decreases with order but is never zero**
+  (`1.2e-2 → 1.3e-3 → 6e-5` at `p = 1, 2, 3`) — so the flux lines do **not** close
+  *even at 2nd order* (Q2: yes, matches Kameari). The de Rham `B`, kept native, is
+  exactly div-free at every order — **a de Rham 2nd-order field closes** (Q2: yes).
+- On a 2-D solve the de Rham `rot(grad A_z)` is exactly tangent to the flux surfaces
+  (misalignment `0.0`) and closes at every order; the smoothed reconstruction's
+  misalignment falls with order (`1.5e-1 → 2.5e-2 → 4.5e-3`) but stays far above
+  de Rham — it does not close even at 2nd order.
+
+So **closure is governed by the representation (de Rham vs nodal-smoothed), not the
+order**. de Rham is the *closed-2-form precondition* that makes a symplectic (2-D,
+Hamiltonian `A_z`) / volume-preserving (3-D, `div B = 0`) tracker meaningful (Q1: yes
+— Noguchi supplies the field, structure-preserving integration supplies the tracker;
+their union is the extension). *Refs: Robert 1991; Noguchi edge-FE flux lines;
+Bossavit / Nédélec (edge elements); Moffatt (helicity).*
+
 ### `clebsch_3d_closing_condition.py` — the 3-D frontier: helicity is the obstruction
 
 The 2-D flux line always has a conserved `A_z` (1.5 DOF → always integrable, always
@@ -646,6 +681,7 @@ python hdiv_vim_clebsch_loopstar.py           # de Rham capstone: HDiv-VIM loop 
 python hdiv_vim_clebsch_2d_az.py              # 2-D unification: A_z IS the Clebsch potential
 python flux_line_closure_symplectic.py        # dynamical face: flux-line closure (de Rham + symplectic)
 python flux_line_realfield_ngsolve.py         # dynamical face on a REAL FE field: de Rham closes, leaky spirals
+python derham_closure_order_sweep.py          # order vs representation: de Rham closes at every order, smoothed does not
 python clebsch_3d_closing_condition.py        # 3-D frontier: helicity obstructs the global Clebsch pair
 ```
 
