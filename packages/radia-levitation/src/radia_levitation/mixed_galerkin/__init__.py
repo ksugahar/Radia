@@ -7,6 +7,7 @@ from .alpha import (
     K_SIBC_total,
     Y_mixed,
     alpha_from_Y,
+    measure_total_area,
     measure_total_area_and_edges,
 )
 from .cad_edges import (
@@ -22,6 +23,7 @@ __all__ = [
     "K_SIBC_total",
     "Y_mixed",
     "alpha_from_Y",
+    "measure_total_area",
     "measure_total_area_and_edges",
     "cad_topology_edges",
     "cad_topology_total_area",
