@@ -27,9 +27,11 @@ Every script PRINTS its result (no files written) and depends only on
 | `demo3_A_dtn_gradient.py` | Is the DtN gradient block formulation-dependent (Ω vs A)? | `formulation` | the gradient block `−(n+1)/R` is the SAME for the vector-potential A formulation (dipole `−2/R`; `B·n = curl_Γ A_t`, rel-L2 3.2e-5) |
 | `demo_d_multipole_spectrum.py` | Source factor `c_n` for a magnetised square (Kameari Q-d) | `datasheet` | edge-charge spectrum has only `n ≡ 1 (mod 4)`; `n=3` FORBIDDEN by symmetry (single-resolution false-positive trap); leading correction `a₅/a₁ = (4/15)(a/R)⁴` |
 | `demo_e_optimal_R.py` | Optimal Kelvin/truncation radius (Kameari Q-e) | `p_method` | disk/sphere = monotone → smallest R; square/cuboid → interior optimum `R/a ≈ 3` (DOF proxy `(R/a)²·p(R)²`) |
+| `demo_f_pole_sector.py` | Does a 1-pole (sector) model keep the open boundary exact? | `symmetry_hex` | a 2D pole sector restricts the circular DtN to its admissible harmonics (4-pole → n=2,…) at full-circle accuracy with ~1/4 the DoF; non-admitted modes (dipole n=1, n=3) are excluded; the eigenvalues `λ_n=−n/R` are untouched |
 | `kelvin_exterior_mesh.py` | Does refining the exterior VOLUME mesh help? | `p_method` | `‖u_h−P_n‖≈1.5e-15` on every volume mesh (p≥n): the volume solve is Galerkin-exact → refining the exterior interior does nothing; only Γ's geometry (a surface effect) moves λ |
 | `kelvin_exterior_mesh3.py` | Isolate Γ-surface vs interior volume | `p_method` | with the Γ surface fixed, λ is set by `∫_Ω|∇P_n|²/∮_Γ P_n²` — a fixed polynomial over a fixed domain; the exterior volume mesh enters nowhere. p=1<n control shows refinement only helps when the order is deficient |
 | `floor_vs_curve.py` | Is the 5–6 digit floor really *geometry*? | `p_method` | fix FE order `p≥n` + mesh, raise only the isoparametric Curve order `k`: error drops ~1000× (`k=1` flat ~1% → `k=3` ~1e-5) → the floor is the curved-sphere **geometry**, not the multipole/method |
+| `inductance_dtn.py` | Is **inductance** DtN-certified like capacitance? | `datasheet` | external `L_ext` = the `n=1` (dipole) Steklov mode (identity `W_ext=½μ₀(n+1)/R∮φ²`, rel diff 0); `C↔n=0` exact, `L_ext↔n=1` defect `1.4e-3 (p=1)→7.6e-6 (p=3)`, floor=geometry, exterior-volume-irrelevant — the **dual of `C`**; NOT the `ngsbem` vector single-layer (different operator) |
 
 ## Running
 
