@@ -829,3 +829,56 @@ def test_clebsch_dipole_saturation_3d_aform():
     cure = out["cure"]
     assert cure["aform_final"] < 1e-4, cure          # B-input A-form converges
     assert cure["redomega_final"] > 1e-2, cure       # reduced-Omega stalls (the cured issue)
+
+
+def test_clebsch_dipole_saturation_3d_throat_circuit():
+    """B(b): a STRONG 3-D B_gap knee, by THROAT flux-concentration -- the magnetic
+    circuit design map at linear cost.  A thin iron throat in series with the gap
+    carries B_throat = B_gap*(A_gap/A_throat), so it saturates FIRST; when it reaches
+    J_sat its reluctance explodes and B_gap clamps near J_sat/(A_gap/A_throat).  The
+    operating curve B_gap(NI) is a 1-shot scalar reluctance solve (no mesh): a real,
+    strong knee (slope drops >10x across it).  Contrast B(a)'s gap-dominated dipole,
+    where iron saturation softens B_gap only ~14%."""
+    import clebsch_dipole_saturation_3d_throat as t3
+    out = t3.run(with_fem=False)
+    c = out["circuit"]
+    bg = c["B_gap"]
+    assert all(bg[i] < bg[i + 1] for i in range(len(bg) - 1)), c   # rises with drive
+    assert min(c["NI"]) < c["knee_NI"] < max(c["NI"]), c           # a real knee in range
+    assert c["slope_drop"] > 8.0, c                                # STRONG knee (>8x)
+    assert abs(c["clamp_pred"] - out["geometry"]["J_sat"]
+               / out["geometry"]["area_ratio"]) < 1e-9, c          # clamp = J_sat/ratio
+    # the throat carries the area-ratio-amplified field (the concentration that knees).
+    for i in range(len(bg)):
+        assert abs(c["B_throat"][i] / bg[i] - out["geometry"]["area_ratio"]) < 1e-6, c
+
+
+@pytest.mark.slow
+def test_clebsch_dipole_saturation_3d_throat_fem():
+    """Validate B(b) with the convergent 3-D B-input A-formulation FEM (adaptive
+    under-relaxation -- halve the step when the residual rises -- carries the Picard
+    THROUGH the steep saturation knee, where a fixed step diverges).  (1) A LINEAR
+    solve proves the LINKING coil concentrates flux: B_throat/B_gap exceeds the
+    geometric area ratio (the throat funnels flux -- the fix for the failed
+    racetrack-over-gap attempts that gave B_throat ~ B_gap, no knee).  (2) The
+    nonlinear sweep shows the CHANNELED flux (the throat field, the bottleneck) clamp
+    near the iron's saturated carrying capacity as the throat chokes -- a strong
+    iron-driven knee.  (The raw gap field also carries the linking coil's local,
+    un-saturable Biot-Savart field, so the saturating quantity is B_throat, not the raw
+    B_gap.)"""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import clebsch_dipole_saturation_3d_throat as t3
+    out = t3.run(with_fem=True, fem_NI=(200, 1500, 3000, 6000, 12000, 24000))
+    amp = out["linear_amplification"]
+    assert amp["ratio"] > out["geometry"]["area_ratio"], amp       # flux concentrates
+    assert out["fem_max_resid"] < 1e-3, out                        # A-form converges
+    fem = out["fem"]
+    bt = [r["B_throat"] for r in fem]
+    assert all(bt[i] < bt[i + 1] for i in range(len(bt) - 1)), fem  # rises with drive
+    assert bt[2] > out["geometry"]["J_sat"], fem    # throat past J_sat by NI=3000 (early)
+    # the throat (bottleneck) field CLAMPS near the iron saturated carrying capacity:
+    # an 8x drive (3000 -> 24000) lifts it only mildly -> a strong knee.
+    assert bt[-1] < 1.5 * out["geometry"]["J_sat"], fem            # clamped near J_sat
+    assert out["fem_throat_slope_drop"] > 20.0, out                # STRONG channeled knee
