@@ -62,10 +62,16 @@ Promote `demo_ff` from the concentric/modal toy to a **general coil inverse desi
    NOT touch M) HITS the target (1e-14) while the free-space-designed psi MISSES by ~43% (stable 31-39%
    across mesh refinement). Physics anchored on the concentric sub-case vs the analytic layered transfer
    (rel 3e-3..2e-2), and M@psi == a fresh solve to 1e-15 (assembly).
-5. **[OPEN — the immediate next task]** Benchmark M-build (sparse Kelvin-FEM Schur) vs the dense
-   layered-Green / FE-BEM baseline (sparsity, conditioning, FE-coupling) — the selling point is "sparse,
-   material-aware, no Green function". Also: a non-spherical coil former (cylinder) and an m≠0 tesseral
-   target to drop the residual spherical symmetry.
+5. **[DONE — `bench_dtn_mbuild.py`]** Benchmark M-build (sparse Kelvin-FEM Schur) vs the dense
+   layered-Green / FE-BEM baseline — JSON + figure committed. Three measured contrasts: **(C1)** the
+   Kelvin-FEM volume matrix has CONSTANT nnz/row (~15, fill→7e-4), storage linear in ndof, vs the dense
+   Green/BEM operator's O(ndof²) — **941× larger at 25k DoF** (3388 MB vs 3.6 MB), sparse factor 0.6 s;
+   **(C2)** order-2 FEM transfer R_n reproduces the analytic layered-Green transfer to rel_max 2.5e-2
+   (same operator); **(C3)** a non-concentric blob builds at identical sparse cost where no closed-form
+   Green function exists. Selling point confirmed: sparse, material-aware, no Green function.
+   **Remaining open refinements:** a non-spherical coil former (cylinder) and an m≠0 tesseral target to
+   drop the residual spherical symmetry; wiring the inverse through `radia.streamfunction`'s ACA-TSVD
+   with the solve-oracle (applicability already settled by `demo_jj`).
    - **[SETTLED, `demo_jj_aca_tsvd_on_dtn_matrix.py`]** *Can ACA-TSVD be applied to M?* **Yes.** TSVD
      applies to the global inverse design `psi = M^+ B_target` unchanged and is necessary (M is the
      compact forward map psi->field; its SVs decay; measured cond(1e-6) ~ 9.5e3). ACA applies
