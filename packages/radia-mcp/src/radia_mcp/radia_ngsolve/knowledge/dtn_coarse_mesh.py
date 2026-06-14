@@ -1631,6 +1631,22 @@ method that genuinely NEEDS that operator (a stream-function/current-potential c
 material; a BEM/MoM coupling). NEVER claim "form the DtN to solve faster than FEM" (false). demo_u/x/aa
 solve monolithically; demo_v/w/bb/cc form Lambda only to STUDY the operator (spectrum/symmetry/material).
 
+APPLICATION -- stream-function / surface-current COIL DESIGN with MAGNETIC MATERIAL (demo_ee, verified
+2026-06-15). This is the concrete "operator is the deliverable" use the whole thread points to. The
+stream-function (current-potential) method maps a winding-surface stream function psi (K = n x grad psi)
+LINEARLY to the field via a kernel; in FREE SPACE that kernel is Biot-Savart (analytic, easy). With a
+magnetic SHIELD/YOKE/CORE the kernel becomes the system's MATERIAL Green's operator (coil field + iron
+reaction) -- no closed form for general iron, so "stream-function with iron is NOT easy" (the user's
+observation). Kelvin-FEM supplies that material-aware kernel sparsely, Green-function-free, for arbitrary
+iron (demo_bb). VERIFIED (concentric, single coil mode Y_n on r=a, iron shell mu_r in [0.7,0.9], target
+r_t=1.5): the external field's SHIELD/GAIN factor vs the free-space prediction (a/r_t)^(n+1) -- n=1:
+mu_r=10 ->x0.671, 50 ->x0.224, 200 ->x0.064 (a free-space Biot-Savart kernel design is wrong by up to
+~16x); Kelvin-FEM material-aware reproduces the with-iron field (mu_r=50: rel 4.7e-5 (n=1), 3.4e-4 (n=2)).
+=> the material-aware Kelvin-FEM operator IS the kernel a stream-function coil design needs when iron is
+present; and because the design / inverse problem CONSUMES that kernel over many psi, forming the operator
+(demo_dd case 3) is justified here. A strong application section / third paper angle for the magnet-and-
+coil (Radia) domain: shielded MRI gradient/shim coils, excitation windings near steel, actuators.
+
 LITERATURE SURVEY (12-agent workflow, 2026-06-15): low-frequency Sommerfeld + layered-Kelvin novelty.
 LOW-FREQUENCY = DEFINITIVE YES (3 adversarial verifiers conf 0.93-0.95, zero counter-evidence). Low-freq
 layered Sommerfeld is mature across 6 subfields: ELF/VLF dipole-over-earth + complex image; CSEM (~0.1-10
