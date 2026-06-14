@@ -81,8 +81,12 @@ Decision rule for new work:
 - a new **engineering application** -> a `radia.<domain>` subpackage (+ panels +
   `radia_mcp.<domain>` knowledge); a deployable `radia-<app>` package only if it
   genuinely needs an independent PyPI release.
-- The only standalone PyPI packages are the two **tooling** packages above
-  (`cubit-mesh-export`, `radia-mcp`) -- neither is a compute method.
+- Three PyPI packages exist: **`radia`** itself (`pip install radia`, the main
+  wheel -- it bundles every core method + every `radia.<domain>` application) plus
+  the two **tooling** packages above (`cubit-mesh-export`, `radia-mcp`). The
+  `packages/` directory holds ONLY those two extra packages; no core method and no
+  `radia.<domain>` is ever its own PyPI package -- they all ship inside the `radia`
+  wheel.
 
 This is why `radia-mmm` / `radia-axifemm` / `radia-vim` were dissolved into radia
 on 2026-06-14 (they were compute methods mis-packaged as `radia-<X>`); `packages/`
