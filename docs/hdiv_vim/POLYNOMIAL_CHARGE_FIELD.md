@@ -161,10 +161,29 @@ adds two degree-2 moment building blocks, each from the **same identities one de
 (`test_tet_volume_field_quadratic_vs_gauss_far`), `M2`/`V1` each vs Gauss to machine precision, and
 `Q = 0` reduces to `tet_volume_field_linear` bit-identically.
 
-**Remaining Step-2 work:** (a) **quadratic+ surface charge** (the linear σ is done; a quadratic σ
-needs the *second* surface moment field `∫_T r'⊗(r-r')/R³ dS' = −∇_r M2` — the `1/R³` second-moment
-machinery / `−∇_r` of the now-available `triangle_potential_moment2`); (b) **cubic+ volume / surface**
-(same recursion one more degree up — cubic ρ needs the volume *second* moment `∫_V r'⊗r'/R dV'`); (c)
+## The polynomial surface-charge field — degree 2 (DONE, closed form)
+
+The quadratic surface charge `σ = σ0 + s·r' + r'ᵀSr'` (S symmetric) field, via the systematic
+in-plane/normal split `(r-r')/R³ = ∇'_s(1/R) + h·n/R³`:
+
+```
+∫_T σ(r-r')/R³ dS'  =  [Σ_e m_e ∫_edge σ/R dl − (P·s·I0 + 2·P·S·M1)]  +  h·n·[σ0 J3_0 + s·J3_1 + S:J3_2]
+                        └──────────── in-plane ──────────────┘            └─────── normal ────────┘
+```
+
+with the `1/R³` moments `J3_0 = ∫_T 1/R³ = (n·F_const)/h` (reusing the constant-σ field for the solid
+angle), `J3_1 = ∫_T r'/R³`, `J3_2 = ∫_T r'⊗r'/R³` (from `ξ⊗ξ/R³ = P/R − Hess_s R`), plus the quadratic
+edge integrals `∫_edge l^k/R dl` (`_edge_monomial_over_R`, closed-form). `quadratic_triangle_charge_field`
+assembles these — validated vs off-plane Gauss to **machine precision**
+(`test_quadratic_triangle_charge_field_vs_gauss`), and `S = 0` matches `linear_triangle_charge_field`
+(two independent derivations — in-plane/normal vs `−∇φ` — agreeing). It subsumes the constant and linear
+cases. Together with `tet_volume_field_quadratic` this is the **complete degree-2 (quadratic) charge
+field**, exact and closed-form for both terms.
+
+**Remaining Step-2 work:** (a) **cubic+ volume / surface** (same recursion one more degree up — cubic ρ
+needs the volume *second* moment `∫_V r'⊗r'/R dV'`, cubic σ the surface *third* moment); (b) a generic
+arbitrary-degree assembler (the per-degree moments follow a clear pattern — `½∇'²R` for volume, the
+`R^k` Hessian identities for surface); (c)
 **curved faces** (flat-triangle only) — note ngsolve.bem's `LaplaceSL` is curved+triangle but gives the
 **potential**, not the field gradient (`grad G` is a documented ngsolve.bem gap, so it cannot be reused
 here); (d) **hex** internal; (e) a **C++ port** of the moment building blocks + a

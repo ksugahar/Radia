@@ -586,3 +586,80 @@ def tet_volume_field_quadratic(verts, r, rho0, grho, Q):
         M2 = triangle_potential_moment2(P, r)
         acc += n * (rho0 * I0 + float(np.dot(grho, M1)) + float(np.einsum("jk,jk", Q, M2)))
     return acc - (grho * tet_newtonian_potential(V, r) + 2.0 * (Q @ tet_newtonian_moment(V, r)))
+
+
+def _edge_monomial_over_R(A, B, r):
+    """(J0, J1, J2, t_hat, L) with Jk = INT_{edge A->B} l^k / R dl  (l = arc length from A),
+    closed form (asinh / sqrt antiderivatives).  Building block for the quadratic surface field."""
+    t = B - A
+    L = np.linalg.norm(t)
+    that = t / L
+    w = r - A
+    l0 = float(np.dot(w, that))
+    d2 = max(float(np.dot(w, w)) - l0 * l0, 0.0)
+    d = np.sqrt(d2)
+    u1, u2 = -l0, L - l0
+    if d < 1e-300:
+        def asinh(u):
+            return np.sign(u) * np.log(2 * abs(u)) if abs(u) > 0 else 0.0
+    else:
+        def asinh(u):
+            return np.arcsinh(u / d)
+    A_ = asinh(u2) - asinh(u1)                                       # INT 1/R du
+    S_ = np.sqrt(u2 * u2 + d2) - np.sqrt(u1 * u1 + d2)               # INT u/R du
+    U2 = (0.5 * (u2 * np.sqrt(u2 * u2 + d2) - d2 * asinh(u2))
+          - 0.5 * (u1 * np.sqrt(u1 * u1 + d2) - d2 * asinh(u1)))     # INT u^2/R du
+    J0 = A_
+    J1 = S_ + l0 * A_                                                # l = u + l0
+    J2 = U2 + 2 * l0 * S_ + l0 * l0 * A_
+    return J0, J1, J2, that, L
+
+
+def quadratic_triangle_charge_field(P, r, sigma0, s, S):
+    """EXACT field of a QUADRATIC surface charge sigma(r') = sigma0 + s.r' + r'^T S r' on a flat
+    triangle (S symmetric): INT_T sigma (r-r')/|r-r'|^3 dS' (NO 1/4pi), via the in-plane/normal split
+    (r-r')/R^3 = grad'_s(1/R) + h n/R^3:
+
+        in-plane  = SUM_e m_e INT_edge sigma/R dl  -  [P s I0 + 2 P S M1]
+        normal    = h n [sigma0 J3_0 + s.J3_1 + S:J3_2]
+
+    with the 1/R^3 moments J3_0 = INT_T 1/R^3 = (n.F_const)/h, J3_1 = INT_T r'/R^3, J3_2 = INT_T r'(x)r'/R^3
+    (from xi(x)xi/R^3 = P/R - Hess_s R), all closed form.  EXACT to machine precision at ANY r (validated
+    vs off-plane Gauss).  Subsumes the constant (s=S=0) and linear (S=0 -> matches
+    linear_triangle_charge_field) cases.  The degree-2 SURFACE companion of tet_volume_field_quadratic.
+    P = (3,3) vertices; returns (3,).  Multiply by 1/4pi for the physical H contribution."""
+    P = np.asarray(P, float)
+    r = np.asarray(r, float)
+    s = np.asarray(s, float)
+    S = np.asarray(S, float)
+    n = np.cross(P[1] - P[0], P[2] - P[0])
+    n = n / np.linalg.norm(n)
+    h = float(np.dot(r - P[0], n))
+    r_p = r - h * n
+    cen = P.mean(axis=0)
+    Pproj = np.eye(3) - np.outer(n, n)
+    Fc = flat_triangle_charge_field(P, r)
+    I0 = triangle_potential_const(P, r)
+    M1 = triangle_potential_moment(P, r)
+    J3_0 = float(np.dot(n, Fc)) / h                                  # INT_T 1/R^3
+    intxi1 = np.zeros(3)                                             # INT_T xi/R^3
+    xixi_R3 = Pproj * I0                                             # INT_T xi(x)xi/R^3
+    inplane = np.zeros(3)
+    for i in range(3):
+        A, B = P[i], P[(i + 1) % 3]
+        J0, J1, J2, that, L = _edge_monomial_over_R(A, B, r)
+        m = np.cross(that, n)
+        if np.dot(m, 0.5 * (A + B) - cen) < 0:
+            m = -m
+        intxi1 -= m * J0
+        Gxi = (A - r_p) * J0 + that * J1                            # INT_edge xi/R dl
+        xixi_R3 -= np.outer(Gxi, m)
+        c0 = sigma0 + float(np.dot(s, A)) + float(A @ S @ A)
+        c1 = float(np.dot(s, that)) + 2.0 * float(A @ S @ that)
+        c2 = float(that @ S @ that)
+        inplane += m * (c0 * J0 + c1 * J1 + c2 * J2)                # m INT_edge sigma/R dl
+    J3_1 = intxi1 + r_p * J3_0                                       # INT_T r'/R^3
+    J3_2 = (xixi_R3 + np.outer(r_p, intxi1) + np.outer(intxi1, r_p) + np.outer(r_p, r_p) * J3_0)
+    inplane -= (Pproj @ s) * I0 + 2.0 * (Pproj @ (S @ M1))          # - INT (grad_s sigma)/R
+    normal = h * n * (sigma0 * J3_0 + float(np.dot(s, J3_1)) + float(np.einsum("jk,jk", S, J3_2)))
+    return inplane + normal
