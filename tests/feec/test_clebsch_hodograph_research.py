@@ -882,3 +882,34 @@ def test_clebsch_dipole_saturation_3d_throat_fem():
     # an 8x drive (3000 -> 24000) lifts it only mildly -> a strong knee.
     assert bt[-1] < 1.5 * out["geometry"]["J_sat"], fem            # clamped near J_sat
     assert out["fem_throat_slope_drop"] > 20.0, out                # STRONG channeled knee
+
+
+def test_bidirectional_coordinate_transform_2d():
+    """The Tampere bidirectional coordinate transformation, made concrete + unifying the
+    lab's 2-D Kelvin and hodograph maps.  Exterior calculus pulls the 2-D magnetostatic
+    Dirichlet energy back under ANY smooth map F with the metric weight
+    W = |det J| (J^T J)^{-1}: so solving on the DEFORMED physical mesh and solving on the
+    simple computational mesh with W are IDENTICAL assemblies (machine precision), for
+    conformal AND non-conformal maps.  A 2-D CONFORMAL map gives W = I (weight-free) --
+    the reason hodograph_kelvin_2d carries mu'=mu0 with no (R/rho')^2 factor -- while 3-D
+    and axisymmetric keep a weight (derived symbolically)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen")
+    sympy = pytest.importorskip("sympy")
+    import bidirectional_coordinate_transform_2d as bx
+    out = bx.run(order=2, maxh=0.12)
+    cases = {c["label"].split()[0]: c for c in out["cases"]}
+    for c in out["cases"]:
+        # the pullback weight reproduces the deformed-mesh assembly EXACTLY (any map)...
+        assert c["mat_rel"] < 1e-12, c
+        # ... so the two solves and the exact harmonic field all agree.
+        assert c["sol_rel"] < 1e-9, c
+        assert c["err_exact"] < 1e-3, c
+    conf = next(c for c in out["cases"] if c["label"].startswith("conformal"))
+    nonc = next(c for c in out["cases"] if c["label"].startswith("non-conformal"))
+    assert conf["W_dev"] < 1e-8, conf      # conformal => W = I (weight-free)
+    assert nonc["W_dev"] > 0.1, nonc       # non-conformal => a genuine metric weight
+    s = out["symbolic"]
+    assert s["conformal_is_identity"] is True, s     # symbolic: 2-D conformal W = I
+    assert s["generic_is_identity"] is False, s      # a generic 2-D map is NOT weight-free
+    assert s["threeD_weight_free"] is False, s       # 3-D conformal scaling keeps a weight

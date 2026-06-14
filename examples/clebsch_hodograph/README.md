@@ -79,6 +79,43 @@ for a truncated air box at `r/a = 6` — **~10⁶× more accurate**; `Bx ~ 1e-17
 ~3e-5. Figure: `hodograph_kelvin_2d.png` (the orthogonal flux/equipotential net
 on the exact field).
 
+### `bidirectional_coordinate_transform_2d.py` — the coordinate transform, unified (Tampere-inspired)
+
+**The exterior-calculus statement behind every map in this folder.** Inspired by
+Dervisha, Marjamäki, **Rasilo** & Tarhasaari, *"Bidirectional Coordinate
+Transformation and Its Application to 2-D Magnetic Field Problems"* (CEFC 2026,
+WA-O1, Tampere): exterior calculus gives the governing equation in **any**
+coordinate system, so a magnetostatic problem may be solved in whichever domain is
+simplest — the physical one (carries the geometry) or a transformed one (a complex
+map to a simple computational domain). For a map `F` with Jacobian `J`, the 2-D
+magnetostatic Dirichlet energy pulls back with the **metric weight**
+`W = |det J|·(JᵀJ)⁻¹`:
+
+```
+∫_phys ∇u·∇v dx dy  =  ∫_comp (∇u)ᵀ W (∇v) dξ dη .
+```
+
+So assembling on the **deformed physical mesh** and assembling on the **simple
+computational mesh with `W`** give the **identical** stiffness matrix — verified
+here to `~1e-16` for a *conformal* map (`F = z + 0.3z²`) **and** a *non-conformal*
+stretch+shear, with the two solutions and the exact harmonic field `Re(z³)` all
+agreeing. This is the **bidirectional** statement: solve where it is convenient,
+the metric carries the geometry; and it works for **arbitrary** maps, not only
+conformal ones.
+
+**It unifies the lab's coordinate transforms.** A 2-D **conformal** map has
+`J = sR`, so `W = s²·(s²I)⁻¹ = I` — **weight-free**. That is *exactly* why
+`hodograph_kelvin_2d.py` carries `μ′ = μ₀` with no `(R/ρ′)²` factor (the Kelvin
+inversion is conformal) and why the hodograph/Cauchy–Riemann nets need no metric:
+the 2-D Kelvin and hodograph maps are the *same* object — a weight-free pullback.
+The example also **derives this symbolically** (`symbolic_pullback_check`, sympy):
+2-D conformal `W = I`, a generic 2-D map `W ≠ I`, and **3-D / axisymmetric keep a
+weight** (`s` for a 3-D scaling, `2πr` for the meridian plane — the reason
+`clebsch_kelvin_3d.py` and `hodograph_kelvin_axisym.py` are *not* weight-free).
+Figure: `bidirectional_coordinate_transform_2d.png` (the physical coordinate grids:
+(a) conformal — angles preserved, `W=I` | (b) non-conformal — skewed, `W≠I`).
+Golden `test_bidirectional_coordinate_transform_2d` (fast).
+
 ### `clebsch_kelvin_3d.py` — Kelvin in the hodograph (3-D, the real formulation)
 
 **rung 2 of "Kelvin in the hodograph."** The genuine 3-D case: the **Clebsch
@@ -846,6 +883,7 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
 python a_method_clebsch_2d.py                 # A-method net figure
 python hodograph_kelvin_axisym.py             # Kelvin exact-open-boundary flux figure
 python hodograph_kelvin_2d.py                 # Kelvin in the hodograph (2-D Cartesian, no air box)
+python bidirectional_coordinate_transform_2d.py  # the coordinate transform unified: pullback W (Tampere) (--fig)
 python clebsch_kelvin_3d.py                   # Kelvin in the hodograph (3-D Clebsch, no air box)
 python saturation_loop_2d.py                  # the nonlinear saturation loop (Chaplygin reference)
 python chaplygin_design_sweep_2d.py           # nonlinear-as-linear: a saturable design space at linear cost (--fem)
