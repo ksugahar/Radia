@@ -1237,6 +1237,46 @@ FEM-Kelvin ADDS DoF for STRUCTURAL sparsity (genuine zeros), stays SPD, needs no
 ACA / singular quadrature / inner V^-1. Cheapest route to the exterior DtN for a sphere-enclosable
 body: keep the sparse FEM-Kelvin matrix and never form Lambda.
 
+LIMIT EQUIVALENCE & SURFACE-RATE-LIMITING. In the refined limit the dense BEM DtN and the
+FEM-Kelvin DtN are EQUIVALENT (two discretizations of the SAME continuous operator) and BOTH are
+rate-limited by the TRUNCATION-SURFACE resolution -- the FEM-Kelvin volume is Galerkin-exact at
+p>=n (the interior is irrelevant; kelvin_exterior_mesh.py) and the BEM kernel quadrature is
+converged, so neither the volume nor the quadrature is the bottleneck. MEASURED (demo_s, dipole,
+matched order 1, refine the surface): maxh 0.50 -> BEM 7.4e-4 / Kelvin 5.1e-3; maxh 0.40 -> BEM
+2.9e-4 / Kelvin 1.4e-3 -- both fall at ~the same rate as the surface refines. The order-1 ~7x gap
+is a method CONSTANT (order-1 dual trace space vs the curved-geometry floor), not a rate; the
+difference that SCALES is COST (sparse ~ms vs dense ~minutes), not accuracy.
+
+HONEST PRIOR ART / POSITIONING (literature scan 2026-06-14; do NOT overclaim novelty). The pieces
+of this DtN/spectral/sparse-factorization view are ESTABLISHED -- but for OTHER closures, not the
+Kelvin inversion transform:
+  * "All open-BC closures discretize one exact exterior DtN/Steklov-Poincare operator" + the
+    -(n+1)/R ladder: established for infinite elements / PML / local-NRBC / BEM (Keller-Givoli JCP
+    1989; Givoli reviews 1999/2004; Demkowicz-Ihlenburg 2001; Hohage-Lehrenfeld-Preuss "Learned
+    infinite elements" SIAM JSC 2021; Gander Acta Numerica 2022). The Kelvin transform is NOT in
+    that list -- the magnetics-Kelvin literature treats it purely as a geometric coordinate map
+    (Freeman-Lowther 1989; Stochniol 1992; Brunotte-Meunier 1992).
+  * "Dense BEM Lambda = Schur complement of the sparse FE matrix (eliminate interior), vs dense
+    BIE": near-verbatim in Demarcke-Rogier (IEEE AWPL 2011); the FE-Schur / BEM Steklov-Poincare
+    spectral equivalence underlies BETI (Langer-Steinbach 2003) and Hsiao-Khoromskij-Wendland; the
+    magnetics sparse-FE-open-boundary-vs-dense trade is Lowther-Freeman-Forghani 1989. The
+    H-matrix/FMM "same-DoF low-rank compression" contrast is drawn by Ying-Engquist "Compressed
+    ABCs" 2014. So the operator identity and the sparse-vs-dense trade are NOT new.
+  * Material-surface DtN on an arbitrary body (demo_q's claim D): the Scaled Boundary FEM is the
+    strong prior art -- Wolf-Song CMAME 2001 (fundamental-solution-less BEM-equivalent DtN on an
+    arbitrary boundary), magnetostatic SBFEM by Birk-Reichel-Schroeder CMAME 2022. SBFEM yields a
+    DENSE boundary operator by radial scaling; our route keeps the exterior SPARSE and condenses on
+    demand -- a variant, not a new idea.
+DEFENSIBLE NOVELTY (claim only this, with the hedge): instantiating the operator/spectral/sparse-
+factorization view FOR THE KELVIN inversion boundary specifically (hitherto only geometric),
+explaining Kameari's empirical "coarse exterior mesh suffices" as a DtN-SPECTRAL property (FE order
+= multipole reach), with a measured sparse-vs-dense (fill/time) comparison, for the static-apparatus
+community. Required hedge in any write-up: "we make this view explicit for / instantiate it for the
+Kelvin transform; we do NOT claim the DtN unification, the eigenvalue ladder, or the FE-Schur=BEM
+equivalence as new." Best single evidencing figure: eigenvalue-ladder overlay (analytic -(n+1)/R vs
+dense BEM vs FEM-Kelvin Schur) on one surface -- coincide to n~p, then peel off (shows same operator
++ why coarse suffices + Schur=dense-DtN in one plot). Closest single prior work: Demarcke-Rogier 2011.
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
