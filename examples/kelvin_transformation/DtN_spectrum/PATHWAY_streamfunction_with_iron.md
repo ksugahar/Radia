@@ -1,6 +1,15 @@
 # New pathway: stream-function coil design with magnetic material via a Kelvin-FEM material-aware DtN matrix
 
-*(Consolidation of the DtN-spectrum / Kelvin thread, 2026-06-15. Honest novelty status at the bottom — a targeted check is running; phrase any claim as "to our knowledge".)*
+> **SCOPE (2026-06-15): this is TRACK B — a SEPARATE paper from the DtN+Kelvin core.**
+> Decision: keep two distinct tracks so the core is not diluted by the application.
+> - **Track A — DtN + Kelvin (core; the SA / Hachinohe paper):** the DtN-spectrum datasheet, the sparse
+>   Kelvin open-boundary, the Sommerfeld isomorphism/surrogate, the directly-assembled material-aware DtN
+>   matrix and what it IS (FEM-condensed, not BEM). Demos d…dd + x/y/z/aa/cc.
+> - **Track B — stream-function coil design with iron (this document; a separate paper):** uses the
+>   Track-A operator as the *material-aware design kernel*. Demos ee/ff + a future general-iron design.
+> The two share machinery but are written up independently.
+
+*(Consolidation of the stream-function track, 2026-06-15. Honest novelty status at the bottom — a targeted check is running; phrase any claim as "to our knowledge".)*
 
 ## The idea (one line)
 The **transfer / DtN matrix** that a stream-function (surface-current / current-potential) coil design
