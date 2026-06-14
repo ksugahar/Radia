@@ -605,3 +605,59 @@ def test_clebsch_3d_closing_condition():
     assert r["h_abc"] > 100.0, r
     # the ABC flux line is chaotic: its Poincare section fills a 2-D region (does not close on a curve)
     assert r["occ_abc"] > 0.15, r
+
+
+def test_clebsch_dipole_workflow_design():
+    """The Clebsch level-set dipole design workflow, fast tier (Stage A + B): the iron
+    pole face is a scalar-potential equipotential = the Clebsch level set.  At a given
+    pole width a finite flat pole droops (b_3 < 0); a curvature shim drives b_3 through
+    zero (the corrected level set).  The WIDTH knob: a wider pole needs less shim.
+    Stage B reflects the level set into the 3-D pole surface (body = extruded 2-D
+    contour; end = the equipotential/Maxwellian end)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import clebsch_dipole_design_workflow as wf
+    # Stage A: design the cross-section at the magnet width.
+    a = wf.design_cross_section(half_w=0.060)
+    assert a["b3_flat"] < 0, a                              # finite flat pole droops
+    assert 0.0 < a["delta_opt"] < 0.1e-3, a                 # a small shim zeroes b_3
+    assert a["spur_opt"] < a["spur_flat"], a               # the shim improves the field
+    assert a["improve_factor"] > 3.0, a
+    # the WIDTH knob: wider pole -> smaller droop AND smaller shim.
+    lev = wf.width_lever(widths=(0.030, 0.060))
+    assert abs(lev[0][1]) > abs(lev[1][1]), lev            # |b3_flat| falls with width
+    assert lev[0][2] > lev[1][2], lev                      # delta_opt falls with width
+    # Stage B: reflect the level set into the 3-D pole surface.
+    b = wf.reflect_to_3d(a)
+    assert b["body_is_extruded_2d_contour"], b
+    assert b["shim_negligible_at_width"], b                # 60 mm width -> shim < 0.05 mm
+
+
+@pytest.mark.slow
+@pytest.mark.filterwarnings("ignore::UserWarning")   # benign CoilBuilder gimbal-lock
+def test_clebsch_dipole_workflow_fem():
+    """The Clebsch level-set dipole workflow, full chain incl. Stage C (3-D reduced-Omega
+    FEM).  The level set carried 2-D cross-section -> 3-D body (extrude) -> 3-D end: the
+    3-D solve gives a clean flat-top dipole, a clean integrated dipole, and reads back the
+    equipotential END contour (= g/2 in the body, lifting past the iron end = the
+    Maxwellian end).  The integrated transverse spurious is mesh-noise-limited (the 2-D
+    cross-section is the instrument for the transverse harmonics)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import accel_pole_ends_fem as fem3d
+    import clebsch_dipole_design_workflow as wf
+    out = wf.run_workflow(with_fem=True, maxh_air=0.06, maxh_iron=0.03,
+                          n_beam=61, n_theta=24)
+    sc = out["stage_c"]
+    # clean flat-top dipole (x-symmetric).
+    assert 0.08 < abs(sc["bz_body_T"]) < 0.30, sc
+    assert sc["bx_over_bz_centre"] < 0.15, sc
+    # a sane integrated dipole, longer than the iron by the fringes.
+    assert sc["integrated_dipole_bbar1_Tm"] > 0.01, sc
+    assert sc["L_eff_m"] > fem3d.L_BEAM, sc
+    # the level set in 3-D: body contour = g/2, lifts past the iron end (Maxwellian).
+    assert abs(sc["z_pole_body_m"] - fem3d.GAP / 2) < 1e-3, sc
+    assert sc["end_contour_lift_m"] > 0.002, sc
+    # the integrated transverse spurious is mesh-noise-limited (loose band, honest).
+    assert sc["integrated_spurious_rel"] < 0.25, sc
