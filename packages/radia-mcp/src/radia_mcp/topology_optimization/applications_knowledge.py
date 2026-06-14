@@ -299,6 +299,51 @@ forward field.  Local direct search for fine tuning; population/global
 """
 
 
+LINEAR_INVERSE = r"""
+TOPOLOGY / FIELD-SYNTHESIS APPLICATIONS -- REGULARIZED LINEAR INVERSION (TSVD / Tikhonov)
+=========================================================================================
+The field-synthesis / source-design inverse problem (topic `field_synthesis`) is LINEAR:
+a forward matrix A maps a source distribution x (element magnetizations, coil
+stream-function weights, shim moments) to the target field samples b = A x.  Build A by
+columns -- the field at every observation point produced by each unit source mode (e.g.
+each magnet element with Mx/My/Mz, weighted by its volume) -- then SOLVE for x given a
+desired b.  A is intrinsically ILL-CONDITIONED (the field is smooth; high source modes
+radiate weakly, so their singular values collapse), and the naive least-squares solution
+amplifies measurement / discretization noise without bound.
+
+The cure is a SPECTRAL FILTER of the SVD A = U diag(s) V^T:
+
+    minimum-norm LS  x = sum_n (u_n^T b / s_n) v_n                 (= pinv(A) b)
+    TSVD (rank k)    x = sum_{n<=k} (u_n^T b / s_n) v_n           (hard cut at mode k)
+    Tikhonov (lam)   x = sum_n phi_n (u_n^T b / s_n) v_n,  phi_n = s_n^2/(s_n^2+lam^2)
+
+TSVD and Tikhonov differ ONLY in the filter factors phi_n: a 1/0 step at mode k (TSVD)
+vs a smooth roll-off s^2/(s^2+lam^2) (Tikhonov).  Both trade the residual ||A x - b||
+(fit) against the solution norm ||x|| (noise amplification) -- the L-CURVE, whose corner
+picks the regularization strength.  This is the standard planar gradient / shim-coil
+design method and the linear core under the `field_synthesis` PM-multipole / stream-
+function inverse: the analytic multipole identity gives the columns of A; this solver
+inverts it stably.
+
+IMPLEMENTATION (radia_mcp.topology_optimization.linear_inverse):
+  tsvd_solve(A, b, k)        TSVD solution keeping k modes (k=rank -> pinv).
+  tikhonov_solve(A, b, lam)  Tikhonov solution, argmin ||A x - b||^2 + lam^2 ||x||^2.
+  filter_factors(s, lam)     phi_n = s_n^2/(s_n^2+lam^2).
+  lcurve(A, b, lams)         (residual_norm, solution_norm) trade-off points.
+
+VERIFICATION (golden-locked by tests/mcp_server/test_topology_linear_inverse.py, on a
+controlled 8x5 rank-3 system with singular values [5, 1, 0.05]):
+  * TSVD at k=rank == minimum-norm least-squares pinv(A) b to 1.2e-15.
+  * Tikhonov lam->0 -> pinv (2.8e-8 at lam=1e-7).
+  * filter factors phi = s^2/(s^2+lam^2) (the 0.05 mode damped to 0.059 at lam=0.2).
+  * TSVD residual non-increasing and solution norm non-decreasing in k; Tikhonov L-curve
+    residual increasing and solution norm decreasing as lam grows.
+
+WHERE IT PLUGS IN: `field_synthesis` supplies the (analytic) forward map A; this topic
+inverts it stably; `outer_loop` then tunes the manufacturable parameters around it.
+"""
+
+
 def get_applications_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -308,6 +353,9 @@ def get_applications_documentation(topic: str = "all") -> str:
       "field_synthesis"- Analytic / linear-inverse branch: PM-multipole
                          magnetization inverse (verified) + air-gap harmonic
                          objective + pointer to the streamfunction coil branch
+      "linear_inverse" - Regularized linear inversion (TSVD / Tikhonov filter
+                         factors + L-curve), the stable solver behind
+                         field_synthesis, verified vs the SVD pseudo-inverse
       "outer_loop"     - Derivative-free outer-loop optimizers (Nelder-Mead +
                          fminsearchbnd bound transform; pointer to evolutionary
                          / optuna for population/global), verified on Rosenbrock
@@ -315,19 +363,23 @@ def get_applications_documentation(topic: str = "all") -> str:
     t = topic.lower().strip()
     if t == "all":
         return (MOTOR_OPTIMIZATION + "\n\n" + FIELD_SYNTHESIS
-                + "\n\n" + OUTER_LOOP_OPTIMIZERS)
+                + "\n\n" + LINEAR_INVERSE + "\n\n" + OUTER_LOOP_OPTIMIZERS)
     if t in ("motor", "ipm"):
         return MOTOR_OPTIMIZATION
     if t in ("field_synthesis", "field-synthesis", "fieldsynthesis",
              "synthesis", "inverse_source", "inverse-source", "magnet",
              "magnet_design", "pm", "multipole", "arbitrary_field",
-             "stream_function", "streamfunction", "target_field", "tsvd",
+             "stream_function", "streamfunction", "target_field",
              "spm", "halbach", "harmonics"):
         return FIELD_SYNTHESIS
+    if t in ("linear_inverse", "linear-inverse", "linearinverse", "tsvd",
+             "truncated_svd", "tikhonov", "regularization", "regularisation",
+             "svd", "pinv", "pseudoinverse", "l_curve", "lcurve", "ill_posed"):
+        return LINEAR_INVERSE
     if t in ("outer_loop", "outer-loop", "outerloop", "derivative_free",
              "derivative-free", "nelder_mead", "nelder-mead", "neldermead",
              "simplex", "fminsearch", "fminsearchbnd", "direct_search",
              "optimizer", "optimizers"):
         return OUTER_LOOP_OPTIMIZERS
     return ("Unknown topic '%s'. Available: all, motor, field_synthesis, "
-            "outer_loop." % topic)
+            "linear_inverse, outer_loop." % topic)
