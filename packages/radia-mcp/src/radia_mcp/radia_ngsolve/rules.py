@@ -1136,6 +1136,107 @@ def check_gridfunction_set_definedon_in_loop(filepath: str, lines: List[str]) ->
     return findings
 
 
+def check_curve_after_vol_import(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: mesh.Curve() after importing a .vol FLATTENS the baked-in curving to facets.
+
+    A .vol exported with a curve order (Cubit ``export netgen "<f>" order N``) stores
+    the high-order curved-node data, and ``ngsolve.Mesh("<f>.vol")`` loads it
+    faithfully. But an imported .vol carries NO CAD geometry, so ``mesh.Curve(k)`` --
+    which rebuilds the curved nodes by projecting them onto the ATTACHED geometry --
+    has nothing to project onto and recomputes them FLAT, collapsing the surface to
+    the inscribed polytope. (For HEX this is the only curving path at all: NGSolve
+    never builds hex from geometry, so the curving must come from the export.)
+
+    Verified empirically on NGSolve 6.2.2604 (a Cubit order-2 curved hex ball):
+    ``Curve(1) == Curve(2) == Curve(3)`` all degrade the DtN eigenvalue floor
+    1.6e-5 -> 5.3e-3 (~320x) and the Gamma surface deviation 5.7e-5 -> 2.3e-2 (~400x,
+    surface area collapsing to 96.7% of 4*pi = the flat-facet area) -- IDENTICAL for
+    every k, because the requested order is irrelevant once the geometry is gone.
+    Worse, ``GetCurveOrder()`` then reports the NEW order while the geometry is
+    actually flat, so the loss is SILENT. (Contrast: on an OCCGeometry mesh, which
+    HAS faces to project onto, Curve(k) correctly IMPROVES the surface -- so this
+    footgun is specific to geometry-less imported meshes, hence the .vol gate.)
+
+    Do NOT .Curve() an imported .vol: set the FE order via ``H1(mesh, order=k)``; to
+    change the GEOMETRY order, re-export the .vol at a higher order.
+    """
+    findings = []
+    msg_sep = (
+        "'{var}.Curve()' is called on a mesh imported from a .vol. An imported .vol "
+        "carries no CAD geometry, so mesh.Curve() rebuilds the curved nodes FLAT and "
+        "collapses the surface to facets -- it does NOT add curving (and NGSolve has "
+        "no hex-from-geometry path, so hex curving must come from the export). "
+        "Verified on NGSolve 6.2.2604: Curve(k) degrades the DtN floor ~320x "
+        "(1.6e-5 -> 5.3e-3) for every k, while GetCurveOrder() misreports success -- "
+        "a SILENT accuracy trap. Remove the .Curve(); set the FE order with "
+        "H1(mesh, order=k); bake the geometry order into the .vol on export "
+        "(Cubit: export netgen ... order N)."
+    )
+    msg_chain = (
+        '.Curve() chained onto Mesh(".vol"). An imported .vol has no CAD geometry, so '
+        "mesh.Curve() rebuilds the curved nodes FLAT (surface -> facets); it does not "
+        "add curving and silently degrades accuracy (~320x on a curved hex ball, "
+        "NGSolve 6.2.2604), with GetCurveOrder() misreporting success. Drop the "
+        ".Curve(); set order via H1(mesh, order=k); bake the geometry order into the "
+        ".vol on export."
+    )
+
+    pathvar_pat = re.compile(r'(\w+)\s*=\s*[rfb]*["\'][^"\']*\.vol\b', re.IGNORECASE)
+    chained_pat = re.compile(r'Mesh\s*\(\s*[^)]*\.vol\b[^)]*\)\s*\.\s*Curve\s*\(', re.IGNORECASE)
+    vol_literal_pat = re.compile(
+        r'(?:(\w+)\s*=\s*)?(?:\w+\.)?Mesh\s*\(\s*[^)]*\.vol\b', re.IGNORECASE)
+    mesh_of_var_pat = re.compile(r'(?:(\w+)\s*=\s*)?(?:\w+\.)?Mesh\s*\(\s*(\w+)\s*\)')
+    load_pat = re.compile(r'(\w+)\s*\.\s*Load\s*\(\s*[^)]*\.vol\b', re.IGNORECASE)
+    curve_pat = re.compile(r'\b(\w+)\s*\.\s*Curve\s*\(')
+
+    path_vars = set()
+    vol_mesh_vars = set()
+
+    def _iter_code():
+        in_doc = False
+        for idx, ln in enumerate(lines, 1):
+            s = ln.strip()
+            if s.count('"""') == 1 or s.count("'''") == 1:
+                in_doc = not in_doc
+                continue
+            if in_doc or s.startswith('#'):
+                continue
+            yield idx, s.split('#', 1)[0]
+
+    # pass 1: identify .vol-imported mesh variables (+ flag chained Mesh(".vol").Curve())
+    for i, code in _iter_code():
+        pv = pathvar_pat.search(code)
+        if pv:
+            path_vars.add(pv.group(1))
+        if chained_pat.search(code):
+            findings.append({'line': i, 'severity': 'HIGH',
+                             'rule': 'ngsolve-curve-after-vol-import', 'message': msg_chain})
+            continue
+        ml = vol_literal_pat.search(code)
+        if ml:
+            if ml.group(1):
+                vol_mesh_vars.add(ml.group(1))
+            continue
+        mv = mesh_of_var_pat.search(code)
+        if mv and mv.group(2) in path_vars and mv.group(1):
+            vol_mesh_vars.add(mv.group(1))
+        lo = load_pat.search(code)
+        if lo:
+            vol_mesh_vars.add(lo.group(1))
+
+    if not vol_mesh_vars:
+        return findings
+
+    # pass 2: flag <var>.Curve() for any var that was loaded from a .vol
+    for i, code in _iter_code():
+        cm = curve_pat.search(code)
+        if cm and cm.group(1) in vol_mesh_vars:
+            findings.append({'line': i, 'severity': 'HIGH',
+                             'rule': 'ngsolve-curve-after-vol-import',
+                             'message': msg_sep.format(var=cm.group(1))})
+    return findings
+
+
 # All rules in execution order
 ALL_RULES = [
     # NGSolve FEM rules
@@ -1153,6 +1254,7 @@ ALL_RULES = [
     check_scattered_eddy_missing_a0,
     check_gridfunction_set_definedon_in_loop,
     check_ngsolve_kelvin_missing_bonus_intorder,
+    check_curve_after_vol_import,
     check_axisymmetric_h1_over_r,
     # Shared PEEC/BEM rules
     check_bessel_jv_for_sibc,
