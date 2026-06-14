@@ -2146,9 +2146,14 @@ with Kelvin give a benefit? there are PML types." Findings (a=1, ka=4):
  (3) a FANCIER profile does NOT help: a k_eff-matched (~1/rho^2, more-concentrated) grading degrades
      SOONER than a plain polynomial (alpha=8: plain 1.8e-3 vs k_eff-matched 0.70) because it over-
      stretches exactly where the mesh is coarsest. CFS-PML's real shift targets EVANESCENT waves, but
-     the Kelvin near-centre field is oscillatory (not evanescent), so CFS adds little here either
-     (VERIFIED demo_ss 3b: a CFS real coordinate stretch kappa>1 only over-stretches and WORSENS the
-     error -- kappa=1 best 1e-4, kappa=2 1.3e-2, kappa=4 5e-2).
+     the Kelvin near-centre field is oscillatory (not evanescent), so CFS adds little here either.
+     VERIFIED both CFS ingredients in the combined Kelvin+PML FE: (3b) the CFS real coordinate stretch
+     kappa>1 only over-stretches and WORSENS it (kappa=1 best 1e-4, kappa=2 1.3e-2, kappa=4 5e-2); (3c)
+     the CFS FREQUENCY SHIFT acfs (absorbing part x (ik)/(acfs+ik)) only shrinks the absorbing part ->
+     monotonically WORSE (acfs=0 standard best 7e-5, acfs=1 3.9e-4, acfs=4 3.4e-2, acfs=16 1.5). So
+     CFS-PML + Kelvin gives NO extra performance: CFS's benefits (evanescent absorption / low-freq
+     conditioning / late-time stability) target regimes that do NOT occur at the high-k_eff oscillatory
+     Kelvin centre, where a standard PML is already optimal.
 NET (answers the user): combining Kelvin with a PML is NOT redundant -- the PML is REQUIRED to make the
 compactified centre usable (excision alone fails catastrophically). But a SOPHISTICATED PML adds little
 to the COMBINATION over a simple, well-tuned polynomial PML; the Kelvin-specific need is adequate
