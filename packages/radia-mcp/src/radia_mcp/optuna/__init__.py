@@ -16,6 +16,6 @@ Tied to lab practice via cross-links to:
   - `radia_mcp.topology_optimization` (SIMP/MMA -- gradient-based)
   - `radia_mcp.motor` (Wakao autoencoder + LS SynRM topology opt)
   - `radia_mcp.accelerator` (coil end-region shape optimization)
-  - `radia_mcp.wpt` (compensation topology selection)
+  - `radia_mcp.pcb` (compensation topology selection)
   - `radia_mcp.pinn` (BBO of PINN architecture / weights)
 """

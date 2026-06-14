@@ -7,7 +7,7 @@ Distilled from W:/.../39_部品材料/02_リッツ線/ (44 files) + 03_伝送線
 Cross-references:
 - `radia_mcp.peec.carstensen_ac_copper_loss` — Carstensen AC loss
 - `radia_mcp.motor.hollaus_eddy` — Hollaus MSFEM
-- `radia_mcp.wpt.coil_compensation` — Litz wire in WPT coils
+- `radia_mcp.pcb.coil_compensation` — Litz wire in WPT coils
 
 Usage:
     mcp-server-litz-transmission              # stdio
@@ -43,7 +43,7 @@ register_status_tool(
     server_name='mcp-server-litz-transmission',
     description='Litz wire AC loss (Dowell, homogenization, magnetic-plated wire) + multiconductor transmission line theory',
     subpackage='radia_mcp.litz_transmission',
-    related_servers=["peec", "ih", "wpt"],
+    related_servers=["peec", "ih", "pcb"],
 )
 
 

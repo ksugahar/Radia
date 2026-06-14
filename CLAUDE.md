@@ -107,7 +107,9 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 | Induction heating | `radia.ih` / `radia_ih.py` panel + `calc_*.py` | `radia_mcp.ih` | ESIM, SIBC, Karl iteration |
 | Electromagnet | `radia_em.py` panel + `calc_em_table.py` | `radia_mcp.electromagnet` | Omega-reduced, hysteresis; **Clebsch-hodograph pole-face inverse design** (`examples/clebsch_hodograph/`, `docs/clebsch_hodograph/`) is part of this domain |
 | **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifemm/CLN incl.)** under `examples/levitation/` (research_cln/ corpus + IGTE 2026 paper). radia-cln is NOT a separate package. |
-| Motor / WPT | (research) | `radia_mcp.motor`, `radia_mcp.wpt` | domain knowledge |
+| Motor | `radia_motor.py` panel + `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
+| PCB | `radia_pcb.py` panel + `calc_pcb_peec.py` | `radia_mcp.pcb` | PEEC planar coils; **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
+| Stream-function | `radia_streamfunction.py` panel + `calc_streamfunction.py` / `calc_streamfunction_volume.py` | `radia_mcp.streamfunction` | SF coil design (Design / Pareto / Manufacture); ACA-TSVD |
 
 **Installation**:
 ```bash
