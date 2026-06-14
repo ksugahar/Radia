@@ -27,11 +27,17 @@ S:\Radia\01_GitHub\
   src/ext/
     HACApK_LH-Cimplm/    # H-matrix library (MIT)
     sparsesolv/           # Compact AMS/COCR (built into radia wheel, exposed as radia.sparsesolv_ngsolve)
-  packages/
-    cubit-mesh-export/    # Independent PyPI package (pip install cubit-mesh-export)
+  packages/               # Independent PyPI packages (separately versioned)
+    cubit-mesh-export/    # pip install cubit-mesh-export
       src/cubit_mesh_export/
         check.py          # check-vol CLI + check_consistency() API
         cubit_mesh_curver.pyd  # C++ pybind11 module (bundled)
+    radia-mcp/            # pip install radia-mcp (MCP servers + skills)
+    radia-axifemm/        # pip install radia-axifemm (axisymmetric FE, Henrotte basis)
+    radia-vim/            # pip install radia-vim (Volume Integral Method, HDivVIM)
+    radia-levitation/     # pip install radia-levitation (eddy-current brakes,
+                          # mixed-Galerkin polarizability, Lorentz force,
+                          # Simulink LTI export, TEAM 28 levitation)
   tests/                  # Radia tests + tests/mcp/
   examples/
   docs/
@@ -39,12 +45,17 @@ S:\Radia\01_GitHub\
   install_full.py          # One-command full setup
 ```
 
-**PyPI packages** (2 independent packages in same monorepo):
+**PyPI packages** (5 independent packages in the same monorepo, each
+versioned + released separately on PyPI):
 
 | Package | Install | Purpose |
 |---------|---------|---------|
 | **radia** | `pip install radia` | C++ core + Python (MMM/MSC/PEEC, panels, MCP) |
 | **cubit-mesh-export** | `pip install cubit-mesh-export` | High-order curved mesh export from Cubit (does NOT require radia) |
+| **radia-mcp** | `pip install radia-mcp` | MCP servers + skills for AI-assisted workflows |
+| **radia-axifemm** | `pip install radia-axifemm` | Axisymmetric FE (Henrotte basis, FEMM-canonical magnetic; standard H1 thermal) |
+| **radia-vim** | `pip install radia-vim` | Volume Integral Method (HDivVIM, matrix-free Newton-Krylov on the analytic field operator) |
+| **radia-levitation** | `pip install radia-levitation` | Eddy-current brakes + maglev: mixed-Galerkin polarizability α(s) for arbitrary polyhedral conductors, Lorentz force, Simulink LTI export, TEAM 28 levitation |
 
 **Installation**:
 ```bash
