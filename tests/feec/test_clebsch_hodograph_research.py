@@ -661,3 +661,43 @@ def test_clebsch_dipole_workflow_fem():
     assert sc["end_contour_lift_m"] > 0.002, sc
     # the integrated transverse spurious is mesh-noise-limited (loose band, honest).
     assert sc["integrated_spurious_rel"] < 0.25, sc
+
+
+def test_chaplygin_design_sweep_linear_cost():
+    """Maximally exploiting nonlinear-as-linear: a saturable-magnet DESIGN MAP over
+    (throat width x throat field) computed by ONE linear hodograph quadrature per
+    point (mesh-free, milliseconds).  The drive bends UP with saturation for every
+    width; the flux-regulator transfer Psi(drive) CLAMPS, and a narrower throat clamps
+    at a LOWER flux level (knee ~ Bk*w_throat) -- the throat width is the clamp knob."""
+    pytest.importorskip("ngsolve")          # module import pulls ngsolve/netgen
+    pytest.importorskip("netgen.occ")
+    import chaplygin_design_sweep_2d as ds
+    out = ds.run(with_fem=False)
+    mp = out["design_map"]
+    assert mp["n_points"] == 36, mp                          # the whole map, mesh-free
+    assert mp["map_seconds"] < 1.0, mp                       # milliseconds (linear cost)
+    assert all(b > 1.5 for b in mp["bend_per_width"]), mp    # drive bends up (saturation)
+    # the flux regulator clamps; a narrower throat clamps at a lower flux.
+    knees = [c["knee_Psi"] for c in out["transfer"]]         # widths 24, 16, 8 mm
+    assert knees[0] > knees[1] > knees[2], knees
+    # the clamp knee scales with the throat width (knee ~ Bk * w_throat, Bk = 1 T).
+    for c in out["transfer"]:
+        assert 0.4 * c["w_throat"] < c["knee_Psi"] < 1.2 * c["w_throat"], c
+
+
+@pytest.mark.slow
+def test_chaplygin_design_sweep_vs_fem():
+    """Validate the LINEAR design sweep against the full NONLINEAR FEM Picard loop: the
+    1-shot agrees to ~1-2 % (slenderness-limited), and each FEM point costs ~12 Picard
+    iterations -- the per-point cost the linear sweep replaces with one quadrature, so
+    the whole nonlinear design map is obtained at linear cost."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_design_sweep_2d as ds
+    out = ds.run(with_fem=True)
+    val, cost = out["validation"], out["cost"]
+    assert val["max_rel_err"] < 5e-2, val                   # 1-shot agrees with nonlinear FEM
+    assert val["mean_picard_iters"] > 3.0, val              # FEM needs a real Picard loop
+    # the whole map is one quadrature per point; the equivalent FEM is many solves.
+    assert cost["one_shot_solves"] == cost["map_points"], cost
+    assert cost["fem_equiv_linear_solves"] > 5 * cost["one_shot_solves"], cost
