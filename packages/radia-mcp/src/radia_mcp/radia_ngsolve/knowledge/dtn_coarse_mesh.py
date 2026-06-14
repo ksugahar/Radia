@@ -1646,6 +1646,16 @@ mu_r=10 ->x0.671, 50 ->x0.224, 200 ->x0.064 (a free-space Biot-Savart kernel des
 present; and because the design / inverse problem CONSUMES that kernel over many psi, forming the operator
 (demo_dd case 3) is justified here. A strong application section / third paper angle for the magnet-and-
 coil (Radia) domain: shielded MRI gradient/shim coils, excitation windings near steel, actuators.
+STRATEGIC SPLIT (user, 2026-06-15): KEEP DtN+Kelvin and the stream-function method as TWO SEPARATE
+papers/tracks -- do NOT dilute the core with the application.
+  * TRACK A (core; the SA / Hachinohe paper): DtN-spectrum datasheet + sparse Kelvin open boundary +
+    Sommerfeld isomorphism/surrogate + the directly-assembled material-aware DtN matrix and what it IS
+    (FEM-condensed, not BEM). Demos d..dd + x/y/z/aa/cc. This is the near-term, near-complete paper.
+  * TRACK B (separate paper): stream-function / current-potential COIL DESIGN with magnetic material,
+    using the Track-A operator as the material-aware design kernel (design = invert M). Demos ee/ff +
+    a future general-(non-concentric)-iron real coil inverse-design; the running targeted novelty check
+    feeds THIS track. They share machinery but are written up independently. See
+    examples/.../DtN_spectrum/PATHWAY_streamfunction_with_iron.md.
 
 LITERATURE SURVEY (12-agent workflow, 2026-06-15): low-frequency Sommerfeld + layered-Kelvin novelty.
 LOW-FREQUENCY = DEFINITIVE YES (3 adversarial verifiers conf 0.93-0.95, zero counter-evidence). Low-freq
