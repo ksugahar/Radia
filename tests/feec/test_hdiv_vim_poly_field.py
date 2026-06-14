@@ -810,3 +810,53 @@ def test_assemble_demag_field_uniform_sphere_center(uniform_sphere):
     rel = abs(Hc[0, 2] + Mval / 3) / (Mval / 3)
     assert rel < 5e-3, f"center H_z {Hc[0,2]:.4e} vs -M/3 (rel {rel:.2e}, faceting at h=0.4)"
     assert abs(Hc[0, 0]) < 1e-2 * Mval and abs(Hc[0, 1]) < 1e-2 * Mval, "transverse leak"
+
+
+# ---------------------------------------------------------------------------------------------------
+# Step 3: the field-based nonlinear demag SOLVE (solve_demag_picard).  Validated on the uniform sphere:
+# linear chi -> the analytic M = chi*H_ext/(1+chi/3); saturating M(H) -> the scalar demag fixed point
+# H_int = H_ext - M/3.  (Centroid collocation; under-relaxed Picard auto-backs-off for stability.)
+# ---------------------------------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def _sphere_solve_mesh():
+    return _sphere(0.4)
+
+
+def test_solve_demag_picard_linear_sphere(_sphere_solve_mesh):
+    """Linear chi: solve_demag_picard converges to the analytic sphere demag M = chi*H_ext/(1+chi/3)."""
+    from radia.hdiv_vim import solve_demag_picard
+    mesh = _sphere_solve_mesh
+    Hext = np.array([0, 0, 1.0e4])
+    for chi in [1.0, 5.0]:
+        with ng.TaskManager():
+            res = solve_demag_picard(mesh, lambda H, chi=chi: chi * np.asarray(H), Hext,
+                                     order=1, tol=1e-6, relax=min(0.5, 1.2 / (1 + chi / 3)))
+        Mz = res["M_centroids"][:, 2].mean()
+        ana = chi * Hext[2] / (1 + chi / 3.0)
+        assert res["converged"], f"chi={chi} did not converge ({res['n_iter']} iters)"
+        assert abs(Mz - ana) / ana < 2e-2, f"chi={chi}: Mz {Mz:.4e} vs analytic {ana:.4e}"
+
+
+def test_solve_demag_picard_saturating_sphere(_sphere_solve_mesh):
+    """Saturating M(H)=Ms*H/(Hs+|H|), MILD (Ms/Hs ~ 5, the under-relaxed Picard's stable regime): the
+    solve converges to the 1-D scalar demag fixed point m* solving m = Mof(H_ext - m/3).  (A STRONGLY
+    saturating law -- effective chi ~ Ms/Hs >> 3 at the knee -- makes the H-input Picard stiff; the
+    robust cure there is a convex B-input (A-formulation) solve, not implemented here.)"""
+    from radia.hdiv_vim import solve_demag_picard
+    mesh = _sphere_solve_mesh
+    Hext = np.array([0, 0, 1.0e4]); Ms = 1.0e5; Hs = 2.0e4   # chi_eff(0) = Ms/Hs = 5 -> stable
+
+    def Mscal(h):
+        return Ms * h / (Hs + abs(h))
+
+    def Mof(H):
+        H = np.asarray(H, float); n = np.linalg.norm(H)
+        return Ms * H / (Hs + n) if n > 0 else np.zeros(3)
+    m = 0.0                                             # reference: 1-D scalar fixed point m*=Mscal(Hext-m*/3)
+    for _ in range(500):
+        m = 0.5 * m + 0.5 * Mscal(Hext[2] - m / 3.0)
+    with ng.TaskManager():
+        res = solve_demag_picard(mesh, Mof, Hext, order=1, tol=1e-6, relax=0.4, max_iter=200)
+    assert res["converged"], f"saturating solve not converged ({res['n_iter']} it, res {res['residual']:.1e})"
+    Mz = res["M_centroids"][:, 2].mean()
+    assert abs(Mz - m) / m < 3e-2, f"saturating Mz {Mz:.4e} vs scalar fixed point {m:.4e}"
