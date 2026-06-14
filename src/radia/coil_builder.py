@@ -14,7 +14,7 @@ Outputs:
   - write_step(): Direct STEP file export
 
 Example:
-	>>> from radia_coil_builder import CoilBuilder
+	>>> from coil_builder import CoilBuilder
 	>>>
 	>>> mm = 1e-3
 	>>> coil = (CoilBuilder(current=1000)

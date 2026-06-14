@@ -34,7 +34,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
                                 '..', '..', '..', 'src', 'radia'))
 
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 
 
 def build_coil():

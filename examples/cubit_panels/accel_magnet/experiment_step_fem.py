@@ -35,7 +35,7 @@ MSC_REFERENCE = -976e-3  # MSC Bz at origin [T]
 # ================================================================
 def create_coil(current_at=20000.0):
     """Create racetrack coil via CoilBuilder."""
-    from radia_coil_builder import CoilBuilder
+    from coil_builder import CoilBuilder
 
     mm = 1e-3
     coil = (CoilBuilder(current=current_at)

@@ -134,7 +134,7 @@ def create_coil_radia(current_at=20000.0):
     Same geometry as coil_model.py: center (0, 131.25, 0) mm.
     Coordinate system: transformed ELF (same as Cubit after transform).
     """
-    from radia_coil_builder import CoilBuilder
+    from coil_builder import CoilBuilder
 
     # ELF coil geometry (mm -> m)
     mm = 1e-3

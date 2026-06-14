@@ -37,7 +37,7 @@ def build_racetrack(straight, radius, width=None, height=None, current=1.0,
     _this_dir = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, os.path.dirname(_this_dir))
 
-    from radia.radia_coil_builder import CoilBuilder
+    from radia.coil_builder import CoilBuilder
 
     cb = CoilBuilder(current=current)
     cb.set_start([0, center_y - straight / 2, center_z])

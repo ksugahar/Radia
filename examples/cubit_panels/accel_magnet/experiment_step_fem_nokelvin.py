@@ -22,7 +22,7 @@ print('ne:', mesh.ne)
 # Coil source
 print("Creating coil...")
 rad.UtiDelAll()
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 mm = 1e-3
 coil = (CoilBuilder(current=20000.0)
     .set_start([47.5*mm, 100*mm, 0])
