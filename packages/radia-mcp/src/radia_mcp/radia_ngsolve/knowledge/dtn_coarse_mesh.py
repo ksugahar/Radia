@@ -1584,6 +1584,23 @@ complex depth h+2/gamma, gamma=sqrt(i omega mu sigma); 3e-4 at N=10) -- the low-
 DCIM, a leading-order approx that degrades at low N (the integral is exact at all N). => the definitive
 "Sommerfeld works at low frequency" evidence in the SA-relevant eddy-current regime (sugahara2022).
 
+NON-LAYERED EXTERIOR = the BROADEST differentiator (demo_bb, verified 2026-06-15). The Sommerfeld/
+layered Green's function REQUIRES stratified (planar/cylindrical/spherical) symmetry -- that translational
+symmetry is what enables the spectral (Hankel) decomposition. For an ARBITRARY inhomogeneous exterior (a
+localized inclusion, a curved interface, any mu(x)) there is NO layered Green's function; BEM falls back
+to a VOLUME integral equation (the dense volume unknown revived). Kelvin-FEM is INDIFFERENT to the
+exterior geometry: it MESHES mu(x) and the Schur complement still yields the dense DtN/Green matrix
+Lambda (demo_v). VERIFIED: a sphere body with a strong ON-AXIS localized inclusion (mu=20 and 100; r=0.30
+at z=0.85 -- a blob, NOT a layer); Lambda is symmetric (sym 0), recovers the full vacuum ladder when the
+inclusion vanishes, and otherwise splits EXACTLY by the reduced AXIAL symmetry C_inf_v |m|-pattern:
+dipole 3 -> doublet(|m|=1)+singlet(m=0)  [4.092,4.095 | 4.227];  quadrupole 5 -> |m|=2 doublet + |m|=1
+doublet + m=0 singlet  [6.146,6.166 | 6.277,6.291 | 6.469]  (the m=0 modes, peaked on the inclusion axis,
+shift most) -- an analytic-value-free proof the arbitrary exterior is carried correctly. So the
+differentiator GENERALIZES: from "layered exterior (vs the hard Sommerfeld)" to "ARBITRARY inhomogeneous
+exterior (where no Sommerfeld Green's function exists AT ALL)" -- arbitrary mu(x), no Green's function,
+sparse SPD, one Schur condensation. PAPER POINT: state the BEM/Sommerfeld differentiator at its broadest;
+the layered case is just the sub-case that happens to have an independent analytic reference (demo_y/z/aa).
+
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
 sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
