@@ -44,7 +44,8 @@ from ._nonlinear import (  # noqa: F401
 from ._vim import DemagOperator, build_charge_gram  # noqa: F401  (ngsolve.bem-style operator + .mat)
 from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^-1 N m)
     reconstruct_field,
-    reconstruct_field_polynomial,
+    reconstruct_field_polynomial,  # Step 1: EXTERNAL polynomial-charge field (tet + hex)
+    reconstruct_field_internal,    # Step 2: INTERNAL/near field (self-volume spherical + analytic surface)
     flat_triangle_charge_field,    # Step-2 building block: exact uniform-triangle field (surface near-field)
     tet_self_volume_field,         # Step-2 building block: tet self volume-charge field (spherical ray-trace)
 )
@@ -54,6 +55,6 @@ __all__ = [
     "analytic_charge_gram", "build_near_correction", "C_TRI",
     "solve_nonlinear_newton", "solve_nonlinear_newton_scalable", "solve_nonlinear",
     "DemagOperator", "build_charge_gram", "reconstruct_field", "reconstruct_field_polynomial",
-    "flat_triangle_charge_field", "tet_self_volume_field",
+    "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",
     "_core", "_nonlinear", "_vim", "_field",
 ]
