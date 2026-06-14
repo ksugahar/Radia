@@ -277,6 +277,29 @@ does the *forward* construction (prescribe 2-D hodograph data → one linear sol
 → back-map to *a* physical patch); the **free-boundary closure** (prescribe the
 physical guide, solve for its hodograph image) is the genuine open frontier.
 
+### `chaplygin_turning_design_sweep_2d.py` — design-at-linear-cost, one rung up: TURNING fields, one linear solve each
+
+`chaplygin_design_sweep_2d.py` exploited the **slender** guide (segment image →
+1-shot quadrature). This is the rung up: a field that **turns** has a 2-D
+hodograph image needing a genuine **linear elliptic PDE** — but still **linear**
+(`μ(q)` a coefficient), so each nonlinear turning field is **one direct linear
+solve, no Picard**. So a whole design space of TURNING saturable fields is at
+linear cost too. Sweeping **material** `μ_r0` (5→20→80) and **operating depth**
+`q₁/q_k` (1.2→2.0→3.0), each entry is one solve with **machine-zero residual**
+(`~8e-15` — it *is* one direct solve); the **saturation bend** (deviation from the
+linear `ln(q)·θ` harmonic) grows monotonically (`0.12→0.47→2.6` with `μ_r0`); and
+each **back-maps single-valued** to a realisable physical turning field (closure
+`≤1.4e-2`). The `μ_r=1` Laplace limit reproduces the exact harmonic to **3e-8**
+(the solver is correct). **The linear-cost win:** 7 turning designs in **~450 ms**
+(7 direct linear solves) vs the equivalent physical-space nonlinear solve at
+**~12 Picard iterations each** (measured on the same Froehlich material via the
+slender-guide reference) ≈ **88 linear solves** — and the turning 2-D case is at
+least as expensive. Figure: `chaplygin_turning_design_sweep_2d.png` (bend vs
+design | a back-mapped physical turning field | the cost bar). Goldens
+`test_chaplygin_turning_design_sweep_*` (sweep fast, Picard-cost slow). *Honest
+scope: the forward construction (free-boundary closure deferred, as above); each
+of those Newton steps is also **linear**, so the exploit carries.*
+
 ### `chaplygin_free_boundary_2d.py` — the turning-guide free boundary, made concrete
 
 The achievable, honest piece of that open frontier. The turning-guide forward
@@ -721,6 +744,7 @@ python hodograph_kelvin_2d.py                 # Kelvin in the hodograph (2-D Car
 python clebsch_kelvin_3d.py                   # Kelvin in the hodograph (3-D Clebsch, no air box)
 python saturation_loop_2d.py                  # the nonlinear saturation loop (Chaplygin reference)
 python chaplygin_design_sweep_2d.py           # nonlinear-as-linear: a saturable design space at linear cost (--fem)
+python chaplygin_turning_design_sweep_2d.py   # ... one rung up: TURNING fields, one linear solve each (--fem)
 python cohomology_hodograph_currentlink.py    # when the hodograph needs cohomology
 python accel_pole_design.py                   # multipole analyzer + quad pole geometry
 python accel_pole_harmonics.py                # 2-D equipotential lever (shim → harmonics)

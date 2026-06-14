@@ -701,3 +701,40 @@ def test_chaplygin_design_sweep_vs_fem():
     # the whole map is one quadrature per point; the equivalent FEM is many solves.
     assert cost["one_shot_solves"] == cost["map_points"], cost
     assert cost["fem_equiv_linear_solves"] > 5 * cost["one_shot_solves"], cost
+
+
+def test_chaplygin_turning_design_sweep_linear():
+    """The design-at-linear-cost exploit one rung up: a TURNING saturable field (hodograph
+    image = a 2-D region, not a segment) is ONE LINEAR elliptic hodograph solve per design.
+    Sweeping material (mu_r0) and operating depth (q1/q_k), each entry is one direct linear
+    solve (machine-zero residual, no Picard); the saturation bend grows; and each back-maps
+    single-valued to a realisable physical turning field.  The mu_r=1 Laplace limit
+    reproduces the exact harmonic A=ln(q)*theta -- the linear solver is correct."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_turning_design_sweep_2d as ts
+    out = ts.run(with_fem=False)
+    sw = out["sweep"]
+    assert sw["max_lin_residual"] < 1e-10, sw                 # each IS one direct linear solve
+    assert sw["verify_laplace"]["laplace_error"] < 1e-4, sw   # mu_r=1 -> exact harmonic (solver OK)
+    mb = [d["bend"] for d in sw["material"]]
+    assert mb[0] < mb[1] < mb[2], mb                          # bend grows with material
+    db = [d["bend"] for d in sw["depth"]]
+    assert db[0] < db[1] < db[2], db                          # bend grows with operating depth
+    for d in sw["material"]:
+        assert d["closure"] < 0.1, d                          # realisable physical turning field
+    assert sw["n_solves"] >= 7, sw
+
+
+@pytest.mark.slow
+def test_chaplygin_turning_design_sweep_cost():
+    """The linear-cost win for the turning sweep: each design is ONE direct linear solve,
+    where the equivalent PHYSICAL-space nonlinear solve needs a Picard loop -- measured on
+    the same Froehlich material via the slender-guide reference (chaplygin_hodograph_2d)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_turning_design_sweep_2d as ts
+    out = ts.run(with_fem=True)
+    cost = out["cost"]
+    assert out["picard_reference"]["mean_picard_iters"] > 3.0, out   # physical FEM needs a loop
+    assert cost["fem_equiv_linear_solves"] > 5 * cost["designs"], cost
