@@ -720,3 +720,66 @@ def test_hex_volume_field_sheared_affine_vs_gauss():
         a = hex_volume_field_quadratic(Vp, r, rho0, g, _QSYM)
         b = box_gauss(Vp, r, rhoQ, 26)
         assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-8, f"sheared hex vs Gauss r={r}"
+
+
+# ---------------------------------------------------------------------------------------------------
+# CURVED triangular face surface-charge field (curved_triangle_charge_field): singularity subtraction
+# (analytic flat tangent + Duffy-refined remainder).  Quadrature-refined (curved has NO closed form):
+# converges to ~1e-6 by nq, validated far + very-near vs a Duffy-refined reference, and the zero-
+# curvature limit reproduces flat_triangle_charge_field.
+# ---------------------------------------------------------------------------------------------------
+def _t6_flat(P3):
+    """6-node (T6) array for a FLAT triangle with corners P3 (edge mids at the midpoints)."""
+    P = np.asarray(P3, float)
+    return np.array([P[0], P[1], P[2], 0.5*(P[0]+P[1]), 0.5*(P[1]+P[2]), 0.5*(P[2]+P[0])])
+
+
+def _curved_ref(surf_map, r, sigma_fn, nq=64):
+    """Duffy-refined reference (same 3-subtriangle fan from the projection; no subtraction)."""
+    from radia.hdiv_vim._field import _project_to_surface
+    r = np.asarray(r, float)
+    u0, v0 = _project_to_surface(surf_map, r)
+    P0 = np.array([u0, v0]); corners = [np.array([0., 0.]), np.array([1., 0.]), np.array([0., 1.])]
+    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5*(xs+1); ws = 0.5*ws
+    F = np.zeros(3)
+    for a in range(3):
+        B = corners[a]; C = corners[(a+1) % 3]
+        area2 = abs((B[0]-P0[0])*(C[1]-P0[1]) - (B[1]-P0[1])*(C[0]-P0[0]))
+        for i in range(nq):
+            for j in range(nq):
+                s, t = xs[i], xs[j]
+                u, v = P0 + s*((1-t)*(B-P0) + t*(C-P0)); jac = s*area2
+                x, xu, xv = surf_map(u, v); J = np.linalg.norm(np.cross(xu, xv))
+                d = r - x
+                F += ws[i]*ws[j]*jac*sigma_fn(x)*d/np.linalg.norm(d)**3*J
+    return F
+
+
+def test_curved_triangle_charge_field_converges_vs_reference():
+    """Curved patch: singularity subtraction matches a Duffy-refined reference, far AND very near."""
+    from radia.hdiv_vim import curved_triangle_charge_field, make_t6_surface_map
+    c = 0.15
+    nodes = np.array([[0,0,0],[1,0,0],[0,1,0],[0.5,0,c],[0.5,0.5,c],[0,0.5,c]], float)
+    smap = make_t6_surface_map(nodes)
+    sig = lambda p: 0.5 + 0.6*p[0] - 0.4*p[1] + 0.3*p[2]
+    for h in [0.5, 0.1, 0.205]:                       # far, near, very-near (surface bows to ~0.198)
+        r = np.array([0.3, 0.3, h])
+        a = curved_triangle_charge_field(smap, r, sig, nq=20)
+        b = _curved_ref(smap, r, sig, nq=80)
+        assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-4, f"curved vs ref h={h}"
+
+
+def test_curved_triangle_charge_field_flat_limit():
+    """Zero-curvature T6 patch reproduces flat_triangle_charge_field (the curved kernel degrades to the
+    analytic flat one when there is no curvature)."""
+    from radia.hdiv_vim import curved_triangle_charge_field, make_t6_surface_map
+    P3 = _TET[[0, 1, 2]]
+    smap = make_t6_surface_map(_t6_flat(P3))
+    sig = lambda p: 0.5 + 0.6*p[0] - 0.4*p[1]         # linear in-plane
+    for r in [[0.3, 0.3, 0.7], [0.3, 0.3, 0.2], [1.5, 0.5, 0.4]]:
+        r = np.array(r, float)
+        a = curved_triangle_charge_field(smap, r, sig, nq=20)
+        # exact flat field of the same linear sigma (s = grad sigma); curved is quadrature-refined so
+        # near-surface is ~1e-7 (far points hit machine precision via the exact flat-tangent part)
+        b = linear_triangle_charge_field(P3, r, 0.5, np.array([0.6, -0.4, 0.0]))
+        assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-6, f"curved flat-limit r={r}"
