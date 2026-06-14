@@ -28,7 +28,7 @@ potential whose single level-set covers an arbitrary contour family is the
 routing problem (F1-like: rigorous parameterisation, non-convex routing).
 
 Verified with Radia Biot-Savart (rad.ObjFlmCur).  Run:
-    python examples/feec_vim/single_stroke_clebsch.py
+    python examples/vim/single_stroke_clebsch.py
 """
 from __future__ import annotations
 

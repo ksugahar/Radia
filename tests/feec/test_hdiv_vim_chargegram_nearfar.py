@@ -15,7 +15,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 import radia._radia_pybind as _rp  # noqa: E402
-from radia.hdiv_vim import _core as tet  # noqa: E402
+from radia.vim import _core as tet  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, OrthoBrick, Pnt  # noqa: E402
 

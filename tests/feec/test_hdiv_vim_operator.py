@@ -1,4 +1,4 @@
-"""Golden: the ngsolve.bem-style HDiv-VIM DemagOperator (radia.hdiv_vim.DemagOperator).
+"""Golden: the ngsolve.bem-style HDiv-VIM DemagOperator (radia.vim.DemagOperator).
 
 Mirrors ngsolve.bem: construct from an HDiv FESpace (order from the fes), expose `.mat` -- an H-matrix-
 backed NGSolve BaseMatrix N = B^T G B that composes with NGSolve solvers.  order=0 (RT0) and order=p go
@@ -23,7 +23,7 @@ import ngsolve as ng  # noqa: E402
 from netgen.occ import Box, OCCGeometry, Pnt  # noqa: E402
 from ngsolve.krylovspace import GMRes  # noqa: E402
 
-from radia.hdiv_vim import DemagOperator  # noqa: E402  (the ngsolve.bem-style public API)
+from radia.vim import DemagOperator  # noqa: E402  (the ngsolve.bem-style public API)
 
 
 def _cube(h):

@@ -22,7 +22,7 @@ Validation
 
 Usage
 -----
-  python examples/feec_vim/clebsch_3d_coil.py
+  python examples/vim/clebsch_3d_coil.py
 """
 import sys
 import os

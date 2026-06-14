@@ -110,14 +110,14 @@ So the cohomology-and-gauge "finish" of the stream-function coil designer is com
 
 ```bash
 # any single example prints its diagnostics and a PASS line
-python examples/feec_vim/bidirectional_map_2d.py
-python examples/feec_vim/vector_t_inverse.py
-python examples/feec_vim/foliated_clebsch_solenoid.py
-python examples/feec_vim/helicity_diagnostic.py
-python examples/feec_vim/foliated_solenoid_wires.py
-python examples/feec_vim/foliation_choice_wall.py
-python examples/feec_vim/clebsch_recovery_wall.py
-python examples/feec_vim/helical_current_no_clebsch.py
+python examples/vim/bidirectional_map_2d.py
+python examples/vim/vector_t_inverse.py
+python examples/vim/foliated_clebsch_solenoid.py
+python examples/vim/helicity_diagnostic.py
+python examples/vim/foliated_solenoid_wires.py
+python examples/vim/foliation_choice_wall.py
+python examples/vim/clebsch_recovery_wall.py
+python examples/vim/helical_current_no_clebsch.py
 
 # the 38 golden tests (Stage A 14 + Stage B 9 + frontier 15)
 python -m pytest tests/feec/test_bidirectional_map_2d.py tests/feec/test_vector_t_inverse.py \

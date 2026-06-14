@@ -34,7 +34,7 @@ import scipy.sparse as sp
 import ngsolve as ng
 from netgen.csg import CSGeometry, Sphere, Pnt
 
-from radia.hdiv_vim import _core as tet   # M1: core promoted to radia.hdiv_vim (was examples/feec_vim)
+from radia.vim import _core as tet   # M1: core promoted to radia.vim (was examples/vim)
 
 
 def _bf_to_dense(bf):

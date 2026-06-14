@@ -639,6 +639,62 @@ def helmholtz_impedance_far_field(kappa, a=1.0, beta=0.5, maxh=0.3, order=3, int
 
 
 # ---------------------------------------------------------------------------
+# ELECTROMAGNETIC (vector Maxwell) Mie -- analytic RCS gate for a future
+# MaxwellSingleLayer EFIE/CFIE PEC-sphere solve.  The vector counterpart of the
+# scalar/acoustic Mie helpers above; this is the canonical analytic gate a
+# commercial HF integral-equation (MoM) RCS solver is checked against.
+# ---------------------------------------------------------------------------
+
+def mie_pec_coefficients(ka, nmax=None):
+    r"""Electromagnetic Mie scattering coefficients of a PERFECTLY CONDUCTING (PEC) sphere, argument
+    ``ka`` (size parameter, k = 2 pi / lambda, a = radius).  Using the Riccati-Bessel functions
+    ``psi_n(x) = x j_n(x)`` and ``xi_n(x) = x h_n^{(1)}(x)``, the PEC limit of the Bohren-Huffman
+    coefficients is
+
+        a_n = psi_n'(ka) / xi_n'(ka)     (TM / electric multipole),
+        b_n = psi_n(ka)  / xi_n(ka)      (TE / magnetic multipole).
+
+    Returns ``(n, a_n, b_n)`` numpy arrays, n = 1 .. nmax.  ``nmax`` defaults to the Wiscombe
+    rule ``ka + 4 ka^{1/3} + 10`` (well-converged for ka up to ~100)."""
+    from scipy.special import spherical_jn, spherical_yn
+    x = float(ka)
+    if nmax is None:
+        nmax = int(x + 4.0 * x ** (1.0 / 3.0) + 10.0)
+    n = np.arange(1, nmax + 1)
+    jn = spherical_jn(n, x); jnp = spherical_jn(n, x, derivative=True)
+    yn = spherical_yn(n, x); ynp = spherical_yn(n, x, derivative=True)
+    hn = jn + 1j * yn; hnp = jnp + 1j * ynp
+    psi = x * jn; psip = jn + x * jnp                 # psi_n = x j_n, psi_n' = j_n + x j_n'
+    xi = x * hn; xip = hn + x * hnp                   # xi_n  = x h_n, xi_n'  = h_n + x h_n'
+    a_n = psip / xip                                  # TM (electric)
+    b_n = psi / xi                                    # TE (magnetic)
+    return n, a_n, b_n
+
+
+def mie_pec_sphere_rcs(ka, nmax=None):
+    r"""Closed-form ELECTROMAGNETIC radar cross-sections of a PEC sphere, normalised by the geometric
+    cross-section ``pi a^2``.  From the Mie coefficients (:func:`mie_pec_coefficients`):
+
+        total scattering   sigma_sca = (2 pi / k^2) sum_{n>=1} (2n+1) (|a_n|^2 + |b_n|^2),
+        backscatter (RCS)  sigma_b   = (pi / k^2) | sum_{n>=1} (2n+1) (-1)^n (a_n - b_n) |^2.
+
+    Two analytic limits gate the result (verified in the test suite):
+      * RAYLEIGH (ka -> 0):     sigma_b / (pi a^2) -> 9 (ka)^4   (electric + magnetic dipole).
+      * GEOMETRIC (ka -> inf):  sigma_b / (pi a^2) -> 1  (specular)  and
+                                sigma_sca / (pi a^2) -> 2  (extinction paradox).
+
+    Returns ``{ka, nmax, sigma_sca_over_pa2, sigma_back_over_pa2}`` (both dimensionless, i.e. divided by
+    pi a^2; multiply by pi a^2 for absolute cross-sections)."""
+    x = float(ka)
+    n, a_n, b_n = mie_pec_coefficients(x, nmax=nmax)
+    sca = (2.0 * np.pi / x ** 2) * np.sum((2 * n + 1) * (np.abs(a_n) ** 2 + np.abs(b_n) ** 2))
+    back = (np.pi / x ** 2) * np.abs(np.sum((2 * n + 1) * (-1.0) ** n * (a_n - b_n))) ** 2
+    return {"ka": x, "nmax": int(n[-1]),
+            "sigma_sca_over_pa2": float(sca / np.pi),
+            "sigma_back_over_pa2": float(back / np.pi)}
+
+
+# ---------------------------------------------------------------------------
 # GIBC -- Generalized Impedance Boundary Condition (curvature-corrected SIBC)
 # ---------------------------------------------------------------------------
 #

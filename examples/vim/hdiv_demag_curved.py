@@ -38,7 +38,7 @@ from math import pi
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from radia.hdiv_vim import _core as tet  # noqa: E402  (reuse _bary_tri + C_TRI)
+from radia.vim import _core as tet  # noqa: E402  (reuse _bary_tri + C_TRI)
 
 import ngsolve as ng  # noqa: E402
 from ngsolve import IntegrationRule, ElementId, BND, CoefficientFunction, Integrate  # noqa: E402

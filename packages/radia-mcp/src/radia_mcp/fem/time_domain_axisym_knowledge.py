@@ -63,7 +63,7 @@ becomes exact.
 ## API in radia
 
 ```python
-import radia.radia_axifemm as ax
+import radia.axifem as ax
 
 mesh = Mesh(...)                       # axis-aligned (r, z) mesh
 fes = ax.H1Henrotte(mesh, order=p)     # p = 1 (Q1) or p = 2 (Q2)

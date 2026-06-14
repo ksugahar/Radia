@@ -1,5 +1,5 @@
 """
-axifemm_quad_q2.py — Phase 2-F (radia_axifemm Q2 prototype)
+axifemm_quad_q2.py — Phase 2-F (axifem Q2 prototype)
 
 Q2 axisymmetric Henrotte element on axis-aligned rectangle.
 

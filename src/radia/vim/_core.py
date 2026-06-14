@@ -68,7 +68,7 @@ def _gauss_duffy_tet(o):
     (lam1,lam2,lam3) + weights summing to 1/6.  For the SMOOTH outer integral of an EXACT analytic inner
     (phi_tet/tri_potential) this converges to ~machine precision -- it REPLACES the crude equal-weight
     _bary_tet outer rule, which under-integrated the volume self-energy by ~6.5% (golden-invisible because
-    every uniform-M demag has div M = 0).  Same rule as radia.hdiv_vim._vim._tet_ref(o)."""
+    every uniform-M demag has div M = 0).  Same rule as radia.vim._vim._tet_ref(o)."""
     x, w = np.polynomial.legendre.leggauss(o)
     s, ws = 0.5 * (x + 1.0), 0.5 * w
     P, W = [], []

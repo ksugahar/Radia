@@ -9,7 +9,7 @@ factor ITSELF (the proper Gram, unlike the crude sub-point method whose quadratu
   - flat is floored (~0.25%) and ORDER-INSENSITIVE (sigma constant per flat face);
   - curved p-convergence: order-2 error is >>10x smaller than order-0.
 
-See examples/feec_vim/hdiv_demag_bem_singlelayer.py.
+See examples/vim/hdiv_demag_bem_singlelayer.py.
 """
 import os
 import sys
@@ -20,7 +20,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("ngsolve.bem")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
 import hdiv_demag_bem_singlelayer as bem  # noqa: E402
 
 

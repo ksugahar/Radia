@@ -25,7 +25,7 @@ w(zeta) = zeta^2,  zeta = x + i y:
 on the square [1,2] x [1,2] (away from the |B|=0 degeneracy at the origin).
 The exact inverse is  x + i y = sqrt(A + i phi).
 
-Run:  python examples/feec_vim/bidirectional_map_2d.py
+Run:  python examples/vim/bidirectional_map_2d.py
 """
 import os
 import sys

@@ -252,7 +252,7 @@ def solve_heat_axisym(wp_vol,
     #     Meeker uses standard P1 triangle for FEMM's heat solver and
     #     ships production accuracy.
     #
-    # The `radia.radia_axifemm.AxiHenrotteHeat{Stiffness,Mass}BFI`
+    # The `radia.axifem.AxiHenrotteHeat{Stiffness,Mass}BFI`
     # classes (added in radia 4.31.0) remain available as optional
     # parity-conscious infrastructure; they are not used here because
     # the FEMM convention says we don't need them for scalar T.

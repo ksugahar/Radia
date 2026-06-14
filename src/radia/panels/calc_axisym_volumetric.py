@@ -12,7 +12,7 @@ Time-harmonic Maxwell in axisymmetric `(r, z)`, single component
 `A_phi`.  Following Henrotte / Meeker FEMM convention, the discrete
 unknown is the flux function `psi = 2 pi r A_phi` interpolated linearly
 in `(s = r^2, z)`; element matrices follow from
-``radia.radia_axifemm.{AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI}``.
+``radia.axifem.{AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI}``.
 
 Strong form:
 
@@ -143,7 +143,7 @@ def run_axisym_nonlinear(args, bh_curve):
         BilinearForm, LinearForm, GridFunction, Integrate, dx, grad,
         Conj, sqrt as ng_sqrt, x as r_cf, H1, L2,
     )
-    import radia.radia_axifemm   # noqa: F401
+    import radia.axifem   # noqa: F401
 
     mesh = build_mesh(
         R_wp_m=args.R_wp, H_wp_m=args.H_wp,
@@ -310,7 +310,7 @@ def run_axisym_linear(args):
         Integrate, dx, ds, grad, InnerProduct, Periodic, x as r_cf,
         FESpace, TaskManager,
     )
-    import radia.radia_axifemm   # registers axihenrotte FESpace
+    import radia.axifem   # registers axihenrotte FESpace
 
     mesh = build_mesh(
         R_wp_m=args.R_wp, H_wp_m=args.H_wp,

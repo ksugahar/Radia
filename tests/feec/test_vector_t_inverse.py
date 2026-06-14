@@ -7,7 +7,7 @@ Locks the verified vector-T claims (sympy 2026-06-11) in a real NGSolve solve:
     in ker(A)), and TSVD truncates the gauge subspace automatically (k_aca <= M
     << ndof) -- no explicit tree-cotree gauge.
 
-See examples/feec_vim/vector_t_inverse.py and streamfunction("clebsch_3d").
+See examples/vim/vector_t_inverse.py and streamfunction("clebsch_3d").
 """
 import os
 import sys
@@ -15,7 +15,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                "../../examples/feec_vim"))
+                                "../../examples/vim"))
 
 
 @pytest.fixture(scope="module")

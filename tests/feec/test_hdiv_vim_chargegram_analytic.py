@@ -3,7 +3,7 @@ reproduces the dense Python build_demag(analytic_gram=True) Gram -- i.e. the acc
 charge Gram now lives in the C++ SCALABLE path, not just the dense Python prototype. The C++ entry is
 G[a][b] = 0.5*(QuadDot(a,b)+QuadDot(b,a)), QuadDot(t,s) = (1/4pi) sum_p w_p Phi_s(p) over t's outer
 quadrature (tet barycentric sub-points / Dunavant-5), Phi_s = rad_hdiv::PhiTet / TriPotential -- the
-same construction as radia.hdiv_vim._core.analytic_charge_gram, so it must match entry-by-entry.
+same construction as radia.vim._core.analytic_charge_gram, so it must match entry-by-entry.
 
 Locks (against the dense analytic reference on the SAME tet mesh):
   (1) all-dense (leaf >= n_charge, no ACA): the analytic H-matvec equals the dense analytic G q to
@@ -18,7 +18,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
 import radia._radia_pybind as _rp  # noqa: E402
-from radia.hdiv_vim import _core as tet  # noqa: E402
+from radia.vim import _core as tet  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
 

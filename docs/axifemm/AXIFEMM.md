@@ -1,11 +1,11 @@
-# radia.radia_axifemm — Henrotte Axisymmetric Q-Element FE for NGSolve
+# radia.axifem — Henrotte Axisymmetric Q-Element FE for NGSolve
 
 > See [`FORMULATION.md`](FORMULATION.md) for the full derivation
 > (Maxwell → axisymmetric reduction → energy functional → Henrotte
 > `s = r²` change of variable → element matrices in closed form).
 > This document covers usage, API, and validation results.
 
-`radia.radia_axifemm` adds a **Henrotte/Meeker axisymmetric finite-element
+`radia.axifem` adds a **Henrotte/Meeker axisymmetric finite-element
 family** to NGSolve.  It registers a FESpace named `axihenrotte` and
 provides closed-form `BilinearFormIntegrator`s; the rest of the workflow
 (mesh, dirichlet, eigsh, Hiruma 3-term) is plain NGSolve.
@@ -42,8 +42,8 @@ matches FEMM `.mat` outputs to 0.1 % on the FEMM NMR benchmark.
 
 ```python
 from ngsolve import Mesh, FESpace, BilinearForm, CoefficientFunction
-from radia.radia_axifemm import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
-import radia.radia_axifemm   # registers the FESpace
+from radia.axifem import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
+import radia.axifem   # registers the FESpace
 
 mesh = Mesh(...)                                    # axis-aligned quad mesh
 fes  = FESpace("axihenrotte", mesh, order=2,
@@ -260,9 +260,9 @@ src/ext/axifemm/                          # built into radia wheel
   axi_henrotte_diffop.hpp                # DifferentialOperators (value, gradient)
   axi_henrotte_integrators.{hpp,cpp}     # closed-form K and σ-mass BFI
   q2_henrotte_generated.hpp              # auto-generated, do not edit
-  radia_axifemm.cpp                      # pybind11 module entry
+  axifem.cpp                      # pybind11 module entry
 
-src/radia/radia_axifemm.pyd              # build output (Build.ps1 + top-level CMake)
+src/radia/axifem.pyd              # build output (Build.ps1 + top-level CMake)
 
 tests/axifemm/                            # public test surface
   conftest.py                             # adds _reference_python/ to sys.path
@@ -316,7 +316,7 @@ flux function `ψ = 2π r A_φ` rather than the field itself.
   per DOF on the Cu-disk benchmark).
 
 Within the NGSolve ecosystem it is a **drop-in FESpace** — once
-`radia_axifemm` is imported, `FESpace("axihenrotte", mesh, order=k)`
+`axifem` is imported, `FESpace("axihenrotte", mesh, order=k)`
 works exactly like any other space.
 
 [^Henrotte93]: F. Henrotte et al., "A new method for axisymmetric linear

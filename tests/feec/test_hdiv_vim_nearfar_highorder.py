@@ -29,7 +29,7 @@ pytest.importorskip("netgen.occ")
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Box, OCCGeometry, Pnt  # noqa: E402
 
-from radia.hdiv_vim import build_charge_gram, DemagOperator  # noqa: E402
+from radia.vim import build_charge_gram, DemagOperator  # noqa: E402
 
 
 def _box(lx, ly, lz, h):

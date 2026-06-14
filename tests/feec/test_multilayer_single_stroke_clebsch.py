@@ -1,6 +1,6 @@
 """Golden lock: multi-layer single-stroke via the foliated Clebsch (lambda,mu) path.
 
-Runs examples/feec_vim/multilayer_single_stroke_clebsch.py and asserts:
+Runs examples/vim/multilayer_single_stroke_clebsch.py and asserts:
 
   - the boustrophedon single-stroke (one wire threading M layers) is a VALID
     M-layer solenoid: on-axis Bz ~ M x the single layer (the azimuthal sense is
@@ -18,7 +18,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "feec_vim")
+EXDIR = os.path.join(HERE, "..", "..", "examples", "vim")
 
 
 @pytest.mark.slow

@@ -24,7 +24,7 @@ import numpy as np
 import ngsolve as ng
 from netgen.csg import CSGeometry, Sphere, Pnt
 
-from radia.hdiv_vim import _core as tet   # build_demag, demag_factor, _bary_tri
+from radia.vim import _core as tet   # build_demag, demag_factor, _bary_tri
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 INV4PI = 1.0 / (4.0 * pi)

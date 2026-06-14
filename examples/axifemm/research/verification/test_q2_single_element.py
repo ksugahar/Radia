@@ -28,7 +28,7 @@ from axifemm_quad_q2 import (  # type: ignore
 
 from ngsolve import Mesh, BilinearForm, CoefficientFunction, TaskManager
 from netgen.occ import OCCGeometry, MoveTo
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte,
     AxiHenrotteStiffnessBFI,
     AxiHenrotteSigmaMassBFI,

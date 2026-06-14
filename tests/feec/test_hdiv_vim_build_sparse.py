@@ -21,7 +21,7 @@ pytest.importorskip("netgen.csg")
 import scipy.sparse as sp  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, OrthoBrick, Pnt  # noqa: E402
-from radia.hdiv_vim import _core as tet  # noqa: E402
+from radia.vim import _core as tet  # noqa: E402
 
 
 def _sphere(h=0.6):

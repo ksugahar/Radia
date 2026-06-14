@@ -23,7 +23,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hdiv_demag_curved as cv
-from radia.hdiv_vim import _core as tet
+from radia.vim import _core as tet
 
 import ngsolve as ng
 from ngsolve import IntegrationRule, ElementId, BND, TaskManager

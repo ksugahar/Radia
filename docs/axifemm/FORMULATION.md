@@ -1,7 +1,7 @@
 # axifemm — Formulation
 
 A self-contained derivation of the Henrotte / Meeker axisymmetric finite-
-element formulation that `radia.radia_axifemm` implements.  Read this
+element formulation that `radia.axifem` implements.  Read this
 before reading the C++ source under `src/ext/axifemm/`.  Companion doc
 [`AXIFEMM.md`](AXIFEMM.md) covers usage, API, and validation results.
 
@@ -419,8 +419,8 @@ Both element matrices are derived in closed form via sympy in
 [`src/ext/axifemm/q_heat_henrotte_generated.hpp`](../../src/ext/axifemm/q_heat_henrotte_generated.hpp),
 and assembled by the C++ integrators
 
-- `radia.radia_axifemm.AxiHenrotteHeatStiffnessBFI(k_cf)` — `K_T`
-- `radia.radia_axifemm.AxiHenrotteHeatMassBFI(rho_c_cf)` — `M_T`
+- `radia.axifem.AxiHenrotteHeatStiffnessBFI(k_cf)` — `K_T`
+- `radia.axifem.AxiHenrotteHeatMassBFI(rho_c_cf)` — `M_T`
 
 DOF semantics are **nodal `T(vertex)`** directly — no
 `T = diag(2 pi r_node)` flux-function transformation (T has no axis
@@ -538,7 +538,7 @@ axifemm Henrotte / Meeker formulation:
   outputs to 0.1 % on the NMR benchmark
   (`examples/axifemm/nmr_validation/`).
 
-This is why `radia.radia_axifemm` is a critical module of the radia
+This is why `radia.axifem` is a critical module of the radia
 distribution and not a separate research package.
 
 ## References

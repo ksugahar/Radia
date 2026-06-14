@@ -66,7 +66,7 @@ Refs:
     trigger F1; it is the ORIENTATION/topology of the foliation vs a multi-axis
     target that makes the outer objective multi-modal).
 
-Run:  python examples/feec_vim/foliation_choice_wall.py
+Run:  python examples/vim/foliation_choice_wall.py
 """
 import os
 import sys

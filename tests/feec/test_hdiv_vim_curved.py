@@ -11,7 +11,7 @@ cannot.  The win is measured against the EXACT uniform-sphere dipole / volume (N
     of the demag factor: the proper ngsolve.bem single-layer (test_hdiv_vim_bem_demag.py) DOES
     discriminate + p-converges.  Locked so the crude offset is not mistaken for a curved-mesh bug.
 
-See examples/feec_vim/hdiv_demag_curved.py for the full derivation + table.
+See examples/vim/hdiv_demag_curved.py for the full derivation + table.
 """
 import os
 import sys
@@ -21,7 +21,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
 import hdiv_demag_curved as cv  # noqa: E402
 
 

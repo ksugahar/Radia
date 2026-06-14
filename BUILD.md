@@ -55,7 +55,7 @@ Builds `radia.pyd` (which includes `RadiaField` NGSolve integration) using MSVC 
 | `-Rebuild` | switch | false | Clean + Configure + Build |
 | `-Test` | switch | false | Run import tests after build |
 | `-RadiaOnly` | switch | false | Build only radia.pyd (legacy flag, no longer needed since RadiaField is integrated) |
-| `-AxiFemmOnly` | switch | false | Rebuild ONLY the `radia_axifemm` C++ extension via direct cl/link (no CMake, no MKL) — fast C++ iteration |
+| `-AxiFemmOnly` | switch | false | Rebuild ONLY the `axifem` C++ extension via direct cl/link (no CMake, no MKL) — fast C++ iteration |
 | `-InstallToSitePackages` | switch | false | After building, also copy the rebuilt `.pyd`(s) into the importable `site-packages\radia` |
 | `-Verbose` | switch | false | Show detailed build output |
 | `-NoParallel` | switch | false | Disable TaskManager parallelization (for debugging) |
@@ -79,16 +79,16 @@ Builds `radia.pyd` (which includes `RadiaField` NGSolve integration) using MSVC 
 - Build log saved to `build_log.txt` for debugging
 - Shows PYD file size and timestamp on success
 
-### Rebuilding only `radia_axifemm` (C++ extension iteration)
+### Rebuilding only `axifem` (C++ extension iteration)
 
 When iterating on the axisymmetric FEMM C++ (`src/ext/axifemm/`: the AxiHenrotte
 FESpace / DiffOps / integrators), a full build is overkill. `-AxiFemmOnly`
-compiles just the four `radia_axifemm` sources and links them directly against the
+compiles just the four `axifem` sources and links them directly against the
 installed NGSolve/Netgen + Python — it does **not** need Intel MKL and does **not**
 run a CMake configure (so it also sidesteps a stale `build-msvc` cache):
 
 ```powershell
-# Rebuild radia_axifemm and refresh the importable package in one step
+# Rebuild axifem and refresh the importable package in one step
 .\Build.ps1 -AxiFemmOnly -InstallToSitePackages
 ```
 

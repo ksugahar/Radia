@@ -40,7 +40,7 @@ import ngsolve as ng
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hdiv_cyoke_nonlinear import cyoke_mesh                      # noqa: E402  same C-yoke geometry
-from radia.hdiv_vim import _nonlinear as nl                       # noqa: E402
+from radia.vim import _nonlinear as nl                       # noqa: E402
 
 ng.SetNumThreads(4)
 HERE = os.path.dirname(os.path.abspath(__file__))

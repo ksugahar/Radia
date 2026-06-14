@@ -1,4 +1,4 @@
-"""Cross-check the C++ radia_axifemm element matrices against the
+"""Cross-check the C++ axifem element matrices against the
 pure-Python reference implementation in `_reference_python/`.
 
 The pure-Python prototype (axifemm_core.py: P1 triangle, axifemm_quad.py:
@@ -29,7 +29,7 @@ from ngsolve import (
 
 def _cpp_q1_quad_matrices(ra, rb, za, zb, mu, sigma):
     """Assemble C++ K, M for a single Q1 quad spanning (ra,rb) x (za,zb)."""
-    radia_axifemm = pytest.importorskip("radia_axifemm")
+    axifem = pytest.importorskip("axifem")
     box = MoveTo(ra, za).Rectangle(rb - ra, zb - za).Face()
     box.faces.name = "conductor"
     # maxh must dominate both dimensions to coerce Netgen into producing
@@ -39,13 +39,13 @@ def _cpp_q1_quad_matrices(ra, rb, za, zb, mu, sigma):
         maxh=maxh, quad_dominated=True))
     assert mesh.ne == 1, f"expected single-element mesh, got ne={mesh.ne}"
 
-    fes = radia_axifemm.H1Henrotte(mesh, order=1)
+    fes = axifem.H1Henrotte(mesh, order=1)
     assert fes.ndof == 4, f"expected ndof=4 (Q1 quad), got {fes.ndof}"
 
     a = BilinearForm(fes, symmetric=True)
-    a += radia_axifemm.AxiHenrotteStiffnessBFI(CoefficientFunction(mu))
+    a += axifem.AxiHenrotteStiffnessBFI(CoefficientFunction(mu))
     m = BilinearForm(fes, symmetric=True)
-    m += radia_axifemm.AxiHenrotteSigmaMassBFI(CoefficientFunction(sigma))
+    m += axifem.AxiHenrotteSigmaMassBFI(CoefficientFunction(sigma))
     with TaskManager():
         a.Assemble()
         m.Assemble()
