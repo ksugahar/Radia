@@ -734,6 +734,30 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   `clebsch_dipole_design_workflow.png` (the cross-section level set | the width
   knob | the level set carried into 3-D). Goldens `test_clebsch_dipole_workflow_*`
   (design fast, FEM slow).
+- **`clebsch_dipole_saturation_2d.py`** — **saturation** added to the dipole design,
+  at **linear cost**: the level-set workflow above assumed an *unsaturated* iron
+  equipotential; at high excitation the iron **saturates** and the gap field stops
+  rising linearly. The iron flux **return path is a saturable Chaplygin guide**, so the
+  operating curve `B_gap(NI)` is a **magnetic-circuit 1-shot**
+  `NI = (B_gap/μ₀)·gap + Σ_seg ν(B_seg)·B_seg·L_seg` — the iron sum *is* the Chaplygin
+  reluctance integral, and a deliberately **necked segment (a throat,
+  `A_throat<A_gap`)** is the Chaplygin throat embedded in the magnet: it carries
+  `B_throat=B_gap·A_gap/A_throat` and **saturates first**, setting the knee. Given `NI`
+  the circuit root-finds `B_gap` in microseconds (no mesh, no Picard). A **120-point**
+  operating-curve design map (3 throat widths × 40 drives) is **~10 ms**; a **thinner
+  iron throat saturates the magnet EARLIER** (knee drive `6.3→19.8 kA·t` as the throat
+  goes `6→16 mm`) — the saturation design knob the (linear) pole-surface design cannot
+  see. **Validated against a real 2-D nonlinear FEM** (an A-formulation Froehlich-iron
+  window-frame electromagnet, under-relaxed Picard): the lumped circuit matches the FEM
+  to **~6–20 %** (the lumped-circuit error — gap fringing + corner crowding), each FEM
+  point costing **~22 Picard iterations**. So the whole map = 120 root-finds (10 ms) vs
+  the equivalent **~2670 nonlinear FEM linear solves**. Figure:
+  `clebsch_dipole_saturation_2d.png` (the `B_gap(NI)` curves + FEM points | the knee
+  design knob | the cost bar). Goldens `test_clebsch_dipole_saturation_*` (circuit fast,
+  FEM slow). *Honest scope: the lumped series circuit is the standard ~10 %-accurate
+  engineering model; the iron-path reluctance is the Chaplygin 1-shot whose slender-guide
+  form is validated in `chaplygin_hodograph_2d.py`, and the 2-D FEM here is the
+  end-to-end check.*
 
 ## Run
 
@@ -754,6 +778,7 @@ python accel_pole_dipole_body_2d.py           # the BODY lever: pole width + cur
 python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any multipole)
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
+python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python chaplygin_free_boundary_2d.py          # Frontier 2: the turning-guide free boundary (image)
 python chaplygin_inverse_vonmises_2d.py       # Frontier 2 inverse: von Mises dissolves it (linear)
 python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inverse, flux (lambda) freed
