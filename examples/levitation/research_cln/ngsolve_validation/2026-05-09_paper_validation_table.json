@@ -63,8 +63,8 @@
   "implementation_files": {
     "FEM_Tanimoto_AT": "ngsolve_validation/tanimoto_AT_geom_sweep.py",
     "FEM_v5_Hiruma": "ngsolve_validation/geom_sweep_v5_hiruma.py",
-    "BEM_Phase_F4_cuboid": "S:/Radia/01_GitHub/packages/radia-vim/scripts/extract_tau_cuboid_521.py",
-    "BEM_Phase_F4_A1": "S:/Radia/01_GitHub/packages/radia-vim/scripts/extract_tau_A1_square.py",
+    "BEM_Phase_F4_cuboid": "S:/Radia/01_GitHub/src/ext/radia_vim/scripts/extract_tau_cuboid_521.py",
+    "BEM_Phase_F4_A1": "S:/Radia/01_GitHub/src/ext/radia_vim/scripts/extract_tau_A1_square.py",
     "MCP_server": "ngsolve_validation/mcp_kameari_kelvin_server.py (tool: tanimoto_AT_3d_cuboid)"
   },
   "key_diagnostic": "Sugahara 2026-05-09: Source ∫σA_s·W on rectangular violates div(σA)=0 across boundary because A_s·n ≠ 0 on x/y faces. Helmholtz-Hodge projection of A_s onto A_s'·n=0 subspace fixes this and recovers BEM agreement.",

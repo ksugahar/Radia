@@ -240,12 +240,12 @@ AXIFEMM_VALIDATION = """\
   τ₁ = 223.06 µs on the Cu disk (matches BEM v3 to 0.55 %).
 * `axifemm/axifemm_quad_q2.py` — Python `p=2` Gauss-8×8 prototype; agrees
   with the Mathematica closed form to ~ 3.4 × 10⁻⁸ relative.
-* `packages/radia-axifemm/scripts/validate_q2_codegen.py` — runs both at the
+* `examples/axifemm/research/validate_q2_codegen.py` — runs both at the
   per-entry level after every `derive_quad_q2_henrotte.wls` re-run.
-* `packages/radia-axifemm/tests/test_q2_single_element.py` — end-to-end
+* `examples/axifemm/research/verification/test_q2_single_element.py` — end-to-end
   per-element BFI eigenvalue match (closed-form vs Gauss prototype, 1e-7
   tolerance).
-* `packages/radia-axifemm/tests/test_hiruma_disk_q2.py` — full disk Cu disk
+* `examples/axifemm/research/verification/test_hiruma_disk_q2.py` — full disk Cu disk
   eddy-current Hiruma 3-term, expects τ₁ ≈ 223.7 µs.
 
 ## Cauer-ladder cross-validation against BEM (Phase 3-(3), Nagamine pipeline)
@@ -309,7 +309,7 @@ Reference:
   Prism Conductor", manuscript 2026-05-04 (Japan J. Industrial Appl.
   Math. submission).
 
-Test: `packages/radia-axifemm/tests/test_3way_cauer_cross_validation.py`
+Test: `examples/axifemm/research/verification/test_3way_cauer_cross_validation.py`
 Reference data (separate working tree, not in this repo):
   W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
     bem_disk_axisym_cauer.wls     (Mathematica BEM + Foster amplitudes)
@@ -447,25 +447,28 @@ factors silently.
 AXIFEMM_FILE_LAYOUT = """\
 # File layout
 
+(radia-axifemm was dissolved into radia on 2026-06-14: the C++ ships in the
+radia wheel as `radia.radia_axifemm`; scripts/tests moved into the repo tree.)
+
 ```
-packages/radia-axifemm/
-  src/
-    axi_henrotte_fe.{hpp,cpp}            # Q1, Q2 quad + P1 triangle FE classes
-    axi_henrotte_fespace.{hpp,cpp}       # FESpace with order=1 / order=2 dispatch
-    axi_henrotte_diffop.hpp              # DifferentialOperators (value, gradient)
-    axi_henrotte_integrators.{hpp,cpp}   # closed-form K and σ-mass BFI
-    q2_henrotte_generated.hpp            # auto-generated, do not edit
-    radia_axifemm.cpp                    # pybind11 module entry
-    __init__.py                          # Python re-exports
-  scripts/
-    codegen_q2_henrotte.py               # JSON → C++ codegen
-    validate_q2_codegen.py               # closed-form vs Gauss prototype
-    q2_henrotte_test_values.json         # numerical reference values
-  tests/
-    test_q2_single_element.py            # per-element BFI sanity check
-    test_hiruma_disk_q1.py               # disk Hiruma 3-term, p=1
-    test_hiruma_disk_q2.py               # disk Hiruma 3-term, p=2
-    test_q2_assembly_diag.py             # 2-quad assembly diagnostic
+src/ext/axifemm/                          # C++ source (built into the radia wheel)
+  axi_henrotte_fe.{hpp,cpp}               # Q1, Q2 quad + P1 triangle FE classes
+  axi_henrotte_fespace.{hpp,cpp}          # FESpace with order=1 / order=2 dispatch
+  axi_henrotte_diffop.hpp                 # DifferentialOperators (value, gradient)
+  axi_henrotte_integrators.{hpp,cpp}      # closed-form K and σ-mass BFI
+  q2_henrotte_generated.hpp               # auto-generated, do not edit
+  radia_axifemm.cpp                       # pybind11 entry -> radia.radia_axifemm
+examples/axifemm/research/                # derivation + codegen scripts
+  codegen_q2_henrotte.py                  # JSON → C++ codegen
+  validate_q2_codegen.py                  # closed-form vs Gauss prototype
+  q2_henrotte_test_values.json            # numerical reference values
+examples/axifemm/research/verification/   # standalone __main__ verification scripts
+  test_q2_single_element.py               # per-element BFI sanity check
+  test_hiruma_disk_q1.py                  # disk Hiruma 3-term, p=1
+  test_hiruma_disk_q2.py                  # disk Hiruma 3-term, p=2
+  test_q2_assembly_diag.py                # 2-quad assembly diagnostic
+tests/axifemm/                            # pytest golden tests (CI-collected)
+  test_element_matrices.py, test_heat_*.py, test_python_reference_consistency.py
 ```
 
 The Mathematica derivation lives upstream at
@@ -645,9 +648,9 @@ src/radia_axifemm.cpp
     + pybind exports of the new overloads
 ```
 
-Test: `packages/radia-axifemm/tests/test_periodic_kelvin_sphere.py`
-(passes against Stoll to -0.001 %, replaces the prior expected-failure
-xfail in Phase B2).
+Test: `examples/axifemm/research/verification/test_magnetized_sphere.py`
+(the sphere verification; passes against Stoll to -0.001 %, replaces the
+prior expected-failure xfail in Phase B2).
 """
 
 

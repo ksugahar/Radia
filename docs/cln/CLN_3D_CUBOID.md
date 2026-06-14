@@ -201,7 +201,7 @@ For each direction `k_dir ∈ {x, y, z}`:
 2. compute `b = M @ A_ext_h_vec` (the Hiruma RHS — the σ-mass-weighted
    external A);
 3. apply the Hiruma 3-term recursion (port from
-   [`packages/radia-axifemm/tests/test_hiruma_disk_q1.py:hiruma_3term`](../../packages/radia-axifemm/tests/test_hiruma_disk_q1.py))
+   [`examples/axifemm/research/verification/test_hiruma_disk_q1.py:hiruma_3term`](../../examples/axifemm/research/verification/test_hiruma_disk_q1.py))
    on `(K_red, M_red, b_red)`, where `_red` = restriction to FreeDofs;
 4. read off Nagamine `R_{2k}, L_{2k+1}, tau_pair[k]` per stage as in the
    disk script.
@@ -226,7 +226,7 @@ This is a direct copy of the disk pipeline
 
 ### 4.3 3-way validation test
 
-Mirror [`tests/test_3way_cauer_cross_validation.py`](../../packages/radia-axifemm/tests/test_3way_cauer_cross_validation.py)
+Mirror [`tests/test_3way_cauer_cross_validation.py`](../../examples/axifemm/research/verification/test_3way_cauer_cross_validation.py)
 in `cuboid_521_3way_cauer_cross_validation.py`: load BEM Cauer + HCurl
 Hiruma JSON files, print the per-direction `τ_pair[k]` table, and assert
 the leading rung agrees to ≲ 1 %.

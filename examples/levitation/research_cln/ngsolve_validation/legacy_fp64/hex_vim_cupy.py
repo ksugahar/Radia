@@ -197,7 +197,7 @@ def evaluate_basis(x, y, z, p, xp_mod=None):
 def validate_basis(p, n_test=20, atol=1e-12, use_cupy=False):
     """Compare evaluate_basis against radia_vim C++ at n_test random points."""
     sys.path.insert(0,
-        str(Path("S:/Radia/01_GitHub/packages/radia-vim/src")))
+        str(Path("S:/Radia/01_GitHub/src/ext/radia_vim/src")))
     import radia_vim
     basis = radia_vim.HDivDivFreeHexBasis(p)
     n_dofs = basis.n_dofs

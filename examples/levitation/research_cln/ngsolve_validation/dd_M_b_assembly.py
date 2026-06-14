@@ -218,7 +218,7 @@ def main():
     print("=" * 72)
 
     sys.path.insert(0,
-        str(Path("S:/Radia/01_GitHub/packages/radia-vim/src")))
+        str(Path("S:/Radia/01_GitHub/src/ext/radia_vim/src")))
     import radia_vim
     sys.path.insert(0, str(Path(__file__).parent))
     # Legacy FP64 reference (in legacy_fp64/ since 2026-05-12)
