@@ -53,6 +53,9 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
     tet_newtonian_potential,       # degree-1 building block: INT_V 1/R dV' (PhiTet, pure-Python)
     tet_volume_field_linear,       # EXACT closed-form LINEAR volume-charge field (order-2 -div M term)
     linear_triangle_charge_field,  # EXACT closed-form LINEAR surface-charge field (order-2 M.n term)
+    triangle_potential_moment2,    # degree-2 building block: INT_T r'(x)r'/R dS' (second moment)
+    tet_newtonian_moment,          # degree-2 building block: INT_V r'/R dV' (volume first moment)
+    tet_volume_field_quadratic,    # EXACT closed-form QUADRATIC volume-charge field
 )
 
 __all__ = [
@@ -63,5 +66,6 @@ __all__ = [
     "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",
     "triangle_potential_const", "triangle_potential_moment", "tet_newtonian_potential",
     "tet_volume_field_linear", "linear_triangle_charge_field",
+    "triangle_potential_moment2", "tet_newtonian_moment", "tet_volume_field_quadratic",
     "_core", "_nonlinear", "_vim", "_field",
 ]

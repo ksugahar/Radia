@@ -33,6 +33,9 @@ from radia.hdiv_vim import (  # noqa: E402
     tet_newtonian_potential,
     tet_volume_field_linear,
     linear_triangle_charge_field,
+    triangle_potential_moment2,
+    tet_newtonian_moment,
+    tet_volume_field_quadratic,
 )
 
 
@@ -408,3 +411,91 @@ def test_linear_triangle_charge_field_constant_reduces():
         a = linear_triangle_charge_field(P, r, sigma0, np.zeros(3))
         b = sigma0 * flat_triangle_charge_field(P, r)
         assert np.linalg.norm(a - b) < 1e-13, f"s=0 vs sigma0*const r={r}"
+
+
+# ---------------------------------------------------------------------------------------------------
+# QUADRATIC volume-charge field (tet_volume_field_quadratic) + its degree-2 moment building blocks:
+# surface second moment M2 = INT_T r'(x)r'/R dS', volume first moment V1 = INT_V r'/R dV'.
+# ---------------------------------------------------------------------------------------------------
+def _tri_moment2_gauss(P, r, nq=44):
+    P = np.asarray(P, float); r = np.asarray(r, float)
+    J = np.linalg.norm(np.cross(P[1] - P[0], P[2] - P[0]))
+    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+    M = np.zeros((3, 3))
+    for i in range(nq):
+        for j in range(nq):
+            u, v = xs[i], xs[j]; jac = (1 - u)
+            p = P[0] + u * (P[1] - P[0]) + v * (1 - u) * (P[2] - P[0])
+            M += ws[i] * ws[j] * jac * J * np.outer(p, p) / np.linalg.norm(r - p)
+    return M
+
+
+def _tet_field_quad_gauss(V, r, rho0, g, Q, nq=26):
+    V = np.asarray(V, float); r = np.asarray(r, float)
+    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+    V6 = abs(np.linalg.det(np.array([V[1] - V[0], V[2] - V[0], V[3] - V[0]])))
+    acc = np.zeros(3)
+    for i in range(nq):
+        for j in range(nq):
+            for k in range(nq):
+                a, b, c = xs[i], xs[j], xs[k]
+                l1, l2, l3 = a, b * (1 - a), c * (1 - a) * (1 - b); jac = (1 - a) ** 2 * (1 - b)
+                p = V[0] + l1 * (V[1] - V[0]) + l2 * (V[2] - V[0]) + l3 * (V[3] - V[0])
+                rho = rho0 + np.dot(g, p) + p @ Q @ p
+                acc += ws[i] * ws[j] * ws[k] * jac * V6 * rho * (r - p) / np.linalg.norm(r - p) ** 3
+    return acc
+
+
+_QSYM = np.array([[0.3, 0.1, -0.2], [0.1, -0.4, 0.15], [-0.2, 0.15, 0.25]])
+
+
+def test_triangle_potential_moment2_vs_gauss_symmetric():
+    """Surface second moment M2 == off-plane Gauss (machine) and is symmetric."""
+    P = _TET[[0, 1, 2]]
+    for r in [[0.3, 0.3, 0.7], [0.3, 0.3, 0.2], [1.5, 0.5, 0.4], [0.2, 0.2, 0.3]]:
+        r = np.array(r, float)
+        a = triangle_potential_moment2(P, r)
+        b = _tri_moment2_gauss(P, r, 44)
+        assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-10, f"M2 vs Gauss r={r}"
+        assert np.linalg.norm(a - a.T) / np.linalg.norm(a) < 1e-12, f"M2 not symmetric r={r}"
+
+
+def test_tet_newtonian_moment_vs_gauss_far():
+    """Volume first moment V1 == far tet Gauss (machine)."""
+    def gV1(r, nq=24):
+        xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+        V6 = abs(np.linalg.det(np.array([_TET[1] - _TET[0], _TET[2] - _TET[0], _TET[3] - _TET[0]])))
+        acc = np.zeros(3)
+        for i in range(nq):
+            for j in range(nq):
+                for k in range(nq):
+                    a, b, c = xs[i], xs[j], xs[k]
+                    l1, l2, l3 = a, b * (1 - a), c * (1 - a) * (1 - b); jac = (1 - a) ** 2 * (1 - b)
+                    p = _TET[0] + l1 * (_TET[1] - _TET[0]) + l2 * (_TET[2] - _TET[0]) + l3 * (_TET[3] - _TET[0])
+                    acc += ws[i] * ws[j] * ws[k] * jac * V6 * p / np.linalg.norm(r - p)
+        return acc
+    for r in [[2.0, 0, 0], [1.5, 1.5, 1.0], [-1.0, 0.5, 0.5]]:
+        r = np.array(r, float)
+        a = tet_newtonian_moment(_TET, r)
+        b = gV1(r, 24)
+        assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-10, f"V1 vs Gauss r={r}"
+
+
+def test_tet_volume_field_quadratic_vs_gauss_far():
+    """Quadratic-rho closed-form volume field == far tet Gauss (machine)."""
+    g = np.array([0.7, -0.3, 0.5]); rho0 = 0.4
+    for r in [[2.0, 0, 0], [1.5, 1.5, 1.0], [-1.0, 0.5, 0.5], [0.5, 0.5, 2.5]]:
+        r = np.array(r, float)
+        Fc = tet_volume_field_quadratic(_TET, r, rho0, g, _QSYM)
+        Fg = _tet_field_quad_gauss(_TET, r, rho0, g, _QSYM, 26)
+        assert np.linalg.norm(Fc - Fg) / np.linalg.norm(Fg) < 1e-9, f"quad volume field vs Gauss r={r}"
+
+
+def test_tet_volume_field_quadratic_reduces_to_linear():
+    """Q = 0 reproduces tet_volume_field_linear bit-identically."""
+    g = np.array([0.7, -0.3, 0.5]); rho0 = 0.4
+    for r in [[2.0, 0, 0], [0.25, 0.25, 0.25], [0.1, 0.1, 0.1]]:
+        r = np.array(r, float)
+        a = tet_volume_field_quadratic(_TET, r, rho0, g, np.zeros((3, 3)))
+        b = tet_volume_field_linear(_TET, r, rho0, g)
+        assert np.linalg.norm(a - b) < 1e-13, f"Q=0 vs linear r={r}"
