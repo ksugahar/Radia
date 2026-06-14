@@ -140,16 +140,37 @@ and `s = 0` reproduces `σ0·flat_triangle_charge_field` bit-identically. This i
 `tet_volume_field_linear` — together they are the **complete degree-1 (linear) charge field**, exact and
 closed-form for both the volume `−div M` and the surface `M·n` terms.
 
+## The polynomial volume-charge field — degree 2 (DONE, closed form)
+
+The quadratic volume charge `ρ = ρ0 + g·r' + r'ᵀQr'` (Q symmetric) field, via the same
+divergence-theorem recursion `∫_V ρ(r-r')/R³ = Σ_f n_f ∫_face ρ/R − ∫_V (∇ρ)/R`:
+
+```
+∫_V ρ (r-r')/R³ dV'  =  Σ_faces n_f [ρ0 I0_f + g·M1_f + Q:M2_f]  −  (g·PhiTet + 2 Q·V1)
+```
+
+adds two degree-2 moment building blocks, each from the **same identities one degree up**:
+
+- `triangle_potential_moment2` — surface second moment `M2 = ∫_T r'⊗r'/R dS'`, from the Hessian identity
+  `∇'_s∇'_s(R³) = 3(ξ⊗ξ/R + R·P)` ⟹ `∫_T ξ⊗ξ/R = Σ_e (∫_edge R ξ dl)⊗m_e − P·∫_T R dS'` (with
+  `∫_T R dS' = ⅓[Σ_e m_e·∫_edge R ξ dl + h² I0]`), then shifted by `r_p`. Symmetric, exact.
+- `tet_newtonian_moment` — volume first moment `V1 = ∫_V r'/R dV' = ⅓[r·PhiTet − Σ_f h_f·M1_f]`, from
+  `1/R = ½∇'²R` weighted by `r'_k`.
+
+`tet_volume_field_quadratic` assembles these — validated vs far tet Gauss to **machine precision**
+(`test_tet_volume_field_quadratic_vs_gauss_far`), `M2`/`V1` each vs Gauss to machine precision, and
+`Q = 0` reduces to `tet_volume_field_linear` bit-identically.
+
 **Remaining Step-2 work:** (a) **quadratic+ surface charge** (the linear σ is done; a quadratic σ
-needs the *second* moment `∫_T r'⊗(r-r')/R³ dS'` — `−∇_r` of the second potential moment `∫_T r'⊗r'/R dS'`,
-the same surface-div-theorem machinery one degree up); (b) **higher-degree volume charge** (quadratic+ ρ needs the *volume*
-potential first moment `∫_V r'/R dV'` — the same `½∇'²R` trick gives `∫_V r'/R dV' = ½Σ_f ∮...`, a
-clean next derivation); (c) **curved faces** (flat-triangle only) — note ngsolve.bem's `LaplaceSL` is
-curved+triangle but gives the **potential**, not the field gradient (`grad G` is a documented
-ngsolve.bem gap, so it cannot be reused here); (d) **hex** internal; (e) a **C++ port** of
-`triangle_potential_moment` / `tet_volume_field_linear` + a **charge-coefficient assembly** (sum the
-kernels weighted by the polynomial charge coeffs from `build_charge_gram`'s B, H-matrix accelerated).
-Then **Step 3** wires the (fast) internal field into the nonlinear `set_field`.
+needs the *second* surface moment field `∫_T r'⊗(r-r')/R³ dS' = −∇_r M2` — the `1/R³` second-moment
+machinery / `−∇_r` of the now-available `triangle_potential_moment2`); (b) **cubic+ volume / surface**
+(same recursion one more degree up — cubic ρ needs the volume *second* moment `∫_V r'⊗r'/R dV'`); (c)
+**curved faces** (flat-triangle only) — note ngsolve.bem's `LaplaceSL` is curved+triangle but gives the
+**potential**, not the field gradient (`grad G` is a documented ngsolve.bem gap, so it cannot be reused
+here); (d) **hex** internal; (e) a **C++ port** of the moment building blocks + a
+**charge-coefficient assembly** (sum the kernels weighted by the polynomial charge coeffs from
+`build_charge_gram`'s B, H-matrix accelerated). Then **Step 3** wires the (fast) internal field into the
+nonlinear `set_field`.
 
 ## Step 1 — validated (`reconstruct_field_polynomial`)
 

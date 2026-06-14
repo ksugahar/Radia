@@ -480,3 +480,109 @@ def linear_triangle_charge_field(P, r, sigma0, s):
             m = -m
         acc -= float(np.dot(s, m)) * _edge_field_integral(A, B, r)
     return acc
+
+
+# ---------------------------------------------------------------------------------------------------
+# Degree-2 (quadratic) charge moments + the quadratic VOLUME field.  Both new moments follow from the
+# SAME identities one degree up:  V1 from 1/R = (1/2) lap'(R) weighted by r'_k;  M2 from the Hessian
+# identity grad'_s grad'_s(R^3) = 3 (xi(x)xi/R + R P).  See docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md.
+# ---------------------------------------------------------------------------------------------------
+def _edge_R_xi_integral(A, B, r, r_p):
+    """INT_{edge A->B} R (r' - r_p) dl  (3-vector) = (A - r_p) INT R dl + t_hat INT R l dl,
+    with INT R dl and INT R l dl elementary (sqrt / asinh antiderivatives)."""
+    t = B - A
+    L = np.linalg.norm(t)
+    if L < 1e-300:
+        return np.zeros(3)
+    that = t / L
+    w = r - A
+    l0 = float(np.dot(w, that))
+    d2 = max(float(np.dot(w, w)) - l0 * l0, 0.0)
+    d = np.sqrt(d2)
+    u1, u2 = -l0, L - l0
+
+    def Fsq(u):                                          # INT sqrt(u^2+d^2) du
+        if d2 < 1e-300:
+            return 0.5 * u * abs(u)
+        return 0.5 * (u * np.sqrt(u * u + d2) + d2 * np.arcsinh(u / d))
+    gR = Fsq(u2) - Fsq(u1)                               # INT R dl
+    int_Rl = ((u2 * u2 + d2) ** 1.5 - (u1 * u1 + d2) ** 1.5) / 3.0 + l0 * (Fsq(u2) - Fsq(u1))  # INT R l dl
+    return (A - r_p) * gR + that * int_Rl
+
+
+def triangle_potential_moment2(P, r):
+    """M2 = INT_T r' (x) r'/R dS' (symmetric 3x3) on a flat triangle.  Via xi (x) xi/R =
+    (1/3) Hess_s(R^3) - R P  (xi = r'-r_p, P = in-plane projector), so
+    INT_T xi(x)xi/R = SUM_edges (INT_edge R xi dl)(x)m_e - P INT_T R dS', with
+    INT_T R dS' = (1/3)[SUM_e m_e.(INT_edge R xi dl) + h^2 I0]; then shift by r_p.  EXACT everywhere."""
+    P = np.asarray(P, float)
+    r = np.asarray(r, float)
+    n = np.cross(P[1] - P[0], P[2] - P[0])
+    n = n / np.linalg.norm(n)
+    h = float(np.dot(r - P[0], n))
+    r_p = r - h * n
+    cen = P.mean(axis=0)
+    I0 = triangle_potential_const(P, r)
+    Pproj = np.eye(3) - np.outer(n, n)
+    Mxi1 = np.zeros(3)
+    ohm_xi_m = np.zeros((3, 3))
+    sum_m_dot = 0.0
+    for i in range(3):
+        A, B = P[i], P[(i + 1) % 3]
+        u = (B - A) / np.linalg.norm(B - A)
+        m = np.cross(u, n)
+        if np.dot(m, 0.5 * (A + B) - cen) < 0:
+            m = -m
+        ARxi = _edge_R_xi_integral(A, B, r, r_p)
+        Mxi1 += m * _edge_R_integral(A, B, r)
+        ohm_xi_m += np.outer(ARxi, m)
+        sum_m_dot += float(np.dot(m, ARxi))
+    intR = (sum_m_dot + h * h * I0) / 3.0                # INT_T R dS'
+    Mxi2 = ohm_xi_m - Pproj * intR
+    return (np.outer(r_p, r_p) * I0 + np.outer(r_p, Mxi1) + np.outer(Mxi1, r_p) + Mxi2)
+
+
+def tet_newtonian_moment(verts, r):
+    """V1 = INT_V r'/R dV' over a tet (3-vector) = (1/3)[r PhiTet - SUM_faces h_f M1_f]
+    (from 1/R = (1/2) lap'(R) weighted by r'_k; M1_f = surface first moment of face f, h_f = signed
+    height of r above outward face f).  Closed form, EXACT interior + exterior."""
+    V = np.asarray(verts, float)
+    r = np.asarray(r, float)
+    c = V.mean(axis=0)
+    acc = r * tet_newtonian_potential(V, r)
+    for tri in ((1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1)):
+        P = V[list(tri)]
+        n = np.cross(P[1] - P[0], P[2] - P[0])
+        n = n / np.linalg.norm(n)
+        if np.dot(n, c - P[0]) > 0:
+            n = -n
+        acc -= float(np.dot(r - P[0], n)) * triangle_potential_moment(P, r)
+    return acc / 3.0
+
+
+def tet_volume_field_quadratic(verts, r, rho0, grho, Q):
+    """EXACT field of a QUADRATIC volume charge rho(r') = rho0 + grho.r' + r'^T Q r' on a tet (Q
+    symmetric 3x3): INT_V rho (r-r')/|r-r'|^3 dV' (NO 1/4pi), via the divergence-theorem recursion
+
+        = SUM_faces n_f [rho0 I0_f + grho.M1_f + Q:M2_f]  -  (grho PhiTet + 2 Q.V1)
+
+    Closed form (reuses triangle_potential_const / _moment / _moment2 + tet_newtonian_potential /
+    _moment), EXACT to machine precision at ANY r.  Q = 0 reduces bit-identically to
+    tet_volume_field_linear.  Multiply by 1/4pi for the physical H contribution."""
+    V = np.asarray(verts, float)
+    r = np.asarray(r, float)
+    grho = np.asarray(grho, float)
+    Q = np.asarray(Q, float)
+    c = V.mean(axis=0)
+    acc = np.zeros(3)
+    for tri in ((1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1)):
+        P = V[list(tri)]
+        n = np.cross(P[1] - P[0], P[2] - P[0])
+        n = n / np.linalg.norm(n)
+        if np.dot(n, c - P[0]) > 0:
+            n = -n
+        I0 = triangle_potential_const(P, r)
+        M1 = triangle_potential_moment(P, r)
+        M2 = triangle_potential_moment2(P, r)
+        acc += n * (rho0 * I0 + float(np.dot(grho, M1)) + float(np.einsum("jk,jk", Q, M2)))
+    return acc - (grho * tet_newtonian_potential(V, r) + 2.0 * (Q @ tet_newtonian_moment(V, r)))
