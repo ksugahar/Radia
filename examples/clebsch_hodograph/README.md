@@ -925,6 +925,41 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   correction, since the linking coil funnels more flux than the geometric area ratio;
   reported, not hidden). Goldens `..._inverse_sizing` (fast) + `..._inverse_fem` (slow).
 
+### `scaling_ffag_pole_2d.py` — achromatic (scaling-FFAG) gantry pole, certified by A/phi bounds
+
+The **engineering target the whole hodograph line serves**: a fixed-field
+(scaling-FFAG) **proton gantry** delivers a *range* of beam momenta without
+re-exciting the magnets (fast energy switching, a compact gantry). The enabling
+property is **achromaticity** — momentum-independent tune — which for a scaling
+field `B_y(r) = B0 (r/r0)^k` (orbits geometrically similar, `p ~ r^{k+1}`) is
+the *single* condition that the **field index** `k(r) = d log B_y / d log r` be
+**constant** across the aperture. The hodograph is the natural language: in
+`u = log r`, momentum change is a *translation* and the scaling field is a
+*straight line* (`log B` vs `log r`, slope `k`), so **achromatic ⇔ that line
+stays straight**.
+
+The design is **shape optimization** (fixed topology — the pole face is the
+`Phi = const` equipotential / Clebsch level set), so the hodograph chart is
+single-valued (no fold). For a **super-ferric** magnet (SC coils set the NI,
+the iron pole shapes the field, saturation is the wall) the value is to hold
+`k` constant *into saturation* — pushing the field for a smaller gantry.
+
+**Step 1 here (linear):** the field-index metric (exact on `B ~ r^k`,
+`~7e-14`); the proton 70-250 MeV band → radial aperture ratio `~1.12` (`k=5`);
+and the achromaticity is **certified by the complementary A/phi bracket** — the
+same gap solved as the scalar potential (`phi`, Dirichlet on the equipotential
+poles, `B=-grad phi`) AND as the flux function (`A`, the dual BCs, `B=curl A`),
+the energy↔co-energy (Legendre) conjugate pair. The two field indices converge
+from discretisation-*complementary* sides; their **gap < 1e-6** certifies that
+the measured `k(r)` is physics, not mesh. Result: the naive `g ~ r^{-k}` pole
+gives a bulk index `k ≈ 4.88` (just under the design `k=5`) — a small, certified
+2-D-fringing **deficit** that the (upcoming) Steps 2-3 reshape closes; *honest*:
+the bracket certifies the deficit is real. Figure
+`scaling_ffag_pole_2d.png` (left: `|B_y|(r)` log-log vs ideal `r^k` | right:
+`k_phi(r)`, `k_A(r)` and the A/phi bracket vs `k_design`). Golden
+`test_scaling_ffag_pole_2d_step1`. *Steps 2-3 (Froehlich saturation droops `k`
+at the high-r edge; von Mises reshape restores it) are the next rungs.*
+
 ## Run
 
 ```bash
@@ -948,6 +983,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
+python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) field index + A/phi bracket (--fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
