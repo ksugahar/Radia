@@ -2046,6 +2046,39 @@ radial exterior DtN and the conventional wisdom needs CORRECTING for this settin
      two regimes, one DtN-spectrum yardstick. (Literature on PML-via-DtN exists: Lassas-Somersalo
      PML-as-DtN; CFS-PML Kuzuoglu-Mittra/Roden-Gedney for the evanescent fix; complex-scaling spectral
      theory -- a dedicated search is the companion task.)
+
+LITERATURE POSITIONING -- PML via the DtN, and the novelty of the 3-way DtN-spectrum comparison
+(5-agent literature workflow, 2026-06-15). The "PML as an approximation of the exterior DtN" idea is
+WELL ESTABLISHED for time-harmonic WAVES -- cite, do not reclaim:
+  * Lassas & Somersalo (Computing 60, 1998; Proc.Roy.Soc.Edinburgh 131A, 2001) + Lassas-Liukkonen-
+    Somersalo (J.Math.Pures Appl. 80, 2001): PML = complex coordinate stretching / complex Riemannian
+    metric; converges EXPONENTIALLY (in thickness) to the exact exterior solution; zero reflection =
+    flat complex-metric curvature.
+  * Gander & Schadle (LNCSE 78, 2010 + Geneva preprint): PML / pole-condition truncation = a Pade /
+    continued-fraction approximation of the EXACT DtN operator; "what matters is DtN-approximation, not
+    absorption" (constant k). THE operator-level "PML approximates the DtN" statement.
+  * Hohage-Lehrenfeld-Preuss "Learned Infinite Elements" (SIAM J.Sci.Comput. 43, 2021): unifies
+    infinite elements + tensor-PML + local NRBC on a PER-MODE scalar DtN axis dtn(lambda_l), PML an
+    explicit special case. ** PREEMPTS THE PER-MODE-DtN COMPARISON AXIS ITSELF (for scalar waves). **
+  * Gomez-Revuelto, Garcia-Castillo & Demkowicz (PIER 126, 2012): IE vs PML vs iterative-BEM head-to-
+    head -- but on a DOF-to-ACCURACY axis, NOT a DtN spectrum (a full-text check is advisable).
+  * Galkowski-Lafontaine-Spence (SIAM J.Math.Anal. 55, 2023): PML truncation exponentially accurate at
+    HIGH frequency. Johnson "Notes on PMLs" (arXiv:2108.05348): the sigma/omega blow-up is "BENIGN in
+    the pure frequency domain" (only bites in time-domain/discretized) -- the CLOSEST prior hint to our
+    accuracy-vs-conditioning point. CFS-PML (Kuzuoglu-Mittra 1996; Roden-Gedney 2000) & Bermudez optimal
+    PML (JCP 2007) = the evanescent/low-freq absorption fixes. BEM = exact DtN (Steklov-Poincare/
+    Calderon) is folklore; SBFEM magnetostatic exterior operator (CMAME 401, 2022) is the closest
+    magnetostatic DtN-like reference (likely reviewer cite).
+DEFENSIBLE NOVELTY (hedge "to our knowledge"; cite the preemptions up front): (1) extending the per-mode
+COMPLEX DtN comparison axis from waves to the MAGNETOSTATIC / quasi-static->radiating regime; (2) co-
+plotting THREE arms -- Kelvin/inversion (matched HOIBC) + PML + BEM-FEM(exact) -- on that one spectrum,
+which no single prior work does; (3) the calibrated low-freq diagnosis "standard PML loses CONDITIONING,
+not DtN ACCURACY; Kelvin is frequency-robust" (refines the common 'low-freq PML breakdown' narrative;
+Johnson is the nearest hint); (4) the quasi-static real ladder -(n+1)/R reproduced EXACTLY & parameter-
+free by Kelvin. Risk MODERATE -> safe if hedged and the preemptions (Hohage axis / Gander-Schadle Pade /
+Gomez-Revuelto 3-way / BEM-folklore / Johnson) are cited. DO NOT claim the per-mode-DtN axis, "PML=DtN
+approx", a generic 3-way comparison, or BEM-as-DtN as new. Sugahara IEICE 2025 (the Kelvin<->PML
+transformation-optics derivation) is OUR launch point, not a competitor.
 """
 
 
