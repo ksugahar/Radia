@@ -209,6 +209,41 @@ def permeance(phi, mesh, mu, mmf):
     return 2.0 * W / (mmf * mmf)
 
 
+def solve_magnetostatic_az(mesh, nu, currents, dirichlet_values, order=2):
+    """In-plane (2D planar) magnetostatic vector potential A_z (FEMM 'magnetics' /
+    COMSOL 'mf' analog): -div(nu grad A_z) = J_z, with reluctivity nu = 1/(mu0 mu_r),
+    out-of-plane current density J_z [A/m^2] and flux density B = (dA_z/dy, -dA_z/dx)
+    so |B| = |grad A_z|. This is the CURRENT-carrying (vector-potential) member of the
+    same elliptic operator -div(c grad u) = f as the scalar potentials in this module --
+    the magnetostatic primitive for slot conductors, coils, busbars and the per-length
+    inductance below (whereas :func:`solve_magnetic_scalar` is the current-free mfnc member).
+
+    ``currents``         = {region_name: J_z [A/m^2]} drive density per material region
+                           (0 in regions not listed).
+    ``dirichlet_values`` = {boundary: A_z}: a far boundary A_z=0 (flux-parallel, FEMM's
+                           default outer boundary) or a perfectly-conducting flux-return shell.
+
+    Returns the H1 GridFunction A_z; the inductance via :func:`inductance_2d`. Validated:
+    solid-conductor coax L' = mu0/(2pi)(ln(b/a)+1/4) and the magnetic-fill variant
+    L' = mu0/(2pi)(mu_r ln(b/a)+1/4) (tests/test_inductance_2d.py)."""
+    src = mesh.MaterialCF(dict(currents), default=0.0)
+    return solve_poisson_2d(mesh, nu, dirichlet_values, source=src, order=order)
+
+
+def inductance_2d(A, mesh, nu, total_current):
+    """Inductance per length [H/m] from the magnetic field energy: L' = 2W/I^2,
+    W = 1/2 int nu |grad A_z|^2 dA = 1/2 int |B|^2/mu dA -- the magnetostatic
+    (vector-potential) member of the energy-method family alongside electric
+    :func:`capacitance` (C=2W/V^2), :func:`conductance` (G=2P/V^2) and magnetic-scalar
+    :func:`permeance` (P'=2W/F^2). ``nu`` = 1/(mu0 mu_r) reluctivity field: a *frozen* nu
+    field (the converged reluctivity of a saturated nonlinear solve, held fixed) makes this
+    the frozen-permeability incremental inductance used for machine Ld/Lq; a constant mu_r is
+    the linear limit. ``total_current`` = net conductor current I [A]. Validated against the
+    solid-coax closed form mu0/(2pi)(ln(b/a)+1/4) to 0.16% (tests/test_inductance_2d.py)."""
+    W = 0.5 * Integrate(nu * grad(A) * grad(A) * dx, mesh)
+    return 2.0 * W / (total_current * total_current)
+
+
 def solve_current_flow_ac(mesh, sigma, eps, omega, potentials, order=2):
     """FEMM AC current-flow: time-harmonic conduction in a lossy dielectric,
     -div((sigma + j w eps) grad V) = 0 with COMPLEX potential V.
