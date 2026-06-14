@@ -47,8 +47,44 @@ These are exactly the charges the HDiv-VIM already forms in `build_charge_gram` 
 | Step | Scope | Singular? | Status |
 |------|-------|-----------|--------|
 | **1** | **External** points (stray field of a polynomial-M body), **tet + hex** | no (`r` clear of the body) | **done** — `reconstruct_field_polynomial`, element-agnostic Python reference, golden-locked |
-| 2 | Internal / near points (the field at the body's own quadrature points) | yes (`1/r²` at `r'→r`) | designed: analytic Wilton/PhiTet base + smooth-remainder Gauss-Duffy (mirror the self-Gram subtraction), likely C++ |
+| **2** | Internal / near points (the field at the body's own quadrature points) | yes (`1/r²` at `r'→r`) | **kernels done** — both singular kernels promoted + golden-locked (`flat_triangle_charge_field`, `tet_self_volume_field`); assembly into a near-surface-accurate internal field (esp. curved faces) remains |
 | 3 | Wire Step 2 into the per-element nonlinear Newton (`set_field` ⇐ polynomial field, not `M_mass⁻¹ N m`) | — | designed: genuine order ≥ 2 nonlinear M, golden vs a finer-mesh / Radia MMM reference |
+
+## Step 2 — internal/near singular field
+
+For a query point `r` inside element `e`, split the charge sum by proximity:
+
+- **far** (elements/faces not containing or adjacent to `r`): non-singular → the Step-1 quadrature.
+- **self / near** (the element holding `r`, and `r`'s own faces): singular → handled analytically.
+
+**Kernel A — self-element VOLUME charge, spherical ray-trace** (`tet_self_volume_field`).
+Substituting `r' = r + s·ŝ` (`dV' = s² ds dΩ`, `r-r' = -s ŝ`, `|r-r'|³ = s³`) cancels the kernel:
+
+```
+                 1                     ⌠       ⌠ smax(ŝ)
+H_self(r) = ───── INT_e ρ ... dV' = - ─── ⎮  ŝ ⎮  ρ(r+s ŝ) ds dΩ      (NON-singular)
+                4π                    4π ⌡S² ⌡0
+```
+
+`smax(ŝ)` = ray distance from `r` to the element boundary; the inner `∫ρ ds` is closed-form for a
+polynomial `ρ`. Same substitution as the self-energy spherical method. Golden
+(`test_tet_self_volume_field_vs_phitet_gradient`): constant `ρ` on the unit tet vs `-(ρ/4π)∇(phi_tet)`
+(central FD of the exact analytic Newtonian potential `_hdiv_phi_tet`) at three interior points → **rel
+7e-4 … 3e-3**.
+
+**Kernel B — surface charge, analytic uniform-triangle field** (`flat_triangle_charge_field`).
+The exact `INT_T (r-r')/|r-r'|³ dS'` for a flat triangle (Wilton/Graglia: solid-angle normal term +
+per-edge log tangential term), valid at any `r` (near/far/on-face PV). Golden
+(`test_flat_triangle_charge_field_exact`): matches a fine Gauss reference to ~machine precision.
+
+**Remaining Step-2 work:** (a) **assemble** self-volume(Kernel A) + far-volume(Step-1) +
+surface(Kernel B, all faces — exact for constant σ per flat face) into one `reconstruct_field_internal`
+call, validated vs a fine-Gauss reference of the **same** mesh (not −M/3 — a flat faceted mesh's
+near-surface field genuinely differs from the smooth −M/3; that gap is **faceting**, removed only by
+curving); (b) **polynomial surface charge** σ (Kernel B is exact for the constant per-face part; the
+polynomial remainder needs the Graglia linear/higher triangle field); (c) **curved faces** (Kernel B is
+flat-triangle; a curved boundary face needs a curved-element near-field); (d) a C++/H-matrix version.
+Then Step 3 wires the assembled internal field into the nonlinear `set_field`.
 
 ## Step 1 — validated (`reconstruct_field_polynomial`)
 
