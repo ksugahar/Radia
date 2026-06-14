@@ -1536,6 +1536,46 @@ Sommerfeld-integral difficulty is a WAVE phenomenon; the static stratified probl
 isomorphic to is its benign limit -- precisely why a sparse real-SPD FEM-Kelvin volume solve can stand
 in for it so cleanly. HOME confirmed: Python/numpy/scipy (open math); NOT the C++ Radia core.
 
+FREQUENCY REGIME & THE TWO-PAPER FRAMING (demo_z, verified 2026-06-14). "Is Sommerfeld high-frequency
+only? usable at low frequency?" Resolve by separating the KERNEL from the FORMULATION:
+ * KERNEL (the layered Green's function) is well-defined at ALL frequencies and NUMERICALLY EASIEST at
+   low frequency. VERIFIED: the frequency-dependent half-space Sommerfeld integral vs the PEC exact
+   image exp(i k0 R_im)/R_im (R=+1 const -> Sommerfeld identity, exact at any k0): rel err 9.7e-9
+   (quasi-static) growing to 3.6e-6 at k0*(z+z')=30 (deep wave) -- the error GROWS with frequency
+   because the oscillatory tail IS the difficulty; k0->0 reproduces demo_y (1/R_im, 1.5e-6); a lossy
+   half-space (eps_r + i sigma/we) converges at every frequency. So Sommerfeld is NOT inherently high-
+   frequency; the 'hard' reputation = the high-frequency oscillatory tail + branch/pole on the SIP.
+   Low-frequency layered Sommerfeld is a MATURE field: geophysical EM (CSEM, magnetotellurics), eddy-
+   current testing, induction logging -- all quasi-static/diffusive (sugahara2022 is itself eddy-current
+   Kelvin).
+ * FORMULATION: the famous 'low-frequency breakdown' is an EFIE/MFIE conditioning issue (vector vs
+   scalar potential scale as omega vs 1/omega) cured by loop-tree / Calderon -- a property of the
+   integral EQUATION, NOT the kernel; and it is ABSENT for the static/quasi-static (Laplace/diffusion)
+   formulations the SA paper uses.
+THREE REGIMES: (a) DC-static (dielectric/permeable layers): pure-conformal Kelvin isomorphism (demo_x),
+benign (demo_y). (b) QUASI-STATIC / eddy-current (low freq, CONDUCTIVE layers, k^2=i w mu sigma): the
+SA-relevant regime (transformer tank/core eddy loss; = sugahara2022) -- mesh the conductive layer with
+the complex coeff and keep Kelvin for the non-conducting exterior (which stays HARMONIC, so Kelvin still
+applies), i.e. our demo_x/v/w machinery extends here directly. (c) FULL-WAVE/radiating (k0 real): hard
+Sommerfeld (SIP, Zenneck/pseudo poles, slow tail, DCIM); the Kelvin side becomes extended-Kelvin +
+Maxwellian PML (sugahara2025), NOT a pure conformal isomorphism (honest: a truncation-EQUIVALENCE,
+weaker than the static operator isomorphism).
+TWO-PAPER FRAMING (user, 2026-06-14): the unifying thesis = ACCELERATING / lightening the Sommerfeld-
+type LAYERED Green's BEM by replacing the dense special-function integral with a sparse transformed-FE
+(Kelvin) solve -- SPLIT BY FREQUENCY because the difficulty (hence the acceleration payoff) differs:
+  PAPER L (low-freq / quasi-static = the SA paper, near-complete): Kelvin-FEM as a sparse real-SPD,
+    material-aware stand-in for the (benign) quasi-static layered Sommerfeld operator; isomorphism +
+    DtN-spectral datasheet; demo_x/v/w/y/z are the evidence; connects sugahara2022.
+  PAPER H (high-freq / radiating, a genuine subproject): accelerate the HARD wave Sommerfeld (avoid
+    SIP/DCIM entirely) via extended-Kelvin + PML; benchmark against a full wave Sommerfeld reference
+    (demo_z is the seed). Caveat: wave = conformal+PML = truncation-equivalence, not a pure isomorphism;
+    needs BOTH a wave Kelvin-FEM and a wave Sommerfeld reference built.
+NOVELTY DISCIPLINE: 'lighten open-boundary BEM with transformed-FE' is Remacle ~1995 / Lowther 1989 but
+for FREE-SPACE exteriors. The defensible NEW angle for both papers = the LAYERED/Sommerfeld-media target
+(+ the spectral DtN datasheet, + the wave/PML extension). Re-search the layered-specific literature
+(Michalski-Mosig; geophysical-EM transformed-FE) before claiming, but it is a stronger position than the
+free-space lightening that Remacle already published.
+
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
 sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
