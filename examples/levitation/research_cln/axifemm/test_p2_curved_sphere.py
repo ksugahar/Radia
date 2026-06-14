@@ -21,7 +21,7 @@ import scipy.linalg as sla
 from netgen.geom2d import SplineGeometry
 from netgen.meshing import meshsize
 from ngsolve import Mesh, BilinearForm, CoefficientFunction, TaskManager, ngsglobals
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 

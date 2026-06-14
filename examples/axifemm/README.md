@@ -1,12 +1,12 @@
 # axifemm — Henrotte / Meeker axisymmetric FEM examples
 
-Examples that exercise the `radia.radia_axifemm` submodule (FEMM-style
+Examples that exercise the `radia.axifem` submodule (FEMM-style
 axisymmetric finite elements with `{1, r², z}`-linear shape functions —
 Henrotte 1993 / Meeker FEMM convention) on representative IH-relevant
 problems.
 
 The C++ implementation lives at `src/ext/axifemm/` and ships in the
-radia wheel as `src/radia/radia_axifemm.pyd`.  Element-matrix unit
+radia wheel as `src/radia/axifem.pyd`.  Element-matrix unit
 tests live at `tests/axifemm/`.
 
 ## Examples
@@ -31,7 +31,7 @@ functions removes the standard P1 axis singularity in `B_r ∝ 1/r`
 and gives clean per-element `B_z = const`, `B_r ∝ 1/r` — perfect for
 time-constant (CLN) extraction and Foster-form network identification.
 
-The lab's IH research stack therefore depends on `radia.radia_axifemm`
+The lab's IH research stack therefore depends on `radia.axifem`
 being installable on every machine (LAB / 100号機 / mdx) so the 21 lab
 users can run axisymmetric IH analyses through the standard
 `pip install radia` path.

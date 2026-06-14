@@ -113,7 +113,7 @@ Two ways to restore exactly field-null loops on distorted elements:
   divergence and the normal trace, so the loops stay field-null under *any*
   distortion. This is the discrete **de Rham** analogue of RWG's exactly
   solenoidal loops. (Verified to machine precision on distorted hexes —
-  `examples/feec_vim/`.)
+  `examples/vim/`.)
 
 Either way, the H-matrix acceleration is unchanged: the demag operator is the
 same dense `1/r` (Laplace) integral operator, so it is compressed by **HACApK**
@@ -222,7 +222,7 @@ lightest that works — Jacobi where the evidence below allows):
 
 ### Evidence so far (favours Jacobi for `μ_r ≤ 1e4`)
 
-`examples/feec_vim/demag_spectrum_jacobi.py` measures the demag operator's spectrum
+`examples/vim/demag_spectrum_jacobi.py` measures the demag operator's spectrum
 with Radia's **exact** `ObjRecMag` field on a compact body (3×3×3 cube grid,
 constant-M = an *all-star*, loop-free operator):
 
@@ -270,7 +270,7 @@ meshes — where `μ_min` drops below `1/χ`) would still need the H-ILU fallbac
 
 ---
 
-*See also:* `examples/feec_vim/` (the HDiv-type loop/star split, loops field-null
+*See also:* `examples/vim/` (the HDiv-type loop/star split, loops field-null
 on distorted hexes), `src/core/rad_hacapk.cpp` (`BuildLoopBasis` /
 `SolveLoopStar`, the de-Rham-exact loop basis + H-ILU `A_SS` solve),
 `docs/HMATRIX_EVALUATION.md` (HACApK ACA⁺).

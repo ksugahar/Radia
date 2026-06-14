@@ -26,7 +26,7 @@ param(
     [switch]$Test,
     [switch]$Verbose,
     [switch]$RadiaOnly,
-    [switch]$AxiFemmOnly,           # configure + build ONLY radia_axifemm (fast C++ iteration)
+    [switch]$AxiFemmOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$InstallToSitePackages  # also copy rebuilt .pyd(s) into the importable site-packages\radia
 )
 
@@ -60,7 +60,7 @@ if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
 }
 if (-not (Test-Path "$INTEL_MKL\lib\mkl_rt.lib")) {
     if ($AxiFemmOnly) {
-        # radia_axifemm does NOT link MKL, and an incremental configure on a
+        # axifem does NOT link MKL, and an incremental configure on a
         # populated build dir reuses the cached MKL paths -- so warn, don't exit.
         Write-Host "WARNING: Intel MKL not found at $INTEL_MKL -- continuing (-AxiFemmOnly does not need MKL)" -ForegroundColor Yellow
     } else {
@@ -133,8 +133,8 @@ if (-not (Test-Path $BUILD_DIR)) {
 # ============================================================================
 
 if ($AxiFemmOnly) {
-# ---- Fast path: DIRECT compile+link of radia_axifemm only (no CMake, no MKL) ----
-# radia_axifemm links ONLY NGSolve/Netgen + Python (no MKL), so we compile its 4
+# ---- Fast path: DIRECT compile+link of axifem only (no CMake, no MKL) ----
+# axifem links ONLY NGSolve/Netgen + Python (no MKL), so we compile its 4
 # .cpp and link directly against the installed packages.  This works on any
 # machine with VS + ngsolve installed -- even without the full MKL/CMake build
 # environment -- and sidesteps a stale build-msvc CMake cache (e.g. 8.3 short
@@ -148,8 +148,8 @@ $objDir    = "$BUILD_DIR\axifemm_direct"
 if (-not (Test-Path $objDir)) { New-Item -ItemType Directory -Path $objDir | Out-Null }
 Write-Host "  netgen pkg: $netgenPkg" -ForegroundColor Gray
 Write-Host "  python    : $pyPrefix ($pyLib)" -ForegroundColor Gray
-# Compile flags mirror the CMake target (see `ninja -t commands radia_axifemm`).
-$axiCFlags = '/nologo /TP -DHAVE_NETGEN_SOURCES -DHAVE_STRUCT_TIMESPEC -DLAPACK -DMSVC_EXPRESS -DNDEBUG -DNETGEN_PYTHON -DNGS_PYTHON -DNG_PYTHON -DNOMINMAX -DPYBIND11_SIMPLE_GIL_MANAGEMENT -DPy_NO_LINK_LIB -DRADIA_AXIFEMM_PHASE_2B -DTCL -DUSE_TIMEOFDAY -DUSE_UMFPACK -DWIN32 -DWNT -DWNT_WINDOW -D_CRT_SECURE_NO_WARNINGS -D_WIN32_WINNT=0x1000 -Dradia_axifemm_EXPORTS /EHsc /O2 /Ob2 /MD /fp:fast /W0 /wd4244 /wd4267 /arch:AVX2 /bigobj /std:c++20 /wd4068 -DMAX_SYS_DIM=3'
+# Compile flags mirror the CMake target (see `ninja -t commands axifem`).
+$axiCFlags = '/nologo /TP -DHAVE_NETGEN_SOURCES -DHAVE_STRUCT_TIMESPEC -DLAPACK -DMSVC_EXPRESS -DNDEBUG -DNETGEN_PYTHON -DNGS_PYTHON -DNG_PYTHON -DNOMINMAX -DPYBIND11_SIMPLE_GIL_MANAGEMENT -DPy_NO_LINK_LIB -DRADIA_AXIFEMM_PHASE_2B -DTCL -DUSE_TIMEOFDAY -DUSE_UMFPACK -DWIN32 -DWNT -DWNT_WINDOW -D_CRT_SECURE_NO_WARNINGS -D_WIN32_WINNT=0x1000 -Daxifem_EXPORTS /EHsc /O2 /Ob2 /MD /fp:fast /W0 /wd4244 /wd4267 /arch:AVX2 /bigobj /std:c++20 /wd4068 -DMAX_SYS_DIM=3'
 $BatchContent = @"
 @echo off
 call "$VS_PATH\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
@@ -158,15 +158,15 @@ if errorlevel 1 (
     exit /b 1
 )
 cd /d "$objDir"
-for %%F in (radia_axifemm axi_henrotte_fe axi_henrotte_fespace axi_henrotte_integrators) do (
+for %%F in (axifem axi_henrotte_fe axi_henrotte_fespace axi_henrotte_integrators) do (
     echo === COMPILE %%F.cpp ===
     cl $axiCFlags -I"$axiSrc" -external:I"$netgenPkg\include" -external:I"$pyInc" -external:I"$netgenPkg\include\include" -external:W0 /Fo"$objDir\%%F.obj" /c "$axiSrc\%%F.cpp"
     if errorlevel 1 ( echo COMPILE_FAILED %%F & exit /b 1 )
 )
-echo === LINK radia_axifemm.pyd ===
-link /nologo "$objDir\radia_axifemm.obj" "$objDir\axi_henrotte_fe.obj" "$objDir\axi_henrotte_fespace.obj" "$objDir\axi_henrotte_integrators.obj" /out:"$BUILD_DIR\radia_axifemm.pyd" /implib:"$objDir\radia_axifemm.lib" /dll /machine:x64 /INCREMENTAL:NO /ignore:4273 /ignore:4217 /ignore:4049 "$pyPrefix\libs\$pyLib" "$netgenPkg\lib\libngsolve.lib" "$netgenPkg\lib\nglib.lib" "$netgenPkg\lib\ngcore.lib" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
+echo === LINK axifem.pyd ===
+link /nologo "$objDir\axifem.obj" "$objDir\axi_henrotte_fe.obj" "$objDir\axi_henrotte_fespace.obj" "$objDir\axi_henrotte_integrators.obj" /out:"$BUILD_DIR\axifem.pyd" /implib:"$objDir\axifem.lib" /dll /machine:x64 /INCREMENTAL:NO /ignore:4273 /ignore:4217 /ignore:4049 "$pyPrefix\libs\$pyLib" "$netgenPkg\lib\libngsolve.lib" "$netgenPkg\lib\nglib.lib" "$netgenPkg\lib\ngcore.lib" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
 if errorlevel 1 ( echo LINK_FAILED & exit /b 2 )
-copy /Y "$BUILD_DIR\radia_axifemm.pyd" "$PROJECT_DIR\src\radia\radia_axifemm.pyd" >nul
+copy /Y "$BUILD_DIR\axifem.pyd" "$PROJECT_DIR\src\radia\axifem.pyd" >nul
 echo Build completed.
 exit /b 0
 "@
@@ -243,10 +243,10 @@ if errorlevel 1 ( echo WARNING: sparsesolv_ngsolve build failed )
 
 echo.
 echo ========================================
-echo   Building radia_axifemm
+echo   Building axifem
 echo ========================================
-"$CMAKE_EXE" --build . --config Release --target radia_axifemm -j
-if errorlevel 1 ( echo WARNING: radia_axifemm build failed )
+"$CMAKE_EXE" --build . --config Release --target axifem -j
+if errorlevel 1 ( echo WARNING: axifem build failed )
 
 echo.
 echo ========================================
@@ -324,7 +324,7 @@ try {
 
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
 
-    # For -AxiFemmOnly, radia_axifemm.pyd is already placed in src/radia/ by the
+    # For -AxiFemmOnly, axifem.pyd is already placed in src/radia/ by the
     # CMake POST_BUILD copy, so skip the full module/cubit copy section below.
     if (-not $AxiFemmOnly) {
     # ========================================================================
@@ -443,7 +443,7 @@ try {
         $platlib = & python -c "import sysconfig; print(sysconfig.get_paths()['platlib'])" 2>$null
         $radiaPkg = if ($platlib) { Join-Path $platlib 'radia' } else { $null }
         if ($radiaPkg -and (Test-Path $radiaPkg)) {
-            $installList = @('radia_axifemm.pyd')
+            $installList = @('axifem.pyd')
             if (-not $AxiFemmOnly) { $installList += @('_radia_pybind.pyd', 'peec_matrices.pyd', 'cln_core.pyd') }
             foreach ($f in $installList) {
                 $srcF = Join-Path "$PROJECT_DIR\src\radia" $f

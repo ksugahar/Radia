@@ -22,7 +22,7 @@ import ngsolve as ng
 from netgen.occ import Box, OCCGeometry, Pnt
 
 import radia._radia_pybind as rp
-from radia.hdiv_vim._core import phi_tet, _gauss_duffy_tet
+from radia.vim._core import phi_tet, _gauss_duffy_tet
 
 
 def _tet_vol(V):

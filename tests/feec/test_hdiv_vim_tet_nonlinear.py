@@ -1,6 +1,6 @@
 """Golden test: NONLINEAR HDiv-type VIM demag (applied-field A+ solve + BH-curve Picard).
 
-The nonlinear foundation (examples/feec_vim/hdiv_demag_tet_nonlinear.py):
+The nonlinear foundation (examples/vim/hdiv_demag_tet_nonlinear.py):
   - applied-field system A+ = (1/chi) M_mass + N (PLUS N -- the eigenvalue framing's -N is NOT the
     applied-field solve; A+ reproduces the analytic sphere M/H = chi/(1+chi D));
   - secant-chi Picard with a saturating BH curve converges + saturates (M -> M_sat);
@@ -20,8 +20,8 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
-from radia.hdiv_vim import _nonlinear as nl  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
+from radia.vim import _nonlinear as nl  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
 

@@ -2787,16 +2787,16 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     m.def("_hdiv_tri_potential", &radia_hdivvim::TriPotentialProbe, py::arg("V"), py::arg("r"),
           "M2 verify: Wilton triangle 1/r potential INT_T 1/|r-r'| dA' (V = 9 flat doubles = 3 verts, "
-          "r = 3).  Pure 1/r integral (no 1/4pi).  Should match radia.hdiv_vim._core.tri_potential.");
+          "r = 3).  Pure 1/r integral (no 1/4pi).  Should match radia.vim._core.tri_potential.");
     m.def("_hdiv_phi_tet", &radia_hdivvim::PhiTetProbe, py::arg("V"), py::arg("P"),
           "M2 verify: tet Newtonian potential INT_tet 1/|P-r'| dV' (V = 12 flat doubles = 4 verts, "
-          "P = 3) via the divergence theorem.  Should match radia.hdiv_vim._core.phi_tet.");
+          "P = 3) via the divergence theorem.  Should match radia.vim._core.phi_tet.");
     m.def("_hdiv_tri_field", &radia_hdivvim::TriFieldProbe, py::arg("V"), py::arg("r"),
           "Wilton triangle FIELD INT_T (r-r')/|r-r'|^3 dA' (V = 9 flat doubles, r = 3) -> 3-vector, no "
-          "1/4pi.  = -grad TriPotential.  Should match radia.hdiv_vim.flat_triangle_charge_field.");
+          "1/4pi.  = -grad TriPotential.  Should match radia.vim.flat_triangle_charge_field.");
     m.def("_hdiv_tet_field", &radia_hdivvim::TetFieldProbe, py::arg("V"), py::arg("P"),
           "Tet volume-charge FIELD INT_tet (P-r')/|P-r'|^3 dV' (V = 12 flat doubles, P = 3) -> 3-vector, "
-          "no 1/4pi.  = -grad PhiTet.  Should match radia.hdiv_vim.tet_self_volume_field * 4pi.");
+          "no 1/4pi.  = -grad PhiTet.  Should match radia.vim.tet_self_volume_field * 4pi.");
     m.def("_hdiv_tri_moment1", &radia_hdivvim::TriMoment1Probe, py::arg("V"), py::arg("r"),
           "Surface first moment INT_T r'/R dS' (V=9, r=3) -> 3-vector.  == triangle_potential_moment.");
     m.def("_hdiv_tri_moment2", &radia_hdivvim::TriMoment2Probe, py::arg("V"), py::arg("r"),

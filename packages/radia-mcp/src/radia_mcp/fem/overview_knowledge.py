@@ -10,7 +10,7 @@ LAB_STACK = r"""
 |-------|------|-----|
 | Mesh generation | Cubit (hex) / Netgen (tet) | STEP -> .vol |
 | FE space | NGSolve `H1`, `HCurl`, `HDiv`, `HDivSurface` | standard |
-| Axisym magnetic | `radia.radia_axifemm` (Henrotte basis) | `H1Henrotte` for A_phi curl-curl |
+| Axisym magnetic | `radia.axifem` (Henrotte basis) | `H1Henrotte` for A_phi curl-curl |
 | Open boundary | Kelvin transform + radia | natural BC via Kelvin |
 | Solver+precond | `radia.sparsesolv_ngsolve` | Compact AMS / COCR (HCurl) |
 | Nonlinear | Picard / Newton with Hantila polarization | radia.hantila_solver |
@@ -25,7 +25,7 @@ LAB_STACK = r"""
 | **Magnetostatic (scalar)** | **H1 + reduced Omega** | natural for nonlinear iron |
 | **Magnetostatic (vector)** | **HCurl A (ungauged) + CompactAMS** | open boundary via Kelvin |
 | **Eddy current MQS** | **HCurl A or A-V** with COCR + ComplexCompactAMS | complex symmetric |
-| **Axisym magnetic curl-curl** | **Henrotte basis** (radia.radia_axifemm) | 1/r kernel handled exactly |
+| **Axisym magnetic curl-curl** | **Henrotte basis** (radia.axifem) | 1/r kernel handled exactly |
 | **Axisym heat / scalar** | **standard H1 + 2*pi*r weighting** | FEMM convention |
 | **Laminated stack** | **Hollaus MSFEM** (effective material) | radia.calc_motor_lamination |
 
@@ -68,7 +68,7 @@ Problem class
 │   │   └── Thin sheet: shell formulation
 │   ├── Axisymmetric magnetic A_phi
 │   │   └── Henrotte basis {1, r^2, z}  ★ lab core
-│   │      -> radia.radia_axifemm
+│   │      -> radia.axifem
 │   └── Full Maxwell (high-freq, scattering)
 │       └── HCurl + Helmholtz kernel (NOT lab focus per CLAUDE.md)
 │
@@ -148,7 +148,7 @@ HISTORY = r"""
 ```
 2020  Compact AMS C++ implementation (HYPRE-free)
 2022  Radia 4.x with NGSolve integration
-2024  radia.radia_axifemm (Henrotte basis ★)
+2024  radia.axifem (Henrotte basis ★)
 2025  calc_motor_lamination v5 (Frljic anisotropic μ_eff)
 2026  radia_mcp ecosystem (this knowledge layer)
 ```

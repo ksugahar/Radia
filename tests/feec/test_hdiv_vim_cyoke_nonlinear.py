@@ -18,9 +18,9 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 pytest.importorskip("radia")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
 import hdiv_cyoke_nonlinear as cy  # noqa: E402
-from radia.hdiv_vim import _nonlinear as nl  # noqa: E402
+from radia.vim import _nonlinear as nl  # noqa: E402
 import ngsolve as ng  # noqa: E402
 
 

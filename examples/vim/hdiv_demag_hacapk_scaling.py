@@ -33,7 +33,7 @@ import ngsolve as ng
 from netgen.csg import CSGeometry, Sphere, Pnt
 
 import radia._radia_pybind as _rp
-from radia.hdiv_vim import _core as tet
+from radia.vim import _core as tet
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 

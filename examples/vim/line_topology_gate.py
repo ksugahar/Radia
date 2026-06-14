@@ -24,7 +24,7 @@ defect of a prescribed-rotation-number winding is clean and seed-robust.  The ga
 takes ANY callable J(p), so it applies to a mesh-evaluated current too; the torus
 winding with an exact constant iota is the analytically-clean demonstration vehicle.
 
-Run:  python examples/feec_vim/line_topology_gate.py
+Run:  python examples/vim/line_topology_gate.py
 """
 from __future__ import annotations
 

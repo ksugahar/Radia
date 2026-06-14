@@ -28,7 +28,7 @@
 #include <fem.hpp>
 #include <integrator.hpp>
 
-namespace radia_axifemm {
+namespace axifem {
 
 using namespace ngfem;
 
@@ -142,6 +142,6 @@ public:
         LocalHeap & lh) const override;
 };
 
-}  // namespace radia_axifemm
+}  // namespace axifem
 
 #endif

@@ -1,7 +1,7 @@
 """The runtime demag-backend selector + yano-type deprecation (radia.set_demag_backend).
 
 The yano-type MSC demag backend (rad.Solve on hex/wedge soft iron) is DEPRECATED, superseded by the FEEC
-HDiv-VIM (radia.hdiv_vim).  It is exposed as an OPTIONAL, selectable runtime backend so it can be removed
+HDiv-VIM (radia.vim).  It is exposed as an OPTIONAL, selectable runtime backend so it can be removed
 cleanly: "yano" (legacy default, one-time DeprecationWarning) vs "hdiv" (forbids the yano path until the
 HDiv-VIM is wired into rad.Solve).  These tests lock the API gate WITHOUT a real solve."""
 import pytest
@@ -40,7 +40,7 @@ def test_solverconfig_sets_backend():
 
 def test_hdiv_backend_forbids_yano_solve():
     """Selecting 'hdiv' makes rad.Solve REFUSE the yano path (NotImplementedError redirecting to
-    radia.hdiv_vim) -- the gate fires before the C++ solver, so no real object/solve is needed."""
+    radia.vim) -- the gate fires before the C++ solver, so no real object/solve is needed."""
     rad.set_demag_backend("hdiv")
     with pytest.raises(NotImplementedError):
         rad.Solve(0, 1e-4, 10, 0)

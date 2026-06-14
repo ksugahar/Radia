@@ -39,7 +39,7 @@ THE ONLY HONEST OUTPUTS for a nonzero-helicity target (stated, not faked):
   (2) a MULTI-PATCH CLEBSCH ATLAS with COHOMOLOGY CUTS: local Clebsch charts
       glued across cut surfaces (the b1 != 0 topology), i.e. accept seams.
 
-Run:  python examples/feec_vim/helical_current_no_clebsch.py
+Run:  python examples/vim/helical_current_no_clebsch.py
 """
 import os
 import sys

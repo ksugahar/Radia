@@ -5,7 +5,7 @@ well-conditioned but assumes a uniform M.  The per-element (operator) generaliza
 Newton-Raphson, which the earlier sessions found the simple per-element Picard / Hantila could NOT do
 robustly (NaN / wrong root at saturation).
 
-solve_nonlinear_newton (examples/feec_vim/hdiv_demag_tet_nonlinear.py) is the robust operator Newton.
+solve_nonlinear_newton (examples/vim/hdiv_demag_tet_nonlinear.py) is the robust operator Newton.
 Its three ingredients (verify-first, 2026-06-07):
   (a) the CONSISTENT TENSOR tangent dM/dH = chi_diff Hhat(x)Hhat + chi_sec (I - Hhat(x)Hhat)
       (the scalar chi_diff*I stalls at moderate drive where chi_sec != chi_diff);
@@ -26,8 +26,8 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
-from radia.hdiv_vim import _nonlinear as nl  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
+from radia.vim import _nonlinear as nl  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
 

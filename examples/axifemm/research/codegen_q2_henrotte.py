@@ -12,10 +12,10 @@ Output:
          to confirm the codegen path stays sound.)
 
 Generated C++ functions:
-    radia_axifemm::q2_henrotte::KPhiGeneral(sa, sb, za, zb, muR, muZ, K[81])
-    radia_axifemm::q2_henrotte::KPhiAxis(sb, za, zb, muR, muZ, K[36])
-    radia_axifemm::q2_henrotte::MSigmaPhiGeneral(sa, sb, za, zb, sigma, M[81])
-    radia_axifemm::q2_henrotte::MSigmaPhiAxis(sb, za, zb, sigma, M[36])
+    axifem::q2_henrotte::KPhiGeneral(sa, sb, za, zb, muR, muZ, K[81])
+    axifem::q2_henrotte::KPhiAxis(sb, za, zb, muR, muZ, K[36])
+    axifem::q2_henrotte::MSigmaPhiGeneral(sa, sb, za, zb, sigma, M[81])
+    axifem::q2_henrotte::MSigmaPhiAxis(sb, za, zb, sigma, M[36])
 
 These return the bilinear form in the **monomial basis**:
     {1, s, s^2, z, s*z, s^2*z, z^2, s*z^2, s^2*z^2}      (general, 9-dim)
@@ -135,7 +135,7 @@ def main():
 
 #include <cmath>
 
-namespace radia_axifemm {{
+namespace axifem {{
 namespace q2_henrotte {{
 
 inline constexpr double PI = 3.14159265358979323846;
@@ -149,7 +149,7 @@ inline constexpr double PI = 3.14159265358979323846;
 {body_ma}
 
 }}  // namespace q2_henrotte
-}}  // namespace radia_axifemm
+}}  // namespace axifem
 
 #endif  // RADIA_AXIFEMM_Q2_HENROTTE_GENERATED_HPP
 """

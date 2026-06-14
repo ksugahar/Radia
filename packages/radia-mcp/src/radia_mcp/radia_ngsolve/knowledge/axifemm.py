@@ -74,8 +74,8 @@ AXIFEMM_API = """\
 
 ```python
 from ngsolve import Mesh, FESpace, BilinearForm, CoefficientFunction
-from radia.radia_axifemm import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
-import radia.radia_axifemm   # import once to register the FESpace
+from radia.axifem import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
+import radia.axifem   # import once to register the FESpace
 
 mesh = Mesh(...)                                    # axis-aligned quad mesh
 fes  = FESpace("axihenrotte", mesh, order=2,
@@ -448,7 +448,7 @@ AXIFEMM_FILE_LAYOUT = """\
 # File layout
 
 (radia-axifemm was dissolved into radia on 2026-06-14: the C++ ships in the
-radia wheel as `radia.radia_axifemm`; scripts/tests moved into the repo tree.)
+radia wheel as `radia.axifem`; scripts/tests moved into the repo tree.)
 
 ```
 src/ext/axifemm/                          # C++ source (built into the radia wheel)
@@ -457,7 +457,7 @@ src/ext/axifemm/                          # C++ source (built into the radia whe
   axi_henrotte_diffop.hpp                 # DifferentialOperators (value, gradient)
   axi_henrotte_integrators.{hpp,cpp}      # closed-form K and σ-mass BFI
   q2_henrotte_generated.hpp               # auto-generated, do not edit
-  radia_axifemm.cpp                       # pybind11 entry -> radia.radia_axifemm
+  axifem.cpp                       # pybind11 entry -> radia.axifem
 examples/axifemm/research/                # derivation + codegen scripts
   codegen_q2_henrotte.py                  # JSON → C++ codegen
   validate_q2_codegen.py                  # closed-form vs Gauss prototype
@@ -510,7 +510,7 @@ on `H1Henrotte`, and the canonical Kelvin recipe carries over verbatim.
 ```python
 from ngsolve import Mesh, BilinearForm, Periodic, TaskManager
 from netgen.occ import OCCGeometry, WorkPlane, Glue, MoveTo
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 from radia.panels.add_kelvin import add_kelvin_2d_axisym
@@ -644,7 +644,7 @@ either the Periodic identification (most common) or the Dirichlet trace
 src/axi_henrotte_fespace.{hpp,cpp}
     + GetDofNrs(NodeId, Array<DofId>&)
     + GetVertexDofNrs / GetEdgeDofNrs / GetFaceDofNrs
-src/radia_axifemm.cpp
+src/axifem.cpp
     + pybind exports of the new overloads
 ```
 

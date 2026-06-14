@@ -1899,7 +1899,7 @@ def solve_axi_magnetostatic(mesh, nu, Jr=None, magnets=None, order=2,
     magnetized sphere B_in = 2 mu0 mu_r Hc/(mu_r+2) to -0.05 %
     (tests/test_axi_magnetostatic.py).
     """
-    from radia.radia_axifemm import H1Henrotte
+    from radia.axifem import H1Henrotte
     fes = H1Henrotte(mesh, order=order, dirichlet=dirichlet)
     u, v = fes.TnT()
     r = x
@@ -1945,7 +1945,7 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
     time-harmonic via Cu-disk eddy eigenvalue tau_1 = 224.31 us, 0.27 % gap to
     BEM-Foster (see examples/axifemm/research/verification/test_disk_eigenvalue.py).
     """
-    from radia.radia_axifemm import H1Henrotte
+    from radia.axifem import H1Henrotte
     r = x
 
     if driven_region is not None and total_current is not None:
@@ -2011,7 +2011,7 @@ def solve_axi_magnetostatic_nonlinear(mesh, nu_of_B, Jr=None, order=2,
 
     Returns the converged H1Henrotte GridFunction A_phi.
     """
-    from radia.radia_axifemm import H1Henrotte
+    from radia.axifem import H1Henrotte
     fes = H1Henrotte(mesh, order=order, dirichlet=dirichlet)
     u_trial, v = fes.TnT()
     r = x
@@ -2074,7 +2074,7 @@ def solve_axi_eddy_harmonic(mesh, mu_cf, sigma_cf, omega, applied_A,
         validated to machine precision in tests/test_axi_henrotte_complex_eval.py
         -- so |A|/B post-processing of this complex solution works (this is what
         unblocks the nonlinear mu(|B|) Picard layer).  Requires the rebuilt
-        radia_axifemm extension.  ``P_eddy`` remains the matrix-based reference.
+        axifem extension.  ``P_eddy`` remains the matrix-based reference.
 
     Validated (tests/test_axi_eddy_harmonic.py): for a Cu disk in a uniform
     applied B0, the eddy loss P_eddy(w) is positive, rises with w, and is
@@ -2086,7 +2086,7 @@ def solve_axi_eddy_harmonic(mesh, mu_cf, sigma_cf, omega, applied_A,
     import numpy as np
     import scipy.sparse as sp
     import scipy.sparse.linalg as spla
-    from radia.radia_axifemm import (H1Henrotte, AxiHenrotteStiffnessBFI,
+    from radia.axifem import (H1Henrotte, AxiHenrotteStiffnessBFI,
                                      AxiHenrotteSigmaMassBFI)
 
     fes = H1Henrotte(mesh, order=order, dirichlet=dirichlet)
@@ -2156,7 +2156,7 @@ def solve_axi_eddy_harmonic_nonlinear(mesh, mu_of_B, sigma_cf, omega, applied_A,
     import numpy as np
     import scipy.sparse as sp
     import scipy.sparse.linalg as spla
-    from radia.radia_axifemm import (H1Henrotte, AxiHenrotteStiffnessBFI,
+    from radia.axifem import (H1Henrotte, AxiHenrotteStiffnessBFI,
                                      AxiHenrotteSigmaMassBFI)
 
     fes = H1Henrotte(mesh, order=order, complex=True, dirichlet=dirichlet)

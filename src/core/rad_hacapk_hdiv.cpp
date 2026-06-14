@@ -142,7 +142,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
     // charge is CONSTANT so the inner is the EXACT analytic PhiTet and the cell self-integral INT_T PhiTet dx
     // is smooth -- 4 pts/dim integrates it to ~1e-4.  (The old hardcoded equal-weight _bary_tet(3) rule
     // under-integrated the volume self-energy by ~6.5% -- invisible to every uniform-M demag golden because
-    // div M = 0 there.  This is the same rule as radia.hdiv_vim._vim._tet_ref(4).)
+    // div M = 0 there.  This is the same rule as radia.vim._vim._tet_ref(4).)
     static const double GL4x[4] = {0.06943184420297371, 0.33000947820757187,
                                    0.66999052179242813, 0.93056815579702629};   // 4-pt Gauss-Legendre on [0,1]
     static const double GL4w[4] = {0.17392742256872693, 0.32607257743127307,

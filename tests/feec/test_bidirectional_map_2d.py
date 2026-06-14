@@ -5,7 +5,7 @@ det[grad A; grad phi] = |B||H| (mu=1, conjugate-harmonic orthogonality), and
 the inverse (A,phi -> geometry, x/y harmonic in (A,phi)) + round-trip, on the
 analytic complex-potential pair w = zeta^2.
 
-See examples/feec_vim/bidirectional_map_2d.py and the MCP topic
+See examples/vim/bidirectional_map_2d.py and the MCP topic
 streamfunction("clebsch_3d").
 """
 import os
@@ -14,7 +14,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                "../../examples/feec_vim"))
+                                "../../examples/vim"))
 
 
 @pytest.fixture(scope="module")

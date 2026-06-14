@@ -19,7 +19,7 @@ from ngsolve import (
     CoefficientFunction, TaskManager, x, ngsglobals,
 )
 from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 

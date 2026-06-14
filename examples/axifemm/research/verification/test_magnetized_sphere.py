@@ -34,7 +34,7 @@ import numpy as np
 from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction, grad,
                      dx, x as r_cf, TaskManager, CoefficientFunction, Integrate)
 from netgen.occ import OCCGeometry, MoveTo, WorkPlane, Glue, X, Y
-from radia.radia_axifemm import H1Henrotte
+from radia.axifem import H1Henrotte
 
 MU0 = 4e-7 * math.pi
 A_SPHERE = 1.0

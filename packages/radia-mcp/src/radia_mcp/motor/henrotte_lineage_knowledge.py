@@ -9,7 +9,7 @@ papers are present in the Sugahara-lab library.
 Coverage:
   axisym_1993      — Henrotte et al., A New Method for Axisymmetrical
                      Linear and Nonlinear Problems (foundation of
-                     `radia.radia_axifemm` Henrotte basis)
+                     `radia.axifem` Henrotte basis)
   source_field_1997 — Dular, Henrotte et al., A Generalized Source
                       Magnetic Field Calculation Method (h-φ formulation
                       source-field with cuts)
@@ -79,7 +79,7 @@ constant materials — the same property linear elements have for plane
 ### Practical implication
 
 This `{1, r², z}` basis (also called the **Henrotte basis** in the
-modern literature) is the basis used in `radia.radia_axifemm` for the
+modern literature) is the basis used in `radia.axifem` for the
 magnetic A_φ curl-curl problem.  See
 `docs/axifemm/FORMULATION.md` sections 5-6.
 
@@ -511,7 +511,7 @@ methodology stack** built entirely on lab-library papers:
 
 | Method | Status in radia / radia-mcp |
 |--------|------------------------------|
-| Henrotte basis (axisym magnetic) | ✓ implemented in `radia.radia_axifemm` |
+| Henrotte basis (axisym magnetic) | ✓ implemented in `radia.axifem` |
 | Energy-based hysteresis | ✓ Play and Energy C++ models in radia (`MatPlayHysteresis`, `MatEnergyHysteresis`) |
 | Dular-Henrotte source-field | ✗ not yet — currently use simple volumetric J_s |
 | Lange-Henrotte-Hameyer field-circuit | ✗ Stage-2 implementation planned (`calc_motor_transient.py`) |

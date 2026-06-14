@@ -6,7 +6,7 @@ that decides whether a clean Clebsch / level-set WIRE EXTRACTION is possible:
   * axial T (T.curl T = 0, Clebsch-type)      -> H_rel ~ 0  (extractable),
   * ABC/Beltrami flow (curl T = k T)          -> H_rel ~ 1  (linked, frontier).
 
-See examples/feec_vim/helicity_diagnostic.py and streamfunction("clebsch_3d").
+See examples/vim/helicity_diagnostic.py and streamfunction("clebsch_3d").
 """
 import os
 import sys
@@ -14,7 +14,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                "../../examples/feec_vim"))
+                                "../../examples/vim"))
 
 
 @pytest.fixture(scope="module")

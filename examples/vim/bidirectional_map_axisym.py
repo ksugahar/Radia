@@ -32,7 +32,7 @@ accelerator-relevant field shape (B_r = -r, B_z = 2z, current-free, Laplace Phi 
     psi = r^2 z ,    Phi = z^2 - r^2/2
 on the meridian box r in [0.3, 1.0], z in [-0.4, 0.4] (away from the axis null).
 
-Run:  python examples/feec_vim/bidirectional_map_axisym.py
+Run:  python examples/vim/bidirectional_map_axisym.py
 """
 import math
 import os

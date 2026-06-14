@@ -14,7 +14,7 @@ end-to-end on a tiny mesh that fits in this file.  Convergence /
 parity-vs-H1 comparison lives in the ``examples/axifemm/`` research
 scripts.
 
-Skips cleanly when ``radia.radia_axifemm`` is unavailable
+Skips cleanly when ``radia.axifem`` is unavailable
 (e.g. running on a machine without NGSolve).
 """
 from math import pi
@@ -58,16 +58,16 @@ def _build_axisym_quad_mesh(ra, rb, za, zb, maxh):
 ])
 def test_q1_heat_assembly_structure(ra, rb, za, zb):
     """Q1 heat: K is SPSD with one zero mode, M is SPD, both symmetric."""
-    radia_axifemm = pytest.importorskip("radia_axifemm")
+    axifem = pytest.importorskip("axifem")
     mesh = _build_axisym_quad_mesh(ra, rb, za, zb,
                                     maxh=10 * max(rb - ra, zb - za))
-    fes = radia_axifemm.H1Henrotte(mesh, order=1)
+    fes = axifem.H1Henrotte(mesh, order=1)
     assert fes.ndof >= 4
 
     a = BilinearForm(fes, symmetric=True)
-    a += radia_axifemm.AxiHenrotteHeatStiffnessBFI(CoefficientFunction(50.0))
+    a += axifem.AxiHenrotteHeatStiffnessBFI(CoefficientFunction(50.0))
     m = BilinearForm(fes, symmetric=True)
-    m += radia_axifemm.AxiHenrotteHeatMassBFI(CoefficientFunction(3.5e6))
+    m += axifem.AxiHenrotteHeatMassBFI(CoefficientFunction(3.5e6))
     with TaskManager():
         a.Assemble()
         m.Assemble()
@@ -92,17 +92,17 @@ def test_q1_heat_assembly_structure(ra, rb, za, zb):
 
 def test_q2_heat_assembly_structure():
     """Q2 heat: same structural checks at 9 DOF/cell."""
-    radia_axifemm = pytest.importorskip("radia_axifemm")
+    axifem = pytest.importorskip("axifem")
     ra, rb, za, zb = 1e-3, 3e-3, 0.0, 2e-3
     mesh = _build_axisym_quad_mesh(ra, rb, za, zb,
                                     maxh=10 * max(rb - ra, zb - za))
-    fes = radia_axifemm.H1Henrotte(mesh, order=2)
+    fes = axifem.H1Henrotte(mesh, order=2)
     assert fes.ndof >= 9
 
     a = BilinearForm(fes, symmetric=True)
-    a += radia_axifemm.AxiHenrotteHeatStiffnessBFI(CoefficientFunction(50.0))
+    a += axifem.AxiHenrotteHeatStiffnessBFI(CoefficientFunction(50.0))
     m = BilinearForm(fes, symmetric=True)
-    m += radia_axifemm.AxiHenrotteHeatMassBFI(CoefficientFunction(3.5e6))
+    m += axifem.AxiHenrotteHeatMassBFI(CoefficientFunction(3.5e6))
     with TaskManager():
         a.Assemble()
         m.Assemble()
@@ -128,16 +128,16 @@ def test_q1_axis_touching_finite():
     no 1/s singularity.  This is the architectural difference vs the
     magnetic stiffness BFI which would hit a log(0) without the axis-
     reduced basis."""
-    radia_axifemm = pytest.importorskip("radia_axifemm")
+    axifem = pytest.importorskip("axifem")
     ra, rb, za, zb = 0.0, 2e-3, 0.0, 1e-3
     mesh = _build_axisym_quad_mesh(ra, rb, za, zb,
                                     maxh=10 * (rb - ra))
-    fes = radia_axifemm.H1Henrotte(mesh, order=1)
+    fes = axifem.H1Henrotte(mesh, order=1)
 
     a = BilinearForm(fes, symmetric=True)
-    a += radia_axifemm.AxiHenrotteHeatStiffnessBFI(CoefficientFunction(50.0))
+    a += axifem.AxiHenrotteHeatStiffnessBFI(CoefficientFunction(50.0))
     m = BilinearForm(fes, symmetric=True)
-    m += radia_axifemm.AxiHenrotteHeatMassBFI(CoefficientFunction(3.5e6))
+    m += axifem.AxiHenrotteHeatMassBFI(CoefficientFunction(3.5e6))
     with TaskManager():
         a.Assemble()
         m.Assemble()

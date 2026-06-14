@@ -21,7 +21,7 @@ from netgen.meshing import (
 from ngsolve import (
     Mesh, BilinearForm, CoefficientFunction, TaskManager, ngsglobals,
 )
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 

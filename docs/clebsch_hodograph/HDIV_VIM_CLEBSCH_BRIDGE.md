@@ -1,7 +1,7 @@
 # The HDiv-VIM ↔ Clebsch bridge (the de Rham capstone) and the saturation frontier
 
 This note maps how the two research lines in `examples/clebsch_hodograph/` —
-the **HDiv-VIM demag solver** (`radia.hdiv_vim`, the FEEC `H(div)` element Radia
+the **HDiv-VIM demag solver** (`radia.vim`, the FEEC `H(div)` element Radia
 is migrating to) and the **Clebsch hodograph** design line — are one structure
 seen from two sides, and pins down exactly what is *verified* versus what is the
 *open* hard part.

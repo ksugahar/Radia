@@ -23,7 +23,7 @@ pytest.importorskip("netgen.csg")
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
-from radia.hdiv_vim import (  # noqa: E402
+from radia.vim import (  # noqa: E402
     reconstruct_field_polynomial,
     reconstruct_field_internal,
     flat_triangle_charge_field,
@@ -674,7 +674,7 @@ _HEX_CV = np.array([[0,0,0],[0,0,1],[0,1,1],[0,1,0],[1,0,0],[1,0,1],[1,1,1],[1,1
 def test_hex_volume_field_equals_tet_decomposition():
     """hex_volume_field(box) == SUM of tet_volume_field over a 6-tet (Kuhn) decomposition of the box,
     to machine precision -- the analytic hex face-loop is correct."""
-    from radia.hdiv_vim import hex_volume_field_quadratic, hex_volume_field_linear
+    from radia.vim import hex_volume_field_quadratic, hex_volume_field_linear
     g = np.array([0.7, -0.3, 0.5]); rho0 = 0.4
     paths = [[0,4,5,6],[0,4,7,6],[0,3,7,6],[0,3,2,6],[0,1,2,6],[0,1,5,6]]  # 6 tets sharing diag v0-v6
     for r in [[2.0, 0.5, 0.5], [0.5, 0.5, 2.0], [-1.0, 0.5, 0.5], [0.5, 2.0, 0.5]]:
@@ -690,7 +690,7 @@ def test_hex_volume_field_equals_tet_decomposition():
 def test_hex_volume_field_sheared_affine_vs_gauss():
     """An affine-sheared parallelepiped (planar faces) -- the analytic hex field matches a box-Gauss
     reference (the ~1e-10 floor is the finite-difference Jacobian in the reference, not the kernel)."""
-    from radia.hdiv_vim import hex_volume_field_quadratic
+    from radia.vim import hex_volume_field_quadratic
     g = np.array([0.7, -0.3, 0.5]); rho0 = 0.4
     A = np.array([[1.0, 0.3, 0.1], [0.0, 1.2, 0.2], [0.0, 0.0, 0.9]])
     Vp = (_HEX_CV @ A.T) + np.array([0.2, -0.1, 0.3])
@@ -736,7 +736,7 @@ def _t6_flat(P3):
 
 def _curved_ref(surf_map, r, sigma_fn, nq=64):
     """Duffy-refined reference (same 3-subtriangle fan from the projection; no subtraction)."""
-    from radia.hdiv_vim._field import _project_to_surface
+    from radia.vim._field import _project_to_surface
     r = np.asarray(r, float)
     u0, v0 = _project_to_surface(surf_map, r)
     P0 = np.array([u0, v0]); corners = [np.array([0., 0.]), np.array([1., 0.]), np.array([0., 1.])]
@@ -757,7 +757,7 @@ def _curved_ref(surf_map, r, sigma_fn, nq=64):
 
 def test_curved_triangle_charge_field_converges_vs_reference():
     """Curved patch: singularity subtraction matches a Duffy-refined reference, far AND very near."""
-    from radia.hdiv_vim import curved_triangle_charge_field, make_t6_surface_map
+    from radia.vim import curved_triangle_charge_field, make_t6_surface_map
     c = 0.15
     nodes = np.array([[0,0,0],[1,0,0],[0,1,0],[0.5,0,c],[0.5,0.5,c],[0,0.5,c]], float)
     smap = make_t6_surface_map(nodes)
@@ -772,7 +772,7 @@ def test_curved_triangle_charge_field_converges_vs_reference():
 def test_curved_triangle_charge_field_flat_limit():
     """Zero-curvature T6 patch reproduces flat_triangle_charge_field (the curved kernel degrades to the
     analytic flat one when there is no curvature)."""
-    from radia.hdiv_vim import curved_triangle_charge_field, make_t6_surface_map
+    from radia.vim import curved_triangle_charge_field, make_t6_surface_map
     P3 = _TET[[0, 1, 2]]
     smap = make_t6_surface_map(_t6_flat(P3))
     sig = lambda p: 0.5 + 0.6*p[0] - 0.4*p[1]         # linear in-plane
@@ -807,7 +807,7 @@ def _curved_tet_ref(tet_map, r, rho_fn, ng=16):
 
 def test_curved_tet_volume_field_subdivision_split_conserves_volume():
     """The 1->8 (Bey red) reference split EXACTLY partitions the parent tet (no gaps/overlaps)."""
-    from radia.hdiv_vim._field import _subdivide_ref_tet, _TET8_REF
+    from radia.vim._field import _subdivide_ref_tet, _TET8_REF
     vol = lambda c: abs(np.linalg.det(np.array([c[1] - c[0], c[2] - c[0], c[3] - c[0]]))) / 6.0
     parent = vol(_TET8_REF)
     for d in (1, 2, 3):
@@ -819,7 +819,7 @@ def test_curved_tet_volume_field_converges_vs_reference():
     """CURVED tet (outward-bowed T10): subdivision converges to the brute-force curved reference, and the
     flat (depth-0) tet has a LARGE error -> the curved geometry is genuinely captured (the order>=2 / #3
     volume piece, the companion of curved_triangle_charge_field)."""
-    from radia.hdiv_vim import make_t10_tet_map, curved_tet_volume_field
+    from radia.vim import make_t10_tet_map, curved_tet_volume_field
     corners = np.array([[0, 0, 0], [1.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]], float)
     mids = np.array([0.5 * (corners[i] + corners[j]) for (i, j) in
                      [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]])
@@ -838,7 +838,7 @@ def test_curved_tet_volume_field_converges_vs_reference():
 def test_curved_tet_volume_field_flat_limit():
     """A FLAT tet (zero edge bowing) -> curved_tet_volume_field reproduces the exact flat closed form
     tet_volume_field_linear (the curved kernel degrades to the analytic flat one with no curvature)."""
-    from radia.hdiv_vim import make_t10_tet_map, curved_tet_volume_field, tet_volume_field_linear
+    from radia.vim import make_t10_tet_map, curved_tet_volume_field, tet_volume_field_linear
     corners = np.array([[0, 0, 0], [1.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]], float)
     mids = np.array([0.5 * (corners[i] + corners[j]) for (i, j) in
                      [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]])    # FLAT mids (no bow)
@@ -856,7 +856,7 @@ def test_curved_tet_volume_field_flat_limit():
 # external points (proves the kernel sum), and give -M/3 at the uniform-sphere center (to faceting).
 # ---------------------------------------------------------------------------------------------------
 def test_assemble_demag_field_matches_external_reference(uniform_sphere):
-    from radia.hdiv_vim import assemble_demag_field
+    from radia.vim import assemble_demag_field
     mesh, gf, Mval = uniform_sphere
     obs = np.array([[0, 0, 2.0], [2.0, 0, 0.0], [1.5, 1.5, 1.0]], float)
     with ng.TaskManager():
@@ -868,7 +868,7 @@ def test_assemble_demag_field_matches_external_reference(uniform_sphere):
 
 
 def test_assemble_demag_field_uniform_sphere_center(uniform_sphere):
-    from radia.hdiv_vim import assemble_demag_field
+    from radia.vim import assemble_demag_field
     mesh, gf, Mval = uniform_sphere
     with ng.TaskManager():
         Hc = assemble_demag_field(mesh, gf, np.array([[0.0, 0.0, 0.0]]))
@@ -883,7 +883,7 @@ def test_hdiv_demag_field_batch_matches_perpair():
     kernels, same order, just looped in C++) -- bit-identical, so the assemble_demag_field hot loop in
     C++ (the order_p / centroid solve cost) is exact AND parallel (honours the caller's TaskManager)."""
     import radia._radia_pybind as rp
-    from radia.hdiv_vim._field import _fit_rho_linear, _fit_sigma_quadratic
+    from radia.vim._field import _fit_rho_linear, _fit_sigma_quadratic
     mesh = _sphere(0.6)
     fes = ng.HDiv(mesh, order=1); gfM = ng.GridFunction(fes)
     with ng.TaskManager():
@@ -929,7 +929,7 @@ def _sphere_solve_mesh():
 
 def test_solve_demag_picard_linear_sphere(_sphere_solve_mesh):
     """Linear chi: solve_demag_picard converges to the analytic sphere demag M = chi*H_ext/(1+chi/3)."""
-    from radia.hdiv_vim import solve_demag_picard
+    from radia.vim import solve_demag_picard
     mesh = _sphere_solve_mesh
     Hext = np.array([0, 0, 1.0e4])
     for chi in [1.0, 5.0]:
@@ -947,7 +947,7 @@ def test_solve_demag_picard_saturating_sphere(_sphere_solve_mesh):
     solve converges to the 1-D scalar demag fixed point m* solving m = Mof(H_ext - m/3).  (A STRONGLY
     saturating law -- effective chi ~ Ms/Hs >> 3 at the knee -- makes the H-input Picard stiff; the
     robust cure there is a convex B-input (A-formulation) solve, not implemented here.)"""
-    from radia.hdiv_vim import solve_demag_picard
+    from radia.vim import solve_demag_picard
     mesh = _sphere_solve_mesh
     Hext = np.array([0, 0, 1.0e4]); Ms = 1.0e5; Hs = 2.0e4   # chi_eff(0) = Ms/Hs = 5 -> stable
 
@@ -984,7 +984,7 @@ def _box_tet(n):
 def test_project_pointdata_to_hdiv_reproduces_polynomial():
     """Element-local L2 + HDiv.Set reproduces a degree-p polynomial vector field EXACTLY (no IRS).  This
     is the order>=2 projection capability the IntegrationRuleSpace path could not deliver (it segfaults)."""
-    from radia.hdiv_vim._field import _project_pointdata_to_hdiv
+    from radia.vim._field import _project_pointdata_to_hdiv
     mesh = _box_tet(2)
     p = 2
 
@@ -1013,7 +1013,7 @@ def test_solve_demag_picard_orderp_sphere(_sphere_coarse):
     -> the per-element polynomial target collapses to the constant; must match the centroid path).  Coarse
     sphere (~50 tets): the order_p assembly is O(N_quad x N_elem) so keep N_elem small; uniform-M
     reproduction is robust to the coarse faceting at the 2.5% level."""
-    from radia.hdiv_vim import solve_demag_picard
+    from radia.vim import solve_demag_picard
     mesh = _sphere_coarse
     Hext = np.array([0, 0, 1.0e4]); chi = 1.0
     with ng.TaskManager():
@@ -1031,8 +1031,8 @@ def test_solve_demag_picard_orderp_beats_centroid_on_nonuniform_body():
     variation centroid collocation cannot.  Metric: the off-collocation self-consistency residual
     r = ||M_of_H(H_ext + H_demag) - M_gf|| / ||M_of_H(...)|| at the element quad points (NOT the
     collocation points) -- order_p must be markedly smaller (measured ~4x: 0.265 -> 0.065)."""
-    from radia.hdiv_vim import solve_demag_picard, assemble_demag_field
-    from radia.hdiv_vim._field import _l2_element_quadrature
+    from radia.vim import solve_demag_picard, assemble_demag_field
+    from radia.vim._field import _l2_element_quadrature
     mesh = _box_tet(2)
     Hext = np.array([0, 0, 1.0e4]); chi = 3.0
     Mof = lambda H: chi * np.asarray(H)
@@ -1068,7 +1068,7 @@ def test_solve_demag_picard_orderp_beats_centroid_on_nonuniform_body():
 # quasi-Newton (Anderson) STAGNATES, while keeping the correct analytic charge field (no N=B^T G B leak).
 # ---------------------------------------------------------------------------------------------------
 def _sphere_demag_factor(mesh, order=1):
-    from radia.hdiv_vim import DemagOperator
+    from radia.vim import DemagOperator
     fes = ng.HDiv(mesh, order=order)
     with ng.TaskManager():
         demag = DemagOperator(fes)
@@ -1082,7 +1082,7 @@ def _sphere_demag_factor(mesh, order=1):
 def test_solve_demag_newton_linear_stiff(_sphere_coarse):
     """Newton-Krylov on the analytic field converges for STIFF chi (chi*D >> 1, here ~33) where the Picard
     DIVERGES (explodes to ~-1e70) -- linear chi=100 reproduces the analytic sphere M = chi H/(1+chi D)."""
-    from radia.hdiv_vim import solve_demag_newton
+    from radia.vim import solve_demag_newton
     mesh = _sphere_coarse; H0 = 1.0e4; chi = 100.0
     D, mu, Mm, den = _sphere_demag_factor(mesh)
     with ng.TaskManager():
@@ -1103,7 +1103,7 @@ def test_solve_demag_newton_saturating_matches_picard(_sphere_coarse):
     stiff saturating knee chi_eff~1000 also converges via the scalar warmstart -- relF->7e-13 in 5 Newton
     steps, demonstrated in dev -- but each GMRES apply is the dense O(n_obs x n_elem) batched field, so a
     stiff-knee golden is too slow until the O(N log N) H-matrix field operator lands.)"""
-    from radia.hdiv_vim import solve_demag_newton, saturating_tangent, solve_demag_picard, assemble_demag_field
+    from radia.vim import solve_demag_newton, saturating_tangent, solve_demag_picard, assemble_demag_field
     mesh = _sphere_coarse; chi0, Msat, H0 = 5.0, 1.0e6, 1.0e4
     fes = ng.HDiv(mesh, order=1); nE = mesh.GetNE(ng.VOL)
     cents = np.array([np.array([mesh[v].point for v in mesh[ng.ElementId(ng.VOL, i)].vertices]).mean(0)

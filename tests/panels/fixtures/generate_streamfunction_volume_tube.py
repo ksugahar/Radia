@@ -2,7 +2,7 @@
 stream-function coil designer golden test.
 
 Mirrors the validated geometry of
-``examples/feec_vim/foliated_clebsch_solenoid.py`` (R0=0.05, R1=0.10, ZL=0.10,
+``examples/vim/foliated_clebsch_solenoid.py`` (R0=0.05, R1=0.10, ZL=0.10,
 maxh=0.03) and saves a FIXED .vol so the golden is reproducible across machines
 (Netgen meshing is not byte-identical across versions/platforms; freezing the
 .vol locks the mesh).

@@ -1,6 +1,6 @@
 """Golden lock: Stage-B line-topology gate (rotation-number closure defect).
 
-Runs examples/feec_vim/line_topology_gate.py and asserts the gate's discriminator:
+Runs examples/vim/line_topology_gate.py and asserts the gate's discriminator:
 
   - a RATIONAL-rotation-number torus winding (iota = 1/5, 2/5) CLOSES after q = 5
     toroidal turns (min closure-defect small) -> windable as a q-fold loop;
@@ -16,7 +16,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "feec_vim")
+EXDIR = os.path.join(HERE, "..", "..", "examples", "vim")
 
 
 @pytest.mark.slow
