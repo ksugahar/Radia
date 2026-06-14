@@ -77,3 +77,33 @@ def test_fail_loud_on_nonmagnetic():
     with pytest.raises(ValueError):
         with ng.TaskManager():
             hdiv_demag_solve(mesh, 1.0, _HEXT)
+
+
+def test_requires_exactly_one_material_spec():
+    """Exactly one of mu_r (linear) / bh_table (nonlinear) -> else RAISE."""
+    mesh = _sphere()
+    with ng.TaskManager():
+        with pytest.raises(ValueError):                       # neither
+            hdiv_demag_solve(mesh, H_ext=_HEXT)
+        with pytest.raises(ValueError):                       # both
+            hdiv_demag_solve(mesh, 100.0, _HEXT, bh_table=[[0.0, 0.0], [1e6, 2.0]])
+
+
+def test_nonlinear_sphere_vs_dense_newton():
+    """NONLINEAR hdiv_demag_solve (uniform field + a real BH table) reproduces the dense reference
+    Newton (radia.vim._nonlinear.solve_nonlinear_newton, analytic Gram) on the saturating sphere."""
+    from radia.vim._nonlinear import solve_nonlinear_newton
+    chi0, Msat, H0 = 1000.0, 1.0e6, 2.0e5
+    Hs = np.concatenate([[0.0], np.logspace(-1, 7, 60)])
+    Ms = chi0 * Hs / (1.0 + chi0 * Hs / Msat)
+    Bs = (4e-7 * np.pi) * (Hs + Ms)
+    BH = [[float(h), float(b)] for h, b in zip(Hs, Bs)]
+    mesh = _sphere()
+    with ng.TaskManager():
+        res = hdiv_demag_solve(mesh, bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
+        mz_dense, _nit, _D = solve_nonlinear_newton(mesh, chi0, Msat, H0,
+                                                    bh_table=(Hs, Bs), analytic_gram=True, maxit=60)
+    assert res["nonlinear"] is True
+    rel = abs(res["M_avg"][2] - mz_dense) / abs(mz_dense)
+    assert rel < 2e-2, f"nonlinear scalable Mz {res['M_avg'][2]:.1f} vs dense {mz_dense:.1f} rel {rel:.2e}"
+    assert res["iters"] < 40, f"nonlinear Newton iters {res['iters']}"
