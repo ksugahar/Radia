@@ -181,6 +181,29 @@ strong reluctivity contrast even though the problem is convex.* **Next rung: a
 guide that *turns* (`θ` varies) → a real 2-D hodograph image needing a linear
 PDE solve; rung 3 = the 3-D merged geometry+material single Picard (next section).*
 
+### `chaplygin_design_sweep_2d.py` — nonlinear-as-linear, MAXIMALLY: a saturable design space at linear cost
+
+The payoff of "the hodograph makes saturation a **coefficient**": a whole
+saturable-magnet **design space** is computed by **one linear quadrature per
+point**. A grid of (throat width × throat field) — 36 nonlinear operating
+points — is the **design map** `ΔΦ(w_throat, |B|_throat)`, each point the
+mesh-free 1-shot drive, in **~2 ms**; the drive **bends up ×3.4–4.0** as the
+throat saturates (the design content). Inverting it gives the **flux-regulator /
+field-limiter** transfer `Ψ(drive)`, which **clamps** (concave) at saturation,
+and a **narrower throat clamps at a lower flux** (`knee Ψ ≈ B_k·w_throat`) — the
+throat width is the clamp-level knob. Validated against the full **nonlinear FEM
+Picard** at sample points: the 1-shot agrees to **~1–2 %** (slenderness-limited),
+and each FEM point costs **~12 Picard iterations**. So the whole map = **36
+quadratures** vs the equivalent **~440 curved-mesh linear solves** the nonlinear
+FEM would need — the **entire nonlinear design space explored at linear cost**,
+where the Picard sweep would be prohibitive. Figure:
+`chaplygin_design_sweep_2d.png` (design map | the clamp curves | the cost bar).
+Goldens `test_chaplygin_design_sweep_*` (map+clamp fast, FEM-validate+cost slow).
+*Honest scope: the 1-shot is the slender-guide limit (its error is the
+slenderness error); a guide that **turns** needs the linear hodograph PDE
+(`chaplygin_turning_guide_2d.py`) — still one **linear** solve per case, so the
+same "design space at linear cost" exploit applies one rung up.*
+
 ### `clebsch_kelvin_nonlinear_3d.py` — rung 3: the 3-D merge (saturation + exact open boundary, one Picard)
 
 **The capstone.** Rungs 1–2 put the Kelvin open boundary in the
@@ -697,6 +720,7 @@ python hodograph_kelvin_axisym.py             # Kelvin exact-open-boundary flux 
 python hodograph_kelvin_2d.py                 # Kelvin in the hodograph (2-D Cartesian, no air box)
 python clebsch_kelvin_3d.py                   # Kelvin in the hodograph (3-D Clebsch, no air box)
 python saturation_loop_2d.py                  # the nonlinear saturation loop (Chaplygin reference)
+python chaplygin_design_sweep_2d.py           # nonlinear-as-linear: a saturable design space at linear cost (--fem)
 python cohomology_hodograph_currentlink.py    # when the hodograph needs cohomology
 python accel_pole_design.py                   # multipole analyzer + quad pole geometry
 python accel_pole_harmonics.py                # 2-D equipotential lever (shim → harmonics)
