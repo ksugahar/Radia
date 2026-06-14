@@ -785,6 +785,71 @@ def test_curved_triangle_charge_field_flat_limit():
         assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-6, f"curved flat-limit r={r}"
 
 
+def _curved_tet_ref(tet_map, r, rho_fn, ng=16):
+    """Brute-force Gauss reference of INT_V_curved rho (r-x)/|r-x|^3 dV over the TRUE curved tet
+    (Duffy cube->tet collapse + finite-diff map Jacobian).  External r only (no singularity)."""
+    xs, ws = np.polynomial.legendre.leggauss(ng); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+    H = np.zeros(3); h = 1e-6
+    for a, wa in zip(xs, ws):
+        for b, wb in zip(xs, ws):
+            for c, wc in zip(xs, ws):
+                xi, eta, zeta = a, b * (1 - a), c * (1 - a) * (1 - b)
+                duffy = (1 - a) ** 2 * (1 - b)
+                x = tet_map(xi, eta, zeta)
+                jx = (tet_map(xi + h, eta, zeta) - tet_map(xi - h, eta, zeta)) / (2 * h)
+                jy = (tet_map(xi, eta + h, zeta) - tet_map(xi, eta - h, zeta)) / (2 * h)
+                jz = (tet_map(xi, eta, zeta + h) - tet_map(xi, eta, zeta - h)) / (2 * h)
+                detJ = abs(np.linalg.det(np.array([jx, jy, jz]).T))
+                d = r - x
+                H += wa * wb * wc * duffy * detJ * rho_fn(x) * d / np.linalg.norm(d) ** 3
+    return H
+
+
+def test_curved_tet_volume_field_subdivision_split_conserves_volume():
+    """The 1->8 (Bey red) reference split EXACTLY partitions the parent tet (no gaps/overlaps)."""
+    from radia.hdiv_vim._field import _subdivide_ref_tet, _TET8_REF
+    vol = lambda c: abs(np.linalg.det(np.array([c[1] - c[0], c[2] - c[0], c[3] - c[0]]))) / 6.0
+    parent = vol(_TET8_REF)
+    for d in (1, 2, 3):
+        tot = sum(vol(s) for s in _subdivide_ref_tet(_TET8_REF, d))
+        assert abs(tot - parent) < 1e-12, f"depth {d}: vol sum {tot} != parent {parent}"
+
+
+def test_curved_tet_volume_field_converges_vs_reference():
+    """CURVED tet (outward-bowed T10): subdivision converges to the brute-force curved reference, and the
+    flat (depth-0) tet has a LARGE error -> the curved geometry is genuinely captured (the order>=2 / #3
+    volume piece, the companion of curved_triangle_charge_field)."""
+    from radia.hdiv_vim import make_t10_tet_map, curved_tet_volume_field
+    corners = np.array([[0, 0, 0], [1.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]], float)
+    mids = np.array([0.5 * (corners[i] + corners[j]) for (i, j) in
+                     [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]])
+    mids = mids + 0.18 * (mids - corners.mean(0))         # bow each edge mid OUTWARD (strong curvature)
+    tet_map = make_t10_tet_map(np.vstack([corners, mids]))
+    rho_fn = lambda x: 1.0
+    for r in (np.array([2.0, 0.3, 0.2]), np.array([0.2, 1.8, 0.4])):
+        ref = _curved_tet_ref(tet_map, r, rho_fn, ng=16)
+        e0 = np.linalg.norm(curved_tet_volume_field(tet_map, r, rho_fn, 0) - ref) / np.linalg.norm(ref)
+        e3 = np.linalg.norm(curved_tet_volume_field(tet_map, r, rho_fn, 3) - ref) / np.linalg.norm(ref)
+        assert e0 > 0.2, f"flat (depth 0) should miss the strong curvature, got {e0:.2e}"
+        assert e3 < 1.5e-2, f"depth-3 subdivision should converge to the curved ref, got {e3:.2e}"
+        assert e3 < 0.1 * e0, f"subdivision must beat the flat tet by >10x ({e3:.2e} vs {e0:.2e})"
+
+
+def test_curved_tet_volume_field_flat_limit():
+    """A FLAT tet (zero edge bowing) -> curved_tet_volume_field reproduces the exact flat closed form
+    tet_volume_field_linear (the curved kernel degrades to the analytic flat one with no curvature)."""
+    from radia.hdiv_vim import make_t10_tet_map, curved_tet_volume_field, tet_volume_field_linear
+    corners = np.array([[0, 0, 0], [1.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]], float)
+    mids = np.array([0.5 * (corners[i] + corners[j]) for (i, j) in
+                     [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]])    # FLAT mids (no bow)
+    tet_map = make_t10_tet_map(np.vstack([corners, mids]))
+    for r in (np.array([2.0, 0.3, 0.2]), np.array([0.3, 0.3, 0.25])):
+        flat = np.asarray(tet_volume_field_linear(corners, r, 1.0, np.zeros(3)))
+        for d in (0, 1, 2):
+            cv = curved_tet_volume_field(tet_map, r, lambda x: 1.0, depth=d)
+            assert np.linalg.norm(cv - flat) / np.linalg.norm(flat) < 1e-12, f"flat-limit depth {d} r={r}"
+
+
 # ---------------------------------------------------------------------------------------------------
 # Step 2: the fast charge-coefficient ASSEMBLY (assemble_demag_field) -- the internal/near demag field
 # summed from the analytic C++ kernels.  Must match the external Gauss reference to machine precision at
