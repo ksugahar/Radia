@@ -775,3 +775,27 @@ def test_clebsch_dipole_saturation_vs_fem():
     assert val["max_rel_err"] < 0.30, val                        # lumped circuit ~ FEM (~20%)
     assert val["mean_iters"] > 5.0, val                          # FEM needs a Picard loop
     assert cost["fem_equiv_linear_solves"] > 5 * cost["one_shot_solves"], cost
+
+
+def test_chaplygin_taper_design_sweep():
+    """Closing Task 1's free boundary: a TURNING+TAPERING saturable design sweep by the
+    von Mises inverse.  A guide that turns AND tapers has a theta-dependent hodograph
+    image = a FREE BOUNDARY; the von Mises (Phi, A) change of variables DISSOLVES it onto
+    a FIXED rectangle, so each tapered design is the nonlinear inverse (a Newton
+    continuation, every step LINEAR, no remesh).  Sweeping the taper: each closes (J->0)
+    with a valid (non-folded) map, and the free-boundary measure (theta-drift of the
+    hodograph q-extent) GROWS -- constant width = a rectangle image (self-linearising),
+    tapering = a theta-dependent image = the free boundary recovered."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_taper_design_sweep_2d as ts
+    out = ts.run()
+    sw = out["sweep"]; rows = sw["rows"]
+    assert sw["max_J"] < 1e-4, sw                             # each inverse closed (J -> 0)
+    assert sw["min_jac"] > 0.0, sw                           # each map valid (no fold)
+    fm = [r["free_measure"] for r in rows]
+    assert fm[0] < fm[1] < fm[2], fm                         # free boundary grows with taper
+    assert rows[0]["free_measure"] < 0.1, rows[0]            # constant width = rectangle image
+    assert rows[-1]["free_measure"] > 0.5, rows[-1]          # tapered = free boundary recovered
+    for r in rows:
+        assert r["turn_deg"] > 30.0, r                       # the field genuinely turns
