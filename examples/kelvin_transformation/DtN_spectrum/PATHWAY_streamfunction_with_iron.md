@@ -45,6 +45,7 @@ is the same clean linear inverse as in free space, but with the correct **materi
 | `demo_ee` | coil + iron shield: free-space kernel off by up to **~16x**; material-aware matches ~1e-4 |
 | `demo_ff` | **design inverts M** (concentric, MODAL): with the material-aware M the target is hit (2e-16); the free-space-designed coil misses by **77%** in the iron system |
 | `demo_hh` | **the GENERAL next step** (this track's deliverable): a REAL winding-surface stream function `psi` (the order-p H1 trace, 378 nodal DoFs -- not 3 modes) + ARBITRARY (NON-concentric) iron blob, where no Sommerfeld Green function exists. M[target, psi-dof] assembled directly (one factorisation + a back-sub per coil DoF). Concentric sub-case ANCHORS M to the analytic layered transfer (rel 3e-3..2e-2; M@psi == a fresh FEM solve to 1e-15). Non-concentric: the iron-aware design HITS the target in a fresh full Kelvin-FEM solve (1e-14), the free-space design MISSES by ~43% (stable 31-39% across mesh refinement -- a real shield effect, not a coarse artifact) |
+| `demo_jj` | **can ACA-TSVD be applied to M?** YES, and the two ingredients answer two questions. **TSVD** -> the GLOBAL inverse design (`psi=M^+ B`), unchanged + necessary (M = compact forward map, SVs decay, measured cond(1e-6)~9.5e3). **ACA** -> BLOCK-WISE as an H-matrix, NOT a global low-rank factor: global M is near-full-rank (189/195, near field) but the material Green kernel `G_mu(x_t,y_c)` is asymptotically smooth for well-separated clusters even with iron between them, so an ADMISSIBLE block (compact source cap + far targets) is low rank (verified 6/20, sigma 1->4e-3; rSVD 10 oracle-calls -> 5e-6) while a NEAR block stays dense (18/20) -- the **same near/far split HACApK already runs** on the MMM/MSC matrix. Only the entry oracle changes: 1 column = 1 Kelvin-FEM back-substitution (a fast matvec of M), 1 row = 1 adjoint solve -> a **randomized SVD/Lanczos is even more natural than entrywise ACA**. Answers the "wire through `radia.streamfunction` ACA-TSVD" open item: yes, with the Kelvin-FEM-solve oracle |
 
 ## To turn into a contribution (next steps)
 1. **General (arbitrary iron) coil-design demo** — **DONE: `demo_hh_general_iron_design.py`** (2026-06,
@@ -53,7 +54,12 @@ is the same clean linear inverse as in free space, but with the correct **materi
    coil forward-verified in a fresh full Kelvin-FEM solve (hits 1e-14) while the free-space design MISSES
    by ~43% (stable across mesh). Concentric sub-case anchors M to the analytic transfer (rel 3e-3..2e-2).
    *Open refinements:* a non-spherical coil former (cylinder), a m≠0 tesseral target, and wiring the
-   inverse through `radia.streamfunction`'s ACA-TSVD rather than a dense numpy TSVD.
+   inverse through `radia.streamfunction`'s ACA-TSVD rather than a dense numpy TSVD. **The
+   ACA-TSVD applicability is now settled by `demo_jj_aca_tsvd_on_dtn_matrix.py`** (TSVD applies to the
+   global inverse unchanged; ACA applies block-wise as an H-matrix — admissible block rank 6/20, near
+   block 18/20, global 189/195 — the same near/far machinery as HACApK, oracle = one Kelvin-FEM solve
+   per column); what remains is the engineering of calling `radia.streamfunction`'s ACA-TSVD with that
+   solve-oracle instead of a closed-form Biot-Savart entry.
 2. **Benchmark** M-build (sparse Kelvin-FEM Schur) vs the dense layered-Green / FE-BEM baseline
    (conditioning, sparsity, FE-coupling) — the selling point is "sparse, material-aware, no Green fn".
    **(still open — the immediate next task.)**
