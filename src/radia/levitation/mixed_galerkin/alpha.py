@@ -246,7 +246,7 @@ def measure_total_area_and_edges(mesh):
             "dihedrals; it is not importable.  Use the dependency-free "
             "CAD-direct route instead -- it is mesh-independent and exact "
             "for polyhedra:\n"
-            "    from radia_levitation.mixed_galerkin import cad_edges\n"
+            "    from radia.levitation.mixed_galerkin import cad_edges\n"
             "    c1, L_total, n = cad_edges.cad_topology_c1(shape, mu)\n"
             "(pass the OCC primitive / loaded STEP shape, not the mesh)."
         ) from exc

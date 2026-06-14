@@ -39,10 +39,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 def run_sweep():
     from netgen.occ import Box, Pnt, OCCGeometry
     from ngsolve import Mesh, TaskManager
-
-    import sys
-    sys.path.insert(0, os.path.join(HERE, "..", "src"))
-    from radia_levitation.mixed_galerkin import alpha as A, cad_edges as CE
+    from radia.levitation.mixed_galerkin import alpha as A, cad_edges as CE
 
     box = Box(Pnt(0, 0, 0), Pnt(L, L, L))
     for f in box.faces:
