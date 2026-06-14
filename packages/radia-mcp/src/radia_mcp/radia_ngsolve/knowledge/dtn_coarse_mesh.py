@@ -1921,6 +1921,36 @@ a Kelvin-transformed HOIBC = a Delta_S surface operator on the inner image spher
 distance is fixed by the multipole band through the DtN spectrum, not by an ad-hoc "far enough". FE
 follow-up = assemble that Delta_S term (NGSolve surface-gradient / Laplace-Beltrami) in the inverted
 exterior; demo_kk fixes the closed-form coefficients and proves the construction reproduces the physics.
+
+DIFFERENTIAL-GEOMETRY (transformation-optics) view -- the (a/r')^2 medium is AUTOMATIC, only IMPEDANCE
+MATCHING matters, and the DtN spectrum is the HIGH-FREQUENCY design object (demo_ll, verified
+2026-06-15; user: "you can derive it with differential geometry; the modulation happens automatically
+if you don't track the Kelvin factor; as long as the impedance is matched, OK; the radiation boundary
+is better-principled; high-freq Kelvin is where the DtN spectral analysis is meaningful"). The Kelvin
+inversion x'=a^2 x/|x|^2 has Jacobian J=(a^2/r^2)Q, Q=I-2 n n^T a Householder REFLECTION (Q^TQ=I,
+det Q=-1) -> J is CONFORMAL (scalar x orthogonal) and ORIENTATION-REVERSING (det J=-(a^2/r^2)^3 = the
+inside-out map). TRANSFORMATION OPTICS (Maxwell form-invariance under a coordinate map): the media
+transform as eps'_r=mu'_r = J J^T/|det J| = (a^2/r^2)^2/(a^2/r^2)^3 I = (r^2/a^2) I = (a^2/r'^2) I
+(r'=a^2/r). VERIFIED to machine precision at sample points: the medium is ISOTROPIC (off-diagonal 0)
+and equals the paper's (a/r')^2 modulation -- it falls out of the geometry AUTOMATICALLY (the
+conformality is exactly what cancels the anisotropy a generic transform would create; no hand-applied
+Kelvin field weight). This is the coordinate-free generalization of demo_kk's radial result.
+=> Only the BOUNDARY is a design choice, and the principled condition is IMPEDANCE MATCHING. VERIFIED:
+the modal reflected-power R_n=|B/A|^2 of an outgoing wave at the absorber sphere is ZERO to machine
+precision when the imposed impedance equals the exact DtN Lambda_n(kb), and otherwise R_n ORDERS BY
+THE DtN-SPECTRAL MISMATCH |Z_n-Lambda_n| (HOIBC << SIBC). So an absorber's quality IS its DtN-spectral
+match: the radiation (surface-impedance/HOIBC) boundary is the PRINCIPLED object; a PML is one
+(volumetric, approximate, far-placed) realization of the same reflectionless goal. PLACEMENT: a
+constant SIBC reflects less the FARTHER it sits (large kb, R~1/kb-ish) -- this is exactly why the paper
+places its 377-ohm PML far (a large domain, U1/U3); the HOIBC matches the complex spectrum so it is
+low-reflection even CLOSE (small domain). LOW- vs HIGH-FREQUENCY: at static the open boundary is EXACT
+with NO absorber (the spectrum is the real ladder -(n+1)/R = an accuracy DATASHEET); only in the
+RADIATING regime is the COMPLEX spectrum an absorber-DESIGN target (per-mode reflection = spectral
+mismatch). Hence the DtN spectral analysis is OPERATIONALLY meaningful (predicts/optimizes the
+absorber) specifically for the HIGH-FREQUENCY Kelvin -- elevating Track A's spectrum from an accuracy
+datasheet (low-freq SA paper) to an absorber-design tool (Paper-H). FE follow-up: assemble the
+isotropic (a/r')^2 medium (transformation optics) + the matched HOIBC surface term; demo_ll verifies
+the medium and the impedance-matching/reflection law in closed form.
 """
 
 
