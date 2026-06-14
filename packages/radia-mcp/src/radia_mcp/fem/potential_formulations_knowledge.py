@@ -32,9 +32,13 @@ nonlinearity, and frequency range.
    │   ├── Multiply-connected conductors           → A-V (Biro-Preis) ★
    │   └── Surface skin effect only                → A + SIBC (lab IH)
    │
+   ├── Static, NONLINEAR (saturable) iron + coil source
+   │   ├── B-input A_red  nu(|B|)  (convex)        → ★ well-conditioned at ANY mu  (topic `nonlinear`)
+   │   └── NOT reduced-Omega mu(|H|): STALLS at high mu (the saturation knee regime)
+   │
    ├── Transient (TD-FEM)
    │   ├── Linear quasi-static                     → A or A-V
-   │   └── Nonlinear iron                          → A + Picard/Newton
+   │   └── Nonlinear iron                          → A_red B-input + Picard/Newton (topic `nonlinear`)
    │
    └── DC to MHz transition (capacitive + inductive)
        └── Darwin model (radia.darwin_model)
@@ -256,6 +260,106 @@ but radiation is not yet relevant.
 """
 
 
+NONLINEAR_AFORM = r"""
+# Nonlinear (saturable) magnetostatics: B-input A-formulation vs H-input reduced-Omega
+
+For NONLINEAR iron (saturable B-H) the CHOICE of formulation governs the
+CONDITIONING of the nonlinear iteration, not just the DOF count.  Pick the
+B-input (convex) form; it converges where the H-input reduced-Omega stalls.
+
+## The conditioning split: B-input (convex) vs H-input (non-convex)
+
+| input | constitutive | energy | conditioning |
+|-------|--------------|--------|--------------|
+| **B-input** nu(\|B\|) | H = nu(\|B\|) B | INT W(\|B\|), W **convex** | ★ well-conditioned at ANY mu |
+| **H-input** mu(\|H\|) | B = mu(\|H\|) H | non-convex in H | ill-conditioned at high mu |
+
+For an ordinary saturating material nu(q) is monotone, so the B-input
+co-energy INT W(\|B\|) is **convex** -> the B-input fixed point / Newton is
+well-posed at any permeability.  The H-input mu(\|H\|) form is not convex in H
+and is ill-conditioned at high mu.
+
+## The reduced-Omega trap (the obvious 3-D choice that fails on saturable iron)
+
+The reduced scalar potential `H = H_s - grad Omega`, `mu(|H|)` Picard is the
+natural 3-D magnetostatic choice (scalar unknown, Biot-Savart coil source, no
+coil mesh -- see the `reduced` topic).  But for SATURABLE iron it is
+ill-conditioned exactly where it matters: the saturation **knee** of an
+iron-dominated circuit sits in the LOW-drive (unsaturated, `mu_r ~ mu_r0`)
+regime, and there the reduced-Omega Picard **STALLS** -- the high-mu scalar
+potential is poorly determined inside the iron, giving a spurious `|H|` ->
+spurious `mu` -> oscillation.  The points that DO converge are all
+post-saturation; the knee is in the non-converged regime (a catch-22).
+
+## The cure: the reduced VECTOR potential, B-input
+
+`B = B_s + curl A_r`:
+- `B_s = mu0 H_s` = the coil's Biot-Savart field (`curl H_s = J`), from Radia /
+  `CoilBuilder.to_radia()` -- **no meshed coil, no div-J** issue.
+- `A_r in H(curl)` = the iron reaction.
+- `nu(|B|)` saturable in iron, `nu0 = 1/mu0` in air.  Since
+  `curl(nu0 B_s) = curl H_s = J`, the governing `curl(nu(|B|) B) = J` becomes
+  the source-free-looking weak form
+
+      INT nu(|B|) curl(A_r) . curl(v)  +  INT_iron (nu(|B|) - nu0) B_s . curl(v)  =  0
+
+  whose ONLY source is the IRON-localised `(nu - nu0) B_s` term (the coil
+  drives the iron through its known `B_s`).  A tiny `eps INT A_r . v`
+  regularises the gradient gauge so a direct (sparsecholesky) solve works.
+  Under-relaxed Picard (or Newton on the convex energy), continuation in the
+  drive.
+
+This is well-conditioned at ANY mu -- it converges in the low-drive high-mu
+regime the reduced-Omega cannot reach.
+
+## Code pattern (reduced-A, B-input, Picard)
+
+```python
+from ngsolve import *
+import radia as rad
+NU0 = 1.0 / mu0
+def mur_B(Bm):                                  # Froehlich (or any monotone nu)
+    return 1.0 + (mur0 - 1.0) / (1.0 + (Bm / Bk)**2)
+Bs = GridFunction(VectorL2(mesh, order=1))
+Bs.Set(mu0 * rad.RadiaField(coils, "h"))        # Biot-Savart, project ONCE
+fes = HCurl(mesh, order=1, dirichlet="outer"); u, v = fes.TnT()
+Ar = GridFunction(fes); eps = 1e-6 * NU0
+for it in range(niter):                          # B-input Picard
+    B = Bs + curl(Ar); Bm = sqrt(InnerProduct(B, B) + 1e-30)
+    nu   = mesh.MaterialCF({"iron": NU0 / mur_B(Bm)},        default=NU0)
+    nu_m = mesh.MaterialCF({"iron": NU0 / mur_B(Bm) - NU0},  default=0.0)
+    a = BilinearForm(nu*InnerProduct(curl(u),curl(v))*dx + eps*InnerProduct(u,v)*dx)
+    f = LinearForm(-nu_m*InnerProduct(Bs, curl(v))*dx)
+    a.Assemble(); f.Assemble()
+    An = GridFunction(fes)
+    An.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    Ar.vec.data = (1.0 - relax)*Ar.vec + relax*An.vec        # under-relax
+```
+
+## Verified (lab)
+
+`examples/clebsch_hodograph/clebsch_dipole_saturation_3d.py` (golden
+`test_clebsch_dipole_saturation_3d_aform`): on an H-frame dipole, at a LOW
+drive (`NI=3 kA-t`, iron `<mu_r>~1200`) the B-input A-formulation converges to
+`resid 8e-6` in **15 iters**, while the reduced-Omega `mu(|H|)` Picard STALLS
+at `resid ~2e-2`.  Same geometry, same B-H knee: the difference is the
+formulation's conditioning.
+
+The 2-D linear-cost companion (the iron flux path as a saturable Chaplygin
+guide -> a magnetic-circuit 1-shot, `B_gap(NI)` at linear cost) is
+`examples/clebsch_hodograph/clebsch_dipole_saturation_2d.py`.
+
+## Cross-reference
+
+- Same B-input convexity that fixes the **HDiv-VIM** nonlinear demag solve
+  (the de Rham dual) -- see `radia_mcp.fem.equivalence_source`.
+- For the reduced-potential CANCELLATION pitfall (a separate issue:
+  `H_s - grad Omega ~ 0` losing precision in saturated regions), see the
+  `reduced` topic above.
+- Gauge regularisation of the curl-curl null space: `fem.gauge_open_boundary`.
+"""
+
+
 def get_potential_formulations_knowledge(topic: str = "catalog") -> str:
     """Dispatch potential formulation topics.
 
@@ -265,6 +369,7 @@ def get_potential_formulations_knowledge(topic: str = "catalog") -> str:
         t_omega          - T-Omega (electric vector + magnetic scalar)
         h_formulation    - H-formulation (HCurl direct) for SC / nonlinear
         reduced          - ★ Reduced potential (lab accelerator magnet core)
+        nonlinear        - ★ B-input A-formulation cure (saturable iron conditioning)
         darwin           - Darwin model (DC to MHz transition)
         all              - Everything
     """
@@ -279,10 +384,13 @@ def get_potential_formulations_knowledge(topic: str = "catalog") -> str:
         return H_FORMULATION
     if topic in ("reduced", "reduced_potential", "reduced_omega", "omega_reduced"):
         return REDUCED_POTENTIAL
+    if topic in ("nonlinear", "b_input", "b-input", "conditioning", "saturable",
+                 "a_reduced_nonlinear", "aform", "a_formulation"):
+        return NONLINEAR_AFORM
     if topic in ("darwin", "darwin_model"):
         return DARWIN
     if topic == "all":
         return "\n\n".join([CATALOG, A_OMEGA, T_OMEGA, H_FORMULATION,
-                            REDUCED_POTENTIAL, DARWIN])
+                            REDUCED_POTENTIAL, NONLINEAR_AFORM, DARWIN])
     return (f"Unknown topic '{topic}'. Available: catalog, a_omega, t_omega, "
-            "h_formulation, reduced, darwin, all.")
+            "h_formulation, reduced, nonlinear, darwin, all.")
