@@ -953,12 +953,27 @@ the energy↔co-energy (Legendre) conjugate pair. The two field indices converge
 from discretisation-*complementary* sides; their **gap < 1e-6** certifies that
 the measured `k(r)` is physics, not mesh. Result: the naive `g ~ r^{-k}` pole
 gives a bulk index `k ≈ 4.88` (just under the design `k=5`) — a small, certified
-2-D-fringing **deficit** that the (upcoming) Steps 2-3 reshape closes; *honest*:
+2-D-fringing **deficit** that the (upcoming) Step 3 reshape closes; *honest*:
 the bracket certifies the deficit is real. Figure
 `scaling_ffag_pole_2d.png` (left: `|B_y|(r)` log-log vs ideal `r^k` | right:
 `k_phi(r)`, `k_A(r)` and the A/phi bracket vs `k_design`). Golden
-`test_scaling_ffag_pole_2d_step1`. *Steps 2-3 (Froehlich saturation droops `k`
-at the high-r edge; von Mises reshape restores it) are the next rungs.*
+`test_scaling_ffag_pole_2d_step1`.
+
+**Step 2 (saturation, `--step2`):** a super-ferric iron pole (SC coils set the
+NI, the iron shapes the field) with a Froehlich `mu(B)` (knee `Bk=1.2 T`).
+Driving the scalar potential through the air gap (`B = -mu0 mu_r(|B|) grad phi`,
+Picard on `mu_r(B)`) and sweeping the drive: referenced to the lowest
+(unsaturated) level, the field-index loss `Dk(r) = k - k_ref` isolates the
+saturation. As the high-r edge (highest `B`) crosses the iron knee, `Dk`
+develops a **negative dip THERE** — the achromaticity degrades at the
+high-energy edge of the momentum acceptance (the **super-ferric operating
+wall**). Verified monotone: at gap fields up to `~3.3 T` the high-r index drops
+`~0.26` below baseline and the aperture **tilts** (`dk_tilt ~ -0.13`: the high-r
+edge droops more than the low-r edge). Figure
+`scaling_ffag_pole_2d_saturation.png` (left: `Dk(r)` deepening at the high-r
+edge | right: `|B_gap|(r)` crossing `Bk`). Golden
+`test_scaling_ffag_pole_2d_step2_saturation`. *Step 3 (von Mises / log-chart
+reshape of the pole to restore `k(r)=const` into saturation) is the next rung.*
 
 ## Run
 
@@ -983,7 +998,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
-python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) field index + A/phi bracket (--fig)
+python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 saturation; --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
