@@ -5,6 +5,12 @@
 # exterior material mu(x) is just a (transformed) coefficient there; an inhomogeneous exterior or an
 # embedded far body is captured natively, with NO Green function.
 #
+# SELLING POINT: "kernel approximation WITHOUT the Sommerfeld Green's function." A BEM treatment of a
+# layered/inhomogeneous exterior needs the Green's function OF THAT layered medium (Sommerfeld
+# integrals -- expensive) or a volume integral equation; FEM-Kelvin needs neither -- the layered
+# exterior is just a coefficient in the sparse inverted FE, so it approximates the exterior BEM kernel
+# without ever forming the hard kernel. Case (2) below IS this proof (layered shell, no Green fn).
+#
 # Two cases (R_in=0.5 body surface, R_out=1.0 Kelvin junction, offset Kelvin ball):
 #  (1) UNIFORM exterior mu_ext: the body-surface DtN scales as mu_ext*(n+1)/R_in -- VERIFIED to the
 #      vacuum floor (~3e-3 at this mesh) for mu_ext=1,2,5. (Caveat: a constant mu keeps the exterior
