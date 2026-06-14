@@ -783,3 +783,30 @@ def test_curved_triangle_charge_field_flat_limit():
         # near-surface is ~1e-7 (far points hit machine precision via the exact flat-tangent part)
         b = linear_triangle_charge_field(P3, r, 0.5, np.array([0.6, -0.4, 0.0]))
         assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-6, f"curved flat-limit r={r}"
+
+
+# ---------------------------------------------------------------------------------------------------
+# Step 2: the fast charge-coefficient ASSEMBLY (assemble_demag_field) -- the internal/near demag field
+# summed from the analytic C++ kernels.  Must match the external Gauss reference to machine precision at
+# external points (proves the kernel sum), and give -M/3 at the uniform-sphere center (to faceting).
+# ---------------------------------------------------------------------------------------------------
+def test_assemble_demag_field_matches_external_reference(uniform_sphere):
+    from radia.hdiv_vim import assemble_demag_field
+    mesh, gf, Mval = uniform_sphere
+    obs = np.array([[0, 0, 2.0], [2.0, 0, 0.0], [1.5, 1.5, 1.0]], float)
+    with ng.TaskManager():
+        Ha = assemble_demag_field(mesh, gf, obs)
+        Hr = reconstruct_field_polynomial(mesh, gf, obs, quad=6)
+    for i in range(len(obs)):
+        rel = np.linalg.norm(Ha[i] - Hr[i]) / np.linalg.norm(Hr[i])
+        assert rel < 1e-9, f"assembly vs external reference at obs {i}: {rel:.2e}"
+
+
+def test_assemble_demag_field_uniform_sphere_center(uniform_sphere):
+    from radia.hdiv_vim import assemble_demag_field
+    mesh, gf, Mval = uniform_sphere
+    with ng.TaskManager():
+        Hc = assemble_demag_field(mesh, gf, np.array([[0.0, 0.0, 0.0]]))
+    rel = abs(Hc[0, 2] + Mval / 3) / (Mval / 3)
+    assert rel < 5e-3, f"center H_z {Hc[0,2]:.4e} vs -M/3 (rel {rel:.2e}, faceting at h=0.4)"
+    assert abs(Hc[0, 0]) < 1e-2 * Mval and abs(Hc[0, 1]) < 1e-2 * Mval, "transverse leak"
