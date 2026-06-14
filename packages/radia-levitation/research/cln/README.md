@@ -1,5 +1,11 @@
 # CLN — Cauer Ladder Network for eddy-current modeling
 
+> **Location note (2026-06-14):** this is `research/cln/` — the research
+> corpus tier (verification scratch, not curated package examples; see
+> `../README.md`).  The IGTE 2026 paper artifacts (`igte_symposium_2026.tex`,
+> `igtesymp.cls`, PDFs) referenced below have moved to
+> `../../papers/igte_symposium_2026/`.
+
 Working folder for the **Cauer Ladder Network (CLN)** research line: extracting
 RL-ladder equivalent circuits of eddy-current decay in 3D conductors via
 double-double (DD) verified arithmetic, BEM-Foster decomposition, and the

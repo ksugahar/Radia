@@ -52,13 +52,37 @@ print(f"alpha(1 kHz) / V = {a/V:.4f}")
 
 ## Examples
 
-| Example | Notebook / script |
-|---------|-------------------|
-| Single cube alpha(s) sweep | `examples/cube_alpha_sweep.py` |
-| Linear ECB drag + lift vs velocity | `examples/ecb_linear.py` |
-| Plate-over-PM levitation force | `examples/plate_levitation.py` |
-| Simulink LTI export | `examples/simulink_export.py` |
-| L-shape / multi-step bar | `examples/L_shape_response.py` |
+Curated, runnable demonstrations live under `examples/` (the broad
+research corpus is in `research/`, see below):
+
+| Example | Script |
+|---------|--------|
+| Single cube alpha(s) sweep (CAD-direct + mesh-derived) | `examples/cube_alpha_sweep.py` |
+| Sphere induced-dipole levitation force vs frequency | `examples/sphere/levitation_sphere_force.py` |
+| Coil-driven sphere eddy force | `examples/sphere/coil_sphere_eddy_force.py` |
+| Coil + sphere equilibrium height | `examples/sphere/coil_levitation_equilibrium.py` |
+| Ellipsoid demag / alpha tensor (axisym + 3D HCurl) | `examples/ellipsoid/ellipsoid_alpha_tensor.py` |
+| 3D cuboid CLN-SIBC standalone demo | `examples/cuboid/cln_sibc_cuboid_3d.py` |
+| TEAM 28 electrodynamic levitation (CLN force / sweep) | `examples/team28/team28_cln_force.py` |
+
+## Research corpus (`research/`)
+
+`research/cln/` holds the absorbed radia-cln research corpus — the raw
+verification sweeps, Mathematica derivations, and iteration history that
+back the theory but are **not** README-backed package examples (per the
+lab Sample Promotion Ladder: tests -> examples -> panels).  Contents:
+
+| Subdir | What |
+|--------|------|
+| `research/cln/ngsolve_validation/` | NGSolve FEM verification sweeps (dated `*_results.json` snapshots, one-off probe scripts) |
+| `research/cln/axifemm/` | Henrotte-basis axisymmetric eddy-current CLN tests (NMR, disk convergence) |
+| `research/cln/multiconn_loop_method/` | T-Omega multiply-connected bath-plate notebook |
+| `research/cln/tanimoto_canonical/` | Tanimoto canonical CLN notebooks (A-phi / A-T / T-Omega) |
+| `research/cln/*.wls` | Schur-F / CF / quadrupole / polarizability symbolic derivations |
+| `research/cln/bem_cln_*` | BEM-CLN multi-conductor verification (iteration history) |
+
+Promote a script from `research/` to `examples/` only after it gains a
+README, runs standalone, and demonstrates one clear concept.
 
 ## Force computation: Lorentz vs Maxwell stress
 
