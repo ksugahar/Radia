@@ -1095,3 +1095,97 @@ def curved_triangle_charge_field(surf_map, r, sigma_fn, nq=16):
                 ff = s0 * dy / np.linalg.norm(dy) ** 3 * J0
                 rem += ws[i] * ws[j] * jac * (f - ff)
     return flat_part + rem
+
+
+# ---------------------------------------------------------------------------------------------------
+# Charge-coefficient ASSEMBLY (Step 2 fast path): the internal/near demag field of a solved HDiv-VIM
+# magnetization at arbitrary points, summed from the ANALYTIC degree-1/2 C++ kernels.  Because those
+# kernels are exact for ANY r (inside / on / outside an element), the assembly is a single uniform sum
+# over all volume elements (rho = -div M, linear for HDiv order<=2) and boundary faces (sigma = M.n,
+# quadratic for HDiv order<=2) -- NO self/near/far split.  TET meshes (the FEM-standard case); the
+# coefficients are extracted ONCE per element/face, then the C++ kernels run per observation point.
+# ---------------------------------------------------------------------------------------------------
+def _fit_rho_linear(divM_cf, mesh, V):
+    """rho = -div M as rho0 + g.r' (linear) from 4 interior samples of the tet (V = (4,3))."""
+    c = V.mean(axis=0)
+    A = np.empty((4, 4)); b = np.empty(4)
+    for i in range(4):
+        p = 0.6 * V[i] + 0.4 * c                              # interior sample (avoid shared vertices)
+        mp = mesh(p[0], p[1], p[2])
+        dv = divM_cf(mp)
+        b[i] = -float(dv[0] if isinstance(dv, tuple) else dv)
+        A[i] = [1.0, p[0], p[1], p[2]]
+    sol = np.linalg.solve(A, b)
+    return float(sol[0]), sol[1:4].copy()
+
+
+def _fit_sigma_quadratic(sigma_fn, P):
+    """sigma = M.n as sigma0 + s.r' + r'^T S r' from interior face samples (P = (3,3) triangle).
+    3D-quadratic least-squares (min-norm; reproduces sigma on the face since it is degree-2 in-plane)."""
+    c = P.mean(axis=0)
+    nodes = []
+    for (a, b) in [(0.7, 0.15), (0.15, 0.7), (0.15, 0.15), (0.45, 0.45), (0.45, 0.1), (0.1, 0.45),
+                   (0.34, 0.33), (0.6, 0.25), (0.25, 0.6), (0.25, 0.25)]:
+        nodes.append(P[0] + a * (P[1] - P[0]) + b * (P[2] - P[0]))
+    M = np.empty((len(nodes), 10)); rhs = np.empty(len(nodes))
+    for i, p in enumerate(nodes):
+        x, y, z = p
+        M[i] = [1, x, y, z, x*x, y*y, z*z, x*y, y*z, z*x]
+        rhs[i] = float(sigma_fn(p))
+    cf, *_ = np.linalg.lstsq(M, rhs, rcond=None)
+    sigma0 = float(cf[0]); s = cf[1:4].copy()
+    S = np.array([[cf[4], 0.5*cf[7], 0.5*cf[9]],
+                  [0.5*cf[7], cf[5], 0.5*cf[8]],
+                  [0.5*cf[9], 0.5*cf[8], cf[6]]])
+    return sigma0, s, S
+
+
+def assemble_demag_field(mesh, gfM, points, quantity="h"):
+    """Internal/near demag field of a solved HDiv magnetization gfM (HDiv order<=2) at `points`, summed
+    from the analytic degree-1/2 C++ kernels (exact at any r -> one uniform sum, no self/far split).
+
+    rho = -div M (<= linear)  -> _hdiv_tet_volfield_linear per volume element
+    sigma = M.n   (<= quadratic) -> _hdiv_quad_tri_field    per boundary triangle
+    quantity 'h' = demag/stray H (A/m); 'b' = MU0*(H + M(r)) (B inside the body).  TET meshes.
+    CALLER wraps in TaskManager when combining with other NGSolve work."""
+    import radia._radia_pybind as rp
+    import ngsolve as ng
+    divM = ng.div(gfM)
+    nrm = ng.specialcf.normal(mesh.dim)
+    sigma_cf = ng.InnerProduct(gfM.Trace(), nrm)
+    inv4pi = 1.0 / (4.0 * np.pi)
+
+    # precompute per-element (verts flat, rho0, g) once
+    elems = []
+    for i in range(mesh.GetNE(ng.VOL)):
+        ei = ng.ElementId(ng.VOL, i)
+        V = np.array([mesh[v].point for v in mesh[ei].vertices], float)
+        rho0, g = _fit_rho_linear(divM, mesh, V)
+        elems.append((V.ravel().tolist(), rho0, g.tolist()))
+
+    # precompute per-boundary-face (verts flat, sigma0, s, S) once
+    faces = []
+    for i in range(mesh.GetNE(ng.BND)):
+        ei = ng.ElementId(ng.BND, i)
+        P = np.array([mesh[v].point for v in mesh[ei].vertices], float)
+        ngeom = np.cross(P[1] - P[0], P[2] - P[0]); ngeom = ngeom / np.linalg.norm(ngeom)
+        sig_fn = lambda p: float(np.array([float(gfM[k](mesh(p[0], p[1], p[2]))) for k in range(3)]) @ ngeom)
+        sigma0, s, S = _fit_sigma_quadratic(sig_fn, P)
+        faces.append((P.ravel().tolist(), sigma0, s.tolist(), S.ravel().tolist()))
+
+    obs = np.asarray(points, float).reshape(-1, 3)
+    out = np.zeros((len(obs), 3))
+    for q, r in enumerate(obs):
+        rl = r.tolist()
+        H = np.zeros(3)
+        for (Vf, rho0, g) in elems:
+            H += np.array(rp._hdiv_tet_volfield_linear(Vf, rl, rho0, g))
+        for (Pf, sigma0, s, S) in faces:
+            H += np.array(rp._hdiv_quad_tri_field(Pf, rl, sigma0, s, S))
+        H *= inv4pi
+        if quantity.lower() == "b":
+            Mr = np.array([float(gfM[k](mesh(r[0], r[1], r[2]))) for k in range(3)])
+            out[q] = (4e-7 * np.pi) * (H + Mr)
+        else:
+            out[q] = H
+    return out

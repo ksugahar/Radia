@@ -69,6 +69,7 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
     hex_volume_field_quadratic,       # quadratic volume-charge field over an (affine) hex
     make_t6_surface_map,              # build a T6 (quadratic) curved-triangle parametrization
     curved_triangle_charge_field,     # CURVED-face surface-charge field (singularity subtraction + Duffy)
+    assemble_demag_field,             # Step 2: fast charge-coefficient assembly (analytic C++ kernels)
 )
 
 __all__ = [
@@ -85,6 +86,6 @@ __all__ = [
     "tet_boundary_triangles", "hex_boundary_triangles", "polytope_newtonian_potential",
     "polytope_newtonian_moment", "polytope_volume_field_quadratic",
     "hex_volume_field_linear", "hex_volume_field_quadratic",
-    "make_t6_surface_map", "curved_triangle_charge_field",
+    "make_t6_surface_map", "curved_triangle_charge_field", "assemble_demag_field",
     "_core", "_nonlinear", "_vim", "_field",
 ]
