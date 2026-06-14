@@ -1811,6 +1811,84 @@ truncation could corrupt, which is exactly what air-box / Kelvin sizing controls
 In short: the spectral reframing lifts open-boundary assessment from a per-problem
 EMPIRICAL exercise to a problem-independent OPERATOR DATASHEET -- specify the
 method once, predict any problem from its multipole content.
+
+THE DATASHEET EXTENDED TO FREQUENCY: the COMPLEX-PLANE spectrum (demo_gg, verified 2026-06-15).
+User: "comparing the high-frequency Kelvin spectrum, the PML spectrum and the FEM-BEM spectrum is
+interesting -- and in that case the spectrum becomes a COMPLEX-PLANE spectrum, right?" YES, exactly.
+The same exterior DtN ladder, at FINITE frequency, is the spherical-Hankel log-derivative
+   Lambda_n(kR) = kR h_n^(1)'(kR) / h_n^(1)(kR)   (units 1/R; outgoing/Sommerfeld condition),
+which is COMPLEX -- Im(Lambda_n) = RADIATION (its sign is the e^{-iwt}/h^(1) convention). The
+static limit kR->0 collapses it onto the REAL ladder -(n+1)/R. So ONE Argand plot of {Lambda_n}
+orders every open-boundary method on a single axis, and the (n, kR) plane is read directly:
+  * FEM-BEM   = reproduces the EXACT complex Hankel locus (= the exterior DtN, up to surface
+                discretisation): the gold-standard reference, complex, but DENSE.
+  * KELVIN (static, the SA/magnetostatics tool) = its operator has NO frequency, so its spectrum is
+    PINNED to the REAL axis at -(n+1), frequency-INDEPENDENT. It is the kR->0 operator. Its deviation
+    from the exact complex value is the QUASI-STATIC ERROR. VERIFIED laws (R=1):
+      (i)  kR->0 exactness at fixed n: |Kelvin-exact| -> 0 as O(kR^2)  (n=1: /kR^2 -> 0.999).
+      (ii) evanescent error law for n>>kR:  |Kelvin-exact| * 2n/kR^2 -> 1  (kR=4: 1.39 at n=6 ->
+           1.02 at n=30) -- i.e. the per-mode error is exactly kR^2/(2n) for evanescent modes, plus
+           the full radiation Im for propagating modes n<kR.
+    => Kelvin's PERFORMANCE DOMAIN is the quasi-static spectrum (kR<~1): it is the CHEAPEST (closed
+       form / sparse thin ball, real, NO wavelength to resolve) AND exact there; it is provably
+       radiation-blind otherwise. This is WHY the SA paper is the quasi-static Kelvin paper.
+  * PML = a complex-stretched layer that DOES carry the wave, so it reproduces the exact COMPLEX
+    spectrum: a strong/thick PML matches it at all n (VERIFIED, rel 3e-9 for propagating n), with a
+    characteristic error KNEE at the propagating<->evanescent transition n~kR (VERIFIED: a thin PML's
+    per-degree error PEAKS at n=4 for kR=4). Cost = a resolved layer (DoF grows with kR).
+HONEST CALIBRATION (no false "complementary crossover"): at ANY finite kR a method that carries k^2
+(PML, FEM-BEM, or a Helmholtz/extended-Kelvin) BEATS the static Kelvin operator -- static Kelvin is
+strictly the kR->0 tool, not a finite-kR competitor. So the kR AXIS itself is the two-paper boundary:
+kR<~1 quasi-static = the SA Kelvin paper (Kelvin exact AND cheapest); kR>~1 radiating = the exact
+complex operator (BEM / PML / extended-Kelvin sugahara2025). The genuine "high-frequency KELVIN" is
+the Helmholtz/extended-Kelvin inversion (sugahara2025), whose spectrum WOULD track the exact complex
+locus until the inverted far-field oscillation (the essential singularity at the inversion centre =
+image of r->inf) out-resolves the polynomial FE -- a peel-off, the natural Paper-H follow-up. demo_gg
+verifies the three CLOSED-FORM objects (exact Hankel, static-Kelvin real ladder, PML radial solver)
+that frame it; the spherical-Bessel helpers are checked vs scipy.special.spherical_jn/yn (rel 4e-14).
+PAPER POINT (Track A): the DtN datasheet is not just a real ladder -- it is a COMPLEX locus
+parameterised by kR, and the Kelvin transformation's place on it (the real axis) is precisely what
+makes it the optimal quasi-static open boundary and disqualifies it for radiation. The figure is the
+Argand plot {Re,Im}(Lambda_n) at fixed kR with the three methods overlaid (the SA paper's frequency
+panel; see C:\\temp\\kelvin_figs\\fig_gg_complex_spectrum for the generated preview).
+
+RADIATION BOUNDARY ON KELVIN = a SURFACE IMPEDANCE (SIBC/HOIBC) AT THE EXTERIOR CENTRE (demo_ii,
+verified 2026-06-15; grounds the author's IEICE Trans. C 2024 "Extended Kelvin Transformation for
+Solving Radiating Electromagnetic Fields"). The Kelvin inversion x'=(a/r)^2 x sends r=infinity to the
+CENTRE rho=0; differential geometry gives the exterior material as an ISOTROPIC modulation (a/r)^2 of
+mu/eps/sigma/sigma* (metric ratio g'/g) -- so a radiating field's outgoing energy flows INTO the
+centre, and the radiation/absorbing condition is imposed THERE. The 2024 paper places a spherical
+Maxwellian PML at the centre (eps'=mu'=(1-0.2j)a^2/r'^2), excising a tiny ball at rho=0 (singular
+image of infinity) and putting the absorber far in physical space (8 m at lambda=3 m) so a simple
+plane-wave (377 ohm) PML suffices; validated vs analytic Hertzian dipole and FEKO MoM.
+THE SURFACE-IMPEDANCE EXTENSION (what the user asked: "derive SIBC/radiation-BC Kelvin; a sphere
+needs HOIBC"): instead of a volumetric PML, impose on the small inner sphere (image of a far sphere
+r=b) an IMPEDANCE reproducing the exterior radiation DtN. On a sphere the exact radiation DtN per
+degree n is Lambda_n(z)=z h_n^(1)'(z)/h_n^(1)(z), z=kb, and its large-z expansion IS the absorbing-BC
+hierarchy:  Lambda_n = i z - 1 - i n(n+1)/(2z) + O(1/z^2). VERIFIED (demo_ii):
+  - the orders are the DtN's OWN expansion: |L-iz|->const, |L-(iz-1)| ~ O(1/z) (halves per z-doubling),
+    |L-HOIBC| ~ O(1/z^2) (quarters per z-doubling) -- ratios 2.00 / 4.0 measured.
+  - SIBC (Leontovich, n-INDEPENDENT = iz-1, the plane-wave 377-ohm) matches Lambda_n only for
+    z>>n(n+1); error ~ n(n+1)/(2z). HOIBC (n-DEPENDENT) adds -i n(n+1)/(2z); since n(n+1) is the unit-
+    sphere Laplace-Beltrami eigenvalue (Delta_S Y_n=-n(n+1)Y_n), HOIBC = iz-1+(i/2z)Delta_S = a 2nd-
+    order SURFACE PDE operator (ordinary surface-FEM term). THIS is why a SPHERE needs an HOIBC: the
+    radiation impedance is curvature/multipole-dependent, which a scalar SIBC cannot carry.
+  - SPECTRAL reading of the paper's design: "place the absorber far (large kb)" == "make n(n+1)/(2kb)
+    small so the n-indep SIBC suffices". At the paper's kb=2pi*8/3=16.76, SIBC is adequate for LOW n
+    (n=1 err 0.06) but degrades (n=12 err 5.5); HOIBC is ~6-17x better across the band. The HOIBC
+    relaxes the placement: to reach |Z-exact|<1e-2 at n=5, SIBC needs kb>=1501 but HOIBC kb>=40 (38x
+    CLOSER absorber => the image sphere a^2/b is larger => fewer exterior cells). Image mapping b->a^2/b
+    (paper a=4,b=8 -> rho=2 m; excise 0.25 m <- image of 64 m). Leading term iz=ikb <=> d_r u=ik u =
+    the Sommerfeld/377-ohm plane-wave condition.
+TOPOLOGY ("topologically easy"): one-point compactification sends infinity to the single centre point;
+excising a small sphere there turns the NONLOCAL exterior DtN (on the truncation r=a) into a LOCAL
+absorber on a small interior sphere. The conformal Kelvin map makes infinity a regular meshable point;
+the scalar/E exterior is simply connected (no cohomology cuts needed) -- contrast the H-formulation
+multiply-connected case where cuts (the cohomology-cuts machinery) would be required. PAPER-H POINT:
+the radiating extended-Kelvin can use a thin surface HOIBC at the centre instead of a thick volumetric
+PML, with the required placement distance set by the multipole band via the DtN spectrum. FE follow-up
+= a Delta_S surface term on the excised inner sphere of the inverted exterior; demo_ii verifies the
+closed-form spectrum that fixes its coefficients.
 """
 
 

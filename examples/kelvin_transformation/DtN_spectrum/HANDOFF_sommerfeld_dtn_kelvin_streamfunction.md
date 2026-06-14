@@ -46,19 +46,45 @@ See `PATHWAY_streamfunction_with_iron.md` for the full table. The load-bearing d
 Run: `pip install -e packages/radia-mcp` then `python demo_ff_streamfunction_design_matrix.py`
 (needs numpy, scipy, ngsolve 6.2.2604, netgen.occ; uses `radia_mcp.radia_ngsolve.fem_bem_coupling`).
 
-## The concrete NEXT task
+## The concrete NEXT task — steps 1-4 DONE (`demo_hh_general_iron_design.py`, streamfunction branch)
 Promote `demo_ff` from the concentric/modal toy to a **general coil inverse design with arbitrary
 (non-concentric) iron**, wired to the existing stream-function module:
-1. Take a real winding-surface stream function psi (triangle-mesh piecewise-linear, as in
-   `calc_streamfunction.py`), not just spherical-harmonic modal amplitudes.
-2. Build the material-aware transfer matrix `M[target, psi-dof]` by Schur-condensing the Kelvin-FEM with
-   the iron meshed (arbitrary geometry) — generalise `demo_v`/`demo_bb`/`demo_ff`'s assembly.
-3. Solve the inverse design (reuse the ACA-TSVD / regularisation already in `radia.streamfunction`) with M.
-4. **Independent forward check** (non-tautological): simulate the designed psi in a fresh full Kelvin-FEM
-   solve with the iron, read the target — confirm it hits B_target, and that a free-space-designed psi
-   MISSES it. (This is the verification that M is the right design operator.)
-5. Benchmark M-build (sparse Kelvin-FEM Schur) vs the dense layered-Green / FE-BEM baseline (sparsity,
-   conditioning, FE-coupling) — the selling point is "sparse, material-aware, no Green function".
+1. **[DONE]** Real winding-surface stream function psi — the order-p H1 nodal trace on the coil surface
+   (378 DoFs), not spherical-harmonic modal amplitudes.
+2. **[DONE]** Material-aware transfer matrix `M[target, psi-dof]` built directly from the Kelvin-FEM with
+   the iron meshed as an arbitrary (non-concentric) blob: ONE sparse factorisation of the Kelvin-FEM +
+   one back-substitution per coil DoF (the Dirichlet(coil)->field(target) specialisation of demo_v's Schur
+   condensation). Targets sit in the PHYSICAL vacuum region (read directly -> no dependence on the
+   inverse-Kelvin map convention).
+3. **[DONE]** Inverse design psi = M^+ B_target (folded TSVD; a dense numpy TSVD here — wiring through
+   `radia.streamfunction`'s ACA-TSVD is the remaining polish).
+4. **[DONE]** Forward check: a fresh full Kelvin-FEM solve of the designed psi (`gf.Set(psi)+solve`, does
+   NOT touch M) HITS the target (1e-14) while the free-space-designed psi MISSES by ~43% (stable 31-39%
+   across mesh refinement). Physics anchored on the concentric sub-case vs the analytic layered transfer
+   (rel 3e-3..2e-2), and M@psi == a fresh solve to 1e-15 (assembly).
+5. **[DONE — `bench_dtn_mbuild.py`]** Benchmark M-build (sparse Kelvin-FEM Schur) vs the dense
+   layered-Green / FE-BEM baseline — JSON + figure committed. Three measured contrasts: **(C1)** the
+   Kelvin-FEM volume matrix has CONSTANT nnz/row (~15, fill→7e-4), storage linear in ndof, vs the dense
+   Green/BEM operator's O(ndof²) — **941× larger at 25k DoF** (3388 MB vs 3.6 MB), sparse factor 0.6 s;
+   **(C2)** order-2 FEM transfer R_n reproduces the analytic layered-Green transfer to rel_max 2.5e-2
+   (same operator); **(C3)** a non-concentric blob builds at identical sparse cost where no closed-form
+   Green function exists. Selling point confirmed: sparse, material-aware, no Green function.
+   **Remaining open refinements:** a non-spherical coil former (cylinder) and an m≠0 tesseral target to
+   drop the residual spherical symmetry; wiring the inverse through `radia.streamfunction`'s ACA-TSVD
+   with the solve-oracle (applicability already settled by `demo_jj`).
+   - **[SETTLED, `demo_jj_aca_tsvd_on_dtn_matrix.py`]** *Can ACA-TSVD be applied to M?* **Yes.** TSVD
+     applies to the global inverse design `psi = M^+ B_target` unchanged and is necessary (M is the
+     compact forward map psi->field; its SVs decay; measured cond(1e-6) ~ 9.5e3). ACA applies
+     **block-wise, as an H-matrix** — NOT a single global low-rank factor: the global M is near-full
+     numerical rank (189/195, near-field), but the material Green kernel G_mu(x_t, y_c) is
+     asymptotically smooth for well-separated clusters even with iron in the gap, so an admissible
+     block (compact source cap + far targets) is low rank (verified 6/20; rSVD with 10 oracle-calls
+     -> 5e-6) while a near block stays dense (18/20). This is the **same near/far split HACApK already
+     runs** on the MMM/MSC matrix. The only change vs free-space ACA is the entry oracle: one column of
+     M = one Kelvin-FEM back-substitution (a fast matvec of M), one row = one adjoint solve — so a
+     randomized SVD / Lanczos is even more natural than entrywise ACA. The remaining engineering is
+     calling `radia.streamfunction`'s ACA-TSVD with that solve-oracle instead of a closed-form
+     Biot-Savart entry.
 
 ## CRITICAL Kelvin-FEM gotchas (each is a ~1e7x blow-up or silent error if missed)
 1. **Gauge:** the open Kelvin compactification has a constant near-null mode; a single ground POINT has
