@@ -1176,12 +1176,23 @@ Both beat the O(N^2) dense exterior coupling, by OPPOSITE mechanisms (demo_o):
     integrals, ~ms assembly, composes with the interior FEM as ONE sparse solve. Even the
     asymptotics favour it (optimal multigrid O(N) vs H-matrix O(N log N)), with no ACA/
     inner-solve constants.
-VERDICT: for a sphere-able truncation where the field is needed INSIDE (most static-apparatus
-/ rotating-machine device problems), Kelvin is the simpler & cheaper data-sparse route -- it
+VERDICT: for a sphere-able truncation, Kelvin is the simpler & cheaper data-sparse route -- it
 is sparse BY CONSTRUCTION, not by compressing an already-dense object. H-matrix/FMM's genuine
-edge is GENERALITY: an ARBITRARY closed Γ (not just a sphere) and the EXTERIOR field at any
-point (post-processing) -- neither of which the Kelvin spherical inversion provides. So "better
-than H-matrix" is true within Kelvin's applicability domain, not universally.
+edge is narrower than it first appears: an ARBITRARY closed Γ (not just a sphere) and mature
+oscillatory-kernel FMM for high-frequency radiation. So "better than H-matrix" is true within
+Kelvin's applicability domain (spherical truncation, static/low-frequency), not universally.
+
+CORRECTION (do NOT credit H-matrix with "exterior field access"): the Kelvin ball IS the
+compactified exterior, so Kelvin ALSO gives the exterior field at ANY point -- one sets up and
+solves on the ball (the prepared, inverted exterior region) and recovers the physical field at
+any exterior x (|x|>R) by the INVERSE Kelvin transform u(x) = (R/rho) u'(R^2 x/rho^2) (3D weight
+(R/rho)^{d-2}): a single FE point-evaluation at the mapped interior point x' plus the conformal
+weight -- no surface integral, no Green function. VERIFIED (demo_p) from just outside Gamma
+(rho=1.2) to far (rho=20): dipole rel err 9e-7..2.4e-5; quadrupole 6e-4..2.3e-2 (the larger FAR
+relative error is the ball's ABSOLUTE geometry floor ~1e-5 amplified where the mapped value is
+tiny -- far points map near the centre, value ~rho^-(n+1)). So exterior-field availability is
+NOT a BEM-only advantage; both BEM and Kelvin provide it. The surviving BEM/H-matrix edge is
+ONLY the arbitrary (non-spherical) Gamma geometry and oscillatory-kernel machinery.
 
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
