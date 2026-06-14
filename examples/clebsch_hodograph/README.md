@@ -806,6 +806,40 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   as in the 2-D throat geometry above) — the point demonstrated is the **solver**: the
   B-input A-formulation resolves the high-μ regime the reduced-Ω cannot.*
 
+- **`clebsch_dipole_saturation_3d_throat.py`** — the **strong 3-D saturation knee** that
+  B(a)'s large-gap dipole could not show, by **throat flux-concentration**. A
+  rectangular iron **window frame** with a thin bottom-limb **throat** in series with
+  the gap: series flux conservation gives `B_throat = B_gap·(A_gap/A_throat)`, so the
+  throat (here `A_gap/A_throat = 2`) reaches `J_sat` **first**; its permeability then
+  collapses (`μ_r→1`), its reluctance explodes, and the **circulating flux clamps**. The
+  operating curve is a **magnetic-circuit 1-shot** (a scalar reluctance root-find per
+  drive, no mesh) — the design map at **linear cost**, exactly as in the 2-D case. *The
+  B(b) bug and its fix:* a throat only concentrates flux if the drive forces
+  **circulating** flux around the closed window. A racetrack coil over the gap drives
+  only the **local** gap flux, so the throat sees nothing (`B_throat ≈ B_gap`, no knee —
+  the failed H-frame/C-core attempts). The cure is a coil that **links** the window — a
+  `rad.ObjFlmCur` loop threading one limb — driving flux all the way around, through the
+  throat. The convergent **B-input A-formulation** FEM (reused from B(a), with **adaptive
+  under-relaxation** to cross the steep knee) validates it: a **linear** solve measures
+  `B_throat/B_gap ≈ 3.8` (> the geometric area ratio 2 — the throat genuinely **funnels**
+  flux, the fix proven), and the nonlinear sweep shows the **throat field** (the
+  bottleneck) **clamp at ≈2.84 T** (`J_sat=2 T`) as the drive grows 8× — `dB_throat/dNI`
+  drops **≈157×** (a strong, converged knee, `resid<1e-4`). *Honest 3-D caveat (a real
+  result):* the **raw gap field does NOT clamp** — it keeps rising, because (1) the
+  linking coil sits beside the gap, so `B_gap` carries the coil's local un-saturable
+  field, and (2) once the throat saturates the circulating flux **leaks around** it in
+  3-D (alternative return paths). So a single saturated throat clamps the field
+  **locally** (at the bottleneck), not everywhere; the lumped circuit's full
+  flux-conservation is the design-level approximation, the FEM is the truth. Figure:
+  `clebsch_dipole_saturation_3d_throat.png` (left: the circuit design map — both fields
+  bend at the knee | right: the FEM — `B_throat` clamps at ≈2.84 T while `B_gap` keeps
+  rising, the honest 3-D leakage). Golden
+  `test_clebsch_dipole_saturation_3d_throat_circuit` (fast, circuit) +
+  `test_clebsch_dipole_saturation_3d_throat_fem` (slow). *This is the iron-bottleneck
+  counterpart to B(a): B(a) demonstrated the **solver** on a gap-dominated dipole; B(b)
+  demonstrates the **strong channeled-flux knee** on a throat-necked circuit, and the
+  honest 3-D limit of throat clamping.*
+
 ## Run
 
 ```bash
@@ -828,6 +862,7 @@ python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function l
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
+python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
 python chaplygin_free_boundary_2d.py          # Frontier 2: the turning-guide free boundary (image)
 python chaplygin_inverse_vonmises_2d.py       # Frontier 2 inverse: von Mises dissolves it (linear)
 python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inverse, flux (lambda) freed
