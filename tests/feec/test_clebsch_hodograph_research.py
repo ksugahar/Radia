@@ -1101,3 +1101,26 @@ def test_scaling_ffag_pole_2d_step3_reshape():
     assert out["ptp_improvement"] > 3.5, out
     # ... by a genuine 2-parameter (non-degenerate) reshape.
     assert abs(o["gamma2"]) > 1.0, o
+
+
+def test_scaling_ffag_pole_2d_saturated_bracket():
+    """Complementary (A vs phi) certification of the SATURATED field index: the
+    same nonlinear operating point solved both ways -- phi (Dirichlet on the
+    poles) and A (Dirichlet on the flux walls, driven to the phi-solve's median
+    flux so both sit at the SAME saturation state).  The nonlinear analogue of
+    Step 1's linear bracket (monotone BH => convex energy => the bracket survives
+    into saturation): k_phi(r) and k_A(r) converge from discretisation-
+    complementary sides, so a TIGHT gap certifies the saturated k(r) is physics,
+    not mesh -- for BOTH the naive pole (a droop) and the reshaped pole (flat)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    # naive pole: the bracket certifies the saturation droop is real.
+    bn = sf.bracket_saturated(B_design=1.8, maxh=0.010)
+    assert bn["B_gap_max"] > 2.0, bn                 # genuinely saturated
+    assert bn["iters_phi"] < 40 and bn["iters_A"] < 40, bn   # both converged
+    assert bn["bracket_gap_max"] < 5e-3, bn          # A and phi agree on k(r)
+    assert 4.6 < bn["k_mid_mean"] < 4.9, bn
+    # reshaped pole: the bracket certifies the FLATTENED k(r) is real (not mesh).
+    br = sf.bracket_saturated(B_design=1.8, gamma=-0.85, gamma2=42.9, maxh=0.010)
+    assert br["bracket_gap_max"] < 5e-3, br

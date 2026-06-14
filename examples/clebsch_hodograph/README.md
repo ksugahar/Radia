@@ -988,7 +988,18 @@ ACTUAL operating field index. Result at the super-ferric design excitation
 `gamma2,+42.9`) nulls both to `~0.002` and flattens the field index **7.2x**
 (`ptp 0.089 -> 0.012`). Figure `scaling_ffag_pole_2d_reshape.png` (left: `k(r)`
 naive vs reshaped vs `k_design` | right: the pole-face shape change). Golden
-`test_scaling_ffag_pole_2d_step3_reshape`. *Together Steps 1-3 are the
+`test_scaling_ffag_pole_2d_step3_reshape`.
+
+**Complementary certification into saturation (`bracket_saturated`):** the
+SATURATED field index is certified the same way Step 1 certifies the linear one
+-- the nonlinear operating point is solved BOTH ways, `phi` (Dirichlet on the
+poles, Picard on `mu(B)`) and `A` (the flux-function dual, Dirichlet on the flux
+walls, driven to the `phi`-solve's median flux `Psi` so both sit at the SAME
+saturation state, Picard on `nu(B)`). Monotone BH => convex energy => the
+bracket survives into saturation: `k_phi(r)` and `k_A(r)` agree to `~1e-3` at
+`B_gap` up to `2.3 T`, certifying BOTH the naive pole's droop AND the reshaped
+pole's flat `k(r)` are physics, not mesh. Golden
+`test_scaling_ffag_pole_2d_saturated_bracket`. *Together Steps 1-3 are the
 saturation-robust achromatic scaling pole: certify the index (A/phi bracket),
 measure the saturation droop, and reshape it flat — all in the hodograph
 (log/von Mises) chart, single-valued shape optimization.*
