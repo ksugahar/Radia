@@ -449,6 +449,31 @@ edge-finite-element results / bubble-system placement", IEEJ (JP); Sugahara
 2020, "Implicit symplectic flux-line tracking" (noting the circular-accelerator
 beam-orbit-tracking analogy).*
 
+### `flux_line_realfield_ngsolve.py` — the diagnostic on a REAL solved FE field
+
+The *field* face of the same idea carried onto an actual NGSolve solve (the
+script above isolated the *integrator* face on an analytic field). A 2-D
+magnetostatic solve `−div(grad A_z) = J` for a current dipole gives `A_z ∈ H1`;
+one flux line is traced for **three reconstructions of the same solve with the
+same RK4 integrator**, so the only variable is the reconstruction:
+
+- **de Rham `rot(grad A_z)` = `(∂A_z/∂y, −∂A_z/∂x)`** — the edge-FE `B = curl A`
+  (Noguchi): a **closed 2-form** exactly tangent to the flux surfaces
+  (`B·∇A_z = 0` pointwise, misalignment `0.0`) → the flux line **closes** (`A_z`
+  drift `7e-4`, returns to `3e-4`, integrator floor).
+- **nodal-averaged (`VectorH1` order 1)** — the realistic, parameter-free
+  edge-vs-nodal leak: forcing both components continuous breaks the de Rham
+  structure (misalignment `3.7e-2`) → **spirals** (`A_z` drift `21×` worse).
+- **explicit charge leak `B + ε∇A_z` (`ε = 0.06`)** — the controlled
+  de Rham-complement admixture (misalignment `6e-2`) → **spirals** dramatically
+  (`A_z` drift `1.34`, `~2000×` worse, never returns).
+
+This turns the de Rham picture into the **field-reconstruction-quality
+diagnostic for the HDiv-VIM migration**: trace a flux line; if it spirals, the
+reconstruction has leaked solenoidal content — the visible symptom of the
+`M_mass⁻¹ N m` leak. The 3-D generalisation is helicity-obstructed (next file).
+*Same refs as the symplectic example (Noguchi edge-FE flux lines).*
+
 ### `clebsch_3d_closing_condition.py` — the 3-D frontier: helicity is the obstruction
 
 The 2-D flux line always has a conserved `A_z` (1.5 DOF → always integrable, always
@@ -620,6 +645,7 @@ python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inv
 python hdiv_vim_clebsch_loopstar.py           # de Rham capstone: HDiv-VIM loop modes ARE Clebsch fields
 python hdiv_vim_clebsch_2d_az.py              # 2-D unification: A_z IS the Clebsch potential
 python flux_line_closure_symplectic.py        # dynamical face: flux-line closure (de Rham + symplectic)
+python flux_line_realfield_ngsolve.py         # dynamical face on a REAL FE field: de Rham closes, leaky spirals
 python clebsch_3d_closing_condition.py        # 3-D frontier: helicity obstructs the global Clebsch pair
 ```
 
