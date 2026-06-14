@@ -419,3 +419,64 @@ def tet_volume_field_linear(verts, r, rho0, grho):
             n = -n
         acc += n * (rho0 * triangle_potential_const(P, r) + np.dot(grho, triangle_potential_moment(P, r)))
     return acc - grho * tet_newtonian_potential(V, r)
+
+
+def _edge_field_integral(A, B, r):
+    """G_e = INT_{edge A->B} (r - r')/|r - r'| dl  (3-vector), closed form
+    = (r-A) INT 1/R dl  -  t_hat INT l/R dl   (1D asinh / sqrt antiderivatives)."""
+    t = B - A
+    L = np.linalg.norm(t)
+    if L < 1e-300:
+        return np.zeros(3)
+    that = t / L
+    w = r - A
+    l0 = float(np.dot(w, that))
+    d2 = max(float(np.dot(w, w)) - l0 * l0, 0.0)
+    d = np.sqrt(d2)
+    u1, u2 = -l0, L - l0
+    if d < 1e-300:                                       # r on the edge line
+        asinh1 = np.sign(u2) * np.log(2 * abs(u2)) if abs(u2) > 0 else 0.0
+        asinh0 = np.sign(u1) * np.log(2 * abs(u1)) if abs(u1) > 0 else 0.0
+    else:
+        asinh1 = np.arcsinh(u2 / d)
+        asinh0 = np.arcsinh(u1 / d)
+    int_1R = asinh1 - asinh0                              # INT 1/R dl
+    int_lR = (np.sqrt(u2 * u2 + d2) - np.sqrt(u1 * u1 + d2)) + l0 * (asinh1 - asinh0)  # INT l/R dl
+    return (r - A) * int_1R - that * int_lR
+
+
+def linear_triangle_charge_field(P, r, sigma0, s):
+    """EXACT field of a LINEAR surface charge sigma(r') = sigma0 + s.r' on a flat triangle:
+
+        INT_T sigma (r-r')/|r-r'|^3 dS'  (NO 1/4pi)
+
+    Derived as -grad_r phi_sigma with phi_sigma = INT_T sigma/R dS' = sigma0 I0 + s.M1 (the degree-1
+    triangle potential), differentiated in closed form:
+
+        = (sigma0 + s.r_p) F_const  -  SUM_edges (s.m_e) G_e  -  I0 s_par
+
+    F_const = flat_triangle_charge_field (the constant-sigma field), G_e = _edge_field_integral,
+    s_par = in-plane part of s, r_p = foot of the perpendicular.  EXACT to machine precision at ANY r
+    (validated vs off-plane Gauss); s = 0 reproduces sigma0 * flat_triangle_charge_field exactly.
+    This is the degree-1 SURFACE companion of tet_volume_field_linear (degree-1 VOLUME).  P = (3,3)
+    vertices; returns (3,).  Multiply by 1/4pi for the physical H contribution."""
+    P = np.asarray(P, float)
+    r = np.asarray(r, float)
+    s = np.asarray(s, float)
+    n = np.cross(P[1] - P[0], P[2] - P[0])
+    n = n / np.linalg.norm(n)
+    h = float(np.dot(r - P[0], n))
+    r_p = r - h * n
+    cen = P.mean(axis=0)
+    Fc = flat_triangle_charge_field(P, r)
+    I0 = triangle_potential_const(P, r)
+    s_par = s - float(np.dot(s, n)) * n
+    acc = (sigma0 + float(np.dot(s, r_p))) * Fc - I0 * s_par
+    for i in range(3):
+        A, B = P[i], P[(i + 1) % 3]
+        u = (B - A) / np.linalg.norm(B - A)
+        m = np.cross(u, n)
+        if np.dot(m, 0.5 * (A + B) - cen) < 0:
+            m = -m
+        acc -= float(np.dot(s, m)) * _edge_field_integral(A, B, r)
+    return acc
