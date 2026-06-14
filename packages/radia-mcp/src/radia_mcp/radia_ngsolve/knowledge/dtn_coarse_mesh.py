@@ -1575,6 +1575,14 @@ for FREE-SPACE exteriors. The defensible NEW angle for both papers = the LAYERED
 (+ the spectral DtN datasheet, + the wave/PML extension). Re-search the layered-specific literature
 (Michalski-Mosig; geophysical-EM transformed-FE) before claiming, but it is a stronger position than the
 free-space lightening that Remacle already published.
+VERIFIED low-freq (demo_aa): the QUASI-STATIC EDDY-CURRENT (diffusive) conducting-half-space Sommerfeld
+integral [R=(krho-u1)/(krho+u1), u1=sqrt(krho^2+i*omega*mu*sigma)] converges and is benign at EVERY
+induction number N=sqrt(omega mu sigma)*h (monotone exp tail, no real poles/branch cuts); hits the exact
+magnetostatic limits R->0 (N->0, transparent) and R->-1 (N->inf, diamagnetic mirror = -1/R_im, 4.6e-3);
+and at moderate-to-high induction (N>=3) reduces to the textbook BANNISTER/WAIT COMPLEX IMAGE (image at
+complex depth h+2/gamma, gamma=sqrt(i omega mu sigma); 3e-4 at N=10) -- the low-frequency ancestor of
+DCIM, a leading-order approx that degrades at low N (the integral is exact at all N). => the definitive
+"Sommerfeld works at low frequency" evidence in the SA-relevant eddy-current regime (sugahara2022).
 
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
