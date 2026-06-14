@@ -2487,6 +2487,35 @@ WLS+width+passivity to the IABC truncation. UPDATED time-domain map: low-freq=Ke
 eddy-current/diffusion=passive sqrt(s) SIBC Foster ladder (demo_xx); HIGH-FREQ wave IABC=WLS wideband
 passive constant shells (demo_wb) -- the demo_zz "hard/non-passive" verdict applies only to the
 exact-null route, NOT to the WLS-wideband route, which is clean.
+
+URN (UNIVERSAL RELAXATION NETWORK) as the time-domain REALIZATION layer -- integration assessment
+(VERIFIED 2026-06-15; user pointed to the existing impl examples/universal_relaxation_network, IEEE
+Access paper). WHAT URN IS: a KAN-inspired fitter that represents a complex frequency response Z(omega)
+as a SPARSE sum of CIRCUIT-COMPATIBLE PASSIVE basis functions (Debye, Cole-Cole/Davidson, Havriliak-
+Negami, CPE, Warburg=1/sqrt(jw), skin-effect~sqrt(jw), RLC resonance, viscoelastic), each with a direct
+RLC-ladder / SPICE equivalent (generate_spice_netlist) -> the fit IS a passive, causal, time-domain
+realization. L1-sparse model selection + frequency-attention; benchmarked vs vector fitting; validated
+on NASA-battery EIS and TDK-ferrite mu(omega). API: train_urn(freqs, Z_data, config)->model.
+ROLE FOR US: the passive, circuit/SPICE-realizable TIME-DOMAIN realization layer for dispersive
+frequency responses -- the answer to "the explicit frequency dependence is fine, can URN handle it?".
+VERIFIED (torch 2.11 in the worktree):
+  * URN runs on our targets. Fast-config (1200-1500 epochs) fits are MODERATE: the eddy-current/
+    diffusion per-mode DtN ~6.5% mean (it GROWS like sqrt(jw), awkward for mostly-bounded relaxation
+    bases -- skin-effect is the matching grower), and the shell mu(omega) ~9% mean (sharp Im(mu)=-10.6
+    resonance near w~1). A full config (6000 epochs, attention, more bases) or an asymptote-subtracted
+    (DtN minus its -(n+1) static and -a*sqrt(jw mu sig) SIBC terms -> bounded correction) target would
+    fit far better; not yet done.
+  * KEY (confirms demo_zz FROM THE REALIZATION SIDE): URN's bases are PASSIVE, and the exact-null
+    high-freq shell has Im(eps) in [+0.04,+1.04] (NON-passive) while Im(mu) in [-10.6,-0.85] (passive).
+    So NO passive URN model can realize the exact-null shell -- the demo_zz obstruction, seen again.
+    URN realizes the PASSIVE responses: the magnetic mu(omega), the demo_wb WLS-wideband design, and
+    (natively, via Warburg/skin = sqrt(jw)) the eddy-current/diffusion DtN/SIBC of demo_xx.
+NET: the clean time-domain high-freq path = WLS-wideband PASSIVE design (demo_wb) realized as a circuit
+by URN; the dispersive route needs PASSIVE materials (URN's domain), which the exact-null optimum is
+not. BOUNDARY: URN lives in the public Radia repo (examples/), not the commercial converters -- fine to
+use/cite; it is the user's own method. NEXT (deferred, user's call): push URN to a tight (<~2%) circuit
+fit on a chosen PASSIVE target (asymptote-subtracted diffusion DtN is the best showcase: Warburg/skin =
+sqrt(jw) is native), then emit the SPICE/ADE for an actual time-domain run.
 """
 
 
