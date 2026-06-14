@@ -1043,3 +1043,35 @@ def test_scaling_ffag_pole_2d_step1():
     #      (2-D fringing softens it; the certified deficit Steps 2-3 close).
     assert 4.7 < r["k_interior_mid_mean"] < 5.0, r
     assert r["k_design"] == 5.0, r
+
+
+def test_scaling_ffag_pole_2d_step2_saturation():
+    """Step 2 (saturation): a super-ferric iron pole (Froehlich mu(B)) droops the
+    field index k(r) at the high-r (high-B) edge as the drive rises -- the
+    achromaticity degrades at the high-energy edge of the momentum acceptance
+    (the super-ferric operating wall the Step-3 reshape closes).
+
+    Referenced to the lowest (unsaturated) drive, Dk(r) = k - k_ref isolates
+    the saturation from the geometric baseline.  Locks: monotone deepening of
+    the high-r index loss with drive; the high-r edge droops MORE than the low-r
+    edge (the index TILTS); a significant loss once the high-r end is deep in
+    saturation."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    out = sf.run_step2(b_targets=(0.6, 1.4, 2.6), maxh=0.010)   # coarser for CI
+    L = out["levels"]
+    Bk = out["Bk_iron"]
+    # the reference (unsaturated) level has Dk == 0 by construction.
+    assert abs(L[0]["dk_hi"]) < 1e-9 and abs(L[0]["dk_tilt"]) < 1e-9, L[0]
+    # all solves converged (Picard well inside the cap).
+    assert all(x["iters"] < 40 for x in L), L
+    # the high-r index loss deepens MONOTONICALLY with drive.
+    assert L[0]["dk_hi"] > L[1]["dk_hi"] > L[2]["dk_hi"], [x["dk_hi"] for x in L]
+    # at the top drive the high-r end is DEEP in saturation (B >> Bk) ...
+    assert L[2]["B_gap_max"] > 2.0 * Bk, L[2]
+    # ... and the high-r index has dropped significantly below baseline.
+    assert L[2]["dk_hi"] < -0.15, L[2]
+    # the saturation TILTS the index: the high-r edge droops more than low-r.
+    assert L[2]["dk_tilt"] < -0.05, L[2]
+    assert L[2]["dk_hi"] < L[2]["dk_lo"], L[2]      # high-r loss > low-r loss
