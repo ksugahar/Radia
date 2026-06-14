@@ -595,6 +595,45 @@ conflict with Netgen's expected library versions, causing initialization failure
 
 **Rule of thumb**: Always `import ngsolve` (and any `from netgen...` imports) at
 the very top of the script, before adding Cubit to `sys.path` or importing `cubit`.
+
+## Standalone cubit.init() Segfaults in the Radia Panel (verified 2026-06)
+
+**Symptom**: From system Python, `import cubit; cubit.init([...])` prints the banner,
+auto-plays `site-packages/radia/panels/startup.py` ("[Radia] Panel debug log: ..."),
+then crashes with exit code -1073741819 (0xC0000005 access violation) BEFORE your first
+`cubit.cmd()` runs. Happens with or without `-nographics` and regardless of the ngsolve
+import order above. Cause: when the Radia Cubit *panel* plugin is installed, its
+`startup.py` is auto-played on init and segfaults under headless embedded Python (it
+expects a GUI main window). The single-process recipe above only works when that panel
+plugin is absent.
+
+**Fix -- robust two-process pattern** (use this whenever the Radia panel is installed):
+
+  1. EXPORT in a child process via the real Cubit executable -- it degrades the panel
+     gracefully ("Cubit main window not found -- Radia Export menu not installed", then
+     continues) instead of crashing:
+
+         coreform_cubit.exe -nographics -batch -nojournal mesh_export.py
+
+     In a script launched this way, `cubit` is PRE-INJECTED -- do NOT `import cubit` or
+     call `cubit.init()` (that re-inits and can crash). Just use `cubit.cmd(...)`.
+
+  2. LOAD the resulting `.vol` in a SEPARATE ngsolve-only process (no `import cubit`).
+
+  This split also sidesteps the NGSolve/Cubit DLL conflict entirely -- the two libraries
+  never share a process, so import order stops mattering.
+
+**`-batch` .py playback is LINE-ORIENTED**: multi-line Python compound statements
+(for/if/try blocks, multi-line parenthesized tuples) break with
+`SyntaxError: '(' was never closed`. Keep every statement on ONE physical line.
+`print()` output may be swallowed -- write results to a file and read it back.
+
+**Exit code 2 / "ERROR: Errors found during session." is benign teardown noise** from the
+panel's "main window not found"; verify success from the OUTPUT FILE, not the exit code.
+
+Verified 2026-06-14: hex cylinder (R=0.5, H=2), order-3 `export netgen` (572 hexes,
+770 -> 25368 curved nodes) -> NGSolve volume 1.57082 vs pi*R^2*H = 1.57080, error
+0.0017% (vs ~0.4% for a 1st-order hex cylinder: curving cuts the error ~250x).
 """
 
 DELETED_APIS = """
