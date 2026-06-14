@@ -2106,6 +2106,29 @@ the high multipoles have decayed so a fixed-order impedance then suffices) but b
     true on accuracy; the real win is qualitative + the radiation-BC case where distance genuinely helps.
 PAPER POINT: separate ORDER (radiation-BC fixed vs PML all-order) from PLACEMENT (Kelvin -> infinity);
 the DtN spectrum exhibits both axes at once.
+
+WHAT KELVIN+PML ACTUALLY BUYS -- NOT far placement, but EXTERIOR SCATTERERS (demo_rr, verified
+2026-06-15; user: "if it's only that you can place the PML farther, does Kelvin+PML have much merit?").
+HONEST two-part answer:
+  PART 1 (VACUUM): NO meaningful merit. A PML is distance-insensitive (demo_qq), so for a compact source
+  in vacuum the Kelvin radial FE (+PML-quality inner) and a plain PML right at the truncation BOTH
+  reproduce the exact vacuum DtN Lambda_n(k0 a) to ~1e-4. A plain PML is then SIMPLER (no inverted
+  medium, no centre singularity/excision). The user's skepticism is correct for vacuum -- "far
+  placement" alone is not a real advantage because a PML already absorbs all-order at any distance.
+  PART 2 (EXTERIOR SCATTERER / MATERIAL): YES, decisively -- the genuine merit and the IEICE-2024
+  motivation (antenna with multipath from mountains/buildings/ground). When scatterers sit OUTSIDE the
+  truncation, the Kelvin map conformally compactifies the WHOLE exterior INCLUDING those objects into a
+  bounded mesh of FIXED cost (independent of their distance). A PML is a VACUUM absorber that cannot
+  contain a scatterer. VERIFIED (a=1, k0a=4; scalar; exterior shell [1.5,2], eps_r=4 -> m=2; exact
+  3-region radial transfer): the shell SHIFTS the truncation DtN by O(1) (|scat-vacuum| ~ 1.4..2.5,
+  comparable to |DtN| itself); the Kelvin FE with the scatterer mapped into the inverted shell
+  REPRODUCES the exact with-scatterer DtN to ~1e-4 (n=1..4), while a plain VACUUM PML gives the vacuum
+  DtN -> WRONG by the full O(1) shift (rel error 0.39..1.6). NET: do NOT sell Kelvin+PML on "places the
+  PML farther" (false benefit -- a PML doesn't care about distance); sell it on conformally
+  compactifying the exterior + its scatterers/material/ground into a bounded fixed-cost mesh that a
+  vacuum PML cannot represent. For pure vacuum radiation from a compact source, a plain PML at the
+  truncation is simpler and equally accurate -- Kelvin+PML there is over-engineering. (Mechanism is the
+  radiating analog of the static demo_t/v/bb exterior-material results.)
 """
 
 
