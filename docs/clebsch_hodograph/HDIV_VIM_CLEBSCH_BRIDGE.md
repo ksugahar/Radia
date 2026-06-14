@@ -91,6 +91,20 @@ nodal-averaged reconstruction (`3.7e-2`) and an explicit charge admixture
 leaked solenoidal content"* is a directly usable field-quality test for the
 HDiv-VIM migration.
 
+**Order vs representation** (`derham_closure_order_sweep.py`, golden
+`test_derham_closure_order_sweep`) answers two old questions: can Noguchi's de Rham
+flux line be *extended* to a symplectic tracker, and was Kameari's "2nd-order elements
+don't close" a de Rham issue? Measured: `B = curl A` is divergence-free for **any**
+conforming `A` — edge `H(curl)` *or* nodal `[H1]³` — at **every order** (`~1e-15`),
+so "edge vs nodal `A`" is *not* the closure discriminator. The closure-breaker is
+*leaving* the de Rham representation — nodally **smoothing** `B` — whose spurious
+divergence falls with order but is **never zero** (`1.2e-2 → 1.3e-3 → 6e-5` at
+`p = 1,2,3`): the flux lines do not close *even at 2nd order*, while the native
+de Rham `B` closes at every order. Closure is governed by the **representation**, not
+the order; de Rham is the closed-2-form precondition that makes the symplectic /
+volume-preserving tracker meaningful (the Noguchi extension; Bossavit / Nédélec edge
+elements).
+
 ## The open frontier (3-D helicity) — now characterised
 
 In 3-D the Clebsch representation needs **two** potentials `(α,β)` for three
@@ -134,7 +148,10 @@ foliated fields). The concrete open questions:
     symplectic integrator (`flux_line_closure_symplectic.py`; Noguchi / Sugahara
     2020), and the same diagnostic **on a real solved NGSolve field**: the de Rham
     `rot(grad A_z)` reconstruction's flux line closes while nodal-averaged / charge-
-    admixed reconstructions spiral (`flux_line_realfield_ngsolve.py`);
+    admixed reconstructions spiral (`flux_line_realfield_ngsolve.py`); and the
+    **order-vs-representation** sweep — closure is set by the de Rham representation,
+    not the polynomial order, so a de Rham 2nd-order field closes while a nodally-
+    smoothed one does not, even at 2nd order (`derham_closure_order_sweep.py`);
   - the 3-D closing condition — **helicity** is the obstruction to a global
     Clebsch pair (`clebsch_3d_closing_condition.py`: Clebsch `h = −7e-17`, ABC
     `h = 3(2π)³ ≠ 0` + chaotic Poincaré).
