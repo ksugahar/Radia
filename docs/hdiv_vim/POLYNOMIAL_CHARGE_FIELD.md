@@ -1,11 +1,16 @@
 # Polynomial-charge field kernel (the order≥2 field)
 
-Status: **Step 1 done** (external field, `reconstruct_field_polynomial`, golden-locked,
-**tetrahedral AND hexahedral**); **the analytic charge-field kernel is done at degree 0, 1, 2 (closed
-form) AND arbitrary degree (general assembler)** — `flat_/linear_/quadratic_triangle_charge_field`,
-`tet_volume_field_linear/quadratic`, and the general `polynomial_triangle_charge_field` /
-`tet_volume_field_polynomial` (validated vs Gauss for cubic/quartic, machine precision; 27 golden tests).
-Step 3 (wiring the fast internal field into the nonlinear `set_field`) and the C++ port remain.
+Status: **the whole Step 1 → 2 → 3 pipeline is in place** (36 golden tests). **Step 1** external field
+(`reconstruct_field_polynomial`); the **analytic charge-field kernel** at degree 0/1/2 (closed form) AND
+arbitrary degree (general assembler), flat-tet + affine-hex + curved-surface, with a **C++ port** of the
+degree-1/2 kernels; **Step 2** the fast charge-coefficient assembly `assemble_demag_field` (sums the C++
+kernels, exact at any r); **Step 3** the field-based nonlinear demag solve `solve_demag_picard`
+(under-relaxed Picard, centroid collocation → HDiv projection) — validated on the uniform sphere
+(linear χ → the analytic `M = χH_ext/(1+χ/3)`; mild saturating → the 1-D scalar demag fixed point).
+**Remaining:** the genuine order≥2 NON-uniform projection (H_demag at quad points → VectorL2 order-p →
+HDiv), a convex B-input (A-formulation) solve for STIFF / strongly-saturating materials (the H-input
+Picard is stiff there — effective χ ≫ 3 at the knee), curved/distorted-hex VOLUME, and an H-matrix
+accelerated / C++ assembly for scale.
 
 The kernel is **element-type agnostic**: the quadrature points / weights / normals come from NGSolve's
 own `mesh.GetTrafo` + `IntegrationRule(el.type)` + `specialcf.normal`, so the *same* code handles tet
