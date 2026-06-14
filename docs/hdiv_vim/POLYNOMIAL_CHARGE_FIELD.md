@@ -209,13 +209,34 @@ r'^{α-e_i}/R ]` (from `1/R = ½∇'²R` + Euler), bottoming at `PhiTet`, reduci
 Validated vs Gauss to **machine precision** for cubic (surface + volume) and quartic (surface), and
 against the degree-2 closed forms. All pure-Python, no debug-probe runtime dependency.
 
-**Remaining work:** (a)
-**curved faces** (flat-triangle only) — note ngsolve.bem's `LaplaceSL` is curved+triangle but gives the
-**potential**, not the field gradient (`grad G` is a documented ngsolve.bem gap, so it cannot be reused
-here); (b) **hex** internal; (c) a **C++ port** of the moment building blocks + a
-**charge-coefficient assembly** (sum the kernels weighted by the polynomial charge coeffs from
-`build_charge_gram`'s B, H-matrix accelerated). Then **Step 3** wires the (fast) internal field into the
-nonlinear `set_field`.
+## C++ port of the degree-1/2 kernels (DONE — the order≤2 fast path)
+
+The degree-1/2 closed forms are ported to C++ (`src/core/rad_hdiv_vim.cpp`, declared in `.h`,
+probes in `radia_pybind.cpp`): `TriMoment1` (`∫_T r'/R`), `TriMoment2` (`∫_T r'⊗r'/R`), `TetMoment1`
+(`∫_V r'/R`), `TetVolFieldLinear` / `TetVolFieldQuadratic`, `LinTriField` / `QuadTriField` — built on the
+existing `TriPotential`/`TriField`/`PhiTet`/`TetField`. Each is validated **entry-by-entry vs its Python
+reference to machine precision** (`test_cpp_degree12_kernels_match_python`, probes `_hdiv_tri_moment1/2`,
+`_hdiv_tet_moment1`, `_hdiv_{lin,quad}_tri_field`, `_hdiv_tet_volfield_{linear,quadratic}`). This is the
+fast per-element kernel for the practical order≤2 case (`ρ = −div M` linear, `σ = M·n` quadratic).
+
+**Scope of the analytic kernels (important):** the analytic near/internal kernels (degree-0/1/2 closed
+forms, the general assembler, the C++ port, and `reconstruct_field_internal`) are **flat-tetrahedron
+volume + flat-triangle surface only**, for any *charge* polynomial degree. They do **not** yet handle
+hex volumes, quad faces, or **curved (high-order) geometry**. The only path that is element-agnostic and
+curved-capable today is the **external quadrature reference** `reconstruct_field_polynomial` (it reads
+`div M` / `M·n` via `GetTrafo` + `IntegrationRule(el.type)` + `specialcf.normal`, so hex / tet / prism,
+flat / curved, any FES order — but it is external-only and quadrature-based, not the analytic fast path).
+
+**Remaining work:** (a) **flat-faced hex / prism** — generalise the analytic tet face-loop to an
+arbitrary flat-faced polytope (triangulate each planar quad face); the volume-potential recursion
+`∫_V q/R = 1/(d+2)[−Σ_f h_f ∫_face q/R + r·∫_V ∇q/R]` is already polytope-general (it only needs planar
+faces + their `h_f`). (b) **curved faces / distorted (trilinear) hex** — needs singularity subtraction
+(flat-triangle analytic part at the singular point + smooth curved-minus-flat remainder by ordinary
+Gauss); note ngsolve.bem's `LaplaceSL` is curved+triangle but gives the **potential**, not the field
+gradient (`grad G` is a documented ngsolve.bem gap, so it cannot be reused here). (c) the
+**charge-coefficient assembly** (sum the C++ kernels over elements/faces weighted by the polynomial
+charge coeffs from `build_charge_gram`'s B, H-matrix accelerated) + a C++ port of the arbitrary-degree
+general recursion. Then **Step 3** wires the (fast) internal field into the nonlinear `set_field`.
 
 ## Step 1 — validated (`reconstruct_field_polynomial`)
 
