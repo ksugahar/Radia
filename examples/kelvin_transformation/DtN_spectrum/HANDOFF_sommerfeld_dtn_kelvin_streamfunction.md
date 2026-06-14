@@ -66,6 +66,19 @@ Promote `demo_ff` from the concentric/modal toy to a **general coil inverse desi
    layered-Green / FE-BEM baseline (sparsity, conditioning, FE-coupling) — the selling point is "sparse,
    material-aware, no Green function". Also: a non-spherical coil former (cylinder) and an m≠0 tesseral
    target to drop the residual spherical symmetry.
+   - **[SETTLED, `demo_jj_aca_tsvd_on_dtn_matrix.py`]** *Can ACA-TSVD be applied to M?* **Yes.** TSVD
+     applies to the global inverse design `psi = M^+ B_target` unchanged and is necessary (M is the
+     compact forward map psi->field; its SVs decay; measured cond(1e-6) ~ 9.5e3). ACA applies
+     **block-wise, as an H-matrix** — NOT a single global low-rank factor: the global M is near-full
+     numerical rank (189/195, near-field), but the material Green kernel G_mu(x_t, y_c) is
+     asymptotically smooth for well-separated clusters even with iron in the gap, so an admissible
+     block (compact source cap + far targets) is low rank (verified 6/20; rSVD with 10 oracle-calls
+     -> 5e-6) while a near block stays dense (18/20). This is the **same near/far split HACApK already
+     runs** on the MMM/MSC matrix. The only change vs free-space ACA is the entry oracle: one column of
+     M = one Kelvin-FEM back-substitution (a fast matvec of M), one row = one adjoint solve — so a
+     randomized SVD / Lanczos is even more natural than entrywise ACA. The remaining engineering is
+     calling `radia.streamfunction`'s ACA-TSVD with that solve-oracle instead of a closed-form
+     Biot-Savart entry.
 
 ## CRITICAL Kelvin-FEM gotchas (each is a ~1e7x blow-up or silent error if missed)
 1. **Gauge:** the open Kelvin compactification has a constant near-null mode; a single ground POINT has
