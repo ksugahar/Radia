@@ -155,6 +155,44 @@ def validate_vs_fem(samples=((0.012, (0.008, 0.024)),), mur0=200.0, Bk=1.0,
     }
 
 
+def size_for_clamp(target_clamp_Psi, H=0.04, depth_lo=0.002, depth_hi=0.0195,
+                   n_bisect=42, **kw):
+    """INVERSE DESIGN at linear cost: size the throat so the flux regulator CLAMPS at a
+    target flux level (the knee flux ``target_clamp_Psi``).  This is the engineer's
+    actual step -- spec -> geometry -- not just a forward sweep.  The clamp knee
+    ``knee_Psi`` is monotone-DECREASING in the throat depth (a narrower throat clamps
+    lower), so bisect on the depth; every candidate is a handful of 1-shot quadratures,
+    so the whole sizing is milliseconds and mesh-free.  Returns the sized geometry and
+    the achieved clamp (verify it against the full nonlinear FEM via ``validate_vs_fem``
+    at the sized depth to CLOSE the design loop)."""
+    t0 = time.perf_counter()
+
+    def knee(d):
+        return transfer_curve(d, H=H, **kw)["knee_Psi"]
+
+    lo, hi = depth_lo, depth_hi
+    klo, khi = knee(lo), knee(hi)                     # klo (wide) > khi (narrow)
+    for _ in range(n_bisect):
+        mid = 0.5 * (lo + hi)
+        if knee(mid) > target_clamp_Psi:             # too much clamp flux -> narrow it
+            lo = mid
+        else:
+            hi = mid
+    depth = 0.5 * (lo + hi)
+    tc = transfer_curve(depth, H=H, **kw)
+    return {
+        "target_clamp_Psi": float(target_clamp_Psi),
+        "sized_depth": float(depth),
+        "sized_w_throat": float(H - 2.0 * depth),
+        "achieved_knee_Psi": float(tc["knee_Psi"]),
+        "achieved_knee_drive": float(tc["knee_drive"]),
+        "achieved_knee_B": float(tc["knee_B"]),
+        "rel_err": float(abs(tc["knee_Psi"] - target_clamp_Psi) / target_clamp_Psi),
+        "sizing_seconds": float(time.perf_counter() - t0),
+        "feasible_Psi_range": [float(khi), float(klo)],   # [narrowest, widest]
+    }
+
+
 def cost_summary(mp, val):
     """The linear-cost win: M map points at 1 quadrature each vs the equivalent
     nonlinear FEM (M points x mean Picard iterations linear solves)."""
@@ -169,15 +207,19 @@ def cost_summary(mp, val):
     }
 
 
-def run(with_fem=False):
+def run(with_fem=False, target_clamp_mWb=12.0):
     mp = design_map()
     curves = [transfer_curve(d) for d in mp["depths"]]
-    out = {"design_map": mp, "transfer": curves}
+    sizing = size_for_clamp(target_clamp_mWb * 1e-3)        # spec -> geometry (linear cost)
+    out = {"design_map": mp, "transfer": curves, "sizing": sizing}
     if with_fem:
         val = validate_vs_fem(samples=((0.008, (0.008, 0.024)),
                                        (0.016, (0.004, 0.012))))
         out["validation"] = val
         out["cost"] = cost_summary(mp, val)
+        # CLOSE the design loop: FEM-verify the SIZED design at its clamp knee.
+        out["sizing_fem"] = validate_vs_fem(
+            samples=((sizing["sized_depth"], (sizing["achieved_knee_Psi"],)),))
     return out
 
 
@@ -208,8 +250,15 @@ def _plot(out):
         axB.plot(np.array(c["drive"]), np.array(c["Psi"]) * 1e3, "-", color=colors[i % 4],
                  label=f"w={c['w_throat']*1e3:.0f} mm")
         axB.plot(c["knee_drive"], c["knee_Psi"] * 1e3, "o", color=colors[i % 4], ms=6)
+    sz = out.get("sizing")
+    if sz is not None:                                # the INVERSE design: spec -> width
+        axB.axhline(sz["target_clamp_Psi"] * 1e3, color="0.5", ls="--", lw=0.9)
+        axB.plot(sz["achieved_knee_drive"], sz["achieved_knee_Psi"] * 1e3, "*",
+                 color="k", ms=13,
+                 label=f"sized w={sz['sized_w_throat']*1e3:.1f} mm "
+                       f"(clamp {sz['target_clamp_Psi']*1e3:.0f} mWb/m)")
     axB.set_xlabel("drive  $\\Delta\\Phi$  [A]"); axB.set_ylabel("flux  $\\Psi$  [mWb/m]")
-    axB.set_title("flux regulator: $\\Psi$(drive) CLAMPS at saturation\n(narrower throat clamps lower; o = knee)")
+    axB.set_title("flux regulator: $\\Psi$(drive) CLAMPS at saturation\n(narrower throat clamps lower; o = knee, * = sized)")
     axB.set_xlim(0, max(c["knee_drive"] for c in out["transfer"]) * 3.0)
     axB.legend(fontsize=8, loc="lower right")
 
@@ -250,6 +299,18 @@ def main():
         print(f"    w_throat = {c['w_throat']*1e3:4.0f} mm:  clamp knee at Psi = {c['knee_Psi']*1e3:.2f} "
               f"mWb/m  (B_throat = {c['knee_B']:.2f} T, drive = {c['knee_drive']:.0f} A)")
     print(f"    -> a narrower throat clamps the flux at a LOWER level (knee Psi ~ Bk*w_throat).")
+    sz = out["sizing"]
+    print(f"  INVERSE DESIGN (spec -> geometry, linear cost):")
+    print(f"    target clamp Psi = {sz['target_clamp_Psi']*1e3:.1f} mWb/m"
+          f"  ->  sized throat w = {sz['sized_w_throat']*1e3:.2f} mm"
+          f"  (depth {sz['sized_depth']*1e3:.2f} mm)")
+    print(f"    achieved clamp = {sz['achieved_knee_Psi']*1e3:.2f} mWb/m "
+          f"(rel.err {sz['rel_err']:.1e}) at drive {sz['achieved_knee_drive']:.0f} A, "
+          f"sized in {sz['sizing_seconds']*1e3:.1f} ms")
+    if "sizing_fem" in out:
+        sf = out["sizing_fem"]["rows"][0]
+        print(f"    FEM check of the sized design: 1-shot {sf['one_shot_drive']:.1f} A "
+              f"vs FEM {sf['fem_drive']:.1f} A (rel.err {sf['rel_err']:.1e}) -> design loop CLOSED")
     if with_fem:
         val, cost = out["validation"], out["cost"]
         print(f"  nonlinear FEM validation (Picard loop at {len(val['rows'])} sample points):")
