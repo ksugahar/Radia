@@ -66,12 +66,31 @@ been *named* as the HDiv-VIM connection. In 2-D the single Clebsch scalar `A_z`
 + the interchange `(x,y) ↔ (θ, q=|B|)` turns `div(ν(|∇A_z|)∇A_z)=0` into a
 **linear** variable-coefficient Chaplygin equation.
 
-## The open frontier (3-D helicity)
+## The dynamical face — flux-line closure (Noguchi / Sugahara 2020)
+
+A flux line is an integral curve of `B` (`dx/ds = B`); in 2-D this **is** Hamilton's
+equations with **`A_z` as the Hamiltonian**, so `A_z` (= the Clebsch potential) is
+conserved and flux lines close. `flux_line_closure_symplectic.py` isolates the two
+requirements: the field must be a **closed 2-form** (`div B = 0` — the de Rham /
+edge-`H(curl)` requirement, Noguchi) *and* the integrator must be **symplectic**
+(`A_z`-conserving — accelerator beam tracking, Sugahara 2020). `A_z` = Clebsch
+potential = flux-line-flow Hamiltonian is the single object behind both the field
+(FEEC) face and the dynamical (tracking) face. This connects the solver's field
+reconstruction quality directly to whether its flux lines close — a leaky
+(`M_mass⁻¹ N m`) reconstruction is *not* a closed 2-form and its flux lines spiral.
+
+## The open frontier (3-D helicity) — now characterised
 
 In 3-D the Clebsch representation needs **two** potentials `(α,β)` for three
-coordinates, and a *global* Clebsch pair need not exist — the obstruction is
-**helicity** (`∫ A·B`). So the 3-D saturable HDiv-VIM solve does **not**
-auto-linearise the way the 2-D hodograph does. The concrete open questions:
+coordinates, and a *global* Clebsch pair need not exist — the obstruction is the
+**helicity** `h = ∫A·B` (the topological linking of field lines, Moffatt 1969).
+This is now **verified** (`clebsch_3d_closing_condition.py`): a Clebsch field is
+helicity-free pointwise (`h = −7e-17`), while the ABC Beltrami field has
+`h = 3(2π)³ ≠ 0` and chaotic, never-closing flux lines (Poincaré occupancy 0.55).
+So the 3-D closing condition is **`h = 0` ⟺ a global Clebsch pair exists ⟺ flux
+lines lie on flux surfaces**, and the 3-D saturable HDiv-VIM solve admits the
+Chaplygin/Clebsch linearisation **only where the helicity vanishes** (integrable /
+foliated fields). The concrete open questions:
 
 1. **Conditioning (tractable next rung).** Does solving the saturable 3-D
    HDiv-VIM in the convex B-input / `A⁺` form (the de Rham-dual Newton) stay
@@ -98,7 +117,13 @@ auto-linearise the way the 2-D hodograph does. The concrete open questions:
     divergence *and* boundary-tangential → fully charge-free; `A_z` recovered
     from `B` to `4e-7`);
   - the convex B-input conditioning cure and the 2-D hodograph linearisation
-    (`saturation_loop_2d.py` / `chaplygin_hodograph_2d.py`).
+    (`saturation_loop_2d.py` / `chaplygin_hodograph_2d.py`);
+  - the dynamical face — flux-line closure needs a closed 2-form *and* a
+    symplectic integrator (`flux_line_closure_symplectic.py`; Noguchi / Sugahara
+    2020);
+  - the 3-D closing condition — **helicity** is the obstruction to a global
+    Clebsch pair (`clebsch_3d_closing_condition.py`: Clebsch `h = −7e-17`, ABC
+    `h = 3(2π)³ ≠ 0` + chaotic Poincaré).
   (Each locked by a golden in `tests/feec/test_clebsch_hodograph_research.py`.)
 - **Rung-1 finding (conditioning).** The convex `A⁺` form *is* well-conditioned
   at the knee (the linear field-exact solve gives the sphere `D = 1/3`; the
