@@ -884,6 +884,16 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   counterpart to B(a): B(a) demonstrated the **solver** on a gap-dominated dipole; B(b)
   demonstrates the **strong channeled-flux knee** on a throat-necked circuit, and the
   honest 3-D limit of throat clamping.*
+  **3-D inverse design (飽和の3D化, spec → geometry):** `size_throat_for_knee(target)`
+  sizes the **throat thickness** so the magnet's **saturation onset** (the knee drive)
+  hits a target — the knee drive is **monotone in throat thickness**, so the 1-shot
+  circuit bisects it **mesh-free, to machine precision** (e.g. 4000 A → `t = 7.1 mm`),
+  the 3-D analog of the 2-D flux-limiter sizing. `run_inverse_3d(target, with_fem=True)`
+  then **closes the 3-D loop**: the adaptive B-input A-formulation FEM at the *sized*
+  throat shows `B_throat` crossing `J_sat` (a real knee), with the FEM onset **earlier
+  than the circuit target by the flux-funneling factor** (`≈1.7` — the lumped-circuit
+  correction, since the linking coil funnels more flux than the geometric area ratio;
+  reported, not hidden). Goldens `..._inverse_sizing` (fast) + `..._inverse_fem` (slow).
 
 ## Run
 
