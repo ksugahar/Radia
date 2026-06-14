@@ -1,6 +1,6 @@
 """cube_alpha_sweep.py -- Generate a 5mm Cu cube .vol and sweep alpha(s).
 
-Demonstrates the radia_levitation.mixed_galerkin API on the simplest case.
+Demonstrates the radia.levitation.mixed_galerkin API on the simplest case.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import numpy as np
 from netgen.occ import Box, OCCGeometry, Pnt
 from ngsolve import Mesh, TaskManager
 
-from radia_levitation.mixed_galerkin import (
+from radia.levitation.mixed_galerkin import (
     bulk_foster_via_eigen,
     K_SIBC_total,
     measure_total_area,

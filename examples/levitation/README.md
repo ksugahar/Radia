@@ -1,8 +1,8 @@
-# radia-levitation examples
+# radia.levitation examples
 
 Curated, standalone-runnable demonstrations (README-backed, per the lab
 Sample Promotion Ladder).  The broad research corpus is in
-`../research/`; the IGTE paper in `../papers/`.
+`research_cln/`; the IGTE paper in `papers/`.
 
 | Folder / script | Topic | Geometry |
 |-----------------|-------|----------|

@@ -2,9 +2,9 @@
 levitation and eddy-current brake analysis.
 
 Public API:
-    radia_levitation.mixed_galerkin -- alpha(s) from any .vol mesh
-    radia_levitation.ecb            -- eddy-current brake force computation
-    radia_levitation.simulink       -- MATLAB / Simulink LTI export
+    radia.levitation.mixed_galerkin -- alpha(s) from any .vol mesh
+    radia.levitation.ecb            -- eddy-current brake force computation
+    radia.levitation.simulink       -- MATLAB / Simulink LTI export
 """
 __version__ = "0.1.0"
 

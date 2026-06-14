@@ -26,8 +26,8 @@ import math
 import numpy as np
 import pytest
 
-from radia_levitation.mixed_galerkin import alpha as A
-from radia_levitation.simulink import export as EX
+from radia.levitation.mixed_galerkin import alpha as A
+from radia.levitation.simulink import export as EX
 
 MU0 = 4.0 * math.pi * 1e-7
 SIGMA_CU = 5.8e7
@@ -118,7 +118,7 @@ def test_diffusive_quadrature_residues_positive():
 def test_cube_cad_topology_c1():
     """CAD-direct: a Box has exactly 12 edges and c_1 == -16(3L)/(pi mu)."""
     occ = pytest.importorskip("netgen.occ")
-    from radia_levitation.mixed_galerkin import cad_edges as CE
+    from radia.levitation.mixed_galerkin import cad_edges as CE
 
     L = 5e-3
     box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(L, L, L))
@@ -144,7 +144,7 @@ def test_cube_alpha_sweep_end_to_end():
     pytest.importorskip("ngsolve")
     occ = pytest.importorskip("netgen.occ")
     from ngsolve import Mesh, TaskManager
-    from radia_levitation.mixed_galerkin import cad_edges as CE
+    from radia.levitation.mixed_galerkin import cad_edges as CE
 
     L = 5e-3
     box = occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(L, L, L))
