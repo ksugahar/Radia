@@ -1352,6 +1352,30 @@ where BEM is hardest -- inhomogeneous exteriors -- while staying sparse. RELATED
 the authors' priority, cite Nabizadeh 2021 / Boulmezaoud 2005-2023 / SBFEM as related/parallel work
 (noting priority), NOT as preempting prior art.
 
+CONSTRUCTIVE COROLLARY (demo_u, verified 2026-06-14): FEM-Kelvin not only AVOIDS the layered Green's
+function -- it CHEAPLY GENERATES its ACTION. The sparse SPD Kelvin-FEM matrix A IS the discrete
+Green's OPERATOR of the (stratified) exterior: A^{-1} applied to a source = the field everywhere,
+including the far field read back through the inverse Kelvin map. So the field of a source radiating
+THROUGH a magnetic shell -- what a BEM would integrate the (expensive) Sommerfeld/layered-media
+Green's function to obtain -- is ONE sparse solve (~43 nnz/row, fill < 0.1%): no Sommerfeld integral,
+no special functions, no branch cuts / surface-wave poles, no singular quadrature; the stratification
+rides as an FE coefficient and infinity is the Kelvin centre. VERIFIED: a Dirichlet source Y_n on a
+body r=a, shell mu_s in [0.7,0.9] vacuum elsewhere, reproduces the analytic layered radial profile
+R_n(r)=A r^n + B r^-(n+1) at ALL radii -- through the shell AND out to r=10 via inverse Kelvin -- to
+rel ~1e-4..3e-3 (n=1,2; mu_s=1,10,50). HONEST BOUNDS (state these, do NOT overclaim): (1) cheap = the
+OPERATOR/ACTION (one solve) and any single value; the FULL dense kernel (all source-observer pairs) is
+still O(N^2) entries == the Schur complement of THIS matrix (demo_r) -- Kelvin-FEM makes each entry
+cheap, NOT the object smaller. (2) it is a NUMERICAL operator: accuracy = FE order x surface reach (the
+-(n+1)/R peel-off datasheet), not a closed-form special function. (3) the genuinely HARD Sommerfeld
+case is PLANAR stratification (half-space): under inversion the flat interfaces become spheres through
+the inversion centre -- representable but geometrically heavier (Sugahara's extended-Kelvin / radiating
+regime, sugahara2025). (4) the inverse map is CONVENTION-dependent: the PERIODIC-GLUE construction
+(potential continuous across Gamma) reads u_phys(x)=u'(x') with NO (R/rho) weight, whereas a standalone
+compactified ball storing the *transformed* field uses u_phys=(R/rho)u' (demo_p); and a free single
+layer with only a one-vertex gauge blows the constant mode up ~1e5x, so inject the source as a
+Dirichlet body surface. FRAMING for the audience: "FEM-Kelvin is a sparse numerical GENERATOR of the
+layered (Sommerfeld-type) Green's operator" is the positive way to state demo_t's BEM differentiator.
+
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
 sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
