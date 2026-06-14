@@ -2458,6 +2458,35 @@ HIGH-FREQUENCY IABC RE-EXAMINED -- and a CORRECTION to demo_ww (demo_zz, VERIFIE
  (non-passive optimal materials, demo_zz). BOUNDARY: demo_zz ports only the published analytic method
  (Meeker 2013/2014; Sugahara PIERS 2016) and re-derives the materials; it does NOT read or embed the
  internal Femtet-folder optimization tables.
+
+WIDEBAND high-frequency IABC via WLS + width -- RESOLVES the demo_zz obstruction (demo_wb, VERIFIED
+2026-06-15; user: "build it with WLS; the IABC width can be controlled -> wideband?"). demo_zz showed
+that EXACT reflection-null at one omega forces NARROWBAND + NON-PASSIVE (Im(eps)>0) materials -> no
+clean dispersive time domain. Following the user's two ideas removes both problems:
+  * WLS (weighted least squares over a frequency BAND via scipy least_squares) instead of exact-null;
+  * PASSIVITY as box bounds (Im(eps),Im(mu)<=0) + SHELL WIDTH / number as DOF.
+VERIFIED (matched eps=mu shells, band kR in [2,8], all asserted, self-contained -- ports only the
+published Mie/IABC method, re-derives materials):
+  (A) recap: exact-null @omega=5 is non-passive (Im(eps)=+0.47).
+  (B) WLS + passivity -> a PASSIVE (Im=-0.27) CONSTANT matched shell (width 3): band-max |ref|=0.087
+      over the 4:1 band; band profile [0.087,0.032,0.016,0.0095,0.0065,0.0048,0.0036] -> most of the
+      band <1%, only the LOW EDGE limits it.
+  (C) WIDTH is the lever (user's point): at FIXED passive material the low-edge (kR=2) reflection
+      drops MONOTONICALLY with width -- 0.54,0.25,0.11,0.087,0.048 for d=0.5..4 -- exactly the
+      round-trip attenuation exp(-2 omega |Im n| d). (Full WLS also treats width as a DOF; that joint
+      landscape is non-convex, so band-max is not a simple monotone function of width.)
+  (D) GRADED passive layers push the upper band to <1%.
+KEY POINT: the wideband design uses CONSTANT, PASSIVE materials -> NO dispersion needed -> the
+time-domain realization is TRIVIAL and STABLE (a plain lossy shell; no ADE / recursive convolution /
+passivity violation). The price is a small (~1-9%), non-zero band reflection (vs exact-null's 0 at one
+omega), with the low-frequency edge set by total width. So the HIGH-FREQUENCY IABC DOES get a usable
+time-domain form -- by WLS-designing a passive wideband absorber up front, NOT by realizing the
+narrowband non-passive optimum dispersively. PRIOR ART: matched/graded (Jaumann) wideband absorbers +
+Chebyshev/LS multilayer design are classical (Collin; Orfanidi); the contribution is applying
+WLS+width+passivity to the IABC truncation. UPDATED time-domain map: low-freq=Kelvin (exact, demo_yy);
+eddy-current/diffusion=passive sqrt(s) SIBC Foster ladder (demo_xx); HIGH-FREQ wave IABC=WLS wideband
+passive constant shells (demo_wb) -- the demo_zz "hard/non-passive" verdict applies only to the
+exact-null route, NOT to the WLS-wideband route, which is clean.
 """
 
 
