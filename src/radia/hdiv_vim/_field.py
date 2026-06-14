@@ -258,7 +258,11 @@ def tet_self_volume_field(verts, r, rho_fn, nth=40, nph=80, ns=8):
 
     (the s^2 volume Jacobian cancels 1/s^3).  smax(s_hat) = ray distance from r to the tet boundary;
     the inner s-integral is exact for polynomial rho via Gauss.  rho_fn(point)->charge density.
-    Validated vs -(rho/4pi) grad(phi_tet) (the analytic Newtonian potential) to ~1e-3."""
+    Validated vs -(rho/4pi) grad(phi_tet) (the analytic Newtonian potential) to ~1e-3.
+
+    NOTE: for a CONSTANT or LINEAR rho prefer tet_volume_field_linear -- it is a CLOSED FORM (exact to
+    machine precision, no nth*nph*ns quadrature) and ~orders faster.  This spherical method is the
+    fallback for genuinely higher-degree (quadratic+) rho where the closed form is not yet derived."""
     planes = _tet_face_planes(verts)
     xth, wth = np.polynomial.legendre.leggauss(nth)
     th = 0.5 * (xth + 1) * np.pi
@@ -283,3 +287,135 @@ def tet_self_volume_field(verts, r, rho_fn, nth=40, nph=80, ns=8):
             integ_s = sum(wk * rho_fn(r + sk * shat) for sk, wk in zip(ss, wss))
             H += -(wth[it] * wph[ip] * sth) * shat * integ_s
     return H / (4.0 * np.pi)
+
+
+# ---------------------------------------------------------------------------------------------------
+# Analytic polynomial volume-charge field (EXACT, closed form) -- the order>=2 volume term.
+#
+# Key identity:  (r-r')/R^3 = grad'(1/R).  With the product rule + divergence theorem, the field of a
+# polynomial volume charge rho reduces to LOWER-degree POTENTIAL integrals (one differential order down):
+#
+#     INT_V rho (r-r')/R^3 dV'  =  SUM_faces n_f INT_face rho/R dS'  -  INT_V (grad rho)/R dV'
+#
+# For LINEAR rho(r') = rho0 + g.r'  (grad rho = g const, == the order-2 volume charge -div M):
+#
+#     = SUM_faces n_f [rho0 I0_f + g . M1_f]  -  g * PhiTet        (PhiTet = INT_V 1/R dV')
+#
+# needing only the degree-1 TRIANGLE potential (const I0 + first moment M1) and the tet Newtonian
+# potential PhiTet -- all closed form, EXACT everywhere (interior AND exterior), no quadrature.  This
+# is the exact replacement for the ~1e-3 spherical tet_self_volume_field when rho is at most linear.
+# See docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md.
+# ---------------------------------------------------------------------------------------------------
+def triangle_potential_const(P, r):
+    """I0 = INT_T 1/R dS' on a flat triangle (Wilton 1984 closed form), pure-Python companion of
+    flat_triangle_charge_field.  Bit-identical to the C++ _hdiv_tri_potential (validated)."""
+    P = np.asarray(P, float)
+    r = np.asarray(r, float)
+    n = np.cross(P[1] - P[0], P[2] - P[0])
+    n = n / np.linalg.norm(n)
+    h = float(np.dot(r - P[0], n))
+    r0 = r - h * n
+    ah = abs(h)
+    I = 0.0
+    omega = 0.0
+    for i in range(3):
+        a, b = P[i], P[(i + 1) % 3]
+        u = (b - a) / np.linalg.norm(b - a)
+        m = np.cross(u, n)
+        t0 = float(np.dot(a - r0, m))
+        sm = float(np.dot(a - r0, u))
+        sp = float(np.dot(b - r0, u))
+        R0sq = t0 * t0 + h * h
+        Rm = np.sqrt(sm * sm + R0sq)
+        Rp = np.sqrt(sp * sp + R0sq)
+        dm = Rm + sm
+        if dm > 1e-300:
+            I += t0 * np.log((Rp + sp) / dm)
+        omega += np.arctan2(t0 * sp, R0sq + ah * Rp) - np.arctan2(t0 * sm, R0sq + ah * Rm)
+    return I - ah * omega
+
+
+def _edge_R_integral(A, B, r):
+    """INT_{edge A->B} |r - r'| dl, closed form  INT sqrt(u^2 + c^2) du."""
+    t = B - A
+    L = np.linalg.norm(t)
+    if L < 1e-300:
+        return 0.0
+    that = t / L
+    w = r - A
+    l0 = float(np.dot(w, that))
+    d2 = max(float(np.dot(w, w)) - l0 * l0, 0.0)
+    u1, u2 = -l0, L - l0
+
+    def F(u):
+        if d2 < 1e-300:                                  # r on the edge line: INT |u| du
+            return 0.5 * u * abs(u)
+        s = np.sqrt(u * u + d2)
+        return 0.5 * (u * s + d2 * np.arcsinh(u / np.sqrt(d2)))
+    return F(u2) - F(u1)
+
+
+def triangle_potential_moment(P, r):
+    """M1 = INT_T r'/R dS' (3-vector) on a flat triangle, via the surface divergence theorem
+    INT_T (r'-r_p)/R dS' = SUM_edges m_e INT_edge R dl  (m_e = in-plane outward edge normal,
+    r_p = foot of the perpendicular from r).  Closed form, EXACT everywhere."""
+    P = np.asarray(P, float)
+    r = np.asarray(r, float)
+    n = np.cross(P[1] - P[0], P[2] - P[0])
+    n = n / np.linalg.norm(n)
+    h = float(np.dot(r - P[0], n))
+    r_p = r - h * n
+    cen = P.mean(axis=0)
+    I0 = triangle_potential_const(P, r)
+    acc = np.zeros(3)
+    for i in range(3):
+        A, B = P[i], P[(i + 1) % 3]
+        u = (B - A) / np.linalg.norm(B - A)
+        m = np.cross(u, n)
+        if np.dot(m, 0.5 * (A + B) - cen) < 0:           # orient outward (away from centroid)
+            m = -m
+        acc += m * _edge_R_integral(A, B, r)
+    return acc + r_p * I0
+
+
+def tet_newtonian_potential(verts, r):
+    """PhiTet = INT_V 1/R dV' over a tet, closed form  -1/2 SUM_faces h_f INT_face 1/R dS'
+    (from 1/R = (1/2) lap'(R); h_f = signed height of r above outward face f).  Pure-Python
+    companion of the C++ _hdiv_phi_tet (validated to machine precision); EXACT interior + exterior."""
+    V = np.asarray(verts, float)
+    r = np.asarray(r, float)
+    c = V.mean(axis=0)
+    I = 0.0
+    for tri in ((1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1)):
+        P = V[list(tri)]
+        n = np.cross(P[1] - P[0], P[2] - P[0])
+        n = n / np.linalg.norm(n)
+        if np.dot(n, c - P[0]) > 0:                      # orient outward
+            n = -n
+        I += -0.5 * float(np.dot(r - P[0], n)) * triangle_potential_const(P, r)
+    return I
+
+
+def tet_volume_field_linear(verts, r, rho0, grho):
+    """EXACT field of a LINEAR volume charge rho(r') = rho0 + grho.r' on a tet:
+
+        INT_V rho (r-r')/|r-r'|^3 dV'  (NO 1/4pi)  via the divergence-theorem recursion
+        = SUM_faces n_f [rho0 I0_f + grho.M1_f]  -  grho * PhiTet
+
+    Closed form (reuses triangle_potential_const / _moment + tet_newtonian_potential), EXACT to machine
+    precision at ANY r (interior, surface, exterior) -- the exact, ~orders-faster replacement for the
+    spherical tet_self_volume_field when rho is at most linear (the order-2 volume charge -div M).
+    Multiply by (1/4pi) for the physical H contribution.  verts = (4,3); returns (3,)."""
+    V = np.asarray(verts, float)
+    r = np.asarray(r, float)
+    grho = np.asarray(grho, float)
+    c = V.mean(axis=0)
+    acc = np.zeros(3)
+    for tri in ((1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1)):
+        P = V[list(tri)]
+        n = np.cross(P[1] - P[0], P[2] - P[0])
+        n = n / np.linalg.norm(n)
+        if np.dot(n, c - P[0]) > 0:                      # orient outward
+            n = -n
+        acc += n * (rho0 * triangle_potential_const(P, r) + np.dot(grho, triangle_potential_moment(P, r)))
+    return acc - grho * tet_newtonian_potential(V, r)

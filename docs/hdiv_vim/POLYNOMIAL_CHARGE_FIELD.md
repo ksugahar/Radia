@@ -96,15 +96,44 @@ near-surface field genuinely differs from the smooth −M/3; Kernel B gives the 
 This is the speed enabler for a practical order≥2 nonlinear solve (the Python reference field is too
 slow in the loop — the self-volume sphere-integral × mesh-location is prohibitive).
 
-**Remaining Step-2 work:** (a) **polynomial surface charge** σ (the C++/Python triangle field is exact
-for the constant per-face part; the polynomial remainder needs the Graglia linear/higher triangle
-field); (b) **curved faces** (flat-triangle only; a curved boundary face needs a curved-element
-near-field) — note ngsolve.bem's `LaplaceSL` is curved+triangle but gives the **potential**, not the
-field gradient (the `grad G` kernel is a documented ngsolve.bem gap, so it cannot be reused here); (c)
-**hex** internal (self-volume ray-trace needs hex face planes; quad boundary faces split into 2
-triangles); (d) a **C++ charge-coefficient assembly** (the field-version of the charge Gram, using
-`TriField`/`TetField` + the polynomial charge coeffs from `build_charge_gram`'s B). Then **Step 3**
-wires the (fast) internal field into the nonlinear `set_field`.
+## The polynomial volume-charge field — degree 1 (DONE, closed form)
+
+The order-2 volume charge `ρ = −div M` is **linear** per cell, and its field is now a **closed form**,
+exact to machine precision at any point (interior, surface, exterior), with **no quadrature** — the
+exact, ~orders-faster replacement for the ~1e-3 spherical `tet_self_volume_field`. The key identity is
+`(r-r')/R³ = ∇'(1/R)`, so by the product rule + divergence theorem the field of a polynomial volume
+charge reduces to **lower-degree potential integrals** (one differential order down):
+
+```
+∫_V ρ (r-r')/R³ dV'  =  Σ_faces n_f ∫_face ρ/R dS'  −  ∫_V (∇ρ)/R dV'
+```
+
+For linear `ρ = ρ0 + g·r'` (`∇ρ = g` const) this is `Σ_f n_f [ρ0 I0_f + g·M1_f] − g·PhiTet`, needing only:
+
+- `triangle_potential_const` — `I0 = ∫_T 1/R dS'` (Wilton; pure-Python, **bit-identical** to the C++ `_hdiv_tri_potential`);
+- `triangle_potential_moment` — `M1 = ∫_T r'/R dS'`, first moment via the **surface** divergence theorem `∫_T (r'−r_p)/R dS' = Σ_edges m_e ∫_edge R dl` (closed-form edge integrals);
+- `tet_newtonian_potential` — `PhiTet = ∫_V 1/R dV' = −½ Σ_f h_f I0_f` (from `1/R = ½∇'²R`; pure-Python, matches the C++ `_hdiv_phi_tet` to machine precision).
+
+`tet_volume_field_linear(verts, r, rho0, grho)` assembles these. Validated four ways
+(`tests/feec/test_hdiv_vim_poly_field.py`): the pure-Python building blocks vs the C++ probes
+(**machine**), the constant case vs the **independently-derived C++ `TetField`** (`−grad PhiTet`,
+**1e-12**), the linear case vs far tet Gauss (**1e-10**), and the interior linear case vs the spherical
+ray-trace (**~1e-3**, the spherical method's own accuracy — confirming the closed form *is* the exact
+value the spherical method converges to). All building blocks are pure-Python (no debug-probe runtime
+dependency); the C++ probes are used only as test oracles.
+
+**Remaining Step-2 work:** (a) **polynomial surface charge** σ (the triangle field is exact for the
+constant per-face part; the linear/quadratic remainder needs the **triangle-field first/second moment**
+— the surface analog of `triangle_potential_moment`, decomposing the kernel into the in-plane
+`∇'_s(1/R)` part (reducible by the surface divergence theorem to edge `∫σ/R dl`) plus the normal
+solid-angle `1/R³` moment); (b) **higher-degree volume charge** (quadratic+ ρ needs the *volume*
+potential first moment `∫_V r'/R dV'` — the same `½∇'²R` trick gives `∫_V r'/R dV' = ½Σ_f ∮...`, a
+clean next derivation); (c) **curved faces** (flat-triangle only) — note ngsolve.bem's `LaplaceSL` is
+curved+triangle but gives the **potential**, not the field gradient (`grad G` is a documented
+ngsolve.bem gap, so it cannot be reused here); (d) **hex** internal; (e) a **C++ port** of
+`triangle_potential_moment` / `tet_volume_field_linear` + a **charge-coefficient assembly** (sum the
+kernels weighted by the polynomial charge coeffs from `build_charge_gram`'s B, H-matrix accelerated).
+Then **Step 3** wires the (fast) internal field into the nonlinear `set_field`.
 
 ## Step 1 — validated (`reconstruct_field_polynomial`)
 
