@@ -1,4 +1,16 @@
-# radia-vim
+# radia_vim — UNBUILT research prototype (NOT a package)
+
+> **Status: orphan research prototype.** This is an experimental Newton-kernel
+> volume-Galerkin VIM that is **not wired into `Build.ps1` / the root CMake**
+> and is **not** a pip-installable package. It was dissolved here from the
+> former standalone `packages/radia-vim/` (2026-06-14) so the source is
+> preserved under `src/ext/` rather than masquerading as a peer package.
+>
+> The **production** FEEC volume integral method that ships in the `radia`
+> wheel is **`radia.hdiv_vim`** (`src/core/rad_hdiv_vim.cpp`,
+> `src/radia/hdiv_vim/`, examples under `examples/feec_vim/`). Use that for
+> real work. The code below builds only via the standalone CMake in this
+> directory and is kept for reference / future revival.
 
 **Volume Integral Method (VIM)** for cuboid eddy currents — NGSolve extension.
 
@@ -7,11 +19,7 @@ basis on an axis-aligned hex (cuboid). Used to extract Cauer ladder networks
 for eddy currents in **isolated 3D conductors** under the boundary condition
 `J·n = 0` (correct vacuum formulation, no air-box pathology).
 
-Part of the **Sugahara-lab Radia public-fork family** — independent NGSolve
-extensions absorbing the best techniques from worldwide EM solvers (FEMM, ELF,
-COMSOL, …) and exposing them as pip-installable Python packages.
-
-`radia-vim` complements **`ngsolve.bem` (ngbem)**, which is surface-only:
+This prototype complements **`ngsolve.bem` (ngbem)**, which is surface-only:
 where ngbem provides surface integral operators (Laplace/Helmholtz/Maxwell
 SL/DL), `radia-vim` provides the missing **volume Galerkin** route on a single
 hex cell with HDiv div-free interior basis. No fork of NGSolve required.
@@ -39,7 +47,9 @@ plumbing. Subsequent phases:
   - F-4: K matrix assembler (OpenMP parallel)
   - F-5: Foster solver + Cauer pipeline (Python wrapper)
   - F-6: order 6-8 production runs + paper figures
-  - F-7: PyPI publication via OIDC trusted publisher
+
+(Development was paused at the prototype stage; the production volume-integral
+path is `radia.hdiv_vim`, see the banner above.)
 
 ## Precision
 
@@ -53,15 +63,15 @@ at compile time via CMake options `RADIA_VIM_WITH_QUAD` and `RADIA_VIM_WITH_MPFR
 | `mpfr_float` (60+ digits)  | 60+    | `RADIA_VIM_WITH_MPFR=ON`  | Order 7-8 (50+ pairs)   |
 
 The empirical study driving these targets is in
-[`scripts/precision_sensitivity_study.py`](../radia-axifemm/scripts/precision_sensitivity_study.py)
-(in the sibling package `radia-axifemm`). Doubles fail catastrophically at
+[`precision_sensitivity_study.py`](../../../examples/axifemm/research/precision_sensitivity_study.py)
+(absorbed into `examples/axifemm/research/`). Doubles fail catastrophically at
 50 modes (87% mid-stage error in Cauer extraction); quad already gives 6%
 mid-stage error; MPFR 60-digit recovers full reference accuracy.
 
-## Build (development)
+## Build (standalone prototype only — NOT part of the radia wheel)
 
 ```bash
-cd packages/radia-vim
+cd src/ext/radia_vim
 pip install --no-build-isolation -e .              # double precision only
 # or
 CMAKE_ARGS="-DRADIA_VIM_WITH_QUAD=ON" \
