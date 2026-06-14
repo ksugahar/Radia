@@ -1163,6 +1163,26 @@ The user's framing is exact: since BEM discretizes the surface anyway, Kelvin-gr
 at the same Γ is all the exterior-exactness can deliver, so meshing/integrating the exterior
 "better" is wasted -- use the sparse volume instead.
 
+KELVIN vs H-MATRIX/FMM (is the sparse volume BETTER than compressing the dense BEM?).
+Both beat the O(N^2) dense exterior coupling, by OPPOSITE mechanisms (demo_o):
+  * H-matrix/FMM: the dense BEM matrix has admissible (well-separated) off-diagonal blocks
+    that are NUMERICALLY LOW RANK (smooth Green's function across the gap) -> store rank r
+    -> O(N log N). MEASURED: a 50x56 block between two polar caps (gap 0.91) has rel
+    singular values 1, 9.5e-2, 8.1e-2,... -> rank 5 @1e-2 (90% saved), 14 @1e-4. But this
+    must be BUILT: cluster tree + ACA/analytic low-rank + singular near-field quadrature +
+    an inner V^-1 solve + an indefinite FEM-BEM coupling.
+  * Kelvin: the SAME geometric far-DoF pair is STRUCTURALLY ZERO in the sparse volume
+    Laplacian (MEASURED: 0 nonzeros in that block; ~9-21 nnz/row). Sparse SPD, local element
+    integrals, ~ms assembly, composes with the interior FEM as ONE sparse solve. Even the
+    asymptotics favour it (optimal multigrid O(N) vs H-matrix O(N log N)), with no ACA/
+    inner-solve constants.
+VERDICT: for a sphere-able truncation where the field is needed INSIDE (most static-apparatus
+/ rotating-machine device problems), Kelvin is the simpler & cheaper data-sparse route -- it
+is sparse BY CONSTRUCTION, not by compressing an already-dense object. H-matrix/FMM's genuine
+edge is GENERALITY: an ARBITRARY closed Γ (not just a sphere) and the EXTERIOR field at any
+point (post-processing) -- neither of which the Kelvin spherical inversion provides. So "better
+than H-matrix" is true within Kelvin's applicability domain, not universally.
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
