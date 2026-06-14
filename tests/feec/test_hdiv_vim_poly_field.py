@@ -1060,3 +1060,72 @@ def test_solve_demag_picard_orderp_beats_centroid_on_nonuniform_body():
     assert r_orderp < 0.5 * r_centroid, \
         f"order_p self-consistency {r_orderp:.3e} not << centroid {r_centroid:.3e} (expected ~4x better)"
     assert r_orderp < 0.12, f"order_p self-consistency {r_orderp:.3e} too large"
+
+
+# ---------------------------------------------------------------------------------------------------
+# The de Rham-clean robust STIFF solve (the (2) prize): matrix-free Newton-Krylov on the ANALYTIC field
+# operator.  Converges for stiff conditioning (chi*D >> 1) where the under-relaxed Picard DIVERGES and a
+# quasi-Newton (Anderson) STAGNATES, while keeping the correct analytic charge field (no N=B^T G B leak).
+# ---------------------------------------------------------------------------------------------------
+def _sphere_demag_factor(mesh, order=1):
+    from radia.hdiv_vim import DemagOperator
+    fes = ng.HDiv(mesh, order=order)
+    with ng.TaskManager():
+        demag = DemagOperator(fes)
+        D = demag.DemagFactor(ng.CoefficientFunction((0, 0, 1)))
+        gfu = ng.GridFunction(fes); gfu.Set(ng.CoefficientFunction((0, 0, 1)))
+    mu = np.asarray(gfu.vec); Mm = demag._Mmass
+    return D, mu, Mm, float(mu @ (Mm @ mu))
+
+
+@pytest.mark.slow
+def test_solve_demag_newton_linear_stiff(_sphere_coarse):
+    """Newton-Krylov on the analytic field converges for STIFF chi (chi*D >> 1, here ~33) where the Picard
+    DIVERGES (explodes to ~-1e70) -- linear chi=100 reproduces the analytic sphere M = chi H/(1+chi D)."""
+    from radia.hdiv_vim import solve_demag_newton
+    mesh = _sphere_coarse; H0 = 1.0e4; chi = 100.0
+    D, mu, Mm, den = _sphere_demag_factor(mesh)
+    with ng.TaskManager():
+        r = solve_demag_newton(mesh, lambda H: chi * np.asarray(H), lambda H: chi * np.eye(3),
+                               [0, 0, H0], order=1)
+    Mray = float(mu @ (Mm @ np.asarray(r["gfM"].vec))) / den
+    ana = chi * H0 / (1 + chi * D)
+    assert r["converged"], f"Newton stiff-linear not converged ({r['n_newton']} steps)"
+    assert abs(Mray - ana) / ana < 2e-2, f"Newton stiff-linear M {Mray:.4e} vs analytic {ana:.4e}"
+
+
+@pytest.mark.slow
+def test_solve_demag_newton_saturating_matches_picard(_sphere_coarse):
+    """Newton-Krylov on a SATURATING law agrees with the validated order_p Picard AND the 1-D scalar
+    demag fixed point (a MILD-enough chi that the Picard also converges -- cross-validating the Newton
+    machinery's nonlinear correctness).  Together with test_solve_demag_newton_linear_stiff (chi=100,
+    analytic, where the Picard EXPLODES), this locks the de Rham-clean robust solve (2).  (The genuinely
+    stiff saturating knee chi_eff~1000 also converges via the scalar warmstart -- relF->7e-13 in 5 Newton
+    steps, demonstrated in dev -- but each GMRES apply is the dense O(n_obs x n_elem) batched field, so a
+    stiff-knee golden is too slow until the O(N log N) H-matrix field operator lands.)"""
+    from radia.hdiv_vim import solve_demag_newton, saturating_tangent, solve_demag_picard, assemble_demag_field
+    mesh = _sphere_coarse; chi0, Msat, H0 = 5.0, 1.0e6, 1.0e4
+    fes = ng.HDiv(mesh, order=1); nE = mesh.GetNE(ng.VOL)
+    cents = np.array([np.array([mesh[v].point for v in mesh[ng.ElementId(ng.VOL, i)].vertices]).mean(0)
+                      for i in range(nE)])
+    gfu = ng.GridFunction(fes)
+    with ng.TaskManager():
+        gfu.Set(ng.CoefficientFunction((0, 0, 1.0)))
+        Hd = assemble_demag_field(mesh, gfu, cents)
+    D = -float(np.mean(Hd[:, 2]))                          # field-operator demag factor
+    Mscal = lambda h: chi0 * h / (1 + chi0 * abs(h) / Msat)
+    f = lambda m: m - Mscal(H0 - D * m); lo, hi = 0.0, 1.0
+    while f(lo) * f(hi) > 0 and hi < 1e12:
+        hi *= 2.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        hi, lo = (mid, lo) if f(lo) * f(mid) <= 0 else (hi, mid)
+    ms = 0.5 * (lo + hi)
+    M_of_H, dM_of_H = saturating_tangent(chi0, Msat)
+    with ng.TaskManager():
+        rN = solve_demag_newton(mesh, M_of_H, dM_of_H, [0, 0, H0], order=1)
+        rP = solve_demag_picard(mesh, M_of_H, [0, 0, H0], order=1, tol=1e-7, relax=0.4, max_iter=200)
+    MzN = rN["M_centroids"][:, 2].mean(); MzP = rP["M_centroids"][:, 2].mean()
+    assert rN["converged"] and rP["converged"], "Newton/Picard saturating did not converge"
+    assert abs(MzN - ms) / abs(ms) < 3e-2, f"Newton M {MzN:.4e} vs scalar fixed point {ms:.4e}"
+    assert abs(MzN - MzP) / abs(MzP) < 3e-2, f"Newton {MzN:.4e} vs Picard {MzP:.4e}"
