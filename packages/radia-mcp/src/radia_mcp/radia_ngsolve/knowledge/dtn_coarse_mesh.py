@@ -1223,6 +1223,20 @@ no Green function / singular near-field quadrature. Gamma need only be a sphere 
 ONLY residual BEM-specific niche is oscillatory high-frequency kernels (mature FMM, volume
 dispersion) and high-aspect-ratio bodies where a bounding Kelvin sphere wastes air-layer volume.
 
+FEM-KELVIN = THE SPARSE FACTORIZATION OF THE DENSE GREEN'S-FUNCTION KERNEL ("trace the DtN
+backward"). The dense BEM DtN kernel Lambda IS the Schur complement of the sparse FEM-Kelvin
+matrix A (eliminate A's volume DoFs -> dense Lambda); equivalently A is a SPARSE representation
+of the same operator obtained by ADDING auxiliary volume DoFs (thin air layer + Kelvin ball).
+The trade is "DoF UP, cost DOWN": MEASURED (demo_r) on one Gamma (R=1, maxh=0.5, both reproduce
+the ladder) -- dense BEM 336 DoF, 100% fill, 70 s (singular Green-function quadrature) vs sparse
+FEM-Kelvin 768 DoF, 4.7% fill (~36 nnz/row), 0.008 s (local grad-grad): DoF x2.3 UP but assembly
+~8800x FASTER and fill 100%->4.7%, because each added volume DoF couples to only ~20-40 neighbours
+(O(N) local) instead of all (dense O(N_S^2)). This is a DISTINCT sparsification from H-matrix/FMM:
+H-matrix keeps the SAME DoF and low-rank-compresses the dense off-diagonal blocks (data-sparse);
+FEM-Kelvin ADDS DoF for STRUCTURAL sparsity (genuine zeros), stays SPD, needs no cluster tree /
+ACA / singular quadrature / inner V^-1. Cheapest route to the exterior DtN for a sphere-enclosable
+body: keep the sparse FEM-Kelvin matrix and never form Lambda.
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
