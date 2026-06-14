@@ -21,6 +21,7 @@ Tools (prefix ``bibliography_``):
         bibliography_cite_validation(tex_path, bib_path)
         bibliography_self_citation_ratio(bib_path, author_lastname)
         bibliography_year_distribution(bib_path)
+        bibliography_check_surname_braces(bib_path, fix=False)
 
     Tier 4 — Format conversion:
         bibliography_normalize_journal_names(bib_path, style="ieee", dry_run=True)
