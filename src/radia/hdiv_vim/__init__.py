@@ -42,12 +42,12 @@ from ._nonlinear import (  # noqa: F401
     solve_nonlinear,
 )
 from ._vim import DemagOperator, build_charge_gram  # noqa: F401  (ngsolve.bem-style operator + .mat)
-from ._field import reconstruct_field  # noqa: F401  (correct field-at-points from solved M; NOT M_mass^-1 N m)
+from ._field import reconstruct_field, reconstruct_field_polynomial  # noqa: F401  (field-at-points from solved M; NOT M_mass^-1 N m)
 
 __all__ = [
     "build_demag", "demag_factor", "tri_potential", "phi_tet", "wilton_surface_block",
     "analytic_charge_gram", "build_near_correction", "C_TRI",
     "solve_nonlinear_newton", "solve_nonlinear_newton_scalable", "solve_nonlinear",
-    "DemagOperator", "build_charge_gram", "reconstruct_field",
+    "DemagOperator", "build_charge_gram", "reconstruct_field", "reconstruct_field_polynomial",
     "_core", "_nonlinear", "_vim", "_field",
 ]
