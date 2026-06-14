@@ -99,10 +99,58 @@ def helmholtz_pair(center, radius, current, axis="z", nseg=48):
     ])
 
 
+def solenoid(center, radius, length, current, nturns, axis="z", nseg=48):
+    """Finite solenoid as a stack of ``nturns`` coaxial circular-loop filaments of
+    ``radius`` evenly spaced over ``length``, each carrying ``current``.
+
+    Args:
+        center: [x, y, z] centre of the solenoid.
+        radius: winding radius.
+        length: axial length.
+        current: per-turn current [A].
+        nturns: number of turns (loops in the stack).
+        axis: coil axis "x" | "y" | "z".
+        nseg: polygon sides per loop.
+
+    Returns:
+        Radia container (ObjCnt) of the ``nturns`` loops.
+    """
+    axis = axis.lower()
+    if axis not in _PERP:
+        raise ValueError("axis must be 'x', 'y' or 'z'")
+    nturns = int(nturns)
+    if nturns < 1:
+        raise ValueError("nturns must be >= 1")
+    ia = _IA[axis]
+    loops = []
+    for k in range(nturns):
+        # turn centres span the full length symmetrically about `center`
+        frac = 0.0 if nturns == 1 else (k / (nturns - 1) - 0.5)
+        c = list(center)
+        c[ia] = center[ia] + frac * length
+        loops.append(rad.ObjFlmCur(_loop_points(c, radius, axis, nseg), current))
+    return rad.ObjCnt(loops)
+
+
 def loop_axial_field(radius, current, z):
     """On-axis flux density [T] of a single circular loop, distance ``z`` from
     its plane:  B = mu0 I R^2 / (2 (R^2 + z^2)^{3/2})  (closed form)."""
     return MU0 * current * radius * radius / (2.0 * (radius * radius + z * z) ** 1.5)
+
+
+def solenoid_axial_field(radius, length, nturns, current, z):
+    """On-axis flux density [T] of a thin finite solenoid (radius R, length L, N turns,
+    per-turn current I), at axial position ``z`` measured from the solenoid centre:
+
+        B(z) = (mu0 N I / 2L) [ (z+L/2)/sqrt(R^2+(z+L/2)^2) - (z-L/2)/sqrt(R^2+(z-L/2)^2) ].
+
+    Centre (z=0): B = mu0 N I (L/2) / (L sqrt(R^2+(L/2)^2)).  Infinite-solenoid limit
+    L>>R: B -> mu0 N I / L = mu0 n I."""
+    n = nturns / length
+    zp, zm = z + 0.5 * length, z - 0.5 * length
+    a = zp / math.sqrt(radius * radius + zp * zp)
+    b = zm / math.sqrt(radius * radius + zm * zm)
+    return 0.5 * MU0 * n * current * (a - b)
 
 
 def helmholtz_center_field(radius, current):
