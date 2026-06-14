@@ -1543,7 +1543,7 @@ INDUCTION_HEATING_PEEC_BEM_SIBC = """
 ## Pipeline (validated 2026-04-18)
 
 ```python
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 from peec_bundle import build_bundle_solver
 from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
                               compute_phi_inc_from_filaments)

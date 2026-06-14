@@ -2,12 +2,12 @@
 
 CoilBuilder provides a fluent interface for constructing multi-segment coil geometries. It tracks position and orientation automatically, so you only describe the coil path.
 
-**Module:** `src/radia/radia_coil_builder.py`
+**Module:** `src/radia/coil_builder.py`
 
 ## Quick Start
 
 ```python
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 
 mm = 1e-3  # Radia always uses meters
 
@@ -196,7 +196,7 @@ The script must define a `build_coil()` function returning a `CoilBuilder` insta
 
 ```python
 # my_coil.py
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 
 def build_coil():
     mm = 1e-3

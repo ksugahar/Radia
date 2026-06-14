@@ -507,7 +507,7 @@ def main():
     else:
         panels = [p for p in sorted(RADIA_DIR.glob("radia_*.py"))
                   if p.name != "radia_gui_base.py"
-                  and p.name != "radia_coil_builder.py"
+                  and p.name != "coil_builder.py"
                   and p.name != "radia_ngsolve.py"]
 
     sys.exit(check(panels, strict=args.strict))

@@ -35,7 +35,7 @@ SRC = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'src'))
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
-from radia.radia_coil_builder import CoilBuilder
+from radia.coil_builder import CoilBuilder
 
 
 MU_0 = 4.0 * np.pi * 1e-7

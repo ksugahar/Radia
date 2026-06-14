@@ -111,7 +111,7 @@ def main():
     # Build filament bundle
     print("[1/4] PEEC filament bundle...")
     t0 = time.perf_counter()
-    from radia_coil_builder import CoilBuilder
+    from coil_builder import CoilBuilder
     cb = (CoilBuilder(current=I_total)
           .set_start([R_coil, 0, 0],
                      orientation=np.array([[1, 0, 0],

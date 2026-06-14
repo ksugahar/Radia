@@ -47,7 +47,7 @@ for p in (SRC, SRC_RADIA, PANELS, HERE):
 from ngsolve import Mesh, Integrate, CF, BND
 from ngsolve import TaskManager
 
-from radia.radia_coil_builder import CoilBuilder
+from radia.coil_builder import CoilBuilder
 from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
                                     compute_phi_inc_from_surface_J,
                                     compute_phi_inc_from_filaments)

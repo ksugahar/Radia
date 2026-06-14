@@ -482,7 +482,7 @@ cubit.cmd('coil "my_coil.py" noimport')                  # STEP only, no import
 
 # my_coil.py must define build_coil() -> CoilBuilder:
 # def build_coil():
-#     from radia.radia_coil_builder import CoilBuilder
+#     from radia.coil_builder import CoilBuilder
 #     cb = CoilBuilder(current=1000)
 #     cb.set_start([0, 0, 0])
 #     cb.set_cross_section(width=0.02, height=0.02)

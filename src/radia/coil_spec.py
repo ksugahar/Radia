@@ -79,7 +79,7 @@ class CoilSpec:
 
 def build_coil_from_spec(spec: CoilSpec):
     """Build a CoilBuilder from a CoilSpec. Raises ValueError on invalid."""
-    from radia.radia_coil_builder import CoilBuilder
+    from radia.coil_builder import CoilBuilder
     from radia.coil_profile import CircleProfile, RectProfile
 
     spec.validate()

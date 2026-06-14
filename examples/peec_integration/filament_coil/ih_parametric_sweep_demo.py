@@ -26,7 +26,7 @@ for p in (SRC, SRC_RADIA, PANELS, HERE):
 
 from ngsolve import Mesh, BND
 
-from radia.radia_coil_builder import CoilBuilder
+from radia.coil_builder import CoilBuilder
 from radia.coil_profile import CircleProfile
 from radia.ih_pipeline import IHWorkpieceContext
 

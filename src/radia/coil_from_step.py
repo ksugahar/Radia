@@ -734,7 +734,7 @@ def to_coil_builder(result, current=1.0):
     segments (Sprint 2 scope). Lofts (varying cross-section) and
     helical / non-planar arcs are NOT yet handled.
     """
-    from radia_coil_builder import CoilBuilder
+    from coil_builder import CoilBuilder
     segs = polyline_to_segments(result)
     if not segs:
         raise RuntimeError("no segments reconstructed")

@@ -4,7 +4,7 @@ Examples demonstrating complex multi-segment coil geometry construction using th
 
 ## Overview
 
-This directory contains examples of building complex coil paths with straight and arc segments. The examples use the `radia_coil_builder` module which provides a fluent interface for constructing multi-segment coils with automatic state tracking.
+This directory contains examples of building complex coil paths with straight and arc segments. The examples use the `coil_builder` module which provides a fluent interface for constructing multi-segment coils with automatic state tracking.
 
 ## Files
 
@@ -102,7 +102,7 @@ python field_map.py
 
 ## CoilBuilder API
 
-The `radia_coil_builder` module provides a modern, elegant interface for building complex coil geometries.
+The `coil_builder` module provides a modern, elegant interface for building complex coil geometries.
 
 ### Key Features
 
@@ -113,12 +113,12 @@ The `radia_coil_builder` module provides a modern, elegant interface for buildin
 - **Automatic cross-section transformation with tilt**
 - **Direct conversion to Radia objects**
 
-**Location:** `src/radia/radia_coil_builder.py`
+**Location:** `src/radia/coil_builder.py`
 
 ### Basic Example
 
 ```python
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 import radia as rad
 
 # Radia always uses meters
@@ -325,7 +325,7 @@ cd <project_root>
 powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 ```
 
-### "No module named 'radia_coil_builder'"
+### "No module named 'coil_builder'"
 
 **Solution:** The module is in `src/radia/`. The examples automatically add this to the path.
 
