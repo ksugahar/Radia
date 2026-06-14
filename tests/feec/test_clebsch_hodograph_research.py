@@ -519,3 +519,20 @@ def test_flux_line_closure_symplectic():
     # (3) same integrator but a charged field (not a closed 2-form): no global A_z -> spirals
     assert r["drift_mix"] > 10.0, r
     assert r["drift_mix"] / r["drift_sym"] > 100.0, r      # the field must be a closed 2-form
+
+
+@pytest.mark.slow
+def test_clebsch_3d_closing_condition():
+    """The 3-D closing condition = vanishing HELICITY = existence of a global Clebsch pair (Moffatt).
+    A Clebsch field B=grad(a)xgrad(b) is helicity-free pointwise (A.B=0) -> global Clebsch exists,
+    flux lines on surfaces; the ABC Beltrami field (A=B) has h=INT|B|^2=3(2pi)^3 != 0 -> NO global
+    Clebsch, and its single flux line's Poincare section fills a 2-D region (chaotic, never closes)."""
+    import clebsch_3d_closing_condition as cc
+    r = cc.analyze(n=32, n_cross=700)
+    # Clebsch field: helicity ~ 0 (machine, pointwise A.B=0)
+    assert r["rel_clebsch"] < 1e-6, r
+    # ABC Beltrami field: helicity = 3(2pi)^3 exactly (NONZERO -> no global Clebsch)
+    assert abs(r["h_abc"] - r["h_abc_exact"]) / r["h_abc_exact"] < 1e-2, r
+    assert r["h_abc"] > 100.0, r
+    # the ABC flux line is chaotic: its Poincare section fills a 2-D region (does not close on a curve)
+    assert r["occ_abc"] > 0.15, r
