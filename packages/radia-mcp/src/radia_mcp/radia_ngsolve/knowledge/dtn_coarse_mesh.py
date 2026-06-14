@@ -2428,6 +2428,36 @@ exterior air = Laplace) Kelvin dominates IABC on every axis:
   extended-Kelvin radiation boundary needs the "uncool" centre-PML (IEICE 2024 U1/U2/U3) and a
   reduced-order pole / Foster IABC competes. So: low-freq story = Kelvin (the Hachinohe paper spine);
   IABC = the time-domain/high-freq complement, with FEM-BEM as the exact reference.
+
+HIGH-FREQUENCY IABC RE-EXAMINED -- and a CORRECTION to demo_ww (demo_zz, VERIFIED 2026-06-15; user:
+"review the high-frequency IABC a bit more"). Reading Sugahara's actual high-freq formulation
+(cf_b.m / ref1.m / sp_bessel.m) shows demo_ww OVER-SIMPLIFIED it. THE ACTUAL high-frequency IABC:
+ * FULL VECTOR EM (Mie): per mode n, TWO polarizations (an epsilon-mode and a mu-mode) propagated by
+   RICCATI-BESSEL transfer matrices; each shell carries COMPLEX epsilon AND COMPLEX mu (4 real DOF
+   /shell), with the radiation condition (outgoing Hankel) built in and a PEC termination -- a
+   discrete, mode-matched METAMATERIAL absorber, NOT a single isotropic index.
+ * the 4 DOF/shell are OPTIMIZED per frequency to null the outgoing-wave reflection for the matched
+   modes. (Verified: an independent Python re-optimization from generic seeds -- NOT reading
+   Sugahara's data -- nulls both polarizations to ~1e-16 and reproduces the known optima, e.g.
+   omega=5: eps=0.104+0.474j, mu=0.047-1.931j.)
+ FINDINGS (all asserted, self-contained):
+  (B) NARROWBAND: a shell optimized at omega0 has ~0 reflection at omega0 but it RISES quickly off
+      omega0 (design@5 -> |ref| 0.07 at +/-10%, 0.14 at +/-20%, 0.3 at -40%). => a TIME-DOMAIN
+      version needs FREQUENCY-DEPENDENT (dispersive) shells, not constant materials.
+  (C) TIME-DOMAIN OBSTRUCTION (the real result): the optimal shell has Im(eps)>0 while Im(mu)<0
+      (opposite signs, product<0, across omega=2/5/8). A single PASSIVE dispersive medium needs both
+      imaginary parts the SAME sign; so the per-frequency-optimal IABC shell is NON-PASSIVE (one
+      parameter is gain-like) -> a naive passive dispersive (Debye/Lorentz ADE / recursive-
+      convolution) time-domain realization is NOT directly possible (stability risk). The honest
+      time-domain high-frequency IABC needs a PASSIVITY-CONSTRAINED redesign = a genuine OPEN PROBLEM.
+ CORRECTION TO demo_ww: its "reduced M-pole rational DtN = the time-domain IABC" is a valid generic
+ MODEL REDUCTION of the TARGET (exact Grote-Keller) DtN and the cost-accuracy datasheet stands AS
+ SUCH; but it is NOT the IABC's own (narrowband, non-passive) materials. demo_zz is the faithful
+ picture. NET time-domain map: LOW-FREQ = Kelvin exact/parameter-free (demo_yy); EDDY-CURRENT/
+ DIFFUSION = passive sqrt(s) SIBC, Foster-realizable (demo_xx, clean); HIGH-FREQ WAVE IABC = hard
+ (non-passive optimal materials, demo_zz). BOUNDARY: demo_zz ports only the published analytic method
+ (Meeker 2013/2014; Sugahara PIERS 2016) and re-derives the materials; it does NOT read or embed the
+ internal Femtet-folder optimization tables.
 """
 
 
