@@ -23,7 +23,11 @@ pytest.importorskip("netgen.csg")
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
-from radia.hdiv_vim import reconstruct_field_polynomial  # noqa: E402
+from radia.hdiv_vim import (  # noqa: E402
+    reconstruct_field_polynomial,
+    flat_triangle_charge_field,
+    tet_self_volume_field,
+)
 
 
 def _sphere(h):
@@ -138,3 +142,54 @@ def test_hex_matches_tet_linear_M():
     for i in range(len(obs)):
         rel = np.linalg.norm(Hhex[i] - Htet[i]) / np.linalg.norm(Htet[i])
         assert rel < 1e-6, f"hex vs tet linear-M (div M != 0) external field differ at obs {i}: {rel:.2e}"
+
+
+# --------------------------------------------------------------------------------------------------
+# Step 2 building blocks (the singular / near-singular INTERNAL field), each validated standalone.
+# --------------------------------------------------------------------------------------------------
+def _tri_field_gauss(P, r, ng=40):
+    """fine Duffy-Gauss reference for INT_T (r-r')/|r-r'|^3 dS' (non-singular at a moderate r)."""
+    P = np.asarray(P, float)
+    x, w = np.polynomial.legendre.leggauss(ng)
+    s = 0.5 * (x + 1); ws = 0.5 * w
+    e1, e2 = P[1] - P[0], P[2] - P[0]
+    area2 = np.linalg.norm(np.cross(e1, e2))
+    F = np.zeros(3)
+    for u, wu in zip(s, ws):
+        for v, wv in zip(s, ws):
+            rp = P[0] + u * e1 + (v * (1 - u)) * e2
+            d = r - rp
+            F += (wu * wv * (1 - u) * area2) * d / np.linalg.norm(d) ** 3
+    return F
+
+
+def test_flat_triangle_charge_field_exact():
+    """The analytic uniform-triangle field matches a fine Gauss reference to ~machine precision."""
+    P = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], float)
+    for r in [np.array([0.3, 0.3, 0.5]), np.array([0.3, 0.3, -0.5]), np.array([1.0, 1.0, 0.3])]:
+        Fa = flat_triangle_charge_field(P, r)
+        Fg = _tri_field_gauss(P, r)
+        rel = np.linalg.norm(Fa - Fg) / np.linalg.norm(Fg)
+        assert rel < 1e-7, f"analytic triangle field vs Gauss r={r.tolist()}: rel {rel:.2e}"
+
+
+def test_tet_self_volume_field_vs_phitet_gradient():
+    """The spherical ray-trace self volume-charge field (constant rho) matches -(rho/4pi) grad(phi_tet),
+    the gradient of the EXACT analytic Newtonian potential (radia _hdiv_phi_tet) -- the 1/r^2 singularity
+    is removed analytically, so it is accurate at INTERIOR points."""
+    import radia._radia_pybind as rp
+    V = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]   # unit tet
+    Varr = np.array(V, float).reshape(4, 3)
+    rho0 = 1.0
+    delta = 1e-5
+    for r in [np.array([0.25, 0.25, 0.25]), np.array([0.15, 0.30, 0.20]), np.array([0.4, 0.3, 0.1])]:
+        Hs = tet_self_volume_field(Varr, r, lambda p: rho0, nth=48, nph=96)
+        g = np.zeros(3)
+        for k in range(3):
+            rp_, rm_ = list(r), list(r)
+            rp_[k] += delta; rm_[k] -= delta
+            g[k] = (rp._hdiv_phi_tet(V, [float(x) for x in rp_])
+                    - rp._hdiv_phi_tet(V, [float(x) for x in rm_])) / (2 * delta)
+        Href = -(rho0 / (4 * np.pi)) * g
+        rel = np.linalg.norm(Hs - Href) / np.linalg.norm(Href)
+        assert rel < 8e-3, f"spherical self volume field vs grad(phi_tet) r={r.tolist()}: rel {rel:.2e}"
