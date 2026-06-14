@@ -227,10 +227,21 @@ curved-capable today is the **external quadrature reference** `reconstruct_field
 `div M` / `M·n` via `GetTrafo` + `IntegrationRule(el.type)` + `specialcf.normal`, so hex / tet / prism,
 flat / curved, any FES order — but it is external-only and quadrature-based, not the analytic fast path).
 
-**Remaining work:** (a) **flat-faced hex / prism** — generalise the analytic tet face-loop to an
-arbitrary flat-faced polytope (triangulate each planar quad face); the volume-potential recursion
-`∫_V q/R = 1/(d+2)[−Σ_f h_f ∫_face q/R + r·∫_V ∇q/R]` is already polytope-general (it only needs planar
-faces + their `h_f`). (b) **curved faces / distorted (trilinear) hex** — needs singularity subtraction
+## Flat-faced hex / prism (DONE — affine hex volume field)
+
+The analytic volume field is now polytope-general: `polytope_volume_field_quadratic(boundary_tris, ...)`
++ `polytope_newtonian_potential` / `_moment` take any list of `(triangle, outward normal)`, so a hex's
+6 **planar** quad faces (triangulated into 12 triangles by `hex_boundary_triangles`, NGSolve vertex
+order) drive the **same** face-loop as a tet's 4. `hex_volume_field_linear` / `hex_volume_field_quadratic`
+are the hex analogues of `tet_volume_field_linear/quadratic`. Validated to **machine precision** against
+the sum of analytic tet fields over a 6-tet (Kuhn) decomposition of the same box
+(`test_hex_volume_field_equals_tet_decomposition` — two independent analytic computations agree), and a
+sheared affine parallelepiped matches a box-Gauss reference. EXACT for **planar-faced** (axis-aligned /
+parallelepiped) hexes; a trilinear (distorted) hex has **bilinear (non-planar) faces** → that is the
+curved case below. (The hex *surface* charge field needs no new code — a boundary quad is two triangles,
+each handled by the existing `linear_/quadratic_triangle_charge_field`.)
+
+**Remaining work:** (a) **curved faces / distorted (trilinear) hex** — needs singularity subtraction
 (flat-triangle analytic part at the singular point + smooth curved-minus-flat remainder by ordinary
 Gauss); note ngsolve.bem's `LaplaceSL` is curved+triangle but gives the **potential**, not the field
 gradient (`grad G` is a documented ngsolve.bem gap, so it cannot be reused here). (c) the
