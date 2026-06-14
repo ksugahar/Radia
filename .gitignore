@@ -41,9 +41,6 @@ build*/
 dist/
 radia-*/
 !packages/radia-mcp/
-!packages/radia-axifemm/
-!packages/radia-vim/
-!packages/radia-mmm/
 *.egg-info/
 .eggs/
 

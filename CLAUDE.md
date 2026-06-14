@@ -33,8 +33,14 @@ S:\Radia\01_GitHub\
         check.py          # check-vol CLI + check_consistency() API
         cubit_mesh_curver.pyd  # C++ pybind11 module (bundled)
     radia-mcp/            # pip install radia-mcp (MCP servers + skills)
-    radia-axifemm/        # pip install radia-axifemm (axisymmetric FE, Henrotte basis)
-    radia-vim/            # pip install radia-vim (Volume Integral Method, HDivVIM)
+  src/radia/radia_axifemm.pyd  # CORE METHOD (not a package): axisymmetric FE
+                          # (Henrotte basis), ships in the radia wheel.
+                          # examples/axifemm/ (+ research/), tests/axifemm/.
+  src/radia/hdiv_vim/     # CORE METHOD (not a package): FEEC HDiv-VIM
+                          # (C++ src/core/rad_hdiv_vim.cpp). examples/feec_vim/.
+  src/ext/radia_vim/      # UNBUILT orphan prototype (Newton-kernel volume
+                          # Galerkin VIM); NOT in Build.ps1, NOT pip-installable.
+                          # Production VIM = radia.hdiv_vim above.
   src/radia/levitation/   # radia.levitation -- APPLICATION domain (NOT a
                           # standalone package): eddy-current brakes +
                           # maglev, mixed-Galerkin polarizability alpha(s),
@@ -52,7 +58,7 @@ S:\Radia\01_GitHub\
   install_full.py          # One-command full setup
 ```
 
-**PyPI packages** (5 independent packages in the same monorepo, each
+**PyPI packages** (3 independent packages in the same monorepo, each
 versioned + released separately on PyPI):
 
 | Package | Install | Purpose |
@@ -60,8 +66,18 @@ versioned + released separately on PyPI):
 | **radia** | `pip install radia` | C++ core + Python (MMM/MSC/PEEC, panels, MCP) |
 | **cubit-mesh-export** | `pip install cubit-mesh-export` | High-order curved mesh export from Cubit (does NOT require radia) |
 | **radia-mcp** | `pip install radia-mcp` | MCP servers + skills for AI-assisted workflows |
-| **radia-axifemm** | `pip install radia-axifemm` | Axisymmetric FE (Henrotte basis, FEMM-canonical magnetic; standard H1 thermal) |
-| **radia-vim** | `pip install radia-vim` | Volume Integral Method (HDivVIM, matrix-free Newton-Krylov on the analytic field operator) |
+
+**Core solver methods inside `radia`** (NOT standalone packages -- they
+ship in the `radia` wheel; `radia-mmm` / `radia-axifemm` / `radia-vim` were
+dissolved into radia on 2026-06-14, packages/ now holds only the two genuine
+PyPI packages above):
+
+| Method | Code (ships in radia wheel) | Examples / Tests |
+|--------|------------------------------|------------------|
+| **MMM / MSC** (collocation demag) | `mmm_core.pyd` + `radia.ObjHexahedron/Tetrahedron/Wedge` (`import radia`; the old `radia_mmm` namespace is gone) | `examples/hantila_solver/`, `examples/smco_magnet_array/` |
+| **Axisymmetric FE** (Henrotte basis) | `radia.radia_axifemm` (`src/radia/radia_axifemm.pyd`) | `examples/axifemm/` (+ `research/`), `tests/axifemm/` |
+| **FEEC HDiv-VIM** (production VIM) | `radia.hdiv_vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) | `examples/feec_vim/` |
+| **Newton-kernel Galerkin VIM** (orphan) | `src/ext/radia_vim/` -- UNBUILT prototype, NOT in Build.ps1, NOT pip-installable; use `radia.hdiv_vim` instead | (standalone CMake only) |
 
 **Application domains inside `radia`** (NOT standalone packages -- they
 ship in the `radia` wheel as `radia.<domain>` subpackages + panels, with
