@@ -23,6 +23,18 @@ iron and carries it as an FE coefficient) -> a **material-aware transfer/DtN mat
 is the same clean linear inverse `psi = M^+ B_target` as in free space, but the kernel now contains the
 iron. (This is why "the stream-function method WANTS the DtN'd matrix" — the inverse design consumes M.)
 
+## CORRECTION (2026-06-15): the coil model is a CURRENT SHEET, not a Dirichlet trace
+An earlier version of the demos (demo_hh/kk/ll) built `M` by imposing Omega=psi as a **Dirichlet trace**
+on the winding surface. That is a DIFFERENT operator from the stream-function current sheet
+K = n x grad psi (sphere per-mode ratio T_BS/T_D = n/(2n+1), so it does NOT reduce to Biot-Savart in
+vacuum and psi-contours are NOT wires). The **correct coil model** is the REDUCED SCALAR POTENTIAL
+H = H_s - grad(Omega), H_s = Biot-Savart of K = n x grad psi, Omega = the iron reaction via the Kelvin
+open boundary -- vacuum -> H = H_s exactly, psi a true current potential. Verified end-to-end in
+`demo_mm` (sphere) / `demo_nn` (ellipsoid, FE-direct) / `demo_oo` (transfer matrix + radia.stream_function
+design): vacuum Omega=0, iron Kelvin == air-box (2.6e-5 / 3.5e-3), design HITS (1.8e-15) vs free-space
+MISSES (13%). Use that model; the Dirichlet-Schur material-aware-OPERATOR machinery (below) is still
+valid as the open-boundary condensation, but the coil SOURCE must be the current sheet.
+
 ## Why free-space fails (the problem you are solving)
 Free space: psi->field kernel = Biot-Savart (analytic, easy). With iron: total field = coil field +
 **iron reaction**; the kernel becomes the material Green operator. Planar/cylindrical iron -> the (hard)
