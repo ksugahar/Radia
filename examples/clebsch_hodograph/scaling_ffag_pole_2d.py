@@ -439,6 +439,109 @@ def bracket_saturated(B_design=1.8, k=K_INDEX, g0=G0, r0=R0, order=3,
     }
 
 
+# --------------------------------------------------------------------------- #
+# Hodograph AS THE SOLVER: design on a FIXED reference mesh, the pole shape a
+# pullback (deformation) -- so changing the pole reshapes the WEIGHT, not the
+# mesh.  Netgen runs ONCE; every pole shape is the same mesh + a new deformation
+# (the no-remesh win the physical-coordinate solves above do not have).
+# --------------------------------------------------------------------------- #
+def _comp_mesh(r_lo, r_hi, maxh):
+    """The FIXED computational rectangle [r_lo,r_hi] x [0,1] (x=r, y=normalised
+    gap eta).  Generated ONCE; the pole shape enters as a deformation of eta."""
+    from netgen.occ import WorkPlane, OCCGeometry
+    from ngsolve import Mesh
+    rect = WorkPlane().MoveTo(r_lo, 0.0).Rectangle(r_hi - r_lo, 1.0).Face()
+    for e in rect.edges:
+        c = e.center
+        if abs(c.y) < 1e-9:
+            e.name = "median"
+        elif abs(c.y - 1.0) < 1e-9:
+            e.name = "pole"
+        elif abs(c.x - r_lo) < 1e-6:
+            e.name = "rmin"
+        elif abs(c.x - r_hi) < 1e-6:
+            e.name = "rmax"
+    return Mesh(OCCGeometry(rect, dim=2).GenerateMesh(maxh=maxh))
+
+
+def _gap_cf(xc, k, g0, r0, gamma, gamma2):
+    """Scaling gap g(r) as an NGSolve CF (xc = the radial coordinate)."""
+    from ngsolve import log as nlog, exp as nexp
+    u = nlog(xc / r0)
+    return g0 * nexp(-k * u - 0.5 * gamma * u * u - gamma2 * u ** 3 / 6.0)
+
+
+def solve_scaling_pole_deformed(mesh, gamma=0.0, gamma2=0.0, k=K_INDEX, g0=G0,
+                                r0=R0, order=4, n_eval=41, meas=(0.92, 1.085)):
+    """Solve the linear equipotential scaling gap on the SHARED fixed mesh by
+    DEFORMING eta -> y = eta*g(r)/2 (mesh.SetDeformation; no Netgen remesh).  The
+    pole shape (gamma, gamma2) lives entirely in the deformation, so a reshape is
+    a new weight on the SAME mesh.  Returns the median field index k(r)."""
+    from ngsolve import (VectorH1, H1, GridFunction, CF, x, y, grad, dx,
+                         BilinearForm, TaskManager)
+    rs_eval = np.linspace(meas[0], meas[1], n_eval)
+    eta_probe = 0.02
+    with TaskManager():
+        gcf = _gap_cf(x, k, g0, r0, gamma, gamma2)
+        gd = GridFunction(VectorH1(mesh, order=order))
+        gd.Set(CF((0.0, y * (gcf / 2.0 - 1.0))))           # eta -> eta*g/2
+        mesh.SetDeformation(gd)
+        fes = H1(mesh, order=order, dirichlet="median|pole")
+        u, v = fes.TnT()
+        a = BilinearForm(grad(u) * grad(v) * dx)
+        a.Assemble()
+        gfu = GridFunction(fes)
+        gfu.Set(mesh.BoundaryCF({"pole": 1.0, "median": 0.0}, default=0.0),
+                definedon=mesh.Boundaries("median|pole"))
+        r = gfu.vec.CreateVector()
+        r.data = -a.mat * gfu.vec
+        gfu.vec.data += a.mat.Inverse(fes.FreeDofs(),
+                                      inverse="sparsecholesky") * r
+        g = grad(gfu)
+        By = np.array([-g(mesh(float(rr), eta_probe))[1] for rr in rs_eval])
+        mesh.UnsetDeformation()
+    rmid, kk = field_index(rs_eval, By)
+    return {"rs_eval": rs_eval, "By": By, "r_index": rmid, "k": kk}
+
+
+def run_pullback(k=K_INDEX, g0=G0, r0=R0, order=4, maxh=0.035):
+    """Hodograph-as-solver: ONE computational mesh, the pole shape a deformation.
+
+    (i) VALIDATE the pullback == the physical-remesh solve (the naive gamma=0
+        equipotential pole) -- same field index k(r).
+    (ii) DEMONSTRATE no-remesh: sweep several pole shapes (gamma) reusing the
+        SAME mesh object (Netgen generated exactly once)."""
+    r_min, r_max = aperture_radii(k=k, r0=r0)
+    buf = 1.25
+    r_lo, r_hi = r_min / buf, r_max * buf
+    meas = (r_min, r_max)
+    mesh = _comp_mesh(r_lo, r_hi, maxh)                     # ONE mesh generation
+    s0 = solve_scaling_pole_deformed(mesh, 0.0, 0.0, k=k, g0=g0, r0=r0,
+                                     order=order, meas=meas)
+    # physical-remesh reference (Step-1 equipotential phi solve, gamma=0)
+    ref = solve_complementary(r_min, r_max, k=k, g0=g0, r0=r0, order=order,
+                              maxh=0.012)
+    m = slice(2, -2)
+    k_def = s0["k"][m]
+    k_phys = ref["k_phi"][m]
+    n = min(len(k_def), len(k_phys))
+    match = float(np.max(np.abs(k_def[:n] - k_phys[:n])))
+    # no-remesh sweep on the SAME mesh
+    sweep = []
+    for gm in (0.0, -0.85, -2.0):
+        s = solve_scaling_pole_deformed(mesh, gm, 0.0, k=k, g0=g0, r0=r0,
+                                        order=order, meas=meas)
+        sweep.append({"gamma": gm, "k_mean": float(s["k"][m].mean()),
+                      "k_tilt": float(s["k"][m][-1] - s["k"][m][0])})
+    return {
+        "k_def_vs_physical_max": match,
+        "k_def_mean": float(k_def.mean()),
+        "k_phys_mean": float(k_phys.mean()),
+        "n_mesh_generations": 1,
+        "sweep": sweep,
+    }
+
+
 def run_step2(b_targets=(0.6, 1.4, 2.0, 2.6), k=K_INDEX, g0=G0, r0=R0,
               order=3, maxh=0.006):
     """Sweep the drive (parametrised by the target B_gap at r0); the field index
@@ -582,6 +685,8 @@ def main():
                     help="also run the saturation sweep (Froehlich iron pole)")
     ap.add_argument("--step3", action="store_true",
                     help="also run the 2-parameter pole reshape (restore flat k)")
+    ap.add_argument("--pullback", action="store_true",
+                    help="hodograph AS solver: fixed mesh, pole shape = deformation")
     ap.add_argument("--order", type=int, default=4)
     ap.add_argument("--maxh", type=float, default=0.008)
     args = ap.parse_args()
@@ -642,6 +747,21 @@ def main():
               f"  (saturated k(r) certified, B_gap up to {bk['B_gap_max']:.2f} T)")
         if args.fig:
             _figure_step3(s3)
+
+    if args.pullback:
+        print("\n" + "=" * 74)
+        print("Hodograph AS solver: fixed mesh, pole shape = pullback deformation")
+        print("=" * 74)
+        pb = run_pullback()
+        print(f"pullback k(r) mean          : {pb['k_def_mean']:.4f}")
+        print(f"physical-remesh k(r) mean   : {pb['k_phys_mean']:.4f}")
+        print(f"pullback vs physical (max)  : {pb['k_def_vs_physical_max']:.2e}"
+              f"  (the deformation == physical)")
+        print(f"Netgen mesh generations     : {pb['n_mesh_generations']}"
+              f"  (every pole shape reuses the SAME mesh -- no remesh)")
+        print(f"{'gamma':<8}{'k_mean':<9}{'k_tilt':<9}")
+        for s in pb["sweep"]:
+            print(f"{s['gamma']:<8.2f}{s['k_mean']:<9.3f}{s['k_tilt']:<+9.4f}")
 
 
 def _figure(res):

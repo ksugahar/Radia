@@ -999,7 +999,24 @@ saturation state, Picard on `nu(B)`). Monotone BH => convex energy => the
 bracket survives into saturation: `k_phi(r)` and `k_A(r)` agree to `~1e-3` at
 `B_gap` up to `2.3 T`, certifying BOTH the naive pole's droop AND the reshaped
 pole's flat `k(r)` are physics, not mesh. Golden
-`test_scaling_ffag_pole_2d_saturated_bracket`. *Together Steps 1-3 are the
+`test_scaling_ffag_pole_2d_saturated_bracket`.
+
+**Hodograph AS the solver, not just framing (`--pullback`):** Steps 1-3 solve in
+PHYSICAL `(r,y)` coordinates and remesh for every pole shape -- the log chart is
+only the framing + the reshape parametrisation. `run_pullback` makes the
+hodograph LOAD-BEARING: the linear scaling pole is solved on a FIXED
+computational rectangle with the pole shape entering as a pullback DEFORMATION
+(`mesh.SetDeformation`, the verified `W = |det J|(J^T J)^{-1}` identity of
+`bidirectional_coordinate_transform_2d.py`), so a reshape is a new WEIGHT on the
+SAME mesh -- **Netgen runs exactly ONCE** for the whole pole-shape sweep. The
+pullback solve reproduces the physical-remesh field index `k(r)` to `~5e-4`
+(the deformation IS the physical solve), and the reshape still bites on the
+fixed mesh (the index tilt moves with `gamma`). This is the genuine no-remesh
+win the physical-coordinate solves lack. Golden
+`test_scaling_ffag_pole_2d_pullback_solver`. *(Honest scope: the no-remesh
+pullback is shown for the LINEAR equipotential pole; wiring it through the
+nonlinear saturated solve + driving the 2-D Newton on the fixed mesh is the
+next rung.)* *Together Steps 1-3 are the
 saturation-robust achromatic scaling pole: certify the index (A/phi bracket),
 measure the saturation droop, and reshape it flat — all in the hodograph
 (log/von Mises) chart, single-valued shape optimization.*
@@ -1027,7 +1044,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
-python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 saturation, --step3 reshape; --fig)
+python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 sat, --step3 reshape, --pullback no-remesh; --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)

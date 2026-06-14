@@ -1124,3 +1124,29 @@ def test_scaling_ffag_pole_2d_saturated_bracket():
     # reshaped pole: the bracket certifies the FLATTENED k(r) is real (not mesh).
     br = sf.bracket_saturated(B_design=1.8, gamma=-0.85, gamma2=42.9, maxh=0.010)
     assert br["bracket_gap_max"] < 5e-3, br
+
+
+def test_scaling_ffag_pole_2d_pullback_solver():
+    """Hodograph AS THE SOLVER (not just framing): the linear scaling pole is
+    solved on a FIXED computational mesh with the pole shape entering as a
+    pullback DEFORMATION (mesh.SetDeformation), so a reshape is a new WEIGHT on
+    the same mesh -- Netgen runs ONCE.  This realises the genuine no-remesh win
+    the physical-coordinate solves lack.
+
+    Locks: (i) the pullback solve reproduces the physical-remesh field index
+    k(r) (the deformation == physical, the lab's verified pullback identity);
+    (ii) the whole pole-shape sweep uses a SINGLE mesh generation; (iii) the
+    reshape still bites on the fixed mesh (the index tilt moves with gamma)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    out = sf.run_pullback()
+    # (i) pullback (fixed mesh + deformation) == physical remesh, on k(r).
+    assert out["k_def_vs_physical_max"] < 5e-3, out
+    assert abs(out["k_def_mean"] - out["k_phys_mean"]) < 5e-3, out
+    # (ii) ONE Netgen mesh for every pole shape (the no-remesh win).
+    assert out["n_mesh_generations"] == 1, out
+    # (iii) the reshape moves the field-index tilt on the SAME mesh
+    #       (more negative gamma -> the tilt falls), monotonically.
+    tilts = [s["k_tilt"] for s in out["sweep"]]
+    assert tilts[0] > tilts[1] > tilts[2], tilts
