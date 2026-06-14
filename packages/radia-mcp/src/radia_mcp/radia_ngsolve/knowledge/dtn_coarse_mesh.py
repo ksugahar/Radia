@@ -2288,9 +2288,55 @@ THE ELEGANT REFORMULATION (all asserted):
      weight, NOT the vector (a/r)^2 TO medium of demo_ll); only the full Kelvin inversion (N->infinity
      graded medium) or an anisotropic PML matches every mode. So N-shell IABC = an N-section impedance
      transformer in the MODE variable = the STATIC sibling of demo_uu's time-domain Bessel-filter
-     network, and Kelvin is its N->infinity exact limit (the Kelvin<->IABC link, now on firm static
-     footing). NEXT (deferred, honest): a closed-form multi-shell DESIGN via multisection-transformer
-     synthesis (binomial/Chebyshev in the mode variable) to replace the optimization outright.
+     network. CITE-DON'T-CLAIM (overclaim corrected 2026-06-15 after the lit survey): "Kelvin = the
+     shell-collapse / N->infinity limit" is PRIOR ART -- Brunotte-Meunier-Imhoff 1992 for the exact
+     spatial shell map (r_e->0 IS the sphere inversion), and Meeker himself frames IABC as
+     Kelvin-transform-derived. So the N->infinity-Kelvin link is NOT our novelty. The defensible-new
+     slice is narrower: a Liouville isotropy-OBSTRUCTION (in 3D, conformal maps = Mobius => an isotropic
+     MATERIAL-shell stack can be exact only for the radial/spherical-inversion case) + a quantitative
+     N->infinity convergence rate -- this explains why Sugahara 2017 needed SEPARATE ellipsoidal /
+     elliptic-cylindrical derivations. NEXT (deferred, honest): a closed-form multi-shell DESIGN via
+     multisection-transformer synthesis (binomial/Chebyshev in the mode variable) to replace the
+     optimization outright.
+
+IABC DEVELOPMENT NOVELTY MAP (survey-grounded 2026-06-15; answers "does the PIERS-2016 IABC work have
+development room?" -- YES, with the boundaries below). Two background lit-surveys (6 agents each)
+graded four candidate directions; cite-don't-claim / defensible-new / overclaim-to-avoid per direction.
+ A. DtN-spectral / transfer-matrix theory of IABC + closed-form shell permeabilities (demo_vv) --
+    NOT PRE-EMPTED (strongest). DECISIVE: Meeker's own Mathematica notebook
+    (femm.info/Archives/contrib/images/IABC/2D_ArbitraryOrderVector.pdf) gets the permeabilities by
+    NUMERICAL OPTIMIZATION (FindMinimum on Total[(GetBn[k]+k)^2], WorkingPrecision->1000, delta-homotopy,
+    "not well conditioned") -- NO closed form / continued fraction anywhere in the IABC family
+    (Meeker 2013 TMAG magnetic; 2014 electrostatic; Sugahara 2017 ellipsoidal 3-layer). Our single-shell
+    closed form mu(n,rho) (Meeker's tabulated constant = the n=1 case) + the scalar Mobius
+    continued-fraction recursion fill exactly that gap. CITE: Meeker 2013 + the femm.info notebooks as
+    the optimization baseline; the (l+1)/R exterior DtN eigenvalue and ABC=multipole-annihilation
+    (Khebir/Kishk/Ramahi; Chen&Konrad 1997 taxonomy) as classical. OVERCLAIM TO AVOID: do NOT claim the
+    sphere DtN spectrum or multipole structure as new physics -- the contribution is the closed-form /
+    well-conditioned permeabilities + spectral certification METHODOLOGY.
+ C. Closed-form multi-shell via multisection-transformer (binomial/Chebyshev) synthesis -- PARTIAL.
+    The synthesis machinery is classical for WAVES (Collin; Orfanidi) and continued-fraction/Pade-DtN
+    ABCs exist for waves (Guddati 2006 CFABC<->PML equivalence; Hagstrom-Warburton). Defensible-new =
+    the STATIC / harmonic-order instantiation: no frequency band; the equiripple "passband" is the
+    SPHERICAL-HARMONIC-ORDER spectrum (1/r^{n+1} decay). OVERCLAIM TO AVOID: not "first Chebyshev layered
+    absorber"; must show it is not a trivial frequency->order substitution and beats Meeker's grading.
+ B. Kelvin <-> IABC unification -- PARTIAL (weakest standalone; fold into A as one section). The
+    Kelvin-as-shell-limit is prior art (above). Defensible-new = ONLY the Liouville isotropy-obstruction
+    theorem + isotropic-shell convergence rate.
+ D. TIME-DOMAIN / eddy-current (parabolic) IABC -- PARTIAL but HIGHEST novelty, LOWEST footing (plan
+    only; the user's destination). No work fuses (nested-shell open boundary)+(parabolic diffusion)+
+    (complex-shell via ADE/recursive convolution). CITE-DISTINGUISH: Valdivieso-Meunier-Ramdane-
+    Gyselinck 2020 (Foster networks + recursive convolution, complex-mu) and time-domain SIBC-by-RC
+    (Yuferev/Ida) -- both use the ADE/RC machinery but for INTERIOR material / conductor truncation, NOT
+    the open exterior boundary; explicitly parabolic, NOT Grote-Keller/PML (hyperbolic). demo_uu's
+    Bessel/Thomson pole network is the constructive engine (the closed-form poles the ADE auxiliaries
+    realize). GATE on a transient sphere/cylinder-diffusion benchmark before any claim.
+ RANKING (novelty x verified-footing x SA-fit): A > C > B > D. Architecture: Paper #1 = A spine + C
+ design payoff + B as one rigor section ("spectral transfer-matrix theory of IABC: closed-form
+ isotropic-shell permeabilities + filter-synthesis design"); Paper #2 = D once a transient benchmark is
+ green. WHOLE-PAPER GUARD: sphere DtN eigenvalues, ABC=multipole annihilation, multisection synthesis,
+ Kelvin-as-shell-limit are each classical/published -- frame every claim as the static-magnetostatic
+ instantiation / closed-form replacement of optimization / spectral-certification methodology.
 """
 
 
