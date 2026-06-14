@@ -2161,6 +2161,28 @@ strength + near-centre RESOLUTION (to resolve the diverging k_eff), not a clever
 の工夫" helps a PML in general (smaller residual) but does not create an extra Kelvin-specific synergy
 beyond getting the centre absorbed and resolved. (The combined FE here is also the seed of the single
 monolithic volumetric 3D solve -- medium + PML/HOIBC in one system.)
+
+EVANESCENT / LOW-FREQUENCY: does Kelvin beat a plain PML? HONEST mode-resolved answer + a CORRECTION
+(demo_tt, verified 2026-06-15). A too-quick earlier claim ("Kelvin+PML beats plain PML for evanescent")
+was based on a THIN plain PML = an unfair comparison; the full test corrects it. Mechanism: a plain PML
+does NOT absorb EVANESCENT waves (the imaginary stretch is for propagating waves) -- only the natural
+DECAY over the layer helps -- so a THIN plain PML reflects the residual evanescent field, but a plain PML
+with ADEQUATE THICKNESS (reaching far enough for decay) is excellent at the same DoF (n=1, ka=0.5: d=0.5
+-> 0.38 vs d=6 -> 6e-4). The right Kelvin tool for evanescent is KELVIN-ONLY (the quasi-static
+compactification, NO PML); adding a PML to Kelvin for evanescent HURTS (the stretch distorts the smooth
+decaying field: n=4, ka=0.5: Kelvin-only 5.9e-5 vs Kelvin+PML 1.1e-3). MODE-RESOLVED crossover (ka=0.5,
+matched M=120, Kelvin-only parameter-free vs plain-PML-best-d): plain WINS for n~ka (n=1: 0.056 vs 6e-4;
+n=2: 0.012 vs 6e-4) -- the physically DOMINANT dipole/quadrupole; Kelvin-only WINS for DEEPLY evanescent
+n/ka >~ 5 (n=3: 3.7e-5 vs 2.4e-4; n=8: 2.1e-4 vs 2.7e-4) AND is parameter-free. NET (honest, no
+overclaim): "Kelvin beats a plain PML for evanescent" is NOT a blanket win -- a thickness-tuned plain PML
+is competitive/better for the dominant low-n modes; Kelvin's genuine evanescent edge is the NARROW
+deeply-evanescent corner where Kelvin-ONLY (no PML) is more accurate AND parameter-free (the exact
+static compactification). SPHERICAL vs BOX PML (the related question): a spherical PML IS better than a
+box (no corner reflections, conforms to spherical wavefronts, diagonal in the spherical-harmonic DtN)
+-- but that favours ANY spherical PML; Kelvin's spherical truncation inherits it, it is NOT a
+Kelvin-vs-PML differentiator (box-vs-sphere needs a genuine 3D test). DISCIPLINE NOTE: this block
+records a corrected claim -- the first thin-PML probe over-confirmed the user's intuition; the fuller
+thickness-sweep + Kelvin-only test is the verified result.
 """
 
 
