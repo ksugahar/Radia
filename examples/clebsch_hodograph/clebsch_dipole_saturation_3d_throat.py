@@ -141,29 +141,66 @@ def circuit_design_map(NI_list):
     return NI, bg, bt
 
 
-def knee_drive():
-    """The drive NI at which the throat reaches J_sat (the knee location)."""
-    # B_throat = J_sat  =>  Phi = J_sat * A_throat ; invert MMF at that flux.
-    Phi = JSAT * A_THROAT
+def circuit_knee_drive(tt=None):
+    """The drive NI at which the throat (thickness ``tt``) reaches J_sat -- the
+    saturation-onset of the magnet, by the 1-shot circuit (no mesh).  Monotone
+    INCREASING in ``tt`` (a thinner throat saturates earlier), so it inverts cleanly."""
+    tt = TT if tt is None else tt
+    a_throat = tt * D
+    Phi = JSAT * a_throat                          # B_throat = J_sat  =>  Phi
     l_throat = 2.0 * AX
     l_rest = (2.0 * AX - GW) + 2.0 * (2.0 * AZ)
     R_gap = GW / (MU0 * A_GAP)
-    R_throat = l_throat / (MU0 * mur_of_B(JSAT) * A_THROAT)
+    R_throat = l_throat / (MU0 * mur_of_B(JSAT) * a_throat)
     R_rest = l_rest / (MU0 * mur_of_B(Phi / A_IRON) * A_IRON)
     return (R_gap + R_throat + R_rest) * Phi
+
+
+def knee_drive():
+    """The knee drive for the nominal throat (module ``TT``)."""
+    return circuit_knee_drive(TT)
+
+
+def size_throat_for_knee(target_NI, tt_lo=0.002, tt_hi=0.012, n_bisect=46):
+    """INVERSE DESIGN at linear cost (spec -> 3-D geometry): size the throat thickness
+    so the magnet saturates (the knee) at a TARGET drive ``target_NI``.  ``circuit_knee_drive``
+    is monotone in ``tt``, so bisect -- a handful of closed-form circuit evaluations,
+    no mesh, milliseconds.  Verify the sized geometry with the full 3-D A-formulation
+    FEM (``nonlinear_fem(..., tt=sized_tt)``) to CLOSE the 3-D design loop."""
+    t0 = time.time()
+    lo, hi = tt_lo, tt_hi
+    klo, khi = circuit_knee_drive(lo), circuit_knee_drive(hi)
+    for _ in range(n_bisect):
+        mid = 0.5 * (lo + hi)
+        if circuit_knee_drive(mid) < target_NI:    # saturates too early -> thicken
+            lo = mid
+        else:
+            hi = mid
+    tt = 0.5 * (lo + hi)
+    achieved = circuit_knee_drive(tt)
+    return {
+        "target_knee_NI": float(target_NI),
+        "sized_tt": float(tt),
+        "sized_area_ratio": float(T / tt),
+        "achieved_knee_NI": float(achieved),
+        "rel_err": float(abs(achieved - target_NI) / target_NI),
+        "sizing_seconds": float(time.time() - t0),
+        "feasible_NI_range": [float(klo), float(khi)],
+    }
 
 
 # =============================================================================
 # 2.  3-D FEM  --  the convergent B-input A-formulation (reused from B(a))
 # =============================================================================
-def _build_mesh(iron_maxh=0.005, air_maxh=0.032):
+def _build_mesh(iron_maxh=0.005, air_maxh=0.032, tt=None):
+    tt = TT if tt is None else tt                # throat thickness (sized in inverse design)
     import ngsolve as ng
     from ngsolve import TaskManager
     from netgen.occ import Box, Pnt, Glue, OCCGeometry
     hD = D / 2.0
     top = (Box(Pnt(-AX, -hD, AZ - T), Pnt(AX, hD, AZ))
            - Box(Pnt(-GW / 2, -hD, AZ - T), Pnt(GW / 2, hD, AZ)))
-    bot = Box(Pnt(-AX, -hD, -AZ), Pnt(AX, hD, -AZ + TT))
+    bot = Box(Pnt(-AX, -hD, -AZ), Pnt(AX, hD, -AZ + tt))
     left = Box(Pnt(-AX, -hD, -AZ), Pnt(-AX + T, hD, AZ))
     right = Box(Pnt(AX - T, -hD, -AZ), Pnt(AX, hD, AZ))
     iron = top + bot + left + right
@@ -232,7 +269,7 @@ def linear_amplification_check(iron_maxh=0.006, air_maxh=0.04):
 
 
 def nonlinear_fem(NI_list, iron_maxh=0.009, air_maxh=0.05, niter=400,
-                  relax0=0.25, relax_min=0.02, tol=1e-4, verbose=False):
+                  relax0=0.25, relax_min=0.02, tol=1e-4, verbose=False, tt=None):
     """Convergent B-input A-formulation saturation sweep (the trusted reference).
 
     B = B_s + curl A_r,  weak form
@@ -247,7 +284,8 @@ def nonlinear_fem(NI_list, iron_maxh=0.009, air_maxh=0.05, niter=400,
     import ngsolve as ng
     from ngsolve import (HCurl, GridFunction, curl, dx, sqrt, InnerProduct,
                          BilinearForm, LinearForm, TaskManager, exp)
-    mesh = _build_mesh(iron_maxh, air_maxh)
+    tt = TT if tt is None else tt                  # throat thickness (sized geometry)
+    mesh = _build_mesh(iron_maxh, air_maxh, tt=tt)
     Bs1 = _coil_Bs(mesh)
 
     def nu_iron_cf(Bm):
@@ -295,7 +333,7 @@ def nonlinear_fem(NI_list, iron_maxh=0.009, air_maxh=0.05, niter=400,
         B = Bs + curl(Ar)
         bg = abs(float(B[0](mesh(0, 0, AZ - T / 2))))           # total gap field
         br = abs(float(curl(Ar)[0](mesh(0, 0, AZ - T / 2))))    # iron-channeled part
-        bt = abs(float(sqrt(InnerProduct(B, B))(mesh(0, 0, -AZ + TT / 2))))  # throat
+        bt = abs(float(sqrt(InnerProduct(B, B))(mesh(0, 0, -AZ + tt / 2))))  # throat
         rec = {"NI": NI, "B_gap": bg, "B_gap_iron": br, "B_throat": bt,
                "iters": nit, "resid": d, "t_s": time.time() - t0, "ne": mesh.ne}
         out.append(rec)
@@ -307,6 +345,37 @@ def nonlinear_fem(NI_list, iron_maxh=0.009, air_maxh=0.05, niter=400,
 
 
 # =============================================================================
+# 3.  INVERSE DESIGN in 3-D -- spec (saturation onset) -> geometry (throat thickness)
+# =============================================================================
+def run_inverse_3d(target_knee_NI, with_fem=False, iron_maxh=0.009, air_maxh=0.05):
+    """3-D inverse design (the 飽和の3D化 of the 2-D inverse sizing): size the throat
+    thickness so the magnet's SATURATION ONSET (the knee drive) hits a target, by the
+    1-shot circuit (linear cost, mesh-free), then VERIFY with the adaptive B-input
+    A-formulation FEM that the throat field crosses J_sat near the target -- the 3-D
+    design loop, closed.
+
+    HONEST note: the lumped circuit uses the GEOMETRIC area ratio, but the linking coil
+    funnels MORE flux into the throat (the linear-amplification ratio exceeds the
+    geometric one), so the FEM saturates EARLIER than the circuit target by that
+    funneling factor -- reported, not hidden."""
+    sz = size_throat_for_knee(target_knee_NI)
+    out = {"sizing": sz}
+    if with_fem:
+        NIs = [int(round(target_knee_NI * f)) for f in (0.2, 0.4, 0.6, 0.9, 1.3)]
+        fem = nonlinear_fem(NIs, iron_maxh=iron_maxh, air_maxh=air_maxh,
+                            tt=sz["sized_tt"])
+        bt = np.array([r["B_throat"] for r in fem])
+        NIa = np.array([r["NI"] for r in fem], float)
+        knee_fem = (float(np.interp(JSAT, bt, NIa))
+                    if bt[0] < JSAT < bt[-1] else None)
+        out["fem"] = fem
+        out["fem_knee_NI"] = knee_fem
+        out["fem_max_resid"] = float(max(r["resid"] for r in fem))
+        if knee_fem is not None:
+            out["funneling_factor"] = float(target_knee_NI / knee_fem)
+    return out
+
+
 def run(with_fem=False, fem_NI=(200, 1500, 3000, 6000, 12000, 24000),
         circuit_NI=(200, 600, 1500, 3000, 6000, 12000, 24000)):
     """Build the saturation design map (circuit, linear cost) and, if asked, the
