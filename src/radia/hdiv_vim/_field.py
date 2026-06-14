@@ -1433,3 +1433,140 @@ def solve_demag_picard(mesh, M_of_H, H_ext, order=1, max_iter=120, tol=1e-5, rel
             converged = True
             break
     return dict(gfM=gfM, M_centroids=M_el, n_iter=it + 1, converged=converged, residual=res)
+
+
+# ---------------------------------------------------------------------------------------------------
+# (4 step 2 / the (2) prize): matrix-free NEWTON-KRYLOV demag solve on the ANALYTIC field operator.
+# The de Rham-CLEAN robust nonlinear solve -- converges for STIFF / strongly-saturating materials
+# (chi*N > 1) where the under-relaxed Picard DIVERGES and a quasi-Newton (Anderson) STAGNATES, while
+# keeping the CORRECT analytic charge field at every order (NO N=B^T G B operator -> no order>=2 solve
+# leak; cf. the flux-line diagnostic / the bridge doc).  Validated: linear chi=100 + stiff saturating,
+# where GMRES converges (~76 iters) but Anderson stagnated at res~1.0 and the Picard exploded.
+# ---------------------------------------------------------------------------------------------------
+def saturating_tangent(chi0, Msat):
+    """(M_of_H, dM_of_H) for the saturating isotropic law M(H) = chi0 H / (1 + chi0|H|/Msat) with the
+    CONSISTENT rank-1 secant tangent dM/dH = chi_diff Hhat(x)Hhat + chi_sec (I - Hhat(x)Hhat),
+    chi_sec = chi0/(1+chi0|H|/Msat), chi_diff = chi0/(1+chi0|H|/Msat)^2 (the scalar chi_diff*I is WRONG
+    at moderate drive)."""
+    def M_of_H(H):
+        H = np.asarray(H, float); n = np.linalg.norm(H)
+        return chi0 * H / (1.0 + chi0 * n / Msat) if n > 0 else np.zeros(3)
+
+    def dM_of_H(H):
+        H = np.asarray(H, float); n = np.linalg.norm(H)
+        if n < 1e-30:
+            return chi0 * np.eye(3)
+        sec = chi0 / (1.0 + chi0 * n / Msat)
+        dif = chi0 / (1.0 + chi0 * n / Msat) ** 2
+        Hh = H / n; P = np.outer(Hh, Hh)
+        return dif * P + sec * (np.eye(3) - P)
+    return M_of_H, dM_of_H
+
+
+def solve_demag_newton(mesh, M_of_H, dM_of_H, H_ext, order=1, max_newton=20, gmres_tol=1e-7,
+                       newton_tol=1e-7, gmres_restart=200, verbose=False):
+    """Matrix-free NEWTON-KRYLOV demag solve on the ANALYTIC field operator -- the de Rham-clean robust
+    nonlinear solve (the (2) prize).  Converges for STIFF / strongly-saturating materials (chi*N > 1)
+    where solve_demag_picard DIVERGES; keeps the CORRECT analytic charge field at every order.
+
+    Newton on the field residual  F(m) = m - proj_HDiv( M_of_H(H_ext + field(m)) ) = 0, with the
+    matrix-free Jacobian  J v = v - proj_HDiv( dM_of_H . field(v) )  (field(.) = the analytic demag field
+    via the batched C++ kernel; dM_of_H the local 3x3 tensor tangent at the current iterate's field).
+    GMRES (asymmetry-robust) solves each Newton step; Armijo line search globalises.  For a LINEAR
+    material this is ONE Newton step (J constant) reproducing the analytic sphere M = chi H/(1+chi D).
+
+    M_of_H  : callable H(3,) -> M(3,).  dM_of_H : callable H(3,) -> 3x3 dM/dH (use saturating_tangent for
+              the saturating law).  returns dict(gfM, M_centroids, n_newton, converged, residual).
+    CALLER wraps in TaskManager."""
+    import ngsolve as ng
+    import scipy.sparse.linalg as spla
+    H_ext = np.asarray(H_ext, float)
+    fes = ng.HDiv(mesh, order=order)
+    nq = max(2 * order + 2, 4)
+    l2 = ng.L2(mesh, order=order)
+    gfs = [ng.GridFunction(l2) for _ in range(3)]
+    perel = _l2_element_quadrature(mesh, l2, nq)
+    offs = []; o = 0
+    for (_, _, _, X) in perel:
+        offs.append((o, o + len(X))); o += len(X)
+    allX = np.vstack([X for (_, _, _, X) in perel])
+    gfM = ng.GridFunction(fes); gfV = ng.GridFunction(fes)
+    ndof = fes.ndof
+    nE = mesh.GetNE(ng.VOL)
+    cents = np.array([np.array([mesh[v].point for v in mesh[ng.ElementId(ng.VOL, i)].vertices]).mean(0)
+                      for i in range(nE)])
+
+    def proj_to_m(targets):
+        _project_targets(gfs, perel, targets)
+        gfM.Set(ng.CoefficientFunction((gfs[0], gfs[1], gfs[2])))
+        return gfM.vec.FV().NumPy().copy()
+
+    def field_at(vec):
+        gfV.vec.FV().NumPy()[:] = vec
+        return assemble_demag_field(mesh, gfV, allX, quantity="h")
+
+    def split(Hq):                                            # (Nq,3) flat -> per-element (nq,3) list
+        return [Hq[a:b] for (a, b) in offs]
+
+    scale = np.linalg.norm(proj_to_m([np.tile(M_of_H(H_ext), (len(X), 1)) for (_, _, _, X) in perel])) + 1e-30
+
+    # Scalar-chi WARMSTART: enter the Newton basin at the stiff saturating KNEE.  A from-zero Newton
+    # overshoots there (the unconstrained response |M_of_H(H_ext)| is >> the demag-limited m*), and the
+    # line search then crawls.  Land near the answer with the 1-D scalar demag fixed point m* solving
+    # m = M_s(|H_ext| - D*m) (M_s the law along H_ext; D the demag factor estimated from the field
+    # operator on a uniform M), set as a UNIFORM M = m* H_ext^.  (Bisection, robust even when the scalar
+    # Picard itself would diverge.)  This is the basin-entry technique of solve_nonlinear_newton.
+    H0mag = float(np.linalg.norm(H_ext))
+    m = np.zeros(ndof)
+    if H0mag > 0:
+        dhat = H_ext / H0mag
+        muvec = proj_to_m([np.tile(dhat, (len(X), 1)) for (_, _, _, X) in perel])
+        Hmu = field_at(muvec)                                    # demag field of a uniform M = dhat
+        D_est = min(max(-float(np.mean(Hmu @ dhat)), 1e-6), 1.0)  # H_demag ~ -D M -> D in (0,1]
+        Ms = lambda h: float(np.asarray(M_of_H(h * dhat)) @ dhat)
+        f = lambda mm: mm - Ms(H0mag - D_est * mm)
+        lo, hi = 0.0, max(abs(Ms(H0mag)), 1.0)
+        while f(lo) * f(hi) > 0 and hi < 1e12:
+            hi *= 2.0
+        for _ in range(200):
+            mid = 0.5 * (lo + hi)
+            if f(lo) * f(mid) <= 0:
+                hi = mid
+            else:
+                lo = mid
+        m = proj_to_m([np.tile(0.5 * (lo + hi) * dhat, (len(X), 1)) for (_, _, _, X) in perel])
+    converged = False; relF = np.inf; nit = 0
+    for it in range(max_newton):
+        nit = it + 1
+        gfM.vec.FV().NumPy()[:] = m
+        Hd = assemble_demag_field(mesh, gfM, allX, quantity="h")     # field of the current M
+        Hcur = H_ext[None, :] + Hd                                   # total field at the quad points
+        F = m - proj_to_m([np.array([M_of_H(Hcur[j]) for j in range(a, b)]) for (a, b) in offs])
+        nF = np.linalg.norm(F); relF = nF / scale
+        if verbose:
+            print(f"  newton {it:2d}  relF = {relF:.3e}")
+        if relF < newton_tol:
+            converged = True; break
+        T = np.array([dM_of_H(Hcur[j]) for j in range(len(allX))])   # local 3x3 tangent per quad point
+
+        def Japply(v):
+            v = np.asarray(v, float)
+            Hv = field_at(v)                                         # analytic field of the perturbation
+            THv = np.einsum("qij,qj->qi", T, Hv)                     # local tangent . field(v)
+            return v - proj_to_m(split(THv))
+
+        Jop = spla.LinearOperator((ndof, ndof), matvec=Japply)
+        dm, _info = spla.gmres(Jop, -F, rtol=gmres_tol, restart=gmres_restart, maxiter=600)
+        # Armijo line search on ||F||
+        def Fnorm(mm):
+            gfM.vec.FV().NumPy()[:] = mm
+            Hh = H_ext[None, :] + assemble_demag_field(mesh, gfM, allX, quantity="h")
+            return np.linalg.norm(mm - proj_to_m([np.array([M_of_H(Hh[j]) for j in range(a, b)])
+                                                  for (a, b) in offs]))
+        lam = 1.0
+        while lam > 1e-4 and Fnorm(m + lam * dm) >= nF:
+            lam *= 0.5
+        m = m + lam * dm
+    gfM.vec.FV().NumPy()[:] = m
+    Mcent = np.array([[float(gfM[c](mesh(cx, cy, cz))) for c in range(3)] for (cx, cy, cz) in cents])
+    return dict(gfM=gfM, M_centroids=Mcent, n_newton=nit, converged=converged, residual=relF)
