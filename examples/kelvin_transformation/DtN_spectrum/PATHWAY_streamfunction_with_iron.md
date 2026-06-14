@@ -18,6 +18,21 @@ inverts — the linear map `psi -> field` — is, **with magnetic material prese
 **Kelvin-transformed FEM** (which carries arbitrary `mu(x)` in the inverted exterior). Then coil design
 is the same clean linear inverse as in free space, but with the correct **material-aware** kernel.
 
+## IMPORTANT correction (2026-06-15): the coil model -- Dirichlet trace vs current sheet
+The demos demo_hh/kk/ll built `M` by a **Dirichlet trace** Omega=psi on the winding surface (the
+exterior-Dirichlet / Schur route described below). That is a DIFFERENT operator from the stream-function
+CURRENT SHEET K = n x grad psi: on a sphere the per-mode transfer ratio is **T_BS/T_D = n/(2n+1)** (1/3,
+2/5, 3/7 -- NOT 1), so the Dirichlet model does NOT reduce to Biot-Savart in vacuum and its psi-contours
+are NOT wires. The **correct, gap-free coil model** is the REDUCED SCALAR POTENTIAL:
+**H = H_s - grad(Omega)**, with H_s = the free-space Biot-Savart field of K = n x grad psi (so vacuum ->
+H = H_s exactly, psi a true current potential) and Omega = the iron reaction via the Kelvin open boundary.
+Verified in **`demo_mm` (sphere, analytic H_s) + `demo_nn` (ellipsoid, FE-direct Biot-Savart) + `demo_oo`
+(transfer matrix into radia.stream_function)**: vacuum Omega=0; iron Kelvin == brute-force air-box
+(2.6e-5 sphere, 3.5e-3 ellipsoid); design WITH the material-aware M HITS (1.8e-15) while the free-space
+design MISSES (13%); the existing radia.stream_function ridge solver consumes M (2.5e-7). The Schur-DtN
+narrative below still demonstrates the material-aware open-boundary OPERATOR machinery, but the
+production coil model is the reduced-potential current sheet.
+
 ## Why it was hard (the user's observation: "流れ関数法は磁性体があると楽じゃない")
 - Free space: `psi -> field` kernel = **Biot-Savart** (analytic, easy). Design = a clean linear solve.
 - With iron (yoke / shield / core): total field = coil field **+ iron reaction**; the kernel becomes the
@@ -48,6 +63,9 @@ is the same clean linear inverse as in free space, but with the correct **materi
 | `demo_jj` | **can ACA-TSVD be applied to M?** YES, and the two ingredients answer two questions. **TSVD** -> the GLOBAL inverse design (`psi=M^+ B`), unchanged + necessary (M = compact forward map, SVs decay, measured cond(1e-6)~9.5e3). **ACA** -> BLOCK-WISE as an H-matrix, NOT a global low-rank factor: global M is near-full-rank (189/195, near field) but the material Green kernel `G_mu(x_t,y_c)` is asymptotically smooth for well-separated clusters even with iron between them, so an ADMISSIBLE block (compact source cap + far targets) is low rank (verified 6/20, sigma 1->4e-3; rSVD 10 oracle-calls -> 5e-6) while a NEAR block stays dense (18/20) -- the **same near/far split HACApK already runs** on the MMM/MSC matrix. Only the entry oracle changes: 1 column = 1 Kelvin-FEM back-substitution (a fast matvec of M), 1 row = 1 adjoint solve -> a **randomized SVD/Lanczos is even more natural than entrywise ACA**. Answers the "wire through `radia.streamfunction` ACA-TSVD" open item: yes, with the Kelvin-FEM-solve oracle |
 | `demo_kk` | **the wiring made real: DtN M -> the EXISTING `radia.stream_function` (ACA+)+TSVD + ridge solver.** The cheap DtN material-aware M is handed to the kernel-agnostic `aca_tsvd(M_rows, N_cols, entry)` (entry = array lookup -- the cheap-build path the benchmark justifies; ACA+ reproduces the formed M to **1e-14**), then designed by `RegularizedTSVD.from_stiffness(res, S)` with `S` = the coil **surface current-density seminorm** (tangential trace gradient; `psi^T S psi = ||K||^2`). Verified (non-concentric blob, mu_r=50, order 2, 378 coil DoFs, 24 targets): TSVD (min-L2) and the **ridge (min current density)** both HIT the iron-system target in a fresh Kelvin-FEM solve, the ridge with **23% less current density** (||K|| 3.37 vs 4.39); an alpha L-curve trades field accuracy (9.7e-10->4.8e-1) for ||K|| (3.37->1.69) re-solving only the k x k core; the **free-space-designed coil MISSES by 22.5%** through the same solver. **No DtN-specific design code** -- only the `entry` callback changes |
 | `demo_ll` | **steps 1-4 of the next-steps list, closed: NON-spherical (cylinder) former + m≠0 TESSERAL shim + manufacturable turns + INDEPENDENT air-box cross-validation.** A finite cylinder coil former + an OFF-AXIS iron blob; the material-aware M designs a real tesseral shim (Z2/ZX) to purity resid **2e-8/8e-8** vs free-space-in-iron **2e-2**; manufacturable discrete contours **9.5e-2 (6 turns) → 1.1e-2 (40)**; and an INDEPENDENT brute-force air-box solve (no Kelvin, far Dirichlet) confirms the iron-aware field to **3.6e-3 on a smooth sphere former** (the cylinder cross-check is edge-singularity-limited to ~8e-2 — a property of the CHECK, not the method, per the clean sphere result + the demo_hh analytic 1e-4 anchor) |
+| `demo_mm` | **the CORRECT coil model (reduced scalar potential current sheet) -- supersedes the Dirichlet M.** H = H_s - grad(Omega): vacuum -> H = H_s = Biot-Savart exactly (Omega=0); iron via Kelvin. Sphere psi=P_2: vacuum Omega_rms 0, iron Kelvin vs air-box 2.6e-5; the two coil models differ by exactly n/(2n+1) |
+| `demo_nn` | **the current-sheet model on an ELLIPSOID via FE-direct Biot-Savart** (any winding surface). Sphere FE-direct H_s == analytic 2.4e-3; ellipsoid iron Kelvin vs air-box (527k DoF) 3.5e-3 |
+| `demo_oo` | **the current-sheet transfer matrix M into radia.stream_function** (the demo_kk result, correct model). Ellipsoid, 429 psi-dofs, M_react/M_free 0.10: material-aware design HITS 1.8e-15, free-space MISSES 13%, ridge solver consumes M 2.5e-7 |
 
 ## To turn into a contribution (next steps)
 1. **General (arbitrary iron) coil-design demo** — **DONE: `demo_hh_general_iron_design.py`** (2026-06,
