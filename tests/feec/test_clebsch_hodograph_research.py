@@ -905,7 +905,7 @@ def test_clebsch_dipole_saturation_3d_throat_fem():
 
 
 def test_clebsch_dipole_saturation_3d_throat_inverse_sizing():
-    """飽和の3D化: 3-D INVERSE design (spec -> geometry), the 3-D analog of the 2-D
+    """3-D INVERSE design (spec -> geometry), the 3-D analog of the 2-D
     flux-limiter sizing.  Size the throat thickness so the magnet's SATURATION ONSET
     (the knee drive) hits a target, by the 1-shot circuit -- the knee drive is monotone
     in throat thickness, so a handful of closed-form circuit evals (no mesh) hit the

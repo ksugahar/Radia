@@ -884,7 +884,7 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   counterpart to B(a): B(a) demonstrated the **solver** on a gap-dominated dipole; B(b)
   demonstrates the **strong channeled-flux knee** on a throat-necked circuit, and the
   honest 3-D limit of throat clamping.*
-  **3-D inverse design (飽和の3D化, spec → geometry):** `size_throat_for_knee(target)`
+  **3-D inverse design (spec → geometry):** `size_throat_for_knee(target)`
   sizes the **throat thickness** so the magnet's **saturation onset** (the knee drive)
   hits a target — the knee drive is **monotone in throat thickness**, so the 1-shot
   circuit bisects it **mesh-free, to machine precision** (e.g. 4000 A → `t = 7.1 mm`),

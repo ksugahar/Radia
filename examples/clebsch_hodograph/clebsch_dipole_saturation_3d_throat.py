@@ -348,7 +348,7 @@ def nonlinear_fem(NI_list, iron_maxh=0.009, air_maxh=0.05, niter=400,
 # 3.  INVERSE DESIGN in 3-D -- spec (saturation onset) -> geometry (throat thickness)
 # =============================================================================
 def run_inverse_3d(target_knee_NI, with_fem=False, iron_maxh=0.009, air_maxh=0.05):
-    """3-D inverse design (the 飽和の3D化 of the 2-D inverse sizing): size the throat
+    """3-D inverse design (the 3-D extension of the 2-D inverse sizing): size the throat
     thickness so the magnet's SATURATION ONSET (the knee drive) hits a target, by the
     1-shot circuit (linear cost, mesh-free), then VERIFY with the adaptive B-input
     A-formulation FEM that the throat field crosses J_sat near the target -- the 3-D
