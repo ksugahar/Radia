@@ -1,0 +1,30 @@
+{
+  "cases": [
+    {
+      "label": "conformal F=z+0.3z^2",
+      "ndof": 1735,
+      "order": 3,
+      "W_dev": 4.295411992307657e-14,
+      "mat_rel": 2.01475656991925e-16,
+      "sol_rel": 2.912624731453786e-14,
+      "err_exact": 7.758198883150256e-07
+    },
+    {
+      "label": "non-conformal stretch+shear",
+      "ndof": 1735,
+      "order": 3,
+      "W_dev": 0.7381512146801442,
+      "mat_rel": 2.7622315501050773e-16,
+      "sol_rel": 6.691651310816892e-14,
+      "err_exact": 1.3239321134451303e-07
+    }
+  ],
+  "symbolic": {
+    "W_2d_conformal": "Matrix([[1, 0], [0, 1]])",
+    "conformal_is_identity": true,
+    "generic_is_identity": false,
+    "W_3d_scale_diag": "s3",
+    "threeD_weight_free": false,
+    "axisym_weight": "2*pi*r"
+  }
+}
