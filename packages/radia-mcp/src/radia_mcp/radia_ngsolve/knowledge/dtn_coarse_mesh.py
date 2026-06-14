@@ -2337,6 +2337,39 @@ graded four candidate directions; cite-don't-claim / defensible-new / overclaim-
  green. WHOLE-PAPER GUARD: sphere DtN eigenvalues, ABC=multipole annihilation, multisection synthesis,
  Kelvin-as-shell-limit are each classical/published -- frame every claim as the static-magnetostatic
  instantiation / closed-form replacement of optimization / spectral-certification methodology.
+
+TIME-DOMAIN HIGH-FREQUENCY IABC + DtN COST (demo_ww, VERIFIED 2026-06-15; user: "the time-domain
+representation of the high-frequency IABC would be good; show its DtN is cost-superior; of course
+time-domain FEM-BEM is most accurate"). This is development-direction D's WAVE (hyperbolic) branch and
+fuses demo_uu (exact pole network) with the IABC reading. RESULTS (all asserted):
+ (A) The exact exterior DtN per mode is the rational n-pole Lambda_n(z)=iz-1+sum z_j/(z-z_j) (demo_uu);
+     its time domain = n LOCAL auxiliary ODEs (Grote-Keller). This is what a TIME-DOMAIN FEM-BEM
+     reproduces -> MOST ACCURATE but the DtN is DENSE on Gamma + a temporal CONVOLUTION (history).
+ (B) Finite-frequency nested-SHELL IABC DtN built by transfer matrix (spherical Bessel j_n,y_n per
+     constant-index shell, u & u' continuous): machinery EXACT (a vacuum shell closed by the exact
+     radiation DtN reproduces Lambda_n(ka) to 5e-16). With CONSTANT-material shells the truncation DtN
+     is TRANSCENDENTAL (Bessel) in z, so it has NO finite-pole time domain by itself; a crude lossy
+     stack beats bare PEC truncation (tuning the shells = Sugahara's fsolve). => the finite-state time
+     domain requires RATIONALIZATION.
+ (C) TIME-DOMAIN IABC = a reduced M-pole rational DtN  Lambda^(M)_n(z)=iz-1+sum_{j<=M} r_j/(z-p_j)
+     fitted over a band (poles = the M exact poles nearest the real axis = least-damped/band-dominant;
+     residues by linear LS => always STABLE, Im p_j<0). Band error DECREASES monotonically with M and
+     -> 0 at M=n (n=5 band kR in [0.5,6]: M=1->2.2, 2->0.36, 3->0.035, 4->1.9e-3, 5->3.5e-15). The
+     M auxiliary ODEs psi_j'=-i p_j psi_j - i r_j u, g=-u'-u+sum psi_j reproduce it by transient
+     integration (1.7e-10). => the high-frequency IABC HAS a finite time-domain representation = a
+     low-order analog (pole) filter, M auxiliary ODEs per surface mode.
+ (D) DtN COST-ACCURACY datasheet: band DtN error vs M (= #poles = #auxiliary ODEs/mode = the cost),
+     exact at M=n. STRUCTURAL cost (NOT wall-clock): time-domain FEM-BEM = exact DtN but dense Gamma x
+     Gamma + global temporal convolution (~O(N_Gamma^2)/step + history); exact local NRBC = n aux ODEs
+     /degree-n; TIME-DOMAIN IABC = M(<n) aux ODEs/mode, LOCAL in time + SPARSE in space (a few FE shell
+     layers, no dense matrix, no history) -> cheapest, controlled DtN error. The DtN spectrum is the
+     common yardstick for the cost-superiority claim.
+PRIOR ART (cite, not claim): exact local-in-time sphere-DtN pole realization = Grote-Keller 1995/96;
+rational/Pade/vector-fitting of NRBC kernels = Alpert-Greengard-Hagstrom 2000 + vector-fitting lit.
+Defensible-new = the IABC reading + the static-to-high-frequency DtN cost-accuracy datasheet in the
+SA/Kelvin context, with FEM-BEM as the cited exact-but-expensive reference. The reduced fit here uses
+exact-pole subsets (clean & verifiable); a free-pole vector fit could do better per M (noted, not
+claimed). Cost comparison is STRUCTURAL (state dimension / locality / sparsity), not benchmarked.
 """
 
 
