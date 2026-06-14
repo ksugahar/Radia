@@ -378,6 +378,29 @@ reported honestly, not a formulation failure. Figure:
 `chaplygin_inverse_nonlinear_2d.png` (const-width annular bend + tapered spiral,
 both with `det>0`).
 
+### `chaplygin_taper_design_sweep_2d.py` — closing Task 1's free boundary: a TAPER design sweep, Newton steps all linear
+
+The connection of the **turning design sweep** (`chaplygin_turning_design_sweep_2d.py`,
+forward, one linear solve each) to the **free-boundary closure** above. A guide that
+turns *and* **tapers** has θ-dependent walls → a θ-dependent hodograph image = a **free
+boundary**; the **von Mises** change of variables dissolves it onto a **fixed
+rectangle**, so each tapered design is the nonlinear inverse — a **Newton continuation
+whose every step is one linear solve, on a fixed mesh (no remesh)**. Sweeping the
+**taper** (the free-boundary lever, `solve_inverse(taper)`): each closes (`J ≤ 3e-6`)
+with a **valid, non-folded map** (`jac_min ≥ 0.05`), and the **free-boundary measure
+grows** `0.04 → 0.86 → 1.19` as the taper goes `0 → 0.15 → 0.30` — constant width is a
+rectangle image (self-linearising), tapering is θ-dependent = the free boundary
+recovered (the saturable flux `λ` falls `5.9 → 3.6` as the throat tightens). So even
+the **turning+tapering (free-boundary) saturable design space** is reachable, the
+nonlinearity handled by Newton with **linear** steps — 3 designs in ~4 s, fixed mesh,
+where a physical-space free-boundary solver would re-mesh and re-solve a nonlinear
+problem at every shape iteration. Figure: `chaplygin_taper_design_sweep_2d.png` (the
+free-boundary measure + λ vs taper | the constant-width annular bend | the tapered
+free-boundary guide). Golden `test_chaplygin_taper_design_sweep`. *Honest scope: the
+slip-wall von Mises formulation; extreme taper eventually **folds** at the geometric
+throat limit (`chaplygin_inverse_nonlinear_2d.py`) — this sweep stays in the valid
+regime.*
+
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
 Answers *"is cohomology needed for the hodograph?"*. The hodograph's **scalar
@@ -769,6 +792,7 @@ python clebsch_kelvin_3d.py                   # Kelvin in the hodograph (3-D Cle
 python saturation_loop_2d.py                  # the nonlinear saturation loop (Chaplygin reference)
 python chaplygin_design_sweep_2d.py           # nonlinear-as-linear: a saturable design space at linear cost (--fem)
 python chaplygin_turning_design_sweep_2d.py   # ... one rung up: TURNING fields, one linear solve each (--fem)
+python chaplygin_taper_design_sweep_2d.py     # ... free-boundary closure: TAPER sweep, Newton steps all linear
 python cohomology_hodograph_currentlink.py    # when the hodograph needs cohomology
 python accel_pole_design.py                   # multipole analyzer + quad pole geometry
 python accel_pole_harmonics.py                # 2-D equipotential lever (shim → harmonics)
