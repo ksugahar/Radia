@@ -2407,6 +2407,27 @@ form) -> demo_ww (high-freq/wave IABC = reduced rational, finite poles) -> demo_
 diffusion IABC = Foster ladder, branch cut). NEXT (deferred): harden the cost claim with a real
 time-domain FE solve (M-aux-ODE boundary vs large-truncation/FEM-BEM reference), and a free-pole
 vector fit for monotone optimal M.
+
+LOW FREQUENCY = KELVIN IS THE ONE CHOICE (vs IABC) -- verified head-to-head (demo_yy, 2026-06-15;
+user strategic call: "for low frequency, Kelvin alone is fine"). This SHARPENS the positioning and
+demotes the practical value of the static-IABC direction. At low frequency (static/quasi-static,
+exterior air = Laplace) Kelvin dominates IABC on every axis:
+  - modes matched: Kelvin ALL (exact ladder -(n+1)/R, every mode) vs IABC only N (optimized).
+  - parameters: Kelvin 0 (parameter-free) vs IABC N (a stiff fit).
+  - conditioning: VERIFIED -- the IABC AMPLITUDE-transfer condition number grows ~1.5 decades PER
+    SHELL (N=2..6: 2.6e1, 2.6e2, 6.9e3, 3.3e5, 2.4e7) -> this IS why Meeker's notebook needs
+    WorkingPrecision->1000. (The demo_vv scalar continued-fraction recursion stays well-conditioned
+    = exact in float64, so OUR reformulation fixes the conditioning; but Kelvin needs NO system at
+    all.) Kelvin is well-conditioned (demo_pp) and carries exterior material (demo_rr); IABC has the
+    isotropy obstruction.
+  CONSEQUENCE for the paper: the static-IABC closed form (novelty-map direction A) is a THEORETICAL /
+  unifying result (it EXPLAINS and supersedes Meeker's ill-conditioned optimization, and gives the
+  DtN/transformer reframing) -- NOT a recommendation to use IABC at low frequency. IABC's PRACTICAL
+  value is (i) codes that cannot do the Kelvin map (isotropic shells, no special elements), and
+  (ii) the TIME-DOMAIN / high-frequency / eddy-current regime (demo_ww / demo_xx), where the
+  extended-Kelvin radiation boundary needs the "uncool" centre-PML (IEICE 2024 U1/U2/U3) and a
+  reduced-order pole / Foster IABC competes. So: low-freq story = Kelvin (the Hachinohe paper spine);
+  IABC = the time-domain/high-freq complement, with FEM-BEM as the exact reference.
 """
 
 
