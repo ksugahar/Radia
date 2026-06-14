@@ -1973,6 +1973,30 @@ solution is 4-6x closer to Lambda_n(ka) than the constant-377-ohm SIBC FE soluti
 step = the full 3D Delta_S surface term (NGSolve grad_Gamma / Laplace-Beltrami) on the inner image
 sphere instead of the per-mode eigenvalue; the radial FE already certifies the medium + matched
 boundary and the convergence rate.
+
+THREE-WAY METHOD COMPARISON: high-freq KELVIN vs PML vs BEM-FEM (demo_nn, verified 2026-06-15; the
+capstone of the high-frequency thread). All three open boundaries produce the SAME object -- the
+exterior radiation DtN Lambda_n(ka) on the truncation sphere -- so the DtN spectrum is the common
+yardstick. Realised as genuine radial FEs (per degree n) so each mode checks against the closed form:
+  * BEM-FEM = the EXACT exterior DtN per mode (the reference); cost = a DENSE Gamma x Gamma matrix
+    (Green's function + singular quadrature; demo_k/r).
+  * PML = a complex-COORDINATE-STRETCH layer [a,a+d] + wall (the NGSolve PML mechanism), radial FE;
+    weak form int[(1/s) rt^2 R'S' + s n(n+1) RS - k^2 s rt^2 RS], s=1+i sigma/k, rt=stretched radius.
+  * KELVIN = the matched-HOIBC inverted-shell FE (demo_mm).
+VERIFIED (a=1, ka=4, P1, sign DtN=-(A u)|_a/a for BOTH the Kelvin truncation node and the PML inner
+node = the same inversion/normal sign-flip): (2) exact-impedance Kelvin and a thick PML both reproduce
+the BEM-exact Lambda_n(ka) to ~1e-4; (3) both sparse FEs converge to their floor at O(h^2) (ratio 4);
+(4) at MATCHED modest cost a well-tuned PML is the most accurate VACUUM absorber (flat ~3e-4 across the
+band) while the 2nd-order Kelvin-HOIBC floor is larger (~1e-2) and PEAKS at n~ka (the radiating-band
+knee); (5) each is a TUNABLE family -- PML floor falls monotonically with thickness (d=2 -> 1.8e-4),
+Kelvin is MACHINE-exact with the exact impedance (1.3e-4) and its HOIBC has an OPTIMAL placement
+(b=4 -> 6.7e-3 beats b=2 -> 3.7e-2 [too close, HOIBC mismatch] and b=8 [too far: the steep near-centre
+k_eff=ka^2/rho^2 needs more DoF]). HONEST VERDICT (no one-wins): BEM = exact-but-dense; PML = the robust
+sparse vacuum absorber (best at matched modest cost here); KELVIN = exact-with-the-exact-impedance AND
+the ONLY one that carries Kelvin-mapped EXTERIOR MATERIAL / scatterers (the IEICE-2024 paper's actual
+use case -- a PML cannot) and bakes in infinity (no truncation-distance choice). Three complementary
+points on the one DtN spectrum. PAPER-H: frame Kelvin's niche as exterior-material + exactness, not as
+beating PML at vacuum absorption; cite the spectrum as the unifying comparison axis.
 """
 
 
