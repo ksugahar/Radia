@@ -54,6 +54,44 @@ double TriPotential(const double V[3][3], const double r[3])
     return I;
 }
 
+// Exact field INT_T (r-r')/|r-r'|^3 dA' of a UNIFORM (sigma=1) flat triangle = -grad_r TriPotential
+// (the Wilton/Graglia triangle FIELD; vector form reusing the SAME per-edge quantities as TriPotential).
+// NO 1/4pi.  Validated entry-by-entry vs radia.hdiv_vim.flat_triangle_charge_field (machine precision).
+void TriField(const double V[3][3], const double r[3], double out[3])
+{
+    out[0]=out[1]=out[2]=0.0;
+    double e1[3], e2[3], n[3];
+    for (int k=0;k<3;k++){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
+    v3cross(e1,e2,n); double nl=v3nrm(n); if (nl<1e-300) return;
+    for (int k=0;k<3;k++) n[k]/=nl;
+    double rmv0[3]; for (int k=0;k<3;k++) rmv0[k]=r[k]-V[0][k];
+    double d = v3dot(rmv0,n);                                   // signed height
+    double p[3]; for (int k=0;k<3;k++) p[k]=r[k]-d*n[k];        // projection
+    double ad = std::fabs(d);
+    double omega = 0.0;
+    for (int i=0;i<3;i++){
+        const double* a = V[i];
+        const double* b = V[(i+1)%3];
+        double lh[3]; for (int k=0;k<3;k++) lh[k]=b[k]-a[k];
+        double ll=v3nrm(lh); if (ll<1e-300) continue; for (int k=0;k<3;k++) lh[k]/=ll;
+        double uh[3]; v3cross(lh,n,uh);                         // in-plane unit normal to the edge
+        double ap[3]; for (int k=0;k<3;k++) ap[k]=a[k]-p[k];
+        double bp[3]; for (int k=0;k<3;k++) bp[k]=b[k]-p[k];
+        double P0 = v3dot(ap,uh);
+        double sm = v3dot(ap,lh), sp = v3dot(bp,lh);
+        double ra[3], rb[3]; for (int k=0;k<3;k++){ ra[k]=r[k]-a[k]; rb[k]=r[k]-b[k]; }
+        double Rm = v3nrm(ra), Rp = v3nrm(rb);
+        double R0sq = P0*P0 + d*d;
+        double dm = Rm+sm, dp = Rp+sp;
+        double f = (dp>1e-300 && dm>1e-300) ? std::log(dp/dm) : 0.0;
+        double beta = std::atan2(P0*sp, R0sq+ad*Rp) - std::atan2(P0*sm, R0sq+ad*Rm);
+        for (int k=0;k<3;k++) out[k] += f*uh[k];               // tangential (per-edge log term)
+        omega += beta;
+    }
+    double sgn = (d>0)?1.0:((d<0)?-1.0:0.0);
+    for (int k=0;k<3;k++) out[k] += sgn*omega*n[k];            // normal (solid-angle term)
+}
+
 // Newtonian potential INT_tet 1/|P-r'| dV' of a uniform tetrahedron (4 verts) at P, via the divergence
 // theorem (nabla'^2 R = 2/R): INT_V 1/R dV = (1/2) sum_{4 faces} d_face * INT_face 1/R dA', reusing
 // TriPotential.  Port of radia.hdiv_vim._core.phi_tet.
@@ -78,6 +116,34 @@ double PhiTet(const double V[4][3], const double P[3])
         tot += dd * TriPotential(Fv, P);
     }
     return 0.5*tot;
+}
+
+// Field INT_tet (P-r')/|P-r'|^3 dV' of a uniform tetrahedron = -grad_P PhiTet, via the divergence
+// theorem: = 0.5 sum_faces [ n_face * TriPotential_face + d_face * TriField_face ].  Exact near AND far
+// (no quadrature).  Validated vs radia.hdiv_vim.tet_self_volume_field (the spherical ray-trace) * 4pi.
+void TetField(const double V[4][3], const double P[3], double out[3])
+{
+    out[0]=out[1]=out[2]=0.0;
+    double cen[3]={0,0,0};
+    for (int i=0;i<4;i++) for (int k=0;k<3;k++) cen[k]+=V[i][k]*0.25;
+    static const int FACES[4][3] = {{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    for (int fi=0;fi<4;fi++){
+        double Fv[3][3];
+        for (int j=0;j<3;j++) for (int k=0;k<3;k++) Fv[j][k]=V[FACES[fi][j]][k];
+        double e1[3], e2[3], nrm[3];
+        for (int k=0;k<3;k++){ e1[k]=Fv[1][k]-Fv[0][k]; e2[k]=Fv[2][k]-Fv[0][k]; }
+        v3cross(e1,e2,nrm); double nl=v3nrm(nrm); if (nl<1e-300) continue;
+        for (int k=0;k<3;k++) nrm[k]/=nl;
+        double fc[3]={0,0,0}; for (int j=0;j<3;j++) for (int k=0;k<3;k++) fc[k]+=Fv[j][k]/3.0;
+        double ov[3]; for (int k=0;k<3;k++) ov[k]=fc[k]-cen[k];
+        if (v3dot(ov,nrm)<0) for (int k=0;k<3;k++) nrm[k]=-nrm[k];   // outward
+        double fv0mP[3]; for (int k=0;k<3;k++) fv0mP[k]=Fv[0][k]-P[k];
+        double dd = v3dot(fv0mP,nrm);
+        double tp = TriPotential(Fv, P);
+        double tf[3]; TriField(Fv, P, tf);
+        for (int k=0;k<3;k++) out[k] += nrm[k]*tp + dd*tf[k];
+    }
+    for (int k=0;k<3;k++) out[k] *= 0.5;
 }
 
 // ---- trilinear hex geometry (NGSolve vertex order v0(000)..v7(110) in (x,y,z) local) ----

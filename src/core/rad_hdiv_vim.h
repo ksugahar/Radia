@@ -144,5 +144,13 @@ double TriPotential(const double V[3][3], const double r[3]);
  * divergence theorem reusing TriPotential.  Matches radia.hdiv_vim._core.phi_tet. */
 double PhiTet(const double V[4][3], const double P[3]);
 
+/* Field INT_T (r-r')/|r-r'|^3 dA' of a uniform (sigma=1) flat triangle = -grad TriPotential (the Wilton
+ * triangle FIELD; out[3], NO 1/4pi).  Matches radia.hdiv_vim.flat_triangle_charge_field. */
+void TriField(const double V[3][3], const double r[3], double out[3]);
+
+/* Field INT_tet (P-r')/|P-r'|^3 dV' of a uniform tetrahedron = -grad PhiTet, via the divergence theorem
+ * (n_face*TriPotential + d_face*TriField).  out[3], NO 1/4pi.  Matches radia.hdiv_vim.tet_self_volume_field*4pi. */
+void TetField(const double V[4][3], const double P[3], double out[3]);
+
 } // namespace rad_hdiv
 #endif

@@ -86,13 +86,25 @@ Gauss-Duffy is ~58 % off there). The residual ~2.4 % at 0.95R is **faceting** (t
 near-surface field genuinely differs from the smooth −M/3; Kernel B gives the faceted body's field
 *exactly*), removed only by curving.
 
-**Remaining Step-2 work:** (a) **polynomial surface charge** σ (Kernel B is exact for the constant
-per-face part; the polynomial remainder needs the Graglia linear/higher triangle field); (b) **curved
-faces** (Kernel B is flat-triangle; a curved boundary face needs a curved-element near-field) — note
-ngsolve.bem's `LaplaceSL` is curved+triangle but gives the **potential**, not the field gradient (the
-`grad G` kernel is a documented ngsolve.bem gap, so it cannot be reused here); (c) **hex** internal
-(self-volume ray-trace needs hex face planes; quad boundary faces split into 2 triangles); (d) a
-C++/H-matrix version. Then Step 3 wires the assembled internal field into the nonlinear `set_field`.
+**C++ kernels (DONE).** The analytic constant-charge field is now in C++ (`rad_hdiv::TriField`,
+`rad_hdiv::TetField`; probes `_hdiv_tri_field` / `_hdiv_tet_field`), exact near AND far, NO quadrature:
+- `TriField` = the Wilton triangle field (`-grad TriPotential`) — matches Python
+  `flat_triangle_charge_field` to **machine precision** (`test_cpp_tri_field_matches_python`).
+- `TetField` = the tet volume-charge field (`-grad PhiTet` via the divergence theorem,
+  `0.5 Σ_faces[n·TriPotential + d·TriField]`) — matches `-grad(_hdiv_phi_tet)` (FD) to **~1e-9** and the
+  Python spherical ray-trace to ~1e-3 (`test_cpp_tet_field_matches_grad_phitet`).
+This is the speed enabler for a practical order≥2 nonlinear solve (the Python reference field is too
+slow in the loop — the self-volume sphere-integral × mesh-location is prohibitive).
+
+**Remaining Step-2 work:** (a) **polynomial surface charge** σ (the C++/Python triangle field is exact
+for the constant per-face part; the polynomial remainder needs the Graglia linear/higher triangle
+field); (b) **curved faces** (flat-triangle only; a curved boundary face needs a curved-element
+near-field) — note ngsolve.bem's `LaplaceSL` is curved+triangle but gives the **potential**, not the
+field gradient (the `grad G` kernel is a documented ngsolve.bem gap, so it cannot be reused here); (c)
+**hex** internal (self-volume ray-trace needs hex face planes; quad boundary faces split into 2
+triangles); (d) a **C++ charge-coefficient assembly** (the field-version of the charge Gram, using
+`TriField`/`TetField` + the polynomial charge coeffs from `build_charge_gram`'s B). Then **Step 3**
+wires the (fast) internal field into the nonlinear `set_field`.
 
 ## Step 1 — validated (`reconstruct_field_polynomial`)
 
