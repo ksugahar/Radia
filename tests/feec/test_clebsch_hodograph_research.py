@@ -1016,3 +1016,30 @@ def test_clebsch_pole_shape_optimization_2d():
     assert abs(two["b3"]) < 1e-5, two
     assert abs(two["b5"]) < 1e-5, two
     assert two["spurious"] < flat["spurious"] / 50.0, out   # >=50x cleaner field
+
+
+def test_scaling_ffag_pole_2d_step1():
+    """Scaling-FFAG proton-gantry pole, Step 1 (linear): the field index
+    k(r) = d log B_y / d log r is the achromaticity condition, and the
+    naive g ~ r^{-k} pole is certified by the A/phi COMPLEMENTARY bracket.
+
+    Locks: (i) the field_index metric is exact on B ~ r^k; (ii) the proton
+    70-250 MeV band -> radial aperture ratio ~1.12; (iii) the A-formulation
+    and phi-formulation field indices BRACKET (gap tiny -> k well resolved);
+    (iv) the naive pole's bulk index sits just under k_design (the 2-D
+    fringing deficit that Steps 2-3's reshape closes)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    r = sf.run(maxh=0.012)                      # coarser for CI speed
+    # (i) the metric is exact: B ~ r^k -> k.
+    assert r["analytic_index_err"] < 1e-10, r
+    # (ii) proton band -> aperture ratio ~1.12 (k=5, 70-250 MeV).
+    rmin, rmax = r["aperture"]
+    assert 1.10 < rmax / rmin < 1.14, r
+    # (iii) A/phi complementary bracket is tight -> the field index is resolved.
+    assert r["bracket_gap_max"] < 1e-3, r
+    # (iv) the naive scaling pole's bulk index sits just under k_design=5
+    #      (2-D fringing softens it; the certified deficit Steps 2-3 close).
+    assert 4.7 < r["k_interior_mid_mean"] < 5.0, r
+    assert r["k_design"] == 5.0, r
