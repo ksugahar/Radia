@@ -175,3 +175,73 @@ except ImportError:
     # Requires ngsolve + scipy (greedy fallback) -- both should be
     # present in any Radia install, so this is just defensive.
     KELVIN_IDENTIFY_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# Demag backend selection (runtime, API-OPTIONAL) -- the yano-type MSC backend is DEPRECATED.
+#
+# The Yano-Sugahara MSC demag backend (rad.Solve on ObjHexahedron / ObjWedge soft iron) is being
+# superseded by the FEEC HDiv-VIM (radia.hdiv_vim).  It is exposed here as an OPTIONAL, selectable
+# backend so it can be removed cleanly later: callers that pin "yano" keep today's behaviour (with a
+# one-time DeprecationWarning), and when the HDiv-VIM is wired into rad.Solve the default flips to
+# "hdiv" -- deleting yano then changes only this default, not the public API surface.  Permanent-magnet
+# and MMM (tetrahedron) solves do not use the yano-type MSC path and are unaffected.
+# ---------------------------------------------------------------------------
+import warnings as _warnings
+
+_DEMAG_BACKEND = "yano"            # legacy default during migration; flips to "hdiv" when wired in
+_yano_deprecation_emitted = False
+
+
+def set_demag_backend(name):
+    """Select the demag backend for rad.Solve: "yano" (the legacy Yano-Sugahara MSC for hex/wedge soft
+    iron -- DEPRECATED, the only backend rad.Solve currently dispatches) or "hdiv" (the FEEC HDiv-VIM in
+    radia.hdiv_vim, not yet wired into rad.Solve).  Returns the previous value."""
+    global _DEMAG_BACKEND
+    if name not in ("yano", "hdiv"):
+        raise ValueError("demag_backend must be 'yano' or 'hdiv', got %r" % (name,))
+    prev, _DEMAG_BACKEND = _DEMAG_BACKEND, name
+    return prev
+
+
+def get_demag_backend():
+    """Return the current demag backend ("yano" legacy / "hdiv" = radia.hdiv_vim)."""
+    return _DEMAG_BACKEND
+
+
+if "Solve" in globals():
+    _cpp_Solve = globals()["Solve"]
+
+    def Solve(*args, **kwargs):   # noqa: F811  (intentional thin wrapper over the C++ Solve)
+        """Radia relaxation solve.  Thin wrapper over the C++ solver adding the demag-backend gate
+        (see set_demag_backend): the yano-type MSC backend is DEPRECATED -- migrate hex/wedge soft-iron
+        demag to the FEEC HDiv-VIM (radia.hdiv_vim).  Permanent-magnet / MMM-tet solves are unaffected."""
+        global _yano_deprecation_emitted
+        if _DEMAG_BACKEND == "hdiv":
+            raise NotImplementedError(
+                "demag_backend='hdiv': rad.Solve does not (yet) dispatch the FEEC HDiv-VIM backend.  Use "
+                "the radia.hdiv_vim API directly (build_demag / DemagOperator / solve_demag_newton on an "
+                "NGSolve HDiv mesh).  rad.Solve dispatches only the legacy yano-type MSC backend -- call "
+                "radia.set_demag_backend('yano') to use it.")
+        if not _yano_deprecation_emitted:
+            _yano_deprecation_emitted = True
+            _warnings.warn(
+                "The yano-type MSC demag backend (rad.Solve on ObjHexahedron / ObjWedge soft iron) is "
+                "DEPRECATED and will be removed; it is superseded by the FEEC HDiv-VIM (radia.hdiv_vim).  "
+                "Permanent-magnet and MMM (tetrahedron) solves are unaffected.  This notice fires once per "
+                "session; call radia.set_demag_backend('hdiv') to forbid the yano path.",
+                DeprecationWarning, stacklevel=2)
+        return _cpp_Solve(*args, **kwargs)
+
+
+if "SolverConfig" in globals():
+    _cpp_SolverConfig = globals()["SolverConfig"]
+
+    def SolverConfig(**kwargs):   # noqa: F811  (adds demag_backend on top of the C++ SolverConfig)
+        """Unified solver config.  Adds the demag_backend selector ("yano" | "hdiv", see
+        set_demag_backend); all other kwargs (hacapk_eps, bicgstab_tol, relax_param, newton_method, ...)
+        pass through to the C++ SolverConfig."""
+        if "demag_backend" in kwargs:
+            set_demag_backend(kwargs.pop("demag_backend"))
+        if kwargs:
+            _cpp_SolverConfig(**kwargs)

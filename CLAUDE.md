@@ -1049,6 +1049,21 @@ sideset 1 add surface 2             # surface 2 may not be the gap face
 - MMM: volume integral equation for magnetization, solved element-by-element
 - MSC: surface charge on element faces, solved via solid angle kernel
 
+**DEPRECATION (2026-06-14): the yano-type MSC demag backend is OPTIONAL + on the removal path.**
+The Yano-Sugahara MSC backend (the `rad.Solve` path for hex/wedge *soft-iron* demag) is being
+superseded by the FEEC HDiv-VIM (`radia.hdiv_vim`).  It is now exposed as a **runtime-selectable
+backend** so it can be removed cleanly:
+- `radia.set_demag_backend("yano" | "hdiv")` / `radia.get_demag_backend()` (or
+  `rad.SolverConfig(demag_backend=...)`).  Default `"yano"` (legacy; emits a one-time
+  `DeprecationWarning` on the first `rad.Solve`).  `"hdiv"` makes `rad.Solve` **refuse** the yano path
+  with a `NotImplementedError` redirecting to the `radia.hdiv_vim` API (HDiv-VIM is not yet wired into
+  `rad.Solve`).
+- Permanent-magnet and **MMM (tetrahedron)** solves do NOT use the yano-type MSC path and are unaffected.
+- When the HDiv-VIM is wired into `rad.Solve`, the default flips to `"hdiv"`; deleting the yano C++ MSC
+  then changes only that default, not the public API.  Wrapper + gate live in `src/radia/__init__.py`
+  (golden `tests/test_demag_backend.py`).  Migrate hex/wedge soft-iron demag to `radia.hdiv_vim`
+  (`build_demag` / `DemagOperator` / `solve_demag_newton`).
+
 **When to use which**:
 - Permanent magnets, soft iron → **MMM/MSC** (Radia)
 - Eddy currents, shielding, impedance extraction → **BEM** (ngsolve.bem) or **PEEC** (Radia)
