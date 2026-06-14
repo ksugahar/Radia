@@ -970,3 +970,27 @@ def test_bidirectional_coordinate_transform_2d():
     assert s["conformal_is_identity"] is True, s     # symbolic: 2-D conformal W = I
     assert s["generic_is_identity"] is False, s      # a generic 2-D map is NOT weight-free
     assert s["threeD_weight_free"] is False, s       # 3-D conformal scaling keeps a weight
+
+
+@pytest.mark.slow
+def test_clebsch_pole_shape_optimization_2d():
+    """3-D Clebsch pole-face shape OPTIMIZATION: the pole face is a magnetic-scalar
+    equipotential (a Clebsch level set), and the 3-D body pole is its extrusion, so
+    optimizing the 2-D contour optimizes the 3-D pole.  A SINGLE quadratic shim has one
+    knob -> it nulls b3 but leaves b5; a TWO-parameter (quadratic+quartic) Clebsch
+    contour, optimized by a 2-D Newton on (b3, b5) = 0, nulls BOTH leading spurious
+    harmonics simultaneously.  A genuine multi-parameter shape optimization."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import clebsch_pole_shape_optimization_2d as po
+    out = po.run()
+    flat, one, two = out["flat"], out["one_param"], out["two_param"]
+    # the flat pole has BOTH spurious harmonics ...
+    assert abs(flat["b3"]) > 1e-4 and abs(flat["b5"]) > 5e-5, flat
+    # the single shim nulls b3 but CANNOT null b5 (one knob) ...
+    assert abs(one["b3"]) < 1e-5, one
+    assert abs(one["b5"]) > 5e-5, one
+    # the two-parameter optimum nulls BOTH simultaneously.
+    assert abs(two["b3"]) < 1e-5, two
+    assert abs(two["b5"]) < 1e-5, two
+    assert two["spurious"] < flat["spurious"] / 50.0, out   # >=50x cleaner field
