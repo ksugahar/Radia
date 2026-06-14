@@ -1075,3 +1075,29 @@ def test_scaling_ffag_pole_2d_step2_saturation():
     # the saturation TILTS the index: the high-r edge droops more than low-r.
     assert L[2]["dk_tilt"] < -0.05, L[2]
     assert L[2]["dk_hi"] < L[2]["dk_lo"], L[2]      # high-r loss > low-r loss
+
+
+def test_scaling_ffag_pole_2d_step3_reshape():
+    """Step 3 (reshape): at the super-ferric design excitation (with iron
+    saturation), a 2-parameter pole reshape (the log-chart gamma, gamma2; the
+    single-valued von Mises chart) flattens the SATURATED field index k(r) --
+    restoring achromaticity that geometry + saturation broke.  A 2-D Newton on
+    (tilt, curvature)=0 nulls both the linear tilt and the bow of k(r).
+
+    Locks: the naive pole's saturated k(r) is clearly non-flat; the reshape
+    drives both tilt and curvature to ~0 and shrinks the peak-to-peak field
+    index variation several-fold; the reshape is non-trivial (gamma2 != 0)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    out = sf.run_step3(B_design=1.8, maxh=0.010)        # coarser for CI
+    n, o = out["naive"], out["reshaped"]
+    # the naive scaling pole's saturated index is clearly non-flat ...
+    assert n["ptp"] > 0.05, n
+    # ... the 2-param reshape nulls both the tilt and the curvature ...
+    assert abs(o["tilt"]) < 6e-3 and abs(o["curv"]) < 6e-3, o
+    # ... shrinking the field-index peak-to-peak several-fold ...
+    assert o["ptp"] < 0.025, o
+    assert out["ptp_improvement"] > 3.5, out
+    # ... by a genuine 2-parameter (non-degenerate) reshape.
+    assert abs(o["gamma2"]) > 1.0, o

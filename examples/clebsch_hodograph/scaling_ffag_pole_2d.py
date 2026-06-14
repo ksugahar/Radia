@@ -95,9 +95,18 @@ def aperture_radii(k=K_INDEX, r0=R0, t_lo=T_LO, t_hi=T_HI):
     return r0 / math.sqrt(ratio), r0 * math.sqrt(ratio)
 
 
-def scaling_gap(r, k=K_INDEX, g0=G0, r0=R0):
-    """Naive scaling pole gap g(r) = g0 (r/r0)^{-k}  (0th order: B ~ 1/g ~ r^k)."""
-    return g0 * (np.asarray(r, dtype=float) / r0) ** (-k)
+def scaling_gap(r, k=K_INDEX, g0=G0, r0=R0, gamma=0.0, gamma2=0.0):
+    """Scaling pole gap.  Naive (gamma=gamma2=0): g(r) = g0 (r/r0)^{-k} (B ~ r^k).
+
+    The Step-3 RESHAPE adds a log-r polynomial correction (u = log(r/r0)):
+        g(r) = g0 * exp(-k u - gamma/2 u^2 - gamma2/6 u^3),
+    so the LOCAL geometric index k_geom = -d log g / d log r tilts as a quadratic
+        k_geom(u) = k + gamma*u + gamma2/2 * u^2.
+    gamma cancels the LINEAR tilt of k(r), gamma2 the CURVATURE -- the 2-parameter
+    reshape that flattens the SATURATED field index (cf. the 2-param Newton in
+    clebsch_pole_shape_optimization_2d that nulls b3 AND b5)."""
+    u = np.log(np.asarray(r, dtype=float) / r0)
+    return g0 * np.exp(-k * u - 0.5 * gamma * u * u - gamma2 * u ** 3 / 6.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -237,14 +246,16 @@ def mu_r_froehlich(B, mur0=MUR0_IRON, Bk=BK_IRON):
     return 1.0 + (mur0 - 1.0) / (1.0 + (B / Bk) ** 2)
 
 
-def _gap_iron_geometry(r_lo, r_hi, k, g0, r0, y_top, n_face=60):
+def _gap_iron_geometry(r_lo, r_hi, k, g0, r0, y_top, n_face=60, gamma=0.0,
+                       gamma2=0.0):
     """Upper half: an AIR gap (median y=0 to the scaling pole face y=g(r)/2)
     glued to an IRON pole (pole face up to a flat back at y_top).  The pole
     face is now an interior gap/iron interface (not a BC).  Boundaries:
-    'median' (y=0), 'irontop' (the driven back), 'rmin'/'rmax'."""
+    'median' (y=0), 'irontop' (the driven back), 'rmin'/'rmax'.  `gamma`,
+    `gamma2` are the Step-3 reshape parameters (see scaling_gap)."""
     from netgen.occ import WorkPlane, OCCGeometry, Glue
     rs = np.linspace(r_lo, r_hi, n_face)
-    yf = scaling_gap(rs, k, g0, r0) / 2.0
+    yf = scaling_gap(rs, k, g0, r0, gamma, gamma2) / 2.0
     wp = WorkPlane().MoveTo(r_lo, 0.0)
     wp.LineTo(r_hi, 0.0)                                     # median
     wp.LineTo(r_hi, float(yf[-1]))                          # rmax (gap)
@@ -277,16 +288,18 @@ def _gap_iron_geometry(r_lo, r_hi, k, g0, r0, y_top, n_face=60):
 
 def solve_saturated(mmf, r_min, r_max, k=K_INDEX, g0=G0, r0=R0, pole_t=0.03,
                     order=3, maxh=0.006, buffer=1.25, n_eval=41,
-                    relax=0.5, tol=1e-4, maxit=60):
+                    relax=0.5, tol=1e-4, maxit=60, gamma=0.0, gamma2=0.0):
     """Nonlinear scalar-potential solve with a Froehlich iron pole: the magnetic
     scalar potential phi (phi=mmf on the iron back, phi=0 on the median) drives
     flux through the air gap; B = -mu0 mu_r(|B|) grad phi.  Picard on mu_r(B).
-    Returns the median field index k(r) and the saturation diagnostics."""
+    Returns the median field index k(r) and the saturation diagnostics.  `gamma`,
+    `gamma2` are the Step-3 pole reshape (0,0 = naive scaling pole)."""
     from ngsolve import (H1, L2, BilinearForm, GridFunction, grad, dx, CF, Norm,
                          TaskManager, Mesh)
     r_lo, r_hi = r_min / buffer, r_max * buffer
-    y_top = float(scaling_gap(r_lo, k, g0, r0) / 2.0 + pole_t)
-    geo = _gap_iron_geometry(r_lo, r_hi, k, g0, r0, y_top)
+    y_top = float(scaling_gap(r_lo, k, g0, r0, gamma, gamma2) / 2.0 + pole_t)
+    geo = _gap_iron_geometry(r_lo, r_hi, k, g0, r0, y_top, gamma=gamma,
+                             gamma2=gamma2)
     rs_eval = np.linspace(r_min, r_max, n_eval)
     y_probe = 0.02 * float(scaling_gap(r0, k, g0, r0))
     with TaskManager():
@@ -370,6 +383,74 @@ def run_step2(b_targets=(0.6, 1.4, 2.0, 2.6), k=K_INDEX, g0=G0, r0=R0,
 
 
 # --------------------------------------------------------------------------- #
+# Step 3: RESHAPE -- a 1-parameter pole correction (gamma) restores k(r)=const
+#         into saturation (the von Mises / log-chart reshape, single-valued).
+# --------------------------------------------------------------------------- #
+def _index_residual(mmf, gamma, gamma2, r_min, r_max, k, g0, r0, order, maxh):
+    """Saturated solve at reshape (gamma, gamma2); return the field-index
+    flatness residual (tilt, curvature), the peak-to-peak, and the solve.
+      tilt = k(r_hi) - k(r_lo)        (the linear slope of k(r))
+      curv = k(r_mid) - mean(edges)   (the bow / quadratic part)."""
+    s = solve_saturated(mmf, r_min, r_max, k=k, g0=g0, r0=r0,
+                        order=order, maxh=maxh, gamma=gamma, gamma2=gamma2)
+    ki = s["k"][2:-2]
+    mid = len(ki) // 2
+    tilt = float(ki[-1] - ki[0])
+    curv = float(ki[mid] - 0.5 * (ki[-1] + ki[0]))
+    return tilt, curv, float(ki.max() - ki.min()), s
+
+
+def run_step3(B_design=1.8, k=K_INDEX, g0=G0, r0=R0, order=3, maxh=0.008,
+              tol=3e-3, newton_steps=3, dg=0.4):
+    """At the design (saturated) excitation, find the 2-parameter pole reshape
+    (gamma, gamma2) that drives BOTH the field-index tilt AND curvature to zero
+    -- restoring a flat (achromatic) k(r) into saturation.  The local geometric
+    index k_geom(u) = k + gamma*u + gamma2/2*u^2 (u=log r/r0) has 2 knobs; a 2-D
+    Newton on (tilt, curv)=0 (finite-difference Jacobian) flattens the saturated
+    index, the single-valued von Mises/log-chart reshape.  Returns naive vs
+    reshaped flatness."""
+    r_min, r_max = aperture_radii(k=k, r0=r0)
+    mmf = B_design * g0 / (2.0 * MU0)
+
+    def resid(g, g2):
+        return _index_residual(mmf, g, g2, r_min, r_max, k, g0, r0, order, maxh)
+
+    t0, c0, p0, s0 = resid(0.0, 0.0)                        # naive pole
+    g, g2 = 0.0, 0.0
+    t, c, p, s = t0, c0, p0, s0
+    evals = [{"gamma": 0.0, "gamma2": 0.0, "tilt": t0, "curv": c0, "ptp": p0}]
+    best = {"gamma": 0.0, "gamma2": 0.0, "tilt": t0, "curv": c0, "ptp": p0,
+            "_s": s0}
+    for _ in range(newton_steps):
+        if max(abs(t), abs(c)) < tol:
+            break
+        # finite-difference 2x2 Jacobian d(tilt,curv)/d(gamma,gamma2)
+        tg, cg, _, _ = resid(g + dg, g2)
+        tg2, cg2, _, _ = resid(g, g2 + dg)
+        J = np.array([[(tg - t) / dg, (tg2 - t) / dg],
+                      [(cg - c) / dg, (cg2 - c) / dg]])
+        try:
+            step = np.linalg.solve(J, np.array([t, c]))
+        except np.linalg.LinAlgError:
+            break
+        g, g2 = g - step[0], g2 - step[1]
+        t, c, p, s = resid(g, g2)
+        evals.append({"gamma": g, "gamma2": g2, "tilt": t, "curv": c, "ptp": p})
+        if p < best["ptp"]:
+            best = {"gamma": g, "gamma2": g2, "tilt": t, "curv": c, "ptp": p,
+                    "_s": s}
+    return {
+        "k_design": float(k), "B_design": float(B_design),
+        "aperture": (float(r_min), float(r_max)),
+        "naive": {"gamma": 0.0, "gamma2": 0.0, "tilt": t0, "curv": c0,
+                  "ptp": p0, "_s": s0},
+        "reshaped": best,
+        "ptp_improvement": float(p0 / best["ptp"]) if best["ptp"] > 0 else None,
+        "evals": evals,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # driver
 # --------------------------------------------------------------------------- #
 def run(k=K_INDEX, g0=G0, r0=R0, order=4, maxh=0.008):
@@ -410,6 +491,8 @@ def main():
     ap.add_argument("--fig", action="store_true")
     ap.add_argument("--step2", action="store_true",
                     help="also run the saturation sweep (Froehlich iron pole)")
+    ap.add_argument("--step3", action="store_true",
+                    help="also run the 2-parameter pole reshape (restore flat k)")
     ap.add_argument("--order", type=int, default=4)
     ap.add_argument("--maxh", type=float, default=0.008)
     args = ap.parse_args()
@@ -448,6 +531,23 @@ def main():
                   f"{L['dk_tilt']:<+9.3f}{L['iters']:<6}")
         if args.fig:
             _figure_step2(s2)
+
+    if args.step3:
+        print("\n" + "=" * 74)
+        print("Step 3: RESHAPE -- 2-param pole correction restores flat k(r) in saturation")
+        print("=" * 74)
+        s3 = run_step3()
+        n, o = s3["naive"], s3["reshaped"]
+        print(f"design excitation B@r0      : {s3['B_design']:.1f} T")
+        print(f"naive pole   k(r) ptp       : {n['ptp']:.4f}"
+              f"  (tilt {n['tilt']:+.4f}, curv {n['curv']:+.4f})")
+        print(f"reshaped     k(r) ptp       : {o['ptp']:.4f}"
+              f"  (tilt {o['tilt']:+.4f}, curv {o['curv']:+.4f})")
+        print(f"reshape (gamma, gamma2)     : ({o['gamma']:+.3f}, {o['gamma2']:+.3f})")
+        print(f"flatness improvement        : {s3['ptp_improvement']:.1f}x"
+              f"  ({len(s3['evals'])-1} Newton step(s))")
+        if args.fig:
+            _figure_step3(s3)
 
 
 def _figure(res):
@@ -507,6 +607,40 @@ def _figure_step2(s2):
     fig.tight_layout()
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        "scaling_ffag_pole_2d_saturation.png")
+    fig.savefig(out, dpi=130)
+    print(f"saved {out}")
+
+
+def _figure_step3(s3):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    n, o = s3["naive"], s3["reshaped"]
+    fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+    for tag, d, style in (("naive", n, "o-"), ("reshaped", o, "s-")):
+        s = d["_s"]
+        m = slice(2, -2)
+        ax[0].plot(s["r_index"][m], s["k"][m], style, ms=3,
+                   label=f"{tag} (ptp {d['ptp']:.3f})")
+    ax[0].axhline(s3["k_design"], color="k", ls="--", lw=1,
+                  label=f"k_design={s3['k_design']:.0f}")
+    ax[0].set_xlabel("r"); ax[0].set_ylabel("field index k(r)")
+    ax[0].set_title(f"saturated k(r) flattened {s3['ptp_improvement']:.1f}x"
+                    f" @ B@r0={s3['B_design']:.1f}T")
+    ax[0].legend(fontsize=8)
+    # pole gap profiles (the shape change)
+    r_min, r_max = s3["aperture"]
+    rs = np.linspace(r_min, r_max, 60)
+    ax[1].plot(rs, scaling_gap(rs, K_INDEX, G0, R0) / 2.0, "o-", ms=3,
+               label="naive g(r)/2")
+    ax[1].plot(rs, scaling_gap(rs, K_INDEX, G0, R0, o["gamma"], o["gamma2"]) / 2.0,
+               "s-", ms=3, label="reshaped g(r)/2")
+    ax[1].set_xlabel("r"); ax[1].set_ylabel("pole-face height g(r)/2")
+    ax[1].set_title("the pole reshape (log-chart 2-param)")
+    ax[1].legend(fontsize=8)
+    fig.tight_layout()
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "scaling_ffag_pole_2d_reshape.png")
     fig.savefig(out, dpi=130)
     print(f"saved {out}")
 
