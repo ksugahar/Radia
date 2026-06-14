@@ -60,9 +60,16 @@ is the same clean linear inverse as in free space, but with the correct **materi
    block 18/20, global 189/195 — the same near/far machinery as HACApK, oracle = one Kelvin-FEM solve
    per column); what remains is the engineering of calling `radia.streamfunction`'s ACA-TSVD with that
    solve-oracle instead of a closed-form Biot-Savart entry.
-2. **Benchmark** M-build (sparse Kelvin-FEM Schur) vs the dense layered-Green / FE-BEM baseline
-   (conditioning, sparsity, FE-coupling) — the selling point is "sparse, material-aware, no Green fn".
-   **(still open — the immediate next task.)**
+2. **Benchmark** M-build (sparse Kelvin-FEM Schur) vs the dense layered-Green / FE-BEM baseline —
+   **DONE: `bench_dtn_mbuild.py`** (JSON + figure committed). Three measured contrasts: **(C1
+   sparsity/scaling)** the Kelvin-FEM volume matrix has CONSTANT nnz/row (~15, fill→7e-4) so its
+   storage is linear in ndof, while the dense operator a Green/BEM route forms is O(ndof²) — **941×
+   larger at 25k DoF** (3388 MB vs 3.6 MB), sparse factor 0.6 s; **(C2 accuracy)** at order-2 the FEM
+   transfer R_n reproduces the analytic layered-sphere Green transfer to **rel_max 2.5e-2** (n=1
+   2.9e-3, n=2 1.6e-2, n=3 2.5e-2) — Kelvin-FEM builds the SAME operator the Green route gives;
+   **(C3 generality)** a non-concentric iron blob builds at the identical sparse cost where **no
+   closed-form Green function exists at all**. Selling point confirmed: sparse, material-aware, no
+   Green function.
 3. **Manuscript**: position as a *formulation* contribution; cite the free-space transformed-FE prior art
    (Brunotte 1992, Meeker 2013), the stream-function/target-field design lineage, and the author's own
    Sugahara 2022 (uniform specimen) as the foundation extended.
