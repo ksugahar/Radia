@@ -16,7 +16,7 @@ The golden asserts the WALL behaviour, NOT a solve:
     the genuinely non-convex foliation choice that has no closed form / no convex
     reformulation.
 
-See examples/feec_vim/foliation_choice_wall.py and the unification memory file
+See examples/vim/foliation_choice_wall.py and the unification memory file
 memory/clebsch_cohomology_streamfunction_unification.md (Honest frontier F1).
 """
 import os
@@ -25,7 +25,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                "../../examples/feec_vim"))
+                                "../../examples/vim"))
 
 
 @pytest.fixture(scope="module")

@@ -19,7 +19,7 @@ a shallow-basin start (-> stuck, higher complexity).
 Reuses foliation_choice_wall.py (build_mesh, loop_field) + radia.stream_function
 (aca_tsvd) UNCHANGED.  Caller wraps NGSolve work in TaskManager.
 
-Run:  python examples/feec_vim/cmaes_foliation_gauge.py
+Run:  python examples/vim/cmaes_foliation_gauge.py
 """
 from __future__ import annotations
 

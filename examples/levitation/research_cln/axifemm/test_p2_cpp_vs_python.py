@@ -16,7 +16,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 import numpy as np
 
-from radia.radia_axifemm import AxiHenrotteFE_P2_Triangle as P2_CPP
+from radia.axifem import AxiHenrotteFE_P2_Triangle as P2_CPP
 
 from axifemm_p2_triangle import AxifemmP2Triangle
 

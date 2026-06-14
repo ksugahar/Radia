@@ -9,7 +9,7 @@
 
 #include <comp.hpp>
 
-namespace radia_axifemm {
+namespace axifem {
 
 using namespace ngcomp;
 
@@ -51,6 +51,6 @@ public:
     string GetClassName() const override { return "AxiHenrotteFESpace"; }
 };
 
-}  // namespace radia_axifemm
+}  // namespace axifem
 
 #endif

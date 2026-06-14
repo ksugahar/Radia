@@ -1,6 +1,6 @@
 """Golden test: the C++ analytic charge-Gram potentials (rad_hdiv::TriPotential / PhiTet, exposed
 as the _hdiv_tri_potential / _hdiv_phi_tet probes) match the dense Python reference
-(radia.hdiv_vim._core.tri_potential / phi_tet) to ~machine precision.
+(radia.vim._core.tri_potential / phi_tet) to ~machine precision.
 
 These are the M2 building blocks: the accurate Wilton triangle 1/r surface potential and the
 divergence-theorem tet Newtonian volume potential that the C++ scalable ChargeGram H-matrix entry
@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import radia._radia_pybind as _rp
-from radia.hdiv_vim._core import tri_potential, phi_tet
+from radia.vim._core import tri_potential, phi_tet
 
 # Triangles: a flat in-plane (z=0) triangle and a tilted one (out-of-plane vertex).
 _TRIS = [

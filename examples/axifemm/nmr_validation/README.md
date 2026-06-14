@@ -72,7 +72,7 @@ axifemm assembly; the disk-convergence example exercises the
 **eddy-current sigma-mass** branch.  Together they cover the two
 operators that production IH simulations need.
 
-The C++ port lives at `radia.radia_axifemm.AxiHenrotteFESpace`.
+The C++ port lives at `radia.axifem.AxiHenrotteFESpace`.
 This pure-Python prototype is its **research-grade reference** —
 when changes are made to the C++ side, the cross-validation test at
 `tests/axifemm/test_python_reference_consistency.py` ensures the

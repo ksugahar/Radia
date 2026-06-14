@@ -1,6 +1,6 @@
 """Golden lock: rigorous single-stroke via the Clebsch/cohomology-secular term.
 
-Runs examples/feec_vim/single_stroke_clebsch.py and asserts:
+Runs examples/vim/single_stroke_clebsch.py and asserts:
 
   - the Clebsch single-stroke (the level-set {Psi = psi + secular} = a continuous
     helix) is a VALID coil: its on-axis Bz matches the ideal multi-turn rings;
@@ -17,7 +17,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "feec_vim")
+EXDIR = os.path.join(HERE, "..", "..", "examples", "vim")
 
 
 @pytest.mark.slow

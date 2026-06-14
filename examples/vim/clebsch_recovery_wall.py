@@ -40,7 +40,7 @@ current has no canonical Clebsch pair -- only local, seed-dependent, null-singul
 ones.  This is an HONEST partly-negative result (repo-first: a clearly-demonstrated
 wall is a real result).
 
-Run:  python examples/feec_vim/clebsch_recovery_wall.py
+Run:  python examples/vim/clebsch_recovery_wall.py
 """
 import os
 import sys

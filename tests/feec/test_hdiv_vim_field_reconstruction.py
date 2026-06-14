@@ -17,7 +17,7 @@ import pytest
 import ngsolve as ng
 from netgen.occ import Sphere, OCCGeometry, Pnt
 
-from radia.hdiv_vim import reconstruct_field
+from radia.vim import reconstruct_field
 
 MU0 = 4e-7 * np.pi
 # generic interior points (avoid mesh nodes / faces, where a point eval would be ill-defined)

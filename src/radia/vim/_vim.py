@@ -1,4 +1,4 @@
-"""radia.hdiv_vim._vim -- an ngsolve.bem-STYLE API for the HDiv-type VIM demag operator.
+"""radia.vim._vim -- an ngsolve.bem-STYLE API for the HDiv-type VIM demag operator.
 
 Mirrors the ngsolve.bem design (SingleLayerPotentialOperator etc.): construct the operator from an NGSolve
 FESpace -- the polynomial ORDER comes from the fes, exactly like `HDiv(mesh, order=p)` -- and expose
@@ -8,7 +8,7 @@ is the degenerate constant-monomial case):
 
     from ngsolve import *
     from ngsolve.krylovspace import GMRes
-    from radia.hdiv_vim import DemagOperator
+    from radia.vim import DemagOperator
 
     mesh = Mesh(...)
     fes  = HDiv(mesh, order=p)                       # order from the fes (NGSolve idiom)

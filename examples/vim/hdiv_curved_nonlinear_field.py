@@ -23,7 +23,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hdiv_demag_curved as cv            # _surface_samples (curved-aware surface quadrature)
-from radia.hdiv_vim import _nonlinear as nl     # _scalar_fixed_point
+from radia.vim import _nonlinear as nl     # _scalar_fixed_point
 
 import ngsolve as ng                       # noqa: E402
 from ngsolve import TaskManager            # noqa: E402

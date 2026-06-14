@@ -1,7 +1,7 @@
-"""Phase 3: Hiruma 3-term recurrence on radia_axifemm Cu disk.
+"""Phase 3: Hiruma 3-term recurrence on axifem Cu disk.
 
 Algorithm (port of cuboid_521_kameari_kelvin_v23_hiruma_3term.py, but using
-radia_axifemm closed-form K, M instead of standard H1 + Gauss):
+axifem closed-form K, M instead of standard H1 + Gauss):
 
     G = global stiffness  (1/mu integrated)
     C = global sigma-mass (sigma integrated, conductor only)
@@ -42,7 +42,7 @@ from ngsolve import (
     CoefficientFunction, TaskManager, x, ngsglobals,
 )
 from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 

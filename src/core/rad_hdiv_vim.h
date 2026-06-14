@@ -12,7 +12,7 @@
  *
  * This first increment builds the structured-hex RT0 topology + charge map B + a DENSE Coulomb
  * Gram G + assembles N, by hand (no NGSolve), validated against the NGSolve prototype golden
- * (examples/feec_vim/hdiv_demag_quad_self.json: regular 3x3x3 -> ndof=108, n_loop=28).  Later
+ * (examples/vim/hdiv_demag_quad_self.json: regular 3x3x3 -> ndof=108, n_loop=28).  Later
  * phases swap the dense G for a HACApK symmetric H-matrix (rad_hacapk_hdiv, reusing the Wilton
  * 1/r face integral in rad_poly_analytical.cpp) and add the sparse HDiv mass M_mass.
  *
@@ -137,23 +137,23 @@ void BuildChargeMapCSC(const Mesh& m, ChargeMapCSC& csc);
 
 /* Exact INT_T 1/|r-r'| dA' over a flat triangle (V = 3 verts, [3][3]) at obs r -- the Wilton/Graglia
  * analytic triangle potential (pure 1/r integral, NO 1/4pi).  Matches the dense Python
- * radia.hdiv_vim._core.tri_potential to ~1e-12 and rad_poly_analytical's I_scalar Wilton edge formula. */
+ * radia.vim._core.tri_potential to ~1e-12 and rad_poly_analytical's I_scalar Wilton edge formula. */
 double TriPotential(const double V[3][3], const double r[3]);
 
 /* Newtonian potential INT_tet 1/|P-r'| dV' of a uniform tetrahedron (V = 4 verts, [4][3]) at P, via the
- * divergence theorem reusing TriPotential.  Matches radia.hdiv_vim._core.phi_tet. */
+ * divergence theorem reusing TriPotential.  Matches radia.vim._core.phi_tet. */
 double PhiTet(const double V[4][3], const double P[3]);
 
 /* Field INT_T (r-r')/|r-r'|^3 dA' of a uniform (sigma=1) flat triangle = -grad TriPotential (the Wilton
- * triangle FIELD; out[3], NO 1/4pi).  Matches radia.hdiv_vim.flat_triangle_charge_field. */
+ * triangle FIELD; out[3], NO 1/4pi).  Matches radia.vim.flat_triangle_charge_field. */
 void TriField(const double V[3][3], const double r[3], double out[3]);
 
 /* Field INT_tet (P-r')/|P-r'|^3 dV' of a uniform tetrahedron = -grad PhiTet, via the divergence theorem
- * (n_face*TriPotential + d_face*TriField).  out[3], NO 1/4pi.  Matches radia.hdiv_vim.tet_self_volume_field*4pi. */
+ * (n_face*TriPotential + d_face*TriField).  out[3], NO 1/4pi.  Matches radia.vim.tet_self_volume_field*4pi. */
 void TetField(const double V[4][3], const double P[3], double out[3]);
 
 /* ---- degree-1/2 polynomial-charge field kernels (the order<=2 fast path; NO 1/4pi) ----
- * Ports of radia.hdiv_vim._field, validated entry-by-entry vs the Python (machine precision). */
+ * Ports of radia.vim._field, validated entry-by-entry vs the Python (machine precision). */
 void TriMoment1(const double V[3][3], const double r[3], double out[3]);          /* INT_T r'/R dS' */
 void TriMoment2(const double V[3][3], const double r[3], double out[3][3]);       /* INT_T r'(x)r'/R dS' */
 void TetMoment1(const double V[4][3], const double r[3], double out[3]);          /* INT_V r'/R dV' */

@@ -11,7 +11,7 @@ designer reproduces the validated band:
   - the helicity gate is ~0 (Clebsch-feasible) and the inverse fit is tight;
   - the standard housekeeping keys are present (ne / ndof / t_*_s / gmsh_file).
 
-Mirrors examples/feec_vim/foliated_solenoid_wires.py (Stage B), promoted to the
+Mirrors examples/vim/foliated_solenoid_wires.py (Stage B), promoted to the
 panel tier.
 """
 import json

@@ -52,8 +52,8 @@ pwsh -ExecutionPolicy Bypass -File S:/Radia/01_GitHub/Build.ps1
 ```
 
 The C++ source lives in `src/ext/axifemm/` and the top-level
-`CMakeLists.txt` defines an `add_ngsolve_python_module(radia_axifemm ...)`
-target.  Output is copied to `src/radia/radia_axifemm.pyd` and ships in
+`CMakeLists.txt` defines an `add_ngsolve_python_module(axifem ...)`
+target.  Output is copied to `src/radia/axifem.pyd` and ships in
 the radia wheel.  Requires NGSolve 6.2.2603+, CMake ≥ 3.16, MSVC.
 
 This `examples/axifemm/research/` directory is now a **research workspace**
@@ -67,7 +67,7 @@ cleanup).
 ```python
 from ngsolve import *
 import radia                                          # registers DLL paths
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte,
     AxiHenrotteStiffnessBFI,
     AxiHenrotteSigmaMassBFI,

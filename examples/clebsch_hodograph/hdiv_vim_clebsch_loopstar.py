@@ -1,7 +1,7 @@
 r"""HDiv-VIM <-> Clebsch: the loop modes of the demag operator ARE Clebsch magnetizations.
 
 The de Rham CAPSTONE bridging the two threads of this directory's research line:
-the HDiv-VIM demag SOLVER (operator side, `radia.hdiv_vim`) and the Clebsch
+the HDiv-VIM demag SOLVER (operator side, `radia.vim`) and the Clebsch
 hodograph DESIGN line (potential side).  The Hodge / Helmholtz split of a
 magnetization is
 
@@ -53,7 +53,7 @@ import numpy as np
 import ngsolve as ng
 from netgen.csg import CSGeometry, Sphere, Pnt
 
-from radia.hdiv_vim import DemagOperator, reconstruct_field_polynomial
+from radia.vim import DemagOperator, reconstruct_field_polynomial
 
 x, y, z = ng.x, ng.y, ng.z
 

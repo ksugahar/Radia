@@ -17,7 +17,7 @@
 #include <fem.hpp>
 #include "axi_henrotte_fe.hpp"
 
-namespace radia_axifemm {
+namespace axifem {
 
 using namespace ngfem;
 
@@ -190,6 +190,6 @@ public:
     }
 };
 
-}  // namespace radia_axifemm
+}  // namespace axifem
 
 #endif  // RADIA_AXIFEMM_AXI_HENROTTE_DIFFOP_HPP

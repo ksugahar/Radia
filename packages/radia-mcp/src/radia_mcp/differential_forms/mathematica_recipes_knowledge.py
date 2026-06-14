@@ -583,7 +583,7 @@ Print["B in physical space = ", bPhys];
 
 ## Why this matters for Radia + NGSolve
 
-- `radia.radia_axifemm` Kelvin: axisymmetric Henrotte + Kelvin shell
+- `radia.axifem` Kelvin: axisymmetric Henrotte + Kelvin shell
   combines TWO conformal effects (axi r² + Kelvin λ).  Mathematica
   can verify the combined factor symbolically.
 

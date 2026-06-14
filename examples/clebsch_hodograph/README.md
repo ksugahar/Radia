@@ -484,7 +484,7 @@ that is the research frontier, not covered here.
 ### `hdiv_vim_clebsch_loopstar.py` — the de Rham capstone: HDiv-VIM loop modes ARE Clebsch fields
 
 The bridge between **this directory's Clebsch line** and the **HDiv-VIM demag
-solver** (`radia.hdiv_vim`, the FEEC `H(div)` element that Radia is migrating
+solver** (`radia.vim`, the FEEC `H(div)` element that Radia is migrating
 to). The Hodge / Helmholtz split of a magnetization is
 
 ```

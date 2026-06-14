@@ -20,7 +20,7 @@ static inline double v3nrm(const double a[3]) { return std::sqrt(v3dot(a,a)); }
 
 // Exact INT_T 1/|r-r'| dA' over a flat triangle (V0,V1,V2) at obs r -- the Wilton/Graglia analytic
 // triangle potential (Wilton-Rao-Glisson, IEEE TAP 32(3):276, 1984).  Pure 1/r integral (NO 1/4pi).
-// Port of examples reference radia.hdiv_vim._core.tri_potential (scalar form); same edge formula as
+// Port of examples reference radia.vim._core.tri_potential (scalar form); same edge formula as
 // rad_poly_analytical.cpp::RadScalarPotentialFromTriangleFaceGlobal's I_scalar.
 double TriPotential(const double V[3][3], const double r[3])
 {
@@ -56,7 +56,7 @@ double TriPotential(const double V[3][3], const double r[3])
 
 // Exact field INT_T (r-r')/|r-r'|^3 dA' of a UNIFORM (sigma=1) flat triangle = -grad_r TriPotential
 // (the Wilton/Graglia triangle FIELD; vector form reusing the SAME per-edge quantities as TriPotential).
-// NO 1/4pi.  Validated entry-by-entry vs radia.hdiv_vim.flat_triangle_charge_field (machine precision).
+// NO 1/4pi.  Validated entry-by-entry vs radia.vim.flat_triangle_charge_field (machine precision).
 void TriField(const double V[3][3], const double r[3], double out[3])
 {
     out[0]=out[1]=out[2]=0.0;
@@ -94,7 +94,7 @@ void TriField(const double V[3][3], const double r[3], double out[3])
 
 // Newtonian potential INT_tet 1/|P-r'| dV' of a uniform tetrahedron (4 verts) at P, via the divergence
 // theorem (nabla'^2 R = 2/R): INT_V 1/R dV = (1/2) sum_{4 faces} d_face * INT_face 1/R dA', reusing
-// TriPotential.  Port of radia.hdiv_vim._core.phi_tet.
+// TriPotential.  Port of radia.vim._core.phi_tet.
 double PhiTet(const double V[4][3], const double P[3])
 {
     double cen[3]={0,0,0};
@@ -120,7 +120,7 @@ double PhiTet(const double V[4][3], const double P[3])
 
 // Field INT_tet (P-r')/|P-r'|^3 dV' of a uniform tetrahedron = -grad_P PhiTet, via the divergence
 // theorem: = 0.5 sum_faces [ n_face * TriPotential_face + d_face * TriField_face ].  Exact near AND far
-// (no quadrature).  Validated vs radia.hdiv_vim.tet_self_volume_field (the spherical ray-trace) * 4pi.
+// (no quadrature).  Validated vs radia.vim.tet_self_volume_field (the spherical ray-trace) * 4pi.
 void TetField(const double V[4][3], const double P[3], double out[3])
 {
     out[0]=out[1]=out[2]=0.0;
@@ -147,7 +147,7 @@ void TetField(const double V[4][3], const double P[3], double out[3])
 }
 
 // ===== degree-1/2 polynomial-charge field kernels (the order<=2 fast path) =====
-// Port of radia.hdiv_vim._field {triangle_potential_moment / _moment2, tet_newtonian_moment,
+// Port of radia.vim._field {triangle_potential_moment / _moment2, tet_newtonian_moment,
 // tet_volume_field_linear / _quadratic, linear_ / quadratic_triangle_charge_field}.  NO 1/4pi.
 // Validated entry-by-entry vs the Python references (machine precision).
 

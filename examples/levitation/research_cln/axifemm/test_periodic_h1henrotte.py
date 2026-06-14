@@ -17,7 +17,7 @@ from netgen.occ import (
 from ngsolve import (
     Mesh, BilinearForm, CoefficientFunction, Periodic, TaskManager, ngsglobals,
 )
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 print("step 2: build geometry", flush=True)

@@ -375,7 +375,7 @@ def pick_a_fem_formulation(problem_class: str) -> str:
             "Axisymmetric magnetic A_phi (★ Henrotte CORE):\n"
             "1. Use Henrotte basis {1, r^2, z}\n"
             "   → fem_time_domain_axisym('henrotte_axisym')\n"
-            "2. radia.radia_axifemm.H1Henrotte\n"
+            "2. radia.axifem.H1Henrotte\n"
             "3. Standard H1 for scalar T, V, etc. (NOT Henrotte)\n"
             "4. Code: radia_ngsolve.axifemm_documentation\n"
         ),

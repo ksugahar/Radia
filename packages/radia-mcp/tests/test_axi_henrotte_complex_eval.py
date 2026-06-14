@@ -26,7 +26,7 @@ if _SRC not in sys.path:
 import numpy as np
 from ngsolve import Mesh, GridFunction, grad, x as r_cf
 from netgen.occ import OCCGeometry, MoveTo, X, Y
-from radia.radia_axifemm import H1Henrotte
+from radia.axifem import H1Henrotte
 
 C = 2.0 + 3.0j
 PTS = [(0.30, 0.40), (0.50, 0.55), (0.72, 0.20), (0.88, 0.83)]

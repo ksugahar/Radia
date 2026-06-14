@@ -3,7 +3,7 @@ from `tests/axifemm/test_*.py` modules.
 
 The reference lives under `_reference_python/` (single source of truth for
 the pure-NumPy/SciPy Henrotte/Meeker prototype that the C++
-`radia_axifemm` module was ported from).  Adding the directory to
+`axifem` module was ported from).  Adding the directory to
 sys.path here lets every test module write a plain
 `from axifemm_core import ...` instead of fragile relative-path
 sys.path tricks.

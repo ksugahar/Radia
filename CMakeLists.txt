@@ -682,7 +682,7 @@ add_custom_command(TARGET sparsesolv_ngsolve POST_BUILD
 message(STATUS "sparsesolv_ngsolve module configured (NGSolve preconditioners)")
 
 # ========================================
-# radia_axifemm module (Henrotte/Meeker axisymmetric FE for NGSolve)
+# axifem module (Henrotte/Meeker axisymmetric FE for NGSolve)
 # ========================================
 # FEMM-style axisymmetric finite elements: shape functions linear in
 # {1, r^2, z}, giving B_z constant per element and B_r ~ 1/r per element
@@ -693,35 +693,35 @@ message(STATUS "sparsesolv_ngsolve module configured (NGSolve preconditioners)")
 # editable install; absorbed into the Radia wheel 2026-05-10 to fix the
 # 100号機 / mdx ImportError that was blocking IH axisymmetric work).
 #
-# Imported as `radia.radia_axifemm` (the .pyd lives at
-# src/radia/radia_axifemm.pyd alongside _radia_pybind.pyd).
+# Imported as `radia.axifem` (the .pyd lives at
+# src/radia/axifem.pyd alongside _radia_pybind.pyd).
 #
 # Reference: F. Henrotte et al., IEEE TMag 9(2):1352-1355, 1993.
 #            D. Meeker, FEMM 4.2 axisymmetric formulation notes.
 
 set(AXIFEMM_DIR "${EXT_DIR}/axifemm")
 
-add_ngsolve_python_module(radia_axifemm
-	${AXIFEMM_DIR}/radia_axifemm.cpp
+add_ngsolve_python_module(axifem
+	${AXIFEMM_DIR}/axifem.cpp
 	${AXIFEMM_DIR}/axi_henrotte_fe.cpp
 	${AXIFEMM_DIR}/axi_henrotte_fespace.cpp
 	${AXIFEMM_DIR}/axi_henrotte_integrators.cpp
 )
 
-target_include_directories(radia_axifemm PRIVATE
+target_include_directories(axifem PRIVATE
 	${AXIFEMM_DIR}
 )
 
 # pybind11 ABI fix (same rationale as _radia_pybind line ~575): force
 # ngsolve's bundled pybind11 headers ahead of system pybind11.  Without
-# this, radia_axifemm.pyd is built against system pybind11 3.0.2 and
+# this, axifem.pyd is built against system pybind11 3.0.2 and
 # fails at import with `ImportError: generic_type: ... referenced unknown
 # base type "ngfem::FiniteElement"` when ngsolve 2604 uses bundled
 # 3.1.0a0 at runtime.  (Caught by v4.80.2 CI 2026-05-28 in
 # test_heat_henrotte_smoke.)
-target_include_directories(radia_axifemm BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC})
+target_include_directories(axifem BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC})
 
-target_compile_definitions(radia_axifemm PRIVATE
+target_compile_definitions(axifem PRIVATE
 	RADIA_AXIFEMM_PHASE_2B
 	_CRT_SECURE_NO_WARNINGS
 	$<$<CONFIG:Debug>:_DEBUG>
@@ -729,7 +729,7 @@ target_compile_definitions(radia_axifemm PRIVATE
 )
 
 if(MSVC)
-	target_compile_options(radia_axifemm PRIVATE
+	target_compile_options(axifem PRIVATE
 		/O2
 		/fp:fast
 		/W0
@@ -739,11 +739,11 @@ if(MSVC)
 endif()
 
 # Post-build: Copy to src/radia
-add_custom_command(TARGET radia_axifemm POST_BUILD
+add_custom_command(TARGET axifem POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		"$<TARGET_FILE:radia_axifemm>"
-		"${CMAKE_SOURCE_DIR}/src/radia/radia_axifemm.pyd"
-	COMMENT "Copying radia_axifemm.pyd to src/radia"
+		"$<TARGET_FILE:axifem>"
+		"${CMAKE_SOURCE_DIR}/src/radia/axifem.pyd"
+	COMMENT "Copying axifem.pyd to src/radia"
 )
 
-message(STATUS "radia_axifemm module configured (Henrotte axisymmetric FE)")
+message(STATUS "axifem module configured (Henrotte axisymmetric FE)")

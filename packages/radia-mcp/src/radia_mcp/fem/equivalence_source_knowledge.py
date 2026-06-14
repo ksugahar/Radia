@@ -151,7 +151,7 @@ label and writes the NFS artifact + an external probe CSV.
   to IABC; same comment applies.
 
 - **No new FEM solver.**  This module is a POST-PROCESSING layer on top
-  of whatever FEM you already have (radia.radia_axifemm, ngsolve,
+  of whatever FEM you already have (radia.axifem, ngsolve,
   Radia MMM, etc.).
 
 ## Known limitations (release v1.0)

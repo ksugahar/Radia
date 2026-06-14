@@ -21,7 +21,7 @@ import scipy.sparse as sp  # noqa: E402
 from scipy.sparse.linalg import LinearOperator, minres  # noqa: E402
 
 import radia._radia_pybind as _rp  # noqa: E402
-from radia.hdiv_vim import _core as tet  # noqa: E402
+from radia.vim import _core as tet  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
 

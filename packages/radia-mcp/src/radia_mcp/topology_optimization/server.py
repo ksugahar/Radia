@@ -64,6 +64,20 @@ def topology_opt_applications(topic: str = "all") -> str:
       "motor"  — IPM brushless motor cogging-torque minimization
                  (Gangl 2015 case study, including the 4-layer
                  theory→Mathematica→NGSolve→Radia workflow)
+      "field_synthesis" — the ANALYTIC / LINEAR-INVERSE branch (complement
+                 to the density/gradient-shape branch the rest of this
+                 server teaches): the VERIFIED permanent-magnet multipole
+                 magnetization inverse (target field → radial M_r(r,θ) in
+                 closed form, with the n=1 uniform-magnetization degeneracy),
+                 the air-gap harmonic-content objective (SPM/Halbach), and a
+                 pointer to the shipped stream-function / TSVD / target-field
+                 COIL inverse in the `streamfunction` server.
+      "outer_loop" — derivative-free OUTER-LOOP optimizers for the
+                 non-closed-form / manufacturable-bounds case: Nelder-Mead
+                 direct search + the fminsearchbnd bound-by-transformation
+                 trick (Sugahara Lab MATLAB optimizer toolbox), verified on
+                 Rosenbrock; pointer to the `evolutionary` / `optuna` servers
+                 for population / global search.
     """
     return get_applications_documentation(topic)
 

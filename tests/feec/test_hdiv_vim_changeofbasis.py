@@ -25,7 +25,7 @@ pytest.importorskip("netgen.occ")
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Sphere, OCCGeometry, Pnt  # noqa: E402
 
-from radia.hdiv_vim._vim import _change_of_basis, _tet_ref, _tri_ref, _monos_vol, _monos_surf  # noqa: E402
+from radia.vim._vim import _change_of_basis, _tet_ref, _tri_ref, _monos_vol, _monos_surf  # noqa: E402
 
 
 def _mesh(maxh=1.5):
@@ -95,7 +95,7 @@ def test_surface_change_of_basis_reproduces_SurfaceL2_in_gram_frame():
 
 def test_demag_factor_unaffected_by_frame_fix():
     """The frame fix must NOT change the (frame-invariant) demag factor for uniform M -- still ~1/3."""
-    from radia.hdiv_vim import DemagOperator
+    from radia.vim import DemagOperator
     mesh = _mesh()
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=2)

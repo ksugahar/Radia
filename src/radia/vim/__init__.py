@@ -1,11 +1,11 @@
-"""radia.hdiv_vim -- HDiv-type VIM demag operator.
+"""radia.vim -- HDiv-type VIM demag operator.
 
 The FEEC H(div) RT alternative to the collocation MMM/MSC kernel, and the candidate replacement for the
 yano-type distortion elements: a SYMMETRIC demag operator N = B^T G B whose loop modes are field-null by
 construction (de Rham), giving mu_r-independent convergence with no hand-crafted loop-star.
 
 This is the PRODUCTION home (productionization milestone M1): the validated core was promoted here from
-examples/feec_vim.  Canonical docs: docs/hdiv_vim/README.md; roadmap: docs/hdiv_vim/PRODUCTIONIZATION.md.
+examples/vim.  Canonical docs: docs/hdiv_vim/README.md; roadmap: docs/hdiv_vim/PRODUCTIONIZATION.md.
 
 Public API (validated solve primitives):
   build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False)

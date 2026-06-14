@@ -42,7 +42,7 @@ from ngsolve import (
     Mesh, BilinearForm, LinearForm, CoefficientFunction, TaskManager,
     x, dx, ngsglobals,
 )
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 from test_hiruma_disk_q1 import (  # type: ignore

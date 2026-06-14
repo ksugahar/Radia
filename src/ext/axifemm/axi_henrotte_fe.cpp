@@ -7,7 +7,7 @@
 #include <pybind11/stl.h>
 #include "axi_henrotte_fe.hpp"
 
-namespace radia_axifemm {
+namespace axifem {
 
 using namespace ngfem;
 
@@ -739,4 +739,4 @@ void ExportAxiHenrotteFE(pybind11::module & m) {
              py::arg("rs"), py::arg("zs"));
 }
 
-}  // namespace radia_axifemm
+}  // namespace axifem

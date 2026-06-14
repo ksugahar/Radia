@@ -28,9 +28,9 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("ngsolve.bem")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
 import hdiv_demag_bem_singlelayer as bem  # noqa: E402
-from radia.hdiv_vim import _nonlinear as nl     # noqa: E402
+from radia.vim import _nonlinear as nl     # noqa: E402
 
 _CHI0, _MSAT = 5000.0, 1.6e6              # soft-iron-like saturating law
 def _Mof(H):

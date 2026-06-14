@@ -19,7 +19,7 @@ from ngsolve import (
     Mesh, BilinearForm, InnerProduct, grad, dx, x, CoefficientFunction,
 )
 from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
-from radia.radia_axifemm import H1Henrotte
+from radia.axifem import H1Henrotte
 
 
 R_DISK = 10e-3
