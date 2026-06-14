@@ -35,9 +35,14 @@ S:\Radia\01_GitHub\
     radia-mcp/            # pip install radia-mcp (MCP servers + skills)
     radia-axifemm/        # pip install radia-axifemm (axisymmetric FE, Henrotte basis)
     radia-vim/            # pip install radia-vim (Volume Integral Method, HDivVIM)
-    radia-levitation/     # pip install radia-levitation (eddy-current brakes,
-                          # mixed-Galerkin polarizability, Lorentz force,
-                          # Simulink LTI export, TEAM 28 levitation)
+    radia-levitation/     # pip install radia-levitation (eddy-current
+                          # brakes, mixed-Galerkin polarizability, Lorentz
+                          # force, Simulink LTI export, TEAM 28 levitation,
+                          # **plus all CLN (Cauer Ladder Network) scope** —
+                          # radia-cln is NOT a separate package; it is
+                          # permanently absorbed here, including the
+                          # multiconn loop method, NGSolve validation sweeps
+                          # (Tanimoto canonical), and the IGTE 2026 paper)
   tests/                  # Radia tests + tests/mcp/
   examples/
   docs/
@@ -55,7 +60,7 @@ versioned + released separately on PyPI):
 | **radia-mcp** | `pip install radia-mcp` | MCP servers + skills for AI-assisted workflows |
 | **radia-axifemm** | `pip install radia-axifemm` | Axisymmetric FE (Henrotte basis, FEMM-canonical magnetic; standard H1 thermal) |
 | **radia-vim** | `pip install radia-vim` | Volume Integral Method (HDivVIM, matrix-free Newton-Krylov on the analytic field operator) |
-| **radia-levitation** | `pip install radia-levitation` | Eddy-current brakes + maglev: mixed-Galerkin polarizability α(s) for arbitrary polyhedral conductors, Lorentz force, Simulink LTI export, TEAM 28 levitation |
+| **radia-levitation** | `pip install radia-levitation` | Eddy-current brakes + maglev + **all CLN (Cauer Ladder Network) scope** (radia-cln is absorbed here, no separate package): mixed-Galerkin polarizability α(s) for arbitrary polyhedral conductors, Lorentz force, Simulink LTI export, TEAM 28 levitation, multiconn loop method, Tanimoto canonical sweeps, IGTE 2026 paper |
 
 **Installation**:
 ```bash
