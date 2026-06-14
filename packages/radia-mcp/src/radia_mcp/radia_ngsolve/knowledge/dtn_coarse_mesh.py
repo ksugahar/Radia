@@ -1601,6 +1601,52 @@ exterior (where no Sommerfeld Green's function exists AT ALL)" -- arbitrary mu(x
 sparse SPD, one Schur condensation. PAPER POINT: state the BEM/Sommerfeld differentiator at its broadest;
 the layered case is just the sub-case that happens to have an independent analytic reference (demo_y/z/aa).
 
+REDUCED-FEM vs BEM -- where the line actually is (demo_cc). Once the Kelvin-FEM volume is condensed
+(Schur complement) onto Gamma it becomes a DENSE boundary DtN matrix and LOOKS like BEM ("is it still
+FEM?"). ANSWER: YES it is FEM -- a condensed FE substructure (static condensation = macro-element /
+superelement, textbook since the 1960s); NOT BEM. The SINGLE defining criterion separating BEM from the
+FEM family is: does it use the FUNDAMENTAL SOLUTION (Green's function)? BEM does (boundary integral of G
+-> dense, surface-only mesh, singular quadrature, G required); the Kelvin route does NOT (weak form, local
+polynomial basis, SPARSE volume assembly, no G) and only looks BEM-like AFTER condensation. MEASURED
+(demo_cc, one sphere): volume matrix A SPARSE (36 nnz/row, 0.57% fill, local grad-grad, SPD, no G) ->
+Schur onto Gamma -> DENSE Lambda (443x443, 100% fill) whose dipole eigenvalue = analytic 2/R (3.3e-3):
+SAME operator, DIFFERENT generator. The convergence noticed is REAL = the central insight of the SBFEM/
+DtN literature: the exterior DtN (Steklov-Poincare) operator is METHOD-AGNOSTIC (BEM-Lambda and FEM-Schur-
+Lambda are two discretizations of ONE operator, demo_r/s). Wolf-Song's SBFEM is literally subtitled "a
+FUNDAMENTAL-SOLUTION-LESS boundary-element method" (wolfsong2001) -- that paradoxical name IS this
+observation. RIGHT FRAMING: not "FEM vs BEM" but "two ROUTES to the exterior DtN -- the Green-function
+route (BEM; needs G; dense; fails for arbitrary mu) vs the transformed sparse-volume route (Kelvin-FEM;
+no G; sparse SPD; arbitrary mu, demo_bb)". They blur at the OUTPUT (shared DtN), stay distinct at the
+GENERATOR.
+
+LITERATURE SURVEY (12-agent workflow, 2026-06-15): low-frequency Sommerfeld + layered-Kelvin novelty.
+LOW-FREQUENCY = DEFINITIVE YES (3 adversarial verifiers conf 0.93-0.95, zero counter-evidence). Low-freq
+layered Sommerfeld is mature across 6 subfields: ELF/VLF dipole-over-earth + complex image; CSEM (~0.1-10
+Hz); magnetotellurics (1e-4..1e4 Hz); eddy-current NDT; induction well logging; grounding/lightning
+(DC..power freq). Canonical: Wait 1951 (Mg dipole over stratified earth), Bannister 1966/67 (quasi-static
+approx applied DIRECTLY to the Sommerfeld integrals), Weaver 1971 (image at COMPLEX depth = the diffusive
+foundational result), Thomson-Weaver 1975 (complex image, multilayer induction), Li 2011 (OA, grounding).
+The "low-frequency breakdown" is a FORMULATION conditioning pathology (omega-scaling of vector vs scalar
+potential), NOT a kernel failure; cured WHILE keeping the layered kernel (Chen-Jiang-Qian-Chew A-EFIE
+2011); quasi-static/Laplace/diffusion formulations are EXEMPT. => NEVER argue "Sommerfeld fails at low
+freq" (false; adversarial reviewers will shred it); argue the sparse-FE-SURROGATE advantage instead.
+NOVELTY = QUALIFIED NOVEL: NO independent third-party prior art for "Kelvin/transformed FE carrying
+STRATIFIED/half-space material in the inverted exterior as a sparse stand-in for the layered Sommerfeld
+operator." ALREADY TAKEN (cite, don't claim): free-space transformed-FE open boundary (Freeman-Lowther
+1989, Imhoff-Meunier 1990, Brunotte 1992, Meeker 2013, Nabizadeh 2021); the DENSE FE-BEM/FEM-Green route
+it displaces (Lobry 2021); Sommerfeld accelerators DCIM (Chow 1991, Aksun 1996) + tail/WA (Michalski-Mosig
+2016) + FMM; FE-on-the-1D-spectral-ODE (Okhmatovski-Cangellaris 2002, closest "FE-meets-layered-Green" but
+NOT a Kelvin inversion); interface-flattening TO (Sainath-Teixeira 2014, geometry not operator-surrogate).
+CLOSEST realization of "material in the Kelvin exterior" = the authors' OWN Sugahara 2022 (UNIFORM
+specimen, not stratified) + 2025 (HF+PML, free-space). GENUINELY OPEN = the explicit-multilayer-exterior +
+Sommerfeld-surrogate framing. RISKS: (1) incremental-over-own-work -> make the multilayer+surrogate
+framing load-bearing, quantify new capability, self-cite honestly; (2) coverage gap (IEEE/RG/MDPI fetch
+blocked; Sugahara-2022 forward-citation graph + COMPUMAG/CEFC/PIERS + Japanese proceedings NOT exhaustive;
+novelty conf ~0.78) -> "to our knowledge" + residual citation-graph/grey-lit search pre-submission; (3)
+say "sparse stand-in/surrogate FOR" not "replace" the operator. POSITION as a FORMULATION contribution
+with 3 related-work buckets + a quantitative sparsity/conditioning/FE-coupling benchmark vs the dense
+layered kernel + a paragraph pre-empting the breakdown objection (A-EFIE 2011; Vico-Greengard DPIE 2016).
+
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
 sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
