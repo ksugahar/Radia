@@ -663,3 +663,265 @@ def quadratic_triangle_charge_field(P, r, sigma0, s, S):
     inplane -= (Pproj @ s) * I0 + 2.0 * (Pproj @ (S @ M1))          # - INT (grad_s sigma)/R
     normal = h * n * (sigma0 * J3_0 + float(np.dot(s, J3_1)) + float(np.einsum("jk,jk", S, J3_2)))
     return inplane + normal
+
+
+# ---------------------------------------------------------------------------------------------------
+# ARBITRARY-DEGREE polynomial charge field (the general assembler).  The degree-0/1/2 functions above
+# are fast closed forms; these handle ANY polynomial degree via the general moment recursion:
+#
+#   master recursion  (2+p+k) INT_T xi^a R^p - p h^2 INT_T xi^a R^{p-2} = oint xi^a (xi.m) R^p dl
+#   => surface 1/R moments  A_k  satisfy  A_k = (E^-1_k - h^2 B_k)/(k+1),  B_k = A_{k-2}(deriv) - edge
+#      so A_k comes from A_{k-2} + edge integrals ALONE (h-safe: fold h^2 B_k = h^2[(a-1)A_{k-2} - edge]).
+#   surface field  = in-plane/normal split (uses A and B moments + edge integrals).
+#   volume potential moment  INT_V rp^a/R = 1/(d+2)[ -SUM_f h_f INT_face rp^a/R + SUM_i r_i a_i INT_V rp^{a-e_i}/R ]
+#      (from 1/R = (1/2) lap'(R) + Euler), bottoming at PhiTet, reducing to surface potentials.
+#   volume field  = SUM_f n_f INT_face rho/R - INT_V (grad rho)/R   (the divergence-theorem recursion).
+#
+# Validated vs Gauss to machine precision for cubic + quartic charge; reduces to the closed forms above.
+# See docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md.  Pure-Python reference; cost ~ per (point, element).
+# ---------------------------------------------------------------------------------------------------
+from math import comb as _comb
+
+
+def _inplane_triangle_setup(P, r):
+    """In-plane orthonormal basis (e1,e2), normal n, foot r_p, signed height h, and per-edge data
+    (in-plane coords of the edge endpoint and tangent/outward-normal, the u-range for l->u)."""
+    P = np.asarray(P, float)
+    r = np.asarray(r, float)
+    n = np.cross(P[1] - P[0], P[2] - P[0])
+    n = n / np.linalg.norm(n)
+    h = float(np.dot(r - P[0], n))
+    r_p = r - h * n
+    cen = P.mean(axis=0)
+    e1 = P[1] - P[0]
+    e1 = e1 / np.linalg.norm(e1)
+    e2 = np.cross(n, e1)
+    edges = []
+    for i in range(3):
+        A, B = P[i], P[(i + 1) % 3]
+        L = np.linalg.norm(B - A)
+        that = (B - A) / L
+        m = np.cross(that, n)
+        if np.dot(m, 0.5 * (A + B) - cen) < 0:
+            m = -m
+        w = r - A
+        l0 = float(np.dot(w, that))
+        d2 = max(float(np.dot(w, w)) - l0 * l0, 0.0)
+        edges.append(dict(
+            xiA=np.array([np.dot(A - r_p, e1), np.dot(A - r_p, e2)]),
+            t2=np.array([np.dot(that, e1), np.dot(that, e2)]),
+            m2=np.array([np.dot(m, e1), np.dot(m, e2)]),
+            L=L, l0=l0, d2=d2))
+    return dict(P=P, r=r, n=n, h=h, r_p=r_p, e1=e1, e2=e2, edges=edges)
+
+
+def _edge_l_moments(edge, nmax):
+    """Jl[n] = INT_edge l^n / R dl  (l = arc length from A), via the INT u^n/R reduction + l = u + l0."""
+    d2 = edge["d2"]
+    d = np.sqrt(d2)
+    u1, u2 = -edge["l0"], edge["L"] - edge["l0"]
+
+    def asinh(u):
+        return np.arcsinh(u / d) if d > 1e-300 else (np.sign(u) * np.log(2 * abs(u)) if abs(u) > 0 else 0.0)
+    W = np.zeros(nmax + 1)
+    W[0] = asinh(u2) - asinh(u1)
+    if nmax >= 1:
+        W[1] = np.sqrt(u2 * u2 + d2) - np.sqrt(u1 * u1 + d2)
+    for nn in range(2, nmax + 1):
+        term = (u2 ** (nn - 1) * np.sqrt(u2 * u2 + d2) - u1 ** (nn - 1) * np.sqrt(u1 * u1 + d2)) / nn
+        W[nn] = term - ((nn - 1) * d2 / nn) * W[nn - 2]
+    l0 = edge["l0"]
+    Jl = np.zeros(nmax + 1)
+    for nn in range(nmax + 1):
+        Jl[nn] = sum(_comb(nn, i) * l0 ** (nn - i) * W[i] for i in range(nn + 1))
+    return Jl
+
+
+def _edge_inplane_monomial(edge, a, b, Jl):
+    """INT_edge xi1^a xi2^b / R dl  (xi1,xi2 = in-plane coords); expand (xiA + t l)^... as a poly in l."""
+    p1 = np.array([edge["xiA"][0], edge["t2"][0]])
+    p2 = np.array([edge["xiA"][1], edge["t2"][1]])
+    poly = np.array([1.0])
+    for _ in range(a):
+        poly = np.convolve(poly, p1)
+    for _ in range(b):
+        poly = np.convolve(poly, p2)
+    return float(sum(poly[nn] * Jl[nn] for nn in range(len(poly))))
+
+
+def triangle_inplane_moments(P, r, degree, want_B=True):
+    """The general surface moment dicts in the in-plane basis: A[(a,b)] = INT_T xi1^a xi2^b/R dS' (always,
+    h-safe) and B[(a,b)] = INT_T xi1^a xi2^b/R^3 dS' (only if want_B and h != 0), for all a+b <= degree.
+    A is self-contained (A_k from A_{k-2} + edge integrals).  Generalises triangle_potential_const /
+    _moment / _moment2 (their r'-moments are r_p-shifts/contractions of these xi-moments)."""
+    g = _inplane_triangle_setup(P, r)
+    h = g["h"]
+    edges = g["edges"]
+    Jl = [_edge_l_moments(e, degree + 2) for e in edges]
+    A = {(0, 0): triangle_potential_const(P, r)}
+    B = {}
+
+    def edge_R(e):                                       # INT_edge R dl
+        u1, u2 = -e["l0"], e["L"] - e["l0"]
+        d2 = e["d2"]
+
+        def F(u):
+            return (0.5 * (u * np.sqrt(u * u + d2) + d2 * np.arcsinh(u / np.sqrt(d2)))
+                    if d2 > 1e-300 else 0.5 * u * abs(u))
+        return F(u2) - F(u1)
+    if degree >= 1:
+        A1 = sum(e["m2"] * edge_R(e) for e in edges)     # INT_T xi/R = SUM m_e INT_edge R dl
+        A[(1, 0)] = float(A1[0])
+        A[(0, 1)] = float(A1[1])
+
+    def Eneg1(a, b):                                     # oint xi1^a xi2^b (xi.m)/R dl
+        return sum(e["m2"][0] * _edge_inplane_monomial(e, a + 1, b, Jl[i])
+                   + e["m2"][1] * _edge_inplane_monomial(e, a, b + 1, Jl[i]) for i, e in enumerate(edges))
+
+    def Eedge(j, p, q):                                  # oint xi1^p xi2^q m_j/R dl
+        return sum(e["m2"][j] * _edge_inplane_monomial(e, p, q, Jl[i]) for i, e in enumerate(edges))
+    for k in range(2, degree + 1):
+        for a in range(k, -1, -1):
+            b = k - a
+            if a >= 1:                                   # h^2 B_k via the GRAD relation (finite at h=0)
+                h2B = h * h * ((a - 1) * A.get((a - 2, b), 0.0) - Eedge(0, a - 1, b))
+            else:
+                h2B = h * h * ((b - 1) * A.get((a, b - 2), 0.0) - Eedge(1, a, b - 1))
+            A[(a, b)] = (Eneg1(a, b) - h2B) / (k + 1)
+    if want_B and abs(h) > 1e-12:
+        Fc = flat_triangle_charge_field(P, r)
+        B[(0, 0)] = float(np.dot(g["n"], Fc)) / h
+        if degree >= 1:
+            B[(1, 0)] = -Eedge(0, 0, 0)
+            B[(0, 1)] = -Eedge(1, 0, 0)
+        for k in range(2, degree + 1):
+            for a in range(k, -1, -1):
+                b = k - a
+                if a >= 1:
+                    B[(a, b)] = (a - 1) * A.get((a - 2, b), 0.0) - Eedge(0, a - 1, b)
+                else:
+                    B[(a, b)] = (b - 1) * A.get((a, b - 2), 0.0) - Eedge(1, a, b - 1)
+    return A, B, g
+
+
+def _fit_inplane_coeffs(charge_fn, g, degree):
+    """Fit charge_fn(r') to in-plane monomial coeffs c[(a,b)] (xi1^a xi2^b) by sampling at barycentric
+    nodes inside the triangle (exact for a degree-`degree` polynomial)."""
+    P, e1, e2, r_p = g["P"], g["e1"], g["e2"], g["r_p"]
+    N = max(degree, 1)
+    nodes = [P[0] + (i / N) * (P[1] - P[0]) + (j / N) * (P[2] - P[0])
+             for i in range(N + 1) for j in range(N + 1 - i)]
+    monos = [(a, k - a) for k in range(degree + 1) for a in range(k + 1)]
+    M = np.empty((len(nodes), len(monos)))
+    rhs = np.empty(len(nodes))
+    for ii, p in enumerate(nodes):
+        x1 = float(np.dot(p - r_p, e1))
+        x2 = float(np.dot(p - r_p, e2))
+        for jj, (a, b) in enumerate(monos):
+            M[ii, jj] = x1 ** a * x2 ** b
+        rhs[ii] = charge_fn(p)
+    c, *_ = np.linalg.lstsq(M, rhs, rcond=None)
+    return {monos[j]: float(c[j]) for j in range(len(monos))}
+
+
+def polynomial_triangle_charge_field(P, r, sigma_fn, degree):
+    """EXACT field of an ARBITRARY-degree polynomial surface charge sigma(r') on a flat triangle:
+    INT_T sigma (r-r')/|r-r'|^3 dS' (NO 1/4pi), via the in-plane/normal split with the general moment
+    recursion.  sigma_fn(point)->scalar (any polynomial of total degree <= `degree`).  EXACT to machine
+    precision at ANY r (validated vs Gauss for cubic/quartic).  Subsumes flat_/linear_/quadratic_
+    triangle_charge_field (use those closed forms when degree<=2 for speed).  Multiply by 1/4pi for H."""
+    A, B, g = triangle_inplane_moments(P, r, degree + 1, want_B=True)
+    e1, e2, n, h = g["e1"], g["e2"], g["n"], g["h"]
+    edges = g["edges"]
+    Jl = [_edge_l_moments(e, degree + 2) for e in edges]
+    c = _fit_inplane_coeffs(sigma_fn, g, degree)
+    normal = h * n * sum(cab * B[(a, b)] for (a, b), cab in c.items())
+    inplane = np.zeros(3)
+    for i, e in enumerate(edges):
+        m3d = e["m2"][0] * e1 + e["m2"][1] * e2
+        inplane += m3d * sum(cab * _edge_inplane_monomial(e, a, b, Jl[i]) for (a, b), cab in c.items())
+    gx = sum(a * cab * A.get((a - 1, b), 0.0) for (a, b), cab in c.items() if a >= 1)
+    gy = sum(b * cab * A.get((a, b - 1), 0.0) for (a, b), cab in c.items() if b >= 1)
+    return inplane - (e1 * gx + e2 * gy) + normal
+
+
+def _surface_potential_monomial(P, r, alpha, degree, cache):
+    """INT_T r'^alpha/R dS' (global monomial alpha) -- the surface potential of the monomial on the
+    triangle, via the in-plane A moments.  Cached per face."""
+    key = P.tobytes()
+    if key not in cache:
+        A, _, g = triangle_inplane_moments(P, r, degree, want_B=False)
+        cache[key] = (g, A)
+    g, A = cache[key]
+    c = _fit_inplane_coeffs(lambda p: p[0] ** alpha[0] * p[1] ** alpha[1] * p[2] ** alpha[2], g, sum(alpha))
+    return sum(cab * A[(a, b)] for (a, b), cab in c.items())
+
+
+def tet_volume_field_polynomial(verts, r, rho_fn, degree):
+    """EXACT field of an ARBITRARY-degree polynomial volume charge rho(r') on a tet:
+    INT_V rho (r-r')/|r-r'|^3 dV' (NO 1/4pi), via the divergence-theorem recursion
+
+        = SUM_faces n_f INT_face rho/R dS'  -  INT_V (grad rho)/R dV'
+
+    with the volume potential moments INT_V r'^a/R = 1/(|a|+2)[-SUM_f h_f INT_face r'^a/R
+    + SUM_i r_i a_i INT_V r'^{a-e_i}/R] (bottoming at PhiTet, reducing to surface potentials).
+    rho_fn(point)->scalar (any polynomial of total degree <= `degree`).  EXACT to machine precision at
+    ANY r (validated vs Gauss for cubic; subsumes tet_volume_field_linear/quadratic).  Multiply by 1/4pi."""
+    V = np.asarray(verts, float)
+    r = np.asarray(r, float)
+    c = V.mean(axis=0)
+    faces = []
+    for tri in ((1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1)):
+        Pf = V[list(tri)]
+        nf = np.cross(Pf[1] - Pf[0], Pf[2] - Pf[0])
+        nf = nf / np.linalg.norm(nf)
+        if np.dot(nf, c - Pf[0]) > 0:
+            nf = -nf
+        faces.append((Pf, nf))
+    monos = [(ax, ay, k - ax - ay) for k in range(degree + 1)
+             for ax in range(k + 1) for ay in range(k + 1 - ax)]
+    N = degree + 1
+    nodes = [V[0] + (i / N) * (V[1] - V[0]) + (j / N) * (V[2] - V[0]) + (k2 / N) * (V[3] - V[0])
+             for i in range(N + 1) for j in range(N + 1 - i) for k2 in range(N + 1 - i - j)]
+    M = np.empty((len(nodes), len(monos)))
+    rhs = np.empty(len(nodes))
+    for ii, p in enumerate(nodes):
+        for jj, (ax, ay, az) in enumerate(monos):
+            M[ii, jj] = p[0] ** ax * p[1] ** ay * p[2] ** az
+        rhs[ii] = rho_fn(p)
+    cg, *_ = np.linalg.lstsq(M, rhs, rcond=None)
+    coeffs = {monos[j]: float(cg[j]) for j in range(len(monos)) if abs(cg[j]) > 1e-13}
+    cache = {}
+    vmemo = {}
+
+    def vol_pot_mono(alpha):
+        d = sum(alpha)
+        if d == 0:
+            return tet_newtonian_potential(V, r)
+        if alpha in vmemo:
+            return vmemo[alpha]
+        s = 0.0
+        for (Pf, nf) in faces:
+            s -= float(np.dot(r - Pf[0], nf)) * _surface_potential_monomial(Pf, r, alpha, degree, cache)
+        for i in range(3):
+            if alpha[i] >= 1:
+                am = list(alpha)
+                am[i] -= 1
+                s += r[i] * alpha[i] * vol_pot_mono(tuple(am))
+        vmemo[alpha] = s / (d + 2)
+        return vmemo[alpha]
+
+    F = np.zeros(3)
+    for (Pf, nf) in faces:
+        F += nf * sum(cc * _surface_potential_monomial(Pf, r, a, degree, cache) for a, cc in coeffs.items())
+    for i in range(3):
+        gi = 0.0
+        for a, cc in coeffs.items():
+            if a[i] >= 1:
+                am = list(a)
+                am[i] -= 1
+                gi += cc * a[i] * vol_pot_mono(tuple(am))
+        ei = np.zeros(3)
+        ei[i] = 1.0
+        F -= ei * gi
+    return F
