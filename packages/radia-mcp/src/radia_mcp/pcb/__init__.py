@@ -1,4 +1,4 @@
-"""radia_mcp.wpt: Wireless Power Transfer knowledge layer.
+"""radia_mcp.pcb: Wireless Power Transfer knowledge layer.
 
 Covers:
 - Overview: WPT physics, decision tree, lab focus areas

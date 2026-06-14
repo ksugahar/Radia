@@ -12,7 +12,7 @@ The primary cross-references are:
   - radia_mcp.peec.carstensen_ac_copper_loss
   - radia_mcp.motor.hollaus_eddy
   - radia_mcp.ih (workpiece SIBC + ESIM)
-  - radia_mcp.wpt (compensation network selection)
+  - radia_mcp.pcb (compensation network selection)
 
 All formulas are written in cp932-safe ASCII (no Unicode math).
 """
@@ -131,7 +131,7 @@ measurement disagrees by > 50 %.
 - `radia_mcp.motor.hollaus_eddy` -- MSFEM for laminated cores
   (analogous eddy-current PDE in laminations)
 - `radia_mcp.ih` -- workpiece SIBC + ESIM
-- `radia_mcp.wpt.coil_compensation` -- Litz wire in WPT coils
+- `radia_mcp.pcb.coil_compensation` -- Litz wire in WPT coils
 """
 
 

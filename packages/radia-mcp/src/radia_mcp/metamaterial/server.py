@@ -92,7 +92,7 @@ register_status_tool(
         "peec",                 # CRLH as PEEC ladder
         "ih",                   # ESIM surface impedance
         "radia_ngsolve",        # periodic FES + BEM
-        "wpt",                  # WPT-side ladder networks
+        "pcb",                  # WPT-side ladder networks
         "litz-transmission",    # adjacent TL topic
     ],
 )

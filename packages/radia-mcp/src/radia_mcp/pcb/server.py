@@ -1,4 +1,4 @@
-"""MCP Server: radia_mcp.wpt
+"""MCP Server: radia_mcp.pcb
 
 Wireless Power Transfer knowledge layer for EV / robot / bearingless
 motor / dynamic / FOD applications.
@@ -19,8 +19,8 @@ Cross-references:
 - `radia_mcp.motor` — bearingless motor design
 
 Usage:
-    mcp-server-wpt              # stdio
-    mcp-server-wpt --selftest   # self-test
+    mcp-server-pcb              # stdio
+    mcp-server-pcb --selftest   # self-test
 """
 
 import sys
@@ -36,11 +36,11 @@ from .applications_knowledge import get_applications_knowledge
 from .alternatives_knowledge import get_alternatives_knowledge
 
 
-mcp = FastMCP("mcp-server-wpt")
+mcp = FastMCP("mcp-server-pcb")
 
 
 @mcp.tool()
-def wpt_overview(topic: str = "decision_tree") -> str:
+def pcb_overview(topic: str = "decision_tree") -> str:
     """
     WPT landscape: regimes, decision tree, lab focus.
 
@@ -55,7 +55,7 @@ def wpt_overview(topic: str = "decision_tree") -> str:
 
 
 @mcp.tool()
-def wpt_coil_compensation(topic: str = "coil_design") -> str:
+def pcb_coil_compensation(topic: str = "coil_design") -> str:
     """
     Coil design + compensation topology + resonance matching.
 
@@ -70,7 +70,7 @@ def wpt_coil_compensation(topic: str = "coil_design") -> str:
 
 
 @mcp.tool()
-def wpt_efficiency_safety(topic: str = "q_factor_kQ") -> str:
+def pcb_efficiency_safety(topic: str = "q_factor_kQ") -> str:
     """
     Efficiency (Q, k, kQ) + safety + IEC/SAE standards.
 
@@ -86,7 +86,7 @@ def wpt_efficiency_safety(topic: str = "q_factor_kQ") -> str:
 
 
 @mcp.tool()
-def wpt_fod(topic: str = "overview") -> str:
+def pcb_fod(topic: str = "overview") -> str:
     """
     ★ Foreign Object Detection (FOD) — lab core research.
 
@@ -102,7 +102,7 @@ def wpt_fod(topic: str = "overview") -> str:
 
 
 @mcp.tool()
-def wpt_applications(topic: str = "dynamic_ev") -> str:
+def pcb_applications(topic: str = "dynamic_ev") -> str:
     """
     WPT applications: dynamic EV, robot, bearingless motor.
 
@@ -110,14 +110,14 @@ def wpt_applications(topic: str = "dynamic_ev") -> str:
         topic: One of:
             "dynamic_ev"           - EV running, segmented primary (DEFAULT)
             "robot_bearingless"    - ★ Lab specialty
-            "wpt_lab_lineage"      - Sugahara lab paper lineage
+            "pcb_lab_lineage"      - Sugahara lab paper lineage
             "all"                  - Everything
     """
     return get_applications_knowledge(topic)
 
 
 @mcp.tool()
-def wpt_alternatives(topic: str = "capacitive") -> str:
+def pcb_alternatives(topic: str = "capacitive") -> str:
     """
     Alternative WPT: capacitive, microwave/rectenna, metamaterial.
 
@@ -136,31 +136,31 @@ def wpt_alternatives(topic: str = "capacitive") -> str:
 # ============================================================
 
 @mcp.prompt()
-def design_wpt_system(scenario: str) -> str:
+def design_pcb_system(scenario: str) -> str:
     """Walk through WPT system design for a scenario."""
     guidance = {
         "ev_stationary_85khz": (
             "EV stationary WPT @ 85 kHz (SAE J2954 compliant):\n"
             "1. Coil: DD or DDQ for misalignment tolerance\n"
-            "   → wpt_coil_compensation('coil_design')\n"
+            "   → pcb_coil_compensation('coil_design')\n"
             "2. Compensation: LCC-LCC topology (constant-I source)\n"
-            "   → wpt_coil_compensation('compensation_topology')\n"
+            "   → pcb_coil_compensation('compensation_topology')\n"
             "3. Target kQ > 10 for >90% efficiency\n"
-            "   → wpt_efficiency_safety('q_factor_kQ')\n"
+            "   → pcb_efficiency_safety('q_factor_kQ')\n"
             "4. FOD: required per IEC 61980-3\n"
-            "   → wpt_fod('overview')\n"
+            "   → pcb_fod('overview')\n"
             "5. Standards: SAE J2954 + IEC 61980-1\n"
-            "   → wpt_efficiency_safety('standards_IEC_SAE')\n"
+            "   → pcb_efficiency_safety('standards_IEC_SAE')\n"
             "6. Code: PEEC for L/M/k, Radia MMM for ferrite plate\n"
             "   → radia_mcp.peec\n"
         ),
         "robot_multi_joint": (
             "Multi-joint arm robot WPT:\n"
             "1. Chain of LCC-LCC stages, one per rotation axis\n"
-            "   → wpt_applications('robot_bearingless')\n"
+            "   → pcb_applications('robot_bearingless')\n"
             "2. Use ディスクリピーター (disc repeater) for compact size\n"
             "3. Litz wire for high Q\n"
-            "   → wpt_coil_compensation('coil_design')\n"
+            "   → pcb_coil_compensation('coil_design')\n"
             "4. Cross-reference lab papers (WPT2016-23, 26, 39)\n"
             "5. Code: PEEC + RNA for joint-by-joint analysis\n"
             "   → radia_mcp.peec, radia_mcp.bem.mmm_msc.rna_mmm\n"
@@ -169,9 +169,9 @@ def design_wpt_system(scenario: str) -> str:
             "Bearingless motor + WPT integration (★ lab specialty):\n"
             "1. Stator: stationary coil for both levitation + power\n"
             "2. Rotor: receiver coil + rectifier + load\n"
-            "   → wpt_applications('robot_bearingless')\n"
+            "   → pcb_applications('robot_bearingless')\n"
             "3. LCC-S compensation (constant-I to rotor)\n"
-            "   → wpt_coil_compensation('compensation_topology')\n"
+            "   → pcb_coil_compensation('compensation_topology')\n"
             "4. Cross-reference: 整流コイルを用いたベアリングレスモータ papers\n"
             "5. Coupling with motor design\n"
             "   → radia_mcp.motor\n"
@@ -179,29 +179,29 @@ def design_wpt_system(scenario: str) -> str:
         "fod_design": (
             "FOD subsystem design:\n"
             "1. Pick detection family by cost / sensitivity\n"
-            "   → wpt_fod('overview')\n"
+            "   → pcb_fod('overview')\n"
             "2. For EV: sensorless freq sweep + search coil array (dual-use)\n"
-            "   → wpt_fod('sensorless')\n"
-            "   → wpt_fod('sensor_based')\n"
+            "   → pcb_fod('sensorless')\n"
+            "   → pcb_fod('sensor_based')\n"
             "3. For living object: capacitive sensor\n"
             "4. Comply with IEC 61980-3 test items\n"
-            "   → wpt_fod('permeability_patents')\n"
+            "   → pcb_fod('permeability_patents')\n"
             "5. Lab actively researching multi-method fusion\n"
         ),
         "dynamic_charging": (
             "Dynamic EV charging (running):\n"
             "1. Segmented primary coil array\n"
-            "   → wpt_applications('dynamic_ev')\n"
+            "   → pcb_applications('dynamic_ev')\n"
             "2. LCC-LCC (k-insensitive)\n"
             "3. Position detection via dual-use search coil\n"
-            "   → wpt_fod('sensor_based')\n"
+            "   → pcb_fod('sensor_based')\n"
             "4. Feed-forward Q control for transitions\n"
             "5. Code: PEEC for segmented primary, transient sim\n"
         ),
         "drone_microwave": (
             "Drone microwave WPT (NOT lab core but reference):\n"
             "1. 28 GHz mmWave with rectenna\n"
-            "   → wpt_alternatives('microwave_rectenna')\n"
+            "   → pcb_alternatives('microwave_rectenna')\n"
             "2. Pencil beam with steering\n"
             "3. Rectenna efficiency: 70-80% small power, 30-50% high power\n"
             "4. Cross-link: ngsolve.bem for high-freq full-wave\n"
@@ -211,7 +211,7 @@ def design_wpt_system(scenario: str) -> str:
         f"Unknown scenario '{scenario}'. Available:\n"
         "  ev_stationary_85khz, robot_multi_joint, bearingless_motor,\n"
         "  fod_design, dynamic_charging, drone_microwave.\n"
-        "For overview, see wpt_overview('decision_tree').\n"
+        "For overview, see pcb_overview('decision_tree').\n"
     ))
 
 
@@ -219,15 +219,15 @@ def design_wpt_system(scenario: str) -> str:
 
 register_status_tool(
     mcp,
-    server_name='mcp-server-wpt',
+    server_name='mcp-server-pcb',
     description='Wireless Power Transfer: coil + compensation (SS/LCC/LCL), efficiency, IEC 61980 / SAE J2954, FOD, dynamic EV / robot / bearingless...',
-    subpackage='radia_mcp.wpt',
+    subpackage='radia_mcp.pcb',
     related_servers=["peec", "litz-transmission", "maglev"],
 )
 
 
 def main():
-    """Entry point for mcp-server-wpt."""
+    """Entry point for mcp-server-pcb."""
     if "--selftest" in sys.argv:
         print("wpt MCP server self-test:")
         print(f"  overview: {len(get_overview_knowledge('all'))} chars")

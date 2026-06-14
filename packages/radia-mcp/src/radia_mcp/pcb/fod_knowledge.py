@@ -80,7 +80,7 @@ Simple but late (object already heating).
 
 ## Cross-reference
 
-- `wpt_efficiency_safety('coupling_k')` — k changes due to metal
+- `pcb_efficiency_safety('coupling_k')` — k changes due to metal
 """
 
 
@@ -188,7 +188,7 @@ Lab is targeting IEC 61980-3 compliance for production WPT systems.
 
 ## Cross-reference
 
-- `wpt_efficiency_safety('safety_human_exposure')` — LOD aspect
+- `pcb_efficiency_safety('safety_human_exposure')` — LOD aspect
 - `radia_mcp.peec` — search coil L computation
 - `radia_mcp.ih` — analogous metal heating physics
 """
