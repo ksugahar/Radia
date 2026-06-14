@@ -1997,6 +1997,29 @@ the ONLY one that carries Kelvin-mapped EXTERIOR MATERIAL / scatterers (the IEIC
 use case -- a PML cannot) and bakes in infinity (no truncation-distance choice). Three complementary
 points on the one DtN spectrum. PAPER-H: frame Kelvin's niche as exterior-material + exactness, not as
 beating PML at vacuum absorption; cite the spectrum as the unifying comparison axis.
+
+THE MATCHED HOIBC AS A GENUINE 3D SURFACE FE TERM (demo_oo, verified 2026-06-15, NGSolve). demo_mm
+reduced the angular Delta_S to its eigenvalue -n(n+1); demo_oo promotes it to the real SURFACE operator.
+The matched HOIBC impedance is Z_HOIBC=(i kb-1) I + (i/2kb) Delta_S (Delta_S=unit-sphere Laplace-
+Beltrami), assembled as the surface bilinear form (weak Delta_S = -grad_Gamma . grad_Gamma):
+  S(u,v) = (i kb-1) int_Gamma u v ds  -  (i/2kb) rho_b^2 int_Gamma grad_Gamma u . grad_Gamma v ds
+(the rho_b^2 converts the radius-rho_b surface gradient to the unit-sphere Delta_S). Built on a genuine
+2-manifold OCC-face surface mesh (H1 with grad(u).Trace()*...*ds; the surface triangles are BND
+elements -> the Trace() is REQUIRED, a pitfall). VERIFIED two ways (surface-mesh discretization ~1%):
+ (1) the surface gradient grad_Gamma reproduces the Laplace-Beltrami SPECTRUM: generalized eigenvalues
+     (K_gradGamma, M_surface) = {0, 2.017(x3), 6.05(x5), 12.10(x7)} = n(n+1) with 2n+1 multiplicities
+     (rel.err <1e-2 at maxh 0.20) -> grad_Gamma IS the unit-sphere Delta_S.
+ (2) the full HOIBC surface form S has generalized spectrum (vs the surface mass) = the per-mode matched
+     impedance Lambda_HOIBC,n = i kb-1 - i n(n+1)/(2kb): n=0 (-1,8) exact; n=1 (-1,7.874) vs (-1,7.875)
+     x3; n=2 x5; n=3 x7; max|err| 5.7e-3 -> the Delta_S surface form encodes the MULTIPOLE-DEPENDENT
+     matched HOIBC impedance (the whole point: a SURFACE operator giving the n-dependent radiation
+     impedance a scalar SIBC cannot).
+So with demo_mm's transformation-optics VOLUME medium + radial coupling (O(h^2) to the closed form) and
+demo_oo's Delta_S SURFACE term, the radiating extended-Kelvin boundary is a genuine 3D FE = isotropic
+(a/rho)^2 medium + the grad_Gamma HOIBC surface term. Each piece is verified; the only remaining step is
+the single monolithic volumetric 3D solve that glues them (condense to the truncation -> complex DtN
+matrix, vs demo_nn's closed form). NGSolve recipe: surface mesh via OCCGeometry(Sphere(R).faces[0]);
+grad(u).Trace() for grad_Gamma; ng.ds for the surface integral; complex=True for the radiating impedance.
 """
 
 
