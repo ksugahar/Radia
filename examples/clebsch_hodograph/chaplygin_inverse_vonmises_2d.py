@@ -26,19 +26,21 @@ angle = Phi).  The least-squares solver RECOVERS it to ~1e-8 (rel. error), with
 the residual J -> 0 -- the free boundary has been dissolved into a fixed-domain
 solve.
 
-THE NONLINEAR WALL (honest -- the genuinely open part).  With mu = mu(q) the
-A-spacing 1/(mu q) changes, so the consistent DISTRIBUTION of Phi, A along the
-walls is mu-DEPENDENT.  Prescribing the full boundary map (x, y) from a fixed
-GEOMETRIC parametrisation (uniform angle) then over-constrains the problem and
-the nonlinear least-squares map FOLDS (Jacobian < 0).  The correct boundary
-condition is a SLIP condition -- the boundary point lies ON the prescribed wall
-curve with its tangential position free -- which for CURVED walls is a NONLINEAR
-constraint (e.g. x^2 + y^2 = r_in^2 on an arc).  Combined with the mu(q) Picard
-this is a nonlinear PDE with nonlinear boundary constraints: the genuine
-free-boundary inverse, still open here.  (Straight-wall guides have LINEAR slip
-constraints but are self-linearising = trivial image.)  So this file SOLVES the
-inverse in the linear case and pins down EXACTLY what makes the nonlinear case
-hard.
+THE NONLINEAR WALL -- now CLOSED in chaplygin_inverse_nonlinear_2d.py.  With
+mu = mu(q) the A-spacing 1/(mu q) changes, so the consistent DISTRIBUTION of
+Phi, A along the walls is mu-DEPENDENT.  Prescribing the full boundary map (x, y)
+from a fixed GEOMETRIC parametrisation (uniform angle) over-constrains the
+problem and the nonlinear least-squares map FOLDS (Jacobian < 0).  The correct
+boundary condition is a SLIP condition -- the boundary point lies ON the
+prescribed wall curve with its tangential position free -- a NONLINEAR constraint
+for CURVED walls (e.g. x^2 + y^2 = r_in^2 on an arc).  The remaining obstacle was
+an OVER-DETERMINATION: the von Mises rectangle has TWO dimensions, Phi1 (the MMF)
+and A1 (the flux Psi), and a guide of fixed geometry + material cannot have BOTH
+prescribed.  The companion file frees A1 = lambda (the mu-dependent saturable
+flux) as a global NumberSpace unknown and uses polar (r, psi) unknowns for clean
+slip BCs; the nonlinear inverse then closes (const-width to machine zero, tapered
+to J~1e-7 with a valid map and a theta-dependent free-boundary image).  This file
+SOLVES the inverse in the linear case; the companion closes the nonlinear case.
 
 run:  python chaplygin_inverse_vonmises_2d.py
 """
