@@ -25,6 +25,7 @@ from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 from radia.hdiv_vim import (  # noqa: E402
     reconstruct_field_polynomial,
+    reconstruct_field_internal,
     flat_triangle_charge_field,
     tet_self_volume_field,
 )
@@ -193,3 +194,29 @@ def test_tet_self_volume_field_vs_phitet_gradient():
         Href = -(rho0 / (4 * np.pi)) * g
         rel = np.linalg.norm(Hs - Href) / np.linalg.norm(Href)
         assert rel < 8e-3, f"spherical self volume field vs grad(phi_tet) r={r.tolist()}: rel {rel:.2e}"
+
+
+def test_internal_field_assembly_uniform_sphere():
+    """The assembled INTERNAL field (self-volume spherical + far-volume + analytic surface) on a uniform
+    sphere: center -> -M/3 (validates the assembly factors); and near-surface the analytic surface beats
+    the Step-1 plain Gauss-Duffy by a large margin (Step-1 is near-singular there)."""
+    g = CSGeometry(); g.Add(Sphere(Pnt(0, 0, 0), 1.0))
+    mesh = ng.Mesh(g.GenerateMesh(maxh=0.4))
+    Mval = 5.0e5
+    fes = ng.HDiv(mesh, order=1)
+    gf = ng.GridFunction(fes)
+    with ng.TaskManager():
+        gf.Set(ng.CoefficientFunction((0, 0, Mval)))
+    d = np.array([0.3, 0.2, 0.9]); d = d / np.linalg.norm(d)
+    pts = np.array([[0, 0, 0.0], (0.95 * d).tolist()])
+    with ng.TaskManager():
+        Hint = reconstruct_field_internal(mesh, gf, pts)
+        Hstep1 = reconstruct_field_polynomial(mesh, gf, pts, quad=4)
+    # center: -M/3
+    rel_c = abs(Hint[0, 2] + Mval / 3) / (Mval / 3)
+    assert rel_c < 5e-3, f"assembled center H_z {Hint[0,2]:.4e} vs -M/3: rel {rel_c:.2e}"
+    # near surface (0.95R): assembled is far better than Step-1 (which is ~58% off there)
+    rel_int = abs(Hint[1, 2] + Mval / 3) / (Mval / 3)
+    rel_s1 = abs(Hstep1[1, 2] + Mval / 3) / (Mval / 3)
+    assert rel_int < 0.05, f"assembled near-surface relZ {rel_int:.2e} not < 5%"
+    assert rel_int < 0.3 * rel_s1, f"assembled ({rel_int:.2e}) should beat Step-1 ({rel_s1:.2e}) >3x near surface"
