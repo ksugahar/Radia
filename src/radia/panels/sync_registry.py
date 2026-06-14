@@ -205,6 +205,22 @@ PANELS = {
         "method": "Foliated current-Clebsch volume stream function (H1 lambda on a conductor volume) + ACA+TSVD least-norm + equal-current contour extraction + two-codebase Biot-Savart check",
         "command_builder": "radia_streamfunction.py:StreamFunctionPanel.build_command",
     },
+    "motor_transient": {
+        "script": "calc_motor_transient.py",
+        "function": "run",
+        "ja_name": "モータ過渡解析 (Lange-Henrotte-Hameyer)",
+        "ja_description": "モータ .vol から、非線形 FE + 回路 ODE 連成で過渡応答を解く。PM 回転と Arkkio トルクを含む。radia_motor パネルの 'Transient' モード。",
+        "method": "Nonlinear FE (A-formulation) + circuit ODE co-simulation, PM rotation, Arkkio torque (Lange-Henrotte-Hameyer 2009)",
+        "command_builder": "radia_motor.py:MotorPanel.build_command",
+    },
+    "motor_lamination": {
+        "script": "calc_motor_lamination.py",
+        "function": "run",
+        "ja_name": "積層鉄心 等価材料 (Hollaus)",
+        "ja_description": "積層鉄心の 1D セル問題で等価材料テーブルを構築し (cell)、それを .vol 上の global FE に適用 (global/full)。radia_motor パネルの 'Lamination' モード。",
+        "method": "Hollaus effective-material homogenization (1D cell problem) + global HCurl FE with the effective-material table",
+        "command_builder": "radia_motor.py:MotorPanel.build_command",
+    },
 }
 
 
