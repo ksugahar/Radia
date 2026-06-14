@@ -38,9 +38,8 @@ S:\Radia\01_GitHub\
                           # examples/axifemm/ (+ research/), tests/axifemm/.
   src/radia/hdiv_vim/     # CORE METHOD (not a package): FEEC HDiv-VIM
                           # (C++ src/core/rad_hdiv_vim.cpp). examples/feec_vim/.
-  src/ext/radia_vim/      # UNBUILT orphan prototype (Newton-kernel volume
-                          # Galerkin VIM); NOT in Build.ps1, NOT pip-installable.
-                          # Production VIM = radia.hdiv_vim above.
+                          # This is the SOLE VIM (the radia_vim Galerkin
+                          # prototype was deleted 2026-06-14 as unnecessary).
   src/radia/levitation/   # radia.levitation -- APPLICATION domain (NOT a
                           # standalone package): eddy-current brakes +
                           # maglev, mixed-Galerkin polarizability alpha(s),
@@ -96,9 +95,8 @@ now holds only the two genuine PyPI packages above.
 |--------|------------------------------|------------------|
 | **MMM / MSC** (collocation demag) | `mmm_core.pyd` + `radia.ObjHexahedron/Tetrahedron/Wedge` (`import radia`; the old `radia_mmm` namespace is gone) | `examples/hantila_solver/`, `examples/smco_magnet_array/` |
 | **Axisymmetric FE** (Henrotte basis) | `radia.radia_axifemm` (`src/radia/radia_axifemm.pyd`) | `examples/axifemm/` (+ `research/`), `tests/axifemm/` |
-| **FEEC HDiv-VIM** (production VIM) | `radia.hdiv_vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) | `examples/feec_vim/` |
+| **FEEC HDiv-VIM** (the VIM) | `radia.hdiv_vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) -- the SOLE VIM. The separate Newton-kernel Galerkin VIM prototype (`src/ext/radia_vim/`) was deleted 2026-06-14 as unnecessary (recover from git history if ever needed). | `examples/feec_vim/` |
 | **DtN / FEM-Kelvin operator** (compute core) | the FEM-Kelvin sparse generator of the layered (Sommerfeld-type) Green's operator -- a **core** capability, NOT an application. Currently research-stage under `examples/kelvin_transformation/DtN_spectrum/` + `radia_mcp.radia_ngsolve` knowledge (`dtn_coarse_mesh`); promotes into `src/radia/` (like `hdiv_vim` did) when stable. | `examples/kelvin_transformation/DtN_spectrum/`, `packages/radia-mcp/tests/test_dtn_*` |
-| **Newton-kernel Galerkin VIM** (orphan) | `src/ext/radia_vim/` -- UNBUILT prototype, NOT in Build.ps1, NOT pip-installable; a *different* module from `radia.hdiv_vim`. Use `radia.hdiv_vim`. | (standalone CMake only) |
 
 **Application domains inside `radia`** (NOT standalone packages -- they
 ship in the `radia` wheel as `radia.<domain>` subpackages + panels, with
