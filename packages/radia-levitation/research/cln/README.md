@@ -97,6 +97,37 @@ manuscript Tables 1-5 and Figures 1-2.
 ## Build the digest
 
 ```bash
-cd examples/CLN
+cd ../../papers/igte_symposium_2026
 pdflatex igte_symposium_2026.tex   # or via texcompile skill
 ```
+
+## Version-iteration consolidation (2026-06-14)
+
+This corpus accumulated many `_vN` debugging iterations during the
+research.  They were collapsed to the canonical (and genuinely-distinct-
+method) survivors below; every removed version remains recoverable via
+`git log --follow <path>` / `git show <sha>:<path>`.  Keeping the negative
+/ superseded iterations as live sibling files added clutter without adding
+information — git history is the archive.
+
+| Family | Kept | Removed (superseded; in git history) |
+|--------|------|--------------------------------------|
+| `bem_cln_ngsolve_2cuboid_*` | `_v4_dirichlet.py` (production pattern, matches `calc_fem_kelvin.py`) | base, v2, v3_kelvin, v5_pardiso_coarse, v6_pardiso_skin |
+| `bem_cln_multiport*` | `_v2.wls` (clean numerical, reciprocity) | base |
+| `bem_foster_spectral_v*` | `_v5.py` (primary) + `_v6_hybrid.py` (18-digit alt) | v1.wls, v4.wls, v4_python.py, v5.wls |
+| `cuboid_3D_vacuum_Born_Bx_v*` | `_v7.wls` (1D-closed + 2D-NIntegrate hybrid) + `_NewtonPotential_derive.wls` | closed_v2, v3_manual, v4_safe, v5, v6 |
+| `cuboid_3D_vacuum_Born_alpha3*` | `_final.wls` | base, closed, v2, v3 |
+| `sphere_vim_axisym_linear_gpu_v*` | `_v3.py` (AGM-ellipe bugfix vs v2) | v2 (+ v2 result JSONs) |
+| `bem_disk_axisym_*` | `_v4_converge.wls` (1% target) | foster_v2, v3_refined (+ JSONs) |
+| `axifemm_disk_kameari*` | `_v2.py` (Schur air-coupling fix) | base (wrong tau) |
+| `cuboid_521_kameari_kelvin_v*` | `_v22h_correct_B2` (canonical, axisym J·n=0 by geometry); `_v15_canonical` (documents the HCurl-Kameari breakdown — paper motivation); `_v9_AT` (A-T formulation); `_v21_T_formulation` (T-formulation) | v2-v8, v10-v14, v16-v20b, v22-v22g (~25 debug iterations) |
+| `tanimoto_canonical/CLN_AT*` | `CLN_AT.ipynb` | `CLN_AT-Copy1.ipynb` (stale local copy) |
+
+The four `cuboid_521_kameari_kelvin` survivors deliberately preserve the
+research narrative: the **canonical working** axisymmetric solve, the
+**documented failure** of the 3D-HCurl Kameari path (a real negative
+result, not laundered away), and the **two alternative formulations**
+(A-T and T) that were tried.  The independent `cuboid_521_*` baselines
+(`vacuum_v2`, `mpmath_RnLn_v2`, `step0a_*`, `gauge_CLN_v4_ebecg`,
+`kameari_breakdown_v2`) are NOT part of the kelvin lineage and were left
+in place.
