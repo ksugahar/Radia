@@ -36,6 +36,7 @@ from radia.hdiv_vim import (  # noqa: E402
     triangle_potential_moment2,
     tet_newtonian_moment,
     tet_volume_field_quadratic,
+    quadratic_triangle_charge_field,
 )
 
 
@@ -499,3 +500,44 @@ def test_tet_volume_field_quadratic_reduces_to_linear():
         a = tet_volume_field_quadratic(_TET, r, rho0, g, np.zeros((3, 3)))
         b = tet_volume_field_linear(_TET, r, rho0, g)
         assert np.linalg.norm(a - b) < 1e-13, f"Q=0 vs linear r={r}"
+
+
+# ---------------------------------------------------------------------------------------------------
+# QUADRATIC surface-charge field (quadratic_triangle_charge_field): EXACT closed form via the
+# in-plane/normal split + 1/R^3 moments.  The degree-2 surface companion of tet_volume_field_quadratic.
+# ---------------------------------------------------------------------------------------------------
+def _quad_tri_field_gauss(P, r, sigma0, s, S, nq=46):
+    P = np.asarray(P, float); r = np.asarray(r, float); s = np.asarray(s, float); S = np.asarray(S, float)
+    J = np.linalg.norm(np.cross(P[1] - P[0], P[2] - P[0]))
+    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+    F = np.zeros(3)
+    for i in range(nq):
+        for j in range(nq):
+            u, v = xs[i], xs[j]; jac = (1 - u)
+            p = P[0] + u * (P[1] - P[0]) + v * (1 - u) * (P[2] - P[0])
+            d = r - p
+            F += ws[i] * ws[j] * jac * J * (sigma0 + np.dot(s, p) + p @ S @ p) * d / np.linalg.norm(d) ** 3
+    return F
+
+
+def test_quadratic_triangle_charge_field_vs_gauss():
+    """Quadratic-sigma triangle field == off-plane Gauss to machine precision (near AND far)."""
+    P = _TET[[0, 1, 2]]
+    s = np.array([0.6, -0.4, 0.3]); sigma0 = 0.5
+    for r in [[0.3, 0.3, 0.7], [0.3, 0.3, 0.2], [1.5, 0.5, 0.4], [0.2, 0.2, 0.3], [-0.5, 0.4, 0.6]]:
+        r = np.array(r, float)
+        Fc = quadratic_triangle_charge_field(P, r, sigma0, s, _QSYM)
+        Fg = _quad_tri_field_gauss(P, r, sigma0, s, _QSYM, 46)
+        assert np.linalg.norm(Fc - Fg) / np.linalg.norm(Fg) < 1e-10, f"quad-sigma tri field r={r}"
+
+
+def test_quadratic_triangle_charge_field_reduces_to_linear():
+    """S = 0 matches linear_triangle_charge_field (two independent derivations -- in-plane/normal vs
+    -grad phi -- agree to machine precision)."""
+    P = _TET[[0, 1, 2]]
+    s = np.array([0.6, -0.4, 0.3]); sigma0 = 0.5
+    for r in [[0.3, 0.3, 0.7], [1.5, 0.5, 0.4], [0.2, 0.2, 0.3]]:
+        r = np.array(r, float)
+        a = quadratic_triangle_charge_field(P, r, sigma0, s, np.zeros((3, 3)))
+        b = linear_triangle_charge_field(P, r, sigma0, s)
+        assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-11, f"S=0 vs linear r={r}"
