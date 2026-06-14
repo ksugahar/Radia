@@ -116,6 +116,22 @@ Figure: `bidirectional_coordinate_transform_2d.png` (the physical coordinate gri
 (a) conformal — angles preserved, `W=I` | (b) non-conformal — skewed, `W≠I`).
 Golden `test_bidirectional_coordinate_transform_2d` (fast).
 
+### `weakform_pullback_kata.py` — the weak form in differential forms (the kata)
+
+**The "kata" companion to the bidirectional file.** Works the *same* exterior-calculus
+pullback for the *specific* magnetostatic conjugate map — the hodograph. Writes the
+2-D Laplace weak form in forms (`d(μ⋆du)=0` → `a(u,v)=∫ μ dv∧⋆du = ∫ μ ∇u·∇v`, one line
+because `α∧⋆β = ⟨α,β⟩vol`), then pulls it into the `(A,φ)` potential chart and shows the
+material survives as the **anisotropic** weight `W = diag(μ, 1/μ)` — exactly the Tampere
+bidirectional governing equation (8) (the unknown having swapped to the geometry
+`x(A,φ), y(A,φ)`). **Derived symbolically** (sympy): the line element
+`g = diag(1/(μq)², 1/q²)` gives `W = diag(μ, 1/μ)` with the field magnitude `q`
+**cancelling**, and the conjugate-map pullback for `F(z) = z, z², z³, 1/z` gives
+`W = diag(μ, 1/μ)` *exactly* in every case (the conformal factor cancels). That
+`q`-independence is why the hodograph linearises (for `μ(q)`, `W = diag(μ(q), 1/μ(q))`
+is a known function of the coordinate — Chaplygin). Golden `test_weakform_pullback_kata`
+(fast, sympy-only).
+
 ### `clebsch_kelvin_3d.py` — Kelvin in the hodograph (3-D, the real formulation)
 
 **rung 2 of "Kelvin in the hodograph."** The genuine 3-D case: the **Clebsch
@@ -916,6 +932,7 @@ python a_method_clebsch_2d.py                 # A-method net figure
 python hodograph_kelvin_axisym.py             # Kelvin exact-open-boundary flux figure
 python hodograph_kelvin_2d.py                 # Kelvin in the hodograph (2-D Cartesian, no air box)
 python bidirectional_coordinate_transform_2d.py  # the coordinate transform unified: pullback W (Tampere) (--fig)
+python weakform_pullback_kata.py              # weak form in forms -> hodograph weight W=diag(mu,1/mu) (kata)
 python clebsch_kelvin_3d.py                   # Kelvin in the hodograph (3-D Clebsch, no air box)
 python saturation_loop_2d.py                  # the nonlinear saturation loop (Chaplygin reference)
 python chaplygin_design_sweep_2d.py           # nonlinear-as-linear: a saturable design space at linear cost (--fem)
