@@ -484,3 +484,20 @@ def test_hdiv_vim_clebsch_loopstar():
     assert r["ratio_ext"] < 2e-2, r
     # (3) gauge: adding t*Clebsch to the uniform star barely changes the external field.
     assert all(dev < 3e-2 for _, dev in r["gauge"]), r
+
+
+def test_hdiv_vim_clebsch_2d_az():
+    """2-D unification: the flux function A_z IS the Clebsch potential (the single scalar the 3-D
+    Clebsch pair collapses to in 2-D -- why the Chaplygin hodograph linearises the 2-D saturation).
+    A loop field B = grad(A_z) x z_hat from a known A_z is machine-zero divergence AND tangential on
+    the boundary (fully charge-free -> field-null), while a gradient field carries the charge; and A_z
+    is RECOVERED from B via the stream-function weak form."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.geom2d")
+    import hdiv_vim_clebsch_2d_az as az
+    r = az.analyze(maxh=0.07, order=3)
+    assert r["div_loop"] < 1e-10, r            # rot(A_z) is exactly charge-free (volume)
+    assert r["bn_loop"] < 1e-10, r             # tangential on the boundary (no surface charge)
+    assert r["div_star"] > 1.0, r              # the gradient field carries the charge
+    assert r["recover_err"] < 1e-4, r          # A_z recovered from B
+    assert r["clebsch_err"] < 1e-3, r          # rot(A_z_recovered) reproduces B -> A_z IS the Clebsch potential
