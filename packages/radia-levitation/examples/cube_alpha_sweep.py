@@ -14,11 +14,11 @@ from ngsolve import Mesh, TaskManager
 from radia_levitation.mixed_galerkin import (
     bulk_foster_via_eigen,
     K_SIBC_total,
-    c1_polyhedral,
-    measure_total_area_and_edges,
+    measure_total_area,
     Y_mixed,
     alpha_from_Y,
     cad_topology_c1,
+    cad_topology_total_area,
 )
 
 
@@ -37,19 +37,22 @@ def main():
     mesh = Mesh(ng)
     ng.Save("cube_5mm.vol")
 
-    # CAD-direct c_1 (mesh-independent, IGA-style)
+    # CAD-direct c_1 + area (mesh-independent, IGA-style -- the recommended,
+    # dependency-free route; exact for polyhedra).
     c1_cad, L_total_cad, n_edges_cad = cad_topology_c1(box, MU_0)
-    print(f"CAD-direct: {n_edges_cad} edges, total L = {L_total_cad*1e3:.3f} mm")
+    S_cad = cad_topology_total_area(box)
+    print(f"CAD-direct: {n_edges_cad} edges, total L = {L_total_cad*1e3:.3f} mm, "
+          f"S = {S_cad*1e6:.3f} mm^2")
     print(f"            c_1 = {c1_cad:.4e}")
     print(f"  (cube closed form c_1 = -16(3L)/(pi mu) = {-16*3*L/(math.pi*MU_0):.4e})")
 
-    # Mesh-derived (cross-check)
+    # Cross-check: CAD area vs mesh-integrated area (both must agree).
     with TaskManager():
         lam, tau, g_n, V = bulk_foster_via_eigen(mesh, SIGMA_CU, MU_0, n_eigen=80)
-        S_total, edges = measure_total_area_and_edges(mesh)
-    K_SIBC = K_SIBC_total(S_total, SIGMA_CU, MU_0)
-    c1_mesh = c1_polyhedral(edges, MU_0)
-    print(f"Mesh-derived: {len(edges)} BBND segments, c_1 = {c1_mesh:.4e}")
+        S_mesh = measure_total_area(mesh)
+    print(f"Mesh-integrated area S = {S_mesh*1e6:.3f} mm^2 "
+          f"(CAD-direct {S_cad*1e6:.3f} mm^2)")
+    K_SIBC = K_SIBC_total(S_cad, SIGMA_CU, MU_0)
     print()
 
     print(f"V = {V*1e9:.3f} mm^3, K_SIBC = {K_SIBC:.4e}")

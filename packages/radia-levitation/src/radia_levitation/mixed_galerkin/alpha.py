@@ -24,8 +24,6 @@ from __future__ import annotations
 
 import cmath
 import math
-import sys
-from pathlib import Path
 
 import numpy as np
 
@@ -217,40 +215,41 @@ def alpha_from_Y(Y, V, sigma):
 # ---------------------------------------------------------------------------
 
 
-def measure_total_area_and_edges(mesh):
-    """Return (S_total, edge_list) where edge_list = [(length, dihedral), ...].
-
-    Uses mesh-derived BBND segments + adjacent face normals to estimate
-    each segment's dihedral.  For clean meshes (well-resolved geometric
-    edges with consistent normals) the per-edge sum gives the correct
-    c_1.  For RUGGED meshes the segments may show spurious dihedrals
-    near pi -- consider using `cad_topology_edges` instead when the
-    OCC primitive is available.
-    """
+def measure_total_area(mesh) -> float:
+    """Total boundary area S_total of the conductor (mesh-derived, exact)."""
     from ngsolve import Integrate, CoefficientFunction
-    S_total = float(Integrate(CoefficientFunction(1), mesh.Boundaries(".*"), order=2))
+    return float(Integrate(CoefficientFunction(1), mesh.Boundaries(".*"), order=2))
 
-    # Try to import the radia mesh-curvature dihedral extractor
-    radia_path = Path("S:/Radia/01_GitHub/build/lib/radia").resolve()
-    if str(radia_path) not in sys.path:
-        sys.path.insert(0, str(radia_path))
+
+def measure_total_area_and_edges(mesh):
+    """Return (S_total, edge_list=[(length, dihedral), ...]).
+
+    S_total is the boundary area (always mesh-derived, exact).  The edge
+    dihedrals come from the OPTIONAL `radia.netgen_mesh_curvature`
+    extractor; if the `radia` package is not importable this raises and
+    points you at the dependency-free, mesh-independent CAD-direct route
+    `mixed_galerkin.cad_edges.cad_topology_edges(shape)` /
+    `cad_topology_c1(shape, mu)`.
+
+    There is deliberately NO silent "assume pi/2" fallback (No-Fallbacks
+    policy): a guessed dihedral happens to be right only for an all-right-
+    angle body (cube) and silently yields a WRONG c_1 for any chamfered /
+    L-shape / oblique-edge geometry.  Fail loud instead.
+    """
+    S_total = measure_total_area(mesh)
     try:
-        from netgen_mesh_curvature import mesh_edge_dihedrals
-        edge_data = mesh_edge_dihedrals(mesh)
-        edges = [(e["length"], e["dihedral"]) for e in edge_data]
-    except Exception as exc:
-        # Fallback: assume all dihedrals pi/2 with total length from BBND segments
-        L_total_est = 0.0
-        try:
-            from ngsolve import BBND
-            pts = mesh.ngmesh.Points()
-            for el in mesh.Elements(BBND):
-                vs = [v.nr for v in el.vertices]
-                if len(vs) == 2:
-                    p0 = np.array([pts[vs[0]+1][0], pts[vs[0]+1][1], pts[vs[0]+1][2]])
-                    p1 = np.array([pts[vs[1]+1][0], pts[vs[1]+1][1], pts[vs[1]+1][2]])
-                    L_total_est += float(np.linalg.norm(p1 - p0))
-        except Exception:
-            pass
-        edges = [(L_total_est, math.pi / 2)] if L_total_est > 0 else []
+        from radia.netgen_mesh_curvature import mesh_edge_dihedrals
+    except Exception as exc:  # radia not installed / module absent
+        raise ImportError(
+            "measure_total_area_and_edges() needs the optional `radia` "
+            "package (radia.netgen_mesh_curvature) for mesh-derived edge "
+            "dihedrals; it is not importable.  Use the dependency-free "
+            "CAD-direct route instead -- it is mesh-independent and exact "
+            "for polyhedra:\n"
+            "    from radia_levitation.mixed_galerkin import cad_edges\n"
+            "    c1, L_total, n = cad_edges.cad_topology_c1(shape, mu)\n"
+            "(pass the OCC primitive / loaded STEP shape, not the mesh)."
+        ) from exc
+    edge_data = mesh_edge_dihedrals(mesh)
+    edges = [(e["length"], e["dihedral"]) for e in edge_data]
     return S_total, edges
