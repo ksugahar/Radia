@@ -90,11 +90,29 @@ auto-linearise the way the 2-D hodograph does. The concrete open questions:
 
 ## Status
 
-- **Verified + committed:** the linear bridge (Clebsch = loop modes), the 2-D
-  hodograph linearisation, the convex B-input conditioning cure (each locked by
-  a golden in `tests/feec/test_clebsch_hodograph_research.py`).
-- **Open:** the 3-D conditioning rung (tractable) and the 3-D saturation
-  linearisation (the hard prize, helicity-obstructed in general).
+- **Verified + committed:**
+  - the linear bridge — Clebsch = loop modes
+    (`hdiv_vim_clebsch_loopstar.py`, 3-D);
+  - the 2-D unification — `A_z` *is* the Clebsch potential
+    (`hdiv_vim_clebsch_2d_az.py`: a loop field `∇A_z×ẑ` is machine-zero
+    divergence *and* boundary-tangential → fully charge-free; `A_z` recovered
+    from `B` to `4e-7`);
+  - the convex B-input conditioning cure and the 2-D hodograph linearisation
+    (`saturation_loop_2d.py` / `chaplygin_hodograph_2d.py`).
+  (Each locked by a golden in `tests/feec/test_clebsch_hodograph_research.py`.)
+- **Rung-1 finding (conditioning).** The convex `A⁺` form *is* well-conditioned
+  at the knee (the linear field-exact solve gives the sphere `D = 1/3`; the
+  committed `solve_nonlinear` outer-χ loop on `A⁺ = (1/χ)M_mass + N` converges).
+  The remaining obstacle to a *practical* field-exact nonlinear solve is **not
+  conditioning but cost**: the exact-field operator is assembled by an
+  element-by-element charge field, which is `O(N²)` (the C++ per-element kernels
+  `_hdiv_tet_volfield_linear` / `_hdiv_tri_field` are ~7× faster than the numpy
+  vectorised path and machine-identical, but still `O(N²)`). The concrete
+  enabler is the **batched H-matrix charge-field assembler** (the field-version
+  of the charge Gram `B`, `docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md` item d) —
+  the parallel C++ work is heading there.
+- **Open (the hard prize):** the 3-D saturation linearisation — a 3-D
+  Chaplygin-analogue valid where the helicity obstruction vanishes.
 
 Per the repository-first policy this note records the *map* — what is connected
 and what is not — so the frontier is dug in the right place rather than
