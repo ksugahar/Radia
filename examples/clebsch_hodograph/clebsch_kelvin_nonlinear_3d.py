@@ -39,19 +39,30 @@ contraction |d RHS/dH| stays small (measured: 0.67 at mu_r0=20, and it DROPS
 toward 0 as the B-H curve is made steeper -- the demag self-stabilises the
 sphere; the instability is simply not reachable for it).
 
-The reduced-Omega H-input Picard DOES fail for a LOW-demag body driven INTO
-saturation (a prolate spheroid, N ~ 0.05-0.1, where the field penetrates to the
-knee): seeded from the linear (high-mu) state it sticks in a spurious SHIELDED
-basin (interior H ~ 0) and OSCILLATES, never reaching the true (unique,
-penetrated) solution -- and neither under-relaxation NOR seeding from the
-saturated state robustly cures it (both collapse back to the shielded basin).
-The robust cure is the convex B-input formulation: for a physical, monotone B-H
-curve the energy INT W(|B|) is convex (dH/dB > 0), so its minimiser is unique
-and gradient-stable.  In 2-D that is the A-formulation (rung 1.5a, done); in
-3-D it is the HCurl vector-potential nu(|B|) formulation (a substantial build,
-genuinely open here -- the axisymmetric spheroid could instead use the 2-D
-A_phi Henrotte form as a cheaper convex route).  This file stays with the
-sphere, where the merged Picard is unconditionally well-behaved.
+A note on the LOW-demag regime (investigated 2026-06-14; an honest correction
+to an earlier draft of this caveat).  It is tempting to claim the reduced-Omega
+H-input Picard simply "fails" for a low-demag body driven into saturation and
+that a convex B-input formulation is the universal cure -- but a controlled
+2-D experiment did NOT bear that out:
+
+  - a WELL-RESOLVED low-demag elliptic cylinder (N_a ~ 0.11, mu_r0 = 800,
+    driven into the knee, PHYSICAL monotone B-H) is solved CLEANLY by the
+    reduced-Omega H-input Picard (under-relaxed): it converges in ~120 iters to
+    the exact 2-D demag fixed point.  The H-input is NOT fragile here.
+  - the A-formulation (B-input) is NOT a universal cure: it is ill-conditioned
+    in the OPPOSITE regime (a high-mu, unsaturated body, where nu -> 0 and the
+    INT nu |grad A|^2 coercivity is lost) and in that same experiment it
+    actually FAILED.  Reduced-Omega and the A-formulation are COMPLEMENTARY --
+    each well-conditioned where the other is not (the classic dual-formulation
+    story), not one curing the other.
+
+An earlier apparent "H-input failure" was for an UNDER-RESOLVED prolate spheroid
+(minor axis ~ one element) plus a non-physical Froehlich-in-H curve (dB/dH < 0
+past the knee); it did not reproduce once the mesh was resolved and the curve
+made physical.  So the steep / low-demag knee is a genuinely harder nonlinear
+SOLVER question (a robust treatment is Newton or a mixed/complementary scheme),
+NOT a clean "B-input cures H-input".  This file stays with the SPHERE, where the
+merged Picard is unconditionally well-behaved and verified below.
 
 Verified (mu_r0=20, Hk=0.25, sphere a=0.2, Kelvin R=0.5, order 3, maxh 0.06,
 ne 14301): the single Picard converges in 42 iters to the scalar demag fixed
