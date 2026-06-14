@@ -56,6 +56,7 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
     triangle_potential_moment2,    # degree-2 building block: INT_T r'(x)r'/R dS' (second moment)
     tet_newtonian_moment,          # degree-2 building block: INT_V r'/R dV' (volume first moment)
     tet_volume_field_quadratic,    # EXACT closed-form QUADRATIC volume-charge field
+    quadratic_triangle_charge_field,  # EXACT closed-form QUADRATIC surface-charge field
 )
 
 __all__ = [
@@ -67,5 +68,6 @@ __all__ = [
     "triangle_potential_const", "triangle_potential_moment", "tet_newtonian_potential",
     "tet_volume_field_linear", "linear_triangle_charge_field",
     "triangle_potential_moment2", "tet_newtonian_moment", "tet_volume_field_quadratic",
+    "quadratic_triangle_charge_field",
     "_core", "_nonlinear", "_vim", "_field",
 ]
