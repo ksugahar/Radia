@@ -224,6 +224,152 @@ def solve_complementary(r_min, r_max, k=K_INDEX, g0=G0, r0=R0,
 
 
 # --------------------------------------------------------------------------- #
+# Step 2: SATURATION -- a super-ferric iron pole (Froehlich mu(B)) droops k(r)
+#         at the high-r (high-B) edge as the drive rises.
+# --------------------------------------------------------------------------- #
+MU0 = 4.0e-7 * math.pi
+MUR0_IRON = 2000.0          # Froehlich mu_r at B=0
+BK_IRON = 1.2               # Froehlich knee (T)
+
+
+def mu_r_froehlich(B, mur0=MUR0_IRON, Bk=BK_IRON):
+    """Froehlich saturation mu_r(|B|): mur0 at B=0 -> 1 as B -> infinity."""
+    return 1.0 + (mur0 - 1.0) / (1.0 + (B / Bk) ** 2)
+
+
+def _gap_iron_geometry(r_lo, r_hi, k, g0, r0, y_top, n_face=60):
+    """Upper half: an AIR gap (median y=0 to the scaling pole face y=g(r)/2)
+    glued to an IRON pole (pole face up to a flat back at y_top).  The pole
+    face is now an interior gap/iron interface (not a BC).  Boundaries:
+    'median' (y=0), 'irontop' (the driven back), 'rmin'/'rmax'."""
+    from netgen.occ import WorkPlane, OCCGeometry, Glue
+    rs = np.linspace(r_lo, r_hi, n_face)
+    yf = scaling_gap(rs, k, g0, r0) / 2.0
+    wp = WorkPlane().MoveTo(r_lo, 0.0)
+    wp.LineTo(r_hi, 0.0)                                     # median
+    wp.LineTo(r_hi, float(yf[-1]))                          # rmax (gap)
+    for ri, yi in zip(rs[-2::-1], yf[-2::-1]):              # pole face (gap top)
+        wp.LineTo(float(ri), float(yi))
+    wp.Close()
+    gap = wp.Face(); gap.faces.name = "gap"
+    wp2 = WorkPlane().MoveTo(r_lo, float(yf[0]))
+    for ri, yi in zip(rs[1:], yf[1:]):                      # pole face (iron bottom)
+        wp2.LineTo(float(ri), float(yi))
+    wp2.LineTo(r_hi, y_top)                                 # rmax (iron)
+    wp2.LineTo(r_lo, y_top)                                 # irontop
+    wp2.Close()
+    iron = wp2.Face(); iron.faces.name = "iron"
+    shape = Glue([gap, iron])
+    for e in shape.edges:
+        c = e.center
+        if abs(c.y) < 1e-9:
+            e.name = "median"
+        elif abs(c.y - y_top) < 1e-9:
+            e.name = "irontop"
+        elif abs(c.x - r_lo) < 1e-6:
+            e.name = "rmin"
+        elif abs(c.x - r_hi) < 1e-6:
+            e.name = "rmax"
+        else:
+            e.name = "poleface"                            # interior interface
+    return OCCGeometry(shape, dim=2)
+
+
+def solve_saturated(mmf, r_min, r_max, k=K_INDEX, g0=G0, r0=R0, pole_t=0.03,
+                    order=3, maxh=0.006, buffer=1.25, n_eval=41,
+                    relax=0.5, tol=1e-4, maxit=60):
+    """Nonlinear scalar-potential solve with a Froehlich iron pole: the magnetic
+    scalar potential phi (phi=mmf on the iron back, phi=0 on the median) drives
+    flux through the air gap; B = -mu0 mu_r(|B|) grad phi.  Picard on mu_r(B).
+    Returns the median field index k(r) and the saturation diagnostics."""
+    from ngsolve import (H1, L2, BilinearForm, GridFunction, grad, dx, CF, Norm,
+                         TaskManager, Mesh)
+    r_lo, r_hi = r_min / buffer, r_max * buffer
+    y_top = float(scaling_gap(r_lo, k, g0, r0) / 2.0 + pole_t)
+    geo = _gap_iron_geometry(r_lo, r_hi, k, g0, r0, y_top)
+    rs_eval = np.linspace(r_min, r_max, n_eval)
+    y_probe = 0.02 * float(scaling_gap(r0, k, g0, r0))
+    with TaskManager():
+        mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+        fes = H1(mesh, order=order, dirichlet="median|irontop")
+        u, v = fes.TnT()
+        gfu = GridFunction(fes)
+        bccf = mesh.BoundaryCF({"irontop": mmf, "median": 0.0}, default=0.0)
+        fes_mu = L2(mesh, order=0)
+        mu_gf = GridFunction(fes_mu)
+        mu_gf.Set(mesh.MaterialCF({"iron": MUR0_IRON}, default=1.0))   # start
+        iron_ind = mesh.MaterialCF({"iron": 1.0}, default=0.0)
+        resid = 1.0
+        it = 0
+        for it in range(1, maxit + 1):
+            a = BilinearForm(fes)
+            a += mu_gf * grad(u) * grad(v) * dx
+            a.Assemble()
+            gfu.Set(bccf, definedon=mesh.Boundaries("median|irontop"))
+            r = gfu.vec.CreateVector()
+            r.data = -a.mat * gfu.vec
+            gfu.vec.data += a.mat.Inverse(fes.FreeDofs(),
+                                          inverse="sparsecholesky") * r
+            B = MU0 * mu_gf * Norm(grad(gfu))               # |B| with current mu
+            froh = 1.0 + (MUR0_IRON - 1.0) / (1.0 + (B / BK_IRON) ** 2)
+            mu_target = (1.0 - iron_ind) * CF(1.0) + iron_ind * froh
+            mu_new = GridFunction(fes_mu)
+            mu_new.Set(mu_target)
+            d = mu_new.vec.CreateVector()
+            d.data = mu_new.vec - mu_gf.vec
+            denom = (mu_gf.vec.Norm() or 1.0)
+            resid = d.Norm() / denom
+            mu_gf.vec.data += relax * d
+            if resid < tol:
+                break
+        # median B_y = -mu0 dphi/dy (gap, mu_r=1)
+        g = grad(gfu)
+        By = np.array([-MU0 * g(mesh(float(r), y_probe))[1] for r in rs_eval])
+    rmid, kk = field_index(rs_eval, By)
+    return {
+        "mmf": float(mmf),
+        "rs_eval": rs_eval, "By": By,
+        "r_index": rmid, "k": kk,
+        "B_gap_min": float(np.min(np.abs(By))),
+        "B_gap_max": float(np.max(np.abs(By))),
+        "iters": int(it), "resid": float(resid),
+        "ndof": fes.ndof,
+    }
+
+
+def run_step2(b_targets=(0.6, 1.4, 2.0, 2.6), k=K_INDEX, g0=G0, r0=R0,
+              order=3, maxh=0.006):
+    """Sweep the drive (parametrised by the target B_gap at r0); the field index
+    k(r) is referenced to the LOWEST (unsaturated) drive, so the saturation
+    signal Dk(r) = k(drive) - k(reference) is isolated from the geometric
+    baseline.  As the high-r edge (highest B) crosses the iron knee, Dk develops
+    a negative dip there: the achromaticity degrades at the high-energy edge of
+    the momentum acceptance -- the super-ferric operating wall."""
+    r_min, r_max = aperture_radii(k=k, r0=r0)
+    mmfs = [bt * g0 / (2.0 * MU0) for bt in b_targets]
+    sols = [solve_saturated(mmf, r_min, r_max, k=k, g0=g0, r0=r0,
+                            order=order, maxh=maxh) for mmf in mmfs]
+    m = slice(2, -2)                                        # interior window
+    k_ref = sols[0]["k"]                                    # unsaturated baseline
+    levels = []
+    for s in sols:
+        dk = s["k"] - k_ref
+        levels.append({
+            "B_target": s["mmf"] * 2.0 * MU0 / g0,
+            "B_gap_min": s["B_gap_min"], "B_gap_max": s["B_gap_max"],
+            "k_hi_edge": float(s["k"][m][-1]),
+            "dk_hi": float(dk[m][-1]),                      # high-r index loss
+            "dk_lo": float(dk[m][0]),                       # low-r index loss
+            "dk_tilt": float(dk[m][-1] - dk[m][0]),         # differential droop
+            "iters": s["iters"], "resid": s["resid"],
+            "_s": s,
+        })
+    return {"k_design": float(k), "aperture": (float(r_min), float(r_max)),
+            "Bk_iron": BK_IRON, "k_ref_interior": k_ref[m].tolist(),
+            "levels": levels}
+
+
+# --------------------------------------------------------------------------- #
 # driver
 # --------------------------------------------------------------------------- #
 def run(k=K_INDEX, g0=G0, r0=R0, order=4, maxh=0.008):
@@ -262,6 +408,8 @@ def run(k=K_INDEX, g0=G0, r0=R0, order=4, maxh=0.008):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fig", action="store_true")
+    ap.add_argument("--step2", action="store_true",
+                    help="also run the saturation sweep (Froehlich iron pole)")
     ap.add_argument("--order", type=int, default=4)
     ap.add_argument("--maxh", type=float, default=0.008)
     args = ap.parse_args()
@@ -285,6 +433,21 @@ def main():
 
     if args.fig:
         _figure(res)
+
+    if args.step2:
+        print("\n" + "=" * 74)
+        print("Step 2: SATURATION -- Froehlich iron pole droops k at the high-r edge")
+        print("=" * 74)
+        s2 = run_step2()
+        print(f"iron knee Bk                : {s2['Bk_iron']:.2f} T")
+        print(f"{'B_tgt(T)':<9}{'B_gap[min,max]':<16}{'k_hi':<8}"
+              f"{'dk_hi':<9}{'dk_tilt':<9}{'iters':<6}")
+        for L in s2["levels"]:
+            print(f"{L['B_target']:<9.1f}[{L['B_gap_min']:.2f}, {L['B_gap_max']:.2f}]"
+                  f"   {L['k_hi_edge']:<8.3f}{L['dk_hi']:<+9.3f}"
+                  f"{L['dk_tilt']:<+9.3f}{L['iters']:<6}")
+        if args.fig:
+            _figure_step2(s2)
 
 
 def _figure(res):
@@ -314,6 +477,36 @@ def _figure(res):
     fig.tight_layout()
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        "scaling_ffag_pole_2d.png")
+    fig.savefig(out, dpi=130)
+    print(f"saved {out}")
+
+
+def _figure_step2(s2):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+    k_ref = np.array(s2["k_ref_interior"])
+    for L in s2["levels"]:
+        s = L["_s"]
+        m = slice(2, -2)
+        ri = s["r_index"][m]
+        dk = s["k"][m] - k_ref
+        ax[0].plot(ri, dk, "o-", ms=3,
+                   label=f"B@r0={L['B_target']:.1f}T (max {L['B_gap_max']:.1f})")
+        ax[1].plot(s["rs_eval"], np.abs(s["By"]), "-",
+                   label=f"B@r0={L['B_target']:.1f}T")
+    ax[0].axhline(0, color="k", lw=0.8)
+    ax[0].set_xlabel("r"); ax[0].set_ylabel("dk(r) = k - k(unsaturated)")
+    ax[0].set_title("field-index droop (high-r edge saturates)")
+    ax[0].legend(fontsize=7)
+    ax[1].axhline(s2["Bk_iron"], color="r", ls="--", lw=1, label="iron knee Bk")
+    ax[1].set_xlabel("r"); ax[1].set_ylabel("|B_gap|(r)  [T]")
+    ax[1].set_title("gap field: high-r end crosses the knee")
+    ax[1].legend(fontsize=7)
+    fig.tight_layout()
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "scaling_ffag_pole_2d_saturation.png")
     fig.savefig(out, dpi=130)
     print(f"saved {out}")
 
