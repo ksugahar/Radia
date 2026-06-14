@@ -972,6 +972,28 @@ def test_bidirectional_coordinate_transform_2d():
     assert s["threeD_weight_free"] is False, s       # 3-D conformal scaling keeps a weight
 
 
+def test_weakform_pullback_kata():
+    """The weak-form-in-forms kata: the 2-D Laplace Dirichlet form
+    INT mu dv ^ star du, pulled into the (A, phi) potential chart, gives the
+    hodograph weight W = diag(mu, 1/mu) -- the Tampere bidirectional eq (8).
+    Symbolic (sympy): both the line-element derivation (the field magnitude q
+    cancels) and the conjugate-map pullback for the conformal maps z, z^2, z^3,
+    1/z give W = diag(mu, 1/mu) EXACTLY (the conformal factor cancels every
+    time -- the q-independence is why the hodograph linearises)."""
+    pytest.importorskip("sympy")
+    import weakform_pullback_kata as wp
+    out = wp.run()
+    # line-element derivation: the field magnitude q cancels -> W = diag(mu, 1/mu)
+    assert out["line_element"]["q_cancels"] is True, out["line_element"]
+    assert out["line_element"]["W_diag"] == ["mu", "1/mu"], out["line_element"]
+    # every conformal conjugate map gives the SAME diagonal W = diag(mu, 1/mu)
+    assert out["all_diag_mu_invmu"] is True, out
+    for c in out["cases"]:
+        assert c["is_diag_mu_invmu"] is True, c
+        assert c["W_diag"] == ["mu", "1/mu"], c
+        assert c["W_offdiag"] == ["0", "0"], c
+
+
 @pytest.mark.slow
 def test_clebsch_pole_shape_optimization_2d():
     """3-D Clebsch pole-face shape OPTIMIZATION: the pole face is a magnetic-scalar
