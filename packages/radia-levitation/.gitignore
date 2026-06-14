@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+*.vol
+*.msh
+*.mat
+*.png
+*.pdf
+*.json
+!examples/**/expected_*.json

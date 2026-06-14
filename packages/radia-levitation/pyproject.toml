@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "radia-levitation"
+version = "0.1.0"
+description = "Mixed Galerkin CLN-SIBC framework for magnetic levitation and eddy-current brake analysis: polarizability tensor alpha(s), Lorentz force, Simulink/MATLAB LTI state-space export"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Kengo Sugahara"},
+]
+keywords = ["maglev", "levitation", "eddy-current-brake", "CLN", "SIBC", "Mixed-Galerkin", "polarizability", "Foster", "Simulink"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "ngsolve>=6.2.2604",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib"]
+simulink = ["scipy"]
+
+[project.urls]
+Homepage = "https://github.com/ksugahar/Radia"
+"Bug Tracker" = "https://github.com/ksugahar/Radia/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+radia_levitation = ["*.md"]
