@@ -12,11 +12,7 @@ import os
 from pathlib import Path
 import numpy as np
 
-# Add paths
-project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root / 'build' / 'lib' / 'Release'))
-sys.path.insert(0, str(project_root / 'dist'))
-
+# radia is an installed package (pip install -e .) -- no source-tree sys.path hack needed.
 import radia as rad
 
 mm = 1e-3  # 1 mm in meters
