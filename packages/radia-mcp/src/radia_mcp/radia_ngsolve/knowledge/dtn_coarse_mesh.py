@@ -1352,6 +1352,31 @@ where BEM is hardest -- inhomogeneous exteriors -- while staying sparse. RELATED
 the authors' priority, cite Nabizadeh 2021 / Boulmezaoud 2005-2023 / SBFEM as related/parallel work
 (noting priority), NOT as preempting prior art.
 
+"LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
+2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
+sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
+because sparse SPD" measurement -- was already published:
+  * Remacle, Nicolet, Genon & Legros (Liege), "Comparison of boundary elements and transformed finite
+    elements for open magnetic problems," ~1995 (Boundary Element Technology, conf. proceedings; not
+    Crossref-indexed -- venue TBC). Directly compares BEM vs Kelvin/transformed-FE on accuracy AND CPU.
+    Verbatim: the Kelvin transformation "needs less computing time and does not imply any additional code
+    to an existing FEM solver." Induction-furnace example: BEM 1080 DoF inverted by a DIRECT method in
+    160 s, vs the transformed-FE (rectangular shell) 3556 DoF but SYMMETRIC POSITIVE DEFINITE solved by
+    an ITERATIVE method in 17 s -- i.e. the exact "DoF UP, cost DOWN (~10x)" result, measured ~1995.
+  * Lowther, Freeman & Forghani, "A sparse matrix open boundary method for FE analysis," IEEE Trans.
+    Magn. 25(4):2810-2812, 1989, doi:10.1109/20.34292 -- the sparse-FE-open-boundary-vs-dense-boundary
+    cost point, in magnetics.
+CONSEQUENCE: the paper must CITE Remacle ~1995 and Lowther 1989 and must NOT present "use Kelvin to
+lighten BEM" (nor the DoF-up/cost-down measurement) as a new proposal. The genuinely-new contribution
+is the OPERATOR/SPECTRAL reinterpretation on top of that old empirical result: casting FEM-Kelvin as a
+sparse discretization of the SAME exterior DtN that BEM assembles densely (FE-Schur = dense BEM kernel),
+with the closed-form -(n+1)/R eigenvalue ladder as a predictive DATASHEET (p = multipole reach) that
+fixes the required surface resolution / element order BEFORE solving -- turning Remacle's empirical "it
+is faster" into a spectral why/how-much -- plus the exterior-material generalization (Sugahara 2022).
+NUANCE on "lighten BEM": (a) REPLACE BEM by sparse transformed-FE = Remacle/Lowther (done); (b) sparsify
+BEM's OWN matrix via a Kelvin map (keep BEM, accelerate it) = a different, rarer idea NOT found -- if a
+future claim is about (b), re-search before asserting novelty.
+
 PRIORITY RESOLVED (2026-06-14, read from the authors' own manuscripts on disk). The author
 (K. Sugahara) has a published chain that establishes priority AND already contains the exterior-
 material Kelvin formulation -- so for the SA paper the exterior-material is the authors' OWN cited
