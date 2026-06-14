@@ -17,7 +17,7 @@ Usage (CAD-first coil design):
 
     from build123d import Rectangle, Circle, loft, Plane
     from radia.coil_profile_occ import profile_from_build123d_face
-    from radia.radia_coil_builder import CoilBuilder
+    from radia.coil_builder import CoilBuilder
 
     # Design the shape in build123d
     p0 = Rectangle(5e-3, 5e-3).face()
@@ -284,7 +284,7 @@ def coil_from_build123d_sweep(profile, path, current, u_axis=None,
         CoilBuilder (already set_start + set_profile + all segments
         appended), ready for to_filaments() / IHWorkpieceContext.evaluate().
     """
-    from radia.radia_coil_builder import CoilBuilder
+    from radia.coil_builder import CoilBuilder
 
     if plane != 'XY':
         raise NotImplementedError(f"plane='{plane}' not supported; use 'XY'.")

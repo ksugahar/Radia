@@ -19,7 +19,7 @@ sys.path.insert(0, str(project_root / 'src' / 'radia'))
 
 import numpy as np
 import radia as rad
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 
 # Set unit system to meters
 

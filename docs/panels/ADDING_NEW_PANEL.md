@@ -352,7 +352,7 @@ pattern when:
   in `panels/radia_export_menu.py` and use the `.ccm` directly, no
   argparse / calc_*.py.
 - The panel needs **interactive 3D widgets** (vtkRenderWindow, etc.)
-  -- those don't fit `bind_argparser`.  See `radia_coil_builder.py`
+  -- those don't fit `bind_argparser`.  See `coil_builder.py`
   for the precedent if you genuinely need this.
 
 ---

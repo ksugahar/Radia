@@ -9,7 +9,7 @@ Sources:
   - CLAUDE.md "Hantila Polarization Method"
   - examples/c_type_electromagnet/
   - examples/cubit_panels/accel_magnet/
-  - src/radia/radia_coil_builder.py
+  - src/radia/coil_builder.py
   - src/radia/coil_geometry.py
 """
 
@@ -127,7 +127,7 @@ coordinate tracking.
 ## Basic Usage
 
 ```python
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 
 mm = 1e-3
 coil = (CoilBuilder(current=2000)
@@ -168,7 +168,7 @@ coil = (CoilBuilder(current=2000)
 ## Dipole Example (C-type magnet)
 
 ```python
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 import radia as rad
 
 mm = 1e-3
@@ -208,7 +208,7 @@ For the Accelerator Magnet panel, create a coil script with `build_coil()`:
 
 ```python
 # coil_dipole.py - loaded by the panel
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 
 def build_coil():
     mm = 1e-3

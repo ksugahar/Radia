@@ -56,7 +56,7 @@ MU_0 = 4e-7 * math.pi
 def build_torus_filaments(R, a, current, gap_deg, nw, nh, n_arc,
                           frequency, sigma):
     """CoilBuilder circular torus (z-axis) -> filament paths."""
-    from radia_coil_builder import CoilBuilder
+    from coil_builder import CoilBuilder
     cb = (CoilBuilder(current=current)
           .set_start([R, 0, 0],
                      orientation=np.array([[1, 0, 0],

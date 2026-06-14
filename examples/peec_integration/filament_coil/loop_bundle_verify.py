@@ -26,7 +26,7 @@ import radia  # noqa: F401  -- sets up MKL DLL paths
 
 
 def build_test_coil(R, a, gap_deg, nw, nh, n_arc, freq, sigma):
-    from radia_coil_builder import CoilBuilder
+    from coil_builder import CoilBuilder
     cb = (CoilBuilder(current=1.0)
           .set_start([R, 0, 0],
                      orientation=np.array([[1, 0, 0],
