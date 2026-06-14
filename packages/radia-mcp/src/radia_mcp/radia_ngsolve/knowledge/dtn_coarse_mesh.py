@@ -1453,6 +1453,31 @@ statement -- Kelvin-FEM is provably the SAME operator as the Sommerfeld layered-
 (isomorphic), realised sparsely and WITHOUT the layered Green's function that is the hard part of BEM
 for stratified media.
 
+SOMMERFELD KERNEL = the open-math BEM reference (demo_y, verified 2026-06-14; NOT in NGSolve/ngbem,
+which has free-space Laplace/Helmholtz kernels only, nor in the Radia core). A static layered-media
+Green's function for a planar stack, source/obs in the top half-space:
+  G = 1/(4 pi c0) [ 1/|x-x'| + INT_0^inf R(k) e^{-k(z+z')} J0(k rho) dk ]
+-- the reflected part is the STATIC SOMMERFELD INTEGRAL, R(k) the layered reflection coefficient from
+the interface recursion R_i=(r_i + R_{i+1}e^{-2k t_{i+1}})/(1 + r_i R_{i+1}e^{-2k t_{i+1}}). For two
+half-spaces R=r01 const -> the single image (=demo_x); for a SLAB R(k) is k-dependent -> a true
+Sommerfeld integral = an infinite image series. VERIFIED: numerical integral == closed image series to
+~1e-16 (slab), and r12=0 / t->0 limits collapse to the single two-media image exactly. WHY for the
+paper: it is the independent, open REFERENCE the Kelvin-FEM (demo_x) is isomorphic to -- the one a
+single image cannot give for >2 media -- so it certifies the isomorphism for genuine multilayer stacks.
+PURPOSE (state clearly, avoid the irony trap): a Sommerfeld kernel is NOT for solving open boundaries
+(Kelvin-FEM already does that, AVOIDING the Sommerfeld integral); it is (a) the gold-standard BENCHMARK
+for the isomorphism, and (b) a complementary BEM capability for stratified media. GOTCHA: the k->0
+spectral boundary layer (width ~1/(2t)) is the classic delicate part of Sommerfeld-integral numerics --
+a thick slab's DC limit approaches the 2-media image only as O(1/t) because R(k=0)=r02 for ANY t;
+under-resolving k~0 spuriously 'passes' (this is why DCIM / tail-extraction methods exist: Aksun;
+Michalski-Mosig). The full WAVE Sommerfeld integral (branch cuts, surface-wave/Zenneck poles) is the
+time-harmonic extension. LIT (W:\03..\11_BEM_..\10_sommerfeld_layered): Koh-Yook 2006 (impedance plane),
+Chew lectures (Weyl/spectral) [pre-existing]; ADDED 2026-06-14: Sautbekov 2020 (short-wave asymptotic,
+arXiv 2005.06857), Lai-Greengard-O'Neil 2015 (hybrid integral representation, arXiv 1507.03491),
+Burke-Poggio NEC-2 Part I theory (the classic PUBLIC-DOMAIN Sommerfeld-ground MoM = the user's "NES"/NEC
+memory; SOMNEC/SOMNTX). HOME: pure numpy/scipy in radia-ngsolve examples (open math = public-boundary
+OK); NOT the C++ Radia magnetostatics core unless a strong reason emerges.
+
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
 sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
