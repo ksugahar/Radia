@@ -812,6 +812,46 @@ def test_assemble_demag_field_uniform_sphere_center(uniform_sphere):
     assert abs(Hc[0, 0]) < 1e-2 * Mval and abs(Hc[0, 1]) < 1e-2 * Mval, "transverse leak"
 
 
+def test_hdiv_demag_field_batch_matches_perpair():
+    """The batched C++ field kernel (_hdiv_demag_field_batch, ngcore::ParallelFor over obs) is
+    MACHINE-IDENTICAL to the per-pair sum of _hdiv_tet_volfield_linear + _hdiv_quad_tri_field (same
+    kernels, same order, just looped in C++) -- bit-identical, so the assemble_demag_field hot loop in
+    C++ (the order_p / centroid solve cost) is exact AND parallel (honours the caller's TaskManager)."""
+    import radia._radia_pybind as rp
+    from radia.hdiv_vim._field import _fit_rho_linear, _fit_sigma_quadratic
+    mesh = _sphere(0.6)
+    fes = ng.HDiv(mesh, order=1); gfM = ng.GridFunction(fes)
+    with ng.TaskManager():
+        gfM.Set(ng.CoefficientFunction((0.3 * ng.x, 0.2 * ng.y, 5e5 + 0.1 * ng.z)))   # non-uniform (div M != 0)
+    divM = ng.div(gfM)
+    vol_flat = []; elems = []
+    for i in range(mesh.GetNE(ng.VOL)):
+        ei = ng.ElementId(ng.VOL, i); V = np.array([mesh[v].point for v in mesh[ei].vertices], float)
+        rho0, g = _fit_rho_linear(divM, mesh, V)
+        vol_flat += V.ravel().tolist() + [float(rho0)] + g.tolist()
+        elems.append((V.ravel().tolist(), rho0, g.tolist()))
+    surf_flat = []; faces = []
+    for i in range(mesh.GetNE(ng.BND)):
+        ei = ng.ElementId(ng.BND, i); P = np.array([mesh[v].point for v in mesh[ei].vertices], float)
+        ngeom = np.cross(P[1] - P[0], P[2] - P[0]); ngeom = ngeom / np.linalg.norm(ngeom)
+        sig_fn = lambda p: float(np.array([float(gfM[k](mesh(p[0], p[1], p[2]))) for k in range(3)]) @ ngeom)
+        s0, s, S = _fit_sigma_quadratic(sig_fn, P)
+        surf_flat += P.ravel().tolist() + [float(s0)] + s.tolist() + S.ravel().tolist()
+        faces.append((P.ravel().tolist(), s0, s.tolist(), S.ravel().tolist()))
+    obs = np.array([[0, 0, 2.0], [2.0, 0, 0], [1.5, 1.5, 1.0], [0.1, 0.2, 0.15]])
+    with ng.TaskManager():
+        bat = np.array(rp._hdiv_demag_field_batch(vol_flat, surf_flat, obs.ravel().tolist())).reshape(-1, 3)
+    ref = np.zeros((len(obs), 3))
+    for q, r in enumerate(obs):
+        rl = r.tolist(); H = np.zeros(3)
+        for (Vf, rho0, g) in elems:
+            H += np.array(rp._hdiv_tet_volfield_linear(Vf, rl, rho0, g))
+        for (Pf, s0, s, S) in faces:
+            H += np.array(rp._hdiv_quad_tri_field(Pf, rl, s0, s, S))
+        ref[q] = H
+    assert np.max(np.abs(bat - ref)) == 0.0, f"batch != per-pair (max diff {np.max(np.abs(bat - ref)):.2e})"
+
+
 # ---------------------------------------------------------------------------------------------------
 # Step 3: the field-based nonlinear demag SOLVE (solve_demag_picard).  Validated on the uniform sphere:
 # linear chi -> the analytic M = chi*H_ext/(1+chi/3); saturating M(H) -> the scalar demag fixed point
