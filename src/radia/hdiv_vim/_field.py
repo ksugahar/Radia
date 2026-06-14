@@ -155,6 +155,86 @@ def flat_triangle_charge_field(P, r):
     return -F                                            # global sign fixed by the fine-Gauss validation
 
 
+def reconstruct_field_internal(mesh, gfM, points, quad=4, nth=32, nph=64, quantity="h"):
+    """INTERNAL/near-point magnetic field of a polynomial magnetization gfM (HDiv order p) on a TET mesh,
+    via the singular-aware assembly:
+
+        self-element VOLUME charge  -> tet_self_volume_field   (spherical ray-trace, non-singular)
+        other-element VOLUME charge -> Gauss-Duffy             (non-singular: r is outside them)
+        boundary SURFACE charge     -> flat_triangle_charge_field  (analytic, exact near AND far)
+
+    This is the order>=2 field at the body's OWN quadrature points (the field Step-1
+    reconstruct_field_polynomial cannot do -- its plain Gauss-Duffy is 1/r^2-singular there).  Validated
+    on the uniform sphere: center -> -M/3, and near-surface the analytic surface beats Step-1 ~24x (the
+    residual near-surface gap is FACETING -- the flat mesh's field genuinely differs from the smooth
+    -M/3; removed by curving, a separate axis).
+
+    TET meshes only (the self-element ray-trace uses tet face planes; boundary faces are triangles).
+    Surface charge is taken CONSTANT per face (sigma = M.n at the face centroid) -- exact for uniform M,
+    the constant-per-face part for polynomial M (the polynomial surface remainder is a future step).
+    quantity 'h' = the demag/stray H; 'b' = MU0*(H + M(r)) (B INSIDE the body).  CALLER wraps TaskManager.
+    """
+    divM = ng.div(gfM)
+    obs = np.asarray(points, float).reshape(-1, 3)
+    inv4pi = 1.0 / (4.0 * np.pi)
+
+    # precompute volume quadrature (point, rho, weight, element index) once -- independent of obs point
+    vol_pts, vol_rho, vol_w, vol_eidx, elem_verts = [], [], [], [], []
+    for i in range(mesh.GetNE(ng.VOL)):
+        ei = ng.ElementId(ng.VOL, i)
+        V = np.array([mesh[v].point for v in mesh[ei].vertices])
+        elem_verts.append(V)
+        trafo = mesh.GetTrafo(ei)
+        for ip in ng.IntegrationRule(mesh[ei].type, 2 * quad):
+            mip = trafo(ip)
+            vol_pts.append([mip.point[k] for k in range(3)])
+            vol_rho.append(-_scalar(divM(mip)))
+            vol_w.append(ip.weight * mip.measure)
+            vol_eidx.append(i)
+    vol_pts = np.array(vol_pts); vol_rho = np.array(vol_rho); vol_w = np.array(vol_w)
+    vol_eidx = np.array(vol_eidx)
+
+    # precompute surface (triangle vertices, constant sigma = M.n at the centroid, geometric normal)
+    surf = []
+    for i in range(mesh.GetNE(ng.BND)):
+        ei = ng.ElementId(ng.BND, i)
+        P = np.array([mesh[v].point for v in mesh[ei].vertices])
+        ngeom = np.cross(P[1] - P[0], P[2] - P[0]); ngeom = ngeom / np.linalg.norm(ngeom)
+        c = P.mean(0)
+        mc = mesh(c[0], c[1], c[2])
+        sig = float(np.array([float(gfM[k](mc)) for k in range(3)]) @ ngeom)
+        surf.append((P, sig))
+
+    out = np.zeros((len(obs), 3))
+    for q, r in enumerate(obs):
+        # locate the self element (barycentric test)
+        self_i = -1
+        for i, V in enumerate(elem_verts):
+            lam = np.linalg.solve(np.array([V[1] - V[0], V[2] - V[0], V[3] - V[0]]).T, r - V[0])
+            if lam.min() > -1e-9 and lam.sum() < 1 + 1e-9:
+                self_i = i
+                break
+        H = np.zeros(3)
+        # far volume (all quad points NOT in the self element) -- non-singular
+        mask = vol_eidx != self_i
+        d = r - vol_pts[mask]
+        rn = np.linalg.norm(d, axis=1)
+        H += inv4pi * np.sum(((vol_w[mask] * vol_rho[mask]) / rn ** 3)[:, None] * d, axis=0)
+        # self volume (spherical ray-trace) -- non-singular
+        if self_i >= 0:
+            H += tet_self_volume_field(elem_verts[self_i], r,
+                                       lambda p: -_scalar(divM(mesh(p[0], p[1], p[2]))), nth=nth, nph=nph)
+        # surface (analytic triangle field, exact near and far)
+        for P, sig in surf:
+            H += inv4pi * sig * flat_triangle_charge_field(P, r)
+        if quantity.lower() == "b":
+            Mr = np.array([float(gfM[k](mesh(r[0], r[1], r[2]))) for k in range(3)])
+            out[q] = (4e-7 * np.pi) * (H + Mr)
+        else:
+            out[q] = H
+    return out
+
+
 def _tet_face_planes(verts):
     """4 (n, d) half-space planes of a tet (n outward unit, interior satisfies n.x <= d)."""
     V = np.asarray(verts, float)

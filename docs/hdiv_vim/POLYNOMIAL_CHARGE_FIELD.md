@@ -47,7 +47,7 @@ These are exactly the charges the HDiv-VIM already forms in `build_charge_gram` 
 | Step | Scope | Singular? | Status |
 |------|-------|-----------|--------|
 | **1** | **External** points (stray field of a polynomial-M body), **tet + hex** | no (`r` clear of the body) | **done** — `reconstruct_field_polynomial`, element-agnostic Python reference, golden-locked |
-| **2** | Internal / near points (the field at the body's own quadrature points) | yes (`1/r²` at `r'→r`) | **kernels done** — both singular kernels promoted + golden-locked (`flat_triangle_charge_field`, `tet_self_volume_field`); assembly into a near-surface-accurate internal field (esp. curved faces) remains |
+| **2** | Internal / near points (the field at the body's own quadrature points), **tet** | yes (`1/r²` at `r'→r`) | **assembled** — `reconstruct_field_internal` (self-volume spherical + far-volume + analytic surface), golden-locked; polynomial surface σ / curved faces / C++ remain |
 | 3 | Wire Step 2 into the per-element nonlinear Newton (`set_field` ⇐ polynomial field, not `M_mass⁻¹ N m`) | — | designed: genuine order ≥ 2 nonlinear M, golden vs a finer-mesh / Radia MMM reference |
 
 ## Step 2 — internal/near singular field
@@ -77,14 +77,22 @@ The exact `INT_T (r-r')/|r-r'|³ dS'` for a flat triangle (Wilton/Graglia: solid
 per-edge log tangential term), valid at any `r` (near/far/on-face PV). Golden
 (`test_flat_triangle_charge_field_exact`): matches a fine Gauss reference to ~machine precision.
 
-**Remaining Step-2 work:** (a) **assemble** self-volume(Kernel A) + far-volume(Step-1) +
-surface(Kernel B, all faces — exact for constant σ per flat face) into one `reconstruct_field_internal`
-call, validated vs a fine-Gauss reference of the **same** mesh (not −M/3 — a flat faceted mesh's
-near-surface field genuinely differs from the smooth −M/3; that gap is **faceting**, removed only by
-curving); (b) **polynomial surface charge** σ (Kernel B is exact for the constant per-face part; the
-polynomial remainder needs the Graglia linear/higher triangle field); (c) **curved faces** (Kernel B is
-flat-triangle; a curved boundary face needs a curved-element near-field); (d) a C++/H-matrix version.
-Then Step 3 wires the assembled internal field into the nonlinear `set_field`.
+**Assembly — `reconstruct_field_internal` (DONE, tet).** Per obs point `r`: locate the self tet
+(barycentric), self-volume via Kernel A, far-volume via Gauss-Duffy (`r` outside those elements →
+non-singular), surface via Kernel B over all boundary triangles (constant σ = M·n per face). Golden
+`test_internal_field_assembly_uniform_sphere`: uniform sphere → **center = −M/3** (pins the assembly
+factors) and **near-surface (0.95R) the analytic surface is ~24× better than Step-1** (Step-1 plain
+Gauss-Duffy is ~58 % off there). The residual ~2.4 % at 0.95R is **faceting** (the flat mesh's
+near-surface field genuinely differs from the smooth −M/3; Kernel B gives the faceted body's field
+*exactly*), removed only by curving.
+
+**Remaining Step-2 work:** (a) **polynomial surface charge** σ (Kernel B is exact for the constant
+per-face part; the polynomial remainder needs the Graglia linear/higher triangle field); (b) **curved
+faces** (Kernel B is flat-triangle; a curved boundary face needs a curved-element near-field) — note
+ngsolve.bem's `LaplaceSL` is curved+triangle but gives the **potential**, not the field gradient (the
+`grad G` kernel is a documented ngsolve.bem gap, so it cannot be reused here); (c) **hex** internal
+(self-volume ray-trace needs hex face planes; quad boundary faces split into 2 triangles); (d) a
+C++/H-matrix version. Then Step 3 wires the assembled internal field into the nonlinear `set_field`.
 
 ## Step 1 — validated (`reconstruct_field_polynomial`)
 
