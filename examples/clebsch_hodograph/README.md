@@ -233,9 +233,17 @@ Picard** at sample points: the 1-shot agrees to **~1–2 %** (slenderness-limite
 and each FEM point costs **~12 Picard iterations**. So the whole map = **36
 quadratures** vs the equivalent **~440 curved-mesh linear solves** the nonlinear
 FEM would need — the **entire nonlinear design space explored at linear cost**,
-where the Picard sweep would be prohibitive. Figure:
-`chaplygin_design_sweep_2d.png` (design map | the clamp curves | the cost bar).
-Goldens `test_chaplygin_design_sweep_*` (map+clamp fast, FEM-validate+cost slow).
+where the Picard sweep would be prohibitive. **Inverse design (spec → geometry)**:
+`size_for_clamp(target)` sizes the throat so the regulator **clamps at a target
+flux** by bisecting the throat depth (the clamp knee is monotone in depth) — a
+handful of mesh-free 1-shot quadratures, **sub-second**, hitting the target to
+machine precision (e.g. **12 mWb/m → w = 14.1 mm**); the **sized design is then
+confirmed by the full nonlinear FEM** (1-shot 477 A vs FEM 483 A, **1.2 %**) — the
+**design loop closes**. This is the engineer's actual step (spec → geometry), not
+just a forward sweep. Figure: `chaplygin_design_sweep_2d.png` (design map | the
+clamp curves with the sized design ★ | the cost bar). Goldens
+`test_chaplygin_design_sweep_*` + `test_chaplygin_inverse_design_sizing` (sizing
+fast, FEM-validate+cost+loop-close slow).
 *Honest scope: the 1-shot is the slender-guide limit (its error is the
 slenderness error); a guide that **turns** needs the linear hodograph PDE
 (`chaplygin_turning_guide_2d.py`) — still one **linear** solve per case, so the
