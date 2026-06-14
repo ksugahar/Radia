@@ -660,3 +660,63 @@ def test_cpp_degree12_kernels_match_python():
                    tet_volume_field_linear(_TET, r, rho0, np.array(g))) < 1e-12
         assert rel(rp._hdiv_tet_volfield_quadratic(Vv, rl, rho0, g, Qf),
                    tet_volume_field_quadratic(_TET, r, rho0, np.array(g), _QSYM)) < 1e-11
+
+
+# ---------------------------------------------------------------------------------------------------
+# Flat-faced POLYTOPE / (affine) HEX volume-charge field (hex_volume_field_linear/quadratic).  The
+# analytic hex field must equal the SUM of analytic tet fields over a tet decomposition of the same box
+# (charge is additive over a flat decomposition -- two independent analytic computations) to machine
+# precision; this locks the hex 6-quad-face loop.
+# ---------------------------------------------------------------------------------------------------
+_HEX_CV = np.array([[0,0,0],[0,0,1],[0,1,1],[0,1,0],[1,0,0],[1,0,1],[1,1,1],[1,1,0]], float)  # NGSolve order
+
+
+def test_hex_volume_field_equals_tet_decomposition():
+    """hex_volume_field(box) == SUM of tet_volume_field over a 6-tet (Kuhn) decomposition of the box,
+    to machine precision -- the analytic hex face-loop is correct."""
+    from radia.hdiv_vim import hex_volume_field_quadratic, hex_volume_field_linear
+    g = np.array([0.7, -0.3, 0.5]); rho0 = 0.4
+    paths = [[0,4,5,6],[0,4,7,6],[0,3,7,6],[0,3,2,6],[0,1,2,6],[0,1,5,6]]  # 6 tets sharing diag v0-v6
+    for r in [[2.0, 0.5, 0.5], [0.5, 0.5, 2.0], [-1.0, 0.5, 0.5], [0.5, 2.0, 0.5]]:
+        r = np.array(r, float)
+        hexL = hex_volume_field_linear(_HEX_CV, r, rho0, g)
+        tetL = sum(tet_volume_field_quadratic(_HEX_CV[p], r, rho0, g, np.zeros((3, 3))) for p in paths)
+        assert np.linalg.norm(hexL - tetL) / np.linalg.norm(tetL) < 1e-12, f"hex linear vs tets r={r}"
+        hexQ = hex_volume_field_quadratic(_HEX_CV, r, rho0, g, _QSYM)
+        tetQ = sum(tet_volume_field_quadratic(_HEX_CV[p], r, rho0, g, _QSYM) for p in paths)
+        assert np.linalg.norm(hexQ - tetQ) / np.linalg.norm(tetQ) < 1e-12, f"hex quad vs tets r={r}"
+
+
+def test_hex_volume_field_sheared_affine_vs_gauss():
+    """An affine-sheared parallelepiped (planar faces) -- the analytic hex field matches a box-Gauss
+    reference (the ~1e-10 floor is the finite-difference Jacobian in the reference, not the kernel)."""
+    from radia.hdiv_vim import hex_volume_field_quadratic
+    g = np.array([0.7, -0.3, 0.5]); rho0 = 0.4
+    A = np.array([[1.0, 0.3, 0.1], [0.0, 1.2, 0.2], [0.0, 0.0, 0.9]])
+    Vp = (_HEX_CV @ A.T) + np.array([0.2, -0.1, 0.3])
+
+    def box_gauss(V8, r, rho_fn, nq=24):
+        xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5*(xs+1); ws = 0.5*ws
+        def hexmap(xi, eta, ze):
+            x0,x1,y0,y1,z0,z1 = 1-xi,xi,1-eta,eta,1-ze,ze
+            N = [x0*y0*z0,x0*y0*z1,x0*y1*z1,x0*y1*z0,x1*y0*z0,x1*y0*z1,x1*y1*z1,x1*y1*z0]
+            return sum(N[i]*V8[i] for i in range(8))
+        def detJ(xi, eta, ze):
+            e = 1e-6
+            px = (hexmap(xi+e,eta,ze)-hexmap(xi-e,eta,ze))/(2*e)
+            py = (hexmap(xi,eta+e,ze)-hexmap(xi,eta-e,ze))/(2*e)
+            pz = (hexmap(xi,eta,ze+e)-hexmap(xi,eta,ze-e))/(2*e)
+            return abs(np.dot(px, np.cross(py, pz)))
+        F = np.zeros(3)
+        for i in range(nq):
+            for j in range(nq):
+                for k in range(nq):
+                    p = hexmap(xs[i],xs[j],xs[k]); d = r-p
+                    F += ws[i]*ws[j]*ws[k]*detJ(xs[i],xs[j],xs[k])*rho_fn(p)*d/np.linalg.norm(d)**3
+        return F
+    rhoQ = lambda p: rho0 + np.dot(g, p) + p @ _QSYM @ p
+    for r in [[3.0, 0.5, 0.5], [0.5, 3.0, 0.5]]:
+        r = np.array(r, float)
+        a = hex_volume_field_quadratic(Vp, r, rho0, g, _QSYM)
+        b = box_gauss(Vp, r, rhoQ, 26)
+        assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-8, f"sheared hex vs Gauss r={r}"
