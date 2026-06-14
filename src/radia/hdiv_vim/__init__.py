@@ -60,6 +60,13 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
     triangle_inplane_moments,         # general surface moment dicts A_k (1/R), B_k (1/R^3), any degree
     polynomial_triangle_charge_field,  # ARBITRARY-degree surface-charge field (general assembler)
     tet_volume_field_polynomial,      # ARBITRARY-degree volume-charge field (general assembler)
+    tet_boundary_triangles,           # flat-faced polytope helper: tet -> 4 (tri, outward n)
+    hex_boundary_triangles,           # flat-faced polytope helper: hex -> 12 (tri, outward n)
+    polytope_newtonian_potential,     # INT_V 1/R over any flat-faced polytope
+    polytope_newtonian_moment,        # INT_V r'/R over any flat-faced polytope
+    polytope_volume_field_quadratic,  # quadratic volume-charge field over any flat-faced polytope
+    hex_volume_field_linear,          # linear volume-charge field over an (affine) hex
+    hex_volume_field_quadratic,       # quadratic volume-charge field over an (affine) hex
 )
 
 __all__ = [
@@ -73,5 +80,8 @@ __all__ = [
     "triangle_potential_moment2", "tet_newtonian_moment", "tet_volume_field_quadratic",
     "quadratic_triangle_charge_field", "triangle_inplane_moments",
     "polynomial_triangle_charge_field", "tet_volume_field_polynomial",
+    "tet_boundary_triangles", "hex_boundary_triangles", "polytope_newtonian_potential",
+    "polytope_newtonian_moment", "polytope_volume_field_quadratic",
+    "hex_volume_field_linear", "hex_volume_field_quadratic",
     "_core", "_nonlinear", "_vim", "_field",
 ]

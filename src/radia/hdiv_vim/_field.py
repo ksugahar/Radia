@@ -925,3 +925,89 @@ def tet_volume_field_polynomial(verts, r, rho_fn, degree):
         ei[i] = 1.0
         F -= ei * gi
     return F
+
+
+# ---------------------------------------------------------------------------------------------------
+# Flat-faced POLYTOPE volume-charge field (affine hex / prism / tet).  The divergence-theorem volume
+# recursion is polytope-general -- it needs only planar faces + their outward normal + signed height.
+# A hex's 6 (planar) quad faces are triangulated into 12 triangles; each triangle carries the (shared,
+# coplanar) face normal, so the per-triangle outward-normal loop is identical to the tet case.  EXACT
+# for planar-faced cells (axis-aligned / parallelepiped hex); a trilinear (distorted) hex has bilinear
+# (non-planar) faces -> that is the curved case (separate).
+# ---------------------------------------------------------------------------------------------------
+def _triangle_outward(P, cen):
+    """Return (P, n) with n the unit normal of triangle P oriented away from the body centroid cen."""
+    P = np.asarray(P, float)
+    n = np.cross(P[1] - P[0], P[2] - P[0])
+    n = n / np.linalg.norm(n)
+    if np.dot(n, P.mean(axis=0) - cen) < 0:
+        n = -n
+    return P, n
+
+
+def tet_boundary_triangles(verts):
+    """The 4 triangular faces of a tet as (triangle (3,3), outward unit normal)."""
+    V = np.asarray(verts, float)
+    cen = V.mean(axis=0)
+    return [_triangle_outward(V[list(t)], cen) for t in ((1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1))]
+
+
+def hex_boundary_triangles(verts):
+    """The 6 (planar) quad faces of a hex (NGSolve vertex order v0(000)..v7(110)) triangulated into 12
+    triangles, each as (triangle (3,3), outward unit normal).  Exact for planar-faced (affine) hexes."""
+    V = np.asarray(verts, float)
+    cen = V.mean(axis=0)
+    quads = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (3, 2, 6, 7), (0, 3, 7, 4), (1, 2, 6, 5)]
+    tris = []
+    for a, b, c, d in quads:
+        tris.append(_triangle_outward(V[[a, b, c]], cen))
+        tris.append(_triangle_outward(V[[a, c, d]], cen))
+    return tris
+
+
+def polytope_newtonian_potential(boundary_tris, r):
+    """INT_V 1/R dV' over a flat-faced polytope = -1/2 SUM_tri h_tri INT_tri 1/R dS'
+    (h_tri = signed height of r above the outward triangle); boundary_tris from
+    tet_/hex_boundary_triangles.  Generalises tet_newtonian_potential to any planar-faced cell."""
+    r = np.asarray(r, float)
+    return -0.5 * sum(float(np.dot(r - P[0], n)) * triangle_potential_const(P, r) for (P, n) in boundary_tris)
+
+
+def polytope_newtonian_moment(boundary_tris, r):
+    """INT_V r'/R dV' over a flat-faced polytope = 1/3[r PhiV - SUM_tri h_tri M1_tri]."""
+    r = np.asarray(r, float)
+    acc = r * polytope_newtonian_potential(boundary_tris, r)
+    for (P, n) in boundary_tris:
+        acc = acc - float(np.dot(r - P[0], n)) * triangle_potential_moment(P, r)
+    return acc / 3.0
+
+
+def polytope_volume_field_quadratic(boundary_tris, r, rho0, grho, Q):
+    """EXACT field of a QUADRATIC volume charge rho = rho0 + grho.r' + r'^T Q r' (Q symmetric) over a
+    flat-faced polytope (affine hex / prism / tet), NO 1/4pi:
+        = SUM_tri n_tri[rho0 I0 + grho.M1 + Q:M2]  -  (grho PhiV + 2 Q.V1).
+    Pass Q = zeros((3,3)) for the linear case.  boundary_tris from tet_/hex_boundary_triangles."""
+    r = np.asarray(r, float)
+    grho = np.asarray(grho, float)
+    Q = np.asarray(Q, float)
+    acc = np.zeros(3)
+    for (P, n) in boundary_tris:
+        I0 = triangle_potential_const(P, r)
+        M1 = triangle_potential_moment(P, r)
+        M2 = triangle_potential_moment2(P, r)
+        acc = acc + n * (rho0 * I0 + float(np.dot(grho, M1)) + float(np.einsum("jk,jk", Q, M2)))
+    PhiV = polytope_newtonian_potential(boundary_tris, r)
+    V1 = polytope_newtonian_moment(boundary_tris, r)
+    return acc - (grho * PhiV + 2.0 * (Q @ V1))
+
+
+def hex_volume_field_linear(verts, r, rho0, grho):
+    """Linear volume-charge field over a (planar-faced) hex -- the hex analogue of
+    tet_volume_field_linear.  EXACT for affine hexes; NO 1/4pi."""
+    return polytope_volume_field_quadratic(hex_boundary_triangles(verts), r, rho0, grho, np.zeros((3, 3)))
+
+
+def hex_volume_field_quadratic(verts, r, rho0, grho, Q):
+    """Quadratic volume-charge field over a (planar-faced) hex -- the hex analogue of
+    tet_volume_field_quadratic.  EXACT for affine hexes; NO 1/4pi."""
+    return polytope_volume_field_quadratic(hex_boundary_triangles(verts), r, rho0, grho, Q)
