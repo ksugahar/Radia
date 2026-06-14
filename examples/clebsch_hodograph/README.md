@@ -254,6 +254,31 @@ does the *forward* construction (prescribe 2-D hodograph data → one linear sol
 → back-map to *a* physical patch); the **free-boundary closure** (prescribe the
 physical guide, solve for its hodograph image) is the genuine open frontier.
 
+### `chaplygin_free_boundary_2d.py` — the turning-guide free boundary, made concrete
+
+The achievable, honest piece of that open frontier. The turning-guide forward
+construction solved the Chaplygin PDE on a *fixed* hodograph rectangle; the
+**inverse** direction — prescribe the physical guide, find its hodograph image —
+is a **free-boundary** problem. This file *computes* the hodograph image of a
+prescribed turning flux guide (a first-quadrant annular-sector bend) and shows
+concretely:
+- **constant-width circular bend → the image is a RECTANGLE** in (q,θ): the
+  field turns (θ_B spans the bend, here ~56°) but the q-extent is the *same* at
+  every position angle (free-boundary measure **0.05** ≈ 0). This is the **1-D
+  self-linearising** case (`|H|∝1/r` forced by geometry).
+- **tapering bend (outer wall spirals inward) → a θ-DEPENDENT image** (free-
+  boundary measure **0.18**, ~3.6×): the gap width varies along the bend, so the
+  q-extent varies with θ — a genuine **free boundary** (the image is unknown a
+  priori).
+
+The image's boundary shape is a *geometric* property of the field, so a linear
+flux solve already exhibits it (saturation shifts the q-values, not the
+rectangle-vs-free-boundary distinction). Figure: `chaplygin_free_boundary_2d.png`
+(the two hodograph images, coloured by position angle). *Recovering the image
+from the prescribed physical boundary — the inverse hodograph solve / free-
+boundary iteration — remains the open frontier (a Newton/mixed free-boundary
+scheme); this file establishes its structure.*
+
 ### `cohomology_hodograph_currentlink.py` — when the hodograph needs cohomology
 
 Answers *"is cohomology needed for the hodograph?"*. The hodograph's **scalar
@@ -435,11 +460,11 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (19 tests; the eight
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (20 tests; the nine
 FEM rungs — forward+contour, the design loop, the curved chamfer, the open-
 boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
-3-D nonlinear Kelvin merge, and the turning-guide hodograph PDE — are
-`@pytest.mark.slow`).
+3-D nonlinear Kelvin merge, the turning-guide hodograph PDE, and the
+free-boundary image — are `@pytest.mark.slow`).
 
 ## Prior art (honest)
 
