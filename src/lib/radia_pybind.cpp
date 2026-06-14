@@ -2639,6 +2639,19 @@ double PhiTetProbe(const std::vector<double>& V, const std::vector<double>& P) {
     for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
     return rad_hdiv::PhiTet(Vv, PP);
 }
+std::vector<double> TriFieldProbe(const std::vector<double>& V, const std::vector<double>& r) {
+    double Vv[3][3], rr[3], out[3];
+    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
+    rad_hdiv::TriField(Vv, rr, out);
+    return {out[0], out[1], out[2]};
+}
+std::vector<double> TetFieldProbe(const std::vector<double>& V, const std::vector<double>& P) {
+    double Vv[4][3], PP[3], out[3];
+    for (int i = 0; i < 3; ++i) PP[i] = P[i];
+    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
+    rad_hdiv::TetField(Vv, PP, out);
+    return {out[0], out[1], out[2]};
+}
 } // namespace radia_hdivvim
 
 // ============================================================================
@@ -2685,6 +2698,12 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("_hdiv_phi_tet", &radia_hdivvim::PhiTetProbe, py::arg("V"), py::arg("P"),
           "M2 verify: tet Newtonian potential INT_tet 1/|P-r'| dV' (V = 12 flat doubles = 4 verts, "
           "P = 3) via the divergence theorem.  Should match radia.hdiv_vim._core.phi_tet.");
+    m.def("_hdiv_tri_field", &radia_hdivvim::TriFieldProbe, py::arg("V"), py::arg("r"),
+          "Wilton triangle FIELD INT_T (r-r')/|r-r'|^3 dA' (V = 9 flat doubles, r = 3) -> 3-vector, no "
+          "1/4pi.  = -grad TriPotential.  Should match radia.hdiv_vim.flat_triangle_charge_field.");
+    m.def("_hdiv_tet_field", &radia_hdivvim::TetFieldProbe, py::arg("V"), py::arg("P"),
+          "Tet volume-charge FIELD INT_tet (P-r')/|P-r'|^3 dV' (V = 12 flat doubles, P = 3) -> 3-vector, "
+          "no 1/4pi.  = -grad PhiTet.  Should match radia.hdiv_vim.tet_self_volume_field * 4pi.");
 
 
     m.def("_hdiv_vim_hmatrix_probe", &radia_hdivvim::HDivVimHMatrixProbe,
