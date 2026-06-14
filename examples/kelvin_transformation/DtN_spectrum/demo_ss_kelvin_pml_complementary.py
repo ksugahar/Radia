@@ -57,12 +57,14 @@ def dtn_exact(n, ka):
 _GX = np.array([-np.sqrt(3 / 5), 0.0, np.sqrt(3 / 5)]); _GW = np.array([5 / 9, 8 / 9, 5 / 9])
 
 
-def kelvin_pml(n, k, a, rho_e, rho_pml, M, alpha, p=2, extra_grade=False, kappa=1.0):
+def kelvin_pml(n, k, a, rho_e, rho_pml, M, alpha, p=2, extra_grade=False, kappa=1.0, acfs=0.0):
     """combined Kelvin (transformation-optics medium) + PML (complex stretch in [rho_e, rho_pml]).
-    extra_grade=True multiplies the stretch by (rho_pml/rho)^2 (a k_eff-matched, more-concentrated
-    profile); kappa>1 adds a CFS-PML-style REAL coordinate stretch (the evanescent-helping ingredient)
-    -- both used to show a fancier PML does NOT help the Kelvin centre."""
+    extra_grade=True multiplies the stretch by (rho_pml/rho)^2 (a k_eff-matched profile); kappa>1 adds a
+    CFS-PML REAL coordinate stretch; acfs>0 is the CFS-PML FREQUENCY SHIFT (the absorbing part is scaled
+    by F=(i k)/(acfs + i k), acfs=0 -> standard PML). All three "fancier-PML" knobs are shown NOT to
+    help the Kelvin centre."""
     L = rho_pml - rho_e
+    F = (1j * k) / (acfs + 1j * k)              # CFS frequency-shift factor (=1 at acfs=0)
 
     def s(r):
         if r >= rho_pml:
@@ -70,7 +72,7 @@ def kelvin_pml(n, k, a, rho_e, rho_pml, M, alpha, p=2, extra_grade=False, kappa=
         g = ((rho_pml - r) / L) ** p
         if extra_grade:
             g = g * (rho_pml / max(r, 1e-9)) ** 2
-        return kappa + 1j * alpha * g
+        return kappa + 1j * alpha * F * g
 
     def rt(r):                                  # rho~: physical for r>=rho_pml, complex-stretched inward
         if r >= rho_pml:
@@ -79,7 +81,7 @@ def kelvin_pml(n, k, a, rho_e, rho_pml, M, alpha, p=2, extra_grade=False, kappa=
             tt = np.linspace(r, rho_pml, 32)
             return rho_pml - np.trapezoid(np.array([s(t) for t in tt]), tt)
         dr = rho_pml - r                        # analytic for the plain polynomial profile
-        return rho_pml - (kappa * dr + 1j * alpha / L**p * dr**(p + 1) / (p + 1))
+        return rho_pml - (kappa * dr + 1j * alpha * F / L**p * dr**(p + 1) / (p + 1))
 
     node = np.linspace(rho_e, a, M + 1); A = np.zeros((M + 1, M + 1), complex)
     for e in range(M):
@@ -171,6 +173,22 @@ for kap in (1.0, 2.0, 4.0):
 assert cfs_worse, "the CFS real stretch (kappa>1) does NOT help the Kelvin centre (it over-stretches)"
 print("    => CFS-PML's real stretch targets EVANESCENT waves, but the Kelvin near-centre field is")
 print("       OSCILLATORY (k_eff large), so kappa>1 only over-stretches -> standard (kappa=1) is best.")
+
+# (3c) the FULL CFS-PML frequency shift acfs (the genuine CFS ingredient) also does NOT help -------
+print("\n(3c) CFS-PML FREQUENCY SHIFT acfs (absorbing part x (ik)/(acfs+ik); acfs=0 = standard PML):")
+print("     acfs   best |DtN-exact| over alpha")
+e_a0 = None; cfs2_worse = False
+for acfs in (0.0, 1.0, 4.0, 16.0):
+    best = min(abs(kelvin_pml(1, k, a, 0.3, 0.6, M, al, acfs=acfs) - dtn_exact(1, ka)) for al in (1, 2, 4, 8))
+    if acfs == 0.0:
+        e_a0 = best
+    elif best > e_a0:
+        cfs2_worse = True
+    print("     %4.1f    %.3e" % (acfs, best))
+assert cfs2_worse and e_a0 < 1e-3, "the CFS frequency shift only reduces absorption -> standard is best"
+print("    => the CFS frequency shift only shrinks the absorbing part in this HIGH-k_eff oscillatory")
+print("       region -> standard PML (acfs=0) is best. CFS's benefits (evanescent / low-freq / late-")
+print("       time) do not occur at the Kelvin centre, so CFS-PML + Kelvin gives NO extra performance.")
 
 print("\n" + "=" * 82)
 print("ANSWER: Kelvin and PML are COMPLEMENTARY, NOT redundant -- excising Kelvin's centre and walling")
