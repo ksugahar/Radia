@@ -406,6 +406,24 @@ HDiv-VIM solve reformulated in Clebsch/hodograph coordinates, where the
 Chaplygin hodograph (`saturation_loop_2d.py` / `chaplygin_hodograph_2d.py`)
 linearises saturation — is the next frontier.
 
+### `hdiv_vim_clebsch_2d_az.py` — the 2-D unification: A_z IS the Clebsch potential
+
+The 2-D companion of the capstone, and the explicit link to the Chaplygin
+hodograph. In 2-D every in-plane divergence-free field is
+`B = ∇A_z × ẑ = (∂A_z/∂y, −∂A_z/∂x)`, so the **flux function `A_z` is exactly the
+Clebsch potential `α`** (with `β = z`). The 3-D Clebsch *pair* `(α,β)` collapses
+to the **single scalar `A_z`** — which is precisely why the Chaplygin hodograph
+linearises the 2-D saturation: `div(ν(|∇A_z|)∇A_z)=0` has one scalar unknown,
+the Clebsch potential.
+
+Verified (unit square, `H1` order 3): a loop field `B = ∇A_z × ẑ` built from a
+known `A_z = sin πx sin πy` is **machine-zero divergence** (`‖div B‖ = 0`) *and*
+**tangential on the boundary** (`‖B·n‖ = 4e-16`) — fully charge-free →
+field-null (the 2-D loop–star, matching the 3-D capstone); a gradient field
+`(x,y)` carries the charge (`‖div‖ = 2`). And `A_z` is **recovered from `B`** via
+the stream-function weak form `∫∇A_z·∇w = ∫B·rot(w)` to `4e-7`, with
+`∇A_z(rec)×ẑ` reproducing `B` to `2e-5` — `A_z` *is* the Clebsch potential.
+
 ## Design track — accelerator pole (the "iron face = equipotential" lever)
 
 These quantify the design methodology (§3–5 of `DESIGN_METHODOLOGY.md`): the
@@ -554,9 +572,10 @@ python chaplygin_free_boundary_2d.py          # Frontier 2: the turning-guide fr
 python chaplygin_inverse_vonmises_2d.py       # Frontier 2 inverse: von Mises dissolves it (linear)
 python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inverse, flux (lambda) freed
 python hdiv_vim_clebsch_loopstar.py           # de Rham capstone: HDiv-VIM loop modes ARE Clebsch fields
+python hdiv_vim_clebsch_2d_az.py              # 2-D unification: A_z IS the Clebsch potential
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (23 tests; the nine
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (24 tests; the nine
 heavy FEM rungs — forward+contour, the design loop, the curved chamfer, the
 open-boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
 3-D nonlinear Kelvin merge, the turning-guide hodograph PDE, and the
