@@ -8,17 +8,28 @@ take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunction -- e.g.
 field `rad.RadiaField(coil,'h')`, the C-type electromagnet driver) and return per-element M.
 
 ## Formulation (verified-first, 2026-06-15)
-Physical magnetization system, **+N**:  ((1/chi) M_mass + N) m = M_mass h_ext ,  N = B^T G B,
+LINEAR -- physical magnetization system, **+N**:  ((1/chi) M_mass + N) m = M_mass h_ext ,  N = B^T G B,
 with `h_ext` = H_ext L2-projected onto RT0 (HDiv order 0).  (The -N system is mu_r-independent but
-NON-physical -- wrong sign -- so +N is solved.)  LINEAR verified vs the analytic sphere to 1.4e-4;
-NONLINEAR is the damped tensor-tangent Newton (the same machinery as `_nonlinear.solve_nonlinear_newton`,
-generalized to an arbitrary source + a real BH table + per-element M output).
+NON-physical -- wrong sign -- so +N is solved.)  Verified vs the analytic sphere to 1.4e-4.
+
+NONLINEAR -- the **Anderson-accelerated Hantila** fixed point (the FEEC analog of
+`radia.hantila_solver` for MMM).  Hantila split M(H) = alpha H + R(H) (alpha CONSTANT, R lagged) gives
+the CONSTANT-LHS  (M_mass + alpha N) m = alpha M_mass h_ext + load(R(H)),  H = h_ext - M_mass^-1 N m.
+Each step is ONE M_mass^-1-GMRES on the constant SPD operator + a cheap constitutive update -- NO
+tangent assembly, NO line search (the tensor-tangent Newton converges in few steps but each step's
+NGSolve assembly + Armijo cost it ~5x the wall-clock; Hantila's cheap step + Anderson lands within ~2x
+of yano).  WHY Hantila is valid here: N = B^T G B is SPD-PSD (G the SPD Coulomb Gram) and the demag
+spectrum is bounded in [0,1], so A = M_mass + alpha N is SPD-invertible and the contraction reduces to
+the classical scalar condition on alpha vs the chi-range (monotone BH); the de-Rham loops sit in
+ker(N) and are carried by M_mass (no loop-star).  alpha = chi0/2 is set by the constitutive (not a
+fit-to-win knob).  Saturation (chi->0) widens the chi-range so the bare fixed point slows -- Anderson
+(Walker-Ni, window) recovers it.
 
 ## Preconditioner -- the FULL HDiv mass inverse (mesh + mu_r robust)
-The +N solves (linear system, nonlinear Newton step, scalar-chi Picard warmstart) are GMRES
-preconditioned with `M_mass^{-1}` (a one-time sparse LU of the local RT0 HDiv mass), which DEFLATES the
-de-Rham loops (ker B) -> the iteration count stays bounded as the mesh refines AND as mu_r grows.  A
-Jacobi diagonal is NOT mesh-robust (the +N count blew past 5000 iters at 7224 faces -- measured).
+Every +N / constant-LHS solve is GMRES preconditioned with `M_mass^{-1}` (a one-time sparse LU of the
+local RT0 HDiv mass), which DEFLATES the de-Rham loops (ker B) -> the iteration count stays bounded as
+the mesh refines AND as mu_r grows (the de-Rham structural advantage: no loop-star, distortion-robust).
+A Jacobi diagonal is NOT mesh-robust (the +N count blew past 5000 iters at 7224 faces -- measured).
 GMRES (not CG/MINRES) absorbs the residual ACA asymmetry of the charge-Gram H-matvec.
 
 KELVIN-LESS: the 1/r charge Gram IS the open boundary (a volume integral method like MMM/MSC); only
@@ -44,7 +55,7 @@ import ngsolve as ng
 
 import radia._radia_pybind as _rp
 from . import _core as _tet
-from ._nonlinear import _bh_table_funcs, _table_tensor_tangent, _bf_to_csr
+from ._nonlinear import _bh_table_funcs, _table_tensor_tangent
 
 _MU0 = 4e-7 * _PI
 # scipy renamed the Krylov tolerance kwarg 'tol' -> 'rtol' (scipy >= 1.12); detect once.
@@ -52,8 +63,8 @@ _GMRES_TOL = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "
 
 
 def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=True, gram_eps=1e-10,
-                     leaf=32, eta=2.0, tol=1e-8, maxit=4000, gmres_restart=400,
-                     newton_maxit=80, newton_tol=1e-7, picard_warmstart=8):
+                     leaf=32, eta=2.0, near_factor=1e30, tol=1e-8, maxit=4000, gmres_restart=400,
+                     nl_maxit=300, nl_tol=1e-6, anderson_window=6):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     Provide EXACTLY ONE material spec:
@@ -75,7 +86,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
         d = _tet.build_demag(mesh, skip_dense_gram=True)
         Mm, B = d["M_mass"], d["B_csr"]
         H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
-                                   n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta)
+                                   n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta,
+                                   near_factor=near_factor)
 
         def N_apply(v):
             v = np.asarray(v, float)
@@ -103,9 +115,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
     if mu_r is not None:
         m, iters = _solve_linear(mu_r, Mm, N_apply, Mprec, rhs0, n_face, tol, maxit, gmres_restart)
     else:
-        m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec, mu, D, denom,
-                                    n_face, fes, gram_eps, tol, gmres_restart,
-                                    newton_maxit, newton_tol, picard_warmstart)
+        m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
+                                    n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window)
 
     # ---- per-element M (VectorL2(0) projection; component-major DOFs -> (n_el,3)) + averages ----
     gfM = ng.GridFunction(fes); gfM.vec.FV().NumPy()[:] = m
@@ -140,92 +151,64 @@ def _solve_linear(mu_r, Mm, N_apply, Mprec, rhs, n_face, tol, maxit, gmres_resta
     return m, it["n"]
 
 
-def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec, mu, Dscal, denom,
-                     n_face, fes, gram_eps, gmres_tol, gmres_restart,
-                     newton_maxit, newton_tol, picard_warmstart):
-    """Damped tensor-tangent Newton on the constitutive residual F(m)=M_mass m - b_M(H),
-    H = h_ext - M_mass^{-1} N m, with a real BH table + an arbitrary applied field.  Scalable: N via
-    the charge-Gram H-matvec, every +N solve M_mass^{-1}-preconditioned GMRES, scalar-chi Picard
-    warmstart, Armijo line search, fail-loud on non-convergence (CLAUDE.md No-Fallbacks)."""
+def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
+                     n_face, fes, gmres_tol, gmres_restart, nl_maxit, nl_tol, anderson_window):
+    """Anderson-accelerated HANTILA fixed point (the FEEC analog of radia.hantila_solver for MMM).
+
+    Hantila split M(H) = alpha H + R(H) (alpha CONSTANT, R lagged) -> the CONSTANT-LHS system
+        (M_mass + alpha N) m = alpha M_mass h_ext + load(R(H)),   H = h_ext - M_mass^-1 N m,  R = M(H)-alpha H.
+    A = M_mass + alpha N is SPD (N = B^T G B is PSD via the SPD Coulomb Gram), so each step is ONE
+    M_mass^-1-preconditioned GMRES on the CONSTANT operator + a cheap constitutive update (NO tangent
+    assembly, NO line search).  alpha = chi0/2 from the BH table (the classical Hantila constant, set by
+    the constitutive -- not a fit-to-win knob).  Anderson (Walker-Ni type-II, window) accelerates the
+    fixed point, which slows at saturation (chi->0 widens the chi-range -> contraction factor -> 1).
+    Fail-loud on non-convergence (CLAUDE.md No-Fallbacks)."""
     arr = np.asarray(bh_table, float)
     if arr.ndim != 2 or arr.shape[1] != 2:
         raise ValueError("hdiv_demag_solve: bh_table must be [[H,B], ...] (A/m, T)")
-    Harr, Barr = arr[:, 0], arr[:, 1]
-    Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(Harr, Barr)
-    chi_init = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
+    _Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
+    chi0 = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
+    alpha = 0.5 * chi0                       # classical Hantila constant (~half the zero-field chi)
 
-    def Dop_apply(v):
-        return Mfac.solve(N_apply(v))
+    AH = spla.LinearOperator((n_face, n_face),
+                             matvec=lambda v: np.asarray(Mm @ np.asarray(v, float)).ravel() + alpha * N_apply(v))
+    rhs_src = alpha * np.asarray(Mm @ h_ext).ravel()
+    Id = ng.Id(3); vf = fes.TestFunction(); gfH = ng.GridFunction(fes)
 
-    Id = ng.Id(3)
-    uf, vf = fes.TnT()
-    gfH = ng.GridFunction(fes)
-    vol = ng.Integrate(ng.CoefficientFunction(1.0), mesh)
-    # representative scalar applied-field magnitude for the scalar-chi Picard warmstart
-    gfHe = ng.GridFunction(fes); gfHe.vec.FV().NumPy()[:] = h_ext
-    H0rep = float(ng.Integrate(ng.sqrt(ng.InnerProduct(gfHe, gfHe) + 1e-30), mesh) / vol)
-    rhs0 = np.asarray(Mm @ h_ext).ravel()
+    def G(m):                                # one Hantila step: m -> A^-1 (alpha M_mass h_ext + load(R(H(m))))
+        gfH.vec.FV().NumPy()[:] = h_ext - Mfac.solve(N_apply(m))
+        M_cf, _ = _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id)
+        lf = ng.LinearForm(fes); lf += (M_cf - alpha * gfH) * vf * ng.dx; lf.Assemble()
+        g, _info = spla.gmres(AH, rhs_src + lf.vec.FV().NumPy(), M=Mprec, x0=m,
+                              restart=int(gmres_restart), maxiter=3, **{_GMRES_TOL: gmres_tol})
+        return g
 
-    def set_field(m):
-        gfH.vec.FV().NumPy()[:] = h_ext - Dop_apply(m)
-
-    def constit():
-        return _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id)
-
-    def bM():
-        Mcf, _ = constit()
-        lf = ng.LinearForm(fes); lf += Mcf * vf * ng.dx; lf.Assemble()
-        return lf.vec.FV().NumPy().copy()
-
-    def Mavg(m):
-        return float((mu @ np.asarray(Mm @ m).ravel()) / denom)
-
-    def Fnorm(m):
-        set_field(m)
-        return float(np.linalg.norm(np.asarray(Mm @ m).ravel() - bM()))
-
-    # scalar-chi Picard warmstart (GMRES on the symmetric +N system) -> lands in the Newton basin
-    chi = chi_init
-    m = np.zeros(n_face)
-    for _ in range(picard_warmstart):
-        Aop = spla.LinearOperator((n_face, n_face),
-                                  matvec=lambda v, c=chi: (1.0 / c) * np.asarray(Mm @ np.asarray(v, float)).ravel()
-                                  + N_apply(v))
-        m, _ = spla.gmres(Aop, rhs0, M=Mprec, x0=m, maxiter=20, restart=int(gmres_restart),
-                          **{_GMRES_TOL: gmres_tol})
-        Hi = H0rep - Dscal * Mavg(m)
-        chi = 0.5 * chi + 0.5 * (Mof(Hi) / Hi if abs(Hi) > 1e-30 else chi)
-
+    # Anderson type-II (Walker-Ni): combine the last `anderson_window` fixed-point residuals f = G(x)-x.
+    x = np.zeros(n_face)
+    Xh, Gh = [], []
     converged = False
-    relF = float("inf")
+    rel = float("inf")
     nit = 0
-    for it in range(newton_maxit):
+    for it in range(nl_maxit):
         nit = it + 1
-        set_field(m)
-        Mcf, tang = constit()
-        lf = ng.LinearForm(fes); lf += Mcf * vf * ng.dx; lf.Assemble()
-        F = np.asarray(Mm @ m).ravel() - lf.vec.FV().NumPy()
-        nF = float(np.linalg.norm(F))
-        relF = nF / (np.linalg.norm(np.asarray(Mm @ m).ravel()) + 1e-30)
-        if relF < newton_tol:
-            converged = True
+        g = G(x); f = g - x
+        rel = float(np.linalg.norm(f) / (np.linalg.norm(g) + 1e-30))
+        if rel < nl_tol:
+            x = g; converged = True
             break
-        T = ng.BilinearForm(fes); T += ng.InnerProduct(tang * uf, vf) * ng.dx; T.Assemble()
-        Tcsr = _bf_to_csr(T)
-
-        def Japply(v):
-            v = np.asarray(v, float)
-            return np.asarray(Mm @ v).ravel() + Tcsr @ Dop_apply(v)
-
-        Jop = spla.LinearOperator((n_face, n_face), matvec=Japply)
-        dm, _ = spla.gmres(Jop, -F, M=Mprec, maxiter=20, restart=int(gmres_restart),
-                           **{_GMRES_TOL: gmres_tol})
-        lam = 1.0
-        while lam > 1e-7 and Fnorm(m + lam * dm) >= nF:
-            lam *= 0.5
-        m = m + lam * dm
+        Xh.append(x.copy()); Gh.append(g.copy())
+        if len(Gh) >= 2:
+            mk = min(anderson_window, len(Gh) - 1)
+            dF = np.column_stack([(Gh[-i] - Xh[-i]) - (Gh[-i-1] - Xh[-i-1]) for i in range(1, mk + 1)])
+            dG = np.column_stack([Gh[-i] - Gh[-i-1] for i in range(1, mk + 1)])
+            gamma, *_ = np.linalg.lstsq(dF, f, rcond=None)
+            x = g - dG @ gamma
+        else:
+            x = g
+        if len(Xh) > anderson_window + 1:
+            Xh.pop(0); Gh.pop(0)
     if not converged:
-        raise RuntimeError("hdiv_demag_solve (nonlinear): Newton did NOT converge -- relF=%.2e > "
-                           "newton_tol=%.1e after %d iters (returning M would be a silent wrong "
-                           "result)" % (relF, newton_tol, nit))
-    return m, nit
+        raise RuntimeError("hdiv_demag_solve (nonlinear Anderson-Hantila): did NOT converge -- "
+                           "rel=%.2e > nl_tol=%.1e after %d iters (returning M would be a silent "
+                           "wrong result)" % (rel, nl_tol, nit))
+    return x, nit

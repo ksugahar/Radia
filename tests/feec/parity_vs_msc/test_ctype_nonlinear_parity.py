@@ -8,12 +8,13 @@ Both solvers use the SAME iron mesh + SAME coil + SAME MatSatIsoTab BH table.  H
 the coil's Biot-Savart H (rad.RadiaField(coil,'h')); yano sees the same coil object in its container.
 KELVIN-LESS (iron-only mesh).
 
-Measured (2026-06-15, NI=8000 A, 270 tets, Msat~1.27e6 A/m): HDiv M_avg [-282 -510558 -330] vs yano
-[-308 -507450 +12] A/m agree to 0.62% (|M| ~ 507 kA/m, ~40% of saturation -- genuinely into the BH
-knee); HDiv converges in 21 damped-Newton iters.
+Measured (2026-06-15, NI=8000 A, 270 tets, Msat~1.27e6 A/m): HDiv (Anderson-Hantila) and yano agree to
+~0.6% on volume-average M (|M| ~ 507 kA/m, ~40% of saturation -- genuinely into the BH knee).  The
+Anderson-Hantila fixed point converges in ~120 outer iters (more than Newton's ~20, but each step is a
+single cheap M_mass^-1-GMRES with no tangent assembly / line search -> within ~2x of yano wall-clock).
 
 The gate locks: HDiv solves the coil-driven NONLINEAR C-type and agrees with yano within 2% (vector),
-bounded Newton iters.  Transitional gate -- retires when yano-type is sealed (M5).
+with a bounded outer-iteration count.  Transitional gate -- retires when yano-type is sealed (M5).
 """
 import math
 import warnings
@@ -89,6 +90,6 @@ def test_ctype_coil_nonlinear_parity():
     rel = float(np.linalg.norm(M_hdiv - M_yano) / (np.linalg.norm(M_yano) + 1e-30))
     assert res["nonlinear"] is True
     assert rel < 0.02, f"C-type HDiv {M_hdiv} vs yano {M_yano} parity rel {rel:.2e}"
-    assert res["iters"] < 30, f"HDiv nonlinear Newton not bounded: {res['iters']} iters"
+    assert res["iters"] < 200, f"HDiv nonlinear Anderson-Hantila outer iters not bounded: {res['iters']}"
     # the drive is genuinely into the nonlinear knee (|M| a large fraction of saturation)
     assert np.linalg.norm(M_yano) > 0.3 * MSAT
