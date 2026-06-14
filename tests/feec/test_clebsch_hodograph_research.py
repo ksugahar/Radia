@@ -501,3 +501,21 @@ def test_hdiv_vim_clebsch_2d_az():
     assert r["div_star"] > 1.0, r              # the gradient field carries the charge
     assert r["recover_err"] < 1e-4, r          # A_z recovered from B
     assert r["clebsch_err"] < 1e-3, r          # rot(A_z_recovered) reproduces B -> A_z IS the Clebsch potential
+
+
+def test_flux_line_closure_symplectic():
+    """The dynamical face of the Clebsch / de Rham structure: a flux line dx/ds = B closes IFF A_z
+    (the Clebsch potential = the flux-line-flow Hamiltonian) is conserved.  Closure needs BOTH (i) a
+    CLOSED 2-form field (div B = 0 -- the de Rham / edge-FE requirement, Noguchi) and (ii) a SYMPLECTIC
+    integrator (A_z-conserving -- accelerator tracking, Sugahara 2020).  Pure-numpy, fast."""
+    import flux_line_closure_symplectic as fl
+    r = fl.analyze(turns=25, steps_per_turn=300)
+    # (1) closed 2-form + symplectic: A_z bounded -> the line closes (returns to the start)
+    assert r["drift_sym"] < 0.1, r
+    assert r["ret_sym"] < 1e-2, r
+    # (2) same 1st order but forward Euler (non-symplectic): A_z drifts, line spirals out
+    assert r["drift_fe"] > 1.0, r
+    assert r["drift_fe"] / r["drift_sym"] > 50.0, r        # the symplecticity is the difference
+    # (3) same integrator but a charged field (not a closed 2-form): no global A_z -> spirals
+    assert r["drift_mix"] > 10.0, r
+    assert r["drift_mix"] / r["drift_sym"] > 100.0, r      # the field must be a closed 2-form

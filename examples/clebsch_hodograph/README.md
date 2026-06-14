@@ -424,6 +424,31 @@ field-null (the 2-D loop–star, matching the 3-D capstone); a gradient field
 the stream-function weak form `∫∇A_z·∇w = ∫B·rot(w)` to `4e-7`, with
 `∇A_z(rec)×ẑ` reproducing `B` to `2e-5` — `A_z` *is* the Clebsch potential.
 
+### `flux_line_closure_symplectic.py` — the dynamical face: flux-line closure
+
+A magnetic flux line is an integral curve of `B`: `dx/ds = B`. In 2-D this is
+**Hamilton's equations with `A_z` as the Hamiltonian** (`ẋ = ∂A_z/∂y`,
+`ẏ = −∂A_z/∂x`), so `A_z` (= the Clebsch potential) is conserved along a flux
+line → flux lines are `A_z` level sets and **close**. Closure has two
+requirements, isolated here:
+
+- **the field must be a closed 2-form** (`div B = 0`): on a closed field the
+  line closes (`A_z` drift `1e-2`, returns to start to `2e-4`); adding a
+  charge/star part `ε∇φ` (div ≠ 0) gives no global `A_z` and the line **spirals**
+  (drift `1.7e3`, `1.6e5×` worse) — *the de Rham / edge-FE requirement: flux
+  lines computed from an edge (`H(curl)`) potential `B = curl A` are exactly
+  divergence-free.*
+- **the integrator must be symplectic** (`A_z`-conserving): same 1st-order
+  forward Euler **spirals out** (drift `26`, `2440×` worse than symplectic) — *the
+  accelerator-tracking requirement.*
+
+`A_z` = the Clebsch potential = the flux-line-flow Hamiltonian is the single
+object behind both the **field** (FEEC/Clebsch) face and the **dynamical**
+(symplectic) face. *Refs: Noguchi, "Flux-line computation from hexahedral
+edge-finite-element results / bubble-system placement", IEEJ (JP); Sugahara
+2020, "Implicit symplectic flux-line tracking" (noting the circular-accelerator
+beam-orbit-tracking analogy).*
+
 ## Design track — accelerator pole (the "iron face = equipotential" lever)
 
 These quantify the design methodology (§3–5 of `DESIGN_METHODOLOGY.md`): the
@@ -573,9 +598,10 @@ python chaplygin_inverse_vonmises_2d.py       # Frontier 2 inverse: von Mises di
 python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inverse, flux (lambda) freed
 python hdiv_vim_clebsch_loopstar.py           # de Rham capstone: HDiv-VIM loop modes ARE Clebsch fields
 python hdiv_vim_clebsch_2d_az.py              # 2-D unification: A_z IS the Clebsch potential
+python flux_line_closure_symplectic.py        # dynamical face: flux-line closure (de Rham + symplectic)
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (24 tests; the nine
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (25 tests; the nine
 heavy FEM rungs — forward+contour, the design loop, the curved chamfer, the
 open-boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
 3-D nonlinear Kelvin merge, the turning-guide hodograph PDE, and the
