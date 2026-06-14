@@ -135,3 +135,29 @@ remaining lift to **retire yano-type in production**:
 | Symmetry models (loops + image demag) | `hdiv_demag_symmetry_image.py` | `test_hdiv_vim_symmetry_{loops,image}.py` |
 
 All under `examples/feec_vim/` and `tests/feec/` (full feec suite: 85 passing).
+
+## 9. Research plan — HCurl-VIM (eddy-current sibling, future direction)
+
+HDiv-VIM above solves the **magnetostatic** demag operator: magnetization in H(div)
+makes the field-null "loop" modes vanish by construction (`ker B`). The analogous
+**eddy-current** problem (vector potential A / curl-curl) is the natural next VIM.
+
+**Motivating negative result.** The eddy-current VIM route taken so far — a
+Newton-kernel volume-Galerkin **Nagamine–Foster–Born series** (the now-deleted
+`radia_vim` prototype, removed 2026-06-14) — is impractical. The obstacle is the
+**Foster-series summation itself**: slow convergence at the wall band and the high-N
+Hankel/QD breakdown in float64 (see [`../../memory`] `foster-convergence-central-obstacle`,
+`cln-high-stage-degrades-below-foster`). An efficient summation would help, but none
+is in hand, so the series route is set aside.
+
+**Hypothesis (planned, not started).** Build an **HCurl-VIM the same way the
+production HDiv-VIM is built** — FEEC, de-Rham-exact, a matrix-free analytic field
+operator (`N = Bᵀ G B` analogue), **not** a Foster/Born series — with the eddy
+current living in NGSolve's H(curl) (Nédélec) space (the curl-conforming space
+natural for the curl-curl / A-formulation). The conjecture is that this sidesteps
+the Foster-summation obstacle the same way HDiv-VIM sidestepped the constant-M loop
+breakdown. **Unverified** — a research direction, not a result.
+
+**Prerequisite / sequencing.** Do HDiv-VIM productionization first
+([PRODUCTIONIZATION.md](PRODUCTIONIZATION.md) M0–M5); the HCurl-VIM reuses the same
+operator / Gram / Newton machinery in the curl-conforming space.
