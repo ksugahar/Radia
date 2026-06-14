@@ -127,7 +127,7 @@ def test_square_torus():
 def _build_racetrack_step(path, length=0.040, radius=0.020, w=0.006, h=0.006):
     """Build a planar racetrack (2 straights + 2 semicircles) via CoilBuilder."""
     sys.path.insert(0, SRC_RADIA)
-    from radia_coil_builder import CoilBuilder
+    from coil_builder import CoilBuilder
     cb = (CoilBuilder(current=1.0)
           .set_start([0, -radius, 0],
                      orientation=np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))

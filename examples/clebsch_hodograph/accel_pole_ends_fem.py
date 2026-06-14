@@ -40,7 +40,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))             # the analyzer
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__)))), "src", "radia"))         # radia_coil_builder
+    os.path.dirname(os.path.abspath(__file__)))), "src", "radia"))         # coil_builder
 
 from accel_pole_ends_3d import integrated_multipoles                       # noqa: E402
 
@@ -188,7 +188,7 @@ def build_mesh(maxh_air=0.05, maxh_iron=0.025, chamfer_depth=0.0, chamfer_len=0.
 def build_coil():
     """Racetrack coil pair (CoilBuilder) -> Radia container.  Biot-Savart only."""
     import radia as rad
-    from radia_coil_builder import CoilBuilder
+    from coil_builder import CoilBuilder
 
     rad.UtiDelAll()
     z_coil = GAP / 2 + COIL_H / 2

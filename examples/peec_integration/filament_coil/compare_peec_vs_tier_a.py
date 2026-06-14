@@ -40,7 +40,7 @@ for p in (SRC, SRC_RADIA):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from radia.radia_coil_builder import CoilBuilder
+from radia.coil_builder import CoilBuilder
 from peec_bundle import build_bundle_solver as _build_bundle_solver_lib
 
 

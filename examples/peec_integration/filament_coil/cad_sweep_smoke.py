@@ -27,7 +27,7 @@ from build123d import Circle, Edge, Plane, Vector, Wire
 
 from radia.coil_profile import CircleProfile
 from radia.coil_profile_occ import coil_from_build123d_sweep
-from radia.radia_coil_builder import CoilBuilder
+from radia.coil_builder import CoilBuilder
 
 MM = 1e-3
 

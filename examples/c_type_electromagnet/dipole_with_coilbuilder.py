@@ -80,7 +80,7 @@ print()
 # ============================================================
 print("Step 1: Define coil with CoilBuilder")
 
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 
 upper_coil = (CoilBuilder(current=COIL_CURRENT)
     .set_start([0, -COIL_STRAIGHT / 2, COIL_Z_CENTER])

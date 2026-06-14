@@ -4371,9 +4371,9 @@ NGSolve → Omega-reduced Omega + Kelvin + Energy-based B-input Play
 
 ## Key Components
 
-### 1. CoilBuilder (radia.radia_coil_builder)
+### 1. CoilBuilder (radia.coil_builder)
 ```python
-from radia.radia_coil_builder import CoilBuilder
+from radia.coil_builder import CoilBuilder
 
 coil = (CoilBuilder(current=10000)
     .set_cross_section(width=15e-3, height=25e-3)

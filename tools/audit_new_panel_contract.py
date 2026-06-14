@@ -257,7 +257,7 @@ def _audit_calc(path: pathlib.Path) -> list[str]:
 # documented.  See same migration policy as LEGACY_CALC_EXEMPT above.
 LEGACY_PANEL_EXEMPT = {
     "radia_gui_base.py",         # the base class itself
-    "radia_coil_builder.py",     # interactive 3D widget panel
+    "coil_builder.py",     # interactive 3D widget panel
     "radia_ngsolve.py",          # legacy / not a panel
     "radia_ih.py",               # custom multi-tab UI predates pattern
     "radia_motor.py",            # tabbed UI, partial migration

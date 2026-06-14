@@ -41,7 +41,7 @@ MU_0 = 4e-7 * math.pi
 class TestCoilBuilderWireSegments:
 
     def test_straight_segment(self):
-        from radia_coil_builder import CoilBuilder
+        from coil_builder import CoilBuilder
         mm = 1e-3
         coil = (CoilBuilder(current=100)
             .set_start([0, 0, 0])
@@ -57,7 +57,7 @@ class TestCoilBuilderWireSegments:
         assert length == pytest.approx(0.1, rel=1e-6)
 
     def test_arc_discretized(self):
-        from radia_coil_builder import CoilBuilder
+        from coil_builder import CoilBuilder
         mm = 1e-3
         coil = (CoilBuilder(current=100)
             .set_start([0, 0, 0])
@@ -67,7 +67,7 @@ class TestCoilBuilderWireSegments:
         assert len(segs) == 10  # 10 sub-segments for one arc
 
     def test_racetrack(self):
-        from radia_coil_builder import CoilBuilder
+        from coil_builder import CoilBuilder
         mm = 1e-3
         coil = (CoilBuilder(current=500)
             .set_start([0, 0, 0])
@@ -88,7 +88,7 @@ class TestCoilBuilderWireSegments:
 class TestCoilRadiaField:
 
     def test_radia_objects_created(self):
-        from radia_coil_builder import CoilBuilder
+        from coil_builder import CoilBuilder
         mm = 1e-3
         rad.UtiDelAll()
         coil = (CoilBuilder(current=1000)
@@ -100,7 +100,7 @@ class TestCoilRadiaField:
 
     def test_radiafield_cf_b(self):
         """RadiaField('b') returns a 3-component CoefficientFunction."""
-        from radia_coil_builder import CoilBuilder
+        from coil_builder import CoilBuilder
         mm = 1e-3
         rad.UtiDelAll()
         coil = (CoilBuilder(current=1000)
@@ -114,7 +114,7 @@ class TestCoilRadiaField:
 
     def test_radiafield_cf_h(self):
         """RadiaField('h') returns H-field CoefficientFunction."""
-        from radia_coil_builder import CoilBuilder
+        from coil_builder import CoilBuilder
         mm = 1e-3
         rad.UtiDelAll()
         coil = (CoilBuilder(current=1000)
@@ -130,7 +130,7 @@ class TestCoilRadiaField:
         """Simple solenoid: B at center should be close to mu_0 * n * I."""
         rad.UtiDelAll()
         # Create a solenoid-like coil (single-turn loop approximated as arc)
-        from radia_coil_builder import CoilBuilder
+        from coil_builder import CoilBuilder
         R = 0.05  # 50mm radius
         coil = (CoilBuilder(current=1000)
             .set_start([R, 0, 0])
@@ -161,7 +161,7 @@ class TestOmegaReducedLinear:
         from netgen.occ import Sphere, Pnt, OCCGeometry
 
         rad.UtiDelAll()
-        from radia_coil_builder import CoilBuilder
+        from coil_builder import CoilBuilder
         R_coil = 0.03
         coil = (CoilBuilder(current=1000)
             .set_start([R_coil, 0, 0])
@@ -228,7 +228,7 @@ class TestAFormulationLinear:
         from netgen.occ import Sphere, Pnt, OCCGeometry
 
         rad.UtiDelAll()
-        from radia_coil_builder import CoilBuilder
+        from coil_builder import CoilBuilder
         coil = (CoilBuilder(current=1000)
             .set_start([0.03, 0, 0])
             .set_cross_section(0.003, 0.003)

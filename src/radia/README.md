@@ -176,7 +176,7 @@ B = B_cf(mesh(0, 0, 0.02))
 
 **See also:** `examples/ngsolve_integration/` for complete examples.
 
-### radia_coil_builder.py
+### coil_builder.py
 
 **Modern fluent interface for constructing complex coil geometries.**
 
@@ -191,7 +191,7 @@ Elegant object-oriented design for multi-segment coil paths with automatic state
 
 **Usage:**
 ```python
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 
 coil = (CoilBuilder(current=1000)
 	.set_start([0, 0, 0])

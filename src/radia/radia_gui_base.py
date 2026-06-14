@@ -63,7 +63,7 @@ panel field (Coil script for EM, STEP for IH) at:
     IH/PEEC   the sibling .step that __main__ writes when this .py
               is run (see bottom of this file)
 
-CoilBuilder API summary (see src/radia/radia_coil_builder.py for full):
+CoilBuilder API summary (see src/radia/coil_builder.py for full):
   .set_start([x, y, z])              -- start position (meters)
   .set_cross_section(width, height)  -- cross-section (meters)
   .add_straight(length)              -- run straight along current direction
@@ -85,11 +85,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 for _up in range(5):
     _candidate = os.path.normpath(
         os.path.join(_HERE, *[".."] * _up, "src", "radia"))
-    if os.path.isfile(os.path.join(_candidate, "radia_coil_builder.py")):
+    if os.path.isfile(os.path.join(_candidate, "coil_builder.py")):
         sys.path.insert(0, _candidate)
         break
 
-from radia_coil_builder import CoilBuilder
+from coil_builder import CoilBuilder
 
 
 def build_coil():
