@@ -2214,6 +2214,41 @@ hadn't, per the lit survey). DEVELOPMENT DIRECTIONS (room for development = YES,
 DISCIPLINE: the exact IABC shell constants (Table 1) come from Sugahara ICEAA 2015 (not in hand), so the
 verified demo for (1)/(2) is deferred until that derivation is incorporated OR re-derived from DtN
 matching -- no shaky example committed. This block is documented analysis, not a numerical result.
+
+TIME-DOMAIN representation of the (IABC-target) exact spherical DtN -- VERIFIED (demo_uu, 2026-06-15;
+user: "I want the time-domain representation of IABC; we'll need Mathematica's power"). Mathematica is not
+installed on this host -> used sympy (symbolic) + scipy (numeric), the same symbolic power, every claim
+numerically asserted. This delivers the TIME-DOMAIN axis of development-direction (1) for the operator
+IABC approximates (the exact sphere DtN); IABC's own shell constants remain deferred (above).
+WHY A CAS: the per-mode exterior DtN symbol Lambda_n(z)=z h_n^{(1)'}(z)/h_n^{(1)}(z), z=kR=omega R/c, is a
+RATIONAL function of z because the spherical Hankel function is a degree-n polynomial x e^{iz}/z^{n+1}:
+  h_n^{(1)}(z) = -i * e^{iz} * z^{-(n+1)} * theta_n(-iz),  theta_n = reverse Bessel polynomial.
+  (The leading constant is -i for EVERY n: the descending-series prefactor (-i)^{n+1} is cancelled by
+   theta_n(-iz)=(-i)^n Q_n(z); (-i)^{n+1} i^n = -i. Verified vs scipy: rel.err 1.5e-15.)
+VERIFIED RESULTS (n=1..6 unless noted, all asserted to the tolerance shown):
+  - POLE-RESIDUE DtN:  Lambda_n(z) = i z - 1 + sum_{j=1..n} z_j/(z - z_j),  z_j = i*roots(theta_n).
+    Matches scipy DtN to 1.9e-15; the z_j are exactly the zeros of h_n^{(1)} (|h_n(z_j)|/|h_n(1)|=5e-16).
+  - THREE INDEPENDENT pole sets agree to 1e-15: sympy roots(theta_n), the scipy spherical-Hankel zeros,
+    and scipy.signal.besselap (the analog BESSEL/THOMSON filter). => the spherical open boundary's poles
+    ARE Bessel-filter poles; the time-domain open boundary is a BESSEL-FILTER NETWORK per mode.
+  - TIME-DOMAIN realization (Grote-Keller form, R=c=1): with g = R d_r u the DtN output,
+        g(t) = -du/dt - u + sum_j psi_j ;   dpsi_j/dt = -i z_j (psi_j + u)   (one local ODE per pole).
+    Reproduces Lambda_n(z) ALGEBRAICALLY for any tone (3.6e-16) and by TRANSIENT integration from rest
+    (solve_ivp, converges to the exact DtN, 9.8e-11). LOCAL in time (ODEs), nonlocal only across the
+    surface harmonic index -- exactly the Grote-Keller exact nonreflecting BC structure.
+  - STABILITY/CAUSALITY: relaxation rates lambda_j = -i z_j = roots(theta_n) = Bessel filter poles, all
+    Re < 0 (worst -1.0) => the auxiliary network decays (passive, causal).
+  - n POLES <-> multipole order n: the DtN datasheet (order = multipole reach) expressed in the TIME
+    DOMAIN; the N-pole truncation is the time-domain analog of the N-shell / N-rung frequency datasheet.
+READING FOR IABC (analysis, consistent with the deferral above): IABC's N nested shells approximate this
+exact N-pole rational DtN, so a "time-domain IABC" is naturally an N-pole Bessel-filter network per mode
+(N auxiliary ODEs); dispersive shell media would be realized by the standard ADE/recursive-convolution
+route. PRIOR ART (cite, do NOT claim): the rational/pole-residue exact sphere DtN and its local-in-time
+auxiliary realization is Grote & Keller (1995) / Hagstrom; reverse-Bessel-polynomial == Bessel/Thomson
+filter poles is classical network synthesis. NEW FRAMING (ours, modest): reading IABC's shells AS this
+pole set + the Kelvin/DtN-datasheet linkage; the verified contribution here is the time-domain CORE
+(pole-residue + Bessel-network + auxiliary ODEs), NOT IABC's exact shell constants. (Background lit
+survey launched to confirm positioning before any manuscript claim.)
 """
 
 
