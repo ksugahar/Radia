@@ -1478,6 +1478,64 @@ Burke-Poggio NEC-2 Part I theory (the classic PUBLIC-DOMAIN Sommerfeld-ground Mo
 memory; SOMNEC/SOMNTX). HOME: pure numpy/scipy in radia-ngsolve examples (open math = public-boundary
 OK); NOT the C++ Radia magnetostatics core unless a strong reason emerges.
 
+SOMMERFELD LAYERED-MEDIA FORMULATION & NUMERICS -- literature precis (2026-06-14 deep-read of NEC-2
+Part I theory [Burke-Poggio], Sautbekov 2020, Koh-Yook 2006, Lai-Greengard-O'Neil 2015, Chew lectures).
+Background for deciding whether/how to build a Sommerfeld capability; also sharpens WHY the static
+Kelvin-FEM isomorphism (demo_x/y) is the BENIGN limit.
+SPECTRAL FORM (Chew): exp(ik0 r)/r = i INT_0^inf (krho/kz) J0(krho rho) exp(i kz|z|) dkrho, kz=
+(k0^2-krho^2)^(1/2), physical sheet Im kz>0 (Sommerfeld identity; 2D plane-wave version = Weyl). LAYERED:
+split source into TE/TM spectra, insert the generalized reflection coefficient R~^{TE/TM}(krho) (per-
+interface recursion) into the integrand. STATIC k0->0: kz->i krho, exp(i kz|z|)->exp(-krho|z|), kernel
+-> Lipschitz-Hankel 1/sqrt(rho^2+z^2)=INT e^{-krho|z|}J0(krho rho)dkrho, R~ -> image factor
+(eps1-eps2)/(eps1+eps2) = EXACTLY demo_y.
+NEC-2 (the user's "NES"/NEC memory; CAVEAT the PDF is a SCANNED image, eqs OCR-reconstructed -- but the
+two integrals match the standard half-space forms): fields = free-space + perfect-image CLOSED forms
+PLUS two numerical Sommerfeld integrals (J0 kernel)
+  U22 = INT_0^inf [e^{-gam2(z+z')}/(gam1+gam2)]            J0(lam rho) lam dlam     (TE-like)
+  V22 = INT_0^inf [e^{-gam2(z+z')}/(k1^2 gam2 + k2^2 gam1)] J0(lam rho) lam dlam     (TM-like)
+gam_j=(lam^2-k_j^2)^(1/2). Three ground models by cost/fidelity: perfect-image (exact, free); Fresnel
+reflection-coefficient image (Rv,Rh; correct only for plane-wave illumination; ~2x); rigorous
+Sommerfeld/Norton (U22/V22 for interaction<1 wavelength, Norton asymptotics beyond; wires only; both
+points air-side). SOMINT/SOMNEC = PRECOMPUTE the smoothed integrals on a grid in (R1, theta=
+atan((z+z')/rho)) after PEELING exp(-jkR1)/R1 and the sin/cos(phi) factors, then bivariate-INTERPOLATE
+at fill time (per eval ~0.06s -> one table ~15s). Reusable structure: peel the closed-form free-space/
+singular part, tabulate ONLY the smooth ground remainder, interpolate.
+THE FOUR NUMERICAL DIFFICULTIES + fixes:
+ (1) BRANCH POINTS krho=+-k_j (kz two-sheeted) + log branch at krho=0 (Hankel). Fix: Sommerfeld
+     Integration Path (SIP) -- real axis but passing ABOVE -k0, BELOW +k0; vertical cuts (NEC); Im kz>0;
+     deform into complex lam to ride exp(-gam2(z+z')) decay; guard the virtual pole crowding +k2 as
+     k1->k2.
+ (2) SURFACE-WAVE / ZENNECK POLES of R~ near the SIP -> detour (+residue if crossed). SUBTLETY
+     (Sautbekov, full-wave): the lossy half-space "surface wave" is a PSEUDO-wave -- the steepest-descent
+     contour never captures the R_par pole, so no independent Zenneck residue; it is a near-grazing
+     transition (Sommerfeld numerical distance p=k0 rho delta^2<1) handled uniformly by erf / parabolic-
+     cylinder (Weber) etalon integrals; a lateral/head wave (total-reflection branch point) decays 1/rho^2.
+ (3) SLOW OSCILLATORY TAIL: J0~ (krho rho)^(-1/2)cos -> only conditionally convergent. NEC: Romberg on
+     ~0.2pi/max(rho,z+z') sub-intervals + Shanks transform; modern standard = Mosig weighted-averages /
+     partition-extrapolation over J0 half-period zeros + analytic tail/quasi-static extraction. Switch
+     kernel by geometry: Bessel J0 when rho<=(z+z')/2, Hankel H0^(2) (exp decay) otherwise (incl. z=z'=0).
+ (4) NEAR-INTERFACE / small-rho near-singularity + per-pair cost. Modern closed-form route = DCIM
+     (discrete complex image method; NOT in the 3 read papers = external knowledge): extract quasi-static
+     + surface-wave terms, fit the remaining spectral kernel by a few COMPLEX EXPONENTIALS in kz (GPOF /
+     matrix-pencil), apply the Sommerfeld identity term-by-term -> CLOSED-FORM spatial complex images
+     (sum exp(ik0 r_i)/r_i, complex r_i). Lai-Greengard-O'Neil alternative: SPLIT G = windowed near-
+     singular LOCAL part (physical-space high-order QBX/Nystrom layer potentials) + smooth remainder via
+     ONE finite-range Sommerfeld correction whose spectral density decays superalgebraically INDEPENDENT
+     of source height (err 1e-10..1e-15). That "physical-space-local + spectral-smooth" split is the SAME
+     instinct as Kelvin-FEM (mesh the near/material part, no Green's function) -- a paper framing.
+VERIFICATION REFERENCES: Koh-Yook exact closed forms (impedance plane), eta->0 (PEC)/eta->inf limits =
+-E1(...) exponential-integral closed forms (clean checks); geometric-optics image = leading asymptotic;
+demo_y slab image-series == static Sommerfeld integral to 1e-16.
+DECISION CONCLUSION: ALL the hard machinery (SIP, branch cuts, Zenneck/pseudo poles, slow tail, DCIM) is
+WAVE-REGIME (k0!=0). The STATIC limit (the SA paper's regime) k0->0 KILLS every one: kz->i krho single-
+valued on krho>0 (no branch points), no propagating poles, EXPONENTIAL (not oscillatory) tail -> the
+static layered Sommerfeld integral is BENIGN and demo_y already nails it to 1e-16. So a STATIC reference
+costs ~nothing (done); a WAVE Sommerfeld capability is a real subproject (SIP + pole tracking + tail
+acceleration + DCIM) worth it ONLY for the radiating/extended-Kelvin paper. PAPER POINT: the century of
+Sommerfeld-integral difficulty is a WAVE phenomenon; the static stratified problem the Kelvin-FEM is
+isomorphic to is its benign limit -- precisely why a sparse real-SPD FEM-Kelvin volume solve can stand
+in for it so cleanly. HOME confirmed: Python/numpy/scipy (open math); NOT the C++ Radia core.
+
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
 sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
