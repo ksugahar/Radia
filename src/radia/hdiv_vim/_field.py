@@ -1011,3 +1011,87 @@ def hex_volume_field_quadratic(verts, r, rho0, grho, Q):
     """Quadratic volume-charge field over a (planar-faced) hex -- the hex analogue of
     tet_volume_field_quadratic.  EXACT for affine hexes; NO 1/4pi."""
     return polytope_volume_field_quadratic(hex_boundary_triangles(verts), r, rho0, grho, Q)
+
+
+# ---------------------------------------------------------------------------------------------------
+# CURVED triangular face surface-charge field (high-order / curved boundary faces).  A curved face has
+# NO closed form, so this uses SINGULARITY SUBTRACTION: the analytic flat-tangent-triangle field (exact,
+# removes the 1/r^2 singularity) + the smooth (curved - flat) remainder by a DUFFY-refined Gauss rule
+# (3 sub-triangles fanned from the projection, each collapse-mapped so the Jacobian kills the residual
+# 1/rho).  Quadrature-refined (NOT closed form): converges to ~1e-6 at nq~16 and is controllable by nq;
+# validated vs a Duffy-refined reference far AND very near the surface.  The flat-triangle limit
+# (zero curvature) reproduces flat_triangle_charge_field.
+# ---------------------------------------------------------------------------------------------------
+def make_t6_surface_map(nodes6):
+    """Build a surf_map(u,v) -> (x, x_u, x_v) for a 6-node quadratic (T6) curved triangle.
+    nodes6 = (6,3): corners (0,0),(1,0),(0,1) then edge mids (0.5,0),(0.5,0.5),(0,0.5)."""
+    X = np.asarray(nodes6, float)
+
+    def surf_map(u, v):
+        L0, L1, L2 = 1.0 - u - v, u, v
+        N = np.array([L0 * (2 * L0 - 1), L1 * (2 * L1 - 1), L2 * (2 * L2 - 1),
+                      4 * L0 * L1, 4 * L1 * L2, 4 * L2 * L0])
+        dNu = np.array([-(4 * L0 - 1), (4 * L1 - 1), 0.0, 4 * (L0 - L1), 4 * L2, -4 * L2])
+        dNv = np.array([-(4 * L0 - 1), 0.0, (4 * L2 - 1), -4 * L1, 4 * L1, 4 * (L0 - L2)])
+        return N @ X, dNu @ X, dNv @ X
+    return surf_map
+
+
+def _project_to_surface(surf_map, r, u=1.0 / 3.0, v=1.0 / 3.0, iters=50):
+    """Reference (u,v) minimising |x(u,v) - r| (Gauss-Newton on the surface)."""
+    r = np.asarray(r, float)
+    for _ in range(iters):
+        x, xu, xv = surf_map(u, v)
+        res = x - r
+        gN = np.array([xu @ res, xv @ res])
+        H = np.array([[xu @ xu, xu @ xv], [xu @ xv, xv @ xv]])
+        du = np.linalg.solve(H + 1e-13 * np.eye(2), -gN)
+        u += du[0]; v += du[1]
+        if np.linalg.norm(du) < 1e-13:
+            break
+    return u, v
+
+
+def curved_triangle_charge_field(surf_map, r, sigma_fn, nq=16):
+    """Field INT_T_curved sigma(x) (r-x)/|r-x|^3 dS (NO 1/4pi) over a CURVED triangular face given by
+    surf_map(u,v) -> (x, x_u, x_v) on the reference triangle {u,v>=0, u+v<=1}.  sigma_fn(x) -> scalar.
+
+    Singularity subtraction: at the surface projection (u0,v0) of r, the flat TANGENT triangle (image of
+    the reference corners under the affine map x0 + x_u(u-u0) + x_v(v-v0)) carries the EXACT 1/r^2
+    singularity -> its field is the analytic flat_triangle_charge_field; the (curved - tangent) remainder
+    is integrated by a Duffy-refined Gauss rule (3 sub-triangles fanned from (u0,v0), each collapse-mapped
+    so the Jacobian ~ s kills the residual 1/rho).  Quadrature-refined: rel err ~1e-6 at nq=16 (raise nq
+    for more).  For an NGSolve curved BND face, build surf_map from GetTrafo (mip.point + the two columns
+    of the Jacobian give x, x_u, x_v); for a T6 patch use make_t6_surface_map.  r = (3,); returns (3,)."""
+    r = np.asarray(r, float)
+    u0, v0 = _project_to_surface(surf_map, r)
+    u0 = max(u0, 0.0); v0 = max(v0, 0.0)                  # clamp into the reference simplex so the
+    if u0 + v0 > 1.0:                                     # 3-subtriangle Duffy fan is a valid partition
+        sc = 1.0 / (u0 + v0); u0 *= sc; v0 *= sc          # (fan from a boundary point still valid;
+    x0, xu0, xv0 = surf_map(u0, v0)                       #  degenerate sub-tris contribute 0)
+    J0 = np.linalg.norm(np.cross(xu0, xv0))
+    s0 = float(sigma_fn(x0))
+    Ttan = np.array([x0 + xu0 * (uc - u0) + xv0 * (vc - v0) for (uc, vc) in [(0, 0), (1, 0), (0, 1)]])
+    flat_part = s0 * flat_triangle_charge_field(Ttan, r)
+    P0 = np.array([u0, v0])
+    corners = [np.array([0.0, 0.0]), np.array([1.0, 0.0]), np.array([0.0, 1.0])]
+    xs, ws = np.polynomial.legendre.leggauss(nq)
+    xs = 0.5 * (xs + 1.0); ws = 0.5 * ws
+    rem = np.zeros(3)
+    for a in range(3):
+        B = corners[a]; C = corners[(a + 1) % 3]
+        area2 = abs((B[0] - P0[0]) * (C[1] - P0[1]) - (B[1] - P0[1]) * (C[0] - P0[0]))  # 2D cross
+        for i in range(nq):
+            for j in range(nq):
+                s, t = xs[i], xs[j]
+                u, v = P0 + s * ((1 - t) * (B - P0) + t * (C - P0))
+                jac = s * area2                                   # Duffy collapse: ~s kills 1/rho
+                x, xu, xv = surf_map(u, v)
+                J = np.linalg.norm(np.cross(xu, xv))
+                d = r - x
+                f = sigma_fn(x) * d / np.linalg.norm(d) ** 3 * J
+                y = x0 + xu0 * (u - u0) + xv0 * (v - v0)          # flat tangent counterpart
+                dy = r - y
+                ff = s0 * dy / np.linalg.norm(dy) ** 3 * J0
+                rem += ws[i] * ws[j] * jac * (f - ff)
+    return flat_part + rem
