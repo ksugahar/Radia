@@ -72,6 +72,11 @@ def topology_opt_applications(topic: str = "all") -> str:
                  the air-gap harmonic-content objective (SPM/Halbach), and a
                  pointer to the shipped stream-function / TSVD / target-field
                  COIL inverse in the `streamfunction` server.
+      "linear_inverse" — the REGULARIZED LINEAR SOLVER behind field_synthesis:
+                 truncated-SVD and Tikhonov filter factors phi=s^2/(s^2+lam^2)
+                 + the L-curve, for the ill-conditioned forward map A x = b
+                 (Sugahara Lab TSVD magnet/coil field-synthesis method),
+                 verified against the SVD pseudo-inverse to ~1e-15.
       "outer_loop" — derivative-free OUTER-LOOP optimizers for the
                  non-closed-form / manufacturable-bounds case: Nelder-Mead
                  direct search + the fminsearchbnd bound-by-transformation
