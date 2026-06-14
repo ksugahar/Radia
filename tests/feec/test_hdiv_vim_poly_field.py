@@ -860,3 +860,98 @@ def test_solve_demag_picard_saturating_sphere(_sphere_solve_mesh):
     assert res["converged"], f"saturating solve not converged ({res['n_iter']} it, res {res['residual']:.1e})"
     Mz = res["M_centroids"][:, 2].mean()
     assert abs(Mz - m) / m < 3e-2, f"saturating Mz {Mz:.4e} vs scalar fixed point {m:.4e}"
+
+
+# ---------------------------------------------------------------------------------------------------
+# Genuine order>=2 path: the element-local L2 projection of point-sampled data onto HDiv(order p) (the
+# robust, IRS-segfault-free path) + the collocation="order_p" nonlinear solve.  Locks:
+#  (1) projection reproduces a degree-p polynomial vector field EXACTLY (HDiv(p) contains [P_p]^3);
+#  (2) order_p reproduces the uniform-M sphere (analytic chi*H/(1+chi/3));
+#  (3) on a non-uniform-M BODY (box, M concentrates near edges) order_p resolves the WITHIN-element M
+#      variation that centroid (order-0) collocation cannot -- the off-collocation self-consistency
+#      residual ||M_of_H(H_ext + H_demag) - M||_gf drops ~4x (measured 26.5% -> 6.5%).
+# ---------------------------------------------------------------------------------------------------
+def _box_tet(n):
+    return MakeStructured3DMesh(hexes=False, nx=n, ny=n, nz=n,
+                                mapping=lambda x, y, z: (x - 0.5, y - 0.5, z - 0.5))
+
+
+def test_project_pointdata_to_hdiv_reproduces_polynomial():
+    """Element-local L2 + HDiv.Set reproduces a degree-p polynomial vector field EXACTLY (no IRS).  This
+    is the order>=2 projection capability the IntegrationRuleSpace path could not deliver (it segfaults)."""
+    from radia.hdiv_vim._field import _project_pointdata_to_hdiv
+    mesh = _box_tet(2)
+    p = 2
+
+    def Mtrue(X):
+        x, y, z = X[:, 0], X[:, 1], X[:, 2]
+        return np.stack([x * x + 2 * y, x * y - z, z * z + x], axis=1)
+
+    with ng.TaskManager():
+        gfH = _project_pointdata_to_hdiv(mesh, Mtrue, p)
+    pts = np.array([[0.1, -0.2, 0.3], [-0.3, 0.15, -0.1], [0.0, 0.0, 0.0], [0.25, 0.25, -0.25]])
+    for q in pts:
+        mp = mesh(q[0], q[1], q[2])
+        got = np.array([float(gfH[c](mp)) for c in range(3)])
+        exp = Mtrue(q.reshape(1, 3))[0]
+        assert np.linalg.norm(got - exp) < 1e-10, f"poly reproduction at {q}: {np.linalg.norm(got-exp):.2e}"
+
+
+@pytest.fixture(scope="module")
+def _sphere_coarse():
+    return _sphere(0.7)          # ~50 tets: order_p assembly is O(N_quad x N_elem), keep it small
+
+
+@pytest.mark.slow
+def test_solve_demag_picard_orderp_sphere(_sphere_coarse):
+    """collocation='order_p' reproduces the uniform-M sphere analytic demag M = chi*H/(1+chi/3) (uniform M
+    -> the per-element polynomial target collapses to the constant; must match the centroid path).  Coarse
+    sphere (~50 tets): the order_p assembly is O(N_quad x N_elem) so keep N_elem small; uniform-M
+    reproduction is robust to the coarse faceting at the 2.5% level."""
+    from radia.hdiv_vim import solve_demag_picard
+    mesh = _sphere_coarse
+    Hext = np.array([0, 0, 1.0e4]); chi = 1.0
+    with ng.TaskManager():
+        res = solve_demag_picard(mesh, lambda H: chi * np.asarray(H), Hext, order=2, tol=1e-6,
+                                 relax=0.5, collocation="order_p")
+    Mz = res["M_centroids"][:, 2].mean()
+    ana = chi * Hext[2] / (1 + chi / 3.0)
+    assert res["converged"], f"order_p sphere did not converge ({res['n_iter']} iters)"
+    assert abs(Mz - ana) / ana < 2.5e-2, f"order_p sphere Mz {Mz:.4e} vs analytic {ana:.4e}"
+
+
+@pytest.mark.slow
+def test_solve_demag_picard_orderp_beats_centroid_on_nonuniform_body():
+    """On a BOX (non-uniform M, concentrates near edges) the order_p solve resolves the within-element M
+    variation centroid collocation cannot.  Metric: the off-collocation self-consistency residual
+    r = ||M_of_H(H_ext + H_demag) - M_gf|| / ||M_of_H(...)|| at the element quad points (NOT the
+    collocation points) -- order_p must be markedly smaller (measured ~4x: 0.265 -> 0.065)."""
+    from radia.hdiv_vim import solve_demag_picard, assemble_demag_field
+    from radia.hdiv_vim._field import _l2_element_quadrature
+    mesh = _box_tet(2)
+    Hext = np.array([0, 0, 1.0e4]); chi = 3.0
+    Mof = lambda H: chi * np.asarray(H)
+
+    def self_consistency(gfM, order):
+        l2 = ng.L2(mesh, order=order)
+        perel = _l2_element_quadrature(mesh, l2, 4)
+        allX = np.vstack([X for (_, _, _, X) in perel])
+        with ng.TaskManager():
+            Hd = assemble_demag_field(mesh, gfM, allX, quantity="h")
+            num = den = 0.0
+            for j, x in enumerate(allX):
+                Mtgt = Mof(Hext + Hd[j]); mp = mesh(x[0], x[1], x[2])
+                Mgf = np.array([float(gfM[c](mp)) for c in range(3)])
+                num += float(np.sum((Mtgt - Mgf) ** 2)); den += float(np.sum(Mtgt ** 2))
+        return np.sqrt(num / den)
+
+    with ng.TaskManager():
+        bc = solve_demag_picard(mesh, Mof, Hext, order=1, tol=1e-6, relax=0.4, max_iter=200)
+        bp = solve_demag_picard(mesh, Mof, Hext, order=2, tol=1e-6, relax=0.4, max_iter=200,
+                                collocation="order_p")
+    assert bc["converged"] and bp["converged"], "box solve did not converge"
+    r_centroid = self_consistency(bc["gfM"], 1)
+    r_orderp = self_consistency(bp["gfM"], 2)
+    assert r_orderp < 0.5 * r_centroid, \
+        f"order_p self-consistency {r_orderp:.3e} not << centroid {r_centroid:.3e} (expected ~4x better)"
+    assert r_orderp < 0.12, f"order_p self-consistency {r_orderp:.3e} too large"
