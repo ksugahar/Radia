@@ -56,7 +56,7 @@ The C++ source lives in `src/ext/axifemm/` and the top-level
 target.  Output is copied to `src/radia/radia_axifemm.pyd` and ships in
 the radia wheel.  Requires NGSolve 6.2.2603+, CMake ≥ 3.16, MSVC.
 
-This `packages/radia-axifemm/` directory is now a **research workspace**
+This `examples/axifemm/research/` directory is now a **research workspace**
 (tests / scripts / demos) — it is not installable as a separate
 package.  The `pyproject.toml`, `CMakeLists.txt`, and `src/` were
 removed when axifemm was absorbed into the radia wheel (2026-05-10

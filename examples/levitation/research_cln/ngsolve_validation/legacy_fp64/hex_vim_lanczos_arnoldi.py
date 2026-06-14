@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from hex_vim_cupy_kassembly import assemble_K_cupy
 from hex_vim_cupy import evaluate_basis
 
-sys.path.insert(0, str(Path("S:/Radia/01_GitHub/packages/radia-vim/src")))
+sys.path.insert(0, str(Path("S:/Radia/01_GitHub/src/ext/radia_vim/src")))
 import radia_vim
 
 

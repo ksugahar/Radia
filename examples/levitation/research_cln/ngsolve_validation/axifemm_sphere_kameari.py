@@ -28,7 +28,7 @@ import mpmath as mp
 mp.mp.dps = 80
 
 sys.path.insert(0,
-    str(Path("S:/Radia/01_GitHub/packages/radia-axifemm/tests")))
+    str(Path("S:/Radia/01_GitHub/examples/axifemm/research/tests")))
 
 import netgen.meshing as ng_meshing
 from netgen.meshing import (

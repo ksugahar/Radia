@@ -18,7 +18,7 @@ from math import pi
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
-sys.path.insert(0, r"S:/Radia/01_GitHub/packages/radia-axifemm/tests")
+sys.path.insert(0, r"S:/Radia/01_GitHub/examples/axifemm/research/tests")
 
 import numpy as np
 import scipy.sparse as sp
