@@ -136,28 +136,43 @@ remaining lift to **retire yano-type in production**:
 
 All under `examples/feec_vim/` and `tests/feec/` (full feec suite: 85 passing).
 
-## 9. Research plan — HCurl-VIM (eddy-current sibling, future direction)
+## 9. Research plan — the eddy-current VIM (future directions)
 
 HDiv-VIM above solves the **magnetostatic** demag operator: magnetization in H(div)
-makes the field-null "loop" modes vanish by construction (`ker B`). The analogous
-**eddy-current** problem (vector potential A / curl-curl) is the natural next VIM.
+splits into charge-carrying modes (which drive demag) and field-null **loop** modes
+(`ker B` — charge-free, divergence-free, zero normal trace). The **eddy-current**
+problem is the natural next VIM, and its unknown is exactly the *solenoidal* part:
+eddy current is divergence-free (`∇·J = 0`), i.e. it lives in the loop space.
 
 **Motivating negative result.** The eddy-current VIM route taken so far — a
-Newton-kernel volume-Galerkin **Nagamine–Foster–Born series** (the now-deleted
-`radia_vim` prototype, removed 2026-06-14) — is impractical. The obstacle is the
-**Foster-series summation itself**: slow convergence at the wall band and the high-N
-Hankel/QD breakdown in float64 (see [`../../memory`] `foster-convergence-central-obstacle`,
+Newton-kernel volume-Galerkin **Nagamine–Foster–Born series** (the `radia_vim`
+prototype, deleted 2026-06-14) — is impractical. The obstacle is the **Foster-series
+summation itself**: slow convergence at the wall band and the high-N Hankel/QD
+breakdown in float64 (see memory `foster-convergence-central-obstacle`,
 `cln-high-stage-degrades-below-foster`). An efficient summation would help, but none
-is in hand, so the series route is set aside.
+is in hand, so the series route is set aside. (An extended-precision "DD" port of the
+hex VIM lives under `examples/levitation/research_cln/ngsolve_validation/dd_*` — a
+separate line attacking the float64 breakdown directly; it is NOT part of the deleted
+engine.)
 
-**Hypothesis (planned, not started).** Build an **HCurl-VIM the same way the
-production HDiv-VIM is built** — FEEC, de-Rham-exact, a matrix-free analytic field
-operator (`N = Bᵀ G B` analogue), **not** a Foster/Born series — with the eddy
-current living in NGSolve's H(curl) (Nédélec) space (the curl-conforming space
-natural for the curl-curl / A-formulation). The conjecture is that this sidesteps
-the Foster-summation obstacle the same way HDiv-VIM sidestepped the constant-M loop
-breakdown. **Unverified** — a research direction, not a result.
+Two **matrix-free, non-series** routes to the same solenoidal eddy-current VIM, both
+built the way the production HDiv-VIM is built (FEEC, de-Rham-exact, analytic field
+operator — the `N = Bᵀ G B` machinery), are **unverified research directions**:
+
+- **(A) HCurl-VIM** — eddy current as `J = curl T` with the current vector potential
+  `T` in NGSolve's H(curl) (Nédélec) space (curl-conforming, natural for curl-curl /
+  the A-formulation). *May be revived* as a sibling to HDiv-VIM.
+- **(B) loop-basis-only VIM** — expand the unknown **directly in the loop subspace
+  `ker B`** (the divergence-free, field-null modes that HDiv-VIM already constructs
+  automatically on any mesh). Since the demag VIM already builds and validates `ker B`
+  (loops field-null to `4e-16`, §1/§5), restricting a VIM to that basis is a small
+  step from the accumulated HDiv-VIM work — it just *uses* what HDiv-VIM discards.
+
+(A) and (B) target the **same** space by the de Rham complex: `ker(div)` in H(div)
+(the loops) **=** `range(curl)` (curls of H(curl) potentials). They are two
+representations of the solenoidal eddy-current VIM; (B) reuses the existing `ker B`
+construction, (A) uses the curl-conforming potential.
 
 **Prerequisite / sequencing.** Do HDiv-VIM productionization first
-([PRODUCTIONIZATION.md](PRODUCTIONIZATION.md) M0–M5); the HCurl-VIM reuses the same
-operator / Gram / Newton machinery in the curl-conforming space.
+([PRODUCTIONIZATION.md](PRODUCTIONIZATION.md) M0–M5); both routes reuse its operator /
+Gram / Newton machinery. All **unverified** — directions, not results.
