@@ -549,6 +549,47 @@ def test_flux_line_realfield_ngsolve():
     assert r["drift_nodal"] > 5.0 * r["drift_closed"], r
 
 
+def test_derham_closure_order_sweep():
+    """Does raising the element ORDER make flux lines close?  No -- the de Rham
+    REPRESENTATION does.  (A) B = curl A is divergence-free for ANY conforming A --
+    edge H(curl) OR nodal [H1]^3 -- at EVERY order (machine zero): div curl = 0 is a de
+    Rham property, not an order property.  The closure-breaker is leaving that
+    representation: nodally SMOOTHING B leaks (decreasing with order but never zero ->
+    'even 2nd order does not close').  (B) on a 2-D solve the de Rham rot(grad A_z) is
+    exactly tangent to the flux surfaces (misalignment 0.0) and closes at every order;
+    the smoothed reconstruction's misalignment / A_z drift fall with order but stay far
+    above de Rham -- it does not close even at 2nd order.  Answers: yes, a de Rham
+    2nd-order field closes (Kameari); de Rham is the closed-2-form precondition for a
+    symplectic/volume-preserving tracker (the Noguchi extension)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.csg")
+    pytest.importorskip("netgen.geom2d")
+    import derham_closure_order_sweep as ds
+    r = ds.analyze(orders=(1, 2, 3))
+    # (A) 3-D: div(curl)=0 at every order for BOTH edge and nodal A; smoothing is the leak.
+    dv = {row[0]: row for row in r["divergence"]["rows"]}
+    for p in (1, 2, 3):
+        _, derham, nodalA, smoothed = dv[p]
+        assert derham < 1e-10, dv[p]                 # de Rham curl div-free at order p
+        assert nodalA < 1e-10, dv[p]                 # nodal-A curl ALSO div-free (not the discriminator)
+        assert smoothed > 1e-6, dv[p]                # smoothing leaks at every order
+        assert smoothed > 1e6 * max(derham, 1e-16), dv[p]
+    sm = [dv[p][3] for p in (1, 2, 3)]
+    assert sm[0] > sm[1] > sm[2], sm                 # leak decreases with order ...
+    assert sm[2] > 1e3 * max(dv[3][1], 1e-16), sm    # ... but never reaches the de Rham floor
+    # (B) 2-D closure: de Rham exactly tangent (closes) at every order; smoothed leaks.
+    cl = {row["order"]: row for row in r["closure"]["rows"]}
+    for p in (1, 2, 3):
+        assert cl[p]["mis_derham"] < 1e-9, cl[p]     # de Rham misalignment ~0 (closed 2-form)
+        assert cl[p]["mis_smoothed"] > 1e-3, cl[p]   # smoothed leaks even at 2nd, 3rd order
+    msm = [cl[p]["mis_smoothed"] for p in (1, 2, 3)]
+    assert msm[0] > msm[1] > msm[2], msm             # falls with order, never to the de Rham floor
+    # at 2nd order the smoothed A_z drift (the tracking-closure signal) >> de Rham.
+    assert cl[2]["drift_smoothed"] > 5.0 * cl[2]["drift_derham"], cl[2]
+    # de Rham closure refines with order (integrator/mesh floor), confirming it closes.
+    assert cl[3]["drift_derham"] < cl[1]["drift_derham"], cl
+
+
 @pytest.mark.slow
 def test_clebsch_3d_closing_condition():
     """The 3-D closing condition = vanishing HELICITY = existence of a global Clebsch pair (Moffatt).
