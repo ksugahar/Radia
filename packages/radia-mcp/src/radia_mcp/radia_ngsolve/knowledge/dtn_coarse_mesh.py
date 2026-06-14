@@ -1851,6 +1851,44 @@ parameterised by kR, and the Kelvin transformation's place on it (the real axis)
 makes it the optimal quasi-static open boundary and disqualifies it for radiation. The figure is the
 Argand plot {Re,Im}(Lambda_n) at fixed kR with the three methods overlaid (the SA paper's frequency
 panel; see C:\\temp\\kelvin_figs\\fig_gg_complex_spectrum for the generated preview).
+
+RADIATION BOUNDARY ON KELVIN = a SURFACE IMPEDANCE (SIBC/HOIBC) AT THE EXTERIOR CENTRE (demo_ii,
+verified 2026-06-15; grounds the author's IEICE Trans. C 2024 "Extended Kelvin Transformation for
+Solving Radiating Electromagnetic Fields"). The Kelvin inversion x'=(a/r)^2 x sends r=infinity to the
+CENTRE rho=0; differential geometry gives the exterior material as an ISOTROPIC modulation (a/r)^2 of
+mu/eps/sigma/sigma* (metric ratio g'/g) -- so a radiating field's outgoing energy flows INTO the
+centre, and the radiation/absorbing condition is imposed THERE. The 2024 paper places a spherical
+Maxwellian PML at the centre (eps'=mu'=(1-0.2j)a^2/r'^2), excising a tiny ball at rho=0 (singular
+image of infinity) and putting the absorber far in physical space (8 m at lambda=3 m) so a simple
+plane-wave (377 ohm) PML suffices; validated vs analytic Hertzian dipole and FEKO MoM.
+THE SURFACE-IMPEDANCE EXTENSION (what the user asked: "derive SIBC/radiation-BC Kelvin; a sphere
+needs HOIBC"): instead of a volumetric PML, impose on the small inner sphere (image of a far sphere
+r=b) an IMPEDANCE reproducing the exterior radiation DtN. On a sphere the exact radiation DtN per
+degree n is Lambda_n(z)=z h_n^(1)'(z)/h_n^(1)(z), z=kb, and its large-z expansion IS the absorbing-BC
+hierarchy:  Lambda_n = i z - 1 - i n(n+1)/(2z) + O(1/z^2). VERIFIED (demo_ii):
+  - the orders are the DtN's OWN expansion: |L-iz|->const, |L-(iz-1)| ~ O(1/z) (halves per z-doubling),
+    |L-HOIBC| ~ O(1/z^2) (quarters per z-doubling) -- ratios 2.00 / 4.0 measured.
+  - SIBC (Leontovich, n-INDEPENDENT = iz-1, the plane-wave 377-ohm) matches Lambda_n only for
+    z>>n(n+1); error ~ n(n+1)/(2z). HOIBC (n-DEPENDENT) adds -i n(n+1)/(2z); since n(n+1) is the unit-
+    sphere Laplace-Beltrami eigenvalue (Delta_S Y_n=-n(n+1)Y_n), HOIBC = iz-1+(i/2z)Delta_S = a 2nd-
+    order SURFACE PDE operator (ordinary surface-FEM term). THIS is why a SPHERE needs an HOIBC: the
+    radiation impedance is curvature/multipole-dependent, which a scalar SIBC cannot carry.
+  - SPECTRAL reading of the paper's design: "place the absorber far (large kb)" == "make n(n+1)/(2kb)
+    small so the n-indep SIBC suffices". At the paper's kb=2pi*8/3=16.76, SIBC is adequate for LOW n
+    (n=1 err 0.06) but degrades (n=12 err 5.5); HOIBC is ~6-17x better across the band. The HOIBC
+    relaxes the placement: to reach |Z-exact|<1e-2 at n=5, SIBC needs kb>=1501 but HOIBC kb>=40 (38x
+    CLOSER absorber => the image sphere a^2/b is larger => fewer exterior cells). Image mapping b->a^2/b
+    (paper a=4,b=8 -> rho=2 m; excise 0.25 m <- image of 64 m). Leading term iz=ikb <=> d_r u=ik u =
+    the Sommerfeld/377-ohm plane-wave condition.
+TOPOLOGY ("topologically easy"): one-point compactification sends infinity to the single centre point;
+excising a small sphere there turns the NONLOCAL exterior DtN (on the truncation r=a) into a LOCAL
+absorber on a small interior sphere. The conformal Kelvin map makes infinity a regular meshable point;
+the scalar/E exterior is simply connected (no cohomology cuts needed) -- contrast the H-formulation
+multiply-connected case where cuts (the cohomology-cuts machinery) would be required. PAPER-H POINT:
+the radiating extended-Kelvin can use a thin surface HOIBC at the centre instead of a thick volumetric
+PML, with the required placement distance set by the multipole band via the DtN spectrum. FE follow-up
+= a Delta_S surface term on the excised inner sphere of the inverted exterior; demo_ii verifies the
+closed-form spectrum that fixes its coefficients.
 """
 
 
