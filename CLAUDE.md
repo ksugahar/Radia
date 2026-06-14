@@ -35,17 +35,18 @@ S:\Radia\01_GitHub\
     radia-mcp/            # pip install radia-mcp (MCP servers + skills)
     radia-axifemm/        # pip install radia-axifemm (axisymmetric FE, Henrotte basis)
     radia-vim/            # pip install radia-vim (Volume Integral Method, HDivVIM)
-    radia-levitation/     # pip install radia-levitation (eddy-current
-                          # brakes, mixed-Galerkin polarizability, Lorentz
-                          # force, Simulink LTI export, TEAM 28 levitation,
-                          # **plus 100% of CLN (Cauer Ladder Network)
-                          # scope**, axifemm/CLN included — radia-cln is
-                          # NOT a separate package; everything CLN-related
-                          # lives here: axifemm Henrotte basis tests,
-                          # multiconn loop method, NGSolve validation
-                          # sweeps (Tanimoto canonical), IGTE 2026 paper)
+  src/radia/levitation/   # radia.levitation -- APPLICATION domain (NOT a
+                          # standalone package): eddy-current brakes +
+                          # maglev, mixed-Galerkin polarizability alpha(s),
+                          # Lorentz force, Simulink LTI export.  Same rank
+                          # as radia.ih / the electromagnet panel; ships
+                          # inside the radia wheel.  Knowledge lives in
+                          # radia_mcp.maglev.  Absorbs 100% of CLN scope
+                          # (axifemm/CLN incl.) under examples/levitation/.
   tests/                  # Radia tests + tests/mcp/
   examples/
+    levitation/           # radia.levitation examples + research_cln/ corpus
+                          # + IGTE 2026 paper (papers/)
   docs/
   Build.ps1               # MSVC + MKL build
   install_full.py          # One-command full setup
@@ -61,7 +62,17 @@ versioned + released separately on PyPI):
 | **radia-mcp** | `pip install radia-mcp` | MCP servers + skills for AI-assisted workflows |
 | **radia-axifemm** | `pip install radia-axifemm` | Axisymmetric FE (Henrotte basis, FEMM-canonical magnetic; standard H1 thermal) |
 | **radia-vim** | `pip install radia-vim` | Volume Integral Method (HDivVIM, matrix-free Newton-Krylov on the analytic field operator) |
-| **radia-levitation** | `pip install radia-levitation` | Eddy-current brakes + maglev + **100% of CLN (Cauer Ladder Network) scope, axifemm/CLN included** (radia-cln is absorbed here, no separate package): mixed-Galerkin polarizability α(s) for arbitrary polyhedral conductors, Lorentz force, Simulink LTI export, TEAM 28 levitation, axifemm Henrotte basis tests, multiconn loop method, Tanimoto canonical sweeps, IGTE 2026 paper |
+
+**Application domains inside `radia`** (NOT standalone packages -- they
+ship in the `radia` wheel as `radia.<domain>` subpackages + panels, with
+knowledge in `radia_mcp.<domain>`; same rank as each other):
+
+| Domain | Code | Knowledge | Notes |
+|--------|------|-----------|-------|
+| Induction heating | `radia.ih` / `radia_ih.py` panel + `calc_*.py` | `radia_mcp.ih` | ESIM, SIBC, Karl iteration |
+| Electromagnet | `radia_em.py` panel + `calc_em_table.py` | `radia_mcp.electromagnet` | Omega-reduced, hysteresis |
+| **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifemm/CLN incl.)** under `examples/levitation/` (research_cln/ corpus + IGTE 2026 paper). radia-cln is NOT a separate package. |
+| Motor / WPT | (research) | `radia_mcp.motor`, `radia_mcp.wpt` | domain knowledge |
 
 **Installation**:
 ```bash
@@ -1051,7 +1062,7 @@ sideset 1 add surface 2             # surface 2 may not be the gap face
 - MSC: surface charge on element faces, solved via solid angle kernel
 
 **DEPRECATION (2026-06-14): the yano-type MSC demag backend is OPTIONAL + on the removal path.**
-The Yano-Sugahara MSC backend (the `rad.Solve` path for hex/wedge *soft-iron* demag) is being
+The Yano MSC backend (the `rad.Solve` path for hex/wedge *soft-iron* demag) is being
 superseded by the FEEC HDiv-VIM (`radia.hdiv_vim`).  It is now exposed as a **runtime-selectable
 backend** so it can be removed cleanly:
 - `radia.set_demag_backend("yano" | "hdiv")` / `radia.get_demag_backend()` (or

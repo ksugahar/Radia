@@ -43,7 +43,6 @@ radia-*/
 !packages/radia-mcp/
 !packages/radia-axifemm/
 !packages/radia-vim/
-!packages/radia-levitation/
 !packages/radia-mmm/
 *.egg-info/
 .eggs/
