@@ -10,7 +10,7 @@ What is demonstrated (all verified below):
   [1] radia.stream_function.aca_tsvd compresses the FORMED DtN M (entry = array lookup; the cheap-
       build path the matrix-construction benchmark justified) -- reproduces M to ~1e-14.
   [2] The SAME solver designs the coil: plain TSVD (min-L2) vs the RIDGE
-      (RegularizedTSVD.from_stiffness, S = the surface current-density seminorm = "電流密度最小化").
+      (RegularizedTSVD.from_stiffness, S = the surface current-density seminorm = "minimize ||K||").
       Both HIT the (iron-system) target; the ridge does so with LOWER current density ||K||.
   [3] An L-curve (alpha sweep) trading field accuracy against current density -- one cached
       factorisation, only the small k x k core re-solved per alpha.
@@ -18,8 +18,8 @@ What is demonstrated (all verified below):
       so the material-aware DtN kernel is what makes the design correct.
 
 The point: with M cheap to build (the benchmark), forming it and handing it to the existing
-ACA+TSVD/ridge stream-function solver is the clean production path (the user's observation:
-"行列がある状態で (ACA+)+TSVD は可能。構築コストが安いなら ACA+TSVD でよい").  ACA+ acts on the
+ACA+TSVD/ridge stream-function solver is the clean production path (the guiding observation:
+with the matrix in hand, (ACA+)+TSVD is possible, and if the build cost is low ACA+TSVD is fine).  ACA+ acts on the
 formed matrix; a randomized-SVD oracle (demo_jj) is the alternative when M is not formed.
 
 Run:  pip install -e packages/radia-mcp ; python demo_kk_streamfunction_ridge_with_dtn.py
