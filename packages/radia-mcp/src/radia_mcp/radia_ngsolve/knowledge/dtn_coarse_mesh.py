@@ -1619,6 +1619,18 @@ route (BEM; needs G; dense; fails for arbitrary mu) vs the transformed sparse-vo
 no G; sparse SPD; arbitrary mu, demo_bb)". They blur at the OUTPUT (shared DtN), stay distinct at the
 GENERATOR.
 
+WHEN to form the DtN matrix at all (demo_dd). For SOLVING one configuration, DON'T -- just solve the
+monolithic sparse Kelvin-FEM (one factor + back-solve). Forming the dense Lambda costs ~N_Gamma back-
+solves (measured ~2.3x one solve at N_Gamma=452, free DoF 6289) + O(N_Gamma^2) storage. If only the RHS
+changes, the monolithic factorization already amortizes (Lambda adds nothing); substructuring reuse
+(FIXED exterior, CHANGING interior matrix) can pay, but in Kelvin the exterior is a cheap thin ball so the
+win is modest. Form Lambda ONLY when the OPERATOR is the DELIVERABLE: (1) its SPECTRUM as a predictive
+datasheet (the paper's real point -- analysis, not a solve); (2) a PORTABLE open-boundary block for a code
+that lacks one; (3) a sparse SURROGATE for the dense layered/Sommerfeld Green operator, e.g. feeding a
+method that genuinely NEEDS that operator (a stream-function/current-potential coil design with magnetic
+material; a BEM/MoM coupling). NEVER claim "form the DtN to solve faster than FEM" (false). demo_u/x/aa
+solve monolithically; demo_v/w/bb/cc form Lambda only to STUDY the operator (spectrum/symmetry/material).
+
 LITERATURE SURVEY (12-agent workflow, 2026-06-15): low-frequency Sommerfeld + layered-Kelvin novelty.
 LOW-FREQUENCY = DEFINITIVE YES (3 adversarial verifiers conf 0.93-0.95, zero counter-evidence). Low-freq
 layered Sommerfeld is mature across 6 subfields: ELF/VLF dipole-over-earth + complex image; CSEM (~0.1-10
