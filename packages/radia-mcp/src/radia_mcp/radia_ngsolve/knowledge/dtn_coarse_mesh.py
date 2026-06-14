@@ -1811,6 +1811,46 @@ truncation could corrupt, which is exactly what air-box / Kelvin sizing controls
 In short: the spectral reframing lifts open-boundary assessment from a per-problem
 EMPIRICAL exercise to a problem-independent OPERATOR DATASHEET -- specify the
 method once, predict any problem from its multipole content.
+
+THE DATASHEET EXTENDED TO FREQUENCY: the COMPLEX-PLANE spectrum (demo_gg, verified 2026-06-15).
+User: "comparing the high-frequency Kelvin spectrum, the PML spectrum and the FEM-BEM spectrum is
+interesting -- and in that case the spectrum becomes a COMPLEX-PLANE spectrum, right?" YES, exactly.
+The same exterior DtN ladder, at FINITE frequency, is the spherical-Hankel log-derivative
+   Lambda_n(kR) = kR h_n^(1)'(kR) / h_n^(1)(kR)   (units 1/R; outgoing/Sommerfeld condition),
+which is COMPLEX -- Im(Lambda_n) = RADIATION (its sign is the e^{-iwt}/h^(1) convention). The
+static limit kR->0 collapses it onto the REAL ladder -(n+1)/R. So ONE Argand plot of {Lambda_n}
+orders every open-boundary method on a single axis, and the (n, kR) plane is read directly:
+  * FEM-BEM   = reproduces the EXACT complex Hankel locus (= the exterior DtN, up to surface
+                discretisation): the gold-standard reference, complex, but DENSE.
+  * KELVIN (static, the SA/magnetostatics tool) = its operator has NO frequency, so its spectrum is
+    PINNED to the REAL axis at -(n+1), frequency-INDEPENDENT. It is the kR->0 operator. Its deviation
+    from the exact complex value is the QUASI-STATIC ERROR. VERIFIED laws (R=1):
+      (i)  kR->0 exactness at fixed n: |Kelvin-exact| -> 0 as O(kR^2)  (n=1: /kR^2 -> 0.999).
+      (ii) evanescent error law for n>>kR:  |Kelvin-exact| * 2n/kR^2 -> 1  (kR=4: 1.39 at n=6 ->
+           1.02 at n=30) -- i.e. the per-mode error is exactly kR^2/(2n) for evanescent modes, plus
+           the full radiation Im for propagating modes n<kR.
+    => Kelvin's PERFORMANCE DOMAIN is the quasi-static spectrum (kR<~1): it is the CHEAPEST (closed
+       form / sparse thin ball, real, NO wavelength to resolve) AND exact there; it is provably
+       radiation-blind otherwise. This is WHY the SA paper is the quasi-static Kelvin paper.
+  * PML = a complex-stretched layer that DOES carry the wave, so it reproduces the exact COMPLEX
+    spectrum: a strong/thick PML matches it at all n (VERIFIED, rel 3e-9 for propagating n), with a
+    characteristic error KNEE at the propagating<->evanescent transition n~kR (VERIFIED: a thin PML's
+    per-degree error PEAKS at n=4 for kR=4). Cost = a resolved layer (DoF grows with kR).
+HONEST CALIBRATION (no false "complementary crossover"): at ANY finite kR a method that carries k^2
+(PML, FEM-BEM, or a Helmholtz/extended-Kelvin) BEATS the static Kelvin operator -- static Kelvin is
+strictly the kR->0 tool, not a finite-kR competitor. So the kR AXIS itself is the two-paper boundary:
+kR<~1 quasi-static = the SA Kelvin paper (Kelvin exact AND cheapest); kR>~1 radiating = the exact
+complex operator (BEM / PML / extended-Kelvin sugahara2025). The genuine "high-frequency KELVIN" is
+the Helmholtz/extended-Kelvin inversion (sugahara2025), whose spectrum WOULD track the exact complex
+locus until the inverted far-field oscillation (the essential singularity at the inversion centre =
+image of r->inf) out-resolves the polynomial FE -- a peel-off, the natural Paper-H follow-up. demo_gg
+verifies the three CLOSED-FORM objects (exact Hankel, static-Kelvin real ladder, PML radial solver)
+that frame it; the spherical-Bessel helpers are checked vs scipy.special.spherical_jn/yn (rel 4e-14).
+PAPER POINT (Track A): the DtN datasheet is not just a real ladder -- it is a COMPLEX locus
+parameterised by kR, and the Kelvin transformation's place on it (the real axis) is precisely what
+makes it the optimal quasi-static open boundary and disqualifies it for radiation. The figure is the
+Argand plot {Re,Im}(Lambda_n) at fixed kR with the three methods overlaid (the SA paper's frequency
+panel; see C:\\temp\\kelvin_figs\\fig_gg_complex_spectrum for the generated preview).
 """
 
 
