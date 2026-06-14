@@ -414,3 +414,19 @@ def test_chaplygin_free_boundary_2d():
     assert rc["free_measure"] < 0.10, rc
     # tapering -> markedly more theta-dependent q-extent = a free boundary.
     assert rt["free_measure"] > 2.0 * rc["free_measure"], (rc, rt)
+
+
+def test_chaplygin_inverse_vonmises_2d():
+    """Frontier 2 inverse: the von Mises (Phi,A) coordinate change DISSOLVES the
+    turning-guide free boundary into a fixed-rectangle solve.  Verified in the
+    linear case: the least-squares solver recovers the exact conformal annular-
+    bend map (f=e^{i(Phi+iA)}) to ~1e-8, residual J->0.  (The nonlinear
+    free-boundary inverse needs slip BCs and is the documented open wall.)"""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_inverse_vonmises_2d as iv
+    r = iv.solve_inverse(order=3, maxh=0.06)
+    assert r["rel_err"] < 1e-6, r                              # recovers conformal map
+    assert r["J"] < 1e-9, r                                    # LS residual -> 0
+    span = r["theta_range_deg"][1] - r["theta_range_deg"][0]
+    assert span > 30.0, r                                      # the field genuinely turns
