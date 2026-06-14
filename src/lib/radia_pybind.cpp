@@ -2652,6 +2652,59 @@ std::vector<double> TetFieldProbe(const std::vector<double>& V, const std::vecto
     rad_hdiv::TetField(Vv, PP, out);
     return {out[0], out[1], out[2]};
 }
+// ---- degree-1/2 polynomial-charge field kernel probes (entry-by-entry validation vs Python) ----
+std::vector<double> TriMoment1Probe(const std::vector<double>& V, const std::vector<double>& r) {
+    double Vv[3][3], rr[3], out[3];
+    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
+    rad_hdiv::TriMoment1(Vv, rr, out);
+    return {out[0], out[1], out[2]};
+}
+std::vector<double> TriMoment2Probe(const std::vector<double>& V, const std::vector<double>& r) {
+    double Vv[3][3], rr[3], out[3][3];
+    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
+    rad_hdiv::TriMoment2(Vv, rr, out);
+    return {out[0][0],out[0][1],out[0][2], out[1][0],out[1][1],out[1][2], out[2][0],out[2][1],out[2][2]};
+}
+std::vector<double> TetMoment1Probe(const std::vector<double>& V, const std::vector<double>& r) {
+    double Vv[4][3], rr[3], out[3];
+    for (int i = 0; i < 3; ++i) rr[i] = r[i];
+    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
+    rad_hdiv::TetMoment1(Vv, rr, out);
+    return {out[0], out[1], out[2]};
+}
+std::vector<double> TetVolFieldLinearProbe(const std::vector<double>& V, const std::vector<double>& r,
+                                           double rho0, const std::vector<double>& g) {
+    double Vv[4][3], rr[3], gg[3], out[3];
+    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; gg[i] = g[i]; }
+    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
+    rad_hdiv::TetVolFieldLinear(Vv, rr, rho0, gg, out);
+    return {out[0], out[1], out[2]};
+}
+std::vector<double> TetVolFieldQuadraticProbe(const std::vector<double>& V, const std::vector<double>& r,
+                                              double rho0, const std::vector<double>& g,
+                                              const std::vector<double>& Q) {
+    double Vv[4][3], rr[3], gg[3], QQ[3][3], out[3];
+    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; gg[i] = g[i]; for (int k=0;k<3;++k) QQ[i][k]=Q[3*i+k]; }
+    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
+    rad_hdiv::TetVolFieldQuadratic(Vv, rr, rho0, gg, QQ, out);
+    return {out[0], out[1], out[2]};
+}
+std::vector<double> LinTriFieldProbe(const std::vector<double>& V, const std::vector<double>& r,
+                                     double sigma0, const std::vector<double>& s) {
+    double Vv[3][3], rr[3], ss[3], out[3];
+    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; ss[i] = s[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
+    rad_hdiv::LinTriField(Vv, rr, sigma0, ss, out);
+    return {out[0], out[1], out[2]};
+}
+std::vector<double> QuadTriFieldProbe(const std::vector<double>& V, const std::vector<double>& r,
+                                      double sigma0, const std::vector<double>& s,
+                                      const std::vector<double>& S) {
+    double Vv[3][3], rr[3], ss[3], SS[3][3], out[3];
+    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; ss[i] = s[i]; for (int k=0;k<3;++k) SS[i][k]=S[3*i+k]; }
+    for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
+    rad_hdiv::QuadTriField(Vv, rr, sigma0, ss, SS, out);
+    return {out[0], out[1], out[2]};
+}
 } // namespace radia_hdivvim
 
 // ============================================================================
@@ -2704,6 +2757,24 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("_hdiv_tet_field", &radia_hdivvim::TetFieldProbe, py::arg("V"), py::arg("P"),
           "Tet volume-charge FIELD INT_tet (P-r')/|P-r'|^3 dV' (V = 12 flat doubles, P = 3) -> 3-vector, "
           "no 1/4pi.  = -grad PhiTet.  Should match radia.hdiv_vim.tet_self_volume_field * 4pi.");
+    m.def("_hdiv_tri_moment1", &radia_hdivvim::TriMoment1Probe, py::arg("V"), py::arg("r"),
+          "Surface first moment INT_T r'/R dS' (V=9, r=3) -> 3-vector.  == triangle_potential_moment.");
+    m.def("_hdiv_tri_moment2", &radia_hdivvim::TriMoment2Probe, py::arg("V"), py::arg("r"),
+          "Surface second moment INT_T r'(x)r'/R dS' (V=9, r=3) -> 9 (row-major 3x3).  == triangle_potential_moment2.");
+    m.def("_hdiv_tet_moment1", &radia_hdivvim::TetMoment1Probe, py::arg("V"), py::arg("r"),
+          "Volume first moment INT_V r'/R dV' (V=12, r=3) -> 3-vector.  == tet_newtonian_moment.");
+    m.def("_hdiv_tet_volfield_linear", &radia_hdivvim::TetVolFieldLinearProbe,
+          py::arg("V"), py::arg("r"), py::arg("rho0"), py::arg("g"),
+          "Linear volume-charge field (V=12, r=3, rho0 scalar, g=3) -> 3-vector.  == tet_volume_field_linear.");
+    m.def("_hdiv_tet_volfield_quadratic", &radia_hdivvim::TetVolFieldQuadraticProbe,
+          py::arg("V"), py::arg("r"), py::arg("rho0"), py::arg("g"), py::arg("Q"),
+          "Quadratic volume-charge field (V=12, r=3, rho0, g=3, Q=9 row-major) -> 3-vector.  == tet_volume_field_quadratic.");
+    m.def("_hdiv_lin_tri_field", &radia_hdivvim::LinTriFieldProbe,
+          py::arg("V"), py::arg("r"), py::arg("sigma0"), py::arg("s"),
+          "Linear surface-charge field (V=9, r=3, sigma0, s=3) -> 3-vector.  == linear_triangle_charge_field.");
+    m.def("_hdiv_quad_tri_field", &radia_hdivvim::QuadTriFieldProbe,
+          py::arg("V"), py::arg("r"), py::arg("sigma0"), py::arg("s"), py::arg("S"),
+          "Quadratic surface-charge field (V=9, r=3, sigma0, s=3, S=9 row-major) -> 3-vector.  == quadratic_triangle_charge_field.");
 
 
     m.def("_hdiv_vim_hmatrix_probe", &radia_hdivvim::HDivVimHMatrixProbe,
