@@ -2129,6 +2129,31 @@ HONEST two-part answer:
   vacuum PML cannot represent. For pure vacuum radiation from a compact source, a plain PML at the
   truncation is simpler and equally accurate -- Kelvin+PML there is over-engineering. (Mechanism is the
   radiating analog of the static demo_t/v/bb exterior-material results.)
+
+KELVIN & PML ARE COMPLEMENTARY (not redundant); does a FANCIER PML help the combination? (demo_ss,
+verified 2026-06-15, a genuine COMBINED Kelvin+PML radial FE = the transformation-optics medium PLUS a
+complex-stretch PML in the near-centre). User: "or if you use a more sophisticated PML, does combining
+with Kelvin give a benefit? there are PML types." Findings (a=1, ka=4):
+ (1) Kelvin's compactified centre (image of r=inf) is where the inverted far-field oscillation piles up
+     (k_eff=k a^2/rho^2 -> inf). Merely EXCISING it + a hard wall (no absorber) is CATASTROPHIC:
+     |DtN-exact| ~ O(1..40) (cavity resonances; rho_e=0.2 -> 41). So the PML is REQUIRED in the Kelvin
+     exterior -- Kelvin and PML are COMPLEMENTARY (the IEICE-2024 design = a PML at the inverted centre),
+     not two redundant routes.
+ (2) a modest STANDARD (polynomial) PML there makes the truncation DtN ~EXACT, with a clear SWEET SPOT
+     in strength: alpha=2..4 -> ~7e-5 (across modes n=1,2,3: 7e-5/6.7e-5/5.6e-5); too weak (alpha=0.5 ->
+     0.1, no absorption) or too STRONG (alpha=20 -> 0.45, the steep near-centre stretch out-resolves the
+     mesh and re-reflects = the classic discretized-PML failure) are both worse -> the PML must be TUNED.
+ (3) a FANCIER profile does NOT help: a k_eff-matched (~1/rho^2, more-concentrated) grading degrades
+     SOONER than a plain polynomial (alpha=8: plain 1.8e-3 vs k_eff-matched 0.70) because it over-
+     stretches exactly where the mesh is coarsest. CFS-PML's real shift targets EVANESCENT waves, but
+     the Kelvin near-centre field is oscillatory (not evanescent), so CFS adds little here either.
+NET (answers the user): combining Kelvin with a PML is NOT redundant -- the PML is REQUIRED to make the
+compactified centre usable (excision alone fails catastrophically). But a SOPHISTICATED PML adds little
+to the COMBINATION over a simple, well-tuned polynomial PML; the Kelvin-specific need is adequate
+strength + near-centre RESOLUTION (to resolve the diverging k_eff), not a clever sigma profile. So "PML
+の工夫" helps a PML in general (smaller residual) but does not create an extra Kelvin-specific synergy
+beyond getting the centre absorbed and resolved. (The combined FE here is also the seed of the single
+monolithic volumetric 3D solve -- medium + PML/HOIBC in one system.)
 """
 
 
