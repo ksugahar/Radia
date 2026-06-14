@@ -685,6 +685,23 @@ def test_chaplygin_design_sweep_linear_cost():
         assert 0.4 * c["w_throat"] < c["knee_Psi"] < 1.2 * c["w_throat"], c
 
 
+def test_chaplygin_inverse_design_sizing():
+    """INVERSE DESIGN at linear cost: spec -> geometry.  Size the throat so the flux
+    regulator CLAMPS at a TARGET flux (the knee), by bisecting the throat depth -- the
+    clamp knee is monotone in depth, so a handful of mesh-free 1-shot quadratures (no
+    Picard, no mesh) hit the target to machine precision.  This is the engineer's actual
+    step (spec -> geometry), not just a forward sweep."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_design_sweep_2d as ds
+    sz = ds.size_for_clamp(12.0e-3)
+    assert sz["rel_err"] < 1e-6, sz                      # hits the target clamp flux
+    assert sz["sizing_seconds"] < 2.0, sz                # sub-second, mesh-free
+    lo, hi = sz["feasible_Psi_range"]
+    assert lo < sz["target_clamp_Psi"] < hi, sz          # target inside feasible range
+    assert 0.0 < sz["sized_w_throat"] < 0.04, sz         # a physical throat width
+
+
 @pytest.mark.slow
 def test_chaplygin_design_sweep_vs_fem():
     """Validate the LINEAR design sweep against the full NONLINEAR FEM Picard loop: the
@@ -701,6 +718,9 @@ def test_chaplygin_design_sweep_vs_fem():
     # the whole map is one quadrature per point; the equivalent FEM is many solves.
     assert cost["one_shot_solves"] == cost["map_points"], cost
     assert cost["fem_equiv_linear_solves"] > 5 * cost["one_shot_solves"], cost
+    # the design loop CLOSES: the inverse-sized design is confirmed by the nonlinear FEM.
+    sf = out["sizing_fem"]["rows"][0]
+    assert sf["rel_err"] < 5e-2, sf
 
 
 def test_chaplygin_turning_design_sweep_linear():
