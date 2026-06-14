@@ -1270,6 +1270,324 @@
           "physics": ""
         }
       ]
+    },
+    "motor_transient": {
+      "script": "calc_motor_transient.py",
+      "function": "run",
+      "ja_name": "モータ過渡解析 (Lange-Henrotte-Hameyer)",
+      "ja_description": "モータ .vol から、非線形 FE + 回路 ODE 連成で過渡応答を解く。PM 回転と Arkkio トルクを含む。radia_motor パネルの 'Transient' モード。",
+      "method": "Nonlinear FE (A-formulation) + circuit ODE co-simulation, PM rotation, Arkkio torque (Lange-Henrotte-Hameyer 2009)",
+      "command_builder": "radia_motor.py:MotorPanel.build_command",
+      "params": [
+        {
+          "cli": "--vol",
+          "name": "vol",
+          "required": true,
+          "help": "Netgen .vol mesh",
+          "ja": ".vol メッシュファイル",
+          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
+        },
+        {
+          "cli": "--method",
+          "name": "method",
+          "default": "linearization",
+          "choices": [
+            "linearization",
+            "coupled"
+          ],
+          "help": "linearization=Lange-HH (default), coupled=fully-coupled ONELAB-style (not yet)"
+        },
+        {
+          "cli": "--fes-order",
+          "name": "fes_order",
+          "type": "int",
+          "default": 1,
+          "ja": "lambda H1 次数",
+          "physics": ""
+        },
+        {
+          "cli": "--linear-solver",
+          "name": "linear_solver",
+          "default": "pardiso",
+          "choices": [
+            "pardiso",
+            "sparsecholesky",
+            "umfpack"
+          ],
+          "help": "FE direct solver. pardiso=MKL (fastest, default); sparsecholesky=ngsolve built-in (no MKL) -- use on machines with a conflicting MKL on PATH (e.g. CST)."
+        },
+        {
+          "cli": "--nbr-phases",
+          "name": "nbr_phases",
+          "type": "int",
+          "default": 3
+        },
+        {
+          "cli": "--n-turns-per-slot",
+          "name": "n_turns_per_slot",
+          "type": "int",
+          "default": 100
+        },
+        {
+          "cli": "--slot-area",
+          "name": "slot_area",
+          "type": "float",
+          "default": 0.0001,
+          "help": "m^2 per slot"
+        },
+        {
+          "cli": "--stack-length",
+          "name": "stack_length",
+          "type": "float",
+          "default": 0.05,
+          "help": "m, axial length"
+        },
+        {
+          "cli": "--n-pole-pairs",
+          "name": "n_pole_pairs",
+          "type": "int",
+          "default": 4
+        },
+        {
+          "cli": "--r-airgap-mid",
+          "name": "r_airgap_mid",
+          "type": "float",
+          "default": 0.05,
+          "help": "m, air-gap mid-radius"
+        },
+        {
+          "cli": "--R-phase",
+          "name": "R_phase",
+          "type": "float",
+          "default": 0.3872,
+          "help": "ohm, per-phase resistance"
+        },
+        {
+          "cli": "--L-endwinding",
+          "name": "L_endwinding",
+          "type": "float",
+          "default": 0.0,
+          "help": "H, lumped end-winding inductance per phase"
+        },
+        {
+          "cli": "--pm-Br-value",
+          "name": "pm_Br_value",
+          "type": "float",
+          "default": 0.0,
+          "help": "T, PM remanence on rotor_pm region (0 = no PMs)"
+        },
+        {
+          "cli": "--J-inertia",
+          "name": "J_inertia",
+          "type": "float",
+          "default": 0.001,
+          "help": "kg.m^2, rotor inertia"
+        },
+        {
+          "cli": "--B-viscous",
+          "name": "B_viscous",
+          "type": "float",
+          "default": 0.0,
+          "help": "N.m.s, viscous damping"
+        },
+        {
+          "cli": "--T-load",
+          "name": "T_load",
+          "type": "float",
+          "default": 0.0,
+          "help": "N.m, mechanical load torque"
+        },
+        {
+          "cli": "--v-amp",
+          "name": "v_amp",
+          "type": "float",
+          "default": 0.0,
+          "help": "V, voltage amplitude"
+        },
+        {
+          "cli": "--v-freq",
+          "name": "v_freq",
+          "type": "float",
+          "default": 0.0,
+          "help": "Hz, voltage frequency"
+        },
+        {
+          "cli": "--theta-init",
+          "name": "theta_init",
+          "type": "float",
+          "default": 0.0
+        },
+        {
+          "cli": "--omega-init",
+          "name": "omega_init",
+          "type": "float",
+          "default": 0.0,
+          "help": "rad/s"
+        },
+        {
+          "cli": "--t-end",
+          "name": "t_end",
+          "type": "float",
+          "default": 0.05,
+          "help": "s, simulation end time"
+        },
+        {
+          "cli": "--dt-FE",
+          "name": "dt_FE",
+          "type": "float",
+          "default": 0.0001,
+          "help": "s, FE refresh interval"
+        },
+        {
+          "cli": "--dt-circ",
+          "name": "dt_circ",
+          "type": "float",
+          "default": 1e-05,
+          "help": "s, circuit ODE step (fine)"
+        },
+        {
+          "cli": "--n-steps-per-FE",
+          "name": "n_steps_per_FE",
+          "type": "int",
+          "default": 10
+        }
+      ]
+    },
+    "motor_lamination": {
+      "script": "calc_motor_lamination.py",
+      "function": "run",
+      "ja_name": "積層鉄心 等価材料 (Hollaus)",
+      "ja_description": "積層鉄心の 1D セル問題で等価材料テーブルを構築し (cell)、それを .vol 上の global FE に適用 (global/full)。radia_motor パネルの 'Lamination' モード。",
+      "method": "Hollaus effective-material homogenization (1D cell problem) + global HCurl FE with the effective-material table",
+      "command_builder": "radia_motor.py:MotorPanel.build_command",
+      "params": [
+        {
+          "cli": "--mode",
+          "name": "mode",
+          "choices": [
+            "cell",
+            "global",
+            "full"
+          ],
+          "default": "cell",
+          "help": "cell=offline cell problem only, global=use existing em-table on .vol, full=cell+global in one run"
+        },
+        {
+          "cli": "--d-iron",
+          "name": "d_iron",
+          "type": "float",
+          "default": 0.00035,
+          "help": "m, lamination iron thickness"
+        },
+        {
+          "cli": "--d-ins",
+          "name": "d_ins",
+          "type": "float",
+          "default": 5e-05,
+          "help": "m, insulation layer thickness"
+        },
+        {
+          "cli": "--sigma",
+          "name": "sigma",
+          "type": "float",
+          "default": 4000000.0,
+          "help": "S/m, iron conductivity",
+          "ja": "導電率",
+          "physics": "材料の電気伝導率。銅: 5.8e7, 鉄: 2e6 [S/m]"
+        },
+        {
+          "cli": "--mu-r-iron",
+          "name": "mu_r_iron",
+          "type": "float",
+          "default": 5000.0,
+          "help": "relative permeability of iron (linear approx)"
+        },
+        {
+          "cli": "--B-list",
+          "name": "B_list",
+          "default": "0.5,1.0,1.5",
+          "help": "comma-separated B amplitudes (T)"
+        },
+        {
+          "cli": "--freq-list",
+          "name": "freq_list",
+          "default": "50,500,5000",
+          "help": "comma-separated frequencies (Hz)"
+        },
+        {
+          "cli": "--cell-n-elements",
+          "name": "cell_n_elements",
+          "type": "int",
+          "default": 100,
+          "help": "resolution of 1D cell problem"
+        },
+        {
+          "cli": "--drive",
+          "name": "drive",
+          "default": "meanB",
+          "choices": [
+            "meanB",
+            "current",
+            "voltage"
+          ],
+          "help": "cell driving: meanB (canonical Hollaus 2024), current (Hanser 2025 J_s), voltage (planned)"
+        },
+        {
+          "cli": "--J-s-iron",
+          "name": "J_s_iron",
+          "type": "float",
+          "default": 0.0,
+          "help": "A/m^2, uniform current density in iron (drive='current' only)"
+        },
+        {
+          "cli": "--vol",
+          "name": "vol",
+          "default": "",
+          "help": "Netgen .vol mesh for global FE",
+          "ja": ".vol メッシュファイル",
+          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
+        },
+        {
+          "cli": "--em-table",
+          "name": "em_table",
+          "default": "",
+          "help": "JSON file with em_table from prior cell run"
+        },
+        {
+          "cli": "--H-amplitude",
+          "name": "H_amplitude",
+          "type": "float",
+          "default": 1000.0,
+          "help": "A/m, peak applied H field"
+        },
+        {
+          "cli": "--freq",
+          "name": "freq",
+          "type": "float",
+          "default": 1000.0,
+          "help": "Hz, operating frequency for global FE"
+        },
+        {
+          "cli": "--fes-order",
+          "name": "fes_order",
+          "type": "int",
+          "default": 2,
+          "help": "HCurl order",
+          "ja": "lambda H1 次数",
+          "physics": ""
+        },
+        {
+          "cli": "--linear-solver",
+          "name": "linear_solver",
+          "default": "pardiso",
+          "choices": [
+            "pardiso",
+            "sparsecholesky",
+            "umfpack"
+          ],
+          "help": "FE direct solver. pardiso=MKL (fastest, default); sparsecholesky=ngsolve built-in (no MKL) -- use on machines with a conflicting MKL on PATH (e.g. CST)."
+        }
+      ]
     }
   }
 }

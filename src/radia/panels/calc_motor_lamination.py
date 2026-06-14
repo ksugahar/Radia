@@ -428,7 +428,7 @@ def solve_global_fe_with_em(vol_file, em_table, H_amplitude, freq,
     }
 
 
-def main():
+def build_argparser():
     parser = argparse.ArgumentParser(
         description="Hollaus Effective Material homogenization for laminated iron")
     parser.add_argument("--mode", choices=["cell", "global", "full"],
@@ -474,6 +474,11 @@ def main():
                         help="FE direct solver. pardiso=MKL (fastest, default); "
                              "sparsecholesky=ngsolve built-in (no MKL) -- use on "
                              "machines with a conflicting MKL on PATH (e.g. CST).")
+    return parser
+
+
+def main():
+    parser = build_argparser()
 
     def run(args):
         global _LINEAR_SOLVER

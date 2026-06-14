@@ -260,7 +260,8 @@ LEGACY_PANEL_EXEMPT = {
     "coil_builder.py",     # interactive 3D widget panel
     "radia_ngsolve.py",          # legacy / not a panel
     "radia_ih.py",               # custom multi-tab UI predates pattern
-    "radia_motor.py",            # tabbed UI, partial migration
+    # radia_motor.py migrated 2026-06-15 to the ModePanel/AnalysisWindow
+    # generator contract (Transient + Lamination sub-panels) -- now audited.
     # radia_*.py NOT in this set MUST follow the canonical pattern.
 }
 
