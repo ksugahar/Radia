@@ -1406,6 +1406,25 @@ inhomogeneous exteriors where the free-space-Green BEM fails." Schur=DtN itself 
 + the -(n+1)/R spectral a-priori + the sparse-Kelvin realization. Cite those as related work, claim the
 combination, not the bare Schur=DtN.
 
+NON-SPHERICAL BODY: DIRECT DtN MATRIX VERIFIED BY SYMMETRY (demo_w, 2026-06-14). The BEM-competitive
+claim is ARBITRARY geometry. The SAME Schur condensation assembles Lambda for a CUBE body. No analytic
+ladder exists for a cube, so verify by the body's OCTAHEDRAL group O_h instead of by a value:
+  l=1 -> T1u                  (stays 3-fold)        = the dipole
+  l=2 -> E_g(2) + T2g(3)      (sphere 5-fold SPLITS 5->2+3) = the quadrupole
+  l=3 -> A2u(1) + T1u(3) + T2u(3).
+MEASURED (cube half-side 0.4; Lambda 389x389 dense, sym 0, built ~1s): dipole 3.357 x3; quadrupole
+4.531 x2 (E_g) + 5.730 x3 (T2g) -> the 2+3 split is an analytic-value-FREE proof that Lambda is the true
+exterior DtN (it carries the body's symmetry). CALIBRATION: same harness on a SPHERE recovers (n+1)/a,
+mult 2n+1. p-CONVERGENCE: cube dipole 3.545 (p2) -> 3.365 (p3) -> 3.342 (p4) = a well-defined operator,
+not a mesh artefact. MATERIAL: an exterior shell mu_s in [0.75,0.9] shifts the cube dipole 3.357 ->
+4.370 (mu_s=10) -> 5.007 (mu_s=50). (Tet-mesh symmetry is imperfect so degeneracies are approximate
+~1-2%; a symmetric mesh would sharpen them.) KEY POSITIONING (refines demo_o's hedge): the BODY surface
+Gamma may be ARBITRARY while the Kelvin INVERSION surface stays a free spherical truncation around it --
+so the one advantage BEM/H-matrix retained over a sphere-able Kelvin truncation (arbitrary Gamma,
+demo_o) is MET HERE by condensing onto the arbitrary body surface; the exterior stays a sphere-able
+Kelvin ball. Net: a sparse, material-aware, BEM-STYLE boundary operator for an arbitrary body, no
+Green's function ever formed -- BEM's arbitrary-Gamma parity PLUS exterior material BEM cannot carry.
+
 "LIGHTEN BEM WITH KELVIN/TRANSFORMED-FE" IS ~30-YEAR-OLD PRIOR ART -- do NOT claim it as new (found
 2026-06-14 in the authors' own literature folder). The proposal that the Kelvin/transformation FE is a
 sparser, cheaper alternative to BEM for open boundaries -- INCLUDING the "more DoF but much faster
