@@ -2020,6 +2020,32 @@ demo_oo's Delta_S SURFACE term, the radiating extended-Kelvin boundary is a genu
 the single monolithic volumetric 3D solve that glues them (condense to the truncation -> complex DtN
 matrix, vs demo_nn's closed form). NGSolve recipe: surface mesh via OCCGeometry(Sphere(R).faces[0]);
 grad(u).Trace() for grad_Gamma; ng.ds for the surface integral; complex=True for the radiating impedance.
+
+IS THERE A PML LOW-FREQUENCY BREAKDOWN IN THE DtN? -- the honest answer + the genuine Kelvin win
+(demo_pp, verified 2026-06-15; user: "Kelvin should perform well; at low freq PML absorption is poor,
+the DtN spectrum should show it; is there DtN research on PML?"). Tested HONESTLY on the converged
+radial exterior DtN and the conventional wisdom needs CORRECTING for this setting:
+ (A) NO DtN-ACCURACY breakdown: a WELL-RESOLVED standard PML (d=1, sigma0=15, M=300) matches the exact
+     Lambda_n(ka) to ~1e-5..1e-4 at EVERY ka in [0.3,8], for a low mode n=1 AND an evanescent mode n=4
+     (evanescent modes DECAY before the absorber wall in the radial-decay/DtN-truncation setting). So
+     "the DtN shows poor low-freq PML absorption" is a MISCONCEPTION here -- the textbook PML
+     low-freq/evanescent breakdown is a WAVEGUIDE / near-field phenomenon (evanescent energy reaching
+     the PML undecayed), not the radial exterior-DtN truncation.
+ (B) the GENUINE low-freq PML cost is CONDITIONING: the stretch s=1+i sigma/k blows up as k->0, so
+     cond(PML interior matrix) GROWS toward DC (n=1, M=300: 2.36e4 at ka=4 -> 2.77e5 at ka=0.05, ~12x),
+     while the Kelvin matrix is FREQUENCY-ROBUST (flat ~5.6-7.3e4); at the lowest ka, PML is ~5x worse-
+     conditioned than Kelvin. (Worse in true 3D FD/FE PML than this idealized 1D model.)
+ (C) so KELVIN's low-freq performance advantage is REAL but precise: at quasi-static the exterior DtN
+     IS the real ladder -(n+1)/R, which Kelvin reproduces EXACTLY, PARAMETER-FREE (no sigma/d/wall),
+     as a REAL-SPD system at k=0, with FREQUENCY-ROBUST conditioning, AND carrying exterior material
+     (demo_t) -- a PML is a wave-absorber MIS-APPLIED to a near-static problem (complex, parameter-
+     laden, conditioning-degrading), even though its continuous DtN would also be accurate. NET (paper):
+     do NOT claim "PML's DtN is inaccurate at low freq" (false here); DO claim Kelvin is the exact /
+     parameter-free / well-conditioned / material-capable open boundary for the quasi-static (SA)
+     regime, while a tuned PML is the better sparse VACUUM absorber for high-freq radiation (demo_nn) --
+     two regimes, one DtN-spectrum yardstick. (Literature on PML-via-DtN exists: Lassas-Somersalo
+     PML-as-DtN; CFS-PML Kuzuoglu-Mittra/Roden-Gedney for the evanescent fix; complex-scaling spectral
+     theory -- a dedicated search is the companion task.)
 """
 
 
