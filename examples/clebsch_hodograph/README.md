@@ -972,8 +972,26 @@ wall**). Verified monotone: at gap fields up to `~3.3 T` the high-r index drops
 edge droops more than the low-r edge). Figure
 `scaling_ffag_pole_2d_saturation.png` (left: `Dk(r)` deepening at the high-r
 edge | right: `|B_gap|(r)` crossing `Bk`). Golden
-`test_scaling_ffag_pole_2d_step2_saturation`. *Step 3 (von Mises / log-chart
-reshape of the pole to restore `k(r)=const` into saturation) is the next rung.*
+`test_scaling_ffag_pole_2d_step2_saturation`.
+
+**Step 3 (reshape, `--step3`):** restore a flat (achromatic) `k(r)` INTO
+saturation by reshaping the pole face. In the log chart the gap correction is a
+polynomial `g(r) = g0 exp(-k u - gamma/2 u^2 - gamma2/6 u^3)` (`u = log r/r0`),
+so the local geometric index `k_geom(u) = k + gamma u + gamma2/2 u^2` has two
+knobs — `gamma` cancels the **tilt** of `k(r)`, `gamma2` the **curvature** (the
+single-valued von Mises / log-chart reshape; cf. the 2-param Newton in
+`clebsch_pole_shape_optimization_2d` that nulls `b3` AND `b5`). A 2-D Newton on
+`(tilt, curv)=0` runs on the **nonlinear (saturated)** solve, so it corrects the
+ACTUAL operating field index. Result at the super-ferric design excitation
+(`B@r0=1.8 T`): the naive pole's saturated `k(r)` varies `ptp ~ 0.089`
+(tilt `+0.084`, curv `+0.039`); **one Newton step** (`gamma,-0.85`,
+`gamma2,+42.9`) nulls both to `~0.002` and flattens the field index **7.2x**
+(`ptp 0.089 -> 0.012`). Figure `scaling_ffag_pole_2d_reshape.png` (left: `k(r)`
+naive vs reshaped vs `k_design` | right: the pole-face shape change). Golden
+`test_scaling_ffag_pole_2d_step3_reshape`. *Together Steps 1-3 are the
+saturation-robust achromatic scaling pole: certify the index (A/phi bracket),
+measure the saturation droop, and reshape it flat — all in the hodograph
+(log/von Mises) chart, single-valued shape optimization.*
 
 ## Run
 
@@ -998,7 +1016,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
-python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 saturation; --fig)
+python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 saturation, --step3 reshape; --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
