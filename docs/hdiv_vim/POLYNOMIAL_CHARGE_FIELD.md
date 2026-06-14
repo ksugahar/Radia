@@ -1,7 +1,11 @@
 # Polynomial-charge field kernel (the order≥2 field)
 
 Status: **Step 1 done** (external field, `reconstruct_field_polynomial`, golden-locked,
-**tetrahedral AND hexahedral**); Steps 2–3 designed, not yet implemented.
+**tetrahedral AND hexahedral**); **the analytic charge-field kernel is done at degree 0, 1, 2 (closed
+form) AND arbitrary degree (general assembler)** — `flat_/linear_/quadratic_triangle_charge_field`,
+`tet_volume_field_linear/quadratic`, and the general `polynomial_triangle_charge_field` /
+`tet_volume_field_polynomial` (validated vs Gauss for cubic/quartic, machine precision; 27 golden tests).
+Step 3 (wiring the fast internal field into the nonlinear `set_field`) and the C++ port remain.
 
 The kernel is **element-type agnostic**: the quadrature points / weights / normals come from NGSolve's
 own `mesh.GetTrafo` + `IntegrationRule(el.type)` + `specialcf.normal`, so the *same* code handles tet
@@ -180,13 +184,35 @@ assembles these — validated vs off-plane Gauss to **machine precision**
 cases. Together with `tet_volume_field_quadratic` this is the **complete degree-2 (quadratic) charge
 field**, exact and closed-form for both terms.
 
-**Remaining Step-2 work:** (a) **cubic+ volume / surface** (same recursion one more degree up — cubic ρ
-needs the volume *second* moment `∫_V r'⊗r'/R dV'`, cubic σ the surface *third* moment); (b) a generic
-arbitrary-degree assembler (the per-degree moments follow a clear pattern — `½∇'²R` for volume, the
-`R^k` Hessian identities for surface); (c)
+## Arbitrary degree (DONE, the general assembler)
+
+The degree-0/1/2 closed forms are fast, hand-derived special cases. The **general assembler**
+(`polynomial_triangle_charge_field`, `tet_volume_field_polynomial`) handles **any polynomial degree**
+via the general moment recursion, and reduces to the closed forms at degree ≤ 2 (verified — two code
+paths agree to machine precision).
+
+**Surface moments** `A_k = ∫_T ξ^⊗k/R`, `B_k = ∫_T ξ^⊗k/R³` (in an in-plane basis) from the master
+recursion `(2+p+k)∫_T ξ^α R^p − p h² ∫_T ξ^α R^{p-2} = ∮ ξ^α(ξ·m) R^p dl`:
+- `A_k = (E⁻¹_k − h² B_k)/(k+1)` with the gradient relation `B_k = A_{k-2}(deriv) − edge`, so **`A_k`
+  comes from `A_{k-2}` + edge integrals alone** — and it is **h-safe** (fold `h² B_k = h²[(a-1)A_{k-2}
+  − edge]`, finite even when `r` lies in a face plane). `triangle_inplane_moments(P, r, degree)`.
+- Edge integrals `∫_edge l^n/R dl` via the `∫u^n/R` reduction formula (any `n`).
+
+**Surface field** = the in-plane/normal split, contracting the charge's in-plane monomial coefficients
+(extracted by sampling at barycentric nodes — exact for a degree-`d` polynomial) with `A_k`, `B_k`, and
+the edge integrals.
+
+**Volume potential moments** `∫_V r'^α/R = 1/(|α|+2)[ −Σ_f h_f ∫_face r'^α/R + Σ_i r_i α_i ∫_V
+r'^{α-e_i}/R ]` (from `1/R = ½∇'²R` + Euler), bottoming at `PhiTet`, reducing to **surface** potentials.
+**Volume field** = the divergence-theorem recursion `Σ_f n_f ∫_face ρ/R − ∫_V (∇ρ)/R`.
+
+Validated vs Gauss to **machine precision** for cubic (surface + volume) and quartic (surface), and
+against the degree-2 closed forms. All pure-Python, no debug-probe runtime dependency.
+
+**Remaining work:** (a)
 **curved faces** (flat-triangle only) — note ngsolve.bem's `LaplaceSL` is curved+triangle but gives the
 **potential**, not the field gradient (`grad G` is a documented ngsolve.bem gap, so it cannot be reused
-here); (d) **hex** internal; (e) a **C++ port** of the moment building blocks + a
+here); (b) **hex** internal; (c) a **C++ port** of the moment building blocks + a
 **charge-coefficient assembly** (sum the kernels weighted by the polynomial charge coeffs from
 `build_charge_gram`'s B, H-matrix accelerated). Then **Step 3** wires the (fast) internal field into the
 nonlinear `set_field`.

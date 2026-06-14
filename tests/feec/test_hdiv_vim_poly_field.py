@@ -37,6 +37,8 @@ from radia.hdiv_vim import (  # noqa: E402
     tet_newtonian_moment,
     tet_volume_field_quadratic,
     quadratic_triangle_charge_field,
+    polynomial_triangle_charge_field,
+    tet_volume_field_polynomial,
 )
 
 
@@ -541,3 +543,87 @@ def test_quadratic_triangle_charge_field_reduces_to_linear():
         a = quadratic_triangle_charge_field(P, r, sigma0, s, np.zeros((3, 3)))
         b = linear_triangle_charge_field(P, r, sigma0, s)
         assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-11, f"S=0 vs linear r={r}"
+
+
+# ---------------------------------------------------------------------------------------------------
+# ARBITRARY-DEGREE general assembler (polynomial_triangle_charge_field / tet_volume_field_polynomial):
+# the general moment recursion.  Validated vs Gauss for cubic charge, and consistent with the degree-2
+# closed forms (two independent code paths agree).
+# ---------------------------------------------------------------------------------------------------
+def _rand_poly(seed, degree):
+    rng = np.random.RandomState(seed)
+    cf = {(ax, ay, k - ax - ay): rng.randn()
+          for k in range(degree + 1) for ax in range(k + 1) for ay in range(k + 1 - ax)}
+    return lambda p: sum(c * p[0] ** ax * p[1] ** ay * p[2] ** az for (ax, ay, az), c in cf.items())
+
+
+def test_polynomial_triangle_charge_field_cubic_vs_gauss():
+    """General surface assembler: cubic sigma == off-plane Gauss to machine precision (near AND far)."""
+    P = _TET[[0, 1, 2]]
+    sig = _rand_poly(3, 3)
+    for r in [[0.3, 0.3, 0.7], [0.3, 0.3, 0.2], [1.5, 0.5, 0.4], [-0.5, 0.4, 0.6]]:
+        r = np.array(r, float)
+        Fc = polynomial_triangle_charge_field(P, r, sig, 3)
+        Fg = _quad_tri_field_gauss_fn(P, r, sig, 52)
+        assert np.linalg.norm(Fc - Fg) / np.linalg.norm(Fg) < 1e-10, f"cubic surface r={r}"
+
+
+def test_polynomial_triangle_charge_field_matches_quadratic():
+    """General assembler at degree 2 == the closed-form quadratic_triangle_charge_field (two paths)."""
+    P = _TET[[0, 1, 2]]
+    s = np.array([0.6, -0.4, 0.3]); sigma0 = 0.5
+    sig = lambda p: sigma0 + np.dot(s, p) + p @ _QSYM @ p
+    for r in [[0.3, 0.3, 0.7], [0.2, 0.2, 0.3], [1.5, 0.5, 0.4]]:
+        r = np.array(r, float)
+        a = polynomial_triangle_charge_field(P, r, sig, 2)
+        b = quadratic_triangle_charge_field(P, r, sigma0, s, _QSYM)
+        assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-11, f"deg2 general vs closed r={r}"
+
+
+def test_tet_volume_field_polynomial_cubic_vs_gauss():
+    """General volume assembler: cubic rho == far tet Gauss to machine precision."""
+    rho = _rand_poly(4, 3)
+    for r in [[2.0, 0, 0], [1.5, 1.5, 1.0], [-1.0, 0.5, 0.5], [0.5, 0.5, 2.5]]:
+        r = np.array(r, float)
+        Fc = tet_volume_field_polynomial(_TET, r, rho, 3)
+        Fg = _vol_field_gauss_fn(_TET, r, rho, 24)
+        assert np.linalg.norm(Fc - Fg) / np.linalg.norm(Fg) < 1e-9, f"cubic volume r={r}"
+
+
+def test_tet_volume_field_polynomial_matches_quadratic():
+    """General volume assembler at degree 2 == the closed-form tet_volume_field_quadratic."""
+    g = np.array([0.7, -0.3, 0.5]); rho0 = 0.4
+    rho = lambda p: rho0 + np.dot(g, p) + p @ _QSYM @ p
+    for r in [[2.0, 0, 0], [0.25, 0.25, 0.25], [-1.0, 0.5, 0.5]]:
+        r = np.array(r, float)
+        a = tet_volume_field_polynomial(_TET, r, rho, 2)
+        b = tet_volume_field_quadratic(_TET, r, rho0, g, _QSYM)
+        assert np.linalg.norm(a - b) / np.linalg.norm(b) < 1e-10, f"deg2 general vs closed r={r}"
+
+
+def _quad_tri_field_gauss_fn(P, r, fn, nq=50):
+    P = np.asarray(P, float); r = np.asarray(r, float)
+    J = np.linalg.norm(np.cross(P[1] - P[0], P[2] - P[0]))
+    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+    F = np.zeros(3)
+    for i in range(nq):
+        for j in range(nq):
+            u, v = xs[i], xs[j]; jac = (1 - u)
+            p = P[0] + u * (P[1] - P[0]) + v * (1 - u) * (P[2] - P[0]); d = r - p
+            F += ws[i] * ws[j] * jac * J * fn(p) * d / np.linalg.norm(d) ** 3
+    return F
+
+
+def _vol_field_gauss_fn(V, r, fn, nq=24):
+    V = np.asarray(V, float); r = np.asarray(r, float)
+    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+    V6 = abs(np.linalg.det(np.array([V[1] - V[0], V[2] - V[0], V[3] - V[0]])))
+    F = np.zeros(3)
+    for i in range(nq):
+        for j in range(nq):
+            for k in range(nq):
+                a, b, cc = xs[i], xs[j], xs[k]
+                l1, l2, l3 = a, b * (1 - a), cc * (1 - a) * (1 - b); jac = (1 - a) ** 2 * (1 - b)
+                p = V[0] + l1 * (V[1] - V[0]) + l2 * (V[2] - V[0]) + l3 * (V[3] - V[0]); d = r - p
+                F += ws[i] * ws[j] * ws[k] * jac * V6 * fn(p) * d / np.linalg.norm(d) ** 3
+    return F
