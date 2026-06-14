@@ -326,7 +326,7 @@ captures this trade-off graphically.
 
 ## Cross-references
 
-- ``radia_mcp.wpt`` -- WPT compensation theory + topology catalog
+- ``radia_mcp.pcb`` -- WPT compensation theory + topology catalog
 - ``radia.panels.calc_inductance`` -- PEEC coil inductance solver
 - ``radia_mcp.peec`` -- PEEC filament-panel architecture
 - Existing skeleton in ``lab_applications_knowledge.APP_WPT`` is the

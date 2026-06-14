@@ -153,7 +153,7 @@ limits from:
    - Reduced power on misalignment
 
 2. **Detection-side**:
-   - Living-object detection (LOD) — see `wpt_fod`
+   - Living-object detection (LOD) — see `pcb_fod`
    - Auto-shutdown on human proximity
 
 ## Special concerns

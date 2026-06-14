@@ -170,7 +170,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "litz-transmission",
             "radia-ngsolve",
             "radia-streamfunction",
-            "wpt",
+            "pcb",
         ],
         "tags": ["application"],
     },
@@ -255,7 +255,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "ih",
             "metamaterial",
             "peec",
-            "wpt",
+            "pcb",
         ],
         "tags": ["application"],
     },
@@ -346,13 +346,13 @@ CATALOG: dict[str, dict[str, Any]] = {
     # ============================================================
     # Domain-specific
     # ============================================================
-    "wpt": {
-        "subpackage": "radia_mcp.wpt",
-        "entry_point": "mcp-server-wpt",
+    "pcb": {
+        "subpackage": "radia_mcp.pcb",
+        "entry_point": "mcp-server-pcb",
         "description": "Wireless Power Transfer: coil + compensation (SS/LCC/"
                        "LCL), efficiency, IEC 61980 / SAE J2954, FOD, dynamic EV / "
                        "robot / bearingless motor, capacitive / microwave / metamaterial",
-        "primary_tools": ["wpt_usage"],
+        "primary_tools": ["pcb_usage"],
         "related": [
             "litz-transmission",
             "maglev",
@@ -376,7 +376,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Metamaterials: homogenization, effective medium, "
                        "periodic structures",
         "primary_tools": ["metamaterial_usage"],
-        "related": ["wpt", "litz-transmission"],
+        "related": ["pcb", "litz-transmission"],
         "tags": ["application"],
     },
     "nmr-mri": {
@@ -398,7 +398,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "IEM<->FEM weak coupling + Cauer Ladder Network MOR "
                        "for control-coupled maglev (Yano, CAE-AI).",
         "primary_tools": ["maglev"],
-        "related": ["motor", "wpt"],
+        "related": ["motor", "pcb"],
         "tags": ["application"],
     },
     # ============================================================

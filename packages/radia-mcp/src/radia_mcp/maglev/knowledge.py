@@ -141,7 +141,7 @@ electrodynamic levitation device).
   topic `cln_mor_control`
 - **Magnetic-wheel EDS** -- Kansai-Univ collaboration (Saiki et al. 2021)
 - **PM axial bearings** -- Sumitomo Heavy lineage (heavy-industrial)
-- **Bearingless motor + WPT** (cross-link `radia_mcp.motor`, `radia_mcp.wpt`)
+- **Bearingless motor + WPT** (cross-link `radia_mcp.motor`, `radia_mcp.pcb`)
 
 ## Levitation FORCE physics (also in this server)
 
