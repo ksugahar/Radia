@@ -802,6 +802,20 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   `clebsch_dipole_design_workflow.png` (the cross-section level set | the width
   knob | the level set carried into 3-D). Goldens `test_clebsch_dipole_workflow_*`
   (design fast, FEM slow).
+- **`clebsch_pole_shape_optimization_2d.py`** — **3-D Clebsch pole-face shape
+  OPTIMIZATION**: null `b3` **and** `b5` together. The pole face is a magnetic-scalar
+  **equipotential = a Clebsch level set**, and the 3-D body pole is its extrusion, so
+  optimizing the 2-D contour optimizes the 3-D pole. A finite flat pole droops at its
+  edges (`B_z = b1 + b3 x² + b5 x⁴ + …`); a **single** quadratic shim has one knob, so
+  it nulls `b3` but **leaves `b5`** (`≈1.1e-4`). A **two-parameter** Clebsch contour
+  `z = g/2 − d2(x/w)² − d4(x/w)⁴`, optimized by a **2-D Newton on `(b3, b5) = 0`** (the
+  harmonics respond near-linearly to the shim coefficients, so the Jacobian solve lands
+  close and one refinement tightens it), nulls **BOTH** leading spurious harmonics
+  simultaneously: `flat 8.3e-4 → 1-shim 1.1e-4 (b5 stuck) → 2-shim 1.8e-6` (a **≈470×
+  cleaner** field), at `d2 = −0.33 mm, d4 = 1.65 mm`. A genuine multi-parameter shape
+  optimization, each eval a 2-D Laplace solve. Figure:
+  `clebsch_pole_shape_optimization_2d.png` (the three contours | the `b3`/`b5` bars).
+  Golden `test_clebsch_pole_shape_optimization_2d`.
 - **`clebsch_dipole_saturation_2d.py`** — **saturation** added to the dipole design,
   at **linear cost**: the level-set workflow above assumed an *unsaturated* iron
   equipotential; at high excitation the iron **saturates** and the gap field stops
@@ -916,6 +930,7 @@ python accel_pole_dipole_body_2d.py           # the BODY lever: pole width + cur
 python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any multipole)
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
+python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
