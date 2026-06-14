@@ -67,17 +67,38 @@ versioned + released separately on PyPI):
 | **cubit-mesh-export** | `pip install cubit-mesh-export` | High-order curved mesh export from Cubit (does NOT require radia) |
 | **radia-mcp** | `pip install radia-mcp` | MCP servers + skills for AI-assisted workflows |
 
-**Core solver methods inside `radia`** (NOT standalone packages -- they
-ship in the `radia` wheel; `radia-mmm` / `radia-axifemm` / `radia-vim` were
-dissolved into radia on 2026-06-14, packages/ now holds only the two genuine
-PyPI packages above):
+### POLICY: Compute Core in `radia`, Applications Outside (2026-06-14)
+
+**POLICY**: The computational **core methods** -- MMM/MSC, axisymmetric FE,
+HDiv-VIM, the DtN / FEM-Kelvin operator, and any future solver/kernel -- live in
+**radia 本体** (the `radia` wheel: `src/core/`, `src/ext/`, `src/radia/`). They are
+**NEVER** spun out as separate `radia-<X>` PyPI packages. The `radia-<X>` name and
+the `radia.<domain>` subpackages are the **application** layer (induction heating,
+electromagnet, levitation, ...), which *consume* the core methods.
+
+Decision rule for new work:
+- a new **solver / numerical method / kernel** -> radia core (`src/core` C++ or
+  `src/radia/<method>` Python, built by `Build.ps1`); never a `packages/radia-<X>`.
+- a new **engineering application** -> a `radia.<domain>` subpackage (+ panels +
+  `radia_mcp.<domain>` knowledge); a deployable `radia-<app>` package only if it
+  genuinely needs an independent PyPI release.
+- The only standalone PyPI packages are the two **tooling** packages above
+  (`cubit-mesh-export`, `radia-mcp`) -- neither is a compute method.
+
+This is why `radia-mmm` / `radia-axifemm` / `radia-vim` were dissolved into radia
+on 2026-06-14 (they were compute methods mis-packaged as `radia-<X>`); `packages/`
+now holds only the two genuine PyPI packages above.
+
+**Core solver methods inside `radia`** (NOT standalone packages -- they ship in the
+`radia` wheel):
 
 | Method | Code (ships in radia wheel) | Examples / Tests |
 |--------|------------------------------|------------------|
 | **MMM / MSC** (collocation demag) | `mmm_core.pyd` + `radia.ObjHexahedron/Tetrahedron/Wedge` (`import radia`; the old `radia_mmm` namespace is gone) | `examples/hantila_solver/`, `examples/smco_magnet_array/` |
 | **Axisymmetric FE** (Henrotte basis) | `radia.radia_axifemm` (`src/radia/radia_axifemm.pyd`) | `examples/axifemm/` (+ `research/`), `tests/axifemm/` |
 | **FEEC HDiv-VIM** (production VIM) | `radia.hdiv_vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) | `examples/feec_vim/` |
-| **Newton-kernel Galerkin VIM** (orphan) | `src/ext/radia_vim/` -- UNBUILT prototype, NOT in Build.ps1, NOT pip-installable; use `radia.hdiv_vim` instead | (standalone CMake only) |
+| **DtN / FEM-Kelvin operator** (compute core) | the FEM-Kelvin sparse generator of the layered (Sommerfeld-type) Green's operator -- a **core** capability, NOT an application. Currently research-stage under `examples/kelvin_transformation/DtN_spectrum/` + `radia_mcp.radia_ngsolve` knowledge (`dtn_coarse_mesh`); promotes into `src/radia/` (like `hdiv_vim` did) when stable. | `examples/kelvin_transformation/DtN_spectrum/`, `packages/radia-mcp/tests/test_dtn_*` |
+| **Newton-kernel Galerkin VIM** (orphan) | `src/ext/radia_vim/` -- UNBUILT prototype, NOT in Build.ps1, NOT pip-installable; a *different* module from `radia.hdiv_vim`. Use `radia.hdiv_vim`. | (standalone CMake only) |
 
 **Application domains inside `radia`** (NOT standalone packages -- they
 ship in the `radia` wheel as `radia.<domain>` subpackages + panels, with
@@ -86,7 +107,7 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 | Domain | Code | Knowledge | Notes |
 |--------|------|-----------|-------|
 | Induction heating | `radia.ih` / `radia_ih.py` panel + `calc_*.py` | `radia_mcp.ih` | ESIM, SIBC, Karl iteration |
-| Electromagnet | `radia_em.py` panel + `calc_em_table.py` | `radia_mcp.electromagnet` | Omega-reduced, hysteresis |
+| Electromagnet | `radia_em.py` panel + `calc_em_table.py` | `radia_mcp.electromagnet` | Omega-reduced, hysteresis; **Clebsch-hodograph pole-face inverse design** (`examples/clebsch_hodograph/`, `docs/clebsch_hodograph/`) is part of this domain |
 | **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifemm/CLN incl.)** under `examples/levitation/` (research_cln/ corpus + IGTE 2026 paper). radia-cln is NOT a separate package. |
 | Motor / WPT | (research) | `radia_mcp.motor`, `radia_mcp.wpt` | domain knowledge |
 
