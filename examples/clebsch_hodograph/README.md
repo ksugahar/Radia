@@ -367,6 +367,45 @@ that is the research frontier, not covered here.
 > (a harmonic-1-form extractor in `ngsolve.comp`) would be the proper place —
 > `radia.cohomology` is structured to be upstreamable.
 
+### `hdiv_vim_clebsch_loopstar.py` — the de Rham capstone: HDiv-VIM loop modes ARE Clebsch fields
+
+The bridge between **this directory's Clebsch line** and the **HDiv-VIM demag
+solver** (`radia.hdiv_vim`, the FEEC `H(div)` element that Radia is migrating
+to). The Hodge / Helmholtz split of a magnetization is
+
+```
+M  =  ∇φ            (+)     ∇α × ∇β
+      "star"                "loop" = Clebsch
+      carries the charge    charge-free → FIELD-NULL in N = BᵀGB
+      pole-forming          flux-guiding (yoke return)
+```
+
+The HDiv-VIM is built so its demag operator `N = BᵀGB` (B = the magnetic-charge
+map `M ↦ (ρ=−div M, σ=M·n)`) annihilates the divergence-free RT modes — *"loop
+modes are field-null by construction"* (de Rham: a curl carries no charge). That
+property **is** the statement that a Clebsch magnetization `∇α×∇β = d(α dβ)` (an
+exact, hence closed, 2-form) makes **no demagnetizing field**. So the Clebsch
+potentials `(α,β)` are the coordinates of the HDiv-VIM kernel: the loop–star
+split *is* the Clebsch–gradient (Hodge) split *is* the pole / flux-guide split.
+
+Verified on a unit sphere (HDiv order 1, exact analytic charge Gram):
+
+| magnetization | form | demag factor `D` | external field |
+|---|---|---|---|
+| **Clebsch** `M=(y,−x,0)` | `∇(½r⊥²)×∇z` | **1.6e-3 ≈ 0** (‖div M‖=1e-14) | **2.4e-4** (≈0) |
+| gradient `M=(x,y,z)` | `∇(½‖r‖²)` | 0.997 | — |
+| uniform `M=(0,0,1)` | `∇z` | 0.333 ✓ (=1/3) | 9.2e-2 (dipole) |
+
+`D_Clebsch / D_gradient = 1.6e-3`; and adding `t·Clebsch` to the uniform star
+changes the external field by **<1.3 % even at t=5** (the residual is the
+faceting `M·n`, → 0 under `mesh.Curve`). Three checks: (1) field-null, (2) no
+stray field, (3) gauge — flux-circulation is invisible from outside.
+
+This is the **linear (kinematic)** level. The nonlinear payoff — the saturable
+HDiv-VIM solve reformulated in Clebsch/hodograph coordinates, where the
+Chaplygin hodograph (`saturation_loop_2d.py` / `chaplygin_hodograph_2d.py`)
+linearises saturation — is the next frontier.
+
 ## Design track — accelerator pole (the "iron face = equipotential" lever)
 
 These quantify the design methodology (§3–5 of `DESIGN_METHODOLOGY.md`): the
@@ -514,9 +553,10 @@ python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function l
 python chaplygin_free_boundary_2d.py          # Frontier 2: the turning-guide free boundary (image)
 python chaplygin_inverse_vonmises_2d.py       # Frontier 2 inverse: von Mises dissolves it (linear)
 python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inverse, flux (lambda) freed
+python hdiv_vim_clebsch_loopstar.py           # de Rham capstone: HDiv-VIM loop modes ARE Clebsch fields
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (22 tests; the nine
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (23 tests; the nine
 heavy FEM rungs — forward+contour, the design loop, the curved chamfer, the
 open-boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
 3-D nonlinear Kelvin merge, the turning-guide hodograph PDE, and the
