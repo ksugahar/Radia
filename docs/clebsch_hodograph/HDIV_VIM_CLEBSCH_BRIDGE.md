@@ -142,3 +142,33 @@ foliated fields). The concrete open questions:
 Per the repository-first policy this note records the *map* — what is connected
 and what is not — so the frontier is dug in the right place rather than
 re-derived.
+
+## References
+
+The Clebsch-potential / flux-line / helicity structure used throughout this note
+is classical; the examples cite:
+
+- **P. Robert**, "Clebsch Potentials and the Visualization of Three-Dimensional
+  Solenoidal Vector Fields," *IEEE Trans. Magn.* **27**(5), Sept. 1991. The
+  foundational reference for this bridge, in the *same differential-forms
+  language*: field intensity `H ∈ Ω¹`, flux density `B ∈ Ω²`, and the **global
+  Clebsch existence as the de Rham question** "*given `β ∈ Ω²` with `dβ = 0`, do
+  (possibly multivalued) `ξ, η` exist with `β = dξ ∧ dη`?*" — obstructed by the
+  **helicity / Hopf invariant** ("tangled flux lines"). Also gives the
+  micromagnetics gyrovector `g = −∇(cosθ)×∇φ` (Clebsch potentials of a
+  magnetization map `R → S²`) and the **stream-function inverse** (current
+  synthesis), i.e. the field ⇄ current de Rham duality.
+- **M. Hirahatake, S. Noguchi, H. Igarashi, H. Yamashita**, "Analytical
+  Calculation of Magnetic Flux Line from Hexahedral **Edge** Finite Element
+  Analysis and its Allocation using the **Bubble System** for Visualization,"
+  *IEEJ Trans.* (pp. 1205–1212). Computes flux lines from edge (`H(curl)`) FE
+  results by solving `dξ/Bξ = dη/Bη = dζ/Bζ` on the normalised hexahedron — the
+  practical edge-FE flux-line method whose closure is exactly the de Rham
+  "closed 2-form" requirement (`B = curl A` is divergence-free by construction).
+- **H. K. Moffatt**, "The degree of knottedness of tangled vortex lines,"
+  *J. Fluid Mech.* **35**, 1969 — helicity = topological linking; the obstruction
+  to a global Clebsch pair.
+- Clebsch / Euler-potential foundations: *Reviews of Plasma Physics* (the
+  flux-coordinate / Euler-potential literature); Bretherton (1970) on the
+  Hamiltonian/Clebsch formulation; Arnold; Dombre et al., *JFM* **167**, 1986
+  (ABC chaos).

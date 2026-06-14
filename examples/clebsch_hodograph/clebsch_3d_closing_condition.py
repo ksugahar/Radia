@@ -17,6 +17,10 @@ so `h = 0`.  Therefore **`h != 0`  =>  NO global Clebsch pair**: the field lines
 linked/knotted and cannot all lie on `alpha = const ∩ beta = const` surfaces -- they
 do not close.  This is the 3-D "closing condition": *flux lines close (lie on flux
 surfaces) iff a global Clebsch pair exists iff the helicity obstruction vanishes.*
+This is exactly P. Robert's de Rham formulation (IEEE Trans. Magn. 27(5), 1991):
+"given B in Omega^2 with dB=0, do (possibly multivalued) alpha,beta exist with
+B = d(alpha) wedge d(beta)?" -- obstructed by the helicity / Hopf invariant.  Full
+references in docs/clebsch_hodograph/HDIV_VIM_CLEBSCH_BRIDGE.md.
 
 Demonstrated on the 3-torus:
   - a Clebsch field `B = grad(alpha) x grad(beta)`  ->  `h ~ 0` (machine), and its
