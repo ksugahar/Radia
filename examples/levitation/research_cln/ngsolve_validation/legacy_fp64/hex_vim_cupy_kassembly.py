@@ -258,7 +258,7 @@ def validate_K(p, a, b, c, n_th=8, n_ph=12, n_rh=8, n_c=4,
                use_gpu=True, atol_rel=1e-6):
     """Compare CuPy K vs C++ assemble_K_bare for given quadrature settings."""
     sys.path.insert(0,
-        str(Path("S:/Radia/01_GitHub/packages/radia-vim/src")))
+        str(Path("S:/Radia/01_GitHub/src/ext/radia_vim/src")))
     import radia_vim
     basis = radia_vim.HDivDivFreeHexBasis(p)
     n_dofs = basis.n_dofs

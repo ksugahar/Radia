@@ -237,7 +237,7 @@ def main():
     print("=" * 72)
 
     sys.path.insert(0,
-        str(Path("S:/Radia/01_GitHub/packages/radia-vim/src")))
+        str(Path("S:/Radia/01_GitHub/src/ext/radia_vim/src")))
     import radia_vim
 
     p = 2  # order=2 (n_dofs=28) for MVP demo

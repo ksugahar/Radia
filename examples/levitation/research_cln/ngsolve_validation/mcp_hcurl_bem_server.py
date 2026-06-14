@@ -147,7 +147,7 @@ async def list_tools() -> list[types.Tool]:
                 "inflated ~80%. For 5x2x1 mm Cu this returns ~19.43 us; true value (4-method "
                 "cross-validated: radia-vim Phase F-4 Spherical Duffy + ELF time-domain + "
                 "ELF Prony + ELF Foster N=3..5) is tau_lead = 10.9-11.6 us. "
-                "Use radia-vim (S:/Radia/01_GitHub/packages/radia-vim) for quantitative work."
+                "Use radia-vim (S:/Radia/01_GitHub/src/ext/radia_vim) for quantitative work."
             ),
             inputSchema={
                 "type": "object",

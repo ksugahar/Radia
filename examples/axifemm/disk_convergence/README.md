@@ -73,7 +73,7 @@ formulation — this is a systematic ~5–6 % gap inherent to P1, not a
 truncation or mesh-resolution error.  To close it to << 0.1 % switch
 to **Q2** quadrilateral elements (`H1Henrotte(mesh, order=2)` with a
 structured quad mesh) — see
-`packages/radia-axifemm/tests/test_hiruma_disk_q2.py` for the Q2
+`examples/axifemm/research/verification/test_hiruma_disk_q2.py` for the Q2
 benchmark on the same disk geometry.
 
 The lesson: P1 Henrotte is the **research-grade reference formulation**

@@ -46,8 +46,8 @@ mp.mp.dps = 50
 
 REPO = Path(__file__).resolve().parents[0]
 BEM_JSON = REPO / "bem_disk_axisym_cauer.json"
-Q2_JSON = Path("S:/Radia/01_GitHub/packages/radia-axifemm/tests/test_hiruma_disk_q2_results.json")
-Q1_JSON = Path("S:/Radia/01_GitHub/packages/radia-axifemm/tests/test_hiruma_disk_q1_results.json")
+Q2_JSON = Path("S:/Radia/01_GitHub/examples/axifemm/research/verification/test_hiruma_disk_q2_results.json")
+Q1_JSON = Path("S:/Radia/01_GitHub/examples/axifemm/research/verification/test_hiruma_disk_q1_results.json")
 
 
 def invert_taylor(c):

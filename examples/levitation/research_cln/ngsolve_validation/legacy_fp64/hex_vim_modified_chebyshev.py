@@ -228,7 +228,7 @@ def qd_pade_cauer(alphas, n_stages):
 
 def main():
     if len(sys.argv) < 2:
-        json_path = (Path("S:/Radia/01_GitHub/packages/radia-vim/scripts")
+        json_path = (Path("S:/Radia/01_GitHub/src/ext/radia_vim/scripts")
                      / "cuboid521_order4_results.json")
     else:
         json_path = Path(sys.argv[1])

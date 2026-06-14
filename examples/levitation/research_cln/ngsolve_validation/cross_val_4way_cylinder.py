@@ -6,10 +6,10 @@ Compares per-stage R_2k, L_{2k+1}, tau_pair from four independent paradigms:
       Source: bem_disk_axisym_cauer.json + bem_disk_axisym_cauer_python_results.json
 
   (B) axihenrotte FE Q2 + Hiruma 3-term  (NGSolve add-on, differential, axisym)
-      Source: S:/.../packages/radia-axifemm/tests/test_hiruma_disk_q2_results.json
+      Source: S:/.../examples/axifemm/research/verification/test_hiruma_disk_q2_results.json
 
   (C) axihenrotte FE Q1 + Hiruma 3-term  (same FE solver, p=1 — convergence check)
-      Source: S:/.../packages/radia-axifemm/tests/test_hiruma_disk_q1_results.json
+      Source: S:/.../examples/axifemm/research/verification/test_hiruma_disk_q1_results.json
 
   (D) NGSolve 3D HCurl + Helmholtz-Hodge + Hiruma 3-term  (full 3D, NOT axisym)
       Source: 2026-05-08-disk_3d_kameari_hiruma_v5_orderphi2_results.json
@@ -41,9 +41,9 @@ SIGMA_CU = 5.8e7
 HERE = Path(__file__).parent
 BEM_JSON = HERE / "bem_disk_axisym_cauer_python_results.json"
 V5_JSON = HERE / "2026-05-08-disk_3d_kameari_hiruma_v5_orderphi2_results.json"
-Q2_JSON = Path("S:/Radia/01_GitHub/packages/radia-axifemm/tests/"
+Q2_JSON = Path("S:/Radia/01_GitHub/examples/axifemm/research/verification/"
                 "test_hiruma_disk_q2_results.json")
-Q1_JSON = Path("S:/Radia/01_GitHub/packages/radia-axifemm/tests/"
+Q1_JSON = Path("S:/Radia/01_GitHub/examples/axifemm/research/verification/"
                 "test_hiruma_disk_q1_results.json")
 
 

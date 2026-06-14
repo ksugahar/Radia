@@ -156,7 +156,7 @@ normalisation-invariant and is the comparison endpoint:
 `axihenrotte p=2` beats `axihenrotte p=1` at every k (closer to the BEM
 Cauer reference). This is **Phase 3-(3) cross-validation**, executed
 2026-05-06; the test lives at
-[`tests/test_3way_cauer_cross_validation.py`](../../packages/radia-axifemm/tests/test_3way_cauer_cross_validation.py).
+[`tests/test_3way_cauer_cross_validation.py`](../../examples/axifemm/research/verification/test_3way_cauer_cross_validation.py).
 
 The high-mode (k ≥ 4) divergence is the expected combined effect of FE
 discretisation error at higher modes and the numerical conditioning of the
@@ -170,8 +170,8 @@ arithmetic, which we have not implemented here).
 Within the FE side, `R_{2k}` and `L_{2k+1}` are directly comparable
 between order=1 and order=2 because both use the same Foster-amplitude
 normalisation (the same RHS vector `b`). The values are recorded in the
-JSON results files [`tests/test_hiruma_disk_q1_results.json`](../../packages/radia-axifemm/tests/test_hiruma_disk_q1_results.json)
-and [`tests/test_hiruma_disk_q2_results.json`](../../packages/radia-axifemm/tests/test_hiruma_disk_q2_results.json)
+JSON results files [`tests/test_hiruma_disk_q1_results.json`](../../examples/axifemm/research/verification/test_hiruma_disk_q1_results.json)
+and [`tests/test_hiruma_disk_q2_results.json`](../../examples/axifemm/research/verification/test_hiruma_disk_q2_results.json)
 under the keys `"R_2k"` and `"L_2k_plus_1"` for each stage.
 
 [^Nagamine2026]: H. Nagamine, T. Yamaguchi, K. Sugahara, S. Hiruma, T.
@@ -239,7 +239,7 @@ M_sigma_phi[i,j] = σ / (4 π) · ∫ m_i · m_j / s ds dz
 The original `derive_quad_q2_henrotte.wls` shipped with a coefficient-of-W
 convention that was 2× too small for `K` and 2π× too small for `M`; this was
 diagnosed and corrected during Phase A2 (commit
-[077e7b03](../../packages/radia-axifemm/)). Anyone re-deriving the wls
+[077e7b03](../../examples/axifemm/research/)). Anyone re-deriving the wls
 script must keep the Hessian convention.
 
 ## Cross-validation references (per-element, machine precision)
@@ -248,7 +248,7 @@ script must keep the Hessian convention.
   τ₁ = 223.06 µs on the Cu disk (matches BEM v3 to 0.55 %).
 * `axifemm/axifemm_quad_q2.py` — Python `p=2` Gauss-8×8 prototype; agrees
   with the Mathematica closed form to ~ 3.4 × 10⁻⁸ relative.
-* `packages/radia-axifemm/scripts/validate_q2_codegen.py` — runs both at the
+* `examples/axifemm/research/validate_q2_codegen.py` — runs both at the
   per-entry level after every `derive_quad_q2_henrotte.wls` re-run.
 
 ## File layout (post-2026-05-10 Path A integration)
@@ -278,7 +278,7 @@ examples/axifemm/                         # research-tier examples
   disk_convergence/                       # Cu disk τ_1 vs BEM-Foster ref
   nmr_validation/                         # FEMM NMR axisymmetric reproduction
 
-packages/radia-axifemm/                   # research workspace (no longer
+examples/axifemm/research/                   # research workspace (no longer
   tests/                                  # installable; pyproject removed)
   scripts/                                #   research scripts: BEM Cauer cross-
   demos/                                  #   validation, breakdown studies, etc.
@@ -294,7 +294,7 @@ mathematical derivation behind the C++ source.
 The Mathematica derivation lives upstream at
 `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifemm/`
 (`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
-Re-run `packages/radia-axifemm/scripts/codegen_q2_henrotte.py` if the
+Re-run `examples/axifemm/research/codegen_q2_henrotte.py` if the
 JSON changes — the regenerated `q2_henrotte_generated.hpp` should be
 copied into `src/ext/axifemm/`.
 

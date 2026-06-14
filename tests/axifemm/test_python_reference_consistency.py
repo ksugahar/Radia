@@ -4,7 +4,7 @@ pure-Python reference implementation in `_reference_python/`.
 The pure-Python prototype (axifemm_core.py: P1 triangle, axifemm_quad.py:
 Q1 quad, axifemm_quad_q2.py: Q2 quad) is the Henrotte/Meeker formulation
 ported directly from FEMM's prob3big.cpp StaticAxisymmetric().  The C++
-side under packages/radia-axifemm/src/ ships the same formulation as an
+side under src/ext/axifemm/ ships the same formulation as an
 NGSolve FESpace (AxiHenrotteFESpace) with assembly bilinear-form
 integrators (AxiHenrotteStiffnessBFI / AxiHenrotteSigmaMassBFI).
 

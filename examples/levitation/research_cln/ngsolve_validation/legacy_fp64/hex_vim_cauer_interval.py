@@ -189,7 +189,7 @@ def main():
         print("Usage: python hex_vim_cauer_interval.py <foster.json> "
               "[eps_rel=1e-14] [width_warn=1e-2]")
         # Default test: run on cuboid 5x2x1 order=5 results
-        json_path = (Path("S:/Radia/01_GitHub/packages/radia-vim/scripts")
+        json_path = (Path("S:/Radia/01_GitHub/src/ext/radia_vim/scripts")
                      / "cuboid521_order4_results.json")
         if not json_path.exists():
             print(f"Default JSON not found: {json_path}")

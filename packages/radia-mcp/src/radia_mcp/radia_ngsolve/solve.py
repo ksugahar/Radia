@@ -1943,7 +1943,7 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
 
     Validated: static limit (sigma=0) agrees with solve_axi_magnetostatic;
     time-harmonic via Cu-disk eddy eigenvalue tau_1 = 224.31 us, 0.27 % gap to
-    BEM-Foster (see packages/radia-axifemm/tests/test_disk_eigenvalue.py).
+    BEM-Foster (see examples/axifemm/research/verification/test_disk_eigenvalue.py).
     """
     from radia.radia_axifemm import H1Henrotte
     r = x
