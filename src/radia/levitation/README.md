@@ -1,4 +1,10 @@
-# radia-levitation
+# radia.levitation
+
+`radia.levitation` is the magnetic-levitation / eddy-current-brake
+application module of **radia** (an application domain like `radia.ih`
+(induction heating) or the electromagnet panel -- NOT a separately
+released PyPI package; it ships inside the `radia` wheel and the
+knowledge lives in the `radia_mcp.maglev` MCP subpackage).
 
 Mixed Galerkin CLN-SIBC framework for magnetic levitation and eddy-current
 brake analysis.  Given an arbitrary conductor geometry (`.vol` mesh or
@@ -24,16 +30,16 @@ for the derivation.
 
 | Module | Purpose |
 |--------|---------|
-| `radia_levitation.mixed_galerkin.alpha` | Bulk Foster spectrum (NGSolve eigsh) + W(alpha) edge + Schur composition -> alpha(s) for any .vol |
-| `radia_levitation.mixed_galerkin.cad_edges` | IGA-style CAD-direct edge extraction (12 edges exact for cuboid, mesh-independent) |
-| `radia_levitation.ecb.lorentz` | F = integral J x B dV via Foster reconstruction, drag + lift on PM/coil source |
-| `radia_levitation.ecb.plate_response` | alpha(s) frequency sweep + drag/lift crossover identification for plate ECB design |
-| `radia_levitation.simulink.export` | State-space (A, B, C, D) export to MATLAB .mat + helper .m for Simulink LTI block |
+| `radia.levitation.mixed_galerkin.alpha` | Bulk Foster spectrum (NGSolve eigsh) + W(alpha) edge + Schur composition -> alpha(s) for any .vol |
+| `radia.levitation.mixed_galerkin.cad_edges` | IGA-style CAD-direct edge extraction (12 edges exact for cuboid, mesh-independent) |
+| `radia.levitation.ecb.lorentz` | F = integral J x B dV via Foster reconstruction, drag + lift on PM/coil source |
+| `radia.levitation.ecb.plate_response` | alpha(s) frequency sweep + drag/lift crossover identification for plate ECB design |
+| `radia.levitation.simulink.export` | State-space (A, B, C, D) export to MATLAB .mat + helper .m for Simulink LTI block |
 
 ## Quick start
 
 ```python
-from radia_levitation.mixed_galerkin import alpha
+from radia.levitation.mixed_galerkin import alpha
 from ngsolve import Mesh
 
 mesh = Mesh("conductor.vol")
@@ -52,36 +58,36 @@ print(f"alpha(1 kHz) / V = {a/V:.4f}")
 
 ## Examples
 
-Curated, runnable demonstrations live under `examples/` (the broad
-research corpus is in `research/`, see below):
+Curated, runnable demonstrations live under `examples/levitation/` (the broad
+research corpus is in `examples/levitation/research_cln/`, see below):
 
 | Example | Script |
 |---------|--------|
-| Single cube alpha(s) sweep (CAD-direct + mesh-derived) | `examples/cube_alpha_sweep.py` |
-| Sphere induced-dipole levitation force vs frequency | `examples/sphere/levitation_sphere_force.py` |
-| Coil-driven sphere eddy force | `examples/sphere/coil_sphere_eddy_force.py` |
-| Coil + sphere equilibrium height | `examples/sphere/coil_levitation_equilibrium.py` |
-| Ellipsoid demag / alpha tensor (axisym + 3D HCurl) | `examples/ellipsoid/ellipsoid_alpha_tensor.py` |
-| 3D cuboid CLN-SIBC standalone demo | `examples/cuboid/cln_sibc_cuboid_3d.py` |
-| TEAM 28 electrodynamic levitation (CLN force / sweep) | `examples/team28/team28_cln_force.py` |
+| Single cube alpha(s) sweep (CAD-direct + mesh-derived) | `examples/levitation/cube_alpha_sweep.py` |
+| Sphere induced-dipole levitation force vs frequency | `examples/levitation/sphere/levitation_sphere_force.py` |
+| Coil-driven sphere eddy force | `examples/levitation/sphere/coil_sphere_eddy_force.py` |
+| Coil + sphere equilibrium height | `examples/levitation/sphere/coil_levitation_equilibrium.py` |
+| Ellipsoid demag / alpha tensor (axisym + 3D HCurl) | `examples/levitation/ellipsoid/ellipsoid_alpha_tensor.py` |
+| 3D cuboid CLN-SIBC standalone demo | `examples/levitation/cuboid/cln_sibc_cuboid_3d.py` |
+| TEAM 28 electrodynamic levitation (CLN force / sweep) | `examples/levitation/team28/team28_cln_force.py` |
 
-## Research corpus (`research/`)
+## Research corpus (`examples/levitation/research_cln/`)
 
-`research/cln/` holds the absorbed radia-cln research corpus — the raw
+`examples/levitation/research_cln/` holds the absorbed radia-cln research corpus — the raw
 verification sweeps, Mathematica derivations, and iteration history that
 back the theory but are **not** README-backed package examples (per the
 lab Sample Promotion Ladder: tests -> examples -> panels).  Contents:
 
 | Subdir | What |
 |--------|------|
-| `research/cln/ngsolve_validation/` | NGSolve FEM verification sweeps (dated `*_results.json` snapshots, one-off probe scripts) |
-| `research/cln/axifemm/` | Henrotte-basis axisymmetric eddy-current CLN tests (NMR, disk convergence) |
-| `research/cln/multiconn_loop_method/` | T-Omega multiply-connected bath-plate notebook |
-| `research/cln/tanimoto_canonical/` | Tanimoto canonical CLN notebooks (A-phi / A-T / T-Omega) |
-| `research/cln/*.wls` | Schur-F / CF / quadrupole / polarizability symbolic derivations |
-| `research/cln/bem_cln_*` | BEM-CLN multi-conductor verification (iteration history) |
+| `examples/levitation/research_cln/ngsolve_validation/` | NGSolve FEM verification sweeps (dated `*_results.json` snapshots, one-off probe scripts) |
+| `examples/levitation/research_cln/axifemm/` | Henrotte-basis axisymmetric eddy-current CLN tests (NMR, disk convergence) |
+| `examples/levitation/research_cln/multiconn_loop_method/` | T-Omega multiply-connected bath-plate notebook |
+| `examples/levitation/research_cln/tanimoto_canonical/` | Tanimoto canonical CLN notebooks (A-phi / A-T / T-Omega) |
+| `examples/levitation/research_cln/*.wls` | Schur-F / CF / quadrupole / polarizability symbolic derivations |
+| `examples/levitation/research_cln/bem_cln_*` | BEM-CLN multi-conductor verification (iteration history) |
 
-Promote a script from `research/` to `examples/` only after it gains a
+Promote a script from `research/` to `examples/levitation/` only after it gains a
 README, runs standalone, and demonstrates one clear concept.
 
 ## Force computation: Lorentz vs Maxwell stress
@@ -102,14 +108,14 @@ Reasons:
    surface evaluation magnifies.
 
 So the package defaults to Lorentz.  Maxwell stress is available
-(`radia_levitation.ecb.maxwell_stress`) for cross-validation.
+(`radia.levitation.ecb.maxwell_stress`) for cross-validation.
 
 ## Simulink integration
 
 Export the polarizability as a continuous-time LTI state-space model:
 
 ```python
-from radia_levitation.simulink import export
+from radia.levitation.simulink import export
 A, B, C, D = export.build_state_space(...)
 export.save_mat("plant_lti.mat", A=A, B=B, C=C, D=D, ...)
 ```
@@ -133,9 +139,9 @@ for c_1/s).  Typical state count: 50-300 depending on accuracy target.
 - **radia-mcp** maglev knowledge: see `radia_iem_fem` and
   `cln_mor_control` topics (the published research line: Yano bachelor
   + Yano master, IEEE TMag 2018).
-- **TEAM 28** electrodynamic levitation: `examples/team28/` reproduces
+- **TEAM 28** electrodynamic levitation: `examples/levitation/team28/` reproduces
   the lab full-FEM force benchmark with 5-stage CLN reduction (0.000%
   error at the equilibrium height).
 - **Sphere / ellipsoid / coil**: closed-form anchors and Radia open-
   boundary coil examples (migrated from
-  `examples/CLN/scripts/team28_levitation/`).
+  `examples/levitation/CLN/scripts/team28_levitation/`).
