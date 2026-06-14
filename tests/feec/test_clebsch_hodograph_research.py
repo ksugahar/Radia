@@ -393,3 +393,24 @@ def test_chaplygin_turning_guide_2d():
     bm = tg.back_map(mesh, gf, r["mur0"], r["qk"], *r["q_range"],
                      r["theta_range"][1], Nq=31, Nth=31)
     assert bm["closure"] < 5e-2, bm                            # single-valued physical field
+
+
+@pytest.mark.slow
+def test_chaplygin_free_boundary_2d():
+    """Frontier 2 (the turning-guide free boundary): the hodograph IMAGE of a
+    turning flux guide is a RECTANGLE for constant width (theta-independent
+    q-extent = the 1-D self-linearising case) but theta-DEPENDENT once the guide
+    tapers (a genuine FREE BOUNDARY).  Confirms the structure that makes the
+    inverse hodograph solve the open frontier."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import chaplygin_free_boundary_2d as fb
+    rc = fb.solve_image(taper=0.0, maxh=0.04)
+    rt = fb.solve_image(taper=0.5, maxh=0.04)
+    # the field genuinely TURNS (theta_B spans a wide range = the bend).
+    span = rc["theta_range_deg"][1] - rc["theta_range_deg"][0]
+    assert span > 30.0, rc
+    # constant width -> rectangle image (q-extent ~ theta-independent).
+    assert rc["free_measure"] < 0.10, rc
+    # tapering -> markedly more theta-dependent q-extent = a free boundary.
+    assert rt["free_measure"] > 2.0 * rc["free_measure"], (rc, rt)
