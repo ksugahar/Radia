@@ -1194,6 +1194,35 @@ tiny -- far points map near the centre, value ~rho^-(n+1)). So exterior-field av
 NOT a BEM-only advantage; both BEM and Kelvin provide it. The surviving BEM/H-matrix edge is
 ONLY the arbitrary (non-spherical) Gamma geometry and oscillatory-kernel machinery.
 
+UNIVERSAL DtN GENERATOR -> FEM-Kelvin IS A SPARSE BEM APPROXIMATION FOR ARBITRARY SHAPES.
+The assembled FEM-Kelvin matrix gives the DtN/Steklov operator on ANY surface in the mesh, not
+just the truncation Gamma. Condense (Schur complement = energy quotient of the harmonic
+extension, since the FEM solve minimises u^T A u so min over interior dofs = u_b^T S u_b with
+S = A_bb - A_bi A_ii^{-1} A_ib the DtN) onto a MATERIAL surface (a body's boundary r=R_in<R_out)
+and you get the EXTERIOR-plus-open DtN there. VERIFIED (demo_q): the ladder is (n+1)/R_in and is
+INDEPENDENT of R_out -- p-converged to ~1e-6 across R_in=0.3/0.4/0.5/0.7, and the Gamma value
+(n+1)/R_out (R_in-independent 2,3,4) is excluded everywhere. Adversarially confirmed by a
+self-consistent two-region weighted-harmonic solve: the natural weak interface coupling
+(duA/dr|_R + (R/s)^2 duB/ds|_R = 0) drives the GROWING-mode coefficient to exactly 0, so the
+condensed shell field IS the true infinite-domain decaying harmonic (R_in/r)^(n+1) and R_out
+cancels completely -- "infinity baked in by Kelvin; Gamma is just an arbitrary glue radius."
+  DERIVATION TRAP (do NOT verify the pullback by naive radial bookkeeping): treating
+  mu=(R/s)^2 as a pointwise weight on the spherically-split energy and guessing the ball image
+  as s^n gives WRONG residuals (e.g. 2/Rin + Rin^2/R^3 = 4.125 instead of 4.0), and a 3D
+  Monte-Carlo is contaminated near the inversion core. The regular weighted-harmonic radial
+  mode is s^(n+1) (from div((R/s)^2 grad)=0 -> exponents -n, n+1), and the regions couple by the
+  NATURAL weak flux-sum, not a hand-guessed strong flux equality. With both correct -> (n+1)/Rin
+  exactly, R-independent, matching the FEM to 1e-6.
+The condensation surface need NOT be a sphere (only the OUTER Kelvin truncation must be): a CUBE
+body (demo_q) gives a well-posed (SPD Cholesky succeeds) dipole DtN ~5.34, in the O(1/size)
+window between its face-radius and corner-radius sphere DtN. THEREFORE FEM-Kelvin on an arbitrary
+body surface IS a BEM approximation: it discretizes the SAME exterior-plus-open DtN operator that
+BEM assembles densely via the Green function -- here from a SPARSE volume matrix, infinity exact,
+no Green function / singular near-field quadrature. Gamma need only be a sphere ENCLOSING the
+(arbitrary) body, and the exterior field anywhere is recovered by inverse Kelvin (demo_p). The
+ONLY residual BEM-specific niche is oscillatory high-frequency kernels (mature FMM, volume
+dispersion) and high-aspect-ratio bodies where a bounding Kelvin sphere wastes air-layer volume.
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
