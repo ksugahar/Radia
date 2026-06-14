@@ -12,3 +12,9 @@ dist/
 *.pdf
 *.json
 !examples/**/expected_*.json
+# Curated examples ship their figures + provenance data (Data Persistence
+# Policy: a committed figure keeps its backing .json next to it, in git --
+# not in C:/temp).  research/ scratch stays ignored.
+!examples/**/*.png
+!examples/**/*.pdf
+!examples/**/*_results.json
