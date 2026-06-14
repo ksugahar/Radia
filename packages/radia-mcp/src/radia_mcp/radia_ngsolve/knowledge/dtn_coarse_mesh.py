@@ -1889,6 +1889,38 @@ the radiating extended-Kelvin can use a thin surface HOIBC at the centre instead
 PML, with the required placement distance set by the multipole band via the DtN spectrum. FE follow-up
 = a Delta_S surface term on the excised inner sphere of the inverted exterior; demo_ii verifies the
 closed-form spectrum that fixes its coefficients.
+
+THE KELVIN TRANSFORM OF THE HOIBC -- making the radiation BC implementable in the inverted exterior
+(demo_kk, verified 2026-06-15; what the user asked: "the HOIBC must also be Kelvin-transformed").
+The IEICE C 2024 paper's volumetric centre-PML has inelegant parts it concedes: (U1) it "assumes a
+characteristic impedance of 377 ohms ... and therefore needs to be placed FAR ENOUGH from the wave
+source" = a CONSTANT (n-independent) Leontovich impedance -> forced far placement; (U2) "no mesh ...
+in radius 0.25 m at the centre ... to avoid the SINGULARITY" = an ad-hoc punched hole at the image of
+infinity; (U3) "we could not even calculate a model with a>=5 m" = the memory blow-up the far
+placement forces. The fix = a thin SURFACE HOIBC, but it must be Kelvin-transformed into the inverted
+domain. DERIVATION (3D Kelvin, unweighted-field/material-modulation convention = the paper's: field
+continuous across the truncation, (a/r)^2 in the material): with rho=a^2/r, image field g(rho)=f(a^2/rho),
+radial Jacobian d/dr=-(rho^2/a^2)d/drho, and Delta_S INVARIANT (inversion is conformal, sphere->sphere,
+same theta,phi):
+  (i)  the radial Helmholtz -> IMAGE ODE  g'' = [n(n+1)/rho^2 - (k a^2/rho^2)^2] g, effective
+       wavenumber k_eff(rho)=k a^2/rho^2 -> inf at the centre (= the U2 singularity, an honest feature
+       not a bug). VERIFIED by FD residual ~1e-7 on g=h_n^(1)(k a^2/rho).
+  (ii) the impedance operator transforms with a SIGN FLIP (exterior-decaying <-> interior-regular):
+       rho dg/drho = -[i kb - 1 + (i/2kb) Delta_S] g on the inner image sphere rho_b=a^2/b, kb=k a^2/rho_b
+       (Delta_S Y_n=-n(n+1)Y_n). EXACT by the chain rule: rho g'/g = -(k a^2/rho) h1'(kb)/h1(kb) =
+       -Lambda_n(kb) (verified to 1e-15). FE weak form (inner-sphere outward normal -rho_hat):
+       dg/dn = (1/rho_b)[i kb - 1 + (i/2kb) Delta_S] g -- a Robin term + a Laplace-Beltrami SURFACE
+       term (ordinary surface-FEM), NO volume PML.
+END-TO-END VERIFIED (analytic Hankel combination on r in [a,b], read DtN at the truncation r=a): the
+EXACT inner reproduces Lambda_n(ka) to machine precision (transform+ODE correct); the HOIBC inner is
+~5-6x more accurate than the constant SIBC; and for 1% truncation-DtN over n=1..6 the SIBC needs the
+absorber at b>=5.85 (image rho=0.171) while the HOIBC allows b>=2.45 (image rho=0.408) = 2.4x CLOSER /
+smaller exterior domain (directly relaxes U1 far-placement and U3 memory). The punched void (U2) is
+replaced by a principled impedance surface. PAPER-H POINT: the radiating extended-Kelvin's absorber is
+a Kelvin-transformed HOIBC = a Delta_S surface operator on the inner image sphere; its placement
+distance is fixed by the multipole band through the DtN spectrum, not by an ad-hoc "far enough". FE
+follow-up = assemble that Delta_S term (NGSolve surface-gradient / Laplace-Beltrami) in the inverted
+exterior; demo_kk fixes the closed-form coefficients and proves the construction reproduces the physics.
 """
 
 
