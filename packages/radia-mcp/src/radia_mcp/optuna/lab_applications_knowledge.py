@@ -55,7 +55,7 @@ The two compose naturally:
 | `radia_mcp.topology_optimization` | gradient-based density / shape | Fixed topology + continuous variables |
 | `radia_mcp.motor` | Wakao decoder + LS | Motor cross-section topology |
 | `radia_mcp.accelerator` | CoilBuilder + sensitivity | Coil end-region shape |
-| `radia_mcp.wpt` | WPT design knowledge | Compensation topology pre-screening |
+| `radia_mcp.pcb` | WPT design knowledge | Compensation topology pre-screening |
 | `radia_mcp.pinn` | surrogate model | Replace FEM in inner Optuna loop |
 | `radia_mcp.literature_index` | corpus search | Find similar BBO benchmarks |
 | `radia_mcp.streamfunction` | `streamfunction(regularized)` | SF coil **(homogeneity, peak current density)** Pareto: NSGA-II over (geometry, Tikhonov alpha) + CMA-ES sheet-metal (板金) surface-forming shape optimisation (inner solve = cached folded-Tikhonov RegularizedTSVD) |
@@ -384,7 +384,7 @@ the conditional pattern from textbook list 2.16.
 
 ## Cross-references
 
-- `radia_mcp.wpt` -- WPT physics + compensation topology theory
+- `radia_mcp.pcb` -- WPT physics + compensation topology theory
 - After Optuna picks the topology, run `radia_mcp.peec` to refine
   the actual coil for the chosen compensation.
 """

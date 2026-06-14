@@ -40,37 +40,37 @@ DECISION_TREE = r"""
 ```
 1. What's the design question?
    ├── Coil geometry / sizing
-   │   → wpt_coil_compensation('coil_design')
-   │   → wpt_efficiency_safety('q_factor_kQ')
+   │   → pcb_coil_compensation('coil_design')
+   │   → pcb_efficiency_safety('q_factor_kQ')
    │
    ├── Compensation topology (SS / LCC / LCL)
-   │   → wpt_coil_compensation('compensation_topology')
+   │   → pcb_coil_compensation('compensation_topology')
    │
    ├── Resonant frequency / matching
-   │   → wpt_coil_compensation('resonance_matching')
+   │   → pcb_coil_compensation('resonance_matching')
    │
    ├── Efficiency analysis
-   │   → wpt_efficiency_safety('q_factor_kQ')
-   │   → wpt_efficiency_safety('coupling_k')
+   │   → pcb_efficiency_safety('q_factor_kQ')
+   │   → pcb_efficiency_safety('coupling_k')
    │
    ├── Foreign Object Detection (FOD) ★ lab core
-   │   → wpt_fod('overview') — 5+ detection method families
+   │   → pcb_fod('overview') — 5+ detection method families
    │
    ├── Dynamic charging (moving EV / robot)
-   │   → wpt_applications('dynamic_charging_ev')
+   │   → pcb_applications('dynamic_charging_ev')
    │
    ├── Safety / human exposure
-   │   → wpt_efficiency_safety('safety_human_exposure')
-   │   → wpt_efficiency_safety('standards_IEC_SAE')
+   │   → pcb_efficiency_safety('safety_human_exposure')
+   │   → pcb_efficiency_safety('standards_IEC_SAE')
    │
    ├── Alternative: capacitive WPT
-   │   → wpt_alternatives('capacitive')
+   │   → pcb_alternatives('capacitive')
    │
    ├── Alternative: microwave rectenna
-   │   → wpt_alternatives('microwave_rectenna')
+   │   → pcb_alternatives('microwave_rectenna')
    │
    └── Bearingless motor + WPT (lab specialty)
-       → wpt_applications('bearingless_motor')
+       → pcb_applications('bearingless_motor')
 
 2. Implementation
    ├── Coil inductance / mutual L → radia_mcp.peec MCP

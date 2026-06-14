@@ -148,7 +148,7 @@ def get_applications_knowledge(topic: str = "dynamic_ev") -> str:
     Topics:
         dynamic_ev               - EV running, segmented primary (DEFAULT)
         robot_bearingless        - ★ lab specialty (multi-joint robot, bearingless motor)
-        wpt_lab_lineage          - Sugahara lab paper lineage + production methods
+        pcb_lab_lineage          - Sugahara lab paper lineage + production methods
         all                      - Everything
     """
     topic = topic.lower().strip()
@@ -156,9 +156,9 @@ def get_applications_knowledge(topic: str = "dynamic_ev") -> str:
         return DYNAMIC_EV
     if topic in ("robot_bearingless", "robot", "bearingless"):
         return ROBOT_BEARINGLESS
-    if topic in ("wpt_lab_lineage", "lab", "lineage", "sugahara"):
+    if topic in ("pcb_lab_lineage", "lab", "lineage", "sugahara"):
         return WPT_LAB_LINEAGE
     if topic == "all":
         return "\n\n".join([DYNAMIC_EV, ROBOT_BEARINGLESS, WPT_LAB_LINEAGE])
     return (f"Unknown topic '{topic}'. Available: dynamic_ev, "
-            "robot_bearingless, wpt_lab_lineage, all.")
+            "robot_bearingless, pcb_lab_lineage, all.")

@@ -31,7 +31,7 @@ Total: **328 tools** across 39 MCP servers.
 | [`mcp-server-data-assimilation`](#mcp-server-data-assimilation) | `radia_mcp.data_assimilation` | 3 |
 | [`mcp-server-gnn`](#mcp-server-gnn) | `radia_mcp.gnn` | 3 |
 | [`mcp-server-pinn`](#mcp-server-pinn) | `radia_mcp.pinn` | 3 |
-| [`mcp-server-wpt`](#mcp-server-wpt) | `radia_mcp.wpt` | 7 |
+| [`mcp-server-pcb`](#mcp-server-pcb) | `radia_mcp.pcb` | 7 |
 | [`mcp-server-ndt`](#mcp-server-ndt) | `radia_mcp.ndt` | 4 |
 | [`mcp-server-metamaterial`](#mcp-server-metamaterial) | `radia_mcp.metamaterial` | 4 |
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
@@ -493,21 +493,21 @@ Module: `radia_mcp.pinn.server`
 | `pinn_status` | (no description) |
 | `pinn_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 5 topics. |
 
-## `mcp-server-wpt`
+## `mcp-server-pcb`
 
 _Wireless Power Transfer: coil + compensation (SS/LCC/LCL), efficiency, IEC 61980 / SAE J2954, FOD, dynamic EV / robot / bearingless motor, capacitive / microwave / metamaterial_
 
-Module: `radia_mcp.wpt.server`
+Module: `radia_mcp.pcb.server`
 
 | Tool | Description |
 |---|---|
-| `wpt_alternatives` | Alternative WPT: capacitive, microwave/rectenna, metamaterial. |
-| `wpt_applications` | WPT applications: dynamic EV, robot, bearingless motor. |
-| `wpt_coil_compensation` | Coil design + compensation topology + resonance matching. |
-| `wpt_efficiency_safety` | Efficiency (Q, k, kQ) + safety + IEC/SAE standards. |
-| `wpt_fod` | ★ Foreign Object Detection (FOD) — lab core research. |
-| `wpt_overview` | WPT landscape: regimes, decision tree, lab focus. |
-| `wpt_status` | (no description) |
+| `pcb_alternatives` | Alternative WPT: capacitive, microwave/rectenna, metamaterial. |
+| `pcb_applications` | WPT applications: dynamic EV, robot, bearingless motor. |
+| `pcb_coil_compensation` | Coil design + compensation topology + resonance matching. |
+| `pcb_efficiency_safety` | Efficiency (Q, k, kQ) + safety + IEC/SAE standards. |
+| `pcb_fod` | ★ Foreign Object Detection (FOD) — lab core research. |
+| `pcb_overview` | WPT landscape: regimes, decision tree, lab focus. |
+| `pcb_status` | (no description) |
 
 ## `mcp-server-ndt`
 
