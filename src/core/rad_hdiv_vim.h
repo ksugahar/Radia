@@ -152,5 +152,19 @@ void TriField(const double V[3][3], const double r[3], double out[3]);
  * (n_face*TriPotential + d_face*TriField).  out[3], NO 1/4pi.  Matches radia.hdiv_vim.tet_self_volume_field*4pi. */
 void TetField(const double V[4][3], const double P[3], double out[3]);
 
+/* ---- degree-1/2 polynomial-charge field kernels (the order<=2 fast path; NO 1/4pi) ----
+ * Ports of radia.hdiv_vim._field, validated entry-by-entry vs the Python (machine precision). */
+void TriMoment1(const double V[3][3], const double r[3], double out[3]);          /* INT_T r'/R dS' */
+void TriMoment2(const double V[3][3], const double r[3], double out[3][3]);       /* INT_T r'(x)r'/R dS' */
+void TetMoment1(const double V[4][3], const double r[3], double out[3]);          /* INT_V r'/R dV' */
+void TetVolFieldLinear(const double V[4][3], const double r[3], double rho0,
+                       const double g[3], double out[3]);                          /* linear volume charge */
+void TetVolFieldQuadratic(const double V[4][3], const double r[3], double rho0,
+                          const double g[3], const double Q[3][3], double out[3]); /* quadratic volume charge */
+void LinTriField(const double V[3][3], const double r[3], double sigma0,
+                 const double s[3], double out[3]);                                /* linear surface charge */
+void QuadTriField(const double V[3][3], const double r[3], double sigma0,
+                  const double s[3], const double S[3][3], double out[3]);         /* quadratic surface charge */
+
 } // namespace rad_hdiv
 #endif

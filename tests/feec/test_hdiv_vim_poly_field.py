@@ -627,3 +627,36 @@ def _vol_field_gauss_fn(V, r, fn, nq=24):
                 p = V[0] + l1 * (V[1] - V[0]) + l2 * (V[2] - V[0]) + l3 * (V[3] - V[0]); d = r - p
                 F += ws[i] * ws[j] * ws[k] * jac * V6 * fn(p) * d / np.linalg.norm(d) ** 3
     return F
+
+
+# ---------------------------------------------------------------------------------------------------
+# C++ ports of the degree-1/2 kernels (the order<=2 fast path): _hdiv_tri_moment1/2, _hdiv_tet_moment1,
+# _hdiv_{lin,quad}_tri_field, _hdiv_tet_volfield_{linear,quadratic}.  Each must match its Python
+# reference to ~machine precision (the kernels ARE the Python formula, in C++).
+# ---------------------------------------------------------------------------------------------------
+def test_cpp_degree12_kernels_match_python():
+    import radia._radia_pybind as rp
+    tri = _TET[[0, 1, 2]]; Vt = tri.ravel().tolist()
+    Vv = _TET.ravel().tolist()
+    s = [0.6, -0.4, 0.3]; s0 = 0.5; g = [0.7, -0.3, 0.5]; rho0 = 0.4
+    Qf = _QSYM.ravel().tolist()
+
+    def rel(a, b):
+        a = np.asarray(a, float); b = np.asarray(b, float)
+        return np.linalg.norm(a - b) / (np.linalg.norm(b) + 1e-30)
+
+    for rr in [[0.3, 0.3, 0.7], [0.3, 0.3, 0.2], [1.5, 0.5, 0.4], [0.2, 0.2, 0.05]]:
+        r = np.array(rr, float); rl = r.tolist()
+        assert rel(rp._hdiv_tri_moment1(Vt, rl), triangle_potential_moment(tri, r)) < 1e-12
+        assert rel(rp._hdiv_tri_moment2(Vt, rl), triangle_potential_moment2(tri, r).ravel()) < 1e-12
+        assert rel(rp._hdiv_lin_tri_field(Vt, rl, s0, s),
+                   linear_triangle_charge_field(tri, r, s0, np.array(s))) < 1e-12
+        assert rel(rp._hdiv_quad_tri_field(Vt, rl, s0, s, Qf),
+                   quadratic_triangle_charge_field(tri, r, s0, np.array(s), _QSYM)) < 1e-11
+    for rr in [[0.25, 0.25, 0.25], [2.0, 0, 0], [0.4, 0.3, 0.1]]:
+        r = np.array(rr, float); rl = r.tolist()
+        assert rel(rp._hdiv_tet_moment1(Vv, rl), tet_newtonian_moment(_TET, r)) < 1e-12
+        assert rel(rp._hdiv_tet_volfield_linear(Vv, rl, rho0, g),
+                   tet_volume_field_linear(_TET, r, rho0, np.array(g))) < 1e-12
+        assert rel(rp._hdiv_tet_volfield_quadratic(Vv, rl, rho0, g, Qf),
+                   tet_volume_field_quadratic(_TET, r, rho0, np.array(g), _QSYM)) < 1e-11

@@ -146,6 +146,299 @@ void TetField(const double V[4][3], const double P[3], double out[3])
     for (int k=0;k<3;k++) out[k] *= 0.5;
 }
 
+// ===== degree-1/2 polynomial-charge field kernels (the order<=2 fast path) =====
+// Port of radia.hdiv_vim._field {triangle_potential_moment / _moment2, tet_newtonian_moment,
+// tet_volume_field_linear / _quadratic, linear_ / quadratic_triangle_charge_field}.  NO 1/4pi.
+// Validated entry-by-entry vs the Python references (machine precision).
+
+// in-plane OUTWARD edge normal m of edge (A,B) on a triangle with unit normal n and centroid cen
+static inline void edge_outnormal(const double A[3], const double B[3], const double n[3],
+                                  const double cen[3], double m[3])
+{
+    double t[3]; for (int k=0;k<3;k++) t[k]=B[k]-A[k];
+    double L=v3nrm(t); for (int k=0;k<3;k++) t[k]/=L;
+    v3cross(t,n,m);
+    double mid[3]; for (int k=0;k<3;k++) mid[k]=0.5*(A[k]+B[k])-cen[k];
+    if (v3dot(m,mid)<0) for (int k=0;k<3;k++) m[k]=-m[k];
+}
+
+// INT_{edge A->B} R dl  (= INT sqrt(u^2+d2) du), and (optionally) INT_{edge} R*(r'-r_p) dl into Rxi.
+static double edge_R_dl(const double A[3], const double B[3], const double r[3])
+{
+    double t[3]; for (int k=0;k<3;k++) t[k]=B[k]-A[k];
+    double L=v3nrm(t); if (L<1e-300) return 0.0;
+    double th[3]; for (int k=0;k<3;k++) th[k]=t[k]/L;
+    double w[3]; for (int k=0;k<3;k++) w[k]=r[k]-A[k];
+    double l0=v3dot(w,th); double d2=v3dot(w,w)-l0*l0; if (d2<0) d2=0;
+    double u1=-l0, u2=L-l0;
+    double s1 = (d2<1e-300)? 0.5*u1*std::fabs(u1) : 0.5*(u1*std::sqrt(u1*u1+d2)+d2*std::asinh(u1/std::sqrt(d2)));
+    double s2 = (d2<1e-300)? 0.5*u2*std::fabs(u2) : 0.5*(u2*std::sqrt(u2*u2+d2)+d2*std::asinh(u2/std::sqrt(d2)));
+    return s2 - s1;
+}
+
+// INT_{edge A->B} R*(r'-r_p) dl = (A-r_p) INT R dl + that INT R l dl  (closed form).
+static void edge_R_xi_dl(const double A[3], const double B[3], const double r[3],
+                         const double r_p[3], double out[3])
+{
+    out[0]=out[1]=out[2]=0.0;
+    double t[3]; for (int k=0;k<3;k++) t[k]=B[k]-A[k];
+    double L=v3nrm(t); if (L<1e-300) return;
+    double th[3]; for (int k=0;k<3;k++) th[k]=t[k]/L;
+    double w[3]; for (int k=0;k<3;k++) w[k]=r[k]-A[k];
+    double l0=v3dot(w,th); double d2=v3dot(w,w)-l0*l0; if (d2<0) d2=0;
+    double u1=-l0, u2=L-l0;
+    double Fsq1=(d2<1e-300)?0.5*u1*std::fabs(u1):0.5*(u1*std::sqrt(u1*u1+d2)+d2*std::asinh(u1/std::sqrt(d2)));
+    double Fsq2=(d2<1e-300)?0.5*u2*std::fabs(u2):0.5*(u2*std::sqrt(u2*u2+d2)+d2*std::asinh(u2/std::sqrt(d2)));
+    double gR=Fsq2-Fsq1;                                       // INT R dl
+    double IRl=((u2*u2+d2)*std::sqrt(u2*u2+d2)-(u1*u1+d2)*std::sqrt(u1*u1+d2))/3.0 + l0*gR;  // INT R l dl
+    for (int k=0;k<3;k++) out[k]=(A[k]-r_p[k])*gR + th[k]*IRl;
+}
+
+// INT_{edge A->B} (r-r')/R dl  (= G_e for the linear surface field), closed form.
+static void edge_field_dl(const double A[3], const double B[3], const double r[3], double out[3])
+{
+    out[0]=out[1]=out[2]=0.0;
+    double t[3]; for (int k=0;k<3;k++) t[k]=B[k]-A[k];
+    double L=v3nrm(t); if (L<1e-300) return;
+    double th[3]; for (int k=0;k<3;k++) th[k]=t[k]/L;
+    double w[3]; for (int k=0;k<3;k++) w[k]=r[k]-A[k];
+    double l0=v3dot(w,th); double d2=v3dot(w,w)-l0*l0; if (d2<0) d2=0; double d=std::sqrt(d2);
+    double u1=-l0, u2=L-l0;
+    double as1,as2;
+    if (d<1e-300){ as1=(std::fabs(u1)>0)?(u1>0?1:-1)*std::log(2*std::fabs(u1)):0.0;
+                   as2=(std::fabs(u2)>0)?(u2>0?1:-1)*std::log(2*std::fabs(u2)):0.0; }
+    else { as1=std::asinh(u1/d); as2=std::asinh(u2/d); }
+    double int_1R=as2-as1;                                     // INT 1/R dl
+    double int_lR=(std::sqrt(u2*u2+d2)-std::sqrt(u1*u1+d2)) + l0*(as2-as1);   // INT l/R dl
+    for (int k=0;k<3;k++) out[k]=(r[k]-A[k])*int_1R - th[k]*int_lR;
+}
+
+// M1 = INT_T r'/R dS'  (first moment, 3-vector) via the surface divergence theorem.
+void TriMoment1(const double V[3][3], const double r[3], double out[3])
+{
+    double e1[3],e2[3],n[3];
+    for (int k=0;k<3;k++){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
+    v3cross(e1,e2,n); double nl=v3nrm(n); for (int k=0;k<3;k++) n[k]/=nl;
+    double h=0; { double d[3]; for(int k=0;k<3;k++) d[k]=r[k]-V[0][k]; h=v3dot(d,n); }
+    double r_p[3]; for (int k=0;k<3;k++) r_p[k]=r[k]-h*n[k];
+    double cen[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) cen[k]+=V[j][k]/3.0;
+    double I0=TriPotential(V,r);
+    out[0]=out[1]=out[2]=0.0;
+    for (int i=0;i<3;i++){
+        const double* A=V[i]; const double* B=V[(i+1)%3];
+        double m[3]; edge_outnormal(A,B,n,cen,m);
+        double gR=edge_R_dl(A,B,r);
+        for (int k=0;k<3;k++) out[k]+=m[k]*gR;
+    }
+    for (int k=0;k<3;k++) out[k]+=r_p[k]*I0;
+}
+
+// M2 = INT_T r'(x)r'/R dS' (symmetric 3x3, row-major out[3][3]) via the Hessian-of-R^3 identity.
+void TriMoment2(const double V[3][3], const double r[3], double out[3][3])
+{
+    double e1[3],e2[3],n[3];
+    for (int k=0;k<3;k++){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
+    v3cross(e1,e2,n); double nl=v3nrm(n); for (int k=0;k<3;k++) n[k]/=nl;
+    double h=0; { double d[3]; for(int k=0;k<3;k++) d[k]=r[k]-V[0][k]; h=v3dot(d,n); }
+    double r_p[3]; for (int k=0;k<3;k++) r_p[k]=r[k]-h*n[k];
+    double cen[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) cen[k]+=V[j][k]/3.0;
+    double I0=TriPotential(V,r);
+    double Mxi1[3]={0,0,0}, ohm[3][3]={{0,0,0},{0,0,0},{0,0,0}}, sum_m_dot=0.0;
+    for (int i=0;i<3;i++){
+        const double* A=V[i]; const double* B=V[(i+1)%3];
+        double m[3]; edge_outnormal(A,B,n,cen,m);
+        double ARxi[3]; edge_R_xi_dl(A,B,r,r_p,ARxi);
+        double gR=edge_R_dl(A,B,r);
+        for (int k=0;k<3;k++) Mxi1[k]+=m[k]*gR;
+        for (int a=0;a<3;a++) for (int b=0;b<3;b++) ohm[a][b]+=ARxi[a]*m[b];
+        sum_m_dot += v3dot(m,ARxi);
+    }
+    double intR=(sum_m_dot + h*h*I0)/3.0;                       // INT_T R dS'
+    for (int a=0;a<3;a++) for (int b=0;b<3;b++){
+        double Pproj = (a==b?1.0:0.0) - n[a]*n[b];
+        double Mxi2 = ohm[a][b] - Pproj*intR;
+        out[a][b] = r_p[a]*r_p[b]*I0 + r_p[a]*Mxi1[b] + Mxi1[a]*r_p[b] + Mxi2;
+    }
+}
+
+// V1 = INT_V r'/R dV' over a tet (3-vector) = (1/3)[r PhiTet - SUM_f h_f M1_f].
+void TetMoment1(const double V[4][3], const double r[3], double out[3])
+{
+    double cen[3]={0,0,0}; for (int i=0;i<4;i++) for(int k=0;k<3;k++) cen[k]+=V[i][k]*0.25;
+    static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    double Phi=PhiTet(V,r);
+    for (int k=0;k<3;k++) out[k]=r[k]*Phi;
+    for (int fi=0;fi<4;fi++){
+        double Fv[3][3]; for (int j=0;j<3;j++) for(int k=0;k<3;k++) Fv[j][k]=V[FACES[fi][j]][k];
+        double e1[3],e2[3],nrm[3];
+        for (int k=0;k<3;k++){ e1[k]=Fv[1][k]-Fv[0][k]; e2[k]=Fv[2][k]-Fv[0][k]; }
+        v3cross(e1,e2,nrm); double nl=v3nrm(nrm); if (nl<1e-300) continue; for (int k=0;k<3;k++) nrm[k]/=nl;
+        double fc[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) fc[k]+=Fv[j][k]/3.0;
+        double ov[3]; for (int k=0;k<3;k++) ov[k]=fc[k]-cen[k];
+        if (v3dot(ov,nrm)<0) for (int k=0;k<3;k++) nrm[k]=-nrm[k];
+        double hf; { double d[3]; for(int k=0;k<3;k++) d[k]=r[k]-Fv[0][k]; hf=v3dot(d,nrm); }
+        double M1[3]; TriMoment1(Fv,r,M1);
+        for (int k=0;k<3;k++) out[k]-=hf*M1[k];
+    }
+    for (int k=0;k<3;k++) out[k]/=3.0;
+}
+
+// INT_V (rho0 + g.r')(r-r')/R^3 dV' (linear volume charge) = SUM_f n_f[rho0 I0_f + g.M1_f] - g PhiTet.
+void TetVolFieldLinear(const double V[4][3], const double r[3], double rho0, const double g[3], double out[3])
+{
+    out[0]=out[1]=out[2]=0.0;
+    double cen[3]={0,0,0}; for (int i=0;i<4;i++) for(int k=0;k<3;k++) cen[k]+=V[i][k]*0.25;
+    static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    for (int fi=0;fi<4;fi++){
+        double Fv[3][3]; for (int j=0;j<3;j++) for(int k=0;k<3;k++) Fv[j][k]=V[FACES[fi][j]][k];
+        double e1[3],e2[3],nrm[3];
+        for (int k=0;k<3;k++){ e1[k]=Fv[1][k]-Fv[0][k]; e2[k]=Fv[2][k]-Fv[0][k]; }
+        v3cross(e1,e2,nrm); double nl=v3nrm(nrm); if (nl<1e-300) continue; for (int k=0;k<3;k++) nrm[k]/=nl;
+        double fc[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) fc[k]+=Fv[j][k]/3.0;
+        double ov[3]; for (int k=0;k<3;k++) ov[k]=fc[k]-cen[k];
+        if (v3dot(ov,nrm)<0) for (int k=0;k<3;k++) nrm[k]=-nrm[k];
+        double I0=TriPotential(Fv,r); double M1[3]; TriMoment1(Fv,r,M1);
+        double w=rho0*I0 + v3dot(g,M1);
+        for (int k=0;k<3;k++) out[k]+=nrm[k]*w;
+    }
+    double Phi=PhiTet(V,r);
+    for (int k=0;k<3;k++) out[k]-=g[k]*Phi;
+}
+
+// INT_V (rho0 + g.r' + r'^T Q r')(r-r')/R^3 dV' (Q symmetric, row-major Q[3][3])
+// = SUM_f n_f[rho0 I0_f + g.M1_f + Q:M2_f] - (g PhiTet + 2 Q.V1).
+void TetVolFieldQuadratic(const double V[4][3], const double r[3], double rho0,
+                          const double g[3], const double Q[3][3], double out[3])
+{
+    out[0]=out[1]=out[2]=0.0;
+    double cen[3]={0,0,0}; for (int i=0;i<4;i++) for(int k=0;k<3;k++) cen[k]+=V[i][k]*0.25;
+    static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    for (int fi=0;fi<4;fi++){
+        double Fv[3][3]; for (int j=0;j<3;j++) for(int k=0;k<3;k++) Fv[j][k]=V[FACES[fi][j]][k];
+        double e1[3],e2[3],nrm[3];
+        for (int k=0;k<3;k++){ e1[k]=Fv[1][k]-Fv[0][k]; e2[k]=Fv[2][k]-Fv[0][k]; }
+        v3cross(e1,e2,nrm); double nl=v3nrm(nrm); if (nl<1e-300) continue; for (int k=0;k<3;k++) nrm[k]/=nl;
+        double fc[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) fc[k]+=Fv[j][k]/3.0;
+        double ov[3]; for (int k=0;k<3;k++) ov[k]=fc[k]-cen[k];
+        if (v3dot(ov,nrm)<0) for (int k=0;k<3;k++) nrm[k]=-nrm[k];
+        double I0=TriPotential(Fv,r); double M1[3]; TriMoment1(Fv,r,M1);
+        double M2[3][3]; TriMoment2(Fv,r,M2);
+        double QM2=0.0; for (int a=0;a<3;a++) for (int b=0;b<3;b++) QM2+=Q[a][b]*M2[a][b];
+        double w=rho0*I0 + v3dot(g,M1) + QM2;
+        for (int k=0;k<3;k++) out[k]+=nrm[k]*w;
+    }
+    double Phi=PhiTet(V,r); double V1[3]; TetMoment1(V,r,V1);
+    for (int k=0;k<3;k++){
+        double QV1=Q[k][0]*V1[0]+Q[k][1]*V1[1]+Q[k][2]*V1[2];
+        out[k]-=(g[k]*Phi + 2.0*QV1);
+    }
+}
+
+// INT_T (sigma0 + s.r')(r-r')/R^3 dS' (linear surface charge)
+// = (sigma0 + s.r_p) F_const - SUM_e (s.m_e) G_e - I0 s_par.
+void LinTriField(const double V[3][3], const double r[3], double sigma0, const double s[3], double out[3])
+{
+    double e1[3],e2[3],n[3];
+    for (int k=0;k<3;k++){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
+    v3cross(e1,e2,n); double nl=v3nrm(n); for (int k=0;k<3;k++) n[k]/=nl;
+    double h=0; { double d[3]; for(int k=0;k<3;k++) d[k]=r[k]-V[0][k]; h=v3dot(d,n); }
+    double r_p[3]; for (int k=0;k<3;k++) r_p[k]=r[k]-h*n[k];
+    double cen[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) cen[k]+=V[j][k]/3.0;
+    double Fc[3]; TriField(V,r,Fc);
+    double I0=TriPotential(V,r);
+    double sn=v3dot(s,n); double s_par[3]; for (int k=0;k<3;k++) s_par[k]=s[k]-sn*n[k];
+    double coef=sigma0+v3dot(s,r_p);
+    for (int k=0;k<3;k++) out[k]=coef*Fc[k] - I0*s_par[k];
+    for (int i=0;i<3;i++){
+        const double* A=V[i]; const double* B=V[(i+1)%3];
+        double m[3]; edge_outnormal(A,B,n,cen,m);
+        double G[3]; edge_field_dl(A,B,r,G);
+        double sm=v3dot(s,m);
+        for (int k=0;k<3;k++) out[k]-=sm*G[k];
+    }
+}
+
+// edge 1D monomial moments Jl[0..2] = INT_edge l^n/R dl, plus in-plane edge geometry (for QuadTriField).
+static void edge_Jmoments(const double A[3], const double B[3], const double r[3],
+                          double Jl[3], double& L, double xiA[2], double t2[2],
+                          const double e1[3], const double e2[3], const double r_p[3])
+{
+    double t[3]; for (int k=0;k<3;k++) t[k]=B[k]-A[k];
+    L=v3nrm(t); double th[3]; for (int k=0;k<3;k++) th[k]=t[k]/L;
+    double w[3]; for (int k=0;k<3;k++) w[k]=r[k]-A[k];
+    double l0=v3dot(w,th); double d2=v3dot(w,w)-l0*l0; if (d2<0) d2=0; double d=std::sqrt(d2);
+    double u1=-l0, u2=L-l0;
+    double as1,as2;
+    if (d<1e-300){ as1=(std::fabs(u1)>0)?(u1>0?1:-1)*std::log(2*std::fabs(u1)):0.0;
+                   as2=(std::fabs(u2)>0)?(u2>0?1:-1)*std::log(2*std::fabs(u2)):0.0; }
+    else { as1=std::asinh(u1/d); as2=std::asinh(u2/d); }
+    double W0=as2-as1;
+    double W1=std::sqrt(u2*u2+d2)-std::sqrt(u1*u1+d2);
+    double W2=(0.5*(u2*std::sqrt(u2*u2+d2)-d2*as2)) - (0.5*(u1*std::sqrt(u1*u1+d2)-d2*as1));
+    Jl[0]=W0; Jl[1]=W1+l0*W0; Jl[2]=W2+2*l0*W1+l0*l0*W0;        // l = u + l0
+    double Av[3]; for (int k=0;k<3;k++) Av[k]=A[k]-r_p[k];
+    xiA[0]=v3dot(Av,e1); xiA[1]=v3dot(Av,e2);
+    t2[0]=v3dot(th,e1);  t2[1]=v3dot(th,e2);
+}
+
+// INT_T (sigma0 + s.r' + r'^T S r')(r-r')/R^3 dS' (S symmetric) via the in-plane/normal split.
+void QuadTriField(const double V[3][3], const double r[3], double sigma0,
+                  const double s[3], const double S[3][3], double out[3])
+{
+    double e1u[3],e2u[3],n[3];
+    for (int k=0;k<3;k++){ e1u[k]=V[1][k]-V[0][k]; e2u[k]=V[2][k]-V[0][k]; }
+    v3cross(e1u,e2u,n); double nl=v3nrm(n); for (int k=0;k<3;k++) n[k]/=nl;
+    double e1[3]; double e1l=v3nrm(e1u); for (int k=0;k<3;k++) e1[k]=e1u[k]/e1l;
+    double e2[3]; v3cross(n,e1,e2);
+    double h=0; { double d[3]; for(int k=0;k<3;k++) d[k]=r[k]-V[0][k]; h=v3dot(d,n); }
+    double r_p[3]; for (int k=0;k<3;k++) r_p[k]=r[k]-h*n[k];
+    double cen[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) cen[k]+=V[j][k]/3.0;
+    double Fc[3]; TriField(V,r,Fc);
+    double I0=TriPotential(V,r);
+    double M1[3]; TriMoment1(V,r,M1);
+    double J3_0=v3dot(n,Fc)/h;                                 // INT_T 1/R^3
+    double intxi1[3]={0,0,0};                                  // INT_T xi/R^3
+    double xixi[3][3];                                         // INT_T xi(x)xi/R^3 = P I0 - SUM (Gxi)(x)m
+    for (int a=0;a<3;a++) for (int b=0;b<3;b++) xixi[a][b]=((a==b?1.0:0.0)-n[a]*n[b])*I0;
+    double inplane[3]={0,0,0};
+    for (int i=0;i<3;i++){
+        const double* A=V[i]; const double* B=V[(i+1)%3];
+        double m[3]; edge_outnormal(A,B,n,cen,m);
+        double Jl[3], L, xiA[2], t2[2];
+        edge_Jmoments(A,B,r,Jl,L,xiA,t2,e1,e2,r_p);
+        double m1=v3dot(m,e1), m2=v3dot(m,e2);
+        // INT_edge xi/R dl = (A-r_p) J0 + th J1 ; in (e1,e2): Gxi = xiA*J0 + t2*J1
+        double Gxi[2]={ xiA[0]*Jl[0]+t2[0]*Jl[1], xiA[1]*Jl[0]+t2[1]*Jl[1] };
+        double Gxi3[3]; for (int k=0;k<3;k++) Gxi3[k]=Gxi[0]*e1[k]+Gxi[1]*e2[k];
+        for (int k=0;k<3;k++) intxi1[k]-=m[k]*Jl[0];
+        for (int a=0;a<3;a++) for (int b=0;b<3;b++) xixi[a][b]-=Gxi3[a]*m[b];
+        // in-plane: m_e * INT_edge sigma/R dl ; sigma = sigma0 + s.r' + r'^T S r' as a poly c0+c1 l+c2 l^2
+        // along r'(l) = A + l*th  (th = unit edge tangent)
+        double sA=v3dot(s,A);
+        double tt[3]; for (int k=0;k<3;k++) tt[k]=B[k]-A[k]; double Lt=v3nrm(tt); for(int k=0;k<3;k++) tt[k]/=Lt;
+        double AStA=0, AStt=0, ttStt=0;
+        for (int a=0;a<3;a++) for (int b=0;b<3;b++){ AStA+=A[a]*S[a][b]*A[b]; AStt+=A[a]*S[a][b]*tt[b]; ttStt+=tt[a]*S[a][b]*tt[b]; }
+        double c0=sigma0+sA+AStA;
+        double c1=v3dot(s,tt)+2.0*AStt;
+        double c2=ttStt;
+        double esig=c0*Jl[0]+c1*Jl[1]+c2*Jl[2];
+        for (int k=0;k<3;k++) inplane[k]+=m[k]*esig;
+    }
+    double J3_1[3]; for (int k=0;k<3;k++) J3_1[k]=intxi1[k]+r_p[k]*J3_0;          // INT_T r'/R^3
+    double J3_2[3][3];                                                            // INT_T r'(x)r'/R^3
+    for (int a=0;a<3;a++) for (int b=0;b<3;b++)
+        J3_2[a][b]=xixi[a][b] + r_p[a]*intxi1[b] + intxi1[a]*r_p[b] + r_p[a]*r_p[b]*J3_0;
+    // in-plane: - (P s I0 + 2 P S M1)
+    double sn=v3dot(s,n); double Psn[3]; for (int k=0;k<3;k++) Psn[k]=s[k]-sn*n[k];
+    double SM1[3]; for (int a=0;a<3;a++){ SM1[a]=S[a][0]*M1[0]+S[a][1]*M1[1]+S[a][2]*M1[2]; }
+    double SM1n=v3dot(SM1,n); double PSM1[3]; for (int k=0;k<3;k++) PSM1[k]=SM1[k]-SM1n*n[k];
+    for (int k=0;k<3;k++) inplane[k]-=(Psn[k]*I0 + 2.0*PSM1[k]);
+    // normal: h n [sigma0 J3_0 + s.J3_1 + S:J3_2]
+    double SJ2=0; for (int a=0;a<3;a++) for (int b=0;b<3;b++) SJ2+=S[a][b]*J3_2[a][b];
+    double nrmscal=h*(sigma0*J3_0 + v3dot(s,J3_1) + SJ2);
+    for (int k=0;k<3;k++) out[k]=inplane[k]+n[k]*nrmscal;
+}
+
 // ---- trilinear hex geometry (NGSolve vertex order v0(000)..v7(110) in (x,y,z) local) ----
 static void hex_shape(double xi, double eta, double ze, double N[8], double dN[8][3])
 {
