@@ -57,10 +57,11 @@ def dtn_exact(n, ka):
 _GX = np.array([-np.sqrt(3 / 5), 0.0, np.sqrt(3 / 5)]); _GW = np.array([5 / 9, 8 / 9, 5 / 9])
 
 
-def kelvin_pml(n, k, a, rho_e, rho_pml, M, alpha, p=2, extra_grade=False):
+def kelvin_pml(n, k, a, rho_e, rho_pml, M, alpha, p=2, extra_grade=False, kappa=1.0):
     """combined Kelvin (transformation-optics medium) + PML (complex stretch in [rho_e, rho_pml]).
     extra_grade=True multiplies the stretch by (rho_pml/rho)^2 (a k_eff-matched, more-concentrated
-    profile) -- used to show that the fancier profile does NOT help."""
+    profile); kappa>1 adds a CFS-PML-style REAL coordinate stretch (the evanescent-helping ingredient)
+    -- both used to show a fancier PML does NOT help the Kelvin centre."""
     L = rho_pml - rho_e
 
     def s(r):
@@ -69,7 +70,7 @@ def kelvin_pml(n, k, a, rho_e, rho_pml, M, alpha, p=2, extra_grade=False):
         g = ((rho_pml - r) / L) ** p
         if extra_grade:
             g = g * (rho_pml / max(r, 1e-9)) ** 2
-        return 1 + 1j * alpha * g
+        return kappa + 1j * alpha * g
 
     def rt(r):                                  # rho~: physical for r>=rho_pml, complex-stretched inward
         if r >= rho_pml:
@@ -78,7 +79,7 @@ def kelvin_pml(n, k, a, rho_e, rho_pml, M, alpha, p=2, extra_grade=False):
             tt = np.linspace(r, rho_pml, 32)
             return rho_pml - np.trapezoid(np.array([s(t) for t in tt]), tt)
         dr = rho_pml - r                        # analytic for the plain polynomial profile
-        return rho_pml - (dr + 1j * alpha / L**p * dr**(p + 1) / (p + 1))
+        return rho_pml - (kappa * dr + 1j * alpha / L**p * dr**(p + 1) / (p + 1))
 
     node = np.linspace(rho_e, a, M + 1); A = np.zeros((M + 1, M + 1), complex)
     for e in range(M):
@@ -155,6 +156,21 @@ assert worse, "the k_eff-matched profile over-concentrates the stretch -> degrad
 print("    => the fancier (k_eff-matched) profile is NOT better: it over-stretches the under-resolved")
 print("       centre and degrades sooner. For the Kelvin centre, STRENGTH + RESOLUTION matter, not a")
 print("       sophisticated sigma profile -- a simple PML is the robust choice.")
+
+# (3b) CFS-PML real coordinate stretch kappa (the evanescent-helping ingredient) does NOT help -----
+print("\n(3b) CFS-PML real coordinate stretch kappa (its evanescent-helping ingredient) (n=1, alpha=2):")
+print("     kappa   |DtN - exact|")
+e_k1 = None; cfs_worse = False
+for kap in (1.0, 2.0, 4.0):
+    e = abs(kelvin_pml(1, k, a, 0.3, 0.6, M, 2.0, kappa=kap) - dtn_exact(1, ka))
+    if kap == 1.0:
+        e_k1 = e
+    elif e > e_k1:
+        cfs_worse = True
+    print("     %4.1f    %.3e" % (kap, e))
+assert cfs_worse, "the CFS real stretch (kappa>1) does NOT help the Kelvin centre (it over-stretches)"
+print("    => CFS-PML's real stretch targets EVANESCENT waves, but the Kelvin near-centre field is")
+print("       OSCILLATORY (k_eff large), so kappa>1 only over-stretches -> standard (kappa=1) is best.")
 
 print("\n" + "=" * 82)
 print("ANSWER: Kelvin and PML are COMPLEMENTARY, NOT redundant -- excising Kelvin's centre and walling")
