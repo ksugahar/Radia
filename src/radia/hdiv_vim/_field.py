@@ -1155,40 +1155,36 @@ def assemble_demag_field(mesh, gfM, points, quantity="h"):
     sigma_cf = ng.InnerProduct(gfM.Trace(), nrm)
     inv4pi = 1.0 / (4.0 * np.pi)
 
-    # precompute per-element (verts flat, rho0, g) once
-    elems = []
+    # Pack the per-element LINEAR-rho volume sources (16 doubles: verts12, rho0, g3) and per-boundary-face
+    # QUADRATIC-sigma surface sources (22: verts9, sigma0, s3, S9) into flat arrays for the BATCHED C++
+    # kernel (_hdiv_demag_field_batch): ONE ngcore::ParallelFor-over-obs C++ call instead of the
+    # O(n_obs x n_src) Python double loop with a per-pair pybind crossing.  The kernel honours the
+    # CALLER's `with TaskManager()` (serial fallback if none) -> the hot loop is now genuinely parallel.
+    vol_flat = []
     for i in range(mesh.GetNE(ng.VOL)):
         ei = ng.ElementId(ng.VOL, i)
         V = np.array([mesh[v].point for v in mesh[ei].vertices], float)
         rho0, g = _fit_rho_linear(divM, mesh, V)
-        elems.append((V.ravel().tolist(), rho0, g.tolist()))
+        vol_flat += V.ravel().tolist() + [float(rho0)] + g.tolist()
 
-    # precompute per-boundary-face (verts flat, sigma0, s, S) once
-    faces = []
+    surf_flat = []
     for i in range(mesh.GetNE(ng.BND)):
         ei = ng.ElementId(ng.BND, i)
         P = np.array([mesh[v].point for v in mesh[ei].vertices], float)
         ngeom = np.cross(P[1] - P[0], P[2] - P[0]); ngeom = ngeom / np.linalg.norm(ngeom)
         sig_fn = lambda p: float(np.array([float(gfM[k](mesh(p[0], p[1], p[2]))) for k in range(3)]) @ ngeom)
         sigma0, s, S = _fit_sigma_quadratic(sig_fn, P)
-        faces.append((P.ravel().tolist(), sigma0, s.tolist(), S.ravel().tolist()))
+        surf_flat += P.ravel().tolist() + [float(sigma0)] + s.tolist() + S.ravel().tolist()
 
     obs = np.asarray(points, float).reshape(-1, 3)
-    out = np.zeros((len(obs), 3))
-    for q, r in enumerate(obs):
-        rl = r.tolist()
-        H = np.zeros(3)
-        for (Vf, rho0, g) in elems:
-            H += np.array(rp._hdiv_tet_volfield_linear(Vf, rl, rho0, g))
-        for (Pf, sigma0, s, S) in faces:
-            H += np.array(rp._hdiv_quad_tri_field(Pf, rl, sigma0, s, S))
-        H *= inv4pi
-        if quantity.lower() == "b":
+    H = np.array(rp._hdiv_demag_field_batch(vol_flat, surf_flat, obs.ravel().tolist())).reshape(-1, 3) * inv4pi
+    if quantity.lower() == "b":
+        out = np.empty_like(H)
+        for q, r in enumerate(obs):
             Mr = np.array([float(gfM[k](mesh(r[0], r[1], r[2]))) for k in range(3)])
-            out[q] = (4e-7 * np.pi) * (H + Mr)
-        else:
-            out[q] = H
-    return out
+            out[q] = (4e-7 * np.pi) * (H[q] + Mr)
+        return out
+    return H
 
 
 # ---------------------------------------------------------------------------------------------------
