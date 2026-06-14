@@ -1149,6 +1149,20 @@ DENSE N_Γ^2 clique: MEASURED nnz 10-20x the sparse extension and growing as N^{
 exterior is reused across many solves (factor once), or the dense block is
 H-matrix/FMM-compressed.  For a one-off sparse FE solve, keep the Kelvin ball sparse.
 
+KELVIN IS A SPARSE STAND-IN FOR THE BEM EXTERIOR DtN (the dual of "keep Kelvin sparse").
+BEM and Kelvin DISCRETIZE THE SAME Λ_ext on the SAME Γ; BEM is exact in the exterior but
+its DELIVERED accuracy is capped by the Γ trace it shares with Kelvin -- the exterior
+treatment buys nothing the surface cannot resolve.  So on ONE coarse sphere (336 surface
+DoF, demo_n) Kelvin at order p>=n MATCHES/beats the dense BEM per-degree (n=1: 3.3e-5 vs
+7.4e-4; n=3: 8.4e-4 vs 5.2e-3) while staying ~93% sparse (~20 nnz/row, ~ms) vs BEM's 100%
+dense (nnz=ndof^2, ~67 s).  The one structural difference: the dense BEM matrix encodes
+the WHOLE ladder up to Γ's Nyquist at once, whereas Kelvin reaches multipole n~p (raise p
+to extend).  Hence Kelvin = "the BEM exterior DtN truncated at multipole p, realised as a
+sparse volume" -- a faithful, cheaper replacement for a compact (low-multipole) source.
+The user's framing is exact: since BEM discretizes the surface anyway, Kelvin-grade accuracy
+at the same Γ is all the exterior-exactness can deliver, so meshing/integrating the exterior
+"better" is wasted -- use the sparse volume instead.
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
