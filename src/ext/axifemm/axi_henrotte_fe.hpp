@@ -15,7 +15,7 @@
 
 #include <fem.hpp>
 
-namespace radia_axifemm {
+namespace axifem {
 
 using namespace ngfem;
 
@@ -221,6 +221,6 @@ public:
                     BareSliceMatrix<> dshape) const override;
 };
 
-}  // namespace radia_axifemm
+}  // namespace axifem
 
 #endif  // RADIA_AXIFEMM_AXI_HENROTTE_FE_HPP

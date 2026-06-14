@@ -24,8 +24,8 @@ from scipy.sparse.linalg import LinearOperator  # noqa: E402
 
 import radia._radia_pybind as _rp  # noqa: E402
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
-from radia.hdiv_vim import _core as tet  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
+from radia.vim import _core as tet  # noqa: E402
 
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402

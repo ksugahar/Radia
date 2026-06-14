@@ -24,7 +24,7 @@ Biot-Savart of the basis current (target p_i, Bz component): since grad(mu)_z=0,
     [(grad v x grad mu) x K_i]_z = -(dv/dz)(grad mu . K_i),   K_i=(p_i-x)/|p_i-x|^3
 so the response row is a single LinearForm in (dv/dz).
 
-Run:  python examples/feec_vim/foliated_clebsch_solenoid.py
+Run:  python examples/vim/foliated_clebsch_solenoid.py
 """
 import os
 import sys

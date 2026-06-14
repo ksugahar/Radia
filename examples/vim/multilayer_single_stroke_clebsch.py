@@ -27,7 +27,7 @@ same-handed rho^-1.97 -- the 1/rho net-axial multipole is what is killed), not
 the full |B|.  Same clean solenoid-foliation (mu = radius) case as the single
 layer; a general multi-layer winding-surface family is the F1-like routing part.
 
-Run:  python examples/feec_vim/multilayer_single_stroke_clebsch.py
+Run:  python examples/vim/multilayer_single_stroke_clebsch.py
 """
 from __future__ import annotations
 

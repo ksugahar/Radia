@@ -27,7 +27,7 @@ equivalence_source C++ work.  Not a production sample -- research
 exploration that feeds into solver design decisions.
 
 **Outcome (2026-06-09):** the design decision this study fed into is made --
-the project consolidated on the **HDiv-VIM** operator (`radia.hdiv_vim`), where
+the project consolidated on the **HDiv-VIM** operator (`radia.vim`), where
 the loop space is `ker(B)` (field-null by construction via de Rham), so NO
 runtime loop deflation / loop-star gauge / loop projection is needed. The C++
 solver APIs (`SetHACApKDeflation`, `SetDeflateNullspace`, `SolveLoopStar`,

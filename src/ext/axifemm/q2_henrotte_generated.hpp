@@ -25,7 +25,7 @@
 
 #include <cmath>
 
-namespace radia_axifemm {
+namespace axifem {
 namespace q2_henrotte {
 
 inline constexpr double PI = 3.14159265358979323846;
@@ -285,6 +285,6 @@ inline void MSigmaPhiAxis(double sb, double za, double zb, double sigma, double 
 }
 
 }  // namespace q2_henrotte
-}  // namespace radia_axifemm
+}  // namespace axifem
 
 #endif  // RADIA_AXIFEMM_Q2_HENROTTE_GENERATED_HPP

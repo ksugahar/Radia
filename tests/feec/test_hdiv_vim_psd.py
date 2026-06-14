@@ -21,7 +21,7 @@ pytest.importorskip("netgen.occ")
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Sphere, OCCGeometry, Pnt  # noqa: E402
 
-from radia.hdiv_vim._vim import build_charge_gram  # noqa: E402
+from radia.vim._vim import build_charge_gram  # noqa: E402
 
 
 def _N_dense(fes):

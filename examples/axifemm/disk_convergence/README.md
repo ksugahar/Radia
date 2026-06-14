@@ -90,7 +90,7 @@ v22b's τ_1 within ~1 % validates the formulation as a reference for
 production induction-heating analyses (where the dominant time
 constant drives heating-rate control loops).
 
-The C++ port lives at `radia.radia_axifemm.AxiHenrotteFESpace` (see
+The C++ port lives at `radia.axifem.AxiHenrotteFESpace` (see
 `tests/axifemm/test_python_reference_consistency.py` for the
 element-matrix-level cross-check between this pure-Python prototype
 and the C++ implementation).

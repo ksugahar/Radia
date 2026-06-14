@@ -127,13 +127,207 @@ This is the 4-layer stack from the killer demo in the README.
 """
 
 
+FIELD_SYNTHESIS = r"""
+# Field synthesis — the ANALYTIC / LINEAR-INVERSE branch of EM design opt
+
+The rest of this server teaches the DENSITY / GRADIENT-SHAPE branch of EM
+optimization (SIMP, level set, ON/OFF, Gangl-Sturm shape derivative,
+Sokolowski topological derivative): iterate a GEOMETRY against a nonlinear
+PDE + adjoint.  This topic covers the COMPLEMENTARY branch — design the
+SOURCE (magnetization M, or surface current K) so that a TARGET field is
+reproduced, exploiting the LINEARITY of magnetostatics in the source.  No
+mesh-iteration, no adjoint: in the canonical cases the source is obtained in
+CLOSED FORM (analytic inverse-source) or by ONE least-norm solve.
+
+Two members of this branch:
+
+  (1) COIL field synthesis (surface current K = n_hat x grad psi).
+      target B over a DSV  ->  A psi = B  ((ACA+)+TSVD least-norm)
+      -> iso-contours of psi = the wires.  This is the stream-function /
+      target-field / TSVD-eigenmode lineage (Turner; Tomasi; M. Abe).
+      ==> ALREADY SHIPPED + golden-locked in the `streamfunction` server.
+          Use it; do NOT reimplement.  (streamfunction("overview"),
+          ("harmonics"), ("fusion"); the Abe edge-equipotential BC =
+          M. Abe's current-potential MRI-coil method.)
+
+  (2) MAGNET field synthesis (permanent-magnet magnetization M).
+      "arbitrary field generation by permanent magnets" — given a target
+      field, find the radial-magnetization distribution M_r(r,theta).  This
+      is the analytic inverse-source method documented below.
+
+
+## Analytic PM-multipole inverse (2D polar) — VERIFIED
+
+For a permanent magnet the bound-current source of the magnetostatic
+vector potential A = A_z(r,theta) z_hat is curl M:
+
+    -Laplacian(A_z) = mu0 (curl M)_z ,   (curl M)_z = -(1/r) dM_r/dtheta
+
+Expand a purely RADIAL magnetization in azimuthal multipoles.  For a single
+mode n with an r-INDEPENDENT amplitude (the lab "Hidaka form"):
+
+    M_r        = (M_rn / n) sin(n (theta + theta_0))
+    (curl M)_z = -(M_rn / r) cos(n (theta + theta_0))
+
+The PARTICULAR solution is
+
+    A_z,n = mu0 * M_rn * r * cos(n (theta + theta_0)) / (n^2 - 1)        (*)
+
+i.e. a 1/(n^2 - 1) modal coefficient and a LINEAR-in-r potential, which
+gives an r-INDEPENDENT (spatially uniform) 2n-pole field component inside
+the magnet region:  B_r ~ sin(n(theta+theta_0)), B_theta ~ cos(...).
+
+Because magnetostatics is LINEAR in M, a general radial magnetization is the
+SUPERPOSITION of (*) over modes n — so an arbitrary target interior field
+expanded in multipoles is inverted mode-by-mode in closed form.  The same
+holds for a radially-VARYING magnetization M_r ~ r^{+/-n} (the lab
+"Sugahara general form"); its particular solution carries r^{n+1}/(2n+1)
+and r^{-n+1}/(2n-1) coefficients.
+
+VERIFICATION (symbolic, golden-locked by
+tests/mcp_server/test_topology_field_synthesis.py):
+  * Hidaka single-mode:  Laplacian(A_z) - (curl M)_z = 0  exactly.
+  * Sugahara general r^{+/-n}:  Laplacian(A_z) - (curl M)_z = 0  exactly.
+(Convention: the lab scripts set mu0 = 1 and write the identity as
+lapAz = rotMr; the test reproduces that identity symbolically.)
+
+### The n = 1 degeneracy (do not miss this)
+The coefficient 1/(n^2 - 1) DIVERGES at n = 1.  n = 1 radial magnetization
+M_r ~ sin(theta + theta_0) IS a UNIFORMLY magnetized cylinder — a resonant
+/ degenerate forcing whose particular solution is NOT of the r*cos form.
+It is handled separately by the classical result: a uniformly magnetized 2D
+cylinder has a UNIFORM interior field B_in = mu0 M / 2 (transverse demag
+factor 1/2).  So the dipole (n=1) term is the special case, exactly as the
+1/(n^2-1) pole signals.  (Cf. the ellipsoid/cylinder demag factors in
+`analytical_formulas("ellipsoid")`.)
+
+
+## Worked objective — air-gap harmonic content (SPM / Halbach ring)
+
+A surface-permanent-magnet (SPM) ring with a chosen segmentation /
+magnetization pattern is evaluated by the FOURIER HARMONIC CONTENT of A_z
+on an air-gap circle r = R:
+
+    a_0 = (1/2pi) integral A_z dtheta ,
+    a_k = (1/pi) integral A_z cos(k theta) dtheta ,
+    b_k = (1/pi) integral A_z sin(k theta) dtheta .
+
+The design objective is to shape the magnet arrangement so the spectrum {a_k,
+b_k} matches a target (e.g. a pure fundamental for low cogging / clean
+back-EMF, or a prescribed gradient/shim profile).  The forward A_z(R,theta)
+comes from Radia (rad.Fld) or the analytic multipole sum above; the harmonic
+decomposition is a 1-D quadrature.  This pairs the analytic inverse (pick the
+modes you want) with a Radia forward check (confirm the realised spectrum).
+Cross-validation against an independent magnetostatic solver is kept as an
+internal regression reference.
+
+
+## Outer loop when the inverse is NOT closed-form
+When the geometry is constrained (manufacturable segment angles, discrete
+magnetization directions, soft-iron return paths) the linear inverse becomes
+a bounded nonlinear fit — drive it with a DERIVATIVE-FREE optimizer:
+Nelder-Mead simplex / swarm (see the `evolutionary` and `optuna` servers).
+The analytic multipole map makes a cheap, exactly-differentiable surrogate
+for the inner objective.
+
+
+## Honest scope
+  * (*) is the INTERIOR particular solution for an r-independent single-mode
+    radial M; a real finite magnet adds homogeneous r^{+/-n} terms fixed by
+    the magnet inner/outer radii + soft-iron BCs (the Sugahara general form
+    supplies those radial pieces; match coefficients to the boundary).
+  * n=1 is degenerate (uniform-M cylinder, B=mu0 M/2) — never apply (*) there.
+  * The COIL branch (stream function / TSVD / target field) is the shipped,
+    tested `streamfunction` server; this topic only POINTS to it and adds the
+    MAGNET (magnetization) analytic inverse + the SPM harmonic objective.
+
+## References (field-synthesis lineage)
+  * Turner, J. Phys. D 19, L147 (1986) — target-field method (gradient coils).
+  * Tomasi, Magn. Reson. Med. (2001) — stream-function gradient-coil design.
+  * M. Abe et al. — current-potential / TSVD-eigenmode MRI magnet & shim
+    design (node current potentials + triangular FE; the edge-equipotential
+    BC in the streamfunction server is named after this work).
+  * Permanent-magnet "arbitrary field generation" + magnetic-body position
+    control (Sugahara Lab analytic multipole note; the (*) derivation above).
+See also the density/gradient-shape PM-design entries in
+`topology_opt_applications` and the bibliography index.
+"""
+
+
+OUTER_LOOP_OPTIMIZERS = r"""
+# Outer-loop optimizers for EM field / shape design (derivative-free)
+
+When the inverse problem is NOT closed-form -- manufacturable bounds on
+segment angles, discrete magnetization directions, soft-iron return paths, a
+black-box FE/Radia forward solve in the loop -- the design is a bounded,
+possibly non-smooth, gradient-free optimization.  The Sugahara Lab optimizer
+toolbox (W:\...\MATLAB\30_Optimization) is the practical reference for this
+outer loop; the canonical members:
+
+  * NELDER-MEAD SIMPLEX (direct search, Nelder-Mead 1965) -- the workhorse
+    derivative-free LOCAL optimizer.  A simplex of n+1 points crawls downhill
+    by reflect / expand / contract / shrink.  No gradient, tolerates a
+    NON-SMOOTH objective (the lab's CF = sum|A x|, an L1 cost, has no
+    derivative at kinks -- Nelder-Mead handles it where gradient methods
+    stall).  Local, so multistart / a global stage for multimodal fields.
+  * BOUND CONSTRAINTS BY TRANSFORMATION (`fminsearchbnd`, D'Errico) -- the
+    lab's actual tool: keep the unconstrained simplex but map the search
+    variable into the feasible box so NO evaluation ever leaves it:
+        both bounds [LB,UB]:  x = LB + (UB-LB)*(sin(t)+1)/2     (sin transform)
+        lower only  [LB, inf): x = LB + t^2                     (quadratic)
+        upper only  (-inf,UB]: x = UB - t^2
+        equal bounds:          variable fixed, problem reduced in size
+    The optimizer sees the unconstrained t; the objective sees the feasible x.
+  * POPULATION / GLOBAL members for multimodal or discrete design -- PSO
+    (Kennedy-Eberhart 1995; lab EQC_PSO / PSO dirs), GA (lab GA dirs), CMA-ES.
+    See the `evolutionary` server (ga_de / pso / cma_es / immune_nsga) and the
+    `optuna` server (TPE / CMA-ES sampler, pruning) -- THIS topic is the
+    direct-search LOCAL sibling those servers do not cover.
+
+VERIFICATION (golden-locked by tests/mcp_server/test_topology_field_synthesis.py):
+  * Nelder-Mead on Rosenbrock (1-x)^2 + 105(y-x^2)^2 from (3,3) -> (1,1), f=0.
+  * fminsearchbnd transform with LB=(2,2), no UB -> the constrained minimum
+    (2,4), f=1 (the boundary optimum; matches the fminsearchbnd doc example) --
+    the transform is reproduced exactly.
+
+WHERE IT PLUGS IN: the analytic PM-multipole / stream-function inverse
+(topic `field_synthesis`) gives a CHEAP, exactly-evaluable surrogate for the
+inner objective; this outer loop then searches the manufacturable parameters
+(segment count/angles, former size, discrete easy-axis) against the Radia/FE
+forward field.  Local direct search for fine tuning; population/global
+(`evolutionary`, `optuna`) when the field landscape is multimodal.
+"""
+
+
 def get_applications_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
     Topics:
-      "all"   - All applications
-      "motor" - IPM motor shape optimization (Gangl 2015 case study)
+      "all"            - All applications
+      "motor"          - IPM motor shape optimization (Gangl 2015 case study)
+      "field_synthesis"- Analytic / linear-inverse branch: PM-multipole
+                         magnetization inverse (verified) + air-gap harmonic
+                         objective + pointer to the streamfunction coil branch
+      "outer_loop"     - Derivative-free outer-loop optimizers (Nelder-Mead +
+                         fminsearchbnd bound transform; pointer to evolutionary
+                         / optuna for population/global), verified on Rosenbrock
     """
-    if topic.lower().strip() in ("motor", "ipm", "all"):
+    t = topic.lower().strip()
+    if t == "all":
+        return (MOTOR_OPTIMIZATION + "\n\n" + FIELD_SYNTHESIS
+                + "\n\n" + OUTER_LOOP_OPTIMIZERS)
+    if t in ("motor", "ipm"):
         return MOTOR_OPTIMIZATION
-    return f"Unknown topic '{topic}'. Available: all, motor."
+    if t in ("field_synthesis", "field-synthesis", "fieldsynthesis",
+             "synthesis", "inverse_source", "inverse-source", "magnet",
+             "magnet_design", "pm", "multipole", "arbitrary_field",
+             "stream_function", "streamfunction", "target_field", "tsvd",
+             "spm", "halbach", "harmonics"):
+        return FIELD_SYNTHESIS
+    if t in ("outer_loop", "outer-loop", "outerloop", "derivative_free",
+             "derivative-free", "nelder_mead", "nelder-mead", "neldermead",
+             "simplex", "fminsearch", "fminsearchbnd", "direct_search",
+             "optimizer", "optimizers"):
+        return OUTER_LOOP_OPTIMIZERS
+    return ("Unknown topic '%s'. Available: all, motor, field_synthesis, "
+            "outer_loop." % topic)

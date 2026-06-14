@@ -8,7 +8,7 @@ de-Rham-exact operator that additionally handles **curved geometry, polynomial h
 symmetry models** that flat yano-type cannot.
 
 This is the canonical technical reference. The runnable examples + their numbers live in
-[`examples/feec_vim/README.md`](../../examples/feec_vim/README.md); the decision/narrative record is
+[`examples/vim/README.md`](../../examples/vim/README.md); the decision/narrative record is
 the radia-mcp `hdiv_vim` knowledge (MCP tool `mcp__radia-ngsolve__hdiv_vim`).
 
 ---
@@ -134,7 +134,7 @@ remaining lift to **retire yano-type in production**:
 | C-yoke nonlinear (non-convex) | `hdiv_cyoke_nonlinear.py` | `test_hdiv_vim_cyoke_nonlinear.py` |
 | Symmetry models (loops + image demag) | `hdiv_demag_symmetry_image.py` | `test_hdiv_vim_symmetry_{loops,image}.py` |
 
-All under `examples/feec_vim/` and `tests/feec/` (full feec suite: 85 passing).
+All under `examples/vim/` and `tests/feec/` (full feec suite: 85 passing).
 
 ## 9. Research plan — the eddy-current VIM (future directions)
 

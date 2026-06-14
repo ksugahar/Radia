@@ -5,7 +5,7 @@ SYMMETRY-MODEL DEMAG VALUE: reflecting the reduced model's spherical-cap surface
 reduction planes (sign = (-1)^#z-reflections, since sigma = n_z) reconstructs the full sphere, so the
 1/2, 1/4, 1/8 models reproduce the FULL-sphere demag from ~1/2, 1/4, 1/8 the surface DOF.
 
-See examples/feec_vim/hdiv_demag_symmetry_image.py.
+See examples/vim/hdiv_demag_symmetry_image.py.
 """
 import os
 import sys
@@ -15,7 +15,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "feec_vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
 import hdiv_demag_symmetry_image as sym  # noqa: E402
 
 

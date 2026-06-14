@@ -18,7 +18,7 @@ The only honest outputs for a helical target are the continuous vector-T
 distribution (J = curl T, Stage A) or a multi-patch Clebsch atlas with
 cohomology cuts -- NOT windable equal-current wires.
 
-See examples/feec_vim/helical_current_no_clebsch.py and streamfunction("clebsch_3d").
+See examples/vim/helical_current_no_clebsch.py and streamfunction("clebsch_3d").
 """
 import os
 import sys
@@ -26,7 +26,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                "../../examples/feec_vim"))
+                                "../../examples/vim"))
 
 
 @pytest.fixture(scope="module")

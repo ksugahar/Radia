@@ -1,6 +1,6 @@
 """Golden lock: CMA-ES over the foliation gauge (the F1 remedy).
 
-Runs examples/feec_vim/cmaes_foliation_gauge.py and asserts:
+Runs examples/vim/cmaes_foliation_gauge.py and asserts:
 
   - the inner field-fit is exact at every gauge (the bilevel inner problem is
     CONVEX -> fit_max ~ 0);
@@ -18,7 +18,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "feec_vim")
+EXDIR = os.path.join(HERE, "..", "..", "examples", "vim")
 
 
 @pytest.mark.slow

@@ -326,7 +326,7 @@ def differential_forms_mathematica_recipes(topic: str = "all") -> str:
       "kelvin"        - Kelvin transformation: derive kelvin_factor
                         R/|y| via conformal weight λ^((n-2k)/2);
                         cover k=0 (scalar pot), k=1 (vector pot),
-                        k=2 (B field).  Pairs with `radia.radia_axifemm`
+                        k=2 (B field).  Pairs with `radia.axifem`
                         Kelvin shell + `radia_mcp.radia_ngsolve` Kelvin
                         identification workflow.
       "maxwell_stress" - Maxwell stress tensor σ_em = b⊗h̃ - {h̃·b - ρΨ}I:

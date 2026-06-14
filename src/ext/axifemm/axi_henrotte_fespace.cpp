@@ -6,7 +6,7 @@
 #include "axi_henrotte_diffop.hpp"
 #include <python_comp.hpp>
 
-namespace radia_axifemm {
+namespace axifem {
 
 using namespace ngcomp;
 
@@ -325,4 +325,4 @@ void ExportAxiHenrotteFESpace(pybind11::module & m) {
           "  order=2          : Q2 quad-only (9 DOFs: 4 vertex + 4 edge + 1 face).");
 }
 
-}  // namespace radia_axifemm
+}  // namespace axifem

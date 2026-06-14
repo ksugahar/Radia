@@ -139,7 +139,7 @@ def motor_henrotte_lineage(topic: str = "research_arc") -> str:
 
     Args:
         topic: One of:
-            "axisym_1993"       - Henrotte basis s=r²/2 (foundation of radia_axifemm)
+            "axisym_1993"       - Henrotte basis s=r²/2 (foundation of axifem)
             "source_field_1997" - Dular-Henrotte cut-aware source field
             "energy_hys_2006"   - Energy-based vector hysteresis (friction)
             "variational_2013"  - Variational FE-friendly extension

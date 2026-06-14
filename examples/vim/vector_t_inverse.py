@@ -19,7 +19,7 @@ min-norm T is orthogonal to gradients) -- NO explicit tree-cotree gauge needed.
 
 Response row (target p_i, Bz):  [curl(v) x K_i]_z,  K_i = (p_i - x)/|p_i-x|^3.
 
-Run:  python examples/feec_vim/vector_t_inverse.py
+Run:  python examples/vim/vector_t_inverse.py
 """
 import os
 import sys

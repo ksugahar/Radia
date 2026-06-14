@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import ngsolve as ng
 from ngsolve import TaskManager
 from netgen.occ import Box, OCCGeometry, Pnt as OPnt
-from radia.hdiv_vim import _nonlinear as nl
+from radia.vim import _nonlinear as nl
 import radia as rad
 import netgen_mesh_import as nmi
 

@@ -78,7 +78,7 @@ private:
 
 /* The UNSTRUCTURED / general-mesh production path.  Charges = volume cells (rho = -div M) +
  * boundary faces (sigma = M.n) extracted from ANY RT0 mesh (e.g. NGSolve HDiv(order=0) on a tet
- * mesh -- see examples/feec_vim/hdiv_demag_tet.py).  This manager builds the n_charge x n_charge
+ * mesh -- see examples/vim/hdiv_demag_tet.py).  This manager builds the n_charge x n_charge
  * Coulomb Gram G as a HACApK H-matrix (a clean 1/r kernel over the charge centroids):
  *   G[a][b] = meas_a meas_b / (4pi |c_a - c_b|)   (a != b, centroid monopole)
  *   G[a][a] = self_energy[a]                       (the accurate sub-divided self, computed by the

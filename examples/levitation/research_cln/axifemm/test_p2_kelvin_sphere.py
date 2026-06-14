@@ -44,7 +44,7 @@ from netgen.occ import (
 from ngsolve import (
     Mesh, BilinearForm, CoefficientFunction, Periodic, TaskManager, ngsglobals,
 )
-from radia.radia_axifemm import (
+from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 from radia.panels.add_kelvin import add_kelvin_2d_axisym

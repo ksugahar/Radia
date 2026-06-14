@@ -1,7 +1,7 @@
 """Wire extraction from a foliated volume current  (Stage B / B2).
 
 Turns the foliated-Clebsch solenoid's continuous solved lambda (a VOLUME H1
-scalar, examples/feec_vim/foliated_clebsch_solenoid.py) into WINDABLE DISCRETE
+scalar, examples/vim/foliated_clebsch_solenoid.py) into WINDABLE DISCRETE
 EQUAL-CURRENT WIRES, and validates that their straight-segment Biot-Savart
 reproduces the target Bz.
 
@@ -19,7 +19,7 @@ are RINGS (the b1=1 net-azimuthal-current case); chaining them is the already-
 solved Gz "smooth helix".  We validate the EXTRACTED EQUAL-CURRENT RINGS here;
 single-stroke chaining is the downstream step.
 
-Run:  python examples/feec_vim/foliated_solenoid_wires.py
+Run:  python examples/vim/foliated_solenoid_wires.py
 """
 import os
 import sys

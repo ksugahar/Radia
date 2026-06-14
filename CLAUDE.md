@@ -33,11 +33,11 @@ S:\Radia\01_GitHub\
         check.py          # check-vol CLI + check_consistency() API
         cubit_mesh_curver.pyd  # C++ pybind11 module (bundled)
     radia-mcp/            # pip install radia-mcp (MCP servers + skills)
-  src/radia/radia_axifemm.pyd  # CORE METHOD (not a package): axisymmetric FE
+  src/radia/axifem.pyd  # CORE METHOD (not a package): axisymmetric FE
                           # (Henrotte basis), ships in the radia wheel.
                           # examples/axifemm/ (+ research/), tests/axifemm/.
   src/radia/hdiv_vim/     # CORE METHOD (not a package): FEEC HDiv-VIM
-                          # (C++ src/core/rad_hdiv_vim.cpp). examples/feec_vim/.
+                          # (C++ src/core/rad_hdiv_vim.cpp). examples/vim/.
                           # This is the SOLE VIM (the radia_vim Galerkin
                           # prototype was deleted 2026-06-14 as unnecessary).
   src/radia/levitation/   # radia.levitation -- APPLICATION domain (NOT a
@@ -94,8 +94,8 @@ now holds only the two genuine PyPI packages above.
 | Method | Code (ships in radia wheel) | Examples / Tests |
 |--------|------------------------------|------------------|
 | **MMM / MSC** (collocation demag) | `mmm_core.pyd` + `radia.ObjHexahedron/Tetrahedron/Wedge` (`import radia`; the old `radia_mmm` namespace is gone) | `examples/hantila_solver/`, `examples/smco_magnet_array/` |
-| **Axisymmetric FE** (Henrotte basis) | `radia.radia_axifemm` (`src/radia/radia_axifemm.pyd`) | `examples/axifemm/` (+ `research/`), `tests/axifemm/` |
-| **FEEC HDiv-VIM** (the VIM) | `radia.hdiv_vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) -- the SOLE VIM. The separate Newton-kernel Galerkin VIM prototype (`src/ext/radia_vim/`) was deleted 2026-06-14 as unnecessary (recover from git history if ever needed). | `examples/feec_vim/` |
+| **Axisymmetric FE** (Henrotte basis) | `radia.axifem` (`src/radia/axifem.pyd`) | `examples/axifemm/` (+ `research/`), `tests/axifemm/` |
+| **FEEC HDiv-VIM** (the VIM) | `radia.vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) -- the SOLE VIM. The separate Newton-kernel Galerkin VIM prototype (`src/ext/radia_vim/`) was deleted 2026-06-14 as unnecessary (recover from git history if ever needed). | `examples/vim/` |
 | **DtN / FEM-Kelvin operator** (compute core) | the FEM-Kelvin sparse generator of the layered (Sommerfeld-type) Green's operator -- a **core** capability, NOT an application. Currently research-stage under `examples/kelvin_transformation/DtN_spectrum/` + `radia_mcp.radia_ngsolve` knowledge (`dtn_coarse_mesh`); promotes into `src/radia/` (like `hdiv_vim` did) when stable. | `examples/kelvin_transformation/DtN_spectrum/`, `packages/radia-mcp/tests/test_dtn_*` |
 
 **Application domains inside `radia`** (NOT standalone packages -- they
@@ -574,7 +574,7 @@ framing)**: Axisymmetric FE convention follows the FEMM 4.2 split:
 
 | Physics | Basis | Reason |
 |---------|-------|--------|
-| **Magnetic A_phi (curl-curl)** | **Henrotte** `{1, r^2, z}` (`radia.radia_axifemm`) | The cylindrical curl operator `B_z = (1/r) d(r A_phi)/dr` produces a `1/r` integrand that standard FE Gauss quadrature cannot integrate accurately near the axis.  Henrotte's `s = r^2` substitution gives clean closed-form integration. |
+| **Magnetic A_phi (curl-curl)** | **Henrotte** `{1, r^2, z}` (`radia.axifem`) | The cylindrical curl operator `B_z = (1/r) d(r A_phi)/dr` produces a `1/r` integrand that standard FE Gauss quadrature cannot integrate accurately near the axis.  Henrotte's `s = r^2` substitution gives clean closed-form integration. |
 | **Scalar T / phi (Laplacian)** | **Standard NGSolve `H1`** + `2 pi r` weighting | The weak form `int k grad T . grad v . 2 pi r dr dz` has `2 pi r` as a **smooth Jacobian** (not a `1/r` integrand).  Standard FE handles this fine; no axis-special treatment is needed. |
 
 This matches the FEMM 4.2 reference implementation (verified against
@@ -596,7 +596,7 @@ proven convention.
 **API for magnetic axisym**:
 
 ```python
-import radia.radia_axifemm as ax
+import radia.axifem as ax
 
 mesh = Mesh(...)                                  # axis-aligned (r, z) mesh
 fes  = ax.H1Henrotte(mesh, order=p)               # p = 1 (Q1) or p = 2 (Q2)
@@ -622,7 +622,7 @@ a_heat += h_conv * v * u * weight * ds(surface_label)   # Robin
 ```
 
 **Optional Henrotte heat infrastructure**: The
-`radia.radia_axifemm.AxiHenrotteHeat{Stiffness,Mass}BFI` classes
+`radia.axifem.AxiHenrotteHeat{Stiffness,Mass}BFI` classes
 (added in radia 4.31.0) and the `H1Henrotte` BND DiffOp (radia
 4.32.0) are kept in the codebase as parity-conscious infrastructure
 for research / publication uses (e.g. comparing convergence rates of
@@ -1098,17 +1098,17 @@ sideset 1 add surface 2             # surface 2 may not be the gap face
 
 **DEPRECATION (2026-06-14): the yano-type MSC demag backend is OPTIONAL + on the removal path.**
 The Yano MSC backend (the `rad.Solve` path for hex/wedge *soft-iron* demag) is being
-superseded by the FEEC HDiv-VIM (`radia.hdiv_vim`).  It is now exposed as a **runtime-selectable
+superseded by the FEEC HDiv-VIM (`radia.vim`).  It is now exposed as a **runtime-selectable
 backend** so it can be removed cleanly:
 - `radia.set_demag_backend("yano" | "hdiv")` / `radia.get_demag_backend()` (or
   `rad.SolverConfig(demag_backend=...)`).  Default `"yano"` (legacy; emits a one-time
   `DeprecationWarning` on the first `rad.Solve`).  `"hdiv"` makes `rad.Solve` **refuse** the yano path
-  with a `NotImplementedError` redirecting to the `radia.hdiv_vim` API (HDiv-VIM is not yet wired into
+  with a `NotImplementedError` redirecting to the `radia.vim` API (HDiv-VIM is not yet wired into
   `rad.Solve`).
 - Permanent-magnet and **MMM (tetrahedron)** solves do NOT use the yano-type MSC path and are unaffected.
 - When the HDiv-VIM is wired into `rad.Solve`, the default flips to `"hdiv"`; deleting the yano C++ MSC
   then changes only that default, not the public API.  Wrapper + gate live in `src/radia/__init__.py`
-  (golden `tests/test_demag_backend.py`).  Migrate hex/wedge soft-iron demag to `radia.hdiv_vim`
+  (golden `tests/test_demag_backend.py`).  Migrate hex/wedge soft-iron demag to `radia.vim`
   (`build_demag` / `DemagOperator` / `solve_demag_newton`).
 
 **When to use which**:

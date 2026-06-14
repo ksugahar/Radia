@@ -743,7 +743,7 @@ charge map B (rho = -div M on L2, sigma = M.n on SurfaceL2) so the loop space is
 exactly ker(B) -- field-null BY CONSTRUCTION via the de Rham complex,
 mu_r-INDEPENDENT, with no runtime deflation / gauge / projection. M^{-1} mass
 preconditioning already deflates the loops, so a plain symmetric Krylov is
-well-conditioned at every mu_r. See `radia.hdiv_vim` and `tests/feec/test_hdiv_vim_*`.
+well-conditioned at every mu_r. See `radia.vim` and `tests/feec/test_hdiv_vim_*`.
 
 Effect on the MSC/MMM default solver (Block-Jacobi BiCGSTAB, HACApK Method 2):
 it no longer projects out loops. Fields are UNAFFECTED (N L = 0) -- rad.Fld is
@@ -756,7 +756,7 @@ makes loops ker(B), is the right consolidation.)
 - At very high mu_r the converged discrete MSC solution can carry spurious loops;
   this is a formulation/conditioning property, NOT a solver bug (LU shows it too),
   and it does not change the computed field.
-- For a loop-free-by-construction formulation use HDiv-VIM (`radia.hdiv_vim`);
+- For a loop-free-by-construction formulation use HDiv-VIM (`radia.vim`);
   otherwise keep mu_r physical for trustworthy high-mu_r MSC results.
 """
 

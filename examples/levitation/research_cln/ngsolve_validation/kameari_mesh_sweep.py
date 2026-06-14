@@ -28,7 +28,7 @@ from ngsolve import (
     Mesh, BilinearForm, LinearForm, CoefficientFunction, GridFunction,
     TaskManager, x, dx, ngsglobals,
 )
-from radia_axifemm import (
+from axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 

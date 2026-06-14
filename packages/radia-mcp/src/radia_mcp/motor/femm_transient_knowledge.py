@@ -554,7 +554,7 @@ or W:/03_文献・論文/00_電磁界解析/磁気特性/ヒステリシス/:
 
 | Year | Authors | Title | Relevance |
 |------|---------|-------|-----------|
-| 1993 | Henrotte-Hedia-Bamps-Genon-Nicolet-Legros | A New Method for Axisymmetrical Linear and Nonlinear Problems | Foundation of Henrotte basis (cf. `radia.radia_axifemm`) |
+| 1993 | Henrotte-Hedia-Bamps-Genon-Nicolet-Legros | A New Method for Axisymmetrical Linear and Nonlinear Problems | Foundation of Henrotte basis (cf. `radia.axifem`) |
 | 1997 | Dular-Henrotte-Robert-Genon-Legros | A Generalized Source Magnetic Field Calculation Method for Inductors of any Shape | Stage-3 source field construction (Whitney) |
 | 2004 | Bossavit-Henrotte | EM Force Density in Ferromagnetic Material | `differential_forms.forces_knowledge` |
 | 2006 | Henrotte | Energy-based vector hysteresis model | Energy-method core paper |

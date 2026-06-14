@@ -23,7 +23,7 @@ Dimensionless diagnostic (Cauchy-Schwarz bounded in [0,1]):
 Two analytic checks: an AXIAL T = (0,0,f) has T.J = 0 pointwise (curl is in-plane)
 -> H_rel = 0; an ABC/Beltrami flow has curl T = T -> H_rel = 1.
 
-Run:  python examples/feec_vim/helicity_diagnostic.py
+Run:  python examples/vim/helicity_diagnostic.py
 """
 import os
 import sys

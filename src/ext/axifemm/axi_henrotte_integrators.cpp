@@ -31,7 +31,7 @@
 #include "q2_henrotte_generated.hpp"
 #include "q_heat_henrotte_generated.hpp"
 
-namespace radia_axifemm {
+namespace axifem {
 
 using namespace ngfem;
 using std::log;
@@ -1000,4 +1000,4 @@ void ExportAxiHenrotteIntegrators(pybind11::module & m)
              py::arg("rho_c"));
 }
 
-}  // namespace radia_axifemm
+}  // namespace axifem

@@ -12,7 +12,7 @@
 #ifndef RADIA_AXIFEMM_Q_HEAT_HENROTTE_GENERATED_HPP
 #define RADIA_AXIFEMM_Q_HEAT_HENROTTE_GENERATED_HPP
 
-namespace radia_axifemm {
+namespace axifem {
 namespace q_heat {
 
 constexpr double kPi = 3.14159265358979323846;
@@ -240,6 +240,6 @@ inline void MMonomialQ2(double sa, double sb, double za, double zb,
 }
 
 }  // namespace q_heat
-}  // namespace radia_axifemm
+}  // namespace axifem
 
 #endif

@@ -161,7 +161,7 @@ This **unifies the lab's two design lines**:
 
 - φ-side iron pole — the hodograph (`examples/clebsch_hodograph/`).
 - A-side coil current — the stream function
-  (`src/radia/stream_function.py`, `examples/feec_vim/foliated_solenoid_wires.py`,
+  (`src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py`,
   verified against Radia to 3.4e-10).
 
 Multiply-connected / current-linking cases (a coil window) bring in the dual
@@ -242,4 +242,4 @@ coil = A-side), so the framework is one method, not two.
 | 3-D ends: integrated analyzer + end rule | `examples/clebsch_hodograph/accel_pole_ends_3d.py` |
 | 3-D ends: FEM rung (reduced-Ω + CoilBuilder) | `examples/clebsch_hodograph/accel_pole_ends_fem.py` |
 | forward (reduced potential + CoilBuilder) | `src/radia/panels/calc_accel_magnet.py` |
-| A-side coil (stream function) | `src/radia/stream_function.py`, `examples/feec_vim/foliated_solenoid_wires.py` |
+| A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
