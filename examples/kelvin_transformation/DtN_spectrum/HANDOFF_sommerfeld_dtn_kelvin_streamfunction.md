@@ -69,9 +69,16 @@ Promote `demo_ff` from the concentric/modal toy to a **general coil inverse desi
    **(C2)** order-2 FEM transfer R_n reproduces the analytic layered-Green transfer to rel_max 2.5e-2
    (same operator); **(C3)** a non-concentric blob builds at identical sparse cost where no closed-form
    Green function exists. Selling point confirmed: sparse, material-aware, no Green function.
-   **Remaining open refinements:** a non-spherical coil former (cylinder) and an m≠0 tesseral target to
-   drop the residual spherical symmetry. (Wiring the inverse through `radia.streamfunction`'s ACA-TSVD is
-   now DONE -- `demo_kk`, below.)
+   **Steps 1-4 fully closed — `demo_ll_cylinder_tesseral_shim.py` (streamfunction branch):** a
+   non-spherical (CYLINDER) coil former + an OFF-AXIS iron blob + a genuine m≠0 TESSERAL shim (Z2 and ZX)
+   drop the residual spherical symmetry — iron-aware purity resid **2e-8/8e-8** vs free-space-in-iron
+   **2e-2**; manufacturable discrete contours **9.5e-2 (6 turns) → 1.1e-2 (40 turns)**; and an INDEPENDENT
+   brute-force air-box solve (no Kelvin, far Dirichlet) confirms the iron-aware field to **3.6e-3 on a
+   smooth sphere former**. (The cylinder air-box cross-check is edge-singularity-limited to ~8e-2 because
+   some DSV points sit ~0.03 from the sharp rim — a 270° reentrant corner whose field singularity BOTH
+   meshes under-resolve = a property of the CHECK, not the method; the method itself is anchored by the
+   clean sphere result and the demo_hh analytic 1e-4.) (Wiring the inverse through
+   `radia.streamfunction`'s ACA-TSVD is also DONE -- `demo_kk`, below.)
    - **[SETTLED, `demo_jj_aca_tsvd_on_dtn_matrix.py`]** *Can ACA-TSVD be applied to M?* **Yes.** TSVD
      applies to the global inverse design `psi = M^+ B_target` unchanged and is necessary (M is the
      compact forward map psi->field; its SVs decay; measured cond(1e-6) ~ 9.5e3). ACA applies
@@ -92,8 +99,8 @@ Promote `demo_ff` from the concentric/modal toy to a **general coil inverse desi
      (min current density)** both HIT the iron-system target in a fresh Kelvin-FEM solve, the ridge with
      **23% less current density**; an alpha L-curve trades accuracy for ||K|| re-solving only the small
      core; the **free-space-designed coil misses by 22.5%** through the same solver. No DtN-specific
-     design code -- only the `entry` callback changes.  This settles the user's point ("行列がある状態で
-     (ACA+)+TSVD は可能; 構築コストが安いなら ACA+TSVD でよい") in code.
+     design code -- only the `entry` callback changes.  This settles the open question (once M is in hand,
+     ACA+ then TSVD is applicable; if M is cheap to build, ACA+TSVD is a fine route) in code.
 
 ## CRITICAL Kelvin-FEM gotchas (each is a ~1e7x blow-up or silent error if missed)
 1. **Gauge:** the open Kelvin compactification has a constant near-null mode; a single ground POINT has
