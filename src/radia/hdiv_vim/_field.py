@@ -1192,44 +1192,155 @@ def assemble_demag_field(mesh, gfM, points, quantity="h"):
 
 
 # ---------------------------------------------------------------------------------------------------
+# Genuine order>=2 projection: element-local L2 projection of point-sampled data onto VectorL2(order=p)
+# (3 scalar L2 GridFunctions), then NGSolve's HDiv.Set(CF((gx,gy,gz))) -> HDiv(order=p).  This is the
+# robust order>=2 path: L2 CalcShape + an element-local (block-diagonal) solve are stable, and the HDiv
+# projection is NGSolve's own well-tested routine.  (The IntegrationRuleSpace path segfaults in NGSolve
+# 6.2.2604 -- gfM.Set of an IRS-CF crashes because an IRS GridFunction is only valid at its own
+# integration points; this path avoids IRS entirely.)  HDiv(order=p) reproduces [P_p]^3 EXACTLY (verified
+# to 3e-15), so a polynomial M of degree<=p is captured with no projection loss.
+# ---------------------------------------------------------------------------------------------------
+def _l2_element_quadrature(mesh, l2, nq):
+    """Precompute, per VOL element: (dofnrs, S (nq x ndof), W (nq), X (nq x 3)) for an element-local L2
+    projection.  S = reference shape values, W = phys quad weights (ip.weight * |J|), X = phys quad pts."""
+    import ngsolve as ng
+    perel = []
+    for i in range(mesh.GetNE(ng.VOL)):
+        ei = ng.ElementId(ng.VOL, i)
+        fe = l2.GetFE(ei)
+        ir = ng.IntegrationRule(mesh[ei].type, nq)
+        trafo = mesh.GetTrafo(ei)
+        npt = len(ir)
+        S = np.empty((npt, fe.ndof)); W = np.empty(npt); X = np.empty((npt, 3))
+        for q, ip in enumerate(ir):
+            S[q] = np.array(fe.CalcShape(ip.point[0], ip.point[1], ip.point[2]))
+            mip = trafo(ip)
+            W[q] = ip.weight * mip.measure
+            X[q] = [mip.point[0], mip.point[1], mip.point[2]]
+        perel.append((list(l2.GetDofNrs(ei)), S, W, X))
+    return perel
+
+
+def _project_targets(gfs, perel, targets):
+    """Fill the 3 scalar L2 GridFunctions gfs from per-element target arrays (each (nq,3)) by the
+    element-local L2 projection coef = mass^{-1} (S^T W) F.  mass is the element L2 mass (block-diagonal
+    -- L2 is discontinuous, so each element solves independently)."""
+    for g in gfs:
+        g.vec[:] = 0.0
+    for (dofs, S, W, X), F in zip(perel, targets):
+        SW = S.T * W
+        mass = SW @ S
+        for c in range(3):
+            coef = np.linalg.solve(mass, SW @ F[:, c])
+            for k, d in enumerate(dofs):
+                gfs[c].vec[d] = coef[k]
+
+
+def _project_pointdata_to_hdiv(mesh, target_fn, order, nq=None):
+    """Project a point-sampled vector field onto HDiv(order) via element-local L2 + HDiv.Set.
+    target_fn : (N,3) phys points -> (N,3) values.  Returns the HDiv GridFunction.
+    HDiv(order) reproduces a polynomial of degree<=order EXACTLY (no projection loss).  CALLER wraps in
+    TaskManager."""
+    import ngsolve as ng
+    if nq is None:
+        nq = 2 * order + 2
+    l2 = ng.L2(mesh, order=order)
+    gfs = [ng.GridFunction(l2) for _ in range(3)]
+    perel = _l2_element_quadrature(mesh, l2, nq)
+    targets = [np.asarray(target_fn(X), float).reshape(-1, 3) for (_, _, _, X) in perel]
+    _project_targets(gfs, perel, targets)
+    gfH = ng.GridFunction(ng.HDiv(mesh, order=order))
+    gfH.Set(ng.CoefficientFunction((gfs[0], gfs[1], gfs[2])))
+    return gfH
+
+
+# ---------------------------------------------------------------------------------------------------
 # Step 3: the field-based nonlinear demag SOLVE (Picard).  M (HDiv) is iterated by evaluating the demag
 # field at the element collocation points via the Step-2 assembly, applying the pointwise constitutive
 # law M = M_of_H(H_ext + H_demag), and projecting the per-element target back to H(div) (which enforces
 # the M.n continuity the charge assembly assumes).  This is the genuine field-based VIM nonlinear solve
-# (the "set_field" path -- NOT M_mass^{-1} N m).  Centroid collocation (per-element constant target ->
-# HDiv projection); exact for a uniform-M body (the sphere), the base for the order>=2 extension.
+# (the "set_field" path -- NOT M_mass^{-1} N m).
+#   collocation="centroid" : one point per element -> per-element CONSTANT target -> HDiv projection.
+#                            Effectively order-0 in M (exact for a uniform-M body, e.g. the sphere); fast.
+#   collocation="order_p"  : H_demag sampled at the element's quad points, M_of_H applied pointwise, the
+#                            per-element NON-uniform target L2-projected to HDiv(order) -- the GENUINE
+#                            order>=2 source (M varies within the element).  Reproduces uniform M exactly
+#                            and captures within-element M variation a non-ellipsoidal body develops.
 # ---------------------------------------------------------------------------------------------------
-def solve_demag_picard(mesh, M_of_H, H_ext, order=1, max_iter=120, tol=1e-5, relax=0.5, verbose=False):
+def solve_demag_picard(mesh, M_of_H, H_ext, order=1, max_iter=120, tol=1e-5, relax=0.5,
+                       collocation="centroid", verbose=False):
     """Solve M = P_HDiv[ M_of_H(H_ext + H_demag[M]) ] by under-relaxed Picard (the field-based VIM
     nonlinear demag solve -- the "set_field" path, NOT M_mass^{-1} N m).
 
-    mesh    : tet mesh of the magnetic body.
-    M_of_H  : callable (Hvec ndarray (3,)) -> Mvec ndarray (3,)  -- the constitutive law (A/m), e.g.
-              lambda H: chi*H, or a saturating M(H).
-    H_ext   : the applied field as an ndarray (3,) (uniform) -- A/m.
-    order   : HDiv order for the projected iterate M.
-    relax   : initial under-relaxation.  The fixed-point map M <- M_of_H(H_ext - N M) has Picard factor
-              ~ -chi*N (N ~ 1/3 for a sphere), so it DIVERGES for chi*N > 1 at full step; relax is
-              AUTO-REDUCED (halved, floor 0.02) whenever the residual rises, which keeps it stable across
-              chi (high chi just needs more iters).  For stiff / saturating materials a convex B-input
-              (A-formulation) solve is the robust alternative -- not implemented here.
-    returns : dict(gfM, M_centroids, n_iter, converged, residual).
+    mesh        : tet mesh of the magnetic body.
+    M_of_H      : callable (Hvec ndarray (3,)) -> Mvec ndarray (3,)  -- the constitutive law (A/m), e.g.
+                  lambda H: chi*H, or a saturating M(H).
+    H_ext       : the applied field as an ndarray (3,) (uniform) -- A/m.
+    order       : HDiv order for the projected iterate M.
+    relax       : initial under-relaxation.  The fixed-point map M <- M_of_H(H_ext - N M) has Picard
+                  factor ~ -chi*N (N ~ 1/3 for a sphere), so it DIVERGES for chi*N > 1 at full step;
+                  relax is AUTO-REDUCED (halved, floor 0.02) whenever the residual rises, which keeps it
+                  stable across chi (high chi just needs more iters).  For stiff / saturating materials a
+                  convex B-input (A-formulation) solve is the robust alternative -- not implemented here.
+    collocation : "centroid" (default, fast: one point/element -> per-element CONSTANT target, effectively
+                  order-0 in M, exact for a uniform-M body) or "order_p" (GENUINE order>=2: H_demag sampled
+                  at the element's quad points, M_of_H applied pointwise, the NON-uniform per-element target
+                  L2-projected to HDiv(order) so M varies WITHIN the element).
+    returns     : dict(gfM, M_centroids, n_iter, converged, residual).
 
-    CALLER wraps in TaskManager.  CENTROID collocation: H_demag is evaluated at element centroids and the
-    per-element constant target is L2-projected to HDiv (the projection enforces the M.n continuity the
-    charge assembly assumes).  Exact for a uniform-M body (validated on the sphere: linear chi -> the
-    analytic M = chi*H_ext/(1+chi/3); saturating -> the scalar demag fixed point).  The genuine order>=2
-    NON-uniform extension evaluates H_demag at quad points and uses a higher-order (VectorL2 order p ->
-    HDiv) projection -- a further step."""
+    CALLER wraps in TaskManager.  The HDiv projection enforces the M.n continuity the charge assembly
+    assumes.  Validated on the sphere (linear chi -> analytic M = chi*H_ext/(1+chi/3); saturating -> the
+    scalar demag fixed point) at BOTH collocation modes; order_p additionally resolves the within-element
+    M variation of a non-ellipsoidal body (see tests/feec/test_hdiv_vim_poly_field.py)."""
     import ngsolve as ng
-    fes = ng.HDiv(mesh, order=order)
-    gfM = ng.GridFunction(fes)
-    vl2 = ng.VectorL2(mesh, order=0)           # per-element constant intermediate (3 DOFs/cell)
-    gfMt = ng.GridFunction(vl2)
     H_ext = np.asarray(H_ext, float)
     nE = mesh.GetNE(ng.VOL)
+    fes = ng.HDiv(mesh, order=order)
+    gfM = ng.GridFunction(fes)
     cents = np.array([np.array([mesh[v].point for v in mesh[ng.ElementId(ng.VOL, i)].vertices]).mean(0)
                       for i in range(nE)])
+
+    if collocation == "order_p":
+        nq = max(2 * order + 2, 4)
+        l2 = ng.L2(mesh, order=order)
+        gfs = [ng.GridFunction(l2) for _ in range(3)]
+        perel = _l2_element_quadrature(mesh, l2, nq)
+        offs = []; o = 0
+        for (_, _, _, X) in perel:
+            offs.append((o, o + len(X))); o += len(X)
+        allX = np.vstack([X for (_, _, _, X) in perel])
+        def set_M():
+            _project_targets(gfs, perel, targets)
+            gfM.Set(ng.CoefficientFunction((gfs[0], gfs[1], gfs[2])))
+        targets = [np.tile(M_of_H(H_ext), (len(X), 1)) for (_, _, _, X) in perel]   # applied-field start
+        set_M()
+        converged = False; res = np.inf; prev = np.inf
+        for it in range(max_iter):
+            Hd = assemble_demag_field(mesh, gfM, allX, quantity="h")
+            new_targets = []; num = 0.0; den = 0.0
+            for k, ((dofs, S, W, X), (a, b)) in enumerate(zip(perel, offs)):
+                Mnew = np.array([M_of_H(H_ext + Hd[j]) for j in range(a, b)])     # (nq,3)
+                Mold = targets[k]
+                num += float(np.sum(W[:, None] * (Mnew - Mold) ** 2))
+                den += float(np.sum(W[:, None] * Mnew ** 2))
+                new_targets.append((1 - relax) * Mold + relax * Mnew)
+            res = np.sqrt(num / (den + 1e-30))
+            if res > prev * 1.05:                            # diverging -> back off the step
+                relax = max(relax * 0.5, 0.02)
+            prev = res
+            targets = new_targets
+            set_M()
+            if verbose:
+                mavg = np.mean([t.mean(0) for t in targets], axis=0)
+                print(f"  iter {it:2d}  res = {res:.3e}  relax = {relax:.3f}  M_avg = {mavg}")
+            if res < tol:
+                converged = True; break
+        Mcent = np.array([[float(gfM[c](mesh(cx, cy, cz))) for c in range(3)] for (cx, cy, cz) in cents])
+        return dict(gfM=gfM, M_centroids=Mcent, n_iter=it + 1, converged=converged, residual=res)
+
+    # --- centroid (order-0) collocation: per-element constant target -> HDiv projection ---
+    vl2 = ng.VectorL2(mesh, order=0)           # per-element constant intermediate (3 DOFs/cell)
+    gfMt = ng.GridFunction(vl2)
 
     def set_M(M):
         # VectorL2 order-0 DOFs are COMPONENT-major [x_0..x_{nE-1}, y_0.., z_0..] (NOT element-major);
