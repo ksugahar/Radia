@@ -1951,6 +1951,28 @@ absorber) specifically for the HIGH-FREQUENCY Kelvin -- elevating Track A's spec
 datasheet (low-freq SA paper) to an absorber-design tool (Paper-H). FE follow-up: assemble the
 isotropic (a/r')^2 medium (transformation optics) + the matched HOIBC surface term; demo_ll verifies
 the medium and the impedance-matching/reflection law in closed form.
+
+A WORKING FE (assembled + solved, converges to the closed form) -- "from derivation to a method that
+runs" (demo_mm, verified 2026-06-15). A genuine sparse FE realises the radiating extended-Kelvin
+boundary and h-converges to demo_kk/ll. Radial reduction (one degree n at a time so every mode is
+independently checkable; Delta_S enters as its EXACT eigenvalue -n(n+1), the modal content a surface
+FE reproduces). FE on the image shell rho in [rho_b, a], rho_b=a^2/b, P1 elements:
+  weak form  int [ alpha rho^2 R'S' + alpha n(n+1) R S - k^2 beta rho^2 R S ] drho,  alpha=(a/rho)^2,
+  beta=(a/rho)^6 (scalar; vector Maxwell would have beta=alpha = the conformal eps=mu). NOTE alpha rho^2
+  = a^2 CONSTANT -> the inverted-exterior stiffness is FLAT (an elegant by-product of the conformal map).
+  This weak form's strong form is exactly demo_kk's image ODE R''=[n(n+1)/rho^2-(k a^2/rho^2)^2]R.
+  Matched-HOIBC Robin at the inner image sphere: A[0,0] += -b*Lambda_inner (from rho dR/drho=
+  -Lambda_inner R). Truncation r=a: Dirichlet R(a)=1; DtN_FE = -(A R)|_a / a -- the MINUS is the
+  inversion flipping d/dr=-d/drho at the fixed-point sphere rho=a (the same sign-flip as demo_kk/ll;
+  caught numerically when the FE first returned -dtn_trunc), and (A R)|_a is the consistent-flux reaction.
+VERIFIED: the assembled+solved FE DtN -> the closed-form dtn_trunc at the P1 rate O(h^2) (error ratio
+4.00 per mesh doubling) for the exact, HOIBC AND SIBC inner conditions; with the EXACT inner impedance
+it reproduces the true truncation DtN Lambda_n(ka) (err ~1e-5 at M=320); and the matched HOIBC FE
+solution is 4-6x closer to Lambda_n(ka) than the constant-377-ohm SIBC FE solution (n=1: 1.3e-2 vs
+7.6e-2; n=3: 4.9e-2 vs 2.1e-1). So the demo_kk/ll derivation is now a METHOD THAT RUNS. Remaining
+step = the full 3D Delta_S surface term (NGSolve grad_Gamma / Laplace-Beltrami) on the inner image
+sphere instead of the per-mode eigenvalue; the radial FE already certifies the medium + matched
+boundary and the convergence rate.
 """
 
 
