@@ -28,6 +28,10 @@ from radia.hdiv_vim import (  # noqa: E402
     reconstruct_field_internal,
     flat_triangle_charge_field,
     tet_self_volume_field,
+    triangle_potential_const,
+    triangle_potential_moment,
+    tet_newtonian_potential,
+    tet_volume_field_linear,
 )
 
 
@@ -260,3 +264,104 @@ def test_cpp_tet_field_matches_grad_phitet():
             Fsph = 4 * np.pi * tet_self_volume_field(Varr, np.array(r), lambda p: 1.0, nth=48, nph=96)
             rel_sph = np.linalg.norm(Fc - Fsph) / np.linalg.norm(Fsph)
             assert rel_sph < 8e-3, f"C++ tet_field vs spherical r={r}: rel {rel_sph:.2e}"
+
+
+# ---------------------------------------------------------------------------------------------------
+# Analytic LINEAR volume-charge field (tet_volume_field_linear): EXACT closed form, the order-2 -div M
+# term.  Validated 4 ways -- pure-Python building blocks vs C++ probes (machine), constant case vs the
+# C++ TetField (machine), linear case vs far Gauss (machine), interior linear vs spherical (~1e-3).
+# ---------------------------------------------------------------------------------------------------
+def _tri_pot_gauss(P, r, nq=40):
+    P = np.asarray(P, float); r = np.asarray(r, float)
+    J = np.linalg.norm(np.cross(P[1] - P[0], P[2] - P[0]))
+    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+    I0 = 0.0; M1 = np.zeros(3)
+    for i in range(nq):
+        for j in range(nq):
+            u, w = xs[i], xs[j]; jac = (1 - u)
+            p = P[0] + u * (P[1] - P[0]) + w * (1 - u) * (P[2] - P[0])
+            wgt = ws[i] * ws[j] * jac * J / np.linalg.norm(r - p)
+            I0 += wgt; M1 += wgt * p
+    return I0, M1
+
+
+def _tet_field_gauss(tet, r, rho0, g, nq=24):
+    t = np.asarray(tet, float); r = np.asarray(r, float)
+    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws
+    V6 = abs(np.linalg.det(np.array([t[1] - t[0], t[2] - t[0], t[3] - t[0]])))
+    acc = np.zeros(3)
+    for i in range(nq):
+        for j in range(nq):
+            for k in range(nq):
+                a, b, c = xs[i], xs[j], xs[k]
+                l1, l2, l3 = a, b * (1 - a), c * (1 - a) * (1 - b)
+                jac = (1 - a) ** 2 * (1 - b)
+                p = t[0] + l1 * (t[1] - t[0]) + l2 * (t[2] - t[0]) + l3 * (t[3] - t[0])
+                acc += ws[i] * ws[j] * ws[k] * jac * V6 * (rho0 + np.dot(g, p)) * (r - p) / np.linalg.norm(r - p) ** 3
+    return acc
+
+
+_TET = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], float)
+
+
+def test_triangle_potential_pure_python_vs_cpp_and_gauss():
+    """Pure-Python triangle potential (const I0 + first moment M1) == C++ _hdiv_tri_potential (machine)
+    and == off-plane Gauss (machine)."""
+    import radia._radia_pybind as rp
+    P = _TET[[0, 1, 2]]
+    for r in [[0.3, 0.3, 0.7], [0.3, 0.3, 0.2], [1.5, 0.5, 0.4]]:
+        r = np.array(r, float)
+        I0 = triangle_potential_const(P, r)
+        M1 = triangle_potential_moment(P, r)
+        I0c = rp._hdiv_tri_potential(P.ravel().tolist(), r.tolist())
+        I0g, M1g = _tri_pot_gauss(P, r, 40)
+        assert abs(I0 - I0c) < 1e-12, f"I0 vs C++ r={r}"
+        assert abs(I0 - I0g) / abs(I0g) < 1e-10, f"I0 vs Gauss r={r}"
+        assert np.linalg.norm(M1 - M1g) / np.linalg.norm(M1g) < 1e-10, f"M1 vs Gauss r={r}"
+
+
+def test_tet_newtonian_potential_vs_cpp():
+    """Pure-Python PhiTet (-1/2 SUM h_f I0_f) == C++ _hdiv_phi_tet (machine), interior AND exterior."""
+    import radia._radia_pybind as rp
+    for r in [[0.25, 0.25, 0.25], [0.4, 0.3, 0.1], [2.0, 0.0, 0.0], [0.1, 0.1, 0.1]]:
+        r = np.array(r, float)
+        a = tet_newtonian_potential(_TET, r)
+        b = rp._hdiv_phi_tet(_TET.ravel().tolist(), r.tolist())
+        assert abs(a - b) / abs(b) < 1e-12, f"PhiTet vs C++ r={r}: {abs(a - b) / abs(b):.2e}"
+
+
+def test_tet_volume_field_linear_constant_vs_cpp_tetfield():
+    """Constant-rho closed-form volume field (SUM_f n_f I0_f) == the C++ TetField (= -grad PhiTet),
+    two INDEPENDENT derivations, to machine precision."""
+    import radia._radia_pybind as rp
+    for r in [[0.25, 0.25, 0.25], [0.4, 0.3, 0.1], [2.0, 0.0, 0.0], [0.3, 0.3, 0.7]]:
+        r = np.array(r, float)
+        Fc = tet_volume_field_linear(_TET, r, 1.0, np.zeros(3))
+        Ft = np.array(rp._hdiv_tet_field(_TET.ravel().tolist(), r.tolist()))
+        rel = np.linalg.norm(Fc - Ft) / np.linalg.norm(Ft)
+        assert rel < 1e-12, f"const volume field vs C++ TetField r={r}: {rel:.2e}"
+
+
+def test_tet_volume_field_linear_vs_gauss_far():
+    """Linear-rho closed-form volume field == high-order tet Gauss at FAR (non-singular) points."""
+    g = np.array([0.7, -0.3, 0.5]); rho0 = 0.4
+    for r in [[2.0, 0.0, 0.0], [1.5, 1.5, 1.0], [-1.0, 0.5, 0.5], [0.5, 0.5, 2.5]]:
+        r = np.array(r, float)
+        Fc = tet_volume_field_linear(_TET, r, rho0, g)
+        Fg = _tet_field_gauss(_TET, r, rho0, g, 24)
+        rel = np.linalg.norm(Fc - Fg) / np.linalg.norm(Fg)
+        assert rel < 1e-10, f"linear volume field vs far Gauss r={r}: {rel:.2e}"
+
+
+def test_tet_volume_field_linear_interior_vs_spherical():
+    """Linear-rho closed form == the spherical ray-trace (tet_self_volume_field, which integrates a
+    polynomial rho) at INTERIOR points, to the spherical method's own ~1e-3 accuracy -- confirms the
+    closed form IS the exact value the ~1e-3 spherical method converges to."""
+    g = np.array([0.7, -0.3, 0.5]); rho0 = 0.4
+    for r in [[0.25, 0.25, 0.25], [0.15, 0.30, 0.20], [0.1, 0.1, 0.1]]:
+        r = np.array(r, float)
+        Fc = tet_volume_field_linear(_TET, r, rho0, g)
+        Fs = 4 * np.pi * tet_self_volume_field(_TET, r, lambda p: rho0 + float(np.dot(g, p)),
+                                               nth=64, nph=128, ns=12)
+        rel = np.linalg.norm(Fc - Fs) / np.linalg.norm(Fs)
+        assert rel < 2e-3, f"linear volume field interior vs spherical r={r}: {rel:.2e}"

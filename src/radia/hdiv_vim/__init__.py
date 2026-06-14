@@ -48,6 +48,10 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
     reconstruct_field_internal,    # Step 2: INTERNAL/near field (self-volume spherical + analytic surface)
     flat_triangle_charge_field,    # Step-2 building block: exact uniform-triangle field (surface near-field)
     tet_self_volume_field,         # Step-2 building block: tet self volume-charge field (spherical ray-trace)
+    triangle_potential_const,      # degree-1 building block: INT_T 1/R dS' (Wilton)
+    triangle_potential_moment,     # degree-1 building block: INT_T r'/R dS' (first moment)
+    tet_newtonian_potential,       # degree-1 building block: INT_V 1/R dV' (PhiTet, pure-Python)
+    tet_volume_field_linear,       # EXACT closed-form LINEAR volume-charge field (order-2 -div M term)
 )
 
 __all__ = [
@@ -56,5 +60,7 @@ __all__ = [
     "solve_nonlinear_newton", "solve_nonlinear_newton_scalable", "solve_nonlinear",
     "DemagOperator", "build_charge_gram", "reconstruct_field", "reconstruct_field_polynomial",
     "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",
+    "triangle_potential_const", "triangle_potential_moment", "tet_newtonian_potential",
+    "tet_volume_field_linear",
     "_core", "_nonlinear", "_vim", "_field",
 ]
