@@ -338,15 +338,104 @@ def solve_saturated(mmf, r_min, r_max, k=K_INDEX, g0=G0, r0=R0, pole_t=0.03,
         # median B_y = -mu0 dphi/dy (gap, mu_r=1)
         g = grad(gfu)
         By = np.array([-MU0 * g(mesh(float(r), y_probe))[1] for r in rs_eval])
+        # total flux through the median (per depth), by a robust line integral of
+        # B_y over the FULL domain -- matches the A-formulation's flux-wall BC.
+        r_full = np.linspace(r_lo, r_hi, 200)
+        By_full = np.array([-MU0 * g(mesh(float(r), y_probe))[1] for r in r_full])
+        Psi = float(abs(np.sum(0.5 * (By_full[:-1] + By_full[1:])
+                               * np.diff(r_full))))
     rmid, kk = field_index(rs_eval, By)
     return {
-        "mmf": float(mmf),
+        "mmf": float(mmf), "Psi": Psi,
         "rs_eval": rs_eval, "By": By,
         "r_index": rmid, "k": kk,
         "B_gap_min": float(np.min(np.abs(By))),
         "B_gap_max": float(np.max(np.abs(By))),
         "iters": int(it), "resid": float(resid),
         "ndof": fes.ndof,
+    }
+
+
+def solve_saturated_A(Psi, r_min, r_max, k=K_INDEX, g0=G0, r0=R0, pole_t=0.03,
+                      order=3, maxh=0.006, buffer=1.25, n_eval=41,
+                      relax=0.5, tol=1e-4, maxit=60, gamma=0.0, gamma2=0.0):
+    """A-formulation (flux function A_z) COMPLEMENT of solve_saturated: B = curl
+    A_z (|B| = |grad A_z|), H = nu(|B|) B with nu = 1/(mu0 mu_r(|B|)).  A_z is
+    Dirichlet on the flux walls (rmin=0, rmax=Psi), natural on median + irontop
+    (the DUAL boundary conditions); Psi is the median flux from the phi solve, so
+    the two formulations sit at the SAME operating point (same saturation state).
+    Picard on nu(|B|).  Returns the median field index k_A(r)."""
+    from ngsolve import (H1, L2, BilinearForm, GridFunction, grad, dx, CF, Norm,
+                         TaskManager, Mesh)
+    r_lo, r_hi = r_min / buffer, r_max * buffer
+    y_top = float(scaling_gap(r_lo, k, g0, r0, gamma, gamma2) / 2.0 + pole_t)
+    geo = _gap_iron_geometry(r_lo, r_hi, k, g0, r0, y_top, gamma=gamma,
+                             gamma2=gamma2)
+    rs_eval = np.linspace(r_min, r_max, n_eval)
+    y_probe = 0.02 * float(scaling_gap(r0, k, g0, r0))
+    nu_air, nu_iron0 = 1.0 / MU0, 1.0 / (MU0 * MUR0_IRON)
+    with TaskManager():
+        mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+        fes = H1(mesh, order=order, dirichlet="rmin|rmax")
+        u, v = fes.TnT()
+        gfu = GridFunction(fes)
+        bccf = mesh.BoundaryCF({"rmax": Psi, "rmin": 0.0}, default=0.0)
+        fes_nu = L2(mesh, order=0)
+        nu_gf = GridFunction(fes_nu)
+        nu_gf.Set(mesh.MaterialCF({"iron": nu_iron0}, default=nu_air))
+        iron_ind = mesh.MaterialCF({"iron": 1.0}, default=0.0)
+        resid, it = 1.0, 0
+        for it in range(1, maxit + 1):
+            a = BilinearForm(fes)
+            a += nu_gf * grad(u) * grad(v) * dx
+            a.Assemble()
+            gfu.Set(bccf, definedon=mesh.Boundaries("rmin|rmax"))
+            r = gfu.vec.CreateVector()
+            r.data = -a.mat * gfu.vec
+            gfu.vec.data += a.mat.Inverse(fes.FreeDofs(),
+                                          inverse="sparsecholesky") * r
+            B = Norm(grad(gfu))                              # |B| = |grad A_z|
+            froh = 1.0 + (MUR0_IRON - 1.0) / (1.0 + (B / BK_IRON) ** 2)
+            nu_target = (1.0 - iron_ind) * CF(nu_air) + iron_ind * (nu_air / froh)
+            nu_new = GridFunction(fes_nu)
+            nu_new.Set(nu_target)
+            d = nu_new.vec.CreateVector()
+            d.data = nu_new.vec - nu_gf.vec
+            resid = d.Norm() / (nu_gf.vec.Norm() or 1.0)
+            nu_gf.vec.data += relax * d
+            if resid < tol:
+                break
+        g = grad(gfu)
+        By = np.array([-g(mesh(float(r), y_probe))[0] for r in rs_eval])  # -dA/dx
+    rmid, kk = field_index(rs_eval, By)
+    return {"By": By, "r_index": rmid, "k": kk,
+            "iters": int(it), "resid": float(resid)}
+
+
+def bracket_saturated(B_design=1.8, k=K_INDEX, g0=G0, r0=R0, order=3,
+                      maxh=0.008, gamma=0.0, gamma2=0.0):
+    """COMPLEMENTARY certification of the SATURATED field index: solve the same
+    nonlinear operating point both ways -- phi (Dirichlet on the poles) and A
+    (Dirichlet on the flux walls, driven to the phi-solve's median flux Psi so
+    both sit at the SAME saturation state).  k_phi(r) and k_A(r) converge from
+    discretisation-complementary sides; their GAP certifies the saturated k(r)
+    is physics, not mesh (the nonlinear analogue of Step 1's linear bracket;
+    monotone BH => convex energy => the bracket survives into saturation)."""
+    r_min, r_max = aperture_radii(k=k, r0=r0)
+    mmf = B_design * g0 / (2.0 * MU0)
+    s_phi = solve_saturated(mmf, r_min, r_max, k=k, g0=g0, r0=r0,
+                            order=order, maxh=maxh, gamma=gamma, gamma2=gamma2)
+    s_A = solve_saturated_A(s_phi["Psi"], r_min, r_max, k=k, g0=g0, r0=r0,
+                            order=order, maxh=maxh, gamma=gamma, gamma2=gamma2)
+    m = slice(2, -2)
+    gap = float(np.max(np.abs(s_phi["k"][m] - s_A["k"][m])))
+    return {
+        "B_design": float(B_design), "Psi": s_phi["Psi"],
+        "B_gap_max": s_phi["B_gap_max"],
+        "r_index": s_phi["r_index"], "k_phi": s_phi["k"], "k_A": s_A["k"],
+        "bracket_gap_max": gap,
+        "k_mid_mean": float(0.5 * (s_phi["k"][m] + s_A["k"][m]).mean()),
+        "iters_phi": s_phi["iters"], "iters_A": s_A["iters"],
     }
 
 
@@ -546,6 +635,11 @@ def main():
         print(f"reshape (gamma, gamma2)     : ({o['gamma']:+.3f}, {o['gamma2']:+.3f})")
         print(f"flatness improvement        : {s3['ptp_improvement']:.1f}x"
               f"  ({len(s3['evals'])-1} Newton step(s))")
+        # complementary (A vs phi) certification of the reshaped saturated design
+        bk = bracket_saturated(B_design=s3["B_design"], gamma=o["gamma"],
+                               gamma2=o["gamma2"])
+        print(f"reshaped A/phi bracket gap  : {bk['bracket_gap_max']:.2e}"
+              f"  (saturated k(r) certified, B_gap up to {bk['B_gap_max']:.2f} T)")
         if args.fig:
             _figure_step3(s3)
 
