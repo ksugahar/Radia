@@ -799,3 +799,33 @@ def test_chaplygin_taper_design_sweep():
     assert rows[-1]["free_measure"] > 0.5, rows[-1]          # tapered = free boundary recovered
     for r in rows:
         assert r["turn_deg"] > 30.0, r                       # the field genuinely turns
+
+
+@pytest.mark.slow
+@pytest.mark.filterwarnings("ignore::UserWarning")   # benign CoilBuilder gimbal-lock
+def test_clebsch_dipole_saturation_3d_aform():
+    """Saturation in a 3-D dipole, done RIGHT: the B-input A-formulation (reduced vector
+    potential, B = B_s + curl A_r with B_s the coil Biot-Savart field, nu(|B|)) -- the
+    documented CURE for the reduced-Omega ill-conditioning.  It converges at EVERY drive,
+    including the low-drive HIGH-mu regime where the reduced-Omega mu(|H|) Picard STALLS;
+    and the iron saturates (<mu_r> falls).  Honest: this large-gap dipole is
+    gap-reluctance-dominated, so B_gap softens only mildly -- the point is the SOLVER."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import clebsch_dipole_saturation_3d as s3
+    out = s3.run(ks=(0.3, 3.0, 30.0), k_compare=0.3)
+    # the A-formulation converges at EVERY drive (incl. the low-drive high-mu regime).
+    assert out["max_resid"] < 1e-4, out
+    assert out["max_iters"] < 30, out
+    rows = out["rows"]
+    # the iron saturates: mean mu_r falls monotonically with drive ...
+    mur = [r["mur_mean"] for r in rows]
+    assert mur[0] > mur[1] > mur[2], mur
+    # ... while the gap field rises with drive.
+    bg = [r["B_gap_T"] for r in rows]
+    assert bg[0] < bg[1] < bg[2], bg
+    # THE CURE: at the low-drive high-mu point the A-form converges, reduced-Omega stalls.
+    cure = out["cure"]
+    assert cure["aform_final"] < 1e-4, cure          # B-input A-form converges
+    assert cure["redomega_final"] > 1e-2, cure       # reduced-Omega stalls (the cured issue)

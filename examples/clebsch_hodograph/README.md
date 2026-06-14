@@ -781,6 +781,30 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   engineering model; the iron-path reluctance is the Chaplygin 1-shot whose slender-guide
   form is validated in `chaplygin_hodograph_2d.py`, and the 2-D FEM here is the
   end-to-end check.*
+- **`clebsch_dipole_saturation_3d.py`** — saturation in a **3-D** dipole, done **right**:
+  the **B-input A-formulation**, the documented **cure** for the reduced-Ω
+  ill-conditioning. The obvious 3-D choice — the reduced scalar potential
+  `H = H_s − ∇Ω`, `μ(|H|)` Picard — is ill-conditioned at high permeability: the
+  saturation knee sits in the **low-drive (unsaturated, high-μ)** regime, and there the
+  reduced-Ω Picard **stalls** (spurious `|H|` in the iron from an under-resolved `Ω`).
+  The fix is the convex **`ν(|B|)` B-input** form. The **reduced vector potential**
+  avoids meshing the coil / any `div J`: `B = B_s + curl A_r` with `B_s = μ₀H_s` the
+  coil's Biot–Savart field (Radia), `A_r ∈ H(curl)` the iron reaction, and the weak form
+  `∫ν(|B|) curl A_r·curl v + ∫_iron (ν−ν₀) B_s·curl v = 0` (the coil drives the iron
+  through its known `B_s`; a tiny `ε∫A_r·v` fixes the gauge). Verified on the accel
+  H-frame + CoilBuilder coil (reused from `accel_pole_ends_fem.py`): **the cure** — at a
+  low drive (`NI=3 kA·t`, iron `⟨μ_r⟩≈1200`) the B-input A-formulation converges to
+  `resid 8e-6` in **15 iters**, while the reduced-Ω `μ(|H|)` Picard **stalls at
+  `resid ~2e-2`**; **the saturation** — swept over drive, the A-formulation converges at
+  *every* point (~14 iters, `resid<1e-5`) including the low-drive regime the reduced-Ω
+  cannot reach, and the iron `⟨μ_r⟩` falls `1228 → 161` (it saturates). Figure:
+  `clebsch_dipole_saturation_3d.png` (the convergence histories — the cure | `B_gap(NI)`
+  + iron `⟨μ_r⟩(NI)`). Golden `test_clebsch_dipole_saturation_3d_aform` (slow). *Honest
+  scope: this **large-gap** dipole is gap-reluctance-dominated (`R_gap/R_iron ~ 160`
+  unsaturated), so `B_gap` softens only mildly with iron saturation (a large-gap dipole
+  is intrinsically robust to it; a strong `B_gap` knee needs a small gap / necked iron,
+  as in the 2-D throat geometry above) — the point demonstrated is the **solver**: the
+  B-input A-formulation resolves the high-μ regime the reduced-Ω cannot.*
 
 ## Run
 
@@ -803,6 +827,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
+python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python chaplygin_free_boundary_2d.py          # Frontier 2: the turning-guide free boundary (image)
 python chaplygin_inverse_vonmises_2d.py       # Frontier 2 inverse: von Mises dissolves it (linear)
 python chaplygin_inverse_nonlinear_2d.py      # Frontier 2 CLOSED: nonlinear inverse, flux (lambda) freed
