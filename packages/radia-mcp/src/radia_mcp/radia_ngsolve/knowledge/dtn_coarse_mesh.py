@@ -1339,6 +1339,19 @@ sparse inverted FE, which a free-space-Green BEM cannot represent. PRIORITY NOTE
 later, NOT prior art over them) and the exterior-material formulation is their scope advantage; the
 citation (date/venue, likely a Japanese IEEJ venue) must be pinned down before final positioning.
 
+SELLING POINT (sharpened): "kernel approximation WITHOUT the Sommerfeld Green's function." For an
+INHOMOGENEOUS/LAYERED exterior a boundary-integral (BEM) treatment needs either the Green's function
+OF THAT layered medium -- the Sommerfeld (layered-media) Green's function, whose construction via
+Sommerfeld integrals is expensive and a subfield in itself -- OR a volume integral equation over the
+inhomogeneity (which revives a dense-coupled volume unknown). FEM-Kelvin needs NEITHER: the layered/
+inhomogeneous exterior is just a transformed coefficient in the sparse inverted FE, so it approximates
+the exterior BEM KERNEL (operator) without ever forming the hard kernel. demo_t is exactly this proof
+(layered magnetic shell exterior matched to the layered analytic with NO Green's function). State the
+payoff as: FEM-ization sidesteps the difficult BEM kernel (Sommerfeld/layered Green) in the one regime
+where BEM is hardest -- inhomogeneous exteriors -- while staying sparse. RELATED-WORK citing: even with
+the authors' priority, cite Nabizadeh 2021 / Boulmezaoud 2005-2023 / SBFEM as related/parallel work
+(noting priority), NOT as preempting prior art.
+
 MEASURED & SETTLED (2026-06-14, hex vs tet on the Kelvin sphere): NEITHER has a decisive
 advantage -- it is a WASH.  The full sphere hexes easily via `volume <id> scheme sphere`
 (a 32-hex O-grid full ball; an earlier "impractical" note was an ERROR -- `scheme
