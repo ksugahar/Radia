@@ -12,12 +12,14 @@ evaluated with the SAME field kernel (radia.Fld) -- only the magnetization M dif
 HDiv applied field = the coil's Biot-Savart H (rad.RadiaField(coil,'h')); KELVIN-LESS (iron-only mesh).
 
 Measured (2026-06-15, NI=8000 A, 2715 tets, Msat~1.27e6 A/m): gap-centre |B| HDiv 0.0982 T vs yano
-0.0979 T agree to 0.32% (bore centre), 0.18% at the gap opening.  The HDiv Anderson-Hantila fixed
-point converges in ~120 outer iters.
+0.0979 T agree to 0.32% (bore centre), 0.18% at the gap opening.  The HDiv nonlinear solve is a damped
+matrix-free NEWTON (replaced Anderson-Hantila 2026-06-15, which STALLED on sharp silicon-steel BH).
 
 The gate locks: HDiv and yano agree within 1.5% on the gap-centre flux density (the engineering
-quantity), with a bounded outer-iteration count.  Transitional gate -- retires when yano-type is
-sealed (M5).
+quantity), with a bounded outer-iteration count.  A second test
+(`test_ctype_coil_nonlinear_sharp_bh_newton`) is the REGRESSION LOCK for the Newton solver: a sharp
+silicon-steel-like BH (chi0=12000) at high drive -- the regime that stalled the old Anderson-Hantila
+fixed point -- which Newton solves.  Transitional gate -- retires when yano-type is sealed (M5).
 """
 import math
 import warnings
@@ -58,12 +60,12 @@ def _coil():
     return rad.ObjFlmCur(pts, NI)
 
 
-def _yano_gapB(mesh):
+def _yano_gapB(mesh, bh=BH):
     """Gap-centre B (Tesla) via yano-type MMM rad.Solve (iron tets + coil), same field kernel."""
     rad.UtiDelAll()
     coil = _coil()
     cont = nmi.netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m', verbose=False)
-    rad.MatApl(cont, rad.MatSatIsoTab(BH))
+    rad.MatApl(cont, rad.MatSatIsoTab(bh))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)    # yano backend deprecated; expected here
         rad.Solve(rad.ObjCnt([cont, coil]), 1e-6, 3000, 0)     # LU
@@ -98,4 +100,44 @@ def test_ctype_coil_nonlinear_gap_field():
         assert rel < 0.015, f"gap B at {p}: HDiv {B_hdiv[k]} vs yano {B_yano[k]} rel {rel:.2e}"
     # bore field is a meaningful fraction of a Tesla (genuinely driven, into the BH knee)
     assert np.linalg.norm(B_yano[0]) > 0.05
-    assert res["iters"] < 200, f"HDiv nonlinear Anderson-Hantila outer iters not bounded: {res['iters']}"
+    assert res["iters"] < 200, f"HDiv nonlinear Newton outer iters not bounded: {res['iters']}"
+
+
+# --- sharp silicon-steel BH (chi0=12000): the regime that STALLED Anderson-Hantila (rho->1) ---
+SHARP_CHI0 = 12000.0
+SHARP_MSAT = 2.0 / MU0
+_sHs = np.concatenate([[0.0], np.logspace(-1, 7, 80)])
+_sMs = SHARP_CHI0 * _sHs / (1.0 + SHARP_CHI0 * _sHs / SHARP_MSAT)
+_sBs = MU0 * (_sHs + _sMs)
+SHARP_BH = [[float(h), float(b)] for h, b in zip(_sHs, _sBs)]
+
+
+def test_ctype_coil_nonlinear_sharp_bh_newton():
+    """REGRESSION LOCK for the damped matrix-free NEWTON nonlinear solve (replaced Anderson-Hantila,
+    2026-06-15).  A SHARP silicon-steel-like BH (chi0=12000, Bsat~2T) at high drive makes the
+    Hantila/Picard contraction rho = (chi_max-chi_min)/(chi_max+chi_min) -> 1 as the pole saturates --
+    the regime that STALLED the old Anderson-Hantila fixed point (~1e-2 after 300 iters, unsolvable).
+    Newton converges in a bounded iter count and matches the yano-type reference on the gap-centre B.
+    This locks that the sharp-BH case stays solved."""
+    with ng.TaskManager():
+        mesh = ng.Mesh(OCCGeometry(_cyoke()).GenerateMesh(maxh=0.010))
+
+    rad.UtiDelAll()
+    coil = _coil()
+    with ng.TaskManager():
+        res = hdiv_demag_solve(mesh, bh_table=SHARP_BH, H_ext=rad.RadiaField(coil, 'h'))
+    M_el = res["M"]
+    coil2 = _coil()
+    iron = nmi.netgen_mesh_to_radia(
+        mesh, material=lambda i: {'magnetization': M_el[i].tolist()}, units='m', verbose=False)
+    B_hdiv = np.array(rad.Fld(rad.ObjCnt([iron, coil2]), 'b', GAP_PTS)).reshape(-1, 3)
+    rad.UtiDelAll()
+
+    B_yano = _yano_gapB(mesh, SHARP_BH)
+
+    assert res["nonlinear"] is True
+    assert res["iters"] < 200, f"Newton outer iters not bounded on sharp BH: {res['iters']}"
+    assert np.linalg.norm(B_yano[0]) > 0.05    # genuinely driven into the knee
+    for k, p in enumerate(GAP_PTS):
+        rel = float(np.linalg.norm(B_hdiv[k] - B_yano[k]) / (np.linalg.norm(B_yano[k]) + 1e-30))
+        assert rel < 0.03, f"sharp-BH gap B at {p}: HDiv {B_hdiv[k]} vs yano {B_yano[k]} rel {rel:.2e}"
