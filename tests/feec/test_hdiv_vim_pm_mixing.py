@@ -117,3 +117,65 @@ def test_pm_mixing_classification_fail_loud():
     with pytest.raises(ValueError):                            # 'pm' unclassified (iron dict omits it), 'nope' missing
         with ng.TaskManager():
             hdiv_demag_solve(mesh, mu_r={"iron": MU}, pm_M={"nope": [0, 0, M0]}, H_ext=ZERO)
+
+
+# ---------------------------------------------------------------------------------------------------
+# PM + NONLINEAR iron (air gap): the same mixed projected statement, now inside the Newton path -- the
+# iron carries M(H)/tangent, the PM region is the M = M_pm (tangent 0) override (MaterialCF), and the
+# PM source b_pm enters the warmstart RHS.  Verified vs rad.Solve (PM fixed + MatSatIsoTab iron).
+# ---------------------------------------------------------------------------------------------------
+_MU0 = 4e-7 * np.pi
+M0_NL = 1.5e6        # strong PM (~Br 1.9 T) so the air-gapped iron is driven into mild saturation
+
+
+def _bh(chi0, Bsat, n=40):
+    H = np.concatenate([[0.0], np.geomspace(1.0, 1e6, n)])
+    M = chi0 * H / (1.0 + chi0 * np.abs(H) / (Bsat / _MU0))
+    return np.column_stack([H, _MU0 * (H + M)])
+
+
+BH_NL = _bh(5000.0, 2.0)
+
+
+def _yano_external_B_nonlinear(mesh, ext):
+    """rad.Solve on the SAME tets: pm -> fixed M0_NL z, iron -> MatSatIsoTab(BH_NL); external B."""
+    rad.UtiDelAll()
+    els, _ = extract_elements(mesh)
+    mat = rad.MatSatIsoTab([[float(h), float(b)] for h, b in BH_NL])
+    objs = []
+    for e in els:
+        reg = mesh[ng.ElementId(ng.VOL, e["element_index"])].mat
+        if reg == "pm":
+            objs.append(create_radia_tetrahedron(e["vertices"], [0.0, 0.0, M0_NL]))
+        else:
+            oid = create_radia_tetrahedron(e["vertices"], [0.0, 0.0, 0.0])
+            rad.MatApl(oid, mat)
+            objs.append(oid)
+    cont = rad.ObjCnt(objs)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        rad.Solve(cont, 1e-6, 3000, 0)
+    return np.array([rad.Fld(cont, "b", p.tolist()) for p in ext])
+
+
+def test_pm_nonlinear_iron_airgap_parity_vs_yano():
+    """PM + NONLINEAR iron separated by an air gap: external B matches rad.Solve (PM fixed +
+    MatSatIsoTab iron) to < 1% on the SAME tet mesh (measured ~7e-4), the iron driven into mild
+    saturation.  Locks the mixed PM + Newton path against the shipped solver."""
+    mesh = _pm_iron_mesh(gap=0.25 * L, maxh=L / 4)
+    ext = _ext_points()
+    By = _yano_external_B_nonlinear(mesh, ext)
+    with ng.TaskManager():
+        r = hdiv_demag_solve(mesh, bh_table=BH_NL, pm_M={"pm": [0.0, 0.0, M0_NL]}, H_ext=ZERO, nl_tol=1e-6)
+    assert r["nonlinear"]
+    Bh = _hdiv_external_B(mesh, r["M"], ext)
+    rel = np.linalg.norm(Bh - By) / np.linalg.norm(By)
+    assert rel < 1e-2, f"PM+nonlinear-iron(air gap) HDiv vs yano external-B rel {rel:.2e}"
+
+
+def test_pm_nonlinear_touching_fail_loud():
+    """PM directly touching NONLINEAR iron must also fail loud (same conforming-RT0 limitation)."""
+    mesh = _pm_iron_mesh(gap=0.0, maxh=L / 4)
+    with pytest.raises(NotImplementedError):
+        with ng.TaskManager():
+            hdiv_demag_solve(mesh, bh_table=BH_NL, pm_M={"pm": [0.0, 0.0, M0_NL]}, H_ext=ZERO)

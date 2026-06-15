@@ -91,9 +91,10 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
                  mixed alongside soft iron (or alone).  A PM region is the M = M_pm (tangent 0) special
                  case of the same projected statement: it contributes a source b_pm = INT M_pm.v dx and
                  its field reaches the iron through the full-m demag, while its own M stays pinned to
-                 M_pm.  With pm_M, the soft-iron spec covers the NON-PM regions (a scalar mu_r applies to
-                 every non-PM region; a dict names them).  NOTE: PM + NONLINEAR iron (bh_table) is the
-                 next step and currently raises NotImplementedError; PM + LINEAR iron (mu_r) is supported.
+                 M_pm.  With pm_M, the soft iron is given as EITHER mu_r (linear) OR bh_table (nonlinear)
+                 and covers the NON-PM regions (a scalar applies to every non-PM region; a dict names
+                 them).  PM directly TOUCHING soft iron is rejected (conforming RT0 cannot represent the
+                 PM-iron magnetization discontinuity) -- separate them with an air gap.
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  REQUIRED.
 
@@ -106,10 +107,9 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
         if (mu_r is None) == (bh_table is None):
             raise ValueError("hdiv_demag_solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
     else:
-        if bh_table is not None:
-            raise NotImplementedError("hdiv_demag_solve: PM (pm_M) + NONLINEAR iron (bh_table) is not yet "
-                                      "supported -- the next productionization step.  Use PM + linear iron "
-                                      "(mu_r) for now.")
+        if (mu_r is not None) and (bh_table is not None):
+            raise ValueError("hdiv_demag_solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
+                             "bh_table (nonlinear), not both")
 
     # ---- demag operator N (apply) + M_mass^{-1} preconditioner, shared by both modes ----
     if scalable:
@@ -141,7 +141,11 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
     denom = float(mu @ np.asarray(Mm @ mu).ravel())
     D = float((mu @ N_apply(mu)) / denom)
 
-    if pm_M is not None:
+    if pm_M is not None and bh_table is not None:
+        m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
+                                    n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window,
+                                    pm_M=pm_M)
+    elif pm_M is not None:
         M_chi, b_pm = _build_mixed_pm(mesh, fes, mu_r, pm_M, Mm, n_face)
         m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit,
                                  gmres_restart, b_extra=b_pm)
@@ -263,23 +267,38 @@ def _check_pm_iron_not_touching(mesh, fes, pm_regions, iron_regions):
             "productionization step." % n_shared)
 
 
-def _build_nl_constit(mesh, fes, bh_table, Mm, n_face):
-    """Build the NONLINEAR constitutive callback + the zero-field-chi (form-1) warmstart mass M_chi0.
+def _build_nl_constit(mesh, fes, bh_table, Mm, n_face, pm_M=None):
+    """Build the NONLINEAR constitutive callback + the zero-field-chi (form-1) warmstart mass M_chi0 +
+    the permanent-magnet source b_pm.
 
-    `bh_table` is either ONE [[H,B]] table (single isotropic soft-iron region) or a dict
-    {material_name: [[H,B]]} (PER-REGION nonlinear iron grades).  N = B^T G B is geometry-only, so
+    `bh_table` is either ONE [[H,B]] table (a single nonlinear iron grade for every NON-PM region) or a
+    dict {material_name: [[H,B]]} (PER-REGION nonlinear iron grades).  N = B^T G B is geometry-only, so
     per-region nonlinear enters ONLY through (a) the per-element constitutive law (each element uses its
     region's PCHIP BH table via `_table_tensor_tangent_multi`) and (b) the chi0-weighted warmstart mass
-    M_chi0 (the region-wise zero-field susceptibility chi0 = B'(0)/mu0 - 1), feeding the same form-1
-    linear warmstart the LINEAR path uses.  Returns
-    (constit_fn(gfH, Id) -> (M(H) CF, tensor-tangent CF), M_chi0 sparse/scaled mass).  Fail-loud
-    (No-Fallbacks): every mesh material must appear in the dict, each table 2-column."""
+    M_chi0 (region-wise zero-field susceptibility chi0 = B'(0)/mu0 - 1).
+
+    `pm_M` (optional) = {material: [Mx,My,Mz]} fixed-magnet regions mixed with the nonlinear iron: each
+    PM region is the M = M_pm (tangent 0) special case, overriding the constitutive law via a MaterialCF
+    and contributing the source b_pm = INT M_pm.v dx (the same projected statement as the linear PM path,
+    now inside Newton).  PM directly touching iron is rejected (the conforming RT0 limitation).
+
+    Returns (constit_fn(gfH, Id) -> (M target CF, tensor-tangent CF), M_chi0 sparse/scaled mass, b_pm
+    source vector or None).  Fail-loud (No-Fallbacks): every material classified, each table 2-column."""
+    mats = list(mesh.GetMaterials())
+    pm_regions = set(pm_M) if pm_M else set()
+    if pm_M:
+        missing_pm = sorted(pm_regions - set(mats))
+        if missing_pm:
+            raise ValueError("hdiv_demag_solve: pm_M region(s) %s not in mesh materials %s" % (missing_pm, mats))
+
+    # ---- iron regions + per-region/single BH constitutive ----
     if isinstance(bh_table, dict):
-        mats = list(mesh.GetMaterials())
-        missing = sorted(set(mats) - set(bh_table))
-        if missing:
-            raise ValueError("hdiv_demag_solve: bh_table dict missing region(s) %s; mesh materials are %s"
-                             % (missing, mats))
+        iron_regions = set(bh_table)
+        if not pm_M:
+            missing = sorted(set(mats) - iron_regions)
+            if missing:
+                raise ValueError("hdiv_demag_solve: bh_table dict missing region(s) %s; mesh materials are %s"
+                                 % (missing, mats))
         region_names = list(bh_table)
         name_to_ridx = {nm: k for k, nm in enumerate(region_names)}
         region_funcs = []
@@ -291,25 +310,69 @@ def _build_nl_constit(mesh, fes, bh_table, Mm, n_face):
             _Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
             region_funcs.append((Bpch, Bder, Hmax, Mmax))
             chi0_by_name[nm] = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
-        elem_region = np.array([name_to_ridx[mesh[ng.ElementId(ng.VOL, i)].mat]
+        # PM elements map to iron index 0 (their iron values are computed but OVERRIDDEN by the PM
+        # MaterialCF below); iron elements map to their grade.
+        elem_region = np.array([name_to_ridx.get(mesh[ng.ElementId(ng.VOL, i)].mat, 0)
                                 for i in range(mesh.ne)], dtype=int)
 
-        def constit_fn(gfH, Id):
+        def _iron_tangent(gfH, Id):
             return _table_tensor_tangent_multi(gfH, mesh, region_funcs, elem_region, Id)
 
-        M_chi0 = _build_chi_mass(mesh, fes, {nm: chi0_by_name[nm] + 1.0 for nm in mats}, Mm, n_face)
-        return constit_fn, M_chi0
+        def _chi0_of(r):
+            return chi0_by_name[r]
+    else:
+        iron_regions = set(mats) - pm_regions
+        arr = np.asarray(bh_table, float)
+        if arr.ndim != 2 or arr.shape[1] != 2:
+            raise ValueError("hdiv_demag_solve: bh_table must be [[H,B], ...] (A/m, T)")
+        _Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
+        chi0 = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
 
-    arr = np.asarray(bh_table, float)
-    if arr.ndim != 2 or arr.shape[1] != 2:
-        raise ValueError("hdiv_demag_solve: bh_table must be [[H,B], ...] (A/m, T)")
-    _Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
-    chi0 = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
+        def _iron_tangent(gfH, Id):
+            return _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id)
+
+        def _chi0_of(r):
+            return chi0
+
+    if not pm_M:
+        # iron-only: M_chi0 reuses the linear chi-weighted mass (every material is iron)
+        if isinstance(bh_table, dict):
+            M_chi0 = _build_chi_mass(mesh, fes, {nm: chi0_by_name[nm] + 1.0 for nm in mats}, Mm, n_face)
+        else:
+            M_chi0 = chi0 * Mm
+        return _iron_tangent, M_chi0, None
+
+    # ---- PM + nonlinear iron: classify XOR, reject touching, build mixed constitutive + b_pm ----
+    overlap = sorted(iron_regions & pm_regions)
+    if overlap:
+        raise ValueError("hdiv_demag_solve: region(s) %s are both iron (bh_table) and PM (pm_M)" % overlap)
+    unspec = sorted(set(mats) - iron_regions - pm_regions)
+    if unspec:
+        raise ValueError("hdiv_demag_solve: region(s) %s are neither iron (bh_table) nor PM (pm_M); "
+                         "mesh materials are %s" % (unspec, mats))
+    _check_pm_iron_not_touching(mesh, fes, pm_regions, iron_regions)
+    _ZERO3 = ng.CoefficientFunction((0.0,) * 9, dims=(3, 3))
 
     def constit_fn(gfH, Id):
-        return _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id)
+        M_iron, tang_iron = _iron_tangent(gfH, Id)
+        M_target = mesh.MaterialCF({**{r: M_iron for r in iron_regions},
+                                    **{r: ng.CoefficientFunction(tuple(pm_M[r])) for r in pm_regions}})
+        tang_target = mesh.MaterialCF({**{r: tang_iron for r in iron_regions},
+                                       **{r: _ZERO3 for r in pm_regions}})
+        return M_target, tang_target
 
-    return constit_fn, chi0 * Mm
+    # warmstart mass: chi0 on iron, 0 on PM
+    u, v = fes.TnT()
+    chi0_cf = mesh.MaterialCF({**{r: _chi0_of(r) for r in iron_regions}, **{r: 0.0 for r in pm_regions}})
+    am = ng.BilinearForm(fes); am += chi0_cf * u * v * ng.dx; am.Assemble()
+    rr, cc, vv = am.mat.COO()
+    M_chi0 = sp.csr_matrix((np.array(vv), (np.array(rr), np.array(cc))), shape=(n_face, n_face))
+    # PM source b_pm = INT M_pm . v dx
+    pm_cf = mesh.MaterialCF({**{r: ng.CoefficientFunction((0.0, 0.0, 0.0)) for r in iron_regions},
+                             **{r: ng.CoefficientFunction(tuple(pm_M[r])) for r in pm_regions}})
+    lf = ng.LinearForm(fes); lf += pm_cf * v * ng.dx; lf.Assemble()
+    b_pm = lf.vec.FV().NumPy().copy()
+    return constit_fn, M_chi0, b_pm
 
 
 def _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit, gmres_restart, b_extra=None):
@@ -340,7 +403,7 @@ def _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit, gm
 
 
 def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
-                     n_face, fes, gmres_tol, gmres_restart, nl_maxit, nl_tol, anderson_window):
+                     n_face, fes, gmres_tol, gmres_restart, nl_maxit, nl_tol, anderson_window, pm_M=None):
     """Damped matrix-free NEWTON on the constitutive residual (replaces the Anderson-Hantila fixed
     point, which STALLS on real silicon steel -- the Hantila/Picard contraction
     rho = (chi_max-chi_min)/(chi_max+chi_min) -> 1 as the iron saturates, so even Anderson cannot
@@ -359,7 +422,7 @@ def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
     the EXACT pieces the Hantila path used -- no new operator, fully scalable (the C++ charge-Gram
     H-matvec is the only O(N log N) cost).  Fail-loud on non-convergence (CLAUDE.md No-Fallbacks)."""
     del anderson_window                      # unused by Newton (signature kept for the caller)
-    constit_fn, M_chi0 = _build_nl_constit(mesh, fes, bh_table, Mm, n_face)
+    constit_fn, M_chi0, b_pm = _build_nl_constit(mesh, fes, bh_table, Mm, n_face, pm_M=pm_M)
     Id = ng.Id(3); vf = fes.TestFunction(); uf = fes.TrialFunction(); gfH = ng.GridFunction(fes)
 
     def _constit(m):                         # (M(H) CF, tensor-tangent CF) at H = h_ext - M_mass^-1 N m
@@ -379,6 +442,8 @@ def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
     # chi0-weighted HDiv mass -- the SAME projected system the LINEAR path solves (so linear == the
     # constant-chi nonlinear limit), just at the zero-field susceptibility chi0.
     rhs0 = np.asarray(M_chi0 @ h_ext).ravel()
+    if b_pm is not None:                     # PM source enters the warmstart RHS too (mixed PM+iron)
+        rhs0 = rhs0 + np.asarray(b_pm).ravel()
     A0 = spla.LinearOperator((n_face, n_face), matvec=lambda v:
                              np.asarray(Mm @ np.asarray(v, float)).ravel()
                              + np.asarray(M_chi0 @ Mfac.solve(N_apply(v))).ravel())
