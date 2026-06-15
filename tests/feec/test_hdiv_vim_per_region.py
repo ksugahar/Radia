@@ -1,10 +1,12 @@
 """Per-region LINEAR soft-iron materials for radia.vim.hdiv_demag_solve (mu_r as a dict
 {material_name: mu_r}).  N = B^T G B is geometry-only (material-independent), so per-region soft iron
-enters ONLY through the (1/chi)-weighted HDiv mass M_invchi = INT (1/chi(x)) u.v dx.  This is the first
-per-region productionization increment (docs/hdiv_vim/PRODUCTIONIZATION.md "per-region / mixed").
+enters ONLY through the chi-weighted HDiv mass M_chi = INT chi(x) u.v dx of the form-1 projected system
+A = M_mass + M_chi M_mass^-1 N (the same projected M = chi H statement the nonlinear path uses, so a
+linear region agrees with its nonlinear-table equivalent).  per-region productionization increment
+(docs/hdiv_vim/PRODUCTIONIZATION.md "per-region / mixed").
 
 Locks: (1) a dict with EQUAL mu in every region reproduces the scalar-mu result bit-for-bit (the
-weighted mass reduces to (1/chi) M_mass); (2) DIFFERENT mu per region is physical -- the global M_avg
+weighted mass reduces to chi M_mass); (2) DIFFERENT mu per region is physical -- the global M_avg
 lies between the two single-mu runs and the high-mu region magnetizes more than the low-mu region;
 (3) fail-loud on a missing region or mu_r <= 1 (No-Fallbacks)."""
 import numpy as np
@@ -38,7 +40,7 @@ def _region_mean_absMz(mesh, M_el):
 
 
 def test_per_region_equal_mu_matches_scalar():
-    """A {lo: mu, hi: mu} dict must reproduce the scalar-mu solve exactly (weighted mass == (1/chi)Mm)."""
+    """A {lo: mu, hi: mu} dict must reproduce the scalar-mu solve exactly (weighted mass == chi Mm)."""
     mesh = _two_region_mesh()
     with ng.TaskManager():
         rd = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT)
