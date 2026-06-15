@@ -8,9 +8,18 @@ take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunction -- e.g.
 field `rad.RadiaField(coil,'h')`, the C-type electromagnet driver) and return per-element M.
 
 ## Formulation (verified-first, 2026-06-15)
-LINEAR -- physical magnetization system, **+N**:  ((1/chi) M_mass + N) m = M_mass h_ext ,  N = B^T G B,
-with `h_ext` = H_ext L2-projected onto RT0 (HDiv order 0).  (The -N system is mu_r-independent but
-NON-physical -- wrong sign -- so +N is solved.)  Verified vs the analytic sphere to 1.4e-4.
+ONE projected weak form everywhere -- the magnetization M is the RT0 primary, the constitutive law
+M = M(H) is imposed in the L2 sense (M_mass m = INT M(H).v dx), and H = h_ext - M_mass^-1 N m is the
+weak total field (N = B^T G B, h_ext = H_ext L2-projected onto RT0 order 0).  LINEAR soft iron is the
+CONSTANT-chi special case M = chi H, giving the form-1 system
+
+    (M_mass + M_chi M_mass^-1 N) m = M_chi h_ext ,   M_chi = INT chi(x) u.v dx   (the chi-weighted mass),
+
+solved +N (the -N system is mu_r-independent but NON-physical -- wrong sign).  For a SINGLE region
+(uniform chi) this is identical bit-for-bit to ((1/chi) M_mass + N) m = M_mass h_ext (verified vs the
+analytic sphere to 1.4e-4); for PER-REGION chi it is the consistent generalization, and it makes a
+linear region agree with its nonlinear-table equivalent (the 1/chi-weighted form differs at material
+interfaces by O(h)).  NONLINEAR iron solves the same projected residual by Newton (below).
 
 NONLINEAR -- a **damped matrix-free Newton** on the constitutive residual.  F(m) = M_mass m - b_M(H),
 H = h_ext - M_mass^-1 N m, b_M(H) = INT M(H).v dx (the RT0 projection of M(H)); consistent tensor
@@ -117,13 +126,12 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
     fes = ng.HDiv(mesh, order=0)
     gfHext = ng.GridFunction(fes); gfHext.Set(H_ext)
     h_ext = gfHext.vec.FV().NumPy().copy()
-    rhs0 = np.asarray(Mm @ h_ext).ravel()
     denom = float(mu @ np.asarray(Mm @ mu).ravel())
     D = float((mu @ N_apply(mu)) / denom)
 
     if mu_r is not None:
-        M_invchi = _build_inv_chi_mass(mesh, fes, mu_r, Mm, n_face)
-        m, iters = _solve_linear(M_invchi, N_apply, Mprec, rhs0, n_face, tol, maxit, gmres_restart)
+        M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
+        m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit, gmres_restart)
     else:
         m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
                                     n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window)
@@ -139,12 +147,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
                 n_charge=int(d["n_charge"]), nonlinear=(bh_table is not None))
 
 
-def _build_inv_chi_mass(mesh, fes, mu_r, Mm, n_face):
-    """The (1/chi)-weighted HDiv mass for the +N linear system A = M_invchi + N.  `mu_r` is either a
-    scalar (one isotropic soft-iron region -> M_invchi = (1/chi) M_mass) or a dict {material: mu_r}
-    (per-region soft iron -> M_invchi = INT (1/chi(x)) u.v dx with a region-wise coefficient).  N is
-    geometry-only (material-independent), so per-region soft iron enters ONLY here.  Fail-loud
-    (No-Fallbacks): every mesh material must be specified, each mu_r > 1."""
+def _build_chi_mass(mesh, fes, mu_r, Mm, n_face):
+    """The chi-weighted HDiv mass M_chi = INT chi(x) u.v dx for the form-1 linear system
+    A = M_mass + M_chi M_mass^-1 N (the projected M = chi H statement; see the module docstring).
+    `mu_r` is either a scalar (one isotropic soft-iron region -> M_chi = chi M_mass) or a dict
+    {material: mu_r} (per-region soft iron -> a region-wise coefficient).  N = B^T G B is geometry-only,
+    so per-region soft iron enters ONLY through this mass.  Fail-loud (No-Fallbacks): every mesh
+    material must be specified, each mu_r > 1."""
     if isinstance(mu_r, dict):
         mats = list(mesh.GetMaterials())
         missing = sorted(set(mats) - set(mu_r))
@@ -154,26 +163,27 @@ def _build_inv_chi_mass(mesh, fes, mu_r, Mm, n_face):
         bad = {r: mu_r[r] for r in mats if float(mu_r[r]) <= 1.0}
         if bad:
             raise ValueError("hdiv_demag_solve: every region mu_r must be > 1 (got %s)" % bad)
-        inv_chi_cf = mesh.MaterialCF({r: 1.0 / (float(mu_r[r]) - 1.0) for r in mats})
+        chi_cf = mesh.MaterialCF({r: float(mu_r[r]) - 1.0 for r in mats})
         u, v = fes.TnT()
-        a = ng.BilinearForm(fes); a += inv_chi_cf * u * v * ng.dx; a.Assemble()
+        a = ng.BilinearForm(fes); a += chi_cf * u * v * ng.dx; a.Assemble()
         r, c, val = a.mat.COO()
         return sp.csr_matrix((np.array(val), (np.array(r), np.array(c))), shape=(n_face, n_face))
     chi = float(mu_r) - 1.0
     if chi <= 0.0:
         raise ValueError("hdiv_demag_solve: mu_r must be > 1 (got %r)" % (mu_r,))
-    return (1.0 / chi) * Mm
+    return chi * Mm
 
 
 def _build_nl_constit(mesh, fes, bh_table, Mm, n_face):
-    """Build the NONLINEAR constitutive callback + the zero-field-chi warmstart mass M_invchi0.
+    """Build the NONLINEAR constitutive callback + the zero-field-chi (form-1) warmstart mass M_chi0.
 
     `bh_table` is either ONE [[H,B]] table (single isotropic soft-iron region) or a dict
     {material_name: [[H,B]]} (PER-REGION nonlinear iron grades).  N = B^T G B is geometry-only, so
     per-region nonlinear enters ONLY through (a) the per-element constitutive law (each element uses its
-    region's PCHIP BH table via `_table_tensor_tangent_multi`) and (b) the warmstart mass M_invchi0
-    (the region-wise zero-field susceptibility chi0 = B'(0)/mu0 - 1).  Returns
-    (constit_fn(gfH, Id) -> (M(H) CF, tensor-tangent CF), M_invchi0 sparse/scaled mass).  Fail-loud
+    region's PCHIP BH table via `_table_tensor_tangent_multi`) and (b) the chi0-weighted warmstart mass
+    M_chi0 (the region-wise zero-field susceptibility chi0 = B'(0)/mu0 - 1), feeding the same form-1
+    linear warmstart the LINEAR path uses.  Returns
+    (constit_fn(gfH, Id) -> (M(H) CF, tensor-tangent CF), M_chi0 sparse/scaled mass).  Fail-loud
     (No-Fallbacks): every mesh material must appear in the dict, each table 2-column."""
     if isinstance(bh_table, dict):
         mats = list(mesh.GetMaterials())
@@ -198,8 +208,8 @@ def _build_nl_constit(mesh, fes, bh_table, Mm, n_face):
         def constit_fn(gfH, Id):
             return _table_tensor_tangent_multi(gfH, mesh, region_funcs, elem_region, Id)
 
-        M_invchi0 = _build_inv_chi_mass(mesh, fes, {nm: chi0_by_name[nm] + 1.0 for nm in mats}, Mm, n_face)
-        return constit_fn, M_invchi0
+        M_chi0 = _build_chi_mass(mesh, fes, {nm: chi0_by_name[nm] + 1.0 for nm in mats}, Mm, n_face)
+        return constit_fn, M_chi0
 
     arr = np.asarray(bh_table, float)
     if arr.ndim != 2 or arr.shape[1] != 2:
@@ -210,13 +220,19 @@ def _build_nl_constit(mesh, fes, bh_table, Mm, n_face):
     def constit_fn(gfH, Id):
         return _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id)
 
-    return constit_fn, (1.0 / chi0) * Mm
+    return constit_fn, chi0 * Mm
 
 
-def _solve_linear(M_invchi, N_apply, Mprec, rhs, n_face, tol, maxit, gmres_restart):
+def _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit, gmres_restart):
+    """Form-1 linear solve: (M_mass + M_chi M_mass^-1 N) m = M_chi h_ext, GMRES + M_mass^-1 precond.
+    This is the constant-chi special case of the projected M = chi H statement (so a linear region and
+    its nonlinear-table equivalent agree).  For uniform chi it is identical to the (1/chi)M_mass + N
+    system (verified bit-for-bit); for per-region chi it is the consistent generalization."""
+    rhs = np.asarray(M_chi @ h_ext).ravel()
+
     def A_apply(v):
         v = np.asarray(v, float)
-        return np.asarray(M_invchi @ v).ravel() + N_apply(v)
+        return np.asarray(Mm @ v).ravel() + np.asarray(M_chi @ Mfac.solve(N_apply(v))).ravel()
 
     A = spla.LinearOperator((n_face, n_face), matvec=A_apply)
     it = {"n": 0}
@@ -225,7 +241,7 @@ def _solve_linear(M_invchi, N_apply, Mprec, rhs, n_face, tol, maxit, gmres_resta
                          callback=lambda _x: it.__setitem__("n", it["n"] + 1),
                          callback_type="pr_norm", **{_GMRES_TOL: tol})
     if info != 0:
-        raise RuntimeError("hdiv_demag_solve (linear): +N GMRES did not converge (info=%d, "
+        raise RuntimeError("hdiv_demag_solve (linear): form-1 GMRES did not converge (info=%d, "
                            "n_face=%d, iters=%d)" % (info, n_face, it["n"]))
     return m, it["n"]
 
@@ -250,7 +266,7 @@ def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
     the EXACT pieces the Hantila path used -- no new operator, fully scalable (the C++ charge-Gram
     H-matvec is the only O(N log N) cost).  Fail-loud on non-convergence (CLAUDE.md No-Fallbacks)."""
     del anderson_window                      # unused by Newton (signature kept for the caller)
-    constit_fn, M_invchi0 = _build_nl_constit(mesh, fes, bh_table, Mm, n_face)
+    constit_fn, M_chi0 = _build_nl_constit(mesh, fes, bh_table, Mm, n_face)
     Id = ng.Id(3); vf = fes.TestFunction(); uf = fes.TrialFunction(); gfH = ng.GridFunction(fes)
 
     def _constit(m):                         # (M(H) CF, tensor-tangent CF) at H = h_ext - M_mass^-1 N m
@@ -266,11 +282,13 @@ def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
         return float(np.linalg.norm(np.asarray(Mm @ m).ravel() - _bM(M_cf)))
 
     # zero-field-chi LINEAR warmstart -> the Newton basin (the unsaturated chi0 response, per region for a
-    # bh_table dict).  M_invchi0 is the (1/chi0)-weighted HDiv mass (scalar -> (1/chi0) M_mass; per-region
-    # -> the region-wise weighted mass), reusing the same +N linear solve as the LINEAR path.
-    rhs0 = np.asarray(Mm @ h_ext).ravel()
+    # bh_table dict).  Form-1 warmstart (M_mass + M_chi0 M_mass^-1 N) m = M_chi0 h_ext, where M_chi0 is the
+    # chi0-weighted HDiv mass -- the SAME projected system the LINEAR path solves (so linear == the
+    # constant-chi nonlinear limit), just at the zero-field susceptibility chi0.
+    rhs0 = np.asarray(M_chi0 @ h_ext).ravel()
     A0 = spla.LinearOperator((n_face, n_face), matvec=lambda v:
-                             np.asarray(M_invchi0 @ np.asarray(v, float)).ravel() + N_apply(v))
+                             np.asarray(Mm @ np.asarray(v, float)).ravel()
+                             + np.asarray(M_chi0 @ Mfac.solve(N_apply(v))).ravel())
     m, _ = spla.gmres(A0, rhs0, M=Mprec, restart=int(gmres_restart), maxiter=4, **{_GMRES_TOL: 1e-6})
 
     converged = False; nit = 0; rel = float("inf")
