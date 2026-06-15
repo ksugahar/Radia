@@ -69,8 +69,12 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     Provide EXACTLY ONE material spec:
-      mu_r     : float > 1  -> LINEAR isotropic soft iron.
-      bh_table : [[H,B], ..] (A/m, T; the MatSatIsoTab data) -> NONLINEAR isotropic soft iron.
+      mu_r     : float > 1 -> LINEAR isotropic soft iron (ONE region), OR a dict {material_name: mu_r}
+                 for PER-REGION linear soft iron (multiple iron grades; every mesh material must appear
+                 and each mu_r > 1).  N = B^T G B is geometry-only, so per-region enters ONLY through the
+                 (1/chi)-weighted HDiv mass.
+      bh_table : [[H,B], ..] (A/m, T; the MatSatIsoTab data) -> NONLINEAR isotropic soft iron (ONE
+                 region; per-region nonlinear is the next productionization step).
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  REQUIRED.
 
@@ -114,7 +118,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
     D = float((mu @ N_apply(mu)) / denom)
 
     if mu_r is not None:
-        m, iters = _solve_linear(mu_r, Mm, N_apply, Mprec, rhs0, n_face, tol, maxit, gmres_restart)
+        M_invchi = _build_inv_chi_mass(mesh, fes, mu_r, Mm, n_face)
+        m, iters = _solve_linear(M_invchi, N_apply, Mprec, rhs0, n_face, tol, maxit, gmres_restart)
     else:
         m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
                                     n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window)
@@ -130,15 +135,36 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
                 n_charge=int(d["n_charge"]), nonlinear=(bh_table is not None))
 
 
-def _solve_linear(mu_r, Mm, N_apply, Mprec, rhs, n_face, tol, maxit, gmres_restart):
+def _build_inv_chi_mass(mesh, fes, mu_r, Mm, n_face):
+    """The (1/chi)-weighted HDiv mass for the +N linear system A = M_invchi + N.  `mu_r` is either a
+    scalar (one isotropic soft-iron region -> M_invchi = (1/chi) M_mass) or a dict {material: mu_r}
+    (per-region soft iron -> M_invchi = INT (1/chi(x)) u.v dx with a region-wise coefficient).  N is
+    geometry-only (material-independent), so per-region soft iron enters ONLY here.  Fail-loud
+    (No-Fallbacks): every mesh material must be specified, each mu_r > 1."""
+    if isinstance(mu_r, dict):
+        mats = list(mesh.GetMaterials())
+        missing = sorted(set(mats) - set(mu_r))
+        if missing:
+            raise ValueError("hdiv_demag_solve: mu_r dict missing region(s) %s; mesh materials are %s"
+                             % (missing, mats))
+        bad = {r: mu_r[r] for r in mats if float(mu_r[r]) <= 1.0}
+        if bad:
+            raise ValueError("hdiv_demag_solve: every region mu_r must be > 1 (got %s)" % bad)
+        inv_chi_cf = mesh.MaterialCF({r: 1.0 / (float(mu_r[r]) - 1.0) for r in mats})
+        u, v = fes.TnT()
+        a = ng.BilinearForm(fes); a += inv_chi_cf * u * v * ng.dx; a.Assemble()
+        r, c, val = a.mat.COO()
+        return sp.csr_matrix((np.array(val), (np.array(r), np.array(c))), shape=(n_face, n_face))
     chi = float(mu_r) - 1.0
     if chi <= 0.0:
         raise ValueError("hdiv_demag_solve: mu_r must be > 1 (got %r)" % (mu_r,))
-    inv_chi = 1.0 / chi
+    return (1.0 / chi) * Mm
 
+
+def _solve_linear(M_invchi, N_apply, Mprec, rhs, n_face, tol, maxit, gmres_restart):
     def A_apply(v):
         v = np.asarray(v, float)
-        return inv_chi * np.asarray(Mm @ v).ravel() + N_apply(v)
+        return np.asarray(M_invchi @ v).ravel() + N_apply(v)
 
     A = spla.LinearOperator((n_face, n_face), matvec=A_apply)
     it = {"n": 0}
@@ -147,8 +173,8 @@ def _solve_linear(mu_r, Mm, N_apply, Mprec, rhs, n_face, tol, maxit, gmres_resta
                          callback=lambda _x: it.__setitem__("n", it["n"] + 1),
                          callback_type="pr_norm", **{_GMRES_TOL: tol})
     if info != 0:
-        raise RuntimeError("hdiv_demag_solve (linear): +N GMRES did not converge (info=%d, mu_r=%g, "
-                           "n_face=%d, iters=%d)" % (info, mu_r, n_face, it["n"]))
+        raise RuntimeError("hdiv_demag_solve (linear): +N GMRES did not converge (info=%d, "
+                           "n_face=%d, iters=%d)" % (info, n_face, it["n"]))
     return m, it["n"]
 
 
