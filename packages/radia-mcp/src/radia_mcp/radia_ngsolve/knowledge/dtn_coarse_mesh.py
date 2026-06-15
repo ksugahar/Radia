@@ -2571,8 +2571,11 @@ panel (truncation closed form, energy-quotient Kelvin DtN, permeable-sphere phys
 THE FOUR CLOSURES at low frequency (a=1, reference -(n+1)):
   * [A] ACCURACY (per-mode DtN, n=0..4): KELVIN holds EVERY mode to <1% (energy-quotient
     lambda=-(d-2)/a - <|grad v*|^2>/<v*^2>, v*=solid-harmonic image = degree-n polynomial -> order>=n
-    exact; radial value matches the production 3D kelvin_dtn_eigenvalue: -2.0000 vs -2.0028). PML holds
-    every mode to <1% (no DtN-accuracy breakdown, confirming demo_pp). The two CHEAP approximate
+    exact; radial value matches the production 3D kelvin_dtn_eigenvalue: -2.0000 vs -2.0028; with
+    MULTIPLE MESHES the real 3D Kelvin DtN error drops monotonically ~3-4x/level for EVERY zonal mode
+    -- n=1: 3.3e-5->7.2e-6->1.3e-6, n=2: 3.9e-5->1.0e-5->3.5e-6, n=3: 4.4e-5->1.1e-5->2.0e-6 at maxh
+    0.5->0.35->0.25 order 5 = h-convergence to the curved-sphere geometry floor, Kameari's 5-6 digits).
+    PML holds every mode to <1% (no DtN-accuracy breakdown, confirming demo_pp). The two CHEAP approximate
     closures fail at OPPOSITE ENDS: the TRUNCATION/air-box wall at reach R fails the LOW (slow-decaying)
     modes -- closed form Lambda_n^trunc=[n+(n+1)C]/[1-C], C=(R/a)^{2n+1}, |error|=(2n+1)/(C-1) ~
     (2n+1)(a/R)^{2n+1}, LARGEST at the monopole (~a/R) and dipole (~3(a/R)^3) and DECREASING with n
