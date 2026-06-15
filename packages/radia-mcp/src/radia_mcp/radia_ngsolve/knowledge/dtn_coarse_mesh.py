@@ -2557,6 +2557,51 @@ ADE-trivial, and ~6-13x better than the constant shell (demo_wc) -- this is the 
 high-freq IABC. The exact lossless route (Hankel CF / Grote-Keller finite-pole, demo_uu) remains the
 parameter-free reference for the loss-free radiation DtN. BOUNDARY: ports only the published Mie/ADE/
 Debye-PML analytic method; no internal optimization tables embedded.
+
+LOW-FREQUENCY 4-WAY HEAD-TO-HEAD: Kelvin vs BEM vs PML vs ballooning, cost x accuracy on the DtN
+spectrum (demo_lf4, VERIFIED 2026-06-15; user: "first, let's do the low-frequency Kelvin -- Kelvin vs
+other methods benchmark"). The additive low-freq 4-way the prior demos lacked: they are pairwise
+(Kelvin-vs-BEM cost demo_k; accuracy demo_n/demo_s; PML radial conditioning demo_pp) and the 3-way
+demo_nn is HIGH freq (ka=4). Here all meet on ONE static yardstick (exterior Laplace, exact ladder
+Lambda_n=-(n+1)/R) and ONE physical apparatus (permeable sphere in a uniform field). Ballooning/
+infinite-elements were ABSENT from the whole tree; a minimal truncation/finite-reach wall is built and
+characterized honestly. All numbers from a pure numpy/scipy/sympy core + a guarded real-3D NGSolve
+cost block; 20/20 asserts green; the 3 central derivations independently re-derived by an adversarial
+panel (truncation closed form, energy-quotient Kelvin DtN, permeable-sphere physics -- all confirmed).
+THE FOUR CLOSURES at low frequency (a=1, reference -(n+1)):
+  * [A] ACCURACY (per-mode DtN, n=0..4): KELVIN holds EVERY mode to <1% (energy-quotient
+    lambda=-(d-2)/a - <|grad v*|^2>/<v*^2>, v*=solid-harmonic image = degree-n polynomial -> order>=n
+    exact; radial value matches the production 3D kelvin_dtn_eigenvalue: -2.0000 vs -2.0028). PML holds
+    every mode to <1% (no DtN-accuracy breakdown, confirming demo_pp). The two CHEAP approximate
+    closures fail at OPPOSITE ENDS: the TRUNCATION/air-box wall at reach R fails the LOW (slow-decaying)
+    modes -- closed form Lambda_n^trunc=[n+(n+1)C]/[1-C], C=(R/a)^{2n+1}, |error|=(2n+1)/(C-1) ~
+    (2n+1)(a/R)^{2n+1}, LARGEST at the monopole (~a/R) and dipole (~3(a/R)^3) and DECREASING with n
+    (high modes decay before the wall; radial FE matches the closed form to 4e-4); ASYMPTOTIC-ROBIN
+    lambda=-1/a fails the HIGH modes -- relative error n/(n+1), 0 at n=0, GROWING with n. So Kelvin and
+    PML hold BOTH spectral ends; truncation and Robin each hold only one.
+  * [B] CONDITIONING (freq robustness): cond(PML) grows toward DC (3.2e4@ka=1 -> 2.8e5@ka=0.05, the
+    s=1+i sigma/k blow-up) while cond(Kelvin) is flat (spread 1.30) -- the real low-freq PML cost
+    (a wave-absorber mis-applied to a static problem); reproduces demo_pp.
+  * [C] COST/SPARSITY: the volume/shell closures (Kelvin, PML, ballooning) give SPARSE matrices,
+    nnz~O(N) (fitted exponent 1.00 in 1D; real 3D Kelvin H1 nnz/row ~20, exponent 1.10 over ndof
+    278->1813); the boundary DtN operator (BEM) is DENSE, nnz=N^2 (exponent 2). Absolute timings in
+    demo_k (Kelvin ms vs BEM seconds->minutes). Comparison is at matched accuracy / via the scaling
+    EXPONENT (the methods pay DOF on different objects: Kelvin/ballooning volume, BEM surface, PML
+    absorber-shell), not at equal ndof.
+  * [D] PHYSICAL APPARATUS: a linearly-permeable sphere (mu_r) in a uniform field H0 z has interior
+    B_in=3 mu_r/(mu_r+2) B0 and a PURE DIPOLE exterior m=a^3 H0 (mu_r-1)/(mu_r+2) (sympy-derived from
+    potential + normal-B matching; mu_r->inf: m->a^3 H0, B_in/B0->3; mu_r->1: m->0). Because the
+    exterior is a SINGLE mode n=1, each closure's n=1 DtN error directly sets its recovered-dipole
+    error: Kelvin exact (3e-13), truncation ~1.5(a/R)^3 rel (R=3:5.8%, R=6:0.7%), Robin 50% wrong.
+VERDICT (the SA-paper headline): at low/quasi-static frequency Kelvin is the EXACT, PARAMETER-FREE,
+frequency-robust, sparse, material-capable open boundary -- the one closure accurate across the WHOLE
+DtN spectrum; BEM is equally exact but dense (O(N^2)); PML is accurate but ill-conditioned at DC and
+needs sigma/d tuning; truncation/ballooning is sparse and cheap but finite-reach (push R out, or use
+infinite elements = approach Kelvin). Prior art: Brunotte-Meunier-Imhoff 1992 / Nabizadeh-Ramamoorthi-
+Chern 2021 (Kelvin ladder), Silvester-Hsieh 1971 / Bettess (ballooning/infinite elements), Berenger /
+Collino-Monk (PML), Jackson (permeable sphere). New angle: the unified low-freq 4-way cost x accuracy
+ON the DtN spectrum + the single-apparatus tie-in. Ports only published analytic method; no internal
+data embedded.
 """
 
 
