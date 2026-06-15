@@ -216,7 +216,12 @@ def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
             return np.asarray(Mm @ x).ravel() + np.asarray(_Tcsr @ Mfac.solve(N_apply(x))).ravel()
 
         Jop = spla.LinearOperator((n_face, n_face), matvec=_Jv)
-        dm, _info = spla.gmres(Jop, -F, M=Mprec, restart=int(gmres_restart), maxiter=4, **{_GMRES_TOL: gmres_tol})
+        # Eisenstat-Walker inexact-Newton forcing: solve the Newton step only as tightly as the current
+        # outer residual warrants (loose when far, tight when near) -- the inner J-GMRES is the dominant
+        # cost (~130 iters/step, M_mass^-1 is a weak preconditioner for J = M_mass + T D_op), so a loose
+        # early tol cuts wasted inner work without changing the (tangent-limited, ~0.65-linear) outer rate.
+        inner_tol = float(min(1e-2, max(gmres_tol, 0.1 * rel)))
+        dm, _info = spla.gmres(Jop, -F, M=Mprec, restart=int(gmres_restart), maxiter=4, **{_GMRES_TOL: inner_tol})
         lam = 1.0                            # Armijo backtracking line search (globalises Newton)
         while lam > 1e-6 and _Fnorm(m + lam * dm) >= nF:
             lam *= 0.5
