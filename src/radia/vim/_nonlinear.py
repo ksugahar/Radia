@@ -183,6 +183,39 @@ def _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id):
     return gf_sec * gfH, gf_dif * par + gf_sec * (Id - par)
 
 
+def _table_tensor_tangent_multi(gfH, mesh, region_funcs, elem_region, Id):
+    """PER-REGION version of _table_tensor_tangent: each element uses ITS OWN region's PCHIP BH table.
+
+    `region_funcs` is a list (indexed by region-id) of (Bpch, Bder, Hmax, Mmax) tuples (one per soft-iron
+    grade); `elem_region` is the per-element region-id array in mesh element order (== L2(0) DOF order, so
+    element i <-> DOF i).  N = B^T G B is geometry-only, so per-region nonlinear iron enters ONLY here:
+    each element's chi_sec / chi_diff is read from the BH table of the material it belongs to.  Returns
+    the same (M(H) CF, consistent tensor-tangent CF) pair as the single-region helper."""
+    l2 = ng.L2(mesh, order=0)
+    gfm = ng.GridFunction(l2)
+    gfm.Set(ng.sqrt(ng.InnerProduct(gfH, gfH) + 1e-30))
+    Hmag = np.maximum(gfm.vec.FV().NumPy(), 1e-30)            # per-element |H| (DOF == element order)
+    sec_e = np.empty_like(Hmag)
+    dif_e = np.empty_like(Hmag)
+    for ridx, (Bpch, Bder, Hmax, Mmax) in enumerate(region_funcs):
+        sel = elem_region == ridx
+        if not np.any(sel):
+            continue
+        h = Hmag[sel]
+        sat = h > Hmax
+        a_cl = np.minimum(h, Hmax)
+        m_e = np.where(sat, Mmax, Bpch(a_cl) / _MU0 - a_cl)   # M(|H|), saturated beyond this region's table
+        sec_e[sel] = m_e / h                                  # chi_sec = M/|H|
+        dif_e[sel] = np.where(sat, 0.0, Bder(a_cl) / _MU0 - 1.0)   # chi_diff = dM/d|H| (0 beyond sat)
+    gf_sec = ng.GridFunction(l2)
+    gf_sec.vec.FV().NumPy()[:] = sec_e
+    gf_dif = ng.GridFunction(l2)
+    gf_dif.vec.FV().NumPy()[:] = dif_e
+    H2 = ng.InnerProduct(gfH, gfH) + 1e-30
+    par = ng.OuterProduct(gfH, gfH) / H2
+    return gf_sec * gfH, gf_dif * par + gf_sec * (Id - par)
+
+
 def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
                            picard_warmstart=8, maxit=200, tol=1e-10, wilton_surface=False,
                            bh_table=None, analytic_gram=False, require_convergence=True):

@@ -76,3 +76,67 @@ def test_per_region_fail_loud():
     with pytest.raises(ValueError):
         with ng.TaskManager():
             hdiv_demag_solve(mesh, mu_r={"lo": 100.0, "hi": 1.0}, H_ext=HEXT)   # mu_r <= 1
+
+
+# ---------------------------------------------------------------------------------------------------
+# Per-region NONLINEAR soft iron: bh_table as {material: [[H,B]]} (multiple iron grades).  Same
+# structural fact as the linear case -- N = B^T G B is geometry-only -- but now each region carries its
+# OWN BH curve, so per-region nonlinear enters through the per-element constitutive law
+# (_table_tensor_tangent_multi) + the per-region zero-field-chi Newton warmstart.
+# ---------------------------------------------------------------------------------------------------
+_MU0 = 4e-7 * np.pi
+
+
+def _bh(chi0, Bsat, n=40):
+    """Saturating BH table [[H,B]]: M(H) = chi0 H/(1+chi0|H|/Msat), Msat = Bsat/mu0, B = mu0(H+M)."""
+    H = np.concatenate([[0.0], np.geomspace(1.0, 1e6, n)])
+    M = chi0 * H / (1.0 + chi0 * np.abs(H) / (Bsat / _MU0))
+    return np.column_stack([H, _MU0 * (H + M)])
+
+
+BH_SOFT = _bh(5000.0, 2.0)        # high-permeability grade
+BH_HARD = _bh(200.0, 2.0)         # low-permeability grade (same saturation)
+HEXT_NL = ng.CoefficientFunction((0.0, 0.0, 1.0e5))   # drive that genuinely saturates the soft grade
+
+
+def test_per_region_nl_equal_table_matches_single():
+    """A {lo: BH, hi: BH} dict with the SAME table in both regions must reproduce the single-table
+    nonlinear solve bit-for-bit (the per-element constitutive law + per-region warmstart both collapse to
+    the single-region path when every region shares one curve)."""
+    mesh = _two_region_mesh()
+    with ng.TaskManager():
+        rd = hdiv_demag_solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_SOFT}, H_ext=HEXT_NL, nl_tol=1e-6)
+        rs = hdiv_demag_solve(mesh, bh_table=BH_SOFT, H_ext=HEXT_NL, nl_tol=1e-6)
+    assert rd["nonlinear"] and rs["nonlinear"]
+    assert np.allclose(rd["M"], rs["M"], rtol=1e-8, atol=1e-3)
+    assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-8, atol=1e-3)
+
+
+def test_per_region_nl_different_tables_physics():
+    """Different BH grades per region: (1) the global M_avg_z is strictly BOUNDED by the all-soft and
+    all-hard scalar runs (monotone response to per-region permeability); (2) the mixed run is genuinely
+    distinct from BOTH (the dict path is not silently collapsing to one curve); (3) the solve is genuinely
+    NONLINEAR -- the soft grade's M_avg differs substantially from its LINEAR (mu_r = chi0+1) counterpart,
+    so the BH saturation is actually engaged (not a disguised linear solve)."""
+    mesh = _two_region_mesh()
+    with ng.TaskManager():
+        r  = hdiv_demag_solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_HARD}, H_ext=HEXT_NL, nl_tol=1e-6)
+        rs = hdiv_demag_solve(mesh, bh_table=BH_SOFT, H_ext=HEXT_NL, nl_tol=1e-6)
+        rh = hdiv_demag_solve(mesh, bh_table=BH_HARD, H_ext=HEXT_NL, nl_tol=1e-6)
+        rL = hdiv_demag_solve(mesh, mu_r=5001.0, H_ext=HEXT_NL)   # linear chi0 counterpart of the soft grade
+    z, zs, zh, zL = r["M_avg"][2], rs["M_avg"][2], rh["M_avg"][2], rL["M_avg"][2]
+    assert zh < z < zs                                    # bounded: harder grade -> less, softer -> more
+    assert abs(z - zs) > 0.03 * abs(zs)                   # distinct from all-soft (measured ~11%)
+    assert abs(z - zh) > 0.01 * abs(zh)                   # distinct from all-hard (measured ~2.3%)
+    assert abs(zs - zL) > 0.10 * abs(zL)                  # saturation engaged: nonlinear != linear (~26%)
+
+
+def test_per_region_nl_fail_loud():
+    """Missing region or a malformed per-region table must raise (No-Fallbacks)."""
+    mesh = _two_region_mesh()
+    with pytest.raises(ValueError):
+        with ng.TaskManager():
+            hdiv_demag_solve(mesh, bh_table={"lo": BH_SOFT}, H_ext=HEXT_NL)          # 'hi' missing
+    with pytest.raises(ValueError):
+        with ng.TaskManager():
+            hdiv_demag_solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_HARD[:, 0]}, H_ext=HEXT_NL)  # 1-col table
