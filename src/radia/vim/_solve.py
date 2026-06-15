@@ -74,20 +74,26 @@ _MU0 = 4e-7 * _PI
 _GMRES_TOL = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "tol"
 
 
-def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=True, gram_eps=1e-10,
-                     leaf=32, eta=2.0, near_factor=1e30, tol=1e-8, maxit=4000, gmres_restart=400,
-                     nl_maxit=300, nl_tol=1e-6, anderson_window=6):
+def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, scalable=True,
+                     gram_eps=1e-10, leaf=32, eta=2.0, near_factor=1e30, tol=1e-8, maxit=4000,
+                     gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
-    Provide EXACTLY ONE material spec:
+    Soft-iron spec (EXACTLY ONE, unless every region is a permanent magnet -> both may be omitted):
       mu_r     : float > 1 -> LINEAR isotropic soft iron (ONE region), OR a dict {material_name: mu_r}
-                 for PER-REGION linear soft iron (multiple iron grades; every mesh material must appear
-                 and each mu_r > 1).  N = B^T G B is geometry-only, so per-region enters ONLY through the
-                 (1/chi)-weighted HDiv mass.
+                 for PER-REGION linear soft iron (multiple iron grades; each mu_r > 1).  N = B^T G B is
+                 geometry-only, so per-region enters ONLY through the chi-weighted HDiv mass (form 1).
       bh_table : [[H,B], ..] (A/m, T; the MatSatIsoTab data) -> NONLINEAR isotropic soft iron (ONE
-                 region), OR a dict {material_name: [[H,B], ..]} for PER-REGION nonlinear soft iron
-                 (multiple iron grades; every mesh material must appear).  N = B^T G B is geometry-only,
-                 so per-region nonlinear enters ONLY through the per-element constitutive law + warmstart.
+                 region), OR a dict {material_name: [[H,B], ..]} for PER-REGION nonlinear soft iron.
+                 N = B^T G B is geometry-only, so per-region nonlinear enters ONLY through the per-element
+                 constitutive law + warmstart.
+      pm_M     : dict {material_name: [Mx,My,Mz]} (A/m) -> PERMANENT-MAGNET (fixed-M source) regions
+                 mixed alongside soft iron (or alone).  A PM region is the M = M_pm (tangent 0) special
+                 case of the same projected statement: it contributes a source b_pm = INT M_pm.v dx and
+                 its field reaches the iron through the full-m demag, while its own M stays pinned to
+                 M_pm.  With pm_M, the soft-iron spec covers the NON-PM regions (a scalar mu_r applies to
+                 every non-PM region; a dict names them).  NOTE: PM + NONLINEAR iron (bh_table) is the
+                 next step and currently raises NotImplementedError; PM + LINEAR iron (mu_r) is supported.
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  REQUIRED.
 
@@ -96,8 +102,14 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
     """
     if H_ext is None:
         raise ValueError("hdiv_demag_solve: H_ext (applied-field CoefficientFunction) is required")
-    if (mu_r is None) == (bh_table is None):
-        raise ValueError("hdiv_demag_solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
+    if pm_M is None:
+        if (mu_r is None) == (bh_table is None):
+            raise ValueError("hdiv_demag_solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
+    else:
+        if bh_table is not None:
+            raise NotImplementedError("hdiv_demag_solve: PM (pm_M) + NONLINEAR iron (bh_table) is not yet "
+                                      "supported -- the next productionization step.  Use PM + linear iron "
+                                      "(mu_r) for now.")
 
     # ---- demag operator N (apply) + M_mass^{-1} preconditioner, shared by both modes ----
     if scalable:
@@ -129,7 +141,11 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
     denom = float(mu @ np.asarray(Mm @ mu).ravel())
     D = float((mu @ N_apply(mu)) / denom)
 
-    if mu_r is not None:
+    if pm_M is not None:
+        M_chi, b_pm = _build_mixed_pm(mesh, fes, mu_r, pm_M, Mm, n_face)
+        m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit,
+                                 gmres_restart, b_extra=b_pm)
+    elif mu_r is not None:
         M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
         m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit, gmres_restart)
     else:
@@ -172,6 +188,79 @@ def _build_chi_mass(mesh, fes, mu_r, Mm, n_face):
     if chi <= 0.0:
         raise ValueError("hdiv_demag_solve: mu_r must be > 1 (got %r)" % (mu_r,))
     return chi * Mm
+
+
+def _build_mixed_pm(mesh, fes, mu_r, pm_M, Mm, n_face):
+    """Permanent-magnet (fixed-M) + LINEAR soft-iron material build for the form-1 mixed system
+    (M_mass + M_chi M_mass^-1 N) m = M_chi h_ext + b_pm.  A PM region is the M = M_pm (no H-response,
+    chi = 0) special case of the projected statement: it contributes the source load b_pm = INT M_pm.v dx
+    and its field reaches the iron through the full-m demag, while its own M stays pinned to M_pm by the
+    projection (chi = 0 there -> M_mass m = b_pm).  `pm_M` is {material: [Mx,My,Mz]} (A/m); the soft-iron
+    spec covers the NON-PM regions (scalar mu_r -> every non-PM region; dict mu_r -> the named iron
+    regions; mu_r = None -> pure PM, no iron).  Returns (M_chi sparse mass, b_pm source vector).
+    Fail-loud (No-Fallbacks): every material is classified exactly once (iron XOR PM), PM regions exist,
+    each iron mu_r > 1."""
+    mats = list(mesh.GetMaterials())
+    pm_regions = set(pm_M)
+    missing_pm = sorted(pm_regions - set(mats))
+    if missing_pm:
+        raise ValueError("hdiv_demag_solve: pm_M region(s) %s not in mesh materials %s" % (missing_pm, mats))
+    if mu_r is None:
+        iron_mu = {}
+    elif isinstance(mu_r, dict):
+        iron_mu = {r: float(mu_r[r]) for r in mu_r}
+    else:
+        iron_mu = {r: float(mu_r) for r in mats if r not in pm_regions}
+    iron_regions = set(iron_mu)
+    overlap = sorted(iron_regions & pm_regions)
+    if overlap:
+        raise ValueError("hdiv_demag_solve: region(s) %s are both iron (mu_r) and PM (pm_M)" % overlap)
+    unspec = sorted(set(mats) - iron_regions - pm_regions)
+    if unspec:
+        raise ValueError("hdiv_demag_solve: region(s) %s are neither iron (mu_r) nor PM (pm_M); "
+                         "mesh materials are %s" % (unspec, mats))
+    bad = {r: iron_mu[r] for r in iron_regions if iron_mu[r] <= 1.0}
+    if bad:
+        raise ValueError("hdiv_demag_solve: every iron mu_r must be > 1 (got %s)" % bad)
+    _check_pm_iron_not_touching(mesh, fes, pm_regions, iron_regions)
+    u, v = fes.TnT()
+    chi_cf = mesh.MaterialCF({r: (iron_mu[r] - 1.0 if r in iron_regions else 0.0) for r in mats})
+    a = ng.BilinearForm(fes); a += chi_cf * u * v * ng.dx; a.Assemble()
+    rr, cc, val = a.mat.COO()
+    M_chi = sp.csr_matrix((np.array(val), (np.array(rr), np.array(cc))), shape=(n_face, n_face))
+    pm_cf = mesh.MaterialCF({r: ng.CoefficientFunction(tuple(pm_M[r])) if r in pm_regions
+                             else ng.CoefficientFunction((0.0, 0.0, 0.0)) for r in mats})
+    lf = ng.LinearForm(fes); lf += pm_cf * v * ng.dx; lf.Assemble()
+    b_pm = lf.vec.FV().NumPy().copy()
+    return M_chi, b_pm
+
+
+def _check_pm_iron_not_touching(mesh, fes, pm_regions, iron_regions):
+    """Fail-loud if a PM region shares an RT0 facet with a soft-iron region.  The magnetization is
+    DISCONTINUOUS across a PM<->iron boundary (M_pm != chi H there), but the conforming HDiv (RT0,
+    order 0) field forces the normal component continuous on every shared facet, so a directly-touching
+    PM-iron interface produces a spurious interface artifact that DIVERGES under refinement (measured:
+    ~20% external-field error vs rad.Solve, growing with mesh density).  A non-touching PM+iron
+    (an air gap between them -- the usual magnetic-circuit / PM-motor case) shares no facets and matches
+    rad.Solve to ~1e-3, converging.  Detecting a shared PM-iron facet -> raise (the broken-RT0 /
+    interface-DG treatment of a touching PM-iron boundary is the next productionization step)."""
+    cls = {}                                   # HDiv order-0 DOF (== facet) -> set of {'pm','iron'}
+    for el in mesh.Elements(ng.VOL):
+        c = "pm" if el.mat in pm_regions else ("iron" if el.mat in iron_regions else None)
+        if c is None:
+            continue
+        for dof in fes.GetDofNrs(el):
+            if dof >= 0:
+                cls.setdefault(dof, set()).add(c)
+    n_shared = sum(1 for s in cls.values() if "pm" in s and "iron" in s)
+    if n_shared:
+        raise NotImplementedError(
+            "hdiv_demag_solve: a permanent-magnet region directly TOUCHES a soft-iron region "
+            "(%d shared RT0 facets).  The conforming HDiv field cannot represent the magnetization "
+            "discontinuity across a PM-iron boundary, so the result would DIVERGE under refinement "
+            "(~20%% external-field error vs rad.Solve).  Separate the PM and iron with an air gap "
+            "(verified to match rad.Solve to ~1e-3); the touching-interface formulation is the next "
+            "productionization step." % n_shared)
 
 
 def _build_nl_constit(mesh, fes, bh_table, Mm, n_face):
@@ -223,12 +312,16 @@ def _build_nl_constit(mesh, fes, bh_table, Mm, n_face):
     return constit_fn, chi0 * Mm
 
 
-def _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit, gmres_restart):
-    """Form-1 linear solve: (M_mass + M_chi M_mass^-1 N) m = M_chi h_ext, GMRES + M_mass^-1 precond.
-    This is the constant-chi special case of the projected M = chi H statement (so a linear region and
-    its nonlinear-table equivalent agree).  For uniform chi it is identical to the (1/chi)M_mass + N
-    system (verified bit-for-bit); for per-region chi it is the consistent generalization."""
+def _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit, gmres_restart, b_extra=None):
+    """Form-1 linear solve: (M_mass + M_chi M_mass^-1 N) m = M_chi h_ext (+ b_extra), GMRES + M_mass^-1
+    precond.  This is the constant-chi special case of the projected M = chi H statement (so a linear
+    region and its nonlinear-table equivalent agree).  For uniform chi it is identical to the
+    (1/chi)M_mass + N system (verified bit-for-bit); for per-region chi it is the consistent
+    generalization.  `b_extra` (the permanent-magnet source load b_pm = INT M_pm.v dx) is added to the
+    RHS when permanent magnets are mixed in."""
     rhs = np.asarray(M_chi @ h_ext).ravel()
+    if b_extra is not None:
+        rhs = rhs + np.asarray(b_extra).ravel()
 
     def A_apply(v):
         v = np.asarray(v, float)
