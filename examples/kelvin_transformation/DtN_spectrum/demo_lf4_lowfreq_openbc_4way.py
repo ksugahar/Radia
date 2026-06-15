@@ -323,8 +323,19 @@ try:
         print(f"     3D kelvin_dtn_eigenvalue(n=1) = {lam3:.4f}  (radial kelvin_dtn(1) = {kelvin_dtn(1):.4f}; exact -2)")
         check("radial Kelvin DtN agrees with production 3D helper at n=1",
               abs(lam3 - kelvin_dtn(1)) < 0.05, f"3D {lam3:.4f} vs radial {kelvin_dtn(1):.4f}")
+        # MULTIPLE MESHES (the hero method): refining the mesh lowers the curved-sphere
+        # geometry floor for EVERY zonal mode n=1..3 -> the figure's convergence headline.
+        print("     3D Kelvin DtN rel-err vs mesh (order=5; zonal modes n=1..3, maxh 0.5->0.35->0.25):")
+        kconv = {}
+        for nn in (1, 2, 3):
+            kconv[nn] = [kelvin_dtn_eigenvalue(R=1.0, degree=nn, maxh=mh, order=5, intorder=12, dim=3)["rel_err"]
+                         for mh in (0.5, 0.35, 0.25)]
+            print(f"        n={nn}: " + "  ".join(f"{e:.2e}" for e in kconv[nn]))
+        mono = all(kconv[nn][i + 1] < kconv[nn][i] for nn in (1, 2, 3) for i in range(2))
+        check("3D Kelvin DtN error DECREASES under mesh refinement for every zonal mode n=1..3",
+              mono, "h-convergence to the curved-geometry floor (~3-4x/level)")
     except Exception as ex:
-        print(f"     (3D kelvin_dtn_eigenvalue cross-check skipped: {type(ex).__name__})")
+        print(f"     (3D kelvin_dtn_eigenvalue checks skipped: {type(ex).__name__})")
 except Exception as ex:
     print(f"     (NGSolve cost block skipped: {type(ex).__name__}: {ex})")
 
