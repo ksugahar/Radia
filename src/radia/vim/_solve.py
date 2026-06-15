@@ -38,10 +38,12 @@ the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the a
 (scalable `_ChargeGramHMatrix` at tight gram_eps), REQUIRED for div M != 0 (non-uniform M) bodies.
 
 ## Scope (M1)
-Single isotropic soft-iron region (one `mu_r` or one `bh_table`).  Per-region / mixed (PM+iron)
-materials + the M0 parity gate are the remaining productionization steps
-(docs/hdiv_vim/PRODUCTIONIZATION.md).  Until they land, yano-type MSC stays the `rad.Solve` default
-demag backend (`radia.set_demag_backend`); this entry does not touch it.
+Per-region soft iron, LINEAR (`mu_r` scalar or `{material: mu_r}` dict) AND NONLINEAR (`bh_table` one
+[[H,B]] table or `{material: [[H,B]]}` dict).  N = B^T G B is geometry-only, so multi-grade iron enters
+ONLY through the (1/chi)-weighted HDiv mass (linear) / the per-element constitutive law (nonlinear).
+Mixed PM+iron (fixed-M source regions) + the 165k-DOF-scale preconditioner + the M0 parity gate are the
+remaining productionization steps (docs/hdiv_vim/PRODUCTIONIZATION.md).  Until they land, yano-type MSC
+stays the `rad.Solve` default demag backend (`radia.set_demag_backend`); this entry does not touch it.
 
 Per CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT" -- this library helper does NOT
 open a TaskManager; the caller wraps the call in `with ng.TaskManager():`.
@@ -56,7 +58,7 @@ import ngsolve as ng
 
 import radia._radia_pybind as _rp
 from . import _core as _tet
-from ._nonlinear import _bh_table_funcs, _table_tensor_tangent
+from ._nonlinear import _bh_table_funcs, _table_tensor_tangent, _table_tensor_tangent_multi
 
 _MU0 = 4e-7 * _PI
 # scipy renamed the Krylov tolerance kwarg 'tol' -> 'rtol' (scipy >= 1.12); detect once.
@@ -74,7 +76,9 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, scalable=Tru
                  and each mu_r > 1).  N = B^T G B is geometry-only, so per-region enters ONLY through the
                  (1/chi)-weighted HDiv mass.
       bh_table : [[H,B], ..] (A/m, T; the MatSatIsoTab data) -> NONLINEAR isotropic soft iron (ONE
-                 region; per-region nonlinear is the next productionization step).
+                 region), OR a dict {material_name: [[H,B], ..]} for PER-REGION nonlinear soft iron
+                 (multiple iron grades; every mesh material must appear).  N = B^T G B is geometry-only,
+                 so per-region nonlinear enters ONLY through the per-element constitutive law + warmstart.
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  REQUIRED.
 
@@ -161,6 +165,54 @@ def _build_inv_chi_mass(mesh, fes, mu_r, Mm, n_face):
     return (1.0 / chi) * Mm
 
 
+def _build_nl_constit(mesh, fes, bh_table, Mm, n_face):
+    """Build the NONLINEAR constitutive callback + the zero-field-chi warmstart mass M_invchi0.
+
+    `bh_table` is either ONE [[H,B]] table (single isotropic soft-iron region) or a dict
+    {material_name: [[H,B]]} (PER-REGION nonlinear iron grades).  N = B^T G B is geometry-only, so
+    per-region nonlinear enters ONLY through (a) the per-element constitutive law (each element uses its
+    region's PCHIP BH table via `_table_tensor_tangent_multi`) and (b) the warmstart mass M_invchi0
+    (the region-wise zero-field susceptibility chi0 = B'(0)/mu0 - 1).  Returns
+    (constit_fn(gfH, Id) -> (M(H) CF, tensor-tangent CF), M_invchi0 sparse/scaled mass).  Fail-loud
+    (No-Fallbacks): every mesh material must appear in the dict, each table 2-column."""
+    if isinstance(bh_table, dict):
+        mats = list(mesh.GetMaterials())
+        missing = sorted(set(mats) - set(bh_table))
+        if missing:
+            raise ValueError("hdiv_demag_solve: bh_table dict missing region(s) %s; mesh materials are %s"
+                             % (missing, mats))
+        region_names = list(bh_table)
+        name_to_ridx = {nm: k for k, nm in enumerate(region_names)}
+        region_funcs = []
+        chi0_by_name = {}
+        for nm in region_names:
+            arr = np.asarray(bh_table[nm], float)
+            if arr.ndim != 2 or arr.shape[1] != 2:
+                raise ValueError("hdiv_demag_solve: bh_table[%r] must be [[H,B], ...] (A/m, T)" % (nm,))
+            _Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
+            region_funcs.append((Bpch, Bder, Hmax, Mmax))
+            chi0_by_name[nm] = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
+        elem_region = np.array([name_to_ridx[mesh[ng.ElementId(ng.VOL, i)].mat]
+                                for i in range(mesh.ne)], dtype=int)
+
+        def constit_fn(gfH, Id):
+            return _table_tensor_tangent_multi(gfH, mesh, region_funcs, elem_region, Id)
+
+        M_invchi0 = _build_inv_chi_mass(mesh, fes, {nm: chi0_by_name[nm] + 1.0 for nm in mats}, Mm, n_face)
+        return constit_fn, M_invchi0
+
+    arr = np.asarray(bh_table, float)
+    if arr.ndim != 2 or arr.shape[1] != 2:
+        raise ValueError("hdiv_demag_solve: bh_table must be [[H,B], ...] (A/m, T)")
+    _Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
+    chi0 = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
+
+    def constit_fn(gfH, Id):
+        return _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id)
+
+    return constit_fn, (1.0 / chi0) * Mm
+
+
 def _solve_linear(M_invchi, N_apply, Mprec, rhs, n_face, tol, maxit, gmres_restart):
     def A_apply(v):
         v = np.asarray(v, float)
@@ -198,16 +250,12 @@ def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
     the EXACT pieces the Hantila path used -- no new operator, fully scalable (the C++ charge-Gram
     H-matvec is the only O(N log N) cost).  Fail-loud on non-convergence (CLAUDE.md No-Fallbacks)."""
     del anderson_window                      # unused by Newton (signature kept for the caller)
-    arr = np.asarray(bh_table, float)
-    if arr.ndim != 2 or arr.shape[1] != 2:
-        raise ValueError("hdiv_demag_solve: bh_table must be [[H,B], ...] (A/m, T)")
-    _Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
-    chi0 = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
+    constit_fn, M_invchi0 = _build_nl_constit(mesh, fes, bh_table, Mm, n_face)
     Id = ng.Id(3); vf = fes.TestFunction(); uf = fes.TrialFunction(); gfH = ng.GridFunction(fes)
 
     def _constit(m):                         # (M(H) CF, tensor-tangent CF) at H = h_ext - M_mass^-1 N m
         gfH.vec.FV().NumPy()[:] = h_ext - Mfac.solve(N_apply(m))
-        return _table_tensor_tangent(gfH, mesh, Bpch, Bder, Hmax, Mmax, Id)
+        return constit_fn(gfH, Id)
 
     def _bM(M_cf):                           # RT0 L2 projection load INT M(H).v dx
         lf = ng.LinearForm(fes); lf += M_cf * vf * ng.dx; lf.Assemble()
@@ -217,10 +265,12 @@ def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
         M_cf, _ = _constit(m)
         return float(np.linalg.norm(np.asarray(Mm @ m).ravel() - _bM(M_cf)))
 
-    # scalar-chi LINEAR warmstart -> the Newton basin (the unsaturated chi0 response)
+    # zero-field-chi LINEAR warmstart -> the Newton basin (the unsaturated chi0 response, per region for a
+    # bh_table dict).  M_invchi0 is the (1/chi0)-weighted HDiv mass (scalar -> (1/chi0) M_mass; per-region
+    # -> the region-wise weighted mass), reusing the same +N linear solve as the LINEAR path.
     rhs0 = np.asarray(Mm @ h_ext).ravel()
     A0 = spla.LinearOperator((n_face, n_face), matvec=lambda v:
-                             (1.0 / chi0) * np.asarray(Mm @ np.asarray(v, float)).ravel() + N_apply(v))
+                             np.asarray(M_invchi0 @ np.asarray(v, float)).ravel() + N_apply(v))
     m, _ = spla.gmres(A0, rhs0, M=Mprec, restart=int(gmres_restart), maxiter=4, **{_GMRES_TOL: 1e-6})
 
     converged = False; nit = 0; rel = float("inf")
