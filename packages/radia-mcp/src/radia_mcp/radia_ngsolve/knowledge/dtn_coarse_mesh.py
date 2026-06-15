@@ -2516,6 +2516,47 @@ not. BOUNDARY: URN lives in the public Radia repo (examples/), not the commercia
 use/cite; it is the user's own method. NEXT (deferred, user's call): push URN to a tight (<~2%) circuit
 fit on a chosen PASSIVE target (asymptote-subtracted diffusion DtN is the best showcase: Warburg/skin =
 sqrt(jw) is native), then emit the SPICE/ADE for an actual time-domain run.
+
+PASSIVE DISPERSIVE (URN/Debye) SHELL = the time-domain IABC, and it BEATS the constant shell
+(demo_wc, VERIFIED 2026-06-15; user: "jointly optimize {URN fit + layer thickness + complex eps,mu}
+to derive the time-domain IABC -- is the Hankel continued-fraction expansion needed?"). This closes
+the loop demo_wb->URN by actually DOING the joint optimization, and it OVERTURNS demo_wb's "constant,
+no dispersion" verdict. Setup: one MATCHED spherical shell (eps=mu=m => planar Z=1 for all omega),
+inner a=1, thickness d, PEC-backed, mode n=1; reflection by Riccati-Bessel transfer matrices (the
+generic published Mie method, no internal data). Material in the URN passive-relaxation basis
+m(w)=einf + sigma/(jw) + sum_k dEps_k/(1+jw tau_k), all params>=0 => Im(m)<=0 (passive) and each term
+is a local-in-time ODE (einf instantaneous; sigma Ohmic dD/dt=sigma E; Debye tau dP/dt+P=dEps E).
+Joint WLS (least_squares) over the band minimizes band-max |reflection| in {einf,sigma,(dEps,tau)_k,d}.
+VERIFIED (band kR in [2,8], 4:1):
+  * (1) PASSIVITY: the fitted +1-Debye m(w) has Im<=0 at every band sample (max Im -9.9e-1), Re>0.
+  * (2) CAUSAL BEATS ACAUSAL: passive +1-Debye band-max |ref| = 0.0042 vs the best ACAUSAL "constant
+    complex" shell (m=a-j b; constant Im violates Kramers-Kronig => not a real time-domain material)
+    0.0417 -> 9.9x BETTER. On the wider band [1,12]: 0.0225 vs 0.1416 (~6x). Dispersion is NOT a tax
+    for going to the time domain; it HELPS. (This corrects the demo_wb headline that constant passive
+    was the practical time-domain shell at ~8.7%: a passive DISPERSIVE shell is both realizable AND
+    ~6-13x more accurate. The earlier probe that found "dispersion doesn't help" was an OPTIMIZATION
+    ARTIFACT -- it carried a redundant acausal constant-Im term that trapped the optimizer near the
+    constant solution with sigma->0; removing it and using a purely-passive parametrization flips it.)
+  * (3) THE RELAXATION POLE IS THE ACTIVE INGREDIENT: einf+sigma/(jw) ALONE (a conductor/Drude term,
+    NO relaxation pole) is WORSE than constant (0.0765 > 0.0417); adding ONE Debye pole flips it to
+    0.0042. The win is the relaxation SHAPE -- exactly the URN basis, not mere conductivity.
+  * (4) TIME-DOMAIN REALIZATION CHECK: the Debye auxiliary ODE tau dP/dt+P=dEps E, integrated from
+    rest under a steady tone E=e^{jwt} for 60 tau, reproduces the susceptibility dEps/(1+jw tau) to
+    rel.err 2.4e-11, with stable rate 1/tau>0. => the optimized shell is a ready-to-run ADE/FETD
+    material; no recursive convolution, no instability.
+  * (5) HANKEL CONTINUED FRACTION -- NEEDED? NO for the lossy IABC. The EXACT LOSSLESS exterior DtN is
+    a FINITE rational function whose poles are the zeros of h_n^{(1)} (reverse-Bessel/Bessel-filter,
+    demo_uu); its partial fraction == the Hankel continued fraction (n=1: Lambda_1=i z-1+z0/(z-z0),
+    z0=-i, matched scipy to 1.8e-15). That is the exact lossless-radiation reference. The LOSSY
+    wideband IABC does NOT expand it -- it fits a low-order passive relaxation model to the per-mode
+    reflection instead. So the Hankel CF is the reference target, not a required ingredient.
+NET (final time-domain map): LOW-FREQ = Kelvin, exact & parameter-free (demo_yy). EDDY-CURRENT/
+DIFFUSION = passive sqrt(s) SIBC, Foster/URN-Warburg realizable (demo_xx). HIGH-FREQ WAVE = a passive
+DISPERSIVE matched shell (URN/Debye), jointly optimized with thickness over the band: passive, causal,
+ADE-trivial, and ~6-13x better than the constant shell (demo_wc) -- this is the practical time-domain
+high-freq IABC. The exact lossless route (Hankel CF / Grote-Keller finite-pole, demo_uu) remains the
+parameter-free reference for the loss-free radiation DtN. BOUNDARY: ports only the published Mie/ADE/
+Debye-PML analytic method; no internal optimization tables embedded.
 """
 
 
