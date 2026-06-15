@@ -2575,7 +2575,13 @@ THE FOUR CLOSURES at low frequency (a=1, reference -(n+1)):
     MULTIPLE MESHES the real 3D Kelvin DtN error drops monotonically ~3-4x/level for EVERY zonal mode
     -- n=1: 3.3e-5->7.2e-6->1.3e-6, n=2: 3.9e-5->1.0e-5->3.5e-6, n=3: 4.4e-5->1.1e-5->2.0e-6 at maxh
     0.5->0.35->0.25 order 5 = h-convergence to the curved-sphere geometry floor, Kameari's 5-6 digits).
-    PML holds every mode to <1% (no DtN-accuracy breakdown, confirming demo_pp). The two CHEAP approximate
+    GEOMETRY-FLOOR LEVER (Kelvin CAN be made far more accurate): the floor is the curved-sphere
+    isoparametric (Curve) order, which kelvin_dtn_eigenvalue CAPS at Curve(min(order+1,3)). Lifting it
+    drops the DtN error ~30x/geometry-order -- at maxh 0.4, FE order 6: Curve 3 (default) ~0.8-1.7e-5 ->
+    Curve 4 ~1-4e-7 -> Curve 5 ~1.3-4.7e-8 (n=1..3); with Curve 5 + maxh 0.25 the dipole reaches 8.4e-10.
+    So with resolved geometry Kelvin is the MOST accurate of the four closures (3-4 orders below BEM/PML),
+    not just competitive -- the open-boundary error is geometry-limited (cf. floor_vs_curve), not a
+    method ceiling. PML holds every mode to <1% (no DtN-accuracy breakdown, confirming demo_pp). The two CHEAP approximate
     closures fail at OPPOSITE ENDS: the TRUNCATION/air-box wall at reach R fails the LOW (slow-decaying)
     modes -- closed form Lambda_n^trunc=[n+(n+1)C]/[1-C], C=(R/a)^{2n+1}, |error|=(2n+1)/(C-1) ~
     (2n+1)(a/R)^{2n+1}, LARGEST at the monopole (~a/R) and dipole (~3(a/R)^3) and DECREASING with n

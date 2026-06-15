@@ -334,6 +334,28 @@ try:
         mono = all(kconv[nn][i + 1] < kconv[nn][i] for nn in (1, 2, 3) for i in range(2))
         check("3D Kelvin DtN error DECREASES under mesh refinement for every zonal mode n=1..3",
               mono, "h-convergence to the curved-geometry floor (~3-4x/level)")
+        # GEOMETRY-FLOOR LEVER: Kelvin's accuracy is limited by the curved-sphere isoparametric
+        # (Curve) order -- the helper caps Curve(min(order+1,3)). Lifting it drops the DtN error
+        # ~30x/order: ~1e-5 (geom 3) -> ~1e-8 (geom 5). So Kelvin CAN be made far more accurate.
+        from radia_mcp.radia_ngsolve.fem_bem_coupling import _solid_harmonic
+        def _kelvin_curve(deg, maxh, order, curve, io=16):
+            m = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=maxh)).Curve(curve)
+            f = ng.H1(m, order=order, dirichlet=".*"); uu, vv = f.TnT()
+            aa = ng.BilinearForm(ng.grad(uu) * ng.grad(vv) * ng.dx); aa.Assemble()
+            g = ng.GridFunction(f); g.Set(_solid_harmonic(deg), ng.BND)
+            rr = g.vec.CreateVector(); rr.data = -(aa.mat * g.vec)
+            g.vec.data += aa.mat.Inverse(freedofs=f.FreeDofs()) * rr
+            en = float(ng.Integrate(ng.grad(g) * ng.grad(g) * ng.dx(bonus_intorder=io), m))
+            bm = float(ng.Integrate(g * g * ng.ds(bonus_intorder=io), m))
+            return abs((-1.0 - en / bm) - (-(deg + 1))) / (deg + 1)
+        print("     Kelvin DtN rel-err vs GEOMETRY (Curve) order at maxh=0.4, FE order=6 (n=1,2,3):")
+        geom = {}
+        for kk in (3, 5):
+            geom[kk] = [_kelvin_curve(nn, 0.4, 6, kk) for nn in (1, 2, 3)]
+            print(f"        Curve {kk}: " + "  ".join(f"{e:.2e}" for e in geom[kk]))
+        check("Kelvin accuracy improves >=30x by lifting geometry order 3->5 (geometry-limited floor)",
+              all(geom[5][i] < geom[3][i] / 30 for i in range(3)) and max(geom[5]) < 1e-6,
+              f"geom5 max {max(geom[5]):.1e} vs geom3 max {max(geom[3]):.1e} -> Kelvin reaches ~1e-8")
     except Exception as ex:
         print(f"     (3D kelvin_dtn_eigenvalue checks skipped: {type(ex).__name__})")
 except Exception as ex:
