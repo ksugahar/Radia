@@ -19,6 +19,8 @@ Element types: TET meshes use the scalable C++ charge-Gram H-matrix; HEX/WEDGE
 meshes use the dense analytic polytope charge Gram (O(N^2), correct -- verified
 demag_z -> 1/3 on hex/wedge cubes).  :func:`hdiv_demag_solve` (scalable=None)
 auto-selects the path from the mesh element type, so this dispatch is element-agnostic.
+The per-element write-back container is ObjTetrahedron / ObjHexahedron / ObjWedge
+(netgen_mesh_to_radia allow_hex=allow_wedge=True), so tet/hex/wedge all round-trip.
 """
 import radia as rad
 
@@ -39,24 +41,15 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     HDiv-VIM on the registered mesh).  Exactly one of ``mu_r`` (linear) or
     ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
 
-    TET and HEX meshes are supported.  WEDGE/prism meshes raise (the per-element Radia
-    container needed for ``ObjSetM`` write-back has no ObjWedge import yet); the direct
-    :func:`radia.vim.hdiv_demag_solve` DOES solve wedge meshes (its polytope charge Gram
-    is element-agnostic) -- only the rad.Solve container wrapper is hex/tet for now.
+    TET, HEX, and WEDGE meshes are all supported (ObjTetrahedron / ObjHexahedron /
+    ObjWedge per element for the ``ObjSetM`` write-back + ``rad.Fld``).
     """
-    import ngsolve
     from radia.netgen_mesh_import import netgen_mesh_to_radia
     if (mu_r is None) == (bh_table is None):
         raise ValueError("soft_iron_from_mesh: give exactly one of mu_r (linear) or bh_table (nonlinear)")
-    if any(len(el.vertices) == 6 for el in mesh.Elements(ngsolve.VOL)):
-        raise NotImplementedError(
-            "soft_iron_from_mesh: wedge/prism meshes cannot yet be wrapped in a rad.Solve container "
-            "(ObjWedge import is not wired into netgen_mesh_to_radia).  Call "
-            "radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=) directly -- it solves wedge "
-            "meshes via the polytope charge Gram; only the rad.Solve container wrapper is hex/tet.")
     handles = netgen_mesh_to_radia(mesh, material={'magnetization': [0.0, 0.0, 0.0]},
                                    combine=False, verbose=verbose, material_filter=material_filter,
-                                   allow_hex=True)
+                                   allow_hex=True, allow_wedge=True)
     # apply the soft-iron material so the legacy yano backend ALSO works on this container
     mat = rad.MatLin(float(mu_r)) if mu_r is not None else rad.MatSatIsoTab(bh_table)
     for h in handles:

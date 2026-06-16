@@ -119,10 +119,27 @@ def test_radsolve_hdiv_hex_dispatch():
     rad.UtiDelAll()
 
 
-def test_wedge_container_raises_clean():
-    """soft_iron_from_mesh cannot wrap a WEDGE mesh in a rad.Solve container yet (no ObjWedge import) --
-    it raises a clean NotImplementedError pointing at the direct solve (which DOES handle wedge, test (1))."""
+def test_radsolve_hdiv_wedge_dispatch():
+    """rad.Solve(demag_backend='hdiv') on a WEDGE soft_iron_from_mesh container (ObjWedge per element)
+    == direct hdiv_demag_solve to machine precision, with per-element M written back (ObjM)."""
     rad.UtiDelAll()
-    with pytest.raises(NotImplementedError):
-        vim.soft_iron_from_mesh(_cube(False, 3), mu_r=MU_R)
+    mesh = _cube(False, 3)
+    with ng.TaskManager():
+        direct = vim.hdiv_demag_solve(mesh, mu_r=MU_R, H_ext=_Hz())
+    iron = vim.soft_iron_from_mesh(mesh, mu_r=MU_R)
+    bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
+    cont = rad.ObjCnt([iron, bkg])
+    prev = rad.set_demag_backend("hdiv")
+    try:
+        with ng.TaskManager():
+            res = rad.Solve(cont, 1e-6, 1000, 0)
+    finally:
+        rad.set_demag_backend(prev)
+    rel = abs(res["M_avg"][2] - direct["M_avg"][2]) / abs(direct["M_avg"][2])
+    assert rel < 1e-9, f"rad.Solve(hdiv) wedge M_avg {res['M_avg'][2]:.1f} != direct {direct['M_avg'][2]:.1f} (rel {rel:.2e})"
+    objm = rad.ObjM(iron)
+    assert len(objm) == direct["n_el"], f"{len(objm)} Radia wedge handles vs {direct['n_el']} HDiv elements"
+    mz = float(np.mean([m[2] for (_c, m) in objm]))
+    assert abs(mz - res["M_avg"][2]) / abs(res["M_avg"][2]) < 0.05, \
+        f"ObjM write-back mean Mz {mz:.1f} not consistent with solved M_avg {res['M_avg'][2]:.1f}"
     rad.UtiDelAll()
