@@ -15,9 +15,10 @@ material getter), so this bridge keeps a registry populated at build time by
 magnetization back onto the iron's Radia elements via ``ObjSetM`` so that
 ``rad.Fld`` / ``rad.ObjM`` reflect the HDiv-VIM solution.
 
-tet-first: ``build_demag``'s volume self-energy is tetrahedron-specific, so this
-dispatch currently requires a TET mesh; hex/wedge raise a clear NotImplementedError
-(their self-energy is the next increment).
+Element types: TET meshes use the scalable C++ charge-Gram H-matrix; HEX/WEDGE
+meshes use the dense analytic polytope charge Gram (O(N^2), correct -- verified
+demag_z -> 1/3 on hex/wedge cubes).  :func:`hdiv_demag_solve` (scalable=None)
+auto-selects the path from the mesh element type, so this dispatch is element-agnostic.
 """
 import radia as rad
 
@@ -37,12 +38,25 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     ``MatLin`` / ``MatSatIsoTab`` MSC -- the legacy path) and ``'hdiv'`` (the FEEC
     HDiv-VIM on the registered mesh).  Exactly one of ``mu_r`` (linear) or
     ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
+
+    TET and HEX meshes are supported.  WEDGE/prism meshes raise (the per-element Radia
+    container needed for ``ObjSetM`` write-back has no ObjWedge import yet); the direct
+    :func:`radia.vim.hdiv_demag_solve` DOES solve wedge meshes (its polytope charge Gram
+    is element-agnostic) -- only the rad.Solve container wrapper is hex/tet for now.
     """
+    import ngsolve
     from radia.netgen_mesh_import import netgen_mesh_to_radia
     if (mu_r is None) == (bh_table is None):
         raise ValueError("soft_iron_from_mesh: give exactly one of mu_r (linear) or bh_table (nonlinear)")
+    if any(len(el.vertices) == 6 for el in mesh.Elements(ngsolve.VOL)):
+        raise NotImplementedError(
+            "soft_iron_from_mesh: wedge/prism meshes cannot yet be wrapped in a rad.Solve container "
+            "(ObjWedge import is not wired into netgen_mesh_to_radia).  Call "
+            "radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=) directly -- it solves wedge "
+            "meshes via the polytope charge Gram; only the rad.Solve container wrapper is hex/tet.")
     handles = netgen_mesh_to_radia(mesh, material={'magnetization': [0.0, 0.0, 0.0]},
-                                   combine=False, verbose=verbose, material_filter=material_filter)
+                                   combine=False, verbose=verbose, material_filter=material_filter,
+                                   allow_hex=True)
     # apply the soft-iron material so the legacy yano backend ALSO works on this container
     mat = rad.MatLin(float(mu_r)) if mu_r is not None else rad.MatSatIsoTab(bh_table)
     for h in handles:
@@ -87,13 +101,6 @@ def dispatch(top, *solve_args, **solve_kwargs):
     iron, sources = _find_registered_iron(top)
     reg = _DEMAG_REGISTRY[iron]
     mesh = reg["mesh"]
-
-    # tet-only guard: build_demag's volume self-energy is tetrahedron-specific
-    for el in mesh.Elements(ngsolve.VOL):
-        if len(el.vertices) != 4:
-            raise NotImplementedError(
-                "demag_backend='hdiv': only tetrahedral meshes are supported so far "
-                "(found a non-tet volume element); hex/wedge self-energy is the next increment.")
 
     # applied field H_ext = the source members' H field (coils / ObjBckg), as an NGSolve CF
     if sources:

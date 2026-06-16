@@ -74,7 +74,7 @@ _MU0 = 4e-7 * _PI
 _GMRES_TOL = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "tol"
 
 
-def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, scalable=True,
+def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, scalable=None,
                      gram_eps=1e-10, leaf=32, eta=2.0, near_factor=1e30, tol=1e-8, maxit=4000,
                      gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
@@ -97,6 +97,9 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
                  PM-iron magnetization discontinuity) -- separate them with an air gap.
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  REQUIRED.
+    scalable   : None (default) -> auto: TET mesh uses the scalable C++ charge-Gram H-matrix, HEX/WEDGE
+                 uses the dense analytic polytope Gram (O(N^2), correct).  True forces the C++ path (tet
+                 only -> raises on hex/wedge).  False forces the dense analytic Gram for any element type.
 
     Returns dict: M (n_el,3) per-element magnetization, M_avg (3,), iters, demag (Rayleigh factor),
     ndof, n_el, n_charge, nonlinear(bool).  The caller must open `with ng.TaskManager():`.
@@ -110,6 +113,21 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
         if (mu_r is not None) and (bh_table is not None):
             raise ValueError("hdiv_demag_solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
                              "bh_table (nonlinear), not both")
+
+    # ---- scalable (C++ charge-Gram H-matrix) vs dense (Python analytic polytope Gram) ----
+    # The scalable C++ kernel (_ChargeGramHMatrix) is TETRAHEDRON-ONLY (tet cells + triangle faces);
+    # hex/wedge meshes take the dense analytic polytope Gram (correct, O(N^2); the scalable C++ hex/wedge
+    # Gram is a future increment).  scalable=None (default) auto-selects by element type; an EXPLICIT
+    # scalable=True on a non-tet mesh is a fail-loud error (No-Fallbacks -- the C++ path cannot run it).
+    all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
+    if scalable is None:
+        scalable = all_tet
+    elif scalable and not all_tet:
+        raise NotImplementedError(
+            "hdiv_demag_solve(scalable=True) uses the C++ charge-Gram H-matrix, which is "
+            "tetrahedron-only, but this mesh has non-tet volume elements (hex/wedge).  Pass "
+            "scalable=False for the dense analytic polytope charge Gram (correct, O(N^2)); the "
+            "scalable C++ hex/wedge charge Gram is a future increment.")
 
     # ---- demag operator N (apply) + M_mass^{-1} preconditioner, shared by both modes ----
     if scalable:
