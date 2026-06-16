@@ -109,20 +109,18 @@ or its parent `panels/samples/`):
 
 ## The full-ELF-CEFC-2020 reference
 
-The published ELF reference (`examples/c_type_electromagnet/mu=1000/
-quarter/verify_elf_radia.py`) is the **quarter_xz** variant with
+The published C-type electromagnet reference is the **quarter_xz** variant with
 Radia MSC (direct hex-element extraction via `IMA='+x-z'` symmetry),
 giving `B_z = -228.1 mT` at `NI=2000, mu_r=1000` (verified by
-running the ELF reference 2026-04-25; earlier README revisions
+running the reference 2026-04-25; earlier README revisions
 incorrectly cited -976 mT, which was a transcription error).
 Matching that number in FEM requires:
 
 - `em_1-4_quarter_xz.jou` (now WORKING) at the ELF-matched yoke
   geometry (NOT the simplified bricks currently shipped -- ELF uses
   17mm pole bevel + 25mm thick C-back at specific positions).
-- The ELF racetrack coil (port `examples/c_type_electromagnet/
-  mu=1000/coil_model.py` to a CoilBuilder script with Y_CENTER =
-  131.25 mm, NOT the 151.25 mm in `em_sample_coil.py`).
+- The C-type electromagnet racetrack coil (a CoilBuilder script with
+  Y_CENTER = 131.25 mm, NOT the 151.25 mm in `em_sample_coil.py`).
 - Mesh refinement matching the ELF discretization for FEM
   convergence to ~1% accuracy.
 
