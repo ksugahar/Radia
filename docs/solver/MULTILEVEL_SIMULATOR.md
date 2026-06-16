@@ -249,7 +249,7 @@ L = np.imag(Z) / (2*np.pi*1e6)
 4. **NGSBEM surface mesh**: Use `Glue(wire.faces)`, not volume Box
 5. **NGSBEM maxh**: `maxh <= min_cross_section / 2` for equilateral elements
 6. **MSC sign**: `(1/chi + N) sigma = H_ext` (not negated)
-7. **Yano-Sugahara**: eval_point = (face_center + element_center) / 2
+7. **Yano**: eval_point = (face_center + element_center) / 2
 8. **Point charge correction**: Required for multi-element (650% error without)
 9. **Loop port**: Split loop with two nodes at same position, not `add_port(n,n)`
 10. **Nonlinear: Newton->Picard order**: Start Newton (fast), finish Picard (stable).

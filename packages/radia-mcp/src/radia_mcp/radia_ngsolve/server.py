@@ -63,6 +63,7 @@ from .knowledge.femm_parity import get_femm_parity_documentation
 from .knowledge.fem_bem_schur import get_fem_bem_schur_documentation
 from .knowledge.airgap_motor_workflow import get_airgap_motor_workflow_documentation
 from .knowledge.dtn_coarse_mesh import get_dtn_coarse_mesh_documentation
+from .knowledge.urn import get_urn_documentation, urn_fit_from_csv
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -550,6 +551,63 @@ def esim(topic: str = "all") -> str:
                                 + BEM-SIBC / FEM-SIBC coupling examples
     """
     return get_esim_documentation(topic)
+
+
+@mcp.tool()
+def urn(topic: str = "all") -> str:
+    """
+    Universal Relaxation Network (URN): causal/passive rational fitting of a
+    complex frequency response, with direct time-domain (relaxation-network /
+    SPICE / auxiliary-ODE) synthesis.
+
+    URN decomposes Z(omega) (impedance, dispersive eps/mu, or an open-boundary
+    DtN symbol G_n(omega)) into a SPARSE sum of physical relaxation mechanisms
+    (Debye, Cole-Cole, Cole-Davidson, Havriliak-Negami, CPE, Warburg, Gerischer,
+    RLC, skin-effect; series + admittance branch) with KAN-style adaptive tau and
+    attention.  Every basis is passive, so the fit is causal/passive BY
+    CONSTRUCTION and maps to one first-order auxiliary ODE per pole (fractional
+    terms -> short RC/RL ladder) -- the local-in-time operator an FETD /
+    Newmark-beta solver needs.  Beats Vector Fitting on fractional/Cole-Cole data
+    (avg ~22.8% lower NRMSE on NASA battery + TDK ferrite datasets).
+
+    Use to turn a frequency-domain absorbing-BC / dispersive-layer response into
+    a stable broadband time-domain model.  Run the fit with the urn_fit tool.
+    Ref: Sugahara & Sato, IEEE Access 2026; impl examples/universal_relaxation_network.
+
+    Args:
+        topic: all | overview | method | api | timedomain | application
+    """
+    return get_urn_documentation(topic)
+
+
+@mcp.tool()
+def urn_fit(data_csv: str, freq_col: int = 0, real_col: int = 1,
+            imag_col: int = 2, delimiter: str = ",", skip_rows: int = 0,
+            n_debye: int = 3, n_cole_cole: int = 2, n_warburg: int = 1,
+            n_cole_davidson: int = 0, sparsity_weight: float = 0.01,
+            n_epochs: int = 2000, n_restarts: int = 3, spice_out: str = "") -> str:
+    """
+    Fit a complex frequency response with a Universal Relaxation Network and
+    return the discovered relaxation mechanisms, the fit NRMSE, and a SPICE
+    netlist (== the auxiliary-ODE ladder for a time-domain / Newmark-beta solver).
+
+    Input is a CSV with columns (frequency_Hz, Re(Z), Im(Z)).  Requires torch;
+    training is iterative -- lower n_epochs / n_restarts for a faster, rougher
+    fit (defaults ~2000/3 are a responsive compromise; the paper uses 6000/10).
+
+    Args:
+        data_csv: path to a CSV of the frequency response.
+        freq_col/real_col/imag_col: 0-based column indices.
+        delimiter, skip_rows: CSV parsing.
+        n_debye/n_cole_cole/n_warburg/n_cole_davidson: basis counts to try.
+        sparsity_weight: L1-ish penalty that prunes unused bases.
+        n_epochs/n_restarts: Adam iterations / random restarts.
+        spice_out: if set, also write the SPICE netlist to this path.
+    """
+    return urn_fit_from_csv(
+        data_csv, freq_col, real_col, imag_col, delimiter, skip_rows,
+        n_debye, n_cole_cole, n_warburg, n_cole_davidson, sparsity_weight,
+        n_epochs, n_restarts, spice_out)
 
 
 @mcp.tool()
@@ -1290,7 +1348,19 @@ def dtn_coarse_mesh(topic: str = "all") -> str:
             "datasheet"    - Problem-INDEPENDENT performance: open-BC error factors
                              into source multipoles x method eigenvalue-defect; the
                              Kelvin closure has an analytic, universal "datasheet"
-                             (certify once, predict any problem by multipole content)
+                             (certify once, predict any problem by multipole content).
+                             Includes COST measured by DoF INCREMENT (not time): the
+                             closure adds a Gamma-scale coarse ball (measured dDoF=58,
+                             closure error ~1/45 of the interior FE error) -> Kelvin is
+                             cheap; keep it SPARSE (condensing to a dense DtN BC is
+                             N^4/3, 10-20x nnz).
+                             Includes the C/L dual: capacitance C <- n=0 (monopole,
+                             exact) and external inductance L_ext <- n=1 (dipole) are
+                             two Steklov modes of the SAME exterior DtN (W_ext =
+                             1/2 mu0 (n+1)/R oint phi^2); certified via the magnetic
+                             POTENTIAL exterior (A no-cut / Omega+cut), NOT the ngsbem
+                             vector single-layer L=mu0 J^T(LaplaceSL)J (a different
+                             operator with no -(n+1)/R ladder)
     """
     return get_dtn_coarse_mesh_documentation(topic)
 

@@ -811,7 +811,7 @@ void RadHACApKBase::UpdateDiagonal(const std::vector<double>& inv_chi) {
 // This function returns the N(dof_i, dof_j) element of the interaction matrix.
 // On-demand computation based on element DOF type:
 // - 3DOF tetrahedra: Use B_comp() with PreRelax mode
-// - 6DOF hexahedra: Use Yano-Sugahara MSC method (face-to-face interaction)
+// - 6DOF hexahedra: Use Yano MSC method (face-to-face interaction)
 //
 // On-demand computation is essential for H-matrix because:
 // - HACApK uses ACA+ which only needs a subset of matrix elements

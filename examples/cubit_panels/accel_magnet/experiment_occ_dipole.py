@@ -35,8 +35,7 @@ import radia as rad
 scale = 0.001  # mm -> m
 MU_0 = 4e-7 * math.pi
 
-BH_FILE = os.path.join(repo_root, 'examples', 'c_type_electromagnet',
-                        'nonlinear', 'BH.txt')
+BH_FILE = os.path.join(work_dir, 'BH.txt')  # nonlinear steel B-H (CEFC 2020 C-type)
 
 MESH_CONFIGS = {
     'coarse': dict(main=2,  sec=1, third=1, factor=10),

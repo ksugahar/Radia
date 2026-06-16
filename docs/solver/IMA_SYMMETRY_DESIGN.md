@@ -335,7 +335,7 @@ Previously, stale cache values from non-IMA solves were incorrectly used for IMA
 solves. Fixed by generation-based cache invalidation in `rad_hacapk.cpp`.
 
 Verified: All three solvers (LU, BiCGSTAB, HACApK) produce identical results with
-IMA quarter model (`image='+x-z'`). See `examples/c_type_electromagnet/mu=1000/quarter/test_all_solvers_ima.py`.
+IMA quarter model (`image='+x-z'`) on the C-type electromagnet quarter-model benchmark.
 
 ### Phase 3: Multi-axis Symmetry - COMPLETED (2026-01-31)
 
@@ -350,4 +350,4 @@ Sign selection policy:
 
 ## References
 
-- Yano-Sugahara MSC method (EIEM2 evaluation points)
+- Yano MSC method (EIEM2 evaluation points)

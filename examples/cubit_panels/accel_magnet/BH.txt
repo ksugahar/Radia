@@ -1,5 +1,5 @@
-# B-H curve extracted from ELF_MAGIC nonlinear_20000AT example
-# Source: S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type\nonlinear_20000AT\ELF_MMB8T_EIEM2_1x1x1\ELF_magic.mai
+# B-H curve: nonlinear soft-iron steel (CEFC 2020 C-type model, 100 points)
+# Used by experiment_occ_dipole.py; canonical embedded copy in src/radia/em_material.py (STEEL_BH)
 # Units: H [A/m], B [T]
 # Format: H B
 0.0	0.0

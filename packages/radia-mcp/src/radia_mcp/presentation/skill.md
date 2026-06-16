@@ -1123,6 +1123,82 @@ tool: `presentation_qa_from_history` / `presentation_talk_feedback_lookup` /
 
 ---
 
+## 📤 PDF → PPTX 変換: `pdf2ppt-pdfgear` skill (PDFgear 上級モード) を使う (2026-06-14)
+
+**POLICY**: 既存の PDF スライド (beamer 出力等) を PPTX に変換する場合は、
+**`pdf2ppt-pdfgear` skill** を使う。 これは PDFgear desktop app を
+**UIAutomation 経由で自動駆動** し、 **上級モード (Advanced Mode) を ON** に
+して editable な PPTX を出力する。 手動で GUI クリックしない。
+
+**Canonical home** (実装ファイルの真の置き場所):
+`packages/radia-mcp/skills/pdf2ppt-pdfgear/{SKILL.md, pdf2ppt_pdfgear.py}`
+
+**Discovery path** (Claude が skill 発見する場所、 canonical home への symlink):
+`C:/Users/Administrator/.claude/skills/pdf2ppt-pdfgear/` (Windows symbolic link、
+S:\ NAS drive 越しでも動作 — junction は対応不可)
+
+**Setup** (一度きり):
+```powershell
+# canonical home に実装が無ければコピー、 ある場合は不要
+Remove-Item "C:\Users\Administrator\.claude\skills\pdf2ppt-pdfgear" -Force -ErrorAction SilentlyContinue
+New-Item -ItemType SymbolicLink \
+  -Path   "C:\Users\Administrator\.claude\skills\pdf2ppt-pdfgear" \
+  -Target "S:\Radia\01_GitHub\packages\radia-mcp\skills\pdf2ppt-pdfgear"
+```
+junction (`-ItemType Junction`) は S:\ (\\192.168.11.100\work) で「再解析ポイント
+バッファー無効」エラー。 SymbolicLink を使うこと (2026-06-14 切替済)。
+
+**使い方** (discovery path 経由 — symlink で canonical home を解決):
+```powershell
+python "C:/Users/Administrator/.claude/skills/pdf2ppt-pdfgear/pdf2ppt_pdfgear.py" \
+       "input.pdf" -o "S:/path/out.pptx"
+```
+canonical home を直接呼んでも OK:
+```powershell
+python "S:/Radia/01_GitHub/packages/radia-mcp/skills/pdf2ppt-pdfgear/pdf2ppt_pdfgear.py" \
+       "input.pdf" -o "S:/path/out.pptx"
+```
+- `-o` なし: PDFgear のデフォルト出力先 (`%USERPROFILE%/OneDrive/PDFgear/<stem> conv.pptx`)
+- 上級モードは **skill の default** (`--no-advanced` で OFF; 通常使わない)
+
+**上級モード ON で何が起きるか** (実測):
+- 14 ページ beamer deck → **315 text box + 0 raster image** の editable PPTX
+- タイトル / 本文 / 数式 / 図形がすべて text shape + vector shape として保持
+- 日本語・LaTeX 記号も editable (OCR ではなく PDF text stream を解析)
+
+**上級モード OFF (`--no-advanced`) では**:
+- 1 ページ = 1 巨大 PICTURE shape (PyMuPDF レンダリングと同等)
+- 編集不能、 ファイル肥大 → **通常は使わない**
+
+**重要なカベアト**:
+- **クラウドアップロード**: 変換は `apiw.pdfgear.com` に PDF を POST する
+  → **未公開研究データには絶対使わない**。 機密はローカル PyMuPDF → python-pptx パス
+- **sign-in**: 初回は PDFgear GUI で手動 sign-in が必要 (skill は無人実行のため)
+- **数式 fidelity**: 上級モード ON でも beamer 数式は **glyph 単位で再 layout** される
+  ので、 editable だが見た目を厳密維持したい場合は **`.tex` 原稿が真の editable master**
+  (編集→ recompile が正攻法)
+
+**典型的な用途**:
+- 共著者が PowerPoint でコメント書き込みたいとき
+- 学会が PPTX 提出を要求しているが、 原稿は beamer のとき
+- 過去 PDF の slide 1 枚を新 deck に取り込みたいとき
+
+**他選択肢との比較**:
+- **`pdf2ppt-pdfgear` skill** (本 policy): クラウド OK な公開済み資料、 editable 必要
+- **PyMuPDF → python-pptx (offline)**: 機密データ、 image-only でよい、 deterministic
+- **PowerPoint で最初から作る**: 継続的に PPTX 必要なら beamer を捨てる
+- **LibreOffice / Adobe Acrobat の標準 PDF→PPT**: 画像化されるため不推奨
+- **`radia-doc-convert.doc_convert_pptx_to_pdf` は逆方向** (PPTX → PDF) なので別物
+
+**関連 tool / skill**:
+- `pdf2ppt-pdfgear` skill (本体)
+- skill 内 `SKILL.md` に reverse-engineered detail (`pdfconverter.exe app1 PDFToPPT
+  <conv_docs.json>` 経由起動、 UIA TogglePattern で 上級モード ON、 InvokePattern で
+  変換ボタン発火)
+- 出力 PPTX を `presentation_check_*` の lint tool 群でチェック (font / bullet / 数式)
+
+---
+
 ## 関連 MCP
 
 - `grant-writing` - 申請書の作文技術 (科研費 / JSPS / KDDI)
