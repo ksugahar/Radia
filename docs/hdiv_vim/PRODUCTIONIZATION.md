@@ -10,7 +10,7 @@ yano-type handles, behind a clean Radia API. Honest scope, milestone-based, with
 
 | Layer | C++ (compiled, `_radia_pybind.pyd`) | Python-only (prototype) |
 |---|---|---|
-| Charge map B + HDiv mass | structured **hex** (`rad_hdiv_vim.cpp`) | unstructured **tet** (NGSolve HDiv extraction, `examples/vim/`) |
+| Charge map B + HDiv mass | structured **hex** (`rad_hdiv_vim.cpp`) | unstructured **tet, hex, wedge** (NGSolve HDiv extraction + polytope analytic Gram, `examples/vim/`) |
 | Coulomb Gram G | monopole + sub-point (`CoulombGramEntry`); **analytic Wilton `TriPotential` + `PhiTet` WIRED into the `_ChargeGramHMatrix` analytic entry (M2a+M2b, golden-locked == dense `analytic_gram` ~1e-9)** | Wilton surface + `phi_tet` volume (analytic), dense `build_demag` |
 | Scalable Gram H-matrix | **`_ChargeGramHMatrix`** monopole **+ analytic mode (M2b)**, `_HDivVimHMatrix` (hex) | (assembly driven from Python) |
 | Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)** | scipy MINRES / CG |
@@ -25,6 +25,21 @@ SolveLinearMaterial Jacobi-PCG + SolveNonlinearPicard scalar-χ nonlinear; the p
 Newton is **measured-not-warranted** — the production Newton converges in 5–6 iters so a C++ port buys
 little). The remaining gap to seal yano-type: the M4 production pieces + the broader **speed** parity
 matrix (M0; the nonlinear-Newton case is now measured — 5–6 iters, orchestration negligible).
+
+Progress (2026-06-17): **`rad.Solve(demag_backend='hdiv')` now dispatches the HDiv-VIM** via
+`radia.vim.soft_iron_from_mesh` (mesh↔container registry) + `radia.vim._radsolve.dispatch` — tet
+increment first, then **hex/wedge**. The dense analytic charge Gram (`build_demag(analytic_gram=True)`)
+was generalized from tet/triangle to **any flat-faced convex cell + quad face** (`_core._polytope_potential`
+/ `_cell_hull_tris` / `_face_subtris`: a cell's Newtonian potential is the divergence-theorem sum over its
+convex-hull faces of the SAME exact Wilton triangle potential; a quad face = two flat triangles). All-tet
+meshes are bit-identical to before (the C++ analytic-Gram golden depends on it); hex/wedge take the dense
+analytic path (the scalable C++ `_ChargeGramHMatrix` stays tet-only — `hdiv_demag_solve(scalable=None)`
+auto-selects, `scalable=True` on hex/wedge fail-loud). Verified: hex/wedge cubes demag_z→1/3, hex M_avg
+matches tet `<1%` (linear) / `~1.7%` (nonlinear); `rad.Solve('hdiv')` hex == direct solve to machine
+precision with ObjM write-back. Golden `tests/feec/test_hdiv_vim_hex_wedge.py` (7), example
+`examples/vim/hdiv_demag_hex_wedge.py`. The rad.Solve **container wrapper** is tet+hex (wedge wrapper needs
+an ObjWedge import — the direct `hdiv_demag_solve(wedge)` already solves it). Scalable C++ hex/wedge Gram +
+panel `calc_accel_msc` integration remain before the seal.
 
 ## Definition of done — the parity gate (M0)
 
@@ -67,8 +82,9 @@ ACA works on it. Benchmark: `examples/vim/hdiv_demag_hacapk_scaling.py` (+ `.jso
 shown to n~3560 (build_demag's dense-G reference is O(N²) and caps N); the trend is clear + favorable;
 larger-N (10k+) confirmation needs a dense-G-free charge extraction — the remaining M0 scalability item.
 
-**Head-to-head target — the saved yano-type C-type benchmarks (M0).** `examples/c_type_electromagnet/
-nonlinear/quarter/hacapk/*.json` record the SHIPPED Radia MMM/MSC (HACApK, nonlinear Newton) on the
+**Head-to-head target — the saved yano-type C-type benchmarks (M0).** The saved
+C-type electromagnet (nonlinear, quarter-model, HACApK) benchmarks record the SHIPPED Radia MMM/MSC
+(HACApK, nonlinear Newton) on the
 C-type electromagnet: at **165600 DOF, 214 nonlinear iterations, t_solve = 2607 s** (= 582 s H-matrix
 build [22%, once] + 1953 s linear solve over 2686 linear iters); at 18900 DOF, 174 iters, 99 s. The
 HDiv-VIM Newton converges in **5–6 iters** (sphere/cube) → ~35–40× fewer nonlinear iterations, so the
