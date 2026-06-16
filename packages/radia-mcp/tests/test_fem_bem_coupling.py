@@ -20,6 +20,7 @@ import pytest
 from radia_mcp.radia_ngsolve.fem_bem_coupling import (
     sphere_shell_analytic_dtn,
     laplace_fem_bem_schur,
+    kelvin_dtn_eigenvalue,
     kelvin_vs_exact_open_bc_error,
     kelvin_openbc_error_vs_exterior_mesh,
     kelvin_twosphere_shell_dipole,
@@ -159,6 +160,43 @@ def test_twosphere_periodic_kelvin_reproduces_dipole():
         f"two-sphere Kelvin dipole rel_err={r['rel_err']:.3e} (expected ~5.5%, < 10%); "
         f"ndof={r['ndof']}"
     )
+
+
+def test_capacitance_inductance_dtn_dual():
+    """The C/L dual: capacitance and external inductance are two Steklov modes of the
+    SAME exterior scalar Laplace DtN, on different rungs of the -(n+1)/R ladder.
+
+      * C     <-> n=0 (MONOPOLE): the constant image is captured EXACTLY at every
+                  order -> defect_0 ~ machine zero.
+      * L_ext <-> n=1 (DIPOLE):   a current loop has no magnetic monopole, so its
+                  leading exterior multipole is the dipole; W_ext = 1/2 mu0 (n+1)/R
+                  oint phi^2, so L_ext = 2 W_ext/I^2 inherits defect_1, which FALLS
+                  with FEM order (dipole image is linear -> captured at p>=1, then a
+                  curved-geometry floor).
+
+    Locks the inductance half of the DtN datasheet (knowledge: dtn_coarse_mesh,
+    datasheet topic; example inductance_dtn.py).  This is the FIELD-ENERGY /
+    potential-exterior inductance, NOT the ngsbem vector single-layer (a different
+    operator with no -(n+1)/R ladder)."""
+    # C: n=0 monopole is machine-exact (constant image, any order)
+    c = kelvin_dtn_eigenvalue(R=1.0, degree=0, maxh=0.5, order=2)
+    assert c["rel_err"] < 1e-9, f"C (n=0 monopole) must be exact, got {c['rel_err']:.2e}"
+
+    # L_ext: n=1 dipole defect falls with order (linear image captured at p>=1)
+    l1 = kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=1)
+    l3 = kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=3)
+    assert l1["rel_err"] < 1e-2, f"L_ext (n=1) coarse defect too large: {l1['rel_err']:.2e}"
+    assert l3["rel_err"] < l1["rel_err"], (
+        f"L_ext defect must fall with order: p1={l1['rel_err']:.2e}, p3={l3['rel_err']:.2e}"
+    )
+
+    # the energy identity that ties the DtN eigenvalue to the exterior inductance:
+    #   1/2 (n+1)/R oint phi^2 == integral_{r>R}|H|^2 == m^2/(6 pi R^3)  (dipole)
+    import math
+    R, m = 1.0, 1.0
+    lhs = 0.5 * (2.0 / R) * (m**2 / (12 * math.pi * R**2))
+    rhs = 0.5 * (m**2 / (6 * math.pi * R**3))
+    assert abs(lhs - rhs) / rhs < 1e-12, "exterior-energy identity (DtN coefficient) broken"
 
 
 def main():

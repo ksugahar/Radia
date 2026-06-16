@@ -180,7 +180,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Demag backend selection (runtime, API-OPTIONAL) -- the yano-type MSC backend is DEPRECATED.
 #
-# The Yano-Sugahara MSC demag backend (rad.Solve on ObjHexahedron / ObjWedge soft iron) is being
+# The Yano MSC demag backend (rad.Solve on ObjHexahedron / ObjWedge soft iron) is being
 # superseded by the FEEC HDiv-VIM (radia.hdiv_vim).  It is exposed here as an OPTIONAL, selectable
 # backend so it can be removed cleanly later: callers that pin "yano" keep today's behaviour (with a
 # one-time DeprecationWarning), and when the HDiv-VIM is wired into rad.Solve the default flips to
@@ -194,7 +194,7 @@ _yano_deprecation_emitted = False
 
 
 def set_demag_backend(name):
-    """Select the demag backend for rad.Solve: "yano" (the legacy Yano-Sugahara MSC for hex/wedge soft
+    """Select the demag backend for rad.Solve: "yano" (the legacy Yano MSC for hex/wedge soft
     iron -- DEPRECATED, the only backend rad.Solve currently dispatches) or "hdiv" (the FEEC HDiv-VIM in
     radia.hdiv_vim, not yet wired into rad.Solve).  Returns the previous value."""
     global _DEMAG_BACKEND
@@ -218,11 +218,11 @@ if "Solve" in globals():
         demag to the FEEC HDiv-VIM (radia.hdiv_vim).  Permanent-magnet / MMM-tet solves are unaffected."""
         global _yano_deprecation_emitted
         if _DEMAG_BACKEND == "hdiv":
-            raise NotImplementedError(
-                "demag_backend='hdiv': rad.Solve does not (yet) dispatch the FEEC HDiv-VIM backend.  Use "
-                "the radia.hdiv_vim API directly (build_demag / DemagOperator / solve_demag_newton on an "
-                "NGSolve HDiv mesh).  rad.Solve dispatches only the legacy yano-type MSC backend -- call "
-                "radia.set_demag_backend('yano') to use it.")
+            # Dispatch the FEEC HDiv-VIM backend.  Requires the iron body to have been built via
+            # radia.vim.soft_iron_from_mesh (which registers the NGSolve mesh + material); the bridge
+            # solves with hdiv_demag_solve and writes per-element M back so rad.Fld/rad.ObjM reflect it.
+            from radia.vim import _radsolve
+            return _radsolve.dispatch(*args, **kwargs)
         if not _yano_deprecation_emitted:
             _yano_deprecation_emitted = True
             _warnings.warn(
@@ -245,3 +245,17 @@ if "SolverConfig" in globals():
             set_demag_backend(kwargs.pop("demag_backend"))
         if kwargs:
             _cpp_SolverConfig(**kwargs)
+
+
+if "UtiDelAll" in globals():
+    _cpp_UtiDelAll = globals()["UtiDelAll"]
+
+    def UtiDelAll(*args, **kwargs):   # noqa: F811  (clears the HDiv mesh<->container registry too)
+        """Delete all Radia objects.  Also clears the HDiv-VIM mesh<->container registry
+        (radia.vim.soft_iron_from_mesh), whose container handles are invalidated here."""
+        try:
+            from radia.vim import _radsolve
+            _radsolve.clear_registry()
+        except Exception:
+            pass
+        return _cpp_UtiDelAll(*args, **kwargs)

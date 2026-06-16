@@ -141,7 +141,7 @@ def test_mmm_delta_L():
         [0, 0, -1], [0, 0, 1], [0, -1, 0], [0, 1, 0], [-1, 0, 0], [1, 0, 0]
     ], dtype=float)
 
-    # Face eval points (Yano-Sugahara midpoint)
+    # Face eval points (Yano midpoint)
     v = core_verts
     face_verts = [
         [v[0], v[3], v[2], v[1]], [v[4], v[5], v[6], v[7]],

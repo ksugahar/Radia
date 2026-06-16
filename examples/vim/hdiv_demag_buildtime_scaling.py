@@ -3,8 +3,8 @@
 The wall-clock head-to-head vs yano-type (Radia MMM/MSC) on the C-type electromagnet has two phases:
 the one-time H-matrix BUILD and the iterative SOLVE.  The SOLVE is the clear HDiv-VIM win (5-6 Newton
 iters vs yano's 214 -- loops field-null by construction).  This benchmark measures the BUILD, the
-dominant remaining unknown ("is the H-matrix build slow?"; the saved yano-type C-type build = 582 s @
-165600 DOF, examples/c_type_electromagnet/.../hacapk/165600DOF.json).
+dominant remaining unknown ("is the H-matrix build slow?"; the saved yano-type C-type electromagnet
+build = 582 s @ 165600 DOF).
 
 KELVIN-LESS by construction: the HDiv-VIM is a VOLUME INTEGRAL method (like MMM/MSC) -- the 1/r charge
 Gram handles the OPEN boundary analytically, so only the IRON is meshed (here a cube as the iron proxy):

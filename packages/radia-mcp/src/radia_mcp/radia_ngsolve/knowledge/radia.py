@@ -2326,7 +2326,7 @@ B = rad.Fld(assembly, 'b', [0, 0, 0.03])
 rad.UtiDelAll()
 ```
 
-**Example**: `examples/c_type_electromagnet/mu=1000/full/verify_elf_radia.py`
+**Example**: C-type electromagnet (full model, nonlinear steel + racetrack coil)
 
 ---
 
@@ -3655,7 +3655,7 @@ RADIA_PEEC_CORE_PITFALLS = """
 
 5. **MSC sign: `(1/chi + N) sigma = H_ext`**, not `(-1/chi - N)`.
 
-6. **Yano-Sugahara eval point = midpoint(face_center, element_center)**:
+6. **Yano eval point = midpoint(face_center, element_center)**:
    Using face_center makes the self-term singular.
 
 7. **Point charge correction required for multi-element**:
@@ -3776,7 +3776,7 @@ The analytical formula returns H pointing INTO the charged surface (negative of
 the physical field from positive sigma). The result must be **negated** to match
 Radia's sign convention where positive sigma produces H pointing away from the surface.
 
-### Yano-Sugahara evaluation point
+### Yano evaluation point
 
 For MSC hexahedra, the evaluation point for each face is the **midpoint between
 the face center and the element center**, NOT the face center itself:

@@ -377,6 +377,44 @@ dominant dipole inverts to a linear field, accurate at order 1).
 > separated from the interior discretisation that a field-refinement study
 > conflates.
 
+### Computational cost — measured by the DoF increment (not solve time)
+
+The cost of an open-boundary closure should be read off the **DoF increment** `ΔDoF`
+it adds to the FE system — machine-independent and reproducible — **not** wall-clock
+solve time (solver/hardware dependent). Measured that way the Kelvin closure is
+**cheap**:
+
+- The closure adds the inverted Kelvin ball = `ΔDoF` unknowns. Meshed as fine as the
+  interior it is `ΔDoF ≈ N_interior` (total ≈ 2×; measured 1.72–2.03×). But the
+  exterior is **volume-irrelevant**, so the ball can be a **coarse, Γ-scale** sphere.
+- **Measured** (`kelvin_openbc_error_vs_exterior_mesh`, shell dipole): the coarsest
+  ball — `ΔDoF = 58`, about the size of the truncation surface `Γ` — already leaves
+  the closure error at `1.2e-3`, **≈ 1/45 of the interior FE error** (`5.3e-2`).
+  Refining it (`ΔDoF 58 → 301`) lowers the closure error (`1.2e-3 → 7.5e-5`) but it is
+  already a non-bottleneck. So the open boundary costs **~a Γ-scale coarse ball of
+  DoF and never limits accuracy** — the precise sense in which Kelvin is "cheap".
+- The **DtN spectrum is the measure**: the order threshold `p ≥ n_src` + the defect
+  law `defect_n ~ n²(h/R)⁴` give the **minimum `ΔDoF`** for a target accuracy *a
+  priori* — size the cheapest admissible exterior without a convergence sweep.
+
+**Keep Kelvin sparse.** Condensing the exterior into the explicit DtN
+(Steklov–Poincaré) operator removes the ball's DoF but turns `Γ` into a **dense
+`N_Γ²` clique**: measured **nnz 10–20× the sparse extension, growing as `N^{4/3}`**
+(vs the sparse extension's `N`). Condensation pays off only when `N_Γ` is small, the
+exterior is reused across many solves (factor once), or the dense block is
+H-matrix/FMM-compressed. *(Measured & settled 2026-06-14, hex vs tet: **a wash — neither wins for the Kelvin
+sphere.** The full sphere hexes easily via `volume scheme sphere` (an earlier "impractical"
+note was an error; only 1/4 & 1/8 sectors aren't covered, where tet wins by default). The
+geometry floor is **two-regime**: at low curving order it tracks the curved-mesh **volume
+(geometry) accuracy**; at high curving order (export order 4+) the volume error keeps
+falling (hex `1.4e-5`, tet `8e-7`) while the floor **plateaus** at the FE/mesh-discretization
+level (tet `~1e-5`, hex `~9e-4`) — so `floor = max(geometry-curving error, FE-discretization
+error)`, the latter lowered only by mesh refinement. At **matched DoF** the two are
+**comparable** (order 2, `N≈2.3k`: hex `1.6e-5` vs tet `1.9e-5`); hex's higher floor was
+mostly its coarser element count, not worse geometry. So "hex lowers the floor / cuts ΔDoF"
+is **not** supported. **Tet stays the practical default** (simpler, handles symmetry sectors);
+high-order hex's strength stays sweepable bodies.)*
+
 ### Connection to the Cauer Ladder Network (CLN)
 
 The `−(n+1)/R` DtN eigenvalue ladder is a **spectral** object of the same kind as
@@ -386,6 +424,43 @@ response by circuit order `{R_n, L_n}`; the Kelvin closure folds the **exterior*
 response by element order `p`. Same idea — decompose the physics into eigenmodes
 and resolve only the modes that matter — applied to the interior network vs the
 open boundary.
+
+### The two scalar readouts: capacitance (n=0) and external inductance (n=1)
+
+Capacitance `C` and external inductance `L_ext` are each **one Steklov mode of the
+same exterior scalar Laplace DtN**, on different rungs of the `−(n+1)/R` ladder — so
+each inherits the datasheet directly:
+
+| quantity | exterior multipole | datasheet rung | measured open-BC defect |
+|---|---|---|---|
+| `C` | **monopole `n=0`** (isolated charged conductor) | `defect_0` | **0** (constant image, exact at every order; sphere `C=4π` machine-precision) |
+| `L_ext` | **dipole `n=1`** (a current loop has no magnetic monopole) | `defect_1` | `1.4e-3 (p=1) → 2.4e-5 (p=2) → 7.6e-6 (p=3)` |
+
+The bridge to inductance is the identity (hand-checked, reconfirmed numerically to
+machine zero) that the DtN eigenvalue **is** the exterior-energy coefficient:
+
+```
+W_ext = ½ μ₀ · (n+1)/R · ∮_Γ φ² dS        (decaying mode r^−(n+1))
+      ⇒  ½·(2/R)∮φ² = ∫_{r>R}|H|² = m²/(6πR³)   (dipole, n=1)
+```
+
+so `L_ext = 2 W_ext / I²` inherits the **dipole** defect exactly: captured at order
+`p ≥ 1`, **floored at curved-Γ geometry** (Curve `k=1→3`: `4.7e-3 → 2.4e-5`),
+mesh-independent, and **exterior-volume-irrelevant** (open-BC error stays ≈ 45× below
+the interior FEM error at every exterior mesh). This is the precise **dual of
+capacitance** — `C ↔ n=0`, `L_ext ↔ n=1`.
+
+**Which operator is certified.** This is the open-boundary *truncation* accuracy of a
+**field-energy** inductance (Kelvin / air-box), via the magnetic *potential* exterior
+— scalar `Ω` (single-valued for a magnetisation source; a free-current loop needs a
+cohomology cut) or the vector potential `A` (no cut; same `−(n+1)/R` gradient block).
+It is **not** the `ngsolve.bem` vector single-layer energy `L = μ₀ Jᵀ(LaplaceSL)J`,
+which is a *different* integral operator (the single-layer potential, no `−(n+1)/R`
+ladder, order-0 current basis). So "C and L are both DtN-certified" is only **half**
+true — keep the two operators distinct. (Scope: `L_ext` is the *external* energy share;
+a thin loop's full self-inductance is near-field/log-dominated = interior FEM accuracy,
+not a DtN question. Verified by
+[`inductance_dtn.py`](../../examples/kelvin_transformation/DtN_spectrum/inductance_dtn.py).)
 
 ---
 

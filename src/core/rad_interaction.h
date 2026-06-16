@@ -273,7 +273,7 @@ class radTInteraction : public radTg {
 	//-------------------------------------------------------------------------
 	bool m_hexaGeomReady;                         // True if geometry is pre-computed
 	std::vector<double> m_hexaCenters;            // n_hex * 3: element centers
-	std::vector<double> m_hexaEvalPoints;         // n_hex * 6 * 3: Yano-Sugahara eval points per face
+	std::vector<double> m_hexaEvalPoints;         // n_hex * 6 * 3: Yano eval points per face
 	std::vector<double> m_hexaFaceNormals;        // n_hex * 6 * 3: outward face normals
 	std::vector<double> m_hexaFaceAreas;          // n_hex * 6: face areas
 	std::vector<double> m_hexaTriVertices;        // n_hex * 6 * 2 * 3 * 3: 2 triangles per face, 3 verts, xyz
@@ -288,7 +288,7 @@ class radTInteraction : public radTg {
 	//-------------------------------------------------------------------------
 	bool m_wedgeGeomReady;
 	std::vector<double> m_wedgeCenters;          // n_wedge * 3
-	std::vector<double> m_wedgeEvalPoints;       // n_wedge * 5 * 3: Yano-Sugahara eval pts
+	std::vector<double> m_wedgeEvalPoints;       // n_wedge * 5 * 3: Yano eval pts
 	std::vector<double> m_wedgeFaceNormals;      // n_wedge * 5 * 3
 	std::vector<double> m_wedgeFaceAreas;        // n_wedge * 5
 	std::vector<int> m_wedgeFaceNumTris;         // n_wedge * 5: 1 for tri face, 2 for quad face
