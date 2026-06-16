@@ -62,6 +62,9 @@ extern "C" {
     void cHACApK_hlu_set_trunc_tol(double tol);
     double cHACApK_hlu_get_trunc_tol(void);
     void cHACApK_hlu_get_materialize_stats(long *out_n_calls, long *out_n_elems);
+    void cHACApK_hlu_get_materialize_split(long *out_internal, long *out_leaf);
+    double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
+                                     const double *x_orig, const double *y_orig, int nffc);
     void cHACApK_hlu_get_mixed_breakdown(long *out_addmul9, long *out_lln9, long *out_run9);
     void cHACApK_hlu_set_parallel(int on);
     int  cHACApK_hlu_get_parallel(void);
@@ -2628,6 +2631,49 @@ py::dict HDivVimHMatrixProbe(int nx, int ny, int nz, int nsub, double distort,
     return d;
 }
 
+// SYSTEM-A H-LU on the HDiv-VIM operator: build A = M_mass + chi*N as a HACApK H-matrix on the FACE
+// DOFs (SetSystemMode), then factor via cHACApK_hlu_decomp and round-trip A^-1(A x_orig)=x_orig.
+// This is the HDiv analogue of HLUTestOnHACApK (which runs on the COLLOCATION matrix): it proves the
+// materialize-free H-LU is a scalable DIRECT solve / strong preconditioner for the soft-iron material
+// system, ON the actual HDiv-VIM operator.  Returns round-trip rel err + the materialize split
+// (n_internal must be 0 = no cubic-driving densification) + decomp time + stats.
+#ifdef RADIA_USE_HACAPK
+py::dict HDivVimHLUProbe(int nx, int ny, int nz, int nsub, double distort,
+                         double chi, double eps, int leaf, double eta, double trunc_tol) {
+    py::dict d;
+    RadHACApKHDivManager mgr(nx, ny, nz, 1.0, distort, nsub);
+    mgr.SetSystemMode(chi);                       // store A = M_mass + chi*N (BEFORE build)
+    RadHACApKParams prm;
+    prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
+    if (!mgr.BuildHMatrix(prm)) { d["ok"] = false; return d; }
+    const int nf = mgr.GetNDOF();
+    d["ok"] = true; d["ndof"] = nf;
+
+    // deterministic x_orig; y = A x_orig via the H-matvec (the H-matrix IS A in system mode)
+    std::vector<double> x_orig((size_t)nf), y_orig((size_t)nf, 0.0);
+    unsigned long long seed = 13579ULL;
+    for (int i = 0; i < nf; ++i) {
+        seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+        x_orig[i] = (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5;
+    }
+    mgr.MatVec(x_orig, y_orig);
+
+    cHACApK_hlu_set_trunc_tol(trunc_tol);
+    double err = cHACApK_hlu_run_on_hacapk(mgr.GetLeafmtxp(), mgr.GetLcontrol(),
+                                           x_orig.data(), y_orig.data(), 1);  // nffc=1 (one DOF/face)
+    d["roundtrip_relerr"] = err;
+    double t_decomp = 0, t_solve = 0; long n_lu = 0, n_gemm = 0;
+    cHACApK_hlu_get_timings(&t_decomp, &t_solve, &n_lu, &n_gemm);
+    d["t_decomp_sec"] = t_decomp; d["t_solve_sec"] = t_solve;
+    long n_internal = 0, n_leaf = 0;
+    cHACApK_hlu_get_materialize_split(&n_internal, &n_leaf);
+    d["n_internal"] = n_internal; d["n_leaf"] = n_leaf;
+    const RadHACApKStats& st = mgr.GetStats();
+    d["compression"] = st.compression; d["max_rank"] = st.max_rank; d["build_time"] = st.build_time;
+    return d;
+}
+#endif
+
 // M2 verification probes: the C++ analytic charge-Gram potentials vs the dense Python reference.
 double TriPotentialProbe(const std::vector<double>& V, const std::vector<double>& r) {
     double Vv[3][3], rr[3];
@@ -2834,6 +2880,21 @@ PYBIND11_MODULE(_radia_pybind, m) {
               dense_memory_mb, matvec_relerr (max over deterministic probe vectors of ||H x - N x||/||N x||),
               and symmetry_relerr (|x^T N y - y^T N x| from the H-matvec).  Golden sizes only (forms dense N).
           )pbdoc");
+
+#ifdef RADIA_USE_HACAPK
+    m.def("_hdiv_vim_hlu_probe", &radia_hdivvim::HDivVimHLUProbe,
+          py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0, py::arg("distort") = 0.0,
+          py::arg("chi") = 999.0, py::arg("eps") = 1e-5, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+          py::arg("trunc_tol") = 1e-4,
+          R"pbdoc(
+              SYSTEM-A H-LU on the HDiv-VIM operator: build A = M_mass + chi*N as a HACApK H-matrix on
+              the RT0 face DOFs, factor via the materialize-free H-LU, and round-trip A^-1(A x)=x.
+              Returns: ok, ndof, roundtrip_relerr, t_decomp_sec, t_solve_sec, n_internal (cubic-driver
+              materialize, must be 0), n_leaf, compression, max_rank, build_time.  Proves the H-LU is a
+              scalable direct-solve / strong preconditioner for the soft-iron material system on the
+              actual HDiv operator (not just collocation).
+          )pbdoc");
+#endif
 
     // Build-once HACApK H-matrix operator for the HDiv-type VIM demag operator -- the production
     // API: build N as an H-matrix ONCE, then drive a scalable symmetric solve (MINRES) over the
@@ -3338,11 +3399,14 @@ PYBIND11_MODULE(_radia_pybind, m) {
     )pbdoc");
 
     m.def("HLUMaterializeStats", []() -> py::dict {
-        long n_calls = 0, n_elems = 0;
+        long n_calls = 0, n_elems = 0, n_internal = 0, n_leaf = 0;
         cHACApK_hlu_get_materialize_stats(&n_calls, &n_elems);
+        cHACApK_hlu_get_materialize_split(&n_internal, &n_leaf);
         py::dict d;
         d["n_calls"] = n_calls;
         d["n_elems"] = n_elems;
+        d["n_internal"] = n_internal;  /* internal-subtree densifications (the cubic driver; must be 0) */
+        d["n_leaf"] = n_leaf;          /* benign dense-leaf data copies for leaf-level dgemms */
         return d;
     },
     R"pbdoc(
