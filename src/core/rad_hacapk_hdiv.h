@@ -26,6 +26,7 @@
 
 #include "rad_hacapk.h"     // RadHACApKBase
 #include "rad_hdiv_vim.h"   // rad_hdiv::Mesh / ChargeMapCSC / ChargeQuad
+#include <unordered_map>
 
 //-------------------------------------------------------------------------
 // RadHACApKHDivManager: builds N = B^T G B (HDiv-type VIM) as a HACApK H-matrix.
@@ -41,6 +42,16 @@ public:
 
     // +N(i,j) for 0-based ORIGINAL face indices (the charge-cluster Coulomb sum).
     double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
+
+    // SYSTEM-A mode for H-LU: when enabled (chi > 0), the H-matrix stores the form-1 SOFT-IRON
+    // MATERIAL SYSTEM  A = M_mass + chi*N  (the uniform-chi material system ((1/chi)M_mass + N)
+    // scaled by chi -- well-conditioned: loop modes see only M_mass), so the HACApK H-LU
+    // (cHACApK_hlu_*) factors A directly = a scalable DIRECT solve / strong preconditioner for the
+    // HDiv-VIM demag.  Default OFF (ComputeSystemEntry = +N for the matvec path).  Call BEFORE
+    // BuildHMatrix.  M_mass[i][j] is read from the sparse RT0 mass via m_mass_map (built in
+    // OnBeforeBuild).
+    void SetSystemMode(double chi) { m_system_chi = chi; m_system_mode = (chi > 0.0); }
+    double ComputeSystemEntry(int dof_i, int dof_j) const override;
 
     // Material system apply: y = A x = inv_chi * (M_mass x) - (N x), where N x is the O(N log N)
     // H-matvec and M_mass is the sparse local RT0 mass.  This is the operator a symmetric Krylov
@@ -70,6 +81,10 @@ private:
     // sparse RT0 mass M_mass (COO) + its per-face diagonal, for the scalable system apply
     std::vector<int>     m_mI, m_mJ;
     std::vector<double>  m_mV, m_mass_diag;
+    // SYSTEM-A H-LU mode: store A = M_mass + chi*N via ComputeSystemEntry (vs the default +N).
+    bool   m_system_mode = false;
+    double m_system_chi  = 0.0;
+    std::unordered_map<long long, double> m_mass_map;  // (i*ndof+j) -> M_mass[i][j], O(1) lookup
 };
 
 //-------------------------------------------------------------------------

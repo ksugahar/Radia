@@ -40,6 +40,27 @@ void RadHACApKHDivManager::OnBeforeBuild()
     rad_hdiv::BuildChargeMapCSC(m_mesh, m_csc);
     rad_hdiv::BuildChargeQuad(m_mesh, m_nsub, m_quad);
     rad_hdiv::BuildMassCOO(m_mesh, m_mI, m_mJ, m_mV, m_mass_diag);
+    // System-A H-LU mode: build the O(1) (i,j)->M_mass[i][j] lookup from the COO (RT0 mass couples
+    // a face with the other faces of its 1-2 incident cells -> sparse, ~12 nnz/row).
+    if (m_system_mode) {
+        m_mass_map.clear();
+        m_mass_map.reserve(m_mV.size() * 2);
+        for (size_t k = 0; k < m_mV.size(); ++k) {
+            long long key = (long long)m_mI[k] * (long long)m_ndof + (long long)m_mJ[k];
+            m_mass_map[key] += m_mV[k];
+        }
+    }
+}
+
+double RadHACApKHDivManager::ComputeSystemEntry(int dof_i, int dof_j) const
+{
+    // Default (+N) for the matvec path; system-A (M_mass + chi*N) when SetSystemMode(chi>0) was called.
+    double N = GetInteractionMatrixElement(dof_i, dof_j);
+    if (!m_system_mode) return N;
+    double mass = 0.0;
+    auto it = m_mass_map.find((long long)dof_i * (long long)m_ndof + (long long)dof_j);
+    if (it != m_mass_map.end()) mass = it->second;
+    return mass + m_system_chi * N;
 }
 
 void RadHACApKHDivManager::InitializeInvChi()
