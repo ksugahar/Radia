@@ -697,6 +697,148 @@ Machine learning in Coreform Cubit 2023.8: Part classification and reduction; Ma
 Learning-enabled Defeaturing in Coreform Cubit 2023.8; How to create a custom GUI (Intro).
 """
 
+NEUTRONICS_FUSION = r"""
+## Cubit for neutronics / fusion multiphysics (DAGMC + Exodus)
+
+(Domain-demo corpus -- captions = narration only, on-screen syntax not captured; exact
+commands marked "(per video; verify)".)
+
+### One Cubit model, two consumers
+A single Cubit geometry serves BOTH the CAD-based Monte-Carlo neutron transport (**DAGMC**
+surface mesh, `.h5m`) and the FE solver (**Exodus** volume mesh -> MOOSE/Cardinal/Open FUSION).
+Generate the DAGMC tri surface mesh, then tet-fill the SAME surfaces so the FE boundary
+triangles coincide with the DAGMC facets -> conformal, mass-conserving coupling (Cardinal runs
+OpenMC tallies + a MOOSE heat solve on the SAME Exodus file, no geometry remapping).
+
+### DAGMC export
+- **Integrated DAGMC export** (native, recent Cubit) meshes surfaces with the REAL tri-mesher
+  -> facets are **watertight on generation** (no separate sealing). The legacy plugin used
+  graphics facets (not topology-aware, not guaranteed watertight, needed a sealing step).
+- Steps: import -> **`imprint body all` + `merge body all`** (CRITICAL for robust particle
+  tracking across shared surfaces; MCNP import imprints automatically, OpenMC-adapter journals
+  do NOT) -> assign materials/BCs -> TriMesh `surface all` -> File>Export>DAGMC (`.h5m`).
+- Faceting controls (replace the old faceting-tolerance knob): **deviation angle** (max
+  triangle-vs-surface angle; smaller=finer; 1 coarse, 0.5 dense, 10 for unimportant air
+  boundaries) and **anisotropic ratio** (~100 default). K-effective fidelity tracks faceting
+  tolerance -> curved boundaries need enough edges for VOLUME conservation (triangle aspect
+  doesn't matter for transport, but DOES matter if the tris also seed a tet mesh -> aim ~unity
+  there + "split over-constrained edges"). A post-hoc script reports max triangle->surface
+  distance to recover the true faceting tolerance.
+- **Metadata** DAGMC/OpenMC read: modern = mesh **blocks** for materials (+ named material
+  objects) and **sidesets** for BCs named `boundary:vacuum|reflecting|transmission`; legacy =
+  group names `mat:<id>/rho:<density>`. A "graveyard" outer shell (material `graveyard`)
+  terminates particles in MCNP-style decks (OpenMC uses sideset BCs instead).
+- Select many surfaces by predicate: `sideset 1 add surface all with y_coord < 1e-6`.
+
+### CSG <-> CAD
+- **MCNP import** (native; rename input to `.i`): evaluates CSG half-space booleans -> very high
+  volume IDs, slow on lattices (disable graphics / import headless via Python -> save `.cub`).
+- **`openmc_to_cad`** (openmc-cad-adapter) emits replayable Cubit journals; `--world-size`
+  bounds the infinite CSG regions; pass cell IDs to convert a single cell. OpenMC can't export
+  back to CAD. Units cm (Cubit unitless -> values import as-entered).
+
+### Volume mesh for coupling
+After the DAGMC tri mesh, **`mesh triangles`** (per video; verify) fills selected surface tris
+into a **tet** mesh whose boundary == the DAGMC facets exactly -> export Exodus for MOOSE/
+Cardinal. Conformal coupling = tet only (track-length estimators); curved/2nd-order transport
+elements not yet supported.
+
+### Open FUSION Toolkit topology metadata
+Encode multivalued-potential jumps for thin-wall eddy/MHD with **web cuts** (create matching
+mesh surfaces) + **nodesets** (one vertex per port-hole; need holes-1 jumps), passed through
+Exodus. Sheet (thin-wall) models: copy an outer face (Copy/Transform, no transform) then delete
+the parent volume. Toroidal: APREPRO-parameterized cross-section, revolve/clone around the
+torus; export **Hex27** for curvature on coarse grids.
+
+### Sources
+Neutronics on exact CAD geometry (Cubit/DAGMC); Nuclear multiphysics workflow (Cubit/OpenMC/
+MOOSE/Cardinal); Cubit + the Open FUSION Toolkit; OpenMC neutronics via DAGMC and Cubit; Live
+Cubit meshing demonstration for MOOSE.
+"""
+
+DOMAIN_APPLICATIONS = r"""
+## Cubit across domains: sculpt (organic), lattice, tire, geomechanics, student edition
+
+(Domain-demo corpus -- captions = narration only; exact commands "(per video; verify)".)
+
+### Sculpt / overlay hex meshing -- for organic / image-derived geometry
+The headline technique for CT/MRI/isosurface/STL geometry where decompose+sweep is impractical
+(bio tissue, mineral grains, Mars samples, evolving melt-pool/level-set fronts). Sculpt immerses
+the geometry in a **Cartesian background grid**, sculpts boundary hexes to the surface, smooths
+-> all-hex, no manual decomposition. **Caveat (decisive):** sharp edges are ROUNDED OFF (esp.
+non-axis-aligned), and the BEST elements are interior, WORST near the surface -- the opposite of
+what contact/large-deformation wants. So for manufactured parts (fillets/holes) prefer
+decomposed hex or tet; sculpt for organic only.
+- CLI-first (Greg's pattern): in the GUI choose "do not run sculpt" -> Cubit writes an input
+  deck (STL + `.i` + `.diatom` assembly). `sculpt` exe is in `.../Coreform Cubit/bin/sculpt`;
+  `sculpt -h` / `sculpt -h <option>` / `sculpt -i <deck>.i -j<N>` (parallel). **Sculpt settings
+  are NOT saved in the .cub** -> the `.i` deck is the source of truth (`$` = comment).
+- Parallel output = decomposed Exodus (`name.e.8.0`, ...); recombine with **`epu -auto <file>`**
+  (ParaView can also read the pieces).
+- BCs by mesh-spatial query (sculpt mesh is dis-associated from CAD):
+  `nodeset 11 add node with y_coordinate < 0` (highlight first to confirm). Quality: sculpt
+  prints min scaled Jacobian; conforming adaptive refinement via `adapt_type`/`adapt_levels`.
+- Advanced: supply a custom "mother mesh" (fine in a hot-spot, coarse outside); the `.diatom`
+  points to the STL sculpted INSIDE it -> mesh stays identical run-to-run except where geometry
+  changes (ideal for evolving fronts).
+
+### Evolving level-set / remesh loop (coupled fluid<->solid)
+Per time step export the fluid morphology as a **mesh-based geometry** (read the tet mesh into
+Cubit as geometry; NOTE: mesh-based geometry **cannot be webcut** -> use sculpt), delete the
+low-quality interface tets, sculpt a fresh hex mesh, loop over hundreds of iterations via
+APREPRO (`{a}` index substitution) / sed / Jinja.
+
+### Coreform Lattice GC (3D-printing lattices, add-on)
+"Geometry-Compliant" lattices that follow the geometry (not clipped on a grid). Build a
+**U-spline** hex-swept mesh; each element's geometric map deforms a chosen **unit cell**
+(triangle tessellation) -> supports strut AND TPMS/gyroid cells; U-spline continuity makes
+inter-cell interfaces smooth (cells effectively pre-merged). Pipeline: CAD region -> webcut/
+partition into sweepable regions -> **imprint+merge** -> composite -> **mesh by sweep** (source
+surface first; extrude + redistribute nodes) -> set U-spline (degree 2, continuity 1) -> `build`
+-> `build u_spline lattice` (unit cell jack/octet_truss/PVB/truncated_sphere or a tessellation
+path). Custom cell: center at 0,0,0 + scale extents to +-0.5 -> `fold` -> export `.json`. Native
+parallel slicer -> binary CLI (Materialise Magics); also VTK/OBJ (-> STL for FEA).
+
+### Tire meshing (2D cross-section -> 3D revolve)
+Hex for tires (near-incompressible rubber converges better in contact; fewer DOF; layered hex
+captures plies/belts for wear). The Endurica plugin (MIT, github.com/coreform-LLC, PySide6)
+automates: import line drawing -> make surfaces from lines (stitch with merge tol ~= 1/2 the
+smallest curve length, since AutoCAD lines don't close) -> classify tread/belt/ply regions by
+ray-firing -> blunt acute tangencies (split/add material/rejoin) -> skew-control cut lines ->
+imprint+merge -> composite curves -> mesh (mark belt/ply/chafer surfaces **mapped** so rebar
+sits on quad midlines) -> reflect half-section -> create rebar (plies 2 elements thick to find
+the midline) -> clean bad triangles toward scaled-Jacobian ~0.3 -> export **Abaqus axisymmetric**.
+Pave-and-sweep blocker = triangular linking surfaces (must be map/sub-map) -> composite the
+front-face + the small side-surface curves to make it sweepable.
+
+### Geomechanics / Irazu (FDEM)
+Surface-mesh the fault/discontinuity network first (imprint+merge, tri scheme, smooth, shape
+~0.6), then tet-mesh the volume with a scheme that **respects the existing fault triangles**
+(embeds the discontinuities in the conforming tet mesh). Element budget: split into a fine inner
+volume + a coarse outer volume with bias on boundary curves (~10x runtime saving). Groups ->
+blocks (materials) + nodesets (fault nodes, roller/pin faces) -> export Abaqus `.inp` (Irazu
+reads it). Mesh quality sets the explicit time step -> a few tiny elements cost runtime.
+
+### Coreform Cubit Learn / Associate (free non-commercial edition)
+The FULL Cubit tool suite (CAD import/cleanup, hex+tet meshing, U-splines, Python API) free for
+non-commercial use; the **ONLY cap = 50,000 elements on EXPORT** (mesh/visualize freely).
+Academic licenses (sales@coreform.com / resellers) lift the cap. Fits a free pipeline: Cubit
+Learn (mesh) -> MOOSE/FEniCS/CalculiX/OpenFOAM (solve) + Dakota (DOE/optimization via Cubit's
+Python black-box API) -> ParaView (view), Exodus as the interchange format.
+
+### Cross-domain reusable bits
+GUI->journal->automate is the universal habit (play whole or "play selected"); APREPRO for
+in-Cubit loops, Python (`cubit.cmd`) for heavier logic / external-solver-driven meshing; batch:
+`cubit -batch -nographics -input <jou> -working_directory $PWD`. Absolute-tolerance SCALING
+trick: scale the model so the smallest feature ~ order 1, mesh, scale back on export (fixes many
+curved-geometry quality issues). Concentric-shell idiom: `volume N copy scale 0.8` repeated.
+
+### Sources
+Geomechanics with Irazu; Meshing Mars (paleomagnetics); Automatic hex meshing for biological/
+material sciences; Coreform Lattice GC (3D printing); Hex meshing an evolving level-set; How to
+mesh a tire tread; Tire model building (Endurica); Coreform Cubit Associate (student pipeline).
+"""
+
 _TOPICS = {
     "python_automation": PYTHON_AUTOMATION,
     "meshing_strategy": MESHING_STRATEGY,
@@ -704,6 +846,8 @@ _TOPICS = {
     "getting_started": GETTING_STARTED,
     "advanced_meshing": ADVANCED_MESHING,
     "ml_and_gui": ML_AND_GUI,
+    "neutronics_fusion": NEUTRONICS_FUSION,
+    "domain_applications": DOMAIN_APPLICATIONS,
 }
 
 _ALIASES = {
@@ -731,6 +875,16 @@ _ALIASES = {
     "classification": "ml_and_gui", "defeaturing": "ml_and_gui",
     "defeature": "ml_and_gui", "custom_gui": "ml_and_gui",
     "toolbar": "ml_and_gui", "pyside6": "ml_and_gui",
+    "neutronics_fusion": "neutronics_fusion", "neutronics": "neutronics_fusion",
+    "dagmc": "neutronics_fusion", "openmc": "neutronics_fusion",
+    "mcnp": "neutronics_fusion", "cardinal": "neutronics_fusion",
+    "fusion": "neutronics_fusion", "nuclear": "neutronics_fusion",
+    "domain_applications": "domain_applications", "domain": "domain_applications",
+    "lattice": "domain_applications", "tire": "domain_applications",
+    "geomechanics": "domain_applications", "irazu": "domain_applications",
+    "level_set": "domain_applications", "bio": "domain_applications",
+    "associate": "domain_applications", "learn": "domain_applications",
+    "student": "domain_applications", "3d_printing": "domain_applications",
 }
 
 _INDEX = """# Coreform Cubit webinar/tutorial knowledge (synthesized from @Coreform YouTube)
@@ -763,7 +917,18 @@ Batch 2 topics:
 Aliases: python/automation/dakota -> python_automation; hex/decomposition/sculpt -> meshing_strategy;
 moose/calculix/openfoam/exodus -> solver_workflows; item/beginner/gui -> getting_started;
 boundary_layer/hybrid/fluid/assembly -> advanced_meshing; ml/classification/defeature/toolbar -> ml_and_gui.
-Domain-application demos (nuclear/fusion/Mars/tire/geomech) pending in a later batch.
+
+Batch 3 topics:
+  neutronics_fusion  - DAGMC watertight export + Exodus coupling (one Cubit model
+                       -> OpenMC/MCNP transport + MOOSE/Cardinal FE), faceting
+                       (deviation angle), block/sideset metadata, Open FUSION cuts.
+  domain_applications- sculpt overlay hex (organic/CT/STL) + caveats, evolving
+                       level-set remesh, Lattice GC (U-spline lattices for 3D
+                       printing), tire 2D->3D cross-section, geomechanics/Irazu
+                       FDEM, and Cubit Learn/Associate (free edition, 50k export cap).
+Aliases: dagmc/openmc/mcnp/fusion -> neutronics_fusion; sculpt(organic)/lattice/tire/
+irazu/learn/student -> domain_applications. ALL 54 Tutorials-playlist videos ingested
+(C++ SDK lives in cpp_sdk). "coreform_all" concatenates every topic.
 """
 
 
@@ -781,7 +946,8 @@ def get_coreform_webinar_documentation(topic: str = "index") -> str:
     if topic == "all":
         return "\n\n".join(_TOPICS[k] for k in
                            ("python_automation", "meshing_strategy", "solver_workflows",
-                            "getting_started", "advanced_meshing", "ml_and_gui"))
+                            "getting_started", "advanced_meshing", "ml_and_gui",
+                            "neutronics_fusion", "domain_applications"))
     resolved = _ALIASES.get(topic, topic)
     if resolved in _TOPICS:
         return _TOPICS[resolved]
