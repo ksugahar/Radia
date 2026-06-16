@@ -21,6 +21,7 @@ from math import pi, sqrt, log, atan2
 
 import numpy as np
 import scipy.sparse as sp
+from scipy.spatial import ConvexHull
 
 import ngsolve as ng
 from netgen.csg import CSGeometry, Sphere, Pnt, OrthoBrick
@@ -210,30 +211,153 @@ def phi_tet(V, P):
     return float(tot[0]) if single else tot
 
 
+# --- polytope (hex / wedge cell, quad face) charge-Gram geometry ---------------------------------
+# The tet/triangle analytic charge Gram (phi_tet / tri_potential + Gauss-Duffy / Dunavant) generalizes
+# to ANY flat-faced convex cell + quad face with NO new singular quadrature: the cell Newtonian
+# potential is the divergence-theorem sum over the cell's (convex-hull) triangular faces of the SAME
+# exact Wilton triangle potential (tri_potential), and a quad face is two flat triangles.  This is the
+# hex/wedge path for build_demag(analytic_gram=True); tets + triangles keep the EXACT phi_tet /
+# tri_potential calls (bit-identical -- the C++ analytic charge-Gram golden depends on it).
+
+
+def _cell_hull_tris(V):
+    """(triangle (3,3), outward unit normal) faces of a convex cell (hex/wedge/...) via ConvexHull.
+    Feeds the polytope volume-charge Newtonian potential; tets use phi_tet directly (this is only
+    reached for cells with != 4 vertices)."""
+    V = np.asarray(V, float)
+    hull = ConvexHull(V)
+    cen = V.mean(0)
+    tris = []
+    for simplex in hull.simplices:
+        P = V[simplex]
+        nrm = np.cross(P[1] - P[0], P[2] - P[0])
+        ln = np.linalg.norm(nrm)
+        if ln < 1e-300:
+            continue
+        nrm = nrm / ln
+        if np.dot(nrm, P.mean(0) - cen) < 0:
+            nrm = -nrm                                       # outward
+        tris.append((P, nrm))
+    return tris
+
+
+def _polytope_potential(tris, R):
+    """VECTORIZED INT_cell 1/|R-r'| dV' over a flat-faced convex cell (hull faces `tris`) at points R,
+    via the divergence theorem on the (vectorized) Wilton triangle potential -- the hex/wedge analog of
+    phi_tet (the two agree on a tet to the reference's accuracy, verified).  R: (3,)->float, (M,3)->(M,)."""
+    R = np.asarray(R, float)
+    single = (R.ndim == 1)
+    RR = R.reshape(1, 3) if single else R
+    tot = np.zeros(len(RR))
+    for (P, nrm) in tris:
+        d = (P[0] - RR) @ nrm                                # (M,) signed distance R -> face plane
+        tot += d * tri_potential(P, RR)
+    tot *= 0.5
+    return float(tot[0]) if single else tot
+
+
+def _face_subtris(V):
+    """Sub-triangles of a boundary face: triangle (3 verts) -> [V]; quad (4 verts) -> 2-triangle fan."""
+    V = np.asarray(V, float)
+    if len(V) == 3:
+        return [V]
+    if len(V) == 4:
+        return [V[[0, 1, 2]], V[[0, 2, 3]]]
+    raise ValueError("HDiv-VIM: boundary face with %d vertices is not supported (triangle or quad only)"
+                     % len(V))
+
+
+def _cell_outer_quad(V, vol, lam_t, w_t):
+    """Interior quadrature (points (m,3), weights (m,) summing to `vol`) over a convex cell: centroid-fan
+    tets (centroid + each hull face), each filled by the Gauss-Duffy tet rule (lam_t, w_t)."""
+    V = np.asarray(V, float)
+    cen = V.mean(0)
+    Ps, Ws = [], []
+    for (T, _n) in _cell_hull_tris(V):
+        tet = np.vstack([cen, T])
+        tvol = abs(np.linalg.det(tet[1:] - tet[0])) / 6.0
+        Ps.append(tet[0] + lam_t @ (tet[1:] - tet[0]))
+        Ws.append(w_t * 6.0 * tvol)
+    return np.vstack(Ps), np.concatenate(Ws)
+
+
+def _face_outer_quad(V, area):
+    """Outer quadrature (points, weights summing to `area`) over a boundary face: Dunavant-5 per sub-tri."""
+    Ps, Ws = [], []
+    for T in _face_subtris(V):
+        a = 0.5 * np.linalg.norm(np.cross(T[1] - T[0], T[2] - T[0]))
+        Ps.append(_DUN5[:, :3] @ T)
+        Ws.append(_DUN5[:, 3] * a)
+    return np.vstack(Ps), np.concatenate(Ws)
+
+
+def _poly_cell_self_energy(V, vol):
+    """Analytic volume self-energy G_aa = (1/4pi) INT_cell INT_cell 1/r for a convex polytope cell (its
+    own outer quadrature against its own Newtonian potential) -- the hex/wedge analog of tet_self_energy,
+    but EXACT-quadrature rather than the C_TET extrapolation.  Used only for the monopole-path
+    preconditioner diagonal (the analytic Gram computes its own diagonal)."""
+    lam_t, w_t = _gauss_duffy_tet(4)
+    P, W = _cell_outer_quad(V, vol, lam_t, w_t)
+    return float(np.sum(W * _polytope_potential(_cell_hull_tris(V), P)) / (4.0 * pi))
+
+
+def _poly_face_self_energy(V, area):
+    """Analytic surface self-energy G_aa for a quad/triangle boundary face (Dunavant outer against its
+    sub-triangle Wilton potentials).  Monopole-path preconditioner diagonal only."""
+    P, W = _face_outer_quad(V, area)
+    pot = sum(tri_potential(T, P) for T in _face_subtris(V))
+    return float(np.sum(W * pot) / (4.0 * pi))
+
+
 def analytic_charge_gram(el_V, bf_V, el_vol, bf_area, nsub_tet=3):
     """FULL analytic charge Gram (n_charge x n_charge, cells then boundary faces): every block via the
-    EXACT analytic potential -- cell sources via phi_tet, face sources via tri_potential -- integrated
-    against an outer quadrature on the target cell (tet sub-points) / face (Dunavant).  Replaces the
+    EXACT analytic potential -- cell sources via phi_tet (tet) / _polytope_potential (hex, wedge, ...),
+    face sources via tri_potential (triangle) / sum-of-tri (quad) -- integrated against an outer
+    quadrature on the target cell (tet sub-points / centroid-fan) / face (Dunavant).  Replaces the
     centroid-monopole G everywhere, so the vol-vol and vol-surf (cell-cell, cell-face) blocks -- which
     matter for NON-uniform M (nonlinear, div M != 0) -- are analytic, not monopole+sub-point.  This is
     the #B 'volume Gram' that closes the residual sharp-body non-uniform gap (cube ~8.7%, C-yoke ~4%).
-    Symmetric; O(n_charge) Python loop (vectorized over target points)."""
+    Symmetric; O(n_charge) Python loop (vectorized over target points).
+
+    TET cells + TRIANGLE faces take the EXACT phi_tet / tri_potential + Gauss-Duffy / Dunavant path, so
+    an all-tet/all-triangle mesh is BIT-IDENTICAL to the original (the C++ analytic charge-Gram golden,
+    test_hdiv_vim_chargegram_analytic, locks C++ == this dense G).  HEX / WEDGE cells + QUAD faces take
+    the convex-hull polytope path -- verified demag_z -> 1/3 on hex- and wedge-meshed cubes."""
     n_el, n_bf = len(el_V), len(bf_V)
     n = n_el + n_bf
     lam_t, w_t = _gauss_duffy_tet(4)                         # Gauss-Duffy tet outer rule (nsub_tet now unused:
     QP, QW = [], []                                          # the old _bary_tet outer under-integrated vol-self ~6.5%)
+    src = []                                                 # per-source potential evaluator descriptor
     for k, V in enumerate(el_V):
-        P = V[0] + lam_t @ (V[1:] - V[0])                    # physical outer pts (V0 + l1 e1 + l2 e2 + l3 e3)
-        QP.append(P); QW.append(w_t * 6.0 * el_vol[k])       # phys weight = w_ref * |J|, |J| = 6*vol
+        if len(V) == 4:
+            QP.append(V[0] + lam_t @ (V[1:] - V[0]))         # physical outer pts (V0 + l1 e1 + l2 e2 + l3 e3)
+            QW.append(w_t * 6.0 * el_vol[k])                 # phys weight = w_ref * |J|, |J| = 6*vol
+            src.append(("tet", V))
+        else:
+            P, W = _cell_outer_quad(V, el_vol[k], lam_t, w_t)
+            QP.append(P); QW.append(W); src.append(("poly", _cell_hull_tris(V)))
     for k, V in enumerate(bf_V):
-        QP.append(_DUN5[:, :3] @ V); QW.append(_DUN5[:, 3] * bf_area[k])
+        if len(V) == 3:
+            QP.append(_DUN5[:, :3] @ V); QW.append(_DUN5[:, 3] * bf_area[k])
+            src.append(("tri", V))
+        else:
+            P, W = _face_outer_quad(V, bf_area[k])
+            QP.append(P); QW.append(W); src.append(("face", _face_subtris(V)))
     allP = np.vstack(QP)
     allW = np.concatenate(QW)
     tidx = np.concatenate([np.full(len(QP[i]), i) for i in range(n)])
     inv4pi = 1.0 / (4.0 * pi)
     G = np.zeros((n, n))
     for s in range(n):
-        pot = phi_tet(el_V[s], allP) if s < n_el else tri_potential(bf_V[s - n_el], allP)
+        kind, data = src[s]
+        if kind == "tet":
+            pot = phi_tet(data, allP)
+        elif kind == "tri":
+            pot = tri_potential(data, allP)
+        elif kind == "poly":
+            pot = _polytope_potential(data, allP)
+        else:                                                # "face": quad -> sum of its sub-triangle potentials
+            pot = sum(tri_potential(T, allP) for T in data)
         G[:, s] = np.bincount(tidx, weights=allW * pot * inv4pi, minlength=n)
     return 0.5 * (G + G.T)
 
@@ -295,12 +419,16 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
         _Brows.append(sp.diags(1.0 / bf_area) @ Bb_sp)
     B_sp = sp.vstack(_Brows).tocsr()
 
-    # diagonal charge self-energies (O(N); kept even on the scalable path, for the preconditioner)
+    # diagonal charge self-energies (O(N); kept even on the scalable path, for the preconditioner).
+    # tet/triangle use the validated tet_self_energy/tri_self_energy (unchanged); hex/wedge cells +
+    # quad faces use the analytic polytope self-energy (EXACT-quadrature) so a non-tet mesh does not
+    # crash here and gets a physical monopole-path diagonal.
     diagG = np.empty(n_el + n_bf)
     for k, V in enumerate(el_V):
-        diagG[k] = tet_self_energy(V, el_vol[k], nsub)
+        diagG[k] = tet_self_energy(V, el_vol[k], nsub) if len(V) == 4 else _poly_cell_self_energy(V, el_vol[k])
     for k, V in enumerate(bf_V):
-        diagG[n_el + k] = tri_self_energy(V, bf_area[k], nsub)
+        diagG[n_el + k] = (tri_self_energy(V, bf_area[k], nsub) if len(V) == 3
+                           else _poly_face_self_energy(V, bf_area[k]))
     if skip_dense_gram:
         # SCALABLE path: SKIP the O(N^2) dense G/N and the O(N^2) loop SVD (the biggest dense costs;
         # G/N are n_charge^2).  The C++ analytic _ChargeGramHMatrix + SolveMaterialMINRES use
@@ -335,8 +463,13 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
     # diagonal self-energies, the dense Gram G, and the sparse charge map B as scipy CSR.
     # cell_verts [n_el*12] (tets, 4 verts) + face_verts [n_bf*9] (tris, 3 verts) feed the ANALYTIC
     # C++ charge Gram (M2b: _ChargeGramHMatrix analytic mode == this dense analytic_gram path).
-    cell_verts = np.asarray(el_V, float).ravel() if n_el else np.zeros(0)
-    face_verts = np.asarray(bf_V, float).ravel() if n_bf else np.zeros(0)
+    # cell_verts/face_verts feed ONLY the C++ scalable charge-Gram H-matrix (tet cells + triangle
+    # faces); ravel only when every cell/face has the same vertex count (uniform tet/triangle mesh).
+    # A hex/wedge or mixed mesh leaves these empty -- it takes the dense analytic polytope path instead.
+    cell_verts = (np.asarray(el_V, float).ravel()
+                  if n_el and len({len(V) for V in el_V}) == 1 else np.zeros(0))
+    face_verts = (np.asarray(bf_V, float).ravel()
+                  if n_bf and len({len(V) for V in bf_V}) == 1 else np.zeros(0))
     return dict(N=N, M_mass=M_mass, B=B, ndof=ndof, n_loop=n_loop, loops=loops, m_unit=m_unit,
                 cent=cent, meas=meas, self_energy=diagG, G=G,
                 B_csr=B_sp, n_charge=n_el + n_bf,
