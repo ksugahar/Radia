@@ -65,6 +65,9 @@ extern "C" {
     void cHACApK_hlu_get_materialize_split(long *out_internal, long *out_leaf);
     double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
                                      const double *x_orig, const double *y_orig, int nffc);
+    void* cHACApK_hlu_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc);
+    int   cHACApK_hlu_apply(void* root_void, void* control_void, const double* r, double* z, int nd);
+    void  cHACApK_hlu_free_factors(void* root_void);
     void cHACApK_hlu_get_mixed_breakdown(long *out_addmul9, long *out_lln9, long *out_run9);
     void cHACApK_hlu_set_parallel(int on);
     int  cHACApK_hlu_get_parallel(void);
@@ -2672,6 +2675,80 @@ py::dict HDivVimHLUProbe(int nx, int ny, int nz, int nsub, double distort,
     d["compression"] = st.compression; d["max_rank"] = st.max_rank; d["build_time"] = st.build_time;
     return d;
 }
+
+// Phase-2 UNSTRUCTURED (real tet mesh) system-A H-LU: build A = M_mass + chi*N on the RT0 face DOFs of
+// an arbitrary mesh (geometry from radia.vim build_demag), H-LU, round-trip A^-1(A x)=x.  This is the
+// production-path operator (the C-type tet mesh); proves the materialize-free H-LU is a scalable
+// direct-solve / Mprec for the soft-iron material system on unstructured geometry.
+py::dict HDivVimTetHLUProbe(std::vector<double> face_centroids, double chi,
+                            std::vector<int> face_charge, std::vector<double> face_coef,
+                            std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                            std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
+                            double eps, int leaf, double eta, double trunc_tol, double gram_near_factor) {
+    py::dict d;
+    RadHACApKHDivSystemTet mgr(std::move(face_centroids), chi, std::move(face_charge), std::move(face_coef),
+                               std::move(mI), std::move(mJ), std::move(mV),
+                               std::move(cell_verts), std::move(face_verts), n_el, gram_near_factor);
+    RadHACApKParams prm; prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
+    if (!mgr.BuildHMatrix(prm)) { d["ok"] = false; return d; }
+    const int nf = mgr.GetNDOF();
+    d["ok"] = true; d["ndof"] = nf;
+    std::vector<double> x_orig((size_t)nf), y_orig((size_t)nf, 0.0);
+    unsigned long long seed = 13579ULL;
+    for (int i = 0; i < nf; ++i) {
+        seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+        x_orig[i] = (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5;
+    }
+    mgr.MatVec(x_orig, y_orig);
+    cHACApK_hlu_set_trunc_tol(trunc_tol);
+    double err = cHACApK_hlu_run_on_hacapk(mgr.GetLeafmtxp(), mgr.GetLcontrol(),
+                                           x_orig.data(), y_orig.data(), 1);
+    d["roundtrip_relerr"] = err;
+    double t_decomp = 0, t_solve = 0; long n_lu = 0, n_gemm = 0;
+    cHACApK_hlu_get_timings(&t_decomp, &t_solve, &n_lu, &n_gemm);
+    d["t_decomp_sec"] = t_decomp; d["t_solve_sec"] = t_solve;
+    long n_internal = 0, n_leaf = 0;
+    cHACApK_hlu_get_materialize_split(&n_internal, &n_leaf);
+    d["n_internal"] = n_internal; d["n_leaf"] = n_leaf;
+    const RadHACApKStats& st = mgr.GetStats();
+    d["compression"] = st.compression; d["max_rank"] = st.max_rank; d["build_time"] = st.build_time;
+    return d;
+}
+
+// Persistent factored H-LU(A) for the unstructured HDiv-VIM material system: build A = M_mass + chi*N on
+// the RT0 face DOFs, H-LU-factor it ONCE, then apply A^-1 repeatedly (per GMRES iteration).  This is the
+// production Mprec for the soft-iron demag solve -- A^-1 A ~ I -> N-INDEPENDENT outer iteration count
+// (vs the M_mass^-1 preconditioner whose count grows with N).  factor in the ctor, apply via solve(),
+// free in the dtor.
+struct PyHDivVimTetSolver {
+    std::unique_ptr<RadHACApKHDivSystemTet> mgr;
+    void* root = nullptr;
+    int   nd   = 0;
+    PyHDivVimTetSolver(std::vector<double> face_centroids, double chi,
+                       std::vector<int> face_charge, std::vector<double> face_coef,
+                       std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                       std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
+                       double eps, int leaf, double eta, double trunc_tol, double gram_near_factor) {
+        mgr.reset(new RadHACApKHDivSystemTet(std::move(face_centroids), chi,
+                  std::move(face_charge), std::move(face_coef), std::move(mI), std::move(mJ), std::move(mV),
+                  std::move(cell_verts), std::move(face_verts), n_el, gram_near_factor));
+        RadHACApKParams prm; prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
+        if (!mgr->BuildHMatrix(prm)) throw std::runtime_error("HDivVimTetSolver: H-matrix build failed");
+        cHACApK_hlu_set_trunc_tol(trunc_tol);
+        nd = mgr->GetNDOF();
+        root = cHACApK_hlu_factor_leafmtxp(mgr->GetLeafmtxp(), mgr->GetLcontrol(), 1);
+        if (!root) throw std::runtime_error("HDivVimTetSolver: H-LU factor failed (singular block?)");
+    }
+    ~PyHDivVimTetSolver() { if (root) cHACApK_hlu_free_factors(root); }
+    std::vector<double> solve(const std::vector<double>& rhs) const {
+        if ((int)rhs.size() != nd) throw std::runtime_error("HDivVimTetSolver.solve: rhs size mismatch");
+        std::vector<double> z((size_t)nd, 0.0);
+        int rc = cHACApK_hlu_apply(root, mgr->GetLcontrol(), rhs.data(), z.data(), nd);
+        if (rc != 0) throw std::runtime_error("HDivVimTetSolver.solve: H-LU apply failed");
+        return z;
+    }
+    int ndof() const { return nd; }
+};
 #endif
 
 // M2 verification probes: the C++ analytic charge-Gram potentials vs the dense Python reference.
@@ -2894,6 +2971,21 @@ PYBIND11_MODULE(_radia_pybind, m) {
               scalable direct-solve / strong preconditioner for the soft-iron material system on the
               actual HDiv operator (not just collocation).
           )pbdoc");
+
+    m.def("_hdiv_vim_tet_hlu_probe", &radia_hdivvim::HDivVimTetHLUProbe,
+          py::arg("face_centroids"), py::arg("chi"), py::arg("face_charge"), py::arg("face_coef"),
+          py::arg("mI"), py::arg("mJ"), py::arg("mV"),
+          py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
+          py::arg("eps") = 1e-5, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+          py::arg("trunc_tol") = 1e-8, py::arg("gram_near_factor") = 2.0,
+          R"pbdoc(
+              UNSTRUCTURED (real tet mesh) system-A H-LU: build A = M_mass + chi*N on the RT0 face DOFs
+              from radia.vim build_demag geometry (face centroids; per-face <=2 charge map
+              face_charge/face_coef; mass COO mI/mJ/mV; cell_verts/face_verts/n_el for the embedded
+              analytic charge Gram), H-LU it, round-trip A^-1(A x)=x.  Returns ok, ndof, roundtrip_relerr,
+              t_decomp_sec, n_internal (must be 0), n_leaf, compression, max_rank.  The production-path
+              operator (the C-type); proves the materialize-free H-LU scales on unstructured geometry.
+          )pbdoc");
 #endif
 
     // Build-once HACApK H-matrix operator for the HDiv-type VIM demag operator -- the production
@@ -2937,6 +3029,33 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
                  return d;
              }, "H-matrix stats dict (n_dof, n_leaves, n_lowrank, compression, build_time, ...).");
+
+#ifdef RADIA_USE_HACAPK
+    // Persistent factored H-LU(A) preconditioner for the unstructured HDiv-VIM material system.
+    // Factor A = M_mass + chi*N ONCE (ctor), apply A^-1 per GMRES iteration (solve) -> N-independent
+    // outer iters (the production Mprec replacing M_mass^-1).
+    py::class_<radia_hdivvim::PyHDivVimTetSolver>(m, "_HDivVimTetSolver")
+        .def(py::init([](std::vector<double> face_centroids, double chi,
+                         std::vector<int> face_charge, std::vector<double> face_coef,
+                         std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                         std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
+                         double eps, int leaf, double eta, double trunc_tol, double gram_near_factor) {
+                 return std::unique_ptr<radia_hdivvim::PyHDivVimTetSolver>(
+                     new radia_hdivvim::PyHDivVimTetSolver(std::move(face_centroids), chi,
+                         std::move(face_charge), std::move(face_coef), std::move(mI), std::move(mJ),
+                         std::move(mV), std::move(cell_verts), std::move(face_verts), n_el,
+                         eps, leaf, eta, trunc_tol, gram_near_factor));
+             }),
+             py::arg("face_centroids"), py::arg("chi"), py::arg("face_charge"), py::arg("face_coef"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"),
+             py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
+             py::arg("eps") = 1e-5, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+             py::arg("trunc_tol") = 1e-6, py::arg("gram_near_factor") = 2.0,
+             "Build + H-LU-factor A = M_mass + chi*N on the RT0 face DOFs (factor once).")
+        .def("solve", &radia_hdivvim::PyHDivVimTetSolver::solve, py::arg("rhs"),
+             "Apply A^-1 to rhs (per-GMRES-iteration preconditioner application).")
+        .def("ndof", &radia_hdivvim::PyHDivVimTetSolver::ndof);
+#endif
 
     // Charge-charge Coulomb Gram G as a HACApK H-matrix -- the UNSTRUCTURED / general-mesh path.
     // Charges (cell rho + boundary-face sigma) extracted from ANY RT0 mesh (e.g. NGSolve tet
