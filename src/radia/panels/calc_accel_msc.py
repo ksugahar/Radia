@@ -173,7 +173,7 @@ def _extract_elements_from_mesh(mesh, material_name="yoke"):
 def solve_msc(coil_script="", vol_file="",
               mat=None, ima="", solver=0,
               max_iter=100, tol=1e-3, relax=0.0,
-              msh_output=""):
+              msh_output="", demag_backend="yano"):
     """MSC solver: Netgen .vol hex mesh -> Radia ObjHexahedron -> Solve.
 
     Args:
@@ -189,6 +189,11 @@ def solve_msc(coil_script="", vol_file="",
         tol: Convergence tolerance
         relax: Under-relaxation (0=full step)
         msh_output: Optional GMSH .msh output path
+        demag_backend: 'yano' (legacy collocation MSC, the default) or 'hdiv'
+            (the FEEC HDiv-VIM via radia.vim.soft_iron_from_mesh + rad.Solve).
+            The 'hdiv' backend is KELVIN-LESS and iron-only: the .vol must
+            contain ONLY the 'yoke' volume material (no air / kelvin elements),
+            and IMA symmetry is not supported there yet (both -> fail-loud).
 
     Returns:
         dict with B_center, n_elem, ndof, iterations, converged, etc.
@@ -203,6 +208,14 @@ def solve_msc(coil_script="", vol_file="",
     import radia as rad
 
     t_total_start = time.perf_counter()
+
+    # Clear ALL prior Radia state ONCE, up front -- before building the coil.
+    # (Bug fix 2026-06-17: this UtiDelAll used to live at the start of "Step 3",
+    # AFTER the coil was built, so it DESTROYED the coil_container -- rad.UtiDelAll
+    # invalidates every existing handle.  model = ObjCnt([yoke, coil_container]) then
+    # referenced a stale coil index, silently dropping the coil's field.  solve_msc had
+    # no end-to-end golden (only a static --help smoke), so it went unnoticed.)
+    rad.UtiDelAll()
 
     # ============================================================
     # Step 1: Load coil -> Radia objects (exact analytical)
@@ -252,67 +265,113 @@ def solve_msc(coil_script="", vol_file="",
     _log(f"MESH:{n_hex} hex + {n_tet} tet + {n_wedge} wedge = {n_total} elem")
 
     # ============================================================
-    # Step 3: Create Radia objects with material
+    # Step 3: Create Radia objects with material  (+ Step 4: solve)
     # ============================================================
-    rad.UtiDelAll()
     _log("RADIA:creating objects")
 
     is_linear = (material == "linear")
-    if is_linear:
-        mat = rad.MatLin(mu_r)
-        _log(f"MAT:linear mu_r={mu_r}")
-    else:
+    bh_data = None
+    if not is_linear:
         bh_data, _ = mat.get_bh_curve()
         if bh_data is None:
             return {"error": f"No BH curve for material: {material}"}
-        mat = rad.MatSatIsoTab(bh_data)
-        _log(f"MAT:nonlinear BH ({len(bh_data)} pts)")
-
-    all_objs = []
-    for elem in elements:
-        verts = elem['vertices']
-        etype = elem['type']
-        if etype == 'hex':
-            obj = rad.ObjHexahedron(verts, [0, 0, 0])
-        elif etype == 'tet':
-            obj = rad.ObjTetrahedron(verts, [0, 0, 0])
-        elif etype == 'wedge':
-            obj = rad.ObjWedge(verts, [0, 0, 0])
-        else:
-            continue
-        rad.MatApl(obj, mat)
-        all_objs.append(obj)
-
-    yoke = rad.ObjCnt(all_objs)
-    n_dof = n_hex * 6 + n_tet * 3 + n_wedge * 5
-    _log(f"RADIA:{len(all_objs)} objects, {n_dof} DOF")
-
-    # ============================================================
-    # Step 4: Assemble model (yoke + coil) and solve
-    # ============================================================
-    model = rad.ObjCnt([yoke, coil_container])
 
     solver_names = {0: "LU", 1: "BiCGSTAB", 2: "HACApK"}
-    ima_str = ima if ima else "(none)"
-    _log(f"SOLVE:solver={solver_names.get(solver, solver)}, "
-         f"IMA={ima_str}, tol={tol}, maxiter={max_iter}")
+    n_dof = n_hex * 6 + n_tet * 3 + n_wedge * 5
 
-    if relax > 0:
-        rad.SolverConfig(relax_param=relax)
-
-    t_solve_start = time.perf_counter()
-    if ima:
-        result = rad.Solve(model, tol, max_iter, solver, image=ima)
+    if demag_backend == "hdiv":
+        # --- FEEC HDiv-VIM backend (radia.vim) -- KELVIN-less, IRON-ONLY ---
+        # The VIM solves the WHOLE registered mesh as iron, so the .vol must contain
+        # ONLY 'yoke' volume elements (no air / kelvin -- the VIM needs no air mesh).
+        if ima:
+            return {"error": "demag_backend='hdiv' does not support IMA symmetry yet; "
+                             "solve the full (non-symmetry) model or use demag_backend='yano'"}
+        from ngsolve import VOL as _VOL, TaskManager as _TM
+        n_nonyoke = sum(1 for el in mesh.Elements(_VOL) if el.mat != "yoke")
+        if n_nonyoke > 0:
+            return {"error": "demag_backend='hdiv' needs an IRON-ONLY .vol (the HDiv-VIM is "
+                             "KELVIN-less; air/kelvin regions are not used).  This .vol has "
+                             f"{n_nonyoke} non-'yoke' volume elements "
+                             f"(materials {sorted(set(mesh.GetMaterials()))}).  Export the yoke "
+                             "block alone, or use demag_backend='yano'."}
+        import radia.vim as _vim
+        if is_linear:
+            iron = _vim.soft_iron_from_mesh(mesh, mu_r=float(mu_r))
+            _log(f"MAT:linear mu_r={mu_r} (HDiv-VIM)")
+        else:
+            iron = _vim.soft_iron_from_mesh(mesh, bh_table=bh_data)
+            _log(f"MAT:nonlinear BH ({len(bh_data)} pts) (HDiv-VIM)")
+        model = rad.ObjCnt([iron, coil_container])
+        _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM), tol={tol}, maxiter={max_iter}")
+        prev_be = rad.set_demag_backend("hdiv")
+        t_solve_start = time.perf_counter()
+        try:
+            with _TM():
+                res = rad.Solve(model, tol, max_iter, solver)
+        finally:
+            rad.set_demag_backend(prev_be)
+        t_solve = time.perf_counter() - t_solve_start
+        # hdiv dispatch returns the hdiv_demag_solve dict (raises on non-convergence)
+        n_iter = int(res.get("iters", 0)) if isinstance(res, dict) else 0
+        n_dof = int(res.get("ndof", n_dof)) if isinstance(res, dict) else n_dof
+        M_avg = [float(c) for c in res["M_avg"]] if isinstance(res, dict) else [0.0, 0.0, 0.0]
+        residual = 0.0
+        converged = True
+        solver_label = "HDiv-VIM"
     else:
-        result = rad.Solve(model, tol, max_iter, solver)
-    t_solve = time.perf_counter() - t_solve_start
+        # --- legacy yano-type collocation MSC backend (the default) ---
+        if is_linear:
+            radmat = rad.MatLin(mu_r)
+            _log(f"MAT:linear mu_r={mu_r}")
+        else:
+            radmat = rad.MatSatIsoTab(bh_data)
+            _log(f"MAT:nonlinear BH ({len(bh_data)} pts)")
 
-    if relax > 0:
-        rad.SolverConfig(relax_param=0.0)
+        all_objs = []
+        for elem in elements:
+            verts = elem['vertices']
+            etype = elem['type']
+            if etype == 'hex':
+                obj = rad.ObjHexahedron(verts, [0, 0, 0])
+            elif etype == 'tet':
+                obj = rad.ObjTetrahedron(verts, [0, 0, 0])
+            elif etype == 'wedge':
+                obj = rad.ObjWedge(verts, [0, 0, 0])
+            else:
+                continue
+            rad.MatApl(obj, radmat)
+            all_objs.append(obj)
 
-    n_iter = int(result[3]) if len(result) > 3 else 0
-    residual = float(result[1]) if len(result) > 1 else 0.0
-    converged = residual < tol
+        yoke = rad.ObjCnt(all_objs)
+        _log(f"RADIA:{len(all_objs)} objects, {n_dof} DOF")
+
+        model = rad.ObjCnt([yoke, coil_container])
+        ima_str = ima if ima else "(none)"
+        _log(f"SOLVE:solver={solver_names.get(solver, solver)}, "
+             f"IMA={ima_str}, tol={tol}, maxiter={max_iter}")
+
+        if relax > 0:
+            rad.SolverConfig(relax_param=relax)
+
+        t_solve_start = time.perf_counter()
+        if ima:
+            result = rad.Solve(model, tol, max_iter, solver, image=ima)
+        else:
+            result = rad.Solve(model, tol, max_iter, solver)
+        t_solve = time.perf_counter() - t_solve_start
+
+        if relax > 0:
+            rad.SolverConfig(relax_param=0.0)
+
+        n_iter = int(result[3]) if len(result) > 3 else 0
+        residual = float(result[1]) if len(result) > 1 else 0.0
+        converged = residual < tol
+        solver_label = solver_names.get(solver, str(solver))
+        # element-mean magnetization (integral quantity, per the Result Output Policy) -- also lets the
+        # golden compare yano vs hdiv on M (the primary unknown), not the internal-origin B_center.
+        M_list = [m for (_c, m) in rad.ObjM(yoke)]
+        nM = max(len(M_list), 1)
+        M_avg = [sum(m[i] for m in M_list) / nM for i in range(3)]
 
     _log(f"SOLVE:done in {t_solve:.2f}s, {n_iter} iter, "
          f"residual={residual:.2e}")
@@ -343,12 +402,14 @@ def solve_msc(coil_script="", vol_file="",
     result_dict = {
         "B_center": [float(B[0]), float(B[1]), float(B[2])],
         "B_center_mag": float(B_mag),
+        "M_avg": [float(M_avg[0]), float(M_avg[1]), float(M_avg[2])],
         "n_elem": n_total,
         "n_hex": n_hex,
         "n_tet": n_tet,
         "n_wedge": n_wedge,
         "ndof": n_dof,
-        "solver": solver_names.get(solver, str(solver)),
+        "solver": solver_label,
+        "demag_backend": demag_backend,
         "ima": ima,
         "iterations": n_iter,
         "residual": residual,
@@ -480,6 +541,11 @@ def build_argparser():
     parser.add_argument("--solver", type=int, default=0,
                         choices=[0, 1, 2],
                         help="0=LU, 1=BiCGSTAB, 2=HACApK")
+    parser.add_argument("--demag-backend", default="yano",
+                        choices=["yano", "hdiv"],
+                        help="Demag backend: 'yano' (legacy collocation MSC, default) "
+                             "or 'hdiv' (FEEC HDiv-VIM; KELVIN-less, requires an iron-only "
+                             ".vol and does not support IMA yet)")
     parser.add_argument("--max-iter", type=int, default=100,
                         help="Max nonlinear iterations")
     parser.add_argument("--tol", type=float, default=1e-3,
@@ -507,6 +573,7 @@ def main():
             tol=args.tol,
             relax=args.relax,
             msh_output=args.msh_output,
+            demag_backend=args.demag_backend,
         )
 
     calc_main(run, parser)
