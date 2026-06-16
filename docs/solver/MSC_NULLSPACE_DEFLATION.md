@@ -350,6 +350,6 @@ magnetization distribution is not. Test: `tests/test_loop_projection.py`.
 
 - Hackbusch, "A Sparse Matrix Arithmetic Based on H-Matrices", Computing 62 (1999).
 - Ida-Iwashita-Mifune-Takahashi, J. Inf. Process. 22(4) (2014) — HACApK.
-- Yano-Sugahara, J. Magn. Soc. Jpn. 47 (2023) — MSC formulation.
+- Yano, J. Magn. Soc. Jpn. 47 (2023) — MSC formulation.
 - Loop-star / cycle-space view: standard tree-cotree decomposition of
   computational electromagnetics.

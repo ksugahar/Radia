@@ -20,7 +20,7 @@
   },
   "elf_reference": {
     "Bz_T": -0.2281,
-    "source": "examples/c_type_electromagnet/mu=1000/quarter/verify_elf_radia.py (ELF binary .mag output)",
+    "source": "C-type electromagnet quarter model, nonlinear steel reference",
     "fem_vs_elf_pct": 5.2
   },
   "fem_convergence_note": "Empirical sweet spot (2026-04-25): 5mm + order=1 = 5.2% high; 2mm + order=1 = -22% (DIVERGES with finer mesh); 5mm + order=2 = -39% (broken: C++ Kelvin pair ID only handles LINEAR nodes, periodic BC fails for the high-order DOFs of curvedelements).  Both refinement paths need future fixes before this can converge to <1%.  Until then -- 5.2% is the practical ceiling for FEM Omega + offset-Kelvin on this geometry.",

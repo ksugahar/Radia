@@ -8,7 +8,7 @@
     "bh_curve": "src/radia/panels/samples/em_sample_bh.txt",
     "generator_cmd_note": "Regenerate via Cubit batch: python-run em_sample.jou + auto_add_kelvin_from_current_model() + export netgen order=1 overwrite.  Land .vol directly at src/radia/panels/samples/em_sample.vol (shipped with the wheel via pyproject.toml package-data).  Reference template: C:/temp/kelvin_bench/regen_em_sample.py."
   },
-  "geometry_note": "Half-y model: yoke in y=[0, 0.18] only (no y-reflection in mesh; physically the ELF reference is quarter-XZ with mesh reduced further).  Comparing to the ELF quarter-XZ -228.1 mT reference (verified by examples/c_type_electromagnet/mu=1000/quarter/verify_elf_radia.py 2026-04-25) requires setting up sym_tangential/sym_normal BCs AND porting examples/c_type_electromagnet/mu=1000/coil_model.py to a CoilBuilder script (Y_CENTER=131.25 mm vs em_sample_coil's 151.25 mm) -- that variant lives in the future em/em_elf_quarter_xz.jou.",
+  "geometry_note": "Half-y model: yoke in y=[0, 0.18] only (no y-reflection in mesh; physically the reference is quarter-XZ with mesh reduced further).  Comparing to the C-type electromagnet quarter-XZ -228.1 mT reference requires setting up sym_tangential/sym_normal BCs AND porting the C-type electromagnet racetrack-coil geometry to a CoilBuilder script (Y_CENTER=131.25 mm vs em_sample_coil's 151.25 mm) -- that variant lives in the future em/em_elf_quarter_xz.jou.",
   "physics": {
     "formulation": "omega",
     "material": "linear",
