@@ -1,11 +1,10 @@
 """
-ELF-matched racetrack coil for the C-type dipole reproduction.
+Racetrack coil for the C-type dipole reproduction.
 
-Matches the ELF MMB8T model coil (see
-examples/c_type_electromagnet/mu=1000/coil_model.py for the
-dimensions extracted from the ELF .meg file).
+Matches the C-type electromagnet racetrack-coil geometry (MMB8T model
+coil dimensions).
 
-ELF coil geometry (mm):
+Coil geometry (mm):
     Y-straights centerline x: ±47.5 (radial offset from yoke center)
     Y-straights y range:      [100.0, 162.5]   (y mid = 131.25)
     X-caps y top:             185.0 (between 167.5 and 202.5)
@@ -20,12 +19,12 @@ ELF coil geometry (mm):
 This differs from `em_sample_coil.py` ONLY in Y_CENTER (131.25 here
 vs 151.25 there) and the consequent y positions of all segments.
 The em_sample coil deliberately sits 20 mm farther from the gap
-than ELF -- which is why em_sample's B at origin is much smaller
-than the ELF reference -228.1 mT for the same yoke + sym BCs.
+than this coil -- which is why em_sample's B at origin is much smaller
+than the reference -228.1 mT for the same yoke + sym BCs.
 
 Usage:
     Set this file as the "Coil script" on the EM panel for any
-    reduction sample that targets ELF.
+    reduction sample that targets the C-type electromagnet reference.
 """
 
 import sys

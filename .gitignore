@@ -448,8 +448,6 @@ examples/cubit_panels/inductance/results/
 !examples/cubit/**/*.jou
 !examples/cubit/netgen/README_ja.html
 examples/cubit/inductance_torus_result.cub5
-examples/c_type_electromagnet/dipole_coils.step
-examples/c_type_electromagnet/dipole_field.msh
 .code-workspace
 
 # Cubit intermediate files (pwd = repo root when launched from GUI)
@@ -473,4 +471,6 @@ docs/research/
 memory/
 # Throwaway debug/presentation scripts dropped at repo root
 /*.py
+# Build.ps1-generated temporary MSVC batch (regenerated each build; never commit)
+/build_temp_msvc.bat
 

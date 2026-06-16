@@ -32,7 +32,6 @@ python arc_current_with_magnet.py
 |-----------|---------|-------------|
 | [background_fields/](background_fields/) | 4 | External background fields with magnetizable materials |
 | [complex_coil_geometry/](complex_coil_geometry/) | 3 | Multi-segment coils using CoilBuilder API |
-| [c_type_electromagnet/](c_type_electromagnet/) | 43 | C-type electromagnet: racetrack coil + yoke with nonlinear materials |
 | [cube_uniform_field/](cube_uniform_field/) | 8 | Cube benchmark: hex/tetra mesh, solver comparison |
 | [visualization/](visualization/) | 9 | PyVista, ParaView, Netgen GUI, GMSH workflow demos |
 
@@ -85,7 +84,7 @@ python arc_current_with_magnet.py
 |----------|-------------|
 | Learn Radia basics | `simple_problems/` |
 | Permanent magnets | `simple_problems/`, `smco_magnet_array/` |
-| Electromagnets | `c_type_electromagnet/`, `complex_coil_geometry/` |
+| Electromagnets | `complex_coil_geometry/` |
 | External/background fields | `background_fields/` |
 | FEM coupling | `ngsolve_integration/`, `kelvin_transformation/` |
 | PEEC conductors | `peec_integration/`, `induction_heating/` |

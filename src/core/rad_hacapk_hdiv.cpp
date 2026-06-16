@@ -40,6 +40,27 @@ void RadHACApKHDivManager::OnBeforeBuild()
     rad_hdiv::BuildChargeMapCSC(m_mesh, m_csc);
     rad_hdiv::BuildChargeQuad(m_mesh, m_nsub, m_quad);
     rad_hdiv::BuildMassCOO(m_mesh, m_mI, m_mJ, m_mV, m_mass_diag);
+    // System-A H-LU mode: build the O(1) (i,j)->M_mass[i][j] lookup from the COO (RT0 mass couples
+    // a face with the other faces of its 1-2 incident cells -> sparse, ~12 nnz/row).
+    if (m_system_mode) {
+        m_mass_map.clear();
+        m_mass_map.reserve(m_mV.size() * 2);
+        for (size_t k = 0; k < m_mV.size(); ++k) {
+            long long key = (long long)m_mI[k] * (long long)m_ndof + (long long)m_mJ[k];
+            m_mass_map[key] += m_mV[k];
+        }
+    }
+}
+
+double RadHACApKHDivManager::ComputeSystemEntry(int dof_i, int dof_j) const
+{
+    // Default (+N) for the matvec path; system-A (M_mass + chi*N) when SetSystemMode(chi>0) was called.
+    double N = GetInteractionMatrixElement(dof_i, dof_j);
+    if (!m_system_mode) return N;
+    double mass = 0.0;
+    auto it = m_mass_map.find((long long)dof_i * (long long)m_ndof + (long long)dof_j);
+    if (it != m_mass_map.end()) mass = it->second;
+    return mass + m_system_chi * N;
 }
 
 void RadHACApKHDivManager::InitializeInvChi()
@@ -836,4 +857,48 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
     PicardResult r;
     r.m = m; r.Mavg = Mavg; r.chi = chi; r.Dscal = Dscal; r.iters = done;
     return r;
+}
+
+//=========================================================================
+// RadHACApKHDivSystemTet -- unstructured face-DOF system A = M_mass + chi*N (Phase 2)
+//=========================================================================
+
+RadHACApKHDivSystemTet::RadHACApKHDivSystemTet(
+    std::vector<double> face_centroids, double chi,
+    std::vector<int> face_charge, std::vector<double> face_coef,
+    std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+    std::vector<double> cell_verts, std::vector<double> face_verts,
+    int n_el, double gram_near_factor)
+    : m_chi(chi),
+      m_face_cent(std::move(face_centroids)),
+      m_face_charge(std::move(face_charge)),
+      m_face_coef(std::move(face_coef)),
+      // embedded analytic charge Gram (constructed -> geometry ready -> G(a,b) via entry, NOT built)
+      m_G(std::move(cell_verts), std::move(face_verts), n_el, gram_near_factor)
+{
+    m_nface = (int)(m_face_cent.size() / 3);
+    // O(1) (i,j)->M_mass[i][j] lookup from the COO (RT0 mass is sparse: ~couples within incident cells)
+    m_mass_map.reserve(mV.size() * 2);
+    for (size_t k = 0; k < mV.size(); ++k)
+        m_mass_map[(long long)mI[k] * (long long)m_nface + (long long)mJ[k]] += mV[k];
+}
+
+double RadHACApKHDivSystemTet::GetInteractionMatrixElement(int dof_i, int dof_j) const
+{
+    // N[i][j] = sum_{a in supp(i)} sum_{b in supp(j)} B[a][i] G[a][b] B[b][j]  (<=2 charges/face)
+    double N = 0.0;
+    for (int p = 0; p < 2; ++p) {
+        int a = m_face_charge[(size_t)dof_i * 2 + p];
+        if (a < 0) continue;
+        double ca = m_face_coef[(size_t)dof_i * 2 + p];
+        for (int q = 0; q < 2; ++q) {
+            int b = m_face_charge[(size_t)dof_j * 2 + q];
+            if (b < 0) continue;
+            N += ca * m_face_coef[(size_t)dof_j * 2 + q] * m_G.GetInteractionMatrixElement(a, b);
+        }
+    }
+    double mass = 0.0;
+    auto it = m_mass_map.find((long long)dof_i * (long long)m_nface + (long long)dof_j);
+    if (it != m_mass_map.end()) mass = it->second;
+    return mass + m_chi * N;   // A = M_mass + chi*N
 }

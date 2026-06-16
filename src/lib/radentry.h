@@ -1184,7 +1184,6 @@ EXP int CALL RadClassifyPoints(int* classification, int* nearest_elem, int n_poi
 @param n_points [in] number of evaluation points
 @param points [in] evaluation point coordinates (n_points * 3)
 @param container_handle [in] Radia container handle
-@param method [in] computation method (0=direct, 1=FMM)
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 */
 EXP int CALL RadFldBatch(double* B_out, double* H_out, int n_points,

@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-06-16T14:53:52.499003",
+  "hostname": "lab",
+  "benchmark": "hdiv_system_hlu_preconditioner",
+  "problem": {
+    "geometry": "unit cube (tet)",
+    "chi": 999.0,
+    "mu_r": 1000.0,
+    "gmres_rtol": 1e-08
+  },
+  "note": "H-LU(A)^-1 is a factor-once preconditioner capability, NOT the default demag solver; iters bounded in N vs the growth of M_mass^-1.",
+  "results": [
+    {
+      "maxh": 0.3,
+      "ndof": 364,
+      "n_el": 149,
+      "iters_mmass_inv": 39,
+      "iters_hlu_inv": 1,
+      "relres_hlu": 5.4416831866316046e-14,
+      "t_factor_s": 4.059270858764648
+    },
+    {
+      "maxh": 0.22,
+      "ndof": 1331,
+      "n_el": 587,
+      "iters_mmass_inv": 36,
+      "iters_hlu_inv": 4,
+      "relres_hlu": 9.510853155196649e-11,
+      "t_factor_s": 26.346903324127197
+    },
+    {
+      "maxh": 0.16,
+      "ndof": 2302,
+      "n_el": 1021,
+      "iters_mmass_inv": 41,
+      "iters_hlu_inv": 5,
+      "relres_hlu": 3.3487146530686417e-10,
+      "t_factor_s": 51.43526649475098
+    },
+    {
+      "maxh": 0.12,
+      "ndof": 7061,
+      "n_el": 3299,
+      "iters_mmass_inv": 38,
+      "iters_hlu_inv": 14,
+      "relres_hlu": 3.861395041911389e-09,
+      "t_factor_s": 214.4132649898529
+    }
+  ]
+}

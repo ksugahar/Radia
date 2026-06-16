@@ -26,6 +26,7 @@
 
 #include "rad_hacapk.h"     // RadHACApKBase
 #include "rad_hdiv_vim.h"   // rad_hdiv::Mesh / ChargeMapCSC / ChargeQuad
+#include <unordered_map>
 
 //-------------------------------------------------------------------------
 // RadHACApKHDivManager: builds N = B^T G B (HDiv-type VIM) as a HACApK H-matrix.
@@ -41,6 +42,16 @@ public:
 
     // +N(i,j) for 0-based ORIGINAL face indices (the charge-cluster Coulomb sum).
     double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
+
+    // SYSTEM-A mode for H-LU: when enabled (chi > 0), the H-matrix stores the form-1 SOFT-IRON
+    // MATERIAL SYSTEM  A = M_mass + chi*N  (the uniform-chi material system ((1/chi)M_mass + N)
+    // scaled by chi -- well-conditioned: loop modes see only M_mass), so the HACApK H-LU
+    // (cHACApK_hlu_*) factors A directly = a scalable DIRECT solve / strong preconditioner for the
+    // HDiv-VIM demag.  Default OFF (ComputeSystemEntry = +N for the matvec path).  Call BEFORE
+    // BuildHMatrix.  M_mass[i][j] is read from the sparse RT0 mass via m_mass_map (built in
+    // OnBeforeBuild).
+    void SetSystemMode(double chi) { m_system_chi = chi; m_system_mode = (chi > 0.0); }
+    double ComputeSystemEntry(int dof_i, int dof_j) const override;
 
     // Material system apply: y = A x = inv_chi * (M_mass x) - (N x), where N x is the O(N log N)
     // H-matvec and M_mass is the sparse local RT0 mass.  This is the operator a symmetric Krylov
@@ -70,6 +81,10 @@ private:
     // sparse RT0 mass M_mass (COO) + its per-face diagonal, for the scalable system apply
     std::vector<int>     m_mI, m_mJ;
     std::vector<double>  m_mV, m_mass_diag;
+    // SYSTEM-A H-LU mode: store A = M_mass + chi*N via ComputeSystemEntry (vs the default +N).
+    bool   m_system_mode = false;
+    double m_system_chi  = 0.0;
+    std::unordered_map<long long, double> m_mass_map;  // (i*ndof+j) -> M_mass[i][j], O(1) lookup
 };
 
 //-------------------------------------------------------------------------
@@ -249,6 +264,57 @@ private:
     double EvalMono(int charge, const double p[3]) const;   // charge's monomial at physical p (host ref-coord map)
     double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR)
     double QuadDotFar(int tgt, int src) const;              // cheap LOW-quad plain double-Gauss (FAR, no subtraction)
+};
+
+//-------------------------------------------------------------------------
+// RadHACApKHDivSystemTet: the UNSTRUCTURED (real tet mesh) face-DOF system matrix
+// A = M_mass + chi*N as a HACApK H-matrix, for H-LU as a scalable preconditioner /
+// direct solve of the soft-iron material system.  This is the production Phase-2
+// generalization of RadHACApKHDivManager (which is structured-grid only): the DOFs
+// are the RT0 faces (cluster tree = face centroids), and the entry composes
+//   A[i][j] = M_mass[i][j] + chi * sum_{a in supp(i)} sum_{b in supp(j)} B[a][i] G[a][b] B[b][j]
+// where G[a][b] is the analytic charge Gram from an EMBEDDED RadHACApKChargeGram (built
+// from the SAME cell_verts/face_verts the production _ChargeGramHMatrix uses, so N here
+// == the production N_apply operator entry-by-entry), B is the per-face charge map
+// (<= 2 charges/face: the 1-2 incident cells, or cell+boundary-sigma), and M_mass is the
+// sparse RT0 mass.  A is SPD (M_mass SPD + chi*B^T G B PSD) so the no-pivot H-LU is stable.
+// All geometry is supplied from Python (extracted from the NGSolve tet mesh by
+// radia.vim build_demag): face centroids, the per-face charge map, the mass COO, and the
+// charge cell/face verts.
+//-------------------------------------------------------------------------
+
+class RadHACApKHDivSystemTet : public RadHACApKBase {
+public:
+    // face_centroids [n_face*3]; chi (mu_r-1); the per-face charge map as <=2 (charge,coef) per face:
+    //   face_charge [n_face*2] charge indices (-1 = empty), face_coef [n_face*2] the scaled B coefs;
+    // mass COO (mI,mJ,mV) on the n_face DOFs; cell_verts [n_el*12]+face_verts [n_bf*9]+n_el for the
+    // embedded analytic charge Gram (n_charge = n_el + n_bf).  gram_near_factor passed through to the
+    // charge Gram (>=2 for the fast near/far analytic split; the G ENTRY itself is exact analytic).
+    RadHACApKHDivSystemTet(std::vector<double> face_centroids, double chi,
+                           std::vector<int> face_charge, std::vector<double> face_coef,
+                           std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                           std::vector<double> cell_verts, std::vector<double> face_verts,
+                           int n_el, double gram_near_factor = 2.0);
+    ~RadHACApKHDivSystemTet() override {}
+
+    double GetInteractionMatrixElement(int dof_i, int dof_j) const override;  // = ComputeSystemEntry (A)
+    double ComputeSystemEntry(int dof_i, int dof_j) const override { return GetInteractionMatrixElement(dof_i, dof_j); }
+
+protected:
+    void ExtractCoordinates() override { m_coordinates = m_face_cent; m_ndof = m_nface; m_n_elem = m_nface; }
+    void OnBeforeBuild() override {}
+    void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }
+    bool IsVariableDOF() const override { return false; }
+    int  GetUniformNFFC() const override { return 1; }
+
+private:
+    int    m_nface = 0;
+    double m_chi   = 0.0;
+    std::vector<double> m_face_cent;            // [n_face*3]
+    std::vector<int>    m_face_charge;          // [n_face*2]  (-1 = empty)
+    std::vector<double> m_face_coef;            // [n_face*2]
+    std::unordered_map<long long, double> m_mass_map;
+    RadHACApKChargeGram m_G;                    // analytic charge Gram (constructed, NOT built) -> G(a,b)
 };
 
 #endif // __RAD_HACAPK_HDIV_H

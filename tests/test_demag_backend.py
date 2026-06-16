@@ -38,9 +38,11 @@ def test_solverconfig_sets_backend():
     assert rad.get_demag_backend() == "hdiv"
 
 
-def test_hdiv_backend_forbids_yano_solve():
-    """Selecting 'hdiv' makes rad.Solve REFUSE the yano path (NotImplementedError redirecting to
-    radia.vim) -- the gate fires before the C++ solver, so no real object/solve is needed."""
+def test_hdiv_backend_requires_registered_mesh():
+    """With 'hdiv' selected, rad.Solve on a container that has NO HDiv-registered soft-iron body
+    (here a bogus handle) raises NotImplementedError redirecting to radia.vim.soft_iron_from_mesh --
+    the FEEC HDiv-VIM needs the NGSolve mesh association (a registered iron dispatches the real
+    HDiv-VIM solve; see tests/feec/test_hdiv_radsolve_dispatch.py)."""
     rad.set_demag_backend("hdiv")
     with pytest.raises(NotImplementedError):
         rad.Solve(0, 1e-4, 10, 0)
