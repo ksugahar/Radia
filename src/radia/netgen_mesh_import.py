@@ -184,6 +184,42 @@ def create_radia_tetrahedron(vertices, magnetization=None):
         raise RuntimeError(f"Failed to create Radia tetrahedron: {e}")
 
 
+def create_radia_wedge(vertices, magnetization=None):
+    """
+    Create a single wedge (triangular prism, 6 vertices) polyhedron in Radia.
+
+    Parameters
+    ----------
+    vertices : list of list
+        6 vertices: [[x1,y1,z1], ..., [x6,y6,z6]] in NGSolve ET.PRISM order
+        (bottom triangle v0,v1,v2 then top triangle v3,v4,v5, with v[i+3] above v[i]).
+        Coordinates in meters.
+    magnetization : list, optional
+        Magnetization vector [Mx, My, Mz] in A/m.  Default: [0, 0, 0].
+
+    Returns
+    -------
+    int
+        Radia object ID
+
+    Notes
+    -----
+    Uses rad.ObjWedge() which auto-generates face topology internally.  The NGSolve
+    ET.PRISM vertex order is the rad.ObjWedge order with no reordering (validated: a
+    uniform-M cube assembled from prisms matches a single ObjHexahedron to ~1e-15).
+    """
+    if magnetization is None:
+        magnetization = [0, 0, 0]
+
+    if len(vertices) != 6:
+        raise ValueError(f"Wedge must have exactly 6 vertices, got {len(vertices)}")
+
+    try:
+        return rad.ObjWedge(vertices, magnetization)
+    except Exception as e:
+        raise RuntimeError(f"Failed to create Radia wedge: {e}\nVertices: {vertices}")
+
+
 def compute_element_centroid(vertices):
     """
     Compute the centroid of an element from its vertices.
@@ -205,7 +241,7 @@ def compute_element_centroid(vertices):
     return [cx, cy, cz]
 
 
-def extract_elements(mesh, material_filter=None, allow_hex=False):
+def extract_elements(mesh, material_filter=None, allow_hex=False, allow_wedge=False):
     """
     Extract volume elements (tetrahedra and optionally hexahedra) from NGSolve mesh.
 
@@ -264,6 +300,7 @@ def extract_elements(mesh, material_filter=None, allow_hex=False):
     skipped_count = 0
     hex_count = 0
     tet_count = 0
+    wedge_count = 0
 
     for el_idx, el in enumerate(mesh.Elements(VOL)):
         # Check material filter
@@ -281,6 +318,10 @@ def extract_elements(mesh, material_filter=None, allow_hex=False):
             element_type = 'HEX'
             expected_vertices = 8
             hex_count += 1
+        elif el.type == ET.PRISM and allow_wedge:
+            element_type = 'WEDGE'
+            expected_vertices = 6
+            wedge_count += 1
         else:
             if el.type == ET.HEX:
                 raise ValueError(
@@ -288,10 +329,17 @@ def extract_elements(mesh, material_filter=None, allow_hex=False):
                     f"Hexahedral elements are not allowed by default. "
                     f"Set allow_hex=True to enable (WARNING: may cause MMM issues)."
                 )
+            elif el.type == ET.PRISM:
+                raise ValueError(
+                    f"Element {el_idx} is a wedge/prism (ET.PRISM). "
+                    f"Wedge elements are not allowed by default. "
+                    f"Set allow_wedge=True to enable (WARNING: may cause MMM issues)."
+                )
             else:
                 raise ValueError(
                     f"Element {el_idx} has unsupported type {el.type}. "
-                    f"Only ET.TET (tetrahedra) and optionally ET.HEX (hexahedra) supported."
+                    f"Only ET.TET (tetrahedra) and optionally ET.HEX (hexahedra) / "
+                    f"ET.PRISM (wedges) supported."
                 )
 
         # Extract vertex NodeId objects (NGSolve format: V0, V1, etc.)
@@ -321,12 +369,15 @@ def extract_elements(mesh, material_filter=None, allow_hex=False):
     if hex_count > 0:
         print(f"[WARNING] Imported {hex_count} hexahedral elements. "
               f"Hexahedra may cause numerical issues in Radia MMM.")
+    if wedge_count > 0:
+        print(f"[WARNING] Imported {wedge_count} wedge/prism elements. "
+              f"Wedges may cause numerical issues in Radia MMM.")
 
     return elements, skipped_count
 
 
 def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=True,
-                          material_filter=None, allow_hex=False):
+                          material_filter=None, allow_hex=False, allow_wedge=False):
     """
     Convert NGSolve/Netgen mesh to Radia geometry.
 
@@ -450,7 +501,8 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
             print(f"                [WARNING] Hexahedral elements enabled (may cause MMM issues)")
 
     try:
-        elements, skipped_count = extract_elements(mesh, material_filter=material_filter, allow_hex=allow_hex)
+        elements, skipped_count = extract_elements(mesh, material_filter=material_filter,
+                                                    allow_hex=allow_hex, allow_wedge=allow_wedge)
     except ValueError as e:
         print(f"[ERROR] {e}")
         raise
@@ -460,9 +512,11 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
         # Count element types
         tet_count = sum(1 for el in elements if el['element_type'] == 'TET')
         hex_count = sum(1 for el in elements if el['element_type'] == 'HEX')
+        wedge_count = sum(1 for el in elements if el['element_type'] == 'WEDGE')
 
-        if hex_count > 0:
-            print(f"                Extracted: {num_elements} elements ({tet_count} TET, {hex_count} HEX)")
+        if hex_count > 0 or wedge_count > 0:
+            print(f"                Extracted: {num_elements} elements "
+                  f"({tet_count} TET, {hex_count} HEX, {wedge_count} WEDGE)")
         else:
             print(f"                Extracted: {num_elements} tetrahedra")
 
@@ -530,6 +584,8 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
                 obj_id = create_radia_tetrahedron(vertices, magnetization)
             elif element_type == 'HEX':
                 obj_id = create_radia_hexahedron(vertices, magnetization)
+            elif element_type == 'WEDGE':
+                obj_id = create_radia_wedge(vertices, magnetization)
             else:
                 raise ValueError(f"Unknown element type: {element_type}")
 
@@ -798,6 +854,7 @@ __all__ = [
     'compute_element_centroid',
     'create_radia_tetrahedron',
     'create_radia_hexahedron',
+    'create_radia_wedge',
     'cubit_hex_to_radia',
     'create_hex_mesh_grid',
     'TETRA_FACES',

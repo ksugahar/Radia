@@ -2385,7 +2385,7 @@ TVector3d radTPolyhedron::FieldFromQuadFaceMirroredWithNormals(const TVector3d& 
 TVector3d radTPolyhedron::FieldFromQuadFace(const TVector3d& obs, int faceIdx, double sigma) const
 {
 	// Compute field from a single quadrilateral face with unit surface charge
-	// Yano-Sugahara MSC method:
+	// Yano MSC method:
 	// - Split quad into 2 triangles
 	// - For each triangle, check if normal points outward
 	// - Apply sign_factor to ensure outward-pointing normal

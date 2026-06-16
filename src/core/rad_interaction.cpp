@@ -788,7 +788,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	bool hasSymmetry = (AmOfElemWithSym > AmOfMainElem);
 
 	// Check if we have any MSC elements (5 DOF wedges or 6 DOF hexahedra)
-	// MSC elements require Yano-Sugahara midpoint evaluation which is more complex
+	// MSC elements require Yano midpoint evaluation which is more complex
 	bool hasMSCElements = false;
 	for(int i = 0; i < AmOfMainElem && !hasMSCElements; i++)
 	{
@@ -866,7 +866,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// Compute the interaction block based on DOF types
 				// FAST PATH: Only for 3x3 blocks (tetrahedra)
 				// MSC hexahedra (6 DOF) fall through to slow path for correctness
-				// (MSC requires Yano-Sugahara midpoint evaluation and proper transforms)
+				// (MSC requires Yano midpoint evaluation and proper transforms)
 				if(dof_row == 3 && dof_col == 3)
 				{
 					// 3x3 N-matrix computation: H_field at row center from col magnetization
@@ -1071,7 +1071,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					// 6x6 block: MSC hexahedron to MSC hexahedron
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
-						// Yano-Sugahara evaluation point: midpoint between face center and element center
+						// Yano evaluation point: midpoint between face center and element center
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
 						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
@@ -1133,7 +1133,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 					for(int face_i = 0; face_i < dof_row; face_i++)
 					{
-						// Yano-Sugahara evaluation point
+						// Yano evaluation point
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
 						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
@@ -1167,7 +1167,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 					for(int face_i = 0; face_i < nFacesRow; face_i++)
 					{
-						// Yano-Sugahara evaluation point: midpoint between face center and element center
+						// Yano evaluation point: midpoint between face center and element center
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
 						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
@@ -1397,7 +1397,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				{
 					for(int face_i = 0; face_i < dof_row; face_i++)
 					{
-						// Yano-Sugahara evaluation point: midpoint between face center and element center
+						// Yano evaluation point: midpoint between face center and element center
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
 						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
@@ -1466,7 +1466,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				{
 					for(int face_i = 0; face_i < dof_row; face_i++)
 					{
-						// Yano-Sugahara evaluation point: midpoint between face center and element center
+						// Yano evaluation point: midpoint between face center and element center
 						// FaceCenter and CentrPoint are already in GLOBAL frame
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
@@ -2339,7 +2339,7 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 //=========================================================================
 // PrecomputeHexaGeometry: Pre-compute hexahedron face geometry
 // Hexahedra have 6 quadrilateral faces, each split into 2 triangles
-// Reference: Yano-Sugahara MSC method for hexahedral elements
+// Reference: Yano MSC method for hexahedral elements
 //=========================================================================
 
 void radTInteraction::PrecomputeHexaGeometry()
@@ -2393,7 +2393,7 @@ void radTInteraction::PrecomputeHexaGeometry()
 			// Store face area
 			m_hexaFaceAreas[h * 6 + f] = poly->FaceArea[f];
 
-			// Store Yano-Sugahara evaluation point: midpoint(face_center, element_center)
+			// Store Yano evaluation point: midpoint(face_center, element_center)
 			int epIdx = (h * 6 + f) * 3;
 			m_hexaEvalPoints[epIdx + 0] = 0.5 * (poly->FaceCenter[f].x + poly->CentrPoint.x);
 			m_hexaEvalPoints[epIdx + 1] = 0.5 * (poly->FaceCenter[f].y + poly->CentrPoint.y);
@@ -2789,7 +2789,7 @@ void radTInteraction::PrecomputeWedgeGeometry()
 
 //=========================================================================
 // Compute5x5BlockFast: Fast 5x5 interaction block for wedges (MSC)
-// Same pattern as Compute6x6BlockFast: Yano-Sugahara eval points,
+// Same pattern as Compute6x6BlockFast: Yano eval points,
 // face-triangle decomposition, IMA inline with scalar sign.
 //=========================================================================
 
@@ -2907,7 +2907,7 @@ void radTInteraction::Compute5x5BlockFast(int wedge_i, int wedge_j, double* K_ma
 //=========================================================================
 // Compute6x6BlockFast: Fast 6x6 interaction block for hexahedra
 // Uses pre-computed geometry (avoiding FieldFromQuadFace overhead)
-// Reference: Yano-Sugahara MSC method
+// Reference: Yano MSC method
 //
 // When IMA is enabled (m_imaEnabled=true), this function computes:
 //   K[i,j] = field at target i from original source j + field from mirrored source j
@@ -2937,7 +2937,7 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 	// For each target face i
 	for(int face_i = 0; face_i < 6; face_i++)
 	{
-		// Yano-Sugahara evaluation point for target face
+		// Yano evaluation point for target face
 		int epIdx = (hex_i * 6 + face_i) * 3;
 		const double obs[3] = {m_hexaEvalPoints[epIdx + 0],
 		                       m_hexaEvalPoints[epIdx + 1],
@@ -3119,8 +3119,8 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 //
 // Row element (target): observation points from precomputed geometry
 //   3DOF (tet): obs = element center, result = H components directly
-//   5DOF (wedge): obs = Yano-Sugahara midpoint per face, result = n_i dot H
-//   6DOF (hex): obs = Yano-Sugahara midpoint per face, result = n_i dot H
+//   5DOF (wedge): obs = Yano midpoint per face, result = n_i dot H
+//   6DOF (hex): obs = Yano midpoint per face, result = n_i dot H
 //
 // Col element (source): field from precomputed triangles + point charge
 //   3DOF (tet): for each unit M_beta, sigma = n_f dot e_beta
@@ -3762,7 +3762,7 @@ void radTInteraction::Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAx
 	// For each target face i (unchanged)
 	for(int face_i = 0; face_i < 6; face_i++)
 	{
-		// Yano-Sugahara evaluation point for target face
+		// Yano evaluation point for target face
 		int epIdx = (hex_i * 6 + face_i) * 3;
 		const double obs[3] = {m_hexaEvalPoints[epIdx + 0],
 		                       m_hexaEvalPoints[epIdx + 1],
