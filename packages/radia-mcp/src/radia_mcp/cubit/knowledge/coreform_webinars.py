@@ -485,10 +485,225 @@ Coreform Cubit in a CFD workflow; Using Cubit and Python to develop OpenFOAM CFD
 Devil in the details: accurate fatigue calculations with Cubit and Endurica CL.
 """
 
+GETTING_STARTED = r"""
+## Getting Started: GUI, the ITEM wizard, and the Command Panel
+
+### GUI layout
+Center = graphics window (select entities, watch updates). Left = model tree (volumes, then
+surfaces/curves; blocks/sidesets/nodesets appear here). Properties page = info for the
+selected entity (some fields editable: size, meshed-vs-true area check, block element type).
+Command line = history of issued commands (the GUI emits commands; you can type your own).
+Right tabbed panels switch between **Power Tools** (holds the **ITEM** wizard + diagnostics;
+best for new users) and the **Command Panel** (graphical command front-end; intermediate+).
+Missing panels: re-enable from the **View** menu (ITEM = wizard-hat icon). Command Panel
+hierarchy (Tools>Options): classic `mode>entity>action` vs new `mode>action>entity`, plus a
+breadcrumb option for small screens.
+
+### Why a workflow (tet vs hex)
+Tet meshing is ~solved (valid surface triangulation -> guaranteed fill). Hex is NOT a solved
+problem -> a human decomposes geometry into Cubit's recipes: **map** (logically 4-sided ->
+structured grid), **pave** (quad surface with holes/non-4-sided), **sweep** (pave source(s) ->
+march through mapped linking surfaces -> target); plus sphere/polyhedron specials. Use hex for
+nonlinear/dynamic accuracy & efficiency per DOF; tet for speed/ease. The prep loop iterates:
+import -> heal -> defeature -> decompose (web cut) -> mesh -> (decompose more for quality).
+
+### Beginner first mesh (Command Panel, clean part)
+File>Import (e.g. .sat). Mode>Mesh, Entity>Volume. Action>Intervals -> Automatic sizing ->
+select volume -> Apply Size. Action>Mesh -> Automatically calculate (scheme auto) -> Apply
+Scheme and Mesh. Quality action -> pick metric (Shape) -> Apply (elements color-coded). Done.
+
+### ITEM wizard (Immersive Topology Environment for Meshing)
+Top-to-bottom guided pipeline in Power Tools; issues the same commands as manual work but
+**auto-imprints and auto-merges** for you; non-modal (exit/re-enter freely). Steps:
+1. Import/create geometry (prefer native CAD; STEP/IGES are dirtier).
+2. Set up FEA model: pick hex/tet; drag size slider OR enter an **element budget** (e.g.
+   10000) and Apply -> Cubit back-solves a target size.
+3. Prepare geometry -> **Run Check Diagnostics** (ordered, recommended sequence): fix invalid
+   topology (Auto Heal), remove small features, connect volumes (gaps/overlaps), build
+   meshable topology. Green != "all removed" -- right-click a feature to **Mark as OK** (keep
+   a physically relevant small feature). Remove small features previews a solution (often
+   `remove surface <id> extend` -> a fillet becomes a sharp corner); right-click>Execute.
+   Connect volumes: detect overlaps -> draw in red -> reduce/remove from the larger volume.
+   Build meshable topology -> **Check Meshability** (meshable vs not) -> select a non-meshable
+   volume -> **Decompose Volume** offers candidate web cuts; cycle with **up/down arrows**,
+   preview the blue web, pick the EFFICIENT cut (one cut can split several features), Execute.
+4. Mesh: type `all` -> Generate Mesh (failed-mesh troubleshooting is ITEM's weakest part).
+5. Validate: define quality metric (scaled Jacobian for implicit/nonlinear; element size for
+   explicit; Shape = combined heuristic) with min/max thresholds; color-code worst elements;
+   refine/smooth/delete.
+6. Boundary conditions: make blocks/sidesets/nodesets from CAD entities (Ctrl-click multi-
+   select); meshing auto-pulls the corresponding faces/nodes into the set.
+7. Export: native Genesis/Exodus (broadest downstream, incl. MOOSE) or Abaqus/Nastran/Patran/
+   LS-DYNA/Fluent/OpenFOAM/...; option to force-overwrite.
+
+### Blocks / sidesets / nodesets (Exodus model)
+Block = material/element-type/section (element type e.g. HEX8 linear vs HEX20 quadratic set on
+Properties page). Sideset = element faces with connectivity/orientation (pressures, integrated
+BCs, contact). Nodeset = bag of nodes (nodal BCs, output tracking). Make sets from CAD
+entities; many solvers treat sidesets/nodesets equivalently (some users use sidesets for all
+BCs). Cubit's own material/BC support is basic -> name the sets, apply materials/BCs in the
+solver deck.
+
+### ITEM vs Command Panel vs journals/Python
+ITEM = new/intermittent users (guided, auto imprint/merge). Command Panel = full control
+(schemes, sizing, bias, virtual geometry). Command line/journals = every GUI action emits a
+command (History tab) -> copy into a .jou (Tools>Journal Editor), clean (drop `preview`/undo
+lines), replay. Python: `#!python` shebang in the command line, or external `import cubit`;
+prefer `cubit.cmd("...")` strings; Journal Editor has a journal->Python button. (Deeper:
+cubit_docs "coreform_python_automation".)
+
+### Beginner decision points
+Auto-mesh when diagnostics show no issues / Check Meshability passes. Ask ITEM to decompose
+when a volume is "not meshable / no scheme set". Defeature small irrelevant fillets/curves
+(they force tiny elements / kill the explicit time step); Mark-as-OK when a small feature
+matters. Heal non-native imports. Imprint&merge for conforming meshes (skip merge only for
+intentional contact). Hex refinement PROPAGATES through merged neighbors (structured), and
+Cubit does conforming refinement (no hanging nodes); tets refine locally more easily.
+
+### Sources
+Your first 15 minutes; Getting the most out of Coreform Cubit; Introduction: Hex meshing for
+beginners with the ITEM wizard; Introduction to Coreform Cubit; Coreform Cubit Basics; 2025
+update: Your first 15 minutes; 2025 update shorts (first/second mesh, ITEM wizard, Command Panel).
+"""
+
+ADVANCED_MESHING = r"""
+## Boundary layers, hybrid meshes, fluid regions, and large assemblies
+
+### Boundary-layer (BL) meshing
+A BL = thin, highly-resolved, graded layer hugging walls (CFD velocity, but also thermal/
+stress) growing out into a coarse core. Cubit "extrudes" wall entities (surfaces in 3D)
+inward; where BLs meet it resolves a **boundary-layer intersection** by internal angle (deg):
+**End** (~right-angle convex), **Corner** (inverse), **Side** (share a side; use for near-flat
+AND sharp internal corners), **Reversal** (trailing-edge / C-grid / O-grid recirculation).
+**internal continuity** is ON by default -> forces all intersections to Side and refuses other
+types; turn OFF to set per-junction types. For many-surface CFD, Cubit often can't auto-assign
+intersection types well -> assign BLs surface-by-surface (labor-intensive).
+Parameters: first-row depth (CFD: your y+-derived first height; Cubit doesn't compute y+),
+growth/bias (e.g. 1.2), number of layers (e.g. 10). **Assign BL to wall SURFACES, not curves**
+(curves are tedious and drift); BL grows normal to surfaces, lateral size inherited from the
+volume/surface mesh size. Selection: "all surfaces in volume 1", or "all except surfaces 1 to
+6" (exclude an outer box for external flow). BL previews yellow (selected->orange).
+**Single-layer BL = structured collar** around bolt/stress holes (turn internal continuity
+off). Limitation: only linear (corner) nodes follow curvature; mid-side interior nodes are NOT
+projected onto curved walls -> smooth, or limit edge length on high-curvature walls.
+**Sizing order: volume -> surface -> curve -> vertex** (a volume size OVERRIDES a prior
+surface size). Inline counts: right-click>measure a distance, then APREPRO distance/size.
+
+### Hybrid (hex-pyramid-tet) meshes
+Mesh wall SURFACES first (quads by default), assign the volume a **tetmesh** scheme -> the tet
+mesher respects the BL: hex layers at the wall, **a single pyramid layer** bridging hex quad
+faces to tet triangles, tets in the core. Use when you want hex on boundaries (contact,
+surface stress, BL) but an all-hex interior is impractical. Element conversion: `thex`
+(tet->hex), `htet` (hex->tet); pyramid->hex is unsupported/unverified. No automatic all-hex
+unstructured fill with BLs (needs manual decomposition); Sculpt is the parallel hex option
+(its BL definition lives outside Cubit, per video).
+
+### Fluid region from solid CAD
+Internal flow (pipe): clean wetted geometry (`remove surface <id> extend` to close a
+non-watertight step), select one inner surface -> **select continuous** -> copy&transform the
+inner wall, **create surface from bounding curves** to cap each opening, then **volume create
+from bounding surfaces** (optional stitch) = watertight fluid volume. External flow: make a
+bounding box (extend 100%), `subtract volume <body> from <box>` -> external void; grow BLs off
+the body surfaces only (exclude box faces). Conjugate/coupled: **imprint and merge** fluid+
+solid for a contiguous interface; web cut (sweep surface perpendicular) to make regions
+sweepable; assign blocks per region (solid vs fluid).
+
+### Large-assembly workflow (~4000-part, ~130M tets)
+Pipeline: clean (heal precision artifacts; remove large overlaps; defeature irrelevant detail
+-> if a part is just wrong, fix the CAD) -> imprint&merge -> blocks/sidesets -> mesh ->
+evaluate/repair quality -> export. **Work in small bites**: group structurally-related parts,
+imprint&merge BY GROUP (a bug localizes to "group 2" not "volume 3607"). Commands:
+`group "vacuum_vessel" add volume in selection` (push GUI pick via `in selection`);
+`imprint volume in vacuum_vessel`; `merge volume vacuum_vessel` (reports surface-pair count =
+sanity check). **Tolerant imprint** for sliver gaps/overlaps that break standard imprint:
+`imprint tolerant volume in <group>` (default tol ~0.05mm; override `tolerance <v>`; slower;
+per-group tuning is the long pole). Undo a bad imprint: `regularize volume in <group>`
+(reverts to clean CAD). Diagnose: hide a part (press **I**) to see neighbor imprints;
+View>Power Tools volume-overlaps -> draw the sliver; validate with a quick gravity/vibration
+run (part "falls through floor" = missed imprint). Selection vocab: groups; **select similar
+volumes** (all copies of a repeated part; also builds big sidesets); `in` (containment);
+`except` (exclusion); `with is_merged = false` (un-merged = exposed/air faces, for BCs/audit);
+id ranges `1 to 6`. Quality at scale: `mesh metric` (per-volume tet quality -> find sliver
+parts), then **smoothing** (relocate nodes, no remesh -- remeshing a giant model is expensive).
+Default to **tet for the bulk** of huge assemblies (all-hex not worth the decomposition).
+Script it (Python/C++) once part counts hit the hundreds; headless on HPC for high-memory
+nodes; **HDF5-format Exodus** for huge meshes (plain Exodus can't hold them; reads into MOOSE
+faster). 2nd-order tet solves are less stable -> tune sizing/quality to avoid negative Jacobians.
+
+### Sources
+How to Build Boundary Layers and Hybrid Meshes; How to create a hybrid mesh; How to create a
+fluid region from CAD geometry; Useful commands when meshing a large assembly; Using "imprint
+and merge" to mesh a massive 4000-part nuclear assembly; Demo: meshing a massive nuclear
+assembly; How to mesh a 4000-part nuclear assembly.
+"""
+
+ML_AND_GUI = r"""
+## Machine-learning features (2023.8) and the custom-GUI intro
+
+All ML runs OFFLINE (training data ships with Cubit). Entry point: the **Geometry
+(Diagnostics) power tool** -> Options -> **Load ML Models** (once per session) -> Done ->
+Analyze. Results are expandable lists; **Show Solutions** previews candidate ops (double-click
+to execute).
+
+### ML-enabled defeaturing
+Rule-based diagnostics flag geometry that LOOKS bad (small curves/surfaces, bad angles, blend
+chains) against thresholds (manual or Auto Size). **ML instead PREDICTS the meshing outcome
+without meshing** (trained on many tet-meshed CAD models). Under "Tet Mesh Poor Quality
+Metrics" it predicts per-feature: **scaled Jacobian** (angle quality, default flag <0.2),
+**(scaled) in-radius** (element size, <0.1), **deviation** (curvature following). Show
+Solutions proposes ~a dozen CAD ops (Remove Surface, Composite, Collapse Angle, Blend/
+Tangency, Rebuild Topology) and **predicts the resulting metric** for each. Batch: select
+several flagged entities -> right-click **"Execute ML Recommended Solutions"**. Limits: **tet
+only** (hex training data is hard to generate); Remove edits REAL geometry (irreversible
+without Undo -> checkpoint to .sat/.cub); B-rep only (not mesh-based); in 2023.8 you can't add
+your own tet-mesh-ML training data.
+
+### ML part classification & reduction
+Classification = shape recognition: predict a volume's category (bolt/gear/pin/spring/washer/
+nut/insert/screw). Geometry power tool -> Load ML Models -> **Part Classification** -> Analyze
+`all` -> lists each category with members ("48 bolts"). Right-click: Draw / Zoom / **Select
+Similar Volumes**. **Reduction** = Show Solutions gives per-category recipes (Preview/Simplify
+bolt = strip threads/fill holes; **Reduce Bolt (spider/wagon-wheel)** = replace solid with FE
+edges + central rebar; Core; **Reduce Bolt and Fit** = align/fit to hole, web-cut, hex-mesh,
+auto-assign blocks). Select many parts -> apply one recipe to all (e.g. 8 bolts -> 3 blocks
+head/shank/plug with materials). **Custom training IS supported & persistent** (unlike tet-ML):
+`classify volume <id>` (predicted category), `... confidence` (per-category 0-1),
+`classify volume <id> <category>` (add a training example + rebuild),
+`reclassify volume <id> <newcat>` (override / new category -> unload+reload models to see it),
+`classify list` (U marks user-trained). Command/Python use: `draw volume with category bolt`,
+`group "bolts" add volume with category bolt`; `cubit.get_ml_classification(...)` (API; verify
+name). Algorithm: **random forest (scikit-learn, bundled)** over a fixed feature vector
+(volume, bbox, genus, surface area, area/volume ratio...). Best on B-rep (STEP/SAT); STL works
+if imported as mesh-based geometry. No semantic context (a flat annulus -> "washer"); correct
+via confidence + user training.
+
+### Custom GUI (intro)
+2023.8 bundles **PySide6** (Qt for Python) -> easiest way to extend the GUI. **Custom toolbars**
+save actions as buttons (a Cubit-command string, or a Python/PySide6 script); exportable/
+shareable (Coreform GitHub examples = DAGMC, tire toolbars; MIT-licensed code, PySide6 is
+LGPL). Python is the easy path; for proprietary logic write a **C++ component** (deeper:
+cubit_docs "cpp_sdk_*"; Python-toolbar depth: the cubit_toolbar_guide tool). Steps: Tools>
+Custom Toolbar Editor (hammer icon) -> Add toolbar (name+file) -> Add button (simple-command /
+Python-script / command-panel button). PySide6-in-Cubit conventions (per video): start with
+`#!python` shebang; `cubit` namespace is ALREADY imported (don't re-import); inside Cubit
+`__name__ == "__coreform_cubit__"` (not "__main__"); Cubit's importer dislikes parenthesized
+imports (use backslash continuations); build a QDialog (QLineEdit rows -> read text ->
+try/except float-convert -> run cubit.cmd commands). A `cubit_util` helper parents dialogs to
+the main window (find the QMainWindow named "Claro"). Import shared toolbars: right-click the
+toolbar panel -> Import a packaged `.tar.gz`.
+
+### Sources
+Machine learning in Coreform Cubit 2023.8: Part classification and reduction; Machine
+Learning-enabled Defeaturing in Coreform Cubit 2023.8; How to create a custom GUI (Intro).
+"""
+
 _TOPICS = {
     "python_automation": PYTHON_AUTOMATION,
     "meshing_strategy": MESHING_STRATEGY,
     "solver_workflows": SOLVER_WORKFLOWS,
+    "getting_started": GETTING_STARTED,
+    "advanced_meshing": ADVANCED_MESHING,
+    "ml_and_gui": ML_AND_GUI,
 }
 
 _ALIASES = {
@@ -503,6 +718,19 @@ _ALIASES = {
     "moose": "solver_workflows", "calculix": "solver_workflows",
     "openfoam": "solver_workflows", "cfd": "solver_workflows",
     "abaqus": "solver_workflows", "export": "solver_workflows",
+    "getting_started": "getting_started", "intro": "getting_started",
+    "beginner": "getting_started", "item": "getting_started",
+    "item_wizard": "getting_started", "command_panel": "getting_started",
+    "first_mesh": "getting_started", "gui": "getting_started",
+    "advanced_meshing": "advanced_meshing", "boundary_layer": "advanced_meshing",
+    "boundary_layers": "advanced_meshing", "hybrid": "advanced_meshing",
+    "fluid": "advanced_meshing", "fluid_region": "advanced_meshing",
+    "assembly": "advanced_meshing", "large_assembly": "advanced_meshing",
+    "imprint": "advanced_meshing", "tolerant_imprint": "advanced_meshing",
+    "ml": "ml_and_gui", "machine_learning": "ml_and_gui",
+    "classification": "ml_and_gui", "defeaturing": "ml_and_gui",
+    "defeature": "ml_and_gui", "custom_gui": "ml_and_gui",
+    "toolbar": "ml_and_gui", "pyside6": "ml_and_gui",
 }
 
 _INDEX = """# Coreform Cubit webinar/tutorial knowledge (synthesized from @Coreform YouTube)
@@ -520,9 +748,22 @@ Batch 1 topics (get via cubit_docs "coreform_<topic>"):
                        Fluent: block/sideset/nodeset model, Exodus, export
                        formats + formulation gotcha, CFD false-diffusion, OEM API.
 
-Aliases: python/automation/dakota -> python_automation; hex/decomposition/
-sculpt/dirty_cad -> meshing_strategy; moose/calculix/openfoam/exodus -> solver_workflows.
-More batches (getting-started, advanced meshing, ML features, domain demos) pending.
+Batch 2 topics:
+  getting_started    - GUI layout, tet-vs-hex recipes, ITEM wizard pipeline,
+                       Command Panel first-mesh, blocks/sidesets/nodesets,
+                       beginner decision points.
+  advanced_meshing   - boundary-layer tool (intersections, y+, internal
+                       continuity), hybrid hex-pyramid-tet, fluid-region
+                       extraction, 4000-part large-assembly imprint/merge + tolerant
+                       imprint + group strategy + HDF5 Exodus.
+  ml_and_gui         - ML defeaturing (predict tet quality), ML part
+                       classification & reduction (random forest; bolt recipes;
+                       custom training), custom-GUI intro (PySide6 toolbars).
+
+Aliases: python/automation/dakota -> python_automation; hex/decomposition/sculpt -> meshing_strategy;
+moose/calculix/openfoam/exodus -> solver_workflows; item/beginner/gui -> getting_started;
+boundary_layer/hybrid/fluid/assembly -> advanced_meshing; ml/classification/defeature/toolbar -> ml_and_gui.
+Domain-application demos (nuclear/fusion/Mars/tire/geomech) pending in a later batch.
 """
 
 
@@ -539,7 +780,8 @@ def get_coreform_webinar_documentation(topic: str = "index") -> str:
         return _INDEX
     if topic == "all":
         return "\n\n".join(_TOPICS[k] for k in
-                           ("python_automation", "meshing_strategy", "solver_workflows"))
+                           ("python_automation", "meshing_strategy", "solver_workflows",
+                            "getting_started", "advanced_meshing", "ml_and_gui"))
     resolved = _ALIASES.get(topic, topic)
     if resolved in _TOPICS:
         return _TOPICS[resolved]
