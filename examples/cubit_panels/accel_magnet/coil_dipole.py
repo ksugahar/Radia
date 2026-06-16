@@ -1,10 +1,10 @@
 """
-Racetrack coil for C-type dipole magnet (ELF geometry).
+Racetrack coil for C-type dipole magnet.
 
 Coil wraps around the main leg (return path) of the C-type yoke.
-Matches ELF geometry from examples/c_type_electromagnet/mu=1000/coil_model.py.
+Matches the C-type electromagnet racetrack-coil geometry.
 
-ELF coil geometry (mm):
+Coil geometry (mm):
     Center: y = 151.25 mm from gap face (around main leg)
     Cross-section: 35 mm (radial) x 105 mm (axial)
     Straight sections: 62.5 mm (beam direction)
@@ -31,7 +31,7 @@ from coil_builder import CoilBuilder
 
 
 def build_coil():
-    """Build racetrack coil matching ELF C-type dipole geometry.
+    """Build racetrack coil matching the C-type dipole geometry.
 
     The coil wraps around the main leg of the C-type yoke.
     Two straight sections run along the beam (z) direction,
