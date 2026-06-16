@@ -495,6 +495,18 @@ static int dense_to_rk_truncate(
 /* DEBUG counters (profiling the mixed-case materialize fallback). */
 long g_dbg_n_materialize = 0;
 long g_dbg_materialize_elems = 0;
+/* Split the materialize count by node kind: an INTERNAL-node densification is the
+ * cubic-driving "materialize a whole subtree" cost (the thing the materialize-free
+ * R(A*B) + htrsm-recursion fixes eliminate); a LEAF densification is the benign,
+ * O(leaf^2) copy of a dense leaf's data for a leaf-level dgemm.  g_dbg_mat_internal
+ * == 0 is the invariant that the near-cubic materialize is gone. */
+long g_dbg_mat_internal = 0;
+long g_dbg_mat_leaf = 0;
+void cHACApK_hlu_get_materialize_split(long *out_internal, long *out_leaf)
+{
+    if (out_internal) *out_internal = g_dbg_mat_internal;
+    if (out_leaf)     *out_leaf     = g_dbg_mat_leaf;
+}
 
 /* Breakdown of WHICH operand kinds trigger the materialize fallback, so the
  * optimization (rk-factored mixed multiply vs sub-view split) is targeted at
@@ -525,6 +537,7 @@ static double *materialize_node_as_dense(const st_cHACApK_block_node_t *node)
     int n = node->dof_ncols;
     g_dbg_n_materialize++;
     g_dbg_materialize_elems += (long)m * (long)n;
+    if (node->nrsons > 0) g_dbg_mat_internal++; else g_dbg_mat_leaf++;
     double *out = (double*)calloc((size_t)m * (size_t)n, sizeof(double));
     if (!out) return NULL;
 
@@ -992,6 +1005,128 @@ static void addmul_ik_body(int idx, void *p)
     c->rc[idx] = rc;
 }
 
+/* ---------- materialize-FREE R(A*B) into a low-rank target ----------------- *
+ *
+ * The dominant near-cubic H-LU cost is the addmul case "A internal, B internal,
+ * C an admissible (rk) leaf": the Phase-3.6 fallback densified the WHOLE internal
+ * B subtree (materialize_node_as_dense), which is O(block^2) scratch and drives
+ * the factor toward O(N^3) on deep trees.  Since C is admissible, A*B restricted
+ * to C IS low-rank, so we approximate R(A*B) directly by randomized range-finding
+ * (Halko-Martinsson-Tropp 2011, Alg 4.3 + 1 power iteration).  The action of A*B
+ * and (A*B)^T on a dense sketch is applied THROUGH node_matmat_local/_trans_local
+ * (compression-aware, never densifies A or B), so the cost is
+ *   O((m+n+inner) * rr * rank(A,B))  -- sub-cubic.
+ * The captured range is recompressed to g_hlu_trunc_tol and added to C via the
+ * accumulator.  If the block is NOT low-rank within a rank ceiling (rare for an
+ * admissible C), returns ADDMUL_RANK_SAT so the caller uses the EXACT materialize
+ * path -- a correctness-preserving fallback (same result, slower), never a silent
+ * wrong answer.  No static state (seed derived from C's DOF offsets) -> thread-safe
+ * under the parallel h_addmul AND deterministic across runs/resumes. */
+#define ADDMUL_RANK_SAT 1
+
+static void rand_fill(double *buf, size_t cnt, unsigned long long seed)
+{
+    unsigned long long s = seed ? seed : 0x9E3779B97F4A7C15ULL;
+    for (size_t i = 0; i < cnt; i++) {
+        s = s * 6364136223846793005ULL + 1442695040888963407ULL;
+        buf[i] = (double)((s >> 33) & 0x7fffffff) / 2147483647.0 - 0.5;
+    }
+}
+
+static int addmul_ii_to_rk(double alpha,
+        const st_cHACApK_block_node_t *A, const st_cHACApK_block_node_t *B,
+        st_cHACApK_block_node_t *C)
+{
+    const int m = C->dof_nrows, n = C->dof_ncols, inner = A->dof_ncols;
+    const int mn = (m < n) ? m : n;
+    if (mn <= 0 || inner <= 0) return CHACAPK_HARITH_OK;
+
+    const int p = 8;                 /* oversampling */
+    /* Rank ceiling: above ~mn/4 a low-rank sketch is no longer cheaper than the
+     * exact dense path, so bail to materialize there (correct, and not worse for
+     * that block).  But keep it generous (>= 256, up to a 1024 hard cap) so the
+     * moderately-ranked admissible blocks that appear at larger N stay on the
+     * materialize-FREE path instead of needlessly densifying (the residual
+     * materialize seen at the old 256 ceiling). */
+    int r_ceiling = mn / 4;
+    if (r_ceiling < 256)  r_ceiling = 256;
+    if (r_ceiling > 1024) r_ceiling = 1024;
+    if (r_ceiling > mn)   r_ceiling = mn;
+    /* Seed the target rank from C's current rank (the Schur update into an
+     * admissible block has comparable rank), so well-ranked blocks resolve in
+     * ONE sketch instead of doubling from a fixed 64. */
+    int kc0 = leaf_rk_rank(C);
+    int r = 2 * (kc0 > 0 ? kc0 : (g_hlu_accum_cap > 0 ? g_hlu_accum_cap : 16));
+    if (r < 32) r = 32;
+    if (r > mn) r = mn;
+
+    for (;;) {
+        int rr = r + p; if (rr > mn) rr = mn;
+        const size_t snr = (size_t)inner * rr, smr = (size_t)m * rr, snn = (size_t)n * rr;
+
+        double *Om = (double*)malloc(sizeof(double) * snn);
+        double *S  = (double*)calloc(snr, sizeof(double));
+        double *Y  = (double*)calloc(smr, sizeof(double));
+        double *W  = (double*)calloc(snr, sizeof(double));
+        double *S2 = (double*)calloc(snn, sizeof(double));
+        double *tau= (double*)malloc(sizeof(double) * (size_t)rr);
+        if (!Om||!S||!Y||!W||!S2||!tau) {
+            free(Om);free(S);free(Y);free(W);free(S2);free(tau);
+            return CHACAPK_HARITH_ERR_NULL;
+        }
+        unsigned long long seed =
+            0x243F6A8885A308D3ULL
+            ^ ((unsigned long long)C->dof_row_start * 2654435761ULL)
+            ^ ((unsigned long long)C->dof_col_start * 40503ULL)
+            ^ ((unsigned long long)rr * 2246822519ULL);
+        rand_fill(Om, snn, seed);
+
+        /* Y = (A*B) Om = A (B Om) */
+        int rc = node_matmat_local(B, 1.0, Om, n, rr, S, inner);
+        if (rc==CHACAPK_HARITH_OK) rc = node_matmat_local(A, 1.0, S, inner, rr, Y, m);
+        /* one power iteration: Y <- (A*B)(A*B)^T Y */
+        if (rc==CHACAPK_HARITH_OK) {
+            memset(W, 0, sizeof(double)*snr); memset(S2, 0, sizeof(double)*snn);
+            rc = node_matmat_trans_local(A, 1.0, Y, m, rr, W, inner);          /* W = A^T Y (inner x rr) */
+            if (rc==CHACAPK_HARITH_OK) rc = node_matmat_trans_local(B, 1.0, W, inner, rr, S2, n); /* S2 = B^T W (n x rr) */
+            if (rc==CHACAPK_HARITH_OK) {
+                memset(S, 0, sizeof(double)*snr); memset(Y, 0, sizeof(double)*smr);
+                rc = node_matmat_local(B, 1.0, S2, n, rr, S, inner);           /* S = B S2 */
+                if (rc==CHACAPK_HARITH_OK) rc = node_matmat_local(A, 1.0, S, inner, rr, Y, m); /* Y = A S */
+            }
+        }
+        if (rc != CHACAPK_HARITH_OK) { free(Om);free(S);free(Y);free(W);free(S2);free(tau); return rc; }
+
+        /* QR(Y) -> orthonormal Q (m x rr) overwriting Y */
+        int info = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, m, rr, Y, m, tau);
+        if (info==0) info = LAPACKE_dorgqr(LAPACK_COL_MAJOR, m, rr, rr, Y, m, tau);
+        if (info != 0) { free(Om);free(S);free(Y);free(W);free(S2);free(tau); return CHACAPK_HARITH_ERR_LAPACK; }
+
+        /* V = (A*B)^T Q = B^T (A^T Q)  (n x rr), reusing W (inner x rr) and S2 (n x rr) */
+        memset(W, 0, sizeof(double)*snr); memset(S2, 0, sizeof(double)*snn);
+        rc = node_matmat_trans_local(A, 1.0, Y, m, rr, W, inner);
+        if (rc==CHACAPK_HARITH_OK) rc = node_matmat_trans_local(B, 1.0, W, inner, rr, S2, n);
+        if (rc != CHACAPK_HARITH_OK) { free(Om);free(S);free(Y);free(W);free(S2);free(tau); return rc; }
+
+        /* A*B ~= Y * S2^T ; recompress to trunc tol */
+        double *Un=NULL, *Vn=NULL; int kn=0;
+        rc = rkleaf_recompress(Y, S2, m, n, rr, g_hlu_trunc_tol, rr, &Un, &Vn, &kn);
+        free(Om);free(S);free(Y);free(W);free(S2);free(tau);
+        if (rc != CHACAPK_HARITH_OK) { free(Un); free(Vn); return rc; }
+
+        if (kn >= rr && rr < mn) {
+            /* range not yet resolved at this rank */
+            free(Un); free(Vn);
+            if (rr >= r_ceiling) return ADDMUL_RANK_SAT;  /* not low-rank -> exact path */
+            r = (rr * 2 > mn) ? mn : rr * 2;              /* grow + retry */
+            continue;
+        }
+        rc = add_lowrank_to_node(alpha, Un, m, Vn, n, m, n, kn, C);
+        free(Un); free(Vn);
+        return rc;
+    }
+}
+
 
 /* C += alpha * A * B  (block-recursive, leaf-leaf base case dispatches on rk/dense). */
 static int h_addmul(double alpha,
@@ -1285,6 +1420,19 @@ static int h_addmul(double alpha,
                     (A_is_leaf  ||  B_is_leaf ||  C_is_leaf);
         int dense_dense_rk = leaf_is_dense(A) && leaf_is_dense(B) && leaf_is_rk(C);
         if (mixed || dense_dense_rk) {
+            /* Materialize-FREE fast path for the dominant near-cubic trigger:
+             * A internal, B internal, C an admissible (rk) leaf.  Randomized
+             * R(A*B) instead of densifying the whole internal B subtree.  On
+             * ADDMUL_RANK_SAT (block not low-rank within ceiling -- rare) fall
+             * through to the exact materialize path below (same result). */
+            if (!leaf_is_dense(A) && !leaf_is_rk(A) &&
+                !leaf_is_dense(B) && !leaf_is_rk(B) && leaf_is_rk(C)) {
+                int rcq = addmul_ii_to_rk(alpha, A, B, C);
+                if (rcq != ADDMUL_RANK_SAT) {
+                    if (rcq == CHACAPK_HARITH_OK) g_stats.n_dense_gemm++;
+                    return rcq;
+                }
+            }
             g_dbg_mixed_addmul[node_kind_idx(A)*3 + node_kind_idx(B)]++;
             int m = C->dof_nrows;
             int n = C->dof_ncols;
@@ -1529,15 +1677,16 @@ static int htrsm_lln(const st_cHACApK_block_node_t *L,
                 else
                     rc = htrsm_lln_dense_rhs(L, leaf_dense_data(X), leaf_rows(X), leaf_cols(X));
             } else {
-                /* Defensive (L leaf, X internal -- not expected): materialize. */
-                int m = L->dof_nrows, n = X->dof_ncols;
-                double *L_dense = materialize_node_as_dense(L);
-                double *X_dense = materialize_node_as_dense(X);
-                if (!L_dense || !X_dense) { free(L_dense); free(X_dense); return CHACAPK_HARITH_ERR_NULL; }
-                cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit,
-                            m, n, 1.0, L_dense, m, X_dense, m);
-                rc = set_node_from_dense(X_dense, m, m, n, X);
-                free(L_dense); free(X_dense);
+                /* L dense leaf, X internal.  X shares L's (terminal) ROW cluster,
+                 * so X is subdivided by COLUMNS only (nrsons==1); recurse the solve
+                 * over X's column sons -- materialize-FREE (was: densify L AND X, a
+                 * dominant residual materialize at larger N).  L^-1 applies to each
+                 * column son independently. */
+                if (X->nrsons != 1) return CHACAPK_HARITH_ERR_TOPOLOGY;
+                int sc = X->ncsons;
+                rc = CHACAPK_HARITH_OK;
+                for (int j = 0; j < sc && rc == CHACAPK_HARITH_OK; j++)
+                    rc = htrsm_lln(L, X->sons[j]);   /* sons[0 + j*1] */
             }
             g_stats.n_dense_trsm++;
             return rc;
@@ -1635,15 +1784,15 @@ static int htrsm_run(const st_cHACApK_block_node_t *U,
                     free(Xt);
                 }
             } else {
-                /* Defensive (U leaf, X internal -- not expected): materialize. */
-                int n_u = U->dof_nrows, m_x = X->dof_nrows;
-                double *U_dense = materialize_node_as_dense(U);
-                double *X_dense = materialize_node_as_dense(X);
-                if (!U_dense || !X_dense) { free(U_dense); free(X_dense); return CHACAPK_HARITH_ERR_NULL; }
-                cblas_dtrsm(CblasColMajor, CblasRight, CblasUpper, CblasNoTrans, CblasNonUnit,
-                            m_x, n_u, 1.0, U_dense, n_u, X_dense, m_x);
-                rc = set_node_from_dense(X_dense, m_x, m_x, n_u, X);
-                free(U_dense); free(X_dense);
+                /* U dense leaf, X internal.  X shares U's (terminal) COLUMN cluster,
+                 * so X is subdivided by ROWS only (ncsons==1); recurse the solve over
+                 * X's row sons -- materialize-FREE (was: densify U AND X).  Each row
+                 * son X_i solves X_i U^-1 independently. */
+                if (X->ncsons != 1) return CHACAPK_HARITH_ERR_TOPOLOGY;
+                int sr = X->nrsons;
+                rc = CHACAPK_HARITH_OK;
+                for (int i = 0; i < sr && rc == CHACAPK_HARITH_OK; i++)
+                    rc = htrsm_run(U, X->sons[i]);   /* sons[i + 0*nrsons] */
             }
             g_stats.n_dense_trsm++;
             return rc;
@@ -1798,6 +1947,8 @@ int cHACApK_hlu_decomp(st_cHACApK_block_node_t *root)
     clear_ipiv_registry();
     g_dbg_n_materialize = 0;
     g_dbg_materialize_elems = 0;
+    g_dbg_mat_internal = 0;
+    g_dbg_mat_leaf = 0;
     for (int i = 0; i < 9; i++) { g_dbg_mixed_addmul[i] = 0; g_dbg_mixed_lln[i] = 0; g_dbg_mixed_run[i] = 0; }
     clock_t t0 = clock();
     /* Wrap in a TaskManager region so the block-parallel h_addmul (i,k) loop
