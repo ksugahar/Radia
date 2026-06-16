@@ -14,7 +14,7 @@ forward engine reproduces the integrated-field theorem on a real device, and it
 exposes the magnet ENDS where the next design step (read the 3-D equipotential
 surface as the end-iron contour) will act.
 
-Convention (matches examples/c_type_electromagnet/dipole_with_coilbuilder.py):
+Convention (matches the C-type electromagnet dipole-with-CoilBuilder geometry):
   beam  = y   (the long / straight-section axis; INT ... dy is the beam integral)
   gap   = z   (pole faces at z = +-g/2; the dipole field is B_z in the gap)
   width = x

@@ -390,6 +390,246 @@ The main contributions of this paper are:
 
 ---
 
+## 📚 references.bib lab style (2023 Compumag review 由来)
+
+**経緯**: 2023 年 Compumag → IEEE TMag 投稿 (`W:\02_学会資料\2023年度\2023_05_Compumag2023@京都\01_発表\CLN_TEAM28@谷本\`) で references.bib の書き方に複数の review 指摘が入った。 以下を **default** style として全 paper / digest / poster で適用すること。
+
+### Rule 1 (最優先): 著者の苗字は `{}` で囲んで case-mangling 保護
+
+**Why**: IEEEtran.bst をはじめ多くの `.bst` ファイルは BibTeX 出力時に著者名の case 変換を行う (大文字保持しない、 全文小文字化、 surname を ALL CAPS 化など)。`{}` で囲んだ文字列は `.bst` が触らないので、 `McDonald` → `Mcdonald` や、 アクセント付き surname `Bíró` → `bíró` の歪みが起きない。
+
+```bibtex
+% ✅ GOOD: surname を {} で保護
+author = {K. {Hollaus} and J. {Sch{\"o}berl}}
+author = {Y. {Sato} and H. {Igarashi}}
+author = {H. A. {van der Vorst}}
+author = {Niels {K{\"o}ster} and Oszk{\'a}r {B{\'\i}r{\'o}}}
+
+% ❌ BAD: 苗字 protect なし — .bst によって case が壊れる
+author = {Yousef Saad}          % "saad" になる可能性
+author = {A. McDonald}          % "A. Mcdonald" になる可能性
+author = {Niels K{\"o}ster}     % accent が壊れる可能性
+```
+
+- **Lastname, Firstname 形式** (`Sato, Y.`) は comma の前が surname と BibTeX が認識するので、 比較的安全だが、 厳密な case 保証は `{}` 必須
+- **複合姓** (`van der Vorst`, `de la Cruz`) は全体を `{}` で囲む
+- **複合姓 + アクセント** (`Bíró`, `Köster`, `Sch{\"o}berl`) は `{B{\'\i}r{\'o}}` 等、 アクセント macros ごと brace で囲む
+
+### Rule 2: 1 paper = 1 entry (重複 entry 禁止)
+
+同じ論文に複数 cite key を作らない。 同じ DOI が複数の `@article{...}` に書かれていると bibtex は両方を reference list に出力し、 **同じ論文が連番 [3] と [14] に二重に出る**。
+
+```bibtex
+% ❌ BAD: Kameari 2018 が 2 entries
+@ARTICLE{Kameari, author = {...}, doi = {10.1109/TMAG.2017.2743224}, ...}
+@article{kameari2017cauer, author = {...}, doi = {10.1109/TMAG.2017.2743224}, ...}
+% → references 欄に同じ論文が二重に
+```
+
+追加前に `grep "<doi>" references.bib` で重複確認。
+
+### Rule 3: Cite key は `AuthorYearTopic` 形式に統一
+
+```bibtex
+% ✅ GOOD
+@article{Kameari2018, ...}
+@article{Sugahara2017team28, ...}
+@article{Koester2021PGDCLN, ...}
+@article{BiroKoester2022scalar, ...}
+
+% ❌ BAD: zoo
+@article{Karl, ...}              % 苗字のみ
+@article{POD, ...}               % acronym
+@article{Lanczos, ...}           % topic only
+@article{CLN_open, ...}          % topic-only
+@article{MOR_T.H&S.C, ...}       % `&` は BibTeX special char — parse error
+@article{MOR_Y.STO&H.Igarashi, ...} % 同上
+```
+
+- 同一著者 + 同一年は **小文字 suffix** で区別: `Sugahara2017team28`, `Sugahara2017kelvin`
+- 共著者の場合 first author を採用 (`Biro` first author なら `BiroKoester2022scalar`)
+- `&`, `空白`, `日本語` は cite key に含めない
+
+### Rule 4: Journal name を一貫した abbreviation に統一
+
+```bibtex
+% ❌ BAD: 同じ journal に 3 つの書き方
+journal = {IEEE Transactions on Magn.}       % 中途半端
+journal = {IEEE Trans. Magn.}                % full abbrev
+journal = {IEEE Transactions on Magnetics}   % full
+
+% ✅ GOOD: paper 単位で 1 形式に統一
+journal = {IEEE Transactions on Magnetics}
+```
+
+- **IEEE 推奨は full name** (`IEEE Transactions on Magnetics`)。 IEEEtran.bst は full でも自動で短縮しない
+- abbreviation 使うなら IEEE 公式 `IEEE Trans. Magn.` (period 含む)
+- COMPEL → `COMPEL --- The international journal for computation and mathematics in electrical and electronic engineering` (full 標準)
+- 旧 entries も新 entry も **paper 全体で 1 形式に揃える**
+
+### Rule 5: 著者は `and` 区切り (comma 区切り禁止)
+
+```bibtex
+% ❌ BAD: comma 区切り — BibTeX は最初の "H. Karl" を "Karl, H." 解釈してしまう
+author = {H. Karl, J. Fetzer, S. Kurz, G. Lehner, and W. M. Rucker}
+
+% ✅ GOOD: and 区切り
+author = {H. {Karl} and J. {Fetzer} and S. {Kurz} and G. {Lehner} and W. M. {Rucker}}
+```
+
+### Rule 6: 正しい entry type を選ぶ
+
+```bibtex
+% ❌ BAD: web リソースを @article で書いてある
+@ARTICLE{TWP28_1,
+  author = {...},
+  title = {Description of TEAM workshop problem 28},
+  howpublished = {\url{http://ics.ec.lyon.fr/team.html}}
+}
+
+% ✅ GOOD: @misc + howpublished + url
+@misc{TWP28_1,
+  author       = {H. {Karl} and J. {Fetzer} and S. {Kurz} and G. {Lehner} and W. M. {Rucker}},
+  title        = {Description of {TEAM} Workshop Problem 28: An Electrodynamic Levitation Device},
+  howpublished = {\url{http://ics.ec.lyon.fr/team.html}},
+  year         = {2009},
+  note         = {accessed YYYY-MM-DD}
+}
+```
+
+| Entry type | 用途 |
+|---|---|
+| `@article` | journal / transaction 論文 |
+| `@inproceedings` | 学会 proceedings 論文 |
+| `@book` | 書籍 |
+| `@incollection` | book chapter |
+| `@techreport` | 技術報告書 |
+| `@phdthesis` / `@mastersthesis` | 学位論文 |
+| `@misc` + `howpublished` + `url` | web リソース、 standard 文書 |
+| `@unpublished` | preprint / submitted / in preparation |
+
+### Rule 7: Year は **published volume/issue の発行年**
+
+```bibtex
+% ❌ BAD: preprint や online-first の年を採用
+@article{kameari2017cauer,
+  year   = {2017},        % 実際は Vol 54 No 3 March 2018 publication
+  volume = {54},
+  number = {3}
+}
+
+% ✅ GOOD
+@article{Kameari2018,
+  year   = {2018},
+  month  = mar,
+  volume = {54},
+  number = {3}
+}
+```
+
+IEEE は早期公開で year ずれが頻発する。 **必ず published volume/issue の月の year** を採用。 `month` は BibTeX macro (`jan`, `feb`, ..., `dec`) を使う (`{Mar}`, `{March}` 等の文字列は inconsistent)。
+
+### Rule 8: 必須フィールドの欠落禁止 + 空 brace 禁止
+
+```bibtex
+% ❌ BAD: 空 brace は欠落と同じ
+@article{Foo,
+  volume = {},     % 空 → 削除すべき
+  number = {},
+  ISSN   = {}
+}
+
+% ❌ BAD: 必須 field 欠落
+@inproceedings{Bar,
+  author = {...},
+  title  = {...}
+  % booktitle, year, pages 欠落 → references 欄に "in ?, ?? (n.d.)" と出る
+}
+
+% ✅ GOOD: 必須 field を完全に
+@article{Foo2024bar,
+  author  = {...},
+  title   = {...},
+  journal = {...},
+  year    = {2024},
+  volume  = {12},
+  number  = {3},
+  pages   = {1100304},
+  doi     = {10.1109/...}
+}
+```
+
+| Entry type | 必須 |
+|---|---|
+| `@article` | author, title, journal, year, volume, **pages or art. no.** |
+| `@inproceedings` | author, title, booktitle, year, pages |
+| `@book` | author, title, publisher, year, **address** (出版地) |
+| `@misc` | author, title, year, howpublished (or url) |
+
+### Rule 9: 文字エンコーディング — UTF-8、 mojibake 禁止
+
+```bibtex
+% ❌ BAD: cp932 から崩れた Japanese mojibake が残っている
+@ARTICLE{Hiruma,
+  journal = {�d�C�w�� �d���E��͂̍����x���Z�p�������ψ����}
+}
+
+% ✅ GOOD: 英訳 + (in Japanese) annotation
+@article{Hiruma2017lanczos,
+  author  = {S. {Hiruma} and H. {Igarashi}},
+  title   = {On {L}anczos algorithm for non-self-adjoint matrices, Part 2},
+  journal = {Technical Committee on Static Apparatus and Rotating Machinery, IEEJ},
+  year    = {2017},
+  month   = aug,
+  note    = {in Japanese}
+}
+```
+
+`.bib` は UTF-8 で保存。 cp932 から copy & paste した日本語は mojibake になりがち。 英訳 + `note = {in Japanese}` で対応。
+
+### Rule 10: タイトルの大文字保護 (固有名詞 / acronym)
+
+```bibtex
+% ❌ BAD: BibTeX/IEEEtran.bst が小文字化する
+title = {Cauer Ladder Network Representation of Eddy-Current Fields}
+% → "Cauer ladder network representation of eddy-current fields" になる
+
+% ✅ GOOD: 固有名詞 / acronym を {} 保護
+title = {{Cauer} Ladder Network Representation of Eddy-Current Fields}
+title = {Generating a {C}auer Ladder Network Representation of Eddy Current Fields}
+title = {Application of {A}-input {C}auer Ladder Network Method to {MOR}}
+title = {Cauer Ladder Network Representation of the {T}eam Problem 28}
+```
+
+`.bst` ファイルが title-case を強制する場合 (IEEEtran.bst デフォルト)、`{}` で囲まれた文字は **そのまま大文字保持**。 固有名詞 (Cauer, Padé, Lanczos, Kelvin, ...) と acronym (CLN, MOR, BEM, FEM, IEEE, TEAM, SIBC, ...) は全て `{}` で囲む。
+
+### Rule 11: 投稿前 PDF の References 欄を音読確認
+
+bibtex compile 後、 PDF の References ページを **連番で 1 つずつ音読** する。
+
+- ✅ 著者名が正しい case で出ているか (`Sato` `Köster` など)
+- ✅ Journal name が一貫しているか
+- ✅ Page 番号が連続しているか (`1--4` / `1100304` 等)
+- ✅ Year / volume / number が一致しているか
+- ✅ Title の大文字保護が効いているか (`Cauer` が `cauer` になっていないか)
+- ✅ 重複している論文がないか
+
+**実例**: 2023 Compumag review (Reviewer 3) で `reference [14]` に typo 指摘が入った。 compile 後 PDF の音読を skip すると **bibtex で正常 parse できる typo** (例: `proceeings`, `Trnasctions`) は検出できない。
+
+### 自動化 (radia-mcp 既存 tool)
+
+- `bibliography_lint(bib_path)` — cite-key 規約 + 必須 field 欠落 + lab style 違反 を検出
+- `bibliography_cite_validation(tex_path, bib_path)` — `\cite{key}` の key が bib に存在 / orphan entry 検出
+- `bibliography_dedupe(bib_path)` — DOI / title fuzzy-match で重複 entry 検出
+- `bibliography_normalize_journal_names(bib_path)` — journal name の inconsistency flag
+
+**今後追加候補** (まだ未実装):
+- `bibliography_check_surname_braces(bib_path)` — Rule 1 違反 (`{}` 無し surname) を検出
+- `bibliography_check_title_acronyms(bib_path)` — Rule 10 違反 (acronym が `{}` 無し title) を検出
+- `bibliography_check_authors_and_separator(bib_path)` — Rule 5 違反 (comma 区切り author) を検出
+
+---
+
 ## 💡 実例集 (汎用 template)
 
 ### Case 1: 国内和文論文誌 (IEEJ / 電気学会 論文誌 クラス)
@@ -759,6 +999,79 @@ Wallwork / 佐藤『なぜあなたの研究は』/ 本多『日本語の作文�
 - **OK**: 読者が変化過程を了解している前提で、図で主張したい点 (例: 従来説を
   覆す箇所) だけを強調する。「図 3 より明白なように…である」と要点だけ書く。
 - (作図力学 2.5.2 / 中島・塚本)
+
+---
+
+## 🔁 フレーミング移行時の figure/数値監査ポリシー (2026-06-14)
+
+論文の理論フレーミングを更新したとき (例: Warburg-Schur → Mixed Galerkin)、
+**本文 (タイトル・abstract・章題・キーワード) と figure/* と figure 内の数値
+は不可分の三点セット**として監査する。これを怠ると、概念は新フレームだが
+**図と数値は旧フレームのまま**という最も悪いタイプのドリフトが発生する。
+
+### 実例 (2026-06-14 lab incident)
+
+IGTE 2026 ダイジェスト:
+- ✅ Title: "Mixed Galerkin Reduction" に更新済
+- ✅ Abstract / §3 本文: Mixed Galerkin で記述
+- ❌ Fig. 1: 旧 `circle_warburg.pdf` のまま (Warburg-with-$d$ で 17% wall band)
+- ❌ Fig. 1 caption: "rank-(1,1) Mixed Galerkin **specialization** — equivalent to the historical Warburg-Randles cell — within **17%**"
+
+実際の no-$d$ Mixed Galerkin は **0.064%** (270× 改善)。本文には正しく
+0.04% と書いてあるが、図と図キャプションだけが旧 Warburg 時代の 17% を
+報告し、自己矛盾していた。reviewer がこれを見つけたら「結果が再現してない」
+と即 reject。
+
+### 監査ルール
+
+**Rule 1: 移行は三点セット**
+
+| 三点セット | 監査項目 |
+|---|---|
+| 本文 (text) | フレーム名・abstract 数値・章題の用語 |
+| 図 (figures/*) | ファイルが新フレーム由来か / 内部の数値が新フレームの実測か |
+| 数値 (caption + body) | 図キャプションと本文の数値が一致しているか |
+
+何か一つだけ更新するのではなく、**3 つを同じコミット**で更新する。
+本文だけ更新して図を後回しにすると、ほぼ確実に忘れる (人間も AI も)。
+
+**Rule 2: 同じファイル名で意味が変わる場合は rename**
+
+旧フレームの `figures/circle_warburg.pdf` を新フレームの内容で上書きしないこと。
+Warburg-with-$d$ の図と Mixed Galerkin no-$d$ の図は**別ファイルとして共存**
+させ、本文の `\includegraphics{...}` を差し替える:
+
+- ✅ 旧: `figures/circle_warburg.pdf` → 残す (歴史的参照、git blame で追跡可)
+- ✅ 新: `figures/cylinder_mixed_galerkin.pdf` → 新規追加
+- `.tex` の `\includegraphics{figures/cylinder_mixed_galerkin.pdf}` で差し替え
+
+**なぜファイル名を変えるか**: 同じファイル名が「Warburg ブランチでは Warburg
+結果、Mixed Galerkin ブランチでは Mixed Galerkin 結果」と branch 依存で意味が
+変わると、ブランチ切り替えや古いキャッシュ済 PDF を開いたときの取り違えが
+起きる。**ファイル名に framework を埋め込む**ことで物理的に区別する
+(`circle_warburg.pdf` vs `cylinder_mixed_galerkin.pdf`)。
+
+**Rule 3: 移行コミットの差分 self-review**
+
+フレーム移行コミットを作るときは `git diff` を以下の順に必ず確認:
+
+1. `*.tex` の本文 (フレーム名・章題・abstract): 新フレームになっているか
+2. `*.tex` の `\includegraphics{...}` パス: 旧ファイル名を指していないか
+3. `figures/` の追加/変更: 新ファイルが追加されたか / 旧ファイルが意図的に
+   残っているか
+4. `*.tex` の数値リテラル (`17\%`, `0.064\%` 等): 図と本文で一致しているか
+5. キャプション内の用語: 「旧フレーム名による特殊化」の記述が必要なら
+   歴史的引用として残し、それ以外は新フレーム用語に置換
+
+5 点全部が揃っていなければ、コミットを分割するか保留する。
+
+### Cross-link
+
+- 関連: `figure_style_guide` (figure 品質の純粋な技術ルール)
+- 関連: `cross_lint` (本文と citation の整合性チェック)
+- (本ポリシー自体には自動 lint なし: 上記 Rule 1-3 は人間 (or AI) が
+  目視で行う運用ルール。将来 `paper_writing_check_framework_migration`
+  tool 化を検討)
 
 ---
 

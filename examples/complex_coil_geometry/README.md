@@ -342,11 +342,6 @@ pip install scipy
 - [tests/README.md](../../tests/README.md) - Test suite
 - [README_BUILD.md](../../README_BUILD.md) - Build instructions
 
-## See Also
-
-For a complete electromagnet simulation with magnetic yoke, see:
-- [examples/c_type_electromagnet/](../c_type_electromagnet/) - C-type electromagnet with Cubit-generated yoke
-
 ---
 
 **Last Updated**: 2026-02-19
