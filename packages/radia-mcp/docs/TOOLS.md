@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **328 tools** across 39 MCP servers.
+Total: **330 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 44 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 38 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 40 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
@@ -199,6 +199,8 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
+| `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
+| `urn_fit` | Fit a complex frequency response with a Universal Relaxation Network and |
 
 ## `mcp-server-radia-streamfunction`
 
