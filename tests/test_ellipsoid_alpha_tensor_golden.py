@@ -20,8 +20,11 @@ import pytest
 pytest.importorskip("scipy")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_TEAM28 = os.path.join(_HERE, "..", "examples", "CLN", "scripts", "team28_levitation")
-sys.path.insert(0, _TEAM28)
+# CLN was absorbed into radia.levitation: examples/CLN/scripts/team28_levitation ->
+# examples/levitation/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
+_LEV = os.path.join(_HERE, "..", "examples", "levitation")
+sys.path.insert(0, os.path.join(_LEV, "sphere"))
+sys.path.insert(0, os.path.join(_LEV, "ellipsoid"))
 
 import ellipsoid_alpha_tensor as E  # noqa: E402
 
