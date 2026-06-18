@@ -38,6 +38,7 @@ from .knowledge.cpp_sdk import get_cpp_sdk_documentation
 from .knowledge.mesh_diagnostics import get_diagnostics_documentation
 from .knowledge.license import get_license_documentation
 from .knowledge.format_routing import get_format_routing_documentation
+from .knowledge.coreform_webinars import get_coreform_webinar_documentation
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -495,6 +496,14 @@ def cubit_docs(topic: str = "all") -> str:
 		"step_vs_vol", "labels_format", "format",
 	):
 		return get_format_routing_documentation("format_routing")
+
+	# Coreform webinar / tutorial corpus, synthesized from the official
+	# @Coreform YouTube channel (Cubit Tutorials playlist). Paraphrased +
+	# attributed; broad technique knowledge beyond the narrow sibling modules.
+	if topic in ("coreform", "coreform_webinars", "webinars", "tutorials"):
+		return get_coreform_webinar_documentation("index")
+	if topic.startswith("coreform_"):
+		return get_coreform_webinar_documentation(topic[len("coreform_"):])
 
 	# Try without prefix (backward compat for simple names)
 	result = get_export_documentation(topic)
