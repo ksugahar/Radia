@@ -103,6 +103,18 @@ def capacitance_axi(V, mesh, eps, v_applied):
     return 2.0 * W / (v_applied * v_applied)
 
 
+def resistance_axi(V, mesh, sigma, v_applied):
+    """Axisymmetric DC RESISTANCE [Ohm] (full 3D, not per length) between the electrodes that fix
+    the solved potential ``V`` (from :func:`solve_poisson_axi` with coeff = sigma): by the power
+    method  R = v_applied^2 / P  with  P = int sigma |grad V|^2 (2 pi r) dr dz  the total ohmic
+    dissipation. The current-flow / resistance dual of :func:`capacitance_axi` (which is the
+    electrostatic 2W/V^2). Validated on the uniform cylinder R = h/(sigma pi b^2) (exact, 1-D
+    current) and the disk-contact SPREADING resistance R = 1/(4 sigma a) (Holm, ~1 % on a finite
+    domain -- the contact-rim current singularity J ~ 1/sqrt(a^2-r^2) limits the rate)."""
+    P = 2.0 * math.pi * Integrate(sigma * grad(V) * grad(V) * _r * dx, mesh)
+    return v_applied * v_applied / P
+
+
 def solve_electrostatic(mesh, eps, potentials, charge=None, order=2):
     """FEMM ``csolv`` analog: -div(eps grad V) = rho. ``potentials`` =
     {electrode_boundary: volts}. Returns V; field E = -grad(V).
