@@ -77,8 +77,11 @@ def build_geo(kelvin, with_iron, R_box=3.0):
     box = Sphere(Pnt(0, 0, 0), R_box)
     for f in box.faces:
         f.name = "outer"
-    out = (box - s_c); out.mat("vac")
-    return occ.Glue([s_a, gap, shell, out])
+    smid = Sphere(Pnt(0, 0, 0), 1.5)
+    s_a.maxh = 0.10; gap.maxh = 0.13; shell.maxh = 0.13     # keep coil + iron region fine under the coarse global
+    near = (smid - s_c); near.mat("vac"); near.maxh = 0.14  # field-carrying near air: keep fine
+    far = (box - smid); far.mat("vac"); far.maxh = 0.45     # negligible shielded far field: coarse
+    return occ.Glue([s_a, gap, shell, near, far])
 
 
 def solve_unified(kelvin, with_iron, gmaxh, source="volume"):
@@ -138,7 +141,7 @@ with TaskManager():
 
     print("\n=== IRON shell mu_r=%g: ONE unified FEM, Kelvin vs air-box (independent open BC) ===" % MU_R)
     Hk, nk = solve_unified(kelvin=True, with_iron=True, gmaxh=0.11, source="volume")
-    Hb, nb = solve_unified(kelvin=False, with_iron=True, gmaxh=0.11, source="volume")
+    Hb, nb = solve_unified(kelvin=False, with_iron=True, gmaxh=0.45, source="volume")   # graded air-box: coarse global, fine near
     rel_kb = np.linalg.norm(Hk - Hb) / np.linalg.norm(Hb)
     shield = np.linalg.norm(Hk) / np.linalg.norm(Hbs)
     print("  Kelvin (ndof %d) vs air-box R=3 (ndof %d): ||H_K - H_box||/|.| = %.3e" % (nk, nb, rel_kb))
