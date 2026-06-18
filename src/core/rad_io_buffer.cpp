@@ -19,7 +19,7 @@
 
 //-------------------------------------------------------------------------
 
-int radTIOBuffer::AmOfErrors = 139; //modify this when adding new error !!!
+int radTIOBuffer::AmOfErrors = 140; //modify this when adding new error !!!
 string radTIOBuffer::err_ar[] = {
 
 	"Radia::ErrorXXX::::Wrong Error Number.\0",
@@ -148,6 +148,7 @@ string radTIOBuffer::err_ar[] = {
 	"Radia::Error123::::Multiple extruded polygon can not be generated from this input: incorrect definition of transformations at extrusion step(s).\0",
 	"Radia::Error124::::Multiple extruded polygon can not be generated from this input: an extrusion step can not consist of a single homothety without any other transformations.\0",
 	"Radia::Error125::::Failed to generate 3D object from the given input.\0",
+	"Radia::Error126::::Triangle-based polygon triangulation is disabled in this build. Use the Netgen/Cubit mesh workflow instead.\0",
 	"Radia::Error200::::Step size is too small in automatic Runge-Kutta integration routine.\0",
 	"Radia::Error201::::Maximum number of steps exceeded in automatic Runge-Kutta integration routine.\0",
 	"Radia::Error202::::Failed to instantiate object(s).\0",

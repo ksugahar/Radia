@@ -204,7 +204,11 @@ The rectangular slices are assumed to be parallel to the XY plane.
 */
 EXP int CALL RadObjMltExtRtg(int* n, double* FlatCenPts, double* FlatRtgSizes, int ns, double* M);
 
-/** Creates triangulated extruded polygon block, i.e. an extruded polygon with its bases subdivided by triangulation.
+/** Disabled legacy triangulated extruded polygon API.
+
+This function is kept for C API compatibility only. Radia no longer bundles
+the Triangle triangulation library; use the Netgen/Cubit mesh workflow instead.
+
 @param n [out] reference number of the object created
 @param xc [in] the horizontal coordinate of the block center of gravity
 @param lx [in] the thickness (extrusion size)

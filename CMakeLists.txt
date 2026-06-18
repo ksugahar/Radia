@@ -168,7 +168,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_material_impl.cpp         # Materials (MatLin, MatSatIsoFrm, MatApl, etc.)
 	${CORE_DIR}/rad_transform_impl.cpp        # Transformations (TrfTrsl, TrfRot, etc.)
 	${CORE_DIR}/rad_field_compute.cpp         # Field computation (Fld, FldLst, FldEnr, etc.)
-	${CORE_DIR}/rad_obj_subdivision.cpp       # Subdivision (ObjDivMag, multi-generation extrusion)
+	${CORE_DIR}/rad_obj_subdivision.cpp       # Legacy Triangle subdivision stubs
 	${CORE_DIR}/rad_point_classify.cpp        # Point classification (inside/outside)
 	${CORE_DIR}/rad_field_unified.cpp         # Unified field computation (inside/outside + batch)
 
@@ -216,7 +216,6 @@ set(RADIA_EXT_SOURCES
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
-	${EXT_DIR}/triangle/triangle.c
 )
 
 # HACApK sources (H-matrix with ACA+ compression)
@@ -244,12 +243,6 @@ set(PEEC_MATRICES_API_SOURCE
 	${LIB_DIR}/rad_peec_matrices_api.cpp  # pybind11 PEEC matrix construction API
 )
 
-# Triangle library (C source needs special handling)
-# Create as static library first
-add_library(triangle_lib STATIC ${EXT_DIR}/triangle/triangle.c)
-target_compile_definitions(triangle_lib PRIVATE TRILIBRARY ANSI_DECLARATORS NO_TIMER)
-target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
-
 # ========================================
 # Legacy modules (REMOVED)
 # ========================================
@@ -269,7 +262,6 @@ target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
 #
 # # Link with Radia core libraries
 # target_link_libraries(test_radhmat PRIVATE
-# 	triangle_lib
 # 	hacapk
 # )
 #
@@ -296,7 +288,6 @@ target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
 # 	${LIB_DIR}
 # 	${EXT_DIR}/auxparse
 # 	${EXT_DIR}/genmath
-# 	${EXT_DIR}/triangle
 # 	${EXT_DIR}/HACApK
 # 	${FFTW_DIR}
 # )
@@ -307,7 +298,6 @@ target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
 # 	FFTW_ENABLE_FLOAT
 # 	NO_TIMER
 # 	ANSI_DECLARATORS
-# 	TRILIBRARY
 # 	_GM_WITHOUT_BASE
 # 	_CRT_SECURE_NO_WARNINGS
 # 	$<$<CONFIG:Debug>:_DEBUG>
@@ -525,9 +515,6 @@ pybind11_add_module(_radia_pybind
 	${RADIA_LIB_SOURCES}
 	${RADIA_PYBIND_SOURCES}
 )
-
-# Link triangle library
-target_link_libraries(_radia_pybind PRIVATE triangle_lib)
 
 # Add include directories
 target_include_directories(_radia_pybind PRIVATE
