@@ -45,9 +45,6 @@ void MultGenExtrPolygonMag();
 void MultGenExtrRectangle();
 void MultGenExtrRectangleOpt( double**, int, double* );
 void MultGenExtrRectangleDLL( double*, double*, int, double* );
-void MultGenExtrTriangle();
-//void MultGenExtrTriangleDLL( double, double, double*, double*, int, char, double*, const char*,const char*,const char* );
-void MultGenExtrTriangleDLL( double, double, double*, double*, int, char, double*, const char*,const char*,const char*,const char* ); //OC30072018
 
 //void ArcMag( double,double,double, double,double, double,double, double, int, double,double,double, char* );
 void ArcMag( double,double,double, double,double, double,double, double, int, char*, double,double,double );
@@ -348,13 +345,6 @@ void ExtrudedPolygon2()
 
 //-------------------------------------------------------------------------
 
-void MultGenExtrTriangle()
-{
-
-}
-
-//-------------------------------------------------------------------------
-
 void ExtrudedPolygonOpt(double xc, double Lx, double** Polygon, int AmOfVertices, double* M)
 {
 	std::vector<TVector2d> vArrayOfPoints2d(AmOfVertices);
@@ -396,44 +386,6 @@ void ExtrudedPolygonDLL(double xc, double Lx, double* Polygon, int AmOfVertices,
 	for(int i1=0; i1<3; i1++) FirstPoi[i1] = radCR.Double(FirstPoi[i1]);
 
 	rad.SetExtrudedPolygon(FirstPoi, 3, radCR.Double(Lx), ArrayOfPoints2d, AmOfVertices, M, 3, &a);
-	// RAII: automatic cleanup
-}
-
-//-------------------------------------------------------------------------
-
-void MultGenExtrTriangleDLL(double xc, double lx, double* pFlatVert, double* pFlatSubd, int nv, char a, double* pM, const char* sOpt1, const char* sOpt2, const char* sOpt3, const char* sOpt4) //OC30072018
-//void MultGenExtrTriangleDLL(double xc, double lx, double* pFlatVert, double* pFlatSubd, int nv, char a, double* pM, const char* sOpt1, const char* sOpt2, const char* sOpt3)
-{
-	std::vector<TVector2d> vArrayOfPoints2d(nv);
-	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
-
-	TVector2d* tArrayOfPoints2d = ArrayOfPoints2d;
-	double* tPolygon = pFlatVert;
-
-	for(int i=0; i<nv; i++)
-	{
-		tArrayOfPoints2d->x = *(tPolygon++);
-		(tArrayOfPoints2d++)->y = *(tPolygon++);
-	}
-
-	double FirstPoi[3];
-	SetExtrPolygFirstPoint(xc, lx, ArrayOfPoints2d[0], a, FirstPoi); //OC040306
-	for(int i1=0; i1<3; i1++) FirstPoi[i1] = radCR.Double(FirstPoi[i1]);
-
-	//std::array<char, 200> CharBuf1, CharBuf2, CharBuf3;
-	std::array<char, 200> CharBuf1, CharBuf2, CharBuf3, CharBuf4; //OC30072018
-	//const char* OptionNames[] = {CharBuf1.data(), CharBuf2.data(), CharBuf3.data()};
-	const char* OptionNames[] = {CharBuf1.data(), CharBuf2.data(), CharBuf3.data(), CharBuf4.data()}; //OC30072018
-	//const char* OptionValues[] = {0,0,0};
-	const char* OptionValues[] = {0,0,0,0}; //OC30072018
-	//const char* NonParsedOpts[] = {sOpt1, sOpt2, sOpt3};
-	const char* NonParsedOpts[] = {sOpt1, sOpt2, sOpt3, sOpt4}; //OC30072018
-	//int OptionCount = 3;
-	int OptionCount = 4; //OC30072018
-	//AuxParseOptionNamesAndValues(3, NonParsedOpts, OptionNames, OptionValues, OptionCount);
-	AuxParseOptionNamesAndValues(NonParsedOpts, OptionNames, OptionValues, OptionCount);
-	
-	rad.SetMultGenExtrTriangle(FirstPoi, 3, radCR.Double(lx), ArrayOfPoints2d, nv, pFlatSubd, pM, 3, &a, OptionNames, OptionValues, OptionCount);
 	// RAII: automatic cleanup
 }
 
