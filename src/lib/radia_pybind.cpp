@@ -4645,57 +4645,32 @@ PYBIND11_MODULE(_radia_pybind, m) {
             Object handle
     )pbdoc");
 
-    // ObjMltExtTri - Triangulated extruded polygon
+    // ObjMltExtTri - disabled legacy Triangle-based API
     m.def("ObjMltExtTri", [](double xc, double lx,
                               const py::list& vertices,
                               const py::list& subdiv,
                               const std::string& axis = "x",
                               const py::list& magnetization = py::list(),
                               const std::string& opt = "") -> int {
-        int nv = static_cast<int>(py::len(vertices));
-
-        std::vector<double> flatVert;
-        for (const auto& pt : vertices) {
-            auto coord = to_vector(pt.cast<py::object>());
-            if (coord.size() != 2) {
-                throw std::runtime_error("Each 2D point must have 2 coordinates");
-            }
-            flatVert.push_back(coord[0]);
-            flatVert.push_back(coord[1]);
-        }
-
-        std::vector<double> flatSubd;
-        for (const auto& sd : subdiv) {
-            auto params = to_vector(sd.cast<py::object>());
-            if (params.size() != 2) {
-                throw std::runtime_error("Each subdiv entry must be [k, q]");
-            }
-            flatSubd.push_back(params[0]);
-            flatSubd.push_back(params[1]);
-        }
-
-        double M[3] = {0, 0, 0};
-        if (py::len(magnetization) >= 3) {
-            auto m = to_vector(magnetization.cast<py::object>());
-            M[0] = m[0]; M[1] = m[1]; M[2] = m[2];
-        }
-
-        char a = axis.empty() ? 'x' : axis[0];
-        char opt_cstr[256];
-        strncpy(opt_cstr, opt.c_str(), 255);
-        opt_cstr[255] = '\0';
-
-        int n = 0;
-        int err = RadObjMltExtTri(&n, xc, lx, flatVert.data(), flatSubd.data(),
-                                   nv, a, M, opt_cstr);
-        check_error(err);
-        return n;
+        (void)xc;
+        (void)lx;
+        (void)vertices;
+        (void)subdiv;
+        (void)axis;
+        (void)magnetization;
+        (void)opt;
+        throw std::runtime_error(
+            "ObjMltExtTri is disabled because Radia no longer bundles Triangle. "
+            "Use the Netgen/Cubit mesh workflow instead.");
     },
     py::arg("xc"), py::arg("lx"), py::arg("vertices"), py::arg("subdiv"),
     py::arg("axis") = "x", py::arg("magnetization") = py::list(),
     py::arg("opt") = "",
     R"pbdoc(
-        Create triangulated extruded polygon.
+        Legacy triangulated extruded polygon API.
+
+        This function is disabled because Radia no longer bundles Triangle.
+        Use the Netgen/Cubit mesh workflow instead.
 
         Args:
             xc: Center position in extrusion direction
