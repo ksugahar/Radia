@@ -39,12 +39,17 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
+import json
 import os
 import shutil
 import subprocess
 import sys
+from importlib import metadata as importlib_metadata
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 # Force UTF-8 stdout/stderr so en/em dashes and CJK in messages do not
 # crash the script on ja-JP cp932 consoles.
@@ -253,10 +258,11 @@ def _kill_cubit_local():
 
 
 def _kill_mcp_local():
-    info("force-kill any local mcp-server-*.exe (otherwise radia-mcp install fails)")
+    info("force-kill local mcp-server-*.exe and Radia panel launchers")
     run(["pwsh", "-NoProfile", "-Command",
          "Get-Process -ErrorAction SilentlyContinue | Where-Object { "
-         "$_.Name -like 'mcp-server*' "
+         "$_.Name -like 'mcp-server*' -or $_.Name -like 'radia-*' -or "
+         "$_.Name -like 'radia_*' "
          "} | ForEach-Object { Stop-Process -Id $_.Id -Force }; "
          "Start-Sleep -Seconds 2"], check=False)
 
@@ -267,8 +273,8 @@ def _deploy_lab():
     _kill_mcp_local()
     repo = NAS_REPO_LAB
     for sub in ("", "/packages/cubit-mesh-export", "/packages/radia-mcp"):
-        run(["pip", "install", "--force-reinstall", "--no-deps",
-             "--no-cache-dir", repo + sub])
+        run(["pip", "install", "-e", repo + sub, "--no-deps",
+             "--no-cache-dir"])
     run(["cubit-plugin-install"])
     run(["cubit-plugin-install", "--verify-only"])
     run(["cubit-smoke-test"])
@@ -329,15 +335,17 @@ def _deploy_pypi(ssh_host, label):
     v_cme   = v["cubit-mesh-export"]
     v_mcp   = v["radia-mcp"]
 
-    ps_block = (
-        "$ErrorActionPreference = 'Continue'; "
-        "Get-Process -ErrorAction SilentlyContinue | Where-Object { "
-        "$_.ProcessName -eq 'coreform_cubit' -or $_.ProcessName -eq 'cubit' "
-        "} | ForEach-Object { Stop-Process -Id $_.Id -Force }; "
-        "Get-Process -ErrorAction SilentlyContinue | Where-Object { "
-        "$_.Name -like 'mcp-server*' "
-        "} | ForEach-Object { Stop-Process -Id $_.Id -Force }; "
-        "Start-Sleep -Seconds 2; "
+    ps_block = f"""
+$ErrorActionPreference = 'Continue'
+Get-Process -ErrorAction SilentlyContinue | Where-Object {{
+  $_.ProcessName -eq 'coreform_cubit' -or $_.ProcessName -eq 'cubit' -or
+  $_.Name -like 'mcp-server*' -or
+  $_.Name -like 'radia-*' -or $_.Name -like 'radia_*'
+}} | ForEach-Object {{
+  Write-Host "Stopping $($_.ProcessName) pid=$($_.Id)"
+  Stop-Process -Id $_.Id -Force
+}}
+Start-Sleep -Seconds 2
         # --force-reinstall is mandatory: `pip install --upgrade X==Y` on a
         # machine already at X==Y is a NO-OP and leaves the on-disk files
         # untouched. That bit us 2026-05-26: 100号機 was already at
@@ -347,15 +355,18 @@ def _deploy_pypi(ssh_host, label):
         # different binary (ef49da18...). Force-reinstall guarantees the
         # PyPI wheel's bytes overwrite whatever is on disk, which is the
         # whole point of "PyPI is the canonical channel" in the 2-tier policy.
-        f"pip install --upgrade --force-reinstall --no-deps --no-cache-dir "
-        f"'radia[cubit,gui]=={v_radia}' "
-        f"'radia-mcp=={v_mcp}' 'cubit-mesh-export=={v_cme}'; "
-        "cubit-plugin-install --all-users; "
-        "cubit-plugin-install --verify-only; "
-        "cubit-smoke-test"
-    )
-    run(["ssh", ssh_host, "pwsh", "-ExecutionPolicy", "Bypass",
-         "-Command", ps_block])
+pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia[cubit,gui]=={v_radia}" "radia-mcp=={v_mcp}" "cubit-mesh-export=={v_cme}"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+cubit-plugin-install --all-users
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+cubit-plugin-install --verify-only
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+cubit-smoke-test
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+"""
+    encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
+    run(["ssh", ssh_host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+         "-EncodedCommand", encoded])
     ok(f"Phase 8 complete on {label}")
     return 0
 
@@ -580,14 +591,32 @@ def _norm_path(p):
 def _pip_show(pkg):
     """Return parsed dict from `pip show <pkg>`, or None if not
     installed.  Keys are lower-cased; values are stripped strings."""
-    p = run(["pip", "show", pkg], check=False, capture=True)
-    if p.returncode != 0:
+    try:
+        dist = importlib_metadata.distribution(pkg)
+    except importlib_metadata.PackageNotFoundError:
         return None
-    d = {}
-    for line in (p.stdout or "").splitlines():
-        if ":" in line:
-            k, _, v = line.partition(":")
-            d[k.strip().lower()] = v.strip()
+
+    d = {
+        "version": dist.version,
+        "location": str(dist.locate_file("")),
+    }
+    direct_url = dist.read_text("direct_url.json")
+    if direct_url:
+        try:
+            data = json.loads(direct_url)
+        except json.JSONDecodeError:
+            data = {}
+        if data.get("dir_info", {}).get("editable") and data.get("url"):
+            parsed = urlparse(data["url"])
+            if parsed.scheme == "file":
+                path = url2pathname(parsed.path)
+                if parsed.netloc:
+                    path = f"//{parsed.netloc}{path}"
+                elif os.name == "nt" and path.startswith("/") and len(path) > 2 and path[2] == ":":
+                    path = path[1:]
+                d["editable project location"] = path
+            else:
+                d["editable project location"] = data["url"]
     return d
 
 
