@@ -7,11 +7,13 @@
 # Usage:
 #   powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 #   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
+#   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
 #   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -Test
 #
 # Options:
 #   -Rebuild    Clean build directory before building
-#   -Test       Run import test + pytest after build
+#   -RadiaOnly  Build and copy only _radia_pybind.pyd
+#   -Test       Run source-tree import test + pytest after build
 #   -Verbose    Show detailed build output
 #
 # Requirements:
@@ -192,6 +194,7 @@ set VSLANG=1033
 set LIB=$INTEL_MKL\lib;%LIB%
 set INCLUDE=$INTEL_MKL\include;%INCLUDE%
 set MKLROOT=$INTEL_MKL
+set RADIA_ONLY=$RadiaOnly
 
 cd /d "$BUILD_DIR"
 
@@ -218,6 +221,12 @@ echo ========================================
 if errorlevel 1 (
     echo ERROR: _radia_pybind build failed
     exit /b 1
+)
+
+if /I "%RADIA_ONLY%"=="True" (
+    echo.
+    echo Build completed -RadiaOnly.
+    exit /b 0
 )
 
 echo.
@@ -339,10 +348,14 @@ try {
     }
 
     $modules = @(
-        @{ src = "_radia_pybind.cp312-win_amd64.pyd"; dst = "_radia_pybind.pyd"; required = $true },
-        @{ src = "peec_matrices.cp312-win_amd64.pyd"; dst = "peec_matrices.pyd"; required = $false },
-        @{ src = "cln_core.cp312-win_amd64.pyd";      dst = "cln_core.pyd";      required = $false }
+        @{ src = "_radia_pybind.cp312-win_amd64.pyd"; dst = "_radia_pybind.pyd"; required = $true }
     )
+    if (-not $RadiaOnly) {
+        $modules += @(
+            @{ src = "peec_matrices.cp312-win_amd64.pyd"; dst = "peec_matrices.pyd"; required = $false },
+            @{ src = "cln_core.cp312-win_amd64.pyd";      dst = "cln_core.pyd";      required = $false }
+        )
+    }
 
     # Cubit plugin files (built in src/cubit_plugin/build-*): shipped ONLY by
     # the cubit-mesh-export package (Tier-2, 2026-06-01).  radia NO LONGER
@@ -360,49 +373,51 @@ try {
         @{ src = "$PROJECT_DIR\src\cubit_plugin\build-ccm\cubit_mesh_export.ccm";
            dst = "$cmeDir\cubit_mesh_export.ccm" }
     )
-    foreach ($cf in $cubitFiles) {
-        $name = Split-Path $cf.dst -Leaf
-        if (Test-Path $cf.src) {
-            $srcInfo = Get-Item $cf.src
-            $needCopy = $true
-            if (Test-Path $cf.dst) {
-                $dstInfo = Get-Item $cf.dst
-                if ($srcInfo.Length -eq $dstInfo.Length -and $srcInfo.LastWriteTime -le $dstInfo.LastWriteTime) {
-                    Write-Host "  cubit-mesh-export/${name}: up-to-date ($([math]::Round($srcInfo.Length / 1KB, 1)) KB)" -ForegroundColor Cyan
-                    $needCopy = $false
+    if (-not $RadiaOnly) {
+        foreach ($cf in $cubitFiles) {
+            $name = Split-Path $cf.dst -Leaf
+            if (Test-Path $cf.src) {
+                $srcInfo = Get-Item $cf.src
+                $needCopy = $true
+                if (Test-Path $cf.dst) {
+                    $dstInfo = Get-Item $cf.dst
+                    if ($srcInfo.Length -eq $dstInfo.Length -and $srcInfo.LastWriteTime -le $dstInfo.LastWriteTime) {
+                        Write-Host "  cubit-mesh-export/${name}: up-to-date ($([math]::Round($srcInfo.Length / 1KB, 1)) KB)" -ForegroundColor Cyan
+                        $needCopy = $false
+                    }
+                }
+                if ($needCopy) {
+                    Copy-Item $cf.src $cf.dst -Force
+                    Write-Host "  cubit-mesh-export/${name}: $([math]::Round($srcInfo.Length / 1KB, 1)) KB (UPDATED)" -ForegroundColor Green
+                }
+            } else {
+                Write-Host "  ${name}: skipped (not built)" -ForegroundColor Yellow
+            }
+        }
+
+        # === Freshness-check sync: touch bundled binaries to the newest source mtime ===
+        # cubit-mesh-export's pyproject.toml runs a freshness gate in
+        # `get_requires_for_build_wheel` that compares mtime of every file
+        # in src/cubit_plugin/ vs every bundled binary.  Ninja's incremental
+        # build only rebuilds targets whose transitive source changed, so
+        # editing a .cpp that only feeds the .ccm leaves the .pyd (or vice-
+        # versa) untouched, which the freshness gate then FALSE-alarms on.
+        # Fix: force-touch every bundled binary mtime so it >= newest source.
+        # (As of radia 4.80.0 the .ccl is gone -- only .ccm + .pyd remain.)
+        $pluginSrcFiles = Get-ChildItem "$PROJECT_DIR\src\cubit_plugin" `
+            -Include "*.cpp","*.hpp","*.h","*.c" -File -Recurse `
+            -ErrorAction SilentlyContinue
+        if ($pluginSrcFiles) {
+            $newest = ($pluginSrcFiles | Measure-Object -Property LastWriteTime -Maximum).Maximum
+            # Bump by 1 s so freshness check sees ">= newest source".
+            $touchTime = $newest.AddSeconds(1)
+            foreach ($cf in $cubitFiles) {
+                if (Test-Path $cf.dst) {
+                    (Get-Item -LiteralPath $cf.dst).LastWriteTime = $touchTime
                 }
             }
-            if ($needCopy) {
-                Copy-Item $cf.src $cf.dst -Force
-                Write-Host "  cubit-mesh-export/${name}: $([math]::Round($srcInfo.Length / 1KB, 1)) KB (UPDATED)" -ForegroundColor Green
-            }
-        } else {
-            Write-Host "  ${name}: skipped (not built)" -ForegroundColor Yellow
+            Write-Host "  cubit-mesh-export plugin binaries: mtime synced to newest source ($touchTime)" -ForegroundColor Cyan
         }
-    }
-
-    # === Freshness-check sync: touch bundled binaries to the newest source mtime ===
-    # cubit-mesh-export's pyproject.toml runs a freshness gate in
-    # `get_requires_for_build_wheel` that compares mtime of every file
-    # in src/cubit_plugin/ vs every bundled binary.  Ninja's incremental
-    # build only rebuilds targets whose transitive source changed, so
-    # editing a .cpp that only feeds the .ccm leaves the .pyd (or vice-
-    # versa) untouched, which the freshness gate then FALSE-alarms on.
-    # Fix: force-touch every bundled binary mtime so it >= newest source.
-    # (As of radia 4.80.0 the .ccl is gone -- only .ccm + .pyd remain.)
-    $pluginSrcFiles = Get-ChildItem "$PROJECT_DIR\src\cubit_plugin" `
-        -Include "*.cpp","*.hpp","*.h","*.c" -File -Recurse `
-        -ErrorAction SilentlyContinue
-    if ($pluginSrcFiles) {
-        $newest = ($pluginSrcFiles | Measure-Object -Property LastWriteTime -Maximum).Maximum
-        # Bump by 1 s so freshness check sees ">= newest source".
-        $touchTime = $newest.AddSeconds(1)
-        foreach ($cf in $cubitFiles) {
-            if (Test-Path $cf.dst) {
-                (Get-Item -LiteralPath $cf.dst).LastWriteTime = $touchTime
-            }
-        }
-        Write-Host "  cubit-mesh-export plugin binaries: mtime synced to newest source ($touchTime)" -ForegroundColor Cyan
     }
 
     foreach ($mod in $modules) {
@@ -444,7 +459,12 @@ try {
         $radiaPkg = if ($platlib) { Join-Path $platlib 'radia' } else { $null }
         if ($radiaPkg -and (Test-Path $radiaPkg)) {
             $installList = @('axifem.pyd')
-            if (-not $AxiFemmOnly) { $installList += @('_radia_pybind.pyd', 'peec_matrices.pyd', 'cln_core.pyd') }
+            if (-not $AxiFemmOnly) {
+                $installList += @('_radia_pybind.pyd')
+                if (-not $RadiaOnly) {
+                    $installList += @('peec_matrices.pyd', 'cln_core.pyd')
+                }
+            }
             foreach ($f in $installList) {
                 $srcF = Join-Path "$PROJECT_DIR\src\radia" $f
                 if (Test-Path $srcF) {
@@ -485,10 +505,35 @@ if ($Test) {
     Write-Host ""
     Write-Host "Running tests..." -ForegroundColor Cyan
 
-    python -c "import radia; print(f'radia {radia.__version__} OK')"
+    $oldPythonPath = $env:PYTHONPATH
+    if ($oldPythonPath) {
+        $env:PYTHONPATH = "$PROJECT_DIR\src;$oldPythonPath"
+    } else {
+        $env:PYTHONPATH = "$PROJECT_DIR\src"
+    }
+
+    $ImportCheck = @"
+import pathlib
+import radia
+
+repo_src = pathlib.Path(r"$PROJECT_DIR") / "src"
+radia_file = pathlib.Path(radia.__file__).resolve()
+try:
+    radia_file.relative_to(repo_src.resolve())
+except ValueError:
+    raise SystemExit(f"imported radia outside source tree: {radia_file}")
+print(f"radia {radia.__version__} OK from {radia_file}")
+"@
+    $ImportCheck | python -
     if ($LASTEXITCODE -ne 0) { Write-Host "Import failed!" -ForegroundColor Red; exit 1 }
 
-    Push-Location $PROJECT_DIR
-    try { python -m pytest tests/ -v --tb=short }
-    finally { Pop-Location }
+    if ($RadiaOnly -or $AxiFemmOnly) {
+        Write-Host "Skipping full pytest because only a focused build was requested." -ForegroundColor Yellow
+    } else {
+        Push-Location $PROJECT_DIR
+        try { python -m pytest tests/ -v --tb=short }
+        finally { Pop-Location }
+    }
+
+    $env:PYTHONPATH = $oldPythonPath
 }
