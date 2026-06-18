@@ -9,8 +9,10 @@ with body force, boundary tractions, and an optional thermal pre-strain.
 Plane stress: lam = E nu/(1-nu^2);  plane strain: lam = E nu/((1+nu)(1-2nu));
 mu = E/(2(1+nu)) for both.
 """
+import math
+
 from ngsolve import (VectorH1, BilinearForm, LinearForm, GridFunction, InnerProduct,
-                     CoefficientFunction, grad, dx, ds, Id, Trace)
+                     CoefficientFunction, grad, dx, ds, Id, Trace, ArnoldiSolver)
 
 
 def _lame(E, nu, plane):
@@ -65,6 +67,37 @@ def solve_linear_elasticity(mesh, E, nu, dirichletx="", dirichlety="", dirichlet
     gu = GridFunction(fes)
     gu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
     return gu
+
+
+def elastic_modal_2d(mesh, E, nu, rho, n_modes, dirichletx="", dirichlety="",
+                     dirichlet="", plane="stress", order=2, shift=-1.0):
+    """Free-vibration (modal) ANGULAR FREQUENCIES omega [rad/s] of a 2D elastic body, by the
+    generalised eigenproblem  K phi = omega^2 M phi  with the elasticity stiffness K and the
+    consistent mass  M = int rho u.v . The dynamic / modal companion of
+    :func:`solve_linear_elasticity` -- the structural-NVH eigenmodes an electromagnetic force
+    spectrum can excite. Per-component clamps as in solve_linear_elasticity (constrain enough to
+    remove the rigid-body modes, else they appear as omega ~ 0 and are dropped).
+
+    Validated on the fixed-free AXIAL rod (nu=0, transverse motion suppressed via u_y clamps):
+    omega_n = (2n-1) pi/(2L) sqrt(E/rho), to ~machine precision; and the fixed-fixed rod
+    omega_n = n pi/L sqrt(E/rho). Returns the ascending list of omega (length ``n_modes``)."""
+    mu, lam = _lame(E, nu, plane)
+    dx_bc = "|".join(s for s in (dirichletx, dirichlet) if s)
+    dy_bc = "|".join(s for s in (dirichlety, dirichlet) if s)
+    fes = VectorH1(mesh, order=order, dirichletx=dx_bc, dirichlety=dy_bc)
+    u, v = fes.TnT()
+    Imat = Id(mesh.dim)
+
+    def sig(w):
+        e = _eps(w)
+        return 2.0 * mu * e + lam * Trace(e) * Imat
+    K = BilinearForm(InnerProduct(sig(u), _eps(v)) * dx).Assemble()
+    M = BilinearForm(rho * InnerProduct(u, v) * dx).Assemble()
+    gf = GridFunction(fes, multidim=n_modes + 6)
+    lams = ArnoldiSolver(K.mat, M.mat, fes.FreeDofs(), list(gf.vecs), shift=shift)
+    w2 = sorted(l.real for l in lams)
+    w2 = [x for x in w2 if x > 1e-6 * max(w2)]
+    return [math.sqrt(x) for x in w2[:n_modes]]
 
 
 def stress_2d(gu, E, nu, plane="stress", thermal=None):
