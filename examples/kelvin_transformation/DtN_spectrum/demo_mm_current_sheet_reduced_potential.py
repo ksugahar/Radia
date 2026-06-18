@@ -79,10 +79,12 @@ def airbox_geo(with_iron, R_box):
         f.name = "outer"
     if with_iron:
         s_b = Sphere(Pnt(0, 0, 0), b); s_c = Sphere(Pnt(0, 0, 0), c)
+        smid = Sphere(Pnt(0, 0, 0), 1.5)
         core = s_b; core.mat("vac"); core.maxh = 0.12
         shell = (s_c - s_b); shell.mat("shell"); shell.maxh = 0.10
-        out = (box - s_c); out.mat("vac")
-        return occ.Glue([core, shell, out])
+        near = (smid - s_c); near.mat("vac"); near.maxh = 0.13    # field-carrying near air: keep fine
+        far = (box - smid); far.mat("vac"); far.maxh = 0.45       # negligible shielded far field: coarse
+        return occ.Glue([core, shell, near, far])
     ball = box; ball.mat("vac")
     return occ.Glue([ball])
 
@@ -131,7 +133,7 @@ with TaskManager():
 
     print("\n=== IRON shell mu_r=%g: Kelvin vs brute-force air-box (independent open BC) ===" % MU_R)
     Hk, nk, omk = solve_reduced(kelvin_geo(True), True, True, 0.11)
-    Hb, nb, omb = solve_reduced(airbox_geo(True, 3.0), False, True, 0.11)
+    Hb, nb, omb = solve_reduced(airbox_geo(True, 3.0), False, True, 0.45)   # graded air-box: coarse global, fine near
     rel_kb = np.linalg.norm(Hk - Hb) / np.linalg.norm(Hb)
     shield = np.linalg.norm(Hk) / np.linalg.norm(Hs)
     print("  Kelvin (ndof %d) vs air-box R=3 (ndof %d): ||H_K - H_box||/||.|| = %.2e" % (nk, nb, rel_kb))
