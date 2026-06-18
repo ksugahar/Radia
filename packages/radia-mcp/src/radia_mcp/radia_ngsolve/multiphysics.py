@@ -11,8 +11,10 @@ validated against the analytic cylinder-in-axial-AC eddy loss (exact I0/I1
 Bessel) and the 1-D radial heat equation (P/L 8.9 %, T_centre 9.6 %; see
 examples/comsol_class/induction_heating.py).
 """
+import math
+
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, InnerProduct,
-                     Conj, CoefficientFunction, grad, dx, ds)
+                     Conj, CoefficientFunction, grad, dx, ds, BND)
 
 
 def joule_loss_density(gfA, gfPhi, sigma_cf, omega, A0=None):
@@ -112,6 +114,42 @@ def solve_heat_transient(mesh, T0, k, rho_cp, dirichlet, t_end, n_steps,
             rhs.data += dt * fvec
         gT.vec.data = inv * rhs
     return gT
+
+
+def thermal_penetration_depth(k, rho_cp, omega):
+    """Thermal-wave penetration depth  delta = sqrt(2 alpha/omega),  alpha = k/rho_cp [m] -- the
+    1/e decay length of a temperature oscillation at angular frequency ``omega`` (the thermal
+    analog of the EM skin depth). Used by :func:`solve_heat_harmonic` / lock-in thermography."""
+    return math.sqrt(2.0 * (k / rho_cp) / omega)
+
+
+def solve_heat_harmonic(mesh, k, rho_cp, omega, dirichlet_values, source=None, order=2,
+                        inverse="umfpack"):
+    """FREQUENCY-DOMAIN (harmonic) heat conduction -- the COMPLEX temperature phasor T(x) for a
+    boundary oscillating at angular frequency ``omega``:
+
+        k grad^2 T = i omega rho_cp T  (+ source) .
+
+    The frequency-domain sibling of :func:`solve_heat_transient`; it shares the complex-diffusion
+    structure of the AC eddy skin solve (``eddy2d``). It launches damped THERMAL WAVES of
+    penetration depth delta = sqrt(2 alpha/omega) (alpha = k/rho_cp,
+    :func:`thermal_penetration_depth`): a semi-infinite solid driven T = T0 on the surface gives
+    T(x) = T0 exp(-(1+i) x/delta), i.e. |T| = T0 exp(-x/delta) with phase lag x/delta -- the basis
+    of lock-in thermography / photothermal depth profiling.
+
+    ``dirichlet_values`` = {boundary: complex T}. Returns the complex temperature GridFunction."""
+    fes = H1(mesh, order=order, complex=True, dirichlet="|".join(dirichlet_values))
+    T, w = fes.TnT()
+    a = BilinearForm(k * grad(T) * grad(w) * dx + 1j * omega * rho_cp * T * w * dx)
+    f = LinearForm(fes)
+    if source is not None:
+        f += source * w * dx
+    a.Assemble(); f.Assemble()
+    gfu = GridFunction(fes)
+    gfu.Set(mesh.BoundaryCF(dirichlet_values, default=0.0), BND)
+    r = f.vec - a.mat * gfu.vec
+    gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse=inverse) * r
+    return gfu
 
 
 def joule_heated_cylinder_peak_dT(q, a, k):
