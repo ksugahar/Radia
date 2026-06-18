@@ -135,6 +135,37 @@ def sphere_polarizability(R=1.0, maxh=0.3, order=3, curve_order=4, **kw):
     return res
 
 
+def single_layer_spectrum(n_eig=9, maxh=0.6, order=1, intorder=10, curve_order=4):
+    r"""Eigenvalue SPECTRUM of the Laplace single-layer BEM operator on the UNIT SPHERE, by the
+    dense generalised eigenproblem  V c = lambda M c  (V the single-layer Galerkin matrix, M the
+    surface mass).  The operator-theory companion of the single-layer capacitance SOLVE
+    (:func:`single_layer_capacitance`): on the unit sphere the single layer is diagonalised by the
+    spherical harmonics with the EXACT eigenvalues
+
+        V Y_l = (1/(2l+1)) Y_l   ->   lambda = 1, 1/3 (x3), 1/5 (x5), 1/7 (x7), ...  (descending),
+
+    so the spectrum gates the discrete operator (and bounds its conditioning -- the eigenvalues
+    decay like 1/(2l+1), the source of the first-kind ill-conditioning the L2-mass preconditioner
+    fixes). Coarse mesh -> small dense matrices -> ``scipy.linalg.eigh``. Returns
+    ``{ndof, eigenvalues}`` (descending, length ``n_eig``)."""
+    import scipy.linalg as _sla
+    mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=maxh)).Curve(curve_order)
+    fes = ng.SurfaceL2(mesh, order=order, dual_mapping=True)
+    N = fes.ndof
+    V = bem.SingleLayerPotentialOperator(fes, intorder=intorder)
+    u, w = fes.TnT()
+    M = BilinearForm(u.Trace() * w.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
+    x = V.mat.CreateColVector(); y = V.mat.CreateColVector()
+    Vd = np.zeros((N, N)); Md = np.zeros((N, N))
+    for i in range(N):
+        x[:] = 0.0; x[i] = 1.0
+        y.data = V.mat * x; Vd[:, i] = y.FV().NumPy()
+        y.data = M * x;     Md[:, i] = y.FV().NumPy()
+    Vd = 0.5 * (Vd + Vd.T); Md = 0.5 * (Md + Md.T)
+    ev = np.sort(_sla.eigh(Vd, Md, eigvals_only=True))[::-1]
+    return {"ndof": N, "eigenvalues": [float(v) for v in ev[:n_eig]]}
+
+
 def helmholtz_exterior_point_source(kappa, a=1.0, maxh=0.4, order=3, rext=3.0, intorder=12):
     """HIGH-FREQUENCY Helmholtz single-layer BEM (wavenumber ``kappa``), verified by the MANUFACTURED
     SOLUTION of an interior point source -- the high-frequency (kappa>0) generalisation of the static
