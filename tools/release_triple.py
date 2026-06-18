@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -87,6 +88,19 @@ def run(cmd, *, check=True, capture=False, shell=False, **kw):
             print(p.stderr.strip())
         sys.exit(3)
     return p
+
+
+def remove_tree(path: Path):
+    """Remove a build directory without relying on POSIX rm being on PATH."""
+    print(f"  $ remove-tree {path}")
+    shutil.rmtree(path)
+
+
+def copy_file(src: Path, dst: Path):
+    """Copy a file without relying on POSIX cp being on PATH."""
+    print(f"  $ copy-file {src} {dst}")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
 
 
 # ============================================================
@@ -198,9 +212,9 @@ def cmd_phase0(args):
     build_pyd = REPO / "src/cubit_plugin/build-pyd"
     build_ccm = REPO / "src/cubit_plugin/build-ccm"
     if build_pyd.exists():
-        run(["rm", "-rf", str(build_pyd)])
+        remove_tree(build_pyd)
     if build_ccm.exists():
-        run(["rm", "-rf", str(build_ccm)])
+        remove_tree(build_ccm)
 
     # Build via the same ps1 we used in the 2026-04-14 manual run.
     ps1 = REPO / "tools/_build_cubit_plugin.ps1"
@@ -223,7 +237,7 @@ def cmd_phase0(args):
             return 3
         for d in dst_dirs:
             dst = REPO / d / src.name
-            run(["cp", str(src), str(dst)])
+            copy_file(src, dst)
 
     ok("Phase 0 complete; .ccm propagated to cubit-mesh-export pkg (radia no longer bundles it)")
     return 0
