@@ -136,6 +136,41 @@ static void rad_inv2x2(const double A[4], double Ai[4])    // inverse of a row-m
     Ai[0] =  A[3]*iv; Ai[1] = -A[1]*iv; Ai[2] = -A[2]*iv; Ai[3] =  A[0]*iv;
 }
 
+// Built-in 64-node Gauss-Duffy collapsed-cube tet rule (4 Gauss-Legendre pts/dim).  ref pts are
+// barycentric (lam1,lam2,lam3) flat in `pts`, weights summing to 1/6 in `w` -> phys weight = w*|J|,
+// |J| = 6*vol.  This is the SAME rule as radia.vim._core._gauss_duffy_tet(4) (so the C++ analytic
+// charge-Gram matches the dense Python reference).  Shared by the tet analytic ctor (outer quad on the
+// tet itself) and the polytope ctor (outer quad on each centroid-fan sub-tet).
+static void rad_gl4_duffy_tet(std::vector<double>& pts, std::vector<double>& w)
+{
+    static const double GL4x[4] = {0.06943184420297371, 0.33000947820757187,
+                                   0.66999052179242813, 0.93056815579702629};   // 4-pt Gauss-Legendre on [0,1]
+    static const double GL4w[4] = {0.17392742256872693, 0.32607257743127307,
+                                   0.32607257743127307, 0.17392742256872693};
+    pts.clear(); w.clear();
+    pts.reserve(64 * 3); w.reserve(64);
+    for (int ia = 0; ia < 4; ++ia)
+        for (int ib = 0; ib < 4; ++ib)
+            for (int ic = 0; ic < 4; ++ic) {
+                const double aa = GL4x[ia], bb = GL4x[ib], cc = GL4x[ic];
+                pts.push_back(aa);
+                pts.push_back(bb * (1.0 - aa));
+                pts.push_back(cc * (1.0 - aa) * (1.0 - bb));
+                w.push_back(GL4w[ia] * GL4w[ib] * GL4w[ic] * (1.0 - aa) * (1.0 - aa) * (1.0 - bb));
+            }
+}
+
+// Built-in Dunavant degree-5 symmetric triangle rule (7 nodes; bary (l1,l2,l3) + weight, weights sum to 1).
+static const double RAD_DUN5[7][4] = {
+    {1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0, 0.225},
+    {0.0597158717, 0.4701420641, 0.4701420641, 0.1323941527},
+    {0.4701420641, 0.0597158717, 0.4701420641, 0.1323941527},
+    {0.4701420641, 0.4701420641, 0.0597158717, 0.1323941527},
+    {0.7974269853, 0.1012865073, 0.1012865073, 0.1259391805},
+    {0.1012865073, 0.7974269853, 0.1012865073, 0.1259391805},
+    {0.1012865073, 0.1012865073, 0.7974269853, 0.1259391805},
+};
+
 RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> centroids,
                                          std::vector<double> measures,
                                          std::vector<double> self_energy)
@@ -164,32 +199,11 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
     // is smooth -- 4 pts/dim integrates it to ~1e-4.  (The old hardcoded equal-weight _bary_tet(3) rule
     // under-integrated the volume self-energy by ~6.5% -- invisible to every uniform-M demag golden because
     // div M = 0 there.  This is the same rule as radia.vim._vim._tet_ref(4).)
-    static const double GL4x[4] = {0.06943184420297371, 0.33000947820757187,
-                                   0.66999052179242813, 0.93056815579702629};   // 4-pt Gauss-Legendre on [0,1]
-    static const double GL4w[4] = {0.17392742256872693, 0.32607257743127307,
-                                   0.32607257743127307, 0.17392742256872693};
     std::vector<double> ref_tet_pts, ref_tet_w;
-    ref_tet_pts.reserve(64 * 3); ref_tet_w.reserve(64);
-    for (int ia = 0; ia < 4; ++ia)
-        for (int ib = 0; ib < 4; ++ib)
-            for (int ic = 0; ic < 4; ++ic) {
-                const double aa = GL4x[ia], bb = GL4x[ib], cc = GL4x[ic];
-                ref_tet_pts.push_back(aa);
-                ref_tet_pts.push_back(bb * (1.0 - aa));
-                ref_tet_pts.push_back(cc * (1.0 - aa) * (1.0 - bb));
-                ref_tet_w.push_back(GL4w[ia] * GL4w[ib] * GL4w[ic] * (1.0 - aa) * (1.0 - aa) * (1.0 - bb));
-            }
+    rad_gl4_duffy_tet(ref_tet_pts, ref_tet_w);   // 64-node Gauss-Duffy tet rule (shared w/ the polytope ctor)
     const int nqt = (int)ref_tet_w.size();   // 64
-    // Outer-quad rule on a FACE: Dunavant degree-5 symmetric triangle rule (7 nodes; weights sum to 1).
-    static const double DUN[7][4] = {
-        {1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0, 0.225},
-        {0.0597158717, 0.4701420641, 0.4701420641, 0.1323941527},
-        {0.4701420641, 0.0597158717, 0.4701420641, 0.1323941527},
-        {0.4701420641, 0.4701420641, 0.0597158717, 0.1323941527},
-        {0.7974269853, 0.1012865073, 0.1012865073, 0.1259391805},
-        {0.1012865073, 0.7974269853, 0.1012865073, 0.1259391805},
-        {0.1012865073, 0.1012865073, 0.7974269853, 0.1259391805},
-    };
+    // Outer-quad rule on a FACE: Dunavant degree-5 symmetric triangle rule (RAD_DUN5; 7 nodes, sum to 1).
+    const double (*DUN)[4] = RAD_DUN5;
 
     for (int a = 0; a < n_el; ++a) {
         const double* V = &m_cellV[(size_t)a * 12];   // 4 x 3
@@ -231,6 +245,91 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
             for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) P[k] += DUN[q][i] * V[3*i+k];
             m_qp[a][q] = P;
             m_qw[a][q] = DUN[q][3] * area;
+        }
+    }
+}
+
+// POLYTOPE constructor (hex/wedge cells + quad faces): the triangulation is supplied from Python (cell
+// hull tris / face sub-tris as flat triangle soups + CSR offsets).  Builds the SAME analytic charge Gram
+// as the tet/triangle ctor, generalized to any flat-faced convex cell: cell outer quad = centroid-fan
+// sub-tets (apex = cell_cent) each filled by the 64-node Gauss-Duffy rule; face outer quad = Dunavant-5
+// per sub-triangle.  The source potential (PhiAt) is the divergence-theorem polytope potential (cell) /
+// sum-of-sub-triangle Wilton potential (face), evaluated from m_srcTris.  Matches the dense Python
+// radia.vim._core.analytic_charge_gram polytope path entry-by-entry (same tris, same quad rules).
+RadHACApKChargeGram::RadHACApKChargeGram(
+    std::vector<double> cell_tris, std::vector<int> cell_troff,
+    std::vector<double> cell_cent, std::vector<double> cell_meas,
+    std::vector<double> face_tris, std::vector<int> face_troff,
+    std::vector<double> face_cent, std::vector<double> face_meas,
+    int n_el, double near_factor)
+    : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor), m_polytope(true)
+{
+    const int n_cell = n_el;
+    const int n_bf   = (int)face_meas.size();
+    m_n = n_cell + n_bf;
+    m_cent.assign((size_t)m_n * 3, 0.0);
+    m_meas.assign((size_t)m_n, 0.0);
+    m_size.assign((size_t)m_n, 0.0);
+    m_qp.resize(m_n); m_qw.resize(m_n); m_srcTris.resize(m_n);
+
+    std::vector<double> ref_tet_pts, ref_tet_w;
+    rad_gl4_duffy_tet(ref_tet_pts, ref_tet_w);          // 64-node Gauss-Duffy tet rule (shared)
+    const int nqt = (int)ref_tet_w.size();
+
+    auto get_tri = [](const std::vector<double>& soup, int t) {  // 9 doubles -> 3x Vec3
+        std::array<rad_hdiv::Vec3, 3> T;
+        for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) T[i][k] = soup[(size_t)t * 9 + 3 * i + k];
+        return T;
+    };
+
+    // --- CELLS: centroid-fan outer quad (apex = cell_cent) + store hull tris for PhiAt ---
+    for (int c = 0; c < n_cell; ++c) {
+        const rad_hdiv::Vec3 cen = {cell_cent[3*c], cell_cent[3*c+1], cell_cent[3*c+2]};
+        m_cent[3*c] = cen[0]; m_cent[3*c+1] = cen[1]; m_cent[3*c+2] = cen[2];
+        m_meas[c] = cell_meas[c]; m_size[c] = std::cbrt(cell_meas[c]);
+        const int t0 = cell_troff[c], t1 = cell_troff[c + 1];
+        m_srcTris[c].reserve(t1 - t0);
+        m_qp[c].reserve((size_t)(t1 - t0) * nqt);
+        m_qw[c].reserve((size_t)(t1 - t0) * nqt);
+        for (int t = t0; t < t1; ++t) {
+            std::array<rad_hdiv::Vec3, 3> T = get_tri(cell_tris, t);
+            m_srcTris[c].push_back(T);
+            // sub-tet (cen, T0, T1, T2): tvol = |det([T0-cen, T1-cen, T2-cen])| / 6
+            double a1[3], a2[3], a3[3];
+            for (int k = 0; k < 3; ++k) { a1[k] = T[0][k]-cen[k]; a2[k] = T[1][k]-cen[k]; a3[k] = T[2][k]-cen[k]; }
+            double cr[3] = {a2[1]*a3[2]-a2[2]*a3[1], a2[2]*a3[0]-a2[0]*a3[2], a2[0]*a3[1]-a2[1]*a3[0]};
+            const double det6 = std::fabs(a1[0]*cr[0] + a1[1]*cr[1] + a1[2]*cr[2]);   // 6*tvol = |J|
+            for (int q = 0; q < nqt; ++q) {
+                const double l1 = ref_tet_pts[3*q], l2 = ref_tet_pts[3*q+1], l3 = ref_tet_pts[3*q+2];
+                rad_hdiv::Vec3 P;
+                for (int k = 0; k < 3; ++k) P[k] = cen[k] + l1*a1[k] + l2*a2[k] + l3*a3[k];
+                m_qp[c].push_back(P);
+                m_qw[c].push_back(ref_tet_w[q] * det6);     // phys weight = ref_w * |J|, sum over sub-tets = vol
+            }
+        }
+    }
+    // --- FACES: Dunavant-5 per sub-triangle + store sub-tris for PhiAt ---
+    for (int b = 0; b < n_bf; ++b) {
+        const int a = n_cell + b;
+        m_cent[3*a] = face_cent[3*b]; m_cent[3*a+1] = face_cent[3*b+1]; m_cent[3*a+2] = face_cent[3*b+2];
+        m_meas[a] = face_meas[b]; m_size[a] = std::sqrt(face_meas[b]);
+        const int t0 = face_troff[b], t1 = face_troff[b + 1];
+        m_srcTris[a].reserve(t1 - t0);
+        m_qp[a].reserve((size_t)(t1 - t0) * 7);
+        m_qw[a].reserve((size_t)(t1 - t0) * 7);
+        for (int t = t0; t < t1; ++t) {
+            std::array<rad_hdiv::Vec3, 3> T = get_tri(face_tris, t);
+            m_srcTris[a].push_back(T);
+            double e1[3], e2[3];
+            for (int k = 0; k < 3; ++k) { e1[k] = T[1][k]-T[0][k]; e2[k] = T[2][k]-T[0][k]; }
+            double cr[3] = {e1[1]*e2[2]-e1[2]*e2[1], e1[2]*e2[0]-e1[0]*e2[2], e1[0]*e2[1]-e1[1]*e2[0]};
+            const double area = 0.5 * std::sqrt(cr[0]*cr[0] + cr[1]*cr[1] + cr[2]*cr[2]);
+            for (int q = 0; q < 7; ++q) {
+                rad_hdiv::Vec3 P = {0, 0, 0};
+                for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) P[k] += RAD_DUN5[q][i] * T[i][k];
+                m_qp[a].push_back(P);
+                m_qw[a].push_back(RAD_DUN5[q][3] * area);
+            }
         }
     }
 }
@@ -538,6 +637,37 @@ double RadHACApKChargeGram::PhiAtHO(int src, const double p[3]) const
 
 double RadHACApKChargeGram::PhiAt(int src, const double p[3]) const
 {
+    if (m_polytope) {
+        const std::vector<std::array<rad_hdiv::Vec3, 3>>& tris = m_srcTris[src];
+        if (src < m_n_el) {
+            // CELL: divergence-theorem polytope potential = (1/2) sum_tri d_tri * TriPotential(tri,p),
+            // d_tri = (T0 - p).n_out, n_out the OUTWARD unit normal (flipped via the cell centroid --
+            // matches radia.vim._core._cell_hull_tris / _polytope_potential).
+            const double cx = m_cent[3*src], cy = m_cent[3*src+1], cz = m_cent[3*src+2];
+            double tot = 0.0;
+            for (const auto& T : tris) {
+                double e1[3], e2[3];
+                for (int k = 0; k < 3; ++k) { e1[k] = T[1][k]-T[0][k]; e2[k] = T[2][k]-T[0][k]; }
+                double n[3] = {e1[1]*e2[2]-e1[2]*e2[1], e1[2]*e2[0]-e1[0]*e2[2], e1[0]*e2[1]-e1[1]*e2[0]};
+                const double nl = std::sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
+                if (nl < 1e-300) continue;
+                n[0]/=nl; n[1]/=nl; n[2]/=nl;
+                const double tcx = (T[0][0]+T[1][0]+T[2][0])/3.0, tcy = (T[0][1]+T[1][1]+T[2][1])/3.0,
+                             tcz = (T[0][2]+T[1][2]+T[2][2])/3.0;
+                if (n[0]*(tcx-cx) + n[1]*(tcy-cy) + n[2]*(tcz-cz) < 0.0) { n[0]=-n[0]; n[1]=-n[1]; n[2]=-n[2]; }
+                const double d = (T[0][0]-p[0])*n[0] + (T[0][1]-p[1])*n[1] + (T[0][2]-p[2])*n[2];
+                double V[3][3] = {{T[0][0],T[0][1],T[0][2]}, {T[1][0],T[1][1],T[1][2]}, {T[2][0],T[2][1],T[2][2]}};
+                tot += d * rad_hdiv::TriPotential(V, p);
+            }
+            return 0.5 * tot;
+        }
+        double tot = 0.0;                          // FACE: sum of sub-triangle Wilton potentials
+        for (const auto& T : tris) {
+            double V[3][3] = {{T[0][0],T[0][1],T[0][2]}, {T[1][0],T[1][1],T[1][2]}, {T[2][0],T[2][1],T[2][2]}};
+            tot += rad_hdiv::TriPotential(V, p);
+        }
+        return tot;
+    }
     if (src < m_n_el) {
         double V[4][3];
         const double* s = &m_cellV[(size_t)src * 12];
