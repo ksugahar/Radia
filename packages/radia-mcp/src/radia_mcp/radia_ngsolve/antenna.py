@@ -236,6 +236,26 @@ def uniform_linear_array_factor(n_elements, spacing_over_lambda, theta_deg,
     return {"AF": AF, "AF_normalized": AF / N, "psi": psi}
 
 
+def _bessel_j1(x):
+    try:
+        from scipy.special import j1
+    except ModuleNotFoundError:
+        pass
+    else:
+        return float(j1(x))
+
+    # Power series: J1(x) = sum_k (-1)^k (x/2)^(2k+1)/(k!(k+1)!).
+    term = 0.5 * x
+    total = term
+    x2_over_4 = 0.25 * x * x
+    for k in range(1, 80):
+        term *= -x2_over_4 / (k * (k + 1))
+        total += term
+        if abs(term) <= 1e-16 * max(1.0, abs(total)):
+            break
+    return total
+
+
 def circular_aperture_pattern(diameter_over_lambda, theta_deg):
     r"""Far-field pattern of a uniformly illuminated circular aperture (Airy).
 
@@ -266,14 +286,13 @@ def circular_aperture_pattern(diameter_over_lambda, theta_deg):
     D = float(diameter_over_lambda)
     if D <= 0.0:
         raise ValueError("diameter_over_lambda must be > 0")
-    from scipy.special import j1  # lazy import; pure scalar evaluation
 
     theta = math.radians(theta_deg)
     u = math.pi * D * math.sin(theta)
     if abs(u) < 1e-12:
         E = 1.0
     else:
-        E = 2.0 * float(j1(u)) / u
+        E = 2.0 * _bessel_j1(u) / u
 
     # first null: u = 3.8317  ->  sin(theta_null) = 3.8317 / (pi D/lambda)
     U1 = 3.8317059702
