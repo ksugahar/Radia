@@ -97,9 +97,9 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
                  PM-iron magnetization discontinuity) -- separate them with an air gap.
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  REQUIRED.
-    scalable   : None (default) -> auto: TET mesh uses the scalable C++ charge-Gram H-matrix, HEX/WEDGE
-                 uses the dense analytic polytope Gram (O(N^2), correct).  True forces the C++ path (tet
-                 only -> raises on hex/wedge).  False forces the dense analytic Gram for any element type.
+    scalable   : None (default) -> the scalable C++ charge-Gram H-matrix for ANY element type (tet via
+                 cell_verts/face_verts, hex/wedge via the polytope triangle-soup ctor).  False forces the
+                 dense analytic polytope Gram (O(N^2), correct) -- a small-mesh cross-check / reference.
 
     Returns dict: M (n_el,3) per-element magnetization, M_avg (3,), iters, demag (Rayleigh factor),
     ndof, n_el, n_charge, nonlinear(bool).  The caller must open `with ng.TaskManager():`.
@@ -115,27 +115,31 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
                              "bh_table (nonlinear), not both")
 
     # ---- scalable (C++ charge-Gram H-matrix) vs dense (Python analytic polytope Gram) ----
-    # The scalable C++ kernel (_ChargeGramHMatrix) is TETRAHEDRON-ONLY (tet cells + triangle faces);
-    # hex/wedge meshes take the dense analytic polytope Gram (correct, O(N^2); the scalable C++ hex/wedge
-    # Gram is a future increment).  scalable=None (default) auto-selects by element type; an EXPLICIT
-    # scalable=True on a non-tet mesh is a fail-loud error (No-Fallbacks -- the C++ path cannot run it).
+    # The scalable C++ kernel (_ChargeGramHMatrix) handles BOTH tet (cell_verts/face_verts) AND hex/wedge
+    # (the polytope triangle-soup ctor); scalable=None (default) always picks the C++ H-matrix.  scalable
+    # is kept as an explicit knob (scalable=False forces the dense O(N^2) analytic Gram, e.g. for a small
+    # cross-check) but is no longer element-type-restricted.
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
     if scalable is None:
-        scalable = all_tet
-    elif scalable and not all_tet:
-        raise NotImplementedError(
-            "hdiv_demag_solve(scalable=True) uses the C++ charge-Gram H-matrix, which is "
-            "tetrahedron-only, but this mesh has non-tet volume elements (hex/wedge).  Pass "
-            "scalable=False for the dense analytic polytope charge Gram (correct, O(N^2)); the "
-            "scalable C++ hex/wedge charge Gram is a future increment.")
+        scalable = True
 
     # ---- demag operator N (apply) + M_mass^{-1} preconditioner, shared by both modes ----
     if scalable:
         d = _tet.build_demag(mesh, skip_dense_gram=True)
         Mm, B = d["M_mass"], d["B_csr"]
-        H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
-                                   n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta,
-                                   near_factor=near_factor)
+        if all_tet:
+            H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
+                                       n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta,
+                                       near_factor=near_factor)
+        else:
+            # HEX/WEDGE: the polytope triangle-soup charge Gram (build_demag emits d["poly"] for non-tet).
+            p = d["poly"]
+            H = _rp._ChargeGramHMatrix(
+                cell_tris=list(p["cell_tris"]), cell_troff=list(p["cell_troff"]),
+                cell_cent=list(p["cell_cent"]), cell_meas=list(p["cell_meas"]),
+                face_tris=list(p["face_tris"]), face_troff=list(p["face_troff"]),
+                face_cent=list(p["face_cent"]), face_meas=list(p["face_meas"]),
+                n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta, near_factor=near_factor)
 
         def N_apply(v):
             v = np.asarray(v, float)
