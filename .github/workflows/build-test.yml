@@ -31,6 +31,10 @@ concurrency:
 
 jobs:
   build-test:
+    # Public-repo safety: never run fork PR code on the lab self-hosted
+    # runner.  Same-repository PRs are still allowed for maintainer-owned
+    # branches; fork PRs get the GitHub-hosted policy/radia-mcp checks only.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, windows-radia]
     # No timeout-minutes -- per 2026-05-25 user decision after
     # 45-min cap (sha 357da370 cancelled) and 70-min cap (sha

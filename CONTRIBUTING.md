@@ -5,7 +5,7 @@ Thank you for your interest in contributing to Radia! This document provides gui
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork and create a feature branch from `master`
+2. Clone your fork and create a feature branch from `main`
 3. Set up the development environment (see [BUILD.md](BUILD.md))
 
 ## Development Environment
@@ -94,4 +94,4 @@ Every example directory under `examples/` must have exactly **one README.md** th
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same [BSD-style AND MIT license](LICENSE) as the project.
+By contributing, you agree that your contributions will be licensed under the terms described in [LICENSE](LICENSE).

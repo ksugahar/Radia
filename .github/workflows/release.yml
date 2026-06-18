@@ -70,7 +70,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          # List all tags whose object SHA (direct for lightweight, or
+          # List all tags whose target SHA (direct for lightweight, or
           # dereferenced ^{} for annotated) matches the triggering commit.
           # The ^{} deref endpoint returns lines like:
           #   refs/tags/v4.90.1^{} <sha>
@@ -80,7 +80,7 @@ jobs:
           # automatically set to "owner/repo" on every Actions runner.
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           VTAG=$(git ls-remote --tags "$REPO_URL" 'refs/tags/v*' \
-                 | awk -v sha="$SHA" '($1==sha) && /\^\{\}/ {print $2}' \
+                 | awk -v sha="$SHA" '$1 == sha {print $2}' \
                  | sed 's/\^{}//' | head -1)
           if [ -n "$VTAG" ]; then
             echo "found=true"  >> "$GITHUB_OUTPUT"
