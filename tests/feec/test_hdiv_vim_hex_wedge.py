@@ -1,14 +1,16 @@
-"""Gate-2 hex/wedge: the FEEC HDiv-VIM demag solve on HEX and WEDGE meshes, via the dense analytic
-POLYTOPE charge Gram (build_demag(analytic_gram=True) generalized from tet/triangle to any flat-faced
-convex cell + quad face: cell Newtonian potential = divergence-theorem sum over the convex-hull faces of
-the exact Wilton triangle potential; a quad face = two flat triangles; centroid-fan / Dunavant outer
-quadrature).  The scalable C++ charge-Gram H-matrix is tetrahedron-only, so hex/wedge take the dense
-analytic path (correct, O(N^2); the scalable C++ hex/wedge Gram is a future increment).
+"""Gate-2 hex/wedge: the FEEC HDiv-VIM demag solve on HEX and WEDGE meshes, via the POLYTOPE charge Gram
+(build_demag's analytic Gram generalized from tet/triangle to any flat-faced convex cell + quad face: cell
+Newtonian potential = divergence-theorem sum over the convex-hull faces of the exact Wilton triangle
+potential; a quad face = two flat triangles; centroid-fan / Dunavant outer quadrature).  Both the dense
+Python path (analytic_charge_gram) AND the scalable C++ charge-Gram H-matrix (the polytope triangle-soup
+_ChargeGramHMatrix ctor) handle hex/wedge -- scalable=None (default) now uses the C++ H-matrix for ANY
+element type.
 
 Locks:
   (1) hex- and wedge-meshed cubes have demag_z ~ 1/3 (the physics gate -- isotropic uniform-M body);
   (2) a hex cube's M_avg matches a tet mesh of the same cube (element-type-independent physics);
-  (3) hdiv_demag_solve(scalable=True) on a hex mesh RAISES (fail-loud: the C++ kernel is tet-only);
+  (3) hdiv_demag_solve(scalable=True) on a hex mesh now WORKS (the C++ polytope Gram) and matches the
+      dense polytope Gram (scalable=False) -- the Item-1 scalable hex/wedge increment;
   (4) rad.Solve(demag_backend='hdiv') dispatches the HEX solve == direct hdiv_demag_solve to machine
       precision and writes per-element M back (ObjM) onto the Radia hex elements;
   (5) soft_iron_from_mesh on a WEDGE mesh raises a clean NotImplementedError (the container write-back
@@ -85,12 +87,26 @@ def test_hex_nonlinear_matches_tet_cube():
     assert rel < 3e-2, f"nonlinear hex M_avg {r_hex['M_avg'][2]:.1f} vs tet {r_tet['M_avg'][2]:.1f} (rel {rel:.2e})"
 
 
-def test_scalable_true_on_hex_raises():
-    """Explicit scalable=True selects the C++ charge-Gram H-matrix, which is tetrahedron-only -> a hex
-    mesh must raise (No-Fallbacks: do not silently fall back to the dense path the user did not ask for)."""
+def test_scalable_hex_matches_dense():
+    """Item-1 scalable hex/wedge Gram: scalable=True (C++ polytope charge-Gram H-matrix) reproduces
+    scalable=False (the dense Python polytope Gram) on a hex cube to a tight tolerance -- the C++ entry ==
+    the dense analytic_charge_gram polytope entry (same hull triangulation, same built-in quad rules)."""
     with ng.TaskManager():
-        with pytest.raises(NotImplementedError):
-            vim.hdiv_demag_solve(_cube(True, 3), mu_r=MU_R, H_ext=_Hz(), scalable=True)
+        r_scal = vim.hdiv_demag_solve(_cube(True, 3), mu_r=MU_R, H_ext=_Hz(), scalable=True)
+        r_dense = vim.hdiv_demag_solve(_cube(True, 3), mu_r=MU_R, H_ext=_Hz(), scalable=False)
+    assert abs(r_scal["demag"] - r_dense["demag"]) < 1e-3 * abs(r_dense["demag"]) + 1e-4, \
+        f"hex scalable demag {r_scal['demag']:.5f} vs dense {r_dense['demag']:.5f}"
+    rel = abs(r_scal["M_avg"][2] - r_dense["M_avg"][2]) / abs(r_dense["M_avg"][2])
+    assert rel < 1e-3, f"hex scalable M_avg {r_scal['M_avg'][2]:.2f} vs dense {r_dense['M_avg'][2]:.2f} (rel {rel:.2e})"
+
+
+def test_scalable_wedge_matches_dense():
+    """Same Item-1 check on a WEDGE cube (mixed tri+quad faces): the C++ polytope Gram == the dense one."""
+    with ng.TaskManager():
+        r_scal = vim.hdiv_demag_solve(_cube(False, 3), mu_r=MU_R, H_ext=_Hz(), scalable=True)
+        r_dense = vim.hdiv_demag_solve(_cube(False, 3), mu_r=MU_R, H_ext=_Hz(), scalable=False)
+    rel = abs(r_scal["M_avg"][2] - r_dense["M_avg"][2]) / abs(r_dense["M_avg"][2])
+    assert rel < 1e-3, f"wedge scalable M_avg {r_scal['M_avg'][2]:.2f} vs dense {r_dense['M_avg'][2]:.2f} (rel {rel:.2e})"
 
 
 def test_radsolve_hdiv_hex_dispatch():
