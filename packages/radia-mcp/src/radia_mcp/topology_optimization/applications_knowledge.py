@@ -373,6 +373,28 @@ scipy.optimize.least_squares(method='lm') to ~1e-15.
 """
 
 
+GLOBAL_OPTIMIZERS = r"""
+## Global optimization -- Differential Evolution (the multimodal/global member)
+
+`global_optimizers.differential_evolution(func, bounds, seed=...)` is a GLOBAL, derivative-free
+population optimizer (Storn-Price DE/rand/1/bin): mutate v = a + F(b-c) from three random members,
+binomially cross with the target, keep the trial only if it lowers the objective. It is the global
+complement to the LOCAL optimizers (Nelder-Mead in `outer_loop`, Levenberg-Marquardt in
+`nonlinear_lsq`) and the LINEAR inverse (`linear_inverse`): reach for it when the objective is
+MULTIMODAL / non-convex (competing harmonics in a magnet/coil layout, a boxed design space) where
+a descent method started anywhere stalls in a local minimum.
+
+SCALING CAVEAT (learned): the budget grows with dimension -- popsize~15/dim & a few hundred gens
+solve 2-D multimodal problems, but a 5-D Rastrigin needs popsize~25/dim and ~2000 gens to reliably
+hit the global optimum (smaller budgets stall one Rastrigin "ring" away). Seed the RNG for a
+deterministic run.
+
+Verified (test_topology_global_opt): global optimum of Rastrigin (2-D and 5-D), Ackley (3-D) and
+Rosenbrock (4-D) to f < 1e-6 at the known minimizer, deterministic for a fixed seed, and matching
+scipy.optimize.differential_evolution.
+"""
+
+
 def get_applications_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -391,12 +413,15 @@ def get_applications_documentation(topic: str = "all") -> str:
       "nonlinear_lsq"  - Levenberg-Marquardt nonlinear least squares (lsqnonlin):
                          the nonlinear sum-of-squares solver for field/curve fitting
                          and inverse design, verified vs known optima + scipy
+      "global_optimizers" - Differential Evolution: global, derivative-free population
+                         optimizer for MULTIMODAL/non-convex objectives where local
+                         methods stall, verified on Rastrigin/Ackley/Rosenbrock + scipy
     """
     t = topic.lower().strip()
     if t == "all":
         return (MOTOR_OPTIMIZATION + "\n\n" + FIELD_SYNTHESIS
                 + "\n\n" + LINEAR_INVERSE + "\n\n" + OUTER_LOOP_OPTIMIZERS
-                + "\n\n" + NONLINEAR_LSQ)
+                + "\n\n" + NONLINEAR_LSQ + "\n\n" + GLOBAL_OPTIMIZERS)
     if t in ("motor", "ipm"):
         return MOTOR_OPTIMIZATION
     if t in ("field_synthesis", "field-synthesis", "fieldsynthesis",
@@ -419,5 +444,9 @@ def get_applications_documentation(topic: str = "all") -> str:
              "least_squares", "least-squares", "gauss_newton", "gauss-newton",
              "nonlinear_least_squares", "curve_fit", "fit"):
         return NONLINEAR_LSQ
+    if t in ("global_optimizers", "global", "global_optimization", "differential_evolution",
+             "differential-evolution", "de", "evolutionary", "population", "swarm",
+             "pso", "stochastic", "multimodal", "global_search"):
+        return GLOBAL_OPTIMIZERS
     return ("Unknown topic '%s'. Available: all, motor, field_synthesis, "
-            "linear_inverse, outer_loop, nonlinear_lsq." % topic)
+            "linear_inverse, outer_loop, nonlinear_lsq, global_optimizers." % topic)
