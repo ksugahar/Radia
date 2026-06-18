@@ -25,11 +25,20 @@ The per-element write-back container is ObjTetrahedron / ObjHexahedron / ObjWedg
 import radia as rad
 
 _DEMAG_REGISTRY = {}   # iron container handle -> dict(mesh, mu_r, bh_table, handles)
+_KNOWN_CONTAINER_MEMBERS = {}  # container handle -> member handles known to be safe for ObjCntStuf-free lookup
 
 
 def clear_registry():
     """Drop all mesh<->container associations (call when Radia handles are invalidated)."""
     _DEMAG_REGISTRY.clear()
+    _KNOWN_CONTAINER_MEMBERS.clear()
+
+
+def register_container(container, members):
+    """Record an ObjCnt built by the Python wrapper so HDiv dispatch can inspect it without calling
+    ObjCntStuf on arbitrary handles.  ObjCntStuf segfaults on non-container handles in some Radia builds,
+    so registry lookup must stay Python-side and conservative."""
+    _KNOWN_CONTAINER_MEMBERS[container] = list(members)
 
 
 def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, verbose=False):
@@ -55,8 +64,20 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     for h in handles:
         rad.MatApl(h, mat)
     cont = rad.ObjCnt(handles)
+    register_container(cont, handles)
     _DEMAG_REGISTRY[cont] = dict(mesh=mesh, mu_r=mu_r, bh_table=bh_table, handles=list(handles))
     return cont
+
+
+def is_registered(top):
+    """True if ``top`` (a rad.Solve object handle) IS, or CONTAINS, a soft-iron body registered via
+    soft_iron_from_mesh -- i.e. the rad.Solve wrapper should dispatch it to the FEEC HDiv-VIM.  Used by
+    radia.Solve to route mesh-backed soft iron to the HDiv-VIM and everything else (MMM-tet, PM) to the
+    C++ solve.  Read-only, never raises."""
+    if top in _DEMAG_REGISTRY:
+        return True
+    members = _KNOWN_CONTAINER_MEMBERS.get(top, [])
+    return any(m in _DEMAG_REGISTRY for m in members)
 
 
 def _find_registered_iron(top):
@@ -65,10 +86,7 @@ def _find_registered_iron(top):
     ``ObjCnt([iron, sources...])``."""
     if top in _DEMAG_REGISTRY:
         return top, []
-    try:
-        members = list(rad.ObjCntStuf(top))
-    except Exception:
-        members = []
+    members = _KNOWN_CONTAINER_MEMBERS.get(top, [])
     irons = [m for m in members if m in _DEMAG_REGISTRY]
     if len(irons) == 1:
         iron = irons[0]
@@ -90,6 +108,14 @@ def dispatch(top, *solve_args, **solve_kwargs):
     ``solve_args`` (prec, maxiter, method) are not used by the HDiv path."""
     import ngsolve
     from ._solve import hdiv_demag_solve
+
+    image = solve_kwargs.pop("image", None)
+    if image:
+        raise NotImplementedError(
+            "rad.Solve(image=...) / IMA symmetry is not supported by the FEEC HDiv-VIM dispatch yet; "
+            "solve the full mesh or call hdiv_demag_solve directly.")
+    if solve_kwargs:
+        raise TypeError(f"unsupported rad.Solve keyword(s) for HDiv-VIM dispatch: {sorted(solve_kwargs)}")
 
     iron, sources = _find_registered_iron(top)
     reg = _DEMAG_REGISTRY[iron]

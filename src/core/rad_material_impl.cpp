@@ -1583,6 +1583,21 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 
 		SendingIsRequired = PrevSendingIsRequired;
 
+		// yano-type MSC removed: refuse the collocation surface-charge demag for hexahedral / wedge soft
+		// iron (route it to the FEEC HDiv-VIM via radia.vim.soft_iron_from_mesh).  Tet (MMM) / PM unaffected.
+		{
+			radThg hgMSCchk;
+			if(ValidateElemKey(InteractElemKey, hgMSCchk))
+			{
+				radTInteraction* pIntrcChk = dynamic_cast<radTInteraction*>(hgMSCchk.rep);
+				if(pIntrcChk != nullptr && pIntrcChk->HasSurfaceChargeElements())
+				{
+					Send.ErrorMessage("Radia::Error203");
+					return 0;
+				}
+			}
+		}
+
 		try
 		{
 			ActualIterNum = MakeAutoRelax(InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);

@@ -368,44 +368,26 @@ class TestMeshImportSolver(unittest.TestCase):
         # M should be positive (induced by external field)
         self.assertGreater(M_avg_z, 0, "Magnetization should be positive")
 
-    def test_hex_mesh_solver(self):
-        """Test ObjHexahedron mesh with solver."""
-
+    def test_hex_mesh_soft_iron_solve_removed(self):
+        """A hexahedral mesh of soft iron (ObjHexahedron + MatLin) solved via rad.Solve now RAISES:
+        the yano-type collocation MSC demag was removed.  Hex soft iron must be built from an NGSolve
+        mesh via radia.vim.soft_iron_from_mesh (the FEEC HDiv-VIM).  (The tetrahedral mesh solve above
+        -- MMM -- and permanent-magnet fields are unaffected.)"""
         center = [0.0, 0.0, 0.0]
         size = [1.0, 1.0, 1.0]
         n_div = 3
         mu_r = 1000.0
-        H_ext = 1000.0  # A/m
-        B_ext = MU_0 * H_ext
+        B_ext = MU_0 * 1000.0
 
-        # ObjHexahedron mesh
         rad.UtiDelAll()
         nodes, hexahedra = create_cube_hex_mesh(center, size, n_div)
-
-        polyhedra = []
-        for hex_indices in hexahedra:
-            hex_verts = [nodes[i] for i in hex_indices]
-            obj = rad.ObjHexahedron(hex_verts, [0, 0, 0])
-            polyhedra.append(obj)
-
+        polyhedra = [rad.ObjHexahedron([nodes[i] for i in hx], [0, 0, 0]) for hx in hexahedra]
         cube_hex = rad.ObjCnt(polyhedra)
-        mat = rad.MatLin(mu_r)
-        rad.MatApl(cube_hex, mat)
-        ext = rad.ObjBckg(lambda p: [0, 0, B_ext])
-        grp_hex = rad.ObjCnt([cube_hex, ext])
+        rad.MatApl(cube_hex, rad.MatLin(mu_r))
+        grp_hex = rad.ObjCnt([cube_hex, rad.ObjBckg(lambda p: [0, 0, B_ext])])
 
-        result_hex = rad.Solve(grp_hex, 0.001, 100, 1)
-        M_hex = rad.ObjM(cube_hex)
-        M_avg_hex = np.mean([m[1][2] for m in M_hex])
-
-        print(f"\nObjHexahedron mesh solver test:")
-        print(f"  N: {n_div} ({n_div**3} elements)")
-        print(f"  mu_r: {mu_r}")
-        print(f"  H_ext: {H_ext} A/m")
-        print(f"  M_avg_z: {M_avg_hex:.0f} A/m")
-
-        # M should be positive (induced by external field)
-        self.assertGreater(M_avg_hex, 0, "Magnetization should be positive")
+        with self.assertRaisesRegex(RuntimeError, "yano-type MSC"):
+            rad.Solve(grp_hex, 0.001, 100, 1)
 
 
 class TestMethodComparison(unittest.TestCase):
