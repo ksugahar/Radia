@@ -173,7 +173,7 @@ def _extract_elements_from_mesh(mesh, material_name="yoke"):
 def solve_msc(coil_script="", vol_file="",
               mat=None, ima="", solver=0,
               max_iter=100, tol=1e-3, relax=0.0,
-              msh_output="", demag_backend="yano"):
+              msh_output="", demag_backend="hdiv"):
     """MSC solver: Netgen .vol hex mesh -> Radia ObjHexahedron -> Solve.
 
     Args:
@@ -279,99 +279,43 @@ def solve_msc(coil_script="", vol_file="",
     solver_names = {0: "LU", 1: "BiCGSTAB", 2: "HACApK"}
     n_dof = n_hex * 6 + n_tet * 3 + n_wedge * 5
 
-    if demag_backend == "hdiv":
-        # --- FEEC HDiv-VIM backend (radia.vim) -- KELVIN-less, IRON-ONLY ---
-        # The VIM solves the WHOLE registered mesh as iron, so the .vol must contain
-        # ONLY 'yoke' volume elements (no air / kelvin -- the VIM needs no air mesh).
-        if ima:
-            return {"error": "demag_backend='hdiv' does not support IMA symmetry yet; "
-                             "solve the full (non-symmetry) model or use demag_backend='yano'"}
-        from ngsolve import VOL as _VOL, TaskManager as _TM
-        n_nonyoke = sum(1 for el in mesh.Elements(_VOL) if el.mat != "yoke")
-        if n_nonyoke > 0:
-            return {"error": "demag_backend='hdiv' needs an IRON-ONLY .vol (the HDiv-VIM is "
-                             "KELVIN-less; air/kelvin regions are not used).  This .vol has "
-                             f"{n_nonyoke} non-'yoke' volume elements "
-                             f"(materials {sorted(set(mesh.GetMaterials()))}).  Export the yoke "
-                             "block alone, or use demag_backend='yano'."}
-        import radia.vim as _vim
-        if is_linear:
-            iron = _vim.soft_iron_from_mesh(mesh, mu_r=float(mu_r))
-            _log(f"MAT:linear mu_r={mu_r} (HDiv-VIM)")
-        else:
-            iron = _vim.soft_iron_from_mesh(mesh, bh_table=bh_data)
-            _log(f"MAT:nonlinear BH ({len(bh_data)} pts) (HDiv-VIM)")
-        model = rad.ObjCnt([iron, coil_container])
-        _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM), tol={tol}, maxiter={max_iter}")
-        prev_be = rad.set_demag_backend("hdiv")
-        t_solve_start = time.perf_counter()
-        try:
-            with _TM():
-                res = rad.Solve(model, tol, max_iter, solver)
-        finally:
-            rad.set_demag_backend(prev_be)
-        t_solve = time.perf_counter() - t_solve_start
-        # hdiv dispatch returns the hdiv_demag_solve dict (raises on non-convergence)
-        n_iter = int(res.get("iters", 0)) if isinstance(res, dict) else 0
-        n_dof = int(res.get("ndof", n_dof)) if isinstance(res, dict) else n_dof
-        M_avg = [float(c) for c in res["M_avg"]] if isinstance(res, dict) else [0.0, 0.0, 0.0]
-        residual = 0.0
-        converged = True
-        solver_label = "HDiv-VIM"
+    # --- FEEC HDiv-VIM backend (radia.vim) -- the only soft-iron demag backend.  KELVIN-less, IRON-ONLY:
+    # the VIM solves the WHOLE registered mesh as iron, so the .vol must contain ONLY 'yoke' volume
+    # elements (no air / kelvin).  Tet / hex / wedge all supported.  (The legacy yano-type collocation
+    # MSC backend -- which also supported IMA symmetry -- has been removed; use the full model.)
+    if demag_backend != "hdiv":
+        return {"error": "demag_backend=%r is not available: the yano-type collocation MSC demag has "
+                         "been removed from Radia.  Use demag_backend='hdiv' (the FEEC HDiv-VIM)."
+                         % (demag_backend,)}
+    if ima:
+        return {"error": "IMA symmetry is not supported by the HDiv-VIM backend yet; solve the full "
+                         "(non-symmetry) model.  (The yano-type MSC IMA path was removed.)"}
+    from ngsolve import VOL as _VOL, TaskManager as _TM
+    n_nonyoke = sum(1 for el in mesh.Elements(_VOL) if el.mat != "yoke")
+    if n_nonyoke > 0:
+        return {"error": "the HDiv-VIM needs an IRON-ONLY .vol (it is KELVIN-less; air/kelvin regions "
+                         "are not used).  This .vol has %d non-'yoke' volume elements (materials %s).  "
+                         "Export the yoke block alone." % (n_nonyoke, sorted(set(mesh.GetMaterials())))}
+    import radia.vim as _vim
+    if is_linear:
+        iron = _vim.soft_iron_from_mesh(mesh, mu_r=float(mu_r))
+        _log(f"MAT:linear mu_r={mu_r} (HDiv-VIM)")
     else:
-        # --- legacy yano-type collocation MSC backend (the default) ---
-        if is_linear:
-            radmat = rad.MatLin(mu_r)
-            _log(f"MAT:linear mu_r={mu_r}")
-        else:
-            radmat = rad.MatSatIsoTab(bh_data)
-            _log(f"MAT:nonlinear BH ({len(bh_data)} pts)")
-
-        all_objs = []
-        for elem in elements:
-            verts = elem['vertices']
-            etype = elem['type']
-            if etype == 'hex':
-                obj = rad.ObjHexahedron(verts, [0, 0, 0])
-            elif etype == 'tet':
-                obj = rad.ObjTetrahedron(verts, [0, 0, 0])
-            elif etype == 'wedge':
-                obj = rad.ObjWedge(verts, [0, 0, 0])
-            else:
-                continue
-            rad.MatApl(obj, radmat)
-            all_objs.append(obj)
-
-        yoke = rad.ObjCnt(all_objs)
-        _log(f"RADIA:{len(all_objs)} objects, {n_dof} DOF")
-
-        model = rad.ObjCnt([yoke, coil_container])
-        ima_str = ima if ima else "(none)"
-        _log(f"SOLVE:solver={solver_names.get(solver, solver)}, "
-             f"IMA={ima_str}, tol={tol}, maxiter={max_iter}")
-
-        if relax > 0:
-            rad.SolverConfig(relax_param=relax)
-
-        t_solve_start = time.perf_counter()
-        if ima:
-            result = rad.Solve(model, tol, max_iter, solver, image=ima)
-        else:
-            result = rad.Solve(model, tol, max_iter, solver)
-        t_solve = time.perf_counter() - t_solve_start
-
-        if relax > 0:
-            rad.SolverConfig(relax_param=0.0)
-
-        n_iter = int(result[3]) if len(result) > 3 else 0
-        residual = float(result[1]) if len(result) > 1 else 0.0
-        converged = residual < tol
-        solver_label = solver_names.get(solver, str(solver))
-        # element-mean magnetization (integral quantity, per the Result Output Policy) -- also lets the
-        # golden compare yano vs hdiv on M (the primary unknown), not the internal-origin B_center.
-        M_list = [m for (_c, m) in rad.ObjM(yoke)]
-        nM = max(len(M_list), 1)
-        M_avg = [sum(m[i] for m in M_list) / nM for i in range(3)]
+        iron = _vim.soft_iron_from_mesh(mesh, bh_table=bh_data)
+        _log(f"MAT:nonlinear BH ({len(bh_data)} pts) (HDiv-VIM)")
+    model = rad.ObjCnt([iron, coil_container])
+    _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM), tol={tol}, maxiter={max_iter}")
+    t_solve_start = time.perf_counter()
+    with _TM():
+        res = rad.Solve(model, tol, max_iter, solver)   # auto-routes to the HDiv-VIM (registered iron)
+    t_solve = time.perf_counter() - t_solve_start
+    # the HDiv dispatch returns the hdiv_demag_solve dict (raises on non-convergence)
+    n_iter = int(res.get("iters", 0)) if isinstance(res, dict) else 0
+    n_dof = int(res.get("ndof", n_dof)) if isinstance(res, dict) else n_dof
+    M_avg = [float(c) for c in res["M_avg"]] if isinstance(res, dict) else [0.0, 0.0, 0.0]
+    residual = 0.0
+    converged = True
+    solver_label = "HDiv-VIM"
 
     _log(f"SOLVE:done in {t_solve:.2f}s, {n_iter} iter, "
          f"residual={residual:.2e}")
@@ -541,11 +485,11 @@ def build_argparser():
     parser.add_argument("--solver", type=int, default=0,
                         choices=[0, 1, 2],
                         help="0=LU, 1=BiCGSTAB, 2=HACApK")
-    parser.add_argument("--demag-backend", default="yano",
-                        choices=["yano", "hdiv"],
-                        help="Demag backend: 'yano' (legacy collocation MSC, default) "
-                             "or 'hdiv' (FEEC HDiv-VIM; KELVIN-less, requires an iron-only "
-                             ".vol and does not support IMA yet)")
+    parser.add_argument("--demag-backend", default="hdiv",
+                        choices=["hdiv"],
+                        help="Demag backend: 'hdiv' (the FEEC HDiv-VIM; KELVIN-less, requires an "
+                             "iron-only .vol, does not support IMA symmetry yet).  The legacy "
+                             "'yano' collocation MSC backend has been removed.")
     parser.add_argument("--max-iter", type=int, default=100,
                         help="Max nonlinear iterations")
     parser.add_argument("--tol", type=float, default=1e-3,

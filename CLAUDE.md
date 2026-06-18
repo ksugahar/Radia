@@ -1112,20 +1112,29 @@ sideset 1 add surface 2             # surface 2 may not be the gap face
 - MMM: volume integral equation for magnetization, solved element-by-element
 - MSC: surface charge on element faces, solved via solid angle kernel
 
-**DEPRECATION (2026-06-14): the yano-type MSC demag backend is OPTIONAL + on the removal path.**
-The Yano MSC backend (the `rad.Solve` path for hex/wedge *soft-iron* demag) is being
-superseded by the FEEC HDiv-VIM (`radia.vim`).  It is now exposed as a **runtime-selectable
-backend** so it can be removed cleanly:
-- `radia.set_demag_backend("yano" | "hdiv")` / `radia.get_demag_backend()` (or
-  `rad.SolverConfig(demag_backend=...)`).  Default `"yano"` (legacy; emits a one-time
-  `DeprecationWarning` on the first `rad.Solve`).  `"hdiv"` makes `rad.Solve` **refuse** the yano path
-  with a `NotImplementedError` redirecting to the `radia.vim` API (HDiv-VIM is not yet wired into
-  `rad.Solve`).
-- Permanent-magnet and **MMM (tetrahedron)** solves do NOT use the yano-type MSC path and are unaffected.
-- When the HDiv-VIM is wired into `rad.Solve`, the default flips to `"hdiv"`; deleting the yano C++ MSC
-  then changes only that default, not the public API.  Wrapper + gate live in `src/radia/__init__.py`
-  (golden `tests/test_demag_backend.py`).  Migrate hex/wedge soft-iron demag to `radia.vim`
-  (`build_demag` / `DemagOperator` / `solve_demag_newton`).
+**REMOVED (2026-06-19): the yano-type collocation MSC demag for hex/wedge soft iron is GONE.**
+The Yano MSC backend (the `rad.Solve` collocation-surface-charge demag for hex/wedge *soft-iron*) has
+been **functionally removed** in favour of the FEEC HDiv-VIM (`radia.vim`).  (The method is preserved
+in the private MAGIC Fortran repo; Yano's academic work is still cited.)  Current state:
+- **`rad.Solve` auto-routes** by mesh registration: a soft iron built via
+  `radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=)` dispatches to the HDiv-VIM (tet/hex/wedge,
+  linear + nonlinear, PM-as-source incl. PM-touching-iron); everything else (tet **MMM**, permanent
+  magnets) stays on the C++ solver.  No `set_demag_backend` call is needed.
+- A hex/wedge soft iron built the **mesh-less** way (`ObjHexahedron`/`ObjWedge` + `MatLin`/`MatSatIsoTab`
+  + `rad.Solve`) now **raises `Radia::Error203`** (C++ guard in `SolveGen`, via
+  `radTInteraction::HasSurfaceChargeElements()`) directing to `soft_iron_from_mesh`.  Build hex/wedge
+  soft iron from an NGSolve mesh.
+- `radia.set_demag_backend("yano")` raises `NotImplementedError`; `get_demag_backend()` returns
+  `"hdiv"`; `set_demag_backend("hdiv")` is a no-op (back-compat shim).  Wrapper in
+  `src/radia/__init__.py`; goldens `tests/test_demag_backend.py`, `tests/feec/test_hdiv_radsolve_dispatch.py`.
+- **MMM (tetrahedron)** soft-iron demag and **permanent magnets** are UNAFFECTED (not the yano path).
+- **Deferred (honest):** the yano-MSC C++ *kernel* (the `Use6DOF_MSC` branches in `rad_relaxation_methods.cpp`
+  / `rad_interaction.cpp`, and the hex-MSC matrix assembly that `BuildMatrix` + the H-LU test still use)
+  is interwoven with the MMM 3DOF path and is physically PRESENT-but-`Solve`-unreachable (gated).  Its
+  clean physical excision (keeping HACApK + MMM + elements + fields + PM) is a separate verified pass.
+  Also deferred: IMA symmetry for hex/wedge (the HDiv-VIM full-model only; the MSC IMA path is gone),
+  and migrating the ~28 `examples/**` scripts + `examples/cube_uniform_field` hex benchmarks that solved
+  hex soft iron via the old mesh-less path.
 
 **When to use which**:
 - Permanent magnets, soft iron → **MMM/MSC** (Radia)

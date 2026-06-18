@@ -169,22 +169,20 @@ class TestMaterialApplication:
         result = rad.Solve(tetra, 0.0001, 100, 0)
         assert result is not None
 
-    def test_hexahedron_with_linear_material(self):
-        """Test hexahedron with linear magnetic material."""
+    def test_hexahedron_soft_iron_solve_removed(self):
+        """A hex soft iron (ObjHexahedron + MatLin) solved via rad.Solve now RAISES: the yano-type
+        collocation MSC demag was removed.  Hex/wedge soft iron must be built from an NGSolve mesh via
+        radia.vim.soft_iron_from_mesh (the FEEC HDiv-VIM).  (The ObjHexahedron API + permanent-magnet
+        fields are unaffected -- only the soft-iron MSC SOLVE is gone.)"""
         s = 0.05
         vertices = [
             [-s, -s, -s], [s, -s, -s], [s, s, -s], [-s, s, -s],
             [-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]
         ]
         hex_obj = rad.ObjHexahedron(vertices, [0, 0, 0])
-
-        # Apply linear material (mu_r = 1000)
-        mat = rad.MatLin(1000)
-        rad.MatApl(hex_obj, mat)
-
-        # Should solve without error
-        result = rad.Solve(hex_obj, 0.0001, 100, 0)
-        assert result is not None
+        rad.MatApl(hex_obj, rad.MatLin(1000))
+        with pytest.raises(RuntimeError, match="yano-type MSC"):
+            rad.Solve(hex_obj, 0.0001, 100, 0)
 
 
 class TestContainer:

@@ -44,12 +44,9 @@ def test_radsolve_hdiv_equals_direct():
     iron = vim.soft_iron_from_mesh(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])      # free-space B whose H is H0
     cont = rad.ObjCnt([iron, bkg])
-    prev = rad.set_demag_backend("hdiv")
-    try:
-        with ng.TaskManager():
-            res = rad.Solve(cont, 1e-6, 1000, 0)
-    finally:
-        rad.set_demag_backend(prev)
+    # No set_demag_backend: a mesh-backed soft iron (soft_iron_from_mesh) auto-routes to the HDiv-VIM.
+    with ng.TaskManager():
+        res = rad.Solve(cont, 1e-6, 1000, 0)
 
     rel = abs(res["M_avg"][2] - direct["M_avg"][2]) / abs(direct["M_avg"][2])
     assert rel < 1e-9, f"rad.Solve(hdiv) M_avg {res['M_avg'][2]:.3f} != direct {direct['M_avg'][2]:.3f} (rel {rel:.2e})"
@@ -62,19 +59,26 @@ def test_radsolve_hdiv_equals_direct():
     rad.UtiDelAll()
 
 
-def test_radsolve_hdiv_unregistered_raises():
-    """rad.Solve(demag_backend='hdiv') on a container with no HDiv-registered iron raises
-    NotImplementedError redirecting to soft_iron_from_mesh (fail-loud, No-Fallback)."""
+def test_radsolve_hdiv_rejects_image_symmetry():
+    """Registered HDiv-VIM dispatch must not silently ignore rad.Solve(image=...) / IMA symmetry."""
     rad.UtiDelAll()
-    # a plain hex magnet container -- NOT built via soft_iron_from_mesh, so no mesh association
+    mesh = _tet_cube_mesh()
+    iron = vim.soft_iron_from_mesh(mesh, mu_r=MU_R)
+    with pytest.raises(NotImplementedError, match="IMA symmetry"):
+        rad.Solve(iron, 1e-6, 100, 0, image="x")
+    rad.UtiDelAll()
+
+
+def test_meshless_hex_soft_iron_raises():
+    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin, NOT via soft_iron_from_mesh)
+    has no mesh association, so rad.Solve cannot route it to the HDiv-VIM -- and the yano-type MSC was
+    removed, so the C++ solve refuses it with Radia::Error203 directing to soft_iron_from_mesh."""
+    rad.UtiDelAll()
     hexv = [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
             [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]
     obj = rad.ObjHexahedron([[c * 0.005 for c in v] for v in hexv], [0, 0, 0])
+    rad.MatApl(obj, rad.MatLin(1000.0))
     cont = rad.ObjCnt([obj])
-    prev = rad.set_demag_backend("hdiv")
-    try:
-        with pytest.raises(NotImplementedError):
-            rad.Solve(cont, 1e-6, 100, 0)
-    finally:
-        rad.set_demag_backend(prev)
+    with pytest.raises(RuntimeError, match="yano-type MSC"):
+        rad.Solve(cont, 1e-6, 100, 0)
     rad.UtiDelAll()
