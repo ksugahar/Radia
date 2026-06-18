@@ -9,7 +9,7 @@
 # pybind11 Migration Complete (2026-01):
 # All bindings now use pybind11 exclusively.
 
-__version__ = "4.90.2"
+__version__ = "4.91.0"
 
 # Compatibility window with the cubit-mesh-export package. The .ccm/.ccl
 # plugin binaries built there must match this radia minor series; the
