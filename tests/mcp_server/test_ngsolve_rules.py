@@ -319,7 +319,7 @@ class TestAllRulesList:
         # Tripwire: bump when adding/removing a rule in
         # radia_ngsolve.rules.ALL_RULES (NOT covered by ci_preflight's
         # pre-push gate -- only this build-test pytest runs it).
-        assert len(ALL_RULES) == 35
+        assert len(ALL_RULES) == 36
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:
