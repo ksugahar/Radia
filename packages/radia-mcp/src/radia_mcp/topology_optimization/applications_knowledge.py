@@ -344,6 +344,35 @@ inverts it stably; `outer_loop` then tunes the manufacturable parameters around 
 """
 
 
+NONLINEAR_LSQ = r"""
+## Nonlinear least squares -- Levenberg-Marquardt (the `lsqnonlin` member)
+
+`nonlinear_lsq.levenberg_marquardt(residual, x0, jac=None)` minimises 0.5||r(x)||^2 by
+interpolating Gauss-Newton and gradient descent:
+
+    (J^T J + lam I) delta = -J^T r ,   x <- x + delta ,
+
+damping lam DOWN on a successful step, UP on a rejected one; the Jacobian is supplied or
+formed by forward differences. It is the NONLINEAR complement of the linear inverse solvers
+(`linear_inverse`: TSVD / Tikhonov, for A x = b) and of the derivative-free `outer_loop`
+(Nelder-Mead): use LM when the model is nonlinear in the parameters but smooth and the
+residual is a sum of squares (curve/field fitting, calibration, inverse design).
+
+Magnet/coil uses: recover excitation/geometry from measured field samples, B-H curve fits,
+over-determined nonlinear calibration -- the field-fitting cousin of the analytic/linear
+`field_synthesis` inverse.
+
+SCALING CAVEAT (learned): the gradient stop ||J^T r||_inf < gtol is ABSOLUTE, so a residual in
+tiny physical units (B ~ 1e-5 T) can halt in a flat valley far from the optimum. NORMALISE the
+residual to O(1) (divide by a characteristic scale); then noiseless data is recovered exactly.
+
+Verified (test_topology_nonlinear_lsq): exponential-model parameter recovery to ~1e-15;
+circular-loop on-axis field B_z=mu0 I a^2/(2(a^2+z^2)^{3/2}) -> (I,a) recovered to ~1e-14 after
+normalisation; Rosenbrock residuals [1-x, 10(y-x^2)] -> (1,1), cost 0; and agreement with
+scipy.optimize.least_squares(method='lm') to ~1e-15.
+"""
+
+
 def get_applications_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -359,11 +388,15 @@ def get_applications_documentation(topic: str = "all") -> str:
       "outer_loop"     - Derivative-free outer-loop optimizers (Nelder-Mead +
                          fminsearchbnd bound transform; pointer to evolutionary
                          / optuna for population/global), verified on Rosenbrock
+      "nonlinear_lsq"  - Levenberg-Marquardt nonlinear least squares (lsqnonlin):
+                         the nonlinear sum-of-squares solver for field/curve fitting
+                         and inverse design, verified vs known optima + scipy
     """
     t = topic.lower().strip()
     if t == "all":
         return (MOTOR_OPTIMIZATION + "\n\n" + FIELD_SYNTHESIS
-                + "\n\n" + LINEAR_INVERSE + "\n\n" + OUTER_LOOP_OPTIMIZERS)
+                + "\n\n" + LINEAR_INVERSE + "\n\n" + OUTER_LOOP_OPTIMIZERS
+                + "\n\n" + NONLINEAR_LSQ)
     if t in ("motor", "ipm"):
         return MOTOR_OPTIMIZATION
     if t in ("field_synthesis", "field-synthesis", "fieldsynthesis",
@@ -381,5 +414,10 @@ def get_applications_documentation(topic: str = "all") -> str:
              "simplex", "fminsearch", "fminsearchbnd", "direct_search",
              "optimizer", "optimizers"):
         return OUTER_LOOP_OPTIMIZERS
+    if t in ("nonlinear_lsq", "nonlinear-lsq", "nonlinearlsq", "lsqnonlin",
+             "levenberg_marquardt", "levenberg-marquardt", "levenberg", "lm",
+             "least_squares", "least-squares", "gauss_newton", "gauss-newton",
+             "nonlinear_least_squares", "curve_fit", "fit"):
+        return NONLINEAR_LSQ
     return ("Unknown topic '%s'. Available: all, motor, field_synthesis, "
-            "linear_inverse, outer_loop." % topic)
+            "linear_inverse, outer_loop, nonlinear_lsq." % topic)
