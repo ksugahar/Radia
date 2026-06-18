@@ -583,7 +583,7 @@ jobs:
       # calls _selftest() directly in the source tree) — here we verify
       # the *installed* wheel behaves the same.
       # ----------------------------------------------------------------
-      - name: Post-install MCP selftest (all 6 public servers)
+      - name: Post-install MCP selftest (5 core public servers)
         # Gated to main-only (2026-05-25) to avoid the concurrency
         # race that bit radia-mcp-v0.73.0 + v0.74.0 tag CIs:
         # main + tag CI fire simultaneously on the same self-hosted
@@ -627,7 +627,7 @@ jobs:
             @{ name = 'mcp-server-cubit';          mod = 'radia_mcp.cubit.server' },
             @{ name = 'mcp-server-build123d';      mod = 'radia_mcp.build123d.server' },
             @{ name = 'mcp-server-gmsh';           mod = 'radia_mcp.gmsh.server' },
-            @{ name = 'mcp-server-radia-interop';  mod = 'radia_mcp.interop.server' }
+            @{ name = 'mcp-server-radia-streamfunction';  mod = 'radia_mcp.streamfunction.server' }
           )
           $failed = @()
           foreach ($s in $servers) {
@@ -644,7 +644,7 @@ jobs:
             exit 1
           }
           Write-Host ""
-          Write-Host "All 6 MCP servers passed --selftest."
+          Write-Host "All 5 core MCP servers passed --selftest."
 
       # ----------------------------------------------------------------
       # MCP response regression tests (topic coverage + unknown-topic
