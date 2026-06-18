@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 |---------|--------------------|
-| 2.x     | Yes                |
-| 1.x     | No                 |
+| 4.x     | Yes                |
+| 3.x and earlier | No        |
 
 ## Reporting a Vulnerability
 
@@ -13,7 +13,7 @@ If you discover a security vulnerability in Radia, please report it responsibly.
 
 **Do NOT open a public issue.**
 
-Instead, please email the maintainer directly:
+Instead, contact the maintainers privately:
 - **Contact**: Open a [private security advisory](https://github.com/ksugahar/Radia/security/advisories/new) on GitHub
 
 ### What to Include
@@ -33,6 +33,7 @@ Instead, please email the maintainer directly:
 
 This policy covers:
 - The Radia Python package (`radia`)
+- The `radia-mcp` and `cubit-mesh-export` packages in this monorepo
 - C++ core library (`src/core/`)
 - Build scripts and CI/CD workflows
 - Example scripts (if they demonstrate insecure patterns)
