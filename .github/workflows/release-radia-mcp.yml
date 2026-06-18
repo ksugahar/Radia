@@ -30,7 +30,7 @@ jobs:
         run: |
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           VTAG=$(git ls-remote --tags "$REPO_URL" 'refs/tags/radia-mcp-v*' \
-                 | awk -v sha="$SHA" '($1==sha) && /\^\{\}/ {print $2}' \
+                 | awk -v sha="$SHA" '$1 == sha {print $2}' \
                  | sed 's/\^{}//' | head -1)
           if [ -n "$VTAG" ]; then
             echo "found=true"  >> "$GITHUB_OUTPUT"

@@ -2,6 +2,7 @@
 
 import importlib.util
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -59,8 +60,11 @@ def _imported_modules(text: str) -> set:
     module-level import crashes COLLECTION, an in-function import errors the
     TEST.  So scan the whole file (matches the prior whole-source behavior).
     Relative imports (`from . import x`) are intra-package and skipped;
-    `pytest.importorskip("x")` is intentionally NOT matched (those tests are
-    collected and self-skip, which is correct)."""
+    In the real GitHub-hosted minimal matrix, `pytest.importorskip("x")`
+    collects and self-skips when x is absent.  Under
+    RADIA_MCP_FORCE_MINIMAL=1 on LAB, x may actually be installed; include
+    importorskip targets in that simulation so the local gate still behaves
+    like the minimal matrix."""
     mods = set()
     for _line in text.splitlines():
         s = _line.strip()
@@ -73,6 +77,9 @@ def _imported_modules(text: str) -> set:
                 tok = _part.strip().split()[0].split(".")[0]
                 if tok:
                     mods.add(tok)
+    if _FORCE_MINIMAL:
+        for _m in re.finditer(r"(?:pytest\.)?importorskip\(\s*['\"]([^'\"]+)['\"]", text):
+            mods.add(_m.group(1).split(".")[0])
     return mods
 
 

@@ -3,7 +3,7 @@
 [![CI](https://github.com/ksugahar/Radia/actions/workflows/build-test.yml/badge.svg)](https://github.com/ksugahar/Radia/actions/workflows/build-test.yml)
 [![Policy Lint](https://github.com/ksugahar/Radia/actions/workflows/policy-lint.yml/badge.svg)](https://github.com/ksugahar/Radia/actions/workflows/policy-lint.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-BSD%20%2B%20MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-see%20LICENSE-blue.svg)](LICENSE)
 
 **A Python-native electromagnetic source framework for [NGSolve](https://ngsolve.org/) and [ngsolve.bem](https://docu.ngsolve.org/latest/i-tutorials/unit-8.1-ngbem/ngbem.html).**
 
@@ -619,8 +619,11 @@ cubit-plugin-install --verify-only      # SHA-256 confirm every deployed binary
 
 ## License
 
+Radia contains multiple components with different license terms. See [LICENSE](LICENSE) for the full terms.
+
 *   **Radia Core**: BSD-style (ESRF)
 *   **$\mathcal{H}$-Matrix Library ([HACApK](https://github.com/RIKENGITHUB/ppOpen-HPC))**: MIT (ppOpen-HPC/JAMSTEC)
+*   **sparseSolv integration**: Mozilla Public License 2.0
 
 ---
 *Radia: Empowering the next generation of magnetic system design.*
