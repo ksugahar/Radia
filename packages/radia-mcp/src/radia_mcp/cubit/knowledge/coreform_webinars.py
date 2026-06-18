@@ -839,6 +839,414 @@ material sciences; Coreform Lattice GC (3D printing); Hex meshing an evolving le
 mesh a tire tread; Tire model building (Endurica); Coreform Cubit Associate (student pipeline).
 """
 
+GETTING_STARTED_2025 = r"""
+## Getting Started (2025 series): UI workflow, journaling, Python, Associate edition
+
+This topic distills Coreform's "Getting started" YouTube playlist (2025.8-era UI refresh plus several
+older Trelis/Cubit overview videos). It assumes the generic getting_started topic already covers the
+GUI panes, the ITEM wizard concept, and Exodus block/sideset/nodeset basics, so it focuses on what is
+distinctive to this playlist: the three parallel "first mesh" paths, journaling/Python scripting,
+extended parsing/selection, pillowing, vertex types, smoothing, and the free Associate/Learn edition.
+Coreform Cubit is the commercial Sandia-codeveloped hex/tet mesher; attribution to Coreform and YouTube
+is fine and required.
+
+### 2025.8 UI refresh and the Power Tools home of ITEM
+The 2025.8 release reskinned the toolbar with scalable high-DPI icons (structure unchanged), and
+simplified licensing: instead of a license file, you log in once with your Coreform account email and
+password and the credentials are remembered for later launches (verify via Help > Product Activation).
+The ITEM wizard (Immersive Topology Environment for Meshing, the little wizard-hat-with-wand icon) now
+lives as a tab inside the Power Tools dock, alongside the Command Panel. New users are steered to Power
+Tools / ITEM; intermediate users shift to the Command Panel; advanced users drive the command line and
+then journal/Python. If a panel is missing (Power Tools, ITEM, Properties Page), re-enable it from the
+View menu. ITEM presents a vertical top-to-bottom checklist whose steps mirror the real hex-meshing
+loop: import/create geometry -> set up FEA model -> prepare geometry (heal invalid topology, remove
+small features, connect volumes) -> mesh -> validate quality -> define boundary conditions (sets) ->
+export. Each step exposes hyperlinks and "done" buttons; a red exclamation flags unresolved issues, and
+you can mark deliberately-kept small features as OK (green check) so a step turns green without removing
+them. "Set up FEA model" lets you preview a hex mesh, type an element budget (e.g. 10k or 100k) and have
+Cubit back-solve a target mesh size, and toggle the default scheme between hex and tet.
+
+### Three parallel paths to your first mesh
+The playlist teaches the same simple.sat / knuckle.sat workflow three independent ways so users can pick
+their comfort level. (1) ITEM-in-Power-Tools: walk the wizard checklist, click Run Check Diagnostics,
+remove small features, Generate Mesh, Validate (scale Jacobian or the meta "shape" metric), and export.
+(2) Command Panel: drive the same operations through mode->action->entity dropdowns -- e.g. mesh mode,
+volume entity, the intervals/scheme/mesh icon trio (automatic sizing -> auto-calculate scheme -> mesh),
+then a Quality panel. The Command Panel is "training wheels for the command line": every panel is just
+a widget builder that emits an ordinary Cubit command, identical to what you would type by hand, so any
+edit field accepts the same syntax (including extended parsing) you would type at the prompt. (3) Command
+line: the fastest path for frequent users. Learn syntax two ways -- run a GUI command and read the
+echoed command in the history, or type a command followed by "?" to list all argument options (e.g.
+"brick ?"). Examples taught: brick x 3 y 2 z 1 (single width arg copies to all dims), cylinder height
+10 radius 3, subtract 2 from volume 1, mesh volume 1, and quality volume 1 scale jacobian global draw
+mesh. Cubit is unitless; the size number just drives intervals.
+
+### Second mesh: decomposition
+The second-mesh tutorials add the core hex idea that complex CAD must be web-cut (partitioned) into
+shapes Cubit has a recipe for, then re-stitched with imprint+merge. Cubit's recognized hex-meshable
+recipes are mapped meshes, swept meshes (mesh one or more source surfaces and sweep layer-by-layer to a
+target), the polyhedron scheme (an arrangement of mapped sub-meshes for cube-with-pocket shapes), and a
+seven-block sphere scheme. Web cuts taught include: web cut with a sheet extended from a surface, web
+cut normal to a curve, and web cut by coordinate plane with an offset. After cutting, imprint copies
+neighbor topology across an interface and merge collapses the duplicate collocated entities into one
+shared entity -- without imprint+merge the meshes stay disconnected (no shared nodes), and stresses
+would only transfer via tied contact. ITEM's "Build Meshable Topology" step (Decompose Volume / Check
+Meshability) previews candidate web cuts as a blue "web" surface; arrow keys cycle alternatives, and
+choosing a cut that severs several appendages at once is more efficient than the first suggestion. Note
+that because hex schemes are structured, a refinement on one merged volume propagates through its
+neighbors -- a key hex-vs-tet gotcha.
+
+### Journaling and the Journal Editor
+Cubit is fundamentally command-driven: the GUI is an application layered on top that sends commands and
+reads data back. Every GUI/Command-Panel action is journaled. Ensure journaling is enabled under Tools >
+Options > History (commands then echo to the command line and append to a default .jou journal file).
+The built-in Journal Editor (file extension .jou) lets you record, clean, and replay sessions; many
+users instead use an external editor (vi/emacs) on a second monitor. You can File > Import the History
+tab (or the Command/Script tabs) into a new journal-editor buffer, then prune undo groups and dead
+exploration, comment/uncomment lines, and save reusable journals. A common pattern is one journal that
+sets up geometry/defeature/decompose and another that sets sizing/schemes/smoothing/BCs/export, since
+journals are shareable, replayable, and parameterizable -- Coreform support often asks for a user's
+journal, fixes it, and sends it back. In the history tab you can also right-click any line (or a
+highlighted portion) and "play selected" to re-run just those commands. The Journal Editor has a one-
+click toggle that converts a Cubit-command journal into a Python script (see next section). Tools >
+Options > Custom Tools provides ten persistent custom toolbar buttons, each holding a mini-journal of
+commands that runs on click and survives between sessions.
+
+### Python scripting intro
+Cubit is fully scriptable through a Python API. The Journal Editor's Python button rewraps a journal as
+Python where the workhorse is cubit.cmd("...") -- it issues any Cubit command as a string, so f-strings,
+numpy, loops, and external data can drive the script. You can run Python inside Cubit (toggle the script
+tab between Cubit-command and Python modes) or externally: import sys; sys.path.append(<cubit bin>);
+import cubit; cubit.init(...), then cubit.cmd(...). A script beginning with the "#!python" shebang line
+is interpreted as Python rather than Cubit commands when played. Useful API helpers shown: cubit.get_last_id
+(grab the id of an entity you just created via cmd), cubit.get_id_string(list) (turn an id list into a
+parsable string for a command), cubit.parse_cubit_list("surface","in volume 1") (resolve a selector to
+ids, combinable with f-strings), cubit.get_entity_name(type,id), and per-entity objects like
+cubit.surface(id) exposing geometry queries (surface type plane/cylindrical, closest_point_trim, center
+point, etc.). Practical demos: loop volumes sorted largest-to-smallest to assign size so the smallest
+volume controls element size; color surfaces by type for a meshing pre-flight; build a mid-surface shell
+by copying/uniting the top surface, meshing it, then moving each node to the midpoint between top and
+bottom via closest_point_trim; and convergence/optimization loops that remesh, re-solve (e.g. the free
+CalculiX/CCX Cubit plugin), read a probe node's Von Mises stress, and refine until an error tolerance is
+met or a geometry parameter (hole radius vs allowable stress) converges. Coreform's guidance: prefer
+cubit.cmd over direct C/C++-backed object mutators (the API is SWIG-generated; direct memory-mutating
+methods exist but are less robust for creating/modifying entities).
+
+### GUI overview tour and setup
+The overview videos tour the layout: central graphics window (blue background; keyboard focus there
+enables shortcuts), model tree (volumes, sheet bodies, and set assignments), properties page (live
+info on selected entities, with some fields editable in place -- e.g. set a requested size, rename an
+entity, or compare meshed vs CAD area), the command line/history, and the right-hand Power Tools and
+Command Panel docks. All windows are dock windows (stackable, repositionable). First-run housekeeping:
+File > Set Directory to move the working dir off the install folder; Tools > Options to set graphics
+tolerance, toggle CAD vertices, recolor entities (a common preference is black curves/vertices to feel
+CAD-like), choose breadcrumb-trail command panels (saves vertical space), and remap left/middle/right-
+drag to rotate/pan/zoom. Help resources: Help > About lists support@ and forum.coreform.com; built-in
+HTML docs (also online) with index/search; ~two dozen "Cubit tips"; and a graphics-window keyboard-
+shortcut reference. Handy graphics shortcuts: X/Y/Z to slice and view internal mesh along an axis, J/K
+to step the cut plane, Q to exit. A power-user habit emphasized throughout: watch the journaled command
+each GUI action emits, and you will learn to type commands faster than hunting panels.
+
+### Extended parsing (aprepro-style command expressions)
+Cubit's command parser supports topological traversal with the "in" keyword and criteria-based filtering
+with the "with" keyword; together they enable powerful one-line selections (documented under Environment
+Control > Entity Selection and Filtering). Topological example: draw hex in face in surface 2, or draw
+node in face in surface 2. Criteria example: subtract volume all with volume < 0.5 from volume 1 to punch
+holes from many small plugs at once; correct the self-subtraction warning with ... with volume > 1.7
+except volume 1 from volume 1. The same extended syntax works inside any Command Panel pick widget (the
+panel just builds a normal command). Other functions/keywords shown: with x_coordinate, surface area
+filters, num_parents (1/2/>2 parent classification of a curve -- mirrors the toolbar curve-valence tool
+coloring orange=1, blue=2, white=>2), and is_merged. You can right-click any populated pick widget to
+draw/locate/highlight what the expression resolves to before applying. Cubit's parser also handles
+aprepro arithmetic expressions in numeric fields. Recommended homework: read the entity-specification
+docs and experiment.
+
+### Selection tools: X-ray, extended selection, nodeset creation
+X-ray selection (toolbar icon with an X) lets a rubber-band/box drag pick entities hidden behind others
+-- without it you only get visible faces; with it a box drag through a brick selects back faces and
+interior hexes too, useful on dense assemblies. Extended Selection / Pick Extended (right-click context
+menu after an initial selection) opens a dialog driven by Python filter scripts loaded from a folder:
+pick all surfaces of a volume, adjacent volumes, curves of a surface, radial selection within a distance,
+etc. You can drag entities between source and target columns to chain filters, multi-select to remove,
+and copy selected ids/names to the clipboard to paste onto the command line or into a pick widget. Custom
+filters are Python classes subclassing cubit_gui.SelectionFilter (class name must match the .py filename
+for auto-instantiation), reimplementing display_name(), run_filter() (using self.source_types/
+get_source_ids and cubit.get_entity_name to filter, e.g. substring match on names like "hex"/"nut"/
+"socket"), and optionally get_ui_file() to attach a Qt .ui widget (built in Qt Creator/Designer, both
+free) so the filter takes user input (e.g. a name line-edit referenced by object name via
+get_line_edit_value). Reloading edited filters requires a Cubit restart. Extended entity specification
+also builds sophisticated node/side sets: e.g. nodeset on surfaces "with not is_core_merged" captures
+all exterior nodes; remove nodes "in surface 141" by topology; remove nodes "with x_coordinate <= -4.9";
+combine criteria. Working at the geometry level (assign sets to CAD surfaces/volumes; meshed entities are
+inherited automatically) is generally easier than picking mesh entities directly.
+
+### Boolean operations
+Three booleans, accessed via geometry > volume > boolean action (or command line): intersect (new body
+from the shared overlap region), subtract (subtract-body id removed from body id; e.g. subtract 2 from
+1), and unite/union (combine bodies into one; works even for non-touching bodies, yielding one body with
+multiple volumes). Each has a "keep originals" option. Unite has an "include mesh" option that produces a
+united meshed body from already-meshed inputs, but it requires the bodies to be merged first.
+
+### Smoothing, vertex types, and free surfaces
+Smoothing improves quality by moving nodes without changing connectivity, and must be applied
+progressively curves -> surfaces -> volumes (smoothing a surface leaves its bounding-curve nodes fixed;
+smoothing a volume leaves surface/curve nodes fixed). Algorithms shown: Laplacian (curves), mean-ratio
+(surfaces, optimization-based), Winslow, and condition-number (volumes). Orthogonal smoothing is a newer
+boundary smoother: "near orthogonal" makes boundary-incident edges nearly perpendicular while smoothing
+the interior (works on arbitrary mapped surfaces, multiple at once, order may matter); "fully orthogonal"
+requires geometry where a ray from a start curve hits the opposite curve exactly once with a spanning
+node line -- i.e. a mapped mesh -- as in an elliptical annulus, where you can fix a center curve to
+preserve its mesh. Vertex types steer sweeping/sub-mapping: Cubit classifies each vertex (relative to a
+surface) by the number of adjacent quads as End=1, Side=2, Corner=3, Reversal=4, normally set
+automatically from the corner angle. Display them with "draw surface <id> vertex type" (shows id + a
+letter E/S/C/R). When a sweep fails (watch the output window for "could not assign vertex types"
+warnings), set them manually via the submap scheme's Advanced fields per surface (and on the opposite
+surface), treating a tricky shape like an L-block; copying the journaled vertex-type commands into a
+journal is usually faster than the GUI. Using free surfaces to mesh a volume: imprint loose surfaces
+placed atop a volume's face onto that face, delete the free surfaces, and the face is now split into
+sub-surfaces you can size independently to get the desired mesh.
+
+### Mesh pillowing (boundary-layer-like)
+Pillowing inserts one or more layers of hexes along chosen surfaces when web cutting, sources/targets,
+vertex types, and smoothing still leave poor quality -- typically where a mapped mesh is forced into a
+circular region creating near-180-degree element angles. Access via Command Panel: mesh mode > surface
+entity > refinement action > pillowing. Selecting one surface inserts a layer next to it (each top-layer
+hex split in two); selecting two adjacent surfaces wraps a continuous layer around the corner. Mechanism:
+a "shrink set" of hexes is shrunk away from its neighbors and a pillow layer is formed in the gap; an
+optional "through surface" argument controls where the layer exits the volume (single/two-surface picks
+auto-designate through surfaces -- the echoed command shows all hexes designated and all surfaces except
+the kept one as through surfaces). For complex cases, assemble the shrink set as a group (e.g. all hex
+adjacent to surface 31, plus all hex in volume 5) then run "pillow hex in <group> through surface 32",
+and follow with progressive smoothing -- this pushes the bad 180-degree angle into the interior where
+smoothing can recover quality (demos went from ~0.1 shape to ~0.48, and a marginal scale-Jacobian up to
+~0.39).
+
+### Localization, history, install, and the Associate/Learn free edition
+Localization: the GUI (menus, labels, tooltips -- not command-window text) can be translated using Qt
+Linguist on the provided english.ts file; save as cubit_<lang>_<country>.qm into the bin folder so Cubit
+loads the .qm matching the system locale at launch (the video demos a Japanese build and a Polish
+translation). Trelis history: some videos say "Trelis" because that was csimsoft's brand; Coreform
+acquired csimsoft in 2019 and rebranded Trelis to Coreform Cubit -- Coreform Cubit 2020.2 simply follows
+Trelis 17.1, with identical workflows. Download/install (2025): buy/register at coreform.com, follow the
+account email's login link to set a password, download the latest build from your account portal, run
+the setup-wizard launcher, then log in with your account email/password in the activation window to tie
+the seat to your license. The free edition (Coreform Cubit Learn, also called Associate) gives full
+access to the entire tool suite for hobbyists/students/researchers with one functional cap: mesh export
+is limited to 50,000 elements (some videos quote ~50k; an older slide said 50k for non-commercial use),
+with no 30-day clock. The separate 30-day free trial has no export limit but expires. Academics needing
+more can get heavily discounted academic licenses (email sales@coreform.com to lift the export cap).
+Where it fits a free student FEA pipeline: choose a solver (application-focused like MOOSE, CalculiX,
+OpenFOAM, FEBio, code_aster vs extensible frameworks like deal.II, FreeFEM, MFEM), model-prep/optimization
+tools (Octave/Python/Julia/spreadsheets, and Dakota for design-of-experiments/optimization via Cubit's
+Python "black-box" interface), meshing (Coreform Cubit Learn), visualization (ParaView for ~99% of users,
+plus GLVis/VisIt for specific solvers), and a file format -- the recommendation is Exodus/Genesis, the
+open Sandia format Cubit was built around, part of the SEACAS toolkit with Python readers and converters.
+A real BYU example chained Cubit Learn -> MOOSE (tensor mechanics) -> ParaView, all free. Cubit also has
+0D-to-3D meshing, conforming hex/tet/pyramid transitions, and smooth U-spline elements for IGA (build/fit
+a U-spline basis on a volume) feeding Coreform's IGA solver. A recurring complex-geometry tip: Cubit's
+ACIS kernel uses a 1e-6 absolute tolerance, so for tiny or highly curved parts whose smallest feature
+approaches that tolerance, scale the model up (e.g. by ~1000 so the smallest curve is order 1-3), do all
+decomposition/meshing, then scale back on export.
+
+### Sources
+- Introduction to Coreform Cubit (advanced meshing overview)
+- 2025 update: Your first 15 minutes with Coreform Cubit (webinar)
+- 2025 update: Your first hex mesh with the ITEM wizard in Power Tools
+- 2025 update: Your second mesh with the ITEM wizard (includes decomposition)
+- Introduction to Coreform Cubit: hex meshing for beginners with the ITEM wizard (webinar)
+- 2025 update: Your first simple mesh with the Command Panel
+- 2025 update: Your second hex mesh using the Command Panel
+- 2025 update: Your first hex mesh using the command line
+- Journal files and journaling in Cubit
+- Your first 15 minutes using Coreform Cubit (webinar)
+- 2025 update: Creating a mesh in Coreform Cubit with Python
+- Importing and exporting custom toolbars in Coreform Cubit
+- Coreform Cubit overview: Graphical User Interface
+- Extended parsing in Coreform Cubit
+- Mesh pillowing in Coreform Cubit
+- Extended selection tool using Python
+- Cubit Boolean operations
+- Cubit nodeset creation with extended entity selection
+- Cubit orthogonal smoothing
+- Localize Cubit for use in non-English-speaking countries
+- Setting vertex types in Cubit
+- Using free surfaces to generate a mesh on a volume
+- Using the X-ray selection tool in Cubit
+- Why do some videos show Trelis?
+- Coreform Cubit Associate: a valuable part of a free, efficient student FEA software pipeline (webinar)
+- Introduction to Python scripting in Coreform Cubit (webinar)
+- 2025 update: How to download and install Coreform Cubit
+"""
+
+FLEX_IGA = r"""
+## Coreform IGA / Flex: isogeometric analysis & U-splines
+
+This topic distills the public Coreform webinar series on isogeometric analysis (IGA), the U-spline technology, and the Coreform IGA / Coreform Flex solver. Coreform Flex is a commercial product (a license is required to run it); the conceptual and workflow knowledge captured here is drawn from Coreform's own public talks. Where the talks make business claims (cost/time savings, speedups), they are attributed as Coreform's stated claims rather than independently verified fact.
+
+### What IGA is and why it exists
+
+Isogeometric analysis is, at its core, just the finite element method (FEM) with a different choice of basis. The motivation is a well-known pain point in simulation workflows, traced repeatedly in the talks to an early-2000s Sandia National Labs study of analyst time: across a typical simulation, the actual solve is a small fraction of the effort, while the dominant cost is non-value-added model preparation: importing CAD, de-featuring (removing fillets, chamfers, small holes, embossings), healing/decomposing geometry so it can be meshed, building a hexahedral mesh, iterating on it, and cleaning up element quality. The Sandia data attributed on the order of 70-80% of analyst time to mesh-related work, and Coreform's presenters argue that in advanced engineering organizations with sophisticated assemblies the figure now often exceeds 90%. Two further problems compound this: (1) the customer derives no engineering value from the mesh itself, and (2) the de-featured "analysis solid model" is no longer the part that will actually be manufactured, so the simulation runs on an approximation, both geometrically (faceted/simplified surfaces) and topologically.
+
+IGA's promise is to drive the mesh-related, non-value-added steps toward zero by analyzing fully-featured CAD directly, using the SAME smooth spline basis that represents the geometry. The slogan throughout the series is getting the analyst "as close to CAD" as possible. Coreform was founded in 2014 (presenters variously cite 2014 and 2016) with this goal; its founders had been investigating IGA since the early 2000s, and the technology rests on roughly 15+ years of IGA research. Coreform positions itself as having shipped the first commercial native IGA solver (Coreform IGA, first released December 2020), later evolving into the Coreform Flex product.
+
+### The mathematical idea
+
+FEM has two ingredients: a function space (where you place little basis functions in space, normally defined by a mesh) and a weak/energy form describing equilibrium. You discretize the weak form against the function space to assemble stiffness matrices, residual/forcing vectors, and mass matrices; the entries of those matrices are determined entirely by the choice of functions. Traditional FEA uses low-order, C0-continuous Lagrange "hat" functions. IGA instead uses smooth, higher-order splines (B-splines, NURBS, Bezier, and Coreform's U-splines) as the shape functions. A key framing in the talks: every mesh you have ever built IS already a spline, because a spline is just a piecewise polynomial; IGA leans into that fact and unlocks the rich mathematics of spline theory. Coreform's presenters state the strong mathematical claim that smooth higher-order splines are the best (most efficient/robust) approximation space one can choose; e.g. a degree-5, C4-continuous function (continuity = degree-1) is far more powerful per degree of freedom than a C0 element.
+
+Consequences of the smooth, higher-order basis, as explained in the talks:
+- Accuracy per DOF: solution fields (e.g. displacement) converge at rate p+1 in mesh refinement; derived quantities (strain, stress) converge one order slower, at rate p. So higher p means displacements AND stresses converge much faster. In an L2 sense, a cubic basis gives ~order-4 convergence for displacement and ~order-3 for stress, vs order-2 / order-1 for linear FEA. This matters for fatigue, work-hardening, and any stress-driven analysis. Coreform repeatedly shows convergence plots (e.g. a C-frame) where cubic U-splines essentially converge in well under ~10,000 elements while linear hexes have not converged at a million; for the Kansas City flat-flex-cable problem they cite reaching converged answers with under ~11,000 elements vs traditional meshes of ~10 million (~1000x fewer).
+- Field smoothness: stresses and contact pressures come out smooth across element boundaries instead of C0-kinked; the nuclear fuel-rod contact example contrasts smooth U-spline contact pressure against the spurious checkerboard pattern from low-order FEM.
+- Efficient quadrature: Gauss quadrature over-integrates smooth splines and proliferates points with degree. Coreform uses "function-maxima" quadrature: place one quadrature point at the maximum of each global (patch-level) basis function, with weights computed by moment fitting (and folded quadrature for efficient weight computation). Each degree increase adds only one basis function and thus one quadrature point, so an 8th-order patch can be exactly integrated with ~18 points vs ~50 for Gauss. This supersedes their earlier Greville-quadrature work and reduces over-integration (a cause of locking).
+- Conditioning: with high-order C0 elements the solution spectrum gets polluted by non-physical "admissible" modes that add high-frequency noise and hurt iterative solvers. Adding smoothness cleans this up, yielding better-conditioned systems. As degree increases, traditional methods' condition numbers grow rapidly while Coreform reports their condition numbers stay flat or even decrease, enabling iterative solvers and (in explicit dynamics) larger stable time steps. They claim problems that customers could not solve on HPC clusters with thousands of cores were solved on a laptop because of this conditioning.
+- Higher-order PDEs / thin structures: smooth higher-order bases capture bending (a higher-order effect) well, so shell-like behavior can be resolved with even less than one element through the thickness (demonstrated on the Scordelis-Lo roof and on thin pipes/clamps).
+- Bigger, denser-but-smaller matrices: higher-order elements give denser per-element stiffness blocks, but the global system is dramatically smaller (their example: 18x18 vs 81x81), so net efficiency improves.
+
+Bezier extraction is the linchpin technology. It is a linear transformation (encoded per-element as local matrices) from a standard C0 Bezier/Bernstein basis to the spline (U-spline/NURBS/T-spline/B-spline) basis. It generalizes the traditional FEM assembly process, letting a conventional FEA code consume spline elements, and lets Coreform switch between a global (patch) view of the spline and a local (per-element) view depending on the operation. The presenters repeatedly advise newcomers that the single best key to understanding IGA is to read the open literature on Bezier extraction. Coreform exports Bezier-extracted U-splines in a BEXT file (the name derives from Bezier extraction; LS-Dyna consumes this as IGA parts, e.g. element formulation 201) and is developing a newer JSON-based extraction format and an Exodus-based format (with Sandia / Idaho National Labs for the open-source MOOSE code).
+
+### U-splines: the key Coreform technology
+
+U-splines ("unstructured splines") are Coreform's patent-pending spline construction. They provide a smooth spline basis over UNstructured, mixed-degree, multi-patch / arbitrary-topology meshes that classic tensor-product NURBS and B-splines cannot represent with smoothness. The limitation they overcome: B-splines are built via Cox-de-Boor recursion (uniform degree, univariate) and extended to 2D/3D only by tensor products, which are inherently structured (u/v/w principal directions) and confined to a single rectangular patch. On any unstructured or multi-patch layout, smoothness is lost (drops to C0) at every patch interface. U-splines instead take, as input, just (1) the mesh layout and (2) the desired local spline properties (per-region polynomial degree and inter-element smoothness), and produce as output a spline basis plus the control points that fit the geometry, with maximal smoothness wherever the topology allows.
+
+What U-splines enable, per the talks:
+- Smooth bases on unstructured, mixed-topology meshes (including triangle/pyramid interface elements), with non-uniform degree, non-uniform smoothness, and local refinement, all in one algorithm that works identically across 1D/2D/3D.
+- True local adaptivity via hierarchical refinement: the U-spline space is built with several nested levels (coarse/medium/fine, and more), and refinement just turns basis functions on/off locally. Unlike T-splines (whose local refinement can propagate dependencies through hanging nodes) and NURBS (whose local changes propagate across the whole patch, proliferating DOFs), U-splines aim for genuine local additivity.
+- "Super-smooth intersections" instead of true hanging nodes: T-junctions that look like hanging nodes are actually fully supported in the basis (no tie constraint needed) and retain smoothness.
+- Mixed continuity: C0 can be inserted deliberately (e.g. at material interfaces or to model cracks/discontinuities), exactly as a C0 FEM basis would, while the rest of the model stays smooth. At extraordinary points the basis is currently only continuous (C0), not smooth; Coreform notes approaches to make these at least C1.
+- NURBS compatibility: U-splines are a generalization of NURBS/B-splines/T-splines, can be rational, and can be exported losslessly to a NURBS layout / STEP (converted to NURBS patches on export). Coreform was the company behind T-splines (sold to Autodesk ~a decade prior to these talks); U-splines were explicitly motivated by lessons from T-splines and built to be suitable for BOTH CAD surfacing and analysis. The "B" in B-spline stood for "basis," and Coreform frames U-splines as finally fulfilling that original vision.
+
+In FEM terminology, U-splines support full h- (subdivision), p- (degree), and k- (smoothness) refinement, locally. Control points are the corollary of FEM nodes (one basis function per control point).
+
+### Model preparation in Coreform Cubit
+
+Coreform Cubit is Coreform's preprocessor, co-developed with Sandia (it descends from Sandia Cubit and the former commercial "Trellis"). It is a state-of-the-art structured/unstructured hex mesher, also does tet and hex-to-tet (pyramid transition) meshing, ships ACIS-based geometry cleanup, reads STEP / SAT natively (plus optional translators for SolidWorks, NX, CATIA, etc., and STL/PLY/OBJ), and is fully scriptable through a Python API where every GUI action echoes a journaled command. A free, non-commercial "Cubit Learn" license is offered, fully featured but capped at 50,000 elements on export.
+
+The general U-spline build workflow (the bolded verbs are Cubit commands): MESH -> SET -> BUILD -> FIT -> EXPORT.
+1. MESH the geometry with hexahedra (volumes) or quadrilaterals (surfaces). For a body-fit U-spline this means traditional prep first: de-feature (e.g. `surface ... remove`, with "select similar surfaces"), decompose via web-cutting (`webcut`) to build structure, composite away sliver/tangent surfaces with virtual topology (applied last, since virtual ops reduce downstream robustness), then imprint+merge for a conforming mesh.
+2. SET the U-spline properties on the geometry: `set u_spline volume all degree 2 continuity 1` (default is degree 2 / continuity 1; max continuity = degree-1).
+3. BUILD the basis: `build u_spline volume all as <id>`.
+4. FIT the U-spline to the CAD via Bezier projection: `fit u_spline <id>`. This step diverges from low-order FEM (whose elements interpolate the geometry, needing no fit); Bezier projection fits the spline's Bezier components as closely as possible to the input CAD.
+5. EXPORT: `export u_spline <id> ...` to BEXT (for LS-Dyna; add the `dyna_cards` option to emit node/side-set .k files), to VTK (surface, for ParaView), to the JSON Bezier-extraction format, or to STEP (lossless, but it becomes NURBS, no longer a U-spline). Assign boundary-condition sets (blocks/side sets/node sets, with globally unique IDs for the BEXT format) BEFORE building the U-spline so the algorithm captures that topology.
+
+Gotchas the webinars call out (in the 2021.11-era releases): U-splines were initially supported only on swept hex meshes (map/submap/tet-primitive/sphere/polyhedron unsupported, since added); officially tested for quadratic and cubic (degree 2-3), with higher orders buildable but untested; a practical limit around ~10,000 (up to ~80,000) hex elements pending performance work; per-element local degree variation not yet exposed (different degrees allowed only on disconnected volumes); T-junctions and extraordinary-point smoothness still in progress. Sharp edges/creases can be "filleted over" by a smooth fit; workarounds shown include (a) web-cutting along the crease (giving C0 there), (b) using a polyhedron-scheme quad whose unshared corner sits on the crease vertex, or (c) for surfaces the semi-automatic `build u_spline crease group`. Over-partitioning is discouraged in those releases because volume boundaries were only continuous, not smooth. Meshes must currently be created in Cubit (importing arbitrary external quad/hex meshes was not officially supported) because the U-spline must be fit to the CAD. Coreform Lattice GC is a related Cubit module that inserts unit cells (jack, octet truss, truncated sphere, PVB self-supporting, or custom) into a U-spline background mesh, inheriting smooth, geometry-conforming, gap-free lattices that can be sliced in parallel for additive manufacturing and represented in a model-based-enterprise without rendering hundreds of thousands of STL cells.
+
+### The Coreform IGA / Flex solver and workflow
+
+Coreform IGA (later Coreform Flex) is built from the ground up as a native IGA solver, not an FEA code retrofitted to IGA. Architecture and capabilities described across the series:
+- Solvers built on PETSc (parallel direct and iterative/Krylov linear solves); they also investigated MFEM (HPC libraries from national labs / exascale efforts) to pair with function-maxima quadrature for rapid assembly. Early demos ran single-core direct solves (PETSc parallel support was still being ported to Windows); the trimming process is itself parallelized.
+- Physics/analysis types shown: linear elastostatics (the most mature/"released" capability); nonlinear structural mechanics including large/finite deformation, isotropic (J2) plasticity with piecewise-linear hardening, hyperelasticity (Neo-Hookean, Mooney-Rivlin) with near-incompressible formulations (pressure stabilization), and contact (self-contact, surface-to-surface, and a "general/base contact" needing only a single mechanical-contact interaction with optional Coulomb friction). Constraint enforcement starts from an augmented-Lagrangian framework specialized to penalty / Nitsche / mixed schemes. Time integration: implicit statics (Newton-Raphson, adaptive step sizes), a nonlinear-static "continuation" method, implicit dynamics (generalized-alpha / implicit midpoint), and explicit dynamics (central difference). Also: tie constraints, element death, multiple parts/assemblies, isotropic heat conduction and modal analysis (beta), with thermomechanical/multiphysics, RBE2/RBE3-style couplings, shells, and topology-optimization integration on the roadmap. User subroutines (custom boundary conditions, loads, and eventually user materials, plus paths like a welding torch trajectory) are written in Julia, chosen for being dynamically typed and just-in-time compiled (no separate compiler per platform) while near-C/Fortran performance.
+- Input and I/O: human-readable JSON5 input decks (text-editable, not binary), VTK output for ParaView, HDF5 (.h5) probe output. Coreform Flex runs in the browser (built on web technologies to support cloud, internal cloud, or air-gapped/node-locked compute) and also as a standalone client; the native session format is .CF, and Cubit can export a Flex model to .CF.
+- Model tree and probe output: Cubit's CAE model tree gives one-to-one correspondence between tree entries and the solver input deck (description, version, material model, function definitions, loads). The probe output evaluates any field (stress, displacement, etc.) at an arbitrary CAD location, NOT tied to a node or integration point, independent of the mesh discretization; probes can sample a single point, a line of N points, or report a field extremum (e.g. max von Mises and the displacement at that location). In a linear-statics demo a probe gave ~-2.3 ksi vs a ParaView peak ~-2.5 ksi.
+
+The Flex Representation Method (FRM) and Flex meshing. FRM is Coreform's core innovation, described as the marriage of U-splines with the finite cell method (an immersed/embedded-domain, cut-cell technique using high-order bases, hierarchical refinement, adaptive integration at boundaries, and weak enforcement of immersed BCs). The key move: relax the requirement that the mesh conform to the geometry. The geometry is captured in the U-spline basis; a CAD body is immersed in a higher-order smooth spline background grid (e.g. quadratic, C1, rectilinear) and a fully-automated, parallel "volumetric trimming" / "flex meshing" step trims the CAD out of the spline grid to produce a volumetric simulation model that exactly represents the original CAD interior, not just its bounding surfaces. Because U-splines are unstructured, FRM spans a CONTINUUM of options: at one end, traditional de-feature-and-body-fit hex meshing; at the other, fully-immersed bounding-box meshing with zero manual prep; and anywhere in between ("locally immersed" / "partially body-fit"), e.g. body-fit a critical region (the outer radius of a piston, the tread of a tire, symmetry faces) for efficiency/accuracy-per-DOF while immersing the hard-to-mesh features (shoulder fillets, embossings). The analyst thereby calibrates the speed/accuracy trade-off per component. The minimum CAD information FRM needs is an inside/outside test, so it accepts not only B-rep CAD but also STL/faceted data, scan/point-cloud data (with a triangulation only for BC/contact imposition), and emerging implicit/additive/generative CAD kernels, all without changing the solver. Trimming is robust to "dirty" CAD (small gaps, lost quadrature points are a practical non-issue) provided the geometry is topologically correct (gaps beyond the model tolerance are respected as real disconnections). Boundary conditions and loads are applied directly to the CAD object, never to node/element sets, so changing a BC region or a tread design within the immersed envelope requires NO remesh; trimmed cells use adaptive (octree + function-maxima) quadrature to integrate accurately up to the cut boundary, and elements are treated merely as scaffolding for the basis functions and quadrature.
+
+Rapid simulation across design iterations (no per-iteration remesh). Because one immersed/locally-immersed mesh covers a whole design envelope, many geometric variants that fit the same envelope reuse the SAME mesh. Demonstrated on a wheel sizing-optimization (spoke-width changes that alter CAD topology and even an invalid regenerated geometry leave the analysis unaffected) and especially on the GE jet-engine bracket grand-challenge (GrabCAD, 2013, ~630 entries). All entries fill the same design envelope, so the prep is identical: select the bolt/load surfaces (using "select similar surfaces"), immerse, and a simple Python script over Cubit's API + Coreform IGA can verify all of them "set-and-forget" with no manual intervention, no per-model tet/hex remeshing. Those models ran ~200,000-600,000 DOF, ~15 min to ~1 hr per model on a single core with a direct solver. This directly answers the original GE finding that evaluating the entries was itself the bottleneck (and some STL files were too large to mesh).
+
+Predicting onset of failure with IGA. A dedicated webinar ("Predicting the onset of failure with IGA," May 2021) worked an undergraduate-textbook 1.5-ton hydraulic-press C-frame in gray cast iron (brittle; max-principal-stress failure criterion). The hand calculation (idealized curved-beam bending) predicted ~127.2 ksi at the inner radius, exceeding the ~50 ksi ultimate, hence failure. Coreform IGA, immersing the fillet-laden CAD in a "horseshoe" partially-immersed domain (and even a tight bounding box), recovered ~127-130 ksi maximum principal stress at the inner radius, in close agreement with both the hand calc and a near-million-element traditional FEA run, but with roughly 2-3 orders of magnitude fewer DOF (cited as ~1000x fewer DOF / ~1000x faster for that accuracy). A ductile (304/316-style steel) variant with perfect plasticity showed FRM handling very large plastic deformation robustly on an immersed mesh. The talk's framing: the textbook problem is for verification/intuition; the real payoff is on complex assemblies (e.g. a helicopter rotor) where load paths and stresses are NOT obvious and hand calcs cannot be trusted.
+
+The "next-generation FEA solver on four challenging problems" demo. This webinar exercised Flex on a spread of physics: (1) a linear-static, additively-manufactured fin-stock heat-exchanger chamber with internal angled fins and fillets, immersed in a rectilinear grid, refined just by typing a smaller mesh size; (2) a topology-optimized radar dish + support (organic surfaces) as a tie-constrained assembly for natural-frequency extraction (linear statics); (3) the flat-flex-cable bending / delamination problem (large deformation, where body-fitting would require projecting every trace through the whole geometry, badly distorting the mesh; immersing each component eliminates that); and (4) the direct-ink-write (DIW) pad live demo: an implicit-dynamic, nearly-incompressible (Neo-Hookean, Poisson up to ~0.499), self-contacting compression of an additively-manufactured silicone-thread engineered-foam pad. The DIW pad is the showcase of full automation: traditionally it needs ~thousands of sub-cells and ~100 web-cuts to hand-build a quality hex mesh, whereas Flex just "drops in a box" and immerses (with body-fit platens where meshing is trivial), then a Python script over the Flex + Cubit APIs sweeps thread diameters / spacings / pad-volume ratios (examples on Coreform's public GitHub, "coreform-llc/flex-python-examples"), with reaction forces probed and fit. A separate "introducing Coreform Flex" webinar adds a NAFEMS trunnion-supported-pipe linear-static benchmark (verified against the published multi-code solution), a bolted pipe-repair-clamp implicit problem (large deformation, friction contact, a nearly-incompressible gasket, metal plasticity, only the bolt threads removed), and a ball-drop explicit-dynamic test (nonlinear, contact, plasticity, fillets immersed). Coreform also referenced the Sandia fracture-challenge problem to show J2 plasticity + friction contact matching experimental reaction-force data.
+
+### Positioning and the March 2025 advancements
+
+Coreform Flex is presented as Coreform's flagship product: a single tool bundling the IGA preprocessor, the native solver, and post-processing, aimed at simulating fully-featured CAD with no required de-featuring, while remaining a true generalization of FEM (standard Galerkin, supports in principle any FEM capability: material nonlinearity, plasticity, contact, fracture, element death, multiphysics). The product family: Coreform Cubit (traditional meshing/geometry prep, competing with HyperMesh / ANSA), Coreform Flex (the IGA solver, competing with general FEA solvers such as Abaqus / LS-Dyna), and Coreform Suite (both together). Coreform claims compatibility/interoperability via Bezier extraction (consumable in LS-Dyna; an Abaqus/CAE integration was disclosed as in active development, letting existing FEA workflows incorporate IGA and connect trimmed IGA regions to traditional beams/shells/connectors "for free"). Coreform repeatedly notes it implements features only against concrete customer requests; primary markets cited are automotive and defense (also aerospace, nuclear/energy), where most problems are large nonlinear/dynamic assemblies with contact.
+
+Stated benefits (attributed to Coreform): drastically reduced model-prep time (some customers' month-long model builds reportedly compressed to a day, two days, or a week); elimination of geometric error from de-featuring; superior accuracy per DOF and superior robustness for nonlinear/dynamic/large-deformation problems; better-conditioned linear systems and larger explicit time steps (for explicit automotive crash work, they claim a roughly order-of-magnitude larger critical time step versus linear FEA, from both coarser high-order meshes and U-spline spectral tailoring that keeps the critical time step roughly constant across polynomial degree); and unlocking design-space exploration / automated optimization because robust, user-intervention-free model building can be scripted (Flex importable as a Python module alongside, e.g., PyTorch).
+
+The March 2025 webinar ("the latest advancements in Coreform Flex") reiterated that Coreform Flex is now available for testing and purchase as the first solver built natively on IGA, with linear elastostatics as the most robust released capability and full nonlinear structural mechanics (including contact) close to leaving beta. New/updated points from that session: a refreshed GUI with mesh-manager and procedure/breadcrumb model-tree wizards; "primitive" background-mesh types beyond the rectilinear grid (cylinder/sphere/annulus in progress, plus the ability to author any background mesh, body-fit or partial, in Cubit and import it); a published, CI-generated verification manual at docs.coreform.com (cantilever beam, large deformation, near-incompressible elasticity, plasticity, mechanical contact) with results regenerated from live CI runs; default maximally-smooth splines with selectable degree up to quartic C3 and selectable custom continuity (e.g. P2C0); element death (not yet activation) and basic element-failure with sub-element resolution down to a quadrature point; the active Abaqus/CAE integration; the worked door-lock and C-frame example models; and a candid estimate that hand-meshing the showcased complex cast part traditionally would take a first-time expert ~20 hours (and that some "dirty" parts shown could not be tet-meshed by any available mesher), versus an automated trim in seconds. Local adaptivity / a-posteriori error estimation and mesh adaptation remain on the roadmap (today, mesh convergence is studied by running several uniform mesh sizes, with per-part size control as the only built-in adaptivity).
+
+### Sources
+
+- 001_What is IGA?
+- 002_Explaining IGA: a brief technical introduction to IGA, U-splines, and Flex IGA
+- 003_Introducing Coreform IGA
+- 004_Rapid simulation of multiple design iterations with Coreform IGA
+- 005_Coreform IGA update webinar: model tree, probe output, linear statics
+- 006_Introduction to Coreform IGA
+- 007_U-splines for IGA model prep in Coreform Cubit
+- 008_IGA model preparation in Coreform Cubit Webinar
+- 009_Coreform IGA: Predicting the onset of failure with IGA
+- 010_Clip from Tire Society presentation
+- 011_The mathematical idea underlying isogeometric analysis (IGA)
+- 012_Introducing Coreform Flex for rapid simulation of fully-featured CAD models
+- 013_Why everyone is so excited about isogeometric analysis (IGA): a brief explanation
+- 014_A demonstration of next-generation FEA solver Coreform Flex on four challenging problems
+- 015 / 016_The latest advancements in Coreform Flex (March 2025)
+"""
+
+CLIPS_HIGHLIGHTS = r"""
+## Clips: short-form highlights (geodynamics/planetary + value framing)
+
+These are Coreform's short-form "Clips" (46 shorts). MOST are brief excerpts of
+material already captured at length in other topics -- see those for depth:
+getting_started (wizard, first hex mesh); advanced_meshing (hybrid hex/pyramid/tet
+mesh, fluid region from bounding surfaces, 4000-part imprint&merge, large-assembly
+selection, toolbar/PySide6 customization); solver_workflows + python_automation
+(MOOSE meshing, parameter-sweep automation, command vs read-only API); neutronics_fusion
+(Cubit as preprocessor for Cardinal/OpenMC, CSG import, DAGMC surface mesh, conformal
+volume mesh); and the Flex/IGA topic ("why FEA is painful", FEA built on CAD math /
+isogeometric analysis, ~50% project cost savings, single-source-of-truth geometry).
+This topic only synthesizes the genuinely DISTINCT content below.
+
+### Geodynamics / planetary-science workflows (new domain)
+
+A planetary-science group uses Cubit (driven by Python + journal files in batch mode)
+to mesh icy-moon crusts -- the worked example is Saturn's moon Enceladus.
+
+- Base body: in Cubit, define a spherical shell by outer radius (Enceladus ~252 km)
+  and a shell thickness, which fixes the inner radius. Export to Exodus (EXO).
+- Crustal-thickness variation: a Python script loads the EXO node coordinates,
+  perturbs the outer and inner surface node positions to impose lateral thickness
+  variations, then writes the EXO back out. So Cubit makes the clean shell; Python
+  edits the geometry as nodal data.
+- Geodynamic faults (the "tiger stripes"): create a finite volume from latitude/
+  longitude points on the outer surface, project it into the shell, then use Cubit's
+  cut feature to merge the two geometries and form fault interfaces. The four main
+  stripes plus small minor "splays" (folds at the stripe tips) are all built this way.
+  The whole sequence runs unattended from a journal file in batch mode; the body is
+  Tet-meshed with refinement concentrated around the fault interfaces.
+- Quality repair: shells with strong lateral thickness variation risk overlapping
+  tetrahedra / coincident nodes. Cubit is asked to find cells with negative Jacobians
+  and untangle them, which is what makes a clean mesh achievable on these bodies.
+- Strain-driven mesh refinement: run an initial sim to get strain over the outer
+  surface, write that as a sizing variable into the EXO, re-import to Cubit, delete the
+  old mesh and remesh -> finer resolution where strain is high, for accurate strain.
+- Why Cubit here: the methodology is a long flowchart of chained steps; any slow stage
+  bottlenecks the whole pipeline of repeated simulations. Cubit's batch-mode speed and
+  scripting efficiency keep the geometry/mesh steps from being the bottleneck.
+
+### Value framing and a concrete tip
+
+Recurring reasons an engineer cites for Cubit (positioning, distilled, no fluff):
+extensive online documentation and deliberate extensibility; an active forum with
+developer participation; a strong Python scripting + automatic-journaling workflow,
+where anything the GUI does is also reachable from Python ("first-class" command
+access, nothing hidden) and verbose output makes debugging/sharing easy; GUI
+customization so a recurring workflow becomes a personal toolbar; and auto-journaling
+that reconstructs "how did I do that" and converts straight into automation. The
+recommended hand-meshing order is import -> heal -> web cut -> composite -> imprint &
+merge -> mesh, ideally walked via the item wizard for discipline; similarity selection
+speeds decomposing arrayed/assembly parts, and order of operations matters (wrong order
+forces backtracking or bad meshes).
+
+Concrete tip not in other topics -- large-assembly selection qualifiers: build named
+groups (add volumes/surfaces/nodes/vertices to a group); "select similar volumes" for
+repeated parts; and compose selections with "except", "in", and "with". Examples:
+select every volume in group 5 except those in block 2 (exclude a different material);
+"select surface in volume 4" for that volume's faces; and "... with is_merged = false"
+to grab only the un-imprinted/-merged (e.g. air-exposed) surfaces. If an imprint goes
+wrong, "regularize" reverts a volume back to its un-imprinted CAD.
+
+### Sources
+
+- Using python scripting to generate geodynamic faults with Coreform Cubit
+- Generating planetary satellite crustal thickness variations with Coreform Cubit
+- Using Coreform Cubit to identify malformed elements
+- A geodynamics workflow relies on the efficiency of Coreform Cubit
+- Mesh refinement with Coreform Cubit in a geodynamics workflow
+- An Engineer's Top Reasons for Using Coreform Cubit
+- An engineer's Coreform Cubit workflow and tips
+- Useful commands when meshing a large assembly with Coreform Cubit
+"""
+
 _TOPICS = {
     "python_automation": PYTHON_AUTOMATION,
     "meshing_strategy": MESHING_STRATEGY,
@@ -848,6 +1256,9 @@ _TOPICS = {
     "ml_and_gui": ML_AND_GUI,
     "neutronics_fusion": NEUTRONICS_FUSION,
     "domain_applications": DOMAIN_APPLICATIONS,
+    "getting_started_2025": GETTING_STARTED_2025,
+    "flex_iga": FLEX_IGA,
+    "clips_highlights": CLIPS_HIGHLIGHTS,
 }
 
 _ALIASES = {
@@ -885,6 +1296,30 @@ _ALIASES = {
     "level_set": "domain_applications", "bio": "domain_applications",
     "associate": "domain_applications", "learn": "domain_applications",
     "student": "domain_applications", "3d_printing": "domain_applications",
+    "getting_started_2025": "getting_started_2025", "gs2025": "getting_started_2025",
+    "power_tools": "getting_started_2025", "powertools": "getting_started_2025",
+    "2025_update": "getting_started_2025", "journaling": "getting_started_2025",
+    "journal": "getting_started_2025", "journal_editor": "getting_started_2025",
+    "pillowing": "getting_started_2025", "pillow": "getting_started_2025",
+    "vertex_type": "getting_started_2025", "vertex_types": "getting_started_2025",
+    "smoothing": "getting_started_2025", "orthogonal_smoothing": "getting_started_2025",
+    "xray": "getting_started_2025", "x_ray": "getting_started_2025",
+    "extended_selection": "getting_started_2025", "extended_parsing": "getting_started_2025",
+    "free_surfaces": "getting_started_2025", "localization": "getting_started_2025",
+    "trelis": "getting_started_2025", "install": "getting_started_2025",
+    "download": "getting_started_2025", "cubit_learn": "getting_started_2025",
+    "associate_edition": "getting_started_2025",
+    "flex_iga": "flex_iga", "flex": "flex_iga", "iga": "flex_iga",
+    "isogeometric": "flex_iga", "isogeometric_analysis": "flex_iga",
+    "u_spline": "flex_iga", "u_splines": "flex_iga", "usplines": "flex_iga",
+    "uspline": "flex_iga", "splines": "flex_iga", "spline": "flex_iga",
+    "coreform_iga": "flex_iga", "bezier": "flex_iga", "bezier_extraction": "flex_iga",
+    "frm": "flex_iga", "nurbs": "flex_iga", "bext": "flex_iga",
+    "clips_highlights": "clips_highlights", "clips": "clips_highlights",
+    "clip": "clips_highlights", "shorts": "clips_highlights",
+    "geodynamics": "clips_highlights", "geodynamic": "clips_highlights",
+    "planetary": "clips_highlights", "enceladus": "clips_highlights",
+    "geology": "clips_highlights",
 }
 
 _INDEX = """# Coreform Cubit webinar/tutorial knowledge (synthesized from @Coreform YouTube)
@@ -928,6 +1363,23 @@ Batch 3 topics:
                        FDEM, and Cubit Learn/Associate (free edition, 50k export cap).
 Aliases: dagmc/openmc/mcnp/fusion -> neutronics_fusion; sculpt(organic)/lattice/tire/
 irazu/learn/student -> domain_applications. ALL 54 Tutorials-playlist videos ingested
+Additional playlists (3 more, ingested separately):
+  getting_started_2025 - Getting-started playlist (2025.8 UI refresh): three first-mesh
+                       paths (Power Tools/ITEM, Command Panel, command line), journaling +
+                       Journal Editor, Python (cubit.cmd / extended selection), extended
+                       parsing, pillowing, vertex types, orthogonal smoothing, X-ray select,
+                       localization, Trelis history, Coreform Associate/Learn free edition.
+  flex_iga           - Coreform IGA / Flex playlist: isogeometric analysis, U-splines (Bezier
+                       extraction, BEXT), the FRM immersed/locally-immersed workflow,
+                       MESH->SET->BUILD->FIT->EXPORT in Cubit, rapid design iteration (GE
+                       bracket), C-frame failure prediction, function-maxima quadrature.
+                       (Flex = licensed product; knowledge from public talks, claims attributed.)
+  clips_highlights   - Clips playlist (short excerpts, mostly cross-ref other topics): the new
+                       geodynamics/planetary domain (Enceladus crust, Python faults), value
+                       framing, large-assembly selection qualifiers (except/in/with is_merged).
+Aliases: power_tools/journaling/pillowing/associate_edition/trelis -> getting_started_2025;
+iga/isogeometric/u_splines/flex/bezier/frm/nurbs -> flex_iga; clips/geodynamics/planetary -> clips_highlights.
+
 (C++ SDK lives in cpp_sdk). "coreform_all" concatenates every topic.
 """
 
@@ -947,7 +1399,8 @@ def get_coreform_webinar_documentation(topic: str = "index") -> str:
         return "\n\n".join(_TOPICS[k] for k in
                            ("python_automation", "meshing_strategy", "solver_workflows",
                             "getting_started", "advanced_meshing", "ml_and_gui",
-                            "neutronics_fusion", "domain_applications"))
+                            "neutronics_fusion", "domain_applications",
+                            "getting_started_2025", "flex_iga", "clips_highlights"))
     resolved = _ALIASES.get(topic, topic)
     if resolved in _TOPICS:
         return _TOPICS[resolved]
