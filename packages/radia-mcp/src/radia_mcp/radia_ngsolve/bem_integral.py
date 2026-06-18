@@ -95,6 +95,46 @@ def spheroid_capacitance(a_polar, b_equatorial, maxh=0.18, order=3, **kw):
     return res
 
 
+def conductor_polarizability(mesh, axis="z", order=3, intorder=12, maxiter=600):
+    """Static polarizability (induced-dipole response to a UNIFORM applied field) of the
+    conductor(s) bounded by ``mesh``, via the Laplace single-layer indirect BEM. A neutral
+    conductor in a unit applied field along ``axis`` sits at potential 0, so its induced
+    surface charge must produce a single-layer potential equal to that coordinate's trace
+    on the surface:  V sigma = r_axis|_Gamma. The induced dipole component is then
+
+        alpha = integral_Gamma sigma * r_axis dS         (eps0 = 1; alpha = p / E0).
+
+    This is the applied-field / multipole-RESPONSE complement to
+    :func:`single_layer_capacitance` (which is the fixed-potential self-capacitance, datum
+    1 instead of a coordinate). ``qnet`` returns the net induced charge (~0 = neutral)."""
+    coord = {"x": ng.x, "y": ng.y, "z": ng.z}[axis]
+    fes = ng.SurfaceL2(mesh, order=order, dual_mapping=True)
+    u, v = fes.TnT()
+    V = bem.SingleLayerPotentialOperator(fes, intorder=intorder)
+    rhs = LinearForm(coord * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
+    mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
+    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    sigma = GridFunction(fes)
+    inv = CGSolver(V.mat, pre, printrates=False, maxiter=maxiter)
+    sigma.vec.data = inv * rhs.vec
+    bnd = mesh.Boundaries(".*")
+    alpha = Integrate(sigma * coord, mesh, definedon=bnd)
+    qnet = Integrate(sigma, mesh, definedon=bnd)
+    return {"ndof": fes.ndof, "alpha": float(alpha), "qnet": float(qnet)}
+
+
+def sphere_polarizability(R=1.0, maxh=0.3, order=3, curve_order=4, **kw):
+    """Polarizability of an isolated conducting sphere via the Laplace single-layer BEM, vs
+    the exact isotropic value  alpha = 4 pi eps0 R^3  (eps0 = 1; the induced surface charge is
+    sigma = 3 eps0 E0 cos theta).  The applied-field-response twin of :func:`sphere_capacitance`.
+    Returns ``{ndof, alpha, qnet, analytic, rel_err}``."""
+    mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), R)).GenerateMesh(maxh=maxh)).Curve(curve_order)
+    res = conductor_polarizability(mesh, axis="z", order=order, **kw)
+    res["analytic"] = 4.0 * np.pi * R**3
+    res["rel_err"] = abs(res["alpha"] - res["analytic"]) / res["analytic"]
+    return res
+
+
 def helmholtz_exterior_point_source(kappa, a=1.0, maxh=0.4, order=3, rext=3.0, intorder=12):
     """HIGH-FREQUENCY Helmholtz single-layer BEM (wavenumber ``kappa``), verified by the MANUFACTURED
     SOLUTION of an interior point source -- the high-frequency (kappa>0) generalisation of the static

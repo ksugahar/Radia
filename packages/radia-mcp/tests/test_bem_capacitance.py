@@ -20,7 +20,8 @@ from radia_mcp.radia_ngsolve.bem_integral import (sphere_capacitance, single_lay
                                                   helmholtz_soundhard_far_field,
                                                   mie_soundhard_farfield, mie_soundhard_cross_section,
                                                   helmholtz_impedance_far_field, mie_impedance_farfield,
-                                                  helmholtz_sphere_radiation_impedance, sphere_radiation_ratio)
+                                                  helmholtz_sphere_radiation_impedance, sphere_radiation_ratio,
+                                                  sphere_polarizability, conductor_polarizability)
 
 
 def test_spheroid_capacitance_prolate_oblate():
@@ -206,3 +207,35 @@ def test_mie_farfield_and_cross_section_consistency():
         assert sig > 0.0
         # back-scatter (theta=pi) is finite and nonzero
         assert abs(mie_soundsoft_farfield(kappa, 1.0, _m.pi)) > 0.0
+
+
+def test_sphere_polarizability_matches_4piR3():
+    # conducting sphere in a UNIFORM applied field -> induced-dipole polarizability alpha = 4 pi eps0 R^3
+    # (eps0=1), via the single-layer BEM with a COORDINATE datum (V sigma = z) instead of the constant-1
+    # capacitance datum. The applied-field RESPONSE complement of the fixed-potential self-capacitance.
+    import math
+    res = sphere_polarizability(R=1.0, maxh=0.3, order=3)
+    assert abs(res["analytic"] - 4.0 * math.pi) < 1e-12          # 4 pi R^3, R=1
+    assert res["rel_err"] < 2e-3, res                            # curved order-3 BEM, measured ~machine
+    assert abs(res["qnet"]) < 1e-5                               # neutral conductor (zero net charge)
+
+
+def test_polarizability_scales_with_volume():
+    # alpha = 4 pi eps0 R^3 is CUBIC in R (a volume-like dipole response), unlike capacitance C ~ R.
+    a1 = sphere_polarizability(R=1.0, maxh=0.3, order=3)["alpha"]
+    a2 = sphere_polarizability(R=2.0, maxh=0.6, order=3)["alpha"]
+    assert abs(a2 / a1 - 8.0) < 2e-2                             # (2)^3 = 8
+
+
+def test_polarizability_isotropic_x_vs_z():
+    # the sphere is isotropic: the x-axis and z-axis applied-field responses are equal.
+    import math
+    mesh_kw = dict(maxh=0.3, order=3)
+    az = sphere_polarizability(R=1.0, **mesh_kw)["alpha"]
+    # rebuild the same mesh and drive along x -> same polarizability
+    import ngsolve as ng
+    from netgen.occ import Sphere, Pnt, OCCGeometry
+    mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=0.3)).Curve(4)
+    ax = conductor_polarizability(mesh, axis="x", order=3)["alpha"]
+    assert abs(ax - az) / az < 5e-3
+    assert abs(az - 4.0 * math.pi) / (4.0 * math.pi) < 2e-3
