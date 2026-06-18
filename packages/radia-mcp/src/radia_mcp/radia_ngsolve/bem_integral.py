@@ -734,6 +734,49 @@ def mie_pec_sphere_rcs(ka, nmax=None):
             "sigma_back_over_pa2": float(back / np.pi)}
 
 
+def _mie_angular_functions(mu, nmax):
+    """Bohren-Huffman angular functions pi_n(mu), tau_n(mu), n=1..nmax (mu = cos theta)."""
+    pi = np.zeros(nmax + 1); tau = np.zeros(nmax + 1)
+    pi[1] = 1.0; tau[1] = mu
+    for n in range(2, nmax + 1):
+        pi[n] = ((2 * n - 1) / (n - 1)) * mu * pi[n - 1] - (n / (n - 1)) * pi[n - 2]
+        tau[n] = n * mu * pi[n] - (n + 1) * pi[n - 1]
+    return pi[1:], tau[1:]
+
+
+def mie_pec_amplitude(ka, theta, nmax=None):
+    r"""Complex scattering AMPLITUDE functions of a PEC sphere -- S1(theta) (perpendicular / H-plane)
+    and S2(theta) (parallel / E-plane) -- from the Mie coefficients (:func:`mie_pec_coefficients`) and
+    the Bohren-Huffman angular functions pi_n, tau_n:
+
+        S1 = sum_{n>=1} (2n+1)/(n(n+1)) [a_n pi_n + b_n tau_n],
+        S2 = sum_{n>=1} (2n+1)/(n(n+1)) [a_n tau_n + b_n pi_n].
+
+    This is the full BISTATIC angular scattering pattern (forward theta=0 -> backscatter theta=pi), the
+    vector-EM counterpart of the SCALAR :func:`mie_soundsoft_farfield`; the existing EM Mie helpers
+    gave only the total and backscatter cross-sections. Returns ``(S1, S2)`` (complex)."""
+    n, a_n, b_n = mie_pec_coefficients(ka, nmax=nmax)
+    pin, taun = _mie_angular_functions(math.cos(theta), len(n))
+    fac = (2 * n + 1) / (n * (n + 1))
+    S1 = complex(np.sum(fac * (a_n * pin + b_n * taun)))
+    S2 = complex(np.sum(fac * (a_n * taun + b_n * pin)))
+    return S1, S2
+
+
+def mie_pec_bistatic_rcs(ka, theta, nmax=None):
+    r"""Bistatic radar cross-section sigma(theta)/(pi a^2) of a PEC sphere for the two principal planes,
+    sigma = (4 pi/k^2)|S|^2  ->  /(pi a^2) = (4/x^2)|S|^2  with x = ka:  the E-plane (incident E in the
+    scattering plane) uses S2, the H-plane uses S1.  At theta=pi both reduce to the monostatic backscatter
+    (:func:`mie_pec_sphere_rcs`); the forward (theta=0) amplitude obeys the OPTICAL THEOREM
+    ``Q_ext = (4/x^2) Re[S(0)] = Q_sca`` (lossless PEC).  Returns
+    ``{theta, e_plane_over_pa2, h_plane_over_pa2}``."""
+    x = float(ka)
+    S1, S2 = mie_pec_amplitude(x, theta, nmax=nmax)
+    return {"theta": float(theta),
+            "e_plane_over_pa2": (4.0 / x ** 2) * abs(S2) ** 2,
+            "h_plane_over_pa2": (4.0 / x ** 2) * abs(S1) ** 2}
+
+
 def maxwell_efie_pec_sphere_rcs(ka, a=1.0, maxh=0.3, order=2, intorder=12):
     r"""VECTOR-MAXWELL EFIE solve: the monostatic (backscatter) radar cross-section of a PERFECTLY
     CONDUCTING (PEC) sphere via the ngsolve.bem ``MaxwellSingleLayerPotentialOperator`` (the electric-field
