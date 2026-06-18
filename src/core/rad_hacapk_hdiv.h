@@ -132,6 +132,30 @@ public:
                         std::vector<double> face_verts,
                         int n_el, double near_factor = 1e30);
 
+    // POLYTOPE analytic mode (HEX / WEDGE cells + QUAD faces): the same EXACT analytic entry as the tet/
+    // triangle analytic mode above, generalized to ANY flat-faced convex cell + quad face with NO new
+    // singular quadrature -- the cell Newtonian potential is the divergence-theorem sum over the cell's
+    // (convex-hull) TRIANGLES of the SAME exact Wilton triangle potential (rad_hdiv::TriPotential), and a
+    // quad face is two flat triangles.  Matches the dense Python radia.vim._core.analytic_charge_gram
+    // polytope path entry-by-entry.  The triangulation is supplied FROM PYTHON (which computes the convex
+    // hulls / sub-triangles) so the C++ needs no hull algorithm and the two share the exact decomposition:
+    //   cell_tris  : flat triangle soup (9 doubles/tri = P0,P1,P2 each xyz) of ALL cells' hull triangles;
+    //   cell_troff : [n_el+1] CSR offsets into cell_tris (in TRIANGLES) -> cell c's hull tris;
+    //   cell_cent  : [n_el*3] cell vertex-mean centroid (the centroid-fan apex AND the outward-normal ref);
+    //   cell_meas  : [n_el]   cell volume;
+    //   face_tris  : flat triangle soup of ALL boundary faces' sub-triangles (triangle->1, quad->2);
+    //   face_troff : [n_bf+1] CSR offsets into face_tris; face_cent [n_bf*3]; face_meas [n_bf] area.
+    // Outer quadrature: cells use the built-in 64-node Gauss-Duffy tet rule on each centroid-fan sub-tet
+    // (apex = cell_cent); faces use built-in Dunavant-5 per sub-triangle -- the SAME rules the tet/tri mode
+    // uses, so an all-tet/all-triangle mesh routed through here would agree with the tet mode to quadrature
+    // precision (it is NOT routed here: the tet mode is kept bit-identical via cell_verts/face_verts).
+    // near_factor: identical NEAR/FAR build split as the analytic mode (default 1e30 = all-analytic).
+    RadHACApKChargeGram(std::vector<double> cell_tris, std::vector<int> cell_troff,
+                        std::vector<double> cell_cent, std::vector<double> cell_meas,
+                        std::vector<double> face_tris, std::vector<int> face_troff,
+                        std::vector<double> face_cent, std::vector<double> face_meas,
+                        int n_el, double near_factor = 1e30);
+
     // HIGH-ORDER (order-p) mode: POLYNOMIAL charges (a monomial basis on each host element), the order-p
     // extension validated against the dense Python build_demag_highorder.  charge_host[c] = host element
     // index (a cell when charge_kind[c]==0, a boundary face when ==1); charge_expo[3*c+{0,1,2}] = the
@@ -243,6 +267,12 @@ private:
     std::vector<std::vector<double>>          m_qw;    // [n] outer-quad weights per charge
     std::vector<double> m_size;                        // [n] characteristic size: vol^(1/3) / area^(1/2)
     double m_near_factor = 1e30;                       // near/far split: NEAR if |c_a-c_b| <= nf*(size_a+size_b)
+
+    // POLYTOPE analytic mode (hex/wedge): per-charge source triangulation (cell hull tris / face sub-tris).
+    // PhiAt(src,.) is the divergence-theorem polytope potential (cell) / sum-of-sub-triangle (face) over
+    // these; the outer quadrature (m_qp/m_qw) is built in the ctor (centroid-fan / Dunavant per sub-tri).
+    bool m_polytope = false;
+    std::vector<std::vector<std::array<rad_hdiv::Vec3, 3>>> m_srcTris;  // [n] source triangle soup per charge
 
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;

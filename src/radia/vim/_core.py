@@ -362,6 +362,41 @@ def analytic_charge_gram(el_V, bf_V, el_vol, bf_area, nsub_tet=3):
     return 0.5 * (G + G.T)
 
 
+def polytope_flat_geom(el_V, bf_V, el_vol, bf_area):
+    """Flatten the per-cell convex-hull triangles + per-face sub-triangles (+ vertex-mean centroids and
+    measures) into the flat triangle-soup arrays the C++ POLYTOPE _ChargeGramHMatrix constructor consumes
+    (hex/wedge scalable path).  Cells -> _cell_hull_tris, boundary faces -> _face_subtris; the C++ rebuilds
+    the centroid-fan (cells) / Dunavant (faces) outer quadrature and the divergence-theorem source potential
+    from these, so it matches the dense analytic_charge_gram polytope path entry-by-entry (SAME triangles,
+    SAME built-in quad rules).  Returns flat float arrays + int CSR offsets (triangle soup = 9 doubles/tri)."""
+    cell_tris, cell_troff, cell_cent = [], [0], []
+    for V in el_V:
+        V = np.asarray(V, float)
+        cell_cent.append(V.mean(0))
+        tris = _cell_hull_tris(V)
+        for (P, _n) in tris:
+            cell_tris.append(np.asarray(P, float).ravel())
+        cell_troff.append(cell_troff[-1] + len(tris))
+    face_tris, face_troff, face_cent = [], [0], []
+    for V in bf_V:
+        V = np.asarray(V, float)
+        face_cent.append(V.mean(0))
+        subs = _face_subtris(V)
+        for T in subs:
+            face_tris.append(np.asarray(T, float).ravel())
+        face_troff.append(face_troff[-1] + len(subs))
+    return dict(
+        cell_tris=(np.concatenate(cell_tris) if cell_tris else np.zeros(0)),
+        cell_troff=np.asarray(cell_troff, np.int32),
+        cell_cent=(np.asarray(cell_cent, float).ravel() if cell_cent else np.zeros(0)),
+        cell_meas=np.asarray(el_vol, float),
+        face_tris=(np.concatenate(face_tris) if face_tris else np.zeros(0)),
+        face_troff=np.asarray(face_troff, np.int32),
+        face_cent=(np.asarray(face_cent, float).ravel() if face_cent else np.zeros(0)),
+        face_meas=np.asarray(bf_area, float),
+    )
+
+
 def _csr_sp(bf):
     """NGSolve BilinearForm.mat -> scipy CSR (SPARSE). The scalable (skip_dense_gram) build keeps the
     charge maps + HDiv mass sparse; only the dense reference path densifies via _csr()."""
@@ -470,10 +505,15 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
                   if n_el and len({len(V) for V in el_V}) == 1 else np.zeros(0))
     face_verts = (np.asarray(bf_V, float).ravel()
                   if n_bf and len({len(V) for V in bf_V}) == 1 else np.zeros(0))
+    # POLYTOPE flat geometry for the C++ scalable HEX/WEDGE charge-Gram H-matrix (the polytope
+    # _ChargeGramHMatrix ctor): computed only when the mesh has non-tet cells / non-triangle faces (a pure
+    # tet mesh takes the bit-identical cell_verts/face_verts path, so the per-cell ConvexHull is skipped).
+    need_poly = any(len(V) != 4 for V in el_V) or any(len(V) != 3 for V in bf_V)
+    poly = (polytope_flat_geom(el_V, bf_V, el_vol, bf_area) if need_poly else None)
     return dict(N=N, M_mass=M_mass, B=B, ndof=ndof, n_loop=n_loop, loops=loops, m_unit=m_unit,
                 cent=cent, meas=meas, self_energy=diagG, G=G,
                 B_csr=B_sp, n_charge=n_el + n_bf,
-                cell_verts=cell_verts, face_verts=face_verts, n_el=n_el)
+                cell_verts=cell_verts, face_verts=face_verts, n_el=n_el, poly=poly)
 
 
 def demag_factor(d):

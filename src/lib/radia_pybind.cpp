@@ -3092,6 +3092,33 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "PhiTet/TriPotential inner x outer quadrature (matches dense build_demag(analytic_gram=True)). "
              "near_factor (default 1e30 = all-analytic) gives the NEAR/FAR build speedup: pass ~2 to use "
              "the cheap centroid-monopole for far pairs, analytic only for near (non-uniform-M) pairs.")
+        .def(py::init([](std::vector<double> cell_tris, std::vector<int> cell_troff,
+                         std::vector<double> cell_cent, std::vector<double> cell_meas,
+                         std::vector<double> face_tris, std::vector<int> face_troff,
+                         std::vector<double> face_cent, std::vector<double> face_meas,
+                         int n_el, double eps, int leaf, double eta, double near_factor) {
+                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
+                     new RadHACApKChargeGram(std::move(cell_tris), std::move(cell_troff),
+                                             std::move(cell_cent), std::move(cell_meas),
+                                             std::move(face_tris), std::move(face_troff),
+                                             std::move(face_cent), std::move(face_meas), n_el, near_factor));
+                 RadHACApKParams p;
+                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("polytope charge Gram H-matrix build failed");
+                 return mgr;
+             }),
+             py::arg("cell_tris"), py::arg("cell_troff"), py::arg("cell_cent"), py::arg("cell_meas"),
+             py::arg("face_tris"), py::arg("face_troff"), py::arg("face_cent"), py::arg("face_meas"),
+             py::arg("n_el"), py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+             py::arg("near_factor") = 1e30,
+             "POLYTOPE mode (hex/wedge cells + quad faces): the EXACT analytic charge Gram for any "
+             "flat-faced convex cell, the triangulation supplied from Python.  cell_tris is a flat "
+             "triangle soup (9 doubles/tri) of all cells' convex-hull triangles, cell_troff [n_el+1] the "
+             "CSR offsets (in triangles), cell_cent [n_el*3] the vertex-mean centroid (fan apex + outward "
+             "normal ref), cell_meas [n_el] the cell volume; face_tris/face_troff/face_cent/face_meas the "
+             "boundary faces' sub-triangles (quad->2).  Entry = divergence-theorem polytope potential x "
+             "centroid-fan / Dunavant outer quadrature (matches dense analytic_charge_gram polytope path). "
+             "near_factor (default 1e30 = all-analytic); pass ~2 for the NEAR/FAR build speedup.")
         .def(py::init([](std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
                          std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
                          std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
