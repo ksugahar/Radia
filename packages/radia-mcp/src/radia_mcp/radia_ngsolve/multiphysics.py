@@ -66,6 +66,54 @@ def solve_heat_steady(mesh, q, k, conductor, dirichlet, order=2,
     return gT
 
 
+def solve_heat_transient(mesh, T0, k, rho_cp, dirichlet, t_end, n_steps,
+                         source=None, conductor=None, order=2, theta=0.5,
+                         inverse="sparsecholesky"):
+    """TRANSIENT heat conduction  rho_cp dT/dt = div(k grad T) + source  by the theta time
+    scheme -- the time-domain complement of :func:`solve_heat_steady`. Homogeneous Dirichlet
+    ``T = 0`` on the ``dirichlet`` boundary (the initial field ``T0`` must vanish there).
+
+    The theta-rule discretisation (theta = 0.5 = Crank-Nicolson, 2nd order in dt; theta = 1 =
+    implicit Euler, unconditionally stable, 1st order) reads, with mass M = int rho_cp u v and
+    stiffness A = int k grad u . grad v,
+
+        (M + theta dt A) T^{n+1} = (M - (1-theta) dt A) T^n + dt F .
+
+    Args:
+        mesh      : NGSolve mesh.
+        T0        : initial-temperature CoefficientFunction (set at t=0).
+        k         : thermal conductivity [W/(m K)] (scalar or CF).
+        rho_cp    : volumetric heat capacity rho*c_p [J/(m^3 K)] (scalar or CF); the
+                    diffusivity is alpha = k / rho_cp.
+        dirichlet : boundary held at T=0.
+        t_end, n_steps : final time and number of equal steps (dt = t_end/n_steps).
+        source    : volumetric heat source CF [W/m^3] (steady; e.g. a Joule density), or None.
+        conductor : restrict the solve to this material (default: whole mesh).
+        order, theta, inverse : H1 order, time-scheme weight, sparse factoriser.
+
+    Returns the temperature GridFunction at ``t_end``. Verified on the single-mode decay of the
+    unit square (T0 = sin(pi x) sin(pi y) -> exp(-alpha 2 pi^2 t), Crank-Nicolson 2nd-order in dt).
+    """
+    kw = {"definedon": mesh.Materials(conductor)} if conductor else {}
+    fesT = H1(mesh, order=order, dirichlet=dirichlet, **kw)
+    T, s = fesT.TnT()
+    A = BilinearForm(k * grad(T) * grad(s) * dx); A.Assemble()
+    M = BilinearForm(rho_cp * T * s * dx); M.Assemble()
+    gT = GridFunction(fesT); gT.Set(T0)
+    dt = t_end / n_steps
+    mstar = M.mat.CreateMatrix()
+    mstar.AsVector().data = M.mat.AsVector() + theta * dt * A.mat.AsVector()
+    inv = mstar.Inverse(fesT.FreeDofs(), inverse=inverse)
+    fvec = LinearForm(source * s * dx).Assemble().vec if source is not None else None
+    rhs = gT.vec.CreateVector()
+    for _ in range(n_steps):
+        rhs.data = M.mat * gT.vec - (1.0 - theta) * dt * (A.mat * gT.vec)
+        if fvec is not None:
+            rhs.data += dt * fvec
+        gT.vec.data = inv * rhs
+    return gT
+
+
 def joule_heated_cylinder_peak_dT(q, a, k):
     """Peak (centre) temperature RISE of a round conductor (radius ``a``) carrying a UNIFORM
     DC Joule source ``q`` [W/m^3] (q = J^2/sigma, uniform current density), with the surface
