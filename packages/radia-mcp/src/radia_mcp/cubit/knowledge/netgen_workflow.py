@@ -534,9 +534,25 @@ gfu.vec.data = A.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")*f.vec
 C_per_L = Integrate(grad(gfu)*grad(gfu), mesh, order=10) / L   # = 2W/V^2 / L, V=1
 ```
 
-Same pattern (swap eps->mu/sigma/k, or curl-curl for magnetics) carries any FEMM-style field
+Same pattern (swap eps->mu/sigma/k, or curl-curl for magnetics) carries any field
 solve onto curved high-order hex. Loader rule from `troubleshooting` still applies: read the
 curving with `Mesh()` + high `order=` quadrature, never `m.Curve()` (no CAD ref in the .vol).
+
+## EIGENVALUE solves on the high-order hex mesh (not just source-driven fields)
+
+The loaded curved-hex `.vol` also supports EIGENVALUE problems, where curving matters most
+(eigenvalues are sensitive to the boundary shape). The Laplace-Dirichlet spectrum
+`-nabla^2 u = lambda u, u=0 on the surface` of a meshed BALL has the exact lowest eigenvalue
+`(pi/R)^2` (radial s-mode `sin(pi r/R)/r`), then `(4.493409/R)^2` (l=1, triply degenerate).
+
+Build a hex SPHERE (`volume 1 scheme sphere` O-grid), `block 1 add volume all`,
+`export netgen ... order 3`; in a separate ngsolve process load the `.vol` AS-IS (no
+`mesh.Curve`) and call
+`radia_mcp.radia_ngsolve.waveguide.laplace_dirichlet_eigenvalues(mesh, n, order=3)`. On a coarse
+56-hex order-3 sphere (R=0.5) this gives lambda_1 = 39.450 vs exact `4 pi^2 = 39.478` (rel err
+7e-4) and lambda_2 = 80.71 vs the l=1 mode 80.76 -- the curved hex recovers the round-domain
+spectrum on very few elements. These eigenvalues are also the modal DECAY rates of the transient
+heat equation (`multiphysics.solve_heat_transient`, `T_n ~ exp(-alpha lambda_n t)`).
 """
 
 TROUBLESHOOTING = """

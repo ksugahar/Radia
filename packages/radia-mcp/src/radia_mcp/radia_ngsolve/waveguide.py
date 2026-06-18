@@ -312,6 +312,32 @@ def helmholtz_cutoff_wavenumbers_2d(mesh, n_modes, bc="neumann", wall="wall",
     return [math.sqrt(x) for x in kc2[:n_modes]]
 
 
+def laplace_dirichlet_eigenvalues(mesh, n_modes, order=2, shift=-1.0, dirichlet=".*"):
+    """Lowest Laplace-Dirichlet eigenvalues of  -nabla^2 u = lambda u  with u = 0 on the
+    Dirichlet boundary, by the generalised eigenproblem (grad.grad vs mass) via ArnoldiSolver
+    with a small negative shift (so A + |shift| M is SPD).
+
+    The 3-D SCALAR companion of :func:`helmholtz_cutoff_wavenumbers_2d` (2-D cross-section) and
+    :func:`maxwell_cavity_modes_3d` (3-D vector). These eigenvalues are ALSO the modal decay
+    rates of the transient heat equation (T_n ~ exp(-alpha lambda_n t), see
+    ``multiphysics.solve_heat_transient``) and the squared acoustic/quantum eigen-wavenumbers.
+    Closed forms: a BALL of radius R has lowest lambda = (pi/R)^2 (radial s-mode sin(pi r/R)/r),
+    next (4.493409/R)^2 (l=1, x3); a BOX a x b x c has lambda = pi^2(p^2/a^2+q^2/b^2+r^2/c^2).
+
+    Works on ANY 3-D mesh -- a Netgen tet mesh (call mesh.Curve for curved boundaries) OR a Cubit
+    high-order curved-HEX ``.vol`` loaded as-is (do NOT mesh.Curve a loaded high-order .vol).
+    Returns the ascending list of eigenvalues (length ``n_modes``)."""
+    fes = H1(mesh, order=order, dirichlet=dirichlet)
+    u, v = fes.TnT()
+    A = BilinearForm(grad(u) * grad(v) * dx).Assemble()
+    M = BilinearForm(u * v * dx).Assemble()
+    gf = GridFunction(fes, multidim=n_modes + 4)
+    lams = ArnoldiSolver(A.mat, M.mat, fes.FreeDofs(), list(gf.vecs), shift=shift)
+    vals = sorted(l.real for l in lams)
+    vals = [x for x in vals if x > 1e-6 * max(vals)]
+    return vals[:n_modes]
+
+
 def rectangular_cavity_frequency(a, b, d, m, n, p):
     """Exact resonant FREQUENCY [Hz] of the TE_mnp / TM_mnp mode of a rectangular metallic CAVITY
     (a closed PEC box a x b x d):
