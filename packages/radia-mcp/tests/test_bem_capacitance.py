@@ -21,7 +21,8 @@ from radia_mcp.radia_ngsolve.bem_integral import (sphere_capacitance, single_lay
                                                   mie_soundhard_farfield, mie_soundhard_cross_section,
                                                   helmholtz_impedance_far_field, mie_impedance_farfield,
                                                   helmholtz_sphere_radiation_impedance, sphere_radiation_ratio,
-                                                  sphere_polarizability, conductor_polarizability)
+                                                  sphere_polarizability, conductor_polarizability,
+                                                  single_layer_spectrum)
 
 
 def test_spheroid_capacitance_prolate_oblate():
@@ -207,6 +208,19 @@ def test_mie_farfield_and_cross_section_consistency():
         assert sig > 0.0
         # back-scatter (theta=pi) is finite and nonzero
         assert abs(mie_soundsoft_farfield(kappa, 1.0, _m.pi)) > 0.0
+
+
+def test_single_layer_operator_spectrum():
+    # eigenvalues of the Laplace single-layer operator on the unit sphere: exact V Y_l = Y_l/(2l+1),
+    # so the spectrum is 1, 1/3 (x3), 1/5 (x5) descending -- the operator companion of the capacitance solve.
+    res = single_layer_spectrum(n_eig=9, maxh=0.6, order=1)
+    ev = res["eigenvalues"]
+    assert ev[0] == pytest.approx(1.0, rel=5e-3)               # l=0 monopole (x1)
+    for v in ev[1:4]:
+        assert v == pytest.approx(1.0 / 3.0, rel=5e-3)         # l=1 (x3)
+    for v in ev[4:9]:
+        assert v == pytest.approx(1.0 / 5.0, rel=5e-3)         # l=2 (x5)
+    assert all(a >= b - 1e-9 for a, b in zip(ev, ev[1:]))      # descending
 
 
 def test_sphere_polarizability_matches_4piR3():
