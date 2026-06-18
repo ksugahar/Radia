@@ -24,8 +24,6 @@ void ExtrudedPolygonDLL( double, double, double*, int, char, double* );
 void PolyhedronDLL( double*, int, int*, int*, int, double*, double*, double*, double* );
 void MultGenExtrPolygonDLL( double*, int*, double*, int, double* );
 void MultGenExtrRectangleDLL( double*, double*, int, double* );
-//void MultGenExtrTriangleDLL( double, double, double*, double*, int, char, double*, const char*,const char*,const char* );
-void MultGenExtrTriangleDLL( double, double, double*, double*, int, char, double*, const char*,const char*,const char*,const char* ); //OC30072018
 
 void ArcMag( double,double,double, double,double, double,double, double, int, char*, double,double,double );
 void ArcPolygon();
@@ -294,38 +292,17 @@ int CALL RadObjMltExtRtg(int* n, double* pFlatCenPts, double* pFlatRtgSizes, int
 
 int CALL RadObjMltExtTri(int* n, double xc, double lx, double* pFlatVert, double* pFlatSubd, int nv, char a, double* pM, char* sOpt)
 {
-	const char *sOpt1=0, *sOpt2=0, *sOpt3=0, *sOpt4=0;
-	vector<string> AuxStrings;
-	if(sOpt != 0)
-	{
-		//char *SepStrArr[] = {";", ","};
-		//CAuxParse::StringSplit(sOpt, SepStrArr, 2, " ", AuxStrings);
-		//OC30072018 
-		int lenStrOpt = (int)strlen(sOpt);
-		char *sOptLoc = new char[lenStrOpt + 1];
-		CAuxParse::StringSymbolsRemove(sOpt, (char*)" ", sOptLoc);
-		CAuxParse::StringSplitNested(sOptLoc,";,", AuxStrings);
-		delete[] sOptLoc;
+	(void)xc;
+	(void)lx;
+	(void)pFlatVert;
+	(void)pFlatSubd;
+	(void)nv;
+	(void)a;
+	(void)pM;
+	(void)sOpt;
 
-		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0) 
-		{
-			sOpt1 = (AuxStrings[0]).c_str();
-			if(AmOfTokens > 1) 
-			{
-				sOpt2 = (AuxStrings[1]).c_str();
-				if(AmOfTokens > 2) 
-				{
-					sOpt3 = (AuxStrings[2]).c_str();
-					if(AmOfTokens > 3) sOpt4 = (AuxStrings[3]).c_str();
-				}
-			}
-		}
-	}
-	
-	MultGenExtrTriangleDLL(xc, lx, pFlatVert, pFlatSubd, nv, a, pM, sOpt1, sOpt2, sOpt3, sOpt4);
-
-	*n = ioBuffer.OutInt();
+	if(n != 0) *n = 0;
+	ioBuffer.StoreErrorMessage("Radia::Error126");
 	return ioBuffer.OutErrorStatus();
 }
 
@@ -1597,6 +1574,5 @@ int CALL RadFldA(double* A_out, int n_points, double* points, int container_hand
 }
 
 //-------------------------------------------------------------------------
-
 
 
