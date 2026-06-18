@@ -4,7 +4,9 @@
 # Local Development Files (DO NOT COMMIT)
 # ============================================================================
 CLAUDE.md
+AGENTS.md
 ROADMAP.md
+.agents/
 .claude/
 .mcp.json
 publish_to_pypi.cmd
