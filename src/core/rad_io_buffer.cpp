@@ -19,7 +19,7 @@
 
 //-------------------------------------------------------------------------
 
-int radTIOBuffer::AmOfErrors = 140; //modify this when adding new error !!!
+int radTIOBuffer::AmOfErrors = 141; //modify this when adding new error !!!
 string radTIOBuffer::err_ar[] = {
 
 	"Radia::ErrorXXX::::Wrong Error Number.\0",
@@ -152,6 +152,7 @@ string radTIOBuffer::err_ar[] = {
 	"Radia::Error200::::Step size is too small in automatic Runge-Kutta integration routine.\0",
 	"Radia::Error201::::Maximum number of steps exceeded in automatic Runge-Kutta integration routine.\0",
 	"Radia::Error202::::Failed to instantiate object(s).\0",
+	"Radia::Error203::::The collocation surface-charge (yano-type MSC) demag for hexahedral / wedge soft iron has been removed from Radia. Build the soft iron from an NGSolve mesh via radia.vim.soft_iron_from_mesh(...) and solve through the FEEC HDiv-VIM (rad.Solve dispatches it automatically, or call radia.vim.hdiv_demag_solve directly). Tetrahedron (MMM) and permanent-magnet solves are unaffected.\0",
 	"Radia::Error500::::Incorrect input: Byte string is expected.\0", //keep on adding new "Incorrect inputs" after this
 	"Radia::Error501::::Incorrect input: Wrong / unsupported magnetic kick units.\0", //keep on adding new "Incorrect inputs" after this
 	"Radia::Error502::::Incorrect input: Wrong / unsupported kick-map string/file format specification.\0", //keep on adding new "Incorrect inputs" after this

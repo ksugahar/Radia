@@ -232,6 +232,21 @@ radTInteraction::~radTInteraction()
 
 //-------------------------------------------------------------------------
 
+bool radTInteraction::HasSurfaceChargeElements() const
+{
+	// True if any relaxable element is a collocation surface-charge (Use6DOF_MSC) polyhedron --
+	// a soft-iron hexahedron (6 faces) or wedge (5 faces).  The yano-type MSC demag for these is
+	// removed; the soft iron must go through the FEEC HDiv-VIM (radia.vim.soft_iron_from_mesh).
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[i]);
+		if(poly && poly->Use6DOF_MSC) return true;
+	}
+	return false;
+}
+
+//-------------------------------------------------------------------------
+
 void radTInteraction::DeallocateMemory() //OC27122019
 {
 	// RAII: automatic cleanup via vInteractMatrix, vInteractMatrixPtrs, and vGenMatrStorage

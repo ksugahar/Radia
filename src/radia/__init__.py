@@ -178,59 +178,75 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# Demag backend selection (runtime, API-OPTIONAL) -- the yano-type MSC backend is DEPRECATED.
+# Demag backend: the FEEC HDiv-VIM (radia.vim) is the ONLY soft-iron demag method.
 #
-# The Yano MSC demag backend (rad.Solve on ObjHexahedron / ObjWedge soft iron) is being
-# superseded by the FEEC HDiv-VIM (radia.hdiv_vim).  It is exposed here as an OPTIONAL, selectable
-# backend so it can be removed cleanly later: callers that pin "yano" keep today's behaviour (with a
-# one-time DeprecationWarning), and when the HDiv-VIM is wired into rad.Solve the default flips to
-# "hdiv" -- deleting yano then changes only this default, not the public API surface.  Permanent-magnet
-# and MMM (tetrahedron) solves do not use the yano-type MSC path and are unaffected.
+# The legacy collocation surface-charge (yano-type MSC) demag for hexahedral / wedge soft iron has
+# been REMOVED.  rad.Solve routes a mesh-backed soft-iron body (built via radia.vim.soft_iron_from_mesh)
+# to the FEEC HDiv-VIM automatically; tetrahedron (MMM) and permanent-magnet solves stay on the C++
+# solver.  A hex/wedge soft iron built the mesh-less way (ObjHexahedron + MatLin) now raises
+# (Radia::Error203) directing to soft_iron_from_mesh.  set_demag_backend / get_demag_backend remain as
+# thin back-compat shims ("hdiv" only; "yano" is rejected) so existing scripts that pinned "hdiv" work.
 # ---------------------------------------------------------------------------
-import warnings as _warnings
-
-_DEMAG_BACKEND = "yano"            # legacy default during migration; flips to "hdiv" when wired in
-_yano_deprecation_emitted = False
-
 
 def set_demag_backend(name):
-    """Select the demag backend for rad.Solve: "yano" (the legacy Yano MSC for hex/wedge soft
-    iron -- DEPRECATED, the only backend rad.Solve currently dispatches) or "hdiv" (the FEEC HDiv-VIM in
-    radia.hdiv_vim, not yet wired into rad.Solve).  Returns the previous value."""
-    global _DEMAG_BACKEND
-    if name not in ("yano", "hdiv"):
-        raise ValueError("demag_backend must be 'yano' or 'hdiv', got %r" % (name,))
-    prev, _DEMAG_BACKEND = _DEMAG_BACKEND, name
-    return prev
+    """Back-compat shim.  The FEEC HDiv-VIM is the only soft-iron demag backend: "hdiv" is a no-op,
+    "yano" is rejected (the collocation MSC demag was removed -- build hex/wedge soft iron via
+    radia.vim.soft_iron_from_mesh).  Returns "hdiv" (the previous/only value)."""
+    if name == "yano":
+        raise NotImplementedError(
+            "The yano-type MSC demag backend has been removed from Radia.  Build hex/wedge soft iron "
+            "via radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=) and solve with rad.Solve (it "
+            "dispatches the FEEC HDiv-VIM automatically), or call radia.vim.hdiv_demag_solve directly.")
+    if name != "hdiv":
+        raise ValueError("demag_backend must be 'hdiv' (got %r); the 'yano' backend was removed" % (name,))
+    return "hdiv"
 
 
 def get_demag_backend():
-    """Return the current demag backend ("yano" legacy / "hdiv" = radia.hdiv_vim)."""
-    return _DEMAG_BACKEND
+    """The soft-iron demag backend is always the FEEC HDiv-VIM ("hdiv"); the legacy yano MSC was removed."""
+    return "hdiv"
+
+
+if "ObjCnt" in globals():
+    _cpp_ObjCnt = globals()["ObjCnt"]
+
+    def ObjCnt(*args, **kwargs):   # noqa: F811  (record Python-built containers for safe HDiv lookup)
+        """Create a Radia container and record its direct members for HDiv-VIM dispatch.
+
+        The underlying C++ ObjCntStuf helper is not safe to probe on arbitrary non-container handles, so
+        the Solve wrapper uses this Python-side record when deciding whether a container includes a
+        soft_iron_from_mesh body.
+        """
+        h = _cpp_ObjCnt(*args, **kwargs)
+        members = args[0] if args else kwargs.get("objs", None)
+        if members is not None:
+            try:
+                from radia.vim import _radsolve
+                _radsolve.register_container(h, list(members))
+            except Exception:
+                pass
+        return h
 
 
 if "Solve" in globals():
     _cpp_Solve = globals()["Solve"]
 
-    def Solve(*args, **kwargs):   # noqa: F811  (intentional thin wrapper over the C++ Solve)
-        """Radia relaxation solve.  Thin wrapper over the C++ solver adding the demag-backend gate
-        (see set_demag_backend): the yano-type MSC backend is DEPRECATED -- migrate hex/wedge soft-iron
-        demag to the FEEC HDiv-VIM (radia.hdiv_vim).  Permanent-magnet / MMM-tet solves are unaffected."""
-        global _yano_deprecation_emitted
-        if _DEMAG_BACKEND == "hdiv":
-            # Dispatch the FEEC HDiv-VIM backend.  Requires the iron body to have been built via
-            # radia.vim.soft_iron_from_mesh (which registers the NGSolve mesh + material); the bridge
-            # solves with hdiv_demag_solve and writes per-element M back so rad.Fld/rad.ObjM reflect it.
-            from radia.vim import _radsolve
-            return _radsolve.dispatch(*args, **kwargs)
-        if not _yano_deprecation_emitted:
-            _yano_deprecation_emitted = True
-            _warnings.warn(
-                "The yano-type MSC demag backend (rad.Solve on ObjHexahedron / ObjWedge soft iron) is "
-                "DEPRECATED and will be removed; it is superseded by the FEEC HDiv-VIM (radia.hdiv_vim).  "
-                "Permanent-magnet and MMM (tetrahedron) solves are unaffected.  This notice fires once per "
-                "session; call radia.set_demag_backend('hdiv') to forbid the yano path.",
-                DeprecationWarning, stacklevel=2)
+    def Solve(*args, **kwargs):   # noqa: F811  (thin wrapper: route mesh-backed soft iron to HDiv-VIM)
+        """Radia relaxation solve.  A soft-iron body built via radia.vim.soft_iron_from_mesh is solved by
+        the FEEC HDiv-VIM (radia.vim, dispatched automatically from the mesh registry); tetrahedron (MMM)
+        and permanent-magnet solves use the C++ solver.  A hex/wedge soft iron built the mesh-less way
+        (ObjHexahedron + MatLin) raises Radia::Error203 -- build it via soft_iron_from_mesh instead
+        (the yano-type collocation MSC demag was removed)."""
+        top = args[0] if args else None
+        if top is not None:
+            try:
+                from radia.vim import _radsolve
+                registered = _radsolve.is_registered(top)
+            except Exception:
+                registered = False
+            if registered:
+                from radia.vim import _radsolve
+                return _radsolve.dispatch(*args, **kwargs)
         return _cpp_Solve(*args, **kwargs)
 
 

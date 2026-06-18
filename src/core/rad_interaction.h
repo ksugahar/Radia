@@ -395,6 +395,12 @@ public:
 	int GetAmOfMainElem() const { return AmOfMainElem; }
 	radTg3dRelax* GetElement(int idx) { return g3dRelaxPtrVect[idx]; }
 
+	// True if any RELAXABLE element is a collocation surface-charge (Use6DOF_MSC) polyhedron --
+	// i.e. soft-iron hexahedron (6 faces) or wedge (5 faces).  The yano-type MSC demag for these is
+	// removed; rad.Solve raises (Radia::Error203) so they route to the FEEC HDiv-VIM instead.  Defined
+	// in rad_interaction.cpp (needs the full radTPolyhedron type).  Tet (MMM) / PM elements -> false.
+	bool HasSurfaceChargeElements() const;
+
 	// Triangle precomputation accessors (for HACApK sharing)
 	const double* GetHexaTriData() const { return m_hexaTriData.data(); }
 	bool IsTetraGeomReady() const { return m_tetraGeomReady; }

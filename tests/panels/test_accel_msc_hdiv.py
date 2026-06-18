@@ -1,20 +1,21 @@
-"""Item 3: calc_accel_msc.solve_msc with demag_backend='hdiv' (FEEC HDiv-VIM) vs 'yano' (legacy MSC).
+"""calc_accel_msc.solve_msc with the FEEC HDiv-VIM backend (the only soft-iron demag backend).
 
-The accelerator-magnet MSC panel can now drive the HDiv-VIM backend (radia.vim.soft_iron_from_mesh +
-rad.Solve(demag_backend='hdiv')) instead of the legacy yano-type collocation MSC.  The HDiv-VIM is
-KELVIN-less / iron-only, so the .vol must contain only the 'yoke' volume material and IMA symmetry is
-not supported there yet.
+The accelerator-magnet MSC panel drives the HDiv-VIM (radia.vim.soft_iron_from_mesh + rad.Solve, which
+auto-routes a mesh-backed soft iron to the HDiv-VIM).  The legacy yano-type collocation MSC backend has
+been REMOVED.  The HDiv-VIM is KELVIN-less / iron-only, so the .vol must contain only the 'yoke' volume
+material, and IMA symmetry is not supported there yet.
 
 Locks:
-  (1) on an iron-only yoke + coil, the yano and hdiv backends agree on the solved volume-averaged
-      magnetization M_avg (the primary unknown) to a few percent -- the panel routes both correctly;
+  (1) on an iron-only yoke + coil, the hdiv backend magnetizes the iron (converged, M_avg large) -- the
+      panel routes the coil field into the HDiv-VIM solve correctly;
   (2) demag_backend='hdiv' on a MULTI-material .vol (yoke + air) returns a clean error (iron-only);
-  (3) demag_backend='hdiv' with an IMA symmetry string returns a clean error (not supported yet).
+  (3) demag_backend='hdiv' with an IMA symmetry string returns a clean error (not supported yet);
+  (4) demag_backend='yano' returns a clean error (the yano backend was removed).
 
-Also implicitly guards the 2026-06-17 coil-bug fix: solve_msc used to rad.UtiDelAll() AFTER building the
-coil (destroying it); now the iron responds to the coil, so M_avg is large (~1e5 A/m), not ~0.
+Also guards the 2026-06-17 coil-bug fix: solve_msc used to rad.UtiDelAll() AFTER building the coil
+(destroying it); now the iron responds to the coil, so M_avg is large (~1e5 A/m), not ~0.
 
-Slow: each solve runs the real Radia / HDiv-VIM solver on a small (64-hex) yoke.
+Slow: each solve runs the real HDiv-VIM solver on a small (64-hex) yoke.
 """
 import math
 import os
@@ -83,27 +84,29 @@ def _linear_mat():
     return EMMaterial(name="linear", sigma=2e6, mu_r=MU_R, bh_curve=None)
 
 
-def test_yano_vs_hdiv_M_avg_agree(tmp_path, coil_script):
-    """yano and hdiv solve the same iron-only yoke+coil; their volume-averaged M agrees to a few %."""
+def test_hdiv_panel_magnetizes(tmp_path, coil_script):
+    """The hdiv backend solves the iron-only yoke + coil: converged, HDiv-VIM, and the iron is actually
+    magnetised by the coil (M_avg large -- the coil-bug-fix guard)."""
     from calc_accel_msc import solve_msc
     vol = _iron_only_yoke_vol(tmp_path / "yoke.vol")
-    mat = _linear_mat()
-
-    ry = solve_msc(coil_script=coil_script, vol_file=vol, mat=mat,
-                   demag_backend="yano", solver=0, tol=1e-5, max_iter=300)
-    rh = solve_msc(coil_script=coil_script, vol_file=vol, mat=mat,
+    rh = solve_msc(coil_script=coil_script, vol_file=vol, mat=_linear_mat(),
                    demag_backend="hdiv", solver=0, tol=1e-7, max_iter=800)
-    assert "error" not in ry, ry
     assert "error" not in rh, rh
-    assert ry["converged"] and rh["converged"]
+    assert rh["converged"]
     assert rh["demag_backend"] == "hdiv" and rh["solver"] == "HDiv-VIM"
-
-    mz_y, mz_h = ry["M_avg"][2], rh["M_avg"][2]
+    mz_h = rh["M_avg"][2]
     # coil-bug-fix guard: the iron must actually be magnetised by the coil (not ~0)
-    assert abs(mz_y) > 1e4, f"yano M_avg_z={mz_y:.1f} too small -- coil field missing?"
     assert abs(mz_h) > 1e4, f"hdiv M_avg_z={mz_h:.1f} too small -- coil field missing?"
-    rel = abs(mz_h - mz_y) / abs(mz_y)
-    assert rel < 3e-2, f"yano M_avg_z={mz_y:.1f} vs hdiv {mz_h:.1f} (rel {rel:.2e})"
+
+
+def test_yano_backend_removed(tmp_path, coil_script):
+    """demag_backend='yano' returns a clean error -- the yano-type collocation MSC was removed."""
+    from calc_accel_msc import solve_msc
+    vol = _iron_only_yoke_vol(tmp_path / "yoke.vol")
+    r = solve_msc(coil_script=coil_script, vol_file=vol, mat=_linear_mat(),
+                  demag_backend="yano", solver=0, tol=1e-6, max_iter=400)
+    assert "error" in r, r
+    assert "yano" in r["error"].lower() and "removed" in r["error"].lower()
 
 
 def test_hdiv_rejects_multimaterial(tmp_path, coil_script):
