@@ -45,9 +45,12 @@ Three regimes of the SAME operator (exterior wavenumber sets the character):
                             Bayliss-Turkel-like curvature hierarchy.
 
 Why time-domain is hard, in one line: a per-frequency-optimised (eps(omega),
-mu(omega)) is generally NON-CAUSAL, so it cannot be marched in time as-is.  The
-fix is to realise the shell material as a CAUSAL relaxation network (URN) plus an
-auxiliary-ODE update -- see topic `causality` and `timedomain`.
+mu(omega)) is generally NON-CAUSAL and the shell's reflection null is extremely
+high-Q (a ~0.006% material error flips |Gamma| from 0 to 1), so it cannot be
+marched in time as-is -- see topic `causality`.  The clean fix is to drop the
+shell and realise the IABC's EFFECTIVE TERMINATION IMPEDANCE (the exact exterior
+DtN) directly as a Robin BC + auxiliary ODEs -- exact, unconditionally stable,
+seamless DC->radiation: see topic `exact_dtn` (the recommended route).
 
 Relation to other truncations:
 - DtN / Bayliss-Turkel: an IABC shell+PEC is a LOCAL material realisation of an
@@ -244,10 +247,63 @@ When to use which absorber:
     there and should not be claimed.
 """
 
+IABC_EXACT_DTN = r"""
+# The exact-impedance route (RECOMMENDED for a transient open boundary)
+
+The cleanest time-domain open boundary uses NO absorbing shell at all.  An IABC
+shell+PEC only presents an effective surface impedance = the exact exterior
+Dirichlet-to-Neumann (DtN) symbol G_l(omega) at the truncation sphere.  Realise
+THAT impedance directly as a Robin BC + auxiliary ODEs, instead of via a
+fictitious lossy material (which is high-Q and does not causalise -- see
+`causality`).
+
+Air (wave) exterior: G_l is EXACTLY RATIONAL in s (outgoing h_l^{(2)} =
+e^{-jx}/x * polynomial(1/x), so e^{-jx} cancels in the log-derivative):
+    R0*G_l(s) = -s - 1 - N_l(s)/Q_l(s),   Q_l = reverse Bessel polynomial,
+    deg l, ALL roots Re<0.
+      l=1:  -s - 1 - 1/(s+1)                          pole s=-1
+      l=2:  -s - 1 - 3(s+2)/(s^2+3s+3)                poles -1.5 +- 0.866 j
+      l=3:  -s - 1 - 3(2s^2+10s+15)/(s^3+6s^2+15s+15) poles -2.32, -1.84+-1.75 j
+    s->0 gives the static -(l+1)/R0; s->inf gives the Sommerfeld -s/c.
+    => seamless DC -> evanescent -> radiation BY CONSTRUCTION (no fitting).
+
+Time-domain realisation: each mode l = one l-state companion auxiliary-ODE
+system (controllable-canonical realisation of N_l/Q_l) + a boundary time
+derivative (the -s) + a constant (the -1), folded into Newmark-beta.  Poles
+Re<0 + dissipative boundary => UNCONDITIONALLY STABLE, reflection zero up to
+discretisation.  VERIFIED by a 1D radial FETD solve (Newmark-beta, R0=c=1,
+demo_uu2_exact_dtn_fetd.py): realising the exact DtN as a Robin BC + l companion
+auxiliary ODEs, the spurious reflection (truncated solve vs a free-space
+reference on the SAME interior mesh) falls as O(h^2) for l=1,2,3 -- ~5.7e-4,
+~1.4e-4, ~3.6e-5 on 100/200/400-element radial meshes (clean x4 per h-halving)
+-- i.e. it is reflectionless in the continuum (discretisation-limited only).  It
+beats a 1st-order Sommerfeld boundary on the same mesh by ~2000x, and the
+interior energy drains to machine precision (~1e-16 of peak) without ever
+growing => passive.  This is the right vehicle for "seamless, stable, transient
+open boundary": realise the exact PASSIVE boundary response, do not causalise a
+material.  (The DtN symbol / pole realisation itself is verified separately in
+demo_uu_iabc_time_domain.py.)
+
+IMPORTANT (prior art, state it): for a SEPARABLE boundary (sphere / cylinder /
+half-space) this exact rational radiation BC is the classical Grote-Keller /
+Bayliss-Turkel / Hagstrom-Warburton exact / high-order radiation condition --
+reflectionless, and it does outperform a PML there, but that is established and
+it does NOT generalise to arbitrary geometry (which is exactly where PML is
+used).  So this is NOT "beating PML" in general.  The IABC-specific value is the
+bridge "IABC shell == this exact termination impedance" and its PASSIVE
+EQUIVALENT-CIRCUIT (relaxation-network / TLM) realisation -- fit/synthesise with
+the `urn` / `urn_fit` tools.
+
+Lossy / conductive exterior: G_l ~ sqrt(s) (half-derivative) is NOT rational;
+fit it with URN to a causal rational/relaxation form, then the same
+auxiliary-ODE Robin machinery applies.
+"""
+
 _TOPICS = {
     "overview": IABC_OVERVIEW,
     "frequency_domain": IABC_FREQUENCY_DOMAIN,
     "causality": IABC_CAUSALITY,
+    "exact_dtn": IABC_EXACT_DTN,
     "timedomain": IABC_TIMEDOMAIN,
     "broadband_design": IABC_BROADBAND_DESIGN,
     "application": IABC_APPLICATION,
@@ -256,13 +312,14 @@ _TOPICS = {
 
 def get_iabc_documentation(topic: str = "all") -> str:
     """Return IABC knowledge text.  topic in
-    {all, overview, frequency_domain, causality, timedomain,
+    {all, overview, frequency_domain, causality, exact_dtn, timedomain,
      broadband_design, application}."""
     t = (topic or "all").strip().lower()
     if t == "all":
         return "\n".join(_TOPICS[k] for k in
                          ["overview", "frequency_domain", "causality",
-                          "timedomain", "broadband_design", "application"])
+                          "exact_dtn", "timedomain", "broadband_design",
+                          "application"])
     if t in _TOPICS:
         return _TOPICS[t]
     return (f"Unknown topic '{topic}'. Options: all, " + ", ".join(_TOPICS) + ".")
