@@ -37,9 +37,29 @@ for n in ns:
     rn = np.abs(amat[:, n] / a1v); pk, ck = np.polyfit(np.log(a / Rs), np.log(rn), 1)
     Ak[n] = (np.exp(ck), pk)
 Rf = np.linspace(1.01, 12.0, 4000)
+sq_opt = {}
 for eps in (1e-4, 1e-6):
     p_nv = np.ceil(np.log(eps) / np.log(a / Rf))
     dof_nv = (Rf / a) ** 2 * p_nv ** 2; dof_dk = (Rf / a) ** 2
-    print(f"eps={eps:.0e}: SQUARE optimal R/a={Rf[np.argmin(dof_nv)]:.2f} "
+    sq_opt[eps] = Rf[np.argmin(dof_nv)] / a
+    print(f"eps={eps:.0e}: SQUARE optimal R/a={sq_opt[eps]:.2f} "
           f"(p={int(p_nv[np.argmin(dof_nv)])});  DISK R/a={Rf[np.argmin(dof_dk)]:.2f} (monotone)")
 # DOF model is an explicit PROXY (area x order^2); (a/R)^4 decay and a3=0 are exact/measured.
+
+# --- verification (backs manuscript cuboid far-field + optimal-R claims) ---
+N_FAIL = 0
+def check(name, cond, detail=""):
+    global N_FAIL
+    if not cond: N_FAIL += 1
+    print(f"  [{'ok ' if cond else 'FAIL'}] {name}{('  -- ' + detail) if detail else ''}")
+print()
+pref = np.abs(amat[:, 5] / a1v) * (Rs / a) ** 4          # |a5/a1|·(R/a)^4 should equal 4/15
+check("octupole a3 vanishes by symmetry (uniformly magnetized square -> n=4k+1 only)",
+      float(np.max(r31)) < 1e-10, f"max|a3/a1| = {np.max(r31):.1e}")
+check("far-field correction a5/a1 ~ (a/R)^4 (fitted exponent in [3.7,4.3])",
+      3.7 < p51 < 4.3, f"exponent = {p51:.3f}")
+check("a5/a1 prefactor = 4/15 = 0.2667 (|a5/a1|*(R/a)^4 in [0.24,0.29])",
+      bool(np.all((pref > 0.24) & (pref < 0.29))), f"prefactor range [{pref.min():.3f},{pref.max():.3f}]")
+check("square truncation has an interior optimal radius R/a in [2.5,3.5] (~3)",
+      2.5 <= sq_opt[1e-4] <= 3.5, f"R/a(eps=1e-4) = {sq_opt[1e-4]:.2f}")
+assert N_FAIL == 0, f"{N_FAIL} checks failed"
