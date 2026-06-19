@@ -2513,6 +2513,108 @@ non-Kelvin, (3) bonus_intorder=4, (4) THEN refine mesh / raise order.
 """
 
 
+KELVIN_MESH_CONTROL = """
+# Kelvin Mesh Control -- where to spend elements (and where NOT)
+
+Kelvin meshing is counterintuitive relative to standard FEM ("refine until the
+field converges").  Two distinct things are under your control: (1) a HARD
+constraint -- the two spheres must share an IDENTICAL surface mesh on Gamma --
+and (2) the element BUDGET, where the verified result is the OPPOSITE of the
+usual instinct: do NOT refine the exterior air.
+
+Provenance: paper kelvin_dtn.tex S4.2-4.4; topic `dtn_coarse_mesh`
+(subsec:gammaonly result + optimal-R analysis); topics `identify` / `adaptive`
+below; CLAUDE.md "Verify-First Policy" and "AI-Driven Cubit: Probe, Don't Guess".
+
+## 1. HARD constraint: identical surface mesh on Gamma (the gluing condition)
+
+The inner physical ball and the Kelvin (inverted exterior) ball are glued at the
+truncation sphere Gamma (radius R).  Their triangulations on Gamma must be
+IDENTICAL point-to-point, or the periodic / DtN coupling does not form and the
+solve crashes.
+
+  - Cubit: `copy mesh surface <in> onto surface <out> ...` (MANDATORY).  The
+    identified nodes are related by a pure TRANSLATION (offset), so source and
+    target hemispheres must have matching topology.  Mesh the air VOLUMES first
+    (so the surface is triangulated) BEFORE copy mesh.
+  - OCC / NGSolve: `int_face.Identify(ext_face, "periodic",
+    IdentificationType.PERIODIC)` then `GenerateMesh()` conforms automatically.
+  - Pitfalls:
+      * ACIS sphere has 0 curves -> copy mesh has no anchor; `webcut ... with
+        plane zplane` creates 1 curve per hemisphere to anchor on.
+      * Anchor selection: a HEMISPHERE has a unique longest curve (equator), so
+        `max(curve, key=length)` is fine.  A 1/8 OCTANT has THREE equal-length
+        arcs -> `max(key=length)` ties NON-deterministically and can pick a
+        different arc on source vs target.  Use a deterministic geometric
+        tiebreak `min(curves, key=(centroid_z, y, x))` (see
+        _add_kelvin_cubit_reduction; feedback_kelvin_1_8_blocker).
+      * Never tet-mesh the two balls independently -- you get different
+        triangulations and the copy/identify fails.
+  - Verify-First (BEFORE any solve, sub-second; CLAUDE.md):
+        slaved = sum(fes.FreeDofs()) - sum(Periodic(fes).FreeDofs())   # > 0
+        # Gamma functional test: Set(1) on kelvin_int, integrate on kelvin_ext;
+        # the kelvin_ext/kelvin_int ratio must be 1.0
+    If slaved == 0 or the ratio != 1.0 the fault is geometry / labels /
+    Identify -- fix it before trusting any solved number.
+
+## 2. The element BUDGET (verified, counterintuitive): do NOT refine the exterior
+
+At p >= n the open-boundary accuracy is decided by the Gamma SURFACE mesh and
+the Curve (geometry) order ONLY; the interior VOLUME mesh of BOTH balls is
+irrelevant (||u_h - P_n|| ~ 1e-15; paper S4.2 subsec:gammaonly).  Measured:
+Delta-DoF ~ 58 buys an open-boundary error ~ 1/45 of the interior FEM error.
+
+  => The exterior Kelvin ball can be a handful of COARSE elements.  Shrinking
+     maxh in the air is wasted budget -- it does not improve the open boundary.
+
+## 3. The four knobs that DO matter
+
+  | knob                | guidance                                             |
+  |---------------------|------------------------------------------------------|
+  | p (poly order)      | p >= n for the highest excited multipole n (the      |
+  |                     | Kelvin image is a degree-n polynomial -> exact at    |
+  |                     | p >= n; the eigenvalue ladder -(n+1)/R).             |
+  | Curve order         | sets the accuracy FLOOR (5-6 digits on a coarse      |
+  |  (geometry)         | mesh); the sphere must be curved -- raise it to      |
+  |                     | lower the floor.                                     |
+  | R / centering       | R/a ~ 3 optimal for COMPACT bodies (the spectral     |
+  |                     | basis for the classic "air box 2-5x" rule); the      |
+  |                     | sphere is R-independent (pure dipole).  Center on    |
+  |                     | the device, take the minimal enclosing R.            |
+  | hp at device corner | a re-entrant corner (L 270deg, lambda=2/3) caps       |
+  |                     | algebraic convergence (alpha_h~0.357, alpha_p~0.661);|
+  |                     | the rate limiter is INSIDE the device, not the air   |
+  |                     | -- geometric grading TO the corner restores          |
+  |                     | exponential convergence.                             |
+
+## 4. Radial grading, the inversion, and the infinite point
+
+  - Inner physical ball: refine toward the device, coarsen toward Gamma
+    (`GenerateMesh(maxh=..., grading=0.7)`).
+  - Kelvin ball: the inversion r -> R^2/r makes a uniform Kelvin-ball element
+    physically huge in the far field -- which is FINE (the far field is smooth /
+    low-multipole, exactly what coarse elements resolve).  Do not spend grading
+    effort in the Kelvin ball.
+  - Infinite point (Kelvin center rho'=0): the material weight ~(R/rho')^2
+    diverges at the center but is INTEGRABLE and is pinned by the GND Dirichlet
+    there, so a nodal SCALAR (Omega / phi) FEM is benign.  Only an EDGE-element
+    A-formulation sees a singular tensor material at the center -- then use a
+    center-less DtN (FEM-BEM) that never creates the center node.
+
+## 5. Adaptive refinement
+
+A Zienkiewicz-Zhu estimator + SetRefinementFlag / Refine loop is available
+(topic `adaptive`), but per section 2 the refinement must target the device
+INTERIOR / corners, never the exterior air.
+
+## One-line rule
+
+Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
+SURFACE mesh + Curve order + p + device-corner hp -- and leave the exterior air
+coarse.
+"""
+
+
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
     topics = {
@@ -2524,6 +2626,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "verified_recipe": KELVIN_VERIFIED_RECIPE,
         "adaptive": KELVIN_ADAPTIVE,
         "identify": KELVIN_IDENTIFY,
+        "mesh_control": KELVIN_MESH_CONTROL,
         "tips": KELVIN_TIPS,
         "verification": KELVIN_VERIFICATION,
         "periodic_wedge": KELVIN_PERIODIC_WEDGE,
