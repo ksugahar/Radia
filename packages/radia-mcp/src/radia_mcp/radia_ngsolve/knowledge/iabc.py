@@ -305,8 +305,12 @@ plateaus ~1.7e-2; URN's edge is measured/multi-mechanism data, not a clean
 analytic DtN).  This promotes the lab CLN (Kameari-Sugahara eddy-current MOR) to
 the open BOUNDARY itself; the sqrt(s) diffusion-memory element is realised by the
 finite eddy-current ladder (real negative poles -> stable, finite auxiliary ODEs).
-VERIFIED in demo_xx3_cln_dtn_cauer.py (the wave + diffusion reverse-Bessel/Cauer
-unification; wave realisation = demo_uu/uu2).
+VERIFIED two ways: demo_xx3_cln_dtn_cauer.py (the EXACT Cauer in q=sqrt(s), n+1
+stages -- the structural/unification result; wave realisation = demo_uu/uu2) and
+demo_xx4_cln_mor_radial_eddy.py (the GENUINE lab CLN: a Lanczos/PVL MOR of a
+~700-DOF radial eddy-current FEM down to a COMPACT ~16-stage INTEGER-ORDER Cauer
+ladder reproducing G_n, monotone convergence, SPD => real negative poles =>
+directly time-domain + stable -- the practical eddy-current open boundary).
 """
 
 _TOPICS = {
