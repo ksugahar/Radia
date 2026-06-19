@@ -55,8 +55,13 @@ def analytic_R(n, mu_s, r, b, c):
     return np.linalg.solve(M, rhs)[4] * r**-(n + 1)
 
 
-# c_n: _solid_harmonic(n)/a^n traces to c_n * P_n on r=a (zonal normalisation): c1=1, c2=2, c3=2.
-_CN = {1: 1.0, 2: 2.0, 3: 2.0}
+# c_n: the probe trace _solid_harmonic(n)/a^n equals c_n * P_n on r=a.  The current zonal solid
+# harmonic is _solid_harmonic(n) = r^n P_n(cos th) (recurrence build, fem_bem_coupling), so /a^n
+# traces to P_n EXACTLY => c_n = 1 for all n.  (Was {1,2,2} for an earlier _solid_harmonic
+# normalisation; that became stale when the recurrence build landed -- the energy-quotient results
+# are scale-invariant and unchanged, but this ABSOLUTE transfer comparison is not, so c_n is now
+# MEASURED at runtime in scenario_A and asserted against this dict to fail loud on any future drift.)
+_CN = {1: 1.0, 2: 1.0, 3: 1.0}
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -183,11 +188,17 @@ def scenario_A(order=2, maxh=0.25):
         book = np.linalg.norm(v_M - v_fresh) / (np.linalg.norm(v_fresh) + 1e-300)
         P = eval_legendre(n, cth)
         fem_R = float(np.dot(v_fresh, P) / np.dot(P, P))           # best-fit R_n from the angular pattern
-        an_R = analytic_R(n, mu_r, r_t, b, c) * _CN[n]
+        # measure the probe trace's P_n coefficient on r=a (robust to the _solid_harmonic normalisation;
+        # asserts against _CN so a future normalisation change fails LOUD instead of silently rescaling).
+        c_meas = float(np.dot([gf(mesh(a * np.sin(t), 0.0, a * np.cos(t))) for t in thetas], P) / np.dot(P, P))
+        assert abs(c_meas - _CN[n]) < 0.05, (
+            "probe normalisation drifted: measured c_%d=%.3f != _CN=%.1f -- update _CN to match "
+            "_solid_harmonic (fem_bem_coupling)" % (n, c_meas, _CN[n]))
+        an_R = analytic_R(n, mu_r, r_t, b, c) * c_meas
         rel = abs(fem_R - an_R) / abs(an_R)
         okA = okA and (rel < 3e-2) and (book < 1e-9)
-        print("   %d   %12.6e   %12.6e   %.2e   (%.0f)   %.1e"
-              % (n, fem_R, an_R, rel, _CN[n], book))
+        print("   %d   %12.6e   %12.6e   %.2e   (%.2f)   %.1e"
+              % (n, fem_R, an_R, rel, c_meas, book))
     print("\n  => the directly-assembled material-aware transfer M reproduces the analytic layered")
     print("     transfer (physics) AND M@psi == a fresh FEM solve (assembly).  [%s]"
           % ("PASS" if okA else "CHECK"))
