@@ -3,11 +3,13 @@
 from .export import (
     diffusive_quadrature,
     build_state_space,
+    build_state_space_mimo,
     save_mat,
 )
 
 __all__ = [
     "diffusive_quadrature",
     "build_state_space",
+    "build_state_space_mimo",
     "save_mat",
 ]
