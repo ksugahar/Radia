@@ -310,7 +310,13 @@ stages -- the structural/unification result; wave realisation = demo_uu/uu2) and
 demo_xx4_cln_mor_radial_eddy.py (the GENUINE lab CLN: a Lanczos/PVL MOR of a
 ~700-DOF radial eddy-current FEM down to a COMPACT ~16-stage INTEGER-ORDER Cauer
 ladder reproducing G_n, monotone convergence, SPD => real negative poles =>
-directly time-domain + stable -- the practical eddy-current open boundary).
+directly time-domain + stable -- the practical eddy-current open boundary).  And
+demo_xx5_cln_fetd_reflection.py USES it as a TRANSIENT open boundary: a Crank-
+Nicolson eddy-current diffusion FETD with the exterior Krylov-substructured to
+~16 DOFs gives ~1e-6 spurious reflection (vs ~6-11% for Dirichlet/Neumann
+truncation), monotone in the stage count, across n=1,2,3 -- the diffusive analog
+of demo_uu2's wave reflection test.  So the reverse-Bessel/CLN open boundary is
+reflectionless in time for BOTH the wave and the diffusion regime.
 """
 
 _TOPICS = {
