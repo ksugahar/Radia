@@ -38,7 +38,7 @@ import scipy.sparse as sp
 import ngsolve as ng
 from ngsolve import TaskManager
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import demo_hh_general_iron_design as hh   # build_fem / analytic_R / _CN / coil_dofs / a, R_out, r_t
+import demo_hh_general_iron_design as hh   # build_fem / analytic_R / coil_dofs / a, R_out, r_t (NOT _CN: bench self-measures c_n)
 from radia_mcp.radia_ngsolve.fem_bem_coupling import _solid_harmonic
 
 try:
@@ -133,11 +133,22 @@ def accuracy_case():
         for n in (1, 2, 3):
             gf.vec[:] = 0.0
             gf.Set(_solid_harmonic(n) / hh.a ** n, ng.BND, definedon=mesh.Boundaries("inner"))
+            P = eval_legendre(n, cth)
+            # MEASURE the probe trace's P_n coefficient c_n on r=a at runtime, BEFORE the interior
+            # solve -- so this benchmark is INDEPENDENT of demo_hh._CN and robust to any future
+            # _solid_harmonic normalisation change (the standard zonal solid harmonic /a^n traces to
+            # P_n exactly => c_n=1; asserted as a drift ALERT, but the MEASURED value is what is used,
+            # so the accuracy contrast stays correct even if the normalisation is changed again).
+            c_n = float(np.dot([gf(mesh(hh.a * np.sin(t), 0.0, hh.a * np.cos(t))) for t in thetas], P)
+                        / np.dot(P, P))
+            assert abs(c_n - 1.0) < 0.05, (
+                "probe normalisation drifted (c_%d=%.3f != 1): _solid_harmonic changed -- bench "
+                "self-measures so the contrast stays correct, but flag it for review" % (n, c_n))
             rr.data = -(A.mat * gf.vec); gf.vec.data += Ainv * rr
-            v = np.array([gf(t) for t in targets]); P = eval_legendre(n, cth)
+            v = np.array([gf(t) for t in targets])
             R_fem = float(np.dot(v, P) / np.dot(P, P))
-            R_ana = hh.analytic_R(n, MU_R, hh.r_t, B_SHELL, C_SHELL) * hh._CN[n]
-            accs.append({"n": n, "R_fem": R_fem, "R_analytic": R_ana,
+            R_ana = hh.analytic_R(n, MU_R, hh.r_t, B_SHELL, C_SHELL) * c_n
+            accs.append({"n": n, "R_fem": R_fem, "R_analytic": R_ana, "c_n": c_n,
                          "rel": abs(R_fem - R_ana) / abs(R_ana)})
     return {"order": ACC_ORDER, "maxh": ACC_MAXH, "per_n": accs,
             "rel_max": max(a["rel"] for a in accs)}
@@ -168,7 +179,8 @@ def main():
     print("\n[C2] ACCURACY vs the analytic layered-Green transfer (order=%d, well-resolved):" % ACC_ORDER)
     acc = accuracy_case()
     for a in acc["per_n"]:
-        print("  n=%d  R_fem=%+.6e  analytic=%+.6e  rel=%.2e" % (a["n"], a["R_fem"], a["R_analytic"], a["rel"]))
+        print("  n=%d  R_fem=%+.6e  analytic=%+.6e  rel=%.2e  (c_n=%.2f)"
+              % (a["n"], a["R_fem"], a["R_analytic"], a["rel"], a["c_n"]))
     print("  => Kelvin-FEM builds the SAME operator the Green route gives (rel_max=%.1e < 3e-2): %s"
           % (acc["rel_max"], "PASS" if acc["rel_max"] < 3e-2 else "CHECK"))
 
