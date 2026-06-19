@@ -330,7 +330,8 @@ def _assemble_biot_savart(fes, n, pts, comps):
 
 
 def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
-                            iron_mat="iron", fem_order=2, ndof_cap=20000):
+                            iron_mat="iron", fem_order=2, ndof_cap=20000,
+                            exact_source=False, quad_order=None):
     """A_react[row, dof]: the MATERIAL (iron) reaction field at each obs point
     from the FE-direct surface current of each psi-DOF, via the reduced scalar
     potential ``H = H_s - grad(Omega)`` on a Kelvin open-boundary FE mesh.
@@ -344,15 +345,19 @@ def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
 
     Verified mechanism: ``examples/kelvin_transformation/DtN_spectrum``
     ``demo_oo``/``demo_sp1`` (M = M_free + M_react; material-aware design HITS,
-    free-space design MISSES).  Source quality is the P1-nodal injection of H_s
-    on the iron vertices (demo_oo); the FMM ``BiotSavartCF`` source (demo_rr) is
-    the planned accuracy upgrade.  Cost: one Kelvin factorisation + one back-
-    substitution PER OBS ROW (the obs-adjoint, NOT per psi-DOF) + the dense
-    source matrix B_iron (3*n_iron x N_psi); verified adjoint == per-psi-DOF
-    forward to 1e-14.  ``ndof_cap`` bounds the B_iron memory/assembly."""
+    free-space design MISSES).  Source quality: the DEFAULT is the P1-nodal
+    injection of B_s on the iron vertices (cheap); ``exact_source=True``
+    evaluates B_s at the iron QUADRATURE points (analytic Biot-Savart, no P1
+    interpolation -> removes the iron-vertex plateau, ~14% on a coarse shell) at
+    the cost of one ``_assemble_biot_savart`` per quad point (much heavier --
+    opt-in).  Cost: one Kelvin factorisation + one back-substitution PER OBS ROW
+    (the obs-adjoint, NOT per psi-DOF); the adjoint identity is
+    ``A_react[i,j] = (mu_r-1) int_iron B_s^j . grad(X_i)``, X_i = Ainv G^T.
+    Verified == the per-psi-DOF forward to 1e-14.  ``ndof_cap`` bounds the dense
+    source matrix memory."""
     from ngsolve import (Mesh, H1, Periodic, VectorH1, BilinearForm,
                          GridFunction, grad, dx, InnerProduct, ElementId, VOL,
-                         x, y, z)
+                         IntegrationRule, x, y, z)
     sys.path.insert(0, os.path.dirname(__file__))
     from calc_common import detect_kelvin_offset
 
@@ -391,32 +396,15 @@ def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
     mu = mesh.MaterialCF({iron_mat: float(mu_r), "kelvin": a_kelvin ** 2 / rp2},
                          default=1.0)
     fesO = Periodic(H1(mesh, order=fem_order, dirichlet="GND"))
-    Vsrc = VectorH1(mesh, order=1)
     u, w = fesO.TnT()
     A = BilinearForm(mu * grad(u) * grad(w) * dx(bonus_intorder=2 * fem_order + 2))
     A.Assemble()
-    # D^T : fesO -> Vsrc  (the coupling transpose, for the obs-adjoint)
-    vt = Vsrc.TestFunction()
-    DT = BilinearForm(trialspace=fesO, testspace=Vsrc)
-    DT += (float(mu_r) - 1.0) * InnerProduct(vt, grad(u)) * \
-        dx(definedon=mesh.Materials(iron_mat), bonus_intorder=4)
-    DT.Assemble()
     Ainv = A.mat.Inverse(fesO.FreeDofs(), inverse="sparsecholesky")
 
-    # iron vertices = where the source field is sampled (VectorH1 order 1)
-    iron = np.array(sorted({v.nr for el in mesh.Elements() if el.mat == iron_mat
-                            for v in el.vertices}), dtype=int)
-    # source field B_s (Tesla) at the iron vertices, per psi-DOF, REUSING the
-    # free-space assembler.  mu0 cancels: B_react = mu0*F(B_iron/mu0) = F(B_iron),
-    # so inject B_iron and read -grad(Omega) -> B_react directly (Tesla).
-    B_iron = _assemble_biot_savart(fes, n, Vc[iron], [0, 1, 2]).reshape(
-        len(iron), 3, fes.ndof)
-
-    # OBS-ADJOINT: A_react[row, j] = G[row] . Ainv . D . S_j with ONE back-
-    # substitution PER OBS ROW (not per psi-DOF).  G[row] = the covector of
-    # "-grad(.)(obs)[comp]" on fesO (element-local basis gradients at the point);
-    # then A_react = einsum(E_iron, B_iron), E_iron = (D^T Ainv G^T) read on the
-    # iron-vertex source dofs.  Verified == the per-psi-DOF forward to 1e-14.
+    # OBS-ADJOINT shared covector G[row] = "-grad(.)(obs)[comp]" on fesO (element-
+    # local basis gradients at the point).  A_react[i,j] = (mu_r-1) int_iron
+    # B_s^j . grad(X_i), X_i = Ainv G[i] (one back-sub per obs row, not per
+    # psi-DOF).  Verified == the per-psi-DOF forward to 1e-14.
     n_rows = len(obs_pts) * len(comps)
     G = np.zeros((n_rows, fesO.ndof))
     gt = GridFunction(fesO); arrgt = gt.vec.FV().NumPy()
@@ -431,6 +419,49 @@ def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
                 arrgt[:] = 0.0; arrgt[gd] = 1.0
                 G[row, gd] = -grad(gt)(mp)[c]
             row += 1
+
+    if exact_source:
+        # EXACT source: B_s^j at the iron QUADRATURE points (analytic Biot-Savart,
+        # no P1 interpolation -> removes the iron-vertex plateau).  Heavier: one
+        # _assemble_biot_savart column block per quad point.
+        qorder = int(quad_order) if quad_order else 2 * fem_order
+        qpts, qw = [], []
+        for el in mesh.Elements(VOL):
+            if el.mat != iron_mat:
+                continue
+            trafo = mesh.GetTrafo(ElementId(VOL, el.nr))
+            for ip in IntegrationRule(el.type, qorder):
+                mip = trafo(ip)
+                qpts.append([mip.point[0], mip.point[1], mip.point[2]])
+                qw.append(ip.weight * mip.measure)
+        qpts = np.array(qpts); qw = np.array(qw)
+        B_q = _assemble_biot_savart(fes, n, qpts, [0, 1, 2]).reshape(
+            len(qpts), 3, fes.ndof)
+        mps = [mesh(*p) for p in qpts]
+        gXi = GridFunction(fesO); src = gXi.vec.CreateVector()
+        A_react = np.zeros((n_rows, fes.ndof))
+        for i in range(n_rows):
+            src.FV().NumPy()[:] = G[i]
+            gXi.vec.data = Ainv * src          # X_i = Ainv G[i]
+            GX = np.array([[grad(gXi)(mp)[c] for c in range(3)] for mp in mps])
+            A_react[i, :] = (float(mu_r) - 1.0) * np.einsum(
+                'qc,qcj->j', GX * qw[:, None], B_q)
+        return A_react
+
+    # P1 source (default, cheap): B_s sampled at the iron VERTICES (VectorH1
+    # order 1), P1-interpolated in the coupling.  mu0 cancels (inject B_s, read
+    # -grad(Omega) -> B_react in Tesla).  A_react = einsum(E_iron, B_iron),
+    # E_iron = (D^T Ainv G^T) read on the iron-vertex source dofs.
+    Vsrc = VectorH1(mesh, order=1)
+    vt = Vsrc.TestFunction()
+    DT = BilinearForm(trialspace=fesO, testspace=Vsrc)   # D^T : fesO -> Vsrc
+    DT += (float(mu_r) - 1.0) * InnerProduct(vt, grad(u)) * \
+        dx(definedon=mesh.Materials(iron_mat), bonus_intorder=4)
+    DT.Assemble()
+    iron = np.array(sorted({v.nr for el in mesh.Elements() if el.mat == iron_mat
+                            for v in el.vertices}), dtype=int)
+    B_iron = _assemble_biot_savart(fes, n, Vc[iron], [0, 1, 2]).reshape(
+        len(iron), 3, fes.ndof)
     gX = GridFunction(fesO); gE = GridFunction(Vsrc)
     tmp = gX.vec.CreateVector()
     E_iron = np.zeros((n_rows, 3, len(iron)))
@@ -701,7 +732,9 @@ def _build_problem(args, eval_scale=1.0):
         obs_all = np.vstack([cpts, mpts])
         A_react = _assemble_iron_reaction(
             fes, n, obs_all, comps, args.iron_vol, float(args.mu_r),
-            iron_mat=getattr(args, "iron_mat", "iron"))
+            iron_mat=getattr(args, "iron_mat", "iron"),
+            exact_source=getattr(args, "iron_exact_source", False),
+            quad_order=getattr(args, "iron_quad_order", None))
         nrc = len(cpts) * len(comps)
         Ac = Ac + A_react[:nrc]
         Am = Am + A_react[nrc:]
@@ -1926,6 +1959,8 @@ def run_design(args):
                 "iron_vol": os.path.basename(args.iron_vol),
                 "mu_r": float(args.mu_r),
                 "iron_mat": getattr(args, "iron_mat", "iron"),
+                "iron_exact_source": bool(getattr(args, "iron_exact_source",
+                                                  False)),
             })
         # Active-shielding extra metrics
         if P.get("is_shielded"):
@@ -2409,6 +2444,16 @@ def build_argparser():
     ap.add_argument("--iron-mat", default="iron",
                     help="material name of the iron region in --iron-vol "
                          "(default 'iron').")
+    ap.add_argument("--iron-exact-source", action="store_true",
+                    help="material-aware kernel: evaluate the coil source field "
+                         "at the iron QUADRATURE points (analytic Biot-Savart, "
+                         "no P1-vertex interpolation -> removes the source "
+                         "plateau, ~14%% on a coarse shell).  Much heavier (one "
+                         "assembly per quad point); opt-in.  Default is the fast "
+                         "P1-vertex source.")
+    ap.add_argument("--iron-quad-order", type=int, default=None,
+                    help="quadrature order for --iron-exact-source (default "
+                         "2*fem_order).")
     ap.add_argument("--shield-vol", default=None,
                     help="outer shield coil surface mesh (.vol). When given, "
                          "designs a PRIMARY + SHIELD coil jointly (Turner "

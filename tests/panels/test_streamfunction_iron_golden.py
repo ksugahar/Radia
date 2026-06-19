@@ -104,6 +104,28 @@ def test_streamfunction_iron_changes_the_design(iron_vols):
         f"{r_iron['peak_J']}, rel={rel:.2e}); reaction not in the operator?")
 
 
+def test_streamfunction_iron_exact_source(iron_vols):
+    """Opt-in exact source (B_s evaluated at the iron QUADRATURE points, no P1-
+    vertex interpolation): runs end-to-end, reports iron_exact_source, fits the
+    target, and gives a DIFFERENT (finer-source) reaction than the default P1
+    source -- confirming the source plateau is real and removed."""
+    coil, evalv, iron = iron_vols
+    base = ["--iron-vol", iron, "--mu-r", "200"]
+    r_p1 = _run_calc(coil, evalv, "x", extra=base)
+    r_ex = _run_calc(coil, evalv, "x",
+                     extra=base + ["--iron-exact-source", "--iron-quad-order", "2"])
+    assert "error" not in r_ex, f"exact-source error: {r_ex.get('error')}"
+    assert r_ex.get("iron_exact_source") is True
+    assert r_p1.get("iron_exact_source") is False
+    assert r_ex["rms"] < 5.0e-2, f"exact-source homogeneity too large: {r_ex['rms']}"
+    # the exact (quadrature) source changes the solved current pattern vs the P1
+    # (vertex) source -- the plateau the exact path removes is non-trivial.
+    rel = abs(r_ex["peak_J"] - r_p1["peak_J"]) / (r_p1["peak_J"] + 1e-30)
+    assert rel > 1.0e-4, (
+        f"exact source identical to P1 (peak_J {r_p1['peak_J']} -> "
+        f"{r_ex['peak_J']}, rel={rel:.2e}); source path not wired?")
+
+
 def test_streamfunction_iron_missing_material_raises(iron_vols):
     """No-Fallback: a wrong --iron-mat (absent material) fails loud with the
     available material list, not a silent guess."""
