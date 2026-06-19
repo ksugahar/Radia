@@ -865,6 +865,40 @@ The two libraries live at different layers and serve different
 geometry classes; using them in their natural domains is not a
 policy contradiction.
 
+**WAIT for Hlib (H-matrix) to land in `ngsolve.bem` -- do NOT
+roll our own H-matrix at the ngsolve.bem layer (2026-06-19)**:
+`ngsolve.bem` today ships only the **FMM** multipole backend
+(``BiotSavartCF``, ``*MLCF``, ``RegularMLExpansion``, ...).  An
+**H-matrix (Hlib / ACA) backend is expected to land in
+`ngsolve.bem`** in an upcoming NGSolve release.  **Until it does,
+do NOT bolt a custom H-matrix / ACA path onto the ngsolve.bem
+layer** (e.g. wiring Radia's HACApK or
+``radia.stream_function.aca_tsvd`` into the SF-coil / BEM
+Biot-Savart assembly).  Use the existing FMM backend for the
+free-space coil source (apply-once, far-field -- see
+`examples/kelvin_transformation/DtN_spectrum/` demo_qq/rr), and
+when a genuine **repeated-apply** H-matrix need arises at that
+layer, **prefer the forthcoming native `ngsolve.bem` Hlib over a
+hand-rolled integration**.
+
+*Why wait*: a custom H-matrix shim at the ngsolve.bem layer would
+(a) duplicate what NGSolve is about to provide natively, (b)
+create a maintenance + version-drift burden the moment Hlib lands,
+and (c) violate the "No Fallbacks / one supported path" and
+"complement NGSolve, do not reimplement" principles.  The
+benchmark backing this decision --
+`examples/kelvin_transformation/DtN_spectrum/bench_fmm_vs_aca_biotsavart.py`
+(FMM vs ACA+ vs direct on the free-space Biot-Savart coil source,
+N=Q 500..8000) -- shows the split the native backends will serve:
+**FMM wins one-shot field eval** (low O(N) setup; total 0.63 s vs
+direct 4.24 s at N=8000), while an **H-matrix wins repeated apply**
+(near-free matvec, 0.015 s vs FMM eval 0.12 s at 24k DoF; rank
+~900 constant in N, storage O(N*r) = 14x less than dense).  This
+does NOT change the Radia core: **HACApK ACA+ stays Radia's own
+MMM/MSC system matrix** (compact, near-field heavy) per the scope
+clarification above; the wait-for-Hlib rule is only about the
+`ngsolve.bem` (free-space BEM / SF-coil) layer.
+
 **Why FMM was removed from Radia (the original reasoning, still
 binding for the Radia core / volume MMM-MSC layer)**:
 
