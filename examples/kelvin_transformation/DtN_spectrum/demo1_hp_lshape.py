@@ -60,4 +60,18 @@ if __name__ == "__main__":
     for p in [1, 2, 3, 4, 5, 6]:
         e, n = solve(mesh, p); pN.append(n); pE.append(e)
         print(f"  order={p}  N={n:7d}  err={e:.6e}")
-    print(f"alpha_h={fit_alpha(hN,hE):.4f} (~1/3)  alpha_p={fit_alpha(pN,pE):.4f} (~2/3)")
+    ah = fit_alpha(hN, hE); ap = fit_alpha(pN, pE)
+    print(f"alpha_h={ah:.4f} (~1/3)  alpha_p={ap:.4f} (~2/3)  ratio alpha_p/alpha_h={ap/ah:.2f} (asymptotic 2)")
+
+    # --- verification (backs manuscript reentrant-corner exponents) ---
+    N_FAIL = 0
+    def check(name, cond, detail=""):
+        global N_FAIL
+        if not cond: N_FAIL += 1
+        print(f"  [{'ok ' if cond else 'FAIL'}] {name}{('  -- ' + detail) if detail else ''}")
+    check("h-version rate alpha_h ~ 1/3 (270deg reentrant corner, lambda=2/3, p=1)",
+          0.30 < ah < 0.40, f"alpha_h = {ah:.4f}")
+    check("p-version rate alpha_p ~ 2/3", 0.60 < ap < 0.72, f"alpha_p = {ap:.4f}")
+    check("p-version ~ 2x h-version (measured ~1.85, asymptotic 2; NOT exactly 2)",
+          1.6 < ap / ah < 2.1, f"alpha_p/alpha_h = {ap/ah:.2f}")
+    assert N_FAIL == 0, f"{N_FAIL} checks failed"
