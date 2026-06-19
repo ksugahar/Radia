@@ -244,6 +244,39 @@ def solve_magnetostatic_az(mesh, nu, currents, dirichlet_values, order=2):
     return solve_poisson_2d(mesh, nu, dirichlet_values, source=src, order=order)
 
 
+def solve_magnetostatic_az_magnet(mesh, nu, magnetization, dirichlet_values,
+                                  currents=None, order=2):
+    """2D planar magnetostatic A_z with a PERMANENT-MAGNET (magnetization) source -- the
+    PM-magnetics extension of :func:`solve_magnetostatic_az` (which carries free currents only).
+
+    A uniform magnetization ``M = (Mx, My)`` [A/m] in a region is the curl-of-M source of
+    ``-div(nu grad A_z) = (curl M)_z``; integrated by parts it enters the weak form as
+
+        int_region ( Mx dv/dy - My dv/dx ) dx      (the equivalent surface current M x n),
+
+    which captures the magnet's bound surface current automatically for a uniform M. With
+    ``nu = 1/mu0`` (a mu_r=1 magnet) the solution is the free-space magnet field; pass ``currents``
+    too for combined coil+PM problems. ``magnetization`` = {region: (Mx, My)};
+    ``currents`` = {region: J_z [A/m^2]} (optional). Flux density B = (dA_z/dy, -dA_z/dx).
+    Validated against the closed form ``radia.analytical_formulas.rect_magnet_2d`` (2D bar magnet)."""
+    Mx = mesh.MaterialCF({r: m[0] for r, m in magnetization.items()}, default=0.0)
+    My = mesh.MaterialCF({r: m[1] for r, m in magnetization.items()}, default=0.0)
+    fes = H1(mesh, order=order, dirichlet="|".join(dirichlet_values))
+    u, v = fes.TnT()
+    a = BilinearForm(nu * grad(u) * grad(v) * dx, symmetric=True).Assemble()
+    gv = grad(v)
+    lf = (Mx * gv[1] - My * gv[0]) * dx                       # magnetization (curl M) source
+    if currents:
+        Jz = mesh.MaterialCF(dict(currents), default=0.0)
+        lf = lf + Jz * v * dx
+    f = LinearForm(lf).Assemble()
+    gfu = GridFunction(fes)
+    gfu.Set(mesh.BoundaryCF(dirichlet_values, default=0.0), BND)
+    res = f.vec - a.mat * gfu.vec
+    gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * res
+    return gfu
+
+
 def inductance_2d(A, mesh, nu, total_current):
     """Inductance per length [H/m] from the magnetic field energy: L' = 2W/I^2,
     W = 1/2 int nu |grad A_z|^2 dA = 1/2 int |B|^2/mu dA -- the magnetostatic
