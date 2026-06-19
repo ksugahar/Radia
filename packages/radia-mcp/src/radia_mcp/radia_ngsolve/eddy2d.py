@@ -26,6 +26,17 @@ agree to ~1e-10 across xi = 0.5..6. Related: the analytic proximity-effect AC co
 model lives in ``radia_mcp.peec`` (Carstensen); this module is the direct FEM solve of
 the single-conductor skin problem.
 
+Extracting R_ac -- the robust route. The effective AC resistance is taken from the OHMIC-LOSS
+integral, ``Rac = (int |J_z|^2 / sigma dA) / |I|^2`` (= ``A_cond int|J_z|^2 dA / |I|^2`` for
+uniform sigma), NOT from an apparent terminal voltage/current ratio. In a multi-conductor or
+iron-bearing problem a terminal V/I folds mutual coupling and core loss into its real part, so the
+apparent "resistance" can come out spuriously low (even complex); the loss integral is immune to
+that and is the mesh-robust definition. Use phasor amplitudes consistently for I and J (peak or
+RMS -- the ratio is convention-independent). This solve is a SINGLE isolated conductor; in a
+bundle/winding the proximity loss is NON-LOCAL (neighbouring-turn fields), so a one-turn result
+cannot simply be scaled by the turn count -- model the whole bundle or use the proximity
+(``radia_mcp.peec``) model.
+
 All quantities are 2D planar (per unit out-of-plane length).
 """
 import math
