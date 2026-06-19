@@ -2645,6 +2645,27 @@ magnitude per DOF (coarse maxh=0.5 p-path vs order-1 h-path):
   => match p to the highest excited multipole n (p>=n); do NOT h-refine the air
   to chase it.  (The coarsest Kelvin closure is only ndof=58 -- cf. Delta-DoF.)
 
+`demo_e_optimal_R.py` (pure numpy; magnetized square a=1, M||x) -- the R knob
+and the box far-field:
+  - a3/a1 ~ 1e-15 (the octupole VANISHES by symmetry -- a uniformly magnetized
+    square excites only n = 4k+1) and a5/a1 = (4/15)(a/R)^4 EXACTLY (fitted
+    exponent 4.000, prefactor 0.267).  The box far field decays as (a/R)^4, so
+    the open-boundary side stays cheap even for a non-spherical source.
+  - the total-DoF proxy (area ~ (R/a)^2 times p^2) has an INTERIOR minimum at
+    R/a = 2.78 (eps=1e-4) / 2.68 (eps=1e-6) for the square, vs R/a -> 1.01
+    (monotone, minimal) for the disk (pure dipole).  This is the spectral basis
+    for the "air box 2-5x" rule and the R/a ~ 3 guidance.
+
+`demo1_hp_lshape.py` (L-shape 270deg re-entrant corner, exact u =
+r^(2/3) sin(2 th/3)) -- the device-corner rate limiter:
+  - h-version (p=1): alpha_h = 0.357 (~1/3); p-version (fixed coarse mesh):
+    alpha_p = 0.661 (~2/3); ratio 1.85 (asymptotic 2).  BOTH rates are
+    ALGEBRAIC -- a re-entrant corner caps convergence under pure-h OR pure-p.
+    Exponential recovery needs TRUE hp (geometric grading TO the corner;
+    Szabo/Schwab theory), which this demo does not run -- it measures the
+    algebraic rates the corner imposes, confirming the rate limiter is the
+    device INTERIOR, not the exterior air.
+
 ## One-line rule
 
 Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
