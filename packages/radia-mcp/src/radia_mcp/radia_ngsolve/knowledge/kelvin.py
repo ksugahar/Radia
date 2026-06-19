@@ -2634,6 +2634,17 @@ Curve order k:
   floor saturates ~1e-5 (k>=3, even slightly non-monotonic) -- push it lower by
   refining the Gamma SURFACE mesh, not the volume.
 
+`p_vs_h_study.py` -- p>=n is a HARD threshold, and p beats h by orders of
+magnitude per DOF (coarse maxh=0.5 p-path vs order-1 h-path):
+  - n=2: p=1 (<n) rel_err 0.95 [mode NOT captured] -> p=2 (=n) 2.5e-3 -> p=3
+    1.2e-5 (ndof 58 / 278 / 768).  The order-1 h-path reaches only 1.4e-2 even
+    at ndof=1075 -- so at comparable DOF p is ~1000x more accurate (the p-path
+    terminates exactly at p>=n; the h-path crawls as the order-1 algebraic h^2).
+  - n=3: p=1,2 (<n) fail hard (rel_err 2.1, 0.20) -> p=3 (=n) 8.4e-4 -> p=4
+    3.5e-5; the h-path is stuck at 4.4e-2 (ndof=1075).
+  => match p to the highest excited multipole n (p>=n); do NOT h-refine the air
+  to chase it.  (The coarsest Kelvin closure is only ndof=58 -- cf. Delta-DoF.)
+
 ## One-line rule
 
 Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
