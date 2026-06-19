@@ -39,8 +39,14 @@ INV4PI = 1.0 / (4.0 * np.pi)
 R_TERM = 0.50                                   # lead terminal radius (busbar), inside the shell
 GAP_DEG = 20.0                                  # design lead separation (azimuthal gap of the break)
 
-th = np.deg2rad(np.linspace(25, 155, 5)); ph0 = np.deg2rad(np.linspace(0, 300, 6))
-PTS = np.array([[np.sin(t) * np.cos(p), np.sin(t) * np.sin(p), np.cos(t)] for t in th for p in ph0]) * 0.20
+# TARGET = a WORKPIECE patch right next to the coil (the induction-heating geometry), NOT a far central
+# DSV.  This is where the leads matter: a probe shows lead/arc field is 2% at a far central DSV (r=0.20)
+# but 33% / 49% / 74% on a workpiece patch at standoff 0.10 / 0.06 / 0.03 from the conductor.  The leads
+# carry the full current and pass close to the workpiece -> their field is first-order AND dominant.
+_phw = np.linspace(-np.deg2rad(40), np.deg2rad(40), 9)
+_rw = np.linspace(0.30, 0.50, 5)
+_zwp = 0.06                                       # workpiece plane (standoff 0.06 below the coil plane z0=0.12)
+PTS = np.array([[r * np.cos(a), r * np.sin(a), _zwp] for a in _phw for r in _rw])
 NT = PTS.shape[0] * 3
 
 REF = np.array([0.40, 0.12, 1.0])               # reference working loop (rho, z0, I)
@@ -158,14 +164,14 @@ def H_iron(sp, ep, Iseg, fwd):
 
 with TaskManager():
     print("SINGLE-PASS coil WITH FEED LEADS -- leads carry the full current (induction-heating-style)")
-    print("  iron shell [%.2f,%.2f] mu_r=%g, Kelvin; lead terminal R=%.2f, design gap=%g deg; DSV=%d pts"
+    print("  iron shell [%.2f,%.2f] mu_r=%g, Kelvin; lead terminal R=%.2f, gap=%g deg; workpiece patch=%d pts"
           % (b, c, MU_R, R_TERM, GAP_DEG, len(PTS)))
     t0 = time.time(); fwd = IronForward()
     print("  Kelvin-FEM factored once: ndof=%d  (%.1fs)\n" % (fwd.ndof, time.time() - t0))
 
     # --- (A) the lead field is FIRST-ORDER: sweep the lead separation (azimuthal gap) ---
-    print("(A) lead field at DSV vs working-arc field (free space), sweeping the lead gap:")
-    print("    gap[deg] | ||H_leads|| / ||H_arc||")
+    print("(A) lead field vs working-arc field AT THE WORKPIECE PATCH (free space), sweeping the lead gap:")
+    print("    gap[deg] | ||H_leads|| / ||H_arc||  (first-order AND large -- target is next to the coil)")
     for gd in (5.0, 10.0, 20.0, 40.0):
         g = np.deg2rad(gd)
         sp_a, ep_a, I_a = single_pass_filaments(REF, g)
