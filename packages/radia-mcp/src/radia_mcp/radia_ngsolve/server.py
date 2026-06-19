@@ -622,19 +622,24 @@ def iabc(topic: str = "all") -> str:
 
     Documents how to take a PER-FREQUENCY IABC design to the TIME DOMAIN
     (transient FETD / Newmark-beta): why a per-omega (eps,mu) is non-causal and
-    why naively fitting the ideal materials BLOWS UP the reflection, the correct
-    direct-broadband passive optimisation (graded telegrapher multilayer => a
-    tapered impedance-matched / PML-like profile), the ADE realisation (one
-    auxiliary ODE per Debye/Lorentzian pole, a damping matrix for conductivity)
-    via the `urn`/`urn_fit` tools, the reduced radial form with the centrifugal
-    l(l+1)/r^2 term, and the fundamental evanescent-band (kR0<1) limit.
+    high-Q (a ~0.006% material error flips |Gamma| 0->1); and the clean fix --
+    DROP the shell and realise the IABC's effective termination impedance (the
+    exact exterior DtN) directly as a Robin BC + auxiliary ODEs.  For an air
+    exterior G_l(s) is EXACTLY RATIONAL (Grote-Keller / Bayliss-Turkel class,
+    separable geometry only -- NOT a general PML replacement): finite companion
+    auxiliary ODEs => exact, unconditionally stable, seamless DC->radiation.  A
+    lossy exterior (sqrt(s)) is causal-rationalised with the `urn`/`urn_fit`
+    tools, and the same network synthesises a passive equivalent termination
+    circuit (TLM).  Also covers the shell-absorber route and its evanescent
+    (kR0<1) limit for context.
 
     Ref: K. Sugahara, "Spherical Absorbing Conditions Based on Electrical
-    Images"; Sugahara & Sato URN (IEEE Access 2026); Jin, FEM in EM 3rd ed Ch.12.
+    Images"; Sugahara & Sato URN (IEEE Access 2026); Grote & Keller, SIAM J.
+    Appl. Math. 55 (1995); Jin, FEM in EM 3rd ed Ch.12.
 
     Args:
-        topic: all | overview | frequency_domain | causality | timedomain |
-               broadband_design | application
+        topic: all | overview | frequency_domain | causality | exact_dtn |
+               timedomain | broadband_design | application
     """
     return get_iabc_documentation(topic)
 
