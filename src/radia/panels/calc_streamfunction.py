@@ -329,6 +329,104 @@ def _assemble_biot_savart(fes, n, pts, comps):
     return A
 
 
+def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
+                            iron_mat="iron", fem_order=2, ndof_cap=3000):
+    """A_react[row, dof]: the MATERIAL (iron) reaction field at each obs point
+    from the FE-direct surface current of each psi-DOF, via the reduced scalar
+    potential ``H = H_s - grad(Omega)`` on a Kelvin open-boundary FE mesh.
+
+    The iron geometry is supplied as a ``.vol`` (``iron_vol``) carrying an iron
+    material (``iron_mat``), the Kelvin ball material ``kelvin`` and the periodic
+    ``kelvin_int``/``kelvin_ext`` identification + a ``GND`` vertex -- the same
+    Kelvin pipeline ``calc_fem_kelvin`` consumes.  Returned A_react is in the
+    SAME units (Tesla) and row order (``pt*len(comps)+comp``) as
+    ``_assemble_biot_savart`` so the caller can do ``Ac += A_react``.
+
+    Verified mechanism: ``examples/kelvin_transformation/DtN_spectrum``
+    ``demo_oo``/``demo_sp1`` (M = M_free + M_react; material-aware design HITS,
+    free-space design MISSES).  Source quality is the P1-nodal injection of H_s
+    on the iron vertices (demo_oo); the FMM ``BiotSavartCF`` source (demo_rr) is
+    the planned accuracy upgrade.  Cost is one Kelvin factorisation + one back-
+    substitution PER psi-DOF (capped by ``ndof_cap``); the obs-adjoint
+    (n_constraint back-subs) is the planned scalability upgrade."""
+    from ngsolve import (Mesh, H1, Periodic, VectorH1, BilinearForm,
+                         GridFunction, grad, dx, InnerProduct, x, y, z)
+    sys.path.insert(0, os.path.dirname(__file__))
+    from calc_common import detect_kelvin_offset
+
+    if fes.ndof > ndof_cap:
+        raise ValueError(
+            f"--iron-vol material-aware kernel currently solves one Kelvin "
+            f"back-substitution per psi-DOF (N={fes.ndof} > cap {ndof_cap}). "
+            f"Coarsen the coil mesh / lower --order for now; the obs-adjoint "
+            f"scalability upgrade (n_constraint back-subs) is planned.")
+
+    mesh = Mesh(iron_vol)
+    mats = set(mesh.GetMaterials())
+    if iron_mat not in mats:
+        raise ValueError(f"--iron-vol has no '{iron_mat}' material; "
+                         f"available: {sorted(mats)}")
+    if "kelvin" not in mats:
+        raise ValueError(f"--iron-vol has no 'kelvin' material (open-boundary "
+                         f"ball); available: {sorted(mats)}")
+    if mesh.ngmesh.GetNrIdentifications() == 0:
+        raise ValueError("--iron-vol has 'kelvin' material but no periodic "
+                         "identification (kelvin_int<->kelvin_ext). Re-export "
+                         "with the Kelvin pipeline.")
+
+    # Kelvin ball geometry from the mesh: centre via detect_kelvin_offset,
+    # radius = max kelvin-vertex distance from that centre (same as calc_fem_kelvin).
+    kc = np.array(detect_kelvin_offset(mesh))
+    kverts = sorted({v.nr for el in mesh.Elements() if el.mat == "kelvin"
+                     for v in el.vertices})
+    if not kverts:
+        raise ValueError("--iron-vol lists 'kelvin' material but no volume "
+                         "elements are tagged 'kelvin'.")
+    Vc = np.array([list(mesh.vertices[i].point) for i in range(mesh.nv)])
+    a_kelvin = float(np.max(np.linalg.norm(Vc[kverts] - kc, axis=1)))
+
+    rp2 = (x - kc[0]) ** 2 + (y - kc[1]) ** 2 + (z - kc[2]) ** 2 + 1e-20
+    mu = mesh.MaterialCF({iron_mat: float(mu_r), "kelvin": a_kelvin ** 2 / rp2},
+                         default=1.0)
+    fesO = Periodic(H1(mesh, order=fem_order, dirichlet="GND"))
+    Vsrc = VectorH1(mesh, order=1)
+    u, w = fesO.TnT()
+    A = BilinearForm(mu * grad(u) * grad(w) * dx(bonus_intorder=2 * fem_order + 2))
+    A.Assemble()
+    usrc = Vsrc.TrialFunction()
+    D = BilinearForm(trialspace=Vsrc, testspace=fesO)
+    D += (float(mu_r) - 1.0) * InnerProduct(usrc, grad(w)) * \
+        dx(definedon=mesh.Materials(iron_mat), bonus_intorder=4)
+    D.Assemble()
+    Ainv = A.mat.Inverse(fesO.FreeDofs(), inverse="sparsecholesky")
+
+    # iron vertices = where H_s is injected (P1 nodal, VectorH1 order 1)
+    iron = np.array(sorted({v.nr for el in mesh.Elements() if el.mat == iron_mat
+                            for v in el.vertices}), dtype=int)
+    # source field B_s (Tesla) at the iron vertices, per psi-DOF, REUSING the
+    # free-space assembler.  mu0 cancels: B_react = mu0*F(B_iron/mu0) = F(B_iron),
+    # so inject B_iron and read -grad(Omega) -> B_react directly (Tesla).
+    B_iron = _assemble_biot_savart(fes, n, Vc[iron], [0, 1, 2]).reshape(
+        len(iron), 3, fes.ndof)
+
+    targets = [mesh(*p) for p in obs_pts]
+    gsrc = GridFunction(Vsrc)
+    gO = GridFunction(fesO)
+    rhs = gO.vec.CreateVector()
+    A_react = np.zeros((len(obs_pts) * len(comps), fes.ndof))
+    for j in range(fes.ndof):
+        for k in range(3):
+            arr = gsrc.components[k].vec.FV().NumPy()
+            arr[:] = 0.0
+            arr[iron] = B_iron[:, k, j]
+        rhs.data = D.mat * gsrc.vec
+        gO.vec.data = Ainv * rhs
+        gr = grad(gO)
+        col = -np.array([[gr(t)[c] for c in comps] for t in targets])
+        A_react[:, j] = col.reshape(-1)
+    return A_react
+
+
 def _seminorm(fes, regularize):
     """SPD seminorm S over ALL DOFs as a SPARSE (scipy CSR) matrix: l2 =
     identity, h1 = surface H1 stiffness.  The caller reduces it to the
@@ -578,6 +676,19 @@ def _build_problem(args, eval_scale=1.0):
     Bm = _eval_target_np(args.target_cf, mpts, vector_b)
     Ac = _assemble_biot_savart(fes, n, cpts, comps)
     Am = _assemble_biot_savart(fes, n, mpts, comps)
+    if getattr(args, "iron_vol", None):
+        # MATERIAL-AWARE kernel: add the iron reaction field (reduced scalar
+        # potential on a Kelvin open-boundary FE mesh) to the free-space Biot-
+        # Savart operator, so the WHOLE downstream design (TSVD/ridge/pareto/
+        # manufacture/distort/chain) sees the iron yoke/shield/core.  One Kelvin
+        # factorisation serves both constraint (cpts) and measure (mpts) points.
+        obs_all = np.vstack([cpts, mpts])
+        A_react = _assemble_iron_reaction(
+            fes, n, obs_all, comps, args.iron_vol, float(args.mu_r),
+            iron_mat=getattr(args, "iron_mat", "iron"))
+        nrc = len(cpts) * len(comps)
+        Ac = Ac + A_react[:nrc]
+        Am = Am + A_react[nrc:]
     if args.regularize == "inductance":
         # DENSE BEM (SL ~ (3N)^2, plus an N-iteration Set loop): O(N^2) memory.
         # No-Fallback: cap with a clear message instead of OOM/hanging on a big
@@ -1674,6 +1785,10 @@ def run_design(args):
     from ngsolve import GridFunction, TaskManager
     t0 = time.perf_counter()
     with TaskManager():
+        if getattr(args, "shield_vol", None) and getattr(args, "iron_vol", None):
+            raise ValueError("--iron-vol (material-aware kernel) and "
+                             "--shield-vol (active-shield coil) are not yet "
+                             "combinable; choose one.")
         if getattr(args, "shield_vol", None):
             P = _build_shielded_problem(args)
         else:
@@ -1739,6 +1854,14 @@ def run_design(args):
             "t_solve_s": round(t2 - t1, 3),
             "t_total_s": round(time.perf_counter() - t0, 3),
         }
+        # Material-aware (iron) metadata
+        if getattr(args, "iron_vol", None):
+            result.update({
+                "material_aware": True,
+                "iron_vol": os.path.basename(args.iron_vol),
+                "mu_r": float(args.mu_r),
+                "iron_mat": getattr(args, "iron_mat", "iron"),
+            })
         # Active-shielding extra metrics
         if P.get("is_shielded"):
             result.update({
@@ -2186,6 +2309,21 @@ def build_argparser():
                     help="per-step manufacturing PNG (contours -> single-stroke "
                          "-> sheet-metal -> with thickness) (manufacture)")
     # ---- active shielding ----
+    ap.add_argument("--iron-vol", default=None,
+                    help="iron/material .vol (iron region + 'kelvin' ball + "
+                         "periodic kelvin_int/kelvin_ext + 'GND' vertex -- the "
+                         "calc_fem_kelvin pipeline). When given, the design is "
+                         "MATERIAL-AWARE: the iron reaction (reduced scalar "
+                         "potential, Kelvin open boundary) is ADDED to the free-"
+                         "space kernel so a coil designed near a yoke/shield/"
+                         "core hits the target IN the iron system. Free-space "
+                         "by default (omit this flag).")
+    ap.add_argument("--mu-r", type=float, default=1000.0,
+                    help="relative permeability of the --iron-vol iron region "
+                         "(linear; default 1000).")
+    ap.add_argument("--iron-mat", default="iron",
+                    help="material name of the iron region in --iron-vol "
+                         "(default 'iron').")
     ap.add_argument("--shield-vol", default=None,
                     help="outer shield coil surface mesh (.vol). When given, "
                          "designs a PRIMARY + SHIELD coil jointly (Turner "
