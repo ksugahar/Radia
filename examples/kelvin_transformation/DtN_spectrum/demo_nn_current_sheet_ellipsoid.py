@@ -68,7 +68,7 @@ def vol_geo(kelvin, with_iron, R_box=3.0):
             f.name = "kelvin_int"
         if with_iron:
             sb, sc = Sphere(Pnt(0, 0, 0), b), Sphere(Pnt(0, 0, 0), c)
-            core = sb; core.mat("vac"); shell = (sc - sb); shell.mat("shell"); out = (outer - sc); out.mat("vac")
+            core = sb; core.mat("vac"); shell = (sc - sb); shell.mat("shell"); shell.maxh = 0.07; out = (outer - sc); out.mat("vac")
             solids = [core, shell, out]
         else:
             outer.mat("vac"); solids = [outer]
@@ -84,12 +84,10 @@ def vol_geo(kelvin, with_iron, R_box=3.0):
     for f in box.faces:
         f.name = "outer"
     sb, sc = Sphere(Pnt(0, 0, 0), b), Sphere(Pnt(0, 0, 0), c)
-    smid = Sphere(Pnt(0, 0, 0), 1.5)
     core = sb; core.mat("vac"); core.maxh = 0.13
-    shell = (sc - sb); shell.mat("shell"); shell.maxh = 0.11
-    near = (smid - sc); near.mat("vac"); near.maxh = 0.14    # field-carrying near air: keep fine
-    far = (box - smid); far.mat("vac"); far.maxh = 0.45      # negligible shielded far field: coarse (~11x fewer DoF)
-    return occ.Glue([core, shell, near, far])
+    shell = (sc - sb); shell.mat("shell"); shell.maxh = 0.07  # match the Kelvin iron resolution: converge the P1 H_s injection
+    out = (box - sc); out.mat("vac"); out.maxh = 0.20        # single-solid air-box (uniform 0.20)
+    return occ.Glue([core, shell, out])
 
 
 def solve_reduced(C, Kw, kelvin, with_iron, gmaxh, R_box=3.0):
@@ -145,7 +143,7 @@ with TaskManager():
     psi_e = Ve[:, 2] ** 2 - 0.5 * (Ve[:, 0] ** 2 + Ve[:, 1] ** 2)
     Ce, Kwe = tri_geom(Ve, Te, psi_e)
     Hk, Hs_t, nk = solve_reduced(Ce, Kwe, True, True, 0.12)
-    Hb, _, nb = solve_reduced(Ce, Kwe, False, True, 0.45, R_box=3.0)   # graded air-box: coarse global, fine near
+    Hb, _, nb = solve_reduced(Ce, Kwe, False, True, 0.20, R_box=3.0)   # single-solid air-box (uniform 0.20)
     rel_kb = np.linalg.norm(Hk - Hb) / np.linalg.norm(Hb)
     shield_e = np.linalg.norm(Hk) / np.linalg.norm(Hs_t)
     print("  ellipsoid + iron: Kelvin(ndof %d) vs air-box(ndof %d): ||H_K - H_box||/||.|| = %.2e" % (nk, nb, rel_kb))
