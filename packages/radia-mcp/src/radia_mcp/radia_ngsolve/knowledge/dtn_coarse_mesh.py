@@ -96,6 +96,44 @@ the boundary (the exterior DtN ladder goes from real to complex; demo_gg):
     no wavelength; any finite-kR method that carries k^2 -- IABC / PML /
     extended-Kelvin -- beats it once kR is not negligible.)
 
+## Radia policy: Kelvin for COMPACT geometry, PML/BEM for high aspect ratio
+
+The frequency axis above is one of TWO axes that bound Kelvin's applicability;
+the other is GEOMETRY (the truncation-shape axis):
+
+  - **Kelvin's truncation surface is structurally a SPHERE (circle in 2D).**
+    The conformal inversion x* = R^2 x/|x|^2 that compactifies the exterior
+    harmonically onto a finite ball exists ONLY for a sphere -- in 3D the only
+    conformal inversion is inversion in a sphere (Liouville's theorem; there is
+    no box / ellipsoid Kelvin transform).  This is exactly WHY the DtN ladder is
+    closed-form (spherical harmonics): the SAME property is both the strength
+    (analytic spectrum, p-exactness) and the cost.
+
+  - **Cost: high-aspect-ratio bodies waste the air layer.**  Gamma must enclose
+    the whole device, so a long thin body (solenoid, dipole / quadrupole with
+    long straight sections, busbar) needs a bounding sphere of radius ~ half the
+    longest dimension; most of that sphere is far-field air that still must be
+    meshed.  A box-conformal PML or a surface-conformal BEM wraps the device
+    tightly and avoids the wasted air.
+
+  - **Mitigation: for COMPACT bodies the sphere is tight.**  At aspect ~1
+    (permanent magnets, compact yokes, rotating-machine / static-apparatus
+    cross-sections -- Radia's natural target) the optimal truncation radius is
+    R/a ~ 3 (the spectral basis for the classic "air box 2-5x" rule; see the
+    optimal-R analysis below), so the air layer is only a couple of body radii
+    and the waste is small.
+
+  - **Rule of thumb (geometry axis): choose KELVIN when the exterior is roughly
+    ball-shaped (aspect ~1); choose PML (box / conformal) or BEM
+    (surface-conformal) when the device is elongated.**  Together with the
+    frequency rule above, Kelvin is the closure of choice for a COMPACT,
+    LOW-frequency open problem; leave that envelope -- high aspect ratio, OR
+    radiating finite kR -- and a conformal / complex-stretch / IABC method wins.
+    This is the same geometry-class reasoning that keeps Radia's own MMM/MSC
+    volume integral on HACApK ACA+ (compact, near-field heavy) rather than FMM
+    (extended, far-field): pick the open-boundary method by the geometry class,
+    not by reflex.
+
 ## One operator behind every open-boundary method
 
 Truncate the unbounded exterior at a surface Γ and impose the EXACT transparent
