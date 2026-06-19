@@ -317,6 +317,19 @@ Nicolson eddy-current diffusion FETD with the exterior Krylov-substructured to
 truncation), monotone in the stage count, across n=1,2,3 -- the diffusive analog
 of demo_uu2's wave reflection test.  So the reverse-Bessel/CLN open boundary is
 reflectionless in time for BOTH the wave and the diffusion regime.
+
+CLN vs PML (head-to-head, demo_xx6_cln_vs_pml.py): for the EDDY-CURRENT /
+low-frequency (quasi-static, the MQS home) regime on this separable geometry,
+CLN BEATS PML -- (a) accuracy per DOF: CLN converges EXPONENTIALLY (a MOR of the
+exact exterior, ~16 DOF to the FEM floor) vs the PML's algebraic layer (~64-128
+DOF), ~4-8x fewer DOF (34x more accurate at equal 16 DOF); (b) conditioning: the
+PML stretch 1+sigma/sqrt(s) ILL-CONDITIONS as omega->0 (cond ~6e3 at omega=1e-3)
+while the CLN reduction is real + frequency-independent (eval cond ~1 at low
+omega), ~1e3-1e4x better in the eddy-current band.  HONEST scope: at HIGH
+frequency (wave-like) PML is better conditioned (its home; lab demo_pp/nn), and
+PML's raison d'etre is ARBITRARY geometry -- the CLN counterpart there is a
+Kelvin-transformed exterior FEM reduced by CLN (not built).  So "CLN beats PML"
+holds for the separable low-frequency eddy-current case, not as a blanket claim.
 """
 
 _TOPICS = {
