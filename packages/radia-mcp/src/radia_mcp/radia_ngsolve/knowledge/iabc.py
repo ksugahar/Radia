@@ -294,9 +294,19 @@ bridge "IABC shell == this exact termination impedance" and its PASSIVE
 EQUIVALENT-CIRCUIT (relaxation-network / TLM) realisation -- fit/synthesise with
 the `urn` / `urn_fit` tools.
 
-Lossy / conductive exterior: G_l ~ sqrt(s) (half-derivative) is NOT rational;
-fit it with URN to a causal rational/relaxation form, then the same
-auxiliary-ODE Robin machinery applies.
+Lossy / conductive (eddy-current / diffusion) exterior: G_l is NOT rational in s
+(a sqrt(s) branch cut) -- BUT it IS EXACTLY RATIONAL in q=sqrt(s), with the SAME
+reverse Bessel poles as the wave case above (gamma=ik -> gamma=sqrt(s)):
+    G_n(s) = -s a^2 theta_{n-1}(a sqrt(s)) / theta_n(a sqrt(s)) - (n+1).
+So a Cauer / CLN continued fraction IN q realises it EXACTLY with n+1 stages and
+WELL-CONDITIONED (coeff spread ~1-30) -- decisively beating a Foster fit in s
+(which floors ~1e-3 at 32 states and ill-conditions to ~1e5) and the URN (which
+plateaus ~1.7e-2; URN's edge is measured/multi-mechanism data, not a clean
+analytic DtN).  This promotes the lab CLN (Kameari-Sugahara eddy-current MOR) to
+the open BOUNDARY itself; the sqrt(s) diffusion-memory element is realised by the
+finite eddy-current ladder (real negative poles -> stable, finite auxiliary ODEs).
+VERIFIED in demo_xx3_cln_dtn_cauer.py (the wave + diffusion reverse-Bessel/Cauer
+unification; wave realisation = demo_uu/uu2).
 """
 
 _TOPICS = {
