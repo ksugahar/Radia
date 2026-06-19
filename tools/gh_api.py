@@ -12,6 +12,8 @@ Token source (first hit wins) -- NEVER committed:
   3. ~/.radia/gh_token          (gitignored; create it yourself: a file
                                  containing a single classic/fine-grained
                                  PAT with public_repo read scope)
+  4. `gh auth token`            (GitHub CLI browser login, OS keyring;
+                                 set RADIA_GH to a gh executable if needed)
 
 So a one-time `setx GH_TOKEN ghp_xxx` (or writing ~/.radia/gh_token) lifts
 the whole repo's CI tooling -- tools/check_ci.py, release_triple ci-verify,
@@ -21,6 +23,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import urllib.request
 
 _API = "https://api.github.com/"
@@ -40,6 +44,39 @@ def token() -> str | None:
                 return t
         except OSError:
             pass
+    gh_token = _gh_cli_token()
+    if gh_token:
+        return gh_token
+    return None
+
+
+def _gh_cli_token() -> str | None:
+    candidates = []
+    configured = os.environ.get("RADIA_GH")
+    if configured:
+        candidates.append(configured)
+    found = shutil.which("gh")
+    if found:
+        candidates.append(found)
+    if not candidates:
+        return None
+    for gh in candidates:
+        for args in (
+            [gh, "auth", "token", "--hostname", "github.com"],
+            [gh, "auth", "token"],
+        ):
+            try:
+                proc = subprocess.run(
+                    args,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+            if proc.returncode == 0 and proc.stdout.strip():
+                return proc.stdout.strip()
     return None
 
 

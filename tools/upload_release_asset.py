@@ -3,10 +3,10 @@
 Mirror of tools/download_release_asset.py for the WRITE side: replaces
 `gh release upload <tag> <file>... --clobber`.
 
-Requires `GITHUB_TOKEN` (or `GH_TOKEN`) in env with `contents: write`
-scope. For the pre-push hook on LAB this is a personal access token
-that the developer sets in their shell rc or .git/safe.directory
-config; the workflow uses ${{ secrets.GITHUB_TOKEN }} as usual.
+Requires a token with `contents: write` scope. It uses the same local
+discovery order as tools/gh_api.py: `GH_TOKEN`, `GITHUB_TOKEN`,
+`~/.radia/gh_token`, then `gh auth token` (GitHub CLI browser login).
+The workflow uses ${{ secrets.GITHUB_TOKEN }} as usual.
 
 If no token is set, this exits 0 with a warning (so it never blocks
 push) -- same graceful-fail semantics as the original bash hook.
@@ -18,17 +18,18 @@ Usage:
         src/radia/foo.pyd src/radia/bar.pyd
 
 Exit codes:
-    0  upload succeeded, OR no token in env (graceful skip)
+    0  upload succeeded, OR no token found locally (graceful skip)
     1  asset push failed after retries (rare; release missing etc.)
 """
 from __future__ import annotations
 import argparse
 import json
-import os
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from gh_api import token as github_token
 
 
 API_BASE = "https://api.github.com"
@@ -36,7 +37,7 @@ UPLOAD_BASE = "https://uploads.github.com"
 
 
 def _headers() -> dict[str, str]:
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    token = github_token()
     if not token:
         return {}
     return {
@@ -134,9 +135,10 @@ def main() -> int:
     p.add_argument("files", nargs="+", help="one or more files to upload")
     args = p.parse_args()
 
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    token = github_token()
     if not token:
-        print("Warning: GITHUB_TOKEN/GH_TOKEN not set in env. "
+        print("Warning: no GitHub token found "
+                "(GH_TOKEN/GITHUB_TOKEN, ~/.radia/gh_token, or gh auth). "
                 "Skipping binary upload (push will continue).")
         return 0
 
