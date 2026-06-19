@@ -471,7 +471,11 @@ MCP knowledge tool for the live recipe.
 
 - **MCP tool:** `dtn_coarse_mesh(topic="overview" | "numerics" | "api" | "applications" | "p_method" | "formulation" | "datasheet")`
   (server `mcp-server-radia-ngsolve`). Companion: `fem_bem_schur(...)`,
-  `kelvin_transformation(...)`.
+  `kelvin_transformation(...)` — including `topic="mesh_control"`, the
+  consolidated "where to spend elements" guide (the Γ-conforming mesh
+  constraint + the six measured pillars above: exterior-volume-free,
+  floor = Curve order, `p ≥ n` & p-vs-h, optimal `R/a ≈ 3`, corner `hp`,
+  DoF-cost `1/45`; confirmed in 2D on the `−n/R` ladder).
 - **BEM side** — `radia_mcp.radia_ngsolve.bem_integral`:
   `laplace_exterior_dtn()` (assemble `Λ_h`), `exterior_dtn_spectrum()`
   (eigenvalues matched to `−(n+1)/R`), `dtn_spectrum_vs_mesh()` (per-degree

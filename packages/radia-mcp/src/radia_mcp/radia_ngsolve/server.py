@@ -1018,6 +1018,11 @@ def kelvin_transformation(topic: str = "all") -> str:
                                 HCurl eddy-current script that is off
                                 by O(10x) from analytical reference.**
             "adaptive"       - Adaptive mesh refinement with Kelvin
+            "mesh_control"   - WHERE to spend elements (consolidated): the
+                               Gamma-conforming constraint + six MEASURED
+                               pillars (exterior volume is free, floor=Curve
+                               order, p>=n & p-vs-h, optimal R/a~3, corner hp,
+                               DoF-cost 1/45; holds in 2D on the -n/R ladder)
             "identify"       - Periodic boundary Identify() best practices
             "tips"           - Common mistakes and performance tips
             "robustness"     - Robustness checklist (mesh copy, material scaling,
