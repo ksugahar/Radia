@@ -63,6 +63,39 @@ you refine).  The question this module answers:
 Yes.  The accuracy is a **spectral** fact about the discrete
 Dirichlet-to-Neumann operator, visible without ever solving the field problem.
 
+## Radia policy: Kelvin at LOW frequency, IABC at HIGH frequency
+
+Radia selects the open-boundary closure by **frequency regime** -- the kR axis is
+the boundary (the exterior DtN ladder goes from real to complex; demo_gg):
+
+  - **LOW frequency / quasi-static / magnetostatic (kR -> 0): the KELVIN
+    transformation.**  It is the exact conformal compactification of the exterior:
+    the truncation DtN IS the closed-form real ladder -(n+1)/R (3D; -n/R in 2D) for
+    EVERY mode, realised as a sparse SPD volume FEM, parameter-free, and able to
+    carry exterior material.  Verified head-to-head -- at low frequency Kelvin is the
+    single best choice versus an absorbing BC (demo_yy) and versus BEM / PML /
+    ballooning on cost x accuracy (demo_lf4).  This is the regime this module
+    datasheets (the SA / Hachinohe paper's subject).
+
+  - **HIGH frequency / radiating / wave (finite kR): an IABC (Improvised Absorbing
+    Boundary Condition).**  The exterior DtN turns COMPLEX -- Lambda_n(kR) =
+    kR h_n^(1)'(kR)/h_n^(1)(kR), whose imaginary part is the radiation -- so a
+    static-Kelvin (real-axis) closure is no longer exact (error O(kR^2); exactly
+    kR^2/(2n) for evanescent modes n >> kR, demo_gg).  The practical IABC is a
+    PASSIVE DISPERSIVE (URN/Debye) matched absorber jointly optimised with thickness
+    over the band (demo_wc), with the lossless reference being the finite-pole
+    Hankel / Grote-Keller DtN (demo_uu).  The eddy-current / magnetic-diffusion
+    sibling (k^2 = i w mu sigma inside a conductor) is a passive sqrt(s) SIBC,
+    Foster / URN-Warburg realisable (demo_xx).
+
+  - **So the kR axis is the two-line split**: the quasi-static KELVIN open boundary
+    (this module) vs the radiating extended-Kelvin / IABC line (Sugahara's
+    extended-Kelvin radiating regime).  Rule of thumb: choose KELVIN when the field
+    decays algebraically (static / diffusive far field), choose an IABC when it
+    radiates.  (Static-Kelvin pinned to the real axis is the cheapest closure with
+    no wavelength; any finite-kR method that carries k^2 -- IABC / PML /
+    extended-Kelvin -- beats it once kR is not negligible.)
+
 ## One operator behind every open-boundary method
 
 Truncate the unbounded exterior at a surface Γ and impose the EXACT transparent
