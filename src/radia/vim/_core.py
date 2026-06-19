@@ -362,6 +362,86 @@ def analytic_charge_gram(el_V, bf_V, el_vol, bf_area, nsub_tet=3):
     return 0.5 * (G + G.T)
 
 
+def parse_image_string(image):
+    """Parse a Radia IMA image string ('+x-z', '-x+y-z', ...) into a list of (axis, sign): axis in
+    {0,1,2} for x/y/z, sign +1 (symmetric across that plane) / -1 (antisymmetric).  The string is a
+    concatenation of (+|-)(x|y|z) tokens.  Matches the rad.Solve(image=...) convention (CLAUDE.md
+    IMA Sign Selection: field PARALLEL to the mirror -> '+', PERPENDICULAR -> '-')."""
+    s = image.strip().lower().replace(" ", "")
+    planes, i = [], 0
+    axis_of = {"x": 0, "y": 1, "z": 2}
+    while i < len(s):
+        if s[i] not in "+-" or i + 1 >= len(s) or s[i + 1] not in axis_of:
+            raise ValueError("bad IMA image string %r (expected tokens like '+x','-z')" % image)
+        planes.append((axis_of[s[i + 1]], 1 if s[i] == "+" else -1))
+        i += 2
+    axes = [a for a, _ in planes]
+    if len(set(axes)) != len(axes):
+        raise ValueError("IMA image string %r repeats an axis" % image)
+    return planes
+
+
+def image_group(planes):
+    """Image-method reflection group from parsed planes [(axis,sign),...]: every NON-EMPTY subset of
+    the mirror planes gives one image, whose reflection negates the coords on those axes and whose
+    scalar sign is the PRODUCT of the per-plane signs (standard image method; the paper eq 23
+    G^IMA = G + sum_m s_m G_{i,m(j)}).  Returns [(axes_tuple, sign), ...] (2^P - 1 images)."""
+    out = []
+    P = len(planes)
+    for mask in range(1, 1 << P):
+        axes, sign = [], 1
+        for k in range(P):
+            if mask & (1 << k):
+                axes.append(planes[k][0]); sign *= planes[k][1]
+        out.append((tuple(sorted(axes)), sign))
+    return out
+
+
+def _reflect(V, axes):
+    """Reflect vertex coords V (n,3) by negating the columns in `axes`."""
+    V = np.asarray(V, float).copy()
+    for a in axes:
+        V[:, a] = -V[:, a]
+    return V
+
+
+def image_charge_gram(el_V, bf_V, el_vol, bf_area, axes):
+    """Cross charge Gram G_img[a][b] = (1/4pi) INT_{target a} Phi_{R_axes(b)} -- the analytic Coulomb
+    interaction of each real charge a with charge b's geometry REFLECTED on `axes` (negate those
+    coords).  Same outer quadrature + source potentials as analytic_charge_gram, but the SOURCE
+    geometry is reflected.  Symmetric (G(a,R(b))=G(b,R(a)) by kernel symmetry + R isometry), so the
+    image term keeps N_IMA symmetric.  Used to fold mirror symmetry (IMA) into the demag operator."""
+    n_el, n_bf = len(el_V), len(bf_V)
+    n = n_el + n_bf
+    lam_t, w_t = _gauss_duffy_tet(4)
+    QP, QW = [], []
+    for k, V in enumerate(el_V):
+        if len(V) == 4:
+            QP.append(V[0] + lam_t @ (V[1:] - V[0])); QW.append(w_t * 6.0 * el_vol[k])
+        else:
+            P, W = _cell_outer_quad(V, el_vol[k], lam_t, w_t); QP.append(P); QW.append(W)
+    for k, V in enumerate(bf_V):
+        if len(V) == 3:
+            QP.append(_DUN5[:, :3] @ V); QW.append(_DUN5[:, 3] * bf_area[k])
+        else:
+            P, W = _face_outer_quad(V, bf_area[k]); QP.append(P); QW.append(W)
+    allP = np.vstack(QP); allW = np.concatenate(QW)
+    tidx = np.concatenate([np.full(len(QP[i]), i) for i in range(n)])
+    inv4pi = 1.0 / (4.0 * pi)
+
+    def refl_src_pot(s):                                  # potential of source s reflected on `axes`
+        if s < n_el:
+            V = _reflect(el_V[s], axes)
+            return phi_tet(V, allP) if len(V) == 4 else _polytope_potential(_cell_hull_tris(V), allP)
+        V = _reflect(bf_V[s - n_el], axes)
+        return sum(tri_potential(T, allP) for T in _face_subtris(V))
+
+    G = np.zeros((n, n))
+    for s in range(n):
+        G[:, s] = np.bincount(tidx, weights=allW * refl_src_pot(s) * inv4pi, minlength=n)
+    return 0.5 * (G + G.T)
+
+
 def polytope_flat_geom(el_V, bf_V, el_vol, bf_area):
     """Flatten the per-cell convex-hull triangles + per-face sub-triangles (+ vertex-mean centroids and
     measures) into the flat triangle-soup arrays the C++ POLYTOPE _ChargeGramHMatrix constructor consumes
@@ -409,9 +489,15 @@ def _csr(bf):
     return _csr_sp(bf).toarray()
 
 
-def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_dense_gram=False):
+def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_dense_gram=False,
+                image=None):
     """Assemble the HDiv-type VIM demag operator N = B^T G B on a tet mesh + the HDiv mass M_mass.
     Returns N, M_mass, the charge map B, the loop basis, and diagnostics.
+
+    image (IMA mirror symmetry, dense analytic path only): a Radia image string ('+x-z', ...).  The
+    mesh is the reduced (1/2, 1/4, 1/8) model; the demag operator folds in the mirror-image charge
+    interactions G_IMA = G + sum_S sign(S) image_charge_gram(.., S) so the reduced solve reproduces the
+    full model (validated quarter+IMA == full to machine precision).  Requires analytic_gram=True.
 
     wilton_surface=True replaces the surface-surface (boundary-triangle) OFF-diagonal Gram block with
     the exact Wilton analytic integral (the diagonal keeps the validated tri_self_energy).  This makes
@@ -484,6 +570,14 @@ def build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False, skip_de
             # FULL analytic charge Gram (#B volume Gram): every block (vol-vol, vol-surf, surf-surf) via
             # the exact phi_tet / tri_potential potentials -- closes the NON-uniform-M (nonlinear) gap.
             G = analytic_charge_gram(el_V, bf_V, el_vol, bf_area)
+            if image:
+                # IMA: fold in the mirror-image charge interactions (G_IMA = G + sum_S sign(S) G_img_S),
+                # so the reduced (1/2,1/4,1/8) mesh reproduces the full model.  Same per-image sign for
+                # cell rho + face sigma (pinned empirically: quarter+IMA == full to 1e-8).
+                for axes, sign in image_group(parse_image_string(image)):
+                    G = G + sign * image_charge_gram(el_V, bf_V, el_vol, bf_area, axes)
+        elif image:
+            raise ValueError("build_demag: image= (IMA) requires analytic_gram=True")
         elif wilton_surface and n_bf > 0:
             # exact Wilton surface-surface block (shape-exact for ANY triangle; demag 1/3 to <0.15%).
             G[n_el:, n_el:] = wilton_surface_block(bf_V)
