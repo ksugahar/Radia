@@ -1439,6 +1439,55 @@ def _loop_field_signs(loops, mpts, target_flat, vector_b):
     return fields, signs
 
 
+def _optimize_contour_levels(psi_v, verts, tris, nlevels, mpts, target_flat,
+                             vector_b, tol, n_rounds=3):
+    """Optimize the N contour LEVELS (vs the uniform equal-deltaI default) to
+    minimise the EQUAL-CURRENT (single series current) discrete-loop field error
+    -- the few-turn quantisation fix.  Coordinate descent on the ORDERED levels
+    (each level 1-D bounded between its neighbours), caching the per-level signed
+    unit-current field so only the moved level's contour is re-extracted.  Keeps
+    clean iso-contours (manufacturable) -- complements --distort's wire bend.
+    Returns (levels, rms_uniform, rms_optimised)."""
+    from scipy.optimize import minimize_scalar
+    lo, hi = float(np.min(psi_v)), float(np.max(psi_v))
+    if hi - lo < 1e-30 or nlevels < 1:
+        return _contour_levels(psi_v, nlevels), float("nan"), float("nan")
+    den = float(np.linalg.norm(target_flat)) + 1e-30
+
+    def level_field(lev):
+        loops = _segs_to_polylines(_contour_segments(verts, psi_v, tris, lev), tol)
+        if not loops:
+            return np.zeros(len(target_flat))
+        fields, signs = _loop_field_signs(loops, mpts, target_flat, vector_b)
+        return np.sum([s * f for f, s in zip(fields, signs)], axis=0)
+
+    def resid(F):
+        d = float(F @ F)
+        if d <= 0.0:
+            return 1.0e30
+        Iw = float(F @ target_flat) / d          # one common (series) current
+        return float(np.linalg.norm(Iw * F - target_flat) / den)
+
+    levels = list(_contour_levels(psi_v, nlevels))
+    fk = [level_field(lv) for lv in levels]
+    rms0 = resid(np.sum(fk, axis=0))
+    eps = 1.0e-6 * (hi - lo)
+    for _ in range(int(n_rounds)):
+        for k in range(nlevels):
+            F_other = (np.sum([fk[j] for j in range(nlevels) if j != k], axis=0)
+                       if nlevels > 1 else np.zeros(len(target_flat)))
+            a = levels[k - 1] if k > 0 else lo
+            b = levels[k + 1] if k < nlevels - 1 else hi
+            if b - a < 4.0 * eps:
+                continue
+            r = minimize_scalar(
+                lambda lv: resid(F_other + level_field(lv)),
+                bounds=(a + eps, b - eps), method="bounded",
+                options={"maxiter": 25})
+            levels[k] = float(r.x); fk[k] = level_field(levels[k])
+    return levels, rms0, resid(np.sum(fk, axis=0))
+
+
 def _distort_wire(chain, mpts, target_flat, vector_b, n_grid=3, n_iter=5,
                   lam_rel=0.3, step=0.8, fd=1.0e-5):
     """Sheet-metal (bankin-ho) single-current wire distortion: bend the ONE
@@ -2037,7 +2086,13 @@ def run_manufacture(args):
             args.nlevels = resonance["nlevels"]      # design AT the resonant N
             args.peec = True                         # need the accurate final L
 
-        levels = _contour_levels(psi_v, args.nlevels)
+        if getattr(args, "optimize_levels", False):
+            levels, lvl_rms0, lvl_rms = _optimize_contour_levels(
+                psi_v, verts, tris, args.nlevels, P["mpts"], P["Bm"],
+                P["vector_b"], tol)
+        else:
+            levels = _contour_levels(psi_v, args.nlevels)
+            lvl_rms0 = lvl_rms = None
         sub = max(1, int(getattr(args, "contour_sub", 1)))
         if sub > 1:                              # order-p curved contour
             hp = _contour_segments_hp(coil, gfu, levels, sub)
@@ -2127,6 +2182,14 @@ def run_manufacture(args):
                     "is too small (extend it) -- that, not the connectors, is "
                     "the dominant single-current error.",
         }
+        if getattr(args, "optimize_levels", False):
+            result.update({
+                "levels_optimized": True,
+                # equal-current (single series current) discrete-loop field RMS:
+                # uniform equal-deltaI levels vs the optimised levels
+                "equal_current_rms_uniform": lvl_rms0,
+                "equal_current_rms_optimized": lvl_rms,
+            })
 
         if args.distort:
             cw, Iw2, rms0, rmsb, disp = _distort_wire(
@@ -2279,6 +2342,12 @@ def build_argparser():
     # ---- manufacture mode ----
     ap.add_argument("--nlevels", type=int, default=12,
                     help="number of iso-contours = wire turns (manufacture)")
+    ap.add_argument("--optimize-levels", action="store_true",
+                    help="manufacture: optimise the N contour LEVELS (vs the "
+                         "uniform equal-deltaI default) to minimise the equal-"
+                         "current discrete-loop field error -- the few-turn "
+                         "quantisation fix (keeps clean contours; complements "
+                         "--distort's wire bend).")
     ap.add_argument("--target-inductance", type=float, default=None,
                     help="IH-RESONANCE design: search the turn count (nlevels) "
                          "so the single-stroke coil inductance equals this "
