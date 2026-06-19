@@ -2677,6 +2677,15 @@ swap ONLY the Gamma operator so the interior FEM error cancels) -- the cost:
     7.5e-5, but that is over-resolving a non-bottleneck.  Grounds the budget
     claim "Delta-DoF ~ 58 buys ~ 1/45" with a measured number.
 
+2D cross-section (dim=2; static-apparatus / rotating-machine sections) --
+`kelvin_dtn_eigenvalue(dim=2)` confirms the SAME structure on the 2D ladder
+lam = -n/R (NOT -(n+1)/R): the p>=n threshold and p>>h both hold.  n=2:
+p=1 (<n) rel_err 1.4e-1 -> p=2 (=n) 6.1e-4 -> p=3 1.1e-5 (ndof 19/61/127);
+the order-1 h-path is only 1.2e-2 at ndof=135.  n=3: p=1,2 (<n) 4.4e-1 / 9.7e-3
+-> p=3 (=n) 1.0e-4.  2D is much cheaper (1-D boundary: ndof=127 for 1e-5 vs
+~768 in 3D).  NOTE pillars 4 (optimal R/a, the magnetized SQUARE) and 5 (corner
+rates, the L-shape) are ALREADY 2D demos -- so all six pillars hold in 2D.
+
 ## One-line rule
 
 Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
