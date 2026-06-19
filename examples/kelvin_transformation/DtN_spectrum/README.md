@@ -4,6 +4,12 @@ These standalone scripts are the verified experiments behind the
 `dtn_coarse_mesh` knowledge module
 (`packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/dtn_coarse_mesh.py`).
 
+Their practical "where to spend elements" synthesis is consolidated in the MCP
+topic `kelvin_transformation(topic="mesh_control")`: the Gamma-conforming mesh
+constraint (copy-mesh / Identify) plus the six measured pillars below
+(exterior volume is free, floor = Curve order, `p >= n` & p-vs-h, optimal
+`R/a ~ 3`, corner `hp`, DoF-cost `1/45`), confirmed in 2D on the `-n/R` ladder.
+
 **Idea.** Every open-boundary closure (Kelvin / BEM / PML / Robin) approximates the
 one exterior Dirichlet-to-Neumann (Steklov–Poincaré) operator `Λ_ext`, whose sphere
 eigenvalues are the mesh-independent ladder `λ_n = −(n+1)/R` (3D), `−n/R` (2D). The
