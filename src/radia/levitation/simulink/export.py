@@ -85,6 +85,95 @@ def build_state_space(g_n, tau_n, V, sigma, K_SIBC, c1, n_warburg_rungs=30):
     return A, B, C, D, n_foster, n_warburg, n_int
 
 
+def _append_matrix_residue(R, pole, poles, Brows, Ccols, tol_rel=1e-12):
+    """Realize a symmetric matrix residue term R / (s - pole) as rank-1 states.
+
+    Eigen-decomposes R = sum_j kappa_j v_j v_j^T and appends one first-order
+    state per significant eigenpair:  dx_j/dt = pole x_j + v_j^T u,
+    y += kappa_j v_j x_j, whose transfer contribution is
+    kappa_j v_j v_j^T / (s - pole); summed over j this is exactly
+    R / (s - pole).  Indefinite R (e.g. the edge term C1, which is negative
+    for convex bodies) is handled -- eigenvalues may be negative.
+    """
+    R = np.asarray(R, dtype=float)
+    if R.size == 0:
+        return
+    w, Vv = np.linalg.eigh(0.5 * (R + R.T))
+    wmax = float(np.max(np.abs(w))) if w.size else 0.0
+    if wmax <= 0.0:
+        return
+    for j in range(len(w)):
+        if abs(w[j]) <= tol_rel * wmax:
+            continue
+        v = Vv[:, j]
+        poles.append(pole)
+        Brows.append(v.copy())
+        Ccols.append(w[j] * v)
+
+
+def build_state_space_mimo(G_n, tau_n, V, sigma, K_mat, C1_mat,
+                           n_warburg_rungs=30):
+    """MIMO (P-port) state-space (A, B, C, D) for the matrix admittance Y(s).
+
+        Y(s)_{pq} = sum_n G_n[n]_{pq} / (1 + s tau_n)
+                    + K_mat_{pq} / sqrt(s) + C1_mat_{pq} / s
+
+    with G_n (n_eigen, P, P) from alpha.bulk_foster_matrix_via_eigen, K_mat
+    from alpha.K_SIBC_matrix, and C1_mat from cad_edges.edge_moment_matrix.
+
+    Realization: each Foster pole contributes ONE state (its residue
+    G_n[n]/tau_n is rank 1, an outer product b b^T); the Warburg tail uses
+    P x n_warburg_rungs diffusive-quadrature states; the edge term uses up to
+    P integrator states.  The resulting (A, B, C, D) is a passive MIMO LTI
+    that drops into MATLAB `ss(A,B,C,D)` / Simulink.  Its transfer-function
+    matrix reproduces Y_matrix_mixed(s) exactly (up to the diffusive-
+    quadrature approximation of 1/sqrt(s)).  P=1 reduces to the same transfer
+    function as build_state_space.
+
+    Returns
+    -------
+    A, B, C, D : ndarray
+        Shapes (n_states, n_states), (n_states, P), (P, n_states), (P, P).
+    n_foster, n_warburg, n_integrator : int
+        State counts of each block.
+    """
+    G_n = np.asarray(G_n, dtype=float)
+    tau_n = np.asarray(tau_n, dtype=float)
+    K_mat = np.asarray(K_mat, dtype=float)
+    C1_mat = np.asarray(C1_mat, dtype=float)
+    P = K_mat.shape[0]
+
+    poles, Brows, Ccols = [], [], []
+
+    # Foster poles: residue G_n[n]/tau_n at pole -1/tau_n (rank 1 -> 1 state)
+    for n in range(G_n.shape[0]):
+        _append_matrix_residue(G_n[n] / tau_n[n], -1.0 / tau_n[n],
+                               poles, Brows, Ccols)
+    n_foster = len(poles)
+
+    # Warburg tail K_mat/sqrt(s) via diffusive quadrature (unit-K weights)
+    xi_w, w_w = diffusive_quadrature(1.0, n_aux=n_warburg_rungs)
+    for k in range(len(xi_w)):
+        _append_matrix_residue(w_w[k] * K_mat, -xi_w[k], poles, Brows, Ccols)
+    n_warburg = len(poles) - n_foster
+
+    # Edge term C1_mat/s at pole 0
+    _append_matrix_residue(C1_mat, 0.0, poles, Brows, Ccols)
+    n_int = len(poles) - n_foster - n_warburg
+
+    n_states = len(poles)
+    A = np.zeros((n_states, n_states))
+    B = np.zeros((n_states, P))
+    C = np.zeros((P, n_states))
+    D = np.zeros((P, P))
+    for i in range(n_states):
+        A[i, i] = poles[i]
+        B[i, :] = Brows[i]
+        C[:, i] = Ccols[i]
+
+    return A, B, C, D, n_foster, n_warburg, n_int
+
+
 def save_mat(out_path, *, A, B, C, D, V, S, sigma, mu, K_SIBC, c_1,
               tau_foster, g_foster, n_foster, n_warburg, n_integrator,
               description="Conductor Y(s) Foster ladder LTI state-space."):
