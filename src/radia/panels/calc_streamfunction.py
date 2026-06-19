@@ -1521,6 +1521,85 @@ def _optimize_contour_levels(psi_v, verts, tris, nlevels, mpts, target_flat,
     return levels, rms0, resid(np.sum(fk, axis=0))
 
 
+def _greedy_coil_turns(cand_fields, target_flat, max_turns, target_rms=None):
+    """LOW-TURN STRATEGY -- greedy constructive coil ("put up a pin, lay the next
+    turn where it helps most").  Matching pursuit with a COMMON series current:
+    keep adding the candidate loop (with sign) that best ALIGNS the unit combined
+    field G = sum_j s_j f_j with the target (residual = min_I ||I G - target|| =
+    the angle between G and target).  MONOTONE by construction -- stop when no
+    candidate improves, ``max_turns`` reached, or residual <= ``target_rms``.
+    Allows repeats (a re-picked loop = a stacked turn -> more local current).
+    Returns (selected [(cand_idx, sign)], trace [{n_turns, rms}]).  This is the
+    antidote to the NON-MONOTONIC contour-quantise turn-count search."""
+    den = float(np.linalg.norm(target_flat)) + 1e-30
+    F = np.asarray(cand_fields, float)             # (D, M) unit-current fields
+    if F.ndim != 2 or F.shape[0] == 0:
+        return [], []
+    G = np.zeros(F.shape[1]); selected, trace = [], []
+    prev = 1.0                                      # empty coil: ||0 - t||/|t| = 1
+    for _ in range(int(max_turns)):
+        best = None
+        for s in (1.0, -1.0):
+            Gp = G[None, :] + s * F                 # (D, M)
+            d = np.einsum('dm,dm->d', Gp, Gp) + 1e-300
+            Iw = (Gp @ target_flat) / d
+            r = np.linalg.norm(Iw[:, None] * Gp - target_flat[None, :],
+                               axis=1) / den
+            k = int(np.argmin(r))
+            if best is None or r[k] < best[0]:
+                best = (float(r[k]), k, s)
+        r, k, s = best
+        if r >= prev - 1e-12:                       # no candidate improves -> stop
+            break
+        G = G + s * F[k]; selected.append((k, s)); prev = r
+        trace.append({"n_turns": len(selected), "rms": r})
+        if target_rms is not None and r <= target_rms:
+            break
+    return selected, trace
+
+
+def _contour_loop_candidates(psi_v, verts, tris, mpts, vector_b, tol, n_levels=40):
+    """Greedy dictionary (A): individual psi iso-contour loops at a DENSE set of
+    levels, each a unit-current closed loop + its Biot-Savart field at mpts."""
+    loops = []
+    for lev in _contour_levels(psi_v, n_levels):
+        loops.extend(_segs_to_polylines(
+            _contour_segments(verts, psi_v, tris, lev), tol))
+    loops = [p for p in loops if len(p) >= 3]
+    fields = [_wire_field_flat(_close_loop(p), mpts, vector_b, 1.0) for p in loops]
+    return loops, fields
+
+
+def _pin_loop_candidates(verts, tris, mpts, vector_b, n_pins=120, n_seg=12,
+                         radius_frac=0.8):
+    """Greedy dictionary (B): a small tangent-plane CIRCULAR loop at each PIN (a
+    surface point) -- the literal "wind a loop on a pin" primitive.  Pins are a
+    subsample of the surface vertices; each loop has radius ~ the local mesh
+    scale, in the vertex tangent plane.  Returns (loops, fields)."""
+    vn = np.zeros_like(verts, dtype=float)
+    for (a, b, c) in tris:
+        nrm = np.cross(verts[b] - verts[a], verts[c] - verts[a])
+        vn[a] += nrm; vn[b] += nrm; vn[c] += nrm
+    ln = np.linalg.norm(vn, axis=1); ln[ln == 0.0] = 1.0
+    vn = vn / ln[:, None]
+    r = radius_frac * _char_len(verts, tris)
+    nv = len(verts)
+    pins = np.unique(np.linspace(0, nv - 1, min(n_pins, nv)).astype(int))
+    ang = np.linspace(0.0, 2.0 * np.pi, n_seg + 1)
+    loops, fields = [], []
+    for v in pins:
+        nrm = vn[v]
+        t1 = np.cross(nrm, [1.0, 0.0, 0.0])
+        if np.linalg.norm(t1) < 1e-6:
+            t1 = np.cross(nrm, [0.0, 1.0, 0.0])
+        t1 = t1 / np.linalg.norm(t1); t2 = np.cross(nrm, t1)
+        loop = verts[v][None, :] + r * (np.cos(ang)[:, None] * t1[None, :]
+                                        + np.sin(ang)[:, None] * t2[None, :])
+        loops.append(loop)
+        fields.append(_wire_field_flat(loop, mpts, vector_b, 1.0))
+    return loops, fields
+
+
 def _distort_wire(chain, mpts, target_flat, vector_b, n_grid=3, n_iter=5,
                   lam_rel=0.3, step=0.8, fd=1.0e-5):
     """Sheet-metal (bankin-ho) single-current wire distortion: bend the ONE
@@ -2121,28 +2200,53 @@ def run_manufacture(args):
             args.nlevels = resonance["nlevels"]      # design AT the resonant N
             args.peec = True                         # need the accurate final L
 
-        if getattr(args, "optimize_levels", False):
-            levels, lvl_rms0, lvl_rms = _optimize_contour_levels(
-                psi_v, verts, tris, args.nlevels, P["mpts"], P["Bm"],
-                P["vector_b"], tol)
-        else:
-            levels = _contour_levels(psi_v, args.nlevels)
+        greedy_trace = None
+        greedy_dict_used = None
+        if getattr(args, "greedy_turns", None):
+            # GREEDY CONSTRUCTIVE coil (low-turn strategy): lay turns one at a
+            # time where each most reduces the residual (monotone by build) --
+            # the antidote to the non-monotonic contour-quantise turn count.
+            greedy_dict_used = getattr(args, "greedy_dict", "contour")
+            if greedy_dict_used == "pin":
+                cand_loops, cand_fields = _pin_loop_candidates(
+                    verts, tris, P["mpts"], P["vector_b"])
+            else:
+                cand_loops, cand_fields = _contour_loop_candidates(
+                    psi_v, verts, tris, P["mpts"], P["vector_b"], tol)
+            sel, greedy_trace = _greedy_coil_turns(
+                cand_fields, P["Bm"], int(args.greedy_turns),
+                getattr(args, "greedy_target", None))
+            loops = [cand_loops[k] if s >= 0.0 else cand_loops[k][::-1]
+                     for (k, s) in sel]
+            levels = []; sub = 1                     # greedy: no contour levels
             lvl_rms0 = lvl_rms = None
-        sub = max(1, int(getattr(args, "contour_sub", 1)))
-        if sub > 1:                              # order-p curved contour
-            hp = _contour_segments_hp(coil, gfu, levels, sub)
-            loops = []
-            for lev in levels:
-                loops.extend(_segs_to_polylines(hp[lev], tol))
-        else:                                    # vertex-linear (fast default)
-            loops = []
-            for lev in levels:
-                loops.extend(_segs_to_polylines(
-                    _contour_segments(verts, psi_v, tris, lev), tol))
-        if not loops:
-            return {"method": "manufacture",
-                    "error": "psi has no iso-contours at the requested levels "
-                             "(check the target / coil surface)"}
+            if not loops:
+                return {"method": "manufacture",
+                        "error": "greedy coil selected no turns (empty candidate "
+                                 "dictionary, or no loop improves the target)"}
+        else:
+            if getattr(args, "optimize_levels", False):
+                levels, lvl_rms0, lvl_rms = _optimize_contour_levels(
+                    psi_v, verts, tris, args.nlevels, P["mpts"], P["Bm"],
+                    P["vector_b"], tol)
+            else:
+                levels = _contour_levels(psi_v, args.nlevels)
+                lvl_rms0 = lvl_rms = None
+            sub = max(1, int(getattr(args, "contour_sub", 1)))
+            if sub > 1:                              # order-p curved contour
+                hp = _contour_segments_hp(coil, gfu, levels, sub)
+                loops = []
+                for lev in levels:
+                    loops.extend(_segs_to_polylines(hp[lev], tol))
+            else:                                    # vertex-linear (fast default)
+                loops = []
+                for lev in levels:
+                    loops.extend(_segs_to_polylines(
+                        _contour_segments(verts, psi_v, tris, lev), tol))
+            if not loops:
+                return {"method": "manufacture",
+                        "error": "psi has no iso-contours at the requested levels "
+                                 "(check the target / coil surface)"}
         wire_len = sum(float(np.sum(np.linalg.norm(np.diff(p, axis=0), axis=1)))
                        for p in loops)
         vector_b = P["vector_b"]
@@ -2217,7 +2321,18 @@ def run_manufacture(args):
                     "is too small (extend it) -- that, not the connectors, is "
                     "the dominant single-current error.",
         }
-        if getattr(args, "optimize_levels", False):
+        if greedy_trace is not None:
+            result.update({
+                "greedy_turns": True,
+                "greedy_dict": greedy_dict_used,
+                "n_turns_used": len(greedy_trace),
+                # rms vs n_turns -- MONOTONE by construction; read off the fewest
+                # turns meeting any field spec (the correct "min turns" answer).
+                "greedy_trace": greedy_trace,
+                "greedy_final_rms": (greedy_trace[-1]["rms"] if greedy_trace
+                                     else None),
+            })
+        elif getattr(args, "optimize_levels", False):
             result.update({
                 "levels_optimized": True,
                 # equal-current (single series current) discrete-loop field RMS:
@@ -2383,6 +2498,23 @@ def build_argparser():
                          "current discrete-loop field error -- the few-turn "
                          "quantisation fix (keeps clean contours; complements "
                          "--distort's wire bend).")
+    ap.add_argument("--greedy-turns", type=int, default=None,
+                    help="LOW-TURN STRATEGY (manufacture): build the coil "
+                         "GREEDILY -- lay up to this many turns one at a time, "
+                         "each placed where it most reduces the field residual "
+                         "(matching pursuit, monotone by construction; the "
+                         "antidote to non-monotonic contour quantisation).  "
+                         "Emits the rms-vs-turns trace (read off the fewest "
+                         "turns meeting any spec).")
+    ap.add_argument("--greedy-dict", choices=["contour", "pin"],
+                    default="contour",
+                    help="greedy candidate loops: 'contour' = dense psi iso-"
+                         "contour loops (A); 'pin' = small tangent-plane loops "
+                         "at surface pins (B, 'wind a loop on a pin').")
+    ap.add_argument("--greedy-target", type=float, default=None,
+                    help="greedy stop threshold: stop adding turns once the "
+                         "field residual rms <= this (else use all --greedy-"
+                         "turns).")
     ap.add_argument("--target-inductance", type=float, default=None,
                     help="IH-RESONANCE design: search the turn count (nlevels) "
                          "so the single-stroke coil inductance equals this "
