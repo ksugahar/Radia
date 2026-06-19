@@ -224,6 +224,6 @@ with TaskManager():
         "design_with_leads": {"rho": sa.x[0], "z0": sa.x[1], "I": sa.x[2], "residual": hit},
         "design_omit_leads": {"rho": sb_.x[0], "z0": sb_.x[1], "I": sb_.x[2], "residual_true": miss},
     }
-    with open(os.path.join(os.path.dirname(__file__), "demo_tt_results.json"), "w") as fh:
+    with open(os.path.join(os.path.dirname(__file__), "demo_sp2_results.json"), "w") as fh:
         json.dump(out, fh, indent=2)
-    print("  results -> demo_tt_results.json")
+    print("  results -> demo_sp2_results.json")

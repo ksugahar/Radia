@@ -187,6 +187,6 @@ with TaskManager():
         "iron_reaction_over_free": float(np.linalg.norm(react_ref) / np.linalg.norm(H_free(REF))),
         "sanity_onaxis_rel": float(abs(Hz_np - Hz_an) / abs(Hz_an)),
     }
-    with open(os.path.join(os.path.dirname(__file__), "demo_ss_results.json"), "w") as fh:
+    with open(os.path.join(os.path.dirname(__file__), "demo_sp1_results.json"), "w") as fh:
         json.dump(out, fh, indent=2)
-    print("  results -> demo_ss_results.json")
+    print("  results -> demo_sp1_results.json")
