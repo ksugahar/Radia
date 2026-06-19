@@ -110,5 +110,19 @@ def test_greedy_target_stops_early(sample_vols):
     assert r["n_turns_used"] < 12
 
 
+def test_greedy_turn_budget_plot(sample_vols, tmp_path):
+    """Turn-budget UI: --greedy-plot writes the monotone rms-vs-turns curve with
+    the spec line + min-turns mark (read off the fewest turns for a spec)."""
+    coil, evalv = sample_vols
+    png = str(tmp_path / "greedy_trace.png")
+    r = _run(coil, evalv, ["--greedy-turns", "10", "--greedy-dict", "contour",
+                           "--greedy-target", "0.55", "--greedy-plot", png])
+    assert "error" not in r, f"greedy plot error: {r.get('error')}"
+    _assert_monotone_improving(r, 10)
+    if "greedy_plot_error" in r:                  # matplotlib unavailable
+        pytest.skip(f"plot backend unavailable: {r['greedy_plot_error']}")
+    assert r.get("greedy_plot") == png and os.path.exists(png)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
