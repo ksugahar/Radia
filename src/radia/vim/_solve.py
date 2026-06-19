@@ -75,8 +75,8 @@ _GMRES_TOL = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "
 
 
 def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, scalable=None,
-                     gram_eps=1e-10, leaf=32, eta=2.0, near_factor=1e30, tol=1e-8, maxit=4000,
-                     gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6):
+                     image=None, gram_eps=1e-10, leaf=32, eta=2.0, near_factor=1e30, tol=1e-8,
+                     maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     Soft-iron spec (EXACTLY ONE, unless every region is a permanent magnet -> both may be omitted):
@@ -120,8 +120,16 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
     # is kept as an explicit knob (scalable=False forces the dense O(N^2) analytic Gram, e.g. for a small
     # cross-check) but is no longer element-type-restricted.
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
+    # IMA (mirror symmetry) currently folds into the DENSE analytic Gram (the C++ scalable image-Gram is
+    # the next port).  An EXPLICIT scalable=True together with image= is a fail-loud conflict (No-Fallbacks:
+    # don't silently downgrade the path the user asked for); otherwise image= selects the dense path.
+    if image is not None and scalable is True:
+        raise NotImplementedError(
+            "hdiv_demag_solve(image=..., scalable=True): IMA mirror symmetry currently uses the DENSE "
+            "analytic Gram.  Pass scalable=False (or omit scalable) with image=; the scalable C++ "
+            "image-Gram is a future increment.")
     if scalable is None:
-        scalable = True
+        scalable = (image is None)   # default to scalable, except the dense path when IMA is requested
 
     # ---- demag operator N (apply) + M_mass^{-1} preconditioner, shared by both modes ----
     if scalable:
@@ -145,7 +153,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
             v = np.asarray(v, float)
             return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
     else:
-        d = _tet.build_demag(mesh, analytic_gram=True)
+        d = _tet.build_demag(mesh, analytic_gram=True, image=image)   # image= folds in the IMA mirror Gram
         Mm, N = d["M_mass"], d["N"]
 
         def N_apply(v):
