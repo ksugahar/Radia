@@ -2666,6 +2666,17 @@ r^(2/3) sin(2 th/3)) -- the device-corner rate limiter:
     algebraic rates the corner imposes, confirming the rate limiter is the
     device INTERIOR, not the exterior air.
 
+`demo_budget_dofcost.py` (shell dipole, R_in=0.5 / R_out=1.0, maxh=0.4, order 2;
+swap ONLY the Gamma operator so the interior FEM error cancels) -- the cost:
+  - error budget: interior FEM error 5.34%; Kelvin open-BC error 0.118%
+    (= 1/45); BEM open-BC error 0.172% (= 1/31).  Both closures sit >1 order
+    BELOW the interior FEM error -- the open boundary is NOT the bottleneck.
+  - DoF-cost (refine ONLY the exterior ball, interior fixed): the coarsest
+    Gamma-scale ball ALREADY closes it -- DeltaDoF=58 -> open-BC 1.2e-3 (1/45 of
+    interior); refining DeltaDoF 58 -> 124 -> 301 drops it 1.2e-3 -> 3.0e-4 ->
+    7.5e-5, but that is over-resolving a non-bottleneck.  Grounds the budget
+    claim "Delta-DoF ~ 58 buys ~ 1/45" with a measured number.
+
 ## One-line rule
 
 Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
