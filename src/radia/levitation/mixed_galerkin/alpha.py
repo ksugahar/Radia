@@ -33,45 +33,18 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 
-def bulk_foster_via_eigen(mesh, sigma: float, mu: float, n_eigen: int = 60,
-                          dirichlet_label: str = "outer"):
-    """Compute bulk Foster spectrum from scalar diffusion eigenmodes.
+def _dirichlet_eigenmodes(mesh, n_eigen: int, dirichlet_label: str):
+    """Shared Dirichlet-Laplacian eigensolve for the bulk Foster spectrum.
 
-    Solves (-Laplacian) phi_n = lam_n phi_n on conductor V with
-    phi_n = 0 on dV.  Projects the constant 1 (driving function for
-    the scalar A_z model) onto the eigenbasis and returns the Foster
-    representation:
-
-        Y_bulk(s) = sum_n g_n / (1 + s tau_n)
-
-    where g_n = sigma V b_n^2, tau_n = mu sigma / lam_n,
-    b_n = <1, phi_n>_M / sqrt(V) (M-normalized eigenvectors).
-
-    Parameters
-    ----------
-    mesh : ngsolve.Mesh
-        Volumetric mesh of the conductor.
-    sigma : float
-        Conductivity (S/m).
-    mu : float
-        Permeability (H/m).
-    n_eigen : int
-        Number of Dirichlet eigenmodes to compute (default 60).
-    dirichlet_label : str
-        Boundary label where v=0 is imposed (default "outer").
-
-    Returns
-    -------
-    lam : ndarray (n_eigen,)
-        Eigenvalues, ascending.
-    tau_n : ndarray (n_eigen,)
-        Foster pole time constants.
-    g_n : ndarray (n_eigen,)
-        Foster pole residues (units of admittance).
-    V : float
-        Conductor volume.
+    Solves (-Laplacian) phi_n = lam_n phi_n on the conductor with phi_n = 0 on
+    `dirichlet_label`.  Returns the ascending eigenvalues, the M-normalized
+    eigenvectors restricted to the free dofs, the free-dof mass matrix, the
+    free-dof boolean mask, the H1 space, and the volume V.  Both the scalar
+    (`bulk_foster_via_eigen`) and the matrix / multi-port
+    (`bulk_foster_matrix_via_eigen`) drivers share this eigensolve so the two
+    return bit-identical spectra.
     """
-    from ngsolve import H1, BilinearForm, grad, dx, GridFunction, Integrate
+    from ngsolve import H1, BilinearForm, grad, dx, Integrate
     import scipy.sparse as sp
     from scipy.sparse.linalg import eigsh
 
@@ -112,19 +85,133 @@ def bulk_foster_via_eigen(mesh, sigma: float, mu: float, n_eigen: int = 60,
         if norm > 1e-30:
             vecs[:, k] /= norm
 
-    # Project the constant 1 onto the eigenbasis: <1, phi_n>_M
-    one_gfu = GridFunction(fes)
-    one_gfu.Set(1.0)
-    one_vec_full = np.array(one_gfu.vec.FV().NumPy())
-    one_vec_free = one_vec_full[free]
-    M_one = M_free.dot(one_vec_free)
-    ip = vecs.T @ M_one
-
     V = float(Integrate(1.0, mesh))
-    b_n = ip / math.sqrt(V)
-    tau_n = mu * sigma / lam
-    g_n = sigma * V * b_n**2
+    return lam, vecs, M_free, free, fes, V
 
+
+def _project_drive(fes, M_free, free, vecs, cf, V):
+    """Project a driving CoefficientFunction onto the eigenbasis.
+
+    Returns b[n] = <cf, phi_n>_M / sqrt(V)  (length n_eigen).  Exact for
+    drives within the polynomial order of `fes` (order 2 -> the constant 1 and
+    the centered coordinates x, y, z are represented exactly).
+    """
+    from ngsolve import GridFunction
+    gfu = GridFunction(fes)
+    gfu.Set(cf)
+    full = np.array(gfu.vec.FV().NumPy())
+    ip = vecs.T @ M_free.dot(full[free])
+    return ip / math.sqrt(V)
+
+
+def bulk_foster_matrix_via_eigen(mesh, sigma: float, mu: float, drive_cfs,
+                                 n_eigen: int = 60,
+                                 dirichlet_label: str = "outer"):
+    """Matrix (multi-port) bulk Foster spectrum from scalar diffusion eigenmodes.
+
+    Generalizes `bulk_foster_via_eigen` to P driving functions
+    {f_0, ..., f_{P-1}} (the "ports"), each projected onto the SAME shared
+    Dirichlet-Laplacian eigenbasis.  Returns a per-pole residue MATRIX:
+
+        Y_bulk(s)_{pq} = sum_n G_n[n]_{pq} / (1 + s tau_n)
+
+    with G_n[n] = sigma V b_n b_n^T  (symmetric positive-semidefinite, rank 1
+    per mode), b_n[p] = <f_p, phi_n>_M / sqrt(V), tau_n = mu sigma / lam_n.
+
+    This is the Foster-eigenbasis realization of the matrix-form CLN
+    (Matsuo 2017/2018c multi-port Kameari: the modal amplitude carries one
+    column per port and lambda becomes an N_port x N_port matrix; see
+    radia_mcp.mor mor_cln_multiport "multiport_theory").  With drive_cfs the
+    set {1, x-x_c, y-y_c, z-z_c, ...} the matrix Y(s)_{pq} is a MULTIPOLE
+    expansion of the conductor's scalar eddy response: the monopole port 1
+    couples to a uniform external field, the dipole ports x, y, z to field
+    gradients.
+
+    Scope note (honest): this is the multipole eddy-ADMITTANCE matrix of the
+    SCALAR diffusion model.  It is NOT the physical 3x3 VECTOR (HCurl) eddy
+    polarizability tensor -- the alpha = V - Y/sigma relation is monopole-
+    specific (for raw dipole drives the V term dominates, see
+    `alpha_matrix_from_Y`), and the scalar A_z model has a single field
+    component.  The verified physical vector polarizability TENSOR (transverse
+    m=1 components + triaxial shape anisotropy) is the full 3D HCurl solve in
+    examples/levitation/ellipsoid/ellipsoid_alpha_tensor_3d.py.
+    P=1 with drive_cfs=[1.0] reproduces `bulk_foster_via_eigen` exactly.
+
+    Parameters
+    ----------
+    drive_cfs : sequence
+        P driving functions, each acceptable to GridFunction.Set (an NGSolve
+        CoefficientFunction or a scalar such as 1.0).
+
+    Returns
+    -------
+    lam : ndarray (n_eigen,)
+    tau_n : ndarray (n_eigen,)
+    G_n : ndarray (n_eigen, P, P)
+        Symmetric PSD rank-1 residue matrix per Foster pole.
+    V : float
+    """
+    from ngsolve import CoefficientFunction
+    lam, vecs, M_free, free, fes, V = _dirichlet_eigenmodes(
+        mesh, n_eigen, dirichlet_label)
+    P = len(drive_cfs)
+    n_mode = len(lam)
+    B = np.zeros((n_mode, P))
+    for p, cf in enumerate(drive_cfs):
+        B[:, p] = _project_drive(fes, M_free, free, vecs,
+                                 CoefficientFunction(cf), V)
+    tau_n = mu * sigma / lam
+    G_n = np.zeros((n_mode, P, P))
+    for n in range(n_mode):
+        G_n[n] = sigma * V * np.outer(B[n], B[n])
+    return lam, tau_n, G_n, V
+
+
+def bulk_foster_via_eigen(mesh, sigma: float, mu: float, n_eigen: int = 60,
+                          dirichlet_label: str = "outer"):
+    """Compute bulk Foster spectrum from scalar diffusion eigenmodes.
+
+    Solves (-Laplacian) phi_n = lam_n phi_n on conductor V with
+    phi_n = 0 on dV.  Projects the constant 1 (driving function for
+    the scalar A_z model) onto the eigenbasis and returns the Foster
+    representation:
+
+        Y_bulk(s) = sum_n g_n / (1 + s tau_n)
+
+    where g_n = sigma V b_n^2, tau_n = mu sigma / lam_n,
+    b_n = <1, phi_n>_M / sqrt(V) (M-normalized eigenvectors).
+
+    This is the single-port (monopole) special case of
+    `bulk_foster_matrix_via_eigen` and delegates to it.
+
+    Parameters
+    ----------
+    mesh : ngsolve.Mesh
+        Volumetric mesh of the conductor.
+    sigma : float
+        Conductivity (S/m).
+    mu : float
+        Permeability (H/m).
+    n_eigen : int
+        Number of Dirichlet eigenmodes to compute (default 60).
+    dirichlet_label : str
+        Boundary label where v=0 is imposed (default "outer").
+
+    Returns
+    -------
+    lam : ndarray (n_eigen,)
+        Eigenvalues, ascending.
+    tau_n : ndarray (n_eigen,)
+        Foster pole time constants.
+    g_n : ndarray (n_eigen,)
+        Foster pole residues (units of admittance).
+    V : float
+        Conductor volume.
+    """
+    lam, tau_n, G_n, V = bulk_foster_matrix_via_eigen(
+        mesh, sigma, mu, [1.0], n_eigen=n_eigen,
+        dirichlet_label=dirichlet_label)
+    g_n = G_n[:, 0, 0]
     return lam, tau_n, g_n, V
 
 
@@ -208,6 +295,90 @@ def Y_mixed(s, lam, tau, g_n, K_SIBC, c1):
 def alpha_from_Y(Y, V, sigma):
     """alpha(s) = V - Y(s)/sigma  (polarizability from admittance)."""
     return V - Y / sigma
+
+
+# ---------------------------------------------------------------------------
+# Matrix (multi-port) admittance Y(s)_{pq} and polarizability alpha(s)_{pq}
+# ---------------------------------------------------------------------------
+
+
+def surface_moment_matrix(mesh, drive_cfs):
+    """Surface moment matrix K_geom[p,q] = integral_{dOmega} f_p f_q dS.
+
+    The matrix generalization of the wetted area S that sets the SIBC
+    orthogonal-residual tail (cln_sibc_orthogonal "math": the residual modes
+    sum to K_SIBC / sqrt(s) with the area as the geometric factor; for a
+    multi-drive projection the area becomes the surface second moment of the
+    drives).  For the monopole drive f=1 this is the total boundary area S
+    (so K reduces to K_SIBC_total); for centered coordinates {x,y,z} it is
+    the surface second-moment tensor.
+
+    Computed by exact boundary integration over the whole surface; for a
+    polyhedron this equals the per-face (partition-of-unity) sum
+    sum_F integral_F f_p f_q dS because the flat faces are disjoint.
+
+    Returns a symmetric (P, P) ndarray.
+    """
+    from ngsolve import Integrate, CoefficientFunction
+    bnd = mesh.Boundaries(".*")
+    cfs = [CoefficientFunction(c) for c in drive_cfs]
+    P = len(cfs)
+    K = np.zeros((P, P))
+    for p in range(P):
+        for q in range(p, P):
+            val = float(Integrate(cfs[p] * cfs[q], mesh,
+                                  definedon=bnd, order=4))
+            K[p, q] = val
+            K[q, p] = val
+    return K
+
+
+def K_SIBC_matrix(mesh, drive_cfs, sigma, mu):
+    """Matrix (multi-port) SIBC tail coefficient K_mat = sqrt(sigma/mu) K_geom.
+
+    Y_matrix_mixed(s) carries a K_mat / sqrt(s) term.  Reduces to the scalar
+    K_SIBC_total(S, sigma, mu) for the single monopole drive f=1.
+    """
+    return math.sqrt(sigma / mu) * surface_moment_matrix(mesh, drive_cfs)
+
+
+def Y_matrix_mixed(s, lam, tau, G_n, K_mat, C1_mat):
+    """Matrix Mixed-Galerkin admittance Y(s)_{pq} (P x P complex).
+
+        Y(s) = sum_n G_n[n] / (1 + s tau_n) + K_mat / sqrt(s) + C1_mat / s
+
+    G_n is the (n_eigen, P, P) residue tensor from
+    bulk_foster_matrix_via_eigen; K_mat from K_SIBC_matrix; C1_mat the
+    per-edge moment matrix (cad_edges.edge_moment_matrix), all P x P.  The
+    P=1 case reproduces Y_mixed(s, lam, tau, g_n, K_SIBC, c1).
+    """
+    s_complex = complex(s) if not isinstance(s, complex) else s
+    P = G_n.shape[1]
+    Y = np.zeros((P, P), dtype=complex)
+    denom = 1.0 + s_complex * np.asarray(tau)
+    for n in range(G_n.shape[0]):
+        Y += G_n[n] / denom[n]
+    Y += np.asarray(K_mat) / cmath.sqrt(s_complex)
+    Y += np.asarray(C1_mat) / s_complex
+    return Y
+
+
+def alpha_matrix_from_Y(Y, V, sigma):
+    """alpha(s)_{pq} = V delta_{pq} - Y(s)_{pq} / sigma  (P x P).
+
+    The matrix generalization of `alpha_from_Y`.  It is physically the
+    polarizability ONLY for monopole-normalized ports (||f_p||_{L2(V)} =
+    sqrt(V), as the constant 1 is): then Y is O(sigma V) and alpha spans
+    [0, V].  For raw DIPOLE / coordinate drives the bulk admittance is
+    O(sigma V L^2) (Y_ii(0) = sigma * integral (x_i-c)^2 dV = sigma V L^2/12
+    for a cube), so the V*I term dominates and alpha ~ V*I at every frequency
+    -- in that case work with the admittance matrix Y(s) directly (its eddy
+    roll-off is the physical content), not this alpha.  The physical vector
+    polarizability tensor is the HCurl solve (see bulk_foster_matrix_via_eigen
+    scope note).
+    """
+    P = Y.shape[0]
+    return V * np.eye(P) - np.asarray(Y) / sigma
 
 
 # ---------------------------------------------------------------------------
