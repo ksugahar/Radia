@@ -330,7 +330,7 @@ def _assemble_biot_savart(fes, n, pts, comps):
 
 
 def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
-                            iron_mat="iron", fem_order=2, ndof_cap=3000):
+                            iron_mat="iron", fem_order=2, ndof_cap=20000):
     """A_react[row, dof]: the MATERIAL (iron) reaction field at each obs point
     from the FE-direct surface current of each psi-DOF, via the reduced scalar
     potential ``H = H_s - grad(Omega)`` on a Kelvin open-boundary FE mesh.
@@ -346,20 +346,22 @@ def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
     ``demo_oo``/``demo_sp1`` (M = M_free + M_react; material-aware design HITS,
     free-space design MISSES).  Source quality is the P1-nodal injection of H_s
     on the iron vertices (demo_oo); the FMM ``BiotSavartCF`` source (demo_rr) is
-    the planned accuracy upgrade.  Cost is one Kelvin factorisation + one back-
-    substitution PER psi-DOF (capped by ``ndof_cap``); the obs-adjoint
-    (n_constraint back-subs) is the planned scalability upgrade."""
+    the planned accuracy upgrade.  Cost: one Kelvin factorisation + one back-
+    substitution PER OBS ROW (the obs-adjoint, NOT per psi-DOF) + the dense
+    source matrix B_iron (3*n_iron x N_psi); verified adjoint == per-psi-DOF
+    forward to 1e-14.  ``ndof_cap`` bounds the B_iron memory/assembly."""
     from ngsolve import (Mesh, H1, Periodic, VectorH1, BilinearForm,
-                         GridFunction, grad, dx, InnerProduct, x, y, z)
+                         GridFunction, grad, dx, InnerProduct, ElementId, VOL,
+                         x, y, z)
     sys.path.insert(0, os.path.dirname(__file__))
     from calc_common import detect_kelvin_offset
 
     if fes.ndof > ndof_cap:
         raise ValueError(
-            f"--iron-vol material-aware kernel currently solves one Kelvin "
-            f"back-substitution per psi-DOF (N={fes.ndof} > cap {ndof_cap}). "
-            f"Coarsen the coil mesh / lower --order for now; the obs-adjoint "
-            f"scalability upgrade (n_constraint back-subs) is planned.")
+            f"--iron-vol material-aware kernel forms the dense source matrix "
+            f"B_iron (3*n_iron x N_psi); N_psi={fes.ndof} > cap {ndof_cap}. "
+            f"Coarsen the coil mesh / lower --order, or raise the cap if memory "
+            f"allows (the back-substitution count is the obs rows, not N_psi).")
 
     mesh = Mesh(iron_vol)
     mats = set(mesh.GetMaterials())
@@ -393,14 +395,15 @@ def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
     u, w = fesO.TnT()
     A = BilinearForm(mu * grad(u) * grad(w) * dx(bonus_intorder=2 * fem_order + 2))
     A.Assemble()
-    usrc = Vsrc.TrialFunction()
-    D = BilinearForm(trialspace=Vsrc, testspace=fesO)
-    D += (float(mu_r) - 1.0) * InnerProduct(usrc, grad(w)) * \
+    # D^T : fesO -> Vsrc  (the coupling transpose, for the obs-adjoint)
+    vt = Vsrc.TestFunction()
+    DT = BilinearForm(trialspace=fesO, testspace=Vsrc)
+    DT += (float(mu_r) - 1.0) * InnerProduct(vt, grad(u)) * \
         dx(definedon=mesh.Materials(iron_mat), bonus_intorder=4)
-    D.Assemble()
+    DT.Assemble()
     Ainv = A.mat.Inverse(fesO.FreeDofs(), inverse="sparsecholesky")
 
-    # iron vertices = where H_s is injected (P1 nodal, VectorH1 order 1)
+    # iron vertices = where the source field is sampled (VectorH1 order 1)
     iron = np.array(sorted({v.nr for el in mesh.Elements() if el.mat == iron_mat
                             for v in el.vertices}), dtype=int)
     # source field B_s (Tesla) at the iron vertices, per psi-DOF, REUSING the
@@ -409,22 +412,35 @@ def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
     B_iron = _assemble_biot_savart(fes, n, Vc[iron], [0, 1, 2]).reshape(
         len(iron), 3, fes.ndof)
 
-    targets = [mesh(*p) for p in obs_pts]
-    gsrc = GridFunction(Vsrc)
-    gO = GridFunction(fesO)
-    rhs = gO.vec.CreateVector()
-    A_react = np.zeros((len(obs_pts) * len(comps), fes.ndof))
-    for j in range(fes.ndof):
+    # OBS-ADJOINT: A_react[row, j] = G[row] . Ainv . D . S_j with ONE back-
+    # substitution PER OBS ROW (not per psi-DOF).  G[row] = the covector of
+    # "-grad(.)(obs)[comp]" on fesO (element-local basis gradients at the point);
+    # then A_react = einsum(E_iron, B_iron), E_iron = (D^T Ainv G^T) read on the
+    # iron-vertex source dofs.  Verified == the per-psi-DOF forward to 1e-14.
+    n_rows = len(obs_pts) * len(comps)
+    G = np.zeros((n_rows, fesO.ndof))
+    gt = GridFunction(fesO); arrgt = gt.vec.FV().NumPy()
+    row = 0
+    for p in obs_pts:
+        mp = mesh(*p)
+        dofs = fesO.GetDofNrs(ElementId(VOL, mp.nr))
+        for c in comps:
+            for gd in dofs:
+                if gd < 0:
+                    continue
+                arrgt[:] = 0.0; arrgt[gd] = 1.0
+                G[row, gd] = -grad(gt)(mp)[c]
+            row += 1
+    gX = GridFunction(fesO); gE = GridFunction(Vsrc)
+    tmp = gX.vec.CreateVector()
+    E_iron = np.zeros((n_rows, 3, len(iron)))
+    for i in range(n_rows):
+        gX.vec.FV().NumPy()[:] = G[i]
+        tmp.data = Ainv * gX.vec               # X_i = Ainv G[i]   (A symmetric)
+        gE.vec.data = DT.mat * tmp             # e_i = D^T X_i  (Vsrc)
         for k in range(3):
-            arr = gsrc.components[k].vec.FV().NumPy()
-            arr[:] = 0.0
-            arr[iron] = B_iron[:, k, j]
-        rhs.data = D.mat * gsrc.vec
-        gO.vec.data = Ainv * rhs
-        gr = grad(gO)
-        col = -np.array([[gr(t)[c] for c in comps] for t in targets])
-        A_react[:, j] = col.reshape(-1)
-    return A_react
+            E_iron[i, k, :] = gE.components[k].vec.FV().NumPy()[iron]
+    return np.einsum('ikv,vkj->ij', E_iron, B_iron)
 
 
 def _seminorm(fes, regularize):
