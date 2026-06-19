@@ -11,7 +11,7 @@ import pytest
 
 ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
-from netgen.occ import unit_cube, Sphere, Pnt, OCCGeometry
+from netgen.occ import unit_cube, Sphere, Cylinder, Pnt, Z, OCCGeometry
 
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
@@ -36,6 +36,21 @@ def test_ball_lowest_eigenvalue():
     assert lam[0] == pytest.approx((math.pi / R)**2, rel=3e-3)        # radial s-mode
     # next eigenvalue is (4.493409/R)^2 (first l=1 mode), triply degenerate
     assert lam[1] == pytest.approx((4.493409 / R)**2, rel=1e-2)
+
+
+def test_cylinder_lowest_eigenvalue():
+    # solid cylinder R, height Lz, u=0 on all surfaces: lambda_1 = (j01/R)^2 + (pi/Lz)^2
+    # (Bessel j01=2.404826 radial + first axial mode). A curved-boundary geometry distinct from
+    # the ball; the same case the Cubit high-order-hex cylinder is verified against.
+    R, Lz, J01 = 0.5, 1.0, 2.4048255577
+    cyl = Cylinder(Pnt(0, 0, -Lz / 2), Z, r=R, h=Lz)
+    mesh = ng.Mesh(OCCGeometry(cyl).GenerateMesh(maxh=0.12))
+    mesh.Curve(4)
+    lam = laplace_dirichlet_eigenvalues(mesh, 3, order=3)
+    exact1 = (J01 / R) ** 2 + (math.pi / Lz) ** 2
+    assert lam[0] == pytest.approx(exact1, rel=3e-3)
+    # second mode is the (0,1,2) axial overtone: (j01/R)^2 + (2 pi/Lz)^2
+    assert lam[1] == pytest.approx((J01 / R) ** 2 + (2 * math.pi / Lz) ** 2, rel=1e-2)
 
 
 def test_ball_eigenvalue_scales_with_radius():

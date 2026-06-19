@@ -553,6 +553,12 @@ Build a hex SPHERE (`volume 1 scheme sphere` O-grid), `block 1 add volume all`,
 7e-4) and lambda_2 = 80.71 vs the l=1 mode 80.76 -- the curved hex recovers the round-domain
 spectrum on very few elements. These eigenvalues are also the modal DECAY rates of the transient
 heat equation (`multiphysics.solve_heat_transient`, `T_n ~ exp(-alpha lambda_n t)`).
+
+The same works on a hex CYLINDER (`create cylinder height Lz radius R`): the Dirichlet spectrum
+is `lambda = (j_mn/R)^2 + (p pi/Lz)^2` (Bessel-zero radial + axial); on a 544-hex order-3 cylinder
+(R=0.5, Lz=1) lambda_1 = 33.0022 vs the exact `(j01/R)^2+(pi/Lz)^2 = 33.0024` (rel err 4e-6), with
+lambda_2/lambda_3 matching the (0,1,2) and (1,1,1) modes -- the curved lateral surface is carried
+by the order-3 export.
 """
 
 TROUBLESHOOTING = """
