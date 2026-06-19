@@ -1889,6 +1889,728 @@ the radiating extended-Kelvin can use a thin surface HOIBC at the centre instead
 PML, with the required placement distance set by the multipole band via the DtN spectrum. FE follow-up
 = a Delta_S surface term on the excised inner sphere of the inverted exterior; demo_ii verifies the
 closed-form spectrum that fixes its coefficients.
+
+THE KELVIN TRANSFORM OF THE HOIBC -- making the radiation BC implementable in the inverted exterior
+(demo_kk, verified 2026-06-15; what the user asked: "the HOIBC must also be Kelvin-transformed").
+The IEICE C 2024 paper's volumetric centre-PML has inelegant parts it concedes: (U1) it "assumes a
+characteristic impedance of 377 ohms ... and therefore needs to be placed FAR ENOUGH from the wave
+source" = a CONSTANT (n-independent) Leontovich impedance -> forced far placement; (U2) "no mesh ...
+in radius 0.25 m at the centre ... to avoid the SINGULARITY" = an ad-hoc punched hole at the image of
+infinity; (U3) "we could not even calculate a model with a>=5 m" = the memory blow-up the far
+placement forces. The fix = a thin SURFACE HOIBC, but it must be Kelvin-transformed into the inverted
+domain. DERIVATION (3D Kelvin, unweighted-field/material-modulation convention = the paper's: field
+continuous across the truncation, (a/r)^2 in the material): with rho=a^2/r, image field g(rho)=f(a^2/rho),
+radial Jacobian d/dr=-(rho^2/a^2)d/drho, and Delta_S INVARIANT (inversion is conformal, sphere->sphere,
+same theta,phi):
+  (i)  the radial Helmholtz -> IMAGE ODE  g'' = [n(n+1)/rho^2 - (k a^2/rho^2)^2] g, effective
+       wavenumber k_eff(rho)=k a^2/rho^2 -> inf at the centre (= the U2 singularity, an honest feature
+       not a bug). VERIFIED by FD residual ~1e-7 on g=h_n^(1)(k a^2/rho).
+  (ii) the impedance operator transforms with a SIGN FLIP (exterior-decaying <-> interior-regular):
+       rho dg/drho = -[i kb - 1 + (i/2kb) Delta_S] g on the inner image sphere rho_b=a^2/b, kb=k a^2/rho_b
+       (Delta_S Y_n=-n(n+1)Y_n). EXACT by the chain rule: rho g'/g = -(k a^2/rho) h1'(kb)/h1(kb) =
+       -Lambda_n(kb) (verified to 1e-15). FE weak form (inner-sphere outward normal -rho_hat):
+       dg/dn = (1/rho_b)[i kb - 1 + (i/2kb) Delta_S] g -- a Robin term + a Laplace-Beltrami SURFACE
+       term (ordinary surface-FEM), NO volume PML.
+END-TO-END VERIFIED (analytic Hankel combination on r in [a,b], read DtN at the truncation r=a): the
+EXACT inner reproduces Lambda_n(ka) to machine precision (transform+ODE correct); the HOIBC inner is
+~5-6x more accurate than the constant SIBC; and for 1% truncation-DtN over n=1..6 the SIBC needs the
+absorber at b>=5.85 (image rho=0.171) while the HOIBC allows b>=2.45 (image rho=0.408) = 2.4x CLOSER /
+smaller exterior domain (directly relaxes U1 far-placement and U3 memory). The punched void (U2) is
+replaced by a principled impedance surface. PAPER-H POINT: the radiating extended-Kelvin's absorber is
+a Kelvin-transformed HOIBC = a Delta_S surface operator on the inner image sphere; its placement
+distance is fixed by the multipole band through the DtN spectrum, not by an ad-hoc "far enough". FE
+follow-up = assemble that Delta_S term (NGSolve surface-gradient / Laplace-Beltrami) in the inverted
+exterior; demo_kk fixes the closed-form coefficients and proves the construction reproduces the physics.
+
+DIFFERENTIAL-GEOMETRY (transformation-optics) view -- the (a/r')^2 medium is AUTOMATIC, only IMPEDANCE
+MATCHING matters, and the DtN spectrum is the HIGH-FREQUENCY design object (demo_ll, verified
+2026-06-15; user: "you can derive it with differential geometry; the modulation happens automatically
+if you don't track the Kelvin factor; as long as the impedance is matched, OK; the radiation boundary
+is better-principled; high-freq Kelvin is where the DtN spectral analysis is meaningful"). The Kelvin
+inversion x'=a^2 x/|x|^2 has Jacobian J=(a^2/r^2)Q, Q=I-2 n n^T a Householder REFLECTION (Q^TQ=I,
+det Q=-1) -> J is CONFORMAL (scalar x orthogonal) and ORIENTATION-REVERSING (det J=-(a^2/r^2)^3 = the
+inside-out map). TRANSFORMATION OPTICS (Maxwell form-invariance under a coordinate map): the media
+transform as eps'_r=mu'_r = J J^T/|det J| = (a^2/r^2)^2/(a^2/r^2)^3 I = (r^2/a^2) I = (a^2/r'^2) I
+(r'=a^2/r). VERIFIED to machine precision at sample points: the medium is ISOTROPIC (off-diagonal 0)
+and equals the paper's (a/r')^2 modulation -- it falls out of the geometry AUTOMATICALLY (the
+conformality is exactly what cancels the anisotropy a generic transform would create; no hand-applied
+Kelvin field weight). This is the coordinate-free generalization of demo_kk's radial result.
+=> Only the BOUNDARY is a design choice, and the principled condition is IMPEDANCE MATCHING. VERIFIED:
+the modal reflected-power R_n=|B/A|^2 of an outgoing wave at the absorber sphere is ZERO to machine
+precision when the imposed impedance equals the exact DtN Lambda_n(kb), and otherwise R_n ORDERS BY
+THE DtN-SPECTRAL MISMATCH |Z_n-Lambda_n| (HOIBC << SIBC). So an absorber's quality IS its DtN-spectral
+match: the radiation (surface-impedance/HOIBC) boundary is the PRINCIPLED object; a PML is one
+(volumetric, approximate, far-placed) realization of the same reflectionless goal. PLACEMENT: a
+constant SIBC reflects less the FARTHER it sits (large kb, R~1/kb-ish) -- this is exactly why the paper
+places its 377-ohm PML far (a large domain, U1/U3); the HOIBC matches the complex spectrum so it is
+low-reflection even CLOSE (small domain). LOW- vs HIGH-FREQUENCY: at static the open boundary is EXACT
+with NO absorber (the spectrum is the real ladder -(n+1)/R = an accuracy DATASHEET); only in the
+RADIATING regime is the COMPLEX spectrum an absorber-DESIGN target (per-mode reflection = spectral
+mismatch). Hence the DtN spectral analysis is OPERATIONALLY meaningful (predicts/optimizes the
+absorber) specifically for the HIGH-FREQUENCY Kelvin -- elevating Track A's spectrum from an accuracy
+datasheet (low-freq SA paper) to an absorber-design tool (Paper-H). FE follow-up: assemble the
+isotropic (a/r')^2 medium (transformation optics) + the matched HOIBC surface term; demo_ll verifies
+the medium and the impedance-matching/reflection law in closed form.
+
+A WORKING FE (assembled + solved, converges to the closed form) -- "from derivation to a method that
+runs" (demo_mm, verified 2026-06-15). A genuine sparse FE realises the radiating extended-Kelvin
+boundary and h-converges to demo_kk/ll. Radial reduction (one degree n at a time so every mode is
+independently checkable; Delta_S enters as its EXACT eigenvalue -n(n+1), the modal content a surface
+FE reproduces). FE on the image shell rho in [rho_b, a], rho_b=a^2/b, P1 elements:
+  weak form  int [ alpha rho^2 R'S' + alpha n(n+1) R S - k^2 beta rho^2 R S ] drho,  alpha=(a/rho)^2,
+  beta=(a/rho)^6 (scalar; vector Maxwell would have beta=alpha = the conformal eps=mu). NOTE alpha rho^2
+  = a^2 CONSTANT -> the inverted-exterior stiffness is FLAT (an elegant by-product of the conformal map).
+  This weak form's strong form is exactly demo_kk's image ODE R''=[n(n+1)/rho^2-(k a^2/rho^2)^2]R.
+  Matched-HOIBC Robin at the inner image sphere: A[0,0] += -b*Lambda_inner (from rho dR/drho=
+  -Lambda_inner R). Truncation r=a: Dirichlet R(a)=1; DtN_FE = -(A R)|_a / a -- the MINUS is the
+  inversion flipping d/dr=-d/drho at the fixed-point sphere rho=a (the same sign-flip as demo_kk/ll;
+  caught numerically when the FE first returned -dtn_trunc), and (A R)|_a is the consistent-flux reaction.
+VERIFIED: the assembled+solved FE DtN -> the closed-form dtn_trunc at the P1 rate O(h^2) (error ratio
+4.00 per mesh doubling) for the exact, HOIBC AND SIBC inner conditions; with the EXACT inner impedance
+it reproduces the true truncation DtN Lambda_n(ka) (err ~1e-5 at M=320); and the matched HOIBC FE
+solution is 4-6x closer to Lambda_n(ka) than the constant-377-ohm SIBC FE solution (n=1: 1.3e-2 vs
+7.6e-2; n=3: 4.9e-2 vs 2.1e-1). So the demo_kk/ll derivation is now a METHOD THAT RUNS. Remaining
+step = the full 3D Delta_S surface term (NGSolve grad_Gamma / Laplace-Beltrami) on the inner image
+sphere instead of the per-mode eigenvalue; the radial FE already certifies the medium + matched
+boundary and the convergence rate.
+
+THREE-WAY METHOD COMPARISON: high-freq KELVIN vs PML vs BEM-FEM (demo_nn, verified 2026-06-15; the
+capstone of the high-frequency thread). All three open boundaries produce the SAME object -- the
+exterior radiation DtN Lambda_n(ka) on the truncation sphere -- so the DtN spectrum is the common
+yardstick. Realised as genuine radial FEs (per degree n) so each mode checks against the closed form:
+  * BEM-FEM = the EXACT exterior DtN per mode (the reference); cost = a DENSE Gamma x Gamma matrix
+    (Green's function + singular quadrature; demo_k/r).
+  * PML = a complex-COORDINATE-STRETCH layer [a,a+d] + wall (the NGSolve PML mechanism), radial FE;
+    weak form int[(1/s) rt^2 R'S' + s n(n+1) RS - k^2 s rt^2 RS], s=1+i sigma/k, rt=stretched radius.
+  * KELVIN = the matched-HOIBC inverted-shell FE (demo_mm).
+VERIFIED (a=1, ka=4, P1, sign DtN=-(A u)|_a/a for BOTH the Kelvin truncation node and the PML inner
+node = the same inversion/normal sign-flip): (2) exact-impedance Kelvin and a thick PML both reproduce
+the BEM-exact Lambda_n(ka) to ~1e-4; (3) both sparse FEs converge to their floor at O(h^2) (ratio 4);
+(4) at MATCHED modest cost a well-tuned PML is the most accurate VACUUM absorber (flat ~3e-4 across the
+band) while the 2nd-order Kelvin-HOIBC floor is larger (~1e-2) and PEAKS at n~ka (the radiating-band
+knee); (5) each is a TUNABLE family -- PML floor falls monotonically with thickness (d=2 -> 1.8e-4),
+Kelvin is MACHINE-exact with the exact impedance (1.3e-4) and its HOIBC has an OPTIMAL placement
+(b=4 -> 6.7e-3 beats b=2 -> 3.7e-2 [too close, HOIBC mismatch] and b=8 [too far: the steep near-centre
+k_eff=ka^2/rho^2 needs more DoF]). HONEST VERDICT (no one-wins): BEM = exact-but-dense; PML = the robust
+sparse vacuum absorber (best at matched modest cost here); KELVIN = exact-with-the-exact-impedance AND
+the ONLY one that carries Kelvin-mapped EXTERIOR MATERIAL / scatterers (the IEICE-2024 paper's actual
+use case -- a PML cannot) and bakes in infinity (no truncation-distance choice). Three complementary
+points on the one DtN spectrum. PAPER-H: frame Kelvin's niche as exterior-material + exactness, not as
+beating PML at vacuum absorption; cite the spectrum as the unifying comparison axis.
+
+THE MATCHED HOIBC AS A GENUINE 3D SURFACE FE TERM (demo_oo, verified 2026-06-15, NGSolve). demo_mm
+reduced the angular Delta_S to its eigenvalue -n(n+1); demo_oo promotes it to the real SURFACE operator.
+The matched HOIBC impedance is Z_HOIBC=(i kb-1) I + (i/2kb) Delta_S (Delta_S=unit-sphere Laplace-
+Beltrami), assembled as the surface bilinear form (weak Delta_S = -grad_Gamma . grad_Gamma):
+  S(u,v) = (i kb-1) int_Gamma u v ds  -  (i/2kb) rho_b^2 int_Gamma grad_Gamma u . grad_Gamma v ds
+(the rho_b^2 converts the radius-rho_b surface gradient to the unit-sphere Delta_S). Built on a genuine
+2-manifold OCC-face surface mesh (H1 with grad(u).Trace()*...*ds; the surface triangles are BND
+elements -> the Trace() is REQUIRED, a pitfall). VERIFIED two ways (surface-mesh discretization ~1%):
+ (1) the surface gradient grad_Gamma reproduces the Laplace-Beltrami SPECTRUM: generalized eigenvalues
+     (K_gradGamma, M_surface) = {0, 2.017(x3), 6.05(x5), 12.10(x7)} = n(n+1) with 2n+1 multiplicities
+     (rel.err <1e-2 at maxh 0.20) -> grad_Gamma IS the unit-sphere Delta_S.
+ (2) the full HOIBC surface form S has generalized spectrum (vs the surface mass) = the per-mode matched
+     impedance Lambda_HOIBC,n = i kb-1 - i n(n+1)/(2kb): n=0 (-1,8) exact; n=1 (-1,7.874) vs (-1,7.875)
+     x3; n=2 x5; n=3 x7; max|err| 5.7e-3 -> the Delta_S surface form encodes the MULTIPOLE-DEPENDENT
+     matched HOIBC impedance (the whole point: a SURFACE operator giving the n-dependent radiation
+     impedance a scalar SIBC cannot).
+So with demo_mm's transformation-optics VOLUME medium + radial coupling (O(h^2) to the closed form) and
+demo_oo's Delta_S SURFACE term, the radiating extended-Kelvin boundary is a genuine 3D FE = isotropic
+(a/rho)^2 medium + the grad_Gamma HOIBC surface term. Each piece is verified; the only remaining step is
+the single monolithic volumetric 3D solve that glues them (condense to the truncation -> complex DtN
+matrix, vs demo_nn's closed form). NGSolve recipe: surface mesh via OCCGeometry(Sphere(R).faces[0]);
+grad(u).Trace() for grad_Gamma; ng.ds for the surface integral; complex=True for the radiating impedance.
+
+IS THERE A PML LOW-FREQUENCY BREAKDOWN IN THE DtN? -- the honest answer + the genuine Kelvin win
+(demo_pp, verified 2026-06-15; user: "Kelvin should perform well; at low freq PML absorption is poor,
+the DtN spectrum should show it; is there DtN research on PML?"). Tested HONESTLY on the converged
+radial exterior DtN and the conventional wisdom needs CORRECTING for this setting:
+ (A) NO DtN-ACCURACY breakdown: a WELL-RESOLVED standard PML (d=1, sigma0=15, M=300) matches the exact
+     Lambda_n(ka) to ~1e-5..1e-4 at EVERY ka in [0.3,8], for a low mode n=1 AND an evanescent mode n=4
+     (evanescent modes DECAY before the absorber wall in the radial-decay/DtN-truncation setting). So
+     "the DtN shows poor low-freq PML absorption" is a MISCONCEPTION here -- the textbook PML
+     low-freq/evanescent breakdown is a WAVEGUIDE / near-field phenomenon (evanescent energy reaching
+     the PML undecayed), not the radial exterior-DtN truncation.
+ (B) the GENUINE low-freq PML cost is CONDITIONING: the stretch s=1+i sigma/k blows up as k->0, so
+     cond(PML interior matrix) GROWS toward DC (n=1, M=300: 2.36e4 at ka=4 -> 2.77e5 at ka=0.05, ~12x),
+     while the Kelvin matrix is FREQUENCY-ROBUST (flat ~5.6-7.3e4); at the lowest ka, PML is ~5x worse-
+     conditioned than Kelvin. (Worse in true 3D FD/FE PML than this idealized 1D model.)
+ (C) so KELVIN's low-freq performance advantage is REAL but precise: at quasi-static the exterior DtN
+     IS the real ladder -(n+1)/R, which Kelvin reproduces EXACTLY, PARAMETER-FREE (no sigma/d/wall),
+     as a REAL-SPD system at k=0, with FREQUENCY-ROBUST conditioning, AND carrying exterior material
+     (demo_t) -- a PML is a wave-absorber MIS-APPLIED to a near-static problem (complex, parameter-
+     laden, conditioning-degrading), even though its continuous DtN would also be accurate. NET (paper):
+     do NOT claim "PML's DtN is inaccurate at low freq" (false here); DO claim Kelvin is the exact /
+     parameter-free / well-conditioned / material-capable open boundary for the quasi-static (SA)
+     regime, while a tuned PML is the better sparse VACUUM absorber for high-freq radiation (demo_nn) --
+     two regimes, one DtN-spectrum yardstick. (Literature on PML-via-DtN exists: Lassas-Somersalo
+     PML-as-DtN; CFS-PML Kuzuoglu-Mittra/Roden-Gedney for the evanescent fix; complex-scaling spectral
+     theory -- a dedicated search is the companion task.)
+
+LITERATURE POSITIONING -- PML via the DtN, and the novelty of the 3-way DtN-spectrum comparison
+(5-agent literature workflow, 2026-06-15). The "PML as an approximation of the exterior DtN" idea is
+WELL ESTABLISHED for time-harmonic WAVES -- cite, do not reclaim:
+  * Lassas & Somersalo (Computing 60, 1998; Proc.Roy.Soc.Edinburgh 131A, 2001) + Lassas-Liukkonen-
+    Somersalo (J.Math.Pures Appl. 80, 2001): PML = complex coordinate stretching / complex Riemannian
+    metric; converges EXPONENTIALLY (in thickness) to the exact exterior solution; zero reflection =
+    flat complex-metric curvature.
+  * Gander & Schadle (LNCSE 78, 2010 + Geneva preprint): PML / pole-condition truncation = a Pade /
+    continued-fraction approximation of the EXACT DtN operator; "what matters is DtN-approximation, not
+    absorption" (constant k). THE operator-level "PML approximates the DtN" statement.
+  * Hohage-Lehrenfeld-Preuss "Learned Infinite Elements" (SIAM J.Sci.Comput. 43, 2021): unifies
+    infinite elements + tensor-PML + local NRBC on a PER-MODE scalar DtN axis dtn(lambda_l), PML an
+    explicit special case. ** PREEMPTS THE PER-MODE-DtN COMPARISON AXIS ITSELF (for scalar waves). **
+  * Gomez-Revuelto, Garcia-Castillo & Demkowicz (PIER 126, 2012): IE vs PML vs iterative-BEM head-to-
+    head -- but on a DOF-to-ACCURACY axis, NOT a DtN spectrum (a full-text check is advisable).
+  * Galkowski-Lafontaine-Spence (SIAM J.Math.Anal. 55, 2023): PML truncation exponentially accurate at
+    HIGH frequency. Johnson "Notes on PMLs" (arXiv:2108.05348): the sigma/omega blow-up is "BENIGN in
+    the pure frequency domain" (only bites in time-domain/discretized) -- the CLOSEST prior hint to our
+    accuracy-vs-conditioning point. CFS-PML (Kuzuoglu-Mittra 1996; Roden-Gedney 2000) & Bermudez optimal
+    PML (JCP 2007) = the evanescent/low-freq absorption fixes. BEM = exact DtN (Steklov-Poincare/
+    Calderon) is folklore; SBFEM magnetostatic exterior operator (CMAME 401, 2022) is the closest
+    magnetostatic DtN-like reference (likely reviewer cite).
+DEFENSIBLE NOVELTY (hedge "to our knowledge"; cite the preemptions up front): (1) extending the per-mode
+COMPLEX DtN comparison axis from waves to the MAGNETOSTATIC / quasi-static->radiating regime; (2) co-
+plotting THREE arms -- Kelvin/inversion (matched HOIBC) + PML + BEM-FEM(exact) -- on that one spectrum,
+which no single prior work does; (3) the calibrated low-freq diagnosis "standard PML loses CONDITIONING,
+not DtN ACCURACY; Kelvin is frequency-robust" (refines the common 'low-freq PML breakdown' narrative;
+Johnson is the nearest hint); (4) the quasi-static real ladder -(n+1)/R reproduced EXACTLY & parameter-
+free by Kelvin. Risk MODERATE -> safe if hedged and the preemptions (Hohage axis / Gander-Schadle Pade /
+Gomez-Revuelto 3-way / BEM-folklore / Johnson) are cited. DO NOT claim the per-mode-DtN axis, "PML=DtN
+approx", a generic 3-way comparison, or BEM-as-DtN as new. Sugahara IEICE 2025 (the Kelvin<->PML
+transformation-optics derivation) is OUR launch point, not a competitor.
+
+ABC PERFORMANCE = TERMINATION ORDER x PLACEMENT; what Kelvin buys each absorber (demo_qq, verified
+2026-06-15). The DtN spectrum evaluates ANY open boundary by how well its truncation DtN matches the
+exact Lambda_n(ka) across the multipole band. Two independent ingredients:
+  ORDER of the termination's impedance: radiation BC (1st-order ABC / Leontovich SIBC, d_n u=ik u) is
+  FIXED-ORDER -- matches Lambda_n(kb) only for low n, error GROWS with n (verified at kb=8: 0.12 at n=1
+  -> 3.05 at n=6). A PML is ALL-ORDER -- its termination impedance matches Lambda_n(kb) for EVERY n
+  (~6e-4 flat) because it absorbs the outgoing wave regardless of mode.
+  PLACEMENT b: Kelvin maps the exterior into the ball so an absorber at the image centre sits
+  effectively at b->infinity (cheaply, a finite image shell).
+VERIFIED truncation-DtN performance (a=1, ka=4, per mode): radiation BC AT the truncation (b=a) is POOR
+(0.06..1.1, grows with n) = the well-known fact; Kelvin+radiation-BC (placed far) is much better than
+radBC@a but a FIXED-ORDER FLOOR remains (SIBC ~1e-2..0.1; HOIBC ~2e-3..1.7e-2); Kelvin+PML is ~exact
+(7e-5..1e-4, all-order) on par with a well-resolved plain PML. KEY NUANCE -- what DISTANCE does (n=3,
+sweep b): farther placement HELPS a radiation BC strongly (error ~1/kb: 0.15@b=1.5 -> 0.009@b=6, because
+the high multipoles have decayed so a fixed-order impedance then suffices) but barely changes a PML
+(~flat 1e-4, all-order absorbs at any distance). NET (answers the user precisely):
+  - radiation境界 alone = poor (fixed-order, at b=a). [known]
+  - Kelvin+radiation-BC IS limited: a fixed-order BC NEEDS far placement, which Kelvin provides but not
+    for free (near-centre resolution, demo_kk b-optimum) AND a floor remains -> NOT as good as Kelvin+PML.
+  - Kelvin+PML is best (all-order + effectively at infinity -> ~exact), BUT its edge over a plain PML is
+    QUALITATIVE: infinity baked in (no truncation-distance choice) AND it carries Kelvin-mapped EXTERIOR
+    SCATTERERS (the IEICE-2024 use case) -- a PML's all-order absorption already makes distance nearly
+    irrelevant for VACUUM accuracy, so "Kelvin+PML beats plain PML because it's farther" is only weakly
+    true on accuracy; the real win is qualitative + the radiation-BC case where distance genuinely helps.
+PAPER POINT: separate ORDER (radiation-BC fixed vs PML all-order) from PLACEMENT (Kelvin -> infinity);
+the DtN spectrum exhibits both axes at once.
+
+WHAT KELVIN+PML ACTUALLY BUYS -- NOT far placement, but EXTERIOR SCATTERERS (demo_rr, verified
+2026-06-15; user: "if it's only that you can place the PML farther, does Kelvin+PML have much merit?").
+HONEST two-part answer:
+  PART 1 (VACUUM): NO meaningful merit. A PML is distance-insensitive (demo_qq), so for a compact source
+  in vacuum the Kelvin radial FE (+PML-quality inner) and a plain PML right at the truncation BOTH
+  reproduce the exact vacuum DtN Lambda_n(k0 a) to ~1e-4. A plain PML is then SIMPLER (no inverted
+  medium, no centre singularity/excision). The user's skepticism is correct for vacuum -- "far
+  placement" alone is not a real advantage because a PML already absorbs all-order at any distance.
+  PART 2 (EXTERIOR SCATTERER / MATERIAL): YES, decisively -- the genuine merit and the IEICE-2024
+  motivation (antenna with multipath from mountains/buildings/ground). When scatterers sit OUTSIDE the
+  truncation, the Kelvin map conformally compactifies the WHOLE exterior INCLUDING those objects into a
+  bounded mesh of FIXED cost (independent of their distance). A PML is a VACUUM absorber that cannot
+  contain a scatterer. VERIFIED (a=1, k0a=4; scalar; exterior shell [1.5,2], eps_r=4 -> m=2; exact
+  3-region radial transfer): the shell SHIFTS the truncation DtN by O(1) (|scat-vacuum| ~ 1.4..2.5,
+  comparable to |DtN| itself); the Kelvin FE with the scatterer mapped into the inverted shell
+  REPRODUCES the exact with-scatterer DtN to ~1e-4 (n=1..4), while a plain VACUUM PML gives the vacuum
+  DtN -> WRONG by the full O(1) shift (rel error 0.39..1.6). NET: do NOT sell Kelvin+PML on "places the
+  PML farther" (false benefit -- a PML doesn't care about distance); sell it on conformally
+  compactifying the exterior + its scatterers/material/ground into a bounded fixed-cost mesh that a
+  vacuum PML cannot represent. For pure vacuum radiation from a compact source, a plain PML at the
+  truncation is simpler and equally accurate -- Kelvin+PML there is over-engineering. (Mechanism is the
+  radiating analog of the static demo_t/v/bb exterior-material results.)
+
+KELVIN & PML ARE COMPLEMENTARY (not redundant); does a FANCIER PML help the combination? (demo_ss,
+verified 2026-06-15, a genuine COMBINED Kelvin+PML radial FE = the transformation-optics medium PLUS a
+complex-stretch PML in the near-centre). User: "or if you use a more sophisticated PML, does combining
+with Kelvin give a benefit? there are PML types." Findings (a=1, ka=4):
+ (1) Kelvin's compactified centre (image of r=inf) is where the inverted far-field oscillation piles up
+     (k_eff=k a^2/rho^2 -> inf). Merely EXCISING it + a hard wall (no absorber) is CATASTROPHIC:
+     |DtN-exact| ~ O(1..40) (cavity resonances; rho_e=0.2 -> 41). So the PML is REQUIRED in the Kelvin
+     exterior -- Kelvin and PML are COMPLEMENTARY (the IEICE-2024 design = a PML at the inverted centre),
+     not two redundant routes.
+ (2) a modest STANDARD (polynomial) PML there makes the truncation DtN ~EXACT, with a clear SWEET SPOT
+     in strength: alpha=2..4 -> ~7e-5 (across modes n=1,2,3: 7e-5/6.7e-5/5.6e-5); too weak (alpha=0.5 ->
+     0.1, no absorption) or too STRONG (alpha=20 -> 0.45, the steep near-centre stretch out-resolves the
+     mesh and re-reflects = the classic discretized-PML failure) are both worse -> the PML must be TUNED.
+ (3) a FANCIER profile does NOT help: a k_eff-matched (~1/rho^2, more-concentrated) grading degrades
+     SOONER than a plain polynomial (alpha=8: plain 1.8e-3 vs k_eff-matched 0.70) because it over-
+     stretches exactly where the mesh is coarsest. CFS-PML's real shift targets EVANESCENT waves, but
+     the Kelvin near-centre field is oscillatory (not evanescent), so CFS adds little here either.
+     VERIFIED both CFS ingredients in the combined Kelvin+PML FE: (3b) the CFS real coordinate stretch
+     kappa>1 only over-stretches and WORSENS it (kappa=1 best 1e-4, kappa=2 1.3e-2, kappa=4 5e-2); (3c)
+     the CFS FREQUENCY SHIFT acfs (absorbing part x (ik)/(acfs+ik)) only shrinks the absorbing part ->
+     monotonically WORSE (acfs=0 standard best 7e-5, acfs=1 3.9e-4, acfs=4 3.4e-2, acfs=16 1.5). So
+     CFS-PML + Kelvin gives NO extra performance: CFS's benefits (evanescent absorption / low-freq
+     conditioning / late-time stability) target regimes that do NOT occur at the high-k_eff oscillatory
+     Kelvin centre, where a standard PML is already optimal.
+NET (answers the user): combining Kelvin with a PML is NOT redundant -- the PML is REQUIRED to make the
+compactified centre usable (excision alone fails catastrophically). But a SOPHISTICATED PML adds little
+to the COMBINATION over a simple, well-tuned polynomial PML; the Kelvin-specific need is adequate
+strength + near-centre RESOLUTION (to resolve the diverging k_eff), not a clever sigma profile. So "PML
+の工夫" helps a PML in general (smaller residual) but does not create an extra Kelvin-specific synergy
+beyond getting the centre absorbed and resolved. (The combined FE here is also the seed of the single
+monolithic volumetric 3D solve -- medium + PML/HOIBC in one system.)
+
+EVANESCENT / LOW-FREQUENCY: does Kelvin beat a plain PML? HONEST mode-resolved answer + a CORRECTION
+(demo_tt, verified 2026-06-15). A too-quick earlier claim ("Kelvin+PML beats plain PML for evanescent")
+was based on a THIN plain PML = an unfair comparison; the full test corrects it. Mechanism: a plain PML
+does NOT absorb EVANESCENT waves (the imaginary stretch is for propagating waves) -- only the natural
+DECAY over the layer helps -- so a THIN plain PML reflects the residual evanescent field, but a plain PML
+with ADEQUATE THICKNESS (reaching far enough for decay) is excellent at the same DoF (n=1, ka=0.5: d=0.5
+-> 0.38 vs d=6 -> 6e-4). The right Kelvin tool for evanescent is KELVIN-ONLY (the quasi-static
+compactification, NO PML); adding a PML to Kelvin for evanescent HURTS (the stretch distorts the smooth
+decaying field: n=4, ka=0.5: Kelvin-only 5.9e-5 vs Kelvin+PML 1.1e-3). MODE-RESOLVED crossover (ka=0.5,
+matched M=120, Kelvin-only parameter-free vs plain-PML-best-d): plain WINS for n~ka (n=1: 0.056 vs 6e-4;
+n=2: 0.012 vs 6e-4) -- the physically DOMINANT dipole/quadrupole; Kelvin-only WINS for DEEPLY evanescent
+n/ka >~ 5 (n=3: 3.7e-5 vs 2.4e-4; n=8: 2.1e-4 vs 2.7e-4) AND is parameter-free. NET (honest, no
+overclaim): "Kelvin beats a plain PML for evanescent" is NOT a blanket win -- a thickness-tuned plain PML
+is competitive/better for the dominant low-n modes; Kelvin's genuine evanescent edge is the NARROW
+deeply-evanescent corner where Kelvin-ONLY (no PML) is more accurate AND parameter-free (the exact
+static compactification). SPHERICAL vs BOX PML (the related question): a spherical PML IS better than a
+box (no corner reflections, conforms to spherical wavefronts, diagonal in the spherical-harmonic DtN)
+-- but that favours ANY spherical PML; Kelvin's spherical truncation inherits it, it is NOT a
+Kelvin-vs-PML differentiator (box-vs-sphere needs a genuine 3D test). DISCIPLINE NOTE: this block
+records a corrected claim -- the first thin-PML probe over-confirmed the user's intuition; the fuller
+thickness-sweep + Kelvin-only test is the verified result.
+
+IABC (IMPROVISED ABSORBING / ASYMPTOTIC BOUNDARY CONDITIONS) -- a DtN-spectral view and DEVELOPMENT
+DIRECTIONS (ANALYSIS, not yet a numerical verification; read Sugahara PIERS 2016 Shanghai, building on
+Meeker IEEE TMAG 2013/2014 + Sugahara ICEAA 2015). WHAT IT IS: surround the region of interest with N
+ISOTROPIC spherical shells, each with special complex (eps,mu) constants, terminated by a PEC; "order N"
+= number of layers. The shells emulate the open boundary WITHOUT modifying the FEM solver (isotropic =
+any code). Verified in that paper: works at LOW frequency / near-field (WPT 13.56 MHz, where PML and
+radiation BC fail); 3/4/5-layer IABC are nearly identical (converged) while radiation BC varies wildly
+with domain size; "highest multipole = sextupole -> 3 layers enough". (Companion 2016 method: a
+Perturbation / equivalence-theorem post-hoc correction -- reconstruct the field from the truncation
+surface via equivalent currents J=n x H, M=E x n to add the 1st-order reflection correction; no matrix
+inversion; also a BC-error visualizer.) DtN-SPECTRAL CONNECTION (the key insight + the gap): "N layers
+-> multipoles to order N" and "sextupole -> 3 layers" are LITERALLY the DtN datasheet (order = multipole
+reach), the SAME statement as the Kelvin ladder lambda_n=-(n+1)/R climbed to degree N (demo_g closure
+hierarchy / demo_m multipole ceiling). YET IABC has never been analyzed via the DtN spectrum (as PML
+hadn't, per the lit survey). DEVELOPMENT DIRECTIONS (room for development = YES, and they extend Track A):
+ (1) a DtN-SPECTRAL THEORY OF IABC: the N-layer IABC = a rational/staircase approximation of the
+     exterior DtN matched to degree N; formalize -> PREDICT the needed N from the source's multipole
+     content (replace the heuristic) and derive the shell constants as the per-mode impedance match;
+     IABC becomes a 4th arm on the Kelvin/PML/BEM DtN-spectrum comparison.
+ (2) KELVIN <-> IABC: nested piecewise-constant isotropic shells = a STAIRCASE of the continuous Kelvin
+     medium -> Kelvin is the N->infinity limit of IABC (unifies Sugahara's two open-boundary families);
+     verifiable: DtN -> exact ladder as N grows. (Caveat: the STATIC SCALAR Kelvin medium is NOT (a/r)^2
+     -- that gives -n/a, not -(n+1)/a; (a/r)^2 is the Maxwell/vector TO medium of demo_ll. So a scalar
+     IABC<->Kelvin demo must use the correct scalar (R/rho)-weight convention, not the vector (a/r)^2.)
+ (3) exterior material / scatterers in IABC (the demo_rr capability for Kelvin); (4) eddy-current /
+     diffusive (SA) extension (demo_aa analog); (5) IABC as a 4th method in the Hachinohe SA paper
+     (isotropic, low-freq, no-code-modification), unified with Kelvin via the DtN spectrum.
+DISCIPLINE: the exact IABC shell constants (Table 1) come from Sugahara ICEAA 2015 (not in hand), so the
+verified demo for (1)/(2) is deferred until that derivation is incorporated OR re-derived from DtN
+matching -- no shaky example committed. This block is documented analysis, not a numerical result.
+
+TIME-DOMAIN representation of the (IABC-target) exact spherical DtN -- VERIFIED (demo_uu, 2026-06-15;
+user: "I want the time-domain representation of IABC; we'll need Mathematica's power"). Mathematica is not
+installed on this host -> used sympy (symbolic) + scipy (numeric), the same symbolic power, every claim
+numerically asserted. This delivers the TIME-DOMAIN axis of development-direction (1) for the operator
+IABC approximates (the exact sphere DtN); IABC's own shell constants remain deferred (above).
+WHY A CAS: the per-mode exterior DtN symbol Lambda_n(z)=z h_n^{(1)'}(z)/h_n^{(1)}(z), z=kR=omega R/c, is a
+RATIONAL function of z because the spherical Hankel function is a degree-n polynomial x e^{iz}/z^{n+1}:
+  h_n^{(1)}(z) = -i * e^{iz} * z^{-(n+1)} * theta_n(-iz),  theta_n = reverse Bessel polynomial.
+  (The leading constant is -i for EVERY n: the descending-series prefactor (-i)^{n+1} is cancelled by
+   theta_n(-iz)=(-i)^n Q_n(z); (-i)^{n+1} i^n = -i. Verified vs scipy: rel.err 1.5e-15.)
+VERIFIED RESULTS (n=1..6 unless noted, all asserted to the tolerance shown):
+  - POLE-RESIDUE DtN:  Lambda_n(z) = i z - 1 + sum_{j=1..n} z_j/(z - z_j),  z_j = i*roots(theta_n).
+    Matches scipy DtN to 1.9e-15; the z_j are exactly the zeros of h_n^{(1)} (|h_n(z_j)|/|h_n(1)|=5e-16).
+  - THREE INDEPENDENT pole sets agree to 1e-15: sympy roots(theta_n), the scipy spherical-Hankel zeros,
+    and scipy.signal.besselap (the analog BESSEL/THOMSON filter). => the spherical open boundary's poles
+    ARE Bessel-filter poles; the time-domain open boundary is a BESSEL-FILTER NETWORK per mode.
+  - TIME-DOMAIN realization (Grote-Keller form, R=c=1): with g = R d_r u the DtN output,
+        g(t) = -du/dt - u + sum_j psi_j ;   dpsi_j/dt = -i z_j (psi_j + u)   (one local ODE per pole).
+    Reproduces Lambda_n(z) ALGEBRAICALLY for any tone (3.6e-16) and by TRANSIENT integration from rest
+    (solve_ivp, converges to the exact DtN, 9.8e-11). LOCAL in time (ODEs), nonlocal only across the
+    surface harmonic index -- exactly the Grote-Keller exact nonreflecting BC structure.
+  - STABILITY/CAUSALITY: relaxation rates lambda_j = -i z_j = roots(theta_n) = Bessel filter poles, all
+    Re < 0 (worst -1.0) => the auxiliary network decays (passive, causal).
+  - n POLES <-> multipole order n: the DtN datasheet (order = multipole reach) expressed in the TIME
+    DOMAIN; the N-pole truncation is the time-domain analog of the N-shell / N-rung frequency datasheet.
+READING FOR IABC (analysis, consistent with the deferral above): IABC's N nested shells approximate this
+exact N-pole rational DtN, so a "time-domain IABC" is naturally an N-pole Bessel-filter network per mode
+(N auxiliary ODEs); dispersive shell media would be realized by the standard ADE/recursive-convolution
+route. PRIOR ART (cite, do NOT claim): the rational/pole-residue exact sphere DtN and its local-in-time
+auxiliary realization is Grote & Keller (1995) / Hagstrom; reverse-Bessel-polynomial == Bessel/Thomson
+filter poles is classical network synthesis. NEW FRAMING (ours, modest): reading IABC's shells AS this
+pole set + the Kelvin/DtN-datasheet linkage; the verified contribution here is the time-domain CORE
+(pole-residue + Bessel-network + auxiliary ODEs), NOT IABC's exact shell constants. (Lit survey
+CONFIRMED this positioning: Grote-Keller 1995/1996 + Thompson&Huan 2000 establish the rational-per-mode
+DtN + local-in-time auxiliary-ODE scaffolding and even the explicit tridiagonal n x n A_n with p_n=n
+auxiliaries per degree n; they do NOT make the Bessel/Thomson-filter-pole identification nor the
+time-domain magnetics-IABC / Kelvin linkage -- those two are ours.)
+
+LOW-FREQUENCY (static / Laplace) IABC -- a MORE ELEGANT derivation of Meeker/Sugahara's nested-shell
+construction (demo_vv, VERIFIED 2026-06-15; user: read Meeker's Mathematica notebook
+femm.info/improvisedabcs and Sugahara's optimization S:\...\2015_11_03_IABC定式化; "it should be
+derivable more elegantly"). THE ORIGINAL METHOD (faithfully ported from main0.m + cf1.m/cf2.m): per
+spherical-harmonic mode n, build the 2x2 basis M=[[r^n,r^{-(n+1)}],[n r^{n-1},-(n+1)r^{-(n+2)}]],
+cascade it through N concentric shells with permeability jumps diag[1,1/x], apply a termination, read a
+reflection coefficient v[1]/v[0], and NUMERICALLY fsolve the N permeabilities to null the reflection for
+modes n=1..N. NAMING (resolves a confusion): Meeker/Sugahara label terminations by the FIELD B -- "B_n=0
+(Dirichlet IABC)" is NEUMANN on the potential u'(b)=0; "B_t=0 (Neumann IABC)" is DIRICHLET u(b)=0.
+THE ELEGANT REFORMULATION (all asserted):
+ (1) The 2x2-coefficient cascade IS EXACTLY a SCALAR Mobius / continued-fraction recursion of the
+     dimensionless DtN Y(r)=r u'(r)/u(r): in a shell the mode ratio t=(B/A)r^{-(2n+1)} just scales by
+     (r_out/r_in)^{2n+1}; across an interface Y multiplies by the permeability ratio; reflection-free
+     <=> Y(a)=-(n+1) (the exact static ladder lambda_n=-(n+1)/R). Verified to reproduce the 2x2
+     reflection to chordal distance 9e-16 over 400 random configs x 6 modes x both terminations.
+ (2) SINGLE-SHELL CLOSED FORM, GENERAL mode n (NO optimization):
+       Neumann (B_n=0):   mu = ((n+1) + n rho^{2n+1}) / (n (rho^{2n+1} - 1))
+       Dirichlet (B_t=0): mu = (n+1)(rho^{2n+1} - 1) / (n + (n+1) rho^{2n+1}),   rho = r_out/r_in.
+     Verified to null mode n to 4e-16. For n=1 the Neumann form is (rho^3+2)/(rho^3-1), which EQUALS
+     Meeker's tabulated (delta^3+3 delta^2+3 delta+3)/(delta(delta^2+3 delta+3)) (rho=1+delta) to 1e-14
+     -- so Meeker's constant is the n=1 special case and this is its clean generalization to every
+     multipole order (sympy-derived). (2D analogue: Neumann mu=(rho^2+1)/(rho^2-1).) Matches the user's
+     main0 case-0 fsolve value 10.06337 (exact 10.063444; gap = their optimizer tolerance).
+ (3) MULTI-SHELL: N isotropic shells null EXACTLY modes 1..N (a square interpolation system); solving
+     the elegant scalar residual r_n(x)=Y(a)+(n+1) reproduces the datasheet (N=2,3,4: |resid|~1e-15,
+     reflection 0 for n<=N then grows for n>N) and every root ALSO zeros the faithful 2x2 port (cross-
+     formulation check, both terminations). The cumulative permeabilities alternate hi-lo (e.g. N=3 Neu
+     mu=[1.69,0.21,29.0]) = a STEPPED-IMPEDANCE matching stack. Multi-shell is a stiff nonlinear solve
+     (needs multi-start) -- that stiffness is exactly WHY the original work optimizes; no closed form for
+     general N is claimed.
+ (4) OBSTRUCTION (the honest reason optimization is intrinsic): no isotropic finite shell can be exact
+     for ALL modes because the static scalar Laplacian is NOT conformally invariant (the scalar Kelvin
+     weight, NOT the vector (a/r)^2 TO medium of demo_ll); only the full Kelvin inversion (N->infinity
+     graded medium) or an anisotropic PML matches every mode. So N-shell IABC = an N-section impedance
+     transformer in the MODE variable = the STATIC sibling of demo_uu's time-domain Bessel-filter
+     network. CITE-DON'T-CLAIM (overclaim corrected 2026-06-15 after the lit survey): "Kelvin = the
+     shell-collapse / N->infinity limit" is PRIOR ART -- Brunotte-Meunier-Imhoff 1992 for the exact
+     spatial shell map (r_e->0 IS the sphere inversion), and Meeker himself frames IABC as
+     Kelvin-transform-derived. So the N->infinity-Kelvin link is NOT our novelty. The defensible-new
+     slice is narrower: a Liouville isotropy-OBSTRUCTION (in 3D, conformal maps = Mobius => an isotropic
+     MATERIAL-shell stack can be exact only for the radial/spherical-inversion case) + a quantitative
+     N->infinity convergence rate -- this explains why Sugahara 2017 needed SEPARATE ellipsoidal /
+     elliptic-cylindrical derivations. NEXT (deferred, honest): a closed-form multi-shell DESIGN via
+     multisection-transformer synthesis (binomial/Chebyshev in the mode variable) to replace the
+     optimization outright.
+
+IABC DEVELOPMENT NOVELTY MAP (survey-grounded 2026-06-15; answers "does the PIERS-2016 IABC work have
+development room?" -- YES, with the boundaries below). Two background lit-surveys (6 agents each)
+graded four candidate directions; cite-don't-claim / defensible-new / overclaim-to-avoid per direction.
+ A. DtN-spectral / transfer-matrix theory of IABC + closed-form shell permeabilities (demo_vv) --
+    NOT PRE-EMPTED (strongest). DECISIVE: Meeker's own Mathematica notebook
+    (femm.info/Archives/contrib/images/IABC/2D_ArbitraryOrderVector.pdf) gets the permeabilities by
+    NUMERICAL OPTIMIZATION (FindMinimum on Total[(GetBn[k]+k)^2], WorkingPrecision->1000, delta-homotopy,
+    "not well conditioned") -- NO closed form / continued fraction anywhere in the IABC family
+    (Meeker 2013 TMAG magnetic; 2014 electrostatic; Sugahara 2017 ellipsoidal 3-layer). Our single-shell
+    closed form mu(n,rho) (Meeker's tabulated constant = the n=1 case) + the scalar Mobius
+    continued-fraction recursion fill exactly that gap. CITE: Meeker 2013 + the femm.info notebooks as
+    the optimization baseline; the (l+1)/R exterior DtN eigenvalue and ABC=multipole-annihilation
+    (Khebir/Kishk/Ramahi; Chen&Konrad 1997 taxonomy) as classical. OVERCLAIM TO AVOID: do NOT claim the
+    sphere DtN spectrum or multipole structure as new physics -- the contribution is the closed-form /
+    well-conditioned permeabilities + spectral certification METHODOLOGY.
+ C. Closed-form multi-shell via multisection-transformer (binomial/Chebyshev) synthesis -- PARTIAL.
+    The synthesis machinery is classical for WAVES (Collin; Orfanidi) and continued-fraction/Pade-DtN
+    ABCs exist for waves (Guddati 2006 CFABC<->PML equivalence; Hagstrom-Warburton). Defensible-new =
+    the STATIC / harmonic-order instantiation: no frequency band; the equiripple "passband" is the
+    SPHERICAL-HARMONIC-ORDER spectrum (1/r^{n+1} decay). OVERCLAIM TO AVOID: not "first Chebyshev layered
+    absorber"; must show it is not a trivial frequency->order substitution and beats Meeker's grading.
+ B. Kelvin <-> IABC unification -- PARTIAL (weakest standalone; fold into A as one section). The
+    Kelvin-as-shell-limit is prior art (above). Defensible-new = ONLY the Liouville isotropy-obstruction
+    theorem + isotropic-shell convergence rate.
+ D. TIME-DOMAIN / eddy-current (parabolic) IABC -- PARTIAL but HIGHEST novelty, LOWEST footing (plan
+    only; the user's destination). No work fuses (nested-shell open boundary)+(parabolic diffusion)+
+    (complex-shell via ADE/recursive convolution). CITE-DISTINGUISH: Valdivieso-Meunier-Ramdane-
+    Gyselinck 2020 (Foster networks + recursive convolution, complex-mu) and time-domain SIBC-by-RC
+    (Yuferev/Ida) -- both use the ADE/RC machinery but for INTERIOR material / conductor truncation, NOT
+    the open exterior boundary; explicitly parabolic, NOT Grote-Keller/PML (hyperbolic). demo_uu's
+    Bessel/Thomson pole network is the constructive engine (the closed-form poles the ADE auxiliaries
+    realize). GATE on a transient sphere/cylinder-diffusion benchmark before any claim.
+ RANKING (novelty x verified-footing x SA-fit): A > C > B > D. Architecture: Paper #1 = A spine + C
+ design payoff + B as one rigor section ("spectral transfer-matrix theory of IABC: closed-form
+ isotropic-shell permeabilities + filter-synthesis design"); Paper #2 = D once a transient benchmark is
+ green. WHOLE-PAPER GUARD: sphere DtN eigenvalues, ABC=multipole annihilation, multisection synthesis,
+ Kelvin-as-shell-limit are each classical/published -- frame every claim as the static-magnetostatic
+ instantiation / closed-form replacement of optimization / spectral-certification methodology.
+
+TIME-DOMAIN HIGH-FREQUENCY IABC + DtN COST (demo_ww, VERIFIED 2026-06-15; user: "the time-domain
+representation of the high-frequency IABC would be good; show its DtN is cost-superior; of course
+time-domain FEM-BEM is most accurate"). This is development-direction D's WAVE (hyperbolic) branch and
+fuses demo_uu (exact pole network) with the IABC reading. RESULTS (all asserted):
+ (A) The exact exterior DtN per mode is the rational n-pole Lambda_n(z)=iz-1+sum z_j/(z-z_j) (demo_uu);
+     its time domain = n LOCAL auxiliary ODEs (Grote-Keller). This is what a TIME-DOMAIN FEM-BEM
+     reproduces -> MOST ACCURATE but the DtN is DENSE on Gamma + a temporal CONVOLUTION (history).
+ (B) Finite-frequency nested-SHELL IABC DtN built by transfer matrix (spherical Bessel j_n,y_n per
+     constant-index shell, u & u' continuous): machinery EXACT (a vacuum shell closed by the exact
+     radiation DtN reproduces Lambda_n(ka) to 5e-16). With CONSTANT-material shells the truncation DtN
+     is TRANSCENDENTAL (Bessel) in z, so it has NO finite-pole time domain by itself; a crude lossy
+     stack beats bare PEC truncation (tuning the shells = Sugahara's fsolve). => the finite-state time
+     domain requires RATIONALIZATION.
+ (C) TIME-DOMAIN IABC = a reduced M-pole rational DtN  Lambda^(M)_n(z)=iz-1+sum_{j<=M} r_j/(z-p_j)
+     fitted over a band (poles = the M exact poles nearest the real axis = least-damped/band-dominant;
+     residues by linear LS => always STABLE, Im p_j<0). Band error DECREASES monotonically with M and
+     -> 0 at M=n (n=5 band kR in [0.5,6]: M=1->2.2, 2->0.36, 3->0.035, 4->1.9e-3, 5->3.5e-15). The
+     M auxiliary ODEs psi_j'=-i p_j psi_j - i r_j u, g=-u'-u+sum psi_j reproduce it by transient
+     integration (1.7e-10). => the high-frequency IABC HAS a finite time-domain representation = a
+     low-order analog (pole) filter, M auxiliary ODEs per surface mode.
+ (D) DtN COST-ACCURACY datasheet: band DtN error vs M (= #poles = #auxiliary ODEs/mode = the cost),
+     exact at M=n. STRUCTURAL cost (NOT wall-clock): time-domain FEM-BEM = exact DtN but dense Gamma x
+     Gamma + global temporal convolution (~O(N_Gamma^2)/step + history); exact local NRBC = n aux ODEs
+     /degree-n; TIME-DOMAIN IABC = M(<n) aux ODEs/mode, LOCAL in time + SPARSE in space (a few FE shell
+     layers, no dense matrix, no history) -> cheapest, controlled DtN error. The DtN spectrum is the
+     common yardstick for the cost-superiority claim.
+PRIOR ART (cite, not claim): exact local-in-time sphere-DtN pole realization = Grote-Keller 1995/96;
+rational/Pade/vector-fitting of NRBC kernels = Alpert-Greengard-Hagstrom 2000 + vector-fitting lit.
+Defensible-new = the IABC reading + the static-to-high-frequency DtN cost-accuracy datasheet in the
+SA/Kelvin context, with FEM-BEM as the cited exact-but-expensive reference. The reduced fit here uses
+exact-pole subsets (clean & verifiable); a free-pole vector fit could do better per M (noted, not
+claimed). Cost comparison is STRUCTURAL (state dimension / locality / sparsity), not benchmarked.
+
+PARABOLIC (eddy-current / magnetic-diffusion) TIME-DOMAIN IABC -- the SA-NATIVE regime (demo_xx,
+VERIFIED 2026-06-15; user picked "(a)" = the diffusion version after the wave case demo_ww). This
+completes development-direction D's parabolic branch. PHYSICS (important, SA-correct): in an
+eddy-current (magneto-quasistatic) problem the EXTERIOR AIR is non-conducting -> instantaneously
+Laplace (the static ladder, demo_vv), NO time dynamics. A genuinely PARABOLIC truncation DtN appears
+where the adjacent region is a CONDUCTOR (tank/core/shield skin effect = SIBC / the open boundary of a
+diffusive region). Per spherical-harmonic mode n, the exterior modified-Helmholtz decaying solution is
+K_{n+1/2}(gamma r), gamma=sqrt(s*mu*sigma), giving
+   Lambda_n(s) = -a*gamma*K_{n-1/2}(gamma a)/K_{n+1/2}(gamma a) - (n+1).
+VERIFIED (all asserted):
+ (A) it INTERPOLATES the two regimes: s->0 (DC/thick skin) -> -(n+1) (the STATIC multipole ladder,
+     1e-12) ; s->inf (high freq/thin skin) -> -a*gamma = -a*sqrt(s*mu*sigma) (the sqrt(s) SIBC, 1.1e-2).
+     One per-mode operator bridging the DC multipole ladder and the skin-effect surface impedance.
+ (B) sqrt(s) is a BRANCH CUT at s=0 (infinite memory; t^{-3/2}/t^{-1/2} kernel), NOT rational: a
+     finite-pole fit error FLOORS algebraically (M=2..32 -> 0.14..4.9e-3, never ~1e-15). THE KEY
+     CONTRAST vs the WAVE DtN (demo_ww, rational, finite n poles, EXACT at M=n): magnetic diffusion has
+     no finite exact pole set -- its DtN spectrum literally shows the diffusion memory.
+ (C) TIME-DOMAIN IABC = a Foster M-pole fit d + sum r_j s/(s+p_j) (real poles p_j>0 = passive RL
+     ladder) over a frequency band: stable; band error decreases OVERALL with M (not step-monotone --
+     the simple fixed-log-pole fit is sub-optimal; a vector-fit would be monotone/better). The M
+     auxiliary ODEs psi_j'=p_j(u-psi_j), g=(d+sum r_j)u - sum r_j psi_j reproduce it by transient
+     integration (3.8e-9) = a recursive-convolution / RL-ladder realization.
+ (D) cost-accuracy datasheet: band rel.err vs M (=#poles=#aux ODEs/mode). Structural cost: time-domain
+     FEM-BEM = the EXACT diffusion DtN (dense Gamma + FULL t^{-1/2} history convolution) = most
+     accurate, costliest; parabolic IABC = M aux ODEs/mode, local+sparse = cheap, band-limited.
+PRIOR ART (cite, not claim): the sqrt(s*mu*sigma) SIBC + Foster/Cauer + recursive-convolution
+time-domain realization is the eddy-current SIBC literature -- Valdivieso-Meunier-Ramdane-Gyselinck
+(IEEE T-Magn 2020, Foster networks + recursive convolution) and time-domain SIBC (Yuferev & Ida) --
+but for INTERIOR material / conductor truncation. Defensible-new = the per-mode DIFFUSION DtN SPECTRUM
+(static-ladder <-> sqrt(s) SIBC interpolation) read as an open-boundary IABC + the cost datasheet + the
+wave(finite-pole)-vs-diffusion(branch-cut) contrast, in the SA/Kelvin context. Cost STRUCTURAL, not
+wall-clock. ARC NOW CLOSED: demo_uu (exact = Bessel pole net) -> demo_vv (static IABC, elegant closed
+form) -> demo_ww (high-freq/wave IABC = reduced rational, finite poles) -> demo_xx (eddy-current/
+diffusion IABC = Foster ladder, branch cut). NEXT (deferred): harden the cost claim with a real
+time-domain FE solve (M-aux-ODE boundary vs large-truncation/FEM-BEM reference), and a free-pole
+vector fit for monotone optimal M.
+
+LOW FREQUENCY = KELVIN IS THE ONE CHOICE (vs IABC) -- verified head-to-head (demo_yy, 2026-06-15;
+user strategic call: "for low frequency, Kelvin alone is fine"). This SHARPENS the positioning and
+demotes the practical value of the static-IABC direction. At low frequency (static/quasi-static,
+exterior air = Laplace) Kelvin dominates IABC on every axis:
+  - modes matched: Kelvin ALL (exact ladder -(n+1)/R, every mode) vs IABC only N (optimized).
+  - parameters: Kelvin 0 (parameter-free) vs IABC N (a stiff fit).
+  - conditioning: VERIFIED -- the IABC AMPLITUDE-transfer condition number grows ~1.5 decades PER
+    SHELL (N=2..6: 2.6e1, 2.6e2, 6.9e3, 3.3e5, 2.4e7) -> this IS why Meeker's notebook needs
+    WorkingPrecision->1000. (The demo_vv scalar continued-fraction recursion stays well-conditioned
+    = exact in float64, so OUR reformulation fixes the conditioning; but Kelvin needs NO system at
+    all.) Kelvin is well-conditioned (demo_pp) and carries exterior material (demo_rr); IABC has the
+    isotropy obstruction.
+  CONSEQUENCE for the paper: the static-IABC closed form (novelty-map direction A) is a THEORETICAL /
+  unifying result (it EXPLAINS and supersedes Meeker's ill-conditioned optimization, and gives the
+  DtN/transformer reframing) -- NOT a recommendation to use IABC at low frequency. IABC's PRACTICAL
+  value is (i) codes that cannot do the Kelvin map (isotropic shells, no special elements), and
+  (ii) the TIME-DOMAIN / high-frequency / eddy-current regime (demo_ww / demo_xx), where the
+  extended-Kelvin radiation boundary needs the "uncool" centre-PML (IEICE 2024 U1/U2/U3) and a
+  reduced-order pole / Foster IABC competes. So: low-freq story = Kelvin (the Hachinohe paper spine);
+  IABC = the time-domain/high-freq complement, with FEM-BEM as the exact reference.
+
+HIGH-FREQUENCY IABC RE-EXAMINED -- and a CORRECTION to demo_ww (demo_zz, VERIFIED 2026-06-15; user:
+"review the high-frequency IABC a bit more"). Reading Sugahara's actual high-freq formulation
+(cf_b.m / ref1.m / sp_bessel.m) shows demo_ww OVER-SIMPLIFIED it. THE ACTUAL high-frequency IABC:
+ * FULL VECTOR EM (Mie): per mode n, TWO polarizations (an epsilon-mode and a mu-mode) propagated by
+   RICCATI-BESSEL transfer matrices; each shell carries COMPLEX epsilon AND COMPLEX mu (4 real DOF
+   /shell), with the radiation condition (outgoing Hankel) built in and a PEC termination -- a
+   discrete, mode-matched METAMATERIAL absorber, NOT a single isotropic index.
+ * the 4 DOF/shell are OPTIMIZED per frequency to null the outgoing-wave reflection for the matched
+   modes. (Verified: an independent Python re-optimization from generic seeds -- NOT reading
+   Sugahara's data -- nulls both polarizations to ~1e-16 and reproduces the known optima, e.g.
+   omega=5: eps=0.104+0.474j, mu=0.047-1.931j.)
+ FINDINGS (all asserted, self-contained):
+  (B) NARROWBAND: a shell optimized at omega0 has ~0 reflection at omega0 but it RISES quickly off
+      omega0 (design@5 -> |ref| 0.07 at +/-10%, 0.14 at +/-20%, 0.3 at -40%). => a TIME-DOMAIN
+      version needs FREQUENCY-DEPENDENT (dispersive) shells, not constant materials.
+  (C) TIME-DOMAIN OBSTRUCTION (the real result): the optimal shell has Im(eps)>0 while Im(mu)<0
+      (opposite signs, product<0, across omega=2/5/8). A single PASSIVE dispersive medium needs both
+      imaginary parts the SAME sign; so the per-frequency-optimal IABC shell is NON-PASSIVE (one
+      parameter is gain-like) -> a naive passive dispersive (Debye/Lorentz ADE / recursive-
+      convolution) time-domain realization is NOT directly possible (stability risk). The honest
+      time-domain high-frequency IABC needs a PASSIVITY-CONSTRAINED redesign = a genuine OPEN PROBLEM.
+ CORRECTION TO demo_ww: its "reduced M-pole rational DtN = the time-domain IABC" is a valid generic
+ MODEL REDUCTION of the TARGET (exact Grote-Keller) DtN and the cost-accuracy datasheet stands AS
+ SUCH; but it is NOT the IABC's own (narrowband, non-passive) materials. demo_zz is the faithful
+ picture. NET time-domain map: LOW-FREQ = Kelvin exact/parameter-free (demo_yy); EDDY-CURRENT/
+ DIFFUSION = passive sqrt(s) SIBC, Foster-realizable (demo_xx, clean); HIGH-FREQ WAVE IABC = hard
+ (non-passive optimal materials, demo_zz). BOUNDARY: demo_zz ports only the published analytic method
+ (Meeker 2013/2014; Sugahara PIERS 2016) and re-derives the materials; it does NOT read or embed the
+ internal Femtet-folder optimization tables.
+
+WIDEBAND high-frequency IABC via WLS + width -- RESOLVES the demo_zz obstruction (demo_wb, VERIFIED
+2026-06-15; user: "build it with WLS; the IABC width can be controlled -> wideband?"). demo_zz showed
+that EXACT reflection-null at one omega forces NARROWBAND + NON-PASSIVE (Im(eps)>0) materials -> no
+clean dispersive time domain. Following the user's two ideas removes both problems:
+  * WLS (weighted least squares over a frequency BAND via scipy least_squares) instead of exact-null;
+  * PASSIVITY as box bounds (Im(eps),Im(mu)<=0) + SHELL WIDTH / number as DOF.
+VERIFIED (matched eps=mu shells, band kR in [2,8], all asserted, self-contained -- ports only the
+published Mie/IABC method, re-derives materials):
+  (A) recap: exact-null @omega=5 is non-passive (Im(eps)=+0.47).
+  (B) WLS + passivity -> a PASSIVE (Im=-0.27) CONSTANT matched shell (width 3): band-max |ref|=0.087
+      over the 4:1 band; band profile [0.087,0.032,0.016,0.0095,0.0065,0.0048,0.0036] -> most of the
+      band <1%, only the LOW EDGE limits it.
+  (C) WIDTH is the lever (user's point): at FIXED passive material the low-edge (kR=2) reflection
+      drops MONOTONICALLY with width -- 0.54,0.25,0.11,0.087,0.048 for d=0.5..4 -- exactly the
+      round-trip attenuation exp(-2 omega |Im n| d). (Full WLS also treats width as a DOF; that joint
+      landscape is non-convex, so band-max is not a simple monotone function of width.)
+  (D) GRADED passive layers push the upper band to <1%.
+KEY POINT: the wideband design uses CONSTANT, PASSIVE materials -> NO dispersion needed -> the
+time-domain realization is TRIVIAL and STABLE (a plain lossy shell; no ADE / recursive convolution /
+passivity violation). The price is a small (~1-9%), non-zero band reflection (vs exact-null's 0 at one
+omega), with the low-frequency edge set by total width. So the HIGH-FREQUENCY IABC DOES get a usable
+time-domain form -- by WLS-designing a passive wideband absorber up front, NOT by realizing the
+narrowband non-passive optimum dispersively. PRIOR ART: matched/graded (Jaumann) wideband absorbers +
+Chebyshev/LS multilayer design are classical (Collin; Orfanidi); the contribution is applying
+WLS+width+passivity to the IABC truncation. UPDATED time-domain map: low-freq=Kelvin (exact, demo_yy);
+eddy-current/diffusion=passive sqrt(s) SIBC Foster ladder (demo_xx); HIGH-FREQ wave IABC=WLS wideband
+passive constant shells (demo_wb) -- the demo_zz "hard/non-passive" verdict applies only to the
+exact-null route, NOT to the WLS-wideband route, which is clean.
+
+URN (UNIVERSAL RELAXATION NETWORK) as the time-domain REALIZATION layer -- integration assessment
+(VERIFIED 2026-06-15; user pointed to the existing impl examples/universal_relaxation_network, IEEE
+Access paper). WHAT URN IS: a KAN-inspired fitter that represents a complex frequency response Z(omega)
+as a SPARSE sum of CIRCUIT-COMPATIBLE PASSIVE basis functions (Debye, Cole-Cole/Davidson, Havriliak-
+Negami, CPE, Warburg=1/sqrt(jw), skin-effect~sqrt(jw), RLC resonance, viscoelastic), each with a direct
+RLC-ladder / SPICE equivalent (generate_spice_netlist) -> the fit IS a passive, causal, time-domain
+realization. L1-sparse model selection + frequency-attention; benchmarked vs vector fitting; validated
+on NASA-battery EIS and TDK-ferrite mu(omega). API: train_urn(freqs, Z_data, config)->model.
+ROLE FOR US: the passive, circuit/SPICE-realizable TIME-DOMAIN realization layer for dispersive
+frequency responses -- the answer to "the explicit frequency dependence is fine, can URN handle it?".
+VERIFIED (torch 2.11 in the worktree):
+  * URN runs on our targets. Fast-config (1200-1500 epochs) fits are MODERATE: the eddy-current/
+    diffusion per-mode DtN ~6.5% mean (it GROWS like sqrt(jw), awkward for mostly-bounded relaxation
+    bases -- skin-effect is the matching grower), and the shell mu(omega) ~9% mean (sharp Im(mu)=-10.6
+    resonance near w~1). A full config (6000 epochs, attention, more bases) or an asymptote-subtracted
+    (DtN minus its -(n+1) static and -a*sqrt(jw mu sig) SIBC terms -> bounded correction) target would
+    fit far better; not yet done.
+  * KEY (confirms demo_zz FROM THE REALIZATION SIDE): URN's bases are PASSIVE, and the exact-null
+    high-freq shell has Im(eps) in [+0.04,+1.04] (NON-passive) while Im(mu) in [-10.6,-0.85] (passive).
+    So NO passive URN model can realize the exact-null shell -- the demo_zz obstruction, seen again.
+    URN realizes the PASSIVE responses: the magnetic mu(omega), the demo_wb WLS-wideband design, and
+    (natively, via Warburg/skin = sqrt(jw)) the eddy-current/diffusion DtN/SIBC of demo_xx.
+NET: the clean time-domain high-freq path = WLS-wideband PASSIVE design (demo_wb) realized as a circuit
+by URN; the dispersive route needs PASSIVE materials (URN's domain), which the exact-null optimum is
+not. BOUNDARY: URN lives in the public Radia repo (examples/), not the commercial converters -- fine to
+use/cite; it is the user's own method. NEXT (deferred, user's call): push URN to a tight (<~2%) circuit
+fit on a chosen PASSIVE target (asymptote-subtracted diffusion DtN is the best showcase: Warburg/skin =
+sqrt(jw) is native), then emit the SPICE/ADE for an actual time-domain run.
+
+PASSIVE DISPERSIVE (URN/Debye) SHELL = the time-domain IABC, and it BEATS the constant shell
+(demo_wc, VERIFIED 2026-06-15; user: "jointly optimize {URN fit + layer thickness + complex eps,mu}
+to derive the time-domain IABC -- is the Hankel continued-fraction expansion needed?"). This closes
+the loop demo_wb->URN by actually DOING the joint optimization, and it OVERTURNS demo_wb's "constant,
+no dispersion" verdict. Setup: one MATCHED spherical shell (eps=mu=m => planar Z=1 for all omega),
+inner a=1, thickness d, PEC-backed, mode n=1; reflection by Riccati-Bessel transfer matrices (the
+generic published Mie method, no internal data). Material in the URN passive-relaxation basis
+m(w)=einf + sigma/(jw) + sum_k dEps_k/(1+jw tau_k), all params>=0 => Im(m)<=0 (passive) and each term
+is a local-in-time ODE (einf instantaneous; sigma Ohmic dD/dt=sigma E; Debye tau dP/dt+P=dEps E).
+Joint WLS (least_squares) over the band minimizes band-max |reflection| in {einf,sigma,(dEps,tau)_k,d}.
+VERIFIED (band kR in [2,8], 4:1):
+  * (1) PASSIVITY: the fitted +1-Debye m(w) has Im<=0 at every band sample (max Im -9.9e-1), Re>0.
+  * (2) CAUSAL BEATS ACAUSAL: passive +1-Debye band-max |ref| = 0.0042 vs the best ACAUSAL "constant
+    complex" shell (m=a-j b; constant Im violates Kramers-Kronig => not a real time-domain material)
+    0.0417 -> 9.9x BETTER. On the wider band [1,12]: 0.0225 vs 0.1416 (~6x). Dispersion is NOT a tax
+    for going to the time domain; it HELPS. (This corrects the demo_wb headline that constant passive
+    was the practical time-domain shell at ~8.7%: a passive DISPERSIVE shell is both realizable AND
+    ~6-13x more accurate. The earlier probe that found "dispersion doesn't help" was an OPTIMIZATION
+    ARTIFACT -- it carried a redundant acausal constant-Im term that trapped the optimizer near the
+    constant solution with sigma->0; removing it and using a purely-passive parametrization flips it.)
+  * (3) THE RELAXATION POLE IS THE ACTIVE INGREDIENT: einf+sigma/(jw) ALONE (a conductor/Drude term,
+    NO relaxation pole) is WORSE than constant (0.0765 > 0.0417); adding ONE Debye pole flips it to
+    0.0042. The win is the relaxation SHAPE -- exactly the URN basis, not mere conductivity.
+  * (4) TIME-DOMAIN REALIZATION CHECK: the Debye auxiliary ODE tau dP/dt+P=dEps E, integrated from
+    rest under a steady tone E=e^{jwt} for 60 tau, reproduces the susceptibility dEps/(1+jw tau) to
+    rel.err 2.4e-11, with stable rate 1/tau>0. => the optimized shell is a ready-to-run ADE/FETD
+    material; no recursive convolution, no instability.
+  * (5) HANKEL CONTINUED FRACTION -- NEEDED? NO for the lossy IABC. The EXACT LOSSLESS exterior DtN is
+    a FINITE rational function whose poles are the zeros of h_n^{(1)} (reverse-Bessel/Bessel-filter,
+    demo_uu); its partial fraction == the Hankel continued fraction (n=1: Lambda_1=i z-1+z0/(z-z0),
+    z0=-i, matched scipy to 1.8e-15). That is the exact lossless-radiation reference. The LOSSY
+    wideband IABC does NOT expand it -- it fits a low-order passive relaxation model to the per-mode
+    reflection instead. So the Hankel CF is the reference target, not a required ingredient.
+NET (final time-domain map): LOW-FREQ = Kelvin, exact & parameter-free (demo_yy). EDDY-CURRENT/
+DIFFUSION = passive sqrt(s) SIBC, Foster/URN-Warburg realizable (demo_xx). HIGH-FREQ WAVE = a passive
+DISPERSIVE matched shell (URN/Debye), jointly optimized with thickness over the band: passive, causal,
+ADE-trivial, and ~6-13x better than the constant shell (demo_wc) -- this is the practical time-domain
+high-freq IABC. The exact lossless route (Hankel CF / Grote-Keller finite-pole, demo_uu) remains the
+parameter-free reference for the loss-free radiation DtN. BOUNDARY: ports only the published Mie/ADE/
+Debye-PML analytic method; no internal optimization tables embedded.
+
+LOW-FREQUENCY 4-WAY HEAD-TO-HEAD: Kelvin vs BEM vs PML vs ballooning, cost x accuracy on the DtN
+spectrum (demo_lf4, VERIFIED 2026-06-15; user: "first, let's do the low-frequency Kelvin -- Kelvin vs
+other methods benchmark"). The additive low-freq 4-way the prior demos lacked: they are pairwise
+(Kelvin-vs-BEM cost demo_k; accuracy demo_n/demo_s; PML radial conditioning demo_pp) and the 3-way
+demo_nn is HIGH freq (ka=4). Here all meet on ONE static yardstick (exterior Laplace, exact ladder
+Lambda_n=-(n+1)/R) and ONE physical apparatus (permeable sphere in a uniform field). Ballooning/
+infinite-elements were ABSENT from the whole tree; a minimal truncation/finite-reach wall is built and
+characterized honestly. All numbers from a pure numpy/scipy/sympy core + a guarded real-3D NGSolve
+cost block; 20/20 asserts green; the 3 central derivations independently re-derived by an adversarial
+panel (truncation closed form, energy-quotient Kelvin DtN, permeable-sphere physics -- all confirmed).
+THE FOUR CLOSURES at low frequency (a=1, reference -(n+1)):
+  * [A] ACCURACY (per-mode DtN, n=0..4): KELVIN holds EVERY mode to <1% (energy-quotient
+    lambda=-(d-2)/a - <|grad v*|^2>/<v*^2>, v*=solid-harmonic image = degree-n polynomial -> order>=n
+    exact; radial value matches the production 3D kelvin_dtn_eigenvalue: -2.0000 vs -2.0028; with
+    MULTIPLE MESHES the real 3D Kelvin DtN error drops monotonically ~3-4x/level for EVERY zonal mode
+    -- n=1: 3.3e-5->7.2e-6->1.3e-6, n=2: 3.9e-5->1.0e-5->3.5e-6, n=3: 4.4e-5->1.1e-5->2.0e-6 at maxh
+    0.5->0.35->0.25 order 5 = h-convergence to the curved-sphere geometry floor, Kameari's 5-6 digits).
+    GEOMETRY-FLOOR LEVER (Kelvin CAN be made far more accurate): the floor is the curved-sphere
+    isoparametric (Curve) order, which kelvin_dtn_eigenvalue CAPS at Curve(min(order+1,3)). Lifting it
+    drops the DtN error ~30x/geometry-order -- at maxh 0.4, FE order 6: Curve 3 (default) ~0.8-1.7e-5 ->
+    Curve 4 ~1-4e-7 -> Curve 5 ~1.3-4.7e-8 (n=1..3); with Curve 5 + maxh 0.25 the dipole reaches 8.4e-10.
+    So with resolved geometry Kelvin is the MOST accurate of the four closures (3-4 orders below BEM/PML),
+    not just competitive -- the open-boundary error is geometry-limited (cf. floor_vs_curve), not a
+    method ceiling. PML holds every mode to <1% (no DtN-accuracy breakdown, confirming demo_pp). The two CHEAP approximate
+    closures fail at OPPOSITE ENDS: the TRUNCATION/air-box wall at reach R fails the LOW (slow-decaying)
+    modes -- closed form Lambda_n^trunc=[n+(n+1)C]/[1-C], C=(R/a)^{2n+1}, |error|=(2n+1)/(C-1) ~
+    (2n+1)(a/R)^{2n+1}, LARGEST at the monopole (~a/R) and dipole (~3(a/R)^3) and DECREASING with n
+    (high modes decay before the wall; radial FE matches the closed form to 4e-4); ASYMPTOTIC-ROBIN
+    lambda=-1/a fails the HIGH modes -- relative error n/(n+1), 0 at n=0, GROWING with n. So Kelvin and
+    PML hold BOTH spectral ends; truncation and Robin each hold only one.
+  * [B] CONDITIONING (freq robustness): cond(PML) grows toward DC (3.2e4@ka=1 -> 2.8e5@ka=0.05, the
+    s=1+i sigma/k blow-up) while cond(Kelvin) is flat (spread 1.30) -- the real low-freq PML cost
+    (a wave-absorber mis-applied to a static problem); reproduces demo_pp.
+  * [C] COST/SPARSITY: the volume/shell closures (Kelvin, PML, ballooning) give SPARSE matrices,
+    nnz~O(N) (fitted exponent 1.00 in 1D; real 3D Kelvin H1 nnz/row ~20, exponent 1.10 over ndof
+    278->1813); the boundary DtN operator (BEM) is DENSE, nnz=N^2 (exponent 2). Absolute timings in
+    demo_k (Kelvin ms vs BEM seconds->minutes). Comparison is at matched accuracy / via the scaling
+    EXPONENT (the methods pay DOF on different objects: Kelvin/ballooning volume, BEM surface, PML
+    absorber-shell), not at equal ndof.
+  * [D] PHYSICAL APPARATUS: a linearly-permeable sphere (mu_r) in a uniform field H0 z has interior
+    B_in=3 mu_r/(mu_r+2) B0 and a PURE DIPOLE exterior m=a^3 H0 (mu_r-1)/(mu_r+2) (sympy-derived from
+    potential + normal-B matching; mu_r->inf: m->a^3 H0, B_in/B0->3; mu_r->1: m->0). Because the
+    exterior is a SINGLE mode n=1, each closure's n=1 DtN error directly sets its recovered-dipole
+    error: Kelvin exact (3e-13), truncation ~1.5(a/R)^3 rel (R=3:5.8%, R=6:0.7%), Robin 50% wrong.
+VERDICT (the SA-paper headline): at low/quasi-static frequency Kelvin is the EXACT, PARAMETER-FREE,
+frequency-robust, sparse, material-capable open boundary -- the one closure accurate across the WHOLE
+DtN spectrum; BEM is equally exact but dense (O(N^2)); PML is accurate but ill-conditioned at DC and
+needs sigma/d tuning; truncation/ballooning is sparse and cheap but finite-reach (push R out, or use
+infinite elements = approach Kelvin). Prior art: Brunotte-Meunier-Imhoff 1992 / Nabizadeh-Ramamoorthi-
+Chern 2021 (Kelvin ladder), Silvester-Hsieh 1971 / Bettess (ballooning/infinite elements), Berenger /
+Collino-Monk (PML), Jackson (permeable sphere). New angle: the unified low-freq 4-way cost x accuracy
+ON the DtN spectrum + the single-apparatus tie-in. Ports only published analytic method; no internal
+data embedded.
 """
 
 
