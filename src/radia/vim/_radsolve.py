@@ -109,11 +109,13 @@ def dispatch(top, *solve_args, **solve_kwargs):
     import ngsolve
     from ._solve import hdiv_demag_solve
 
+    # IMA mirror symmetry: rad.Solve(image='+x-z', ...).  The image string may arrive as a kwarg or as
+    # the 5th positional arg (rad.Solve(obj, prec, maxiter, method, image)).  It folds the mirror-image
+    # charge interactions into the demag (radia.vim image-charge Gram), so the registered mesh is the
+    # REDUCED (1/2, 1/4, 1/8) model and the solve reproduces the full model (currently the DENSE path).
     image = solve_kwargs.pop("image", None)
-    if image:
-        raise NotImplementedError(
-            "rad.Solve(image=...) / IMA symmetry is not supported by the FEEC HDiv-VIM dispatch yet; "
-            "solve the full mesh or call hdiv_demag_solve directly.")
+    if image is None and len(solve_args) >= 4 and solve_args[3]:
+        image = solve_args[3]
     if solve_kwargs:
         raise TypeError(f"unsupported rad.Solve keyword(s) for HDiv-VIM dispatch: {sorted(solve_kwargs)}")
 
@@ -127,7 +129,7 @@ def dispatch(top, *solve_args, **solve_kwargs):
     else:
         H_ext = ngsolve.CoefficientFunction((0.0, 0.0, 0.0))
 
-    res = hdiv_demag_solve(mesh, mu_r=reg["mu_r"], H_ext=H_ext, bh_table=reg["bh_table"])
+    res = hdiv_demag_solve(mesh, mu_r=reg["mu_r"], H_ext=H_ext, bh_table=reg["bh_table"], image=image)
 
     M = res["M"]
     handles = reg["handles"]

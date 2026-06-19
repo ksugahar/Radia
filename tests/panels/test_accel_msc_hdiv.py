@@ -119,14 +119,21 @@ def test_hdiv_rejects_multimaterial(tmp_path, coil_script):
     assert "iron-only" in r["error"].lower()
 
 
-def test_hdiv_rejects_ima(tmp_path, coil_script):
-    """demag_backend='hdiv' with an IMA symmetry string -> clean error (symmetry not supported yet)."""
+def test_hdiv_ima_runs(tmp_path, coil_script):
+    """demag_backend='hdiv' with an IMA image string now RUNS via the image-charge Gram (the panel passes
+    it through to the HDiv-VIM).  Uses a HALF yoke (z>0) + image='-z' -- a valid reduced model.  The IMA
+    physics (reduced+IMA == full) itself is locked in tests/feec/test_hdiv_vim_ima.py."""
     from calc_accel_msc import solve_msc
-    vol = _iron_only_yoke_vol(tmp_path / "yoke.vol")
-    r = solve_msc(coil_script=coil_script, vol_file=vol, mat=_linear_mat(),
-                  demag_backend="hdiv", ima="+x-z", solver=0, tol=1e-6, max_iter=400)
-    assert "error" in r, r
-    assert "ima" in r["error"].lower()
+    p = tmp_path / "half_yoke.vol"
+    mp = lambda x, y, z: (L * (x - 0.5), L * (y - 0.5), 0.5 * L * z)   # [-L/2,L/2]^2 x [0,L/2] half  # noqa: E731
+    with ng.TaskManager():
+        m = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=2, mapping=mp)
+    m.ngmesh.SetMaterial(1, "yoke")
+    m.ngmesh.Save(str(p))
+    r = solve_msc(coil_script=coil_script, vol_file=str(p), mat=_linear_mat(),
+                  demag_backend="hdiv", ima="-z", solver=0, tol=1e-7, max_iter=800)
+    assert "error" not in r, r
+    assert r["converged"] and r["ima"] == "-z"
 
 
 if __name__ == "__main__":
