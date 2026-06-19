@@ -59,13 +59,24 @@ def test_radsolve_hdiv_equals_direct():
     rad.UtiDelAll()
 
 
-def test_radsolve_hdiv_rejects_image_symmetry():
-    """Registered HDiv-VIM dispatch must not silently ignore rad.Solve(image=...) / IMA symmetry."""
+def test_radsolve_hdiv_image_passed_through():
+    """rad.Solve(..., image='-z') on a registered iron routes the IMA image string into the HDiv-VIM
+    (== a direct hdiv_demag_solve(image='-z')), i.e. the dispatch passes image through (it no longer
+    rejects it).  The IMA physics itself (reduced+IMA == full) is locked in test_hdiv_vim_ima.py."""
+    from ngsolve.meshes import MakeStructured3DMesh
     rad.UtiDelAll()
-    mesh = _tet_cube_mesh()
-    iron = vim.soft_iron_from_mesh(mesh, mu_r=MU_R)
-    with pytest.raises(NotImplementedError, match="IMA symmetry"):
-        rad.Solve(iron, 1e-6, 100, 0, image="x")
+    mp = lambda x, y, z: (L * (x - 0.5), L * (y - 0.5), 0.5 * L * z)   # [-L/2,L/2]^2 x [0,L/2] half
+    with ng.TaskManager():
+        half = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=2, mapping=mp)
+        direct = vim.hdiv_demag_solve(half, mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)),
+                                      image="-z", scalable=False)
+    iron = vim.soft_iron_from_mesh(half, mu_r=MU_R)
+    bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
+    cont = rad.ObjCnt([iron, bkg])
+    with ng.TaskManager():
+        res = rad.Solve(cont, 1e-6, 1000, 0, image="-z")     # image as 5th positional arg
+    rel = abs(res["M_avg"][2] - direct["M_avg"][2]) / abs(direct["M_avg"][2])
+    assert rel < 1e-6, f"rad.Solve(image=) M_avg {res['M_avg'][2]:.2f} != direct {direct['M_avg'][2]:.2f} (rel {rel:.2e})"
     rad.UtiDelAll()
 
 
