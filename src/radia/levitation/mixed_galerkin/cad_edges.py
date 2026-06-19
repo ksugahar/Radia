@@ -45,6 +45,15 @@ def _edge_midpoint(edge) -> np.ndarray:
     return _vec(verts[0].p) if verts else np.zeros(3)
 
 
+def _edge_endpoints(edge):
+    """Return (p0, p1) endpoint coordinates of a (straight) edge."""
+    verts = list(edge.vertices)
+    if len(verts) >= 2:
+        return _vec(verts[0].p), _vec(verts[-1].p)
+    p = _vec(verts[0].p) if verts else np.zeros(3)
+    return p, p
+
+
 def _face_normal_at(face, point) -> np.ndarray:
     verts = list(face.vertices)
     if len(verts) < 3:
@@ -128,6 +137,7 @@ def cad_topology_edges(shape) -> list[dict]:
     for ei, e in enumerate(edges):
         L_e = _edge_length(e)
         mid = _edge_midpoint(e)
+        p0, p1 = _edge_endpoints(e)
 
         e_keys = edge_vert_keys[ei]
         adj = []
@@ -140,6 +150,8 @@ def cad_topology_edges(shape) -> list[dict]:
                 "length": L_e,
                 "dihedral": math.pi,
                 "midpoint": mid.tolist(),
+                "p0": p0.tolist(),
+                "p1": p1.tolist(),
                 "adjacent_faces": adj,
                 "degenerate": True,
             })
@@ -159,10 +171,91 @@ def cad_topology_edges(shape) -> list[dict]:
             "length": L_e,
             "dihedral": dihedral,
             "midpoint": mid.tolist(),
+            "p0": p0.tolist(),
+            "p1": p1.tolist(),
             "adjacent_faces": adj,
             "degenerate": False,
         })
     return info
+
+
+def cad_topology_faces(shape) -> list[dict]:
+    """Return one dict per CAD face with exact area + outward normal + center.
+
+    Each dict: `{'face_idx', 'area', 'normal', 'center'}` (normal oriented
+    outward from the body centroid).  This is the per-face partition of the
+    wetted surface used by the multi-port SIBC envelope: for a polyhedron the
+    flat faces are disjoint, so the partition-of-unity weights theta_f are
+    face indicators and the surface integral
+
+        K_geom[p,q] = integral_{dOmega} f_p f_q dS
+
+    decomposes as the plain per-face sum sum_F integral_F f_p f_q dS (the
+    `alpha.surface_moment_matrix` boundary integral).  Curved bodies tiled
+    with OVERLAPPING patches need genuine theta_f weights (Paper 1 SIII.B
+    partition-of-unity SIBC); that smooth-surface extension is not yet
+    verified here -- this function gives the verified flat-face partition.
+    """
+    faces = list(shape.faces)
+    if not faces:
+        return []
+    centers = [_vec(f.center) for f in faces]
+    body_center = np.mean(centers, axis=0)
+    normals_raw = [_face_normal_at(f, c) for f, c in zip(faces, centers)]
+    normals = _orient_outward(normals_raw, centers, body_center)
+    out = []
+    for fi, f in enumerate(faces):
+        out.append({
+            "face_idx": fi,
+            "area": float(f.mass),
+            "normal": normals[fi].tolist(),
+            "center": centers[fi].tolist(),
+        })
+    return out
+
+
+def edge_moment_matrix(shape, drive_fns, mu) -> np.ndarray:
+    """Matrix (multi-port) edge coefficient C1[p,q] (CAD-direct, mesh-free).
+
+        C1[p,q] = -(1/mu) sum_e W(alpha_e) * integral_e f_p(x) f_q(x) dl
+
+    the matrix generalization of `cad_topology_c1` (the scalar c_1 Mellin
+    edge coefficient).  `drive_fns` is the list of P port functions as
+    callables R^3 -> R (numpy 3-vector in); they must be the SAME ports used
+    for the bulk residue (`alpha.bulk_foster_matrix_via_eigen`) and the
+    surface moment (`alpha.surface_moment_matrix`), expressed in the global
+    frame.
+
+    For the single monopole drive f=1 this returns [[c1]] identical to
+    `cad_topology_c1(shape, mu)[0]`.  The straight-edge integral of the
+    product of two affine port functions is integrated exactly with a 2-point
+    Gauss rule.
+
+    Returns a symmetric (P, P) ndarray.
+    """
+    edges_info = cad_topology_edges(shape)
+    P = len(drive_fns)
+    C1 = np.zeros((P, P))
+    g = 1.0 / math.sqrt(3.0)            # 2-point Gauss node offset on [-1, 1]
+    for e in edges_info:
+        if e.get("degenerate", False):
+            continue
+        alpha = e["dihedral"]
+        if alpha < 1e-3 or alpha > 2 * math.pi - 1e-3:
+            continue
+        W = (4.0 / math.pi) * (1.0 / math.tan(alpha / 2.0))
+        L_e = e["length"]
+        p0 = np.asarray(e["p0"], dtype=float)
+        p1 = np.asarray(e["p1"], dtype=float)
+        mid = 0.5 * (p0 + p1)
+        half = 0.5 * (p1 - p0)
+        nodes = [mid - g * half, mid + g * half]   # weights L_e/2 each
+        fvals = np.array([[fn(xg) for fn in drive_fns] for xg in nodes])
+        # integral_e f_p f_q dl = (L_e/2) sum_g f_p(x_g) f_q(x_g)
+        moment = (L_e / 2.0) * (np.outer(fvals[0], fvals[0])
+                                + np.outer(fvals[1], fvals[1]))
+        C1 += -W * moment / mu
+    return C1
 
 
 def cad_topology_total_area(shape) -> float:
