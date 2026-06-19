@@ -2607,6 +2607,33 @@ A Zienkiewicz-Zhu estimator + SetRefinementFlag / Refine loop is available
 (topic `adaptive`), but per section 2 the refinement must target the device
 INTERIOR / corners, never the exterior air.
 
+## Measured evidence (reproducible)
+
+Two demos in examples/kelvin_transformation/DtN_spectrum/ reproduce the two
+headline claims on a unit sphere (mode n=2, p=3 >= n, R=1):
+
+`kelvin_exterior_mesh.py` -- refining the exterior VOLUME does not help; only
+the Gamma GEOMETRY does:
+  - AFFINE ball (straight facets, Gamma geometry frozen): the volume solution is
+    the EXACT degree-n polynomial on every mesh -- ||u_h - poly|| = 8.1e-16 ...
+    6.5e-16 across 4 uniform refinements (ne 107 -> 54784, Galerkin-exact at
+    p>=n).  The DtN rel_err that DOES fall (1.3e-2 -> 6.9e-5) is purely the
+    polygonal Gamma approximating the sphere better, NOT the volume density.
+  - CURVED ball: the COARSEST mesh (ne=107) already gives rel_err 1.2e-5 --
+    ~500x fewer elements than the affine ball needs for comparable accuracy --
+    and 1.8e-8 with refinement.  Curving Gamma is the efficient knob; refining
+    the air is not.
+
+`floor_vs_curve.py` -- the 5-6 digit floor IS the Curve (isoparametric
+geometry) order, at FIXED coarse maxh=0.5 and FIXED p>=n; sweeping ONLY the
+Curve order k:
+  - n=2,p=3:  k=1: 1.3e-2,  k=2: 3.8e-4,  k=3: 1.3e-5  (then ~1e-5, saturated)
+  - n=3,p=4:  k=1: 1.5e-2,  k=2: 4.4e-4,  k=3-4: 3.4e-5 / 1.3e-5
+  Raising only k (mesh + p frozen) drops the floor ~3 orders, proving it is
+  curved-geometry error, not a method / multipole limit.  On a COARSE mesh the
+  floor saturates ~1e-5 (k>=3, even slightly non-monotonic) -- push it lower by
+  refining the Gamma SURFACE mesh, not the volume.
+
 ## One-line rule
 
 Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
