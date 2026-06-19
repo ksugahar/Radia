@@ -77,15 +77,32 @@ def fem_layered_dtn(n, mu_s, maxh=0.16, order=3, intorder=10):
     return e / bm
 
 
+N_FAIL = 0
+def check(name, cond, detail=""):
+    global N_FAIL
+    if not cond: N_FAIL += 1
+    print(f"  [{'ok ' if cond else 'FAIL'}] {name}{('  -- ' + detail) if detail else ''}")
+
 print("FEM-Kelvin with MATERIAL in the exterior: body-surface (r=%.1f) DtN." % a)
 print("Inhomogeneous exterior = magnetic shell mu_s in [%.1f,%.1f], vacuum elsewhere.\n" % (b, c))
 print("  mu_s | n | FEM-Kelvin | layered analytic | rel.err | vacuum (n+1)/a")
 print("  -----+---+------------+------------------+---------+---------------")
+rows = []
 for mu_s in (5.0, 20.0):
     for n in (1, 2):
         fem = fem_layered_dtn(n, mu_s); an = analytic_layered_dtn(n, mu_s)
-        print("  %4.0f | %d |  %8.4f  |     %8.4f     | %.1e |   %.3f"
-              % (mu_s, n, fem, an, abs(fem - an) / an, (n + 1) / a))
+        rel = abs(fem - an) / an; vac = (n + 1) / a
+        rows.append((mu_s, n, fem, an, rel, vac))
+        print("  %4.0f | %d |  %8.4f  |     %8.4f     | %.1e |   %.3f" % (mu_s, n, fem, an, rel, vac))
 print("\n-> the exterior magnetic shell shifts the body-surface DtN OFF the vacuum ladder (n+1)/a, and")
 print("   FEM-Kelvin matches the layered-sphere analytic. A free-space-Green BEM cannot represent a")
-print("   material shell in the exterior; the FEM-ized (Kelvin) exterior carries it as a coefficient.")
+print("   material shell in the exterior; the FEM-ized (Kelvin) exterior carries it as a coefficient.\n")
+
+# --- verification (backs manuscript fig:extmat ~1e-4) ---
+worst = max(r[4] for r in rows)
+check("FEM-Kelvin matches the layered-sphere analytic DtN for all (mu_s,n) (rel.err < 5e-4)",
+      worst < 5e-4, f"worst rel.err = {worst:.1e}")
+check("the magnetic shell LIFTS the body-surface DtN above the vacuum ladder (n+1)/a (all cases)",
+      all(r[2] > r[5] + 1e-6 for r in rows),
+      "FEM>vacuum: " + ", ".join(f"mu{r[0]:.0f}n{r[1]}:{r[2]:.3f}>{r[5]:.3f}" for r in rows))
+assert N_FAIL == 0, f"{N_FAIL} checks failed"

@@ -300,40 +300,46 @@ def sphere_shell_analytic_dtn(R_inner=0.5, R_outer=1.0, maxh_vol=0.3,
 
 
 def _solid_harmonic(n):
-    """Zonal solid harmonic h_n = ρ^n P_n(cosθ) as a Cartesian-polynomial CF.
+    """Zonal solid harmonic h_n = ρ^n P_n(cosθ) as a Cartesian-polynomial CF, for
+    ARBITRARY degree n ≥ 0, built by the Legendre recurrence
 
-    Its trace on |x|=R is the degree-n boundary datum (a spherical harmonic), and
-    it is itself the EXACT Kelvin image u* of the exterior mode (a degree-n
-    harmonic polynomial).  Each is verified harmonic (Δ h_n = 0)."""
-    if n == 0:
-        return ng.CoefficientFunction(1.0)
-    if n == 1:
-        return ng_z                                       # Δ z = 0
-    if n == 2:
-        return 2.0 * ng_z * ng_z - ng_x * ng_x - ng_y * ng_y          # Δ = 4−2−2 = 0
-    if n == 3:
-        return ng_z * (2.0 * ng_z * ng_z - 3.0 * ng_x * ng_x - 3.0 * ng_y * ng_y)
-    raise ValueError("zonal solid harmonic implemented for n = 0..3, got %r" % n)
+        (k+1) h_{k+1} = (2k+1) z h_k − k ρ² h_{k−1},   h_0 = 1, h_1 = z, ρ²=x²+y²+z².
+
+    Its trace on |x|=R is the degree-n boundary datum (a spherical harmonic), and it
+    is itself the EXACT Kelvin image u* of the exterior mode r^{−(n+1)}Y_n (a degree-n
+    harmonic polynomial, Δ h_n = 0).  The (Legendre) normalization is immaterial: every
+    consumer here reports a SCALE-INVARIANT quantity (the effective-DtN energy quotient,
+    or a relative error in which the datum and the exact solution share the same h_n).
+    Lifting the former n ≤ 3 cap lets the n=1..9 spectrum be computed from the library."""
+    if n < 0:
+        raise ValueError("solid harmonic degree must be n >= 0, got %r" % n)
+    r2 = ng_x * ng_x + ng_y * ng_y + ng_z * ng_z
+    h = [ng.CoefficientFunction(1.0), ng_z]
+    for k in range(1, n):
+        h.append(((2 * k + 1) * ng_z * h[k] - k * r2 * h[k - 1]) / (k + 1))
+    return h[n]
 
 
 def _solid_harmonic_2d(n):
-    """2D solid harmonic h_n = r^n cos(nθ) as a Cartesian-polynomial CF (Δ h_n = 0).
+    """2D solid harmonic h_n = r^n cos(nθ) as a Cartesian-polynomial CF (Δ h_n = 0),
+    for ARBITRARY n ≥ 0, by the Chebyshev-type recurrence
 
-    The 2D analogue of :func:`_solid_harmonic`: the exact Kelvin image of the
-    exterior mode r^{-n} e^{inθ} under the 2D (circle) inversion -- a degree-n
-    harmonic polynomial.  Used by :func:`kelvin_dtn_eigenvalue` with ``dim=2``."""
-    if n == 0:
-        return ng.CoefficientFunction(1.0)
-    if n == 1:
-        return ng_x                                          # r cosθ
-    if n == 2:
-        return ng_x * ng_x - ng_y * ng_y                     # r² cos2θ
-    if n == 3:
-        return ng_x * (ng_x * ng_x - 3.0 * ng_y * ng_y)      # r³ cos3θ
-    raise ValueError("2D solid harmonic implemented for n = 0..3, got %r" % n)
+        h_{k+1} = 2 x h_k − (x²+y²) h_{k−1},   h_0 = 1, h_1 = x.
+
+    The 2D analogue of :func:`_solid_harmonic`: the exact Kelvin image of the exterior
+    mode r^{−n} e^{inθ} under the 2D (circle) inversion.  Used by
+    :func:`kelvin_dtn_eigenvalue` with ``dim=2``.  (n=0..3 reproduce 1, x, x²−y²,
+    x³−3xy² exactly.)"""
+    if n < 0:
+        raise ValueError("2D solid harmonic degree must be n >= 0, got %r" % n)
+    r2 = ng_x * ng_x + ng_y * ng_y
+    h = [ng.CoefficientFunction(1.0), ng_x]
+    for k in range(1, n):
+        h.append(2 * ng_x * h[k] - r2 * h[k - 1])
+    return h[n]
 
 
-def kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=1, intorder=10, dim=3):
+def kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=1, intorder=10, dim=3, curve=None):
     """Measure the effective exterior DtN eigenvalue the KELVIN closure realises on
     the truncation surface for harmonic mode ``degree`` (n), vs the analytic value.
 
@@ -357,17 +363,24 @@ def kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=1, intorder=10, dim=3
     is deeper (~1e-7…1e-9).  ``dim=2`` is the cross-section case for static apparatus /
     rotating machines.
 
-    Returns dict ``{ndof, degree, order, maxh, dim, lam, lam_exact, rel_err}``."""
+    ``curve`` sets the isoparametric (geometry) order of the curved truncation sphere;
+    ``None`` keeps the historical default ``min(order+1, 3)`` (3D) / ``min(order+1, 4)``
+    (2D).  Because the residual floor IS this curved-geometry error, raising ``curve``
+    lowers it ~30×/order (e.g. 3D order=9: Curve 3 ~1e-5 → Curve 5 ~1e-7); ``degree`` is
+    no longer capped (the solid-harmonic image is built by recurrence for any n).
+
+    Returns dict ``{ndof, degree, order, maxh, dim, curve, lam, lam_exact, rel_err}``."""
     if dim not in (2, 3):
         raise ValueError("dim must be 2 or 3, got %r" % dim)
     if dim == 3:
-        mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), R)).GenerateMesh(maxh=maxh)
-                       ).Curve(min(order + 1, 3))
+        cv = curve if curve is not None else min(order + 1, 3)
+        mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), R)).GenerateMesh(maxh=maxh)).Curve(cv)
         datum = _solid_harmonic(degree)
     else:
         from netgen.geom2d import SplineGeometry
+        cv = curve if curve is not None else min(order + 1, 4)
         geo = SplineGeometry(); geo.AddCircle((0, 0), R, bc="kelvin_circle")
-        mesh = ng.Mesh(geo.GenerateMesh(maxh=maxh)); mesh.Curve(min(order + 1, 4))
+        mesh = ng.Mesh(geo.GenerateMesh(maxh=maxh)); mesh.Curve(cv)
         datum = _solid_harmonic_2d(degree)
 
     fes = ng.H1(mesh, order=order, dirichlet=".*")
@@ -389,7 +402,7 @@ def kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=1, intorder=10, dim=3
     lam_exact = -(degree + dim - 2) / R
     return {
         "ndof": fes.ndof, "degree": degree, "order": order, "maxh": maxh, "dim": dim,
-        "lam": lam, "lam_exact": lam_exact,
+        "curve": cv, "lam": lam, "lam_exact": lam_exact,
         "rel_err": abs(lam - lam_exact) / abs(lam_exact),
     }
 
