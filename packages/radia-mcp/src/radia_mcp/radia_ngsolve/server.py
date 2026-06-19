@@ -64,6 +64,7 @@ from .knowledge.fem_bem_schur import get_fem_bem_schur_documentation
 from .knowledge.airgap_motor_workflow import get_airgap_motor_workflow_documentation
 from .knowledge.dtn_coarse_mesh import get_dtn_coarse_mesh_documentation
 from .knowledge.urn import get_urn_documentation, urn_fit_from_csv
+from .knowledge.iabc import get_iabc_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -608,6 +609,34 @@ def urn_fit(data_csv: str, freq_col: int = 0, real_col: int = 1,
         data_csv, freq_col, real_col, imag_col, delimiter, skip_rows,
         n_debye, n_cole_cole, n_warburg, n_cole_davidson, sparsity_weight,
         n_epochs, n_restarts, spice_out)
+
+
+@mcp.tool()
+def iabc(topic: str = "all") -> str:
+    """
+    Time-domain IABC (improvised/improved asymptotic absorbing boundary
+    conditions / spherical absorbing conditions based on electrical images):
+    truncate an open exterior with concentric virtual material shells whose
+    (complex, frequency-dependent) eps, mu act as electrical images that null
+    the multipole reflection at the truncation surface, backed by a PEC wall.
+
+    Documents how to take a PER-FREQUENCY IABC design to the TIME DOMAIN
+    (transient FETD / Newmark-beta): why a per-omega (eps,mu) is non-causal and
+    why naively fitting the ideal materials BLOWS UP the reflection, the correct
+    direct-broadband passive optimisation (graded telegrapher multilayer => a
+    tapered impedance-matched / PML-like profile), the ADE realisation (one
+    auxiliary ODE per Debye/Lorentzian pole, a damping matrix for conductivity)
+    via the `urn`/`urn_fit` tools, the reduced radial form with the centrifugal
+    l(l+1)/r^2 term, and the fundamental evanescent-band (kR0<1) limit.
+
+    Ref: K. Sugahara, "Spherical Absorbing Conditions Based on Electrical
+    Images"; Sugahara & Sato URN (IEEE Access 2026); Jin, FEM in EM 3rd ed Ch.12.
+
+    Args:
+        topic: all | overview | frequency_domain | causality | timedomain |
+               broadband_design | application
+    """
+    return get_iabc_documentation(topic)
 
 
 @mcp.tool()
