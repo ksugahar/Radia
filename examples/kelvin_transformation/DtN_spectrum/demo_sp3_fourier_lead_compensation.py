@@ -141,6 +141,6 @@ out = {
     "compensation": {"raw": raw, "pinned": {str(k): v for k, v in resB.items()},
                      "free_feed": {str(k): v for k, v in resBf.items()}},
 }
-with open(os.path.join(os.path.dirname(__file__), "demo_uu_results.json"), "w") as fh:
+with open(os.path.join(os.path.dirname(__file__), "demo_sp3_results.json"), "w") as fh:
     json.dump(out, fh, indent=2)
-print("  results -> demo_uu_results.json")
+print("  results -> demo_sp3_results.json")
