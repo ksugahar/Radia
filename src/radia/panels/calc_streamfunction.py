@@ -1570,34 +1570,73 @@ def _contour_loop_candidates(psi_v, verts, tris, mpts, vector_b, tol, n_levels=4
     return loops, fields
 
 
-def _pin_loop_candidates(verts, tris, mpts, vector_b, n_pins=120, n_seg=12,
-                         radius_frac=0.8):
-    """Greedy dictionary (B): a small tangent-plane CIRCULAR loop at each PIN (a
-    surface point) -- the literal "wind a loop on a pin" primitive.  Pins are a
-    subsample of the surface vertices; each loop has radius ~ the local mesh
-    scale, in the vertex tangent plane.  Returns (loops, fields)."""
+def _pin_loop_candidates(verts, tris, mpts, vector_b, n_pins=120,
+                         krings=(1, 2, 3)):
+    """Greedy dictionary (B): ON-SURFACE k-RING loops at each PIN (a surface
+    vertex) -- "wind a loop on a pin", multi-scale.  For pin v and ring k the
+    loop is the mesh vertices at graph distance EXACTLY k from v, ordered by
+    angle in v's tangent plane (k=1 = the natural 1-ring; larger k = bigger
+    loops -> the "adaptive size" the small flat tangent circles lacked, and the
+    loops follow the curved surface, not a flat chord).  Returns (loops, fields)."""
+    nv = len(verts)
+    adj = [set() for _ in range(nv)]
+    for (a, b, c) in tris:
+        adj[a].update((b, c)); adj[b].update((a, c)); adj[c].update((a, b))
     vn = np.zeros_like(verts, dtype=float)
     for (a, b, c) in tris:
         nrm = np.cross(verts[b] - verts[a], verts[c] - verts[a])
         vn[a] += nrm; vn[b] += nrm; vn[c] += nrm
     ln = np.linalg.norm(vn, axis=1); ln[ln == 0.0] = 1.0
     vn = vn / ln[:, None]
-    r = radius_frac * _char_len(verts, tris)
-    nv = len(verts)
     pins = np.unique(np.linspace(0, nv - 1, min(n_pins, nv)).astype(int))
-    ang = np.linspace(0.0, 2.0 * np.pi, n_seg + 1)
+    kmax = max(krings)
     loops, fields = [], []
     for v in pins:
+        # BFS graph distance from v up to kmax
+        dist = {int(v): 0}; frontier = [int(v)]
+        for d in range(1, kmax + 1):
+            nf = []
+            for u in frontier:
+                for w in adj[u]:
+                    if w not in dist:
+                        dist[w] = d; nf.append(w)
+            frontier = nf
         nrm = vn[v]
         t1 = np.cross(nrm, [1.0, 0.0, 0.0])
         if np.linalg.norm(t1) < 1e-6:
             t1 = np.cross(nrm, [0.0, 1.0, 0.0])
         t1 = t1 / np.linalg.norm(t1); t2 = np.cross(nrm, t1)
-        loop = verts[v][None, :] + r * (np.cos(ang)[:, None] * t1[None, :]
-                                        + np.sin(ang)[:, None] * t2[None, :])
-        loops.append(loop)
-        fields.append(_wire_field_flat(loop, mpts, vector_b, 1.0))
+        for k in krings:
+            shell = [w for w, dd in dist.items() if dd == k]
+            if len(shell) < 3:
+                continue
+            rel = verts[shell] - verts[v]
+            order = np.argsort(np.arctan2(rel @ t2, rel @ t1))
+            loop = verts[[shell[i] for i in order]]
+            loops.append(loop)
+            fields.append(_wire_field_flat(_close_loop(loop), mpts, vector_b, 1.0))
     return loops, fields
+
+
+def _greedy_trace_plot(trace, target, out_path):
+    """Turn-budget UI: the greedy rms-vs-turns curve (monotone) -- read off the
+    fewest turns meeting a spec.  Marks the --greedy-target line + the turn it is
+    first met.  No in-figure title (lab rule -- caption carries it)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    ns = [t["n_turns"] for t in trace]; rms = [t["rms"] for t in trace]
+    fig, ax = plt.subplots(figsize=(4.0, 3.0))
+    ax.plot(ns, rms, "o-", color="C0", label="greedy")
+    if target is not None:
+        ax.axhline(target, ls="--", color="C3", label="spec")
+        met = [n for n, r in zip(ns, rms) if r <= target]
+        if met:
+            ax.axvline(min(met), ls=":", color="C2",
+                       label="min turns = %d" % min(met))
+    ax.set_xlabel("turns"); ax.set_ylabel("field residual rms")
+    ax.set_ylim(bottom=0.0); ax.grid(True, alpha=0.3); ax.legend(fontsize=8)
+    fig.tight_layout(); fig.savefig(out_path, dpi=150); plt.close(fig)
 
 
 def _distort_wire(chain, mpts, target_flat, vector_b, n_grid=3, n_iter=5,
@@ -2332,6 +2371,14 @@ def run_manufacture(args):
                 "greedy_final_rms": (greedy_trace[-1]["rms"] if greedy_trace
                                      else None),
             })
+            if getattr(args, "greedy_plot", "") and greedy_trace:
+                try:
+                    _greedy_trace_plot(greedy_trace,
+                                       getattr(args, "greedy_target", None),
+                                       args.greedy_plot)
+                    result["greedy_plot"] = args.greedy_plot
+                except Exception as e:                 # noqa: BLE001
+                    result["greedy_plot_error"] = str(e)
         elif getattr(args, "optimize_levels", False):
             result.update({
                 "levels_optimized": True,
@@ -2515,6 +2562,10 @@ def build_argparser():
                     help="greedy stop threshold: stop adding turns once the "
                          "field residual rms <= this (else use all --greedy-"
                          "turns).")
+    ap.add_argument("--greedy-plot", default="",
+                    help="turn-budget UI: write the greedy rms-vs-turns curve "
+                         "(with the --greedy-target spec line + min-turns mark) "
+                         "to this PNG.")
     ap.add_argument("--target-inductance", type=float, default=None,
                     help="IH-RESONANCE design: search the turn count (nlevels) "
                          "so the single-stroke coil inductance equals this "
