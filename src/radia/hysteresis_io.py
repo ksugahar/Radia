@@ -26,12 +26,13 @@ from scipy.integrate import cumulative_trapezoid
 def load_hys(filepath):
     """Read JMAG .hys file.
 
-    Format:
-        Line 1: Model type ("Jiles Atherton")
-        Line 2: 0  nx  ny  (nx=points/loop, ny=number of loops)
-        Line 3: 1  nx  0   (flags)
-        Line 4: units ("tesla;A/m" or "A/m;tesla")
-        Line 5+: col1  col2  (nx * ny data rows)
+    Format (multi-loop JMAG, as written by JilesAtherton.m):
+        Line 1: model type ("Jiles Atherton")
+        Line 2: type  maxpts  nloops
+        Then, repeated nloops times (one self-contained block per loop):
+            header: loopID  npts  flag
+            units:  "A/m;tesla" or "tesla;A/m"
+            npts rows: col1  col2
 
     Parameters
     ----------
@@ -45,24 +46,34 @@ def load_hys(filepath):
         Descending branch (Bmax -> -Bmax).
     """
     filepath = Path(filepath)
-    with open(filepath, 'r') as f:
-        model_type = f.readline().strip()
-        dims = f.readline().split()
-        nx, ny = int(dims[1]), int(dims[2])
-        f.readline()  # flags
-        units = f.readline().strip()
-
-        b_first = units.lower().split(';')[0].startswith('t')
-
-        data = np.loadtxt(f)
+    lines = filepath.read_text().splitlines()
+    nloops = int(lines[1].split()[2])              # line 2: type  maxpts  nloops
 
     loops = []
-    for i in range(ny):
-        chunk = data[i * nx:(i + 1) * nx]
+    idx = 2
+    for _ in range(nloops):
+        # Each loop is a self-contained block: per-loop header + units + npts
+        # data rows. JMAG (e.g. JilesAtherton.m) writes a header AND a units
+        # line before EVERY loop; the previous single-header + np.loadtxt reader
+        # only worked for nloops == 1 and crashed on multi-loop files
+        # ("number of columns changed from 2 to 3" at the second loop header).
+        hdr = lines[idx].split(); idx += 1
+        npts = int(hdr[1])
+        units = lines[idx].strip(); idx += 1
+        b_first = units.lower().split(';')[0].startswith('t')
+        block = np.array([[float(v) for v in lines[idx + j].split()[:2]]
+                          for j in range(npts)])
+        idx += npts
         if b_first:
-            B, H = chunk[:, 0], chunk[:, 1]
+            B, H = block[:, 0], block[:, 1]
         else:
-            H, B = chunk[:, 0], chunk[:, 1]
+            H, B = block[:, 0], block[:, 1]
+        # Enforce the DESCENDING branch convention (Bmax -> -Bmax) promised by
+        # this function's docstring and required by build_shape_functions; JMAG
+        # stores each branch B-ascending, which otherwise yields garbage shape
+        # functions (~1500 A/m reconstruction error, near-zero material).
+        if B[0] < B[-1]:
+            B, H = B[::-1], H[::-1]
         loops.append({
             'B': B.copy(),
             'H': H.copy(),
@@ -156,7 +167,11 @@ def build_shape_functions(loops, dB=None):
 
     if dB is None:
         if len(loops_desc) >= 2:
-            dB = loops_desc[-1]['Bmax'] - loops_desc[-2]['Bmax']
+            # loops_desc is sorted DESCENDING by Bmax, so [-1] is the smallest
+            # and [-2] the next-smallest: take abs so the step is positive.
+            # (The bare subtraction was negative -> np.zeros((negative, ...))
+            #  crashed for any caller that did not pass dB explicitly.)
+            dB = abs(loops_desc[-2]['Bmax'] - loops_desc[-1]['Bmax'])
         else:
             dB = loops_desc[0]['Bmax'] / 10.0
 
