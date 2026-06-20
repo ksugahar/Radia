@@ -32,7 +32,7 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
 
 | method | accuracy (per-mode `d_n`) | convergent? | parameter-free? | DC conditioning | cost |
 |---|---|---|---|---|---|
-| **Kelvin** | **exact** (static `~2e−6`, eddy converges) | **YES** | **YES** | **flat** | sparse |
+| **Kelvin** | **exact** (static `~2e−6`, eddy converges; **extended/radiating Kelvin** carries high-freq — HOIBC `~3e−2`, exact-Z `~6e−6`) | **YES** | **YES** | **flat** | sparse |
 | **BEM** | **exact** (all regimes) | **YES** | **YES** | — | **DENSE** (`N²`) |
 | **PML** | accurate per-mode (`~1e−4` in its home) | no (a tuned **layer**) | no (`σ, L`) | **blows up** (`2.4e4`@DC) | sparse |
 | **CFS-PML** | accurate per-mode | no (a tuned layer) | no (`σ, α, L`) | **fixed** (`2.3e3`@DC) | sparse |
@@ -51,18 +51,29 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
   **conditioning** — vanilla PML's interior matrix conditioning **blows up toward DC**
   (`cond ≈ 2.4e4` at `s=i·1e−4`) while **CFS-PML removes it** (`cond ≈ 2.3e3`) — *which is why
   CFS-PML exists*.
-- **high-freq** (`z=ka=2`, radiating): **PML is accurate in its home** (`d_n ~ 1e−4`); **Kelvin
-  exits** — its real-axis DtN cannot carry the radiation `Im` part, and this regime is **outside
-  radia's MQS / Laplace-kernel scope** (→ NGSolve).
+- **high-freq** (`z=ka=2`, radiating) — **a studied regime** (the radiating extended-Kelvin /
+  HOIBC / PML track, `act7_01`–`act7_07`; Sugahara, *IEICE Trans. C* 2024). The DtN goes
+  **COMPLEX** (`Im` = radiation). The **static** Kelvin is only the `kR→0` limit (real axis); the
+  regime is carried by the **extended (radiating) Kelvin** — transformation-optics medium +
+  matched HOIBC — which reproduces the complex DtN to **`~6e−6` with the exact impedance** and
+  **`~3e−2` with the 2nd-order HOIBC** (the radiating-band knee at `n≈ka`, measured in `act7_22`),
+  competitive with **PML** (`d_n ~ 1e−4` in its home) and exact **BEM-FEM**. *(The Laplace-kernel /
+  MQS limit is on Radia's CORE field solver — MMM/MSC — not on this open-boundary study.)*
 
 ## The headline (the two classes, measured)
 
-- **Convergent + parameter-free**: **Kelvin** (static / eddy) and **BEM** (all regimes, but
-  DENSE) — the discrete operator `S_h → Λ_ext` for every mode under refinement.
+- **Convergent + parameter-free**: **Kelvin** (static / eddy; the **extended / radiating Kelvin**
+  carries the complex DtN at high-freq via the matched HOIBC — `act7_05`/`act7_07`/`act7_22`) and
+  **BEM** (all regimes, but DENSE) — the discrete operator `S_h → Λ_ext` for every mode under
+  refinement.
 - **Fixed-error surrogates**: **PML** (accurate per-mode but **DC-ill-conditioned** + tuned),
   **CFS-PML** (fixes the conditioning at modest accuracy + tuned), **Robin** (exact `n=0` only).
 - **Finite-reach**: **ballooning** (cheap, but a finite wall — fails the low modes; shrinks with
   `R`).
+- **High-freq / radiating is studied, not excluded**: the DtN goes **complex**; carried by the
+  **extended (radiating) Kelvin** (matched HOIBC, Sugahara *IEICE Trans. C* 2024), **PML**, and
+  **BEM-FEM**. The Laplace-kernel / MQS limit is on Radia's *core field solver* (MMM/MSC), not on
+  this open-boundary comparison.
 
 > The comparison is **not a single number**: on the *accuracy* axis Kelvin, BEM and PML are all
 > good per-mode; the methods separate on **convergence** (Kelvin/BEM vs tuned layer),

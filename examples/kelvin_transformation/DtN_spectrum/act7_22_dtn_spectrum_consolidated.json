@@ -53,6 +53,20 @@
       }
     },
     "high_freq": {
+      "extKelvin_HOIBC": [
+        5.695916070384708e-06,
+        0.01288682629727349,
+        0.028456800697642094,
+        0.018697129056070867,
+        0.006732366187359512
+      ],
+      "extKelvin_exactZ": [
+        5.695916070666477e-06,
+        4.244628179515087e-06,
+        1.154689992202344e-06,
+        7.105261073576725e-07,
+        1.7816980742658392e-06
+      ],
       "PML": [
         9.109617742407364e-05,
         9.86433762881793e-05,
@@ -64,7 +78,7 @@
   },
   "taxonomy": {
     "convergent_parameter_free": [
-      "Kelvin (static+eddy)",
+      "Kelvin (static+eddy; extended/radiating Kelvin via matched HOIBC at high-freq)",
       "BEM (all regimes, DENSE)"
     ],
     "fixed_error_surrogate": [
@@ -75,6 +89,7 @@
     "finite_reach": [
       "ballooning (low-mode dominated)"
     ],
+    "high_freq_note": "the radiating regime IS studied (complex DtN); carried by the extended (radiating) Kelvin (matched HOIBC, Sugahara IEICE 2024) + PML + BEM. The MQS/Laplace-kernel limit is on radia's CORE field solver, not on this comparison.",
     "axes": [
       "per-mode DtN defect",
       "convergence under refinement",

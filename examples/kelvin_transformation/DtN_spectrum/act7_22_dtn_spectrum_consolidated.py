@@ -23,8 +23,11 @@ YARDSTICK -- the exact exterior DtN eigenvalue per multipole n, per regime (a = 
 CLOSURES + DtN class (the headline two-class split, MEASURED here):
   CONVERGENT discretizations (defect -> 0 under refinement, every mode):
     Kelvin  exact conformal compactification, parameter-free; static + eddy (real axis).
-            EXITS at the radiating high-freq regime (its real-axis DtN cannot carry the
-            radiation Im part) -- and that regime is OUTSIDE radia's MQS/Laplace scope.
+            The high-freq / radiating regime is ALSO studied here: the STATIC Kelvin is the
+            kR->0 limit (real axis), and the radiating regime is carried by the EXTENDED
+            (radiating) Kelvin -- transformation-optics medium + matched HOIBC (act7_05) --
+            which DOES take the complex DtN (Sugahara, IEICE Trans. C 2024). The Laplace
+            kernel / MQS limit is on radia's CORE field solver, NOT on this DtN study.
     BEM     exact boundary operator; converges every regime; DENSE (the cost axis).
   FIXED-ERROR surrogates (defect FLOORS at a mesh-independent value per mode):
     PML     complex stretch; accurate at finite k but DC system conditioning BLOWS UP;
@@ -201,6 +204,41 @@ def helm_pml_dtn(n, k, a=1.0, d=1.0, M=300, s0=15.0):
 
 
 # ===========================================================================
+# HIGH-FREQ extended/radiating KELVIN -- transformation-optics medium + matched
+#   HOIBC Robin on the inverted image shell (ported from act7_05_fe_kelvin_hoibc,
+#   verified there: the FE DtN converges P1 O(h^2) to the closed form, and the matched
+#   HOIBC reproduces the COMPLEX Lambda_n(ka)).  The radiating extended-Kelvin IS the
+#   high-freq Kelvin (Sugahara, IEICE Trans. C 2024) -- high-freq IS a study object.
+# ===========================================================================
+def kelvin_hoibc_dtn(n, k, a, b, M, inner):
+    """Radial transformation-optics FE on the image shell rho in [a^2/b, a] with the
+    matched-impedance Robin 'inner' at the inner image sphere; returns the truncation DtN
+    the interior sees (ported from act7_05_fe_kelvin_hoibc.fe_kelvin_dtn, verified there)."""
+    rb = a * a / b
+    rho = np.linspace(rb, a, M + 1)
+    Am = np.zeros((M + 1, M + 1), dtype=complex)
+    for e in range(M):
+        r0, r1 = rho[e], rho[e + 1]
+        h = r1 - r0
+        dphi = np.array([-1.0 / h, 1.0 / h])
+        Kloc = np.outer(dphi, dphi) * (a * a * h)        # int alpha rho^2 dphi dphi = a^2 h
+        Cloc = np.zeros((2, 2), dtype=complex)
+        Mloc = np.zeros((2, 2), dtype=complex)
+        for gp, gw in zip(_GP, _GW):
+            r = 0.5 * (r0 + r1) + 0.5 * h * gp
+            w = 0.5 * h * gw
+            ph = np.array([(r1 - r) / h, (r - r0) / h])
+            Cloc += np.outer(ph, ph) * (a * a / r**2) * w
+            Mloc += np.outer(ph, ph) * (a**6 / r**4) * w
+        Am[e:e + 2, e:e + 2] += Kloc + n * (n + 1) * Cloc - k * k * Mloc
+    Am[0, 0] += -b * inner                                # matched HOIBC Robin at inner image sphere
+    u = np.zeros(M + 1, dtype=complex)
+    u[M] = 1.0                                            # Dirichlet R(a)=1
+    u[:M] = np.linalg.solve(Am[:M, :M], -Am[:M, M])
+    return -(Am[M, :] @ u) / a                            # consistent-flux DtN (inversion sign-flip)
+
+
+# ===========================================================================
 print("=" * 80)
 print(" act7_22_dtn_spectrum_consolidated : open-boundary closures x regimes x multipole")
 print(" -- ONE yardstick: the per-multipole DtN-spectral defect")
@@ -270,18 +308,36 @@ check("eddy: vanilla PML conditioning BLOWS UP toward DC; CFS-PML fixes it (>=10
 TABLE["regimes"]["eddy"]["convergence_n2"] = {"Kelvin_coarse": float(ek_coarse), "Kelvin_fine": float(ek_fine)}
 TABLE["regimes"]["eddy"]["DC_conditioning_n1"] = {"PML_vanilla": float(cpv), "CFS_PML": float(cpc)}
 
-# ---- REGIME 3: HIGH-FREQ (Helmholtz), exact = wave_dtn --------------------
-print("\n[high-freq] exact = radia.open_boundary.wave_dtn(n,z), z=ka=2.0 (radiating).")
-print("    Kelvin EXITS here (real-axis DtN cannot carry radiation); PML is its home.")
-print("    n     PML(ka=2)     [Kelvin: N/A radiating, exits radia MQS scope]")
+# ---- REGIME 3: HIGH-FREQ (Helmholtz, radiating), exact = wave_dtn ----------
+#   The high-freq / radiating regime IS a study object: the DtN goes COMPLEX (Im =
+#   radiation).  The STATIC Kelvin is only the kR->0 limit; the radiating regime is
+#   carried by the EXTENDED (radiating) Kelvin -- transformation-optics medium +
+#   matched HOIBC (act7_05/act7_07) -- which DOES take the complex DtN, with PML + BEM.
+print("\n[high-freq] exact = radia.open_boundary.wave_dtn(n,z), z=ka=2.0 (radiating, COMPLEX).")
+print("    carried by: extended (radiating) Kelvin (matched HOIBC) / PML  (static Kelvin = kR->0 limit only)")
+print("    n   extKelvin-HOIBC   extKelvin-exactZ   PML(ka=2)")
 ka = 2.0
-hf = {"PML": []}
+kf = ka / A                        # k  (a = A = 1)
+b_hf = 2.0                         # absorber placement: inner image sphere b  (kb = k*b)
+kb = kf * b_hf
+M_hf = 320
+hf = {"extKelvin_HOIBC": [], "extKelvin_exactZ": [], "PML": []}
 for n in MODES:
     le = ob.wave_dtn(n, ka)
+    inner_ho = 1j * kb - 1 - 1j * n * (n + 1) / (2 * kb)   # matched HOIBC (act7_03)
+    inner_ex = ob.wave_dtn(n, kb)                          # exact inner impedance (sanity)
+    eho = relerr(kelvin_hoibc_dtn(n, kf, A, b_hf, M_hf, inner_ho), le)
+    eex = relerr(kelvin_hoibc_dtn(n, kf, A, b_hf, M_hf, inner_ex), le)
     ep = relerr(helm_pml_dtn(n, ka / A), le)
+    hf["extKelvin_HOIBC"].append(eho)
+    hf["extKelvin_exactZ"].append(eex)
     hf["PML"].append(ep)
-    print(f"   {n}   {ep:.3e}")
+    print(f"   {n}   {eho:.3e}         {eex:.3e}          {ep:.3e}")
 TABLE["regimes"]["high_freq"] = hf
+check("high-freq: extended-Kelvin with the EXACT inner impedance reproduces the COMPLEX wave DtN (every mode < 1e-3)",
+      max(hf["extKelvin_exactZ"]) < 1e-3, f"max {max(hf['extKelvin_exactZ']):.1e}")
+check("high-freq: extended-Kelvin matched-HOIBC carries the radiating DtN (every mode < 5e-2; radiating-band knee ~1e-2 near n=ka)",
+      max(hf["extKelvin_HOIBC"]) < 5e-2, f"max {max(hf['extKelvin_HOIBC']):.1e}")
 check("high-freq: PML accurate in its home regime (every mode < 1e-2)",
       max(hf["PML"]) < 1e-2, f"max {max(hf['PML']):.1e}")
 
@@ -297,11 +353,15 @@ print("    Robin       n=0 only             no (floor)  none    --         spars
 print("    => CONVERGENT + parameter-free + frequency-robust = Kelvin (static/eddy) / BEM (dense).")
 print("       PML is accurate per-mode but DC-ill-conditioned + tuned; CFS-PML fixes the")
 print("       conditioning (modest); ballooning fails low modes; Robin fails high modes.")
-print("       (high-freq radiating = PML's home, OUTSIDE radia's MQS/Laplace scope -- Kelvin exits.)")
+print("       high-freq (radiating) IS a study object: the DtN is COMPLEX, carried by the EXTENDED")
+print("       (radiating) Kelvin (matched HOIBC, Sugahara IEICE 2024) + PML + BEM; static Kelvin is")
+print("       only its kR->0 limit. (The MQS/Laplace-kernel limit is on radia's CORE field solver,")
+print("       not on this open-boundary study.)")
 TABLE["taxonomy"] = {
-    "convergent_parameter_free": ["Kelvin (static+eddy)", "BEM (all regimes, DENSE)"],
+    "convergent_parameter_free": ["Kelvin (static+eddy; extended/radiating Kelvin via matched HOIBC at high-freq)", "BEM (all regimes, DENSE)"],
     "fixed_error_surrogate": ["PML (DC-ill-conditioned, tuned)", "CFS-PML (DC-fixed modest, tuned)", "Robin (n=0 only)"],
     "finite_reach": ["ballooning (low-mode dominated)"],
+    "high_freq_note": "the radiating regime IS studied (complex DtN); carried by the extended (radiating) Kelvin (matched HOIBC, Sugahara IEICE 2024) + PML + BEM. The MQS/Laplace-kernel limit is on radia's CORE field solver, not on this comparison.",
     "axes": ["per-mode DtN defect", "convergence under refinement", "parameter-free?", "DC conditioning", "sparse vs dense cost"],
 }
 
@@ -325,6 +385,8 @@ try:
     axs[1].semilogy(range(1, 5), ed["PML"], "s--", label="PML")
     axs[1].semilogy(range(1, 5), ed["CFS-PML"], "d-.", label="CFS-PML")
     axs[1].set_xlabel("multipole n"); axs[1].legend(fontsize=7)
+    axs[2].semilogy(MODES, [max(x, 1e-16) for x in hf["extKelvin_HOIBC"]], "o-", label="ext-Kelvin HOIBC")
+    axs[2].semilogy(MODES, [max(x, 1e-16) for x in hf["extKelvin_exactZ"]], "v:", label="ext-Kelvin exactZ")
     axs[2].semilogy(MODES, hf["PML"], "s--", label="PML")
     axs[2].set_xlabel("multipole n"); axs[2].legend(fontsize=7)
     for ax, t in zip(axs, ("static", "eddy", "high-freq")):
