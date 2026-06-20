@@ -81,6 +81,25 @@ except ImportError:
 PROJECT_ROOT = setup_radia_path()
 
 
+def _load_ci_slow_nodeids():
+    """Load measured-slow tests so main CI can skip them while tag CI stays full."""
+    path = PROJECT_ROOT / "tests" / "ci_slow_nodeids.txt"
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return set()
+
+    nodeids = set()
+    for line in lines:
+        line = line.split("#", 1)[0].strip()
+        if line:
+            nodeids.add(line.replace("\\", "/"))
+    return nodeids
+
+
+CI_SLOW_NODEIDS = _load_ci_slow_nodeids()
+
+
 # ---------------------------------------------------------------
 # collect_ignore: Skip test files that import unavailable packages.
 # This runs BEFORE pytest tries to import test modules, preventing
@@ -195,6 +214,8 @@ def project_root():
 def pytest_collection_modifyitems(config, items):
     """Add markers based on test location."""
     for item in items:
+        if item.nodeid.replace("\\", "/") in CI_SLOW_NODEIDS:
+            item.add_marker(pytest.mark.slow)
         if "benchmarks" in str(item.fspath):
             item.add_marker(pytest.mark.benchmark)
             item.add_marker(pytest.mark.slow)
