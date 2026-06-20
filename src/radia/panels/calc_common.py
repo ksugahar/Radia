@@ -1084,10 +1084,12 @@ def calc_main(solve_func, parser):
 
     real_stdout = sys.stdout
     sys.stdout = io.StringIO()
+    exception_caught = False
     try:
         result = solve_func(args)
     except Exception as e:
         result = {"error": str(e)}
+        exception_caught = True
         sys.stderr.write(traceback.format_exc())
         sys.stderr.flush()
         try:
@@ -1131,3 +1133,15 @@ def calc_main(solve_func, parser):
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(result, f)
     print(json.dumps(result))
+
+    # CLAUDE.md "No Fallbacks -- Fail Fast, Fail Loud": a calc_*.py run
+    # that caught an exception OR returned {"error": ...} / {"status":
+    # "error"} MUST exit non-zero so subprocess callers (sweep scripts,
+    # panel UI, CI) see the failure unambiguously.  The error JSON is
+    # still written for audit (panel Output window + sweep_results.json
+    # error entry) but exit code reflects success / failure.
+    if exception_caught or (
+        isinstance(result, dict)
+        and ("error" in result or result.get("status") == "error")
+    ):
+        sys.exit(1)
