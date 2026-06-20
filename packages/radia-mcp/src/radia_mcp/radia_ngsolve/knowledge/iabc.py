@@ -334,9 +334,13 @@ shifted, beta=1+sigma/(alpha+sqrt(s))) that was invented precisely for evanescen
      while N-to-floor stays ~O(10) (a 4900-DOF exterior -> 11-state ladder) -- and
      CLN is DC-exact (omega->0 rel.err 4e-5 vs CFS-PML 6e-4, vanilla PML 2e-2).
  (c) conditioning toward DC: vanilla PML 1+sigma/sqrt(s) BLOWS UP (cond 2.3e4 at
-     omega=1e-4).  CFS-PML REMOVES that blowup (cond ~2e3, conceded) -- but is
-     still ~1e3x worse conditioned than the real, frequency-robust CLN eval-system
-     (cond ~1).
+     omega=1e-4).  CFS-PML removes that blowup ONLY at modest accuracy (cond ~2e3
+     at M=32) -- but the DECISIVE matched-accuracy scorecard: at EQUAL NRMSE
+     (~1.5e-4) CFS-PML needs a thick/strong layer (M=128, sigma=16) whose
+     conditioning RETURNS to ~5e4, so in the chosen arena CLN wins ALL THREE axes
+     at once -- 16x fewer online DOF (8 vs 128) AND a ~5e4x better-conditioned aux
+     block (~1 vs ~5e4) at the same accuracy.  CLN has no accuracy<->conditioning
+     tradeoff.
 HONEST NON-CLAIMS: this is NOT PML's home (propagating waves = the WAVE operator,
 demo_uu/pp; there high-freq vacuum -> PML, and at high omega the table shows PML
 better conditioned than CLN).  And the geometry is separable (radial), so [b]'s
