@@ -2879,7 +2879,24 @@ HEADLINE (not a single number -- report all axes, the honest result):
   FIXED-ERROR surrogate = PML (DC-ill-conditioned + tuned), CFS-PML (DC-fixed modest + tuned),
   Robin (n=0 only).  FINITE-REACH = ballooning (low-mode dominated).  This is a MEASUREMENT /
   COMPARISON (not a new method); provenance Freeman-Lowther / Bettess / Berenger / Kuzuoglu-
-  Mittra.  It is the basis for the open-boundary comparison PAPER.
+  Mittra.  It is a repository BENCHMARK (the honest map), NOT a novel metric -- reflection is the
+  standard equivalent (below) and "exact open boundary = the DtN operator" is classical NRBC theory
+  (Keller-Givoli 1989 / Grote-Keller / Hagstrom).  The genuine paper is the Kelvin material-aware
+  inverse-design fusion (SF coils with iron), NOT this comparison.
+
+REFLECTION VIEW (act7_22 reflection block; d_n IS the reflection coefficient): the community grades
+open boundaries by the REFLECTION coefficient R_n (Berenger / Engquist-Majda / Bayliss-Turkel), NOT
+a DtN defect.  They are the SAME quantity: R_n = |lam_h-lam_exact|/|lam_h-lam_other| (lam_other =
+growing/incoming mode) has the SAME numerator as d_n -> reflection is the physically-measured face
+of d_n (adds nothing physically new; only convenience = uniform across regimes).  Measured: static
+Kelvin reflectionless ~1e-13..1e-6 vs ballooning R[n=0]=0.25; high-freq prop extKelvin-HOIBC + PML
+R<3e-2.
+
+ngsolve.bem AT HIGH-FREQ (act7_23_ngsbem_highfreq_dtn): the high-freq "BEM" column made REAL -- the
+genuine ngsolve.bem Helmholtz single/double-layer operators BUILD the exterior DtN
+Lambda = V^{-1}(-1/2 M + K); a per-mode Rayleigh quotient reproduces the COMPLEX wave_dtn to ~1e-5
+(monopole/dipole/quadrupole/octupole, ka=2), ~reflectionless.  NGSolve (FEM+PML) + ngsolve.bem
+(Helmholtz BEM) ARE the working high-freq tools the DtN-spectrum ranks.
 
 Companions: kelvin_transformation(topic="mesh_control"), dtn_coarse_mesh(topic="dtn_to_cln"),
 mor_cln(...).  (The `iabc` MCP tool was RETIRED 2026-06-20; the exact-impedance/Zs
