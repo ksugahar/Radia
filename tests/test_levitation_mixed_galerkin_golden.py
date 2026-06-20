@@ -27,6 +27,7 @@ import numpy as np
 import pytest
 
 from radia.levitation.mixed_galerkin import alpha as A
+from radia.levitation.mixed_galerkin import rom_fit as RF
 from radia.levitation.simulink import export as EX
 
 MU0 = 4.0 * math.pi * 1e-7
@@ -484,3 +485,91 @@ def test_vector_bulk_cuboid_eddy_foster():
     assert abs(tx - tau_ref[0]) / tau_ref[0] < 0.08    # tight (well resolved)
     assert abs(tz - tau_ref[2]) / tau_ref[2] < 0.08    # tight (well resolved)
     assert abs(ty - tau_ref[1]) / tau_ref[1] < 0.15    # resolution-sensitive at this h
+
+
+# ---------------------------------------------------------------------------
+# Physical-tensor ROM: passive Foster fit of the EXTERIOR-MATCHED alpha(s)
+# (rom_fit) -- verified against the analytic sphere Stoll spectrum (pure numpy)
+# ---------------------------------------------------------------------------
+
+def _sphere_alpha_causal(omega, a=5e-3, sigma=SIGMA_CU):
+    """Causal-convention sphere polarizability alpha(j omega) (LHP poles).
+
+    Landau-Lifshitz: m = (4 pi a^3/mu0) G(x) B0, x=(1+j) a/delta, and the
+    FEM-convention alpha = 4 pi a^3 conj(G).  Foster form:
+      alpha(s)/(4 pi a^3) = -1/2 + sum_n (3/(n pi)^2)/(1 + s tau_n),
+      tau_n = mu0 sigma a^2 / (n pi)^2  (the physical Stoll spectrum).
+    """
+    delta = math.sqrt(2.0 / (omega * MU0 * sigma))
+    x = (1 + 1j) * a / delta
+    e = cmath.exp(2j * x)
+    cot = 1j * (e + 1.0) / (e - 1.0)
+    G = -0.5 * (1.0 - 3.0 / x**2 + 3.0 / x * cot)
+    return 4 * math.pi * a**3 * G.conjugate()
+
+
+def test_rom_fit_sphere_stoll_spectrum():
+    """AAA+NNLS passive Foster ROM recovers the analytic sphere Stoll spectrum.
+
+    Locks: the dominant AAA poles == physical tau_n = mu0 sigma a^2/(n pi)^2 to
+    ~0%, the passive fit reproduces alpha(s) to <0.5% over 1 Hz..1 GHz, the ROM
+    is passive (g_k>=0) and stable, the feedthrough D == the perfect-conductor
+    limit -2 pi a^3, and the state-space transfer equals eval(s).
+    """
+    a = 5e-3
+    n = np.arange(1, 4)
+    tau_anal = MU0 * SIGMA_CU * a**2 / (n * math.pi) ** 2
+
+    f = np.logspace(0, 9, 400)
+    s = 1j * 2 * math.pi * f
+    Y = np.array([_sphere_alpha_causal(2 * math.pi * fi, a) for fi in f])
+
+    rom = RF.passive_foster_fit(s, Y, n_filler=20)
+
+    # passive + stable + accurate
+    assert np.all(rom.g_n >= 0)
+    assert rom.band_fit_relerr < 5e-3
+    # feedthrough = perfect-conductor flux exclusion -2 pi a^3
+    assert rom.alpha_inf == pytest.approx(-2 * math.pi * a**3, rel=1e-2)
+
+    # AAA-discovered dominant poles == physical Stoll tau_n (top 2 to <1%)
+    dt = np.sort(rom.dominant_tau)[::-1]
+    assert len(dt) >= 2
+    for k in range(2):
+        assert abs(dt[k] - tau_anal[k]) / tau_anal[k] < 1e-2
+
+    # state-space transfer == eval (exact realization)
+    Amat, Bmat, Cmat, Dmat = rom.state_space()
+    Ac = Amat.astype(complex)
+    eye = np.eye(rom.n_states)
+    sp = 1j * 2 * math.pi * np.array([1e2, 1e3, 1e4, 1e5, 1e6])
+    H = np.array([(Cmat @ np.linalg.solve(si * eye - Ac, Bmat))[0, 0] + Dmat[0, 0]
+                  for si in sp])
+    assert np.allclose(H, rom.eval(sp), rtol=1e-9)
+    # stable: all poles in the LHP
+    assert np.all(np.diag(Amat) < 0)
+
+
+def test_rom_fit_diagonal_tensor_mimo():
+    """Three scalar ROMs -> a diagonal MIMO LTI (principal-axis tensor).
+
+    Locks: per-axis transfer reproduces each scalar ROM, the off-diagonal is
+    identically zero, and the block-diagonal state count is the sum.
+    """
+    a = 5e-3
+    f = np.logspace(0, 9, 300)
+    s = 1j * 2 * math.pi * f
+    Y = np.array([_sphere_alpha_causal(2 * math.pi * fi, a) for fi in f])
+    roms = [RF.passive_foster_fit(s, Y, n_filler=12) for _ in range(3)]
+
+    A_t, B_t, C_t, D_t, ns = RF.diagonal_tensor_state_space(roms)
+    assert ns == sum(r.n_states for r in roms)
+    assert A_t.shape == (ns, ns) and B_t.shape == (ns, 3) and C_t.shape == (3, ns)
+
+    eye = np.eye(ns)
+    sp = 1j * 2 * math.pi * np.array([1e3, 1e4, 1e5])
+    Ht = np.array([C_t @ np.linalg.solve(si * eye - A_t.astype(complex), B_t) + D_t
+                   for si in sp])
+    for p in range(3):
+        assert np.allclose(Ht[:, p, p], roms[p].eval(sp), rtol=1e-9)
+    assert np.allclose(Ht[:, 0, 1], 0.0)               # no cross coupling

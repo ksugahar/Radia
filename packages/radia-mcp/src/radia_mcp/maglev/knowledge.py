@@ -72,6 +72,7 @@ TOPICS: dict[str, str] = {
     # -- maglev systems + the lab's Radia/CLN research --
     "radia_iem_fem": "Radia IEM (MMM/MSC) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi/T-Omega; no re-mesh on magnet motion (Yano bachelor, lab research)",
     "cln_mor_control": "Cauer Ladder Network (CLN) model-order reduction for real-time control-coupled maglev: ~1/500 speedup, multiport matrix-CLN, 3D gauge A-phi/T-Omega/A-T, TEAM 28 (Yano master, lab research)",
+    "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; Kameari+Kelvin accumulation BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
     "eddy_current_maglev": "Eddy-current EDS: Arago-disk physics, magnetic wheels (Fujii/Kansai 2D model), Inductrack",
     "sumitomo_heavy_industrial": "Sumitomo Heavy patents: PM axial bearing with brake ring (JP 7-327337); planar eddy-current mover (JP 2007-215264)",
@@ -368,6 +369,145 @@ what makes the 3D multiport CLN accurate.
   (multiport matrix CLN); Tanimoto, Yano, Sugahara & Nagamine 2025 (3D
   CLN gauge comparison).  (See `radia_mcp.mor` mor_cln for the canonical
   CLN paper list.)
+"""
+
+
+PHYSICAL_TENSOR_ROM = r"""
+# Physical polarizability tensor alpha(s) as a passive, stable LTI
+*(Lab research: radia.levitation, the "physical Stoll spectrum -> CLN/LTI"
+route; src/radia/levitation/mixed_galerkin/rom_fit.py, 2026-06-20.)*
+
+The maglev FORCE on a moving conductor is F ~ Re[alpha(s)] grad(B^2); the
+conductor is fully described, per direction, by its eddy-current
+polarizability alpha_i(s).  For control-in-the-loop simulation we want
+alpha(s) as a PASSIVE, STABLE state-space LTI (drops into Simulink /
+SPICE), NOT a per-frequency solve.  This is the maglev counterpart of the
+IH/port CLN ladder (topic `cln_mor_control`): there the object is a port
+admittance Z(s); here it is the open-boundary polarizability TENSOR
+alpha_ij(s) of an isolated body in free space.
+
+## The honest obstacle: Kameari + Kelvin accumulation BREAKS DOWN here
+
+The natural idea -- get the physical (exterior-matched, free-decay /
+Stoll) eddy spectrum by a Kameari A-T accumulation with a Kelvin open
+boundary, then read off a Cauer ladder -- DOES NOT WORK for a general 3D
+isolated-conductor-in-vacuum body.  The lab's own canonical script
+`examples/levitation/research_cln/ngsolve_validation/
+cuboid_521_kameari_kelvin_v15_canonical.py` is a documented BREAKDOWN demo:
+even with the two known bug fixes applied, the iteration sign-flips L_1 at
+stage 1 and the Schmidt energy norm grows x15.  This is structural for the
+HCurl + vacuum-coupled BC class (the A_ext gauge is unbounded at infinity;
+see `radia_mcp.radia_ngsolve` cln_3d).  Kameari accumulation reaches the
+Stoll Cauer ladder to 0.000% ONLY for the SPHERE (the special
+chi-susceptibility case) and for AXISYM bodies -- NOT for the general 3D
+tensor.  So the physical-tensor LTI is NOT obtained by eigen-accumulation.
+
+## The verified route: AAA + NNLS sample fit of the per-frequency tensor
+
+The verified PHYSICAL tensor is the per-frequency 3D HCurl solve
+`examples/levitation/ellipsoid/ellipsoid_alpha_tensor_3d.py` (gauged
+complex HCurl + a FINE AIR SHELL that resolves the air reaction dipole =
+the lift / Re[alpha] part; CompactAMS + COCR; ~2-3% vs the analytic
+sphere).  rom_fit.py turns those frequency samples into a passive, stable
+LTI
+
+    alpha(s) ~ alpha_inf + sum_k g_k/(1 + s tau_k),  g_k >= 0, tau_k > 0,
+
+(one RC relaxation state per pole + a feedthrough D = alpha_inf), via:
+
+  1. `scipy.interpolate.AAA(s, alpha)` DISCOVERS the dominant real LHP
+     poles -- they land on the physical Stoll decay times
+     tau_n = mu0 sigma a^2/(n pi)^2 to ~0.00 %.
+  2. pole set = those dominant poles UNION a log-spaced filler over the
+     sample band (the filler captures the high-order tail AAA buries in
+     Froissart pairs; it is ALWAYS present, so the fit degrades gracefully
+     -- one coherent method, not a fallback chain).
+  3. `scipy.optimize.nnls` real residues g_k >= 0 -> PASSIVE by
+     construction; real negative poles -> STABLE by construction.
+
+CONVENTION (a real gotcha): the fit form g_k/(1+s tau_k), g_k>=0 has
+Im[alpha(j omega)] < 0 (causal / passive e^{+j omega t}).  A 3D HCurl eddy
+solve returns the PHYSICS convention (Im > 0), so CONJUGATE the FEM samples
+(np.conj(alpha)) before fitting -- else NNLS cannot match positive Im, the
+residues collapse, and the band fit is ~58 % (a real failure).
+
+Why not the obvious alternatives (probe history, do not re-walk):
+  - raw AAA: excellent function fit (6e-10) but places Froissart +
+    occasional RHP poles -> UNSTABLE LTI; you cannot re-LS residues on the
+    full near-cancelling pole set (ill-conditioned -> garbage residues).
+  - dense log-grid NNLS only: passive but grid-smeared (~3% floor; a fixed
+    grid cannot land a pole exactly at the physical tau).
+  - hand-rolled vector fitting: finicky (column scaling / relaxed
+    constraint); not worth debugging vs AAA-discover + filler + NNLS.
+  - METRIC TRAP: the sphere has alpha(0)=0, so a POINTWISE relative error
+    blows up near DC (a phantom "980%").  Use max|fit-data|/max|data|.
+
+## Verified (analytic sphere Stoll spectrum, pure numpy, FEM-free)
+
+Cu sphere a=5mm, alpha(s) = 4 pi a^3 [ -1/2 + sum_n (3/(n pi)^2)/(1+s tau_n) ],
+1 Hz..1 GHz, n_filler=20:
+  - 16 states, band fit 1.95e-4, passive (all g_k >= 0), stable.
+  - dominant poles 184.62 / 46.155 / 20.513 us == analytic
+    mu0 sigma a^2/(n pi)^2 to 0.000 %.
+  - alpha_inf = -784.9 mm^3 == the perfect-conductor flux-exclusion limit
+    -2 pi a^3 = -785.4 mm^3.
+Golden: tests/test_levitation_mixed_galerkin_golden.py
+`::test_rom_fit_sphere_stoll_spectrum` + `::test_rom_fit_diagonal_tensor_mimo`.
+
+Verified on the ANISOTROPIC body too (FEM triaxial): Cu ellipsoid 5x3x1.5 mm,
+the verified 3D HCurl tensor sampled at 9 frequencies per axis (conjugated) ->
+3 ROMs -> a diagonal MIMO LTI (13 states), band fit ~3.6-3.9 % (= the
+per-frequency FEM data accuracy plus the sparse 9-point sampling).  Dominant
+decay times shape-split: tau_z = 60.2 us > tau_x = tau_y = 34.6 us; D_diag =
+[-102.5, -122.3, -218.8] mm^3 = the -V/(1-N_i) ordering |z|>|y|>|x| (short axis
+strongest) -- matching the static `ellipsoid_alpha_tensor.py` HF anchors.
+
+## API (radia.levitation.mixed_galerkin)
+
+```python
+from radia.levitation.mixed_galerkin import (
+    passive_foster_fit, FosterROM, diagonal_tensor_state_space)
+
+# sample the verified per-frequency tensor (or any alpha(s) data) on j omega
+rom = passive_foster_fit(s, alpha, n_filler=20)     # -> FosterROM
+rom.dominant_tau      # AAA-discovered physical Stoll decay times
+rom.tau_n, rom.g_n, rom.alpha_inf, rom.band_fit_relerr
+A, B, C, D = rom.state_space()                      # passive scalar LTI
+
+# diagonal (principal-axis) 3D tensor -> one MIMO LTI
+A, B, C, D, n = diagonal_tensor_state_space([rom_x, rom_y, rom_z])
+```
+Example `examples/levitation/physical_tensor_rom.py` (default = analytic
+sphere, fast; `--fem` = triaxial ellipsoid per-frequency tensor -> diagonal
+MIMO LTI).
+
+## Scope / caveats (honest)
+
+- The DOMINANT AAA poles ARE the physical Stoll decay times; the FILLER
+  poles are an approximation basis, NOT individually physical.
+- The fit is only as accurate as the per-frequency FEM data it consumes
+  (~2-3% for a general body; the analytic sphere is the exact anchor).
+- These are FOSTER poles tau_n, not Cauer rungs tau_pair[k] (systematic
+  ~-6-8% offset; compare like-with-like -- `radia_mcp.radia_ngsolve`
+  cln_3d POLICY).
+- This is the EXTERIOR-MATCHED physical tensor.  The mixed-Galerkin bulk
+  Foster (bulk_foster_via_eigen / bulk_foster_vector_via_eigen) uses the
+  INTERIOR-PEC eigenmodes -- a different, interior model; a SIBC tail
+  completes it, but it is NOT the same object as this exterior-matched fit.
+- Deferred first-principles alternative: a singular-M free-decay GEP with
+  an air shell -> the Stoll eigenmodes directly (route B); higher risk
+  (gauge + singular-M + open boundary).  The sample fit is the robust route.
+
+## Cross-references
+- topic `cln_mor_control` -- the port-CLN ladder this mirrors for the
+  open-boundary polarizability tensor
+- topic `force_computation` -- F ~ Re[alpha] grad(B^2) the LTI feeds
+- `radia_mcp.radia_ngsolve` cln_3d -- 3D Kameari + the Kelvin-accumulation
+  open problem (why the eigen route is avoided here)
+- `radia_mcp.mor` mor_cln / mor_cln_multiport -- CLN MOR + matrix-CLN theory
+- Refs: Landau-Lifshitz ECM sec. 59 (sphere alpha = 4 pi a^3 G(x));
+  Stoll 1974 (Bessel eddy spectrum); Nakata-Berthier / Gustavsen 1999
+  (vector fitting context); AAA = Nakatsukasa-Sete-Trefethen 2018.
 """
 
 
@@ -1585,6 +1725,7 @@ def get_knowledge(topic: str = "overview") -> str:
         overview                  - Magnetic levitation landscape + lab research (DEFAULT)
         radia_iem_fem             - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
         cln_mor_control           - Cauer Ladder Network MOR for control-coupled maglev (Yano)
+        physical_tensor_rom       - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS)
         pm_maglev_zero_power      - Passive PM levitation, Maxwell-Earnshaw
         eddy_current_maglev       - Eddy-current EDS, Kansai 2D model, Arago
         sumitomo_heavy_industrial - JP 7-327337 PM bearing + JP 2007-215264 planar mover
@@ -1611,6 +1752,10 @@ def get_knowledge(topic: str = "overview") -> str:
     if topic in ("cln_mor_control", "cln", "cauer", "cauer_ladder", "mor",
                  "model_order_reduction", "multiport_cln", "control_coupled"):
         return CLN_MOR_CONTROL
+    if topic in ("physical_tensor_rom", "tensor_rom", "polarizability_rom",
+                 "alpha_rom", "rom_fit", "aaa_nnls", "foster_rom",
+                 "stoll_rom", "physical_tensor"):
+        return PHYSICAL_TENSOR_ROM
     if topic in ("pm_maglev_zero_power", "pm", "passive_pm",
                  "zero_power", "pm_bearing"):
         return PM_MAGLEV_ZERO_POWER
@@ -1657,6 +1802,7 @@ def get_knowledge(topic: str = "overview") -> str:
             OVERVIEW,
             RADIA_IEM_FEM,
             CLN_MOR_CONTROL,
+            PHYSICAL_TENSOR_ROM,
             PM_MAGLEV_ZERO_POWER,
             EDDY_CURRENT_MAGLEV,
             SUMITOMO_HEAVY_INDUSTRIAL,
