@@ -159,6 +159,24 @@ the uniform field is still hit (4.5e-4).  Locked by
 `tests/panels/test_streamfunction_golden.py::test_streamfunction_ih_resonance`;
 connects the SF designer to the `radia-ih` work-coil pipeline.
 
+### With `--greedy-turns` (the low-turn coil): report the required capacitor
+
+When you ALSO ask for a **few-turn** coil with `--greedy-turns`, greedy owns the
+turn count, so a resonance spec can no longer search `nlevels` — the two levers
+both set the turns and would fight (`L_coil ~ N²` pins `N`).  Rather than
+silently dropping the resonance target, the result reports
+`required_cap_F = 1/((2π f)² L_coil)` — the tank capacitor that resonates the
+**delivered** few-turn coil at `--peec-freq` — plus, for `--resonance-cap`, the
+`resonance_freq_Hz` that the coil + the given capacitor actually reach (with its
+relative error vs the operating frequency).  This is the **"few-turn uniform IH
+coil → required capacitor"** answer: design the low-turn uniform coil, then size
+the capacitor to `required_cap_F`; or drop `--greedy-turns` to let `nlevels` be
+searched for `L_target`.  The `resonance` dict carries `mode = "from_greedy_coil"`
+(vs `"search_nlevels"`).  Verified end-to-end (LAB cylinder + DSV, uniform `Bz`,
+8 greedy turns, `47 nF` @ `200 kHz`): `L_coil = 25.3 µH`, `required_cap_F =
+25.0 nF`, the `47 nF` cap resonates that coil at `146 kHz`.  Locked by
+`tests/panels/test_streamfunction_golden.py::test_streamfunction_resonance_with_greedy_reports_cap`.
+
 ## Current-confinement boundary condition (`--confine {off, on, abe}`)
 
 On a **finite** former the contours run off the edges; closing them with a rim

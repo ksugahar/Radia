@@ -2484,15 +2484,34 @@ def run_manufacture(args):
         resonance = None
         tgt_L = getattr(args, "target_inductance", None)
         cap = getattr(args, "resonance_cap", None)
+        greedy_mode = bool(getattr(args, "greedy_turns", None))
         if tgt_L or cap:
             if cap:                                  # L from the tank cap + freq
                 w = 2.0 * np.pi * args.peec_freq
                 tgt_L = 1.0 / (w * w * cap)
-            resonance = _search_nlevels_for_L(
-                P, psi_v, verts, tris, tol, args, tgt_L,
-                nl_max=int(getattr(args, "nlevels_max", 60)))
-            args.nlevels = resonance["nlevels"]      # design AT the resonant N
-            args.peec = True                         # need the accurate final L
+            if greedy_mode:
+                # GREEDY owns the turn count (the low-turn coil), so we CANNOT
+                # also search nlevels to hit L_target -- the two levers both set
+                # the turns and would fight (L_coil ~ N^2 pins N).  No-Fallback:
+                # instead of silently dropping the resonance spec, report what
+                # the delivered few-turn coil ACHIEVES + the tank capacitor it
+                # needs to resonate at the operating frequency (filled from the
+                # final PEEC L below).  Turns stay = greedy_turns; nlevels is
+                # left untouched.
+                resonance = {"mode": "from_greedy_coil",
+                             "L_target_H": float(tgt_L),
+                             "operating_freq_Hz": float(args.peec_freq),
+                             "turns_source": "greedy"}
+                if cap is not None:
+                    resonance["resonance_cap_F"] = float(cap)
+                args.peec = True                     # need the accurate final L
+            else:
+                resonance = _search_nlevels_for_L(
+                    P, psi_v, verts, tris, tol, args, tgt_L,
+                    nl_max=int(getattr(args, "nlevels_max", 60)))
+                resonance["mode"] = "search_nlevels"
+                args.nlevels = resonance["nlevels"]  # design AT the resonant N
+                args.peec = True                     # need the accurate final L
 
         greedy_trace = None
         greedy_dict_used = None
@@ -2728,20 +2747,43 @@ def run_manufacture(args):
             # accurate achieved L from the FINAL chain (search used a fast nn L)
             L_ach = float(result.get("peec", {}).get("L_H", float("nan")))
             resonance["achieved_inductance_H"] = L_ach
-            resonance["achieved_rel_error"] = float(
-                abs(L_ach - resonance["L_target_H"])
-                / (abs(resonance["L_target_H"]) + 1e-30))
-            if cap is not None and L_ach > 0:
-                resonance["resonance_cap_F"] = float(cap)
-                resonance["resonance_freq_Hz"] = float(
-                    1.0 / (2.0 * np.pi * (L_ach * cap) ** 0.5))
-                resonance["operating_freq_Hz"] = float(args.peec_freq)
-            if not resonance["in_range"]:
+            w_op = 2.0 * np.pi * float(args.peec_freq)
+            if resonance.get("mode") == "from_greedy_coil":
+                # turns are fixed by --greedy-turns (the low-turn coil); the
+                # resonance spec did NOT search turns.  Report the tank capacitor
+                # this coil NEEDS to resonate at the operating frequency, and (if
+                # a cap was given) the resonance frequency this coil + that cap
+                # actually reach -- the "few-turn uniform coil -> required C" answer.
+                if L_ach > 0:
+                    resonance["required_cap_F"] = float(1.0 / (w_op * w_op * L_ach))
+                if cap is not None and L_ach > 0:
+                    resonance["resonance_freq_Hz"] = float(
+                        1.0 / (2.0 * np.pi * (L_ach * cap) ** 0.5))
+                    resonance["resonance_freq_rel_error"] = float(
+                        abs(resonance["resonance_freq_Hz"] - args.peec_freq)
+                        / (abs(args.peec_freq) + 1e-30))
                 resonance["note"] = (
-                    "L_target is OUTSIDE the achievable range "
-                    f"{resonance['L_range_H']} H over nlevels "
-                    f"{resonance['nlevels_range']}; the closest coil was kept. "
-                    "Change the former geometry or the tank capacitor C.")
+                    "turn count fixed by --greedy-turns (the low-turn coil); the "
+                    "resonance spec was NOT used to search turns (L_coil ~ N^2 "
+                    "pins the turns).  required_cap_F is the tank capacitor to "
+                    "resonate THIS coil at operating_freq_Hz -- size the capacitor "
+                    "to it; or drop --greedy-turns to let nlevels be searched for "
+                    "L_target.")
+            else:
+                resonance["achieved_rel_error"] = float(
+                    abs(L_ach - resonance["L_target_H"])
+                    / (abs(resonance["L_target_H"]) + 1e-30))
+                if cap is not None and L_ach > 0:
+                    resonance["resonance_cap_F"] = float(cap)
+                    resonance["resonance_freq_Hz"] = float(
+                        1.0 / (2.0 * np.pi * (L_ach * cap) ** 0.5))
+                    resonance["operating_freq_Hz"] = float(args.peec_freq)
+                if not resonance["in_range"]:
+                    resonance["note"] = (
+                        "L_target is OUTSIDE the achievable range "
+                        f"{resonance['L_range_H']} H over nlevels "
+                        f"{resonance['nlevels_range']}; the closest coil was kept. "
+                        "Change the former geometry or the tank capacitor C.")
             result["resonance"] = resonance
 
         if args.steps_plot:
@@ -2901,12 +2943,19 @@ def build_argparser():
                     help="IH-RESONANCE design: search the turn count (nlevels) "
                          "so the single-stroke coil inductance equals this "
                          "value in Henries (the field design is unchanged; "
-                         "L_coil ~ N^2 sets the resonance).  Forces --peec.")
+                         "L_coil ~ N^2 sets the resonance).  Forces --peec.  "
+                         "WITH --greedy-turns: turns are fixed by greedy (the "
+                         "low-turn coil), so nlevels is NOT searched; instead "
+                         "the result reports required_cap_F (the tank capacitor "
+                         "to resonate the delivered coil at --peec-freq).")
     ap.add_argument("--resonance-cap", type=float, default=None,
                     help="IH-RESONANCE design via the tank capacitor in Farads: "
                          "target L = 1/((2 pi f)^2 C) with f = --peec-freq "
                          "(the inverter frequency).  Alternative to "
-                         "--target-inductance.")
+                         "--target-inductance.  WITH --greedy-turns: turns are "
+                         "fixed by greedy, so the result reports the resonance "
+                         "frequency THIS coil + this cap reach (resonance_freq_Hz)"
+                         " plus required_cap_F to hit --peec-freq exactly.")
     ap.add_argument("--nlevels-max", type=int, default=60,
                     help="upper bound for the IH-resonance nlevels search")
     ap.add_argument("--contour-sub", type=int, default=1,
