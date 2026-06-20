@@ -96,6 +96,11 @@ Kelvin shell is the classical workhorse.)
   `10→4e9`→`2→339`, vector-L2 `19→1.5e10`→`3→15` for `P=2..8`), and the DtN is spectral
   (`n≤P−1`) — a usable, arbitrary-order, exact-sequence exterior element (the static kernel of
   Nannen 2013; C++/3-D port is downstream).
+- **The genuine VECTOR IEs are built** (`act7_30`): the de Rham vector ends carry two distinct radial
+  Steklov ladders — gradient/normal (H1, H(div)) `−(n+1)` and **toroidal/transverse (H(curl)) `−n`**
+  — each spectral and well-conditioned in an orthogonal basis (toroidal cond `6.85→2.6e9`→`1→326` for
+  `P=2..8`). H(div) is the Hodge dual (same ladders). The full Maxwell/wave vector IE (TE/TM, Hankel
+  radial) is Nannen 2013, downstream.
 
 ## 5. Build decision for Radia (Gate 2 / Gate 3 spec)
 
