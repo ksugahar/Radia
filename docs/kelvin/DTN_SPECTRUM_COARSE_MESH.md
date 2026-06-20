@@ -251,6 +251,21 @@ one reaches 5–6 digits. (Past `k ≥ 3` it plateaus ~1e-5: the residual
 conformal-weight quadrature / energy-quotient limit.) Script:
 `examples/kelvin_transformation/DtN_spectrum/floor_vs_curve.py`.
 
+**The floor in closed form — `floor ~ (h/R)^{2k}`.** Sweeping the *surface mesh* `h`
+at each geometry order `k` (rather than `k` at fixed `h`) pins the floor's law:
+the DtN eigenvalue is an **energy functional**, so it **superconverges at twice the
+isoparametric boundary order** (Strang–Fix / Ciarlet–Raviart domain approximation):
+
+```
+   k=1 :  q ≈ 1.86  (≈ 2k=2)        floor ~ (h/R)^{2k}
+   k=2 :  q ≈ 3.77  (≈ 2k=4)        ratio q(2)/q(1) = 2.03  (the 2k doubling, NOT k+1)
+   k=3 :  bottoms out on the ~1e-6 double-precision floor  (2k=6 not observable)
+```
+
+mode-independent (`n=2` and `n=3` agree). So `k=2` already suffices and the practical
+knob is the `Γ` surface `h`, not `k>2`. Script:
+`examples/kelvin_transformation/DtN_spectrum/demo_xx13_geometry_floor_law.py`.
+
 ### Isolating the Kelvin open-BC error from the interior FEM error
 
 On **one shared shell mesh**, swap only the `Γ` operator — exact-DtN Robin
@@ -308,6 +323,36 @@ This is the directly relevant case for the planar cross-section of a static
 apparatus or rotating machine: the same coarse-mesh accuracy, with the
 2-D ladder.
 
+### The design calc on a real apparatus (reactor / transformer leg)
+
+Run a reactor/transformer **leg winding** (a balanced 2-D current set `{(z_k, I_k)}`,
+`Σ I_k = 0`) through the whole closed-form calc — `demo_xx16_apparatus_design_calc.py`:
+
+```
+   exterior content = winding CURRENT MOMENTS  a_m = Σ_k I_k z_k^m   (== FFT of A_z on Γ, 2.7e-17)
+   balanced winding -> NO monopole;  x<->-x symmetry -> ODD multipoles only (m=1,3,5,…)
+   optimal enclosing R*/a_app = 2.78  (min DoF proxy (R/a)² p*²)   p* = 5  for ε=1e-4
+   m≤p* closure reproduces the exterior field to 1.96e-5  ≤ ε
+```
+
+So from the winding geometry alone the open-boundary `R` and `p` follow directly — no
+convergence study. The odd-only excitation is a **symmetry selection rule** (like the
+magnetized square's `n = 4k+1` in `demo_e`), and a linear iron core only **rescales** the
+moments `a_m`, not the geometric `a_app/R` decay, so the design order is unchanged.
+
+### Vector (A-formulation) Kelvin centre — use a centre-less DtN
+
+For the edge-element **A-formulation** the Kelvin material weight is
+`ν' = (ρ'/R)²` (the reciprocal of the scalar `μ' = (R/ρ')²`), so it **vanishes** at the
+centre while the scalar weight **diverges** there. The scalar centre is benign — a
+diverging weight pinned away by a single GND node — but the A-form centre is a
+**zero-curl-curl-stiffness** region with no single node to pin (HCurl edges + a gauge null
+space). The centre carries **no DtN physics** (field-energy fraction in `[0,ε] → 0`), so a
+**centre-less DtN** (FEM-BEM, never creating the centre node) loses nothing and sheds the
+degenerate region. Measured in `demo_xx15_aform_center_singularity.py` (the volume A-form
+still works on a coarse mesh with the gauge mass-reg — `demo_j` — the centre-less route is
+the robust one at scale).
+
 ### The lab's real two-sphere periodic Kelvin (end-to-end validation)
 
 `kelvin_twosphere_shell_dipole` solves the genuine two-offset-sphere periodic-BC
@@ -351,6 +396,39 @@ confirmed on the actual implementation.
    mesh resolution only polishes the low-mode eigenvalues from an already-tiny
    coarse-mesh floor. This separates "the operator is wrong" from "the mesh is
    too coarse," which a pure field-refinement study cannot.
+
+### The mesh-adequacy criterion in closed form
+
+Item 1 ("size the air box without a convergence sweep") becomes two **closed-form
+numbers** — the abstract's promise that "from the source's multipole content, the
+required surface resolution **and** element order follow in closed form". The total
+Kelvin closure error factorises into a **source side** (which element order `p`) and a
+**geometry side** (which surface mesh `h`):
+
+```
+   err  ~  max(  (d_max/R)^p   [SOURCE: demo_xx12/xx14],   C·(h/R)^{2k}  [GEOMETRY: demo_xx13]  )
+```
+
+- **Source side — required element order.** A source at radial distance `d` from the
+  Kelvin centre pumps a geometric multipole tower `|a_m|/|a_1| = (d/R)^{m−1}`
+  (machine-precise), so the order-`p` closure (which captures `m ≤ p` exactly) needs
+  ```
+     p*  =  ⌈ ln ε / ln(d_max/R) ⌉
+  ```
+  For several bodies the **most eccentric** `d_max` governs (the ladder `−(n+1)/R` is a
+  property of `Γ`, source-independent — a common enclosing sphere is invariant). A
+  compact, centred source (`d/R → 0`) is a pure dipole, `p=1`; an eccentric one blows
+  `p` up → **re-centre** the sphere. Verified analytically (`demo_xx12`) and **end-to-end
+  by a real Kelvin solve** (`demo_xx14`: an off-centre dipole, exterior field recovered by
+  the inverse Kelvin map; the field error decays at `~2·ln(d/R)` — the exterior field
+  *beats* the trace rate via radial suppression — so `p*` is a **sufficient, conservative**
+  design rule, margin `4×–40×`).
+- **Geometry side — required surface resolution.** At `p ≥ n` the residual is the
+  curved-sphere floor `~ (h/R)^{2k}` (the energy superconvergence above), so `k=2` and the
+  `Γ` surface mesh `h` set the accuracy floor.
+
+So the design calc is: from the source compactness / eccentricity choose `p`; from the
+target accuracy choose the `Γ` surface `h` at `k=2` — no convergence study.
 
 ### Relation to the radia-ngsolve DtN hierarchy
 
@@ -479,7 +557,10 @@ MCP knowledge tool for the live recipe.
   consolidated "where to spend elements" guide (the Γ-conforming mesh
   constraint + the six measured pillars above: exterior-volume-free,
   floor = Curve order, `p ≥ n` & p-vs-h, optimal `R/a ≈ 3`, corner `hp`,
-  DoF-cost `1/45`; confirmed in 2D on the `−n/R` ladder).
+  DoF-cost `1/45`; confirmed in 2D on the `−n/R` ladder) **plus the
+  closed-form mesh-adequacy criterion** (source order `p* = ⌈ln ε/ln(d_max/R)⌉`,
+  geometry floor `(h/R)^{2k}`, eccentric/multi-body, the A-form centre, and the
+  reactor-leg apparatus design calc).
 - **BEM side** — `radia_mcp.radia_ngsolve.bem_integral`:
   `laplace_exterior_dtn()` (assemble `Λ_h`), `exterior_dtn_spectrum()`
   (eigenvalues matched to `−(n+1)/R`), `dtn_spectrum_vs_mesh()` (per-degree
@@ -494,6 +575,15 @@ MCP knowledge tool for the live recipe.
   [`examples/dtn_spectrum_coarse_mesh_demo.py`](../../packages/radia-mcp/examples/dtn_spectrum_coarse_mesh_demo.py)
   — Part A (BEM spectrum), Part B (Kelvin effective DtN), Part C (exterior-mesh
   sweep). Runs end-to-end.
+- **Demos** (`examples/kelvin_transformation/DtN_spectrum/`, each self-asserting):
+  the six `mesh_control` pillars (`floor_vs_curve`, `p_vs_h_study`, `demo_e`,
+  `demo1_hp_lshape`, `demo_budget_dofcost`, …); the **mesh-adequacy criterion**
+  `demo_xx12` (source `p*`), `demo_xx13` (geometry `(h/R)^{2k}`), `demo_xx14`
+  (eccentric, FEM end-to-end), `demo_xx15` (A-form centre), `demo_xx16`
+  (reactor-leg design calc); and the **non-separable build + DtN→CLN arc**
+  `demo_xx9`/`demo_xx10` (square C4v / cube O_h, FEM-built eddy DtN), `demo_xx11`
+  (2-D conformal Kelvin disk, no weight). See the directory
+  [`README.md`](../../examples/kelvin_transformation/DtN_spectrum/README.md).
 - **Tests:**
   [`tests/test_dtn_spectrum_coarse.py`](../../packages/radia-mcp/tests/test_dtn_spectrum_coarse.py)
   (BEM spectrum + Kelvin + 2-D Kelvin),
