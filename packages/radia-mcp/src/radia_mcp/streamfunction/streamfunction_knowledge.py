@@ -735,6 +735,25 @@ ROUNDING / REFINEMENT (the topology-opt SIMP analogy); single-pass (one wire)
 is the N=1 extreme (path optimisation).  So "few turns" is not a separate
 paradigm -- it is the discrete back-end that completes SF for ALL turn counts.
 
+CONTOUR ORIENTATION = grad-psi winding (the single-wire l>=2 fix, production)
+---------------------------------------------------------------------------
+The single-wire / equal-current manufacture path orients each contour loop by
+the surface-current winding K = n_hat x grad_s(psi) (a KDTree majority vote of
+segment-direction . K per loop; global sense aligned to the target), NOT by the
+old per-loop field alignment sign(f.B).  WHY it matters: the marching-triangles
+polyline order is arbitrary, so its winding does not carry the current sign.
+sign(f.B) ('flip every loop to help the target') recovers it ONLY for a MONOTONE
+psi (l=1 gradient); for a SADDLE psi (l>=2 shim: Z2, Z3, C2/S2 ...) the natural
+winding has MIXED senses (the single wire reverses through the saddle) and
+sign(f.B) FLATTENS them, so one common series current cancels itself.  Measured:
+Z2 single-wire 88% (sign(f.B)) -> 5.6% (grad-psi, loop-set) -> ~9% delivered
+(+ field_aware chain + --distort); Gx (l=1) is IDENTICAL either way (grad-psi is
+a strict generalisation).  This was an orientation BUG, not a physics limit --
+single-wire l>=2 shims DO work.  `_gradpsi_signs` / `_build_gradpsi_kdt` in
+calc_streamfunction.py; verified by examples/stream_function/
+verify_gradpsi_orientation.py.  (The ~9% delivered is the documented multi-region
+single-stroke BRIDGE ceiling; sub-1% l>=2 needs multi-wire / independent feeds.)
+
 (1) EQUAL-deltaI CONTOURS  (default, --nlevels N)
     N iso-contours at equal psi increments = N equal-current turns; the
     asymptotic large-N continuum.  KEY PITFALL: the contour-quantise turn count

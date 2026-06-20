@@ -18,21 +18,17 @@ Per geometry/target it reports:
 --confine abe (closes contours).  Metric = relative field rms.  Targets: Z2
 (the hard l=2 case) + Gx (l=1 sanity contrast).
 
-CONCLUSION (measured): geometry does NOT fix it.  Z2 best single wire stays
-~0.69 across aspect L/2a = 1.7 -> 6.7 AND for smaller DSV; a longer former does
-not help.  And the limit is NOT design/order/geometry: the Z2 CONTINUOUS design
-is ~0.9% everywhere (order 1 and 2; purity 0.9999) and INDEPENDENT currents on
-the same contour loops reach ~5e-4 -- so the loop basis is perfect.  The wall is
-SPECIFICALLY the single COMMON series current for an l=2 (saddle-structure) psi.
-Gx (l=1, monotone psi) single-wire is fine and improves with length (~5e-3).
-=> "advance the research": the open problem is the equal-current contour
-discretisation / ORIENTATION for multi-region (l>=2) psi -- the per-loop
-sign(f.B) flip (_loop_field_signs) aligns every loop to the target, which is
-right for a monotone l=1 psi but destroys the natural grad-psi winding that
-already encodes the correct MIXED senses of a saddle psi.  Hypothesis (not yet
-implemented): orient the single wire by the consistent grad-psi winding instead
-of per-loop field alignment.  Verified-perfect basis + SF theory both say
-single-wire Z2 SHOULD be realizable; the current discretisation does not.
+CONCLUSION (measured): geometry does NOT change the Z2 single-wire residual --
+it is flat across aspect L/2a = 1.7 -> 6.7 and for smaller DSV.  The lever was
+NEVER geometry: the Z2 CONTINUOUS design is ~0.9% everywhere (order 1 and 2,
+purity 0.9999) and INDEPENDENT currents on the same contour loops reach ~5e-4
+(the loop basis is perfect).  The single-wire bottleneck was the equal-current
+contour ORIENTATION, now FIXED in production (commit 630ece06): loops are
+oriented by the consistent grad-psi winding K = n_hat x grad_s(psi), not the
+sign(f.B) flip that flattened the saddle's mixed current senses.  POST-FIX this
+bench's best_wire for Z2 is a few-% (was ~70%); see verify_gradpsi_orientation.py
+for the controlled before/after (Z2 88% -> 5.6% loop-set, ~9% delivered single
+wire).  Gx (l=1, monotone psi) is unchanged (~5e-3) and improves with length.
 
 Outputs (committed): bench_low_turn_geometry.json + .png next to this script.
 Run:  python bench_low_turn_geometry.py
