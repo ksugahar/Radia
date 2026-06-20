@@ -59,6 +59,13 @@ def streamfunction(topic: str = "overview") -> str:
             "regularized"     - regularisation menu + folded Tikhonov closed form
             "pareto"          - (homogeneity, peak current density) Pareto
                                 front + 4 levers + sheet-metal (板金) forming
+            "material_aware"  - SF design WITH IRON (--iron-vol): Kelvin-FEM
+                                reaction folded into the whole pipeline,
+                                obs-adjoint scalability, exact-quad source
+            "low_turn"        - low/many-turn discrete refinement: greedy
+                                constructive (--greedy-turns, monotone) +
+                                connector-aware, --pin-tiling driven array,
+                                --optimize-levels, --distort, single-pass
             "single_stroke"   - one-wire chain, FE-direct on arbitrary formers,
                                 sheet-metal wire distortion
             "fe_direct"       - FE-direct H1 psi on plane/cylinder/sphere
@@ -137,7 +144,8 @@ def main():
     if "--selftest" in sys.argv:
         print("Stream-function MCP server self-test:")
         for t in ["overview", "theory", "api", "kernel_agnostic",
-                  "regularized", "pareto", "single_stroke", "fe_direct",
+                  "regularized", "pareto", "material_aware", "low_turn",
+                  "single_stroke", "fe_direct",
                   "deformation", "cmaes", "performance", "validation",
                   "literature", "workflow", "fusion", "clebsch_3d"]:
             result = streamfunction(t)
