@@ -2878,11 +2878,18 @@ DTN_COARSE_MESH_DTN_TO_CLN = r"""
 #                                          #   (point-group split: cube O_h, square C4v)
 #   ob.band_cln_fit(s_band, dtn, stages)   # convergent band-CLN for the non-separable case
 # Goldens tests/open_boundary/{test_dtn_cln,test_kelvin_dtn}.py; example examples/open_boundary/.
-# NOT NOVEL: separable = Grote-Keller / Hagstrom-Warburton continued-fraction ABCs /
-# Warburg-Cauer / Kameari CLN; material-in-exterior Kelvin = Freeman-Lowther 1988/89 (FEMM).
-# The plausibly-novel part is the FUSION (Kelvin material-aware DtN as an inverse-design
-# kernel = the SF-with-iron line), NOT the open-boundary use -- a verified reusable
-# operator, not a paper claim.
+# PROVENANCE (3 layers -- see kelvin_transformation(topic="material_exterior")):
+#   separable Zs-DtN-CLN = Grote-Keller / Hagstrom-Warburton continued-fraction ABCs /
+#     Warburg-Cauer / Kameari CLN (classical);
+#   Kelvin open boundary with AIR exterior + interior material = Freeman-Lowther 1988/89
+#     (FEMM); transforming sigma under a conformal map = transformation optics /
+#     Ward-Pendry 1996 (DC sigma cloaks) -- both classical;
+#   Sugahara's own contributions = the VALIDATED FUSIONS: (i) Kelvin inversion as an
+#     exact open boundary with the sigma-CONFORMAL transform so a CONDUCTOR crosses the
+#     truncation, eddy-current-testing-validated (IEEE Magnetics 2022); (ii) the Kelvin
+#     material-aware DtN as an INVERSE-DESIGN kernel (SF-with-iron, conf ~0.83, self-
+#     check pending).  The building blocks are classical; the validated fusion is the
+#     contribution.  This module is the verified reusable operator, not a paper claim.
 
 The cleanest time-domain open boundary uses NO absorbing shell at all.  An
 absorbing shell + PEC only presents an effective surface impedance = the exact exterior
