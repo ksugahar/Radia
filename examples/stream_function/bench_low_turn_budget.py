@@ -21,6 +21,13 @@ HONEST scope: ONE representative geometry (the golden cylinder fixture), TWO
 targets.  Few turns = coarse quantisation of a continuous current density, so
 the achievable field accuracy is bounded; this bench measures that bound.
 
+POST-FIX NOTE (grad-psi orientation, commit 630ece06): the production single-wire
+orientation now uses K = n_hat x grad_s(psi), not sign(f.B), so Z2 (l=2) single-
+wire NOW works -- optimize_levels reaches a few-% equal-current residual instead
+of ~70%.  The earlier "Z2 single-wire fails / needs a driven array" reading was an
+ORIENTATION BUG, not a physics limit (see verify_gradpsi_orientation.py).  Gx
+(l=1) is unchanged.  These numbers are POST-fix.
+
 Outputs (committed, per the Data Persistence Policy): bench_low_turn_budget.json
 + bench_low_turn_budget.png next to this script.  The .vol meshes are gitignored
 and regenerated into a temp dir by tests/panels/fixtures/make_streamfunction_vol.py.
@@ -46,7 +53,7 @@ N_SET = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16]
 GREEDY_MAX = 16
 SPECS = [0.30, 0.20, 0.10, 0.05, 0.02]
 CONFINE = "abe"          # the recommended BC: closes the contours on a finite former
-EVAL_MAX = 24
+EVAL_MAX = 40            # >=40 so Z2 (l=2) is not under-sampled (24 reads false)
 
 
 def _env():
