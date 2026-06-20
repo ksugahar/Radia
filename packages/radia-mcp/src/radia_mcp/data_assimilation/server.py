@@ -40,7 +40,7 @@ register_status_tool(
     server_name='mcp-server-data-assimilation',
     description='Kalman / EnKF / 4D-Var for EM state estimation + sensor fusion',
     subpackage='radia_mcp.data_assimilation',
-    related_servers=["mor", "fusion"],
+    related_servers=["mor", "fusion-reactor"],
     optional_deps=["filterpy"],
 )
 

@@ -125,7 +125,7 @@ mcp-server-pcb = "radia_mcp.pcb.server:main"
 mcp-server-team-benchmark = "radia_mcp.team_benchmark.server:main"
 mcp-server-litz-transmission = "radia_mcp.litz_transmission.server:main"
 mcp-server-maglev = "radia_mcp.maglev.server:main"
-mcp-server-fusion = "radia_mcp.fusion.server:main"
+mcp-server-fusion-reactor = "radia_mcp.fusion_reactor.server:main"
 mcp-server-rna-mec = "radia_mcp.rna_mec.server:main"
 mcp-server-literature-index = "radia_mcp.literature_index.server:main"
 # 2026-05-26 v0.82.0: md2html -- Markdown -> self-contained HTML

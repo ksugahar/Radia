@@ -1010,7 +1010,7 @@ easier curve negotiation, safer derailment margin.
   HTS-bulk pinning is the stationary-bearing variant)
 - `eddy_current_maglev` -- physics common to SCMaglev levitation
 - `halbach_arrays` -- PM alternative to SC magnets
-- `radia_mcp.fusion` -- adjacent SC magnet design expertise
+- `radia_mcp.fusion_reactor` -- adjacent SC magnet design expertise
 """
 
 

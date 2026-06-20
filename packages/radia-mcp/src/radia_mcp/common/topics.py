@@ -18,7 +18,7 @@ from the MCP `tools/list` response, so an LLM has to either:
 returns the authoritative topic enumeration in a stable shape:
 
     {
-        "server": "mcp-server-fusion",
+        "server": "mcp-server-fusion-reactor",
         "n_topics": 4,
         "topics": [
             {"name": "overview",    "description": "..."},
@@ -42,7 +42,7 @@ At the bottom of a dispatcher-style server.py, after the dispatcher
 
     register_topics_tool(
         mcp,
-        server_name="mcp-server-fusion",
+        server_name="mcp-server-fusion-reactor",
         topics=TOPICS,                    # dict[str, str]
     )
 
@@ -65,7 +65,7 @@ def register_topics_tool(
 
     Args:
         mcp:          FastMCP instance.
-        server_name:  Full server name (e.g. "mcp-server-fusion") — only
+        server_name:  Full server name (e.g. "mcp-server-fusion-reactor") — only
                       used in the payload; the registered tool name
                       derives from it via the rule
                           mcp-server-<short>  ->  <short>_topics

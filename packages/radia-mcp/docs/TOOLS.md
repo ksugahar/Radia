@@ -20,7 +20,7 @@ Total: **330 tools** across 39 MCP servers.
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
 | [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 12 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 3 |
-| [`mcp-server-fusion`](#mcp-server-fusion) | `radia_mcp.fusion` | 3 |
+| [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 7 |
 | [`mcp-server-litz-transmission`](#mcp-server-litz-transmission) | `radia_mcp.litz_transmission` | 3 |
 | [`mcp-server-rna-mec`](#mcp-server-rna-mec) | `radia_mcp.rna_mec` | 3 |
@@ -355,17 +355,17 @@ Module: `radia_mcp.accelerator.server`
 | `accelerator_status` | (no description) |
 | `accelerator_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 4 topics. |
 
-## `mcp-server-fusion`
+## `mcp-server-fusion-reactor`
 
 _Fusion reactor magnets: tokamak ITER + stellarator LHD/W7-X/heliotron lineage_
 
-Module: `radia_mcp.fusion.server`
+Module: `radia_mcp.fusion_reactor.server`
 
 | Tool | Description |
 |---|---|
-| `fusion` | Fusion reactor magnet knowledge. |
-| `fusion_status` | (no description) |
-| `fusion_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 12 topics. |
+| `fusion_reactor` | Fusion reactor magnet knowledge. |
+| `fusion_reactor_status` | (no description) |
+| `fusion_reactor_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 12 topics. |
 
 ## `mcp-server-magnetic-materials`
 
