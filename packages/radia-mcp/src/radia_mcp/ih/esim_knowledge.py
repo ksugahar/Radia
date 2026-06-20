@@ -365,6 +365,45 @@ dZ_max stops decreasing while Z_s_abs_mean stabilises, the global
 average is converging but individual hotspot DOFs still oscillate.
 For P_wp purposes this is usually OK (P_wp tracks the mean), but
 local saturation pattern is unreliable.
+
+## Operating-regime stall map (dense (I, f) sweep, IGTE 2026 ESIM digest)
+
+Empirical convergence behaviour on the IGTE workpiece (Ø50 mm x
+H25 mm steel, BH src/radia/panels/samples/em_sample_bh.txt) with
+default Karl settings (--esim-max-iter 30 --esim-relax 0.5
+--esim-anderson-m 5), 108-case sweep (9 I_port x 6 f, scalar +
+per-element each):
+
+  Region                              | Behaviour
+  ------------------------------------|----------------------------
+  Low / medium I (1 -- 200 A) all f   | converged 6-13 iter (median 8)
+  I = 500 A, f = 10 kHz               | converged 6 iter
+  I = 500 A, f = 20 kHz               | stall (iter=30 cap, conv=False)
+  I = 500 A, f = 50 kHz               | stall
+  I = 500 A, f = 100 kHz              | stall
+  I = 500 A, f = 200 kHz              | stall
+  I = 500 A, f = 500 kHz              | stall (spurious +20 % gap)
+
+Interpretation: the I = 500 A high-frequency band is the only
+operating region where per-element Karl + Anderson-II currently
+fails to converge in 30 iterations.  Raising --esim-max-iter
+beyond 30 does NOT help in this band (the per-DOF Z_s oscillates
+around a non-fixed-point limit cycle, not slowly drifting).  The
+underlying cause is suspected to be the locally non-Lipschitz
+piecewise BH at deep saturation crossings; needs further study.
+
+For converged cases the per-element vs scalar gap reaches:
+  - max -49.8 % at (500 A, 10 kHz)    (converged, this is the
+                                       digest panel-(b) case)
+  - max -47.4 % at (200 A, 100 kHz)   (converged, second-worst)
+  - max +28   % at (1 A, 500 kHz)     (sign flips below BH knee)
+
+Reproducing the full sweep: examples/ih_esim_benchmark/sweep_f_I.py
+(restart-safe after 1795e078 -- transient NAS-import flickers
+auto-recover; see ih_esim "troubleshooting" topic).
+
+Source-of-truth data: examples/ih_esim_benchmark/sweep_data_dense/*.json
+(108 per-case JSONs + sweep_results.json, committed `847259d2`).
 """
 
 
@@ -433,6 +472,8 @@ ESIM_USAGE_TROUBLESHOOTING = """
 | Karl converges but P_wp wildly off ref             | wrong --half-thickness        | Use min(R_wp, H_wp/2) for solid bulk |
 | `BIE iv overflow` / NaN seed                       | very high xi (R/delta > 100)  | Cell solver uses thin-skin fallback automatically (v4.46.1+); upgrade radia |
 | Per-element runs but stagnates around dZ_max=0.3   | BH-knee-straddling DOFs       | Try --esim-relax 0.2; if still stuck, P_wp is usually stable to ~1% anyway |
+| Per-element stalls at iter=30 in I=500 A f>=20 kHz band | high-current high-freq limit cycle | See `convergence` topic, "Operating-regime stall map" -- not fixable by raising max_iter |
+| `{"error": "No module named 'radia.<X>'"}` in JSON, returncode 0 | transient NAS-share import flicker under heavy 100bangoki OCR load | radia >= 4.92.0: calc_main now exits non-zero on any error (commit `5b88b67f`).  Sweep wrappers see returncode != 0 and can retry.  examples/ih_esim_benchmark/sweep_f_I.py has auto-recover for cached error JSONs (commit `1795e078`). |
 
 ## Sanity checks
 
@@ -608,10 +649,37 @@ Reproduction (from any machine with radia >= 4.67.0 installed):
     --h1-order 1 --wp-bem-backend intree-dense \\
     --output {scalar,per_panel}.json
 
-For the full 32-case heatmap (Fig. 1a) use
-examples/ih_esim_benchmark/sweep_f_I.py.
+For the full 108-case (I, f) sweep map (Fig. 1a of the IGTE 2026
+digest) use examples/ih_esim_benchmark/sweep_f_I.py.  Grid:
+I_port in {1, 2, 5, 10, 20, 50, 100, 200, 500} A x
+f in {10, 20, 50, 100, 200, 500} kHz x {scalar, per_panel}
+= 9 x 6 x 2 = 108 cases.
 
-Frozen artifacts: C:/temp/igte_bench/sweep_v2/* (LAB, 2026-05-22).
+Frozen artifacts: examples/ih_esim_benchmark/sweep_data_dense/*.json
+(108 per-case JSONs + sweep_results.json + side-wall |Z_s| at the
+max-gap I=500 A / f=10 kHz case, committed `847259d2` on 2026-05-30).
+Replaces the older sparse 32-case `sweep_v2` at C:/temp/igte_bench/.
+
+## Dense-sweep max-gap point (IGTE 2026 digest panel (b))
+
+Maximum per-element-vs-uniform P_wp gap over the dense grid:
+
+  Case            Scalar P_wp    Per-element P_wp   Gap       Notes
+  --------------  -------------  -----------------  --------  -----------------
+  500 A, 10 kHz   162.85 W       81.83 W            -49.75 %  CONVERGED iter=6
+                                                              (digest panel (b))
+  200 A, 100 kHz  310.48 W       163.36 W           -47.39 %  CONVERGED iter=8
+
+The 500 A / 10 kHz case has both the maximum P_wp gap AND the
+maximum |Z_s| spatial spread (4.5--16.5 mOhm = 4.36x ratio) among
+all CONVERGED cases.  Non-converged 500 A high-freq cases formally
+show larger spreads (up to 9.3x at 500 A / 200 kHz) but the per-
+element Karl limit cycle makes those Z_s values unreliable.
+
+Source: examples/ih_esim_benchmark/sweep_data_dense/
+        I500_f10k_per_panel.json (per-DOF Z_s) +
+        examples/ih_esim_benchmark/sweep_data/
+        I500_f10k_Zs_side_field.json (side-wall (theta, z, |Z_s|, R)).
 
 ## Three-path consistency (linear-mu screening)
 
