@@ -138,6 +138,7 @@ def _compare_B(solver, grp_ref, pts, mesh):
 # to 2 times to absorb the rare bad iteration without masking a real
 # regression.  See cf576fa4 / eeb664c3 commit messages for the L_coil
 # convergence study where the same runner-state effect showed up.
+@pytest.mark.slow
 @pytest.mark.flaky(reruns=2, reruns_delay=2)
 class TestOmegaReducedOmegaKelvin:
 
