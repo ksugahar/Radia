@@ -2780,6 +2780,55 @@ the .vol. Guarded by the static lint rule `ngsolve-curve-after-vol-import`.
 """
 
 
+DTN_COARSE_MESH_METHOD_MAP = r"""
+# Open-boundary method map -- Kelvin / BEM / PML / IABC / CLN
+
+Full doc: docs/open_boundary/OPEN_BOUNDARY_MAP.md. They all realize ONE operator
+-- the exterior DtN Lambda_ext on Gamma -- which is reverse-Bessel RATIONAL per
+mode (poles = Bessel/Thomson filter poles; demo_uu 1e-15).
+
+## Three axes that select the method
+1. FREQUENCY (kR): quasi-static kR->0 = real ladder -(n+1)/R -> KELVIN (spatial)
+   or its CLN time-domain realization; radiating finite-kR = complex Hankel DtN
+   -> IABC / PML / extended-Kelvin. Wave is rational in s, diffusion in sqrt(s),
+   SAME reverse-Bessel poles (demo_xx3).
+2. GEOMETRY (truncation shape): Kelvin inversion is SPHERE-LOCKED (Liouville; the
+   BODY inside is arbitrary). CLN/IABC/BEM are surface-free; CLN is finite-exact
+   ONLY on a separable surface (sphere=rational, n+1 stages), convergent-approx on
+   cylinder/cube. Elongated body: sphere wastes air, a cylinder hugs.
+3. SPACE vs TIME: KELVIN = spatial operator FACTORY (builds the sparse DtN,
+   arbitrary body + iron, no Green's function); CLN = temporal operator REDUCER
+   (compresses the DtN's s-dependence to a Cauer ladder). They COMPOSE.
+
+## No free lunch (modal axis)
+Every method truncates the multipole ladder at finite n_max (Kelvin p>=n, BEM
+surface Nyquist, CLN n_max + stages). Universal; the source multipole content
+sets n_max. CLN "exact" = exact per-mode impedance synthesis over a FINITE set.
+
+## Selection map
+- separable + transient          -> CLN alone (beats PML; demo_xx5/xx6)
+- separable + static             -> analytic DtN / Kelvin (Kelvin exactness = elegance)
+- arbitrary body + iron + static -> KELVIN (only sparse Green-free factory; SA paper)
+- arbitrary + iron + transient   -> Kelvin BUILDS + CLN REDUCES
+- radiating (finite kR)          -> IABC / PML / extended-Kelvin
+
+## Measured anchors (audit-verified 2026-06-19)
+- Kelvin: 6 mesh_control pillars (Gamma-only 1e-15, floor=Curve 1.3e-5, p>=n &
+  p-vs-h ~1000x, R/a~2.78, corner 0.357/0.661, DeltaDoF 58->1/45; 2D -n/R).
+- IABC exact-DtN (wave): demo_uu (DtN poles = Bessel filter, 1e-15), demo_uu2
+  (FETD reflection O(h^2) 5.7e-4->3.6e-5, x2471 vs Sommerfeld-1, passive).
+- CLN (diffusion): demo_xx3 (Cauer in sqrt(s) EXACT n+1 stages 1e-16 vs Foster
+  floor 1.7e-3), demo_xx4 (700-DOF eddy FEM -> N=16 ladder, ~43x, SPD stable),
+  demo_xx5 (transient reflection 9.9e-7, 62659x vs Dirichlet), demo_xx6 (CLN 8
+  online DOF vs CFS-PML 128 at matched NRMSE 1.46e-4 = 16x fewer + 53189x better
+  cond@DC, DC-exact). NON-CLAIM: propagating waves are PML's home; arbitrary
+  geometry needs Kelvin + CLN.
+
+Companions: kelvin_transformation(topic="mesh_control"), iabc(topic=...),
+mor_cln(...).
+"""
+
+
 def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
     """Return DtN-spectrum / coarse-mesh-accuracy documentation."""
     topics = {
@@ -2791,6 +2840,7 @@ def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
         "formulation": DTN_COARSE_MESH_FORMULATION,
         "datasheet": DTN_COARSE_MESH_DATASHEET,
         "symmetry_hex": DTN_COARSE_MESH_SYMMETRY_HEX,
+        "method_map": DTN_COARSE_MESH_METHOD_MAP,
     }
     if topic == "all":
         return "\n\n".join(topics.values())
