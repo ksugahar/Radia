@@ -2726,6 +2726,40 @@ with the Nagamine 2D-cylindrical tensor "in-plane identity slots" note above):
     sqrt(s) (unlike the 3D sphere's reverse-Bessel), so the 2D CLN is a band
     APPROXIMATION, not machine-exact.
 
+## Mesh-adequacy criterion (SOURCE side): required p from eccentricity
+
+The "p >= n for the highest excited multipole n" knob (section 3) becomes a CLOSED-FORM
+NUMBER once you ask "how big is n for MY source?".  A source at radial distance d from
+the Kelvin centre (truncation radius R) pumps a geometric multipole TOWER
+
+        |a_m| / |a_1|  =  (d/R)^(m-1)                              (machine-precise)
+
+(an on-centre source d->0 is a pure dipole = m=1 only; eccentricity geometrically pumps
+higher multipoles with ratio rho = d/R).  The Kelvin closure captures m<=p EXACTLY
+(p-method, section 3), so the SOURCE-side closure error is the dropped tail ~ (d/R)^p,
+giving the closed-form REQUIRED ELEMENT ORDER
+
+        p*  =  ceil( ln(eps) / ln(d_max/R) )
+
+and for SEVERAL bodies the MOST eccentric d_max governs (the ladder -(n+1)/R is a Gamma
+property -- a common enclosing sphere keeps it invariant; only the excited content
+changes, paper S5).  Table p*(d_max/R, eps):
+
+        d/R \\ eps    1e-2  1e-4  1e-6  1e-8
+        0.30           4     8    12    16
+        0.50           7    14    20    27
+        0.70          13    26    39    52
+        0.85          29    57    86   114
+
+Reading: a COMPACT, CENTRED source (d/R -> 0) is a pure dipole -> p=1 suffices; an
+ECCENTRIC source (d/R -> 1) blows p up -> RE-CENTRE the Kelvin sphere on the source (or
+pay the order).  This is the QUANTITATIVE form of the "center on the device, minimal
+enclosing R" knob (section 3) and the SOURCE half of the abstract's "required resolution
+AND element order in closed form"; the geometry-FLOOR half is floor_vs_curve (Curve order
+sets the 5-6 digit floor at fixed p).  Total Kelvin error ~ max( (d_max/R)^p, geometry
+floor ).  Measured to machine precision in
+examples/kelvin_transformation/DtN_spectrum/demo_xx12_adequacy_eccentric_multibody.py.
+
 ## One-line rule
 
 Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
