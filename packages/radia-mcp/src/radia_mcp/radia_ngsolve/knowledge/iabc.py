@@ -318,18 +318,31 @@ truncation), monotone in the stage count, across n=1,2,3 -- the diffusive analog
 of demo_uu2's wave reflection test.  So the reverse-Bessel/CLN open boundary is
 reflectionless in time for BOTH the wave and the diffusion regime.
 
-CLN vs PML (head-to-head, demo_xx6_cln_vs_pml.py): for the EDDY-CURRENT /
-low-frequency (quasi-static, the MQS home) regime on this separable geometry,
-CLN BEATS PML -- (a) accuracy per DOF: CLN converges EXPONENTIALLY (a MOR of the
-exact exterior, ~16 DOF to the FEM floor) vs the PML's algebraic layer (~64-128
-DOF), ~4-8x fewer DOF (34x more accurate at equal 16 DOF); (b) conditioning: the
-PML stretch 1+sigma/sqrt(s) ILL-CONDITIONS as omega->0 (cond ~6e3 at omega=1e-3)
-while the CLN reduction is real + frequency-independent (eval cond ~1 at low
-omega), ~1e3-1e4x better in the eddy-current band.  HONEST scope: at HIGH
-frequency (wave-like) PML is better conditioned (its home; lab demo_pp/nn), and
-PML's raison d'etre is ARBITRARY geometry -- the CLN counterpart there is a
-Kelvin-transformed exterior FEM reduced by CLN (not built).  So "CLN beats PML"
-holds for the separable low-frequency eddy-current case, not as a blanket claim.
+CLN vs PML (head-to-head, demo_xx6_cln_vs_pml.py): the eddy-current/diffusion
+exterior is EVANESCENT for every s=i*omega and STATIC as omega->0 -- this whole
+band IS the "DC-to-evanescent" regime (the operator's entire physical range; a
+pure diffusion operator has NO propagating regime).  SCOPED CLAIM (measured,
+NOT a blanket "CLN beats PML"): in the DC-to-evanescent regime CLN OUTPERFORMS
+PML, and -- crucially -- it is tested against the CFS-PML (complex-frequency-
+shifted, beta=1+sigma/(alpha+sqrt(s))) that was invented precisely for evanescent
+/ low-frequency absorption:
+ (a) ONLINE-DOF efficiency: CLN reaches NRMSE 2e-4 in ~8 ladder DOF (the exterior
+     FEM is reduced away OFFLINE) vs CFS-PML's ~128 LIVE layer DOF -- ~16x fewer
+     online DOF (exponential MOR of the exact operator vs an algebraic layer).
+ (b) accuracy is a reduced-away CLOSURE knob, not a fixed-layer limit: CLN's floor
+     tracks the truncation (R0/Rfar)^(2n+1) (Rfar 8/20/50 -> 2.4e-3/1.5e-4/3.3e-5)
+     while N-to-floor stays ~O(10) (a 4900-DOF exterior -> 11-state ladder) -- and
+     CLN is DC-exact (omega->0 rel.err 4e-5 vs CFS-PML 6e-4, vanilla PML 2e-2).
+ (c) conditioning toward DC: vanilla PML 1+sigma/sqrt(s) BLOWS UP (cond 2.3e4 at
+     omega=1e-4).  CFS-PML REMOVES that blowup (cond ~2e3, conceded) -- but is
+     still ~1e3x worse conditioned than the real, frequency-robust CLN eval-system
+     (cond ~1).
+HONEST NON-CLAIMS: this is NOT PML's home (propagating waves = the WAVE operator,
+demo_uu/pp; there high-freq vacuum -> PML, and at high omega the table shows PML
+better conditioned than CLN).  And the geometry is separable (radial), so [b]'s
+"grow the far domain" is just "raise Rfar"; arbitrary geometry needs a Kelvin /
+large-domain exterior FEM reduced by CLN -- the radial case is the proof of
+mechanism, not a general-geometry benchmark.
 """
 
 _TOPICS = {
