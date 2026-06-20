@@ -71,22 +71,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $remote = git ls-remote origin refs/heads/main
-          if (-not $remote) {
-            Write-Host "::error::Could not read origin/main"
+          $headers = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $repo = "${{ github.repository }}"
+          $refUri = "https://api.github.com/repos/$repo/git/ref/heads/main"
+          try {
+            $mainRef = Invoke-RestMethod -Method Get -Uri $refUri -Headers $headers
+          } catch {
+            Write-Host "::error::Could not read refs/heads/main via GitHub API: $($_.Exception.Message)"
             exit 1
           }
-          $tip = ($remote -split '\s+')[0]
+          $tip = $mainRef.object.sha
           Write-Host "origin/main tip: $tip"
           Write-Host "this run sha: $env:GITHUB_SHA"
           if ($tip -ne $env:GITHUB_SHA) {
             Write-Host "::warning::Stale main CI: $env:GITHUB_SHA is no longer origin/main ($tip). Cancelling before build/test."
-            $headers = @{
-              Authorization = "Bearer $env:GITHUB_TOKEN"
-              Accept = "application/vnd.github+json"
-              "X-GitHub-Api-Version" = "2022-11-28"
-            }
-            $uri = "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+            $uri = "https://api.github.com/repos/$repo/actions/runs/${{ github.run_id }}/cancel"
             Invoke-RestMethod -Method Post -Uri $uri -Headers $headers | Out-Null
 
             $deadline = (Get-Date).AddSeconds(90)
