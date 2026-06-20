@@ -23,6 +23,11 @@ from .cad_edges import (
     edge_moment_matrix,
 )
 from .vector_bulk import bulk_foster_vector_via_eigen
+from .rom_fit import (
+    FosterROM,
+    passive_foster_fit,
+    diagonal_tensor_state_space,
+)
 
 __all__ = [
     "bulk_foster_via_eigen",
@@ -44,4 +49,7 @@ __all__ = [
     "cad_topology_c1",
     "edge_moment_matrix",
     "bulk_foster_vector_via_eigen",
+    "FosterROM",
+    "passive_foster_fit",
+    "diagonal_tensor_state_space",
 ]
