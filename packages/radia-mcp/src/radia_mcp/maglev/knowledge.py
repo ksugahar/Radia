@@ -56,13 +56,16 @@ NOT read on this pass (size budget):
 Sections marked "(open literature)" are textbook-level summaries
 included so the knowledge file is self-contained; cross-check
 against the unread lab PDFs when those become accessible.
+
+References (retained):
+  - T. Matsuo, "Cauer Ladder Network Representation with Constant Basis Functions for Eddy Current Problems Involving Conductor Movement", COMPUMAG 2023 (Paper
 """
 
 
 # Authoritative topic enum for the dispatcher tool (wired into
 # `maglev_topics()` via common.register_topics_tool).
 TOPICS: dict[str, str] = {
-    "radia_iem_fem": "Radia IEM (MMM/MSC) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi/T-Omega; no re-mesh on magnet motion (Yano bachelor, lab research)",
+    "radia_iem_fem": "Radia IEM (MMM/MSC) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi (A_ext) / T-Omega (B_ext); no re-mesh on magnet motion; rotating-magnet-over-plate cross-validation tightens to ~0.1% at order=2; the Lorentz-force HDiv(J=curl T) function-space pitfall + verified NGSolve recipe (Yano bachelor, lab research)",
     "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; Kameari+Kelvin accumulation BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
     "eddy_current_maglev": "Eddy-current EDS: Arago-disk physics, magnetic wheels (Fujii/Kansai 2D model), Inductrack",
@@ -195,48 +198,198 @@ Run IEM and FEM SEQUENTIALLY, exchanging fields (weak coupling):
 
 ## The two reduced-potential formulations (both validated)
 
-**A-phi method** [Biro 2000] -- uses the IEM A_ext.  Split the magnetic
-vector potential A = A_ext + A_r; in the conductor Omega_c:
+**A-phi method** [Biro 2000] -- consumes the IEM **A_ext** (Radia 'a').
+Split the magnetic vector potential A = A_ext + A_r; in the conductor
+Omega_c, with an electric scalar Phi (current continuity div J = 0) and
+J = -sigma( dA_r/dt + grad Phi ):
 
 ```
-  sigma * d(A_r)/dt + curl( (1/mu) curl A_r ) = -sigma * d(A_ext)/dt
-                                                  \_____ source _____/
+  sigma( dA_r/dt + grad Phi ) + curl( (1/mu) curl A_r ) = -sigma * d(A_ext)/dt
+                                                            \_____ source _____/
 ```
 
-**T-Omega method** [Biro 2000] -- uses the IEM H_ext.  Split H = H_ext +
-H_r, with the reaction field via an electric vector potential T and a
-magnetic scalar potential Omega:  J = curl T,  H_r = T - grad(Omega):
+**T-Omega method** [Biro 2000] -- consumes the IEM **B_ext** (Radia 'b').
+Split H = H_ext + H_r, with the reaction field via an electric vector
+potential T and a magnetic scalar potential Omega:  J = curl T,
+H_r = T - grad(Omega):
 
 ```
-  curl( rho * curl T ) + mu * d/dt( T - grad Omega ) = -mu * d(H_ext)/dt
-                                                         \_____ source ____/
+  curl( rho * curl T ) + mu * d/dt( T - grad Omega ) = -d(B_ext)/dt
+                                                         \____ source ___/
 ```
 
-## Validation (Yano & Sugahara digest E-3-1)
+The two feed DIFFERENT Radia outputs (A_ext vs B_ext) to the FEM, so they
+are INDEPENDENT discretisations -- their mutual agreement is a real
+cross-check, not a tautology.
 
-Test problem: a permanent magnet ROTATING + TRANSLATING above a copper
-plate (the magnet-wheel / Arago class), dt = 0.0111 s, 181 steps.  The
-two formulations are physically consistent but feed DIFFERENT physical
-quantities (A_ext vs H_ext) to the FEM -- so cross-checking them is an
-independent validation:
+### Discrete form (both formulations)
 
-| Quantity     | Mean rel. error | Max rel. error |
-|--------------|-----------------|----------------|
-| Joule heat   | 3.38 %          | 10.65 %        |
-| Lorentz force| 4.81 %          | 13.20 %        |
+| | A-phi | T-Omega |
+|---|---|---|
+| vector unknown | A_r in HCurl, **conductor only** | T in HCurl, **conductor only** |
+| scalar unknown | Phi in H1, conductor only | Omega in H1, **whole domain** |
+| eddy current J | -sigma( dA_r/dt + grad Phi ) | curl T |
+| flux density B | curl A_ext + curl A_r | B_ext + mu( T - grad Omega ) |
+| Radia source | A_ext (rate dA_ext/dt) | B_ext (rate dB_ext/dt; + B_ext . grad psi) |
 
-All quantities agree within ~5 % mean -> the coupled method is sound.
-The eddy-current force/loss solver was also validated against TEAM
-Problem 7 (eddy-current "Asymmetrical Conductor with a Hole") and the
-levitation against TEAM Problem 28 (electrodynamic levitation device).
+- **Gauge**: HCurl with `nograds=True` (tree-cotree) removes the gradient
+  null-space of curl -- no explicit Coulomb gauge needed.
+- **Scalar uniqueness**: pin one GND vertex (`dirichlet_bbbnd="GND"` /
+  Phi = 0) so the scalar potential is unique.
+- **Time**: backward Euler; the per-step system is
+  `(M + dt K) u^{n+1} = M u^n + f_ext`, M the sigma/mu mass block, K the
+  reluctivity curl-curl block.
+- **Open boundary is Radia's job, not the FEM's**: the source is the
+  ANALYTIC Radia field, so the FEM box only has to host the DECAYING
+  reaction field -- a modest air box with B.n = 0 truncation suffices.
+  A Kelvin transformation for the reaction field is OPTIONAL, not
+  required (the corpus runs both "kelvin" and "no_kelvin" variants and
+  they agree); this is exactly the re-mesh-free advantage of letting IEM
+  carry the unbounded source.
+
+## Validation: A-phi vs T-Omega mutual cross-check
+
+Test problem: a permanent magnet (Br = 0.2 T, M = Br/mu0 ~ 1.59e5 A/m)
+ROTATING + TRANSLATING above a copper plate (10 x 10 x 0.5 mm,
+sigma = 5.8e7 S/m) -- the magnet-wheel / Arago class; backward Euler,
+dt = 0.0111 s, two magnet revolutions.  The mutual agreement TIGHTENS
+sharply with FE order + mesh refinement, which is itself the evidence
+that the coupling is sound:
+
+| Run | Joule heat mean/max | Lorentz force mean/max |
+|-----|---------------------|------------------------|
+| digest E-3-1 (published, coarse) | 3.38% / 10.65% | 4.81% / 13.20% |
+| order=2, 0.5 mm mesh (matured)   | 0.21% / 5.16%  | 0.11% / 2.01%  |
+| order=2, steady state (step>30)  | 0.17% / 0.42%  | 0.09% / 0.28%  |
+
+So the two INDEPENDENT formulations converge to ~0.1% mutual agreement on
+BOTH loss and force -- the matured cross-validation.  The eddy-current
+force/loss solver was separately validated against TEAM Problem 7
+(eddy-current "Asymmetrical Conductor with a Hole") and the levitation
+against TEAM Problem 28 (electrodynamic levitation device).
+
+## The Lorentz-force function-space pitfall (hard-won, transferable)
+
+Computing the brake/lift force F = integral_Omega_c J x B dV is where the
+T-Omega method first looked WRONG: at order=1 on a 1 mm mesh, |J|_rms
+agreed to 1.7% and Joule loss to 1.2%, yet the Lorentz force was off by
+~8% mean (max ~60%).  The correlation study is the key diagnostic: the
+B-error-vs-F-error correlation was ~0 (r = -0.07), so the FIELD error was
+NOT the cause.  The cause is the FUNCTION SPACE of J under the cross
+product:
+
+- T-Omega: J = curl T lands in **HDiv(order=0)** -- element-wise CONSTANT,
+  only the NORMAL component continuous across faces.  The cross product
+  J x B of a face-discontinuous J integrates poorly (the tangential jump
+  pollutes the quadrature) even though the SCALAR self-product J.J (used
+  for |J|_rms and Joule loss) is fine.
+- A-phi: J = -sigma( dA_r/dt + grad Phi ) is effectively VectorH1-
+  continuous, so its cross product is well-behaved -- which is why A-phi's
+  force was accurate first.
+
+General rule: **a scalar invariant (J.J) tolerates a face-discontinuous
+field; a vector product (J x B) integrated over the volume does not.**
+Fixes that WORK (all in the matured runs):
+
+1. **Raise the FE order AND refine the mesh together.**  order=2 makes
+   J = curl T live in HDiv(order=1) and a 0.5 mm mesh resolves it; this
+   alone takes the force from ~8% to ~0.1% (table above).  Caveat:
+   bumping to order=2 on the OLD 1 mm mesh made it WORSE (J 87% / F 53%)
+   -- the mesh must actually resolve the higher-order space.
+2. **Use B_ext (the analytic Radia field), not B_total, in J x B.**  The
+   net force on the body comes from the external field; B_total reinjects
+   the discontinuous internal reaction field and adds noise.  It also
+   makes A-phi and T-Omega use the IDENTICAL B in the force integral,
+   isolating the genuine difference.
+3. **Integrate the CoefficientFunction directly with an explicit high
+   quadrature order** -- `Integrate(Cross(J, B_ext)[i], mesh,
+   definedon=Materials("copper"), order=5)`.  Do NOT L2-project B onto a
+   GridFunction first: the projection error ACCUMULATES across time steps
+   and shows up as visible "chatter" in F(t).  NGSolve integrates the CF
+   with the right quadrature; projecting only throws accuracy away.
+
+## Implementation recipe (verified, NGSolve order=2)
+
+- **The reduced-potential operator is TIME-INVARIANT -- factor it ONCE,
+  back-substitute each step.**  With the conductor mesh fixed and the magnet
+  supplied as the analytic Radia SOURCE (not meshed), the LHS
+  `A_sys = M_sigma + dt*K` (sigma-mass + curl-curl) depends only on the
+  conductor mesh + (linear) material -- it does NOT change as the magnet
+  moves.  Assemble + factor it once per `dt`; the motion enters ONLY the RHS
+  (`sigma * dA_s/dt`, a finite difference of two projected source steps).
+  This O(N^2) back-substitution per step (vs an O(N^3) refactor) IS the
+  speed-up.  (Re-meshing + rebuilding every step is the FULL-FEM baseline --
+  magnet meshed and moving -- which this reduced coupling exists to avoid;
+  rebuild per step ONLY if sigma/mu are nonlinear / field-dependent.)
+- **Define the HCurl unknown (T or A_r) on the CONDUCTOR ONLY**
+  (`definedon=mesh.Materials("copper")`, `nograds=True`) -- no eddy DOF in
+  air.
+- **The A-phi mass is near-singular on a coarse mesh** (kernel
+  `A + grad phi = 0`): add a tiny full-mass regularization (~1e-4 rel.) to
+  `M_sigma`, used CONSISTENTLY in both `A_sys` and the RHS history term (an
+  O(1e-4) well-posed perturbation, no dt-dependent bias) -- else
+  `sparsecholesky` can return NaN at certain dt + coarse mesh.
+- **Solver**: small conductor meshes factor directly
+  (`mat.Inverse(FreeDofs, inverse="sparsecholesky")`); large ones use
+  BDDC-preconditioned CG -- `Preconditioner(a, "bddc")` + `c.Update()` AFTER
+  `a.Assemble()` + `solvers.CG(...)`, with a small eps (~1e-6 on the mass
+  block) to keep BDDC well-conditioned on the air-singular operator.
+- **`rad.TrfOrnt` does NOT move an object for `rad.Fld`** (no-op, returns 1
+  -> every pose yields an identical field, a spurious "rank-1" source).  Move
+  the magnet via the eval-frame transform
+  `rad.RadiaField(obj,'a'|'b', origin=, u_axis=, v_axis=, w_axis=)`, or
+  rebuild the magnet at the new pose.
+- **`rad.Fld` inside a `RadiaField` CF is NOT thread-safe under
+  `TaskManager`** (the C++ field eval crashes).  Project the Radia source and
+  assemble its LinearForm loads SERIALLY; wrap only the conductor-FES
+  assemble / factor / solve in `with TaskManager()`.
+- **Coarse-mesh BDDC artifact**: under-convergence at isolated magnet angles
+  emits NON-PHYSICAL J_rms spikes (alternating spike/normal, ~1.8x the
+  neighbours) -- a solver artifact, not physics.  Refine the mesh / tighten
+  the CG tolerance rather than trusting the spike.
+
+## The magnetic-Reynolds crossover: do you even NEED the eddy FEM?
+
+
+```
+  Rm = mu0 * sigma * omega * L^2      (L = conductor size, omega = field-change rate)
+```
+
+`Rm` measures how strongly the induced eddy current perturbs the applied
+field.  The eddy reaction field scales like `Rm` relative to the source.
+Three regimes (verified on the rotating-magnet plate,
+`examples/levitation/rotating_magnet_eddy.py`):
+
+| Rm | reaction vs source | what to compute J / force / loss with |
+|----|--------------------|----------------------------------------|
+| `<~ 0.1` | negligible (<~1%) | **kinematic source-only**: `J = -sigma dA_s/dt` straight from the Radia analytic field -- NO per-step FEM at all |
+
+**Yano's actual rotating-magnet case is Rm ~ 0.016** (1 mm magnet, ~1 Hz, 0.5
+mm Cu plate; skin depth ~66 mm >> 0.5 mm). Measured: the source-only `J =
+-sigma dA_s/dt` reproduces the full-FEM Lorentz force to **0.035%** -- so the
+entire per-step eddy FEM (which Yano's study ran) computes a ~0.03%
+correction.
+
+**The real high-Rm anchor at the other end of this crossover is TEAM 28** (`Rm
+~ 57` at the in-plane current-loop scale; the lift IS the eddy reaction).
 
 ## Mapping to the Radia / NGSolve stack
 
 | Role | Tool |
 |------|------|
-| IEM external field A_ext, H_ext | **Radia MMM/MSC** (`rad.Fld(obj,'a'|'h',pts)`; ObjHexahedron/ObjTetrahedron magnets) -- exact analytic, open boundary |
+| IEM external field A_ext, B_ext | **Radia MMM/MSC** (`rad.Fld(obj,'a'|'b',pts)`; ObjHexahedron/ObjTetrahedron magnets) -- exact analytic, open boundary |
 | reduced-potential FEM reaction field | **NGSolve** A-phi / T-Omega eddy-current solve on the conductor mesh |
-| coupling of Radia field into FEM | `radia_mcp.fem.equivalence_source` (NearFieldSource), `radia_mcp.radia_ngsolve` RadiaField CoefficientFunction |
+| coupling of Radia field into FEM | `rad.RadiaField(obj, 'a'|'b')` CoefficientFunction (in `_radia_pybind.pyd`; supports an origin/u/v/w coordinate transform) -> `gf.Set(...)` / `Integrate(...)` directly; or `radia_mcp.fem.equivalence_source` (NearFieldSource) |
+
+> Field-coupling note: project the Radia field once per step onto a
+> VectorH1/HDiv GridFunction for the SOURCE (so `dA_ext/dt` / `dB_ext/dt`
+> is a clean finite difference of two stored steps), but keep the Lorentz
+> B_ext as a CoefficientFunction in the force integral (see the pitfall
+> above).  (Historical caveat, now resolved: the old standalone
+> `radia_ngsolve.pyd` was ABI-pinned to a specific NGSolve build and
+> seg-faulted against a mismatched one; the CF now ships inside
+> `_radia_pybind.pyd` built against the official NGSolve 6.2.2604, so a
+> matched `pip install radia ngsolve` is the supported path.)
 
 ## Cross-references
 
@@ -1580,7 +1733,9 @@ def get_knowledge(topic: str = "overview") -> str:
     if topic in ("overview", "intro", ""):
         return OVERVIEW
     if topic in ("radia_iem_fem", "iem_fem", "iem", "weak_coupling",
-                 "reduced_potential", "moving_magnet", "iem-fem"):
+                 "reduced_potential", "moving_magnet", "iem-fem",
+                 "rotating_magnet", "t_omega", "a_phi", "aphi", "tomega",
+                 "lorentz_force", "lorentz_pitfall"):
         return RADIA_IEM_FEM
     if topic in ("physical_tensor_rom", "tensor_rom", "polarizability_rom",
                  "alpha_rom", "rom_fit", "aaa_nnls", "foster_rom",
