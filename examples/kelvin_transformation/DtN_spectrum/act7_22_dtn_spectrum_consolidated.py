@@ -341,6 +341,44 @@ check("high-freq: extended-Kelvin matched-HOIBC carries the radiating DtN (every
 check("high-freq: PML accurate in its home regime (every mode < 1e-2)",
       max(hf["PML"]) < 1e-2, f"max {max(hf['PML']):.1e}")
 
+# ---- REFLECTION VIEW: d_n IS the reflection coefficient the community measures ----
+#   Conventionally an open boundary is graded by its REFLECTION coefficient (Berenger /
+#   Engquist-Majda / Bayliss-Turkel).  For a mode at the truncation the spurious "wrong"
+#   solution is the GROWING mode (static / evanescent) or the INCOMING wave (high-freq),
+#   whose DtN is lam_other; a boundary DtN lam_h then admits
+#       R_n = |lam_h - lam_exact| / |lam_h - lam_other|
+#   -- the SAME numerator as d_n = |lam_h - lam_exact| / |lam_exact|.  So the reflection and the
+#   DtN defect carry the same information: reflection is the physically-measured face of d_n.
+def reflection(lh, le, lother):
+    return abs(complex(lh) - complex(le)) / abs(complex(lh) - complex(lother))
+print("\n[reflection] R_n = |lam_h-lam_exact|/|lam_h-lam_other| (lam_other = growing/incoming mode);")
+print("    SAME numerator as d_n -> reflection and the DtN defect are ONE quantity.")
+rf = {"static": {"Kelvin": [], "ballooning": []}, "high_freq_prop": {"extKelvin_HOIBC": [], "PML": []}}
+print("    static (lam_other = +n, the growing r^n):    n   Kelvin       ballooning(R=4)")
+for n in MODES:
+    le = -(n + 1) / A
+    rk = reflection(kelvin_static_dtn(n), le, n / A)
+    rb = reflection(ballooning_static_dtn(n, R_wall), le, n / A)
+    rf["static"]["Kelvin"].append(rk)
+    rf["static"]["ballooning"].append(rb)
+    print(f"                                                 {n}   {rk:.3e}    {rb:.3e}")
+print("    high-freq PROPAGATING n<=2 (lam_other = conj lam_exact, incoming):  n  extK-HOIBC    PML")
+for n in (0, 1, 2):
+    le = ob.wave_dtn(n, ka)
+    inner_ho = 1j * kb - 1 - 1j * n * (n + 1) / (2 * kb)
+    rh = reflection(kelvin_hoibc_dtn(n, kf, A, b_hf, M_hf, inner_ho), le, np.conj(le))
+    rp = reflection(helm_pml_dtn(n, ka / A), le, np.conj(le))
+    rf["high_freq_prop"]["extKelvin_HOIBC"].append(rh)
+    rf["high_freq_prop"]["PML"].append(rp)
+    print(f"                                                            {n}  {rh:.3e}    {rp:.3e}")
+TABLE["reflection"] = rf
+check("reflection == DtN defect: Kelvin static ~reflectionless (R<1e-3), ballooning REFLECTS the low modes (R[0]>0.1)",
+      max(rf["static"]["Kelvin"]) < 1e-3 and rf["static"]["ballooning"][0] > 0.1,
+      f"Kelvin max {max(rf['static']['Kelvin']):.1e}, balloon[0] {rf['static']['ballooning'][0]:.2f}")
+check("reflection == DtN defect: high-freq extended-Kelvin-HOIBC + PML low-reflection on propagating modes (R<5e-2)",
+      max(rf["high_freq_prop"]["extKelvin_HOIBC"]) < 5e-2 and max(rf["high_freq_prop"]["PML"]) < 5e-2,
+      f"HOIBC {max(rf['high_freq_prop']['extKelvin_HOIBC']):.1e}, PML {max(rf['high_freq_prop']['PML']):.1e}")
+
 # ---- The two-class taxonomy (the headline) --------------------------------
 print("\n[summary] the open-boundary closures on the DtN spectrum, across axes (MEASURED):")
 print("    method      accuracy(per-mode)   convergent  params  cond@DC    cost")
