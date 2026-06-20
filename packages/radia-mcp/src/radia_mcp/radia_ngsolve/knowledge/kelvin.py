@@ -2599,7 +2599,14 @@ Delta-DoF ~ 58 buys an open-boundary error ~ 1/45 of the interior FEM error.
     diverges at the center but is INTEGRABLE and is pinned by the GND Dirichlet
     there, so a nodal SCALAR (Omega / phi) FEM is benign.  Only an EDGE-element
     A-formulation sees a singular tensor material at the center -- then use a
-    center-less DtN (FEM-BEM) that never creates the center node.
+    center-less DtN (FEM-BEM) that never creates the center node.  MEASURED
+    (demo_xx15_aform_center_singularity.py): the scalar weight mu'=(R/rho')^2
+    DIVERGES (pinned by one GND node, benign), the A-form nu'=(rho'/R)^2 VANISHES
+    (zero curl-curl stiffness, no single node to pin -- the gauge null space + weak
+    center edges are what the center-less route sheds); the center carries NO DtN
+    physics (field-energy fraction in [0,eps] -> 0 for both), so a center-less DtN
+    drops nothing.  (demo_j confirms the volume A-form still works on a coarse mesh
+    with the gauge mass-reg; the center-less FEM-BEM is the robust route at scale.)
 
 ## 5. Adaptive refinement
 
