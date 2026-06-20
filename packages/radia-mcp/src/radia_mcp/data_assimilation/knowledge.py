@@ -68,7 +68,7 @@ Data Assimilation
   estimation hybrid
 - **Plasma equilibrium reconstruction** (fusion): magnetic
   diagnostics + Grad-Shafranov forward → EnKF (cross-link:
-  `radia_mcp.fusion`)
+  `radia_mcp.fusion_reactor`)
 """
 
 
@@ -201,7 +201,7 @@ def enkf_step(ensemble, y_obs, H, R, forward_model):
 ## Cross-references
 
 - `radia_mcp.mor` — model order reduction for filter state
-- `radia_mcp.fusion` — plasma equilibrium reconstruction
+- `radia_mcp.fusion_reactor` — plasma equilibrium reconstruction
 """
 
 
