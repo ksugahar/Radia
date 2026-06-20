@@ -113,6 +113,13 @@ def robin_static_dtn(n):
     return -1.0 / A
 
 
+def infinite_element_dtn(n, P, a=A):
+    # radial mapped/Bettess infinite element, decay basis (a/r)^k k=1..P (act7_25); EXACT for n<=P-1
+    k = np.arange(1, P + 1)
+    Am = a * (np.outer(k, k) + n * (n + 1)) / (k[:, None] + k[None, :] - 1.0)
+    return -1.0 / (a * (np.ones(P) @ np.linalg.solve(Am, np.ones(P))))
+
+
 # ===========================================================================
 # EDDY (diffusion) radial-FE PML / CFS-PML  -- exact = radia.open_boundary.eddy_dtn
 #   (re-implemented from act6_09_cln_vs_pml, verified there; beta=1+sigma/(alpha+sqrt s))
@@ -253,25 +260,30 @@ def relerr(lh, le):
 
 
 # ---- REGIME 1: STATIC (Laplace), exact -(n+1) -----------------------------
-print("\n[static] exact ladder lambda_n = -(n+1); closures: Kelvin / ballooning(R=4) / Robin")
-print("    n     Kelvin       ballooning   Robin")
+print("\n[static] exact ladder lambda_n = -(n+1); closures: Kelvin / ballooning(R=4) / Robin / InfEl(P=3)")
+print("    n     Kelvin       ballooning   Robin        InfEl(P=3)")
 R_wall = 4.0
-st = {"Kelvin": [], "ballooning": [], "Robin": []}
+st = {"Kelvin": [], "ballooning": [], "Robin": [], "InfEl(P=3)": []}
 for n in MODES:
     le = -(n + 1) / A
     ek = relerr(kelvin_static_dtn(n), le)
     eb = relerr(ballooning_static_dtn(n, R_wall), le)
     er = relerr(robin_static_dtn(n), le)
+    ei = relerr(infinite_element_dtn(n, 3), le)            # infinite element, decay order P=3
     st["Kelvin"].append(ek)
     st["ballooning"].append(eb)
     st["Robin"].append(er)
-    print(f"   {n}   {ek:.3e}   {eb:.3e}   {er:.3e}")
+    st["InfEl(P=3)"].append(ei)
+    print(f"   {n}   {ek:.3e}   {eb:.3e}   {er:.3e}   {ei:.3e}")
 TABLE["regimes"]["static"] = st
 check("static: Kelvin converges, every mode < 1e-3", max(st["Kelvin"]) < 1e-3, f"max {max(st['Kelvin']):.1e}")
 check("static: ballooning fails the LOW modes (defect DECREASES with n)",
       all(st["ballooning"][i + 1] < st["ballooning"][i] for i in range(len(MODES) - 1)))
 check("static: Robin exact n=0 only, fails HIGH modes (defect GROWS with n)",
       st["Robin"][0] < 1e-12 and st["Robin"][-1] > 0.5)
+check("static: infinite element EXACT for n<=P-1=2, degrades for n>=P (OPPOSITE of the wall's low-mode failure)",
+      max(st["InfEl(P=3)"][n] for n in range(3)) < 1e-10 and st["InfEl(P=3)"][3] > st["InfEl(P=3)"][2],
+      f"max(n<=2) {max(st['InfEl(P=3)'][n] for n in range(3)):.1e}, n=3 {st['InfEl(P=3)'][3]:.1e}")
 
 # ---- REGIME 2: EDDY (diffusion sqrt(s)), exact = eddy_dtn ------------------
 print("\n[eddy] exact = radia.open_boundary.eddy_dtn(n,s); closures: Kelvin-built / PML / CFS-PML")
@@ -415,9 +427,10 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     fig, axs = plt.subplots(1, 3, figsize=(9.0, 2.8))
-    axs[0].semilogy(MODES, st["Kelvin"], "o-", label="Kelvin")
-    axs[0].semilogy(MODES, st["ballooning"], "s--", label="ballooning")
+    axs[0].semilogy(MODES, [max(x, 1e-16) for x in st["Kelvin"]], "o-", label="Kelvin")
+    axs[0].semilogy(MODES, st["ballooning"], "s--", label="ballooning(wall)")
     axs[0].semilogy(MODES, [max(x, 1e-16) for x in st["Robin"]], "^:", label="Robin")
+    axs[0].semilogy(MODES, [max(x, 1e-16) for x in st["InfEl(P=3)"]], "D-.", label="InfEl(P=3)")
     axs[0].set_xlabel("multipole n"); axs[0].set_ylabel("DtN defect"); axs[0].legend(fontsize=7)
     axs[1].semilogy(range(1, 5), ed["Kelvin"], "o-", label="Kelvin")
     axs[1].semilogy(range(1, 5), ed["PML"], "s--", label="PML")
