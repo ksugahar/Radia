@@ -44,7 +44,7 @@ def sample_vols(tmp_path_factory):
     return coil, evalv
 
 
-def _run_calc(coil, evalv, extra):
+def _run_calc(coil, evalv, extra, expect_error=False):
     cmd = [sys.executable, CALC, "--coil-vol", coil, "--eval-vol", evalv,
            "--order", "1", "--target-cf", "x"] + extra
     env = os.environ.copy()
@@ -55,6 +55,18 @@ def _run_calc(coil, evalv, extra):
         if ("mkl" in low or "dll" in low or "libiomp" in low
                 or (not r.stderr.strip() and abs(r.returncode) > 1000000)):
             pytest.skip("NGSolve/MKL subprocess env issue (LAB pytest)")
+        # fail-loud calc_main exits non-zero on an {"error": ...} result but
+        # STILL prints the error JSON to stdout; for an EXPECTED user error
+        # parse + return that dict, else re-raise the genuine failure.
+        if expect_error:
+            elines = [ln for ln in r.stdout.splitlines() if ln.strip()]
+            if elines:
+                try:
+                    d = json.loads(elines[-1])
+                    if isinstance(d, dict) and "error" in d:
+                        return d
+                except json.JSONDecodeError:
+                    pass
         raise AssertionError(
             f"calc_streamfunction.py failed (rc={r.returncode}):\n{r.stderr[-1500:]}")
     lines = [ln for ln in r.stdout.splitlines() if ln.strip()]
@@ -122,6 +134,48 @@ def test_auto_chain_resolution_improves_delivered_wire_saddle(sample_vols):
     # fixture mesh).
     assert wn < 0.95 * wo, \
         f"auto chain resolution did not improve the delivered wire: {wo} -> {wn}"
+
+
+@pytest.mark.parametrize("flag", ["--chain-ncut", "--chain-passes"])
+def test_negative_chain_resolution_fails_loud(sample_vols, flag):
+    """No-Fallback: a NEGATIVE chain-resolution knob must fail loud, not silently
+    degrade.  chain-ncut<0 silently became step=1 (max resolution); chain-passes<0
+    made range() empty so the cut-opt was SKIPPED and the wire silently un-
+    optimised.  Now it returns a clear, flag-named error (the auto/explicit paths
+    -- 0 and positive -- are exercised by the test above and the goldens)."""
+    coil, evalv = sample_vols
+    r = _run_calc(coil, evalv,
+                  ["--method", "manufacture", "--nlevels", "8", flag, "-3",
+                   "--eval-max", "30", "--confine", "abe"], expect_error=True)
+    assert "error" in r, f"negative {flag} was not rejected: {r}"
+    assert flag in r["error"] and ">= 0" in r["error"], r["error"]
+
+
+def test_nlevels_zero_no_contours_fails_loud(sample_vols):
+    """No-Fallback: nlevels=0 yields no iso-contours -> a clear error, not an
+    empty/garbage wire (locks the existing fail-loud guard)."""
+    coil, evalv = sample_vols
+    r = _run_calc(coil, evalv,
+                  ["--method", "manufacture", "--nlevels", "0",
+                   "--eval-max", "30", "--confine", "abe"], expect_error=True)
+    assert "error" in r and "iso-contour" in r["error"], r
+
+
+@pytest.mark.parametrize("flag,val,lo", [("--distort-grid", "0", "2"),
+                                         ("--distort-iter", "-2", "1")])
+def test_degenerate_distort_knobs_fail_loud(sample_vols, flag, val, lo):
+    """No-Fallback: a degenerate --distort knob must fail loud, not crash or no-op.
+    distort-grid<2 used to CRASH with a cryptic numpy IndexError (empty control
+    grid); distort-iter<1 made range() empty so the Gauss-Newton was SKIPPED and
+    the wire silently left un-distorted.  Both now return a clear, flag-named
+    error.  (Only checked when --distort is set; otherwise the knobs are unused.)"""
+    coil, evalv = sample_vols
+    r = _run_calc(coil, evalv,
+                  ["--method", "manufacture", "--nlevels", "8", "--distort",
+                   flag, val, "--eval-max", "30", "--confine", "abe"],
+                  expect_error=True)
+    assert "error" in r, f"degenerate {flag} {val} was not rejected: {r}"
+    assert flag in r["error"] and f">= {lo}" in r["error"], r["error"]
 
 
 if __name__ == "__main__":
