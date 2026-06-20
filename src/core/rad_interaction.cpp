@@ -941,7 +941,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	}
 
 	// ULTRA-FAST PATH: Pure hexahedra without symmetry
-	if(!hasSymmetry && allHex)
+	// (skipped when the improved yano-type pyramid-cloud kernel is enabled: that kernel is wired into
+	//  the inline MEDIUM/SLOW paths below via radTPolyhedron::MscEvalPoint / MscCompensationField, not
+	//  the precomputed-geometry fast path -- so the flag falls through to the inline path here.)
+	if(!hasSymmetry && allHex && !g_yano_pyramid_cloud)
 	{
 		PrecomputeHexaGeometry();
 		if(m_hexaGeomReady)
@@ -989,7 +992,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	}
 
 	// ULTRA-FAST PATH: Pure wedges without symmetry
-	if(!hasSymmetry && allWedge)
+	// (skipped when the pyramid-cloud kernel is enabled -- see the pure-hexahedra note above.)
+	if(!hasSymmetry && allWedge && !g_yano_pyramid_cloud)
 	{
 		PrecomputeWedgeGeometry();
 		if(m_wedgeGeomReady)
@@ -1087,10 +1091,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
 						// Yano evaluation point: midpoint between face center and element center
-						TVector3d EvalPt;
-						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
-						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
-						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
 
 						for(int face_j = 0; face_j < 6; face_j++)
 						{
@@ -1098,8 +1099,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							TVector3d H_face = poly_col->FieldFromQuadFace(EvalPt, face_j, 1.0);
 
 							// Point charge contribution: m = -sigma * area
-							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-							TVector3d H_point = poly_col->FieldFromPointCharge(EvalPt, unit_point_charge);
+							TVector3d H_point = poly_col->MscCompensationField(EvalPt, face_j);   // single point (flag off) or 12-edge cloud (flag on)
 
 							TVector3d H_total;
 							H_total.x = H_face.x + H_point.x;
@@ -1125,8 +1125,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					for(int face_j = 0; face_j < 6; face_j++)
 					{
 						TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
-						double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-						TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+						TVector3d H_point = poly_col->MscCompensationField(ObsPoiVect, face_j);   // single point (flag off) or 12-edge cloud (flag on)
 
 						TVector3d H_total;
 						H_total.x = H_face.x + H_point.x;
@@ -1149,10 +1148,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					for(int face_i = 0; face_i < dof_row; face_i++)
 					{
 						// Yano evaluation point
-						TVector3d EvalPt;
-						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
-						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
-						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
 
 						TVector3d& n = poly_row->FaceNormal[face_i];
 
@@ -1183,10 +1179,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					for(int face_i = 0; face_i < nFacesRow; face_i++)
 					{
 						// Yano evaluation point: midpoint between face center and element center
-						TVector3d EvalPt;
-						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
-						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
-						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
 
 						for(int face_j = 0; face_j < nFacesCol; face_j++)
 						{
@@ -1194,8 +1187,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							TVector3d H_face = poly_col->FieldFromFace(EvalPt, face_j, 1.0);
 
 							// Point charge contribution: m = -sigma * area
-							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-							TVector3d H_point = poly_col->FieldFromPointCharge(EvalPt, unit_point_charge);
+							TVector3d H_point = poly_col->MscCompensationField(EvalPt, face_j);   // single point (flag off) or 12-edge cloud (flag on)
 
 							TVector3d H_total;
 							H_total.x = H_face.x + H_point.x;
@@ -1219,8 +1211,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					for(int face_j = 0; face_j < 5; face_j++)
 					{
 						TVector3d H_face = poly_col->FieldFromFace(ObsPoiVect, face_j, 1.0);
-						double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-						TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+						TVector3d H_point = poly_col->MscCompensationField(ObsPoiVect, face_j);   // single point (flag off) or 12-edge cloud (flag on)
 
 						TVector3d H_total;
 						H_total.x = H_face.x + H_point.x;
@@ -1243,10 +1234,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 					for(int face_i = 0; face_i < 5; face_i++)
 					{
-						TVector3d EvalPt;
-						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
-						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
-						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
 
 						TVector3d& n = poly_row->FaceNormal[face_i];
 
@@ -1375,8 +1363,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							// Field from source at observation point (both in column's local frame)
 							// FieldFromFace handles both tri and quad faces
 							TVector3d H_face = poly_col->FieldFromFace(ObsPoiVect, face_j, 1.0);
-							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-							TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+							TVector3d H_point = poly_col->MscCompensationField(ObsPoiVect, face_j);   // single point (flag off) or 12-edge cloud (flag on)
 
 							// Sum field contributions (in column's local frame)
 							TVector3d H_local;
@@ -1413,10 +1400,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					for(int face_i = 0; face_i < dof_row; face_i++)
 					{
 						// Yano evaluation point: midpoint between face center and element center
-						TVector3d EvalPt;
-						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
-						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
-						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
 
 						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
 
@@ -1483,10 +1467,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					{
 						// Yano evaluation point: midpoint between face center and element center
 						// FaceCenter and CentrPoint are already in GLOBAL frame
-						TVector3d EvalPt;
-						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
-						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
-						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
 
 						// EvalPt is already in GLOBAL frame - no transform needed
 						TVector3d InitObsPoiVect = EvalPt;
@@ -1502,8 +1483,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 								// FieldFromFace handles both tri and quad faces
 								TVector3d H_face = poly_col->FieldFromFace(ObsPoiVect, face_j, 1.0);
-								double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-								TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+								TVector3d H_point = poly_col->MscCompensationField(ObsPoiVect, face_j);   // single point (flag off) or 12-edge cloud (flag on)
 
 								// Sum field contributions (in column's local frame)
 								TVector3d H_local;
@@ -1625,10 +1605,7 @@ void radTInteraction::SetupExternFieldArray()
 					{
 						// Eval point for face i (midpoint between face center and element center)
 						// This is in element's local coordinates
-						TVector3d EvalPt;
-						EvalPt.x = 0.5 * (poly->FaceCenter[face_i].x + poly->CentrPoint.x);
-						EvalPt.y = 0.5 * (poly->FaceCenter[face_i].y + poly->CentrPoint.y);
-						EvalPt.z = 0.5 * (poly->FaceCenter[face_i].z + poly->CentrPoint.z);
+						TVector3d EvalPt = poly->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
 
 						// Transform EvalPt from element's local coords to world coords
 						TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);
@@ -1724,10 +1701,7 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 						{
 							// Eval point for face i (midpoint between face center and element center)
 							// This is in element's local coordinates
-							TVector3d EvalPt;
-							EvalPt.x = 0.5 * (poly->FaceCenter[face_i].x + poly->CentrPoint.x);
-							EvalPt.y = 0.5 * (poly->FaceCenter[face_i].y + poly->CentrPoint.y);
-							EvalPt.z = 0.5 * (poly->FaceCenter[face_i].z + poly->CentrPoint.z);
+							TVector3d EvalPt = poly->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
 
 							// Transform EvalPt to world coords (same as 3DOF code on line 1520)
 							TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);

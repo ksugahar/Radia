@@ -29,6 +29,12 @@
 extern radTConvergRepair& radCR;
 
 //-------------------------------------------------------------------------
+// Opt-in "improved yano-type" surface-charge (MSC) kernel (pyramid-cloud + pyramid-centroid eval).
+// Set via rad.SolverConfig(yano_pyramid_cloud=True).  Default false == the EIEM2 single-point kernel
+// (bit-identical to the historical default).  See radTPolyhedron::MscEvalPoint / MscCompensationField.
+extern bool g_yano_pyramid_cloud;
+
+//-------------------------------------------------------------------------
 
 struct radTHandlePgnAndTrans {
 	radTHandle<radTPolygon> PgnHndl;
@@ -395,6 +401,21 @@ public:
 	                                 const TVector3d* mirrorVerts, int numVerts,
 	                                 double sigma, bool flipNormal,
 	                                 const TVector3d& mirrorCenter) const;
+
+	// --- "improved yano-type" MSC kernel (opt-in via g_yano_pyramid_cloud) ---
+	// MscEvalPoint: the per-face collocation evaluation point.
+	//   default (flag off): EIEM2 midpoint 0.5*(FaceCenter[i] + CentrPoint);
+	//   flag on: pyramid centroid 0.75*MscFaceAreaCentroid(i) + 0.25*MscVolumeCentroid().
+	// MscCompensationField: the source-face charge-neutralising compensation field (no 1/4pi).
+	//   default (flag off): single point charge -FaceArea[i] at the element center (FieldFromPointCharge);
+	//   flag on: element-common cloud (all (volume-centroid, edge) partition triangles, 3-pt quad,
+	//            normalised), total charge -FaceArea[i] -> per-DOF charge-neutral, loop-source-null.
+	// Flag-off branches return EXACTLY the historical inline expressions (bit-identical goldens).
+	TVector3d FieldFromPointChargeAt(const TVector3d& obs, const TVector3d& src, double charge) const;
+	TVector3d MscFaceAreaCentroid(int faceIdx) const;
+	TVector3d MscVolumeCentroid() const;
+	TVector3d MscEvalPoint(int faceIdx) const;
+	TVector3d MscCompensationField(const TVector3d& obs, int faceIdx) const;
 
 	// 6 DOF MSC setup for hexahedra
 	// IMPORTANT: This relies on Netgen face winding convention for correct normal direction.

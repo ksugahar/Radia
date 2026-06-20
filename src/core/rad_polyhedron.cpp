@@ -2568,6 +2568,156 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 }
 
 //-------------------------------------------------------------------------
+// "Improved yano-type" MSC kernel (opt-in via g_yano_pyramid_cloud).  See rad_polyhedron.h.
+//-------------------------------------------------------------------------
+
+bool g_yano_pyramid_cloud = false;   // default: historical EIEM2 single-point kernel (bit-identical)
+
+// Field from a point charge at an ARBITRARY source point (no 1/4pi divisor; matches FieldFromPointCharge).
+TVector3d radTPolyhedron::FieldFromPointChargeAt(const TVector3d& obs, const TVector3d& src, double charge) const
+{
+	double rx = obs.x - src.x, ry = obs.y - src.y, rz = obs.z - src.z;
+	double r2 = rx*rx + ry*ry + rz*rz;
+	if(r2 < 1e-20) return TVector3d(0.0, 0.0, 0.0);
+	double rm = sqrt(r2);
+	double coef = charge / (r2 * rm);
+	return TVector3d(coef*rx, coef*ry, coef*rz);
+}
+
+// Area-weighted centroid of face faceIdx (global frame), fan-triangulated from vertex 0.
+TVector3d radTPolyhedron::MscFaceAreaCentroid(int faceIdx) const
+{
+	const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[faceIdx];
+	radTPolygon* pgn = hpt.PgnHndl.rep;
+	radTrans* tr = hpt.TransHndl.rep;
+	const radTVect2dVect& v2 = pgn->EdgePointsVector;
+	int nv = (int)v2.size();
+	if(nv < 3) return FaceCenter[faceIdx];
+	if(nv > 8) nv = 8;
+	TVector3d V[8];
+	for(int k = 0; k < nv; k++) V[k] = tr->TrPoint(TVector3d(v2[k].x, v2[k].y, pgn->CoordZ));
+	TVector3d acc(0.0, 0.0, 0.0);
+	double Atot = 0.0;
+	for(int k = 1; k < nv - 1; k++)
+	{
+		const TVector3d& a = V[0]; const TVector3d& b = V[k]; const TVector3d& c = V[k+1];
+		double e1x = b.x-a.x, e1y = b.y-a.y, e1z = b.z-a.z;
+		double e2x = c.x-a.x, e2y = c.y-a.y, e2z = c.z-a.z;
+		double crx = e1y*e2z - e1z*e2y, cry = e1z*e2x - e1x*e2z, crz = e1x*e2y - e1y*e2x;
+		double A = 0.5*sqrt(crx*crx + cry*cry + crz*crz);
+		acc.x += A*(a.x+b.x+c.x)/3.0; acc.y += A*(a.y+b.y+c.y)/3.0; acc.z += A*(a.z+b.z+c.z)/3.0;
+		Atot += A;
+	}
+	if(Atot < 1e-300) return FaceCenter[faceIdx];
+	return TVector3d(acc.x/Atot, acc.y/Atot, acc.z/Atot);
+}
+
+// True polyhedral volume centroid (global frame) via tet decomposition seeded at CentrPoint.
+// For a planar-faced hexahedron this equals the trilinear (isoparametric) volume centroid;
+// for a cube/parallelepiped it equals CentrPoint.
+TVector3d radTPolyhedron::MscVolumeCentroid() const
+{
+	const TVector3d& seed = CentrPoint;
+	TVector3d acc(0.0, 0.0, 0.0);
+	double Vtot = 0.0;
+	for(int f = 0; f < AmOfFaces; f++)
+	{
+		const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[f];
+		radTPolygon* pgn = hpt.PgnHndl.rep;
+		radTrans* tr = hpt.TransHndl.rep;
+		const radTVect2dVect& v2 = pgn->EdgePointsVector;
+		int nv = (int)v2.size();
+		if(nv < 3) continue;
+		if(nv > 8) nv = 8;
+		TVector3d V[8];
+		for(int k = 0; k < nv; k++) V[k] = tr->TrPoint(TVector3d(v2[k].x, v2[k].y, pgn->CoordZ));
+		for(int k = 1; k < nv - 1; k++)
+		{
+			const TVector3d& a = V[0]; const TVector3d& b = V[k]; const TVector3d& c = V[k+1];
+			double d1x = a.x-seed.x, d1y = a.y-seed.y, d1z = a.z-seed.z;
+			double d2x = b.x-seed.x, d2y = b.y-seed.y, d2z = b.z-seed.z;
+			double d3x = c.x-seed.x, d3y = c.y-seed.y, d3z = c.z-seed.z;
+			double vol = (d1x*(d2y*d3z - d2z*d3y) - d1y*(d2x*d3z - d2z*d3x) + d1z*(d2x*d3y - d2y*d3x)) / 6.0;
+			double tcx = 0.25*(seed.x+a.x+b.x+c.x), tcy = 0.25*(seed.y+a.y+b.y+c.y), tcz = 0.25*(seed.z+a.z+b.z+c.z);
+			acc.x += vol*tcx; acc.y += vol*tcy; acc.z += vol*tcz;
+			Vtot += vol;
+		}
+	}
+	if(fabs(Vtot) < 1e-300) return CentrPoint;
+	return TVector3d(acc.x/Vtot, acc.y/Vtot, acc.z/Vtot);
+}
+
+// Per-face collocation evaluation point (global frame, same frame as FaceCenter/CentrPoint).
+TVector3d radTPolyhedron::MscEvalPoint(int faceIdx) const
+{
+	if(!g_yano_pyramid_cloud)
+	{
+		// EIEM2 (historical default): midpoint between face center and element center.
+		return TVector3d(0.5*(FaceCenter[faceIdx].x + CentrPoint.x),
+		                 0.5*(FaceCenter[faceIdx].y + CentrPoint.y),
+		                 0.5*(FaceCenter[faceIdx].z + CentrPoint.z));
+	}
+	// Pyramid centroid: 0.75*face-area-centroid + 0.25*volume-centroid.
+	TVector3d fac = MscFaceAreaCentroid(faceIdx);
+	TVector3d vc  = MscVolumeCentroid();
+	return TVector3d(0.75*fac.x + 0.25*vc.x, 0.75*fac.y + 0.25*vc.y, 0.75*fac.z + 0.25*vc.z);
+}
+
+// Source-face charge-neutralising compensation field at obs (no 1/4pi divisor), total charge -FaceArea[faceIdx].
+TVector3d radTPolyhedron::MscCompensationField(const TVector3d& obs, int faceIdx) const
+{
+	double area = FaceArea[faceIdx];
+	if(!g_yano_pyramid_cloud)
+	{
+		// Single point charge -area at the element center (historical default).
+		return FieldFromPointCharge(obs, -area);
+	}
+	// Element-common cloud: union over every face edge of triangle (volume-centroid, edge_v0, edge_v1),
+	// 3-pt quadrature, total weight normalised to 1, scaled to total charge -area.  Each interior edge
+	// is enumerated twice (once per adjacent face) -> normalisation makes this identical to the unique-edge
+	// "pyr_faces12" cloud.  Element-common (faceIdx only sets the -area scale) -> loop-source-null.
+	static const double B3[3][3] = {{2.0/3.0, 1.0/6.0, 1.0/6.0},
+	                                 {1.0/6.0, 2.0/3.0, 1.0/6.0},
+	                                 {1.0/6.0, 1.0/6.0, 2.0/3.0}};
+	TVector3d C = MscVolumeCentroid();
+	TVector3d Hsum(0.0, 0.0, 0.0);
+	double wtot = 0.0;
+	for(int f = 0; f < AmOfFaces; f++)
+	{
+		const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[f];
+		radTPolygon* pgn = hpt.PgnHndl.rep;
+		radTrans* tr = hpt.TransHndl.rep;
+		const radTVect2dVect& v2 = pgn->EdgePointsVector;
+		int nv = (int)v2.size();
+		if(nv < 3) continue;
+		for(int e = 0; e < nv; e++)
+		{
+			int e1i = (e + 1) % nv;
+			TVector3d va = tr->TrPoint(TVector3d(v2[e].x,  v2[e].y,  pgn->CoordZ));
+			TVector3d vb = tr->TrPoint(TVector3d(v2[e1i].x, v2[e1i].y, pgn->CoordZ));
+			double e1x = va.x-C.x, e1y = va.y-C.y, e1z = va.z-C.z;
+			double e2x = vb.x-C.x, e2y = vb.y-C.y, e2z = vb.z-C.z;
+			double crx = e1y*e2z - e1z*e2y, cry = e1z*e2x - e1x*e2z, crz = e1x*e2y - e1y*e2x;
+			double A = 0.5*sqrt(crx*crx + cry*cry + crz*crz);
+			if(A < 1e-300) continue;
+			double w = A / 3.0;
+			for(int q = 0; q < 3; q++)
+			{
+				TVector3d p(B3[q][0]*C.x + B3[q][1]*va.x + B3[q][2]*vb.x,
+				            B3[q][0]*C.y + B3[q][1]*va.y + B3[q][2]*vb.y,
+				            B3[q][0]*C.z + B3[q][1]*va.z + B3[q][2]*vb.z);
+				TVector3d h = FieldFromPointChargeAt(obs, p, 1.0);
+				Hsum.x += w*h.x; Hsum.y += w*h.y; Hsum.z += w*h.z;
+				wtot += w;
+			}
+		}
+	}
+	if(wtot < 1e-300) return FieldFromPointCharge(obs, -area);
+	double s = -area / wtot;
+	return TVector3d(s*Hsum.x, s*Hsum.y, s*Hsum.z);
+}
+
+//-------------------------------------------------------------------------
 // B_genComp: Simplified version without TrfMlt support
 // TrfMlt has been removed from Radia - use explicit element duplication instead
 //-------------------------------------------------------------------------
