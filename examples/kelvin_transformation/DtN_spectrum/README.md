@@ -23,6 +23,84 @@ Every script PRINTS its result (no files written) and depends only on
 `numpy` / `ngsolve` / `netgen` and the open `radia_mcp.radia_ngsolve` helpers
 (`bem_integral`, `fem_bem_coupling`).
 
+## The one story — a reading guide (read in this order)
+
+Every open boundary is the SAME object: the exterior Dirichlet-to-Neumann
+(Steklov–Poincaré) operator `Λ_ext` on the truncation surface Γ, whose sphere
+spectrum is the ladder `λ_n = −(n+1)/R` (3D) / `−n/R` (2D). These scripts are **one
+story about that operator** — *read* its spectrum, *build* it sparsely, *realize* it in
+time, *extend* it to radiation, and *design* with it. The detailed table follows; this
+is the arc (each script self-asserts and prints its result).
+
+- **Act 0 — The question (Kameari's coarse-mesh accuracy).** Why does a coarse
+  truncation already give the right field? → `sufficient_mesh`, `p_vs_h_study`,
+  `poly_vs_sphere`, `demo1_hp_lshape` (corner regularity), `demo2_dual_bracket`
+  (certified error bracket), `demo3_A_dtn_gradient` (A-formulation).
+- **Act 1 — One operator, one spectrum.** Each BC is a *partial* DtN spectrum; assemble
+  `Λ` directly. → `demo_g_closure_hierarchy`, `demo_d_multipole_spectrum`,
+  `demo_f_pole_sector`, `demo_e_optimal_R`, `demo_v_assemble_dtn_matrix`,
+  `demo_lf9_spectrum_n1to9`, `inductance_dtn`.
+- **Act 2 — Why coarse meshes work: the mesh-adequacy criterion (closed form).** The
+  p-method + the polynomial image + `err ~ max((d_max/R)^p, C(h/R)^{2k})`. →
+  `demo_m_multipole_ceiling`, `demo_l_minimal_ball`, `floor_vs_curve`,
+  `demo_xx12` (source `p*=⌈ln ε/ln(d/R)⌉`), `demo_xx13` (geometry `(h/R)^{2k}`),
+  `demo_xx14` (FEM end-to-end), `demo_xx16` (reactor-leg design calc),
+  `demo_budget_dofcost`, `kelvin_exterior_mesh`, `kelvin_exterior_mesh3`.
+- **Act 3 — Kelvin realizes it exactly.** The conformal compactification; the infinity
+  point; the vector form; the exterior field. → `demo_h_infinity_integrable`,
+  `demo_i_centre_quadrature`, `demo_j_kelvin_vector_dtn`, `demo_xx15` (A-form centre),
+  `demo_p_exterior_field_recovery`.
+- **Act 4 — Kelvin is a sparse BEM (the Schur complement).** `Λ` = the Schur complement
+  of the sparse Kelvin-FEM matrix; sparse vs dense; vs H-matrix; still-FEM taxonomy. →
+  `demo_k_kelvin_vs_bem_cost`, `demo_n_kelvin_approximates_bem`,
+  `demo_o_kelvin_vs_hmatrix`, `demo_r_sparse_factorization_of_kernel`,
+  `demo_s_bem_kelvin_equivalence`, `demo_cc_reducedfem_vs_bem_taxonomy`,
+  `demo_dd_when_form_dtn`.
+- **Act 5 — Beyond vacuum & beyond the sphere.** Exterior material; the layered
+  ("Sommerfeld") Green operator *without* the integral; non-spherical bodies;
+  inclusions. → `demo_t_exterior_material`, `demo_u_layered_green_function`,
+  `demo_q_material_surface_dtn`, `demo_w_nonspherical_dtn_matrix`,
+  `demo_bb_nonlayered_inclusion_dtn`, `demo_x_sommerfeld_isomorphism`,
+  `demo_y_sommerfeld_static_kernel`, `demo_z_sommerfeld_frequency_sweep`,
+  `demo_aa_eddy_quasistatic_sommerfeld`.
+- **Act 6 — The time axis: the eddy DtN → CLN.** The diffusion DtN is `√s`-native
+  (reverse-Bessel `θ_n`); the Cauer-in-`√s` CLN is exact per multipole (n=1..6). →
+  `demo_xx8` (Kelvin-FEM builds the eddy DtN), `demo_xx3` (Cauer-in-`√s` exact),
+  `demo_xx7` (band-unlimited), `demo_xx4`/`demo_xx5` (CLN MOR + transient),
+  `demo_xx9`/`demo_xx10` (non-separable square C4v / cube O_h), `demo_xx11` (2D
+  conformal disk), `demo_xx6` (CLN vs CFS-PML), `demo_uu`/`demo_uu2` (exact-DtN FETD),
+  `demo_xx_iabc_diffusion_timedomain`.
+- **Act 7 — The radiating extension (high-freq, OUTSIDE the MQS scope).** The `kR` axis
+  is the two-paper boundary; PML / BEM / HOIBC / IABC carry the *complex* DtN. →
+  `demo_gg_highfreq_spectrum_comparison`, `demo_ii_radiation_sibc_hoibc_center`,
+  `demo_kk_hoibc_kelvin_transform`, `demo_ll_transformation_optics_impedance`,
+  `demo_mm_fe_kelvin_hoibc`, `demo_oo_hoibc_surface_3d`, `demo_nn_threeway_kelvin_pml_bemfem`,
+  `demo_pp_pml_lowfreq_dtn`, `demo_pml_dof_cost`, `demo_qq_abc_performance_combos`,
+  `demo_rr_kelvin_pml_merit_scatterer`, `demo_ss_kelvin_pml_complementary`,
+  `demo_tt_evanescent_kelvin_vs_pml`, `demo_vv_iabc_static_elegant`,
+  `demo_ww_iabc_timedomain_cost`, `demo_wb_wideband_iabc`, `demo_wc_dispersive_iabc`,
+  `demo_yy_lowfreq_kelvin_vs_iabc`, `demo_zz_highfreq_iabc_revisited`,
+  `demo_xx17_impedance_vs_kelvin_dtn_cln` (impedance vs Kelvin → CLN head-to-head),
+  `demo_lf4_lowfreq_openbc_4way`.
+- **Act 8 — The application: stream-function coil design with iron.** *Build* the
+  material-aware transfer matrix `M` (the DtN's job), then *invert* it to design the coil
+  (the climax — the operator becomes a design tool). → `demo_ee_streamfunction_coil_with_iron`,
+  `demo_ff_streamfunction_design_matrix`, `demo_hh_general_iron_design`,
+  `demo_jj_aca_tsvd_on_dtn_matrix`, `bench_dtn_mbuild`,
+  `demo_kk_streamfunction_ridge_with_dtn`, `demo_ll_cylinder_tesseral_shim`,
+  `demo_mm_current_sheet_reduced_potential`, `demo_nn_current_sheet_ellipsoid`,
+  `demo_oo_current_sheet_design_matrix`, `demo_pp_current_sheet_unified`,
+  `demo_qq_fmm_filament_highorder_source`, `demo_rr_sf_contour_filament_fmm_source`,
+  `bench_fmm_vs_aca_biotsavart`, `demo_sp1_inverse_design`, `demo_sp2_leads_workpiece`,
+  `demo_sp3_fourier_lead_compensation`.
+
+**Note on the 8 duplicate prefixes** (`demo_kk`…`demo_rr` each appear twice): they are
+the *seam* between **Act 7** (radiation: `*_hoibc` / `*_pml` / `*_transformation`) and
+**Act 8** (stream-function: `*_current_sheet` / `*_fmm` / `*_streamfunction` / `*_cylinder`);
+the full filename disambiguates. A future cleanup may renumber these into the two acts.
+
+---
+
 | Script | Question | Knowledge topic | Verified result |
 |---|---|---|---|
 | `sufficient_mesh.py` | How fine must the truncation mesh be? | `numerics` | sufficient-mesh criterion `N_surf ≳ n_src/√ε`; accurate band ≈ 0.12–0.18 of angular Nyquist; per-degree defect `~ n²(h/R)⁴` |
