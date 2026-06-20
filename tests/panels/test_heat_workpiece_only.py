@@ -59,9 +59,16 @@ def _run_heat(wp_vol, tmp_path):
            "--dt", "1.0", "--t-end", "1.0",
            "--output", str(tmp_path / "heat.json")]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    assert proc.returncode == 0, (
-        f"calc_heat.py exited non-zero (expected a clean JSON error, not "
-        f"a crash):\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
+    # calc_main exits non-zero on error (radia >= 4.92.0, commit
+    # 5b88b67f, "No Fallbacks -- Fail Fast" policy).  Either a
+    # successful run (returncode 0) or a clean JSON error
+    # (returncode 1 + last stdout line is JSON with "error" key) is
+    # acceptable here; a Python traceback on stderr (no JSON in
+    # stdout) is not.
+    assert proc.returncode in (0, 1), (
+        f"calc_heat.py exited with unexpected code {proc.returncode} "
+        f"(expected 0 success or 1 clean JSON error, NOT a crash):\n"
+        f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
     # The result JSON is the last non-empty stdout line.
     last = [ln for ln in proc.stdout.splitlines() if ln.strip()][-1]
     return json.loads(last)
