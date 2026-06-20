@@ -34,7 +34,7 @@ in two fidelity classes:
 
 On a sphere `Λ_ext` diagonalizes in spherical harmonics; each mode `n` has a
 **scalar frequency symbol** `Λ_n(s)`. That symbol is **reverse-Bessel rational**
-— its poles are the Bessel/Thomson filter poles (verified `demo_uu`,
+— its poles are the Bessel/Thomson filter poles (verified `act6_10_iabc_time_domain`,
 `besselap` match `9.9e-16`). The whole map below follows from this one fact.
 
 ---
@@ -50,11 +50,11 @@ The exterior wavenumber sets the character of `Λ_n`:
   **CLN** time-domain realization. *This is the SA / Hachinohe regime.*
 - **Radiating / wave (finite `kR`)** — `Λ_n(kR)` turns **complex** (spherical
   Hankel log-derivative; `Im` = radiation). Closed by **IABC / PML /
-  extended-Kelvin** (`demo_gg`, `demo_uu`).
+  extended-Kelvin** (`act7_01_highfreq_spectrum_comparison`, `act6_10_iabc_time_domain`).
 
 The same reverse-Bessel structure carries both: **wave** is rational in `s`,
 **diffusion** is rational in `√s`, with the **same** poles `roots(θ_n)`
-(`demo_xx3`, machine-ε). So one datasheet, two variables.
+(`act6_02_cln_dtn_cauer`, machine-ε). So one datasheet, two variables.
 
 ### 2.2 The geometry axis (truncation shape)
 
@@ -78,7 +78,7 @@ axes**:
 
 - **Kelvin = a SPATIAL operator FACTORY.** It *builds* the exterior DtN as a
   sparse SPD volume FEM — no Green's function, arbitrary body, exterior material
-  (iron) — for the case nothing else can (`demo_v/w/q/t/bb`).
+  (iron) — for the case nothing else can (`act1_05_assemble_dtn_matrix/w/q/t/bb`).
 - **CLN = a TEMPORAL operator REDUCER.** It *compresses* a DtN's `s`-dependence
   into a small Cauer ladder (auxiliary ODEs) for transient / repeated / control
   solves. It needs a DtN to reduce.
@@ -129,35 +129,35 @@ re-entrant corner `α_h=0.357 / α_p=0.661`; `ΔDoF ≈ 58 → 1/45` of the inte
 error. Holds in 2-D on the `−n/R` ladder. (See `kelvin_transformation(topic="mesh_control")`.)
 
 ### IABC / exact-DtN — wave, radiating
-- `demo_uu`: per-mode DtN = degree-`n` reverse-Bessel rational; its poles ARE the
+- `act6_10_iabc_time_domain`: per-mode DtN = degree-`n` reverse-Bessel rational; its poles ARE the
   **Bessel/Thomson filter poles** (`besselap` `9.9e-16`); the transient auxiliary
   network converges to the exact DtN (`9.8e-11`), all rates `Re<0` (passive).
-- `demo_uu2`: exact-DtN FETD reflection falls as **O(h²)** — `5.70e-4 → 3.57e-5`
+- `act6_11_exact_dtn_fetd`: exact-DtN FETD reflection falls as **O(h²)** — `5.70e-4 → 3.57e-5`
   (`l=1`, `N=100→400`) — **×2471** better than a 1st-order Sommerfeld ABC, and
   passive (`E_final/E_peak = 1.7e-16`). Separable-geometry (Grote–Keller class).
 
 ### CLN — diffusion, temporal
-- `demo_xx3`: the diffusion DtN = a Cauer continued fraction **in `√s`**, EXACT at
+- `act6_02_cln_dtn_cauer`: the diffusion DtN = a Cauer continued fraction **in `√s`**, EXACT at
   `n+1` stages (`NRMSE 1.1e-16`, well-conditioned) **for EVERY multipole, not just the
   dipole** — verified `n=1..6` (each `~1e-16`, spread `1→582`); whereas a Foster fit
   **in `s`** floors at `1.7e-3` and ill-conditions (spread `1e5`) at every `n` — the
   structural win of the natural variable. (The full multipole field on the sphere is a
   **bank** of per-mode exact ladders; non-separable bodies are a band approximation.)
-- `demo_xx4`: a genuine lab CLN (Lanczos/PVL) reduces a **700-DOF** radial eddy FEM
+- `act6_04_cln_mor_radial_eddy`: a genuine lab CLN (Lanczos/PVL) reduces a **700-DOF** radial eddy FEM
   to an **`N=16`-stage** integer-order Cauer ladder (reduction `1.2e-5` / total
   `3.6e-4` at the FEM floor) — **~43× state reduction**; `T_N` SPD → real-negative
   poles → unconditionally stable, directly time-domain.
-- `demo_xx5`: in a **transient** eddy-current FETD, the CLN open boundary
+- `act6_05_cln_fetd_reflection`: in a **transient** eddy-current FETD, the CLN open boundary
   (`N=16`, a 16-DOF exterior vs 699 full) gives reflection **`9.9e-7`** (`n=1`) —
   **62659×** better than Dirichlet truncation (`6.19e-2`).
-- `demo_xx6`: CLN vs **CFS-PML** in the DC-to-evanescent eddy-current band — at
+- `act6_09_cln_vs_pml`: CLN vs **CFS-PML** in the DC-to-evanescent eddy-current band — at
   matched accuracy (`NRMSE ≈ 1.46e-4`) CLN uses **8 online DOF vs CFS-PML's 128**
   (~16× fewer) **and** is **`53189×` better-conditioned at DC** (`cond` `1.00` vs
   `5.32e4`); CLN is **DC-exact** (`4.2e-5` vs vanilla-PML `1.83e-2`, whose stretch
   `~1/√s` blows up). CFS-PML's conditioning fix *evaporates* when pushed to CLN's
   accuracy (a thick/strong layer). **Non-claim:** propagating waves are PML's home
   — this is the *diffusion* operator; arbitrary geometry still needs Kelvin + CLN.
-- `demo_xx17`: **impedance-boundary-DtN-CLN vs Kelvin-DtN-CLN, head-to-head** (4 axes). The
+- `act7_20_impedance_vs_kelvin_dtn_cln`: **impedance-boundary-DtN-CLN vs Kelvin-DtN-CLN, head-to-head** (4 axes). The
   eddy DtN is `√s`-native (Warburg); Kelvin's `√s`-Cauer is **exact** (`~1e−16`, `n+1`
   stages, well-conditioned, passive) while an impedance **`s`-network** (passive RLC) hits the
   **Warburg wall** (floors `~1.7e−3` + ill-conditions `~1e5`) and the IABC `N`-shell
@@ -169,21 +169,21 @@ error. Holds in 2-D on the `−n/R` ladder. (See `kelvin_transformation(topic="m
 ### Kelvin **builds** + CLN **reduces** — separable → non-separable (the DtN→CLN arc)
 The arc that joins the two columns: realize the operator (don't discretize the air),
 then compress it.
-- `demo_xx7`: **separable, band-UNLIMITED.** The 3-D sphere eddy DtN is *exactly*
+- `act6_03_dtn_to_cln_wideband`: **separable, band-UNLIMITED.** The 3-D sphere eddy DtN is *exactly*
   rational in `q=√s` (reverse-Bessel), so its CLN (Cauer in `√s`) is exact for all
   `s`: NRMSE **`1.5e-16` over 11 decades** at **2 online DOF**, while FEM-MOR-CLN and
   CFS-PML degrade at the band edge (and adding DOF does not save them).
-- `demo_xx8`: the Kelvin-FEM **BUILDS** the eddy DtN where there is no closed form
+- `act6_01_kelvin_fem_eddy_dtn`: the Kelvin-FEM **BUILDS** the eddy DtN where there is no closed form
   (radial sphere = analytic-checkable proof). The 3-D ball carries the scalar
   `(R/ρ')²` weight (3-D Dirichlet energy is **not** conformally invariant); with it
   DC error `3e-5` and **no** `(R0/Rfar)^(2n+1)` closure floor (truncated FEM `5.8e-2`).
-- `demo_xx9` / `demo_xx10`: the build on a genuinely **NON-separable** body — 2-D
+- `act6_06_square_eddy_dtn_to_cln` / `act6_07_cube_eddy_dtn_to_cln`: the build on a genuinely **NON-separable** body — 2-D
   **square** (C4v) / 3-D **cube** (O_h) — verified **analytic-free by the symmetry
   splitting** of the static Steklov ladder `(S, Mg)`: C4v splits the `m=2` quadrupole
   (square); O_h splits the `l=2` quintet **2+3 = E_g+T_2g** (cube) while the dipole
   stays a degenerate triplet; mesh-convergent; the dipole DtN interpolates
   DC→evanescent and a few-stage CLN-in-`√s` reduces it (6 stages → `3.5e-4`–`6e-4`).
-- `demo_xx11`: the **2-D Kelvin disk is CONFORMAL → NO weight** (2-D in-plane
+- `act6_08_disk2d_kelvin_eddy_dtn`: the **2-D Kelvin disk is CONFORMAL → NO weight** (2-D in-plane
   Dirichlet energy IS invariant = the Nagamine 2-D-cylindrical in-plane identity
   slots). Hits `−m` to `1e-5` with no DC floor; applying the 3-D `(R/ρ')²` weight in
   2-D **MISSES** the ladder (`m=1` by ~30%) — proving 2-D needs no weight. (2-D `K_m`
@@ -195,10 +195,10 @@ then compress it.
 
 | situation | use | why |
 |---|---|---|
-| separable + **transient** | **CLN alone** | analytic per-mode symbol → finite-exact ladder; beats PML (`demo_xx5/xx6`) |
+| separable + **transient** | **CLN alone** | analytic per-mode symbol → finite-exact ladder; beats PML (`act6_05_cln_fetd_reflection/xx6`) |
 | separable + static | analytic DtN **or** Kelvin | either works; Kelvin's exactness here is mostly elegance |
 | **arbitrary body + iron + static** | **Kelvin** | the only sparse, Green-function-free DtN factory — the SA / Hachinohe paper |
-| arbitrary + iron + **transient** | **Kelvin builds + CLN reduces** | no analytic symbol → Kelvin makes it, CLN compresses it (`demo_xx9`/`demo_xx10`: non-separable square/cube build, symmetry-verified) |
+| arbitrary + iron + **transient** | **Kelvin builds + CLN reduces** | no analytic symbol → Kelvin makes it, CLN compresses it (`act6_06_square_eddy_dtn_to_cln`/`act6_07_cube_eddy_dtn_to_cln`: non-separable square/cube build, symmetry-verified) |
 | **radiating** (finite `kR`) | **IABC / PML / extended-Kelvin** | the DtN is complex; static Kelvin is pinned to the real axis |
 
 ---
@@ -212,13 +212,13 @@ then compress it.
   `iabc(topic="overview"|"frequency_domain"|"causality"|"exact_dtn"|"timedomain"|"broadband_design"|"application")`,
   `mor_cln(...)`.
 - **Demos:** `examples/kelvin_transformation/DtN_spectrum/` — the wave/diffusion
-  open-boundary corpus: `demo_uu`, `demo_uu2` (exact-DtN FETD), `demo_xx3`
-  (Cauer in `√s`), `demo_xx4` (CLN MOR of a radial eddy FEM), `demo_xx5`
-  (transient CLN reflection), `demo_xx6` (CLN vs PML); the **DtN→CLN arc**
-  `demo_xx7` (separable band-unlimited), `demo_xx8` (3-D Kelvin-FEM build),
-  `demo_xx9`/`demo_xx10` (non-separable square/cube, C4v/O_h-verified),
-  `demo_xx11` (2-D conformal Kelvin disk, no weight); alongside the Kelvin
-  spectral corpus (`demo_d` … `demo_w`, `floor_vs_curve`, `p_vs_h_study`, …).
+  open-boundary corpus: `act6_10_iabc_time_domain`, `act6_11_exact_dtn_fetd` (exact-DtN FETD), `act6_02_cln_dtn_cauer`
+  (Cauer in `√s`), `act6_04_cln_mor_radial_eddy` (CLN MOR of a radial eddy FEM), `act6_05_cln_fetd_reflection`
+  (transient CLN reflection), `act6_09_cln_vs_pml` (CLN vs PML); the **DtN→CLN arc**
+  `act6_03_dtn_to_cln_wideband` (separable band-unlimited), `act6_01_kelvin_fem_eddy_dtn` (3-D Kelvin-FEM build),
+  `act6_06_square_eddy_dtn_to_cln`/`act6_07_cube_eddy_dtn_to_cln` (non-separable square/cube, C4v/O_h-verified),
+  `act6_08_disk2d_kelvin_eddy_dtn` (2-D conformal Kelvin disk, no weight); alongside the Kelvin
+  spectral corpus (`act1_02_multipole_spectrum` … `act5_04_nonspherical_dtn_matrix`, `act2_03_floor_vs_curve`, `act0_02_p_vs_h_study`, …).
 
 ---
 

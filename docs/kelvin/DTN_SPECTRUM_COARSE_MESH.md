@@ -249,7 +249,7 @@ Raising only the geometry order from `k=1` (flat polyhedron, ~1 % faceting) to
 the FE order untouched. A flat truncation is ~1 % off; an isoparametric (curved)
 one reaches 5–6 digits. (Past `k ≥ 3` it plateaus ~1e-5: the residual
 conformal-weight quadrature / energy-quotient limit.) Script:
-`examples/kelvin_transformation/DtN_spectrum/floor_vs_curve.py`.
+`examples/kelvin_transformation/DtN_spectrum/act2_03_floor_vs_curve.py`.
 
 **The floor in closed form — `floor ~ (h/R)^{2k}`.** Sweeping the *surface mesh* `h`
 at each geometry order `k` (rather than `k` at fixed `h`) pins the floor's law:
@@ -264,7 +264,7 @@ isoparametric boundary order** (Strang–Fix / Ciarlet–Raviart domain approxim
 
 mode-independent (`n=2` and `n=3` agree). So `k=2` already suffices and the practical
 knob is the `Γ` surface `h`, not `k>2`. Script:
-`examples/kelvin_transformation/DtN_spectrum/demo_xx13_geometry_floor_law.py`.
+`examples/kelvin_transformation/DtN_spectrum/act2_05_geometry_floor_law.py`.
 
 ### Isolating the Kelvin open-BC error from the interior FEM error
 
@@ -326,7 +326,7 @@ apparatus or rotating machine: the same coarse-mesh accuracy, with the
 ### The design calc on a real apparatus (reactor / transformer leg)
 
 Run a reactor/transformer **leg winding** (a balanced 2-D current set `{(z_k, I_k)}`,
-`Σ I_k = 0`) through the whole closed-form calc — `demo_xx16_apparatus_design_calc.py`:
+`Σ I_k = 0`) through the whole closed-form calc — `act2_07_apparatus_design_calc.py`:
 
 ```
    exterior content = winding CURRENT MOMENTS  a_m = Σ_k I_k z_k^m   (== FFT of A_z on Γ, 2.7e-17)
@@ -337,7 +337,7 @@ Run a reactor/transformer **leg winding** (a balanced 2-D current set `{(z_k, I_
 
 So from the winding geometry alone the open-boundary `R` and `p` follow directly — no
 convergence study. The odd-only excitation is a **symmetry selection rule** (like the
-magnetized square's `n = 4k+1` in `demo_e`), and a linear iron core only **rescales** the
+magnetized square's `n = 4k+1` in `act1_04_optimal_R`), and a linear iron core only **rescales** the
 moments `a_m`, not the geometric `a_app/R` decay, so the design order is unchanged.
 
 ### Vector (A-formulation) Kelvin centre — use a centre-less DtN
@@ -349,8 +349,8 @@ diverging weight pinned away by a single GND node — but the A-form centre is a
 **zero-curl-curl-stiffness** region with no single node to pin (HCurl edges + a gauge null
 space). The centre carries **no DtN physics** (field-energy fraction in `[0,ε] → 0`), so a
 **centre-less DtN** (FEM-BEM, never creating the centre node) loses nothing and sheds the
-degenerate region. Measured in `demo_xx15_aform_center_singularity.py` (the volume A-form
-still works on a coarse mesh with the gauge mass-reg — `demo_j` — the centre-less route is
+degenerate region. Measured in `act3_04_aform_center_singularity.py` (the volume A-form
+still works on a coarse mesh with the gauge mass-reg — `act3_03_vector_dtn` — the centre-less route is
 the robust one at scale).
 
 ### The lab's real two-sphere periodic Kelvin (end-to-end validation)
@@ -406,7 +406,7 @@ Kelvin closure error factorises into a **source side** (which element order `p`)
 **geometry side** (which surface mesh `h`):
 
 ```
-   err  ~  max(  (d_max/R)^p   [SOURCE: demo_xx12/xx14],   C·(h/R)^{2k}  [GEOMETRY: demo_xx13]  )
+   err  ~  max(  (d_max/R)^p   [SOURCE: act2_04_adequacy_eccentric_multibody/xx14],   C·(h/R)^{2k}  [GEOMETRY: act2_05_geometry_floor_law]  )
 ```
 
 - **Source side — required element order.** A source at radial distance `d` from the
@@ -418,8 +418,8 @@ Kelvin closure error factorises into a **source side** (which element order `p`)
   For several bodies the **most eccentric** `d_max` governs (the ladder `−(n+1)/R` is a
   property of `Γ`, source-independent — a common enclosing sphere is invariant). A
   compact, centred source (`d/R → 0`) is a pure dipole, `p=1`; an eccentric one blows
-  `p` up → **re-centre** the sphere. Verified analytically (`demo_xx12`) and **end-to-end
-  by a real Kelvin solve** (`demo_xx14`: an off-centre dipole, exterior field recovered by
+  `p` up → **re-centre** the sphere. Verified analytically (`act2_04_adequacy_eccentric_multibody`) and **end-to-end
+  by a real Kelvin solve** (`act2_06_eccentric_fem_endtoend`: an off-centre dipole, exterior field recovered by
   the inverse Kelvin map; the field error decays at `~2·ln(d/R)` — the exterior field
   *beats* the trace rate via radial suppression — so `p*` is a **sufficient, conservative**
   design rule, margin `4×–40×`).
@@ -542,7 +542,7 @@ ladder, order-0 current basis). So "C and L are both DtN-certified" is only **ha
 true — keep the two operators distinct. (Scope: `L_ext` is the *external* energy share;
 a thin loop's full self-inductance is near-field/log-dominated = interior FEM accuracy,
 not a DtN question. Verified by
-[`inductance_dtn.py`](../../examples/kelvin_transformation/DtN_spectrum/inductance_dtn.py).)
+[`act1_07_inductance_dtn.py`](../../examples/kelvin_transformation/DtN_spectrum/act1_07_inductance_dtn.py).)
 
 ---
 
@@ -576,12 +576,12 @@ MCP knowledge tool for the live recipe.
   — Part A (BEM spectrum), Part B (Kelvin effective DtN), Part C (exterior-mesh
   sweep). Runs end-to-end.
 - **Demos** (`examples/kelvin_transformation/DtN_spectrum/`, each self-asserting):
-  the six `mesh_control` pillars (`floor_vs_curve`, `p_vs_h_study`, `demo_e`,
-  `demo1_hp_lshape`, `demo_budget_dofcost`, …); the **mesh-adequacy criterion**
-  `demo_xx12` (source `p*`), `demo_xx13` (geometry `(h/R)^{2k}`), `demo_xx14`
-  (eccentric, FEM end-to-end), `demo_xx15` (A-form centre), `demo_xx16`
+  the six `mesh_control` pillars (`act2_03_floor_vs_curve`, `act0_02_p_vs_h_study`, `act1_04_optimal_R`,
+  `act0_04_hp_lshape_corner`, `act2_08_budget_dofcost`, …); the **mesh-adequacy criterion**
+  `act2_04_adequacy_eccentric_multibody` (source `p*`), `act2_05_geometry_floor_law` (geometry `(h/R)^{2k}`), `act2_06_eccentric_fem_endtoend`
+  (eccentric, FEM end-to-end), `act3_04_aform_center_singularity` (A-form centre), `act2_07_apparatus_design_calc`
   (reactor-leg design calc); and the **non-separable build + DtN→CLN arc**
-  `demo_xx9`/`demo_xx10` (square C4v / cube O_h, FEM-built eddy DtN), `demo_xx11`
+  `act6_06_square_eddy_dtn_to_cln`/`act6_07_cube_eddy_dtn_to_cln` (square C4v / cube O_h, FEM-built eddy DtN), `act6_08_disk2d_kelvin_eddy_dtn`
   (2-D conformal Kelvin disk, no weight). See the directory
   [`README.md`](../../examples/kelvin_transformation/DtN_spectrum/README.md).
 - **Tests:**
