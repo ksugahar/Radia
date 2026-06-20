@@ -114,6 +114,7 @@ self-tested.
 | `cohomology.wls`    | discrete de Rham complex (d0/d1 incidence), Betti b0/b1/b2, **harmonic H^1 generator** (tree-cotree, `b1=E-V+C`) | done, self-test PASS (filled-disk/cycle/annulus/figure-eight; generator is a cycle but not a gradient) — the GLOBAL loops |
 | `vim_field.wls`     | **VIM field operator**: charge extraction (sigma=M.n, rho=-div M), 1/r field, van Oosterom-Strackee solid angle (MSC analytic kernel) | done, self-test PASS (div-free M -> rho=0 = loop field-null; VIM -> dipole far-field O(1/R^2); VOS solid angle = quadrature) |
 | `vim_loopfree.wls`  | **THE loop-mode question**: is the FEEC VIM formulated so no spurious loop modes arise? | done, self-test PASS -- loops = curl(interior H(curl)) (+) cohomology are CHARGE-FREE (div=0 AND M.n=0) => field-null **by construction on any element** (Piola preserves div + normal-trace); constant-M misses them (avg=0) -> its tree-cotree loops only approx ker(N) on distorted hexes = the defect |
+| `infinite_element_derham.wls` | **de Rham (exact-sequence) INFINITE ELEMENT** on the spherical EXTERIOR (open boundary) -- the Mathematica twin of `examples/kelvin_transformation/DtN_spectrum/act7_26` | done, self-test PASS -- via Mathematica's built-in ORTHONORMAL spherical `Grad`/`Curl`/`Div`: the radial decay families shift **+1 per form degree** (S0={n+1..n+P}, S1=S0+1, S2=S0+2, S3=S0+3) so grad/curl/div COMMUTE (grad(V0) subset V1, curl(V1) subset V2, div(V2) subset V3 with explicit structure constants; curl.grad=0, div.curl=0; toroidal/div closure via the Legendre eig -n(n+1), shown m-independent). Demkowicz-Pal (CMAME 164, 1998), STATIC/low-freq; the 0-form tower is the scalar Bettess IE (act7_25). NOTE the shipped de Rham open boundary is instead the coordinate-mapping family (Kelvin / coordinate-scaling IE), de Rham inherited free; high-freq needs an oscillatory exp(ikr) basis (Astley/Demkowicz-Pal radiating) |
 
 **The de Rham complex `H1 →grad→ H(curl) →curl→ H(div) →div→ L2` is now verified
 symbolically** (both maps exact: `curl∘grad=0`, `div∘curl=0`, each image lands in
@@ -127,13 +128,16 @@ them charge-free (div=0 AND M·n=0) on *any* distorted element, so no spurious l
 arise and no per-geometry numerical null-vector patch is needed.  This is the formulation
 question that had to be answered symbolically first.  The full de Rham complex + cohomology
 + VIM field operator are covered for every element Radia's solver uses (MMM=tet,
-MSC=hex/wedge; plus quad/trig/prism) — 9 files, 100+ self-test assertions, all PASS.
+MSC=hex/wedge; plus quad/trig/prism) — 10 files, 100+ self-test assertions, all PASS —
+now including the **EXTERIOR open-boundary** de Rham element (`infinite_element_derham.wls`),
+the FEEC counterpart on the unbounded side (the same `H1→H(curl)→H(div)→L2` exactness, with
+decay families that commute under grad/curl/div).
 
 Still to settle at the `.wls`/formulation level before C++:
 - the loop/star (Hodge) SPLIT of the assembled high-order system — confirm the star
   (charge-carrying) block is well-conditioned once the loops are removed;
 - the VIM right-hand side / collocation correspondence (the evaluation points must match
-  the high-order basis, per the lab's "矢野 element" experience);
+  the high-order basis, per the lab's "Yano element" experience);
 - a small end-to-end VIM solve on a distorted multi-element patch, loops removed, vs a
   trusted reference — entirely in `.wls`/Python before committing to a C++ kernel.
 
