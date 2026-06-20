@@ -991,9 +991,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		if(m_elemDOF[i] != 5) allWedge = false;
 	}
 
-	// ULTRA-FAST PATH: Pure wedges without symmetry
-	// (skipped when the pyramid-cloud kernel is enabled -- see the pure-hexahedra note above.)
-	if(!hasSymmetry && allWedge && !g_yano_pyramid_cloud)
+	// ULTRA-FAST PATH: Pure wedges without symmetry.  Flag-aware (stage 3): PrecomputeWedgeGeometry +
+	// Compute5x5BlockFast handle both the EIEM2 default and the pyramid-cloud kernel (flag on).
+	if(!hasSymmetry && allWedge)
 	{
 		PrecomputeWedgeGeometry();
 		if(m_wedgeGeomReady)
@@ -2734,6 +2734,21 @@ void radTInteraction::PrecomputeWedgeGeometry()
 	m_wedgeTriVertices.resize(nWedge * WEDGE_MAX_TRIS * 3 * 3);
 	m_wedgeTriSigns.resize(nWedge * WEDGE_MAX_TRIS);
 
+	// Pyramid-cloud kernel (flag on): per-wedge element-common compensation cloud (2 tri*3 + 3 quad*4
+	// edges = 18 face-edges * 3-pt quadrature = 54 points/wedge; degenerate wedges zero-pad).
+	if(g_yano_pyramid_cloud)
+	{
+		m_wedgeCloudN = 54;
+		m_wedgeCloudPts.assign((size_t)nWedge * m_wedgeCloudN * 3, 0.0);
+		m_wedgeCloudWts.assign((size_t)nWedge * m_wedgeCloudN, 0.0);
+	}
+	else
+	{
+		m_wedgeCloudN = 0;
+		m_wedgeCloudPts.clear();
+		m_wedgeCloudWts.clear();
+	}
+
 	for(int w = 0; w < nWedge; w++)
 	{
 		int elemIdx = m_wedgeElemIndices[w];
@@ -2752,9 +2767,10 @@ void radTInteraction::PrecomputeWedgeGeometry()
 			m_wedgeFaceNormals[(w*5+f)*3+1] = poly->FaceNormal[f].y;
 			m_wedgeFaceNormals[(w*5+f)*3+2] = poly->FaceNormal[f].z;
 			m_wedgeFaceAreas[w*5+f] = poly->FaceArea[f];
-			m_wedgeEvalPoints[(w*5+f)*3+0] = 0.5*(poly->FaceCenter[f].x + poly->CentrPoint.x);
-			m_wedgeEvalPoints[(w*5+f)*3+1] = 0.5*(poly->FaceCenter[f].y + poly->CentrPoint.y);
-			m_wedgeEvalPoints[(w*5+f)*3+2] = 0.5*(poly->FaceCenter[f].z + poly->CentrPoint.z);
+			TVector3d wep = poly->MscEvalPoint(f);   // EIEM2 (flag off) or pyramid centroid (flag on)
+			m_wedgeEvalPoints[(w*5+f)*3+0] = wep.x;
+			m_wedgeEvalPoints[(w*5+f)*3+1] = wep.y;
+			m_wedgeEvalPoints[(w*5+f)*3+2] = wep.z;
 
 			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
@@ -2806,6 +2822,28 @@ void radTInteraction::PrecomputeWedgeGeometry()
 		}
 	}
 
+	// Pyramid-cloud kernel (flag on): precompute each wedge's element-common compensation cloud via
+	// the SAME helper the inline path uses -> wedge fast path == inline path.
+	if(g_yano_pyramid_cloud && m_wedgeCloudN > 0)
+	{
+		for(int w = 0; w < nWedge; w++)
+		{
+			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[m_wedgeElemIndices[w]]);
+			if(!poly || poly->AmOfFaces != 5) continue;
+			TVector3d cpts[64];
+			double cwts[64];
+			int nc = poly->MscCompensationCloud(cpts, cwts, m_wedgeCloudN);
+			for(int k = 0; k < nc; k++)
+			{
+				size_t b = (size_t)w * m_wedgeCloudN + k;
+				m_wedgeCloudPts[b*3+0] = cpts[k].x;
+				m_wedgeCloudPts[b*3+1] = cpts[k].y;
+				m_wedgeCloudPts[b*3+2] = cpts[k].z;
+				m_wedgeCloudWts[b] = cwts[k];
+			}
+		}
+	}
+
 	m_wedgeGeomReady = true;
 }
 
@@ -2853,8 +2891,24 @@ void radTInteraction::Compute5x5BlockFast(int wedge_i, int wedge_j, double* K_ma
 				H_total[0] += H_tri[0]; H_total[1] += H_tri[1]; H_total[2] += H_tri[2];
 			}
 
-			// Point charge cancellation
+			// Compensation: single point charge (flag off) or the precomputed element-common cloud (flag on).
 			double area_j = m_wedgeFaceAreas[wedge_j*5+fj];
+			if(g_yano_pyramid_cloud && m_wedgeCloudN > 0)
+			{
+				const double* cp = &m_wedgeCloudPts[(size_t)wedge_j * m_wedgeCloudN * 3];
+				const double* cw = &m_wedgeCloudWts[(size_t)wedge_j * m_wedgeCloudN];
+				double Hc[3] = {0.0, 0.0, 0.0};
+				for(int k = 0; k < m_wedgeCloudN; k++)
+				{
+					double wk = cw[k];
+					if(wk == 0.0) continue;
+					double r[3] = {obs[0]-cp[k*3+0], obs[1]-cp[k*3+1], obs[2]-cp[k*3+2]};
+					double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+					if(d2 > 1e-30) { double cf = wk/(sqrt(d2)*d2); Hc[0]+=cf*r[0]; Hc[1]+=cf*r[1]; Hc[2]+=cf*r[2]; }
+				}
+				H_total[0] += -area_j*Hc[0]; H_total[1] += -area_j*Hc[1]; H_total[2] += -area_j*Hc[2];
+			}
+			else
 			{
 				double r[3] = {obs[0]-src_center[0], obs[1]-src_center[1], obs[2]-src_center[2]};
 				double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
@@ -2898,13 +2952,36 @@ void radTInteraction::Compute5x5BlockFast(int wedge_i, int wedge_j, double* K_ma
 						H_total[0] += imaSign*H_tri[0]; H_total[1] += imaSign*H_tri[1]; H_total[2] += imaSign*H_tri[2];
 					}
 
-					// Mirror point charge
-					double r[3] = {obs[0]-mir_center[0], obs[1]-mir_center[1], obs[2]-mir_center[2]};
-					double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-					if(d2 > 1e-30) {
-						double id3 = 1.0/(sqrt(d2)*d2);
-						double c = -area_j * id3 * imaSign;
-						H_total[0] += c*r[0]; H_total[1] += c*r[1]; H_total[2] += c*r[2];
+					// Mirrored compensation: single mirrored point (flag off) or the mirrored cloud (flag on).
+					if(g_yano_pyramid_cloud && m_wedgeCloudN > 0)
+					{
+						const double* cp = &m_wedgeCloudPts[(size_t)wedge_j * m_wedgeCloudN * 3];
+						const double* cw = &m_wedgeCloudWts[(size_t)wedge_j * m_wedgeCloudN];
+						double Hc[3] = {0.0, 0.0, 0.0};
+						for(int k = 0; k < m_wedgeCloudN; k++)
+						{
+							double wk = cw[k];
+							if(wk == 0.0) continue;
+							double p[3] = {cp[k*3+0], cp[k*3+1], cp[k*3+2]};
+							if(mirrorAxis & IMA_X) p[0] = -p[0];
+							if(mirrorAxis & IMA_Y) p[1] = -p[1];
+							if(mirrorAxis & IMA_Z) p[2] = -p[2];
+							double r[3] = {obs[0]-p[0], obs[1]-p[1], obs[2]-p[2]};
+							double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+							if(d2 > 1e-30) { double cf = wk/(sqrt(d2)*d2); Hc[0]+=cf*r[0]; Hc[1]+=cf*r[1]; Hc[2]+=cf*r[2]; }
+						}
+						double s = -area_j * imaSign;
+						H_total[0] += s*Hc[0]; H_total[1] += s*Hc[1]; H_total[2] += s*Hc[2];
+					}
+					else
+					{
+						double r[3] = {obs[0]-mir_center[0], obs[1]-mir_center[1], obs[2]-mir_center[2]};
+						double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+						if(d2 > 1e-30) {
+							double id3 = 1.0/(sqrt(d2)*d2);
+							double c = -area_j * id3 * imaSign;
+							H_total[0] += c*r[0]; H_total[1] += c*r[1]; H_total[2] += c*r[2];
+						}
 					}
 				};
 
@@ -3106,20 +3183,49 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 						H_total[2] += imaSign * H_tri[2];
 					}
 
-					// Point charge from mirrored center
-					double r[3] = {obs[0] - src_mirror[0],
-					               obs[1] - src_mirror[1],
-					               obs[2] - src_mirror[2]};
-					double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-
-					if(dist_sq > 1e-30)
+					// Mirrored compensation: single point charge at the mirrored center (flag off) or the
+					// mirrored element-common cloud (flag on -- mirror each precomputed cloud point).
+					if(g_yano_pyramid_cloud && m_hexaCloudN > 0)
 					{
-						double dist = sqrt(dist_sq);
-						double inv_dist3 = 1.0 / (dist * dist_sq);
-						double coef = -area_j * inv_dist3 * imaSign;
-						H_total[0] += coef * r[0];
-						H_total[1] += coef * r[1];
-						H_total[2] += coef * r[2];
+						const double* cp = &m_hexaCloudPts[(size_t)hex_j * m_hexaCloudN * 3];
+						const double* cw = &m_hexaCloudWts[(size_t)hex_j * m_hexaCloudN];
+						double Hc[3] = {0.0, 0.0, 0.0};
+						for(int k = 0; k < m_hexaCloudN; k++)
+						{
+							double w = cw[k];
+							if(w == 0.0) continue;
+							double p[3] = {cp[k*3+0], cp[k*3+1], cp[k*3+2]};
+							if(mirrorAxis & IMA_X) p[0] = -p[0];
+							if(mirrorAxis & IMA_Y) p[1] = -p[1];
+							if(mirrorAxis & IMA_Z) p[2] = -p[2];
+							double r[3] = {obs[0]-p[0], obs[1]-p[1], obs[2]-p[2]};
+							double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+							if(dist_sq > 1e-30)
+							{
+								double dist = sqrt(dist_sq);
+								double cf = w / (dist * dist_sq);
+								Hc[0] += cf*r[0]; Hc[1] += cf*r[1]; Hc[2] += cf*r[2];
+							}
+						}
+						double s = -area_j * imaSign;
+						H_total[0] += s*Hc[0]; H_total[1] += s*Hc[1]; H_total[2] += s*Hc[2];
+					}
+					else
+					{
+						double r[3] = {obs[0] - src_mirror[0],
+						               obs[1] - src_mirror[1],
+						               obs[2] - src_mirror[2]};
+						double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+
+						if(dist_sq > 1e-30)
+						{
+							double dist = sqrt(dist_sq);
+							double inv_dist3 = 1.0 / (dist * dist_sq);
+							double coef = -area_j * inv_dist3 * imaSign;
+							H_total[0] += coef * r[0];
+							H_total[1] += coef * r[1];
+							H_total[2] += coef * r[2];
+						}
 					}
 				};
 
@@ -3218,6 +3324,9 @@ void radTInteraction::ComputeMixedBlockFast(
 		const double* triSigns;
 		double faceArea;
 		int maxTris;
+		const double* cloudPts = nullptr;   // pyramid-cloud compensation (flag on); nullptr/0 -> single point
+		const double* cloudWts = nullptr;
+		int cloudN = 0;
 
 		if(src_elem_type == 6 && m_hexaGeomReady) {
 			src_center[0] = m_hexaCenters[src_elem_idx*3+0];
@@ -3229,6 +3338,9 @@ void radTInteraction::ComputeMixedBlockFast(
 			triSigns = &m_hexaTriSigns[triOff];
 			faceArea = m_hexaFaceAreas[src_elem_idx*6 + src_face];
 			maxTris = 2;
+			if(g_yano_pyramid_cloud && m_hexaCloudN > 0) {
+				cloudPts = &m_hexaCloudPts[(size_t)src_elem_idx*m_hexaCloudN*3];
+				cloudWts = &m_hexaCloudWts[(size_t)src_elem_idx*m_hexaCloudN]; cloudN = m_hexaCloudN; }
 		} else if(src_elem_type == 5 && m_wedgeGeomReady) {
 			src_center[0] = m_wedgeCenters[src_elem_idx*3+0];
 			src_center[1] = m_wedgeCenters[src_elem_idx*3+1];
@@ -3239,6 +3351,9 @@ void radTInteraction::ComputeMixedBlockFast(
 			triSigns = &m_wedgeTriSigns[src_elem_idx*WEDGE_MAX_TRIS + off];
 			faceArea = m_wedgeFaceAreas[src_elem_idx*5 + src_face];
 			maxTris = numTris;
+			if(g_yano_pyramid_cloud && m_wedgeCloudN > 0) {
+				cloudPts = &m_wedgeCloudPts[(size_t)src_elem_idx*m_wedgeCloudN*3];
+				cloudWts = &m_wedgeCloudWts[(size_t)src_elem_idx*m_wedgeCloudN]; cloudN = m_wedgeCloudN; }
 		} else return;
 
 		// Direct contribution
@@ -3250,11 +3365,20 @@ void radTInteraction::ComputeMixedBlockFast(
 			FieldFromChargedTriangleLocal(obs, V0, V1, V2, triSigns[t], H_tri);
 			H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
 		}
-		// Point charge
-		double r[3] = {obs[0]-src_center[0], obs[1]-src_center[1], obs[2]-src_center[2]};
-		double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-		if(d2 > 1e-30) { double id3=1.0/(sqrt(d2)*d2); double c=-faceArea*id3;
-			H_out[0]+=c*r[0]; H_out[1]+=c*r[1]; H_out[2]+=c*r[2]; }
+		// Compensation: single point charge (flag off) or the precomputed element-common cloud (flag on).
+		if(cloudN > 0) {
+			double Hc[3] = {0,0,0};
+			for(int k = 0; k < cloudN; k++) { double wk = cloudWts[k]; if(wk == 0.0) continue;
+				double r[3] = {obs[0]-cloudPts[k*3+0], obs[1]-cloudPts[k*3+1], obs[2]-cloudPts[k*3+2]};
+				double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+				if(d2 > 1e-30) { double cf = wk/(sqrt(d2)*d2); Hc[0]+=cf*r[0]; Hc[1]+=cf*r[1]; Hc[2]+=cf*r[2]; } }
+			H_out[0]+=-faceArea*Hc[0]; H_out[1]+=-faceArea*Hc[1]; H_out[2]+=-faceArea*Hc[2];
+		} else {
+			double r[3] = {obs[0]-src_center[0], obs[1]-src_center[1], obs[2]-src_center[2]};
+			double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+			if(d2 > 1e-30) { double id3=1.0/(sqrt(d2)*d2); double c=-faceArea*id3;
+				H_out[0]+=c*r[0]; H_out[1]+=c*r[1]; H_out[2]+=c*r[2]; }
+		}
 
 		// IMA mirrors
 		if(m_imaEnabled) {
@@ -3277,10 +3401,22 @@ void radTInteraction::ComputeMixedBlockFast(
 					double H_tri[3]; FieldFromChargedTriangleLocal(obs, V0, V1, V2, triSigns[t], H_tri);
 					H_out[0]+=imaSign*H_tri[0]; H_out[1]+=imaSign*H_tri[1]; H_out[2]+=imaSign*H_tri[2];
 				}
-				double r[3]={obs[0]-mc[0],obs[1]-mc[1],obs[2]-mc[2]};
-				double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-				if(d2>1e-30){double id3=1.0/(sqrt(d2)*d2);double c=-faceArea*id3*imaSign;
-					H_out[0]+=c*r[0];H_out[1]+=c*r[1];H_out[2]+=c*r[2];}
+				// Mirrored compensation: single mirrored point (flag off) or the mirrored cloud (flag on).
+				if(cloudN > 0) {
+					double Hc[3]={0,0,0};
+					for(int k=0;k<cloudN;k++){ double wk=cloudWts[k]; if(wk==0.0) continue;
+						double p[3]={cloudPts[k*3+0],cloudPts[k*3+1],cloudPts[k*3+2]};
+						if(mirrorAxis&IMA_X)p[0]=-p[0]; if(mirrorAxis&IMA_Y)p[1]=-p[1]; if(mirrorAxis&IMA_Z)p[2]=-p[2];
+						double r[3]={obs[0]-p[0],obs[1]-p[1],obs[2]-p[2]};
+						double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+						if(d2>1e-30){double cf=wk/(sqrt(d2)*d2);Hc[0]+=cf*r[0];Hc[1]+=cf*r[1];Hc[2]+=cf*r[2];} }
+					double s=-faceArea*imaSign; H_out[0]+=s*Hc[0]; H_out[1]+=s*Hc[1]; H_out[2]+=s*Hc[2];
+				} else {
+					double r[3]={obs[0]-mc[0],obs[1]-mc[1],obs[2]-mc[2]};
+					double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+					if(d2>1e-30){double id3=1.0/(sqrt(d2)*d2);double c=-faceArea*id3*imaSign;
+						H_out[0]+=c*r[0];H_out[1]+=c*r[1];H_out[2]+=c*r[2];}
+				}
 			};
 			bool hX=(m_imaSymmetry&IMA_X)!=0, hY=(m_imaSymmetry&IMA_Y)!=0, hZ=(m_imaSymmetry&IMA_Z)!=0;
 			if(hX) addMir(IMA_X,m_imaSignX); if(hY) addMir(IMA_Y,m_imaSignY); if(hZ) addMir(IMA_Z,m_imaSignZ);
@@ -4030,15 +4166,6 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		return 0;
 	}
 
-	// Stage 1/2 scope: the improved yano-type pyramid-cloud kernel is wired into the dense fast/inline
-	// paths only, NOT the IMA mirrored-source compensation -- so flag-ON + image symmetry would mix
-	// kernels.  Fail loud rather than silently produce an inconsistent matrix (No-Fallbacks).
-	if(g_yano_pyramid_cloud)
-	{
-		std::cerr << "[Radia] Error: SolverConfig(yano_pyramid_cloud=True) does not support IMA image "
-		             "symmetry yet; solve the full (unmirrored) model or disable the flag." << std::endl;
-		return 0;
-	}
 
 	// Check all elements have valid DOF (3=tet MMM, 5=wedge MSC, 6=hex MSC)
 	bool allHex = true;

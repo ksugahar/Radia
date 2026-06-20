@@ -850,24 +850,19 @@ void RadHACApKMSCManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat)
         return;
     }
 
-    // Pre-compute evaluation points and normals for row element (ELF optimization)
+    // Pre-compute evaluation points for row element (EIEM2 midpoint, or pyramid centroid when the
+    // improved yano-type kernel flag is on -- MscEvalPoint is flag-gated).
     TVector3d eval_pts[6];
-    for (int fi = 0; fi < 6; fi++) {
-        eval_pts[fi].x = 0.5 * (poly_row->FaceCenter[fi].x + poly_row->CentrPoint.x);
-        eval_pts[fi].y = 0.5 * (poly_row->FaceCenter[fi].y + poly_row->CentrPoint.y);
-        eval_pts[fi].z = 0.5 * (poly_row->FaceCenter[fi].z + poly_row->CentrPoint.z);
-    }
+    for (int fi = 0; fi < 6; fi++) eval_pts[fi] = poly_row->MscEvalPoint(fi);
 
     // Compute all 36 elements (source face outer loop for cache locality)
     // IMPORTANT: K_mat indexing must match GetCached6x6Element access pattern
     // K_mat[fi * 6 + fj] stores K(face_i, face_j) = normal_i dot H(eval_pt_i, src_face_j)
     for (int fj = 0; fj < 6; fj++) {
-        double unit_point_charge = -1.0 * poly_col->FaceArea[fj];
-
         for (int fi = 0; fi < 6; fi++) {
             // Field from unit sigma on face_j
             TVector3d H_face = poly_col->FieldFromQuadFace(eval_pts[fi], fj, 1.0);
-            TVector3d H_point = poly_col->FieldFromPointCharge(eval_pts[fi], unit_point_charge);
+            TVector3d H_point = poly_col->MscCompensationField(eval_pts[fi], fj);  // single point or cloud (flag)
 
             TVector3d H_total;
             H_total.x = H_face.x + H_point.x;
