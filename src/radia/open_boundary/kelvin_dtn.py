@@ -11,16 +11,21 @@ generalised Steklov eigenproblem `(S, M_Gamma)`; for a non-separable shape it is
 convergent BAND approximation in `q = sqrt(s)` (a few-stage CLN), verified by the
 point-group SPLITTING of the sphere's degeneracies (square: C4v; cube: O_h).
 
-HONEST PROVENANCE (this is the crux -- do not overclaim):
-  * The **Kelvin transformation open boundary, INCLUDING material inhomogeneities
-    and anisotropies, is CLASSICAL** -- Freeman & Lowther (IEEE T-Magn 1988/1989);
-    it ships in production tools (FEMM handles iron shields this way).  "Material in
-    the Kelvin exterior" is NOT a new contribution.
-  * What is plausibly new (and is the SF-with-iron line's real claim, conf ~0.83,
-    self-check vs JP grey-lit / in-press still pending) is the **FUSION**: using the
-    Kelvin-FEM material-aware DtN, Schur-condensed into a TRANSFER operator, as the
-    INVERSE-DESIGN kernel for stream-function coil design with iron -- not the
-    open-boundary use here.  This module is the verified reusable operator.
+HONEST PROVENANCE (the crux -- 3 layers, do not overclaim; full record in the MCP
+topic kelvin_transformation(topic="material_exterior")):
+  * Kelvin open boundary with an AIR exterior + arbitrary INTERIOR material/anisotropy
+    is CLASSICAL -- Freeman & Lowther (IEEE T-Magn 1988/89); FEMM ships it.
+  * Transforming sigma / eps / mu under a coordinate (conformal) map is CLASSICAL --
+    transformation optics / Ward-Pendry 1996 (incl. DC-sigma cloaks); a PML is the
+    same CTM family.  So "transform sigma under the Kelvin map" is NOT new in the
+    abstract.
+  * Sugahara's OWN validated FUSIONS are the contributions: (i) Kelvin INVERSION as an
+    EXACT OPEN BOUNDARY with the sigma-CONFORMAL transform so a CONDUCTOR crosses the
+    truncation, eddy-current-testing-validated (IEEE Magnetics 2022 -- the formulation
+    basis for the (a/r)^4 sigma / (a/r)^2 mu weights this module's nu, sigma carry);
+    (ii) the Kelvin material-aware DtN as an INVERSE-DESIGN kernel (SF-with-iron, conf
+    ~0.83, self-check pending).  This module is the verified reusable operator, not a
+    paper claim.
 
 VERIFIED (tests/open_boundary/test_kelvin_dtn.py, ported from the research demos
 examples/kelvin_transformation/DtN_spectrum/act6_01_kelvin_fem_eddy_dtn.py +
