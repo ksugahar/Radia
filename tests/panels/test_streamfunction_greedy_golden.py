@@ -110,6 +110,32 @@ def test_greedy_target_stops_early(sample_vols):
     assert r["n_turns_used"] < 12
 
 
+def test_greedy_connector_aware(sample_vols):
+    """CONNECTOR-AWARE greedy: --greedy-connector-weight biases selection toward
+    loops NEAR the ones already laid, so the single-stroke connector ('rung')
+    path is shorter -- the fix for the isolated-pin chaining penalty.  On the pin
+    dictionary the weighted run's total connector length is no worse than the
+    pure-field run (deterministic mesh), at an essentially unchanged field
+    residual."""
+    coil, evalv = sample_vols
+    c0 = _run(coil, evalv, ["--greedy-turns", "8", "--greedy-dict", "pin",
+                            "--greedy-connector-weight", "0.0"])
+    cw = _run(coil, evalv, ["--greedy-turns", "8", "--greedy-dict", "pin",
+                            "--greedy-connector-weight", "0.6"])
+    assert "error" not in c0 and "error" not in cw
+    assert cw["greedy_connector_weight"] == 0.6
+    # both genuinely build a multi-turn coil and stay monotone
+    _assert_monotone_improving(c0, 8)
+    _assert_monotone_improving(cw, 8)
+    assert cw["n_turns_used"] >= 2 and c0["n_turns_used"] >= 2
+    # the whole point: weighting does NOT lengthen the connector path
+    assert cw["connector_length_m"] <= c0["connector_length_m"] + 1e-9, (
+        f"connector-aware made the rungs longer: "
+        f"{c0['connector_length_m']} -> {cw['connector_length_m']}")
+    # field residual stays in the same ballpark (manufacturability is ~free)
+    assert cw["greedy_final_rms"] <= c0["greedy_final_rms"] * 1.5 + 1e-9
+
+
 def test_greedy_turn_budget_plot(sample_vols, tmp_path):
     """Turn-budget UI: --greedy-plot writes the monotone rms-vs-turns curve with
     the spec line + min-turns mark (read off the fewest turns for a spec)."""
