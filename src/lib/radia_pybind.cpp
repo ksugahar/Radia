@@ -1694,6 +1694,12 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 // Additional Solver Functions
 // ============================================================================
 
+// Opt-in "improved yano-type" surface-charge (MSC) kernel flag (pyramid-cloud + pyramid-centroid eval);
+// defined in rad_polyhedron.cpp (global scope), read by the yano-MSC matrix-build paths in
+// rad_interaction.cpp.  Declared here at GLOBAL scope so the in-namespace SolverConfig/GetSolverConfig
+// usages resolve to the global definition (not a namespace-scoped symbol).
+extern bool g_yano_pyramid_cloud;
+
 namespace radia_solver_ext {
 
 py::tuple SolveNonl(int obj, double prec, int max_iter, int method, int nonl_method, const std::string& image = "") {
@@ -1873,6 +1879,7 @@ double GetHantilaRelax() {
 // Use BuildMatrix(obj, image="+x-z") or Solve(obj, ..., image="+x-z") instead
 
 // ---- Unified SolverConfig / GetSolverConfig ----
+// (g_yano_pyramid_cloud is declared at global scope above the namespace; usages below resolve to it.)
 
 void SolverConfig(py::kwargs kwargs) {
     // HACApK parameters
@@ -1935,6 +1942,13 @@ void SolverConfig(py::kwargs kwargs) {
 
     if (kwargs.contains("keep_magnetization")) {
         SetKeepMagnetization(kwargs["keep_magnetization"].cast<bool>());
+    }
+
+    // Improved yano-type MSC kernel (opt-in research flag): pyramid-cloud + pyramid-centroid eval.
+    // Default false == the historical EIEM2 single-point kernel (goldens unchanged).  Stage 1: supported
+    // for the dense LU/BiCGSTAB yano-MSC path (no HACApK method 2, no IMA image symmetry).
+    if (kwargs.contains("yano_pyramid_cloud")) {
+        g_yano_pyramid_cloud = kwargs["yano_pyramid_cloud"].cast<bool>();
     }
 }
 
@@ -2002,6 +2016,8 @@ py::dict GetSolverConfig() {
           stats["dense_memory_mb"] = dOut[11];
           config["hacapk_stats"] = stats;
       } }
+
+    config["yano_pyramid_cloud"] = g_yano_pyramid_cloud;
 
     return config;
 }
