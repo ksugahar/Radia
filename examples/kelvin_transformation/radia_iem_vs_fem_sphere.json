@@ -1,0 +1,21 @@
+{
+  "geometry": "magnetic sphere (R=50mm) in uniform field; bundled half-sphere .vol",
+  "vol": "src/radia/panels/samples/kelvin_benchmark_sphere_1_2.vol",
+  "mu_r": 100.0,
+  "analytic_ratio_Hin_over_H0": 0.029411764705882353,
+  "radia_iem_mmm": {
+    "ratio_Hin_over_H0": 0.02961451699404346,
+    "Mz_avg": 2931.8371824103024,
+    "n_tet": 414,
+    "image": "+y",
+    "err_vs_analytic": 0.006893577797477679,
+    "observable": "volume-averaged M_z (reliable; not inside-field eval)"
+  },
+  "reduced_omega_kelvin_fem": {
+    "ratio_Hin_over_H0": 0.02972600779546335,
+    "ndof": 30553,
+    "fes_order": 2,
+    "err_vs_analytic": 0.010684265045753927
+  },
+  "note": "MMM is the tet variant of the Radia surface-charge IEM; yano-type MSC is the hex variant (parity locked by tests/feec/parity_vs_msc). Loop removal (rad.GetLoopBasis) is field-preserving and does not change this accuracy."
+}
