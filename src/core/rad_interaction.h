@@ -510,6 +510,9 @@ public:
 	//-------------------------------------------------------------------------
 	void PrecomputeHexaGeometry();  // Pre-compute face triangles/normals/eval points
 	void PrecomputeHexaTriangleData();  // Pre-compute triangle local coordinate systems
+	// Cell-graph cycle (loop) basis = field-null subspace of the yano-MSC operator (== HDiv ker(B)).
+	// Geometry-only (no SVD); Lflat is ROW-MAJOR (m_totalDOF x nLoop): Lflat[d*nLoop+col].  See .cpp.
+	void BuildLoopBasis(std::vector<double>& Lflat, int& nLoop) const;
 	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
