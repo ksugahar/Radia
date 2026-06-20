@@ -1491,7 +1491,8 @@ def _build_gradpsi_kdt(verts, psi_v, tris):
     return cKDTree(cen), K
 
 
-def _gradpsi_signs(loops, kdt, tri_K, mpts, vector_b, target_flat):
+def _gradpsi_signs(loops, kdt, tri_K, mpts, vector_b, target_flat,
+                   global_align=True):
     """Per-loop unit-current fields + the sign orienting each contour loop by the
     consistent surface-current winding K = n_hat x grad_s(psi) -- NOT per-loop
     field alignment.
@@ -1505,8 +1506,13 @@ def _gradpsi_signs(loops, kdt, tri_K, mpts, vector_b, target_flat):
     wire residual ~88%).  Orienting each loop so its traversal matches K -- a
     KDTree majority vote of (segment direction . K) over the loop -- recovers the
     physical stream-function winding (Z2 ~5.6%) and reduces to sign(f.B) for l=1.
-    The GLOBAL sense is aligned to the target (cosmetic: the best-fit current
-    absorbs the overall sign; this reproduces the old l=1 convention exactly).
+    The K-vote signs are globally consistent BY CONSTRUCTION (K is one global
+    vector field), so they may be summed across contour levels directly.  With
+    ``global_align`` the OVERALL sense is then flipped once to align with the
+    target (cosmetic -- the best-fit current absorbs it -- and it reproduces the
+    old l=1 convention).  ``global_align`` MUST be False when this is called
+    PER LEVEL (e.g. _optimize_contour_levels): a per-level overall flip would
+    re-flatten the inter-level saddle reversals the K-vote just recovered.
     Returns (fields[list], signs[ndarray]); sign = +1 keep / -1 reverse the
     polyline."""
     if not loops:
@@ -1518,9 +1524,10 @@ def _gradpsi_signs(loops, kdt, tri_K, mpts, vector_b, target_flat):
         signs[li] = (1.0 if float(np.einsum('ij,ij->i', d, tri_K[j]).sum()) >= 0.0
                      else -1.0)
     fields = [_wire_field_flat(_close_loop(p), mpts, vector_b, 1.0) for p in loops]
-    G = np.sum([s * f for s, f in zip(signs, fields)], axis=0)
-    if target_flat is not None and float(G @ target_flat) < 0.0:
-        signs = -signs                            # align global sense to target
+    if global_align and target_flat is not None:
+        G = np.sum([s * f for s, f in zip(signs, fields)], axis=0)
+        if float(G @ target_flat) < 0.0:
+            signs = -signs                        # align global sense to target
     return fields, signs
 
 
@@ -1545,7 +1552,7 @@ def _optimize_contour_levels(psi_v, verts, tris, nlevels, mpts, target_flat,
         if not loops:
             return np.zeros(len(target_flat))
         fields, signs = _gradpsi_signs(loops, kdt, tri_K, mpts, vector_b,
-                                       target_flat)
+                                       target_flat, global_align=False)
         return np.sum([s * f for f, s in zip(fields, signs)], axis=0)
 
     def resid(F):
