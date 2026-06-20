@@ -36,8 +36,15 @@ from .dtn_cln import (  # noqa: F401
     sqrt_s_passive_ladder,
     eval_sqrt_ladder,
 )
+from .kelvin_dtn import (  # noqa: F401
+    kelvin_fem_radial_dtn,
+    kelvin_dtn_matrix,
+    steklov_spectrum,
+    band_cln_fit,
+)
 
 __all__ = [
+    # dtn_cln -- exact closed-form separable Zs-DtN-CLN
     "reverse_bessel_theta",
     "reverse_bessel_roots",
     "eddy_dtn",
@@ -48,4 +55,9 @@ __all__ = [
     "companion_poles",
     "sqrt_s_passive_ladder",
     "eval_sqrt_ladder",
+    # kelvin_dtn -- Kelvin-built material-aware / non-separable DtN -> CLN
+    "kelvin_fem_radial_dtn",
+    "kelvin_dtn_matrix",
+    "steklov_spectrum",
+    "band_cln_fit",
 ]

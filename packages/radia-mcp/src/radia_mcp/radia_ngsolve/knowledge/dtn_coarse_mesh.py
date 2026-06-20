@@ -2865,16 +2865,24 @@ DTN_COARSE_MESH_DTN_TO_CLN = r"""
 # boundary is the part that is KEPT; IABC survives only as the comparison record
 # (the act7 demos).  Open-boundary SELECTOR: docs/open_boundary/OPEN_BOUNDARY_MAP.md.
 #
-# PRODUCTION API (adopted 2026-06-20): the verified separable case ships as the
-# `radia.open_boundary` module (radia wheel, pure numpy/scipy):
+# PRODUCTION API (adopted 2026-06-20): `radia.open_boundary` (radia wheel), TWO paths:
 #   import radia.open_boundary as ob
+#   # (1) dtn_cln -- exact closed-form SEPARABLE (pure numpy/scipy):
 #   ob.eddy_dtn(n, s, R0, mu_sigma)        # exact eddy/diffusion DtN per multipole
 #   ob.cauer_ladder(n); ob.eval_ladder(..) # Cauer ladder, EXACT at n+1 stages
 #   ob.companion_poles(n)                  # passive transient Robin (Grote-Keller, Re<0)
-# Golden tests/open_boundary/test_dtn_cln.py; example examples/open_boundary/.
-# NOT NOVEL (Grote-Keller / Hagstrom-Warburton continued-fraction ABCs / Warburg-Cauer
-# / Kameari CLN) -- a verified reusable operator, not a paper claim.  The non-separable
-# Kelvin-built DtN stays research-stage (act6_06..).
+#   # (2) kelvin_dtn -- Kelvin-BUILT material-aware / NON-separable:
+#   ob.kelvin_fem_radial_dtn(n, s)         # Kelvin-FEM BUILDS the DtN, no DC floor (numpy)
+#   ob.kelvin_dtn_matrix(mesh, p, s, nu=, sigma=); ob.steklov_spectrum(S, Mg)  # NGSolve,
+#                                          #   arbitrary-shape / iron-exterior DtN ladder
+#                                          #   (point-group split: cube O_h, square C4v)
+#   ob.band_cln_fit(s_band, dtn, stages)   # convergent band-CLN for the non-separable case
+# Goldens tests/open_boundary/{test_dtn_cln,test_kelvin_dtn}.py; example examples/open_boundary/.
+# NOT NOVEL: separable = Grote-Keller / Hagstrom-Warburton continued-fraction ABCs /
+# Warburg-Cauer / Kameari CLN; material-in-exterior Kelvin = Freeman-Lowther 1988/89 (FEMM).
+# The plausibly-novel part is the FUSION (Kelvin material-aware DtN as an inverse-design
+# kernel = the SF-with-iron line), NOT the open-boundary use -- a verified reusable
+# operator, not a paper claim.
 
 The cleanest time-domain open boundary uses NO absorbing shell at all.  An
 absorbing shell + PEC only presents an effective surface impedance = the exact exterior

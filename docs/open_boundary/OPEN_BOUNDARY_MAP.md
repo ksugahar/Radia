@@ -48,12 +48,18 @@ you need CLN temporal reduction on top?):
   is kept as the **negative-result / comparison** corpus only: the `act7_*` demos +
   `dtn_coarse_mesh(topic="method_map")`. (The historical map below still analyses
   IABC as one fixed-error surrogate — that analysis is *why* it was retired.)
-- **`Zs`-DtN-CLN is ADOPTED as a radia module** (2026-06-20): `radia.open_boundary`
-  ships the verified separable case — the exact eddy/diffusion DtN per multipole, its
-  Cauer ladder (**exact at `n+1` stages**, well-conditioned, passive), and the
-  Grote-Keller companion auxiliary-ODE form for a transient Robin boundary
-  (`tests/open_boundary/`, `examples/open_boundary/`). The non-separable Kelvin-built
-  DtN stays research-stage (`act6_06..`).
+- **BOTH paths are ADOPTED as `radia.open_boundary`** (2026-06-20):
+  - **`dtn_cln`** — the exact closed-form separable `Zs`-DtN-CLN: the exact
+    eddy/diffusion DtN per multipole, its Cauer ladder (**exact at `n+1` stages**,
+    well-conditioned, passive), the Grote-Keller companion auxiliary-ODE form.
+  - **`kelvin_dtn`** — the **Kelvin-BUILT material-aware / non-separable** DtN: a
+    Kelvin-FEM (`kelvin_fem_radial_dtn`, pure numpy) BUILDS the DtN with no DC floor;
+    `kelvin_dtn_matrix` + `steklov_spectrum` (NGSolve) build an arbitrary-shape /
+    iron-exterior DtN whose Steklov ladder is point-group-split (cube O_h, square C4v),
+    reduced by `band_cln_fit`. **Honest provenance:** material-in-exterior Kelvin is
+    **CLASSICAL** (Freeman-Lowther 1988/89; FEMM); the plausibly-novel part is the
+    *fusion* (Kelvin material-aware DtN as an inverse-design kernel — the SF-with-iron
+    line, not the open-boundary use). Goldens `tests/open_boundary/`, usage `examples/open_boundary/`.
 
 ### Is it "better than PML"? — three senses of *superior* (be precise)
 
@@ -275,11 +281,15 @@ then compress it.
 
 ## 7. Runnable layer (source of truth)
 
-- **Module (production API):** [`radia.open_boundary`](../../src/radia/open_boundary/dtn_cln.py)
-  — the adopted verified `Zs`-DtN-CLN operator: `eddy_dtn` / `wave_dtn` (exact symbols),
-  `cauer_ladder` / `eval_ladder` (exact at `n+1` stages), `companion_poles` (passive
-  transient Robin), `sqrt_s_passive_ladder`. Golden: [`tests/open_boundary/test_dtn_cln.py`](../../tests/open_boundary/test_dtn_cln.py);
-  usage: [`examples/open_boundary/demo_dtn_cln_usage.py`](../../examples/open_boundary/demo_dtn_cln_usage.py).
+- **Module (production API):** [`radia.open_boundary`](../../src/radia/open_boundary/) — the adopted operator, two paths:
+  - [`dtn_cln`](../../src/radia/open_boundary/dtn_cln.py) (exact separable): `eddy_dtn` /
+    `wave_dtn`, `cauer_ladder` / `eval_ladder` (exact at `n+1` stages), `companion_poles`,
+    `sqrt_s_passive_ladder`.
+  - [`kelvin_dtn`](../../src/radia/open_boundary/kelvin_dtn.py) (Kelvin-built, material-aware /
+    non-separable): `kelvin_fem_radial_dtn` (pure numpy), `kelvin_dtn_matrix` + `steklov_spectrum`
+    (NGSolve), `band_cln_fit`.
+  - Goldens [`tests/open_boundary/`](../../tests/open_boundary/) (`test_dtn_cln.py`, `test_kelvin_dtn.py`);
+    usage [`examples/open_boundary/`](../../examples/open_boundary/).
 - **Docs:** [`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
   (Kelvin spectral datasheet), [`docs/cln/CAUER_LADDER_NETWORK.md`](../cln/CAUER_LADDER_NETWORK.md)
   (CLN), [`docs/kelvin/KELVIN_TRANSFORMATION.md`](../kelvin/KELVIN_TRANSFORMATION.md).
