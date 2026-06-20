@@ -1425,6 +1425,11 @@ def _field_aware_chain(loops, signs, mpts, target_flat, vector_b,
     two = _two_opt_order(_loop_gap_matrix(L0), list(nn))
     if two != nn:
         cands.append(two)
+    # (A lobe-aware order -- group loops by current sense, cross at the saddle --
+    # was tried to shorten the long inter-lobe rung; it does NOT help: the saddle
+    # sits at the DSV centre, so a SHORT crossover there contaminates the target
+    # MORE than a long one routed away from it.  The "shorter rungs != better
+    # field" trap; the cut-opt already finds the field-best of {nn, 2-opt}.)
     best = None
     for order in cands:
         chain, clen, err = optimize(order)
@@ -2434,6 +2439,25 @@ def run_manufacture(args):
     manufactured-wire field homogeneity at the eval region (closes the design
     loop: does the discretised wire still hit the target?)."""
     from ngsolve import GridFunction, TaskManager
+    # No-Fallback: a manufacture knob must FAIL LOUD on a value that would
+    # silently degrade or CRASH, not produce a quiet wrong wire.  chain-ncut<0 ->
+    # step=1 max resolution; chain-passes<0 / distort-iter<1 -> the optimiser
+    # range() is EMPTY so it is SKIPPED and the wire silently un-optimised;
+    # distort-grid<2 -> a degenerate control grid that crashes with a cryptic
+    # numpy IndexError.
+    _checks = [("chain_ncut", 0, "0 = auto-scale with loop count, positive = "
+                "explicit cut candidates per loop"),
+               ("chain_passes", 0, "0 = auto-scale, positive = explicit descent "
+                "rounds")]
+    if getattr(args, "distort", False):
+        _checks += [("distort_grid", 2, "control-grid points per axis"),
+                    ("distort_iter", 1, "Gauss-Newton iterations")]
+    for _nm, _lo, _hint in _checks:
+        _v = int(getattr(args, _nm, _lo))
+        if _v < _lo:
+            return {"method": "manufacture",
+                    "error": f"--{_nm.replace('_', '-')} must be >= {_lo} "
+                             f"({_hint}); got {_v}"}
     t0 = time.perf_counter()
     with TaskManager():
         P = _build_problem(args)
