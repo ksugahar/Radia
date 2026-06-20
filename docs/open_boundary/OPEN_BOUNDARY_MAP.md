@@ -156,6 +156,29 @@ error. Holds in 2-D on the `−n/R` ladder. (See `kelvin_transformation(topic="m
   accuracy (a thick/strong layer). **Non-claim:** propagating waves are PML's home
   — this is the *diffusion* operator; arbitrary geometry still needs Kelvin + CLN.
 
+### Kelvin **builds** + CLN **reduces** — separable → non-separable (the DtN→CLN arc)
+The arc that joins the two columns: realize the operator (don't discretize the air),
+then compress it.
+- `demo_xx7`: **separable, band-UNLIMITED.** The 3-D sphere eddy DtN is *exactly*
+  rational in `q=√s` (reverse-Bessel), so its CLN (Cauer in `√s`) is exact for all
+  `s`: NRMSE **`1.5e-16` over 11 decades** at **2 online DOF**, while FEM-MOR-CLN and
+  CFS-PML degrade at the band edge (and adding DOF does not save them).
+- `demo_xx8`: the Kelvin-FEM **BUILDS** the eddy DtN where there is no closed form
+  (radial sphere = analytic-checkable proof). The 3-D ball carries the scalar
+  `(R/ρ')²` weight (3-D Dirichlet energy is **not** conformally invariant); with it
+  DC error `3e-5` and **no** `(R0/Rfar)^(2n+1)` closure floor (truncated FEM `5.8e-2`).
+- `demo_xx9` / `demo_xx10`: the build on a genuinely **NON-separable** body — 2-D
+  **square** (C4v) / 3-D **cube** (O_h) — verified **analytic-free by the symmetry
+  splitting** of the static Steklov ladder `(S, Mg)`: C4v splits the `m=2` quadrupole
+  (square); O_h splits the `l=2` quintet **2+3 = E_g+T_2g** (cube) while the dipole
+  stays a degenerate triplet; mesh-convergent; the dipole DtN interpolates
+  DC→evanescent and a few-stage CLN-in-`√s` reduces it (6 stages → `3.5e-4`–`6e-4`).
+- `demo_xx11`: the **2-D Kelvin disk is CONFORMAL → NO weight** (2-D in-plane
+  Dirichlet energy IS invariant = the Nagamine 2-D-cylindrical in-plane identity
+  slots). Hits `−m` to `1e-5` with no DC floor; applying the 3-D `(R/ρ')²` weight in
+  2-D **MISSES** the ladder (`m=1` by ~30%) — proving 2-D needs no weight. (2-D `K_m`
+  is not exactly rational in `√s`, so its 2-D CLN is a band approximation.)
+
 ---
 
 ## 6. Selection map (the decision table)
@@ -165,7 +188,7 @@ error. Holds in 2-D on the `−n/R` ladder. (See `kelvin_transformation(topic="m
 | separable + **transient** | **CLN alone** | analytic per-mode symbol → finite-exact ladder; beats PML (`demo_xx5/xx6`) |
 | separable + static | analytic DtN **or** Kelvin | either works; Kelvin's exactness here is mostly elegance |
 | **arbitrary body + iron + static** | **Kelvin** | the only sparse, Green-function-free DtN factory — the SA / Hachinohe paper |
-| arbitrary + iron + **transient** | **Kelvin builds + CLN reduces** | no analytic symbol → Kelvin makes it, CLN compresses it |
+| arbitrary + iron + **transient** | **Kelvin builds + CLN reduces** | no analytic symbol → Kelvin makes it, CLN compresses it (`demo_xx9`/`demo_xx10`: non-separable square/cube build, symmetry-verified) |
 | **radiating** (finite `kR`) | **IABC / PML / extended-Kelvin** | the DtN is complex; static Kelvin is pinned to the real axis |
 
 ---
@@ -181,7 +204,10 @@ error. Holds in 2-D on the `−n/R` ladder. (See `kelvin_transformation(topic="m
 - **Demos:** `examples/kelvin_transformation/DtN_spectrum/` — the wave/diffusion
   open-boundary corpus: `demo_uu`, `demo_uu2` (exact-DtN FETD), `demo_xx3`
   (Cauer in `√s`), `demo_xx4` (CLN MOR of a radial eddy FEM), `demo_xx5`
-  (transient CLN reflection), `demo_xx6` (CLN vs PML), alongside the Kelvin
+  (transient CLN reflection), `demo_xx6` (CLN vs PML); the **DtN→CLN arc**
+  `demo_xx7` (separable band-unlimited), `demo_xx8` (3-D Kelvin-FEM build),
+  `demo_xx9`/`demo_xx10` (non-separable square/cube, C4v/O_h-verified),
+  `demo_xx11` (2-D conformal Kelvin disk, no weight); alongside the Kelvin
   spectral corpus (`demo_d` … `demo_w`, `floor_vs_curve`, `p_vs_h_study`, …).
 
 ---

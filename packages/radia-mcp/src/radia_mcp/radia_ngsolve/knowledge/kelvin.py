@@ -2686,6 +2686,46 @@ the order-1 h-path is only 1.2e-2 at ndof=135.  n=3: p=1,2 (<n) 4.4e-1 / 9.7e-3
 ~768 in 3D).  NOTE pillars 4 (optimal R/a, the magnetized SQUARE) and 5 (corner
 rates, the L-shape) are ALREADY 2D demos -- so all six pillars hold in 2D.
 
+## Arbitrary (non-separable) bodies + the dimensional weight rule (DtN->CLN arc)
+
+Beyond a sphere, the Kelvin-FEM does not merely CLOSE the boundary -- it BUILDS
+the exterior (eddy-current) DtN operator of a genuinely NON-separable body, which
+a CLN model-order reduction then compresses.  Verified analytic-free by SYMMETRY
+(the static Steklov ladder, the generalized eigenproblem (S, Mg) on Gamma, splits
+the sphere's l-fold degeneracies by the body's point group):
+
+  - `demo_xx9` (2D SQUARE, C4v): the m=1 dipole doublet is PRESERVED while the
+    m=2 quadrupole SPLITS (B1 != B2, by ~0.52) -- the C4v signature.
+  - `demo_xx10` (3D CUBE, O_h): the l=1 dipole stays a ~degenerate TRIPLET
+    (T_1u, spread ~0.002) while the l=2 quadrupole quintet SPLITS 2+3
+    (E_g doublet + T_2g triplet, by ~0.50) -- the O_h signature.
+  Both are mesh-convergent; the dipole-mode DtN interpolates DC -> evanescent
+  (real static rung -> sqrt(s) growth), and a few-stage CLN-in-sqrt(s) reduces it.
+  `demo_xx8` is the radial proof-of-mechanism (a sphere, so the analytic DtN
+  checks the FEM build) and `demo_xx7` is the separable-analytic band-unlimited
+  end (the 3D sphere DtN is EXACTLY rational in q=sqrt(s) -- reverse-Bessel -- so
+  the CLN is machine-exact at n+1 stages).
+
+THE DIMENSIONAL WEIGHT RULE (the crisp practical takeaway -- and fully consistent
+with the Nagamine 2D-cylindrical tensor "in-plane identity slots" note above):
+
+  | setting                         | Kelvin material weight (scalar Omega / phi) |
+  |---------------------------------|---------------------------------------------|
+  | 3D Kelvin BALL                  | (R/rho')^2  -- REQUIRED (NOT conformal)     |
+  | 2D Kelvin DISK (in-plane scalar)| 1 -- NONE (the in-plane Dirichlet energy IS  |
+  |                                 | conformally invariant; = Nagamine xx/yy=1)  |
+
+  - 3D Dirichlet energy is NOT conformally invariant -> the ball carries the
+    scalar (R/rho')^2 weight; with it the static limit hits -(n+1)/R (`demo_xx8`,
+    DC error ~3e-5 vs a truncated FEM's (R0/Rfar)^(2n+1) closure floor ~5.8e-2).
+  - 2D in-plane Dirichlet energy IS conformally invariant -> the disk needs NO
+    weight; the static limit hits -m/R to ~1e-5 (`demo_xx11`).  DECISIVE check:
+    applying the 3D weight (R/rho')^2 in a 2D disk MISSES the ladder -m (m=1 by
+    ~30%, m=2 by ~6%) -- proving 2D genuinely needs no weight.
+  - CAVEAT (band, not static): the 2D cylindrical K_m is NOT exactly rational in
+    sqrt(s) (unlike the 3D sphere's reverse-Bessel), so the 2D CLN is a band
+    APPROXIMATION, not machine-exact.
+
 ## One-line rule
 
 Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
