@@ -157,6 +157,14 @@ error. Holds in 2-D on the `−n/R` ladder. (See `kelvin_transformation(topic="m
   `~1/√s` blows up). CFS-PML's conditioning fix *evaporates* when pushed to CLN's
   accuracy (a thick/strong layer). **Non-claim:** propagating waves are PML's home
   — this is the *diffusion* operator; arbitrary geometry still needs Kelvin + CLN.
+- `demo_xx17`: **impedance-boundary-DtN-CLN vs Kelvin-DtN-CLN, head-to-head** (4 axes). The
+  eddy DtN is `√s`-native (Warburg); Kelvin's `√s`-Cauer is **exact** (`~1e−16`, `n+1`
+  stages, well-conditioned, passive) while an impedance **`s`-network** (passive RLC) hits the
+  **Warburg wall** (floors `~1.7e−3` + ill-conditions `~1e5`) and the IABC `N`-shell
+  transformer ill-conditions `~1`–`1.5` decade/shell. **Kelvin wins on all four axes in the
+  MQS/eddy scope**; the impedance route's home is high-freq radiation (outside scope). For the
+  sphere the exact DtN is one operator (exact-DtN-Robin `==` Kelvin → same CLN) — the gap is
+  the impedance *approximation* vs Kelvin's exact operator.
 
 ### Kelvin **builds** + CLN **reduces** — separable → non-separable (the DtN→CLN arc)
 The arc that joins the two columns: realize the operator (don't discretize the air),
