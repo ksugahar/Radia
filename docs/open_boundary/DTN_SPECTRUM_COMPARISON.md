@@ -108,6 +108,41 @@ over reflection** — its only convenience is being defined *uniformly across re
 evanescent have no propagating wave to "reflect"). This is a measurement / comparison, framed in
 the standard reflection language, **not a new metric**.
 
+## De Rham / vector extension, and the two infinite-element families
+
+The scalar infinite element (`act7_25`, the `H1` / 0-form end) extends to a **de Rham
+(exact-sequence) infinite element** — the `H1 → H(curl) → H(div) → L2` complex on the exterior, with
+the radial decay families shifted by **+1 per form degree** (`S0 = {n+1..n+P}`, `S1 = S0+1`,
+`S2 = S0+2`, `S3 = S0+3`) chosen so that grad / curl / div **commute** (the commuting diagram).
+[`act7_26_derham_infinite_element`](../../examples/kelvin_transformation/DtN_spectrum/act7_26_derham_infinite_element.py)
+verifies the diagram **exactly with sympy** (`grad(V0) ⊂ V1`, `curl(V1) ⊂ V2`, `div(V2) ⊂ V3` with
+explicit structure constants; `curl∘grad = 0`, `div∘curl = 0`), the toroidal / div closure resting on
+the Legendre angular eigenvalue `−n(n+1)`. This is the construction of **Demkowicz & Pal**, *An
+infinite element for Maxwell's equations* (CMAME 164, 1998) — a known construction, implemented and
+verified here (no novelty claimed). "High-order" is the same decay order `P` (a radial p-method,
+exact for `n ≤ P−1`).
+
+**Two distinct "infinite element" families** — they reach de Rham by different routes:
+
+| family | radial treatment | de Rham source | example |
+|---|---|---|---|
+| **decay-basis / shape-function** | special radial functions `(a/r)^k` | hand-built **commuting radial families** (exact-sequence) | Bettess scalar (`act7_25`); Demkowicz–Pal vector (`act7_26`) |
+| **coordinate-mapping / coordinate-scaling** | a real coordinate stretch on a standard FE layer | **standard Nédélec / RT elements** on the mapped region — inherited **for free** | the **Kelvin transformation** (conformal map); the coordinate-scaling infinite-element domain shipped in commercial FE |
+
+The **practical / shipped** de Rham open boundary is the coordinate-mapping kind (the same family as
+the Kelvin transformation, and the real-stretch cousin of PML); the decay-basis exact-sequence IE is
+the academic alternative. For a VECTOR problem handled by a **volume integral** method instead
+(MMM / MSC, or the H(div) charge-Gram VIM), the open boundary lives in the free-space kernel — there
+is no exterior to mesh, so the IE-vs-Kelvin choice does not arise. That integral route is an
+**alternative to**, not a combination with, the mapped-exterior FEM.
+
+**Trefftz framing.** The whole *convergent* class = "represent the exact exterior" = the **Trefftz
+umbrella**: Kelvin (a conformal map of the exact exterior), BEM (the exact kernel), and the
+decay-basis IE (whose basis `(a/r)^k` contains the one Trefftz function `r^{−(n+1)}`, hence exact for
+`n ≤ P−1`). A *pure* Trefftz element (exact multipoles as the basis) reproduces the exact DtN
+trivially. The trade is **no free lunch**: sparse ⇒ approximate (Kelvin's FE floor; the IE's order-`P`
+cutoff), exact ⇒ dense (BEM / pure-Trefftz multipole).
+
 ## Provenance (cite — this is a measurement / comparison, not a new method)
 
 Kelvin / inversion open boundary: Freeman-Lowther 1988/89; Brunotte-Meunier-Imhoff 1992.
