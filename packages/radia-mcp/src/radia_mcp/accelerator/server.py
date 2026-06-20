@@ -35,7 +35,7 @@ register_status_tool(
     server_name='mcp-server-accelerator',
     description='Accelerator physics: beam optics, dipole/quad/sext magnets, undulator/wiggler',
     subpackage='radia_mcp.accelerator',
-    related_servers=["electromagnet", "fusion"],
+    related_servers=["electromagnet", "fusion-reactor"],
     optional_deps=["radia"],
 )
 

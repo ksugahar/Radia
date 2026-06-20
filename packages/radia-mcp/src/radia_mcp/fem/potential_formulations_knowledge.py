@@ -171,7 +171,7 @@ In air:
 
 ## Lab use
 
-- Superconducting magnet design (in `radia_mcp.accelerator`, `radia_mcp.fusion`)
+- Superconducting magnet design (in `radia_mcp.accelerator`, `radia_mcp.fusion_reactor`)
 - High-Tc YBCO tape modeling
 - Not yet a production lab panel; reference layer only
 """

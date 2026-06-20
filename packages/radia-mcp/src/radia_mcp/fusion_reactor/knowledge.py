@@ -9,7 +9,7 @@ re-discovering numbers from scratch.
 """
 
 # Single source of truth for the dispatcher's accepted topic enum.
-# Wired into the `fusion_topics()` MCP tool via
+# Wired into the `fusion_reactor_topics()` MCP tool via
 # common.register_topics_tool -- see server.py.
 TOPICS: dict[str, str] = {
     "overview":         "Confinement landscape (tokamak / stellarator / FRC / "
@@ -1152,6 +1152,71 @@ simplification, and the closest tie-in for `radia_mcp` users:
 NdFeB magnetization can be modeled as fixed M = Br / mu_0 in Radia
 without solving anything (see `radia_mcp.electromagnet`).
 
+## radia's stream-function solver vs these codes (2026-06-21)
+
+radia ships the SAME object as NESCOIL/REGCOIL/FOCUS -- the winding-surface
+CURRENT POTENTIAL psi (surface current K = n x grad psi) -- via
+`radia.stream_function` + `calc_streamfunction.py` (knowledge:
+`radia_mcp.streamfunction`).  Honest positioning:
+
+**DESIGN -- AT PARITY.**  examples/stream_function/demo_regcoil_fusion.py
+(+_advanced) reproduce the REGCOIL workflow: current potential, the Tikhonov
+L-curve (B.n residual vs peak |grad psi|), the net-current secular term
+Psi = psi + (G/2pi) zeta + (I/2pi) theta (the 2 first-cohomology generators,
+b1 = 2 - chi, gmsh-free), VMEC-shaped boundaries (li383 / NCSX-like, B.n ~4e-8),
+coil Lorentz force/stress, and the FOCUS standoff + winding-SHAPE levers
+(kappa=2 plasma: conformal winding cuts coil complexity ~34%).  B.n ~2e-9 on
+producible targets; no fusion-specific solver code (design-matrix rows are just
+the plasma-normal Biot-Savart of the winding surface).
+
+**SCALE / METHOD -- ACA + ridge-TSVD.**  radia's design solver is the dense
+Biot-Savart design matrix COMPRESSED by ACA (an H-matrix) and inverted by a
+ridge (Tikhonov) TRUNCATED-SVD pseudo-inverse (`radia.stream_function.aca_tsvd`;
+knowledge topic `aca_tsvd`).  The ridge IS REGCOIL's lambda (same regularisation
+role), but the ACA compression + the FE-direct surface make it a SCALABLE
+regularised least-squares on an ARBITRARY meshed winding surface -- not REGCOIL's
+dense Fourier least-squares on a parameterised torus.  Goldens (a)/(b):
+test_regcoil_parity_deliverable_golden.py, test_regcoil_iron_differentiator_golden.py.
+
+**DELIVERABLE -- radia is a strict SUPERSET (design-to-manufacture, not
+design-only).**  NESCOIL/REGCOIL/FOCUS stop at psi (a field and its contours).
+radia continues: contours -> SINGLE-STROKE wire (grad-psi winding orientation,
+so even l>=2 saddle shims chain without the common current cancelling) ->
+SHEET-METAL distort (bend the discrete wire against its own Biot-Savart) ->
+STEP CAD (OCC WriteStep) -> PEEC.  The PEEC step is a full circuit-extraction
+SOLVER (`radia.peec_*`: L, R, C, M + SPICE netlist, MMM coupling), not just an
+inductance number.  So from ONE run radia emits a windable conductor + CAD + a
+circuit model that the design codes do not.
+
+**PHYSICS -- radia is a SUPERSET (iron).**  NESCOIL/REGCOIL/FOCUS are ALL
+free-space (vacuum Biot-Savart) and cannot handle magnetic material.  radia's
+material-aware kernel (Kelvin-FEM DtN transfer M = M_free + M_react, the
+`--iron-vol` path) designs coils WITH iron yoke/shield/core (free-space design
+misses ~77% with iron; material-aware matches ~1e-4) -- opening the domains
+REGCOIL structurally cannot enter (and, for fusion, iron flux returns /
+structures).
+
+**HONEST NUANCE (do not over-claim).**  The single-stroke win is decisive for
+SINGLE-CONDUCTOR coils (MRI gradient/shim, induction heating -- same current-
+potential math).  Stellarator MODULAR coils are intentionally SEPARATE coils
+(equal-Delta-Psi contours), so "one wire" is not their manufacturing step;
+there radia still adds STEP CAD + PEEC L beyond REGCOIL's psi, and its distort
+is analogous to FOCUS filament-shape optimization (an addition vs NESCOIL/
+REGCOIL, not unique vs FOCUS).  Precise claim: "REGCOIL is a special case
+(vacuum, toroidal, design-only) of radia's SF; design at parity, deliverable +
+iron a superset; a complete win for single-conductor coils."
+
+**EARN THE CLAIM BY MEASUREMENT (Repository-First, not paper-chasing):**
+  (a) vacuum-parity golden -- same target: B.n parity with REGCOIL AND the same
+      run emits a *.step + PEEC L (locks "design equal, deliverable beyond").
+  (b) iron differentiator on a standard problem -- REGCOIL misses, radia matches
+      FEM/measurement (productionise the demo_ee/ff bridge).
+  (c) manufacturing end-to-end -- target -> psi -> single-stroke -> distort ->
+      STEP -> PEEC, wound-wire field verified.
+Open gaps (honest): no SIMSOPT/STELLOPT Stage-1+2 integration; performance
+head-to-head at community mode counts unmeasured; full winding-surface
+optimization loop not built.
+
 ## Cross-references
 
 - `stellarator` -- overview, Stage-1 / Stage-2 framework
@@ -1160,6 +1225,8 @@ without solving anything (see `radia_mcp.electromagnet`).
 - `w7x_modular` -- the engineering reality after Stage-2
 - `radia_mcp.electromagnet` -- PM-stellarator coil modeling
   (Radia ObjHexahedron with fixed [Mx, My, Mz])
+- `radia_mcp.streamfunction` -- the SF engine that IS the current
+  potential (topics: fusion, material_aware, low_turn, single_stroke)
 """
 
 
