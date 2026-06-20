@@ -1,7 +1,7 @@
 """Golden test: full eddy-current Lorentz force on a sphere-in-coil vs the
 induced-dipole force -- the point-dipole approximation error at a/L ~ 0.5.
 
-Locks examples/levitation/sphere/coil_sphere_eddy_force.py:
+Locks examples/maglev/sphere/coil_sphere_eddy_force.py:
   - the FULL axisymmetric eddy-current force and the induced-dipole force
     are the same order at a/L ~ 0.5 (ratio near 1, but not identical), and
   - shrinking the sphere (a/L 0.5 -> 0.1) drives the ratio TOWARD 1 -- the
@@ -21,7 +21,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_TEAM28 = os.path.join(_HERE, "..", "examples", "levitation", "sphere")
+_TEAM28 = os.path.join(_HERE, "..", "examples", "maglev", "sphere")
 _SCRIPT = os.path.join(_TEAM28, "coil_sphere_eddy_force.py")
 _JSON = os.path.join(_TEAM28, "coil_sphere_eddy_force_results.json")
 

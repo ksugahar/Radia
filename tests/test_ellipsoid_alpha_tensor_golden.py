@@ -1,7 +1,7 @@
 """Golden test: shape-anisotropic eddy-current polarizability of an ellipsoid.
 
 Locks the analytic shape-anisotropy result of
-examples/CLN/scripts/team28_levitation/ellipsoid_alpha_tensor.py:
+examples/maglev/ellipsoid/ellipsoid_alpha_tensor.py:
   - the demagnetizing tensor sums to 1 and the Osborn integral matches the
     spheroid closed form (sphere 1/3, 2:1 prolate N_c=0.1736),
   - a triaxial body a1!=a2!=a3 gives three DISTINCT alpha_i (genuine shape
@@ -20,9 +20,9 @@ import pytest
 pytest.importorskip("scipy")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# CLN was absorbed into radia.levitation: examples/CLN/scripts/team28_levitation ->
-# examples/levitation/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
-_LEV = os.path.join(_HERE, "..", "examples", "levitation")
+# CLN was absorbed into radia.maglev ->
+# examples/maglev/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
+_LEV = os.path.join(_HERE, "..", "examples", "maglev")
 sys.path.insert(0, os.path.join(_LEV, "sphere"))
 sys.path.insert(0, os.path.join(_LEV, "ellipsoid"))
 
@@ -71,7 +71,7 @@ def test_lift_largest_along_short_axis():
 
 
 def test_kappa_lift_reduces_to_verified_sphere_coefficient():
-    import levitation_sphere_force as L
+    import maglev_sphere_force as L
     mu0 = E.mu0
     gradB2 = 0.2
     F_sphere = (np.pi * L.a**3 / (2 * mu0)) * gradB2

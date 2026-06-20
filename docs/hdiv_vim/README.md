@@ -151,7 +151,7 @@ summation itself**: slow convergence at the wall band and the high-N Hankel/QD
 breakdown in float64 (see memory `foster-convergence-central-obstacle`,
 `cln-high-stage-degrades-below-foster`). An efficient summation would help, but none
 is in hand, so the series route is set aside. (An extended-precision "DD" port of the
-hex VIM lives under `examples/levitation/research_cln/ngsolve_validation/dd_*` — a
+hex VIM lives under `examples/maglev/research_cln/ngsolve_validation/dd_*` — a
 separate line attacking the float64 breakdown directly; it is NOT part of the deleted
 engine.)
 
