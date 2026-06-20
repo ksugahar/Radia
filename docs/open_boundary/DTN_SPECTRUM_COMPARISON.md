@@ -155,6 +155,21 @@ needs an *orthogonalized* basis, and a cheap 1-D proxy does **not** establish an
 over box-PML. **Verdict: no clean GO** — prefer box-PML (complement NGSolve, do not reimplement),
 *unless* the IE basis is orthogonalized **and** IE-vs-box-PML is settled on a real 3-D model first.
 
+**Fair re-test on the DtN yardstick ([`act7_28`](../../examples/kelvin_transformation/DtN_spectrum/act7_28_ie_vs_kelvin_fair_dtn.py)).**
+Gate 1 above compared the IE against box-PML but never put IE and **Kelvin** on the same per-mode
+`d_n`. Doing so reveals they are the **same method on the sphere**: the Kelvin inversion `ξ = a²/r`
+maps `r^{−(n+1)}` to the polynomial `ξ^{n+1}`, and the IE decay-matrix `A_kl = a(kl+n(n+1))/((k+l)−1)`
+*is* the Kelvin-mapped monomial energy (measured identical). Consequences, measured: IE and Kelvin
+give **identical DtN at matched DOF** (a TIE on accuracy-per-DOF; both exact for `n ≤ P−1`); the IE's
+*only* deficit is that the monomial basis `(a/r)^k` is the Hilbert-ill-conditioned coordinate system
+for that space (`cond ≈ 10 → 4e9` for `P=2..8`), whereas an orthogonal/nodal basis for the **same**
+space is well-conditioned (`cond ≈ 2 → 339`) — so the deficit is **fixable by orthogonalization, not
+intrinsic**. Net: an *orthogonalized* IE has Kelvin-grade accuracy + conditioning **plus** the
+geometry edge (no Liouville sphere-lock) — so the honest build decision reads in the IE's favour
+*provided the orthogonalized basis is used*. (The Gate-1 "prefer box-PML" was an unfair-comparison
+artifact; box-PML stays relevant only as the tuned, wave-native alternative for the eddy/radiating
+regime.)
+
 ## Provenance (cite — this is a measurement / comparison, not a new method)
 
 Kelvin / inversion open boundary: Freeman-Lowther 1988/89; Brunotte-Meunier-Imhoff 1992.
