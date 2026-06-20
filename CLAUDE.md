@@ -1901,9 +1901,17 @@ PyPI install には反映されない**。C++ 変更を 100号機 / mdx で試�
 
 CI が通っても Cubit テストに通らなければリリースしない。
 
-### CI Preflight Policy: commit → CI check → push (2026-06-05)
+### CI Preflight Policy: commit → CI check → push (2026-06-05; ownership 2026-06-21)
 
-**POLICY**: Run the CI gates **LOCALLY before every push to `main`**, not
+**OWNERSHIP (2026-06-21): `ci_preflight` is CODEX's job — Claude does NOT run it.**
+Per *Agent Division of Labor: Claude Commits; Codex Runs CI + Release*, Claude
+implements → tests locally → commits this-session files by name → STOPS at the
+local `git commit` and reports the SHA.  Claude does **NOT** run
+`tools/ci_preflight.py`, and does **NOT** push (a push would trigger ci_preflight
+via the pre-push hook — that path is codex's too).  The rest of this section
+documents what ci_preflight does, for **codex's** reference.
+
+**POLICY (codex)**: Run the CI gates **LOCALLY before every push to `main`**, not
 after.  CI must not be the FIRST place a catchable error surfaces.  The
 single command is:
 
