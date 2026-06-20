@@ -70,7 +70,7 @@ against the unread lab PDFs when those become accessible.
 TOPICS: dict[str, str] = {
     "overview": "Magnetic levitation -- systems (EMS/EDS/PM/SC/Halbach) + force physics (induction/EML/AMB/SC/diamagnetic/Earnshaw) + the lab's Radia-IEM / CLN research line",
     # -- maglev systems + the lab's Radia/CLN research --
-    "radia_iem_fem": "Radia IEM (MMM/MSC) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi/T-Omega; no re-mesh on magnet motion (Yano bachelor, lab research)",
+    "radia_iem_fem": "Radia IEM (MMM/MSC) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi (A_ext) / T-Omega (B_ext); no re-mesh on magnet motion; rotating-magnet-over-plate cross-validation tightens to ~0.1% at order=2; the Lorentz-force HDiv(J=curl T) function-space pitfall + verified NGSolve recipe (Yano bachelor, lab research)",
     "cln_mor_control": "Cauer Ladder Network (CLN) model-order reduction for real-time control-coupled maglev: ~1/500 speedup, multiport matrix-CLN, 3D gauge A-phi/T-Omega/A-T, TEAM 28 (Yano master, lab research)",
     "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; Kameari+Kelvin accumulation BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
@@ -210,48 +210,216 @@ Run IEM and FEM SEQUENTIALLY, exchanging fields (weak coupling):
 
 ## The two reduced-potential formulations (both validated)
 
-**A-phi method** [Biro 2000] -- uses the IEM A_ext.  Split the magnetic
-vector potential A = A_ext + A_r; in the conductor Omega_c:
+**A-phi method** [Biro 2000] -- consumes the IEM **A_ext** (Radia 'a').
+Split the magnetic vector potential A = A_ext + A_r; in the conductor
+Omega_c, with an electric scalar Phi (current continuity div J = 0) and
+J = -sigma( dA_r/dt + grad Phi ):
 
 ```
-  sigma * d(A_r)/dt + curl( (1/mu) curl A_r ) = -sigma * d(A_ext)/dt
-                                                  \_____ source _____/
+  sigma( dA_r/dt + grad Phi ) + curl( (1/mu) curl A_r ) = -sigma * d(A_ext)/dt
+                                                            \_____ source _____/
 ```
 
-**T-Omega method** [Biro 2000] -- uses the IEM H_ext.  Split H = H_ext +
-H_r, with the reaction field via an electric vector potential T and a
-magnetic scalar potential Omega:  J = curl T,  H_r = T - grad(Omega):
+**T-Omega method** [Biro 2000] -- consumes the IEM **B_ext** (Radia 'b').
+Split H = H_ext + H_r, with the reaction field via an electric vector
+potential T and a magnetic scalar potential Omega:  J = curl T,
+H_r = T - grad(Omega):
 
 ```
-  curl( rho * curl T ) + mu * d/dt( T - grad Omega ) = -mu * d(H_ext)/dt
-                                                         \_____ source ____/
+  curl( rho * curl T ) + mu * d/dt( T - grad Omega ) = -d(B_ext)/dt
+                                                         \____ source ___/
 ```
 
-## Validation (Yano & Sugahara digest E-3-1)
+The two feed DIFFERENT Radia outputs (A_ext vs B_ext) to the FEM, so they
+are INDEPENDENT discretisations -- their mutual agreement is a real
+cross-check, not a tautology.
 
-Test problem: a permanent magnet ROTATING + TRANSLATING above a copper
-plate (the magnet-wheel / Arago class), dt = 0.0111 s, 181 steps.  The
-two formulations are physically consistent but feed DIFFERENT physical
-quantities (A_ext vs H_ext) to the FEM -- so cross-checking them is an
-independent validation:
+### Discrete form (both formulations)
 
-| Quantity     | Mean rel. error | Max rel. error |
-|--------------|-----------------|----------------|
-| Joule heat   | 3.38 %          | 10.65 %        |
-| Lorentz force| 4.81 %          | 13.20 %        |
+| | A-phi | T-Omega |
+|---|---|---|
+| vector unknown | A_r in HCurl, **conductor only** | T in HCurl, **conductor only** |
+| scalar unknown | Phi in H1, conductor only | Omega in H1, **whole domain** |
+| eddy current J | -sigma( dA_r/dt + grad Phi ) | curl T |
+| flux density B | curl A_ext + curl A_r | B_ext + mu( T - grad Omega ) |
+| Radia source | A_ext (rate dA_ext/dt) | B_ext (rate dB_ext/dt; + B_ext . grad psi) |
 
-All quantities agree within ~5 % mean -> the coupled method is sound.
-The eddy-current force/loss solver was also validated against TEAM
-Problem 7 (eddy-current "Asymmetrical Conductor with a Hole") and the
-levitation against TEAM Problem 28 (electrodynamic levitation device).
+- **Gauge**: HCurl with `nograds=True` (tree-cotree) removes the gradient
+  null-space of curl -- no explicit Coulomb gauge needed.
+- **Scalar uniqueness**: pin one GND vertex (`dirichlet_bbbnd="GND"` /
+  Phi = 0) so the scalar potential is unique.
+- **Time**: backward Euler; the per-step system is
+  `(M + dt K) u^{n+1} = M u^n + f_ext`, M the sigma/mu mass block, K the
+  reluctivity curl-curl block.
+- **Open boundary is Radia's job, not the FEM's**: the source is the
+  ANALYTIC Radia field, so the FEM box only has to host the DECAYING
+  reaction field -- a modest air box with B.n = 0 truncation suffices.
+  A Kelvin transformation for the reaction field is OPTIONAL, not
+  required (the corpus runs both "kelvin" and "no_kelvin" variants and
+  they agree); this is exactly the re-mesh-free advantage of letting IEM
+  carry the unbounded source.
+
+## Validation: A-phi vs T-Omega mutual cross-check
+
+Test problem: a permanent magnet (Br = 0.2 T, M = Br/mu0 ~ 1.59e5 A/m)
+ROTATING + TRANSLATING above a copper plate (10 x 10 x 0.5 mm,
+sigma = 5.8e7 S/m) -- the magnet-wheel / Arago class; backward Euler,
+dt = 0.0111 s, two magnet revolutions.  The mutual agreement TIGHTENS
+sharply with FE order + mesh refinement, which is itself the evidence
+that the coupling is sound:
+
+| Run | Joule heat mean/max | Lorentz force mean/max |
+|-----|---------------------|------------------------|
+| digest E-3-1 (published, coarse) | 3.38% / 10.65% | 4.81% / 13.20% |
+| order=2, 0.5 mm mesh (matured)   | 0.21% / 5.16%  | 0.11% / 2.01%  |
+| order=2, steady state (step>30)  | 0.17% / 0.42%  | 0.09% / 0.28%  |
+
+So the two INDEPENDENT formulations converge to ~0.1% mutual agreement on
+BOTH loss and force -- the matured cross-validation.  The eddy-current
+force/loss solver was separately validated against TEAM Problem 7
+(eddy-current "Asymmetrical Conductor with a Hole") and the levitation
+against TEAM Problem 28 (electrodynamic levitation device).
+
+## The Lorentz-force function-space pitfall (hard-won, transferable)
+
+Computing the brake/lift force F = integral_Omega_c J x B dV is where the
+T-Omega method first looked WRONG: at order=1 on a 1 mm mesh, |J|_rms
+agreed to 1.7% and Joule loss to 1.2%, yet the Lorentz force was off by
+~8% mean (max ~60%).  The correlation study is the key diagnostic: the
+B-error-vs-F-error correlation was ~0 (r = -0.07), so the FIELD error was
+NOT the cause.  The cause is the FUNCTION SPACE of J under the cross
+product:
+
+- T-Omega: J = curl T lands in **HDiv(order=0)** -- element-wise CONSTANT,
+  only the NORMAL component continuous across faces.  The cross product
+  J x B of a face-discontinuous J integrates poorly (the tangential jump
+  pollutes the quadrature) even though the SCALAR self-product J.J (used
+  for |J|_rms and Joule loss) is fine.
+- A-phi: J = -sigma( dA_r/dt + grad Phi ) is effectively VectorH1-
+  continuous, so its cross product is well-behaved -- which is why A-phi's
+  force was accurate first.
+
+General rule: **a scalar invariant (J.J) tolerates a face-discontinuous
+field; a vector product (J x B) integrated over the volume does not.**
+Fixes that WORK (all in the matured runs):
+
+1. **Raise the FE order AND refine the mesh together.**  order=2 makes
+   J = curl T live in HDiv(order=1) and a 0.5 mm mesh resolves it; this
+   alone takes the force from ~8% to ~0.1% (table above).  Caveat:
+   bumping to order=2 on the OLD 1 mm mesh made it WORSE (J 87% / F 53%)
+   -- the mesh must actually resolve the higher-order space.
+2. **Use B_ext (the analytic Radia field), not B_total, in J x B.**  The
+   net force on the body comes from the external field; B_total reinjects
+   the discontinuous internal reaction field and adds noise.  It also
+   makes A-phi and T-Omega use the IDENTICAL B in the force integral,
+   isolating the genuine difference.
+3. **Integrate the CoefficientFunction directly with an explicit high
+   quadrature order** -- `Integrate(Cross(J, B_ext)[i], mesh,
+   definedon=Materials("copper"), order=5)`.  Do NOT L2-project B onto a
+   GridFunction first: the projection error ACCUMULATES across time steps
+   and shows up as visible "chatter" in F(t).  NGSolve integrates the CF
+   with the right quadrature; projecting only throws accuracy away.
+
+## Implementation recipe (verified, NGSolve order=2)
+
+- **The reduced-potential operator is TIME-INVARIANT -- factor it ONCE,
+  back-substitute each step.**  With the conductor mesh fixed and the magnet
+  supplied as the analytic Radia SOURCE (not meshed), the LHS
+  `A_sys = M_sigma + dt*K` (sigma-mass + curl-curl) depends only on the
+  conductor mesh + (linear) material -- it does NOT change as the magnet
+  moves.  Assemble + factor it once per `dt`; the motion enters ONLY the RHS
+  (`sigma * dA_s/dt`, a finite difference of two projected source steps).
+  This O(N^2) back-substitution per step (vs an O(N^3) refactor) IS the
+  speed-up.  (Re-meshing + rebuilding every step is the FULL-FEM baseline --
+  magnet meshed and moving -- which this reduced coupling exists to avoid;
+  rebuild per step ONLY if sigma/mu are nonlinear / field-dependent.)
+- **Define the HCurl unknown (T or A_r) on the CONDUCTOR ONLY**
+  (`definedon=mesh.Materials("copper")`, `nograds=True`) -- no eddy DOF in
+  air.
+- **The A-phi mass is near-singular on a coarse mesh** (kernel
+  `A + grad phi = 0`): add a tiny full-mass regularization (~1e-4 rel.) to
+  `M_sigma`, used CONSISTENTLY in both `A_sys` and the RHS history term (an
+  O(1e-4) well-posed perturbation, no dt-dependent bias) -- else
+  `sparsecholesky` can return NaN at certain dt + coarse mesh.
+- **Solver**: small conductor meshes factor directly
+  (`mat.Inverse(FreeDofs, inverse="sparsecholesky")`); large ones use
+  BDDC-preconditioned CG -- `Preconditioner(a, "bddc")` + `c.Update()` AFTER
+  `a.Assemble()` + `solvers.CG(...)`, with a small eps (~1e-6 on the mass
+  block) to keep BDDC well-conditioned on the air-singular operator.
+- **`rad.TrfOrnt` does NOT move an object for `rad.Fld`** (no-op, returns 1
+  -> every pose yields an identical field, a spurious "rank-1" source).  Move
+  the magnet via the eval-frame transform
+  `rad.RadiaField(obj,'a'|'b', origin=, u_axis=, v_axis=, w_axis=)`, or
+  rebuild the magnet at the new pose.
+- **`rad.Fld` inside a `RadiaField` CF is NOT thread-safe under
+  `TaskManager`** (the C++ field eval crashes).  Project the Radia source and
+  assemble its LinearForm loads SERIALLY; wrap only the conductor-FES
+  assemble / factor / solve in `with TaskManager()`.
+- **Coarse-mesh BDDC artifact**: under-convergence at isolated magnet angles
+  emits NON-PHYSICAL J_rms spikes (alternating spike/normal, ~1.8x the
+  neighbours) -- a solver artifact, not physics.  Refine the mesh / tighten
+  the CG tolerance rather than trusting the spike.
+
+## The magnetic-Reynolds crossover: do you even NEED the eddy FEM?
+
+Before reaching for the FEM (or a CLN reduction of it), check the magnetic
+Reynolds number of the conductor:
+
+```
+  Rm = mu0 * sigma * omega * L^2      (L = conductor size, omega = field-change rate)
+```
+
+`Rm` measures how strongly the induced eddy current perturbs the applied
+field.  The eddy reaction field scales like `Rm` relative to the source.
+Three regimes (verified on the rotating-magnet plate,
+`examples/levitation/rotating_magnet_eddy.py`):
+
+| Rm | reaction vs source | what to compute J / force / loss with |
+|----|--------------------|----------------------------------------|
+| `<~ 0.1` | negligible (<~1%) | **kinematic source-only**: `J = -sigma dA_s/dt` straight from the Radia analytic field -- NO per-step FEM at all |
+| `~ 0.1 .. 1` | a few % | full-FEM or CLN if you need that accuracy |
+| `>~ 1` | significant (>%-level) | the reaction matters -- full-FEM, and CLN to make it fast |
+
+**Yano's actual rotating-magnet case is Rm ~ 0.016** (1 mm magnet, ~1 Hz,
+0.5 mm Cu plate; skin depth ~66 mm >> 0.5 mm).  Measured: the source-only
+`J = -sigma dA_s/dt` reproduces the full-FEM Lorentz force to **0.035%** --
+so the entire per-step eddy FEM (which Yano's study ran) computes a ~0.03%
+correction.  **The dramatic speed-up for that problem is simply to drop the
+FEM and evaluate J / F / P from the analytic Radia source.**  The crossover
+script sweeps the motion speed to push Rm from 0.016 to 16: source-only
+Lorentz-force error grows 0.035% -> 20%, while the CLN (next topic)
+reproduces the full-FEM to <~ 0.3% across the whole range (1e-6 at low Rm,
+0.25% at Rm ~ 16) -- but the CLN only *earns its keep* above
+Rm ~ 1 (faster motion, thicker / more conductive rails, kHz drive, the
+TEAM 28 Al disk).  Do NOT present a CLN reduction of a low-Rm problem as a
+dynamic-reduction success -- there the outputs are source-determined and any
+faithful reduction looks "exact" for the wrong reason.
+
+**The real high-Rm anchor at the other end of this crossover is TEAM 28**
+(`Rm ~ 57` at the in-plane current-loop scale; the lift IS the eddy reaction).
+There the CLN genuinely earns its keep: a 6-stage CLN reproduces the full-FEM
+levitation force and the equilibrium height matches the **published measured
+11.5 mm to 4%** -- see `cln_mor_control` ("External-benchmark validation").  So
+the crossover has two REAL anchors: low-Rm Yano (kinematic, no CLN) and
+high-Rm TEAM 28 (CLN essential, validated against the published benchmark).
 
 ## Mapping to the Radia / NGSolve stack
 
 | Role | Tool |
 |------|------|
-| IEM external field A_ext, H_ext | **Radia MMM/MSC** (`rad.Fld(obj,'a'|'h',pts)`; ObjHexahedron/ObjTetrahedron magnets) -- exact analytic, open boundary |
+| IEM external field A_ext, B_ext | **Radia MMM/MSC** (`rad.Fld(obj,'a'|'b',pts)`; ObjHexahedron/ObjTetrahedron magnets) -- exact analytic, open boundary |
 | reduced-potential FEM reaction field | **NGSolve** A-phi / T-Omega eddy-current solve on the conductor mesh |
-| coupling of Radia field into FEM | `radia_mcp.fem.equivalence_source` (NearFieldSource), `radia_mcp.radia_ngsolve` RadiaField CoefficientFunction |
+| coupling of Radia field into FEM | `rad.RadiaField(obj, 'a'|'b')` CoefficientFunction (in `_radia_pybind.pyd`; supports an origin/u/v/w coordinate transform) -> `gf.Set(...)` / `Integrate(...)` directly; or `radia_mcp.fem.equivalence_source` (NearFieldSource) |
+
+> Field-coupling note: project the Radia field once per step onto a
+> VectorH1/HDiv GridFunction for the SOURCE (so `dA_ext/dt` / `dB_ext/dt`
+> is a clean finite difference of two stored steps), but keep the Lorentz
+> B_ext as a CoefficientFunction in the force integral (see the pitfall
+> above).  (Historical caveat, now resolved: the old standalone
+> `radia_ngsolve.pyd` was ABI-pinned to a specific NGSolve build and
+> seg-faulted against a mismatched one; the CF now ships inside
+> `_radia_pybind.pyd` built against the official NGSolve 6.2.2604, so a
+> matched `pip install radia ngsolve` is the supported path.)
 
 ## Cross-references
 
@@ -303,22 +471,53 @@ control design.  (Sugahara et al. 2023 extended CLN to problems with
 CONDUCTOR MOVEMENT using constant basis functions, which is what makes
 the moving-magnet maglev tractable.)
 
-## Verified in-repo: CLN-reduced levitation FORCE vs height (2026-06-04)
+## Verified in-repo: CLN levitation FORCE + EXTERNAL benchmark (2026-06-20)
 
-A worked, verified example lives in
-`examples/CLN/scripts/team28_levitation/`.  The coil-driven axisymmetric
-eddy problem is `(K + s*N) X = F` (K = s-independent magnetostatic
-operator, N = conductivity term, F = coil source); the CLN/Cauer
+A worked, verified example lives in `examples/levitation/team28/`.  The
+coil-driven axisymmetric eddy problem is `(K + s*N) X = F` (K = s-independent
+magnetostatic operator, N = conductivity term, F = coil source); the CLN/Cauer
 reduction is the Krylov subspace built from the COIL SOURCE
-(`V0 = K^-1 F`, `V_{k+1} = orthonormalise(K^-1 (N V_k))`).  A **6-stage
-CLN reproduces the full-FEM levitation force vs height to < 0.1%** and
-recovers the levitation equilibrium **dZ = +4.1 mm** (lift == disk weight
-~1.055 N; lab full-FEM ~+4 mm); the force converges in ~5 stages
-(stage 3 = 0.14%, stage 5 = 0.000%).  The repo full-FEM baseline matches
-the lab axisymmetric ground truth to 0.01%.  This is the first CLN
-reduction carried through to the actual TEAM 28 levitation force (prior
-CLN-on-TEAM28 work was decay-spectrum-only).  See `radia_mcp.mor`
-mor_cln (applications) for the same example from the CLN-theory side.
+(`V0 = K^-1 F`, `V_{k+1} = orthonormalise(K^-1 (N V_k))`).  A **6-stage CLN
+reproduces the full-FEM levitation force vs height** to max |CLN-full| = 5e-4 N
+(stage 3 = 0.14%, stage 5 = 0.000%); the repo full-FEM matches the lab
+axisymmetric ground truth to 0.01%.
+
+**External-benchmark validation (the honest high-Rm anchor).**  TEAM 28 is a
+genuinely HIGH-Rm levitation problem -- `Rm ~ 57` at the in-plane
+current-loop scale (disk R=65mm; the through-thickness Rm is only ~0.12) -- so
+the lift IS the eddy reaction, exactly the regime where the CLN earns its keep
+(contrast the LOW-Rm rotating-magnet plate in `radia_iem_fem`, Rm ~ 0.016,
+where the reaction is a ~0.03% correction and a CLN buys nothing).  The
+physically-correct levitation equilibrium (where the time-averaged lift ==
+disk weight 1.055 N) lands at absolute disk-bottom height **z = 11.0 mm**,
+matching the **published measured steady-state levitation height z = 11.5 mm**
+(Karl-Fetzer-Kurz-Lehner-Rucker, the official TEAM 28 definition; laser
+triangulation, 4-measurement average) to **4%**.
+
+**Prior art -- this is an OPEN REPRODUCTION, not a first.**  The lab already
+published CLN-on-TEAM-28 levitation: K. Sugahara, N. Tanimoto, Y. Takahashi,
+T. Matsuo, "Cauer Ladder Network Representation with Constant Basis Functions
+for Eddy Current Problems Involving Conductor Movement", COMPUMAG 2023 (Paper
+ID 324).  That work did MORE: the full motion-coupled transient levitation
+height `z(t)` (Matlab/Simulink, 20000 steps) vs measurement + the conventional
+method, 4-stage CLN, ~7 s vs ~8 h.  It also introduced the constant-basis
+`As(zgap) = sum_n a_2n i_2n` expansion that the moving-source CLN (below /
+`radia_iem_fem`) builds on -- and it explicitly flagged that motion in more
+than one parameter needs the multiport matrix-CLN (Matsuo 2018).  The radia
+`examples/levitation/team28/` is the OPEN, pip-installable, NGSolve +
+golden-tested reproduction of (a frequency-domain slice of) that published
+result -- reproducible-open value, NOT novelty.
+
+**Force-convention gotcha (caught by the published 11.5 mm).**  The TEAM 28
+surface force integral `Re[B_r J_t]` (and the lab .mat `Fz1`) is EXACTLY 2x the
+physical time-averaged Lorentz force `<f_z> = -(1/2) Re[J_t conj(B_r)]`
+(verified ratio 1.9998; the Im*Im cross term ~6e-5).  The disk floats where the
+PHYSICAL lift == weight, i.e. `F_z/2 == 1.055 N`.  Balancing the 2x integral
+against the 1x weight gives a spurious equilibrium 14.9 mm -- ABOVE the
+measured 11.5 mm, which is the unphysical tell -- so use `F_z/2`.  The
+CLN-vs-full convergence is convention-independent (golden locks
+`F_z(dZ=0) = -2.1928 N`).  See `radia_mcp.mor` mor_cln (applications) for the
+same example from the CLN-theory side.
 
 ## Multiport CLN (matrix Cauer ladder) -- for multi-axis maglev
 
@@ -335,6 +534,59 @@ Y-matrix converges monotonically to the truth value as ladder stages are
 added (8-stage CLN taken as reference).  Two enabling steps:
 - **CLN 3-dimensionalisation** (3D formulation)
 - **CLN multiport-isation** (matrix CLN)
+
+## Moving-SOURCE constant-basis CLN (a 2-parameter generalization)
+
+The constant-basis moving-source CLN is **Sugahara-Tanimoto-Takahashi-Matsuo,
+COMPUMAG 2023** ("Cauer Ladder Network Representation with Constant Basis
+Functions for Eddy Current Problems Involving Conductor Movement"): for
+SINGLE-parameter motion (the gap `z_gap`) the source field `A_s(z_gap)` stays
+inside the span of a few CLN test functions (`A_s = sum_n a_2n i_2n`), so 2-4
+stages suffice and the motion enters only the RHS expansion coefficients.  For a source whose spatial pattern moves over
+the conductor in MORE than one parameter (e.g. a magnet that translates AND
+rotates over a plate -- `radia_iem_fem`), the single-seed CLN basis no
+longer spans the source variation.  The paper itself flags this ("if the
+expansion is not a good approximation, the space must be expanded with an
+additional set of basis functions").  The generalization, verified in
+`examples/levitation/rotating_magnet_eddy.py`:
+1. **SVD-pre-evaluate the source rank**: POD the source field over the
+   conductor across the trajectory -> M dominant spatial modes (M ~ 16 for
+   the rotating magnet over a 12 mm plate; the moving localized hot-spot is
+   the reason it is not rank-3).
+2. **Block-Krylov over the TRANSIENT iteration matrix** `A_sys^-1 M`
+   (`A_sys = M_sigma + dt*K`, NOT `K^-1 M` -- in the A-phi system K is
+   singular on the phi block): seeds `A_sys^-1 g_m`, stages
+   `(A_sys^-1 M)^p`.  This is the reachable subspace of the time-stepped
+   solution; deflate/orthonormalize (the conductor modes are SHARED across
+   the M seeds, so the reduced state is ~16-25, NOT M x stages).
+3. Galerkin-project: `M_r = V^T M V`, `A_r = V^T A_sys V`; the reduced
+   transient is an M x M solve per step (~1000x less than the full back-sub).
+
+**HONEST status of this block-Krylov variant (do NOT over-claim).**  The
+established route for the multi-parameter case is the **multiport matrix-CLN**
+(Matsuo-Kameari-Sugahara-Shindo 2018), which the COMPUMAG 2023 paper already
+names.  The `A_sys^-1 M` block-Krylov construction above is ONE realization of
+that idea, and it is (a) demonstrated ONLY on the LOW-Rm rotating-magnet plate
+(`Rm ~ 0.016`), where -- per the crossover -- the CLN buys nothing because the
+output is source-determined, and (b) cross-checked only against our OWN
+full-FEM, NOT against an external reference.  So it is a plausible construction,
+NOT a validated novelty; treat it as exploratory until it is exercised at high
+Rm against an external benchmark.
+
+## When the CLN actually earns its keep: high Rm only
+
+The CLN reduces the eddy REACTION.  If the conductor's magnetic Reynolds
+number `Rm = mu0 sigma omega L^2` is `<< 1` (low-Rm, e.g. the rotating-magnet
+plate at Rm ~ 0.016), the reaction is a ~0.03% correction and the outputs
+(force, loss) are SOURCE-determined -- a CLN there reproduces them to ~1e-6,
+but that is the source being exact, NOT a dynamic-reduction win (the reduced
+reaction field is itself ~100% wrong and it does not matter).  **Do not claim
+a CLN dynamic-reduction success on a low-Rm problem.**  The CLN is the right,
+necessary tool at `Rm >~ 1` -- TEAM 28 (Al disk, 34 MS/m), faster motion,
+thicker / more conductive rails, kHz drive -- where the reaction is
+significant and there is real eddy dynamics to compress.  See
+`radia_mcp.maglev` `radia_iem_fem` ("magnetic-Reynolds crossover") for the
+low-Rm kinematic shortcut (`J = -sigma dA_s/dt`, no FEM).
 
 ## 3D formulation: the gauge choice matters
 
@@ -1747,7 +1999,9 @@ def get_knowledge(topic: str = "overview") -> str:
     if topic in ("overview", "intro", ""):
         return OVERVIEW
     if topic in ("radia_iem_fem", "iem_fem", "iem", "weak_coupling",
-                 "reduced_potential", "moving_magnet", "iem-fem"):
+                 "reduced_potential", "moving_magnet", "iem-fem",
+                 "rotating_magnet", "t_omega", "a_phi", "aphi", "tomega",
+                 "lorentz_force", "lorentz_pitfall"):
         return RADIA_IEM_FEM
     if topic in ("cln_mor_control", "cln", "cauer", "cauer_ladder", "mor",
                  "model_order_reduction", "multiport_cln", "control_coupled"):
