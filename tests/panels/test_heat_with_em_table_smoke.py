@@ -106,8 +106,12 @@ class TestCLI:
             "--coil-step", "/nonexistent.step",
             "--coil-current", "100",
             "--I-ref", "100")
-        # The subprocess swallows the error into JSON via calc_main.
-        assert proc.returncode == 0  # calc_main catches and returns JSON
+        # calc_main writes JSON to stdout AND exits non-zero on error
+        # (radia >= 4.92.0, commit 5b88b67f, "No Fallbacks -- Fail Fast"
+        # policy; soft-fail with returncode 0 was an upstream bug that
+        # caused the IGTE 2026 sweep to miscount results).
+        assert proc.returncode != 0, \
+            "calc_main must exit non-zero on internal error"
         # Last line of stdout is the JSON dump.
         last = proc.stdout.strip().splitlines()[-1]
         import json
