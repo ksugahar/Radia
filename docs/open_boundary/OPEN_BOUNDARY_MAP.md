@@ -21,7 +21,35 @@ It is the cross-cutting companion to the two single-method references:
 
 ---
 
-## 0. The selector (radia open-boundary policy, 2026-06-20)
+## 0. The selector (radia / Sugahara-lab open-boundary policy, refined 2026-06-21)
+
+**LAB POLICY: the lab closes the exterior with the EXACT-OPERATOR → CLN route, NOT PML.**
+PML / CFS-PML are kept only as the benchmark **foil** (measured on the DtN yardstick —
+[`DTN_SPECTRUM_COMPARISON.md`](DTN_SPECTRUM_COMPARISON.md), `act7_22` + the real NGSolve FEM+PML
+`act7_24`), never as a solving method. Pick the method by **what the boundary operator IS** — and
+note the two axes are different: **Kelvin = the spatial boundary; CLN = the temporal `s` axis**:
+
+| boundary operator | regime | method |
+|---|---|---|
+| **static Laplace, `ω`-independent** — air truncation (the usual outer boundary) | non-radiating | **Kelvin ALONE** (`−(n+1)/R`; no `s` ⇒ **no CLN job**) |
+| **`√s`-dependent** — conductor / diffusive SIBC (a semi-infinite conductor interior) | evanescent | **multipole-Zs → CLN** (analytic `√s`; **Kelvin-built → CLN only for a non-separable conductor**) |
+| **complex, `s`-dependent** — Helmholtz wave DtN | radiation | **Grote-Keller → CLN** (exact rational NRBC = pole/Cauer ladder; prior art, not PML) |
+
+- **CLN earns its keep ONLY where the boundary operator is `s`-dependent** — a conductor boundary
+  or radiation. The air open boundary is static ⇒ **Kelvin alone**; "Kelvin → CLN" *combined* is
+  essentially never needed in the non-radiating regime (only an exotic non-separable conductor).
+  Kelvin (spatial) and CLN (temporal/`s`) are **different boundaries / different axes** — do not
+  conflate them.
+- **Honest scope:** principled for the lab's MQS-magnetics class (compact / quasi-spherical).
+  Exact for separable geometry; an arbitrary non-separable boundary ⇒ build (Kelvin-FEM / BEM)
+  then CLN band-fit. PML's generality (antennas / scattering / arbitrary radiating geometry) is for
+  problem classes outside the lab — "no PML" is domain-appropriate, **not** "PML universally bad."
+- **Grote-Keller → CLN is prior art** (Grote-Keller 1995/96/98; Hagstrom-Warburton; Guddati; Birk;
+  Cauer-Foster; Kameari-Sugahara 2018) — adopted as a repository capability, not a novelty claim.
+
+The homogeneous-exterior-vs-material-body refinement below is *within* the exact-operator route
+(read "transient → CLN" as the **conducting / diffusive** case — a static air boundary stays
+Kelvin-alone even in a transient problem):
 
 Radia is **Laplace-kernel / MQS–Darwin** (no full-wave). Within that scope the
 open boundary is picked on two axes — **is the exterior homogeneous, or does it
