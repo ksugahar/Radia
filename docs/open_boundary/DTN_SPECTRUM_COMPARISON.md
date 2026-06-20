@@ -168,7 +168,9 @@ intrinsic**. Net: an *orthogonalized* IE has Kelvin-grade accuracy + conditionin
 geometry edge (no Liouville sphere-lock) — so the honest build decision reads in the IE's favour
 *provided the orthogonalized basis is used*. (The Gate-1 "prefer box-PML" was an unfair-comparison
 artifact; box-PML stays relevant only as the tuned, wave-native alternative for the eddy/radiating
-regime.)
+regime.) See [`INFINITE_ELEMENT_SOTA.md`](INFINITE_ELEMENT_SOTA.md) for the full infinite-element
+state of the art (acoustic conjugated / Jacobi conditioning / Hardy-space; the de Rham Maxwell IE)
+and the Gate-2/3 build spec.
 
 ## Provenance (cite — this is a measurement / comparison, not a new method)
 
