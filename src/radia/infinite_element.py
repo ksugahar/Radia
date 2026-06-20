@@ -105,18 +105,24 @@ def ie_compound_space(mesh, P, order=2, definedon=None):
     return ng.FESpace([Vint] + Ss)
 
 
-def add_exterior_ie(a_bf, X, P, a=1.0, nq=160):
+def add_exterior_ie(a_bf, X, P, a=1.0, nq=160, definedon=None):
     """Add the static IE exterior energy to a BilinearForm ``a_bf`` on the compound space ``X``
     (from :func:`ie_compound_space`).  Appends the boundary integrals
     ``sum_kl [ (R1_kl/a^2) int_Gamma u_k u_l ds + R0_kl int_Gamma grad_S u_k . grad_S u_l ds ]``
     (level 0 = the interior trace, levels 1..P-1 = the surface bubbles), so the augmented SPARSE
     system closes the exterior.  The caller adds the interior physics + RHS to the same ``X``.
+
+    ``definedon`` restricts the IE to a specific truncation boundary (e.g. an OUTER sphere enclosing a
+    body, so an internal material interface is NOT treated as the open boundary).  It MUST match the
+    ``definedon`` passed to :func:`ie_compound_space` (the bubble levels live there).  Default = all
+    boundaries.
     """
     import ngsolve as ng
     R1, R0, _ = radial_operators(P, a, nq)
     trial = X.TrialFunction(); test = X.TestFunction()
     n = ng.specialcf.normal(X.mesh.dim)
     inv_a2 = 1.0 / (a * a)
+    ds = ng.ds if definedon is None else ng.ds(definedon=definedon)
 
     def val(fns, k):
         return fns[0].Trace() if k == 0 else fns[k]
@@ -128,9 +134,9 @@ def add_exterior_ie(a_bf, X, P, a=1.0, nq=160):
     for k in range(P):
         for l in range(P):
             if R1[k, l] != 0.0:
-                a_bf += (inv_a2 * R1[k, l]) * val(trial, k) * val(test, l) * ng.ds
+                a_bf += (inv_a2 * R1[k, l]) * val(trial, k) * val(test, l) * ds
             if R0[k, l] != 0.0:
-                a_bf += R0[k, l] * sgrad(trial, k) * sgrad(test, l) * ng.ds
+                a_bf += R0[k, l] * sgrad(trial, k) * sgrad(test, l) * ds
 
 
 def exterior_field(gf, P, a, points):
