@@ -430,7 +430,7 @@
 - もう少し丁寧に書く、段階的に sphere の検証から
 - **段階的構造**:
   1. **Sphere** (R=10mm): 3 方法 (Stoll 解析 + NGSolve FEM Kelvin + radia-vim VIM)
-  2. **Cylinder/Disk** (R=10 t=2mm): 3 方法 (radia-axifemm + NGSolve FEM Kelvin + radia-vim VIM)
+  2. **Cylinder/Disk** (R=10 t=2mm): 3 方法 (radia-core axifem + NGSolve FEM Kelvin + radia-vim VIM)
   3. **A1 Cuboid 円板ライク** (17.72²×2): 3 方法 (NGSolve + radia-vim VIM + ELF)
   4. **Cuboid 5×2×1** (sharp 3D, 最後 = breakdown demo): 4 方法 (NGSolve + radia-vim VIM o3/o4 + ELF)
 - **角部 → 直交性維持困難** という議論も追加 (corner singularity が Krylov M-orthogonality 損失を加速)

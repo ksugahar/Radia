@@ -1,12 +1,12 @@
 """
-radia-axifemm knowledge base for the Radia + NGSolve MCP server.
+radia-core axifem knowledge base for the Radia + NGSolve MCP server.
 
-`radia-axifemm` is an NGSolve add-on (registered FESpace `axihenrotte`) that
-adds a Henrotte axisymmetric Q-element family which NGSolve does not
-ship out of the box: polynomial basis in `s = r²` (not `r`) representing the
-flux function `ψ = 2π r A_φ` (not `A_φ` itself). On the Cu-disk eddy-current
-benchmark the `p=2` Q-element matches BEM-Foster to 0.27 % with ~6× fewer
-DOFs than NGSolve `H1 order=3`.
+`radia.axifem` in radia-core is an NGSolve add-on (registered FESpace
+`axihenrotte`) that adds a Henrotte axisymmetric Q-element family which
+NGSolve does not ship out of the box: polynomial basis in `s = r²` (not `r`)
+representing the flux function `ψ = 2π r A_φ` (not `A_φ` itself). On the
+Cu-disk eddy-current benchmark the `p=2` Q-element matches BEM-Foster to
+0.27 % with ~6× fewer DOFs than NGSolve `H1 order=3`.
 
 Read this when:
 * Setting up an axisymmetric eddy-current / magnetostatic FEM problem with
@@ -23,7 +23,7 @@ file_layout, why_dropped_p3.
 """
 
 AXIFEMM_OVERVIEW = """\
-# radia-axifemm — Henrotte Axisymmetric Q-Element FE for NGSolve
+# radia-core axifem — Henrotte Axisymmetric Q-Element FE for NGSolve
 
 ## Status
 
@@ -64,9 +64,9 @@ The Henrotte / Meeker trick:
 
 NGSolve's standard FE library does not contain this basis (no FE family
 polynomial in `s = r²`, no representation of `ψ` rather than `A_φ`).
-`radia-axifemm` adds it via the public NGSolve add-on pattern (custom
-`FESpace`, `DiffOp`, and `BilinearFormIntegrator`s), without modifying
-NGSolve itself.
+`radia-core`'s `radia.axifem` module adds it via the public NGSolve add-on
+pattern (custom `FESpace`, `DiffOp`, and `BilinearFormIntegrator`s), without
+modifying NGSolve itself.
 """
 
 AXIFEMM_API = """\
@@ -447,8 +447,9 @@ factors silently.
 AXIFEMM_FILE_LAYOUT = """\
 # File layout
 
-(radia-axifemm was dissolved into radia on 2026-06-14: the C++ ships in the
-radia wheel as `radia.axifem`; scripts/tests moved into the repo tree.)
+(the former standalone axifemm add-on was dissolved into radia-core on
+2026-06-14: the C++ ships in the radia-core wheel as `radia.axifem`;
+scripts/tests moved into the repo tree.)
 
 ```
 src/ext/axifemm/                          # C++ source (built into the radia wheel)
@@ -482,7 +483,7 @@ AXIFEMM_KELVIN = """\
 # `axihenrotte` + z-offset Kelvin transformation (Phase B3, 2026-05-12)
 
 The 2D axisymmetric z-offset Kelvin transformation works end-to-end with
-the Henrotte basis as of `radia-axifemm` Phase B3 (commits 81f6415f /
+the Henrotte basis as of the radia-core axifem Phase B3 work (commits 81f6415f /
 6e963ab9). Same boilerplate as the canonical `H1` axisym Kelvin recipe
 (`kelvin.a_formulation` topic) — substitute `H1Henrotte` for `H1` and
 add a `Periodic(...)` wrap.
@@ -638,7 +639,7 @@ pairs, names the new x=0 edges `"axis_ext"`, and registers the
 either the Periodic identification (most common) or the Dirichlet trace
 (silent — eigenvalues come out finite but wrong).
 
-## What changed in `radia-axifemm` source
+## What changed in radia-core axifem source
 
 ```
 src/axi_henrotte_fespace.{hpp,cpp}
@@ -777,7 +778,7 @@ a stored axisymmetric Kelvin reference uses the same a/mu_r/Hc.
 
 def get_axifemm_documentation(topic: str = "all") -> str:
     """
-    Return radia-axifemm documentation for the requested topic.
+    Return radia-core axifem documentation for the requested topic.
 
     Topics:
       "all"             - All sections concatenated
