@@ -19,6 +19,21 @@ For multipole `n` at a sphere of radius `R0`:
 - `sqrt_s_passive_ladder(...)` — a finite passive realisation of the `√s`
   diffusion-memory element.
 
+The **`kelvin_dtn`** companion **BUILDS** the DtN by a Kelvin-FEM (so it carries an
+arbitrary / non-separable shape and a **material** exterior, which the closed form
+cannot):
+
+- `kelvin_fem_radial_dtn(n, s, ...)` — pure numpy; reproduces the closed-form
+  `eddy_dtn` with **no DC floor** (the "Kelvin builds the exact DtN" check).
+- `kelvin_dtn_matrix(mesh, order, s, nu=, sigma=)` + `steklov_spectrum(S, Mg)` —
+  NGSolve; the arbitrary-shape / iron-exterior DtN matrix and its Steklov ladder
+  (point-group split: cube `O_h`, square `C4v`). `band_cln_fit(...)` reduces it.
+
+> **Honest provenance:** material-in-the-exterior Kelvin is **classical**
+> (Freeman-Lowther 1988/89; FEMM ships it for iron shields). The plausibly-novel
+> part is the *fusion* — the Kelvin material-aware DtN as an **inverse-design**
+> kernel (the SF-with-iron line) — not the open-boundary use here.
+
 ## Files
 
 | file | what |
