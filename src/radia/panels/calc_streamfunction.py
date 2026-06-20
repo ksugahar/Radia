@@ -1460,15 +1460,67 @@ def _close_loop(p):
     return p
 
 
-def _loop_field_signs(loops, mpts, target_flat, vector_b):
-    """Per-loop unit-current fields + the sign that makes each loop's field
-    reinforce the target (consistent contour orientation): s_k = sign(f_k . B).
-    Returns (fields[list], signs[ndarray]).  Without this the marching-triangle
-    contour winding is arbitrary and adjacent turns cancel."""
-    fields = [_wire_field_flat(_close_loop(p), mpts, vector_b, 1.0)
-              for p in loops]
-    signs = np.array([1.0 if (f @ target_flat) >= 0.0 else -1.0
-                      for f in fields])
+def _tri_grad_K(verts, psi_v, tris):
+    """Per-triangle centroid + surface-current direction K = n_hat x grad_s(psi).
+    The constant in-plane gradient of the linear psi is solved in an orthonormal
+    tangent basis (robust on a curved surface in 3D)."""
+    cen = np.empty((len(tris), 3)); K = np.empty((len(tris), 3)); m = 0
+    for (a, b, c) in tris:
+        pa = verts[a]; e1 = verts[b] - pa; e2 = verts[c] - pa
+        nrm = np.cross(e1, e2); A2 = float(np.linalg.norm(nrm))
+        l1 = float(np.linalg.norm(e1))
+        if A2 < 1e-30 or l1 < 1e-30:
+            continue
+        t1 = e1 / l1; nhat = nrm / A2; t2 = np.cross(nhat, t1)
+        M = np.array([[e1 @ t1, e1 @ t2], [e2 @ t1, e2 @ t2]])
+        try:
+            ab = np.linalg.solve(M, [psi_v[b] - psi_v[a], psi_v[c] - psi_v[a]])
+        except np.linalg.LinAlgError:
+            continue
+        cen[m] = (pa + verts[b] + verts[c]) / 3.0
+        K[m] = np.cross(nhat, ab[0] * t1 + ab[1] * t2)
+        m += 1
+    return cen[:m], K[:m]
+
+
+def _build_gradpsi_kdt(verts, psi_v, tris):
+    """KDTree of triangle centroids + their K = n_hat x grad_s(psi), built ONCE
+    per psi so contour loops can be oriented by the surface-current winding."""
+    from scipy.spatial import cKDTree
+    cen, K = _tri_grad_K(verts, psi_v, tris)
+    return cKDTree(cen), K
+
+
+def _gradpsi_signs(loops, kdt, tri_K, mpts, vector_b, target_flat):
+    """Per-loop unit-current fields + the sign orienting each contour loop by the
+    consistent surface-current winding K = n_hat x grad_s(psi) -- NOT per-loop
+    field alignment.
+
+    The marching-triangles polyline order is arbitrary, so its winding does NOT
+    carry the current sign.  The old s_k = sign(f_k . B) ('flip every loop to
+    help the target') recovers it ONLY for a MONOTONE psi (l=1 gradient): there
+    every loop wants the same sense.  For a SADDLE psi (l>=2 shim) the natural
+    winding has MIXED senses (the single wire reverses through the saddle), and
+    sign(f.B) FLATTENS them so the one common current cancels itself (Z2 single-
+    wire residual ~88%).  Orienting each loop so its traversal matches K -- a
+    KDTree majority vote of (segment direction . K) over the loop -- recovers the
+    physical stream-function winding (Z2 ~5.6%) and reduces to sign(f.B) for l=1.
+    The GLOBAL sense is aligned to the target (cosmetic: the best-fit current
+    absorbs the overall sign; this reproduces the old l=1 convention exactly).
+    Returns (fields[list], signs[ndarray]); sign = +1 keep / -1 reverse the
+    polyline."""
+    if not loops:
+        return [], np.zeros(0)
+    signs = np.empty(len(loops))
+    for li, p in enumerate(loops):
+        mid = 0.5 * (p[:-1] + p[1:]); d = p[1:] - p[:-1]
+        _, j = kdt.query(mid)
+        signs[li] = (1.0 if float(np.einsum('ij,ij->i', d, tri_K[j]).sum()) >= 0.0
+                     else -1.0)
+    fields = [_wire_field_flat(_close_loop(p), mpts, vector_b, 1.0) for p in loops]
+    G = np.sum([s * f for s, f in zip(signs, fields)], axis=0)
+    if target_flat is not None and float(G @ target_flat) < 0.0:
+        signs = -signs                            # align global sense to target
     return fields, signs
 
 
@@ -1486,12 +1538,14 @@ def _optimize_contour_levels(psi_v, verts, tris, nlevels, mpts, target_flat,
     if hi - lo < 1e-30 or nlevels < 1:
         return _contour_levels(psi_v, nlevels), float("nan"), float("nan")
     den = float(np.linalg.norm(target_flat)) + 1e-30
+    kdt, tri_K = _build_gradpsi_kdt(verts, psi_v, tris)
 
     def level_field(lev):
         loops = _segs_to_polylines(_contour_segments(verts, psi_v, tris, lev), tol)
         if not loops:
             return np.zeros(len(target_flat))
-        fields, signs = _loop_field_signs(loops, mpts, target_flat, vector_b)
+        fields, signs = _gradpsi_signs(loops, kdt, tri_K, mpts, vector_b,
+                                       target_flat)
         return np.sum([s * f for f, s in zip(fields, signs)], axis=0)
 
     def resid(F):
@@ -2083,7 +2137,9 @@ def _coil_L_at_nlevels(P, psi_v, verts, tris, tol, args, nlevels):
             _contour_segments(verts, psi_v, tris, lev), tol))
     if not loops:
         return None
-    fields, signs = _loop_field_signs(loops, P["mpts"], P["Bm"], P["vector_b"])
+    kdt, tri_K = _build_gradpsi_kdt(verts, psi_v, tris)
+    fields, signs = _gradpsi_signs(loops, kdt, tri_K, P["mpts"], P["vector_b"],
+                                   P["Bm"])
     loops_signed = [p if s >= 0.0 else p[::-1] for p, s in zip(loops, signs)]
     chain, _nc, _cl = _single_stroke_chain(loops_signed)
     chain = _dedupe(chain)
@@ -2470,9 +2526,13 @@ def run_manufacture(args):
         target_flat = P["Bm"]
         den_t = float(np.linalg.norm(target_flat)) + 1e-30
 
-        # consistent contour orientation: flip loops whose field opposes B
-        fields, signs = _loop_field_signs(loops, P["mpts"], target_flat,
-                                          vector_b)
+        # consistent contour orientation by the surface-current winding
+        # K = n_hat x grad psi (NOT per-loop field alignment) -- correct for a
+        # multi-region (saddle, l>=2) psi where sign(f.B) flattens the reversals
+        # (reduces to sign(f.B) for a monotone l=1 psi).
+        kdt, tri_K = _build_gradpsi_kdt(verts, psi_v, tris)
+        fields, signs = _gradpsi_signs(loops, kdt, tri_K, P["mpts"], vector_b,
+                                       target_flat)
         loops_signed = [p if s >= 0.0 else p[::-1]
                         for p, s in zip(loops, signs)]
         # separate-turns best (per-loop currents) -- the discretisation's best
