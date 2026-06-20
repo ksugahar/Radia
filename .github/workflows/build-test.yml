@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  actions: write
+
 # Concurrency: serialize per-SHA, NOT per-ref.
 #
 # Why: a release pushes BOTH main and a tag (e.g. main + v4.78.1 +
@@ -23,8 +27,10 @@ on:
 # Grouping by SHA forces serial execution per commit so the
 # linker only ever has one writer at a time.
 #
-# On main: never cancel a running build (only pending ones get replaced).
-# On PRs:    cancel the previous run to save runner time.
+# On main: keep per-SHA serialization to protect the shared LAB build tree.
+# A stale-main guard below cancels an older main push as soon as it starts,
+# before it spends ~40 min in tests while a newer SHA is queued.
+# On PRs: cancel the previous run to save runner time.
 concurrency:
   group: ci-${{ github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -58,6 +64,40 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cancel stale main push before build/test
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $remote = git ls-remote origin refs/heads/main
+          if (-not $remote) {
+            Write-Host "::error::Could not read origin/main"
+            exit 1
+          }
+          $tip = ($remote -split '\s+')[0]
+          Write-Host "origin/main tip: $tip"
+          Write-Host "this run sha: $env:GITHUB_SHA"
+          if ($tip -ne $env:GITHUB_SHA) {
+            Write-Host "::warning::Stale main CI: $env:GITHUB_SHA is no longer origin/main ($tip). Cancelling before build/test."
+            $headers = @{
+              Authorization = "Bearer $env:GITHUB_TOKEN"
+              Accept = "application/vnd.github+json"
+              "X-GitHub-Api-Version" = "2022-11-28"
+            }
+            $uri = "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+            Invoke-RestMethod -Method Post -Uri $uri -Headers $headers | Out-Null
+
+            $deadline = (Get-Date).AddSeconds(90)
+            while ((Get-Date) -lt $deadline) {
+              Start-Sleep -Seconds 5
+              Write-Host "Waiting for GitHub to cancel this stale run..."
+            }
+            Write-Host "::error::Cancellation request did not stop the stale run in time."
+            exit 1
+          }
+          Write-Host "This main CI is current; continuing."
 
       # ----------------------------------------------------------------
       # Guard (2026-05-28): a self-hosted job must NOT pip-install a lab
@@ -257,7 +297,7 @@ jobs:
           }
 
       # ----------------------------------------------------------------
-      # Test: Run basic pytest tests (~2 sec)
+      # Test: Run full Windows integration pytest tests.
       # ----------------------------------------------------------------
       - name: Run basic tests
         shell: pwsh
@@ -282,6 +322,7 @@ jobs:
           # step below.
           python -m pytest tests/ -v --tb=short -r aR `
             --junitxml=test-results.xml `
+            --durations=50 --durations-min=1.0 `
             --reruns 2 --reruns-delay 1 `
             --ignore=tests/cubit `
             --ignore=tests/panels `
@@ -343,6 +384,7 @@ jobs:
                             tests/panels/test_combo_wheel_guard.py `
             -v --tb=short -r aR `
             --junitxml=panel-test-results.xml `
+            --durations=25 --durations-min=0.5 `
             --reruns 1 --reruns-delay 1 `
             2>&1 | Tee-Object -FilePath pytest-panel-stdout.log
           $rc = $LASTEXITCODE
@@ -660,6 +702,7 @@ jobs:
           PYTHONPATH: '${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
           python -m pytest tests/mcp_server/ -v --tb=short `
+            --durations=25 --durations-min=0.5 `
             --junitxml=mcp-test-results.xml
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::MCP response regression tests failed"
