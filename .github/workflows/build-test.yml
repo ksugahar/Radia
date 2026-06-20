@@ -4,12 +4,23 @@ on:
   push:
     branches: [main]
     tags: ['v*', 'cubit-mesh-export-v*', 'radia-mcp-v*']
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
     inputs:
+      run_golden:
+        description: 'Run @pytest.mark.golden tests (manual golden gate)'
+        required: false
+        default: false
+        type: boolean
       full_slow:
-        description: 'Run @pytest.mark.slow tests (manual full gate)'
+        description: 'Run @pytest.mark.slow tests too (implies golden)'
         required: false
         default: false
         type: boolean
@@ -74,6 +85,7 @@ jobs:
       # release-tag CI stay fast by default so the self-hosted runner does
       # not spend hours revalidating the same SHA.
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
+      RUN_GOLDEN_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_golden == true || inputs.full_slow == true) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -380,15 +392,15 @@ jobs:
           }
 
       # ----------------------------------------------------------------
-      # Test: Run full Windows integration pytest tests.
+      # Test: Run simple Windows integration pytest tests.
       # ----------------------------------------------------------------
-      - name: Run basic tests
+      - name: Run simple tests
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\radia-mcp\src'
         run: |
-          Write-Host "Running pytest (excluding cubit + OCC-dependent tests)..."
+          Write-Host "Running simple pytest gate (excluding cubit + OCC-dependent + golden tests)..."
           # --reruns 2: retry transient failures up to 2x.  Commit
           # a61cecdf added pytest-rerunfailures as a dependency
           # specifically for test_omega_reduced_omega flakiness but
@@ -423,22 +435,69 @@ jobs:
             '--ignore=tests/test_mesh_import.py',
             '--ignore=tests/test_scalar_bie_sibc.py'
           )
+          $markerExpr = 'not golden'
           if ($env:RUN_SLOW_TESTS -ne 'true') {
-            Write-Host "Fast CI -- excluding @pytest.mark.slow tests. Use workflow_dispatch full_slow=true for the full slow/golden gate."
-            $pytestArgs += @('-m', 'not slow')
+            $markerExpr = 'not slow and not golden'
+            Write-Host "Fast CI -- excluding @pytest.mark.slow and @pytest.mark.golden tests."
           } else {
-            Write-Host "Manual full gate -- running the full suite, including @pytest.mark.slow tests."
+            Write-Host "Manual full gate -- running slow simple tests here; golden tests run in their own step."
           }
+          $pytestArgs += @('-m', $markerExpr)
           python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath pytest-basic-stdout.log
           $rc = $LASTEXITCODE
-          Write-Host "pytest basic exit=$rc"
+          Write-Host "pytest simple exit=$rc"
           if ($rc -ne 0) {
-            Write-Host "::error::Basic tests failed (rc=$rc) -- see Annotate step for the test list"
+            Write-Host "::error::Simple tests failed (rc=$rc) -- see Annotate step for the test list"
             # Record the exit code; the Annotate step below re-exits
             # so that failures surface as ::error annotations BEFORE
             # the job is marked failed (otherwise GitHub UI shows no
             # failed-test names without an artifact download).
             "$rc" | Out-File -Encoding ascii pytest-basic-exit.txt
+            exit $rc
+          }
+
+      - name: Run golden tests
+        if: success() && env.RUN_GOLDEN_TESTS == 'true'
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\radia-mcp\src'
+        run: |
+          Write-Host "Running golden pytest gate (excluding cubit + OCC-dependent tests)..."
+          $pytestArgs = @(
+            'tests/',
+            '-v',
+            '--tb=short',
+            '-r', 'aR',
+            '--junitxml=golden-test-results.xml',
+            '--durations=50',
+            '--durations-min=1.0',
+            '--reruns', '2',
+            '--reruns-delay', '1',
+            '--ignore=tests/cubit',
+            '--ignore=tests/panels',
+            '--ignore=tests/test_far_field_accuracy.py',
+            '--ignore=tests/test_rad_ngsolve_function.py',
+            '--ignore=tests/test_tetrahedral_solver.py',
+            '--ignore=tests/test_batch_evaluation.py',
+            '--ignore=tests/test_curlA_equals_B.py',
+            '--ignore=tests/test_mesh_import.py',
+            '--ignore=tests/test_scalar_bie_sibc.py'
+          )
+          $markerExpr = 'golden'
+          if ($env:RUN_SLOW_TESTS -ne 'true') {
+            $markerExpr = 'golden and not slow'
+            Write-Host "Manual golden gate -- excluding @pytest.mark.slow golden tests. Use full_slow=true for the full golden set."
+          } else {
+            Write-Host "Manual full gate -- running all golden tests, including @pytest.mark.slow."
+          }
+          $pytestArgs += @('-m', $markerExpr)
+          python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath pytest-golden-stdout.log
+          $rc = $LASTEXITCODE
+          Write-Host "pytest golden exit=$rc"
+          if ($rc -ne 0) {
+            Write-Host "::error::Golden tests failed (rc=$rc) -- see Annotate step for the test list"
+            "$rc" | Out-File -Encoding ascii pytest-golden-exit.txt
             exit $rc
           }
 
@@ -452,10 +511,9 @@ jobs:
       # tests/conftest.py made `from PySide6.QtCore import ...` survive
       # the MKL bin add_dll_directory (was 0xc0000139 on LAB pytest).
       # ----------------------------------------------------------------
-      - name: Run panel tests
-        # Panel tests: motor golden (transient + lamination) + UX
-        # (output health + combo/spin wheel-guard).  NGSolve + PySide6,
-        # no Cubit.
+      - name: Run panel smoke tests
+        # Panel smoke tests: UX/output health only. Motor golden tests
+        # are separated into the manual golden gate below.
         # Re-enabled 2026-05-28: the tests pass `--linear-solver sparsecholesky`
         # (ngsolve built-in, no MKL) -- identical direct-solver solution to the
         # production pardiso default, but immune to the MKL PARDISO threading-
@@ -469,14 +527,12 @@ jobs:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
           PYTHONIOENCODING: utf-8
         run: |
-          Write-Host "Running motor panel golden tests..."
+          Write-Host "Running motor panel smoke tests..."
           # Ensure C:\temp exists for the test fixtures
           New-Item -ItemType Directory -Force -Path C:\temp | Out-Null
           # L0+L1 (2026-05-30): -r aR + Tee to stdout file, same
-          # pattern as "Run basic tests" above.  See note there.
-          python -m pytest tests/panels/test_motor_transient_golden.py `
-                            tests/panels/test_motor_lamination_golden.py `
-                            tests/panels/test_panel_output_health.py `
+          # pattern as "Run simple tests" above.  See note there.
+          python -m pytest tests/panels/test_panel_output_health.py `
                             tests/panels/test_combo_wheel_guard.py `
             -v --tb=short -r aR `
             --junitxml=panel-test-results.xml `
@@ -484,10 +540,35 @@ jobs:
             --reruns 1 --reruns-delay 1 `
             2>&1 | Tee-Object -FilePath pytest-panel-stdout.log
           $rc = $LASTEXITCODE
-          Write-Host "pytest panel exit=$rc"
+          Write-Host "pytest panel smoke exit=$rc"
           if ($rc -ne 0) {
-            Write-Host "::error::Motor panel tests failed (rc=$rc) -- see Annotate step for the test list"
+            Write-Host "::error::Panel smoke tests failed (rc=$rc) -- see Annotate step for the test list"
             "$rc" | Out-File -Encoding ascii pytest-panel-exit.txt
+            exit $rc
+          }
+
+      - name: Run panel golden tests
+        if: success() && env.RUN_GOLDEN_TESTS == 'true'
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
+          PYTHONIOENCODING: utf-8
+        run: |
+          Write-Host "Running motor panel golden tests..."
+          New-Item -ItemType Directory -Force -Path C:\temp | Out-Null
+          python -m pytest tests/panels/test_motor_transient_golden.py `
+                            tests/panels/test_motor_lamination_golden.py `
+            -v --tb=short -r aR `
+            --junitxml=panel-golden-test-results.xml `
+            --durations=25 --durations-min=0.5 `
+            --reruns 1 --reruns-delay 1 `
+            2>&1 | Tee-Object -FilePath pytest-panel-golden-stdout.log
+          $rc = $LASTEXITCODE
+          Write-Host "pytest panel golden exit=$rc"
+          if ($rc -ne 0) {
+            Write-Host "::error::Panel golden tests failed (rc=$rc) -- see Annotate step for the test list"
+            "$rc" | Out-File -Encoding ascii pytest-panel-golden-exit.txt
             exit $rc
           }
 
@@ -513,8 +594,10 @@ jobs:
         run: |
           $found = $false
           foreach ($pair in @(
-            @{ xml = 'test-results.xml';       log = 'pytest-basic-stdout.log';  label = 'basic' },
-            @{ xml = 'panel-test-results.xml'; log = 'pytest-panel-stdout.log';  label = 'panel' }
+            @{ xml = 'test-results.xml';              log = 'pytest-basic-stdout.log';        label = 'simple' },
+            @{ xml = 'golden-test-results.xml';       log = 'pytest-golden-stdout.log';       label = 'golden' },
+            @{ xml = 'panel-test-results.xml';        log = 'pytest-panel-stdout.log';        label = 'panel-smoke' },
+            @{ xml = 'panel-golden-test-results.xml'; log = 'pytest-panel-golden-stdout.log'; label = 'panel-golden' }
           )) {
             $xmlPath = $pair.xml
             $logPath = $pair.log
@@ -577,8 +660,10 @@ jobs:
           $dst = "C:\actions-runner\test-history\${{ github.sha }}_${{ github.run_id }}_${{ github.run_attempt }}"
           New-Item -ItemType Directory -Force -Path $dst | Out-Null
           foreach ($f in @(
-            'test-results.xml','panel-test-results.xml','mcp-test-results.xml',
-            'pytest-basic-stdout.log','pytest-panel-stdout.log'
+            'test-results.xml','golden-test-results.xml',
+            'panel-test-results.xml','panel-golden-test-results.xml','mcp-test-results.xml',
+            'pytest-basic-stdout.log','pytest-golden-stdout.log',
+            'pytest-panel-stdout.log','pytest-panel-golden-stdout.log'
           )) {
             if (Test-Path $f) {
               Copy-Item $f -Destination $dst -Force
@@ -597,9 +682,13 @@ jobs:
           name: test-results
           path: |
             test-results.xml
+            golden-test-results.xml
             panel-test-results.xml
+            panel-golden-test-results.xml
             pytest-basic-stdout.log
+            pytest-golden-stdout.log
             pytest-panel-stdout.log
+            pytest-panel-golden-stdout.log
           retention-days: 30
 
       # ----------------------------------------------------------------
