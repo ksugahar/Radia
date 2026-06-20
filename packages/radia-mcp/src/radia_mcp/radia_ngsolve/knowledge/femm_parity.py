@@ -271,7 +271,7 @@ FEMM_VALIDATION = """\
 
 | test file (packages/.../tests)      | reference                          | error  |
 |-------------------------------------|------------------------------------|--------|
-| radia-axifemm/test_magnetized_sphere| B_in=2 mu0 mu_r Hc/(mu_r+2)        | -0.05% |
+| radia-core/axifem/test_magnetized_sphere| B_in=2 mu0 mu_r Hc/(mu_r+2)    | -0.05% |
 | radia-mcp/test_axi_magnetostatic    | same sphere via solve_axi_magnet.  | -0.05% |
 | test_planar_magnet                  | B_in=mu0 mu_r Hc/(mu_r+1) (cyl)   | -0.05% |
 | test_planar_force                   | two-wire mu0 I^2/(2 pi d)          |  1.6%  |
@@ -282,7 +282,7 @@ FEMM_VALIDATION = """\
 | test_planar_periodic                | strip closed form (periodic+anti) | ~1e-7  |
 | test_scalar_fem2d                   | coaxial 2 pi c/ln(b/a) (eps/sig/k)| -0.19% |
 | test_axi_scalar                     | sphere 4 pi c ab/(b-a) (eps,k)    | -0.15% |
-| radia-axifemm/test_disk_eigenvalue  | Cu-disk tau_1 = 224.31 us (BEM)   |  0.27% |
+| radia-core/axifem/test_disk_eigenvalue  | Cu-disk tau_1 = 224.31 us (BEM)|  0.27% |
 | test_laminated_steel (AC)           | mu_eff = mu_r tanh(b)/b vs 1D FE  |  0.00% |
 | test_laminated_steel (DC)           | resolved stack vs anisotropic ten.|  0.00% |
 | test_planar_proximity (single)      | round-wire Kelvin Rac/Rdc         | +0.07% |

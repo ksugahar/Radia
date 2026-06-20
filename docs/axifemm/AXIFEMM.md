@@ -22,9 +22,10 @@ Meeker / Henrotte axisymmetric formulation [^Henrotte93][^MeekerFEMM]; without
 it, standard H1 elements lose 5–10 % accuracy near the symmetry axis owing to
 the `1/r` weight in the axisymmetric integrals.
 
-NGSolve does **not** ship this basis. `radia-axifemm` adds it without
-modifying NGSolve itself, following the public `ngsolve-addon-template`
-pattern (a custom `FESpace`, custom `DiffOps`, custom `BilinearFormIntegrator`s).
+NGSolve does **not** ship this basis. `radia-core`'s `radia.axifem` module
+adds it without modifying NGSolve itself, following the public
+`ngsolve-addon-template` pattern (a custom `FESpace`, custom `DiffOps`,
+custom `BilinearFormIntegrator`s).
 
 ## Status
 

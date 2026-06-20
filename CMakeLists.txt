@@ -676,8 +676,8 @@ message(STATUS "sparsesolv_ngsolve module configured (NGSolve preconditioners)")
 # without the standard P1 axis singularity.  P1 triangles + Q1/Q2 axis-
 # aligned quads + bilinear form integrators (Stiffness, SigmaMass).
 #
-# Source: src/ext/axifemm/ (formerly the standalone packages/radia-axifemm
-# editable install; absorbed into the Radia wheel 2026-05-10 to fix the
+# Source: src/ext/axifemm/ (formerly a standalone axifemm add-on; absorbed
+# into the radia-core wheel 2026-05-10 to fix the
 # 100号機 / mdx ImportError that was blocking IH axisymmetric work).
 #
 # Imported as `radia.axifem` (the .pyd lives at

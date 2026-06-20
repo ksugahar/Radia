@@ -32,7 +32,7 @@ L_{2k+1} (k=0,1,2,...) the shunt inductors (odd subscripts). Per-stage
 time constant: tau_pair[k] = L_{2k+1}/R_{2k}.
 
 Comparison endpoint: tau_pair[k] is normalisation-invariant and directly
-comparable with the FE Hiruma 3-term output (radia-axifemm). Absolute R, L
+comparable with the FE Hiruma 3-term output (radia-core axifem). Absolute R, L
 values depend on the Foster-amplitude normalisation chosen on the BEM side.
 """
 from __future__ import annotations
@@ -79,7 +79,7 @@ def cauer_extract(c_taylor, max_stages):
 
 def main():
     print("=" * 76)
-    print("Phase 3-(3) BEM Cauer-I (Nagamine-style)  vs  radia-axifemm Hiruma 3-term")
+    print("Phase 3-(3) BEM Cauer-I (Nagamine-style)  vs  radia-core axifem Hiruma 3-term")
     print("=" * 76)
     print()
 

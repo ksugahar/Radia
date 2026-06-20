@@ -10,7 +10,7 @@ does.  Validated on a Cu disk in a uniform applied axial B0:
   * the eddy loss P_eddy = 0.5 w^2 Re(x^H M x) is positive and ~ w^2 -> 0 as w->0.
 
 Uses the SAME K, M closed-form integrators validated by the Cu-disk tau_1
-eigenvalue (radia-axifemm/test_disk_eigenvalue_closedform.py), now in a FORCED
+eigenvalue (radia-core/axifem/test_disk_eigenvalue_closedform.py), now in a FORCED
 harmonic solve rather than an eigenproblem.
 """
 import math

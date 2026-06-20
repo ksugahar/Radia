@@ -40,7 +40,7 @@ Reference data location (separate working tree, not part of this repo):
     bem_disk_axisym_cauer_python_results.json     (Cauer rungs)
 
 This test asserts the τ_rung agreement and serves as a regression check
-for the radia-axifemm Q1 / Q2 implementations.
+for the radia-core axifem Q1 / Q2 implementations.
 """
 from __future__ import annotations
 
