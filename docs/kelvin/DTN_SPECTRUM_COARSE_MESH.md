@@ -582,7 +582,12 @@ MCP knowledge tool for the live recipe.
   (eccentric, FEM end-to-end), `act3_04_aform_center_singularity` (A-form centre), `act2_07_apparatus_design_calc`
   (reactor-leg design calc); and the **non-separable build + DtN→CLN arc**
   `act6_06_square_eddy_dtn_to_cln`/`act6_07_cube_eddy_dtn_to_cln` (square C4v / cube O_h, FEM-built eddy DtN), `act6_08_disk2d_kelvin_eddy_dtn`
-  (2-D conformal Kelvin disk, no weight). See the directory
+  (2-D conformal Kelvin disk, no weight); the **temporal CLN realisation**
+  `act6_02_cln_dtn_cauer` (the eddy DtN = a Cauer continued fraction **in `√s`**,
+  EXACT at `n+1` stages for **every** multipole `n=1..6`, each `~1e-16`) and the
+  head-to-head `act7_20_impedance_vs_kelvin_dtn_cln` (Kelvin-DtN-CLN beats the
+  impedance route on all four axes in the MQS scope) — full temporal treatment in
+  [`OPEN_BOUNDARY_MAP.md` §5](../open_boundary/OPEN_BOUNDARY_MAP.md). See the directory
   [`README.md`](../../examples/kelvin_transformation/DtN_spectrum/README.md).
 - **Tests:**
   [`tests/test_dtn_spectrum_coarse.py`](../../packages/radia-mcp/tests/test_dtn_spectrum_coarse.py)
