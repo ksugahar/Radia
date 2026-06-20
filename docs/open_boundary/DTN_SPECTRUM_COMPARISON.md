@@ -34,7 +34,7 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
 |---|---|---|---|---|---|
 | **Kelvin** | **exact** (static `~2e−6`, eddy converges; **extended/radiating Kelvin** carries high-freq — HOIBC `~3e−2`, exact-Z `~6e−6`) | **YES** | **YES** | **flat** | sparse |
 | **BEM** (`ngsolve.bem`) | **exact** (all regimes; the real `ngsolve.bem` Helmholtz BEM reproduces `wave_dtn` to `~1e−5`, `act7_23`) | **YES** | **YES** | — | **DENSE** (`N²`) |
-| **PML** | accurate per-mode (`~1e−4` in its home) | no (a tuned **layer**) | no (`σ, L`) | **blows up** (`2.4e4`@DC) | sparse |
+| **PML** (`NGSolve` FEM+PML) | accurate per-mode (`~1e−4` in its home; the real 3-D NGSolve FEM+PML reproduces `wave_dtn` to `~1e−3`, `act7_24`) | no (a tuned **layer**) | no (`σ, L`) | **blows up** (`2.4e4`@DC) | sparse |
 | **CFS-PML** | accurate per-mode | no (a tuned layer) | no (`σ, α, L`) | **fixed** (`2.3e3`@DC) | sparse |
 | **ballooning** | **fails the LOW modes** (`~(a/R)^{2n+1}`) | no (finite **reach** `R`) | `R` | — | sparse |
 | **Robin** (`λ=−1/a`) | **exact `n=0` only**, fails HIGH modes | no (a fixed floor) | YES | — | sparse |
@@ -97,8 +97,9 @@ physically-measured *face* of the DtN defect; they carry identical information (
 normalisation differs). Measured in `act7_22` (reflection view): static **Kelvin** is
 reflectionless (`R ~ 1e−13…1e−6`) while **ballooning** reflects the low modes (`R[n=0] = 0.25`,
 shrinking with `n`); high-freq propagating (`n ≤ ka`) **extended-Kelvin-HOIBC** and **PML** are
-both low-reflection (`R ≲ 3e−2`); and **`ngsolve.bem`** is ~reflectionless (`act7_23`, `R ~ 1e−5`)
-because it reproduces the exact outgoing DtN. **The DtN-spectrum view adds nothing physically new
+both low-reflection (`R ≲ 3e−2`); and the real **`ngsolve.bem`** (`act7_23`, `R ~ 1e−5`) and the
+real **3-D NGSolve FEM+PML** (`act7_24`, `R ~ 1e−3`) are ~reflectionless because they reproduce the
+exact outgoing DtN. **The DtN-spectrum view adds nothing physically new
 over reflection** — its only convenience is being defined *uniformly across regimes* (static /
 evanescent have no propagating wave to "reflect"). This is a measurement / comparison, framed in
 the standard reflection language, **not a new metric**.

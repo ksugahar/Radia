@@ -2895,8 +2895,13 @@ R<3e-2.
 ngsolve.bem AT HIGH-FREQ (act7_23_ngsbem_highfreq_dtn): the high-freq "BEM" column made REAL -- the
 genuine ngsolve.bem Helmholtz single/double-layer operators BUILD the exterior DtN
 Lambda = V^{-1}(-1/2 M + K); a per-mode Rayleigh quotient reproduces the COMPLEX wave_dtn to ~1e-5
-(monopole/dipole/quadrupole/octupole, ka=2), ~reflectionless.  NGSolve (FEM+PML) + ngsolve.bem
-(Helmholtz BEM) ARE the working high-freq tools the DtN-spectrum ranks.
+(monopole/dipole/quadrupole/octupole, ka=2), ~reflectionless.  The SYMMETRIC partner
+act7_24_ngsolve_fem_pml_highfreq_dtn makes the FEM+PML column REAL too: a genuine 3-D NGSolve
+Helmholtz solve with NGSolve's native radial PML (mesh.SetPML(pml.Radial(...))) reproduces wave_dtn
+to ~1e-3 (consistent-flux BILINEAR Rayleigh quotient -- the DtN is complex-SYMMETRIC, not Hermitian;
+coarser than BEM's ~1e-5 = volume + PML-truncation error).  So BOTH NGSolve high-freq tools (FEM+PML
+AND Helmholtz BEM) ARE on the DtN yardstick (not proxies) -- the working high-freq tools the
+DtN-spectrum ranks.
 
 Companions: kelvin_transformation(topic="mesh_control"), dtn_coarse_mesh(topic="dtn_to_cln"),
 mor_cln(...).  (The `iabc` MCP tool was RETIRED 2026-06-20; the exact-impedance/Zs
