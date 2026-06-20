@@ -119,7 +119,8 @@ def test_radsolve_hdiv_hex_dispatch():
     iron = vim.soft_iron_from_mesh(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])      # free-space B whose H is H0
     cont = rad.ObjCnt([iron, bkg])
-    prev = rad.set_demag_backend("hdiv")
+    prev = rad.get_demag_backend()        # set_demag_backend returns the NEW value, not prev
+    rad.set_demag_backend("hdiv")
     try:
         with ng.TaskManager():
             res = rad.Solve(cont, 1e-6, 1000, 0)
@@ -145,7 +146,8 @@ def test_radsolve_hdiv_wedge_dispatch():
     iron = vim.soft_iron_from_mesh(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     cont = rad.ObjCnt([iron, bkg])
-    prev = rad.set_demag_backend("hdiv")
+    prev = rad.get_demag_backend()        # set_demag_backend returns the NEW value, not prev
+    rad.set_demag_backend("hdiv")
     try:
         with ng.TaskManager():
             res = rad.Solve(cont, 1e-6, 1000, 0)
