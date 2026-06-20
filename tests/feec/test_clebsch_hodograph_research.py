@@ -1016,3 +1016,137 @@ def test_clebsch_pole_shape_optimization_2d():
     assert abs(two["b3"]) < 1e-5, two
     assert abs(two["b5"]) < 1e-5, two
     assert two["spurious"] < flat["spurious"] / 50.0, out   # >=50x cleaner field
+
+
+def test_scaling_ffag_pole_2d_step1():
+    """Scaling-FFAG proton-gantry pole, Step 1 (linear): the field index
+    k(r) = d log B_y / d log r is the achromaticity condition, and the
+    naive g ~ r^{-k} pole is certified by the A/phi COMPLEMENTARY bracket.
+
+    Locks: (i) the field_index metric is exact on B ~ r^k; (ii) the proton
+    70-250 MeV band -> radial aperture ratio ~1.12; (iii) the A-formulation
+    and phi-formulation field indices BRACKET (gap tiny -> k well resolved);
+    (iv) the naive pole's bulk index sits just under k_design (the 2-D
+    fringing deficit that Steps 2-3's reshape closes)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    r = sf.run(maxh=0.012)                      # coarser for CI speed
+    # (i) the metric is exact: B ~ r^k -> k.
+    assert r["analytic_index_err"] < 1e-10, r
+    # (ii) proton band -> aperture ratio ~1.12 (k=5, 70-250 MeV).
+    rmin, rmax = r["aperture"]
+    assert 1.10 < rmax / rmin < 1.14, r
+    # (iii) A/phi complementary bracket is tight -> the field index is resolved.
+    assert r["bracket_gap_max"] < 1e-3, r
+    # (iv) the naive scaling pole's bulk index sits just under k_design=5
+    #      (2-D fringing softens it; the certified deficit Steps 2-3 close).
+    assert 4.7 < r["k_interior_mid_mean"] < 5.0, r
+    assert r["k_design"] == 5.0, r
+
+
+def test_scaling_ffag_pole_2d_step2_saturation():
+    """Step 2 (saturation): a super-ferric iron pole (Froehlich mu(B)) droops the
+    field index k(r) at the high-r (high-B) edge as the drive rises -- the
+    achromaticity degrades at the high-energy edge of the momentum acceptance
+    (the super-ferric operating wall the Step-3 reshape closes).
+
+    Referenced to the lowest (unsaturated) drive, Dk(r) = k - k_ref isolates
+    the saturation from the geometric baseline.  Locks: monotone deepening of
+    the high-r index loss with drive; the high-r edge droops MORE than the low-r
+    edge (the index TILTS); a significant loss once the high-r end is deep in
+    saturation."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    out = sf.run_step2(b_targets=(0.6, 1.4, 2.6), maxh=0.010)   # coarser for CI
+    L = out["levels"]
+    Bk = out["Bk_iron"]
+    # the reference (unsaturated) level has Dk == 0 by construction.
+    assert abs(L[0]["dk_hi"]) < 1e-9 and abs(L[0]["dk_tilt"]) < 1e-9, L[0]
+    # all solves converged (Picard well inside the cap).
+    assert all(x["iters"] < 40 for x in L), L
+    # the high-r index loss deepens MONOTONICALLY with drive.
+    assert L[0]["dk_hi"] > L[1]["dk_hi"] > L[2]["dk_hi"], [x["dk_hi"] for x in L]
+    # at the top drive the high-r end is DEEP in saturation (B >> Bk) ...
+    assert L[2]["B_gap_max"] > 2.0 * Bk, L[2]
+    # ... and the high-r index has dropped significantly below baseline.
+    assert L[2]["dk_hi"] < -0.15, L[2]
+    # the saturation TILTS the index: the high-r edge droops more than low-r.
+    assert L[2]["dk_tilt"] < -0.05, L[2]
+    assert L[2]["dk_hi"] < L[2]["dk_lo"], L[2]      # high-r loss > low-r loss
+
+
+def test_scaling_ffag_pole_2d_step3_reshape():
+    """Step 3 (reshape): at the super-ferric design excitation (with iron
+    saturation), a 2-parameter pole reshape (the log-chart gamma, gamma2; the
+    single-valued von Mises chart) flattens the SATURATED field index k(r) --
+    restoring achromaticity that geometry + saturation broke.  A 2-D Newton on
+    (tilt, curvature)=0 nulls both the linear tilt and the bow of k(r).
+
+    Locks: the naive pole's saturated k(r) is clearly non-flat; the reshape
+    drives both tilt and curvature to ~0 and shrinks the peak-to-peak field
+    index variation several-fold; the reshape is non-trivial (gamma2 != 0)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    out = sf.run_step3(B_design=1.8, maxh=0.010)        # coarser for CI
+    n, o = out["naive"], out["reshaped"]
+    # the naive scaling pole's saturated index is clearly non-flat ...
+    assert n["ptp"] > 0.05, n
+    # ... the 2-param reshape nulls both the tilt and the curvature ...
+    assert abs(o["tilt"]) < 6e-3 and abs(o["curv"]) < 6e-3, o
+    # ... shrinking the field-index peak-to-peak several-fold ...
+    assert o["ptp"] < 0.025, o
+    assert out["ptp_improvement"] > 3.5, out
+    # ... by a genuine 2-parameter (non-degenerate) reshape.
+    assert abs(o["gamma2"]) > 1.0, o
+
+
+def test_scaling_ffag_pole_2d_saturated_bracket():
+    """Complementary (A vs phi) certification of the SATURATED field index: the
+    same nonlinear operating point solved both ways -- phi (Dirichlet on the
+    poles) and A (Dirichlet on the flux walls, driven to the phi-solve's median
+    flux so both sit at the SAME saturation state).  The nonlinear analogue of
+    Step 1's linear bracket (monotone BH => convex energy => the bracket survives
+    into saturation): k_phi(r) and k_A(r) converge from discretisation-
+    complementary sides, so a TIGHT gap certifies the saturated k(r) is physics,
+    not mesh -- for BOTH the naive pole (a droop) and the reshaped pole (flat)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    # naive pole: the bracket certifies the saturation droop is real.
+    bn = sf.bracket_saturated(B_design=1.8, maxh=0.010)
+    assert bn["B_gap_max"] > 2.0, bn                 # genuinely saturated
+    assert bn["iters_phi"] < 40 and bn["iters_A"] < 40, bn   # both converged
+    assert bn["bracket_gap_max"] < 5e-3, bn          # A and phi agree on k(r)
+    assert 4.6 < bn["k_mid_mean"] < 4.9, bn
+    # reshaped pole: the bracket certifies the FLATTENED k(r) is real (not mesh).
+    br = sf.bracket_saturated(B_design=1.8, gamma=-0.85, gamma2=42.9, maxh=0.010)
+    assert br["bracket_gap_max"] < 5e-3, br
+
+
+def test_scaling_ffag_pole_2d_pullback_solver():
+    """Hodograph AS THE SOLVER (not just framing): the linear scaling pole is
+    solved on a FIXED computational mesh with the pole shape entering as a
+    pullback DEFORMATION (mesh.SetDeformation), so a reshape is a new WEIGHT on
+    the same mesh -- Netgen runs ONCE.  This realises the genuine no-remesh win
+    the physical-coordinate solves lack.
+
+    Locks: (i) the pullback solve reproduces the physical-remesh field index
+    k(r) (the deformation == physical, the lab's verified pullback identity);
+    (ii) the whole pole-shape sweep uses a SINGLE mesh generation; (iii) the
+    reshape still bites on the fixed mesh (the index tilt moves with gamma)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    out = sf.run_pullback()
+    # (i) pullback (fixed mesh + deformation) == physical remesh, on k(r).
+    assert out["k_def_vs_physical_max"] < 5e-3, out
+    assert abs(out["k_def_mean"] - out["k_phys_mean"]) < 5e-3, out
+    # (ii) ONE Netgen mesh for every pole shape (the no-remesh win).
+    assert out["n_mesh_generations"] == 1, out
+    # (iii) the reshape moves the field-index tilt on the SAME mesh
+    #       (more negative gamma -> the tilt falls), monotonically.
+    tilts = [s["k_tilt"] for s in out["sweep"]]
+    assert tilts[0] > tilts[1] > tilts[2], tilts
