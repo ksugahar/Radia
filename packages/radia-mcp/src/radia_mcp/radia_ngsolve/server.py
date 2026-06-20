@@ -1001,6 +1001,14 @@ def kelvin_transformation(topic: str = "all") -> str:
                                FreeDofs verification, symmetry models, GND)
             "verification"   - Numerical verification (single-domain approach)
             "periodic_wedge" - 1/n sector (symmetry model) with Periodic BC
+            "material_exterior" - Provenance of material/conducting exterior
+                               Kelvin: Freeman-Lowther (air exterior) vs
+                               transformation-optics sigma (Ward-Pendry) vs
+                               Sugahara 2022's validated sigma-conformal ECT
+                               fusion (conductor crosses the truncation); the
+                               formulation basis for radia.open_boundary.
+                               kelvin_dtn's (a/r)^4 sigma / (a/r)^2 mu weights.
+                               Read before claiming "material Kelvin" novel.
     """
     return get_kelvin_documentation(topic)
 

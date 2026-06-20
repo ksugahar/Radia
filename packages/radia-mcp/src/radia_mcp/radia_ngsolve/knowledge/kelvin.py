@@ -2807,6 +2807,57 @@ coarse.
 """
 
 
+KELVIN_MATERIAL_EXTERIOR = """
+# Material / conducting exterior in the Kelvin transformation -- provenance + the sigma-conformal extension
+
+PROVENANCE MAP (set the record straight, 2026-06-20; corrects an earlier over-coarse
+"material-exterior Kelvin = Freeman-Lowther" framing).  "Kelvin with material in the
+exterior" is NOT one undifferentiated thing -- three layers, different owners:
+
+1. Kelvin open boundary, AIR exterior + arbitrary INTERIOR material / anisotropy
+   = Freeman-Lowther (IEEE T-Magn 1988/89; Wong 1985, Ciric 1986; FEMM ships it).
+   The exterior is air; the 3-D scalar mu' = (a/r)^2 weight is theirs.  CLASSICAL.
+
+2. Coordinate-transformation == material-transformation (the form-invariance of
+   Maxwell under a coordinate map, INCLUDING sigma) = Ward-Pendry 1996 + the whole
+   transformation-optics / CTM programme.  This subsumes "transform sigma under a
+   map": DC transformation optics realises anisotropic-sigma devices (EIT, DC electric
+   cloaks, thermoelectric cloaks).  So transforming sigma under a conformal map is,
+   in principle, NOT new -- it is transformation optics.  (A PML is itself a
+   complex-coordinate CTM, same family.)  CLASSICAL.
+
+3. The SPECIFIC FUSION -- Kelvin INVERSION as an EXACT OPEN BOUNDARY, with the
+   sigma / epsilon / mu CONFORMAL transformation, so a CONDUCTOR can CROSS the
+   truncation boundary (a half-infinite conducting ground continues to infinity
+   through the circle/sphere), VALIDATED for eddy-current testing (field independent
+   of the truncation radius) = Sugahara 2022 (IEEE Magnetics, "Electromagnetic
+   Analysis of Eddy Current Testing with Kelvin Transformation"; 2-D
+   sigma_ext = sigma_int (a/r)^4, mu_ext = mu_int, from the metric ratio g'_i/g_i).
+   The transformation-optics sigma literature is about CLOAKING (hiding a region),
+   NOT open-boundary truncation with a conductor crossing it -- NO single prior work
+   found doing THIS.  So the genuine contribution is the validated APPLICATION /
+   fusion, not the abstract sigma-transformation principle.
+
+HONEST FRAMING for any claim: do NOT claim "material / conducting exterior Kelvin" as
+new in the abstract (transformation optics owns the sigma-transformation; Freeman-
+Lowther owns Kelvin-with-material).  DO claim the specific, validated fusion: Kelvin
+inversion as an exact open boundary for EDDY-CURRENT problems where a conductor
+crosses the truncation, via the conformal sigma transformation.  (Same pattern as the
+rest of the open-boundary line -- the building blocks are classical, the validated
+fusion is the contribution.)  Sugahara also has the radiating extension (Extended
+Kelvin Transformation, IEICE Trans. Electron. 2024) and a periodic Kelvin (2013).
+
+This is the formulation basis for radia.open_boundary.kelvin_dtn's MATERIAL-aware
+(nu, sigma) exterior DtN: the (a/r)^4 sigma / (a/r)^2 mu weights come from this
+conformal derivation.  See dtn_coarse_mesh(topic="dtn_to_cln") +
+docs/open_boundary/OPEN_BOUNDARY_MAP.md.
+
+References (cite): Ward & Pendry, J. Mod. Opt. 43 (1996); Freeman & Lowther, IEEE
+T-Magn 24/25 (1988/89); Sugahara, IEEE Magnetics 2022 (ECT + Kelvin); Sugahara,
+IEICE Trans. Electron. 2024 (Extended Kelvin, radiating).
+"""
+
+
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
     topics = {
@@ -2829,6 +2880,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "source_in_omega_form": KELVIN_SOURCE_IN_OMEGA_FORM,
         "benchmark_panel": KELVIN_BENCHMARK_PANEL,
         "kameari_canonical": KELVIN_KAMEARI_CANONICAL,
+        "material_exterior": KELVIN_MATERIAL_EXTERIOR,
     }
 
     topic = topic.lower().strip()
