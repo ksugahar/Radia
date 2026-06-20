@@ -19,6 +19,11 @@
 #include "rad_polyhedron.h"  // For IsTetrahedron() check in N_self fix
 #include "rad_constants.h"   // For RadConst::INV_FOUR_PI
 #include <array>
+#include <unordered_map>
+#include <map>
+#include <cmath>
+#include <algorithm>
+#include <utility>
 
 #include "rad_parallel.h"
 
@@ -2494,6 +2499,151 @@ void radTInteraction::PrecomputeHexaGeometry()
 
 	// Also pre-compute triangle local coordinate systems
 	const_cast<radTInteraction*>(this)->PrecomputeHexaTriangleData();
+}
+
+//=========================================================================
+// BuildLoopBasis: cell-graph cycle (loop) basis of the yano-MSC operator.
+//
+// The loops are the field-null subspace of the surface-charge collocation
+// operator N (== the HDiv ker(B) cell/internal-face cycle space).  They sit at
+// eigenvalue 1/chi in the system A = (1/chi) I - N, so cond(A) ~ mu_r and the
+// BiCGSTAB iteration count grows at high mu_r.  Deflating this basis (Stage 2)
+// makes the iteration count bounded and mu_r-independent (verified on the exact
+// C++ operator in examples/vim/yano_loop_removal_scaling.py; cf. the lab
+// loop-free collocation study, Yano & Sugahara 2023).
+//
+// Construction is geometry-only (no dense SVD): match internal faces by
+// coincident face centers -> cell-adjacency graph -> spanning forest ->
+// fundamental cycles.  Each internal face shared by hex a (DOF dA) and hex b
+// (DOF dB) contributes +c to dA and -c to dB along the cycle (the field-null
+// "+q / -q on the same physical face" convention).  Output Lflat is ROW-MAJOR
+// (m_totalDOF rows x nLoop cols): Lflat[d * nLoop + col].  nLoop = the cell-graph
+// cycle count = nInternalFaces - (nHex - nComponents).
+//=========================================================================
+
+void radTInteraction::BuildLoopBasis(std::vector<double>& Lflat, int& nLoop) const
+{
+	Lflat.clear(); nLoop = 0;
+	int nHex = (int)m_hexaElemIndices.size();
+	if(nHex == 0) return;
+
+	// 1) face center + area + DOF index for every hex face (DOF f of hex h = offset + f)
+	struct FaceRec { double cx, cy, cz, area; int hex, dof; };
+	std::vector<FaceRec> faces; faces.reserve((size_t)nHex * 6);
+	double scale = 0.0;
+	for(int h = 0; h < nHex; h++)
+	{
+		int elemIdx = m_hexaElemIndices[h];
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
+		if(!poly || poly->AmOfFaces != 6) continue;
+		int off = m_elemDOFOffset[elemIdx];
+		for(int f = 0; f < 6; f++)
+		{
+			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+			if(!pgn || !tr) continue;
+			const radTVect2dVect& v2d = pgn->EdgePointsVector;
+			if(v2d.size() < 4) continue;
+			TVector3d V4[4];
+			for(int v = 0; v < 4; v++)
+				V4[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
+			// quad area via two triangles (V0V1V2 + V0V2V3)
+			double area = 0.0;
+			for(int t = 0; t < 2; t++)
+			{
+				const TVector3d& A = V4[0]; const TVector3d& B = V4[t + 1]; const TVector3d& C = V4[t + 2];
+				double ux = B.x - A.x, uy = B.y - A.y, uz = B.z - A.z;
+				double wx = C.x - A.x, wy = C.y - A.y, wz = C.z - A.z;
+				double rx = uy * wz - uz * wy, ry = uz * wx - ux * wz, rz = ux * wy - uy * wx;
+				area += 0.5 * std::sqrt(rx * rx + ry * ry + rz * rz);
+			}
+			FaceRec fr;
+			fr.cx = 0.25 * (V4[0].x + V4[1].x + V4[2].x + V4[3].x);
+			fr.cy = 0.25 * (V4[0].y + V4[1].y + V4[2].y + V4[3].y);
+			fr.cz = 0.25 * (V4[0].z + V4[1].z + V4[2].z + V4[3].z);
+			fr.area = (area > 0 ? area : 1.0);
+			fr.hex = h; fr.dof = off + f;
+			faces.push_back(fr);
+			scale = std::max(scale, std::fabs(fr.cx) + std::fabs(fr.cy) + std::fabs(fr.cz));
+		}
+	}
+	double tol = 1e-9 * (scale > 0 ? scale : 1.0);
+
+	// 2) match coincident face centers -> internal edges (conforming mesh: shared centers coincide)
+	struct Edge { int hexA, dofA, hexB, dofB; double areaA, areaB; };
+	std::vector<Edge> edges;
+	std::unordered_map<long long, int> seen;   // spatial-hash key -> first face index
+	for(int i = 0; i < (int)faces.size(); i++)
+	{
+		long long kx = (long long)std::llround(faces[i].cx / tol);
+		long long ky = (long long)std::llround(faces[i].cy / tol);
+		long long kz = (long long)std::llround(faces[i].cz / tol);
+		long long key = (kx * 73856093LL) ^ (ky * 19349663LL) ^ (kz * 83492791LL);
+		std::unordered_map<long long, int>::iterator it = seen.find(key);
+		if(it == seen.end()) { seen[key] = i; continue; }
+		int j = it->second;
+		double d = std::fabs(faces[i].cx - faces[j].cx) + std::fabs(faces[i].cy - faces[j].cy)
+		         + std::fabs(faces[i].cz - faces[j].cz);
+		if(d <= 10.0 * tol && faces[i].hex != faces[j].hex)
+		{
+			Edge e; e.hexA = faces[j].hex; e.dofA = faces[j].dof; e.areaA = faces[j].area;
+			e.hexB = faces[i].hex; e.dofB = faces[i].dof; e.areaB = faces[i].area;
+			edges.push_back(e);
+		}
+	}
+	int nInternal = (int)edges.size();
+	if(nInternal == 0) return;
+
+	// 3) spanning forest (BFS) with parent edge; non-tree edges close fundamental cycles
+	std::vector<std::vector<std::pair<int,int> > > adj(nHex);   // hex -> (neighbor, edgeIdx)
+	for(int e = 0; e < nInternal; e++)
+	{
+		adj[edges[e].hexA].push_back(std::make_pair(edges[e].hexB, e));
+		adj[edges[e].hexB].push_back(std::make_pair(edges[e].hexA, e));
+	}
+	std::vector<int> parentNode(nHex, -1), parentEdge(nHex, -1);
+	std::vector<char> visited(nHex, 0), treeEdge(nInternal, 0);
+	for(int s = 0; s < nHex; s++)
+	{
+		if(visited[s]) continue;
+		visited[s] = 1; std::vector<int> q; q.push_back(s); size_t qi = 0;
+		while(qi < q.size())
+		{
+			int u = q[qi++];
+			for(size_t a = 0; a < adj[u].size(); a++)
+			{
+				int v = adj[u][a].first, eidx = adj[u][a].second;
+				if(!visited[v]) { visited[v] = 1; parentNode[v] = u; parentEdge[v] = eidx; treeEdge[eidx] = 1; q.push_back(v); }
+			}
+		}
+	}
+	std::vector<int> nonTree;
+	for(int e = 0; e < nInternal; e++) if(!treeEdge[e]) nonTree.push_back(e);
+	nLoop = (int)nonTree.size();
+	if(nLoop == 0) return;
+
+	// 4) assemble L: fundamental cycle = non-tree edge + tree paths of its two endpoints
+	Lflat.assign((size_t)m_totalDOF * nLoop, 0.0);
+	for(int c = 0; c < nLoop; c++)
+	{
+		int e = nonTree[c];
+		std::map<int,int> coeff;     // edgeIdx -> integer cycle coefficient
+		int x = edges[e].hexA; while(parentNode[x] != -1) { coeff[parentEdge[x]] += 1; x = parentNode[x]; }
+		x = edges[e].hexB;     while(parentNode[x] != -1) { coeff[parentEdge[x]] -= 1; x = parentNode[x]; }
+		coeff[e] += 1;
+		for(std::map<int,int>::iterator it = coeff.begin(); it != coeff.end(); ++it)
+		{
+			if(it->second == 0) continue;
+			const Edge& ee = edges[it->first];
+			// integer coefficient = FLUX along the cycle; charge DENSITY sigma = flux / face area
+			// (the field-null condition needs Sum_f area*sigma = 0 per cell -> use flux, not density;
+			//  on a cube all areas are equal so 1/area is a constant, but on a distorted hex it matters).
+			double q = (double)it->second;
+			Lflat[(size_t)ee.dofA * nLoop + c] += q / ee.areaA;
+			Lflat[(size_t)ee.dofB * nLoop + c] -= q / ee.areaB;
+		}
+	}
 }
 
 //=========================================================================

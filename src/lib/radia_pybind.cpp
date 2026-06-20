@@ -922,6 +922,35 @@ py::tuple GetInteractMatrix(int intrc_handle) {
 }
 
 /**
+ * @brief Get the yano-MSC cell-graph cycle (loop) basis as a numpy array
+ * @param intrc_handle Interaction handle from BuildMatrix
+ * @return Tuple (L as 2D numpy array (dof x nLoop), nLoop)
+ */
+py::tuple GetLoopBasis(int intrc_handle) {
+    int nLoop = 0, dof = 0;
+    int err = RadGetLoopBasis(nullptr, &nLoop, &dof, intrc_handle);
+    check_error(err);
+    if (dof <= 0) {
+        throw std::runtime_error("No interaction matrix built");
+    }
+    int ncol = nLoop > 0 ? nLoop : 0;
+    py::array_t<double> result({dof, ncol});
+    if (nLoop > 0) {
+        std::vector<double> data((size_t)dof * (size_t)nLoop);
+        err = RadGetLoopBasis(data.data(), &nLoop, &dof, intrc_handle);
+        check_error(err);
+        auto r = result.mutable_unchecked<2>();
+        // L is ROW-MAJOR: L[d * nLoop + c]
+        for (int i = 0; i < dof; i++) {
+            for (int c = 0; c < nLoop; c++) {
+                r(i, c) = data[(size_t)i * (size_t)nLoop + (size_t)c];
+            }
+        }
+    }
+    return py::make_tuple(result, nLoop);
+}
+
+/**
  * @brief Densify the actual HACApK (ACA+) operator as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
  * @return Tuple (matrix as 2D numpy array, dof)
@@ -3507,6 +3536,25 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   Tuple (matrix, dof) where matrix is (dof x dof) numpy array
+          )pbdoc");
+
+    m.def("GetLoopBasis", &radia_solver::GetLoopBasis,
+          py::arg("intrc_handle"),
+          R"pbdoc(
+              Get the yano-MSC cell-graph cycle (loop) basis L of an interaction matrix.
+
+              The loops are the field-null subspace of the surface-charge collocation
+              operator N (== HDiv ker(B), the cell/internal-face cycle space).  They sit
+              at eigenvalue 1/chi in A = (1/chi) I - N, so cond(A) ~ mu_r; deflating L
+              makes the high-mu_r solve bounded and mu_r-independent.  Built geometry-only
+              (no SVD): face-center matching -> cell adjacency -> fundamental cycles.
+
+              Args:
+                  intrc_handle: Interaction handle from BuildMatrix()
+
+              Returns:
+                  Tuple (L, nLoop) where L is a (dof x nLoop) numpy array whose columns
+                  span ker(N) (verify ||N @ L|| ~ 0).
           )pbdoc");
 
     m.def("HMatrixDensify", &radia_solver::HMatrixDensify,

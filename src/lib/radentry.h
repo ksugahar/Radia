@@ -388,6 +388,18 @@ EXP int CALL RadBuildMatrix(int* n, int ElemKey, const char* image);
 */
 EXP int CALL RadGetInteractMatrix(double* pMatrix, int* pDOF, int InteractElemKey);
 
+/** Gets the yano-MSC cell-graph cycle (loop) basis L of the interaction operator.
+The loops are the field-null subspace (== HDiv ker(B)); deflating them makes the high-mu_r
+solve bounded + mu_r-independent.  Two-call pattern: pass pL=nullptr to read back nLoop+DOF,
+allocate DOF*nLoop doubles, then call again to fill (ROW-MAJOR, L[d*nLoop+col]).
+@param pL [out] flat L array (DOF x nLoop, row-major), or nullptr to query size
+@param pNLoop [out] number of loop (cycle) basis vectors
+@param pDOF [out] number of DOF (L has DOF rows)
+@param InteractElemKey [in] interaction handle from BuildMatrix
+@return integer error code
+*/
+EXP int CALL RadGetLoopBasis(double* pL, int* pNLoop, int* pDOF, int InteractElemKey);
+
 /** Densify the actual HACApK (ACA+) system operator into a dense matrix.
 Builds the MSC H-matrix for the interaction handle and applies it to unit
 vectors (A = -N + diag(1/chi), original DOF ordering). Use to validate the
