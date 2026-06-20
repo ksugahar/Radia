@@ -483,11 +483,22 @@ class ScalarPotentialSolver:
                                       iron_boundary='default'):
         """Solve using EMPY-style total+reduced split with Kelvin.
 
-        This is the ONLY correct method for Kelvin + external coil source.
-        ``solve_single_potential`` does NOT work with Kelvin + coil source
-        because the fully-reduced formulation requires H_s defined in the
-        Kelvin region via 1-form pullback, which ``set_source_from_radia``
-        cannot provide.
+        WARNING (2026-06-19): this Omega_s-LIFT two-scalar method is BROKEN for
+        COIL sources.  It couples the source through the coil's magnetic SCALAR
+        potential Omega_s (= -rad.Fld(coil,'phi')) used as a Dirichlet lift on
+        the iron-air boundary -- but Omega_s is MULTIVALUED (the solid-angle
+        potential jumps by the ampere-turns NI) for any current loop linking the
+        iron.  The lift is therefore ill-posed: the iron magnetises but the
+        air/gap field comes out ~100% wrong, MESH-INDEPENDENTLY (verified on the
+        coil-driven C-yoke; uniform-source Omega_s = H0*z, being single-valued,
+        works -- which is the ONLY case this method was ever validated on).
+
+        Use ``solve_single_potential`` / ``solve_nonlinear_newton`` instead:
+        they drive the reduced potential with the single-valued VECTOR source
+        H_s = rad.RadiaField(coil,'h') in a VOLUME integral (H = H_s - grad Omega),
+        exactly as the production ``calc_accel_magnet.py`` pipeline does -- that
+        is the correct and validated method for Kelvin + external coil source.
+        (Static check: lint rule ``coil-scalar-potential-as-lift``.)
 
         The unknown ``omega`` represents:
         - Omega_t (total potential) in iron regions

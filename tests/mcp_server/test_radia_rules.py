@@ -20,6 +20,7 @@ from radia_mcp.radia_ngsolve.rules import (
     check_efie_v_minus_sign,
     check_classical_efie_breakdown,
     check_peec_p_over_jw,
+    check_coil_scalar_potential_as_lift,
 )
 
 
@@ -332,6 +333,36 @@ class TestPeecPOverJw:
         assert _run(check_peec_p_over_jw, code) == []
 
 
+class TestCoilScalarPotentialAsLift:
+    def test_detects_phi_boundary_lift(self):
+        code = (
+            'phi = rad.Fld(coil, "phi", pts)\n'
+            'gfu.Set(phi, BND, definedon=mesh.Boundaries("iron"))\n'
+        )
+        findings = _run(check_coil_scalar_potential_as_lift, code)
+        assert len(findings) == 1
+        assert findings[0]['severity'] == 'CRITICAL'
+        assert findings[0]['rule'] == 'coil-scalar-potential-as-lift'
+
+    def test_detects_total_reduced_call(self):
+        code = 'solver.solve_total_reduced_potential(coil)\n'
+        findings = _run(check_coil_scalar_potential_as_lift, code)
+        assert len(findings) == 1
+        assert findings[0]['severity'] == 'HIGH'
+
+    def test_allows_vector_h_source(self):
+        code = (
+            'Hs = rad.RadiaField(coil, "h")\n'
+            'f += mu * Hs * grad(v) * dx\n'
+        )
+        assert _run(check_coil_scalar_potential_as_lift, code) == []
+
+    def test_skips_owner_file(self):
+        code = 'def solve_total_reduced_potential(self):\n    pass\n'
+        assert _run(check_coil_scalar_potential_as_lift, code,
+                    filepath="scalar_potential_solver.py") == []
+
+
 # ============================================================
 # Meta-tests
 # ============================================================
@@ -341,7 +372,7 @@ class TestAllRulesList:
         # Tripwire: bump when adding/removing a rule in
         # radia_ngsolve.rules.ALL_RULES (NOT covered by ci_preflight's
         # pre-push gate -- only this build-test pytest runs it).
-        assert len(ALL_RULES) == 36
+        assert len(ALL_RULES) == 37
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:
