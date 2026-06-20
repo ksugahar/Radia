@@ -1,5 +1,5 @@
 # Tests measured >=10 s in CI run 27871849250 on 2026-06-20.
-# Non-tag CI runs with -m "not slow"; version-tag CI still runs these.
+# Fast CI runs with -m "not slow"; workflow_dispatch full_slow=true still runs these.
 tests/feec/parity_vs_msc/test_ctype_nonlinear_parity.py::test_ctype_coil_nonlinear_gap_field  # 303.090s
 tests/bem/test_coil_bem_a_volume_vol.py::test_bem_a_inductance_from_volume_vol  # 143.087s
 tests/test_omega_reduced_omega.py::TestOmegaReducedOmegaKelvin::test_B_accuracy_inside_iron  # 118.703s
