@@ -1,0 +1,96 @@
+{
+  "all_ok": true,
+  "cases": [
+    {
+      "tag": "2x2x2 shear=0.0",
+      "n_cells": 8,
+      "n_internal": 12,
+      "cycle": 5,
+      "hdiv_ndof": 36,
+      "hdiv_n_loop": 5,
+      "hdiv_loop_res": 5.609974559857583e-16,
+      "yano_dof": 48,
+      "yano_cond": 2.9615541512476144e+16,
+      "yano_near_null": 5,
+      "yano_cond_star": 40.737735592204274,
+      "n_keep": 43,
+      "match": true
+    },
+    {
+      "tag": "3x3x2 shear=0.0",
+      "n_cells": 18,
+      "n_internal": 33,
+      "cycle": 16,
+      "hdiv_ndof": 75,
+      "hdiv_n_loop": 16,
+      "hdiv_loop_res": 1.4443404352669014e-16,
+      "yano_dof": 108,
+      "yano_cond": 1.8262797252156732e+16,
+      "yano_near_null": 16,
+      "yano_cond_star": 60.44044441273586,
+      "n_keep": 92,
+      "match": true
+    },
+    {
+      "tag": "3x3x2 shear=0.5",
+      "n_cells": 18,
+      "n_internal": 33,
+      "cycle": 16,
+      "hdiv_ndof": 75,
+      "hdiv_n_loop": 16,
+      "hdiv_loop_res": 1.4443404352669014e-16,
+      "yano_dof": 108,
+      "yano_cond": 1.0523356670885794e+16,
+      "yano_near_null": 16,
+      "yano_cond_star": 65.50057393899986,
+      "n_keep": 92,
+      "match": true
+    },
+    {
+      "tag": "3x3x3 shear=0.5",
+      "n_cells": 27,
+      "n_internal": 54,
+      "cycle": 28,
+      "hdiv_ndof": 108,
+      "hdiv_n_loop": 28,
+      "hdiv_loop_res": 1.3505373404403031e-16,
+      "yano_dof": 162,
+      "yano_cond": 2.9153377331202932e+16,
+      "yano_near_null": 28,
+      "yano_cond_star": 47.11721771161755,
+      "n_keep": 134,
+      "match": true
+    }
+  ],
+  "mur_sweep": {
+    "grid": "3x3x2",
+    "cycle": 16,
+    "sweep": [
+      {
+        "mu_r": 10.0,
+        "cond_full": 82.13098014462285,
+        "cond_star": 36.03114626572941
+      },
+      {
+        "mu_r": 100.0,
+        "cond_full": 914.9322916710054,
+        "cond_star": 60.93756515863003
+      },
+      {
+        "mu_r": 1000.0,
+        "cond_full": 9254.850233507606,
+        "cond_star": 65.0178692188544
+      },
+      {
+        "mu_r": 10000.0,
+        "cond_full": 92655.8663266835,
+        "cond_star": 65.4520226208165
+      },
+      {
+        "mu_r": 100000.0,
+        "cond_full": 926666.221464072,
+        "cond_star": 65.49571598083527
+      }
+    ]
+  }
+}

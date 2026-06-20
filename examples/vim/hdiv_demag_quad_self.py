@@ -168,7 +168,7 @@ def build(distort_amt, nsub_hex, nsub_quad, n=3):
     loop_res = max(np.linalg.norm(N @ loops[k]) for k in range(n_loop)) / (Nn + 1e-300)
     Nsb = Sstar.T @ N @ Sstar; mu = np.sort(np.abs(np.linalg.eigvals(Nsb).real))
     return dict(ndof=ndof, rankQ=rankQ, n_loop=n_loop, N=N, Nsb=Nsb, mu=mu, el_dofs=el_dofs,
-                Sstar=Sstar, loops=loops, mass_hdiv=mass_hdiv, divdiv_hdiv=divdiv_hdiv,
+                Sstar=Sstar, loops=loops, mass_hdiv=mass_hdiv, divdiv_hdiv=divdiv_hdiv, B=B,
                 loop_res=loop_res, volerr=volerr, areaerr=areaerr,
                 cube_self=diagG[0], cube_self_cubeformula=c_cube*el_vol[0]**(5/3.)/(4*pi), el_vol0=el_vol[0])
 
