@@ -3421,6 +3421,32 @@ python tests/cubit/test_ho_volume_all_formats.py  # Order=2 volume accuracy (sph
 
 ---
 
+## Agent Division of Labor: Claude Commits; Codex Runs CI + Release (2026-06-21)
+
+**POLICY**: Split of work between AI agents on this repo.
+
+- **Claude's responsibility ENDS at the local `git commit`.** Claude implements,
+  tests locally, and commits (this-session files BY NAME, per the existing commit
+  hygiene), then STOPS and reports the commit SHA.
+- **CI and release are codex's job — NOT Claude's.** codex pushes, watches CI to
+  green, fixes CI infrastructure, cuts tags, runs the PyPI publish, and deploys
+  (100号機 / mdx).
+
+Claude does **NOT**: push for release, monitor/poll GitHub Actions CI, wait for
+CI-green, run `tools/check_ci.py` watch-loops, push tags, invoke the
+`release-triple` flow, or publish to PyPI. If asked to "release", Claude prepares
+and commits the work, then hands off to codex.
+
+**Why**: CI monitoring and release driving (queue watching, tag/publish, remote
+deploy) is long-running, polling-heavy work that does not need Claude's
+reasoning and wasted Claude turns. Keep Claude on implement → test → commit;
+codex owns CI + release.
+
+**Exception**: only if the user EXPLICITLY asks Claude to push / handle CI /
+release in a specific task does Claude do it. The default is **commit-and-stop**.
+
+---
+
 **Last Updated**: 2026-04-02
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
