@@ -1,109 +1,152 @@
 # -*- coding: utf-8 -*-
-"""radia.infinite_element -- static / low-frequency INFINITE-ELEMENT open-boundary closure.
+"""radia.infinite_element -- NGSolve-native static / low-frequency INFINITE-ELEMENT open boundary.
 
 The (static) infinite element (IE) closes an exterior Laplace problem on a truncation surface by
-expanding the decaying exterior field as (surface FE) x (radial decay basis) and statically
-condensing the radial DOFs onto the surface trace, giving a DtN surface stiffness ``S_Gamma`` that
-the caller adds to the interior FE system.  On a SPHERE this is identical to the Kelvin
-transformation (same exterior polynomial space; see
-``examples/kelvin_transformation/DtN_spectrum/act7_28_ie_vs_kelvin_fair_dtn.py``).
+expanding the decaying exterior field as (surface FE) x (radial decay basis) and adding the radial
+levels as EXTRA surface DOFs that NGSolve assembles + solves monolithically with the interior FE
+system.  On a SPHERE this is identical to the Kelvin transformation (same exterior polynomial space;
+see ``examples/kelvin_transformation/DtN_spectrum/act7_28_ie_vs_kelvin_fair_dtn.py``).
 
-The numerical kernel is C++ (``src/core/rad_infinite_element.cpp``, the port of the Python prototypes
-``act7_32``/``act7_33``): the well-conditioned radial decay operators (R1 radial stiffness, R0 radial
-mass, in the vertex + integrated-Legendre basis -- NEVER naive monomials, per the act7_28 conditioning
-lesson) and the static condensation.  The generic surface FE matrices (mass + Laplace-Beltrami) come
-from NGSolve (this module does not reimplement them -- "complement NGSolve").
+DESIGN (NGSolve-native -- "complement NGSolve, do not reimplement"):
+  * the radial decay operators are tiny (P x P) and live in numpy here (the well-conditioned vertex +
+    integrated-Legendre basis -- NEVER naive monomials, per the act7_28 conditioning lesson);
+  * the P-1 radial "bubble" levels are boundary-only NGSolve H1 spaces, compounded with the interior
+    H1; the exterior energy ``sum_kl [ R1_kl int_Gamma u_k u_l ds + R0_kl int_Gamma grad_S u_k . grad_S
+    u_l ds ]`` is added as boundary integrals, so NGSolve assembles the augmented SPARSE system and
+    solves it monolithically (no scipy, no dense Schur condensation);
+  * the exterior field is recovered everywhere as the radial expansion ``phi(r,s) = sum_k U_k(s)
+    N_k(a/r)`` from the solved level GridFunctions (:func:`exterior_field`).
+
+The exterior energy is the TENSOR PRODUCT of a surface part and a radial part: for a single mode n the
+block reduces to ``R1 + n(n+1) R0`` (act7_25) and ``eig -> the analytic ladder (n+1)/a``.
 
 Public API
 ----------
-``radial_operators(P, a=1.0)``           -> (R1, R0, g)   the P x P radial operators + trace vector.
-``dtn_surface_operator(Mtil, Ktil, P, a)`` -> S            condense given unit-sphere surface matrices.
-``surface_dtn_from_mesh(mesh, P, a, order)`` -> (S, bnd)   the full closure on an NGSolve mesh's
-                                                            spherical boundary (lazy NGSolve import).
+``radial_operators(P, a)``                  -> (R1, R0, g)  the P x P radial operators + trace vector.
+``dtn_surface_matrix(MS, KS, P, a)``         -> S            condensed DtN matrix (numpy, for analysis).
+``ie_compound_space(mesh, P, order)``        -> X            compound [interior H1, P-1 surface H1].
+``add_exterior_ie(a_bf, X, P, a)``           -> None         add the IE boundary terms to a BilinearForm.
+``exterior_field(gf, P, a, points)``         -> ndarray      evaluate the exterior radial expansion.
 """
 import numpy as np
 
-__all__ = ["radial_operators", "dtn_surface_operator", "surface_dtn_from_mesh"]
+__all__ = ["radial_operators", "dtn_surface_matrix", "ie_compound_space",
+           "add_exterior_ie", "exterior_field"]
+
+
+# ===========================================================================
+# radial decay operators (numpy) -- orthogonal nodal basis (vertex + integrated-Legendre bubbles)
+# ===========================================================================
+def _legval(j, xi):
+    c = np.zeros(j + 1); c[j] = 1.0
+    return np.polynomial.legendre.legval(xi, c)
+
+
+def _radial_eval(P, t):
+    """nodal basis on t = a/r in (0,1]: N_1=t (vertex/trace), N_k=int-Legendre bubble (0 at t=0,1)."""
+    t = np.asarray(t, float)
+    N = np.zeros((P, t.size)); Np = np.zeros((P, t.size))
+    N[0] = t; Np[0] = np.ones_like(t)
+    xi = 2.0 * t - 1.0
+    for k in range(2, P + 1):
+        N[k - 1] = (_legval(k, xi) - _legval(k - 2, xi)) / (2.0 * k - 1.0)
+        Np[k - 1] = _legval(k - 1, xi) * 2.0
+    return N, Np
 
 
 def radial_operators(P, a=1.0, nq=160):
-    """Orthogonal nodal radial decay operators of the static IE (sphere radius ``a``).
-
-    Returns ``(R1, R0, g)``: ``R1`` (P x P) radial stiffness ``int rho_k' rho_l' r^2 dr``, ``R0``
-    (P x P) radial mass ``int rho_k rho_l dr`` in the well-conditioned vertex + integrated-Legendre
-    basis, and the trace vector ``g`` (= e_1).
+    """Radial decay operators (sphere radius ``a``): ``R1`` (P x P) radial stiffness
+    ``int rho_k' rho_l' r^2 dr``, ``R0`` (P x P) radial mass ``int rho_k rho_l dr``, and the trace
+    vector ``g`` (= e_1; only the vertex function is nonzero at the surface).
     """
-    from radia import _radia_pybind as _rp
-    d = _rp._ie_radial_operators(int(P), float(a), int(nq))
-    R1 = np.asarray(d["R1"], float).reshape(P, P)
-    R0 = np.asarray(d["R0"], float).reshape(P, P)
-    g = np.asarray(d["g"], float)
+    x, w = np.polynomial.legendre.leggauss(nq)
+    t = 0.5 * (x + 1.0); w = 0.5 * w
+    N, Np = _radial_eval(P, t)
+    R1 = a * (Np * w) @ Np.T
+    R0 = a * (N / t ** 2 * w) @ N.T
+    g = np.zeros(P); g[0] = 1.0
     return R1, R0, g
 
 
-def dtn_surface_operator(Mtil, Ktil, P, a=1.0, nq=160):
-    """Condensed DtN surface stiffness ``S_Gamma`` (N x N) of the static IE.
-
-    ``Mtil`` / ``Ktil`` are the UNIT-SPHERE surface mass and Laplace-Beltrami matrices (N x N,
-    symmetric).  For a truncation sphere of radius ``a``, ``Mtil = M_physical / a^2`` and
-    ``Ktil = K_physical`` (see :func:`surface_dtn_from_mesh`, which does the scaling).  Builds the
-    P-level tensor blocks ``R1_kl*Mtil + R0_kl*Ktil`` and condenses the radial bubble levels onto
-    the trace.  ``eig(S, Mtil) -> the analytic Steklov ladder (n+1)/a``.
+def dtn_surface_matrix(MS, KS, P, a=1.0, nq=160):
+    """Condensed DtN surface stiffness ``S`` (N x N) from the UNIT-SPHERE surface mass ``MS`` and
+    Laplace-Beltrami ``KS`` (N x N, symmetric).  Builds the P-level tensor blocks ``R1_kl*MS +
+    R0_kl*KS`` and statically condenses the radial bubble levels onto the trace (numpy).  Useful for
+    the discrete Steklov spectrum (``eig(S, MS) -> (n+1)/a``); the production solve keeps the levels
+    explicit (:func:`add_exterior_ie`) and does NOT condense.
     """
-    from radia import _radia_pybind as _rp
-    Mtil = np.ascontiguousarray(Mtil, float)
-    Ktil = np.ascontiguousarray(Ktil, float)
-    N = Mtil.shape[0]
-    if Mtil.shape != (N, N) or Ktil.shape != (N, N):
-        raise ValueError(f"Mtil/Ktil must be square N x N (got {Mtil.shape}, {Ktil.shape})")
-    d = _rp._ie_dtn_operator(Mtil.ravel().tolist(), Ktil.ravel().tolist(),
-                             int(N), int(P), float(a), int(nq))
-    if d["info"] != 0:
-        raise RuntimeError(f"IE condensation LAPACK solve failed (info={d['info']})")
-    return np.asarray(d["S"], float).reshape(N, N)
+    MS = np.ascontiguousarray(MS, float); KS = np.ascontiguousarray(KS, float)
+    Nn = MS.shape[0]
+    R1, R0, _ = radial_operators(P, a, nq)
+    block = lambda k, l: R1[k, l] * MS + R0[k, l] * KS
+    A11 = block(0, 0)
+    if P == 1:
+        return 0.5 * (A11 + A11.T)
+    b = list(range(1, P))
+    A1b = np.hstack([block(0, l) for l in b])
+    Abb = np.vstack([np.hstack([block(k, l) for l in b]) for k in b])
+    S = A11 - A1b @ np.linalg.solve(Abb, A1b.T)
+    return 0.5 * (S + S.T)
 
 
-def surface_dtn_from_mesh(mesh, P, a=1.0, order=None, nq=160):
-    """Build the IE DtN closure on the SPHERICAL boundary of an NGSolve volume ``mesh`` (radius ``a``).
-
-    Assembles the boundary surface mass ``M^S`` and Laplace-Beltrami ``K^S`` (NGSolve, via the
-    tangential projection of the volume H1 gradient trace), restricts to the boundary DOFs, scales to
-    the unit sphere (``Mtil = M^S/a^2``, ``Ktil = K^S``), and condenses the radial DOFs in C++.
-
-    Returns ``(S, bnd)``: the dense DtN surface stiffness ``S`` (n_bnd x n_bnd, the exterior energy to
-    add to the interior system) and the boundary DOF indices ``bnd`` (into the volume H1 space).
-    ``order`` defaults to the mesh's curve order / 2 if available, else 2.  The caller wraps the
-    NGSolve assembly in ``with TaskManager():`` per the lab TaskManager policy.
+# ===========================================================================
+# NGSolve-native coupling: compound space + boundary IE terms + exterior recovery
+# ===========================================================================
+def ie_compound_space(mesh, P, order=2, definedon=None):
+    """Compound FESpace ``[interior H1, S_1, ..., S_{P-1}]`` for the IE: the interior H1 (its boundary
+    trace is radial level 0) plus ``P-1`` boundary-only H1 "bubble" levels on the truncation surface.
+    ``definedon`` restricts the surface levels (default: all boundaries).
     """
     import ngsolve as ng
-    import scipy.sparse as sp
+    if definedon is None:
+        definedon = mesh.Boundaries(".*")
+    Vint = ng.H1(mesh, order=order)
+    Ss = [ng.H1(mesh, order=order, definedon=definedon) for _ in range(P - 1)]
+    return ng.FESpace([Vint] + Ss)
 
-    if order is None:
-        order = 2
-    fes = ng.H1(mesh, order=order)
-    u, v = fes.TnT()
-    n = ng.specialcf.normal(3)
-    bm = ng.BilinearForm(fes, symmetric=True, check_unused=False)
-    bm += u * v * ng.ds
-    bm.Assemble()
-    gu, gv = ng.grad(u).Trace(), ng.grad(v).Trace()
-    gut = gu - (gu * n) * n
-    gvt = gv - (gv * n) * n
-    bk = ng.BilinearForm(fes, symmetric=True, check_unused=False)
-    bk += (gut * gvt) * ng.ds
-    bk.Assemble()
 
-    def _csr(m):
-        r, c, val = m.COO()
-        return sp.csr_matrix((np.asarray(val), (np.asarray(r), np.asarray(c))),
-                             shape=(m.height, m.height))
+def add_exterior_ie(a_bf, X, P, a=1.0, nq=160):
+    """Add the static IE exterior energy to a BilinearForm ``a_bf`` on the compound space ``X``
+    (from :func:`ie_compound_space`).  Appends the boundary integrals
+    ``sum_kl [ (R1_kl/a^2) int_Gamma u_k u_l ds + R0_kl int_Gamma grad_S u_k . grad_S u_l ds ]``
+    (level 0 = the interior trace, levels 1..P-1 = the surface bubbles), so the augmented SPARSE
+    system closes the exterior.  The caller adds the interior physics + RHS to the same ``X``.
+    """
+    import ngsolve as ng
+    R1, R0, _ = radial_operators(P, a, nq)
+    trial = X.TrialFunction(); test = X.TestFunction()
+    n = ng.specialcf.normal(X.mesh.dim)
+    inv_a2 = 1.0 / (a * a)
 
-    bnd_ba = fes.GetDofs(mesh.Boundaries(".*"))
-    bnd = np.array([i for i in range(fes.ndof) if bnd_ba[i]], dtype=int)
-    MS = _csr(bm.mat)[np.ix_(bnd, bnd)].toarray()
-    KS = _csr(bk.mat)[np.ix_(bnd, bnd)].toarray()
-    MS = 0.5 * (MS + MS.T)
-    KS = 0.5 * (KS + KS.T)
-    Mtil = MS / (a * a)        # unit-sphere mass (physical/a^2); Ktil = K^S (a-factors cancel)
-    S = dtn_surface_operator(Mtil, KS, P, a=a, nq=nq)
-    return S, bnd
+    def val(fns, k):
+        return fns[0].Trace() if k == 0 else fns[k]
+
+    def sgrad(fns, k):
+        g = ng.grad(fns[k]).Trace()
+        return g - (g * n) * n        # tangential (surface) gradient; boundary levels already tangential
+
+    for k in range(P):
+        for l in range(P):
+            if R1[k, l] != 0.0:
+                a_bf += (inv_a2 * R1[k, l]) * val(trial, k) * val(test, l) * ng.ds
+            if R0[k, l] != 0.0:
+                a_bf += R0[k, l] * sgrad(trial, k) * sgrad(test, l) * ng.ds
+
+
+def exterior_field(gf, P, a, points):
+    """Evaluate the IE exterior field ``phi(x) = sum_k U_k(s) N_k(a/|x|)`` at exterior ``points``
+    (|x| >= a), where ``U_k(s)`` is level-k of the solved compound GridFunction ``gf`` at the surface
+    point ``s = a x/|x|``.  Returns a 1-D ndarray (one value per point).  This makes the exterior
+    field available EVERYWHERE from the NGSolve solution (the IE is not interior-only).
+    """
+    import ngsolve as ng
+    mesh = gf.space.mesh
+    pts = np.atleast_2d(np.asarray(points, float))
+    out = np.empty(len(pts))
+    for i, x in enumerate(pts):
+        r = float(np.linalg.norm(x))
+        s = x / r * a                          # project onto the truncation sphere (radius a)
+        mp = mesh(float(s[0]), float(s[1]), float(s[2]), ng.BND)
+        Nv, _ = _radial_eval(P, np.array([a / r]))
+        out[i] = sum(float(gf.components[k](mp)) * Nv[k, 0] for k in range(P))
+    return out
