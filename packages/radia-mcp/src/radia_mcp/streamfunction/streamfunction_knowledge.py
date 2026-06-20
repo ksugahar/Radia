@@ -706,7 +706,7 @@ METHOD (reduced scalar potential, mu0 cancels by linearity)
   iron reaction is assembled as A_react and ADDED to the free-space design matrix
   (Ac/Am += reaction) behind --iron-vol, so nothing downstream changes.
 
-VERIFIED (test_streamfunction_iron_golden.py + the DtN demo_oo it was ported
+VERIFIED (test_streamfunction_iron_golden.py + the DtN act8_10_current_sheet_design_matrix it was ported
 from): designing WITH M HITS the target (isolation 1.3e-15) while the free-space
 M MISSES by ~12-13%; iron vs free-space peak_J differs ~3.8% on the full CLI.
 iron_changes_the_design / iron_aware_design / iron_exact_source /
@@ -739,7 +739,7 @@ No-Fallback: --iron-vol and --shield-vol together RAISE (an active shield coil
 is not iron); free-space is the default when neither is given.
 
 See also: 'shielding' (active shield COIL, a different lever), the Kelvin DtN
-demos examples/kelvin_transformation/DtN_spectrum/demo_mm..oo, and
+demos examples/kelvin_transformation/DtN_spectrum/act8_08..act8_10, and
 [[sf-coil-model-current-sheet-vs-dirichlet]].
 """
 
