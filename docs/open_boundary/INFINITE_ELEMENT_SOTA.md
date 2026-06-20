@@ -112,6 +112,11 @@ Kelvin shell is the classical workhorse.)
   (Hohage–Nannen) for proven convergence + resonance use.
 - **Vector / de Rham:** the exact-sequence Hardy-space Maxwell IE (Nannen 2013); `act7_26` is its
   kernel.
+- **Curved geometry (essential for the IE):** the truncation surface MUST use curved (isoparametric)
+  elements — NGSolve `mesh.Curve(p)` / Cubit high-order export; the vector ends carry the cell's Piola
+  map. A faceted surface tilts the decay rays (which follow the surface *normal*) at `O(1/N)` — worse
+  than the `O(1/N²)` area error — so the IE is *more* curved-element-sensitive than a volume FE
+  (`act7_31`; same principle as the lab `mesh.Curve(order)` policy, but it bites harder).
 - **The honest case to build it:** a **homogeneous-exterior, static/low-freq, elongated or planar**
   magnetostatics problem where Kelvin wastes air (sphere-lock) *and* the exterior carries no iron
   (Kelvin's material capability is then moot). On a compact / spherical body, or with an iron
