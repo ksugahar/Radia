@@ -1023,6 +1023,12 @@ def kelvin_transformation(topic: str = "all") -> str:
                                pillars (exterior volume is free, floor=Curve
                                order, p>=n & p-vs-h, optimal R/a~3, corner hp,
                                DoF-cost 1/45; holds in 2D on the -n/R ladder)
+                               + the CLOSED-FORM mesh-adequacy criterion
+                               (source order p*=ceil(ln eps/ln(d_max/R)),
+                               geometry floor (h/R)^2k, eccentric/multi-body,
+                               the A-form centre, the apparatus design calc)
+                               + the non-separable build + DtN->CLN arc
+                               (square C4v / cube O_h, 2D conformal disk)
             "identify"       - Periodic boundary Identify() best practices
             "tips"           - Common mistakes and performance tips
             "robustness"     - Robustness checklist (mesh copy, material scaling,

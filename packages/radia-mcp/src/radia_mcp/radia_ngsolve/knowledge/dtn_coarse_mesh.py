@@ -587,6 +587,27 @@ whose `accurate_band` already covers it -- no field-level mesh-refinement study
 required.  This replaces "refine until the field stops moving" with "resolve the
 DtN modes the source excites."
 
+CLOSED FORM (the two design numbers; full derivation + demos in
+`kelvin_transformation(topic="mesh_control")`): the total Kelvin error factorises
+into a SOURCE side (which element order p) and a GEOMETRY side (which surface mesh h):
+
+    err  ~  max(  (d_max/R)^p   [source],   C*(h/R)^(2k)  [geometry]  )
+
+  - SOURCE: a source at radial distance d from the centre pumps a multipole tower
+    |a_m|/|a_1| = (d/R)^(m-1), so the order-p closure (captures m<=p exactly) needs
+    p* = ceil( ln(eps) / ln(d_max/R) ); several bodies -> the MOST eccentric d_max
+    governs (the ladder is a Gamma property -- a common enclosing sphere is invariant).
+    Compact/centred -> p=1; eccentric -> RE-CENTRE the sphere.  (demos xx12 analytic,
+    xx14 FEM end-to-end -- the exterior field even beats this, ~2*ln(d/R), so p* is a
+    SUFFICIENT/conservative rule.)
+  - GEOMETRY: at p>=n the residual is the curved-sphere floor ~ (h/R)^(2k) (the DtN
+    eigenvalue is an energy functional -> superconverges at TWICE the Curve order k;
+    k=2 suffices, demo xx13).
+  For a balanced winding (reactor/transformer leg) the content is the CURRENT MOMENTS
+  a_m = sum_k I_k z_k^m (no monopole; symmetry selects e.g. odd m), optimal R/a~2.78,
+  a modest p* -- the apparatus design calc, demo xx16.  A linear iron core only
+  rescales a_m, not the geometric decay.
+
 ## 2. Choosing an open-BC method
 
 The table at the bottom of the OVERVIEW ranks methods by which DtN modes they
