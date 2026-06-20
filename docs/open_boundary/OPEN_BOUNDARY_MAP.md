@@ -6,12 +6,48 @@ Radia closes an unbounded exterior several ways — **Kelvin** transformation,
 unrelated, but they are all discretizations or reductions of **one** object: the
 exterior Dirichlet-to-Neumann operator. This document maps them onto the few axes
 that actually select one in practice, with measured anchors reproduced in-repo.
+See **The selector** below for the radia policy (which method when; **IABC is
+retired** as a radia method — kept only as the comparison record).
 
 It is the cross-cutting companion to the two single-method references:
 [`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
 (Kelvin, the **spatial** side) and
 [`docs/cln/CAUER_LADDER_NETWORK.md`](../cln/CAUER_LADDER_NETWORK.md) (CLN, the
 **temporal** side).
+
+---
+
+## 0. The selector (radia open-boundary policy, 2026-06-20)
+
+Radia is **Laplace-kernel / MQS–Darwin** (no full-wave). Within that scope the
+open boundary is picked on two axes — **is the exterior homogeneous, or does it
+contain a material body?** (does the DtN come in closed form, or must Kelvin-FEM
+build it?) × **do you solve once, or evolve in time / couple to a circuit?** (do
+you need CLN temporal reduction on top?):
+
+| | **solve once** (static / single shot) | **transient / repeated / circuit-coupled** |
+|---|---|---|
+| **homogeneous exterior** (free space / layered) | **Kelvin** — build the DtN, solve once (closed-form `−(n+1)/R`) | **exact DtN → CLN** — `√s`-Cauer, exact at `n+1` stages, every multipole `n=1..6` (`act7_20`: beats the impedance-shell route on all 4 axes) |
+| **exterior contains a body** (iron shield, 2nd magnet) | **Kelvin** — mesh the exterior body, solve once | **Kelvin builds a material-aware DtN → CLN reduces it** (Track-B SF-with-iron) |
+
+- **Exterior body ⇒ Kelvin** is *the* reason Kelvin exists: the closed-form DtN
+  symbol assumes a homogeneous / separable exterior, so a material body in the
+  exterior breaks it, and only Kelvin (a genuine compactified exterior FEM) carries
+  it. If the exterior is homogeneous you usually prefer the closed-form DtN.
+- **There is no "high-freq → PML" branch inside radia.** The MQS eddy exterior is
+  *evanescent for every ω* (`√s` diffusion — no propagating regime), so raising ω
+  stays in the Kelvin / DtN-CLN home (`act6_09`: CLN beats even CFS-PML there).
+  **PML is only for genuine wave radiation (Helmholtz) = outside radia's
+  Laplace-kernel scope → that is NGSolve's job, not radia's.** "I need PML" ⇒ "I
+  have left radia's scope."
+- **IABC (absorbing impedance shells) is RETIRED as a radia method** (2026-06-20):
+  the impedance boundary is realised better as *exact DtN → CLN* (top-right cell),
+  and IABC's only niche — high-freq radiation (HOIBC) — is outside radia's scope.
+  There is **no `iabc()` MCP tool**; the exact-impedance / `Zs` → DtN → CLN
+  knowledge moved to `dtn_coarse_mesh(topic="dtn_to_cln")`. The IABC investigation
+  is kept as the **negative-result / comparison** corpus only: the `act7_*` demos +
+  `dtn_coarse_mesh(topic="method_map")`. (The historical map below still analyses
+  IABC as one fixed-error surrogate — that analysis is *why* it was retired.)
 
 ---
 
@@ -208,9 +244,10 @@ then compress it.
 - **Docs:** [`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
   (Kelvin spectral datasheet), [`docs/cln/CAUER_LADDER_NETWORK.md`](../cln/CAUER_LADDER_NETWORK.md)
   (CLN), [`docs/kelvin/KELVIN_TRANSFORMATION.md`](../kelvin/KELVIN_TRANSFORMATION.md).
-- **MCP knowledge:** `dtn_coarse_mesh(topic=...)`, `kelvin_transformation(topic="mesh_control")`,
-  `iabc(topic="overview"|"frequency_domain"|"causality"|"exact_dtn"|"timedomain"|"broadband_design"|"application")`,
-  `mor_cln(...)`.
+- **MCP knowledge:** `dtn_coarse_mesh(topic=...)` — including `topic="dtn_to_cln"`
+  (the exact-impedance / `Zs` → DtN → CLN realisation, relocated 2026-06-20 from the
+  retired `iabc` tool) and `topic="method_map"` (the IABC comparison record) —
+  `kelvin_transformation(topic="mesh_control")`, `mor_cln(...)`.
 - **Demos:** `examples/kelvin_transformation/DtN_spectrum/` — the wave/diffusion
   open-boundary corpus: `act6_10_iabc_time_domain`, `act6_11_exact_dtn_fetd` (exact-DtN FETD), `act6_02_cln_dtn_cauer`
   (Cauer in `√s`), `act6_04_cln_mor_radial_eddy` (CLN MOR of a radial eddy FEM), `act6_05_cln_fetd_reflection`
@@ -225,7 +262,7 @@ then compress it.
 ## 8. The map in one line
 
 > **One operator (`Λ_ext`, reverse-Bessel rational), selected by three axes:**
-> *frequency* (quasi-static → Kelvin / radiating → IABC), *geometry* (sphere-locked
+> *frequency* (quasi-static → Kelvin / radiating → PML/BEM, out of radia's MQS scope), *geometry* (sphere-locked
 > Kelvin / surface-free CLN), and *space-vs-time* (Kelvin **builds** the operator,
 > CLN **reduces** it). The "exactness" of any of them is always relative to a
 > **finite multipole truncation** — there is no free lunch on that axis; the
