@@ -344,6 +344,7 @@ public:
 	void ShowInteractMatrix(int InteractElemKey);
 	int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF);
 	int HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF);  // Densify actual HACApK ACA+ operator (validation)
+	int GetLoopBasis(int InteractElemKey, double* pL, int* pNLoop, int* pDOF);  // yano-MSC cell-graph cycle (loop) basis
 	double HLUTestOnHACApK(int InteractElemKey);  // Phase 4: H-LU smoke test on real HACApK tree (returns max rel err vs MatVec round-trip)
 	int HLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out);  // Phase 4 debug: materialize post-convert tree
 	void ShowInteractVector(int InteractElemKey, char* FieldVectID);
