@@ -31,6 +31,82 @@ All numbers below are reproduced by the demos and locked by
 
 ---
 
+## 0. radia's SF solver vs NESCOIL / REGCOIL / FOCUS -- a superset
+
+radia ships the **same object** as these codes (the winding-surface current
+potential `psi`, `K = n x grad psi`) through
+[`radia.stream_function`](../../src/radia/stream_function.py) +
+[`calc_streamfunction.py`](../../src/radia/panels/calc_streamfunction.py). The
+honest positioning is **design at parity, deliverable + physics a strict
+superset**:
+
+| axis | radia-SF | NESCOIL / REGCOIL / FOCUS |
+|------|----------|---------------------------|
+| **Design** (`B.n` / current potential) | yes -- `B.n` ~2e-9 on producible targets | yes (the reference) |
+| **Scale / method** | dense Biot-Savart **ACA**-compressed (H-matrix) + **ridge-TSVD** pseudo-inverse on **any meshed** surface | dense Fourier least-squares on a parameterised torus |
+| **Optimise** | fast (~50 us) folded-TSVD re-solve -> **multi-objective Pareto** over `alpha` **and** winding-surface **shape** (+ sheet-metal deform) | single-`alpha` L-curve |
+| **Deliverable** | `psi` -> single-stroke wire -> sheet-metal distort -> **STEP CAD** -> **PEEC** circuit model | stop at `psi` |
+| **Physics** | **iron** yoke/shield/core (Kelvin-FEM `M = M_free + M_react`, `--iron-vol`) | free-space (vacuum) only |
+
+So **REGCOIL is a special case** (vacuum, toroidal, design-only) of radia's SF:
+design at parity, deliverable + iron a superset, and a complete win for
+single-conductor coils (MRI gradient/shim, induction heating -- the same
+current-potential math). The design-parity claim is exactly what sections 1-4
+and A-D below demonstrate; the four extra axes are:
+
+- **Scale / method -- ACA + ridge-TSVD.** The design matrix is the dense
+  Biot-Savart coupling compressed by ACA (an H-matrix) and inverted by a ridge
+  (Tikhonov) truncated-SVD pseudo-inverse ([api.md](api.md),
+  [regularization.md](regularization.md)). The ridge **is** REGCOIL's `lambda`,
+  but the ACA compression + the FE-direct surface make it a *scalable*
+  regularised least-squares on an **arbitrary meshed** winding surface, not a
+  dense Fourier least-squares on a parameterised torus.
+- **Optimise -- fast TSVD -> Pareto + surface deformation.** The TSVD core is
+  folded once, so each regularised re-solve is a ~50 us `k x k` core solve
+  (`RegularizedTSVD`, `demo_pareto_tikhonov_aca.py`). That cheap re-solve makes a
+  whole front affordable, so radia sweeps a multi-objective Pareto over **both**
+  the regularisation `alpha` (misfit-vs-energy, plus an L-inf IRLS
+  misfit-vs-peak-current front) **and** the winding-surface **shape**
+  (`geometry`/geom_scale lever + the sheet-metal `deform`) -- richer than a
+  single-`alpha` L-curve. See [regularization.md](regularization.md) +
+  [deformation.md](deformation.md).
+- **Deliverable -- design-to-manufacture.** NESCOIL/REGCOIL/FOCUS stop at `psi`.
+  radia continues: contours -> single-stroke wire (grad-`psi` winding
+  orientation, so `l>=2` saddle shims chain without the common series current
+  cancelling) -> sheet-metal distort -> STEP CAD (OCC `WriteStep`) -> PEEC. The
+  PEEC step is a full circuit-extraction **solver** (`L, R, C, M` + SPICE
+  netlist, MMM coupling), not just an inductance number. See
+  [single_stroke.md](single_stroke.md).
+- **Physics -- iron.** These codes are all free-space (vacuum Biot-Savart).
+  radia's material-aware kernel (Kelvin-FEM DtN transfer `M = M_free + M_react`,
+  the `--iron-vol` path) designs coils **with** iron yoke/shield/core -- domains
+  REGCOIL structurally cannot enter.
+
+**Honest nuance.** The single-stroke win is decisive for single-conductor coils.
+Stellarator **modular** coils are intentionally separate coils, so "one wire" is
+not their manufacturing step; there radia still adds STEP CAD + PEEC `L` beyond
+REGCOIL's `psi`, and its distort is analogous to FOCUS filament-shape
+optimisation. Open gaps: no SIMSOPT/STELLOPT Stage-1+2 integration; a
+head-to-head at community mode counts is unmeasured.
+
+### Earned by measurement (three goldens, Repository-First)
+
+| golden | what it locks | measured |
+|--------|---------------|----------|
+| (a) [`test_regcoil_parity_deliverable_golden.py`](../../tests/panels/test_regcoil_parity_deliverable_golden.py) | vacuum **parity** + the deliverable REGCOIL lacks | `B.n` rel **4.9e-9**, STEP **954 kB**, PEEC `L` **3.09 uH** from one run |
+| (b) [`test_regcoil_iron_differentiator_golden.py`](../../tests/panels/test_regcoil_iron_differentiator_golden.py) | the **iron** differentiator | free-space **misses >20 %**, material-aware **hits <1e-2** (ratio >10x) |
+| (c) [`test_streamfunction_manufacture_e2e_golden.py`](../../tests/panels/test_streamfunction_manufacture_e2e_golden.py) | **manufacture end-to-end** | target `x` -> `psi` **0.042 %** -> single-stroke wire **0.197 %** -> distort **0.175 %** (no regress) -> STEP -> PEEC `L` **81.8 uH** |
+
+The driver for (a) is
+[`examples/stream_function/demo_regcoil_parity_deliverable.py`](../../examples/stream_function/demo_regcoil_parity_deliverable.py)
+(it reuses the `demo_regcoil_fusion` helpers + `calc_streamfunction`'s
+`_write_step_polylines` / `_peec_inductance`); (b) reuses the Kelvin-DtN
+`act8_03_general_iron_design` bridge; (c) runs the production
+`calc_streamfunction.py --method manufacture ... --distort --step-output --peec`
+on the cylinder + DSV fixture.
+
+---
+
 ## 1. The forward map is exact
 
 Two **producible** targets -- a uniform vertical field (a PF / equilibrium /
