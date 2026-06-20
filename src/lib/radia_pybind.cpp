@@ -93,6 +93,7 @@ extern "C" {
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
+#include "rad_infinite_element.h"// Static infinite-element DtN surface operator (C++ port of act7_32/33)
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
 
 namespace py = pybind11;
@@ -2916,6 +2917,34 @@ std::vector<double> HDivDemagFieldBatch(const std::vector<double>& vol, const st
 } // namespace radia_hdivvim
 
 // ============================================================================
+// Infinite-element (static IE) DtN surface operator -- C++ port of acts7_32/7_33.
+// Thin bindings for golden testing: the radial decay operators (R1,R0,g) and the
+// condensed DtN surface stiffness S_Gamma from the caller-supplied (NGSolve) unit-
+// sphere surface mass Mtil and Laplace-Beltrami Ktil (flat row-major N x N).
+// ============================================================================
+namespace radia_ie_bind {
+py::dict RadialOperators(int P, double a, int nq) {
+    std::vector<double> R1, R0, g;
+    rad_ie::RadialOperators(P, a, R1, R0, g, nq);
+    py::dict d;
+    d["P"] = P; d["a"] = a;
+    d["R1"] = R1;   // row-major P x P
+    d["R0"] = R0;   // row-major P x P
+    d["g"] = g;     // length P (= e_1 for the nodal basis)
+    return d;
+}
+py::dict DtNSurfaceOperator(const std::vector<double>& Mtil, const std::vector<double>& Ktil,
+                            int N, int P, double a, int nq) {
+    std::vector<double> S;
+    int info = rad_ie::DtNSurfaceOperator(Mtil.data(), Ktil.data(), N, P, a, S, nq);
+    py::dict d;
+    d["N"] = N; d["P"] = P; d["a"] = a; d["info"] = info;
+    d["S"] = S;     // row-major N x N (condensed DtN surface stiffness)
+    return d;
+}
+} // namespace radia_ie_bind
+
+// ============================================================================
 // Module Definition
 // ============================================================================
 
@@ -2951,6 +2980,30 @@ PYBIND11_MODULE(_radia_pybind, m) {
               factors -- O(n_charge^2 nsub^6), golden sizes only).  Returns a dict with nf, n_cell,
               n_charge, n_bnd, and the row-major flat lists N (nf x nf), B (n_charge x nf), M_mass
               (nf x nf).  For testing: symmetry, loops field-null (ker B), demag factors (N, M_mass).
+          )pbdoc");
+
+    // ========================================================================
+    // Infinite-element (static IE) DtN surface operator -- C++ port of act7_32/33
+    // ========================================================================
+    m.def("_ie_radial_operators", &radia_ie_bind::RadialOperators,
+          py::arg("P"), py::arg("a") = 1.0, py::arg("nq") = 160,
+          R"pbdoc(
+              Orthogonal nodal radial decay operators of the static infinite element (a = radius).
+              Returns a dict with row-major P x P R1 (radial stiffness int rho_k' rho_l' r^2 dr) and
+              R0 (radial mass int rho_k rho_l dr) in the well-conditioned vertex+integrated-Legendre
+              basis (NEVER naive monomials), and the trace vector g (= e_1).  Matches the Python
+              prototype radial_RR (examples/.../act7_32_ie_3d_assembly_validation).
+          )pbdoc");
+    m.def("_ie_dtn_operator", &radia_ie_bind::DtNSurfaceOperator,
+          py::arg("Mtil"), py::arg("Ktil"), py::arg("N"), py::arg("P"), py::arg("a") = 1.0,
+          py::arg("nq") = 160,
+          R"pbdoc(
+              Condensed DtN surface stiffness S_Gamma (row-major N x N) of the static infinite element
+              from the caller-supplied (NGSolve) unit-sphere surface mass Mtil and Laplace-Beltrami
+              Ktil (flat row-major N x N).  Builds the P-level tensor blocks R1_kl*Mtil + R0_kl*Ktil and
+              statically condenses the radial bubble levels onto the trace.  eig(S_Gamma, Mtil) -> the
+              analytic Steklov ladder (n+1)/a.  C++ port of act7_32 ie_surface_operator; 'info' is the
+              LAPACK condensation-solve status (0 = ok).
           )pbdoc");
 
     m.def("_hdiv_tri_potential", &radia_hdivvim::TriPotentialProbe, py::arg("V"), py::arg("r"),
