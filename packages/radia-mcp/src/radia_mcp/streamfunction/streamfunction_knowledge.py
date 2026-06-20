@@ -96,6 +96,11 @@ TOPIC MAP  (query: streamfunction("<topic>"))
   kernel_agnostic   the callback matrix-entry contract (coils OR magnets)
   regularized       regularisation menu + folded Tikhonov closed form
   pareto            (homogeneity, peak-J) Pareto front + 4 levers + sheet-metal
+  material_aware    SF design WITH IRON (--iron-vol): Kelvin-FEM reaction folded
+                    into the whole pipeline; obs-adjoint; exact-quad source
+  low_turn          low/many-turn discrete refinement: greedy constructive
+                    (--greedy-turns, monotone) + connector-aware; --pin-tiling
+                    driven array; --optimize-levels; --distort; single-pass
   single_stroke     one-wire chain, FE-direct on arbitrary formers, wire 板金
   cmaes             SA-25-020 CMA-ES outer loop
   performance       ACA+ amortisation numbers
@@ -144,6 +149,12 @@ both, with THREE modes (--method):
   manufacture  psi iso-contours -> orientation-consistent equal-current turns
                -> field-aware single-stroke wire -> (sheet-metal --distort)
                -> CAD STEP (--step-output) -> PEEC L,R (--peec).
+               TURN-COUNT / few-turn levers (--greedy-turns greedy constructive,
+               --pin-tiling driven array, --optimize-levels): see 'low_turn'.
+
+MATERIAL-AWARE design (iron yoke / shield / core): --iron-vol folds a Kelvin-FEM
+iron reaction into design + pareto + manufacture so the whole pipeline accounts
+for the iron.  See the 'material_aware' topic.
 
 I/O: --coil-vol (a STANDALONE 2D surface .vol; psi = H1 on it, Setup-B
 ``definedon=Boundaries('.*')`` + ``grad(v).Trace()`` + ``ds``), --eval-vol
@@ -645,8 +656,170 @@ memory/clebsch_cohomology_streamfunction_unification.md (full record).
 """
 
 
+SF_MATERIAL_AWARE = r"""
+================================================================
+SF coil design WITH MAGNETIC MATERIAL (iron yoke / shield / core)
+================================================================
+The free-space Biot-Savart kernel BREAKS the moment iron is in the picture: a
+coil designed in vacuum produces the wrong field once a yoke / shield / core
+re-routes the flux.  ``--iron-vol`` makes the ENTIRE existing pipeline
+(design / pareto / manufacture / single-stroke / distort) MATERIAL-AWARE, so the
+designed psi already accounts for the iron reaction.  (This was the Track-B
+"SF with iron" handoff goal; now shipped in the production solver.)
+
+CLI (calc_streamfunction.py):
+  --iron-vol IRON.vol     a Kelvin open-boundary FE mesh of the iron region
+                          (materials: the iron block + air + a `kelvin` shell;
+                          Periodic kelvin_int<->kelvin_ext + a GND vertex --
+                          the same .vol convention as the Kelvin DtN demos)
+  --mu-r MU               iron relative permeability (linear)
+  --iron-mat NAME         iron material label in the .vol (default "iron")
+  --iron-exact-source     [OPT-IN] evaluate the basis-current source at the iron
+                          QUADRATURE points (FE-direct, no P1-vertex interp)
+  --iron-quad-order N     quadrature order for --iron-exact-source
+
+METHOD (reduced scalar potential, mu0 cancels by linearity)
+-----------------------------------------------------------
+  H = H_s - grad(Omega)
+    H_s   = Biot-Savart of the SF basis current K_j = n x grad(phi_j)
+    Omega = the IRON REACTION, a Kelvin open-boundary FE solve driven by H_s
+  The design transfer splits  M = M_free + M_react ; design = invert M.  The
+  iron reaction is assembled as A_react and ADDED to the free-space design matrix
+  (Ac/Am += reaction) behind --iron-vol, so nothing downstream changes.
+
+VERIFIED (test_streamfunction_iron_golden.py + the DtN demo_oo it was ported
+from): designing WITH M HITS the target (isolation 1.3e-15) while the free-space
+M MISSES by ~12-13%; iron vs free-space peak_J differs ~3.8% on the full CLI.
+iron_changes_the_design / iron_aware_design / iron_exact_source /
+iron_missing_material_raises are golden-locked.  (commits: iron 3f16aff5,
+obs-adjoint 7baa5ae9, exact-source 7603e053.)
+
+SCALABILITY -- obs-adjoint (commit 7baa5ae9)
+--------------------------------------------
+The reaction is built with ONE back-substitution per OBS ROW (not one per
+psi-DOF): A_react = einsum(E_iron, B_iron), E_iron = D^T Ainv G^T read on the
+iron source DOFs, G[row] = the -grad(.)(obs)[comp] covector (element-local basis
+grads via mesh(*p).nr -> ElementId(VOL,nr)).  Verified BIT-IDENTICAL to the
+forward per-DOF loop (1.1e-14); the cap rose 3000 -> 20000 DOF (now B_iron-memory
+bound, not solve-bound).  --iron-exact-source uses the adjoint identity
+A_react[i,j] = (mu_r-1) integral_iron B_s^j . grad(X_i) with B_s^j at the
+quadrature points; exact vs P1 differ ~14% on a coarse shell (the removed
+source-interpolation plateau).  Default stays the fast P1 (opt-in exact).
+
+WHY NOT FMM FOR THE DESIGN MATRIX (recurring question)
+------------------------------------------------------
+FMM (ngsolve.bem.BiotSavartCF) takes FILAMENT segments.  The SF DESIGN matrix
+needs the field PER psi-DOF, and each basis current n x grad(phi_j) has NO clean
+filament representation, so FMM CANNOT assemble the design matrix.  FMM only
+fits a KNOWN / finished psi (filament-izable into contour loops) for apply-once
+field eval (viz / verify / a fixed source).  The SF design matrix is FE-direct
+Biot-Savart (O(N^2)) + ACA+TSVD (HACApK) compression -- this is exactly why the
+accuracy upgrade became exact-quad-adjoint, NOT FMM.
+
+No-Fallback: --iron-vol and --shield-vol together RAISE (an active shield coil
+is not iron); free-space is the default when neither is given.
+
+See also: 'shielding' (active shield COIL, a different lever), the Kelvin DtN
+demos examples/kelvin_transformation/DtN_spectrum/demo_mm..oo, and
+[[sf-coil-model-current-sheet-vs-dirichlet]].
+"""
+
+
+SF_LOW_TURN = r"""
+================================================================
+LOW-TURN / MANY-TURN MANUFACTURE -- discrete refinement of psi
+================================================================
+CONCEPTUAL FRAME (user-approved): the stream function is the CONVEX CONTINUOUS
+relaxation of the coil; a finite-turn coil is that relaxation PLUS discrete
+ROUNDING / REFINEMENT (the topology-opt SIMP analogy); single-pass (one wire)
+is the N=1 extreme (path optimisation).  So "few turns" is not a separate
+paradigm -- it is the discrete back-end that completes SF for ALL turn counts.
+
+(1) EQUAL-deltaI CONTOURS  (default, --nlevels N)
+    N iso-contours at equal psi increments = N equal-current turns; the
+    asymptotic large-N continuum.  KEY PITFALL: the contour-quantise turn count
+    is NON-MONOTONIC (N=2 equal-current residual 0.24 can BEAT N=20's 0.43), so
+    a "bisect for the minimum N" search is UNSOUND -- use greedy (3) for a
+    monotone min-turns answer.
+
+(2) --optimize-levels  (commit f9a9121a)
+    Optimise the N ordered contour LEVELS (vs the uniform equal-deltaI default)
+    to minimise the EQUAL-CURRENT discrete-loop residual.  Coordinate descent on
+    the ordered levels (each 1-D bounded between its neighbours, per-level field
+    cached); keeps clean, manufacturable contours.  Gain (nlevels=5, Gx):
+    0.68->0.48 .. 0.77->0.24.  Complements --distort (position) + --chain.
+
+(3) --greedy-turns N  (greedy constructive, the MONOTONE low-turn strategy;
+    commit 39780894)
+    "Put up a pin, lay the next turn where it helps most."  Matching pursuit with
+    a COMMON series current: each step adds the candidate loop (with sign) that
+    best ALIGNS the unit combined field with the target.  MONOTONE by
+    construction -> the rms-vs-turns trace directly gives the fewest turns for
+    any spec.  --greedy-target R stops once the residual <= R.
+      --greedy-dict {contour, pin, bubble}
+        contour : dense psi iso-contour loops (the manufacturable default)
+        pin     : ON-SURFACE k-ring loops at surface pins (mesh verts at graph
+                  distance k, angle-ordered in the tangent plane; k=1 1-ring,
+                  k=2,3 adaptive size)
+        bubble  : bubble-packed pins, density ~ |grad psi| (= the (4) dictionary)
+      --greedy-connector-weight w   (commit 9fd546e1)
+        CONNECTOR-AWARE selection: score = field_residual + w * gap/coil_diag,
+        gap = nearest distance from the candidate's centroid to a loop already
+        laid (0 for the first/stacked turn).  Keeps only field-improving turns
+        so the trace stays MONOTONE; biases toward SHORT single-stroke connectors
+        ("rungs") -> a manufacturable wire.  Verified: w=0.6 cuts connector
+        length 0.502->0.447 m at an unchanged field residual.  w=0 (default) =
+        pure-field.
+      --greedy-plot p.png   turn-budget UI: the monotone rms-vs-turns curve +
+        the --greedy-target spec line + the min-turns mark (no in-figure title).
+    HONEST FINDING: greedy with ONE common current SATURATES fast (single-
+    direction alignment).  The pin dictionary's poor chained wire_homo (~0.98 vs
+    contour ~0.28) is from chaining FEW ISOLATED loops (long connectors), NOT
+    loop size -- connector-aware (w>0) is the fix; the contour dictionary stays
+    the manufacturable low-turn choice.
+
+(4) --pin-tiling  (dense bubble-tiling pin coil; commit 9fd546e1)
+    Equal-current k-ring loops packed over the surface with DENSITY proportional
+    to |K| = |grad psi| (Hirahatake/Noguchi/Igarashi/Yamashita bubble system,
+    clearance r ~ 1/sqrt|K|, k bisected to --pin-tiling-pins) and each loop sized
+    to its bubble (--pin-tiling-frac).  HONEST REGIME (reported in the result +
+    pin_tiling_note): isolated equal-current bubble loops reproduce the target
+    under INDEPENDENT currents (loops_homogeneity_rms ~ 4.7e-15 -- the driven pin
+    / shim ARRAY regime) but NOT as one series wire (wire_homogeneity_rms ~ 0.85),
+    because isolated loops do NOT tile-cancel into the surface current K the way
+    psi iso-contours do.  USE --pin-tiling for a DRIVEN-ARRAY layout (shim /
+    matrix coil, independent currents); use iso-contours (default) or
+    --greedy-turns for a single wound wire.
+
+(5) --distort  (sheet-metal WIRE distortion; already shipped)
+    Bend the ONE chained single-stroke wire (psi / levels fixed, one current)
+    against the ACTUAL discrete-wire Biot-Savart to cancel the single-stroke
+    residual without extra feeds.  Measured: plane 12290->340 ppm; cylinder Gx
+    8.5-9.3%->1.4%; sphere Z2 4.3%->0.36%.  (See 'single_stroke'.)
+
+(6) SINGLE-PASS (N=1 extreme)  -- demos sp1/sp2/sp3
+    Inverse design through the iron-aware map (sp1); WITH feed leads at a
+    near-coil workpiece (sp2, IH geometry -- lead field is first-order); Fourier
+    lead compensation is FUNDAMENTALLY LIMITED (sp3: 46%->39%) -> geometric
+    cancellation (bifilar / coaxial leads) or MATERIAL (flux concentrator over
+    the leads, via --iron-vol) is the lever, not coil reshaping.
+
+Metrics in the manufacture result: homogeneity_rms (continuous psi design ref),
+loops_homogeneity_rms (N separate turns, independent currents -- best
+discretisation / driven-array regime), wire_homogeneity_rms (single-stroke one
+series current -- the delivered wire; the primary `rms`).  See 'panel' for
+--chain / --confine and the connector ("rung") physics.
+
+Goldens: test_streamfunction_greedy_golden.py (contour/pin/target/plot +
+connector-aware), test_streamfunction_pin_tiling_golden.py (array regime /
+density / bubble dict), test_streamfunction_levels_golden.py.
+"""
+
+
 TOPICS = {
     "overview": "SF coil-design framework + pipeline + topic map (this server's front door)",
+    "material_aware": "SF coil design WITH iron (--iron-vol): Kelvin-FEM reaction folded into the whole pipeline, obs-adjoint scalability, exact-quad source, why-not-FMM",
+    "low_turn": "low/many-turn manufacture: greedy constructive (--greedy-turns, monotone) + dicts contour/pin/bubble + connector-aware + turn-budget plot; --pin-tiling driven array; --optimize-levels; --distort; single-pass",
     "harmonics": "spherical-harmonic target (--target-harmonic Z2/X/..) + achieved-field (l,m) decomposition: purity / contamination (MRI gradient/shim basis)",
     "shielding": "active shielding (--shield-vol): primary+shield joint design (Turner 1986), ~86x stray reduction; coverage-is-everything lesson",
     "panel": "the design/pareto/manufacture PANEL + calc_streamfunction.py CLI",
@@ -698,6 +871,19 @@ def get_streamfunction_documentation(topic: str = "overview") -> str:
              "flux_line", "flux_lines", "bubble", "bubble_system",
              "cross_codebase", "validation_panel", "chain"):
         return SF_PANEL
+    if t in ("material_aware", "material", "iron", "iron_vol", "iron_aware",
+             "with_iron", "yoke", "core", "shield_iron", "reaction",
+             "iron_reaction", "kelvin_reaction", "obs_adjoint", "exact_source",
+             "iron_exact_source", "mu_r"):
+        return SF_MATERIAL_AWARE
+    if t in ("low_turn", "low_turns", "few_turn", "few_turns", "turn_count",
+             "turns", "greedy", "greedy_turns", "greedy_dict", "greedy_target",
+             "greedy_plot", "greedy_connector", "connector_aware", "connector",
+             "pin", "pin_tiling", "pin_coil", "bubble", "bubble_tiling",
+             "shim_array", "driven_array", "optimize_levels", "level_opt",
+             "discrete_refinement", "single_pass", "one_pass", "1pass",
+             "distort", "sheet_metal_wire"):
+        return SF_LOW_TURN
     if t in ("harmonics", "harmonic", "spherical_harmonic", "spherical_harmonics",
              "spherical", "solid_harmonic", "solid_harmonics", "target_harmonic",
              "gradient", "gradients", "shim", "shims", "purity", "contamination",
