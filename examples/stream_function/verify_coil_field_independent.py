@@ -45,7 +45,8 @@ sys.path.insert(0, _SRC)
 from radia.panels.calc_streamfunction import (         # noqa: E402
     _build_problem, _solve_and_metrics, _surface_triangles, _char_len,
     _contour_levels, _contour_segments, _segs_to_polylines,
-    _loop_field_signs, _close_loop, _segment_field_B, _best_fit_current,
+    _build_gradpsi_kdt, _gradpsi_signs, _close_loop, _segment_field_B,
+    _best_fit_current,
 )
 
 
@@ -84,8 +85,9 @@ def _design_loops(coil_vol, eval_vol, target_cf, order, nlevels,
     for lev in _contour_levels(psi_v, nlevels):
         loops.extend(_segs_to_polylines(
             _contour_segments(verts, psi_v, tris, lev), tol))
-    _fields, signs = _loop_field_signs(loops, P["mpts"], P["Bm"],
-                                       P["vector_b"])
+    _kdt, _tK = _build_gradpsi_kdt(verts, psi_v, tris)        # grad-psi winding
+    _fields, signs = _gradpsi_signs(loops, _kdt, _tK, P["mpts"], P["vector_b"],
+                                    P["Bm"])
     loops_closed = [_close_loop(p) for p in loops]
     n_open = sum(1 for p in loops
                  if np.linalg.norm(p[0] - p[-1]) > 1e-9)

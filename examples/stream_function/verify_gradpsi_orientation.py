@@ -107,7 +107,9 @@ def run_target(cs, coil, evalv, name, target_cf, nlevels=20):
     den = float(np.linalg.norm(Bm)) + 1e-30
     fields = [cs._wire_field_flat(cs._close_loop(p), mpts, vb, 1.0) for p in loops]
 
-    _, signsA = cs._loop_field_signs(loops, mpts, Bm, vb)
+    # (A) the OLD sign(f.B) scheme, inlined (it is no longer a production
+    # function -- run_manufacture now uses the grad-psi winding, scheme B)
+    signsA = np.array([1.0 if (f @ Bm) >= 0.0 else -1.0 for f in fields])
     GA = np.sum([s * f for s, f in zip(fields, signsA)], axis=0)
     rA = float(np.linalg.norm(cs._best_fit_current(GA, Bm) * GA - Bm) / den)
 
