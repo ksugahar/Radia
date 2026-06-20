@@ -29,10 +29,14 @@ cannot):
   NGSolve; the arbitrary-shape / iron-exterior DtN matrix and its Steklov ladder
   (point-group split: cube `O_h`, square `C4v`). `band_cln_fit(...)` reduces it.
 
-> **Honest provenance:** material-in-the-exterior Kelvin is **classical**
-> (Freeman-Lowther 1988/89; FEMM ships it for iron shields). The plausibly-novel
-> part is the *fusion* — the Kelvin material-aware DtN as an **inverse-design**
-> kernel (the SF-with-iron line) — not the open-boundary use here.
+> **Honest provenance (3 layers):** Kelvin-with-air-exterior = Freeman-Lowther
+> 1988/89 (FEMM); transforming `σ` under a conformal map = transformation optics /
+> Ward-Pendry 1996 (DC-`σ` cloaks) — both **classical**. Sugahara's own *validated
+> fusions* are the contributions: (i) Kelvin inversion as an exact open boundary with
+> the **`σ`-conformal** transform so a **conductor crosses the truncation**,
+> ECT-validated (IEEE Magnetics 2022 — the basis for the `(a/r)⁴ σ` / `(a/r)² μ`
+> weights used here); (ii) the Kelvin material-aware DtN as an inverse-design kernel
+> (SF-with-iron). Full record: MCP `kelvin_transformation(topic="material_exterior")`.
 
 ## Files
 

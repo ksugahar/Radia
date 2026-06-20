@@ -56,10 +56,15 @@ you need CLN temporal reduction on top?):
     Kelvin-FEM (`kelvin_fem_radial_dtn`, pure numpy) BUILDS the DtN with no DC floor;
     `kelvin_dtn_matrix` + `steklov_spectrum` (NGSolve) build an arbitrary-shape /
     iron-exterior DtN whose Steklov ladder is point-group-split (cube O_h, square C4v),
-    reduced by `band_cln_fit`. **Honest provenance:** material-in-exterior Kelvin is
-    **CLASSICAL** (Freeman-Lowther 1988/89; FEMM); the plausibly-novel part is the
-    *fusion* (Kelvin material-aware DtN as an inverse-design kernel — the SF-with-iron
-    line, not the open-boundary use). Goldens `tests/open_boundary/`, usage `examples/open_boundary/`.
+    reduced by `band_cln_fit`. **Honest provenance (3 layers):** Kelvin-with-air-exterior
+    = Freeman-Lowther 1988/89 (FEMM); transforming `σ` under a conformal map =
+    transformation optics / Ward-Pendry 1996 (DC-`σ` cloaks) — both **classical**.
+    Sugahara's OWN *validated fusions* are the contributions: (i) Kelvin inversion as an
+    exact open boundary with the **`σ`-conformal** transform so a **conductor crosses the
+    truncation**, ECT-validated (IEEE Magnetics 2022 — the basis for this module's
+    `(a/r)⁴ σ` / `(a/r)² μ` weights); (ii) the Kelvin material-aware DtN as an
+    inverse-design kernel (SF-with-iron, conf ~0.83). Full record: MCP
+    `kelvin_transformation(topic="material_exterior")`. Goldens `tests/open_boundary/`, usage `examples/open_boundary/`.
 
 ### Is it "better than PML"? — three senses of *superior* (be precise)
 
