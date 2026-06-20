@@ -91,6 +91,11 @@ Kelvin shell is the classical workhorse.)
 - **The de Rham static kernel is verified twice** — sympy (`act7_26`) and a Mathematica twin
   (`radia_mcp/.../basis_functions/infinite_element_derham.wls`) — the low-order static analog of
   Nannen 2013.
+- **The static de Rham HIGH-ORDER IE is completed** (`act7_29`): the exact sequence holds at
+  arbitrary radial order, the orthogonal basis bounds conditioning in *every* form end (scalar-H1
+  `10→4e9`→`2→339`, vector-L2 `19→1.5e10`→`3→15` for `P=2..8`), and the DtN is spectral
+  (`n≤P−1`) — a usable, arbitrary-order, exact-sequence exterior element (the static kernel of
+  Nannen 2013; C++/3-D port is downstream).
 
 ## 5. Build decision for Radia (Gate 2 / Gate 3 spec)
 
