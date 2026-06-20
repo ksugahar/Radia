@@ -376,8 +376,9 @@ per-element each):
 
   Region                              | Behaviour
   ------------------------------------|----------------------------
-  Low / medium I (1 -- 200 A) all f   | converged 6-13 iter (median 8)
-  I = 500 A, f = 10 kHz               | converged 6 iter
+  Bulk of low / medium I (47 of 49)   | converged 6-13 iter (median 8)
+  I = 200 A, f = 500 kHz              | converged 26 iter (outlier)
+  I = 500 A, f = 10 kHz               | converged 25 iter (outlier, max-gap case)
   I = 500 A, f = 20 kHz               | stall (iter=30 cap, conv=False)
   I = 500 A, f = 50 kHz               | stall
   I = 500 A, f = 100 kHz              | stall
