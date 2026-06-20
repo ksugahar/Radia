@@ -2600,12 +2600,12 @@ Delta-DoF ~ 58 buys an open-boundary error ~ 1/45 of the interior FEM error.
     there, so a nodal SCALAR (Omega / phi) FEM is benign.  Only an EDGE-element
     A-formulation sees a singular tensor material at the center -- then use a
     center-less DtN (FEM-BEM) that never creates the center node.  MEASURED
-    (demo_xx15_aform_center_singularity.py): the scalar weight mu'=(R/rho')^2
+    (act3_04_aform_center_singularity.py): the scalar weight mu'=(R/rho')^2
     DIVERGES (pinned by one GND node, benign), the A-form nu'=(rho'/R)^2 VANISHES
     (zero curl-curl stiffness, no single node to pin -- the gauge null space + weak
     center edges are what the center-less route sheds); the center carries NO DtN
     physics (field-energy fraction in [0,eps] -> 0 for both), so a center-less DtN
-    drops nothing.  (demo_j confirms the volume A-form still works on a coarse mesh
+    drops nothing.  (act3_03_vector_dtn confirms the volume A-form still works on a coarse mesh
     with the gauge mass-reg; the center-less FEM-BEM is the robust route at scale.)
 
 ## 5. Adaptive refinement
@@ -2619,7 +2619,7 @@ INTERIOR / corners, never the exterior air.
 Two demos in examples/kelvin_transformation/DtN_spectrum/ reproduce the two
 headline claims on a unit sphere (mode n=2, p=3 >= n, R=1):
 
-`kelvin_exterior_mesh.py` -- refining the exterior VOLUME does not help; only
+`act2_09_exterior_mesh.py` -- refining the exterior VOLUME does not help; only
 the Gamma GEOMETRY does:
   - AFFINE ball (straight facets, Gamma geometry frozen): the volume solution is
     the EXACT degree-n polynomial on every mesh -- ||u_h - poly|| = 8.1e-16 ...
@@ -2631,7 +2631,7 @@ the Gamma GEOMETRY does:
     and 1.8e-8 with refinement.  Curving Gamma is the efficient knob; refining
     the air is not.
 
-`floor_vs_curve.py` -- the 5-6 digit floor IS the Curve (isoparametric
+`act2_03_floor_vs_curve.py` -- the 5-6 digit floor IS the Curve (isoparametric
 geometry) order, at FIXED coarse maxh=0.5 and FIXED p>=n; sweeping ONLY the
 Curve order k:
   - n=2,p=3:  k=1: 1.3e-2,  k=2: 3.8e-4,  k=3: 1.3e-5  (then ~1e-5, saturated)
@@ -2641,7 +2641,7 @@ Curve order k:
   floor saturates ~1e-5 (k>=3, even slightly non-monotonic) -- push it lower by
   refining the Gamma SURFACE mesh, not the volume.
 
-`p_vs_h_study.py` -- p>=n is a HARD threshold, and p beats h by orders of
+`act0_02_p_vs_h_study.py` -- p>=n is a HARD threshold, and p beats h by orders of
 magnitude per DOF (coarse maxh=0.5 p-path vs order-1 h-path):
   - n=2: p=1 (<n) rel_err 0.95 [mode NOT captured] -> p=2 (=n) 2.5e-3 -> p=3
     1.2e-5 (ndof 58 / 278 / 768).  The order-1 h-path reaches only 1.4e-2 even
@@ -2652,7 +2652,7 @@ magnitude per DOF (coarse maxh=0.5 p-path vs order-1 h-path):
   => match p to the highest excited multipole n (p>=n); do NOT h-refine the air
   to chase it.  (The coarsest Kelvin closure is only ndof=58 -- cf. Delta-DoF.)
 
-`demo_e_optimal_R.py` (pure numpy; magnetized square a=1, M||x) -- the R knob
+`act1_04_optimal_R.py` (pure numpy; magnetized square a=1, M||x) -- the R knob
 and the box far-field:
   - a3/a1 ~ 1e-15 (the octupole VANISHES by symmetry -- a uniformly magnetized
     square excites only n = 4k+1) and a5/a1 = (4/15)(a/R)^4 EXACTLY (fitted
@@ -2663,7 +2663,7 @@ and the box far-field:
     (monotone, minimal) for the disk (pure dipole).  This is the spectral basis
     for the "air box 2-5x" rule and the R/a ~ 3 guidance.
 
-`demo1_hp_lshape.py` (L-shape 270deg re-entrant corner, exact u =
+`act0_04_hp_lshape_corner.py` (L-shape 270deg re-entrant corner, exact u =
 r^(2/3) sin(2 th/3)) -- the device-corner rate limiter:
   - h-version (p=1): alpha_h = 0.357 (~1/3); p-version (fixed coarse mesh):
     alpha_p = 0.661 (~2/3); ratio 1.85 (asymptotic 2).  BOTH rates are
@@ -2673,7 +2673,7 @@ r^(2/3) sin(2 th/3)) -- the device-corner rate limiter:
     algebraic rates the corner imposes, confirming the rate limiter is the
     device INTERIOR, not the exterior air.
 
-`demo_budget_dofcost.py` (shell dipole, R_in=0.5 / R_out=1.0, maxh=0.4, order 2;
+`act2_08_budget_dofcost.py` (shell dipole, R_in=0.5 / R_out=1.0, maxh=0.4, order 2;
 swap ONLY the Gamma operator so the interior FEM error cancels) -- the cost:
   - error budget: interior FEM error 5.34%; Kelvin open-BC error 0.118%
     (= 1/45); BEM open-BC error 0.172% (= 1/31).  Both closures sit >1 order
@@ -2701,15 +2701,15 @@ a CLN model-order reduction then compresses.  Verified analytic-free by SYMMETRY
 (the static Steklov ladder, the generalized eigenproblem (S, Mg) on Gamma, splits
 the sphere's l-fold degeneracies by the body's point group):
 
-  - `demo_xx9` (2D SQUARE, C4v): the m=1 dipole doublet is PRESERVED while the
+  - `act6_06_square_eddy_dtn_to_cln` (2D SQUARE, C4v): the m=1 dipole doublet is PRESERVED while the
     m=2 quadrupole SPLITS (B1 != B2, by ~0.52) -- the C4v signature.
-  - `demo_xx10` (3D CUBE, O_h): the l=1 dipole stays a ~degenerate TRIPLET
+  - `act6_07_cube_eddy_dtn_to_cln` (3D CUBE, O_h): the l=1 dipole stays a ~degenerate TRIPLET
     (T_1u, spread ~0.002) while the l=2 quadrupole quintet SPLITS 2+3
     (E_g doublet + T_2g triplet, by ~0.50) -- the O_h signature.
   Both are mesh-convergent; the dipole-mode DtN interpolates DC -> evanescent
   (real static rung -> sqrt(s) growth), and a few-stage CLN-in-sqrt(s) reduces it.
-  `demo_xx8` is the radial proof-of-mechanism (a sphere, so the analytic DtN
-  checks the FEM build) and `demo_xx7` is the separable-analytic band-unlimited
+  `act6_01_kelvin_fem_eddy_dtn` is the radial proof-of-mechanism (a sphere, so the analytic DtN
+  checks the FEM build) and `act6_03_dtn_to_cln_wideband` is the separable-analytic band-unlimited
   end (the 3D sphere DtN is EXACTLY rational in q=sqrt(s) -- reverse-Bessel -- so
   the CLN is machine-exact at n+1 stages).
 
@@ -2723,10 +2723,10 @@ with the Nagamine 2D-cylindrical tensor "in-plane identity slots" note above):
   |                                 | conformally invariant; = Nagamine xx/yy=1)  |
 
   - 3D Dirichlet energy is NOT conformally invariant -> the ball carries the
-    scalar (R/rho')^2 weight; with it the static limit hits -(n+1)/R (`demo_xx8`,
+    scalar (R/rho')^2 weight; with it the static limit hits -(n+1)/R (`act6_01_kelvin_fem_eddy_dtn`,
     DC error ~3e-5 vs a truncated FEM's (R0/Rfar)^(2n+1) closure floor ~5.8e-2).
   - 2D in-plane Dirichlet energy IS conformally invariant -> the disk needs NO
-    weight; the static limit hits -m/R to ~1e-5 (`demo_xx11`).  DECISIVE check:
+    weight; the static limit hits -m/R to ~1e-5 (`act6_08_disk2d_kelvin_eddy_dtn`).  DECISIVE check:
     applying the 3D weight (R/rho')^2 in a 2D disk MISSES the ladder -m (m=1 by
     ~30%, m=2 by ~6%) -- proving 2D genuinely needs no weight.
   - CAVEAT (band, not static): the 2D cylindrical K_m is NOT exactly rational in
@@ -2763,10 +2763,10 @@ ECCENTRIC source (d/R -> 1) blows p up -> RE-CENTRE the Kelvin sphere on the sou
 pay the order).  This is the QUANTITATIVE form of the "center on the device, minimal
 enclosing R" knob (section 3) and the SOURCE half of the abstract's "required resolution
 AND element order in closed form".  Measured to machine precision in
-examples/kelvin_transformation/DtN_spectrum/demo_xx12_adequacy_eccentric_multibody.py.
+examples/kelvin_transformation/DtN_spectrum/act2_04_adequacy_eccentric_multibody.py.
 
 The GEOMETRY-FLOOR half (at p>=n, the residual is the curved-sphere error, not the
-source) has its own measured closed form (demo_xx13_geometry_floor_law.py, sweeping h at
+source) has its own measured closed form (act2_05_geometry_floor_law.py, sweeping h at
 each isoparametric Curve order k):
 
         floor_n(k, h/R)  ~  C_n * (h/R)^(2k)      [down to the double-precision floor]
@@ -2774,26 +2774,26 @@ each isoparametric Curve order k):
 the DtN eigenvalue is an ENERGY functional, so it SUPERCONVERGES at TWICE the boundary
 order k (Strang-Fix / Ciarlet-Raviart domain approximation): measured q(1)~1.9, q(2)~3.8
 (ratio ~2, the 2k doubling -- NOT k+1), mode-independent.  k=3 (2k=6) bottoms out on the
-~1e-6 double-precision quadrature/round-off floor (= floor_vs_curve's saturation), so
+~1e-6 double-precision quadrature/round-off floor (= act2_03_floor_vs_curve's saturation), so
 k=2 already suffices; the practical knob is the Gamma SURFACE mesh h, not k>2.  COMBINING
 the two halves, the TOTAL Kelvin closure error is
 
-        err  ~  max( (d_max/R)^p  [source, demo_xx12],  C*(h/R)^(2k)  [geometry, demo_xx13] )
+        err  ~  max( (d_max/R)^p  [source, act2_04_adequacy_eccentric_multibody],  C*(h/R)^(2k)  [geometry, act2_05_geometry_floor_law] )
 
 = the abstract's mesh-adequacy criterion in full: from the source compactness/eccentricity
 choose p; from the target accuracy choose the Gamma surface h at k=2.
 
-End-to-end FEM check (demo_xx14_eccentric_fem_endtoend.py): an off-centre dipole solved
+End-to-end FEM check (act2_06_eccentric_fem_endtoend.py): an off-centre dipole solved
 through the Kelvin ball, exterior field recovered by the inverse Kelvin map, has error that
 decays at ~2*ln(d/R) -- the exterior FIELD beats the boundary-trace (d/R)^p rate (the radial
 decay (R/rho)^(2n+1) extra-suppresses the dropped high multipoles), so p* is a SUFFICIENT,
 CONSERVATIVE rule for field accuracy (measured margin 4x-40x at p=p*), not tight for it.
 
-In ENGINEERING practice (demo_xx16_apparatus_design_calc.py): a reactor / transformer LEG
+In ENGINEERING practice (act2_07_apparatus_design_calc.py): a reactor / transformer LEG
 winding (a balanced 2-D current set, sum I=0) runs through the whole calc in closed form --
 its exterior content is the winding CURRENT MOMENTS a_m = sum_k I_k z_k^m (== an FFT of A_z
 on Gamma); a balanced winding has NO monopole and (by x<->-x symmetry) excites ODD
-multipoles only (a selection rule like demo_e's square n=4k+1), decaying geometrically.  The
+multipoles only (a selection rule like act1_04_optimal_R's square n=4k+1), decaying geometrically.  The
 total-DoF proxy (R/a)^2 * p*^2 is minimised at R*/a_app ~ 2.78 (the air-box 2-5x optimum)
 with a MODEST p*=5 for eps=1e-4; the m<=p* closure reproduces the exterior field to ~2e-5.
 So from the winding geometry the open-boundary R and p follow directly -- NO convergence
