@@ -302,6 +302,10 @@ class radTInteraction : public radTg {
 	std::vector<int> m_wedgeTriOffset;           // n_wedge * 5: start index into TriVertices for each face
 	std::vector<int> m_wedgeElemIndices;         // Maps wedge index to element index
 	std::vector<int> m_globalToWedgeIdx;         // Maps global element index to wedge index (-1 if not wedge)
+	// Pyramid-cloud kernel (built only when g_yano_pyramid_cloud): per-wedge compensation cloud.
+	std::vector<double> m_wedgeCloudPts;         // n_wedge * m_wedgeCloudN * 3: cloud points (global)
+	std::vector<double> m_wedgeCloudWts;         // n_wedge * m_wedgeCloudN: normalised weights (sum=1)
+	int m_wedgeCloudN = 0;                       // cloud points per wedge (0 = not built)
 	static constexpr int WEDGE_MAX_TRIS = 8;    // Max triangles per wedge element
 
 	//-------------------------------------------------------------------------
