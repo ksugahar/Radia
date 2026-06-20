@@ -115,7 +115,8 @@ TOPIC MAP  (query: streamfunction("<topic>"))
   shielding         active shielding (--shield-vol): primary+shield joint
                     design (Turner 1986), ~86x stray reduction; coverage lesson
   fusion            stellarator Stage-2 (REGCOIL/NESCOIL/FOCUS): winding-surface
-                    current potential, net current, force/stress, VMEC, winding-shape
+                    current potential, net current, force/stress, VMEC, winding-shape;
+                    + radia-SF-vs-REGCOIL SUPERSET (parity + deliverable/iron, goldens a/b/c)
 
 DOCS + DEMOS
 ------------
@@ -360,6 +361,67 @@ Locked by tests/panels/test_streamfunction_golden.py
 (test_regcoil_fusion_* : forward machine precision, b1==2, TF Ampere 1/R +
 tangency, VMEC non-axisym, wout round-trip + lasym-raise, force=pressure,
 FOCUS monotonic + conformal<circular).
+
+radia-SF vs NESCOIL / REGCOIL / FOCUS -- A SUPERSET (2026-06-21)
+---------------------------------------------------------------
+radia ships the SAME object (winding-surface current potential psi,
+K = n x grad psi) but is a strict SUPERSET on deliverable + physics.
+Precise claim: "REGCOIL is a special case (vacuum, toroidal, design-only)
+of radia's SF; design AT PARITY, deliverable + iron a SUPERSET; a complete
+win for single-conductor coils."
+
+  DESIGN -- AT PARITY.  The demos above reproduce the REGCOIL workflow
+    (current potential, Tikhonov L-curve, net-current secular term, VMEC
+    boundary, force/stress, FOCUS standoff + winding-shape); B.n ~2e-9 on
+    producible targets.  No fusion-specific solver code.
+  SCALE / METHOD -- ACA + ridge-TSVD.  The design matrix is the dense
+    Biot-Savart coupling COMPRESSED by ACA (an H-matrix) and inverted by a
+    ridge (Tikhonov) TRUNCATED-SVD pseudo-inverse (radia.stream_function
+    aca_tsvd; topics 'regularized' / 'performance').  The ridge IS REGCOIL's
+    lambda, but ACA + the FE-direct surface make it a SCALABLE regularised
+    least-squares on an ARBITRARY meshed winding surface -- not REGCOIL's
+    dense Fourier least-squares on a parameterised torus.
+  OPTIMISE -- fast TSVD -> Pareto + surface deformation.  The TSVD core is
+    FOLDED ONCE, so each regularised re-solve is a ~50 us k x k core solve
+    (RegularizedTSVD; demo_pareto_tikhonov_aca.py).  That cheap re-solve makes
+    a whole front affordable, so radia sweeps a MULTI-OBJECTIVE PARETO over
+    BOTH the regularisation alpha (misfit-vs-energy + an L-inf IRLS
+    misfit-vs-PEAK-current front) AND the winding-surface SHAPE
+    (geometry/geom_scale lever + sheet-metal deform) -- richer than REGCOIL's
+    single-alpha L-curve.  (topic 'pareto'.)
+  DELIVERABLE -- design-to-manufacture, not design-only.  NESCOIL/REGCOIL/
+    FOCUS stop at psi.  radia continues: contours -> SINGLE-STROKE wire
+    (grad-psi winding orientation, so l>=2 saddle shims chain without the
+    common series current cancelling) -> sheet-metal distort -> STEP CAD
+    (OCC WriteStep) -> PEEC.  The PEEC step is a full circuit-extraction
+    SOLVER (L,R,C,M + SPICE, MMM coupling), not just an inductance number.
+    (topics 'single_stroke' / 'low_turn'.)
+  PHYSICS -- iron.  NESCOIL/REGCOIL/FOCUS are free-space (vacuum Biot-Savart).
+    radia's material-aware kernel (Kelvin-FEM DtN, M = M_free + M_react,
+    --iron-vol) designs coils WITH iron yoke/shield/core -- domains REGCOIL
+    structurally cannot enter.  (topic 'material_aware'.)
+  HONEST NUANCE.  The single-stroke win is decisive for SINGLE-CONDUCTOR coils
+    (MRI gradient/shim, IH).  Stellarator MODULAR coils are intentionally
+    SEPARATE coils, so "one wire" is not their manufacturing step; there radia
+    still adds STEP CAD + PEEC L beyond REGCOIL's psi, and its distort is
+    analogous to FOCUS filament-shape opt.  Open gaps: no SIMSOPT/STELLOPT
+    Stage-1+2 integration; head-to-head at community mode counts unmeasured.
+
+EARNED BY MEASUREMENT (the three goldens, Repository-First)
+----------------------------------------------------------
+  (a) VACUUM PARITY + DELIVERABLE -- test_regcoil_parity_deliverable_golden.py
+      (examples/stream_function/demo_regcoil_parity_deliverable.py): a uniform-
+      vertical B.n design on the torus winding surface hits B.n_rel ~4.9e-9
+      (parity) AND the SAME run emits a ~954 kB STEP + PEEC L ~3.09 uH
+      ("design equal, deliverable beyond").
+  (b) IRON DIFFERENTIATOR -- test_regcoil_iron_differentiator_golden.py
+      (act8_03_general_iron_design SCENARIO B): on a target behind iron the
+      FREE-SPACE design MISSES by >20% while the MATERIAL-AWARE design HITS to
+      <1e-2 (ratio >10x) -- the physics REGCOIL cannot do.
+  (c) MANUFACTURE END-TO-END -- test_streamfunction_manufacture_e2e_golden.py:
+      ONE --method manufacture run takes target x -> psi (design ~0.042%) ->
+      single-stroke wire (~0.197%) -> sheet-metal distort (~0.175%, no regress)
+      -> STEP CAD -> PEEC L ~81.8 uH, on the cylinder + DSV fixture.
 
 REFERENCES
 ----------
@@ -896,7 +958,7 @@ TOPICS = {
     "validation": "analytic-benchmark validation",
     "literature": "SFM lineage (Turner / Peeren / current potential method)",
     "workflow": "end-to-end demo recipes",
-    "fusion": "stellarator Stage-2 (NESCOIL/REGCOIL/FOCUS): winding-surface current potential -> plasma B.n, net-current secular term (cohomology), coil force/stress, real VMEC boundary, FOCUS winding-distance + winding-SHAPE",
+    "fusion": "stellarator Stage-2 (NESCOIL/REGCOIL/FOCUS): winding-surface current potential -> plasma B.n, net-current secular term (cohomology), coil force/stress, real VMEC boundary, FOCUS winding-distance + winding-SHAPE; PLUS the radia-SF-vs-REGCOIL SUPERSET positioning (design parity; ACA+ridge-TSVD scale; fast-TSVD Pareto over alpha+shape; STEP+PEEC deliverable; iron) earned by goldens (a)(b)(c)",
     "clebsch_3d": "[IN PROGRESS] 3D stream function + cohomology: NGSolve de Rham unification (Clebsch/cohomology/SF/deform on H1->HCurl->HDiv); ACA+TSVD on CURRENT-Clebsch J=grad(lambda)xgrad(mu) with mu fixed; Tampere bidirectional (A,phi) map -> 3D flux coords, Jacobian=1/(|B||H|); honest non-convex+helicity frontier",
 }
 
