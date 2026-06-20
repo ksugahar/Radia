@@ -49,7 +49,7 @@ def iron_vols(tmp_path_factory):
     return coil, evalv, iron
 
 
-def _run_calc(coil, evalv, target, extra=None):
+def _run_calc(coil, evalv, target, extra=None, expect_error=False):
     cmd = [sys.executable, CALC, "--coil-vol", coil, "--eval-vol", evalv,
            "--order", "1", "--eval-max", "30"]
     if target is not None:
@@ -63,6 +63,18 @@ def _run_calc(coil, evalv, target, extra=None):
         if ("mkl" in low or "dll" in low or "libiomp" in low
                 or (not r.stderr.strip() and abs(r.returncode) > 1000000)):
             pytest.skip("NGSolve/MKL subprocess env issue (LAB pytest)")
+        # fail-loud calc_main (CLAUDE.md No-Fallback) exits non-zero on an
+        # {"error": ...} result but STILL prints the error JSON to stdout; for
+        # an EXPECTED user error parse + return that dict, else re-raise.
+        if expect_error:
+            elines = [ln for ln in r.stdout.splitlines() if ln.strip()]
+            if elines:
+                try:
+                    d = json.loads(elines[-1])
+                    if isinstance(d, dict) and "error" in d:
+                        return d
+                except json.JSONDecodeError:
+                    pass
         raise AssertionError(
             f"calc_streamfunction.py failed (rc={r.returncode}):\n"
             f"STDERR:\n{r.stderr[-1500:]}")
@@ -132,7 +144,7 @@ def test_streamfunction_iron_missing_material_raises(iron_vols):
     coil, evalv, iron = iron_vols
     r = _run_calc(coil, evalv, "x",
                   extra=["--iron-vol", iron, "--mu-r", "200",
-                         "--iron-mat", "steel"])
+                         "--iron-mat", "steel"], expect_error=True)
     assert "error" in r and "steel" in r["error"]
 
 

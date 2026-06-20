@@ -93,5 +93,36 @@ def test_optimize_levels_absent_by_default(sample_vols):
     assert r["method"] == "manufacture"
 
 
+def test_auto_chain_resolution_improves_delivered_wire_saddle(sample_vols):
+    """The field-aware cut-opt resolution AUTO-scales with the loop count; for a
+    clustered multi-region (Z2 saddle, --optimize-levels) coil that lowers the
+    DELIVERED single-stroke WIRE field error vs the old fixed (ncut=24, passes=4).
+
+    The loop-set field is fixed; only the inter-loop connectors depend on the
+    cuts.  More passes monotonically lower the cut-opt objective and a finer
+    n_cut grid samples more cuts, so auto resolution is a STRONG NET improvement
+    on clustered coils -- though NOT a per-geometry guarantee (the cut grids for
+    different n_cut are not strictly nested, so a marginal case can shift a few
+    %).  This stubby fixture is firmly in the win regime (the under-resolved
+    default leaves Z2 ~0.18, auto ~0.17; a longer former 0.20 -> 0.067).  Target
+    Z2 via a trailing --target-cf (argparse last-wins over the helper's 'x')."""
+    coil, evalv = sample_vols
+    base = ["--method", "manufacture", "--nlevels", "16", "--optimize-levels",
+            "--eval-max", "40", "--confine", "abe",
+            "--target-cf", "z*z-(x*x+y*y)/2"]
+    old = _run_calc(coil, evalv, base + ["--chain-ncut", "24",
+                                         "--chain-passes", "4"])
+    new = _run_calc(coil, evalv, base)               # auto resolution (default)
+    assert "error" not in old and "error" not in new
+    wo = old["wire_homogeneity_rms"]
+    wn = new["wire_homogeneity_rms"]
+    assert wo > 0.0 and wn > 0.0
+    # measured ~10% delivered-wire gain on this fixture; lock a conservative >=5%
+    # (the gain is geometry-driven, not FP noise, so it is stable on the fixed
+    # fixture mesh).
+    assert wn < 0.95 * wo, \
+        f"auto chain resolution did not improve the delivered wire: {wo} -> {wn}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

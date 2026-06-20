@@ -233,8 +233,27 @@ field_aware (default) keeps that field small two ways:
       2-opt GUARANTEED never worse than nearest-neighbour while capturing the
       real gains.  (Pure --chain nn keeps NN order + naive closing, no cut-opt,
       so it never sees the 2-opt -- which would only hurt a cut-opt-free chain.)
-field_aware is never worse than nn; with closed contours (--confine abe) it
-reaches the separate-turns floor with no --distort.
+  (3) RESOLUTION -- the cut-opt's candidate count (--chain-ncut, cuts/loop) and
+      descent rounds (--chain-passes) AUTO-scale with the loop count when not
+      given (~1.1 cuts/loop capped [24,64]; passes 4..8).  More loops -> more
+      connectors -> the JOINT cut-opt needs more candidates/rounds to drive
+      their net field to zero.  More PASSES at a fixed n_cut monotonically lower
+      the objective (coordinate descent re-scans the same grid); a higher n_cut
+      samples a FINER but not strictly-nested cut grid, so auto resolution is a
+      STRONG NET improvement (NOT a per-geometry guarantee -- a marginal case can
+      shift a few %).  It matters most for CLUSTERED levels (--optimize-levels
+      packs contours to sharpen the loop-set field): the OLD fixed default (24,4)
+      under-resolved them and left a 45-loop Z2 wire ~0.20 vs a 0.0098 loop-set
+      floor; auto (~50,8) recovers it to ~0.067 (3x, then --distort ~0.052).
+      Override with --chain-ncut / --chain-passes.  (Bench across 6 formers: 4
+      better 2-28%, 2 marginally worse 3-5% -- the cut-grid non-nesting.)
+field_aware is never worse than nn.  For a SINGLE-region (l=1) psi with closed
+contours (--confine abe) it reaches the separate-turns floor with no --distort.
+For a MULTI-region (saddle, l>=2) psi the inter-region connectors leave a
+residual gap above the loop-set floor (clustered Z2: ~0.067 delivered vs ~0.0098
+loop-set) that auto-resolution SHRINKS but does not close -- splitting into one
+wire per current group is WORSE (verified): the cut-opt nulls connectors GLOBALLY
+by cross-cancelling the +/- groups' rungs, a freedom per-group chaining removes.
 
 END-TO-END VALIDATION vs an INDEPENDENT codebase
 ------------------------------------------------
@@ -745,14 +764,24 @@ polyline order is arbitrary, so its winding does not carry the current sign.
 sign(f.B) ('flip every loop to help the target') recovers it ONLY for a MONOTONE
 psi (l=1 gradient); for a SADDLE psi (l>=2 shim: Z2, Z3, C2/S2 ...) the natural
 winding has MIXED senses (the single wire reverses through the saddle) and
-sign(f.B) FLATTENS them, so one common series current cancels itself.  Measured:
-Z2 single-wire 88% (sign(f.B)) -> 5.6% (grad-psi, loop-set) -> ~9% delivered
-(+ field_aware chain + --distort); Gx (l=1) is IDENTICAL either way (grad-psi is
-a strict generalisation).  This was an orientation BUG, not a physics limit --
-single-wire l>=2 shims DO work.  `_gradpsi_signs` / `_build_gradpsi_kdt` in
-calc_streamfunction.py; verified by examples/stream_function/
-verify_gradpsi_orientation.py.  (The ~9% delivered is the documented multi-region
-single-stroke BRIDGE ceiling; sub-1% l>=2 needs multi-wire / independent feeds.)
+sign(f.B) FLATTENS them, so one common series current cancels itself.  Measured
+(L=1.0 former): Z2 single-wire 88% (sign(f.B)) -> 5.6% grad-psi loop-set (uniform
+N=20) / 0.98% with --optimize-levels -> ~6.7% DELIVERED single-stroke wire
+(grad-psi + auto-resolution field_aware chain).  Gx (l=1) is IDENTICAL either way
+(grad-psi is a strict generalisation).  This was an orientation BUG, not a physics
+limit -- single-wire l>=2 shims DO work.  `_gradpsi_signs` / `_build_gradpsi_kdt`
+in calc_streamfunction.py; verified by examples/stream_function/
+verify_gradpsi_orientation.py.
+  DELIVERED gap (loop-set ~0.01 vs single-stroke wire ~0.067) = the inter-region
+  CONNECTOR (bridge) field, NOT a loop-set error.  It was mostly chain UNDER-
+  RESOLUTION: the old fixed cut-opt (ncut=24,passes=4) left clustered-level Z2 at
+  ~0.20; auto-scaling resolution with loop count (see 'panel' CHAIN (3)) recovers
+  ~0.067 (3x).  The remaining ~7x gap above the loop-set floor is the irreducible
+  single-series-wire connector cost.  Splitting into one wire PER current group is
+  WORSE (verified: ~0.85): the cut-opt nulls connectors GLOBALLY by cross-
+  cancelling the +/- groups' rungs.  Sub-1% l>=2 therefore needs INDEPENDENT feeds
+  (a driven ARRAY: loops_homogeneity_rms ~ 0, the --pin-tiling regime), NOT one
+  series wire; --distort further bends the one wire (sphere Z2 4.3%->0.36%).
 
 (1) EQUAL-deltaI CONTOURS  (default, --nlevels N)
     N iso-contours at equal psi increments = N equal-current turns; the

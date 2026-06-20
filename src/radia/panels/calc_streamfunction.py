@@ -1307,11 +1307,25 @@ def _dedupe(path, tol=1e-10):
 
 
 def _field_aware_chain(loops, signs, mpts, target_flat, vector_b,
-                       n_cut=24, passes=4):
+                       n_cut=None, passes=None):
     """Field-aware single-stroke chain (geometry-independent): visit the
     sign-aligned contour loops in a good order, then choose each loop's
     ENTRY/EXIT point (the cut) by coordinate descent to minimise the full
     one-current WIRE field error ``min_I ||I*(loops + connectors) - B||``.
+
+    Cut-opt RESOLUTION (``n_cut`` candidate cuts/loop, ``passes`` descent
+    rounds) is AUTO-scaled with the loop count when not given: more loops ->
+    more connectors -> the joint cut-opt needs more candidates/rounds to drive
+    their net field to zero.  This matters most for CLUSTERED levels (e.g.
+    --optimize-levels, which packs contours to sharpen the loop-set field): at
+    the under-resolved old default (n_cut=24, passes=4) a 45-loop clustered Z2
+    wire delivered ~0.20 rms vs a 0.0098 loop-set floor; auto-scaling to
+    (~50, ~8) recovers it to ~0.067 (3x).  More ``passes`` at a fixed ``n_cut``
+    monotonically lower the cut-opt objective (coordinate descent re-scans the
+    same grid); a higher ``n_cut`` samples a FINER but not strictly-nested cut
+    grid, so it is a STRONG NET improvement (large on clustered/multi-region
+    coils) but NOT a per-geometry guarantee -- a marginal case can tie or shift
+    a few %.  Override with explicit n_cut/passes (CLI --chain-ncut/--chain-passes).
 
     The loop field is fixed; only the inter-loop connectors (the 'rungs')
     depend on the cuts.  Minimising the TOTAL error (not the connectors in
@@ -1337,6 +1351,11 @@ def _field_aware_chain(loops, signs, mpts, target_flat, vector_b,
     Returns (chain_xyz, n_connectors, connector_length)."""
     if not loops:
         return np.zeros((0, 3)), 0, 0.0
+    n = len(loops)
+    if n_cut is None:               # auto: ~1.1 cuts per loop, capped [24, 64]
+        n_cut = int(min(64, max(24, round(1.1 * n))))
+    if passes is None:              # auto: grow descent rounds with loop count
+        passes = int(min(8, max(4, n // 6 + 4)))
     L0 = [_close_loop(p if s >= 0.0 else p[::-1])
           for p, s in zip(loops, signs)]
     ncomp = len(target_flat)
@@ -2562,7 +2581,9 @@ def run_manufacture(args):
             chain, n_conn, conn_len = _single_stroke_chain(loops_signed)
         else:                                  # field_aware (default)
             chain, n_conn, conn_len = _field_aware_chain(
-                loops, signs, P["mpts"], target_flat, vector_b)
+                loops, signs, P["mpts"], target_flat, vector_b,
+                n_cut=(int(args.chain_ncut) or None),
+                passes=(int(args.chain_passes) or None))
         chain = _dedupe(chain)
         t2 = time.perf_counter()
 
@@ -2875,6 +2896,12 @@ def build_argparser():
                          "connector field; reaches the separate-turns floor "
                          "for closed contours, no distort) or nn (nearest "
                          "neighbour)")
+    ap.add_argument("--chain-ncut", type=int, default=0,
+                    help="field_aware cut candidates per loop (0 = auto-scale "
+                         "with loop count; raise for clustered/many-loop coils)")
+    ap.add_argument("--chain-passes", type=int, default=0,
+                    help="field_aware cut coordinate-descent rounds (0 = auto-"
+                         "scale with loop count)")
     ap.add_argument("--distort", action="store_true",
                     help="single-current sheet-metal wire distortion (manufacture)")
     ap.add_argument("--distort-grid", type=int, default=3,
