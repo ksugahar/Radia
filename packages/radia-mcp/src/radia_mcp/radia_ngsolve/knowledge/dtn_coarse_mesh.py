@@ -2866,11 +2866,16 @@ Measured (a=1):
                           CONVERGENCE (Kelvin-built n=2 defect 1.2e-3->2.2e-5 under (h,Rmid)
                           refinement, PARAMETER-FREE) and CONDITIONING (vanilla PML cond BLOWS
                           UP toward DC ~2.4e4 vs CFS-PML ~2.3e3 -- WHY CFS-PML exists).
-  high-freq (z=ka=2):     PML accurate in its home ~1e-4; KELVIN EXITS (real-axis DtN cannot
-                          carry radiation; OUTSIDE radia's MQS scope).
+  high-freq (z=ka=2):     a STUDIED regime (the radiating extended-Kelvin / HOIBC / PML track,
+                          act7_01..07).  The DtN is COMPLEX; the STATIC Kelvin is only the kR->0
+                          limit, but the EXTENDED (radiating) Kelvin (matched HOIBC, IEICE 2024)
+                          carries it -- exact-Z ~6e-6, 2nd-order HOIBC ~3e-2 (radiating-band knee
+                          at n~ka), competitive with PML ~1e-4 + BEM.  (The MQS/Laplace limit is
+                          on radia's CORE field solver, NOT on this comparison.)
 
 HEADLINE (not a single number -- report all axes, the honest result):
-  CONVERGENT + parameter-free + frequency-robust = Kelvin (static/eddy) / BEM (all, DENSE).
+  CONVERGENT + parameter-free + frequency-robust = Kelvin (static/eddy; the extended/radiating
+  Kelvin carries high-freq via the matched HOIBC) / BEM (all, DENSE).
   FIXED-ERROR surrogate = PML (DC-ill-conditioned + tuned), CFS-PML (DC-fixed modest + tuned),
   Robin (n=0 only).  FINITE-REACH = ballooning (low-mode dominated).  This is a MEASUREMENT /
   COMPARISON (not a new method); provenance Freeman-Lowther / Bettess / Berenger / Kuzuoglu-
