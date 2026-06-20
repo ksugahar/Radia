@@ -61,7 +61,12 @@ WHAT THIS FRAMEWORK PROVIDES
     L_coil for the turn count that resonates; reports `resonance` {nlevels,
     achieved L, resonance_freq_Hz, L_range_H, in_range}.  Same BEM L machinery,
     opposite goal.  LAB: C=22nF f=200kHz -> 28.8uH -> nlevels 13 -> 30.3uH ->
-    coil resonates 195kHz; connects SF designer to radia-ih.  [topic: panel]
+    coil resonates 195kHz; connects SF designer to radia-ih.  WITH --greedy-turns
+    (few-turn coil) the turns are FIXED by greedy (no nlevels search; L_coil ~ N^2
+    pins N), so it instead reports required_cap_F = 1/((2 pi f)^2 L_coil) -- the
+    tank cap to resonate the DELIVERED low-turn coil at --peec-freq (+ for
+    --resonance-cap, the resonance_freq_Hz that coil+cap reach).  [topic: panel,
+    low_turn]
   * Folded TIKHONOV (the "+ alpha I" core) -> the (field homogeneity, PEAK
     current density) PARETO FRONT swept at ~50 us/point, with FOUR stackable
     levers: Tikhonov alpha (L-curve), L-inf minimax, geometry (former size /
