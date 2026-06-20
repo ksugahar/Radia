@@ -559,7 +559,7 @@ Module: `radia_mcp.maglev.server`
 |---|---|
 | `maglev` | Magnetic levitation knowledge -- maglev systems + levitation force physics. |
 | `maglev_status` | (no description) |
-| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 18 topics. |
+| `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 19 topics. |
 
 ## `mcp-server-team-benchmark`
 
