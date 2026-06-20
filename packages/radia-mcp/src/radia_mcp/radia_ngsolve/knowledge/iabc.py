@@ -58,6 +58,11 @@ Relation to other truncations:
 - PML: both are absorbers near the boundary; a graded multilayer IABC optimised
   for broadband absorption emerges as a tapered impedance-matched stack, i.e. a
   discrete PML-like profile (topic `broadband_design`).
+
+Unified map: IABC is the RADIATING half of the open-boundary picture (Kelvin =
+quasi-static/spatial, CLN = temporal). The cross-cutting map (frequency /
+geometry / space-vs-time axes + selection table) is
+`dtn_coarse_mesh(topic="method_map")` / docs/open_boundary/OPEN_BOUNDARY_MAP.md.
 """
 
 IABC_FREQUENCY_DOMAIN = r"""

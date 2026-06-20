@@ -1400,6 +1400,11 @@ def dtn_coarse_mesh(topic: str = "all") -> str:
                              POTENTIAL exterior (A no-cut / Omega+cut), NOT the ngsbem
                              vector single-layer L=mu0 J^T(LaplaceSL)J (a different
                              operator with no -(n+1)/R ladder)
+            "method_map"   - UNIFIED open-boundary map: Kelvin / BEM / PML / IABC /
+                             CLN on the three selection axes (frequency / geometry /
+                             space-vs-time) + the no-free-lunch modal axis + the
+                             selection table. Audit-verified anchors.
+                             doc: docs/open_boundary/OPEN_BOUNDARY_MAP.md
     """
     return get_dtn_coarse_mesh_documentation(topic)
 
