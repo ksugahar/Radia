@@ -727,3 +727,4 @@ Module: `radia_mcp.panel_review.server`
 | `panel_review` | Get Radia GUI panel review skill-chain documentation and bug catalogue. |
 | `panel_review_status` | (no description) |
 | `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
+
