@@ -27,8 +27,17 @@ contour ORIENTATION, now FIXED in production (commit 630ece06): loops are
 oriented by the consistent grad-psi winding K = n_hat x grad_s(psi), not the
 sign(f.B) flip that flattened the saddle's mixed current senses.  POST-FIX this
 bench's best_wire for Z2 is a few-% (was ~70%); see verify_gradpsi_orientation.py
-for the controlled before/after (Z2 88% -> 5.6% loop-set, ~9% delivered single
-wire).  Gx (l=1, monotone psi) is unchanged (~5e-3) and improves with length.
+for the controlled before/after (Z2 88% -> 5.6% loop-set).  Gx (l=1, monotone psi)
+is unchanged (~5e-3) and improves with length.
+
+NOTE on wire_deliv (the DELIVERED single-stroke column): best_wire is the
+connector-FREE loop set; wire_deliv adds the field-aware single-stroke connectors.
+For a multi-region (saddle) psi the connectors are the bottleneck and were
+chain-resolution-limited -- the field-aware cut-opt now AUTO-scales its resolution
+with the loop count (calc_streamfunction --chain-ncut/--chain-passes), which cut a
+clustered Z2 delivered wire ~0.20 -> ~0.067 on a longer former.  This bench's
+wire_deliv reflects that auto-resolution; it stays geometry-limited (the stubby
+aspect 1.7 former holds a ~0.16 connector floor that a longer former relaxes).
 
 Outputs (committed): bench_low_turn_geometry.json + .png next to this script.
 Run:  python bench_low_turn_geometry.py
