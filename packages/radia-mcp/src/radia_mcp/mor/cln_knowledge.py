@@ -286,7 +286,7 @@ to < 0.1%, and recovers the levitation equilibrium dZ = +4.1 mm (lift ==
 disk weight ~1.055 N; lab full-FEM ~ +4 mm).  Fast convergence: stage 1
 = 97.8% err (DC, no eddy), stage 3 = 0.14%, stage 5 = 0.000%.
 
-Code: `examples/CLN/scripts/team28_levitation/` (`team28_axisym_fem.py`
+Code: `examples/maglev/team28/` (`team28_axisym_fem.py`
 full-FEM baseline, 0.01% vs the lab ground truth; `team28_cln_force.py`
 convergence; `team28_cln_sweep.py` force-vs-height + equilibrium).  This
 is the worked example behind the `radia_mcp.maglev` `cln_mor_control`

@@ -306,7 +306,7 @@ the moving-magnet maglev tractable.)
 ## Verified in-repo: CLN-reduced levitation FORCE vs height (2026-06-04)
 
 A worked, verified example lives in
-`examples/CLN/scripts/team28_levitation/`.  The coil-driven axisymmetric
+`examples/maglev/team28/`.  The coil-driven axisymmetric
 eddy problem is `(K + s*N) X = F` (K = s-independent magnetostatic
 operator, N = conductivity term, F = coil source); the CLN/Cauer
 reduction is the Krylov subspace built from the COIL SOURCE
@@ -374,8 +374,8 @@ what makes the 3D multiport CLN accurate.
 
 PHYSICAL_TENSOR_ROM = r"""
 # Physical polarizability tensor alpha(s) as a passive, stable LTI
-*(Lab research: radia.levitation, the "physical Stoll spectrum -> CLN/LTI"
-route; src/radia/levitation/mixed_galerkin/rom_fit.py, 2026-06-20.)*
+*(Lab research: radia.maglev, the "physical Stoll spectrum -> CLN/LTI"
+route; src/radia/maglev/mixed_galerkin/rom_fit.py, 2026-06-20.)*
 
 The maglev FORCE on a moving conductor is F ~ Re[alpha(s)] grad(B^2); the
 conductor is fully described, per direction, by its eddy-current
@@ -392,7 +392,7 @@ The natural idea -- get the physical (exterior-matched, free-decay /
 Stoll) eddy spectrum by a Kameari A-T accumulation with a Kelvin open
 boundary, then read off a Cauer ladder -- DOES NOT WORK for a general 3D
 isolated-conductor-in-vacuum body.  The lab's own canonical script
-`examples/levitation/research_cln/ngsolve_validation/
+`examples/maglev/research_cln/ngsolve_validation/
 cuboid_521_kameari_kelvin_v15_canonical.py` is a documented BREAKDOWN demo:
 even with the two known bug fixes applied, the iteration sign-flips L_1 at
 stage 1 and the Schmidt energy norm grows x15.  This is structural for the
@@ -405,7 +405,7 @@ tensor.  So the physical-tensor LTI is NOT obtained by eigen-accumulation.
 ## The verified route: AAA + NNLS sample fit of the per-frequency tensor
 
 The verified PHYSICAL tensor is the per-frequency 3D HCurl solve
-`examples/levitation/ellipsoid/ellipsoid_alpha_tensor_3d.py` (gauged
+`examples/maglev/ellipsoid/ellipsoid_alpha_tensor_3d.py` (gauged
 complex HCurl + a FINE AIR SHELL that resolves the air reaction dipole =
 the lift / Re[alpha] part; CompactAMS + COCR; ~2-3% vs the analytic
 sphere).  rom_fit.py turns those frequency samples into a passive, stable
@@ -462,10 +462,10 @@ decay times shape-split: tau_z = 60.2 us > tau_x = tau_y = 34.6 us; D_diag =
 [-102.5, -122.3, -218.8] mm^3 = the -V/(1-N_i) ordering |z|>|y|>|x| (short axis
 strongest) -- matching the static `ellipsoid_alpha_tensor.py` HF anchors.
 
-## API (radia.levitation.mixed_galerkin)
+## API (radia.maglev.mixed_galerkin)
 
 ```python
-from radia.levitation.mixed_galerkin import (
+from radia.maglev.mixed_galerkin import (
     passive_foster_fit, FosterROM, diagonal_tensor_state_space)
 
 # sample the verified per-frequency tensor (or any alpha(s) data) on j omega
@@ -477,7 +477,7 @@ A, B, C, D = rom.state_space()                      # passive scalar LTI
 # diagonal (principal-axis) 3D tensor -> one MIMO LTI
 A, B, C, D, n = diagonal_tensor_state_space([rom_x, rom_y, rom_z])
 ```
-Example `examples/levitation/physical_tensor_rom.py` (default = analytic
+Example `examples/maglev/physical_tensor_rom.py` (default = analytic
 sphere, fast; `--fem` = triaxial ellipsoid per-frequency tensor -> diagonal
 MIMO LTI).
 
