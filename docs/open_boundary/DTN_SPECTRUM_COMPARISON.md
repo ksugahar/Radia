@@ -36,7 +36,8 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
 | **BEM** (`ngsolve.bem`) | **exact** (all regimes; the real `ngsolve.bem` Helmholtz BEM reproduces `wave_dtn` to `~1e−5`, `act7_23`) | **YES** | **YES** | — | **DENSE** (`N²`) |
 | **PML** (`NGSolve` FEM+PML) | accurate per-mode (`~1e−4` in its home; the real 3-D NGSolve FEM+PML reproduces `wave_dtn` to `~1e−3`, `act7_24`) | no (a tuned **layer**) | no (`σ, L`) | **blows up** (`2.4e4`@DC) | sparse |
 | **CFS-PML** | accurate per-mode | no (a tuned layer) | no (`σ, α, L`) | **fixed** (`2.3e3`@DC) | sparse |
-| **ballooning** | **fails the LOW modes** (`~(a/R)^{2n+1}`) | no (finite **reach** `R`) | `R` | — | sparse |
+| **ballooning** (truncation wall) | **fails the LOW modes** (`~(a/R)^{2n+1}`) | no (finite **reach** `R`) | `R` | — | sparse |
+| **infinite element** (Bettess) | **exact `n ≤ P−1`**, degrades `n ≥ P` (decay-basis; `act7_25`) | **YES** (p in decay order) | `P` | — | sparse |
 | **Robin** (`λ=−1/a`) | **exact `n=0` only**, fails HIGH modes | no (a fixed floor) | YES | — | sparse |
 
 ### Per-regime numbers (from `act7_22`)
@@ -44,7 +45,10 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
 - **static** (`λ_n=−(n+1)`): Kelvin `≤ 2.1e−6` every mode (converged); **ballooning** `n=0..4 =
   0.33 → 0.024 → 1.6e−3 → 1.1e−4 → 6.9e−6` (fails the *low* slow-decaying modes, shrinks with
   `n` and with `R`); **Robin** `0 → 0.5 → 0.67 → 0.75 → 0.80` (exact `n=0`, fails the *high*
-  modes — the opposite failure).
+  modes — the opposite failure); the **infinite element** (decay order `P`) is **exact for
+  `n ≤ P−1`** (its `(a/r)^k` basis contains the exact `r^{−(n+1)}`) and degrades for `n ≥ P` — the
+  OPPOSITE failure to the wall, so it is the *convergent* member of the ballooning / infinite-element
+  family (`act7_25`; NGSolve has no infinite element — implemented directly).
 - **eddy** (`s=i·1`): all three closures resolve the mode (`d_n < 5e−2`); the **distinguishing**
   behaviour is **convergence** — Kelvin-built `n=2` defect drops `1.2e−3 → 2.2e−5` under
   `(h, R_mid)` refinement (parameter-free), while PML/CFS-PML are a tuned absorbing layer; and
