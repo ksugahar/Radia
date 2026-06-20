@@ -2755,10 +2755,26 @@ Reading: a COMPACT, CENTRED source (d/R -> 0) is a pure dipole -> p=1 suffices; 
 ECCENTRIC source (d/R -> 1) blows p up -> RE-CENTRE the Kelvin sphere on the source (or
 pay the order).  This is the QUANTITATIVE form of the "center on the device, minimal
 enclosing R" knob (section 3) and the SOURCE half of the abstract's "required resolution
-AND element order in closed form"; the geometry-FLOOR half is floor_vs_curve (Curve order
-sets the 5-6 digit floor at fixed p).  Total Kelvin error ~ max( (d_max/R)^p, geometry
-floor ).  Measured to machine precision in
+AND element order in closed form".  Measured to machine precision in
 examples/kelvin_transformation/DtN_spectrum/demo_xx12_adequacy_eccentric_multibody.py.
+
+The GEOMETRY-FLOOR half (at p>=n, the residual is the curved-sphere error, not the
+source) has its own measured closed form (demo_xx13_geometry_floor_law.py, sweeping h at
+each isoparametric Curve order k):
+
+        floor_n(k, h/R)  ~  C_n * (h/R)^(2k)      [down to the double-precision floor]
+
+the DtN eigenvalue is an ENERGY functional, so it SUPERCONVERGES at TWICE the boundary
+order k (Strang-Fix / Ciarlet-Raviart domain approximation): measured q(1)~1.9, q(2)~3.8
+(ratio ~2, the 2k doubling -- NOT k+1), mode-independent.  k=3 (2k=6) bottoms out on the
+~1e-6 double-precision quadrature/round-off floor (= floor_vs_curve's saturation), so
+k=2 already suffices; the practical knob is the Gamma SURFACE mesh h, not k>2.  COMBINING
+the two halves, the TOTAL Kelvin closure error is
+
+        err  ~  max( (d_max/R)^p  [source, demo_xx12],  C*(h/R)^(2k)  [geometry, demo_xx13] )
+
+= the abstract's mesh-adequacy criterion in full: from the source compactness/eccentricity
+choose p; from the target accuracy choose the Gamma surface h at k=2.
 
 ## One-line rule
 
