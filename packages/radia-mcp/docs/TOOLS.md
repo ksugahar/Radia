@@ -212,7 +212,7 @@ Module: `radia_mcp.streamfunction.server`
 | Tool | Description |
 |---|---|
 | `radia_streamfunction_status` | (no description) |
-| `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 23 topics. |
+| `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 25 topics. |
 | `streamfunction` | Get Stream-Function (SF) coil-design documentation. |
 
 ## `mcp-server-fem`
