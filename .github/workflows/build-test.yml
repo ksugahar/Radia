@@ -6,6 +6,13 @@ on:
     tags: ['v*', 'cubit-mesh-export-v*', 'radia-mcp-v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      full_slow:
+        description: 'Run @pytest.mark.slow tests (manual full gate)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -30,6 +37,8 @@ permissions:
 # On main: keep per-SHA serialization to protect the shared LAB build tree.
 # A stale-main guard below cancels an older main push as soon as it starts,
 # before it spends ~40 min in tests while a newer SHA is queued.
+# On tags: a duplicate-tag guard below keeps one release-tag CI per SHA even
+# when v* + radia-mcp-v* are pushed together.
 # On PRs: cancel the previous run to save runner time.
 concurrency:
   group: ci-${{ github.sha }}
@@ -61,6 +70,10 @@ jobs:
       # CUBIT_INSTALL_DIR to pin a specific install on the self-hosted
       # runner if needed.
       CUBIT_PATH: ''
+      # Full slow/golden tests are an explicit manual gate. Main, PR, and
+      # release-tag CI stay fast by default so the self-hosted runner does
+      # not spend hours revalidating the same SHA.
+      RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
 
     steps:
       - uses: actions/checkout@v4
@@ -101,6 +114,73 @@ jobs:
             exit 1
           }
           Write-Host "This main CI is current; continuing."
+
+      - name: Cancel duplicate release-tag CI before build/test
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $patterns = @('refs/tags/v*', 'refs/tags/radia-mcp-v*', 'refs/tags/cubit-mesh-export-v*')
+          $releaseTags = [System.Collections.Generic.List[string]]::new()
+
+          foreach ($line in (git ls-remote --tags origin @patterns)) {
+            $parts = $line -split '\s+'
+            if ($parts.Count -lt 2 -or $parts[0] -ne $env:GITHUB_SHA) {
+              continue
+            }
+            $ref = $parts[1] -replace '\^\{\}$', ''
+            if ($ref -notlike 'refs/tags/*') {
+              continue
+            }
+            $name = $ref.Substring('refs/tags/'.Length)
+            if (-not $releaseTags.Contains($name)) {
+              [void]$releaseTags.Add($name)
+            }
+          }
+
+          if ($releaseTags.Count -le 1) {
+            Write-Host "Release tags on this SHA: $($releaseTags -join ', ')"
+            Write-Host "No duplicate release-tag CI to cancel."
+            exit 0
+          }
+
+          $canonical = @(
+            $releaseTags | Sort-Object `
+              @{ Expression = {
+                if ($_ -like 'v*') { 0 }
+                elseif ($_ -like 'radia-mcp-v*') { 1 }
+                elseif ($_ -like 'cubit-mesh-export-v*') { 2 }
+                else { 9 }
+              } },
+              @{ Expression = { $_ } }
+          )[0]
+
+          Write-Host "Release tags on this SHA: $($releaseTags -join ', ')"
+          Write-Host "Canonical release-tag CI for this SHA: $canonical"
+          Write-Host "Current tag: $env:GITHUB_REF_NAME"
+          if ($env:GITHUB_REF_NAME -eq $canonical) {
+            Write-Host "This is the canonical release-tag CI; continuing."
+            exit 0
+          }
+
+          Write-Host "::warning::Duplicate release-tag CI for $env:GITHUB_SHA. $canonical will represent this SHA; cancelling $env:GITHUB_REF_NAME before build/test."
+          $headers = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $repo = "${{ github.repository }}"
+          $uri = "https://api.github.com/repos/$repo/actions/runs/${{ github.run_id }}/cancel"
+          Invoke-RestMethod -Method Post -Uri $uri -Headers $headers | Out-Null
+
+          $deadline = (Get-Date).AddSeconds(90)
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 5
+            Write-Host "Waiting for GitHub to cancel this duplicate tag run..."
+          }
+          Write-Host "::error::Cancellation request did not stop the duplicate tag run in time."
+          exit 1
 
       # ----------------------------------------------------------------
       # Guard (2026-05-28): a self-hosted job must NOT pip-install a lab
@@ -343,11 +423,11 @@ jobs:
             '--ignore=tests/test_mesh_import.py',
             '--ignore=tests/test_scalar_bie_sibc.py'
           )
-          if ($env:GITHUB_REF -notlike 'refs/tags/*') {
-            Write-Host "Non-tag CI -- excluding @pytest.mark.slow tests. Version tags still run the full suite."
+          if ($env:RUN_SLOW_TESTS -ne 'true') {
+            Write-Host "Fast CI -- excluding @pytest.mark.slow tests. Use workflow_dispatch full_slow=true for the full slow/golden gate."
             $pytestArgs += @('-m', 'not slow')
           } else {
-            Write-Host "Tag CI -- running the full suite, including @pytest.mark.slow tests."
+            Write-Host "Manual full gate -- running the full suite, including @pytest.mark.slow tests."
           }
           python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath pytest-basic-stdout.log
           $rc = $LASTEXITCODE
