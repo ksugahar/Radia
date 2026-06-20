@@ -101,6 +101,7 @@ BH_HARD = _bh(200.0, 2.0)         # low-permeability grade (same saturation)
 HEXT_NL = ng.CoefficientFunction((0.0, 0.0, 1.0e5))   # drive that genuinely saturates the soft grade
 
 
+@pytest.mark.slow
 def test_per_region_nl_equal_table_matches_single():
     """A {lo: BH, hi: BH} dict with the SAME table in both regions must reproduce the single-table
     nonlinear solve bit-for-bit (the per-element constitutive law + per-region warmstart both collapse to
@@ -114,6 +115,7 @@ def test_per_region_nl_equal_table_matches_single():
     assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-8, atol=1e-3)
 
 
+@pytest.mark.slow
 def test_per_region_nl_different_tables_physics():
     """Different BH grades per region: (1) the global M_avg_z is strictly BOUNDED by the all-soft and
     all-hard scalar runs (monotone response to per-region permeability); (2) the mixed run is genuinely

@@ -27,6 +27,8 @@ import warnings
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.slow
+
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 import radia as rad  # noqa: E402
