@@ -7,7 +7,8 @@ target of the Nagamine 2026 paper [^Nagamine2026].
 The 2D disk benchmark (see [`docs/axifemm/AXIFEMM.md`](../axifemm/AXIFEMM.md))
 showed that two completely different formulations -- BEM-Foster integral
 equation (Mathematica + 50-digit mpmath Nagamine pipeline) and Henrotte
-axisymmetric FE (radia-axifemm `axihenrotte` order=1/2) + Hiruma 3-term --
+axisymmetric FE (`radia.axifem` in radia-core, `axihenrotte` order=1/2) +
+Hiruma 3-term --
 agree on the leading Cauer rung `τ_pair[0] = L_1/R_0` to **0.28 %**. The
 3D cuboid is the next step.
 
@@ -121,7 +122,8 @@ side and the **Hiruma 3-term** on the HCurl side.
 
 Before tackling the cuboid (which has no axisymmetric reference solution),
 the 3D HCurl + Hiruma 3-term pipeline is **first calibrated on the Cu disk**
-(R = 10 mm, t = 2 mm) for which radia-axifemm `axihenrotte p=2` already
+(R = 10 mm, t = 2 mm) for which `radia.axifem` in radia-core
+(`axihenrotte p=2`) already
 gives the canonical answer:
 
 ```
@@ -159,7 +161,7 @@ By rotational symmetry, the three directions B_x, B_y, B_z that the
 cuboid script enumerates collapse on the disk: B_x and B_y give modes
 that vanish identically (the disk has no preferred radial direction in
 the x-y plane), and B_z is the only physically meaningful drive. This
-matches the axisymmetric reduction in radia-axifemm (which only treats
+matches the axisymmetric reduction in `radia.axifem` (which only treats
 B_z).
 
 ### Expected outcome and what failure means
@@ -257,9 +259,9 @@ the leading rung agrees to ≲ 1 %.
 
 ---
 
-## 6. Connection to radia-axifemm
+## 6. Connection to radia-core axifem
 
-The radia-axifemm package
+The `radia-core` `radia.axifem` module
 ([`docs/axifemm/AXIFEMM.md`](../axifemm/AXIFEMM.md)) is **specific to
 axisymmetric problems** -- its Henrotte basis polynomial in `s = r²` only
 makes sense when the integrand has the axisymmetric `1/r` weight. The 3D

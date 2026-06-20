@@ -1042,7 +1042,7 @@ def kelvin_transformation(topic: str = "all") -> str:
 @mcp.tool()
 def axifemm_documentation(topic: str = "all") -> str:
     """
-    Get radia-axifemm documentation: Henrotte axisymmetric Q-element FE
+    Get radia-core axifem documentation: Henrotte axisymmetric Q-element FE
     add-on for NGSolve (registered FESpace name: "axihenrotte").
 
     Use this when designing or reviewing axisymmetric eddy-current /

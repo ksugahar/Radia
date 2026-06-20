@@ -1,14 +1,14 @@
-# radia-axifemm
+# radia-core axifem research workspace
 
-FEMM/Henrotte axisymmetric finite elements as an NGSolve extension. Brings the
-Henrotte (1993) / FEMM (Meeker) trick of using `{1, r², z, r²z, ...}` shape
-functions in physical `(r, z)` coordinates to NGSolve, so axisymmetric solvers
-get FEMM-grade smooth `B_z` (piecewise constant per element) and well-behaved
-`B_r ∝ 1/r` on the axis without forking NGSolve.
+FEMM/Henrotte axisymmetric finite elements as the `radia.axifem` module in
+radia-core. Brings the Henrotte (1993) / FEMM (Meeker) trick of using
+`{1, r², z, r²z, ...}` shape functions in physical `(r, z)` coordinates to
+NGSolve, so axisymmetric solvers get FEMM-grade smooth `B_z` (piecewise
+constant per element) and well-behaved `B_r ∝ 1/r` on the axis without forking
+NGSolve.
 
-Part of the **Sugahara-lab Radia public-fork family** — independent NGSolve
-extensions absorbing the best techniques from worldwide EM solvers (FEMM, ELF,
-COMSOL, …) and exposing them as pip-installable Python packages.
+Part of the **Sugahara-lab Radia public-fork family**. The implementation now
+ships in the radia-core wheel rather than as a separate installable package.
 
 ## Status
 
@@ -44,8 +44,8 @@ and a 50-digit mpmath classical Cauer extraction (`disk_bem_cauer.py`).
 
 ## Build
 
-axifemm is built into the radia wheel (since 2026-05-10) — no separate
-package install.  Just rebuild radia:
+`radia.axifem` is built into the radia-core wheel (since 2026-05-10) — no
+separate package install. Just rebuild radia:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File S:/Radia/01_GitHub/Build.ps1
@@ -54,12 +54,12 @@ pwsh -ExecutionPolicy Bypass -File S:/Radia/01_GitHub/Build.ps1
 The C++ source lives in `src/ext/axifemm/` and the top-level
 `CMakeLists.txt` defines an `add_ngsolve_python_module(axifem ...)`
 target.  Output is copied to `src/radia/axifem.pyd` and ships in
-the radia wheel.  Requires NGSolve 6.2.2603+, CMake ≥ 3.16, MSVC.
+the radia-core wheel.  Requires NGSolve 6.2.2603+, CMake ≥ 3.16, MSVC.
 
 This `examples/axifemm/research/` directory is now a **research workspace**
 (tests / scripts / demos) — it is not installable as a separate
 package.  The `pyproject.toml`, `CMakeLists.txt`, and `src/` were
-removed when axifemm was absorbed into the radia wheel (2026-05-10
+removed when axifemm was absorbed into radia-core (2026-05-10
 cleanup).
 
 ## Quick usage
