@@ -2848,6 +2848,34 @@ sets n_max. CLN "exact" = exact per-mode impedance synthesis over a FINITE set.
   cond@DC, DC-exact). NON-CLAIM: propagating waves are PML's home; arbitrary
   geometry needs Kelvin + CLN.
 
+## The CONSOLIDATED measured comparison (act7_22_dtn_spectrum_consolidated; 2026-06-21)
+
+ONE table, every closure x regime x multipole, ONE yardstick = the per-mode DtN-spectral
+defect d_n = |lambda_h(n) - lambda_exact(n)| / |lambda_exact(n)|.  Consolidates the scattered
+measurements (static act7_21, eddy act6_09, high-freq act7_01/act7_07).  Full datasheet:
+docs/open_boundary/DTN_SPECTRUM_COMPARISON.md (data act7_22_dtn_spectrum_consolidated.json).
+
+WHY this lens: a field-error comparison conflates interior-FEM error with open-boundary error;
+the per-mode DtN defect ISOLATES the boundary operator's accuracy, mode by mode.
+
+Measured (a=1):
+  static (lam_n=-(n+1)):  Kelvin <=2.1e-6 (converged); ballooning 0.33->6.9e-6 (fails LOW
+                          slow-decaying modes, shrinks with n and R); Robin 0->0.80 (exact n=0,
+                          fails HIGH modes -- the OPPOSITE failure).
+  eddy (s=i*1):           all closures resolve the mode (<5e-2); the DISTINGUISHERS are
+                          CONVERGENCE (Kelvin-built n=2 defect 1.2e-3->2.2e-5 under (h,Rmid)
+                          refinement, PARAMETER-FREE) and CONDITIONING (vanilla PML cond BLOWS
+                          UP toward DC ~2.4e4 vs CFS-PML ~2.3e3 -- WHY CFS-PML exists).
+  high-freq (z=ka=2):     PML accurate in its home ~1e-4; KELVIN EXITS (real-axis DtN cannot
+                          carry radiation; OUTSIDE radia's MQS scope).
+
+HEADLINE (not a single number -- report all axes, the honest result):
+  CONVERGENT + parameter-free + frequency-robust = Kelvin (static/eddy) / BEM (all, DENSE).
+  FIXED-ERROR surrogate = PML (DC-ill-conditioned + tuned), CFS-PML (DC-fixed modest + tuned),
+  Robin (n=0 only).  FINITE-REACH = ballooning (low-mode dominated).  This is a MEASUREMENT /
+  COMPARISON (not a new method); provenance Freeman-Lowther / Bettess / Berenger / Kuzuoglu-
+  Mittra.  It is the basis for the open-boundary comparison PAPER.
+
 Companions: kelvin_transformation(topic="mesh_control"), dtn_coarse_mesh(topic="dtn_to_cln"),
 mor_cln(...).  (The `iabc` MCP tool was RETIRED 2026-06-20; the exact-impedance/Zs
 -> DtN -> CLN content moved here to topic="dtn_to_cln".  IABC is kept only as the
