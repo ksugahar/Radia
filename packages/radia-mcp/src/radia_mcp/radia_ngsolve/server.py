@@ -64,7 +64,6 @@ from .knowledge.fem_bem_schur import get_fem_bem_schur_documentation
 from .knowledge.airgap_motor_workflow import get_airgap_motor_workflow_documentation
 from .knowledge.dtn_coarse_mesh import get_dtn_coarse_mesh_documentation
 from .knowledge.urn import get_urn_documentation, urn_fit_from_csv
-from .knowledge.iabc import get_iabc_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -609,39 +608,6 @@ def urn_fit(data_csv: str, freq_col: int = 0, real_col: int = 1,
         data_csv, freq_col, real_col, imag_col, delimiter, skip_rows,
         n_debye, n_cole_cole, n_warburg, n_cole_davidson, sparsity_weight,
         n_epochs, n_restarts, spice_out)
-
-
-@mcp.tool()
-def iabc(topic: str = "all") -> str:
-    """
-    Time-domain IABC (improvised/improved asymptotic absorbing boundary
-    conditions / spherical absorbing conditions based on electrical images):
-    truncate an open exterior with concentric virtual material shells whose
-    (complex, frequency-dependent) eps, mu act as electrical images that null
-    the multipole reflection at the truncation surface, backed by a PEC wall.
-
-    Documents how to take a PER-FREQUENCY IABC design to the TIME DOMAIN
-    (transient FETD / Newmark-beta): why a per-omega (eps,mu) is non-causal and
-    high-Q (a ~0.006% material error flips |Gamma| 0->1); and the clean fix --
-    DROP the shell and realise the IABC's effective termination impedance (the
-    exact exterior DtN) directly as a Robin BC + auxiliary ODEs.  For an air
-    exterior G_l(s) is EXACTLY RATIONAL (Grote-Keller / Bayliss-Turkel class,
-    separable geometry only -- NOT a general PML replacement): finite companion
-    auxiliary ODEs => exact, unconditionally stable, seamless DC->radiation.  A
-    lossy exterior (sqrt(s)) is causal-rationalised with the `urn`/`urn_fit`
-    tools, and the same network synthesises a passive equivalent termination
-    circuit (TLM).  Also covers the shell-absorber route and its evanescent
-    (kR0<1) limit for context.
-
-    Ref: K. Sugahara, "Spherical Absorbing Conditions Based on Electrical
-    Images"; Sugahara & Sato URN (IEEE Access 2026); Grote & Keller, SIAM J.
-    Appl. Math. 55 (1995); Jin, FEM in EM 3rd ed Ch.12.
-
-    Args:
-        topic: all | overview | frequency_domain | causality | exact_dtn |
-               timedomain | broadband_design | application
-    """
-    return get_iabc_documentation(topic)
 
 
 @mcp.tool()
