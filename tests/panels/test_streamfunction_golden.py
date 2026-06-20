@@ -65,7 +65,7 @@ def biplanar_vols(tmp_path_factory):
     return coil, evalv
 
 
-def _run_calc(coil, evalv, target, extra=None):
+def _run_calc(coil, evalv, target, extra=None, expect_error=False):
     cmd = [sys.executable, CALC, "--coil-vol", coil, "--eval-vol", evalv,
            "--order", "2"]
     if target is not None:
@@ -82,6 +82,19 @@ def _run_calc(coil, evalv, target, extra=None):
                 or (not r.stderr.strip() and abs(r.returncode) > 1000000)):
             pytest.skip("NGSolve/MKL subprocess env issue (LAB pytest); run "
                         "calc_streamfunction.py directly to verify")
+        # fail-loud calc_main (CLAUDE.md No-Fallback) exits non-zero on an
+        # {"error": ...} result but STILL prints the error JSON to stdout; for
+        # an EXPECTED user error (bad flags / missing material) parse + return
+        # that dict, else re-raise the genuine failure.
+        if expect_error:
+            elines = [ln for ln in r.stdout.splitlines() if ln.strip()]
+            if elines:
+                try:
+                    d = json.loads(elines[-1])
+                    if isinstance(d, dict) and "error" in d:
+                        return d
+                except json.JSONDecodeError:
+                    pass
         raise AssertionError(
             f"calc_streamfunction.py failed (rc={r.returncode}):\n"
             f"STDERR:\n{r.stderr[-1500:]}")
@@ -768,9 +781,11 @@ def test_streamfunction_design_target_harmonic(sample_vols):
 
 
 def test_streamfunction_target_harmonic_xor(sample_vols):
-    """Giving both --target-cf and --target-harmonic is a loud error."""
+    """Giving both --target-cf and --target-harmonic is a loud error (fail-loud
+    calc_main exits non-zero, the error JSON is still on stdout)."""
     coil, evalv = sample_vols
-    r = _run_calc(coil, evalv, "x", extra=["--target-harmonic", "X"])
+    r = _run_calc(coil, evalv, "x", extra=["--target-harmonic", "X"],
+                  expect_error=True)
     assert "error" in r and "not both" in r["error"]
 
 
