@@ -332,8 +332,10 @@ def test_em_panel_rejects_step_coil_input():
          "--material", "linear", "--mu-r", "1000"],
         capture_output=True, text=True, timeout=60)
 
-    # calc_main wraps exceptions in JSON {"error": ...} with rc=0,
-    # so check the message text rather than the return code.
+    # calc_main wraps exceptions in JSON {"error": ...} on stdout AND
+    # exits non-zero (radia >= 4.92.0, commit 5b88b67f, "No Fallbacks
+    # -- Fail Fast" policy).  Both stdout and stderr are inspected
+    # for the message text.
     combined = (proc.stdout + proc.stderr).lower()
     assert "step" in combined and "peec" in combined, (
         f"Expected 'STEP'/'PEEC' in rejection message.  Got:\n"
