@@ -368,17 +368,18 @@ class TestMeshImportSolver(unittest.TestCase):
         # M should be positive (induced by external field)
         self.assertGreater(M_avg_z, 0, "Magnetization should be positive")
 
-    def test_hex_mesh_soft_iron_solve_removed(self):
-        """A hexahedral mesh of soft iron (ObjHexahedron + MatLin) solved via rad.Solve now RAISES:
-        the yano-type collocation MSC demag was removed.  Hex soft iron must be built from an NGSolve
-        mesh via radia.vim.soft_iron_from_mesh (the FEEC HDiv-VIM).  (The tetrahedral mesh solve above
-        -- MMM -- and permanent-magnet fields are unaffected.)"""
+    def test_hex_mesh_soft_iron_solve_yano(self):
+        """A hexahedral mesh of soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the
+        yano-type collocation MSC demag (kept 2026-06-19; the Error203 guard was removed).  In a
+        uniform applied field the cube magnetizes (M_avg_z > 0), like the tetrahedral (MMM) solve
+        above.  (Permanent-magnet fields are unaffected.)"""
         center = [0.0, 0.0, 0.0]
         size = [1.0, 1.0, 1.0]
         n_div = 3
         mu_r = 1000.0
         B_ext = MU_0 * 1000.0
 
+        rad.set_demag_backend("auto")
         rad.UtiDelAll()
         nodes, hexahedra = create_cube_hex_mesh(center, size, n_div)
         polyhedra = [rad.ObjHexahedron([nodes[i] for i in hx], [0, 0, 0]) for hx in hexahedra]
@@ -386,8 +387,9 @@ class TestMeshImportSolver(unittest.TestCase):
         rad.MatApl(cube_hex, rad.MatLin(mu_r))
         grp_hex = rad.ObjCnt([cube_hex, rad.ObjBckg(lambda p: [0, 0, B_ext])])
 
-        with self.assertRaisesRegex(RuntimeError, "yano-type MSC"):
-            rad.Solve(grp_hex, 0.001, 100, 1)
+        rad.Solve(grp_hex, 0.001, 100, 1)        # yano-MSC; no Error203
+        M_avg_z = sum(rad.ObjM(p)["magnetization"][2] for p in polyhedra) / len(polyhedra)
+        self.assertGreater(M_avg_z, 0, "yano-MSC: hex cube should magnetize in the applied field")
 
 
 class TestMethodComparison(unittest.TestCase):
