@@ -69,6 +69,24 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     return cont
 
 
+def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None, verbose=False):
+    """Build a soft-iron Radia container from a netgen ``.vol`` FILE -- the canonical, correctly
+    oriented geometry interchange for BOTH demag backends.
+
+    ``.vol`` is the SOLE Cubit<->NGSolve mesh interchange (Cubit ``export netgen`` / Netgen / OCC
+    ``ngmesh.Save``).  Loading via NGSolve lets netgen own the mesh topology + face orientation,
+    which avoids the hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding that silently
+    breaks the HDiv surface charge).  Both backends then read the SAME mesh: the default/'hdiv' path
+    solves on the registered mesh (FEEC HDiv-VIM); set_demag_backend('yano') solves the built
+    ObjHexahedron/Tetrahedron/Wedge elements (yano-type MSC).  Exactly one of ``mu_r`` (linear) or
+    ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.  (Caller opens ``with ng.TaskManager():``.)
+    """
+    import ngsolve as ng
+    mesh = ng.Mesh(str(vol_path))
+    return soft_iron_from_mesh(mesh, mu_r=mu_r, bh_table=bh_table,
+                               material_filter=material_filter, verbose=verbose)
+
+
 def is_registered(top):
     """True if ``top`` (a rad.Solve object handle) IS, or CONTAINS, a soft-iron body registered via
     soft_iron_from_mesh -- i.e. the rad.Solve wrapper should dispatch it to the FEEC HDiv-VIM.  Used by

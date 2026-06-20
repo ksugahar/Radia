@@ -1237,6 +1237,140 @@ def check_curve_after_vol_import(filepath: str, lines: List[str]) -> List[Dict]:
     return findings
 
 
+def check_coil_scalar_potential_as_lift(filepath: str, lines: List[str]) -> List[Dict]:
+    """CRITICAL: a coil's magnetic SCALAR potential must not drive a reduced-Omega FEM.
+
+    A current loop's magnetic scalar potential Omega_s (= -rad.Fld(coil, 'phi'),
+    the solid-angle potential) is MULTIVALUED -- it jumps by the ampere-turns NI
+    across the loop's spanning surface.  For a coil that links the iron magnetic
+    circuit (any real electromagnet), using Omega_s as a Dirichlet LIFT on the
+    iron-air interface (``gf.Set(Omega_s, BND, ...)``) is ill-posed: the iron
+    magnetises but the air/gap field comes out ~100% wrong, MESH-INDEPENDENTLY.
+    (The bug hides because the only validations were UNIFORM sources, whose
+    Omega_s = H0*z is single-valued.)
+
+    The production accelerator-magnet pipeline (``calc_accel_magnet.py``) does it
+    correctly: the source enters as the single-valued VECTOR field
+    ``H_s = rad.RadiaField(coil, 'h')`` in a VOLUME integral,
+
+        a += mu * grad(u) * grad(v) * dx
+        f += mu * H_s * grad(v) * dx          # H = H_s - grad(Omega)
+
+    Likewise ``ScalarPotentialSolver.solve_total_reduced_potential`` (the
+    Omega_s-lift two-scalar method) is broken for coil sources -- prefer
+    ``solve_single_potential`` / ``solve_nonlinear_newton`` (vector H_s).
+    """
+    findings = []
+    # The owner of the (deprecated/broken) method legitimately defines and
+    # dispatches to it -- do not self-flag that library file.
+    if os.path.basename(filepath) == 'scalar_potential_solver.py':
+        return findings
+    text = '\n'.join(lines)
+    has_phi = bool(re.search(r"(?:RadiaField|rad\.Fld)\s*\([^)]*['\"]phi['\"]", text))
+    calls_total_reduced = 'solve_total_reduced_potential' in text
+    if not (has_phi or calls_total_reduced):
+        return findings
+
+    # Track variables bound to a coil scalar potential: direct + one-level aliases.
+    phi_assign = re.compile(
+        r"^(\w+)\s*=\s*[^#\n]*(?:RadiaField|rad\.Fld)\s*\([^)]*['\"]phi['\"]")
+    phi_vars = set()
+    in_doc = False
+    for line in lines:
+        s = line.strip()
+        if s.count('"""') == 1 or s.count("'''") == 1:
+            in_doc = not in_doc
+            continue
+        if in_doc or s.startswith('#'):
+            continue
+        m = phi_assign.search(s.split('#', 1)[0])
+        if m:
+            phi_vars.add(m.group(1))
+    # one-level aliases:  Om = -1.0 * phi   /   Omega_s = -phi
+    if phi_vars:
+        alias = re.compile(
+            r"^(\w+)\s*=\s*[-\d.\s()*+]*\b(" + '|'.join(map(re.escape, phi_vars)) + r")\b")
+        in_doc = False
+        for line in lines:
+            s = line.strip()
+            if s.count('"""') == 1 or s.count("'''") == 1:
+                in_doc = not in_doc
+                continue
+            if in_doc or s.startswith('#'):
+                continue
+            m = alias.search(s.split('#', 1)[0])
+            if m:
+                phi_vars.add(m.group(1))
+
+    # GridFunctions filled FROM a coil scalar potential (`gf.Set(<...phi...>)`):
+    # projecting phi into a GridFunction is fine, but the GridFunction then
+    # carries the multivalued potential, so a LATER `.Set(gf, BND, ...)` lift is
+    # the bug.  Track those GridFunctions too (the projection line has no BND, so
+    # it is not itself flagged).
+    set_from_phi = re.compile(r"^(\w+)\.Set\s*\(([^)]*)\)")
+    in_doc = False
+    for line in lines:
+        s = line.strip()
+        if s.count('"""') == 1 or s.count("'''") == 1:
+            in_doc = not in_doc
+            continue
+        if in_doc or s.startswith('#'):
+            continue
+        code = s.split('#', 1)[0]
+        m = set_from_phi.search(code)
+        if m and 'BND' not in code and 'Boundaries(' not in code:
+            arg = m.group(2)
+            if re.search(r"(?:RadiaField|rad\.Fld)\s*\([^)]*['\"]phi['\"]", arg) \
+                    or any(re.search(r'\b' + re.escape(pv) + r'\b', arg) for pv in phi_vars):
+                phi_vars.add(m.group(1))
+
+    in_doc = False
+    for i, line in enumerate(lines, 1):
+        s = line.strip()
+        if s.count('"""') == 1 or s.count("'''") == 1:
+            in_doc = not in_doc
+            continue
+        if in_doc or s.startswith('#'):
+            continue
+        code = s.split('#', 1)[0]
+        # (a) a coil scalar potential used as a boundary Dirichlet lift
+        is_bnd_set = ('.Set(' in code and ('BND' in code or 'Boundaries(' in code))
+        if is_bnd_set:
+            uses_phi = bool(re.search(r"(?:RadiaField|rad\.Fld)\s*\([^)]*['\"]phi['\"]", code)) \
+                or any(re.search(r'\b' + re.escape(pv) + r'\b', code) for pv in phi_vars)
+            if uses_phi:
+                findings.append({
+                    'line': i,
+                    'severity': 'CRITICAL',
+                    'rule': 'coil-scalar-potential-as-lift',
+                    'message': (
+                        "A coil magnetic SCALAR potential (rad.Fld/RadiaField 'phi') is "
+                        "used as a Dirichlet boundary LIFT (.Set(..., BND, ...)). The "
+                        "coil scalar potential is MULTIVALUED (solid angle, jumps by NI) "
+                        "for any current loop linking iron, so this lift is ill-posed -> "
+                        "~100% wrong air/gap field (mesh-independent). Drive the reduced-"
+                        "Omega FEM with the VECTOR source H_s = rad.RadiaField(coil,'h') in "
+                        "a VOLUME integral (H = H_s - grad(Omega)), as calc_accel_magnet.py "
+                        "does: f += mu * H_s * grad(v) * dx."
+                    ),
+                })
+        # (b) the broken Omega_s-lift two-scalar method, called (not defined)
+        if 'solve_total_reduced_potential' in code and not code.lstrip().startswith('def '):
+            findings.append({
+                'line': i,
+                'severity': 'HIGH',
+                'rule': 'coil-scalar-potential-as-lift',
+                'message': (
+                    "solve_total_reduced_potential() (Omega_s-lift two-scalar) is broken "
+                    "for coil sources: it couples the coil via its MULTIVALUED scalar "
+                    "potential Omega_s on the iron boundary -> ~100% wrong gap field "
+                    "(validated only on uniform sources). Use solve_single_potential / "
+                    "solve_nonlinear_newton, which use the vector H_s = RadiaField(coil,'h')."
+                ),
+            })
+    return findings
+
+
 # All rules in execution order
 ALL_RULES = [
     # NGSolve FEM rules
@@ -1256,6 +1390,7 @@ ALL_RULES = [
     check_ngsolve_kelvin_missing_bonus_intorder,
     check_curve_after_vol_import,
     check_axisymmetric_h1_over_r,
+    check_coil_scalar_potential_as_lift,
     # Shared PEEC/BEM rules
     check_bessel_jv_for_sibc,
     check_peec_low_nseg,

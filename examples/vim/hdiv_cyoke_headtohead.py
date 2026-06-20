@@ -1,6 +1,6 @@
 """hdiv_cyoke_headtohead.py -- wall-clock head-to-head: the SCALABLE HDiv-VIM (now dense-N^2-FREE) on the
-C-yoke vs the yano-type distortion-element reference (saved on this machine; numbers embedded below for
-reproducibility, since the yano JSON is not committed to this repo).
+C-yoke vs the yano-type distortion-element reference (numbers embedded below for reproducibility; the
+source JSONs are now committed under reference_yano_msc/ -- rescued from git history, see its README).
 
 The scalable HDiv-VIM path is dense-N^2-free as of 2026-06-09:
   - BUILD: O(N log N) analytic charge-Gram H-matrix with the near/far split (analytic near, monopole far),
@@ -45,7 +45,8 @@ from radia.vim import _nonlinear as nl                       # noqa: E402
 ng.SetNumThreads(4)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# yano-type distortion-element solver reference (saved on the LAB machine; embedded for reproducibility).
+# yano-type distortion-element solver reference (committed under reference_yano_msc/golden/; embedded here
+# for reproducibility -- the LU/BiCGSTAB/HACApK x DOF matrix is the superset of the two points below).
 YANO_REF = {
     "method": "yano-type distortion elements + loop-star (LAB machine, saved)",
     "points": [

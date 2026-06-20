@@ -1146,29 +1146,33 @@ sideset 1 add surface 2             # surface 2 may not be the gap face
 - MMM: volume integral equation for magnetization, solved element-by-element
 - MSC: surface charge on element faces, solved via solid angle kernel
 
-**REMOVED (2026-06-19): the yano-type collocation MSC demag for hex/wedge soft iron is GONE.**
-The Yano MSC backend (the `rad.Solve` collocation-surface-charge demag for hex/wedge *soft-iron*) has
-been **functionally removed** in favour of the FEEC HDiv-VIM (`radia.vim`).  (The method is preserved
-in the private MAGIC Fortran repo; Yano's academic work is still cited.)  Current state:
-- **`rad.Solve` auto-routes** by mesh registration: a soft iron built via
-  `radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=)` dispatches to the HDiv-VIM (tet/hex/wedge,
-  linear + nonlinear, PM-as-source incl. PM-touching-iron); everything else (tet **MMM**, permanent
-  magnets) stays on the C++ solver.  No `set_demag_backend` call is needed.
-- A hex/wedge soft iron built the **mesh-less** way (`ObjHexahedron`/`ObjWedge` + `MatLin`/`MatSatIsoTab`
-  + `rad.Solve`) now **raises `Radia::Error203`** (C++ guard in `SolveGen`, via
-  `radTInteraction::HasSurfaceChargeElements()`) directing to `soft_iron_from_mesh`.  Build hex/wedge
-  soft iron from an NGSolve mesh.
-- `radia.set_demag_backend("yano")` raises `NotImplementedError`; `get_demag_backend()` returns
-  `"hdiv"`; `set_demag_backend("hdiv")` is a no-op (back-compat shim).  Wrapper in
-  `src/radia/__init__.py`; goldens `tests/test_demag_backend.py`, `tests/feec/test_hdiv_radsolve_dispatch.py`.
+**KEEP BOTH (decision 2026-06-19): yano-type MSC AND the FEEC HDiv-VIM are both kept.**  The earlier
+"drop yano-type" plan was CANCELLED -- measured that yano-MSC reaches the converged field with FEWER
+hex elements than HDiv RT0 (yano-MSC = 6 surface-charge DOF/hex, higher per-element order; HDiv RT0 =
+1 flux DOF/face, lowest order).  The two are COMPLEMENTARY: **yano-MSC for per-element accuracy on hex;
+HDiv-VIM for loop-free (mesh/mu_r-independent ~6 Newton iters) convergence.**  (yano is also preserved
+in the private MAGIC Fortran repo; Yano's academic work is cited.)
+
+- **Canonical geometry path for BOTH backends = `.vol` -> NGSolve `Mesh` -> `radia.vim.soft_iron_from_mesh`
+  (or the one-call `soft_iron_from_vol("iron.vol", mu_r=/bh_table=)`).**  `.vol` is the SOLE
+  Cubit<->NGSolve interchange (Cubit `export netgen` / Netgen / OCC `ngmesh.Save`); netgen owns the mesh
+  orientation, which avoids hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding silently
+  breaking the HDiv surface charge -- a real bug seen 2026-06-19).  The returned container carries BOTH
+  representations (Radia `ObjHexahedron/Tetrahedron/Wedge` for yano + field eval; the registered NGSolve
+  mesh for HDiv), so either backend can solve it.  Do NOT hand-build netgen meshes for this.
+- **Backend selection** (`radia.set_demag_backend(...)`, default `"auto"`):
+  - `"auto"` (API-split, default): a mesh-backed soft iron (`soft_iron_from_mesh`) -> HDiv-VIM; a
+    mesh-LESS soft iron (`ObjHexahedron`/`ObjWedge` + `MatLin`/`MatSatIsoTab` built directly) -> yano-MSC;
+    tet (MMM) and permanent magnets -> C++ solver.
+  - `"yano"` -> force the yano-type MSC (solves the container's `ObjHexahedron`/`Wedge` elements, incl. a
+    `soft_iron_from_mesh` body); `"hdiv"` -> force the HDiv-VIM (needs a mesh-backed body).
+  - Per-call override: `rad.Solve(cont, ..., demag_backend="yano"|"hdiv"|"auto")`.
+  - Wrapper in `src/radia/__init__.py`; goldens `tests/test_demag_backend.py`,
+    `tests/feec/test_hdiv_radsolve_dispatch.py`, `tests/feec/test_vol_both_backends.py`.
 - **MMM (tetrahedron)** soft-iron demag and **permanent magnets** are UNAFFECTED (not the yano path).
-- **Deferred (honest):** the yano-MSC C++ *kernel* (the `Use6DOF_MSC` branches in `rad_relaxation_methods.cpp`
-  / `rad_interaction.cpp`, and the hex-MSC matrix assembly that `BuildMatrix` + the H-LU test still use)
-  is interwoven with the MMM 3DOF path and is physically PRESENT-but-`Solve`-unreachable (gated).  Its
-  clean physical excision (keeping HACApK + MMM + elements + fields + PM) is a separate verified pass.
-  Also deferred: IMA symmetry for hex/wedge (the HDiv-VIM full-model only; the MSC IMA path is gone),
-  and migrating the ~28 `examples/**` scripts + `examples/cube_uniform_field` hex benchmarks that solved
-  hex soft iron via the old mesh-less path.
+- The yano-MSC C++ kernel (`Use6DOF_MSC` branches in `rad_relaxation_methods.cpp` / `rad_interaction.cpp`,
+  hex-MSC assembly in `BuildMatrix`) is LIVE again (the `SolveGen` Error203 guard was removed
+  2026-06-19).  HACApK stays.
 
 **When to use which**:
 - Permanent magnets, soft iron → **MMM/MSC** (Radia)
@@ -1195,6 +1199,61 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 │  WEAK: Circuit parameters   │  OK: L, R, C, M extraction       │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Reduce Proprietary API Surface — Plumbing to netgen/ngsolve, Methods Stay (2026-06-19)
+
+**POLICY**: Extend "Complement NGSolve" to the **API surface itself**:
+**aggressively delete Radia-proprietary APIs that duplicate netgen/ngsolve
+(the plumbing), and lean on netgen/ngsolve for those parts.**  BUT this is a
+**plumbing-vs-method** line, NOT a "uses-ngsolve-vs-not" line — the genuine
+numerical METHODS stay (even when built on ngsolve, like `axifem` or the
+HDiv-VIM), because they are exactly the value NGSolve does not provide.
+
+**The decision rule (apply every time):**
+> "Does netgen/ngsolve already provide this?"
+> - **YES (plumbing)** → delete Radia's version, delegate to netgen/ngsolve.
+> - **NO (a method NGSolve lacks: open-boundary analytic field, MMM/MSC,
+>   PEEC, Henrotte axisymmetric FE, ...)** → KEEP it (and over time DEMOTE it
+>   from a user-facing API to an internal C++/representation detail — keep ≠
+>   expose; the un-pybind path is gradual, see the 2-layer API below).
+
+**DELETE / delegate (plumbing — netgen/ngsolve own it):**
+- Mesh generation & representation → netgen mesh / `.vol` (e.g. retire
+  `create_hex_mesh_grid`; use `MakeStructured3DMesh` / OCC / Cubit).
+- Mesh I/O, geometry/CAD kernels → NGSolve / OCC.
+- Visualization & mesh export → GMSH / the Cubit plugin (mostly already removed:
+  `ObjDrwVTK`, pyvista, `ObjDivMag`…).
+- Generic linear algebra → MKL / NGSolve.
+- **The geometry PRIMITIVES (`ObjHexahedron`/`ObjRecMag`/…) as the user's
+  hand-built-mesh API** → replaced by `.vol` → `soft_iron_from_mesh`/`_from_vol`
+  + the intent objects below.  (The primitives are NOT deleted — see KEEP — they
+  are demoted to the internal representation.)
+
+**KEEP (genuine methods — Radia's reason to exist; never delete, even on ngsolve):**
+the whole `core` set — `rad.Fld` **analytic open-boundary field** (the crown
+jewel), **MMM/MSC**, **yano-MSC**, **HDiv-VIM**, **`axifem`** (Henrotte
+axisymmetric FE — NGSolve has no native Henrotte magnetic basis), **DtN/FEM-Kelvin
+operator**, **PEEC**, **BEM** (`sibc_hacapk`…), **sparsesolv** (Compact AMS/AMG/COCR),
+**HACApK**, **analytical_formulas**, **coil_builder** (mesh-free Biot-Savart source),
+and the application methods (**levitation/ECB**, **stream-function**).  These are
+KEPT as internal kernels even as their direct user-facing pybind surface shrinks.
+
+**Target = a 2-layer API:**
+- **User layer (pybind, intent-based):** `radia.SoftIron("yoke.vol", mu_r=)` /
+  `Magnet(...)` / `CoilBuilder(...)` — "place a magnet / soft iron / coil",
+  geometry from `.vol` or simple-shape constructors; backend selected, not
+  re-APIed.  Built on NGSolve mesh/geometry where possible.
+- **Internal layer (shrinking pybind surface → C++-internal):** the proprietary
+  field kernels, demag solvers, and element primitives (`ObjHexahedron`…).  Move
+  builders to C++ and un-pybind the primitives **gradually** (CoilBuilder /
+  panels / examples depend on them today — demote first, remove after migration).
+
+**Unify yano-MSC + HDiv-VIM under ONE soft-iron path** (already mostly done): the
+SAME `.vol` → mesh → element container → `rad.Fld`, with the demag backend a
+**selector** (`set_demag_backend` / `SoftIron.solve(backend=…)`), NOT two diverging
+APIs.  "Unify" = one ingestion/data/field-eval/API; it does **not** merge the two
+algorithms (that would defeat keeping both — yano = per-element accuracy, HDiv =
+loop-free convergence).
 
 ### Maglev Analysis: Radia + NGSolve, Not FEM Alone
 

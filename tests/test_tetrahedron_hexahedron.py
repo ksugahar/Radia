@@ -169,11 +169,12 @@ class TestMaterialApplication:
         result = rad.Solve(tetra, 0.0001, 100, 0)
         assert result is not None
 
-    def test_hexahedron_soft_iron_solve_removed(self):
-        """A hex soft iron (ObjHexahedron + MatLin) solved via rad.Solve now RAISES: the yano-type
-        collocation MSC demag was removed.  Hex/wedge soft iron must be built from an NGSolve mesh via
-        radia.vim.soft_iron_from_mesh (the FEEC HDiv-VIM).  (The ObjHexahedron API + permanent-magnet
-        fields are unaffected -- only the soft-iron MSC SOLVE is gone.)"""
+    def test_hexahedron_soft_iron_solve_yano(self):
+        """A hex soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the yano-type collocation
+        MSC demag (kept 2026-06-19; the Error203 guard was removed).  With no applied field M stays 0 --
+        this just locks that the mesh-less hex path SOLVES (no raise).  The yano physics (cube demag
+        ~1/3) is locked in tests/test_demag_backend.py."""
+        rad.set_demag_backend("auto")
         s = 0.05
         vertices = [
             [-s, -s, -s], [s, -s, -s], [s, s, -s], [-s, s, -s],
@@ -181,8 +182,9 @@ class TestMaterialApplication:
         ]
         hex_obj = rad.ObjHexahedron(vertices, [0, 0, 0])
         rad.MatApl(hex_obj, rad.MatLin(1000))
-        with pytest.raises(RuntimeError, match="yano-type MSC"):
-            rad.Solve(hex_obj, 0.0001, 100, 0)
+        rad.Solve(hex_obj, 0.0001, 100, 0)        # yano-MSC; no Error203
+        M = rad.ObjM(hex_obj)["magnetization"]
+        assert abs(M[0]) + abs(M[1]) + abs(M[2]) < 1e-6   # no source -> M stays 0
 
 
 class TestContainer:
