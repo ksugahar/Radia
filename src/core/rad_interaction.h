@@ -278,6 +278,11 @@ class radTInteraction : public radTg {
 	std::vector<double> m_hexaFaceAreas;          // n_hex * 6: face areas
 	std::vector<double> m_hexaTriVertices;        // n_hex * 6 * 2 * 3 * 3: 2 triangles per face, 3 verts, xyz
 	std::vector<double> m_hexaTriSigns;           // n_hex * 6 * 2: sign correction for each triangle
+	// Improved yano-type pyramid-cloud kernel (built only when g_yano_pyramid_cloud): per-hex
+	// element-common compensation cloud, so Compute6x6BlockFast can use the fast path with the cloud.
+	std::vector<double> m_hexaCloudPts;           // n_hex * m_hexaCloudN * 3: cloud points (global)
+	std::vector<double> m_hexaCloudWts;           // n_hex * m_hexaCloudN: normalised weights (sum=1 per hex)
+	int m_hexaCloudN = 0;                         // cloud points per hex (0 = not built)
 	std::vector<int> m_hexaElemIndices;           // Maps hex index to element index
 	std::vector<int> m_globalToHexIdx;            // Maps global element index to hex index (-1 if not hex)
 
