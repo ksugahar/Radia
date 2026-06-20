@@ -416,6 +416,11 @@ public:
 	TVector3d MscVolumeCentroid() const;
 	TVector3d MscEvalPoint(int faceIdx) const;
 	TVector3d MscCompensationField(const TVector3d& obs, int faceIdx) const;
+	// Element-common compensation cloud (the loop-source-null pyramid cloud): fills pts[] (global) and
+	// wts[] (normalised, sum=1) with up to `cap` (volume-centroid, edge) 3-pt-quadrature points; returns
+	// the count.  Single source for both MscCompensationField (inline path) and the precomputed
+	// Compute6x6BlockFast fast path, so the two agree by construction.  For a hexahedron count==72.
+	int MscCompensationCloud(TVector3d* pts, double* wts, int cap) const;
 
 	// 6 DOF MSC setup for hexahedra
 	// IMPORTANT: This relies on Netgen face winding convention for correct normal direction.

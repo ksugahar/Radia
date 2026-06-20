@@ -940,11 +940,11 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		if(m_elemDOF[i] != 6) allHex = false;
 	}
 
-	// ULTRA-FAST PATH: Pure hexahedra without symmetry
-	// (skipped when the improved yano-type pyramid-cloud kernel is enabled: that kernel is wired into
-	//  the inline MEDIUM/SLOW paths below via radTPolyhedron::MscEvalPoint / MscCompensationField, not
-	//  the precomputed-geometry fast path -- so the flag falls through to the inline path here.)
-	if(!hasSymmetry && allHex && !g_yano_pyramid_cloud)
+	// ULTRA-FAST PATH: Pure hexahedra without symmetry.  Flag-aware (stage 2): PrecomputeHexaGeometry +
+	// Compute6x6BlockFast handle BOTH the EIEM2 default and the pyramid-cloud kernel (flag on) -- the
+	// eval points come from MscEvalPoint and the compensation from the precomputed cloud, matching the
+	// inline path.  (Pure wedges still fall through to the inline path; Compute5x5BlockFast is unported.)
+	if(!hasSymmetry && allHex)
 	{
 		PrecomputeHexaGeometry();
 		if(m_hexaGeomReady)
@@ -2358,6 +2358,21 @@ void radTInteraction::PrecomputeHexaGeometry()
 	m_hexaTriVertices.resize(nHex * 6 * 2 * 3 * 3);  // 6 faces, 2 tris, 3 verts, xyz
 	m_hexaTriSigns.resize(nHex * 6 * 2);    // 6 faces, 2 tris
 
+	// Pyramid-cloud kernel (flag on): per-hex element-common compensation cloud (6 faces * 4 edges *
+	// 3-pt quadrature = 72 points/hex; degenerate hexes zero-pad).  Flag off keeps the single point charge.
+	if(g_yano_pyramid_cloud)
+	{
+		m_hexaCloudN = 72;
+		m_hexaCloudPts.assign((size_t)nHex * m_hexaCloudN * 3, 0.0);
+		m_hexaCloudWts.assign((size_t)nHex * m_hexaCloudN, 0.0);
+	}
+	else
+	{
+		m_hexaCloudN = 0;
+		m_hexaCloudPts.clear();
+		m_hexaCloudWts.clear();
+	}
+
 	for(int h = 0; h < nHex; h++)
 	{
 		int elemIdx = m_hexaElemIndices[h];
@@ -2382,11 +2397,12 @@ void radTInteraction::PrecomputeHexaGeometry()
 			// Store face area
 			m_hexaFaceAreas[h * 6 + f] = poly->FaceArea[f];
 
-			// Store Yano evaluation point: midpoint(face_center, element_center)
+			// Store collocation eval point: EIEM2 midpoint (flag off) or pyramid centroid (flag on).
 			int epIdx = (h * 6 + f) * 3;
-			m_hexaEvalPoints[epIdx + 0] = 0.5 * (poly->FaceCenter[f].x + poly->CentrPoint.x);
-			m_hexaEvalPoints[epIdx + 1] = 0.5 * (poly->FaceCenter[f].y + poly->CentrPoint.y);
-			m_hexaEvalPoints[epIdx + 2] = 0.5 * (poly->FaceCenter[f].z + poly->CentrPoint.z);
+			TVector3d ep = poly->MscEvalPoint(f);
+			m_hexaEvalPoints[epIdx + 0] = ep.x;
+			m_hexaEvalPoints[epIdx + 1] = ep.y;
+			m_hexaEvalPoints[epIdx + 2] = ep.z;
 
 			// Get face vertices and split into 2 triangles
 			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
@@ -2453,6 +2469,23 @@ void radTInteraction::PrecomputeHexaGeometry()
 					sign = (dot >= 0) ? 1.0 : -1.0;
 				}
 				m_hexaTriSigns[(h * 6 + f) * 2 + t] = sign;
+			}
+		}
+
+		// Pyramid-cloud kernel (flag on): precompute this hex's element-common compensation cloud
+		// (normalised, sum=1) via the SAME helper the inline path uses -> fast path == inline path.
+		if(g_yano_pyramid_cloud && m_hexaCloudN > 0)
+		{
+			TVector3d cpts[96];
+			double cwts[96];
+			int nc = poly->MscCompensationCloud(cpts, cwts, m_hexaCloudN);
+			for(int k = 0; k < nc; k++)
+			{
+				size_t b = (size_t)h * m_hexaCloudN + k;
+				m_hexaCloudPts[b*3 + 0] = cpts[k].x;
+				m_hexaCloudPts[b*3 + 1] = cpts[k].y;
+				m_hexaCloudPts[b*3 + 2] = cpts[k].z;
+				m_hexaCloudWts[b] = cwts[k];
 			}
 		}
 	}
@@ -2972,9 +3005,32 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 				H_total[2] += H_tri[2];
 			}
 
-			// Point charge contribution: m = -sigma * area
-			// H_point = -area * (r - p) / |r - p|^3
+			// Compensation: single point charge -area at the element center (flag off, historical) or the
+			// precomputed element-common cloud (flag on; same normalised cloud the inline path uses).
 			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
+			if(g_yano_pyramid_cloud && m_hexaCloudN > 0)
+			{
+				const double* cp = &m_hexaCloudPts[(size_t)hex_j * m_hexaCloudN * 3];
+				const double* cw = &m_hexaCloudWts[(size_t)hex_j * m_hexaCloudN];
+				double Hc[3] = {0.0, 0.0, 0.0};
+				for(int k = 0; k < m_hexaCloudN; k++)
+				{
+					double w = cw[k];
+					if(w == 0.0) continue;
+					double r[3] = {obs[0] - cp[k*3+0], obs[1] - cp[k*3+1], obs[2] - cp[k*3+2]};
+					double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+					if(dist_sq > 1e-30)
+					{
+						double dist = sqrt(dist_sq);
+						double cf = w / (dist * dist_sq);
+						Hc[0] += cf * r[0]; Hc[1] += cf * r[1]; Hc[2] += cf * r[2];
+					}
+				}
+				H_total[0] += -area_j * Hc[0];
+				H_total[1] += -area_j * Hc[1];
+				H_total[2] += -area_j * Hc[2];
+			}
+			else
 			{
 				double r[3] = {obs[0] - src_center_orig[0],
 				               obs[1] - src_center_orig[1],
@@ -3971,6 +4027,16 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 	if(!m_imaEnabled)
 	{
 		std::cerr << "[Radia] Error: IMA not enabled" << std::endl;
+		return 0;
+	}
+
+	// Stage 1/2 scope: the improved yano-type pyramid-cloud kernel is wired into the dense fast/inline
+	// paths only, NOT the IMA mirrored-source compensation -- so flag-ON + image symmetry would mix
+	// kernels.  Fail loud rather than silently produce an inconsistent matrix (No-Fallbacks).
+	if(g_yano_pyramid_cloud)
+	{
+		std::cerr << "[Radia] Error: SolverConfig(yano_pyramid_cloud=True) does not support IMA image "
+		             "symmetry yet; solve the full (unmirrored) model or disable the flag." << std::endl;
 		return 0;
 	}
 

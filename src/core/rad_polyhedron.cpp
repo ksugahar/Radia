@@ -2663,24 +2663,18 @@ TVector3d radTPolyhedron::MscEvalPoint(int faceIdx) const
 	return TVector3d(0.75*fac.x + 0.25*vc.x, 0.75*fac.y + 0.25*vc.y, 0.75*fac.z + 0.25*vc.z);
 }
 
-// Source-face charge-neutralising compensation field at obs (no 1/4pi divisor), total charge -FaceArea[faceIdx].
-TVector3d radTPolyhedron::MscCompensationField(const TVector3d& obs, int faceIdx) const
+// Element-common compensation cloud (loop-source-null): up to `cap` (volume-centroid, edge_v0, edge_v1)
+// 3-pt-quadrature points with weights normalised to sum 1; returns the count.  Every face edge is
+// enumerated (each interior edge twice, once per adjacent face) -> after normalisation this is identical
+// to the unique-edge "pyr_faces12" cloud.  SINGLE SOURCE for both MscCompensationField (inline path) and
+// the precomputed Compute6x6BlockFast fast path, so the two paths agree by construction.
+int radTPolyhedron::MscCompensationCloud(TVector3d* pts, double* wts, int cap) const
 {
-	double area = FaceArea[faceIdx];
-	if(!g_yano_pyramid_cloud)
-	{
-		// Single point charge -area at the element center (historical default).
-		return FieldFromPointCharge(obs, -area);
-	}
-	// Element-common cloud: union over every face edge of triangle (volume-centroid, edge_v0, edge_v1),
-	// 3-pt quadrature, total weight normalised to 1, scaled to total charge -area.  Each interior edge
-	// is enumerated twice (once per adjacent face) -> normalisation makes this identical to the unique-edge
-	// "pyr_faces12" cloud.  Element-common (faceIdx only sets the -area scale) -> loop-source-null.
 	static const double B3[3][3] = {{2.0/3.0, 1.0/6.0, 1.0/6.0},
 	                                 {1.0/6.0, 2.0/3.0, 1.0/6.0},
 	                                 {1.0/6.0, 1.0/6.0, 2.0/3.0}};
 	TVector3d C = MscVolumeCentroid();
-	TVector3d Hsum(0.0, 0.0, 0.0);
+	int n = 0;
 	double wtot = 0.0;
 	for(int f = 0; f < AmOfFaces; f++)
 	{
@@ -2703,18 +2697,41 @@ TVector3d radTPolyhedron::MscCompensationField(const TVector3d& obs, int faceIdx
 			double w = A / 3.0;
 			for(int q = 0; q < 3; q++)
 			{
-				TVector3d p(B3[q][0]*C.x + B3[q][1]*va.x + B3[q][2]*vb.x,
-				            B3[q][0]*C.y + B3[q][1]*va.y + B3[q][2]*vb.y,
-				            B3[q][0]*C.z + B3[q][1]*va.z + B3[q][2]*vb.z);
-				TVector3d h = FieldFromPointChargeAt(obs, p, 1.0);
-				Hsum.x += w*h.x; Hsum.y += w*h.y; Hsum.z += w*h.z;
+				if(n >= cap) { if(wtot > 1e-300) for(int i = 0; i < n; i++) wts[i] /= wtot; return n; }
+				pts[n] = TVector3d(B3[q][0]*C.x + B3[q][1]*va.x + B3[q][2]*vb.x,
+				                   B3[q][0]*C.y + B3[q][1]*va.y + B3[q][2]*vb.y,
+				                   B3[q][0]*C.z + B3[q][1]*va.z + B3[q][2]*vb.z);
+				wts[n] = w;
 				wtot += w;
+				n++;
 			}
 		}
 	}
-	if(wtot < 1e-300) return FieldFromPointCharge(obs, -area);
-	double s = -area / wtot;
-	return TVector3d(s*Hsum.x, s*Hsum.y, s*Hsum.z);
+	if(wtot > 1e-300) for(int i = 0; i < n; i++) wts[i] /= wtot;
+	return n;
+}
+
+// Source-face charge-neutralising compensation field at obs (no 1/4pi divisor), total charge -FaceArea[faceIdx].
+TVector3d radTPolyhedron::MscCompensationField(const TVector3d& obs, int faceIdx) const
+{
+	double area = FaceArea[faceIdx];
+	if(!g_yano_pyramid_cloud)
+	{
+		// Single point charge -area at the element center (historical default).
+		return FieldFromPointCharge(obs, -area);
+	}
+	// Element-common normalised cloud (the pyramid-cloud kernel), total charge -area -> per-DOF neutral.
+	TVector3d pts[96];
+	double wts[96];
+	int n = MscCompensationCloud(pts, wts, 96);
+	if(n <= 0) return FieldFromPointCharge(obs, -area);
+	TVector3d Hsum(0.0, 0.0, 0.0);
+	for(int k = 0; k < n; k++)
+	{
+		TVector3d h = FieldFromPointChargeAt(obs, pts[k], 1.0);
+		Hsum.x += wts[k]*h.x; Hsum.y += wts[k]*h.y; Hsum.z += wts[k]*h.z;
+	}
+	return TVector3d(-area*Hsum.x, -area*Hsum.y, -area*Hsum.z);
 }
 
 //-------------------------------------------------------------------------
