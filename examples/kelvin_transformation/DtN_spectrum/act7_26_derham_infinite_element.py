@@ -43,7 +43,9 @@ the coordinate-MAPPING family (the Kelvin transformation here; the coordinate-sc
 domain in commercial FE) -- standard Nedelec / RT elements on the mapped region, de Rham inherited for
 free; the decay-BASIS exact-sequence IE below is the academic alternative.
 
-Pure sympy.
+Pure sympy.  Mathematica twin (cross-check via Mathematica's built-in ORTHONORMAL spherical
+Grad/Curl/Div, plus a general-m angular-eigenvalue check):
+packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/infinite_element_derham.wls
 """
 import os
 import json
