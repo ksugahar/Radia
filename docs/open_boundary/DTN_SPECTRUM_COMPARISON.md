@@ -143,6 +143,18 @@ decay-basis IE (whose basis `(a/r)^k` contains the one Trefftz function `r^{−(
 trivially. The trade is **no free lunch**: sparse ⇒ approximate (Kelvin's FE floor; the IE's order-`P`
 cutoff), exact ⇒ dense (BEM / pure-Trefftz multipole).
 
+**Build decision (Gate 1, [`act7_27`](../../examples/kelvin_transformation/DtN_spectrum/act7_27_ie_vs_kelvin_vs_pml_gate1.py)).**
+Before committing to a C++ infinite element, the honest rival is **not Kelvin but box-PML** —
+NGSolve's `pml.Cartesian` / `BrickRadial` *also* escapes the Liouville sphere-lock. Measured:
+on exterior-DOF vs aspect ratio `AR = L/d`, **Kelvin scales `AR²`** (sphere-lock — it must enclose
+the body in a sphere) while **box-PML and IE both scale `AR¹`** (the IE a bit leaner). So Kelvin is
+out for elongated / planar bodies, but the IE only **ties** box-PML on geometry. The IE's one proven
+unique edge is **spectral exactness** (`n ≤ P−1`); however the naive reciprocal-power basis `(a/r)^k`
+is **Hilbert-ill-conditioned** (`cond` ≈ `10 → 5e3 → 4e6 → 4e9` for `P = 2,4,6,8`), so a production IE
+needs an *orthogonalized* basis, and a cheap 1-D proxy does **not** establish an IE conditioning win
+over box-PML. **Verdict: no clean GO** — prefer box-PML (complement NGSolve, do not reimplement),
+*unless* the IE basis is orthogonalized **and** IE-vs-box-PML is settled on a real 3-D model first.
+
 ## Provenance (cite — this is a measurement / comparison, not a new method)
 
 Kelvin / inversion open boundary: Freeman-Lowther 1988/89; Brunotte-Meunier-Imhoff 1992.
