@@ -22,10 +22,20 @@ Magn.*, 2025, doi:10.1109/TMAG.2025.3613932 (bib key `Hollaus2025`). **Karl
 Hollaus (TU Wien) is a co-author** of the present IGTE 2026 paper. Use the
 official IEEE author field exactly:
 `Hollaus, Karl and Hanser, Valentin and Sch\"{o}binger, Markus` (braced umlaut).
-The digest abstract cites this as reference [1] and **retains
-`\cite{Hollaus2025}` in the abstract** — a deliberate exception to the
-no-citations-in-abstract rule, justified because the paper's premise is
-re-casting that method (do not "fix" it by removing the citation).
+The digest abstract **does NOT cite Hollaus2025** (or use
+"Hollaus et al." attribution).  History (2026-05-29 → 2026-05-31):
+an earlier draft kept `\cite{Hollaus2025}` in the abstract as a
+"foundational + co-author exception" to the no-citations rule;
+Sugahara reversed this 2026-05-29 ("abstractに[1]引用はしないを
+守れていない") and the radia-mcp `paper_writing` rule 2 was
+hardened to admit **no exception** for foundational/co-author
+references.  Then 2026-05-31 the "of Hollaus et al." word-level
+attribution was also dropped from the abstract because Karl is a
+co-author (third-party attribution to a co-author is incorrect).
+The `\cite{Hollaus2025}` now lives ONLY in the Method body
+("\cite{Hollaus2025} uses volumetric FEM in the air; we formulate
+this on Γ as a boundary integral method (BIM) in φ ...").  Do NOT
+re-add it to the abstract.
 
 ---
 
