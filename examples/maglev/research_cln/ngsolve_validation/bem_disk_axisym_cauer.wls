@@ -127,7 +127,7 @@ Print["  g_1..g_6 = ", N[gAmpl[[1;;Min[6, Length[gAmpl]]]], 6]];
 
    Note: signs and normalizations are chosen so that the Cauer-I CFE on
    c_taylor = [alpha_0, alpha_1, ...] reproduces L_n, R_n in the same
-   convention as the Hiruma 3-term recursion in radia-axifemm.
+   convention as the Hiruma 3-term recursion in radia-core axifem.
 *)
 
 tausSec = sigma * Re[eigvalsSorted];   (* tau_k in seconds *)

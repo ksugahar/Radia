@@ -163,7 +163,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 |---|---|
 | `airgap_motor_workflow` | Get AGE rotating machine workflow documentation -- nonlinear iron + AGE coupling. |
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
-| `axifemm_documentation` | Get radia-axifemm documentation: Henrotte axisymmetric Q-element FE |
+| `axifemm_documentation` | Get radia-core axifem documentation: Henrotte axisymmetric Q-element FE |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
 | `bem_cln` | Get BEM-CLN (per-element multipole CLN with Schur-F termination) |
 | `cln_3d` | Get 3D Cauer Ladder Network (CLN) / Kameari-Tanimoto iteration |
@@ -727,4 +727,3 @@ Module: `radia_mcp.panel_review.server`
 | `panel_review` | Get Radia GUI panel review skill-chain documentation and bug catalogue. |
 | `panel_review_status` | (no description) |
 | `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
-
