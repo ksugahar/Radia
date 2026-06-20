@@ -15,6 +15,7 @@ if that environment cannot run NGSolve in a subprocess.
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -397,6 +398,46 @@ def test_streamfunction_ih_resonance(sample_vols):
     assert res2 is not None and "resonance_freq_Hz" in res2, res2
     # designed coil resonates within ~12 % of the 200 kHz inverter frequency
     assert abs(res2["resonance_freq_Hz"] - 2.0e5) / 2.0e5 < 0.12, res2
+
+
+def test_streamfunction_resonance_with_greedy_reports_cap(sample_vols):
+    """--greedy-turns (the low-turn coil) + a resonance spec COMPOSE: greedy
+    owns the turn count (L_coil ~ N^2 pins it), so the resonance spec does NOT
+    search nlevels -- instead the result reports the tank capacitor the
+    delivered few-turn coil NEEDS to resonate at the operating frequency
+    (required_cap_F), and for --resonance-cap the resonance frequency that coil
+    + cap actually reach.  REGRESSION: this combination used to SILENTLY DISCARD
+    the resonance target (the greedy branch overwrote the searched nlevels).
+    This is exactly the 'few-turn uniform IH coil -> required capacitor' answer."""
+    coil, evalv = sample_vols
+    # (a) --resonance-cap + --greedy-turns -> required_cap_F + resonance_freq_Hz
+    r = _run_calc(coil, evalv, "1",
+                  extra=["--order", "1", "--method", "manufacture",
+                         "--confine", "off", "--greedy-turns", "8",
+                         "--resonance-cap", "47e-9", "--peec-freq", "2e5"])
+    assert "error" not in r, f"greedy+resonance error: {r.get('error')}"
+    res = r.get("resonance")
+    assert res is not None and res.get("mode") == "from_greedy_coil", res
+    # turns came from greedy, NOT an nlevels search
+    assert res.get("turns_source") == "greedy", res
+    assert "nlevels" not in res, "greedy path must not search nlevels"
+    L = res["achieved_inductance_H"]
+    assert L > 0.0, res
+    # required cap resonates THIS coil at the operating freq: C = 1/(w^2 L)
+    w = 2.0 * math.pi * 2.0e5
+    assert res["required_cap_F"] == pytest.approx(1.0 / (w * w * L), rel=1e-6), res
+    # the reported resonance freq for the GIVEN cap is self-consistent
+    f_res = 1.0 / (2.0 * math.pi * (L * 47e-9) ** 0.5)
+    assert res["resonance_freq_Hz"] == pytest.approx(f_res, rel=1e-6), res
+    # (b) --target-inductance + --greedy-turns -> required_cap_F, still no search
+    r2 = _run_calc(coil, evalv, "1",
+                   extra=["--order", "1", "--method", "manufacture",
+                          "--confine", "off", "--greedy-turns", "8",
+                          "--target-inductance", "20e-6", "--peec-freq", "2e5"])
+    assert "error" not in r2, f"greedy+target-L error: {r2.get('error')}"
+    res2 = r2.get("resonance")
+    assert res2 is not None and res2.get("mode") == "from_greedy_coil", res2
+    assert res2["required_cap_F"] > 0.0 and "nlevels" not in res2, res2
 
 
 def test_streamfunction_easy_tier_single_stroke_sub500ppm(sample_vols):
