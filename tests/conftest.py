@@ -5,6 +5,8 @@ Usage:
   pytest tests/                     # Run all tests
   pytest tests/ -m basic            # Run only basic tests
   pytest tests/ -m "not slow"       # Skip slow tests
+  pytest tests/ -m "not slow and not golden"  # Fast CI/simple gate
+  pytest tests/ -m golden           # Golden/reference checks
 """
 
 import sys
@@ -82,7 +84,7 @@ PROJECT_ROOT = setup_radia_path()
 
 
 def _load_ci_slow_nodeids():
-    """Load measured-slow tests so main CI can skip them while tag CI stays full."""
+    """Load measured-slow tests so fast CI can keep the runner responsive."""
     path = PROJECT_ROOT / "tests" / "ci_slow_nodeids.txt"
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -177,6 +179,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "advanced: Advanced features and edge cases")
     config.addinivalue_line("markers", "performance: Performance and scaling tests")
     config.addinivalue_line("markers", "slow: Tests that take more than 10 seconds")
+    config.addinivalue_line("markers", "golden: Golden/reference tests separated from the simple CI gate")
     config.addinivalue_line("markers", "benchmark: Performance benchmarks")
     config.addinivalue_line("markers", "ngsolve: Tests requiring NGSolve")
 
@@ -214,8 +217,11 @@ def project_root():
 def pytest_collection_modifyitems(config, items):
     """Add markers based on test location."""
     for item in items:
-        if item.nodeid.replace("\\", "/") in CI_SLOW_NODEIDS:
+        nodeid = item.nodeid.replace("\\", "/")
+        if nodeid in CI_SLOW_NODEIDS:
             item.add_marker(pytest.mark.slow)
+        if "golden" in nodeid.lower():
+            item.add_marker(pytest.mark.golden)
         if "benchmarks" in str(item.fspath):
             item.add_marker(pytest.mark.benchmark)
             item.add_marker(pytest.mark.slow)
