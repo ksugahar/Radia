@@ -59,4 +59,17 @@ print(f"    K=12: NRMSE={e:.2e}, all poles -p<0 (stable), passive (g>=0): "
       f"{bool(np.all(g >= 0) and np.all(p > 0))}")
 assert e < 5e-2 and np.all(p > 0) and np.all(g >= 0)
 
+print("\n[5] Kelvin BUILDS the DtN (material-aware / non-separable companion):")
+print("    a radial Kelvin-FEM reproduces the closed-form eddy DtN with NO DC floor")
+band = 1j * np.logspace(-4, 2, 30)
+for n in (1, 2, 3):
+    G = np.array([ob.kelvin_fem_radial_dtn(n, s) for s in band])
+    Gx = np.array([ob.eddy_dtn(n, s) for s in band])
+    nrmse = float(np.sqrt(np.mean(np.abs(G - Gx) ** 2)) / np.sqrt(np.mean(np.abs(Gx) ** 2)))
+    print(f"    n={n}: Kelvin-FEM build vs closed-form, band NRMSE={nrmse:.1e}")
+    assert nrmse < 5e-2
+print("    (the arbitrary-shape / iron-exterior path = ob.kelvin_dtn_matrix + ob.steklov_spectrum,")
+print("     verified O_h-split on a cube -- needs NGSolve; see tests/open_boundary/test_kelvin_dtn.py.")
+print("     NOTE: material-in-exterior Kelvin is CLASSICAL (Freeman-Lowther 1988/89).)")
+
 print("\nALL CHECKS PASSED.")
