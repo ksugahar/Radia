@@ -776,12 +776,20 @@ verify_gradpsi_orientation.py.
   CONNECTOR (bridge) field, NOT a loop-set error.  It was mostly chain UNDER-
   RESOLUTION: the old fixed cut-opt (ncut=24,passes=4) left clustered-level Z2 at
   ~0.20; auto-scaling resolution with loop count (see 'panel' CHAIN (3)) recovers
-  ~0.067 (3x).  The remaining ~7x gap above the loop-set floor is the irreducible
-  single-series-wire connector cost.  Splitting into one wire PER current group is
-  WORSE (verified: ~0.85): the cut-opt nulls connectors GLOBALLY by cross-
-  cancelling the +/- groups' rungs.  Sub-1% l>=2 therefore needs INDEPENDENT feeds
-  (a driven ARRAY: loops_homogeneity_rms ~ 0, the --pin-tiling regime), NOT one
-  series wire; --distort further bends the one wire (sphere Z2 4.3%->0.36%).
+  ~0.067 (3x).  CHARACTER of the remaining ~7x gap (decomposed, 2026-06-20): the
+  unit-current connector field is TINY (~7e-4 of ||B||) but the coil runs at high
+  current, which AMPLIFIES it to the ~6.6% residual.  It is ROBUST to visit-ORDER:
+  a lobe-aware reorder (group by current sense, cross at the saddle to shorten the
+  long inter-lobe rung) does NOT help -- the saddle sits at the DSV centre, so a
+  SHORT crossover there contaminates the target MORE than a long one routed away
+  (the "shorter rungs != better field" trap); the cut-opt already finds the field-
+  best of {nn, 2-opt}.  Splitting into one wire PER current group is also WORSE
+  (~0.85): the cut-opt nulls connectors GLOBALLY by cross-cancelling the +/- rungs.
+  LEVERS that DO work: --distort bends the one wire against the discrete Biot-Savart
+  (Z2 0.067 -> 0.052 grid3/iter5 ~5mm, -> 0.045 grid4/iter10 ~7mm; sphere Z2
+  4.3%->0.36%) -- a field/manufacturability trade (more bend), so it is a user knob,
+  NOT auto-scaled.  For sub-1% l>=2 use INDEPENDENT feeds (a driven ARRAY:
+  loops_homogeneity_rms ~ 0, the --pin-tiling regime), NOT one series wire.
 
 (1) EQUAL-deltaI CONTOURS  (default, --nlevels N)
     N iso-contours at equal psi increments = N equal-current turns; the
