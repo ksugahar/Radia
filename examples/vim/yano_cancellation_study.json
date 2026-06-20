@@ -1,0 +1,205 @@
+{
+  "cases": [
+    {
+      "tag": "REGULAR",
+      "cycle": 16,
+      "rows": [
+        {
+          "layout": "single",
+          "neutral": 0.0,
+          "near_null": 16,
+          "cond_star": 83.98716381866117,
+          "bicgstab": [
+            38,
+            31
+          ]
+        },
+        {
+          "layout": "pyr_faces12",
+          "neutral": 4.0245584642661925e-16,
+          "near_null": 16,
+          "cond_star": 14.565868735443456,
+          "bicgstab": [
+            20,
+            21
+          ]
+        },
+        {
+          "layout": "faces6",
+          "neutral": 4.0245584642661925e-16,
+          "near_null": 34,
+          "cond_star": 3797932833512972.5,
+          "bicgstab": [
+            71,
+            79
+          ]
+        },
+        {
+          "layout": "edges_mid",
+          "neutral": 1.6653345369377348e-16,
+          "near_null": 16,
+          "cond_star": 126.52965625521277,
+          "bicgstab": [
+            35,
+            38
+          ]
+        },
+        {
+          "layout": "edges_len",
+          "neutral": 1.6653345369377348e-16,
+          "near_null": 16,
+          "cond_star": 126.52965625521277,
+          "bicgstab": [
+            33,
+            38
+          ]
+        },
+        {
+          "layout": "edges_q",
+          "neutral": 3.712308238590367e-16,
+          "near_null": 16,
+          "cond_star": 215.33519850489245,
+          "bicgstab": [
+            37,
+            47
+          ]
+        }
+      ],
+      "best": "pyr_faces12"
+    },
+    {
+      "tag": "distorted",
+      "cycle": 16,
+      "rows": [
+        {
+          "layout": "single",
+          "neutral": 0.0,
+          "near_null": 16,
+          "cond_star": 91.39187026106248,
+          "bicgstab": [
+            35,
+            32
+          ]
+        },
+        {
+          "layout": "pyr_faces12",
+          "neutral": 5.342948306008566e-16,
+          "near_null": 16,
+          "cond_star": 16.556040890669234,
+          "bicgstab": [
+            21,
+            22
+          ]
+        },
+        {
+          "layout": "faces6",
+          "neutral": 4.2327252813834093e-16,
+          "near_null": 34,
+          "cond_star": 5.7328951742659096e+16,
+          "bicgstab": [
+            1180,
+            1180
+          ]
+        },
+        {
+          "layout": "edges_mid",
+          "neutral": 2.220446049250313e-16,
+          "near_null": 16,
+          "cond_star": 253.1247435394473,
+          "bicgstab": [
+            36,
+            36
+          ]
+        },
+        {
+          "layout": "edges_len",
+          "neutral": 2.636779683484747e-16,
+          "near_null": 16,
+          "cond_star": 243.68925262176995,
+          "bicgstab": [
+            39,
+            36
+          ]
+        },
+        {
+          "layout": "edges_q",
+          "neutral": 4.2327252813834093e-16,
+          "near_null": 16,
+          "cond_star": 394.75513767223504,
+          "bicgstab": [
+            43,
+            41
+          ]
+        }
+      ],
+      "best": "pyr_faces12"
+    },
+    {
+      "tag": "distorted_big",
+      "cycle": 136,
+      "rows": [
+        {
+          "layout": "single",
+          "neutral": 0.0,
+          "near_null": 136,
+          "cond_star": 229.66762509214462,
+          "bicgstab": [
+            76,
+            85
+          ]
+        },
+        {
+          "layout": "pyr_faces12",
+          "neutral": 6.800116025829084e-16,
+          "near_null": 136,
+          "cond_star": 56.470859320497034,
+          "bicgstab": [
+            43,
+            44
+          ]
+        },
+        {
+          "layout": "faces6",
+          "neutral": 5.967448757360216e-16,
+          "near_null": 236,
+          "cond_star": 6.604638429054996e+17,
+          "bicgstab": [
+            3337,
+            4580
+          ]
+        },
+        {
+          "layout": "edges_mid",
+          "neutral": 4.440892098500626e-16,
+          "near_null": 136,
+          "cond_star": 3147.6413092640482,
+          "bicgstab": [
+            163,
+            170
+          ]
+        },
+        {
+          "layout": "edges_len",
+          "neutral": 4.440892098500626e-16,
+          "near_null": 136,
+          "cond_star": 6490.246522078338,
+          "bicgstab": [
+            153,
+            170
+          ]
+        },
+        {
+          "layout": "edges_q",
+          "neutral": 5.48172618408671e-16,
+          "near_null": 136,
+          "cond_star": 22732.39712889078,
+          "bicgstab": [
+            206,
+            262
+          ]
+        }
+      ],
+      "best": "pyr_faces12"
+    }
+  ]
+}
