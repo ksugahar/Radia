@@ -138,9 +138,11 @@ error. Holds in 2-D on the `−n/R` ladder. (See `kelvin_transformation(topic="m
 
 ### CLN — diffusion, temporal
 - `demo_xx3`: the diffusion DtN = a Cauer continued fraction **in `√s`**, EXACT at
-  `n+1` stages (`NRMSE 1.1e-16`, well-conditioned), whereas a Foster fit **in `s`**
-  floors at `1.7e-3` and ill-conditions (spread `1e5`) — the structural win of the
-  natural variable.
+  `n+1` stages (`NRMSE 1.1e-16`, well-conditioned) **for EVERY multipole, not just the
+  dipole** — verified `n=1..6` (each `~1e-16`, spread `1→582`); whereas a Foster fit
+  **in `s`** floors at `1.7e-3` and ill-conditions (spread `1e5`) at every `n` — the
+  structural win of the natural variable. (The full multipole field on the sphere is a
+  **bank** of per-mode exact ladders; non-separable bodies are a band approximation.)
 - `demo_xx4`: a genuine lab CLN (Lanczos/PVL) reduces a **700-DOF** radial eddy FEM
   to an **`N=16`-stage** integer-order Cauer ladder (reduction `1.2e-5` / total
   `3.6e-4` at the FEM floor) — **~43× state reduction**; `T_N` SPD → real-negative
