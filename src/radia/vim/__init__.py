@@ -43,7 +43,7 @@ from ._nonlinear import (  # noqa: F401
 )
 from ._vim import DemagOperator, build_charge_gram  # noqa: F401  (ngsolve.bem-style operator + .mat)
 from ._solve import hdiv_demag_solve  # noqa: F401  (M1 production entry: linear soft-iron demag solve)
-from ._radsolve import soft_iron_from_mesh  # noqa: F401  (rad.Solve demag_backend='hdiv' bridge builder)
+from ._radsolve import soft_iron_from_mesh, soft_iron_from_vol  # noqa: F401  (.vol/mesh -> both-backend iron)
 from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^-1 N m)
     reconstruct_field,
     reconstruct_field_polynomial,  # Step 1: EXTERNAL polynomial-charge field (tet + hex)
@@ -83,7 +83,7 @@ __all__ = [
     "build_demag", "demag_factor", "tri_potential", "phi_tet", "wilton_surface_block",
     "analytic_charge_gram", "build_near_correction", "C_TRI",
     "solve_nonlinear_newton", "solve_nonlinear_newton_scalable", "solve_nonlinear",
-    "DemagOperator", "build_charge_gram", "hdiv_demag_solve", "soft_iron_from_mesh",
+    "DemagOperator", "build_charge_gram", "hdiv_demag_solve", "soft_iron_from_mesh", "soft_iron_from_vol",
     "reconstruct_field", "reconstruct_field_polynomial",
     "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",
     "triangle_potential_const", "triangle_potential_moment", "tet_newtonian_potential",

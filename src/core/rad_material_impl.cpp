@@ -1583,20 +1583,11 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 
 		SendingIsRequired = PrevSendingIsRequired;
 
-		// yano-type MSC removed: refuse the collocation surface-charge demag for hexahedral / wedge soft
-		// iron (route it to the FEEC HDiv-VIM via radia.vim.soft_iron_from_mesh).  Tet (MMM) / PM unaffected.
-		{
-			radThg hgMSCchk;
-			if(ValidateElemKey(InteractElemKey, hgMSCchk))
-			{
-				radTInteraction* pIntrcChk = dynamic_cast<radTInteraction*>(hgMSCchk.rep);
-				if(pIntrcChk != nullptr && pIntrcChk->HasSurfaceChargeElements())
-				{
-					Send.ErrorMessage("Radia::Error203");
-					return 0;
-				}
-			}
-		}
+		// yano-type MSC is KEPT (decision 2026-06-19): mesh-less hexahedral / wedge soft iron
+		// (ObjHexahedron/ObjWedge + MatLin/MatSatIsoTab + rad.Solve) is solved by the collocation
+		// surface-charge (yano-type MSC) demag here.  Mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
+		// is routed to the FEEC HDiv-VIM by the Python rad.Solve wrapper BEFORE reaching this C++ path
+		// (unless demag_backend='yano' forces yano on it).  Tet (MMM) and permanent magnets are unaffected.
 
 		try
 		{

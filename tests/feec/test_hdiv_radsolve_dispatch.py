@@ -80,16 +80,20 @@ def test_radsolve_hdiv_image_passed_through():
     rad.UtiDelAll()
 
 
-def test_meshless_hex_soft_iron_raises():
-    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin, NOT via soft_iron_from_mesh)
-    has no mesh association, so rad.Solve cannot route it to the HDiv-VIM -- and the yano-type MSC was
-    removed, so the C++ solve refuses it with Radia::Error203 directing to soft_iron_from_mesh."""
+def test_meshless_hex_soft_iron_not_registered_uses_yano():
+    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin, NOT via soft_iron_from_mesh) has
+    no mesh association, so rad.Solve does NOT route it to the HDiv-VIM -- it falls through to the C++
+    solver, which now solves it with the yano-type MSC (the Error203 guard was removed 2026-06-19).
+    The full yano-MSC physics (cube demag ~1/3) is locked by tests/test_demag_backend.py."""
+    from radia.vim import _radsolve
+    rad.set_demag_backend("auto")
     rad.UtiDelAll()
     hexv = [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
             [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]
     obj = rad.ObjHexahedron([[c * 0.005 for c in v] for v in hexv], [0, 0, 0])
     rad.MatApl(obj, rad.MatLin(1000.0))
     cont = rad.ObjCnt([obj])
-    with pytest.raises(RuntimeError, match="yano-type MSC"):
-        rad.Solve(cont, 1e-6, 100, 0)
+    assert not _radsolve.is_registered(cont)        # mesh-less -> not HDiv-registered
+    rad.Solve(cont, 1e-6, 100, 0)                   # no Error203; yano-MSC solves (M stays 0, no source)
     rad.UtiDelAll()
+    rad.set_demag_backend("auto")
