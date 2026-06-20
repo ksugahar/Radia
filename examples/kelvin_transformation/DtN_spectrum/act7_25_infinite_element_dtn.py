@@ -29,6 +29,27 @@ which fails the LOW (slow-decaying) modes `~(a/R)^{2n+1}` and is good at high n.
 element joins Kelvin / BEM in the CONVERGENT class (exact-operator, here a modal/decay-basis
 realisation valid for the separable exterior), distinct from the finite-reach wall.
 
+CLASSIFICATION (three honest distinctions):
+  - TREFFTZ FAMILY.  The decay basis `(a/r)^k` CONTAINS the one Trefftz function `r^-(n+1)` (the exact
+    exterior harmonic), so the Galerkin fit is EXACT for `n <= P-1`; a PURE Trefftz element (exact
+    multipoles as the basis) would reproduce the exact DtN `-(n+1)/a` trivially per mode.  This is a
+    Bettess-Galerkin decay-basis IE, i.e. Trefftz-FAMILY, not pure Trefftz.  (NGSolve core has NO
+    infinite element AND no Trefftz space; `ngstrefftz` is a separate add-on = interior Trefftz-DG,
+    not an open-boundary element.)
+  - SPARSE vs APPROXIMATE.  This MODAL measurement is a tiny DENSE `P x P` block per mode (`P~3-6`).
+    The PRACTICAL Bettess element (local decay-shape-function elements on the truncation surface)
+    assembles SPARSELY -- a thin FE layer, each element coupling only its own nodes (its appeal vs
+    dense BEM).  And it is APPROXIMATE: EXACT for `n <= P-1`, Galerkin best-fit for `n >= P`, converging
+    as `P -> inf` (a spectral / p-method).  The exact-and-no-approximation alternative is BEM / pure
+    Trefftz -- but those are DENSE.  No free lunch: sparse (Kelvin / IE) => approximate; exact (BEM /
+    Trefftz multipole) => dense.
+  - de Rham / VECTOR extension is act7_26_derham_infinite_element (the exact-sequence
+    H1->H(curl)->H(div)->L2 IE, Demkowicz-Pal CMAME 1998); THIS scalar tower is its 0-form.  NOTE the
+    practical SHIPPED de Rham open boundary is instead the coordinate-MAPPING family (the Kelvin
+    transformation here; the coordinate-scaling infinite-element domain in commercial FE) -- standard
+    Nedelec / RT elements on the mapped region, de Rham inherited for FREE; the decay-basis
+    exact-sequence IE (act7_26) is the academic alternative.
+
 Pure numpy.  (The eddy / radiation infinite element would need an `exp(-q r)` decay basis -- out of
 scope here; this is the classic static infinite element, which is where the method is used.)
 """
