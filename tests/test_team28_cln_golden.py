@@ -1,6 +1,6 @@
 """Golden test: 3D (axisymmetric) CLN reproduces the TEAM 28 levitation force.
 
-Locks the verified result of examples/levitation/team28/:
+Locks the verified result of examples/maglev/team28/:
   - the full-FEM (split K+sN) levitation force at dZ=0 == lab ground truth
     -2.1928 N (within a hard band),
   - the N-stage CLN/Cauer reduced force CONVERGES to it (stage 3 < 1%,
@@ -19,7 +19,7 @@ pytest.importorskip("netgen.occ")
 pytest.importorskip("scipy")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_TEAM28 = os.path.join(_HERE, "..", "examples", "levitation", "team28")
+_TEAM28 = os.path.join(_HERE, "..", "examples", "maglev", "team28")
 sys.path.insert(0, _TEAM28)
 
 LAB_REF = -2.1928   # N, lab full-FEM ground truth at dZ=0 (50Hz_可動 .mat)

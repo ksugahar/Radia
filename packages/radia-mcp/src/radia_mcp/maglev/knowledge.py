@@ -266,7 +266,7 @@ So the physical-tensor LTI is NOT obtained by eigen-accumulation.
 ## The verified route: AAA + NNLS sample fit of the per-frequency tensor
 
 The verified PHYSICAL tensor is the per-frequency 3D HCurl solve
-`examples/levitation/ellipsoid/ellipsoid_alpha_tensor_3d.py` (gauged
+`examples/maglev/ellipsoid/ellipsoid_alpha_tensor_3d.py` (gauged
 complex HCurl + a FINE AIR SHELL that resolves the air reaction dipole =
 the lift / Re[alpha] part; CompactAMS + COCR; ~2-3% vs the analytic
 sphere).  rom_fit.py turns those frequency samples into a passive, stable
@@ -323,10 +323,10 @@ decay times shape-split: tau_z = 60.2 us > tau_x = tau_y = 34.6 us; D_diag =
 [-102.5, -122.3, -218.8] mm^3 = the -V/(1-N_i) ordering |z|>|y|>|x| (short axis
 strongest) -- matching the static `ellipsoid_alpha_tensor.py` HF anchors.
 
-## API (radia.levitation.mixed_galerkin)
+## API (radia.maglev.mixed_galerkin)
 
 ```python
-from radia.levitation.mixed_galerkin import (
+from radia.maglev.mixed_galerkin import (
     passive_foster_fit, FosterROM, diagonal_tensor_state_space)
 
 # sample the verified per-frequency tensor (or any alpha(s) data) on j omega
@@ -338,7 +338,7 @@ A, B, C, D = rom.state_space()                      # passive scalar LTI
 # diagonal (principal-axis) 3D tensor -> one MIMO LTI
 A, B, C, D, n = diagonal_tensor_state_space([rom_x, rom_y, rom_z])
 ```
-Example `examples/levitation/physical_tensor_rom.py` (default = analytic
+Example `examples/maglev/physical_tensor_rom.py` (default = analytic
 sphere, fast; `--fem` = triaxial ellipsoid per-frequency tensor -> diagonal
 MIMO LTI).
 
