@@ -812,11 +812,9 @@ def _figure_step2(s2):
                    label=f"B@r0={L['B_target']:.1f}T")
     ax[0].axhline(0, color="k", lw=0.8)
     ax[0].set_xlabel("r"); ax[0].set_ylabel("dk(r) = k - k(unsaturated)")
-    ax[0].set_title("field-index droop (high-r edge saturates)")
     ax[0].legend(fontsize=7)
     ax[1].axhline(s2["Bk_iron"], color="r", ls="--", lw=1, label="iron knee Bk")
     ax[1].set_xlabel("r"); ax[1].set_ylabel("|B_gap|(r)  [T]")
-    ax[1].set_title("gap field: high-r end crosses the knee")
     ax[1].legend(fontsize=7)
     fig.tight_layout()
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -839,8 +837,6 @@ def _figure_step3(s3):
     ax[0].axhline(s3["k_design"], color="k", ls="--", lw=1,
                   label=f"k_design={s3['k_design']:.0f}")
     ax[0].set_xlabel("r"); ax[0].set_ylabel("field index k(r)")
-    ax[0].set_title(f"saturated k(r) flattened {s3['ptp_improvement']:.1f}x"
-                    f" @ B@r0={s3['B_design']:.1f}T")
     ax[0].legend(fontsize=8)
     # pole gap profiles (the shape change)
     r_min, r_max = s3["aperture"]
@@ -850,7 +846,6 @@ def _figure_step3(s3):
     ax[1].plot(rs, scaling_gap(rs, K_INDEX, G0, R0, o["gamma"], o["gamma2"]) / 2.0,
                "s-", ms=3, label="reshaped g(r)/2")
     ax[1].set_xlabel("r"); ax[1].set_ylabel("pole-face height g(r)/2")
-    ax[1].set_title("the pole reshape (log-chart 2-param)")
     ax[1].legend(fontsize=8)
     fig.tight_layout()
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
