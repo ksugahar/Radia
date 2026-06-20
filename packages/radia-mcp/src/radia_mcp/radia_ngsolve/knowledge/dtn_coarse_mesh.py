@@ -63,41 +63,53 @@ you refine).  The question this module answers:
 Yes.  The accuracy is a **spectral** fact about the discrete
 Dirichlet-to-Neumann operator, visible without ever solving the field problem.
 
-## Radia policy: Kelvin (static) + exact DtN->CLN (eddy) inside MQS; radiation is OUT of scope
+## Sugahara-lab / Radia open-boundary POLICY: exact-operator -> CLN, NOT PML (refined 2026-06-21)
 
-Radia is Laplace-kernel / MQS-Darwin, so the open-boundary closure splits on the kR
-axis -- but BOTH in-scope branches are Kelvin / DtN-family, and the IABC
-absorbing-shell METHOD is RETIRED (2026-06-20; act7_20_impedance_vs_kelvin_dtn_cln: strictly dominated by
-exact DtN->CLN in this scope, and its only niche -- high-freq radiation -- is OUTSIDE
-radia).  The IABC material below is kept as the comparison / research record only:
+Radia is Laplace-kernel / MQS-Darwin.  The lab closes the exterior with the **exact-operator
+-> CLN** route; **PML / CFS-PML are NOT a solving method here** -- they are kept only as the
+benchmark FOIL measured on the DtN yardstick (act7_22_dtn_spectrum_consolidated + the real NGSolve
+FEM+PML act7_24_ngsolve_fem_pml_highfreq_dtn).  The IABC absorbing-shell METHOD is likewise RETIRED
+(2026-06-20, act7_20_impedance_vs_kelvin_dtn_cln: strictly dominated by exact DtN->CLN in this scope;
+kept as the comparison/research record only).  Pick the method by WHAT THE BOUNDARY OPERATOR IS
+(and note the two axes differ -- Kelvin = the SPATIAL boundary, CLN = the TEMPORAL / s axis):
 
-  - **LOW frequency / quasi-static / magnetostatic (kR -> 0): the KELVIN
-    transformation.**  It is the exact conformal compactification of the exterior:
-    the truncation DtN IS the closed-form real ladder -(n+1)/R (3D; -n/R in 2D) for
-    EVERY mode, realised as a sparse SPD volume FEM, parameter-free, and able to
-    carry exterior material.  Verified head-to-head -- at low frequency Kelvin is the
-    single best choice versus an absorbing BC (act7_18_lowfreq_kelvin_vs_iabc) and versus BEM / PML /
-    ballooning on cost x accuracy (act7_21_lowfreq_openbc_4way).  This is the regime this module
-    datasheets (the SA / Hachinohe paper's subject).
+  - **non-radiating AIR truncation (the usual outer boundary) -> KELVIN ALONE.**  Air is
+    non-conducting, so the boundary DtN is the omega-INDEPENDENT static Laplace ladder
+    -(n+1)/R (3D; -n/R 2D) -- a sparse SPD conformal-compactification FEM, parameter-free,
+    carrying exterior material.  NOTHING is s-dependent here -> **CLN has no job at the air
+    boundary** (Kelvin imposes the same operator for every omega).  Verified: Kelvin is the
+    single best low-freq choice vs an absorbing BC (act7_18_lowfreq_kelvin_vs_iabc) and vs
+    BEM/PML/ballooning on cost x accuracy (act7_21_lowfreq_openbc_4way).  The SA / Hachinohe
+    paper's regime.
 
-  - **EDDY-CURRENT / magnetic DIFFUSION (k^2 = i w mu sigma; STILL MQS, IN scope):
-    the exact DtN -> CLN.**  The exterior DtN is a passive sqrt(s) (Warburg) operator,
-    EXACTLY rational in q=sqrt(s) with the reverse-Bessel poles -- realise it as a
-    Robin BC + a finite Cauer / CLN ladder (topic="dtn_to_cln"; act6_12_iabc_diffusion_timedomain,
-    act6_02_cln_dtn_cauer).  The exterior is evanescent for EVERY omega, so there is no
-    propagating regime to absorb -- CLN beats even CFS-PML here (act6_09_cln_vs_pml).  This is
-    the in-scope high-omega branch -- NOT PML.
+  - **conducting / diffusive boundary (SIBC = a semi-infinite conductor interior; sqrt(s))
+    -> multipole-Zs -> CLN.**  HERE the boundary operator IS s-dependent: a passive sqrt(s)
+    (Warburg) DtN, EXACTLY rational in q=sqrt(s) (reverse-Bessel poles) -> a Robin BC + a
+    finite Cauer / CLN ladder (topic="dtn_to_cln"; act6_02_cln_dtn_cauer,
+    act6_12_iabc_diffusion_timedomain).  A SEPARABLE conductor (half-space / sphere) uses the
+    analytic sqrt(s) impedance -> CLN; **Kelvin-BUILT -> CLN only for an arbitrary NON-separable
+    conductor** (act6_01_kelvin_fem_eddy_dtn, rare).  Evanescent for EVERY omega (no propagating
+    regime to absorb) -> CLN beats even CFS-PML (act6_09_cln_vs_pml) -- NOT PML.
 
-  - **Genuine WAVE radiation (finite real kR; Helmholtz): OUT of radia's scope.**
-    The exterior DtN turns COMPLEX -- Lambda_n(kR) = kR h_n^(1)'(kR)/h_n^(1)(kR),
-    Im = radiation -- so a static-Kelvin real-axis closure is no longer exact (error
-    O(kR^2); act7_01_highfreq_spectrum_comparison).  This is a full-wave problem = OUTSIDE radia's Laplace
-    kernel -> PML / NGSolve (or the HOIBC / dispersive-IABC research line --
-    act6_10_iabc_time_domain, act7_17_dispersive_iabc, act7_19_highfreq_iabc_revisited -- kept as the record).  "I need PML" => "I left radia."
+  - **radiation (finite real kR; Helmholtz wave) -> Grote-Keller -> CLN.**  The exterior DtN
+    turns COMPLEX -- Lambda_n(kR) = kR h_n^(1)'(kR)/h_n^(1)(kR), Im = radiation -- but it is
+    STILL rational (reverse-Bessel in iz), so the lab realises it as the exact Grote-Keller
+    NRBC = a pole / Cauer (CLN) ladder + auxiliary ODEs (act6_11_exact_dtn_fetd; and the
+    extended-Kelvin HOIBC act7_05_fe_kelvin_hoibc / act7_07_threeway_kelvin_pml_bemfem) --
+    NOT a PML.  PRIOR ART (Grote-Keller 1995/96/98, Hagstrom-Warburton, Guddati, Birk,
+    Cauer-Foster, Kameari-Sugahara 2018) -> adopted as a CAPABILITY, not a novelty claim.
 
-  - **Rule of thumb (inside radia):** static / algebraic far field -> KELVIN; eddy /
-    magnetic-diffusion (sqrt(s)) -> exact DtN -> CLN (topic="dtn_to_cln").  If the
-    field genuinely RADIATES (finite real kR) you have left radia's MQS scope -> NGSolve / PML.
+  - **KEY (do not conflate the two axes):** Kelvin = the SPATIAL boundary (static air);
+    CLN = the TEMPORAL / s axis, and ONLY a conducting boundary or radiation is s-dependent.
+    So "Kelvin -> CLN" COMBINED is ~never needed in the non-radiating regime (the air boundary
+    is static -> Kelvin alone); CLN earns its keep at the conductor SIBC or in radiation.
+
+  - **HONEST SCOPE (no overclaim):** principled for the lab's MQS-magnetics class (compact /
+    quasi-spherical; mostly evanescent; separable radiation).  Exact for separable; an arbitrary
+    non-separable radiating / conducting boundary = build (Kelvin-FEM / BEM) then CLN band-fit
+    (approximate).  PML's GENERALITY (antennas / scattering / arbitrary radiating geometry) is
+    for problem classes OUTSIDE the lab -- "no PML" is domain-appropriate, not "PML universally
+    bad."
 
 ## Radia policy: Kelvin for COMPACT geometry, PML/BEM for high aspect ratio
 
