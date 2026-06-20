@@ -1,0 +1,86 @@
+{
+  "yardstick": "rel DtN defect |lam_h(n)-lam_exact(n)|/|lam_exact(n)|",
+  "regimes": {
+    "static": {
+      "Kelvin": [
+        3.5349501104064984e-13,
+        4.516387264175137e-13,
+        2.3148149086438252e-07,
+        9.375010945333884e-07,
+        2.1428601952422353e-06
+      ],
+      "ballooning": [
+        0.33333333333333326,
+        0.023809523809523725,
+        0.0016291951775822728,
+        0.00010681804309342624,
+        6.8664812717500466e-06
+      ],
+      "Robin": [
+        0.0,
+        0.5,
+        0.6666666666666666,
+        0.75,
+        0.8
+      ]
+    },
+    "eddy": {
+      "Kelvin": [
+        0.015188901092559545,
+        0.0016430307152677376,
+        4.981676236083842e-05,
+        0.0001260924185264522
+      ],
+      "PML": [
+        0.00033878087473308475,
+        0.0005555735828341663,
+        0.0008776874682750772,
+        0.001293719856533569
+      ],
+      "CFS-PML": [
+        0.0006036082030173677,
+        0.00045882005932907776,
+        0.0008873499650809678,
+        0.0013126378137617164
+      ],
+      "convergence_n2": {
+        "Kelvin_coarse": 0.001185807778694092,
+        "Kelvin_fine": 2.1549030531265114e-05
+      },
+      "DC_conditioning_n1": {
+        "PML_vanilla": 24355.156292503372,
+        "CFS_PML": 2280.2067158074374
+      }
+    },
+    "high_freq": {
+      "PML": [
+        9.109617742407364e-05,
+        9.86433762881793e-05,
+        8.218634251263624e-05,
+        3.083662091113997e-05,
+        8.852203738606052e-06
+      ]
+    }
+  },
+  "taxonomy": {
+    "convergent_parameter_free": [
+      "Kelvin (static+eddy)",
+      "BEM (all regimes, DENSE)"
+    ],
+    "fixed_error_surrogate": [
+      "PML (DC-ill-conditioned, tuned)",
+      "CFS-PML (DC-fixed modest, tuned)",
+      "Robin (n=0 only)"
+    ],
+    "finite_reach": [
+      "ballooning (low-mode dominated)"
+    ],
+    "axes": [
+      "per-mode DtN defect",
+      "convergence under refinement",
+      "parameter-free?",
+      "DC conditioning",
+      "sparse vs dense cost"
+    ]
+  }
+}

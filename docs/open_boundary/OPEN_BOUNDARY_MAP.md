@@ -7,7 +7,11 @@ unrelated, but they are all discretizations or reductions of **one** object: the
 exterior Dirichlet-to-Neumann operator. This document maps them onto the few axes
 that actually select one in practice, with measured anchors reproduced in-repo.
 See **The selector** below for the radia policy (which method when; **IABC is
-retired** as a radia method — kept only as the comparison record).
+retired** as a radia method — kept only as the comparison record). The **measured,
+quantitative** companion to this map is
+[`DTN_SPECTRUM_COMPARISON.md`](DTN_SPECTRUM_COMPARISON.md) — every closure (Kelvin / BEM /
+PML / CFS-PML / ballooning / Robin) on **one yardstick, the per-multipole DtN-spectral
+defect**, across the static / eddy / high-freq regimes (reproduced by `act7_22`).
 
 It is the cross-cutting companion to the two single-method references:
 [`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
@@ -295,7 +299,9 @@ then compress it.
     (NGSolve), `band_cln_fit`.
   - Goldens [`tests/open_boundary/`](../../tests/open_boundary/) (`test_dtn_cln.py`, `test_kelvin_dtn.py`);
     usage [`examples/open_boundary/`](../../examples/open_boundary/).
-- **Docs:** [`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
+- **Docs:** [`DTN_SPECTRUM_COMPARISON.md`](DTN_SPECTRUM_COMPARISON.md) (**the measured
+  method × regime × multipole comparison** — reproduced by `act7_22_dtn_spectrum_consolidated`),
+  [`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
   (Kelvin spectral datasheet), [`docs/cln/CAUER_LADDER_NETWORK.md`](../cln/CAUER_LADDER_NETWORK.md)
   (CLN), [`docs/kelvin/KELVIN_TRANSFORMATION.md`](../kelvin/KELVIN_TRANSFORMATION.md).
 - **MCP knowledge:** `dtn_coarse_mesh(topic=...)` — including `topic="dtn_to_cln"`
