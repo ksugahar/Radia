@@ -1,4 +1,4 @@
-"""radia_mcp.fusion: Fusion reactor magnet knowledge.
+"""radia_mcp.fusion_reactor: Fusion reactor magnet knowledge.
 
 Covers fusion plasma confinement EM analysis:
 - ITER tokamak coil systems (TF, PF, CS)

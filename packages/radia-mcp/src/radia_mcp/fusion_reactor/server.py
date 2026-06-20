@@ -1,4 +1,4 @@
-"""MCP Server: radia_mcp.fusion
+"""MCP Server: radia_mcp.fusion_reactor
 
 Fusion reactor magnet knowledge.
 
@@ -10,19 +10,19 @@ Cross-references:
 - `radia_mcp.fem.potential_formulations.h_formulation` — HCurl H for SC
 
 Usage:
-    mcp-server-fusion              # stdio
-    mcp-server-fusion --selftest   # self-test
+    mcp-server-fusion-reactor              # stdio
+    mcp-server-fusion-reactor --selftest   # self-test
 """
 import sys
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool, register_topics_tool
 from .knowledge import get_knowledge, TOPICS
 
-mcp = FastMCP("mcp-server-fusion")
+mcp = FastMCP("mcp-server-fusion-reactor")
 
 
 @mcp.tool()
-def fusion(topic: str = "overview") -> str:
+def fusion_reactor(topic: str = "overview") -> str:
     """
     Fusion reactor magnet knowledge.
 
@@ -36,26 +36,24 @@ def fusion(topic: str = "overview") -> str:
     return get_knowledge(topic)
 
 
-
-
 register_status_tool(
     mcp,
-    server_name='mcp-server-fusion',
+    server_name='mcp-server-fusion-reactor',
     description='Fusion reactor magnets: tokamak ITER + stellarator LHD/W7-X/heliotron lineage',
-    subpackage='radia_mcp.fusion',
+    subpackage='radia_mcp.fusion_reactor',
     related_servers=["accelerator", "electromagnet"],
 )
 
 register_topics_tool(
     mcp,
-    server_name='mcp-server-fusion',
+    server_name='mcp-server-fusion-reactor',
     topics=TOPICS,
 )
 
 
 def main():
     if "--selftest" in sys.argv:
-        print("fusion MCP server self-test:")
+        print("fusion-reactor MCP server self-test:")
         print(f"  knowledge: {len(get_knowledge('all'))} chars")
         print("OK")
         return

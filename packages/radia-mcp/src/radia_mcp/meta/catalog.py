@@ -182,7 +182,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["electromagnet_usage"],
         "related": [
             "accelerator",
-            "fusion",
+            "fusion-reactor",
             "magnetic-materials",
             "motor",
             "nmr-mri",
@@ -214,15 +214,15 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Accelerator physics: beam optics, dipole/quad/sext "
                        "magnets, undulator/wiggler",
         "primary_tools": ["accelerator_usage"],
-        "related": ["electromagnet", "fusion", "nmr-mri"],
+        "related": ["electromagnet", "fusion-reactor", "nmr-mri"],
         "tags": ["application"],
     },
-    "fusion": {
-        "subpackage": "radia_mcp.fusion",
-        "entry_point": "mcp-server-fusion",
+    "fusion-reactor": {
+        "subpackage": "radia_mcp.fusion_reactor",
+        "entry_point": "mcp-server-fusion-reactor",
         "description": "Fusion reactor magnets: tokamak ITER + stellarator "
                        "LHD/W7-X/heliotron lineage",
-        "primary_tools": ["fusion"],
+        "primary_tools": ["fusion_reactor"],
         "related": ["accelerator", "data-assimilation", "electromagnet"],
         "tags": ["application"],
     },
@@ -322,7 +322,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Kalman / EnKF / 4D-Var for EM state estimation + "
                        "sensor fusion",
         "primary_tools": ["data_assimilation"],
-        "related": ["mor", "fusion"],
+        "related": ["mor", "fusion-reactor"],
         "tags": ["optimization"],
     },
     "gnn": {
