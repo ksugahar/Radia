@@ -202,11 +202,12 @@ the central engineering finding of the IGTE paper.
 
 ### Convergence summary (per-panel mode, 54 cases)
 
-| Region | Iter range | Notes |
+| Region | Iter | Notes |
 |---|---|---|
-| `I=1 -- 200 A` all `f` (49 cases) | 6 -- 13 (median 8) | converged |
-| `I=500 A, f=10 kHz` | 6 | converged (this is the max-gap case) |
-| `I=500 A, f=20 -- 500 kHz` (5 cases) | **30 (max), conv=False** | limit cycle, see below |
+| Bulk of `I=1 -- 200 A` (47 of 49 converged) | 6 -- 13 (median 8) | converged |
+| `I=200 A, f=500 kHz` | 26 | converged outlier |
+| `I=500 A, f=10 kHz` | 25 | converged outlier (this is the max-gap case) |
+| `I=500 A, f=20 -- 500 kHz` (5 cases) | **30 (cap), conv=False** | limit cycle, see below |
 
 49 of 54 per-element cases converge; the 5 outliers (the I = 500 A
 high-frequency band) hit the 30-iter cap with a non-decreasing dZ_max
