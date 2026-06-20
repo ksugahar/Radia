@@ -925,6 +925,102 @@ iron pole face is a scalar-potential **equipotential**, and *deviation from it
   correction, since the linking coil funnels more flux than the geometric area ratio;
   reported, not hidden). Goldens `..._inverse_sizing` (fast) + `..._inverse_fem` (slow).
 
+### `scaling_ffag_pole_2d.py` — achromatic (scaling-FFAG) gantry pole, certified by A/phi bounds
+
+The **engineering target the whole hodograph line serves**: a fixed-field
+(scaling-FFAG) **proton gantry** delivers a *range* of beam momenta without
+re-exciting the magnets (fast energy switching, a compact gantry). The enabling
+property is **achromaticity** — momentum-independent tune — which for a scaling
+field `B_y(r) = B0 (r/r0)^k` (orbits geometrically similar, `p ~ r^{k+1}`) is
+the *single* condition that the **field index** `k(r) = d log B_y / d log r` be
+**constant** across the aperture. The hodograph is the natural language: in
+`u = log r`, momentum change is a *translation* and the scaling field is a
+*straight line* (`log B` vs `log r`, slope `k`), so **achromatic ⇔ that line
+stays straight**.
+
+The design is **shape optimization** (fixed topology — the pole face is the
+`Phi = const` equipotential / Clebsch level set), so the hodograph chart is
+single-valued (no fold). For a **super-ferric** magnet (SC coils set the NI,
+the iron pole shapes the field, saturation is the wall) the value is to hold
+`k` constant *into saturation* — pushing the field for a smaller gantry.
+
+**Step 1 here (linear):** the field-index metric (exact on `B ~ r^k`,
+`~7e-14`); the proton 70-250 MeV band → radial aperture ratio `~1.12` (`k=5`);
+and the achromaticity is **certified by the complementary A/phi bracket** — the
+same gap solved as the scalar potential (`phi`, Dirichlet on the equipotential
+poles, `B=-grad phi`) AND as the flux function (`A`, the dual BCs, `B=curl A`),
+the energy↔co-energy (Legendre) conjugate pair. The two field indices converge
+from discretisation-*complementary* sides; their **gap < 1e-6** certifies that
+the measured `k(r)` is physics, not mesh. Result: the naive `g ~ r^{-k}` pole
+gives a bulk index `k ≈ 4.88` (just under the design `k=5`) — a small, certified
+2-D-fringing **deficit** that the (upcoming) Step 3 reshape closes; *honest*:
+the bracket certifies the deficit is real. Figure
+`scaling_ffag_pole_2d.png` (left: `|B_y|(r)` log-log vs ideal `r^k` | right:
+`k_phi(r)`, `k_A(r)` and the A/phi bracket vs `k_design`). Golden
+`test_scaling_ffag_pole_2d_step1`.
+
+**Step 2 (saturation, `--step2`):** a super-ferric iron pole (SC coils set the
+NI, the iron shapes the field) with a Froehlich `mu(B)` (knee `Bk=1.2 T`).
+Driving the scalar potential through the air gap (`B = -mu0 mu_r(|B|) grad phi`,
+Picard on `mu_r(B)`) and sweeping the drive: referenced to the lowest
+(unsaturated) level, the field-index loss `Dk(r) = k - k_ref` isolates the
+saturation. As the high-r edge (highest `B`) crosses the iron knee, `Dk`
+develops a **negative dip THERE** — the achromaticity degrades at the
+high-energy edge of the momentum acceptance (the **super-ferric operating
+wall**). Verified monotone: at gap fields up to `~3.3 T` the high-r index drops
+`~0.26` below baseline and the aperture **tilts** (`dk_tilt ~ -0.13`: the high-r
+edge droops more than the low-r edge). Figure
+`scaling_ffag_pole_2d_saturation.png` (left: `Dk(r)` deepening at the high-r
+edge | right: `|B_gap|(r)` crossing `Bk`). Golden
+`test_scaling_ffag_pole_2d_step2_saturation`.
+
+**Step 3 (reshape, `--step3`):** restore a flat (achromatic) `k(r)` INTO
+saturation by reshaping the pole face. In the log chart the gap correction is a
+polynomial `g(r) = g0 exp(-k u - gamma/2 u^2 - gamma2/6 u^3)` (`u = log r/r0`),
+so the local geometric index `k_geom(u) = k + gamma u + gamma2/2 u^2` has two
+knobs — `gamma` cancels the **tilt** of `k(r)`, `gamma2` the **curvature** (the
+single-valued von Mises / log-chart reshape; cf. the 2-param Newton in
+`clebsch_pole_shape_optimization_2d` that nulls `b3` AND `b5`). A 2-D Newton on
+`(tilt, curv)=0` runs on the **nonlinear (saturated)** solve, so it corrects the
+ACTUAL operating field index. Result at the super-ferric design excitation
+(`B@r0=1.8 T`): the naive pole's saturated `k(r)` varies `ptp ~ 0.089`
+(tilt `+0.084`, curv `+0.039`); **one Newton step** (`gamma,-0.85`,
+`gamma2,+42.9`) nulls both to `~0.002` and flattens the field index **7.2x**
+(`ptp 0.089 -> 0.012`). Figure `scaling_ffag_pole_2d_reshape.png` (left: `k(r)`
+naive vs reshaped vs `k_design` | right: the pole-face shape change). Golden
+`test_scaling_ffag_pole_2d_step3_reshape`.
+
+**Complementary certification into saturation (`bracket_saturated`):** the
+SATURATED field index is certified the same way Step 1 certifies the linear one
+-- the nonlinear operating point is solved BOTH ways, `phi` (Dirichlet on the
+poles, Picard on `mu(B)`) and `A` (the flux-function dual, Dirichlet on the flux
+walls, driven to the `phi`-solve's median flux `Psi` so both sit at the SAME
+saturation state, Picard on `nu(B)`). Monotone BH => convex energy => the
+bracket survives into saturation: `k_phi(r)` and `k_A(r)` agree to `~1e-3` at
+`B_gap` up to `2.3 T`, certifying BOTH the naive pole's droop AND the reshaped
+pole's flat `k(r)` are physics, not mesh. Golden
+`test_scaling_ffag_pole_2d_saturated_bracket`.
+
+**Hodograph AS the solver, not just framing (`--pullback`):** Steps 1-3 solve in
+PHYSICAL `(r,y)` coordinates and remesh for every pole shape -- the log chart is
+only the framing + the reshape parametrisation. `run_pullback` makes the
+hodograph LOAD-BEARING: the linear scaling pole is solved on a FIXED
+computational rectangle with the pole shape entering as a pullback DEFORMATION
+(`mesh.SetDeformation`, the verified `W = |det J|(J^T J)^{-1}` identity of
+`bidirectional_coordinate_transform_2d.py`), so a reshape is a new WEIGHT on the
+SAME mesh -- **Netgen runs exactly ONCE** for the whole pole-shape sweep. The
+pullback solve reproduces the physical-remesh field index `k(r)` to `~5e-4`
+(the deformation IS the physical solve), and the reshape still bites on the
+fixed mesh (the index tilt moves with `gamma`). This is the genuine no-remesh
+win the physical-coordinate solves lack. Golden
+`test_scaling_ffag_pole_2d_pullback_solver`. *(Honest scope: the no-remesh
+pullback is shown for the LINEAR equipotential pole; wiring it through the
+nonlinear saturated solve + driving the 2-D Newton on the fixed mesh is the
+next rung.)* *Together Steps 1-3 are the
+saturation-robust achromatic scaling pole: certify the index (A/phi bracket),
+measure the saturation droop, and reshape it flat — all in the hodograph
+(log/von Mises) chart, single-valued shape optimization.*
+
 ## Run
 
 ```bash
@@ -948,6 +1044,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
+python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 sat, --step3 reshape, --pullback no-remesh; --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
