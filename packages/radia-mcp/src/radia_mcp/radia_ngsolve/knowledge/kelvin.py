@@ -2776,6 +2776,12 @@ the two halves, the TOTAL Kelvin closure error is
 = the abstract's mesh-adequacy criterion in full: from the source compactness/eccentricity
 choose p; from the target accuracy choose the Gamma surface h at k=2.
 
+End-to-end FEM check (demo_xx14_eccentric_fem_endtoend.py): an off-centre dipole solved
+through the Kelvin ball, exterior field recovered by the inverse Kelvin map, has error that
+decays at ~2*ln(d/R) -- the exterior FIELD beats the boundary-trace (d/R)^p rate (the radial
+decay (R/rho)^(2n+1) extra-suppresses the dropped high multipoles), so p* is a SUFFICIENT,
+CONSERVATIVE rule for field accuracy (measured margin 4x-40x at p=p*), not tight for it.
+
 ## One-line rule
 
 Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
