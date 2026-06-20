@@ -2789,6 +2789,16 @@ decays at ~2*ln(d/R) -- the exterior FIELD beats the boundary-trace (d/R)^p rate
 decay (R/rho)^(2n+1) extra-suppresses the dropped high multipoles), so p* is a SUFFICIENT,
 CONSERVATIVE rule for field accuracy (measured margin 4x-40x at p=p*), not tight for it.
 
+In ENGINEERING practice (demo_xx16_apparatus_design_calc.py): a reactor / transformer LEG
+winding (a balanced 2-D current set, sum I=0) runs through the whole calc in closed form --
+its exterior content is the winding CURRENT MOMENTS a_m = sum_k I_k z_k^m (== an FFT of A_z
+on Gamma); a balanced winding has NO monopole and (by x<->-x symmetry) excites ODD
+multipoles only (a selection rule like demo_e's square n=4k+1), decaying geometrically.  The
+total-DoF proxy (R/a)^2 * p*^2 is minimised at R*/a_app ~ 2.78 (the air-box 2-5x optimum)
+with a MODEST p*=5 for eps=1e-4; the m<=p* closure reproduces the exterior field to ~2e-5.
+So from the winding geometry the open-boundary R and p follow directly -- NO convergence
+study (a linear iron core only rescales the moments, not the geometric a_app/R decay).
+
 ## One-line rule
 
 Make Gamma conforming (copy mesh / Identify), then spend the budget on the Gamma
