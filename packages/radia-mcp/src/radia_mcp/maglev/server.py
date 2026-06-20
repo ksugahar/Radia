@@ -44,6 +44,7 @@ def maglev(topic: str = "overview") -> str:
             "overview"            - Unified maglev landscape (DEFAULT)
             "radia_iem_fem"       - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
             "cln_mor_control"     - Cauer Ladder Network MOR for control-coupled maglev (Yano)
+            "physical_tensor_rom" - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS; Kameari+Kelvin breakdown)
             "pm_maglev_zero_power"- Passive PM levitation, Maxwell-Earnshaw
             "eddy_current_maglev" - Eddy-current EDS, Kansai 2D model, Arago
             "sumitomo_heavy_industrial" - JP 7-327337 PM bearing + JP 2007-215264 mover
