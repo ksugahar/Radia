@@ -33,7 +33,7 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
 | method | accuracy (per-mode `d_n`) | convergent? | parameter-free? | DC conditioning | cost |
 |---|---|---|---|---|---|
 | **Kelvin** | **exact** (static `~2e−6`, eddy converges; **extended/radiating Kelvin** carries high-freq — HOIBC `~3e−2`, exact-Z `~6e−6`) | **YES** | **YES** | **flat** | sparse |
-| **BEM** | **exact** (all regimes) | **YES** | **YES** | — | **DENSE** (`N²`) |
+| **BEM** (`ngsolve.bem`) | **exact** (all regimes; the real `ngsolve.bem` Helmholtz BEM reproduces `wave_dtn` to `~1e−5`, `act7_23`) | **YES** | **YES** | — | **DENSE** (`N²`) |
 | **PML** | accurate per-mode (`~1e−4` in its home) | no (a tuned **layer**) | no (`σ, L`) | **blows up** (`2.4e4`@DC) | sparse |
 | **CFS-PML** | accurate per-mode | no (a tuned layer) | no (`σ, α, L`) | **fixed** (`2.3e3`@DC) | sparse |
 | **ballooning** | **fails the LOW modes** (`~(a/R)^{2n+1}`) | no (finite **reach** `R`) | `R` | — | sparse |
@@ -80,6 +80,28 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
 > **conditioning** (PML blows up at DC; CFS-PML fixes it; Kelvin flat), **cost** (BEM dense vs
 > the rest sparse), and **reach** (ballooning finite). Reporting all axes is the honest result —
 > not "method X is best".
+
+## Relation to the conventional reflection coefficient (`d_n ≡ reflection`)
+
+The community grades an open boundary by its **reflection coefficient** `R_n` (Bérenger;
+Engquist–Majda; Bayliss–Turkel), not by a DtN defect. The two are the **same quantity**: for a
+mode at the truncation the spurious "wrong" solution is the *growing* mode (static / evanescent)
+or the *incoming* wave (high-freq), with DtN `λ_other`, and a boundary DtN `λ_h` admits
+
+```
+    R_n  =  | λ_h − λ_exact |  /  | λ_h − λ_other |
+```
+
+— the **same numerator** as `d_n = |λ_h − λ_exact| / |λ_exact|`. So `R_n` is the
+physically-measured *face* of the DtN defect; they carry identical information (only the
+normalisation differs). Measured in `act7_22` (reflection view): static **Kelvin** is
+reflectionless (`R ~ 1e−13…1e−6`) while **ballooning** reflects the low modes (`R[n=0] = 0.25`,
+shrinking with `n`); high-freq propagating (`n ≤ ka`) **extended-Kelvin-HOIBC** and **PML** are
+both low-reflection (`R ≲ 3e−2`); and **`ngsolve.bem`** is ~reflectionless (`act7_23`, `R ~ 1e−5`)
+because it reproduces the exact outgoing DtN. **The DtN-spectrum view adds nothing physically new
+over reflection** — its only convenience is being defined *uniformly across regimes* (static /
+evanescent have no propagating wave to "reflect"). This is a measurement / comparison, framed in
+the standard reflection language, **not a new metric**.
 
 ## Provenance (cite — this is a measurement / comparison, not a new method)
 
