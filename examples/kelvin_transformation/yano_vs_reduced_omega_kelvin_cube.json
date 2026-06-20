@@ -1,0 +1,27 @@
+{
+  "problem": "hex iron cube in uniform field; yano-MSC vs reduced-Omega+Kelvin FEM",
+  "mu_r": 200.0,
+  "H0": 1000.0,
+  "cube_half_edge_m": 0.02,
+  "fem_reduced_omega_kelvin": {
+    "Mz": 3464.680773571641,
+    "ndof": 105922,
+    "ne": 22995,
+    "fes_order": 3
+  },
+  "yano_msc": [
+    {
+      "yano_grid": "REGULAR",
+      "n_hex": 64,
+      "Mz": 3414.207318279917,
+      "err_vs_fem": -0.0145679958963989
+    },
+    {
+      "yano_grid": "DISTORTED(graded)",
+      "n_hex": 64,
+      "Mz": 3395.2550008801495,
+      "err_vs_fem": -0.02003814412602367
+    }
+  ],
+  "note": "yano (loop-removed) matches the independent reduced-Omega+Kelvin FEM to ~2% for both regular and distorted hexes -> loop-free + distortion-robust; both in the validated cube range (tests/feec/parity_vs_msc)."
+}
