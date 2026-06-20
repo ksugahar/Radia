@@ -1521,7 +1521,8 @@ def _optimize_contour_levels(psi_v, verts, tris, nlevels, mpts, target_flat,
     return levels, rms0, resid(np.sum(fk, axis=0))
 
 
-def _greedy_coil_turns(cand_fields, target_flat, max_turns, target_rms=None):
+def _greedy_coil_turns(cand_fields, target_flat, max_turns, target_rms=None,
+                       cand_centroids=None, connector_weight=0.0, coil_diag=1.0):
     """LOW-TURN STRATEGY -- greedy constructive coil ("put up a pin, lay the next
     turn where it helps most").  Matching pursuit with a COMMON series current:
     keep adding the candidate loop (with sign) that best ALIGNS the unit combined
@@ -1530,30 +1531,57 @@ def _greedy_coil_turns(cand_fields, target_flat, max_turns, target_rms=None):
     candidate improves, ``max_turns`` reached, or residual <= ``target_rms``.
     Allows repeats (a re-picked loop = a stacked turn -> more local current).
     Returns (selected [(cand_idx, sign)], trace [{n_turns, rms}]).  This is the
-    antidote to the NON-MONOTONIC contour-quantise turn-count search."""
+    antidote to the NON-MONOTONIC contour-quantise turn-count search.
+
+    CONNECTOR-AWARE selection (``connector_weight`` > 0, needs
+    ``cand_centroids``): bias the SELECTION toward loops geometrically NEAR the
+    loops already laid -- score = field_residual + connector_weight * (gap /
+    coil_diag), gap = nearest distance from the candidate's centroid to an
+    already-selected loop (0 for the first turn or a re-picked/stacked loop).
+    This trades a little field optimality for a SHORT single-stroke connector
+    ('rung') path -> a manufacturable wire, the fix for the isolated-pin chaining
+    penalty (long rungs wreck the single-current homogeneity).  Only field-
+    IMPROVING turns are accepted, so the rms-vs-turns trace stays MONOTONE
+    regardless of the weight; ``connector_weight=0`` is the pure-field default."""
     den = float(np.linalg.norm(target_flat)) + 1e-30
     F = np.asarray(cand_fields, float)             # (D, M) unit-current fields
     if F.ndim != 2 or F.shape[0] == 0:
         return [], []
-    G = np.zeros(F.shape[1]); selected, trace = [], []
+    cents = (np.asarray(cand_centroids, float)
+             if (cand_centroids is not None and connector_weight > 0.0)
+             else None)
+    diag = float(coil_diag) + 1e-30
+    G = np.zeros(F.shape[1]); selected, trace, sel_cents = [], [], []
     prev = 1.0                                      # empty coil: ||0 - t||/|t| = 1
     for _ in range(int(max_turns)):
-        best = None
+        if cents is not None and sel_cents:         # connector gap per candidate
+            sc = np.asarray(sel_cents)
+            gap = np.min(np.linalg.norm(cents[:, None, :] - sc[None, :, :],
+                                        axis=2), axis=1) / diag
+        else:
+            gap = np.zeros(F.shape[0])
+        best = None                                 # (score, field_r, idx, sign)
         for s in (1.0, -1.0):
             Gp = G[None, :] + s * F                 # (D, M)
             d = np.einsum('dm,dm->d', Gp, Gp) + 1e-300
             Iw = (Gp @ target_flat) / d
             r = np.linalg.norm(Iw[:, None] * Gp - target_flat[None, :],
                                axis=1) / den
-            k = int(np.argmin(r))
-            if best is None or r[k] < best[0]:
-                best = (float(r[k]), k, s)
-        r, k, s = best
-        if r >= prev - 1e-12:                       # no candidate improves -> stop
+            score = r + connector_weight * gap
+            improving = np.where(r < prev - 1e-12)[0]   # keep trace monotone
+            if improving.size == 0:
+                continue
+            k = int(improving[int(np.argmin(score[improving]))])
+            if best is None or score[k] < best[0]:
+                best = (float(score[k]), float(r[k]), k, s)
+        if best is None:                            # no candidate improves -> stop
             break
-        G = G + s * F[k]; selected.append((k, s)); prev = r
-        trace.append({"n_turns": len(selected), "rms": r})
-        if target_rms is not None and r <= target_rms:
+        _, fr, k, s = best
+        G = G + s * F[k]; selected.append((k, s)); prev = fr
+        if cents is not None:
+            sel_cents.append(cents[k])
+        trace.append({"n_turns": len(selected), "rms": fr})
+        if target_rms is not None and fr <= target_rms:
             break
     return selected, trace
 
@@ -1615,6 +1643,127 @@ def _pin_loop_candidates(verts, tris, mpts, vector_b, n_pins=120,
             loop = verts[[shell[i] for i in order]]
             loops.append(loop)
             fields.append(_wire_field_flat(_close_loop(loop), mpts, vector_b, 1.0))
+    return loops, fields
+
+
+def _surface_grad_mag(psi_v, verts, tris):
+    """Per-vertex |grad_s psi| (the surface-current magnitude |K| = |n x grad
+    psi| up to the constant) -- area-weighted average of each incident triangle's
+    constant in-plane gradient.  Solves the 2x2 system for the gradient in an
+    orthonormal tangent basis (robust on a curved surface in 3D).  Used to place
+    bubble pins with line DENSITY proportional to |K| (the stream-function
+    equal-flux packing law)."""
+    nv = len(verts)
+    acc = np.zeros(nv); wsum = np.zeros(nv)
+    for (a, b, c) in tris:
+        pa = verts[a]; e1 = verts[b] - pa; e2 = verts[c] - pa
+        n = np.cross(e1, e2); area2 = float(np.linalg.norm(n))
+        if area2 < 1e-30:
+            continue
+        ln1 = float(np.linalg.norm(e1))
+        if ln1 < 1e-30:
+            continue
+        t1 = e1 / ln1; t2 = np.cross(n / area2, t1)   # orthonormal in-plane basis
+        M = np.array([[e1 @ t1, e1 @ t2], [e2 @ t1, e2 @ t2]])
+        rhs = np.array([psi_v[b] - psi_v[a], psi_v[c] - psi_v[a]])
+        try:
+            ab = np.linalg.solve(M, rhs)
+        except np.linalg.LinAlgError:
+            continue
+        gmag = float(np.hypot(ab[0], ab[1])); area = 0.5 * area2
+        for v in (a, b, c):
+            acc[v] += gmag * area; wsum[v] += area
+    wsum[wsum == 0.0] = 1.0
+    return acc / wsum
+
+
+def _bubble_pin_loops(psi_v, verts, tris, mpts, vector_b, n_target=80,
+                      frac=0.7, kmax=6):
+    """DENSE BUBBLE-TILING pin coil -- the bubble system (Hirahatake/Noguchi/
+    Igarashi/Yamashita) applied to coil DISCRETISATION: drop small circulating
+    loops over the surface with DENSITY proportional to |K| = |grad_s psi|
+    (clearance radius r_i = k / sqrt(|K|_i), so loops pack where the current is
+    strong), and size each loop to its bubble (grow the on-surface k-ring until
+    the ring radius ~ frac * r_i).  A many-turn, MANUFACTURABLE alternative to
+    long iso-contours: equal-current loops that TILE the surface, dense where
+    needed, each a short local loop with a short hop to its neighbour (no long
+    cross-coil rungs).  k is bisected so ~``n_target`` loops land.  Returns
+    (loops, fields)."""
+    nv = len(verts)
+    gmag = _surface_grad_mag(psi_v, verts, tris)
+    pos = gmag > 0.0
+    if not np.any(pos):
+        return [], []
+    adj = [set() for _ in range(nv)]               # vertex adjacency
+    for (a, b, c) in tris:
+        adj[a].update((b, c)); adj[b].update((a, c)); adj[c].update((a, b))
+    vn = np.zeros_like(verts, dtype=float)         # vertex normals
+    for (a, b, c) in tris:
+        nrm = np.cross(verts[b] - verts[a], verts[c] - verts[a])
+        vn[a] += nrm; vn[b] += nrm; vn[c] += nrm
+    ln = np.linalg.norm(vn, axis=1); ln[ln == 0.0] = 1.0
+    vn = vn / ln[:, None]
+
+    order = np.argsort(-gmag)                       # strongest |K| first
+    diag = float(np.linalg.norm(verts.max(0) - verts.min(0))) + 1e-30
+
+    def pack(k_const):
+        seeds = []
+        for idx in order:
+            b = gmag[idx]
+            if b <= 0.0:
+                continue
+            r = k_const / np.sqrt(b)
+            p = verts[idx]
+            if all(np.linalg.norm(p - verts[s]) > r for s in seeds):
+                seeds.append(int(idx))
+        return seeds
+
+    # bisect k so ~n_target seeds land (monotone: bigger k -> fewer seeds)
+    bref = float(np.median(gmag[pos]))
+    klo = 1e-4 * diag * np.sqrt(bref); khi = 4.0 * diag * np.sqrt(bref)
+    k_used = 0.5 * (klo + khi); pins = pack(k_used)
+    for _ in range(18):
+        k_used = 0.5 * (klo + khi); pins = pack(k_used)
+        if len(pins) > n_target:
+            klo = k_used
+        elif len(pins) < n_target:
+            khi = k_used
+        else:
+            break
+
+    loops, fields = [], []
+    for v in pins:
+        target_r = frac * k_used / np.sqrt(gmag[v] + 1e-30)
+        dist = {v: 0}; frontier = [v]; chosen = None
+        for d in range(1, kmax + 1):               # grow rings to the bubble size
+            nf = []
+            for u in frontier:
+                for w_ in adj[u]:
+                    if w_ not in dist:
+                        dist[w_] = d; nf.append(w_)
+            frontier = nf
+            if not nf:
+                break
+            chosen = d
+            if float(np.mean(np.linalg.norm(verts[nf] - verts[v],
+                                            axis=1))) >= target_r:
+                break
+        if chosen is None:
+            continue
+        shell = [w_ for w_, dd in dist.items() if dd == chosen]
+        if len(shell) < 3:
+            continue
+        nrm = vn[v]
+        t1 = np.cross(nrm, [1.0, 0.0, 0.0])
+        if np.linalg.norm(t1) < 1e-6:
+            t1 = np.cross(nrm, [0.0, 1.0, 0.0])
+        t1 = t1 / np.linalg.norm(t1); t2 = np.cross(nrm, t1)
+        rel = verts[shell] - verts[v]
+        ang = np.argsort(np.arctan2(rel @ t2, rel @ t1))
+        loop = _close_loop(verts[[shell[i] for i in ang]])   # closed k-ring loop
+        loops.append(loop)
+        fields.append(_wire_field_flat(loop, mpts, vector_b, 1.0))
     return loops, fields
 
 
@@ -2241,6 +2390,7 @@ def run_manufacture(args):
 
         greedy_trace = None
         greedy_dict_used = None
+        pin_tiling_used = False
         if getattr(args, "greedy_turns", None):
             # GREEDY CONSTRUCTIVE coil (low-turn strategy): lay turns one at a
             # time where each most reduces the residual (monotone by build) --
@@ -2249,12 +2399,24 @@ def run_manufacture(args):
             if greedy_dict_used == "pin":
                 cand_loops, cand_fields = _pin_loop_candidates(
                     verts, tris, P["mpts"], P["vector_b"])
+            elif greedy_dict_used == "bubble":
+                cand_loops, cand_fields = _bubble_pin_loops(
+                    psi_v, verts, tris, P["mpts"], P["vector_b"],
+                    n_target=int(getattr(args, "pin_tiling_pins", 80)),
+                    frac=float(getattr(args, "pin_tiling_frac", 0.7)))
             else:
                 cand_loops, cand_fields = _contour_loop_candidates(
                     psi_v, verts, tris, P["mpts"], P["vector_b"], tol)
+            cand_cents = (np.array([p.mean(axis=0) for p in cand_loops])
+                          if cand_loops else None)
+            coil_diag = float(np.linalg.norm(verts.max(0) - verts.min(0)))
             sel, greedy_trace = _greedy_coil_turns(
                 cand_fields, P["Bm"], int(args.greedy_turns),
-                getattr(args, "greedy_target", None))
+                getattr(args, "greedy_target", None),
+                cand_centroids=cand_cents,
+                connector_weight=float(getattr(args, "greedy_connector_weight",
+                                               0.0)),
+                coil_diag=coil_diag)
             loops = [cand_loops[k] if s >= 0.0 else cand_loops[k][::-1]
                      for (k, s) in sel]
             levels = []; sub = 1                     # greedy: no contour levels
@@ -2263,6 +2425,22 @@ def run_manufacture(args):
                 return {"method": "manufacture",
                         "error": "greedy coil selected no turns (empty candidate "
                                  "dictionary, or no loop improves the target)"}
+        elif getattr(args, "pin_tiling", False):
+            # DENSE BUBBLE-TILING pin coil (many-turn, manufacturable): equal-
+            # current loops packed with density ~ |K| = |grad psi| and sized to
+            # their bubble -- the discrete-loop alternative to long iso-contours.
+            pin_tiling_used = True
+            loops, _ = _bubble_pin_loops(
+                psi_v, verts, tris, P["mpts"], P["vector_b"],
+                n_target=int(getattr(args, "pin_tiling_pins", 80)),
+                frac=float(getattr(args, "pin_tiling_frac", 0.7)))
+            levels = []; sub = 1
+            lvl_rms0 = lvl_rms = None
+            if not loops:
+                return {"method": "manufacture",
+                        "error": "pin-tiling produced no loops (psi is constant, "
+                                 "or the surface mesh is too coarse for the k-ring "
+                                 "bubble loops)"}
         else:
             if getattr(args, "optimize_levels", False):
                 levels, lvl_rms0, lvl_rms = _optimize_contour_levels(
@@ -2364,6 +2542,8 @@ def run_manufacture(args):
             result.update({
                 "greedy_turns": True,
                 "greedy_dict": greedy_dict_used,
+                "greedy_connector_weight": float(
+                    getattr(args, "greedy_connector_weight", 0.0)),
                 "n_turns_used": len(greedy_trace),
                 # rms vs n_turns -- MONOTONE by construction; read off the fewest
                 # turns meeting any field spec (the correct "min turns" answer).
@@ -2379,6 +2559,24 @@ def run_manufacture(args):
                     result["greedy_plot"] = args.greedy_plot
                 except Exception as e:                 # noqa: BLE001
                     result["greedy_plot_error"] = str(e)
+        elif pin_tiling_used:
+            result.update({
+                "pin_tiling": True,
+                "pin_tiling_pins": int(getattr(args, "pin_tiling_pins", 80)),
+                "pin_tiling_frac": float(getattr(args, "pin_tiling_frac", 0.7)),
+                "n_pin_loops": int(len(loops)),
+                # HONEST regime note: bubble pins reproduce the target under
+                # INDEPENDENT currents (loops_homogeneity_rms) -- the natural
+                # metric for a driven pin / shim ARRAY -- but NOT under one series
+                # current (wire_homogeneity_rms), because isolated equal-current
+                # loops do not tile-cancel into the surface current K the way psi
+                # iso-contours do.  Use --pin-tiling for a driven-array layout;
+                # use iso-contours (default) / --greedy-turns for a single wire.
+                "pin_tiling_note": "loops_homogeneity_rms = driven pin/shim ARRAY "
+                                   "(independent currents, the pin-coil regime); "
+                                   "wire_homogeneity_rms = single series wire "
+                                   "(use iso-contours for that).",
+            })
         elif getattr(args, "optimize_levels", False):
             result.update({
                 "levels_optimized": True,
@@ -2553,11 +2751,19 @@ def build_argparser():
                          "antidote to non-monotonic contour quantisation).  "
                          "Emits the rms-vs-turns trace (read off the fewest "
                          "turns meeting any spec).")
-    ap.add_argument("--greedy-dict", choices=["contour", "pin"],
+    ap.add_argument("--greedy-dict", choices=["contour", "pin", "bubble"],
                     default="contour",
                     help="greedy candidate loops: 'contour' = dense psi iso-"
-                         "contour loops (A); 'pin' = small tangent-plane loops "
-                         "at surface pins (B, 'wind a loop on a pin').")
+                         "contour loops (A); 'pin' = on-surface k-ring loops at "
+                         "surface pins (B, 'wind a loop on a pin'); 'bubble' = "
+                         "bubble-packed pins, density ~ |grad psi| (C).")
+    ap.add_argument("--greedy-connector-weight", type=float, default=0.0,
+                    help="connector-aware greedy: bias selection toward loops "
+                         "NEAR the ones already laid (score = field_residual + "
+                         "weight * gap/coil_diag) so the single-stroke connector "
+                         "('rung') path stays short -> manufacturable wire.  0 = "
+                         "pure-field (default); ~0.3-1.0 trades a little field for "
+                         "short rungs (fixes the isolated-pin chaining penalty).")
     ap.add_argument("--greedy-target", type=float, default=None,
                     help="greedy stop threshold: stop adding turns once the "
                          "field residual rms <= this (else use all --greedy-"
@@ -2566,6 +2772,19 @@ def build_argparser():
                     help="turn-budget UI: write the greedy rms-vs-turns curve "
                          "(with the --greedy-target spec line + min-turns mark) "
                          "to this PNG.")
+    ap.add_argument("--pin-tiling", action="store_true",
+                    help="DENSE BUBBLE-TILING pin coil (manufacture, many-turn): "
+                         "equal-current loops packed over the surface with "
+                         "density ~ |K| = |grad psi| and sized to their bubble -- "
+                         "the discrete-loop, manufacturable alternative to long "
+                         "iso-contours (dense where the current is strong).")
+    ap.add_argument("--pin-tiling-pins", type=int, default=80,
+                    help="pin-tiling / bubble greedy dict: target number of "
+                         "bubble loops (k is bisected to land ~this many).")
+    ap.add_argument("--pin-tiling-frac", type=float, default=0.7,
+                    help="pin-tiling / bubble greedy dict: loop radius as a "
+                         "fraction of the bubble clearance radius (0.7 -> loops "
+                         "tile without heavy overlap).")
     ap.add_argument("--target-inductance", type=float, default=None,
                     help="IH-RESONANCE design: search the turn count (nlevels) "
                          "so the single-stroke coil inductance equals this "
