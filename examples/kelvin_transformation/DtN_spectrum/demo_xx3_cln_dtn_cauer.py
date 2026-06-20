@@ -33,10 +33,15 @@ VERIFIED HERE (all asserted; self-contained numpy/scipy):
       q=sqrt(s)) -- both to machine precision -- and BOTH have poles = roots of
       the SAME reverse Bessel polynomial theta_n.
   (2) CLN realisation: the diffusion DtN as a Cauer continued fraction in
-      q=sqrt(s) is EXACT with n+1 stages (~1e-15) and WELL-CONDITIONED
-      (coeff spread ~1-30), whereas a Foster fit in s FLOORS (~1e-3 at 32 states)
-      and ILL-CONDITIONS (coeff spread -> 1e5).  CLN beats Foster by ~12 orders
-      at ~10x fewer states.
+      q=sqrt(s) is EXACT with n+1 stages (~1e-15) and WELL-CONDITIONED -- and this
+      holds for EVERY multipole, not just the dipole: VERIFIED n=1..6 (dipole ->
+      2^6-pole, NRMSE ~1e-16 each at n+1 stages, coeff spread 1 -> 582 < 1e3),
+      whereas a Foster fit in s FLOORS (~1e-3 at 32 states) and ILL-CONDITIONS
+      (coeff spread -> 1e5) at every n.  CLN beats Foster by ~12 orders at ~10x
+      fewer states.  (So the full multipole FIELD on the sphere -- the modes are
+      Y_n-orthogonal, the DtN is block-diagonal -- is exactly a BANK of per-mode
+      CLN ladders, each n+1 stages; arbitrary NON-separable bodies are a convergent
+      band approximation instead, demo_xx9/xx10.)
   (3) TIME-DOMAIN realisability + stability: the diffusion-memory element sqrt(s)
       is realised by a finite PASSIVE relaxation ladder (real negative poles =>
       stable, finite auxiliary ODEs); composed into the exact n+1-stage Cauer
@@ -197,7 +202,7 @@ omega = np.logspace(-1, 2, 60)
 # ---------------------------------------------------------------------------
 print("\n[1] UNIFICATION: wave (in s) and diffusion (in sqrt(s)) DtN share the")
 print("    SAME reverse-Bessel poles theta_n; both reproduce scipy to machine eps:")
-for n in (1, 2, 3):
+for n in (1, 2, 3, 4, 5, 6):
     rbr = np.sort_complex(reverse_bessel_roots(n))
     # wave: poles in z are i*roots(theta_n); pole-residue vs scipy spherical Hankel
     zp = 1j * reverse_bessel_roots(n)
@@ -222,7 +227,7 @@ print("    ok  (ONE reverse-Bessel structure; gamma=ik wave / gamma=sqrt(s) diff
 # ---------------------------------------------------------------------------
 print("\n[2] CLN realisation: diffusion DtN = Cauer continued fraction in sqrt(s),")
 print("    EXACT with n+1 stages + well-conditioned; Foster (in s) floors + blows up:")
-for n in (1, 2, 3):
+for n in (1, 2, 3, 4, 5, 6):
     A, den = dtn_diff_q_num_den(n)
     quo = cauer_cf_in_q(A, den)
     Zcln = np.array([eval_cf(quo, np.sqrt(1j * w)) for w in omega], complex)
@@ -251,7 +256,7 @@ g, p, e_sqrt = sqrt_s_ladder(omega, 12)
 assert np.all(p > 0) and e_sqrt < 5e-2
 # (b) compose: exact n+1-stage Cauer structure  o  the sqrt(s) ladder -> reproduce G_n
 print("    compose (exact n+1-stage Cauer structure) o (sqrt(s) passive ladder):")
-for n in (1, 2, 3):
+for n in (1, 2, 3, 4, 5, 6):
     A, den = dtn_diff_q_num_den(n)
     quo = cauer_cf_in_q(A, den)
     Zc = np.array([eval_cf(quo, eval_sqrt_ladder(g, p, 1j * w)) for w in omega], complex)
@@ -264,7 +269,7 @@ for n in (1, 2, 3):
 print("    stability: G_n analytic + bounded in Re(s)>0 (poles only on the")
 print("    non-physical sqrt(s) sheet, Re sqrt(s)<0):")
 worst = 0.0
-for n in (1, 2, 3):
+for n in (1, 2, 3, 4, 5, 6):
     grid = [(sr + 1j * si) for sr in (0.05, 0.5, 2.0, 10.0) for si in (-8, -1, 0, 1, 8)]
     mx = max(abs(complex(dtn_diff_bessel(n, s))) for s in grid)
     worst = max(worst, mx)
