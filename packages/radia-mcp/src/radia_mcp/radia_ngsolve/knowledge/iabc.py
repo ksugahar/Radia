@@ -277,7 +277,7 @@ system (controllable-canonical realisation of N_l/Q_l) + a boundary time
 derivative (the -s) + a constant (the -1), folded into Newmark-beta.  Poles
 Re<0 + dissipative boundary => UNCONDITIONALLY STABLE, reflection zero up to
 discretisation.  VERIFIED by a 1D radial FETD solve (Newmark-beta, R0=c=1,
-demo_uu2_exact_dtn_fetd.py): realising the exact DtN as a Robin BC + l companion
+act6_11_exact_dtn_fetd.py): realising the exact DtN as a Robin BC + l companion
 auxiliary ODEs, the spurious reflection (truncated solve vs a free-space
 reference on the SAME interior mesh) falls as O(h^2) for l=1,2,3 -- ~5.7e-4,
 ~1.4e-4, ~3.6e-5 on 100/200/400-element radial meshes (clean x4 per h-halving)
@@ -287,7 +287,7 @@ interior energy drains to machine precision (~1e-16 of peak) without ever
 growing => passive.  This is the right vehicle for "seamless, stable, transient
 open boundary": realise the exact PASSIVE boundary response, do not causalise a
 material.  (The DtN symbol / pole realisation itself is verified separately in
-demo_uu_iabc_time_domain.py.)
+act6_10_iabc_time_domain.py.)
 
 IMPORTANT (prior art, state it): for a SEPARABLE boundary (sphere / cylinder /
 half-space) this exact rational radiation BC is the classical Grote-Keller /
@@ -310,20 +310,20 @@ plateaus ~1.7e-2; URN's edge is measured/multi-mechanism data, not a clean
 analytic DtN).  This promotes the lab CLN (Kameari-Sugahara eddy-current MOR) to
 the open BOUNDARY itself; the sqrt(s) diffusion-memory element is realised by the
 finite eddy-current ladder (real negative poles -> stable, finite auxiliary ODEs).
-VERIFIED two ways: demo_xx3_cln_dtn_cauer.py (the EXACT Cauer in q=sqrt(s), n+1
-stages -- the structural/unification result; wave realisation = demo_uu/uu2) and
-demo_xx4_cln_mor_radial_eddy.py (the GENUINE lab CLN: a Lanczos/PVL MOR of a
+VERIFIED two ways: act6_02_cln_dtn_cauer.py (the EXACT Cauer in q=sqrt(s), n+1
+stages -- the structural/unification result; wave realisation = act6_10/act6_11) and
+act6_04_cln_mor_radial_eddy.py (the GENUINE lab CLN: a Lanczos/PVL MOR of a
 ~700-DOF radial eddy-current FEM down to a COMPACT ~16-stage INTEGER-ORDER Cauer
 ladder reproducing G_n, monotone convergence, SPD => real negative poles =>
 directly time-domain + stable -- the practical eddy-current open boundary).  And
-demo_xx5_cln_fetd_reflection.py USES it as a TRANSIENT open boundary: a Crank-
+act6_05_cln_fetd_reflection.py USES it as a TRANSIENT open boundary: a Crank-
 Nicolson eddy-current diffusion FETD with the exterior Krylov-substructured to
 ~16 DOFs gives ~1e-6 spurious reflection (vs ~6-11% for Dirichlet/Neumann
 truncation), monotone in the stage count, across n=1,2,3 -- the diffusive analog
-of demo_uu2's wave reflection test.  So the reverse-Bessel/CLN open boundary is
+of act6_11's wave reflection test.  So the reverse-Bessel/CLN open boundary is
 reflectionless in time for BOTH the wave and the diffusion regime.
 
-CLN vs PML (head-to-head, demo_xx6_cln_vs_pml.py): the eddy-current/diffusion
+CLN vs PML (head-to-head, act6_09_cln_vs_pml.py): the eddy-current/diffusion
 exterior is EVANESCENT for every s=i*omega and STATIC as omega->0 -- this whole
 band IS the "DC-to-evanescent" regime (the operator's entire physical range; a
 pure diffusion operator has NO propagating regime).  SCOPED CLAIM (measured,
@@ -347,11 +347,37 @@ shifted, beta=1+sigma/(alpha+sqrt(s))) that was invented precisely for evanescen
      block (~1 vs ~5e4) at the same accuracy.  CLN has no accuracy<->conditioning
      tradeoff.
 HONEST NON-CLAIMS: this is NOT PML's home (propagating waves = the WAVE operator,
-demo_uu/pp; there high-freq vacuum -> PML, and at high omega the table shows PML
+act6_10/act7_08; there high-freq vacuum -> PML, and at high omega the table shows PML
 better conditioned than CLN).  And the geometry is separable (radial), so [b]'s
 "grow the far domain" is just "raise Rfar"; arbitrary geometry needs a Kelvin /
 large-domain exterior FEM reduced by CLN -- the radial case is the proof of
 mechanism, not a general-geometry benchmark.
+
+# Kelvin-DtN-CLN vs impedance-DtN-CLN -- which performs better? (act7_20_impedance_vs_kelvin_dtn_cln.py)
+
+The DIRECT head-to-head, both pipelines on the SAME four axes (accuracy / stages /
+conditioning / passivity) for the sphere eddy-current DtN, per multipole.  Both
+realise the SAME sqrt(s) (Warburg / constant-phase) operator; the difference is the
+VARIABLE the finite ladder lives in:
+  Kelvin-DtN-CLN    : Kelvin reaches the EXACT operator -> a Cauer continued fraction
+                      in q=sqrt(s) (the NATURAL variable) -> EXACT at n+1 stages,
+                      well-conditioned (spread ~1-30), passive (reverse-Bessel roots
+                      Re<0).  MEASURED exact for EVERY multipole, not just the dipole:
+                      n=1..6 each ~1e-16 (act6_02_cln_dtn_cauer.py).
+  impedance-DtN-CLN : a lumped impedance network is rational in s (the RLC variable)
+                      and hits the WARBURG WALL -- a finite RLC ladder cannot be
+                      sqrt(s), so it FLOORS (~1.7e-3) and ILL-CONDITIONS (spread ~1e5)
+                      at every n; OR an N-section nested-shell transformer (the IABC)
+                      needs N parameters for N modes and ill-conditions ~1-1.5
+                      decade/shell (2.6e1 -> 2.4e7, N=2..6; act7_18_lowfreq_kelvin_vs_iabc.py).
+VERDICT (within Radia's MQS / eddy / static = Laplace-kernel scope): Kelvin-DtN-CLN
+wins on ALL FOUR axes.  The impedance route's home is the HIGH-FREQUENCY RADIATION
+regime (Helmholtz, OUTSIDE Radia's scope), where the DtN is complex/radiating and
+Kelvin's static real-axis ladder does not apply (HOIBC/IABC: act7_19_highfreq_iabc_revisited).
+NON-CLAIM: for the SPHERE the EXACT exterior DtN is ONE operator -- an exact-DtN-as-
+Robin (Grote-Keller, act6_11_exact_dtn_fetd.py) EQUALS the Kelvin DtN -> the SAME CLN;
+the gap measured is specifically the impedance APPROXIMATION (s-network / finite
+shells) vs Kelvin's exact operator in the diffusion regime.
 """
 
 _TOPICS = {
