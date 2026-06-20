@@ -48,6 +48,40 @@ you need CLN temporal reduction on top?):
   is kept as the **negative-result / comparison** corpus only: the `act7_*` demos +
   `dtn_coarse_mesh(topic="method_map")`. (The historical map below still analyses
   IABC as one fixed-error surrogate — that analysis is *why* it was retired.)
+- **`Zs`-DtN-CLN is ADOPTED as a radia module** (2026-06-20): `radia.open_boundary`
+  ships the verified separable case — the exact eddy/diffusion DtN per multipole, its
+  Cauer ladder (**exact at `n+1` stages**, well-conditioned, passive), and the
+  Grote-Keller companion auxiliary-ODE form for a transient Robin boundary
+  (`tests/open_boundary/`, `examples/open_boundary/`). The non-separable Kelvin-built
+  DtN stays research-stage (`act6_06..`).
+
+### Is it "better than PML"? — three senses of *superior* (be precise)
+
+`Zs`/Kelvin-DtN-CLN vs CFS-PML has **no single winner**. Separate the axes:
+
+| axis | winner | why |
+|---|---|---|
+| **numerical, on the island** (separable / quasi-spherical, MQS evanescent) | **Kelvin / `Zs`-DtN-CLN** (`act6_09`: 8 vs 128 online DOF, cond `~1` vs `~5e4`) | it has the **exact closed-form operator** (Kelvin **builds** it for material / non-separable interiors) — exact, DC-well-conditioned, + a compact passive circuit ROM |
+| **arbitrary geometry** | **CFS-PML** (by default) | the exact DtN does **not exist** there → `Zs`-DtN-CLN can't even play; Kelvin pays a **spherical-truncation** waste (Liouville) a box CFS-PML avoids |
+| **general adoption** (all shapes / all physics / every solver) | **PML** | PML is *approximate* (has a floor) but **local, trivial, conforms to box/sphere/cylinder shells, ships everywhere** — it won on **generality, not accuracy** |
+
+So: **inside the island Kelvin/`Zs`-DtN-CLN genuinely beats CFS-PML on capability**
+(exact + DC-conditioning + passive ROM); **outside it (elongated / arbitrary / waves)
+CFS-PML wins**. "PML is superior" means *generally applicable*, **not** *more accurate*.
+Do **not** state "`Zs`-DtN-CLN > PML" as a general claim — only the island claim is true.
+(Separable ≠ only the sphere: it is the family of separable systems — sphere, cylinder /
+circle, half-space, … — but **Kelvin** itself is sphere-locked (3D) / circle-locked (2D)
+by Liouville, tighter than separable.)
+
+**Prior art (cite — NOT novel).** The exact rational radiation DtN + local
+auxiliary-ODE realisation is **Grote-Keller** (SIAM J. Appl. Math. 1995) /
+**Hagstrom-Warburton** (complete radiation BCs / continued-fraction ABCs; **Guddati**
+2006, **Birk** 2012); the `√s` (Warburg) diffusion impedance as a **Cauer ladder** is
+classical network synthesis (e.g. *PCCP* 18 (2016) 9498); the **Cauer Ladder Network**
+MOR is Kameari-Ebrahimi-Sugahara-Shindo-Matsuo (*IEEE T-Magn* 54(3):7201804, 2018).
+`radia.open_boundary` is a **verified, reusable operator + the reverse-Bessel
+wave↔diffusion unification in CLN form** — *not* a novelty claim. It earns its place by
+being correct and useful in the repository (the bonsai), **no paper required**.
 
 ---
 
@@ -241,6 +275,11 @@ then compress it.
 
 ## 7. Runnable layer (source of truth)
 
+- **Module (production API):** [`radia.open_boundary`](../../src/radia/open_boundary/dtn_cln.py)
+  — the adopted verified `Zs`-DtN-CLN operator: `eddy_dtn` / `wave_dtn` (exact symbols),
+  `cauer_ladder` / `eval_ladder` (exact at `n+1` stages), `companion_poles` (passive
+  transient Robin), `sqrt_s_passive_ladder`. Golden: [`tests/open_boundary/test_dtn_cln.py`](../../tests/open_boundary/test_dtn_cln.py);
+  usage: [`examples/open_boundary/demo_dtn_cln_usage.py`](../../examples/open_boundary/demo_dtn_cln_usage.py).
 - **Docs:** [`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
   (Kelvin spectral datasheet), [`docs/cln/CAUER_LADDER_NETWORK.md`](../cln/CAUER_LADDER_NETWORK.md)
   (CLN), [`docs/kelvin/KELVIN_TRANSFORMATION.md`](../kelvin/KELVIN_TRANSFORMATION.md).

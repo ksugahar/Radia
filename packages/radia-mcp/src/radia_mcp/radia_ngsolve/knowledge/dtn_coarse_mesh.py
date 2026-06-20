@@ -2864,6 +2864,17 @@ DTN_COARSE_MESH_DTN_TO_CLN = r"""
 # radia's Laplace-kernel scope).  This DtN->CLN realisation of the exact impedance
 # boundary is the part that is KEPT; IABC survives only as the comparison record
 # (the act7 demos).  Open-boundary SELECTOR: docs/open_boundary/OPEN_BOUNDARY_MAP.md.
+#
+# PRODUCTION API (adopted 2026-06-20): the verified separable case ships as the
+# `radia.open_boundary` module (radia wheel, pure numpy/scipy):
+#   import radia.open_boundary as ob
+#   ob.eddy_dtn(n, s, R0, mu_sigma)        # exact eddy/diffusion DtN per multipole
+#   ob.cauer_ladder(n); ob.eval_ladder(..) # Cauer ladder, EXACT at n+1 stages
+#   ob.companion_poles(n)                  # passive transient Robin (Grote-Keller, Re<0)
+# Golden tests/open_boundary/test_dtn_cln.py; example examples/open_boundary/.
+# NOT NOVEL (Grote-Keller / Hagstrom-Warburton continued-fraction ABCs / Warburg-Cauer
+# / Kameari CLN) -- a verified reusable operator, not a paper claim.  The non-separable
+# Kelvin-built DtN stays research-stage (act6_06..).
 
 The cleanest time-domain open boundary uses NO absorbing shell at all.  An
 absorbing shell + PEC only presents an effective surface impedance = the exact exterior
