@@ -35,6 +35,8 @@ basis, not claimed to be individually physical.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy.interpolate import AAA
 from scipy.optimize import nnls
@@ -129,7 +131,13 @@ def passive_foster_fit(s, alpha, *, n_filler=20, max_aaa_terms=24,
 
     # --- 1. AAA discovers the dominant real LHP poles ----------------------
     try:
-        rat = AAA(s, alpha, max_terms=max_aaa_terms, rtol=aaa_rtol)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="AAA failed to converge*",
+                category=RuntimeWarning,
+            )
+            rat = AAA(s, alpha, max_terms=max_aaa_terms, rtol=aaa_rtol)
         dominant_tau = np.array(sorted(
             (-1.0 / p.real for p in rat.poles()
              if p.real < 0 and abs(p.imag) < 1e-2 * abs(p.real)),
