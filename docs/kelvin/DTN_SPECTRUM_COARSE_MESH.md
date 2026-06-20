@@ -15,6 +15,10 @@ in §10.
 > 2026-06. The 2-D circle-inversion result (§7) is the static-apparatus /
 > rotating-machine cross-section case.
 
+**See also:** the cross-cutting [Open-Boundary Method Map](../open_boundary/OPEN_BOUNDARY_MAP.md)
+— Kelvin / BEM / PML / IABC / CLN on the frequency / geometry / space-vs-time axes
+(this document is its **Kelvin / spatial** anchor).
+
 ---
 
 ## 1. The question (Kameari, reframed)

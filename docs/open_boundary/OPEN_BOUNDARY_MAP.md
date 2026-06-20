@@ -1,0 +1,198 @@
+# Radia Open-Boundary Methods — A Unified Map
+
+Radia closes an unbounded exterior several ways — **Kelvin** transformation,
+**BEM** coupling, **PML**, **IABC** (improvised absorbing shells), the
+**asymptotic Robin** BC, and the **CLN** (Cauer-ladder) open boundary. They look
+unrelated, but they are all discretizations or reductions of **one** object: the
+exterior Dirichlet-to-Neumann operator. This document maps them onto the few axes
+that actually select one in practice, with measured anchors reproduced in-repo.
+
+It is the cross-cutting companion to the two single-method references:
+[`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
+(Kelvin, the **spatial** side) and
+[`docs/cln/CAUER_LADDER_NETWORK.md`](../cln/CAUER_LADDER_NETWORK.md) (CLN, the
+**temporal** side).
+
+---
+
+## 1. One operator behind all of them
+
+Truncate the exterior at a surface `Γ` and impose the exact transparent condition
+
+```
+    ∂u/∂n |_Γ  =  Λ_ext u |_Γ ,
+```
+
+where `Λ_ext` is the exterior Steklov–Poincaré (Dirichlet-to-Neumann) operator.
+Every method realizes some discrete `S_h` on `Γ` targeting this single `Λ_ext`,
+in two fidelity classes:
+
+| class | members | behaviour |
+|---|---|---|
+| **convergent discretizations** | Kelvin, BEM, exact-DtN / CLN, rich infinite elements | `S_h → Λ_ext` for every mode as the discretization refines |
+| **fixed-error surrogates** | PML, asymptotic Robin (`S_h=−1/R`), single IABC shell | fixed, mesh-independent modal error (Robin: exact `n=0` only) |
+
+On a sphere `Λ_ext` diagonalizes in spherical harmonics; each mode `n` has a
+**scalar frequency symbol** `Λ_n(s)`. That symbol is **reverse-Bessel rational**
+— its poles are the Bessel/Thomson filter poles (verified `demo_uu`,
+`besselap` match `9.9e-16`). The whole map below follows from this one fact.
+
+---
+
+## 2. Three axes that select the method
+
+### 2.1 The kR axis (frequency regime)
+
+The exterior wavenumber sets the character of `Λ_n`:
+
+- **Quasi-static / low-freq (`kR → 0`)** — `Λ_n` is the **real** ladder
+  `−(n+1)/R` (3-D), `−n/R` (2-D). Closed by **Kelvin** (spatial) or its
+  **CLN** time-domain realization. *This is the SA / Hachinohe regime.*
+- **Radiating / wave (finite `kR`)** — `Λ_n(kR)` turns **complex** (spherical
+  Hankel log-derivative; `Im` = radiation). Closed by **IABC / PML /
+  extended-Kelvin** (`demo_gg`, `demo_uu`).
+
+The same reverse-Bessel structure carries both: **wave** is rational in `s`,
+**diffusion** is rational in `√s`, with the **same** poles `roots(θ_n)`
+(`demo_xx3`, machine-ε). So one datasheet, two variables.
+
+### 2.2 The geometry axis (truncation shape)
+
+- **Kelvin is sphere-locked.** Its inversion `r ↦ R²/r` is a spherical (3-D) /
+  circular (2-D) conformal map — Liouville's theorem leaves no non-sphere Kelvin.
+  The **body inside** the sphere is arbitrary (cube, elongated, iron); only the
+  **truncation** must be a sphere.
+- **CLN / IABC / BEM are surface-free** at the operator level. CLN is
+  **finite-exact only on a separable surface** (sphere → spherical Bessel →
+  *rational* → `n+1`-stage exact); on a cylinder / cube / arbitrary surface the
+  symbol is transcendental / non-separable → CLN is a *convergent* approximation.
+- **Aspect ratio** is where the sphere lock bites: an elongated body needs a big
+  enclosing sphere (wasted air). A **cylinder** truncation hugs an axial device
+  (CLN can use it; Kelvin cannot). In 2-D a conformal pre-map *relocates* the
+  cost to spectral order rather than removing it (`memory/conformal_kelvin_2d_no_free_lunch.md`).
+
+### 2.3 The spatial vs temporal axis (division of labor)
+
+The deepest split — **Kelvin and CLN are not substitutes, they are on different
+axes**:
+
+- **Kelvin = a SPATIAL operator FACTORY.** It *builds* the exterior DtN as a
+  sparse SPD volume FEM — no Green's function, arbitrary body, exterior material
+  (iron) — for the case nothing else can (`demo_v/w/q/t/bb`).
+- **CLN = a TEMPORAL operator REDUCER.** It *compresses* a DtN's `s`-dependence
+  into a small Cauer ladder (auxiliary ODEs) for transient / repeated / control
+  solves. It needs a DtN to reduce.
+- **They compose:** *separable* exterior → CLN works on the analytic symbol
+  directly (no mesh). *Arbitrary geometry + iron, transient* → **Kelvin builds
+  the DtN, CLN reduces it**.
+
+---
+
+## 3. The methods side by side
+
+| method | class | freq regime | matrix | geometry | role |
+|---|---|---|---|---|---|
+| **Kelvin** | convergent | quasi-static | **sparse** SPD (`∝N`) | sphere truncation, **any body + material** | spatial **factory** |
+| **BEM** | convergent | DC → wave | **dense** (`∝N²`) | any `Γ`, free-space/Helmholtz kernel | dense factory |
+| **PML** | surrogate | radiating (weak DC) | sparse | box / conformal | absorber; **low-freq cond. degrades** |
+| **IABC** | surrogate→exact | radiating | sparse shell / Robin+ODE | sphere | electrical-image absorber; exact-DtN route |
+| **CLN** | convergent (reduced) | DC → radiating | tiny ladder | surface-free; **finite-exact on sphere** | temporal **reducer** |
+| **asymptotic Robin** | surrogate | static | sparse (`−1/R`) | sphere | cheap, exact `n=0` only |
+
+---
+
+## 4. The no-free-lunch axis (finite multipole truncation)
+
+All of them truncate the multipole ladder at some finite `n_max` — this cost is
+**universal** and unavoidable:
+
+- **Kelvin**: `p ≥ n` captures mode `n` (the order is the multipole reach).
+- **BEM**: surface Nyquist `√N_Γ`.
+- **CLN**: `n_max` modes × the per-mode stage count. CLN's "exact" means **exact
+  per-mode impedance synthesis over a *finite* multipole set** — not global
+  exactness.
+
+The **source's multipole content sets `n_max`**: compact source → low `n_max` →
+every method is cheap; sharp / elongated source → high `n_max` → every method
+pays (the aspect-ratio penalty). No method escapes this axis; they differ only in
+*how they represent the modes they keep* (spatial polynomial / dense surface /
+circuit impedance).
+
+---
+
+## 5. Measured anchors (audit-verified in-repo, 2026-06-19)
+
+### Kelvin — spatial, quasi-static (six `mesh_control` pillars)
+Exterior volume is free (`‖u_h−P_n‖ ≈ 1e-15`); floor = Curve order (`k=1→3`:
+`1.3e-2 → 1.3e-5`); `p ≥ n` & `p`-vs-`h` (~1000× per DOF); optimal `R/a ≈ 2.78`;
+re-entrant corner `α_h=0.357 / α_p=0.661`; `ΔDoF ≈ 58 → 1/45` of the interior FEM
+error. Holds in 2-D on the `−n/R` ladder. (See `kelvin_transformation(topic="mesh_control")`.)
+
+### IABC / exact-DtN — wave, radiating
+- `demo_uu`: per-mode DtN = degree-`n` reverse-Bessel rational; its poles ARE the
+  **Bessel/Thomson filter poles** (`besselap` `9.9e-16`); the transient auxiliary
+  network converges to the exact DtN (`9.8e-11`), all rates `Re<0` (passive).
+- `demo_uu2`: exact-DtN FETD reflection falls as **O(h²)** — `5.70e-4 → 3.57e-5`
+  (`l=1`, `N=100→400`) — **×2471** better than a 1st-order Sommerfeld ABC, and
+  passive (`E_final/E_peak = 1.7e-16`). Separable-geometry (Grote–Keller class).
+
+### CLN — diffusion, temporal
+- `demo_xx3`: the diffusion DtN = a Cauer continued fraction **in `√s`**, EXACT at
+  `n+1` stages (`NRMSE 1.1e-16`, well-conditioned), whereas a Foster fit **in `s`**
+  floors at `1.7e-3` and ill-conditions (spread `1e5`) — the structural win of the
+  natural variable.
+- `demo_xx4`: a genuine lab CLN (Lanczos/PVL) reduces a **700-DOF** radial eddy FEM
+  to an **`N=16`-stage** integer-order Cauer ladder (reduction `1.2e-5` / total
+  `3.6e-4` at the FEM floor) — **~43× state reduction**; `T_N` SPD → real-negative
+  poles → unconditionally stable, directly time-domain.
+- `demo_xx5`: in a **transient** eddy-current FETD, the CLN open boundary
+  (`N=16`, a 16-DOF exterior vs 699 full) gives reflection **`9.9e-7`** (`n=1`) —
+  **62659×** better than Dirichlet truncation (`6.19e-2`).
+- `demo_xx6`: CLN vs **CFS-PML** in the DC-to-evanescent eddy-current band — at
+  matched accuracy (`NRMSE ≈ 1.46e-4`) CLN uses **8 online DOF vs CFS-PML's 128**
+  (~16× fewer) **and** is **`53189×` better-conditioned at DC** (`cond` `1.00` vs
+  `5.32e4`); CLN is **DC-exact** (`4.2e-5` vs vanilla-PML `1.83e-2`, whose stretch
+  `~1/√s` blows up). CFS-PML's conditioning fix *evaporates* when pushed to CLN's
+  accuracy (a thick/strong layer). **Non-claim:** propagating waves are PML's home
+  — this is the *diffusion* operator; arbitrary geometry still needs Kelvin + CLN.
+
+---
+
+## 6. Selection map (the decision table)
+
+| situation | use | why |
+|---|---|---|
+| separable + **transient** | **CLN alone** | analytic per-mode symbol → finite-exact ladder; beats PML (`demo_xx5/xx6`) |
+| separable + static | analytic DtN **or** Kelvin | either works; Kelvin's exactness here is mostly elegance |
+| **arbitrary body + iron + static** | **Kelvin** | the only sparse, Green-function-free DtN factory — the SA / Hachinohe paper |
+| arbitrary + iron + **transient** | **Kelvin builds + CLN reduces** | no analytic symbol → Kelvin makes it, CLN compresses it |
+| **radiating** (finite `kR`) | **IABC / PML / extended-Kelvin** | the DtN is complex; static Kelvin is pinned to the real axis |
+
+---
+
+## 7. Runnable layer (source of truth)
+
+- **Docs:** [`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
+  (Kelvin spectral datasheet), [`docs/cln/CAUER_LADDER_NETWORK.md`](../cln/CAUER_LADDER_NETWORK.md)
+  (CLN), [`docs/kelvin/KELVIN_TRANSFORMATION.md`](../kelvin/KELVIN_TRANSFORMATION.md).
+- **MCP knowledge:** `dtn_coarse_mesh(topic=...)`, `kelvin_transformation(topic="mesh_control")`,
+  `iabc(topic="overview"|"frequency_domain"|"causality"|"exact_dtn"|"timedomain"|"broadband_design"|"application")`,
+  `mor_cln(...)`.
+- **Demos:** `examples/kelvin_transformation/DtN_spectrum/` — the wave/diffusion
+  open-boundary corpus: `demo_uu`, `demo_uu2` (exact-DtN FETD), `demo_xx3`
+  (Cauer in `√s`), `demo_xx4` (CLN MOR of a radial eddy FEM), `demo_xx5`
+  (transient CLN reflection), `demo_xx6` (CLN vs PML), alongside the Kelvin
+  spectral corpus (`demo_d` … `demo_w`, `floor_vs_curve`, `p_vs_h_study`, …).
+
+---
+
+## 8. The map in one line
+
+> **One operator (`Λ_ext`, reverse-Bessel rational), selected by three axes:**
+> *frequency* (quasi-static → Kelvin / radiating → IABC), *geometry* (sphere-locked
+> Kelvin / surface-free CLN), and *space-vs-time* (Kelvin **builds** the operator,
+> CLN **reduces** it). The "exactness" of any of them is always relative to a
+> **finite multipole truncation** — there is no free lunch on that axis; the
+> methods differ in *capability* (Kelvin builds arbitrary-body+material) and
+> *deployment* (CLN compresses to a time-domain ladder), not in escaping the
+> modal cost.
