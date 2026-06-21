@@ -92,10 +92,9 @@ def moment_yano(hexes, Happ):
             Dvec = np.array([Dm[0, 0], Dm[1, 1], Dm[2, 2], Dm[0, 1]+Dm[1, 0], Dm[0, 2]+Dm[2, 0], Dm[1, 2]+Dm[2, 1]])
             row -= CHI * (Dvec @ Ginv)
             row, rhs = _norm(row, 0.0); A[r, :] = row; b[r] = rhs; r += 1
-    U, _S, _ = np.linalg.svd(Lb, full_matrices=True); P = U[:, nLoop:]
-    sigma = P @ np.linalg.solve(P.T @ A @ P, P.T @ b)
-    m = np.array([np.sum(sigma * area * (fc[:, k] - ecen[:, k])) for k in range(3)])  # int M dV = dipole(sigma)
-    cond = float(np.linalg.cond(P.T @ A @ P))
+    sigma = np.linalg.solve(A, b)                # A is non-singular -> NO loop deflation (deflating breaks
+    m = np.array([np.sum(sigma * area * (fc[:, k] - ecen[:, k])) for k in range(3)])  # the per-element constitutive)
+    cond = float(np.linalg.cond(A))
     rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
     return m, cond, n_el, dof
 
