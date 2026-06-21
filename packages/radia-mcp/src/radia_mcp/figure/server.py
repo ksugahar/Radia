@@ -992,6 +992,212 @@ Layering (see 'sakuzu_vs_graph'):
 
 
 @mcp.tool()
+def figure_diagram_recipes(topic: str = "all") -> str:
+    r"""Flowchart + conceptual/schematic DIAGRAM recipes -- the diagram-DRAWING skill
+    (distinct from data-PLOTTING グラフ and from the general 作図 design canon in
+    figure_design_principles).
+
+    COMPLEMENTS figure_tikz_recipe (which owns the general TikZ schematic / geometry /
+    flux-path template + PGFPlots + externalize + matlab2tikz).  THIS tool adds the
+    FLOWCHART + CONCEPTUAL-diagram skill and the multi-tool ecosystem: the TikZ flowchart
+    idiom (shapes.geometric node styles), GRAPHVIZ/DOT AUTO-layout (the big complement --
+    figure_tikz_recipe is manual-coordinate TikZ only), schemdraw / Mermaid, tool
+    selection, and diagram DESIGN conventions (ISO 5807 symbols, flow direction, crossing
+    minimisation).
+
+    Topics:
+        'all'                - everything
+        'tool_selection'     - TikZ vs Graphviz vs schemdraw vs Mermaid vs draw.io
+        'tikz_flowchart'     - the TikZ shapes.geometric flowchart idiom (ready template)
+        'graphviz'           - DOT auto-layout (digraph, rankdir, clusters, engines)
+        'concept_diagram'    - conceptual / block-relationship diagrams (architecture style)
+        'design'             - ISO 5807 symbols + flow direction + crossing/alignment rules
+        'external_resources' - manuals, galleries, standards
+    """
+    recipes = {
+        "tool_selection": r"""[tool_selection] -- pick the diagram tool by WHERE it goes + HOW it is laid out.
+
+  Tool          Best for                              Layout     Source     Paper-native?
+  ------------  ------------------------------------  ---------  ---------  -------------
+  TikZ          paper figures: schematics, flux       MANUAL     .tex       YES (font + math
+                paths, small flowcharts, concept                            match the body)
+                blocks -- coordinate-precise.
+  Graphviz/DOT  large flowcharts, DAGs, dependency     AUTO       .dot       via PDF/SVG
+                / state graphs -- when manual node     (dot/...)             include (font
+                placement is tedious.                                        differs)
+  schemdraw     programmatic flowcharts / circuits     semi-auto  .py        via PDF/SVG
+                from Python (loop over data).          (Python)
+  Mermaid       README / docs / web flowcharts,        AUTO       md fence   NO (docs only)
+                quick sketches in Markdown.
+  draw.io       one-off GUI diagrams (NOT diffable --  GUI        .drawio    export PDF
+                avoid for reproducible repo figures).
+
+  LAB DEFAULT for a PAPER diagram: TikZ -- text-source/diffable, labels inherit the paper's
+  Times/newtx font + math (see figure_tikz_recipe for the general schematic; 'tikz_flowchart'
+  here for the flowchart idiom).  Reach for Graphviz when the graph is big or a hierarchy/DAG
+  you do NOT want to place by hand, then include the rendered PDF.  Mermaid = repo READMEs
+  only (never camera-ready).
+""",
+        "tikz_flowchart": r"""[tikz_flowchart] -- the TikZ shapes.geometric flowchart idiom (ISO-5807 node shapes,
+auto-spaced with `positioning`).  For a non-flow schematic (geometry, flux, BC) use
+figure_tikz_recipe('schematic') instead.
+
+\documentclass[tikz,border=2mm]{standalone}
+\usepackage{newtxtext,newtxmath}                 % match IEEE/IEEJ body font
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\begin{document}
+\begin{tikzpicture}[
+  node distance=8mm and 14mm, font=\footnotesize,
+  start/.style   ={rounded rectangle, draw, fill=black!5, minimum height=7mm, inner xsep=3mm},
+  process/.style ={rectangle, draw, fill=blue!4,  minimum height=7mm, text width=24mm, align=center},
+  decision/.style={diamond, draw, fill=orange!12, aspect=2, inner sep=1pt, align=center},
+  io/.style      ={trapezium, trapezium left angle=70, trapezium right angle=110,
+                   draw, fill=black!4, minimum height=7mm},
+  arrow/.style   ={-{Latex[length=2mm]}, semithick},
+]
+  \node[start]                    (a) {start};
+  \node[io,       below=of a]     (b) {read .vol};
+  \node[process,  below=of b]     (c) {assemble DtN};
+  \node[decision, below=of c]     (d) {$p\ge n$?};
+  \node[process,  below=of d]     (e) {refine order};
+  \node[start,    right=24mm of d](f) {done};
+  \draw[arrow] (a)--(b); \draw[arrow] (b)--(c); \draw[arrow] (c)--(d);
+  \draw[arrow] (d)-- node[left]{no} (e);
+  \draw[arrow] (e.west) -- ++(-7mm,0) |- (c.west);     % feedback loop, routed orthogonally
+  \draw[arrow] (d)-- node[above]{yes} (f);
+\end{tikzpicture}
+\end{document}
+
+KEYS: the SHAPE encodes the ISO-5807 meaning (see 'design'); `positioning` (`below=of`,
+`right=of` + `node distance=A and B`) AUTO-spaces -- never hand-tune (x,y) for a flowchart;
+route feedback edges orthogonally with `|-` / `-|`.  Compile standalone -> PDF, or paste the
+tikzpicture into the paper and embed at the column width.
+""",
+        "graphviz": r"""[graphviz] -- DOT AUTO-layout: let the engine place the nodes.  Use when the graph is
+large or a hierarchy/DAG you do NOT want to position by hand (the big complement to manual
+TikZ; figure_tikz_recipe has no auto-layout).
+
+  flow.dot:
+    digraph G {
+      rankdir=TB;                                  // TB top-down | LR left-right
+      node [shape=box, style=rounded, fontname="Times", fontsize=10];
+      edge [fontname="Times", fontsize=9];
+      start [shape=stadium, label="start"];
+      read  [shape=parallelogram, label="read .vol"];
+      asm   [label="assemble DtN"];
+      chk   [shape=diamond, label="p >= n ?"];
+      ref   [label="refine order"];
+      done  [shape=stadium, label="done"];
+      start -> read -> asm -> chk;
+      chk -> ref  [label="no"];
+      ref -> asm  [constraint=false];              // feedback: do NOT affect ranking
+      chk -> done [label="yes"];
+      subgraph cluster_solve { label="solve loop"; style=dashed; asm; chk; ref; }
+    }
+
+  render:  dot -Tpdf flow.dot -o flow.pdf          # vector, for paper include
+           dot -Tsvg flow.dot -o flow.svg          # web / docs
+
+  LAYOUT ENGINES (pick by graph shape):
+    dot    layered / hierarchical -> FLOWCHARTS, DAGs, call graphs   (the default choice)
+    neato  spring model           -> small undirected relationship graphs
+    fdp    force-directed         -> larger undirected / clustered graphs
+    circo  circular               -> ring / cyclic topologies
+    twopi  radial                 -> trees around a centre
+
+  TIPS: `rankdir=LR` for wide-short page fits; `constraint=false` stops a feedback edge from
+  distorting the ranking; `subgraph cluster_*` draws a labelled box round a group; set
+  fontname="Times" to approach the paper body (still NOT an exact match -- for exact font
+  use TikZ, see 'tool_selection').
+""",
+        "concept_diagram": r"""[concept_diagram] -- conceptual / block-relationship diagrams (architecture, data flow,
+"X consumes Y"): boxes + LABELLED arrows + optional grouping; not a strict process flow.
+
+  TikZ (paper, exact font; `fit`+`backgrounds` draw the group box):
+    \usetikzlibrary{positioning, fit, backgrounds, arrows.meta}
+    \begin{tikzpicture}[font=\footnotesize, >={Latex[length=2mm]},
+      blk/.style={rectangle, draw, rounded corners, fill=black!4,
+                  minimum height=8mm, text width=22mm, align=center}]
+      \node[blk] (cubit) {Cubit\\hex mesh};
+      \node[blk, right=14mm of cubit] (vol) {.vol};
+      \node[blk, right=14mm of vol]   (ng)  {NGSolve\\FEM};
+      \draw[->] (cubit) -- node[above]{export} (vol);
+      \draw[->] (vol)   -- node[above]{Mesh()} (ng);
+      \begin{scope}[on background layer]
+        \node[draw=blue!40, dashed, rounded corners, fit=(vol)(ng),
+              inner sep=3mm, label=below:{computation}] {};
+      \end{scope}
+    \end{tikzpicture}
+
+  Graphviz alternative (auto-layout, good when there are many blocks):
+    digraph { rankdir=LR; node[shape=box,style=rounded,fontname=Times];
+      cubit->vol[label=export]; vol->ng[label="Mesh()"]; }
+
+  The lab CLAUDE.md ASCII box-diagrams (the 4-Layer panel architecture, the accelerator-magnet
+  pipeline) convert directly: one box per ASCII box, one arrow per `->`.  Keep ONE flow
+  direction; group with a dashed `fit` box (TikZ) or a `cluster` (DOT).
+""",
+        "design": r"""[design] -- flowchart / diagram design rules (ISO 5807 symbols + layout craft; the
+Tufte/Rougier canon in figure_design_principles applies here too).
+
+  SHAPE = MEANING (ISO 5807:1985 flowchart symbols -- keep them consistent):
+    terminator (start / end)    stadium / rounded rectangle
+    process / action            rectangle
+    decision / branch           diamond   (label EVERY outgoing edge: yes / no)
+    input / output (data)       parallelogram
+    predefined process (sub)    rectangle with double side bars
+    connector (off-page / loop) small circle
+
+  LAYOUT:
+    - ONE dominant flow direction: top-to-bottom OR left-to-right, never both.
+    - align nodes on a grid (TikZ `node distance` / DOT ranks); ragged placement reads
+      as careless.
+    - MINIMISE edge crossings; route feedback / loop edges orthogonally around the side
+      (TikZ `-|` / `|-`; DOT `constraint=false`).
+    - label decision branches AND meaningful edges; an unlabeled fork is ambiguous.
+    - group related steps with a dashed box (TikZ `fit` / DOT `cluster`) + a group label.
+
+  STILL THE LAB RULES (paper_figure_quality_rules / figure_design_principles):
+    - NO in-figure title (-> the LaTeX caption).
+    - light Okabe-Ito / greyscale fills, black outlines; colour carries MEANING
+      (one hue per subsystem), not decoration.
+    - 10 pt page text; spare -- erase ink that is not a node, an edge, or a label.
+""",
+        "external_resources": r"""[external_resources] -- where to learn diagram-making, curated 2026-06.
+
+  TikZ
+    - "TikZ & PGF" manual (pgf-tikz.github.io / CTAN) -- libraries shapes.geometric,
+      arrows.meta, positioning, chains, fit, backgrounds.
+    - TeXample.net (texample.net/tikz/examples) -- a large gallery of TikZ diagrams.
+    - Overleaf "Creating Flowcharts" tutorial (overleaf.com/learn) -- the node-style idiom.
+  Graphviz
+    - graphviz.org -- the DOT language reference, attribute list, and gallery; the `dot`
+      hierarchical engine for flowcharts.
+  Python
+    - schemdraw (schemdraw.readthedocs.io) -- flowcharts + circuits from Python.
+  Markdown / web
+    - Mermaid (mermaid.js.org) -- ```mermaid flowcharts in READMEs (docs only, not paper).
+  Standards / principles
+    - ISO 5807:1985 -- flowchart symbol semantics.
+    - Rougier, "Scientific Visualization: Python + Matplotlib" (2021) -- the layout +
+      figure-anatomy chapters (see figure_design_principles('external_resources')).
+""",
+    }
+    q = (topic or "all").strip().lower()
+    if q == "all":
+        return "\n\n".join(recipes.values()) + r"""
+See also: figure_tikz_recipe (general TikZ schematic + PGFPlots + externalize),
+figure_design_principles (the 作図 design canon), paper_figure_quality_rules (the gates).
+"""
+    if q in recipes:
+        return recipes[q]
+    return (
+        f"Unknown topic {topic!r}. Available: "
+        f"{', '.join(['all'] + list(recipes))}"
+    )
+
+
+@mcp.tool()
 def figure_audit_embeds(tex_path: str) -> str:
     """Lint every \\includegraphics in a LaTeX file for figure embeds that
     cannot guarantee on-page 10 pt @ 8 cm (the CEFC-2026 mistake class).
@@ -1146,6 +1352,18 @@ def main():
             "design-principles unknown-topic help missing"
         print(f"  figure_design_principles('all')   -> "
               f"{len(principles):5d} chars")
+
+        # Diagram-recipes tool (flowcharts + concept diagrams; TikZ + Graphviz)
+        diagrams = figure_diagram_recipes("all")
+        for sec in ("tool_selection", "tikz_flowchart", "graphviz",
+                    "concept_diagram", "design", "external_resources"):
+            assert f"[{sec}]" in diagrams, f"diagram topic {sec!r} missing"
+        assert ("digraph" in diagrams and "tikzpicture" in diagrams
+                and "ISO 5807" in diagrams), "diagram-recipes content missing"
+        assert "Unknown topic" in figure_diagram_recipes("nope"), \
+            "diagram-recipes unknown-topic help missing"
+        print(f"  figure_diagram_recipes('all')     -> "
+              f"{len(diagrams):5d} chars")
 
         # Try importing matplotlib + smoke-test the runtime helpers
         # (paper_figure / measure_figure_efficiency).  Skip if mpl is
