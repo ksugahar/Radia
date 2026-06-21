@@ -2647,6 +2647,69 @@ void radTInteraction::BuildLoopBasis(std::vector<double>& Lflat, int& nLoop) con
 }
 
 //=========================================================================
+// BuildFaceGeom: per-DOF hex face geometry in the matrix DOF order.
+// Row-major (m_totalDOF x 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz].
+// Mirrors the DOF<->face mapping of BuildLoopBasis (DOF = m_elemDOFOffset[elem] + f), so the rows
+// align 1:1 with GetInteractMatrix.  Lets Python form the div(B)=0 constraint (Sum_f area_f*sigma_f
+// = 0 per element), the uniform-field RHS (n.H), and the dipole moment (Sum_f sigma_f*area_f*(c_f-c_e)).
+//=========================================================================
+
+void radTInteraction::BuildFaceGeom(std::vector<double>& Gflat) const
+{
+	const int STRIDE = 11;
+	Gflat.assign((size_t)m_totalDOF * STRIDE, 0.0);
+	for(int d = 0; d < m_totalDOF; d++) Gflat[(size_t)d * STRIDE + 0] = -1.0;  // elem_local default -1 (non-hex)
+
+	int nHex = (int)m_hexaElemIndices.size();
+	for(int h = 0; h < nHex; h++)
+	{
+		int elemIdx = m_hexaElemIndices[h];
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
+		if(!poly || poly->AmOfFaces != 6) continue;
+		int off = m_elemDOFOffset[elemIdx];
+		const TVector3d ec = poly->CentrPoint;
+		for(int f = 0; f < 6; f++)
+		{
+			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+			if(!pgn || !tr) continue;
+			const radTVect2dVect& v2d = pgn->EdgePointsVector;
+			if(v2d.size() < 4) continue;
+			TVector3d V4[4];
+			for(int v = 0; v < 4; v++)
+				V4[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
+			// quad area via two triangles (V0V1V2 + V0V2V3) -- same as BuildLoopBasis
+			double area = 0.0;
+			for(int t = 0; t < 2; t++)
+			{
+				const TVector3d& A = V4[0]; const TVector3d& B = V4[t + 1]; const TVector3d& C = V4[t + 2];
+				double ux = B.x - A.x, uy = B.y - A.y, uz = B.z - A.z;
+				double wx = C.x - A.x, wy = C.y - A.y, wz = C.z - A.z;
+				double rx = uy * wz - uz * wy, ry = uz * wx - ux * wz, rz = ux * wy - uy * wx;
+				area += 0.5 * std::sqrt(rx * rx + ry * ry + rz * rz);
+			}
+			double cx = 0.25 * (V4[0].x + V4[1].x + V4[2].x + V4[3].x);
+			double cy = 0.25 * (V4[0].y + V4[1].y + V4[2].y + V4[3].y);
+			double cz = 0.25 * (V4[0].z + V4[1].z + V4[2].z + V4[3].z);
+			// outward unit normal: stored FaceNormal, flipped to point away from the element center
+			TVector3d nrm = poly->FaceNormal[f];
+			double nlen = std::sqrt(nrm.x*nrm.x + nrm.y*nrm.y + nrm.z*nrm.z);
+			if(nlen > 1e-20) { nrm.x /= nlen; nrm.y /= nlen; nrm.z /= nlen; }
+			double outdot = nrm.x*(cx - ec.x) + nrm.y*(cy - ec.y) + nrm.z*(cz - ec.z);
+			if(outdot < 0.0) { nrm.x = -nrm.x; nrm.y = -nrm.y; nrm.z = -nrm.z; }
+
+			size_t b = (size_t)(off + f) * STRIDE;
+			Gflat[b + 0] = (double)h;
+			Gflat[b + 1] = area;
+			Gflat[b + 2] = cx; Gflat[b + 3] = cy; Gflat[b + 4] = cz;
+			Gflat[b + 5] = nrm.x; Gflat[b + 6] = nrm.y; Gflat[b + 7] = nrm.z;
+			Gflat[b + 8] = ec.x; Gflat[b + 9] = ec.y; Gflat[b + 10] = ec.z;
+		}
+	}
+}
+
+//=========================================================================
 // PrecomputeHexaTriangleData: Pre-compute triangle local coordinate systems
 // Eliminates redundant sqrt/div operations during field computation
 // Each hexahedron has 12 triangles (6 faces * 2 triangles)

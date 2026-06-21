@@ -513,6 +513,10 @@ public:
 	// Cell-graph cycle (loop) basis = field-null subspace of the yano-MSC operator (== HDiv ker(B)).
 	// Geometry-only (no SVD); Lflat is ROW-MAJOR (m_totalDOF x nLoop): Lflat[d*nLoop+col].  See .cpp.
 	void BuildLoopBasis(std::vector<double>& Lflat, int& nLoop) const;
+	// Per-DOF hex face geometry in the matrix DOF order (for div(B)=0 / RHS / moment studies in Python).
+	// Gflat is ROW-MAJOR (m_totalDOF x 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz].
+	// Non-hex DOFs (tet/wedge) get elem_local=-1 and zeros.  See .cpp.
+	void BuildFaceGeom(std::vector<double>& Gflat) const;
 	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 

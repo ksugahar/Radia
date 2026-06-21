@@ -88,6 +88,7 @@ void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
 int HMatrixDensify(int, double*, int*);
 int GetLoopBasis(int, double*, int*, int*);
+int GetFaceGeom(int, double*, int*);
 double HLUTestOnHACApK(int);
 int HLUDebugMaterialize(int, double*, int*, int*);
 void SetRelaxSubInterval(int, int, int, int);
@@ -1339,6 +1340,15 @@ int CALL RadGetInteractMatrix(double* pMatrix, int* pDOF, int InteractElemKey)
 int CALL RadGetLoopBasis(double* pL, int* pNLoop, int* pDOF, int InteractElemKey)
 {
 	int result = GetLoopBasis(InteractElemKey, pL, pNLoop, pDOF);
+	if(result == 0) return ioBuffer.OutErrorStatus();
+	return 0;
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadGetFaceGeom(double* pG, int* pDOF, int InteractElemKey)
+{
+	int result = GetFaceGeom(InteractElemKey, pG, pDOF);
 	if(result == 0) return ioBuffer.OutErrorStatus();
 	return 0;
 }
