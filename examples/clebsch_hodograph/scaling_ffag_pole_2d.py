@@ -53,17 +53,30 @@ NOTE the field-index k is SCALE-INVARIANT (d log B / d log r ignores the overall
 amplitude), so phi (unit potential) and A (unit flux) need NOT share a
 normalisation to be compared -- only the field SHAPE matters.
 
-SCOPE (this file = Step 1, the linear foundation)
--------------------------------------------------
-  Step 1 (HERE): linear high-mu scaling pole; measure k_phi(r), k_A(r); show the
-                 A/phi bracket certifies how flat the naive g ~ r^{-k} pole is.
-  Step 2 (next): Froehlich mu(B) saturation -> k droops at the high-r (high-B)
-                 edge = the super-ferric operating wall.
-  Step 3 (next): reshape the pole (von Mises / log chart, no remesh) to restore
-                 k(r) = const into saturation.
+SCOPE (this file = the full achromatic-pole program, Steps 1-4 + hodograph solver)
+----------------------------------------------------------------------------------
+  Step 1: linear high-mu scaling pole; measure k_phi(r), k_A(r); show the A/phi
+          bracket certifies how flat the naive g ~ r^{-k} pole is.
+  Step 2: Froehlich mu(B) saturation -> k droops at the high-r (high-B) edge =
+          the super-ferric operating wall.
+  Step 3: reshape the pole (von Mises / log chart, no remesh) to restore
+          k(r) = const into saturation.
+  Step 4: ISOCHRONOUS -- the OTHER achromaticity (constant revolution TIME, not
+          tune): the target is the RISING index k_iso(r) = (beta gamma)^2 i.e.
+          <B>(r) = B0 gamma(r).  Saturation breaks it at the high-r NONLINEAR END
+          PACK; the same 2-parameter reshape drives the SATURATED <B>(r) back
+          onto B0 gamma(r), A/phi-certified.  (scaling: constant tune <-> rigid
+          k=const; isochronous: constant time <-> rising k_iso(r) -- the two
+          achromaticities are different and, relativistically, mutually
+          exclusive.)
+  Hodograph AS solver: the linear pole solved on a FIXED mesh with the shape a
+          pullback deformation (mesh.SetDeformation) -- Netgen runs ONCE.
 
-run:  python scaling_ffag_pole_2d.py            # complementary bracket (fast)
+run:  python scaling_ffag_pole_2d.py            # Step 1 complementary bracket (fast)
       python scaling_ffag_pole_2d.py --fig       # + figure
+      python scaling_ffag_pole_2d.py --step2 --step3 --fig   # saturation + reshape
+      python scaling_ffag_pole_2d.py --pullback              # hodograph-as-solver
+      python scaling_ffag_pole_2d.py --iso --fig             # isochronous end pack
 """
 import argparse
 import math
@@ -413,15 +426,18 @@ def solve_saturated_A(Psi, r_min, r_max, k=K_INDEX, g0=G0, r0=R0, pole_t=0.03,
 
 
 def bracket_saturated(B_design=1.8, k=K_INDEX, g0=G0, r0=R0, order=3,
-                      maxh=0.008, gamma=0.0, gamma2=0.0):
+                      maxh=0.008, gamma=0.0, gamma2=0.0, r_min=None, r_max=None):
     """COMPLEMENTARY certification of the SATURATED field index: solve the same
     nonlinear operating point both ways -- phi (Dirichlet on the poles) and A
     (Dirichlet on the flux walls, driven to the phi-solve's median flux Psi so
     both sit at the SAME saturation state).  k_phi(r) and k_A(r) converge from
     discretisation-complementary sides; their GAP certifies the saturated k(r)
     is physics, not mesh (the nonlinear analogue of Step 1's linear bracket;
-    monotone BH => convex energy => the bracket survives into saturation)."""
-    r_min, r_max = aperture_radii(k=k, r0=r0)
+    monotone BH => convex energy => the bracket survives into saturation).
+    The aperture defaults to the scaling momentum band aperture_radii(k); pass
+    r_min/r_max explicitly for a non-scaling (e.g. isochronous) window."""
+    if r_min is None or r_max is None:
+        r_min, r_max = aperture_radii(k=k, r0=r0)
     mmf = B_design * g0 / (2.0 * MU0)
     s_phi = solve_saturated(mmf, r_min, r_max, k=k, g0=g0, r0=r0,
                             order=order, maxh=maxh, gamma=gamma, gamma2=gamma2)
@@ -643,6 +659,126 @@ def run_step3(B_design=1.8, k=K_INDEX, g0=G0, r0=R0, order=3, maxh=0.008,
 
 
 # --------------------------------------------------------------------------- #
+# Step 4: ISOCHRONOUS -- a DIFFERENT achromaticity (constant revolution TIME,
+#   not constant tune).  Make the nonlinear (saturated) END PACK isochronous.
+# --------------------------------------------------------------------------- #
+# An isochronous magnet (cyclotron / non-scaling FFAG) keeps the revolution TIME
+# momentum-independent.  That needs the average field to RISE with radius as the
+# relativistic factor:
+#     <B>(r) = B0 gamma(r),  gamma = 1/sqrt(1 - beta^2),  beta(r) = beta0 (r/r0)
+# (beta = omega r / c is linear in r at a constant revolution frequency omega).
+# The LOCAL field index is therefore NOT constant but RISING:
+#     k_iso(r) = d log B / d log r = (beta gamma)^2 = beta^2 / (1 - beta^2),
+# the OPPOSITE of the scaling (k = const) target -- isochronism trades a
+# momentum-independent TUNE for a momentum-independent TIME.  The high-r (highest
+# B) edge must deliver the STEEPEST rise AND saturates first: the super-ferric
+# isochronous wall = the NONLINEAR END PACK.  The SAME 2-parameter pole reshape
+# (+ A/phi bracket certificate) that flattened the scaling index instead drives
+# the SATURATED <B>(r) back onto B0 gamma(r) into saturation.
+def iso_field_law(r, beta0, r0=R0):
+    """Isochronous orbit kinematics: beta(r) = beta0 (r/r0) (linear in r at a
+    constant revolution frequency, beta = omega r / c); returns beta(r) and
+    gamma(r) = 1/sqrt(1 - beta^2)."""
+    beta = beta0 * (np.asarray(r, dtype=float) / r0)
+    return beta, 1.0 / np.sqrt(1.0 - beta ** 2)
+
+
+def iso_target_index(r, beta0, r0=R0):
+    """Isochronous LOCAL field index k_iso(r) = (beta gamma)^2 = beta^2/(1-beta^2)
+    = d log(B0 gamma) / d log r (the RISING index of a constant-time orbit)."""
+    beta, _ = iso_field_law(r, beta0, r0)
+    return beta ** 2 / (1.0 - beta ** 2)
+
+
+def iso_geometric_reshape(beta0):
+    """The (k0, gamma) of scaling_gap that, in LINEAR theory, reproduces the
+    isochronous index k_iso(r) to first order at r0: the geometric index
+    k_geom(u) = k0 + gamma u matches k_iso AND its slope at u = 0.
+        k0    = k_iso(r0)         = beta0^2 / (1 - beta0^2)
+        gamma = d k_iso / d log r = 2 beta0^2 / (1 - beta0^2)^2 ."""
+    b = beta0 ** 2
+    return b / (1.0 - b), 2.0 * b / (1.0 - b) ** 2
+
+
+def _iso_residual(mmf, gamma, gamma2, beta0, r_min, r_max, k0, g0, r0, order,
+                  maxh):
+    """Saturated solve at reshape (gamma, gamma2) on the isochronous-base pole.
+    Returns the field-INDEX mismatch to the isochronous target (tilt, curv of
+    diff(r) = k(r) - k_iso(r)), the field-SHAPE isochronism residual
+    max|shape(<B>)/shape(gamma) - 1| (the timing error: T(p)=const <=> <B>~gamma),
+    and the solve."""
+    s = solve_saturated(mmf, r_min, r_max, k=k0, g0=g0, r0=r0,
+                        order=order, maxh=maxh, gamma=gamma, gamma2=gamma2)
+    diff = s["k"] - iso_target_index(s["r_index"], beta0, r0)
+    dd = diff[2:-2]
+    mid = len(dd) // 2
+    tilt = float(dd[-1] - dd[0])
+    curv = float(dd[mid] - 0.5 * (dd[-1] + dd[0]))
+    rs, By = s["rs_eval"], np.abs(s["By"])
+    _, gam = iso_field_law(rs, beta0, r0)
+    c = len(rs) // 2
+    iso_resid = float(np.max(np.abs(By / By[c] / (gam / gam[c]) - 1.0)[2:-2]))
+    return tilt, curv, iso_resid, s
+
+
+def run_isochronous(beta0=0.6, B_design=1.1, r_min=0.78, r_max=1.28, g0=G0,
+                    r0=R0, order=3, maxh=0.008, tol=2e-3, newton_steps=4,
+                    dg=0.3):
+    """Design a SATURATED isochronous pole.  The naive pole is the LINEAR-theory
+    isochronous shape (iso_geometric_reshape); saturation droops <B>(r) below
+    B0 gamma(r) at the high-r NONLINEAR END PACK; the 2-parameter pole reshape
+    restores the saturated <B>(r) onto B0 gamma(r), certified by the A/phi
+    bracket.  beta0 = beta at r0 (how relativistic the orbit is); the field-shape
+    residual max|<B>(r)/(B0 gamma(r)) - 1| is the timing error."""
+    k0, g_iso = iso_geometric_reshape(beta0)               # linear-theory iso pole
+    mmf = B_design * g0 / (2.0 * MU0)
+
+    def resid(g, g2):
+        return _iso_residual(mmf, g, g2, beta0, r_min, r_max, k0, g0, r0,
+                             order, maxh)
+
+    t0, c0, iso0, s0 = resid(g_iso, 0.0)                   # naive = linear-theory iso
+    g, g2 = g_iso, 0.0
+    t, c = t0, c0
+    best = {"gamma": g_iso, "gamma2": 0.0, "tilt": t0, "curv": c0,
+            "iso_resid": iso0, "_s": s0}
+    evals = [{"gamma": g_iso, "gamma2": 0.0, "tilt": t0, "curv": c0,
+              "iso_resid": iso0}]
+    for _ in range(newton_steps):
+        if max(abs(t), abs(c)) < tol:
+            break
+        tg, cg, _, _ = resid(g + dg, g2)
+        tg2, cg2, _, _ = resid(g, g2 + dg)
+        J = np.array([[(tg - t) / dg, (tg2 - t) / dg],
+                      [(cg - c) / dg, (cg2 - c) / dg]])
+        try:
+            step = np.linalg.solve(J, np.array([t, c]))
+        except np.linalg.LinAlgError:
+            break
+        g, g2 = g - step[0], g2 - step[1]
+        t, c, iso, s = resid(g, g2)
+        evals.append({"gamma": g, "gamma2": g2, "tilt": t, "curv": c,
+                      "iso_resid": iso})
+        if iso < best["iso_resid"]:
+            best = {"gamma": g, "gamma2": g2, "tilt": t, "curv": c,
+                    "iso_resid": iso, "_s": s}
+    beta_min, beta_max = beta0 * r_min / r0, beta0 * r_max / r0
+    return {
+        "beta0": float(beta0), "beta_min": float(beta_min),
+        "beta_max": float(beta_max), "k_iso0": float(k0),
+        "k_iso_min": float(iso_target_index(r_min, beta0, r0)),
+        "k_iso_max": float(iso_target_index(r_max, beta0, r0)),
+        "B_design": float(B_design), "aperture": (float(r_min), float(r_max)),
+        "naive": {"gamma": float(g_iso), "gamma2": 0.0, "tilt": t0, "curv": c0,
+                  "iso_resid": iso0, "_s": s0},
+        "reshaped": best,
+        "iso_improvement": float(iso0 / best["iso_resid"])
+                           if best["iso_resid"] > 0 else None,
+        "evals": evals,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # driver
 # --------------------------------------------------------------------------- #
 def run(k=K_INDEX, g0=G0, r0=R0, order=4, maxh=0.008):
@@ -687,6 +823,8 @@ def main():
                     help="also run the 2-parameter pole reshape (restore flat k)")
     ap.add_argument("--pullback", action="store_true",
                     help="hodograph AS solver: fixed mesh, pole shape = deformation")
+    ap.add_argument("--iso", action="store_true",
+                    help="also run the isochronous design (nonlinear end pack -> B0*gamma(r))")
     ap.add_argument("--order", type=int, default=4)
     ap.add_argument("--maxh", type=float, default=0.008)
     args = ap.parse_args()
@@ -762,6 +900,35 @@ def main():
         print(f"{'gamma':<8}{'k_mean':<9}{'k_tilt':<9}")
         for s in pb["sweep"]:
             print(f"{s['gamma']:<8.2f}{s['k_mean']:<9.3f}{s['k_tilt']:<+9.4f}")
+
+    if args.iso:
+        print("\n" + "=" * 74)
+        print("Step 4: ISOCHRONOUS -- nonlinear end pack driven onto B0*gamma(r)")
+        print("=" * 74)
+        s4 = run_isochronous()
+        n, o = s4["naive"], s4["reshaped"]
+        gmin = 1.0 / math.sqrt(1.0 - s4["beta_min"] ** 2)
+        gmax = 1.0 / math.sqrt(1.0 - s4["beta_max"] ** 2)
+        print(f"beta(r) range               : {s4['beta_min']:.3f} -> {s4['beta_max']:.3f}"
+              f"  (gamma {gmin:.3f} -> {gmax:.3f})")
+        print(f"isochronous index k_iso(r)  : {s4['k_iso_min']:.3f} -> {s4['k_iso_max']:.3f}"
+              f"  (RISES; not the scaling k=const)")
+        print(f"design gap field B@r0       : {s4['B_design']:.2f} T"
+              f"  (B_gap up to {o['_s']['B_gap_max']:.2f} T, knee {BK_IRON:.1f})")
+        print(f"naive iso pole  |<B>/B0gam-1|: {n['iso_resid']:.4f}"
+              f"  (linear-theory iso, broken by saturation)")
+        print(f"reshaped        |<B>/B0gam-1|: {o['iso_resid']:.4f}"
+              f"  (gamma {o['gamma']:+.3f}, gamma2 {o['gamma2']:+.3f})")
+        print(f"isochronism improvement     : {s4['iso_improvement']:.1f}x"
+              f"  ({len(s4['evals'])-1} Newton step(s))")
+        rmin_i, rmax_i = s4["aperture"]
+        bk = bracket_saturated(B_design=s4["B_design"], k=s4["k_iso0"],
+                               g0=G0, r0=R0, gamma=o["gamma"], gamma2=o["gamma2"],
+                               r_min=rmin_i, r_max=rmax_i)
+        print(f"reshaped A/phi bracket gap  : {bk['bracket_gap_max']:.2e}"
+              f"  (saturated <B>(r) certified)")
+        if args.fig:
+            _figure_iso(s4)
 
 
 def _figure(res):
@@ -855,6 +1022,46 @@ def _figure_step3(s3):
     fig.tight_layout()
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        "scaling_ffag_pole_2d_reshape.png")
+    fig.savefig(out, dpi=130)
+    print(f"saved {out}")
+
+
+def _figure_iso(s4):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    n, o = s4["naive"], s4["reshaped"]
+    beta0 = s4["beta0"]
+    fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+    # left: field shape <B>(r)/<B>(r_mid) vs the isochronous gamma(r) target
+    for tag, d, style in (("naive (saturated)", n, "o-"), ("reshaped", o, "s-")):
+        s = d["_s"]
+        rs = s["rs_eval"]
+        By = np.abs(s["By"])
+        c = len(rs) // 2
+        ax[0].plot(rs, By / By[c], style, ms=3,
+                   label=f"{tag}  |res| {d['iso_resid']:.3f}")
+    rs = n["_s"]["rs_eval"]
+    _, gam = iso_field_law(rs, beta0, R0)
+    c = len(rs) // 2
+    ax[0].plot(rs, gam / gam[c], "k--", lw=1.2, label="isochronous B0*gamma(r)")
+    ax[0].set_xlabel("r"); ax[0].set_ylabel("<B>(r) / <B>(r_mid)")
+    ax[0].set_title("isochronism: field shape vs gamma(r)")
+    ax[0].legend(fontsize=8)
+    # right: the local field index k(r) vs the RISING isochronous target
+    for tag, d, style in (("naive", n, "o-"), ("reshaped", o, "s-")):
+        s = d["_s"]
+        m = slice(2, -2)
+        ax[1].plot(s["r_index"][m], s["k"][m], style, ms=3, label=f"k(r) {tag}")
+    ri = n["_s"]["r_index"][2:-2]
+    ax[1].plot(ri, iso_target_index(ri, beta0, R0), "k--", lw=1.2,
+               label="k_iso(r)=(beta*gamma)^2")
+    ax[1].set_xlabel("r"); ax[1].set_ylabel("field index k(r)")
+    ax[1].set_title("rising isochronous index restored in saturation")
+    ax[1].legend(fontsize=8)
+    fig.tight_layout()
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "scaling_ffag_pole_2d_isochronous.png")
     fig.savefig(out, dpi=130)
     print(f"saved {out}")
 

@@ -10,7 +10,11 @@ TOPICS: dict[str, str] = {
     "end_pole": "Analytical chamfer design (Delferriere)",
     "kolkata": "Radia + TOSCA validation case study",
     "rotating_coil": "Multipole measurement + field reconstruction",
-    "all": "return \"\n\n\".join([",
+    "isochronous_endpack": (
+        "Radial field index design: scaling (k=const) vs isochronous "
+        "(rising k_iso), and the saturated nonlinear end-pack reshape"
+    ),
+    "all": "Everything (all topics concatenated)",
 }
 
 END_POLE_DESIGN = """
@@ -224,14 +228,121 @@ by the radia-mcp tool stack.
 """
 
 
+ISOCHRONOUS_ENDPACK_DESIGN = """
+# Radial field-index design: scaling vs isochronous, and the
+# saturated nonlinear END PACK (super-ferric pole reshape)
+
+Beyond the longitudinal end-pole chamfer (the `end_pole` topic), a
+CIRCULAR machine (FFAG / cyclotron) has an orthogonal design axis: the
+RADIAL field index
+
+    k(r) = d log B_y / d log r
+
+that controls how the gap field grows with radius.  This is a
+hodograph-native, single-valued SHAPE design (no topology change),
+shipped + golden-tested in
+`examples/clebsch_hodograph/scaling_ffag_pole_2d.py`.
+
+## Two achromaticities -- and they are DIFFERENT (mutually exclusive)
+
+"Achromatic" (momentum-independent) means one of two distinct things:
+
+| | scaling FFAG | isochronous (cyclotron / non-scaling FFAG) |
+|---|---|---|
+| invariant | betatron TUNE | revolution TIME |
+| field law | B_y(r) = B0 (r/r0)^k | <B>(r) = B0 gamma(r) |
+| field index | k = const (rigid) | k_iso(r) = (beta gamma)^2 = beta^2/(1-beta^2) (RISING) |
+
+with beta(r) = beta0 (r/r0) (beta = omega r / c, linear in r at a
+constant revolution frequency).  In u = log r a momentum scaling
+r -> lambda r is a TRANSLATION; the scaling field is translation-
+covariant (k = const, a straight log-log line), while isochronism
+DELIBERATELY breaks that symmetry (rising k_iso).  Relativistically you
+cannot have both: scaling fixes the tune, isochronism fixes the time.
+The pole gap is g(r) ~ 1/B(r) in either case (thin-gap, B ~ 1/g).
+
+## The super-ferric wall = the NONLINEAR END PACK
+
+With a Froehlich mu(B) iron pole, the high-r edge carries the highest B,
+saturates FIRST, and the achieved field index DROOPS there -- degrading
+achromaticity at the high-energy edge of the momentum acceptance.  For
+the ISOCHRONOUS magnet this is most acute: the high-r end must deliver
+the STEEPEST rise exactly where the iron gives out.  That high-r,
+highest-B region IS the nonlinear end pack.
+
+## The fix: the SAME hodograph machinery for both targets
+
+A 2-parameter pole reshape in the log / von Mises chart
+
+    g = g0 exp(-k u - gamma/2 u^2 - gamma2/6 u^3),
+    local index k_geom(u) = k + gamma u + gamma2/2 u^2
+
+(single-valued: the full 2-variable hodograph FOLDS once mu = mu(q), so
+the von Mises single-variable chart is used) drives the SATURATED index
+back onto the target via a 2-D Newton on (tilt, curvature):
+
+  * scaling  (`run_step3`): target k = const -> flatten the saturated
+    index ~7.2x in one Newton step.
+  * isochronous (`run_isochronous`): target the RISING k_iso(r) -> drive
+    the saturated <B>(r) back onto B0 gamma(r), restoring isochronism
+    ~3.1x.  Measured: field-shape residual |<B>/(B0 gamma) - 1| goes
+    2.3% -> 0.73% at B_gap ~ 1.33 T > knee Bk = 1.2 T (k_iso rises
+    0.28 -> 1.44 across the aperture).
+
+## Certified INTO saturation (the A/phi complementary bracket)
+
+The same operating point is solved BOTH ways -- phi (Dirichlet on the
+poles) and A (Dirichlet on the flux walls, driven to the phi-solve's
+median flux so both sit at the SAME saturation state).  Monotone BH =>
+convex energy => the energy bracket survives into saturation (Synge
+hypercircle / Rikabi-Bryant-Freeman).  k_phi(r) and k_A(r) converge from
+discretisation-complementary sides, so a tight gap (~5e-4) certifies the
+saturated index is PHYSICS, not mesh -- for the scaling AND the
+isochronous reshaped pole.
+
+## Hodograph AS the solver (no remesh)
+
+For the linear pole, `run_pullback` solves on a FIXED computational mesh
+with the pole shape entering as a pullback DEFORMATION
+(mesh.SetDeformation, weight W = |det J|(J^T J)^{-1}), so a reshape is a
+new WEIGHT on the same mesh -- Netgen runs ONCE for the whole shape
+sweep (reproduces the physical-remesh k(r) to ~5e-4).
+
+## Honest scope (repo-first)
+
+  * The reshape residual (0.73% isochronous) is the higher-order
+    mismatch a 2-PARAMETER quadratic reshape leaves against a ~5x rising
+    k_iso -- more shape DOF closes it; the Newton converges in one step.
+  * This is the RADIAL <B>(r) isochronism ONLY.  The AVF flutter
+    (vertical focusing), the betatron tunes, and the orbit<->field
+    self-consistency (the closed-orbit r(p)) are SEPARATE problems, not
+    modeled here.
+  * The no-remesh pullback is shown for the LINEAR pole; threading it
+    through the nonlinear saturated Newton is the next rung.
+
+## Connection to radia / where this sits
+
+This is the radial-index companion to the `end_pole` (longitudinal
+chamfer) topic and the `kolkata` SC-cyclotron case study.  It is part of
+the electromagnet / accelerator-magnet domain (Clebsch-hodograph
+pole-face inverse design, `examples/clebsch_hodograph/`,
+`docs/clebsch_hodograph/DESIGN_METHODOLOGY.md` section 3.3).  Goldens:
+`tests/feec/test_clebsch_hodograph_research.py`
+(`test_scaling_ffag_pole_2d_step1/_step2_saturation/_step3_reshape/
+_saturated_bracket/_pullback_solver/_isochronous`).
+"""
+
+
 def get_accelerator_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
     Topics:
       "all"
-      "end_pole"         - Analytical chamfer design (Delferriere)
-      "kolkata"          - Radia + TOSCA validation case study
-      "rotating_coil"    - Multipole measurement + field reconstruction
+      "end_pole"             - Analytical chamfer design (Delferriere)
+      "kolkata"              - Radia + TOSCA validation case study
+      "rotating_coil"        - Multipole measurement + field reconstruction
+      "isochronous_endpack"  - Radial field index: scaling vs isochronous,
+                               saturated nonlinear end-pack reshape
     """
     topic = topic.lower().strip()
     if topic in ("end_pole", "chamfer", "delferriere"):
@@ -240,11 +351,15 @@ def get_accelerator_documentation(topic: str = "all") -> str:
         return KOLKATA_CYCLOTRON
     if topic in ("rotating_coil", "multipole", "measurement"):
         return ROTATING_COIL_MEASUREMENT
+    if topic in ("isochronous_endpack", "isochronous", "scaling_ffag",
+                 "field_index", "end_pack", "endpack"):
+        return ISOCHRONOUS_ENDPACK_DESIGN
     if topic == "all":
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
+            ISOCHRONOUS_ENDPACK_DESIGN,
         ])
     return (
         f"Unknown topic '{topic}'. Available: "
-        "all, end_pole, kolkata, rotating_coil."
+        "all, end_pole, kolkata, rotating_coil, isochronous_endpack."
     )
