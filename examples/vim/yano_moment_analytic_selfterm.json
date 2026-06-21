@@ -1,0 +1,74 @@
+{
+  "mu_r": 200.0,
+  "patch_Mz": 2955.44585888937,
+  "patch_Mz_exact": 2955.445544554456,
+  "rows": [
+    {
+      "n": 3,
+      "s": 0.0,
+      "eiem2_err": -0.038516699373435825,
+      "fd_err": -3.7384710166454838e-06,
+      "fd_cond": 234.37661487901346,
+      "an_err": -0.004564511136973759,
+      "an_cond": 215.31616400579867,
+      "bare_err": -0.00115639739148643,
+      "bare_cond": 396.03797042310833
+    },
+    {
+      "n": 3,
+      "s": 0.6,
+      "eiem2_err": -0.04487638263016824,
+      "fd_err": 0.006059291109780762,
+      "fd_cond": 13329.338044036627,
+      "an_err": -0.0017559972458975892,
+      "an_cond": 303.9188194281718,
+      "bare_err": 0.003282876320682915,
+      "bare_cond": 3653.1447111417788
+    },
+    {
+      "n": 4,
+      "s": 0.0,
+      "eiem2_err": -0.026179253936452818,
+      "fd_err": -0.00030140386144728026,
+      "fd_cond": 2297.5184353196696,
+      "an_err": -0.003249076397648154,
+      "an_cond": 4429.8747644463165,
+      "bare_err": -0.2066987884383823,
+      "bare_cond": 1533612.3618652024
+    },
+    {
+      "n": 4,
+      "s": 0.6,
+      "eiem2_err": -0.030029841554448877,
+      "fd_err": 0.0037897636684949276,
+      "fd_cond": 12470.98855681889,
+      "an_err": 0.0015194259603137361,
+      "an_cond": 6079.262178183842,
+      "bare_err": 0.005176312345239964,
+      "bare_cond": 3658.3003560643497
+    },
+    {
+      "n": 6,
+      "s": 0.0,
+      "eiem2_err": -0.015267454024673222,
+      "fd_err": 0.0005238393684909859,
+      "fd_cond": 18382.550331709346,
+      "an_err": -0.0014041553706549692,
+      "an_cond": 23989.232145204045,
+      "bare_err": 0.0024337293455325426,
+      "bare_cond": 32527.549147654663
+    },
+    {
+      "n": 6,
+      "s": 0.6,
+      "eiem2_err": -0.01672013907636072,
+      "fd_err": 0.002083307644026311,
+      "fd_cond": 347834.60549012164,
+      "an_err": 0.0003690043683706179,
+      "an_cond": 3159.1805395788,
+      "bare_err": -0.016486764766763584,
+      "bare_cond": 37275.11741826733
+    }
+  ],
+  "conclusion": "Analytic closed-form centroid field+gradient (SELF=bare face charge, patch-test exact + finite; MUTUAL=yano dipole layer = face charge - area*point@source center, finite at the self centroid; monopole=div(B)=0 neutrality row) reproduces the finite-difference moment accuracy (~0.1-0.5%) with bounded conditioning everywhere (no 2e6 regular-grid blowup; up to 100x lower than FD on sheared meshes). The mutual center charge is REQUIRED (the 'bare' column breaks regular grids with a charge-free dipole-free quadrupole near-null mode, NOT a loop -- loop basis is complete). Singularity-free: the center charge is excluded exactly where it would be singular (self) and is unnecessary there. This is the kernel for C++ GetCentroidFieldGrad."
+}
