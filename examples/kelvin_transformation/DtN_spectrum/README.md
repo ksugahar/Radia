@@ -57,7 +57,8 @@ is the arc (each script self-asserts and prints its result).
   `act2_01_multipole_ceiling`, `act2_02_minimal_ball`, `act2_03_floor_vs_curve`,
   `act2_04_adequacy_eccentric_multibody` (source `p*=⌈ln ε/ln(d/R)⌉`), `act2_05_geometry_floor_law` (geometry `(h/R)^{2k}`),
   `act2_06_eccentric_fem_endtoend` (FEM end-to-end), `act2_07_apparatus_design_calc` (reactor-leg design calc),
-  `act2_08_budget_dofcost`, `act2_09_exterior_mesh`, `act2_10_exterior_mesh3`.
+  `act2_08_budget_dofcost`, `act2_09_exterior_mesh`, `act2_10_exterior_mesh3`,
+  `act2_11_kelvin_mesh_cutting_datasheet` (the consolidated `min(p,k)` mesh-cut recipe).
 - **Act 3 — Kelvin realizes it exactly.** The conformal compactification; the infinity
   point; the vector form; the exterior field. → `act3_01_infinity_integrable`,
   `act3_02_centre_quadrature`, `act3_03_vector_dtn`, `act3_04_aform_center_singularity` (A-form centre),
@@ -284,6 +285,7 @@ cite the old names are historical — use `RENAME_MAP.md` to resolve any stale r
 | `act2_09_exterior_mesh.py` | Does refining the exterior VOLUME mesh help? | `p_method` | `‖u_h−P_n‖≈1.5e-15` on every volume mesh (p≥n): the volume solve is Galerkin-exact → refining the exterior interior does nothing; only Γ's geometry (a surface effect) moves λ |
 | `act2_10_exterior_mesh3.py` | Isolate Γ-surface vs interior volume | `p_method` | with the Γ surface fixed, λ is set by `∫_Ω\|∇P_n\|²/∮_Γ P_n²` — a fixed polynomial over a fixed domain; the exterior volume mesh enters nowhere. p=1<n control shows refinement only helps when the order is deficient |
 | `act2_03_floor_vs_curve.py` | Is the 5–6 digit floor really *geometry*? | `p_method` | fix FE order `p≥n` + mesh, raise only the isoparametric Curve order `k`: error drops ~1000× (`k=1` flat ~1% → `k=3` ~1e-5) → the floor is the curved-sphere **geometry**, not the multipole/method |
+| `act2_11_kelvin_mesh_cutting_datasheet.py` | How should the Kelvin region be MESHED, and what DtN accuracy does a given cut buy? | `p_method` | consolidates `act0_01` (n²), `act2_05` ((h/R)^{2k}) and `act2_09` (volume-irrelevant) into ONE law for the **sparse Kelvin-FEM** DtN: `d_n ~ n²(h/R)^{2·min(p,k)}` (measured slopes **2.0, 3.9, 3.8, 3.9** for (p,k)=(2,1),(2,2),(2,3),(3,2)). The exponent is set by **min(FE order p, Curve order k)**: raising k past p (115×→0.83) or p past k (1.49) **saturates**; only the balanced cut **p=k=3** unlocks a lower floor (~3e-6, floor-limited → near-converged even on the coarsest mesh). Recipe: one **balanced-order Γ shell**, no exterior refinement |
 | `act1_07_inductance_dtn.py` | Is **inductance** DtN-certified like capacitance? | `datasheet` | external `L_ext` = the `n=1` (dipole) Steklov mode (identity `W_ext=½μ₀(n+1)/R∮φ²`, rel diff 0); `C↔n=0` exact, `L_ext↔n=1` defect `1.4e-3 (p=1)→7.6e-6 (p=3)`, floor=geometry, exterior-volume-irrelevant — the **dual of `C`**; NOT the `ngsbem` vector single-layer (different operator) |
 
 ## Running
