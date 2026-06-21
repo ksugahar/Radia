@@ -1753,6 +1753,7 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 // usages resolve to the global definition (not a namespace-scoped symbol).
 extern bool g_yano_pyramid_cloud;
 extern bool g_yano_no_center_charge;
+extern double g_yano_eval_alpha;
 
 namespace radia_solver_ext {
 
@@ -2009,6 +2010,10 @@ void SolverConfig(py::kwargs kwargs) {
     if (kwargs.contains("yano_no_center_charge")) {
         g_yano_no_center_charge = kwargs["yano_no_center_charge"].cast<bool>();
     }
+    // Research: override the EIEM2 collocation-point alpha (eval = a*FaceCenter + (1-a)*center; -1 = 0.5).
+    if (kwargs.contains("yano_eval_alpha")) {
+        g_yano_eval_alpha = kwargs["yano_eval_alpha"].cast<double>();
+    }
 }
 
 py::dict GetSolverConfig() {
@@ -2078,6 +2083,7 @@ py::dict GetSolverConfig() {
 
     config["yano_pyramid_cloud"] = g_yano_pyramid_cloud;
     config["yano_no_center_charge"] = g_yano_no_center_charge;
+    config["yano_eval_alpha"] = g_yano_eval_alpha;
 
     return config;
 }
