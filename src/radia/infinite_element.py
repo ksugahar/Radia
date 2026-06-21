@@ -18,7 +18,10 @@ DESIGN (NGSolve-native -- "complement NGSolve, do not reimplement"):
     N_k(a/r)`` from the solved level GridFunctions (:func:`exterior_field`).
 
 The exterior energy is the TENSOR PRODUCT of a surface part and a radial part: for a single mode n the
-block reduces to ``R1 + n(n+1) R0`` (act7_25) and ``eig -> the analytic ladder (n+1)/a``.
+block reduces to ``R1 + n(n+1) R0`` (act7_25).  Note the ENERGY operator ``S`` (the condensed surface
+stiffness added to the FE system) has per-mode eigenvalue ``eig(S, Mtil) = (n+1)*a`` (the exterior
+energy / radial Steklov), while the DtN eigenvalue (du/dr over u at r=a) is ``-(n+1)/a``; these
+coincide only at ``a=1`` (the default).  The FE coupling uses the energy operator (correct for all a).
 
 Public API
 ----------
@@ -72,11 +75,11 @@ def dtn_surface_matrix(MS, KS, P, a=1.0, nq=160):
     """Condensed DtN surface stiffness ``S`` (N x N) from the UNIT-SPHERE surface mass ``MS`` and
     Laplace-Beltrami ``KS`` (N x N, symmetric).  Builds the P-level tensor blocks ``R1_kl*MS +
     R0_kl*KS`` and statically condenses the radial bubble levels onto the trace (numpy).  Useful for
-    the discrete Steklov spectrum (``eig(S, MS) -> (n+1)/a``); the production solve keeps the levels
-    explicit (:func:`add_exterior_ie`) and does NOT condense.
+    the discrete Steklov spectrum: ``eig(S, MS)`` gives the per-mode exterior ENERGY ``(n+1)*a`` (the
+    condensed radial stiffness), which equals the DtN magnitude ``(n+1)/a`` only at ``a=1``.  The
+    production solve keeps the levels explicit (:func:`add_exterior_ie`) and does NOT condense.
     """
     MS = np.ascontiguousarray(MS, float); KS = np.ascontiguousarray(KS, float)
-    Nn = MS.shape[0]
     R1, R0, _ = radial_operators(P, a, nq)
     block = lambda k, l: R1[k, l] * MS + R0[k, l] * KS
     A11 = block(0, 0)
