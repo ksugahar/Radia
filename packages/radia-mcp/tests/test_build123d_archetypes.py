@@ -13,8 +13,10 @@ import sys
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
-from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetization, cylindrical_magnet,
-                                            block_magnet, halbach_ring, c_core, solenoid)
+from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetization, magnetization_map,
+                                            cylindrical_magnet, block_magnet, halbach_ring, c_core,
+                                            solenoid, pole_tip, multipole_yoke, h_dipole, helmholtz_pair,
+                                            cos_theta_dipole)
 from build123d import Box
 
 
@@ -71,6 +73,17 @@ def test_solenoid_is_tube():
     assert abs(s.volume - math.pi*(30**2-20**2)*40)/s.volume < 1e-9
 
 
+def test_cos_theta_dipole_arcsin_spacing():
+    ct = cos_theta_dipole(45, 4, 8, 120, n_per_half=8, name="ct")
+    assert len(ct.children) == 16 and all(s.is_valid for s in ct.solids())
+    gos = [c for c in ct.children if "_go_" in c.label]
+    assert len(gos) == 8
+    sins = sorted(math.sin(math.atan2(c.center().Y, c.center().X)) for c in gos)
+    diffs = [sins[i+1]-sins[i] for i in range(len(sins)-1)]
+    # cos-theta layout: sin(theta) is UNIFORMLY spaced (density ~ cos theta)
+    assert max(diffs)/min(diffs) < 1.05, "bars must be arcsin-spaced (uniform sin theta)"
+
+
 def test_halbach_meshes_in_netgen():
     """CAE gate: a Halbach segment tet-meshes through build123d -> STEP -> Netgen."""
     import tempfile
@@ -86,6 +99,50 @@ def test_halbach_meshes_in_netgen():
     assert mesh.ne > 50, f"Halbach segment should tet-mesh (got {mesh.ne})"
 
 
+def test_magnetization_map_follows_halbach():
+    hb = halbach_ring(40, 55, 20, 12, pole_pairs=1, name="hb")
+    Mmap = magnetization_map(hb, Br=1.2)
+    assert len(Mmap) == 12
+    for c in hb.children:
+        mx, my = Mmap[c.label]
+        assert abs(math.hypot(mx, my) - 1.2) < 1e-9, "|M| = Br"
+        ang = math.degrees(math.atan2(my, mx))
+        d = abs((ang - parse_magnetization(c.label) + 180.0) % 360.0 - 180.0)   # circular distance
+        assert d < 1e-3, "M direction matches the label"
+    # non-magnet regions are skipped
+    assert magnetization_map([c_core(60, 50, 40, 10, 14)]) == {}
+
+
+def test_pole_tip_trapezoid_volume():
+    p = pole_tip(30, 16, 40, 50, name="pole")
+    assert p.is_valid and p.label == "pole"
+    assert abs(p.volume - 0.5*(30+16)*40*50) < 1e-6, "trapezoid area x depth"
+
+
+def test_multipole_yoke_regions():
+    for n in (2, 4, 6):
+        y = multipole_yoke(n, 25, 20, 14, 12, 60, name="m")
+        assert len(y.children) == n + 1, f"{n} poles + 1 return ring"
+        assert all(s.is_valid for s in y.solids())
+        labels = [c.label for c in y.children]
+        assert "yoke" in labels and sum(l.startswith("pole") for l in labels) == n
+
+
+def test_h_dipole_has_gap_and_poles():
+    y = h_dipole(120, 100, 60, 20, 30, 24, name="dip")
+    assert y.is_valid and y.label == "dip" and y.volume > 0
+    # poles + frame fused into one solid that spans more than the bare frame
+    frame_vol = 120*100*60 - (120-40)*(100-40)*60
+    assert y.volume > frame_vol, "the protruding poles add iron beyond the window frame"
+
+
+def test_helmholtz_pair_two_coils():
+    hh = helmholtz_pair(40, 50, 15, 45, name="hh")
+    assert len(hh.children) == 2 and all(s.is_valid for s in hh.solids())
+    zc = sorted(c.center().Z for c in hh.children)
+    assert abs((zc[1]-zc[0]) - 45) < 1e-6, "coils separated along z"
+
+
 def main():
     test_magnetization_label_roundtrip()
     test_pm_primitives_carry_magnetization()
@@ -93,9 +150,16 @@ def main():
     test_halbach_quadrupole_advances_3x()
     test_c_core_has_pole_gap()
     test_solenoid_is_tube()
+    test_magnetization_map_follows_halbach()
+    test_pole_tip_trapezoid_volume()
+    test_multipole_yoke_regions()
+    test_h_dipole_has_gap_and_poles()
+    test_helmholtz_pair_two_coils()
+    test_cos_theta_dipole_arcsin_spacing()
     test_halbach_meshes_in_netgen()
     print("[OK] build123d EM archetypes: PM cylinder/block, Halbach ring (Mallinson easy axes via "
-          "magnetization labels), C-core yoke with pole gap, solenoid bundle -- meshable, label-driven.")
+          "magnetization labels) + magnetization_map, C-core / multipole / H-dipole yokes, pole tip, "
+          "solenoid & Helmholtz pair -- meshable, label-driven, region-separated.")
 
 
 if __name__ == "__main__":
