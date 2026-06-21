@@ -177,9 +177,12 @@ RELATION TO THE OTHER IDENTIFICATION ROUTES.  The Everett function (see "identif
 INTEGRAL of the Preisach density, so Everett-from-symmetric-loops and FORC-from-reversal-curves are two
 views of the same density; FORC uses the full reversal-curve family and so resolves the whole
 distribution (incl. asymmetric / off-diagonal interaction), where ``identify_from_loop_areas`` uses only
-the symmetric-loop areas (the diagonal).  ROADMAP: an INVERSE FORC identifier ``from_measured_forc(...)``
-that reads measured FORCs, forms rho, and reads off the ridge comb (eta_k, a_k) -- the HysterSoft
-identification applied to fit a Play material directly from FORC measurements.
+the symmetric-loop areas (the diagonal).  The INVERSE FORC identifier ``hysteresis.identify_from_forc``
+reads a measured FORC family, forms rho, and reads off the ridge comb to recover ``(eta_k, a_k)`` --
+the HysterSoft identification applied to fit a Play material directly from FORC measurements; it
+round-trips a known model to ~1-3 % and reproduces unseen loops (test_hysteresis_forc).  NEXT: a VECTOR
+FORC for the 2D play (HysterSoft's vector Preisach), and landscape notes on the Energetic (Hauser),
+Jiles-Atherton and Hodgdon models HysterSoft also implements.
 """
 
 SECTIONS = {

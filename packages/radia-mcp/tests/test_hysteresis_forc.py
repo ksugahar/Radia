@@ -19,7 +19,7 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.hysteresis import (PlayHysteresis, forc_distribution,
-                                                forc_coercivity_weight)
+                                                forc_coercivity_weight, identify_from_forc)
 
 
 def _model():
@@ -68,11 +68,30 @@ def test_forc_total_weight():
     assert abs(total - wsum) / wsum < 0.05
 
 
+def test_identify_from_forc_roundtrip():
+    """INVERSE FORC identification (HysterSoft workflow): recover the cell slopes a_k from a FORC family
+    by reading the ridge comb, and reproduce an unseen loop."""
+    eta = [0.0, 0.3, 0.6, 0.9]; a_true = [200.0, 150.0, 100.0, 80.0]
+    m0 = PlayHysteresis(eta=eta, a=a_true)
+    Bsat = 1.3
+    grid, H = m0.forc_curves(Bsat, n=161)
+    m1 = identify_from_forc(grid, H, eta, Bsat, a0=200.0)
+    rel = max(abs(m1.a[k] - a_true[k]) / a_true[k] for k in range(1, len(a_true)))
+    Bt = 1.1
+    gen = abs(m1.loss_per_cycle(Bt) - m0.loss_per_cycle(Bt)) / m0.loss_per_cycle(Bt)
+    print(f"identify from FORC: recovered a={[round(x,1) for x in m1.a]} (true {a_true}), "
+          f"max rel={rel:.3f}, unseen-loop rel={gen:.3f}")
+    assert rel < 0.06, f"recovered slopes off by {rel:.2f}"
+    assert gen < 0.05, "the FORC-identified model must reproduce an unseen loop"
+    assert m1.a[0] == 200.0, "the reversible slope a0 is the separate loop-tip input (no FORC ridge)"
+
+
 def main():
     test_forc_family_structure()
     test_forc_ridges_at_play_thresholds()
     test_forc_distribution_concentrates_on_ridges()
     test_forc_total_weight()
+    test_identify_from_forc_roundtrip()
     print("[OK] FORC for the B-input Play model: first-order reversal curves -> FORC distribution "
           "rho=-1/2 d2H/dBa dBb ridges at the play thresholds eta_k with weight a_k(Bsat-eta_k) "
           "(the B-space Preisach density; the HysterSoft FORC technique on the Play == Preisach model).")
