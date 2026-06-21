@@ -2570,27 +2570,35 @@ void radTInteraction::BuildLoopBasis(std::vector<double>& Lflat, int& nLoop) con
 	}
 	double tol = 1e-9 * (scale > 0 ? scale : 1.0);
 
-	// 2) match coincident face centers -> internal edges (conforming mesh: shared centers coincide)
+	// 2) match coincident face centers -> internal edges (conforming mesh: shared centers coincide).
+	// Bucket per spatial-hash key as a VECTOR (not a single int) and match against ALL members by
+	// distance, always registering the face.  The previous single-bucket map dropped any face whose
+	// XOR hash COLLIDED with an unrelated earlier face (it found the wrong face, failed the distance
+	// check, and never registered itself, so its true partner never matched) -- that silently
+	// undercounted the internal faces and hence the cycle (loop) basis by exactly the collision count.
 	struct Edge { int hexA, dofA, hexB, dofB; double areaA, areaB; };
 	std::vector<Edge> edges;
-	std::unordered_map<long long, int> seen;   // spatial-hash key -> first face index
+	std::unordered_map<long long, std::vector<int> > buckets;   // spatial-hash key -> all face indices
 	for(int i = 0; i < (int)faces.size(); i++)
 	{
 		long long kx = (long long)std::llround(faces[i].cx / tol);
 		long long ky = (long long)std::llround(faces[i].cy / tol);
 		long long kz = (long long)std::llround(faces[i].cz / tol);
 		long long key = (kx * 73856093LL) ^ (ky * 19349663LL) ^ (kz * 83492791LL);
-		std::unordered_map<long long, int>::iterator it = seen.find(key);
-		if(it == seen.end()) { seen[key] = i; continue; }
-		int j = it->second;
-		double d = std::fabs(faces[i].cx - faces[j].cx) + std::fabs(faces[i].cy - faces[j].cy)
-		         + std::fabs(faces[i].cz - faces[j].cz);
-		if(d <= 10.0 * tol && faces[i].hex != faces[j].hex)
+		std::vector<int>& bucket = buckets[key];
+		for(size_t b = 0; b < bucket.size(); b++)
 		{
-			Edge e; e.hexA = faces[j].hex; e.dofA = faces[j].dof; e.areaA = faces[j].area;
-			e.hexB = faces[i].hex; e.dofB = faces[i].dof; e.areaB = faces[i].area;
-			edges.push_back(e);
+			int j = bucket[b];
+			double d = std::fabs(faces[i].cx - faces[j].cx) + std::fabs(faces[i].cy - faces[j].cy)
+			         + std::fabs(faces[i].cz - faces[j].cz);
+			if(d <= 10.0 * tol && faces[i].hex != faces[j].hex)
+			{
+				Edge e; e.hexA = faces[j].hex; e.dofA = faces[j].dof; e.areaA = faces[j].area;
+				e.hexB = faces[i].hex; e.dofB = faces[i].dof; e.areaB = faces[i].area;
+				edges.push_back(e);
+			}
 		}
+		bucket.push_back(i);
 	}
 	int nInternal = (int)edges.size();
 	if(nInternal == 0) return;
