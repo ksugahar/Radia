@@ -31,6 +31,21 @@ of a single dissipative cell under a symmetric cycle of amplitude Bm > eta_k is 
 fitted Steinmetz k_h.  A distribution of thresholds reproduces the empirical P_hyst ~ Bm^2 (Steinmetz)
 and the low-field Rayleigh ~ Bm^3 without any curve fit.  This is the principled replacement for the
 fitted ``coreloss.steinmetz_loss_density`` k_h.
+
+WHY B-INPUT (and not H-input) FOR THE radia-ngsolve CORE.  The lab's own measurements
+(Hane-Sugahara-Morishita-Ahagon, "Experimental Verification of Congruency Property ... Using B-input
+Play Model", IEEE TMAG 2026) show that real non-oriented silicon steel has CONGRUENCY along the H-axis
+(all minor loops the same shape in H for a given B-range) but INCONGRUENCY along the B-axis.  The
+B-input play model has H-axis congruency by construction (the shape functions depend only on the play
+hysterons, Eq. 4), so it reproduces measured minor loops -- shapes, areas, and losses -- where the
+H-input model (which forces B-axis congruency) fails.  And the B-input model is the one that matches an
+A-formulation FE solve (B = curl A is primary, H = sum_k f_k(|p_k|) p_k/|p_k| is the constitutive
+output) -- exactly the radia-ngsolve AGE / A_z core.  So B-input is both more accurate AND the natural
+FE fit here.  The play model is mathematically equivalent to the static Preisach model (Bobbio 1997;
+Matsuo-Shimasaki 2003) but much cheaper; the shape-function slope ``a_k`` is a RELUCTIVITY (for B-input).
+Standard discretisation: equal-interval thresholds eta_k = (k - 1/2) * Bmax / N (``play_cells``), shape
+functions identified from measured loops via the Everett function (next increment).  FE coupling: the
+vector play model + Newton-Raphson (Mitsuoka-Mifune-Matsuo 2013) -- the planned hysteresis-aware solve.
 """
 from __future__ import annotations
 
@@ -124,6 +139,17 @@ class PlayHysteresis:
             if 0.0 < self.eta[k] < Bm:
                 contrib += 4.0 * self.a[k] * self.eta[k] * (Bm - self.eta[k])
         return contrib
+
+
+def play_cells(Bmax, N, reluctivities):
+    """Standard play discretisation (Matsuo / Hane-Sugahara IEEE TMAG 2026, Eq. 3): equal-interval
+    B-space thresholds  eta_k = (k - 1/2) * Bmax / N,  k = 1..N, plus the eta=0 reversible cell.
+    ``reluctivities`` is the per-cell linear slope a_k (a reluctivity, for B-input); pass a scalar for
+    equal cells or an array of length N+1.  These equal intervals are what the Everett-function shape
+    identification assumes."""
+    eta = np.concatenate([[0.0], (np.arange(1, N + 1) - 0.5) * Bmax / N])
+    a = np.full(N + 1, reluctivities) if np.isscalar(reluctivities) else np.asarray(reluctivities, float)
+    return PlayHysteresis(eta=eta, a=a)
 
 
 def rayleigh_cells(eta_max, K, a_each):
