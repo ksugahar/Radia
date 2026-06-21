@@ -117,6 +117,77 @@ So "follow the 3-D equipotential at the end" = *keep the symmetry and let the
 radial fringe corrections cancel, so the integrated field stays the pure
 designed multipole.*
 
+### 3.3 The radial field index — achromatic (scaling) vs isochronous, into saturation
+
+§3.1–3.2 shape the iron so the *transverse / longitudinal* field is the
+designed multipole. A **circular** machine (FFAG / cyclotron) adds an
+orthogonal design axis: the **radial field index**
+`k(r) = d log B_y / d log r` that controls how the field grows with radius.
+This is a hodograph-native, single-valued *shape* design (no topology change),
+golden in `scaling_ffag_pole_2d.py`.
+
+**Two achromaticities — and they are different.** "Achromatic" (momentum-
+independent) means one of two distinct, relativistically **mutually exclusive**
+things:
+
+| | scaling FFAG | isochronous (cyclotron / non-scaling FFAG) |
+|---|---|---|
+| invariant | betatron **tune** | revolution **time** |
+| field law | `B_y(r) = B0 (r/r0)^k` | `<B>(r) = B0 γ(r)` |
+| field index | `k = const` (rigid) | `k_iso(r) = (β γ)² = β²/(1−β²)` (**rising**) |
+| chart | `u = log r`: log B straight, slope `k` | `u = log r`: a **convex rising** curve |
+
+In `u = log r` a momentum scaling `r → λr` is a **translation**; the scaling
+field is translation-covariant (hence `k = const`), while the isochronous field
+deliberately **breaks** that symmetry (rising `k_iso`). The pole gap is
+`g(r) ∝ 1/B(r)` in either case (thin-gap, `B ∝ 1/g`).
+
+**The super-ferric wall = the nonlinear END PACK.** With a Froehlich `µ(B)`
+iron pole, the high-`r` edge carries the highest `B`, saturates first, and the
+achieved field index **droops** there — degrading achromaticity at the
+high-energy edge of the momentum acceptance. For the **isochronous** magnet
+this is most acute: the high-`r` end must deliver the *steepest* rise exactly
+where the iron gives out.
+
+**The fix is the same hodograph machinery in both cases.** A **2-parameter
+pole reshape** in the log / von Mises chart (`g = g0 exp(−k u − γ/2 u² −
+γ2/6 u³)`, local index `k_geom(u) = k + γ u + γ2/2 u²`) — single-valued (the
+full 2-variable hodograph folds once `µ = µ(q)`, so the von Mises single-
+variable chart is used) — drives the **saturated** index back onto the target:
+
+- **scaling** (`run_step3`): target `k = const`; a 2-D Newton on
+  (tilt, curvature) = 0 flattens the saturated index **~7.2×** in one step
+  (`test_scaling_ffag_pole_2d_step3_reshape`).
+- **isochronous** (`run_isochronous`): target the **rising** `k_iso(r)`;
+  the *same* Newton drives the saturated `<B>(r)` back onto `B0 γ(r)`,
+  restoring isochronism **3.1×** (field-shape residual `|<B>/(B0 γ) − 1|`
+  2.3 % → 0.73 % at `B_gap ≈ 1.33 T > Bk = 1.2 T`)
+  (`test_scaling_ffag_pole_2d_isochronous`).
+
+**Certified into saturation (the A–φ bracket of §1, nonlinear).** The same
+operating point is solved both ways — φ (Dirichlet on the poles) and A
+(Dirichlet on the flux walls, driven to the φ-solve's median flux so both sit
+at the **same** saturation state). Monotone `BH ⇒ convex energy ⇒` the energy
+bracket survives into saturation (Synge hypercircle / Rikabi–Bryant–Freeman);
+`k_φ(r)` and `k_A(r)` converge from discretisation-complementary sides, so a
+tight gap (≈5e-4) certifies the saturated index is **physics, not mesh** — for
+the scaling *and* the isochronous reshaped pole.
+
+**Hodograph AS the solver (no remesh).** For the linear pole, `run_pullback`
+solves on a **fixed** computational mesh with the pole shape entering as a
+pullback deformation (`mesh.SetDeformation`, weight `W = |det J|(JᵀJ)⁻¹`), so
+a reshape is a new *weight* on the same mesh — Netgen runs **once** for the
+whole shape sweep (the genuine no-remesh win; reproduces the physical-remesh
+`k(r)` to ~5e-4).
+
+**Honest scope.** The reshape residual (0.73 % isochronous) is the higher-order
+mismatch a *2-parameter* quadratic reshape leaves against a ~5× rising `k_iso`
+— more shape DOF closes it; the Newton itself converges in one step. This is
+the **radial `<B>(r)` isochronism only**; the AVF flutter (vertical focusing),
+the betatron tunes, and the orbit↔field self-consistency are separate problems,
+not modeled here. The no-remesh pullback is shown for the *linear* pole; wiring
+it through the nonlinear saturated Newton is the next rung.
+
 **Established (rung 2, FEM, `accel_pole_ends_fem.py`, golden-tested).** The
 analytic field is replaced by a real **reduced-Ω + CoilBuilder** forward solve
 of a finite-length dipole — x-symmetric H-frame iron (netgen.occ, no Cubit) + a
@@ -213,7 +284,13 @@ coil = A-side), so the framework is one method, not two.
   design loop** — a chamfer following that lift drives the longitudinal pole-end
   enhancement through zero (the transverse `b₃,₅` stays body-dominated);
 - the stream-function coil (A-side), vs Radia to 3.4e-10;
-- the reduced-potential + CoilBuilder forward engine (the panel).
+- the reduced-potential + CoilBuilder forward engine (the panel);
+- the **radial field-index design** (§3.3, `scaling_ffag_pole_2d.py`): the
+  achromatic *scaling* pole (`k ≈ 4.88`, A/φ bracket ~9e-7) and its saturation
+  droop + 2-param reshape (flat `k` restored ~7.2×); the **isochronous** variant
+  (rising `k_iso(r) = (β γ)²`) whose nonlinear END PACK is driven back onto
+  `B0 γ(r)` (saturation-broken 2.3 % → 0.73 %, **3.1×**, A/φ-certified ~5e-4);
+  and the hodograph-as-solver pullback (fixed mesh, Netgen runs once).
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed for the longitudinal end-field** (§3.2 rung 2);
@@ -242,4 +319,5 @@ coil = A-side), so the framework is one method, not two.
 | 3-D ends: integrated analyzer + end rule | `examples/clebsch_hodograph/accel_pole_ends_3d.py` |
 | 3-D ends: FEM rung (reduced-Ω + CoilBuilder) | `examples/clebsch_hodograph/accel_pole_ends_fem.py` |
 | forward (reduced potential + CoilBuilder) | `src/radia/panels/calc_accel_magnet.py` |
+| radial field index (scaling + isochronous, saturation) | `examples/clebsch_hodograph/scaling_ffag_pole_2d.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |

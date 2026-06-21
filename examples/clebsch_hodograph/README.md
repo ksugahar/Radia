@@ -1021,6 +1021,32 @@ saturation-robust achromatic scaling pole: certify the index (A/phi bracket),
 measure the saturation droop, and reshape it flat — all in the hodograph
 (log/von Mises) chart, single-valued shape optimization.*
 
+**Step 4 — ISOCHRONOUS: the OTHER achromaticity, on the NONLINEAR end pack
+(`--iso`):** a scaling pole keeps the *tune* momentum-independent (`k = const`);
+an **isochronous** magnet (cyclotron / non-scaling FFAG) keeps the revolution
+*time* momentum-independent, which needs the average field to **rise** with
+radius as the relativistic factor, `<B>(r) = B0 gamma(r)` with
+`beta(r) = beta0 (r/r0)`. The local field index is then **not** constant but the
+RISING `k_iso(r) = (beta gamma)^2` — the opposite target (and, relativistically,
+the two achromaticities are mutually exclusive). The high-`r`, highest-`B` edge
+must deliver the steepest rise **and** saturates first: the super-ferric
+isochronous wall = the **nonlinear end pack**. `run_isochronous` builds the
+linear-theory isochronous pole (`iso_geometric_reshape`), shows saturation
+breaks its field shape there (`|<B>/B0*gamma - 1|` jumps to **2.3%** at
+`B_gap ≈ 1.33 T > Bk = 1.2 T`), then drives the SATURATED `<B>(r)` back onto
+`B0*gamma(r)` with the **same 2-parameter pole reshape** — restoring isochronism
+**3.1x** (to **0.73%**) in one Newton step, A/phi-bracket-certified
+(`bracket_gap ≈ 5e-4`). Figure `scaling_ffag_pole_2d_isochronous.png` (left:
+field shape `<B>(r)` vs the `gamma(r)` target; right: the rising `k_iso(r)`
+restored in saturation). Golden `test_scaling_ffag_pole_2d_isochronous`.
+*(Honest scope: the residual 0.73% is the higher-order mismatch a 2-parameter
+quadratic reshape leaves against a 5x-rising `k_iso` — more shape DOF closes it;
+and this is the radial `<B>(r)` isochronism only — the AVF flutter / vertical
+tune / orbit-field self-consistency are separate, un-modeled here.)* This is
+exactly the answer to "make the nonlinear end pack isochronous": the **same**
+saturated-reshape + complementary-bracket machinery, retargeted from
+`k = const` (constant tune) to `k_iso(r)` (constant time).
+
 ## Run
 
 ```bash
@@ -1044,7 +1070,7 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
-python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 sat, --step3 reshape, --pullback no-remesh; --fig)
+python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 sat, --step3 reshape, --pullback no-remesh, --iso isochronous end pack; --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
