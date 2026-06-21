@@ -1,0 +1,48 @@
+{
+  "n": 6,
+  "s": 0.6,
+  "dof": 1296,
+  "field_null_dim": 325,
+  "getloopbasis_cycles": 307,
+  "missing_null_modes": 18,
+  "mmm_moment": 0.22886575302335607,
+  "sweep": [
+    {
+      "mu_r": 100.0,
+      "cond_full": 922.4801556959108,
+      "cond_loop": 800.212802871081,
+      "cond_fullnull": 55.80527967171487,
+      "err_full": -0.05836755245929692,
+      "err_loop": -0.058367552459297256,
+      "err_fullnull": -0.05836755245929692
+    },
+    {
+      "mu_r": 1000.0,
+      "cond_full": 9365.089899510314,
+      "cond_loop": 8094.543514771444,
+      "cond_fullnull": 59.73667944106674,
+      "err_full": -0.017429751627734635,
+      "err_loop": -0.017429751627734857,
+      "err_fullnull": -0.017429751627734857
+    },
+    {
+      "mu_r": 10000.0,
+      "cond_full": 93794.4920252808,
+      "cond_loop": 81039.4587907713,
+      "cond_fullnull": 60.15648621197611,
+      "err_full": -0.013134957704399985,
+      "err_loop": -0.01313495770439943,
+      "err_fullnull": -0.01313495770439943
+    },
+    {
+      "mu_r": 100000.0,
+      "cond_full": 938088.8647544764,
+      "cond_loop": 810488.7827382002,
+      "cond_fullnull": 60.1987517210573,
+      "err_full": -0.012703350609789,
+      "err_loop": -0.01270335060982053,
+      "err_fullnull": -0.012703350609807429
+    }
+  ],
+  "conclusion": "YES by deflating the FULL field-null of N (clean spectral gap, here dim 325 vs the 307 GetLoopBasis cycles -> 18 missed). Full-null deflation: cond BOUNDED + mu_r-independent, accuracy-neutral (~1% vs MMM, distortion-robust). Cycle-only (GetLoopBasis) leaves the missing null modes at 1/chi -> cond still ~mu_r. Accuracy is distortion-robust regardless; the open item is making the loop basis / solve deflation capture the FULL null, not just the cycles."
+}
