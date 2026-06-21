@@ -27,7 +27,7 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.hysteresis import (PlayHysteresis, rayleigh_cells, steinmetz_cells,
-                                                play_cells, dissipation_increments)
+                                                play_cells, saturating_cells, dissipation_increments)
 
 _trapz = getattr(np, "trapezoid", None) or np.trapz
 
@@ -137,7 +137,84 @@ def test_h_axis_congruency_of_shape():
     assert rel < 1e-6, f"B-input minor loops must be H-axis congruent across bias, got {rel:.2e}"
 
 
+def test_rotational_loss_analytic():
+    """Vector rotational loss == closed form 2*pi sum_k a_k eta_k sqrt(Bm^2-eta_k^2) (linear cells)."""
+    m = play_cells(Bmax=1.5, N=20, reluctivities=100.0)
+    for Bm in (0.6, 1.0, 1.4):
+        num = m.rotational_loss_per_cycle(Bm, n=4001)
+        ana = m.analytic_rotational_loss(Bm)
+        assert abs(num - ana) / ana < 5e-3, f"Bm={Bm}: rot {num} vs analytic {ana}"
+
+
+def test_rotational_alternating_ratio_lowfield():
+    """Rotational/alternating loss ratio -> pi/2 in the low-field (eta<<Bm) Rayleigh regime."""
+    m = play_cells(Bmax=0.15, N=30, reluctivities=100.0)         # eta_max=0.1475
+    ratios = [m.rotational_loss_per_cycle(Bm, n=2881) / m.loss_per_cycle(Bm, n=2001)
+              for Bm in (0.8, 1.5, 3.0)]                          # decreasing eta_max/Bm
+    print(f"rot/alt ratios (decreasing field) = {[round(r,3) for r in ratios]}, pi/2={math.pi/2:.3f}")
+    assert ratios[0] > ratios[1] > ratios[2], "ratio must decrease toward pi/2 as field rises"
+    assert abs(ratios[-1] - math.pi / 2) / (math.pi / 2) < 0.06, "low-field ratio must approach pi/2"
+
+
+def test_saturating_rotational_loss_bounded():
+    """Saturating shape functions BOUND the rotational loss to 2*pi a B_sat sum_k eta_k at high B."""
+    a_each, B_sat, N, Bmax = 200.0, 0.5, 20, 1.5
+    m = saturating_cells(Bmax=Bmax, N=N, a_each=a_each, B_sat=B_sat)
+    limit = 2 * math.pi * a_each * B_sat * float(sum(m.eta))
+    hi = m.rotational_loss_per_cycle(8.0, n=1441)
+    lo = m.rotational_loss_per_cycle(0.6, n=1441)
+    print(f"saturating rot loss: lo(0.6)={lo:.1f}, hi(8.0)={hi:.1f}, analytic limit={limit:.1f}")
+    assert hi > lo, "rotational loss should rise with field"
+    assert abs(hi - limit) / limit < 2e-3, f"high-field rot loss must saturate to {limit:.1f}, got {hi:.1f}"
+
+
+def test_loss_kernel_matches_analytic():
+    """The waveform loss kernel (the motor per-point iron-loss kernel) reproduces the alternating loop
+    area and the rotational loss exactly -- so feeding a motor B(theta) sweep gives the real loss."""
+    m = play_cells(Bmax=1.5, N=20, reluctivities=100.0)
+    th = np.linspace(0, 2 * math.pi, 2001)
+    alt = m.loss_from_waveform(1.0 * np.cos(th))
+    rot = m.loss_from_waveform(1.0 * np.cos(th), 1.0 * np.sin(th))
+    assert abs(alt - m.loss_per_cycle(1.0, n=2001)) / m.loss_per_cycle(1.0, n=2001) < 1e-6
+    assert abs(rot - m.rotational_loss_per_cycle(1.0, n=2001)) / m.rotational_loss_per_cycle(1.0, n=2001) < 2e-3
+
+
+def test_elliptical_loss_between_alternating_and_rotational():
+    """An ELLIPTICAL B-path (motor reality) dissipates more than pure alternating and less than full
+    rotational, monotonically in the axis ratio -- the 2D loss a scalar |B|-Steinmetz cannot capture."""
+    m = play_cells(Bmax=1.5, N=20, reluctivities=100.0)
+    th = np.linspace(0, 2 * math.pi, 2001)
+    losses = [m.loss_from_waveform(np.cos(th), b * np.sin(th)) for b in (0.0, 0.3, 0.6, 1.0)]
+    print(f"elliptical losses (b=0,.3,.6,1) = {[round(L,1) for L in losses]}")
+    assert losses[0] < losses[1] < losses[2] < losses[3], "loss must rise with the B-path ellipticity"
+
+
+def test_minor_loop_adds_loss_natively():
+    """A minor reversal embedded in the major cycle ADDS its own loop area (native minor-loop capture --
+    the iGSE refinement coreloss.py flags as a TODO); the increment equals the minor loop's analytic area."""
+    m = play_cells(Bmax=1.5, N=20, reluctivities=100.0)
+    th = np.linspace(0, 2 * math.pi, 1201)
+    major = 1.2 * np.cos(th)
+    # embed one minor loop near the top: dip 1.2 -> 0.6 -> 1.2 then continue
+    dip = np.concatenate([np.linspace(1.2, 0.6, 80), np.linspace(0.6, 1.2, 80)])
+    with_minor = np.concatenate([major[:200], dip, major[200:]])
+    L_major = m.loss_from_waveform(major)
+    L_minor = m.loss_from_waveform(with_minor)
+    # a 1.2->0.6->1.2 reversal is a symmetric-equivalent loop of half-swing 0.3
+    minor_area = m.analytic_loss_per_cycle(0.3)
+    print(f"major={L_major:.2f}, with-minor={L_minor:.2f}, increment={L_minor-L_major:.2f}, "
+          f"minor-area(half-swing 0.3)={minor_area:.2f}")
+    assert L_minor > L_major, "an embedded minor loop must add loss (native capture)"
+    assert abs((L_minor - L_major) - minor_area) / minor_area < 0.05, "increment == the minor-loop area"
+
+
 def main():
+    test_loss_kernel_matches_analytic()
+    test_elliptical_loss_between_alternating_and_rotational()
+    test_minor_loop_adds_loss_natively()
+    test_rotational_loss_analytic()
+    test_rotational_alternating_ratio_lowfield()
+    test_saturating_rotational_loss_bounded()
     test_play_cells_standard_discretization()
     test_h_axis_congruency_of_shape()
     test_single_cell_loop_area_is_analytic()
