@@ -975,6 +975,31 @@ py::array_t<double> GetFaceGeom(int intrc_handle) {
 }
 
 /**
+ * @brief Per-hex centroid demag field + gradient functionals (the moment-formulation kernel)
+ * @param intrc_handle Interaction handle from BuildMatrix
+ * @return numpy array (nHex, 9, dof): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
+ */
+py::array_t<double> GetCentroidFieldGrad(int intrc_handle) {
+    int nHex = 0, dof = 0;
+    int err = RadGetCentroidFieldGrad(nullptr, &nHex, &dof, intrc_handle);
+    check_error(err);
+    if (nHex <= 0 || dof <= 0) {
+        throw std::runtime_error("No hex DOFs in interaction matrix");
+    }
+    py::array_t<double> result({nHex, 9, dof});
+    std::vector<double> data((size_t)nHex * 9 * dof);
+    err = RadGetCentroidFieldGrad(data.data(), &nHex, &dof, intrc_handle);
+    check_error(err);
+    auto r = result.mutable_unchecked<3>();
+    // C is ROW-MAJOR: C[(h*9 + k)*dof + g]
+    for (int h = 0; h < nHex; h++)
+        for (int k = 0; k < 9; k++)
+            for (int g = 0; g < dof; g++)
+                r(h, k, g) = data[((size_t)h * 9 + (size_t)k) * dof + (size_t)g];
+    return result;
+}
+
+/**
  * @brief Densify the actual HACApK (ACA+) operator as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
  * @return Tuple (matrix as 2D numpy array, dof)
@@ -3611,6 +3636,31 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   numpy array (dof x 11).
+          )pbdoc");
+
+    m.def("GetCentroidFieldGrad", &radia_solver::GetCentroidFieldGrad,
+          py::arg("intrc_handle"),
+          R"pbdoc(
+              Per-hex centroid demag field + gradient functionals -- the kernel of the
+              parameter-free yano-MSC moment formulation (replaces the eval-point alpha and
+              the finite-difference conditioning noise; see examples/vim/
+              yano_moment_analytic_selfterm.py).
+
+              For each hex element, the demag field H and gradient gradH at the element
+              CENTROID as linear functionals of every source DOF charge:
+                SELF face  -> bare charged-face field (interior centroid, finite, no center
+                              charge -- patch-test exact: single cube -> demag N=1/3);
+                MUTUAL face -> yano dipole layer = bare face - area*(point @ source center)
+                              (finite distance -> singularity-free).
+              Field convention H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.
+
+              Args:
+                  intrc_handle: Interaction handle from BuildMatrix()
+
+              Returns:
+                  numpy array (nHex, 9, dof): component k in
+                  (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g.  Use C[e,0:3,:] as the
+                  centroid field functional F0 and C[e,3:9,:] as the symmetric gradient Ginv.
           )pbdoc");
 
     m.def("HMatrixDensify", &radia_solver::HMatrixDensify,

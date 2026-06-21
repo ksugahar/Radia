@@ -1066,6 +1066,39 @@ int radTApplication::GetFaceGeom(int InteractElemKey, double* pG, int* pDOF)
 
 //-------------------------------------------------------------------------
 
+int radTApplication::GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF)
+{
+	// Per-hex centroid demag field + gradient functionals (nHex x 9 x m_totalDOF, ROW-MAJOR).  Two-call
+	// pattern: pass pC=nullptr to read back nHex and dof, then allocate nHex*9*dof and call again to fill.
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
+
+		int totalDOF = InteractPtr->GetTotalDOF();
+		int nHex = InteractPtr->GetNumHexElements();
+		if(pDOF) *pDOF = totalDOF;
+		if(pNHex) *pNHex = nHex;
+
+		if(pC != nullptr && totalDOF > 0 && nHex > 0)
+		{
+			std::vector<double> Cflat; int nh = 0;
+			InteractPtr->BuildCentroidFieldGrad(Cflat, nh);
+			std::memcpy(pC, Cflat.data(), (size_t)nHex * 9 * totalDOF * sizeof(double));
+		}
+
+		return 1;
+	}
+	catch (...)
+	{
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
 int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
 {
 #ifdef RADIA_USE_HACAPK
