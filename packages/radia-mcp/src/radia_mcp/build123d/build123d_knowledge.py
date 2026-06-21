@@ -2394,6 +2394,11 @@ Verified end-to-end in `tests/test_build123d_pmsm_field.py`: a `spm_rotor` -> `m
 AGE solve makes an air-gap field whose ring-harmonic spectrum peaks at the pole-pair number `n_poles/2`
 (with the 3rd space harmonic next), i.e. the rotor archetype produces the correct multipole field.
 
+GEOMETRY -> FIELD is gated for all three lab domains: **accelerator** (Halbach dipole uniform bore
+field / quadrupole null centre -- test_build123d_halbach_field), **motor** (spm_rotor n-pole air-gap
+field -- test_build123d_pmsm_field), and **coil / induction heating** (helmholtz_pair uniform centre
+field = (4/5)^1.5 mu0 NI/R, read back from the geometry -- test_build123d_coil_field).
+
 The magnetization convention is verified end-to-end against physics in
 `tests/test_build123d_halbach_field.py`: a `halbach_ring` -> `magnetization_map` -> 2D A_z PM solve
 gives a UNIFORM transverse bore field of `Br*ln(r_out/r_in)` (dipole), and a quadrupole Halbach
