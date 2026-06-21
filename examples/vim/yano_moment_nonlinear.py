@@ -44,8 +44,8 @@ def M_BH_vec(H):
     return np.where(Hm > 1e-30, Mm * H / Hm, 0.0)
 
 
-def moment_nonlinear(hexes, Happ, maxit=600, tol=1e-10, relax=0.5):
-    """secant fixed-point, NO loop deflation (solve A directly -- A is non-singular)."""
+def moment_nonlinear(hexes, Happ, maxit=80, tol=1e-10, m_depth=6):
+    """Anderson-accelerated secant fixed-point, NO loop deflation (solve A directly -- A is non-singular)."""
     rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
@@ -69,24 +69,38 @@ def moment_nonlinear(hexes, Happ, maxit=600, tol=1e-10, relax=0.5):
             Dvec = np.array([Dm[0, 0], Dm[1, 1], Dm[2, 2], Dm[0, 1]+Dm[1, 0], Dm[0, 2]+Dm[2, 0], Dm[1, 2]+Dm[2, 1]])
             quads.append((qf, Dvec @ Ginv))
         EL.append((fs, F0, dip, Ve, quads))
-    chi_e = np.full(n_el, CHI0); sig = np.zeros(dof); nit = 0; conv = False
-    for it in range(maxit):
-        nit = it + 1; A = np.zeros((dof, dof)); b = np.zeros(dof); r = 0
+    def Gmap(sig):                                                       # one secant fixed-point step
+        Hs = np.array([Happ + EL[e][1] @ sig for e in range(n_el)])
+        chi = chi_secant(np.linalg.norm(Hs, axis=1))
+        A = np.zeros((dof, dof)); b = np.zeros(dof); r = 0
         for e in range(n_el):
-            ce = chi_e[e]; fs, F0, dip, Ve, quads = EL[e]
+            ce = chi[e]; fs, F0, dip, Ve, quads = EL[e]
             for k in range(3):                                           # dipole: M_e = chi_e H_total,e
                 row, rhs = _norm(dip[k, :] / Ve - ce * F0[k, :], ce * Happ[k]); A[r, :] = row; b[r] = rhs; r += 1
             mono = np.zeros(dof); mono[fs] = area[fs]                     # monopole: div(B)=0
             row, rhs = _norm(mono, 0.0); A[r, :] = row; b[r] = rhs; r += 1
             for (qf, gradrow) in quads:                                  # quadrupole: gradM = chi_e gradH
                 row, rhs = _norm(qf - ce * gradrow, 0.0); A[r, :] = row; b[r] = rhs; r += 1
-        sig = np.linalg.solve(A, b)                                      # NO deflation (A is non-singular)
-        Hs = np.array([Happ + EL[e][1] @ sig for e in range(n_el)])
-        chi_new = chi_secant(np.linalg.norm(Hs, axis=1))
-        d_ = np.linalg.norm(chi_new - chi_e) / np.linalg.norm(chi_e)
-        chi_e = (1 - relax) * chi_e + relax * chi_new
-        if d_ < tol and it > 3:
-            conv = True; break
+        return np.linalg.solve(A, b)                                     # NO deflation (A is non-singular)
+
+    # Anderson-accelerated secant fixed-point: ~4-9x fewer iters than plain Picard (Newton tangent over-
+    # saturates here, so the secant chord is the robust map; Anderson supplies the speed).
+    sig = np.zeros(dof); Sh = []; Fh = []; nit = 0; conv = False
+    for it in range(maxit):
+        nit = it + 1
+        g = Gmap(sig); f = g - sig
+        if np.linalg.norm(f) / (np.linalg.norm(g) + 1e-30) < tol:
+            sig = g; conv = True; break
+        Sh.append(g); Fh.append(f)
+        if len(Fh) > m_depth:
+            Sh.pop(0); Fh.pop(0)
+        if len(Fh) == 1:
+            sig = g
+        else:
+            dF = np.array([Fh[i+1] - Fh[i] for i in range(len(Fh)-1)]).T
+            dG = np.array([Sh[i+1] - Sh[i] for i in range(len(Sh)-1)]).T
+            gamma, *_ = np.linalg.lstsq(dF, Fh[-1], rcond=None)
+            sig = Sh[-1] - dG @ gamma
     Hs = np.array([Happ + EL[e][1] @ sig for e in range(n_el)])
     divB = max(abs(np.sum(area[dofs_of[e]] * sig[dofs_of[e]])) / (np.sum(area[dofs_of[e]] * np.abs(sig[dofs_of[e]])) + 1e-30) for e in range(n_el))
     constit = float(np.median([np.linalg.norm(EL[e][2] @ sig / EL[e][3] - M_BH_vec(Hs[e:e+1])[0]) / (np.linalg.norm(EL[e][2] @ sig / EL[e][3]) + 1e-30) for e in range(n_el)]))
