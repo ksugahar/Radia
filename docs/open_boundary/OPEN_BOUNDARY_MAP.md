@@ -302,6 +302,48 @@ then compress it.
   2-D **MISSES** the ladder (`m=1` by ~30%) — proving 2-D needs no weight. (2-D `K_m`
   is not exactly rational in `√s`, so its 2-D CLN is a band approximation.)
 
+### Review-hardening: honest refinements (SA / Hachinohe paper Q&A, 2026-06-22)
+
+Twenty reviewer questions + seven new demos sharpened claims this map (and the SA paper)
+had stated loosely. The headline is the conditioning correction:
+
+- **Separate the SOLVE cond from the per-mode RATIO.** The "`cond ~1`" / "`1.30`" quoted
+  above and in `act6_09` is the **per-mode DtN eigenvalue ratio** (a spectral property),
+  **not** the assembled linear-system condition number one actually solves. Measured
+  (`act2_14`, 3-D scalar ball): the Kelvin ball's **assembled-stiffness cond is `1e3–1e4`
+  and GROWS with refinement**, its `λmax` amplified `~(R/h)²` by the singular centre weight
+  `(R/ρ')²`. The PML solve cond (`act7_40`, radial, matched mesh) **grows `~1/k`** toward
+  static. So *neither is "1.30"*: **Kelvin pays a fixed (frequency-independent) centre
+  penalty; PML loses on frequency-robustness** — Kelvin is frequency-robust but not cheap.
+  (3-D only — the 2-D Kelvin disk is conformal / weight-free, no centre penalty.)
+- **The `2·min(p,k)` error law is FORM-dependent** (`act3_06`, H(curl)): it extends to edge
+  elements **for curved geometry** (`k=2` → the `2k=4` superconvergence, = scalar), but the
+  **flat-facet `k=1` is DEGRADED** (`q~1.4 <` the scalar `h²`) and the **vector dipole needs
+  higher `p`** than scalar `p=1`. "Kelvin inherits the de Rham family for free" = free of
+  *bespoke per-coordinate construction*, **not** of the *curved high-order machinery* the
+  vector form genuinely needs.
+- **Edge-element `A` solves SPARSE on the Kelvin ball** (`act3_07`): `nnz ∝ N`, no dense DtN
+  formed (`(ρ'/R)² → 0` at the centre is integrable + a gauge). The "centre-less DtN
+  (FEM-BEM)" is a **niche alternative, not a forced fallback** — "do not form the DtN and it
+  stays sparse". (Advantage over dense DtN: asymptotic in storage + qualitative — no
+  Green-kernel / BEM assembly, sparse solve, carries iron.)
+- **AC / MQS open boundary is FREQUENCY-FLAT** (`act6_13`): the air (`σ=0`) exterior is
+  Laplace, so its DtN is the static `−(n+1)/R` at **every** ω; the eddy / skin physics is
+  entirely in the conductor (matches analytic DC→skin→evanescent, no DC floor). **Every
+  static open-boundary result applies to the MQS (static-apparatus / rotating-machine)
+  problem verbatim** — only the interior block carries `jω`. (Measures the "static air ⇒
+  Kelvin alone" policy of §0.)
+- **The 5–6-digit floor is GEOMETRY, not centre-quadrature** (`act2_14`): it drops with the
+  Curve order and is `0.0%`-sensitive to extra centre quadrature (the smooth image `P_n`
+  keeps the eigenvalue's centre integral finite; conditioning is the separate matrix effect).
+- **Validated beyond symmetry** (`act2_15`): on a genuinely asymmetric 3-source field Kelvin
+  recovers the analytic exterior to `~1e-9` and agrees with an independent large-box solve
+  (`~3e-8`) — the open-boundary conclusions are not a symmetry artifact.
+- **`p`-selection chicken-and-egg, resolved** (`act2_13`): a cheap coarse-`p` solve recovers
+  `d_max/R` from the low multipoles; an adaptive loop (estimate the tail rate from the top
+  resolved modes, raise `p_c` until it stabilises) sizes the production `p*` — single body
+  `p_c=2` nails it, a multi-body mix needs the loop (a 2-mode peek under-sizes).
+
 ---
 
 ## 6. Selection map (the decision table)
