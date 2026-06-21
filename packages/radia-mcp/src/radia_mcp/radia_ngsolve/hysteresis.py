@@ -284,6 +284,36 @@ class PlayHysteresis:
         return [(float(self.eta[k]), float(self.a[k] * (Bsat - self.eta[k])))
                 for k in range(self.K) if 0.0 < self.eta[k] < Bsat]
 
+    def vector_forc_curves(self, Bsat, n=121, theta_deg=0.0, bias=0.0):
+        r"""VECTOR FORC: reversal curves swept along the direction ``theta_deg`` with a fixed TRANSVERSE
+        bias.  Saturate ``B = +Bsat*e_par + bias*e_perp``, reverse the parallel component down to each
+        ``Ba``, sweep it back up, recording H projected on ``e_par`` (``Hpar``) and ``e_perp``
+        (``Hperp``).  Returns ``(grid, Hpar, Hperp)``.
+
+        For the isotropic vector Play model: ``bias = 0`` reduces EXACTLY to the scalar
+        :meth:`forc_curves` along ANY direction (rotational isotropy; ``Hperp == 0``).  A transverse
+        ``bias`` produces a nonzero ``Hperp`` (the vector coupling) and SHRINKS each cell's axial
+        coercivity from ``eta_k`` to ``sqrt(eta_k^2 - bias^2)`` -- the 2D play-ball geometry (a ball of
+        radius ``eta_k`` offset transversely by ``bias`` has axial half-width ``sqrt(eta_k^2-bias^2)``);
+        a cell with ``eta_k <= bias`` has no axial ridge at all.  This is the radia-ngsolve counterpart
+        of HysterSoft's vector-Preisach / vector-FORC characterisation -- the FORC distribution of
+        ``Hpar`` (via :func:`forc_distribution`) maps the play thresholds, distorted by the bias."""
+        th = np.deg2rad(theta_deg)
+        ex, ey = float(np.cos(th)), float(np.sin(th))  # e_par
+        qx, qy = float(-np.sin(th)), float(np.cos(th)) # e_perp
+        grid = np.linspace(-Bsat, Bsat, n)
+        Hpar = np.full((n, n), np.nan)
+        Hperp = np.full((n, n), np.nan)
+        for i in range(n):
+            px = np.zeros(self.K); py = np.zeros(self.K)
+            _, _, px, py = self.step(Bsat * ex + bias * qx, Bsat * ey + bias * qy, px, py)
+            _, _, px, py = self.step(grid[i] * ex + bias * qx, grid[i] * ey + bias * qy, px, py)
+            for j in range(i, n):
+                Hx, Hy, px, py = self.step(grid[j] * ex + bias * qx, grid[j] * ey + bias * qy, px, py)
+                Hpar[i, j] = Hx * ex + Hy * ey
+                Hperp[i, j] = Hx * qx + Hy * qy
+        return grid, Hpar, Hperp
+
 
 def play_cells(Bmax, N, reluctivities):
     """Standard play discretisation (Matsuo / Hane-Sugahara IEEE TMAG 2026, Eq. 3): equal-interval
