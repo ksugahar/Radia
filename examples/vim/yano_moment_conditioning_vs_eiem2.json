@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-06-22T08:53:27.986159",
+  "hostname": "lab",
+  "benchmark": "yano_moment_conditioning_vs_eiem2",
+  "results": [
+    {
+      "nxy": 12,
+      "dof": 648,
+      "kappa_eiem2_N": 1.6746876768969649e+18,
+      "kappa_eiem2_sys": 11342.213288149242,
+      "kappa_moment_sys": 2829.6014716342306,
+      "nonnormal_eiem2": 0.02429623744965106,
+      "nonnormal_moment": 0.07392692197838131,
+      "moment_kappa_better": true
+    },
+    {
+      "nxy": 16,
+      "dof": 1080,
+      "kappa_eiem2_N": 8.757206257541413e+18,
+      "kappa_eiem2_sys": 14652.498873768032,
+      "kappa_moment_sys": 4254.438711618912,
+      "nonnormal_eiem2": 0.018782600353002634,
+      "nonnormal_moment": 0.07169801096845946,
+      "moment_kappa_better": true
+    },
+    {
+      "nxy": 20,
+      "dof": 1824,
+      "kappa_eiem2_N": 3.803868354199406e+18,
+      "kappa_eiem2_sys": 18073.08993442202,
+      "kappa_moment_sys": 9530.04950460814,
+      "nonnormal_eiem2": 0.013597086964080888,
+      "nonnormal_moment": 0.06588410138089965,
+      "moment_kappa_better": true
+    },
+    {
+      "nxy": 24,
+      "dof": 2760,
+      "kappa_eiem2_N": 8.956030561143187e+18,
+      "kappa_eiem2_sys": 21526.769917911242,
+      "kappa_moment_sys": 25617.915579063832,
+      "nonnormal_eiem2": 0.010347900958671186,
+      "nonnormal_moment": 0.061716560298606,
+      "moment_kappa_better": false
+    }
+  ],
+  "kappa_growth_exponent_eiem2": 0.43813589593766444,
+  "kappa_growth_exponent_moment": 1.507723190249612,
+  "moment_kappa_better_at_nxy": [
+    12,
+    16,
+    20
+  ],
+  "moment_kappa_worse_at_nxy": [
+    24
+  ],
+  "moment_nonnormality_higher": true,
+  "conclusion": "FAIR system-vs-system condition number (NOT the apples-to-oranges raw N, which is near-singular kappa~1e18 from the cell-graph loops -- the 1/chi diagonal regularizes the SYSTEM matrix to ~1e4).  kappa(moment) is BETTER (smaller) than kappa(EIEM2) at the smaller sizes (nxy [12, 16, 20]) but grows FASTER with N -- kappa(moment) ~ dof^1.5 vs kappa(EIEM2) ~ dof^0.4 -- and CROSSES over (moment >= EIEM2 at nxy [24]).  So on condition number moment is NOT systematically worse than EIEM2 ('moment needs H-LU because it is worse-conditioned' was wrong), but THIS build() is also not the construction that would keep kappa <= EIEM2 at all N: it uses only 2 DIAGONAL quadrupole test functions (d_x^2-d_y^2, d_y^2-d_z^2) with per-row 2-norm normalization, while the SHEAR enters only through the operator correction Dvec@Ginv, not the test space -- an unbalanced/incomplete construction whose faster kappa-growth is plausibly that asymmetry, not a fundamental cost of the tensor.  Whether a BALANCED full-symmetric-tensor construction (all 5-6 quadrupole functionals, scaled commensurately with the dipole) keeps kappa <= EIEM2 at all N is the open question.  Separately, moment is HIGHER in NON-NORMALITY (~7e-2 vs ~2e-2) at all sizes; that (a different metric from kappa) is what makes a cheap block-Jacobi Krylov solve harder."
+}
