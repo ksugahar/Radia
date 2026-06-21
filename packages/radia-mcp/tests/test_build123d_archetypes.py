@@ -16,7 +16,7 @@ if _SRC not in sys.path:
 from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetization, magnetization_map,
                                             cylindrical_magnet, block_magnet, halbach_ring, c_core,
                                             solenoid, pole_tip, multipole_yoke, h_dipole, helmholtz_pair,
-                                            cos_theta_dipole)
+                                            cos_theta_dipole, e_core, slotted_stator, spm_rotor)
 from build123d import Box
 
 
@@ -84,6 +84,35 @@ def test_cos_theta_dipole_arcsin_spacing():
     assert max(diffs)/min(diffs) < 1.05, "bars must be arcsin-spaced (uniform sin theta)"
 
 
+def test_e_core_two_windows():
+    W, H, D, lw, bt = 120, 80, 50, 20, 25
+    core = e_core(W, H, D, lw, bt, name="iron_core")
+    assert core.is_valid and core.label == "iron_core"
+    ww = (W - 3*lw)/2.0
+    assert abs(core.volume - (W*H*D - 2*ww*(H-bt)*D)) < 1e-6, "block minus two windows"
+
+
+def test_slotted_stator_removes_slots():
+    s = slotted_stator(30, 55, 12, 10, 12, 40, name="stator")
+    assert s.is_valid and s.label == "stator"
+    full = math.pi*(55**2-30**2)*40
+    assert 0 < s.volume < full, "the slots must remove material from the full ring"
+
+
+def test_spm_rotor_alternating_radial_magnets():
+    n = 8
+    rotor = spm_rotor(10, 30, n, 6, 35, 40, name="pm")
+    assert len(rotor.children) == n + 1                      # hub + n magnets
+    assert any(c.label == "rotor_iron" for c in rotor.children)
+    mags = [c for c in rotor.children if parse_magnetization(c.label) is not None]
+    assert len(mags) == n and all(s.is_valid for s in rotor.solids())
+    # radial + alternating: magnet k easy axis = k*(360/n) + (180 if k odd) (relative to its position)
+    for k, c in enumerate(mags):
+        expect = (k*360.0/n + (180.0 if k % 2 else 0.0)) % 360.0
+        d = abs((parse_magnetization(c.label) - expect + 180.0) % 360.0 - 180.0)
+        assert d < 1e-2, f"magnet {k} easy axis not radial-alternating"
+
+
 def test_halbach_meshes_in_netgen():
     """CAE gate: a Halbach segment tet-meshes through build123d -> STEP -> Netgen."""
     import tempfile
@@ -97,6 +126,20 @@ def test_halbach_meshes_in_netgen():
         export_step(seg0, f)
         mesh = Mesh(OCCGeometry(f).GenerateMesh(maxh=6.0))
     assert mesh.ne > 50, f"Halbach segment should tet-mesh (got {mesh.ne})"
+
+
+def test_slotted_stator_meshes_in_netgen():
+    """CAE gate: the slotted (toothed) stator -- a non-trivial multiply-cut solid -- tet-meshes."""
+    import tempfile
+    from build123d import export_step
+    from netgen.occ import OCCGeometry
+    from ngsolve import Mesh
+    s = slotted_stator(30, 55, 12, 10, 12, 40, name="stator")
+    with tempfile.TemporaryDirectory() as d:
+        f = os.path.join(d, "stator.step")
+        export_step(s, f)
+        mesh = Mesh(OCCGeometry(f).GenerateMesh(maxh=6.0))
+    assert mesh.ne > 200, f"slotted stator should tet-mesh (got {mesh.ne})"
 
 
 def test_magnetization_map_follows_halbach():
@@ -156,7 +199,11 @@ def main():
     test_h_dipole_has_gap_and_poles()
     test_helmholtz_pair_two_coils()
     test_cos_theta_dipole_arcsin_spacing()
+    test_e_core_two_windows()
+    test_slotted_stator_removes_slots()
+    test_spm_rotor_alternating_radial_magnets()
     test_halbach_meshes_in_netgen()
+    test_slotted_stator_meshes_in_netgen()
     print("[OK] build123d EM archetypes: PM cylinder/block, Halbach ring (Mallinson easy axes via "
           "magnetization labels) + magnetization_map, C-core / multipole / H-dipole yokes, pole tip, "
           "solenoid & Helmholtz pair -- meshable, label-driven, region-separated.")

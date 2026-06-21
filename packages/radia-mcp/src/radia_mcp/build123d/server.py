@@ -887,10 +887,17 @@ def new_cae_geometry(geometry_type: str = "ih_coil") -> str:
     elif geo in ("transformer", "e_core", "ecore"):
         base += (
             "E-core Transformer:\n"
-            "- E-shaped iron core (parametric: width, height, leg thickness)\n"
-            "- Winding regions around center and/or outer legs\n"
+            "- archetypes.e_core(width, height, depth, leg_width, back_thickness) -- E-shaped iron\n"
+            "- add winding regions (archetypes.solenoid / modeling.racetrack_coil) around the legs\n"
             "- Label: 'iron_core', 'winding_primary', 'winding_secondary'\n"
-            "- See build123d_usage('examples') for e_core function\n"
+        )
+    elif geo in ("motor", "pmsm", "stator", "rotor"):
+        base += (
+            "PM synchronous machine (PMSM) cross-section:\n"
+            "- archetypes.slotted_stator(r_bore, r_yoke, n_slots, slot_depth, slot_span_deg, h)\n"
+            "- archetypes.spm_rotor(r_shaft, r_rotor, n_poles, magnet_thickness, magnet_span_deg, h)\n"
+            "  (radial alternating-N/S magnets; easy axes in the labels -> magnetization_map)\n"
+            "- drops into the AGE solver: radia_ngsolve.airgap_motor_workflow (incl. hysteresis sweep)\n"
         )
     elif geo in ("dipole", "magnet", "accelerator"):
         base += (
