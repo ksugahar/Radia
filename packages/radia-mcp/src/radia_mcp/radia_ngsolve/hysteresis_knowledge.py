@@ -37,9 +37,10 @@ reference code spanning this landscape -- Energetic, Jiles-Atherton, Hodgdon and
 models -- with **FORC-based identification** (see the ``forc_preisach`` topic; radia-ngsolve brings the
 FORC technique to the Play model via Play == Preisach).  Its companion line of work (Dimian & Andrei,
 *Noise-Driven Phenomena in Hysteretic Systems*, Springer) covers the RATE / TEMPERATURE-dependent
-frontier -- thermal relaxation (magnetic aftereffect, M ~ -S ln t) and stochastic resonance -- which the
-rate-independent Play model here deliberately does not cover (it is the natural next extension: a
-thermally-activated, time-dependent play threshold).
+frontier -- thermal relaxation (magnetic aftereffect, M ~ -S ln t) and stochastic resonance.  The
+magnetic aftereffect is now available on the Play model (``PlayHysteresis.aftereffect`` /
+``magnetic_viscosity``; see the ``forc_preisach`` topic) as a fluctuation-field relaxation; stochastic
+resonance (noise-assisted switching, a periodic+noise drive) remains a further extension.
 """
 
 PLAY_FORMULATION = """\
@@ -200,9 +201,17 @@ For the isotropic vector Play: with no bias it reduces EXACTLY to the scalar FOR
 axial coercivity from eta_k to ``sqrt(eta_k^2 - bias^2)`` -- the 2D play-BALL geometry (a ball of radius
 eta_k offset transversely by ``bias`` has axial half-width sqrt(eta_k^2-bias^2); a cell with
 eta_k <= bias has no axial ridge).  So the vector FORC reads the play thresholds distorted by the
-field-direction geometry -- the radia-ngsolve take on vector Preisach identification.  NEXT: thermal
-aftereffect (magnetic viscosity M ~ -S ln t -- a thermally-activated, time-dependent play threshold)
-and landscape notes on the Energetic/Jiles-Atherton/Hodgdon models HysterSoft also implements.
+field-direction geometry -- the radia-ngsolve take on vector Preisach identification.
+
+THERMAL AFTEREFFECT / MAGNETIC VISCOSITY (``PlayHysteresis.aftereffect`` / ``magnetic_viscosity``) --
+the rate/temperature-dependent side (Dimian-Andrei, "Noise-Driven Phenomena in Hysteretic Systems").
+With B held, thermal activation relaxes each play state toward the held field via the fluctuation field
+``eta_f = kT / activation-volume``: the irreversible lag ``|p_k - B|`` shrinks by ``eta_f ln(t/t0)``, so
+H relaxes LOGARITHMICALLY ``H(t) = H0 - S ln(t/t0)`` with magnetic viscosity ``S = eta_f * sum_{still-
+relaxing cells} a_k`` -- proportional to ``eta_f`` and to the active differential susceptibility, which
+is exactly the FORC / Preisach density at the working line (so the aftereffect viscosity and the FORC
+distribution are two readings of the same irreversible-cell population; relaxes to the anhysteretic
+``sum(a_k) B``).  Gated: test_hysteresis_aftereffect.
 """
 
 SECTIONS = {

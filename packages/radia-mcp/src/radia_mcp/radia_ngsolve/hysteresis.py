@@ -314,6 +314,40 @@ class PlayHysteresis:
                 Hperp[i, j] = Hx * qx + Hy * qy
         return grid, Hpar, Hperp
 
+    # --- magnetic aftereffect / thermal viscosity (HysterSoft's noise-driven side) ---
+    def aftereffect(self, Bx, By, px, py, eta_f, ln_times):
+        r"""Magnetic AFTEREFFECT (thermal viscosity): with B held at ``(Bx, By)`` and the play state
+        ``(px, py)`` frozen, thermal activation relaxes each cell toward the held field -- the
+        irreversible lag ``|p_k - B|`` shrinks by ``eta_f * ln(t/t0)`` (Neel-Arrhenius fluctuation-field
+        model; ``eta_f = kT / activation-volume`` is the FLUCTUATION FIELD).  Returns ``(Hx_t, Hy_t)``
+        over ``ln_times = ln(t/t0) >= 0``.  The output relaxes LOGARITHMICALLY,
+        ``H(t) = H0 - S ln(t/t0)``, with magnetic viscosity ``S = eta_f * sum_{cells still relaxing}
+        a_k`` (:meth:`magnetic_viscosity`) -- the differential-susceptibility / FORC-density link that
+        ties the aftereffect to FORC (both HysterSoft, Dimian-Andrei, "Noise-Driven Phenomena in
+        Hysteretic Systems").  Linear cells only."""
+        if self.a is None:
+            raise ValueError("aftereffect only for linear cells")
+        px = np.asarray(px, float); py = np.asarray(py, float)
+        sx = px - Bx; sy = py - By
+        s0 = np.sqrt(sx * sx + sy * sy)
+        safe = np.where(s0 > 1e-30, s0, 1.0)
+        ln_times = np.asarray(ln_times, float)
+        Hx = np.empty(len(ln_times)); Hy = np.empty(len(ln_times))
+        for m, lt in enumerate(ln_times):
+            s_t = np.maximum(s0 - eta_f * lt, 0.0)
+            scale = np.where(s0 > 1e-30, s_t / safe, 0.0)
+            Hx[m] = float(np.sum(self.a * (Bx + sx * scale)))
+            Hy[m] = float(np.sum(self.a * (By + sy * scale)))
+        return Hx, Hy
+
+    def magnetic_viscosity(self, eta_f):
+        r"""The early-time magnetic viscosity ``S = -dH/d ln t = eta_f * sum_{eta_k > 0} a_k`` (all
+        dissipative cells relaxing).  Proportional to ``eta_f`` and to the active differential
+        susceptibility -- the aftereffect <-> FORC link.  Linear cells only."""
+        if self.a is None:
+            raise ValueError("magnetic viscosity only for linear cells")
+        return float(eta_f * np.sum(self.a[self.eta > 0.0]))
+
 
 def play_cells(Bmax, N, reluctivities):
     """Standard play discretisation (Matsuo / Hane-Sugahara IEEE TMAG 2026, Eq. 3): equal-interval
