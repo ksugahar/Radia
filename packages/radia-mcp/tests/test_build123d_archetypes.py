@@ -16,7 +16,8 @@ if _SRC not in sys.path:
 from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetization, magnetization_map,
                                             cylindrical_magnet, block_magnet, halbach_ring, c_core,
                                             solenoid, pole_tip, multipole_yoke, h_dipole, helmholtz_pair,
-                                            cos_theta_dipole, e_core, slotted_stator, spm_rotor)
+                                            cos_theta_dipole, e_core, slotted_stator, spm_rotor,
+                                            litz_wire, litz_packing_radius)
 from build123d import Box
 
 
@@ -113,6 +114,39 @@ def test_spm_rotor_alternating_radial_magnets():
         assert d < 1e-2, f"magnet {k} easy axis not radial-alternating"
 
 
+def test_litz_wire_twisted_strands():
+    N, rs, Rb, L, pitch = 7, 0.5, 1.6, 30.0, 12.0
+    litz = litz_wire(N, rs, Rb, L, pitch, name="litz")
+    assert len(litz.children) == N and all(s.is_valid for s in litz.solids())
+    turns = L / pitch
+    strand_len = math.sqrt(L ** 2 + (turns * 2 * math.pi * Rb) ** 2)
+    vol = sum(s.volume for s in litz.solids())
+    assert abs(vol - N * math.pi * rs ** 2 * strand_len) / vol < 1e-3, "N strands x circle x helix length"
+    assert [c.label for c in litz.children] == [f"litz_{k:02d}" for k in range(N)], "per-strand regions"
+
+
+def test_litz_packing_radius_strands_touch():
+    rs = 0.5
+    for n in (6, 12, 19):
+        R = litz_packing_radius(n, rs)
+        sep = 2 * R * math.sin(math.pi / n)              # neighbour strand-centre distance
+        assert abs(sep - 2 * rs) < 1e-9, "single-layer packing: neighbours just touch"
+
+
+def test_litz_strand_meshes_in_netgen():
+    """CAE gate: a Litz strand (a swept helix) tet-meshes through build123d -> STEP -> Netgen."""
+    import tempfile
+    from build123d import export_step
+    from netgen.occ import OCCGeometry
+    from ngsolve import Mesh
+    litz = litz_wire(3, 0.6, 1.8, 12.0, 12.0, name="litz")
+    with tempfile.TemporaryDirectory() as d:
+        f = os.path.join(d, "strand.step")
+        export_step(litz.children[0], f)
+        mesh = Mesh(OCCGeometry(f).GenerateMesh(maxh=1.5))
+    assert mesh.ne > 50, f"a Litz strand should tet-mesh (got {mesh.ne})"
+
+
 def test_halbach_meshes_in_netgen():
     """CAE gate: a Halbach segment tet-meshes through build123d -> STEP -> Netgen."""
     import tempfile
@@ -199,6 +233,9 @@ def main():
     test_h_dipole_has_gap_and_poles()
     test_helmholtz_pair_two_coils()
     test_cos_theta_dipole_arcsin_spacing()
+    test_litz_wire_twisted_strands()
+    test_litz_packing_radius_strands_touch()
+    test_litz_strand_meshes_in_netgen()
     test_e_core_two_windows()
     test_slotted_stator_removes_slots()
     test_spm_rotor_alternating_radial_magnets()

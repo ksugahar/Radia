@@ -2382,6 +2382,7 @@ library OR copy-paste into an `execute_build123d` subprocess.
 | `h_dipole(width, height, depth, leg, pole_width, gap)` | H-frame dipole yoke (window frame + 2 poles + gap) |
 | `solenoid(r_in, r_out, h)` / `helmholtz_pair(r_in, r_out, h, separation)` | solenoid bundle / coaxial coil pair |
 | `cos_theta_dipole(radius, conductor_w, conductor_h, length, n_per_half)` | cos-theta winding (arcsin-spaced axial bars -> pure dipole) |
+| `litz_wire(n_strands, strand_radius, bundle_radius, length, pitch)` | Litz wire: n twisted helical strands, each a separate conductor region for AC-loss (skin/proximity) analysis (`litz_packing_radius` for single-layer packing) |
 | `e_core(width, height, depth, leg_width, back_thickness)` | E-core transformer / inductor (back spine + 3 legs + 2 windows) |
 | `slotted_stator(r_bore, r_yoke, n_slots, slot_depth, slot_span_deg, h)` | motor stator lamination (toothed ring); feeds the AGE solver |
 | `spm_rotor(r_shaft, r_rotor, n_poles, magnet_thickness, magnet_span_deg, h)` | surface-PM rotor (iron hub + radial alternating-N/S magnets, easy axes in the labels) |

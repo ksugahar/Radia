@@ -915,11 +915,13 @@ def new_cae_geometry(geometry_type: str = "ih_coil") -> str:
             "- archetypes.magnetization_map(ring, Br) -> {label: (Mx,My)} drives the solver per segment\n"
             "- each segment label encodes the Mallinson easy axis; see build123d_usage('parametric_library')\n"
         )
-    elif geo in ("solenoid", "coil", "helmholtz"):
+    elif geo in ("solenoid", "coil", "helmholtz", "litz"):
         base += (
             "Coil / winding region:\n"
             "- archetypes.solenoid(r_in, r_out, h) bundle, archetypes.helmholtz_pair(..., separation),\n"
             "  modeling.racetrack_coil(...), or archetypes.cos_theta_dipole(...) for a transverse field\n"
+            "- archetypes.litz_wire(n_strands, strand_radius, bundle_radius, length, pitch) -- twisted\n"
+            "  strands as SEPARATE conductor regions for AC-loss (skin/proximity) analysis (PEEC / FE)\n"
             "- Label as 'coil'; the solver sets the current density\n"
         )
     else:

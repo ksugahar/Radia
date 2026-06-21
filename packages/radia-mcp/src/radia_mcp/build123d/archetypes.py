@@ -22,14 +22,15 @@ from __future__ import annotations
 import math
 import re
 
-from build123d import (BuildLine, BuildSketch, Box, Compound, Cylinder, Plane, Polyline, Pos, Rot,
-                       extrude, make_face)
+from build123d import (BuildLine, BuildSketch, Box, Circle, Compound, Cylinder, Helix, Plane, Polyline,
+                       Pos, Rot, extrude, make_face, sweep)
 
 from .modeling import annular_segment, assembly, polar_array, tube
 
 __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cylindrical_magnet",
            "block_magnet", "halbach_ring", "c_core", "solenoid", "pole_tip", "multipole_yoke",
-           "h_dipole", "helmholtz_pair", "cos_theta_dipole", "e_core", "slotted_stator", "spm_rotor"]
+           "h_dipole", "helmholtz_pair", "cos_theta_dipole", "e_core", "slotted_stator", "spm_rotor",
+           "litz_packing_radius", "litz_wire"]
 
 
 def magnetization_tag(name, index, angle_deg):
@@ -260,3 +261,31 @@ def spm_rotor(r_shaft, r_rotor, n_poles, magnet_thickness, magnet_span_deg, h, n
         seg.label = magnetization_tag(name, k, c + (180.0 if k % 2 else 0.0))   # radial, alternating
         children.append(seg)
     return assembly(*children, label="spm_rotor")
+
+
+def litz_packing_radius(n_strands, strand_radius):
+    r"""Bundle radius for ``n_strands`` strands packed touching on a SINGLE LAYER (ring):
+    ``R = strand_radius / sin(pi / n_strands)`` (neighbour centres ``2 R sin(pi/n)`` apart =
+    ``2 strand_radius``).  Use for the single-served-layer Litz idealisation (``n_strands >= 3``)."""
+    if n_strands < 3:
+        raise ValueError("single-layer packing needs >= 3 strands")
+    return strand_radius / math.sin(math.pi / n_strands)
+
+
+def litz_wire(n_strands, strand_radius, bundle_radius, length, pitch, name="litz"):
+    r"""A **Litz wire**: ``n_strands`` insulated strands twisted together on a bundle of radius
+    ``bundle_radius`` with a twist ``pitch`` (axial length per turn), over an axial ``length``.  Each
+    strand is a circular conductor (radius ``strand_radius``) swept along its own helix; the strands are
+    the same helix rotated by ``2*pi*i/n_strands`` (a phase-shifted twist), so the model is ONE swept
+    helical strand replicated by :func:`~radia_mcp.build123d.modeling.polar_array`.  Returns a labelled
+    multi-region :class:`~build123d.Compound` (``{name}_kk`` per strand) -- each strand a separate
+    conductor region for AC-loss (skin / proximity) analysis (PEEC / FE), the whole point of Litz wire.
+    Use :func:`litz_packing_radius` for the single-layer touching ``bundle_radius``.
+    """
+    if n_strands < 1:
+        raise ValueError("n_strands must be >= 1")
+    helix = Helix(pitch=pitch, height=length, radius=bundle_radius)
+    section = Plane(origin=helix @ 0.0, z_dir=helix % 0.0) * Circle(strand_radius)
+    strand = sweep(section, path=helix).solid()
+    strand.label = "strand"
+    return polar_array(strand, n_strands, 360.0, label=name)
