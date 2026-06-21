@@ -1044,7 +1044,7 @@ figure_tikz_recipe('schematic') instead.
 
 \documentclass[tikz,border=2mm]{standalone}
 \usepackage{newtxtext,newtxmath}                 % match IEEE/IEEJ body font
-\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\usetikzlibrary{shapes.geometric, shapes.misc, arrows.meta, positioning}  % shapes.misc = rounded rectangle
 \begin{document}
 \begin{tikzpicture}[
   node distance=8mm and 14mm, font=\footnotesize,
