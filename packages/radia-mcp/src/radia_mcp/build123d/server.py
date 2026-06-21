@@ -859,10 +859,16 @@ def new_cae_geometry(geometry_type: str = "ih_coil") -> str:
     """Create a new CAE geometry with build123d."""
     base = (
         "Create a CAE-ready geometry using build123d.\n\n"
+        "FIRST CHECK THE TESTED LIBRARY: build123d_usage('parametric_library') -- ready-made,\n"
+        "Netgen-meshable, region-labelled generators in radia_mcp.build123d.modeling (annular_segment,\n"
+        "tube, racetrack_coil, polar_array, linear_array, mirrored, assembly) and .archetypes\n"
+        "(cylindrical_magnet/block_magnet, halbach_ring, pole_tip, c_core, multipole_yoke, h_dipole,\n"
+        "solenoid, helmholtz_pair, cos_theta_dipole, magnetization_map).  Prefer these over hand-rolled\n"
+        "geometry; fall back to primitives + boolean only for shapes they don't cover.\n\n"
         "Use build123d_usage tool for API reference.\n\n"
         "Workflow:\n"
-        "1. Create geometry with primitives + boolean (build123d_usage('primitives_3d'))\n"
-        "2. Assign labels for material regions (build123d_usage('topology'))\n"
+        "1. Compose from the parametric_library, or primitives + boolean (build123d_usage('primitives_3d'))\n"
+        "2. Assign labels for material regions on the Compound's CHILDREN (build123d_usage('topology'))\n"
         "3. Validate: check is_valid, min edge length (build123d_usage('cae_guidelines'))\n"
         "4. Export BREP (for Netgen) or STEP (for Cubit)\n"
         "5. Use execute_build123d tool to run and validate\n\n"
@@ -888,11 +894,26 @@ def new_cae_geometry(geometry_type: str = "ih_coil") -> str:
         )
     elif geo in ("dipole", "magnet", "accelerator"):
         base += (
-            "Accelerator Dipole Magnet (quarter model):\n"
-            "- Quarter-annular yoke (symmetry exploitation)\n"
-            "- Bore region for beam pipe\n"
-            "- Label: 'iron_yoke', 'bore', 'air'\n"
-            "- See build123d_usage('examples') for yoke code\n"
+            "Accelerator Dipole Magnet:\n"
+            "- archetypes.h_dipole(width, height, depth, leg, pole_width, gap) -- H-frame yoke, OR\n"
+            "  archetypes.c_core(...) for a C-yoke, OR archetypes.multipole_yoke(n_poles=2, ...)\n"
+            "- add a coil (archetypes.solenoid / cos_theta_dipole) and a 'bore' region\n"
+            "- Label: 'yoke', 'coil', 'bore', 'air'\n"
+        )
+    elif geo in ("halbach", "halbach_ring", "pm_array", "undulator"):
+        base += (
+            "Halbach permanent-magnet ring:\n"
+            "- archetypes.halbach_ring(r_in, r_out, h, n_segments, pole_pairs=1) -- dipole (uniform\n"
+            "  bore field), pole_pairs=2 quadrupole, etc.\n"
+            "- archetypes.magnetization_map(ring, Br) -> {label: (Mx,My)} drives the solver per segment\n"
+            "- each segment label encodes the Mallinson easy axis; see build123d_usage('parametric_library')\n"
+        )
+    elif geo in ("solenoid", "coil", "helmholtz"):
+        base += (
+            "Coil / winding region:\n"
+            "- archetypes.solenoid(r_in, r_out, h) bundle, archetypes.helmholtz_pair(..., separation),\n"
+            "  modeling.racetrack_coil(...), or archetypes.cos_theta_dipole(...) for a transverse field\n"
+            "- Label as 'coil'; the solver sets the current density\n"
         )
     else:
         base += (
