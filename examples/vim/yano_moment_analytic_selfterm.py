@@ -7,7 +7,10 @@ their field MOMENTS about the centroid -- parameter-free, no eval-point alpha:
     dipole(3)     : <M> = dipole(sigma)/V = chi * H(centroid)
     quadrupole(2) : quad(sigma) (mixing-corrected) = chi * gradH(centroid)
     monopole(1)   : sum_f A_f sigma_f = 0           (neutrality == discrete div(B)=0)
-    loops         : deflated (cell-graph cycle basis; complete: nLoop == n_internal_faces - n_cells + 1)
+    loops         : NOT deflated -- the moment matrix A is non-singular, so the (field-null) cell-graph
+                    cycle modes are solved, not projected out.  Deflating them to zero (an earlier prototype
+                    did) breaks the per-element constitutive (the loops carry per-element dipole); that is
+                    invisible in the external moment but FATAL in nonlinear -- see yano_moment_nonlinear.py.
 
 That prototype obtained H(centroid) and gradH(centroid) by finite-differencing the yano operator over two
 small alphas (N0 = N(a->0), N1 = dN/da).  The differencing injects noise that drives the conditioning up on
@@ -25,15 +28,17 @@ Wilton/Graglia face integrals in the C++ kernel).  Two physics points the valida
     center point needed.
 
   * MUTUAL term uses the yano DIPOLE LAYER = (face charge) - area*(point charge @ source-element center).
-    The per-face center charge is REQUIRED: without it a regular grid develops a charge-free, dipole-free
-    quadrupole NEAR-NULL mode (NOT a loop -- the loop basis is already complete), and the conditioning blows
-    up (cond ~ 2e6, error -20% at 4^3 regular; see the 'bare' column).  The source-element center is at finite
-    distance from the self centroid, so the mutual center charge is finite -- the formulation is singularity-
-    free by construction (the center charge is excluded exactly where it would be singular: self).
+    With the deflation removed, the bare variant (no mutual center charge, the 'bare' column) is ALSO
+    accurate -- it matches the analytic; the per-face center charge gives only a modest conditioning
+    improvement (e.g. 6^3 shear: analytic 6e2 vs bare 2e3).  (An earlier deflated prototype reported the
+    center charge as REQUIRED -- bare cond 2e6, -20% at 4^3 regular -- but that breakage was a DEFLATION
+    artifact, not intrinsic.)  The source-element center is at finite distance from the self centroid, so
+    the mutual center charge is finite (it is excluded exactly where it would be singular: self).
 
-RESULT: the analytic self-term matches the finite-difference moment accuracy (~0.1-0.5%, vs EIEM2's 1.5-4.5%)
-while dropping the conditioning by up to 100x on sheared meshes (6^3 shear: 3e3 vs 3e5).  This is the
-parameter-free, well-conditioned closed-form that the C++ GetCentroidFieldGrad kernel implements.
+RESULT: the analytic self-term matches the finite-difference moment accuracy (~0.1-0.6%, vs EIEM2's 1.5-4.5%)
+while dropping the conditioning by ~300x on sheared meshes (6^3 shear: analytic 6e2 vs finite-diff 2e5 -- the
+finite-diff alpha-extrapolation noise is real and survives without deflation).  This is the parameter-free,
+well-conditioned closed-form that the C++ GetCentroidFieldGrad kernel implements.
 """
 import json
 import math
@@ -206,20 +211,23 @@ def _assemble(G, dof, get_F0_Ginv):
     return A, b
 
 
-def _solve_deflated(A, b, Lb, nLoop, G):
+def _solve(A, b, Lb, nLoop, G):
+    # The moment matrix A is NON-SINGULAR -> solve directly.  Deflating the (field-null) loop modes to zero
+    # (an earlier prototype did) would break the per-element constitutive -- the loops carry per-element
+    # dipole -- which is invisible in the external moment but FATAL in nonlinear (see yano_moment_nonlinear.py).
+    # Reporting cond(A) of the FULL system also corrects the earlier conditioning claim, which was measured on
+    # the deflated P^T A P.  (Lb, nLoop kept in the signature for call-site compatibility; unused here.)
     area = G[:, 1]; fc = G[:, 2:5]; ecen = G[:, 8:11]
-    U, _S, _ = np.linalg.svd(Lb, full_matrices=True); P = U[:, nLoop:]
-    sig = P @ np.linalg.solve(P.T @ A @ P, P.T @ b)
+    sig = np.linalg.solve(A, b)
     m = float(np.sum(sig * area * (fc[:, 2] - ecen[:, 2])))
-    return m, float(np.linalg.cond(P.T @ A @ P))
+    return m, float(np.linalg.cond(A))
 
 
 def eiem2_err(cells, m_mmm):
     N, G, Lb, nLoop, dof = matgeom(cells, 0.5)
     area = G[:, 1]; cen = G[:, 2:5]; ecen = G[:, 8:11]; nrm = G[:, 5:8]
-    U, _S, _ = np.linalg.svd(Lb, full_matrices=True); P = U[:, nLoop:]
-    A = (1.0 / CHI) * np.eye(dof) - N
-    sig = P @ np.linalg.solve(P.T @ A @ P, P.T @ (H0 * nrm[:, 2]))
+    A = (1.0 / CHI) * np.eye(dof) - N                              # non-singular -> no deflation needed
+    sig = np.linalg.solve(A, H0 * nrm[:, 2])
     return float(np.sum(sig * area * (cen[:, 2] - ecen[:, 2]))) / m_mmm - 1
 
 
@@ -238,7 +246,7 @@ def moment_finite_diff(cells, m_mmm):
         return F0, Ginv
 
     A, b = _assemble(G, dof, get)
-    m, c = _solve_deflated(A, b, Lb, nLoop, G)
+    m, c = _solve(A, b, Lb, nLoop, G)
     return m / m_mmm - 1, c
 
 
@@ -255,7 +263,7 @@ def moment_analytic(cells, m_mmm, ng=8, dipole_layer=True):
         return H.T, np.array([gH[:, 0, 0], gH[:, 1, 1], gH[:, 2, 2], gH[:, 0, 1], gH[:, 0, 2], gH[:, 1, 2]])
 
     A, b = _assemble(G, dof, get)
-    m, c = _solve_deflated(A, b, Lb, nLoop, G)
+    m, c = _solve(A, b, Lb, nLoop, G)
     return m / m_mmm - 1, c
 
 
@@ -271,8 +279,7 @@ def patch_test():
 
     A, b = _assemble(G, dof, get)
     area = G[:, 1]; fc = G[:, 2:5]; ecen = G[:, 8:11]
-    U, _S, _ = np.linalg.svd(Lb, full_matrices=True); P = U[:, nLoop:]
-    sig = P @ np.linalg.solve(P.T @ A @ P, P.T @ b)
+    sig = np.linalg.solve(A, b)                                    # non-singular -> no deflation
     Mz = float(np.sum(sig * area * (fc[:, 2] - ecen[:, 2]))) / (2 * L) ** 3
     return Mz, CHI * H0 / (1.0 + CHI / 3.0)
 
@@ -282,7 +289,7 @@ def main():
     print(f"\nPATCH TEST (single cube, exact N=1/3): M_z={Mz:.3f} vs {Mz_exact:.3f}  err={Mz/Mz_exact-1:+.3%}\n")
     print("  accuracy (vs MMM) and CONDITIONING -- EIEM2(tuned) vs moment(finite-diff) vs moment(ANALYTIC)")
     print("  ANALYTIC = closed-form centroid field+grad (SELF=bare face, MUTUAL=dipole layer, mono=div(B)=0);")
-    print("  'bare' = no mutual center charge (breaks regular grids -> shows the center charge is required).\n")
+    print("  'bare' = no mutual center charge (now accurate too -- a modest conditioning aid, not required).\n")
     print(f"  {'mesh':>11} | {'EIEM2':>8} | {'moment FD':>10} {'cond':>7} | {'ANALYTIC':>10} {'cond':>7} | {'bare':>9} {'cond':>7}")
     print("  " + "-" * 86)
     rows = []
@@ -299,14 +306,14 @@ def main():
 
     out = dict(mu_r=MU_R, patch_Mz=Mz, patch_Mz_exact=Mz_exact, rows=rows,
                conclusion=("Analytic closed-form centroid field+gradient (SELF=bare face charge, patch-test "
-                           "exact + finite; MUTUAL=yano dipole layer = face charge - area*point@source center, "
-                           "finite at the self centroid; monopole=div(B)=0 neutrality row) reproduces the "
-                           "finite-difference moment accuracy (~0.1-0.5%) with bounded conditioning everywhere "
-                           "(no 2e6 regular-grid blowup; up to 100x lower than FD on sheared meshes). The mutual "
-                           "center charge is REQUIRED (the 'bare' column breaks regular grids with a charge-free "
-                           "dipole-free quadrupole near-null mode, NOT a loop -- loop basis is complete). "
-                           "Singularity-free: the center charge is excluded exactly where it would be singular "
-                           "(self) and is unnecessary there. This is the kernel for C++ GetCentroidFieldGrad."))
+                           "exact; MUTUAL=yano dipole layer; monopole=div(B)=0) solved with NO loop deflation "
+                           "(A is non-singular). Reproduces the finite-difference moment accuracy (~0.1-0.6%, "
+                           "vs EIEM2 1.5-4.5%) AND resolves the finite-difference alpha-extrapolation "
+                           "conditioning noise: ~300x lower cond on sheared meshes (6^3 shear analytic ~6e2 vs "
+                           "FD ~2e5) -- a REAL benefit that survives without deflation. The mutual center charge "
+                           "is a modest conditioning aid, NOT required (the 'bare' column now matches analytic; "
+                           "the earlier 'bare breaks regular grids / cond 2e6' was a DEFLATION artifact). This is "
+                           "the kernel for C++ GetCentroidFieldGrad; deflation removed per yano_moment_nonlinear.py."))
     with open(os.path.join(HERE, "yano_moment_analytic_selfterm.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print("\n  Analytic self-term: parameter-free AND well-conditioned. saved",
