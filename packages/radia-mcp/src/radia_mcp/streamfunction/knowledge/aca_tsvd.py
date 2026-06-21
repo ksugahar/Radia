@@ -1569,6 +1569,99 @@ S)`` for non-iterated use.
     but seminorm matches to 2.2e-6 (the optimisation target IS
     near-machine-precision unchanged).
 
+## Tikhonov vs TSVD vs generalised-Tikhonov -- ONE factorisation, three filters
+
+The folded form above is the CONSTRAINED (equality, lambda -> 0) limit
+min psi^T S psi s.t. A psi = B.  The whole Tikhonov family lives on the
+SAME ACA+TSVD ``A ~= U Sigma V^T`` by inserting a spectral FILTER phi_n
+on the modes -- the three classic regularisers differ ONLY in phi_n:
+
+    TSVD (truncate at k)        phi_n = 1 (n<=k), else 0          hard cut
+    Tikhonov (ridge lambda)     phi_n = sigma_n^2/(sigma_n^2+lambda^2)  smooth
+    constrained min-seminorm    phi_n = 1 for every kept mode     (lambda -> 0)
+
+STANDARD (identity) Tikhonov is just S = I:
+
+    psi(lambda) = V diag(sigma_n/(sigma_n^2+lambda^2)) U^T B
+                = sum_n [sigma_n^2/(sigma_n^2+lambda^2)] (u_n^T B / sigma_n) v_n
+
+i.e. ``pseudo_inverse_solve`` damped by f = Sigma/(Sigma^2 + lambda^2)
+(the api topic gives this one-liner).  GENERALISED (S != I) Tikhonov
+min ||A psi - B||^2 + lambda^2 ||L psi||^2 with S = L^T L is classically
+the GSVD of the pair (A, L); the folded ``RegularizedTSVD`` is an
+ACA-FRIENDLY IMPLICIT GSVD -- it never forms the (dense) GSVD, only
+``S^-1 V`` (a SPARSE solve when S is the L2 / H1 stiffness; dense only
+for the inductance S) and the k x k ``W = V^T S^-1 V``.  So "ridge alpha"
+and "min-energy seminorm S" are the SAME machine: lambda is a smooth
+spectral filter, S re-shapes WHICH norm is minimised.  Tikhonov with
+lambda ~ sigma_k is the SOFT version of TSVD truncated at rank k.
+
+## Three distinct dials -- do not conflate them (the aca_eps pitfall)
+
+ACA+TSVD-with-Tikhonov has THREE separate truncation / regularisation
+dials; mixing them up regularises SILENTLY:
+
+  1. aca_eps -> k_aca   : the ACA+ rank = the APPROXIMATION of A
+                          (compression accuracy).  NOT a regulariser;
+                          keep it TIGHT.
+  2. k_mode (<= k_aca)  : the TSVD regularisation rank (hard filter).
+  3. lambda             : the Tikhonov ridge (smooth filter).
+
+PITFALL (the aca_eps sanity above is the evidence): a LOOSE aca_eps lets
+the ACA+ truncation ITSELF act as an uncontrolled regulariser -- it drops
+small singular directions you may have wanted to keep + regularise
+explicitly.  Rule: set aca_eps TIGHTER than the regularisation you intend
+(eps ~ 1e-10..1e-13), THEN steer the design with k_mode / lambda / S --
+the auditable dials.  At eps=1e-10 the cached psi already carries ~1.5e-3
+nullspace noise; the optimisation TARGET (seminorm + constraint) stays
+near machine precision, but the specific least-norm REPRESENTATIVE drifts.
+
+## Why the DUAL form (M << N)
+
+SF design is massively UNDER-determined (M target rows << N surface DOFs).
+The primal normal equations (A^T A + lambda S) are N x N (huge); the
+folded form solves the DUAL ``A S^-1 A^T`` (M x M, small) -- the
+constrained-min-seminorm Lagrangian psi = S^-1 A^T (A S^-1 A^T)^-1 B.
+Re-solving at a new lambda / B reuses ``S^-1 V`` and ``W^-1`` and redoes
+only the k-dimensional filter (O(k^2 + k M)) plus one (N, k) expansion
+matvec -- THAT is the ~50 us "k x k core" re-solve the Pareto sweep rides
+on.  The regularised inverse lives in the k-dimensional ACA range, never
+the N-dimensional DOF space.
+
+## Choosing lambda / k_mode (L-curve, Morozov, and the SF-specific meaning)
+
+  - L-curve: plot (||A psi - B|| , ||psi|| or peak J) over a lambda / k
+    sweep; the CORNER (max curvature) is the design point.  ``lcurve()``
+    in ``topology_optimization.linear_inverse`` returns the point list.
+  - Morozov discrepancy: stop where ||A psi - B|| == the noise level.  SF
+    has NO measurement noise -- the floor is the FIELD UNREACHABILITY on
+    this winding surface (the residual PLATEAU), so Morozov here == "stop
+    at the achievable-on-this-surface floor".
+  - GCV (parameter-free): not wired in; use the L-curve corner.
+  HONEST: the SF alpha-L-curve is NON-MONOTONIC -- the iso-contour
+  TOPOLOGY jumps with alpha (a saddle merges / splits a current region),
+  so report BOTH residual AND peak J and pick the corner, never residual
+  alone.  Measured: for the Gx single-stroke plain TSVD mode-truncation
+  beat the best ridge alpha (8.45 % vs 8.97 %) -- the best regulariser is
+  target-dependent, so the menu (tsvd / tikhonov / h1 / inductance) earns
+  its keep.
+
+## Conditioning -- the constant-psi null space
+
+Both A and a GRADIENT seminorm S = L^T L annihilate an additive CONSTANT
+in psi: grad(const) = 0, and a uniform current potential carries no
+current (K = n x grad psi = 0).  So S is SPD only on the quotient and
+``W = V^T S^-1 V`` can blow up.  Two fixes, both already in the code:
+  (a) a tiny ridge ``S += (1e-9 * mean_diag) I`` (``_inductance_seminorm``
+      ridge=1e-9) lifts the harmless null space;
+  (b) ``--confine abe / on`` GROUNDS it via the reduction matrix R (one
+      free constant per physical boundary component).
+Without either, W^-1 amplifies the constant mode -- a DC offset in psi
+that the equal-increment contouring happens to ignore, but which wrecks
+any ||psi||-based L-curve selection.  This is the regularisation-side
+reason the Verify-First FES checks (slaved DOFs, constant-mode grounding)
+matter before trusting an L-curve.
+
 ## Why this matters
 
   1. ACA+ amortisation -- the heavy O(k * (M + N)) ACA+ runs ONCE,
