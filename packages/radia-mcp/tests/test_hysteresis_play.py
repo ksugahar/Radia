@@ -26,8 +26,8 @@ import numpy as np
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
-from radia_mcp.radia_ngsolve.hysteresis import (PlayHysteresis, rayleigh_cells,
-                                                steinmetz_cells, dissipation_increments)
+from radia_mcp.radia_ngsolve.hysteresis import (PlayHysteresis, rayleigh_cells, steinmetz_cells,
+                                                play_cells, dissipation_increments)
 
 _trapz = getattr(np, "trapezoid", None) or np.trapz
 
@@ -106,7 +106,40 @@ def test_second_law_dissipation_nonnegative_and_closes():
     assert abs(cyc.sum() - area) / area < 1e-4, "dissipation must sum to the loop area"
 
 
+def test_play_cells_standard_discretization():
+    """play_cells: equal-interval thresholds eta_k=(k-1/2)Bmax/N (Matsuo/Hane Eq.3) + analytic loss."""
+    Bmax, N, nu = 1.5, 10, 100.0
+    m = play_cells(Bmax, N, nu)
+    expect = (np.arange(1, N + 1) - 0.5) * Bmax / N
+    assert np.allclose(m.eta[1:], expect) and m.eta[0] == 0.0
+    num = m.loss_per_cycle(1.2, n=3001)
+    assert abs(num - m.analytic_loss_per_cycle(1.2)) / m.analytic_loss_per_cycle(1.2) < 1e-3
+
+
+def test_h_axis_congruency_of_shape():
+    """B-input play model: minor loops of the same B-range have IDENTICAL H-shape regardless of DC bias
+    (H-axis congruency -- the property the lab measured in NOES and the B-input model reproduces)."""
+    s = steinmetz_cells(eta_min=0.05, eta_max=1.4, K=40, a_each=120.0)
+    n, dB = 1201, 0.4
+
+    def centered_minor(bias, cycles=6):
+        th = np.linspace(0, 2 * math.pi, n); osc = bias + dB * np.cos(th)
+        wave = np.concatenate([np.linspace(0, bias + dB, 600), np.tile(osc[:-1], cycles), osc])
+        H, _ = s.bh_history(wave)
+        Hc = H[-n:]
+        return dB * np.cos(th), Hc - Hc.mean()       # B relative to bias, H relative to its mean
+
+    B1, H1 = centered_minor(0.3)
+    B2, H2 = centered_minor(0.6)                      # same B-grid (relative), different bias
+    excursion = H1.max() - H1.min()
+    rel = np.max(np.abs(H1 - H2)) / excursion
+    print(f"H-axis congruency: max|dH| / H-excursion = {rel:.2e}")
+    assert rel < 1e-6, f"B-input minor loops must be H-axis congruent across bias, got {rel:.2e}"
+
+
 def main():
+    test_play_cells_standard_discretization()
+    test_h_axis_congruency_of_shape()
     test_single_cell_loop_area_is_analytic()
     test_multicell_loop_area_is_analytic_sum()
     test_loop_closes()
