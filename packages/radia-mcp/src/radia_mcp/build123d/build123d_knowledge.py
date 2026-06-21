@@ -2382,7 +2382,14 @@ library OR copy-paste into an `execute_build123d` subprocess.
 | `h_dipole(width, height, depth, leg, pole_width, gap)` | H-frame dipole yoke (window frame + 2 poles + gap) |
 | `solenoid(r_in, r_out, h)` / `helmholtz_pair(r_in, r_out, h, separation)` | solenoid bundle / coaxial coil pair |
 | `cos_theta_dipole(radius, conductor_w, conductor_h, length, n_per_half)` | cos-theta winding (arcsin-spaced axial bars -> pure dipole) |
+| `e_core(width, height, depth, leg_width, back_thickness)` | E-core transformer / inductor (back spine + 3 legs + 2 windows) |
+| `slotted_stator(r_bore, r_yoke, n_slots, slot_depth, slot_span_deg, h)` | motor stator lamination (toothed ring); feeds the AGE solver |
+| `spm_rotor(r_shaft, r_rotor, n_poles, magnet_thickness, magnet_span_deg, h)` | surface-PM rotor (iron hub + radial alternating-N/S magnets, easy axes in the labels) |
 | `magnetization_map(compound, Br)` | close the loop: PM region labels -> `{label: (Mx, My)}` for the solver |
+
+`slotted_stator` + `spm_rotor` compose a full PMSM cross-section in build123d that drops straight into
+the AGE rotating-machine solver (`radia_ngsolve.airgap_motor_workflow`), including the hysteresis-coupled
+sweep -- so the geometry, magnetization labels, and field/torque solve share one parametric source.
 
 The magnetization convention is verified end-to-end against physics in
 `tests/test_build123d_halbach_field.py`: a `halbach_ring` -> `magnetization_map` -> 2D A_z PM solve
