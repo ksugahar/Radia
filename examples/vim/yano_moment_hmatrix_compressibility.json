@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-06-22T00:12:13.939357",
+  "timestamp": "2026-06-22T00:28:01.424953",
   "hostname": "lab",
   "benchmark": "yano_moment_hmatrix_compressibility",
   "results": [
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 0.23496119268249932,
+      "sep": 0.23496119268249932,
       "field_rank": 24,
       "grad_rank": 39,
       "full": 24,
@@ -15,7 +15,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 0.23070140982635495,
+      "sep": 0.23070140982635495,
       "field_rank": 24,
       "grad_rank": 40,
       "full": 24,
@@ -24,7 +24,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 0.2298564252267193,
+      "sep": 0.2298564252267193,
       "field_rank": 24,
       "grad_rank": 38,
       "full": 24,
@@ -33,7 +33,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 0.3520858922265962,
+      "sep": 0.3520858922265962,
       "field_rank": 22,
       "grad_rank": 30,
       "full": 24,
@@ -42,7 +42,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 1.0800972922700995,
+      "sep": 1.0800972922700995,
       "field_rank": 17,
       "grad_rank": 24,
       "full": 24,
@@ -51,7 +51,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 1.5299061312640736,
+      "sep": 1.5299061312640736,
       "field_rank": 14,
       "grad_rank": 20,
       "full": 24,
@@ -60,7 +60,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 1.3135120531677897,
+      "sep": 1.3135120531677897,
       "field_rank": 14,
       "grad_rank": 20,
       "full": 24,
@@ -69,7 +69,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 1.4222084020302275,
+      "sep": 1.4222084020302275,
       "field_rank": 13,
       "grad_rank": 20,
       "full": 24,
@@ -78,7 +78,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 1.2959681701411256,
+      "sep": 1.2959681701411256,
       "field_rank": 15,
       "grad_rank": 20,
       "full": 24,
@@ -87,7 +87,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 1.5761689843355546,
+      "sep": 1.5761689843355546,
       "field_rank": 13,
       "grad_rank": 19,
       "full": 24,
@@ -96,7 +96,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 1.4320269277812223,
+      "sep": 1.4320269277812223,
       "field_rank": 13,
       "grad_rank": 19,
       "full": 24,
@@ -105,7 +105,7 @@
     {
       "nxy": 12,
       "nhex": 108,
-      "eta": 1.730472025235679,
+      "sep": 1.730472025235679,
       "field_rank": 12,
       "grad_rank": 16,
       "full": 24,
@@ -114,7 +114,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 0.29520941075627877,
+      "sep": 0.29520941075627877,
       "field_rank": 24,
       "grad_rank": 32,
       "full": 24,
@@ -123,7 +123,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 0.30585156393554985,
+      "sep": 0.30585156393554985,
       "field_rank": 24,
       "grad_rank": 38,
       "full": 24,
@@ -132,7 +132,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 0.31221208019800456,
+      "sep": 0.31221208019800456,
       "field_rank": 24,
       "grad_rank": 38,
       "full": 24,
@@ -141,7 +141,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 0.3512780507000291,
+      "sep": 0.3512780507000291,
       "field_rank": 24,
       "grad_rank": 36,
       "full": 24,
@@ -150,7 +150,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 0.3202935796981065,
+      "sep": 0.3202935796981065,
       "field_rank": 24,
       "grad_rank": 40,
       "full": 24,
@@ -159,7 +159,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 0.2901533947744458,
+      "sep": 0.2901533947744458,
       "field_rank": 23,
       "grad_rank": 31,
       "full": 24,
@@ -168,7 +168,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 0.3531499624408163,
+      "sep": 0.3531499624408163,
       "field_rank": 24,
       "grad_rank": 35,
       "full": 24,
@@ -177,7 +177,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 0.396993104929505,
+      "sep": 0.396993104929505,
       "field_rank": 21,
       "grad_rank": 29,
       "full": 24,
@@ -186,7 +186,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 0.4150383223396575,
+      "sep": 0.4150383223396575,
       "field_rank": 21,
       "grad_rank": 30,
       "full": 24,
@@ -195,7 +195,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 1.3531704838916818,
+      "sep": 1.3531704838916818,
       "field_rank": 15,
       "grad_rank": 22,
       "full": 24,
@@ -204,7 +204,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 1.5284680868978695,
+      "sep": 1.5284680868978695,
       "field_rank": 14,
       "grad_rank": 19,
       "full": 24,
@@ -213,7 +213,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 1.758767127892829,
+      "sep": 1.758767127892829,
       "field_rank": 13,
       "grad_rank": 18,
       "full": 24,
@@ -222,7 +222,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 2.0754680742634686,
+      "sep": 2.0754680742634686,
       "field_rank": 12,
       "grad_rank": 16,
       "full": 24,
@@ -231,7 +231,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 2.199383707646606,
+      "sep": 2.199383707646606,
       "field_rank": 12,
       "grad_rank": 15,
       "full": 24,
@@ -240,7 +240,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 2.13837814019283,
+      "sep": 2.13837814019283,
       "field_rank": 12,
       "grad_rank": 15,
       "full": 24,
@@ -249,7 +249,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 1.7464774083356362,
+      "sep": 1.7464774083356362,
       "field_rank": 12,
       "grad_rank": 16,
       "full": 24,
@@ -258,7 +258,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 1.9266195635043495,
+      "sep": 1.9266195635043495,
       "field_rank": 12,
       "grad_rank": 15,
       "full": 24,
@@ -267,7 +267,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 1.5896121653591837,
+      "sep": 1.5896121653591837,
       "field_rank": 12,
       "grad_rank": 17,
       "full": 24,
@@ -276,7 +276,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 1.7468255012932774,
+      "sep": 1.7468255012932774,
       "field_rank": 12,
       "grad_rank": 16,
       "full": 24,
@@ -285,7 +285,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 1.8532356770328509,
+      "sep": 1.8532356770328509,
       "field_rank": 12,
       "grad_rank": 16,
       "full": 24,
@@ -294,7 +294,7 @@
     {
       "nxy": 16,
       "nhex": 180,
-      "eta": 2.0093595798585993,
+      "sep": 2.0093595798585993,
       "field_rank": 12,
       "grad_rank": 16,
       "full": 24,
@@ -303,7 +303,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.06031801495739832,
+      "sep": 0.06031801495739832,
       "field_rank": 19,
       "grad_rank": 24,
       "full": 24,
@@ -312,7 +312,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.13747856597010233,
+      "sep": 0.13747856597010233,
       "field_rank": 24,
       "grad_rank": 33,
       "full": 24,
@@ -321,7 +321,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.14783869318469675,
+      "sep": 0.14783869318469675,
       "field_rank": 23,
       "grad_rank": 28,
       "full": 24,
@@ -330,7 +330,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.1772486541555617,
+      "sep": 0.1772486541555617,
       "field_rank": 24,
       "grad_rank": 36,
       "full": 24,
@@ -339,7 +339,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.2097187147207852,
+      "sep": 0.2097187147207852,
       "field_rank": 24,
       "grad_rank": 28,
       "full": 24,
@@ -348,7 +348,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.16155918592043028,
+      "sep": 0.16155918592043028,
       "field_rank": 24,
       "grad_rank": 40,
       "full": 24,
@@ -357,7 +357,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.20009233186632602,
+      "sep": 0.20009233186632602,
       "field_rank": 24,
       "grad_rank": 31,
       "full": 24,
@@ -366,7 +366,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.1147567789125835,
+      "sep": 0.1147567789125835,
       "field_rank": 24,
       "grad_rank": 36,
       "full": 24,
@@ -375,7 +375,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.2008860178457326,
+      "sep": 0.2008860178457326,
       "field_rank": 24,
       "grad_rank": 31,
       "full": 24,
@@ -384,7 +384,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.16036652958622322,
+      "sep": 0.16036652958622322,
       "field_rank": 24,
       "grad_rank": 31,
       "full": 24,
@@ -393,7 +393,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.17546373895719636,
+      "sep": 0.17546373895719636,
       "field_rank": 24,
       "grad_rank": 32,
       "full": 24,
@@ -402,7 +402,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.30651480473094184,
+      "sep": 0.30651480473094184,
       "field_rank": 19,
       "grad_rank": 29,
       "full": 24,
@@ -411,7 +411,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.6275652268446491,
+      "sep": 0.6275652268446491,
       "field_rank": 15,
       "grad_rank": 18,
       "full": 24,
@@ -420,7 +420,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.7047496877193,
+      "sep": 0.7047496877193,
       "field_rank": 15,
       "grad_rank": 21,
       "full": 24,
@@ -429,7 +429,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.7941978387165527,
+      "sep": 0.7941978387165527,
       "field_rank": 18,
       "grad_rank": 23,
       "full": 24,
@@ -438,7 +438,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 0.8721925919771608,
+      "sep": 0.8721925919771608,
       "field_rank": 17,
       "grad_rank": 23,
       "full": 24,
@@ -447,7 +447,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.011697239658159,
+      "sep": 1.011697239658159,
       "field_rank": 17,
       "grad_rank": 22,
       "full": 24,
@@ -456,7 +456,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.1026903609628962,
+      "sep": 1.1026903609628962,
       "field_rank": 16,
       "grad_rank": 21,
       "full": 24,
@@ -465,7 +465,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.1962254943797799,
+      "sep": 1.1962254943797799,
       "field_rank": 15,
       "grad_rank": 20,
       "full": 24,
@@ -474,7 +474,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.2917505596913588,
+      "sep": 1.2917505596913588,
       "field_rank": 14,
       "grad_rank": 20,
       "full": 24,
@@ -483,7 +483,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.3888550166726732,
+      "sep": 1.3888550166726732,
       "field_rank": 14,
       "grad_rank": 19,
       "full": 24,
@@ -492,7 +492,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.4872295317219488,
+      "sep": 1.4872295317219488,
       "field_rank": 13,
       "grad_rank": 18,
       "full": 24,
@@ -501,7 +501,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.5762254362764956,
+      "sep": 1.5762254362764956,
       "field_rank": 13,
       "grad_rank": 17,
       "full": 24,
@@ -510,7 +510,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.3449168290980162,
+      "sep": 1.3449168290980162,
       "field_rank": 13,
       "grad_rank": 19,
       "full": 24,
@@ -519,7 +519,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.348136169786136,
+      "sep": 1.348136169786136,
       "field_rank": 13,
       "grad_rank": 19,
       "full": 24,
@@ -528,7 +528,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.2712596030896852,
+      "sep": 1.2712596030896852,
       "field_rank": 14,
       "grad_rank": 20,
       "full": 24,
@@ -537,7 +537,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.211508480711828,
+      "sep": 1.211508480711828,
       "field_rank": 14,
       "grad_rank": 20,
       "full": 24,
@@ -546,7 +546,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.4176597118930896,
+      "sep": 1.4176597118930896,
       "field_rank": 13,
       "grad_rank": 17,
       "full": 24,
@@ -555,7 +555,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.36929703982781,
+      "sep": 1.36929703982781,
       "field_rank": 14,
       "grad_rank": 19,
       "full": 24,
@@ -564,7 +564,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.339883117818432,
+      "sep": 1.339883117818432,
       "field_rank": 14,
       "grad_rank": 18,
       "full": 24,
@@ -573,7 +573,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.393606785866578,
+      "sep": 1.393606785866578,
       "field_rank": 13,
       "grad_rank": 17,
       "full": 24,
@@ -582,7 +582,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.3395798087303556,
+      "sep": 1.3395798087303556,
       "field_rank": 13,
       "grad_rank": 18,
       "full": 24,
@@ -591,7 +591,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.3740080949412503,
+      "sep": 1.3740080949412503,
       "field_rank": 14,
       "grad_rank": 19,
       "full": 24,
@@ -600,7 +600,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.4227014809323675,
+      "sep": 1.4227014809323675,
       "field_rank": 14,
       "grad_rank": 18,
       "full": 24,
@@ -609,7 +609,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.4153480132885363,
+      "sep": 1.4153480132885363,
       "field_rank": 13,
       "grad_rank": 16,
       "full": 24,
@@ -618,7 +618,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.4767098619215255,
+      "sep": 1.4767098619215255,
       "field_rank": 13,
       "grad_rank": 18,
       "full": 24,
@@ -627,7 +627,7 @@
     {
       "nxy": 20,
       "nhex": 304,
-      "eta": 1.3292294569953864,
+      "sep": 1.3292294569953864,
       "field_rank": 14,
       "grad_rank": 18,
       "full": 24,
@@ -637,6 +637,7 @@
   "far_field_rank_max": 17,
   "far_grad_rank_max": 24,
   "full_block_dim_nxy20": 24,
+  "recommended_hacapk_eta": 2.0,
   "gate_pass": true,
-  "conclusion": "Admissible (eta>=1) blocks of the centroid field+gradient operator D have BOUNDED, ~N-independent rank (field ~12-17, gradient ~16-24 at tol 1e-4, flat over nxy 12/16/20) while near blocks stay full-rank. The field rank ~13 matches the existing yano-MSC EIEM2 interaction's production natural rank ~13 -- same 1/r^3 kernel -- and that interaction ALREADY runs HACApK in production, so scalability of the field part is proven, not just plausible. The gradient (1/r^4) ranks higher and compresses only for eta>=~1.5 (at eta~1 it is still ~full for these clusters), so its H-matrix wants a more conservative admissibility. Bounded + N-independent rank is the H-matrix prerequisite -> HACApK applies to D. NOTE the tiny 8-elem clusters here (block dim 24) UNDERSTATE the compression ratio; realistic leaf sizes (rank ~13-20 vs block dim in the 100s) give the O(N log N) win. PATH: reuse the yano field-HACApK (eval at centroid) + add a gradient H-matrix (admissibility eta>=1.5)."
+  "conclusion": "Well-separated (sep>=1) blocks of the centroid field+gradient operator D have BOUNDED, ~N-independent rank (field ~12-17, gradient ~16-24 at tol 1e-4, flat over nxy 12/16/20) while near blocks stay full-rank. The field rank ~13 matches the existing yano-MSC EIEM2 interaction's production natural rank ~13 -- same 1/r^3 kernel -- and that interaction ALREADY runs HACApK in production at hacapk_eta=2.0, so scalability of the field part is proven, not just plausible. The gradient (1/r^4) ranks higher (compresses well only for sep>=~1.5; at sep~1 still ~full for these clusters). Bounded + N-independent rank is the H-matrix prerequisite -> HACApK applies to D. NOTE the tiny 8-elem clusters here (block dim 24) UNDERSTATE the compression ratio; realistic leaf sizes (rank ~13-20 vs block dim in the 100s) give the O(N log N) win. ADMISSIBILITY: use the PRODUCTION hacapk_eta=2.0 -- NOT a number off the `sep` column. `sep` is dist/(rt+rs); HACApK's condition is min(diam)<=hacapk_eta*dist, so it admits sep>=1/hacapk_eta (eta=2.0 => sep>=0.5), the INVERSE of `sep`. The gradient's higher rank is absorbed by ACA adapting to aca_eps at eta=2.0 (costs a little memory on marginal blocks, never accuracy); a genuinely near-field gradient block is handled by the near_factor keep-dense guard, not by globally tightening eta. PATH: reuse the yano field-HACApK (eval at centroid) + add a gradient H-matrix, both at hacapk_eta=2.0, and verify HACApK-matvec vs dense for the gradient at build time."
 }
