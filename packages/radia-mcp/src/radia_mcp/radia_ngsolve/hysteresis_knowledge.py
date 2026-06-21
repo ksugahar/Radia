@@ -191,9 +191,18 @@ distribution (incl. asymmetric / off-diagonal interaction), where ``identify_fro
 the symmetric-loop areas (the diagonal).  The INVERSE FORC identifier ``hysteresis.identify_from_forc``
 reads a measured FORC family, forms rho, and reads off the ridge comb to recover ``(eta_k, a_k)`` --
 the HysterSoft identification applied to fit a Play material directly from FORC measurements; it
-round-trips a known model to ~1-3 % and reproduces unseen loops (test_hysteresis_forc).  NEXT: a VECTOR
-FORC for the 2D play (HysterSoft's vector Preisach), and landscape notes on the Energetic (Hauser),
-Jiles-Atherton and Hodgdon models HysterSoft also implements.
+round-trips a known model to ~1-3 % and reproduces unseen loops (test_hysteresis_forc).
+
+VECTOR FORC (``PlayHysteresis.vector_forc_curves``, HysterSoft's vector-Preisach characterisation).
+Sweep the FORC along a direction with a fixed TRANSVERSE bias, recording H parallel & perpendicular.
+For the isotropic vector Play: with no bias it reduces EXACTLY to the scalar FORC along ANY direction
+(rotational isotropy, Hperp=0); a transverse bias couples into a nonzero Hperp and SHRINKS each cell's
+axial coercivity from eta_k to ``sqrt(eta_k^2 - bias^2)`` -- the 2D play-BALL geometry (a ball of radius
+eta_k offset transversely by ``bias`` has axial half-width sqrt(eta_k^2-bias^2); a cell with
+eta_k <= bias has no axial ridge).  So the vector FORC reads the play thresholds distorted by the
+field-direction geometry -- the radia-ngsolve take on vector Preisach identification.  NEXT: thermal
+aftereffect (magnetic viscosity M ~ -S ln t -- a thermally-activated, time-dependent play threshold)
+and landscape notes on the Energetic/Jiles-Atherton/Hodgdon models HysterSoft also implements.
 """
 
 SECTIONS = {
