@@ -86,12 +86,46 @@ def test_identify_from_forc_roundtrip():
     assert m1.a[0] == 200.0, "the reversible slope a0 is the separate loop-tip input (no FORC ridge)"
 
 
+def test_vector_forc_reduces_to_scalar_and_is_isotropic():
+    """The vector FORC with no transverse bias equals the scalar FORC along ANY direction (rotational
+    isotropy of the vector Play model), with zero transverse response."""
+    m = _model(); Bsat = 1.4
+    _, Hs = m.forc_curves(Bsat, n=81)
+    for theta in (0.0, 37.0, 90.0):
+        _, Hpar, Hperp = m.vector_forc_curves(Bsat, n=81, theta_deg=theta, bias=0.0)
+        assert np.nanmax(np.abs(Hpar - Hs)) < 1e-9, f"axial FORC (theta={theta}) must equal scalar"
+        assert np.nanmax(np.abs(Hperp)) < 1e-9, "no transverse H without a bias (isotropy)"
+
+
+def test_vector_forc_transverse_bias_shrinks_coercivity():
+    """A transverse bias produces a transverse H (vector coupling) and shrinks each well-separated
+    cell's axial coercivity from eta_k to sqrt(eta_k^2 - bias^2) -- the 2D play-ball geometry."""
+    m = _model(); Bsat = 1.4; bias = 0.2
+    grid, Hpar, Hperp = m.vector_forc_curves(Bsat, n=161, theta_deg=0.0, bias=bias)
+    assert np.nanmax(np.abs(Hperp)) > 1.0, "a transverse bias must couple into a transverse H"
+    rho = forc_distribution(grid, Hpar)
+    checked = 0
+    for eta_k, w in m.analytic_forc_weights(Bsat):
+        if eta_k <= 2.5 * bias:                                   # only well-separated cells stay clean
+            continue
+        Bc_shift = math.sqrt(eta_k ** 2 - bias ** 2)
+        num = forc_coercivity_weight(grid, rho, Bc_shift, 0.07)
+        unshifted = forc_coercivity_weight(grid, rho, eta_k, 0.03)
+        print(f"bias={bias} eta={eta_k}: weight at shrunk Bc={Bc_shift:.3f} is {num:.1f} (analytic {w:.1f}), "
+              f"at eta_k it is {unshifted:.1f}")
+        assert abs(num - w) / w < 0.12, f"ridge must move to sqrt(eta^2-bias^2) keeping weight a(Bsat-eta)"
+        checked += 1
+    assert checked >= 2, "need >= 2 well-separated cells to gate the coercivity shrink"
+
+
 def main():
     test_forc_family_structure()
     test_forc_ridges_at_play_thresholds()
     test_forc_distribution_concentrates_on_ridges()
     test_forc_total_weight()
     test_identify_from_forc_roundtrip()
+    test_vector_forc_reduces_to_scalar_and_is_isotropic()
+    test_vector_forc_transverse_bias_shrinks_coercivity()
     print("[OK] FORC for the B-input Play model: first-order reversal curves -> FORC distribution "
           "rho=-1/2 d2H/dBa dBb ridges at the play thresholds eta_k with weight a_k(Bsat-eta_k) "
           "(the B-space Preisach density; the HysterSoft FORC technique on the Play == Preisach model).")
