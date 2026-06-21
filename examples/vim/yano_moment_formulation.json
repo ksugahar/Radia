@@ -1,0 +1,34 @@
+{
+  "mu_r": 200.0,
+  "rows": [
+    {
+      "n": 4,
+      "s": 0.0,
+      "eiem2_err": -0.026179253936452818,
+      "moment_err": -0.00030140386144728026,
+      "moment_cond": 2297.5184353196696
+    },
+    {
+      "n": 4,
+      "s": 0.6,
+      "eiem2_err": -0.030029841554448877,
+      "moment_err": 0.0037897636684949276,
+      "moment_cond": 12470.98855681889
+    },
+    {
+      "n": 6,
+      "s": 0.0,
+      "eiem2_err": -0.015267454024673222,
+      "moment_err": 0.0005238393684909859,
+      "moment_cond": 18382.550331709346
+    },
+    {
+      "n": 6,
+      "s": 0.6,
+      "eiem2_err": -0.01672013907636072,
+      "moment_err": 0.002083307644026311,
+      "moment_cond": 347834.60549012164
+    }
+  ],
+  "conclusion": "The parameter-free moment formulation (centroid field -> dipole, centroid field gradient -> quadrupole, neutrality -> monopole, loops deflated) is near-exact on regular meshes (~0.05%) and ~0.3% on strongly sheared meshes -- 5x to 50x better than the alpha-tuned EIEM2 collocation, with NO eval-point parameter. The quadrupole condition must subtract the dipole(M_0) mixing that is nonzero on distorted (non-symmetric) hexes. Conditioning on sheared meshes is the remaining refinement."
+}
