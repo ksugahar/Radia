@@ -16,6 +16,15 @@ cluster pair:
 PASS = far blocks rank << block dim (like the existing yano-MSC EIEM2 interaction, natural rank ~13) -> ACA /
 HACApK applies, the C++ on-demand kernel is justified.  FAIL = slow decay -> HACApK won't help, stay dense.
 mdx-clean import (radia direct).
+
+CAUTION -- `sep` here is NOT the HACApK admissibility parameter `hacapk_eta`.  `sep = dist / (rt + rs)` is a
+separation RATIO (center distance over the sum of cluster radii; sep>=1 => clusters do not overlap).  HACApK's
+actual admissibility (cHACApK_base.c) is `min(cluster_diameter) <= hacapk_eta * dist`, and since diameter ~ 2*
+radius the two relate INVERSELY: HACApK admits a block when `sep >= 1/hacapk_eta`.  So the production
+hacapk_eta=2.0 admits sep>=0.5 blocks; a `sep>=1.5` separation corresponds to hacapk_eta~0.67 (STRICTER than
+2.0), NOT 1.5.  DO NOT read a `hacapk_eta` value off this script's `sep` column.  USE the production
+hacapk_eta=2.0 (proven for the field part = the existing yano-MSC interaction); the more-peaked gradient (1/r^4)
+just carries a higher BOUNDED ACA rank at that setting, with accuracy guarded by aca_eps, not by tightening eta.
 """
 import json
 import math
@@ -76,7 +85,9 @@ def assemble_dense_D(hexes):
     return F, Gm, ecen_el, fc, elem, n_el, dof
 
 
-def _eta(ecen_el, tgt_el, src_el):
+def _sep(ecen_el, tgt_el, src_el):
+    """Separation RATIO sep = dist / (rt + rs) -- NOT hacapk_eta (see module docstring; HACApK admits a block
+    when sep >= 1/hacapk_eta, so hacapk_eta=2.0 <=> sep>=0.5)."""
     ct = ecen_el[tgt_el].mean(0); cs = ecen_el[src_el].mean(0)
     rt = np.linalg.norm(ecen_el[tgt_el] - ct, axis=1).max() if len(tgt_el) > 1 else 0.0
     rs = np.linalg.norm(ecen_el[src_el] - cs, axis=1).max() if len(src_el) > 1 else 0.0
@@ -85,8 +96,8 @@ def _eta(ecen_el, tgt_el, src_el):
 
 def rank_vs_separation(ecen_el, elem, F, Gm, kc=8):
     """Fix a SMALL target cluster (kc elements at one extreme); form SMALL source clusters as consecutive
-    groups of kc elements ordered by distance from the target.  For each, report (eta, field rank, grad rank)
-    -- the rank-vs-separation curve.  Admissible blocks (eta>=1) must be low-rank if D is H-compressible."""
+    groups of kc elements ordered by distance from the target.  For each, report (sep, field rank, grad rank)
+    -- the rank-vs-separation curve.  `sep` is the separation ratio dist/(rt+rs), NOT hacapk_eta."""
     n_el = ecen_el.shape[0]
     tgt_el = np.argsort(ecen_el[:, 1])[:kc]                      # kc lowest-y elements (bottom bar)
     ct = ecen_el[tgt_el].mean(0)
@@ -96,11 +107,11 @@ def rank_vs_separation(ecen_el, elem, F, Gm, kc=8):
     for g0 in range(0, len(others) - kc + 1, kc):
         src_el = others[g0:g0 + kc]
         src_face = np.where(np.isin(elem, src_el))[0]
-        eta = _eta(ecen_el, tgt_el, src_el)
+        sep = _sep(ecen_el, tgt_el, src_el)
         fblk = F[np.ix_(field_rows(tgt_el), src_face)]
         gblk = Gm[np.ix_(grad_rows(tgt_el), src_face)]
         rf, _ = _num_rank(fblk, 1e-4); rg, _ = _num_rank(gblk, 1e-4)
-        curve.append(dict(eta=eta, field_rank=rf, grad_rank=rg,
+        curve.append(dict(sep=sep, field_rank=rf, grad_rank=rg,
                           full=min(fblk.shape), nfar=int(len(src_face))))
     return tgt_el, curve
 
@@ -114,9 +125,9 @@ def grad_rows(tgt_el):
 
 
 def main():
-    print("\nHACApK compressibility gate for moment-yano: numerical rank (tol 1e-4) of D blocks vs cluster")
-    print("separation eta.  PASS = admissible blocks (eta>=1) are LOW rank for BOTH field and gradient,")
-    print("bounded and ~N-independent (the H-matrix structure of the existing yano-MSC interaction).\n")
+    print("\nHACApK compressibility gate for moment-yano: numerical rank (tol 1e-4) of D blocks vs the cluster")
+    print("separation ratio sep=dist/(rt+rs) (NOT hacapk_eta).  PASS = well-separated blocks are LOW rank for")
+    print("BOTH field and gradient, bounded and ~N-independent (the H-matrix structure of yano-MSC).\n")
     rows = []
     far_field = []; far_grad = []
     for nxy in (12, 16, 20):
@@ -125,12 +136,12 @@ def main():
         tgt_el, curve = rank_vs_separation(ecen_el, elem, F, Gm, kc=8)
         print(f"  nxy={nxy} (nhex={n_el}, dof={dof}) -- target = 8-elem bottom cluster, full block dim = "
               f"{curve[0]['full']}")
-        print(f"    {'eta':>5} | {'field rank':>10} {'grad rank':>9} {'(/ full)':>9}")
+        print(f"    {'sep':>5} | {'field rank':>10} {'grad rank':>9} {'(/ full)':>9}")
         for c in curve:
-            mark = " admissible" if c["eta"] >= 1.0 else ""
-            print(f"    {c['eta']:>5.2f} | {c['field_rank']:>10} {c['grad_rank']:>9} {('/' + str(c['full'])):>9}{mark}")
+            mark = " separated" if c["sep"] >= 1.0 else ""
+            print(f"    {c['sep']:>5.2f} | {c['field_rank']:>10} {c['grad_rank']:>9} {('/' + str(c['full'])):>9}{mark}")
             rows.append(dict(nxy=nxy, nhex=n_el, **c))
-            if c["eta"] >= 1.0:
+            if c["sep"] >= 1.0:
                 far_field.append(c["field_rank"]); far_grad.append(c["grad_rank"])
         print()
     fmax = max(far_field) if far_field else 999; gmax = max(far_grad) if far_grad else 999
@@ -139,26 +150,32 @@ def main():
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
                benchmark="yano_moment_hmatrix_compressibility", results=rows,
                far_field_rank_max=int(fmax), far_grad_rank_max=int(gmax), full_block_dim_nxy20=int(full20),
-               gate_pass=bool(bounded),
-               conclusion=("Admissible (eta>=1) blocks of the centroid field+gradient operator D have BOUNDED, "
-                           f"~N-independent rank (field ~12-{fmax}, gradient ~16-{gmax} at tol 1e-4, flat over "
-                           "nxy 12/16/20) while near blocks stay full-rank. The field rank ~13 matches the "
-                           "existing yano-MSC EIEM2 interaction's production natural rank ~13 -- same 1/r^3 "
-                           "kernel -- and that interaction ALREADY runs HACApK in production, so scalability of "
-                           "the field part is proven, not just plausible. The gradient (1/r^4) ranks higher and "
-                           "compresses only for eta>=~1.5 (at eta~1 it is still ~full for these clusters), so its "
-                           "H-matrix wants a more conservative admissibility. Bounded + N-independent rank is the "
-                           "H-matrix prerequisite -> HACApK applies to D. NOTE the tiny 8-elem clusters here "
-                           "(block dim 24) UNDERSTATE the compression ratio; realistic leaf sizes (rank ~13-20 vs "
-                           "block dim in the 100s) give the O(N log N) win. PATH: reuse the yano field-HACApK "
-                           "(eval at centroid) + add a gradient H-matrix (admissibility eta>=1.5).") if bounded else
-                          (f"Admissible-block rank too high (field {fmax}, grad {gmax}) -- reconsider before "
-                           "committing to the HACApK C++ kernel."))
+               recommended_hacapk_eta=2.0, gate_pass=bool(bounded),
+               conclusion=("Well-separated (sep>=1) blocks of the centroid field+gradient operator D have "
+                           f"BOUNDED, ~N-independent rank (field ~12-{fmax}, gradient ~16-{gmax} at tol 1e-4, "
+                           "flat over nxy 12/16/20) while near blocks stay full-rank. The field rank ~13 matches "
+                           "the existing yano-MSC EIEM2 interaction's production natural rank ~13 -- same 1/r^3 "
+                           "kernel -- and that interaction ALREADY runs HACApK in production at hacapk_eta=2.0, so "
+                           "scalability of the field part is proven, not just plausible. The gradient (1/r^4) ranks "
+                           "higher (compresses well only for sep>=~1.5; at sep~1 still ~full for these clusters). "
+                           "Bounded + N-independent rank is the H-matrix prerequisite -> HACApK applies to D. NOTE "
+                           "the tiny 8-elem clusters here (block dim 24) UNDERSTATE the compression ratio; realistic "
+                           "leaf sizes (rank ~13-20 vs block dim in the 100s) give the O(N log N) win. "
+                           "ADMISSIBILITY: use the PRODUCTION hacapk_eta=2.0 -- NOT a number off the `sep` column. "
+                           "`sep` is dist/(rt+rs); HACApK's condition is min(diam)<=hacapk_eta*dist, so it admits "
+                           "sep>=1/hacapk_eta (eta=2.0 => sep>=0.5), the INVERSE of `sep`. The gradient's higher "
+                           "rank is absorbed by ACA adapting to aca_eps at eta=2.0 (costs a little memory on marginal "
+                           "blocks, never accuracy); a genuinely near-field gradient block is handled by the "
+                           "near_factor keep-dense guard, not by globally tightening eta. PATH: reuse the yano "
+                           "field-HACApK (eval at centroid) + add a gradient H-matrix, both at hacapk_eta=2.0, and "
+                           "verify HACApK-matvec vs dense for the gradient at build time.") if bounded else
+                          (f"Far-block rank too high (field {fmax}, grad {gmax}) -- reconsider before the HACApK kernel."))
     with open(os.path.join(HERE, "yano_moment_hmatrix_compressibility.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
-    print(f"  GATE {'PASS' if bounded else 'FAIL'}: admissible-block rank@1e-4 -- field<={fmax}, grad<={gmax} "
-          f"(full block dim {full20} at nxy=20), bounded + ~N-independent.")
-    print("  =>", "HACApK applies to the moment operator." if bounded else "reconsider.")
+    print(f"  GATE {'PASS' if bounded else 'FAIL'}: well-separated (sep>=1) block rank@1e-4 -- field<={fmax}, "
+          f"grad<={gmax} (full block dim {full20} at nxy=20), bounded + ~N-independent.")
+    print("  => HACApK applies; use the production hacapk_eta=2.0 (sep is NOT hacapk_eta -- see docstring)."
+          if bounded else "  => reconsider.")
     print("  saved", os.path.join(HERE, "yano_moment_hmatrix_compressibility.json"))
 
 
