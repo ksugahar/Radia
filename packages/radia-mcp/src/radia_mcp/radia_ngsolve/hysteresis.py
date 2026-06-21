@@ -249,6 +249,41 @@ class PlayHysteresis:
                 contrib += 4.0 * self.a[k] * self.eta[k] * (Bm - self.eta[k])
         return contrib
 
+    # --- FORC (first-order reversal curves): the Preisach-identification technique (HysterSoft) ---
+    def forc_curves(self, Bsat, n=121):
+        r"""First-Order Reversal Curves in B-space.  Saturate to +Bsat, reverse DOWN to each reversal
+        field Ba on a uniform grid, then sweep B back UP recording H(Ba, Bb).  Returns ``(grid, H)``
+        with ``grid = linspace(-Bsat, Bsat, n)`` and ``H[i, j]`` = H at reversal ``Ba=grid[i]``, field
+        ``Bb=grid[j]`` (``NaN`` for ``Bb < Ba``).
+
+        FORC (Mayergoyz; Pike-Roberts-Verosub 1999) is the standard experimental identification of the
+        Preisach distribution, and the signature feature of HysterSoft (Dimian-Andrei, FAMU-FSU / TU
+        Vienna / Cuza University; "Scalar and vector hysteresis simulations using HysterSoft").  The
+        FORC distribution :func:`forc_distribution` ``rho = -1/2 d2H/dBa dBb`` of the B-input Play model
+        is a set of RIDGES at the coercivity ``(Bb-Ba)/2 = eta_k`` with integrated weight
+        ``a_k (Bsat - eta_k)`` (:meth:`analytic_forc_weights`) -- i.e. the play thresholds ARE the
+        B-space Preisach / FORC density (Play == static Preisach, Bobbio 1997)."""
+        grid = np.linspace(-Bsat, Bsat, n)
+        H = np.full((n, n), np.nan)
+        for i in range(n):
+            px = np.zeros(self.K); py = np.zeros(self.K)
+            _, _, px, py = self.step(float(Bsat), 0.0, px, py)        # positive saturation
+            _, _, px, py = self.step(float(grid[i]), 0.0, px, py)     # reverse down to Ba
+            for j in range(i, n):                                     # sweep up: Bb >= Ba
+                Hx, _, px, py = self.step(float(grid[j]), 0.0, px, py)
+                H[i, j] = Hx
+        return grid, H
+
+    def analytic_forc_weights(self, Bsat):
+        r"""Closed-form FORC-distribution ridge weights for the linear-cell model: ``rho`` is
+        concentrated on the coercivity lines ``(Bb-Ba)/2 = eta_k`` and the integrated weight of ridge
+        ``k`` is ``a_k (Bsat - eta_k)``.  Returns ``[(eta_k, weight_k), ...]`` over the dissipative
+        cells (``0 < eta_k < Bsat``)."""
+        if self.a is None:
+            raise ValueError("analytic FORC weights only for linear cells")
+        return [(float(self.eta[k]), float(self.a[k] * (Bsat - self.eta[k])))
+                for k in range(self.K) if 0.0 < self.eta[k] < Bsat]
+
 
 def play_cells(Bmax, N, reluctivities):
     """Standard play discretisation (Matsuo / Hane-Sugahara IEEE TMAG 2026, Eq. 3): equal-interval
@@ -332,3 +367,41 @@ def dissipation_increments(model, B_wave):
         dp = np.sqrt((px - px_old) ** 2 + (py - py_old) ** 2)
         dD.append(float(np.sum(model.a * model.eta * dp)))
     return np.array(dD)
+
+
+def forc_distribution(grid, H):
+    r"""FORC distribution ``rho(Ba, Bb) = -1/2 d2H / dBa dBb`` from a FORC family ``(grid, H)``
+    (:meth:`PlayHysteresis.forc_curves`) -- the central mixed second difference, ``NaN`` wherever the
+    3x3 stencil leaves the measured ``Bb >= Ba`` region.  For the linear-cell Play model this is a set
+    of ridges at the coercivity ``(Bb-Ba)/2 = eta_k`` (the B-space Preisach density); the per-ridge
+    integrated weight ``INT rho dBa dBb`` over a band around ``eta_k`` equals ``a_k (Bsat - eta_k)``
+    (:meth:`PlayHysteresis.analytic_forc_weights`).  This is the Play-model side of the FORC /
+    Preisach identification that HysterSoft (Dimian-Andrei) performs on measured loops."""
+    grid = np.asarray(grid, float)
+    n = len(grid)
+    d = grid[1] - grid[0]
+    rho = np.full((n, n), np.nan)
+    for i in range(1, n - 1):
+        for j in range(1, n - 1):
+            if np.isnan(H[i - 1:i + 2, j - 1:j + 2]).any():
+                continue
+            rho[i, j] = -0.5 * (H[i + 1, j + 1] - H[i + 1, j - 1]
+                                - H[i - 1, j + 1] + H[i - 1, j - 1]) / (4.0 * d * d)
+    return rho
+
+
+def forc_coercivity_weight(grid, rho, Bc, half_band):
+    r"""Integrate the FORC distribution ``rho`` over the band ``|(Bb-Ba)/2 - Bc| < half_band`` --
+    ``INT_INT rho dBa dBb`` near coercivity ``Bc``.  For the linear-cell Play model this recovers the
+    ridge weight ``a_k (Bsat - eta_k)`` when ``Bc = eta_k`` (verified to ~1-3% on a fine grid)."""
+    grid = np.asarray(grid, float)
+    n = len(grid)
+    d = grid[1] - grid[0]
+    w = 0.0
+    for i in range(n):
+        for j in range(n):
+            if np.isnan(rho[i, j]):
+                continue
+            if abs((grid[j] - grid[i]) / 2.0 - Bc) < half_band:
+                w += rho[i, j] * d * d
+    return w
