@@ -266,6 +266,19 @@ mode-independent (`n=2` and `n=3` agree). So `k=2` already suffices and the prac
 knob is the `Γ` surface `h`, not `k>2`. Script:
 `examples/kelvin_transformation/DtN_spectrum/act2_05_geometry_floor_law.py`.
 
+**Review-hardening (2026-06-22) — two refinements of this floor law.**
+- **The floor is GEOMETRY, not centre-quadrature** (`act2_14_center_conditioning_floor`): at fixed
+  Curve order the floor is `0.0%`-sensitive to extra centre quadrature — the singular ball weight
+  `(R/ρ')²` does NOT set it (the smooth image `P_n` keeps the eigenvalue's centre integral finite),
+  confirming the `(h/R)^{2k}` law above is the curved-sphere geometry. (The *conditioning* of the
+  assembled solve IS centre-driven, `~(R/h)²` — a separate matrix-level effect, see
+  [`../open_boundary/DTN_SPECTRUM_COMPARISON.md`](../open_boundary/DTN_SPECTRUM_COMPARISON.md).)
+- **The `2k` law is FORM-dependent** (`act3_06_vector_minpk_law`): for the vector (`H(curl)` edge)
+  form it holds for CURVED geometry (`k=2` → `2k=4`, = scalar) but the flat-facet `k=1` is degraded
+  (`q ≈ 1.4 <` the scalar `h²`; the covariant Piola pullback is more facet-sensitive), and the
+  vector dipole needs higher `p` than the scalar's `p=1`. So `err ~ max((d_max/R)^p, C(h/R)^{2·min(p,k)})`
+  is form-INDEPENDENT only at curved `k ≥ 2`; edge elements genuinely need the curved machinery.
+
 ### Isolating the Kelvin open-BC error from the interior FEM error
 
 On **one shared shell mesh**, swap only the `Γ` operator — exact-DtN Robin
