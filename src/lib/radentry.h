@@ -400,6 +400,17 @@ allocate DOF*nLoop doubles, then call again to fill (ROW-MAJOR, L[d*nLoop+col]).
 */
 EXP int CALL RadGetLoopBasis(double* pL, int* pNLoop, int* pDOF, int InteractElemKey);
 
+/** Gets per-DOF hex face geometry in the matrix DOF order (for div(B)=0 / RHS / moment studies).
+Two-call pattern: pass pG=nullptr to read back DOF, allocate DOF*11 doubles, then call again to fill.
+Each DOF row (ROW-MAJOR, stride 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz];
+non-hex DOFs get elem_local=-1 and zeros.
+@param pG [out] flat geometry array (DOF x 11, row-major), or nullptr to query size
+@param pDOF [out] number of DOF (G has DOF rows)
+@param InteractElemKey [in] interaction handle from BuildMatrix
+@return integer error code
+*/
+EXP int CALL RadGetFaceGeom(double* pG, int* pDOF, int InteractElemKey);
+
 /** Densify the actual HACApK (ACA+) system operator into a dense matrix.
 Builds the MSC H-matrix for the interaction handle and applies it to unit
 vectors (A = -N + diag(1/chi), original DOF ordering). Use to validate the

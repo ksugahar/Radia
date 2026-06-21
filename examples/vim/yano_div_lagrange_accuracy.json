@@ -1,0 +1,148 @@
+{
+  "mu_r": 200.0,
+  "H0": 1000.0,
+  "cases": [
+    {
+      "n": 4,
+      "s": 0.0,
+      "n_el": 64,
+      "dof": 384,
+      "closure": 0.0,
+      "mmm_moment": 0.2243835482140106,
+      "cpp_moment": 0.21828656825519102,
+      "python_moment_gamma0": 0.21850935432615365,
+      "sweep": [
+        {
+          "gamma_over_A": 0.0,
+          "moment": 0.21850935432615365,
+          "err_vs_mmm": -0.02617925393645315,
+          "net_charge": 0.000976485270717447
+        },
+        {
+          "gamma_over_A": 0.1,
+          "moment": 0.21851095407983873,
+          "err_vs_mmm": -0.026172124386636297,
+          "net_charge": 0.0008868801810330099
+        },
+        {
+          "gamma_over_A": 1.0,
+          "moment": 0.21851810751983117,
+          "err_vs_mmm": -0.026140243974505428,
+          "net_charge": 0.0004857329938530386
+        },
+        {
+          "gamma_over_A": 10.0,
+          "moment": 0.21852518753485414,
+          "err_vs_mmm": -0.026108690792111533,
+          "net_charge": 8.794577857442323e-05
+        },
+        {
+          "gamma_over_A": 100.0,
+          "moment": 0.21852658091848504,
+          "err_vs_mmm": -0.026102480962371444,
+          "net_charge": 9.570334530265905e-06
+        }
+      ],
+      "hard_lagrange": {
+        "moment": 0.21852675102733105,
+        "err_vs_mmm": -0.026101722845979336,
+        "net_charge": 2.677137696975552e-16
+      }
+    },
+    {
+      "n": 4,
+      "s": 0.6,
+      "n_el": 64,
+      "dof": 384,
+      "closure": 1.3552527156068805e-19,
+      "mmm_moment": 0.22242256441623592,
+      "cpp_moment": 0.21386274091971902,
+      "python_moment_gamma0": 0.2157432500486821,
+      "sweep": [
+        {
+          "gamma_over_A": 0.0,
+          "moment": 0.2157432500486821,
+          "err_vs_mmm": -0.0300298415544491,
+          "net_charge": 0.0013332532380778452
+        },
+        {
+          "gamma_over_A": 0.1,
+          "moment": 0.21573733313892218,
+          "err_vs_mmm": -0.030056443665504973,
+          "net_charge": 0.001195052623751266
+        },
+        {
+          "gamma_over_A": 1.0,
+          "moment": 0.21571345562128924,
+          "err_vs_mmm": -0.030163795712702224,
+          "net_charge": 0.0006185296735149933
+        },
+        {
+          "gamma_over_A": 10.0,
+          "moment": 0.21569325637079867,
+          "err_vs_mmm": -0.0302546104667879,
+          "net_charge": 0.00010625698385407115
+        },
+        {
+          "gamma_over_A": 100.0,
+          "moment": 0.21568961555832206,
+          "err_vs_mmm": -0.030270979365717543,
+          "net_charge": 1.1448119825931168e-05
+        }
+      ],
+      "hard_lagrange": {
+        "moment": 0.21568917791114778,
+        "err_vs_mmm": -0.030272947004097328,
+        "net_charge": 2.539995413666516e-16
+      }
+    },
+    {
+      "n": 6,
+      "s": 0.6,
+      "n_el": 216,
+      "dof": 1296,
+      "closure": 5.564725474397718e-20,
+      "mmm_moment": 0.22436356025591633,
+      "cpp_moment": 0.21904606186641074,
+      "python_moment_gamma0": 0.22061217032476993,
+      "sweep": [
+        {
+          "gamma_over_A": 0.0,
+          "moment": 0.22061217032476993,
+          "err_vs_mmm": -0.01672013907636094,
+          "net_charge": 0.0013214393274798594
+        },
+        {
+          "gamma_over_A": 0.1,
+          "moment": 0.2206093493664335,
+          "err_vs_mmm": -0.016732712233665126,
+          "net_charge": 0.0011840461766752983
+        },
+        {
+          "gamma_over_A": 1.0,
+          "moment": 0.2205981012804601,
+          "err_vs_mmm": -0.01678284553499343,
+          "net_charge": 0.000611955983710435
+        },
+        {
+          "gamma_over_A": 10.0,
+          "moment": 0.2205887631195989,
+          "err_vs_mmm": -0.016824466201248445,
+          "net_charge": 0.0001049985891511773
+        },
+        {
+          "gamma_over_A": 100.0,
+          "moment": 0.2205870980613901,
+          "err_vs_mmm": -0.01683188745186015,
+          "net_charge": 1.1310012485559048e-05
+        }
+      ],
+      "hard_lagrange": {
+        "moment": 0.22058689829398254,
+        "err_vs_mmm": -0.016832777825534606,
+        "net_charge": 2.4149808455995365e-16
+      }
+    }
+  ],
+  "conclusion": "div(B)=0 (soft penalty -> hard Lagrange) drives the per-element net charge 1e-3 -> 0 but changes the bulk dipole moment only ~0.01-0.03% (negligible). Hard is marginally worse than Yano's near-0 cancellation at distortion (weakly 'slack is beneficial'), but immaterial for the bulk moment. On the global field the Lagrange div=0 ~ Yano cancellation; any real difference is in the LOCAL field, not tested here."
+}
