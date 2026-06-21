@@ -208,7 +208,35 @@ def test_minor_loop_adds_loss_natively():
     assert abs((L_minor - L_major) - minor_area) / minor_area < 0.05, "increment == the minor-loop area"
 
 
+def test_play_tangent_matches_finite_difference():
+    """The Newton differential-reluctivity tensor dH/dB (Mitsuoka 2013 FE ingredient) matches a
+    finite-difference of H(B) to machine precision, including the off-diagonal vector coupling that
+    appears when cells are moving."""
+    m = play_cells(1.5, 12, 800.0)
+    eps = 1e-6
+
+    def jac_fd(px, py, B0):
+        def H(bx, by):
+            hx, hy, _, _ = m.step(bx, by, px.copy(), py.copy()); return np.array([hx, hy])
+        J = np.zeros((2, 2))
+        J[:, 0] = (H(B0[0]+eps, B0[1]) - H(B0[0]-eps, B0[1])) / (2*eps)
+        J[:, 1] = (H(B0[0], B0[1]+eps) - H(B0[0], B0[1]-eps)) / (2*eps)
+        return J
+
+    # moving regime: frozen virgin state, a big B step -> several cells move (non-trivial tensor)
+    px, py = np.zeros(m.K), np.zeros(m.K)
+    B0 = (0.5, 0.3)
+    J = jac_fd(px, py, B0)
+    nxx, nxy, nyy = (t[0] for t in m.play_tangent(B0[0], B0[1], px, py))
+    print(f"tangent moving: nxx={nxx:.1f} nxy={nxy:.1f} nyy={nyy:.1f}; FD off-diag {J[0,1]:.1f}/{J[1,0]:.1f}")
+    assert nxy > 1.0, "moving cells must produce a nonzero off-diagonal (vector coupling)"
+    assert abs(J[0, 1] - J[1, 0]) < 1e-6*nxx, "dH/dB must be symmetric"
+    rel = max(abs(J[0, 0]-nxx)/nxx, abs(J[1, 1]-nyy)/nyy, abs(J[0, 1]-nxy)/nxy)
+    assert rel < 1e-5, f"play_tangent off the finite-difference dH/dB by {rel:.2e}"
+
+
 def main():
+    test_play_tangent_matches_finite_difference()
     test_loss_kernel_matches_analytic()
     test_elliptical_loss_between_alternating_and_rotational()
     test_minor_loop_adds_loss_natively()
