@@ -114,11 +114,21 @@ flags as a TODO.
 
 FE-COUPLED SOLVE (the core increment).  Make the constitutive H(B) history-dependent at each Gauss
 point: per Newton/Picard step, given B = curl A, the play operator returns H and its differential
-reluctivity dH/dB (the active shape-function slopes) for the tangent.  The reference is the VECTOR PLAY
-MODEL + Newton-Raphson (Mitsuoka-Mifune-Matsuo, IEEE TMAG 2013) and the energy-based variational form
-(Francois-Lavet-Henrotte 2013).  This extends the AGE nonlinear Picard
-(``airgap_motor_workflow.age_motor_nonlinear_solve``) from single-valued nu(|B|) to a hysteretic,
-history-carrying constitutive -- the play state p_k stored per element as the internal variable.
+reluctivity dH/dB.  STATUS in radia_ngsolve.hysteresis:
+- The DH/DB TENSOR is implemented and verified -- ``PlayHysteresis.play_tangent(Bx,By,px,py)`` returns
+  the consistent  dH/dB = a_0 I + sum_{moving} a_k [I - (eta_k/|s_k|)(I - s^_k (x) s^_k)]  (s_k=B-p_k;
+  pinned cells contribute 0), SPD by construction, matching a finite-difference of H to ~1e-11 incl. the
+  off-diagonal vector coupling (Mitsuoka-Mifune-Matsuo, IEEE TMAG 2013 -- the Newton-Raphson ingredient).
+- The FIXED-POINT (M-source) solve is the ROBUST working solver (test_hysteresis_fe_coupled): a
+  current-driven ring core, per-element play states on the mesh, FE loop area ~ the model (~11%).
+- A full NEWTON solve with this tangent needs robust GLOBALISATION for the stiff high-mu regime: the
+  play H(B) is convex (dH/dB grows as cells activate, mu_r ~ 1000 low-field -> ~76 saturated), so plain
+  Newton OVERSHOOTS (a tiny-tangent first step over-magnetises) and a naive line search under-shoots --
+  load-stepping / trust-region or a hybrid fixed-point-then-Newton is the next step.  The variational
+  form (Francois-Lavet-Henrotte 2013, a per-Gauss-point energy minimisation) is the principled
+  globally-convergent alternative.  This all extends the AGE nonlinear Picard
+  (``airgap_motor_workflow.age_motor_nonlinear_solve``) from single-valued nu(|B|) to a hysteretic,
+  history-carrying constitutive -- the play state p_k per element is the internal variable.
 """
 
 SECTIONS = {
