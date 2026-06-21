@@ -128,6 +128,60 @@ class PlayHysteresis:
         loss, the principled replacement for the fitted Steinmetz k_h*f*B^2."""
         return f * self.loss_per_cycle(Bm, n=n, cycles=cycles)
 
+    # --- arbitrary (vector) B-waveform loss: the per-point MOTOR iron-loss kernel ---
+    def loss_from_waveform(self, Bx_wave, By_wave=None, settle=2):
+        """Hysteresis loss density [J/m^3 per cycle] = |∮ H . dB| for an arbitrary (vector) B(t)
+        waveform over one closed cycle (the waveform's first and last samples should coincide).  The
+        operator is pre-cycled ``settle`` times to reach the steady minor/major loop.  This is the
+        per-point motor iron-loss kernel: feed the per-element B(theta) from a rotor-angle sweep (the
+        committed cogging / 3-phase AGE sweeps) and you get the REAL loop-area hysteresis loss --
+        minor loops handled natively (every reversal is tracked), no fitted Steinmetz k_h."""
+        Bx = np.asarray(Bx_wave, dtype=float)
+        By = np.zeros_like(Bx) if By_wave is None else np.asarray(By_wave, dtype=float)
+        n = len(Bx)
+        px = np.zeros(self.K); py = np.zeros(self.K)
+        for _ in range(int(settle)):
+            for i in range(n):
+                _, _, px, py = self.step(Bx[i], By[i], px, py)
+        Hx = np.empty(n); Hy = np.empty(n)
+        for i in range(n):
+            Hx[i], Hy[i], px, py = self.step(Bx[i], By[i], px, py)
+        return abs(float(_trapz(Hx, Bx) + _trapz(Hy, By)))
+
+    # --- vector ROTATIONAL hysteresis (rotating B of constant magnitude) ---
+    def rotational_loop(self, Bm, n=721, cycles=3):
+        """Steady rotational B-H: B = Bm (cos phi, sin phi) over a full revolution (after `cycles` to
+        settle).  Returns (Bx, By, Hx, Hy) over the final revolution."""
+        phi = np.linspace(0.0, 2 * np.pi, n)
+        bx, by = Bm * np.cos(phi), Bm * np.sin(phi)
+        px = np.zeros(self.K); py = np.zeros(self.K)
+        Hx = np.empty(n); Hy = np.empty(n)
+        for c in range(cycles):
+            for i in range(n - 1):
+                _, _, px, py = self.step(bx[i], by[i], px, py)
+        for i in range(n):
+            Hx[i], Hy[i], px, py = self.step(bx[i], by[i], px, py)
+        return bx, by, Hx, Hy
+
+    def rotational_loss_per_cycle(self, Bm, n=721, cycles=3):
+        """Rotational hysteresis loss density [J/m^3 per revolution] = ∮ H . dB for a rotating B."""
+        bx, by, Hx, Hy = self.rotational_loop(Bm, n=n, cycles=cycles)
+        return abs(float(_trapz(Hx, bx) + _trapz(Hy, by)))
+
+    def analytic_rotational_loss(self, Bm):
+        """Closed-form rotational loss for linear cells:  2*pi * sum_k a_k eta_k * sqrt(Bm^2 - eta_k^2).
+        Under a rotating B of radius Bm, the play state p_k traces a circle of radius sqrt(Bm^2-eta_k^2)
+        lagging B by sin(delta_k)=eta_k/Bm (|B-p_k|=eta_k), and the work ∮ H.dB = 2*pi*a_k*r_k*Bm*
+        sin(delta_k) = 2*pi*a_k*eta_k*sqrt(Bm^2-eta_k^2) per cell.  In the LOW-FIELD limit (eta_k << Bm)
+        this -> 2*pi*a_k*eta_k*Bm, so the rotational/alternating loss ratio -> 2*pi/4 = pi/2 (the
+        classical Rayleigh-regime result).  At high field each cell's rotational loss falls back toward
+        zero as eta_k -> Bm (sqrt -> 0) -- the seed of the rotational-loss peak-and-collapse that a
+        SATURATING shape function produces."""
+        if self.a is None:
+            raise ValueError("analytic rotational loss only for linear cells")
+        return float(2.0 * np.pi * np.sum([self.a[k] * self.eta[k] * np.sqrt(Bm ** 2 - self.eta[k] ** 2)
+                                           for k in range(self.K) if 0.0 < self.eta[k] < Bm]))
+
     # --- analytic loop area for the linear-cell model (verification) ---
     def analytic_loss_per_cycle(self, Bm):
         """Closed-form loop area sum_k 4 a_k eta_k (Bm - eta_k) over dissipative cells (eta_k < Bm).
@@ -150,6 +204,18 @@ def play_cells(Bmax, N, reluctivities):
     eta = np.concatenate([[0.0], (np.arange(1, N + 1) - 0.5) * Bmax / N])
     a = np.full(N + 1, reluctivities) if np.isscalar(reluctivities) else np.asarray(reluctivities, float)
     return PlayHysteresis(eta=eta, a=a)
+
+
+def saturating_cells(Bmax, N, a_each, B_sat):
+    """Standard equal-interval thresholds but SATURATING shape functions f_k(r) = a*B_sat*tanh(r/B_sat),
+    so H saturates at high B.  The ROTATIONAL loss then SATURATES to the closed-form high-field limit
+    2*pi * a * B_sat * sum_k eta_k  (each saturated cell contributes 2*pi*a*B_sat*Bm*sin(delta_k) =
+    2*pi*a*B_sat*eta_k, independent of Bm), instead of growing without bound like the linear-cell model
+    -- a physical, BOUNDED rotational loss.  (Nonlinear cells: the analytic linear-cell loop-area /
+    rotational formulas do not apply.)"""
+    eta = np.concatenate([[0.0], (np.arange(1, N + 1) - 0.5) * Bmax / N])
+    f = [(lambda r, A=a_each, S=B_sat: A * S * np.tanh(r / S)) for _ in range(N + 1)]
+    return PlayHysteresis(eta=eta, f_k=f)
 
 
 def rayleigh_cells(eta_max, K, a_each):
