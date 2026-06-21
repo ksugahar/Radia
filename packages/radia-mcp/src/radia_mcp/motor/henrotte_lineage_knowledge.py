@@ -512,7 +512,7 @@ methodology stack** built entirely on lab-library papers:
 | Method | Status in radia / radia-mcp |
 |--------|------------------------------|
 | Henrotte basis (axisym magnetic) | ✓ implemented in `radia.axifem` |
-| Energy-based hysteresis | ✓ Play and Energy C++ models in radia (`MatPlayHysteresis`, `MatEnergyHysteresis`) |
+| Energy-based hysteresis | ✓ Play and Energy C++ models in radia (`MatPlayHysteresis`, `MatEnergyHysteresis`); ✓ **NGSolve-core B-input vector Play in `radia_ngsolve.hysteresis`** (physics-gated: analytic loop area `4 a eta (Bm-eta)`, Steinmetz `Bm^2` / Rayleigh `Bm^3` loss with k_h DERIVED not fitted, congruency, 2nd-law dissipation `sum_k a_k eta_k |dp_k| >= 0`) |
 | Dular-Henrotte source-field | ✗ not yet — currently use simple volumetric J_s |
 | Lange-Henrotte-Hameyer field-circuit | ✗ Stage-2 implementation planned (`calc_motor_transient.py`) |
 | Carstensen analytical Dowell | ✗ not yet — PEEC SIBC handles solid conductors only |
