@@ -60,6 +60,8 @@ is the arc (each script self-asserts and prints its result).
   `act2_08_budget_dofcost`, `act2_09_exterior_mesh`, `act2_10_exterior_mesh3`,
   `act2_11_kelvin_mesh_cutting_datasheet` (the consolidated `min(p,k)` mesh-cut recipe),
   `act2_12_derham_dtn_pconv_hconv` (the DtN spectrum is FORM-dependent: two de Rham ladders, p- & h-convergence).
+  Figures for both (lab `radia_mcp.figure` toolkit, IEEJ profile + quality gates): `plot_dtn_mesh_studies.py`
+  -> `act2_11_*.png` (the `min(p,k)` data-collapse) + `act2_12_*.png` (the two ladders + the p-method).
 - **Act 3 — Kelvin realizes it exactly.** The conformal compactification; the infinity
   point; the vector form; the exterior field. → `act3_01_infinity_integrable`,
   `act3_02_centre_quadrature`, `act3_03_vector_dtn`, `act3_04_aform_center_singularity` (A-form centre),
