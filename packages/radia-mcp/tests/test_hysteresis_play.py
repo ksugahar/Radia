@@ -27,7 +27,8 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.hysteresis import (PlayHysteresis, rayleigh_cells, steinmetz_cells,
-                                                play_cells, saturating_cells, dissipation_increments)
+                                                play_cells, saturating_cells, dissipation_increments,
+                                                identify_from_loop_areas)
 
 _trapz = getattr(np, "trapezoid", None) or np.trapz
 
@@ -235,7 +236,30 @@ def test_play_tangent_matches_finite_difference():
     assert rel < 1e-5, f"play_tangent off the finite-difference dH/dB by {rel:.2e}"
 
 
+def test_identify_from_loop_areas_roundtrip():
+    """Identify the cell slopes from MEASURED symmetric-loop areas, round-trip exactly (analytic) and
+    robustly (simulated 'measurements'), and generalise to an unseen amplitude."""
+    Bmax, N = 1.5, 10
+    D = Bmax / N
+    eta = np.concatenate([[0.0], (np.arange(1, N + 1) - 0.5) * D])
+    a_true = np.array([50., 80, 120, 100, 90, 70, 60, 50, 40, 30, 20])      # a0=50 + a_1..a_10
+    m0 = PlayHysteresis(eta=eta, a=a_true)
+    W_ana = np.array([m0.analytic_loss_per_cycle(mi * D) for mi in range(1, N + 1)])
+    W_sim = np.array([m0.loss_per_cycle(mi * D, n=2001) for mi in range(1, N + 1)])
+    mid_a = identify_from_loop_areas(Bmax, N, W_ana, a0=50.)
+    mid_s = identify_from_loop_areas(Bmax, N, W_sim, a0=50.)
+    rel_a = np.max(np.abs(mid_a.a[1:] - a_true[1:]) / a_true[1:])
+    rel_s = np.max(np.abs(mid_s.a[1:] - a_true[1:]) / a_true[1:])
+    Bt = 1.13
+    gen = abs(mid_s.loss_per_cycle(Bt, n=2001) - m0.loss_per_cycle(Bt, n=2001)) / m0.loss_per_cycle(Bt, n=2001)
+    print(f"identify slopes: analytic rel={rel_a:.2e}, simulated rel={rel_s:.2e}; unseen-loop rel={gen:.2e}")
+    assert rel_a < 1e-9, "exact inversion of analytic loop areas must recover the slopes"
+    assert rel_s < 1e-2, "identification must be robust to simulated-measurement noise"
+    assert gen < 1e-2, "the identified model must reproduce an unseen loop amplitude"
+
+
 def main():
+    test_identify_from_loop_areas_roundtrip()
     test_play_tangent_matches_finite_difference()
     test_loss_kernel_matches_analytic()
     test_elliptical_loss_between_alternating_and_rotational()
