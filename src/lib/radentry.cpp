@@ -89,6 +89,7 @@ int GetInteractMatrix(int, double*, int*);
 int HMatrixDensify(int, double*, int*);
 int GetLoopBasis(int, double*, int*, int*);
 int GetFaceGeom(int, double*, int*);
+int GetCentroidFieldGrad(int, double*, int*, int*);
 double HLUTestOnHACApK(int);
 int HLUDebugMaterialize(int, double*, int*, int*);
 void SetRelaxSubInterval(int, int, int, int);
@@ -1349,6 +1350,15 @@ int CALL RadGetLoopBasis(double* pL, int* pNLoop, int* pDOF, int InteractElemKey
 int CALL RadGetFaceGeom(double* pG, int* pDOF, int InteractElemKey)
 {
 	int result = GetFaceGeom(InteractElemKey, pG, pDOF);
+	if(result == 0) return ioBuffer.OutErrorStatus();
+	return 0;
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadGetCentroidFieldGrad(double* pC, int* pNHex, int* pDOF, int InteractElemKey)
+{
+	int result = GetCentroidFieldGrad(InteractElemKey, pC, pNHex, pDOF);
 	if(result == 0) return ioBuffer.OutErrorStatus();
 	return 0;
 }
