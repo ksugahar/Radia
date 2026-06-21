@@ -150,6 +150,39 @@ class PlayHysteresis:
         nu_xy = np.sum(a1*np.where(m1, f1*sx1*sy1, 0.0), axis=1)
         return nu_xx, nu_xy, nu_yy
 
+    # --- convex incremental co-energy: the MERIT FUNCTION for the variational (global) Newton ---
+    def play_coenergy_density(self, Bx, By, px_prev, py_prev):
+        r"""Convex incremental co-energy density psi*(B) whose B-gradient is the model field
+        H = a_0 B + sum_{k>=1} a_k p_k, with the FROZEN previous play states (px_prev, py_prev).
+        This is the MERIT FUNCTION that makes the FE-coupled-hysteresis Newton GLOBALLY CONVERGENT:
+        Pi(A) = INT_iron psi*(B(A)) dx + INT_air (nu0/2)|B|^2 dx - INT J.A dx is CONVEX (psi* is convex
+        in B because dH/dB = ``play_tangent`` is SPD, and B = curl A is linear in A), so its unique
+        minimiser is the FE solution and a damped Newton with an Armijo line search ON Pi -- not on the
+        residual norm -- always finds a decreasing step (the Newton direction d = -K^{-1}R satisfies
+        grad(Pi).d = -R^T K^{-1} R < 0).  That cures the kink-overshoot DIVERGENCE of a plain
+        residual-norm Newton on the piecewise-linear play H(B): the play model is the exact
+        rate-independent-plasticity analogue (p_prev <-> back-stress, eta_k <-> yield radius, the play
+        update <-> radial return), and just as in computational plasticity the incremental energy is
+        convex and Newton on it with the consistent tangent converges.
+
+        Per dissipative cell k (q = p_prev_k, r = B - q):
+            pinned  (|r| <= eta_k):  psi_k = a_k ( q.B - |q|^2 / 2 )            [affine in B]
+            slipping(|r| >  eta_k):  psi_k = a_k ( |B|^2/2 - eta_k|r| + eta_k^2/2 )
+        (C^1 across |r|=eta_k; the eta_k^2/2 constant enforces value-continuity).  The eta=0 reversible
+        cell falls out of the slip branch as a_0|B|^2/2 with no special case.  Linear cells only.
+        Inputs (n,) and (n, K); returns psi* (n,)."""
+        if self.a is None:
+            raise ValueError("co-energy implemented for linear cells (slopes `a`)")
+        Bx = np.atleast_1d(np.asarray(Bx, float)); By = np.atleast_1d(np.asarray(By, float))
+        qx = np.atleast_2d(px_prev); qy = np.atleast_2d(py_prev)
+        rx = Bx[:, None] - qx; ry = By[:, None] - qy
+        rmag = np.sqrt(rx * rx + ry * ry)
+        eta = self.eta[None, :]
+        psi_pin = (qx * Bx[:, None] + qy * By[:, None]) - 0.5 * (qx * qx + qy * qy)
+        psi_slip = 0.5 * (Bx * Bx + By * By)[:, None] - eta * rmag + 0.5 * eta * eta
+        psi_cell = self.a[None, :] * np.where(rmag <= eta, psi_pin, psi_slip)
+        return np.sum(psi_cell, axis=1)
+
     # --- arbitrary (vector) B-waveform loss: the per-point MOTOR iron-loss kernel ---
     def loss_from_waveform(self, Bx_wave, By_wave=None, settle=2):
         """Hysteresis loss density [J/m^3 per cycle] = |∮ H . dB| for an arbitrary (vector) B(t)
