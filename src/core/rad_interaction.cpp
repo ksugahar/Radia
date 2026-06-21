@@ -3305,8 +3305,13 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 
 			// Compensation: single point charge -area at the element center (flag off, historical) or the
 			// precomputed element-common cloud (flag on; same normalised cloud the inline path uses).
+			// g_yano_no_center_charge (research): skip the cancellation charge entirely (raw collocation).
 			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
-			if(g_yano_pyramid_cloud && m_hexaCloudN > 0)
+			if(g_yano_no_center_charge)
+			{
+				// raw: bare face charge only, no cancellation
+			}
+			else if(g_yano_pyramid_cloud && m_hexaCloudN > 0)
 			{
 				const double* cp = &m_hexaCloudPts[(size_t)hex_j * m_hexaCloudN * 3];
 				const double* cw = &m_hexaCloudWts[(size_t)hex_j * m_hexaCloudN];
