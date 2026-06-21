@@ -32,13 +32,21 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
 
 | method | accuracy (per-mode `d_n`) | convergent? | parameter-free? | DC conditioning | cost |
 |---|---|---|---|---|---|
-| **Kelvin** | **exact** (static `~2e−6`, eddy converges; **extended/radiating Kelvin** carries high-freq — HOIBC `~3e−2`, exact-Z `~6e−6`) | **YES** | **YES** | **flat** | sparse |
+| **Kelvin** | **exact** (static `~2e−6`, eddy converges; **extended/radiating Kelvin** carries high-freq — HOIBC `~3e−2`, exact-Z `~6e−6`) | **YES** | **YES** | **flat** (`~(R/h)²` solve) | sparse |
 | **BEM** (`ngsolve.bem`) | **exact** (all regimes; the real `ngsolve.bem` Helmholtz BEM reproduces `wave_dtn` to `~1e−5`, `act7_23`) | **YES** | **YES** | — | **DENSE** (`N²`) |
 | **PML** (`NGSolve` FEM+PML) | accurate per-mode (`~1e−4` in its home; the real 3-D NGSolve FEM+PML reproduces `wave_dtn` to `~1e−3`, `act7_24`) | no (a tuned **layer**) | no (`σ, L`) | **blows up** (`2.4e4`@DC) | sparse |
 | **CFS-PML** | accurate per-mode | no (a tuned layer) | no (`σ, α, L`) | **fixed** (`2.3e3`@DC) | sparse |
 | **ballooning** (truncation wall) | **fails the LOW modes** (`~(a/R)^{2n+1}`) | no (finite **reach** `R`) | `R` | — | sparse |
 | **infinite element** (Bettess) | **exact `n ≤ P−1`**, degrades `n ≥ P` (decay-basis; `act7_25`) | **YES** (p in decay order) | `P` | — | sparse |
 | **Robin** (`λ=−1/a`) | **exact `n=0` only**, fails HIGH modes | no (a fixed floor) | YES | — | sparse |
+
+> **Conditioning — the honest distinction (review-hardening 2026-06-22).** The "DC conditioning"
+> column is the per-mode / DC-frequency BEHAVIOUR (does it blow up at DC?). The assembled
+> linear-system SOLVE cond is a separate *magnitude*: Kelvin is frequency-flat but at `~(R/h)²`
+> (the singular centre weight `(R/ρ')²` amplifies `λ_max`; assembled cond `1e3–1e4`, `act2_14`),
+> PML grows `~1/k` toward static (`act7_40`). So PML loses on frequency-robustness, but Kelvin is
+> frequency-robust **not cheap** — and neither figure is the per-mode `1.30`. (3-D only; the 2-D
+> Kelvin disk is conformal / weight-free.)
 
 ### Per-regime numbers (from `act7_22`)
 
@@ -81,7 +89,7 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
 
 > The comparison is **not a single number**: on the *accuracy* axis Kelvin, BEM and PML are all
 > good per-mode; the methods separate on **convergence** (Kelvin/BEM vs tuned layer),
-> **conditioning** (PML blows up at DC; CFS-PML fixes it; Kelvin flat), **cost** (BEM dense vs
+> **conditioning** (PML blows up at DC; CFS-PML fixes it; Kelvin frequency-flat but at `~(R/h)²`), **cost** (BEM dense vs
 > the rest sparse), and **reach** (ballooning finite). Reporting all axes is the honest result —
 > not "method X is best".
 
