@@ -517,6 +517,13 @@ public:
 	// Gflat is ROW-MAJOR (m_totalDOF x 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz].
 	// Non-hex DOFs (tet/wedge) get elem_local=-1 and zeros.  See .cpp.
 	void BuildFaceGeom(std::vector<double>& Gflat) const;
+	// Per-hex demag field H and gradient gradH at the element CENTROID, as linear functionals of each
+	// source DOF charge -- the analytic self-term kernel of the parameter-free moment formulation.
+	// SELF face: bare charged-face field (centroid is interior -> finite, no center charge needed).
+	// MUTUAL face: yano dipole layer = bare face - area*(point charge @ source center) (finite distance).
+	// Cflat is ROW-MAJOR (nHex x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
+	// -> Cflat[(h*9+k)*m_totalDOF + g].  H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.  See .cpp.
+	void BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const;
 	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 

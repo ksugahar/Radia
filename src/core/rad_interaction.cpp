@@ -2718,6 +2718,129 @@ void radTInteraction::BuildFaceGeom(std::vector<double>& Gflat) const
 }
 
 //=========================================================================
+// BuildCentroidFieldGrad: per-hex demag field H and gradient gradH at the element CENTROID, as linear
+// functionals of each source DOF charge -- the kernel of the parameter-free moment formulation (the fix
+// for the eval-point alpha + the finite-difference conditioning noise; validated in
+// examples/vim/yano_moment_analytic_selfterm.py).
+//   SELF face (same element): bare charged-face field, no center charge.  The centroid is interior, at
+//     finite distance from every face, so the integrand is smooth -> exact by Gauss quadrature, and it is
+//     patch-test exact (single cube -> demag N=1/3).
+//   MUTUAL face: yano dipole layer = (bare face) - area*(point charge @ source element center).  The
+//     per-face center charge is REQUIRED (without it a regular grid develops a charge-free dipole-free
+//     quadrupole near-null mode); the source center is at finite distance from this centroid -> finite.
+//     Excluding it for SELF is exactly where it would be singular -> the kernel is singularity-free.
+// Output Cflat ROW-MAJOR (nHex x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
+// -> Cflat[(h*9+k)*m_totalDOF + g].  Field convention H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.
+//=========================================================================
+
+void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const
+{
+	const int NK = 9;
+	int nHex = (int)m_hexaElemIndices.size();
+	nHexOut = nHex;
+	Cflat.assign((size_t)nHex * NK * m_totalDOF, 0.0);
+	if(nHex == 0 || m_totalDOF == 0) return;
+
+	// 8-point Gauss-Legendre on [0,1] (the centroid is interior -> the 1/r^3 integrand is smooth)
+	const int NG = 8;
+	static const double gl_x[NG] = {-0.9602898564975363,-0.7966664774136267,-0.5255324099163290,-0.1834346424956498,
+	                                 0.1834346424956498, 0.5255324099163290, 0.7966664774136267, 0.9602898564975363};
+	static const double gl_w[NG] = { 0.1012285362903763, 0.2223810344533745, 0.3137066458778873, 0.3626837833783620,
+	                                 0.3626837833783620, 0.3137066458778873, 0.2223810344533745, 0.1012285362903763};
+	double gp[NG], gw[NG];
+	for(int i = 0; i < NG; i++) { gp[i] = 0.5*(gl_x[i]+1.0); gw[i] = 0.5*gl_w[i]; }
+
+	// gather per-DOF hex face data (4 verts, 2-triangle area, source element center + index)
+	struct FaceRec { TVector3d V[4]; double area; TVector3d srcEC; int srcElem; int valid; };
+	std::vector<FaceRec> faces((size_t)m_totalDOF);
+	for(size_t i = 0; i < faces.size(); i++) { faces[i].valid = 0; faces[i].srcElem = -1; }
+
+	for(int h = 0; h < nHex; h++)
+	{
+		int elemIdx = m_hexaElemIndices[h];
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
+		if(!poly || poly->AmOfFaces != 6) continue;
+		int off = m_elemDOFOffset[elemIdx];
+		const TVector3d ec = poly->CentrPoint;
+		for(int f = 0; f < 6; f++)
+		{
+			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
+			radTPolygon* pgn = hpt.PgnHndl.rep; radTrans* tr = hpt.TransHndl.rep;
+			if(!pgn || !tr) continue;
+			const radTVect2dVect& v2d = pgn->EdgePointsVector;
+			if(v2d.size() < 4) continue;
+			TVector3d V4[4];
+			for(int v = 0; v < 4; v++) V4[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
+			double area = 0.0;
+			for(int t = 0; t < 2; t++)
+			{
+				const TVector3d& A = V4[0]; const TVector3d& B = V4[t+1]; const TVector3d& C = V4[t+2];
+				double ux = B.x-A.x, uy = B.y-A.y, uz = B.z-A.z, wx = C.x-A.x, wy = C.y-A.y, wz = C.z-A.z;
+				double rx = uy*wz-uz*wy, ry = uz*wx-ux*wz, rz = ux*wy-uy*wx;
+				area += 0.5*std::sqrt(rx*rx+ry*ry+rz*rz);
+			}
+			FaceRec& fr = faces[off+f];
+			for(int v = 0; v < 4; v++) fr.V[v] = V4[v];
+			fr.area = area; fr.srcEC = ec; fr.srcElem = elemIdx; fr.valid = 1;
+		}
+	}
+
+	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
+	for(int h = 0; h < nHex; h++)
+	{
+		int elemIdx = m_hexaElemIndices[h];
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
+		if(!poly || poly->AmOfFaces != 6) continue;
+		const TVector3d ce = poly->CentrPoint;
+		size_t base = (size_t)h * NK * m_totalDOF;
+		for(int g = 0; g < m_totalDOF; g++)
+		{
+			const FaceRec& fr = faces[g];
+			if(!fr.valid) continue;
+			double H[3] = {0,0,0};
+			double gH[6] = {0,0,0,0,0,0};                              // xx,yy,zz,xy,xz,yz
+			for(int iu = 0; iu < NG; iu++) for(int iv = 0; iv < NG; iv++)
+			{
+				double u = gp[iu], v = gp[iv], wuv = gw[iu]*gw[iv];
+				double a0 = (1-u)*(1-v), a1 = u*(1-v), a2 = u*v, a3 = (1-u)*v;
+				double Px = a0*fr.V[0].x+a1*fr.V[1].x+a2*fr.V[2].x+a3*fr.V[3].x;
+				double Py = a0*fr.V[0].y+a1*fr.V[1].y+a2*fr.V[2].y+a3*fr.V[3].y;
+				double Pz = a0*fr.V[0].z+a1*fr.V[1].z+a2*fr.V[2].z+a3*fr.V[3].z;
+				double Tux = (1-v)*(fr.V[1].x-fr.V[0].x)+v*(fr.V[2].x-fr.V[3].x);
+				double Tuy = (1-v)*(fr.V[1].y-fr.V[0].y)+v*(fr.V[2].y-fr.V[3].y);
+				double Tuz = (1-v)*(fr.V[1].z-fr.V[0].z)+v*(fr.V[2].z-fr.V[3].z);
+				double Tvx = (1-u)*(fr.V[3].x-fr.V[0].x)+u*(fr.V[2].x-fr.V[1].x);
+				double Tvy = (1-u)*(fr.V[3].y-fr.V[0].y)+u*(fr.V[2].y-fr.V[1].y);
+				double Tvz = (1-u)*(fr.V[3].z-fr.V[0].z)+u*(fr.V[2].z-fr.V[1].z);
+				double jx = Tuy*Tvz-Tuz*Tvy, jy = Tuz*Tvx-Tux*Tvz, jz = Tux*Tvy-Tuy*Tvx;
+				double dA = std::sqrt(jx*jx+jy*jy+jz*jz)*wuv;
+				double dx = ce.x-Px, dy = ce.y-Py, dz = ce.z-Pz;
+				double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
+				double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
+				double c3 = inv_r3*dA, c5 = inv_r5*dA;
+				H[0] += dx*c3; H[1] += dy*c3; H[2] += dz*c3;
+				gH[0] += c3 - 3.0*dx*dx*c5; gH[1] += c3 - 3.0*dy*dy*c5; gH[2] += c3 - 3.0*dz*dz*c5;
+				gH[3] += -3.0*dx*dy*c5;     gH[4] += -3.0*dx*dz*c5;     gH[5] += -3.0*dy*dz*c5;
+			}
+			if(fr.srcElem != elemIdx)                                 // mutual: add the yano center charge
+			{
+				double dx = ce.x-fr.srcEC.x, dy = ce.y-fr.srcEC.y, dz = ce.z-fr.srcEC.z;
+				double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
+				double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2, q = -fr.area;
+				H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
+				gH[0] += q*(inv_r3-3.0*dx*dx*inv_r5); gH[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
+				gH[2] += q*(inv_r3-3.0*dz*dz*inv_r5); gH[3] += q*(-3.0*dx*dy*inv_r5);
+				gH[4] += q*(-3.0*dx*dz*inv_r5);       gH[5] += q*(-3.0*dy*dz*inv_r5);
+			}
+			Cflat[base + 0*m_totalDOF + g] = H[0]*INV4PI;
+			Cflat[base + 1*m_totalDOF + g] = H[1]*INV4PI;
+			Cflat[base + 2*m_totalDOF + g] = H[2]*INV4PI;
+			for(int k = 0; k < 6; k++) Cflat[base + (size_t)(3+k)*m_totalDOF + g] = gH[k]*INV4PI;
+		}
+	}
+}
+
+//=========================================================================
 // PrecomputeHexaTriangleData: Pre-compute triangle local coordinate systems
 // Eliminates redundant sqrt/div operations during field computation
 // Each hexahedron has 12 triangles (6 faces * 2 triangles)
