@@ -1,65 +1,57 @@
 {
-  "problem": "hex iron cube in uniform field; yano-MSC vs reduced-Omega+Kelvin FEM (h-convergence)",
+  "problem": "hex iron cube under non-uniform shear; yano-MSC distortion-robustness, external-moment observable",
   "mu_r": 200.0,
   "H0": 1000.0,
   "cube_half_edge_m": 0.02,
-  "fem_reduced_omega_kelvin_p3_large_air": [
+  "observable": "M_z = m_z/V via external 2-point dipole fit",
+  "fem_kelvin_anchor_s0": {
+    "Mz": 3576.9863060607167,
+    "ndof": 95171,
+    "ne": 20878,
+    "p": 3,
+    "h_yoke_mm": 4.0
+  },
+  "shear_sweep": [
     {
-      "h_yoke_mm": 4.0,
-      "ne": 20878,
-      "ndof": 95171,
-      "Mz": 3576.986306060728
+      "shear": 0.0,
+      "mmm_ref": 3532.548165369679,
+      "n_tet": 1296,
+      "n_hex": 512,
+      "eiem2_new": 3504.7842214017423,
+      "eiem2_old": 3507.243779320102,
+      "pyramid_new": 3422.768065256899,
+      "pyramid_old": 3475.151535603788
     },
     {
-      "h_yoke_mm": 3.0,
-      "ne": 28019,
-      "ndof": 127356,
-      "Mz": 3575.614607098308
-    }
-  ],
-  "yano_msc_hconv": [
-    {
-      "grid": "REGULAR",
-      "sequence": [
-        {
-          "n_hex": 64,
-          "Mz": 3414.207318279917
-        },
-        {
-          "n_hex": 216,
-          "Mz": 3478.6139183770633
-        },
-        {
-          "n_hex": 512,
-          "Mz": 3507.232847496444
-        },
-        {
-          "n_hex": 1000,
-          "Mz": 3523.030841524398
-        }
-      ]
+      "shear": 0.3,
+      "mmm_ref": 3524.208996285314,
+      "n_tet": 1296,
+      "n_hex": 512,
+      "eiem2_new": 3490.99319809287,
+      "eiem2_old": 3281.3294649692916,
+      "pyramid_new": 3435.107034761968,
+      "pyramid_old": 3260.4798882875903
     },
     {
-      "grid": "DISTORTED",
-      "sequence": [
-        {
-          "n_hex": 64,
-          "Mz": 3395.2550008801495
-        },
-        {
-          "n_hex": 216,
-          "Mz": 3471.0574954226645
-        },
-        {
-          "n_hex": 512,
-          "Mz": 3503.31094180172
-        },
-        {
-          "n_hex": 1000,
-          "Mz": 3523.2320549264846
-        }
-      ]
+      "shear": 0.6,
+      "mmm_ref": 3505.680628998692,
+      "n_tet": 1296,
+      "n_hex": 512,
+      "eiem2_new": 3460.220221565861,
+      "eiem2_old": 2946.6961789393413,
+      "pyramid_new": 3419.5109364613463,
+      "pyramid_old": 2926.2766555966414
+    },
+    {
+      "shear": 0.9,
+      "mmm_ref": 3473.541283493002,
+      "n_tet": 1296,
+      "n_hex": 512,
+      "eiem2_new": 3428.8063846872315,
+      "eiem2_old": 2688.8116568207765,
+      "pyramid_new": 3295.395481418539,
+      "pyramid_old": 2657.1411526453494
     }
   ],
-  "conclusion": "DISTORTION-ROBUST: REGULAR and DISTORTED yano h-converge to the SAME value (mesh-independent = the physical solution), anchored by HDiv (tests/feec/parity_vs_msc, 0.76%). yano -> ~3535, reduced-Omega+Kelvin FEM -> ~3568: ~1% apart on the CUBE, the genuine edge/corner method difference (the smooth sphere has all methods agree <0.1%; the FEM is validated -0.07% vs analytic there).  The loops are field-null so the solved field is loop-free; rad.GetLoopBasis (C++ Stage 1) builds the loop basis."
+  "conclusion": "FIXED observable removes the readout artifact: yano EIEM2 external-moment <M_z> stays ~1% of MMM with FLAT error across the shear (s=0->0.9) = the SOLVE is distortion-robust; the 'old' internal-readout column drops ~23% = a pure rad.Fld('m',centroid) artifact on skewed hexes. The opt-in pyramid-cloud kernel does NOT improve the bulk moment (~3%, degrading to ~5% at s=0.9); its benefit is a different (transverse/per-element) metric, not <M_z>. FEM/Kelvin anchors the regular cube."
 }
