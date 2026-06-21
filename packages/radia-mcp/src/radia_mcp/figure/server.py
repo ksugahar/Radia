@@ -767,6 +767,231 @@ Recipe pipeline:
 
 
 @mcp.tool()
+def figure_design_principles(topic: str = "all") -> str:
+    """The figure-MAKING (作図, *sakuzu*) DESIGN canon, distilled from the
+    authoritative external scientific-visualization literature (GitHub repos +
+    the canonical papers), each topic attributed to its source.
+
+    This is the DESIGN layer that sits ABOVE two other layers:
+      * the lab MECHANICS / save-time gates -> paper_figure_quality_rules
+        (no-title, frameless legend, units-in-parens, axes-efficiency,
+        no-overlap, Type-42, Okabe-Ito);
+      * the data-PLOTTING (グラフ, the line/scatter/bar itself) ->
+        radia_mcp.chart2d + paper_figure()/emit_paper_figure().
+
+    The user's distinction: 作図 (figure DESIGN -- message, encoding, colour,
+    labelling, composition, medium) decided FIRST, vs グラフ (data PLOTTING)
+    drawn after.  This tool carries the 作図 knowledge.
+
+    Topics:
+        'all'                - everything
+        'ten_rules'          - Rougier, Droettboom & Bourne (2014), Ten Simple Rules
+        'perception'         - Cleveland & McGill (1984) graphical-perception ranking
+        'color'              - perceptually-uniform maps (Crameri 2020) + Okabe-Ito
+        'chartjunk'          - Tufte data-ink ratio; strip non-data ink
+        'direct_labeling'    - label curves directly > legend (adjustText, ...)
+        'defaults'           - "do not trust the defaults"; journal styles
+        'external_resources' - where to learn 作図 (books, repos, papers)
+        'sakuzu_vs_graph'    - the 作図 vs グラフ split + the radia_mcp layering
+    """
+    principles = {
+        "ten_rules": """\
+[ten_rules]  -- Rougier, Droettboom & Bourne (2014), "Ten Simple Rules for Better
+Figures", PLOS Comput. Biol. 10(9):e1003833 (the canonical principle checklist;
+lead author wrote matplotlib's scientific-visualization reference book).
+
+  1.  Know your audience       - peers vs students vs public set the detail level.
+  2.  Identify your message    - one figure = ONE message; design backward from it.
+  3.  Adapt to the medium      - paper / slide / poster need DIFFERENT figures
+                                 (font, detail, size); never reuse a paper figure
+                                 verbatim on a slide.
+  4.  Captions are not optional - the caption carries what the graphic cannot;
+                                 this is WHY the lab forbids in-figure titles
+                                 (paper_figure_quality_rules('no_title_in_figure')).
+  5.  Do not trust the defaults - matplotlib / MATLAB defaults are NOT publication
+                                 ready (see the 'defaults' topic).
+  6.  Use colour effectively   - colour is a DATA channel, not decoration ('color').
+  7.  Do not mislead           - honest axes/scales; pick the encoding the eye reads
+                                 accurately (see 'perception').
+  8.  Avoid chartjunk          - every drop of ink should be data ('chartjunk').
+  9.  Message trumps beauty    - clarity / readability over prettiness.
+  10. Get the right tool       - match the tool to the job (vector for line art,
+                                 raster for images).
+""",
+        "perception": """\
+[perception]  -- Cleveland & McGill (1984), "Graphical Perception: Theory,
+Experimentation, and Application...", J. Amer. Statist. Assoc. 79(387):531
+(the experimental ranking of how ACCURATELY the eye decodes each channel).
+
+  Most -> least accurate quantitative decoding:
+    1. position along a COMMON scale   (scatter, dot plot, aligned bars)
+    2. position on non-aligned scales
+    3. length                          (unaligned bars)
+    4. angle / slope                   (line slope, pie wedges)
+    5. area                            (bubble size)
+    6. volume / colour-hue / saturation
+
+  CONSEQUENCE for chart choice (the evidence behind rule 7 "do not mislead"):
+    - to COMPARE magnitudes, encode as POSITION or LENGTH, never area or colour.
+      Prefer a dot / bar / line over a pie (angle), a bubble (area) or a heat-tile
+      (colour) when the reader must read values accurately.
+    - reserve colour-HUE for CATEGORIES and colour-LUMINANCE for ORDERED fields
+      (colour is a weak quantitative channel -- good for "which", poor for
+      "how much").
+    - a convergence / defect plot (e.g. the lab act2_1x figures) is rightly a
+      log-y POSITION encoding -- the most accurate channel.
+""",
+        "color": """\
+[color]  -- Crameri, Shephard & Heron (2020), "The misuse of colour in science
+communication", Nature Commun. 11:5444 + Okabe & Ito (2008) / Wong (2011),
+Nature Methods 8:441.
+
+  THREE colormap CLASSES -- choose by DATA type, never by taste:
+    - QUALITATIVE (categories; lines/markers): the Okabe-Ito 8-colour colourblind
+      -safe set (lab line default; paper_figure_quality_rules('colorblind_safe')).
+    - SEQUENTIAL (ordered 0->max field, e.g. |B|): a PERCEPTUALLY-UNIFORM map --
+      viridis / cividis / magma (matplotlib) or Crameri batlow / lajolla.
+    - DIVERGING (signed field about 0, e.g. +/- error): vik / roma / coolwarm
+      (perceptually-uniform, symmetric about a neutral midpoint).
+
+  NEVER use jet / rainbow / hsv for data:
+    Crameri 2020 shows a physically-built (not perceptually-built) map ADDS
+    artificial boundaries where its luminance jumps and HIDES variation where
+    luminance is flat -- it DISTORTS the data -- AND is unreadable to ~4-8% of
+    readers with colour-vision deficiency AND fails greyscale print.  Perceptually
+    -uniform maps are perceptually ordered, colourblind-friendly, greyscale-safe.
+
+  In radia_mcp: lines already default to Okabe-Ito (paper_figure); for FIELD plots
+  (chart2d pcolormesh / contourf) pass cmap='viridis' (or a Crameri map via the
+  `cmcrameri` package), never matplotlib's historical 'jet'.
+""",
+        "chartjunk": """\
+[chartjunk]  -- Tufte (1983), "The Visual Display of Quantitative Information"
+(the data-ink ratio) + Rougier rule 8.
+
+  data-ink ratio = ink-encoding-data / total-ink.  Maximise it: every stroke
+  should carry information; erase the rest.
+
+  REMOVE the non-data ink (the lab gates already enforce most of this):
+    - 3-D bars / pie / extruded charts (3-D adds area+volume distortion, the
+      worst-decoded channels -- see 'perception').
+    - the LEGEND BOX (frameon=False; paper_figure_quality_rules('no_legend_frame')).
+    - the in-figure TITLE (-> the caption; 'no_title_in_figure').
+    - heavy / redundant gridlines, drop shadows, gradient fills, dense ticks.
+    - idle whitespace margins (the axes-area gate, 'efficiency').
+
+  KEEP: the data marks, the axis frame + sparse ticks, axis labels with
+  units-in-parentheses, and direct curve labels.  A lab paper figure is
+  deliberately spare -- the lab principle "情報がなく無駄はやめる"
+  (drop anything carrying no information).
+""",
+        "direct_labeling": """\
+[direct_labeling]  -- label the curve WHERE IT IS, not in a legend the eye must
+round-trip to (Rougier rules 8/9; the R `ggrepel` lineage).
+
+  WHY: a legend forces the reader to match colour -> name -> curve repeatedly; an
+  inline label at the curve's end is read in place.  For time-series / sweeps /
+  convergence plots with a handful of curves, direct labels beat a legend.
+
+  EXTERNAL tools (the GitHub lineage to learn from):
+    - adjustText  (github.com/Phlya/adjustText) -- `ggrepel`-for-Python; iteratively
+      repositions many text labels to remove overlap with points and each other.
+      `pip install adjustText`; `from adjustText import adjust_text`.
+    - matplotlib-label-lines (github.com/cphyc/matplotlib-label-lines) -- places
+      each line's label ON the line: `labelLines(ax.get_lines())`.
+
+  LAB tools (radia_mcp.figure.tools -- the gate-aware versions):
+    - label_curve_endpoints(ax, [{"y_data":.., "text":..}], side='right') +
+      fig.subplots_adjust(right=0.78) -- right-margin direct labels.
+    - find_best_legend_loc(ax) -- if a legend IS used, pick the least-overlapping
+      location; emit_paper_figure() then HARD-FAILS on any legend-data overlap
+      (paper_figure_quality_rules('no_legend_overlap')).
+""",
+        "defaults": """\
+[defaults]  -- Rougier rule 5, "Do Not Trust the Defaults".
+
+  Out-of-the-box matplotlib / MATLAB is NOT publication-ready:
+    - the tab10 cycle has a confusable red+orange (colourblind-unsafe);
+    - pdf.fonttype defaults to Type-3 raster glyphs (fail IEEE / Elsevier preflight);
+    - legends render a BOX; titles default on; jet was the historical image cmap.
+
+  Two ways to fix it by STARTING from a journal style, not the default:
+    - SciencePlots (github.com/garrettj403/SciencePlots) -- `pip install
+      SciencePlots`; `import scienceplots; plt.style.use(['science','ieee'])`
+      (or 'nature').  Sets the column width, serif/sans per journal, ticks-in,
+      tight rcParams; also ships CJK font styles (e.g. cjk-jp) for Japanese labels.
+    - the LAB path: radia_mcp.figure.paper_figure(profile=...) -- bakes in the exact
+      IEEE / IEEJ / IGTE column geometry + 10pt@8cm + Okabe-Ito + Type-42 + frameless
+      legend + the no-title / no-overlap / efficiency GATES (emit_paper_figure).
+      Prefer this for lab papers; SciencePlots is the lighter general-purpose option.
+""",
+        "external_resources": """\
+[external_resources]  -- where to LEARN 作図 (figure-making), curated 2026-06.
+
+  BOOKS / PRINCIPLES
+    - Rougier, "Scientific Visualization: Python + Matplotlib" (2021) -- FREE,
+      github.com/rougier/scientific-visualization-book.  THE reference: figure
+      anatomy, coordinate systems, typography, colour, design rules, layout.
+    - Rougier, Droettboom & Bourne, "Ten Simple Rules for Better Figures" (2014),
+      PLOS Comput. Biol. 10(9):e1003833 -- the principle checklist.
+    - Tufte, "The Visual Display of Quantitative Information" (1983) -- data-ink.
+    - Cleveland & McGill, "Graphical Perception" (1984), JASA 79(387):531 -- the
+      channel-accuracy ranking.
+    - Wong, "Points of view: Color blindness" (2011), Nature Methods 8:441 -- the
+      Okabe-Ito palette.
+    - Crameri, Shephard & Heron, "The misuse of colour in science communication"
+      (2020), Nature Commun. 11:5444 -- perceptually-uniform colour maps.
+
+  TOOLS / REPOS (matplotlib ecosystem)
+    - SciencePlots   github.com/garrettj403/SciencePlots   -- journal style sheets.
+    - cmcrameri      github.com/callumrollo/cmcrameri       -- Crameri colour maps.
+    - adjustText     github.com/Phlya/adjustText            -- auto non-overlap labels.
+    - matplotlib-label-lines github.com/cphyc/matplotlib-label-lines -- inline labels.
+    - the matplotlib official "Choosing Colormaps" + "Annotations" user guides.
+
+  These external sources inform the lab's own radia_mcp.figure (paper_figure, the
+  quality gates, label_curve_endpoints, the Okabe-Ito default).
+""",
+        "sakuzu_vs_graph": """\
+[sakuzu_vs_graph]  -- 作図 (figure DESIGN) vs グラフ (data PLOTTING): the split the
+radia_mcp toolchain mirrors.
+
+  作図 (sakuzu) = the DESIGN decisions made BEFORE / AROUND the plot: what message
+    (rule 2), what to encode + which channel (perception), colour's role (color),
+    what to strip (chartjunk), how to label (direct_labeling), medium adaptation
+    (paper vs slide), the caption.
+      -> THIS tool (figure_design_principles) for the canon, plus
+         paper_figure_quality_rules for the lab MECHANICS / gates that ENFORCE the
+         design (no-title, frameless, units-in-parens, axes-efficiency, no-overlap,
+         Type-42, Okabe-Ito).
+
+  グラフ (graph) = the data PLOTTING itself, the line / scatter / bar:
+      -> radia_mcp.chart2d (22 chart types) drawn on a paper_figure() canvas, then
+         emit_paper_figure() gates the result.
+
+  ORDER: decide the 作図 (message, encoding, colour, labels) FIRST, then draw the
+  グラフ on a paper_figure() canvas, then let emit_paper_figure() gate it against
+  the design rules.  A good グラフ on a bad 作図 still fails review -- design first.
+""",
+    }
+    q = (topic or "all").strip().lower()
+    if q == "all":
+        return "\n\n".join(principles.values()) + """\
+
+Layering (see 'sakuzu_vs_graph'):
+  figure_design_principles   -- the 作図 DESIGN canon (this tool)
+  paper_figure_quality_rules -- the lab MECHANICS + save-time gates
+  radia_mcp.chart2d / paper_figure -- the グラフ data-plotting + journal canvas
+"""
+    if q in principles:
+        return principles[q]
+    return (
+        f"Unknown topic {topic!r}. Available: "
+        f"{', '.join(['all'] + list(principles))}"
+    )
+
+
+@mcp.tool()
 def figure_audit_embeds(tex_path: str) -> str:
     """Lint every \\includegraphics in a LaTeX file for figure embeds that
     cannot guarantee on-page 10 pt @ 8 cm (the CEFC-2026 mistake class).
@@ -908,6 +1133,19 @@ def main():
             assert f"[{sec}]" in rules, f"section {sec!r} missing"
         print(f"  paper_figure_quality_rules('all') -> "
               f"{len(rules):5d} chars")
+
+        # Design-principles tool (the 作図 canon, distilled from external refs)
+        principles = figure_design_principles("all")
+        for sec in ("ten_rules", "perception", "color", "chartjunk",
+                    "direct_labeling", "defaults", "external_resources",
+                    "sakuzu_vs_graph"):
+            assert f"[{sec}]" in principles, f"design topic {sec!r} missing"
+        assert ("Rougier" in principles and "Cleveland" in principles
+                and "Crameri" in principles), "design-principles citations missing"
+        assert "Unknown topic" in figure_design_principles("nope"), \
+            "design-principles unknown-topic help missing"
+        print(f"  figure_design_principles('all')   -> "
+              f"{len(principles):5d} chars")
 
         # Try importing matplotlib + smoke-test the runtime helpers
         # (paper_figure / measure_figure_efficiency).  Skip if mpl is
