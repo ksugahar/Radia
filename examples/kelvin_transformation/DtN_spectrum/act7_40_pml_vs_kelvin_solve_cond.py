@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 r"""
-act7_32_pml_vs_kelvin_solve_cond.py  (finishes Q13: the PML-vs-Kelvin SOLVE conditioning bench)
+act7_40_pml_vs_kelvin_solve_cond.py  (finishes Q13: the PML-vs-Kelvin SOLVE conditioning bench)
 ================================================================================
 act2_14 measured the Kelvin ball's assembled-stiffness condition number (Q13: the FEM-solve
 cond, not the per-mode DtN ratio 1.30) and left the PML comparison as the "exit".  This bench
