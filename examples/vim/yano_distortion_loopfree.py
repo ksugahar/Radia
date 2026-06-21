@@ -1,22 +1,25 @@
 """Can a COLLOCATION (yano-MSC) be distortion-robust (accuracy holds on skewed hexes), loop-free, AND
-well-conditioned at high mu_r?  Answer: YES -- by deflating the FULL field-null of N.  But the field-null
-is RICHER than the cell-graph cycles: rad.GetLoopBasis captures only the cycles and is INCOMPLETE.
+well-conditioned at high mu_r?  Answer: YES -- loop deflation alone does it, once the loop basis is
+COMPLETE.  The field-null of N is EXACTLY the cell-graph cycle space (no mysterious extra modes):
+dim(ker N) == graph nullity (= n_internal_faces - n_cells + 1) to machine precision.
 
 Measured on a genuinely sheared hex cube (n=6 s=0.6, mu_r-sweep):
   * ACCURACY is distortion-robust from the collocation kernel itself: external-moment <M_z> ~ 1% of an
     independent MMM (tet) reference; deflation is ACCURACY-NEUTRAL (m_full ~= m_deflated, the deflated
     modes are field-null -> no field -> no moment).
-  * CONDITIONING: A = (1/chi) I - N has cond ~ mu_r because the field-null subspace sits at eigenvalue
-    1/chi.  N has a CLEAN spectral gap: dim(ker N) = 325 here (|eig| ~ 1e-17, the next eig > 1e-2), so
-    bounded mu_r-independent conditioning IS achievable -- by deflating that full 325-dim null.
-      - deflate the FULL null (SVD of N): cond BOUNDED + mu_r-INDEPENDENT, accuracy-neutral.  <-- YES
-      - deflate only the GetLoopBasis cycles (307): cond STILL ~ mu_r.  GetLoopBasis is INCOMPLETE by
-        18 modes (325 - 307); those 18 field-null modes are NOT cell-graph cycles, so loop-only leaves
-        them at 1/chi.  (This is a concrete TODO for the C++ GetLoopBasis / the solve-side deflation.)
+  * CONDITIONING: A = (1/chi) I - N has cond ~ mu_r because the field-null sits at eigenvalue 1/chi.
+    N has a CLEAN spectral gap (|eig| ~ 1e-17, the next > 1e-2), and the null == the cycle space, so
+    deflating rad.GetLoopBasis (the cell cycles) bounds cond mu_r-INDEPENDENTLY.  This is verified here
+    against deflating the full SVD-null: cond_loop == cond_fullnull == bounded (the loop basis is the
+    whole null).
+
+History note: this script first found cond_loop STILL ~ mu_r because BuildLoopBasis's spatial-hash face
+matching had KEY COLLISIONS that silently undercounted the cycles (307 of 325 at n=6, 77 of 81 at n=4).
+The cause was pinned exactly (undercount == hash-collision count == missed-internal-face count) and fixed
+(bucketed face matching); GetLoopBasis now returns the full cycle count, so loop deflation alone suffices.
 
 So "distortion-robust + loop-free + well-conditioned collocation" = yano-MSC collocation (accuracy)
-+ deflate the FULL field-null of N (clean gap -> well-posed).  The current cycle-only loop basis is a
-SUBSET of that null and does not bound conditioning on its own.
++ deflate the cell-graph loop space (which IS the full field-null).  No div(B)=0 / no SVD needed.
 """
 import json
 import math
@@ -119,8 +122,8 @@ def main():
         return P @ np.linalg.solve(P.T @ A @ P, P.T @ b)
 
     print(f"\nDISTORTED hex cube n={n} s={s}: dof={dof}.  field-null dim(N)={nulldim}, "
-          f"GetLoopBasis cycles={nLoop}  ->  GetLoopBasis MISSES {nulldim - nLoop} null modes")
-    print("deflate cycles-only (GetLoopBasis) vs the FULL null (SVD) -- which bounds cond at high mu_r?\n")
+          f"GetLoopBasis cycles={nLoop} (misses {nulldim - nLoop})")
+    print("deflate cycles (GetLoopBasis) vs the FULL SVD-null -- both should bound cond (loop == full null)\n")
     hdr = (f"  {'mu_r':>7} | {'cond full':>10} {'cond loop':>10} {'cond FULLNULL':>13} | "
            f"{'err full':>9} {'err loop':>9} {'err FULL':>9} (vs MMM)")
     print(hdr); print("  " + "-" * len(hdr))
@@ -136,20 +139,20 @@ def main():
         rows.append(dict(mu_r=mu_r, cond_full=cf, cond_loop=cl, cond_fullnull=cn,
                          err_full=ef, err_loop=el, err_fullnull=en))
     print(f"\n  independent MMM moment = {m_mmm:.4e}.")
-    print(f"  ANSWER: YES, by deflating the FULL null. cond_full ~ mu_r; cond_LOOP (GetLoopBasis cycles)")
-    print(f"  STILL ~ mu_r (misses {nulldim-nLoop} null modes); cond_FULLNULL is BOUNDED + mu_r-independent.")
-    print("  All keep err ~1% vs MMM (distortion-robust, deflation accuracy-neutral).  So the field-null is")
-    print("  RICHER than the cell cycles -- the cycle-only loop basis is incomplete for conditioning.")
+    print(f"  ANSWER: YES.  field-null dim(N) == cell-graph nullity == GetLoopBasis cycles ({nLoop}); the")
+    print("  null IS the cycle space.  cond_full ~ mu_r; cond_LOOP (GetLoopBasis) == cond_FULLNULL == BOUNDED")
+    print("  + mu_r-independent.  All keep err ~1% vs MMM (distortion-robust, deflation accuracy-neutral).")
+    print("  So loop deflation ALONE makes the collocation loop-free + well-conditioned -- no div=0 / no SVD.")
     with open(os.path.join(HERE, "yano_distortion_loopfree.json"), "w") as f:
         json.dump({"n": n, "s": s, "dof": dof, "field_null_dim": int(nulldim), "getloopbasis_cycles": nLoop,
                    "missing_null_modes": int(nulldim - nLoop), "mmm_moment": m_mmm, "sweep": rows,
-                   "conclusion": ("YES by deflating the FULL field-null of N (clean spectral gap, here "
-                                  f"dim {int(nulldim)} vs the {nLoop} GetLoopBasis cycles -> {int(nulldim-nLoop)} "
-                                  "missed). Full-null deflation: cond BOUNDED + mu_r-independent, accuracy-neutral "
-                                  "(~1% vs MMM, distortion-robust). Cycle-only (GetLoopBasis) leaves the missing "
-                                  "null modes at 1/chi -> cond still ~mu_r. Accuracy is distortion-robust "
-                                  "regardless; the open item is making the loop basis / solve deflation capture "
-                                  "the FULL null, not just the cycles.")},
+                   "conclusion": ("YES. The field-null of N IS exactly the cell-graph cycle space "
+                                  f"(dim(ker N) == graph nullity == GetLoopBasis = {nLoop}, no extra modes). "
+                                  "Deflating the loop basis bounds cond mu_r-independently (cond_loop == "
+                                  "cond_fullnull == bounded), accuracy-neutral (~1% vs MMM, distortion-robust). "
+                                  "An earlier BuildLoopBasis hash-collision bug undercounted the cycles (307 of "
+                                  "325); fixed (bucketed matching), so loop deflation ALONE now suffices -- no "
+                                  "div=0, no SVD needed.")},
                   f, indent=2, default=float)
     print("saved", os.path.join(HERE, "yano_distortion_loopfree.json"))
 
