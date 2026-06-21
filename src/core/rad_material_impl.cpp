@@ -1035,6 +1035,37 @@ int radTApplication::GetLoopBasis(int InteractElemKey, double* pL, int* pNLoop, 
 
 //-------------------------------------------------------------------------
 
+int radTApplication::GetFaceGeom(int InteractElemKey, double* pG, int* pDOF)
+{
+	// Per-DOF hex face geometry (m_totalDOF x 11, ROW-MAJOR).  Two-call pattern:
+	// pass pG=nullptr to read back dof, then allocate dof*11 and call again to fill.
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
+
+		int totalDOF = InteractPtr->GetTotalDOF();
+		if(pDOF) *pDOF = totalDOF;
+
+		if(pG != nullptr && totalDOF > 0)
+		{
+			std::vector<double> Gflat;
+			InteractPtr->BuildFaceGeom(Gflat);
+			std::memcpy(pG, Gflat.data(), (size_t)totalDOF * 11 * sizeof(double));
+		}
+
+		return 1;
+	}
+	catch (...)
+	{
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
 int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
 {
 #ifdef RADIA_USE_HACAPK

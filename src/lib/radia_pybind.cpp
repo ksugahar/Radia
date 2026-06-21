@@ -951,6 +951,30 @@ py::tuple GetLoopBasis(int intrc_handle) {
 }
 
 /**
+ * @brief Get per-DOF hex face geometry as a numpy array
+ * @param intrc_handle Interaction handle from BuildMatrix
+ * @return numpy array (dof x 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz] per DOF
+ */
+py::array_t<double> GetFaceGeom(int intrc_handle) {
+    int dof = 0;
+    int err = RadGetFaceGeom(nullptr, &dof, intrc_handle);
+    check_error(err);
+    if (dof <= 0) {
+        throw std::runtime_error("No interaction matrix built");
+    }
+    py::array_t<double> result({dof, 11});
+    std::vector<double> data((size_t)dof * 11);
+    err = RadGetFaceGeom(data.data(), &dof, intrc_handle);
+    check_error(err);
+    auto r = result.mutable_unchecked<2>();
+    // G is ROW-MAJOR: G[d * 11 + j]
+    for (int i = 0; i < dof; i++)
+        for (int j = 0; j < 11; j++)
+            r(i, j) = data[(size_t)i * 11 + (size_t)j];
+    return result;
+}
+
+/**
  * @brief Densify the actual HACApK (ACA+) operator as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
  * @return Tuple (matrix as 2D numpy array, dof)
@@ -3555,6 +3579,25 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Returns:
                   Tuple (L, nLoop) where L is a (dof x nLoop) numpy array whose columns
                   span ker(N) (verify ||N @ L|| ~ 0).
+          )pbdoc");
+
+    m.def("GetFaceGeom", &radia_solver::GetFaceGeom,
+          py::arg("intrc_handle"),
+          R"pbdoc(
+              Get per-DOF hex face geometry of an interaction matrix, in the matrix DOF order.
+
+              Rows align 1:1 with GetInteractMatrix.  Each row (stride 11) is
+              [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz]: the face area,
+              face centroid, outward unit normal, and owning-element center.  Non-hex DOFs
+              (tet/wedge) get elem_local = -1 and zeros.  Lets Python form the div(B)=0
+              constraint (Sum_f area_f*sigma_f = 0 per element), the uniform-field RHS
+              (n . H), and the dipole moment (Sum_f sigma_f*area_f*(c_f - c_e)).
+
+              Args:
+                  intrc_handle: Interaction handle from BuildMatrix()
+
+              Returns:
+                  numpy array (dof x 11).
           )pbdoc");
 
     m.def("HMatrixDensify", &radia_solver::HMatrixDensify,
