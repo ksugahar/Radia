@@ -236,6 +236,31 @@ def test_play_tangent_matches_finite_difference():
     assert rel < 1e-5, f"play_tangent off the finite-difference dH/dB by {rel:.2e}"
 
 
+def test_play_coenergy_is_the_convex_potential():
+    """The incremental co-energy psi*(B) is the CONVEX potential of the B-input Play field: its
+    B-gradient is exactly H (so Pi = INT psi* - INT J.A is the variational principle for the FE solve)
+    and its Hessian is exactly the SPD play_tangent -- the two facts that make the energy-line-search
+    Newton globally convergent (test_hysteresis_fe_variational)."""
+    m = play_cells(1.5, 12, 800.0)
+    px, py = np.zeros((1, m.K)), np.zeros((1, m.K))
+    e, d = 1e-6, 1e-4
+    P = lambda bx, by: m.play_coenergy_density(bx, by, px, py)[0]
+    for (Bx, By) in [(1.0, 0.0), (0.5, 0.3), (1.2, 0.7), (0.3, 0.0)]:
+        gx = (P(Bx+e, By) - P(Bx-e, By)) / (2*e)
+        gy = (P(Bx, By+e) - P(Bx, By-e)) / (2*e)
+        Hx, Hy, _, _ = m.step(Bx, By, np.zeros(m.K), np.zeros(m.K))      # same frozen virgin state
+        assert abs(gx-Hx) < 1e-3*max(abs(Hx), 1.0) and abs(gy-Hy) < 1e-3*max(abs(Hy), 1.0), \
+            f"grad psi* must equal H at B=({Bx},{By}): ({gx:.1f},{gy:.1f}) vs ({Hx:.1f},{Hy:.1f})"
+        hxx = (P(Bx+d, By) - 2*P(Bx, By) + P(Bx-d, By)) / d**2
+        hyy = (P(Bx, By+d) - 2*P(Bx, By) + P(Bx, By-d)) / d**2
+        hxy = (P(Bx+d, By+d) - P(Bx+d, By-d) - P(Bx-d, By+d) + P(Bx-d, By-d)) / (4*d**2)
+        nxx, nxy, nyy = (t[0] for t in m.play_tangent(Bx, By, px, py))
+        assert abs(hxx-nxx) < 2e-2*nxx and abs(hyy-nyy) < 2e-2*nyy and abs(hxy-nxy) < 2e-2*max(abs(nxy), 1.0), \
+            f"Hessian of psi* must equal the SPD play_tangent at B=({Bx},{By})"
+        assert nxx > 0 and nyy > 0 and nxx*nyy - nxy*nxy > -1e-6*nxx*nyy, "play_tangent must be SPD"
+    print("[ok] psi* gradient == H and Hessian == SPD play_tangent (the convex potential of the Play field)")
+
+
 def test_identify_from_loop_areas_roundtrip():
     """Identify the cell slopes from MEASURED symmetric-loop areas, round-trip exactly (analytic) and
     robustly (simulated 'measurements'), and generalise to an unseen amplitude."""
@@ -260,6 +285,7 @@ def test_identify_from_loop_areas_roundtrip():
 
 def main():
     test_identify_from_loop_areas_roundtrip()
+    test_play_coenergy_is_the_convex_potential()
     test_play_tangent_matches_finite_difference()
     test_loss_kernel_matches_analytic()
     test_elliptical_loss_between_alternating_and_rotational()

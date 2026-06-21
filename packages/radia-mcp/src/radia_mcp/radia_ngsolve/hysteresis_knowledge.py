@@ -119,16 +119,25 @@ reluctivity dH/dB.  STATUS in radia_ngsolve.hysteresis:
   the consistent  dH/dB = a_0 I + sum_{moving} a_k [I - (eta_k/|s_k|)(I - s^_k (x) s^_k)]  (s_k=B-p_k;
   pinned cells contribute 0), SPD by construction, matching a finite-difference of H to ~1e-11 incl. the
   off-diagonal vector coupling (Mitsuoka-Mifune-Matsuo, IEEE TMAG 2013 -- the Newton-Raphson ingredient).
-- The FIXED-POINT (M-source) solve is the ROBUST working solver (test_hysteresis_fe_coupled): a
-  current-driven ring core, per-element play states on the mesh, FE loop area ~ the model (~11%).
-- A full NEWTON solve with this tangent needs robust GLOBALISATION for the stiff high-mu regime: the
-  play H(B) is convex (dH/dB grows as cells activate, mu_r ~ 1000 low-field -> ~76 saturated), so plain
-  Newton OVERSHOOTS (a tiny-tangent first step over-magnetises) and a naive line search under-shoots --
-  load-stepping / trust-region or a hybrid fixed-point-then-Newton is the next step.  The variational
-  form (Francois-Lavet-Henrotte 2013, a per-Gauss-point energy minimisation) is the principled
-  globally-convergent alternative.  This all extends the AGE nonlinear Picard
-  (``airgap_motor_workflow.age_motor_nonlinear_solve``) from single-valued nu(|B|) to a hysteretic,
-  history-carrying constitutive -- the play state p_k per element is the internal variable.
+- The FIXED-POINT (M-source) solve is a ROBUST working solver (test_hysteresis_fe_coupled): a
+  current-driven ring core, per-element play states on the mesh, FE loop area ~ the model (~11%), ~25
+  M-source sweeps/step.
+- The VARIATIONAL (energy-line-search) NEWTON is the principled globally-convergent solver and is now
+  implemented & verified (test_hysteresis_fe_variational).  ``PlayHysteresis.play_coenergy_density`` is
+  the CONVEX incremental co-energy psi*(B) whose B-gradient is H and whose Hessian is the SPD
+  play_tangent (Francois-Lavet-Henrotte 2013; the rate-independent-plasticity structure: p_prev <->
+  back-stress, eta_k <-> yield radius, the play update <-> radial return).  So Pi(A)=INT psi*(B(A)) -
+  INT J.A is CONVEX and a Newton step damped by an ARMIJO LINE SEARCH ON Pi (not the residual norm) is
+  a guaranteed descent direction -> converges in a HANDFUL of iters/step (vs ~25 fixed-point sweeps),
+  energy monotone, steady loop area matching the play model TIGHTER than fixed-point (~1.4% vs ~11%).
+  NOTE: an earlier Newton attempt "diverged"; the cause was traced to an INEXACT element-average B
+  (gfB.Set's L2-projection at order 1 inflates |B|, amplified by nu_air) -- NOT an intrinsic kink
+  pathology.  Taking B exactly via Integrate(.,element_wise) on order-1 H1 (B=curl A is then P0 per
+  element), BOTH plain and line-searched Newton converge; the energy line search is the rigorous
+  globalisation/safety-net (guaranteed descent under deeper saturation / worse starts).
+- This all extends the AGE nonlinear Picard (``airgap_motor_workflow.age_motor_nonlinear_solve``) from
+  single-valued nu(|B|) to a hysteretic, history-carrying constitutive -- the play state p_k per element
+  is the internal variable.
 """
 
 SECTIONS = {
