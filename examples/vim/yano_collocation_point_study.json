@@ -1,0 +1,68 @@
+{
+  "n": 6,
+  "s": 0.6,
+  "mmm_moment": 0.22436356025591633,
+  "sweep": [
+    {
+      "alpha": 0.2,
+      "moment": 0.22377078399545738,
+      "err_vs_mmm": -0.0026420344720096134,
+      "cond_loop_deflated": 749.6455548542543
+    },
+    {
+      "alpha": 0.25,
+      "moment": 0.22340943395276824,
+      "err_vs_mmm": -0.004252590313951976,
+      "cond_loop_deflated": 391.33942238998924
+    },
+    {
+      "alpha": 0.3,
+      "moment": 0.2229682547627973,
+      "err_vs_mmm": -0.006218948796888002,
+      "cond_loop_deflated": 224.01265179979646
+    },
+    {
+      "alpha": 0.4,
+      "moment": 0.2218881460924792,
+      "err_vs_mmm": -0.011033049041536014,
+      "cond_loop_deflated": 94.6560769944814
+    },
+    {
+      "alpha": 0.5,
+      "moment": 0.22061217032476993,
+      "err_vs_mmm": -0.01672013907636094,
+      "cond_loop_deflated": 57.93146669726913
+    },
+    {
+      "alpha": 0.6,
+      "moment": 0.21921724275425217,
+      "err_vs_mmm": -0.022937403452655603,
+      "cond_loop_deflated": 39.59644056409046
+    },
+    {
+      "alpha": 0.7,
+      "moment": 0.2177590895056355,
+      "err_vs_mmm": -0.02943646794848309,
+      "cond_loop_deflated": 29.366890354357942
+    },
+    {
+      "alpha": 0.75,
+      "moment": 0.217013751498574,
+      "err_vs_mmm": -0.03275847802093579,
+      "cond_loop_deflated": 26.007747119421747
+    },
+    {
+      "alpha": 0.85,
+      "moment": 0.2154795803864652,
+      "err_vs_mmm": -0.03959635806865336,
+      "cond_loop_deflated": 21.571068734475
+    },
+    {
+      "alpha": 0.95,
+      "moment": 0.21382384868066145,
+      "err_vs_mmm": -0.04697603997383948,
+      "cond_loop_deflated": 19.33021963460905
+    }
+  ],
+  "conclusion": "The yano-MSC collocation point (EvalPt = alpha*FaceCenter + (1-alpha)*center) is an un-derived accuracy knob: err vs MMM swings ~4% from alpha=0.3 (-0.6%) to alpha=0.95 (-4.7%), a clean accuracy<->conditioning trade-off (small alpha=center: accurate, ill-conditioned; large alpha=face: well-conditioned, inaccurate). EIEM2 (0.5) and pyramid (0.75) are heuristic points, neither optimal. Loop deflation bounds cond for all alpha so alpha can be tuned for accuracy, but there is no principled choice; the principled fix is INTEGRATION (Galerkin / analytic Gram, as in HDiv-VIM) -- no eval point."
+}

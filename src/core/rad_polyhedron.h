@@ -34,6 +34,7 @@ extern radTConvergRepair& radCR;
 // (bit-identical to the historical default).  See radTPolyhedron::MscEvalPoint / MscCompensationField.
 extern bool g_yano_pyramid_cloud;
 extern bool g_yano_no_center_charge;   // research: drop the element-center cancellation charge (raw collocation)
+extern double g_yano_eval_alpha;   // research: override EIEM2 collocation-point alpha (-1 = default 0.5)
 
 //-------------------------------------------------------------------------
 

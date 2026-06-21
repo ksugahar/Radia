@@ -2573,6 +2573,7 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 
 bool g_yano_pyramid_cloud = false;   // default: historical EIEM2 single-point kernel (bit-identical)
 bool g_yano_no_center_charge = false;   // research: drop the element-center cancellation charge (raw collocation)
+double g_yano_eval_alpha = -1.0;   // research: override EIEM2 eval point a*FaceCenter+(1-a)*center (-1 = default 0.5)
 
 // Field from a point charge at an ARBITRARY source point (no 1/4pi divisor; matches FieldFromPointCharge).
 TVector3d radTPolyhedron::FieldFromPointChargeAt(const TVector3d& obs, const TVector3d& src, double charge) const
@@ -2653,10 +2654,12 @@ TVector3d radTPolyhedron::MscEvalPoint(int faceIdx) const
 {
 	if(!g_yano_pyramid_cloud)
 	{
-		// EIEM2 (historical default): midpoint between face center and element center.
-		return TVector3d(0.5*(FaceCenter[faceIdx].x + CentrPoint.x),
-		                 0.5*(FaceCenter[faceIdx].y + CentrPoint.y),
-		                 0.5*(FaceCenter[faceIdx].z + CentrPoint.z));
+		// EIEM2 (historical default): midpoint between face center and element center (alpha = 0.5).
+		// g_yano_eval_alpha >= 0 overrides alpha (research: study the collocation-point sensitivity).
+		double a = (g_yano_eval_alpha >= 0.0) ? g_yano_eval_alpha : 0.5;
+		return TVector3d(a*FaceCenter[faceIdx].x + (1.0-a)*CentrPoint.x,
+		                 a*FaceCenter[faceIdx].y + (1.0-a)*CentrPoint.y,
+		                 a*FaceCenter[faceIdx].z + (1.0-a)*CentrPoint.z);
 	}
 	// Pyramid centroid: 0.75*face-area-centroid + 0.25*volume-centroid.
 	TVector3d fac = MscFaceAreaCentroid(faceIdx);
