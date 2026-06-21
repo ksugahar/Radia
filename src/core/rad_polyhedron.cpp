@@ -2572,6 +2572,7 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 //-------------------------------------------------------------------------
 
 bool g_yano_pyramid_cloud = false;   // default: historical EIEM2 single-point kernel (bit-identical)
+bool g_yano_no_center_charge = false;   // research: drop the element-center cancellation charge (raw collocation)
 
 // Field from a point charge at an ARBITRARY source point (no 1/4pi divisor; matches FieldFromPointCharge).
 TVector3d radTPolyhedron::FieldFromPointChargeAt(const TVector3d& obs, const TVector3d& src, double charge) const
@@ -2715,6 +2716,7 @@ int radTPolyhedron::MscCompensationCloud(TVector3d* pts, double* wts, int cap) c
 TVector3d radTPolyhedron::MscCompensationField(const TVector3d& obs, int faceIdx) const
 {
 	double area = FaceArea[faceIdx];
+	if(g_yano_no_center_charge) return TVector3d(0.0, 0.0, 0.0);   // raw collocation (no cancellation charge)
 	if(!g_yano_pyramid_cloud)
 	{
 		// Single point charge -area at the element center (historical default).

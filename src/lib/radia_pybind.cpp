@@ -1752,6 +1752,7 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 // rad_interaction.cpp.  Declared here at GLOBAL scope so the in-namespace SolverConfig/GetSolverConfig
 // usages resolve to the global definition (not a namespace-scoped symbol).
 extern bool g_yano_pyramid_cloud;
+extern bool g_yano_no_center_charge;
 
 namespace radia_solver_ext {
 
@@ -2003,6 +2004,11 @@ void SolverConfig(py::kwargs kwargs) {
     if (kwargs.contains("yano_pyramid_cloud")) {
         g_yano_pyramid_cloud = kwargs["yano_pyramid_cloud"].cast<bool>();
     }
+    // Research flag: drop the element-center cancellation charge (raw collocation).  For studying the
+    // "div(B)=0 via Lagrange instead of a center charge" question.  Pure-hex dense/BiCGSTAB matrix path.
+    if (kwargs.contains("yano_no_center_charge")) {
+        g_yano_no_center_charge = kwargs["yano_no_center_charge"].cast<bool>();
+    }
 }
 
 py::dict GetSolverConfig() {
@@ -2071,6 +2077,7 @@ py::dict GetSolverConfig() {
       } }
 
     config["yano_pyramid_cloud"] = g_yano_pyramid_cloud;
+    config["yano_no_center_charge"] = g_yano_no_center_charge;
 
     return config;
 }
