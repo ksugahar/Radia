@@ -1,0 +1,32 @@
+{
+  "mu_r": 1000.0,
+  "H0": 1000.0,
+  "applied": "in-plane +y",
+  "rows": [
+    {
+      "nxy": 8,
+      "nz": 2,
+      "nhex": 56,
+      "dof": 336,
+      "moment_my": 2.5244351808152032,
+      "cond": 352.12845529456325,
+      "eiem2_my": 2.4772717332155696,
+      "mmm_my": 2.530305942184457,
+      "moment_err": -0.0023201784698752004,
+      "eiem2_err": -0.020959603376302427
+    },
+    {
+      "nxy": 12,
+      "nz": 2,
+      "nhex": 108,
+      "dof": 648,
+      "moment_my": 2.598692875594295,
+      "cond": 3102.466934126999,
+      "eiem2_my": 2.565871398191831,
+      "mmm_my": 2.603904419719711,
+      "moment_err": -0.0020014344942725915,
+      "eiem2_err": -0.014606151147427249
+    }
+  ],
+  "conclusion": "On a voxelized non-convex hex C-yoke (real flux path), the moment formulation assembled from rad.GetCentroidFieldGrad lands ~0.2% from the MMM reference vs ~1.5-2% for the alpha-tuned EIEM2 collocation -- the ~7-10x cube accuracy advantage carries over to a real geometry, with bounded conditioning. NOT accuracy-negative -> sound to build on."
+}
