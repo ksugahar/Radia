@@ -6,6 +6,9 @@ the linear AGE core (airgap_machine.py) for the B-H nonlinearity loop.
 Companion code: radia_ngsolve.airgap_motor_workflow
   - age_motor_nonlinear_solve(): Picard/Newton loop for one rotor position
   - age_motor_rotation_sweep():  torque–angle curve with nonlinear iron
+  - age_motor_hysteresis_sweep(): HYSTERETIC sweep -- B-input Play constitutive in the iron with
+                                  per-element history carried across rotor angles (M-source, one AGE
+                                  factorization) -> hysteretic torque + real-loop iron loss
 """
 
 AGE_MOTOR_WORKFLOW_OVERVIEW = """
@@ -54,6 +57,34 @@ For silicon steel at typical operating points (B ≈ 1.5 T):
 
 Newton (use_newton=True) is a future extension for faster convergence near
 saturation knee. Picard is adequate for most machine analysis workflows.
+
+## Hysteretic Iron (age_motor_hysteresis_sweep)
+
+Beyond a single-valued saturating nu(|B|), the iron can carry the energy-based B-input vector PLAY
+hysteresis constitutive (radia_ngsolve.hysteresis.PlayHysteresis).  The per-element play states p_k are
+carried FORWARD across rotor angles, so the iron B-H response is path-dependent (magnetic history) and
+the torque / iron loss include the hysteresis -- the hysteretic upgrade of age_motor_rotation_sweep.
+
+Method: the fixed-point M-SOURCE (excess-field) coupling, which reuses ONE AGE factorization for the
+whole rotation sweep (the air-gap element is unchanged; only an iron RHS source changes):
+
+    per rotor angle (states p_k frozen during the angle, advanced after):
+      iterate:  H_res = nu0*B - H_play(B; p_k)        # excess field over the reference nu0
+                solve (K(nu0) + gap) A = source + INT_iron H_res.curl v   # one cached factorization
+                B = curl A
+      then:     p_k <- play(B; p_k)                   # advance the history
+
+The play co-energy is CONVEX (hysteresis.play_coenergy_density), so with nu0 >= nu_max/2 the M-source
+is a contraction; the optimal (fastest) reference is nu0 = (nu_max + nu_min)/2 = (sum a_k + a_0)/2,
+which converges in ~10 iterations/angle.  (A per-angle variational/Newton solve is the robust
+alternative for very nonlinear iron, at the cost of a re-factorization per Newton step -- the M-source
+keeps the AGE one-factorization advantage.)
+
+Units: the AGE core uses NORMALIZED reluctivity nu~ = 1/mur (gap = 1), so B = curl A is physical Tesla;
+pass the play slopes normalized (a~ = mu0*nu) and the returned loss_density is physical J/m^3 (the
+normalized loop area / mu0).  The iron loss is the REAL per-element loop area |INT H.dB| from the
+recorded steady cycle -- it captures the rotating/elliptical stator B (loss > scalar |B|pk-Steinmetz),
+which is the whole point of a vector hysteresis model.  Validated: tests/test_age_hysteresis_coupled.py.
 """
 
 AGE_MOTOR_WORKFLOW_API = """
