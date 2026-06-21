@@ -2032,7 +2032,7 @@ CAE_WORKFLOW_TIPS = """# CAE workflow tips — getting from build123d to clean h
 ```
 build123d (Python) → STEP → Cubit (hex mesh) → .msh v4.1 or .vol
                                               → ngsolve / radia_ngsolve
-                                              → JMAG / Abaqus / Nastran
+                                              → Abaqus / Nastran / other FEA
 ```
 
 One-call equivalents (radia-mcp ≥ 0.17):
@@ -2376,8 +2376,19 @@ library OR copy-paste into an `execute_build123d` subprocess.
 |---|---|
 | `cylindrical_magnet(radius, h, m_angle_deg)` / `block_magnet(length, width, h, m_angle_deg)` | a PM primitive, easy-axis angle in the label |
 | `halbach_ring(r_in, r_out, h, n_segments, pole_pairs=1)` | segmented Halbach PM ring; per-segment easy axis = Mallinson `(pole_pairs+1)*theta` |
+| `pole_tip(base_width, tip_width, height, depth)` | trapezoidal shaped pole piece |
 | `c_core(width, height, depth, leg, gap)` | C-shaped electromagnet yoke with a pole gap |
-| `solenoid(r_in, r_out, h)` | winding-bundle (tube) conductor region |
+| `multipole_yoke(n_poles, r_bore, pole_len, pole_width, yoke_thickness, depth)` | n-pole iron yoke (dipole/quad/sextupole) + return ring |
+| `h_dipole(width, height, depth, leg, pole_width, gap)` | H-frame dipole yoke (window frame + 2 poles + gap) |
+| `solenoid(r_in, r_out, h)` / `helmholtz_pair(r_in, r_out, h, separation)` | solenoid bundle / coaxial coil pair |
+| `cos_theta_dipole(radius, conductor_w, conductor_h, length, n_per_half)` | cos-theta winding (arcsin-spaced axial bars -> pure dipole) |
+| `magnetization_map(compound, Br)` | close the loop: PM region labels -> `{label: (Mx, My)}` for the solver |
+
+The magnetization convention is verified end-to-end against physics in
+`tests/test_build123d_halbach_field.py`: a `halbach_ring` -> `magnetization_map` -> 2D A_z PM solve
+gives a UNIFORM transverse bore field of `Br*ln(r_out/r_in)` (dipole), and a quadrupole Halbach
+(`pole_pairs=2`) a field that grows from a null centre.  (A swept saddle coil is future work -- the
+closed-path sweep is fragile in the OCCT kernel; use `cos_theta_dipole` for transverse-field windings.)
 
 ## Region labels & magnetization (the solver hand-off)
 
