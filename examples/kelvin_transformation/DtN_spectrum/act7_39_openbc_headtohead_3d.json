@@ -1,0 +1,12 @@
+{
+  "mu_r": 100.0,
+  "hugging_box_err": {
+    "AR2": 0.11266618313339483,
+    "AR4": 5.22421081509405
+  },
+  "far_sphere_err_AR4": 0.004739072153781139,
+  "sphere_dof_AR4": 29112,
+  "ie_dof_ref": 1300,
+  "kelvin_dof_ref": 76000,
+  "n_fail": 0
+}
