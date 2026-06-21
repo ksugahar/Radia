@@ -1150,3 +1150,39 @@ def test_scaling_ffag_pole_2d_pullback_solver():
     #       (more negative gamma -> the tilt falls), monotonically.
     tilts = [s["k_tilt"] for s in out["sweep"]]
     assert tilts[0] > tilts[1] > tilts[2], tilts
+
+
+def test_scaling_ffag_pole_2d_isochronous():
+    """ISOCHRONOUS design (Step 4): a DIFFERENT achromaticity -- constant
+    revolution TIME, not constant tune.  The isochronous law <B>(r) = B0 gamma(r)
+    needs a RISING field index k_iso(r) = (beta gamma)^2 (opposite of the scaling
+    k = const).  The high-r (highest-B) edge -- the NONLINEAR END PACK -- must
+    deliver the steepest rise AND saturates first, so the linear-theory
+    isochronous pole loses isochronism there; the SAME 2-parameter pole reshape
+    drives the SATURATED <B>(r) back onto B0 gamma(r), A/phi-certified.
+
+    Locks: (i) k_iso(r) genuinely RISES across the aperture; (ii) the end pack is
+    genuinely saturated (B_gap > knee); (iii) saturation breaks the naive iso
+    pole's field shape; (iv) the reshape restores it (smaller residual, real
+    improvement); (v) the saturated reshaped design is A/phi-bracket certified."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    out = sf.run_isochronous(maxh=0.012)
+    n, o = out["naive"], out["reshaped"]
+    # (i) the isochronous index RISES (not the scaling k = const).
+    assert out["k_iso_max"] - out["k_iso_min"] > 0.8, out
+    assert out["k_iso_min"] > 0.0, out
+    # (ii) the end pack genuinely saturates (gap field crosses the iron knee).
+    assert n["_s"]["B_gap_max"] > 1.25 > sf.BK_IRON - 0.1, n["_s"]["B_gap_max"]
+    # (iii) saturation breaks the naive (linear-theory) isochronous field shape.
+    assert n["iso_resid"] > 0.012, n
+    # (iv) the 2-parameter reshape restores isochronism into saturation.
+    assert o["iso_resid"] < 0.013, o
+    assert out["iso_improvement"] > 2.0, out
+    # (v) the saturated reshaped <B>(r) is A/phi-bracket certified.
+    rmin_i, rmax_i = out["aperture"]
+    bk = sf.bracket_saturated(B_design=out["B_design"], k=out["k_iso0"],
+                              gamma=o["gamma"], gamma2=o["gamma2"],
+                              r_min=rmin_i, r_max=rmax_i, maxh=0.012)
+    assert bk["bracket_gap_max"] < 5e-3, bk
