@@ -93,6 +93,8 @@ def build123d_usage(topic: str = "overview") -> str:
     Args:
         topic: Documentation topic. Options:
             "overview"        - What build123d is, CAE pipeline, safe subset
+            "parametric_library" - Tested ops (wedge/tube/racetrack/arrays/mirror/assembly) + EM
+                                archetypes (Halbach ring, C-core, magnets, solenoid): modeling.py + archetypes.py
             "lab_policy"      - Role split vs Cubit (tet vs hex), translation guidance
             "cubit_rosetta"   - Cubit `.jou` verb ↔ build123d mapping table
             "primitives_3d"   - Box, Cylinder, Cone, Sphere, Torus, Wedge + boolean

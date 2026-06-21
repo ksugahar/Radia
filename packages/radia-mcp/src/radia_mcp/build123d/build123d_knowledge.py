@@ -1841,29 +1841,28 @@ Use: quadrupole field modeling, pole shape optimization.
 
 ### 6. Halbach ring (labels-per-segment for magnetization direction)
 
-```python
-import math
-from build123d import Compound, Pos, Rot, Cylinder
+Use the tested generator (no hand-rolled wedge math):
 
-R_in, R_out, h, n_seg = 40.0, 55.0, 20.0, 12
-segments = []
-seg_arc = 360.0 / n_seg
-for k in range(n_seg):
-    angle = k * seg_arc
-    # Cut a radial wedge from an annulus.  In build123d, approximate
-    # the wedge by intersecting the annulus with a large pie slice.
-    # For mesh purposes, using the *full annulus* split by angle
-    # labels is often cleaner; Radia treats each labeled segment
-    # separately and takes its magnetization direction from the label.
-    pass   # (abridged; implementation depends on solver side)
-halbach = Compound(children=segments)
-halbach.label = "halbach_array"
+```python
+from radia_mcp.build123d.archetypes import halbach_ring, parse_magnetization
+
+# 12-segment DIPOLE Halbach ring (pole_pairs=1 -> uniform transverse bore field)
+hb = halbach_ring(r_in=40, r_out=55, h=20, n_segments=12, pole_pairs=1, name="hb")
+# each child is a real annular wedge whose label encodes its easy-axis angle:
+for seg in hb.children:
+    m_deg = parse_magnetization(seg.label)     # e.g. "hb_00_M30.000" -> 30.0
+    # solver side: M = Br * (cos(m_deg), sin(m_deg), 0)
 ```
-Key idea: each segment's **label encodes the magnetization angle**,
-e.g. `f"seg_{k:02d}_m{k*2*seg_arc:.1f}deg"`, and the solver
-(Radia) dispatches on the label prefix to set magnetization direction.
-`run_pipeline_multi` (`examples/build123d_netgen_gmsh_flow/`) carries
-labels to Gmsh physical groups, preserving this mapping.
+
+Key idea: each segment's **label encodes the magnetization (easy-axis) angle** via the
+``_M<deg>`` suffix, set by the Mallinson law ``alpha_k = (pole_pairs+1)*theta_k`` (so the dipole
+array's easy axis advances at TWICE the mechanical angle, a quadrupole at 3x).  The solver (Radia)
+recovers it with ``archetypes.parse_magnetization`` and sets the magnetization direction;
+``run_pipeline_multi`` (`examples/build123d_netgen_gmsh_flow/`) carries the labels to Gmsh physical
+groups, preserving the mapping.  The underlying wedge is
+``radia_mcp.build123d.modeling.annular_segment`` (full annulus intersected with a pie slice -- robust
+for any span); ``polar_array`` tiles it.  See the `parametric_library` topic for the full op +
+archetype set.
 
 ## PEEC filament CAD
 
@@ -2351,8 +2350,60 @@ source of `BRep_API: Make Shape failed` when forgotten.
 from .build123d_api import get_api_reference as _get_b3d_api_reference
 
 
+PARAMETRIC_LIBRARY = r"""
+# Parametric modeling library (radia_mcp.build123d.modeling + .archetypes)
+
+A small, **tested** library of solid-modeller operations and EM-device archetypes -- the parametric
+building blocks you would author in a parametric solid modeller, as clean Netgen-meshable build123d
+solids with region labels.  Pure build123d (no radia_mcp dependency at runtime), so they import as a
+library OR copy-paste into an `execute_build123d` subprocess.
+
+## modeling -- generic operations (the building blocks)
+
+| helper | what it makes |
+|---|---|
+| `annular_segment(r_in, r_out, h, start_angle, end_angle)` | a radial WEDGE of an annulus (robust for any span < 360: annulus INTERSECTED with a pie slice -- no self-intersecting sketch) |
+| `tube(r_in, r_out, h)` | hollow cylinder |
+| `racetrack_coil(length, width, band, h, corner_radius)` | rounded-rectangle (racetrack) coil outline, extruded |
+| `polar_array(part, count, total_angle=360)` | rotate-with-copies -> labelled Compound (full ring or partial fan) |
+| `linear_array(part, count, spacing, direction)` | translate-with-copies |
+| `mirrored(part, about=Plane.XZ)` | symmetry completion (original + mirror) |
+| `assembly(*parts)` | group labelled regions into ONE multi-region Compound (does NOT fuse) |
+
+## archetypes -- EM devices (composed from the ops)
+
+| helper | device |
+|---|---|
+| `cylindrical_magnet(radius, h, m_angle_deg)` / `block_magnet(length, width, h, m_angle_deg)` | a PM primitive, easy-axis angle in the label |
+| `halbach_ring(r_in, r_out, h, n_segments, pole_pairs=1)` | segmented Halbach PM ring; per-segment easy axis = Mallinson `(pole_pairs+1)*theta` |
+| `c_core(width, height, depth, leg, gap)` | C-shaped electromagnet yoke with a pole gap |
+| `solenoid(r_in, r_out, h)` | winding-bundle (tube) conductor region |
+
+## Region labels & magnetization (the solver hand-off)
+
+build123d keeps region labels on a Compound's **`.children`** (NOT on the flattened `.solids()`, which
+drops them).  PM regions encode their easy-axis angle in the label via `archetypes.magnetization_tag`
+(`"{name}_{i:02d}_M{deg:.3f}"`); the solver recovers it with `archetypes.parse_magnetization` and sets
+`M = Br*(cos, sin, 0)`.  `run_pipeline_multi` carries these labels to Gmsh physical groups.
+
+```python
+from radia_mcp.build123d.modeling import annular_segment, polar_array, assembly, tube
+from radia_mcp.build123d.archetypes import halbach_ring, c_core, parse_magnetization
+
+hb = halbach_ring(40, 55, 20, 12, pole_pairs=1, name="pm")     # dipole Halbach
+yoke = c_core(120, 90, 60, 18, 26, name="yoke")
+machine = assembly(*hb.children, yoke, tube(10, 18, 40, "coil"), label="device")
+mags = {seg.label: parse_magnetization(seg.label) for seg in hb.children}
+```
+
+Validated: tests/test_build123d_modeling.py, tests/test_build123d_archetypes.py (analytic volumes,
+OCCT-valid, region labels, Netgen-meshable, Mallinson easy axes).
+"""
+
+
 _TOPICS = {
     "overview": OVERVIEW,
+    "parametric_library": PARAMETRIC_LIBRARY,
     "lab_policy": LAB_POLICY,
     "cubit_rosetta": CUBIT_ROSETTA,
     "examples_lab_patterns": EXAMPLES_LAB_PATTERNS,
