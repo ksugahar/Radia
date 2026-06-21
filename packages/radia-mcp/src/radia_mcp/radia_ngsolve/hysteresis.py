@@ -240,6 +240,28 @@ def saturating_cells(Bmax, N, a_each, B_sat):
     return PlayHysteresis(eta=eta, f_k=f)
 
 
+def identify_from_loop_areas(Bmax, N, loop_areas, a0=0.0):
+    """IDENTIFY the dissipative cell slopes a_k from MEASURED symmetric-loop areas W(m*Delta), m=1..N
+    (Delta=Bmax/N, equal-interval thresholds eta_k=(k-1/2)*Delta).  For the linear-cell B-input Play,
+    the loop area is the lower-triangular relation
+
+        W(m*Delta) = 4 Delta^2 * sum_{k=1..m} a_k (k-1/2)(m-k+1/2),
+
+    so the cell slopes are recovered by inverting it (a deterministic identification, the linear-cell
+    analogue of the Everett-function shape-function identification used for general piecewise-linear
+    cells -- see radia.hysteresis_io / the lab Hane-Sugahara TMAG 2026 paper).  ``a0`` is the reversible
+    reluctivity (the loop-TIP slope, which the area does not constrain).  Returns a fitted
+    :class:`PlayHysteresis`."""
+    D = Bmax / N
+    M = np.zeros((N, N))
+    for mi in range(1, N + 1):
+        for k in range(1, mi + 1):
+            M[mi - 1, k - 1] = 4.0 * D * D * (k - 0.5) * (mi - k + 0.5)
+    a = np.linalg.solve(M, np.asarray(loop_areas, dtype=float))
+    eta = np.concatenate([[0.0], (np.arange(1, N + 1) - 0.5) * D])
+    return PlayHysteresis(eta=eta, a=np.concatenate([[a0], a]))
+
+
 def rayleigh_cells(eta_max, K, a_each):
     """UNIFORM threshold density on (0, eta_max] (plus an eta=0 reversible cell).  The loop-area loss
     is then  loss(Bm) = (2/3) a rho Bm^3  -- the RAYLEIGH cubic law P_hyst ~ Bm^3 -- by the closed
