@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-06-22T00:03:56.632239",
+  "hostname": "lab",
+  "benchmark": "yano_moment_scaling",
+  "problem": {
+    "geometry": "voxelized hex C-yoke",
+    "mu_r0": 1000.0,
+    "Msat": 1000000.0,
+    "H_applied": 50000.0,
+    "nz": 2,
+    "sizes": [
+      8,
+      12,
+      16,
+      20
+    ],
+    "solver": "Anderson-accelerated secant, dense, no deflation"
+  },
+  "results": [
+    {
+      "nxy": 8,
+      "nz": 2,
+      "nhex": 56,
+      "dof": 336,
+      "H0": 50000.0,
+      "moment_my": 113.84535662112012,
+      "iterations": 30,
+      "converged": true,
+      "t_setup": 0.1874754000455141,
+      "t_solve": 0.12438399996608496,
+      "peak_memory_mb": 118.1953125,
+      "dense_matrix_mb": 0.903168,
+      "divB_resid": 3.445580688305432e-16,
+      "constit_resid": 9.848349100856457e-11
+    },
+    {
+      "nxy": 12,
+      "nz": 2,
+      "nhex": 108,
+      "dof": 648,
+      "H0": 50000.0,
+      "moment_my": 88.580831659621,
+      "iterations": 51,
+      "converged": true,
+      "t_setup": 0.1043305000057444,
+      "t_solve": 0.5759488999610767,
+      "peak_memory_mb": 133.59375,
+      "dense_matrix_mb": 3.359232,
+      "divB_resid": 3.436187778673691e-16,
+      "constit_resid": 1.2523716434764663e-11
+    },
+    {
+      "nxy": 16,
+      "nz": 2,
+      "nhex": 180,
+      "dof": 1080,
+      "H0": 50000.0,
+      "moment_my": 94.87580305443203,
+      "iterations": 42,
+      "converged": true,
+      "t_setup": 0.2662413999205455,
+      "t_solve": 1.2770280999829993,
+      "peak_memory_mb": 168.421875,
+      "dense_matrix_mb": 9.3312,
+      "divB_resid": 1.120922005084501e-15,
+      "constit_resid": 8.710373269588864e-11
+    },
+    {
+      "nxy": 20,
+      "nz": 2,
+      "nhex": 304,
+      "dof": 1824,
+      "H0": 50000.0,
+      "moment_my": 99.66497180191607,
+      "iterations": 43,
+      "converged": true,
+      "t_setup": 0.8021728000603616,
+      "t_solve": 3.2633809000253677,
+      "peak_memory_mb": 267.65625,
+      "dense_matrix_mb": 26.615808,
+      "divB_resid": 1.1501461323825781e-15,
+      "constit_resid": 6.683543229799265e-11
+    }
+  ],
+  "note": "Dense baseline for the parameter-free moment-yano nonlinear solver. Memory is O(dof^2) (dense_matrix_mb) and the per-iteration solve is O(dof^3), so this path caps at a few thousand dof -- the HACApK phase (ACA-compression of the centroid field+gradient operator F0/Ginv) must reproduce these moment_my / div(B) / constit numbers and beat peak_memory_mb + t_solve at scale. mdx-ready: imports radia directly (no src-path hack)."
+}
