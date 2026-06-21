@@ -33,6 +33,7 @@ extern radTConvergRepair& radCR;
 // Set via rad.SolverConfig(yano_pyramid_cloud=True).  Default false == the EIEM2 single-point kernel
 // (bit-identical to the historical default).  See radTPolyhedron::MscEvalPoint / MscCompensationField.
 extern bool g_yano_pyramid_cloud;
+extern bool g_yano_no_center_charge;   // research: drop the element-center cancellation charge (raw collocation)
 
 //-------------------------------------------------------------------------
 
