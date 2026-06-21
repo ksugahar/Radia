@@ -59,13 +59,17 @@ is the arc (each script self-asserts and prints its result).
   `act2_06_eccentric_fem_endtoend` (FEM end-to-end), `act2_07_apparatus_design_calc` (reactor-leg design calc),
   `act2_08_budget_dofcost`, `act2_09_exterior_mesh`, `act2_10_exterior_mesh3`,
   `act2_11_kelvin_mesh_cutting_datasheet` (the consolidated `min(p,k)` mesh-cut recipe),
-  `act2_12_derham_dtn_pconv_hconv` (the DtN spectrum is FORM-dependent: two de Rham ladders, p- & h-convergence).
+  `act2_12_derham_dtn_pconv_hconv` (the DtN spectrum is FORM-dependent: two de Rham ladders, p- & h-convergence),
+  `act2_13_adaptive_p_selection` (the p-selection chicken-and-egg, resolved by a coarse-solve adaptive loop),
+  `act2_14_center_conditioning_floor` (the SOLVE cond `~(R/h)²` vs the per-mode `1.30`; floor = geometry, not centre-quadrature),
+  `act2_15_nonsymmetric_validation` (Kelvin vs an independent large box on an asymmetric field).
   Figures for both (lab `radia_mcp.figure` toolkit, IEEJ profile + quality gates): `plot_dtn_mesh_studies.py`
   -> `act2_11_*.png` (the `min(p,k)` data-collapse) + `act2_12_*.png` (the two ladders + the p-method).
 - **Act 3 — Kelvin realizes it exactly.** The conformal compactification; the infinity
   point; the vector form; the exterior field. → `act3_01_infinity_integrable`,
   `act3_02_centre_quadrature`, `act3_03_vector_dtn`, `act3_04_aform_center_singularity` (A-form centre),
-  `act3_05_exterior_field_recovery`.
+  `act3_05_exterior_field_recovery`, `act3_06_vector_minpk_law` (the `2·min(p,k)` law is FORM-dependent — H(curl) needs curved `k>=2`),
+  `act3_07_aform_sparse_kelvin` (edge-element A solves SPARSE on the Kelvin ball, no dense DtN).
 - **Act 4 — Kelvin is a sparse BEM (the Schur complement).** `Λ` = the Schur complement
   of the sparse Kelvin-FEM matrix; sparse vs dense; vs H-matrix; still-FEM taxonomy. →
   `act4_01_kelvin_vs_bem_cost`, `act4_02_kelvin_approximates_bem`,
@@ -85,7 +89,7 @@ is the arc (each script self-asserts and prints its result).
   `act6_03_dtn_to_cln_wideband` (band-unlimited), `act6_04_cln_mor_radial_eddy`/`act6_05_cln_fetd_reflection` (CLN MOR + transient),
   `act6_06_square_eddy_dtn_to_cln`/`act6_07_cube_eddy_dtn_to_cln` (non-separable square C4v / cube O_h), `act6_08_disk2d_kelvin_eddy_dtn` (2D
   conformal disk), `act6_09_cln_vs_pml` (CLN vs CFS-PML), `act6_10_iabc_time_domain`/`act6_11_exact_dtn_fetd` (exact-DtN FETD),
-  `act6_12_iabc_diffusion_timedomain`.
+  `act6_12_iabc_diffusion_timedomain`, `act6_13_mqs_eddy_dtn_frequency` (the MQS open boundary is FREQUENCY-FLAT — air is Laplace, the eddy physics is internal).
 - **Act 7 — The radiating extension (high-freq — a studied regime; the MQS / Laplace limit is on
   Radia's *core field solver*, not this DtN study).** The `kR` axis is the two-paper boundary; the
   **extended (radiating) Kelvin** (transformation-optics medium + matched HOIBC) / PML / BEM / IABC
@@ -144,7 +148,9 @@ is the arc (each script self-asserts and prints its result).
   worsens with AR), so the geometry edge needs a PROPER conforming closure; the spheroidal IE delivers
   the same Osborn demag at ~1300 DOF vs the sphere-locked Dirichlet/Kelvin (29k/76k) — 22–58× fewer —
   but is spheroid-LOCKED (as Kelvin is sphere-locked), so for ARBITRARY shapes the general proper
-  conforming closure is box-PML, not a decay-basis IE.
+  conforming closure is box-PML, not a decay-basis IE. Finally `act7_40_pml_vs_kelvin_solve_cond`
+  (the Q13 conditioning bench — the assembled SOLVE cond, not the per-mode `1.30`: Kelvin is
+  frequency-flat, PML grows `~1/k` toward static).
 - **Act 8 — The application: stream-function coil design with iron.** *Build* the
   material-aware transfer matrix `M` (the DtN's job), then *invert* it to design the coil
   (the climax — the operator becomes a design tool). → `act8_01_streamfunction_coil_with_iron`,
