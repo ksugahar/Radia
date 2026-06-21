@@ -140,11 +140,54 @@ reluctivity dH/dB.  STATUS in radia_ngsolve.hysteresis:
   is the internal variable.
 """
 
+FORC_PREISACH = """\
+## FORC (first-order reversal curves) and the Preisach connection
+
+FORC is the standard experimental characterisation of a hysteretic material and the signature feature
+of HYSTERSOFT (Dimian & Andrei, FAMU-FSU / TU Vienna / Alexandru-Ioan-Cuza University; "Scalar and
+vector hysteresis simulations using HysterSoft", and "HYSTERSOFT -- Software for the simulation of
+magnetization processes").  HysterSoft implements the Energetic (Hauser), Jiles-Atherton, Hodgdon and
+scalar/vector Preisach models, and identifies the (scalar or vector) Preisach distribution from MEASURED
+first-order reversal curves.
+
+THE TECHNIQUE.  Saturate positively; reverse to a reversal field (here a B-input reversal Ba); then
+sweep the field back UP recording the output along the reversal curve.  The family {FORC(Ba, .)} and its
+mixed second derivative -- the FORC distribution
+
+    rho(Ba, Bb) = -1/2 d^2 H / dBa dBb            (Mayergoyz; Pike-Roberts-Verosub 1999)
+
+map the irreversible switching: in Preisach terms rho is the Preisach density of hysterons with
+switching thresholds (alpha, beta), and the coercivity / interaction axes are Bc=(Bb-Ba)/2,
+Bu=(Bb+Ba)/2.
+
+WHY IT FITS THE PLAY MODEL EXACTLY.  The energy-based Play model is mathematically the STATIC PREISACH
+model (Bobbio 1997; Matsuo-Shimasaki 2003), so its FORC distribution is computable in closed form.  For
+the linear-cell B-input Play (H = sum_k a_k p_k, thresholds eta_k):
+
+    rho(Ba, Bb) = sum_k (a_k/2) delta( (Bb - Ba)/2 - eta_k )
+
+-- a set of RIDGES on the coercivity lines Bc = eta_k, with per-ridge integrated weight
+``INT rho dBa dBb = a_k (Bsat - eta_k)``.  So the play thresholds eta_k ARE the B-space Preisach / FORC
+coercivity density and the slopes a_k set the ridge weights -- the FORC diagram of a Play material is a
+comb at its cell thresholds.  (Implemented & gated: ``PlayHysteresis.forc_curves`` ->
+``hysteresis.forc_distribution`` -> ``forc_coercivity_weight`` vs ``analytic_forc_weights``;
+test_hysteresis_forc.)
+
+RELATION TO THE OTHER IDENTIFICATION ROUTES.  The Everett function (see "identification") is the DOUBLE
+INTEGRAL of the Preisach density, so Everett-from-symmetric-loops and FORC-from-reversal-curves are two
+views of the same density; FORC uses the full reversal-curve family and so resolves the whole
+distribution (incl. asymmetric / off-diagonal interaction), where ``identify_from_loop_areas`` uses only
+the symmetric-loop areas (the diagonal).  ROADMAP: an INVERSE FORC identifier ``from_measured_forc(...)``
+that reads measured FORCs, forms rho, and reads off the ridge comb (eta_k, a_k) -- the HysterSoft
+identification applied to fit a Play material directly from FORC measurements.
+"""
+
 SECTIONS = {
     "landscape": LANDSCAPE,
     "play_formulation": PLAY_FORMULATION,
     "binput_congruency": BINPUT_CONGRUENCY,
     "identification": IDENTIFICATION,
+    "forc_preisach": FORC_PREISACH,
     "fe_and_loss": FE_AND_LOSS,
 }
 
