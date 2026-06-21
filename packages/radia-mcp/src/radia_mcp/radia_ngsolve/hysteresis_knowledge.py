@@ -17,11 +17,13 @@ Rate-independent ("DC") scalar/vector hysteresis-model families, with the lab's 
 
 | Family | Idea | Pros / cons (for motor FE) |
 |--------|------|----------------------------|
-| Jiles-Atherton | anhysteretic + pinning ODE, ~5 params | few params, but limited flexibility, scalar only, minor-loop trouble |
-| Preisach | weighted integral of rectangular hysterons (Everett fn) | very expressive; congruency + wiping-out built in; costly |
+| Jiles-Atherton | anhysteretic + pinning ODE, ~5 params (Ms, a, alpha, k, c) | few params, but limited flexibility, scalar only, minor-loop trouble |
+| Preisach | weighted integral of rectangular hysterons (Everett fn); FORC-identified | very expressive; congruency + wiping-out built in; costly |
 | **Play** | sum of play hysterons + shape functions | **equivalent to static Preisach but cheap; the practical FE choice** |
 | Stop | sum of stop hysterons (the dual of play) | H-input dual; play/stop are complementary (Matsuo 2003) |
 | Energy-based | friction-pinning, energy-consistent, vector | thermodynamic, vector-intrinsic (Henrotte 2006 / Jacques 2018) |
+| Energetic (Hauser) | energy balance: reversible + pinning + interaction terms | physical params, scalar; HysterSoft staple |
+| Hodgdon | first-order ODE dB/dt = f(H) (g(H) - B) sign-based | rate-form, scalar, circuit-friendly |
 | Chua / Chan / Bouc-Wen / LLG | circuit / phenomenological / micromagnetic | niche; not the iron-loss workhorse |
 
 The lab's working choice for electric-machine iron loss is the **play model** -- mathematically
@@ -29,6 +31,15 @@ equivalent to the static Preisach model (so equally expressive) but far cheaper,
 commercial motor-design hysteresis modelling.  Energy-based (Henrotte/Jacques) is the same friction
 idea recast to be intrinsically vector and energy-consistent; the play and energy models coincide in
 the unified Radia Type 5/6 formulation (energy ``chi`` == play threshold ``eta``).
+
+REFERENCE IMPLEMENTATION.  HysterSoft (Dimian & Andrei, FAMU-FSU / TU Vienna / Cuza University) is a
+reference code spanning this landscape -- Energetic, Jiles-Atherton, Hodgdon and scalar/vector Preisach
+models -- with **FORC-based identification** (see the ``forc_preisach`` topic; radia-ngsolve brings the
+FORC technique to the Play model via Play == Preisach).  Its companion line of work (Dimian & Andrei,
+*Noise-Driven Phenomena in Hysteretic Systems*, Springer) covers the RATE / TEMPERATURE-dependent
+frontier -- thermal relaxation (magnetic aftereffect, M ~ -S ln t) and stochastic resonance -- which the
+rate-independent Play model here deliberately does not cover (it is the natural next extension: a
+thermally-activated, time-dependent play threshold).
 """
 
 PLAY_FORMULATION = """\
