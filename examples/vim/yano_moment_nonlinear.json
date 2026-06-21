@@ -1,0 +1,79 @@
+{
+  "mu_r0": 1000.0,
+  "Msat": 1000000.0,
+  "rows": [
+    {
+      "nxy": 8,
+      "H0": 1000.0,
+      "regime": "linear",
+      "moment_my": 2.519347005009826,
+      "iters": 29,
+      "converged": true,
+      "radia_my": 2.529344862822407,
+      "err": -0.003952746009266761,
+      "divB_resid": 4.13104058065851e-16,
+      "constit_resid": 5.30747797968802e-11
+    },
+    {
+      "nxy": 8,
+      "H0": 50000.0,
+      "regime": "knee",
+      "moment_my": 113.8453566191405,
+      "iters": 266,
+      "converged": true,
+      "radia_my": 113.34747816560137,
+      "err": 0.004392496962408954,
+      "divB_resid": 2.771425779148984e-16,
+      "constit_resid": 4.9398580954786405e-12
+    },
+    {
+      "nxy": 8,
+      "H0": 200000.0,
+      "regime": "saturated",
+      "moment_my": 184.79953797598824,
+      "iters": 232,
+      "converged": true,
+      "radia_my": 184.5988564152714,
+      "err": 0.0010871224481769914,
+      "divB_resid": 1.5127400054158177e-15,
+      "constit_resid": 5.250006051184258e-11
+    },
+    {
+      "nxy": 10,
+      "H0": 1000.0,
+      "regime": "linear",
+      "moment_my": 2.4463043753062736,
+      "iters": 30,
+      "converged": true,
+      "radia_my": 2.45472537517737,
+      "err": -0.0034305262642619905,
+      "divB_resid": 4.855375627566684e-16,
+      "constit_resid": 3.6898439801537607e-11
+    },
+    {
+      "nxy": 10,
+      "H0": 50000.0,
+      "regime": "knee",
+      "moment_my": 98.55335932193628,
+      "iters": 320,
+      "converged": true,
+      "radia_my": 98.1799513343661,
+      "err": 0.0038033018197216606,
+      "divB_resid": 4.1558995304153987e-16,
+      "constit_resid": 1.682909505050371e-11
+    },
+    {
+      "nxy": 10,
+      "H0": 200000.0,
+      "regime": "saturated",
+      "moment_my": 145.9643037748834,
+      "iters": 239,
+      "converged": true,
+      "radia_my": 145.8895399973311,
+      "err": 0.0005124683891228887,
+      "divB_resid": 1.106018406604199e-15,
+      "constit_resid": 3.937797980596237e-11
+    }
+  ],
+  "conclusion": "Nonlinear (BH-curve) moment-yano with NO loop deflation matches the shipped Radia MMM-MatSatIsoTab solver to <1% across linear/knee/saturated at two mesh densities, with div(B)=0 and the per-element constitutive exact (~1e-11). The loop deflation (an earlier prototype artifact) was the whole nonlinear bug: A is non-singular, the loops carry per-element dipole, and deflating them broke the per-element constitutive + div(B)=0 invisibly (the external moment is loop-invariant, so linear looked fine). Solve A directly. The parameter-free moment formulation is NOT linear-only -- it handles real soft iron."
+}
