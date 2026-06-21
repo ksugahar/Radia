@@ -295,6 +295,76 @@ i.e. a ~6-line `solve(B, alpha=0.0)` extension of `RegularizedTSVD` —
 `alpha = 0` keeps the present exact-fit branch; `alpha > 0` swaps the
 `W⁻¹·Σ⁻¹` core for the `(αI + Σ²W)⁻¹·Σ` core.  No new factorisation.
 
+#### Three dials, not two — the `aca_eps` pitfall
+
+The "two knobs + one metric" framing above quietly assumes a **third**
+dial is pinned: the ACA+ tolerance `aca_eps`, which sets the **rank
+`k_aca`** at which `A ≈ U Σ Vᵀ` is built.  That rank is an
+**approximation** of `A`, *not* a regulariser — but a **loose** `aca_eps`
+drops small-σ directions before `α` / `k_mode` ever see them, so the ACA+
+truncation silently regularises out of your control:
+
+| dial      | sets        | role                          | guidance                     |
+|-----------|-------------|-------------------------------|------------------------------|
+| `aca_eps` | `k_aca`     | **approximation** of `A`      | keep **TIGHT** (1e-10…1e-13) |
+| `k_mode`  | hard filter | TSVD regularisation rank      | the auditable hard knob      |
+| `α`       | soft filter | Tikhonov ridge `σ/(σ²+α)`     | the auditable soft knob      |
+
+Rule: make `aca_eps` **tighter** than the regularisation you intend, then
+steer with `k_mode` / `α` / `S`.  The verification above is the evidence —
+at `aca_eps = 1e-10` the cached ψ already carries ~1.5e-3 null-space
+noise, even though the optimisation *target* (seminorm + constraint)
+stays near machine precision; the specific least-norm **representative**
+has drifted because ACA+ pre-truncated it.
+
+(General-`S` Tikhonov `min ‖Aψ − B‖² + α‖Lψ‖²`, `S = LᵀL`, is classically
+the **GSVD of the pair `(A, L)`**; the folded core is an ACA-friendly
+*implicit* GSVD — it forms only `S⁻¹V` and the `k × k` `W`, never the
+dense GSVD.)
+
+#### Choosing α / k_mode — L-curve, Morozov, and what "noise" means in SF
+
+  - **L-curve**: plot `(‖Aψ − B‖, ‖ψ‖ or peak J)` over an `α` (or
+    `k_mode`) sweep; the **corner** (maximum curvature) is the design
+    point.  The fold makes the whole sweep cheap (one factorisation,
+    `k × k` re-solves).
+  - **Morozov discrepancy** (stop at `‖Aψ − B‖ = noise`): SF has **no
+    measurement noise** — the floor is the **field unreachability** on
+    this winding surface (the residual *plateau*).  So "Morozov" here
+    means **stop at the achievable-on-this-surface floor**; chasing a
+    lower residual past the plateau only inflates `‖ψ‖` / peak J.
+  - **GCV** (parameter-free): not wired in; use the L-curve corner.
+
+  **Honest caveat — the α-L-curve is NON-MONOTONIC.**  The iso-contour
+  **topology** jumps with `α` (a saddle merges / splits a current
+  region), so a smooth L-curve is not guaranteed.  Report **both**
+  residual **and** peak J and pick on the corner, never residual alone.
+  Measured (Gx single-stroke): plain **TSVD mode-truncation beat the best
+  ridge `α`** (8.45 % vs 8.97 %) — the best regulariser is
+  target-dependent, which is why the menu (`tsvd` / `tikhonov` / `h1` /
+  `inductance`) is kept rather than collapsed to one.
+
+#### Conditioning — the constant-ψ null space
+
+Both `A` **and** a gradient seminorm `S = LᵀL` annihilate an additive
+**constant** in ψ: `grad(const) = 0`, and a uniform current potential
+carries no current (`K = n̂ × grad ψ = 0`).  So `S` is SPD only on the
+quotient and `W = Vᵀ S⁻¹ V` can blow up.  Two fixes, both already in the
+code (distinct from the small-σ damping above, which is *data*-side
+conditioning):
+
+  - a tiny **ridge** `S += (1e-9 · mean_diag) · I` (the `ridge = 1e-9` in
+    [`_inductance_seminorm`](../../src/radia/panels/calc_streamfunction.py))
+    lifts the harmless null space;
+  - `--confine abe / on` **grounds** it via the reduction matrix `R` (one
+    free constant per physical boundary component).
+
+Without either, `W⁻¹` amplifies the constant mode — a DC offset in ψ that
+the equal-increment contouring happens to ignore, but which wrecks any
+`‖ψ‖`-based L-curve selection.  This is the regularisation-side reason to
+run the Verify-First FES checks (slaved DOFs, constant-mode grounding)
+**before** trusting an L-curve.
+
 ### Why this matters
 
 The Path-A compensated iteration re-uses the same `A` and the same
