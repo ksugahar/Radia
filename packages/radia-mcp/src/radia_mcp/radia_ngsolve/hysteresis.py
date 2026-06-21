@@ -128,6 +128,28 @@ class PlayHysteresis:
         loss, the principled replacement for the fitted Steinmetz k_h*f*B^2."""
         return f * self.loss_per_cycle(Bm, n=n, cycles=cycles)
 
+    # --- differential reluctivity tensor dH/dB: the Newton-Raphson FE ingredient ---
+    def play_tangent(self, Bx, By, px, py):
+        """Consistent differential-reluctivity tensor dH/dB for the B-input Play with FROZEN states
+        (px, py) -- the Newton-Raphson FE-coupled-hysteresis ingredient (Mitsuoka-Mifune-Matsuo 2013).
+        Linear cells: dH/dB = a_0 I + sum_{moving} a_k [ I - (eta_k/|s_k|)(I - s^_k (x) s^_k) ], with
+        s_k = B - p_k; a PINNED cell (|s_k| <= eta_k) contributes 0, the eta=0 cell contributes a_0 I.
+        SPD by construction (eigenvalues a along s^ and a(1-eta/|s|) across), so the Newton tangent
+        K_t = INT (dH/dB) curl(dA).curl(w) is positive-definite.  Inputs are arrays of shape (n,) and
+        (n, K); returns (nu_xx, nu_xy, nu_yy) each (n,)."""
+        Bx = np.atleast_1d(np.asarray(Bx, float)); By = np.atleast_1d(np.asarray(By, float))
+        px = np.atleast_2d(px); py = np.atleast_2d(py)
+        sx = Bx[:, None] - px; sy = By[:, None] - py
+        smag = np.sqrt(sx*sx + sy*sy); smag = np.where(smag < 1e-30, 1e-30, smag)
+        moving = (smag > self.eta[None, :]) & (self.eta[None, :] > 0)
+        fac = np.where(moving, self.eta[None, :]/smag, 0.0)
+        shx = np.where(moving, sx/smag, 0.0); shy = np.where(moving, sy/smag, 0.0)
+        a1 = self.a[None, 1:]; m1 = moving[:, 1:]; f1 = fac[:, 1:]; sx1 = shx[:, 1:]; sy1 = shy[:, 1:]
+        nu_xx = self.a[0] + np.sum(a1*np.where(m1, 1.0 - f1*(1.0 - sx1**2), 0.0), axis=1)
+        nu_yy = self.a[0] + np.sum(a1*np.where(m1, 1.0 - f1*(1.0 - sy1**2), 0.0), axis=1)
+        nu_xy = np.sum(a1*np.where(m1, f1*sx1*sy1, 0.0), axis=1)
+        return nu_xx, nu_xy, nu_yy
+
     # --- arbitrary (vector) B-waveform loss: the per-point MOTOR iron-loss kernel ---
     def loss_from_waveform(self, Bx_wave, By_wave=None, settle=2):
         """Hysteresis loss density [J/m^3 per cycle] = |∮ H . dB| for an arbitrary (vector) B(t)
