@@ -29,7 +29,7 @@ from .modeling import annular_segment, assembly, polar_array, tube
 
 __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cylindrical_magnet",
            "block_magnet", "halbach_ring", "c_core", "solenoid", "pole_tip", "multipole_yoke",
-           "h_dipole", "helmholtz_pair", "cos_theta_dipole"]
+           "h_dipole", "helmholtz_pair", "cos_theta_dipole", "e_core", "slotted_stator", "spm_rotor"]
 
 
 def magnetization_tag(name, index, angle_deg):
@@ -204,3 +204,59 @@ def cos_theta_dipole(radius, conductor_w, conductor_h, length, n_per_half, name=
             bar.label = f"{name}_{grp}_{i:02d}"
             bars.append(bar)
     return Compound(children=bars, label=name)
+
+
+def e_core(width, height, depth, leg_width, back_thickness, name="iron_core"):
+    r"""An **E-core** (transformer / inductor): a rectangular block (``width`` x ``height`` x ``depth``)
+    with two windows cut out, leaving a back spine of ``back_thickness`` and three legs of ``leg_width``
+    (centre + two outer).  Pair with two windows for windings around the centre leg.  Returns one iron
+    Solid.  (For an EI-core, add a separate bar across the open face.)"""
+    ww = (width - 3 * leg_width) / 2.0
+    wh = height - back_thickness
+    if ww <= 0 or wh <= 0:
+        raise ValueError("legs/back too thick for the given width/height")
+    win = Box(ww, wh, depth + 2)
+    y_win = -height / 2 + back_thickness + wh / 2
+    x1 = -width / 2 + leg_width + ww / 2
+    x2 = width / 2 - leg_width - ww / 2
+    core = (Box(width, height, depth) - Pos(x1, y_win, 0) * win - Pos(x2, y_win, 0) * win).solid()
+    core.label = name
+    return core
+
+
+def slotted_stator(r_bore, r_yoke, n_slots, slot_depth, slot_span_deg, h, name="stator"):
+    r"""A **slotted stator lamination**: an annular ring (bore ``r_bore``, yoke ``r_yoke``, height ``h``)
+    with ``n_slots`` radial slots opening to the bore (depth ``slot_depth``, angular width
+    ``slot_span_deg``), leaving the teeth between them.  The single-region iron core a motor / actuator
+    winding sits in; feed it to the AGE rotating-machine solver (see
+    ``radia_ngsolve.airgap_motor_workflow``).  Returns one iron Solid."""
+    if not (0 < r_bore < r_yoke):
+        raise ValueError("require 0 < r_bore < r_yoke")
+    if slot_depth >= r_yoke - r_bore:
+        raise ValueError("slot deeper than the stator radial thickness")
+    stator = tube(r_bore, r_yoke, h, label=name)
+    slot = annular_segment(r_bore - 0.5, r_bore + slot_depth, h, -slot_span_deg / 2, slot_span_deg / 2)
+    slots = polar_array(slot, n_slots, 360.0)
+    core = (stator - slots).solid()
+    core.label = name
+    return core
+
+
+def spm_rotor(r_shaft, r_rotor, n_poles, magnet_thickness, magnet_span_deg, h, name="magnet"):
+    r"""A **surface-PM (SPM) rotor**: an iron hub (``r_shaft < r < r_rotor``) carrying ``n_poles``
+    surface magnets (annular segments, radial thickness ``magnet_thickness``, angular width
+    ``magnet_span_deg``) whose easy axes are RADIAL and ALTERNATE N/S pole-to-pole (encoded in each
+    magnet label via the magnetization convention).  Returns a labelled multi-region Compound
+    (``rotor_iron`` + ``{name}_kk_M<deg>``); ``magnetization_map`` turns the labels into M vectors.
+    The rotor half of a PMSM you can drop into the AGE solver."""
+    if not (0 <= r_shaft < r_rotor):
+        raise ValueError("require 0 <= r_shaft < r_rotor")
+    hub = tube(r_shaft, r_rotor, h, label="rotor_iron")
+    children = [hub]
+    for k in range(n_poles):
+        c = k * 360.0 / n_poles
+        seg = annular_segment(r_rotor, r_rotor + magnet_thickness, h,
+                              c - magnet_span_deg / 2, c + magnet_span_deg / 2)
+        seg.label = magnetization_tag(name, k, c + (180.0 if k % 2 else 0.0))   # radial, alternating
+        children.append(seg)
+    return assembly(*children, label="spm_rotor")
