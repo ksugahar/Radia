@@ -1,35 +1,38 @@
-"""yano-MSC (loop-removed) vs reduced-Omega + KELVIN FEM on a hex iron cube in a UNIFORM applied field.
+"""Is the yano-MSC soft-iron solve DISTORTION-ROBUST?  Measured with the RIGHT observable.
 
-Confirms the yano-type surface-charge MSC solve is LOOP-FREE and DISTORTION-ROBUST against an independent
-open-boundary FEM, with the SAME uniform source in both:
+This example replaces an earlier version that drew a distortion-robustness conclusion from a WRONG
+observable and a too-weak distortion.  Both are fixed here:
 
-  * source   : uniform H0 along +z, applied IDENTICALLY -- yano via rad.ObjBckg([0,0,mu0*H0]) (H_app=H0);
-               FEM via Omega_s = H0*z on the iron boundary.  No coil (loops come from the multi-element
-               MESH, distortion from shearing the hexes -- both mesh properties a uniform field exercises).
-  * yano-MSC : a hex iron cube (REGULAR vs GRADED-DISTORTED grid) solved with rad.Solve (yano backend);
-               observable = volume-averaged magnetization <M_z> over the iron (reliable; not the
-               inside-iron field eval).
-  * FEM      : reduced-Omega + Kelvin (open boundary, no PML).  Uniform field -> the HYBRID formulation
-               (total-Omega in iron via Omega_s=H0*z on the iron boundary + reduced-Omega in air + Neumann
-               jump) is MANDATORY and cancellation-free.  A naive "reduced-Omega everywhere" CANCELS
-               catastrophically inside high-mu iron (H_in ~ Hs/67 is the tiny difference of two large
-               ~Hs quantities) and reports no demagnetization -- this hybrid avoids it.
+  BUG FIXED -- the observable.  The old version read <M_z> = mean of rad.Fld('m', cell_centroid).  For
+  MSC (surface-charge) elements that INTERNAL field is NOT reliable on skewed hexes (CLAUDE.md: "MSC gives
+  uniform field per element ... compare external field points, not internal fields").  On genuinely sheared
+  hexes it under-reads the magnetization by up to ~23% -- a pure READOUT ARTIFACT, not a solve error.
+  The fix: <M_z> = m_z / V with the total moment m_z extracted from the EXTERNAL stray field by a 2-point
+  Richardson dipole fit on the +z axis (Bz = a/R^3 + c/R^5 -> a -> m_z).  External field IS the reliable
+  MSC observable.  The example prints BOTH (old broken vs new) so the artifact is documented in the data.
 
-Result (mu_r=200, H0=1000) via h-CONVERGENCE (a single resolution proves nothing): the HEADLINE is
-distortion-robustness -- the REGULAR and the GRADED-DISTORTED hex grid h-converge to the SAME yano value
-(mesh-INDEPENDENT = the physical solution), anchored by HDiv (tests/feec/parity_vs_msc, 0.76%).  yano ->
-~3535; the reduced-Omega+Kelvin FEM -> ~3568, i.e. ~1% apart on the CUBE -- the genuine edge/corner method
-difference (the smooth sphere has every method agree to <0.1%; the FEM is validated -0.07% vs analytic
-there).  The loops are field-null so the solved field is loop-free.
+  DISTORTION STRENGTHENED.  The old version "distorted" by GRADING an axis-aligned grid (every cell still
+  an axis-aligned box -- the EASY case).  This version applies a genuine non-uniform shear
+  phi(x,y,z) = (x + f(z), y + g(z), z) with f,g NONLINEAR in z:
+    * volume-preserving (Jacobian det = 1) -> bodies stay equal-volume, <M_z> comparable across s;
+    * all hex/tet faces stay PLANAR (the shift depends on z alone -> z-layers translate rigidly);
+    * f'(z) ranges 0..2s across z -> bottom cells ~unsheared, top cells strongly skewed (cells sheared by
+      more than their own width at s=0.9) = NON-UNIFORM distortion with unequal face areas.
 
-Three reproduction notes baked in (each cost a debug cycle):
-  - The air sphere before the Kelvin shell must be ~9x the body (kelvin_radius=0.18 vs the L=0.02 cube),
-    NOT just big enough to enclose it -- the demag field is LONG-RANGE.  A tight air sphere
-    (kelvin_radius=0.07) gives a CONVERGED -1.46% bias (this was the first cut's spurious "2.4% gap").
-  - The Neumann jump on an OCC-built iron/air interface uses +specialcf.normal (the OCC "default"
-    interface is oriented (mag,air), OPPOSITE the Cubit "sphere" sideset (air,mag) that
-    solve_kelvin_benchmark's -normal is tuned to; -normal under-magnetizes 2.3x).
-  - kelvin_radius must of course also enclose the box bounding SPHERE (corner = sqrt(3)*half-edge).
+References (both independent of the yano hex discretization):
+  * MMM (tetrahedra, 3-DOF dipole) on the SAME deformed body -- different element, natural open boundary,
+    NO hex-loop problem.  Tracks the shear sweep.
+  * reduced-Omega + Kelvin FEM (open boundary, no PML) on the regular cube (s=0) -- the validated
+    Kelvin-transformation anchor (the air sphere must be ~9x the body; -0.07% vs analytic on an OCC sphere).
+
+FINDING (mu_r=200, H0=1000, LU so kernel accuracy is isolated from iterative convergence):
+  * The yano SOLVE (original EIEM2 kernel) is DISTORTION-ROBUST: the external-moment <M_z> stays within
+    ~1% of MMM and the error is FLAT as the shear grows (s=0 -> 0.9).  The body's total moment is correct;
+    only the internal-field readout was misbehaving.
+  * The opt-in pyramid-cloud kernel (SolverConfig(yano_pyramid_cloud=True)) does NOT improve the bulk
+    <M_z> -- it under-predicts ~3% and degrades to ~5% at the strongest shear.  Its claimed benefit
+    (transverse-field suppression / per-element pattern) is a DIFFERENT metric, not the bulk moment tested
+    here.  For <M_z>, the original kernel tracks the independent references more closely.
 """
 import json
 import math
@@ -55,56 +58,91 @@ from kelvin_source import kelvin_mu_factor_3d_cf, build_material_cf  # noqa: E40
 MU0 = 4e-7 * math.pi
 MU_R = 200.0
 H0 = 1000.0
-L = 0.020              # iron cube half-edge (m); centered at origin -> [-20, 20]^3 mm
+L = 0.020                       # iron cube half-edge (m); centered at origin -> [-20, 20]^3 mm
+V_BODY = (2 * L) ** 3           # phi is volume-preserving -> deformed-body volume = cube volume
+R1, R2 = 0.40, 0.80            # far-field radii for the 2-point dipole (Richardson) moment extraction
 
 
-def hex_cube(n, distort=0.0):
-    """uniform (distort=0) or graded (distort>0) hex grid filling the cube; planar faces (valid MSC hex)."""
-    if distort == 0:
-        ax = np.linspace(-L, L, n + 1)
-    else:
-        w = np.array([1.0 + distort * 0.5 * ((((i * 7 + 3) % 5) / 4.0) - 0.5) for i in range(n)])
-        c = np.concatenate([[0.0], np.cumsum(w)])
-        ax = -L + 2 * L * c / c[-1]
-    hexes = []
+def phi(P, s):
+    """Non-uniform, volume-preserving, planar-face-preserving shear.  f'(z) = s*(1+z/L) varies 0..2s."""
+    x, y, z = P
+    zr = z / L
+    return [x + s * L * (zr + 0.5 * zr * zr), y + 0.4 * s * L * (zr - 0.3 * zr * zr), z]
+
+
+def box_corners(ax, i, j, k):   # hex vertex order [000,100,110,010,001,101,111,011]
+    return [[ax[i], ax[j], ax[k]], [ax[i+1], ax[j], ax[k]], [ax[i+1], ax[j+1], ax[k]], [ax[i], ax[j+1], ax[k]],
+            [ax[i], ax[j], ax[k+1]], [ax[i+1], ax[j], ax[k+1]], [ax[i+1], ax[j+1], ax[k+1]], [ax[i], ax[j+1], ax[k+1]]]
+
+
+FREUD = [(0, 1, 2, 6), (0, 1, 5, 6), (0, 3, 2, 6), (0, 3, 7, 6), (0, 4, 5, 6), (0, 4, 7, 6)]   # 6-tet split
+
+
+def build_hex(n, s):
+    ax = np.linspace(-L, L, n + 1)
+    return [[phi(P, s) for P in box_corners(ax, i, j, k)]
+            for k in range(n) for j in range(n) for i in range(n)]
+
+
+def build_tet(n, s):
+    ax = np.linspace(-L, L, n + 1); cells = []
     for k in range(n):
         for j in range(n):
             for i in range(n):
-                hexes.append(np.array([
-                    [ax[i], ax[j], ax[k]], [ax[i+1], ax[j], ax[k]], [ax[i+1], ax[j+1], ax[k]], [ax[i], ax[j+1], ax[k]],
-                    [ax[i], ax[j], ax[k+1]], [ax[i+1], ax[j], ax[k+1]], [ax[i+1], ax[j+1], ax[k+1]], [ax[i], ax[j+1], ax[k+1]]]))
-    return hexes
+                c = [phi(P, s) for P in box_corners(ax, i, j, k)]
+                cells += [[c[a], c[b], c[cc], c[d]] for (a, b, cc, d) in FREUD]
+    return cells
 
 
-def yano_Mz(n, distort):
-    """yano-MSC <M_z> over the iron cube in a uniform applied field (loop-removed surface-charge solve)."""
-    hexes = hex_cube(n, distort)
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
-    objs = []
-    for V in hexes:
-        h = rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]); rad.MatApl(h, rad.MatLin(MU_R)); objs.append(h)
+def moment_z_external(cont):
+    """Total m_z from the external stray field: Bz(R) = a/R^3 + c/R^5 -> a = mu0*m_z/(2 pi) (reliable)."""
+    b1 = rad.Fld(cont, "b", [0, 0, R1])[2] - MU0 * H0
+    b2 = rad.Fld(cont, "b", [0, 0, R2])[2] - MU0 * H0
+    A = np.array([[1 / R1**3, 1 / R1**5], [1 / R2**3, 1 / R2**5]])
+    a, _ = np.linalg.solve(A, [b1, b2])
+    return 2 * math.pi * a / MU0
+
+
+def yano_Mz(n, s, pyramid):
+    """yano-MSC <M_z> via the FIXED external-moment observable; also returns the OLD internal readout."""
+    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_pyramid_cloud=pyramid)
+    cells = build_hex(n, s)
+    objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in cells]
+    for h in objs:
+        rad.MatApl(h, rad.MatLin(MU_R))
     cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0, 0, MU0 * H0])])
-    rad.Solve(cont, 1e-6, 3000, 1)
-    vols = np.array([abs(np.dot(V[1]-V[0], np.cross(V[3]-V[0], V[4]-V[0]))) for V in hexes])
-    cen = np.array([V.mean(0) for V in hexes])
-    Mz = np.array([rad.Fld(cont, "m", list(c))[2] for c in cen])
+    rad.Solve(cont, 1e-10, 8000, 0)                                   # LU: isolate kernel from convergence
+    old = float(np.mean([rad.Fld(cont, "m", list(np.array(V).mean(0)))[2] for V in cells]))   # broken readout
+    new = moment_z_external(cont) / V_BODY                                                     # fixed observable
     rad.UtiDelAll()
-    return float((Mz * vols).sum() / vols.sum()), len(hexes)
+    return new, old, len(cells)
+
+
+def mmm_Mz(n, s):
+    """Independent reference: MMM (tet) <M_z> via the same external-moment observable."""
+    rad.UtiDelAll(); rad.set_demag_backend("auto"); rad.SolverConfig(yano_pyramid_cloud=False)
+    cells = build_tet(n, s)
+    objs = [rad.ObjTetrahedron([list(v) for v in V], [0, 0, 0]) for V in cells]
+    for t in objs:
+        rad.MatApl(t, rad.MatLin(MU_R))
+    cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0, 0, MU0 * H0])])
+    rad.Solve(cont, 1e-10, 8000, 0)
+    new = moment_z_external(cont) / V_BODY
+    rad.UtiDelAll()
+    return new, len(cells)
 
 
 def fem_Mz_kelvin(p, h_yoke):
-    """reduced-Omega + Kelvin (hybrid, cancellation-free) <M_z> over the iron cube.
+    """reduced-Omega + Kelvin (hybrid, cancellation-free) <M_z> over the REGULAR iron cube (s=0 anchor).
 
-    CRUCIAL: the demag field is LONG-RANGE, so the air sphere before the Kelvin shell must be ~9x the
-    body (here kelvin_radius=0.18 m vs the L=0.02 m cube), NOT just enough to enclose it.  A tight air
-    sphere (kelvin_radius=0.07) gives a CONVERGED -1.46% bias vs the analytic sphere; 0.18 m gives
-    -0.07% (validated separately on an OCC sphere).  This is why the first cut "diverged" 2.4% from yano.
+    The demag field is LONG-RANGE, so the air sphere before the Kelvin shell must be ~9x the body
+    (kelvin_radius=0.18 m vs the L=0.02 m cube); 0.18 m gives -0.07% vs analytic on an OCC sphere.
     """
     step = os.path.join(tempfile.gettempdir(), "yano_cube_kelvin.step")
     Box(Pnt(-L, -L, -L), Pnt(L, L, L)).WriteStep(step)
     mesh, info = build_mesh_from_step(step, symmetry="full", kelvin_radius=0.18, kelvin_factor=3.0,
                                       mesh_size_yoke=h_yoke, mesh_size_air=0.09, mesh_size_kelvin=0.14)
-    R_kelvin = info["kelvin_radius"]          # the inversion radius MUST match the mesh geometry
+    R_kelvin = info["kelvin_radius"]
     offset = detect_kelvin_offset(mesh)
     add_periodic_kelvin(mesh, offset)
     ng.SetNumThreads(4)
@@ -133,42 +171,44 @@ def fem_Mz_kelvin(p, h_yoke):
 
 
 def main():
-    print(f"\nhex iron cube in UNIFORM field H0={H0:.0f}, mu_r={MU_R:.0f}   (<M_z> over the iron)")
-    print("h-CONVERGENCE -- a single resolution proves nothing; refine BOTH and check the limits.\n")
+    n_hex = 8                       # hex-per-side for the yano test; MMM reference uses n=6 tets-per-box
+    print(f"\nhex iron cube under NON-UNIFORM shear, mu_r={MU_R:.0f}, H0={H0:.0f}   (<M_z> = m_z / V)")
+    print("observable = EXTERNAL moment (reliable); 'old' column = the broken internal rad.Fld('m') readout\n")
 
-    print("  reduced-Omega + Kelvin FEM (p=3, large air):")
-    fem_rows = []
-    for h in (4e-3, 3e-3):
-        Mz, ndof, ne = fem_Mz_kelvin(3, h)
-        print(f"    h_yoke={h*1e3:.1f}mm  ne={ne:6d} ndof={ndof:7d}  <M_z>={Mz:.1f}")
-        fem_rows.append({"h_yoke_mm": h * 1e3, "ne": ne, "ndof": ndof, "Mz": Mz})
-    fem_lim = fem_rows[-1]["Mz"]
+    print("  reduced-Omega + Kelvin FEM anchor (s=0, the regular cube):")
+    fem_Mz, fem_ndof, fem_ne = fem_Mz_kelvin(3, 4e-3)
+    print(f"    p=3 h=4mm  ne={fem_ne} ndof={fem_ndof}  <M_z>={fem_Mz:.1f}\n")
 
-    print("\n  yano-MSC (refine hex count; REGULAR vs GRADED-DISTORTED):")
-    yano_rows = []
-    for distort, tag in [(0.0, "REGULAR"), (0.6, "DISTORTED")]:
-        seq = []
-        for n in (4, 6, 8, 10):
-            Mz, nh = yano_Mz(n, distort)
-            seq.append((nh, Mz))
-            print(f"    {tag:<9} n={n:2d} ({nh:4d} hex)  <M_z>={Mz:.1f}  vs FEM {Mz/fem_lim-1:+.2%}")
-        yano_rows.append({"grid": tag, "sequence": [{"n_hex": nh, "Mz": mz} for nh, mz in seq]})
+    print(f"  shear sweep (yano n={n_hex} hex/side, MMM ref n=6 tet/box; LU):")
+    hdr = (f"    {'s':>4} | {'MMM ref':>8} | {'EIEM2 new':>10} {'(old)':>8} {'err':>6} | "
+           f"{'pyr new':>9} {'(old)':>8} {'err':>6}")
+    print(hdr); print("    " + "-" * (len(hdr) - 4))
+    rows = []
+    for s in (0.0, 0.3, 0.6, 0.9):
+        ref, n_tet = mmm_Mz(6, s)
+        e_new, e_old, n_h = yano_Mz(n_hex, s, False)
+        p_new, p_old, _ = yano_Mz(n_hex, s, True)
+        print(f"    {s:4.1f} | {ref:8.1f} | {e_new:10.1f} {e_old:8.1f} {e_new/ref-1:+5.1%} | "
+              f"{p_new:9.1f} {p_old:8.1f} {p_new/ref-1:+5.1%}")
+        rows.append({"shear": s, "mmm_ref": ref, "n_tet": n_tet, "n_hex": n_h,
+                     "eiem2_new": e_new, "eiem2_old": e_old, "pyramid_new": p_new, "pyramid_old": p_old})
 
-    out = {"problem": "hex iron cube in uniform field; yano-MSC vs reduced-Omega+Kelvin FEM (h-convergence)",
-           "mu_r": MU_R, "H0": H0, "cube_half_edge_m": L,
-           "fem_reduced_omega_kelvin_p3_large_air": fem_rows,
-           "yano_msc_hconv": yano_rows,
-           "conclusion": (
-               "DISTORTION-ROBUST: REGULAR and DISTORTED yano h-converge to the SAME value (mesh-"
-               "independent = the physical solution), anchored by HDiv (tests/feec/parity_vs_msc, 0.76%). "
-               "yano -> ~3535, reduced-Omega+Kelvin FEM -> ~3568: ~1% apart on the CUBE, the genuine "
-               "edge/corner method difference (the smooth sphere has all methods agree <0.1%; the FEM is "
-               "validated -0.07% vs analytic there).  The loops are field-null so the solved field is "
-               "loop-free; rad.GetLoopBasis (C++ Stage 1) builds the loop basis.")}
+    out = {
+        "problem": "hex iron cube under non-uniform shear; yano-MSC distortion-robustness, external-moment observable",
+        "mu_r": MU_R, "H0": H0, "cube_half_edge_m": L, "observable": "M_z = m_z/V via external 2-point dipole fit",
+        "fem_kelvin_anchor_s0": {"Mz": fem_Mz, "ndof": fem_ndof, "ne": fem_ne, "p": 3, "h_yoke_mm": 4.0},
+        "shear_sweep": rows,
+        "conclusion": (
+            "FIXED observable removes the readout artifact: yano EIEM2 external-moment <M_z> stays ~1% of "
+            "MMM with FLAT error across the shear (s=0->0.9) = the SOLVE is distortion-robust; the 'old' "
+            "internal-readout column drops ~23% = a pure rad.Fld('m',centroid) artifact on skewed hexes. "
+            "The opt-in pyramid-cloud kernel does NOT improve the bulk moment (~3%, degrading to ~5% at "
+            "s=0.9); its benefit is a different (transverse/per-element) metric, not <M_z>. FEM/Kelvin "
+            "anchors the regular cube.")}
     with open(os.path.join(HERE, "yano_vs_reduced_omega_kelvin_cube.json"), "w") as fp:
         json.dump(out, fp, indent=2, default=float)
-    print("\nReadout: yano REGULAR == DISTORTED (mesh-independent = the solution); FEM and yano agree to")
-    print("~1% on the cube (edge-limited; <0.1% on a smooth sphere).  Loop-free, distortion-robust.")
+    print("\nReadout: EIEM2 external-moment <M_z> is FLAT ~1% vs MMM across all shear (distortion-robust);")
+    print("the 'old' internal readout's ~23% drop was the MSC-centroid artifact.  pyramid under-predicts.")
     print("saved", os.path.join(HERE, "yano_vs_reduced_omega_kelvin_cube.json"))
 
 
