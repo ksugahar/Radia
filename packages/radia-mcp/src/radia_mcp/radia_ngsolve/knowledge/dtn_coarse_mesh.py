@@ -2698,6 +2698,13 @@ THE FOUR CLOSURES at low frequency (a=1, reference -(n+1)):
   * [B] CONDITIONING (freq robustness): cond(PML) grows toward DC (3.2e4@ka=1 -> 2.8e5@ka=0.05, the
     s=1+i sigma/k blow-up) while cond(Kelvin) is flat (spread 1.30) -- the real low-freq PML cost
     (a wave-absorber mis-applied to a static problem); reproduces act7_08_pml_lowfreq_dtn.
+    CAVEAT (review-hardening 2026-06-22): the 'spread 1.30' is the per-mode DtN eigenvalue RATIO,
+    NOT the assembled linear-system SOLVE cond. Apples-to-apples solve cond at matched mesh
+    (act7_40_pml_vs_kelvin_solve_cond): Kelvin is frequency-FLAT but at ~(R/h)^2 (the singular centre
+    weight (R/rho')^2 amplifies lambda_max; assembled cond 1e3-1e4 measured in
+    act2_14_center_conditioning_floor), PML grows ~1/k toward static. So PML loses on FREQUENCY-
+    robustness, but Kelvin is frequency-robust NOT cheap (a fixed centre penalty); neither is '1.30'
+    a solve cond. (3D only; the 2D Kelvin disk is conformal / weight-free, no centre penalty.)
   * [C] COST/SPARSITY: the volume/shell closures (Kelvin, PML, ballooning) give SPARSE matrices,
     nnz~O(N) (fitted exponent 1.00 in 1D; real 3D Kelvin H1 nnz/row ~20, exponent 1.10 over ndof
     278->1813); the boundary DtN operator (BEM) is DENSE, nnz=N^2 (exponent 2). Absolute timings in
@@ -2718,6 +2725,30 @@ Chern 2021 (Kelvin ladder), Silvester-Hsieh 1971 / Bettess (ballooning/infinite 
 Collino-Monk (PML), Jackson (permeable sphere). New angle: the unified low-freq 4-way cost x accuracy
 ON the DtN spectrum + the single-apparatus tie-in. Ports only published analytic method; no internal
 data embedded.
+
+REVIEW-HARDENING -- honest refinements from the SA / Hachinohe paper Q&A (2026-06-22; 7 demos + 20
+reviewer questions; full digest in docs/open_boundary/OPEN_BOUNDARY_MAP.md sec.5):
+  - CONDITIONING: the "cond 1.30 / cond ~1" quoted above is the per-mode DtN RATIO, NOT the assembled
+    SOLVE cond. Solve cond at matched mesh: Kelvin frequency-flat at ~(R/h)^2 (centre weight
+    (R/rho')^2, 1e3-1e4; act2_14_center_conditioning_floor), PML ~1/k toward static
+    (act7_40_pml_vs_kelvin_solve_cond). PML loses on frequency-robustness; Kelvin is frequency-robust
+    NOT cheap (a fixed centre penalty). (3D only; 2D Kelvin disk is conformal / weight-free.)
+  - FORM-DEPENDENT min(p,k): the 2*min(p,k) error law extends to H(curl) for CURVED geometry (k=2 ->
+    2k=4, = scalar) but flat-facet k=1 is degraded (q~1.4) and the vector dipole needs higher p than
+    scalar p=1 (act3_06_vector_minpk_law). "Kelvin inherits de Rham for free" = free of bespoke
+    per-coordinate construction, NOT of the curved high-order machinery the vector form needs.
+  - EDGE-ELEMENT A SOLVES SPARSE on the Kelvin ball (act3_07_aform_sparse_kelvin): nnz~N, no dense
+    DtN; the centre-less DtN (FEM-BEM) is a niche alternative, not a forced fallback ("do not form the
+    DtN and it stays sparse"). Advantage over dense DtN: asymptotic in storage + qualitative.
+  - AC/MQS OPEN BOUNDARY IS FREQUENCY-FLAT (act6_13_mqs_eddy_dtn_frequency): air (sigma=0) is Laplace
+    -> DtN is static -(n+1)/R at every omega; eddy physics is internal. Every static result applies to
+    MQS (static-apparatus / rotating-machine) verbatim; only the interior carries jw. No DC floor.
+  - FLOOR = GEOMETRY, not centre-quadrature (act2_14): drops with Curve order, 0% sensitive to extra
+    centre quadrature.
+  - VALIDATED BEYOND SYMMETRY (act2_15_nonsymmetric_validation): on an asymmetric 3-source field
+    Kelvin recovers the exterior to ~1e-9 and agrees with an independent large-box solve (~3e-8).
+  - p-SELECTION CHICKEN-AND-EGG resolved (act2_13_adaptive_p_selection): a cheap coarse-p solve
+    recovers d_max/R; an adaptive loop sizes p* (single body p_c=2 nails it; a mix needs the loop).
 """
 
 
