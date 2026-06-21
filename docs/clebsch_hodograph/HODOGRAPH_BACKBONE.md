@@ -54,6 +54,18 @@ identity is verified to machine precision (deformed-mesh assembly == reference +
 (golden `test_bidirectional_coordinate_transform_2d`). Everything below is what
 `W` and `⋆_ν` do in each cell.
 
+> **Symbolic (Mathematica) twin of this section.** The Hodge / material half is
+> reproduced symbolically in
+> [`packages/radia-mcp/.../mathematica/differential_geometry/`](../../packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/):
+> `weakform_hodge.wls` derives the material modulation `ν' = ν |det P|(PᵀP)⁻¹`
+> (the **same** formula as `W = |det J|(JᵀJ)⁻¹`) and lands the pullback-Kelvin
+> `ν'` — spherical isotropic `(r'/R)²`, cylindrical anisotropic
+> `diag(1,1,(ρ'/R)⁴)` — plus the SPD nonlinear `⋆_ν` tangent (no fold);
+> `hodograph.wls` does the 3-axis backbone (cochain-map split, conformal
+> weight-freeness, Clebsch + helicity, `A_z`-as-Clebsch-potential). Both
+> self-test `ALL PASS`. This is the lab policy "differential geometry → weak
+> form + Hodge-as-material-modulation" made operational.
+
 ---
 
 ## 2. The three axes

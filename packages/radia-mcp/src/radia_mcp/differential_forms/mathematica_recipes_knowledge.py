@@ -607,6 +607,33 @@ See `differential_forms_de_rham('weak')` for the Sobolev-space
 framework underlying the Kelvin variational formulation, and
 `differential_forms_homology('chain_complex')` for the chain-level
 view of the inversion's effect on the de Rham complex.
+
+## Committed, self-tested realization (lab .wls)
+
+The weak-form / Hodge-as-material-modulation half of this recipe is a
+committed, self-testing `.wls` pair (run via `mathematica_evaluate` or
+`wolframscript -file`), in
+`packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/`:
+
+- `weakform_hodge.wls` — derives the **material modulation**
+  `nu' = nu |det P| (P^T P)^{-1}` (P = pullback on the orthonormal 1-form
+  basis), shows it is the SAME formula as the scalar Dirichlet weight
+  `W = |det J|(J^T J)^{-1}`, and lands the **Nagamine-Yamaguchi-Sugahara
+  pullback Kelvin** law: spherical (conformal) `nu' = (r'/R)^2 nu`
+  isotropic; cylindrical (non-conformal) `nu' = diag(1,1,(rho'/R)^4) nu`
+  anisotropic; plus the nonlinear `Star_nu` tangent `nu I + nu'(B(x)B)/|B|`
+  is SPD (elliptic, no fold).  13 assertions, ALL PASS.
+- `hodograph.wls` — the 3-axis backbone: cochain-map split (dB=0 metric-free),
+  2-D Kelvin inversion conformal => weight-free, Clebsch + helicity
+  obstruction (Moffatt), `A_z`-as-Clebsch-potential.  13 assertions, ALL PASS.
+
+Note these use the **k-form conformal weight as the material tensor**
+`nu' = nu |det P|(P^T P)^{-1}` (the energy/cofactor route), which is the
+same fact as the `factor_k = lambda^((n-2k)/2)` table above written as a
+metric weight; the spherical k=2 (flux B) case there is the `(r'/R)^2`
+isotropic `nu'` here.  See
+`docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md` sec.1 and that directory's
+`README.md`.
 """
 
 WHITNEY_HEXAHEDRAL = """
