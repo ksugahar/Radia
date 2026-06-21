@@ -411,6 +411,18 @@ non-hex DOFs get elem_local=-1 and zeros.
 */
 EXP int CALL RadGetFaceGeom(double* pG, int* pDOF, int InteractElemKey);
 
+/** Per-hex centroid demag field+gradient functionals (the parameter-free moment formulation kernel).
+For each hex element, the demag field H and gradient gradH at the element CENTROID as linear functionals
+of every source DOF charge (SELF = bare charged face; MUTUAL = yano dipole layer, singularity-free).
+ROW-MAJOR (nHex x 9 x DOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g -> C[(h*9+k)*DOF+g].
+@param pC [out] flat array (nHex*9*DOF, row-major), or nullptr to query nHex/DOF
+@param pNHex [out] number of hex elements
+@param pDOF [out] total number of DOF
+@param InteractElemKey [in] interaction handle from BuildMatrix
+@return integer error code
+*/
+EXP int CALL RadGetCentroidFieldGrad(double* pC, int* pNHex, int* pDOF, int InteractElemKey);
+
 /** Densify the actual HACApK (ACA+) system operator into a dense matrix.
 Builds the MSC H-matrix for the interaction handle and applies it to unit
 vectors (A = -N + diag(1/chi), original DOF ordering). Use to validate the
