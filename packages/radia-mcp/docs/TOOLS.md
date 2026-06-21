@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **330 tools** across 39 MCP servers.
+Total: **332 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -40,7 +40,7 @@ Total: **330 tools** across 39 MCP servers.
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 12 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
-| [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 10 |
+| [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 12 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 8 |
@@ -637,6 +637,8 @@ Module: `radia_mcp.figure.server`
 | Tool | Description |
 |---|---|
 | `figure_audit_embeds` | Lint every \includegraphics in a LaTeX file for figure embeds that |
+| `figure_design_principles` | The figure-MAKING (作図, *sakuzu*) DESIGN canon, distilled from the |
+| `figure_diagram_recipes` | Flowchart + conceptual/schematic DIAGRAM recipes -- the diagram-DRAWING skill |
 | `figure_everyday_recipe` | Matplotlib recipe for the lab's EVERYDAY analysis figure. |
 | `figure_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
 | `figure_office_export_recipe` | MATLAB recipe to export the current figure for Word / PowerPoint |
