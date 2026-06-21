@@ -405,3 +405,29 @@ def forc_coercivity_weight(grid, rho, Bc, half_band):
             if abs((grid[j] - grid[i]) / 2.0 - Bc) < half_band:
                 w += rho[i, j] * d * d
     return w
+
+
+def identify_from_forc(grid, H, etas, Bsat, a0=0.0, half_band=None):
+    r"""INVERSE FORC identification (the HysterSoft workflow): recover the linear-cell B-input Play
+    slopes ``a_k`` from a measured FORC family ``(grid, H)`` (:meth:`PlayHysteresis.forc_curves`) by
+    reading the RIDGE COMB of its FORC distribution.  For each threshold ``eta_k`` (the known
+    equal-interval discretisation), the ridge weight ``INT rho dBa dBb`` over the coercivity band
+    ``|(Bb-Ba)/2 - eta_k| < half_band`` equals ``a_k (Bsat - eta_k)``, so
+    ``a_k = weight / (Bsat - eta_k)``.  The reversible slope ``a0`` (``eta = 0`` -> no irreversible
+    switching -> no FORC ridge) is a separate input (the loop-tip slope).  ``half_band`` defaults to
+    0.4 x the smallest threshold spacing.  Returns a fitted :class:`PlayHysteresis` (round-trips a known
+    model to ~1-3 %, tighter on a finer ``grid``).
+
+    This is the FORC-based identification HysterSoft (Dimian-Andrei) performs on measured loops, applied
+    to a Play material -- the reversal-curve counterpart of the symmetric-loop-area
+    :func:`identify_from_loop_areas` (FORC resolves the full Preisach density, not just the diagonal)."""
+    etas = np.asarray(etas, dtype=float)
+    pos = etas[etas > 0.0]
+    if half_band is None:
+        knots = np.sort(np.concatenate([[0.0], pos]))
+        half_band = 0.4 * float(np.min(np.diff(knots)))
+    rho = forc_distribution(grid, H)
+    a = [a0]
+    for ek in pos:
+        a.append(forc_coercivity_weight(grid, rho, float(ek), half_band) / (Bsat - ek))
+    return PlayHysteresis(eta=np.concatenate([[0.0], pos]), a=np.array(a, dtype=float))
