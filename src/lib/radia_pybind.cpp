@@ -999,6 +999,21 @@ py::array_t<double> GetCentroidFieldGrad(int intrc_handle) {
     return result;
 }
 
+// Moment-yano system matrix A (dof x dof, row-major) + rhs (dof) for uniform linear chi + uniform applied
+// field (hx,hy,hz).  Step-1 verification of the EIEM2 -> moment-yano upgrade (vs examples/vim prototype).
+py::tuple BuildMomentSystem(int intrc_handle, double chi, double hx, double hy, double hz) {
+    double Happ[3] = {hx, hy, hz};
+    int dof = 0;
+    int err = RadBuildMomentSystem(chi, Happ, nullptr, nullptr, &dof, intrc_handle);
+    check_error(err);
+    if (dof <= 0) throw std::runtime_error("No DOFs in interaction matrix");
+    py::array_t<double> Aout({dof, dof});
+    py::array_t<double> rout(dof);
+    err = RadBuildMomentSystem(chi, Happ, (double*)Aout.request().ptr, (double*)rout.request().ptr, &dof, intrc_handle);
+    check_error(err);
+    return py::make_tuple(Aout, rout, dof);
+}
+
 /**
  * @brief Densify the actual HACApK (ACA+) operator as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
@@ -3661,6 +3676,18 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   numpy array (nHex, 9, dof): component k in
                   (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g.  Use C[e,0:3,:] as the
                   centroid field functional F0 and C[e,3:9,:] as the symmetric gradient Ginv.
+          )pbdoc");
+
+    m.def("BuildMomentSystem", &radia_solver::BuildMomentSystem,
+          py::arg("intrc_handle"), py::arg("chi"), py::arg("hx"), py::arg("hy"), py::arg("hz"),
+          R"pbdoc(
+              Parameter-free MOMENT-yano system matrix A (dof x dof, row-major) + rhs (dof) for a
+              UNIFORM linear material (chi) in a UNIFORM applied field (hx,hy,hz).  Per hex (6 face-
+              charge DOF): 3 dipole + 1 monopole + 2 diagonal-quadrupole rows = moment of sigma matched
+              to chi*{H,gradH}(centroid) via GetCentroidFieldGrad.  Step-1 verification of the
+              EIEM2 -> moment-yano upgrade (matches examples/vim/yano_moment_iter_scaling.py::build).
+
+              Returns: (A, rhs, dof) -- A is (dof, dof), rhs is (dof,).
           )pbdoc");
 
     m.def("HMatrixDensify", &radia_solver::HMatrixDensify,
