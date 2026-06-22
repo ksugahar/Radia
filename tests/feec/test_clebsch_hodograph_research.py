@@ -1186,3 +1186,36 @@ def test_scaling_ffag_pole_2d_isochronous():
                               gamma=o["gamma"], gamma2=o["gamma2"],
                               r_min=rmin_i, r_max=rmax_i, maxh=0.012)
     assert bk["bracket_gap_max"] < 5e-3, bk
+
+
+def test_leaf_coupling_perturbation_3d():
+    """Foliate-and-perturb diagnostic for a straight dipole: the 3-D magnet is
+    sliced into 2-D (x,z) LEAVES along the beam (y).  For a constant-gap magnet
+    the BODY slice IS the 2-D infinite-long leaf, so delta(y) = ||B_perp(.,y) -
+    B_perp(.,body)|| is the 0th-order leaf-stacking error and the fringe excess
+    (L_eff - L_iron)/L_iron is the 1st-order (inter-leaf) correction.
+
+    Locks the SCALING -- the headline result: the leaf coupling decays as
+    ~ gap/L (a log-log slope near -1), so a COMPACT magnet (L/gap ~ 2) is
+    strongly NON-perturbative and the foliate-and-perturb scheme lands only for
+    LONG (L/gap >> 1) dipoles.  Two-point sweep (L = 80, 200 mm; gap 40 mm =>
+    L/gap = 2, 5) to keep the 3-D solve cost bounded; the 4-point scaling is in
+    the committed leaf_coupling_perturbation_3d_sweep.json."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import leaf_coupling_perturbation_3d as lc
+    sw = lc.aspect_sweep(Ls=(0.08, 0.20))
+    fr = sw["fringe_excess"]
+    # (i) the leaf coupling DECREASES with aspect ratio (longer magnet = more 2-D).
+    assert sw["monotone_decay"], fr
+    assert fr[0] > fr[1], fr
+    # (ii) the compact magnet (L/gap=2) is strongly NON-perturbative (>100% fringe).
+    assert fr[0] > 1.2, fr
+    assert fr[1] < 1.1, fr
+    # (iii) the coupling scales as ~ gap/L (log-log slope near -1).
+    assert -1.5 < sw["fringe_scaling_exponent"] < -0.6, sw["fringe_scaling_exponent"]
+    # (iv) the ENDS are genuinely 3-D while the body is roughly 2-D (compact case).
+    r0 = sw["rows"][0]
+    assert r0["delta_farend_max"] > 0.3, r0["delta_farend_max"]
+    assert r0["delta_body_max"] < 0.15, r0["delta_body_max"]
