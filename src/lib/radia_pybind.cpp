@@ -1794,6 +1794,7 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 extern bool g_yano_pyramid_cloud;
 extern bool g_yano_no_center_charge;
 extern double g_yano_eval_alpha;
+extern bool g_yano_moment;
 
 namespace radia_solver_ext {
 
@@ -2054,6 +2055,9 @@ void SolverConfig(py::kwargs kwargs) {
     if (kwargs.contains("yano_eval_alpha")) {
         g_yano_eval_alpha = kwargs["yano_eval_alpha"].cast<double>();
     }
+    if (kwargs.contains("yano_moment")) {
+        g_yano_moment = kwargs["yano_moment"].cast<bool>();
+    }
 }
 
 py::dict GetSolverConfig() {
@@ -2124,6 +2128,7 @@ py::dict GetSolverConfig() {
     config["yano_pyramid_cloud"] = g_yano_pyramid_cloud;
     config["yano_no_center_charge"] = g_yano_no_center_charge;
     config["yano_eval_alpha"] = g_yano_eval_alpha;
+    config["yano_moment"] = g_yano_moment;
 
     return config;
 }

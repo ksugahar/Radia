@@ -2122,10 +2122,35 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// Copy base matrix (already contains -K/(4pi), see SetupBaseMatrix_VariableDOF)
 	// System equation: (-K/(4pi) + I/chi) * sigma = H_ext_n (ELF-compatible)
 	// BaseMatrix is already negated in SetupBaseMatrix_VariableDOF (line 282-285)
-	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), matrix_size * sizeof(double));
-
 	// Build RHS vector (will be overwritten with solution by dgesv)
 	std::vector<double> RHS(totalDOF);
+
+	// MOMENT-yano upgrade (opt-in g_yano_moment, hex-only): assemble the parameter-free MOMENT system
+	// (BuildMomentSystemCore) instead of the EIEM2 collocation system.  A's COLUMNS are the face DOF, so
+	// dgesv's solution is sigma in DOF order -- a drop-in for the EIEM2 transpose + dgesv + write-back below.
+	extern bool g_yano_moment;
+	bool useMoment = g_yano_moment;
+	if(useMoment) { for(int e = 0; e < AmOfMainElem; e++) if(IntrctPtr->GetElementDOF(e) != 6) { useMoment = false; break; } }
+
+	if(useMoment)
+	{
+		const std::vector<int>& hexElem = IntrctPtr->GetHexaElemIndices();
+		int nHex = (int)hexElem.size();
+		std::vector<double> chiPerHex((size_t)nHex), HextPerHex((size_t)nHex*3);
+		for(int h = 0; h < nHex; h++)
+		{
+			int e = hexElem[h];
+			double chi_abs = ctx.CurrentChiArray[e]; if(chi_abs < 1.0e-6) chi_abs = 1.0e-6;
+			chiPerHex[h] = chi_abs;
+			const TVector3d& He = IntrctPtr->ExternFieldArray[e];      // external field at element centroid
+			HextPerHex[(size_t)h*3+0] = He.x; HextPerHex[(size_t)h*3+1] = He.y; HextPerHex[(size_t)h*3+2] = He.z;
+			radTPolyhedron* poly = ctx.polyCache[e]; if(poly && poly->Use6DOF_MSC) poly->CurrentChi = chi_abs;
+		}
+		IntrctPtr->BuildMomentSystemCore(chiPerHex.data(), HextPerHex.data(), SystemMatrix, RHS);
+	}
+	else
+	{
+	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), matrix_size * sizeof(double));
 
 	// Update diagonal and RHS based on current chi
 	// Matrix is ROW-MAJOR: A(i,j) at [i * totalDOF + j]
@@ -2188,6 +2213,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			}
 		}
 	}
+	}  // end else (EIEM2 collocation path; the moment path above already filled SystemMatrix + RHS)
 
 	// Solve using LAPACK LU (dgesv solves A*x = b in-place)
 	auto t_lu_start = std::chrono::high_resolution_clock::now();
