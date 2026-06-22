@@ -111,6 +111,37 @@ def test_ima_image_uses_moment(Happ, image):
     assert rel < 1e-6, f"moment IMA {image} != explicit full (rel {rel:.2e})"
 
 
+def test_moment_entry_reproduces_system():
+    """Phase-2 Increment-1: the on-demand moment H-matrix entry (MomentSystemDenseRaw, built entry-by-entry
+    via MomentSystemEntry) reproduces the moment system: (1) re-normalizing A_raw's rows == the normalized
+    BuildMomentSystem A (machine precision); (2) the UN-normalized A_raw solves to the SAME magnetization
+    (the row 2-norm is a diagonal scaling -> direct solve invariant -- the premise the H-LU path rests on)."""
+    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True)
+    mu_r = 50.0; chi = mu_r - 1.0; L = 0.01
+    objs = []                                          # 2x2x1 grid of hexes (mutual + local entries to test)
+    for ix in range(2):
+        for iy in range(2):
+            x0, y0 = ix * L, iy * L
+            v = [[x0, y0, 0.0], [x0 + L, y0, 0.0], [x0 + L, y0 + L, 0.0], [x0, y0 + L, 0.0],
+                 [x0, y0, L], [x0 + L, y0, L], [x0 + L, y0 + L, L], [x0, y0 + L, L]]
+            h = rad.ObjHexahedron(v, [0, 0, 0]); rad.MatApl(h, rad.MatLin(mu_r)); objs.append(h)
+    handle = rad.BuildMatrix(rad.ObjCnt(objs))
+    A_norm, rhs_norm, dof = rad.BuildMomentSystem(handle, chi, 0.0, 0.0, 1.0e3)
+    A_norm = np.asarray(A_norm, float); rhs_norm = np.asarray(rhs_norm, float)
+    A_raw, _ = rad.MomentSystemDenseRaw(handle, chi)
+    A_raw = np.asarray(A_raw, float)
+
+    rownorm = np.linalg.norm(A_raw, axis=1)
+    A_renorm = A_raw / np.where(rownorm > 1e-300, rownorm, 1.0)[:, None]
+    assert np.max(np.abs(A_renorm - A_norm)) < 1e-9, "on-demand entry != BuildMomentSystem (renormalized)"
+
+    x_norm = np.linalg.solve(A_norm, rhs_norm)
+    x_raw = np.linalg.solve(A_raw, rhs_norm * rownorm)
+    rel = np.linalg.norm(x_raw - x_norm) / max(np.linalg.norm(x_norm), 1e-30)
+    assert rel < 1e-9, f"un-normalized A_raw solves to a different x (rel {rel:.2e})"
+    rad.UtiDelAll()
+
+
 def test_moment_nonlinear_picard_matches_linear_in_linear_regime():
     """The moment LU path drives a NONLINEAR material (MatSatIsoTab) through the Picard loop, reading chi(H)
     from ctx.CurrentChiArray each step.  Locked robustly WITHOUT saturation-extrapolation tuning: at a field

@@ -1128,6 +1128,35 @@ int radTApplication::BuildMomentSystem(int InteractElemKey, double chi, const do
 	}
 }
 
+int radTApplication::MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF)
+{
+	// Build the UN-normalized moment system A_raw ENTRY-BY-ENTRY via radTInteraction::MomentSystemEntry --
+	// the validation harness for the on-demand HACApK H-matrix entry (Phase 2, ACA_MOMENT_DESIGN.md).
+	// Two-call: pA=nullptr -> read back dof; allocate dof*dof + call again.  Uniform chi.
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
+		int totalDOF = InteractPtr->GetTotalDOF();
+		if(pDOF) *pDOF = totalDOF;
+		if(pA != nullptr && totalDOF > 0)
+		{
+			int nHex = InteractPtr->GetNumHexElements();
+			std::vector<double> chiv((size_t)(nHex > 0 ? nHex : 1), chi);
+			for(int i = 0; i < totalDOF; i++)
+				for(int j = 0; j < totalDOF; j++)
+					pA[(size_t)i*totalDOF + j] = InteractPtr->MomentSystemEntry(i, j, chiv.data());
+		}
+		return 1;
+	}
+	catch (...)
+	{
+		Initialize(); return 0;
+	}
+}
+
 //-------------------------------------------------------------------------
 
 int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)

@@ -524,6 +524,18 @@ public:
 	// Cflat is ROW-MAJOR (nHex x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
 	// -> Cflat[(h*9+k)*m_totalDOF + g].  H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.  See .cpp.
 	void BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const;
+	// Field H[3] + grad gH[6] (xx,yy,zz,xy,xz,yz) at a target centroid ce3 from ONE unit-charge face (V4
+	// corners, srcCenter = the face's element center, area), INCLUDING the IMA mirror images.  isSelf =
+	// (the source face's element == the target element) drops the original center charge (singularity-free).
+	// The reusable single-(target,source) kernel shared by BuildCentroidFieldGrad and MomentSystemEntry.
+	void CentroidFieldGradFromFace(const double ce3[3], const double V4[4][3], const double srcCenter[3],
+	                               bool isSelf, double area, double Hout[3], double gHout[6]) const;
+	// On-demand UN-normalized moment system entry A_raw[rowGlobal][colDOF] (the H-matrix entry; see
+	// docs/moment_yano/ACA_MOMENT_DESIGN.md).  rowGlobal = 6*hpos + t over the valid 6-face hexes
+	// (t: 0,1,2 dipole; 3 monopole; 4,5 diagonal-quadrupole); colDOF = global face DOF.  Computed ONLY from
+	// the row element's local geometry + the on-demand centroid field/grad from face colDOF -- no full-system
+	// build, no row normalization (the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
+	double MomentSystemEntry(int rowGlobal, int colDOF, const double* chiPerHex) const;
 	// MOMENT-yano system matrix (parameter-free upgrade of EIEM2): per hex (6 face-charge DOF) assemble
 	// 3 dipole + 1 monopole + 2 diagonal-quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
 	// (global field/grad from BuildCentroidFieldGrad, local moments from the hex geometry).  Rows 2-norm
@@ -532,7 +544,7 @@ public:
 	void BuildMomentSystem(double chi, const double Happ[3], std::vector<double>& A, std::vector<double>& rhs) const;  // uniform-field wrapper
 	// Per-element chi + per-element external field (at hex centroid, HextPerHex[h*3+k]); A column = face DOF
 	// so dgesv's solution is sigma in DOF order.  The solve path uses this (coil sources are not uniform).
-	void BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex, std::vector<double>& A, std::vector<double>& rhs) const;
+	void BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex, std::vector<double>& A, std::vector<double>& rhs, bool normalize = true) const;
 	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
