@@ -1138,6 +1138,38 @@ GEOMETRY — a high-μ equipotential forces `B ∝ 1/g(r)` — so it is drive-in
 a CoilBuilder + reduced-Ω coil drive sets the field AMPLITUDE, a further step, not
 the index. Saturation is Plane A's §3.3 lever, composed orthogonally.)*
 
+### `twisting_quadrupole_pole.py` — the beam-referenced equipotential surface as design primitive (the twist)
+
+The **reframing** (`DESIGN_METHODOLOGY.md` §3.6): instead of solving a magnet and
+then multipole-**expanding** the field, make the **beam-referenced equipotential
+surface** the design SPEC. In the Frenet frame the iron pole face is
+`Ω(r,θ;s) = Σ_n r^n b_n(s) sin(nθ + φ_n(s))`, so the multipole `(b_n,φ_n)(s)` **is**
+the surface's angular Fourier mode — design = prescribe it, sweep the surface along
+the orbit, place iron there.
+
+**The twist** (the curved-orbit / combined-function axis): the transverse multipole
+**rotates** along `s` (the Frenet frame turns with the bend; a rotating-gradient
+magnet turns the pole on purpose). The **n-fold law**: rotating the equipotential
+SURFACE by `φ` rotates the order-`n` multipole PHASE by `nφ` — for the quad,
+`rotate pole by φ ⟺ (b₂,a₂) → |b₂|(cos2φ, sin2φ)`, so a quad twisted by 45° becomes
+a pure **skew** quad.
+
+**Verified (ngsolve only).** The quad pole = the hyperbola `xy = ±r₀²/2` (the
+`Ω=const` equipotential, `accel_pole_design.quad_pole_hyperbola`); a 2-D Laplace
+solve with the 4 hyperbola poles at alternating `±Ω₀` recovers a **clean quad**
+(skew `a₂/|c₂| ~ 5e-6`, forbidden `n=1,3,5` at the `~5e-5` floor, the leading
+allowed spurious the finite-pole 12-pole `b₆ ~ 5.6e-3`). **Rotating the poles by
+`φ` rotates the recovered orientation by exactly `φ`** — `α = −½ atan2(a₂,b₂)`
+tracks the prescribed twist to **slope 1.000, max error 0.00°** — and `b₆` is
+rotation-invariant. Figure `twisting_quadrupole_pole.png` (left: the hyperbola pole
+faces at φ=0/30/60° twisting around the aperture; right: recovered orientation vs
+prescribed φ, slope 1). Golden `test_twisting_quadrupole_pole`.
+*(Honest scope: the per-station 2-D design is the **slow-twist (adiabatic)** limit
+`dφ/ds → 0` — the §3.4 foliate-and-perturb stack, now twisting; a fast twist couples
+leaves (`dφ/ds` is a leaf-coupling parameter), and combined-function (dipole+quad =
+a shifted+rotated hyperbola) + the genuine curved-orbit Frenet sweep are the
+extensions the n-fold law governs.)*
+
 ## Run
 
 ```bash
@@ -1164,6 +1196,7 @@ python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null
 python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 sat, --step3 reshape, --pullback no-remesh, --iso isochronous end pack; --fig)
 python leaf_coupling_perturbation_3d.py       # foliate-and-perturb: leaf-coupling ~ gap/L, when can the body be 2-D + ends a perturbation (--sweep aspect ratio; --fig)
 python ffag_sector_two_plane.py               # the two-plane -> 3-D method: FFAG sector = transverse (r,z) + azimuthal (s,z); reflection validity ~ L/g (--sweep aspect; --rung2 the 3-D reflection B(r)~r^k; --fig)
+python twisting_quadrupole_pole.py            # beam-referenced equipotential surface as design primitive: the TWIST (n-fold law, rotating quad, slope 1.000) (--fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
