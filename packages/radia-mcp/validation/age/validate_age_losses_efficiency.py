@@ -23,7 +23,7 @@ from ngsolve import (H1, BilinearForm, LinearForm, CoefficientFunction, grad, dx
                      atan2, cos, sin, IfPos, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -73,7 +73,7 @@ def _loaded(fes, mesh, theta_m, delta, br=BR, j0=J0):
     L.Assemble(); return L
 
 
-def test_losses_and_efficiency():
+def validate_losses_and_efficiency():
     ma = _geo()
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
     ua, wa = fa.TnT(); aa = BilinearForm(fa); aa += _nu(ma)*grad(ua)*grad(wa)*dx
@@ -134,7 +134,7 @@ def test_losses_and_efficiency():
 
 
 def main():
-    test_losses_and_efficiency()
+    validate_losses_and_efficiency()
     print("[OK] AGE losses->efficiency: copper I^2R exact (cos^2 averaging machine-precision), iron "
           "classical-eddy from the FE B-field with B^2 & f^2 scaling, efficiency assembled (k_h flagged).")
 

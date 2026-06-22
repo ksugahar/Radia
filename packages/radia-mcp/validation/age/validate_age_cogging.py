@@ -17,15 +17,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction,
                      grad, dx, x, y, sqrt, atan2, cos, sin, exp, IfPos, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -78,7 +75,7 @@ def _pm(fes, mesh, theta_r):
     L.Assemble(); return L
 
 
-def test_cogging_age_matches_brute():
+def validate_cogging_age_matches_brute():
     ma = _geo(False)
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
     ua, wa = fa.TnT(); aa = BilinearForm(fa); aa += _nu(ma)*grad(ua)*grad(wa)*dx
@@ -112,7 +109,7 @@ def test_cogging_age_matches_brute():
 
 
 def main():
-    test_cogging_age_matches_brute()
+    validate_cogging_age_matches_brute()
     print("[OK] AGE cogging: PM-only slotted-SPM reluctance torque over one 360/LCM period, un-meshed "
           "gap (no remesh), reproduces the brute meshed-gap Arkkio cogging curve.")
 

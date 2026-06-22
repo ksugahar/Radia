@@ -15,15 +15,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction, Norm,
                      grad, dx, x, y, sqrt, atan2, cos, sin, IfPos, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -85,7 +82,7 @@ def _src(fes, mesh, j0):
     L.Assemble(); return L
 
 
-def test_nonlinear_saturation_age_matches_brute():
+def validate_nonlinear_saturation_age_matches_brute():
     ma = _geo(False)
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
     ua, wa = fa.TnT()
@@ -139,7 +136,7 @@ def test_nonlinear_saturation_age_matches_brute():
 
 
 def main():
-    test_nonlinear_saturation_age_matches_brute()
+    validate_nonlinear_saturation_age_matches_brute()
     print("[OK] AGE nonlinear iron: saturating nu~(|B|) Picard with analytic gap, reproduces the "
           "nonlinear brute meshed-gap torque; saturation cuts the torque below the linear machine.")
 
