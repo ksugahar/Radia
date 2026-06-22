@@ -73,7 +73,7 @@ def external_moment(cont):
 
 
 def mmm_moment(cells, mu_r):
-    rad.UtiDelAll(); rad.set_demag_backend("auto"); rad.SolverConfig(yano_pyramid_cloud=False)
+    rad.UtiDelAll(); rad.set_demag_backend("auto")
     objs = [rad.ObjTetrahedron([list(v) for v in V], [0, 0, 0]) for V in cells]
     for t in objs:
         rad.MatApl(t, rad.MatLin(mu_r))
@@ -82,7 +82,7 @@ def mmm_moment(cells, mu_r):
 
 
 def matrix_geom_loops(cells):
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_pyramid_cloud=False)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in cells]
     for h in objs:
         rad.MatApl(h, rad.MatLin(1000.0))                 # N is geometry-only (mu_r-independent)

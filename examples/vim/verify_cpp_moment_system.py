@@ -18,7 +18,7 @@ def main():
     nxy, nz, chi = 8, 2, 999.0
     Happ = np.array([0.0, 1e3, 0.0])
     hexes = build_cyoke_hexes(nxy, nz)
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(chi + 1.0))
