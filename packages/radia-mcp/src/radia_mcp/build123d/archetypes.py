@@ -25,9 +25,9 @@ import re
 
 import numpy as np
 
-from build123d import (Align, BuildLine, BuildSketch, Box, Circle, Compound, Cylinder, Helix, Plane,
-                       Polyline, Pos, Rectangle, RegularPolygon, Rot, Spline, Triangle, extrude, loft,
-                       make_face, sweep)
+from build123d import (Align, BuildLine, BuildSketch, Box, Circle, Compound, Cone, Cylinder, Helix,
+                       Plane, Polyline, Pos, Rectangle, RegularPolygon, Rot, Spline, Torus, Triangle,
+                       extrude, loft, make_face, scale, sweep)
 
 from .modeling import annular_segment, assembly, polar_array, tube
 
@@ -36,7 +36,8 @@ __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cyl
            "h_dipole", "helmholtz_pair", "cos_theta_dipole", "e_core", "slotted_stator", "spm_rotor",
            "litz_packing_radius", "litz_fill_factor", "litz_wire", "hierarchical_litz",
            "rectangular_litz", "litz_serving",
-           "involute_gear", "threaded_rod", "airfoil", "blade"]
+           "involute_gear", "threaded_rod", "airfoil", "blade",
+           "gear_rack", "bevel_gear", "worm", "chain_sprocket", "vbelt_pulley"]
 
 
 def magnetization_tag(name, index, angle_deg):
@@ -568,5 +569,66 @@ def blade(sections, name="blade"):
         raise ValueError("need >= 2 sections to loft")
     secs = [Pos(0, 0, z) * Rot(0, 0, tw) * airfoil(c, t) for (c, t, z, tw) in sections]
     g = loft(secs)
+    g.label = name
+    return g
+
+
+def gear_rack(n_teeth, tooth_pitch, height, width, name="rack"):
+    r"""A **gear rack**: a bar of cross-section ``height`` (y) x ``width`` (z) carrying ``n_teeth``
+    trapezoidal teeth along its length on the top (+y) edge -- the straight-line conjugate of a pinion
+    (:func:`involute_gear`).  Returns a labelled solid spanning ``z = 0..width``."""
+    if n_teeth < 1:
+        raise ValueError("n_teeth must be >= 1")
+    length = (n_teeth + 1) * tooth_pitch
+    bar = Box(length, height, width, align=_BASE_Z)
+    s = tooth_pitch * 0.5
+    g = bar
+    for i in range(n_teeth):
+        x = -length / 2.0 + (i + 1) * tooth_pitch
+        g = g + Pos(x, height / 2.0, width / 2.0) * Rot(0, 0, 45) * Box(s, s, width)
+    g.label = name
+    return g
+
+
+def bevel_gear(n_teeth, base_radius, addendum, height, taper=0.55, name="bevel"):
+    r"""A **bevel gear**: ``n_teeth`` involute teeth lofted from the base radius down to ``taper`` x base
+    over ``height`` on a matching conical core -- the right-angle conjugate gear.  Returns a labelled
+    solid spanning ``z = 0..height``."""
+    if n_teeth < 4:
+        raise ValueError("n_teeth must be >= 4")
+    rb, top = base_radius, addendum
+    ha = 360.0 / n_teeth / 4.0
+    tooth = loft([_involute_tooth_face(rb, top, ha),
+                  Pos(0, 0, height) * scale(_involute_tooth_face(rb, top, ha), taper)])
+    core = Cone(rb * 1.06, rb * 1.06 * taper, height, align=_BASE_Z)
+    g = core + polar_array(tooth, n_teeth, 360.0)
+    g.label = name
+    return g
+
+
+def worm(radius, pitch, length, name="worm"):
+    r"""A **worm** (single-start screw gear): a core cylinder with a deep helical thread -- the driver
+    that meshes a worm wheel.  A :func:`threaded_rod` with a deeper (``0.7 * pitch``) thread; spans
+    ``z = 0..length``."""
+    return threaded_rod(radius, pitch, length, thread_depth=pitch * 0.7, name=name)
+
+
+def chain_sprocket(n_teeth, radius, width, roller_radius, name="sprocket"):
+    r"""A **roller-chain sprocket**: a disk of ``radius`` x ``width`` with ``n_teeth`` roller seats
+    (radius ``roller_radius``) cut around the rim.  Returns a labelled solid spanning ``z = 0..width``."""
+    disk = Cylinder(radius, width, align=_BASE_Z)
+    seat = Pos(radius, 0, 0) * Cylinder(roller_radius, width * 1.2, align=_BASE_Z)
+    g = disk - polar_array(seat, n_teeth, 360.0)
+    g.label = name
+    return g
+
+
+def vbelt_pulley(radius, width, groove_depth, bore_radius, name="pulley"):
+    r"""A **V-belt pulley**: a cylinder of ``radius`` x ``width`` with a toroidal V-groove (depth
+    ``groove_depth``) around the rim and an axial bore (``bore_radius``).  Returns a labelled solid
+    spanning ``z = 0..width``."""
+    body = Cylinder(radius, width, align=_BASE_Z)
+    groove = Pos(0, 0, width / 2.0) * Torus(radius, groove_depth)       # V-groove centred on the rim
+    g = body - groove - Cylinder(bore_radius, width * 1.2, align=_BASE_Z)
     g.label = name
     return g
