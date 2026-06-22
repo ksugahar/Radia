@@ -1274,3 +1274,28 @@ def test_ffag_sector_two_plane_rung2_3d():
     excess = (r2["L_eff_arc"] - r2["L_sector"]) / r2["L_sector"]
     assert 0.20 < excess < 0.70, excess
     assert r2["ne"] > 3000, r2["ne"]
+
+
+def test_twisting_quadrupole_pole():
+    """The beam-referenced equipotential surface as the design primitive + the
+    TWIST (the curved-orbit / combined-function axis).  The quad pole = the
+    hyperbola equipotential (xy = r0^2/2); a 2-D Laplace solve recovers a clean
+    quad, and rotating the pole by phi rotates the recovered orientation by
+    exactly phi (the n-fold law: surface twist phi <=> multipole phase 2 phi).
+    ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import twisting_quadrupole_pole as tq
+    base = tq.solve_quad(0.0)
+    # a clean quad: skew ~0, forbidden harmonics at the floor, the leading
+    # allowed spurious the finite-pole 12-pole b_6.
+    assert abs(base["a2"]) / base["main"] < 1e-3, base
+    assert base["forbidden_max_rel"] < 1e-3, base
+    assert 1e-3 < base["b6_rel"] < 2e-2, base
+    # the TWIST: recovered pole orientation tracks the prescribed phi (slope 1).
+    sw = tq.twist_sweep(phis_deg=(0.0, 20.0, 40.0, 60.0))
+    assert abs(sw["tracking_slope"] - 1.0) < 0.05, sw["tracking_slope"]
+    assert sw["tracking_err_deg"] < 1.5, sw["tracking_err_deg"]
+    # the finite-pole spurious b_6 is rotation-INVARIANT (the twist is clean).
+    b6 = [r["b6_rel"] for r in sw["rows"]]
+    assert max(b6) - min(b6) < 5e-4, b6
