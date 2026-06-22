@@ -19,18 +19,20 @@ Mallinson easy-axis angle baked into each segment label).
 """
 from __future__ import annotations
 
+import itertools
 import math
 import re
 
 from build123d import (BuildLine, BuildSketch, Box, Circle, Compound, Cylinder, Helix, Plane, Polyline,
-                       Pos, Rot, extrude, make_face, sweep)
+                       Pos, Rectangle, RegularPolygon, Rot, Spline, extrude, make_face, sweep)
 
 from .modeling import annular_segment, assembly, polar_array, tube
 
 __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cylindrical_magnet",
            "block_magnet", "halbach_ring", "c_core", "solenoid", "pole_tip", "multipole_yoke",
            "h_dipole", "helmholtz_pair", "cos_theta_dipole", "e_core", "slotted_stator", "spm_rotor",
-           "litz_packing_radius", "litz_wire"]
+           "litz_packing_radius", "litz_fill_factor", "litz_wire", "hierarchical_litz",
+           "rectangular_litz"]
 
 
 def magnetization_tag(name, index, angle_deg):
@@ -272,20 +274,119 @@ def litz_packing_radius(n_strands, strand_radius):
     return strand_radius / math.sin(math.pi / n_strands)
 
 
-def litz_wire(n_strands, strand_radius, bundle_radius, length, pitch, name="litz"):
+def litz_fill_factor(n_strands, strand_radius, bundle_radius):
+    r"""Copper **fill factor** of a round Litz bundle: ``n_strands * (strand_radius / bundle_radius)**2``
+    (total strand copper area / bundle envelope area), where ``bundle_radius`` is the bundle's OUTER
+    (envelope) radius.  For the single-layer touching ring the envelope is the strand-centre ring radius
+    plus one strand radius, ``litz_packing_radius(n, rs) + rs``, which gives the closed form
+    ``n sin(pi/n)**2 / (1 + sin(pi/n))**2``; real served / multi-layer Litz sits around 0.4-0.5 once
+    insulation, twist take-up and voids are counted.  A pure number in ``(0, 1)`` -- the headline metric
+    the rectangular / profiled constructions exist to raise."""
+    if bundle_radius <= 0:
+        raise ValueError("bundle_radius must be > 0")
+    return n_strands * (strand_radius / bundle_radius) ** 2
+
+
+def _sweep_section(path, section_2d):
+    r"""Sweep a 2D ``section_2d`` (a build123d face/sketch such as ``Circle(r)``, ``Rectangle(w, h)`` or
+    ``RegularPolygon(r, n)``) along ``path`` (a wire / edge), orienting the section normal to the path
+    tangent at the start, and return the swept :class:`~build123d.Solid`."""
+    sec = Plane(origin=path @ 0.0, z_dir=path % 0.0) * section_2d
+    return sweep(sec, path=path).solid()
+
+
+def _superposed_centerline(levels, indices, length, n):
+    r"""Sampled centreline (``n+1`` points over axial ``length``) of one hierarchical-Litz strand: the
+    **additive superposition** of one circular orbit per level.  ``levels`` is ``[(count, radius, pitch),
+    ...]`` and ``indices`` the strand's per-level index; level ``l`` contributes radius ``radius_l`` at
+    angular rate ``2*pi/pitch_l`` with phase ``2*pi*index_l/count_l``."""
+    pts = []
+    for s in range(n + 1):
+        z = length * s / n
+        x = y = 0.0
+        for (count, radius, pitch), idx in zip(levels, indices):
+            ph = 2.0 * math.pi * z / pitch + 2.0 * math.pi * idx / count
+            x += radius * math.cos(ph)
+            y += radius * math.sin(ph)
+        pts.append((x, y, z))
+    return pts
+
+
+def litz_wire(n_strands, strand_radius, bundle_radius, length, pitch, name="litz", strand_section=None):
     r"""A **Litz wire**: ``n_strands`` insulated strands twisted together on a bundle of radius
     ``bundle_radius`` with a twist ``pitch`` (axial length per turn), over an axial ``length``.  Each
-    strand is a circular conductor (radius ``strand_radius``) swept along its own helix; the strands are
-    the same helix rotated by ``2*pi*i/n_strands`` (a phase-shifted twist), so the model is ONE swept
-    helical strand replicated by :func:`~radia_mcp.build123d.modeling.polar_array`.  Returns a labelled
-    multi-region :class:`~build123d.Compound` (``{name}_kk`` per strand) -- each strand a separate
-    conductor region for AC-loss (skin / proximity) analysis (PEEC / FE), the whole point of Litz wire.
-    Use :func:`litz_packing_radius` for the single-layer touching ``bundle_radius``.
+    strand is a conductor swept along its own helix; the strands are the same helix rotated by
+    ``2*pi*i/n_strands`` (a phase-shifted twist), so the model is ONE swept helical strand replicated by
+    :func:`~radia_mcp.build123d.modeling.polar_array`.  By default the strand section is a circle of
+    radius ``strand_radius``; pass ``strand_section`` (any build123d 2D face, e.g. ``Rectangle(w, h)`` for
+    a flat / edge wire or ``RegularPolygon(r, 6)`` for a compacted hexagonal strand) to override -- real
+    Litz is not always round.  Returns a labelled multi-region :class:`~build123d.Compound`
+    (``{name}_kk`` per strand) -- each strand a separate conductor region for AC-loss (skin / proximity)
+    analysis (PEEC / FE), the whole point of Litz wire.  Use :func:`litz_packing_radius` for the
+    single-layer touching ``bundle_radius`` and :func:`litz_fill_factor` for the copper fill.
     """
     if n_strands < 1:
         raise ValueError("n_strands must be >= 1")
     helix = Helix(pitch=pitch, height=length, radius=bundle_radius)
-    section = Plane(origin=helix @ 0.0, z_dir=helix % 0.0) * Circle(strand_radius)
-    strand = sweep(section, path=helix).solid()
+    sec2d = Circle(strand_radius) if strand_section is None else strand_section
+    strand = _sweep_section(helix, sec2d)
     strand.label = "strand"
     return polar_array(strand, n_strands, 360.0, label=name)
+
+
+def hierarchical_litz(levels, strand_radius, length, name="litz", n_axial=160, strand_section=None):
+    r"""A **hierarchical (multi-level) Litz** cable -- a *coiled coil* / bundle-of-bundles, the real
+    construction of high-strand-count Litz (e.g. ``5x5x5``).  ``levels`` is ``[(count, radius, pitch),
+    ...]`` ordered OUTER cabling -> INNER strand orbit; the cable carries ``prod(count)`` strands, one for
+    every combination of per-level indices.  Each strand's centreline is the **additive superposition**
+    (:func:`_superposed_centerline`) of one circular orbit per level -- the analytic idealisation in which
+    the orbits add in the lab frame (not carried / Frenet), matching the closed-form ``sum r_l cos(.)``
+    centreline.  The section defaults to ``Circle(strand_radius)``; override with ``strand_section``.
+    Returns a labelled :class:`~build123d.Compound` (``{name}_ii_jj_..`` per strand), each a separate
+    conductor region.  ``n_axial`` is the centreline sampling (raise for many turns of the finest pitch).
+    """
+    if not levels:
+        raise ValueError("levels must be non-empty")
+    sec2d = Circle(strand_radius) if strand_section is None else strand_section
+    strands = []
+    for combo in itertools.product(*[range(int(c)) for (c, _, _) in levels]):
+        pts = _superposed_centerline(levels, combo, length, n_axial)
+        strand = _sweep_section(Spline(*pts), sec2d)
+        strand.label = name + "_" + "_".join(f"{i:02d}" for i in combo)
+        strands.append(strand)
+    return assembly(*strands, label=name)
+
+
+def rectangular_litz(nx, ny, strand_radius, pitch, length, twist_pitch=None, name="litz",
+                     strand_section=None, n_axial=160):
+    r"""A **rectangular / profiled Litz bundle** -- ``nx x ny`` strands on a rectangular grid (centre
+    spacing ``pitch``), the slot-fill ("compacted" / rectangular) Litz idealisation that fills a
+    rectangular winding window far better than a round bundle.  With ``twist_pitch`` the whole rectangular
+    bundle is twisted about its axis (each strand follows a helix at its grid radius
+    ``hypot(gx, gy)``); ``twist_pitch=None`` leaves the strands straight and parallel.  The section
+    defaults to ``Circle(strand_radius)``; override with ``strand_section`` (e.g. ``Rectangle`` for a
+    foil-like compacted strand).  Returns a labelled :class:`~build123d.Compound` (``{name}_ii_jj`` per
+    strand), each a separate conductor region.  Pair with :func:`litz_fill_factor` (use the rectangle
+    ``nx*pitch x ny*pitch`` as the envelope) to report the slot-fill gain over a round bundle.
+    """
+    if nx < 1 or ny < 1:
+        raise ValueError("nx, ny must be >= 1")
+    sec2d = Circle(strand_radius) if strand_section is None else strand_section
+    gx = [(i - (nx - 1) / 2.0) * pitch for i in range(nx)]
+    gy = [(j - (ny - 1) / 2.0) * pitch for j in range(ny)]
+    strands = []
+    for i in range(nx):
+        for j in range(ny):
+            rad = math.hypot(gx[i], gy[j])
+            if twist_pitch is None or rad < 1e-9:
+                sec = Plane(origin=(gx[i], gy[j], 0.0), z_dir=(0.0, 0.0, 1.0)) * sec2d
+                strand = extrude(sec, amount=length).solid()
+            else:
+                ph0 = math.atan2(gy[j], gx[i])
+                pts = [(rad * math.cos(2.0 * math.pi * (length * s / n_axial) / twist_pitch + ph0),
+                        rad * math.sin(2.0 * math.pi * (length * s / n_axial) / twist_pitch + ph0),
+                        length * s / n_axial) for s in range(n_axial + 1)]
+                strand = _sweep_section(Spline(*pts), sec2d)
+            strand.label = f"{name}_{i:02d}_{j:02d}"
+            strands.append(strand)
+    return assembly(*strands, label=name)
