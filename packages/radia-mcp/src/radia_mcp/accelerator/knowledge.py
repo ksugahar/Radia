@@ -23,6 +23,11 @@ TOPICS: dict[str, str] = {
         "(s,z) planes, reflect into a 3-D sector pole; FFAG scaling sector, "
         "reflection validity = the L/g leaf coupling"
     ),
+    "beam_referenced_twist": (
+        "The beam-referenced equipotential SURFACE as the design primitive + "
+        "the TWIST: rotate the surface by phi <=> multipole phase n*phi "
+        "(the n-fold law, verified on a twisting quadrupole)"
+    ),
     "all": "Everything (all topics concatenated)",
 }
 
@@ -485,6 +490,56 @@ surface rotating along a bent orbit) is the next axis.
 """
 
 
+BEAM_REFERENCED_TWIST = """
+# The beam-referenced equipotential SURFACE as the design primitive + the TWIST
+
+Instead of solving a magnet and then multipole-EXPANDING the field, make the
+beam-referenced equipotential SURFACE the design SPEC.  In the Frenet frame of
+the orbit s the iron pole face is
+
+    Omega(r, theta; s) = sum_n r^n b_n(s) sin(n theta + phi_n(s))
+
+(high-mu => H_tangential = 0 => Omega = const), so the multipole (b_n, phi_n)(s)
+IS the surface's angular Fourier mode.  Design = prescribe (b_n, phi_n)(s), sweep
+the equipotential surface along the orbit, place iron there -- NOT
+solve-then-expand.
+
+## The twist (the curved-orbit / combined-function axis)
+
+The genuinely 3-D content of a CURVED-orbit / COMBINED-function magnet is that
+the transverse multipole ROTATES along s (the Frenet frame turns with the bend;
+a rotating-gradient magnet turns the pole on purpose).  The key fact is the
+N-FOLD LAW:
+
+    rotate the equipotential SURFACE by phi  <=>  multipole PHASE turns n*phi.
+
+For the quadrupole (n=2): rotate the pole by phi <=> (b_2, a_2) ->
+|b_2| (cos 2phi, sin 2phi), so a quad twisted by 45 deg becomes a pure SKEW quad.
+
+## What is verified (twisting_quadrupole_pole.py, ngsolve only, golden-tested)
+
+The quad pole face is the hyperbola xy = +-r0^2/2 (the Omega=const equipotential,
+accel_pole_design.quad_pole_hyperbola).  A 2-D Laplace solve in the aperture with
+the 4 hyperbola poles at alternating +-Omega0 recovers a CLEAN quad:
+  - skew a_2/|c_2| ~ 5e-6 (pure normal at phi=0)
+  - forbidden n=1,3,5 at the ~5e-5 floor
+  - leading allowed spurious = the finite-pole 12-pole b_6 ~ 5.6e-3
+Rotating the 4 poles by phi rotates the recovered pole orientation
+alpha = -(1/2) atan2(a_2, b_2) by EXACTLY phi (slope 1.000, max error 0.00 deg),
+and b_6 is rotation-INVARIANT.  The twist is the surface angular mode, measured.
+
+## Honest scope
+
+This is the per-station (Frenet cross-section) 2-D design -- the SLOW-TWIST
+(adiabatic) limit d phi / ds -> 0, where the magnet is a stack of 2-D leaves (the
+foliate_perturb picture, now twisting).  A fast twist / tight bend couples
+adjacent leaves (a longitudinal-field correction); the twist rate d phi / ds is a
+leaf-coupling perturbation parameter (the next rung).  Combined-function
+(dipole + quad together = a shifted+rotated hyperbola) and the genuine
+curved-orbit Frenet sweep are the extensions the n-fold law governs.
+"""
+
+
 def get_accelerator_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -499,6 +554,8 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                                perturbation?  Leaf coupling ~ gap/L
       "two_plane_design"     - The two-plane -> 3-D method: transverse (r,z)
                                + azimuthal (s,z) -> 3-D sector pole
+      "beam_referenced_twist" - The equipotential SURFACE as design primitive
+                               + the twist (n-fold law, twisting quadrupole)
     """
     topic = topic.lower().strip()
     if topic in ("end_pole", "chamfer", "delferriere"):
@@ -516,12 +573,17 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     if topic in ("two_plane_design", "two_plane", "twoplane", "sector",
                  "ffag_sector", "reflection"):
         return TWO_PLANE_DESIGN
+    if topic in ("beam_referenced_twist", "twist", "twisting", "design_primitive",
+                 "equipotential_surface", "n_fold", "rotating_gradient"):
+        return BEAM_REFERENCED_TWIST
     if topic == "all":
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
+            BEAM_REFERENCED_TWIST,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
-        "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design."
+        "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
+        "beam_referenced_twist."
     )
