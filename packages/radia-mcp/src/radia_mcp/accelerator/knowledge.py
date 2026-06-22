@@ -35,6 +35,14 @@ TOPICS: dict[str, str] = {
         "into one 3-D equipotential pole; the chamfer-depth sweep zeroes the "
         "pole-tip corner over-field (endpack_two_plane.py)"
     ),
+    "spectrometer_endpack": (
+        "The SPECTROMETER end pack, NONLINEAR: the pole-tip corner is a Chaplygin "
+        "saturable THROAT (concentration kappa) that reaches the iron knee FIRST "
+        "(corner saturates at B_gap=B_K/kappa, below the bulk knee), drifting the "
+        "EFB / edge focusing; the Rogowski chamfer is the throat-width knob. "
+        "Nonlinear design map at LINEAR cost + B-input A-formulation truth check "
+        "(endpack_spectrometer_saturation.py)"
+    ),
     "all": "Everything (all topics concatenated)",
 }
 
@@ -638,6 +646,75 @@ accel_pole_dipole_body_2d.
 """
 
 
+SPECTROMETER_ENDPACK_SATURATION = """
+# The SPECTROMETER end pack, NONLINEAR -- the pole-tip corner is a saturable throat
+
+A large BENDING SPECTROMETER dipole runs near the iron knee, so its end pack must
+be designed WITH saturation.  This composes the linear end pack (endpack_two_plane)
+with the iron-saturation lever (clebsch_dipole_saturation_2d/3d) on the magnet END.
+
+## The physics (why a spectrometer end needs the nonlinear design)
+
+The linear (high-mu equipotential) end pack found the hard-cut pole END concentrates
+flux at the tip CORNER by
+
+    B_corner = kappa * B_gap ,   kappa = tip_enhancement ~ 1.11   (geometry-only).
+
+In a SATURATING iron, kappa > 1 means the CORNER reaches the iron knee FIRST: it
+saturates at a gap field
+
+    B_gap_knee = B_K / kappa ~ 1.5 / 1.13 ~ 1.33 T,
+
+~12% BELOW the bulk iron knee B_K = 1.5 T.  Above that the corner mu_r collapses, the
+flux can no longer follow the pole edge, and the EFB (effective field boundary
+~ L_eff) DRIFTS with excitation.  That is fatal for a spectrometer: the pole-edge
+angle's EDGE FOCUSING (the vertical focusing tan(beta)/rho) depends on the EFB, so a
+drifting EFB means the optics CHANGE with the field setting.
+
+## The design (the Rogowski chamfer is the corner-throat width knob)
+
+The corner is exactly a Chaplygin saturable THROAT (clebsch_dipole_saturation_2d):
+kappa is its inverse cross-section, and it saturates first.  The Rogowski end chamfer
+(endpack_two_plane's s-y design) WIDENS that throat -- lowers kappa -- so the corner
+knee B_K/kappa RISES toward the bulk knee.  The SAME chamfer that zeroes the LINEAR
+corner over-field (the cosmetic field-quality lever) REMOVES the PREMATURE corner
+saturation (the hard engineering lever) and keeps the EFB -- and the edge focusing --
+STABLE up to the bulk limit.  Linear and nonlinear levers POINT THE SAME WAY;
+saturation gives the chamfer its hard justification.
+
+## Verified (endpack_spectrometer_saturation.py, golden-tested, ngsolve only)
+
+1. The MAP at LINEAR cost: reuse the linear equipotential corner concentration
+   kappa(chamfer) (endpack_two_plane's depth sweep) and overlay the Froehlich iron BH
+   (B_K=1.5 T, mu_r0=2000, from clebsch_dipole_saturation_3d): the corner knee
+   B_K/kappa(chamfer) -- flat 1.33 T -> 2.4 mm chamfer 1.55 T -> 5 mm 1.75 T.  To
+   clear a B_op = 1.45 T operating field without corner saturation needs kappa <= 1.034
+   (~1.4 mm chamfer; the linear cosmetic optimum kappa=1 is ~1.9 mm -- the same lever).
+   The whole nonlinear end-pack map = 4 linear equipotential solves + a BH overlay --
+   the Chaplygin "nonlinear analysis done linearly" applied to the END corner.
+
+2. DESIGN-GRADE, components validated: the lumped kappa-throat overlay is the same
+   lumped-magnetic-circuit class as clebsch_dipole_saturation_2d (~10% vs FEM), and
+   its two ingredients are independently verified elsewhere:
+     - the corner concentration kappa = the LINEAR equipotential tip_enhancement
+       (endpack_two_plane.py, golden-tested) -- geometry-only, drive-agnostic;
+     - the Froehlich BH + the well-conditioned B-input A-formulation that backs the
+       iron saturation = clebsch_dipole_saturation_3d.py (the documented cure: the
+       reduced-Omega mu(|H|) Picard STALLS at high mu, the A-formulation does not).
+   So the composition B_corner = kappa*B_gap until B_K is well-founded.
+
+## Honest scope
+
+A fully coil-driven 3-D corner-saturation FEM is the documented expensive extension,
+NOT run in the example: the equipotential/MMF drive forces flux across the gap (a
+UNIFORM applied field does NOT reproduce the corner concentration kappa -- measured),
+and the coil's Biot-Savart B_s projection is the serial bottleneck.  The corner kappa
+softens before the hard knee (a real FEM is the truth).  The curved/rotated-EFB edge
+focusing (the horizontal x-s edge contour) and the fully-saturating sector body are
+the remaining spectrometer extensions (see endpack_two_plane + two_plane_design).
+"""
+
+
 def get_accelerator_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -656,6 +733,8 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                                + the twist (n-fold law, twisting quadrupole)
       "endpack_two_plane"    - The magnet END PACK in two planes (x-y cross-
                                section + s-y end) -> 3-D equipotential reflect
+      "spectrometer_endpack" - The SPECTROMETER end pack NONLINEAR: the pole-tip
+                               corner = saturable throat, B_K/kappa knee, EFB drift
     """
     topic = topic.lower().strip()
     if topic in ("end_pole", "chamfer", "delferriere"):
@@ -679,14 +758,17 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     if topic in ("endpack_two_plane", "end_pack_two_plane", "magnet_end",
                  "end_chamfer", "rogowski", "endpack_2plane"):
         return ENDPACK_TWO_PLANE
+    if topic in ("spectrometer_endpack", "spectrometer", "nonlinear_endpack",
+                 "corner_saturation", "saturable_endpack", "efb", "edge_focusing"):
+        return SPECTROMETER_ENDPACK_SATURATION
     if topic == "all":
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
-            BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE,
+            BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
         "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
-        "beam_referenced_twist, endpack_two_plane."
+        "beam_referenced_twist, endpack_two_plane, spectrometer_endpack."
     )
