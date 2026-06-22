@@ -1,5 +1,5 @@
 """Golden lock for moment-yano (Steps 3-4 + Phase 2-3, 2026-06-22): the parameter-free MOMENT formula
-(BuildMomentSystemCore) is the SOLE surface-charge soft-iron demag (hex 6-DOF + wedge 5-DOF).  The EIEM2
+(BuildMomentSystemCore) is the SOLE surface-charge soft-iron demag (hex 6-DOF + wedge/pyramid 5-DOF).  The EIEM2
 collocation kernel and its `yano_moment=False` opt-out were removed (Phase 3b).  Method dispatch in SolveGen:
 
   - method 0 (LU)  : moment, physical (cube demag ~1/3 -> M_z ~ 3*H0).
@@ -175,7 +175,7 @@ def test_wedge_moment_matches_hex_externally():
 
 
 def test_mixed_hex_wedge_moment():
-    """Phase-3a: a MIXED container (hex 6-DOF + wedge 5-DOF) solves via the moment dense path with variable
+    """Phase-3a: a MIXED container (hex 6-DOF + wedge 5-DOF; same 5-DOF family as pyramid) solves via the moment dense path with variable
     DOF offsets.  A 2-cube stack with the top cube tiled by 2 wedges == both cubes as hexes, externally."""
     MU0 = 4e-7 * np.pi; L = 0.02; Happ = 1000.0
     probes = [[0.06, 0.01, 0.02], [0.0, 0.06, 0.03], [0.01, 0.01, 0.08], [-0.05, 0.02, 0.04]]
