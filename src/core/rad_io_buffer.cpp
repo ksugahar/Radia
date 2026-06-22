@@ -158,6 +158,7 @@ string radTIOBuffer::err_ar[] = {
 	"Radia::Error502::::Incorrect input: Wrong / unsupported kick-map string/file format specification.\0", //keep on adding new "Incorrect inputs" after this
 	"Radia::Error600::::MPI is not supported in this version of code (it may need to be re-compiled with an appropriate option).\0",
 	"Radia::Error601::::Failed to execute MPI function.\0",
+	"Radia::Error204::::moment-yano (the default 6-DOF hexahedral soft-iron demag formula) is solved by the direct dense solver only; it has no H-matrix (HACApK, method 2) path yet. For a large-scale H-matrix solve, set rad.SolverConfig(yano_moment=False) to use the EIEM2 collocation formula (which supports method 2), or use method 0 / 1. An ACA-compressed moment matvec is future work.\0",
 	"Radia::Error900::::Memory allocation failure.\0",
 	"Radia::Error990::::Graphical presentation of this element is not available.\0",
 	"Radia::Error998::::Execution aborted by User.\0",
