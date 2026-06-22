@@ -18,7 +18,8 @@ from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetizati
                                             solenoid, pole_tip, multipole_yoke, h_dipole, helmholtz_pair,
                                             cos_theta_dipole, e_core, slotted_stator, spm_rotor,
                                             litz_wire, litz_packing_radius, litz_fill_factor,
-                                            hierarchical_litz, rectangular_litz)
+                                            hierarchical_litz, rectangular_litz, litz_serving)
+from radia_mcp.build123d.archetypes import _carried_centerline, _superposed_centerline
 from build123d import Box, Rectangle, RegularPolygon
 
 
@@ -215,6 +216,54 @@ def test_rectangular_litz_grid_and_twist():
     assert len(tw.children) == nx * ny and all(s.is_valid for s in tw.solids())
 
 
+def test_hierarchical_litz_carried():
+    """carried=True carries each inner orbit in the parent's rotation-minimizing frame, so the orbit is
+    perpendicular to the local parent tangent everywhere (additive keeps it in the lab plane)."""
+    import numpy as np
+    levels = [(3, 2.0, 30.0), (2, 0.7, 8.0)]
+    L, n, combo = 24.0, 300, (1, 1)
+
+    def perp_cos(fn):
+        strand = np.array(fn(levels, combo, L, n))
+        parent = np.array(fn(levels[:-1], combo[:-1], L, n))      # sub-bundle (outer level only)
+        T = np.zeros_like(parent)
+        T[1:-1] = parent[2:] - parent[:-2]; T[0] = parent[1] - parent[0]; T[-1] = parent[-1] - parent[-2]
+        T /= np.linalg.norm(T, axis=1, keepdims=True)
+        off = strand - parent; off /= np.linalg.norm(off, axis=1, keepdims=True)
+        return np.abs(np.einsum("ij,ij->i", off, T))
+
+    assert perp_cos(_carried_centerline).max() < 1e-6, "carried orbit perpendicular to parent tangent"
+    assert perp_cos(_superposed_centerline).max() > 0.1, "additive orbit is NOT perpendicular (lab frame)"
+    cab = hierarchical_litz(levels, 0.25, L, name="hc", n_axial=160, carried=True)
+    assert len(cab.children) == 6 and all(s.is_valid for s in cab.solids())
+    assert [c.label for c in cab.children] == [f"hc_{i:02d}_{j:02d}" for i in range(3) for j in range(2)]
+
+
+def test_litz_wire_insulation():
+    """insulation>0 enamels each strand: copper core {name}_kk + coaxial shell {name}_kk_ins, a flat
+    2N-region compound; core and shell volumes match circle / annulus x helix length."""
+    N, rs, Rb, L, pitch, t = 5, 0.5, 1.6, 24.0, 12.0, 0.12
+    litz = litz_wire(N, rs, Rb, L, pitch, name="enam", insulation=t)
+    assert len(litz.children) == 2 * N and all(s.is_valid for s in litz.solids())
+    cores = [c for c in litz.children if not c.label.endswith("_ins")]
+    shells = [c for c in litz.children if c.label.endswith("_ins")]
+    assert [c.label for c in cores] == [f"enam_{k:02d}" for k in range(N)]
+    assert [c.label for c in shells] == [f"enam_{k:02d}_ins" for k in range(N)]
+    turns = L / pitch
+    hlen = math.sqrt(L ** 2 + (turns * 2 * math.pi * Rb) ** 2)
+    cv = sum(c.volume for c in cores); sv = sum(s.volume for s in shells)
+    assert abs(cv - N * math.pi * rs ** 2 * hlen) / cv < 1e-3, "cores = N circle x helix length"
+    assert abs(sv - N * math.pi * ((rs + t) ** 2 - rs ** 2) * hlen) / sv < 1e-3, "shells = N annulus x len"
+
+
+def test_litz_serving_tube():
+    """Bundle serving = a concentric tube of given radial thickness around the bundle envelope."""
+    env, t, L = 2.0, 0.2, 24.0
+    serv = litz_serving(env, t, L, name="serve")
+    assert serv.is_valid and serv.label == "serve"
+    assert abs(serv.volume - math.pi * ((env + t) ** 2 - env ** 2) * L) / serv.volume < 1e-9, "annulus tube"
+
+
 def test_hierarchical_litz_meshes_in_netgen():
     """CAE gate: a coiled-coil strand (superposed-helix spline sweep) tet-meshes via STEP -> Netgen."""
     import tempfile
@@ -322,6 +371,9 @@ def main():
     test_litz_fill_factor()
     test_hierarchical_litz_coiled_coil()
     test_rectangular_litz_grid_and_twist()
+    test_hierarchical_litz_carried()
+    test_litz_wire_insulation()
+    test_litz_serving_tube()
     test_hierarchical_litz_meshes_in_netgen()
     test_e_core_two_windows()
     test_slotted_stator_removes_slots()
