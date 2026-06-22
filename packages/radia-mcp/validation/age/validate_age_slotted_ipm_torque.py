@@ -19,15 +19,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction,
                      grad, dx, x, y, sqrt, atan2, cos, sin, IfPos, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -96,7 +93,7 @@ def _src(fes, mesh, delta, with_pm=True, with_cur=True):
     L.Assemble(); return L
 
 
-def test_slotted_ipm_absolute_torque_age_matches_brute():
+def validate_slotted_ipm_absolute_torque_age_matches_brute():
     ma = _geo(False)
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
     ua, wa = fa.TnT(); aa = BilinearForm(fa); aa += _nu(ma)*grad(ua)*grad(wa)*dx
@@ -143,7 +140,7 @@ def test_slotted_ipm_absolute_torque_age_matches_brute():
 
 
 def main():
-    test_slotted_ipm_absolute_torque_age_matches_brute()
+    validate_slotted_ipm_absolute_torque_age_matches_brute()
     print("[OK] AGE real-slot concentrated IPM: genuine geometric slots + buried PM + concentrated "
           "winding; absolute torque-angle curve reproduces the brute meshed-gap FE, cogging suppressed.")
 

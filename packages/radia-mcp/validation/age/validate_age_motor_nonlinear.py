@@ -26,7 +26,7 @@ from ngsolve import (
 )
 from netgen.geom2d import SplineGeometry
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -82,7 +82,7 @@ def _bilinear_fn(fes, nu_cf):
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_linear_limit_one_iteration():
+def validate_linear_limit_one_iteration():
     """With constant nu, Picard converges in at most 2 iterations.
 
     Iteration 1: solve from zero → solution u₁.  rel_change = ||u₁||/||u₁|| = 1 > tol.
@@ -104,7 +104,7 @@ def test_linear_limit_one_iteration():
     assert info["converged"]
 
 
-def test_linear_limit_matches_direct_solve():
+def validate_linear_limit_matches_direct_solve():
     """Picard result must match direct airgap_solve to machine precision."""
     mesh = _build_mesh()
     fes = _make_fes(mesh)
@@ -135,7 +135,7 @@ def test_linear_limit_matches_direct_solve():
     assert rel < 1e-10, f"Picard vs direct solve mismatch: rel_err = {rel:.3e}"
 
 
-def test_null_nu_cf_fn_converges_fast():
+def validate_null_nu_cf_fn_converges_fast():
     """nu_cf_fn=None (linear mode): converges in at most 2 iterations."""
     mesh = _build_mesh()
     fes = _make_fes(mesh)
@@ -153,7 +153,7 @@ def test_null_nu_cf_fn_converges_fast():
     assert info["converged"]
 
 
-def test_froelich_saturation_converges():
+def validate_froelich_saturation_converges():
     """Froelich-type nu → Picard converges within 50 iters, residuals shrink.
 
     With |∇A| ~ A_ROT/R0 ~ 20 (in SI 2D), B_sat2 = 500 gives mild but non-trivial
@@ -183,7 +183,7 @@ def test_froelich_saturation_converges():
     assert h[-1] < h[0], f"Residuals not shrinking: {h[0]:.3e} → {h[-1]:.3e}"
 
 
-def test_saturation_torque_nonzero():
+def validate_saturation_torque_nonzero():
     """Torque must be nonzero for nonzero phase between rotor and stator excitation."""
     mesh = _build_mesh()
     fes = _make_fes(mesh)
@@ -207,7 +207,7 @@ def test_saturation_torque_nonzero():
     assert abs(T) > 1e-8, f"Torque should be nonzero, got T={T:.3e}"
 
 
-def test_rotation_sweep_linear():
+def validate_rotation_sweep_linear():
     """Linear rotation sweep: all angles converge in 1 iter, torque varies."""
     mesh = _build_mesh()
     fes = _make_fes(mesh)
@@ -239,7 +239,7 @@ def test_rotation_sweep_linear():
 
 def main():
     for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
+        if name.startswith("validate_") and callable(fn):
             fn(); print("ok", name)
     print("[OK] AGE nonlinear motor: Picard loop + saturation + rotation sweep.")
 

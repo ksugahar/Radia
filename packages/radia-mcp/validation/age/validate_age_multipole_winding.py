@@ -16,13 +16,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction,
                      grad, dx, x, y, sqrt, atan2, cos, sin, IfPos, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -100,8 +99,7 @@ def _winding_factor(p, q, n):
     return kw, kd, Na, Q
 
 
-@pytest.mark.xval
-def test_multipole_age_matches_brute():
+def validate_multipole_age_matches_brute():
     """4-pole (p=2) SPM: AGE (harmonics n=p(2k+1)) reproduces the brute meshed-gap field & torque."""
     ma = _geo(False)
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
@@ -143,7 +141,7 @@ def test_multipole_age_matches_brute():
     assert rel_T < 5e-3, f"4-pole loaded torque AGE off brute by {rel_T:.2e}"
 
 
-def test_distributed_winding_factor():
+def validate_distributed_winding_factor():
     """Slot-phasor winding factor kw == analytic distribution factor kd for n=1,3,5,7."""
     worst = 0.0
     for (p, q) in [(2, 2), (2, 3), (1, 4)]:
@@ -158,8 +156,8 @@ def test_distributed_winding_factor():
 
 
 def main():
-    test_multipole_age_matches_brute()
-    test_distributed_winding_factor()
+    validate_multipole_age_matches_brute()
+    validate_distributed_winding_factor()
     print("[OK] AGE multi-pole (4-pole p=2, n=p(2k+1) harmonics) == brute meshed-gap; distributed "
           "winding factor kw == analytic kd (harmonic suppression) to machine precision.")
 
