@@ -79,6 +79,18 @@ def test_assembly_keeps_regions_separate():
     assert labels == {"iron", "coil"}, "regions stay separate and labelled on the children (not fused)"
 
 
+def test_assembly_accepts_raw_primitives():
+    """A raw build123d Part (Box / Cylinder / extrude result) is a Compound with its solid in .solids()
+    but EMPTY .children -- assembly must still keep it (fall back to .solids()), not silently drop it,
+    and a label set on the raw Part must survive onto its child solid."""
+    from build123d import Box, Cylinder, Pos
+    core = Cylinder(0.5, 2); core.label = "core"
+    asm = assembly(Box(1, 1, 1), Pos(3, 0, 0) * core, label="mixed")
+    assert len(asm.solids()) == 2 and len(asm.children) == 2, "raw primitives are kept, not dropped"
+    assert abs(asm.volume - (1.0 + math.pi * 0.5 ** 2 * 2)) < 1e-6
+    assert "core" in {c.label for c in asm.children}, "a label on a raw Part carries onto its solid"
+
+
 def test_segment_meshes_in_netgen():
     """CAE gate: the wedge tet-meshes cleanly through the build123d -> STEP -> Netgen pipeline
     (build123d's OCP kernel and Netgen's OCC binding are different, so STEP is the bridge)."""
