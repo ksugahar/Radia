@@ -1,11 +1,10 @@
-# FEEC VIM — the HDiv-type MMM/MSC (replacing the yano-type distortion elements)
+# FEEC VIM — the HDiv-type MMM/MSC
 
 Research demonstration of the **FEEC (Finite Element Exterior Calculus) Volume Integral
 Method** for the MMM/MSC magnetization problem. The goal: build an **HDiv-type** demag
-operator whose magnetization "loops" are **field-null by construction**, and — if it matches
-or beats the **yano-type** element-engineering (Yano's hand-crafted elements that suppress
-the loop-star / `A_ls` component on distorted hexes, preserved in the private ELF repo) —
-retire the yano-type from public Radia.
+operator whose magnetization "loops" are **field-null by construction**, complementing the
+canonical **moment-yano** surface-charge backend with FEEC, curved/high-order geometry, and
+symmetry-model capabilities.
 
 > **Sibling research line in this directory:** a separate set of examples builds a **3D
 > stream-function + cohomology COIL-DESIGN method** (Clebsch / vector-T potentials on the same
@@ -80,6 +79,7 @@ solver but NOT ground truth on a coarse mesh):
 |---|---|---|---|
 | Loops field-null on distorted hex | `ngsolve_loopfree_verify.py` | exact (charge-form field `3.7e-16`) | ✅ machine zero |
 | Loop/star (Hodge) split | `hdiv_loop_star_split.py` | exact (`ker Q` charge-free `~1e-16`) | ✅ |
+| **yano-MSC <-> HDiv-VIM loop bridge** | `yano_hdiv_loop_bridge.py` | exact (collocation near-null `==` HDiv `ker(B)` `==` cell-graph cycle) | ✅ the yano-type collocation matrix carries the SAME loops as a latent near-null: dim `== n_loop` (cycle count) on every grid; yano cond `~1e16` (HDiv `loop_res ~1e-16`); cond(`-N+I/chi`) `~mu_r` while star projection is `~40-65`, mu_r-independent. |
 | Linear demag (sphere/cube → 1/3) | `hdiv_demag_tet.py` | **ANALYTIC** 1/3 | ✅ `<0.15%` (Wilton surface Gram) |
 | Nonlinear (damped Newton) | `hdiv_demag_tet_nonlinear.py` | **ANALYTIC** sphere fixed point | ✅ `<0.05%` deep-saturation |
 | Nonlinear cross-check | `test_hdiv_vim_newton_vs_radia.py` | Radia MMM/MSC (`MatSatIsoTab`) | ✅ agree `<0.05%` (sphere) |
@@ -117,7 +117,7 @@ head-to-head accuracy-per-resolution win vs the shipped Radia solver (`test_curv
 The narrative + decisions live in the radia-mcp **`hdiv_vim`** MCP knowledge
 (`overview` / `status` / `nonlinear`); `memory/` holds the Problem-A/B investigation record.
 
-## Honest open items (the productionization to actually retire yano-type)
+## Honest open items (productionization alongside moment-yano)
 
 The **surface** Gram, curved + high-order + FMM-scalable, is now SOLVED by reusing the
 `ngsolve.bem` Laplace single-layer (`hdiv_demag_bem_singlelayer.py`) — no hand-rolled singular
@@ -133,4 +133,4 @@ quadrature needed. The remaining work:
    curved+high-order nonlinear operator.
 3. **C++ maturity** — the production charge Gram (single-layer surface + `phi_tet` volume) and
    the Newton loop in C++ behind a Radia API. The big lift that turns the validated prototype
-   into the shipped replacement.
+   into a shipped production backend.

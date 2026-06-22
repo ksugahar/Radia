@@ -645,7 +645,8 @@ It builds the MSC H-matrix and applies its `MatVec` to unit vectors,
 returning the dense A in the ORIGINAL DOF ordering (directly comparable to
 `diag(1/chi) - N`, and usable with a loop basis). Use it to check whether
 the real ACA+ shifts the near-zero eigenvalues (it does not materially --
-see "eigenvalue_nullspace"). C++ path: `RadHACApKMSCManager::MatVec`
+see "eigenvalue_nullspace"). C++ path: `RadHACApKMMMManager::MatVec`
+(formerly `RadHACApKMSCManager` before the 2026-06-23 moment-yano cleanup)
 exposed via `radTApplication::HMatrixDensify`.
 
 See "eigenvalue_nullspace" for why the spectrum of A matters, and

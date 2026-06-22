@@ -3,9 +3,9 @@
 **One sentence:** the magnetization "loop" modes that break the constant-M MMM/MSC integral
 equation on distorted meshes (see [`../loop_star_breakdown.md`](../loop_star_breakdown.md)) are
 **field-null by construction** when the magnetization lives in NGSolve's H(div) (RT) finite-element
-space — so the **HDiv-type VIM** replaces the hand-crafted **yano-type** distortion elements with a
-de-Rham-exact operator that additionally handles **curved geometry, polynomial high order, and
-symmetry models** that flat yano-type cannot.
+space — so the **HDiv-type VIM** complements the canonical **moment-yano** MSC backend with a
+de-Rham-exact operator for **curved geometry, polynomial high order, and symmetry models** that flat
+surface-charge elements cannot represent.
 
 This is the canonical technical reference. The runnable examples + their numbers live in
 [`examples/vim/README.md`](../../examples/vim/README.md); the decision/narrative record is
@@ -106,13 +106,13 @@ in **6 Newton iters** and matches Radia to `<1%`.
 
 ## 7. Honest status & open work
 
-> **The concrete milestone roadmap to retire yano-type is [PRODUCTIONIZATION.md](PRODUCTIONIZATION.md)**
+> **The concrete milestone roadmap for production HDiv-VIM is [PRODUCTIONIZATION.md](PRODUCTIONIZATION.md)**
 > — current C++/Python inventory, the parity-gate definition-of-done (incl. the unmeasured speed gap),
-> and milestones M0 (parity + speed measurement) → M5 (the seal).
+> and milestones M0 (parity + speed measurement) -> M5 (production seal).
 
 The HDiv-type VIM is a **validated research prototype** (Python + NGSolve) with a quantified
 accuracy-per-DOF win over the shipped flat solver on curved problems, and parity on the flat cases. The
-remaining lift to **retire yano-type in production**:
+remaining lift to make it a **production backend alongside moment-yano MSC**:
 
 1. **C++ productionization** — the charge Gram (Wilton surface / `phi_tet` volume / `ngsolve.bem`
    single-layer) + the Newton loop in C++ behind a Radia API. This also enables a fair **wall-clock**

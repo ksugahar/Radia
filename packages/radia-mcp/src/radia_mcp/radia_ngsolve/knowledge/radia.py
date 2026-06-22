@@ -3797,8 +3797,9 @@ source element center to improve convergence of the far-field expansion:
 H_point = -area_face * (obs - src_center) / |obs - src_center|^3
 ```
 
-This is included in radTInteraction::Compute6x6BlockFast but may not be needed
-for single-element validation. For production use with multiple elements, include it.
+This was included in the retired EIEM2 `Compute6x6BlockFast` kernel. Current surface-charge soft iron uses
+the moment-yano path (`BuildMomentSystemCore` / centroid field-gradient coupling), where the center-charge
+cancellation is internal to the moment assembly.
 
 ### Schur complement for PEEC-MSC coupling
 

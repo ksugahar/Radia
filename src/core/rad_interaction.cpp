@@ -3124,9 +3124,9 @@ int radTInteraction::GetMirrorElementIndex(int elemIdx, int symmetryAxis) const
 // images via CentroidFieldGradFromFace.
 
 //-------------------------------------------------------------------------
-// SetupInteractMatrix_IMA: Build IMA interaction matrix
-// Both hex and tet fast paths now delegate to kernel functions that
-// handle IMA mirror contributions internally (Compute6x6BlockFast, Compute3x3BlockFast).
+// SetupInteractMatrix_IMA: Build IMA interaction matrix.
+// The tet MMM path uses Compute3x3BlockFast. Surface-charge moment-yano handles IMA in
+// BuildMomentSystemCore / CentroidFieldGradFromFace and skips this dense MSC matrix.
 //-------------------------------------------------------------------------
 int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 {
@@ -3247,10 +3247,8 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
-	// For HACApK: skip dense matrix, let kernel functions compute on demand.
-	// All element types (pure and mixed) are handled by kernel functions:
-	// - Same-type: Compute6x6BlockFast, Compute5x5BlockFast, Compute3x3BlockFast
-	// - Cross-DOF: ComputeMixedBlockFast (with type-specific indexing)
+	// For HACApK: skip dense matrix. Pure tet MMM computes entries on demand through
+	// Compute3x3BlockFast; surface-charge moment-yano uses RadHACApKMomentSystem instead.
 	// Reset geometry so it gets recomputed for the reduced IMA element set.
 	if(skipDenseMatrix)
 	{
