@@ -138,6 +138,7 @@ int GetLoopBasis(int, double*, int*, int*);
 int GetFaceGeom(int, double*, int*);
 int GetCentroidFieldGrad(int, double*, int*, int*);
 int BuildMomentSystem(int, double, const double*, double*, double*, int*);
+int MomentSystemDenseRaw(int, double, double*, int*);
 double HLUTestOnHACApK(int);
 int HLUDebugMaterialize(int, double*, int*, int*);
 void SetRelaxSubInterval(int, int, int, int);
@@ -1442,6 +1443,11 @@ int GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF)
 int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF)
 {
 	return rad.BuildMomentSystem(InteractElemKey, chi, Happ, pA, pRhs, pDOF);
+}
+
+int MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF)
+{
+	return rad.MomentSystemDenseRaw(InteractElemKey, chi, pA, pDOF);
 }
 
 //-------------------------------------------------------------------------

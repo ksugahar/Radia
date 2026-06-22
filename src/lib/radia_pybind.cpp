@@ -1014,6 +1014,19 @@ py::tuple BuildMomentSystem(int intrc_handle, double chi, double hx, double hy, 
     return py::make_tuple(Aout, rout, dof);
 }
 
+// Dense UN-normalized moment system A_raw built ENTRY-BY-ENTRY via radTInteraction::MomentSystemEntry --
+// the validation harness for the on-demand HACApK H-matrix entry (Phase 2; ACA_MOMENT_DESIGN.md).
+py::tuple MomentSystemDenseRaw(int intrc_handle, double chi) {
+    int dof = 0;
+    int err = RadMomentSystemDenseRaw(chi, nullptr, &dof, intrc_handle);
+    check_error(err);
+    if (dof <= 0) throw std::runtime_error("No DOFs in interaction matrix");
+    py::array_t<double> Aout({dof, dof});
+    err = RadMomentSystemDenseRaw(chi, (double*)Aout.request().ptr, &dof, intrc_handle);
+    check_error(err);
+    return py::make_tuple(Aout, dof);
+}
+
 /**
  * @brief Densify the actual HACApK (ACA+) operator as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
@@ -3693,6 +3706,16 @@ PYBIND11_MODULE(_radia_pybind, m) {
               EIEM2 -> moment-yano upgrade (matches examples/vim/yano_moment_iter_scaling.py::build).
 
               Returns: (A, rhs, dof) -- A is (dof, dof), rhs is (dof,).
+          )pbdoc");
+
+    m.def("MomentSystemDenseRaw", &radia_solver::MomentSystemDenseRaw,
+          py::arg("intrc_handle"), py::arg("chi"),
+          R"pbdoc(
+              Dense UN-normalized moment system A_raw built ENTRY-BY-ENTRY via the on-demand
+              MomentSystemEntry (the HACApK H-matrix entry; ACA_MOMENT_DESIGN.md Phase 2).  Validation
+              harness: re-normalizing A_raw's rows must reproduce BuildMomentSystem's A; and A_raw solves
+              to the SAME magnetization as the normalized system (row-norm = diagonal scaling, invariant).
+              Returns: (A_raw, dof).
           )pbdoc");
 
     m.def("HMatrixDensify", &radia_solver::HMatrixDensify,
