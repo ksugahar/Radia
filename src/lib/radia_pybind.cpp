@@ -1878,13 +1878,6 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 // Additional Solver Functions
 // ============================================================================
 
-// Opt-in "improved yano-type" surface-charge (MSC) kernel flag (pyramid-cloud + pyramid-centroid eval);
-// defined in rad_polyhedron.cpp (global scope), read by the yano-MSC matrix-build paths in
-// rad_interaction.cpp.  Declared here at GLOBAL scope so the in-namespace SolverConfig/GetSolverConfig
-// usages resolve to the global definition (not a namespace-scoped symbol).
-extern bool g_yano_pyramid_cloud;
-extern bool g_yano_no_center_charge;
-extern double g_yano_eval_alpha;
 
 namespace radia_solver_ext {
 
@@ -2065,7 +2058,6 @@ double GetHantilaRelax() {
 // Use BuildMatrix(obj, image="+x-z") or Solve(obj, ..., image="+x-z") instead
 
 // ---- Unified SolverConfig / GetSolverConfig ----
-// (g_yano_pyramid_cloud is declared at global scope above the namespace; usages below resolve to it.)
 
 void SolverConfig(py::kwargs kwargs) {
     // HACApK parameters
@@ -2130,21 +2122,6 @@ void SolverConfig(py::kwargs kwargs) {
         SetKeepMagnetization(kwargs["keep_magnetization"].cast<bool>());
     }
 
-    // Improved yano-type MSC kernel (opt-in research flag): pyramid-cloud + pyramid-centroid eval.
-    // Default false == the historical EIEM2 single-point kernel (goldens unchanged).  Stage 1: supported
-    // for the dense LU/BiCGSTAB yano-MSC path (no HACApK method 2, no IMA image symmetry).
-    if (kwargs.contains("yano_pyramid_cloud")) {
-        g_yano_pyramid_cloud = kwargs["yano_pyramid_cloud"].cast<bool>();
-    }
-    // Research flag: drop the element-center cancellation charge (raw collocation).  For studying the
-    // "div(B)=0 via Lagrange instead of a center charge" question.  Pure-hex dense/BiCGSTAB matrix path.
-    if (kwargs.contains("yano_no_center_charge")) {
-        g_yano_no_center_charge = kwargs["yano_no_center_charge"].cast<bool>();
-    }
-    // Research: override the EIEM2 collocation-point alpha (eval = a*FaceCenter + (1-a)*center; -1 = 0.5).
-    if (kwargs.contains("yano_eval_alpha")) {
-        g_yano_eval_alpha = kwargs["yano_eval_alpha"].cast<double>();
-    }
     // (the yano_moment=False opt-out was REMOVED in Phase 3b-1: moment is the sole surface-charge demag.)
 }
 
@@ -2212,10 +2189,6 @@ py::dict GetSolverConfig() {
           stats["dense_memory_mb"] = dOut[11];
           config["hacapk_stats"] = stats;
       } }
-
-    config["yano_pyramid_cloud"] = g_yano_pyramid_cloud;
-    config["yano_no_center_charge"] = g_yano_no_center_charge;
-    config["yano_eval_alpha"] = g_yano_eval_alpha;
 
     return config;
 }
