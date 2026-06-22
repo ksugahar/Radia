@@ -72,7 +72,7 @@ def _norm(row, rhs):
 def assemble(hexes, Happ, mu_r):
     """Dense linear moment system A,b + per-element row blocks + loop basis Lb + the nonlocal operator D."""
     chi = mu_r - 1.0
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(mu_r))
@@ -102,7 +102,7 @@ def assemble(hexes, Happ, mu_r):
             row -= chi * (Dvec @ Ginv)
             row, rhs = _norm(row, 0.0); A[r, :] = row; b[r] = rhs; r += 1
     Dop = np.vstack([C[:, 0:3, :].reshape(3 * n_el, dof), C[:, 3:9, :].reshape(6 * n_el, dof)])
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return A, b, row_of, dof, n_el, Lb, Dop
 
 

@@ -68,7 +68,7 @@ def _norm(row, rhs):
 
 def build_dense(hexes, Happ, mu_r):
     chi = mu_r - 1.0
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(mu_r))
@@ -95,7 +95,7 @@ def build_dense(hexes, Happ, mu_r):
             Dvec = np.array([Dm[0, 0], Dm[1, 1], Dm[2, 2], Dm[0, 1]+Dm[1, 0], Dm[0, 2]+Dm[2, 0], Dm[1, 2]+Dm[2, 1]])
             row -= chi * (Dvec @ Ginv)
             row, rhs = _norm(row, 0.0); A[r, :] = row; b[r] = rhs; r += 1
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return A, b, row_of, dof, n_el, float(t_cfg)
 
 
