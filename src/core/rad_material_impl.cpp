@@ -1549,6 +1549,29 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 
 			//int ActualIterNum = 0;
 
+			// EIEM2 retirement (Phase 3b): the parameter-free moment-yano formulation
+			// (BuildMomentSystemCore) is the SOLE surface-charge (MSC) demag solver.  The retired EIEM2
+			// collocation kernel used to cover two element-composition cases that moment does NOT
+			// represent; both are now rejected fail-loud (No Fallbacks -- a silent wrong number is worse
+			// than an error):
+			//   (1) a single Solve that MIXES MMM elements (tetrahedron / RecMag, DOF < 5) with MSC
+			//       surface-charge elements (hexahedron / wedge, DOF >= 5).  The two use different
+			//       formulations (dipole vs surface charge); solve them as separate containers.
+			//   (2) B-input hysteresis (b_input_newton / b_input_hantila) on MSC elements -- the B-input
+			//       Newton/Hantila Jacobian is block-3x3 (MMM, 3 DOF) only; a 5/6-DOF MSC element cannot
+			//       be driven by it.  Hysteresis stays on tetrahedron / RecMag.
+			{
+				int nElemChk = InteractPtr->GetAmOfMainElem();
+				bool anyMSC = false, anyLowDOF = false;
+				for(int i = 0; i < nElemChk; i++)
+				{
+					int dd = InteractPtr->GetElementDOF(i);
+					if(dd >= 5) anyMSC = true; else anyLowDOF = true;
+				}
+				if(anyMSC && anyLowDOF) { Send.ErrorMessage("Radia::Error204"); return 0; }
+				if(anyMSC && (m_b_input_newton || m_b_input_hantila)) { Send.ErrorMessage("Radia::Error205"); return 0; }
+			}
+
 			// B-input solvers for hysteresis (energy or play)
 			// Auto-activates when b_input_newton=True or b_input_hantila=True
 			// and all materials are radTHysteresisMaterial
