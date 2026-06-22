@@ -2230,7 +2230,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	std::vector<double> RHS(totalDOF);
 
 	// MOMENT-yano: assemble the parameter-free MOMENT system (BuildMomentSystemCore) for surface-charge
-	// polyhedra (hex 6-DOF + wedge 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
+	// polyhedra (hex 6-DOF + wedge/pyramid 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
 	// sigma in DOF order -- a drop-in for the EIEM2 transpose + dgesv + write-back below.  moment is now
 	// UNCONDITIONAL (the yano_moment=False opt-out was removed in Phase 3b-1); only Tet (3 DOF = MMM) and
 	// mixed tet+MSC fall to the EIEM2 path (removed with a fail-loud guard in 3b-2).
@@ -3326,8 +3326,8 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 }
 
 //-------------------------------------------------------------------------
-// Block Jacobi preconditioner for H-matrix BiCGSTAB
-// Extracts 6x6 diagonal blocks from H-matrix using Compute6x6BlockFast
+// Block Jacobi preconditioner for H-matrix BiCGSTAB.
+// Extracts diagonal blocks DOF-generically through GetInteractionMatrixElement.
 //-------------------------------------------------------------------------
 
 #ifdef HAVE_LAPACK
@@ -3531,8 +3531,8 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	}
 
 
-	// NOTE: 3DOF tetrahedra use PrecomputeFlatInteractMatrix() for fast O(1) access
-	// 6DOF hexahedra use PrecomputeGeometry() + Compute6x6BlockFast()
+	// NOTE: 3DOF tetrahedra use precomputed geometry for fast O(1) access.
+	// Surface-charge moment-yano method-2 solves use RadHACApKMomentSystem, not this MMM manager.
 
 	std::vector<double> OldMagn(totalDOF);
 	// Store current isotropic chi for ALL elements (unified 3DOF/6DOF handling, same as LU/BiCGSTAB)

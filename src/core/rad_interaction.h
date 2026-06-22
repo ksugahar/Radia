@@ -348,8 +348,8 @@ public:
 	// Netgen face ordering: DOFs [0, 1, 2, 3, 4, 5] = z-, x+, y-, x-, y+, z+
 	// (Matches NETGEN_FACES in radia_pybind.cpp)
 	//
-	// IMA mirror contributions are computed inline in the kernel functions:
-	//   Compute6x6BlockFast: scalar IMA sign (MSC surface charge is scalar)
+	// IMA mirror contributions are computed inline in the active kernels:
+	//   moment-yano centroid field/grad: scalar IMA sign (MSC surface charge is scalar)
 	//   Compute3x3BlockFast: component sign matrix S[beta] (MMM magnetization is pseudovector)
 	// No DOF permutation matrices are needed.
 
@@ -393,10 +393,9 @@ public:
 	int GetAmOfMainElem() const { return AmOfMainElem; }
 	radTg3dRelax* GetElement(int idx) { return g3dRelaxPtrVect[idx]; }
 
-	// True if any RELAXABLE element is a collocation surface-charge (Use6DOF_MSC) polyhedron --
-	// i.e. soft-iron hexahedron (6 faces) or wedge (5 faces).  The yano-type MSC demag for these is
-	// removed; rad.Solve raises (Radia::Error203) so they route to the FEEC HDiv-VIM instead.  Defined
-	// in rad_interaction.cpp (needs the full radTPolyhedron type).  Tet (MMM) / PM elements -> false.
+	// True if any RELAXABLE element is a surface-charge (Use6DOF_MSC) polyhedron -- hex (6 faces) or
+	// 5-face wedge/pyramid.  These are solved by the canonical moment-yano path. Defined in
+	// rad_interaction.cpp (needs the full radTPolyhedron type). Tet (MMM) / PM elements -> false.
 	bool HasSurfaceChargeElements() const;
 
 	// Triangle precomputation accessors (for HACApK sharing)
@@ -512,7 +511,7 @@ public:
 	// Cflat is ROW-MAJOR (nHex x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
 	// -> Cflat[(h*9+k)*m_totalDOF + g].  H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.  See .cpp.
 	void BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const;
-	// e-ordered list of MOMENT elements (hex 6-DOF + wedge 5-DOF surface-charge polyhedra); for a pure-hex
+	// e-ordered list of MOMENT elements (hex 6-DOF + wedge/pyramid 5-DOF surface-charge polyhedra); for a pure-hex
 	// model this equals m_hexaElemIndices order.  Single source of moment element ordering (dense path +
 	// the SolveLinearStep moment branch).  Generalizes the moment formula from hex-only to hex+wedge.
 	void CollectMomentElems(std::vector<int>& out) const;
@@ -528,9 +527,9 @@ public:
 	// the row element's local geometry + the on-demand centroid field/grad from face colDOF -- no full-system
 	// build, no row normalization (the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
 	double MomentSystemEntry(int rowGlobal, int colDOF, const double* chiPerHex) const;
-	// MOMENT-yano system matrix (parameter-free upgrade of EIEM2): per hex (6 face-charge DOF) assemble
-	// 3 dipole + 1 monopole + 2 diagonal-quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
-	// (global field/grad from BuildCentroidFieldGrad, local moments from the hex geometry).  Rows 2-norm
+	// MOMENT-yano system matrix (parameter-free replacement for EIEM2): per moment element assemble
+	// 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
+	// (global field/grad from BuildCentroidFieldGrad, local moments from the element geometry).  Rows 2-norm
 	// normalized.  A row-major (dof x dof), rhs length dof.  Uniform linear chi + uniform applied field Happ
 	// (Step-1 verification path vs examples/vim moment prototype; hex-only).
 	void BuildMomentSystem(double chi, const double Happ[3], std::vector<double>& A, std::vector<double>& rhs) const;  // uniform-field wrapper
@@ -539,7 +538,8 @@ public:
 	void BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex, std::vector<double>& A, std::vector<double>& rhs, bool normalize = true) const;
 	// EIEM2 surface-charge block kernels (Compute6x6BlockFast / Compute5x5BlockFast /
 	// ComputeMixedBlockFast) retired Phase 3b -- moment-yano (BuildMomentSystemCore) is the sole
-	// surface-charge demag; the method-2 HACApK path is MMM-only (3x3 tet).
+	// surface-charge demag. Method-2 surface-charge solves use RadHACApKMomentSystem; the legacy HACApK
+	// manager is now MMM-only (3x3 tet).
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
 	//-------------------------------------------------------------------------
@@ -571,7 +571,7 @@ public:
 
 	// Legacy IMA functions removed (2026-03-31): ApplyDOFPermutation, ApplyRowPermutation,
 	// Compute6x6BlockIMA, Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget
-	// IMA mirror logic is now inline in Compute6x6BlockFast, Compute5x5BlockFast, and Compute3x3BlockFast.
+	// IMA mirror logic is now inline in the moment-yano centroid field/grad path and Compute3x3BlockFast.
 
 	// IMA accessors
 	bool IsIMAEnabled() const { return m_imaEnabled; }
