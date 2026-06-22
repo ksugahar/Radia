@@ -133,7 +133,8 @@ def lab_figure(embed_width_cm, aspect: float = 0.62, nrows: int = 1, ncols: int 
 def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
                     allow_in_figure_title: bool = False, check_cvd: bool = False,
                     save_pdf: bool = True, save_png: bool = True, dpi: int = 300,
-                    tighten=True) -> dict:
+                    tighten=True, check_label_overflow: bool = True,
+                    label_overflow_tol_pt: float = 0.5) -> dict:
     """Save a figure with FAIL-LOUD lab gates; return a dict whose ``latex``
     key is the exact ``\\includegraphics`` snippet (embed at 100% -> 10 pt)
     and whose ``axes_fraction`` reports how much of the figure the axes fill.
@@ -186,6 +187,32 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
             eff = auto_tighten(fig, target_axes_fraction=tgt)["final_efficiency"]
         except Exception:
             eff = measure_figure_efficiency(fig)["axes_area_fraction"]
+        # auto_tighten chases `tgt` and can over-expand the axes until a long x-/y-label is CLIPPED by
+        # the canvas edge ("余白を攻めすぎ").  Back off -- re-run tight_layout with growing pad (which
+        # reserves room for the labels) until they fit again.  The figure SIZE is unchanged, so the
+        # 10 pt @ embed-width guarantee holds; only the interior axes box shrinks a little.
+        if check_label_overflow:
+            for pad in (0.5, 0.9, 1.5, 2.4):
+                if not _label_overflow(fig, tol_pt=label_overflow_tol_pt):
+                    break
+                fig.tight_layout(pad=pad)
+            try:
+                eff = measure_figure_efficiency(fig)["axes_area_fraction"]
+            except Exception:
+                pass
+
+    # ---- gate: tight margins must not CLIP the axis labels.  After the back-off above this only fires
+    #     when the labels cannot fit at all (e.g. tighten=False with a hand-forced full-bleed axes) --
+    #     fail LOUD rather than ship a clipped figure. ----
+    if check_label_overflow:
+        ov = _label_overflow(fig, tol_pt=label_overflow_tol_pt)
+        if ov:
+            items = "; ".join(f"{where} {txt!r} clipped {o:.1f} pt past the {side} edge"
+                              for (where, side, txt, o) in ov)
+            raise ValueError(
+                "save_lab_figure: label(s) overflow the figure canvas (margins too tight, the text is "
+                "clipped): " + items + ".  Fix by raising `aspect` (taller figure), shortening the "
+                "label, lowering the `tighten` target, or widening `embed_width_cm`.")
     plt.rcParams["pdf.fonttype"] = 42
     wrote = []
     if save_pdf:
@@ -212,6 +239,54 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
     plt.close(fig)
     return {"wrote": wrote, "embed_width_cm": ew, "latex": latex,
             "axes_fraction": eff, "gates": "passed"}
+
+
+def _label_overflow(fig, tol_pt: float = 0.5, include_ticklabels: bool = False):
+    """List the figure's axis labels / title (and, if ``include_ticklabels``, the tick labels) whose
+    drawn extent falls OUTSIDE the figure canvas -- i.e. the margins are pushed so far the text is
+    clipped.  Returns ``[(where, side, text, overhang_pt), ...]`` (overhang in points past the edge).
+
+    Tick labels are off by default: their outermost members routinely sit a hair past the axes corner
+    after a tight layout, which is cosmetic; the binding lab rule is that the **axis labels** (and any
+    title) must never clip, so that is what :func:`save_lab_figure` gates on."""
+    fig.canvas.draw()                                   # realise a renderer + final text positions
+    rend = fig.canvas.get_renderer()
+    dpi = float(fig.dpi)
+    W, H = fig.bbox.width, fig.bbox.height
+    tol_px = tol_pt * dpi / 72.0
+    out = []
+
+    def _chk(artist, where):
+        if artist is None or not artist.get_visible() or not artist.get_text():
+            return
+        try:
+            bb = artist.get_window_extent(rend)
+        except Exception:
+            return
+        for side, over_px in (("left", -bb.x0), ("bottom", -bb.y0),
+                              ("right", bb.x1 - W), ("top", bb.y1 - H)):
+            if over_px > tol_px:
+                out.append((where, side, artist.get_text(), over_px * 72.0 / dpi))
+
+    for ax in fig.get_axes():
+        _chk(ax.xaxis.label, "xlabel")
+        _chk(ax.yaxis.label, "ylabel")
+        _chk(ax.title, "title")
+        if include_ticklabels:
+            for lab in list(ax.get_xticklabels()) + list(ax.get_yticklabels()):
+                _chk(lab, "ticklabel")
+    return out
+
+
+def audit_label_overflow(fig, tol_pt: float = 0.5, include_ticklabels: bool = True) -> list:
+    """Lint a figure for **clipped labels**: which axis labels / title (and tick labels, unless
+    ``include_ticklabels=False``) are pushed past the canvas edge because the margins are too tight.
+    Returns a list of ``{"where", "side", "text", "overhang_pt"}`` (empty == every label fits).  The
+    axis-label subset is exactly the gate :func:`save_lab_figure` enforces
+    (``check_label_overflow=True``); call this directly to lint a figure built with bare matplotlib, or
+    before saving to decide whether to grow ``aspect`` / shorten a label."""
+    return [{"where": w, "side": s, "text": t, "overhang_pt": round(o, 2)}
+            for (w, s, t, o) in _label_overflow(fig, tol_pt=tol_pt, include_ticklabels=include_ticklabels)]
 
 
 def legend_no_overlap(ax, *, frameon=False, outside_threshold: float = 0.03,
