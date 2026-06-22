@@ -7,6 +7,9 @@ companion notes are specializations of it:
   pole = equipotential), the φ-side application of the spine.
 - [`HDIV_VIM_CLEBSCH_BRIDGE.md`](HDIV_VIM_CLEBSCH_BRIDGE.md) — the HDiv-VIM /
   Clebsch / flux-line face, the de Rham application of the spine.
+- [`DIFFERENTIAL_GEOMETRY_WLS.md`](DIFFERENTIAL_GEOMETRY_WLS.md) — the
+  executable Mathematica guardrail for the spine (`weakform_hodge`,
+  `hodograph`, `canonical`, `surface_derham`).
 
 The point of this note (the user's *"微分幾何で理解するべき"* — understand it
 through differential geometry): the Kelvin transform, the hodograph (both
@@ -62,9 +65,14 @@ identity is verified to machine precision (deformed-mesh assembly == reference +
 > `ν'` — spherical isotropic `(r'/R)²`, cylindrical anisotropic
 > `diag(1,1,(ρ'/R)⁴)` — plus the SPD nonlinear `⋆_ν` tangent (no fold);
 > `hodograph.wls` does the 3-axis backbone (cochain-map split, conformal
-> weight-freeness, Clebsch + helicity, `A_z`-as-Clebsch-potential). Both
-> self-test `ALL PASS`. This is the lab policy "differential geometry → weak
-> form + Hodge-as-material-modulation" made operational.
+> weight-freeness, Clebsch + helicity, `A_z`-as-Clebsch-potential, Chaplygin
+> linearisation); `canonical.wls` records the Hamiltonian / Legendre reading of
+> the hodograph; and `surface_derham.wls` splits HOIBC into surface topology
+> plus analytic DtN / Steklov geometry. All self-test `ALL PASS`. The human
+> index is
+> [`DIFFERENTIAL_GEOMETRY_WLS.md`](DIFFERENTIAL_GEOMETRY_WLS.md); the MCP mirror
+> is `differential_forms_mathematica_recipes(topic="differential_geometry" |
+> "weakform_hodge" | "hodograph" | "canonical" | "surface_derham")`.
 
 ---
 
