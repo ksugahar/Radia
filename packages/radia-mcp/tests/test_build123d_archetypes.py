@@ -22,6 +22,7 @@ from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetizati
 from radia_mcp.build123d.archetypes import _carried_centerline, _superposed_centerline
 from radia_mcp.build123d.archetypes import involute_gear, threaded_rod, airfoil, blade
 from radia_mcp.build123d.archetypes import gear_rack, bevel_gear, worm, chain_sprocket, vbelt_pulley
+from radia_mcp.build123d.archetypes import ipm_rotor, squirrel_cage_rotor, claw_pole_rotor
 from build123d import Box, Rectangle, RegularPolygon, extrude
 import math as _math
 
@@ -388,6 +389,32 @@ def test_transmission_family():
     assert pul.is_valid and pul.volume < _math.pi * 3.5 ** 2 * 2.0, "groove + bore remove material"
 
 
+def test_ipm_rotor_regions_and_magnetization():
+    n = 4
+    rotor = ipm_rotor(0.8, 4.0, n, 1.2, 0.4, 40.0, 2.0, name="pm")
+    assert len(rotor.children) == 1 + 2 * n and all(s.is_valid for s in rotor.solids())
+    iron = [c for c in rotor.children if c.label == "rotor_iron"]
+    mags = [c for c in rotor.children if c.label != "rotor_iron"]
+    assert len(iron) == 1 and len(mags) == 2 * n
+    angles = sorted({round(parse_magnetization(m.label)) % 360 for m in mags})
+    assert len(angles) >= 2, "magnets alternate N/S (more than one easy-axis angle)"
+
+
+def test_squirrel_cage_regions():
+    nb = 16
+    rotor = squirrel_cage_rotor(0.8, 3.0, nb, 0.3, 0.4, 4.0, name="bar")
+    assert len(rotor.children) == 1 + nb + 2 and all(s.is_valid for s in rotor.solids())
+    labels = {c.label for c in rotor.children}
+    assert "rotor_iron" in labels and "end_ring_hi" in labels and "end_ring_lo" in labels
+    assert sum(1 for c in rotor.children if c.label.startswith("bar_")) == nb
+
+
+def test_claw_pole_two_halves():
+    rotor = claw_pole_rotor(0.6, 3.0, 6, 1.0, 5.0)
+    assert {c.label for c in rotor.children} == {"claw_north", "claw_south"}
+    assert all(s.is_valid for s in rotor.solids())
+
+
 def main():
     test_magnetization_label_roundtrip()
     test_pm_primitives_carry_magnetization()
@@ -415,6 +442,9 @@ def main():
     test_threaded_rod_adds_thread()
     test_airfoil_and_blade()
     test_transmission_family()
+    test_ipm_rotor_regions_and_magnetization()
+    test_squirrel_cage_regions()
+    test_claw_pole_two_halves()
     test_hierarchical_litz_meshes_in_netgen()
     test_e_core_two_windows()
     test_slotted_stator_removes_slots()
