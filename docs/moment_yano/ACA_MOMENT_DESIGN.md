@@ -141,8 +141,12 @@ kernel was REMOVED (live/dead refactor, commits bf4424d9/99556872/15f17022/d8d4e
 `radTInteraction::Compute6x6/5x5/MixedBlockFast`, the `RadHACApKMSCManager` MSC machinery
 (now MMM-3x3-only), the dead IMA-mirror block, the per-face eval-point caches, and the
 `g_yano_eval_alpha`/`g_yano_no_center_charge`/`g_yano_pyramid_cloud` research flags (+ their
-`SolverConfig` kwargs).  `MscEvalPoint` (alpha=0.5 midpoint) is kept only for the per-face
-external-field sampling in `SetupExternFieldArray`.  moment-yano (`BuildMomentSystemCore`
+`SolverConfig` kwargs).  `MscEvalPoint` (alpha=0.5 midpoint) was ALSO deleted (final polish
+`6b617a91`): the per-face MSC external-field branches (`dof>=5`/`dof==6`) in `SetupExternFieldArray`
+/ `AddExternFieldFromMoreExtSource` are gone (only the tet `dof==3` fill remains), so `MscEvalPoint`
+appears in NO source file.  The moment formulation samples the applied field at the element CENTROID
+(the moment RHS via `BuildCentroidFieldGrad`), not per-face -- the per-face MSC fill was immaterial
+to the converged moment result (it fed only the initial-H guess).  moment-yano (`BuildMomentSystemCore`
 dense / `RadHACApKMomentSystem` H-matrix) is the SOLE surface-charge demag = the canonical
 radia MMM for hex/wedge/pyramid soft iron (tet stays 3-DOF MMM).  The quadrupole rows are
 the per-element residual eigenmodes (see `examples/vim/eigenmode_quadrupole_derivation.wls`).
