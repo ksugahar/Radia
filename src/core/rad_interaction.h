@@ -524,6 +524,10 @@ public:
 	// Cflat is ROW-MAJOR (nHex x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
 	// -> Cflat[(h*9+k)*m_totalDOF + g].  H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.  See .cpp.
 	void BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const;
+	// e-ordered list of MOMENT elements (hex 6-DOF + wedge 5-DOF surface-charge polyhedra); for a pure-hex
+	// model this equals m_hexaElemIndices order.  Single source of moment element ordering (dense path +
+	// the SolveLinearStep moment branch).  Generalizes the moment formula from hex-only to hex+wedge.
+	void CollectMomentElems(std::vector<int>& out) const;
 	// Field H[3] + grad gH[6] (xx,yy,zz,xy,xz,yz) at a target centroid ce3 from ONE unit-charge face (V4
 	// corners, srcCenter = the face's element center, area), INCLUDING the IMA mirror images.  isSelf =
 	// (the source face's element == the target element) drops the original center charge (singularity-free).

@@ -2234,16 +2234,18 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// dgesv's solution is sigma in DOF order -- a drop-in for the EIEM2 transpose + dgesv + write-back below.
 	extern bool g_yano_moment;
 	bool useMoment = g_yano_moment;   // IMA is now moment-capable (BuildCentroidFieldGrad adds the mirror images)
-	if(useMoment) { for(int e = 0; e < AmOfMainElem; e++) if(IntrctPtr->GetElementDOF(e) != 6) { useMoment = false; break; } }
+	// moment-yano covers the surface-charge polyhedra: hex (6 DOF) AND wedge (5 DOF, Phase 3a).  Tet (3 DOF =
+	// MMM) and any other element kind are NOT moment -> fall to the EIEM2 path.
+	if(useMoment) { for(int e = 0; e < AmOfMainElem; e++) { int dd = IntrctPtr->GetElementDOF(e); if(dd != 6 && dd != 5) { useMoment = false; break; } } }
 
 	if(useMoment)
 	{
-		const std::vector<int>& hexElem = IntrctPtr->GetHexaElemIndices();
-		int nHex = (int)hexElem.size();
-		std::vector<double> chiPerHex((size_t)nHex), HextPerHex((size_t)nHex*3);
-		for(int h = 0; h < nHex; h++)
+		std::vector<int> momElem; IntrctPtr->CollectMomentElems(momElem);   // hex(6)+wedge(5), matches BuildMomentSystemCore
+		int nMom = (int)momElem.size();
+		std::vector<double> chiPerHex((size_t)nMom), HextPerHex((size_t)nMom*3);
+		for(int h = 0; h < nMom; h++)
 		{
-			int e = hexElem[h];
+			int e = momElem[h];
 			double chi_abs = ctx.CurrentChiArray[e]; if(chi_abs < 1.0e-6) chi_abs = 1.0e-6;
 			chiPerHex[h] = chi_abs;
 			const TVector3d& He = IntrctPtr->ExternFieldArray[e];      // external field at element centroid
@@ -2256,7 +2258,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		// Picard outer loop calls this each iteration with the current chiPerHex (no uniform-chi restriction);
 		// breakdown/build-fail falls through to the dense moment LU below (same answer).
 		extern bool g_yano_moment_hacapk;
-		if(g_yano_moment_hacapk && nHex > 0)
+		if(g_yano_moment_hacapk && nMom > 0)
 		{
 			std::vector<double> sigma;
 			int nit = SolveMomentHACApK(IntrctPtr, chiPerHex, HextPerHex,
