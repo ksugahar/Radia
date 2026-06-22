@@ -87,12 +87,31 @@ class RadHACApKMomentSystem : public RadHACApKBase {
 2. **H-matrix build + matvec.** `RadHACApKMomentSystem` over element-centroid clusters.
    **Gate:** H-matvec `A_raw @ x` == dense `A_raw @ x` to ACA tolerance; ACA rank bounded
    in `N` (re-confirms Gate 1 in C++); build sub-cubic (Benchmark Policy JSON).
-3. **H-LU solve wired into method 2.** `cHACApK_hlu_*` factor of `A_raw`; route
-   `radTRelaxationMethNo_2` (moment-eligible: g_yano_moment && all-6-DOF-hex) to it;
-   drop the `Error204` raise. **Gate:** method-2 moment `x` == method-0 moment `x` (dense
-   LU) to solver tol; iteration count **mu_r-INDEPENDENT** (the H-LU payoff), unlike
-   block-Jacobi; scaling JSON (memory/time) sub-cubic.
-4. **Nonlinear.** Picard/Anderson outer loop reuses the H-LU linear solve per step
+3. **~~H-LU solve~~ -> BLOCKED; use a Krylov solve on the H-matvec (REVISED 2026-06-22).**
+   **FINDING (Increment 2.5 de-risk + the no-pivot diagnostic):** the HACApK H-LU
+   (`cHACApK_hlu_*`) is **NO-PIVOT** (the HDiv template's `A = M_mass + chi*N` is SPD, so
+   no-pivot is stable there).  The moment `A_raw` is **NON-symmetric** and, in the natural
+   (element) ordering, the no-pivot factorization hits a **near-zero pivot**
+   (`min|U_ii|/max|U_ii| ~ 2e-16`) even though the full matrix is well-conditioned
+   (`cond(A_norm) ~ 1.6e3`) -- i.e. it is a PIVOTING (ordering) problem, NOT a scaling one.
+   Measured: the no-pivot H-LU round trip is 8e-7 at dof=336 (all-dense, no truncation) but
+   degrades to 6.7e-2 (1080) and DIVERGES to 1.4e+4 (2760) once ACA low-rank truncation
+   compounds the near-zero pivot.  **Row/col equilibration does NOT fix it** (the near-zero
+   pivot persists; a Python no-pivot LU on A_raw / A_norm / Ruiz-equilibrated all keep
+   `min|U|/max|U| ~ 2e-16`).  dense LU (method 0) is fine because `dgesv` PIVOTS.  The
+   prototype's "moment scales via H-LU" was an inference (cheap iterative preconditioners
+   fail) that was never checked against the actual no-pivot H-LU -- it does not hold.
+   **REVISED Increment 3:** solve method 2 with **GMRES/BiCGSTAB on the EXACT moment
+   H-matvec (Increment 2, scalable storage) + a block-Jacobi preconditioner** (invert each
+   element's local 6x6 `A_raw` block).  This avoids the factorization entirely; the
+   matfree prototype (`yano_moment_matfree_solve.py`) validated it converges (== dense to
+   <1e-6) with iters that GROW ~dof^1.06 (the high-mu_r demag conditioning wall, shared with
+   yano-MSC/HDiv-VIM -- a documented caveat, not a moment defect, NOT bounded like a true
+   H-LU would give).  Route `radTRelaxationMethNo_2` (moment-eligible) to it; drop `Error204`.
+   **Gate:** method-2 moment `x` == method-0 moment `x` to solver tol; storage scales (the
+   dense matrix is gone); iter-growth documented.  Bounded-iter (a PIVOTED H-matrix factor,
+   or a symmetrized moment formulation) stays FUTURE work.
+4. **Nonlinear.** Picard/Anderson outer loop reuses the linear Krylov solve per step
    (chi per-element). **Gate:** C-yoke saturation == method-0 moment.
 
 ## After Phase 2 (-> Phase 3, EIEM2 deletion)
