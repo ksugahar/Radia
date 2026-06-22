@@ -1426,3 +1426,29 @@ def test_endpack_spectrometer_saturation():
     assert 0.0005 < d["depth_required_for_Bop_m"] < 0.005, d      # ~1-2 mm
     assert d["depth_linear_cosmetic_m"] > 0.0, d
     assert d["n_linear_solves"] >= 4, d
+
+
+def test_endpack_cobake():
+    """The completion of endpack_two_plane: BOTH the x-y shim (delta) AND the s-y
+    Rogowski chamfer (ghat) baked into ONE 3-D pole face z(x,s)=g/2-delta(x/w)^2+
+    lift(s).  The CO-BAKED (both) pole achieves a clean integrated transverse b_3,5
+    AND a rounded pole-tip corner at once -- the two cleanly-separated two-plane
+    levers composed in 3-D.  (The per-lever causation is golden-locked separately;
+    the delta-shim x-prism staircase makes the no-shim cases mesh coarser, so this
+    locks the WELL-RESOLVED both pole + the robust per-lever directions, not the
+    coarse-baseline absolute numbers.)  ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import endpack_cobake as cb
+    d = cb.cobake_design(fast=True)
+
+    # the headline: the co-baked (both) pole -- clean transverse AND rounded corner.
+    assert d["both_clean_transverse_rel"] < 1.5e-3, d            # b_3,5 ~ 0.07%
+    assert 0.88 < d["both_corner_tip"] < 1.12, d                 # rounded near the body
+    # both two-plane levers act (large, robust to the staircase mesh):
+    assert d["chamfer_rounds_corner"] is True, d                 # s-y chamfer lowers the tip
+    assert d["shim_cleans_transverse"] is True, d                # x-y shim lowers b_3,5
+    # the chamfer-only corner is rounded below the flat-cut corner, below ~1.0:
+    assert d["cases"]["chamfer_only"]["tip_enhancement"] < 1.0, d
+    assert d["cases"]["both"]["tip_enhancement"] < d["cases"]["shim_only"]["tip_enhancement"], d
+    assert 2e-4 < d["shim_delta_m"] < 7e-4, d                    # ~0.4 mm shim
