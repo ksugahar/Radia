@@ -5,12 +5,14 @@ dense solver, with a method dispatch in SolveGen:
   - default        : rad.SolverConfig()["yano_moment"] is True.
   - method 0 (LU)  : moment, physical (cube demag ~1/3 -> M_z ~ 3*H0).
   - method 1 (BiCG): reroutes to the dense moment LU -> bit-identical M to method 0.
-  - method 2 (HACApK): fails loud (Error204) with the EIEM2 opt-out (yano_moment=False).
-  - IMA (image=)   : NOT moment-eligible -> EIEM2 path runs (finite), no Error204.
+  - method 2 (HACApK): the scalable moment H-matrix + block-Jacobi BiCGSTAB (Phase-2 Inc 3) -- solves the
+    moment system (no longer Error204) and == method 0; LINEAR and NONLINEAR (per-element chi, Inc 4), with
+    O(N log N) storage (no dense interaction/base/system matrix, Inc 4 -- see bench_moment_storage_scaling.py).
+  - IMA (image=)   : moment-capable (BuildCentroidFieldGrad adds the mirror images) -> reproduces explicit full.
   - opt-out        : yano_moment=False -> EIEM2 collocation (close to moment externally).
 
-These lock the Step-3 default flip + the Step-4 dispatch so a future change cannot silently break them.
-Self-contained (mesh-less ObjHexahedron + MatLin), no NGSolve dependency, fast.
+These lock the Step-3 default flip + the Step-4 dispatch + the Phase-2 H-matrix path so a future change cannot
+silently break them.  Self-contained (mesh-less ObjHexahedron + MatLin/MatSatIsoTab), no NGSolve, fast.
 """
 import numpy as np
 import pytest
@@ -96,6 +98,48 @@ def test_method2_hacapk_multihex_external_field():
     B2 = solve_extB(2)
     rel = np.linalg.norm(B2 - B0) / max(np.linalg.norm(B0), 1e-30)
     assert rel < 1e-5, f"method2 H-BiCGSTAB external B != method0 (rel {rel:.2e})"
+
+
+def test_method2_nonlinear_matches_method0():
+    """Phase-2 Increment-4: the NONLINEAR moment Picard loop solves via method 2 (HACApK H-matrix +
+    PER-ELEMENT-chi block-Jacobi BiCGSTAB) to the SAME saturated state as method 0 (dense moment LU).  A
+    compact block of nonlinear soft iron (MatSatIsoTab) is driven past the knee along its long (y) axis;
+    both methods run the SAME Picard outer loop (chi(H) recomputed per element each iteration), differing
+    only in the linear solver, so the EXTERNAL B must match tightly AND both must take the same (>1) number
+    of nonlinear iterations.  (Rigorous saturation sweep: examples/vim/verify_moment_nonlinear.py; storage
+    scaling: examples/vim/bench_moment_storage_scaling.py.)"""
+    MU0 = 4e-7 * np.pi; L = 0.01
+    BH = [[0.0, 0.0], [200.0, 0.75], [500.0, 1.30], [1200.0, 1.70],
+          [4000.0, 1.95], [20000.0, 2.08], [100000.0, 2.15]]
+    Msat = 2.15 / MU0
+
+    def solve(method):
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True, bicgstab_tol=1e-9)
+        objs = []
+        for iz in range(2):
+            for ix in range(3):
+                for iy in range(4):                                  # 3x4x2 block, long along y -> moderate demag -> saturates
+                    x0, y0, z0 = ix * L, iy * L, iz * L
+                    v = [[x0, y0, z0], [x0 + L, y0, z0], [x0 + L, y0 + L, z0], [x0, y0 + L, z0],
+                         [x0, y0, z0 + L], [x0 + L, y0, z0 + L], [x0 + L, y0 + L, z0 + L], [x0, y0 + L, z0 + L]]
+                    h = rad.ObjHexahedron(v, [0, 0, 0]); rad.MatApl(h, rad.MatSatIsoTab(BH)); objs.append(h)
+        cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, MU0 * 6.0e5, 0.0])])
+        nit = rad.Solve(cont, 1e-6, 500, method)
+        iters = int(round(nit[-1])) if isinstance(nit, (list, tuple)) else int(nit)
+        M = np.asarray([m[1] for m in rad.ObjM(rad.ObjCnt(objs))], float)
+        B = np.asarray([rad.Fld(cont, "b", p) for p in ([0.05, 0.02, 0.06], [0.0, 0.04, 0.1], [0.02, 0.0, -0.03])], float)
+        rad.UtiDelAll()
+        return M, B, iters
+
+    M0, B0, n0 = solve(0)
+    M2, B2, n2 = solve(2)
+    Mmax = np.max(np.linalg.norm(M0, axis=1))
+    assert n0 > 1 and abs(n2 - n0) <= 2, f"not a genuine nonlinear iteration (iters m0={n0} m2={n2})"
+    assert Mmax < Msat, f"unphysical: |M|max={Mmax:.3e} exceeds Msat={Msat:.3e}"
+    relB = np.linalg.norm(B2 - B0) / max(np.linalg.norm(B0), 1e-30)
+    relM = np.linalg.norm(M2 - M0) / max(np.linalg.norm(M0), 1e-30)
+    assert relB < 1e-4, f"nonlinear method2 external B != method0 (rel {relB:.2e})"
+    assert relM < 5e-3, f"nonlinear method2 M != method0 (rel {relM:.2e})"
 
 
 # NOTE: moment-vs-EIEM2 agreement is NOT tested on a single cube -- the solved M is an INTERNAL,
