@@ -583,6 +583,112 @@ void AxiHenrotteFE_P2_Triangle::CalcDShape(
 }
 
 // ---------------------------------------------------------------------------
+// AxiHenrotteFE_Q2_Curved -- 9-node curved biquadratic Henrotte quad element.
+// ---------------------------------------------------------------------------
+
+namespace {
+// FEMM/our Q2 node order -> 1D-Lagrange index (0=L@0, 1=L@0.5, 2=L@1) in xi, eta.
+constexpr int Q2C_IX[9] = { 0, 2, 2, 0, 1, 2, 1, 0, 1 };
+constexpr int Q2C_IY[9] = { 0, 0, 2, 2, 0, 1, 2, 1, 1 };
+
+// Biquadratic Lagrange geometric map on the NGSolve quad ref [0,1]^2 through the
+// 9 physical nodes; returns the physical point and the 2x2 geometric Jacobian.
+inline void Q2CurvedGeomMap(const double rn[9], const double zn[9],
+                            double xi, double eta,
+                            double & rp, double & zp,
+                            double & dr_dxi, double & dr_deta,
+                            double & dz_dxi, double & dz_deta)
+{
+    const double Lx[3]  = { 2*xi*xi - 3*xi + 1, -4*xi*xi + 4*xi, 2*xi*xi - xi };
+    const double dLx[3] = { 4*xi - 3,           -8*xi + 4,        4*xi - 1 };
+    const double Ly[3]  = { 2*eta*eta - 3*eta + 1, -4*eta*eta + 4*eta, 2*eta*eta - eta };
+    const double dLy[3] = { 4*eta - 3,              -8*eta + 4,          4*eta - 1 };
+    rp = zp = dr_dxi = dr_deta = dz_dxi = dz_deta = 0.0;
+    for (int k = 0; k < 9; ++k) {
+        double N   = Lx[Q2C_IX[k]]  * Ly[Q2C_IY[k]];
+        double dNx = dLx[Q2C_IX[k]] * Ly[Q2C_IY[k]];
+        double dNy = Lx[Q2C_IX[k]]  * dLy[Q2C_IY[k]];
+        rp += N * rn[k];      zp += N * zn[k];
+        dr_dxi += dNx * rn[k]; dr_deta += dNy * rn[k];
+        dz_dxi += dNx * zn[k]; dz_deta += dNy * zn[k];
+    }
+}
+
+// Even-r-power monomials (scaled) m_j and their physical-coord derivatives.
+inline void Q2CurvedMonomials(double sp, double zp, double m[9])
+{
+    m[0]=1.0; m[1]=sp; m[2]=sp*sp; m[3]=zp; m[4]=sp*zp;
+    m[5]=sp*sp*zp; m[6]=zp*zp; m[7]=sp*zp*zp; m[8]=sp*sp*zp*zp;
+}
+}  // namespace
+
+AxiHenrotteFE_Q2_Curved::AxiHenrotteFE_Q2_Curved(const double rs[9], const double zs[9])
+  : AxiHenrotteBaseFE(9, 4)  // 9 DOFs, polynomial degree 4 (in r, via r^4)
+{
+    double rmax = 0.0, zmin = zs[0], zmax = zs[0];
+    for (int i = 0; i < 9; ++i) {
+        rn[i] = rs[i]; zn[i] = zs[i];
+        double ar = rs[i] < 0 ? -rs[i] : rs[i];
+        if (ar > rmax) rmax = ar;
+        if (zs[i] < zmin) zmin = zs[i];
+        if (zs[i] > zmax) zmax = zs[i];
+    }
+    L_r = rmax > 1e-30 ? rmax : 1e-30;
+    z_c = 0.5 * (zmin + zmax);
+    L_z = (0.5 * (zmax - zmin)) > 1e-30 ? 0.5 * (zmax - zmin) : 1e-30;
+
+    Mat<9,9> V;
+    for (int i = 0; i < 9; ++i) {
+        double rpr = rn[i] / L_r, zpr = (zn[i] - z_c) / L_z, spr = rpr * rpr;
+        double m[9]; Q2CurvedMonomials(spr, zpr, m);
+        for (int j = 0; j < 9; ++j) V(i, j) = m[j];
+    }
+    Mat<9,9> Vi; CalcInverse(V, Vi);
+    // psi_i = sum_j coeffs[j][i] m_j ;  V * C = I  =>  C = V^{-1}, coeffs[j][i]=Vi(j,i)
+    for (int j = 0; j < 9; ++j)
+        for (int i = 0; i < 9; ++i)
+            coeffs[j][i] = Vi(j, i);
+}
+
+void AxiHenrotteFE_Q2_Curved::CalcShape(
+    const IntegrationPoint & ip, BareSliceVector<> shape) const
+{
+    double rp, zp, a, b, c, d;
+    Q2CurvedGeomMap(rn, zn, ip(0), ip(1), rp, zp, a, b, c, d);
+    double rpr = rp / L_r, zpr = (zp - z_c) / L_z, spr = rpr * rpr;
+    double m[9]; Q2CurvedMonomials(spr, zpr, m);
+    for (int i = 0; i < 9; ++i) {
+        double v = 0.0;
+        for (int j = 0; j < 9; ++j) v += coeffs[j][i] * m[j];
+        shape(i) = v;
+    }
+}
+
+void AxiHenrotteFE_Q2_Curved::CalcDShape(
+    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
+{
+    double rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta;
+    Q2CurvedGeomMap(rn, zn, ip(0), ip(1), rp, zp,
+                    dr_dxi, dr_deta, dz_dxi, dz_deta);
+    double rpr = rp / L_r, zpr = (zp - z_c) / L_z, spr = rpr * rpr;
+    // d m / d r', d m / d z'  (scaled), then chain to physical (/L_r, /L_z).
+    double dmr[9] = { 0.0, 2*rpr, 4*rpr*spr, 0.0, 2*rpr*zpr,
+                      4*rpr*spr*zpr, 0.0, 2*rpr*zpr*zpr, 4*rpr*spr*zpr*zpr };
+    double dmz[9] = { 0.0, 0.0, 0.0, 1.0, spr, spr*spr, 2*zpr, 2*spr*zpr, 2*spr*spr*zpr };
+    for (int i = 0; i < 9; ++i) {
+        double dpsi_dr = 0.0, dpsi_dz = 0.0;
+        for (int j = 0; j < 9; ++j) {
+            dpsi_dr += coeffs[j][i] * dmr[j];
+            dpsi_dz += coeffs[j][i] * dmz[j];
+        }
+        dpsi_dr /= L_r; dpsi_dz /= L_z;             // physical gradient
+        // Chain rule to reference coords (NGSolve applies J^{-1} for the physical).
+        dshape(i, 0) = dpsi_dr * dr_dxi + dpsi_dz * dz_dxi;   // d/dxi
+        dshape(i, 1) = dpsi_dr * dr_deta + dpsi_dz * dz_deta; // d/deta
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AxiHenrotteFE_Edge_Q1 / _Q2 -- 1D restriction of the parent quad's
 // Lagrange basis to a single edge.  Used for Neumann RHS integration
 // `LinearForm += q * v * ds(label)` in axisymmetric heat / magnetic
