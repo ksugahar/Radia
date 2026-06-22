@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""Induction-machine torque-slip via the eddy AGE, gated against the analytic Kloss equation.
 
-Extends the AGE rotating-machine core from synchronous (test_age_pmsm_physical) to INDUCTION: a
+Extends the AGE rotating-machine core from synchronous (validate_age_pmsm_physical) to INDUCTION: a
 polyphase stator MMF (forward-rotating 2-pole wave = complex spatial phasor J0*exp(i*theta)) drives a
 CONDUCTING rotor (copper sleeve, sigma) across the UN-MESHED gap; the time-harmonic eddy solve at the
 SLIP frequency f = s*f_sys gives the induced rotor currents and the drag torque. Sweeping slip traces
@@ -13,7 +13,7 @@ is a single-time-constant response, so the torque-slip curve must follow the tex
     T(s) = 2 * T_max / (s/s_breakdown + s_breakdown/s)
 
 (linear rise at low slip, breakdown peak, 1/s tail). The eddy AGE itself is validated to machine
-precision against a fully-meshed complex reference in test_airgap_eddy_machine; here we lock that it
+precision against a fully-meshed complex reference in validate_airgap_eddy_machine; here we lock that it
 reproduces the IM torque-slip physics. Relative-reluctivity nu~=1/mur (gap nu~=1); eddy coefficient
 jw*mu0*sigma.
 """
@@ -21,14 +21,11 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import H1, BilinearForm, LinearForm, grad, dx, x, y, atan2, cos, sin, Mesh, TaskManager
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -58,7 +55,7 @@ def _geo():
     return Mesh(g.GenerateMesh(maxh=1*mm))
 
 
-def test_im_torque_slip_follows_kloss():
+def validate_im_torque_slip_follows_kloss():
     mesh = _geo()
     fes = H1(mesh, order=3, dirichlet="outer|rotor_inner", complex=True)
     u, v = fes.TnT()
@@ -101,7 +98,7 @@ def test_im_torque_slip_follows_kloss():
 
 
 def main():
-    test_im_torque_slip_follows_kloss()
+    validate_im_torque_slip_follows_kloss()
     print("[OK] AGE induction machine: forward-rotating stator MMF + conducting rotor across the "
           "un-meshed gap, slip-frequency eddy solve -> torque-slip curve follows the analytic Kloss law.")
 

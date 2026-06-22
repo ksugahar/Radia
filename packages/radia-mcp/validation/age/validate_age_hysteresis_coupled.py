@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""HYSTERESIS-COUPLED AGE rotating-machine solve: the Play constitutive INSIDE the AGE rotor sweep.
 
-The committed test_hysteresis_motor_loss.py post-processes a LINEAR AGE field through the play operator
+The committed validate_hysteresis_motor_loss.py post-processes a LINEAR AGE field through the play operator
 (decoupled).  Here the iron's B-H response IS the B-input vector Play model DURING the solve, with the
 per-element play states carried FORWARD across rotor angles (magnetic history) -- so the field, torque,
 and iron loss are all hysteretic.  Driver: radia_ngsolve.airgap_motor_workflow.age_motor_hysteresis_sweep,
@@ -23,7 +23,7 @@ from ngsolve import (H1, LinearForm, GridFunction, CoefficientFunction, grad, dx
                      atan2, cos, sin, IfPos, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import airgap_coupling
@@ -49,7 +49,7 @@ def _geo():
     return Mesh(g.GenerateMesh(maxh=1.5*mm))
 
 
-def test_age_hysteresis_coupled_sweep():
+def validate_age_hysteresis_coupled_sweep():
     # normalized play iron: reversible mur ~ 800 (a0 = 1/800) + modest dissipative cells (a~ = mu0*nu)
     eta = np.array([0.0, 0.4, 0.8, 1.2])
     a = np.array([1.0/800, 0.3/800, 0.3/800, 0.3/800])
@@ -102,7 +102,7 @@ def test_age_hysteresis_coupled_sweep():
 
 
 def main():
-    test_age_hysteresis_coupled_sweep()
+    validate_age_hysteresis_coupled_sweep()
     print("[OK] hysteresis-coupled AGE rotor sweep: B-input Play constitutive in the iron with per-element "
           "history carried across rotor angles, M-source reusing one AGE factorization -> hysteretic "
           "torque + real-loop iron loss (rotational/elliptical capture).")

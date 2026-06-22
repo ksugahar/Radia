@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""SYNCHRONOUS operating-point torque of an SPM via the AGE, vs the brute meshed-gap FE.
 
-Extends the loaded-torque core (test_age_pmsm_physical) to a controlled SYNCHRONOUS operating
+Extends the loaded-torque core (validate_age_pmsm_physical) to a controlled SYNCHRONOUS operating
 point: the stator current vector is PHASE-LOCKED to the rotor (electrical angle theta_e = p*theta_m;
 2-pole p=1) at a commanded load angle delta = angle(stator-field d-axis, rotor d-axis).  Two
 defining signatures of synchronous running, each gated and cross-checked AGE (mesh-free) vs brute:
@@ -23,15 +23,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction,
                      grad, dx, x, y, sqrt, atan2, cos, sin, IfPos, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -83,7 +80,7 @@ def _source(fes, mesh, theta_m, delta):
     L.Assemble(); return L
 
 
-def test_synchronous_operating_point_age_matches_brute():
+def validate_synchronous_operating_point_age_matches_brute():
     ma = _geo(False)
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
     ua, wa = fa.TnT(); aa = BilinearForm(fa); aa += _nu(ma)*grad(ua)*grad(wa)*dx
@@ -141,7 +138,7 @@ def test_synchronous_operating_point_age_matches_brute():
 
 
 def main():
-    test_synchronous_operating_point_age_matches_brute()
+    validate_synchronous_operating_point_age_matches_brute()
     print("[OK] AGE synchronous operating point: phase-locked stator current -> constant torque, "
           "T(delta)=T_max*sin(delta) cross-field law (no reluctance term), AGE == brute meshed gap.")
 

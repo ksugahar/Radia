@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""SLIDING-BAND FRONTIER: salient rotor AND slotted stator together, via per-angle AGE vs brute.
 
-This locks the ONE case the salient-rotor test (test_age_salient_ipm) flagged as breaking AGE's
+This locks the ONE case the salient-rotor test (validate_age_salient_ipm) flagged as breaking AGE's
 one-factorization: BOTH the rotor (salient, nu~ depends on theta - theta_m, rotating) and the stator
 (slotted, nu~ depends on theta, fixed) are angle-structured, so NEITHER reference frame freezes the
 other -- K(theta_m) genuinely changes with rotor angle and must be RE-ASSEMBLED + RE-FACTORIZED per
@@ -25,15 +25,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction,
                      grad, dx, x, y, sqrt, atan2, cos, sin, exp, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -86,7 +83,7 @@ def _cur(fes, mesh, theta_m):
     L.Assemble(); return L
 
 
-def test_slotted_salient_age_matches_brute():
+def validate_slotted_salient_age_matches_brute():
     ma = _geo(False)
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
     ua, wa = fa.TnT()
@@ -126,7 +123,7 @@ def test_slotted_salient_age_matches_brute():
 
 
 def main():
-    test_slotted_salient_age_matches_brute()
+    validate_slotted_salient_age_matches_brute()
     print("[OK] AGE sliding-band frontier: salient rotor + slotted stator, per-angle re-factorization "
           "(gap coupling reused), reproduces the brute meshed-gap torque + slot ripple mesh-free.")
 

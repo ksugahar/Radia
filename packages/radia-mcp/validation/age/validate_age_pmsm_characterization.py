@@ -26,15 +26,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx, x, y,
                      atan2, cos, sin, IfPos, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -95,7 +92,7 @@ def _cur(fes, mesh, phi_s, theta_m=None):
     L.Assemble(); return L
 
 
-def test_pmsm_characterization_age():
+def validate_pmsm_characterization_age():
     ma = _geo(False)
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
     ua, wa = fa.TnT(); aa = BilinearForm(fa); aa += _nu(ma)*grad(ua)*grad(wa)*dx
@@ -157,7 +154,7 @@ def test_pmsm_characterization_age():
 
 
 def main():
-    test_pmsm_characterization_age()
+    validate_pmsm_characterization_age()
     print("[OK] AGE PMSM characterisation: back-EMF (low-THD sinusoidal), Kt==Ke energy consistency "
           "(field<->circuit, parameter-free), Ld=Lq non-salient baseline + dq decoupling.")
 
