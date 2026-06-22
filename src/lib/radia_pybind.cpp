@@ -452,6 +452,65 @@ int ObjWedge(py::list vertices, py::array_t<double> magnetization) {
 }
 
 /**
+ * @brief Create pyramid element from 5 vertices
+ *
+ * Square-base pyramid: 1 quadrilateral base + 4 triangular sides.
+ * 5 faces total -> 5 surface-charge DOF for the moment-yano MSC method.  The single quadrupole row is
+ * the per-element RESIDUAL EIGENMODE (the in-plane dx^2-dy^2-type mode for a symmetric pyramid -- DISTINCT
+ * from the wedge's axial mode; both are derived/verified in examples/vim/eigenmode_quadrupole_derivation.wls),
+ * so the pyramid solves through the same moment path as hex (6) and wedge (5) with no extra kernel.
+ *
+ * Vertex convention (matches netgen_mesh_import.PYRAMID_FACES):
+ *   v0..v3 = base quad, v4 = apex.
+ *   Base   : (v0, v3, v2, v1)  -- outward normal points away from the apex
+ *   Sides  : (v0,v1,v4) (v1,v2,v4) (v2,v3,v4) (v3,v0,v4)
+ *
+ * @param vertices 5 vertices: base v0..v3 then apex v4
+ * @param magnetization Magnetization vector [Mx, My, Mz] in A/m
+ * @return Object handle
+ */
+int ObjPyramid(py::list vertices, py::array_t<double> magnetization) {
+    if (py::len(vertices) != 5) {
+        throw std::runtime_error("Pyramid requires exactly 5 vertices");
+    }
+
+    auto [flat_verts, nv] = to_vertex_array(vertices);
+    auto m = magnetization.unchecked<1>();
+
+    if (m.size() != 3) {
+        throw std::runtime_error("magnetization must have 3 elements");
+    }
+
+    double M[3] = {m(0), m(1), m(2)};
+
+    // Pyramid face definitions (1-indexed vertices; matches netgen_mesh_import.PYRAMID_FACES).
+    // Face 0: base quad (v0, v3, v2, v1) - outward normal points away from the apex.
+    // Faces 1-4: triangular sides (each base edge + apex v4).
+    std::vector<int> flatFaces;
+    int faceLengths[5] = {4, 3, 3, 3, 3};
+
+    // base quad
+    flatFaces.push_back(1); flatFaces.push_back(4); flatFaces.push_back(3); flatFaces.push_back(2);
+    // side triangles
+    flatFaces.push_back(1); flatFaces.push_back(2); flatFaces.push_back(5);
+    flatFaces.push_back(2); flatFaces.push_back(3); flatFaces.push_back(5);
+    flatFaces.push_back(3); flatFaces.push_back(4); flatFaces.push_back(5);
+    flatFaces.push_back(4); flatFaces.push_back(1); flatFaces.push_back(5);
+
+    int handle = 0;
+    double M_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    double J[3] = {0, 0, 0};
+    double J_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    int err = RadObjPolyhdr(&handle, flat_verts.data(), nv,
+                           flatFaces.data(), faceLengths, 5,
+                           M, M_LinCoef, J, J_LinCoef);
+    check_error(err);
+
+    return handle;
+}
+
+/**
  * @brief Create container for objects
  *
  * @param objects List of object handles
@@ -3452,6 +3511,28 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Args:
                   vertices: List of 6 vertex coordinates [[x,y,z], ...]
+                  magnetization: Magnetization vector [Mx, My, Mz] in A/m
+
+              Returns:
+                  Object handle
+          )pbdoc");
+
+    m.def("ObjPyramid", &radia_objects::ObjPyramid,
+          py::arg("vertices"), py::arg("magnetization"),
+          R"pbdoc(
+              Create pyramid element from 5 vertices.
+
+              Square-base pyramid: 1 quadrilateral base + 4 triangular sides (5 faces total).
+              5 DOF for the moment-yano MSC method; the single quadrupole row is the per-element
+              residual eigenmode (same moment path as hex/wedge -- no extra kernel).
+
+              Vertex convention (matches netgen_mesh_import.PYRAMID_FACES):
+                  v0..v3 = base quad, v4 = apex.
+                  Base : (v0, v3, v2, v1) -- outward normal away from the apex.
+                  Sides: (v0,v1,v4) (v1,v2,v4) (v2,v3,v4) (v3,v0,v4).
+
+              Args:
+                  vertices: List of 5 vertex coordinates [[x,y,z], ...] (base v0..v3, then apex v4)
                   magnetization: Magnetization vector [Mx, My, Mz] in A/m
 
               Returns:
