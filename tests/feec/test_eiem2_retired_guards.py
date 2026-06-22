@@ -84,6 +84,33 @@ def test_pure_tet_mmm_still_solves():
     assert Mz > 0, f"pure-tet MMM M_z={Mz:.1f} (should magnetize)"
 
 
+def test_method2_hacapk_mmm_tet_matches_lu():
+    """KEPT: method 2 (HACApK) on a tetrahedron (MMM) soft iron matches the LU/BiCGSTAB result -- the
+    rad_hacapk MMM 3x3 path is unaffected by the EIEM2 (MSC 5/6 DOF) kernel deletion."""
+    rad.UtiDelAll(); rad.set_demag_backend("auto")
+    Mz = []
+    for meth in (0, 1, 2):
+        rad.UtiDelAll()
+        t = rad.ObjTetrahedron(_tet(0.0, L=0.02), [0, 0, 0]); rad.MatApl(t, rad.MatLin(1000.0))
+        rad.Solve(rad.ObjCnt([t, rad.ObjBckg(lambda p: [0, 0, MU0 * H0])]), 1e-6, 1000, meth)
+        Mz.append(rad.ObjM(t)["magnetization"][2])
+        rad.UtiDelAll()
+    assert all(m > 0 for m in Mz), f"MMM tet should magnetize for every method: {Mz}"
+    assert abs(Mz[2] - Mz[0]) < 1e-3 * abs(Mz[0]) + 1e-6, f"method 2 (HACApK) != method 0 (LU): {Mz}"
+
+
+def test_tet_mmm_ima_solves():
+    """KEPT: a tetrahedron (MMM) soft iron solved with image symmetry (IMA) magnetizes -- the tet 3x3
+    branch of the IMA dense build is unaffected by the EIEM2 MSC-branch deletion."""
+    rad.UtiDelAll(); rad.set_demag_backend("auto")
+    t = rad.ObjTetrahedron([[0, 0, 0.01], [0.02, 0, 0.01], [0.01, 0.017, 0.01], [0.01, 0.006, 0.026]], [0, 0, 0])
+    rad.MatApl(t, rad.MatLin(1000.0))
+    rad.Solve(rad.ObjCnt([t, rad.ObjBckg(lambda p: [0, 0, MU0 * H0])]), 1e-6, 1000, 0, image='+z')
+    Mz = rad.ObjM(t)["magnetization"][2]
+    rad.UtiDelAll()
+    assert Mz > 0, f"tet MMM + IMA should magnetize: M_z={Mz:.1f}"
+
+
 def test_mixed_container_permanent_magnet_field_untouched():
     """KEPT: a mixed tet+hex container of PERMANENT magnets (no Solve) evaluates fields normally --
     the guard only fires on a demag Solve, not on field evaluation."""
