@@ -1,4 +1,4 @@
-# Differential geometry, operational — weak form, Hodge star, hodograph, canonical structure
+# Differential geometry, operational — weak form, Hodge star, hodograph, canonical structure, HOIBC/DtN
 
 Symbolic (Mathematica / `.wls`) reference for the **lab policy**:
 
@@ -53,6 +53,7 @@ Kelvin law** (CEFC 2026):
 | `weakform_hodge.wls` | weak form = Hodge pairing; `nu' = nu \|det P\|(P^T P)^{-1}` = the scalar weight `W` (the unification); 2-D conformal weight-free, 3-D scale survives; pullback Kelvin `nu'` (spherical isotropic / cylindrical anisotropic); nonlinear `Star_nu` tangent `nu I + nu'(B⊗B)/\|B\|` is **SPD** (elliptic, no fold); **metric ≠ curvature** — the Kelvin & polar metrics are FLAT (`Riemann = 0`; a map can't curve flat space), sphere control genuinely curved (`R = 2`); **transformation optics = premetric "push everything onto the Hodge"** — our `ν' = χ(g) = √(det g) g⁻¹` is Pendry's `ε' = ΛΛᵀ/det Λ` (the one metric→material map, on the pullback vs pushforward metric), and any coordinate map (conformal or not) keeps `Riemann = 0`: the geometry moves onto the Hodge, the topology can't | 20 assertions, ALL PASS |
 | `hodograph.wls` | the 3-axis backbone: **[1]** the topology/metric split (pullback = cochain map); **[2]** axis 1 — 2-D Kelvin inversion is conformal ⇒ weight-free, complex-potential `(Phi, A_z)` Cauchy–Riemann net; **[3]** axis 2 — Clebsch `B = grad(alpha)×grad(beta)` div-free with `A = alpha grad(beta)`, helicity `A.B = 0` vs ABC Beltrami `A.B = \|B\|^2 != 0` (Moffatt obstruction); **[4]** axis 3 — in 2-D `A_z` IS the Clebsch potential / flux-line Hamiltonian; **[5]** axis 3 deep — the **Chaplygin full nonlinear linearisation**: `div(nu(\|grad A\|) grad A)=0` → the LINEAR self-adjoint elliptic `d/dq((q/mu) A_q) + ((mu q)'/(mu^2 q)) A_thth = 0` (`mu(q)` a coefficient, not a nonlinearity), elliptic ⇔ `(mu q)'>0` ⇔ `nu+nu'\|B\|>0` (no limiting line) | 21 assertions, ALL PASS |
 | `canonical.wls` | the **Hamiltonian / canonical reading** of the weak form (weak form = `δ(action)=0`; the Hamiltonian is its Legendre shadow): **[1]** flux lines ARE Hamilton's canonical equations with `A_z` the Hamiltonian (`dx/ds=A_z,y`, `dy/ds=-A_z,x`; `A_z` conserved; area-preserving) — the repo's symplectic flux-line tracking; **[2]** the constitutive law `H=∂w/∂B` is a **Legendre transform** (`B↔H` conjugate, coenergy `w*=H·B-w`, `B=∂w*/∂H`; tangent = Hessian, SPD ⇔ `w` convex ⇔ ⋆_ν "no fold"); **[3]** the hodograph IS the Legendre transform of the potential = a **canonical transformation** (`H=∇Φ` ⇔ the `(x,H)` graph is Lagrangian); **[4]** Poisson bracket `{x,y}=1`, flow `ḟ={f,A_z}` | 12 assertions, ALL PASS |
+| `surface_derham.wls` | **HOIBC** read via **topology + the analytic DtN**: **[A]** the boundary's surface de Rham (`d∘d=0`); HOIBC global modes = surface harmonic 1-forms = surface Betti `b1` (sphere `b1=0` ⇒ no global loop; cylinder `b1=1` ⇒ one loop; the count is topological, the impedance values geometric); **[B]** the exact exterior DtN ladder `Λ_n=(n+1)/R` (diagonal in `Y_n`; Kelvin/IE reproduce it exactly), and HOIBC = a **local Laplace–Beltrami-polynomial (Padé) approximation** — order-1 matches `Λ_n` at `n=0,1`, deviates at `n=2` (the knee); order-2 at `n≤2`, deviates at `n=3` (higher order = more matched modes, never exact, because `Λ(n)=(n+1)/R` is not a polynomial in the Laplace–Beltrami eigenvalue `n(n+1)`) | 9 assertions, ALL PASS |
 
 The **dual half** of "push everything onto the Hodge" — *topology is NOT in the
 Hodge* — is verified in [`../basis_functions/cohomology.wls`](../basis_functions/cohomology.wls):
@@ -66,6 +67,7 @@ but never the holes (`dB=0` survives; only `H=⋆B` moves).
 wolframscript -file weakform_hodge.wls
 wolframscript -file hodograph.wls
 wolframscript -file canonical.wls
+wolframscript -file surface_derham.wls
 ```
 
 (or via the `mathematica_evaluate` MCP tool / `radia_mcp.mathematica`). Each file
