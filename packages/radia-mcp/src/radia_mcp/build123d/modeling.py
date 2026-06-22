@@ -24,11 +24,15 @@ from __future__ import annotations
 
 import math
 
-from build123d import (Axis, BuildLine, BuildSketch, CenterArc, Compound, Cylinder, Line, Mode,
-                       Plane, Pos, RectangleRounded, extrude, make_face)
+from build123d import (Axis, BuildLine, BuildSketch, CenterArc, Circle, Compound, Cylinder, Helix, Line,
+                       Mode, Plane, Pos, RectangleRounded, chamfer, extrude, fillet, loft, make_face,
+                       offset, revolve, sweep)
 
 __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_array",
-           "mirrored", "assembly"]
+           "mirrored", "assembly",
+           # generic solid-modelling operations (constructors / local mods / arrays)
+           "swept", "revolved", "lofted", "coil", "strut", "thicken", "draft_extrude",
+           "shell", "fillet_edges", "chamfer_edges", "grid_array", "path_array"]
 
 
 def annular_segment(r_in, r_out, h, start_angle=0.0, end_angle=90.0, label="segment"):
@@ -91,7 +95,7 @@ def polar_array(part, count, total_angle=360.0, axis=Axis.Z, label=None, label_f
     r"""``count`` rotated copies of ``part`` about ``axis``, returned as a labelled
     :class:`~build123d.Compound`.  A full ``360`` deg ring spaces the copies by ``360/count``; a
     partial fan (``total_angle < 360``) spaces them by ``total_angle/(count-1)`` so the first and last
-    copies sit at the fan ends.  The CST-modeller "rotate with copies" / Radia segmented-array verb.
+    copies sit at the fan ends.  The "rotate with copies" / segmented-array verb.
     """
     if count < 1:
         raise ValueError("count must be >= 1")
@@ -161,3 +165,133 @@ def assembly(*parts, label="assembly"):
         else:
             children.append(p)                   # a bare Solid
     return Compound(children=children, label=label)
+
+
+# =====================================================================================================
+# Generic solid-modelling operations -- the constructor / local-modification / array verbs a full 3D
+# modeller exposes, wrapped as clean, labelled, CAE-safe build123d helpers.
+# =====================================================================================================
+def swept(profile, path, label="swept"):
+    r"""**Sweep** a 2D ``profile`` (a face / sketch such as ``Circle(r)`` or ``Rectangle(w, h)``) along a
+    ``path`` (a wire / edge -- a line, arc, spline or :class:`~build123d.Helix`), keeping the profile
+    perpendicular to the path tangent at the start.  The "sweep curve" verb -- pipes, coil conductors,
+    swept beams.  Returns a single labelled :class:`~build123d.Solid`."""
+    sec = Plane(origin=path @ 0.0, z_dir=path % 0.0) * profile
+    s = sweep(sec, path=path).solid()
+    s.label = label
+    return s
+
+
+def revolved(profile, axis=Axis.Y, angle=360.0, label="revolved"):
+    r"""**Revolve** (spin) a 2D ``profile`` about ``axis`` by ``angle`` degrees -- bodies of revolution
+    (shafts, vases, toroidal cores, pulleys).  Returns a labelled :class:`~build123d.Solid`."""
+    s = revolve(profile, axis, angle).solid()
+    s.label = label
+    return s
+
+
+def lofted(sections, label="lofted"):
+    r"""**Loft** (blend) a list of 2D ``sections`` (faces, positioned at their stations) into a solid that
+    interpolates between them -- transitions, blades, ducts, frusta.  Returns a labelled
+    :class:`~build123d.Solid`."""
+    s = loft(sections).solid()
+    s.label = label
+    return s
+
+
+def coil(profile, pitch, height, radius, label="coil"):
+    r"""A **helical coil**: sweep a 2D ``profile`` (e.g. ``Circle(wire_radius)``) along a helix of the
+    given ``pitch`` (axial advance per turn), ``height`` and ``radius``.  Solenoids, springs, helical
+    conductors.  Returns a labelled :class:`~build123d.Solid` (volume ``= area(profile) * helix length``)."""
+    return swept(profile, Helix(pitch=pitch, height=height, radius=radius), label=label)
+
+
+def strut(p0, p1, radius, label="strut"):
+    r"""A round **strut** (cylinder) of given ``radius`` between two arbitrary 3D points ``p0`` and
+    ``p1`` -- the member primitive for trusses, space frames, spokes and lattices."""
+    return swept(Circle(radius), Line(p0, p1), label=label)
+
+
+def thicken(profile, thickness, label="sheet"):
+    r"""**Thicken** a planar ``profile`` (face / sketch) into a solid of the given ``thickness``,
+    symmetric about the profile plane -- the "thicken sheet" verb (plates, laminations, membranes)."""
+    s = extrude(profile, amount=thickness / 2.0, both=True).solid()
+    s.label = label
+    return s
+
+
+def draft_extrude(profile, height, taper_deg, label="draft"):
+    r"""**Extrude with draft**: extrude a 2D ``profile`` by ``height`` while tapering its walls by
+    ``taper_deg`` (a positive angle shrinks the top) -- moulded / cast features, frusta."""
+    s = extrude(profile, amount=height, taper=taper_deg).solid()
+    s.label = label
+    return s
+
+
+def shell(solid, thickness, openings=None, label="shell"):
+    r"""**Shell** (hollow out) a ``solid`` to a wall of ``thickness``, removing material inward.  With
+    ``openings`` (a face or list of faces of ``solid``) the shell is OPEN on those faces (a cup / box);
+    without, it is a CLOSED hollow shell.  The "shell solid" verb."""
+    if openings is None:
+        sh = (solid - offset(solid, amount=-abs(thickness)))
+    else:
+        sh = offset(solid, amount=-abs(thickness), openings=openings)
+    sh = sh.solid()
+    sh.label = label
+    return sh
+
+
+def fillet_edges(solid, radius, edge_filter=None, label="filleted"):
+    r"""**Blend (fillet)** the edges of ``solid`` with the given ``radius``.  ``edge_filter`` is an
+    optional callable ``edges -> edges`` to pick a subset (e.g. ``lambda e: e.filter_by(Axis.Z)`` for the
+    vertical edges only); without it, every edge is rounded."""
+    edges = solid.edges() if edge_filter is None else edge_filter(solid.edges())
+    f = fillet(edges, radius)
+    try:
+        f.label = label
+    except Exception:
+        pass
+    return f
+
+
+def chamfer_edges(solid, length, edge_filter=None, label="chamfered"):
+    r"""**Chamfer** the edges of ``solid`` by the given ``length``.  ``edge_filter`` is an optional
+    callable ``edges -> edges`` to pick a subset; without it, every edge is chamfered."""
+    edges = solid.edges() if edge_filter is None else edge_filter(solid.edges())
+    c = chamfer(edges, length)
+    try:
+        c.label = label
+    except Exception:
+        pass
+    return c
+
+
+def grid_array(part, nx, ny, dx, dy, label=None, label_fmt="{base}_{i:02d}_{j:02d}"):
+    r"""An ``nx`` x ``ny`` **rectangular grid** of copies of ``part`` at pitches ``dx`` (x) and ``dy``
+    (y), returned as a labelled :class:`~build123d.Compound` -- the 2D "translate with copies" verb
+    (pin grids, hole patterns, fin / standoff arrays)."""
+    if nx < 1 or ny < 1:
+        raise ValueError("nx, ny must be >= 1")
+    base = label or (part.label or "part")
+    children = []
+    for i in range(nx):
+        for j in range(ny):
+            c = Pos(i * dx, j * dy, 0) * part
+            c.label = label_fmt.format(base=base, i=i, j=j)
+            children.append(c)
+    return Compound(children=children, label=base + "_grid")
+
+
+def path_array(part, path, count, label=None, label_fmt="{base}_{k:02d}"):
+    r"""``count`` copies of ``part`` placed at equal parameter steps along ``path`` (a wire / edge) --
+    the "array along a curve" verb (beads on a wire, bolts along a slot, stations along a spline)."""
+    if count < 1:
+        raise ValueError("count must be >= 1")
+    base = label or (part.label or "part")
+    children = []
+    for k in range(count):
+        t = k / (count - 1) if count > 1 else 0.0
+        c = Pos(*tuple(path @ t)) * part
+        c.label = label_fmt.format(base=base, k=k)
+        children.append(c)
+    return Compound(children=children, label=base + "_patharray")

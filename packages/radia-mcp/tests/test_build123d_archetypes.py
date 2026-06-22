@@ -20,7 +20,8 @@ from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetizati
                                             litz_wire, litz_packing_radius, litz_fill_factor,
                                             hierarchical_litz, rectangular_litz, litz_serving)
 from radia_mcp.build123d.archetypes import _carried_centerline, _superposed_centerline
-from build123d import Box, Rectangle, RegularPolygon
+from radia_mcp.build123d.archetypes import involute_gear, threaded_rod, airfoil, blade
+from build123d import Box, Rectangle, RegularPolygon, extrude
 
 
 def test_magnetization_label_roundtrip():
@@ -351,6 +352,27 @@ def test_helmholtz_pair_two_coils():
     assert abs((zc[1]-zc[0]) - 45) < 1e-6, "coils separated along z"
 
 
+def test_involute_gear_spur_and_helical():
+    spur = involute_gear(18, 4.0, 1.0, 1.2, name="spur")
+    assert spur.is_valid and spur.label == "spur"
+    assert spur.volume > math.pi * (4.0 * 1.06) ** 2 * 1.2, "teeth add material beyond the root cylinder"
+    helical = involute_gear(16, 3.5, 0.9, 2.0, twist_deg=20.0, name="hel")
+    assert helical.is_valid and helical.volume > 0
+
+
+def test_threaded_rod_adds_thread():
+    rod = threaded_rod(1.5, 1.0, 6.0, name="bolt")
+    assert rod.is_valid and rod.label == "bolt"
+    assert rod.volume > math.pi * 1.5 ** 2 * 6.0, "the V-thread adds material to the core"
+
+
+def test_airfoil_and_blade():
+    sec = extrude(airfoil(4.0, 0.12), 1.0)
+    assert sec.is_valid and sec.volume > 0
+    bl = blade([(4.0, 0.14, 0, 0), (3.0, 0.12, 3, 12), (2.0, 0.10, 6, 25)], name="vane")
+    assert bl.is_valid and bl.label == "vane" and bl.volume > 0
+
+
 def main():
     test_magnetization_label_roundtrip()
     test_pm_primitives_carry_magnetization()
@@ -374,6 +396,9 @@ def main():
     test_hierarchical_litz_carried()
     test_litz_wire_insulation()
     test_litz_serving_tube()
+    test_involute_gear_spur_and_helical()
+    test_threaded_rod_adds_thread()
+    test_airfoil_and_blade()
     test_hierarchical_litz_meshes_in_netgen()
     test_e_core_two_windows()
     test_slotted_stator_removes_slots()

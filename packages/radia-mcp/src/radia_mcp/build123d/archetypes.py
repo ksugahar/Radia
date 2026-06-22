@@ -25,8 +25,9 @@ import re
 
 import numpy as np
 
-from build123d import (BuildLine, BuildSketch, Box, Circle, Compound, Cylinder, Helix, Plane, Polyline,
-                       Pos, Rectangle, RegularPolygon, Rot, Spline, extrude, make_face, sweep)
+from build123d import (Align, BuildLine, BuildSketch, Box, Circle, Compound, Cylinder, Helix, Plane,
+                       Polyline, Pos, Rectangle, RegularPolygon, Rot, Spline, Triangle, extrude, loft,
+                       make_face, sweep)
 
 from .modeling import annular_segment, assembly, polar_array, tube
 
@@ -34,7 +35,8 @@ __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cyl
            "block_magnet", "halbach_ring", "c_core", "solenoid", "pole_tip", "multipole_yoke",
            "h_dipole", "helmholtz_pair", "cos_theta_dipole", "e_core", "slotted_stator", "spm_rotor",
            "litz_packing_radius", "litz_fill_factor", "litz_wire", "hierarchical_litz",
-           "rectangular_litz", "litz_serving"]
+           "rectangular_litz", "litz_serving",
+           "involute_gear", "threaded_rod", "airfoil", "blade"]
 
 
 def magnetization_tag(name, index, angle_deg):
@@ -485,3 +487,86 @@ def rectangular_litz(nx, ny, strand_radius, pitch, length, twist_pitch=None, nam
             strand.label = f"{name}_{i:02d}_{j:02d}"
             strands.append(strand)
     return assembly(*strands, label=name)
+
+
+# =====================================================================================================
+# Mechanical / aerodynamic parametric shapes (promoted from the modelling marathon corpus)
+# =====================================================================================================
+_BASE_Z = (Align.CENTER, Align.CENTER, Align.MIN)        # z runs 0..h
+
+
+def _involute_tooth_face(rb, top, half_ang_deg, steps=40):
+    r"""One involute gear tooth as a 2D face: two involute flanks of base radius ``rb`` rotated
+    +/-``half_ang_deg`` apart (finite-width root), capped at radius ``rb + top``."""
+    a = math.radians(half_ang_deg)
+    tv = [0.03 * k for k in range(steps)]
+    inv = [(rb * (math.cos(t) + t * math.sin(t)), rb * (math.sin(t) - t * math.cos(t))) for t in tv]
+    inv = [p for p in inv if math.hypot(*p) <= rb + top]
+
+    def rot(p, ang):
+        x, y = p
+        return (x * math.cos(ang) - y * math.sin(ang), x * math.sin(ang) + y * math.cos(ang))
+    left = [rot(p, a) for p in inv]
+    right = [rot((x, -y), -a) for x, y in inv]
+    return make_face(Polyline(*(left + list(reversed(right)) + [left[0]])))
+
+
+def involute_gear(n_teeth, base_radius, addendum, width, twist_deg=0.0, name="gear"):
+    r"""An **involute spur gear** (or, with ``twist_deg``, a helical gear): a root cylinder fused with
+    ``n_teeth`` involute teeth of base radius ``base_radius`` and tip height ``addendum`` over an axial
+    ``width``.  ``twist_deg`` lofts each tooth from base to top with that angular twist (helical).
+    Returns a labelled solid spanning ``z = 0..width``."""
+    if n_teeth < 4:
+        raise ValueError("n_teeth must be >= 4")
+    rb, top = base_radius, addendum
+    root = Cylinder(rb * 1.06, width, align=_BASE_Z)
+    tooth2d = _involute_tooth_face(rb, top, 360.0 / n_teeth / 4.0)
+    if abs(twist_deg) < 1e-9:
+        tooth = extrude(tooth2d, width)
+    else:
+        tooth = loft([tooth2d, Pos(0, 0, width) * Rot(0, 0, twist_deg) * tooth2d])
+    g = root + polar_array(tooth, n_teeth, 360.0)
+    g.label = name
+    return g
+
+
+def threaded_rod(radius, pitch, length, thread_depth=None, name="thread"):
+    r"""A **threaded rod**: a core cylinder of ``radius`` fused with an external V-thread -- a triangular
+    profile of depth ``thread_depth`` (default ``0.6 * pitch``) swept along a helix of the given
+    ``pitch`` over ``length``.  The reusable thread primitive for bolts, studs, set screws and lead
+    screws; spans ``z = 0..length``."""
+    depth = thread_depth or pitch * 0.6
+    core = Cylinder(radius, length, align=_BASE_Z)
+    hel = Helix(pitch=pitch, height=length, radius=radius)
+    thr = _sweep_section(hel, Triangle(a=depth, b=depth, C=90))
+    g = core + thr
+    g.label = name
+    return g
+
+
+def airfoil(chord, thickness=0.12, n=40):
+    r"""A **NACA-00xx symmetric airfoil** section as a 2D face (cosine-spaced, sharp closed trailing
+    edge): ``chord`` long with maximum thickness ``thickness * chord``.  Extrude it for a constant wing,
+    or stack twisted / scaled copies with :func:`blade` (or
+    :func:`~radia_mcp.build123d.modeling.lofted`)."""
+    xs = [chord * (0.5 - 0.5 * math.cos(math.pi * i / n)) for i in range(n + 1)]
+
+    def yt(x):
+        xn = x / chord
+        return 5 * thickness * chord * (0.2969 * math.sqrt(xn) - 0.1260 * xn - 0.3516 * xn ** 2
+                                        + 0.2843 * xn ** 3 - 0.1036 * xn ** 4)
+    up = [(x, yt(x)) for x in xs]
+    lo = [(x, -yt(x)) for x in reversed(xs)]
+    return make_face(Polyline(*(up + lo[1:-1] + [up[0]])))
+
+
+def blade(sections, name="blade"):
+    r"""A **lofted blade / vane**: ``sections`` is a list of ``(chord, thickness, z, twist_deg)`` stacked
+    along the span; each becomes a twisted :func:`airfoil` placed at height ``z`` and the lot is lofted
+    into a smooth blade (turbine / propeller / fan / impeller vane).  Returns a labelled solid."""
+    if len(sections) < 2:
+        raise ValueError("need >= 2 sections to loft")
+    secs = [Pos(0, 0, z) * Rot(0, 0, tw) * airfoil(c, t) for (c, t, z, tw) in sections]
+    g = loft(secs)
+    g.label = name
+    return g
