@@ -1670,7 +1670,7 @@ paper) — only the surrogate L2 cost.
 
 
 # ============================================================
-# 9. NGSolve recipes for COMSOL-equivalent workflow
+# 9. NGSolve recipes for the full topology-optimization workflow
 # ============================================================
 
 LAB_NGSOLVE_RECIPES = """
