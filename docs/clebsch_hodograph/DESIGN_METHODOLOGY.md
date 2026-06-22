@@ -512,6 +512,44 @@ The corner-`κ` softens before the hard knee (a real FEM is the truth). Curved/r
 -EFB edge focusing (the horizontal `x-s` edge contour) and the fully-saturating sector
 body remain the spectrometer extensions (§3.9 honest scope + the sector §3.5).
 
+### 3.11 The two planes CO-BAKED into one pole — `z(x,s)=g/2−δ(x/w)²+lift(s)`
+
+§3.9 named its own next refinement: its 3-D reflection carried the `s-y` chamfer at a
+fixed body width, so the `x-y` shim `δ` was *verified as the transverse lever* but not
+yet baked into the same 3-D pole. This **co-bakes both** into one gap face
+
+$$z_{\text{face}}(x,s) = g/2 \;-\; \underbrace{\delta\,(x/w)^2}_{x\text{-}y\ \text{shim}} \;+\; \underbrace{\text{lift}(s)}_{s\text{-}y\ \text{chamfer}},$$
+
+and shows BOTH levers act **at once**: the co-baked pole achieves a clean integrated
+transverse `b̄₃,₅` AND a rounded pole-tip corner.
+
+**Verified (`endpack_cobake.py`, ngsolve only, golden-tested).** The 4 cases (the
+same equipotential-pole drive + integrated analyzer as §3.9) on the co-baked face:
+
+| case | corner tip | transverse `b̄₃,₅` |
+|---|---|---|
+| baseline (flat cut) | `1.16` (over-fields) | `0.7 %` |
+| shim only (`δ`) | `1.23` | **`0.07 %`** (x-y lever cleans it) |
+| chamfer only (`ĝ`) | **`0.96`** (s-y lever rounds it) | `0.3 %` |
+| **BOTH (co-baked)** | **`1.02`** | **`0.07 %`** |
+
+i.e. **one pole face delivers a clean transverse harmonic AND a rounded corner** — the
+two cleanly-separated two-plane levers composed in 3-D (`δ ≈ 0.41 mm` from §3.9 Plane 1;
+`ĝ` the Rogowski shape from Plane 2).
+
+**Honest scope.** The exact `δ(x/w)²` shim needs an *x-varying* face, built here as an
+x-prism STAIRCASE (per-slab shim offset), so the no-shim cases mesh coarser than the
+shim cases — the per-case *absolute* numbers are research-grade, not precision. The
+locked claim is the **co-existence** of both levers in the (well-resolved) BOTH pole;
+the per-lever *causation* is golden-locked separately (the `x-y` shim zeroes `b₃`:
+`accel_pole_dipole_body_2d` / §3.9 Plane 1; the `s-y` chamfer drives the corner
+over-field through `1`: §3.9's depth sweep). A precision tensor LOFT (OCC ThruSections)
+is the clean construction. (A separate attempt at the **rotated-EFB edge focusing**
+extension was *not shipped*: the `∫B` effective-field-boundary angle extracted from the
+equipotential drive attenuated to `~0.47·β_cut` in a way that could not be cleanly
+separated from the genuine fringe effect — it needs a reduced-Ω-with-source drive or
+particle tracking, recorded as the open next step.)
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -641,6 +679,14 @@ coil = A-side), so the framework is one method, not two.
   design-grade (the lumped-circuit class of `clebsch_dipole_saturation_2d`), with `κ`
   from the §3.9 linear equipotential (golden) and the BH + A-formulation from
   `clebsch_dipole_saturation_3d` (committed) as its independently-validated components.
+- the **two planes CO-BAKED into one pole** (§3.11, `endpack_cobake.py`): both the `x-y`
+  shim `δ` and the `s-y` Rogowski chamfer `ĝ` baked into one gap face
+  `z(x,s)=g/2−δ(x/w)²+lift(s)` — the co-baked pole delivers a clean integrated
+  transverse `b̄₃,₅ ≈ 0.07 %` AND a rounded pole-tip corner (`tip ≈ 1.02`) at once, the
+  §3.9 two-plane levers composed in 3-D (the `δ`-shim x-prism staircase is research-grade
+  mesh; the per-lever causation is golden-locked in §3.9). The rotated-EFB edge-focusing
+  extension was attempted but not shipped (the `∫B` EFB angle attenuated `~0.47·β_cut`,
+  not cleanly attributable — needs a reduced-Ω-with-source drive or tracking).
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed in two planes** (§3.9): the longitudinal
@@ -680,4 +726,5 @@ coil = A-side), so the framework is one method, not two.
 | fast-twist leaf coupling (the per-station 2-D validity threshold) | `examples/clebsch_hodograph/twist_rate_leaf_coupling.py` |
 | end pack in two planes (x-y cross-section + s-y end → 3-D) | `examples/clebsch_hodograph/endpack_two_plane.py` |
 | spectrometer end pack NONLINEAR (corner saturable throat) | `examples/clebsch_hodograph/endpack_spectrometer_saturation.py` |
+| two planes co-baked into one pole (δ shim + ĝ chamfer) | `examples/clebsch_hodograph/endpack_cobake.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |

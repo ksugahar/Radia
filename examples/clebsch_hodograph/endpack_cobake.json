@@ -1,0 +1,35 @@
+{
+  "shim_delta_m": 0.00040555397745518793,
+  "chamfer_depth_m": 0.0024,
+  "chamfer_len_m": 0.03,
+  "cases": {
+    "baseline": {
+      "ne": 1186,
+      "tip_enhancement": 1.1583627670290315,
+      "integrated_spurious_rel": 0.006828214015349104,
+      "L_eff_m": 0.14982050997882895
+    },
+    "shim_only": {
+      "ne": 28288,
+      "tip_enhancement": 1.231846030048615,
+      "integrated_spurious_rel": 0.0007076651895076483,
+      "L_eff_m": 0.14570076985612349
+    },
+    "chamfer_only": {
+      "ne": 5174,
+      "tip_enhancement": 0.958775583711717,
+      "integrated_spurious_rel": 0.0028611205011483598,
+      "L_eff_m": 0.1426930034087122
+    },
+    "both": {
+      "ne": 29554,
+      "tip_enhancement": 1.0147617073914315,
+      "integrated_spurious_rel": 0.0006637238640742422,
+      "L_eff_m": 0.14113327723351074
+    }
+  },
+  "both_clean_transverse_rel": 0.0006637238640742422,
+  "both_corner_tip": 1.0147617073914315,
+  "chamfer_rounds_corner": true,
+  "shim_cleans_transverse": true
+}
