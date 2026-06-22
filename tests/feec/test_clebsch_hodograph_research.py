@@ -1390,3 +1390,39 @@ def test_endpack_two_plane():
     # CROSS-CHECK: the cheap 2-D s-y chamfer SHAPE predicts the 3-D end
     # equipotential bow-out (both normalized) to a few percent rms.
     assert d["crosscheck_2d_vs_3d_contour_rms_rel"] < 0.20, d
+
+
+def test_endpack_spectrometer_saturation():
+    """The SPECTROMETER end pack, NONLINEAR: the pole-tip corner is a saturable
+    throat.  The linear corner concentration kappa = tip_enhancement (~1.13) means
+    the corner reaches the iron knee FIRST -- it saturates at B_gap = B_K/kappa
+    (~1.33 T, ~12% BELOW the bulk knee B_K=1.5 T), so the EFB / edge focusing
+    drifts before the bulk saturates.  The Rogowski chamfer is the corner-throat
+    width knob (kappa -> knee = B_K/kappa); the SAME chamfer that zeroes the linear
+    over-field clears the premature corner saturation.  The whole nonlinear map is
+    the linear equipotential sweep + a Froehlich-BH overlay (Chaplygin
+    'nonlinear-done-linearly' on the END corner).  ngsolve only (the design map; the
+    A-formulation FEM validation is gated behind --fem, not run here)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import endpack_spectrometer_saturation as es
+    d = es.design(B_op=1.45, fast=True)
+
+    # the FLAT corner concentrates flux and saturates BEFORE the bulk iron.
+    assert 1.05 < d["flat_corner_kappa"] < 1.25, d
+    assert 1.25 < d["flat_corner_knee_Bgap_T"] < 1.45, d           # ~1.33 T
+    assert d["flat_corner_knee_Bgap_T"] < d["B_K_T"], d           # below the bulk knee
+    assert 0.05 < d["corner_premature_fraction"] < 0.20, d        # ~12% early
+    assert d["flat_corner_saturates_below_Bop"] is True, d        # 1.33 < 1.45
+
+    # the chamfer raises the corner knee (kappa decreases monotonically -> knee up).
+    knee = [r["corner_knee_Bgap_T"] for r in d["sweep"]]
+    assert all(knee[i] < knee[i + 1] for i in range(len(knee) - 1)), knee
+    kap = [r["kappa"] for r in d["sweep"]]
+    assert all(kap[i] > kap[i + 1] for i in range(len(kap) - 1)), kap
+
+    # a finite chamfer clears the operating field; the linear cosmetic optimum
+    # (kappa=1) is the SAME lever, with a hard saturation justification.
+    assert 0.0005 < d["depth_required_for_Bop_m"] < 0.005, d      # ~1-2 mm
+    assert d["depth_linear_cosmetic_m"] > 0.0, d
+    assert d["n_linear_solves"] >= 4, d
