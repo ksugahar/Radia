@@ -206,6 +206,23 @@ jobs:
         run: python tools/audit_ci_no_system_install.py
 
       # ----------------------------------------------------------------
+      # radia-mcp PUBLISH BOUNDARY lint (CLAUDE.md 公開境界): fail fast,
+      # BEFORE the ~25-min build, if the public package attributes
+      # verification to / design-references / leaks an internal path of a
+      # commercial tool (COMSOL / FEMM / JMAG / CST).  Because
+      # release-radia-mcp.yml gates the PyPI publish on THIS "CI" workflow
+      # succeeding, running it here makes the boundary lint a hard
+      # publish gate (not just the separate policy-lint.yml feedback run).
+      # ----------------------------------------------------------------
+      - name: Publish-boundary lint (radia-mcp provenance)
+        shell: pwsh
+        run: |
+          python packages/radia-mcp/tools/policy_lint.py --selftest
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::radia-mcp boundary-lint selftest failed"; exit 1 }
+          python packages/radia-mcp/tools/policy_lint.py
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::radia-mcp publish-boundary lint failed -- commercial-tool attribution / design-reference / internal-path leak in the public package"; exit 1 }
+
+      # ----------------------------------------------------------------
       # Install test dependencies (MCP server tests need the mcp package).
       #
       # radia_mcp itself is NOT pip-installed.  The self-hosted runner
