@@ -64,7 +64,7 @@ def build_linear_system(hexes, Happ, mu_r=MU_R):
     """Assemble the dense LINEAR moment system (fixed chi), exactly as yano_moment_cyoke_gate.moment_yano,
     and return A, b, plus the per-element row block 6e..6e+5 and own-face DOF set for block-Jacobi."""
     chi = mu_r - 1.0
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(mu_r))
@@ -93,7 +93,7 @@ def build_linear_system(hexes, Happ, mu_r=MU_R):
             row -= chi * (Dvec @ Ginv)
             row, rhs = _norm(row, 0.0); A[r, :] = row; b[r] = rhs; r += 1
     geom = dict(area=area, fc=fc, ecen=ecen, dofs_of=dofs_of)
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return A, b, row_of, geom, n_el, dof
 
 

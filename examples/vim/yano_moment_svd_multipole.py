@@ -40,7 +40,7 @@ NAMES = ["mono", "dipX", "dipY", "dipZ", "quadD1", "quadD2"]
 
 def analyze(a, b, c):
     """SVD a single hex's 6x6 interaction matrix N; label each singular mode by its dominant multipole."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=-1.0)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     V = [[-a, -b, -c], [a, -b, -c], [a, b, -c], [-a, b, -c],
          [-a, -b, c], [a, -b, c], [a, b, c], [-a, b, c]]
     o = rad.ObjHexahedron(V, [0, 0, 0]); rad.MatApl(o, rad.MatLin(1000.0))
