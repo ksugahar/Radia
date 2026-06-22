@@ -11,9 +11,11 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from build123d import Axis, Box, Circle, Rectangle, Pos, Line, Spline, GeomType
+from build123d import Axis, Box, Circle, Cylinder, Sphere, Rectangle, Plane, Pos, Line, Spline, GeomType
 from radia_mcp.build123d.modeling import (swept, revolved, lofted, coil, strut, thicken, draft_extrude,
-                                          shell, fillet_edges, chamfer_edges, grid_array, path_array)
+                                          shell, fillet_edges, chamfer_edges, grid_array, path_array,
+                                          fuse, cut, common, slice_solid, bend_sheet,
+                                          fillet_varied, chamfer_varied, slice_array)
 
 
 def _close(a, b, rel=3e-3):
@@ -105,6 +107,64 @@ def test_path_array():
     g = path_array(Box(0.3, 0.3, 0.3), path, 5, label="bead")
     assert len(g.solids()) == 5
     assert [c.label for c in g.children] == [f"bead_{k:02d}" for k in range(5)]
+
+
+def test_fuse_union():
+    g = fuse(Box(2, 2, 2), Pos(1, 0, 0) * Box(2, 2, 2), label="u")
+    _close(g.volume, 8 + 8 - 1 * 2 * 2)                   # overlap x in [0,1] removed once
+    assert g.label == "u"
+
+
+def test_cut_subtract():
+    g = cut(Box(4, 4, 4), Cylinder(1, 5), label="drilled")
+    _close(g.volume, 64 - math.pi * 1 ** 2 * 4)
+    assert g.label == "drilled"
+
+
+def test_common_intersect():
+    box, sph = Box(3, 3, 3), Sphere(2)
+    g = common(box, sph, label="lens")
+    assert 0 < g.volume < min(box.volume, sph.volume)
+    assert g.label == "lens"
+
+
+def test_slice_keep_top():
+    g = slice_solid(Box(2, 3, 4), Plane.XY, keep="top", label="half")
+    _close(g.volume, 12.0)                                # upper half of a 24-volume box
+    assert g.center().Z > 0
+
+
+def test_bend_sheet():
+    leg1, leg2, w, t, ang, r = 5.0, 4.0, 2.0, 0.4, 90.0, 1.0
+    g = bend_sheet(leg1, leg2, w, t, ang, r, label="bracket")
+    assert g.is_valid and g.label == "bracket"
+    arc = math.radians(ang) * (r + t / 2)
+    _close(g.volume, t * w * (leg1 + leg2 + arc), rel=0.1)   # ~ section area x neutral-axis length
+    assert abs(g.bounding_box().size.Z - w) < 1e-6, "width runs out of the bend plane (along z)"
+
+
+def test_fillet_varied():
+    box = Box(3, 3, 3)
+    g = fillet_varied(box, [(lambda e: e.filter_by(Axis.Z), 0.5),
+                            (lambda e: e.filter_by(Axis.X), 0.25)], label="rounded")
+    assert g.is_valid and g.volume < box.volume and g.label == "rounded"
+
+
+def test_chamfer_varied():
+    box = Box(3, 3, 3)
+    g = chamfer_varied(box, [(lambda e: e.filter_by(Axis.Z), 0.4),
+                             (lambda e: e.filter_by(Axis.X), 0.2)])
+    assert g.is_valid and g.volume < box.volume
+
+
+def test_slice_array():
+    st = slice_array(Box(2, 2, 6), 3, 2.0, axis="z", label="lam")
+    assert len(st.solids()) == 3
+    _close(st.volume, 24.0)                               # 3 slabs tile the box exactly
+    assert [c.label for c in st.children] == [f"lam_{k:02d}" for k in range(3)]
+    cyl = slice_array(Cylinder(1.5, 5), 5, 1.0, axis="z")
+    assert len(cyl.solids()) == 5
+    _close(cyl.volume, math.pi * 1.5 ** 2 * 5)
 
 
 def main():

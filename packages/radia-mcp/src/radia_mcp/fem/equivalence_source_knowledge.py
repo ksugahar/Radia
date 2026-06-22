@@ -1,6 +1,6 @@
 """Equivalence-theorem near-field source for radia_mcp.fem.
 
-CST-style Near-Field Source equivalent for the Radia/NGSolve stack.
+An equivalence-theorem near-field source for the Radia/NGSolve stack.
 The Schelkunoff/Love equivalence theorem lets us "record" the EM field
 on a closed surface around a source region, persist it, and later
 "replay" it as either (a) an external-field probe via the Stratton-Chu
