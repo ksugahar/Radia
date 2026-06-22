@@ -529,7 +529,10 @@ public:
 	// (global field/grad from BuildCentroidFieldGrad, local moments from the hex geometry).  Rows 2-norm
 	// normalized.  A row-major (dof x dof), rhs length dof.  Uniform linear chi + uniform applied field Happ
 	// (Step-1 verification path vs examples/vim moment prototype; hex-only).
-	void BuildMomentSystem(double chi, const double Happ[3], std::vector<double>& A, std::vector<double>& rhs) const;
+	void BuildMomentSystem(double chi, const double Happ[3], std::vector<double>& A, std::vector<double>& rhs) const;  // uniform-field wrapper
+	// Per-element chi + per-element external field (at hex centroid, HextPerHex[h*3+k]); A column = face DOF
+	// so dgesv's solution is sigma in DOF order.  The solve path uses this (coil sources are not uniform).
+	void BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex, std::vector<double>& A, std::vector<double>& rhs) const;
 	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 

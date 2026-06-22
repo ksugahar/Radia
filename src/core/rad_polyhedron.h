@@ -35,6 +35,7 @@ extern radTConvergRepair& radCR;
 extern bool g_yano_pyramid_cloud;
 extern bool g_yano_no_center_charge;   // research: drop the element-center cancellation charge (raw collocation)
 extern double g_yano_eval_alpha;   // research: override EIEM2 collocation-point alpha (-1 = default 0.5)
+extern bool g_yano_moment;   // upgrade: solve the parameter-free MOMENT system (BuildMomentSystemCore) instead of EIEM2 collocation (hex-only, opt-in)
 
 //-------------------------------------------------------------------------
 
