@@ -1892,13 +1892,28 @@ def solve_axi_magnetostatic(mesh, nu, Jr=None, magnets=None, order=2,
     Jr        : phi-direction current density [A/m^2] CF or None.
     magnets   : {material: (Hc, theta_deg)} where theta is from the r-axis [deg].
                 theta=90 => axial (+z) magnetization (FEMM MagDir convention).
-    order     : H1Henrotte order 1 or 2 (default 2).
+    order     : H1Henrotte order (MUST be >= 2).  order=1 is rejected: the
+                {1, r^2, z} P1/Q1 basis cannot represent a uniform axial field
+                (see the guard below).  Default 2.
     dirichlet : boundary tag for A_phi = 0 (must include the r=0 axis).
 
     Returns the H1Henrotte GridFunction ``gfu`` (A_phi at DOFs). Validated:
     magnetized sphere B_in = 2 mu0 mu_r Hc/(mu_r+2) to -0.05 %
     (tests/test_axi_magnetostatic.py).
     """
+    if order < 2:
+        # order=1 is a REPRESENTATION defect, not a solver issue: the H1Henrotte
+        # order-1 basis monomials are {1, r^2, z}; the reconstructed flux density
+        # B_z = dA/dr + A/r maps these to {1/r, r, z/r}, which has NO constant
+        # term, so a uniform axial B_z is unrepresentable.  Verified by a patch
+        # test (project the exact A_phi = B0*r/2 in, no solve): |B_z error|
+        # plateaus at ~74 % RMS and does NOT decrease from h=0.2 to h=0.025,
+        # while order=2 converges O(h^2).  (radia.axifem, 2026-06-23.)
+        raise ValueError(
+            "solve_axi_magnetostatic requires order >= 2; order=1 (P1 triangle / "
+            "Q1 quad) cannot represent a uniform axial B_z -- its reconstructed "
+            "B_z carries ~74 % RMS error that does not converge under refinement. "
+            "Use order=2.")
     from radia.axifem import H1Henrotte
     fes = H1Henrotte(mesh, order=order, dirichlet=dirichlet)
     u, v = fes.TnT()
