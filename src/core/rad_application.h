@@ -250,6 +250,7 @@ public:
 	int SetPolyhedron1(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfNumOfPoInFaces, int lenArrayOfFaces, double* Magn, double* arM_LinCoef=0, double* J=0, double* arJ_LinCoef=0, const char** OptionNames=0, const char** OptionValues=0, int OptionCount=0);
 	int SetPolyhedron2(TVector3d** ArrayOfFaces, int* ArrayOfNumOfPoInFaces, long lenArrayOfFaces, double* Magn, long lenMagn);
 	int SetArcPolygon(double* CenP, const char* OrientStr, TVector2d* ArrayOfPoints2d, long lenArrayOfPoints2d, double* Angles, int NumberOfSegm, const char* SymOrNoSymStr, double* Magn);
+	int SetSolidRevolutionPolyhedron(const TVector3d& CPoiVect, const TVector3d& AxisVect, const TVector3d& AzAxVect0, TVector2d* ArrayOfPoints2d, long lenArrayOfPoints2d, double StartAngle, int NumberOfSegm, double* Magn);
 
 	int SetMultGenExtrPolygon(TVector2d** LayerPolygons, int* PtsNumbersInLayerPgns, double* CoordsZ, int AmOfLayerPolygons, double* Magn, long lenMagn);
 	int SetMultGenExtrPolygonCur(double zc, const char* strOrient, TVector2d* arPoints2d, int lenArPoints2d, double* arSubdData, double*** arPtrTrfParInExtrSteps, char** arStrTrfOrderInExtrSteps, int* arNumTrfInExtrSteps, int NumSteps, double avgCur, double* arMagnCompInSteps, const char** arOptionNames=0, const char** arOptionValues=0, int numOptions=0);
@@ -347,6 +348,7 @@ public:
 	int GetLoopBasis(int InteractElemKey, double* pL, int* pNLoop, int* pDOF);  // yano-MSC cell-graph cycle (loop) basis
 	int GetFaceGeom(int InteractElemKey, double* pG, int* pDOF);  // per-DOF hex face geometry (area/centroid/normal/elem-center)
 	int GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF);  // per-hex centroid demag field+gradient functionals (moment formulation kernel)
+	int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF);  // moment-yano system matrix + rhs (Step-1 verification of the EIEM2->moment upgrade)
 	double HLUTestOnHACApK(int InteractElemKey);  // Phase 4: H-LU smoke test on real HACApK tree (returns max rel err vs MatVec round-trip)
 	int HLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out);  // Phase 4 debug: materialize post-convert tree
 	void ShowInteractVector(int InteractElemKey, char* FieldVectID);

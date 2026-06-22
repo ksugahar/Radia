@@ -1099,6 +1099,37 @@ int radTApplication::GetCentroidFieldGrad(int InteractElemKey, double* pC, int* 
 
 //-------------------------------------------------------------------------
 
+int radTApplication::BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF)
+{
+	// Moment-yano system matrix A (dof x dof, ROW-MAJOR) + rhs (dof) for uniform linear chi + uniform Happ.
+	// Two-call pattern: pA=nullptr -> read back dof; then allocate dof*dof + dof and call again to fill.
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
+
+		int totalDOF = InteractPtr->GetTotalDOF();
+		if(pDOF) *pDOF = totalDOF;
+
+		if(pA != nullptr && pRhs != nullptr && totalDOF > 0)
+		{
+			std::vector<double> A, rhs;
+			InteractPtr->BuildMomentSystem(chi, Happ, A, rhs);
+			std::memcpy(pA, A.data(), (size_t)totalDOF * totalDOF * sizeof(double));
+			std::memcpy(pRhs, rhs.data(), (size_t)totalDOF * sizeof(double));
+		}
+		return 1;
+	}
+	catch (...)
+	{
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
 int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
 {
 #ifdef RADIA_USE_HACAPK

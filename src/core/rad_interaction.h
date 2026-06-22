@@ -524,6 +524,12 @@ public:
 	// Cflat is ROW-MAJOR (nHex x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
 	// -> Cflat[(h*9+k)*m_totalDOF + g].  H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.  See .cpp.
 	void BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const;
+	// MOMENT-yano system matrix (parameter-free upgrade of EIEM2): per hex (6 face-charge DOF) assemble
+	// 3 dipole + 1 monopole + 2 diagonal-quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
+	// (global field/grad from BuildCentroidFieldGrad, local moments from the hex geometry).  Rows 2-norm
+	// normalized.  A row-major (dof x dof), rhs length dof.  Uniform linear chi + uniform applied field Happ
+	// (Step-1 verification path vs examples/vim moment prototype; hex-only).
+	void BuildMomentSystem(double chi, const double Happ[3], std::vector<double>& A, std::vector<double>& rhs) const;
 	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
