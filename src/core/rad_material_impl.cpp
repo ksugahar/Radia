@@ -1818,8 +1818,8 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// is routed to the FEEC HDiv-VIM by the Python rad.Solve wrapper BEFORE reaching this C++ path
 		// (unless demag_backend='yano' forces yano on it).  Tet (MMM) and permanent magnets are unaffected.
 
-		// MOMENT-yano dispatch (g_yano_moment, default ON): the parameter-free MOMENT formula
-		// (BuildMomentSystemCore) is the default for surface-charge soft iron -- hex (6 DOF) AND wedge (5 DOF,
+		// MOMENT-yano dispatch (UNCONDITIONAL since Phase 3b-1): the parameter-free MOMENT formula
+		// (BuildMomentSystemCore) is the SOLE solver for surface-charge soft iron -- hex (6 DOF) AND wedge (5 DOF,
 		// Phase 3a: 3 dipole + 1 monopole + 1 axial quad).  Solver method:
 		//   - method 0 (LU)       -> dense direct moment solve (hex / wedge / mixed).
 		//   - method 1 (BiCGSTAB) -> reroute to LU (dense moment direct solve; medium N).
@@ -1829,12 +1829,15 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		//     wedge/mixed method-2 routes to the dense moment LU until the variable-DOF H-matrix (Phase 3a-2).
 		//     PER-ELEMENT chi: the nonlinear Picard loop re-solves each iteration with the current chi (Inc 4).
 		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Tet (3 DOF =
-		// MMM), other element kinds, and explicit yano_moment=False are NOT -> the EIEM2 collocation path.
+		// MMM) and mixed tet+MSC are NOT -> the EIEM2 collocation path (the only remaining EIEM2 use after the
+		// yano_moment=False opt-out removal, Phase 3b-1; removed with a fail-loud guard in 3b-2).
 		{
-			extern bool g_yano_moment;
 			extern bool g_yano_moment_hacapk;
 			g_yano_moment_hacapk = false;
-			if(g_yano_moment)
+			// moment-yano is UNCONDITIONAL for surface-charge polyhedra (the yano_moment=False opt-out was
+			// removed in Phase 3b-1).  EIEM2 now runs ONLY for mixed tet+MSC models (the allMoment check below
+			// fails when a tet is present -> the EIEM2 collocation path; that path is removed in 3b-2 with a
+			// fail-loud guard, as no production case mixes surface-charge + dipole soft iron in one demag solve).
 			{
 				radThg hgMom;
 				if(ValidateElemKey(InteractElemKey, hgMom))

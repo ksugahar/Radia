@@ -1,18 +1,18 @@
-"""Golden lock for the moment-yano upgrade (Steps 3-4, 2026-06-22): the parameter-free MOMENT formula
-(BuildMomentSystemCore) is the DEFAULT for pure 6-DOF hexahedral soft-iron demag, solved by the direct
-dense solver, with a method dispatch in SolveGen:
+"""Golden lock for moment-yano (Steps 3-4 + Phase 2-3, 2026-06-22): the parameter-free MOMENT formula
+(BuildMomentSystemCore) is the SOLE surface-charge soft-iron demag (hex 6-DOF + wedge 5-DOF).  The EIEM2
+collocation kernel and its `yano_moment=False` opt-out were removed (Phase 3b).  Method dispatch in SolveGen:
 
-  - default        : rad.SolverConfig()["yano_moment"] is True.
   - method 0 (LU)  : moment, physical (cube demag ~1/3 -> M_z ~ 3*H0).
   - method 1 (BiCG): reroutes to the dense moment LU -> bit-identical M to method 0.
   - method 2 (HACApK): the scalable moment H-matrix + block-Jacobi BiCGSTAB (Phase-2 Inc 3) -- solves the
-    moment system (no longer Error204) and == method 0; LINEAR and NONLINEAR (per-element chi, Inc 4), with
-    O(N log N) storage (no dense interaction/base/system matrix, Inc 4 -- see bench_moment_storage_scaling.py).
+    moment system and == method 0; LINEAR and NONLINEAR (per-element chi, Inc 4), with O(N log N) storage
+    (no dense interaction/base/system matrix, Inc 4 -- see bench_moment_storage_scaling.py).
   - IMA (image=)   : moment-capable (BuildCentroidFieldGrad adds the mirror images) -> reproduces explicit full.
-  - opt-out        : yano_moment=False -> EIEM2 collocation (close to moment externally).
+  - wedge (5-DOF)  : moment 5-row axial-quad (Phase 3a); hex+wedge mixed via the dense moment path.
 
-These lock the Step-3 default flip + the Step-4 dispatch + the Phase-2 H-matrix path so a future change cannot
-silently break them.  Self-contained (mesh-less ObjHexahedron + MatLin/MatSatIsoTab), no NGSolve, fast.
+These lock the Step-3 default flip + the Step-4 dispatch + the Phase-2 H-matrix path + the Phase-3 wedge
+extension so a future change cannot silently break them.  Self-contained (mesh-less ObjHexahedron / ObjWedge
++ MatLin/MatSatIsoTab), no NGSolve, fast.
 """
 import numpy as np
 import pytest
@@ -24,13 +24,13 @@ H0 = 1000.0
 
 @pytest.fixture(autouse=True)
 def _clean():
-    rad.UtiDelAll(); rad.set_demag_backend("auto"); rad.SolverConfig(yano_moment=True)
+    rad.UtiDelAll(); rad.set_demag_backend("auto")
     yield
-    rad.SolverConfig(yano_moment=True); rad.set_demag_backend("auto"); rad.UtiDelAll()
+    rad.set_demag_backend("auto"); rad.UtiDelAll()
 
 
-def _cube_Mz(method, moment, image=None, L=0.01, center=(0.0, 0.0, 0.0)):
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=bool(moment))
+def _cube_Mz(method, image=None, L=0.01, center=(0.0, 0.0, 0.0)):
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     cx, cy, cz = center
     v = [[cx - L, cy - L, cz - L], [cx + L, cy - L, cz - L], [cx + L, cy + L, cz - L], [cx - L, cy + L, cz - L],
          [cx - L, cy - L, cz + L], [cx + L, cy - L, cz + L], [cx + L, cy + L, cz + L], [cx - L, cy + L, cz + L]]
@@ -43,21 +43,17 @@ def _cube_Mz(method, moment, image=None, L=0.01, center=(0.0, 0.0, 0.0)):
     return np.asarray(rad.ObjM(h)["magnetization"], float)
 
 
-def test_moment_is_default():
-    assert rad.GetSolverConfig().get("yano_moment") is True
-
-
 def test_moment_cube_physical():
     """method 0 moment: a cube in uniform Hz magnetizes with demag ~1/3 -> M_z ~ 3*H0, transverse ~ 0."""
-    M = _cube_Mz(0, moment=True)
+    M = _cube_Mz(0)
     assert 2.0 * H0 < M[2] < 4.0 * H0, f"moment cube M_z={M[2]:.1f} not ~3*H0"
     assert abs(M[0]) < 0.05 * abs(M[2]) and abs(M[1]) < 0.05 * abs(M[2])
 
 
 def test_method1_bicgstab_reroutes_to_moment_lu():
     """method 1 (BiCGSTAB) is rerouted to the dense moment LU -> bit-identical to method 0."""
-    M0 = _cube_Mz(0, moment=True)
-    M1 = _cube_Mz(1, moment=True)
+    M0 = _cube_Mz(0)
+    M1 = _cube_Mz(1)
     assert np.linalg.norm(M1 - M0) <= 1e-9 * max(np.linalg.norm(M0), 1.0), f"M1={M1} != M0={M0}"
 
 
@@ -65,8 +61,8 @@ def test_method2_hacapk_solves_via_hmatrix():
     """method 2 (HACApK H-matrix + block-Jacobi BiCGSTAB, Phase-2 Increment 3) now SOLVES the moment system
     (no longer raises Error204) and == method 0 (dense LU).  Single cube: the 6x6 block-Jacobi is the exact
     local inverse so BiCGSTAB converges immediately."""
-    M0 = _cube_Mz(0, moment=True)
-    M2 = _cube_Mz(2, moment=True)
+    M0 = _cube_Mz(0)
+    M2 = _cube_Mz(2)
     assert np.all(np.isfinite(M2)) and np.linalg.norm(M2) > 1e-6
     rel = np.linalg.norm(M2 - M0) / max(np.linalg.norm(M0), 1e-30)
     assert rel < 1e-3, f"method2 H-BiCGSTAB M={M2} != method0 M={M0} (rel {rel:.2e})"
@@ -79,7 +75,7 @@ def test_method2_hacapk_multihex_external_field():
     MU0 = 4e-7 * np.pi; mu_r = 200.0; L = 0.01
 
     def solve_extB(method):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True, bicgstab_tol=1e-9)
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
         objs = []
         for iz in range(2):
             for ix in range(3):
@@ -114,7 +110,7 @@ def test_method2_nonlinear_matches_method0():
     Msat = 2.15 / MU0
 
     def solve(method):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True, bicgstab_tol=1e-9)
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
         objs = []
         for iz in range(2):
             for ix in range(3):
@@ -155,7 +151,7 @@ def test_wedge_moment_matches_hex_externally():
     wB = [[L, 0, 0], [L, L, 0], [0, L, 0], [L, 0, L], [L, L, L], [0, L, L]]      # upper-right triangle prism
 
     def solve(build, method):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True, bicgstab_tol=1e-9)
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
         objs = build()
         for o in objs:
             rad.MatApl(o, rad.MatLin(1000.0))
@@ -192,7 +188,7 @@ def test_mixed_hex_wedge_moment():
                 [[L, 0, z0], [L, L, z0], [0, L, z0], [L, 0, z0+L], [L, L, z0+L], [0, L, z0+L]]]
 
     def solve(mixed):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True, bicgstab_tol=1e-9)
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
         objs = [rad.ObjHexahedron(hx(0.0), [0, 0, 0])]
         objs += ([rad.ObjWedge(w, [0, 0, 0]) for w in wg(L)] if mixed else [rad.ObjHexahedron(hx(L), [0, 0, 0])])
         for o in objs:
@@ -228,7 +224,7 @@ def _ima_boxes_half():
 
 
 def _ima_solve(boxes, Happ, image):
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron(b, [0, 0, 0]) for b in boxes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(200.0))
@@ -259,7 +255,7 @@ def test_moment_entry_reproduces_system():
     via MomentSystemEntry) reproduces the moment system: (1) re-normalizing A_raw's rows == the normalized
     BuildMomentSystem A (machine precision); (2) the UN-normalized A_raw solves to the SAME magnetization
     (the row 2-norm is a diagonal scaling -> direct solve invariant -- the premise the H-LU path rests on)."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     mu_r = 50.0; chi = mu_r - 1.0; L = 0.01
     objs = []                                          # 2x2x1 grid of hexes (mutual + local entries to test)
     for ix in range(2):
@@ -290,7 +286,7 @@ def test_moment_hmatrix_matvec_equals_dense():
     reproduces the dense A_raw matvec.  MomentHMatrixProbe builds the H-matrix + compares H-matvec(x) to
     dense A_raw @ x.  (Compression-at-scale -- n_lowrank/compression growing with N -- is exercised in
     C:/temp/verify_moment_hmatrix.py on the larger C-yoke; here we lock matvec correctness.)"""
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     mu_r = 200.0; chi = mu_r - 1.0; L = 0.01
     objs = []                                          # 3x3x2 grid of hexes (some off-diagonal structure)
     for iz in range(2):
@@ -322,7 +318,7 @@ def test_moment_nonlinear_picard_matches_linear_in_linear_regime():
     v = [[-L, -L, -L], [L, -L, -L], [L, L, -L], [-L, L, -L], [-L, -L, L], [L, -L, L], [L, L, L], [-L, L, L]]
 
     def solve(make_mat):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True)
+        rad.UtiDelAll(); rad.set_demag_backend("yano")
         h = rad.ObjHexahedron(v, [0, 0, 0]); rad.MatApl(h, make_mat())   # build material AFTER UtiDelAll
         rad.Solve(rad.ObjCnt([h, rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H_app])]), 1e-8, 500, 0)
         return rad.ObjM(h)["magnetization"][2]
