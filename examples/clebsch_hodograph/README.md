@@ -1047,6 +1047,46 @@ exactly the answer to "make the nonlinear end pack isochronous": the **same**
 saturated-reshape + complementary-bracket machinery, retargeted from
 `k = const` (constant tune) to `k_iso(r)` (constant time).
 
+### `leaf_coupling_perturbation_3d.py` — when can you foliate the body in 2-D and treat the ends as a perturbation?
+
+The "foliate-and-perturb" program for quasi-2-D magnets: slice the 3-D magnet
+into 2-D `(x,z)` **leaves** along the beam `y`, **stack** the 2-D cross-section
+solution (0th order), and **connect** adjacent leaves by a beam-direction
+**perturbation** (1st order). This only pays off if the inter-leaf coupling is
+small and localised to the ends. This example **measures** that on a real
+finite-length C-frame dipole (reduced-Ω + CoilBuilder, geometry parametrised by
+the iron length `L` so the aspect ratio `L/gap` can be swept). For a straight,
+constant-gap magnet the **body slice y=0 IS the 2-D infinite-long leaf**, so:
+
+- `delta(y)` = `‖B⊥(·,y) − B⊥(·,body)‖ / ‖B⊥(·,body)‖` = the **0th-order
+  leaf-stacking error** (~0 in the body, grows at the ends);
+- `eps(y)` = `(g/2)|∂Bz/∂y| / |Bz_body|` = the **local perturbation parameter**
+  (transverse/beam-variation scale ratio; not an operator-norm ratio, which is
+  trapped at 1 by `∇⊥² = −∂²/∂y²` in current-free air);
+- `fringe_excess` = `(L_eff − L_iron)/L_iron` = the integrated **1st-order
+  (inter-leaf) correction**.
+
+**The result (the headline): the leaf coupling decays as ~ `gap/L`** — a log-log
+fit of the fringe excess vs aspect ratio gives slope **−0.95** (≈ −1):
+
+| L/gap | 2 | 3 | 5 | 8 |
+|---|---|---|---|---|
+| fringe excess | +180% | +111% | +70% | +48% |
+
+So a **compact** magnet (the lab's deliberately-short end-study dipole, `L/gap=3`)
+is firmly **non-perturbative** (+111% fringe, the 0th-order stack misses ~40%,
+the 3-D-ness is *not* end-localised); foliate-and-perturb lands only for **long**
+magnets, with the fringe dropping to ~10% near `L/gap ≈ 40` (typical beamline
+dipole). Figure `leaf_coupling_perturbation_3d_sweep.png` (left: fringe vs
+`L/gap` log-log with the `gap/L` line; right: body leaf-stacking error vs length),
+data `leaf_coupling_perturbation_3d_sweep.json`. Golden
+`test_leaf_coupling_perturbation_3d`. *(Honest scope: this measures the SCALING
+of the BARE-end 3-D-ness; an **equipotential-following** end (§3.2 `z_p(y)` /
+Delferriere `r(z)=Δ(½−z/L)^{1/n}`) removes the fringe's HARMONIC contamination —
+not the fringe itself (the integrated `L_eff>L_iron` is a free-space effect, the
++180→+48% in the table above) — which is the next rung: foliate the body in 2-D,
+follow the beam-referenced equipotential surface at the ends.)*
+
 ## Run
 
 ```bash
@@ -1071,6 +1111,7 @@ python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function l
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
 python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 sat, --step3 reshape, --pullback no-remesh, --iso isochronous end pack; --fig)
+python leaf_coupling_perturbation_3d.py       # foliate-and-perturb: leaf-coupling ~ gap/L, when can the body be 2-D + ends a perturbation (--sweep aspect ratio; --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
