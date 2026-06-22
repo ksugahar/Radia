@@ -60,7 +60,6 @@ def _norm(row, rhs):
 def moment_yano(hexes, Happ):
     """moment formulation, assembled from the C++ rad.GetCentroidFieldGrad accessor."""
     rad.UtiDelAll(); rad.set_demag_backend("yano")
-    rad.SolverConfig(yano_pyramid_cloud=False, yano_no_center_charge=False, yano_eval_alpha=0.5)
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R))
@@ -95,7 +94,7 @@ def moment_yano(hexes, Happ):
     sigma = np.linalg.solve(A, b)                # A is non-singular -> NO loop deflation (deflating breaks
     m = np.array([np.sum(sigma * area * (fc[:, k] - ecen[:, k])) for k in range(3)])  # the per-element constitutive)
     cond = float(np.linalg.cond(A))
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return m, cond, n_el, dof
 
 
@@ -107,7 +106,7 @@ def _moment_vec_solve(objs, cents, vols, Happ):
 
 
 def eiem2_yano(hexes, Happ):
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=-1.0)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R))
@@ -117,7 +116,7 @@ def eiem2_yano(hexes, Happ):
 
 
 def mmm_ref(hexes, Happ):
-    rad.UtiDelAll(); rad.set_demag_backend("auto"); rad.SolverConfig(yano_eval_alpha=-1.0)
+    rad.UtiDelAll(); rad.set_demag_backend("auto")
     objs, cents, vols = [], [], []
     for V in hexes:
         c = [list(v) for v in V]

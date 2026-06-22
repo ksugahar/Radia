@@ -52,7 +52,7 @@ def _norm(row, rhs):
 
 def build(hexes, Happ, mu_r, nxy):
     chi = mu_r - 1.0
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(mu_r))
@@ -84,7 +84,7 @@ def build(hexes, Happ, mu_r, nxy):
     gi = np.clip(((ecen_el[:, 0] + 0.06) / dxy).astype(int), 0, nxy - 1)
     gj = np.clip(((ecen_el[:, 1] + 0.06) / dxy).astype(int), 0, nxy - 1)
     gk = np.clip(((ecen_el[:, 2] + 0.02) / dz).astype(int), 0, nz - 1)
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return A, b, row_of, dof, n_el, gi, gj, gk
 
 

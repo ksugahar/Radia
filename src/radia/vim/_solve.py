@@ -3,9 +3,9 @@
 `hdiv_demag_solve(mesh, mu_r=.., H_ext=..)`           -- LINEAR soft iron (scalar mu_r), and
 `hdiv_demag_solve(mesh, bh_table=.., H_ext=..)`       -- NONLINEAR soft iron (real BH table),
 
-the candidate replacement for the yano-type MSC hex/wedge soft-iron demag in `rad.Solve`.  Both modes
-take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunction -- e.g. a coil's Biot-Savart
-field `rad.RadiaField(coil,'h')`, the C-type electromagnet driver) and return per-element M.
+the FEEC/HDiv counterpart to the moment-yano MSC hex/wedge/pyramid soft-iron demag in `rad.Solve`.
+Both modes take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunction -- e.g. a coil's
+Biot-Savart field `rad.RadiaField(coil,'h')`, the C-type electromagnet driver) and return per-element M.
 
 ## Formulation (verified-first, 2026-06-15)
 ONE projected weak form everywhere -- the magnetization M is the RT0 primary, the constitutive law
