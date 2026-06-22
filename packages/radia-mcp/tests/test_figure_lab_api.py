@@ -15,7 +15,7 @@ matplotlib.use("Agg")
 
 from radia_mcp.figure import (
     lab_figure, save_lab_figure, legend_no_overlap, audit_tex_figures,
-    scaling_loglog, bh_curve,
+    audit_label_overflow, scaling_loglog, bh_curve,
 )
 
 
@@ -96,6 +96,60 @@ def test_audit_flags_height_linewidth_and_missing(tmp_path):
     assert by["c"]["fixed_cm_width"] is True
     # all three referenced files are absent -> each flagged (FILE NOT FOUND)
     assert rep["n_flagged"] == 3
+
+
+# ------------------------------------------------------------------
+# label-overflow lint (margins too tight -> xlabel / ylabel clipped)
+# ------------------------------------------------------------------
+def test_audit_label_overflow_detects_clipped_axis_labels():
+    """A full-bleed axes (position [0,0,1,1]) pushes the x- and y-labels off the canvas; the lint flags
+    both with a positive overhang -- no Times New Roman needed (pure matplotlib)."""
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(3, 2))
+    ax.set_position([0.0, 0.0, 1.0, 1.0])
+    ax.plot([0, 1], [0, 1]); ax.set_xlabel("a long x axis label"); ax.set_ylabel("a long y axis label")
+    rep = audit_label_overflow(fig, include_ticklabels=False)
+    wheres = {r["where"] for r in rep}
+    assert "xlabel" in wheres and "ylabel" in wheres, rep
+    assert all(r["overhang_pt"] > 0 for r in rep)
+    plt.close(fig)
+
+
+def test_audit_label_overflow_clean_when_roomy():
+    """With a normal layout that reserves room for the labels, the axis-label lint is clean."""
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax.plot([0, 1], [0, 1]); ax.set_xlabel("x"); ax.set_ylabel("y")
+    fig.subplots_adjust(left=0.2, bottom=0.2, right=0.95, top=0.95)
+    assert audit_label_overflow(fig, include_ticklabels=False) == []
+    plt.close(fig)
+
+
+def test_save_lab_figure_raises_on_unfixable_clip(tmp_path):
+    """With tighten=False (no back-off) a hand-forced full-bleed axes clips the labels -> the save gate
+    fails LOUD rather than ship a clipped figure (pure matplotlib, no TNR request)."""
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(3, 2))
+    ax.set_position([0.0, 0.0, 1.0, 1.0])
+    ax.plot([0, 1], [0, 1]); ax.set_xlabel("clipped x label"); ax.set_ylabel("clipped y label")
+    with pytest.raises(ValueError, match="overflow the figure canvas"):
+        save_lab_figure(fig, str(tmp_path / "clip"), 8.0, save_pdf=False, tighten=False)
+    plt.close(fig)
+
+
+@requires_tnr
+def test_save_lab_figure_backs_off_clipped_label(tmp_path):
+    """The exact Rac/Rdc figure whose xlabel auto_tighten(0.80) clipped at the bottom edge: the back-off
+    (re-run tight_layout, figure size unchanged) reserves the room so the gate passes -- the
+    '余白を攻めすぎ' bottom clip never ships."""
+    import numpy as np
+    fig, ax = lab_figure(8.5, aspect=0.66)
+    ax.semilogx(np.logspace(3, 6, 60), np.linspace(1.0, 2.5, 60), label="solid")
+    ax.set_xlabel("frequency  $f$  (Hz)")
+    ax.set_ylabel(r"$R_\mathrm{AC}/R_\mathrm{DC}$  (per strand)")
+    ax.legend()
+    info = save_lab_figure(fig, str(tmp_path / "rac"), 8.5, save_pdf=False, save_png=True)
+    assert info["gates"] == "passed" and os.path.isfile(str(tmp_path / "rac.png"))
 
 
 # ------------------------------------------------------------------

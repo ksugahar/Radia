@@ -1,10 +1,8 @@
 """radia_mcp.figure — Sugahara Lab publication-figure toolkit.
 
-Promoted on 2026-05-26 from
-  s:/mcp-server/src/mcp_server_document/graph/
-into radia-mcp as a standalone subpackage following the
-`radia_mcp.<topic>.server` pattern (statusable, --selftest-able,
-discoverable via the meta catalog).
+Promoted on 2026-05-26 from LAB-private figure tooling into radia-mcp as
+a standalone subpackage following the `radia_mcp.<topic>.server` pattern
+(statusable, --selftest-able, discoverable via the meta catalog).
 
 Two MCP tools:
   - figure_style_guide(target='all'|'paper_single_column'|...)
@@ -13,6 +11,9 @@ Two MCP tools:
   - figure_size_for_target(target, embed_width_cm)
         Compute Matplotlib/MATLAB figure size and font sizes that
         will display correctly when embedded at the given column width.
+  - figure_tikz_recipe(query, target)
+        TikZ / PGFPlots drawing templates and review rules for
+        paper-ready schematics, data axes, and MATLAB export.
 
 Python callable helpers (importable; NOT MCP tools):
   - lab_figsize / apply_lab_style / lab_savefig
@@ -91,6 +92,7 @@ from ._lab_api import (  # noqa: F401
     save_lab_figure,
     legend_no_overlap,
     audit_tex_figures,
+    audit_label_overflow,
     _assert_times_new_roman,
 )
 
