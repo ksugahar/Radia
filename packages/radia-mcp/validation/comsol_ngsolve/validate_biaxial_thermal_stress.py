@@ -14,7 +14,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -26,8 +26,7 @@ from radia_mcp.radia_ngsolve.elasticity import (solve_linear_elasticity, stress_
 L, E, nu, alpha, dT = 0.05, 200e9, 0.30, 12e-6, 50.0
 
 
-@pytest.mark.xval
-def test_biaxial_thermal_stress_plane_stress():
+def validate_biaxial_thermal_stress_plane_stress():
     plate = MoveTo(0, 0).Rectangle(L, L).Face(); plate.faces.name = "plate"
     for e in plate.edges:
         e.name = "fix"
@@ -46,5 +45,5 @@ def test_biaxial_thermal_stress_plane_stress():
 
 
 if __name__ == "__main__":
-    test_biaxial_thermal_stress_plane_stress()
+    validate_biaxial_thermal_stress_plane_stress()
     print("[OK] biaxial (plane-stress) thermal stress validated.")

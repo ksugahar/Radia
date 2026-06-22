@@ -14,7 +14,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -27,8 +27,7 @@ L, h = 0.10, 0.004
 E, nu, alpha, dT = 70e9, 0.33, 23e-6, 50.0
 
 
-@pytest.mark.xval
-def test_thermal_bending_cantilever():
+def validate_thermal_bending_cantilever():
     beam = MoveTo(0, 0).Rectangle(L, h).Face(); beam.faces.name = "beam"
     beam.edges.Min(X).name = "clamp"; beam.edges.Max(X).name = "tip"
     mesh = Mesh(OCCGeometry(beam, dim=2).GenerateMesh(maxh=h / 3))
@@ -45,5 +44,5 @@ def test_thermal_bending_cantilever():
 
 
 if __name__ == "__main__":
-    test_thermal_bending_cantilever()
+    validate_thermal_bending_cantilever()
     print("[OK] thermal bending (bimorph curvature) validated.")

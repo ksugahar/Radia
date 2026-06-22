@@ -8,6 +8,8 @@ Run a validation script directly:
 
 ```bash
 python validation/age/validate_age_nonlinear_saturation.py
+python validation/comsol_ngsolve/validate_carter.py
+python validation/force/validate_force_xval.py
 ```
 
 Validation scripts may run real FEM solves, compare against brute-force

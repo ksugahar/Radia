@@ -23,7 +23,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -66,8 +66,7 @@ def _inductance(a, b):
         return inductance_2d(A, mesh, "coilpos", "coilneg", NTURNS, CURRENT, depth=DEPTH)
 
 
-@pytest.mark.xval
-def test_ldlq_saliency():
+def validate_ldlq_saliency():
     Ld = _inductance(A_LONG, A_SHORT)
     Lq = _inductance(A_SHORT, A_LONG)
     print(f"[Ld/Lq] radia Ld={Ld:.4e} Lq={Lq:.4e} (Ld/Lq={Ld/Lq:.3f}) | "
@@ -80,5 +79,5 @@ def test_ldlq_saliency():
 
 
 if __name__ == "__main__":
-    test_ldlq_saliency()
+    validate_ldlq_saliency()
     print("[OK] Ld/Lq saliency validated against the reference.")

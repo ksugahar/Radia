@@ -34,38 +34,3 @@ def test_rectangular_cutoff_closed_form():
     # wavenumber round-trip: f = c kc/2pi
     kc = 2 * math.pi * f11 / C0
     assert math.isclose(cutoff_frequency(kc), f11, rel_tol=1e-12)
-
-
-@pytest.mark.xval
-def test_waveguide_eigenmodes_fe():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    from ngsolve import Mesh, TaskManager
-    from netgen.occ import OCCGeometry, MoveTo
-    from radia_mcp.radia_ngsolve.waveguide import helmholtz_cutoff_wavenumbers_2d
-
-    face = MoveTo(0, 0).Rectangle(A, B).Face()
-    face.edges.name = "wall"
-    mesh = Mesh(OCCGeometry(face, dim=2).GenerateMesh(maxh=min(A, B) / 16))
-
-    with TaskManager():
-        te = helmholtz_cutoff_wavenumbers_2d(mesh, 3, bc="neumann")     # TE10, TE20, TE01
-        tm = helmholtz_cutoff_wavenumbers_2d(mesh, 2, bc="dirichlet")   # TM11, TM21
-
-    # TE (Neumann) spectrum matches the closed form; the constant null mode is dropped
-    for kc, (m, n) in zip(te, [(1, 0), (2, 0), (0, 1)]):
-        assert math.isclose(cutoff_frequency(kc), rectangular_waveguide_cutoff(A, B, m, n),
-                            rel_tol=3e-3)
-    # TM (Dirichlet) spectrum matches; lowest TM11 lies ABOVE every TE mode here
-    for kc, (m, n) in zip(tm, [(1, 1), (2, 1)]):
-        assert math.isclose(cutoff_frequency(kc), rectangular_waveguide_cutoff(A, B, m, n),
-                            rel_tol=3e-3)
-    assert cutoff_frequency(tm[0]) > cutoff_frequency(te[-1])           # TM11 > TE01
-    # the BC distinction is the physics: dominant mode is TE10 = c/(2a), no TM below it
-    assert math.isclose(cutoff_frequency(te[0]), C0 / (2 * A), rel_tol=3e-3)
-
-
-if __name__ == "__main__":
-    test_rectangular_cutoff_closed_form()
-    test_waveguide_eigenmodes_fe()
-    print("[OK] waveguide cutoff: TE=Neumann / TM=Dirichlet Laplacian eigenvalues == exact spectrum.")

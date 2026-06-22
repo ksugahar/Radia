@@ -14,7 +14,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -27,8 +27,7 @@ E, nu, dT = 70e9, 0.33, 50.0
 a1, a2 = 10e-6, 23e-6
 
 
-@pytest.mark.xval
-def test_bimetallic_strip_curvature():
+def validate_bimetallic_strip_curvature():
     bot = MoveTo(0, 0).Rectangle(L, h/2).Face(); bot.faces.name = "lay1"
     top = MoveTo(0, h/2).Rectangle(L, h/2).Face(); top.faces.name = "lay2"
     strip = Glue([bot, top]); strip.edges.Min(X).name = "clamp"
@@ -46,5 +45,5 @@ def test_bimetallic_strip_curvature():
 
 
 if __name__ == "__main__":
-    test_bimetallic_strip_curvature()
+    validate_bimetallic_strip_curvature()
     print("[OK] bimetallic strip (Timoshenko curvature) validated.")

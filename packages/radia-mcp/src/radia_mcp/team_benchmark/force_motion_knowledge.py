@@ -224,7 +224,7 @@ own Radia (-5..-15 %) and NGSolve A-phi. The steel saturates correctly (pole
 0.59 -> 1.83 T) so the force levels off (8 -> 57 -> 77 -> 81 N, not the ~200 N a
 linear model gives). Newton converges in ~3-5 iters/load-step; CG/BDDC makes each
 solve ~90-130 s (vs 185 s direct, and Picard would be hours). Shipped as the
-@pytest.mark.xval test ``test_team20_static_force`` (coarse NI=1000, ~15 s). This is
+validation case ``validate_team20_static_force`` (coarse NI=1000, ~15 s). This is
 the FLAGSHIP: the radia-ngsolve magnetostatic force path is now validated end-to-end
 against a measured, nonlinear, 3-D benchmark.
 
@@ -363,7 +363,7 @@ B_z_fem = complex(curl(gfA)[2](mesh(0.01, 0.0, 0.0))) + B0
 
 ## Regression test
 
-`tests/test_force_xval.py::test_team6_sphere_eddy`
+`validation/force/validate_force_xval.py::validate_team6_sphere_eddy`
 Pass criterion: |B_z_fem − B_z_ref| < 0.06 T (6 % of B₀)
 
 ## Reference values
@@ -858,7 +858,7 @@ avg |B| in iron: 0.9118 T. All within 2 % of measurement.
 This matches Yano's own SparseCholeski result (1.317 / 1.233 / 0.664 T, 109 s)
 to better than 0.7 %; the formulation is validated.
 
-Shipped as @pytest.mark.xval test ``test_team13_bflux``
+Shipped as validation case ``validate_team13_bflux``
 (10x20 grid, tol=0.10 T, ~2 min, skips if Yano's geometry module unavailable).
 
 ## Lab source

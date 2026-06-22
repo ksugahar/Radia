@@ -16,7 +16,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -61,8 +61,7 @@ def _solve_gap(g):
     return F_fe, F_model, g + l_fe/mu_r
 
 
-@pytest.mark.xval
-def test_reluctance_actuator_holding_force():
+def validate_reluctance_actuator_holding_force():
     res = [(_solve_gap(g), g) for g in (0.004, 0.006, 0.009)]
     scaled = []
     for (F_fe, F_model, geff), g in res:
@@ -77,5 +76,5 @@ def test_reluctance_actuator_holding_force():
 
 
 if __name__ == "__main__":
-    test_reluctance_actuator_holding_force()
+    validate_reluctance_actuator_holding_force()
     print("[OK] reluctance-actuator holding force = B^2 A/2mu0, 1/g^2 law validated.")

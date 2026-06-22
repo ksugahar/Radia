@@ -16,7 +16,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -58,8 +58,7 @@ def _jz(I):
     return CoefficientFunction([{"cApos": j0, "cAneg": -j0}.get(m, 0.0) for m in _MATS])
 
 
-@pytest.mark.xval
-def test_incremental_inductance_and_coenergy():
+def validate_incremental_inductance_and_coenergy():
     global _MATS
     mesh = _build(); _MATS = mesh.GetMaterials()
     Is = [0.05, 0.1, 0.2, 0.4, 0.8, 1.6, 3.2]
@@ -86,5 +85,5 @@ def test_incremental_inductance_and_coenergy():
 
 
 if __name__ == "__main__":
-    test_incremental_inductance_and_coenergy()
+    validate_incremental_inductance_and_coenergy()
     print("[OK] incremental inductance + co-energy validated.")
