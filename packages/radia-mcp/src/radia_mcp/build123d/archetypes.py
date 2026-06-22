@@ -23,6 +23,8 @@ import itertools
 import math
 import re
 
+import numpy as np
+
 from build123d import (BuildLine, BuildSketch, Box, Circle, Compound, Cylinder, Helix, Plane, Polyline,
                        Pos, Rectangle, RegularPolygon, Rot, Spline, extrude, make_face, sweep)
 
@@ -32,7 +34,7 @@ __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cyl
            "block_magnet", "halbach_ring", "c_core", "solenoid", "pole_tip", "multipole_yoke",
            "h_dipole", "helmholtz_pair", "cos_theta_dipole", "e_core", "slotted_stator", "spm_rotor",
            "litz_packing_radius", "litz_fill_factor", "litz_wire", "hierarchical_litz",
-           "rectangular_litz"]
+           "rectangular_litz", "litz_serving"]
 
 
 def magnetization_tag(name, index, angle_deg):
@@ -312,7 +314,60 @@ def _superposed_centerline(levels, indices, length, n):
     return pts
 
 
-def litz_wire(n_strands, strand_radius, bundle_radius, length, pitch, name="litz", strand_section=None):
+def _rmf(C):
+    r"""Rotation-minimizing frame ``(U, V)`` along a sampled space curve ``C`` (``(m, 3)`` array) by the
+    **double-reflection method** (Wang, Juttler, Zheng & Liu 2008).  ``U``, ``V`` span the normal plane at
+    each sample with NO torsion-induced spin (unlike a Frenet frame), so an offset carried in ``(U, V)``
+    stays perpendicular to the curve and free of spurious twist -- the right frame for carrying an inner
+    Litz orbit on its parent strand-bundle curve."""
+    C = np.asarray(C, float)
+    m = len(C)
+    T = np.zeros((m, 3))
+    T[1:-1] = C[2:] - C[:-2]
+    T[0] = C[1] - C[0]
+    T[-1] = C[-1] - C[-2]
+    T /= np.linalg.norm(T, axis=1, keepdims=True)
+    seed = np.array([1.0, 0.0, 0.0]) if abs(T[0, 0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    U = np.zeros((m, 3))
+    V = np.zeros((m, 3))
+    U[0] = np.cross(T[0], seed)
+    U[0] /= np.linalg.norm(U[0])
+    V[0] = np.cross(T[0], U[0])
+    for k in range(m - 1):
+        v1 = C[k + 1] - C[k]
+        c1 = v1 @ v1
+        r_l = U[k] - (2.0 / c1) * (v1 @ U[k]) * v1
+        t_l = T[k] - (2.0 / c1) * (v1 @ T[k]) * v1
+        v2 = T[k + 1] - t_l
+        c2 = v2 @ v2
+        r_next = r_l - (2.0 / c2) * (v2 @ r_l) * v2
+        U[k + 1] = r_next / np.linalg.norm(r_next)
+        V[k + 1] = np.cross(T[k + 1], U[k + 1])
+    return U, V
+
+
+def _carried_centerline(levels, indices, length, n):
+    r"""Centreline of one hierarchical-Litz strand built by **carrying** each inner orbit in the
+    rotation-minimizing frame of its parent curve (the geometrically faithful coiled-coil, as opposed to
+    the lab-frame :func:`_superposed_centerline`).  Starting from the cable axis, level ``l`` adds an
+    offset ``radius_l (cos theta * U + sin theta * V)`` with ``theta = 2*pi*z/pitch_l + 2*pi*idx_l/count_l``
+    and ``(U, V)`` the parent's :func:`_rmf`; the offset is therefore perpendicular to the local parent
+    tangent everywhere (additive superposition keeps the orbit plane horizontal instead)."""
+    zs = np.linspace(0.0, length, n + 1)
+    C = np.column_stack([np.zeros(n + 1), np.zeros(n + 1), zs])
+    U = np.tile([1.0, 0.0, 0.0], (n + 1, 1))
+    V = np.tile([0.0, 1.0, 0.0], (n + 1, 1))
+    levels = list(levels)
+    for li, ((count, radius, pitch), idx) in enumerate(zip(levels, indices)):
+        th = 2.0 * np.pi * zs / pitch + 2.0 * np.pi * idx / count
+        C = C + radius * (np.cos(th)[:, None] * U + np.sin(th)[:, None] * V)
+        if li < len(levels) - 1:                      # only need the parent frame for a deeper level
+            U, V = _rmf(C)
+    return [tuple(p) for p in C]
+
+
+def litz_wire(n_strands, strand_radius, bundle_radius, length, pitch, name="litz", strand_section=None,
+              insulation=0.0):
     r"""A **Litz wire**: ``n_strands`` insulated strands twisted together on a bundle of radius
     ``bundle_radius`` with a twist ``pitch`` (axial length per turn), over an axial ``length``.  Each
     strand is a conductor swept along its own helix; the strands are the same helix rotated by
@@ -323,34 +378,74 @@ def litz_wire(n_strands, strand_radius, bundle_radius, length, pitch, name="litz
     Litz is not always round.  Returns a labelled multi-region :class:`~build123d.Compound`
     (``{name}_kk`` per strand) -- each strand a separate conductor region for AC-loss (skin / proximity)
     analysis (PEEC / FE), the whole point of Litz wire.  Use :func:`litz_packing_radius` for the
-    single-layer touching ``bundle_radius`` and :func:`litz_fill_factor` for the copper fill.
+    single-layer touching ``bundle_radius`` and :func:`litz_fill_factor` for the copper fill.  With
+    ``insulation > 0`` each (circular) strand is enamelled: it becomes a copper core ``{name}_kk`` plus a
+    coaxial insulation shell ``{name}_kk_ins`` (a swept annulus of radial thickness ``insulation``), i.e.
+    a flat ``2 * n_strands`` region compound; wrap the whole bundle with :func:`litz_serving`.
     """
     if n_strands < 1:
         raise ValueError("n_strands must be >= 1")
     helix = Helix(pitch=pitch, height=length, radius=bundle_radius)
     sec2d = Circle(strand_radius) if strand_section is None else strand_section
+    if insulation and insulation > 0.0:
+        if strand_section is not None:
+            raise ValueError("insulation is only supported for the default circular strand section")
+        core0 = _sweep_section(helix, Circle(strand_radius))
+        shell0 = _sweep_section(helix, Circle(strand_radius + insulation) - Circle(strand_radius))
+        units = []
+        for k in range(n_strands):
+            ang = 360.0 * k / n_strands
+            core = Rot(0.0, 0.0, ang) * core0
+            core.label = f"{name}_{k:02d}"
+            shell = Rot(0.0, 0.0, ang) * shell0
+            shell.label = f"{name}_{k:02d}_ins"
+            units += [core, shell]
+        return assembly(*units, label=name)
     strand = _sweep_section(helix, sec2d)
     strand.label = "strand"
     return polar_array(strand, n_strands, 360.0, label=name)
 
 
-def hierarchical_litz(levels, strand_radius, length, name="litz", n_axial=160, strand_section=None):
+def litz_serving(inner_radius, thickness, length, name="serving"):
+    r"""A **bundle serving** -- the concentric textile / tape wrap (or outer jacket) around a Litz bundle,
+    modelled as a straight coaxial tube of inner radius ``inner_radius`` (the bundle outer envelope, e.g.
+    ``bundle_radius + strand_radius`` for a single layer, or ``litz_packing_radius(n, rs) + rs``) and
+    radial ``thickness`` over axial ``length``.  Returns a single labelled tube
+    :class:`~build123d.Solid` (volume ``pi * (ro**2 - ri**2) * length``); assemble it with the strands via
+    :func:`~radia_mcp.build123d.modeling.assembly` to get the served bundle."""
+    if inner_radius <= 0 or thickness <= 0:
+        raise ValueError("inner_radius and thickness must be > 0")
+    serv = tube(inner_radius, inner_radius + thickness, length)
+    serv.label = name
+    return serv
+
+
+def hierarchical_litz(levels, strand_radius, length, name="litz", n_axial=160, strand_section=None,
+                      carried=False):
     r"""A **hierarchical (multi-level) Litz** cable -- a *coiled coil* / bundle-of-bundles, the real
     construction of high-strand-count Litz (e.g. ``5x5x5``).  ``levels`` is ``[(count, radius, pitch),
     ...]`` ordered OUTER cabling -> INNER strand orbit; the cable carries ``prod(count)`` strands, one for
-    every combination of per-level indices.  Each strand's centreline is the **additive superposition**
-    (:func:`_superposed_centerline`) of one circular orbit per level -- the analytic idealisation in which
-    the orbits add in the lab frame (not carried / Frenet), matching the closed-form ``sum r_l cos(.)``
-    centreline.  The section defaults to ``Circle(strand_radius)``; override with ``strand_section``.
-    Returns a labelled :class:`~build123d.Compound` (``{name}_ii_jj_..`` per strand), each a separate
-    conductor region.  ``n_axial`` is the centreline sampling (raise for many turns of the finest pitch).
+    every combination of per-level indices.  Two centreline models:
+
+    * ``carried=False`` (default) -- **additive superposition** (:func:`_superposed_centerline`): one
+      circular orbit per level added in the lab frame, the analytic idealisation matching the closed-form
+      ``sum r_l cos(.)`` centreline (orbit planes stay horizontal).
+    * ``carried=True`` -- the **geometrically faithful coiled coil** (:func:`_carried_centerline`): each
+      inner orbit is carried in the rotation-minimizing frame of its parent curve, so the orbit stays
+      perpendicular to the local parent tangent everywhere -- how wire is actually wound on a moving core.
+      (Rotation-minimizing rather than Frenet, to avoid torsion-induced spin of the orbit.)
+
+    The section defaults to ``Circle(strand_radius)``; override with ``strand_section``.  Returns a
+    labelled :class:`~build123d.Compound` (``{name}_ii_jj_..`` per strand), each a separate conductor
+    region.  ``n_axial`` is the centreline sampling (raise for many turns of the finest pitch).
     """
     if not levels:
         raise ValueError("levels must be non-empty")
     sec2d = Circle(strand_radius) if strand_section is None else strand_section
+    builder = _carried_centerline if carried else _superposed_centerline
     strands = []
     for combo in itertools.product(*[range(int(c)) for (c, _, _) in levels]):
-        pts = _superposed_centerline(levels, combo, length, n_axial)
+        pts = builder(levels, combo, length, n_axial)
         strand = _sweep_section(Spline(*pts), sec2d)
         strand.label = name + "_" + "_".join(f"{i:02d}" for i in combo)
         strands.append(strand)
