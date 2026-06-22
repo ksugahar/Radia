@@ -350,6 +350,7 @@ public:
 	int GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF);  // per-hex centroid demag field+gradient functionals (moment formulation kernel)
 	int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF);  // moment-yano system matrix + rhs (Step-1 verification of the EIEM2->moment upgrade)
 	int MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF);  // dense UN-normalized A_raw built ENTRY-BY-ENTRY via MomentSystemEntry (ACA H-matrix entry validation, Phase 2)
+	int MomentHMatrixProbe(int InteractElemKey, double chi, double eps, int leaf, double eta, double* out);  // build A_raw as a HACApK H-matrix + probe H-matvec vs dense; out[8] (Phase 2 Increment 2)
 	double HLUTestOnHACApK(int InteractElemKey);  // Phase 4: H-LU smoke test on real HACApK tree (returns max rel err vs MatVec round-trip)
 	int HLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out);  // Phase 4 debug: materialize post-convert tree
 	void ShowInteractVector(int InteractElemKey, char* FieldVectID);

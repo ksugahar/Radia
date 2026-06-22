@@ -424,6 +424,7 @@ ROW-MAJOR (nHex x 9 x DOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source D
 EXP int CALL RadGetCentroidFieldGrad(double* pC, int* pNHex, int* pDOF, int InteractElemKey);
 EXP int CALL RadBuildMomentSystem(double chi, const double* Happ, double* pA, double* pRhs, int* pDOF, int InteractElemKey);
 EXP int CALL RadMomentSystemDenseRaw(double chi, double* pA, int* pDOF, int InteractElemKey);
+EXP int CALL RadMomentHMatrixProbe(double chi, double eps, int leaf, double eta, double* out, int InteractElemKey);
 
 /** Densify the actual HACApK (ACA+) system operator into a dense matrix.
 Builds the MSC H-matrix for the interaction handle and applies it to unit
