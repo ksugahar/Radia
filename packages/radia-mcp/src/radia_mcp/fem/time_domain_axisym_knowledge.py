@@ -41,7 +41,7 @@ HENROTTE_AXISYM = r"""
 # Henrotte basis for axisymmetric magnetic (★ lab CORE)
 
 Reference: Henrotte 1993 IEEE TMAG axisymmetric — see
-`radia_mcp.radia_ngsolve.axifemm_documentation` and CLAUDE.md
+`radia_mcp.radia_ngsolve.axifem_documentation` and CLAUDE.md
 "Axisymmetric FE: Henrotte for Magnetic, Standard H1 for Scalar".
 
 ## The problem
@@ -89,7 +89,7 @@ convention.
 
 ## Cross-reference
 
-- `radia_mcp.radia_ngsolve.axifemm_documentation` — complete API + examples
+- `radia_mcp.radia_ngsolve.axifem_documentation` — complete API + examples
 - `radia_mcp.mathematica.recipes.HENROTTE` — symbolic derivation
 """
 

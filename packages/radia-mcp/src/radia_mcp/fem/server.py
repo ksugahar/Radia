@@ -10,7 +10,7 @@ circuit coupling, and large-scale + multi-scale (Hollaus MSFEM).
 
 This is the **theory/genealogy** layer.  For code usage:
 - NGSolve API: see `radia_mcp.radia_ngsolve`
-- Axisymmetric: see `radia_mcp.radia_ngsolve.axifemm_documentation`
+- Axisymmetric: see `radia_mcp.radia_ngsolve.axifem_documentation`
 - Hollaus lamination: see `radia_mcp.motor.hollaus_eddy`
 - Solver+preconditioner: see `radia_mcp.matrix_solvers`
 - BEM/MoM: see `radia_mcp.bem`
@@ -377,7 +377,7 @@ def pick_a_fem_formulation(problem_class: str) -> str:
             "   → fem_time_domain_axisym('henrotte_axisym')\n"
             "2. radia.axifem.H1Henrotte\n"
             "3. Standard H1 for scalar T, V, etc. (NOT Henrotte)\n"
-            "4. Code: radia_ngsolve.axifemm_documentation\n"
+            "4. Code: radia_ngsolve.axifem_documentation\n"
         ),
         "open_boundary_static": (
             "Open boundary magnetostatic (★ lab default):\n"
