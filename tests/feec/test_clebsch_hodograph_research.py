@@ -1219,3 +1219,58 @@ def test_leaf_coupling_perturbation_3d():
     r0 = sw["rows"][0]
     assert r0["delta_farend_max"] > 0.3, r0["delta_farend_max"]
     assert r0["delta_body_max"] < 0.15, r0["delta_body_max"]
+
+
+def test_ffag_sector_two_plane():
+    """The two-plane -> 3-D method on the FFAG scaling sector (rung 1, ngsolve
+    only -- no radia).  Plane A (r,z) = the scaling field index; Plane B (s,z) =
+    the sector ENDS.  Locks: Plane A recovers k ~ 5 with a tight A/phi bracket;
+    Plane B's sector ends add ~0.75 g each (L_eff = L_sector + ~1.5 g) so the
+    fringe excess falls as ~ gap/L (the leaf-coupling law on the azimuthal
+    plane, slope ~ -1)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import ffag_sector_two_plane as fs
+    d = fs.design_two_plane(dtheta=0.30)
+    A, C = d["plane_A"], d["compose"]
+    # Plane A: the scaling index is recovered near the design (the naive-pole
+    # droop), and the A/phi bracket is tight (the index is physics, not mesh).
+    assert 4.7 < A["k_interior_mean"] < 5.0, A
+    assert A["k_interior_dev_from_design"] < 0.30, A
+    assert A["bracket_gap_max"] < 1e-5, A
+    # Plane B compose: gap at r0 is g0; the aspect is L_sector / g(r0).
+    assert abs(C["g_r0"] - fs.G0) < 1e-9, C
+    assert abs(C["aspect_L_over_g"] - 3.0) < 1e-6, C            # dtheta 0.3, r0 1, g 0.1
+    # each sector end adds ~0.75 g -> L_eff = L_sector + ~1.5 g -> ~+50% at L/g=3.
+    assert 0.40 < C["fringe_excess"] < 0.60, C
+    # the AZIMUTHAL leaf coupling falls as ~ gap/L (log-log slope near -1).
+    sw = fs.aspect_sweep(dthetas=(0.20, 0.35, 0.60, 1.00))
+    assert sw["monotone_decay"], sw["rows"]
+    assert -1.15 < sw["fringe_vs_aspect_slope"] < -0.80, sw["fringe_vs_aspect_slope"]
+    fr = [row["fringe_excess"] for row in sw["rows"]]
+    assert fr[0] > fr[-1], fr                                   # compact -> more fringe
+    assert fr[0] > 0.5, fr                                      # L/g=2 strongly non-perturbative
+
+
+def test_ffag_sector_two_plane_rung2_3d():
+    """Rung 2: the 3-D REFLECTION.  Revolve the (r,z) scaling gap profile around
+    the sector arc into a 3-D iron pole and forward-solve (iron-pole equipotential
+    drive).  The orbit must see B_z(r) ~ r^k -- the swept g(r) ~ r^(-k) pole
+    reproduces the designed field index in full 3-D.  Cross-checks Plane B's
+    azimuthal end (L_eff > L_sector).  ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import ffag_sector_two_plane as fs
+    r2 = fs.solve_sector_field_index(dtheta=0.30)
+    # the field index is recovered near the design (the naive-pole droop + mesh
+    # scatter); the swept-gap pole gives B_z(r) ~ r^k along the 3-D orbit.
+    assert 4.5 < r2["k_mean"] < 5.2, r2["k_mean"]
+    assert r2["k_min"] > 3.5 and r2["k_max"] < 6.6, (r2["k_min"], r2["k_max"])
+    # the mmf calibration lands the body field near B_design (1 T).
+    assert 0.8 < abs(r2["Bz_body_T"]) < 1.2, r2["Bz_body_T"]
+    # the azimuthal sector ends ADD effective length (the fringe; positive excess,
+    # the same non-perturbative regime as Plane B at L/g=3).
+    assert r2["L_eff_arc"] > r2["L_sector"], (r2["L_eff_arc"], r2["L_sector"])
+    excess = (r2["L_eff_arc"] - r2["L_sector"]) / r2["L_sector"]
+    assert 0.20 < excess < 0.70, excess
+    assert r2["ne"] > 3000, r2["ne"]
