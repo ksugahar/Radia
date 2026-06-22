@@ -401,10 +401,6 @@ public:
 	                                 double sigma, bool flipNormal,
 	                                 const TVector3d& mirrorCenter) const;
 
-	// MscEvalPoint: per-face MSC collocation point = midpoint of FaceCenter[i] and CentrPoint
-	// (alpha = 0.5).  Sampled by radTInteraction::SetupExternFieldArray for the per-face external field.
-	TVector3d MscEvalPoint(int faceIdx) const;
-
 	// 6 DOF MSC setup for hexahedra
 	// IMPORTANT: This relies on Netgen face winding convention for correct normal direction.
 	// No inside/outside check is performed - the normal is computed mechanically from

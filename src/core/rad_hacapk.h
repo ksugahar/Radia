@@ -9,7 +9,7 @@
 *
 *                 Refactored 2026-04-16:
 *                 - RadHACApKBase owns the kernel-agnostic H-matrix lifecycle
-*                 - RadHACApKMSCManager : public RadHACApKBase implements the
+*                 - RadHACApKMMMManager : public RadHACApKBase implements the
 *                   MMM/MSC kernel (tetra/wedge/hex magnetization moments and
 *                   surface charges). A future RadHACApKPEECManager will
 *                   implement Ruehli finite-filament mutual inductance.
@@ -95,7 +95,7 @@ struct RadHACApKStats {
  *     is applied once inside RadHACApKCallback::ComputeEntry)
  *
  * Typical usage:
- *   RadHACApKMSCManager mgr(interaction);
+ *   RadHACApKMMMManager mgr(interaction);
  *   mgr.BuildHMatrix();
  *   mgr.MatVec(x, y);                    // y = A * x
  *   mgr.UpdateDiagonal(new_inv_chi);     // nonlinear iteration update
@@ -246,11 +246,11 @@ private:
 };
 
 //-------------------------------------------------------------------------
-// RadHACApKMSCManager: MMM/MSC kernel (tetra 3DOF, wedge 5DOF, hex 6DOF)
+// RadHACApKMMMManager: MMM/MSC kernel (tetra 3DOF, wedge 5DOF, hex 6DOF)
 //-------------------------------------------------------------------------
 
 /**
- * RadHACApKMSCManager implements the HACApK kernel for Radia's Magnetic
+ * RadHACApKMMMManager implements the HACApK kernel for Radia's Magnetic
  * Moment Method (MMM, tetrahedra, 3 DOF) and Magnetic Surface Charge
  * method (MSC, wedges 5 DOF / hexahedra 6 DOF) element types, including
  * mixed meshes.
@@ -265,10 +265,10 @@ private:
  * pipeline, but the dense BiCGSTAB solver (Method 1) is often faster
  * on small/medium problems. Use HACApK when N > ~1000.
  */
-class RadHACApKMSCManager : public RadHACApKBase {
+class RadHACApKMMMManager : public RadHACApKBase {
 public:
-    explicit RadHACApKMSCManager(radTInteraction* interaction);
-    ~RadHACApKMSCManager() override;
+    explicit RadHACApKMMMManager(radTInteraction* interaction);
+    ~RadHACApKMMMManager() override;
 
     radTInteraction* GetInteraction() const { return m_interaction; }
 
@@ -291,18 +291,15 @@ protected:
     void ExtractCoordinates() override;
     void OnBeforeBuild() override;
     void InitializeInvChi() override;
-    bool IsVariableDOF() const override { return m_is_mixed_dof || m_is_5dof; }
-    int GetUniformNFFC() const override { return m_nffc; }
+    bool IsVariableDOF() const override { return false; }   // MMM-only: uniform 3-DOF tet
+    int GetUniformNFFC() const override { return m_nffc; }   // == 3
 
 private:
     // Pointer to Radia interaction (not owned)
     radTInteraction* m_interaction;
 
-    // DOF per element classification
-    int m_nffc;            // 3 (tetra), 5 (wedge), 6 (hex), 0 (mixed/variable)
-    bool m_is_6dof;
-    bool m_is_5dof;
-    bool m_is_mixed_dof;
+    // DOF per element: MMM-only manager, always 3 (tetrahedron)
+    int m_nffc;
 
     // O(1) DOF-to-element lookup (ELF-style)
     std::vector<int> m_dof_to_elem;   // [dof] -> element index
