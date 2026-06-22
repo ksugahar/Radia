@@ -1819,15 +1819,17 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// (unless demag_backend='yano' forces yano on it).  Tet (MMM) and permanent magnets are unaffected.
 
 		// MOMENT-yano dispatch (g_yano_moment, default ON): the parameter-free MOMENT formula
-		// (BuildMomentSystemCore) is the default for pure 6-DOF hexahedral soft iron.  Solver method:
-		//   - method 0 (LU)       -> dense direct moment solve.
+		// (BuildMomentSystemCore) is the default for surface-charge soft iron -- hex (6 DOF) AND wedge (5 DOF,
+		// Phase 3a: 3 dipole + 1 monopole + 1 axial quad).  Solver method:
+		//   - method 0 (LU)       -> dense direct moment solve (hex / wedge / mixed).
 		//   - method 1 (BiCGSTAB) -> reroute to LU (dense moment direct solve; medium N).
 		//   - method 2 (HACApK)   -> the moment H-matrix + block-Jacobi BiCGSTAB (scalable storage; no dense
 		//     interaction/base matrix, Increment 4), set g_yano_moment_hacapk and route to the LU/Picard driver
-		//     whose linear step picks the H-BiCGSTAB.  PER-ELEMENT chi: the nonlinear Picard loop re-solves the
-		//     H-system each iteration with the current chi (Increment 4); breakdown falls back to dense moment LU.
-		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Mixed/
-		// non-hex elements and explicit yano_moment=False are NOT -> the EIEM2 collocation path handles them.
+		//     whose linear step picks the H-BiCGSTAB.  HEX-ONLY for now (the H-matrix assumes uniform 6 DOF);
+		//     wedge/mixed method-2 routes to the dense moment LU until the variable-DOF H-matrix (Phase 3a-2).
+		//     PER-ELEMENT chi: the nonlinear Picard loop re-solves each iteration with the current chi (Inc 4).
+		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Tet (3 DOF =
+		// MMM), other element kinds, and explicit yano_moment=False are NOT -> the EIEM2 collocation path.
 		{
 			extern bool g_yano_moment;
 			extern bool g_yano_moment_hacapk;
@@ -1841,15 +1843,22 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 					if(pIntrMom != 0)
 					{
 						int neMom = pIntrMom->GetAmOfMainElem();
-						bool allHex6 = (neMom > 0);
+						bool allMoment = (neMom > 0), allHex6 = (neMom > 0);
 						for(int iEl = 0; iEl < neMom; iEl++)
-							if(pIntrMom->GetElementDOF(iEl) != 6) { allHex6 = false; break; }
-						if(allHex6)
 						{
-							if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
-								g_yano_moment_hacapk = true;    // moment linear step via H-matrix + BiCGSTAB
+							int dd = pIntrMom->GetElementDOF(iEl);
+							if(dd != 6 && dd != 5) allMoment = false;   // moment = hex(6) + wedge(5); tet(3)=MMM is not
+							if(dd != 6) allHex6 = false;
+						}
+						if(allMoment)
+						{
+							// The moment H-matrix (method 2) is currently HEX-ONLY (RadHACApKMomentSystem assumes
+							// uniform 6 DOF); wedge/mixed moment uses the dense LU/Picard moment path (Phase 3a-1).
+							// The variable-DOF moment H-matrix for wedge/mixed method-2 is Phase 3a-2.
+							if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && allHex6)
+								g_yano_moment_hacapk = true;    // moment linear step via H-matrix + BiCGSTAB (hex-only)
 							if(MethNo != RadSolverMethod::LU)
-								MethNo = RadSolverMethod::LU;   // route to the Picard/LU driver (linear step picks dense or H-BiCGSTAB)
+								MethNo = RadSolverMethod::LU;   // route moment (hex or wedge) to the Picard/LU driver
 						}
 					}
 				}

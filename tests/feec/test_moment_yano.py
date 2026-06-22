@@ -142,6 +142,73 @@ def test_method2_nonlinear_matches_method0():
     assert relM < 5e-3, f"nonlinear method2 M != method0 (rel {relM:.2e})"
 
 
+def test_wedge_moment_matches_hex_externally():
+    """Phase-3a: moment-yano extended to 5-face WEDGE elements (3 dipole + 1 monopole + 1 AXIAL quad about the
+    prism axis = 5 rows).  A unit cube as ONE hex vs the SAME cube tiled by TWO triangular-prism wedges must
+    give the same EXTERNAL field (same geometry + uniform applied field).  The AXIAL quad (3*(d.a)^2-|d|^2,
+    a = prism axis) is REQUIRED: the naive antisymmetric dx^2-dy^2 leaves a symmetric near-null sigma mode
+    that blows up (|M| ~ 1e9).  Locks method 0 (LU) and method 1 (-> moment LU) for wedges."""
+    MU0 = 4e-7 * np.pi; L = 0.02; Happ = 1000.0
+    probes = [[0.05, 0.0, 0.0], [0.0, 0.05, 0.01], [0.01, 0.01, 0.05], [-0.04, 0.02, 0.03]]
+    hexv = [[0, 0, 0], [L, 0, 0], [L, L, 0], [0, L, 0], [0, 0, L], [L, 0, L], [L, L, L], [0, L, L]]
+    wA = [[0, 0, 0], [L, 0, 0], [0, L, 0], [0, 0, L], [L, 0, L], [0, L, L]]      # lower-left triangle prism
+    wB = [[L, 0, 0], [L, L, 0], [0, L, 0], [L, 0, L], [L, L, L], [0, L, L]]      # upper-right triangle prism
+
+    def solve(build, method):
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True, bicgstab_tol=1e-9)
+        objs = build()
+        for o in objs:
+            rad.MatApl(o, rad.MatLin(1000.0))
+        cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * Happ])])
+        rad.Solve(cont, 1e-8, 2000, method)
+        M = np.asarray([rad.ObjM(o)["magnetization"] for o in objs], float)
+        B = np.asarray([rad.Fld(cont, "b", p) for p in probes], float)
+        rad.UtiDelAll()
+        return M, B
+
+    _, B_hex = solve(lambda: [rad.ObjHexahedron(hexv, [0, 0, 0])], 0)
+    for method in (0, 1):
+        Mw, Bw = solve(lambda: [rad.ObjWedge(wA, [0, 0, 0]), rad.ObjWedge(wB, [0, 0, 0])], method)
+        assert np.all(np.isfinite(Mw)) and np.max(np.abs(Mw)) < 1e6, \
+            f"wedge sigma blew up (near-null mode unpinned): |M|max={np.max(np.abs(Mw)):.2e}"
+        Mzw = float(np.mean(Mw[:, 2]))
+        assert 2.0 * Happ < Mzw < 4.0 * Happ, f"wedge M_z={Mzw:.1f} not ~3*Happ (cube demag ~1/3)"
+        assert np.all(np.abs(Mw[:, :2]) < 0.1 * abs(Mzw)), "wedge transverse M not small (symmetric mode leak)"
+        relB = np.linalg.norm(Bw - B_hex) / max(np.linalg.norm(B_hex), 1e-30)
+        assert relB < 0.02, f"wedge method{method} external B != hex (rel {relB:.2e})"
+
+
+def test_mixed_hex_wedge_moment():
+    """Phase-3a: a MIXED container (hex 6-DOF + wedge 5-DOF) solves via the moment dense path with variable
+    DOF offsets.  A 2-cube stack with the top cube tiled by 2 wedges == both cubes as hexes, externally."""
+    MU0 = 4e-7 * np.pi; L = 0.02; Happ = 1000.0
+    probes = [[0.06, 0.01, 0.02], [0.0, 0.06, 0.03], [0.01, 0.01, 0.08], [-0.05, 0.02, 0.04]]
+
+    def hx(z0):
+        return [[0, 0, z0], [L, 0, z0], [L, L, z0], [0, L, z0], [0, 0, z0+L], [L, 0, z0+L], [L, L, z0+L], [0, L, z0+L]]
+
+    def wg(z0):
+        return [[[0, 0, z0], [L, 0, z0], [0, L, z0], [0, 0, z0+L], [L, 0, z0+L], [0, L, z0+L]],
+                [[L, 0, z0], [L, L, z0], [0, L, z0], [L, 0, z0+L], [L, L, z0+L], [0, L, z0+L]]]
+
+    def solve(mixed):
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True, bicgstab_tol=1e-9)
+        objs = [rad.ObjHexahedron(hx(0.0), [0, 0, 0])]
+        objs += ([rad.ObjWedge(w, [0, 0, 0]) for w in wg(L)] if mixed else [rad.ObjHexahedron(hx(L), [0, 0, 0])])
+        for o in objs:
+            rad.MatApl(o, rad.MatLin(500.0))
+        cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * Happ])])
+        rad.Solve(cont, 1e-8, 3000, 0)
+        B = np.asarray([rad.Fld(cont, "b", p) for p in probes], float)
+        rad.UtiDelAll()
+        return B
+
+    B_hex = solve(False)
+    B_mix = solve(True)
+    relB = np.linalg.norm(B_mix - B_hex) / max(np.linalg.norm(B_hex), 1e-30)
+    assert np.all(np.isfinite(B_mix)) and relB < 0.01, f"mixed hex+wedge external B != all-hex (rel {relB:.2e})"
+
+
 # NOTE: moment-vs-EIEM2 agreement is NOT tested on a single cube -- the solved M is an INTERNAL,
 # formulation-dependent quantity (CLAUDE.md "do not compare MSC internal fields"), and a single cube is
 # the coarsest discretization where the two formulations legitimately differ most (~18%); they converge as
