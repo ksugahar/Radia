@@ -1027,6 +1027,24 @@ py::tuple MomentSystemDenseRaw(int intrc_handle, double chi) {
     return py::make_tuple(Aout, dof);
 }
 
+// Build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem) and probe the H-matvec
+// against the dense A_raw (entry-by-entry).  Phase-2 Increment-2 gate (ACA_MOMENT_DESIGN.md).
+py::dict MomentHMatrixProbe(int intrc_handle, double chi, double eps, int leaf, double eta) {
+    double out[8] = {0,0,0,0,0,0,0,0};
+    int err = RadMomentHMatrixProbe(chi, eps, leaf, eta, out, intrc_handle);
+    check_error(err);
+    py::dict d;
+    d["ok"]          = (out[0] != 0.0);
+    d["matvec_relerr"] = out[1];
+    d["ndof"]        = (int)out[2];
+    d["n_lowrank"]   = (int)out[3];
+    d["n_dense"]     = (int)out[4];
+    d["max_rank"]    = (int)out[5];
+    d["compression"] = out[6];
+    d["build_time"]  = out[7];
+    return d;
+}
+
 /**
  * @brief Densify the actual HACApK (ACA+) operator as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
@@ -3716,6 +3734,15 @@ PYBIND11_MODULE(_radia_pybind, m) {
               harness: re-normalizing A_raw's rows must reproduce BuildMomentSystem's A; and A_raw solves
               to the SAME magnetization as the normalized system (row-norm = diagonal scaling, invariant).
               Returns: (A_raw, dof).
+          )pbdoc");
+
+    m.def("MomentHMatrixProbe", &radia_solver::MomentHMatrixProbe,
+          py::arg("intrc_handle"), py::arg("chi"), py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+          R"pbdoc(
+              Build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem) and probe the
+              O(N log N) H-matvec against the dense A_raw built entry-by-entry (ACA_MOMENT_DESIGN.md
+              Phase 2 Increment 2).  Returns a dict: ok, matvec_relerr (vs dense), ndof, n_lowrank,
+              n_dense, max_rank, compression, build_time.
           )pbdoc");
 
     m.def("HMatrixDensify", &radia_solver::HMatrixDensify,

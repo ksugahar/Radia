@@ -344,6 +344,46 @@ private:
 };
 
 //-------------------------------------------------------------------------
+// RadHACApKMomentSystem: the parameter-free MOMENT-yano system A_raw as a HACApK
+// H-matrix (Phase 2 of the EIEM2 full-deletion track; docs/moment_yano/ACA_MOMENT_DESIGN.md).
+//-------------------------------------------------------------------------
+
+/* The moment system A_raw = L(block-diag local moment) - chi*C(centroid field/grad coupling).
+ * The off-diagonal block of well-separated element clusters is the smooth field/grad kernel
+ * folded by the per-row moment functionals -> low-rank (Gate 1), so A_raw is an H-matrix with
+ * the cluster tree over element (hex) centroids: one element = 6 DOF (3 dipole + 1 monopole +
+ * 2 quadrupole rows on the row side, 6 face charges on the column side, co-located).  The entry
+ * A_raw[i][j] is computed ON DEMAND by radTInteraction::MomentSystemEntry (no dense build, no row
+ * normalization -- the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
+ * A_raw is NON-symmetric (rows = moment functionals, cols = charges) -- ACA+ compresses it anyway.
+ * ComputeSystemEntry stores A_raw directly (no -N/+1/chi flip); the H-LU (cHACApK_hlu_*) factors it
+ * (Increment 3).  HEX-ONLY; assumes m_elemDOFOffset[m_hexaElemIndices[h]] == 6*h (pure-hex moment). */
+class RadHACApKMomentSystem : public RadHACApKBase {
+public:
+    RadHACApKMomentSystem(radTInteraction* interaction, double chi);
+    ~RadHACApKMomentSystem() override {}
+
+    radTInteraction* GetInteraction() const { return m_interaction; }
+
+    // A_raw[i][j] on demand (the un-normalized moment system entry; rows 6*h+t, cols = face DOF).
+    double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
+    // The H-matrix stores A_raw directly (no MSC sign flip / 1-chi shift).
+    double ComputeSystemEntry(int dof_i, int dof_j) const override { return GetInteractionMatrixElement(dof_i, dof_j); }
+
+protected:
+    void ExtractCoordinates() override;   // cluster tree = hex centroids; ndof = 6*nHex
+    void OnBeforeBuild() override {}
+    void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }   // chi folded into A_raw
+    bool IsVariableDOF() const override { return false; }
+    int  GetUniformNFFC() const override { return 6; }                    // 6 DOF per hex
+
+private:
+    radTInteraction* m_interaction;   // not owned
+    double m_chi;
+    std::vector<double> m_chiv;       // uniform chi per hex, for MomentSystemEntry
+};
+
+//-------------------------------------------------------------------------
 // Global callback state for HACApK
 // (Required because HACApK C interface uses global callback function)
 //-------------------------------------------------------------------------
