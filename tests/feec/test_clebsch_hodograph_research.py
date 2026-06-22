@@ -1299,3 +1299,28 @@ def test_twisting_quadrupole_pole():
     # the finite-pole spurious b_6 is rotation-INVARIANT (the twist is clean).
     b6 = [r["b6_rel"] for r in sw["rows"]]
     assert max(b6) - min(b6) < 5e-4, b6
+
+
+def test_combined_function_frenet_sweep():
+    """The confluence (rung 1-2 + rung 3): a COMBINED-FUNCTION magnet (dipole +
+    quad gradient in ONE cross-section) swept along its CURVED orbit.  In the
+    Frenet frame the cross-section is fixed; the Frenet rotation theta(s) twists
+    the lab pole, and the n-fold law gives dipole phase theta, quad phase 2 theta
+    (so both orientations roll with the frame, the phase CHANGE ratio is 2).
+    ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import combined_function_frenet_sweep as cf
+    base = cf.solve_combined(roll_deg=0.0)
+    # the combined-function cross-section: a dipole AND a real gradient (quad).
+    assert base["b1"] > 1.0, base
+    assert 0.02 < base["b2_rel"] < 0.12, base["b2_rel"]        # ~6% gradient
+    assert base["b3_rel"] < 0.02, base["b3_rel"]               # small sextupole
+    # the Frenet sweep: BOTH harmonics roll with the frame (slope 1)...
+    sw = cf.frenet_sweep(rolls_deg=(0.0, 15.0, 30.0, 45.0))
+    assert abs(sw["slope_dipole"] - 1.0) < 0.03, sw["slope_dipole"]
+    assert abs(sw["slope_quad"] - 1.0) < 0.03, sw["slope_quad"]
+    assert sw["track_err_dipole_deg"] < 1.0, sw["track_err_dipole_deg"]
+    assert sw["track_err_quad_deg"] < 1.0, sw["track_err_quad_deg"]
+    # ...and the n-fold law: the quad phase CHANGE is 2x the dipole's.
+    assert abs(sw["phase_ratio_n2_over_n1"] - 2.0) < 0.05, sw["phase_ratio_n2_over_n1"]
