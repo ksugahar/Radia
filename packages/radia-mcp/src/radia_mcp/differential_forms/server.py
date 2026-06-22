@@ -319,6 +319,17 @@ def differential_forms_mathematica_recipes(topic: str = "all") -> str:
                         the potentials A, ϕ (Faraday + Gauss-magnetic)
       "hodge"         - Hodge star ⋆ in R^3 and in Minkowski R^{1,3};
                         symbolic constitutive relations d = ε e, b = μ h
+      "weakform_hodge" - Committed `.wls`: weak form as Hodge pairing,
+                         pulled-back material/Kelvin weights, transformation
+                         optics, metric-vs-curvature checks
+      "hodograph"     - Committed `.wls`: Kelvin/Clebsch/Chaplygin 3-axis
+                        hodograph backbone and no-fold saturation condition
+      "canonical"     - Committed `.wls`: Hamiltonian/Legendre/canonical
+                        transform reading of flux lines and the hodograph
+      "surface_derham" - Committed `.wls`: HOIBC as surface topology
+                         plus analytic exterior DtN/Steklov approximation
+      "differential_geometry" - Runbook/index for the committed hodograph
+                                differential-geometry `.wls` suite
       "tex"           - TeXForm output for paper writing
       "lorentz"       - Lorentz boost of the EM 2-form F  (E ↔ B mixing)
       "hex_dga"       - Codecasa-Specogna-Trevisan basis functions for
@@ -414,6 +425,10 @@ def verify_with_mathematica(identity: str = "dsquared") -> str:
         "whitney_edge"  - the Whitney edge element formula
         "maxwell"       - dF = 0  (Faraday + ∇·B = 0)
         "hodge"         - ⋆⋆ = ±id, constitutive ⋆-laws
+        "weakform_hodge" - pulled-back Hodge/material weight
+        "hodograph"     - Kelvin/Clebsch/Chaplygin symbolic backbone
+        "canonical"     - Hamiltonian/Legendre symbolic backbone
+        "surface_derham" - HOIBC surface de Rham + analytic DtN
         "lorentz"       - Lorentz covariance of F
     """
     return (
