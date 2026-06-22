@@ -181,9 +181,11 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> centroids,
 
 RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
                                          std::vector<double> face_verts,
-                                         int n_el, double near_factor)
+                                         int n_el, double near_factor,
+                                         std::vector<int> image_masks, std::vector<double> image_signs)
     : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor),
-      m_cellV(std::move(cell_verts)), m_faceV(std::move(face_verts))
+      m_cellV(std::move(cell_verts)), m_faceV(std::move(face_verts)),
+      m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs))
 {
     const int n_bf = (int)(m_faceV.size() / 9);
     m_n = n_el + n_bf;
@@ -261,8 +263,10 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> cell_cent, std::vector<double> cell_meas,
     std::vector<double> face_tris, std::vector<int> face_troff,
     std::vector<double> face_cent, std::vector<double> face_meas,
-    int n_el, double near_factor)
-    : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor), m_polytope(true)
+    int n_el, double near_factor,
+    std::vector<int> image_masks, std::vector<double> image_signs)
+    : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor), m_polytope(true),
+      m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs))
 {
     const int n_cell = n_el;
     const int n_bf   = (int)face_meas.size();
@@ -722,6 +726,25 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
     return s * RAD_INV_FOUR_PI;
 }
 
+double RadHACApKChargeGram::QuadDotRefl(int tgt, int src, int mask) const
+{
+    // IMA image entry G_img(tgt,src) = (1/4pi) INT_tgt Phi_{R(src)} = (1/4pi) INT_tgt Phi_src(R(x))
+    // (reflection isometry |x - R(y)| = |R(x) - y|), so we mirror tgt's outer points on the mask axes and
+    // evaluate the UNreflected source potential there.  Always the full analytic PhiAt (the image of a
+    // charge straddling the mirror is singular at the plane -> needs the exact through-singularity potential).
+    const std::vector<rad_hdiv::Vec3>& P = m_qp[tgt];
+    const std::vector<double>&         W = m_qw[tgt];
+    double s = 0.0;
+    for (size_t k = 0; k < P.size(); ++k) {
+        double p[3] = {P[k][0], P[k][1], P[k][2]};
+        if (mask & 1) p[0] = -p[0];
+        if (mask & 2) p[1] = -p[1];
+        if (mask & 4) p[2] = -p[2];
+        s += W[k] * PhiAt(src, p);
+    }
+    return s * RAD_INV_FOUR_PI;
+}
+
 double RadHACApKChargeGram::QuadDotFar(int tgt, int src) const
 {
     // cheap FAR evaluation (near/far adaptive quadrature): plain LOW-quad double Gauss of
@@ -777,19 +800,30 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
     }
     if (m_analytic) {
         // Diagonal = the analytic self (the Wilton/phi_tet potential is exact through the 1/r singularity).
-        if (a == b) return QuadDot(a, a);
-        // NEAR/FAR split (build speedup): the analytic entry 0.5*(outer-quad_a . Phi_b + outer-quad_b .
-        // Phi_a) is EXPENSIVE (PhiTet/TriPotential per outer point) and only matters for NEAR pairs
-        // (the non-uniform-M / div M != 0 interaction); FAR pairs use the cheap centroid-monopole.
-        // near_factor = 1e30 (default) => all pairs NEAR => all-analytic (matches the dense
-        // build_demag(analytic_gram=True) golden); near_factor ~ 2 gives the fast split.
-        const double dx = m_cent[3*a]     - m_cent[3*b];
-        const double dy = m_cent[3*a + 1] - m_cent[3*b + 1];
-        const double dz = m_cent[3*a + 2] - m_cent[3*b + 2];
-        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-        if (r <= m_near_factor * (m_size[a] + m_size[b]))
-            return 0.5 * (QuadDot(a, b) + QuadDot(b, a));        // NEAR: exact analytic
-        return m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI / r;      // FAR: cheap centroid-monopole
+        double base;
+        if (a == b) {
+            base = QuadDot(a, a);
+        } else {
+            // NEAR/FAR split (build speedup): the analytic entry 0.5*(outer-quad_a . Phi_b + outer-quad_b .
+            // Phi_a) is EXPENSIVE (PhiTet/TriPotential per outer point) and only matters for NEAR pairs
+            // (the non-uniform-M / div M != 0 interaction); FAR pairs use the cheap centroid-monopole.
+            // near_factor = 1e30 (default) => all pairs NEAR => all-analytic (matches the dense
+            // build_demag(analytic_gram=True) golden); near_factor ~ 2 gives the fast split.
+            const double dx = m_cent[3*a]     - m_cent[3*b];
+            const double dy = m_cent[3*a + 1] - m_cent[3*b + 1];
+            const double dz = m_cent[3*a + 2] - m_cent[3*b + 2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r <= m_near_factor * (m_size[a] + m_size[b]))
+                base = 0.5 * (QuadDot(a, b) + QuadDot(b, a));    // NEAR: exact analytic
+            else
+                base = m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI / r;  // FAR: cheap centroid-monopole
+        }
+        // IMA: fold in the mirror-image charge interactions (always full analytic) so the reduced
+        // (1/2,1/4,1/8) model reproduces the full model: G_IMA = G + sum_i sign_i*0.5*(refl(a,b)+refl(b,a)).
+        for (size_t i = 0; i < m_image_masks.size(); ++i)
+            base += m_image_signs[i] * 0.5 *
+                    (QuadDotRefl(a, b, m_image_masks[i]) + QuadDotRefl(b, a, m_image_masks[i]));
+        return base;
     }
     if (a == b) return m_self[a];
     double dx = m_cent[3 * a + 0] - m_cent[3 * b + 0];
