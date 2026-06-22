@@ -29,6 +29,14 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
                         "(Q2 quad-only) are supported.");
     order = axi_order;  // base-class field; 4 = poly-degree-in-r for Q2
 
+    // curved=True: order-2 QUADS sample 9 curved node positions from the mesh's
+    // (Curve(2)-d) ElementTransformation and use the AxiHenrotteFE_Q2_Curved
+    // isoparametric element -- follows curved boundaries to O(curve^2), the
+    // proper curved element for eddy-current / rounded-conductor problems.
+    // Default False keeps the axis-aligned closed-form Q2 (and the heat path).
+    curved_quad = flags.GetDefineFlag("curvedquad") ||
+                  (flags.GetStringFlag("curvedquad", "") == string("True"));
+
     // Wire our custom DiffOps so that SymbolicBilinearForm can integrate
     // u, grad(u) for u : H1Henrotte.
     //   evaluator[VOL]: invoked when ProxyFunction is sampled with no derivative
@@ -78,6 +86,22 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
 
     if (axi_order == 2) {
         if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
+            if (curved_quad) {
+                // Sample the 9 node positions from the (possibly Curve(2)-d)
+                // element transformation, in our Q2 node order: 4 corners (v0-v3),
+                // then bottom/right/top/left edge midnodes, then the face center.
+                const double xi_refs[9]  = {0,1,1,0, 0.5,1,0.5,0, 0.5};
+                const double eta_refs[9] = {0,0,1,1, 0,0.5,1,0.5, 0.5};
+                auto & eltrans = ma->GetTrafo(ei, lh);
+                double rs[9], zs[9];
+                for (int k = 0; k < 9; ++k) {
+                    IntegrationPoint ip(xi_refs[k], eta_refs[k], 0.0);
+                    auto & mip = eltrans(ip, lh);
+                    auto pt = mip.GetPoint();
+                    rs[k] = pt(0); zs[k] = pt(1);
+                }
+                return *new (lh) AxiHenrotteFE_Q2_Curved(rs, zs);
+            }
             Vec<3> p[4];
             for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
             double r_a = p[0](0), r_b = p[1](0);

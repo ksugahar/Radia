@@ -16,6 +16,7 @@ using namespace ngcomp;
 class AxiHenrotteFESpace : public FESpace {
 public:
     int axi_order = 1;   // 1 = Q1/P1 (vertex DOFs), 2 = Q2 (vertex+edge+face)
+    bool curved_quad = false;  // order=2 quads: sample 9 curved nodes (Q2_Curved) vs axis-aligned
 
     AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & flags);
 

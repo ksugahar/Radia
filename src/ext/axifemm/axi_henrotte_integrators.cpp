@@ -688,6 +688,114 @@ void P2TriangleSigmaMass(const double rn[6], const double zn[6], double sigma,
                         * 0.5 * (M(i, j) + M(j, i));
 }
 
+// ---------------------------------------------------------------------------
+// AxiHenrotteFE_Q2_Curved stiffness / sigma-mass via the element's own
+// biquadratic geometric map + tensor Gauss-Legendre 8x8 on [0,1]^2.
+// Mirrors P2TriangleStiffness/SigmaMass (V-DOF, 2 pi r_i r_j prefactor) but for
+// the 9-node curved quad.  K[i,j] = (2 pi / mu) r_i r_j INT (grad psi_i . grad psi_j)/r.
+// ---------------------------------------------------------------------------
+
+// Biquadratic Lagrange geometric map (duplicate of the FE-side helper, kept here
+// so the integrator uses the SAME map as the FE -- essential for curved meshes).
+constexpr int Q2C_IX[9] = { 0, 2, 2, 0, 1, 2, 1, 0, 1 };
+constexpr int Q2C_IY[9] = { 0, 0, 2, 2, 0, 1, 2, 1, 1 };
+inline void IntQ2CurvedGeomMap(const double rn[9], const double zn[9],
+                               double xi, double eta,
+                               double & rp, double & zp,
+                               double & dr_dxi, double & dr_deta,
+                               double & dz_dxi, double & dz_deta)
+{
+    const double Lx[3]  = { 2*xi*xi - 3*xi + 1, -4*xi*xi + 4*xi, 2*xi*xi - xi };
+    const double dLx[3] = { 4*xi - 3,           -8*xi + 4,        4*xi - 1 };
+    const double Ly[3]  = { 2*eta*eta - 3*eta + 1, -4*eta*eta + 4*eta, 2*eta*eta - eta };
+    const double dLy[3] = { 4*eta - 3,              -8*eta + 4,          4*eta - 1 };
+    rp = zp = dr_dxi = dr_deta = dz_dxi = dz_deta = 0.0;
+    for (int k = 0; k < 9; ++k) {
+        double N   = Lx[Q2C_IX[k]]  * Ly[Q2C_IY[k]];
+        double dNx = dLx[Q2C_IX[k]] * Ly[Q2C_IY[k]];
+        double dNy = Lx[Q2C_IX[k]]  * dLy[Q2C_IY[k]];
+        rp += N * rn[k];       zp += N * zn[k];
+        dr_dxi += dNx * rn[k]; dr_deta += dNy * rn[k];
+        dz_dxi += dNx * zn[k]; dz_deta += dNy * zn[k];
+    }
+}
+
+// Physical-coord psi gradients at a quad point (uses the FE's scaling + coeffs).
+inline void Q2CurvedPsiGrad(const AxiHenrotteFE_Q2_Curved & fe, double rp, double zp,
+                            double dpsi_dr[9], double dpsi_dz[9])
+{
+    double rpr = rp / fe.L_r, zpr = (zp - fe.z_c) / fe.L_z, spr = rpr * rpr;
+    double dmr[9] = { 0.0, 2*rpr, 4*rpr*spr, 0.0, 2*rpr*zpr,
+                      4*rpr*spr*zpr, 0.0, 2*rpr*zpr*zpr, 4*rpr*spr*zpr*zpr };
+    double dmz[9] = { 0.0, 0.0, 0.0, 1.0, spr, spr*spr, 2*zpr, 2*spr*zpr, 2*spr*spr*zpr };
+    for (int i = 0; i < 9; ++i) {
+        double gr = 0.0, gz = 0.0;
+        for (int j = 0; j < 9; ++j) { gr += fe.coeffs[j][i]*dmr[j]; gz += fe.coeffs[j][i]*dmz[j]; }
+        dpsi_dr[i] = gr / fe.L_r; dpsi_dz[i] = gz / fe.L_z;
+    }
+}
+inline void Q2CurvedPsi(const AxiHenrotteFE_Q2_Curved & fe, double rp, double zp,
+                        double psi[9])
+{
+    double rpr = rp / fe.L_r, zpr = (zp - fe.z_c) / fe.L_z, spr = rpr * rpr;
+    double m[9] = { 1.0, spr, spr*spr, zpr, spr*zpr, spr*spr*zpr,
+                    zpr*zpr, spr*zpr*zpr, spr*spr*zpr*zpr };
+    for (int i = 0; i < 9; ++i) {
+        double v = 0.0;
+        for (int j = 0; j < 9; ++j) v += fe.coeffs[j][i]*m[j];
+        psi[i] = v;
+    }
+}
+
+void Q2CurvedStiffness(const AxiHenrotteFE_Q2_Curved & fe, double mu,
+                       FlatMatrix<double> elmat)
+{
+    Mat<9,9> K; K = 0.0;
+    for (int ix = 0; ix < N_GL; ++ix)
+        for (int iy = 0; iy < N_GL; ++iy) {
+            double xi = _gl_nodes_01[ix], eta = _gl_nodes_01[iy];
+            double w = _gl_weights_01[ix] * _gl_weights_01[iy];
+            double rp, zp, drx, dre, dzx, dze;
+            IntQ2CurvedGeomMap(fe.rn, fe.zn, xi, eta, rp, zp, drx, dre, dzx, dze);
+            if (rp <= EPS_AXIS) continue;
+            double detJ = abs(drx * dze - dre * dzx);
+            double gr[9], gz[9];
+            Q2CurvedPsiGrad(fe, rp, zp, gr, gz);
+            double factor = w * detJ / rp;
+            for (int i = 0; i < 9; ++i)
+                for (int j = 0; j < 9; ++j)
+                    K(i, j) += factor * (gr[i]*gr[j] + gz[i]*gz[j]);
+        }
+    double inv_mu = 1.0 / mu;
+    for (int i = 0; i < 9; ++i)
+        for (int j = 0; j < 9; ++j)
+            elmat(i, j) = 2.0 * PI * inv_mu * fe.rn[i] * fe.rn[j] * K(i, j);
+}
+
+void Q2CurvedSigmaMass(const AxiHenrotteFE_Q2_Curved & fe, double sigma,
+                       FlatMatrix<double> elmat)
+{
+    Mat<9,9> M; M = 0.0;
+    for (int ix = 0; ix < N_GL; ++ix)
+        for (int iy = 0; iy < N_GL; ++iy) {
+            double xi = _gl_nodes_01[ix], eta = _gl_nodes_01[iy];
+            double w = _gl_weights_01[ix] * _gl_weights_01[iy];
+            double rp, zp, drx, dre, dzx, dze;
+            IntQ2CurvedGeomMap(fe.rn, fe.zn, xi, eta, rp, zp, drx, dre, dzx, dze);
+            if (rp <= EPS_AXIS) continue;
+            double detJ = abs(drx * dze - dre * dzx);
+            double psi[9]; Q2CurvedPsi(fe, rp, zp, psi);
+            double factor = w * detJ / rp;
+            for (int i = 0; i < 9; ++i)
+                for (int j = 0; j < 9; ++j)
+                    M(i, j) += factor * psi[i] * psi[j];
+        }
+    for (int i = 0; i < 9; ++i)
+        for (int j = 0; j < 9; ++j)
+            elmat(i, j) = 2.0 * PI * sigma * fe.rn[i] * fe.rn[j]
+                        * 0.5 * (M(i, j) + M(j, i));
+}
+
 }  // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -719,6 +827,10 @@ void AxiHenrotteStiffnessBFI::CalcElementMatrix(
     }
     if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
         Q2StiffnessElement(*q2, mu, elmat);
+        return;
+    }
+    if (auto * q2c = dynamic_cast<const AxiHenrotteFE_Q2_Curved*>(&fel)) {
+        Q2CurvedStiffness(*q2c, mu, elmat);
         return;
     }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {
@@ -763,6 +875,10 @@ void AxiHenrotteSigmaMassBFI::CalcElementMatrix(
     }
     if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
         Q2SigmaMassElement(*q2, sigma, elmat);
+        return;
+    }
+    if (auto * q2c = dynamic_cast<const AxiHenrotteFE_Q2_Curved*>(&fel)) {
+        Q2CurvedSigmaMass(*q2c, sigma, elmat);
         return;
     }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {
