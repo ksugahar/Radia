@@ -2574,7 +2574,10 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 bool g_yano_pyramid_cloud = false;   // default: historical EIEM2 single-point kernel (bit-identical)
 bool g_yano_no_center_charge = false;   // research: drop the element-center cancellation charge (raw collocation)
 double g_yano_eval_alpha = -1.0;   // research: override EIEM2 eval point a*FaceCenter+(1-a)*center (-1 = default 0.5)
-bool g_yano_moment = false;   // upgrade: opt-in parameter-free MOMENT solve (BuildMomentSystemCore) vs EIEM2 collocation (hex-only)
+bool g_yano_moment = true;    // DEFAULT (2026-06-22 upgrade): parameter-free MOMENT solve (BuildMomentSystemCore)
+                              // for pure 6-DOF hex soft iron, no IMA, method 0/1 (method 1 reroutes to the dense
+                              // moment LU; method 2/HACApK raises Error204).  Opt out to the EIEM2 collocation
+                              // kernel with rad.SolverConfig(yano_moment=False) (needed for HACApK / IMA parity).
 
 // Field from a point charge at an ARBITRARY source point (no 1/4pi divisor; matches FieldFromPointCharge).
 TVector3d radTPolyhedron::FieldFromPointChargeAt(const TVector3d& obs, const TVector3d& src, double charge) const
