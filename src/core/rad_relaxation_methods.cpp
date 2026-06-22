@@ -3503,7 +3503,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 	if(!m_hacapk)
 	{
-		m_hacapk = new RadHACApKMSCManager(IntrctPtr);
+		m_hacapk = new RadHACApKMMMManager(IntrctPtr);
 	}
 
 	// Reset timing statistics at start of solve
