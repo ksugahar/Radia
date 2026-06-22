@@ -311,6 +311,12 @@ protected:
 	// Override: LU direct solver for linear step
 	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
 
+	// Override: when the moment H-matrix path (g_yano_moment_hacapk) drives this LU/Picard driver, the
+	// linear step solves via the scalable H-BiCGSTAB and the convergence scaffold uses H=M/chi -- so no
+	// dense interaction/base matrix is needed (Phase 2 Increment 4 storage decoupling).  Returns true for
+	// the genuine dense LU / B-input Newton-Hantila paths (which DO read the dense BaseMatrix).
+	bool NeedsDenseMatrix() const override;
+
 	// Override: Dense Jacobian assembly + LAPACK dgesv_ for B-input Newton
 	int SolveBInputLinearStep(NonlinearContext& ctx,
 	                          const std::vector<double>& NpI,

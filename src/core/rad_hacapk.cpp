@@ -1492,6 +1492,13 @@ RadHACApKMomentSystem::RadHACApKMomentSystem(radTInteraction* interaction, doubl
 {
 }
 
+// Per-element chi (Increment 4, nonlinear Picard): each row 6h+* folds chiPerHex[h] (the row element's
+// susceptibility) into A_raw via MomentSystemEntry; resolved in ExtractCoordinates once nHex is known.
+RadHACApKMomentSystem::RadHACApKMomentSystem(radTInteraction* interaction, const std::vector<double>& chiPerHex)
+    : m_interaction(interaction), m_chi(chiPerHex.empty() ? 1.0 : chiPerHex[0]), m_chi_in(chiPerHex)
+{
+}
+
 void RadHACApKMomentSystem::ExtractCoordinates()
 {
     if (!m_interaction) { m_ndof = 0; m_n_elem = 0; return; }
@@ -1509,7 +1516,10 @@ void RadHACApKMomentSystem::ExtractCoordinates()
         m_dof_offset[h] = 6 * h;
     }
     m_dof_offset[nHex] = 6 * nHex;
-    m_chiv.assign((size_t)(nHex > 0 ? nHex : 1), m_chi);   // uniform chi per hex for MomentSystemEntry
+    // chi per hex for MomentSystemEntry: per-element (Increment 4, nonlinear Picard) when the vector ctor
+    // supplied one of matching length, else uniform m_chi.
+    if ((int)m_chi_in.size() == nHex && nHex > 0) m_chiv = m_chi_in;
+    else m_chiv.assign((size_t)(nHex > 0 ? nHex : 1), m_chi);
 }
 
 double RadHACApKMomentSystem::GetInteractionMatrixElement(int dof_i, int dof_j) const
