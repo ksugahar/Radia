@@ -68,6 +68,14 @@ betti[K_] := Module[{nv = Length[K["verts"]], ne = Length[K["edges"]],
   r1 = If[nf == 0, 0, MatrixRank[K["d1"]]];
   {nv - r0, (ne - r1) - r0, nf - r1}];     (* {b0, b1, b2} *)
 
+(* harmonic 1-form count under an ARBITRARY edge inner product M1 (SPD): a harmonic h is
+   CLOSED (d1 h = 0) and CO-CLOSED (d0^T M1 h = 0, the M1-adjoint of d0).  Hodge theorem:
+   dim(harmonic) = b1 for ANY metric M1 -- the Hodge star / metric / material CANNOT change
+   the topological Betti number.  This is "topology is NOT in the Hodge" (transformation
+   optics moves the geometry, never the holes). *)
+harmonicDim[K_, M1_] := Length[K["edges"]] -
+  MatrixRank[Join[K["d1"], Transpose[K["d0"]].M1], Tolerance -> 1.*^-9];
+
 (* harmonic H^1 generator: a cycle (d1 g = 0) that is NOT a gradient (g not in im d0) *)
 isComplex[K_] := With[{nf = Length[K["tris"]]},
   nf == 0 || K["d1"].K["d0"] == ConstantArray[0, {nf, Length[K["verts"]]}]];
@@ -126,6 +134,24 @@ Module[{ok = True, chk, Kfill, Kcyc, Kann, K2, b, gens},
    chk["figure-eight graph: b1 = 2 (two independent loops)", bb[[2]] == 2];
    chk["figure-eight: 2 cohomology generators (2 cotree edges)",
        Length[h1Generators[Ktwo]] == 2]];
+
+  (* ---- metric-INDEPENDENCE of Betti: the Hodge / metric CANNOT change the topology ----
+     The harmonic 1-form count = b1 for ANY SPD edge inner product M1 (Hodge theorem), so a
+     coordinate map / material / Hodge star moves the GEOMETRY but never the holes.  This is
+     "topology is NOT in the Hodge" -- the half of transformation optics that does NOT move. *)
+  Module[{Kann2, Kfig, spd},
+   Kann2 = build2Complex[{{1, 2, 5}, {1, 5, 4}, {2, 3, 6}, {2, 6, 5}, {3, 1, 4}, {3, 4, 6}}]; (* annulus, b1=1 *)
+   Kfig = build1Complex[{{1, 2}, {2, 3}, {3, 1}, {1, 4}, {4, 5}, {5, 1}}];                     (* figure-eight, b1=2 *)
+   spd[n_, seed_] := (SeedRandom[seed];
+     With[{A = RandomReal[{-1, 1}, {n, n}]}, A.Transpose[A] + n IdentityMatrix[n]]); (* random SPD *)
+   chk["annulus: harmonic-1-form dim = b1 = 1 under the trivial metric M1 = I",
+       harmonicDim[Kann2, IdentityMatrix[Length[Kann2["edges"]]]] == 1];
+   chk["annulus: harmonic-1-form dim STILL = 1 under TWO random SPD metrics (Hodge can't change Betti)",
+       harmonicDim[Kann2, spd[Length[Kann2["edges"]], 1]] == 1 &&
+       harmonicDim[Kann2, spd[Length[Kann2["edges"]], 2]] == 1];
+   chk["figure-eight: harmonic-1-form dim = b1 = 2 under I AND a random SPD metric (topology not in the Hodge)",
+       harmonicDim[Kfig, IdentityMatrix[Length[Kfig["edges"]]]] == 2 &&
+       harmonicDim[Kfig, spd[Length[Kfig["edges"]], 3]] == 2]];
 
   Print[If[ok, "ALL PASS", "SOME FAILED"]];
 ];
