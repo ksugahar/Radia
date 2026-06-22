@@ -43,6 +43,12 @@ TOPICS: dict[str, str] = {
         "Nonlinear design map at LINEAR cost + B-input A-formulation truth check "
         "(endpack_spectrometer_saturation.py)"
     ),
+    "endpack_cobake": (
+        "The two-plane end pack CO-BAKED into ONE pole face "
+        "z(x,s)=g/2-delta(x/w)^2+lift(s): the x-y shim (delta) AND the s-y Rogowski "
+        "chamfer (ghat) in one gap face -> clean transverse b_3,5 AND a rounded "
+        "pole-tip corner at once (endpack_cobake.py)"
+    ),
     "all": "Everything (all topics concatenated)",
 }
 
@@ -715,6 +721,47 @@ the remaining spectrometer extensions (see endpack_two_plane + two_plane_design)
 """
 
 
+ENDPACK_COBAKE = """
+# The two-plane end pack CO-BAKED into ONE pole face
+
+The completion of endpack_two_plane: that example's 3-D reflection carried the s-y
+chamfer at a FIXED body width (the x-y shim was verified as the transverse lever, not
+baked into the same 3-D pole).  endpack_cobake.py bakes BOTH into one gap face
+
+    z_face(x, s) = g/2 - delta (x/w)^2  +  lift(s)
+                    \\___ x-y shim ___/    \\_ s-y _/   (a tensor-product face),
+
+and shows BOTH levers act AT ONCE.  The 4 cases (the same equipotential-pole drive +
+integrated analyzer as endpack_two_plane._solve_3d_endpack):
+
+  baseline (flat cut):  corner tip 1.16 (over-fields),  transverse b_3,5 ~ 0.7%
+  shim only   (delta):  corner tip 1.23,                transverse b_3,5 ~ 0.07%  (x-y lever)
+  chamfer only (ghat):  corner tip 0.96 (rounded),      transverse b_3,5 ~ 0.3%   (s-y lever)
+  BOTH (co-baked):      corner tip 1.02 (rounded)  AND  transverse b_3,5 ~ 0.07%
+
+i.e. ONE pole face delivers a clean integrated transverse harmonic AND a rounded
+pole-tip corner -- the two cleanly-separated two-plane levers (delta ~ 0.41 mm from
+Plane 1; ghat the Rogowski shape from Plane 2) composed in 3-D.
+
+## Honest scope
+
+The exact delta(x/w)^2 shim needs an x-VARYING face, built here as an x-prism
+STAIRCASE (per-slab shim offset), so the no-shim cases mesh coarser than the shim
+cases -- the per-case ABSOLUTE numbers are research-grade, not precision.  The locked
+claim is the CO-EXISTENCE of both levers in the (well-resolved) BOTH pole; the per-lever
+CAUSATION is golden-locked separately (the x-y shim zeroes b_3: accel_pole_dipole_body_2d
+/ endpack_two_plane Plane 1; the s-y chamfer drives the corner over-field through 1:
+endpack_two_plane's depth sweep).  A precision tensor LOFT (OCC ThruSections) is the
+clean construction.
+
+A separate attempt at the rotated-EFB EDGE FOCUSING extension was NOT shipped: the INT B
+effective-field-boundary angle extracted from the equipotential drive attenuated to
+~0.47*beta_cut in a way that could not be cleanly separated from the genuine fringe
+effect (it needs a reduced-Omega-with-source drive or particle tracking) -- recorded as
+the open next step, not committed as a murky result.
+"""
+
+
 def get_accelerator_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -735,6 +782,8 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                                section + s-y end) -> 3-D equipotential reflect
       "spectrometer_endpack" - The SPECTROMETER end pack NONLINEAR: the pole-tip
                                corner = saturable throat, B_K/kappa knee, EFB drift
+      "endpack_cobake"       - The two-plane end pack CO-BAKED into one pole face
+                               (x-y shim + s-y chamfer): clean b_3,5 AND rounded corner
     """
     topic = topic.lower().strip()
     if topic in ("end_pole", "chamfer", "delferriere"):
@@ -761,14 +810,18 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     if topic in ("spectrometer_endpack", "spectrometer", "nonlinear_endpack",
                  "corner_saturation", "saturable_endpack", "efb", "edge_focusing"):
         return SPECTROMETER_ENDPACK_SATURATION
+    if topic in ("endpack_cobake", "cobake", "co_bake", "tensor_pole",
+                 "shim_chamfer", "both_planes"):
+        return ENDPACK_COBAKE
     if topic == "all":
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
             BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION,
+            ENDPACK_COBAKE,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
         "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
-        "beam_referenced_twist, endpack_two_plane, spectrometer_endpack."
+        "beam_referenced_twist, endpack_two_plane, spectrometer_endpack, endpack_cobake."
     )
