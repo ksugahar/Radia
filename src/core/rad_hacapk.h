@@ -287,9 +287,6 @@ public:
     void PrecomputeFlatInteractMatrix();
     bool IsFlatNReady() const { return m_flat_N_ready; }
 
-    // Delegates to radTInteraction::Compute6x6BlockFast (shared with LU/BiCGSTAB)
-    void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;
-
 protected:
     void ExtractCoordinates() override;
     void OnBeforeBuild() override;
@@ -327,19 +324,14 @@ private:
     void BuildDOFLookupTable();
     void PrecomputeGeometry3DOF();
 
-    // 6DOF hexahedron block computation
-    double GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const;
-    void Compute6x6Block(int elem_i, int elem_j, double* K_mat) const;
-
-    // 3DOF tetrahedron block computation
+    // 3DOF tetrahedron block computation (MMM -- the only element type this manager solves;
+    // EIEM2 surface-charge 6x6/5x5/mixed kernels were retired in Phase 3b, the moment-yano
+    // H-matrix RadHACApKMomentSystem now owns hex/wedge MSC)
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
     void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
     void Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const;
     void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;
 
-    // 5DOF wedge / mixed / generic
-    double GetCached5x5Element(int elem_i, int elem_j, int face_i, int face_j) const;
-    double GetCachedMixedElement(int elem_i, int elem_j, int dof_i, int dof_j, int local_i, int local_j) const;
     double GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const;
 };
 
