@@ -1715,6 +1715,41 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// is routed to the FEEC HDiv-VIM by the Python rad.Solve wrapper BEFORE reaching this C++ path
 		// (unless demag_backend='yano' forces yano on it).  Tet (MMM) and permanent magnets are unaffected.
 
+		// MOMENT-yano dispatch (g_yano_moment, default ON): the parameter-free MOMENT formula
+		// (BuildMomentSystemCore) is the default for pure 6-DOF hexahedral soft iron, but it currently has
+		// ONLY the direct dense solver (the moment branch in radTRelaxationMethNo_0::SolveLinearStep).  So:
+		//   - method 1 (BiCGSTAB, medium N) -> reroute to LU: dense is feasible at this scale, so honor it
+		//     with the correct moment result (the direct dense moment solve) rather than the EIEM2 iteration.
+		//   - method 2 (HACApK) signals large N where a dense solve is infeasible -> fail loud (Error204) with
+		//     the EIEM2 opt-out (yano_moment=False), instead of OOM-ing on a dense moment matrix.
+		// IMA (image symmetry), mixed/non-hex elements, and explicit yano_moment=False are NOT moment-eligible
+		// -> the EIEM2 collocation path handles them unchanged.
+		{
+			extern bool g_yano_moment;
+			if(g_yano_moment && imageSpec.empty())
+			{
+				radThg hgMom;
+				if(ValidateElemKey(InteractElemKey, hgMom))
+				{
+					radTInteraction* pIntrMom = dynamic_cast<radTInteraction*>(hgMom.rep);
+					if(pIntrMom != 0 && !pIntrMom->IsIMAEnabled())
+					{
+						int neMom = pIntrMom->GetAmOfMainElem();
+						bool allHex6 = (neMom > 0);
+						for(int iEl = 0; iEl < neMom; iEl++)
+							if(pIntrMom->GetElementDOF(iEl) != 6) { allHex6 = false; break; }
+						if(allHex6)
+						{
+							if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
+							{ Send.ErrorMessage("Radia::Error204"); return 0; }
+							if(MethNo == RadSolverMethod::BICGSTAB)
+								MethNo = RadSolverMethod::LU;   // moment is dense-direct; satisfy medium-N via LU
+						}
+					}
+				}
+			}
+		}
+
 		try
 		{
 			ActualIterNum = MakeAutoRelax(InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
