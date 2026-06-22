@@ -2095,6 +2095,91 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 #endif
 }
 
+#ifdef RADIA_USE_HACAPK
+//-------------------------------------------------------------------------
+// SolveMomentHACApK: the SCALABLE-storage moment linear step (Phase 2 Increment 3,
+// docs/moment_yano/ACA_MOMENT_DESIGN.md).  Solves A_raw sigma = b_raw with the moment system
+// as a HACApK H-matrix (RadHACApKMomentSystem, O(N log N) matvec) + block-Jacobi BiCGSTAB.
+// LINEAR / UNIFORM chi only (the H-matrix uses a single chi; nonlinear per-element chi is Increment 4).
+// b_raw[6h+t] = chi*Hext_h[t] for the 3 dipole rows (t<3), 0 for monopole/quadrupole.  Returns the
+// BiCGSTAB iteration count (>=0 converged), -1 (build fail), -10 (breakdown).  sigma length 6*nHex.
+//-------------------------------------------------------------------------
+static int SolveMomentHACApK(radTInteraction* IntrctPtr, double chi,
+                             const std::vector<double>& HextPerHex,
+                             double aca_eps, int leaf, double eta,
+                             double tol, int maxiter, std::vector<double>& sigma)
+{
+	int nHex = IntrctPtr->GetNumHexElements();
+	int dof = 6 * nHex;
+	sigma.assign((size_t)dof, 0.0);
+	if(dof == 0) return 0;
+
+	RadHACApKMomentSystem mgr(IntrctPtr, chi);
+	RadHACApKParams prm; prm.aca_eps = aca_eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
+	if(!mgr.BuildHMatrix(prm)) return -1;
+
+	// RHS b_raw (un-normalized): dipole rows carry chi*Hext, the rest are 0.
+	std::vector<double> b((size_t)dof, 0.0);
+	for(int h = 0; h < nHex; h++)
+		for(int t = 0; t < 3; t++) b[(size_t)6*h + t] = chi * HextPerHex[(size_t)3*h + t];
+
+	// block-Jacobi: invert each element's local 6x6 A_raw block (rows/cols 6h..6h+5).
+	std::vector<double> Binv((size_t)dof * 6);   // [6h+i]*6 + j  = (B_h^-1)[i][j], row-major per block
+	{
+		std::vector<double> blk(36); std::vector<int> ipiv(6); std::vector<double> work(36);
+		int six = 6, lwork = 36, info = 0;
+		std::vector<double> chiv((size_t)(nHex > 0 ? nHex : 1), chi);
+		for(int h = 0; h < nHex; h++)
+		{
+			for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++)
+				blk[(size_t)j*6 + i] = IntrctPtr->MomentSystemEntry(6*h+i, 6*h+j, chiv.data());   // col-major for LAPACK
+			dgetrf_(&six, &six, blk.data(), &six, ipiv.data(), &info);
+			if(info == 0) { dgetri_(&six, blk.data(), &six, ipiv.data(), work.data(), &lwork, &info); }
+			if(info != 0) { for(int k = 0; k < 36; k++) blk[k] = 0.0; for(int k = 0; k < 6; k++) blk[(size_t)k*6+k] = 1.0; }
+			for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++) Binv[((size_t)6*h+i)*6 + j] = blk[(size_t)j*6 + i];
+		}
+	}
+	auto applyM = [&](const std::vector<double>& r, std::vector<double>& z)
+	{
+		z.assign((size_t)dof, 0.0);
+		for(int h = 0; h < nHex; h++)
+			for(int i = 0; i < 6; i++) { double s = 0.0; const double* Bi = &Binv[((size_t)6*h+i)*6];
+				for(int j = 0; j < 6; j++) s += Bi[j]*r[(size_t)6*h+j]; z[(size_t)6*h+i] = s; }
+	};
+	auto dot = [&](const std::vector<double>& a, const std::vector<double>& bb){ double s=0; for(int i=0;i<dof;i++) s+=a[i]*bb[i]; return s; };
+
+	// preconditioned BiCGSTAB on the H-matvec (x0 = 0 -> r0 = b)
+	double bnorm = std::sqrt(dot(b, b)); if(bnorm < 1e-300) return 0;
+	std::vector<double> x((size_t)dof, 0.0), r = b, rhat = b, v((size_t)dof, 0.0), p((size_t)dof, 0.0);
+	std::vector<double> phat((size_t)dof), s((size_t)dof), shat((size_t)dof), tvec((size_t)dof);
+	double rho = 1.0, alpha = 1.0, omega = 1.0;
+	int it = 0;
+	for(; it < maxiter; it++)
+	{
+		double rho_new = dot(rhat, r);
+		if(std::fabs(rho_new) < 1e-300) return -10;                 // breakdown
+		double beta = (rho_new/rho) * (alpha/omega);
+		for(int i = 0; i < dof; i++) p[i] = r[i] + beta*(p[i] - omega*v[i]);
+		applyM(p, phat); mgr.MatVec(phat, v);
+		double rhv = dot(rhat, v); if(std::fabs(rhv) < 1e-300) return -10;
+		alpha = rho_new / rhv;
+		for(int i = 0; i < dof; i++) s[i] = r[i] - alpha*v[i];
+		double snorm = std::sqrt(dot(s, s));
+		if(snorm/bnorm < tol) { for(int i=0;i<dof;i++) x[i] += alpha*phat[i]; it++; break; }
+		applyM(s, shat); mgr.MatVec(shat, tvec);
+		double tt = dot(tvec, tvec); if(tt < 1e-300) return -10;
+		omega = dot(tvec, s) / tt;
+		for(int i = 0; i < dof; i++) x[i] += alpha*phat[i] + omega*shat[i];
+		for(int i = 0; i < dof; i++) r[i] = s[i] - omega*tvec[i];
+		if(std::sqrt(dot(r, r))/bnorm < tol) { it++; break; }
+		if(std::fabs(omega) < 1e-300) return -10;
+		rho = rho_new;
+	}
+	sigma = x;
+	return it;
+}
+#endif
+
 //-------------------------------------------------------------------------
 // LU Solver: SolveLinearStep override
 // Builds system matrix with current chi, solves with LU, stores result
@@ -2146,6 +2231,31 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			HextPerHex[(size_t)h*3+0] = He.x; HextPerHex[(size_t)h*3+1] = He.y; HextPerHex[(size_t)h*3+2] = He.z;
 			radTPolyhedron* poly = ctx.polyCache[e]; if(poly && poly->Use6DOF_MSC) poly->CurrentChi = chi_abs;
 		}
+#ifdef RADIA_USE_HACAPK
+		// method 2 (scalable storage): solve the moment system via the HACApK H-matrix + block-Jacobi BiCGSTAB
+		// (O(N log N) matvec) instead of the dense O(N^3) LU.  LINEAR / uniform chi only (nonlinear per-element
+		// chi is Increment 4); breakdown/build-fail falls through to the dense LU below (same answer).
+		extern bool g_yano_moment_hacapk;
+		if(g_yano_moment_hacapk && nHex > 0)
+		{
+			bool chiUniform = true;
+			for(int h = 1; h < nHex; h++)
+				if(std::fabs(chiPerHex[h] - chiPerHex[0]) > 1.0e-12 * chiPerHex[0]) { chiUniform = false; break; }
+			if(chiUniform)
+			{
+				std::vector<double> sigma;
+				int nit = SolveMomentHACApK(IntrctPtr, chiPerHex[0], HextPerHex,
+				                            rad.m_hacapk_eps, rad.m_hacapk_leaf_size, rad.m_hacapk_eta,
+				                            rad.m_bicg_tol, 10000, sigma);
+				if(nit >= 0)
+				{
+					for(int i = 0; i < totalDOF; i++) ctx.FlatMagn[i] = sigma[i];
+					return nit;   // converged -> sigma written; skip the dense LU path
+				}
+				// nit < 0 (breakdown / build fail) -> fall through to dense LU (correct answer)
+			}
+		}
+#endif
 		IntrctPtr->BuildMomentSystemCore(chiPerHex.data(), HextPerHex.data(), SystemMatrix, RHS);
 	}
 	else

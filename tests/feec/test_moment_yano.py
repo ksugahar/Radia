@@ -59,11 +59,43 @@ def test_method1_bicgstab_reroutes_to_moment_lu():
     assert np.linalg.norm(M1 - M0) <= 1e-9 * max(np.linalg.norm(M0), 1.0), f"M1={M1} != M0={M0}"
 
 
-def test_method2_hacapk_fails_loud():
-    """method 2 (HACApK) has no moment path yet -> raise with the EIEM2 opt-out hint (Error204)."""
-    with pytest.raises(RuntimeError) as ei:
-        _cube_Mz(2, moment=True)
-    assert "yano_moment=False" in str(ei.value)
+def test_method2_hacapk_solves_via_hmatrix():
+    """method 2 (HACApK H-matrix + block-Jacobi BiCGSTAB, Phase-2 Increment 3) now SOLVES the moment system
+    (no longer raises Error204) and == method 0 (dense LU).  Single cube: the 6x6 block-Jacobi is the exact
+    local inverse so BiCGSTAB converges immediately."""
+    M0 = _cube_Mz(0, moment=True)
+    M2 = _cube_Mz(2, moment=True)
+    assert np.all(np.isfinite(M2)) and np.linalg.norm(M2) > 1e-6
+    rel = np.linalg.norm(M2 - M0) / max(np.linalg.norm(M0), 1e-30)
+    assert rel < 1e-3, f"method2 H-BiCGSTAB M={M2} != method0 M={M0} (rel {rel:.2e})"
+
+
+def test_method2_hacapk_multihex_external_field():
+    """method 2 H-matrix BiCGSTAB == method 0 dense LU on a multi-hex block, compared by the EXTERNAL field
+    (formulation/solver-tolerance-independent observable; internal M is BiCGSTAB-tol-limited).  Exercises the
+    real off-diagonal H-matvec (not a single 6x6 block)."""
+    MU0 = 4e-7 * np.pi; mu_r = 200.0; L = 0.01
+
+    def solve_extB(method):
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True, bicgstab_tol=1e-9)
+        objs = []
+        for iz in range(2):
+            for ix in range(3):
+                for iy in range(3):
+                    x0, y0, z0 = ix * L, iy * L, iz * L
+                    v = [[x0, y0, z0], [x0 + L, y0, z0], [x0 + L, y0 + L, z0], [x0, y0 + L, z0],
+                         [x0, y0, z0 + L], [x0 + L, y0, z0 + L], [x0 + L, y0 + L, z0 + L], [x0, y0 + L, z0 + L]]
+                    h = rad.ObjHexahedron(v, [0, 0, 0]); rad.MatApl(h, rad.MatLin(mu_r)); objs.append(h)
+        cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * 1e3])])
+        rad.Solve(cont, 1e-8, 3000, method)
+        B = np.asarray([rad.Fld(cont, "b", p) for p in ([0.05, 0.01, 0.01], [0.0, 0.05, 0.02], [0.02, 0.02, 0.06])], float)
+        rad.UtiDelAll()
+        return B
+
+    B0 = solve_extB(0)
+    B2 = solve_extB(2)
+    rel = np.linalg.norm(B2 - B0) / max(np.linalg.norm(B0), 1e-30)
+    assert rel < 1e-5, f"method2 H-BiCGSTAB external B != method0 (rel {rel:.2e})"
 
 
 # NOTE: moment-vs-EIEM2 agreement is NOT tested on a single cube -- the solved M is an INTERNAL,
