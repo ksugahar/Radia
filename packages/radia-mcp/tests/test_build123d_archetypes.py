@@ -17,8 +17,9 @@ from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetizati
                                             cylindrical_magnet, block_magnet, halbach_ring, c_core,
                                             solenoid, pole_tip, multipole_yoke, h_dipole, helmholtz_pair,
                                             cos_theta_dipole, e_core, slotted_stator, spm_rotor,
-                                            litz_wire, litz_packing_radius)
-from build123d import Box
+                                            litz_wire, litz_packing_radius, litz_fill_factor,
+                                            hierarchical_litz, rectangular_litz)
+from build123d import Box, Rectangle, RegularPolygon
 
 
 def test_magnetization_label_roundtrip():
@@ -147,6 +148,87 @@ def test_litz_strand_meshes_in_netgen():
     assert mesh.ne > 50, f"a Litz strand should tet-mesh (got {mesh.ne})"
 
 
+def test_litz_wire_noncircular_section():
+    """Non-circular strand: a rectangular (flat / edge) wire swept on the helix has volume
+    rect_area x helix_length, the same twist machinery with a non-round section."""
+    N, w, h, Rb, L, pitch = 6, 0.8, 0.4, 1.6, 24.0, 12.0
+    litz = litz_wire(N, 0.5, Rb, L, pitch, name="flat", strand_section=Rectangle(w, h))
+    assert len(litz.children) == N and all(s.is_valid for s in litz.solids())
+    turns = L / pitch
+    strand_len = math.sqrt(L ** 2 + (turns * 2 * math.pi * Rb) ** 2)
+    vol = sum(s.volume for s in litz.solids())
+    assert abs(vol - N * (w * h) * strand_len) / vol < 1e-3, "N strands x rect area x helix length"
+
+
+def test_litz_fill_factor():
+    """Copper fill = n*(rs/Rb)^2; single-layer PHYSICAL envelope (ring radius + rs) gives the closed form
+    n sin^2(pi/n)/(1+sin(pi/n))^2, a fraction < 1 (the centre-ring radius alone would overcount > 1)."""
+    assert abs(litz_fill_factor(7, 0.5, 1.5) - 7 * (0.5 / 1.5) ** 2) < 1e-12
+    for n in (6, 12, 19):
+        rs = 0.5
+        env = litz_packing_radius(n, rs) + rs                 # physical outer envelope
+        ff = litz_fill_factor(n, rs, env)
+        s = math.sin(math.pi / n)
+        assert abs(ff - n * s ** 2 / (1 + s) ** 2) < 1e-12, "single-layer fill via physical envelope"
+        assert ff < 1.0, "physical fill factor is a fraction"
+
+
+def _superposed_len(levels, indices, length, n):                 # independent re-impl for the test
+    pts = []
+    for s in range(n + 1):
+        z = length * s / n
+        x = y = 0.0
+        for (count, radius, pitch), idx in zip(levels, indices):
+            ph = 2 * math.pi * z / pitch + 2 * math.pi * idx / count
+            x += radius * math.cos(ph); y += radius * math.sin(ph)
+        pts.append((x, y, z))
+    return sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
+
+
+def test_hierarchical_litz_coiled_coil():
+    """A 3x2 coiled-coil carries prod(count)=6 strands; each strand volume = pi rs^2 x its superposed
+    centreline length (Pappus tube), and the strands are separate labelled regions."""
+    levels = [(3, 2.0, 30.0), (2, 0.7, 8.0)]
+    rs, L, n = 0.25, 24.0, 160
+    cab = hierarchical_litz(levels, rs, L, name="hl", n_axial=n)
+    import itertools
+    combos = list(itertools.product(range(3), range(2)))
+    assert len(cab.children) == len(combos) == 6 and all(s.is_valid for s in cab.solids())
+    assert [c.label for c in cab.children] == [f"hl_{i:02d}_{j:02d}" for (i, j) in combos]
+    for c, (i, j) in zip(cab.children, combos):
+        exp = math.pi * rs ** 2 * _superposed_len(levels, (i, j), L, n)
+        assert abs(c.volume - exp) / exp < 0.02, "strand vol = pi rs^2 x centreline length"
+
+
+def test_rectangular_litz_grid_and_twist():
+    """Rectangular bundle: nx*ny strands on a grid. Straight -> each volume = pi rs^2 L exactly and the
+    bundle bbox spans the grid; twisted -> strands stay valid following per-strand helices."""
+    nx, ny, rs, pitch, L = 2, 3, 0.4, 1.0, 20.0
+    rl = rectangular_litz(nx, ny, rs, pitch, L, twist_pitch=None, name="rl")
+    assert len(rl.children) == nx * ny and all(s.is_valid for s in rl.solids())
+    for s in rl.solids():
+        assert abs(s.volume - math.pi * rs ** 2 * L) / (math.pi * rs ** 2 * L) < 1e-6, "straight extrude"
+    bb = rl.bounding_box()
+    assert abs(bb.size.X - ((nx - 1) * pitch + 2 * rs)) < 1e-6, "x spans the grid"
+    assert abs(bb.size.Y - ((ny - 1) * pitch + 2 * rs)) < 1e-6, "y spans the grid"
+    tw = rectangular_litz(nx, ny, rs, pitch, L, twist_pitch=40.0, name="rl", n_axial=120)
+    assert len(tw.children) == nx * ny and all(s.is_valid for s in tw.solids())
+
+
+def test_hierarchical_litz_meshes_in_netgen():
+    """CAE gate: a coiled-coil strand (superposed-helix spline sweep) tet-meshes via STEP -> Netgen."""
+    import tempfile
+    from build123d import export_step
+    from netgen.occ import OCCGeometry
+    from ngsolve import Mesh
+    cab = hierarchical_litz([(3, 1.6, 24.0), (2, 0.6, 8.0)], 0.25, 16.0, name="hl", n_axial=120)
+    with tempfile.TemporaryDirectory() as d:
+        f = os.path.join(d, "coil.step")
+        export_step(cab.children[0], f)
+        mesh = Mesh(OCCGeometry(f).GenerateMesh(maxh=0.8))
+    assert mesh.ne > 50, f"a coiled-coil strand should tet-mesh (got {mesh.ne})"
+
+
 def test_halbach_meshes_in_netgen():
     """CAE gate: a Halbach segment tet-meshes through build123d -> STEP -> Netgen."""
     import tempfile
@@ -236,6 +318,11 @@ def main():
     test_litz_wire_twisted_strands()
     test_litz_packing_radius_strands_touch()
     test_litz_strand_meshes_in_netgen()
+    test_litz_wire_noncircular_section()
+    test_litz_fill_factor()
+    test_hierarchical_litz_coiled_coil()
+    test_rectangular_litz_grid_and_twist()
+    test_hierarchical_litz_meshes_in_netgen()
     test_e_core_two_windows()
     test_slotted_stator_removes_slots()
     test_spm_rotor_alternating_radial_magnets()
