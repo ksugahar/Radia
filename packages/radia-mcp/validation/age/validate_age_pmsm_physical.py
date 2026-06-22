@@ -2,7 +2,7 @@
 r"""Physical surface-PM (SPM) machine via the AGE, gated against a fully-meshed brute FE solve.
 
 This locks the AGE rotating-machine core as a PHYSICAL motor solver (not just the idealised
-ring-harmonic excitation of test_age_motor_nonlinear / test_airgap_eddy_machine): the permanent
+ring-harmonic excitation of validate_age_motor_nonlinear / validate_airgap_eddy_machine): the permanent
 magnet is a REAL FE volume source (remanence linear form) and the armature is a real winding
 current density, both in physical units, and the air-gap field [T] and torque [N.m] are validated
 against an independent fully-meshed-gap reference.
@@ -30,15 +30,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction,
                      grad, dx, x, y, sqrt, atan2, cos, sin, IfPos, Integrate, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -112,7 +109,7 @@ def _br1(B, mesh, r, n=240):   # fundamental of B_r(theta) on the circle of radi
     return 2 * abs(np.fft.rfft(np.array(vals))[1]) / n
 
 
-def test_opencircuit_field_age_matches_brute():
+def validate_opencircuit_field_age_matches_brute():
     """Open-circuit air-gap |B_r1|: AGE (un-meshed gap) == brute (meshed gap) to <0.1%, ~1.1 T."""
     mb = _geo(True)
     fb = H1(mb, order=3, dirichlet="outer|rotor_inner", complex=False)
@@ -141,7 +138,7 @@ def test_opencircuit_field_age_matches_brute():
     assert 0.7 < b_gap < 1.2, f"mid-gap field {b_gap:.3f} T off the physical air-gap magnitude"
 
 
-def test_loaded_torque_age_matches_brute():
+def validate_loaded_torque_age_matches_brute():
     """Loaded torque: AGE mesh-free == brute Arkkio to <0.5% over rotor angle; sinusoidal law."""
     J0 = 6.0e6
     mb = _geo(True)
@@ -184,8 +181,8 @@ def test_loaded_torque_age_matches_brute():
 
 
 def main():
-    test_opencircuit_field_age_matches_brute()
-    test_loaded_torque_age_matches_brute()
+    validate_opencircuit_field_age_matches_brute()
+    validate_loaded_torque_age_matches_brute()
     print("[OK] AGE PHYSICAL PMSM: PM remanence + winding current FE sources, un-meshed gap; "
           "air-gap field [T] and mesh-free torque [N.m] reproduce the fully-meshed brute FE.")
 

@@ -5,7 +5,7 @@ A real 3-phase distributed winding (60-deg belts -> MMF space harmonics 5, 7, 11
 sinusoidal currents i_a,b,c(t), with the square-wave PM rotor phase-locked at the max-torque operating
 point (theta_m = omega_e t, p=1).  The belt MMF harmonics beat with the PM field to give the
 characteristic 6k ELECTRICAL torque ripple on the DC operating torque -- the standard PMSM ripple that
-a single-harmonic SINUSOIDAL winding does NOT show (test_age_synchronous_torque was ripple-free).
+a single-harmonic SINUSOIDAL winding does NOT show (validate_age_synchronous_torque was ripple-free).
 torque(t) over one electrical period -> FFT.
 
 ONE factorization: the belts are fixed current SOURCES and the stator iron is smooth, so K is fixed;
@@ -17,15 +17,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction,
                      grad, dx, x, y, sqrt, atan2, cos, sin, IfPos, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -83,7 +80,7 @@ def _src(fes, mesh, wt):
     L.Assemble(); return L
 
 
-def test_threephase_torque_ripple_age_matches_brute():
+def validate_threephase_torque_ripple_age_matches_brute():
     ma = _geo(False)
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
     ua, wa = fa.TnT(); aa = BilinearForm(fa); aa += _nu(ma)*grad(ua)*grad(wa)*dx
@@ -126,7 +123,7 @@ def test_threephase_torque_ripple_age_matches_brute():
 
 
 def main():
-    test_threephase_torque_ripple_age_matches_brute()
+    validate_threephase_torque_ripple_age_matches_brute()
     print("[OK] AGE 3-phase time-waveform: real belt winding + phase-locked PM, one factorization, "
           "reproduces the brute meshed-gap torque(t) and its characteristic 6k-electrical ripple.")
 

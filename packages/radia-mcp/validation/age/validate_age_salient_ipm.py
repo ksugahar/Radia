@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""SALIENT rotor (SynRM / IPM) via the AGE -- reluctance torque + dq saliency, vs brute meshed gap.
 
-The non-salient SPM (test_age_synchronous_torque / test_age_pmsm_characterization) had Ld=Lq and a
+The non-salient SPM (validate_age_synchronous_torque / validate_age_pmsm_characterization) had Ld=Lq and a
 pure sin(delta) torque with NO reluctance (2*delta) term.  Here the rotor is SALIENT -- a 2-pole
 anisotropic core, low reluctivity (iron) on the d-axis, high (air barrier) on the q-axis, as a smooth
 rotor-fixed modulation  nu~_rotor(theta) = 1/mur_fe + (1-1/mur_fe)*sin^2(theta).
@@ -26,15 +26,12 @@ import math
 import os
 import sys
 
-import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction,
                      grad, dx, x, y, sqrt, atan2, cos, sin, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
 
-pytestmark = pytest.mark.xval
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.airgap_machine import (
@@ -94,7 +91,7 @@ def _fourier_mag(T, d):
     return f1, f2
 
 
-def test_salient_ipm_synrm_age_matches_brute():
+def validate_salient_ipm_synrm_age_matches_brute():
     ma = _geo(False)
     fa = H1(ma, order=3, dirichlet="outer|rotor_inner", complex=True)
     ua, wa = fa.TnT(); aa = BilinearForm(fa); aa += _nu(ma)*grad(ua)*grad(wa)*dx
@@ -161,7 +158,7 @@ def test_salient_ipm_synrm_age_matches_brute():
 
 
 def main():
-    test_salient_ipm_synrm_age_matches_brute()
+    validate_salient_ipm_synrm_age_matches_brute()
     print("[OK] AGE salient rotor: SynRM pure-2nd-harmonic reluctance torque + IPM fundamental(PM), "
           "Ld!=Lq saliency, ONE factorization (rotor frame) reproducing the brute meshed-gap FE.")
 

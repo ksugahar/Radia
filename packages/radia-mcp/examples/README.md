@@ -24,17 +24,17 @@ python examples/cadquery_to_cubit_hex_demo.py
 ## Heavy Validation
 
 Long FEM/physics cross-validations are not part of the default
-radia-mcp pytest gate. They are marked `xval` and should be run
+radia-mcp pytest gate. They live under `validation/` and should be run
 explicitly when validating a research workflow:
 
 ```bash
-python -m pytest tests/ -m xval
+python validation/age/validate_age_nonlinear_saturation.py
 ```
 
 When a validation becomes primarily explanatory or publication-facing,
-move it from `tests/` into `examples/` as a runnable script with a short
-README entry. Keep `tests/` focused on fast MCP/API contracts and small
-numerical invariants.
+move it from `validation/` into `examples/` as a runnable script with a
+short README entry. Keep `tests/` focused on fast MCP/API contracts and
+small numerical invariants.
 
 The Cubit-touching demos kill any existing `coreform_cubit.exe`
 process at start (so they leave a clean slate); the live Cubit GUI
