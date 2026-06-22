@@ -134,12 +134,18 @@ class RadHACApKMomentSystem : public RadHACApKBase {
      demag conditioning wall shared with yano-MSC / HDiv-VIM).  Bounded-iter (a pivoted H-factor or a
      symmetrized moment formulation) stays FUTURE work; it does not block Phase 3.
 
-## After Phase 2 (-> Phase 3, EIEM2 deletion)
+## Phase 3 (DONE, 2026-06-23): EIEM2 deleted -- moment-yano is canonical
 
-With method 0/1/2 + IMA + nonlinear all on moment, EIEM2 (the `Use6DOF_MSC` eval-point
-collocation kernel + `g_yano_eval_alpha`/`g_yano_no_center_charge`/`g_yano_pyramid_cloud`
-research flags + the `yano_moment=False` opt-out) can be removed and the yano goldens
-re-locked to moment-only. See the full-delete task list.
+With method 0/1/2 + IMA + nonlinear all on moment, the EIEM2 surface-charge collocation
+kernel was REMOVED (live/dead refactor, commits bf4424d9/99556872/15f17022/d8d4ef99):
+`radTInteraction::Compute6x6/5x5/MixedBlockFast`, the `RadHACApKMSCManager` MSC machinery
+(now MMM-3x3-only), the dead IMA-mirror block, the per-face eval-point caches, and the
+`g_yano_eval_alpha`/`g_yano_no_center_charge`/`g_yano_pyramid_cloud` research flags (+ their
+`SolverConfig` kwargs).  `MscEvalPoint` (alpha=0.5 midpoint) is kept only for the per-face
+external-field sampling in `SetupExternFieldArray`.  moment-yano (`BuildMomentSystemCore`
+dense / `RadHACApKMomentSystem` H-matrix) is the SOLE surface-charge demag = the canonical
+radia MMM for hex/wedge/pyramid soft iron (tet stays 3-DOF MMM).  The quadrupole rows are
+the per-element residual eigenmodes (see `examples/vim/eigenmode_quadrupole_derivation.wls`).
 
 ## References
 

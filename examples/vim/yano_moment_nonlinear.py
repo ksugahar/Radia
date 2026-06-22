@@ -46,7 +46,7 @@ def M_BH_vec(H):
 
 def moment_nonlinear(hexes, Happ, maxit=80, tol=1e-10, m_depth=6):
     """Anderson-accelerated secant fixed-point, NO loop deflation (solve A directly -- A is non-singular)."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R0))
@@ -105,13 +105,13 @@ def moment_nonlinear(hexes, Happ, maxit=80, tol=1e-10, m_depth=6):
     divB = max(abs(np.sum(area[dofs_of[e]] * sig[dofs_of[e]])) / (np.sum(area[dofs_of[e]] * np.abs(sig[dofs_of[e]])) + 1e-30) for e in range(n_el))
     constit = float(np.median([np.linalg.norm(EL[e][2] @ sig / EL[e][3] - M_BH_vec(Hs[e:e+1])[0]) / (np.linalg.norm(EL[e][2] @ sig / EL[e][3]) + 1e-30) for e in range(n_el)]))
     my = float(np.sum(sig * area * (fc[:, 1] - ecen[:, 1])))
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return my, nit, conv, float(divB), constit
 
 
 def radia_ref(hexes, Happ):
     """shipped Radia (MMM tets + MatSatIsoTab, same M-H law) -- the trusted nonlinear reference."""
-    rad.UtiDelAll(); rad.set_demag_backend("auto"); rad.SolverConfig(yano_eval_alpha=-1.0)
+    rad.UtiDelAll(); rad.set_demag_backend("auto")
     objs, cents, vols = [], [], []
     for V in hexes:
         c = [list(v) for v in V]
