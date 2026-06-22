@@ -15,10 +15,12 @@
    The (nF-4) quadrupole rows are the RESIDUAL eigenmodes = charge patterns with ZERO monopole and ZERO
    dipole moment = null space of the 4 functionals {Ae, Ae dx, Ae dy, Ae dz}.  Each eigenmode sources a
    pure-quadrupole field; the row pins it to chi times that self-field (the gradH coupling), so the mode
-   is suppressed by the field IT creates.  Same recipe for every element:
-       hex     (6 faces) -> 2 eigenmodes
+   is suppressed by the field IT creates.  Same recipe for EVERY surface-charge element (the (nF-4) count
+   is exactly the quadrupole-and-higher modes that survive after the 4 monopole+dipole conditions):
+       tet     (4 faces) -> 0 eigenmodes  (pure monopole + 3 dipole -- no quadrupole row)
        wedge   (5 faces) -> 1 eigenmode
-       pyramid (5 faces) -> 1 eigenmode
+       pyramid (5 faces) -> 1 eigenmode   (PLANAR mode, distinct from the wedge's axial one)
+       hex     (6 faces) -> 2 eigenmodes
 
    Self-tested: run  wolframscript -file eigenmode_quadrupole_derivation.wls
 ---------------------------------------------------------------------------------------------------- *)
@@ -82,6 +84,13 @@ wedF = {{1, 2, 3}, {4, 5, 6}, {1, 2, 5, 4}, {2, 3, 6, 5}, {3, 1, 4, 6}};
 pyrV = {{-1, -1, 0}, {1, -1, 0}, {1, 1, 0}, {-1, 1, 0}, {0, 0, 2}};
 pyrF = {{1, 2, 3, 4}, {1, 2, 5}, {2, 3, 5}, {3, 4, 5}, {4, 1, 5}};
 
+(* tetrahedron: 4 triangular faces -> 4 DOF = monopole(1) + dipole(3) + quadrupole(0).  The residual
+   eigenmode count nF-4 = 0, so a tet carries NO quadrupole row -- it is pure monopole+dipole (this is the
+   "4 DoF = monopole + 3 dipole" the user confirmed; radia's production tet is the 3-DOF MMM dipole, the
+   same dipole block without the redundant net-charge monopole row). *)
+tetV = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+tetF = {{1, 3, 2}, {1, 2, 4}, {1, 4, 3}, {2, 3, 4}};
+
 (* a DISTORTED (sheared) hex + a SCALENE wedge, to certify geometry-adaptivity (no hand-picked axis) *)
 shHexV = (# + {0.6 (#[[3]] + 1)/2, 0, 0}) & /@ hexV;   (* shear top in +x *)
 scWedV = {{0, 0, -1}, {2.3, 0.2, -0.8}, {0.7, 1.9, -1.2}, {0.1, -0.1, 1}, {2.5, 0.3, 1.1}, {0.6, 1.8, 0.9}};
@@ -112,6 +121,7 @@ report[name_, V_, F_] := Module[{dat, modes, q, mono, dip, Q, Dm},
     {q, Length[modes]}];
   modes];
 
+tetModes = report["TET (tetrahedron)", tetV, tetF];
 hexModes = report["HEX (cube)", hexV, hexF];
 wedModes = report["WEDGE (triangular prism)", wedV, wedF];
 pyrModes = report["PYRAMID (square)", pyrV, pyrF];
