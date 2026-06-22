@@ -18,6 +18,11 @@ TOPICS: dict[str, str] = {
         "When can a magnet be designed as a 2-D body + end perturbation? "
         "Leaf coupling scales as ~ gap/L (measured slope -0.95)"
     ),
+    "two_plane_design": (
+        "The two-plane -> 3-D method: design in transverse (r,z) + azimuthal "
+        "(s,z) planes, reflect into a 3-D sector pole; FFAG scaling sector, "
+        "reflection validity = the L/g leaf coupling"
+    ),
     "all": "Everything (all topics concatenated)",
 }
 
@@ -407,6 +412,79 @@ is below your field-integral tolerance.
 """
 
 
+TWO_PLANE_DESIGN = """
+# The two-plane -> 3-D design method (the FFAG scaling sector cell)
+
+An accelerator (bending / focusing) magnet is designed in TWO orthogonal 2-D
+planes, and the two designs are REFLECTED into ONE 3-D pole.  The radial-index
+design (isochronous_endpack) and the foliate-and-perturb leaf coupling
+(foliate_perturb) are fragments of this single method.
+
+## The two planes (circular / FFAG sector geometry: orbit = azimuthal arc)
+
+  * TRANSVERSE plane (r, z), perpendicular to the orbit:
+        sets the field the beam SEES -- the scaling field index
+        B_z(r) ~ r^k (k = const => momentum-independent tune), pole gap
+        g(r) = g0 (r/r0)^(-k).  Engine: scaling_ffag_pole_2d.py (Plane A).
+  * AZIMUTHAL plane (s, z), along the orbit (s = r0 * theta):
+        sets how the field TURNS ON/OFF -- the sector ENDS, the fringe, the
+        effective magnetic length L_eff = INT B_z ds / B_z(body).  A
+        finite-length iron pole of gap g(r0) over the sector arc
+        L_sector = r0 * dtheta.  Engine:
+        ffag_sector_two_plane.py::solve_azimuthal_end (Plane B).
+
+The 3-D pole is the (r,z) gap profile SWEPT around the sector arc and truncated
+at the azimuthal ends shaped by Plane B.  The two 2-D designs are EXACT in the
+body and couple only at the ends.
+
+## The reflection's validity = the leaf-coupling aspect L_sector / g
+
+Measured (ffag_sector_two_plane.py, ngsolve only, golden-tested):
+
+  * Plane A: scaling index k ~ 4.88 (vs design 5; the naive pole droop,
+    reshaped per isochronous_endpack), A/phi bracket ~2e-6 (physics, not mesh).
+  * Plane B: EACH sector end adds ~0.75 g of effective length, so
+        L_eff = L_sector + ~1.5 g,
+    and the fringe excess (L_eff - L_sector)/L_sector falls as ~ gap/L:
+
+        L_sector/g      2      3.5     6      10
+        fringe        +73%    +43%    +25%   +15%
+
+    log-log slope -0.98 -- the SAME leaf-coupling ~ gap/L law as the straight
+    magnet (foliate_perturb), now on the AZIMUTHAL plane.
+
+So the aspect L_sector / g(r0) is the design lever: a COMPACT cell (L/g = 3 ->
++50% fringe) is NON-perturbative -- the sector ENDS are a genuine 3-D problem,
+not a body-stack correction.  The two-plane reflection is exact only as
+L/g -> infinity.
+
+## Rung 2 (the 3-D reflection -- ESTABLISHED, ngsolve, golden-tested)
+
+Sweep g(r) around the sector arc -- REVOLVE the (r,z) gap cross-section about
+the bend axis -- into a 3-D iron pole, driven as an IRON-POLE EQUIPOTENTIAL
+(upper-half model, median z=0 the up-down antisymmetry plane, the high-mu pole
+back at Psi=mmf; the 3-D form of Plane A/B's scalar potential).  Verified
+(ffag_sector_two_plane.py --rung2): the orbit RECOVERS B_z(r) ~ r^k -- field
+index mean ~4.88 (range [4.6, 5.2], design 5; the naive-pole droop + mesh
+scatter) -- so the swept g(r) ~ r^(-k) pole reproduces the designed radial field
+in full 3-D; the azimuthal sector ends add L_eff/L_sector - 1 ~ +39% (the
+Plane-B fringe, cross-checked in 3-D).  The field index is set by the pole
+GEOMETRY (a high-mu equipotential forces B ~ 1/g(r)), so it is DRIVE-INDEPENDENT
+-- a CoilBuilder + reduced-Omega coil drive sets the field AMPLITUDE (a further
+step), not the index.
+
+## Honest scope
+
+Plane B is the LINEAR-iron azimuthal-END geometry (the magnetic-length excess;
+saturation is Plane A's lever, composed orthogonally).  The radial profile is
+<B>(r) only -- AVF flutter (vertical focusing), the betatron tunes, and the
+orbit<->field self-consistency are separate.  This is the METHOD SCAFFOLD: two
+2-D hodograph-native designs + a measured L/g reflection criterion; the
+curved-orbit twist (combined-function, the beam-referenced equipotential
+surface rotating along a bent orbit) is the next axis.
+"""
+
+
 def get_accelerator_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -419,6 +497,8 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                                saturated nonlinear end-pack reshape
       "foliate_perturb"      - When can a magnet be a 2-D body + end
                                perturbation?  Leaf coupling ~ gap/L
+      "two_plane_design"     - The two-plane -> 3-D method: transverse (r,z)
+                               + azimuthal (s,z) -> 3-D sector pole
     """
     topic = topic.lower().strip()
     if topic in ("end_pole", "chamfer", "delferriere"):
@@ -433,12 +513,15 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     if topic in ("foliate_perturb", "foliate", "leaf_coupling", "quasi_2d",
                  "quasi2d", "perturbation"):
         return FOLIATE_PERTURB
+    if topic in ("two_plane_design", "two_plane", "twoplane", "sector",
+                 "ffag_sector", "reflection"):
+        return TWO_PLANE_DESIGN
     if topic == "all":
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
-            ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB,
+            ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
-        "rotating_coil, isochronous_endpack, foliate_perturb."
+        "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design."
     )

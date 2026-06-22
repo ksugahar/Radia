@@ -1087,6 +1087,57 @@ not the fringe itself (the integrated `L_eff>L_iron` is a free-space effect, the
 +180→+48% in the table above) — which is the next rung: foliate the body in 2-D,
 follow the beam-referenced equipotential surface at the ends.)*
 
+### `ffag_sector_two_plane.py` — the two-plane → 3-D method, on the FFAG scaling sector
+
+**The unifying method** the §3.3 (radial index) and §3.4 (leaf coupling) pieces
+are fragments of: **design the magnet in two orthogonal 2-D planes and reflect
+the two designs into one 3-D pole** (`DESIGN_METHODOLOGY.md` §3.5). For an FFAG
+scaling **sector** cell the beam orbit is an azimuthal arc, so the two planes are:
+
+- **Plane A — transverse `(r,z)`** (⊥ orbit): the field the beam *sees* — the
+  scaling index `B_z(r) ∝ r^k`, gap `g(r)=g₀(r/r₀)^{−k}` — solved by reusing
+  `scaling_ffag_pole_2d.py`. Verified `k ≈ 4.88` (vs design 5; the naive pole's
+  droop, reshaped in §3.3), **A/φ bracket `~2e-6`** (physics, not mesh).
+- **Plane B — azimuthal `(s,z)`** (along the orbit, `s=r₀θ`; **new** here): how
+  the field *turns on/off* — a finite-length iron pole of gap `g(r₀)` over the
+  sector arc `L_sector=r₀Δθ`, scalar-potential reduced solve (ngsolve only, the
+  same machinery as Plane A in the perpendicular plane). It measures the
+  effective magnetic length `L_eff = ∫B_z ds / B_z(body)`.
+
+The 3-D pole is Plane A's `g(r)` profile **swept around the sector arc** and
+truncated at the azimuthal ends shaped by Plane B; the two 2-D designs are exact
+in the body and couple only at the ends. **The headline (the §3.4 leaf-coupling
+law, now azimuthal):** each sector end adds **~`0.75 g`** of effective length, so
+`L_eff = L_sector + ~1.5 g`, and the **fringe excess falls as ~ `gap/L`** —
+log-log slope **−0.98**:
+
+| L_sector/g | 2 | 3.5 | 6 | 10 |
+|---|---|---|---|---|
+| fringe excess | +73% | +43% | +25% | +15% |
+
+So the aspect `L_sector/g(r₀)` is the **reflection's validity lever**: a compact
+cell (`L/g=3` → **+50%** fringe) is non-perturbative — the sector ENDS are a
+genuine 3-D problem, exact two-plane reflection only as `L/g → ∞`. Figure
+`ffag_sector_two_plane.png` (left: Plane A `k(r)` with the A/φ bracket; right:
+Plane B `B_z(s)/B_body` — flat sector body + the end fringe), data
+`ffag_sector_two_plane.json`. Golden `test_ffag_sector_two_plane`.
+
+**Rung 2 (the 3-D reflection, `--rung2`, ngsolve, golden-tested).** Sweep `g(r)`
+around the sector arc — **revolve** the `(r,z)` gap cross-section about the bend
+axis — into a 3-D iron pole, and drive it as an **iron-pole equipotential**
+(upper-half model, median `z=0` the up-down antisymmetry plane, high-μ pole back
+at `Ψ=mmf`; the 3-D form of Plane A/B's scalar potential). The orbit **recovers
+`B_z(r) ∝ r^k`: field index mean `≈ 4.88`** (range `[4.6, 5.2]`, vs design 5 —
+the naive-pole droop + mesh scatter), so the swept `g(r) ∝ r^{−k}` pole reproduces
+the designed radial field in full 3-D; the azimuthal sector ends add
+`L_eff/L_sector − 1 ≈ +39%` (the Plane-B fringe, cross-checked in 3-D). Figure
+`ffag_sector_two_plane_rung2.png` (left: the recovered `k(r)` vs design; right:
+`B_z(θ)/B_body` along the arc — flat body + sector-end fringe). Golden
+`test_ffag_sector_two_plane_rung2_3d`. *(The field index is set by the pole
+GEOMETRY — a high-μ equipotential forces `B ∝ 1/g(r)` — so it is drive-independent;
+a CoilBuilder + reduced-Ω coil drive sets the field AMPLITUDE, a further step, not
+the index. Saturation is Plane A's §3.3 lever, composed orthogonally.)*
+
 ## Run
 
 ```bash
@@ -1112,6 +1163,7 @@ python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D
 python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
 python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 sat, --step3 reshape, --pullback no-remesh, --iso isochronous end pack; --fig)
 python leaf_coupling_perturbation_3d.py       # foliate-and-perturb: leaf-coupling ~ gap/L, when can the body be 2-D + ends a perturbation (--sweep aspect ratio; --fig)
+python ffag_sector_two_plane.py               # the two-plane -> 3-D method: FFAG sector = transverse (r,z) + azimuthal (s,z); reflection validity ~ L/g (--sweep aspect; --rung2 the 3-D reflection B(r)~r^k; --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
