@@ -35,7 +35,7 @@ from .knowledge.sparsesolv import get_sparsesolv_documentation
 from .knowledge.kelvin import get_kelvin_documentation
 from .knowledge.kelvin_identify_post_hoc import (
     get_post_hoc_documentation as _get_kelvin_identify_post_hoc_doc)
-from .knowledge.axifemm import get_axifemm_documentation
+from .knowledge.axifem import get_axifem_documentation
 from .knowledge.ngsbem_inductance import get_ngsbem_inductance_documentation
 from .knowledge.peec_inductance import get_peec_inductance_documentation
 from .knowledge.esim import get_esim_documentation
@@ -1020,7 +1020,7 @@ def kelvin_transformation(topic: str = "all") -> str:
 
 
 @mcp.tool()
-def axifemm_documentation(topic: str = "all") -> str:
+def axifem_documentation(topic: str = "all") -> str:
     """
     Get radia-core axifem documentation: Henrotte axisymmetric Q-element FE
     add-on for NGSolve (registered FESpace name: "axihenrotte").
@@ -1050,7 +1050,7 @@ def axifemm_documentation(topic: str = "all") -> str:
             "file_layout"     - where each piece lives (C++, Mathematica, tests)
             "why_dropped_p3"  - why p=3 was attempted and reverted (Vandermonde cond ~ 1e30)
     """
-    return get_axifemm_documentation(topic)
+    return get_axifem_documentation(topic)
 
 
 @mcp.tool()

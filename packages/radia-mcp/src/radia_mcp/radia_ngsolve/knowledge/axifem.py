@@ -17,7 +17,7 @@ Read this when:
 * Implementing a new FEM panel that needs the `1/r`-weighted axisymmetric
   weak form integrated in closed form rather than by Gauss quadrature.
 
-The MCP server exposes this via axifemm_documentation(topic=...). Topics:
+The MCP server exposes this via axifem_documentation(topic=...). Topics:
 overview, api, basis_p1, basis_p2, vs_standard_h1, validation, kelvin,
 file_layout, why_dropped_p3.
 """
@@ -429,7 +429,7 @@ The same workflow on Cu sphere R=10 mm (Stoll Bessel ground truth, τ₁ = μ₀
 
 The axifemm + Kelvin result is the closest to Stoll across all available
 axisym/3D methods on this benchmark (machine-precision agreement on the
-leading rung). See `axifemm_documentation(topic="kelvin")` for the full
+leading rung). See `axifem_documentation(topic="kelvin")` for the full
 canonical recipe (Phase B3, commit 81f6415f).
 
 ## Hessian-of-W convention (load-bearing)
@@ -776,7 +776,7 @@ a stored axisymmetric Kelvin reference uses the same a/mu_r/Hc.
   distorts the external dipole by O((a/R_far)^3)+mesh error.
 """
 
-def get_axifemm_documentation(topic: str = "all") -> str:
+def get_axifem_documentation(topic: str = "all") -> str:
     """
     Return radia-core axifem documentation for the requested topic.
 
