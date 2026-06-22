@@ -95,6 +95,7 @@ windows, the yoke loops) — they only move the metric.
 | PML | **complex** tensor Hodge (geometry-flexible, approximate) | (same `χ`, complex `g`) |
 | HOIBC | **surface** de Rham basis + **local Padé** of the surface DtN | `surface_derham.wls [A],[B]` |
 | two vector impedance ladders | surface Hodge–Helmholtz → H(curl) tangential `n/R`, H(div) normal `(n+1)/R` | `surface_derham.wls [C]` (cf. act7_30) |
+| **DtN / Steklov operator itself** | the **exterior `⋆` condensed** to Γ: Schur complement / Riccati fixed point; `= ` shifted `√(-Δ_Γ)` (nonlocal, order +1); self-adjoint positive (the boundary `H^{1/2}` metric) | `dtn_geometry.wls` |
 | nonlinear material (saturation) | `⋆_ν` field-dependent; tangent SPD ⇒ elliptic, no fold | `weakform_hodge.wls §6`, `hodograph.wls [5]` |
 | Chaplygin linearisation | a canonical transformation that makes `μ(q)` a coefficient | `hodograph.wls [5]` |
 | weak form = Hamiltonian's shadow | `δ(action)=0`; Legendre `B↔H`, flux line = Hamilton flow (`A_z`) | `canonical.wls` |
