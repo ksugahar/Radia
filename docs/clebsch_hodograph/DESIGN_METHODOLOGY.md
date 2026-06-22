@@ -350,6 +350,42 @@ combined-function (dipole + quad together = a shifted+rotated hyperbola) and the
 genuine curved-orbit Frenet sweep are the extensions; the quad here establishes
 the n-fold twist law that governs them.
 
+### 3.7 The confluence — a combined-function magnet on its curved orbit (the Frenet sweep is the twist)
+
+§3.5 bent the beam with a pure **dipole** sector; §3.6 twisted a pure **quad** on
+a fixed station. **`combined_function_frenet_sweep.py` merges them**: a
+**combined-function** magnet (dipole `b1` + quad gradient `b2` in ONE
+cross-section) swept along the **curved orbit it bends**.
+
+In the **Frenet frame** of the orbit the cross-section is FIXED (the design spec:
+`b1` bends, `b2` focuses). But the Frenet frame **rotates** with the bend — by the
+bend angle `θ(s) = s/ρ`, `ρ = (Bρ)/b1` — so in the **lab frame** the whole
+combined-function pole **twists by `θ(s)`**. §3.6's n-fold law then gives:
+
+$$\text{geometric roll }\theta \;\Rightarrow\; \text{dipole phase }\psi_1=\theta,\quad \text{quad phase }\psi_2=2\theta,$$
+
+so **both** the dipole and quad orientations track the *same* Frenet angle `θ`
+(the rigid roll), while their multipole **phases** differ by the factor `n`
+(`ψ_2 = 2 ψ_1`).
+
+**The combined-function cross-section** is a **tilted-gap** dipole (`z = ±(g/2 −
+t x)`): the gap narrows toward `+x`, so `B_z(x) ∝ 1/g(x)` carries a dipole `b1`
+plus a gradient `b2` (the quad) — §3.5's flat gap, *tilted*.
+
+**Verified (`combined_function_frenet_sweep.py`, ngsolve only, golden-tested).**
+The 2-D Laplace solve recovers the combined function (`b1` dipole + `b2/b1 ≈ 6%`
+gradient + a small `b3 ~ 3e-3`, the `1/g` curvature a real magnet shims out);
+rolling the magnet by `θ`, **both the dipole and quad orientations track `θ`
+(slope 1.000, error 0.00°)** and the **quad multipole-phase change is exactly
+2× the dipole's** (`ψ_2/ψ_1 = 2.000`, the n-fold law) — the design-primitive
+surface (fixed in the Frenet frame) reflected into a lab pole that twists by `θ(s)`.
+
+**Honest scope.** A pure sector (rigid Frenet roll; no spiral edge, no s-varying
+gradient), per-station 2-D = the **slow-bend** limit. A spiral sector (the pole
+twist `φ ≠` the orbit bend `θ`) and an s-ramped `(b1(s),b2(s))` are extensions;
+**when the per-station 2-D breaks** — the fast-twist `dφ/ds` leaf coupling
+(the §3.4 perturbation parameter, now on the twist) — is the next rung.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -447,7 +483,13 @@ coil = A-side), so the framework is one method, not two.
   equipotential; rotating the surface by `φ` rotates the recovered orientation by
   exactly `φ` (**slope 1.000, err 0.00°**) — the n-fold law (surface twist `φ` ⟷
   multipole phase `2φ`), with a clean quad (skew `~5e-6`, `b_6 ~ 5.6e-3`
-  rotation-invariant).
+  rotation-invariant);
+- the **combined-function magnet on its curved orbit** (§3.7,
+  `combined_function_frenet_sweep.py`): a tilted-gap dipole+quad cross-section,
+  fixed in the Frenet frame, **twists by `θ(s)` in the lab** — both the dipole and
+  quad orientations track `θ` (**slope 1.000, err 0.00°**) with the multipole
+  phase-change ratio `ψ_2/ψ_1 = 2.000` (the n-fold law) — the confluence of §3.5
+  (the dipole sector) and §3.6 (the twist).
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed for the longitudinal end-field** (§3.2 rung 2);
@@ -480,4 +522,5 @@ coil = A-side), so the framework is one method, not two.
 | foliate-and-perturb scaling (leaf coupling ~ gap/L) | `examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py` |
 | two-plane → 3-D method (FFAG sector: transverse + azimuthal) | `examples/clebsch_hodograph/ffag_sector_two_plane.py` |
 | beam-referenced equipotential surface + the twist (n-fold law) | `examples/clebsch_hodograph/twisting_quadrupole_pole.py` |
+| combined-function on a curved orbit (the Frenet sweep = twist) | `examples/clebsch_hodograph/combined_function_frenet_sweep.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
