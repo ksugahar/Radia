@@ -71,6 +71,12 @@ riem[g_, xs_] := With[{G = christo[g, xs], n = Length[xs]},   (* R^a_{bcd} *)
 scalarR[g_, xs_] := With[{gi = Inverse[g], Rm = riem[g, xs], n = Length[xs]},
   Sum[gi[[b, d]] Rm[[a, b, a, d]], {a, n}, {b, n}, {d, n}]];   (* g^{bd} R^a_{bad} *)
 
+(* premetric "metric -> material" map (Plebanski / transformation optics): the material
+   tensor that makes a flat-space field SEE the metric g is  chi(g) = sqrt(det g) g^{-1}.
+   This is the Hodge star written as a material; ALL of {coordinate map, material, IE
+   decay, PML stretch} is this one map -- "push everything onto the Hodge". *)
+chiMat[g_] := Sqrt[Det[g]] Inverse[g];
+
 (* ============================ self-test ============================ *)
 Module[{ok = True, chk, zero, diagQ},
   chk[name_, cond_] := (Print["  ", If[cond, "ok  ", "FAIL"], name]; ok = ok && cond);
@@ -173,6 +179,32 @@ Module[{ok = True, chk, zero, diagQ},
   (* CONTROL: the round 2-sphere genuinely IS curved -- the machinery detects it (R_scalar = 2) *)
   chk["(7c) CONTROL: the round 2-sphere diag(1, sin^2 th) is CURVED, scalar curvature = 2 (machinery detects it)",
       Simplify[scalarR[DiagonalMatrix[{1, Sin[th]^2}], {th, ph}], 0 < th < Pi] === 2];
+
+  (* ---- (8) TRANSFORMATION OPTICS = "push everything onto the Hodge" ----
+     premetric EM (Hehl-Obukhov): dF=0, dG=J are metric-free; ONLY the constitutive Hodge
+     G = star F carries metric+material.  A coordinate map can therefore be traded entirely
+     for a material = the metric->material map chi(g) = sqrt(det g) g^{-1}.  Our Kelvin rule
+     nu' and Pendry's transformation-optics material are BOTH this one chi, on the pullback
+     vs the pushforward metric -- "push everything onto the Hodge." *)
+  chk["(8a) our material rule IS the premetric map:  nuFactor[P] = chi(P^T P) = sqrt(det g) g^{-1}  (= transformation optics)",
+      With[{P = DiagonalMatrix[{pa, pb, pc}]},
+        Simplify[nuFactor[P] - chiMat[Transpose[P].P], pa > 0 && pb > 0 && pc > 0]
+          === ConstantArray[0, {3, 3}]]];
+  chk["(8b) Pendry vacuum TO material  eps' = Lam Lam^T / det Lam  is the SAME chi on the pushforward metric (Lam Lam^T)^{-1}",
+      With[{Lam = {{la, lb}, {lc, ld}}},
+        Simplify[chiMat[Inverse[Lam.Transpose[Lam]]] - Lam.Transpose[Lam]/Det[Lam],
+                 la ld - lb lc > 0] === ConstantArray[0, {2, 2}]]];
+
+  (* ---- (9) the OTHER half of "push onto the Hodge": a coordinate map cannot CURVE space.
+     The pullback metric g = J^T J of ANY diffeomorphism is FLAT (Riemann = 0) -- the map
+     moves the metric (the geometry) but not the curvature.  Verified for a conformal AND a
+     non-conformal map (the two bidirectional_coordinate_transform_2d.py maps): W != I, yet flat. *)
+  chk["(9a) conformal map f = z + e z^2: pullback metric J^T J is FLAT (Riemann = 0)  (W=I but still: flat)",
+      With[{J = D[{x + ee (x^2 - y^2), y + ee (2 x y)}, {{x, y}}]},
+        Simplify[Flatten[riem[Transpose[J].J, {x, y}]]] === ConstantArray[0, 2^4]]];
+  chk["(9b) NON-conformal map f = (3/2 x + 1/5 y^2, y + 1/10 x^2): pullback metric is FLAT (W != I, yet Riemann = 0)",
+      With[{J = D[{3/2 x + 1/5 y^2, y + 1/10 x^2}, {{x, y}}]},
+        Simplify[Flatten[riem[Transpose[J].J, {x, y}]]] === ConstantArray[0, 2^4]]];
 
   Print[If[ok, "ALL PASS", "SOME FAILED"]];
 ];
