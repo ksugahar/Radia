@@ -24,9 +24,9 @@ from __future__ import annotations
 
 import math
 
-from build123d import (Axis, BuildLine, BuildSketch, CenterArc, Circle, Compound, Cylinder, Helix, Keep,
-                       Line, Mode, Plane, Pos, Rectangle, RectangleRounded, Spline, chamfer, extrude,
-                       fillet, loft, make_face, offset, revolve, split, sweep)
+from build123d import (Axis, Box, BuildLine, BuildSketch, CenterArc, Circle, Compound, Cylinder, Helix,
+                       Keep, Line, Mode, Plane, Pos, Rectangle, RectangleRounded, Spline, chamfer,
+                       extrude, fillet, loft, make_face, offset, revolve, split, sweep)
 
 __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_array",
            "mirrored", "assembly",
@@ -34,7 +34,8 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "swept", "revolved", "lofted", "coil", "strut", "thicken", "draft_extrude",
            "shell", "fillet_edges", "chamfer_edges", "grid_array", "path_array",
            # boolean / slice / sheet-metal
-           "fuse", "cut", "common", "slice_solid", "bend_sheet"]
+           "fuse", "cut", "common", "slice_solid", "bend_sheet",
+           "fillet_varied", "chamfer_varied", "slice_array"]
 
 
 def annular_segment(r_in, r_out, h, start_angle=0.0, end_angle=90.0, label="segment"):
@@ -372,3 +373,64 @@ def bend_sheet(leg1, leg2, width, thickness, angle_deg, radius, n_arc=24, label=
     pa = pts[-1]
     pts.append((pa[0] + leg2 * math.cos(a), pa[1] + leg2 * math.sin(a), 0.0))
     return swept(Rectangle(thickness, width), Spline(*pts), label=label)
+
+
+def fillet_varied(solid, specs, label="filleted"):
+    r"""**Variable-radius fillet**: ``specs`` is a list of ``(edge_filter, radius)`` applied in turn, so
+    different edge groups take different blend radii (e.g. a large radius on the load-bearing edges, a
+    small one elsewhere).  Each ``edge_filter`` is a callable ``edges -> edges`` (e.g.
+    ``lambda e: e.filter_by(Axis.Z)``); the fillets are applied sequentially (each operates on the
+    already-filleted solid, so order edge-groups outer-to-inner)."""
+    g = solid
+    for edge_filter, radius in specs:
+        g = fillet(edge_filter(g.edges()), radius)
+    try:
+        g.label = label
+    except Exception:
+        pass
+    return g
+
+
+def chamfer_varied(solid, specs, label="chamfered"):
+    r"""**Variable chamfer**: ``specs`` is a list of ``(edge_filter, length)`` applied in turn -- the
+    chamfer analogue of :func:`fillet_varied`."""
+    g = solid
+    for edge_filter, length in specs:
+        g = chamfer(edge_filter(g.edges()), length)
+    try:
+        g.label = label
+    except Exception:
+        pass
+    return g
+
+
+def slice_array(solid, n, thickness, axis="z", label="slice"):
+    r"""**Slice** a solid into ``n`` slabs of ``thickness`` along ``axis`` (``'x'`` / ``'y'`` / ``'z'``),
+    centred on the solid, returned as a labelled :class:`~build123d.Compound` of the ``n`` pieces -- the
+    lamination-stack / parting verb (split an iron core into laminations, a bar into segments).  Each
+    piece is the solid intersected with one slab; choose ``n * thickness`` to span the solid's extent."""
+    if n < 1:
+        raise ValueError("n must be >= 1")
+    if axis not in ("x", "y", "z"):
+        raise ValueError("axis must be 'x', 'y' or 'z'")
+    bb = solid.bounding_box()
+    big = max(bb.size.X, bb.size.Y, bb.size.Z) * 3.0
+    c = solid.center()
+    total = n * thickness
+    pieces = []
+    for k in range(n):
+        off = -total / 2.0 + (k + 0.5) * thickness
+        if axis == "z":
+            slab = Pos(c.X, c.Y, c.Z + off) * Box(big, big, thickness)
+        elif axis == "x":
+            slab = Pos(c.X + off, c.Y, c.Z) * Box(thickness, big, big)
+        else:
+            slab = Pos(c.X, c.Y + off, c.Z) * Box(big, thickness, big)
+        piece = solid & slab
+        try:
+            piece = piece.solid()
+        except Exception:
+            pass
+        piece.label = f"{label}_{k:02d}"
+        pieces.append(piece)
+    return Compound(children=pieces, label=label + "_stack")
