@@ -2841,6 +2841,125 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 }
 
 //=========================================================================
+// BuildMomentSystem: the parameter-free MOMENT-yano system matrix A and RHS for a UNIFORM linear material
+// (chi) in a UNIFORM applied field Happ -- the C++ port of the validated Python prototype
+// examples/vim/yano_moment_iter_scaling.py::build.  Per hex element (6 face-charge DOF sigma):
+//   3 dipole rows : (local dipole moment of sigma)/Ve - chi*H_k(centroid) . sigma = chi*Happ_k
+//   1 monopole row: sum_f area_f sigma_f = 0                       (= div B = 0)
+//   2 quad rows   : (local diagonal-quadrupole moment of sigma) - chi*(Dvec . gradH(centroid)) . sigma = 0
+// Global field/grad functionals H,gradH(centroid) come from BuildCentroidFieldGrad; the local geometric
+// moments (face center fc, outward normal n, area, d=fc-centroid, volume Ve) from the hex geometry.  Each
+// row is 2-norm normalized (matches the prototype).  A is ROW-MAJOR (dof x dof); rhs length dof.  This is
+// the Step-1 dense verification path; solve wiring + nonlinear chi + HACApK are later steps.
+//=========================================================================
+void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
+                                        std::vector<double>& A, std::vector<double>& rhs) const
+{
+	std::vector<double> Cflat; int nHex = 0;
+	BuildCentroidFieldGrad(Cflat, nHex);                 // (nHex x 9 x dof): H[3], gradH[6] per hex
+	const int dof = m_totalDOF;
+	A.assign((size_t)dof * dof, 0.0);
+	rhs.assign(dof, 0.0);
+	if(nHex == 0 || dof == 0) return;
+
+	std::vector<double> r((size_t)dof);
+	int row = 0;
+	for(int h = 0; h < nHex; h++)
+	{
+		int elemIdx = m_hexaElemIndices[h];
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
+		if(!poly || poly->AmOfFaces != 6) continue;
+		const int off = m_elemDOFOffset[elemIdx];
+		const TVector3d ce = poly->CentrPoint;
+
+		// per-face local geometry: center fc, OUTWARD unit normal nf, area Ae, d = fc - centroid
+		double fc[6][3], nf[6][3], Ae[6], d[6][3];
+		for(int f = 0; f < 6; f++)
+		{
+			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
+			radTPolygon* pgn = hpt.PgnHndl.rep; radTrans* tr = hpt.TransHndl.rep;
+			const radTVect2dVect& v2d = pgn->EdgePointsVector;
+			TVector3d V4[4];
+			for(int v = 0; v < 4; v++) V4[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
+			double cx = 0, cy = 0, cz = 0;
+			for(int v = 0; v < 4; v++) { cx += V4[v].x; cy += V4[v].y; cz += V4[v].z; }
+			fc[f][0] = cx*0.25; fc[f][1] = cy*0.25; fc[f][2] = cz*0.25;
+			double sx = 0, sy = 0, sz = 0, area = 0;          // sum of triangle area-normals
+			for(int t = 0; t < 2; t++)
+			{
+				const TVector3d& P0 = V4[0]; const TVector3d& P1 = V4[t+1]; const TVector3d& P2 = V4[t+2];
+				double ux = P1.x-P0.x, uy = P1.y-P0.y, uz = P1.z-P0.z;
+				double wx = P2.x-P0.x, wy = P2.y-P0.y, wz = P2.z-P0.z;
+				double rx = uy*wz-uz*wy, ry = uz*wx-ux*wz, rz = ux*wy-uy*wx;
+				area += 0.5*std::sqrt(rx*rx+ry*ry+rz*rz); sx += rx; sy += ry; sz += rz;
+			}
+			double nlen = std::sqrt(sx*sx+sy*sy+sz*sz); if(nlen < 1e-300) nlen = 1.0;
+			double ox = fc[f][0]-ce.x, oy = fc[f][1]-ce.y, oz = fc[f][2]-ce.z;
+			double sgn = (sx*ox+sy*oy+sz*oz >= 0.0) ? 1.0 : -1.0;     // orient outward
+			nf[f][0] = sgn*sx/nlen; nf[f][1] = sgn*sy/nlen; nf[f][2] = sgn*sz/nlen;
+			Ae[f] = area;
+			d[f][0] = fc[f][0]-ce.x; d[f][1] = fc[f][1]-ce.y; d[f][2] = fc[f][2]-ce.z;
+		}
+		double Ve = 0.0;
+		for(int f = 0; f < 6; f++) Ve += Ae[f]*(fc[f][0]*nf[f][0]+fc[f][1]*nf[f][1]+fc[f][2]*nf[f][2]);
+		Ve *= (1.0/3.0);
+
+		const double* Hh = &Cflat[(size_t)h*9*dof];           // Hh[k*dof..] field (k<3), grad (k 3..8)
+
+		auto putRow = [&](double rh)
+		{
+			double nn = 0.0; for(int g = 0; g < dof; g++) nn += r[g]*r[g];
+			nn = std::sqrt(nn);
+			if(nn > 1e-300) { double inv = 1.0/nn; for(int g = 0; g < dof; g++) r[g] *= inv; rh *= inv; }
+			double* Arow = &A[(size_t)row*dof];
+			for(int g = 0; g < dof; g++) Arow[g] = r[g];
+			rhs[row] = rh; row++;
+		};
+
+		// 3 dipole rows
+		for(int k = 0; k < 3; k++)
+		{
+			std::fill(r.begin(), r.end(), 0.0);
+			for(int f = 0; f < 6; f++) r[off+f] += Ae[f]*d[f][k]/Ve;
+			const double* F0k = &Hh[(size_t)k*dof];
+			for(int g = 0; g < dof; g++) r[g] -= chi*F0k[g];
+			putRow(chi*Happ[k]);
+		}
+		// monopole row
+		std::fill(r.begin(), r.end(), 0.0);
+		for(int f = 0; f < 6; f++) r[off+f] = Ae[f];
+		putRow(0.0);
+		// 2 diagonal-quadrupole rows: Bm = dx^2-dy^2, then dy^2-dz^2
+		for(int qq = 0; qq < 2; qq++)
+		{
+			double Bm[6];
+			for(int f = 0; f < 6; f++)
+				Bm[f] = (qq == 0) ? (d[f][0]*d[f][0]-d[f][1]*d[f][1]) : (d[f][1]*d[f][1]-d[f][2]*d[f][2]);
+			std::fill(r.begin(), r.end(), 0.0);
+			for(int f = 0; f < 6; f++) r[off+f] += Ae[f]*Bm[f];
+			double cm[3] = {0,0,0};
+			for(int f = 0; f < 6; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
+			for(int f = 0; f < 6; f++)
+			{
+				double cd = cm[0]*d[f][0]+cm[1]*d[f][1]+cm[2]*d[f][2];
+				r[off+f] -= Ae[f]*cd/Ve;
+			}
+			double Dm[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+			for(int f = 0; f < 6; f++) for(int ii = 0; ii < 3; ii++) for(int jj = 0; jj < 3; jj++)
+				Dm[ii][jj] += Ae[f]*d[f][jj]*nf[f][ii]*Bm[f];
+			double Dvec[6] = {Dm[0][0], Dm[1][1], Dm[2][2], Dm[0][1]+Dm[1][0], Dm[0][2]+Dm[2][0], Dm[1][2]+Dm[2][1]};
+			for(int m = 0; m < 6; m++)
+			{
+				const double* Gm = &Hh[(size_t)(3+m)*dof];
+				double w = chi*Dvec[m];
+				for(int g = 0; g < dof; g++) r[g] -= w*Gm[g];
+			}
+			putRow(0.0);
+		}
+	}
+}
+
+//=========================================================================
 // PrecomputeHexaTriangleData: Pre-compute triangle local coordinate systems
 // Eliminates redundant sqrt/div operations during field computation
 // Each hexahedron has 12 triangles (6 faces * 2 triangles)
