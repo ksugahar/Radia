@@ -1250,7 +1250,7 @@ int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* p
 			// A = -N + diag(1/chi) WITH the ACA approximation, in the original
 			// (user) DOF ordering -- same ordering as GetInteractMatrix, so it is
 			// directly comparable / usable for deflation.
-			RadHACApKMSCManager mgr(InteractPtr);
+			RadHACApKMMMManager mgr(InteractPtr);
 			RadHACApKParams params;
 			params.aca_eps = m_hacapk_eps;
 			params.leaf_size = m_hacapk_leaf_size;
@@ -1316,7 +1316,7 @@ int radTApplication::HLUDebugMaterialize(int InteractElemKey,
         int totalDOF = InteractPtr->GetTotalDOF();
         if (totalDOF <= 0) return 0;
 
-        RadHACApKMSCManager mgr(InteractPtr);
+        RadHACApKMMMManager mgr(InteractPtr);
         RadHACApKParams params;
         params.aca_eps = m_hacapk_eps;
         params.leaf_size = m_hacapk_leaf_size;
@@ -1352,7 +1352,7 @@ double radTApplication::HLUTestOnHACApK(int InteractElemKey)
 
 		// Build a fresh HACApK MSC manager. The cluster-tree root will be
 		// preserved at m_leafmtxp->st_clt_root (Phase 4 ground work).
-		RadHACApKMSCManager mgr(InteractPtr);
+		RadHACApKMMMManager mgr(InteractPtr);
 		RadHACApKParams params;
 		params.aca_eps = m_hacapk_eps;
 		params.leaf_size = m_hacapk_leaf_size;
@@ -1852,15 +1852,15 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		//     wedge/mixed method-2 routes to the dense moment LU until the variable-DOF H-matrix (Phase 3a-2).
 		//     PER-ELEMENT chi: the nonlinear Picard loop re-solves each iteration with the current chi (Inc 4).
 		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Tet (3 DOF =
-		// MMM) and mixed tet+MSC are NOT -> the EIEM2 collocation path (the only remaining EIEM2 use after the
-		// yano_moment=False opt-out removal, Phase 3b-1; removed with a fail-loud guard in 3b-2).
+		// MMM) keeps the dipole MMM path; mixed tet+MSC is rejected fail-loud (Error204) in MakeAutoRelax.  The
+		// EIEM2 surface-charge collocation kernel was fully removed in Phase 3b.
 		{
 			extern bool g_yano_moment_hacapk;
 			g_yano_moment_hacapk = false;
-			// moment-yano is UNCONDITIONAL for surface-charge polyhedra (the yano_moment=False opt-out was
-			// removed in Phase 3b-1).  EIEM2 now runs ONLY for mixed tet+MSC models (the allMoment check below
-			// fails when a tet is present -> the EIEM2 collocation path; that path is removed in 3b-2 with a
-			// fail-loud guard, as no production case mixes surface-charge + dipole soft iron in one demag solve).
+			// moment-yano is UNCONDITIONAL for surface-charge polyhedra.  The allMoment check below routes pure
+			// hex/wedge to the LU/Picard moment driver (method 2 + pure-hex also sets g_yano_moment_hacapk); a
+			// tet present -> not allMoment -> tet keeps the MMM dipole path, and mixed tet+MSC is rejected
+			// fail-loud (Error204), since no production case mixes surface-charge + dipole soft iron.
 			{
 				radThg hgMom;
 				if(ValidateElemKey(InteractElemKey, hgMom))
