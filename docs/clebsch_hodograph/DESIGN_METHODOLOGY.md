@@ -458,6 +458,60 @@ So the end-pack realizes the design thought literally: **design the END in `x-y`
 2-D plane, then loft into one 3-D pole** — the transverse and longitudinal levers
 cleanly separated (Plane-1 owns `b₃,₅`; Plane-2 owns the end taper / `L_eff`).
 
+### 3.10 The SPECTROMETER end pack, NONLINEAR — the pole-tip corner is a saturable throat
+
+A large **bending spectrometer** dipole runs near the iron knee, so the end pack
+must be designed **with saturation**. The linear §3.9 result hands this to the
+saturation framework directly: the hard-cut pole END concentrates flux at the tip
+corner by `κ = tip_enhancement ≈ 1.11`, so in saturating iron the **corner reaches
+the knee FIRST** — it saturates at a gap field
+
+$$B_{gap}^{\text{corner-knee}} = B_K/\kappa \approx 1.5/1.13 \approx 1.33\ \text{T},$$
+
+**~12 % BELOW the bulk iron knee** `B_K = 1.5 T`. Above that the corner `μ_r`
+collapses, the flux can no longer follow the pole edge, and the **EFB (effective
+field boundary `≈ L_eff`) drifts with excitation** — fatal for a spectrometer,
+whose pole-edge **edge focusing** `tan β/ρ` depends on the EFB (the optics would
+change with the field setting).
+
+**The corner is exactly a Chaplygin saturable THROAT** (§3.3,
+`clebsch_dipole_saturation_2d.py`): `κ` is its inverse cross-section, and it
+saturates first. **The Rogowski end chamfer (§3.9's `s-y` design) is the
+corner-throat width knob** — it lowers `κ`, raising the corner knee `B_K/κ` toward
+the bulk knee. The **SAME chamfer that zeroes the linear corner over-field removes
+the premature corner saturation**: linear (cosmetic field quality) and nonlinear
+(avoid early saturation + EFB drift) levers POINT THE SAME WAY, and saturation gives
+the chamfer its **hard engineering justification**.
+
+**Verified (`endpack_spectrometer_saturation.py`, golden-tested, ngsolve only).**
+
+- **The map at LINEAR cost.** Reuse the §3.9 equipotential corner concentration
+  `κ(chamfer)` (the depth sweep) and overlay the Froehlich iron BH (`B_K=1.5 T`,
+  `μ_r0=2000`, from `clebsch_dipole_saturation_3d.py`): the corner knee
+  `B_K/κ(chamfer)` — flat `1.33 T` → `2.4 mm` chamfer `1.55 T` → `5 mm` `1.75 T`.
+  To clear a `B_op = 1.45 T` operating field without corner saturation needs
+  `κ ≤ 1.034`, a `≈ 1.4 mm` chamfer (the linear cosmetic optimum `κ=1` is `≈ 1.9 mm`
+  — the same lever). The **whole nonlinear end-pack map = 4 linear equipotential
+  solves + a BH overlay** — the Chaplygin "nonlinear analysis done linearly" applied
+  to the END corner.
+- **Design-grade, components validated.** The lumped `κ`-throat overlay is the same
+  lumped-magnetic-circuit class as `clebsch_dipole_saturation_2d` (~10 % vs FEM), and
+  its two ingredients are independently verified elsewhere: the corner concentration
+  `κ` is the LINEAR equipotential `tip_enhancement` (§3.9, golden — geometry-only,
+  drive-agnostic), and the Froehlich BH + the well-conditioned **B-input A-formulation**
+  that backs the iron saturation are the §3.3 `clebsch_dipole_saturation_3d.py`
+  (the documented cure: the reduced-Ω `μ(|H|)` Picard STALLS at high `μ`, the
+  A-formulation does not). So the composition `B_corner = κ·B_gap` until `B_K` is
+  well-founded.
+
+**Honest scope.** A fully coil-driven 3-D corner-saturation FEM is the documented
+expensive extension (the equipotential/MMF drive forces flux across the gap — a
+*uniform* applied field does NOT reproduce the corner concentration `κ`, and the
+coil's Biot-Savart `B_s` projection is the serial bottleneck), not run here.
+The corner-`κ` softens before the hard knee (a real FEM is the truth). Curved/rotated
+-EFB edge focusing (the horizontal `x-s` edge contour) and the fully-saturating sector
+body remain the spectrometer extensions (§3.9 honest scope + the sector §3.5).
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -576,6 +630,17 @@ coil = A-side), so the framework is one method, not two.
   pole-tip corner over-field (`+11 %` hard-cut) **through zero at ~2.1 mm**, the
   integrated `b̄₃,₅` stays `~0.3 %` (body lever), and the **cheap 2-D `s-y` chamfer
   shape predicts the 3-D end equipotential to ~7 % rms**.
+- the **spectrometer end pack, NONLINEAR** (§3.10,
+  `endpack_spectrometer_saturation.py`): the pole-tip corner is a Chaplygin saturable
+  THROAT — `κ ≈ 1.13` means it reaches the iron knee FIRST (corner saturates at
+  `B_K/κ ≈ 1.33 T`, **~12 % below the bulk knee** `B_K=1.5 T`), drifting the EFB /
+  edge focusing; the Rogowski chamfer is the throat-width knob (`κ↓` ⇒ corner knee
+  `B_K/κ↑`), the SAME lever as the linear over-field zero, now with a hard saturation
+  justification. The whole nonlinear map = the linear equipotential `κ(chamfer)` sweep
+  + a BH overlay (the §3.3 Chaplygin "nonlinear-done-linearly" on the END corner) —
+  design-grade (the lumped-circuit class of `clebsch_dipole_saturation_2d`), with `κ`
+  from the §3.9 linear equipotential (golden) and the BH + A-formulation from
+  `clebsch_dipole_saturation_3d` (committed) as its independently-validated components.
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed in two planes** (§3.9): the longitudinal
@@ -614,4 +679,5 @@ coil = A-side), so the framework is one method, not two.
 | combined-function on a curved orbit (the Frenet sweep = twist) | `examples/clebsch_hodograph/combined_function_frenet_sweep.py` |
 | fast-twist leaf coupling (the per-station 2-D validity threshold) | `examples/clebsch_hodograph/twist_rate_leaf_coupling.py` |
 | end pack in two planes (x-y cross-section + s-y end → 3-D) | `examples/clebsch_hodograph/endpack_two_plane.py` |
+| spectrometer end pack NONLINEAR (corner saturable throat) | `examples/clebsch_hodograph/endpack_spectrometer_saturation.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |

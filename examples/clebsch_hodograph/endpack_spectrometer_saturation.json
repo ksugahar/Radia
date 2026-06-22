@@ -1,0 +1,38 @@
+{
+  "B_K_T": 1.5,
+  "B_op_T": 1.45,
+  "flat_corner_kappa": 1.1304412320547994,
+  "flat_corner_knee_Bgap_T": 1.326915506499577,
+  "corner_premature_fraction": 0.11538966233361532,
+  "kappa_required_for_Bop": 1.0344827586206897,
+  "depth_required_for_Bop_m": 0.0014057001408416044,
+  "depth_linear_cosmetic_m": 0.0019108396758405056,
+  "flat_corner_saturates_below_Bop": true,
+  "sweep": [
+    {
+      "chamfer_depth_m": 0.0,
+      "kappa": 1.1304412320547994,
+      "corner_knee_Bgap_T": 1.326915506499577,
+      "corner_saturated_at_Bop": true
+    },
+    {
+      "chamfer_depth_m": 0.0024,
+      "kappa": 0.9666080434887226,
+      "corner_knee_Bgap_T": 1.5518182474316442,
+      "corner_saturated_at_Bop": false
+    },
+    {
+      "chamfer_depth_m": 0.005,
+      "kappa": 0.8579192587186949,
+      "corner_knee_Bgap_T": 1.7484162813179585,
+      "corner_saturated_at_Bop": false
+    },
+    {
+      "chamfer_depth_m": 0.008,
+      "kappa": 0.7109508506830876,
+      "corner_knee_Bgap_T": 2.109850489044056,
+      "corner_saturated_at_Bop": false
+    }
+  ],
+  "n_linear_solves": 4
+}
