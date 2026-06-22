@@ -248,6 +248,67 @@ move — end shaping is the right lever for the end bump, a Rogowski body-pole
 shape is the lever for `b₃,₅`. The §3.2 loop is closed for the end-field; the
 transverse-harmonic lever is a separate (body) problem.
 
+### 3.5 The two-plane → 3-D method (the FFAG sector cell)
+
+§3.1–3.4 are fragments of one method, stated plainly: **design the magnet in
+two orthogonal 2-D planes and REFLECT the two designs into one 3-D pole.** For a
+circular (FFAG / cyclotron sector) magnet the beam orbit is an azimuthal arc, so
+the two planes are:
+
+| plane | what it sets | engine |
+|---|---|---|
+| **transverse `(r, z)`** (⊥ orbit) | the field the beam **sees** — the scaling field index `B_z(r) ∝ r^k`, gap `g(r)=g₀(r/r₀)^{−k}` (§3.3) | `scaling_ffag_pole_2d.py` (Plane A) |
+| **azimuthal `(s, z)`** (along the orbit, `s=r₀θ`) | how the field **turns on/off** — the sector ENDS, the effective magnetic length `L_eff=∫B_z ds / B_z(body)` | `ffag_sector_two_plane.py::solve_azimuthal_end` (Plane B) |
+
+The **3-D pole is the `(r,z)` gap profile SWEPT around the sector arc**
+`θ∈[−Δθ/2,Δθ/2]` and truncated at the azimuthal ends shaped by Plane B. The two
+2-D designs are **exact in the body** and couple only at the ends; the §3.4
+leaf-coupling law (`coupling ~ gap/L`) is therefore the **validity lever of the
+reflection** — now on the AZIMUTHAL plane.
+
+**Verified (rung 1, `ffag_sector_two_plane.py`, ngsolve only, golden-tested).**
+
+- Plane A: the scaling index `k ≈ 4.88` (vs design 5; the naive pole's droop,
+  reshaped by §3.3), A/φ bracket `~2e-6` (physics, not mesh).
+- Plane B: a finite-length iron pole of gap `g(r₀)` over the sector arc
+  `L_sector=r₀Δθ`, scalar-potential reduced solve. **Each sector end adds
+  ~`0.75 g` of effective length**, i.e. `L_eff = L_sector + ~1.5 g`, so the
+  **fringe excess `(L_eff−L_sector)/L_sector` falls as `~gap/L` (log-log slope
+  −0.98)** — the same leaf-coupling law as §3.4's straight magnet, now azimuthal:
+
+  | L_sector/g | 2 | 3.5 | 6 | 10 |
+  |---|---|---|---|---|
+  | fringe excess | +73% | +43% | +25% | +15% |
+
+- **Validity:** the aspect `L_sector/g(r₀)` is the design lever. A **compact**
+  cell (`L/g=3` → +50% fringe) is non-perturbative: the sector ENDS are a genuine
+  3-D problem, not a body-stack correction. The two-plane reflection is exact only
+  as `L/g → ∞`.
+
+**Established (rung 2, the 3-D reflection — `ffag_sector_two_plane.py --rung2`,
+ngsolve, golden-tested).** Sweep `g(r)` around the sector arc (**revolve** the
+`(r,z)` gap cross-section about the bend axis) into a 3-D iron pole; drive it as
+an **iron-pole equipotential** (upper-half model, median `z=0` the up-down
+antisymmetry plane, the high-μ pole back at `Ψ=mmf` — the 3-D form of Plane A/B's
+scalar potential). The orbit sees **`B_z(r) ∝ r^k` recovered: field index mean
+`≈ 4.88`** (range `[4.6, 5.2]`, vs design 5 — the same naive-pole droop as Plane A
++ mesh scatter), confirming the swept `g(r) ∝ r^{−k}` pole reproduces the designed
+radial field in full 3-D; the azimuthal sector ends add `L_eff/L_sector − 1 ≈
++39%` (the Plane-B fringe, cross-checked in 3-D). The field index is set by the
+pole **geometry** (a high-μ equipotential forces `B ∝ 1/g(r)`), so it is
+**drive-independent** — a CoilBuilder + reduced-Ω coil drive would set the field
+**amplitude** (a further step), not the index.
+
+**Honest scope.** Plane B is the linear-iron azimuthal-END geometry (the
+magnetic-length excess; saturation is Plane A's §3.3 lever, composed
+orthogonally). The radial profile is `<B>(r)` only — AVF flutter (vertical
+focusing), the betatron tunes, and the orbit↔field self-consistency are separate
+(as in §3.3). This is the **method scaffold**: two 2-D hodograph-native designs +
+a measured `L/g` reflection criterion, now verified end-to-end (rung 1 the two 2-D
+planes, rung 2 the 3-D reflection); the curved-orbit twist (combined-function, the
+beam-referenced equipotential surface rotating along a bent orbit) is the next
+axis.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -331,7 +392,15 @@ coil = A-side), so the framework is one method, not two.
   the inter-leaf coupling (fringe excess) of a straight dipole decays as ~ gap/L
   (log-log slope -0.95 over L/gap = 2..8), so a compact magnet (L/gap=3) is
   non-perturbative (+111 % fringe) and the body-2-D + end-perturbation scheme
-  lands only for long magnets (~10 % fringe at L/gap ~ 40).
+  lands only for long magnets (~10 % fringe at L/gap ~ 40);
+- the **two-plane → 3-D method** (§3.5, `ffag_sector_two_plane.py`): the FFAG
+  scaling sector designed in two orthogonal 2-D planes — transverse `(r,z)`
+  scaling index (Plane A) + azimuthal `(s,z)` sector ends (Plane B) — with the
+  reflection's validity the `L/g` leaf-coupling: each sector end adds ~`0.75 g`,
+  `L_eff = L_sector + 1.5 g`, fringe ~ gap/L (slope −0.98); and **rung 2** (the
+  3-D reflection, `--rung2`) revolves `g(r)` into a 3-D iron pole and **recovers
+  the field index `B(r) ∝ r^k` in full 3-D** (mean `≈ 4.88`, design 5) with the
+  azimuthal end fringe (`+39%` at `L/g=3`).
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed for the longitudinal end-field** (§3.2 rung 2);
@@ -362,4 +431,5 @@ coil = A-side), so the framework is one method, not two.
 | forward (reduced potential + CoilBuilder) | `src/radia/panels/calc_accel_magnet.py` |
 | radial field index (scaling + isochronous, saturation) | `examples/clebsch_hodograph/scaling_ffag_pole_2d.py` |
 | foliate-and-perturb scaling (leaf coupling ~ gap/L) | `examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py` |
+| two-plane → 3-D method (FFAG sector: transverse + azimuthal) | `examples/clebsch_hodograph/ffag_sector_two_plane.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
