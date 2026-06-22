@@ -178,7 +178,7 @@ public:
 
 class radTInteraction : public radTg {
 	friend class radTHMatrixACA;    // Allow H-matrix to access interaction data
-	friend class RadHACApKMSCManager;  // Allow HACApK manager to access interaction data
+	friend class RadHACApKMMMManager;  // Allow HACApK manager to access interaction data
 
 	// Allow unified nonlinear iteration helpers to access interaction data
 	friend bool InitializeNonlinearContext(struct NonlinearContext&, radTInteraction*, bool);
@@ -273,16 +273,10 @@ class radTInteraction : public radTg {
 	//-------------------------------------------------------------------------
 	bool m_hexaGeomReady;                         // True if geometry is pre-computed
 	std::vector<double> m_hexaCenters;            // n_hex * 3: element centers
-	std::vector<double> m_hexaEvalPoints;         // n_hex * 6 * 3: Yano eval points per face
 	std::vector<double> m_hexaFaceNormals;        // n_hex * 6 * 3: outward face normals
 	std::vector<double> m_hexaFaceAreas;          // n_hex * 6: face areas
 	std::vector<double> m_hexaTriVertices;        // n_hex * 6 * 2 * 3 * 3: 2 triangles per face, 3 verts, xyz
 	std::vector<double> m_hexaTriSigns;           // n_hex * 6 * 2: sign correction for each triangle
-	// Improved yano-type pyramid-cloud kernel (built only when g_yano_pyramid_cloud): per-hex
-	// element-common compensation cloud, so Compute6x6BlockFast can use the fast path with the cloud.
-	std::vector<double> m_hexaCloudPts;           // n_hex * m_hexaCloudN * 3: cloud points (global)
-	std::vector<double> m_hexaCloudWts;           // n_hex * m_hexaCloudN: normalised weights (sum=1 per hex)
-	int m_hexaCloudN = 0;                         // cloud points per hex (0 = not built)
 	std::vector<int> m_hexaElemIndices;           // Maps hex index to element index
 	std::vector<int> m_globalToHexIdx;            // Maps global element index to hex index (-1 if not hex)
 
@@ -293,7 +287,6 @@ class radTInteraction : public radTg {
 	//-------------------------------------------------------------------------
 	bool m_wedgeGeomReady;
 	std::vector<double> m_wedgeCenters;          // n_wedge * 3
-	std::vector<double> m_wedgeEvalPoints;       // n_wedge * 5 * 3: Yano eval pts
 	std::vector<double> m_wedgeFaceNormals;      // n_wedge * 5 * 3
 	std::vector<double> m_wedgeFaceAreas;        // n_wedge * 5
 	std::vector<int> m_wedgeFaceNumTris;         // n_wedge * 5: 1 for tri face, 2 for quad face
@@ -302,10 +295,6 @@ class radTInteraction : public radTg {
 	std::vector<int> m_wedgeTriOffset;           // n_wedge * 5: start index into TriVertices for each face
 	std::vector<int> m_wedgeElemIndices;         // Maps wedge index to element index
 	std::vector<int> m_globalToWedgeIdx;         // Maps global element index to wedge index (-1 if not wedge)
-	// Pyramid-cloud kernel (built only when g_yano_pyramid_cloud): per-wedge compensation cloud.
-	std::vector<double> m_wedgeCloudPts;         // n_wedge * m_wedgeCloudN * 3: cloud points (global)
-	std::vector<double> m_wedgeCloudWts;         // n_wedge * m_wedgeCloudN: normalised weights (sum=1)
-	int m_wedgeCloudN = 0;                       // cloud points per wedge (0 = not built)
 	static constexpr int WEDGE_MAX_TRIS = 8;    // Max triangles per wedge element
 
 	//-------------------------------------------------------------------------
@@ -359,8 +348,8 @@ public:
 	// Netgen face ordering: DOFs [0, 1, 2, 3, 4, 5] = z-, x+, y-, x-, y+, z+
 	// (Matches NETGEN_FACES in radia_pybind.cpp)
 	//
-	// IMA mirror contributions are computed inline in the kernel functions:
-	//   Compute6x6BlockFast: scalar IMA sign (MSC surface charge is scalar)
+	// IMA mirror contributions are computed inline in the active kernels:
+	//   moment-yano centroid field/grad: scalar IMA sign (MSC surface charge is scalar)
 	//   Compute3x3BlockFast: component sign matrix S[beta] (MMM magnetization is pseudovector)
 	// No DOF permutation matrices are needed.
 
@@ -404,10 +393,9 @@ public:
 	int GetAmOfMainElem() const { return AmOfMainElem; }
 	radTg3dRelax* GetElement(int idx) { return g3dRelaxPtrVect[idx]; }
 
-	// True if any RELAXABLE element is a collocation surface-charge (Use6DOF_MSC) polyhedron --
-	// i.e. soft-iron hexahedron (6 faces) or wedge (5 faces).  The yano-type MSC demag for these is
-	// removed; rad.Solve raises (Radia::Error203) so they route to the FEEC HDiv-VIM instead.  Defined
-	// in rad_interaction.cpp (needs the full radTPolyhedron type).  Tet (MMM) / PM elements -> false.
+	// True if any RELAXABLE element is a surface-charge (Use6DOF_MSC) polyhedron -- hex (6 faces) or
+	// 5-face wedge/pyramid.  These are solved by the canonical moment-yano path. Defined in
+	// rad_interaction.cpp (needs the full radTPolyhedron type). Tet (MMM) / PM elements -> false.
 	bool HasSurfaceChargeElements() const;
 
 	// Triangle precomputation accessors (for HACApK sharing)
@@ -422,7 +410,6 @@ public:
 	const std::vector<double>& GetHexaTriSigns() const { return m_hexaTriSigns; }
 	const std::vector<double>& GetHexaCenters() const { return m_hexaCenters; }
 	const std::vector<double>& GetHexaFaceAreas() const { return m_hexaFaceAreas; }
-	const std::vector<double>& GetHexaEvalPoints() const { return m_hexaEvalPoints; }
 	const std::vector<double>& GetHexaFaceNormals() const { return m_hexaFaceNormals; }
 
 	// Flat matrix/array accessors for solvers
@@ -524,7 +511,7 @@ public:
 	// Cflat is ROW-MAJOR (nHex x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
 	// -> Cflat[(h*9+k)*m_totalDOF + g].  H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.  See .cpp.
 	void BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const;
-	// e-ordered list of MOMENT elements (hex 6-DOF + wedge 5-DOF surface-charge polyhedra); for a pure-hex
+	// e-ordered list of MOMENT elements (hex 6-DOF + wedge/pyramid 5-DOF surface-charge polyhedra); for a pure-hex
 	// model this equals m_hexaElemIndices order.  Single source of moment element ordering (dense path +
 	// the SolveLinearStep moment branch).  Generalizes the moment formula from hex-only to hex+wedge.
 	void CollectMomentElems(std::vector<int>& out) const;
@@ -540,29 +527,25 @@ public:
 	// the row element's local geometry + the on-demand centroid field/grad from face colDOF -- no full-system
 	// build, no row normalization (the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
 	double MomentSystemEntry(int rowGlobal, int colDOF, const double* chiPerHex) const;
-	// MOMENT-yano system matrix (parameter-free upgrade of EIEM2): per hex (6 face-charge DOF) assemble
-	// 3 dipole + 1 monopole + 2 diagonal-quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
-	// (global field/grad from BuildCentroidFieldGrad, local moments from the hex geometry).  Rows 2-norm
+	// MOMENT-yano system matrix (parameter-free replacement for EIEM2): per moment element assemble
+	// 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
+	// (global field/grad from BuildCentroidFieldGrad, local moments from the element geometry).  Rows 2-norm
 	// normalized.  A row-major (dof x dof), rhs length dof.  Uniform linear chi + uniform applied field Happ
 	// (Step-1 verification path vs examples/vim moment prototype; hex-only).
 	void BuildMomentSystem(double chi, const double Happ[3], std::vector<double>& A, std::vector<double>& rhs) const;  // uniform-field wrapper
 	// Per-element chi + per-element external field (at hex centroid, HextPerHex[h*3+k]); A column = face DOF
 	// so dgesv's solution is sigma in DOF order.  The solve path uses this (coil sources are not uniform).
 	void BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex, std::vector<double>& A, std::vector<double>& rhs, bool normalize = true) const;
-	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
+	// EIEM2 surface-charge block kernels (Compute6x6BlockFast / Compute5x5BlockFast /
+	// ComputeMixedBlockFast) retired Phase 3b -- moment-yano (BuildMomentSystemCore) is the sole
+	// surface-charge demag. Method-2 surface-charge solves use RadHACApKMomentSystem; the legacy HACApK
+	// manager is now MMM-only (3x3 tet).
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
 	//-------------------------------------------------------------------------
-	// Fast wedge matrix build (same pattern as hex, 5 faces: 2 tri + 3 quad)
+	// Fast wedge geometry precompute (face triangles/normals; shared by moment assembly)
 	//-------------------------------------------------------------------------
 	void PrecomputeWedgeGeometry();  // Pre-compute face triangles/normals/eval points
-	void Compute5x5BlockFast(int wedge_i, int wedge_j, double* K_mat) const;  // Fast 5x5 block
-
-	//-------------------------------------------------------------------------
-	// Unified mixed-DOF block computation (handles ALL element type pairs)
-	// Eliminates flat matrix dependency for mixed meshes in HACApK
-	//-------------------------------------------------------------------------
-	void ComputeMixedBlockFast(int elem_row, int dof_row, int elem_col, int dof_col, double* block_out) const;
 
 	//-------------------------------------------------------------------------
 	// IMA (Image) Symmetry Methods
@@ -588,7 +571,7 @@ public:
 
 	// Legacy IMA functions removed (2026-03-31): ApplyDOFPermutation, ApplyRowPermutation,
 	// Compute6x6BlockIMA, Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget
-	// IMA mirror logic is now inline in Compute6x6BlockFast, Compute5x5BlockFast, and Compute3x3BlockFast.
+	// IMA mirror logic is now inline in the moment-yano centroid field/grad path and Compute3x3BlockFast.
 
 	// IMA accessors
 	bool IsIMAEnabled() const { return m_imaEnabled; }
@@ -657,7 +640,7 @@ public:
 	friend class radTRelaxationMethNo_1;   // BiCGSTAB
 #ifdef RADIA_USE_HACAPK
 	friend class radTRelaxationMethNo_2;   // BiCGSTAB + HACApK
-	friend class RadHACApKMSCManager;      // HACApK H-matrix manager (MSC kernel)
+	friend class RadHACApKMMMManager;      // HACApK H-matrix manager (MSC kernel)
 #endif
 };
 

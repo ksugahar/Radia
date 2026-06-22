@@ -2808,8 +2808,7 @@ double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
  *   factor : convert leaves + build block-tree + hlu_decomp -> opaque root
  *   apply  : permute(lod) + hlu_solve_vec + un-permute   (r,z in ORIGINAL order)
  *   free   : free the block-tree
- * Used by RadHACApKMSCManager to H-LU-precondition the A_SS = S^T A S star block
- * (HACApK-only star path). */
+ * Used by the HACApK-based H-LU preconditioner path (factor once, apply per GMRES iteration). */
 void* cHACApK_hlu_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc)
 {
     (void)control_void;

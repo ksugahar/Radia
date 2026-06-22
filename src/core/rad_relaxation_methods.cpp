@@ -2230,7 +2230,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	std::vector<double> RHS(totalDOF);
 
 	// MOMENT-yano: assemble the parameter-free MOMENT system (BuildMomentSystemCore) for surface-charge
-	// polyhedra (hex 6-DOF + wedge 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
+	// polyhedra (hex 6-DOF + wedge/pyramid 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
 	// sigma in DOF order -- a drop-in for the EIEM2 transpose + dgesv + write-back below.  moment is now
 	// UNCONDITIONAL (the yano_moment=False opt-out was removed in Phase 3b-1); only Tet (3 DOF = MMM) and
 	// mixed tet+MSC fall to the EIEM2 path (removed with a fail-loud guard in 3b-2).
@@ -3326,8 +3326,8 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 }
 
 //-------------------------------------------------------------------------
-// Block Jacobi preconditioner for H-matrix BiCGSTAB
-// Extracts 6x6 diagonal blocks from H-matrix using Compute6x6BlockFast
+// Block Jacobi preconditioner for H-matrix BiCGSTAB.
+// Extracts diagonal blocks DOF-generically through GetInteractionMatrixElement.
 //-------------------------------------------------------------------------
 
 #ifdef HAVE_LAPACK
@@ -3352,7 +3352,6 @@ bool radTRelaxationMethNo_2::BuildBlockJacobiPreconditioner_HMatrix(
 	blockInverse.resize(total_block_storage);
 
 	int max_dof = 6;
-	std::vector<double> K_mat(max_dof * max_dof);
 	std::vector<double> block_copy(max_dof * max_dof);
 	std::vector<int> ipiv(max_dof);
 	std::vector<double> work(max_dof * max_dof);
@@ -3364,17 +3363,16 @@ bool radTRelaxationMethNo_2::BuildBlockJacobiPreconditioner_HMatrix(
 		int mat_offset = IntrctPtr->GetElementDOFOffset(elem);
 		int block_offset = blockOffsets[elem];
 
-		// Extract diagonal K block from H-matrix kernel
-		m_hacapk->Compute6x6BlockFast(elem, elem, K_mat.data());
-
-		// Form A_block = -K_block/(4pi) + (1/chi) * I
-		// K_mat stores K/(4pi), so negate it
+		// Diagonal block A_block = -N_block + (1/chi) I, extracted DOF-generically from the H-matrix
+		// kernel via GetInteractionMatrixElement (returns +N).  Works for any element DOF; the moment-yano
+		// MSC path never reaches method 2 here (pure hex/wedge is rerouted to the LU/Picard moment driver
+		// in SolveGen), so this block-Jacobi only ever sees 3-DOF tetrahedra (MMM).
 		for(int i = 0; i < dof; i++)
 		{
 			for(int j = 0; j < dof; j++)
 			{
-				// K_mat is row-major [i*6+j], convert to column-major for LAPACK
-				block_copy[i + j * dof] = -K_mat[i * 6 + j];
+				// column-major for LAPACK
+				block_copy[i + j * dof] = -m_hacapk->GetInteractionMatrixElement(mat_offset + i, mat_offset + j);
 				if(i == j)
 				{
 					block_copy[i + j * dof] += inv_chi[mat_offset + i];
@@ -3505,7 +3503,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 	if(!m_hacapk)
 	{
-		m_hacapk = new RadHACApKMSCManager(IntrctPtr);
+		m_hacapk = new RadHACApKMMMManager(IntrctPtr);
 	}
 
 	// Reset timing statistics at start of solve
@@ -3533,8 +3531,8 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	}
 
 
-	// NOTE: 3DOF tetrahedra use PrecomputeFlatInteractMatrix() for fast O(1) access
-	// 6DOF hexahedra use PrecomputeGeometry() + Compute6x6BlockFast()
+	// NOTE: 3DOF tetrahedra use precomputed geometry for fast O(1) access.
+	// Surface-charge moment-yano method-2 solves use RadHACApKMomentSystem, not this MMM manager.
 
 	std::vector<double> OldMagn(totalDOF);
 	// Store current isotropic chi for ALL elements (unified 3DOF/6DOF handling, same as LU/BiCGSTAB)

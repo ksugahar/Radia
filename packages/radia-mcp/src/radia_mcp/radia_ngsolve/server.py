@@ -864,8 +864,8 @@ def mmm_core(topic: str = "chubar_1998") -> str:
 def hdiv_vim(topic: str = "overview") -> str:
     """
     HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT
-    alternative to the collocation MMM/MSC kernel, and the candidate replacement for the
-    yano-type distortion elements.  Canonical reference: docs/hdiv_vim/README.md.
+    alternative/complement to the canonical moment-yano MSC kernel.  Canonical reference:
+    docs/hdiv_vim/README.md.
 
     Key idea: SYMMETRIC demag operator N = B^T G B with the loop modes FIELD-NULL BY
     CONSTRUCTION (loops = ker B) -> mu_r-INDEPENDENT convergence + NO hand-crafted loop-star.
@@ -874,7 +874,7 @@ def hdiv_vim(topic: str = "overview") -> str:
     analytic_gram for div M != 0, fail-loud otherwise), distorted-mesh mu_r-independence, CURVED
     + high-order (demag exact; field accuracy-per-DOF ~10-30x vs flat Radia), and SYMMETRY models
     1/2,1/4,1/8 (loops automatic + image-method demag).  Python+NGSolve prototype; C++
-    productionization is the remaining lift to actually retire yano-type.
+    productionization is the remaining lift to make it a supported production backend.
 
     Args:
         topic: One of:
