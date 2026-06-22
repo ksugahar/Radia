@@ -1279,6 +1279,24 @@ extension (a *uniform* applied field does not reproduce the corner `κ`; the coi
 `B_s` projection is the serial bottleneck). Golden `test_endpack_spectrometer_saturation`
 (the design map, ngsolve only, ~8 s).
 
+### `endpack_cobake.py` — the two planes CO-BAKED into one pole `z(x,s)=g/2−δ(x/w)²+lift(s)`
+
+The completion of `endpack_two_plane.py`: that script's 3-D reflection carried the `s-y`
+chamfer at a fixed body width (the `x-y` shim was *verified* as the transverse lever, not
+baked into the same pole). This **co-bakes both** into one gap face
+`z(x,s)=g/2−δ(x/w)²+lift(s)` and shows both levers act at once. The 4 cases (same
+equipotential drive + integrated analyzer as `endpack_two_plane`): baseline (flat) corner
+tip `1.16`, `b̄₃,₅` `0.7 %`; **shim only** `b̄₃,₅` → `0.07 %`; **chamfer only** tip → `0.96`;
+**BOTH (co-baked)** tip `1.02` AND `b̄₃,₅` `0.07 %` — **one pole face, clean transverse
+harmonic AND rounded corner**.
+
+Honest scope: the exact `δ(x/w)²` shim is an x-prism STAIRCASE, so the no-shim cases mesh
+coarser than the shim cases (per-case absolute numbers are research-grade); the locked
+claim is the **co-existence** in the well-resolved BOTH pole, the per-lever causation
+being golden-locked separately (`accel_pole_dipole_body_2d` + `endpack_two_plane`). A
+precision tensor LOFT (OCC ThruSections) is the clean construction. Golden
+`test_endpack_cobake` (ngsolve only, ~11 s).
+
 ## Run
 
 ```bash
@@ -1310,6 +1328,7 @@ python combined_function_frenet_sweep.py      # the confluence: combined-functio
 python twist_rate_leaf_coupling.py            # when the per-station 2-D twist breaks: helical multipole, eps~(ka)^2, threshold pitch/aperture ~46 (--fig)
 python endpack_two_plane.py                   # the END PACK in two planes: x-y cross-section (shim) + s-y end (Rogowski chamfer, L_eff +26%) -> 3-D equipotential reflect, corner over-field -> 0 (--fast, --fig)
 python endpack_spectrometer_saturation.py     # the spectrometer end pack NONLINEAR: pole-tip corner = saturable throat, corner knee B_K/kappa ~1.33T (12% below bulk), chamfer raises it; nonlinear design map at LINEAR cost (design-grade, kappa+BH components validated; --b-op, --fig)
+python endpack_cobake.py                      # the two planes CO-BAKED into one pole z(x,s)=g/2-delta(x/w)^2+lift(s): x-y shim + s-y Rogowski chamfer in one face -> clean transverse b_3,5 (0.07%) AND rounded corner (tip 1.02) at once (--fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
