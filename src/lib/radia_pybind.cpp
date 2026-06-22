@@ -1030,7 +1030,7 @@ py::tuple MomentSystemDenseRaw(int intrc_handle, double chi) {
 // Build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem) and probe the H-matvec
 // against the dense A_raw (entry-by-entry).  Phase-2 Increment-2 gate (ACA_MOMENT_DESIGN.md).
 py::dict MomentHMatrixProbe(int intrc_handle, double chi, double eps, int leaf, double eta) {
-    double out[8] = {0,0,0,0,0,0,0,0};
+    double out[9] = {0,0,0,0,0,0,0,0,0};
     int err = RadMomentHMatrixProbe(chi, eps, leaf, eta, out, intrc_handle);
     check_error(err);
     py::dict d;
@@ -1042,6 +1042,7 @@ py::dict MomentHMatrixProbe(int intrc_handle, double chi, double eps, int leaf, 
     d["max_rank"]    = (int)out[5];
     d["compression"] = out[6];
     d["build_time"]  = out[7];
+    d["hlu_roundtrip_relerr"] = out[8];   // H-LU stability on the NON-symmetric A_raw (Increment 3 de-risk)
     return d;
 }
 
