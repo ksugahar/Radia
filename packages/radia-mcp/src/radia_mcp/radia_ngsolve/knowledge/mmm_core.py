@@ -19,6 +19,11 @@ Coverage:
                         geometric N, NOT the system matrix A
   eigenvalue_nullspace— Near-null "loop" modes, conditioning ~ mu_r, and the
                         beautiful->ugly BiCGSTAB behavior (CEFC 2026 study)
+  multipole_modes     — What field the 6-DoF MSC element creates: mono+dipole+
+                        2 quadrupole (SVD/eig + .wls symbolic proof); conditioning
+                        = multipole field-strength ratio; aspect-ratio (not size)
+                        sets the iteration count; distortion only rotates the
+                        quadrupole (Sugahara-lab study 2026-06-22)
   chubar_1998         — The original Radia paper (Chubar-Elleaume-Chavanne)
   takahashi_2007_aca  — Large-scale MMM + ACA H-matrix (Wakao group,
                         Sugahara lineage — see also CLAUDE.md HACApK)
@@ -760,10 +765,99 @@ makes loops ker(B), is the right consolidation.)
   otherwise keep mu_r physical for trustworthy high-mu_r MSC results.
 """
 
+MULTIPOLE_MODES = """\
+## What field does the 6-DoF MSC element create? (multipole modes + conditioning)
+
+(Sugahara-lab study 2026-06-22. Numerics: `examples/vim/yano_moment_svd_multipole.py`
+(SVD/eig + multipole projection) and `examples/vim/yano_moment_aspect_ratio.py`
+(iteration vs aspect ratio). Symbolic proof:
+`packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/yano_6dof_multipole.wls`.)
+
+### The 6 DOF ARE exactly monopole + dipole + 2 quadrupole
+
+SVD (and eig) of a single hexahedron's 6x6 interaction matrix N (sigma -> demag field)
+shows the 6 face-charge DOF produce PURE multipole fields:
+
+    1 monopole  +  3 dipole  +  2 (diagonal) quadrupole   =   6 modes
+
+On a cube each eigenmode is ~100% one multipole. So **6-DoF MSC = MMM (the 3 dipole DOF a
+tetrahedron also carries) + a monopole + the 2 quadrupole moments that 6 axis-aligned face
+charges can represent**. The off-diagonal (shear) quadrupole of an axis-aligned hex is
+EXACTLY 0 (int_face x_i x_j dA = 0 by face symmetry).
+
+Symbolic proof (yano_6dof_multipole.wls, generic shear s, self-test ALL PASS) -- the RANK
+of the charge -> multipole-moment map:
+
+    rank[mono;dipole]               = 4
+    rank[mono;dipole;quad]          = 6     (quadrupole adds EXACTLY 2 independent DOF)
+    rank[mono;dipole;quad;octupole] = 6     (octupole adds 0 -> NO independent octupole)
+
+so the field's octupole and higher multipoles (and the other 3 quadrupole components) are
+LINEARLY DETERMINED by these 6 -- the element has no independent content beyond
+mono + dipole + 2 quadrupole.
+
+### Distortion only ROTATES the quadrupole (no new DOF, no octupole)
+
+For a distorted (sheared) hex the 6 eigenmodes are STILL mono + 3 dipole + 2 quadrupole; the
+distortion only (a) tilts the quadrupole pair's principal axes (~12-26 deg for a 0.4 xy-shear,
+so the quadrupole acquires SHEAR appearance in the GLOBAL frame) and (b) splits the degenerate
+dipole/quadrupole eigenvalues. The shear-quadrupole functional is exactly LINEAR in the shear
+parameter (closed form int_face d_x d_y dA = {s/3, s/3, s, s, s/3, s/3}), vanishing for the
+cube. So "does a distorted 6-DoF create beyond 2 diagonal quadrupole?" -- NO: it is always
+exactly 2 quadrupole DOF; only their ORIENTATION changes.
+
+### Condition number IS the multipole field-strength ratio
+
+cond(N) = (strongest multipole field) / (weakest). The MONOPOLE is by far the strongest mode
+(singular value ~7.66 on a unit cube) and dominates cond(N) ~ 27 -- BUT it is CONSTRAINED to
+zero by div B = 0 (sum_f A_f sigma_f = 0), so it does not enter the solve. The physically
+relevant conditioning is the DIPOLE / QUADRUPOLE strength spread (cond with the monopole
+removed):
+
+    cubic cell          : ~1.4    (dipole and quadrupole fields almost equally strong -> ideal)
+    thin / tall (1:1:4) : ~6-7    (the thin-direction quadrupole field weakens)
+
+### Aspect ratio -- NOT size or condition number -- sets the iteration count
+
+The quadrupole is the WEAKEST field mode; on an anisotropic cell its thin-direction field
+weakens further, opening the dipole/quadrupole gap. Block-Jacobi inverts the local 6x6 block,
+AMPLIFYING that weak quadrupole mode -> the iteration trouble. Measured (C-yoke, mu_r=1000,
+block-Jacobi GMRES): a clean V-curve in cell aspect ratio (iters MINIMIZE at dx/dz ~ 1 and grow
+on both sides) while dof grows MONOTONICALLY -> it is aspect ratio, NOT problem size. With
+~cubic cells (nz ~ nxy/3) the iters stay BOUNDED (~64-99) as dof grows 1296 -> 16848 -> the
+6-DoF MSC SCALES with cheap block-Jacobi (no H-LU) on well-shaped cells. Per-row normalization /
+condition number is NOT the lever -- block-Jacobi absorbs any per-row (and any same-subspace
+local) scaling, so the iteration count is invariant to it. (This is the orthogonal axis to the
+high-mu_r loop story in "eigenvalue_nullspace".)
+
+### Point-matching (EIEM2) vs moment-matching
+
+EIEM2 collocation (eval-point alpha=0.5) is point-matching: it collocates a SINGLE physical
+quantity (the field) at points, so it does NOT mix the monopole/dipole/quadrupole orders
+(L^2 / L^3 / L^4) the way moment-matching (integral functionals) does. Measured: EIEM2 is lower
+at EVERY aspect ratio and has a shallower V than moment-matching, but is not fully aspect-immune
+(a thin cell puts the normal-offset eval point too close to its face). The eval-point offset
+alpha and the gradient/quadrupole term are the SAME degree of freedom (the alpha-offset is a
+field-gradient sample, n.gradH.u with u along the normal -> it sees only the DIAGONAL part of
+the gradient tensor; the full quadrupole/shear needs the moment or a transverse sample). On a
+fair system-vs-system comparison BOTH are well-posed: the raw `GetInteractMatrix` N is
+near-singular (~1e18, the loops); the SYSTEM matrix A = -N + diag(1/chi) regularizes to ~1e4,
+and there the moment system's condition number is actually NOT worse than EIEM2's.
+
+### Practical guidance
+
+- Mesh hexahedra as close to cubic as the geometry allows; block-Jacobi then scales without H-LU.
+- The 6-DoF element is a faithful dipole + 2-quadrupole source on ANY planar-faced hex;
+  distortion costs only quadrupole ORIENTATION, never spurious modes or independent octupole.
+- For a loop-free-by-construction high-mu_r formulation use HDiv-VIM (`radia.vim`); see
+  "eigenvalue_nullspace".
+"""
+
 SECTIONS = {
     "build_msc_mmm": BUILD_MSC_MMM,
     "matrix_structure": MATRIX_STRUCTURE,
     "eigenvalue_nullspace": EIGENVALUE_NULLSPACE,
+    "multipole_modes": MULTIPOLE_MODES,
     "chubar_1998": CHUBAR_1998,
     "takahashi_2007_aca": TAKAHASHI_2007_ACA,
     "pradhan_2007": PRADHAN_2007,
