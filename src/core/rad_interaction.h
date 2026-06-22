@@ -273,16 +273,10 @@ class radTInteraction : public radTg {
 	//-------------------------------------------------------------------------
 	bool m_hexaGeomReady;                         // True if geometry is pre-computed
 	std::vector<double> m_hexaCenters;            // n_hex * 3: element centers
-	std::vector<double> m_hexaEvalPoints;         // n_hex * 6 * 3: Yano eval points per face
 	std::vector<double> m_hexaFaceNormals;        // n_hex * 6 * 3: outward face normals
 	std::vector<double> m_hexaFaceAreas;          // n_hex * 6: face areas
 	std::vector<double> m_hexaTriVertices;        // n_hex * 6 * 2 * 3 * 3: 2 triangles per face, 3 verts, xyz
 	std::vector<double> m_hexaTriSigns;           // n_hex * 6 * 2: sign correction for each triangle
-	// Improved yano-type pyramid-cloud kernel (built only when g_yano_pyramid_cloud): per-hex
-	// element-common compensation cloud, so Compute6x6BlockFast can use the fast path with the cloud.
-	std::vector<double> m_hexaCloudPts;           // n_hex * m_hexaCloudN * 3: cloud points (global)
-	std::vector<double> m_hexaCloudWts;           // n_hex * m_hexaCloudN: normalised weights (sum=1 per hex)
-	int m_hexaCloudN = 0;                         // cloud points per hex (0 = not built)
 	std::vector<int> m_hexaElemIndices;           // Maps hex index to element index
 	std::vector<int> m_globalToHexIdx;            // Maps global element index to hex index (-1 if not hex)
 
@@ -293,7 +287,6 @@ class radTInteraction : public radTg {
 	//-------------------------------------------------------------------------
 	bool m_wedgeGeomReady;
 	std::vector<double> m_wedgeCenters;          // n_wedge * 3
-	std::vector<double> m_wedgeEvalPoints;       // n_wedge * 5 * 3: Yano eval pts
 	std::vector<double> m_wedgeFaceNormals;      // n_wedge * 5 * 3
 	std::vector<double> m_wedgeFaceAreas;        // n_wedge * 5
 	std::vector<int> m_wedgeFaceNumTris;         // n_wedge * 5: 1 for tri face, 2 for quad face
@@ -302,10 +295,6 @@ class radTInteraction : public radTg {
 	std::vector<int> m_wedgeTriOffset;           // n_wedge * 5: start index into TriVertices for each face
 	std::vector<int> m_wedgeElemIndices;         // Maps wedge index to element index
 	std::vector<int> m_globalToWedgeIdx;         // Maps global element index to wedge index (-1 if not wedge)
-	// Pyramid-cloud kernel (built only when g_yano_pyramid_cloud): per-wedge compensation cloud.
-	std::vector<double> m_wedgeCloudPts;         // n_wedge * m_wedgeCloudN * 3: cloud points (global)
-	std::vector<double> m_wedgeCloudWts;         // n_wedge * m_wedgeCloudN: normalised weights (sum=1)
-	int m_wedgeCloudN = 0;                       // cloud points per wedge (0 = not built)
 	static constexpr int WEDGE_MAX_TRIS = 8;    // Max triangles per wedge element
 
 	//-------------------------------------------------------------------------
@@ -422,7 +411,6 @@ public:
 	const std::vector<double>& GetHexaTriSigns() const { return m_hexaTriSigns; }
 	const std::vector<double>& GetHexaCenters() const { return m_hexaCenters; }
 	const std::vector<double>& GetHexaFaceAreas() const { return m_hexaFaceAreas; }
-	const std::vector<double>& GetHexaEvalPoints() const { return m_hexaEvalPoints; }
 	const std::vector<double>& GetHexaFaceNormals() const { return m_hexaFaceNormals; }
 
 	// Flat matrix/array accessors for solvers
