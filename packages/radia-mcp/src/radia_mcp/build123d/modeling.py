@@ -24,15 +24,17 @@ from __future__ import annotations
 
 import math
 
-from build123d import (Axis, BuildLine, BuildSketch, CenterArc, Circle, Compound, Cylinder, Helix, Line,
-                       Mode, Plane, Pos, RectangleRounded, chamfer, extrude, fillet, loft, make_face,
-                       offset, revolve, sweep)
+from build123d import (Axis, BuildLine, BuildSketch, CenterArc, Circle, Compound, Cylinder, Helix, Keep,
+                       Line, Mode, Plane, Pos, Rectangle, RectangleRounded, Spline, chamfer, extrude,
+                       fillet, loft, make_face, offset, revolve, split, sweep)
 
 __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_array",
            "mirrored", "assembly",
            # generic solid-modelling operations (constructors / local mods / arrays)
            "swept", "revolved", "lofted", "coil", "strut", "thicken", "draft_extrude",
-           "shell", "fillet_edges", "chamfer_edges", "grid_array", "path_array"]
+           "shell", "fillet_edges", "chamfer_edges", "grid_array", "path_array",
+           # boolean / slice / sheet-metal
+           "fuse", "cut", "common", "slice_solid", "bend_sheet"]
 
 
 def annular_segment(r_in, r_out, h, start_angle=0.0, end_angle=90.0, label="segment"):
@@ -295,3 +297,78 @@ def path_array(part, path, count, label=None, label_fmt="{base}_{k:02d}"):
         c.label = label_fmt.format(base=base, k=k)
         children.append(c)
     return Compound(children=children, label=base + "_patharray")
+
+
+# ---- boolean / slice / sheet-metal verbs -----------------------------------------------------------
+def fuse(*parts, label="fused"):
+    r"""**Boolean union** (add): fuse ``parts`` into one body, relabelled.  Overlapping inputs merge into
+    a single solid; disjoint inputs remain separate solids in the returned body."""
+    if not parts:
+        raise ValueError("fuse needs at least one part")
+    r = parts[0]
+    for p in parts[1:]:
+        r = r + p
+    try:
+        r.label = label
+    except Exception:
+        pass
+    return r
+
+
+def cut(base, *tools, label="cut"):
+    r"""**Boolean subtract**: ``base`` minus each of ``tools`` (drill holes / remove material),
+    relabelled."""
+    r = base
+    for t in tools:
+        r = r - t
+    try:
+        r.label = label
+    except Exception:
+        pass
+    return r
+
+
+def common(*parts, label="common"):
+    r"""**Boolean intersect**: the common (overlapping) volume of ``parts``, relabelled."""
+    if not parts:
+        raise ValueError("common needs at least one part")
+    r = parts[0]
+    for p in parts[1:]:
+        r = r & p
+    try:
+        r.label = label
+    except Exception:
+        pass
+    return r
+
+
+def slice_solid(solid, plane=Plane.XY, keep="top", label="slice"):
+    r"""**Slice** a solid by a ``plane`` and keep one side -- ``keep`` is ``"top"`` (the +normal side),
+    ``"bottom"`` (the -normal side) or ``"both"`` (returns both halves).  The plane-cut / split verb
+    (half models on a symmetry plane, sectioning)."""
+    keepmap = {"top": Keep.TOP, "bottom": Keep.BOTTOM, "both": Keep.BOTH}
+    if keep not in keepmap:
+        raise ValueError("keep must be 'top', 'bottom' or 'both'")
+    r = split(solid, bisect_by=plane, keep=keepmap[keep])
+    try:
+        r.label = label
+    except Exception:
+        pass
+    return r
+
+
+def bend_sheet(leg1, leg2, width, thickness, angle_deg, radius, n_arc=24, label="bent"):
+    r"""A **sheet-metal bend**: a strip of cross-section ``thickness`` (in the bend plane) x ``width``
+    (out of plane) that runs a flat leg of length ``leg1``, a cylindrical bend of inner ``radius``
+    through ``angle_deg``, then a flat leg of length ``leg2``.  Built by sweeping the cross-section along
+    the neutral-axis path (straight -> arc -> straight), so it is one clean labelled solid -- the
+    sheet-metal "bend" verb (brackets, flanges, folded chassis)."""
+    a = math.radians(angle_deg)
+    rn = radius + thickness / 2.0
+    pts = [(-leg1, 0.0, 0.0), (-leg1 * 0.5, 0.0, 0.0), (0.0, 0.0, 0.0)]
+    for k in range(1, n_arc + 1):
+        t = a * k / n_arc
+        pts.append((rn * math.sin(t), rn * (1.0 - math.cos(t)), 0.0))
+    pa = pts[-1]
+    pts.append((pa[0] + leg2 * math.cos(a), pa[1] + leg2 * math.sin(a), 0.0))
+    return swept(Rectangle(thickness, width), Spline(*pts), label=label)
