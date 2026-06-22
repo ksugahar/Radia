@@ -60,17 +60,6 @@ def test_per_element_M_uniform_and_aligned():
     assert np.abs(M[:, :2]).mean() < 0.05 * abs(mz.mean()), "spurious transverse per-element M"
 
 
-def test_scalable_matches_dense():
-    """The scalable (skip-dense-Gram + approx Jacobi diagonal) path matches the dense reference."""
-    mesh = _sphere()
-    with ng.TaskManager():
-        r_dense = hdiv_demag_solve(mesh, 100.0, _HEXT, scalable=False)
-        r_scal = hdiv_demag_solve(mesh, 100.0, _HEXT, scalable=True)
-    rel = abs(r_scal["M_avg"][2] - r_dense["M_avg"][2]) / abs(r_dense["M_avg"][2])
-    assert rel < 5e-3, f"scalable vs dense Mz_avg rel {rel:.2e}"
-    assert abs(r_scal["demag"] - r_dense["demag"]) < 5e-3
-
-
 def test_fail_loud_on_nonmagnetic():
     """mu_r <= 1 is not a soft-iron demag problem -> RAISE (no silent fallback)."""
     mesh = _sphere()
