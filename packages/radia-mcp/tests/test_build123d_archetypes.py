@@ -21,7 +21,9 @@ from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetizati
                                             hierarchical_litz, rectangular_litz, litz_serving)
 from radia_mcp.build123d.archetypes import _carried_centerline, _superposed_centerline
 from radia_mcp.build123d.archetypes import involute_gear, threaded_rod, airfoil, blade
+from radia_mcp.build123d.archetypes import gear_rack, bevel_gear, worm, chain_sprocket, vbelt_pulley
 from build123d import Box, Rectangle, RegularPolygon, extrude
+import math as _math
 
 
 def test_magnetization_label_roundtrip():
@@ -373,6 +375,19 @@ def test_airfoil_and_blade():
     assert bl.is_valid and bl.label == "vane" and bl.volume > 0
 
 
+def test_transmission_family():
+    rack = gear_rack(8, 1.4, 1.2, 1.0, name="rack")
+    assert rack.is_valid and rack.volume > 1.2 * 1.0 * (9 * 1.4) * 0.99, "bar + teeth"
+    bevel = bevel_gear(14, 3.0, 0.8, 2.5, name="bevel")
+    assert bevel.is_valid and bevel.volume > 0
+    wm = worm(1.0, 2.0, 8.0, name="worm")
+    assert wm.is_valid and wm.volume > _math.pi * 1.0 ** 2 * 8.0, "thread adds material"
+    spr = chain_sprocket(16, 4.0, 0.8, 0.5, name="spr")
+    assert spr.is_valid and spr.volume < _math.pi * 4.0 ** 2 * 0.8, "roller seats remove material"
+    pul = vbelt_pulley(3.5, 2.0, 0.7, 0.7, name="pul")
+    assert pul.is_valid and pul.volume < _math.pi * 3.5 ** 2 * 2.0, "groove + bore remove material"
+
+
 def main():
     test_magnetization_label_roundtrip()
     test_pm_primitives_carry_magnetization()
@@ -399,6 +414,7 @@ def main():
     test_involute_gear_spur_and_helical()
     test_threaded_rod_adds_thread()
     test_airfoil_and_blade()
+    test_transmission_family()
     test_hierarchical_litz_meshes_in_netgen()
     test_e_core_two_windows()
     test_slotted_stator_removes_slots()
