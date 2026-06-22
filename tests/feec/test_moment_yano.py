@@ -73,10 +73,42 @@ def test_method2_hacapk_fails_loud():
 # EIEM2's 0.94% -- moment is the MORE accurate formula, and that accuracy is locked there, not here).
 
 
-def test_ima_image_excludes_moment():
-    """image= (IMA) is not moment-eligible -> the EIEM2 path runs finite (no Error204)."""
-    M = _cube_Mz(0, moment=True, image="+z", center=(0.0, 0.0, 0.03))
-    assert np.all(np.isfinite(M)) and np.linalg.norm(M) > 1e-9
+def _ima_boxes_half():
+    """A 2x2 layer of hexes entirely in z>0 (disjoint from its z<0 mirror -> no boundary elements on z=0)."""
+    out = []
+    for ix in range(2):
+        for iy in range(2):
+            x0, y0 = -0.02 + ix * 0.02, -0.02 + iy * 0.02
+            out.append([[x0, y0, 0.006], [x0 + 0.02, y0, 0.006], [x0 + 0.02, y0 + 0.02, 0.006], [x0, y0 + 0.02, 0.006],
+                        [x0, y0, 0.026], [x0 + 0.02, y0, 0.026], [x0 + 0.02, y0 + 0.02, 0.026], [x0, y0 + 0.02, 0.026]])
+    return out
+
+
+def _ima_solve(boxes, Happ, image):
+    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True)
+    objs = [rad.ObjHexahedron(b, [0, 0, 0]) for b in boxes]
+    for h in objs:
+        rad.MatApl(h, rad.MatLin(200.0))
+    cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [MU0 * Happ[0], MU0 * Happ[1], MU0 * Happ[2]])])
+    if image is None:
+        rad.Solve(cont, 1e-8, 500, 0)
+    else:
+        rad.Solve(cont, 1e-8, 500, 0, image=image)
+    return np.asarray([m[1] for m in rad.ObjM(rad.ObjCnt(objs))], float)
+
+
+@pytest.mark.parametrize("Happ,image", [([1000.0, 0.0, 0.0], "+z"),    # parallel to z=0 -> symmetric
+                                        ([0.0, 0.0, 1000.0], "-z")])   # perpendicular -> antisymmetric
+def test_ima_image_uses_moment(Happ, image):
+    """image= (IMA) is now moment-capable: BuildCentroidFieldGrad adds the mirror images, so a HALF model
+    solved with image= reproduces the EXPLICIT FULL model (half + hand-mirrored z<0 copy) to machine
+    precision -- same moment formulation, IMA is just the computational shortcut for the mirror."""
+    half = _ima_boxes_half()
+    full = half + [[[p[0], p[1], -p[2]] for p in b] for b in half]
+    M_ref = _ima_solve(full, Happ, None)[:len(half)]      # explicit full, no image, z>0 elements
+    M_ima = _ima_solve(half, Happ, image)                 # half + image
+    rel = np.linalg.norm(M_ima - M_ref) / max(np.linalg.norm(M_ref), 1e-30)
+    assert rel < 1e-6, f"moment IMA {image} != explicit full (rel {rel:.2e})"
 
 
 def test_moment_nonlinear_picard_matches_linear_in_linear_regime():

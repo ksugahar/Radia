@@ -1722,17 +1722,17 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		//     with the correct moment result (the direct dense moment solve) rather than the EIEM2 iteration.
 		//   - method 2 (HACApK) signals large N where a dense solve is infeasible -> fail loud (Error204) with
 		//     the EIEM2 opt-out (yano_moment=False), instead of OOM-ing on a dense moment matrix.
-		// IMA (image symmetry), mixed/non-hex elements, and explicit yano_moment=False are NOT moment-eligible
-		// -> the EIEM2 collocation path handles them unchanged.
+		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Mixed/
+		// non-hex elements and explicit yano_moment=False are NOT -> the EIEM2 collocation path handles them.
 		{
 			extern bool g_yano_moment;
-			if(g_yano_moment && imageSpec.empty())
+			if(g_yano_moment)
 			{
 				radThg hgMom;
 				if(ValidateElemKey(InteractElemKey, hgMom))
 				{
 					radTInteraction* pIntrMom = dynamic_cast<radTInteraction*>(hgMom.rep);
-					if(pIntrMom != 0 && !pIntrMom->IsIMAEnabled())
+					if(pIntrMom != 0)
 					{
 						int neMom = pIntrMom->GetAmOfMainElem();
 						bool allHex6 = (neMom > 0);
