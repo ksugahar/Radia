@@ -532,11 +532,22 @@ and b_6 is rotation-INVARIANT.  The twist is the surface angular mode, measured.
 
 This is the per-station (Frenet cross-section) 2-D design -- the SLOW-TWIST
 (adiabatic) limit d phi / ds -> 0, where the magnet is a stack of 2-D leaves (the
-foliate_perturb picture, now twisting).  A fast twist / tight bend couples
-adjacent leaves (a longitudinal-field correction); the twist rate d phi / ds is a
-leaf-coupling perturbation parameter (the next rung).  Combined-function
-(dipole + quad together = a shifted+rotated hyperbola) and the genuine
-curved-orbit Frenet sweep are the extensions the n-fold law governs.
+foliate_perturb picture, now twisting).
+
+The CONFLUENCE with the FFAG sector (rung 1-2) is DONE
+(combined_function_frenet_sweep.py): a COMBINED-FUNCTION magnet (dipole b1 + quad
+gradient b2 in one tilted-gap cross-section) swept along the CURVED orbit it bends.
+In the Frenet frame the cross-section is fixed; the Frenet rotation theta(s) =
+s/rho (rho = Brho/b1) twists the lab pole, and the n-fold law gives dipole phase
+theta, quad phase 2 theta -- BOTH orientations track theta (slope 1.000, err
+0.00 deg), the multipole phase-change ratio psi2/psi1 = 2.000.  Verified ngsolve,
+golden test_combined_function_frenet_sweep.
+
+REMAINING: a fast twist / tight bend couples adjacent leaves (a longitudinal-field
+correction); the twist rate d phi / ds is a leaf-coupling perturbation parameter
+(the next rung -- when does the per-station 2-D break).  A spiral sector (pole
+twist phi != orbit bend theta) and an s-ramped (b1, b2)(s) are the other
+extensions the n-fold law governs.
 """
 
 

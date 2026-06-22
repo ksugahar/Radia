@@ -1170,6 +1170,32 @@ leaves (`dφ/ds` is a leaf-coupling parameter), and combined-function (dipole+qu
 a shifted+rotated hyperbola) + the genuine curved-orbit Frenet sweep are the
 extensions the n-fold law governs.)*
 
+### `combined_function_frenet_sweep.py` — the confluence: a combined-function magnet on its curved orbit
+
+**Merges the FFAG sector (rung 1-2, a pure dipole bend) and the twist (rung 3, a
+pure rotating quad)** into a **combined-function** magnet (dipole `b1` + quad
+gradient `b2` in ONE cross-section) swept along the **curved orbit it bends**. In
+the **Frenet frame** the cross-section is fixed (`b1` bends, `b2` focuses), but the
+Frenet frame **rotates** with the bend by `θ(s) = s/ρ` (`ρ = Bρ/b1`), so in the
+**lab** the whole pole **twists by `θ(s)`**. §3.6's n-fold law gives dipole phase
+`ψ₁ = θ`, quad phase `ψ₂ = 2θ` — both orientations track the *same* Frenet angle,
+their multipole phases in the `n:1` ratio.
+
+The combined-function cross-section is a **tilted-gap** dipole (`z = ±(g/2 − t·x)`):
+the gap narrows toward `+x`, so `B_z(x) ∝ 1/g(x)` carries a dipole + a gradient —
+rung 1-2's flat gap, *tilted*. **Verified (ngsolve only):** the 2-D Laplace solve
+recovers the combined function (`b1` dipole + `b2/b1 ≈ 6%` gradient + a small
+`b3 ~ 3e-3`); rolling by `θ`, **both the dipole and quad orientations track `θ`
+(slope 1.000, err 0.00°)** and the **quad phase change is exactly 2× the dipole's**
+(`ψ₂/ψ₁ = 2.000`, the n-fold law). Figure `combined_function_frenet_sweep.png`
+(left: the tilted-gap pole at θ=0/20/40° rolling with the Frenet frame; right: both
+harmonics' recovered roll vs θ, slope 1, phase ratio 2). Golden
+`test_combined_function_frenet_sweep`.
+*(Honest scope: a pure sector (rigid Frenet roll), per-station 2-D = the slow-bend
+limit; a spiral sector (pole twist `φ ≠` orbit bend `θ`) + an s-ramped `(b1,b2)(s)`
+are extensions, and **when the per-station 2-D breaks** — the fast-twist `dφ/ds`
+leaf coupling — is the next rung.)*
+
 ## Run
 
 ```bash
@@ -1197,6 +1223,7 @@ python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry p
 python leaf_coupling_perturbation_3d.py       # foliate-and-perturb: leaf-coupling ~ gap/L, when can the body be 2-D + ends a perturbation (--sweep aspect ratio; --fig)
 python ffag_sector_two_plane.py               # the two-plane -> 3-D method: FFAG sector = transverse (r,z) + azimuthal (s,z); reflection validity ~ L/g (--sweep aspect; --rung2 the 3-D reflection B(r)~r^k; --fig)
 python twisting_quadrupole_pole.py            # beam-referenced equipotential surface as design primitive: the TWIST (n-fold law, rotating quad, slope 1.000) (--fig)
+python combined_function_frenet_sweep.py      # the confluence: combined-function (dipole+quad) on its curved orbit; the Frenet sweep IS the twist (phase ratio 2.000) (--fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
