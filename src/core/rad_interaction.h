@@ -549,20 +549,15 @@ public:
 	// Per-element chi + per-element external field (at hex centroid, HextPerHex[h*3+k]); A column = face DOF
 	// so dgesv's solution is sigma in DOF order.  The solve path uses this (coil sources are not uniform).
 	void BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex, std::vector<double>& A, std::vector<double>& rhs, bool normalize = true) const;
-	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
+	// EIEM2 surface-charge block kernels (Compute6x6BlockFast / Compute5x5BlockFast /
+	// ComputeMixedBlockFast) retired Phase 3b -- moment-yano (BuildMomentSystemCore) is the sole
+	// surface-charge demag; the method-2 HACApK path is MMM-only (3x3 tet).
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
 	//-------------------------------------------------------------------------
-	// Fast wedge matrix build (same pattern as hex, 5 faces: 2 tri + 3 quad)
+	// Fast wedge geometry precompute (face triangles/normals; shared by moment assembly)
 	//-------------------------------------------------------------------------
 	void PrecomputeWedgeGeometry();  // Pre-compute face triangles/normals/eval points
-	void Compute5x5BlockFast(int wedge_i, int wedge_j, double* K_mat) const;  // Fast 5x5 block
-
-	//-------------------------------------------------------------------------
-	// Unified mixed-DOF block computation (handles ALL element type pairs)
-	// Eliminates flat matrix dependency for mixed meshes in HACApK
-	//-------------------------------------------------------------------------
-	void ComputeMixedBlockFast(int elem_row, int dof_row, int elem_col, int dof_col, double* block_out) const;
 
 	//-------------------------------------------------------------------------
 	// IMA (Image) Symmetry Methods
