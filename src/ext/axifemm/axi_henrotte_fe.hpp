@@ -221,6 +221,41 @@ public:
                     BareSliceMatrix<> dshape) const override;
 };
 
+// ---------------------------------------------------------------------------
+// AxiHenrotteFE_Q2_Curved
+//   - 9-DOF CURVED biquadratic Henrotte quad on a GENERAL 9-node element in the
+//     physical (r, z) plane (the proper curved isoparametric element -- Phase B6
+//     port of examples/.../axifemm/axifemm_quad_q2_curved.py).  Unlike
+//     AxiHenrotteFE_Q2_AxisAligned (axis-aligned rectangle, closed-form matrices),
+//     this follows curved boundaries to O(curve^2): the FESpace samples the 9 node
+//     positions from the mesh's (curved) ElementTransformation, exactly as the P2
+//     triangle does for curved triangles.
+//   - psi_i(r, z) = sum_j coeffs[j][i] * m_j(r', z') with the even-r-power monomials
+//     m = {1, s, s^2, z, sz, s^2 z, z^2, sz^2, s^2 z^2}, s = (r/L_r)^2 (scaled for
+//     conditioning), z' = (z - z_c)/L_z; coeffs = Vandermonde^{-1} over the 9 nodes.
+//   - geometric map: biquadratic Lagrange on the NGSolve quad ref [0,1]^2 through
+//     the 9 nodes (corners 0-3, edge mids 4-7, face center 8), matching the
+//     AxiHenrotteFESpace Q2 node order (4=bottom,5=right,6=top,7=left,8=center).
+//   - axis-touching nodes (r_i = 0) get the r_i factor in the V-DOF matrices, so the
+//     caller MUST Dirichlet the axis-side DOFs (same contract as the other elements).
+// ---------------------------------------------------------------------------
+
+class AxiHenrotteFE_Q2_Curved : public AxiHenrotteBaseFE {
+public:
+    double rn[9], zn[9];        // physical node coords (FEMM/our Q2 node order)
+    double L_r, z_c, L_z;       // conditioning scales (s' = (r/L_r)^2, z' = (z-z_c)/L_z)
+    double coeffs[9][9];        // coeffs[j][i] = monomial-j coefficient of nodal basis i
+
+    AxiHenrotteFE_Q2_Curved(const double rs[9], const double zs[9]);
+
+    ELEMENT_TYPE ElementType() const override { return ET_QUAD; }
+
+    void CalcShape(const IntegrationPoint & ip,
+                   BareSliceVector<> shape) const override;
+    void CalcDShape(const IntegrationPoint & ip,
+                    BareSliceMatrix<> dshape) const override;
+};
+
 }  // namespace axifem
 
 #endif  // RADIA_AXIFEMM_AXI_HENROTTE_FE_HPP
