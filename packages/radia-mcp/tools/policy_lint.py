@@ -159,6 +159,10 @@ def check_packaging(root: Path) -> tuple[list[str], list[str]]:
 # ground-truth claim) or on an internal filesystem path -- NOT on a bare
 # capability mention, an open-source tool, or a published author/method.
 _TOOL = r"(?:FEMM|JMAG|COMSOL|CST)"          # commercial / licensed tools
+# Tools whose INFLUENCE on a public capability must be hidden ("何から学んだかも隠す").
+# FEMM is deliberately EXCLUDED: radia-ngsolve's "FEMM-parity" is the project's STATED open goal
+# (allowlisted), so a FEMM design-reference is allowed; COMSOL / JMAG / CST design-references are not.
+_REF_TOOL = r"(?:COMSOL|JMAG|CST)"
 # A "value" token that signals a benchmark NUMBER (a MEASUREMENT), NOT a
 # capability label ("prob1-4big") nor a VERSION ("FEMM 4.2", "COMSOL 6.2").
 # A measurement is: signed; or %-suffixed; or a physical unit (T/H/us/...); or a
@@ -208,6 +212,23 @@ PROVENANCE_RULES: list[tuple[re.Pattern, str]] = [
      "commercial tool named as ground truth"),
     (re.compile(r"\bground[\s-]*truth\b[^\n]{0,40}" + _TOOL, re.IGNORECASE),
      "commercial tool named as ground truth"),
+    # --- commercial tool named as the DESIGN / CAPABILITY reference -------
+    # "公開物では何から学んだかも隠す": a public capability described as "<tool>-modeller",
+    # "<tool>-style", "<tool>-equivalent", "like <tool>", "what <tool> calls X", or "<tool>'s X verb"
+    # leaks the commercial tool as the SOURCE even with no number. (FEMM-parity is the project's
+    # stated open goal, so _REF_TOOL excludes FEMM -- these fire on COMSOL / JMAG / CST only.)
+    (re.compile(r"\b" + _REF_TOOL + r"[\s-]modell?(?:er|ing|ed)\b", re.IGNORECASE),
+     "commercial tool's modeller named as a reference ('<tool>-modeller / -modelling')"),
+    (re.compile(r"\b" + _REF_TOOL + r"[\s-](?:equivalent|style|like)\b", re.IGNORECASE),
+     "public capability described as commercial-tool-equivalent ('<tool>-equivalent / -style')"),
+    (re.compile(r"\b(?:like|as in|mimic\w*|emulat\w*|modell?ed after|equivalent to|inspired by|"
+                r"akin to)\s+" + _REF_TOOL + r"\b", re.IGNORECASE),
+     "public capability attributed to a commercial tool as its model ('like <tool>')"),
+    (re.compile(r"\bwhat\s+" + _REF_TOOL + r"\s+calls\b", re.IGNORECASE),
+     "public capability described by what a commercial tool calls it"),
+    (re.compile(r"\b" + _REF_TOOL + r"(?:'s)?\s+\w{2,14}\s+"
+                r"(?:verb|feature|operation|primitive)\b", re.IGNORECASE),
+     "commercial tool named as the source of a modelling verb / feature"),
     # --- internal / commercial-harness paths & identifiers ----------------
     # Commercial-tool drive paths the policy names explicitly: S:\<TOOL>,
     # W:\00_CAE\<TOOL>, plus a deeper S:\..\<TOOL>\ component. Open-tool paths
@@ -322,6 +343,13 @@ def selftest() -> int:
         "the proposed method matches CST to 0.5 %",
         "validated against REAL CST Studio Suite",
         r"the lab's CST corpus (S:\CST).",                        # CST internal path
+        # design / capability reference (no number) -- the leak class this guard now catches:
+        'The CST-modeller "rotate with copies" verb',            # <tool>-modeller
+        "a CST-style near-field equivalent source",              # <tool>-style
+        "NGSolve recipes for a COMSOL-equivalent workflow",      # <tool>-equivalent
+        "the sweep is modelled after COMSOL's loft tool",        # 'modelled after <tool>'
+        "this reproduces what CST calls a Blend",                # 'what <tool> calls'
+        "COMSOL's sweep feature is reproduced here",             # "<tool>'s X feature"
         r"FEMM itself as the ground truth",
         "**radia** (0.2512 vs FEMM 0.2498)",
         "validated against ... the reference commercial code",
@@ -357,6 +385,12 @@ def selftest() -> int:
         "Created in CST Studio Suite 2026.0",                    # CST version, not a benchmark
         "EMF is at the EED/CST London, UK, e-mail 10016.3130",   # quoted paper affiliation (allowlisted)
         "high-frequency tools (HFSS, FEKO) exist",               # competitor landscape (not in _TOOL)
+        # FEMM design-references are ALLOWED (FEMM-parity is the stated open goal):
+        "radia-ngsolve is FEMM-like -- the FEMM-parity goal",    # FEMM excluded from _REF_TOOL
+        "the FEMM modeller workflow, reimplemented openly",      # FEMM, not COMSOL/JMAG/CST
+        # generic capability prose (no commercial tool named) stays clean:
+        "a generic loft / sweep / shell modelling operation",
+        "Created in COMSOL Multiphysics 6.2 with the AC/DC module",  # version + module, no feature-ref
     ]
     fails = []
     for s in must_flag:
