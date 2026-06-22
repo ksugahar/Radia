@@ -151,8 +151,13 @@ def assembly(*parts, label="assembly"):
     """
     children = []
     for p in parts:
-        if isinstance(p, Compound):
-            children.extend(p.children)          # keep the labelled children (solids() strips labels)
+        if isinstance(p, Compound) and p.children:
+            children.extend(p.children)          # labelled sub-parts: keep them (solids() strips labels)
+        elif isinstance(p, Compound):
+            sols = p.solids()                    # raw Part (Box / extrude / ... has no children): its solids
+            if p.label and len(sols) == 1:
+                sols[0].label = p.label          # carry the Part's own label onto its (stripped) solid
+            children.extend(sols)
         else:
-            children.append(p)
+            children.append(p)                   # a bare Solid
     return Compound(children=children, label=label)
