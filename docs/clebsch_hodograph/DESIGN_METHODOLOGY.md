@@ -309,6 +309,47 @@ planes, rung 2 the 3-D reflection); the curved-orbit twist (combined-function, t
 beam-referenced equipotential surface rotating along a bent orbit) is the next
 axis.
 
+### 3.6 The beam-referenced equipotential surface as the design primitive — and the twist
+
+§3.1–3.5 read the multipoles OUT of a solved field. The reframing makes the
+**beam-referenced equipotential surface the design SPEC**: in the Frenet frame of
+the orbit `s`, the iron pole face is
+
+$$\Omega(r,\theta;s) = \sum_n r^n\, b_n(s)\,\sin\!\big(n\theta + \phi_n(s)\big)$$
+
+(high-μ ⇒ `H_tangential = 0` ⇒ `Ω = const`), so the **multipole `(b_n,φ_n)(s)`
+IS the surface's angular Fourier mode.** Design = prescribe `(b_n,φ_n)(s)`, sweep
+the equipotential surface along the orbit, place iron there — *not* solve-then-expand.
+
+**The twist (the curved-orbit / combined-function axis).** The genuinely 3-D
+content is that the transverse multipole **rotates** along `s` — the Frenet frame
+turns with the bend, or a rotating-gradient magnet turns the pole on purpose. The
+key fact is the **n-fold law**: rotating the equipotential SURFACE by `φ` rotates
+the order-`n` multipole PHASE by `nφ`. For the quadrupole (`n=2`):
+
+$$\text{rotate the pole by }\phi \iff (b_2,a_2)\to|b_2|(\cos 2\phi,\ \sin 2\phi),$$
+
+so a quad twisted by 45° becomes a pure **skew** quad.
+
+**Verified (`twisting_quadrupole_pole.py`, ngsolve only, golden-tested).** The
+quad pole face is the hyperbola `xy = ±r0²/2` (the `Ω=const` equipotential); a 2-D
+Laplace solve in the aperture with the 4 hyperbola poles at alternating `±Ω0`
+recovers a **clean quad** (skew `a_2/|c_2| ~ 5e-6`, forbidden `n=1,3,5` at the
+`~5e-5` floor, the leading allowed spurious the finite-pole 12-pole `b_6 ~ 5.6e-3`).
+**Rotating the poles by `φ` rotates the recovered pole orientation by exactly `φ`**
+— `α = −½ atan2(a_2,b_2)` tracks the prescribed twist to **slope 1.000, max error
+0.00°** — and `b_6` is rotation-invariant. The twist is the surface angular mode,
+measured.
+
+**Honest scope.** This is the per-station (Frenet cross-section) 2-D design — the
+**slow-twist (adiabatic) limit** `dφ/ds → 0`, where the magnet is a stack of 2-D
+leaves (the §3.4 foliate-and-perturb picture, now twisting). A fast twist / tight
+bend couples adjacent leaves (a longitudinal-field correction) — the twist rate
+`dφ/ds` is a leaf-coupling perturbation parameter (the next rung). The
+combined-function (dipole + quad together = a shifted+rotated hyperbola) and the
+genuine curved-orbit Frenet sweep are the extensions; the quad here establishes
+the n-fold twist law that governs them.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -400,7 +441,13 @@ coil = A-side), so the framework is one method, not two.
   `L_eff = L_sector + 1.5 g`, fringe ~ gap/L (slope −0.98); and **rung 2** (the
   3-D reflection, `--rung2`) revolves `g(r)` into a 3-D iron pole and **recovers
   the field index `B(r) ∝ r^k` in full 3-D** (mean `≈ 4.88`, design 5) with the
-  azimuthal end fringe (`+39%` at `L/g=3`).
+  azimuthal end fringe (`+39%` at `L/g=3`);
+- the **beam-referenced equipotential surface as the design primitive + the
+  twist** (§3.6, `twisting_quadrupole_pole.py`): the quad pole = the hyperbola
+  equipotential; rotating the surface by `φ` rotates the recovered orientation by
+  exactly `φ` (**slope 1.000, err 0.00°**) — the n-fold law (surface twist `φ` ⟷
+  multipole phase `2φ`), with a clean quad (skew `~5e-6`, `b_6 ~ 5.6e-3`
+  rotation-invariant).
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed for the longitudinal end-field** (§3.2 rung 2);
@@ -432,4 +479,5 @@ coil = A-side), so the framework is one method, not two.
 | radial field index (scaling + isochronous, saturation) | `examples/clebsch_hodograph/scaling_ffag_pole_2d.py` |
 | foliate-and-perturb scaling (leaf coupling ~ gap/L) | `examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py` |
 | two-plane → 3-D method (FFAG sector: transverse + azimuthal) | `examples/clebsch_hodograph/ffag_sector_two_plane.py` |
+| beam-referenced equipotential surface + the twist (n-fold law) | `examples/clebsch_hodograph/twisting_quadrupole_pole.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
