@@ -37,6 +37,12 @@
   d carries topology, Star carries material+metric: the pullback (kStar) is a
   COCHAIN MAP (kStar.d = d.kStar) so dB=0 survives ANY phi for free; all that
   MOVES is in Star.
+
+  Sec.7: the metric IS the geometry, but it is NOT the curvature.  The action is a
+  coordinate-invariant scalar; the metric (Hodge) carries the map AND the material;
+  yet a coordinate map / Kelvin / material weight changes the metric while the space
+  stays FLAT (Riemann = 0) -- a diffeomorphism cannot curve flat space.  ("Material =
+  effective metric" is transformation optics; genuine curvature needs curved spacetime.)
 *)
 
 (* ================= the one formula: Hodge weight on 1-forms ================= *)
@@ -51,6 +57,19 @@ nuFactor[P_] := Abs[Det[P]] Inverse[Transpose[P].P];
 (* nonlinear Hodge *_nu tangent  dH/dB = nu I + nu'(|B|) (B (x) B)/|B|  (flat helper) *)
 tangentNu[nu_, nup_, bx_, by_, bz_] :=
   nu IdentityMatrix[3] + nup Outer[Times, {bx, by, bz}, {bx, by, bz}]/Sqrt[bx^2 + by^2 + bz^2];
+
+(* ---- Riemann curvature of a metric g(xs): metric is local geometry, curvature is the
+   coordinate-INVARIANT 2nd-order quantity.  A coordinate map / Kelvin / material weight
+   changes g but NOT the curvature (a diffeomorphism of flat space stays flat). ---- *)
+christo[g_, xs_] := With[{gi = Inverse[g], n = Length[xs]},
+  Table[(1/2) Sum[gi[[k, l]] (D[g[[l, j]], xs[[i]]] + D[g[[l, i]], xs[[j]]]
+                              - D[g[[i, j]], xs[[l]]]), {l, n}], {k, n}, {i, n}, {j, n}]];
+riem[g_, xs_] := With[{G = christo[g, xs], n = Length[xs]},   (* R^a_{bcd} *)
+  Table[D[G[[a, b, d]], xs[[c]]] - D[G[[a, b, c]], xs[[d]]]
+        + Sum[G[[a, c, e]] G[[e, b, d]] - G[[a, d, e]] G[[e, b, c]], {e, n}],
+    {a, n}, {b, n}, {c, n}, {d, n}]];
+scalarR[g_, xs_] := With[{gi = Inverse[g], Rm = riem[g, xs], n = Length[xs]},
+  Sum[gi[[b, d]] Rm[[a, b, a, d]], {a, n}, {b, n}, {d, n}]];   (* g^{bd} R^a_{bad} *)
 
 (* ============================ self-test ============================ *)
 Module[{ok = True, chk, zero, diagQ},
@@ -130,6 +149,30 @@ Module[{ok = True, chk, zero, diagQ},
       Resolve[ForAll[{nu, nup, nbmag},
                 Implies[nu > 0 && nup >= 0 && nbmag > 0,
                         nu > 0 && nu + nup nbmag > 0]], Reals] === True];
+
+  (* ---- (7) METRIC vs CURVATURE: the metric IS the geometry, but it is NOT the curvature ----
+     The action INT (1/2)<dA, nu dA> is a coordinate-invariant scalar (same form in any chart);
+     ALL the geometry -- the coordinate map AND the material -- lives in the metric (Hodge star).
+     BUT the metric is the LOCAL geometry (lengths/angles); CURVATURE is the coordinate-INVARIANT
+     2nd-order quantity derived from it.  A coordinate map / Kelvin inversion / material weight
+     changes the metric, yet a diffeomorphism of flat space CANNOT create curvature: the space
+     stays FLAT (Riemann = 0), the metric just looks non-trivial in the chosen chart.  (The
+     deep "material = effective metric" identity is transformation optics: the field sees an
+     effective geometry, the space stays flat.  Genuine curvature needs curved spacetime / GR.) *)
+
+  (* the 2-D Kelvin inversion metric g = (R^2/|x|^2)^2 I is non-trivial but FLAT (Riemann = 0) *)
+  chk["(7a) the 2-D Kelvin inversion metric (R^2/|x|^2)^2 I is FLAT (Riemann = 0): a map can't curve space",
+      Simplify[Flatten[riem[(R^2/(x^2 + y^2))^2 IdentityMatrix[2], {x, y}]],
+               x^2 + y^2 > 0 && R > 0] === ConstantArray[0, 2^4]];
+
+  (* the polar metric diag(1, r^2) is non-trivial but FLAT -- non-trivial metric =/= curved *)
+  chk["(7b) the polar metric diag(1, r^2) is FLAT (Riemann = 0): a non-trivial metric is NOT curvature",
+      Simplify[Flatten[riem[DiagonalMatrix[{1, rr^2}], {rr, ph}]], rr > 0]
+        === ConstantArray[0, 2^4]];
+
+  (* CONTROL: the round 2-sphere genuinely IS curved -- the machinery detects it (R_scalar = 2) *)
+  chk["(7c) CONTROL: the round 2-sphere diag(1, sin^2 th) is CURVED, scalar curvature = 2 (machinery detects it)",
+      Simplify[scalarR[DiagonalMatrix[{1, Sin[th]^2}], {th, ph}], 0 < th < Pi] === 2];
 
   Print[If[ok, "ALL PASS", "SOME FAILED"]];
 ];
