@@ -21,7 +21,7 @@ The A-form solve itself is ``radia_mcp.radia_ngsolve.solve``
 (``solve_magnetostatic_Aform``, ``solve_magnetostatic_nonlinear`` -- under-relaxed
 Picard for a field-dependent nu(|B|) saturating B-H -- ``azimuthal_coil_current``,
 ``reluctivity``; high-mu-safe per #25). B = curl(gfu). Regression-tested in
-``tests/test_force_xval.py`` against the stored reference values, so the
+``validation/force/validate_force_xval.py`` against the stored reference values, so the
 force/solve pipeline cannot silently drift.
 
 Point-wise Maxwell surface stress is noisy on unstructured FEM meshes (it needs
@@ -199,8 +199,8 @@ the force, so nonlinear mu_r(B_iron) coupling works.
   | 6 | Helmholtz pair                | center B        | 0.075 %     |
   | 7 | single circular loop          | on-axis B(z)    | <0.8% near  |
 
-EXECUTABLE: cases below are codified as @pytest.mark.xval regression tests in
-tests/test_force_xval.py, each calling the shipped radia_ngsolve.solve / .force
+EXECUTABLE: cases below are codified as explicit validation cases in
+validation/force/validate_force_xval.py, each calling the shipped radia_ngsolve.solve / .force
 directly (so a regression in the solver or extractor fails the test):
   case 1  -> test_magnetized_sphere_field       (PM remanent source, analytic 2/3 Br)
   case 2  -> test_coil_linear_iron_force        (eggshell, linear iron)
@@ -210,7 +210,7 @@ directly (so a regression in the solver or extractor fails the test):
   case 6  -> test_helmholtz_center_field        (center B + flat-field)
   case 7  -> test_single_loop_axis_field        (on-axis B_z vs analytic)
 All 7 recorded cross-validation cases are now codified. Run the suite with
-`pytest -m xval` (heavy: the iron solves are minutes; the iron-free cases are
+`python validation/force/validate_force_xval.py` (heavy: the iron solves are minutes; the iron-free cases are
 ~20-60 s). NGSolve permanent-magnet source = the A-form RHS int nu0 Br . curl(v):
 build with solve.remanent_source(mesh, {mat: (Brx,Bry,Brz)}) and pass as
 solve_magnetostatic_Aform(curl_source=...).

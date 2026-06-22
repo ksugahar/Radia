@@ -10,7 +10,7 @@ energy [J], inductance [H]).
 Validated against COMSOL (LiveLink) and analytics; see the ``force_validation``
 MCP tool for the agreement table (sphere 0.11 %, coil+iron force ~3 %,
 self-inductance 0.01 %, ...). The regression tests in
-``tests/test_force_xval.py`` assert these keep matching.
+``validation/force/validate_force_xval.py`` assert these keep matching.
 
 #25 lesson baked in: for a HIGH-permeability body do NOT carve a separate nested
 "shell" material around it -- the nested-sphere interface isolates the body and

@@ -32,35 +32,3 @@ def test_cavity_closed_form():
     L = 0.05
     assert math.isclose(rectangular_cavity_frequency(L, L, L, 1, 0, 1),
                         C0 * math.sqrt(2) / (2 * L), rel_tol=1e-12)
-
-
-@pytest.mark.xval
-def test_cavity_maxwell_fe():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    from ngsolve import Mesh, TaskManager
-    from netgen.occ import Box, OCCGeometry, Pnt
-    from radia_mcp.radia_ngsolve.waveguide import maxwell_cavity_modes_3d
-
-    box = Box(Pnt(0, 0, 0), Pnt(A, B, D))
-    for f in box.faces:
-        f.name = "pec"
-    mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.006))
-
-    shift = (math.pi / A) ** 2 + (math.pi / D) ** 2
-    with TaskManager():
-        fe = maxwell_cavity_modes_3d(mesh, 4, shift)
-
-    # the dominant FE mode is TE101, to FE accuracy; gradient kernel suppressed (no near-0 modes)
-    assert math.isclose(fe[0], rectangular_cavity_frequency(A, B, D, 1, 0, 1), rel_tol=3e-3)
-    assert fe[0] > 1e9                                       # not a spurious zero mode
-    # the next physical modes match the box spectrum (TM110, TE011)
-    assert math.isclose(fe[1], rectangular_cavity_frequency(A, B, D, 1, 1, 0), rel_tol=3e-3)
-    # ascending and all physical
-    assert all(b >= a for a, b in zip(fe, fe[1:]))
-
-
-if __name__ == "__main__":
-    test_cavity_closed_form()
-    test_cavity_maxwell_fe()
-    print("[OK] 3D cavity: HCurl Maxwell eigenvalue == exact box spectrum (TE101 dominant).")

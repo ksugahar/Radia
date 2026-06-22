@@ -19,7 +19,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -66,8 +66,7 @@ def _jz(pos, neg, current):
     return CoefficientFunction([{pos: j0, neg: -j0}.get(m, 0.0) for m in _MATS])
 
 
-@pytest.mark.xval
-def test_frozen_permeability_superposition():
+def validate_frozen_permeability_superposition():
     global _MATS
     mesh = _build()
     _MATS = mesh.GetMaterials()
@@ -91,5 +90,5 @@ def test_frozen_permeability_superposition():
 
 
 if __name__ == "__main__":
-    test_frozen_permeability_superposition()
+    validate_frozen_permeability_superposition()
     print("[OK] frozen-permeability superposition validated (self-consistent).")

@@ -5,7 +5,7 @@ L_sec(I)=lambda_nl(I)/I via solve.saturated_secant_inductance. Tool-independent 
   (1) at LOW current (unsaturated) L_sec -> the linear inductance L0 (nu=nu0 everywhere);
   (2) L_sec DECREASES monotonically with current (the iron saturates);
   (3) deep saturation pulls L_sec well below L0 (the knee).
-Frozen-perm superposition for the dq split is separately locked in test_frozen_permeability.py.
+Frozen-perm superposition for the dq split is separately locked in validate_frozen_permeability.py.
 """
 import math
 import os
@@ -16,7 +16,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -63,8 +63,7 @@ def _jz(current):
     return CoefficientFunction([{"cApos": j0, "cAneg": -j0}.get(m, 0.0) for m in _MATS])
 
 
-@pytest.mark.xval
-def test_saturating_inductance_knee():
+def validate_saturating_inductance_knee():
     global _MATS
     mesh = _build(); _MATS = mesh.GetMaterials()
     with TaskManager():
@@ -80,5 +79,5 @@ def test_saturating_inductance_knee():
 
 
 if __name__ == "__main__":
-    test_saturating_inductance_knee()
+    validate_saturating_inductance_knee()
     print("[OK] saturating inductance knee validated.")
