@@ -44,61 +44,12 @@ def close(a, b, rel=1e-3):
     return True
 
 
-# ---- shared helpers (gears recur, so build them once) ------------------------------------------------
-def involute_tooth_face(rb, top, half_ang_deg, steps=40):
-    """A single involute gear tooth as a 2D face: two involute flanks of base radius ``rb`` rotated
-    +-``half_ang_deg`` apart (finite-width root) and capped at radius ``rb + top``."""
-    a = math.radians(half_ang_deg)
-    tv = [0.03 * k for k in range(steps)]
-    inv = [(rb * (math.cos(t) + t * math.sin(t)), rb * (math.sin(t) - t * math.cos(t))) for t in tv]
-    inv = [p for p in inv if math.hypot(*p) <= rb + top]
-
-    def rot(p, ang):
-        x, y = p
-        return (x * math.cos(ang) - y * math.sin(ang), x * math.sin(ang) + y * math.cos(ang))
-    left = [rot(p, a) for p in inv]
-    right = [rot((x, -y), -a) for x, y in inv]
-    return make_face(Polyline(*(left + list(reversed(right)) + [left[0]])))
-
-
-def spur_gear(n_teeth, rb, top, width, twist_deg=0.0):
-    """An involute spur (or, with ``twist_deg``, helical) gear: a root cylinder fused with ``n_teeth``
-    involute teeth (a lofted twist makes it helical)."""
-    root = Cylinder(rb * 1.06, width, align=CK)
-    tooth2d = involute_tooth_face(rb, top, 360.0 / n_teeth / 4.0)
-    if abs(twist_deg) < 1e-9:
-        tooth = extrude(tooth2d, width)
-    else:
-        tooth = loft([tooth2d, Pos(0, 0, width) * Rot(0, 0, twist_deg) * tooth2d])
-    return root + polar_array(tooth, n_teeth, 360.0)
-
-
-def threaded_shank(r, pitch, height, depth=None):
-    """A cylindrical shank with an external V-thread: the core cylinder fused with a triangular profile
-    swept along a helix of the given ``pitch`` over ``height``."""
-    depth = depth or pitch * 0.6
-    core = Cylinder(r, height, align=CK)
-    hel = Helix(pitch=pitch, height=height, radius=r)
-    thr = sweep(Plane(origin=hel @ 0.0, z_dir=hel % 0.0) * Triangle(a=depth, b=depth, C=90), path=hel)
-    return core + thr
-
-
-def airfoil_face(chord, thick=0.12, npts=40):
-    """A NACA-00xx symmetric airfoil section as a 2D face (closed sharp trailing edge)."""
-    xs = [chord * (0.5 - 0.5 * math.cos(math.pi * i / npts)) for i in range(npts + 1)]
-    def yt(x):
-        xn = x / chord
-        return 5 * thick * chord * (0.2969 * math.sqrt(xn) - 0.1260 * xn - 0.3516 * xn ** 2
-                                    + 0.2843 * xn ** 3 - 0.1036 * xn ** 4)
-    up = [(x, yt(x)) for x in xs]
-    lo = [(x, -yt(x)) for x in reversed(xs)]
-    return make_face(Polyline(*(up + lo[1:-1] + [up[0]])))
-
-
-def strut(p0, p1, r):
-    """A round strut (cylinder) between two arbitrary 3D points -- a circle swept along the line."""
-    path = Line(p0, p1)
-    return sweep(Plane(origin=path @ 0.0, z_dir=path % 0.0) * Circle(r), path=path)
+# ---- shared shapes / ops PROMOTED to the formal API -- the marathon now EXERCISES the public functions
+# (gears, threads, airfoils, struts moved out of this test file into archetypes.py / modeling.py).
+from radia_mcp.build123d.archetypes import (involute_gear as spur_gear, threaded_rod as threaded_shank,
+                                            airfoil as airfoil_face,
+                                            _involute_tooth_face as involute_tooth_face)
+from radia_mcp.build123d.modeling import strut
 
 
 # =====================================================================================================
@@ -1028,10 +979,8 @@ def _p():
             members.append(strut(nodes[(i, j)], nodes[(i, j + 1)], 0.08))
     for n in [(0, 0), (2, 0), (0, 2), (2, 2)]:
         members.append(strut(nodes[n], top, 0.08))
-    g = members[0]
-    for m in members[1:]:
-        g = g + m
-    assert g.is_valid and g.volume > 0
+    g = assembly(*members, label="space_frame")                # many members -> keep as an assembly
+    assert len(g.solids()) == len(members) and all(s.is_valid for s in g.solids())
     return g
 
 
