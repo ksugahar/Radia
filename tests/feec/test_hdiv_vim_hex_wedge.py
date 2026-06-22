@@ -87,28 +87,6 @@ def test_hex_nonlinear_matches_tet_cube():
     assert rel < 3e-2, f"nonlinear hex M_avg {r_hex['M_avg'][2]:.1f} vs tet {r_tet['M_avg'][2]:.1f} (rel {rel:.2e})"
 
 
-def test_scalable_hex_matches_dense():
-    """Item-1 scalable hex/wedge Gram: scalable=True (C++ polytope charge-Gram H-matrix) reproduces
-    scalable=False (the dense Python polytope Gram) on a hex cube to a tight tolerance -- the C++ entry ==
-    the dense analytic_charge_gram polytope entry (same hull triangulation, same built-in quad rules)."""
-    with ng.TaskManager():
-        r_scal = vim.hdiv_demag_solve(_cube(True, 3), mu_r=MU_R, H_ext=_Hz(), scalable=True)
-        r_dense = vim.hdiv_demag_solve(_cube(True, 3), mu_r=MU_R, H_ext=_Hz(), scalable=False)
-    assert abs(r_scal["demag"] - r_dense["demag"]) < 1e-3 * abs(r_dense["demag"]) + 1e-4, \
-        f"hex scalable demag {r_scal['demag']:.5f} vs dense {r_dense['demag']:.5f}"
-    rel = abs(r_scal["M_avg"][2] - r_dense["M_avg"][2]) / abs(r_dense["M_avg"][2])
-    assert rel < 1e-3, f"hex scalable M_avg {r_scal['M_avg'][2]:.2f} vs dense {r_dense['M_avg'][2]:.2f} (rel {rel:.2e})"
-
-
-def test_scalable_wedge_matches_dense():
-    """Same Item-1 check on a WEDGE cube (mixed tri+quad faces): the C++ polytope Gram == the dense one."""
-    with ng.TaskManager():
-        r_scal = vim.hdiv_demag_solve(_cube(False, 3), mu_r=MU_R, H_ext=_Hz(), scalable=True)
-        r_dense = vim.hdiv_demag_solve(_cube(False, 3), mu_r=MU_R, H_ext=_Hz(), scalable=False)
-    rel = abs(r_scal["M_avg"][2] - r_dense["M_avg"][2]) / abs(r_dense["M_avg"][2])
-    assert rel < 1e-3, f"wedge scalable M_avg {r_scal['M_avg'][2]:.2f} vs dense {r_dense['M_avg'][2]:.2f} (rel {rel:.2e})"
-
-
 def test_radsolve_hdiv_hex_dispatch():
     """rad.Solve(demag_backend='hdiv') on a HEX soft_iron_from_mesh container == direct hdiv_demag_solve
     to machine precision, and writes the per-element M back onto the Radia hex elements (ObjM)."""

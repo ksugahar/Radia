@@ -59,8 +59,7 @@ def test_image_string_and_group():
 @pytest.fixture(scope="module")
 def _full_linear():
     with ng.TaskManager():
-        r = vim.hdiv_demag_solve(_box(-A, A, -A, A, -A, A, 4, 4, 4), mu_r=MU_R, H_ext=_Hz(),
-                                 scalable=False)
+        r = vim.hdiv_demag_solve(_box(-A, A, -A, A, -A, A, 4, 4, 4), mu_r=MU_R, H_ext=_Hz())
     return r["M_avg"][2], r["demag"]
 
 
@@ -73,8 +72,7 @@ def test_ima_reduced_matches_full_linear(_full_linear, name, boxargs, image, nx,
     """A reduced (1/2,1/4,1/8) cube + IMA reproduces the full cube M_avg + demag at high mu_r."""
     Mf, Df = _full_linear
     with ng.TaskManager():
-        r = vim.hdiv_demag_solve(_box(*boxargs, nx, ny, nz), mu_r=MU_R, H_ext=_Hz(),
-                                 image=image, scalable=False)
+        r = vim.hdiv_demag_solve(_box(*boxargs, nx, ny, nz), mu_r=MU_R, H_ext=_Hz(), image=image)
     relM = abs(r["M_avg"][2] - Mf) / abs(Mf)
     relD = abs(r["demag"] - Df) / abs(Df)
     assert relM < 3e-3, f"{name} IMA M_avg {r['M_avg'][2]:.2f} vs full {Mf:.2f} (rel {relM:.2e})"
@@ -88,18 +86,9 @@ def test_ima_quarter_matches_full_nonlinear():
     BH = [[h, b] for h, b in zip(Hs, Bs)]
     Hdrive = ng.CoefficientFunction((0, 0, 5000.0))
     with ng.TaskManager():
-        rf = vim.hdiv_demag_solve(_box(-A, A, -A, A, -A, A, 3, 3, 3), bh_table=BH, H_ext=Hdrive,
-                                  scalable=False)
+        rf = vim.hdiv_demag_solve(_box(-A, A, -A, A, -A, A, 3, 3, 3), bh_table=BH, H_ext=Hdrive)
         rq = vim.hdiv_demag_solve(_box(0, A, -A, A, 0, A, 2, 3, 2), bh_table=BH, H_ext=Hdrive,
-                                  image="+x-z", scalable=False)
+                                  image="+x-z")
     rel = abs(rq["M_avg"][2] - rf["M_avg"][2]) / abs(rf["M_avg"][2])
     assert rq["nonlinear"] and rf["nonlinear"]
     assert rel < 2e-2, f"nonlinear quarter+IMA M_avg {rq['M_avg'][2]:.1f} vs full {rf['M_avg'][2]:.1f} (rel {rel:.2e})"
-
-
-def test_ima_scalable_true_conflict():
-    """image=... with an EXPLICIT scalable=True is fail-loud (IMA is dense-only for now)."""
-    with ng.TaskManager():
-        with pytest.raises(NotImplementedError):
-            vim.hdiv_demag_solve(_box(0, A, -A, A, 0, A, 2, 4, 2), mu_r=MU_R, H_ext=_Hz(),
-                                 image="+x-z", scalable=True)

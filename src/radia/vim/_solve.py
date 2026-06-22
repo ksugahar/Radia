@@ -74,7 +74,7 @@ _MU0 = 4e-7 * _PI
 _GMRES_TOL = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "tol"
 
 
-def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, scalable=None,
+def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                      image=None, gram_eps=1e-10, leaf=32, eta=2.0, near_factor=1e30, tol=1e-8,
                      maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
@@ -97,10 +97,6 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
                  PM-iron magnetization discontinuity) -- separate them with an air gap.
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  REQUIRED.
-    scalable   : None (default) -> the scalable C++ charge-Gram H-matrix for ANY element type (tet via
-                 cell_verts/face_verts, hex/wedge via the polytope triangle-soup ctor).  False forces the
-                 dense analytic polytope Gram (O(N^2), correct) -- a small-mesh cross-check / reference.
-
     Returns dict: M (n_el,3) per-element magnetization, M_avg (3,), iters, demag (Rayleigh factor),
     ndof, n_el, n_charge, nonlinear(bool).  The caller must open `with ng.TaskManager():`.
     """
@@ -114,50 +110,38 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, s
             raise ValueError("hdiv_demag_solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
                              "bh_table (nonlinear), not both")
 
-    # ---- scalable (C++ charge-Gram H-matrix) vs dense (Python analytic polytope Gram) ----
-    # The scalable C++ kernel (_ChargeGramHMatrix) handles BOTH tet (cell_verts/face_verts) AND hex/wedge
-    # (the polytope triangle-soup ctor); scalable=None (default) always picks the C++ H-matrix.  scalable
-    # is kept as an explicit knob (scalable=False forces the dense O(N^2) analytic Gram, e.g. for a small
-    # cross-check) but is no longer element-type-restricted.
+    # ---- demag operator N: ALWAYS the scalable C++ charge-Gram H-matrix (_ChargeGramHMatrix) ----
+    # The C++ kernel handles tet (cell_verts/face_verts) AND hex/wedge (the polytope triangle-soup ctor),
+    # and folds IMA mirror symmetry as image charges (image_masks/image_signs) so the reduced (1/2,1/4,1/8)
+    # model reproduces the full one -- validated == the dense IMA Gram to ~1e-10.  The `scalable` knob + the
+    # dense O(N^2) Python Gram path were REMOVED (the dense path was ~70x slower at ~1000 elements;
+    # No-Fallbacks: one supported C++ path).
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
-    # IMA (mirror symmetry) currently folds into the DENSE analytic Gram (the C++ scalable image-Gram is
-    # the next port).  An EXPLICIT scalable=True together with image= is a fail-loud conflict (No-Fallbacks:
-    # don't silently downgrade the path the user asked for); otherwise image= selects the dense path.
-    if image is not None and scalable is True:
-        raise NotImplementedError(
-            "hdiv_demag_solve(image=..., scalable=True): IMA mirror symmetry currently uses the DENSE "
-            "analytic Gram.  Pass scalable=False (or omit scalable) with image=; the scalable C++ "
-            "image-Gram is a future increment.")
-    if scalable is None:
-        scalable = (image is None)   # default to scalable, except the dense path when IMA is requested
-
-    # ---- demag operator N (apply) + M_mass^{-1} preconditioner, shared by both modes ----
-    if scalable:
-        d = _tet.build_demag(mesh, skip_dense_gram=True)
-        Mm, B = d["M_mass"], d["B_csr"]
-        if all_tet:
-            H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
-                                       n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta,
-                                       near_factor=near_factor)
-        else:
-            # HEX/WEDGE: the polytope triangle-soup charge Gram (build_demag emits d["poly"] for non-tet).
-            p = d["poly"]
-            H = _rp._ChargeGramHMatrix(
-                cell_tris=list(p["cell_tris"]), cell_troff=list(p["cell_troff"]),
-                cell_cent=list(p["cell_cent"]), cell_meas=list(p["cell_meas"]),
-                face_tris=list(p["face_tris"]), face_troff=list(p["face_troff"]),
-                face_cent=list(p["face_cent"]), face_meas=list(p["face_meas"]),
-                n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta, near_factor=near_factor)
-
-        def N_apply(v):
-            v = np.asarray(v, float)
-            return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
+    image_masks, image_signs = [], []
+    if image is not None:
+        for axes, sign in _tet.image_group(_tet.parse_image_string(image)):
+            image_masks.append(int(sum(1 << a for a in axes)))
+            image_signs.append(float(sign))
+    d = _tet.build_demag(mesh, skip_dense_gram=True)
+    Mm, B = d["M_mass"], d["B_csr"]
+    if all_tet:
+        H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
+                                   n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta,
+                                   near_factor=near_factor, image_masks=image_masks, image_signs=image_signs)
     else:
-        d = _tet.build_demag(mesh, analytic_gram=True, image=image)   # image= folds in the IMA mirror Gram
-        Mm, N = d["M_mass"], d["N"]
+        # HEX/WEDGE: the polytope triangle-soup charge Gram (build_demag emits d["poly"] for non-tet).
+        p = d["poly"]
+        H = _rp._ChargeGramHMatrix(
+            cell_tris=list(p["cell_tris"]), cell_troff=list(p["cell_troff"]),
+            cell_cent=list(p["cell_cent"]), cell_meas=list(p["cell_meas"]),
+            face_tris=list(p["face_tris"]), face_troff=list(p["face_troff"]),
+            face_cent=list(p["face_cent"]), face_meas=list(p["face_meas"]),
+            n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta, near_factor=near_factor,
+            image_masks=image_masks, image_signs=image_signs)
 
-        def N_apply(v):
-            return N @ np.asarray(v, float)
+    def N_apply(v):
+        v = np.asarray(v, float)
+        return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
 
     n_face, n_el = int(d["ndof"]), int(d["n_el"])
     mu = d["m_unit"]
