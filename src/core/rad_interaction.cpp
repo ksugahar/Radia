@@ -951,8 +951,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// own system (BuildMomentSystemCore, on-the-fly geometry via momentFaceGeom) and NEVER reads this
 	// dense interaction matrix -- it is identical to the method-2 path, which runs with no dense matrix at
 	// all (Phase 2 Increment 4).  So leave the MSC blocks zero (the matrix is already zero-initialized) and
-	// return, retiring every EIEM2 collocation block (Compute6x6/5x5/Mixed, MscEvalPoint,
-	// MscCompensationField) from the dense assembly.  Precompute the per-element geometry caches so the
+	// return -- the EIEM2 collocation block kernels (Compute6x6/5x5/MixedBlockFast) are retired (Phase 3b).
+	// Precompute the per-element geometry caches so the
 	// method-2 H-matrix moment path (which enumerates hexes via m_hexaElemIndices) and any precompute-based
 	// scaffold see the elements -- idempotent, O(N), mirrors the skipDenseMatrix=1 branch in Setup.
 	if(hasMSCElements)
@@ -1873,26 +1873,11 @@ void radTInteraction::PrecomputeHexaGeometry()
 
 	// Allocate arrays
 	m_hexaCenters.resize(nHex * 3);
-	m_hexaEvalPoints.resize(nHex * 6 * 3);  // 6 faces, xyz
 	m_hexaFaceNormals.resize(nHex * 6 * 3); // 6 faces, xyz
 	m_hexaFaceAreas.resize(nHex * 6);       // 6 faces
 	m_hexaTriVertices.resize(nHex * 6 * 2 * 3 * 3);  // 6 faces, 2 tris, 3 verts, xyz
 	m_hexaTriSigns.resize(nHex * 6 * 2);    // 6 faces, 2 tris
 
-	// Pyramid-cloud kernel (flag on): per-hex element-common compensation cloud (6 faces * 4 edges *
-	// 3-pt quadrature = 72 points/hex; degenerate hexes zero-pad).  Flag off keeps the single point charge.
-	if(g_yano_pyramid_cloud)
-	{
-		m_hexaCloudN = 72;
-		m_hexaCloudPts.assign((size_t)nHex * m_hexaCloudN * 3, 0.0);
-		m_hexaCloudWts.assign((size_t)nHex * m_hexaCloudN, 0.0);
-	}
-	else
-	{
-		m_hexaCloudN = 0;
-		m_hexaCloudPts.clear();
-		m_hexaCloudWts.clear();
-	}
 
 	for(int h = 0; h < nHex; h++)
 	{
@@ -1917,13 +1902,6 @@ void radTInteraction::PrecomputeHexaGeometry()
 
 			// Store face area
 			m_hexaFaceAreas[h * 6 + f] = poly->FaceArea[f];
-
-			// Store collocation eval point: EIEM2 midpoint (flag off) or pyramid centroid (flag on).
-			int epIdx = (h * 6 + f) * 3;
-			TVector3d ep = poly->MscEvalPoint(f);
-			m_hexaEvalPoints[epIdx + 0] = ep.x;
-			m_hexaEvalPoints[epIdx + 1] = ep.y;
-			m_hexaEvalPoints[epIdx + 2] = ep.z;
 
 			// Get face vertices and split into 2 triangles
 			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
@@ -1993,22 +1971,6 @@ void radTInteraction::PrecomputeHexaGeometry()
 			}
 		}
 
-		// Pyramid-cloud kernel (flag on): precompute this hex's element-common compensation cloud
-		// (normalised, sum=1) via the SAME helper the inline path uses -> fast path == inline path.
-		if(g_yano_pyramid_cloud && m_hexaCloudN > 0)
-		{
-			TVector3d cpts[96];
-			double cwts[96];
-			int nc = poly->MscCompensationCloud(cpts, cwts, m_hexaCloudN);
-			for(int k = 0; k < nc; k++)
-			{
-				size_t b = (size_t)h * m_hexaCloudN + k;
-				m_hexaCloudPts[b*3 + 0] = cpts[k].x;
-				m_hexaCloudPts[b*3 + 1] = cpts[k].y;
-				m_hexaCloudPts[b*3 + 2] = cpts[k].z;
-				m_hexaCloudWts[b] = cwts[k];
-			}
-		}
 	}
 
 	m_hexaGeomReady = true;
@@ -2980,7 +2942,6 @@ void radTInteraction::PrecomputeWedgeGeometry()
 	if(nWedge == 0) return;
 
 	m_wedgeCenters.resize(nWedge * 3);
-	m_wedgeEvalPoints.resize(nWedge * 5 * 3);
 	m_wedgeFaceNormals.resize(nWedge * 5 * 3);
 	m_wedgeFaceAreas.resize(nWedge * 5);
 	m_wedgeFaceNumTris.resize(nWedge * 5);
@@ -2988,20 +2949,6 @@ void radTInteraction::PrecomputeWedgeGeometry()
 	m_wedgeTriVertices.resize(nWedge * WEDGE_MAX_TRIS * 3 * 3);
 	m_wedgeTriSigns.resize(nWedge * WEDGE_MAX_TRIS);
 
-	// Pyramid-cloud kernel (flag on): per-wedge element-common compensation cloud (2 tri*3 + 3 quad*4
-	// edges = 18 face-edges * 3-pt quadrature = 54 points/wedge; degenerate wedges zero-pad).
-	if(g_yano_pyramid_cloud)
-	{
-		m_wedgeCloudN = 54;
-		m_wedgeCloudPts.assign((size_t)nWedge * m_wedgeCloudN * 3, 0.0);
-		m_wedgeCloudWts.assign((size_t)nWedge * m_wedgeCloudN, 0.0);
-	}
-	else
-	{
-		m_wedgeCloudN = 0;
-		m_wedgeCloudPts.clear();
-		m_wedgeCloudWts.clear();
-	}
 
 	for(int w = 0; w < nWedge; w++)
 	{
@@ -3021,11 +2968,6 @@ void radTInteraction::PrecomputeWedgeGeometry()
 			m_wedgeFaceNormals[(w*5+f)*3+1] = poly->FaceNormal[f].y;
 			m_wedgeFaceNormals[(w*5+f)*3+2] = poly->FaceNormal[f].z;
 			m_wedgeFaceAreas[w*5+f] = poly->FaceArea[f];
-			TVector3d wep = poly->MscEvalPoint(f);   // EIEM2 (flag off) or pyramid centroid (flag on)
-			m_wedgeEvalPoints[(w*5+f)*3+0] = wep.x;
-			m_wedgeEvalPoints[(w*5+f)*3+1] = wep.y;
-			m_wedgeEvalPoints[(w*5+f)*3+2] = wep.z;
-
 			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
 			radTrans* tr = hpt.TransHndl.rep;
@@ -3076,27 +3018,6 @@ void radTInteraction::PrecomputeWedgeGeometry()
 		}
 	}
 
-	// Pyramid-cloud kernel (flag on): precompute each wedge's element-common compensation cloud via
-	// the SAME helper the inline path uses -> wedge fast path == inline path.
-	if(g_yano_pyramid_cloud && m_wedgeCloudN > 0)
-	{
-		for(int w = 0; w < nWedge; w++)
-		{
-			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[m_wedgeElemIndices[w]]);
-			if(!poly || poly->AmOfFaces != 5) continue;
-			TVector3d cpts[64];
-			double cwts[64];
-			int nc = poly->MscCompensationCloud(cpts, cwts, m_wedgeCloudN);
-			for(int k = 0; k < nc; k++)
-			{
-				size_t b = (size_t)w * m_wedgeCloudN + k;
-				m_wedgeCloudPts[b*3+0] = cpts[k].x;
-				m_wedgeCloudPts[b*3+1] = cpts[k].y;
-				m_wedgeCloudPts[b*3+2] = cpts[k].z;
-				m_wedgeCloudWts[b] = cwts[k];
-			}
-		}
-	}
 
 	m_wedgeGeomReady = true;
 }
