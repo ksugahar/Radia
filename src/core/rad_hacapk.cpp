@@ -5,7 +5,7 @@
 * Project:        RADIA
 *
 * Description:    HACApK (H-matrix with ACA+) interface for BiCGSTAB solver
-*                 Implementation of RadHACApKBase / RadHACApKMSCManager and callback functions
+*                 Implementation of RadHACApKBase / RadHACApKMMMManager and callback functions
 *
 * First release:  2025
 *
@@ -206,23 +206,20 @@ RadHACApKBase::~RadHACApKBase() {
 }
 
 //=========================================================================
-// RadHACApKMSCManager Implementation (MMM / MSC kernel)
+// RadHACApKMMMManager Implementation (MMM / MSC kernel)
 //=========================================================================
 
-RadHACApKMSCManager::RadHACApKMSCManager(radTInteraction* interaction)
+RadHACApKMMMManager::RadHACApKMMMManager(radTInteraction* interaction)
     : RadHACApKBase()
     , m_interaction(interaction)
     , m_nffc(3)
-    , m_is_6dof(false)
-    , m_is_5dof(false)
-    , m_is_mixed_dof(false)
     , m_geometry_3dof_ready(false)
     , m_flat_N_ready(false)
 {
     // Hash-based cache is initialized automatically
 }
 
-RadHACApKMSCManager::~RadHACApKMSCManager() {}
+RadHACApKMMMManager::~RadHACApKMMMManager() {}
 
 //=========================================================================
 // MSC system-matrix convention: A(i, j) = -N(i, j) + delta_ij / chi_i
@@ -230,7 +227,7 @@ RadHACApKMSCManager::~RadHACApKMSCManager() {}
 // GetInteractionMatrixElement (MSC/MMM convention: +N).
 //=========================================================================
 
-double RadHACApKMSCManager::ComputeSystemEntry(int dof_i, int dof_j) const {
+double RadHACApKMMMManager::ComputeSystemEntry(int dof_i, int dof_j) const {
     double N_val = GetInteractionMatrixElement(dof_i, dof_j);
     double A_val = -N_val;
     if (dof_i == dof_j && dof_i < (int)m_inv_chi.size()) {
@@ -262,7 +259,7 @@ void RadHACApKBase::FreeResources() {
 }
 
 //=========================================================================
-void RadHACApKMSCManager::ExtractCoordinates() {
+void RadHACApKMMMManager::ExtractCoordinates() {
     // Extract element center coordinates for clustering
     // Supports both 3DOF tetrahedra and 6DOF MSC hexahedra
     if (!m_interaction) return;
@@ -271,76 +268,28 @@ void RadHACApKMSCManager::ExtractCoordinates() {
     m_coordinates.resize(m_n_elem * 3);
     m_dof_offset.resize(m_n_elem + 1);
 
-    // Check if using variable DOF (6DOF hexahedra) or uniform 3DOF (tetrahedra)
-    bool has_variable_dof = m_interaction->HasVariableDOF();
-
+    // MMM-only manager: uniform 3-DOF tetrahedra.  Surface-charge MSC (hex 6-DOF, wedge 5-DOF) is
+    // solved by the moment-yano path (SolveGen forces pure-MSC to the LU/Picard moment driver) and mixed
+    // MMM+MSC is rejected fail-loud in MakeAutoRelax (Error204), so ONLY 3-DOF tets reach this manager
+    // (the EIEM2 surface-charge collocation kernels were retired in Phase 3b).
     int total_dof = 0;
-    int n_3dof = 0;
-    int n_6dof = 0;
-
     for (int i = 0; i < m_n_elem; i++) {
         m_dof_offset[i] = total_dof;
         int elem_dof = m_interaction->GetElementDOF(i);
-        total_dof += elem_dof;
-
-        if (elem_dof == 3) {
-            n_3dof++;
-        } else if (elem_dof >= 5) {
-            n_6dof++;  // Count all MSC elements (5-DOF wedges and 6-DOF hexahedra)
-        } else {
+        if (elem_dof != 3) {
             std::cerr << "[HACApK] Error: Element " << i << " has " << elem_dof
-                      << " DOF, expected 3, 5, or 6" << std::endl;
+                      << " DOF; the MMM (HACApK) manager handles 3-DOF tetrahedra only "
+                      << "(surface-charge MSC uses the moment-yano solver)" << std::endl;
             m_ndof = 0;
             m_nffc = 0;
-            m_is_6dof = false;
             return;
         }
+        total_dof += elem_dof;
     }
 
     m_dof_offset[m_n_elem] = total_dof;
     m_ndof = total_dof;
-
-    // Support mixed DOF elements (hex + tetra + wedge)
-    if (n_3dof > 0 && n_6dof > 0) {
-        // Mixed mode: variable DOF per element (tetra + MSC)
-        m_nffc = 0;  // Indicates variable DOF
-        m_is_6dof = false;
-        m_is_mixed_dof = true;
-#ifdef HACAPK_RADIA_LOGGING
-        std::cout << "[HACApK] Mixed DOF mode: " << n_3dof << " tetrahedra (3DOF) + "
-                  << n_6dof << " MSC elements (5/6DOF), total " << total_dof << " DOF" << std::endl;
-#endif
-    } else if (n_6dof > 0) {
-        // Check element types: pure hex, pure wedge, or mixed
-        bool allHex = true, allWedge = true;
-        for (int i = 0; i < m_n_elem; i++) {
-            int dof = m_interaction->GetElementDOF(i);
-            if (dof != 6) allHex = false;
-            if (dof != 5) allWedge = false;
-        }
-        if (allHex) {
-            m_nffc = 6;
-            m_is_6dof = true;   // Pure hex (fast path with Compute6x6BlockFast)
-            m_is_5dof = false;
-            m_is_mixed_dof = false;
-        } else if (allWedge) {
-            m_nffc = 5;
-            m_is_6dof = false;
-            m_is_5dof = true;   // Pure wedge (fast path with Compute5x5BlockFast)
-            m_is_mixed_dof = false;
-        } else {
-            // Mixed hex+wedge: use variable DOF mode (flat matrix)
-            m_nffc = 0;
-            m_is_6dof = false;
-            m_is_5dof = false;
-            m_is_mixed_dof = true;
-        }
-    } else {
-        m_nffc = 3;
-        m_is_6dof = false;
-        m_is_5dof = false;
-        m_is_mixed_dof = false;
-    }
+    m_nffc = 3;   // uniform 3-DOF (tetrahedron MMM)
 
     // Get element centers from g3dRelaxPtrVect
     for (int i = 0; i < m_n_elem; i++) {
@@ -361,7 +310,7 @@ void RadHACApKMSCManager::ExtractCoordinates() {
 // BuildDOFLookupTable: Create O(1) DOF-to-element lookup (ELF-style)
 //=========================================================================
 
-void RadHACApKMSCManager::BuildDOFLookupTable() {
+void RadHACApKMMMManager::BuildDOFLookupTable() {
     if (m_ndof == 0) return;
 
     m_dof_to_elem.resize(m_ndof);
@@ -383,7 +332,7 @@ void RadHACApKMSCManager::BuildDOFLookupTable() {
 // This avoids calling B_comp() which has significant overhead during H-matrix build
 //=========================================================================
 
-void RadHACApKMSCManager::PrecomputeGeometry3DOF() {
+void RadHACApKMMMManager::PrecomputeGeometry3DOF() {
     if (m_geometry_3dof_ready || m_n_elem == 0 || !m_interaction) return;
 
     // Allocate arrays for tetrahedra (4 triangular faces, 3 vertices each)
@@ -472,7 +421,7 @@ void RadHACApKMSCManager::PrecomputeGeometry3DOF() {
 // This eliminates pointer chasing during matrix element access
 //=========================================================================
 
-void RadHACApKMSCManager::PrecomputeFlatInteractMatrix() {
+void RadHACApKMMMManager::PrecomputeFlatInteractMatrix() {
     if (m_flat_N_ready || m_n_elem == 0 || !m_interaction) return;
     if (!m_interaction->InteractMatrix) {
         return;  // InteractMatrix not computed
@@ -508,22 +457,6 @@ void RadHACApKMSCManager::PrecomputeFlatInteractMatrix() {
     });
 
     m_flat_N_ready = true;
-}
-
-//=========================================================================
-// Compute6x6BlockFast: Delegates to radTInteraction for unified implementation
-// 6DOF hexahedra use radTInteraction::Compute6x6BlockFast (shared with LU/BiCGSTAB)
-//=========================================================================
-
-void RadHACApKMSCManager::Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const {
-    // Use radTInteraction's unified implementation (shared with LU/BiCGSTAB)
-    if (m_interaction && m_interaction->IsHexaTriDataReady()) {
-        m_interaction->Compute6x6BlockFast(elem_i, elem_j, K_mat);
-        return;
-    }
-
-    // Error: radTInteraction geometry not ready
-    std::memset(K_mat, 0, 36 * sizeof(double));
 }
 
 bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
@@ -666,59 +599,39 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
 }
 
 //=========================================================================
-// RadHACApKMSCManager::OnBeforeBuild
-// MSC-specific precomputation switch (runs AFTER ExtractCoordinates has
-// populated m_nffc, m_is_6dof/5dof/mixed_dof, and BEFORE HACApK callbacks).
+// RadHACApKMMMManager::OnBeforeBuild
+// MMM (3-DOF tet) precomputation (runs AFTER ExtractCoordinates has populated
+// m_nffc=3, and BEFORE HACApK callbacks).
 //=========================================================================
 
-void RadHACApKMSCManager::OnBeforeBuild() {
+void RadHACApKMMMManager::OnBeforeBuild() {
     if (!m_interaction) return;
 
-    // Validate MSC DOF configuration
-    if (m_nffc != 0 && m_nffc != 3 && m_nffc != 5 && m_nffc != 6) {
-        std::cerr << "[HACApK] Warning: unexpected MSC nffc=" << m_nffc << std::endl;
+    if (m_nffc != 3) {
+        std::cerr << "[HACApK] Warning: MMM manager expects 3-DOF tet (nffc=" << m_nffc << ")" << std::endl;
     }
 
     // Register with callback (informational; ComputeEntry uses the manager directly)
     RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, m_nffc);
 
-    // ELF-style pre-computation for 6DOF hexahedra — shared with LU/BiCGSTAB.
-    if (m_is_6dof) {
-        m_interaction->PrecomputeHexaGeometry();
-    }
-    // ELF-style pre-computation for 3DOF tetrahedra (2025-12-26) — extracts
-    // face vertices/normals for direct field computation without O(N^2)
-    // SetupInteractMatrix().
-    if (!m_is_6dof && !m_is_5dof && !m_is_mixed_dof) {
-        PrecomputeGeometry3DOF();
-    }
-    // Pure wedge: precompute via radTInteraction
-    if (m_is_5dof) {
-        m_interaction->PrecomputeWedgeGeometry();
-    }
-    // FIX (2025-12-26): 3DOF tetrahedra fallback — if InteractMatrix was
-    // already computed, use flat storage for O(1) element access.
-    if (!m_is_6dof && !m_is_5dof && !m_is_mixed_dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
+    // ELF-style pre-computation for 3DOF tetrahedra: extract face vertices/normals for direct
+    // field computation without the O(N^2) SetupInteractMatrix().
+    PrecomputeGeometry3DOF();
+    // Fallback: if InteractMatrix was already computed, use flat storage for O(1) element access.
+    if (!m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
         PrecomputeFlatInteractMatrix();
-    }
-    // Mixed DOF: precompute ALL element geometries (ComputeMixedBlockFast
-    // needs each type present in the mesh).
-    if (m_is_mixed_dof) {
-        m_interaction->PrecomputeTetraGeometry();
-        m_interaction->PrecomputeWedgeGeometry();
-        m_interaction->PrecomputeHexaGeometry();
     }
 }
 
 //=========================================================================
-// RadHACApKMSCManager::InitializeInvChi
+// RadHACApKMMMManager::InitializeInvChi
 // Populate m_inv_chi from material state. Matches ELF's
 // initialize_chi_from_bh() for nonlinear isotropic materials (chi from the
 // 2nd BH curve point) and falls back to DefineInstantKsiTensor(H=0) for
 // linear materials.
 //=========================================================================
 
-void RadHACApKMSCManager::InitializeInvChi() {
+void RadHACApKMMMManager::InitializeInvChi() {
     if (!m_interaction) return;
     m_inv_chi.resize(m_ndof);
 
@@ -806,82 +719,6 @@ void RadHACApKBase::UpdateDiagonal(const std::vector<double>& inv_chi) {
 }
 
 //=========================================================================
-// GetInteractionMatrixElement: Access N matrix element
-//
-// This function returns the N(dof_i, dof_j) element of the interaction matrix.
-// On-demand computation based on element DOF type:
-// - 3DOF tetrahedra: Use B_comp() with PreRelax mode
-// - 6DOF hexahedra: Use Yano MSC method (face-to-face interaction)
-//
-// On-demand computation is essential for H-matrix because:
-// - HACApK uses ACA+ which only needs a subset of matrix elements
-// - Pre-computing the full dense matrix would defeat the O(N log N) purpose
-//=========================================================================
-
-//=========================================================================
-// Compute6x6Block: Calculate full 6x6 interaction block (ELF-style)
-// K(face_i, face_j) = normal_i dot H_field(eval_pt_i, src_face_j)
-//=========================================================================
-
-void RadHACApKMSCManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) const {
-    // Bounds check for element indices
-    if (elem_i < 0 || elem_i >= m_n_elem || elem_j < 0 || elem_j >= m_n_elem) {
-        std::cerr << "[HACApK] Error: Invalid element indices in Compute6x6Block: "
-                  << elem_i << ", " << elem_j << " (n_elem=" << m_n_elem << ")" << std::endl;
-        std::memset(K_mat, 0, 36 * sizeof(double));
-        return;
-    }
-
-    radTg3dRelax* elem_row = m_interaction->g3dRelaxPtrVect[elem_i];
-    radTg3dRelax* elem_col = m_interaction->g3dRelaxPtrVect[elem_j];
-
-    if (!elem_row || !elem_col) {
-        std::cerr << "[HACApK] Error: Null element pointer in Compute6x6Block: "
-                  << (elem_row ? "col" : "row") << " elem" << std::endl;
-        std::memset(K_mat, 0, 36 * sizeof(double));
-        return;
-    }
-
-    radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
-    radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
-
-    if (!poly_row || !poly_col) {
-        std::memset(K_mat, 0, 36 * sizeof(double));
-        return;
-    }
-
-    // Pre-compute evaluation points for row element (EIEM2 midpoint, or pyramid centroid when the
-    // improved yano-type kernel flag is on -- MscEvalPoint is flag-gated).
-    TVector3d eval_pts[6];
-    for (int fi = 0; fi < 6; fi++) eval_pts[fi] = poly_row->MscEvalPoint(fi);
-
-    // Compute all 36 elements (source face outer loop for cache locality)
-    // IMPORTANT: K_mat indexing must match GetCached6x6Element access pattern
-    // K_mat[fi * 6 + fj] stores K(face_i, face_j) = normal_i dot H(eval_pt_i, src_face_j)
-    for (int fj = 0; fj < 6; fj++) {
-        for (int fi = 0; fi < 6; fi++) {
-            // Field from unit sigma on face_j
-            TVector3d H_face = poly_col->FieldFromQuadFace(eval_pts[fi], fj, 1.0);
-            TVector3d H_point = poly_col->MscCompensationField(eval_pts[fi], fj);  // single point or cloud (flag)
-
-            TVector3d H_total;
-            H_total.x = H_face.x + H_point.x;
-            H_total.y = H_face.y + H_point.y;
-            H_total.z = H_face.z + H_point.z;
-
-            // K_ij = H_total dot normal_i
-            double K_ij = H_total.x * poly_row->FaceNormal[fi].x +
-                          H_total.y * poly_row->FaceNormal[fi].y +
-                          H_total.z * poly_row->FaceNormal[fi].z;
-
-            // Store K_ij / (4*pi) in row-major order: K_mat[row * 6 + col]
-            // The solver will negate when building system matrix
-            K_mat[fi * 6 + fj] = K_ij * RadConst::INV_FOUR_PI;
-        }
-    }
-}
-
-//=========================================================================
 // GetCached6x6Element: ELF-style hash-based thread-local cache (NO locking!)
 //
 // ELF pattern from m_ppohBEM_user_func_unified.f90:
@@ -897,91 +734,13 @@ void RadHACApKMSCManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat)
 //=========================================================================
 
 // Hash-based cache size (must be power of 2 for fast modulo)
-static constexpr int TL_HASH_SIZE = 1024;
-static constexpr int TL_HASH_MASK = TL_HASH_SIZE - 1;
-
-double RadHACApKMSCManager::GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const {
-    // FIX (2025-02-04): Use generation counter for cache invalidation.
-    // The generation counter is incremented each time a new HACApK manager builds its H-matrix.
-    // This properly handles memory reuse where a new interaction object might have the
-    // same pointer value as a previous (deleted) object.
-    static thread_local uint64_t tl_cached_generation = 0;
-
-    // Thread-local single-entry cache (most common case: same block accessed multiple times)
-    static thread_local int tl_single_elem_i = -1;
-    static thread_local int tl_single_elem_j = -1;
-    static thread_local double tl_single_K_mat[36];
-
-    // Thread-local hash-based cache (O(1) lookup, no locking!)
-    static thread_local int tl_cache_elem_i[TL_HASH_SIZE];
-    static thread_local int tl_cache_elem_j[TL_HASH_SIZE];
-    static thread_local double tl_cache_K_mat[TL_HASH_SIZE][36];
-    static thread_local bool tl_initialized = false;
-
-    // Check if generation changed (new solve with different settings)
-    // This handles IMA vs non-IMA transitions and geometry changes
-    uint64_t current_gen = RadHACApKCallback::GetGeneration();
-    if (tl_cached_generation != current_gen) {
-        // Invalidate all caches
-        tl_single_elem_i = -1;
-        tl_single_elem_j = -1;
-        for (int i = 0; i < TL_HASH_SIZE; i++) {
-            tl_cache_elem_i[i] = -1;
-            tl_cache_elem_j[i] = -1;
-        }
-        tl_cached_generation = current_gen;
-        tl_initialized = true;  // Skip redundant initialization below
-    }
-
-    // Initialize thread-local cache on first access
-    if (!tl_initialized) {
-        for (int i = 0; i < TL_HASH_SIZE; i++) {
-            tl_cache_elem_i[i] = -1;
-            tl_cache_elem_j[i] = -1;
-        }
-        tl_initialized = true;
-    }
-
-    // Check single-entry cache first (fastest path)
-    if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
-        return tl_single_K_mat[face_i * 6 + face_j];
-    }
-
-    // Compute hash index (ELF-style hash function)
-    int hash_idx = ((elem_i * 73856093) ^ (elem_j * 19349663)) & TL_HASH_MASK;
-
-    // Check hash cache (O(1) lookup!)
-    if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
-        // Cache hit - copy to single-entry cache for repeated access
-        std::memcpy(tl_single_K_mat, tl_cache_K_mat[hash_idx], 36 * sizeof(double));
-        tl_single_elem_i = elem_i;
-        tl_single_elem_j = elem_j;
-        return tl_single_K_mat[face_i * 6 + face_j];
-    }
-
-    // Cache miss - compute the block using radTInteraction's precomputed geometry
-    if (m_interaction && m_interaction->IsHexaTriDataReady()) {
-        Compute6x6BlockFast(elem_i, elem_j, tl_single_K_mat);
-    } else {
-        Compute6x6Block(elem_i, elem_j, tl_single_K_mat);
-    }
-    tl_single_elem_i = elem_i;
-    tl_single_elem_j = elem_j;
-
-    // Insert into hash cache (overwrites any existing entry at this slot)
-    tl_cache_elem_i[hash_idx] = elem_i;
-    tl_cache_elem_j[hash_idx] = elem_j;
-    std::memcpy(tl_cache_K_mat[hash_idx], tl_single_K_mat, 36 * sizeof(double));
-
-    return tl_single_K_mat[face_i * 6 + face_j];
-}
 
 //=========================================================================
 // GetInteractionMatrixElement: Optimized with O(1) lookup and LRU cache
 // Supports 3DOF tetrahedra, 6DOF hexahedra, and mixed meshes
 //=========================================================================
 
-double RadHACApKMSCManager::GetInteractionMatrixElement(int dof_i, int dof_j) const {
+double RadHACApKMMMManager::GetInteractionMatrixElement(int dof_i, int dof_j) const {
     if (!m_interaction || dof_i < 0 || dof_i >= m_ndof || dof_j < 0 || dof_j >= m_ndof) {
         return 0.0;
     }
@@ -1007,22 +766,18 @@ double RadHACApKMSCManager::GetInteractionMatrixElement(int dof_i, int dof_j) co
     int dof_elem_i = m_dof_offset[elem_i + 1] - m_dof_offset[elem_i];
     int dof_elem_j = m_dof_offset[elem_j + 1] - m_dof_offset[elem_j];
 
-    // Dispatch based on DOF type of each element
-    if (dof_elem_i == 6 && dof_elem_j == 6) {
-        // 6DOF-6DOF: hex-hex interaction (Compute6x6BlockFast has IMA support)
-        return GetCached6x6Element(elem_i, elem_j, local_i, local_j);
-    } else if (dof_elem_i == 3 && dof_elem_j == 3) {
-        // 3DOF-3DOF: tetra-tetra interaction
-        // For mixed+IMA: Compute3x3Block_OnDemand handles IMA via B_comp() + IMA field context
+    // EIEM2 retirement (Phase 3b): RadHACApKMMMManager is now MMM-only (tetrahedron, 3 DOF).  MSC
+    // surface-charge models (hexahedron / wedge) are solved by the moment-yano H-matrix
+    // (RadHACApKMomentSystem) or the dense moment LU -- never this manager -- and mixed MMM+MSC is
+    // rejected fail-loud in MakeAutoRelax.  So only the 3x3 (tet-tet) block can occur here.
+    if (dof_elem_i == 3 && dof_elem_j == 3) {
+        // 3DOF-3DOF: tetra-tetra interaction (IMA-aware via Compute3x3Block_OnDemand / B_comp)
         return GetCached3x3Element(elem_i, elem_j, local_i, local_j);
-    } else if (dof_elem_i == 5 && dof_elem_j == 5) {
-        // 5DOF-5DOF: wedge-wedge interaction (Compute5x5BlockFast has IMA support)
-        return GetCached5x5Element(elem_i, elem_j, local_i, local_j);
     }
-
-    // All cross-DOF pairs (3x5, 3x6, 5x3, 5x6, 6x3, 6x5):
-    // Use unified ComputeMixedBlockFast kernel (IMA-aware, +N sign convention)
-    return GetCachedMixedElement(elem_i, elem_j, dof_elem_i, dof_elem_j, local_i, local_j);
+    std::cerr << "[HACApK] Error: RadHACApKMMMManager received a non-MMM element pair (DOF "
+              << dof_elem_i << "/" << dof_elem_j << "); surface-charge MSC is handled by the moment "
+              << "solver, not this manager." << std::endl;
+    return 0.0;
 }
 
 //=========================================================================
@@ -1038,7 +793,7 @@ double RadHACApKMSCManager::GetInteractionMatrixElement(int dof_i, int dof_j) co
 static constexpr int TL_HASH_SIZE_3DOF = 1024;
 static constexpr int TL_HASH_MASK_3DOF = TL_HASH_SIZE_3DOF - 1;
 
-double RadHACApKMSCManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const {
+double RadHACApKMMMManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const {
     // If flat storage is ready (pre-computed), use O(1) direct access
     if (m_flat_N_ready) {
         int64_t base_idx = ((int64_t)elem_i * m_n_elem + elem_j) * 9;
@@ -1137,66 +892,6 @@ double RadHACApKMSCManager::GetCached3x3Element(int elem_i, int elem_j, int comp
 static constexpr int TL_HASH_SIZE_5DOF = 512;
 static constexpr int TL_HASH_MASK_5DOF = TL_HASH_SIZE_5DOF - 1;
 
-double RadHACApKMSCManager::GetCached5x5Element(int elem_i, int elem_j, int face_i, int face_j) const {
-    static thread_local uint64_t tl_cached_generation = 0;
-    static thread_local int tl_single_elem_i = -1;
-    static thread_local int tl_single_elem_j = -1;
-    static thread_local double tl_single_K_mat[25];
-    static thread_local int tl_cache_elem_i[TL_HASH_SIZE_5DOF];
-    static thread_local int tl_cache_elem_j[TL_HASH_SIZE_5DOF];
-    static thread_local double tl_cache_K_mat[TL_HASH_SIZE_5DOF][25];
-    static thread_local bool tl_initialized = false;
-
-    uint64_t current_gen = RadHACApKCallback::GetGeneration();
-    if (tl_cached_generation != current_gen) {
-        tl_single_elem_i = -1;
-        tl_single_elem_j = -1;
-        for (int i = 0; i < TL_HASH_SIZE_5DOF; i++) {
-            tl_cache_elem_i[i] = -1;
-            tl_cache_elem_j[i] = -1;
-        }
-        tl_cached_generation = current_gen;
-        tl_initialized = true;
-    }
-    if (!tl_initialized) {
-        for (int i = 0; i < TL_HASH_SIZE_5DOF; i++) {
-            tl_cache_elem_i[i] = -1;
-            tl_cache_elem_j[i] = -1;
-        }
-        tl_initialized = true;
-    }
-
-    if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
-        return tl_single_K_mat[face_i * 5 + face_j];
-    }
-
-    int hash_idx = ((elem_i * 73856093) ^ (elem_j * 19349663)) & TL_HASH_MASK_5DOF;
-    if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
-        std::memcpy(tl_single_K_mat, tl_cache_K_mat[hash_idx], 25 * sizeof(double));
-        tl_single_elem_i = elem_i;
-        tl_single_elem_j = elem_j;
-        return tl_single_K_mat[face_i * 5 + face_j];
-    }
-
-    // Cache miss: compute via radTInteraction::Compute5x5BlockFast (IMA-aware)
-    double K_mat[25];
-    if (m_interaction) {
-        m_interaction->Compute5x5BlockFast(elem_i, elem_j, K_mat);
-    } else {
-        std::memset(K_mat, 0, 25 * sizeof(double));
-    }
-
-    std::memcpy(tl_single_K_mat, K_mat, 25 * sizeof(double));
-    tl_single_elem_i = elem_i;
-    tl_single_elem_j = elem_j;
-
-    tl_cache_elem_i[hash_idx] = elem_i;
-    tl_cache_elem_j[hash_idx] = elem_j;
-    std::memcpy(tl_cache_K_mat[hash_idx], K_mat, 25 * sizeof(double));
-
-    return K_mat[face_i * 5 + face_j];
-}
-
 //=========================================================================
 // GetCachedMixedElement: On-demand mixed-DOF block with hash cache
 // Delegates to radTInteraction::ComputeMixedBlockFast (IMA-aware)
@@ -1207,75 +902,13 @@ static constexpr int TL_HASH_SIZE_MIXED = 256;
 static constexpr int TL_HASH_MASK_MIXED = TL_HASH_SIZE_MIXED - 1;
 static constexpr int MAX_BLOCK_SIZE = 36;  // max DOF product: 6x6
 
-double RadHACApKMSCManager::GetCachedMixedElement(int elem_i, int elem_j,
-	int dof_i, int dof_j, int local_i, int local_j) const
-{
-	static thread_local uint64_t tl_cached_generation = 0;
-	static thread_local int tl_single_elem_i = -1;
-	static thread_local int tl_single_elem_j = -1;
-	static thread_local int tl_single_dof_i = 0;
-	static thread_local int tl_single_dof_j = 0;
-	static thread_local double tl_single_block[MAX_BLOCK_SIZE];
-	static thread_local int tl_cache_elem_i[TL_HASH_SIZE_MIXED];
-	static thread_local int tl_cache_elem_j[TL_HASH_SIZE_MIXED];
-	static thread_local int tl_cache_dof_i[TL_HASH_SIZE_MIXED];
-	static thread_local int tl_cache_dof_j[TL_HASH_SIZE_MIXED];
-	static thread_local double tl_cache_block[TL_HASH_SIZE_MIXED][MAX_BLOCK_SIZE];
-	static thread_local bool tl_initialized = false;
-
-	uint64_t current_gen = RadHACApKCallback::GetGeneration();
-	if (tl_cached_generation != current_gen) {
-		tl_single_elem_i = -1; tl_single_elem_j = -1;
-		for (int i = 0; i < TL_HASH_SIZE_MIXED; i++) { tl_cache_elem_i[i] = -1; tl_cache_elem_j[i] = -1; }
-		tl_cached_generation = current_gen; tl_initialized = true;
-	}
-	if (!tl_initialized) {
-		for (int i = 0; i < TL_HASH_SIZE_MIXED; i++) { tl_cache_elem_i[i] = -1; tl_cache_elem_j[i] = -1; }
-		tl_initialized = true;
-	}
-
-	if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
-		return tl_single_block[local_i * tl_single_dof_j + local_j];
-	}
-
-	int hash_idx = ((elem_i * 73856093) ^ (elem_j * 19349663)) & TL_HASH_MASK_MIXED;
-	if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
-		int bs = tl_cache_dof_i[hash_idx] * tl_cache_dof_j[hash_idx];
-		std::memcpy(tl_single_block, tl_cache_block[hash_idx], bs * sizeof(double));
-		tl_single_elem_i = elem_i; tl_single_elem_j = elem_j;
-		tl_single_dof_i = tl_cache_dof_i[hash_idx]; tl_single_dof_j = tl_cache_dof_j[hash_idx];
-		return tl_single_block[local_i * tl_single_dof_j + local_j];
-	}
-
-	// Cache miss: compute via unified kernel
-	double block[MAX_BLOCK_SIZE];
-	if (m_interaction) {
-		m_interaction->ComputeMixedBlockFast(elem_i, dof_i, elem_j, dof_j, block);
-	} else {
-		std::memset(block, 0, MAX_BLOCK_SIZE * sizeof(double));
-	}
-
-	int bs = dof_i * dof_j;
-	std::memcpy(tl_single_block, block, bs * sizeof(double));
-	tl_single_elem_i = elem_i; tl_single_elem_j = elem_j;
-	tl_single_dof_i = dof_i; tl_single_dof_j = dof_j;
-
-	tl_cache_elem_i[hash_idx] = elem_i; tl_cache_elem_j[hash_idx] = elem_j;
-	tl_cache_dof_i[hash_idx] = dof_i; tl_cache_dof_j[hash_idx] = dof_j;
-	std::memcpy(tl_cache_block[hash_idx], block, bs * sizeof(double));
-
-	// ComputeMixedBlockFast returns +N (physical quantity) for all DOF types.
-	// ComputeEntry() handles the sign flip to -N for the system matrix.
-	return block[local_i * dof_j + local_j];
-}
-
 //=========================================================================
 // Compute3x3Block: Compute 3x3 interaction block for tetrahedra
 // N_ij = interaction matrix element between magnetization components
 // Uses existing radTInteraction::InteractMatrix
 //=========================================================================
 
-void RadHACApKMSCManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) const {
+void RadHACApKMMMManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) const {
     // InteractMatrix[elem_i][elem_j] returns TMatrix3df (3x3 float matrix)
     //
     // MATRIX LAYOUT FIX (2025-12-24):
@@ -1322,7 +955,7 @@ void RadHACApKMSCManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat)
 // This is used by HACApK to avoid O(N^2) matrix pre-computation
 //=========================================================================
 
-void RadHACApKMSCManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const {
+void RadHACApKMMMManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const {
     // Compute interaction from element j to observation at element i center
     // using B_comp() directly (same approach as SetupInteractMatrix)
     //
@@ -1398,7 +1031,7 @@ void RadHACApKMSCManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, doubl
 // For PreRelax mode, we compute dH/dM for each unit M direction.
 //=========================================================================
 
-void RadHACApKMSCManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const {
+void RadHACApKMMMManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const {
     std::memset(N_mat, 0, 9 * sizeof(double));
 
     if (!m_geometry_3dof_ready || elem_i < 0 || elem_i >= m_n_elem ||
@@ -1471,7 +1104,7 @@ void RadHACApKMSCManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_
     }
 }
 
-double RadHACApKMSCManager::GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const {
+double RadHACApKMMMManager::GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const {
     // Generic path: access pre-computed flat interaction matrix (+N convention)
     if (!m_interaction || m_interaction->m_flatInteractMatrix.empty()) return 0.0;
 

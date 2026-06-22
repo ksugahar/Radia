@@ -61,7 +61,7 @@ def _norm(row, rhs):
 def build(hexes, Happ, mu_r, mono_weight=1.0):
     """Dense linear moment system + block structure + loop basis. mono_weight scales the div(B)=0 row."""
     chi = mu_r - 1.0
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(mu_r))
@@ -90,7 +90,7 @@ def build(hexes, Happ, mu_r, mono_weight=1.0):
             Dvec = np.array([Dm[0, 0], Dm[1, 1], Dm[2, 2], Dm[0, 1]+Dm[1, 0], Dm[0, 2]+Dm[2, 0], Dm[1, 2]+Dm[2, 1]])
             row -= chi * (Dvec @ Ginv)
             row, rhs = _norm(row, 0.0); A[r, :] = row; b[r] = rhs; r += 1
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return A, b, row_of, dof, Lb
 
 
