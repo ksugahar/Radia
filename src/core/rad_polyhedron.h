@@ -29,13 +29,9 @@
 extern radTConvergRepair& radCR;
 
 //-------------------------------------------------------------------------
-// Opt-in "improved yano-type" surface-charge (MSC) kernel (pyramid-cloud + pyramid-centroid eval).
-// Set via rad.SolverConfig(yano_pyramid_cloud=True).  Default false == the EIEM2 single-point kernel
-// (bit-identical to the historical default).  See radTPolyhedron::MscEvalPoint / MscCompensationField.
-extern bool g_yano_pyramid_cloud;
-extern bool g_yano_no_center_charge;   // research: drop the element-center cancellation charge (raw collocation)
-extern double g_yano_eval_alpha;   // research: override EIEM2 collocation-point alpha (-1 = default 0.5)
-extern bool g_yano_moment_hacapk;   // moment linear step via HACApK H-matrix + BiCGSTAB (method 2 / scalable storage) vs dense LU
+// moment-yano method-2 routing flag (set by SolveGen): the moment linear step uses the HACApK
+// H-matrix + BiCGSTAB (scalable storage) instead of the dense LU.
+extern bool g_yano_moment_hacapk;
 
 //-------------------------------------------------------------------------
 
@@ -404,26 +400,6 @@ public:
 	                                 const TVector3d* mirrorVerts, int numVerts,
 	                                 double sigma, bool flipNormal,
 	                                 const TVector3d& mirrorCenter) const;
-
-	// --- "improved yano-type" MSC kernel (opt-in via g_yano_pyramid_cloud) ---
-	// MscEvalPoint: the per-face collocation evaluation point.
-	//   default (flag off): EIEM2 midpoint 0.5*(FaceCenter[i] + CentrPoint);
-	//   flag on: pyramid centroid 0.75*MscFaceAreaCentroid(i) + 0.25*MscVolumeCentroid().
-	// MscCompensationField: the source-face charge-neutralising compensation field (no 1/4pi).
-	//   default (flag off): single point charge -FaceArea[i] at the element center (FieldFromPointCharge);
-	//   flag on: element-common cloud (all (volume-centroid, edge) partition triangles, 3-pt quad,
-	//            normalised), total charge -FaceArea[i] -> per-DOF charge-neutral, loop-source-null.
-	// Flag-off branches return EXACTLY the historical inline expressions (bit-identical goldens).
-	TVector3d FieldFromPointChargeAt(const TVector3d& obs, const TVector3d& src, double charge) const;
-	TVector3d MscFaceAreaCentroid(int faceIdx) const;
-	TVector3d MscVolumeCentroid() const;
-	TVector3d MscEvalPoint(int faceIdx) const;
-	TVector3d MscCompensationField(const TVector3d& obs, int faceIdx) const;
-	// Element-common compensation cloud (the loop-source-null pyramid cloud): fills pts[] (global) and
-	// wts[] (normalised, sum=1) with up to `cap` (volume-centroid, edge) 3-pt-quadrature points; returns
-	// the count.  Single source for both MscCompensationField (inline path) and the precomputed
-	// Compute6x6BlockFast fast path, so the two agree by construction.  For a hexahedron count==72.
-	int MscCompensationCloud(TVector3d* pts, double* wts, int cap) const;
 
 	// 6 DOF MSC setup for hexahedra
 	// IMPORTANT: This relies on Netgen face winding convention for correct normal direction.

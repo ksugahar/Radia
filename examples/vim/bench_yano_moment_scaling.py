@@ -81,7 +81,7 @@ def _peak_mb():
 def moment_setup(hexes):
     """SETUP phase: objs + C++ accessors (rad.GetFaceGeom / rad.GetCentroidFieldGrad) + per-element local
     geometry (dipole/quadrupole functionals).  Returns the assembled-once per-element data the SOLVE reuses."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R0))
@@ -159,7 +159,7 @@ def run_case(nxy, nz, H0, maxit):
     divB = max(abs(np.sum(area[dofs_of[e]] * sig[dofs_of[e]])) / (np.sum(area[dofs_of[e]] * np.abs(sig[dofs_of[e]])) + 1e-30) for e in range(n_el))
     constit = float(np.median([np.linalg.norm(EL[e][2] @ sig / EL[e][3] - M_BH_vec(Hs[e:e+1])[0]) / (np.linalg.norm(EL[e][2] @ sig / EL[e][3]) + 1e-30) for e in range(n_el)]))
     my = float(np.sum(sig * area * (fc[:, 1] - ecen[:, 1])))
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return dict(nxy=nxy, nz=nz, nhex=int(n_el), dof=int(dof), H0=float(H0), moment_my=my,
                 iterations=int(nit), converged=bool(conv),
                 t_setup=float(t_setup), t_solve=float(t_solve), peak_memory_mb=float(_peak_mb()),

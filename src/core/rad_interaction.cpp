@@ -944,351 +944,30 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		return 1;
 	}
 
-	// Check if all elements are hexahedra (for ultra-fast pure-hexa path)
-	bool allHex = hasMSCElements;
-	for(int i = 0; i < AmOfMainElem && allHex; i++)
-	{
-		if(m_elemDOF[i] != 6) allHex = false;
-	}
-
-	// ULTRA-FAST PATH: Pure hexahedra without symmetry.  Flag-aware (stage 2): PrecomputeHexaGeometry +
-	// Compute6x6BlockFast handle BOTH the EIEM2 default and the pyramid-cloud kernel (flag on) -- the
-	// eval points come from MscEvalPoint and the compensation from the precomputed cloud, matching the
-	// inline path.  (Pure wedges still fall through to the inline path; Compute5x5BlockFast is unported.)
-	if(!hasSymmetry && allHex)
+	// EIEM2 retirement (Phase 3b): the dense MSC (surface-charge) interaction blocks are no longer
+	// assembled.  After the fail-loud guards in MakeAutoRelax (mixed MMM+MSC and B-input-on-MSC are
+	// rejected), the ONLY path that reaches here with an MSC element (DOF>=5) is a pure surface-charge
+	// (hex / wedge) model solved by the parameter-free moment-yano formulation.  That path assembles its
+	// own system (BuildMomentSystemCore, on-the-fly geometry via momentFaceGeom) and NEVER reads this
+	// dense interaction matrix -- it is identical to the method-2 path, which runs with no dense matrix at
+	// all (Phase 2 Increment 4).  So leave the MSC blocks zero (the matrix is already zero-initialized) and
+	// return -- the EIEM2 collocation block kernels (Compute6x6/5x5/MixedBlockFast) are retired (Phase 3b).
+	// Precompute the per-element geometry caches so the
+	// method-2 H-matrix moment path (which enumerates hexes via m_hexaElemIndices) and any precompute-based
+	// scaffold see the elements -- idempotent, O(N), mirrors the skipDenseMatrix=1 branch in Setup.
+	if(hasMSCElements)
 	{
 		PrecomputeHexaGeometry();
-		if(m_hexaGeomReady)
-		{
-			int nHex = (int)m_hexaElemIndices.size();
-
-			ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t hex_col)
-			{
-				int col = m_hexaElemIndices[(int)hex_col];
-				int offset_col = m_elemDOFOffset[col];
-
-				for(int hex_row = 0; hex_row < nHex; hex_row++)
-				{
-					int row = m_hexaElemIndices[hex_row];
-					int offset_row = m_elemDOFOffset[row];
-
-					double K_block[36];
-					Compute6x6BlockFast(hex_row, (int)hex_col, K_block);
-
-					// Copy to row-major flat matrix (both row-major, direct copy pattern)
-					// K_block is [target][source] row-major, matrix is [target][source] row-major
-					// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-					double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
-					for(int i = 0; i < 6; i++)
-					{
-						for(int j = 0; j < 6; j++)
-						{
-							// Both row-major: K[i][j] at i*6+j -> A[target_i][source_j] at i*stride+j
-							block[(size_t)i * m_totalDOF + j] = K_block[i * 6 + j];
-						}
-					}
-				}
-			});
-
-			return 1;
-		}
-		// Fall through to MEDIUM PATH if geometry precompute failed
-	}
-
-	// Check if all MSC elements are wedges (for pure-wedge fast path)
-	bool allWedge = hasMSCElements;
-	for(int i = 0; i < AmOfMainElem && allWedge; i++)
-	{
-		if(m_elemDOF[i] != 5) allWedge = false;
-	}
-
-	// ULTRA-FAST PATH: Pure wedges without symmetry.  Flag-aware (stage 3): PrecomputeWedgeGeometry +
-	// Compute5x5BlockFast handle both the EIEM2 default and the pyramid-cloud kernel (flag on).
-	if(!hasSymmetry && allWedge)
-	{
 		PrecomputeWedgeGeometry();
-		if(m_wedgeGeomReady)
-		{
-			int nWedge = (int)m_wedgeElemIndices.size();
-
-			ngcore::ParallelFor(ngcore::IntRange(nWedge), [&](size_t w_col)
-			{
-				int col = m_wedgeElemIndices[(int)w_col];
-				int offset_col = m_elemDOFOffset[col];
-
-				for(int w_row = 0; w_row < nWedge; w_row++)
-				{
-					int row = m_wedgeElemIndices[w_row];
-					int offset_row = m_elemDOFOffset[row];
-
-					double K_block[25];
-					Compute5x5BlockFast(w_row, (int)w_col, K_block);
-
-					double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
-					for(int i = 0; i < 5; i++)
-						for(int j = 0; j < 5; j++)
-							block[(size_t)i * m_totalDOF + j] = K_block[i * 5 + j];
-				}
-			});
-
-			return 1;
-		}
-	}
-
-	// MEDIUM PATH: MSC hexahedra without symmetry - uses OpenMP
-	// This handles mixed hex/tetra meshes with 6x6 blocks
-	if(!hasSymmetry && hasMSCElements)
-	{
-		// Use unified 1/(4*pi) constant for all MSC interactions
-		// (ELF-compatible sign convention: K_ij / (4*pi))
-
-		ngcore::ParallelFor(ngcore::IntRange(AmOfMainElem), [&](size_t col)
-		{
-			radTg3dRelax* elem_col = g3dRelaxPtrVect[(int)col];
-			int dof_col = m_elemDOF[(int)col];
-			int offset_col = m_elemDOFOffset[(int)col];
-
-			// Check if source is MSC element (wedge: 5 DOF, hexahedron: 6 DOF)
-			radTPolyhedron* poly_col = nullptr;
-			if(dof_col >= 5)
-			{
-				poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
-			}
-
-			for(int row = 0; row < AmOfMainElem; row++)
-			{
-				radTg3dRelax* elem_row = g3dRelaxPtrVect[row];
-				int dof_row = m_elemDOF[row];
-				int offset_row = m_elemDOFOffset[row];
-
-				// ROW-MAJOR: A(row, col) at index [row * m_totalDOF + col]
-				// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
-				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-				double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
-
-				// Check if target is MSC element (wedge: 5 DOF, hexahedron: 6 DOF)
-				radTPolyhedron* poly_row = nullptr;
-				if(dof_row >= 5)
-				{
-					poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
-				}
-
-				if(dof_row == 3 && dof_col == 3)
-				{
-					// 3x3 N-matrix block: H-field at row center from col magnetization
-					// PreRelax mode computes ALL 3 unit responses in ONE call:
-					//   Field.B = dH/dMx, Field.H = dH/dMy, Field.A = dH/dMz
-					TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
-
-					radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-					Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
-					elem_col->B_comp(&Field);
-
-					// Store N-matrix (row-major): N[row_comp][col_comp]
-					// Field.B = response to Mx, Field.H = response to My, Field.A = response to Mz
-					block[(size_t)0 * m_totalDOF + 0] = Field.B.x;  // dHx/dMx
-					block[(size_t)0 * m_totalDOF + 1] = Field.H.x;  // dHx/dMy
-					block[(size_t)0 * m_totalDOF + 2] = Field.A.x;  // dHx/dMz
-					block[(size_t)1 * m_totalDOF + 0] = Field.B.y;  // dHy/dMx
-					block[(size_t)1 * m_totalDOF + 1] = Field.H.y;  // dHy/dMy
-					block[(size_t)1 * m_totalDOF + 2] = Field.A.y;  // dHy/dMz
-					block[(size_t)2 * m_totalDOF + 0] = Field.B.z;  // dHz/dMx
-					block[(size_t)2 * m_totalDOF + 1] = Field.H.z;  // dHz/dMy
-					block[(size_t)2 * m_totalDOF + 2] = Field.A.z;  // dHz/dMz
-				}
-				else if(dof_row == 6 && dof_col == 6 && poly_row && poly_col)
-				{
-					// 6x6 block: MSC hexahedron to MSC hexahedron
-					for(int face_i = 0; face_i < 6; face_i++)
-					{
-						// Yano evaluation point: midpoint between face center and element center
-						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-						for(int face_j = 0; face_j < 6; face_j++)
-						{
-							// Field from unit sigma on face j
-							TVector3d H_face = poly_col->FieldFromQuadFace(EvalPt, face_j, 1.0);
-
-							// Point charge contribution: m = -sigma * area
-							TVector3d H_point = poly_col->MscCompensationField(EvalPt, face_j);   // single point (flag off) or 12-edge cloud (flag on)
-
-							TVector3d H_total;
-							H_total.x = H_face.x + H_point.x;
-							H_total.y = H_face.y + H_point.y;
-							H_total.z = H_face.z + H_point.z;
-
-							// K_ij = normal_i dot H_total
-							double K_ij = H_total.x * poly_row->FaceNormal[face_i].x +
-							              H_total.y * poly_row->FaceNormal[face_i].y +
-							              H_total.z * poly_row->FaceNormal[face_i].z;
-
-							// ROW-MAJOR: A[target_face_i][source_face_j] at face_i*stride+face_j
-							// Store K/(4pi) - the solver will negate when building system matrix
-							block[(size_t)face_i * m_totalDOF + face_j] = K_ij * RadConst::INV_FOUR_PI;
-						}
-					}
-				}
-				else if(dof_row == 3 && dof_col == 6 && poly_col)
-				{
-					// 3x6 block: tetrahedron from MSC hexahedron
-					TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
-
-					for(int face_j = 0; face_j < 6; face_j++)
-					{
-						TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
-						TVector3d H_point = poly_col->MscCompensationField(ObsPoiVect, face_j);   // single point (flag off) or 12-edge cloud (flag on)
-
-						TVector3d H_total;
-						H_total.x = H_face.x + H_point.x;
-						H_total.y = H_face.y + H_point.y;
-						H_total.z = H_face.z + H_point.z;
-
-						// ROW-MAJOR: A[target_i][source_face_j] at target_i*stride+face_j
-						block[(size_t)0 * m_totalDOF + face_j] = H_total.x * RadConst::INV_FOUR_PI;
-						block[(size_t)1 * m_totalDOF + face_j] = H_total.y * RadConst::INV_FOUR_PI;
-						block[(size_t)2 * m_totalDOF + face_j] = H_total.z * RadConst::INV_FOUR_PI;
-					}
-				}
-				else if(dof_row == 6 && dof_col == 3 && poly_row)
-				{
-					// 6x3 block: MSC hexahedron from 3DOF polyhedron (tetra/wedge)
-					// K(face_i, Mj) = normal_i · H_j where H_j is H-field from unit M in direction j
-					// PreRelax mode computes ALL 3 unit responses in ONE call:
-					//   Field.B = dH/dMx, Field.H = dH/dMy, Field.A = dH/dMz
-
-					for(int face_i = 0; face_i < dof_row; face_i++)
-					{
-						// Yano evaluation point
-						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-						TVector3d& n = poly_row->FaceNormal[face_i];
-
-						radTField Field(FieldKeyInteract, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-						Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
-						elem_col->B_comp(&Field);
-
-						// K(face_i, m_dir) = normal · H_response
-						// Field.B = response to Mx, Field.H = response to My, Field.A = response to Mz
-						double K_Mx = n.x * Field.B.x + n.y * Field.B.y + n.z * Field.B.z;
-						double K_My = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
-						double K_Mz = n.x * Field.A.x + n.y * Field.A.y + n.z * Field.A.z;
-
-						// ROW-MAJOR: A[target_face_i][source_m_dir]
-						// No INV_FOUR_PI - already included in field computation
-						block[(size_t)face_i * m_totalDOF + 0] = K_Mx;
-						block[(size_t)face_i * m_totalDOF + 1] = K_My;
-						block[(size_t)face_i * m_totalDOF + 2] = K_Mz;
-					}
-				}
-				else if(dof_row >= 5 && dof_col >= 5 && poly_row && poly_col)
-				{
-					// NxM block: MSC-to-MSC (covers 5x5, 5x6, 6x5 wedge/hex combinations)
-					// Uses FieldFromFace for generalized tri/quad face handling
-					int nFacesRow = dof_row;  // 5 for wedge, 6 for hex
-					int nFacesCol = dof_col;
-
-					for(int face_i = 0; face_i < nFacesRow; face_i++)
-					{
-						// Yano evaluation point: midpoint between face center and element center
-						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-						for(int face_j = 0; face_j < nFacesCol; face_j++)
-						{
-							// Field from unit sigma on face j (handles both tri and quad)
-							TVector3d H_face = poly_col->FieldFromFace(EvalPt, face_j, 1.0);
-
-							// Point charge contribution: m = -sigma * area
-							TVector3d H_point = poly_col->MscCompensationField(EvalPt, face_j);   // single point (flag off) or 12-edge cloud (flag on)
-
-							TVector3d H_total;
-							H_total.x = H_face.x + H_point.x;
-							H_total.y = H_face.y + H_point.y;
-							H_total.z = H_face.z + H_point.z;
-
-							// K_ij = normal_i dot H_total
-							double K_ij = H_total.x * poly_row->FaceNormal[face_i].x +
-							              H_total.y * poly_row->FaceNormal[face_i].y +
-							              H_total.z * poly_row->FaceNormal[face_i].z;
-
-							block[(size_t)face_i * m_totalDOF + face_j] = K_ij * RadConst::INV_FOUR_PI;
-						}
-					}
-				}
-				else if(dof_row == 3 && dof_col == 5 && poly_col)
-				{
-					// 3x5 block: tetrahedron from MSC wedge
-					TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
-
-					for(int face_j = 0; face_j < 5; face_j++)
-					{
-						TVector3d H_face = poly_col->FieldFromFace(ObsPoiVect, face_j, 1.0);
-						TVector3d H_point = poly_col->MscCompensationField(ObsPoiVect, face_j);   // single point (flag off) or 12-edge cloud (flag on)
-
-						TVector3d H_total;
-						H_total.x = H_face.x + H_point.x;
-						H_total.y = H_face.y + H_point.y;
-						H_total.z = H_face.z + H_point.z;
-
-						block[(size_t)0 * m_totalDOF + face_j] = H_total.x * RadConst::INV_FOUR_PI;
-						block[(size_t)1 * m_totalDOF + face_j] = H_total.y * RadConst::INV_FOUR_PI;
-						block[(size_t)2 * m_totalDOF + face_j] = H_total.z * RadConst::INV_FOUR_PI;
-					}
-				}
-				else if(dof_row == 5 && dof_col == 3 && poly_row)
-				{
-					// 5x3 block: MSC wedge from 3DOF polyhedron (tetra)
-					radTPolyhedron* poly_col_3dof = dynamic_cast<radTPolyhedron*>(elem_col);
-					TVector3d orig_magn(0., 0., 0.);
-					if(poly_col_3dof) {
-						orig_magn = poly_col_3dof->Magn;
-					}
-
-					for(int face_i = 0; face_i < 5; face_i++)
-					{
-						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-						TVector3d& n = poly_row->FaceNormal[face_i];
-
-						for(int m_dir = 0; m_dir < 3; m_dir++)
-						{
-							TVector3d unit_M(0., 0., 0.);
-							if(m_dir == 0) unit_M.x = 1.0;
-							else if(m_dir == 1) unit_M.y = 1.0;
-							else unit_M.z = 1.0;
-
-							if(poly_col_3dof) {
-								poly_col_3dof->Magn = unit_M;
-							}
-
-							radTField Field(FieldKeyInteract, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-							Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
-							elem_col->B_comp(&Field);
-
-							double K_val = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
-							block[(size_t)face_i * m_totalDOF + m_dir] = K_val;
-						}
-					}
-
-					if(poly_col_3dof) {
-						poly_col_3dof->Magn = orig_magn;
-					}
-				}
-				else
-				{
-					// Zero out unknown blocks
-					for(int i = 0; i < dof_row; i++)
-					{
-						for(int j = 0; j < dof_col; j++)
-						{
-							// ROW-MAJOR: A[i][j] at i*stride+j
-							block[(size_t)i * m_totalDOF + j] = 0.0;
-						}
-					}
-				}
-			}
-		});
 		return 1;
 	}
+
+	// EIEM2 retirement (Phase 3b): the dense MSC fast paths (pure-hex / pure-wedge via Compute6x6/5x5BlockFast)
+	// and the no-symmetry MEDIUM MSC path were deleted.  The only surface-charge path now reaches the
+	// hasMSCElements early-return above (moment-yano assembles its own system and never reads this dense
+	// matrix).  What remains below is the SLOW PATH, now MMM-only (3x3, symmetry-aware) -- reached only by
+	// an all-tetrahedron model WITH space-group symmetry (pure-tet without symmetry returned via the fast
+	// path at the top of this function).
 
 	// SLOW PATH: With symmetry transformations (original code)
 	for(int col = 0; col < AmOfMainElem; col++)
@@ -1351,178 +1030,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str2.y;  // (2,1)
 				block[(size_t)2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
 			}
-			else if(dof_row == 3 && dof_col >= 5)
-			{
-				// 3xN block: Field at tetrahedron (3 DOF) center from MSC element (5 or 6 DOF)
-				// K(Mk, face_j) = H_field_k at tetra center due to unit sigma on face j
-				// Matrix stores: H_field(k) / (4*pi) (following ELF convention)
-
-				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
-				if(poly_col && poly_col->Use6DOF_MSC)
-				{
-					TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(elem_row->ReturnCentrPoint());
-
-					for(int face_j = 0; face_j < dof_col; face_j++)
-					{
-						TVector3d H_total(0., 0., 0.);
-
-						for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
-						{
-							// Transform obs point from world frame to column element's local frame
-							TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
-
-							// Field from source at observation point (both in column's local frame)
-							// FieldFromFace handles both tri and quad faces
-							TVector3d H_face = poly_col->FieldFromFace(ObsPoiVect, face_j, 1.0);
-							TVector3d H_point = poly_col->MscCompensationField(ObsPoiVect, face_j);   // single point (flag off) or 12-edge cloud (flag on)
-
-							// Sum field contributions (in column's local frame)
-							TVector3d H_local;
-							H_local.x = H_face.x + H_point.x;
-							H_local.y = H_face.y + H_point.y;
-							H_local.z = H_face.z + H_point.z;
-
-							// Transform field from column's local frame back to world frame
-							TVector3d H_world = TransPtrVect[tr]->TrAxialVect(H_local);
-
-							H_total.x += H_world.x;
-							H_total.y += H_world.y;
-							H_total.z += H_world.z;
-						}
-
-						// Transform field from world frame to row element's local frame
-						TVector3d H_final = MainTransPtrArray[row]->TrAxialVect_inv(H_total);
-
-						// Store in block (ROW-MAJOR): A[i][j] at [i * stride + j]
-						block[(size_t)0 * m_totalDOF + face_j] = H_final.x * RadConst::INV_FOUR_PI;
-						block[(size_t)1 * m_totalDOF + face_j] = H_final.y * RadConst::INV_FOUR_PI;
-						block[(size_t)2 * m_totalDOF + face_j] = H_final.z * RadConst::INV_FOUR_PI;
-					}
-				}
-			}
-			else if(dof_row >= 5 && dof_col == 3)
-			{
-				// Nx3 block: Field at MSC element (5 or 6 DOF) eval points from tetrahedron (3 DOF)
-				// K(face_i, Mj) = normal_i dot N_mat(:, j)
-
-				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
-				if(poly_row && poly_row->Use6DOF_MSC)
-				{
-					for(int face_i = 0; face_i < dof_row; face_i++)
-					{
-						// Yano evaluation point: midpoint between face center and element center
-						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
-
-						// N_mat stores the 3x3 demagnetization tensor: H = -N*M/(4*pi)
-						// SubMatrix.Str0 = column 0 (response to Mx)
-						// SubMatrix.Str1 = column 1 (response to My)
-						// SubMatrix.Str2 = column 2 (response to Mz)
-						TMatrix3d SubMatrix(TVector3d(0., 0., 0.), TVector3d(0., 0., 0.), TVector3d(0., 0., 0.));
-						TMatrix3d BufSubMatrix;
-
-						for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
-						{
-							TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
-
-							radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, TVector3d(0., 0., 0.),
-							                TVector3d(0., 0., 0.), TVector3d(0., 0., 0.), TVector3d(0., 0., 0.), 0.);
-							Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
-
-							elem_col->B_comp(&Field);
-
-							BufSubMatrix.Str0 = Field.B;
-							BufSubMatrix.Str1 = Field.H;
-							BufSubMatrix.Str2 = Field.A;
-
-							TransPtrVect[tr]->TrMatrix(BufSubMatrix);
-							SubMatrix += BufSubMatrix;
-						}
-
-						MainTransPtrArray[row]->TrMatrix_inv(SubMatrix);
-
-						// Get face normal (outward)
-						TVector3d& n = poly_row->FaceNormal[face_i];
-
-						// K(face_i, Mj) = normal · N_mat(:, j) / (4*pi)
-						// SubMatrix stores the 3x3 demagnetization response
-						// Str0 = [dHx/dMx, dHy/dMx, dHz/dMx] (column for Mx)
-						// Str1 = [dHx/dMy, dHy/dMy, dHz/dMy] (column for My)
-						// Str2 = [dHx/dMz, dHy/dMz, dHz/dMz] (column for Mz)
-						double K_face_Mx = n.x * SubMatrix.Str0.x + n.y * SubMatrix.Str0.y + n.z * SubMatrix.Str0.z;
-						double K_face_My = n.x * SubMatrix.Str1.x + n.y * SubMatrix.Str1.y + n.z * SubMatrix.Str1.z;
-						double K_face_Mz = n.x * SubMatrix.Str2.x + n.y * SubMatrix.Str2.y + n.z * SubMatrix.Str2.z;
-
-						// Store in block (ROW-MAJOR): A[face_i][col] at [face_i * stride + col]
-						// row is face_i (0-5), col is component (0,1,2 = Mx,My,Mz)
-						// Sign convention: +K/(4*pi) for hex-tetra (following ELF)
-						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)face_i * m_totalDOF + 0] = K_face_Mx * RadConst::INV_FOUR_PI;  // (face_i, Mx)
-						block[(size_t)face_i * m_totalDOF + 1] = K_face_My * RadConst::INV_FOUR_PI;  // (face_i, My)
-						block[(size_t)face_i * m_totalDOF + 2] = K_face_Mz * RadConst::INV_FOUR_PI;  // (face_i, Mz)
-					}
-				}
-			}
-			else if(dof_row >= 5 && dof_col >= 5)
-			{
-				// NxM block: MSC-to-MSC (covers 5x5, 5x6, 6x5, 6x6 combinations)
-				// K(face_i, face_j) = normal_i dot H_field(eval_pt_i, src_face_j)
-
-				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
-				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
-
-				if(poly_row && poly_row->Use6DOF_MSC && poly_col && poly_col->Use6DOF_MSC)
-				{
-					for(int face_i = 0; face_i < dof_row; face_i++)
-					{
-						// Yano evaluation point: midpoint between face center and element center
-						// FaceCenter and CentrPoint are already in GLOBAL frame
-						TVector3d EvalPt = poly_row->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-						// EvalPt is already in GLOBAL frame - no transform needed
-						TVector3d InitObsPoiVect = EvalPt;
-
-						for(int face_j = 0; face_j < dof_col; face_j++)
-						{
-							TVector3d H_total(0., 0., 0.);
-
-							for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
-							{
-								// Transform obs point from GLOBAL frame to column element's local frame
-								TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
-
-								// FieldFromFace handles both tri and quad faces
-								TVector3d H_face = poly_col->FieldFromFace(ObsPoiVect, face_j, 1.0);
-								TVector3d H_point = poly_col->MscCompensationField(ObsPoiVect, face_j);   // single point (flag off) or 12-edge cloud (flag on)
-
-								// Sum field contributions (in column's local frame)
-								TVector3d H_local;
-								H_local.x = H_face.x + H_point.x;
-								H_local.y = H_face.y + H_point.y;
-								H_local.z = H_face.z + H_point.z;
-
-								// Transform field from column's local frame back to GLOBAL frame
-								TVector3d H_world = TransPtrVect[tr]->TrAxialVect(H_local);
-
-								H_total.x += H_world.x;
-								H_total.y += H_world.y;
-								H_total.z += H_world.z;
-							}
-
-							// K_ij = normal_i dot H_total (both in GLOBAL frame)
-							// FaceNormal is already in GLOBAL frame (from SetupFaceGeometry)
-							double K_ij = H_total.x * poly_row->FaceNormal[face_i].x +
-							              H_total.y * poly_row->FaceNormal[face_i].y +
-							              H_total.z * poly_row->FaceNormal[face_i].z;
-
-							// Store K_ij / (4*pi) (ROW-MAJOR): A[face_i][face_j] at [face_i * stride + face_j]
-							double K_val = K_ij * RadConst::INV_FOUR_PI;
-							block[(size_t)face_i * m_totalDOF + face_j] = K_val;
-						}
-					}
-				}
-			}
+				// EIEM2 retirement (Phase 3b): the dof>=5 MSC branches were deleted.  In this MMM-only path
+				// dof is always 3, so the 3x3 branch above always matches; the defensive else zeroes any
+				// unexpected block.
 			else
 			{
 				// Unknown DOF combination - zero out the block (ROW-MAJOR)
@@ -1605,57 +1115,7 @@ void radTInteraction::SetupExternFieldArray()
 				m_flatExternFieldArray[offset + 1] += H_ext.y;
 				m_flatExternFieldArray[offset + 2] += H_ext.z;
 			}
-			else if(dof >= 5)
-			{
-				// MSC element (5=wedge, 6=hex): compute H_ext dot n at each face
-				// External field is evaluated at element positions
-				radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
-				if(poly && poly->Use6DOF_MSC)
-				{
-					for(int face_i = 0; face_i < dof; face_i++)
-					{
-						// Eval point for face i (midpoint between face center and element center)
-						// This is in element's local coordinates
-						TVector3d EvalPt = poly->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-						// Transform EvalPt from element's local coords to world coords
-						TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);
-
-						// Compute H_ext at eval point from all external sources
-						// Use same transform handling as 3DOF elements
-						TVector3d H_world(0., 0., 0.);
-						for(int ExtElNo = 0; ExtElNo < AmOfExtElem; ExtElNo++)
-						{
-							FillInTransPtrVectForElem(ExtElNo, 'E');
-							radTg3d* ExtElPtr = g3dExternPtrVect[ExtElNo];
-
-							TVector3d BufVect(0., 0., 0.);
-							for(unsigned t = 0; t < TransPtrVect.size(); t++)
-							{
-								// Transform obs point to external element's local coords
-								TVector3d ObsPoiVect = TransPtrVect[t]->TrPoint_inv(WorldEvalPt);
-								radTField Field(FieldKeyExtern, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-								ExtElPtr->B_comp(&Field);
-								// Transform field back to world coords using pseudo-vector transformation
-								// H field is a pseudo-vector: H' = det(T) * T * H
-								BufVect += TransPtrVect[t]->TrAxialVect(Field.H);
-							}
-							H_world += BufVect;
-							EmptyTransPtrVect();
-						}
-
-						// FaceNormal is stored in GLOBAL coordinates (from SetupFaceGeometry)
-						// H_world is already in global coordinates
-						// Compute dot product directly in global coordinates (ELF-compatible)
-						// Note: Do NOT transform H to local coords - FaceNormal is already global!
-						double H_dot_n = H_world.x * poly->FaceNormal[face_i].x +
-						                 H_world.y * poly->FaceNormal[face_i].y +
-						                 H_world.z * poly->FaceNormal[face_i].z;
-
-						m_flatExternFieldArray[offset + face_i] += H_dot_n;
-					}
-				}
-			}
+			// MSC (hex/wedge): no per-face external field -- the moment-yano solve samples ExternFieldArray (centroid).
 		}
 	}
 	//g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
@@ -1702,38 +1162,7 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 					m_flatExternFieldArray[offset + 1] = H_ext.y;
 					m_flatExternFieldArray[offset + 2] = H_ext.z;
 				}
-				else if(dof == 6)
-				{
-					// MSC hexahedron: compute H_ext dot n at each face
-					radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
-					if(poly && poly->Use6DOF_MSC)
-					{
-						for(int face_i = 0; face_i < 6; face_i++)
-						{
-							// Eval point for face i (midpoint between face center and element center)
-							// This is in element's local coordinates
-							TVector3d EvalPt = poly->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-							// Transform EvalPt to world coords (same as 3DOF code on line 1520)
-							TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);
-
-							// Compute H_ext at world eval point
-							// B_genComp handles internal transforms recursively
-							radTField Field(FieldKeyExtern, CompCriterium, WorldEvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-							(static_cast<radTg3d*>(MoreExtSourceHandle.rep))->B_genComp(&Field);
-
-							// FaceNormal is stored in GLOBAL coordinates (from SetupFaceGeometry)
-							// Field.H from B_genComp is already in global coordinates
-							// Compute dot product directly in global coordinates (ELF-compatible)
-							// Note: Do NOT transform H to local coords - FaceNormal is already global!
-							double H_dot_n = Field.H.x * poly->FaceNormal[face_i].x +
-							                 Field.H.y * poly->FaceNormal[face_i].y +
-							                 Field.H.z * poly->FaceNormal[face_i].z;
-
-							m_flatExternFieldArray[offset + face_i] = H_dot_n;
-						}
-					}
-				}
+				// MSC: no per-face external field (moment-yano uses the centroid ExternFieldArray).
 			}
 		}
 	}
@@ -1861,7 +1290,7 @@ void radTInteraction::FindMaxModMandH(double& MaxModM, double& MaxModH)
 //=========================================================================
 // PrecomputeTetraGeometry: Pre-compute tetrahedron face geometry
 // Extracts vertices, normals, and areas for fast 3x3 block computation
-// Reference: ELF-style optimization (same as RadHACApKMSCManager::PrecomputeGeometry3DOF)
+// Reference: ELF-style optimization (same as RadHACApKMMMManager::PrecomputeGeometry3DOF)
 //=========================================================================
 
 void radTInteraction::PrecomputeTetraGeometry()
@@ -2096,7 +1525,7 @@ static void FieldFromChargedTriangleLocal(const double* obs,
 //=========================================================================
 // Compute3x3BlockFast: Fast 3x3 interaction block for tetrahedra
 // Uses pre-computed geometry (no B_comp overhead)
-// Reference: ELF-style optimization (same as RadHACApKMSCManager::Compute3x3BlockFast)
+// Reference: ELF-style optimization (same as RadHACApKMMMManager::Compute3x3BlockFast)
 //=========================================================================
 
 void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const
@@ -2363,26 +1792,11 @@ void radTInteraction::PrecomputeHexaGeometry()
 
 	// Allocate arrays
 	m_hexaCenters.resize(nHex * 3);
-	m_hexaEvalPoints.resize(nHex * 6 * 3);  // 6 faces, xyz
 	m_hexaFaceNormals.resize(nHex * 6 * 3); // 6 faces, xyz
 	m_hexaFaceAreas.resize(nHex * 6);       // 6 faces
 	m_hexaTriVertices.resize(nHex * 6 * 2 * 3 * 3);  // 6 faces, 2 tris, 3 verts, xyz
 	m_hexaTriSigns.resize(nHex * 6 * 2);    // 6 faces, 2 tris
 
-	// Pyramid-cloud kernel (flag on): per-hex element-common compensation cloud (6 faces * 4 edges *
-	// 3-pt quadrature = 72 points/hex; degenerate hexes zero-pad).  Flag off keeps the single point charge.
-	if(g_yano_pyramid_cloud)
-	{
-		m_hexaCloudN = 72;
-		m_hexaCloudPts.assign((size_t)nHex * m_hexaCloudN * 3, 0.0);
-		m_hexaCloudWts.assign((size_t)nHex * m_hexaCloudN, 0.0);
-	}
-	else
-	{
-		m_hexaCloudN = 0;
-		m_hexaCloudPts.clear();
-		m_hexaCloudWts.clear();
-	}
 
 	for(int h = 0; h < nHex; h++)
 	{
@@ -2407,13 +1821,6 @@ void radTInteraction::PrecomputeHexaGeometry()
 
 			// Store face area
 			m_hexaFaceAreas[h * 6 + f] = poly->FaceArea[f];
-
-			// Store collocation eval point: EIEM2 midpoint (flag off) or pyramid centroid (flag on).
-			int epIdx = (h * 6 + f) * 3;
-			TVector3d ep = poly->MscEvalPoint(f);
-			m_hexaEvalPoints[epIdx + 0] = ep.x;
-			m_hexaEvalPoints[epIdx + 1] = ep.y;
-			m_hexaEvalPoints[epIdx + 2] = ep.z;
 
 			// Get face vertices and split into 2 triangles
 			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
@@ -2483,22 +1890,6 @@ void radTInteraction::PrecomputeHexaGeometry()
 			}
 		}
 
-		// Pyramid-cloud kernel (flag on): precompute this hex's element-common compensation cloud
-		// (normalised, sum=1) via the SAME helper the inline path uses -> fast path == inline path.
-		if(g_yano_pyramid_cloud && m_hexaCloudN > 0)
-		{
-			TVector3d cpts[96];
-			double cwts[96];
-			int nc = poly->MscCompensationCloud(cpts, cwts, m_hexaCloudN);
-			for(int k = 0; k < nc; k++)
-			{
-				size_t b = (size_t)h * m_hexaCloudN + k;
-				m_hexaCloudPts[b*3 + 0] = cpts[k].x;
-				m_hexaCloudPts[b*3 + 1] = cpts[k].y;
-				m_hexaCloudPts[b*3 + 2] = cpts[k].z;
-				m_hexaCloudWts[b] = cwts[k];
-			}
-		}
 	}
 
 	m_hexaGeomReady = true;
@@ -2848,6 +2239,48 @@ static int momentFaceGeom(radTPolyhedron* poly, int f, const TVector3d& ce,
 }
 
 //=========================================================================
+// momentResidualEigenmodes: orthonormal basis of the RESIDUAL subspace -- the (nF-4) charge patterns with
+// ZERO monopole and ZERO dipole MOMENT (null space of the 4 functionals {Ae, Ae*d_x, Ae*d_y, Ae*d_z} in
+// R^nF).  These are the element's natural QUADRUPOLE eigenmodes; using them as the moment-system quadrupole
+// test directions (in place of the hand-picked dx^2-dy^2 / axial forms) is geometry-adaptive and ALWAYS
+// full-rank -- it never hits the degenerate near-null mode a fixed quadratic can on a distorted element
+// (the wedge dx^2-dy^2 -> M~1e9 blow-up that motivated the axial hand-fix; verified equivalent to the
+// hand-pick on symmetric elements -> cube demag N=1/3 preserved).  Deterministic Gram-Schmidt (nF <= 6,
+// no LAPACK needed); identical Ae/d in BuildMomentSystemCore and MomentSystemEntry -> identical modes, so
+// the dense (method 0/1) and H-matrix (method 2) moment systems stay consistent.  Returns the mode count
+// (nF-4 generically); phi[q][f] is the q-th orthonormal mode (sum_f phi[q][f]^2 = 1).
+//=========================================================================
+static int momentResidualEigenmodes(const double Ae[], const double d[][3], int nF, double phi[][6])
+{
+	double basis[6][6]; int nb = 0;
+	auto orthoAdd = [&](double v[6]) -> bool
+	{
+		for(int b = 0; b < nb; b++)
+		{
+			double dot = 0.0; for(int f = 0; f < nF; f++) dot += basis[b][f]*v[f];
+			for(int f = 0; f < nF; f++) v[f] -= dot*basis[b][f];
+		}
+		double nrm = 0.0; for(int f = 0; f < nF; f++) nrm += v[f]*v[f]; nrm = std::sqrt(nrm);
+		if(nrm > 1.0e-9) { for(int f = 0; f < nF; f++) basis[nb][f] = v[f]/nrm; nb++; return true; }
+		return false;
+	};
+	// 1) orthonormalize the monopole + 3 dipole MOMENT functionals -> ortho basis of the NON-residual part
+	for(int i = 0; i < 4; i++)
+	{
+		double v[6]; for(int f = 0; f < nF; f++) v[f] = (i == 0) ? Ae[f] : Ae[f]*d[f][i-1];
+		orthoAdd(v);
+	}
+	// 2) extend to R^nF with the standard basis; each newly-independent residual vector is a quad eigenmode
+	int nq = 0;
+	for(int e = 0; e < nF && nb < nF; e++)
+	{
+		double v[6] = {0,0,0,0,0,0}; v[e] = 1.0;
+		if(orthoAdd(v)) { for(int f = 0; f < nF; f++) phi[nq][f] = basis[nb-1][f]; nq++; }
+	}
+	return nq;
+}
+
+//=========================================================================
 // CollectMomentElems: e-ordered list of MOMENT elements (the surface-charge polyhedra: hex with 6 DOF +
 // wedge with 5 DOF).  For a pure-hex model this equals m_hexaElemIndices order, so the moment Cflat / row
 // layout is unchanged (hex stays bit-identical).  THE single source of element ordering for the moment
@@ -2984,20 +2417,9 @@ void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const doubl
 			double V4col[4][3];
 			fnv[f] = momentFaceGeom(poly, f, ce, V4col, fc[f], nf[f], Ae[f], d[f]);
 		}
-		// wedge prism axis = direction between the 2 triangular cap centroids (the nv==3 faces).  The wedge's
-		// single quad row is the AXIAL quadrupole about THIS axis (orientation-robust; see the Bm code below).
-		double axis[3] = {0.0, 0.0, 1.0};
-		if(nF == 5)
-		{
-			int t0 = -1, t1 = -1;
-			for(int f = 0; f < nF; f++) if(fnv[f] == 3) { if(t0 < 0) t0 = f; else t1 = f; }
-			if(t0 >= 0 && t1 >= 0)
-			{
-				double ax = fc[t1][0]-fc[t0][0], ay = fc[t1][1]-fc[t0][1], az = fc[t1][2]-fc[t0][2];
-				double an = std::sqrt(ax*ax+ay*ay+az*az); if(an < 1e-300) an = 1.0;
-				axis[0] = ax/an; axis[1] = ay/an; axis[2] = az/an;
-			}
-		}
+		// residual quadrupole eigenmodes (the geometry-adaptive replacement for the hand-picked dx^2-dy^2 /
+		// axial forms): the (nF-4) zero-monopole, zero-dipole-moment charge patterns the element can carry.
+		double phiQ[6][6]; int nQ = momentResidualEigenmodes(Ae, d, nF, phiQ); (void)nQ;
 		double Ve = 0.0;
 		for(int f = 0; f < nF; f++) Ve += Ae[f]*(fc[f][0]*nf[f][0]+fc[f][1]*nf[f][1]+fc[f][2]*nf[f][2]);
 		Ve *= (1.0/3.0);
@@ -3030,22 +2452,14 @@ void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const doubl
 		std::fill(r.begin(), r.end(), 0.0);
 		for(int f = 0; f < nF; f++) r[off+f] = Ae[f];
 		putRow(0.0);
-		// diagonal-quadrupole rows: (nF-4) of them -- hex has 2 (Bm = dx^2-dy^2, then dy^2-dz^2), wedge has 1
-		// (dx^2-dy^2 only).  3 dipole + 1 monopole + (nF-4) quad = nF rows = nF DOF (square per element).
+		// residual-eigenmode quadrupole rows: (nF-4) of them (hex 2, wedge 1).  3 dipole + 1 monopole +
+		// (nF-4) quad = nF rows = nF DOF (square per element).  Bm = the qq-th residual eigenmode written as
+		// a per-face form so the test term Ae*Bm = phi_qq exactly; the cm-correction + Dm field-balance below
+		// are unchanged (they act on Ae*Bm).
 		for(int qq = 0; qq < nF-4; qq++)
 		{
 			double Bm[6];
-			for(int f = 0; f < nF; f++)
-			{
-				if(nF == 5)      // wedge: ONE quad row = AXIAL quadrupole 3(d.axis)^2-|d|^2 about the prism axis
-				{                // (orientation-robust; = 2dz^2-dx^2-dy^2 for a z-aligned prism).  Symmetric about
-					double da = d[f][0]*axis[0]+d[f][1]*axis[1]+d[f][2]*axis[2];   // the axis -> PINS the symmetric
-					double dd = d[f][0]*d[f][0]+d[f][1]*d[f][1]+d[f][2]*d[f][2];   // near-null mode the antisymmetric
-					Bm[f] = 3.0*da*da - dd;                                       // dx^2-dy^2 misses.
-				}
-				else
-					Bm[f] = (qq == 0) ? (d[f][0]*d[f][0]-d[f][1]*d[f][1]) : (d[f][1]*d[f][1]-d[f][2]*d[f][2]);
-			}
+			for(int f = 0; f < nF; f++) Bm[f] = (Ae[f] > 1.0e-300) ? phiQ[qq][f]/Ae[f] : 0.0;
 			std::fill(r.begin(), r.end(), 0.0);
 			for(int f = 0; f < nF; f++) r[off+f] += Ae[f]*Bm[f];
 			double cm[3] = {0,0,0};
@@ -3195,8 +2609,11 @@ double radTInteraction::MomentSystemEntry(int rowGlobal, int colDOF, const doubl
 	else                                        // diagonal-quadrupole qq = t-4
 	{
 		int qq = t - 4;
+		// SAME residual quadrupole eigenmode as BuildMomentSystemCore (identical Ae/d -> identical modes),
+		// so the H-matrix (method 2) and dense (method 0/1) moment systems stay consistent.  Bm = phi_qq/Ae.
+		double phiQ[6][6]; momentResidualEigenmodes(Ae, d, 6, phiQ);
 		double Bm[6];
-		for(int f = 0; f < 6; f++) Bm[f] = (qq == 0) ? (d[f][0]*d[f][0]-d[f][1]*d[f][1]) : (d[f][1]*d[f][1]-d[f][2]*d[f][2]);
+		for(int f = 0; f < 6; f++) Bm[f] = (Ae[f] > 1.0e-300) ? phiQ[qq][f]/Ae[f] : 0.0;
 		if(localFace) val += Ae[lf]*Bm[lf];
 		double cm[3] = {0,0,0};
 		for(int f = 0; f < 6; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
@@ -3444,7 +2861,6 @@ void radTInteraction::PrecomputeWedgeGeometry()
 	if(nWedge == 0) return;
 
 	m_wedgeCenters.resize(nWedge * 3);
-	m_wedgeEvalPoints.resize(nWedge * 5 * 3);
 	m_wedgeFaceNormals.resize(nWedge * 5 * 3);
 	m_wedgeFaceAreas.resize(nWedge * 5);
 	m_wedgeFaceNumTris.resize(nWedge * 5);
@@ -3452,20 +2868,6 @@ void radTInteraction::PrecomputeWedgeGeometry()
 	m_wedgeTriVertices.resize(nWedge * WEDGE_MAX_TRIS * 3 * 3);
 	m_wedgeTriSigns.resize(nWedge * WEDGE_MAX_TRIS);
 
-	// Pyramid-cloud kernel (flag on): per-wedge element-common compensation cloud (2 tri*3 + 3 quad*4
-	// edges = 18 face-edges * 3-pt quadrature = 54 points/wedge; degenerate wedges zero-pad).
-	if(g_yano_pyramid_cloud)
-	{
-		m_wedgeCloudN = 54;
-		m_wedgeCloudPts.assign((size_t)nWedge * m_wedgeCloudN * 3, 0.0);
-		m_wedgeCloudWts.assign((size_t)nWedge * m_wedgeCloudN, 0.0);
-	}
-	else
-	{
-		m_wedgeCloudN = 0;
-		m_wedgeCloudPts.clear();
-		m_wedgeCloudWts.clear();
-	}
 
 	for(int w = 0; w < nWedge; w++)
 	{
@@ -3485,11 +2887,6 @@ void radTInteraction::PrecomputeWedgeGeometry()
 			m_wedgeFaceNormals[(w*5+f)*3+1] = poly->FaceNormal[f].y;
 			m_wedgeFaceNormals[(w*5+f)*3+2] = poly->FaceNormal[f].z;
 			m_wedgeFaceAreas[w*5+f] = poly->FaceArea[f];
-			TVector3d wep = poly->MscEvalPoint(f);   // EIEM2 (flag off) or pyramid centroid (flag on)
-			m_wedgeEvalPoints[(w*5+f)*3+0] = wep.x;
-			m_wedgeEvalPoints[(w*5+f)*3+1] = wep.y;
-			m_wedgeEvalPoints[(w*5+f)*3+2] = wep.z;
-
 			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
 			radTrans* tr = hpt.TransHndl.rep;
@@ -3540,749 +2937,14 @@ void radTInteraction::PrecomputeWedgeGeometry()
 		}
 	}
 
-	// Pyramid-cloud kernel (flag on): precompute each wedge's element-common compensation cloud via
-	// the SAME helper the inline path uses -> wedge fast path == inline path.
-	if(g_yano_pyramid_cloud && m_wedgeCloudN > 0)
-	{
-		for(int w = 0; w < nWedge; w++)
-		{
-			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[m_wedgeElemIndices[w]]);
-			if(!poly || poly->AmOfFaces != 5) continue;
-			TVector3d cpts[64];
-			double cwts[64];
-			int nc = poly->MscCompensationCloud(cpts, cwts, m_wedgeCloudN);
-			for(int k = 0; k < nc; k++)
-			{
-				size_t b = (size_t)w * m_wedgeCloudN + k;
-				m_wedgeCloudPts[b*3+0] = cpts[k].x;
-				m_wedgeCloudPts[b*3+1] = cpts[k].y;
-				m_wedgeCloudPts[b*3+2] = cpts[k].z;
-				m_wedgeCloudWts[b] = cwts[k];
-			}
-		}
-	}
 
 	m_wedgeGeomReady = true;
 }
 
-//=========================================================================
-// Compute5x5BlockFast: Fast 5x5 interaction block for wedges (MSC)
-// Same pattern as Compute6x6BlockFast: Yano eval points,
-// face-triangle decomposition, IMA inline with scalar sign.
-//=========================================================================
-
-void radTInteraction::Compute5x5BlockFast(int wedge_i, int wedge_j, double* K_mat) const
-{
-	std::memset(K_mat, 0, 25 * sizeof(double));
-	if(!m_wedgeGeomReady) return;
-
-	int nWedge = (int)m_wedgeElemIndices.size();
-	if(wedge_i < 0 || wedge_i >= nWedge || wedge_j < 0 || wedge_j >= nWedge) return;
-
-	const double src_center[3] = {m_wedgeCenters[wedge_j*3+0],
-	                               m_wedgeCenters[wedge_j*3+1],
-	                               m_wedgeCenters[wedge_j*3+2]};
-
-	for(int fi = 0; fi < 5; fi++)
-	{
-		int epIdx = (wedge_i*5+fi)*3;
-		const double obs[3] = {m_wedgeEvalPoints[epIdx+0], m_wedgeEvalPoints[epIdx+1], m_wedgeEvalPoints[epIdx+2]};
-		int fnIdx_i = (wedge_i*5+fi)*3;
-		const double n_i[3] = {m_wedgeFaceNormals[fnIdx_i+0], m_wedgeFaceNormals[fnIdx_i+1], m_wedgeFaceNormals[fnIdx_i+2]};
-
-		for(int fj = 0; fj < 5; fj++)
-		{
-			double H_total[3] = {0,0,0};
-
-			// Original source: triangles of face fj
-			int triOff = m_wedgeTriOffset[wedge_j*5+fj];
-			int numTris = m_wedgeFaceNumTris[wedge_j*5+fj];
-			for(int t = 0; t < numTris; t++)
-			{
-				int tvIdx = (wedge_j*WEDGE_MAX_TRIS + triOff + t) * 3 * 3;
-				const double* V0 = &m_wedgeTriVertices[tvIdx+0];
-				const double* V1 = &m_wedgeTriVertices[tvIdx+3];
-				const double* V2 = &m_wedgeTriVertices[tvIdx+6];
-				double sign_tri = m_wedgeTriSigns[wedge_j*WEDGE_MAX_TRIS + triOff + t];
-				double H_tri[3];
-				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign_tri, H_tri);
-				H_total[0] += H_tri[0]; H_total[1] += H_tri[1]; H_total[2] += H_tri[2];
-			}
-
-			// Compensation: single point charge (flag off) or the precomputed element-common cloud (flag on).
-			double area_j = m_wedgeFaceAreas[wedge_j*5+fj];
-			if(g_yano_pyramid_cloud && m_wedgeCloudN > 0)
-			{
-				const double* cp = &m_wedgeCloudPts[(size_t)wedge_j * m_wedgeCloudN * 3];
-				const double* cw = &m_wedgeCloudWts[(size_t)wedge_j * m_wedgeCloudN];
-				double Hc[3] = {0.0, 0.0, 0.0};
-				for(int k = 0; k < m_wedgeCloudN; k++)
-				{
-					double wk = cw[k];
-					if(wk == 0.0) continue;
-					double r[3] = {obs[0]-cp[k*3+0], obs[1]-cp[k*3+1], obs[2]-cp[k*3+2]};
-					double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-					if(d2 > 1e-30) { double cf = wk/(sqrt(d2)*d2); Hc[0]+=cf*r[0]; Hc[1]+=cf*r[1]; Hc[2]+=cf*r[2]; }
-				}
-				H_total[0] += -area_j*Hc[0]; H_total[1] += -area_j*Hc[1]; H_total[2] += -area_j*Hc[2];
-			}
-			else
-			{
-				double r[3] = {obs[0]-src_center[0], obs[1]-src_center[1], obs[2]-src_center[2]};
-				double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-				if(d2 > 1e-30) {
-					double id3 = 1.0 / (sqrt(d2)*d2);
-					double c = -area_j * id3;
-					H_total[0] += c*r[0]; H_total[1] += c*r[1]; H_total[2] += c*r[2];
-				}
-			}
-
-			// IMA: mirrored source contributions (scalar sign, same as hex)
-			if(m_imaEnabled)
-			{
-				auto addMirrorWedge = [&](int mirrorAxis, int sign) {
-					double imaSign = (double)sign;
-					double mir_center[3] = {src_center[0], src_center[1], src_center[2]};
-					if(mirrorAxis & IMA_X) mir_center[0] = -mir_center[0];
-					if(mirrorAxis & IMA_Y) mir_center[1] = -mir_center[1];
-					if(mirrorAxis & IMA_Z) mir_center[2] = -mir_center[2];
-
-					int numMir = 0;
-					if(mirrorAxis & IMA_X) numMir++;
-					if(mirrorAxis & IMA_Y) numMir++;
-					if(mirrorAxis & IMA_Z) numMir++;
-					bool flipW = (numMir % 2 == 1);
-
-					for(int t = 0; t < numTris; t++)
-					{
-						int tvIdx = (wedge_j*WEDGE_MAX_TRIS + triOff + t) * 3 * 3;
-						double V0[3] = {m_wedgeTriVertices[tvIdx+0], m_wedgeTriVertices[tvIdx+1], m_wedgeTriVertices[tvIdx+2]};
-						double V1[3] = {m_wedgeTriVertices[tvIdx+3], m_wedgeTriVertices[tvIdx+4], m_wedgeTriVertices[tvIdx+5]};
-						double V2[3] = {m_wedgeTriVertices[tvIdx+6], m_wedgeTriVertices[tvIdx+7], m_wedgeTriVertices[tvIdx+8]};
-						if(mirrorAxis & IMA_X) { V0[0]=-V0[0]; V1[0]=-V1[0]; V2[0]=-V2[0]; }
-						if(mirrorAxis & IMA_Y) { V0[1]=-V0[1]; V1[1]=-V1[1]; V2[1]=-V2[1]; }
-						if(mirrorAxis & IMA_Z) { V0[2]=-V0[2]; V1[2]=-V1[2]; V2[2]=-V2[2]; }
-						if(flipW) { for(int k=0;k<3;k++) std::swap(V1[k],V2[k]); }
-
-						double st = m_wedgeTriSigns[wedge_j*WEDGE_MAX_TRIS + triOff + t];
-						double H_tri[3];
-						FieldFromChargedTriangleLocal(obs, V0, V1, V2, st, H_tri);
-						H_total[0] += imaSign*H_tri[0]; H_total[1] += imaSign*H_tri[1]; H_total[2] += imaSign*H_tri[2];
-					}
-
-					// Mirrored compensation: single mirrored point (flag off) or the mirrored cloud (flag on).
-					if(g_yano_pyramid_cloud && m_wedgeCloudN > 0)
-					{
-						const double* cp = &m_wedgeCloudPts[(size_t)wedge_j * m_wedgeCloudN * 3];
-						const double* cw = &m_wedgeCloudWts[(size_t)wedge_j * m_wedgeCloudN];
-						double Hc[3] = {0.0, 0.0, 0.0};
-						for(int k = 0; k < m_wedgeCloudN; k++)
-						{
-							double wk = cw[k];
-							if(wk == 0.0) continue;
-							double p[3] = {cp[k*3+0], cp[k*3+1], cp[k*3+2]};
-							if(mirrorAxis & IMA_X) p[0] = -p[0];
-							if(mirrorAxis & IMA_Y) p[1] = -p[1];
-							if(mirrorAxis & IMA_Z) p[2] = -p[2];
-							double r[3] = {obs[0]-p[0], obs[1]-p[1], obs[2]-p[2]};
-							double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-							if(d2 > 1e-30) { double cf = wk/(sqrt(d2)*d2); Hc[0]+=cf*r[0]; Hc[1]+=cf*r[1]; Hc[2]+=cf*r[2]; }
-						}
-						double s = -area_j * imaSign;
-						H_total[0] += s*Hc[0]; H_total[1] += s*Hc[1]; H_total[2] += s*Hc[2];
-					}
-					else
-					{
-						double r[3] = {obs[0]-mir_center[0], obs[1]-mir_center[1], obs[2]-mir_center[2]};
-						double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-						if(d2 > 1e-30) {
-							double id3 = 1.0/(sqrt(d2)*d2);
-							double c = -area_j * id3 * imaSign;
-							H_total[0] += c*r[0]; H_total[1] += c*r[1]; H_total[2] += c*r[2];
-						}
-					}
-				};
-
-				bool hasX = (m_imaSymmetry & IMA_X) != 0;
-				bool hasY = (m_imaSymmetry & IMA_Y) != 0;
-				bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
-				if(hasX) addMirrorWedge(IMA_X, m_imaSignX);
-				if(hasY) addMirrorWedge(IMA_Y, m_imaSignY);
-				if(hasZ) addMirrorWedge(IMA_Z, m_imaSignZ);
-				if(hasX && hasY) addMirrorWedge(IMA_XY, m_imaSignX*m_imaSignY);
-				if(hasX && hasZ) addMirrorWedge(IMA_XZ, m_imaSignX*m_imaSignZ);
-				if(hasY && hasZ) addMirrorWedge(IMA_YZ, m_imaSignY*m_imaSignZ);
-				if(hasX && hasY && hasZ) addMirrorWedge(IMA_XYZ, m_imaSignX*m_imaSignY*m_imaSignZ);
-			}
-
-			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2]) * RadConst::INV_FOUR_PI;
-			K_mat[fi*5+fj] = K_ij;
-		}
-	}
-}
-
-//=========================================================================
-// Compute6x6BlockFast: Fast 6x6 interaction block for hexahedra
-// Uses pre-computed geometry (avoiding FieldFromQuadFace overhead)
-// Reference: Yano MSC method
-//
-// When IMA is enabled (m_imaEnabled=true), this function computes:
-//   K[i,j] = field at target i from original source j + field from mirrored source j
-// This is the kernel-based IMA approach (user suggestion 2026-01-31):
-// - Mirroring is done directly in the kernel, not via virtual elements/DOFs
-// - No permutation arrays needed - coordinates are mirrored directly
-// - HACApK compatible - kernel returns correct IMA value directly
-//=========================================================================
-
-void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const
-{
-	std::memset(K_mat, 0, 36 * sizeof(double));
-
-	if(!m_hexaGeomReady) return;
-
-	int nHex = (int)m_hexaElemIndices.size();
-	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
-
-	// Source element center (for point charge)
-	const double src_center_orig[3] = {m_hexaCenters[hex_j * 3 + 0],
-	                                   m_hexaCenters[hex_j * 3 + 1],
-	                                   m_hexaCenters[hex_j * 3 + 2]};
-
-	// Check if pre-computed triangle data is available
-	const bool usePrecomputed = m_hexaTriDataReady;
-
-	// For each target face i
-	for(int face_i = 0; face_i < 6; face_i++)
-	{
-		// Yano evaluation point for target face
-		int epIdx = (hex_i * 6 + face_i) * 3;
-		const double obs[3] = {m_hexaEvalPoints[epIdx + 0],
-		                       m_hexaEvalPoints[epIdx + 1],
-		                       m_hexaEvalPoints[epIdx + 2]};
-
-		// Target face normal
-		int fnIdx_i = (hex_i * 6 + face_i) * 3;
-		const double n_i[3] = {m_hexaFaceNormals[fnIdx_i + 0],
-		                       m_hexaFaceNormals[fnIdx_i + 1],
-		                       m_hexaFaceNormals[fnIdx_i + 2]};
-
-		// For each source face j
-		for(int face_j = 0; face_j < 6; face_j++)
-		{
-			// Field from unit sigma on source face j
-			double H_total[3] = {0.0, 0.0, 0.0};
-
-			// =========== Original source contribution ===========
-			// Sum contributions from 2 triangles of face j
-			for(int t = 0; t < 2; t++)
-			{
-				double H_tri[3];
-
-				if(usePrecomputed)
-				{
-					// Use pre-computed triangle data (fast path)
-					int tri_idx = face_j * 2 + t;
-					FieldFromTrianglePrecomputed(hex_j, tri_idx, obs, 1.0, H_tri);
-				}
-				else
-				{
-					// Fallback: compute on the fly
-					int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
-					const double* V0 = &m_hexaTriVertices[tvIdx + 0];
-					const double* V1 = &m_hexaTriVertices[tvIdx + 3];
-					const double* V2 = &m_hexaTriVertices[tvIdx + 6];
-					double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
-					FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
-				}
-
-				H_total[0] += H_tri[0];
-				H_total[1] += H_tri[1];
-				H_total[2] += H_tri[2];
-			}
-
-			// Compensation: single point charge -area at the element center (flag off, historical) or the
-			// precomputed element-common cloud (flag on; same normalised cloud the inline path uses).
-			// g_yano_no_center_charge (research): skip the cancellation charge entirely (raw collocation).
-			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
-			if(g_yano_no_center_charge)
-			{
-				// raw: bare face charge only, no cancellation
-			}
-			else if(g_yano_pyramid_cloud && m_hexaCloudN > 0)
-			{
-				const double* cp = &m_hexaCloudPts[(size_t)hex_j * m_hexaCloudN * 3];
-				const double* cw = &m_hexaCloudWts[(size_t)hex_j * m_hexaCloudN];
-				double Hc[3] = {0.0, 0.0, 0.0};
-				for(int k = 0; k < m_hexaCloudN; k++)
-				{
-					double w = cw[k];
-					if(w == 0.0) continue;
-					double r[3] = {obs[0] - cp[k*3+0], obs[1] - cp[k*3+1], obs[2] - cp[k*3+2]};
-					double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-					if(dist_sq > 1e-30)
-					{
-						double dist = sqrt(dist_sq);
-						double cf = w / (dist * dist_sq);
-						Hc[0] += cf * r[0]; Hc[1] += cf * r[1]; Hc[2] += cf * r[2];
-					}
-				}
-				H_total[0] += -area_j * Hc[0];
-				H_total[1] += -area_j * Hc[1];
-				H_total[2] += -area_j * Hc[2];
-			}
-			else
-			{
-				double r[3] = {obs[0] - src_center_orig[0],
-				               obs[1] - src_center_orig[1],
-				               obs[2] - src_center_orig[2]};
-				double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-
-				if(dist_sq > 1e-30)
-				{
-					double dist = sqrt(dist_sq);
-					double inv_dist3 = 1.0 / (dist * dist_sq);
-					double coef = -area_j * inv_dist3;
-					H_total[0] += coef * r[0];
-					H_total[1] += coef * r[1];
-					H_total[2] += coef * r[2];
-				}
-			}
-
-			// =========== IMA: Mirrored source contributions ===========
-			// Kernel-based IMA: compute field from mirrored source coordinates directly
-			// This avoids virtual elements/DOFs and permutation arrays
-			if(m_imaEnabled)
-			{
-				// Helper lambda: add field contribution from mirrored source
-				auto addMirroredSourceContribution = [&](int mirrorAxis, int sign) {
-					// Mirror sign: +1 for symmetric BC, -1 for antisymmetric BC
-					double imaSign = (double)sign;
-
-					// Mirrored source center
-					double src_mirror[3] = {src_center_orig[0], src_center_orig[1], src_center_orig[2]};
-					if(mirrorAxis & IMA_X) src_mirror[0] = -src_mirror[0];
-					if(mirrorAxis & IMA_Y) src_mirror[1] = -src_mirror[1];
-					if(mirrorAxis & IMA_Z) src_mirror[2] = -src_mirror[2];
-
-					// Count number of mirror axes for winding correction
-					int numMirrors = 0;
-					if(mirrorAxis & IMA_X) numMirrors++;
-					if(mirrorAxis & IMA_Y) numMirrors++;
-					if(mirrorAxis & IMA_Z) numMirrors++;
-					bool flipWinding = (numMirrors % 2 == 1);
-
-					// Field from mirrored triangles
-					for(int t = 0; t < 2; t++)
-					{
-						int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
-						double V0[3] = {m_hexaTriVertices[tvIdx + 0],
-						                m_hexaTriVertices[tvIdx + 1],
-						                m_hexaTriVertices[tvIdx + 2]};
-						double V1[3] = {m_hexaTriVertices[tvIdx + 3],
-						                m_hexaTriVertices[tvIdx + 4],
-						                m_hexaTriVertices[tvIdx + 5]};
-						double V2[3] = {m_hexaTriVertices[tvIdx + 6],
-						                m_hexaTriVertices[tvIdx + 7],
-						                m_hexaTriVertices[tvIdx + 8]};
-
-						// Mirror vertices
-						if(mirrorAxis & IMA_X) { V0[0] = -V0[0]; V1[0] = -V1[0]; V2[0] = -V2[0]; }
-						if(mirrorAxis & IMA_Y) { V0[1] = -V0[1]; V1[1] = -V1[1]; V2[1] = -V2[1]; }
-						if(mirrorAxis & IMA_Z) { V0[2] = -V0[2]; V1[2] = -V1[2]; V2[2] = -V2[2]; }
-
-						// Swap V1/V2 to restore winding if odd number of mirrors
-						if(flipWinding) {
-							std::swap(V1[0], V2[0]);
-							std::swap(V1[1], V2[1]);
-							std::swap(V1[2], V2[2]);
-						}
-
-						double sign_tri = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
-						double H_tri[3];
-						FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign_tri, H_tri);
-
-						H_total[0] += imaSign * H_tri[0];
-						H_total[1] += imaSign * H_tri[1];
-						H_total[2] += imaSign * H_tri[2];
-					}
-
-					// Mirrored compensation: single point charge at the mirrored center (flag off) or the
-					// mirrored element-common cloud (flag on -- mirror each precomputed cloud point).
-					if(g_yano_pyramid_cloud && m_hexaCloudN > 0)
-					{
-						const double* cp = &m_hexaCloudPts[(size_t)hex_j * m_hexaCloudN * 3];
-						const double* cw = &m_hexaCloudWts[(size_t)hex_j * m_hexaCloudN];
-						double Hc[3] = {0.0, 0.0, 0.0};
-						for(int k = 0; k < m_hexaCloudN; k++)
-						{
-							double w = cw[k];
-							if(w == 0.0) continue;
-							double p[3] = {cp[k*3+0], cp[k*3+1], cp[k*3+2]};
-							if(mirrorAxis & IMA_X) p[0] = -p[0];
-							if(mirrorAxis & IMA_Y) p[1] = -p[1];
-							if(mirrorAxis & IMA_Z) p[2] = -p[2];
-							double r[3] = {obs[0]-p[0], obs[1]-p[1], obs[2]-p[2]};
-							double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-							if(dist_sq > 1e-30)
-							{
-								double dist = sqrt(dist_sq);
-								double cf = w / (dist * dist_sq);
-								Hc[0] += cf*r[0]; Hc[1] += cf*r[1]; Hc[2] += cf*r[2];
-							}
-						}
-						double s = -area_j * imaSign;
-						H_total[0] += s*Hc[0]; H_total[1] += s*Hc[1]; H_total[2] += s*Hc[2];
-					}
-					else
-					{
-						double r[3] = {obs[0] - src_mirror[0],
-						               obs[1] - src_mirror[1],
-						               obs[2] - src_mirror[2]};
-						double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-
-						if(dist_sq > 1e-30)
-						{
-							double dist = sqrt(dist_sq);
-							double inv_dist3 = 1.0 / (dist * dist_sq);
-							double coef = -area_j * inv_dist3 * imaSign;
-							H_total[0] += coef * r[0];
-							H_total[1] += coef * r[1];
-							H_total[2] += coef * r[2];
-						}
-					}
-				};
-
-				// Add contributions based on active symmetry axes
-				bool hasX = (m_imaSymmetry & IMA_X) != 0;
-				bool hasY = (m_imaSymmetry & IMA_Y) != 0;
-				bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
-
-				// Single axis mirrors
-				if(hasX) addMirroredSourceContribution(IMA_X, m_imaSignX);
-				if(hasY) addMirroredSourceContribution(IMA_Y, m_imaSignY);
-				if(hasZ) addMirroredSourceContribution(IMA_Z, m_imaSignZ);
-
-				// Dual axis mirrors (for quarter models)
-				if(hasX && hasY) addMirroredSourceContribution(IMA_XY, m_imaSignX * m_imaSignY);
-				if(hasX && hasZ) addMirroredSourceContribution(IMA_XZ, m_imaSignX * m_imaSignZ);
-				if(hasY && hasZ) addMirroredSourceContribution(IMA_YZ, m_imaSignY * m_imaSignZ);
-
-				// Triple axis mirror (for eighth models)
-				if(hasX && hasY && hasZ) addMirroredSourceContribution(IMA_XYZ, m_imaSignX * m_imaSignY * m_imaSignZ);
-			}
-
-			// K_ij = n_i dot H_total / (4*pi)
-			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
-			              * RadConst::INV_FOUR_PI;
-
-			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
-			// The solver will negate when building system matrix
-			K_mat[face_i * 6 + face_j] = K_ij;
-		}
-	}
-}
-
-//-------------------------------------------------------------------------
-// IMA (Image) Symmetry Implementation
-// Reference: IMA approach - matrix construction with image summation
-//-------------------------------------------------------------------------
-
-//=========================================================================
-// ComputeMixedBlockFast: Unified cross-DOF interaction block computation
-// Handles ALL element type pairs: 3x3, 3x5, 3x6, 5x3, 5x5, 5x6, 6x3, 6x5, 6x6
-//
-// Row element (target): observation points from precomputed geometry
-//   3DOF (tet): obs = element center, result = H components directly
-//   5DOF (wedge): obs = Yano midpoint per face, result = n_i dot H
-//   6DOF (hex): obs = Yano midpoint per face, result = n_i dot H
-//
-// Col element (source): field from precomputed triangles + point charge
-//   3DOF (tet): for each unit M_beta, sigma = n_f dot e_beta
-//   5DOF (wedge): sigma on source face (1-2 triangles per face)
-//   6DOF (hex): sigma on source face (2 triangles per face)
-//
-// IMA: MSC source -> scalar sign, MMM source -> component sign matrix S[beta]
-//=========================================================================
-
-void radTInteraction::ComputeMixedBlockFast(
-	int elem_row, int dof_row, int elem_col, int dof_col,
-	double* block_out) const
-{
-	std::memset(block_out, 0, dof_row * dof_col * sizeof(double));
-
-	// Helper: convert global element index to type-specific index
-	// O(1) reverse lookup via m_globalToHexIdx / m_globalToWedgeIdx / m_globalToTetraIdx
-	// (built in PrecomputeHexaGeometry / PrecomputeWedgeGeometry / PrecomputeTetraGeometry).
-	auto globalToHexIdx = [&](int globalIdx) -> int {
-		if(globalIdx < 0 || globalIdx >= (int)m_globalToHexIdx.size()) return -1;
-		return m_globalToHexIdx[globalIdx];
-	};
-	auto globalToWedgeIdx = [&](int globalIdx) -> int {
-		if(globalIdx < 0 || globalIdx >= (int)m_globalToWedgeIdx.size()) return -1;
-		return m_globalToWedgeIdx[globalIdx];
-	};
-	auto globalToTetIdx = [&](int globalIdx) -> int {
-		if(globalIdx < 0 || globalIdx >= (int)m_globalToTetraIdx.size()) return -1;
-		return m_globalToTetraIdx[globalIdx];
-	};
-
-	// Get type-specific indices
-	int hex_row = -1, wedge_row = -1, hex_col = -1, wedge_col = -1;
-	int tet_row = -1, tet_col = -1;
-	if(dof_row == 6) hex_row = globalToHexIdx(elem_row);
-	else if(dof_row == 5) wedge_row = globalToWedgeIdx(elem_row);
-	else if(dof_row == 3) tet_row = globalToTetIdx(elem_row);
-	if(dof_col == 6) hex_col = globalToHexIdx(elem_col);
-	else if(dof_col == 5) wedge_col = globalToWedgeIdx(elem_col);
-	else if(dof_col == 3) tet_col = globalToTetIdx(elem_col);
-
-	// Helper: compute H field at obs from MSC source face (scalar sigma = 1)
-	// Returns H without 4pi factor. Includes IMA mirror contributions.
-	auto fieldFromMSCSourceFace = [&](const double* obs, int src_elem_type, int src_elem_idx, int src_face,
-	                                   double* H_out) {
-		H_out[0] = H_out[1] = H_out[2] = 0.0;
-		double src_center[3];
-		int triOff, numTris;
-		const double* triVerts;
-		const double* triSigns;
-		double faceArea;
-		int maxTris;
-		const double* cloudPts = nullptr;   // pyramid-cloud compensation (flag on); nullptr/0 -> single point
-		const double* cloudWts = nullptr;
-		int cloudN = 0;
-
-		if(src_elem_type == 6 && m_hexaGeomReady) {
-			src_center[0] = m_hexaCenters[src_elem_idx*3+0];
-			src_center[1] = m_hexaCenters[src_elem_idx*3+1];
-			src_center[2] = m_hexaCenters[src_elem_idx*3+2];
-			triOff = (src_elem_idx * 6 + src_face) * 2;
-			numTris = 2;
-			triVerts = &m_hexaTriVertices[triOff * 3 * 3];
-			triSigns = &m_hexaTriSigns[triOff];
-			faceArea = m_hexaFaceAreas[src_elem_idx*6 + src_face];
-			maxTris = 2;
-			if(g_yano_pyramid_cloud && m_hexaCloudN > 0) {
-				cloudPts = &m_hexaCloudPts[(size_t)src_elem_idx*m_hexaCloudN*3];
-				cloudWts = &m_hexaCloudWts[(size_t)src_elem_idx*m_hexaCloudN]; cloudN = m_hexaCloudN; }
-		} else if(src_elem_type == 5 && m_wedgeGeomReady) {
-			src_center[0] = m_wedgeCenters[src_elem_idx*3+0];
-			src_center[1] = m_wedgeCenters[src_elem_idx*3+1];
-			src_center[2] = m_wedgeCenters[src_elem_idx*3+2];
-			int off = m_wedgeTriOffset[src_elem_idx*5 + src_face];
-			numTris = m_wedgeFaceNumTris[src_elem_idx*5 + src_face];
-			triVerts = &m_wedgeTriVertices[(src_elem_idx*WEDGE_MAX_TRIS + off) * 3 * 3];
-			triSigns = &m_wedgeTriSigns[src_elem_idx*WEDGE_MAX_TRIS + off];
-			faceArea = m_wedgeFaceAreas[src_elem_idx*5 + src_face];
-			maxTris = numTris;
-			if(g_yano_pyramid_cloud && m_wedgeCloudN > 0) {
-				cloudPts = &m_wedgeCloudPts[(size_t)src_elem_idx*m_wedgeCloudN*3];
-				cloudWts = &m_wedgeCloudWts[(size_t)src_elem_idx*m_wedgeCloudN]; cloudN = m_wedgeCloudN; }
-		} else return;
-
-		// Direct contribution
-		for(int t = 0; t < numTris; t++) {
-			const double* V0 = &triVerts[t*9+0];
-			const double* V1 = &triVerts[t*9+3];
-			const double* V2 = &triVerts[t*9+6];
-			double H_tri[3];
-			FieldFromChargedTriangleLocal(obs, V0, V1, V2, triSigns[t], H_tri);
-			H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
-		}
-		// Compensation: single point charge (flag off) or the precomputed element-common cloud (flag on).
-		if(cloudN > 0) {
-			double Hc[3] = {0,0,0};
-			for(int k = 0; k < cloudN; k++) { double wk = cloudWts[k]; if(wk == 0.0) continue;
-				double r[3] = {obs[0]-cloudPts[k*3+0], obs[1]-cloudPts[k*3+1], obs[2]-cloudPts[k*3+2]};
-				double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-				if(d2 > 1e-30) { double cf = wk/(sqrt(d2)*d2); Hc[0]+=cf*r[0]; Hc[1]+=cf*r[1]; Hc[2]+=cf*r[2]; } }
-			H_out[0]+=-faceArea*Hc[0]; H_out[1]+=-faceArea*Hc[1]; H_out[2]+=-faceArea*Hc[2];
-		} else {
-			double r[3] = {obs[0]-src_center[0], obs[1]-src_center[1], obs[2]-src_center[2]};
-			double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-			if(d2 > 1e-30) { double id3=1.0/(sqrt(d2)*d2); double c=-faceArea*id3;
-				H_out[0]+=c*r[0]; H_out[1]+=c*r[1]; H_out[2]+=c*r[2]; }
-		}
-
-		// IMA mirrors
-		if(m_imaEnabled) {
-			auto addMir = [&](int mirrorAxis, int sign) {
-				double imaSign = (double)sign;
-				double mc[3] = {src_center[0], src_center[1], src_center[2]};
-				if(mirrorAxis & IMA_X) mc[0]=-mc[0];
-				if(mirrorAxis & IMA_Y) mc[1]=-mc[1];
-				if(mirrorAxis & IMA_Z) mc[2]=-mc[2];
-				int nm=0; if(mirrorAxis&IMA_X) nm++; if(mirrorAxis&IMA_Y) nm++; if(mirrorAxis&IMA_Z) nm++;
-				bool fw = (nm%2==1);
-				for(int t=0;t<numTris;t++) {
-					double V0[3]={triVerts[t*9+0],triVerts[t*9+1],triVerts[t*9+2]};
-					double V1[3]={triVerts[t*9+3],triVerts[t*9+4],triVerts[t*9+5]};
-					double V2[3]={triVerts[t*9+6],triVerts[t*9+7],triVerts[t*9+8]};
-					if(mirrorAxis&IMA_X){V0[0]=-V0[0];V1[0]=-V1[0];V2[0]=-V2[0];}
-					if(mirrorAxis&IMA_Y){V0[1]=-V0[1];V1[1]=-V1[1];V2[1]=-V2[1];}
-					if(mirrorAxis&IMA_Z){V0[2]=-V0[2];V1[2]=-V1[2];V2[2]=-V2[2];}
-					if(fw) for(int k=0;k<3;k++) std::swap(V1[k],V2[k]);
-					double H_tri[3]; FieldFromChargedTriangleLocal(obs, V0, V1, V2, triSigns[t], H_tri);
-					H_out[0]+=imaSign*H_tri[0]; H_out[1]+=imaSign*H_tri[1]; H_out[2]+=imaSign*H_tri[2];
-				}
-				// Mirrored compensation: single mirrored point (flag off) or the mirrored cloud (flag on).
-				if(cloudN > 0) {
-					double Hc[3]={0,0,0};
-					for(int k=0;k<cloudN;k++){ double wk=cloudWts[k]; if(wk==0.0) continue;
-						double p[3]={cloudPts[k*3+0],cloudPts[k*3+1],cloudPts[k*3+2]};
-						if(mirrorAxis&IMA_X)p[0]=-p[0]; if(mirrorAxis&IMA_Y)p[1]=-p[1]; if(mirrorAxis&IMA_Z)p[2]=-p[2];
-						double r[3]={obs[0]-p[0],obs[1]-p[1],obs[2]-p[2]};
-						double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-						if(d2>1e-30){double cf=wk/(sqrt(d2)*d2);Hc[0]+=cf*r[0];Hc[1]+=cf*r[1];Hc[2]+=cf*r[2];} }
-					double s=-faceArea*imaSign; H_out[0]+=s*Hc[0]; H_out[1]+=s*Hc[1]; H_out[2]+=s*Hc[2];
-				} else {
-					double r[3]={obs[0]-mc[0],obs[1]-mc[1],obs[2]-mc[2]};
-					double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-					if(d2>1e-30){double id3=1.0/(sqrt(d2)*d2);double c=-faceArea*id3*imaSign;
-						H_out[0]+=c*r[0];H_out[1]+=c*r[1];H_out[2]+=c*r[2];}
-				}
-			};
-			bool hX=(m_imaSymmetry&IMA_X)!=0, hY=(m_imaSymmetry&IMA_Y)!=0, hZ=(m_imaSymmetry&IMA_Z)!=0;
-			if(hX) addMir(IMA_X,m_imaSignX); if(hY) addMir(IMA_Y,m_imaSignY); if(hZ) addMir(IMA_Z,m_imaSignZ);
-			if(hX&&hY) addMir(IMA_XY,m_imaSignX*m_imaSignY);
-			if(hX&&hZ) addMir(IMA_XZ,m_imaSignX*m_imaSignZ);
-			if(hY&&hZ) addMir(IMA_YZ,m_imaSignY*m_imaSignZ);
-			if(hX&&hY&&hZ) addMir(IMA_XYZ,m_imaSignX*m_imaSignY*m_imaSignZ);
-		}
-	};
-
-	// --- Case 1: MSC row x MSC col (5x5, 5x6, 6x5, 6x6) ---
-	if(dof_row >= 5 && dof_col >= 5)
-	{
-		for(int fi = 0; fi < dof_row; fi++) {
-			double obs[3], n_i[3];
-			if(dof_row == 6 && m_hexaGeomReady && hex_row >= 0) {
-				int ep=(hex_row*6+fi)*3; obs[0]=m_hexaEvalPoints[ep]; obs[1]=m_hexaEvalPoints[ep+1]; obs[2]=m_hexaEvalPoints[ep+2];
-				int fn=(hex_row*6+fi)*3; n_i[0]=m_hexaFaceNormals[fn]; n_i[1]=m_hexaFaceNormals[fn+1]; n_i[2]=m_hexaFaceNormals[fn+2];
-			} else if(dof_row == 5 && m_wedgeGeomReady && wedge_row >= 0) {
-				int ep=(wedge_row*5+fi)*3; obs[0]=m_wedgeEvalPoints[ep]; obs[1]=m_wedgeEvalPoints[ep+1]; obs[2]=m_wedgeEvalPoints[ep+2];
-				int fn=(wedge_row*5+fi)*3; n_i[0]=m_wedgeFaceNormals[fn]; n_i[1]=m_wedgeFaceNormals[fn+1]; n_i[2]=m_wedgeFaceNormals[fn+2];
-			} else continue;
-
-			int col_idx = (dof_col == 6) ? hex_col : wedge_col;
-			for(int fj = 0; fj < dof_col; fj++) {
-				double H[3];
-				fieldFromMSCSourceFace(obs, dof_col, col_idx, fj, H);
-				block_out[fi * dof_col + fj] = (n_i[0]*H[0]+n_i[1]*H[1]+n_i[2]*H[2]) * RadConst::INV_FOUR_PI;
-			}
-		}
-		return;
-	}
-
-	// --- Case 2: MMM row (3DOF) x MSC col (5/6DOF) ---
-	if(dof_row == 3 && dof_col >= 5)
-	{
-		if(!m_tetraGeomReady || tet_row < 0) return;
-		const double* obs = &m_tetraCenters[tet_row * 3];
-		int col_idx = (dof_col == 6) ? hex_col : wedge_col;
-		for(int fj = 0; fj < dof_col; fj++) {
-			double H[3];
-			fieldFromMSCSourceFace(obs, dof_col, col_idx, fj, H);
-			// N[alpha][fj] = H_alpha (directly, no n_i projection)
-			for(int a = 0; a < 3; a++)
-				block_out[a * dof_col + fj] = H[a] * RadConst::INV_FOUR_PI;
-		}
-		return;
-	}
-
-	// --- Case 3: MSC row (5/6DOF) x MMM col (3DOF) ---
-	if(dof_row >= 5 && dof_col == 3)
-	{
-		// For each target face i, for each unit M_beta:
-		// Compute sigma=n_f dot e_beta on each source tet face, field at obs, dot n_i
-		if(!m_tetraGeomReady || tet_col < 0) return;
-		const double* col_center = &m_tetraCenters[tet_col * 3];
-
-		for(int fi = 0; fi < dof_row; fi++) {
-			double obs[3], n_i[3];
-			if(dof_row == 6 && m_hexaGeomReady && hex_row >= 0) {
-				int ep=(hex_row*6+fi)*3; obs[0]=m_hexaEvalPoints[ep]; obs[1]=m_hexaEvalPoints[ep+1]; obs[2]=m_hexaEvalPoints[ep+2];
-				int fn=(hex_row*6+fi)*3; n_i[0]=m_hexaFaceNormals[fn]; n_i[1]=m_hexaFaceNormals[fn+1]; n_i[2]=m_hexaFaceNormals[fn+2];
-			} else if(dof_row == 5 && m_wedgeGeomReady && wedge_row >= 0) {
-				int ep=(wedge_row*5+fi)*3; obs[0]=m_wedgeEvalPoints[ep]; obs[1]=m_wedgeEvalPoints[ep+1]; obs[2]=m_wedgeEvalPoints[ep+2];
-				int fn=(wedge_row*5+fi)*3; n_i[0]=m_wedgeFaceNormals[fn]; n_i[1]=m_wedgeFaceNormals[fn+1]; n_i[2]=m_wedgeFaceNormals[fn+2];
-			} else continue;
-
-			// Compute H at obs for each unit M_beta from tet source
-			for(int beta = 0; beta < 3; beta++) {
-				double H_total[3] = {0,0,0};
-				double total_charge = 0;
-				for(int f = 0; f < 4; f++) {
-					int fvIdx = (tet_col*4+f)*3*3;
-					const double* V0=&m_tetraFaceVertices[fvIdx]; const double* V1=&m_tetraFaceVertices[fvIdx+3]; const double* V2=&m_tetraFaceVertices[fvIdx+6];
-					double sigma = m_tetraFaceNormals[(tet_col*4+f)*3+beta];
-					total_charge += sigma * m_tetraFaceAreas[tet_col*4+f];
-					if(fabs(sigma) > 1e-20) {
-						double H_f[3]; FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma, H_f);
-						H_total[0]+=H_f[0]; H_total[1]+=H_f[1]; H_total[2]+=H_f[2];
-					}
-				}
-				// Point charge
-				double r[3]={obs[0]-col_center[0],obs[1]-col_center[1],obs[2]-col_center[2]};
-				double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-				if(d2>1e-30){double id3=1.0/(sqrt(d2)*d2);
-					H_total[0]+=-total_charge*r[0]*id3; H_total[1]+=-total_charge*r[1]*id3; H_total[2]+=-total_charge*r[2]*id3;}
-
-				// IMA for MMM source: sign matrix S[beta]
-				if(m_imaEnabled) {
-					auto addMirTet = [&](int mirrorAxis, int combinedSign) {
-						double S_beta = (double)combinedSign;
-						if((mirrorAxis & IMA_X) && beta==0) S_beta = -S_beta;
-						if((mirrorAxis & IMA_Y) && beta==1) S_beta = -S_beta;
-						if((mirrorAxis & IMA_Z) && beta==2) S_beta = -S_beta;
-
-						double mc[3]={col_center[0],col_center[1],col_center[2]};
-						if(mirrorAxis&IMA_X)mc[0]=-mc[0]; if(mirrorAxis&IMA_Y)mc[1]=-mc[1]; if(mirrorAxis&IMA_Z)mc[2]=-mc[2];
-						int nm=0; if(mirrorAxis&IMA_X)nm++; if(mirrorAxis&IMA_Y)nm++; if(mirrorAxis&IMA_Z)nm++;
-						bool fw=(nm%2==1);
-						double mirH[3]={0,0,0}; double mirCharge=0;
-						for(int f=0;f<4;f++){
-							int fvIdx=(tet_col*4+f)*3*3;
-							double V0[3],V1[3],V2[3];
-							for(int k=0;k<3;k++){V0[k]=m_tetraFaceVertices[fvIdx+k];V1[k]=m_tetraFaceVertices[fvIdx+3+k];V2[k]=m_tetraFaceVertices[fvIdx+6+k];}
-							if(mirrorAxis&IMA_X){V0[0]=-V0[0];V1[0]=-V1[0];V2[0]=-V2[0];}
-							if(mirrorAxis&IMA_Y){V0[1]=-V0[1];V1[1]=-V1[1];V2[1]=-V2[1];}
-							if(mirrorAxis&IMA_Z){V0[2]=-V0[2];V1[2]=-V1[2];V2[2]=-V2[2];}
-							if(fw) for(int k=0;k<3;k++) std::swap(V1[k],V2[k]);
-							double e1[3]={V1[0]-V0[0],V1[1]-V0[1],V1[2]-V0[2]};
-							double e2[3]={V2[0]-V0[0],V2[1]-V0[1],V2[2]-V0[2]};
-							double n_f[3]={e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]};
-							double nL=sqrt(n_f[0]*n_f[0]+n_f[1]*n_f[1]+n_f[2]*n_f[2]);
-							double area=0.5*nL; if(nL>1e-20){n_f[0]/=nL;n_f[1]/=nL;n_f[2]/=nL;}
-							double sigma=n_f[beta]; mirCharge+=sigma*area;
-							if(fabs(sigma)>1e-20){double H_f[3];FieldFromChargedTriangleLocal(obs,V0,V1,V2,sigma,H_f);
-								mirH[0]+=H_f[0];mirH[1]+=H_f[1];mirH[2]+=H_f[2];}
-						}
-						double r[3]={obs[0]-mc[0],obs[1]-mc[1],obs[2]-mc[2]};
-						double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
-						if(d2>1e-30){double id3=1.0/(sqrt(d2)*d2);
-							mirH[0]+=-mirCharge*r[0]*id3;mirH[1]+=-mirCharge*r[1]*id3;mirH[2]+=-mirCharge*r[2]*id3;}
-						for(int a=0;a<3;a++) H_total[a]+=S_beta*mirH[a];
-					};
-					bool hX=(m_imaSymmetry&IMA_X)!=0,hY=(m_imaSymmetry&IMA_Y)!=0,hZ=(m_imaSymmetry&IMA_Z)!=0;
-					if(hX) addMirTet(IMA_X,m_imaSignX); if(hY) addMirTet(IMA_Y,m_imaSignY); if(hZ) addMirTet(IMA_Z,m_imaSignZ);
-					if(hX&&hY) addMirTet(IMA_XY,m_imaSignX*m_imaSignY);
-					if(hX&&hZ) addMirTet(IMA_XZ,m_imaSignX*m_imaSignZ);
-					if(hY&&hZ) addMirTet(IMA_YZ,m_imaSignY*m_imaSignZ);
-					if(hX&&hY&&hZ) addMirTet(IMA_XYZ,m_imaSignX*m_imaSignY*m_imaSignZ);
-				}
-
-				block_out[fi * 3 + beta] = (n_i[0]*H_total[0]+n_i[1]*H_total[1]+n_i[2]*H_total[2]) * RadConst::INV_FOUR_PI;
-			}
-		}
-		return;
-	}
-
-	// --- Case 4: MMM row x MMM col (3x3) - delegate to Compute3x3BlockFast ---
-	if(dof_row == 3 && dof_col == 3) {
-		Compute3x3BlockFast(elem_row, elem_col, block_out);
-		return;
-	}
-}
+// EIEM2 surface-charge kernels retired (Phase 3b, live/dead step C): Compute5x5BlockFast (wedge),
+// Compute6x6BlockFast (hex), and ComputeMixedBlockFast (cross-DOF) are deleted -- the moment-yano
+// formulation (BuildMomentSystemCore) is the sole surface-charge demag, and the method-2 HACApK
+// path is MMM-only (3x3) for the remaining tetrahedron solves.
 
 //-------------------------------------------------------------------------
 // SetIMASymmetry: Configure IMA symmetry mode
@@ -4456,430 +3118,15 @@ int radTInteraction::GetMirrorElementIndex(int elemIdx, int symmetryAxis) const
 	return best_match;
 }
 
-// Legacy IMA functions removed (2026-03-31):
-// - ApplyDOFPermutation, ApplyRowPermutation: ELF-style face permutation (replaced by kernel-based IMA)
-// - Compute6x6BlockIMA: used ELF permutations, never called
-// - Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget: helper for Compute6x6BlockIMA
-
-// REMOVED_BLOCK_START (was ApplyDOFPermutation through Compute6x6BlockMirroredTarget)
-#if 0  // Dead code preserved for reference only
-void radTInteraction::ApplyDOFPermutation(const double* input, const int* perm, double* result) const
-{
-	// result = input @ P
-	// P[j][k] = 1 if perm[j] == k, else 0
-	// (input @ P)[i][k] = sum_j input[i][j] * P[j][k] = input[i][perm^-1[k]]
-	//
-	// Alternative interpretation: column j of input goes to column perm[j] of result
-	// result[:, perm[j]] = input[:, j]
-
-	// Initialize result to zero
-	for(int k = 0; k < 36; k++) result[k] = 0.0;
-
-	// For each column j of input, copy to column perm[j] of result
-	for(int j = 0; j < 6; j++)
-	{
-		int k = perm[j];  // column j maps to column k
-		for(int i = 0; i < 6; i++)
-		{
-			// input[i][j] -> result[i][k]
-			result[i * 6 + k] = input[i * 6 + j];
-		}
-	}
-}
+// Legacy ELF face-permutation + IMA-mirror block (ApplyDOFPermutation, ApplyRowPermutation,
+// Compute6x6BlockIMA, Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget) deleted (Phase 3b).
+// It was #if 0 dead code (kernel-based IMA replaced it); the moment-yano path adds IMA mirror
+// images via CentroidFieldGradFromFace.
 
 //-------------------------------------------------------------------------
-// ApplyRowPermutation: Apply row permutation Q to 6x6 block
-// result[i, :] = input[perm[i], :]
-// For ELF IMA: result = Q @ K_BA
-// Q[i] = row index in K_BA that becomes row i in result
-//-------------------------------------------------------------------------
-void radTInteraction::ApplyRowPermutation(const double* input, const int* perm, double* result) const
-{
-	// result = Q @ input
-	// Q[i][k] = 1 if perm[i] == k, else 0
-	// (Q @ input)[i][j] = sum_k Q[i][k] * input[k][j] = input[perm[i]][j]
-
-	// For each row i of result, copy from row perm[i] of input
-	for(int i = 0; i < 6; i++)
-	{
-		int k = perm[i];  // row i comes from row k
-		for(int j = 0; j < 6; j++)
-		{
-			// input[k][j] -> result[i][j]
-			result[i * 6 + j] = input[k * 6 + j];
-		}
-	}
-}
-
-//-------------------------------------------------------------------------
-// Compute6x6BlockIMA: Compute IMA block with image summation (ELF-compatible)
-// ELF formula: K_IMA[i,j] = K[i,j] + sign * Q @ K[mirror(i), j]
-// where K[mirror(i), j] = K_BA (field at mirrored target from original source)
-// For single axis: K_IMA[i,j] = K[i,j] + sign * Q @ K[mirror(i), j]
-// For dual axis (e.g., XZ):
-//   K_IMA[i,j] = K[i,j] + sign_x * K[i, mx(j)] @ Px
-//                       + sign_z * K[i, mz(j)] @ Pz
-//                       + sign_x * sign_z * K[i, mxz(j)] @ Pxz
-// For quarter models: if no physical mirror exists, compute virtual mirror
-//-------------------------------------------------------------------------
-void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) const
-{
-	if(!m_hexaGeomReady)
-	{
-		std::cerr << "[Radia] Error: Hexahedron geometry not precomputed for IMA" << std::endl;
-		for(int k = 0; k < 36; k++) K_ima[k] = 0.0;
-		return;
-	}
-
-	int full_i = m_imaToFull[ima_i];
-	int full_j = m_imaToFull[ima_j];
-
-	// Find hex indices in precomputed arrays via O(1) reverse lookup
-	int hex_i = -1, hex_j = -1;
-	if(full_i >= 0 && full_i < (int)m_globalToHexIdx.size()) hex_i = m_globalToHexIdx[full_i];
-	if(full_j >= 0 && full_j < (int)m_globalToHexIdx.size()) hex_j = m_globalToHexIdx[full_j];
-
-	if(hex_i < 0 || hex_j < 0)
-	{
-		std::cerr << "[Radia] Error: Element not found in hex arrays" << std::endl;
-		for(int k = 0; k < 36; k++) K_ima[k] = 0.0;
-		return;
-	}
-
-	// Start with direct interaction: K[full_i][full_j] = K_AA
-	Compute6x6BlockFast(hex_i, hex_j, K_ima);
-
-	// ELF-compatible IMA formula:
-	// K_IMA[i,i] = K[i,i] + sign * Q @ K[mirror(i), i]
-	//            = K_AA + sign * Q @ K_BA
-	//
-	// where K_BA = K[mirror(i), i] is computed by Compute6x6BlockMirroredTarget
-	// Q is the row permutation to reorder faces after mirroring
-	//
-	// For x-mirror: Q = [0, 3, 2, 1, 4, 5] (swap x+ (face 1) and x- (face 3))
-
-	// Helper lambda to add mirror contribution using ELF formula
-	auto addMirrorContributionELF = [&](int mirrorAxis, int sign, const int* rowPerm, const int* colPerm) {
-		double K_BA[36];        // K[mirror(i), j] from Compute6x6BlockMirroredTarget
-		double K_BA_perm[36];   // After row permutation: Q @ K_BA
-
-		// Compute K_BA: mirrored TARGET element i
-		Compute6x6BlockMirroredTarget(hex_i, hex_j, mirrorAxis, K_BA);
-
-		// Apply row permutation Q: K_BA_perm[i, :] = K_BA[rowPerm[i], :]
-		ApplyRowPermutation(K_BA, rowPerm, K_BA_perm);
-
-		// Add contribution: K_ima += sign * Q @ K_BA
-		for(int k = 0; k < 36; k++)
-		{
-			K_ima[k] += sign * K_BA_perm[k];
-		}
-	};
-
-	// Add contributions based on active symmetry axes
-	bool hasX = (m_imaSymmetry & IMA_X) != 0;
-	bool hasY = (m_imaSymmetry & IMA_Y) != 0;
-	bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
-
-	// Single axis contributions using ELF permutations
-	if(hasX) addMirrorContributionELF(IMA_X, m_imaSignX, IMA_ROW_PERM_X, IMA_COL_PERM_X);
-	if(hasY) addMirrorContributionELF(IMA_Y, m_imaSignY, IMA_ROW_PERM_Y, IMA_COL_PERM_Y);
-	if(hasZ) addMirrorContributionELF(IMA_Z, m_imaSignZ, IMA_ROW_PERM_Z, IMA_COL_PERM_Z);
-
-	// Dual axis contributions (combined permutations)
-	if(hasX && hasY)
-	{
-		// XY mirror: apply column perms, then row perms
-		double K_AB[36], K_col1[36], K_col2[36], K_row1[36], K_perm[36];
-		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XY, K_AB);
-		ApplyDOFPermutation(K_AB, IMA_COL_PERM_X, K_col1);
-		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Y, K_col2);
-		ApplyRowPermutation(K_col2, IMA_ROW_PERM_X, K_row1);
-		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Y, K_perm);
-		int sign = m_imaSignX * m_imaSignY;
-		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
-	}
-	if(hasX && hasZ)
-	{
-		// XZ mirror: apply column perms, then row perms
-		double K_AB[36], K_col1[36], K_col2[36], K_row1[36], K_perm[36];
-		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XZ, K_AB);
-		ApplyDOFPermutation(K_AB, IMA_COL_PERM_X, K_col1);
-		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Z, K_col2);
-		ApplyRowPermutation(K_col2, IMA_ROW_PERM_X, K_row1);
-		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Z, K_perm);
-		int sign = m_imaSignX * m_imaSignZ;
-		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
-	}
-	if(hasY && hasZ)
-	{
-		// YZ mirror: apply column perms, then row perms
-		double K_AB[36], K_col1[36], K_col2[36], K_row1[36], K_perm[36];
-		Compute6x6BlockMirrored(hex_i, hex_j, IMA_YZ, K_AB);
-		ApplyDOFPermutation(K_AB, IMA_COL_PERM_Y, K_col1);
-		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Z, K_col2);
-		ApplyRowPermutation(K_col2, IMA_ROW_PERM_Y, K_row1);
-		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Z, K_perm);
-		int sign = m_imaSignY * m_imaSignZ;
-		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
-	}
-
-	// Triple axis contribution (eighth model)
-	if(hasX && hasY && hasZ)
-	{
-		double K_AB[36], K_col1[36], K_col2[36], K_col3[36];
-		double K_row1[36], K_row2[36], K_perm[36];
-		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XYZ, K_AB);
-		ApplyDOFPermutation(K_AB, IMA_COL_PERM_X, K_col1);
-		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Y, K_col2);
-		ApplyDOFPermutation(K_col2, IMA_COL_PERM_Z, K_col3);
-		ApplyRowPermutation(K_col3, IMA_ROW_PERM_X, K_row1);
-		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Y, K_row2);
-		ApplyRowPermutation(K_row2, IMA_ROW_PERM_Z, K_perm);
-		int sign = m_imaSignX * m_imaSignY * m_imaSignZ;
-		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
-	}
-}
-
-//-------------------------------------------------------------------------
-// Compute6x6BlockMirrored: Compute interaction with virtually mirrored element j
-// For quarter model support: element j's geometry is mirrored on-the-fly
-// mirrorAxis: IMA_X, IMA_Y, IMA_Z, or combinations
-//-------------------------------------------------------------------------
-void radTInteraction::Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const
-{
-	std::memset(K_mat, 0, 36 * sizeof(double));
-
-	if(!m_hexaGeomReady) return;
-
-	int nHex = (int)m_hexaElemIndices.size();
-	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
-
-	// Mirror source element center
-	double src_center[3] = {m_hexaCenters[hex_j * 3 + 0],
-	                        m_hexaCenters[hex_j * 3 + 1],
-	                        m_hexaCenters[hex_j * 3 + 2]};
-	if(mirrorAxis & IMA_X) src_center[0] = -src_center[0];
-	if(mirrorAxis & IMA_Y) src_center[1] = -src_center[1];
-	if(mirrorAxis & IMA_Z) src_center[2] = -src_center[2];
-
-	// For each target face i (unchanged)
-	for(int face_i = 0; face_i < 6; face_i++)
-	{
-		// Yano evaluation point for target face
-		int epIdx = (hex_i * 6 + face_i) * 3;
-		const double obs[3] = {m_hexaEvalPoints[epIdx + 0],
-		                       m_hexaEvalPoints[epIdx + 1],
-		                       m_hexaEvalPoints[epIdx + 2]};
-
-		// Target face normal
-		int fnIdx_i = (hex_i * 6 + face_i) * 3;
-		const double n_i[3] = {m_hexaFaceNormals[fnIdx_i + 0],
-		                       m_hexaFaceNormals[fnIdx_i + 1],
-		                       m_hexaFaceNormals[fnIdx_i + 2]};
-
-		// For each source face j (mirrored)
-		for(int face_j = 0; face_j < 6; face_j++)
-		{
-			// Field from unit sigma on mirrored source face j
-			double H_total[3] = {0.0, 0.0, 0.0};
-
-			// Sum contributions from 2 triangles of mirrored face j
-			for(int t = 0; t < 2; t++)
-			{
-				// Get original triangle vertices
-				int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
-				double V0[3] = {m_hexaTriVertices[tvIdx + 0],
-				                m_hexaTriVertices[tvIdx + 1],
-				                m_hexaTriVertices[tvIdx + 2]};
-				double V1[3] = {m_hexaTriVertices[tvIdx + 3],
-				                m_hexaTriVertices[tvIdx + 4],
-				                m_hexaTriVertices[tvIdx + 5]};
-				double V2[3] = {m_hexaTriVertices[tvIdx + 6],
-				                m_hexaTriVertices[tvIdx + 7],
-				                m_hexaTriVertices[tvIdx + 8]};
-
-				// Mirror vertices
-				if(mirrorAxis & IMA_X)
-				{
-					V0[0] = -V0[0]; V1[0] = -V1[0]; V2[0] = -V2[0];
-				}
-				if(mirrorAxis & IMA_Y)
-				{
-					V0[1] = -V0[1]; V1[1] = -V1[1]; V2[1] = -V2[1];
-				}
-				if(mirrorAxis & IMA_Z)
-				{
-					V0[2] = -V0[2]; V1[2] = -V1[2]; V2[2] = -V2[2];
-				}
-
-				// Original sign (for orientation)
-				double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
-
-				// Mirror reverses winding -> flip sign
-				// Count number of mirror axes (odd = flip, even = no flip)
-				int numMirrors = 0;
-				if(mirrorAxis & IMA_X) numMirrors++;
-				if(mirrorAxis & IMA_Y) numMirrors++;
-				if(mirrorAxis & IMA_Z) numMirrors++;
-				if(numMirrors % 2 == 1)
-				{
-					// Odd number of mirrors: swap V1 and V2 to restore winding
-					std::swap(V1[0], V2[0]);
-					std::swap(V1[1], V2[1]);
-					std::swap(V1[2], V2[2]);
-				}
-
-				double H_tri[3];
-				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
-
-				H_total[0] += H_tri[0];
-				H_total[1] += H_tri[1];
-				H_total[2] += H_tri[2];
-			}
-
-			// Point charge contribution from mirrored element center
-			// (Same approximation as Compute6x6BlockFast: use element center for all faces)
-			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
-			double r[3] = {obs[0] - src_center[0],
-			               obs[1] - src_center[1],
-			               obs[2] - src_center[2]};
-			double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-
-			if(dist_sq > 1e-30)
-			{
-				double dist = sqrt(dist_sq);
-				double inv_dist3 = 1.0 / (dist * dist_sq);
-				double coef = -area_j * inv_dist3;
-				H_total[0] += coef * r[0];
-				H_total[1] += coef * r[1];
-				H_total[2] += coef * r[2];
-			}
-
-			// K_ij = n_i dot H_total / (4*pi)
-			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
-			              * RadConst::INV_FOUR_PI;
-
-			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
-			// The solver will negate when building system matrix
-			K_mat[face_i * 6 + face_j] = K_ij;
-		}
-	}
-}
-
-//-------------------------------------------------------------------------
-// Compute6x6BlockMirroredTarget: Compute K[mirror(i), j] for ELF IMA formula
-// This mirrors the TARGET element i, keeping SOURCE element j unchanged.
-// K_BA[face_i, face_j] = n'_i dot H_j / (4*pi)
-// where n'_i is the mirrored target face normal,
-// and H_j is computed at the mirrored target evaluation point
-// mirrorAxis: IMA_X, IMA_Y, IMA_Z, or combinations
-//-------------------------------------------------------------------------
-void radTInteraction::Compute6x6BlockMirroredTarget(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const
-{
-	std::memset(K_mat, 0, 36 * sizeof(double));
-
-	if(!m_hexaGeomReady) return;
-
-	int nHex = (int)m_hexaElemIndices.size();
-	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
-
-	// Source element center (unchanged)
-	double src_center[3] = {m_hexaCenters[hex_j * 3 + 0],
-	                        m_hexaCenters[hex_j * 3 + 1],
-	                        m_hexaCenters[hex_j * 3 + 2]};
-
-	// For each target face i (MIRRORED evaluation point and normal)
-	for(int face_i = 0; face_i < 6; face_i++)
-	{
-		// Get original target evaluation point and mirror it
-		int epIdx = (hex_i * 6 + face_i) * 3;
-		double obs[3] = {m_hexaEvalPoints[epIdx + 0],
-		                 m_hexaEvalPoints[epIdx + 1],
-		                 m_hexaEvalPoints[epIdx + 2]};
-
-		// Mirror the evaluation point
-		if(mirrorAxis & IMA_X) obs[0] = -obs[0];
-		if(mirrorAxis & IMA_Y) obs[1] = -obs[1];
-		if(mirrorAxis & IMA_Z) obs[2] = -obs[2];
-
-		// Get original target face normal and mirror it
-		int fnIdx_i = (hex_i * 6 + face_i) * 3;
-		double n_i[3] = {m_hexaFaceNormals[fnIdx_i + 0],
-		                 m_hexaFaceNormals[fnIdx_i + 1],
-		                 m_hexaFaceNormals[fnIdx_i + 2]};
-
-		// Mirror the normal (flip component in mirror axis)
-		if(mirrorAxis & IMA_X) n_i[0] = -n_i[0];
-		if(mirrorAxis & IMA_Y) n_i[1] = -n_i[1];
-		if(mirrorAxis & IMA_Z) n_i[2] = -n_i[2];
-
-		// For each source face j (unchanged geometry)
-		for(int face_j = 0; face_j < 6; face_j++)
-		{
-			// Field from unit sigma on ORIGINAL source face j
-			double H_total[3] = {0.0, 0.0, 0.0};
-
-			// Sum contributions from 2 triangles of original source face j
-			for(int t = 0; t < 2; t++)
-			{
-				// Get original triangle vertices (NOT mirrored)
-				int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
-				double V0[3] = {m_hexaTriVertices[tvIdx + 0],
-				                m_hexaTriVertices[tvIdx + 1],
-				                m_hexaTriVertices[tvIdx + 2]};
-				double V1[3] = {m_hexaTriVertices[tvIdx + 3],
-				                m_hexaTriVertices[tvIdx + 4],
-				                m_hexaTriVertices[tvIdx + 5]};
-				double V2[3] = {m_hexaTriVertices[tvIdx + 6],
-				                m_hexaTriVertices[tvIdx + 7],
-				                m_hexaTriVertices[tvIdx + 8]};
-
-				double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
-
-				double H_tri[3];
-				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
-
-				H_total[0] += H_tri[0];
-				H_total[1] += H_tri[1];
-				H_total[2] += H_tri[2];
-			}
-
-			// Point charge contribution from original source element center
-			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
-			double r[3] = {obs[0] - src_center[0],
-			               obs[1] - src_center[1],
-			               obs[2] - src_center[2]};
-			double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-
-			if(dist_sq > 1e-30)
-			{
-				double dist = sqrt(dist_sq);
-				double inv_dist3 = 1.0 / (dist * dist_sq);
-				double coef = -area_j * inv_dist3;
-				H_total[0] += coef * r[0];
-				H_total[1] += coef * r[1];
-				H_total[2] += coef * r[2];
-			}
-
-			// K_ij = n'_i dot H_total / (4*pi)
-			// where n'_i is the mirrored normal
-			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
-			              * RadConst::INV_FOUR_PI;
-
-			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
-			// The solver will negate when building system matrix
-			K_mat[face_i * 6 + face_j] = K_ij;
-		}
-	}
-}
-#endif  // Dead code end
-// REMOVED_BLOCK_END
-
-//-------------------------------------------------------------------------
-// SetupInteractMatrix_IMA: Build IMA interaction matrix
-// Both hex and tet fast paths now delegate to kernel functions that
-// handle IMA mirror contributions internally (Compute6x6BlockFast, Compute3x3BlockFast).
+// SetupInteractMatrix_IMA: Build IMA interaction matrix.
+// The tet MMM path uses Compute3x3BlockFast. Surface-charge moment-yano handles IMA in
+// BuildMomentSystemCore / CentroidFieldGradFromFace and skips this dense MSC matrix.
 //-------------------------------------------------------------------------
 int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 {
@@ -4905,6 +3152,9 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		if(m_elemDOF[i] != 5) allWedge = false;
 		if(m_elemDOF[i] != 3) allTet = false;
 	}
+	// EIEM2 retirement (Phase 3b): any MSC surface-charge element (DOF 5/6) present?  (DOF is in {3,5,6}
+	// here; the loop above errors on < 3.)  Used below to skip the dense MSC IMA build.
+	bool hasMSC = !allTet;
 
 	// Pre-compute geometry for fast path (all element types, including mixed meshes)
 	if(!m_hexaGeomReady)
@@ -4997,10 +3247,8 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
-	// For HACApK: skip dense matrix, let kernel functions compute on demand.
-	// All element types (pure and mixed) are handled by kernel functions:
-	// - Same-type: Compute6x6BlockFast, Compute5x5BlockFast, Compute3x3BlockFast
-	// - Cross-DOF: ComputeMixedBlockFast (with type-specific indexing)
+	// For HACApK: skip dense matrix. Pure tet MMM computes entries on demand through
+	// Compute3x3BlockFast; surface-charge moment-yano uses RadHACApKMomentSystem instead.
 	// Reset geometry so it gets recomputed for the reduced IMA element set.
 	if(skipDenseMatrix)
 	{
@@ -5011,35 +3259,17 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		return 1;
 	}
 
+	// EIEM2 retirement (Phase 3b): skip the dense MSC IMA matrix.  moment+IMA assembles its own system
+	// (BuildMomentSystemCore + CentroidFieldGradFromFace, which adds the IMA mirror images) and never reads
+	// this matrix; mixed MMM+MSC and B-input-on-MSC are rejected fail-loud in MakeAutoRelax.  Pure-tet (MMM)
+	// IMA still builds its 3x3 dense matrix below.  Geometry precomputed above is left intact (moment uses
+	// on-the-fly momentFaceGeom; the precompute caches stay valid for the reduced IMA element set).
+	if(hasMSC)
+		return 1;
+
 	// Build mapping from IMA index to type-specific geometry index
 	// Uses geometry precomputed from the full model (before system reduction)
 	// NOTE: Always populate for ALL element types (not just pure meshes) to support mixed meshes
-	std::vector<int> imaToHex(m_imaNumElements, -1);
-	if(m_hexaGeomReady)
-	{
-		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
-		{
-			if(m_elemDOF[ima_i] != 6) continue;
-			int full_i = m_imaToFull[ima_i];
-			// O(1) reverse lookup via m_globalToHexIdx
-			if(full_i >= 0 && full_i < (int)m_globalToHexIdx.size())
-				imaToHex[ima_i] = m_globalToHexIdx[full_i];
-		}
-	}
-
-	std::vector<int> imaToWedge(m_imaNumElements, -1);
-	if(m_wedgeGeomReady)
-	{
-		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
-		{
-			if(m_elemDOF[ima_i] != 5) continue;
-			int full_i = m_imaToFull[ima_i];
-			// O(1) reverse lookup via m_globalToWedgeIdx
-			if(full_i >= 0 && full_i < (int)m_globalToWedgeIdx.size())
-				imaToWedge[ima_i] = m_globalToWedgeIdx[full_i];
-		}
-	}
-
 	// Tet mapping: stores full model index (Compute3x3BlockFast resolves internally)
 	std::vector<int> imaToTet(m_imaNumElements, -1);
 	if(m_tetraGeomReady)
@@ -5070,38 +3300,6 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 			double* block = &m_flatInteractMatrix[(size_t)offset_row * imaDOF + offset_col];
 
-			// Fast path: 6DOF-6DOF hex with precomputed geometry
-			if(dof_row == 6 && dof_col == 6)
-			{
-				int hex_row = imaToHex[ima_row];
-				int hex_col = imaToHex[ima_col];
-				if(hex_row >= 0 && hex_col >= 0)
-				{
-					double K_ima[36];
-					Compute6x6BlockFast(hex_row, hex_col, K_ima);
-					for(int i = 0; i < 6; i++)
-						for(int j = 0; j < 6; j++)
-							block[(size_t)i * imaDOF + j] = K_ima[i * 6 + j];
-					continue;
-				}
-			}
-
-			// Fast path: 5DOF-5DOF wedge - Compute5x5BlockFast handles IMA inline
-			if(dof_row == 5 && dof_col == 5)
-			{
-				int w_row = imaToWedge[ima_row];
-				int w_col = imaToWedge[(int)ima_col];
-				if(w_row >= 0 && w_col >= 0)
-				{
-					double K_ima[25];
-					Compute5x5BlockFast(w_row, w_col, K_ima);
-					for(int i = 0; i < 5; i++)
-						for(int j = 0; j < 5; j++)
-							block[(size_t)i * imaDOF + j] = K_ima[i * 5 + j];
-					continue;
-				}
-			}
-
 			// Fast path: 3DOF-3DOF tet (MMM) - Compute3x3BlockFast handles IMA inline
 			if(dof_row == 3 && dof_col == 3)
 			{
@@ -5116,20 +3314,6 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 							block[(size_t)i * imaDOF + j] = N_ima[i * 3 + j];
 					continue;
 				}
-			}
-
-			// Unified kernel path: handles ALL DOF combinations (same-type and cross-DOF)
-			// including IMA mirror contributions, using precomputed geometry from full model.
-			// ComputeMixedBlockFast takes full model element indices and resolves type-specific
-			// geometry indices internally.
-			{
-				int full_row = m_imaToFull[ima_row];
-				int full_col = m_imaToFull[(int)ima_col];
-				double mixed_block[36];  // max 6x6
-				ComputeMixedBlockFast(full_row, dof_row, full_col, dof_col, mixed_block);
-				for(int i = 0; i < dof_row; i++)
-					for(int j = 0; j < dof_col; j++)
-						block[(size_t)i * imaDOF + j] = mixed_block[i * dof_col + j];
 			}
 		}
 	});

@@ -91,7 +91,7 @@ def external_moment(cont):
 
 
 def mmm_moment(cells):
-    rad.UtiDelAll(); rad.set_demag_backend("auto"); rad.SolverConfig(yano_eval_alpha=-1.0, yano_no_center_charge=False)
+    rad.UtiDelAll(); rad.set_demag_backend("auto")
     objs = [rad.ObjTetrahedron([list(v) for v in V], [0, 0, 0]) for V in cells]
     for t in objs:
         rad.MatApl(t, rad.MatLin(MU_R))
@@ -101,13 +101,12 @@ def mmm_moment(cells):
 
 def matgeom(cells, alpha):
     rad.UtiDelAll(); rad.set_demag_backend("yano")
-    rad.SolverConfig(yano_pyramid_cloud=False, yano_no_center_charge=False, yano_eval_alpha=alpha)
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in cells]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R))
     handle = rad.BuildMatrix(rad.ObjCnt(objs))
     N, dof = rad.GetInteractMatrix(handle); G = rad.GetFaceGeom(handle); Lb, nLoop = rad.GetLoopBasis(handle)
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return np.asarray(N, float), np.asarray(G, float), np.asarray(Lb, float), nLoop, dof
 
 

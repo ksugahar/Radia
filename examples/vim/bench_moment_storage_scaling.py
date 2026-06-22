@@ -51,7 +51,7 @@ def _build_block(nx, ny, nz):
 
 
 def run_one(method, nx, ny, nz):
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_moment=True, bicgstab_tol=1e-8)
+    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-8)
     t0 = time.perf_counter()
     objs = _build_block(nx, ny, nz)
     cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * 1.0e3])])

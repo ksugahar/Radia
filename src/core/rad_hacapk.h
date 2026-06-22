@@ -9,7 +9,7 @@
 *
 *                 Refactored 2026-04-16:
 *                 - RadHACApKBase owns the kernel-agnostic H-matrix lifecycle
-*                 - RadHACApKMSCManager : public RadHACApKBase implements the
+*                 - RadHACApKMMMManager : public RadHACApKBase implements the
 *                   MMM/MSC kernel (tetra/wedge/hex magnetization moments and
 *                   surface charges). A future RadHACApKPEECManager will
 *                   implement Ruehli finite-filament mutual inductance.
@@ -95,7 +95,7 @@ struct RadHACApKStats {
  *     is applied once inside RadHACApKCallback::ComputeEntry)
  *
  * Typical usage:
- *   RadHACApKMSCManager mgr(interaction);
+ *   RadHACApKMMMManager mgr(interaction);
  *   mgr.BuildHMatrix();
  *   mgr.MatVec(x, y);                    // y = A * x
  *   mgr.UpdateDiagonal(new_inv_chi);     // nonlinear iteration update
@@ -246,11 +246,11 @@ private:
 };
 
 //-------------------------------------------------------------------------
-// RadHACApKMSCManager: MMM/MSC kernel (tetra 3DOF, wedge 5DOF, hex 6DOF)
+// RadHACApKMMMManager: MMM/MSC kernel (tetra 3DOF, wedge 5DOF, hex 6DOF)
 //-------------------------------------------------------------------------
 
 /**
- * RadHACApKMSCManager implements the HACApK kernel for Radia's Magnetic
+ * RadHACApKMMMManager implements the HACApK kernel for Radia's Magnetic
  * Moment Method (MMM, tetrahedra, 3 DOF) and Magnetic Surface Charge
  * method (MSC, wedges 5 DOF / hexahedra 6 DOF) element types, including
  * mixed meshes.
@@ -265,10 +265,10 @@ private:
  * pipeline, but the dense BiCGSTAB solver (Method 1) is often faster
  * on small/medium problems. Use HACApK when N > ~1000.
  */
-class RadHACApKMSCManager : public RadHACApKBase {
+class RadHACApKMMMManager : public RadHACApKBase {
 public:
-    explicit RadHACApKMSCManager(radTInteraction* interaction);
-    ~RadHACApKMSCManager() override;
+    explicit RadHACApKMMMManager(radTInteraction* interaction);
+    ~RadHACApKMMMManager() override;
 
     radTInteraction* GetInteraction() const { return m_interaction; }
 
@@ -287,25 +287,19 @@ public:
     void PrecomputeFlatInteractMatrix();
     bool IsFlatNReady() const { return m_flat_N_ready; }
 
-    // Delegates to radTInteraction::Compute6x6BlockFast (shared with LU/BiCGSTAB)
-    void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;
-
 protected:
     void ExtractCoordinates() override;
     void OnBeforeBuild() override;
     void InitializeInvChi() override;
-    bool IsVariableDOF() const override { return m_is_mixed_dof || m_is_5dof; }
-    int GetUniformNFFC() const override { return m_nffc; }
+    bool IsVariableDOF() const override { return false; }   // MMM-only: uniform 3-DOF tet
+    int GetUniformNFFC() const override { return m_nffc; }   // == 3
 
 private:
     // Pointer to Radia interaction (not owned)
     radTInteraction* m_interaction;
 
-    // DOF per element classification
-    int m_nffc;            // 3 (tetra), 5 (wedge), 6 (hex), 0 (mixed/variable)
-    bool m_is_6dof;
-    bool m_is_5dof;
-    bool m_is_mixed_dof;
+    // DOF per element: MMM-only manager, always 3 (tetrahedron)
+    int m_nffc;
 
     // O(1) DOF-to-element lookup (ELF-style)
     std::vector<int> m_dof_to_elem;   // [dof] -> element index
@@ -327,19 +321,14 @@ private:
     void BuildDOFLookupTable();
     void PrecomputeGeometry3DOF();
 
-    // 6DOF hexahedron block computation
-    double GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const;
-    void Compute6x6Block(int elem_i, int elem_j, double* K_mat) const;
-
-    // 3DOF tetrahedron block computation
+    // 3DOF tetrahedron block computation (MMM -- the only element type this manager solves;
+    // EIEM2 surface-charge 6x6/5x5/mixed kernels were retired in Phase 3b, the moment-yano
+    // H-matrix RadHACApKMomentSystem now owns hex/wedge MSC)
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
     void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
     void Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const;
     void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;
 
-    // 5DOF wedge / mixed / generic
-    double GetCached5x5Element(int elem_i, int elem_j, int face_i, int face_j) const;
-    double GetCachedMixedElement(int elem_i, int elem_j, int dof_i, int dof_j, int local_i, int local_j) const;
     double GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const;
 };
 

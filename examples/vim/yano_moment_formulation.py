@@ -21,9 +21,10 @@ MIXES a dipole(M_0) part and a gradient(grad M) part.  On a symmetric (cube) ele
 vanishes, but on a sheared hex it does not -- so the quadrupole condition must SUBTRACT the M_0 mixing
 (coefficient c_m = sum_f area_f n_f B_m) before equating the gradient part to chi*gradH.
 
-Implementation: the field at the centroid (N0) and the field gradient (N1) are obtained from the yano
-operator at two small alphas (N(alpha) = N0 + alpha*N1 + O(alpha^2), via rad.SolverConfig(yano_eval_alpha));
-the per-DOF face geometry from rad.GetFaceGeom; the loop basis from rad.GetLoopBasis.
+Historical implementation note: the original prototype estimated the centroid field and gradient by
+finite-differencing the now-retired EIEM2 eval-point operator. Current Radia no longer exposes those
+research knobs; the production moment system is built directly by `rad.BuildMomentSystem` /
+`BuildMomentSystemCore`.
 
 RESULT (vs an independent MMM reference): the parameter-free moment formulation is near-exact on regular
 meshes (~0.05%) and ~0.3% on strongly sheared meshes -- 5x to 50x better than the (alpha-tuned) EIEM2
@@ -38,13 +39,19 @@ import sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "src", "radia"))
-import radia as rad  # noqa: E402
 
 MU0 = 4e-7 * math.pi
 MU_R = 200.0; H0 = 1000.0; L = 0.020; CHI = MU_R - 1.0
 R1, R2 = 0.40, 0.80
 FREUD = [(0, 1, 2, 6), (0, 1, 5, 6), (0, 3, 2, 6), (0, 3, 7, 6), (0, 4, 5, 6), (0, 4, 7, 6)]
+
+
+def _radia():
+    """Lazy import so the archive-printing path works without a local built _radia_pybind.pyd."""
+    if "radia" not in sys.modules:
+        sys.path.insert(0, os.path.join(HERE, "..", "..", "src"))
+    import radia as rad
+    return rad
 
 
 def phi(P, s):
@@ -73,6 +80,7 @@ def build_tet(n, s):
 
 
 def external_moment(cont):
+    rad = _radia()
     b1 = rad.Fld(cont, "b", [0, 0, R1])[2] - MU0 * H0
     b2 = rad.Fld(cont, "b", [0, 0, R2])[2] - MU0 * H0
     A = np.array([[1 / R1**3, 1 / R1**5], [1 / R2**3, 1 / R2**5]])
@@ -80,7 +88,8 @@ def external_moment(cont):
 
 
 def mmm_moment(cells):
-    rad.UtiDelAll(); rad.set_demag_backend("auto"); rad.SolverConfig(yano_eval_alpha=-1.0, yano_no_center_charge=False)
+    rad = _radia()
+    rad.UtiDelAll(); rad.set_demag_backend("auto")
     objs = [rad.ObjTetrahedron([list(v) for v in V], [0, 0, 0]) for V in cells]
     for t in objs:
         rad.MatApl(t, rad.MatLin(MU_R))
@@ -89,15 +98,11 @@ def mmm_moment(cells):
 
 
 def matgeom(cells, alpha):
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
-    rad.SolverConfig(yano_pyramid_cloud=False, yano_no_center_charge=False, yano_eval_alpha=alpha)
-    objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in cells]
-    for h in objs:
-        rad.MatApl(h, rad.MatLin(MU_R))
-    handle = rad.BuildMatrix(rad.ObjCnt(objs))
-    N, dof = rad.GetInteractMatrix(handle); G = rad.GetFaceGeom(handle); Lb, nLoop = rad.GetLoopBasis(handle)
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
-    return np.asarray(N, float), np.asarray(G, float), np.asarray(Lb, float), nLoop, dof
+    raise RuntimeError(
+        "This historical EIEM2 alpha-sweep prototype cannot be recomputed on current Radia. "
+        "Use yano_moment_formulation.json for the archived numbers, and use rad.BuildMomentSystem "
+        "or GetCentroidFieldGrad for the canonical moment-yano path."
+    )
 
 
 def eiem2_err(cells, m_mmm):
@@ -158,29 +163,18 @@ def moment_err(cells, m_mmm):
 
 
 def main():
-    print(f"\nParameter-free MOMENT formulation vs alpha-tuned EIEM2 (mu_r={MU_R:.0f}, vs MMM)\n")
+    json_path = os.path.join(HERE, "yano_moment_formulation.json")
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    print(f"\nArchived parameter-free MOMENT formulation results (mu_r={data['mu_r']:.0f}, vs MMM)\n")
     print(f"  {'mesh':>11} | {'EIEM2 (tuned a)':>15} | {'MOMENT (param-free)':>20}")
     print("  " + "-" * 54)
-    rows = []
-    for (n, s) in [(4, 0.0), (4, 0.6), (6, 0.0), (6, 0.6)]:
-        cells = build_hex(n, s); m_mmm = mmm_moment(build_tet(n, s))
-        e_e = eiem2_err(cells, m_mmm)
-        e_m, c_m = moment_err(cells, m_mmm)
-        tag = f"{n}^3 {'reg' if s == 0 else 'shear'}"
-        print(f"  {tag:>11} | {e_e:>+14.2%} | {e_m:>+13.2%} (cond {c_m:.0e})")
-        rows.append(dict(n=n, s=s, eiem2_err=e_e, moment_err=e_m, moment_cond=c_m))
-    with open(os.path.join(HERE, "yano_moment_formulation.json"), "w") as f:
-        json.dump({"mu_r": MU_R, "rows": rows,
-                   "conclusion": ("The parameter-free moment formulation (centroid field -> dipole, centroid "
-                                  "field gradient -> quadrupole, neutrality -> monopole, loops deflated) is "
-                                  "near-exact on regular meshes (~0.05%) and ~0.3% on strongly sheared meshes "
-                                  "-- 5x to 50x better than the alpha-tuned EIEM2 collocation, with NO eval-"
-                                  "point parameter. The quadrupole condition must subtract the dipole(M_0) "
-                                  "mixing that is nonzero on distorted (non-symmetric) hexes. Conditioning on "
-                                  "sheared meshes is the remaining refinement.")}, f, indent=2, default=float)
-    print("\n  The moment formulation removes the eval-point alpha (physics: M responds to the volume-average")
-    print("  field = the field MOMENTS at the centroid) and is far more accurate than the tuned collocation.")
-    print("saved", os.path.join(HERE, "yano_moment_formulation.json"))
+    for row in data["rows"]:
+        tag = f"{row['n']}^3 {'reg' if row['s'] == 0 else 'shear'}"
+        print(f"  {tag:>11} | {row['eiem2_err']:>+14.2%} | {row['moment_err']:>+13.2%} (cond {row['moment_cond']:.0e})")
+    print("\n  Historical EIEM2 alpha-sweep knobs were removed in Phase 3.")
+    print("  Current production recomputation goes through rad.BuildMomentSystem / BuildMomentSystemCore.")
+    print("source", json_path)
 
 
 if __name__ == "__main__":

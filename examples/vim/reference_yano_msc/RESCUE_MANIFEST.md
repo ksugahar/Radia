@@ -53,10 +53,10 @@ HDiv-VIM collapses.
 
 ## Runnability caveat
 
-Per CLAUDE.md (2026-06-19), the mesh-less hex/wedge yano-MSC `rad.Solve`
-path now **raises `Radia::Error203`** (directs to `radia.vim.soft_iron_from_mesh`).
-These scripts solved hex soft iron via the OLD mesh-less path, so they will
-NOT run as-is on current radia. The durable value here is:
+These scripts solved hex soft iron via the old EIEM2 collocation yano-MSC path.
+Current Radia routes mesh-less hex/wedge/pyramid surface-charge soft iron to the
+canonical moment-yano formulation instead, so these scripts are no longer a
+reproduction path for the historical JSONs. The durable value here is:
   1. the **golden reference numbers** (JSONs above) — frozen, citeable;
   2. the **hex geometry** (generate_hex_mesh.py + .step) — reusable to
      rebuild the C-yoke hex mesh for an HDiv-VIM re-run;
