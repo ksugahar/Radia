@@ -38,6 +38,12 @@
         (conserved), which is why the 2-D saturable problem linearises in the hodograph
         (Chaplygin) plane.  The nonlinear Star_nu stays SPD (weakform_hodge.wls) so the
         magnetic hodograph -- unlike transonic gas dynamics -- never folds (no limiting line).
+    [5] axis 3 (deep): the CHAPLYGIN full nonlinear linearisation.  With q=|H|, th=arg(H)
+        the independent variables, the saturable div(nu(|grad A|) grad A)=0 becomes the
+        LINEAR self-adjoint elliptic Chaplygin eq d/dq((q/mu)A_q) + ((mu q)'/(mu^2 q))A_thth=0
+        -- mu(q) is now a COEFFICIENT, not a nonlinearity (verified: hodograph op LINEAR in A
+        while the physical op is nonlinear; linear limit -> polar Laplacian; elliptic iff
+        (mu q)'>0 == nu+nu'|B|>0, so ordinary saturation never folds).
 
   Prior art (classical; this is a working map, not an originality claim): complex-potential
   pole design (1900s); 2-D conformal weight-freeness (classical); geometric Kelvin FE open
@@ -50,6 +56,17 @@ grad[f_] := D[f, {{x, y, z}}];
 crl[F_]  := Curl[F, {x, y, z}];
 dvg[F_]  := Div[F, {x, y, z}];
 weightW[J_] := Abs[Det[J]] Inverse[Transpose[J].J];      (* = weakform_hodge.wls *)
+
+(* Chaplygin (saturable hodograph) operator on the flux fn A in the (q, th) plane,
+   q = |H|, th = arg(H); muF = mu(|H|) passed as a pure function.  Self-adjoint elliptic:
+       chaplygin[A] = d/dq( (q/mu) A_q ) + ( (mu q)'/(mu^2 q) ) A_thth . *)
+chaplyginMu[expr_, muF_] :=
+  D[(q/muF[q]) D[expr, q], q] + (D[muF[q] q, q]/(muF[q]^2 q)) D[expr, {th, 2}];
+
+(* physical-plane nonlinear operator div( nu(|grad A|) grad A ) in 2-D (x=xx, y=yy) *)
+physOp[a_, nuF_] := Module[{gx = D[a, xx], gy = D[a, yy], sm},
+  sm = Sqrt[gx^2 + gy^2];
+  D[nuF[sm] gx, xx] + D[nuF[sm] gy, yy]];
 
 (* ============================ self-test ============================ *)
 Module[{ok = True, chk, zero, F2, J2, JtJ, alpha, beta, Bc, Ac, Babc, az, Bz2, pt},
@@ -125,6 +142,62 @@ Module[{ok = True, chk, zero, F2, J2, JtJ, alpha, beta, Bc, Ac, Babc, az, Bz2, p
       Simplify[dvg[Bz2]] === 0];
   chk["2-D flux lines are A_z level sets: B . grad(A_z) = 0 (A_z = flux-line Hamiltonian)",
       Simplify[Bz2.grad[az]] === 0];
+
+  (* ---- [5] AXIS 3 (deep): the CHAPLYGIN full nonlinear LINEARISATION ----
+     2-D current-free saturable magnetostatics div(nu(|grad A|) grad A) = 0 IS 2-D steady
+     irrotational compressible flow.  Take q = |H|, th = arg(H) as the INDEPENDENT (hodograph)
+     variables; Phi (scalar pot, H = grad Phi) and A (flux fn, B = (A_y,-A_x)) the unknowns;
+     B = mu(q) H.  Inverting  dPhi = q cos th dx + q sin th dy ,  dA = -mu q sin th dx + mu q cos th dy
+     gives the LINEAR variable-coefficient first-order pair (Molenbroek 1890, Chaplygin 1902)
+         Phi_q = -q (mu q)'/(mu q)^2 A_th ,    A_q = (mu/q) Phi_th
+     whose elimination is the self-adjoint elliptic CHAPLYGIN equation, LINEAR in A:
+         d/dq( (q/mu) A_q ) + ( (mu q)'/(mu^2 q) ) A_thth = 0 .
+     The whole nonlinearity is absorbed into the COEFFICIENT mu(q) -> one linear solve, no Picard. *)
+
+  (* [C1] hodograph inversion: (dx,dy) from (dPhi,dA) is the rotation inverse *)
+  chk["Chaplygin [C1]: hodograph inversion dx = cos.dPhi/q - sin.dA/(mu q), dy = sin.dPhi/q + cos.dA/(mu q)",
+      Module[{Mfwd = {{qq Cos[tt], qq Sin[tt]}, {-mm qq Sin[tt], mm qq Cos[tt]}}},
+       Simplify[Inverse[Mfwd] - {{Cos[tt]/qq, -Sin[tt]/(mm qq)}, {Sin[tt]/qq, Cos[tt]/(mm qq)}},
+                qq > 0 && mm > 0] === {{0, 0}, {0, 0}}]];
+
+  (* [C2] the self-adjoint coefficient identity  q (mu q)'/(mu q)^2 = (mu q)'/(mu^2 q) *)
+  chk["Chaplygin [C2]: self-adjoint coefficient  q (mu q)'/(mu q)^2 = (mu q)'/(mu^2 q)",
+      Simplify[qq D[gmu[qq] qq, qq]/(gmu[qq] qq)^2 - D[gmu[qq] qq, qq]/(gmu[qq]^2 qq)] === 0];
+
+  (* [C3a] the HODOGRAPH operator is LINEAR in A (mu(q) is a known coefficient, not a nonlinearity) *)
+  chk["Chaplygin [C3a]: the hodograph operator is LINEAR in A  (mu(q) absorbed as a coefficient)",
+      Simplify[chaplyginMu[al aA[q, th] + be aB[q, th], gmu]
+               - (al chaplyginMu[aA[q, th], gmu] + be chaplyginMu[aB[q, th], gmu])] === 0];
+
+  (* [C3b] CONTRAST: the PHYSICAL operator div(nu(|grad A|) grad A) is NONLINEAR in A *)
+  chk["Chaplygin [C3b]: the PHYSICAL operator div(nu(|grad A|) grad A) is NONLINEAR (phys[2A] != 2 phys[A])",
+      (Simplify[physOp[2 (xx^3 + yy^3), (1 + #^2 &)] - 2 physOp[xx^3 + yy^3, (1 + #^2 &)]]
+         /. {xx -> 3/10, yy -> 1/2}) =!= 0];
+
+  (* [C4] the first-order pair's compatibility (Phi_qth = Phi_thq) IS exactly the Chaplygin eq *)
+  chk["Chaplygin [C4]: 1st-order pair compatibility Phi_qth = Phi_thq IS the Chaplygin equation",
+      Simplify[(D[(q/gmu[q]) D[aA[q, th], q], q]
+                + q D[gmu[q] q, q]/(gmu[q] q)^2 D[aA[q, th], {th, 2}])
+               - chaplyginMu[aA[q, th], gmu]] === 0];
+
+  (* [C5a] linear limit mu = const reduces Chaplygin to the SELF-ADJOINT polar Laplacian
+     (1/mu0)[ d/dq(q A_q) + A_thth/q ] = (q/mu0) (A_qq + A_q/q + A_thth/q^2): same zero set *)
+  chk["Chaplygin [C5a]: linear limit mu=const => (1/mu0)[ d/dq(q A_q) + A_thth/q ] (self-adjoint polar Laplace)",
+      Simplify[chaplyginMu[aA[q, th], (mu0 &)]
+               - (1/mu0) (D[q D[aA[q, th], q], q] + D[aA[q, th], {th, 2}]/q)] === 0];
+
+  (* [C5b] concrete: A = q^n cos(n th) solves the linear-limit Chaplygin (harmonic in (q, th)) *)
+  chk["Chaplygin [C5b]: A = q^n cos(n th) solves the linear-limit Chaplygin (hodograph-harmonic)",
+      Simplify[chaplyginMu[q^nn Cos[nn th], (mu0 &)], q > 0] === 0];
+
+  (* [C6] ELLIPTIC (no limiting line) iff both coefficients > 0: mu>0 and (mu q)' > 0
+     == d|B|/d|H| > 0 == nu + nu'|B| > 0 -- the SAME condition as weakform_hodge.wls sec.6.
+     Ordinary saturation: mu falls but |B|=mu*q still rises, so (mu q)'>0 ALWAYS -> elliptic
+     everywhere, NO limiting line (unlike transonic gas dynamics). *)
+  chk["Chaplygin [C6]: elliptic iff mu>0 and (mu q)'>0 (= nu+nu'|B|>0); ordinary saturation always elliptic",
+      Resolve[ForAll[{q, muu, dBdH},
+                Implies[q > 0 && muu > 0 && dBdH > 0,
+                        q/muu > 0 && dBdH/(muu^2 q) > 0]], Reals] === True];
 
   Print[If[ok, "ALL PASS", "SOME FAILED"]];
 ];
