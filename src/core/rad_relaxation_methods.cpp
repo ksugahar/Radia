@@ -2229,13 +2229,12 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// in SetupBaseMatrix_VariableDOF.  Build RHS vector (will be overwritten with solution by dgesv).
 	std::vector<double> RHS(totalDOF);
 
-	// MOMENT-yano upgrade (opt-in g_yano_moment, hex-only): assemble the parameter-free MOMENT system
-	// (BuildMomentSystemCore) instead of the EIEM2 collocation system.  A's COLUMNS are the face DOF, so
-	// dgesv's solution is sigma in DOF order -- a drop-in for the EIEM2 transpose + dgesv + write-back below.
-	extern bool g_yano_moment;
-	bool useMoment = g_yano_moment;   // IMA is now moment-capable (BuildCentroidFieldGrad adds the mirror images)
-	// moment-yano covers the surface-charge polyhedra: hex (6 DOF) AND wedge (5 DOF, Phase 3a).  Tet (3 DOF =
-	// MMM) and any other element kind are NOT moment -> fall to the EIEM2 path.
+	// MOMENT-yano: assemble the parameter-free MOMENT system (BuildMomentSystemCore) for surface-charge
+	// polyhedra (hex 6-DOF + wedge 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
+	// sigma in DOF order -- a drop-in for the EIEM2 transpose + dgesv + write-back below.  moment is now
+	// UNCONDITIONAL (the yano_moment=False opt-out was removed in Phase 3b-1); only Tet (3 DOF = MMM) and
+	// mixed tet+MSC fall to the EIEM2 path (removed with a fail-loud guard in 3b-2).
+	bool useMoment = true;
 	if(useMoment) { for(int e = 0; e < AmOfMainElem; e++) { int dd = IntrctPtr->GetElementDOF(e); if(dd != 6 && dd != 5) { useMoment = false; break; } } }
 
 	if(useMoment)
