@@ -14,7 +14,7 @@ Distilled from W:/03_文献・論文/00_電磁界解析/10_FEM_定式化/
 
 This is the **theory/genealogy** layer.  For concrete code usage:
 - NGSolve FEM API: see `radia_mcp.radia_ngsolve` (radia_usage, sparsesolv)
-- Axisymmetric FEMM-canonical: see `radia_mcp.radia_ngsolve.axifemm_documentation`
+- Axisymmetric FEMM-canonical: see `radia_mcp.radia_ngsolve.axifem_documentation`
 - Hollaus MSFEM lamination: see `radia_mcp.motor` (hollaus_eddy)
 - Solver+preconditioner: see `radia_mcp.matrix_solvers`
 - BEM/MoM theory: see `radia_mcp.bem`

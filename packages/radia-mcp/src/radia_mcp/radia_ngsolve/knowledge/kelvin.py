@@ -460,7 +460,7 @@ Substitute `H1Henrotte(...)` for `H1(...)`, wrap with `Periodic(...)`,
 pass `kelvin_mu_factor_axisym_cf` to `AxiHenrotteStiffnessBFI`, and set
 `check_unused=False` on the BilinearForm.  Sphere Cu R=10 mm hits
 Stoll to -0.001 % with this configuration.  See
-`axifemm_documentation(topic="kelvin")` for the canonical recipe and
+`axifem_documentation(topic="kelvin")` for the canonical recipe and
 the documented gotchas (`mu` vs `nu` factor convention, element-
 centroid mu sampling, Curve(2) trade-off).
 

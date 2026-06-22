@@ -59,7 +59,7 @@ FEMM_MATRIX = """\
 
 (*) axisymmetric magnetics / eddy / nonlinear use H1Henrotte (axihenrotte FESpace)
 "(mat)" = a material model (anisotropic / complex-mu CF) usable in either path.
--- see `axifemm_documentation`. "(3D)" = available via the 3D eggshell / SIBC force.
+-- see `axifem_documentation`. "(3D)" = available via the 3D eggshell / SIBC force.
 API: solve_axi_magnetostatic / solve_axi_eddy / solve_axi_eddy_harmonic /
 solve_axi_magnetostatic_nonlinear in solve.py; inductance_axi / ohmic_loss_axi /
 maxwell_surface_force / maxwell_surface_force_harmonic in force.py.
@@ -157,7 +157,7 @@ P_3D = ohmic_loss_axi(-1j*omega*Az, mesh, sigma, region="wire") # W ; Rac = 2P/|
 Conventions: axis(r=0) MUST be Dirichlet for H1Henrotte; magnet theta is from
 the r-axis (theta=90 => +z, theta=0 => +r); Vc = r*E_phi [V/turn/rad] for axi
 (vs E_z [V/m] for planar). The Cu-disk eddy reference τ₁ = 224.31 µs (BEM-Foster,
-see axifemm_documentation "validation" topic).
+see axifem_documentation "validation" topic).
 """
 
 FEMM_SCALAR = """\
