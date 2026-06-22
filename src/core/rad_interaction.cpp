@@ -2841,19 +2841,21 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 }
 
 //=========================================================================
-// BuildMomentSystem: the parameter-free MOMENT-yano system matrix A and RHS for a UNIFORM linear material
-// (chi) in a UNIFORM applied field Happ -- the C++ port of the validated Python prototype
-// examples/vim/yano_moment_iter_scaling.py::build.  Per hex element (6 face-charge DOF sigma):
-//   3 dipole rows : (local dipole moment of sigma)/Ve - chi*H_k(centroid) . sigma = chi*Happ_k
+// BuildMomentSystemCore: the parameter-free MOMENT-yano system matrix A and RHS for PER-ELEMENT linear
+// susceptibility chiPerHex[h] in a PER-ELEMENT external field HextPerHex[h*3+k] (at the hex centroid) -- the
+// C++ port of examples/vim/yano_moment_iter_scaling.py::build, generalized for the solve (coil/source fields
+// are not uniform).  Per hex element (6 face-charge DOF sigma):
+//   3 dipole rows : (local dipole moment of sigma)/Ve - chi*H_k(centroid) . sigma = chi*Hext_k
 //   1 monopole row: sum_f area_f sigma_f = 0                       (= div B = 0)
 //   2 quad rows   : (local diagonal-quadrupole moment of sigma) - chi*(Dvec . gradH(centroid)) . sigma = 0
 // Global field/grad functionals H,gradH(centroid) come from BuildCentroidFieldGrad; the local geometric
 // moments (face center fc, outward normal n, area, d=fc-centroid, volume Ve) from the hex geometry.  Each
-// row is 2-norm normalized (matches the prototype).  A is ROW-MAJOR (dof x dof); rhs length dof.  This is
-// the Step-1 dense verification path; solve wiring + nonlinear chi + HACApK are later steps.
+// row is 2-norm normalized.  A is ROW-MAJOR (dof x dof); rhs length dof.  The column index of A is the face
+// DOF, so dgesv's solution is sigma in DOF order (drop-in for the EIEM2 LU write-back).  HEX-ONLY.
+// The uniform BuildMomentSystem(chi,Happ,...) wrapper below broadcasts a scalar chi + uniform Happ.
 //=========================================================================
-void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
-                                        std::vector<double>& A, std::vector<double>& rhs) const
+void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex,
+                                            std::vector<double>& A, std::vector<double>& rhs) const
 {
 	std::vector<double> Cflat; int nHex = 0;
 	BuildCentroidFieldGrad(Cflat, nHex);                 // (nHex x 9 x dof): H[3], gradH[6] per hex
@@ -2871,6 +2873,8 @@ void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
 		if(!poly || poly->AmOfFaces != 6) continue;
 		const int off = m_elemDOFOffset[elemIdx];
 		const TVector3d ce = poly->CentrPoint;
+		const double chiH = chiPerHex[h];                 // per-element susceptibility (linear or current Picard)
+		const double* Hext = &HextPerHex[(size_t)h*3];    // external field at this hex centroid
 
 		// per-face local geometry: center fc, OUTWARD unit normal nf, area Ae, d = fc - centroid
 		double fc[6][3], nf[6][3], Ae[6], d[6][3];
@@ -2922,8 +2926,8 @@ void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
 			std::fill(r.begin(), r.end(), 0.0);
 			for(int f = 0; f < 6; f++) r[off+f] += Ae[f]*d[f][k]/Ve;
 			const double* F0k = &Hh[(size_t)k*dof];
-			for(int g = 0; g < dof; g++) r[g] -= chi*F0k[g];
-			putRow(chi*Happ[k]);
+			for(int g = 0; g < dof; g++) r[g] -= chiH*F0k[g];
+			putRow(chiH*Hext[k]);
 		}
 		// monopole row
 		std::fill(r.begin(), r.end(), 0.0);
@@ -2951,12 +2955,24 @@ void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
 			for(int m = 0; m < 6; m++)
 			{
 				const double* Gm = &Hh[(size_t)(3+m)*dof];
-				double w = chi*Dvec[m];
+				double w = chiH*Dvec[m];
 				for(int g = 0; g < dof; g++) r[g] -= w*Gm[g];
 			}
 			putRow(0.0);
 		}
 	}
+}
+
+// Uniform-field wrapper: broadcast a scalar chi + uniform applied field Happ to every hex (verification path
+// + uniform-source linear solves).  See BuildMomentSystemCore.
+void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
+                                        std::vector<double>& A, std::vector<double>& rhs) const
+{
+	int nHex = (int)m_hexaElemIndices.size();
+	if(nHex <= 0) { A.clear(); rhs.assign(m_totalDOF, 0.0); return; }
+	std::vector<double> chiv((size_t)nHex, chi), Hv((size_t)nHex*3);
+	for(int h = 0; h < nHex; h++) { Hv[(size_t)h*3] = Happ[0]; Hv[(size_t)h*3+1] = Happ[1]; Hv[(size_t)h*3+2] = Happ[2]; }
+	BuildMomentSystemCore(chiv.data(), Hv.data(), A, rhs);
 }
 
 //=========================================================================
