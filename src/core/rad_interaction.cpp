@@ -944,6 +944,24 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		return 1;
 	}
 
+	// EIEM2 retirement (Phase 3b): the dense MSC (surface-charge) interaction blocks are no longer
+	// assembled.  After the fail-loud guards in MakeAutoRelax (mixed MMM+MSC and B-input-on-MSC are
+	// rejected), the ONLY path that reaches here with an MSC element (DOF>=5) is a pure surface-charge
+	// (hex / wedge) model solved by the parameter-free moment-yano formulation.  That path assembles its
+	// own system (BuildMomentSystemCore, on-the-fly geometry via momentFaceGeom) and NEVER reads this
+	// dense interaction matrix -- it is identical to the method-2 path, which runs with no dense matrix at
+	// all (Phase 2 Increment 4).  So leave the MSC blocks zero (the matrix is already zero-initialized) and
+	// return, retiring every EIEM2 collocation block (Compute6x6/5x5/Mixed, MscEvalPoint,
+	// MscCompensationField) from the dense assembly.  Precompute the per-element geometry caches so the
+	// method-2 H-matrix moment path (which enumerates hexes via m_hexaElemIndices) and any precompute-based
+	// scaffold see the elements -- idempotent, O(N), mirrors the skipDenseMatrix=1 branch in Setup.
+	if(hasMSCElements)
+	{
+		PrecomputeHexaGeometry();
+		PrecomputeWedgeGeometry();
+		return 1;
+	}
+
 	// Check if all elements are hexahedra (for ultra-fast pure-hexa path)
 	bool allHex = hasMSCElements;
 	for(int i = 0; i < AmOfMainElem && allHex; i++)
@@ -4905,6 +4923,9 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		if(m_elemDOF[i] != 5) allWedge = false;
 		if(m_elemDOF[i] != 3) allTet = false;
 	}
+	// EIEM2 retirement (Phase 3b): any MSC surface-charge element (DOF 5/6) present?  (DOF is in {3,5,6}
+	// here; the loop above errors on < 3.)  Used below to skip the dense MSC IMA build.
+	bool hasMSC = !allTet;
 
 	// Pre-compute geometry for fast path (all element types, including mixed meshes)
 	if(!m_hexaGeomReady)
@@ -5010,6 +5031,14 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		m_tetraGeomReady = false;
 		return 1;
 	}
+
+	// EIEM2 retirement (Phase 3b): skip the dense MSC IMA matrix.  moment+IMA assembles its own system
+	// (BuildMomentSystemCore + CentroidFieldGradFromFace, which adds the IMA mirror images) and never reads
+	// this matrix; mixed MMM+MSC and B-input-on-MSC are rejected fail-loud in MakeAutoRelax.  Pure-tet (MMM)
+	// IMA still builds its 3x3 dense matrix below.  Geometry precomputed above is left intact (moment uses
+	// on-the-fly momentFaceGeom; the precompute caches stay valid for the reduced IMA element set).
+	if(hasMSC)
+		return 1;
 
 	// Build mapping from IMA index to type-specific geometry index
 	// Uses geometry precomputed from the full model (before system reduction)
