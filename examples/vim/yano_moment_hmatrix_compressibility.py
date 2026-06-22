@@ -70,7 +70,7 @@ def _num_rank(block, tol):
 def assemble_dense_D(hexes):
     """Return the centroid field operator F (3*nHex, dof), gradient operator Gm (6*nHex, dof), element
     centroids (nHex,3), per-dof face centers (dof,3), per-dof element index (dof,)."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(yano_eval_alpha=0.5)
+    rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R))
@@ -81,7 +81,7 @@ def assemble_dense_D(hexes):
     ecen_el = np.array([ecen[np.where(elem == e)[0][0]] for e in range(n_el)])
     F = C[:, 0:3, :].reshape(3 * n_el, dof)
     Gm = C[:, 3:9, :].reshape(6 * n_el, dof)
-    rad.SolverConfig(yano_eval_alpha=-1.0); rad.UtiDelAll()
+    rad.UtiDelAll()
     return F, Gm, ecen_el, fc, elem, n_el, dof
 
 
