@@ -840,6 +840,12 @@ def mmm_core(topic: str = "chubar_1998") -> str:
                                    GetInteractMatrix returns mu_r-independent N
             "eigenvalue_nullspace" - Near-null loop modes, cond ~ mu_r,
                                    beautiful->ugly BiCGSTAB (CEFC 2026)
+            "multipole_modes"    - What field the 6-DoF MSC creates:
+                                   mono+dipole+2 quadrupole (SVD/eig + .wls
+                                   proof); cond = multipole field-strength
+                                   ratio; aspect ratio (not size) sets the
+                                   iteration count; distortion only rotates
+                                   the quadrupole (Sugahara-lab 2026-06-22)
             "chubar_1998"        - Original Radia paper (ESRF 1998)
             "takahashi_2007_aca" - Wakao group MMM + ACA H-matrix
                                    (Sugahara lab heritage)
