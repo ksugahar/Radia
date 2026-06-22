@@ -1708,13 +1708,18 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		short PrevSendingIsRequired = SendingIsRequired;
 		SendingIsRequired = 0;
 
-		// For HACApK (method 2), skip dense matrix construction
-		// HACApK builds its own data structures
+		// For HACApK (method 2), skip dense matrix construction -- the EIEM2 HACApK kernel builds its own
+		// H-matrix.  EXCEPT for moment-yano (g_yano_moment): moment+method2 routes to the LU/Picard driver
+		// whose context machinery (BuildBaseMatrix, ComputeActualHFieldFromSigma) needs the dense interaction;
+		// the moment LINEAR STEP itself uses the scalable H-matrix BiCGSTAB (SolveMomentHACApK), so the dense
+		// build here is for the Picard/convergence scaffold only (TODO Increment 4: decouple it for true
+		// large-N storage scalability).
 		char skipDenseMatrix = 0;
 #ifdef RADIA_USE_HACAPK
-		if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
 		{
-			skipDenseMatrix = 1;
+			extern bool g_yano_moment;
+			if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && !g_yano_moment)
+				skipDenseMatrix = 1;
 		}
 #endif
 
@@ -1816,16 +1821,18 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// (unless demag_backend='yano' forces yano on it).  Tet (MMM) and permanent magnets are unaffected.
 
 		// MOMENT-yano dispatch (g_yano_moment, default ON): the parameter-free MOMENT formula
-		// (BuildMomentSystemCore) is the default for pure 6-DOF hexahedral soft iron, but it currently has
-		// ONLY the direct dense solver (the moment branch in radTRelaxationMethNo_0::SolveLinearStep).  So:
-		//   - method 1 (BiCGSTAB, medium N) -> reroute to LU: dense is feasible at this scale, so honor it
-		//     with the correct moment result (the direct dense moment solve) rather than the EIEM2 iteration.
-		//   - method 2 (HACApK) signals large N where a dense solve is infeasible -> fail loud (Error204) with
-		//     the EIEM2 opt-out (yano_moment=False), instead of OOM-ing on a dense moment matrix.
+		// (BuildMomentSystemCore) is the default for pure 6-DOF hexahedral soft iron.  Solver method:
+		//   - method 0 (LU)       -> dense direct moment solve.
+		//   - method 1 (BiCGSTAB) -> reroute to LU (dense moment direct solve; medium N).
+		//   - method 2 (HACApK)   -> the moment H-matrix + block-Jacobi BiCGSTAB (scalable storage), set
+		//     g_yano_moment_hacapk and route to the LU/Picard driver whose linear step picks the H-BiCGSTAB
+		//     (LINEAR/uniform chi; nonlinear per-element chi falls back to dense LU inside the step).
 		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Mixed/
 		// non-hex elements and explicit yano_moment=False are NOT -> the EIEM2 collocation path handles them.
 		{
 			extern bool g_yano_moment;
+			extern bool g_yano_moment_hacapk;
+			g_yano_moment_hacapk = false;
 			if(g_yano_moment)
 			{
 				radThg hgMom;
@@ -1841,9 +1848,9 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 						if(allHex6)
 						{
 							if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
-							{ Send.ErrorMessage("Radia::Error204"); return 0; }
-							if(MethNo == RadSolverMethod::BICGSTAB)
-								MethNo = RadSolverMethod::LU;   // moment is dense-direct; satisfy medium-N via LU
+								g_yano_moment_hacapk = true;    // moment linear step via H-matrix + BiCGSTAB
+							if(MethNo != RadSolverMethod::LU)
+								MethNo = RadSolverMethod::LU;   // route to the Picard/LU driver (linear step picks dense or H-BiCGSTAB)
 						}
 					}
 				}
@@ -1855,10 +1862,12 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 			ActualIterNum = MakeAutoRelax(InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
 			// Store matrix build time (MakeAutoRelax resets m_solve_t_matrix_build to 0)
 			m_solve_t_matrix_build = t_matrix_build;
+			{ extern bool g_yano_moment_hacapk; g_yano_moment_hacapk = false; }   // reset the per-solve moment H-matrix flag
 		}
 		catch(...)
 		{
 			SendingIsRequired = 0;
+			{ extern bool g_yano_moment_hacapk; g_yano_moment_hacapk = false; }
 			// Don't delete cached interaction on error - keep for potential retry
 			throw 0;
 		}
