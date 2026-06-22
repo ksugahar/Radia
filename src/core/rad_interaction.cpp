@@ -195,6 +195,12 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 		NewMagnArray = vNewMagnArray.data();
 		NewFieldArray = vNewFieldArray.data();
 		ExternFieldArray = vExternFieldArray.data();
+		// The moment-yano H-matrix path (method 2) enumerates hexes via m_hexaElemIndices, populated by
+		// PrecomputeHexaGeometry() -- normally done inside SetupInteractMatrix_VariableDOF (skipped here).
+		// Call it directly (O(N) per-element geometry, idempotent) so the scalable moment solve sees the
+		// hexes even with the dense matrix skipped (Phase 2 Increment 4 storage decoupling).  Harmless for
+		// tet-only / EIEM2-HACApK models (nHex == 0 -> early return).
+		PrecomputeHexaGeometry();
 	}
 	else
 	{

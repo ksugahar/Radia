@@ -1708,19 +1708,17 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		short PrevSendingIsRequired = SendingIsRequired;
 		SendingIsRequired = 0;
 
-		// For HACApK (method 2), skip dense matrix construction -- the EIEM2 HACApK kernel builds its own
-		// H-matrix.  EXCEPT for moment-yano (g_yano_moment): moment+method2 routes to the LU/Picard driver
-		// whose context machinery (BuildBaseMatrix, ComputeActualHFieldFromSigma) needs the dense interaction;
-		// the moment LINEAR STEP itself uses the scalable H-matrix BiCGSTAB (SolveMomentHACApK), so the dense
-		// build here is for the Picard/convergence scaffold only (TODO Increment 4: decouple it for true
-		// large-N storage scalability).
+		// For HACApK (method 2), skip the dense interaction matrix N: method 2 builds its own H-matrix --
+		// either the EIEM2 HACApK kernel (radTRelaxationMethNo_2) OR, for moment-yano on pure 6-DOF hex, the
+		// scalable moment H-BiCGSTAB (SolveMomentHACApK).  In both cases the dense N is never read, and the
+		// moment Picard scaffold (ComputeActualHFieldFromSigma etc.) uses the constitutive H=M/chi -- so we
+		// skip the O(N^2) dense build (Phase 2 Increment 4 storage decoupling).  EXCEPTION: the B-input
+		// Newton/Hantila hysteresis path builds its NpI from the dense BaseMatrix (needs N), so keep the dense
+		// build when those flags are set.
 		char skipDenseMatrix = 0;
 #ifdef RADIA_USE_HACAPK
-		{
-			extern bool g_yano_moment;
-			if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && !g_yano_moment)
-				skipDenseMatrix = 1;
-		}
+		if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && !m_b_input_newton && !m_b_input_hantila)
+			skipDenseMatrix = 1;
 #endif
 
 		// Check if we can reuse cached interaction matrix
@@ -1824,9 +1822,10 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// (BuildMomentSystemCore) is the default for pure 6-DOF hexahedral soft iron.  Solver method:
 		//   - method 0 (LU)       -> dense direct moment solve.
 		//   - method 1 (BiCGSTAB) -> reroute to LU (dense moment direct solve; medium N).
-		//   - method 2 (HACApK)   -> the moment H-matrix + block-Jacobi BiCGSTAB (scalable storage), set
-		//     g_yano_moment_hacapk and route to the LU/Picard driver whose linear step picks the H-BiCGSTAB
-		//     (LINEAR/uniform chi; nonlinear per-element chi falls back to dense LU inside the step).
+		//   - method 2 (HACApK)   -> the moment H-matrix + block-Jacobi BiCGSTAB (scalable storage; no dense
+		//     interaction/base matrix, Increment 4), set g_yano_moment_hacapk and route to the LU/Picard driver
+		//     whose linear step picks the H-BiCGSTAB.  PER-ELEMENT chi: the nonlinear Picard loop re-solves the
+		//     H-system each iteration with the current chi (Increment 4); breakdown falls back to dense moment LU.
 		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Mixed/
 		// non-hex elements and explicit yano_moment=False are NOT -> the EIEM2 collocation path handles them.
 		{
