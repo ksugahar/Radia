@@ -69,7 +69,7 @@ def test_radsolve_hdiv_image_passed_through():
     with ng.TaskManager():
         half = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=2, mapping=mp)
         direct = vim.hdiv_demag_solve(half, mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)),
-                                      image="-z", scalable=False)
+                                      image="-z")
     iron = vim.soft_iron_from_mesh(half, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     cont = rad.ObjCnt([iron, bkg])
