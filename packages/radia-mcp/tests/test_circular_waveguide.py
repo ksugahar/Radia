@@ -33,34 +33,3 @@ def test_circular_cutoff_closed_form():
     assert math.isclose(circular_waveguide_cutoff(2 * A, "TE", 1, 1), f_te11 / 2, rel_tol=1e-12)
     with pytest.raises(ValueError):
         circular_waveguide_cutoff(A, "XX", 1, 1)
-
-
-@pytest.mark.xval
-def test_circular_waveguide_fe():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    from ngsolve import Mesh, TaskManager
-    from netgen.occ import OCCGeometry, WorkPlane
-    from radia_mcp.radia_ngsolve.waveguide import helmholtz_cutoff_wavenumbers_2d
-
-    disk = WorkPlane().Circle(0, 0, A).Face(); disk.edges.name = "wall"
-    mesh = Mesh(OCCGeometry(disk, dim=2).GenerateMesh(maxh=A / 18))
-
-    with TaskManager():
-        te = helmholtz_cutoff_wavenumbers_2d(mesh, 3, bc="neumann")     # TE11(x2), TE21
-        tm = helmholtz_cutoff_wavenumbers_2d(mesh, 1, bc="dirichlet")   # TM01
-
-    # dominant TE11 matches the Bessel-zero cutoff
-    assert math.isclose(cutoff_frequency(te[0]), circular_waveguide_cutoff(A, "TE", 1, 1), rel_tol=3e-3)
-    # TE21 (3rd TE wavenumber, after the TE11 degenerate pair)
-    assert math.isclose(cutoff_frequency(te[2]), circular_waveguide_cutoff(A, "TE", 2, 1), rel_tol=3e-3)
-    # TM01 (Dirichlet) matches
-    assert math.isclose(cutoff_frequency(tm[0]), circular_waveguide_cutoff(A, "TM", 0, 1), rel_tol=3e-3)
-    # TE11 appears as a degenerate pair (two near-equal lowest Neumann modes)
-    assert math.isclose(te[0], te[1], rel_tol=5e-3)
-
-
-if __name__ == "__main__":
-    test_circular_cutoff_closed_form()
-    test_circular_waveguide_fe()
-    print("[OK] circular waveguide: disk Helmholtz eigenvalues == Bessel-zero cutoffs (TE11 dominant).")

@@ -14,7 +14,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -28,8 +28,7 @@ a, h, I, mur = 0.002, 0.02, 100.0, 5000.0
 IW, ID, Rbox = 1.0, 0.5, 1.0
 
 
-@pytest.mark.xval
-def test_image_force_wire_above_iron():
+def validate_image_force_wire_above_iron():
     wire = WorkPlane().Circle(0, h, a).Face(); wire.faces.name = "wire"
     iron = MoveTo(-IW/2, -ID).Rectangle(IW, ID).Face(); iron.faces.name = "iron"
     box = WorkPlane().Circle(0, 0, Rbox).Face(); box.edges.name = "outer"
@@ -53,5 +52,5 @@ def test_image_force_wire_above_iron():
 
 
 if __name__ == "__main__":
-    test_image_force_wire_above_iron()
+    validate_image_force_wire_above_iron()
     print("[OK] method-of-images force (wire above iron) validated.")

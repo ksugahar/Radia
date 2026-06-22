@@ -2,7 +2,7 @@
 quality post-processing. The core extraction is pure numpy/cmath (NO NGSolve),
 so these run everywhere and lock the CERN/European convention and the exact
 line-current reference. The FEM cross-check (a real quadrupole solve) lives in
-tests/test_force_xval.py::test_multipole_quadrupole_fem (xval).
+validation/force/validate_force_xval.py::validate_multipole_quadrupole_fem.
 """
 import math
 import cmath

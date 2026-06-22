@@ -55,28 +55,3 @@ def _slot_L_fe(w_s, h_c, h_o=0.0, w_o=None, order=3):
     A = solve_planar_magnetostatic(mesh, CoefficientFunction(NU0), Jz=Jz, order=order, dirichlet="top")
     B = CoefficientFunction((grad(A)[1], -grad(A)[0]))
     return 2 * sum(magnetic_energy_2d(B, mesh, m) for m in set(mesh.GetMaterials()))
-
-
-@pytest.mark.xval
-def test_slot_leakage_fe():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    from ngsolve import TaskManager
-    with TaskManager():
-        # closed slot: the 1/3 factor is EXACT
-        L = _slot_L_fe(0.004, 0.020)
-        assert math.isclose(L, MU0 * slot_leakage_permeance(0.020, 0.004), rel_tol=5e-3)
-        # same-width current-free extension: still EXACT (no step)
-        L = _slot_L_fe(0.004, 0.020, 0.010, 0.004)
-        assert math.isclose(L, MU0 * slot_leakage_permeance(0.020, 0.004, 0.010, 0.004), rel_tol=5e-3)
-        # narrowed tooth-tip opening: FE sits ABOVE the simple series form (shoulder fringing),
-        # but within ~10 % -- the closed form is a documented lower bound
-        L = _slot_L_fe(0.006, 0.024, 0.004, 0.002)
-        cf = MU0 * slot_leakage_permeance(0.024, 0.006, 0.004, 0.002)
-        assert cf < L < 1.10 * cf
-
-
-if __name__ == "__main__":
-    test_slot_leakage_closed_form()
-    test_slot_leakage_fe()
-    print("[OK] slot leakage: 1/3 conductor term + same-width opening exact; narrowed = lower bound.")
