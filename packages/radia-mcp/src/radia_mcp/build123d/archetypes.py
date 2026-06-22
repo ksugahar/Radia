@@ -37,7 +37,8 @@ __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cyl
            "litz_packing_radius", "litz_fill_factor", "litz_wire", "hierarchical_litz",
            "rectangular_litz", "litz_serving",
            "involute_gear", "threaded_rod", "airfoil", "blade",
-           "gear_rack", "bevel_gear", "worm", "chain_sprocket", "vbelt_pulley"]
+           "gear_rack", "bevel_gear", "worm", "chain_sprocket", "vbelt_pulley",
+           "ipm_rotor", "squirrel_cage_rotor", "claw_pole_rotor"]
 
 
 def magnetization_tag(name, index, angle_deg):
@@ -632,3 +633,88 @@ def vbelt_pulley(radius, width, groove_depth, bore_radius, name="pulley"):
     g = body - groove - Cylinder(bore_radius, width * 1.2, align=_BASE_Z)
     g.label = name
     return g
+
+
+# =====================================================================================================
+# Rotating-machine rotor archetypes (z-centred, multi-region, AGE-solver-ready -- like spm_rotor)
+# =====================================================================================================
+_CENTRED = (Align.CENTER, Align.CENTER, Align.CENTER)
+
+
+def ipm_rotor(r_shaft, r_rotor, n_poles, magnet_width, magnet_thickness, v_open_deg, h, name="magnet"):
+    r"""An **interior-PM (IPM) rotor**: a lamination (``r_shaft < r < r_rotor``, ``z``-centred) with
+    ``n_poles`` V-shaped pairs of BURIED rectangular magnets (the ``v_open_deg`` opening of the V), the
+    magnet pockets cut from the iron so iron and magnets are non-overlapping regions.  Each magnet's easy
+    axis is encoded RADIAL and ALTERNATING N/S pole-to-pole via the magnetization-label convention.
+    Returns a labelled multi-region Compound (``rotor_iron`` + ``{name}_kk_M<deg>``, ``1 + 2*n_poles``
+    regions) -- the IPM rotor half of a PMSM for the AGE solver."""
+    if not (0 <= r_shaft < r_rotor):
+        raise ValueError("require 0 <= r_shaft < r_rotor")
+    r_mag = r_rotor * 0.6
+    mags, idx = [], 0
+    for k in range(n_poles):
+        pole = k * 360.0 / n_poles
+        for sgn in (+1, -1):
+            blk = (Rot(0, 0, pole) * Rot(0, 0, sgn * v_open_deg / 2.0)
+                   * Pos(r_mag, 0, 0) * Box(magnet_thickness, magnet_width, h, align=_CENTRED))
+            blk.label = magnetization_tag(name, idx, pole + (180.0 if k % 2 else 0.0))
+            mags.append(blk)
+            idx += 1
+    iron = Cylinder(r_rotor, h) if r_shaft <= 0 else tube(r_shaft, r_rotor, h)
+    for m in mags:
+        iron = iron - m
+    iron.label = "rotor_iron"
+    return assembly(iron, *mags, label="ipm_rotor")
+
+
+def squirrel_cage_rotor(r_shaft, r_rotor, n_bars, bar_radius, ring_thickness, h, name="bar"):
+    r"""A **squirrel-cage induction rotor**: an iron core (``r_shaft < r < r_rotor``, ``z``-centred) with
+    ``n_bars`` conductor bars (radius ``bar_radius``) seated near the surface and two shorting end rings
+    (radial ``ring_thickness``).  The bar slots are cut from the iron, so the iron, the bars and the
+    rings are non-overlapping regions.  Returns a labelled multi-region Compound (``rotor_iron`` +
+    ``{name}_kk`` + ``end_ring_hi`` / ``end_ring_lo``, ``1 + n_bars + 2`` regions)."""
+    if not (0 <= r_shaft < r_rotor):
+        raise ValueError("require 0 <= r_shaft < r_rotor")
+    core = Cylinder(r_rotor, h) if r_shaft <= 0 else tube(r_shaft, r_rotor, h)
+    r_bar = r_rotor - bar_radius * 1.4
+    bars = []
+    for k in range(n_bars):
+        b = Rot(0, 0, k * 360.0 / n_bars) * Pos(r_bar, 0, 0) * Cylinder(bar_radius, h)
+        b.label = f"{name}_{k:02d}"
+        bars.append(b)
+    iron = core
+    for b in bars:
+        iron = iron - b
+    iron.label = "rotor_iron"
+    ring_hi = Pos(0, 0, h / 2) * tube(r_bar - bar_radius, r_bar + bar_radius, ring_thickness)
+    ring_hi.label = "end_ring_hi"
+    ring_lo = Pos(0, 0, -h / 2) * tube(r_bar - bar_radius, r_bar + bar_radius, ring_thickness)
+    ring_lo.label = "end_ring_lo"
+    return assembly(iron, *bars, ring_hi, ring_lo, label="squirrel_cage")
+
+
+def claw_pole_rotor(r_shaft, r_rotor, n_claws, claw_width, h, name="claw"):
+    r"""A **Lundell / claw-pole rotor**: two interleaved iron claw sets (the alternating N and S poles of
+    an automotive alternator), each a hub at one axial end with ``n_claws`` axial fingers reaching toward
+    the other end; the two sets are offset by half a pole pitch.  ``z``-centred.  Returns a labelled
+    Compound of the two fused half-rotors (``claw_north`` / ``claw_south``)."""
+    if n_claws < 2:
+        raise ValueError("n_claws must be >= 2")
+    hub_h = h * 0.24
+    claw_len = h - hub_h
+    r_mid, rad_t = r_rotor * 0.78, r_rotor * 0.34        # claws overlap their hub radially (clean fuse)
+
+    def _half(z_hub, zdir, ang_off, lbl):
+        hub = Pos(0, 0, z_hub) * (Cylinder(r_rotor * 0.9, hub_h) - Cylinder(r_shaft, hub_h * 1.2))
+        g = hub
+        for k in range(n_claws):
+            ang = ang_off + k * 360.0 / n_claws
+            zc = z_hub + zdir * claw_len / 2.0
+            g = g + Rot(0, 0, ang) * Pos(r_mid, 0, zc) * Box(rad_t, claw_width, claw_len + hub_h,
+                                                             align=_CENTRED)
+        g.label = lbl
+        return g
+
+    north = _half(-(h - hub_h) / 2.0, +1, 0.0, "claw_north")
+    south = _half((h - hub_h) / 2.0, -1, 180.0 / n_claws, "claw_south")
+    return assembly(north, south, label="claw_pole_rotor")
