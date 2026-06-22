@@ -1115,57 +1115,7 @@ void radTInteraction::SetupExternFieldArray()
 				m_flatExternFieldArray[offset + 1] += H_ext.y;
 				m_flatExternFieldArray[offset + 2] += H_ext.z;
 			}
-			else if(dof >= 5)
-			{
-				// MSC element (5=wedge, 6=hex): compute H_ext dot n at each face
-				// External field is evaluated at element positions
-				radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
-				if(poly && poly->Use6DOF_MSC)
-				{
-					for(int face_i = 0; face_i < dof; face_i++)
-					{
-						// Eval point for face i (midpoint between face center and element center)
-						// This is in element's local coordinates
-						TVector3d EvalPt = poly->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-						// Transform EvalPt from element's local coords to world coords
-						TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);
-
-						// Compute H_ext at eval point from all external sources
-						// Use same transform handling as 3DOF elements
-						TVector3d H_world(0., 0., 0.);
-						for(int ExtElNo = 0; ExtElNo < AmOfExtElem; ExtElNo++)
-						{
-							FillInTransPtrVectForElem(ExtElNo, 'E');
-							radTg3d* ExtElPtr = g3dExternPtrVect[ExtElNo];
-
-							TVector3d BufVect(0., 0., 0.);
-							for(unsigned t = 0; t < TransPtrVect.size(); t++)
-							{
-								// Transform obs point to external element's local coords
-								TVector3d ObsPoiVect = TransPtrVect[t]->TrPoint_inv(WorldEvalPt);
-								radTField Field(FieldKeyExtern, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-								ExtElPtr->B_comp(&Field);
-								// Transform field back to world coords using pseudo-vector transformation
-								// H field is a pseudo-vector: H' = det(T) * T * H
-								BufVect += TransPtrVect[t]->TrAxialVect(Field.H);
-							}
-							H_world += BufVect;
-							EmptyTransPtrVect();
-						}
-
-						// FaceNormal is stored in GLOBAL coordinates (from SetupFaceGeometry)
-						// H_world is already in global coordinates
-						// Compute dot product directly in global coordinates (ELF-compatible)
-						// Note: Do NOT transform H to local coords - FaceNormal is already global!
-						double H_dot_n = H_world.x * poly->FaceNormal[face_i].x +
-						                 H_world.y * poly->FaceNormal[face_i].y +
-						                 H_world.z * poly->FaceNormal[face_i].z;
-
-						m_flatExternFieldArray[offset + face_i] += H_dot_n;
-					}
-				}
-			}
+			// MSC (hex/wedge): no per-face external field -- the moment-yano solve samples ExternFieldArray (centroid).
 		}
 	}
 	//g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
@@ -1212,38 +1162,7 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 					m_flatExternFieldArray[offset + 1] = H_ext.y;
 					m_flatExternFieldArray[offset + 2] = H_ext.z;
 				}
-				else if(dof == 6)
-				{
-					// MSC hexahedron: compute H_ext dot n at each face
-					radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
-					if(poly && poly->Use6DOF_MSC)
-					{
-						for(int face_i = 0; face_i < 6; face_i++)
-						{
-							// Eval point for face i (midpoint between face center and element center)
-							// This is in element's local coordinates
-							TVector3d EvalPt = poly->MscEvalPoint(face_i);   // EIEM2 (flag off) or pyramid centroid (flag on)
-
-							// Transform EvalPt to world coords (same as 3DOF code on line 1520)
-							TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);
-
-							// Compute H_ext at world eval point
-							// B_genComp handles internal transforms recursively
-							radTField Field(FieldKeyExtern, CompCriterium, WorldEvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-							(static_cast<radTg3d*>(MoreExtSourceHandle.rep))->B_genComp(&Field);
-
-							// FaceNormal is stored in GLOBAL coordinates (from SetupFaceGeometry)
-							// Field.H from B_genComp is already in global coordinates
-							// Compute dot product directly in global coordinates (ELF-compatible)
-							// Note: Do NOT transform H to local coords - FaceNormal is already global!
-							double H_dot_n = Field.H.x * poly->FaceNormal[face_i].x +
-							                 Field.H.y * poly->FaceNormal[face_i].y +
-							                 Field.H.z * poly->FaceNormal[face_i].z;
-
-							m_flatExternFieldArray[offset + face_i] = H_dot_n;
-						}
-					}
-				}
+				// MSC: no per-face external field (moment-yano uses the centroid ExternFieldArray).
 			}
 		}
 	}
@@ -1371,7 +1290,7 @@ void radTInteraction::FindMaxModMandH(double& MaxModM, double& MaxModH)
 //=========================================================================
 // PrecomputeTetraGeometry: Pre-compute tetrahedron face geometry
 // Extracts vertices, normals, and areas for fast 3x3 block computation
-// Reference: ELF-style optimization (same as RadHACApKMSCManager::PrecomputeGeometry3DOF)
+// Reference: ELF-style optimization (same as RadHACApKMMMManager::PrecomputeGeometry3DOF)
 //=========================================================================
 
 void radTInteraction::PrecomputeTetraGeometry()
@@ -1606,7 +1525,7 @@ static void FieldFromChargedTriangleLocal(const double* obs,
 //=========================================================================
 // Compute3x3BlockFast: Fast 3x3 interaction block for tetrahedra
 // Uses pre-computed geometry (no B_comp overhead)
-// Reference: ELF-style optimization (same as RadHACApKMSCManager::Compute3x3BlockFast)
+// Reference: ELF-style optimization (same as RadHACApKMMMManager::Compute3x3BlockFast)
 //=========================================================================
 
 void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const
