@@ -4,6 +4,12 @@
 
 This document describes the implementation of Image symmetry for MSC hexahedra in Radia.
 
+**Status (updated 2026-06-23):** this is a historical design note for the pre-moment-yano
+surface-charge kernel. The EIEM2 `Compute6x6BlockFast` / `Compute5x5BlockFast` kernels were removed;
+current surface-charge IMA is handled by `BuildMomentSystemCore` /
+`CentroidFieldGradFromFace`, while tetrahedral MMM still uses `Compute3x3BlockFast`.
+Old snippets and class names are kept below only to explain the original design.
+
 **Note**: As of 2026-01-31, `TrfMlt`, `TrfPlSym`, `TrfZerPara`, and `TrfZerPerp` have been **REMOVED** from Radia. `rad.Image()` is the only supported method for plane symmetry with MSC hexahedra.
 
 ## Why TrfMlt Was Removed

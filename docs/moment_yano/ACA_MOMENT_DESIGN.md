@@ -1,21 +1,21 @@
 # Scalable moment-yano: ACA + H-LU design (Phase 2 of the EIEM2 full-deletion track)
 
-**Status (2026-06-22):** Increments 1-4 ALL DONE -- Phase 2 (scalable method 2) is COMPLETE. moment-yano is
-the DEFAULT 6-DOF hex soft-iron demag formula (Steps 3-4), covers IMA (Phase 1), and `rad.Solve(..., method=2)`
-now solves the moment system via the HACApK H-matrix + block-Jacobi BiCGSTAB for BOTH linear and nonlinear
-(per-element chi) materials, with **O(N log N) storage** (the three dense O(N^2) buffers -- interaction N,
-BaseMatrix, dgesv SystemMatrix -- are all removed from the method-2 path).  Measured: at dof=12288 method 2
-uses 673 MB vs method 0's 5461 MB (ratio 0.12, sub-quadratic; `examples/vim/bench_moment_storage_scaling.py`
-+ `.json`), external B matches method 0 to ~1e-10, nonlinear C-yoke saturates identically (same Picard iters).
-With method 0/1/2 + IMA + nonlinear all on moment, **EIEM2 deletion (Phase 3) is unblocked** (keep EIEM2 as
-the `yano_moment=False` opt-out until Phase 3 lands per the user's 2026-06-22 decision).
+**Status (2026-06-23):** Phase 2 (scalable method 2) is COMPLETE and Phase 3 has landed. moment-yano is the
+canonical surface-charge soft-iron demag formula for hex, wedge, and pyramid polyhedra; the EIEM2 collocation
+kernels and their `SolverConfig` research opt-outs are removed. `rad.Solve(..., method=2)` solves the moment
+system via the HACApK moment H-matrix + block-Jacobi BiCGSTAB for linear and nonlinear (per-element chi)
+materials, with **O(N log N) storage** (the three dense O(N^2) buffers -- interaction N, BaseMatrix, dgesv
+SystemMatrix -- are all removed from the method-2 path). Measured: at dof=12288 method 2 uses 673 MB vs
+method 0's 5461 MB (ratio 0.12, sub-quadratic; `examples/vim/bench_moment_storage_scaling.py` + `.json`),
+external B matches method 0 to ~1e-10, and the nonlinear C-yoke saturates identically (same Picard iters).
 
-## What we are building
+## What was built
 
-A scalable solver for the moment-yano linear system so that `rad.Solve(..., method=2)`
-(HACApK) on pure 6-DOF hex soft iron solves the **moment** system (not EIEM2) with
-`O(N log N)` storage + matvec and **bounded iterations**. The nonlinear outer loop
-(Picard / Anderson) wraps this linear solve unchanged.
+A scalable solver for the moment-yano linear system so that `rad.Solve(..., method=2)` (HACApK) on pure
+6-DOF hex soft iron solves the **moment** system (not EIEM2) with `O(N log N)` storage + matvec. The shipped
+preconditioner is block-Jacobi, so iterations still grow with the high-mu demag conditioning wall; a pivoted
+H-factor or symmetrized moment formulation remains future work. The nonlinear outer loop (Picard / Anderson)
+wraps this linear solve unchanged.
 
 ## The validated picture (from the lab prototypes, all on `main`)
 
@@ -23,9 +23,10 @@ A scalable solver for the moment-yano linear system so that `rad.Solve(..., meth
 |---|---|
 | `yano_moment_hmatrix_compressibility.py` | Gate 1 PASS: the nonlocal moment kernel `D` (centroid field+grad coupling) has **bounded ACA rank** (field ~13, grad ~16-24), `N`-independent -> H-compressible. |
 | `yano_moment_matfree_solve.py` | Gate 2 PASS: matrix-free moment matvec reproduces the dense direct solve to `<1e-6` -> swapping the dense matvec for the HACApK matvec keeps the same answer. Block-Jacobi does NOT bound iters (grow `~dof^1.06`, mu_r-contrast driven). |
-| `yano_moment_scalable_path.py` | The A-build kernel is **cheap** (`~0.9 us`/(elem,face), single centroid->face integral) -- lighter than HDiv's face-face charge-Gram. Cheap preconditioners (block-Jacobi, sparse-LU top-k, deflation) all FAIL; the long-range demag coupling MUST stay in the preconditioner. **H-LU is necessary, sufficient, and affordable** (cheap factor + cheap build). |
+| `yano_moment_scalable_path.py` | The A-build kernel is **cheap** (`~0.9 us`/(elem,face), single centroid->face integral) -- lighter than HDiv's face-face charge-Gram. Cheap preconditioners (block-Jacobi, sparse-LU top-k, deflation) all FAIL in the prototype, which motivated trying H-LU; the later no-pivot HACApK diagnostic below showed that H-LU is not shippable for this non-symmetric moment matrix. |
 
-Net: **SCALABLE moment-yano = HACApK A-build (cheap entries) + H-LU factor -> bounded iters.**
+Net: **SCALABLE moment-yano = HACApK A-build (cheap entries) + H-matvec BiCGSTAB + block-Jacobi today.**
+Bounded iterations remain future work (pivoted H-factor or a symmetrized moment formulation).
 
 ## The system
 
@@ -138,8 +139,9 @@ class RadHACApKMomentSystem : public RadHACApKBase {
 
 With method 0/1/2 + IMA + nonlinear all on moment, the EIEM2 surface-charge collocation
 kernel was REMOVED (live/dead refactor, commits bf4424d9/99556872/15f17022/d8d4ef99):
-`radTInteraction::Compute6x6/5x5/MixedBlockFast`, the `RadHACApKMSCManager` MSC machinery
-(now MMM-3x3-only), the dead IMA-mirror block, the per-face eval-point caches, and the
+`radTInteraction::Compute6x6/5x5/MixedBlockFast`, the former `RadHACApKMSCManager` MSC machinery
+(renamed `RadHACApKMMMManager` and now MMM-3x3-only), the dead IMA-mirror block, the per-face eval-point
+caches, and the
 `g_yano_eval_alpha`/`g_yano_no_center_charge`/`g_yano_pyramid_cloud` research flags (+ their
 `SolverConfig` kwargs).  `MscEvalPoint` (alpha=0.5 midpoint) was ALSO deleted (final polish
 `6b617a91`): the per-face MSC external-field branches (`dof>=5`/`dof==6`) in `SetupExternFieldArray`
