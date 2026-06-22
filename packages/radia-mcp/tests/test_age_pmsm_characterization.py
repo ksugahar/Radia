@@ -26,10 +26,13 @@ import math
 import os
 import sys
 
+import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx, x, y,
                      atan2, cos, sin, IfPos, Integrate, Mesh, TaskManager)
 from netgen.geom2d import SplineGeometry
+
+pytestmark = pytest.mark.xval
 
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
