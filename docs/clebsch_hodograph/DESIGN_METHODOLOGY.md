@@ -188,6 +188,42 @@ the betatron tunes, and the orbit↔field self-consistency are separate problems
 not modeled here. The no-remesh pullback is shown for the *linear* pole; wiring
 it through the nonlinear saturated Newton is the next rung.
 
+### 3.4 Foliate-and-perturb: when is the body 2-D and the end a perturbation?
+
+§3.1 designs the 2-D cross-section; §3.2 designs the 3-D end. The **quantitative
+bridge** is: slice the magnet into 2-D `(x,z)` **leaves** along the beam `y`,
+**stack** the cross-section solution (0th order), and **connect** leaves by a
+beam-direction **perturbation** (the ends). When does this land? Measured on a
+real reduced-Omega + CoilBuilder dipole, parametrised by the iron length so the
+aspect ratio `L/gap` can be swept (`leaf_coupling_perturbation_3d.py`):
+
+- the **0th-order leaf-stacking error** `delta(y) = ||B_perp(.,y) -
+  B_perp(.,body)|| / ||B_perp(.,body)||` (for a straight constant-gap magnet the
+  body slice IS the 2-D infinite-long leaf) is ~0 in the body and grows at the
+  ends;
+- the **inter-leaf perturbation parameter** `eps(y) = (g/2)|dBz/dy|/|Bz_body|`
+  (transverse / beam-variation scale; **not** an operator-norm ratio, which is
+  trapped at 1 by `grad_perp^2 = -d^2/dy^2` in current-free air) is ~0 in the
+  body, O(1) at the ends;
+- the integrated **fringe excess** `(L_eff - L_iron)/L_iron` is the 1st-order
+  correction, and it **scales as ~ gap/L** (log-log slope **-0.95**):
+
+| L/gap | 2 | 3 | 5 | 8 |
+|---|---|---|---|---|
+| fringe excess | +180 % | +111 % | +70 % | +48 % |
+
+**Consequence for the design.** A **compact** magnet (the §3.2 end-study dipole,
+`L/gap = 3`) is **non-perturbative** (+111 % fringe, the 0th-order stack misses
+~40 %, the 3-D-ness is *not* end-localised) -- you cannot foliate it, the ends
+are the whole magnet. Foliate-and-perturb lands only for **long** magnets, the
+fringe dropping to ~10 % near `L/gap ~ 40` (typical beamline dipole). **Where it
+lands, the body is a 2-D cross-section design and only the ends need the 3-D
+treatment -- and that 3-D end treatment is exactly §3.2 (follow the
+beam-referenced equipotential surface).** An equipotential-following end removes
+the fringe's *harmonic* contamination (§3.2 theorem) but **not** the fringe
+itself (`L_eff > L_iron` is a free-space effect, the table above) -- so the end
+fixes the *integrated strength*, the body 2-D design fixes the *field quality*.
+
 **Established (rung 2, FEM, `accel_pole_ends_fem.py`, golden-tested).** The
 analytic field is replaced by a real **reduced-Ω + CoilBuilder** forward solve
 of a finite-length dipole — x-symmetric H-frame iron (netgen.occ, no Cubit) + a
@@ -290,7 +326,12 @@ coil = A-side), so the framework is one method, not two.
   droop + 2-param reshape (flat `k` restored ~7.2×); the **isochronous** variant
   (rising `k_iso(r) = (β γ)²`) whose nonlinear END PACK is driven back onto
   `B0 γ(r)` (saturation-broken 2.3 % → 0.73 %, **3.1×**, A/φ-certified ~5e-4);
-  and the hodograph-as-solver pullback (fixed mesh, Netgen runs once).
+  and the hodograph-as-solver pullback (fixed mesh, Netgen runs once);
+- the **foliate-and-perturb scaling** (§3.4, `leaf_coupling_perturbation_3d.py`):
+  the inter-leaf coupling (fringe excess) of a straight dipole decays as ~ gap/L
+  (log-log slope -0.95 over L/gap = 2..8), so a compact magnet (L/gap=3) is
+  non-perturbative (+111 % fringe) and the body-2-D + end-perturbation scheme
+  lands only for long magnets (~10 % fringe at L/gap ~ 40).
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed for the longitudinal end-field** (§3.2 rung 2);
@@ -320,4 +361,5 @@ coil = A-side), so the framework is one method, not two.
 | 3-D ends: FEM rung (reduced-Ω + CoilBuilder) | `examples/clebsch_hodograph/accel_pole_ends_fem.py` |
 | forward (reduced potential + CoilBuilder) | `src/radia/panels/calc_accel_magnet.py` |
 | radial field index (scaling + isochronous, saturation) | `examples/clebsch_hodograph/scaling_ffag_pole_2d.py` |
+| foliate-and-perturb scaling (leaf coupling ~ gap/L) | `examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
