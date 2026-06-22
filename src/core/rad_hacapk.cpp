@@ -1483,5 +1483,41 @@ double RadHACApKMSCManager::GetGenericElement(int elem_i, int elem_j, int local_
 }
 
 //=========================================================================
+// RadHACApKMomentSystem: the moment-yano system A_raw as a HACApK H-matrix
+// (docs/moment_yano/ACA_MOMENT_DESIGN.md, Phase 2 Increment 2).
+//=========================================================================
+
+RadHACApKMomentSystem::RadHACApKMomentSystem(radTInteraction* interaction, double chi)
+    : m_interaction(interaction), m_chi(chi)
+{
+}
+
+void RadHACApKMomentSystem::ExtractCoordinates()
+{
+    if (!m_interaction) { m_ndof = 0; m_n_elem = 0; return; }
+    const std::vector<int>& hexElem = m_interaction->GetHexaElemIndices();
+    int nHex = (int)hexElem.size();
+    m_n_elem = nHex;
+    m_ndof = 6 * nHex;
+    m_coordinates.resize((size_t)nHex * 3);
+    m_dof_offset.resize(nHex + 1);
+    for (int h = 0; h < nHex; h++) {
+        TVector3d c = m_interaction->GetElementCenter(hexElem[h]);
+        m_coordinates[(size_t)h * 3 + 0] = c.x;
+        m_coordinates[(size_t)h * 3 + 1] = c.y;
+        m_coordinates[(size_t)h * 3 + 2] = c.z;
+        m_dof_offset[h] = 6 * h;
+    }
+    m_dof_offset[nHex] = 6 * nHex;
+    m_chiv.assign((size_t)(nHex > 0 ? nHex : 1), m_chi);   // uniform chi per hex for MomentSystemEntry
+}
+
+double RadHACApKMomentSystem::GetInteractionMatrixElement(int dof_i, int dof_j) const
+{
+    if (!m_interaction || m_chiv.empty()) return 0.0;
+    return m_interaction->MomentSystemEntry(dof_i, dof_j, m_chiv.data());
+}
+
+//=========================================================================
 // End of rad_hacapk.cpp
 //=========================================================================
