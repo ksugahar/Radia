@@ -2358,6 +2358,48 @@ static int momentFaceGeom(radTPolyhedron* poly, int f, const TVector3d& ce,
 }
 
 //=========================================================================
+// momentResidualEigenmodes: orthonormal basis of the RESIDUAL subspace -- the (nF-4) charge patterns with
+// ZERO monopole and ZERO dipole MOMENT (null space of the 4 functionals {Ae, Ae*d_x, Ae*d_y, Ae*d_z} in
+// R^nF).  These are the element's natural QUADRUPOLE eigenmodes; using them as the moment-system quadrupole
+// test directions (in place of the hand-picked dx^2-dy^2 / axial forms) is geometry-adaptive and ALWAYS
+// full-rank -- it never hits the degenerate near-null mode a fixed quadratic can on a distorted element
+// (the wedge dx^2-dy^2 -> M~1e9 blow-up that motivated the axial hand-fix; verified equivalent to the
+// hand-pick on symmetric elements -> cube demag N=1/3 preserved).  Deterministic Gram-Schmidt (nF <= 6,
+// no LAPACK needed); identical Ae/d in BuildMomentSystemCore and MomentSystemEntry -> identical modes, so
+// the dense (method 0/1) and H-matrix (method 2) moment systems stay consistent.  Returns the mode count
+// (nF-4 generically); phi[q][f] is the q-th orthonormal mode (sum_f phi[q][f]^2 = 1).
+//=========================================================================
+static int momentResidualEigenmodes(const double Ae[], const double d[][3], int nF, double phi[][6])
+{
+	double basis[6][6]; int nb = 0;
+	auto orthoAdd = [&](double v[6]) -> bool
+	{
+		for(int b = 0; b < nb; b++)
+		{
+			double dot = 0.0; for(int f = 0; f < nF; f++) dot += basis[b][f]*v[f];
+			for(int f = 0; f < nF; f++) v[f] -= dot*basis[b][f];
+		}
+		double nrm = 0.0; for(int f = 0; f < nF; f++) nrm += v[f]*v[f]; nrm = std::sqrt(nrm);
+		if(nrm > 1.0e-9) { for(int f = 0; f < nF; f++) basis[nb][f] = v[f]/nrm; nb++; return true; }
+		return false;
+	};
+	// 1) orthonormalize the monopole + 3 dipole MOMENT functionals -> ortho basis of the NON-residual part
+	for(int i = 0; i < 4; i++)
+	{
+		double v[6]; for(int f = 0; f < nF; f++) v[f] = (i == 0) ? Ae[f] : Ae[f]*d[f][i-1];
+		orthoAdd(v);
+	}
+	// 2) extend to R^nF with the standard basis; each newly-independent residual vector is a quad eigenmode
+	int nq = 0;
+	for(int e = 0; e < nF && nb < nF; e++)
+	{
+		double v[6] = {0,0,0,0,0,0}; v[e] = 1.0;
+		if(orthoAdd(v)) { for(int f = 0; f < nF; f++) phi[nq][f] = basis[nb-1][f]; nq++; }
+	}
+	return nq;
+}
+
+//=========================================================================
 // CollectMomentElems: e-ordered list of MOMENT elements (the surface-charge polyhedra: hex with 6 DOF +
 // wedge with 5 DOF).  For a pure-hex model this equals m_hexaElemIndices order, so the moment Cflat / row
 // layout is unchanged (hex stays bit-identical).  THE single source of element ordering for the moment
@@ -2494,20 +2536,9 @@ void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const doubl
 			double V4col[4][3];
 			fnv[f] = momentFaceGeom(poly, f, ce, V4col, fc[f], nf[f], Ae[f], d[f]);
 		}
-		// wedge prism axis = direction between the 2 triangular cap centroids (the nv==3 faces).  The wedge's
-		// single quad row is the AXIAL quadrupole about THIS axis (orientation-robust; see the Bm code below).
-		double axis[3] = {0.0, 0.0, 1.0};
-		if(nF == 5)
-		{
-			int t0 = -1, t1 = -1;
-			for(int f = 0; f < nF; f++) if(fnv[f] == 3) { if(t0 < 0) t0 = f; else t1 = f; }
-			if(t0 >= 0 && t1 >= 0)
-			{
-				double ax = fc[t1][0]-fc[t0][0], ay = fc[t1][1]-fc[t0][1], az = fc[t1][2]-fc[t0][2];
-				double an = std::sqrt(ax*ax+ay*ay+az*az); if(an < 1e-300) an = 1.0;
-				axis[0] = ax/an; axis[1] = ay/an; axis[2] = az/an;
-			}
-		}
+		// residual quadrupole eigenmodes (the geometry-adaptive replacement for the hand-picked dx^2-dy^2 /
+		// axial forms): the (nF-4) zero-monopole, zero-dipole-moment charge patterns the element can carry.
+		double phiQ[6][6]; int nQ = momentResidualEigenmodes(Ae, d, nF, phiQ); (void)nQ;
 		double Ve = 0.0;
 		for(int f = 0; f < nF; f++) Ve += Ae[f]*(fc[f][0]*nf[f][0]+fc[f][1]*nf[f][1]+fc[f][2]*nf[f][2]);
 		Ve *= (1.0/3.0);
@@ -2540,22 +2571,14 @@ void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const doubl
 		std::fill(r.begin(), r.end(), 0.0);
 		for(int f = 0; f < nF; f++) r[off+f] = Ae[f];
 		putRow(0.0);
-		// diagonal-quadrupole rows: (nF-4) of them -- hex has 2 (Bm = dx^2-dy^2, then dy^2-dz^2), wedge has 1
-		// (dx^2-dy^2 only).  3 dipole + 1 monopole + (nF-4) quad = nF rows = nF DOF (square per element).
+		// residual-eigenmode quadrupole rows: (nF-4) of them (hex 2, wedge 1).  3 dipole + 1 monopole +
+		// (nF-4) quad = nF rows = nF DOF (square per element).  Bm = the qq-th residual eigenmode written as
+		// a per-face form so the test term Ae*Bm = phi_qq exactly; the cm-correction + Dm field-balance below
+		// are unchanged (they act on Ae*Bm).
 		for(int qq = 0; qq < nF-4; qq++)
 		{
 			double Bm[6];
-			for(int f = 0; f < nF; f++)
-			{
-				if(nF == 5)      // wedge: ONE quad row = AXIAL quadrupole 3(d.axis)^2-|d|^2 about the prism axis
-				{                // (orientation-robust; = 2dz^2-dx^2-dy^2 for a z-aligned prism).  Symmetric about
-					double da = d[f][0]*axis[0]+d[f][1]*axis[1]+d[f][2]*axis[2];   // the axis -> PINS the symmetric
-					double dd = d[f][0]*d[f][0]+d[f][1]*d[f][1]+d[f][2]*d[f][2];   // near-null mode the antisymmetric
-					Bm[f] = 3.0*da*da - dd;                                       // dx^2-dy^2 misses.
-				}
-				else
-					Bm[f] = (qq == 0) ? (d[f][0]*d[f][0]-d[f][1]*d[f][1]) : (d[f][1]*d[f][1]-d[f][2]*d[f][2]);
-			}
+			for(int f = 0; f < nF; f++) Bm[f] = (Ae[f] > 1.0e-300) ? phiQ[qq][f]/Ae[f] : 0.0;
 			std::fill(r.begin(), r.end(), 0.0);
 			for(int f = 0; f < nF; f++) r[off+f] += Ae[f]*Bm[f];
 			double cm[3] = {0,0,0};
@@ -2705,8 +2728,11 @@ double radTInteraction::MomentSystemEntry(int rowGlobal, int colDOF, const doubl
 	else                                        // diagonal-quadrupole qq = t-4
 	{
 		int qq = t - 4;
+		// SAME residual quadrupole eigenmode as BuildMomentSystemCore (identical Ae/d -> identical modes),
+		// so the H-matrix (method 2) and dense (method 0/1) moment systems stay consistent.  Bm = phi_qq/Ae.
+		double phiQ[6][6]; momentResidualEigenmodes(Ae, d, 6, phiQ);
 		double Bm[6];
-		for(int f = 0; f < 6; f++) Bm[f] = (qq == 0) ? (d[f][0]*d[f][0]-d[f][1]*d[f][1]) : (d[f][1]*d[f][1]-d[f][2]*d[f][2]);
+		for(int f = 0; f < 6; f++) Bm[f] = (Ae[f] > 1.0e-300) ? phiQ[qq][f]/Ae[f] : 0.0;
 		if(localFace) val += Ae[lf]*Bm[lf];
 		double cm[3] = {0,0,0};
 		for(int f = 0; f < 6; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
