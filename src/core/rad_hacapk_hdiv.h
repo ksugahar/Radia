@@ -130,7 +130,8 @@ public:
     // energy by ~6.5% -- golden-invisible because every uniform-M demag golden has div M = 0.)
     RadHACApKChargeGram(std::vector<double> cell_verts,
                         std::vector<double> face_verts,
-                        int n_el, double near_factor = 1e30);
+                        int n_el, double near_factor = 1e30,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
     // POLYTOPE analytic mode (HEX / WEDGE cells + QUAD faces): the same EXACT analytic entry as the tet/
     // triangle analytic mode above, generalized to ANY flat-faced convex cell + quad face with NO new
@@ -154,7 +155,8 @@ public:
                         std::vector<double> cell_cent, std::vector<double> cell_meas,
                         std::vector<double> face_tris, std::vector<int> face_troff,
                         std::vector<double> face_cent, std::vector<double> face_meas,
-                        int n_el, double near_factor = 1e30);
+                        int n_el, double near_factor = 1e30,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
     // HIGH-ORDER (order-p) mode: POLYNOMIAL charges (a monomial basis on each host element), the order-p
     // extension validated against the dense Python build_demag_highorder.  charge_host[c] = host element
@@ -256,6 +258,9 @@ protected:
 private:
     double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
     double QuadDot(int tgt, int src) const;            // (1/4pi) sum_p w_p PhiAt(src, p) over tgt's outer quad
+    // IMA image term: (1/4pi) sum_p w_p PhiAt(src, R_mask(p)) -- tgt's outer points reflected on the mask
+    // axes.  Uses Phi_{R(b)}(x) = Phi_b(R(x)) (reflection isometry), so only the eval point is mirrored.
+    double QuadDotRefl(int tgt, int src, int mask) const;
 
     std::vector<double> m_cent, m_meas, m_self;        // monopole mode (m_cent also = the cluster-tree points)
     int  m_n = 0;
@@ -267,6 +272,12 @@ private:
     std::vector<std::vector<double>>          m_qw;    // [n] outer-quad weights per charge
     std::vector<double> m_size;                        // [n] characteristic size: vol^(1/3) / area^(1/2)
     double m_near_factor = 1e30;                       // near/far split: NEAR if |c_a-c_b| <= nf*(size_a+size_b)
+    // IMA mirror symmetry (image method): G_IMA(a,b) = G(a,b) + sum_i sign_i*0.5*(QuadDotRefl(a,b,mask_i)
+    // + QuadDotRefl(b,a,mask_i)).  The 2^P-1 non-empty subsets of the P mirror planes (image_group); each
+    // reflects the eval point on its axes.  Always the full analytic image (the self-on-plane image can be
+    // singular -> needs the exact PhiTet/TriPotential, not a monopole far).  Empty = no IMA.
+    std::vector<int>    m_image_masks;                 // [n_img] 3-bit axis mask (bit0=x,1=y,2=z) of the subset
+    std::vector<double> m_image_signs;                 // [n_img] product-sign of the subset
 
     // POLYTOPE analytic mode (hex/wedge): per-charge source triangulation (cell hull tris / face sub-tris).
     // PhiAt(src,.) is the divergence-theorem polytope potential (cell) / sum-of-sub-triangle (face) over
