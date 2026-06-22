@@ -3083,12 +3083,13 @@ double radTInteraction::MomentSystemEntry(int rowGlobal, int colDOF, const doubl
 	// then evaluate the shared kernel at THIS element's centroid (incl. IMA mirrors).
 	double Hc[3] = {0,0,0}, gHc[6] = {0,0,0,0,0,0};
 	{
-		int colElem = -1, colF = -1;
-		for(int hc = 0; hc < nHex; hc++)
+		// O(1) DOF->(hex,face): for pure hex m_elemDOFOffset[m_hexaElemIndices[h]] == 6h, so colDOF/6 is
+		// the hex position and colDOF%6 the local face (no O(nHex) search).  Guard the pure-hex premise.
+		int h_col = colDOF / 6, colF = colDOF % 6, colElem = -1;
+		if(h_col >= 0 && h_col < nHex)
 		{
-			int ei = m_hexaElemIndices[hc];
-			int oc = m_elemDOFOffset[ei];
-			if(colDOF >= oc && colDOF < oc + 6) { colElem = ei; colF = colDOF - oc; break; }
+			int ei = m_hexaElemIndices[h_col];
+			if(m_elemDOFOffset[ei] == 6 * h_col) colElem = ei;   // premise holds -> direct map
 		}
 		radTPolyhedron* pc = (colElem >= 0) ? dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[colElem]) : nullptr;
 		if(pc && pc->AmOfFaces == 6)
