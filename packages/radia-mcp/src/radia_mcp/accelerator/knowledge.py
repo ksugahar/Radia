@@ -14,6 +14,10 @@ TOPICS: dict[str, str] = {
         "Radial field index design: scaling (k=const) vs isochronous "
         "(rising k_iso), and the saturated nonlinear end-pack reshape"
     ),
+    "foliate_perturb": (
+        "When can a magnet be designed as a 2-D body + end perturbation? "
+        "Leaf coupling scales as ~ gap/L (measured slope -0.95)"
+    ),
     "all": "Everything (all topics concatenated)",
 }
 
@@ -333,6 +337,76 @@ _saturated_bracket/_pullback_solver/_isochronous`).
 """
 
 
+FOLIATE_PERTURB = """
+# Foliate-and-perturb: when can a 3-D magnet be designed as a 2-D body
+# plus an end perturbation?  (Leaf coupling scales as ~ gap/L)
+
+A beamline / circular magnet is QUASI-2-D: the long beam direction varies
+slowly and only the magnet ENDS are genuinely 3-D.  The natural design
+scheme is therefore to FOLIATE the magnet into 2-D cross-section "leaves"
+along the beam:
+
+    0th order : STACK the 2-D cross-section (leaf) solution along the beam;
+    1st order : CONNECT adjacent leaves by a beam-direction perturbation
+                (the ENDS / fringe).
+
+This pays off ONLY if the inter-leaf coupling is small AND localised to the
+ends.  Whether it does is governed by the ASPECT RATIO L_iron / gap, and is
+MEASURED (no model assumption) in
+`examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py` on a real
+reduced-Omega + CoilBuilder finite-length C-frame dipole (beam = y, gap = z;
+geometry parametrised by L so L/gap can be swept).
+
+## What is measured (a straight, constant-gap magnet)
+
+For a straight magnet the BODY slice y=0 IS the 2-D infinite-long leaf, so:
+
+  * delta(y) = || B_perp(.,y) - B_perp(.,body) || / || B_perp(.,body) ||
+        the 0th-ORDER leaf-stacking error (~0 in the body, grows at the ends);
+  * eps(y) = (g/2) |dBz/dy| / |Bz_body|
+        the local PERTURBATION PARAMETER = (transverse scale)/(beam-variation
+        scale).  Use THIS, not an operator-norm ratio ||d^2/dy^2|| / ||grad_perp^2||,
+        which is trapped at 1 by the current-free Laplace identity
+        grad_perp^2 Omega = -d^2 Omega/dy^2 in air;
+  * fringe_excess = (L_eff - L_iron)/L_iron
+        the integrated 1st-order (inter-leaf) correction.
+
+## THE RESULT: leaf coupling decays as ~ gap/L
+
+A log-log fit of the fringe excess vs L/gap gives slope -0.95 (i.e. ~ gap/L):
+
+    L/gap        2       3       5       8
+    fringe     +180%   +111%   +70%    +48%
+
+Extrapolating, the fringe drops to ~10% near L/gap ~ 40.
+
+## Consequences for design
+
+  * A COMPACT magnet (e.g. an end-study dipole, L/gap = 3) is firmly
+    NON-PERTURBATIVE: +111% fringe, the 0th-order leaf stack misses ~40% of
+    the integrated dipole, and the 3-D-ness is NOT end-localised (it is the
+    whole magnet).  You CANNOT foliate it -- solve it fully 3-D.
+  * Foliate-and-perturb LANDS only for LONG magnets (L/gap >> 1, ~10% fringe
+    near L/gap ~ 40 -- typical beamline dipoles).  There the BODY is a 2-D
+    cross-section design and ONLY the ends need 3-D treatment.
+  * That 3-D end treatment is exactly the `end_pole` / equipotential-following
+    design: an equipotential-following end (Delferriere r(z)=Delta(1/2-z/L)^(1/n),
+    the beam-referenced equipotential surface) removes the fringe's HARMONIC
+    contamination, but NOT the fringe itself (L_eff > L_iron is a free-space
+    effect).  So: the END fixes the integrated STRENGTH (L_eff), the body 2-D
+    design fixes the FIELD QUALITY (harmonics).
+
+## Honest scope
+
+This measures the SCALING of the BARE-end 3-D-ness for a STRAIGHT magnet.
+Curved orbits (combined-function, the beam-referenced equipotential surface
+twisting along a bent orbit) and the orbit<->field closed-orbit
+self-consistency are separate problems.  The point established here is the
+DECISION RULE: compute L/gap, and only foliate when the implied fringe (~gap/L)
+is below your field-integral tolerance.
+"""
+
+
 def get_accelerator_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -343,6 +417,8 @@ def get_accelerator_documentation(topic: str = "all") -> str:
       "rotating_coil"        - Multipole measurement + field reconstruction
       "isochronous_endpack"  - Radial field index: scaling vs isochronous,
                                saturated nonlinear end-pack reshape
+      "foliate_perturb"      - When can a magnet be a 2-D body + end
+                               perturbation?  Leaf coupling ~ gap/L
     """
     topic = topic.lower().strip()
     if topic in ("end_pole", "chamfer", "delferriere"):
@@ -354,12 +430,15 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     if topic in ("isochronous_endpack", "isochronous", "scaling_ffag",
                  "field_index", "end_pack", "endpack"):
         return ISOCHRONOUS_ENDPACK_DESIGN
+    if topic in ("foliate_perturb", "foliate", "leaf_coupling", "quasi_2d",
+                 "quasi2d", "perturbation"):
+        return FOLIATE_PERTURB
     if topic == "all":
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
-            ISOCHRONOUS_ENDPACK_DESIGN,
+            ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB,
         ])
     return (
-        f"Unknown topic '{topic}'. Available: "
-        "all, end_pole, kolkata, rotating_coil, isochronous_endpack."
+        f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
+        "rotating_coil, isochronous_endpack, foliate_perturb."
     )
