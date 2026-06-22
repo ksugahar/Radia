@@ -28,6 +28,13 @@ TOPICS: dict[str, str] = {
         "the TWIST: rotate the surface by phi <=> multipole phase n*phi "
         "(the n-fold law, verified on a twisting quadrupole)"
     ),
+    "endpack_two_plane": (
+        "The magnet END PACK in two planes -> 3-D: design the END in the x-y "
+        "cross-section (shim zeroes b3) AND the s-y longitudinal plane (a "
+        "standalone 2-D Laplace fringe -> Rogowski end chamfer + L_eff), reflect "
+        "into one 3-D equipotential pole; the chamfer-depth sweep zeroes the "
+        "pole-tip corner over-field (endpack_two_plane.py)"
+    ),
     "all": "Everything (all topics concatenated)",
 }
 
@@ -543,11 +550,91 @@ theta, quad phase 2 theta -- BOTH orientations track theta (slope 1.000, err
 0.00 deg), the multipole phase-change ratio psi2/psi1 = 2.000.  Verified ngsolve,
 golden test_combined_function_frenet_sweep.
 
-REMAINING: a fast twist / tight bend couples adjacent leaves (a longitudinal-field
-correction); the twist rate d phi / ds is a leaf-coupling perturbation parameter
-(the next rung -- when does the per-station 2-D break).  A spiral sector (pole
-twist phi != orbit bend theta) and an s-ramped (b1, b2)(s) are the other
-extensions the n-fold law governs.
+THE FAST-TWIST LEAF COUPLING is DONE (twist_rate_leaf_coupling.py): the exact
+helical multipole Phi_n = I_n(n k r) sin(n(theta - k s)) (Laplace + helical
+symmetry => modified Bessel) deviates from the 2-D stack as eps ~ (ka)^2
+(transverse focusing error, slope 2.04) with a longitudinal B_s ~ ka (slope 0.97),
+ka = 2 pi a / P the twist per aperture.  As k -> 0 it IS the per-station 2-D stack.
+Threshold eps = 1% at pitch/aperture ~ 46 -- the SAME "longitudinal >> transverse
+by ~40x" rule as the straight magnet's foliate_perturb (L/gap ~ 40), with the
+twist replacing gap/L by a/P.  So the twist axis closes: the twist (n-fold law) ->
+the combined-function confluence on a curved orbit -> its validity threshold.
+
+REMAINING: a spiral sector (pole twist phi != orbit bend theta) and an s-ramped
+(b1, b2)(s) are the extensions the n-fold law governs.
+"""
+
+
+ENDPACK_TWO_PLANE = """
+# The magnet END PACK in two planes -> 3-D (x-y cross-section + s-y end)
+
+This is the two-plane -> 3-D method (see two_plane_design) applied to the magnet
+END PACK -- the longitudinal TERMINATION of a STRAIGHT magnet -- as opposed to a
+curved FFAG sector cell.  Convention: beam = y (the arc length s of a straight
+magnet), gap = z (pole faces z = +-g/2), width = x.  So the design planes are the
+literal (x-y) transverse cross-section and the (s-y) longitudinal plane.
+
+NOTE: this is a DIFFERENT "end pack" from isochronous_endpack (which is the RADIAL
+field-index end pack of an FFAG, scaling vs isochronous k(r)).  This one is the
+longitudinal magnet-END termination.
+
+## The method: two cheap 2-D DESIGN solves, then a 3-D REFLECTION
+
+Unlike the 3-D end study (accel_pole_ends_fem, which reads the end equipotential
+OUT of the finished 3-D solve), here BOTH planes are standalone 2-D DESIGN solves
+done FIRST; the 3-D solve only reflects + verifies.
+
+  Plane 1 (x-y cross-section) -- the transverse multipole:
+    a finite flat pole droops (b3/b1 ~ -3.6e-5); the concave shim
+    z = g/2 - delta (x/w)^2 with delta ~ 0.41 mm zeroes it
+    (accel_pole_dipole_body_2d.solve).
+
+  Plane 2 (s-y longitudinal) -- the end chamfer:
+    a STANDALONE 2-D Laplace fringe (the parallel-plate end, Dirichlet pole
+    terminating at the iron end, midplane = 0) -> the interior-gap equipotential
+    Phi = Phi_ref bows up past the pole edge = the ROGOWSKI end chamfer shape
+    ghat(s); and L_eff ~ 151 mm, a +26% excess over the 120 mm iron (each end
+    ~0.75 g) -- endpack_two_plane.solve_sy_endpack.
+
+  Reflection (3-D) -- equipotential-pole drive (PURE LAPLACE, no coil):
+    an upper-half pole at Psi = mmf, midplane Psi = 0 (the same high-mu
+    equipotential drive as the FFAG rung-2; B = -grad Psi is a plain CF, so the
+    whole solve + the integrated multipole analyzer are CHEAP -- no RadiaField).
+    Sweeping the chamfer DEPTH with the ghat(s) shape drives the hard-cut
+    pole-tip corner over-field (+11%) THROUGH ZERO at ~2.1 mm, while the
+    integrated transverse b3,5 stays ~0.3% -- body/Plane-1 dominated (the END
+    shape is the wrong lever for it, the honest two-lever split).
+
+## Verified (endpack_two_plane.py, ngsolve only, golden-tested ~8 s --fast)
+
+  Plane 1 : b3/b1 ~ -3.6e-5 (flat droop), shim delta ~ 0.41 mm (zeroes b3).
+  Plane 2 : L_eff ~ 151 mm (+26% excess), a real Rogowski bow-out ~21 mm/30 mm.
+  3-D     : flat pole-tip corner over-field ~ +11%; depth sweep [0, 2.4, 5, 8 mm]
+            -> tip over-field [+11, -2, -15, -26]% (monotone), designed depth
+            ~2.1 mm (zero over-field); integrated b3,5 ~0.3% throughout.
+  Cross-check: the cheap 2-D s-y chamfer SHAPE predicts the 3-D end
+            equipotential bow-out to ~7% rms.
+
+## Why equipotential-pole drive (not a coil)
+
+A CoilBuilder + RadiaField (Biot-Savart) source makes the reduced-Omega assembly
+and the per-point field readout SERIAL and ~1000x slower (the analyzer + contour
+do thousands of RadiaField evals).  The high-mu iron pole IS an equipotential, so
+driving the pole face at Psi = mmf (pure Laplace) gives the SAME gap-field SHAPE
+(the field index / multipole content is set by the pole GEOMETRY, drive-
+independent -- same argument as two_plane_design rung 2) at a fraction of the
+cost.  The coil only sets the field AMPLITUDE (Tesla calibration), not the end
+geometry the chamfer designs.
+
+## Honest scope
+
+The 3-D reflection carries the s-y chamfer at a FIXED body pole width; the x-y
+shim (delta) is verified as the transverse lever but not yet co-baked into the
+same 3-D loft.  A single 3-D pole surface carrying BOTH z = g/2 - delta (x/w)^2
+(x-y shim) AND + lift(s) (s-y chamfer) -- a tensor-product loft -- is the next
+refinement.  The transverse b3,5 being body-dominated (and barely moved by the
+end shape) is the same two-lever split established in accel_pole_ends_fem /
+accel_pole_dipole_body_2d.
 """
 
 
@@ -567,6 +654,8 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                                + azimuthal (s,z) -> 3-D sector pole
       "beam_referenced_twist" - The equipotential SURFACE as design primitive
                                + the twist (n-fold law, twisting quadrupole)
+      "endpack_two_plane"    - The magnet END PACK in two planes (x-y cross-
+                               section + s-y end) -> 3-D equipotential reflect
     """
     topic = topic.lower().strip()
     if topic in ("end_pole", "chamfer", "delferriere"):
@@ -587,14 +676,17 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     if topic in ("beam_referenced_twist", "twist", "twisting", "design_primitive",
                  "equipotential_surface", "n_fold", "rotating_gradient"):
         return BEAM_REFERENCED_TWIST
+    if topic in ("endpack_two_plane", "end_pack_two_plane", "magnet_end",
+                 "end_chamfer", "rogowski", "endpack_2plane"):
+        return ENDPACK_TWO_PLANE
     if topic == "all":
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
-            BEAM_REFERENCED_TWIST,
+            BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
         "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
-        "beam_referenced_twist."
+        "beam_referenced_twist, endpack_two_plane."
     )

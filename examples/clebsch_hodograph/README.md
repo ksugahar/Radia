@@ -1196,6 +1196,57 @@ limit; a spiral sector (pole twist `φ ≠` orbit bend `θ`) + an s-ramped `(b1,
 are extensions, and **when the per-station 2-D breaks** — the fast-twist `dφ/ds`
 leaf coupling — is the next rung.)*
 
+### `twist_rate_leaf_coupling.py` — when does the per-station 2-D twist break?
+
+The fast-twist leaf coupling (the twist analogue of rung-1's foliate-and-perturb).
+A magnet whose order-`n` multipole twists at rate `k = dφ/ds` has helical symmetry;
+the exact current-free harmonic is the **helical multipole**
+`Φ_n = I_n(nkr) sin(n(θ − ks))` (standard for helical undulators / Siberian snakes
+/ twisted quads). As `k → 0` it reduces to the pure 2-D multipole rotated by
+`φ(s) = ks` — **exactly the per-station 2-D stack** (the Frenet-sweep design). The
+leaf coupling is the deviation from that stack, controlled by the dimensionless
+**twist-per-aperture `ka = 2π a/P`** (`a` aperture, `P` pitch).
+
+**Measured (analytic, scipy Bessel — no FEM):** on the aperture circle, the
+**transverse** focusing error `ε = ‖B_⊥(3D) − B_⊥(2D)‖/‖B_⊥(2D)‖` scales as
+**`(ka)²`** (slope 2.04, 2nd order), the **longitudinal** `B_s/B_⊥` as **`ka`**
+(slope 0.97, 1st order, the genuinely-3-D component); the threshold `ε = 1%` is at
+`ka* ≈ 0.14`, i.e. **pitch/aperture `P/a ≈ 46`**. So the per-station 2-D twist
+holds when the pitch exceeds the aperture by ~ several tens — **the same
+"longitudinal ≫ transverse by ~40×" rule as rung-1** (`L/gap ~ 40`), with the
+twist replacing `gap/L` by `a/P`. Figure `twist_rate_leaf_coupling.png` (left: `ε`
+and `B_s/B_⊥` vs `ka` log-log, slopes 2 and 1; right: the validity map `ε` vs
+`P/a` with the threshold). Golden `test_twist_rate_leaf_coupling`. This closes the
+twist axis (the twist → the combined-function confluence → its validity threshold).
+
+### `endpack_two_plane.py` — the END PACK in two planes (x-y cross-section + s-y end → 3-D)
+
+The magnet **end pack** designed exactly the way one pictures it: in the `x-y`
+cross-section **and** the `s-y` longitudinal plane, reflected into one 3-D pole.
+Where `ffag_sector_two_plane.py` applied the two-plane method to a *curved* FFAG
+sector **cell**, this applies the same thought to the *straight* magnet's **end**
+— the genuinely-3-D termination.
+
+**Two cheap 2-D DESIGN solves, then a 3-D REFLECTION:**
+- **Plane 1 (`x-y` cross-section):** the transverse multipole — a finite flat pole
+  droops (`b₃/b₁ ≈ −3.6e-5`); the concave shim `z=g/2−δ(x/w)²` with `δ ≈ 0.41 mm`
+  zeroes it (`accel_pole_dipole_body_2d`).
+- **Plane 2 (`s-y` longitudinal):** a **standalone** 2-D Laplace fringe (the
+  parallel-plate end) → the **Rogowski** end-chamfer shape `ĝ(s)` and the effective
+  length `L_eff ≈ 151 mm` (**+26 %** over the 120 mm iron) — done *before* any 3-D.
+- **Reflection (3-D):** an upper-half **equipotential-pole** drive (`Ψ=mmf` on the
+  pole, `Ψ=0` on the median plane — *pure Laplace, no coil*, the same drive as the
+  FFAG rung-2). Sweeping the chamfer **depth** with the `ĝ(s)` shape drives the
+  hard-cut pole-tip corner over-field (`+11 %`) **through zero at ~2.1 mm**, while
+  the integrated transverse `b̄₃,₅` stays `~0.3 %` (the body/Plane-1 lever — the END
+  shape is the wrong lever for it).
+
+**Cross-check:** the cheap 2-D `s-y` chamfer SHAPE predicts the expensive 3-D end
+equipotential bow-out to **~7 % rms** — the two-plane reflection is sound. Figure
+`endpack_two_plane.png` (left: the `x-y` shim; middle: the `s-y` Rogowski `ĝ(s)`;
+right: the 3-D depth sweep driving the corner over-field through zero). Golden
+`test_endpack_two_plane` (`--fast`, ngsolve only, ~8 s).
+
 ## Run
 
 ```bash
@@ -1224,6 +1275,8 @@ python leaf_coupling_perturbation_3d.py       # foliate-and-perturb: leaf-coupli
 python ffag_sector_two_plane.py               # the two-plane -> 3-D method: FFAG sector = transverse (r,z) + azimuthal (s,z); reflection validity ~ L/g (--sweep aspect; --rung2 the 3-D reflection B(r)~r^k; --fig)
 python twisting_quadrupole_pole.py            # beam-referenced equipotential surface as design primitive: the TWIST (n-fold law, rotating quad, slope 1.000) (--fig)
 python combined_function_frenet_sweep.py      # the confluence: combined-function (dipole+quad) on its curved orbit; the Frenet sweep IS the twist (phase ratio 2.000) (--fig)
+python twist_rate_leaf_coupling.py            # when the per-station 2-D twist breaks: helical multipole, eps~(ka)^2, threshold pitch/aperture ~46 (--fig)
+python endpack_two_plane.py                   # the END PACK in two planes: x-y cross-section (shim) + s-y end (Rogowski chamfer, L_eff +26%) -> 3-D equipotential reflect, corner over-field -> 0 (--fast, --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
