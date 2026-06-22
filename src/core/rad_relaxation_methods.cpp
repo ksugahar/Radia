@@ -3352,7 +3352,6 @@ bool radTRelaxationMethNo_2::BuildBlockJacobiPreconditioner_HMatrix(
 	blockInverse.resize(total_block_storage);
 
 	int max_dof = 6;
-	std::vector<double> K_mat(max_dof * max_dof);
 	std::vector<double> block_copy(max_dof * max_dof);
 	std::vector<int> ipiv(max_dof);
 	std::vector<double> work(max_dof * max_dof);
@@ -3364,17 +3363,16 @@ bool radTRelaxationMethNo_2::BuildBlockJacobiPreconditioner_HMatrix(
 		int mat_offset = IntrctPtr->GetElementDOFOffset(elem);
 		int block_offset = blockOffsets[elem];
 
-		// Extract diagonal K block from H-matrix kernel
-		m_hacapk->Compute6x6BlockFast(elem, elem, K_mat.data());
-
-		// Form A_block = -K_block/(4pi) + (1/chi) * I
-		// K_mat stores K/(4pi), so negate it
+		// Diagonal block A_block = -N_block + (1/chi) I, extracted DOF-generically from the H-matrix
+		// kernel via GetInteractionMatrixElement (returns +N).  Works for any element DOF; the moment-yano
+		// MSC path never reaches method 2 here (pure hex/wedge is rerouted to the LU/Picard moment driver
+		// in SolveGen), so this block-Jacobi only ever sees 3-DOF tetrahedra (MMM).
 		for(int i = 0; i < dof; i++)
 		{
 			for(int j = 0; j < dof; j++)
 			{
-				// K_mat is row-major [i*6+j], convert to column-major for LAPACK
-				block_copy[i + j * dof] = -K_mat[i * 6 + j];
+				// column-major for LAPACK
+				block_copy[i + j * dof] = -m_hacapk->GetInteractionMatrixElement(mat_offset + i, mat_offset + j);
 				if(i == j)
 				{
 					block_copy[i + j * dof] += inv_chi[mat_offset + i];
