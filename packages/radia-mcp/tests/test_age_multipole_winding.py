@@ -16,6 +16,7 @@ import math
 import os
 import sys
 
+import pytest
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, CoefficientFunction,
                      grad, dx, x, y, sqrt, atan2, cos, sin, IfPos, Integrate, Mesh, TaskManager)
@@ -99,6 +100,7 @@ def _winding_factor(p, q, n):
     return kw, kd, Na, Q
 
 
+@pytest.mark.xval
 def test_multipole_age_matches_brute():
     """4-pole (p=2) SPM: AGE (harmonics n=p(2k+1)) reproduces the brute meshed-gap field & torque."""
     ma = _geo(False)

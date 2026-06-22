@@ -8,6 +8,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 # Ensure tests resolve `radia_mcp` to THIS checkout's src/, not whatever
 # `pip install -e` happens to point at on the editable-install machine.
 _SRC = Path(__file__).resolve().parent.parent / "src"
@@ -164,3 +166,23 @@ for _f in sorted(_TEST_ROOT.rglob("test_*.py")):
     if any(_module_absent(_m) or _project_import_has_absent_dependency(_m)
            for _m in _imported_modules(_src)):
         collect_ignore.append(_f.relative_to(_TEST_ROOT).as_posix())
+
+
+def pytest_collection_modifyitems(config, items):
+    """Keep heavyweight research validations out of the default local gate.
+
+    The radia-mcp package has two different test audiences:
+    fast MCP/API contract tests, and expensive physics cross-validations that
+    are closer to executable examples.  Run the latter explicitly with
+    ``pytest -m xval`` or by setting ``RADIA_MCP_RUN_XVAL=1``.
+    """
+    markexpr = getattr(config.option, "markexpr", "") or ""
+    if os.environ.get("RADIA_MCP_RUN_XVAL") == "1" or "xval" in markexpr:
+        return
+
+    skip_xval = pytest.mark.skip(
+        reason="radia-mcp xval validation skipped by default; run with -m xval"
+    )
+    for item in items:
+        if item.get_closest_marker("xval"):
+            item.add_marker(skip_xval)
