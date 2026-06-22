@@ -54,7 +54,7 @@ Problem class
 │   │   └── H1 (standard)
 │   └── Axisymmetric scalar
 │       └── H1 + 2*pi*r weighting (NOT Henrotte; FEMM convention)
-│         -> radia_ngsolve.axifemm_documentation
+│         -> radia_ngsolve.axifem_documentation
 │
 ├── Vector curl-curl - magnetostatic vector / magnetodynamic
 │   ├── Static, vector A

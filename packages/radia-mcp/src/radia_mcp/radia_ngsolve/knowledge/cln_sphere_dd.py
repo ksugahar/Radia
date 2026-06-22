@@ -185,7 +185,7 @@ above).
    load balance; contiguous chunks leave some workers idle when
    axis cells (r_qi < 1e-15) are skipped.
 6. The sigma rescaling of raw DD R, L to canonical CLN units is
-   essential when comparing against Stoll / NGSolve / axifemm.
+   essential when comparing against Stoll / NGSolve / axifem.
 
 ## Cross-References
 
