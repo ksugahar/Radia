@@ -4,9 +4,9 @@ keeps reproducing the values cross-validated against an independent reference
 solve (see the ``force_validation`` MCP tool for the agreement table).
 
 Skipped automatically if ngsolve / netgen are not installed. These are heavy FEM
-solves (sparse-Cholesky on ~40-50k tets), all marked ``@pytest.mark.xval``: run
-the cross-validation suite with ``pytest -m xval``, or skip it with
-``pytest -m 'not xval'``. The two linear solves take ~1-2 min total; the
+solves (sparse-Cholesky on ~40-50k tets), all marked validation: run
+the cross-validation suite with ``python validation/.../validate_*.py``, or skip it with
+``the default pytest gate``. The two linear solves take ~1-2 min total; the
 nonlinear saturating-iron case runs ~20 Picard sweeps (multi-minute).
 """
 import math
@@ -69,8 +69,7 @@ def _solve_Aform(mesh, nu, J0):
     return gfu
 
 
-@pytest.mark.xval
-def test_coil_linear_iron_force():
+def validate_coil_linear_iron_force():
     """Case 2: coil + linear-iron sphere (mu_r=1000), force via eggshell.
     Recorded: NGSolve F_z = -0.1937 N, ref -0.1995 N (dipole -0.207)."""
     geo = CSGeometry()
@@ -97,8 +96,7 @@ def test_coil_linear_iron_force():
     assert abs(Fy) < 0.15 * abs(Fz)
 
 
-@pytest.mark.xval
-def test_solenoid_self_inductance():
+def validate_solenoid_self_inductance():
     """Cases 4-5: finite solenoid, self-inductance via field energy.
     Recorded: NGSolve L = 269.60 uH, ref 269.62 uH (Nagaoka 279.8)."""
     geo = CSGeometry()
@@ -116,8 +114,7 @@ def test_solenoid_self_inductance():
     assert abs(L_uH - 269.6) < 8.0                   # regression band vs recorded
 
 
-@pytest.mark.xval
-def test_coil_nonlinear_iron_force():
+def validate_coil_nonlinear_iron_force():
     """Case 3: coil + NONLINEAR saturating-iron sphere, force via the shipped
     Picard solver ``solve_magnetostatic_nonlinear``. Iron permeability follows
     the saturation law mu_r(B) = 1 + 999/(1 + (|B|/1 T)^8) (mur0=1000) -- the SAME
@@ -128,7 +125,7 @@ def test_coil_nonlinear_iron_force():
     never engages -- that #25 artifact is what produced the old, wrong -4.842 N.
     Recorded (iron-in-air, relax 0.35): NGSolve B_iron = 1.138 T, F_z = -4.898 N;
     ref B_iron = 1.13 T, F_z = -4.930 N => agree 0.65 %. ~20 Picard sweeps on
-    ~37k tets -> multi-minute (hence xval-marked).
+    ~37k tets -> multi-minute, so this stays in validation rather than pytest.
     """
     geo = CSGeometry()
     coil = _ring(50 * MM, 2 * MM, 0, 2 * MM).mat("coil").maxh(3 * MM)
@@ -171,8 +168,7 @@ def test_coil_nonlinear_iron_force():
     assert abs(Fy) < 0.1 * abs(Fz)
 
 
-@pytest.mark.xval
-def test_helmholtz_center_field():
+def validate_helmholtz_center_field():
     """Case 6: Helmholtz pair (R = 50 mm coils at z = +/-25 mm, separation = R,
     NI = 10000 A-turns each, SAME sense), center field + flat-field uniformity,
     via the shipped ``solve_magnetostatic_Aform`` + ``azimuthal_coil_current``.
@@ -200,8 +196,7 @@ def test_helmholtz_center_field():
     assert bz_r / bz_c > 0.99                          # flat field off axis
 
 
-@pytest.mark.xval
-def test_solenoid_axis_field():
+def validate_solenoid_axis_field():
     """Case 4: finite solenoid (mean R = 30 mm, 2 mm radial, length 100 mm,
     NI = 10000 A-turns) on-axis B_z(z), via the shipped ``solve_magnetostatic_Aform``
     + ``azimuthal_coil_current``. Recorded NGSolve / ref / analytic [T]:
@@ -210,7 +205,7 @@ def test_solenoid_axis_field():
         z=30: 0.09300 / 0.09274 / 0.09368
         z=45: 0.06947 / 0.06923 / 0.07025
     reference <-> NGSolve agree <0.35 %; both ~0.7 % below the thin-solenoid formula
-    (finite coil thickness). Same solenoid as test_solenoid_self_inductance."""
+    (finite coil thickness). Same solenoid as validate_solenoid_self_inductance."""
     geo = CSGeometry()
     coil = _ring(30 * MM, 1 * MM, 0, 50 * MM).mat("coil").maxh(4 * MM)
     box = OrthoBrick(Pnt(-150 * MM, -150 * MM, -150 * MM),
@@ -227,8 +222,7 @@ def test_solenoid_axis_field():
         assert abs(bz - b_rec) < 0.006                 # regression band vs recorded (ref agrees <0.35%)
 
 
-@pytest.mark.xval
-def test_magnetized_sphere_field():
+def validate_magnetized_sphere_field():
     """Case 1: uniformly magnetized sphere (Br = 1 T along z, radius 10 mm) in a
     200 mm air cube, via the shipped permanent-magnet source ``remanent_source``
     -> ``solve_magnetostatic_Aform(curl_source=...)``. The interior field is
@@ -250,8 +244,7 @@ def test_magnetized_sphere_field():
     assert abs(bz_avg - 0.6667) < 0.02                 # interior (2/3)Br; recorded NGSolve 0.6639 / ref 0.6647
 
 
-@pytest.mark.xval
-def test_pm_sphere_exterior_dipole_field():
+def validate_pm_sphere_exterior_dipole_field():
     """Uniformly magnetized PM sphere (Br=1 T, R=10 mm) — exterior dipole field on axis.
     The exact exterior field of a uniformly magnetized sphere is a pure dipole:
         B_z(z) = (μ₀/4π) × 2m / z³  where  m = (Br/μ₀)(4π/3)R³.
@@ -284,8 +277,7 @@ def test_pm_sphere_exterior_dipole_field():
         )
 
 
-@pytest.mark.xval
-def test_single_loop_axis_field():
+def validate_single_loop_axis_field():
     """Case 7: single circular loop (R = 50 mm, 4x4 mm section, NI = 10000 AT)
     on-axis B_z(z), via the shipped ``solve_magnetostatic_Aform`` +
     ``azimuthal_coil_current``. Thin-filament analytic
@@ -312,8 +304,7 @@ def test_single_loop_axis_field():
         assert bz < ana                                  # finite section lowers the center field
 
 
-@pytest.mark.xval
-def test_team20_static_force():
+def validate_team20_static_force():
     """TEAM Workshop Problem 20 (3-D static force) at NI=1000, via the shipped
     Newton solver ``solve_magnetostatic_newton`` (energy-min + CG/BDDC) on the
     official geometry (yoke + center pole + rectangular coil, 1.5 mm bottom gap),
@@ -399,8 +390,7 @@ def test_team20_static_force():
     assert abs(Fz - 8.0) < 1.6                         # measured 8.1; coarse 7.89 / full mesh 8.23
 
 
-@pytest.mark.xval
-def test_team13_bflux():
+def validate_team13_bflux():
     """TEAM Workshop Problem 13 (3-D nonlinear C-core) at NI=1000 AT, via the shipped
     Newton solver ``solve_magnetostatic_newton`` (energy-min + CG/BDDC) on Yano's
     gap-resolved 37k-element half-model mesh (z >= 0 symmetry plane).
@@ -518,8 +508,7 @@ def test_team13_bflux():
         )
 
 
-@pytest.mark.xval
-def test_team7_eddy_bz():
+def validate_team7_eddy_bz():
     """TEAM Workshop Problem 7 (3-D eddy current in a thick aluminium plate,
     50 Hz sinusoidal, 2742-turn rectangular coil) — frequency-domain A-Φ
     formulation with Kelvin open-boundary transform.
@@ -629,8 +618,8 @@ def test_team7_eddy_bz():
     pot_coil = CoefficientFunction(
         (0.0, 0.0, sqrt((projy - y)**2 + (projx - x)**2) - 0.050))
 
-    def add_source(lf, test_fn):
-        v_A, _ = test_fn
+    def add_source(lf, validate_fn):
+        v_A, _ = validate_fn
         lf += (-turns / 0.100 * tau_coil * v_A.Trace()
                * ds("coili", bonus_intorder=4))
         lf += (turns / (0.025 * 0.100) * pot_coil * curl(v_A)
@@ -662,8 +651,7 @@ def test_team7_eddy_bz():
     )
 
 
-@pytest.mark.xval
-def test_team21_eddy_loss():
+def validate_team21_eddy_loss():
     """TEAM Workshop Problem 21 P21a-0 — frequency-domain eddy current in a
     non-magnetic steel plate (20Mn23Al, σ=1.3889×10⁶ S/m, μr=1) driven by two
     opposite-phase rectangular coils (Case I: flux perpendicular to plate), 50 Hz,
@@ -748,8 +736,8 @@ def test_team21_eddy_loss():
     NI_peak  = turns * I_rms * math.sqrt(2)
     J_scale  = NI_peak / (coil_w * coil_h)   # [A/m²]
 
-    def add_source(lf, test_fn):
-        v, _ = test_fn
+    def add_source(lf, validate_fn):
+        v, _ = validate_fn
         lf += J_scale * tau_coil * v * dx("coil1")   # CCW  →  +z flux
         lf += (-J_scale) * tau_coil * v * dx("coil2") # CW   →  −z flux  (Case I)
 
@@ -772,8 +760,7 @@ def test_team21_eddy_loss():
     )
 
 
-@pytest.mark.xval
-def test_team6_sphere_eddy():
+def validate_team6_sphere_eddy():
     """TEAM Workshop Problem 6 — hollow conducting sphere (σ=5×10⁷ S/m, μᵣ=1)
     in a uniform sinusoidal magnetic field B₀ = 1 T at 50 Hz.
 
@@ -851,8 +838,8 @@ def test_team6_sphere_eddy():
     A0       = CoefficientFunction((-B0 * y / 2, B0 * x / 2, 0.0))
 
     # Scattered-field source: −jωσ A₀ in the shell (σ_cf = 0 elsewhere)
-    def add_source(lf, test_fn):
-        v_A, psi = test_fn
+    def add_source(lf, validate_fn):
+        v_A, psi = validate_fn
         lf += -1j * omega * sigma_cf * A0 * v_A          * dx
         lf += -1j * omega * sigma_cf * A0 * grad(psi)    * dx
 
@@ -876,8 +863,7 @@ def test_team6_sphere_eddy():
     )
 
 
-@pytest.mark.xval
-def test_team21_p21a1_eddy_loss():
+def validate_team21_p21a1_eddy_loss():
     """TEAM Workshop Problem 21 P21a-1 — same plate as P21a-0 but with one
     central horizontal slit (660 × 10 × 10 mm through-thickness slot centred in
     the plate at z = plate_z/2) that interrupts the main eddy-current loop.
@@ -959,8 +945,8 @@ def test_team21_p21a1_eddy_loss():
     NI_peak  = turns * I_rms * math.sqrt(2)
     J_scale  = NI_peak / (coil_w * coil_h)
 
-    def add_source(lf, test_fn):
-        v, _ = test_fn
+    def add_source(lf, validate_fn):
+        v, _ = validate_fn
         lf += J_scale * tau_coil * v * dx("coil1")
         lf += (-J_scale) * tau_coil * v * dx("coil2")
 
@@ -982,8 +968,7 @@ def test_team21_p21a1_eddy_loss():
     )
 
 
-@pytest.mark.xval
-def test_cylinder_axial_eddy():
+def validate_cylinder_axial_eddy():
     """Conducting cylinder (R=50 mm, σ=1.6×10⁷ S/m, μᵣ=1) in a uniform axial
     sinusoidal field B₀ = 1 T at 50 Hz.  Scattered-field A-Φ formulation.
 
@@ -1049,8 +1034,8 @@ def test_cylinder_axial_eddy():
     sigma_cf = mesh.MaterialCF({"conductor": sigma}, default=0.0)
     A0       = CoefficientFunction((-B0 * y / 2, B0 * x / 2, 0.0))
 
-    def add_source(lf, test_fn):
-        v_A, psi = test_fn
+    def add_source(lf, validate_fn):
+        v_A, psi = validate_fn
         lf += -1j * omega * sigma_cf * A0 * v_A       * dx
         lf += -1j * omega * sigma_cf * A0 * grad(psi) * dx
 
@@ -1074,8 +1059,7 @@ def test_cylinder_axial_eddy():
     )
 
 
-@pytest.mark.xval
-def test_sphere_magnetostatic_scattered():
+def validate_sphere_magnetostatic_scattered():
     """Permeable sphere (μr = 10, R = 50 mm) in a uniform applied field B₀ = 1 T.
     Scattered-field A-form magnetostatics: the source arises from the permeability
     jump (not a coil current).
@@ -1142,8 +1126,7 @@ def test_sphere_magnetostatic_scattered():
     )
 
 
-@pytest.mark.xval
-def test_team21_p21b2n_eddy_loss():
+def validate_team21_p21b2n_eddy_loss():
     """TEAM Workshop Problem 21 P21b-2N — two non-magnetic steel plates (each
     458 × 248 × 10 mm, 20Mn23Al) separated by a 200 mm gap centred on the
     coil axis in y.  Identical coils to P21a family; Case I excitation.
@@ -1231,8 +1214,8 @@ def test_team21_p21b2n_eddy_loss():
     NI_peak  = turns * I_rms * math.sqrt(2)
     J_scale  = NI_peak / (coil_w * coil_h)
 
-    def add_source(lf, test_fn):
-        v, _ = test_fn
+    def add_source(lf, validate_fn):
+        v, _ = validate_fn
         lf += J_scale * tau_coil * v * dx("coil1")
         lf += (-J_scale) * tau_coil * v * dx("coil2")
 
@@ -1254,8 +1237,7 @@ def test_team21_p21b2n_eddy_loss():
     )
 
 
-@pytest.mark.xval
-def test_conducting_sphere_axial_eddy():
+def validate_conducting_sphere_axial_eddy():
     """Conducting sphere (σ=1.6e7 S/m, R=50 mm) in uniform axial AC field B₀=1 T, 50 Hz.
     Scattered-field A-Φ formulation: same source as the cylinder test.
 
@@ -1297,8 +1279,8 @@ def test_conducting_sphere_axial_eddy():
     sigma_cf = mesh.MaterialCF({"conductor": sigma}, default=0.0)
     A0       = CoefficientFunction((-B0 * y / 2, B0 * x / 2, 0.0))
 
-    def add_source(lf, test_fn):
-        v_A, psi = test_fn
+    def add_source(lf, validate_fn):
+        v_A, psi = validate_fn
         lf += -1j * omega * sigma_cf * A0 * v_A       * dx
         lf += -1j * omega * sigma_cf * A0 * grad(psi) * dx
 
@@ -1321,8 +1303,7 @@ def test_conducting_sphere_axial_eddy():
     )
 
 
-@pytest.mark.xval
-def test_permeable_cylinder_transverse_static():
+def validate_permeable_cylinder_transverse_static():
     """Permeable cylinder (μr=10, R=50 mm, L=500 mm) in transverse uniform field B₀=1 T.
     Scattered-field A-form magnetostatics.
 
@@ -1374,8 +1355,7 @@ def test_permeable_cylinder_transverse_static():
     )
 
 
-@pytest.mark.xval
-def test_solenoid_center_bz_static():
+def validate_solenoid_center_bz_static():
     """Thick annular solenoid (N=1000 turns, I=1 A, Ri=40 mm, Ro=60 mm, L=200 mm).
     Azimuthal current source J_φ = NI/((Ro-Ri)L) in the winding volume.
 
@@ -1435,8 +1415,7 @@ def test_solenoid_center_bz_static():
     )
 
 
-@pytest.mark.xval
-def test_team21_p21a2_eddy_loss():
+def validate_team21_p21a2_eddy_loss():
     """TEAM Workshop Problem 21 P21a-2 — same plate as P21a-0 but with two
     horizontal slits (each 660 × 10 × 10 mm) placed at z = plate_z/3 and
     z = 2*plate_z/3, dividing the plate into 3 equal-height strips.
@@ -1509,8 +1488,8 @@ def test_team21_p21a2_eddy_loss():
     NI_peak  = turns * I_rms * math.sqrt(2)
     J_scale  = NI_peak / (coil_w * coil_h)
 
-    def add_source(lf, test_fn):
-        v, _ = test_fn
+    def add_source(lf, validate_fn):
+        v, _ = validate_fn
         lf += J_scale * tau_coil * v * dx("coil1")
         lf += (-J_scale) * tau_coil * v * dx("coil2")
 
@@ -1532,8 +1511,7 @@ def test_team21_p21a2_eddy_loss():
         f"ref = {ref:.2f} W  (tol +-1.2 W, slit positions estimated)")
 
 
-@pytest.mark.xval
-def test_team21_p21a3_eddy_loss():
+def validate_team21_p21a3_eddy_loss():
     """TEAM Workshop Problem 21 P21a-3 — same plate with four horizontal slits
     (each 660 × 10 × 10 mm) at z = plate_z × k/5 for k=1..4, creating 5 equal strips.
 
@@ -1603,8 +1581,8 @@ def test_team21_p21a3_eddy_loss():
     NI_peak  = turns * I_rms * math.sqrt(2)
     J_scale  = NI_peak / (coil_w * coil_h)
 
-    def add_source(lf, test_fn):
-        v, _ = test_fn
+    def add_source(lf, validate_fn):
+        v, _ = validate_fn
         lf += J_scale * tau_coil * v * dx("coil1")
         lf += (-J_scale) * tau_coil * v * dx("coil2")
 
@@ -1627,8 +1605,7 @@ def test_team21_p21a3_eddy_loss():
     )
 
 
-@pytest.mark.xval
-def test_eddy_conducting_slab_tangential():
+def validate_eddy_conducting_slab_tangential():
     """1-D eddy shielding: conducting slab (σ=1.6e7 S/m, 2h=30 mm normal to y)
     in tangential harmonic B₀=1 T (z-dir), f=50 Hz.
 
@@ -1666,8 +1643,8 @@ def test_eddy_conducting_slab_tangential():
     sigma_cf = mesh.MaterialCF({"slab": sigma}, default=0.0)
     A0       = CoefficientFunction((-B0 * y / 2, B0 * x / 2, 0.0))
 
-    def add_source(lf, test_fn):
-        v_A, psi = test_fn
+    def add_source(lf, validate_fn):
+        v_A, psi = validate_fn
         lf += -1j * omega * sigma_cf * A0 * v_A       * dx
         lf += -1j * omega * sigma_cf * A0 * grad(psi) * dx
 
@@ -1687,8 +1664,7 @@ def test_eddy_conducting_slab_tangential():
     )
 
 
-@pytest.mark.xval
-def test_helmholtz_pair_bz_center():
+def validate_helmholtz_pair_bz_center():
     """Helmholtz coil pair — two identical rings (R=50 mm) separated by d=R,
     each N=100 turns at I=100 A — B_z at the geometric centre.
 
@@ -1722,8 +1698,7 @@ def test_helmholtz_pair_bz_center():
     )
 
 
-@pytest.mark.xval
-def test_eddy_solid_cylinder_axial():
+def validate_eddy_solid_cylinder_axial():
     """Solid conducting cylinder (axis ∥ z, σ=1.6e7 S/m, R=25 mm, L=200 mm)
     in uniform harmonic B₀=1 T (z-dir), f=50 Hz.
 
@@ -1776,8 +1751,8 @@ def test_eddy_solid_cylinder_axial():
     sigma_cf = mesh.MaterialCF({"cyl": sigma}, default=0.0)
     A0       = CoefficientFunction((-B0 * y / 2, B0 * x / 2, 0.0))
 
-    def add_source(lf, test_fn):
-        v_A, psi = test_fn
+    def add_source(lf, validate_fn):
+        v_A, psi = validate_fn
         lf += -1j * omega * sigma_cf * A0 * v_A       * dx
         lf += -1j * omega * sigma_cf * A0 * grad(psi) * dx
 
@@ -1797,8 +1772,7 @@ def test_eddy_solid_cylinder_axial():
     )
 
 
-@pytest.mark.xval
-def test_permeable_sphere_highmu_scattered():
+def validate_permeable_sphere_highmu_scattered():
     """Permeable sphere at EXTREME contrast (mu_r=1000, R=50 mm) in uniform B0=1 T.
     Exact (demagnetization N=1/3): B_inside = 3 mu_r/(mu_r+2) * B0 = 2.994 T.
     Stress-tests the scattered-field A-form at high permeability (the regime where
@@ -1832,8 +1806,7 @@ def test_permeable_sphere_highmu_scattered():
         f"high-mu sphere B_z(centre) = {B_z:.4f} T, exact = {B_z_ref:.4f} T")
 
 
-@pytest.mark.xval
-def test_coaxial_loops_mutual_inductance():
+def validate_coaxial_loops_mutual_inductance():
     """Mutual inductance of two coaxial circular loops (a1=a2=50 mm, gap d=30 mm).
     NGSolve: solve loop-1, M = 2*pi*a2 * A_phi(a2,0,z2) / I1 (flux linkage via A).
     Exact (Maxwell): M = mu0*sqrt(a1 a2)[(2/k - k)K(k) - (2/k)E(k)],
@@ -1860,8 +1833,7 @@ def test_coaxial_loops_mutual_inductance():
         f"coaxial-loop M = {M_fem*1e9:.3f} nH, Maxwell exact = {M_ref*1e9:.3f} nH")
 
 
-@pytest.mark.xval
-def test_coaxial_loops_axial_force():
+def validate_coaxial_loops_axial_force():
     """Axial force between two coaxial loops (a1=a2=50 mm, gap d=30 mm, I1=I2=100 A).
     NGSolve: solve loop-1, then the Lorentz force on loop-2 is
         F_z = -2*pi*a2*I2 * B_r1(a2,0,d)   (B_r1 = radial field of loop-1 there).
@@ -1893,8 +1865,7 @@ def test_coaxial_loops_axial_force():
         f"coaxial-loop F_z = {F_fem*1e3:.3f} mN, exact I1 I2 dM/dz = {F_ref*1e3:.3f} mN")
 
 
-@pytest.mark.xval
-def test_anti_helmholtz_axial_gradient():
+def validate_anti_helmholtz_axial_gradient():
     """Anti-Helmholtz pair: two coaxial coils radius a=50 mm at z=+/-s (s=40 mm)
     with OPPOSING NI=1000 A-turns. On-axis B_z is antisymmetric; the central
     axial gradient is exact:
@@ -1933,8 +1904,7 @@ def test_anti_helmholtz_axial_gradient():
         f"anti-Helmholtz gradient = {G_fem:.4f} T/m, exact = {G_ref:.4f} T/m")
 
 
-@pytest.mark.xval
-def test_current_loop_offaxis_field():
+def validate_current_loop_offaxis_field():
     """OFF-axis field of a circular current loop (a=50 mm, I=100 A) at the
     cylindrical point (r=30 mm, z=20 mm) -- both components against the exact
     elliptic-integral field (Simpson / Jackson §5.5):
@@ -1968,12 +1938,11 @@ def test_current_loop_offaxis_field():
         f"loop off-axis B_r = {Br_fem*1e3:.4f} mT, exact = {Br_ex*1e3:.4f} mT")
 
 
-@pytest.mark.xval
-def test_permeable_sphere_exterior_dipole():
+def validate_permeable_sphere_exterior_dipole():
     """EXTERIOR field of a permeable sphere (mu_r=10, R=50 mm) in uniform B0=1 T.
     Outside, the scattered field is an exact dipole; on the polar (z) axis
         B_z(z) = B0 + 2 R^3 (mu_r-1)/(mu_r+2) B0 / z^3   (z > R).
-    Complements the INTERIOR check (test_sphere_magnetostatic_scattered) using the
+    Complements the INTERIOR check (validate_sphere_magnetostatic_scattered) using the
     same scattered-field A-form solve -- validates the exterior multipole.
 
     Pass criterion: |B_z_fem - B_z_ref| < 3 % of B_z_ref at z = 100, 150 mm.
@@ -2008,8 +1977,7 @@ def test_permeable_sphere_exterior_dipole():
             f"fem={Bz_fem:.4f} ref={Bz_ref:.4f} T")
 
 
-@pytest.mark.xval
-def test_coaxial_loops_mutual_parametric():
+def validate_coaxial_loops_mutual_parametric():
     """Mutual inductance of coaxial loops (a1=a2=50 mm) at THREE gaps d=20/40/60 mm
     from a SINGLE loop-1 solve -- M(d) = 2*pi*a2 A_phi(a2,0,d)/I1 vs the Maxwell
     elliptic M at each d. Validates the loop-1 field along the whole axis, not
@@ -2038,8 +2006,7 @@ def test_coaxial_loops_mutual_parametric():
             f"M(d={d*1e3:.0f}mm) = {M_fem*1e9:.3f} nH, exact = {M_ref*1e9:.3f} nH")
 
 
-@pytest.mark.xval
-def test_magnetic_shielding_spherical_shell():
+def validate_magnetic_shielding_spherical_shell():
     """Magnetic shielding factor of a mu-metal SPHERICAL SHELL (a=40, b=60 mm) in a
     uniform applied field B0 -- ref AC/DC "magnetic shielding" benchmark (#5).
 
@@ -2072,8 +2039,7 @@ def test_magnetic_shielding_spherical_shell():
     assert abs(shell_shielding_factor(1.0, a, b, "cylinder") - 1.0) < 1e-12
 
 
-@pytest.mark.xval
-def test_capacitance_3d_spherical():
+def validate_capacitance_3d_spherical():
     """3D capacitance of a SPHERICAL CAPACITOR (inner a, outer b, vacuum gap) --
     ref AC/DC "Computing Capacitance" benchmark (#6).
 
@@ -2095,8 +2061,7 @@ def test_capacitance_3d_spherical():
             f"C(a={a},b={b}) = {C_fem*1e12:.3f} pF, exact = {C_ref*1e12:.3f} pF")
 
 
-@pytest.mark.xval
-def test_capacitance_dielectric_layered():
+def validate_capacitance_dielectric_layered():
     """Layered-dielectric spherical capacitor (eps_r1 in a<r<c, eps_r2 in c<r<b) --
     ref "Computing Capacitance" with dielectric materials (#7). Validates the
     piecewise-permittivity (mesh.MaterialCF) path of electrostatic3d. Exact:
@@ -2118,8 +2083,7 @@ def test_capacitance_dielectric_layered():
             f"C(layered, er=({er1},{er2})) = {C_fem*1e12:.3f} pF, exact = {C_ref*1e12:.3f} pF")
 
 
-@pytest.mark.xval
-def test_halbach_cylinder_bore_field():
+def validate_halbach_cylinder_bore_field():
     """Ideal dipole HALBACH cylinder (Br=1.2 T, Ri=20, Ro=40 mm) -- accelerator/
     undulator magnet (#8). Rotating remanence (easy axis = 2*phi) gives a UNIFORM
     transverse bore field B = Br ln(Ro/Ri). 2D planar A_z with
@@ -2146,8 +2110,7 @@ def test_halbach_cylinder_bore_field():
     assert (max(vals) - min(vals)) / B_ref < 0.01, f"bore field not uniform: {vals}"
 
 
-@pytest.mark.xval
-def test_capacitance_matrix_spherical():
+def validate_capacitance_matrix_spherical():
     """Maxwell capacitance MATRIX of a closed 2-conductor spherical capacitor (#9) --
     ref "Computing Capacitance" matrix. Exact C = [[C0,-C0],[-C0,C0]],
     C0 = 4 pi eps0 ab/(b-a). Validates the FEM reaction charge extraction, symmetry,
@@ -2166,8 +2129,7 @@ def test_capacitance_matrix_spherical():
     assert np.max(np.abs(C.sum(axis=1))) / C0 < 0.01, "row-sum != 0 (charge not conserved)"
 
 
-@pytest.mark.xval
-def test_electrostatic_force_parallel_plate():
+def validate_electrostatic_force_parallel_plate():
     """Electrostatic force on a parallel-plate capacitor (#10, MEMS actuator). A closed
     gap box with NEUMANN side walls gives an exact 1-D field, so |F| = eps0 A V^2/(2d^2)
     exactly (no fringing). Maxwell-stress electrostatic eggshell. <2 % on 2026-06-05.
@@ -2188,8 +2150,7 @@ def test_electrostatic_force_parallel_plate():
     assert Fz < 0, "parallel-plate force must be attractive (downward)"
 
 
-@pytest.mark.xval
-def test_magnetic_shielding_cylinder():
+def validate_magnetic_shielding_cylinder():
     """CYLINDER magnetic shielding (2D transverse, #11) -- the infinite-length twin of
     the sphere (#5). mu-metal shell (a=40, b=60 mm) in a uniform transverse B0; exact
     S = [(mu_r+1)^2 - (a/b)^2(mu_r-1)^2]/(4 mu_r). 2D planar A_z, permeability-jump
@@ -2213,8 +2174,7 @@ def test_magnetic_shielding_cylinder():
     assert abs(S_fem - S_ref) / S_ref < 0.025, f"S_fem={S_fem:.2f} vs exact {S_ref:.2f}"
 
 
-@pytest.mark.xval
-def test_two_wire_line_capacitance():
+def validate_two_wire_line_capacitance():
     """Two-wire transmission-line capacitance per unit length (#12). Exact
     C = pi eps0 / arccosh(D/2a). 2D electrostatics, differential drive (+-V0/2)
     with a far ground ring. <1 % on 2026-06-05.
@@ -2232,8 +2192,7 @@ def test_two_wire_line_capacitance():
     assert abs(C_fem - C_ref) / C_ref < 0.02, f"C={C_fem*1e12:.3f} pF/m vs exact {C_ref*1e12:.3f}"
 
 
-@pytest.mark.xval
-def test_multipole_quadrupole_fem():
+def validate_multipole_quadrupole_fem():
     """ref-class #13: an air-cored NORMAL quadrupole (4 line currents
     +I,-I,+I,-I at 0/90/180/270 deg, radius r0) solved as planar A_z; the
     multipoles extracted from the FEM field on R_ref must match the exact
@@ -2274,8 +2233,7 @@ def test_multipole_quadrupole_fem():
         assert fem["C"][n] / fe["main_C"] * 1e4 < 1.0
 
 
-@pytest.mark.xval
-def test_cylinder_magnet_axial_field():
+def validate_cylinder_magnet_axial_field():
     """ref-class #14: on-axis B_z of an axially-magnetized CYLINDER permanent
     magnet vs the closed form B_z(z)=(Br/2)[(z+L/2)/sqrt(R^2+(z+L/2)^2) -
     (z-L/2)/sqrt(R^2+(z-L/2)^2)]. Axisymmetric A_phi with a rigid magnetization
@@ -2317,8 +2275,7 @@ def test_cylinder_magnet_axial_field():
     assert abs(bz0(2 * L) - bf_ex) / bf_ex < 0.06                      # far field
 
 
-@pytest.mark.xval
-def test_solenoid_field_and_inductance():
+def validate_solenoid_field_and_inductance():
     """ref-class #15: finite air-core SOLENOID. On-axis B_z vs the exact closed
     form B_z=(mu0 n I/2)[(L/2-z)/sqrt(..)+(L/2+z)/sqrt(..)] (centre + bore), and the
     self-inductance L=2W/I^2 (energy method) vs the long limit times the Nagaoka
@@ -2358,8 +2315,7 @@ def test_solenoid_field_and_inductance():
     assert abs(kN - 1.0 / (1.0 + 0.9 * a / L)) / (1.0 / (1.0 + 0.9 * a / L)) < 0.02, f"k_N={kN:.4f}"
 
 
-@pytest.mark.xval
-def test_busbar_lorentz_force():
+def validate_busbar_lorentz_force():
     """ref-class #16: Lorentz force per length between two parallel busbars vs
     F = mu0 I1 I2/(2 pi d), both attractive (parallel) and repulsive (anti-parallel),
     via the J x B volume integral (force.lorentz_force_2d) on the planar A_z field."""
@@ -2386,8 +2342,7 @@ def test_busbar_lorentz_force():
         assert abs(Fy) < 0.05 * F_exact                       # force is along x
 
 
-@pytest.mark.xval
-def test_helmholtz_uniformity():
+def validate_helmholtz_uniformity():
     """ref-class #17: HELMHOLTZ pair (loops radius a at z=+/-a/2). On-axis B_z vs
     the closed form, centre B0 vs (4/5)^(3/2) mu0 NI/a, and the field UNIFORMITY over
     the central |z|<=a/4 working region (the Helmholtz figure of merit)."""
@@ -2430,8 +2385,7 @@ def test_helmholtz_uniformity():
     assert unif < 0.015, f"uniformity {unif*100:.2f}% over |z|<=a/4"   # Helmholtz flatness
 
 
-@pytest.mark.xval
-def test_c_magnet_gap_field():
+def validate_c_magnet_gap_field():
     """ref-class #18: iron window-frame DIPOLE air-gap field vs the reluctance
     model B_gap = mu0 NI/(g + l_fe/mu_r). 2D planar A_z, high-mu yoke, coil threading
     the left leg; gap field = avg |B_x| over the gap. FEM sits just below the lumped
@@ -2470,8 +2424,7 @@ def test_c_magnet_gap_field():
     assert Bx > 0.85 * MU0 * NI / g                           # but close to it (small gap)
 
 
-@pytest.mark.xval
-def test_joule_heating_electrothermal():
+def validate_joule_heating_electrothermal():
     """ref-class #19: ELECTRO-THERMAL Joule heating, chaining the two NGSolve
     solvers solve_current_flow -> joule_heat_source -> solve_heat_steady. A uniform
     bar (voltage V across length L, ends cold, sides insulated) has q=sigma(V/L)^2 and
@@ -2496,8 +2449,7 @@ def test_joule_heating_electrothermal():
     assert abs(dT(mesh(L / 2, hh / 2)) - sigma * V0 ** 2 / (8 * k)) / (sigma * V0 ** 2 / (8 * k)) < 0.01
 
 
-@pytest.mark.xval
-def test_electro_thermo_mechanical_chain():
+def validate_electro_thermo_mechanical_chain():
     """ref-class #20: 3-physics chain solve_current_flow -> solve_heat_steady ->
     solve_linear_elasticity. Validates dT_max = sigma V^2/(8k) and the constrained-bar
     axial thermal stress sigma_xx = -E alpha <dT>. Also locks the new elasticity solver
@@ -2536,8 +2488,7 @@ def test_electro_thermo_mechanical_chain():
     assert abs(sxx - sxx_ex) / abs(sxx_ex) < 0.01
 
 
-@pytest.mark.xval
-def test_magneto_mechanical_beam():
+def validate_magneto_mechanical_beam():
     """ref-class #21: magneto-mechanical -- a current-carrying cantilever in a
     transverse field B0 feels a Lorentz body force f_y=-J_x B0 and deflects; the tip
     deflection matches Euler-Bernoulli w L^4/(8EI), w=I B0, for a slender beam."""
@@ -2558,8 +2509,7 @@ def test_magneto_mechanical_beam():
     assert tip_fem < 0                                     # deflects in the force direction
 
 
-@pytest.mark.xval
-def test_mems_electro_mechanical():
+def validate_mems_electro_mechanical():
     """ref-class #22: MEMS electro-mechanical chain -- solve_electrostatic ->
     electrostatic_eggshell_force_2d (P = 1/2 eps0 (V0/d)^2, EXACT with a whole-gap
     CONSTANT weight ramp gradg=(0,1/d)) -> solve_linear_elasticity (the pull deflects a
@@ -2593,8 +2543,7 @@ def test_mems_electro_mechanical():
     assert abs(tip_fem - tip_eb) / tip_eb < 0.03
 
 
-@pytest.mark.xval
-def test_electrothermal_sigmaT_2way():
+def validate_electrothermal_sigmaT_2way():
     """ref-class #24: TWO-WAY temperature-dependent sigma(T) electro-thermal.
     sigma(T)=sigma0/(1+alpha T) -> Joule q=(J^2/sigma0)(1+alpha T) feeds back into the heat;
     solve_heat_steady_nonlinear (Picard) matches the exact closed form
@@ -2618,8 +2567,7 @@ def test_electrothermal_sigmaT_2way():
     assert Tmax > 1.03 * Tmax_parab, "2-way feedback should raise the peak above the parabola"
 
 
-@pytest.mark.xval
-def test_coax_line_inductance():
+def validate_coax_line_inductance():
     """ref-class #25: coaxial-line external inductance from the FE magnetic energy
     matches (mu0/2pi) ln(b/a); with the analytic coax C it gives Z0 = 60 ln(b/a) and v=c."""
     from netgen.occ import OCCGeometry, WorkPlane, Glue
@@ -2647,3 +2595,14 @@ def test_coax_line_inductance():
           f"Z0 {Z0_fe:.2f} vs {Z0_cf:.2f} ohm")
     assert abs(L_fe - L_cf)/L_cf < 0.01, "coax L_ext vs (mu0/2pi)ln(b/a)"
     assert abs(Z0_fe - Z0_cf)/Z0_cf < 0.01, "coax Z0 vs 60 ln(b/a)"
+
+
+def main():
+    for name, fn in sorted(globals().items()):
+        if name.startswith("validate_") and callable(fn):
+            fn()
+            print("ok", name)
+
+
+if __name__ == "__main__":
+    main()

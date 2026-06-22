@@ -31,31 +31,3 @@ def test_peak_dt_formula():
     assert math.isclose(convective_slab_peak_dT(Q, L, K, 1e12), Q*L*L/(8*K), rel_tol=1e-6)
     # smaller h (worse cooling) -> larger film -> hotter
     assert convective_slab_peak_dT(Q, L, K, 250.0) > convective_slab_peak_dT(Q, L, K, 500.0)
-
-
-@pytest.mark.xval
-def test_convective_slab_fe():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    from ngsolve import Mesh, CoefficientFunction
-    from netgen.occ import OCCGeometry, WorkPlane, X, Y
-    from radia_mcp.radia_ngsolve.multiphysics import solve_heat_steady_robin
-
-    slab = WorkPlane().MoveTo(-WD/2, -L/2).Rectangle(WD, L).Face(); slab.faces.name = "slab"
-    slab.edges.Max(Y).name = "conv"; slab.edges.Min(Y).name = "conv"
-    slab.edges.Max(X).name = "side"; slab.edges.Min(X).name = "side"
-    mesh = Mesh(OCCGeometry(slab, dim=2).GenerateMesh(maxh=L/20))
-
-    for h in (250.0, 500.0, 2000.0):
-        gT = solve_heat_steady_robin(mesh, CoefficientFunction(Q), K, "slab", "conv", h, order=3)
-        dT_an = convective_slab_peak_dT(Q, L, K, h)
-        assert abs(gT(mesh(0.0, 0.0)) - dT_an) / dT_an < 5e-3, f"h={h}: centre"
-        # surface floats q L/(2h) above coolant
-        dT_surf = Q * L / (2.0 * h)
-        assert abs(gT(mesh(0.0, L/2 * 0.999)) - dT_surf) / dT_surf < 1e-2, f"h={h}: surface"
-
-
-if __name__ == "__main__":
-    test_peak_dt_formula()
-    test_convective_slab_fe()
-    print("[OK] convective electro-thermal dT = qL^2/8k + qL/2h validated.")

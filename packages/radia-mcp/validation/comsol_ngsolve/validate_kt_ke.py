@@ -16,7 +16,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -48,8 +48,7 @@ def _mesh():
     return Mesh(OCCGeometry(Glue([rotor, cp, cn, gap, iron, outer]), dim=2).GenerateMesh(maxh=8e-3))
 
 
-@pytest.mark.xval
-def test_kt_equals_ke():
+def validate_kt_equals_ke():
     mesh = _mesh()
     nu = reluctivity(mesh, {"iron": 1000.0})
     area = Integrate(mesh.MaterialCF({"coilpos": 1.0}, default=0.0) * dx, mesh)
@@ -75,5 +74,5 @@ def test_kt_equals_ke():
 
 
 if __name__ == "__main__":
-    test_kt_equals_ke()
+    validate_kt_equals_ke()
     print("[OK] Kt = Ke (torque constant = back-EMF constant) validated.")

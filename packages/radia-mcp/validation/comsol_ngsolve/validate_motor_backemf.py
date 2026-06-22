@@ -22,7 +22,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -55,8 +55,7 @@ def _mesh():
                             dim=2).GenerateMesh(maxh=8.0))
 
 
-@pytest.mark.xval
-def test_flux_linkage_amplitude():
+def validate_flux_linkage_amplitude():
     mesh = _mesh()
     nu = reluctivity(mesh, {"iron": 1000.0})
     thetas = [0, 30, 60, 90, 180]
@@ -81,5 +80,5 @@ def test_flux_linkage_amplitude():
 
 
 if __name__ == "__main__":
-    test_flux_linkage_amplitude()
+    validate_flux_linkage_amplitude()
     print("[OK] PMSM no-load flux linkage / back-EMF validated against the reference.")

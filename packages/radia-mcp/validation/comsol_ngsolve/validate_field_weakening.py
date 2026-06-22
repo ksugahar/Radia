@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -54,9 +54,8 @@ def _numeric_opt(lm, Ld, Lq, Imax, Vlim, N=400):
     return None if T < -1e90 else (idb, iqb, T)
 
 
-@pytest.mark.xval
 @pytest.mark.parametrize("name,lm,Ld,Lq,Vmax,expects_mtpv", MACHINES)
-def test_field_weakening_matches_numeric(name, lm, Ld, Lq, Vmax, expects_mtpv):
+def validate_field_weakening_matches_numeric(name, lm, Ld, Lq, Vmax, expects_mtpv):
     wb = base_speed_electrical(lm, Ld, Lq, I, Vmax, P)
     regions, torques = [], []
     for k in (0.5, 0.9, 1.0, 1.2, 1.6, 2.2, 3.0, 4.5, 7.0):
@@ -94,8 +93,7 @@ def test_field_weakening_matches_numeric(name, lm, Ld, Lq, Vmax, expects_mtpv):
     assert ("MTPV" in regions) == expects_mtpv, f"{name}: MTPV presence wrong ({regions})"
 
 
-@pytest.mark.xval
-def test_base_speed_is_mtpa_voltage_limit():
+def validate_base_speed_is_mtpa_voltage_limit():
     """At exactly base speed the MTPA-at-Imax point sits on the voltage ellipse."""
     lm, Ld, Lq, Vmax = 0.05, 0.0010, 0.0010, 6.0
     wb = base_speed_electrical(lm, Ld, Lq, I, Vmax, P)
@@ -111,6 +109,6 @@ def test_base_speed_is_mtpa_voltage_limit():
 
 if __name__ == "__main__":
     for m in MACHINES:
-        test_field_weakening_matches_numeric(*m)
-    test_base_speed_is_mtpa_voltage_limit()
+        validate_field_weakening_matches_numeric(*m)
+    validate_base_speed_is_mtpa_voltage_limit()
     print("[OK] field-weakening operating-region map validated vs numeric (0.000%).")

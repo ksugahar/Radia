@@ -234,7 +234,6 @@ def gate_radia_mcp_matrix():
     #     exactly the ubuntu matrix "Pytest" step (the 30x top failure).
     rc, out = _sh([sys.executable, "-m", "pytest", "tests/", "-q",
                    "-p", "no:cacheprovider", "--no-header",
-                   "-m", "not xval",
                    "--reruns", "1", "--reruns-delay", "1"],  # match matrix flaky-retry
                   cwd=MCP, env={"RADIA_MCP_FORCE_MINIMAL": "1"})
     tail = out.strip().splitlines()[-1] if out.strip() else "(no output)"

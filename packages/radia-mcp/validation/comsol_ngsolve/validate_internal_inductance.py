@@ -15,7 +15,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -40,8 +40,7 @@ def _L_internal(R, Rout):
     return 2.0 * magnetic_energy_2d(B, mesh, "wire") / (I*I)
 
 
-@pytest.mark.xval
-def test_internal_inductance_round_wire():
+def validate_internal_inductance_round_wire():
     L_cf = internal_inductance_round_wire()
     Ls = {R: _L_internal(R, 20*R) for R in (0.001, 0.002)}
     for R, L in Ls.items():
@@ -54,5 +53,5 @@ def test_internal_inductance_round_wire():
 
 
 if __name__ == "__main__":
-    test_internal_inductance_round_wire()
+    validate_internal_inductance_round_wire()
     print("[OK] internal inductance mu0/(8 pi) validated (radius-independent).")

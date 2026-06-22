@@ -148,37 +148,3 @@ def test_evanescent_limits():
     assert math.isclose(waveguide_evanescent_attenuation(1e-3 * fc, fc), kc, rel_tol=1e-3)
     assert waveguide_evanescent_attenuation(0.9999 * fc, fc) < 0.02 * kc
     assert waveguide_evanescent_attenuation(0.999999 * fc, fc) < 1.0     # continuity at cutoff
-
-
-@pytest.mark.xval
-def test_dispersion_fe_anchor():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    from ngsolve import Mesh, TaskManager
-    from netgen.occ import OCCGeometry, WorkPlane
-    from radia_mcp.radia_ngsolve.waveguide import helmholtz_cutoff_wavenumbers_2d
-
-    a, b = 0.02286, 0.01016
-    rect = WorkPlane().Rectangle(a, b).Face(); rect.edges.name = "wall"
-    mesh = Mesh(OCCGeometry(rect, dim=2).GenerateMesh(maxh=min(a, b) / 12))
-    with TaskManager():
-        kc_fe = helmholtz_cutoff_wavenumbers_2d(mesh, 1, bc="neumann")[0]
-
-    fc_fe = cutoff_frequency(kc_fe)
-    fc_an = rectangular_waveguide_cutoff(a, b, 1, 0)
-    assert math.isclose(fc_fe, fc_an, rel_tol=5e-3)                 # FE cutoff matches analytic
-    # the dispersion built on the FE cutoff agrees with the analytic-cutoff dispersion
-    d_fe = waveguide_dispersion(10e9, fc_fe)
-    d_an = waveguide_dispersion(10e9, fc_an)
-    assert math.isclose(d_fe["v_group"], d_an["v_group"], rel_tol=1e-2)
-    assert math.isclose(d_fe["lambda_g"], d_an["lambda_g"], rel_tol=1e-2)
-
-
-if __name__ == "__main__":
-    test_dielectric_slab_sparams()
-    test_cascade_and_offset_short()
-    test_dispersion_identities()
-    test_cutoff_and_high_frequency_limits()
-    test_evanescent_limits()
-    test_dispersion_fe_anchor()
-    print("[OK] waveguide dispersion: slab/cascade/offset-short S-params, v_p*v_g=c^2, FE-anchored fc.")

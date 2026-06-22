@@ -14,7 +14,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -28,8 +28,7 @@ EPS0 = 8.8541878128e-12
 a, D, Rout, I = 0.001, 0.010, 0.12, 1.0
 
 
-@pytest.mark.xval
-def test_two_wire_external_inductance():
+def validate_two_wire_external_inductance():
     w1 = WorkPlane().Circle(-D/2, 0, a).Face(); w1.faces.name = "w1"
     w2 = WorkPlane().Circle(D/2, 0, a).Face(); w2.faces.name = "w2"
     box = WorkPlane().Circle(0, 0, Rout).Face(); box.edges.name = "outer"
@@ -54,5 +53,5 @@ def test_two_wire_external_inductance():
 
 
 if __name__ == "__main__":
-    test_two_wire_external_inductance()
+    validate_two_wire_external_inductance()
     print("[OK] two-wire line external inductance validated.")
