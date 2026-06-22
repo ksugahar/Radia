@@ -386,6 +386,78 @@ twist `φ ≠` the orbit bend `θ`) and an s-ramped `(b1(s),b2(s))` are extensio
 **when the per-station 2-D breaks** — the fast-twist `dφ/ds` leaf coupling
 (the §3.4 perturbation parameter, now on the twist) — is the next rung.
 
+### 3.8 When does the per-station 2-D twist break? — the fast-twist leaf coupling
+
+§3.6–3.7 design a twisting magnet as a STACK of independently-rotated 2-D
+cross-sections — the **slow-twist (adiabatic)** limit `dφ/ds → 0`. **When does
+that break?** A magnet whose order-`n` multipole twists at rate `k = dφ/ds` has
+helical symmetry, and the exact current-free harmonic is the **helical multipole**
+(standard for helical undulators / Siberian snakes / twisted quads):
+
+$$\Phi_n = C\, I_n(n k r)\,\sin\!\big(n(\theta - k s)\big),$$
+
+`I_n` the modified Bessel function. As `k → 0`, `I_n(nkr) → (nkr/2)^n/n!` and the
+field reduces to the pure 2-D multipole rotated by `φ(s) = ks` — **exactly the
+per-station 2-D stack** (§3.6–3.7). The leaf coupling is the deviation from that
+stack, controlled by the dimensionless **twist-per-aperture** `ka = 2π a/P`
+(`a` aperture, `P` pitch).
+
+**Measured (`twist_rate_leaf_coupling.py`, analytic, golden-tested).** On the
+aperture circle:
+- the **transverse** focusing error `ε = ‖B_⊥(3D) − B_⊥(2D stack)‖/‖B_⊥(2D)‖`
+  scales as **`(ka)²`** (slope 2.04 — 2nd order, the quality the optics sees);
+- the **longitudinal** field `B_s/B_⊥` scales as **`ka`** (slope 0.97 — 1st order,
+  the genuinely-3-D component absent in any 2-D stack);
+- the **threshold**: `ε = 1%` at `ka* ≈ 0.14`, i.e. **pitch/aperture `P/a ≈ 46`**.
+
+**The bridge to §3.4 (rung-1).** The per-station 2-D twist design holds when the
+**pitch exceeds the aperture by ~ several tens** — the *same* "longitudinal scale
+≫ transverse scale by ~40×" rule as the straight magnet's foliate-and-perturb
+(`L/gap ~ 40`), with the twist replacing `gap/L` by `a/P`. So the whole twist axis
+closes: §3.6 (the twist + n-fold law), §3.7 (the combined-function confluence on a
+curved orbit), §3.8 (its validity threshold) — a per-station 2-D design with a
+*measured* fast-twist coupling, exactly mirroring the straight-magnet rung-1.
+
+### 3.9 The END PACK in two planes — x-y cross-section + s-y end → 3-D
+
+§3.5 applied the two-plane method to a *curved* FFAG sector **cell** (the whole
+bend cell). The **end pack** — the magnet's longitudinal **termination**, the
+genuinely-3-D hard part of a *straight* magnet — is the **same two-plane thought
+on the literal `(x-y)` cross-section + `(s-y)` longitudinal planes**:
+
+| plane | what it sets | engine |
+|---|---|---|
+| **`x-y` cross-section** (⊥ beam) | the transverse multipole: a finite flat pole droops (`b₃<0`), the **shim** `z=g/2−δ(x/w)²` zeroes it | `accel_pole_dipole_body_2d.solve` (Plane 1) |
+| **`s-y` longitudinal** (beam `s`, gap `y`) | the **end chamfer**: a *standalone* 2-D Laplace fringe → the Rogowski bow-out `ĝ(s)` + the effective length `L_eff` | `endpack_two_plane.solve_sy_endpack` (Plane 2) |
+
+The distinction from §3.2/§3.5: **both planes are cheap 2-D DESIGN solves done
+FIRST**; the 3-D solve only **reflects + verifies** (it does *not* extract the end
+profile out of itself). The reflection drives the 3-D pole as an **equipotential**
+(`Ψ=mmf` on the pole, `Ψ=0` on the median plane — the high-μ limit, the same drive
+as §3.5 rung-2, *pure Laplace, no coil*), then sweeps the chamfer **depth** to
+drive the pole-tip corner field through its body value.
+
+**Verified (`endpack_two_plane.py`, ngsolve only, golden-tested).**
+
+- **Plane 1 (`x-y`):** the flat finite pole (half-width 60 mm) droops
+  `b₃/b₁ ≈ −3.6×10⁻⁵`; a `δ ≈ 0.41 mm` concave shim zeroes it (residual
+  `~1×10⁻⁴`).
+- **Plane 2 (`s-y`):** a standalone 2-D Laplace fringe gives the Rogowski end
+  bow-out `ĝ(s)` and `L_eff ≈ 151 mm` — a **+26 %** excess over the 120 mm iron
+  (each end ~`0.75 g`, the same fringe law as §3.2/§3.5).
+- **Reflection (3-D):** the hard-cut pole tip **over-fields by ~+11 %** (the corner
+  flux concentration); reflecting the `ĝ(s)` shape and sweeping the depth drives
+  that corner over-field **through zero at ~2.1 mm**, while the integrated
+  transverse `b̄₃,₅` stays **~0.3 %** — body/Plane-1 dominated (the END shape is the
+  wrong lever for it, the honest two-lever split of §3.2).
+- **Cross-check:** the *cheap 2-D* `s-y` chamfer SHAPE predicts the *expensive 3-D*
+  end equipotential bow-out to **~7 % rms** — the two-plane reflection is sound.
+
+So the end-pack realizes the design thought literally: **design the END in `x-y`
+(the transverse harmonic) and `s-y` (the longitudinal termination), each a cheap
+2-D plane, then loft into one 3-D pole** — the transverse and longitudinal levers
+cleanly separated (Plane-1 owns `b₃,₅`; Plane-2 owns the end taper / `L_eff`).
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -489,13 +561,30 @@ coil = A-side), so the framework is one method, not two.
   fixed in the Frenet frame, **twists by `θ(s)` in the lab** — both the dipole and
   quad orientations track `θ` (**slope 1.000, err 0.00°**) with the multipole
   phase-change ratio `ψ_2/ψ_1 = 2.000` (the n-fold law) — the confluence of §3.5
-  (the dipole sector) and §3.6 (the twist).
+  (the dipole sector) and §3.6 (the twist);
+- the **fast-twist leaf coupling** (§3.8, `twist_rate_leaf_coupling.py`): the
+  per-station 2-D twist design breaks when the twist is fast — the exact helical
+  multipole deviates from the 2-D stack as `ε ~ (ka)²` (transverse, slope 2.04)
+  with a longitudinal `B_s ~ ka` (slope 0.97); the threshold `ε = 1%` is at
+  **pitch/aperture `~46`**, the twist analogue of rung-1's `L/gap ~ 40`
+  (`gap/L → a/P`).
+- the **end pack in two planes** (§3.9, `endpack_two_plane.py`): the magnet END
+  designed in the `x-y` cross-section (the shim `δ≈0.41 mm` zeroes `b₃≈−3.6e-5`)
+  **and** the `s-y` longitudinal plane (a standalone 2-D Laplace fringe →
+  Rogowski `ĝ(s)`, `L_eff` **+26 %**), reflected into one 3-D pole
+  (equipotential-pole drive, pure Laplace): the chamfer-depth sweep drives the
+  pole-tip corner over-field (`+11 %` hard-cut) **through zero at ~2.1 mm**, the
+  integrated `b̄₃,₅` stays `~0.3 %` (body lever), and the **cheap 2-D `s-y` chamfer
+  shape predicts the 3-D end equipotential to ~7 % rms**.
 
 **Research program (named, not claimed done):**
-- the end-design loop is **closed for the longitudinal end-field** (§3.2 rung 2);
-  what remains is the **transverse** integrated-harmonic lever — a Rogowski /
-  body-pole-shape problem (a separate, body-not-end design knob), plus a
-  *curved* (not linear) end chamfer that follows the equipotential contour exactly;
+- the end-design loop is **closed in two planes** (§3.9): the longitudinal
+  end-field (the `s-y` Rogowski chamfer, depth tuned to zero the corner over-field)
+  AND the transverse harmonic (the `x-y` shim that zeroes `b₃`) — cleanly
+  separated levers; what remains is the FULL co-baked 3-D loft carrying BOTH the
+  `δ`-shim curvature and the `ĝ(s)` chamfer in one pole surface (here the 3-D
+  reflection carries the `s-y` chamfer at fixed body width; the `x-y` shim is
+  verified as the transverse lever, baked-together loft is the next refinement);
 - the 1-turn coil stream-function design (§5 B);
 - nonlinear µ(B) (saturation) inside the potential framework — the elegant
   "design sophistication", done within the reduced potential / hodograph
@@ -523,4 +612,6 @@ coil = A-side), so the framework is one method, not two.
 | two-plane → 3-D method (FFAG sector: transverse + azimuthal) | `examples/clebsch_hodograph/ffag_sector_two_plane.py` |
 | beam-referenced equipotential surface + the twist (n-fold law) | `examples/clebsch_hodograph/twisting_quadrupole_pole.py` |
 | combined-function on a curved orbit (the Frenet sweep = twist) | `examples/clebsch_hodograph/combined_function_frenet_sweep.py` |
+| fast-twist leaf coupling (the per-station 2-D validity threshold) | `examples/clebsch_hodograph/twist_rate_leaf_coupling.py` |
+| end pack in two planes (x-y cross-section + s-y end → 3-D) | `examples/clebsch_hodograph/endpack_two_plane.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |

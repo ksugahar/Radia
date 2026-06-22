@@ -1324,3 +1324,69 @@ def test_combined_function_frenet_sweep():
     assert sw["track_err_quad_deg"] < 1.0, sw["track_err_quad_deg"]
     # ...and the n-fold law: the quad phase CHANGE is 2x the dipole's.
     assert abs(sw["phase_ratio_n2_over_n1"] - 2.0) < 0.05, sw["phase_ratio_n2_over_n1"]
+
+
+def test_twist_rate_leaf_coupling():
+    """The fast-twist leaf coupling: when does the per-station 2-D twist design
+    break?  The exact helical multipole (Phi = I_n(n k r) sin n(theta - k s))
+    deviates from the 2-D stack as eps ~ (ka)^2 (transverse, 2nd order) with a
+    longitudinal B_s ~ ka (1st order); the per-station 2-D holds for
+    pitch/aperture >> 1 -- the twist analogue of rung-1's L/gap ~ 40.  scipy
+    only (analytic, no FEM)."""
+    pytest.importorskip("scipy")
+    import twist_rate_leaf_coupling as tw
+    sw = tw.twist_sweep(n=2)
+    # the transverse focusing error is 2nd order in ka; the longitudinal field 1st.
+    assert abs(sw["eps_slope"] - 2.0) < 0.15, sw["eps_slope"]
+    assert abs(sw["bs_slope"] - 1.0) < 0.15, sw["bs_slope"]
+    # monotone growth with the twist-per-aperture.
+    eps = sw["eps_transverse"]
+    assert all(eps[i] < eps[i + 1] for i in range(len(eps) - 1)), eps
+    # the threshold: per-station 2-D good only for pitch/aperture of order tens.
+    assert 30.0 < sw["pitch_over_aperture_star"] < 70.0, sw["pitch_over_aperture_star"]
+    assert 0.08 < sw["ka_star"] < 0.20, sw["ka_star"]
+
+
+def test_endpack_two_plane():
+    """The END PACK in two planes -> 3-D.  Design the magnet END in the x-y
+    cross-section (the transverse multipole + the shim that zeroes b_3) AND the
+    s-y longitudinal plane (a standalone 2-D Laplace fringe -> the Rogowski end
+    chamfer + L_eff), then REFLECT into one 3-D pole (equipotential-pole drive,
+    pure Laplace -- no coil) and verify.  Locks: Plane-1 the flat-pole droop +
+    the shim; Plane-2 L_eff excess ~+26%; the 3-D reflection's chamfer-depth
+    sweep drives the pole-tip corner over-field through zero; the cheap 2-D s-y
+    chamfer SHAPE predicts the 3-D end equipotential to a few %.  ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import endpack_two_plane as ep
+    d = ep.design_two_plane(fast=True)
+
+    # Plane 1 (x-y): the finite flat pole droops (b_3 < 0), the shim zeroes it.
+    p1 = d["plane1_xy"]
+    assert -6e-5 < p1["b3_over_b1_flat_body"] < -1e-5, p1
+    assert 2e-4 < p1["shim_delta_opt_m"] < 7e-4, p1               # ~0.4 mm concavity
+    assert p1["spurious_at_shim_opt"] < 1e-3, p1                  # residual quality at b_3=0
+
+    # Plane 2 (s-y): a standalone 2-D design -> a real end fringe (L_eff > L).
+    p2 = d["plane2_sy"]
+    assert 0.15 < p2["L_eff_excess_2d"] < 0.40, p2               # each end ~0.75 g
+    assert p2["end_lift_m"] > 0.005, p2                          # a real Rogowski bow-out
+
+    # Reflection (3-D): the hard-cut pole tip OVER-fields (corner enhancement),
+    # and the chamfer-depth sweep drives it through 1 (zero over-field).
+    r3 = d["reflect_3d"]
+    assert 1.05 < r3["flat_tip_enhancement"] < 1.25, r3          # +5..25% corner over-field
+    tip = [s["tip_enhancement"] for s in r3["depth_sweep"]]
+    assert all(tip[i] > tip[i + 1] for i in range(len(tip) - 1)), tip   # monotone down
+    assert 0.03 < r3["designed_depth_frac_zero"] < 0.20, r3      # a few-mm designed taper
+    assert r3["integrated_spurious_flat"] < 1e-2, r3            # clean integrated dipole
+    assert r3["ne"] > 5000, r3
+
+    # the transverse b_3,5 is a body/cross-section (Plane-1) lever -- the END
+    # shape barely moves it (both small, same order).
+    tl = d["transverse_lever_consistency"]
+    assert tl["3d_integrated_spurious_flat"] < 1e-2, tl
+
+    # CROSS-CHECK: the cheap 2-D s-y chamfer SHAPE predicts the 3-D end
+    # equipotential bow-out (both normalized) to a few percent rms.
+    assert d["crosscheck_2d_vs_3d_contour_rms_rel"] < 0.20, d
