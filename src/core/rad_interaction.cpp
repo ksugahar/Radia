@@ -2809,6 +2809,58 @@ void radTInteraction::CentroidFieldGradFromFace(const double ce3[3], const doubl
 }
 
 //=========================================================================
+// momentFaceGeom: per-face geometry for the moment formulation, generalized to triangular (3-vert) and
+// quad (4-vert) faces.  Fills V4col (the corners, with a TRIANGLE returned as a degenerate quad V[3]=V[2]
+// so the bilinear-quad kernel CentroidFieldGradFromFace integrates the triangle), the face center fc, the
+// OUTWARD unit normal nf, the polygon area (fan over nv-2 triangles), and d = fc - element centroid.  For a
+// hex quad (nv=4) this reproduces the previous inline geometry BIT-FOR-BIT.  File-static: used only by the
+// three moment kernel functions below (BuildCentroidFieldGrad / BuildMomentSystemCore / MomentSystemEntry).
+//=========================================================================
+static int momentFaceGeom(radTPolyhedron* poly, int f, const TVector3d& ce,
+                          double V4col[4][3], double fc[3], double nf[3], double& area, double d[3])
+{
+	const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
+	radTPolygon* pgn = hpt.PgnHndl.rep; radTrans* tr = hpt.TransHndl.rep;
+	const radTVect2dVect& v2d = pgn->EdgePointsVector;
+	int nv = (int)v2d.size(); if(nv > 4) nv = 4; if(nv < 3) nv = 3;
+	TVector3d V[4];
+	for(int v = 0; v < nv; v++) V[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
+	if(nv == 3) V[3] = V[2];                       // degenerate quad -> bilinear kernel integrates the triangle
+	double cx = 0, cy = 0, cz = 0;
+	for(int v = 0; v < nv; v++) { cx += V[v].x; cy += V[v].y; cz += V[v].z; }
+	fc[0] = cx/nv; fc[1] = cy/nv; fc[2] = cz/nv;
+	double sx = 0, sy = 0, sz = 0; area = 0.0;
+	for(int t = 0; t < nv-2; t++)                  // fan triangulation (quad: 2 triangles, tri: 1)
+	{
+		const TVector3d& P0 = V[0]; const TVector3d& P1 = V[t+1]; const TVector3d& P2 = V[t+2];
+		double ux = P1.x-P0.x, uy = P1.y-P0.y, uz = P1.z-P0.z;
+		double wx = P2.x-P0.x, wy = P2.y-P0.y, wz = P2.z-P0.z;
+		double rx = uy*wz-uz*wy, ry = uz*wx-ux*wz, rz = ux*wy-uy*wx;
+		area += 0.5*std::sqrt(rx*rx+ry*ry+rz*rz); sx += rx; sy += ry; sz += rz;
+	}
+	double nlen = std::sqrt(sx*sx+sy*sy+sz*sz); if(nlen < 1e-300) nlen = 1.0;
+	double ox = fc[0]-ce.x, oy = fc[1]-ce.y, oz = fc[2]-ce.z;
+	double sgn = (sx*ox+sy*oy+sz*oz >= 0.0) ? 1.0 : -1.0;
+	nf[0] = sgn*sx/nlen; nf[1] = sgn*sy/nlen; nf[2] = sgn*sz/nlen;
+	d[0] = fc[0]-ce.x; d[1] = fc[1]-ce.y; d[2] = fc[2]-ce.z;
+	for(int v = 0; v < 4; v++) { V4col[v][0] = V[v].x; V4col[v][1] = V[v].y; V4col[v][2] = V[v].z; }
+	return nv;
+}
+
+//=========================================================================
+// CollectMomentElems: e-ordered list of MOMENT elements (the surface-charge polyhedra: hex with 6 DOF +
+// wedge with 5 DOF).  For a pure-hex model this equals m_hexaElemIndices order, so the moment Cflat / row
+// layout is unchanged (hex stays bit-identical).  THE single source of element ordering for the moment
+// dense path (BuildCentroidFieldGrad + BuildMomentSystemCore) and the SolveLinearStep moment branch.
+//=========================================================================
+void radTInteraction::CollectMomentElems(std::vector<int>& out) const
+{
+	out.clear();
+	for(int e = 0; e < AmOfMainElem; e++)
+		if(m_elemDOF[e] == 6 || m_elemDOF[e] == 5) out.push_back(e);
+}
+
+//=========================================================================
 // BuildCentroidFieldGrad: per-hex demag field H and gradient gradH at the element CENTROID, as linear
 // functionals of each source DOF charge -- the kernel of the parameter-free moment formulation (the fix
 // for the eval-point alpha + the finite-difference conditioning noise; validated in
@@ -2827,53 +2879,45 @@ void radTInteraction::CentroidFieldGradFromFace(const double ce3[3], const doubl
 void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const
 {
 	const int NK = 9;
-	int nHex = (int)m_hexaElemIndices.size();
-	nHexOut = nHex;
-	Cflat.assign((size_t)nHex * NK * m_totalDOF, 0.0);
-	if(nHex == 0 || m_totalDOF == 0) return;
+	std::vector<int> melem; CollectMomentElems(melem);   // hex (6) + wedge (5), e-ordered
+	int nMom = (int)melem.size();
+	nHexOut = nMom;                                       // = moment-element count (hex+wedge)
+	Cflat.assign((size_t)nMom * NK * m_totalDOF, 0.0);
+	if(nMom == 0 || m_totalDOF == 0) return;
 
-	// gather per-DOF hex face data (4 verts, 2-triangle area, source element center + index)
-	struct FaceRec { TVector3d V[4]; double area; TVector3d srcEC; int srcElem; int valid; };
+	// gather per-DOF source-face data (corners as a possibly-degenerate quad, polygon area, source element
+	// center + index) for every moment element's faces (hex 6 / wedge 5; triangle faces via momentFaceGeom).
+	struct FaceRec { double V[4][3]; double area; TVector3d srcEC; int srcElem; int valid; };
 	std::vector<FaceRec> faces((size_t)m_totalDOF);
 	for(size_t i = 0; i < faces.size(); i++) { faces[i].valid = 0; faces[i].srcElem = -1; }
 
-	for(int h = 0; h < nHex; h++)
+	for(int h = 0; h < nMom; h++)
 	{
-		int elemIdx = m_hexaElemIndices[h];
+		int elemIdx = melem[h];
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly || poly->AmOfFaces != 6) continue;
+		if(!poly) continue;
+		int nF = poly->AmOfFaces; if(nF != 6 && nF != 5) continue;
 		int off = m_elemDOFOffset[elemIdx];
 		const TVector3d ec = poly->CentrPoint;
-		for(int f = 0; f < 6; f++)
+		for(int f = 0; f < nF; f++)
 		{
 			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
-			radTPolygon* pgn = hpt.PgnHndl.rep; radTrans* tr = hpt.TransHndl.rep;
-			if(!pgn || !tr) continue;
-			const radTVect2dVect& v2d = pgn->EdgePointsVector;
-			if(v2d.size() < 4) continue;
-			TVector3d V4[4];
-			for(int v = 0; v < 4; v++) V4[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
-			double area = 0.0;
-			for(int t = 0; t < 2; t++)
-			{
-				const TVector3d& A = V4[0]; const TVector3d& B = V4[t+1]; const TVector3d& C = V4[t+2];
-				double ux = B.x-A.x, uy = B.y-A.y, uz = B.z-A.z, wx = C.x-A.x, wy = C.y-A.y, wz = C.z-A.z;
-				double rx = uy*wz-uz*wy, ry = uz*wx-ux*wz, rz = ux*wy-uy*wx;
-				area += 0.5*std::sqrt(rx*rx+ry*ry+rz*rz);
-			}
+			if(!hpt.PgnHndl.rep || !hpt.TransHndl.rep) continue;
+			double V4col[4][3], fc[3], nf[3], d[3], area;
+			momentFaceGeom(poly, f, ec, V4col, fc, nf, area, d);   // tri -> degenerate quad; hex bit-identical
 			FaceRec& fr = faces[off+f];
-			for(int v = 0; v < 4; v++) fr.V[v] = V4[v];
+			for(int v = 0; v < 4; v++) { fr.V[v][0]=V4col[v][0]; fr.V[v][1]=V4col[v][1]; fr.V[v][2]=V4col[v][2]; }
 			fr.area = area; fr.srcEC = ec; fr.srcElem = elemIdx; fr.valid = 1;
 		}
 	}
 
 	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
 
-	for(int h = 0; h < nHex; h++)
+	for(int h = 0; h < nMom; h++)
 	{
-		int elemIdx = m_hexaElemIndices[h];
+		int elemIdx = melem[h];
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly || poly->AmOfFaces != 6) continue;
+		if(!poly) continue;
 		const TVector3d ce = poly->CentrPoint;
 		const double ce3[3] = {ce.x, ce.y, ce.z};
 		size_t base = (size_t)h * NK * m_totalDOF;
@@ -2881,8 +2925,8 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 		{
 			const FaceRec& fr = faces[g];
 			if(!fr.valid) continue;
-			const double V4[4][3] = {{fr.V[0].x,fr.V[0].y,fr.V[0].z}, {fr.V[1].x,fr.V[1].y,fr.V[1].z},
-			                         {fr.V[2].x,fr.V[2].y,fr.V[2].z}, {fr.V[3].x,fr.V[3].y,fr.V[3].z}};
+			const double V4[4][3] = {{fr.V[0][0],fr.V[0][1],fr.V[0][2]}, {fr.V[1][0],fr.V[1][1],fr.V[1][2]},
+			                         {fr.V[2][0],fr.V[2][1],fr.V[2][2]}, {fr.V[3][0],fr.V[3][1],fr.V[3][2]}};
 			const double cen[3] = {fr.srcEC.x, fr.srcEC.y, fr.srcEC.z};
 			double H[3], gH[6];
 			CentroidFieldGradFromFace(ce3, V4, cen, fr.srcElem == elemIdx, fr.area, H, gH);  // incl. IMA mirrors
@@ -2911,55 +2955,51 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex,
                                             std::vector<double>& A, std::vector<double>& rhs, bool normalize) const
 {
-	std::vector<double> Cflat; int nHex = 0;
-	BuildCentroidFieldGrad(Cflat, nHex);                 // (nHex x 9 x dof): H[3], gradH[6] per hex
+	std::vector<double> Cflat; int nMom = 0;
+	BuildCentroidFieldGrad(Cflat, nMom);                 // (nMom x 9 x dof): H[3], gradH[6] per moment elem
+	std::vector<int> melem; CollectMomentElems(melem);   // SAME hex(6)+wedge(5) e-order as Cflat
 	const int dof = m_totalDOF;
 	A.assign((size_t)dof * dof, 0.0);
 	rhs.assign(dof, 0.0);
-	if(nHex == 0 || dof == 0) return;
+	if(nMom == 0 || dof == 0) return;
 
 	std::vector<double> r((size_t)dof);
 	int row = 0;
-	for(int h = 0; h < nHex; h++)
+	for(int h = 0; h < nMom; h++)
 	{
-		int elemIdx = m_hexaElemIndices[h];
+		int elemIdx = melem[h];
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly || poly->AmOfFaces != 6) continue;
+		if(!poly) continue;
+		int nF = poly->AmOfFaces; if(nF != 6 && nF != 5) continue;     // hex 6 / wedge 5
 		const int off = m_elemDOFOffset[elemIdx];
 		const TVector3d ce = poly->CentrPoint;
 		const double chiH = chiPerHex[h];                 // per-element susceptibility (linear or current Picard)
-		const double* Hext = &HextPerHex[(size_t)h*3];    // external field at this hex centroid
+		const double* Hext = &HextPerHex[(size_t)h*3];    // external field at this element centroid
 
-		// per-face local geometry: center fc, OUTWARD unit normal nf, area Ae, d = fc - centroid
-		double fc[6][3], nf[6][3], Ae[6], d[6][3];
-		for(int f = 0; f < 6; f++)
+		// per-face local geometry (center fc, OUTWARD unit normal nf, area Ae, d = fc - centroid); the shared
+		// momentFaceGeom handles tri(3-vert) + quad(4-vert) faces and is bit-identical for the hex quad case.
+		double fc[6][3], nf[6][3], Ae[6], d[6][3]; int fnv[6];
+		for(int f = 0; f < nF; f++)
 		{
-			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
-			radTPolygon* pgn = hpt.PgnHndl.rep; radTrans* tr = hpt.TransHndl.rep;
-			const radTVect2dVect& v2d = pgn->EdgePointsVector;
-			TVector3d V4[4];
-			for(int v = 0; v < 4; v++) V4[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
-			double cx = 0, cy = 0, cz = 0;
-			for(int v = 0; v < 4; v++) { cx += V4[v].x; cy += V4[v].y; cz += V4[v].z; }
-			fc[f][0] = cx*0.25; fc[f][1] = cy*0.25; fc[f][2] = cz*0.25;
-			double sx = 0, sy = 0, sz = 0, area = 0;          // sum of triangle area-normals
-			for(int t = 0; t < 2; t++)
+			double V4col[4][3];
+			fnv[f] = momentFaceGeom(poly, f, ce, V4col, fc[f], nf[f], Ae[f], d[f]);
+		}
+		// wedge prism axis = direction between the 2 triangular cap centroids (the nv==3 faces).  The wedge's
+		// single quad row is the AXIAL quadrupole about THIS axis (orientation-robust; see the Bm code below).
+		double axis[3] = {0.0, 0.0, 1.0};
+		if(nF == 5)
+		{
+			int t0 = -1, t1 = -1;
+			for(int f = 0; f < nF; f++) if(fnv[f] == 3) { if(t0 < 0) t0 = f; else t1 = f; }
+			if(t0 >= 0 && t1 >= 0)
 			{
-				const TVector3d& P0 = V4[0]; const TVector3d& P1 = V4[t+1]; const TVector3d& P2 = V4[t+2];
-				double ux = P1.x-P0.x, uy = P1.y-P0.y, uz = P1.z-P0.z;
-				double wx = P2.x-P0.x, wy = P2.y-P0.y, wz = P2.z-P0.z;
-				double rx = uy*wz-uz*wy, ry = uz*wx-ux*wz, rz = ux*wy-uy*wx;
-				area += 0.5*std::sqrt(rx*rx+ry*ry+rz*rz); sx += rx; sy += ry; sz += rz;
+				double ax = fc[t1][0]-fc[t0][0], ay = fc[t1][1]-fc[t0][1], az = fc[t1][2]-fc[t0][2];
+				double an = std::sqrt(ax*ax+ay*ay+az*az); if(an < 1e-300) an = 1.0;
+				axis[0] = ax/an; axis[1] = ay/an; axis[2] = az/an;
 			}
-			double nlen = std::sqrt(sx*sx+sy*sy+sz*sz); if(nlen < 1e-300) nlen = 1.0;
-			double ox = fc[f][0]-ce.x, oy = fc[f][1]-ce.y, oz = fc[f][2]-ce.z;
-			double sgn = (sx*ox+sy*oy+sz*oz >= 0.0) ? 1.0 : -1.0;     // orient outward
-			nf[f][0] = sgn*sx/nlen; nf[f][1] = sgn*sy/nlen; nf[f][2] = sgn*sz/nlen;
-			Ae[f] = area;
-			d[f][0] = fc[f][0]-ce.x; d[f][1] = fc[f][1]-ce.y; d[f][2] = fc[f][2]-ce.z;
 		}
 		double Ve = 0.0;
-		for(int f = 0; f < 6; f++) Ve += Ae[f]*(fc[f][0]*nf[f][0]+fc[f][1]*nf[f][1]+fc[f][2]*nf[f][2]);
+		for(int f = 0; f < nF; f++) Ve += Ae[f]*(fc[f][0]*nf[f][0]+fc[f][1]*nf[f][1]+fc[f][2]*nf[f][2]);
 		Ve *= (1.0/3.0);
 
 		const double* Hh = &Cflat[(size_t)h*9*dof];           // Hh[k*dof..] field (k<3), grad (k 3..8)
@@ -2981,32 +3021,42 @@ void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const doubl
 		for(int k = 0; k < 3; k++)
 		{
 			std::fill(r.begin(), r.end(), 0.0);
-			for(int f = 0; f < 6; f++) r[off+f] += Ae[f]*d[f][k]/Ve;
+			for(int f = 0; f < nF; f++) r[off+f] += Ae[f]*d[f][k]/Ve;
 			const double* F0k = &Hh[(size_t)k*dof];
 			for(int g = 0; g < dof; g++) r[g] -= chiH*F0k[g];
 			putRow(chiH*Hext[k]);
 		}
 		// monopole row
 		std::fill(r.begin(), r.end(), 0.0);
-		for(int f = 0; f < 6; f++) r[off+f] = Ae[f];
+		for(int f = 0; f < nF; f++) r[off+f] = Ae[f];
 		putRow(0.0);
-		// 2 diagonal-quadrupole rows: Bm = dx^2-dy^2, then dy^2-dz^2
-		for(int qq = 0; qq < 2; qq++)
+		// diagonal-quadrupole rows: (nF-4) of them -- hex has 2 (Bm = dx^2-dy^2, then dy^2-dz^2), wedge has 1
+		// (dx^2-dy^2 only).  3 dipole + 1 monopole + (nF-4) quad = nF rows = nF DOF (square per element).
+		for(int qq = 0; qq < nF-4; qq++)
 		{
 			double Bm[6];
-			for(int f = 0; f < 6; f++)
-				Bm[f] = (qq == 0) ? (d[f][0]*d[f][0]-d[f][1]*d[f][1]) : (d[f][1]*d[f][1]-d[f][2]*d[f][2]);
+			for(int f = 0; f < nF; f++)
+			{
+				if(nF == 5)      // wedge: ONE quad row = AXIAL quadrupole 3(d.axis)^2-|d|^2 about the prism axis
+				{                // (orientation-robust; = 2dz^2-dx^2-dy^2 for a z-aligned prism).  Symmetric about
+					double da = d[f][0]*axis[0]+d[f][1]*axis[1]+d[f][2]*axis[2];   // the axis -> PINS the symmetric
+					double dd = d[f][0]*d[f][0]+d[f][1]*d[f][1]+d[f][2]*d[f][2];   // near-null mode the antisymmetric
+					Bm[f] = 3.0*da*da - dd;                                       // dx^2-dy^2 misses.
+				}
+				else
+					Bm[f] = (qq == 0) ? (d[f][0]*d[f][0]-d[f][1]*d[f][1]) : (d[f][1]*d[f][1]-d[f][2]*d[f][2]);
+			}
 			std::fill(r.begin(), r.end(), 0.0);
-			for(int f = 0; f < 6; f++) r[off+f] += Ae[f]*Bm[f];
+			for(int f = 0; f < nF; f++) r[off+f] += Ae[f]*Bm[f];
 			double cm[3] = {0,0,0};
-			for(int f = 0; f < 6; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
-			for(int f = 0; f < 6; f++)
+			for(int f = 0; f < nF; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
+			for(int f = 0; f < nF; f++)
 			{
 				double cd = cm[0]*d[f][0]+cm[1]*d[f][1]+cm[2]*d[f][2];
 				r[off+f] -= Ae[f]*cd/Ve;
 			}
 			double Dm[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
-			for(int f = 0; f < 6; f++) for(int ii = 0; ii < 3; ii++) for(int jj = 0; jj < 3; jj++)
+			for(int f = 0; f < nF; f++) for(int ii = 0; ii < 3; ii++) for(int jj = 0; jj < 3; jj++)
 				Dm[ii][jj] += Ae[f]*d[f][jj]*nf[f][ii]*Bm[f];
 			double Dvec[6] = {Dm[0][0], Dm[1][1], Dm[2][2], Dm[0][1]+Dm[1][0], Dm[0][2]+Dm[2][0], Dm[1][2]+Dm[2][1]};
 			for(int m = 0; m < 6; m++)
@@ -3025,10 +3075,11 @@ void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const doubl
 void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
                                         std::vector<double>& A, std::vector<double>& rhs) const
 {
-	int nHex = (int)m_hexaElemIndices.size();
-	if(nHex <= 0) { A.clear(); rhs.assign(m_totalDOF, 0.0); return; }
-	std::vector<double> chiv((size_t)nHex, chi), Hv((size_t)nHex*3);
-	for(int h = 0; h < nHex; h++) { Hv[(size_t)h*3] = Happ[0]; Hv[(size_t)h*3+1] = Happ[1]; Hv[(size_t)h*3+2] = Happ[2]; }
+	std::vector<int> melem; CollectMomentElems(melem);   // hex(6)+wedge(5), matches BuildMomentSystemCore order
+	int nMom = (int)melem.size();
+	if(nMom <= 0) { A.clear(); rhs.assign(m_totalDOF, 0.0); return; }
+	std::vector<double> chiv((size_t)nMom, chi), Hv((size_t)nMom*3);
+	for(int h = 0; h < nMom; h++) { Hv[(size_t)h*3] = Happ[0]; Hv[(size_t)h*3+1] = Happ[1]; Hv[(size_t)h*3+2] = Happ[2]; }
 	BuildMomentSystemCore(chiv.data(), Hv.data(), A, rhs);
 }
 
