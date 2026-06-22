@@ -1157,12 +1157,17 @@ int radTApplication::MomentSystemDenseRaw(int InteractElemKey, double chi, doubl
 	}
 }
 
+#ifdef RADIA_USE_HACAPK
+extern "C" double cHACApK_hlu_run_on_hacapk(void* leafmtxp_void, void* control_void,
+                                            const double* x_orig, const double* y_orig, int nffc);
+#endif
+
 int radTApplication::MomentHMatrixProbe(int InteractElemKey, double chi, double eps, int leaf, double eta, double* out)
 {
 	// Phase-2 Increment-2 gate: build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem)
 	// and probe the H-matvec against the dense A_raw (entry-by-entry).  out[8] = {ok, matvec_relerr, ndof,
 	// n_lowrank, n_dense, max_rank, compression, build_time}.  See ACA_MOMENT_DESIGN.md.
-	if(out) for(int k = 0; k < 8; k++) out[k] = 0.0;
+	if(out) for(int k = 0; k < 9; k++) out[k] = 0.0;
 #ifdef RADIA_USE_HACAPK
 	try
 	{
@@ -1186,6 +1191,7 @@ int radTApplication::MomentHMatrixProbe(int InteractElemKey, double chi, double 
 				Ad[(size_t)i*dof + j] = InteractPtr->MomentSystemEntry(i, j, chiv.data());
 
 		double max_rel = 0.0;
+		std::vector<double> x0(dof), y0(dof, 0.0);
 		for(int k = 0; k < 4; k++)
 		{
 			std::vector<double> x(dof), yd(dof, 0.0), yh(dof, 0.0);
@@ -1195,11 +1201,20 @@ int radTApplication::MomentHMatrixProbe(int InteractElemKey, double chi, double 
 			double num = 0.0, den = 0.0;
 			for(int f = 0; f < dof; f++) { num = std::max(num, std::fabs(yh[f]-yd[f])); den = std::max(den, std::fabs(yd[f])); }
 			if(den > 1e-300) max_rel = std::max(max_rel, num/den);
+			if(k == 0) { x0 = x; y0 = yh; }
 		}
+
+		// CRITICAL de-risk for Increment 3: the moment A_raw is NON-symmetric (the HDiv H-LU template
+		// assumed SPD).  Smoke-test the no-pivot HACApK H-LU round trip: factor A_raw, solve A_raw z = y0
+		// (y0 = A_raw x0), and measure ||z - x0|| / ||x0||.  Small -> H-LU is stable on A_raw -> Increment 3
+		// is just RHS + dispatch wiring; large -> a pivoted / different factor is needed first.
+		double hlu_rt = cHACApK_hlu_run_on_hacapk(mgr.GetLeafmtxp(), mgr.GetLcontrol(), x0.data(), y0.data(), 6);
+
 		if(out)
 		{
 			out[0] = 1.0; out[1] = max_rel; out[2] = (double)dof; out[3] = (double)st.n_lowrank;
 			out[4] = (double)st.n_dense; out[5] = (double)st.max_rank; out[6] = st.compression; out[7] = st.build_time;
+			out[8] = hlu_rt;
 		}
 		return 1;
 	}
