@@ -2568,25 +2568,13 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 }
 
 //-------------------------------------------------------------------------
-// MSC per-face collocation point (MscEvalPoint) for the external-field sampling.
+// moment-yano method-2 routing flag (set by SolveGen).
 //-------------------------------------------------------------------------
 
 bool g_yano_moment_hacapk = false;   // moment linear step via the HACApK H-matrix + BiCGSTAB (method 2 / scalable storage); set by SolveGen for moment-eligible + method 2 (else dense LU)
-// NOTE (Phase 3b-1, 2026-06-22): the g_yano_moment opt-out flag was REMOVED.  moment-yano is now the
-// UNCONDITIONAL surface-charge demag (hex 6-DOF + wedge 5-DOF, method 0/1/2); there is no EIEM2 opt-out.
-// EIEM2 survives only for mixed tet+MSC until 3b-2 deletes it.
-
-
-
-
-// Per-face MSC collocation point (global frame): midpoint of the face center and the element
-// center (alpha = 0.5).  Used by SetupExternFieldArray to sample the external field per MSC face.
-TVector3d radTPolyhedron::MscEvalPoint(int faceIdx) const
-{
-	return TVector3d(0.5*(FaceCenter[faceIdx].x + CentrPoint.x),
-	                 0.5*(FaceCenter[faceIdx].y + CentrPoint.y),
-	                 0.5*(FaceCenter[faceIdx].z + CentrPoint.z));
-}
+// NOTE: the surface-charge demag is UNCONDITIONALLY moment-yano (hex 6-DOF + wedge 5-DOF, method 0/1/2).
+// The EIEM2 collocation kernel + its g_yano_moment / eval-point / pyramid-cloud opt-outs were fully
+// removed in Phase 3b; mixed tet+MSC is rejected fail-loud (Error204) in MakeAutoRelax.
 
 
 
