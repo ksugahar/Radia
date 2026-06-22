@@ -1157,6 +1157,62 @@ int radTApplication::MomentSystemDenseRaw(int InteractElemKey, double chi, doubl
 	}
 }
 
+int radTApplication::MomentHMatrixProbe(int InteractElemKey, double chi, double eps, int leaf, double eta, double* out)
+{
+	// Phase-2 Increment-2 gate: build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem)
+	// and probe the H-matvec against the dense A_raw (entry-by-entry).  out[8] = {ok, matvec_relerr, ndof,
+	// n_lowrank, n_dense, max_rank, compression, build_time}.  See ACA_MOMENT_DESIGN.md.
+	if(out) for(int k = 0; k < 8; k++) out[k] = 0.0;
+#ifdef RADIA_USE_HACAPK
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
+		int dof = InteractPtr->GetTotalDOF();
+		if(dof <= 0) return 0;
+
+		RadHACApKMomentSystem mgr(InteractPtr, chi);
+		RadHACApKParams prm; prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
+		if(!mgr.BuildHMatrix(prm)) return 0;
+		const RadHACApKStats& st = mgr.GetStats();
+
+		int nHex = InteractPtr->GetNumHexElements();
+		std::vector<double> chiv((size_t)(nHex > 0 ? nHex : 1), chi);
+		std::vector<double> Ad((size_t)dof*dof);
+		for(int i = 0; i < dof; i++)
+			for(int j = 0; j < dof; j++)
+				Ad[(size_t)i*dof + j] = InteractPtr->MomentSystemEntry(i, j, chiv.data());
+
+		double max_rel = 0.0;
+		for(int k = 0; k < 4; k++)
+		{
+			std::vector<double> x(dof), yd(dof, 0.0), yh(dof, 0.0);
+			for(int f = 0; f < dof; f++) x[f] = std::sin(0.7*(f+1)+1.3*k) + 0.3*std::cos(0.21*(f+1)*(k+1));
+			for(int i = 0; i < dof; i++) { double s = 0.0; const double* Ar = &Ad[(size_t)i*dof]; for(int j = 0; j < dof; j++) s += Ar[j]*x[j]; yd[i] = s; }
+			mgr.MatVec(x, yh);
+			double num = 0.0, den = 0.0;
+			for(int f = 0; f < dof; f++) { num = std::max(num, std::fabs(yh[f]-yd[f])); den = std::max(den, std::fabs(yd[f])); }
+			if(den > 1e-300) max_rel = std::max(max_rel, num/den);
+		}
+		if(out)
+		{
+			out[0] = 1.0; out[1] = max_rel; out[2] = (double)dof; out[3] = (double)st.n_lowrank;
+			out[4] = (double)st.n_dense; out[5] = (double)st.max_rank; out[6] = st.compression; out[7] = st.build_time;
+		}
+		return 1;
+	}
+	catch (...)
+	{
+		Initialize(); return 0;
+	}
+#else
+	(void)InteractElemKey; (void)chi; (void)eps; (void)leaf; (void)eta;
+	return 0;
+#endif
+}
+
 //-------------------------------------------------------------------------
 
 int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
