@@ -2129,8 +2129,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// (BuildMomentSystemCore) instead of the EIEM2 collocation system.  A's COLUMNS are the face DOF, so
 	// dgesv's solution is sigma in DOF order -- a drop-in for the EIEM2 transpose + dgesv + write-back below.
 	extern bool g_yano_moment;
-	bool useMoment = g_yano_moment;
-	if(useMoment && IntrctPtr->IsIMAEnabled()) useMoment = false;   // moment has no image-symmetry path -> EIEM2 handles IMA
+	bool useMoment = g_yano_moment;   // IMA is now moment-capable (BuildCentroidFieldGrad adds the mirror images)
 	if(useMoment) { for(int e = 0; e < AmOfMainElem; e++) if(IntrctPtr->GetElementDOF(e) != 6) { useMoment = false; break; } }
 
 	if(useMoment)

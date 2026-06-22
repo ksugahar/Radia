@@ -2786,12 +2786,57 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 	}
 
 	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
+
+	// field H[3] + grad gH[6] (xx,yy,zz,xy,xz,yz) at target ce3 from a bilinear quad Vq of UNIT surface-charge
+	// density (8x8 Gauss), plus -- when withCenter -- a point charge q=-area at cen (the yano mutual center
+	// cancellation).  The whole contribution is scaled by sgn (= the IMA image sign for a mirrored source;
+	// 1.0 for the original).  ACCUMULATES into H,gH.  Computing field+grad FRESH from mirrored geometry makes
+	// the rank-2 gradient transform under the reflection automatically -- sgn only carries the BC charge sign.
+	auto accumQG = [&](const double ce3[3], const double Vq[4][3], bool withCenter,
+	                   const double cen[3], double area, double sgn, double H[3], double gH[6])
+	{
+		for(int iu = 0; iu < NG; iu++) for(int iv = 0; iv < NG; iv++)
+		{
+			double u = gp[iu], v = gp[iv], wuv = gw[iu]*gw[iv];
+			double a0 = (1-u)*(1-v), a1 = u*(1-v), a2 = u*v, a3 = (1-u)*v;
+			double Px = a0*Vq[0][0]+a1*Vq[1][0]+a2*Vq[2][0]+a3*Vq[3][0];
+			double Py = a0*Vq[0][1]+a1*Vq[1][1]+a2*Vq[2][1]+a3*Vq[3][1];
+			double Pz = a0*Vq[0][2]+a1*Vq[1][2]+a2*Vq[2][2]+a3*Vq[3][2];
+			double Tux = (1-v)*(Vq[1][0]-Vq[0][0])+v*(Vq[2][0]-Vq[3][0]);
+			double Tuy = (1-v)*(Vq[1][1]-Vq[0][1])+v*(Vq[2][1]-Vq[3][1]);
+			double Tuz = (1-v)*(Vq[1][2]-Vq[0][2])+v*(Vq[2][2]-Vq[3][2]);
+			double Tvx = (1-u)*(Vq[3][0]-Vq[0][0])+u*(Vq[2][0]-Vq[1][0]);
+			double Tvy = (1-u)*(Vq[3][1]-Vq[0][1])+u*(Vq[2][1]-Vq[1][1]);
+			double Tvz = (1-u)*(Vq[3][2]-Vq[0][2])+u*(Vq[2][2]-Vq[1][2]);
+			double jx = Tuy*Tvz-Tuz*Tvy, jy = Tuz*Tvx-Tux*Tvz, jz = Tux*Tvy-Tuy*Tvx;
+			double dA = std::sqrt(jx*jx+jy*jy+jz*jz)*wuv*sgn;
+			double dx = ce3[0]-Px, dy = ce3[1]-Py, dz = ce3[2]-Pz;
+			double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
+			double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
+			double c3 = inv_r3*dA, c5 = inv_r5*dA;
+			H[0] += dx*c3; H[1] += dy*c3; H[2] += dz*c3;
+			gH[0] += c3 - 3.0*dx*dx*c5; gH[1] += c3 - 3.0*dy*dy*c5; gH[2] += c3 - 3.0*dz*dz*c5;
+			gH[3] += -3.0*dx*dy*c5;     gH[4] += -3.0*dx*dz*c5;     gH[5] += -3.0*dy*dz*c5;
+		}
+		if(withCenter)
+		{
+			double dx = ce3[0]-cen[0], dy = ce3[1]-cen[1], dz = ce3[2]-cen[2];
+			double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
+			double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2, q = -area*sgn;
+			H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
+			gH[0] += q*(inv_r3-3.0*dx*dx*inv_r5); gH[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
+			gH[2] += q*(inv_r3-3.0*dz*dz*inv_r5); gH[3] += q*(-3.0*dx*dy*inv_r5);
+			gH[4] += q*(-3.0*dx*dz*inv_r5);       gH[5] += q*(-3.0*dy*dz*inv_r5);
+		}
+	};
+
 	for(int h = 0; h < nHex; h++)
 	{
 		int elemIdx = m_hexaElemIndices[h];
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
 		if(!poly || poly->AmOfFaces != 6) continue;
 		const TVector3d ce = poly->CentrPoint;
+		const double ce3[3] = {ce.x, ce.y, ce.z};
 		size_t base = (size_t)h * NK * m_totalDOF;
 		for(int g = 0; g < m_totalDOF; g++)
 		{
@@ -2799,39 +2844,37 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 			if(!fr.valid) continue;
 			double H[3] = {0,0,0};
 			double gH[6] = {0,0,0,0,0,0};                              // xx,yy,zz,xy,xz,yz
-			for(int iu = 0; iu < NG; iu++) for(int iv = 0; iv < NG; iv++)
+			const double V4[4][3] = {{fr.V[0].x,fr.V[0].y,fr.V[0].z}, {fr.V[1].x,fr.V[1].y,fr.V[1].z},
+			                         {fr.V[2].x,fr.V[2].y,fr.V[2].z}, {fr.V[3].x,fr.V[3].y,fr.V[3].z}};
+			const double cen[3] = {fr.srcEC.x, fr.srcEC.y, fr.srcEC.z};
+			// original source: center charge only for the MUTUAL pairing (SELF is singularity-free)
+			accumQG(ce3, V4, fr.srcElem != elemIdx, cen, fr.area, 1.0, H, gH);
+
+			// IMA mirror images: scalar-sign pattern, same as Compute6x6BlockFast / Compute5x5BlockFast.  The
+			// mirror of a (non-boundary) source is never the target's own location -> always include its center
+			// charge.  Reflect the 4 corners + the source-element center across the active plane(s); accumQG
+			// recomputes field+grad from the reflected geometry (rank-2 grad transform handled automatically).
+			if(m_imaEnabled)
 			{
-				double u = gp[iu], v = gp[iv], wuv = gw[iu]*gw[iv];
-				double a0 = (1-u)*(1-v), a1 = u*(1-v), a2 = u*v, a3 = (1-u)*v;
-				double Px = a0*fr.V[0].x+a1*fr.V[1].x+a2*fr.V[2].x+a3*fr.V[3].x;
-				double Py = a0*fr.V[0].y+a1*fr.V[1].y+a2*fr.V[2].y+a3*fr.V[3].y;
-				double Pz = a0*fr.V[0].z+a1*fr.V[1].z+a2*fr.V[2].z+a3*fr.V[3].z;
-				double Tux = (1-v)*(fr.V[1].x-fr.V[0].x)+v*(fr.V[2].x-fr.V[3].x);
-				double Tuy = (1-v)*(fr.V[1].y-fr.V[0].y)+v*(fr.V[2].y-fr.V[3].y);
-				double Tuz = (1-v)*(fr.V[1].z-fr.V[0].z)+v*(fr.V[2].z-fr.V[3].z);
-				double Tvx = (1-u)*(fr.V[3].x-fr.V[0].x)+u*(fr.V[2].x-fr.V[1].x);
-				double Tvy = (1-u)*(fr.V[3].y-fr.V[0].y)+u*(fr.V[2].y-fr.V[1].y);
-				double Tvz = (1-u)*(fr.V[3].z-fr.V[0].z)+u*(fr.V[2].z-fr.V[1].z);
-				double jx = Tuy*Tvz-Tuz*Tvy, jy = Tuz*Tvx-Tux*Tvz, jz = Tux*Tvy-Tuy*Tvx;
-				double dA = std::sqrt(jx*jx+jy*jy+jz*jz)*wuv;
-				double dx = ce.x-Px, dy = ce.y-Py, dz = ce.z-Pz;
-				double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
-				double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
-				double c3 = inv_r3*dA, c5 = inv_r5*dA;
-				H[0] += dx*c3; H[1] += dy*c3; H[2] += dz*c3;
-				gH[0] += c3 - 3.0*dx*dx*c5; gH[1] += c3 - 3.0*dy*dy*c5; gH[2] += c3 - 3.0*dz*dz*c5;
-				gH[3] += -3.0*dx*dy*c5;     gH[4] += -3.0*dx*dz*c5;     gH[5] += -3.0*dy*dz*c5;
+				auto addMir = [&](int ax, double sgn)
+				{
+					double Vm[4][3]; double cm[3] = {cen[0], cen[1], cen[2]};
+					for(int c = 0; c < 4; c++) { Vm[c][0]=V4[c][0]; Vm[c][1]=V4[c][1]; Vm[c][2]=V4[c][2]; }
+					if(ax & IMA_X) { for(int c=0;c<4;c++) Vm[c][0]=-Vm[c][0]; cm[0]=-cm[0]; }
+					if(ax & IMA_Y) { for(int c=0;c<4;c++) Vm[c][1]=-Vm[c][1]; cm[1]=-cm[1]; }
+					if(ax & IMA_Z) { for(int c=0;c<4;c++) Vm[c][2]=-Vm[c][2]; cm[2]=-cm[2]; }
+					accumQG(ce3, Vm, true, cm, fr.area, sgn, H, gH);
+				};
+				bool hX = (m_imaSymmetry & IMA_X) != 0, hY = (m_imaSymmetry & IMA_Y) != 0, hZ = (m_imaSymmetry & IMA_Z) != 0;
+				if(hX) addMir(IMA_X, (double)m_imaSignX);
+				if(hY) addMir(IMA_Y, (double)m_imaSignY);
+				if(hZ) addMir(IMA_Z, (double)m_imaSignZ);
+				if(hX && hY) addMir(IMA_XY, (double)m_imaSignX*m_imaSignY);
+				if(hX && hZ) addMir(IMA_XZ, (double)m_imaSignX*m_imaSignZ);
+				if(hY && hZ) addMir(IMA_YZ, (double)m_imaSignY*m_imaSignZ);
+				if(hX && hY && hZ) addMir(IMA_XYZ, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
 			}
-			if(fr.srcElem != elemIdx)                                 // mutual: add the yano center charge
-			{
-				double dx = ce.x-fr.srcEC.x, dy = ce.y-fr.srcEC.y, dz = ce.z-fr.srcEC.z;
-				double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
-				double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2, q = -fr.area;
-				H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
-				gH[0] += q*(inv_r3-3.0*dx*dx*inv_r5); gH[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
-				gH[2] += q*(inv_r3-3.0*dz*dz*inv_r5); gH[3] += q*(-3.0*dx*dy*inv_r5);
-				gH[4] += q*(-3.0*dx*dz*inv_r5);       gH[5] += q*(-3.0*dy*dz*inv_r5);
-			}
+
 			Cflat[base + 0*m_totalDOF + g] = H[0]*INV4PI;
 			Cflat[base + 1*m_totalDOF + g] = H[1]*INV4PI;
 			Cflat[base + 2*m_totalDOF + g] = H[2]*INV4PI;
