@@ -51,7 +51,14 @@ betti2[K_] := With[{r0 = MatrixRank[K["d0"]], r1 = MatrixRank[K["d1"]]},
 (* ---- sphere-surface operators (m=0 representative Y_n = P_n(cos th)) ---- *)
 Yf[n_] := LegendreP[n, Cos[th]];
 lapBeltrami[f_] := (1/(R^2 Sin[th])) D[Sin[th] D[f, th], th];   (* Delta_Gamma on the sphere *)
-dtnEig[n_] := Module[{u = r^(-(n + 1)) Yf[n]}, Simplify[(-D[u, r]/u) /. r -> R]];   (* exact exterior DtN *)
+dtnEig[n_] := Module[{u = r^(-(n + 1)) Yf[n]}, Simplify[(-D[u, r]/u) /. r -> R]];   (* exact exterior DtN, 0-form *)
+
+(* ---- surface tangential calculus (th,ph components) for the VECTOR (H(curl)) channel ---- *)
+curlG[f_] := {-(1/(R Sin[th])) D[f, ph], (1/R) D[f, th]};                  (* n x grad_S f (toroidal generator) *)
+divS[V_]  := (1/(R Sin[th])) (D[Sin[th] V[[1]], th] + D[V[[2]], ph]);      (* surface divergence *)
+(* toroidal (TE) exterior field T = r^{-(n+1)} (d/dth Y_n) e_phi; its H(curl) tangential Steklov *)
+steklovTor[n_] := Module[{T = {0, 0, r^(-(n + 1)) D[Yf[n], th]}},
+  Simplify[(Curl[T, {r, th, ph}, "Spherical"][[2]]/T[[3]]) /. r -> R]];
 
 (* ============================ self-test ============================ *)
 Module[{ok = True, chk, Ksph, Kann, hoibc1, hoibc2, a1, b1c, a2, b2c, c2, sol1, sol2},
@@ -96,6 +103,22 @@ Module[{ok = True, chk, Ksph, Kann, hoibc1, hoibc2, a1, b1c, a2, b2c, c2, sol1, 
       Simplify[hoibc2[2] - 3/R] === 0];
   chk["[B5] order-2 HOIBC STILL deviates at n = 3 (finite local order can never be exact; Kelvin/IE are)",
       Simplify[hoibc2[3] - 4/R] =!= 0];
+
+  (* ---- [C] VECTOR HOIBC: the two de Rham Steklov ladders (cf. act7_30) ----
+     A tangential field on Gamma splits (surface Hodge-Helmholtz) into a curl_Gamma-free part
+     grad_Gamma(alpha) and a div_Gamma-free part curl_Gamma(beta) -- the two surface de Rham
+     channels (TM/poloidal and TE/toroidal).  The exterior DtN has a DISTINCT eigenvalue ladder
+     on each: the 0-form / H(div) normal trace gives (n+1)/R, the H(curl) TANGENTIAL trace gives
+     n/R.  So a VECTOR HOIBC is a 2-channel (tensor) impedance, each channel a local Pade of ITS
+     ladder.  (Pure magnetostatics is curl-free => poloidal only, ONE ladder; the second appears
+     for the eddy-current/impedance surface that carries current -- which is what HOIBC is for.) *)
+  chk["[C0] the toroidal channel is surface-solenoidal: div_Gamma(curl_Gamma Y) = 0 (the H(curl) de Rham channel)",
+      And @@ Flatten[Table[Simplify[divS[curlG[SphericalHarmonicY[nn, mm, th, ph]]]] === 0,
+                           {nn, {2, 3}}, {mm, {1, 2}}]]];
+  chk["[C1] toroidal (TE / H(curl) tangential) Steklov ladder = n/R",
+      And @@ Table[Simplify[steklovTor[n] - n/R] === 0, {n, 1, 4}]];
+  chk["[C2] TWO DISTINCT de Rham ladders: H(curl) tangential n/R  vs  0-form/H(div) normal (n+1)/R (differ by 1/R)",
+      And @@ Table[Simplify[steklovTor[n] - dtnEig[n] + 1/R] === 0, {n, 1, 4}]];
 
   Print[If[ok, "ALL PASS", "SOME FAILED"]];
 ];
