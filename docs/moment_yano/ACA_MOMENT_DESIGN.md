@@ -1,11 +1,14 @@
 # Scalable moment-yano: ACA + H-LU design (Phase 2 of the EIEM2 full-deletion track)
 
-**Status (2026-06-22):** design locked, implementation pending. moment-yano is the
-DEFAULT 6-DOF hex soft-iron demag formula (Steps 3-4) and now covers IMA (Phase 1).
-The last parity item before EIEM2 can be deleted is **method 2 (HACApK) at large N** --
-this document is the validated plan for it. Decision (user, 2026-06-22): *defer the
-EIEM2 deletion until this lands* (keep EIEM2 as the `yano_moment=False` opt-out
-meanwhile).
+**Status (2026-06-22):** Increments 1-4 ALL DONE -- Phase 2 (scalable method 2) is COMPLETE. moment-yano is
+the DEFAULT 6-DOF hex soft-iron demag formula (Steps 3-4), covers IMA (Phase 1), and `rad.Solve(..., method=2)`
+now solves the moment system via the HACApK H-matrix + block-Jacobi BiCGSTAB for BOTH linear and nonlinear
+(per-element chi) materials, with **O(N log N) storage** (the three dense O(N^2) buffers -- interaction N,
+BaseMatrix, dgesv SystemMatrix -- are all removed from the method-2 path).  Measured: at dof=12288 method 2
+uses 673 MB vs method 0's 5461 MB (ratio 0.12, sub-quadratic; `examples/vim/bench_moment_storage_scaling.py`
++ `.json`), external B matches method 0 to ~1e-10, nonlinear C-yoke saturates identically (same Picard iters).
+With method 0/1/2 + IMA + nonlinear all on moment, **EIEM2 deletion (Phase 3) is unblocked** (keep EIEM2 as
+the `yano_moment=False` opt-out until Phase 3 lands per the user's 2026-06-22 decision).
 
 ## What we are building
 
@@ -111,8 +114,25 @@ class RadHACApKMomentSystem : public RadHACApKBase {
    **Gate:** method-2 moment `x` == method-0 moment `x` to solver tol; storage scales (the
    dense matrix is gone); iter-growth documented.  Bounded-iter (a PIVOTED H-matrix factor,
    or a symmetrized moment formulation) stays FUTURE work.
-4. **Nonlinear.** Picard/Anderson outer loop reuses the linear Krylov solve per step
-   (chi per-element). **Gate:** C-yoke saturation == method-0 moment.
+4. **Nonlinear + storage decoupling. -> DONE (2026-06-22).** Two parts:
+   - *Nonlinear (per-element chi):* `RadHACApKMomentSystem` gained a per-element-chi ctor; `SolveMomentHACApK`
+     takes the `chiPerHex` vector (RHS `b[6h+t]=chi_h*Hext_h[t]`, per-element block-Jacobi), and the moment
+     branch dropped its uniform-chi guard.  The Picard outer loop re-solves the H-system each iteration with
+     the current chi -- the entry `MomentSystemEntry` already folds the row element's chi.  **Gate MET:**
+     nonlinear C-yoke (MatSatIsoTab, driven to ~94-95% of Msat) -> method 2 == method 0 (external B ~1e-10,
+     same Picard iteration count).  `tests/feec/test_moment_yano.py::test_method2_nonlinear_matches_method0`,
+     `examples/vim/verify_moment_nonlinear.py`.
+   - *Storage decoupling (closes the Increment-3 storage gate that was a caveat):* the method-2 path no longer
+     builds ANY dense O(N^2) buffer.  `SolveGen` sets `skipDenseMatrix=1` for all method 2 except B-input
+     Newton/Hantila (no dense interaction N); `radTRelaxationMethNo_0::NeedsDenseMatrix()` returns false when
+     `g_yano_moment_hacapk` (no BaseMatrix); `SolveLinearStep` lazy-allocates the dgesv SystemMatrix (never
+     reached on the H-BiCGSTAB happy path).  `Setup(skipDenseMatrix)` calls `PrecomputeHexaGeometry()` so the
+     moment solve still sees the hexes (the index map normally built inside the skipped dense assembly).
+     **Gate MET:** `bench_moment_storage_scaling.py` -- method2/method0 peak memory 0.69 -> 0.32 -> 0.18 ->
+     0.12 across dof 1536..12288 (method 0 grows ~N^2, method 2 sub-quadratic ~N log N).
+   - *Residual caveat (unchanged from Increment 3):* iters still GROW with N (block-Jacobi only; the high-mu_r
+     demag conditioning wall shared with yano-MSC / HDiv-VIM).  Bounded-iter (a pivoted H-factor or a
+     symmetrized moment formulation) stays FUTURE work; it does not block Phase 3.
 
 ## After Phase 2 (-> Phase 3, EIEM2 deletion)
 

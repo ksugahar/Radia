@@ -1657,6 +1657,20 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	return AutoRelax_Unified(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 }
 
+// Phase 2 Increment 4 (storage decoupling): when moment+method2 routes here (g_yano_moment_hacapk), the
+// Picard linear step uses the scalable moment H-BiCGSTAB (SolveMomentHACApK) and the convergence scaffold
+// (ComputeActualHFieldFromSigma / StoreOldValuesAndComputeBnorm / UpdateChiAndCheckConvergence) uses the
+// constitutive H=M/chi -- NONE of these read the dense interaction/base matrix, so it can be skipped (no
+// O(N^2) BaseMatrix).  EXCEPTION: the B-input Newton/Hantila path (rad.m_b_input_newton / _hantila) builds
+// NpI from the dense BaseMatrix, so it still needs it -> keep dense there.
+bool radTRelaxationMethNo_0::NeedsDenseMatrix() const
+{
+	extern bool g_yano_moment_hacapk;
+	if(g_yano_moment_hacapk && !rad.m_b_input_newton && !rad.m_b_input_hantila)
+		return false;
+	return true;
+}
+
 //=========================================================================
 // Method 0: B-input Newton Linear Step (dense Jacobian + LAPACK dgesv_)
 //
@@ -2097,14 +2111,15 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 
 #ifdef RADIA_USE_HACAPK
 //-------------------------------------------------------------------------
-// SolveMomentHACApK: the SCALABLE-storage moment linear step (Phase 2 Increment 3,
+// SolveMomentHACApK: the SCALABLE-storage moment linear step (Phase 2 Increments 3-4,
 // docs/moment_yano/ACA_MOMENT_DESIGN.md).  Solves A_raw sigma = b_raw with the moment system
 // as a HACApK H-matrix (RadHACApKMomentSystem, O(N log N) matvec) + block-Jacobi BiCGSTAB.
-// LINEAR / UNIFORM chi only (the H-matrix uses a single chi; nonlinear per-element chi is Increment 4).
-// b_raw[6h+t] = chi*Hext_h[t] for the 3 dipole rows (t<3), 0 for monopole/quadrupole.  Returns the
+// chiPerHex is PER-ELEMENT (Increment 4): each row 6h+* folds chiPerHex[h], so the nonlinear Picard outer
+// loop just calls this each iteration with the current chi (no uniform-chi restriction).
+// b_raw[6h+t] = chiPerHex[h]*Hext_h[t] for the 3 dipole rows (t<3), 0 for monopole/quadrupole.  Returns the
 // BiCGSTAB iteration count (>=0 converged), -1 (build fail), -10 (breakdown).  sigma length 6*nHex.
 //-------------------------------------------------------------------------
-static int SolveMomentHACApK(radTInteraction* IntrctPtr, double chi,
+static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<double>& chiPerHex,
                              const std::vector<double>& HextPerHex,
                              double aca_eps, int leaf, double eta,
                              double tol, int maxiter, std::vector<double>& sigma)
@@ -2114,25 +2129,24 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, double chi,
 	sigma.assign((size_t)dof, 0.0);
 	if(dof == 0) return 0;
 
-	RadHACApKMomentSystem mgr(IntrctPtr, chi);
+	RadHACApKMomentSystem mgr(IntrctPtr, chiPerHex);
 	RadHACApKParams prm; prm.aca_eps = aca_eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
 	if(!mgr.BuildHMatrix(prm)) return -1;
 
-	// RHS b_raw (un-normalized): dipole rows carry chi*Hext, the rest are 0.
+	// RHS b_raw (un-normalized): dipole rows carry chi_h*Hext_h (per-element), the rest are 0.
 	std::vector<double> b((size_t)dof, 0.0);
 	for(int h = 0; h < nHex; h++)
-		for(int t = 0; t < 3; t++) b[(size_t)6*h + t] = chi * HextPerHex[(size_t)3*h + t];
+		for(int t = 0; t < 3; t++) b[(size_t)6*h + t] = chiPerHex[h] * HextPerHex[(size_t)3*h + t];
 
-	// block-Jacobi: invert each element's local 6x6 A_raw block (rows/cols 6h..6h+5).
+	// block-Jacobi: invert each element's local 6x6 A_raw block (rows/cols 6h..6h+5), per-element chi.
 	std::vector<double> Binv((size_t)dof * 6);   // [6h+i]*6 + j  = (B_h^-1)[i][j], row-major per block
 	{
 		std::vector<double> blk(36); std::vector<int> ipiv(6); std::vector<double> work(36);
 		int six = 6, lwork = 36, info = 0;
-		std::vector<double> chiv((size_t)(nHex > 0 ? nHex : 1), chi);
 		for(int h = 0; h < nHex; h++)
 		{
 			for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++)
-				blk[(size_t)j*6 + i] = IntrctPtr->MomentSystemEntry(6*h+i, 6*h+j, chiv.data());   // col-major for LAPACK
+				blk[(size_t)j*6 + i] = IntrctPtr->MomentSystemEntry(6*h+i, 6*h+j, chiPerHex.data());   // col-major for LAPACK
 			dgetrf_(&six, &six, blk.data(), &six, ipiv.data(), &info);
 			if(info == 0) { dgetri_(&six, blk.data(), &six, ipiv.data(), work.data(), &lwork, &info); }
 			if(info != 0) { for(int k = 0; k < 36; k++) blk[k] = 0.0; for(int k = 0; k < 6; k++) blk[(size_t)k*6+k] = 1.0; }
@@ -2192,22 +2206,27 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 	// Build system matrix: copy base matrix and add diagonal terms
 	// LAPACK dgesv destroys the matrix, so we need a working copy
-	// Only one copy is needed - dgesv works directly on this
 	// CRITICAL: Use size_t to avoid int32 overflow for DOF > 46340
 	size_t matrix_size = (size_t)totalDOF * (size_t)totalDOF;
+	// SystemMatrix (the dense O(N^2) working copy for dgesv) is allocated LAZILY (Phase 2 Increment 4):
+	// the moment+method2 H-BiCGSTAB path returns before any dense solve, so on that scalable path we never
+	// pay the O(N^2).  Both dense paths (the moment dense-LU fallback and the EIEM2 collocation path) call
+	// ensureSystemMatrix() first; it returns false on OOM (-> caller returns -2).
 	std::vector<double> SystemMatrix;
-	try {
-		SystemMatrix.resize(matrix_size);
-	} catch (const std::bad_alloc&) {
-		// Memory allocation failed - likely DOF is too large for LU
-		double required_gb = (double)matrix_size * 8 / (1024.0 * 1024.0 * 1024.0);
-		fprintf(stderr, "Radia::Solve> LU solver requires %.1f GB memory for DOF=%d. Use BiCGSTAB (method 1) or HACApK (method 2) for large problems.\n", required_gb, totalDOF);
-		return -2;  // Memory allocation failure
-	}
-	// Copy base matrix (already contains -K/(4pi), see SetupBaseMatrix_VariableDOF)
-	// System equation: (-K/(4pi) + I/chi) * sigma = H_ext_n (ELF-compatible)
-	// BaseMatrix is already negated in SetupBaseMatrix_VariableDOF (line 282-285)
-	// Build RHS vector (will be overwritten with solution by dgesv)
+	bool systemMatrixReady = false;
+	auto ensureSystemMatrix = [&]() -> bool {
+		if(systemMatrixReady) return true;
+		try { SystemMatrix.resize(matrix_size); }
+		catch (const std::bad_alloc&) {
+			double required_gb = (double)matrix_size * 8 / (1024.0 * 1024.0 * 1024.0);
+			fprintf(stderr, "Radia::Solve> LU solver requires %.1f GB memory for DOF=%d. Use BiCGSTAB (method 1) or HACApK (method 2) for large problems.\n", required_gb, totalDOF);
+			return false;
+		}
+		systemMatrixReady = true;
+		return true;
+	};
+	// System equation: (-K/(4pi) + I/chi) * sigma = H_ext_n (ELF-compatible); BaseMatrix already negated
+	// in SetupBaseMatrix_VariableDOF.  Build RHS vector (will be overwritten with solution by dgesv).
 	std::vector<double> RHS(totalDOF);
 
 	// MOMENT-yano upgrade (opt-in g_yano_moment, hex-only): assemble the parameter-free MOMENT system
@@ -2233,33 +2252,30 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		}
 #ifdef RADIA_USE_HACAPK
 		// method 2 (scalable storage): solve the moment system via the HACApK H-matrix + block-Jacobi BiCGSTAB
-		// (O(N log N) matvec) instead of the dense O(N^3) LU.  LINEAR / uniform chi only (nonlinear per-element
-		// chi is Increment 4); breakdown/build-fail falls through to the dense LU below (same answer).
+		// (O(N log N) matvec) instead of the dense O(N^3) LU.  PER-ELEMENT chi (Increment 4): the nonlinear
+		// Picard outer loop calls this each iteration with the current chiPerHex (no uniform-chi restriction);
+		// breakdown/build-fail falls through to the dense moment LU below (same answer).
 		extern bool g_yano_moment_hacapk;
 		if(g_yano_moment_hacapk && nHex > 0)
 		{
-			bool chiUniform = true;
-			for(int h = 1; h < nHex; h++)
-				if(std::fabs(chiPerHex[h] - chiPerHex[0]) > 1.0e-12 * chiPerHex[0]) { chiUniform = false; break; }
-			if(chiUniform)
+			std::vector<double> sigma;
+			int nit = SolveMomentHACApK(IntrctPtr, chiPerHex, HextPerHex,
+			                            rad.m_hacapk_eps, rad.m_hacapk_leaf_size, rad.m_hacapk_eta,
+			                            rad.m_bicg_tol, 10000, sigma);
+			if(nit >= 0)
 			{
-				std::vector<double> sigma;
-				int nit = SolveMomentHACApK(IntrctPtr, chiPerHex[0], HextPerHex,
-				                            rad.m_hacapk_eps, rad.m_hacapk_leaf_size, rad.m_hacapk_eta,
-				                            rad.m_bicg_tol, 10000, sigma);
-				if(nit >= 0)
-				{
-					for(int i = 0; i < totalDOF; i++) ctx.FlatMagn[i] = sigma[i];
-					return nit;   // converged -> sigma written; skip the dense LU path
-				}
-				// nit < 0 (breakdown / build fail) -> fall through to dense LU (correct answer)
+				for(int i = 0; i < totalDOF; i++) ctx.FlatMagn[i] = sigma[i];
+				return nit;   // converged -> sigma written; skip the dense LU path
 			}
+			// nit < 0 (breakdown / build fail) -> fall through to the dense moment LU below (correct answer)
 		}
 #endif
+		if(!ensureSystemMatrix()) return -2;   // dense moment fallback (H-BiCGSTAB unavailable/broke down)
 		IntrctPtr->BuildMomentSystemCore(chiPerHex.data(), HextPerHex.data(), SystemMatrix, RHS);
 	}
 	else
 	{
+	if(!ensureSystemMatrix()) return -2;   // EIEM2 collocation path needs the dense BaseMatrix copy
 	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), matrix_size * sizeof(double));
 
 	// Update diagonal and RHS based on current chi

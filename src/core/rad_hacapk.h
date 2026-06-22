@@ -360,7 +360,8 @@ private:
  * (Increment 3).  HEX-ONLY; assumes m_elemDOFOffset[m_hexaElemIndices[h]] == 6*h (pure-hex moment). */
 class RadHACApKMomentSystem : public RadHACApKBase {
 public:
-    RadHACApKMomentSystem(radTInteraction* interaction, double chi);
+    RadHACApKMomentSystem(radTInteraction* interaction, double chi);                            // uniform chi
+    RadHACApKMomentSystem(radTInteraction* interaction, const std::vector<double>& chiPerHex);  // per-element chi (Increment 4)
     ~RadHACApKMomentSystem() override {}
 
     radTInteraction* GetInteraction() const { return m_interaction; }
@@ -379,8 +380,9 @@ protected:
 
 private:
     radTInteraction* m_interaction;   // not owned
-    double m_chi;
-    std::vector<double> m_chiv;       // uniform chi per hex, for MomentSystemEntry
+    double m_chi;                     // uniform chi (fallback when m_chi_in is empty)
+    std::vector<double> m_chi_in;     // per-element chi supplied by the ctor (Increment 4); empty -> uniform m_chi
+    std::vector<double> m_chiv;       // chi per hex, resolved in ExtractCoordinates, for MomentSystemEntry
 };
 
 //-------------------------------------------------------------------------
