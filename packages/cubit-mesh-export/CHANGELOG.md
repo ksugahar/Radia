@@ -4,6 +4,19 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## Unreleased
+
+- Require Coreform Cubit 2025.12+ in both `cubit-plugin-install` and
+  Radia panel registration; older 2025.3/2025.6 installs are no longer
+  selected accidentally.
+- Move the generated Radia toolbar startup shim out of the Python package
+  tree and into `%ProgramData%/Radia/Cubit/` for `--all-users` installs
+  (or `%LOCALAPPDATA%/Radia/Cubit/` for current-user installs), so first
+  install no longer rewrites tracked/editable `startup.py`.
+- Extend `cubit-plugin-install --verify-only` to verify Radia panel
+  startup registration when `radia` is installed, not just Cubit plugin
+  binary hashes.
+
 ## 0.11.0 — Tier-2 sole-shipper + de-radia rename + `export` command verb
 
 Released 2026-06-01.

@@ -46,7 +46,7 @@ packages to PyPI:
 | Package           | Tag prefix              | What it ships                                     |
 |-------------------|-------------------------|---------------------------------------------------|
 | radia             | `v`                     | C++ core (.pyd) + Python (panels, MCP, BEM, PEEC) |
-| cubit-mesh-export | `cubit-mesh-export-v`   | Cubit plugin .ccm/.ccl/.pyd + check-vol CLI       |
+| cubit-mesh-export | `cubit-mesh-export-v`   | Cubit plugin .ccm/.pyd + check-vol CLI            |
 | radia-mcp         | `radia-mcp-v`           | MCP servers (radia-ngsolve, cubit, build123d,     |
 |                   |                         | gmsh, electromagnet, ih, peec, ...)               |
 
@@ -73,7 +73,7 @@ table is the AI-readable summary.
 
 | Phase | Action | Mandatory? | Notes |
 |------:|--------|-----------|-------|
-| 0 | Clean rebuild of Cubit plugin (.ccm/.ccl/.pyd) | If `src/cubit_plugin/` changed | ~2-5 min targeted, ~10 min full |
+| 0 | Clean rebuild of Cubit plugin (.ccm/.pyd) | If `src/cubit_plugin/` changed | ~2-5 min targeted, ~10 min full |
 | 1 | Decide minor vs patch per package | always | git log per package since last tag |
 | 2 | Bump 4 version files (radia: pyproject + __init__; radia-mcp: pyproject + __init__; cubit-mesh-export: pyproject) | always | strictly lock-step; mismatch = wheel install bug |
 | **2.5** | **Pre-flight CI validation (4 gates) — ADDED 2026-05-03** | **always** | local equivalent of CI; saves 2-3 round-trips |
@@ -236,7 +236,7 @@ immutability conflict.
 ## lab_lock_release — pre-release: stop processes that hold .pyd / .ccm files
 ## ===
 
-Before any deploy that touches the Cubit plugin .ccm/.ccl/.pyd or
+Before any deploy that touches the Cubit plugin .ccm/.pyd or
 the radia-mcp Scripts/mcp-server-*.exe, every machine in the deploy
 target must release file locks:
 

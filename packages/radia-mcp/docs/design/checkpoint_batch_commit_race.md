@@ -168,7 +168,7 @@ The polling thread can only ask the live Cubit because we control
 the live session via **Plan A**: a custom `cubit_bootstrap.py`
 runs inside Cubit's GUI process, installed by
 `coreform_cubit.exe -nojournal cubit_bootstrap.py`. The bootstrap
-registers a `PyQt5.QtCore.QTimer` (200 ms) that polls a temp drop
+registers a `PySide6.QtCore.QTimer` (200 ms) that polls a temp drop
 directory for `*.req.json` files, runs `cubit.cmd()` on the Qt
 main thread, and writes responses to `out/*.resp.json`. Atomically
 renamed JSON files; no sockets, no pipes, no ABI conflicts.

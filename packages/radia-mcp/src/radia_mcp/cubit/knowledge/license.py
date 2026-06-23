@@ -118,15 +118,17 @@ session can verify infrastructure state without writing:
 
        cubit-plugin-install --verify-only
 
-   Verifies .ccm / .ccl / .pyd binaries match package source by
-   sha256.
+   Verifies .ccm / .pyd binaries match package source by sha256 and
+   reports any stale retired Qt5 .ccl files.
 
 2. **Per-user .cubit init script**::
 
        Get-Content C:/Users/<u>/.cubit
 
-   Should contain a ``play "...startup.py"`` line pointing at the
-   deployed ``radia/panels/startup.py``.
+   Should contain a ``play "...radia_startup.py"`` line.  For
+   ``--all-users`` installs this should point under
+   ``C:/ProgramData/Radia/Cubit/``; for current-user installs it should
+   point under ``%LOCALAPPDATA%/Radia/Cubit/``.
 
 3. **Per-user Cubit.ini plugin path**::
 

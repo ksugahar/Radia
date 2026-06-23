@@ -677,13 +677,13 @@ the very top of the script, before adding Cubit to `sys.path` or importing `cubi
 ## Standalone cubit.init() Segfaults in the Radia Panel (verified 2026-06)
 
 **Symptom**: From system Python, `import cubit; cubit.init([...])` prints the banner,
-auto-plays `site-packages/radia/panels/startup.py` ("[Radia] Panel debug log: ..."),
+auto-plays the generated Radia startup shim
+(`%ProgramData%/Radia/Cubit/radia_startup.py` for all-users installs),
 then crashes with exit code -1073741819 (0xC0000005 access violation) BEFORE your first
 `cubit.cmd()` runs. Happens with or without `-nographics` and regardless of the ngsolve
 import order above. Cause: when the Radia Cubit *panel* plugin is installed, its
-`startup.py` is auto-played on init and segfaults under headless embedded Python (it
-expects a GUI main window). The single-process recipe above only works when that panel
-plugin is absent.
+startup shim loads the PySide6 toolbar under headless embedded Python (no GUI main
+window). The single-process recipe above only works when that panel plugin is absent.
 
 **Fix -- robust two-process pattern** (use this whenever the Radia panel is installed):
 
