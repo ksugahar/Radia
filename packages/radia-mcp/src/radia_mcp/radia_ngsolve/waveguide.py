@@ -306,6 +306,39 @@ def waveguide_offset_short_s11(frequency, width_a, offset_length, c=C0):
             "group_delay": 2.0 * d / vg}
 
 
+def reflection_metrics(s11):
+    r"""Common scalar readouts of a one-port reflection coefficient ``S11``.
+
+    CST/VNA-style post-processing usually shows the same complex reflection in several units:
+
+    - ``gamma = |S11|``
+    - return loss ``RL = -20 log10(gamma)`` [dB]
+    - reflected power fraction ``gamma^2``
+    - delivered/matched power fraction ``1 - gamma^2``
+    - mismatch loss ``ML = -10 log10(1 - gamma^2)`` [dB]
+    - voltage standing-wave ratio ``VSWR = (1+gamma)/(1-gamma)``
+
+    ``gamma=0`` gives infinite return loss and ``VSWR=1``.  ``gamma=1`` gives zero return loss,
+    infinite VSWR, and infinite mismatch loss.
+    """
+    gamma = abs(complex(s11))
+    if gamma > 1.0 + 1e-12:
+        raise ValueError("|S11| must be <= 1 for a passive one-port")
+    gamma = min(gamma, 1.0)
+    reflected = gamma * gamma
+    delivered = max(0.0, 1.0 - reflected)
+    return_loss = math.inf if gamma == 0.0 else (-20.0 * math.log10(gamma))
+    mismatch_loss = math.inf if delivered == 0.0 else (-10.0 * math.log10(delivered))
+    return {
+        "gamma": gamma,
+        "return_loss_db": 0.0 if gamma == 1.0 else return_loss,
+        "reflected_power_fraction": reflected,
+        "delivered_power_fraction": delivered,
+        "mismatch_loss_db": 0.0 if delivered == 1.0 else mismatch_loss,
+        "vswr": math.inf if gamma == 1.0 else (1.0 + gamma) / (1.0 - gamma),
+    }
+
+
 def helmholtz_cutoff_wavenumbers_2d(mesh, n_modes, bc="neumann", wall="wall",
                                     order=3, shift=-1.0):
     """Lowest cutoff wavenumbers k_c [1/m] of a waveguide cross-section by solving the 2D
