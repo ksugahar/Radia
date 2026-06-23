@@ -773,10 +773,27 @@ chamfer introduces (both 0.47% < chamfer-only 0.84%), and the co-baked pole is t
 lowest b_3,5 of all four cases.  (Absolute b_3,5 differs from the staircase table above
 because the meshes differ; the loft's value is the precision one.)
 
-The rotated-EFB EDGE FOCUSING extension (first attempted from the equipotential drive,
-where the INT B effective-field-boundary angle attenuated to ~0.47*beta_cut) is retried
-with a reduced-Omega + CoilBuilder source -- see topic "edge_focusing"
-(endpack_edge_focusing.py).
+## Rotated-EFB EDGE FOCUSING -- characterized NEGATIVE, not shipped
+
+The rotated-edge EDGE FOCUSING extension was retried this session and is recorded as a
+CHARACTERIZED NEGATIVE (not a shipped example).  A first attempt read the INT B
+effective-field-boundary angle out of the EQUIPOTENTIAL drive and it attenuated to
+~0.47*beta_cut (unattributed).  The retry used the genuine forward engine -- a rigidly
+rotated WHOLE magnet (iron AND the CoilBuilder coil rotated together by beta) driven by
+reduced-Omega + Biot-Savart, with the EFB read both as INT B_z dy / B_z(body) and as the
+half-field crossing y_half(x).  Across all variants (parallelogram vs rigid rotation,
+integral vs half-field EFB, narrow vs wide pole) the result is robust: at beta=0 the EFB
+slope is cleanly ~0 (unbiased), but for beta>0 the field-EFB slope does NOT recover the
+geometric edge angle (wrong sign, many times tan(beta); at larger beta the per-line
+B_z(body) normalization passes through zero).
+
+Attribution: the per-beam-line field integral INT B_z dy through a tilted FINITE magnet is
+NOT a local edge tracker -- the compact fringe is fully 3-D and the field-EFB slope simply
+is not the edge angle (the prior ~0.47 was the same surrogate failing, not the drive).  The
+genuine edge-focusing strength is a TRAJECTORY quantity (the vertical kick INT (v x B) along
+particle orbits through the fringe) and needs PARTICLE TRACKING, not a field-EFB slope.
+Per the repository honest-results policy it is kept as a characterized open problem, not
+shipped as a working example.
 """
 
 
