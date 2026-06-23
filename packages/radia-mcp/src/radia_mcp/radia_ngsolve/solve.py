@@ -132,6 +132,53 @@ def planar_magnet_source(mesh, magnets):
     return CoefficientFunction((sx, sy))
 
 
+def segmented_ring_fill_factor(n_segments, segment_span_deg):
+    """Azimuthal fill factor of a segmented ring.
+
+    ``n_segments`` identical blocks repeat uniformly around 360 degrees, and each block occupies an
+    angular span ``segment_span_deg``.  The fill factor is the occupied angle divided by the full pitch,
+
+        fill = segment_span_deg / (360 / n_segments).
+
+    This is the clean geometry correction for replacing a discrete PM/star ring by a continuous smeared
+    ring in an axisymmetric or mean-field model.  If the real ring fills only 48% of the circumference,
+    a continuous-ring surrogate must use 48% of the remanence/coercivity to preserve magnet volume and
+    first-order source strength.
+    """
+    n = int(n_segments)
+    span = float(segment_span_deg)
+    if n < 1:
+        raise ValueError("n_segments must be >= 1")
+    if span <= 0.0:
+        raise ValueError("segment_span_deg must be > 0")
+    pitch = 360.0 / n
+    if span > pitch * (1.0 + 1e-12):
+        raise ValueError("segment_span_deg exceeds the segment pitch; neighbouring segments overlap")
+    return span / pitch
+
+
+def smeared_ring_equivalent_remanence(remanence, n_segments, segment_span_deg):
+    """Effective remanence for a continuous ring that represents discrete PM segments.
+
+    Returns a dict with the azimuthal ``fill_factor``, the scaled ``effective_remanence`` and the
+    ``solid_to_segmented_volume_ratio``.  ``remanence`` may be a scalar or a 2/3-component sequence.
+    The correction is purely geometric and assumes the segmented and smeared models use the same radial
+    thickness and axial/stack length.
+    """
+    fill = segmented_ring_fill_factor(n_segments, segment_span_deg)
+    if isinstance(remanence, (tuple, list)):
+        eff = tuple(fill * float(v) for v in remanence)
+    else:
+        eff = fill * float(remanence)
+    return {
+        "n_segments": int(n_segments),
+        "segment_span_deg": float(segment_span_deg),
+        "fill_factor": fill,
+        "effective_remanence": eff,
+        "solid_to_segmented_volume_ratio": 1.0 / fill,
+    }
+
+
 def laminated_mu_eff(mu_r, sigma, omega, d_lam, fill=1.0):
     """Complex effective permeability of IN-PLANE laminated steel (FEMM AC
     lamination model -- the ``Lamination & Wire Type`` material).
