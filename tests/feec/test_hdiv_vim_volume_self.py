@@ -7,14 +7,13 @@ matches the converged value of that integral.
 REGRESSION GUARD for the 2026-06-12 fix.  The order-0 analytic ctor's CELL outer-quadrature was a crude
 10-point equal-weight _bary_tet(3) rule that under-integrated the volume self-energy by ~6.5%.  It was
 INVISIBLE to every other HDiv-VIM golden because they all use UNIFORM M -> div M = 0 -> the volume charge
-(and hence the volume self) never participates; the demag is surface-charge only.  AND the Python dense
-reference (analytic_charge_gram) shared the same crude rule, so the "validated against dense" cross-check was
-blind in the same direction.  This test reads the RAW volume-self Gram diagonal directly, so div M != 0 is
-exercised and the defect cannot hide.
+(and hence the volume self) never participates; the demag is surface-charge only.  This test reads the RAW
+volume-self Gram diagonal of the C++ charge-Gram H-matrix directly, so div M != 0 is exercised and the
+defect cannot hide.
 
-The reference is the SAME integral with an exact analytic inner (phi_tet, the Wilton uniform-tet potential)
-and a FINE Gauss-Duffy outer rule -- it self-converges, so it is an independent gold standard, not a
-re-statement of the production rule.
+The reference is the SAME integral with an exact analytic inner (the Wilton uniform-tet potential, built
+here from the kept tri_potential via the divergence theorem) and a FINE Gauss-Duffy outer rule -- it
+self-converges, so it is an independent gold standard, not a re-statement of the production rule.
 """
 import numpy as np
 import pytest
@@ -22,20 +21,39 @@ import ngsolve as ng
 from netgen.occ import Box, OCCGeometry, Pnt
 
 import radia._radia_pybind as rp
-from radia.vim._core import phi_tet, _gauss_duffy_tet
+from radia.vim._core import tri_potential, _gauss_duffy_tet
 
 
 def _tet_vol(V):
     return abs(np.linalg.det(np.array([V[1] - V[0], V[2] - V[0], V[3] - V[0]]))) / 6.0
 
 
+def _phi_tet(V, P):
+    """Exact Newtonian potential INT_tet 1/|P-r'| dV' of a uniform tet via the divergence theorem
+    (nabla'^2 R = 2/R -> (1/2) sum_{4 faces} d_face INT_face 1/R dA'), the inner face integral = the
+    kept exact Wilton triangle potential tri_potential.  P: (M,3) -> (M,)."""
+    V = np.asarray(V, float)
+    P = np.atleast_2d(np.asarray(P, float))
+    cen = V.mean(0)
+    tot = np.zeros(len(P))
+    for f in ((1, 2, 3), (0, 2, 3), (0, 1, 3), (0, 1, 2)):
+        Fv = V[list(f)]
+        n = np.cross(Fv[1] - Fv[0], Fv[2] - Fv[0])
+        n = n / np.linalg.norm(n)
+        if np.dot(Fv.mean(0) - cen, n) < 0:
+            n = -n                                          # outward face normal
+        d = (Fv[0] - P) @ n                                 # (M,) signed distance P -> face plane
+        tot += d * tri_potential(Fv, P)
+    return 0.5 * tot
+
+
 def _gold_self(V):
-    """(1/4pi) INT_T phi_tet(V, x) dx via a FINE (o=12) Gauss-Duffy outer rule; phi_tet is the EXACT
-    Wilton uniform-tet potential, so this self-converges to the true volume self-energy."""
+    """(1/4pi) INT_T phi(V, x) dx via a FINE (o=12) Gauss-Duffy outer rule; phi is the EXACT Wilton
+    uniform-tet potential (_phi_tet), so this self-converges to the true volume self-energy."""
     V = np.asarray(V, float)
     refP, refW = _gauss_duffy_tet(12)
     P = V[0] + refP @ (V[1:] - V[0])
-    return float(np.sum(refW * 6.0 * _tet_vol(V) * phi_tet(V, P)) / (4.0 * np.pi))
+    return float(np.sum(refW * 6.0 * _tet_vol(V) * _phi_tet(V, P)) / (4.0 * np.pi))
 
 
 def test_order0_volume_self_energy_matches_gold():

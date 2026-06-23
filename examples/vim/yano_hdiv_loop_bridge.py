@@ -89,13 +89,30 @@ def report(nx, ny, nz, shear=0.0):
     cycle = n_internal - (n_cells - 1)        # first Betti of the cell-adjacency graph (the loops)
     tag = f"{nx}x{ny}x{nz} shear={shear}"
 
-    # (1) HDiv-VIM: the loop-free RT0 internal-flux operator
+    # (1) HDiv-VIM: the loop-free RT0 internal-flux operator.  N = B^T G B is applied via the production
+    # C++ polytope charge-Gram H-matrix (the dense Python Gram path was removed); on these small structured
+    # grids we densify N from the C++ H-matvec and take the loops = ker(B) of the sparse charge map.
+    import radia._radia_pybind as _rp
     with ng.TaskManager():
         mesh = MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz)
-        d = _core.build_demag(mesh, skip_dense_gram=False)
-    n_loop = d["n_loop"]
-    Nn = np.linalg.norm(d["N"]) or 1.0
-    loop_res = (max(np.linalg.norm(d["N"] @ d["loops"][k]) for k in range(n_loop)) / Nn) if n_loop else 0.0
+        d = _core.build_demag(mesh)
+        B = d["B_csr"]; ndof = int(d["ndof"])
+        p = d["poly"]
+        Hg = _rp._ChargeGramHMatrix(
+            cell_tris=list(p["cell_tris"]), cell_troff=list(p["cell_troff"]),
+            cell_cent=list(p["cell_cent"]), cell_meas=list(p["cell_meas"]),
+            face_tris=list(p["face_tris"]), face_troff=list(p["face_troff"]),
+            face_cent=list(p["face_cent"]), face_meas=list(p["face_meas"]),
+            n_el=int(d["n_el"]), eps=1e-7, leaf=64, eta=2.0)
+        N = np.column_stack([B.T @ np.asarray(Hg.matvec((B @ np.eye(ndof)[:, k]).tolist()), float)
+                             for k in range(ndof)])
+        Bd = B.toarray()
+        sv_B = np.linalg.svd(Bd, compute_uv=False)
+        rankB = int(np.sum(sv_B > 1e-9 * sv_B.max()))
+        loops = np.linalg.svd(Bd)[2][rankB:, :]
+    n_loop = ndof - rankB
+    Nn = np.linalg.norm(N) or 1.0
+    loop_res = (max(np.linalg.norm(N @ loops[k]) for k in range(n_loop)) / Nn) if n_loop else 0.0
 
     # (2) yano-MSC: collocation matrix + latent near-null (the loops) + conditioning
     A, dof = yano_matrix(cells)

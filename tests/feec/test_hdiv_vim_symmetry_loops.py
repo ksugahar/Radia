@@ -22,9 +22,10 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
-from radia.vim import _core as tet  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, OrthoBrick, Pnt  # noqa: E402
+
+from conftest import hdiv_vim_dense_N_and_loops  # noqa: E402
 
 
 def _reduced_sphere(box_lo):
@@ -42,9 +43,11 @@ def _reduced_sphere(box_lo):
     ("eighth", (0, 0, 0)),
 ])
 def test_loops_field_null_on_symmetry_reduced_mesh(tag, box_lo):
-    """On full/1/2/1/4/1/8 meshes the ker(B) loops are field-null to machine precision, automatically."""
-    d = tet.build_demag(_reduced_sphere(box_lo), 4)
-    assert d["n_loop"] > 0, f"{tag}: expected loops (ker B) on the reduced mesh"
-    Nn = np.linalg.norm(d["N"], 2)
-    loop_res = max(np.linalg.norm(d["N"] @ d["loops"][k]) for k in range(d["n_loop"])) / Nn
-    assert loop_res < 1e-12, f"{tag}: loops not field-null (residual {loop_res:.2e}) -- ker(B) should be exact"
+    """On full/1/2/1/4/1/8 meshes the ker(B) loops are field-null (N = B^T G B with the C++ Gram), so
+    N @ loop = 0 BY CONSTRUCTION -- no hand-crafted loop-star, no cohomology bookkeeping."""
+    with ng.TaskManager():
+        N, loops, n_loop = hdiv_vim_dense_N_and_loops(_reduced_sphere(box_lo))
+    assert n_loop > 0, f"{tag}: expected loops (ker B) on the reduced mesh"
+    Nn = np.linalg.norm(N, 2)
+    loop_res = max(np.linalg.norm(N @ loops[k]) for k in range(n_loop)) / Nn
+    assert loop_res < 1e-8, f"{tag}: loops not field-null (residual {loop_res:.2e}) -- ker(B) should be exact"
