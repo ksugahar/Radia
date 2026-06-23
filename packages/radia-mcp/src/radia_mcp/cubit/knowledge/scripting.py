@@ -1078,6 +1078,13 @@ cubit.cmd("block 2 add tri all")   # For tet meshes
 cubit.cmd("block 2 add quad all")  # For hex meshes
 ```
 
+Do not write `block 2 add face all` by habit. In Cubit APREPRO, `face`
+is a generic surface-element selector, but Python inspection APIs are
+element-specific (`get_block_tris`, `get_block_quads`). Use `tri` or
+`quad` explicitly unless the boundary block is intentionally mixed; for a
+mixed tet/hex boundary, keep `face` only with an explicit `mixed tri/quad`
+comment so lint can tell it is intentional.
+
 ## Problem: "Interrupt Detected" During NetgenCurver (AddPoint Crash)
 
 **Cause**: ABI mismatch between the ccm plugin and nglib.dll loaded at runtime.
