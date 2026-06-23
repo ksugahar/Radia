@@ -42,7 +42,7 @@ matches FEMM `.mat` outputs to 0.1 % on the FEMM NMR benchmark.
 ## Quick start (canonical API)
 
 ```python
-from ngsolve import Mesh, FESpace, BilinearForm, CoefficientFunction
+from ngsolve import Mesh, FESpace, BilinearForm, CoefficientFunction, TaskManager
 from radia.axifem import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
 import radia.axifem   # registers the FESpace
 
@@ -55,11 +55,13 @@ sigma_cf = mesh.MaterialCF({"conductor": 5.8e7}, default=0.0)
 
 a = BilinearForm(fes, symmetric=True)
 a += AxiHenrotteStiffnessBFI(mu_cf)
-a.Assemble()
 
 m = BilinearForm(fes, symmetric=True)
 m += AxiHenrotteSigmaMassBFI(sigma_cf)
-m.Assemble()
+
+with TaskManager():
+    a.Assemble()
+    m.Assemble()
 
 # Solve K v = λ M v as you would with any NGSolve eigenproblem.
 ```
@@ -67,6 +69,23 @@ m.Assemble()
 A convenience wrapper `H1Henrotte(mesh, order=k, **flags)` is also exported
 for back-compat, but the canonical entry point is the standard NGSolve
 `FESpace("axihenrotte", ...)` factory.
+
+## TaskManager contract
+
+`radia.axifem` follows NGSolve's native parallel model. Python callers wrap
+heavy FE work in `with TaskManager():`; the custom C++ FESpace, DiffOps, and
+BFIs do not create a private thread pool and do not use OpenMP.
+
+The custom FE instances are allocated from NGSolve's per-thread `Allocator`
+inside `GetFE`, while the closed-form BFIs are `const` element integrators
+that use `LocalHeap` scratch and immutable quadrature tables. This keeps the
+P1/P2 triangle, Q1/Q2 quad, and curved-Q2 paths safe under NGSolve's
+partitioned assembly.
+
+Regression coverage lives in `tests/axifemm/test_taskmanager_race.py`. It
+assembles the order-1 V-DOF custom-BFI path and the order-2 symbolic
+DiffOp/GetFE path with `SetNumThreads(1)` and `SetNumThreads(4)` and compares
+a deterministic matrix checksum.
 
 ## How `axihenrotte p=2` differs from NGSolve `H1 order=2`
 
@@ -269,6 +288,7 @@ tests/axifemm/                            # public test surface
   conftest.py                             # adds _reference_python/ to sys.path
   test_element_matrices.py                # P1 triangle symmetry + axis cases
   test_python_reference_consistency.py    # Q1 quad C++ vs Python ref spectrum
+  test_taskmanager_race.py                # 1-vs-4 thread race-free assembly gate
   _reference_python/                      # pure-Python prototype (test fixture)
     axifemm_core.py                       #   P1 triangle Henrotte ref
     axifemm_quad.py                       #   Q1 axis-aligned quad ref

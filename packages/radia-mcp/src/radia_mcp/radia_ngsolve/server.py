@@ -1046,6 +1046,7 @@ def axifem_documentation(topic: str = "all") -> str:
             "all"             - all sections concatenated
             "overview"        - what it is and why NGSolve doesn't already have it
             "api"             - FESpace("axihenrotte", mesh, order=k) usage
+            "taskmanager"     - NGSolve-native parallel execution contract
             "basis_p1"        - p=1 Q-element (4 DOFs) basis details
             "basis_p2"        - p=2 Q-element (9 DOFs) basis + s-midpoint convention
             "vs_standard_h1"  - 6-property comparison table vs H1 order=2

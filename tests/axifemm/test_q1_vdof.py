@@ -25,7 +25,7 @@ if _SRC not in sys.path:
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
-from ngsolve import BilinearForm, GridFunction, CoefficientFunction
+from ngsolve import BilinearForm, GridFunction, CoefficientFunction, TaskManager
 from ngsolve.meshes import MakeStructured2DMesh
 from radia.axifem import H1Henrotte, AxiHenrotteStiffnessBFI
 
@@ -39,7 +39,8 @@ def _uniform_field_residual(nx, ny):
     fes = H1Henrotte(mesh, order=1)
     aK = BilinearForm(fes, symmetric=True)
     aK += AxiHenrotteStiffnessBFI(CoefficientFunction(MU0))
-    aK.Assemble()
+    with TaskManager():
+        aK.Assemble()
     n = fes.ndof
     r = np.array([mesh[v].point[0] for v in mesh.vertices])
     z = np.array([mesh[v].point[1] for v in mesh.vertices])
