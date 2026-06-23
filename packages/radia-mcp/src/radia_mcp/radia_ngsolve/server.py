@@ -869,20 +869,20 @@ def hdiv_vim(topic: str = "overview") -> str:
 
     Key idea: SYMMETRIC demag operator N = B^T G B with the loop modes FIELD-NULL BY
     CONSTRUCTION (loops = ker B) -> mu_r-INDEPENDENT convergence + NO hand-crafted loop-star.
-    VALIDATED (feec suite 85/85, 2026-06-08): linear demag (sphere/spheroid/triaxial EXACT vs
-    analytic), NONLINEAR (damped Newton; cube & C-yoke <1% vs shipped Radia in 6 iters; needs
-    analytic_gram for div M != 0, fail-loud otherwise), distorted-mesh mu_r-independence, CURVED
-    + high-order (demag exact; field accuracy-per-DOF ~10-30x vs flat Radia), and SYMMETRY models
-    1/2,1/4,1/8 (loops automatic + image-method demag).  Python+NGSolve prototype; C++
-    productionization is the remaining lift to actually retire yano-type.
+    VALIDATED: linear demag (sphere/spheroid/triaxial EXACT vs analytic), NONLINEAR (damped
+    Newton; cube & C-yoke <1-3% vs shipped Radia in ~6 iters), distorted-mesh mu_r-independence,
+    CURVED + high-order (demag exact; field accuracy-per-DOF ~10-30x vs flat Radia), and SYMMETRY
+    models 1/2,1/4,1/8 (loops automatic + image-method demag).  Production entry
+    radia.vim.hdiv_demag_solve; the C++ _ChargeGramHMatrix kernel is the SOLE demag operator (the
+    dense Python Gram path + the analytic_gram/wilton_surface kwargs were REMOVED 2026-06-23).
 
     Args:
         topic: One of:
             "overview"       - what it is + why (symmetric, loops field-null, mu_r-independent) [DEFAULT]
             "implementation" - C++/pybind/Python files + APIs (rad_hdiv_vim, _ChargeGramHMatrix, ...)
-            "scaling"        - charge-Gram H-matrix + sparse near-field correction
+            "scaling"        - the C++ charge-Gram H-matrix (exact analytic near AND far)
             "verification"   - golden tests (tests/feec/) + the verify-first bug catches
-            "nonlinear"      - damped Newton; analytic_gram REQUIRED for non-uniform M; C-yoke vs Radia;
+            "nonlinear"      - damped Newton on the exact C++ charge Gram; C-yoke vs Radia;
                                fail-loud on non-convergence; the honest reference distinctions
             "curved"         - curved + high-order demag (ngsolve.bem single-layer): sphere/spheroid/
                                triaxial exact; accuracy-per-DOF ~10-30x vs flat Radia; curved x nonlinear
