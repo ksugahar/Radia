@@ -27,6 +27,50 @@ EPS0 = 8.8541878128e-12
 SIGMA_SB = 5.670374419e-8     # Stefan-Boltzmann constant [W/m^2/K^4]
 
 
+def p1_triangle_geometry(vertices):
+    """Area and constant P1 shape-function gradients for a 2D triangle.
+
+    ``vertices`` is ``[(x0,y0), (x1,y1), (x2,y2)]``.  Returns
+    ``{"area": A, "gradients": [(dN0/dx,dN0/dy), ...]}``.  The gradients are
+    orientation-safe for element matrices: reversing node order changes the
+    signed Jacobian and numerator together, leaving the physical gradients
+    consistent with the supplied local node order.
+    """
+    (x1, y1), (x2, y2), (x3, y3) = [(float(x), float(y)) for x, y in vertices]
+    detj = (x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)
+    if detj == 0.0:
+        raise ValueError("degenerate triangle")
+    area = abs(detj) / 2.0
+    grads = [
+        ((y2 - y3) / detj, (x3 - x2) / detj),
+        ((y3 - y1) / detj, (x1 - x3) / detj),
+        ((y1 - y2) / detj, (x2 - x1) / detj),
+    ]
+    return {"area": area, "gradients": grads}
+
+
+def p1_triangle_stiffness(vertices, coeff=1.0):
+    """Local scalar P1 stiffness matrix for ``-div(coeff grad u)`` on a triangle."""
+    g = p1_triangle_geometry(vertices)
+    area = g["area"]
+    grads = g["gradients"]
+    c = float(coeff)
+    return [[c * area * (gi[0] * gj[0] + gi[1] * gj[1]) for gj in grads] for gi in grads]
+
+
+def p1_triangle_mass(vertices, density=1.0):
+    """Consistent scalar P1 mass matrix ``int density N_i N_j dA`` on a triangle."""
+    area = p1_triangle_geometry(vertices)["area"]
+    d = float(density)
+    return [[d * area * (2.0 if i == j else 1.0) / 12.0 for j in range(3)] for i in range(3)]
+
+
+def p1_triangle_constant_load(vertices, source=1.0):
+    """Local P1 load vector for a constant source term over a triangle."""
+    area = p1_triangle_geometry(vertices)["area"]
+    return [float(source) * area / 3.0] * 3
+
+
 def solve_poisson_2d(mesh, coeff, dirichlet_values, source=None, order=2,
                      robin=None):
     """Core 2D elliptic solve  -div(coeff grad u) = source  with Dirichlet and
