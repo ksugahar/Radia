@@ -23,6 +23,14 @@ TOPICS: dict[str, str] = {
         "(s,z) planes, reflect into a 3-D sector pole; FFAG scaling sector, "
         "reflection validity = the L/g leaf coupling"
     ),
+    "sector_saturation": (
+        "The scaling-FFAG SECTOR body driven into SATURATION: the azimuthal (s,z) "
+        "end made NONLINEAR (Froehlich mu_r(|B|)) -> the two sector planes respond "
+        "OPPOSITELY -- the azimuthal effective length L_eff is ROBUST (gap-reluctance-"
+        "dominated; barely moves even as the high-r iron <mu_r> collapses x0.3), while "
+        "the radial field index k(r) is FRAGILE (droops, the achromaticity wall) "
+        "(scaling_ffag_sector_saturation.py)"
+    ),
     "beam_referenced_twist": (
         "The beam-referenced equipotential SURFACE as the design primitive + "
         "the TWIST: rotate the surface by phi <=> multipole phase n*phi "
@@ -513,6 +521,38 @@ surface rotating along a bent orbit) is the next axis.
 """
 
 
+SECTOR_SATURATION = """
+# The saturating sector body -- the two sector planes respond OPPOSITELY to saturation
+
+The scaling-FFAG SECTOR is designed in two planes: the radial (r,z) field index
+k(r) ~ r^k (the achromaticity) and the azimuthal (s,z) sector end (the effective
+length L_eff = INT B_z ds / B_z(body)).  scaling_ffag_pole_2d.py showed the RADIAL
+plane droops k(r) at the high-r edge under iron saturation (Step 2, the achromaticity
+wall); the azimuthal end was solved only LINEARLY.  scaling_ffag_sector_saturation.py
+drives the SECTOR BODY into saturation by making the azimuthal end solve NONLINEAR
+(Froehlich mu_r(|B|), the same knee as Step 2) and solving it at the high-r aperture
+edge (smallest gap, highest B) and the low-r body.
+
+## The honest result: a CONTRAST between the two planes (golden-tested)
+
+  azimuthal (s,z) L_eff : ROBUST  -- drift < 0.1% even where the high-r iron <mu_r>
+                                     collapses 1574->481 (x0.3); the sector end is
+                                     GAP-RELUCTANCE-DOMINATED (the same honest scope
+                                     as clebsch_dipole_saturation_3d: a large-gap
+                                     magnet's gap field softens only mildly with iron
+                                     saturation).  The fringe stays ~1.5 gaps.
+  radial   (r,z) k(r)   : FRAGILE -- droops dk_hi ~ -0.26 at the high-r edge (the
+                                     achromaticity wall, scaling_ffag Step 2).
+
+So SATURATION degrades the radial field SHAPE (the achromaticity) but NOT the
+azimuthal end LENGTH.  Design insight: the high-r achromaticity needs the radial
+reshape (scaling_ffag Step 3), while the sector ENDS are saturation-robust and need
+no nonlinear end correction.  (A sector where L_eff WOULD drift needs R_iron ~ R_gap
+-- a small gap or a necked iron path; the scaling pole's large gap makes the end
+robust.)
+"""
+
+
 BEAM_REFERENCED_TWIST = """
 # The beam-referenced equipotential SURFACE as the design primitive + the TWIST
 
@@ -811,6 +851,8 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                                perturbation?  Leaf coupling ~ gap/L
       "two_plane_design"     - The two-plane -> 3-D method: transverse (r,z)
                                + azimuthal (s,z) -> 3-D sector pole
+      "sector_saturation"    - The saturating SECTOR body: azimuthal L_eff ROBUST
+                               (gap-dominated) vs radial k(r) FRAGILE -- planes differ
       "beam_referenced_twist" - The equipotential SURFACE as design primitive
                                + the twist (n-fold law, twisting quadrupole)
       "endpack_two_plane"    - The magnet END PACK in two planes (x-y cross-
@@ -836,6 +878,9 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     if topic in ("two_plane_design", "two_plane", "twoplane", "sector",
                  "ffag_sector", "reflection"):
         return TWO_PLANE_DESIGN
+    if topic in ("sector_saturation", "saturating_sector", "sector_sat",
+                 "ffag_saturation", "gap_reluctance", "leff_robust"):
+        return SECTOR_SATURATION
     if topic in ("beam_referenced_twist", "twist", "twisting", "design_primitive",
                  "equipotential_surface", "n_fold", "rotating_gradient"):
         return BEAM_REFERENCED_TWIST
@@ -853,11 +898,12 @@ def get_accelerator_documentation(topic: str = "all") -> str:
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
-            BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION,
-            ENDPACK_COBAKE,
+            SECTOR_SATURATION, BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE,
+            SPECTROMETER_ENDPACK_SATURATION, ENDPACK_COBAKE,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
         "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
-        "beam_referenced_twist, endpack_two_plane, spectrometer_endpack, endpack_cobake."
+        "sector_saturation, beam_referenced_twist, endpack_two_plane, "
+        "spectrometer_endpack, endpack_cobake."
     )
