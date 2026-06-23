@@ -6796,12 +6796,14 @@ k_C * g. The standard machine-design correction (Carter 1901):
 tau_s = slot pitch, g = gap, b_o = slot opening.
 
 ```python
-from radia_mcp.radia_ngsolve.solve import carter_coefficient, effective_air_gap
-kc   = carter_coefficient(tau_s, g, b_o)     # >= 1
-geff = effective_air_gap(tau_s, g, b_o)      # kc * g -> use in the magnetising-permeance/L_m calc
+from radia_mcp.radia_ngsolve.solve import (
+    carter_coefficient, effective_air_gap, slotted_air_gap_permeance_factor)
+kc   = carter_coefficient(tau_s, g, b_o)             # >= 1
+geff = effective_air_gap(tau_s, g, b_o)              # kc * g -> use in L_m calc
+kp   = slotted_air_gap_permeance_factor(tau_s, g, b_o)  # P_slot/P_smooth = 1/kc
 ```
 
-k_C feeds the magnetising inductance, the no-load flux, and (via 1/k_C) the slot-ripple permeance;
+k_C feeds the magnetising inductance, the no-load flux, and the slot-ripple permeance ratio;
 typical openings lengthen the gap a few % to ~30-40 %.
 
 FE validation (the gap PERMEANCE, examples/comsol_class/carter_coefficient.py): a SCALAR magnetic
