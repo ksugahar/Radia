@@ -37,6 +37,7 @@ __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cyl
            "litz_packing_radius", "litz_fill_factor", "litz_single_layer_metrics", "litz_wire",
            "hierarchical_litz",
            "rectangular_litz", "rectangular_litz_fill_factor", "litz_serving",
+           "cos_theta_dipole_layout",
            "involute_gear", "threaded_rod", "airfoil", "blade",
            "gear_rack", "bevel_gear", "worm", "chain_sprocket", "vbelt_pulley",
            "ipm_rotor", "squirrel_cage_rotor", "claw_pole_rotor"]
@@ -196,6 +197,29 @@ def helmholtz_pair(r_in, r_out, h, separation, name="coil"):
     return assembly(c1, c2, label=name)
 
 
+def cos_theta_dipole_layout(n_per_half):
+    r"""Return the idealised bar-angle table for :func:`cos_theta_dipole`.
+
+    The bars are uniformly spaced in ``sin(theta)`` on each half of the aperture,
+    so their angular density is proportional to ``cos(theta)``.  Each entry is a
+    small dictionary with ``group`` (``"go"`` or ``"ret"``), ``index``,
+    ``angle_deg`` in the xy plane, ``sin_theta`` for spacing checks, and
+    ``current_sign`` (+1 for go, -1 for return).  This is a CAD-free handoff for
+    winding tables, solver current assignment, and layout tests.
+    """
+    if n_per_half < 2:
+        raise ValueError("need >= 2 bars per half")
+    rows = []
+    for i in range(n_per_half):
+        s = 2.0 * (i + 0.5) / n_per_half - 1.0
+        th = math.degrees(math.asin(s))
+        rows.append({"group": "go", "index": i, "angle_deg": th % 360.0,
+                     "sin_theta": s, "current_sign": 1})
+        rows.append({"group": "ret", "index": i, "angle_deg": (th + 180.0) % 360.0,
+                     "sin_theta": -s, "current_sign": -1})
+    return tuple(rows)
+
+
 def cos_theta_dipole(radius, conductor_w, conductor_h, length, n_per_half, name="coil"):
     r"""A **cos-theta dipole winding** approximated by ``2*n_per_half`` axial conductor bars on a shell
     of radius ``radius`` (cross-section ``conductor_w`` x ``conductor_h``, axial ``length``).  The bars
@@ -203,16 +227,12 @@ def cos_theta_dipole(radius, conductor_w, conductor_h, length, n_per_half, name=
     is ``~ cos(theta)``, the current layout that produces a pure dipole field.  Two polarity groups
     (``{name}_go_kk`` for theta in (-90,90), ``{name}_ret_kk`` on the opposite side); the solver drives
     +I / -I.  Returns a labelled :class:`~build123d.Compound`."""
-    if n_per_half < 2:
-        raise ValueError("need >= 2 bars per half")
     bars = []
-    for i in range(n_per_half):
-        s = 2.0 * (i + 0.5) / n_per_half - 1.0                       # uniform in (-1, 1)
-        th = math.degrees(math.asin(s))                             # arcsin spacing -> density ~ cos(theta)
-        for off, grp in ((0.0, "go"), (180.0, "ret")):
-            bar = (Rot(0, 0, th + off) * Pos(radius, 0, 0) * Box(conductor_w, conductor_h, length)).solid()
-            bar.label = f"{name}_{grp}_{i:02d}"
-            bars.append(bar)
+    for row in cos_theta_dipole_layout(n_per_half):
+        bar = (Rot(0, 0, row["angle_deg"]) * Pos(radius, 0, 0) *
+               Box(conductor_w, conductor_h, length)).solid()
+        bar.label = f"{name}_{row['group']}_{row['index']:02d}"
+        bars.append(bar)
     return Compound(children=bars, label=name)
 
 
