@@ -61,6 +61,26 @@ cubit-plugin-install            # Deploy Cubit plugin + panels (skip if no Cubit
 
 ## Critical Policies
 
+### Self-Driving Loop Discipline (2026-06-24)
+
+Drive an autonomous / self-paced loop by **task completion, not a clock**: finish
+one verified step, then immediately start the next — do not insert idle interval
+ticks. Every iteration must produce **concrete, verified progress** (a number that
+came from running the code, never an estimate), recorded to the project's internal
+validation notes. **Never overclaim** — a "pass" must trace to a checked value. Stop
+and ask only where the decision is genuinely the user's.
+
+### Publish Boundary: No Validation Provenance in Public Artifacts (2026-06-24)
+
+Public artifacts (this repo, PyPI packages, public docs) **lead with analytic
+solutions**. Do NOT put into them: internal absolute paths or local working-directory
+names; a third-party tool's **benchmark numbers** used as a validation basis; or
+"verified / validated against <external tool>" attributions, including the names of
+that tool's source files. Citing a *published* convention or a peer-reviewed paper is
+fine — attributing validation to an internal or third-party reference is not. Keep
+cross-validation provenance in machine-local notes only; stored regression-reference
+values may remain, but **unattributed**.
+
 ### Green's Function: Laplace Kernel Only (MQS/Darwin)
 
 **POLICY**: Radia uses **Laplace kernel only**: $G(r) = 1/(4\pi r)$. Target regime is MQS (Magneto-Quasi-Static) to Darwin approximation.
@@ -401,13 +421,11 @@ framing)**: Axisymmetric FE convention follows the FEMM 4.2 split:
 | **Magnetic A_phi (curl-curl)** | **Henrotte** `{1, r^2, z}` (`radia.radia_axifemm`) | The cylindrical curl operator `B_z = (1/r) d(r A_phi)/dr` produces a `1/r` integrand that standard FE Gauss quadrature cannot integrate accurately near the axis.  Henrotte's `s = r^2` substitution gives clean closed-form integration. |
 | **Scalar T / phi (Laplacian)** | **Standard NGSolve `H1`** + `2 pi r` weighting | The weak form `int k grad T . grad v . 2 pi r dr dz` has `2 pi r` as a **smooth Jacobian** (not a `1/r` integrand).  Standard FE handles this fine; no axis-special treatment is needed. |
 
-This matches the FEMM 4.2 reference implementation (verified against
-`S:/FEMM/02_source/femm42src_22Oct2023/`):
+This follows the documented FEMM 4.2 axisymmetric convention:
 
-- `belasolv/prob3big.cpp` — magnetic, uses Henrotte `{1, r^2, z}`
-- `hsolv/prob1big.cpp` — heat, uses **standard P1 triangle** with
-  `2 pi r` evaluated at the element centroid, **no** Henrotte basis,
-  **no** `s = r^2` substitution
+- **magnetic** uses the Henrotte `{1, r^2, z}` basis
+- **heat** uses a **standard P1 triangle** with `2 pi r` evaluated at the
+  element centroid — **no** Henrotte basis, **no** `s = r^2` substitution
 
 **Why not "all axisym Henrotte"**: Henrotte basis IS the natural
 function space for axisymmetric scalars (the parity / even-function
@@ -456,8 +474,7 @@ production heat solvers and are NOT required.
 **Reference**: see
 [`docs/axifemm/FORMULATION.md`](docs/axifemm/FORMULATION.md)
 sections 5-6 (Henrotte basis derivation for magnetic) and 10b/10c
-(optional heat BFIs).  The FEMM convention split is documented in
-`memory/reference_femm_source_axisym_conventions.md`.
+(optional heat BFIs).
 
 ### Unit System Policy
 
