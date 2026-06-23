@@ -564,11 +564,25 @@ introduces (`both 0.47 % < chamfer-only 0.84 %`), and the co-baked pole is the l
 `b̄₃,₅` of all four cases. *(Absolute `b̄₃,₅` differs from the staircase table above
 because the meshes differ; the loft's value is the precision one.)*
 
-**Rotated-EFB edge focusing — retried with a reduced-Ω source.** A first attempt
-extracted the `∫B` effective-field-boundary angle from the *equipotential* drive and it
-attenuated to `~0.47·β_cut` (an extraction artifact). The retry drives a slant-ended
-(parallelogram) H-frame dipole with a *real coil* (reduced-Ω + CoilBuilder Biot-Savart)
-and measures `y_EFB(x)` directly — the genuine edge-focusing test.
+**Rotated-EFB edge focusing — characterized NEGATIVE, not shipped (the field-EFB slope
+is the wrong observable).** A first attempt read the `∫B` effective-field-boundary angle
+out of the *equipotential* drive and it attenuated to `~0.47·β_cut`, recorded as an
+unattributed open step. This session retried it the better way — a rigidly-rotated
+*whole magnet* (iron **and** the CoilBuilder coil rotated together) driven by the genuine
+reduced-Ω + Biot-Savart **source**, with the EFB read both as `∫B_z dy / B_z(body)` and as
+the half-field crossing `y_half(x)` — and across all variants (parallelogram vs rigid
+rotation, integral vs half-field EFB, narrow vs wide pole) the result is robust and
+**negative**: at `β=0` the EFB slope is cleanly `≈ 0` (the method is unbiased), but for
+`β>0` the field-EFB slope does **not** recover the geometric edge angle (it comes out
+wrong-sign and many times `tan β`, and at larger `β` the per-line `B_z(body)` normalization
+passes through zero). The attribution is now clear: **the per-beam-line field integral
+`∫B_z dy` through a tilted finite magnet is not a local edge tracker** — the compact
+fringe is fully 3-D and the field-EFB slope simply is not the edge angle (so the prior
+`~0.47` was the same surrogate failing, not the drive). The genuine edge-focusing strength
+is a **trajectory** quantity — the vertical kick `∫(v×B)` along particle orbits through the
+fringe — so it needs **particle tracking**, not a field-EFB slope. Per the repository's
+honest-results policy this is kept as a characterized open problem (recorded here), not
+shipped as a working example.
 
 ---
 
@@ -707,7 +721,11 @@ coil = A-side), so the framework is one method, not two.
   (`endpack_cobake_loft.py`, OCC `ThruSections`) builds the gap face as a SMOOTH loft so
   the baseline + shim cases mesh at the SAME density (`ne(shim)/ne(baseline) ≈ 0.97`, vs
   the staircase's `≈ 36`) — it RESOLVES the documented staircase artifact, making the
-  co-baked `b̄₃,₅` + corner a precision claim.
+  co-baked `b̄₃,₅` + corner a precision claim. The rotated-EFB **edge-focusing** extension
+  remains **not shipped** — retried this session with a whole-magnet rotation + reduced-Ω
+  source, the field-EFB slope does NOT recover the geometric edge angle (it is the wrong
+  observable; the genuine focusing is a particle-tracking quantity), kept as a characterized
+  negative (§3.11).
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed in two planes** (§3.9): the longitudinal
