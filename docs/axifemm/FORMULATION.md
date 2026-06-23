@@ -206,9 +206,10 @@ care on axis elements (`s_a = 0`) — see § 7.
 
 ## 6. Variational form on a single element
 
-Let `Ω_e = [r_a, r_b] × [z_a, z_b]` be one axis-aligned rectangle, with
-`s_a = r_a²`, `s_b = r_b²`.  Choose `ψ` to be polynomial in `(s, z)` of
-total degree `p` (in NGSolve API: `H1Henrotte(mesh, order=p)`):
+For axis-aligned quads, let `Ω_e = [r_a, r_b] × [z_a, z_b]` be one
+rectangle, with `s_a = r_a²`, `s_b = r_b²`.  Choose `ψ` to be polynomial
+in `(s, z)` of total degree `p` (in NGSolve API:
+`H1Henrotte(mesh, order=p)`):
 
 $$
 \psi(s, z) = \sum_{m=1}^{N_p} c_m \, m(s, z),
@@ -293,22 +294,41 @@ internally toggle between the interior basis (4 / 9 DOFs) and the
 axis basis (2 / 6 DOFs) based on whether `s_a < ε`.  The dropped DOFs
 are treated as a Dirichlet zero in NGSolve's free-DOF bookkeeping.
 
-## 8. P1 triangle (FEMM `prob3big.cpp` direct port)
+## 8. Triangle paths: P1, P2, and P2 curved
 
-For unstructured triangle meshes — when axis-aligned quads are not
-available — `axifemm` provides a P1-triangle fallback,
-`AxiHenrotteFE_P1_Triangle` (3 DOFs/cell).  The basis is `{1, r², z}`
-on each triangle, with shape functions linear in those variables (not
-in `(r, z)`).  This reproduces FEMM's `StaticAxisymmetric()` exactly,
-including the axis-touching cases (1- or 2-vertex on axis) that take
-special-case stiffness formulas (see `axifemm_core.element_matrices`
-in `tests/axifemm/_reference_python/` for the per-element reference
-implementation).
+For unstructured triangle meshes, `axifemm` provides both P1 and P2 triangle
+elements:
 
-The P1 triangle has lower per-DOF accuracy than Q2 quads
-(`disk_convergence` example shows ~5–6 % gap to BEM-Foster reference
-even at very fine meshes), so production use prefers Q2 quad whenever
-a structured mesh is available.
+- `AxiHenrotteFE_P1_Triangle` (3 DOFs/cell) uses the `{1, r², z}` basis.
+  This reproduces FEMM's `StaticAxisymmetric()` exactly, including the
+  axis-touching cases (1- or 2-vertex on axis) that take special-case
+  stiffness formulas (see `axifemm_core.element_matrices` in
+  `tests/axifemm/_reference_python/` for the per-element reference
+  implementation).
+- `AxiHenrotteFE_P2_Triangle` (6 DOFs/cell) uses the
+  `{1, r², z, r⁴, r² z, z²}` basis at 3 vertices plus 3 edge midnodes.
+  The FESpace reads all 6 node coordinates via NGSolve's element
+  transformation.  On a straight mesh this is the usual chord midpoint;
+  after `mesh.Curve(2)` it is the curved-geometry mid-edge coordinate.
+  The stiffness and sigma-mass BFIs use the same 6-node geometric map at
+  quadrature points, so P2 curved triangles are part of the production
+  implementation.
+
+P1 triangles have lower per-DOF accuracy than Q2 quads
+(`disk_convergence` example shows ~5–6 % gap to BEM-Foster reference even
+at very fine meshes).  P2 curved triangles are the preferred curved-boundary
+path for spheres, Kelvin half-discs, and OCC-generated regions; Q2 straight
+quads remain the preferred structured-mesh path for disks, cylinders, and
+rectangular workpieces.
+
+### Q2 curved quads are not production C++
+
+The shipped `AxiHenrotteFE_Q2_AxisAligned` is a straight, axis-aligned
+closed-form quad.  It constructs the element from the four corner
+coordinates; it does not consume curved quad edge/face nodes from
+`mesh.Curve(2)`.  A true 9-node curved Q2 quad exists only as the Python
+prototype `examples/maglev/research_cln/axifemm/axifemm_quad_q2_curved.py`.
+Porting it requires a separate quadrature-over-biquadratic-map BFI path.
 
 ## 9. Boundary conditions
 
@@ -341,7 +361,7 @@ where `V` is the global vector of nodal `A_φ` DOFs.  In the API:
 - `AxiHenrotteSigmaMassBFI(sigma_cf)` assembles `M_σ` (per § 4 + 6,
   with `σ` from the CoefficientFunction).
 - `H1Henrotte(mesh, order=p)` provides the appropriate FESpace
-  (Q1 / Q2 quad, P1 triangle, with axis-element bookkeeping).
+  (P1 / P2 triangle, Q1 / Q2 quad, with axis-element bookkeeping).
 - The user assembles `K`, `M` with standard NGSolve `BilinearForm`
   and feeds them into any solver (direct, iterative, eigenvalue,
   Hiruma 3-term recurrence for Cauer ladder extraction).
@@ -492,10 +512,11 @@ matrices.
 Use a **structured rectangular grid generator** (see
 [`tests/panels/fixtures/generate_heat_cylinder_axisym.py`](../../tests/panels/fixtures/generate_heat_cylinder_axisym.py)
 for the canonical pattern: hand-build with `netgen.meshing.MeshPoint
-+ Element2D + Element1D` on a regular `(NR, NZ)` lattice).  P1
++ Element2D + Element1D` on a regular `(NR, NZ)` lattice).  P1/P2
 triangle support exists for unstructured meshes on the magnetic side
-(`AxiHenrotteFE_P1_Triangle` + `AxiHenrotteStiffnessBFI`); the heat
-BFIs are quad-only as of radia 4.32.0.
+(`AxiHenrotteFE_P{1,2}_Triangle` + `AxiHenrotteStiffnessBFI`); the heat
+BFIs are quad-only as of radia 4.32.0.  A true curved Q2 quad BFI is not
+shipped; use P2 curved triangles for curved magnetic boundaries.
 
 ## 11. Cross-validation
 
@@ -507,7 +528,8 @@ independent paths:
    axifemm_quad_q2 for Q2 quad with Gauss 8×8 numerical quadrature).
    Test `tests/axifemm/test_python_reference_consistency.py` asserts
    the C++ stiffness eigenvalues match the Python prototype at
-   machine precision for a single quad.
+   machine precision for a single quad and smoke-tests the shipped
+   P2 curved triangle assembly path.
 
 2. **Mathematica derivation** —
    `examples/axifemm/research/validate_q2_codegen.py` runs the
