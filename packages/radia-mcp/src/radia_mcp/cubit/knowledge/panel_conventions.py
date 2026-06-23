@@ -12,7 +12,7 @@ PANEL_CONVENTIONS = """
 
 ```
 Cubit Solve -> Radia-NGSolve...
-  +-- Launcher dialog (Cubit Qt5): mode + order + folder + label check
+  +-- Launcher dialog (Cubit PySide6 / Qt6): mode + order + folder + label check
   |     |
   |     +-- export netgen "radia_model.vol" order N overwrite
   |     +-- Launch: python radia_*.py radia_model.vol [--optional-files ...]
@@ -25,6 +25,10 @@ Cubit Solve -> Radia-NGSolve...
 
 Each analysis window is a standalone PySide6 app (Python 3.12, NOT Cubit's Python 3.10).
 The .vol file is the SOLE interface between Cubit and NGSolve.
+Coreform Cubit 2025.12+ is the supported in-Cubit host.  The retired
+Qt5 `.ccl` launcher is not part of the current install; `cubit-plugin-install`
+registers the PySide6 toolbar through a generated startup shim and
+`--verify-only --all-users` checks that registration.
 
 ## Module-Level Metadata (REQUIRED in every radia_*.py)
 

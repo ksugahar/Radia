@@ -558,7 +558,7 @@ def check_qt_imports(filepath: str, lines: List[str]) -> List[Dict]:
 	"""HIGH: Qt class used but not imported (NameError at runtime).
 
 	Checks that all Qt classes referenced in the code are present
-	in PySide6/PyQt5 import statements.
+	in PySide6 import statements.
 	"""
 	findings = []
 	qt_classes_used = set()
@@ -573,7 +573,7 @@ def check_qt_imports(filepath: str, lines: List[str]) -> List[Dict]:
 		'QTableWidget', 'QDialogButtonBox', 'QProcess', 'QTimer',
 	}
 
-	import_pattern = re.compile(r'from\s+(?:PySide6|PyQt5)\.\w+\s+import\s+(.+)')
+	import_pattern = re.compile(r'from\s+PySide6\.\w+\s+import\s+(.+)')
 
 	for i, line in enumerate(lines, 1):
 		stripped = line.strip()
@@ -604,7 +604,27 @@ def check_qt_imports(filepath: str, lines: List[str]) -> List[Dict]:
 				'line': line_num,
 				'severity': 'HIGH',
 				'rule': 'missing-qt-import',
-				'message': f'{cls} used but not imported from PySide6/PyQt5.',
+				'message': f'{cls} used but not imported from PySide6.',
+			})
+	return findings
+
+
+def check_no_pyqt5_imports(filepath: str, lines: List[str]) -> List[Dict]:
+	"""HIGH: Radia Cubit UI is PySide6-only on Coreform Cubit 2025.12+."""
+	findings = []
+	for i, line in enumerate(lines, 1):
+		stripped = line.strip()
+		if stripped.startswith("#"):
+			continue
+		if re.search(r"\b(?:from\s+PyQt5|import\s+PyQt5)\b", stripped):
+			findings.append({
+				"line": i,
+				"severity": "HIGH",
+				"rule": "pyqt5-import-forbidden",
+				"message": (
+					"PyQt5 is not supported. Radia targets Coreform "
+					"Cubit 2025.12+ and must use PySide6 only."
+				),
 			})
 	return findings
 
@@ -653,7 +673,7 @@ def _looks_like_cubit_toolbar_script(filepath: str, lines: List[str]) -> bool:
 	Triggers on any of:
 	  - First line is `#!python` (Cubit toolbar shebang convention).
 	  - Anywhere contains `__name__ == '_coreform_cubit'`.
-	  - File path includes a `scripts/` segment and imports PySide6/PyQt5
+	  - File path includes a `scripts/` segment and imports PySide6
 	    (but does NOT call `cubit.init(` - that would be an external
 	    launcher / panel).
 	"""
@@ -671,7 +691,7 @@ def _looks_like_cubit_toolbar_script(filepath: str, lines: List[str]) -> bool:
 		or "toolbar" in os.path.basename(filepath).lower()
 	)
 	if path_ok:
-		imports_qt = bool(re.search(r"from\s+(?:PySide6|PyQt5)\.", joined))
+		imports_qt = bool(re.search(r"from\s+PySide6\.", joined))
 		calls_init = "cubit.init(" in joined
 		if imports_qt and not calls_init:
 			return True
@@ -699,7 +719,7 @@ def check_cubit_toolbar_import_parens(filepath: str,
 		if stripped.startswith("#"):
 			i += 1
 			continue
-		m = re.match(r"from\s+(PySide6|PyQt5)\.\w+\s+import\s*(\(.*)?$",
+		m = re.match(r"from\s+PySide6\.\w+\s+import\s*(\(.*)?$",
 		             stripped)
 		if m:
 			has_paren_here = m.group(2) is not None and "(" in m.group(2)
@@ -731,7 +751,7 @@ def check_cubit_toolbar_missing_shebang(filepath: str,
 	command language).
 
 	Fires only when a file is under a `scripts/` directory AND references
-	PySide6/PyQt5 (so it's clearly a Cubit toolbar script) but is missing
+	PySide6 (so it's clearly a Cubit toolbar script) but is missing
 	the shebang.
 	"""
 	findings: List[Dict] = []
@@ -748,7 +768,7 @@ def check_cubit_toolbar_missing_shebang(filepath: str,
 	if not is_in_toolbar_dir:
 		return findings
 	joined = "".join(lines)
-	if not re.search(r"from\s+(?:PySide6|PyQt5)\.", joined):
+	if not re.search(r"from\s+PySide6\.", joined):
 		return findings
 	first = lines[0].strip()
 	if first.startswith("#!python"):
@@ -831,6 +851,7 @@ ALL_RULES = [
 	check_curve_without_setgeominfo,
 	check_missing_block_names,
 	check_non_ascii_bytes,
+	check_no_pyqt5_imports,
 	check_qt_imports,
 	check_plain_gmsh_export,
 	check_cubit_toolbar_import_parens,

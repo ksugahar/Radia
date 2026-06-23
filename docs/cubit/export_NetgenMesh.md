@@ -197,17 +197,16 @@ The plugin resolves `FaceDescriptor.DomainIn`/`DomainOut` from Cubit's surface-v
 - Periodic identification
 - Kelvin boundary conditions
 
-## Legacy Python API
+## In-Memory Curving
 
-The `extract_curved_mesh()` function from the `cubit_mesh_export` package still works for in-memory mesh transfer:
+The old top-level `cubit_mesh_export.extract_curved_mesh` helper is retired
+from the public API.  Use `export netgen` for production workflows; it handles
+curving, labels, Kelvin detection, and companion JSON in one Cubit command.
 
-```python
-from cubit_mesh_export import extract_curved_mesh
-ng_mesh = extract_curved_mesh(cubit, order=3)
-mesh = ngsolve.Mesh(ng_mesh)
-```
-
-For file-based workflows, `export netgen` is preferred — it handles all labeling, Kelvin detection, and companion JSON automatically.
+The low-level `cubit_mesh_curver.build_curved_mesh` pybind module remains an
+internal implementation detail of the `.ccm` plugin.  It expects already
+extracted mesh arrays plus geometry callbacks and is not the user-facing
+entry point.
 
 ## Troubleshooting
 

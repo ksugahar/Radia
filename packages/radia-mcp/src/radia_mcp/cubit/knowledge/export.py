@@ -528,7 +528,7 @@ The .vol export was unaffected (uses Netgen internal mesh, not edge_ho_nodes_).
 
 ```
 Menu bar: File Edit View Display Tools Export_Mesh Help Solve
-                                       (C++ .ccl)        (Python)
+                                       (PySide6)         (PySide6)
 Export Mesh:                           Solve:
   Netgen Vol (.vol)...                   Radia-NGSolve...
   GMSH...                               Generate Coil...
@@ -540,7 +540,7 @@ Export Mesh:                           Solve:
   Mesh Evaluation...
 ```
 
-- **Export Mesh**: C++ .ccl component (Qt5 dialogs, APREPRO commands)
+- **Export Mesh**: PySide6 menu/dialogs calling C++ APREPRO export commands
 - **Solve**: Python register_toolbar.py (subprocess to external Python 3.12)
 - Settings saved to `AppData/Roaming/Radia/export_settings.json`
 """

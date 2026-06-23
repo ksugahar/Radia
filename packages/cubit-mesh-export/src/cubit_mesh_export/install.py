@@ -1,8 +1,8 @@
 """
 Cubit plugin installer for cubit-mesh-export.
 
-Deploys the Cubit plugin binaries (.ccm, .ccl, .pyd) and Netgen DLLs
-to the Coreform Cubit installation directory.
+Deploys the Cubit plugin binaries (.ccm, .pyd) and Netgen DLLs to the
+Coreform Cubit 2025.12+ installation directory.
 
 After ``pip install cubit-mesh-export``, run::
 
@@ -10,8 +10,10 @@ After ``pip install cubit-mesh-export``, run::
     cubit-plugin-install --all-users    # install for all user profiles (admin)
     cubit-plugin-install --check-only   # preflight only, no writes
 
-This is the SINGLE entry point for Cubit plugin deployment.
-Radia-NGSolve panels are installed separately via ``radia-setup``.
+This is the SINGLE entry point for Cubit plugin and Radia panel
+deployment. If the ``radia`` package is installed, this command also
+registers the PySide6 Radia-NGSolve toolbar and verifies that Cubit's
+startup files point at it.
 
 Safety policy (2026-04-14 -- post-incident hardening):
 
@@ -30,11 +32,19 @@ from __future__ import annotations
 import argparse
 import glob
 import hashlib
+import importlib.metadata as importlib_metadata
 import os
 import shutil
 import sys
 import time
 from pathlib import Path
+
+MIN_CUBIT_VERSION = (2025, 12)
+MIN_CUBIT_VERSION_TEXT = "2025.12"
+_REQUIRED_PACKAGE_BINARIES = (
+    "cubit_mesh_export.ccm",
+    "cubit_mesh_curver.pyd",
+)
 
 
 # Windows console defaults to cp932 for ja-JP locales; our user-facing
@@ -53,44 +63,52 @@ if hasattr(sys.stdout, "reconfigure"):
 # ============================================================
 
 def _find_cubit_dir():
-    """Find Coreform Cubit installation directory.
+    """Find a supported Coreform Cubit installation directory.
 
     Search order:
       1. CUBIT_PATH environment variable
-      2. Common install locations (newest version first)
+      2. Common install locations (newest supported version first)
     """
+    def _cubit_version_key(p):
+        name = os.path.basename(os.path.normpath(p))
+        if name.lower() == "bin":
+            name = os.path.basename(os.path.dirname(os.path.normpath(p)))
+        v = name.replace("Coreform Cubit ", "", 1).strip()
+        try:
+            return tuple(int(x) for x in v.split("."))
+        except (ValueError, AttributeError):
+            return (0,)
+
+    def _supported(root: Path) -> bool:
+        return (
+            (root / "bin" / "plugins").is_dir()
+            and _cubit_version_key(str(root)) >= MIN_CUBIT_VERSION
+        )
+
     cubit_path = os.environ.get("CUBIT_PATH")
-    if cubit_path and os.path.isdir(os.path.join(cubit_path, "plugins")):
-        return Path(cubit_path).parent  # CUBIT_PATH points to bin/
-    if cubit_path and os.path.isdir(os.path.join(cubit_path, "bin", "plugins")):
-        return Path(cubit_path)
+    if cubit_path:
+        p = Path(cubit_path)
+        candidates = [p.parent if (p / "plugins").is_dir() else p]
+        if (p / "bin" / "plugins").is_dir():
+            candidates.insert(0, p)
+        for candidate in candidates:
+            if _supported(candidate):
+                return candidate
+        return None
 
     if sys.platform == "win32":
         for base in [os.environ.get("ProgramFiles", "")]:
             if not base:
                 continue
-            # Numeric-aware version sort.  Was `sorted(..., reverse=True)`
-            # (string compare) until 2026-05-26; Coreform releases as
-            # "2025.3", "2025.6", "2025.12" et seq, where string sort puts
-            # "2025.6" > "2025.12" because '6' > '1' character-wise.  Parse
-            # the trailing "2025.X" as a Version tuple instead so 2025.12
-            # correctly outranks 2025.6 / 2025.3.  Mirrors the same fix in
-            # tools/find_cubit.ps1 and S:\CoreformCubit\CoreformCubit.ps1.
-            def _cubit_version_key(p):
-                name = os.path.basename(p)
-                v = name.replace("Coreform Cubit ", "", 1).strip()
-                try:
-                    return tuple(int(x) for x in v.split("."))
-                except (ValueError, AttributeError):
-                    return (0,)
             candidates = sorted(
                 glob.glob(os.path.join(base, "Coreform Cubit *")),
                 key=_cubit_version_key,
                 reverse=True,
             )
             for c in candidates:
-                if os.path.isdir(os.path.join(c, "bin", "plugins")):
-                    return Path(c)
+                root = Path(c)
+                if _supported(root):
+                    return root
     return None
 
 
@@ -169,6 +187,14 @@ def _find_netgen_dlls():
     except ImportError:
         pass
     return None, None
+
+
+def _radia_distribution_installed() -> bool:
+    try:
+        importlib_metadata.version("radia")
+        return True
+    except importlib_metadata.PackageNotFoundError:
+        return False
 
 
 def _is_cubit_process_name(name: str) -> bool:
@@ -264,8 +290,8 @@ def _critical_plugin_files(cubit_dir: Path):
         plugins / "cubit_mesh_curver.cp312-win_amd64.pyd",
         plugins / "nglib.dll",
         plugins / "ngcore.dll",
-        bin_ / "cubit_mesh_export.ccl",
-        plugins / "cubit_mesh_export.ccl",  # historical stale location
+        bin_ / "cubit_mesh_export.ccl",      # historical stale Qt5 location
+        plugins / "cubit_mesh_export.ccl",  # historical stale Qt5 location
     ]
 
 
@@ -278,9 +304,6 @@ def _expected_deployments(pkg_dir: Path, cubit_dir: Path):
     if (pkg_dir / "cubit_mesh_export.ccm").is_file():
         pairs.append((pkg_dir / "cubit_mesh_export.ccm",
                        plugins_dir / "cubit_mesh_export.ccm"))
-    if (pkg_dir / "cubit_mesh_export.ccl").is_file():
-        pairs.append((pkg_dir / "cubit_mesh_export.ccl",
-                       bin_dir / "cubit_mesh_export.ccl"))
     if (pkg_dir / "cubit_mesh_curver.pyd").is_file():
         pairs.append((pkg_dir / "cubit_mesh_curver.pyd",
                        plugins_dir / "cubit_mesh_curver.cp312-win_amd64.pyd"))
@@ -309,14 +332,28 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
     Checks:
       - every expected destination file exists
       - destination file size + sha256 match the package source
-      - no stale ``cubit_mesh_export.ccl`` lingering in bin/plugins/ (the
-        2026-04-14 shadow bug)
+      - no stale ``cubit_mesh_export.ccl`` lingering from the retired Qt5
+        plugin path
 
     Independent from ``preflight()`` (which is read-only safety-before-write).
     Use this after ``cubit-plugin-install`` finishes, OR at any later
     time to re-confirm the install state.
     """
     issues = []
+
+    for name in _REQUIRED_PACKAGE_BINARIES:
+        p = pkg_dir / name
+        if not p.is_file():
+            issues.append(
+                f"required package binary missing: {p}. Rebuild before deploy."
+            )
+
+    nglib, ngcore = _find_netgen_dlls()
+    if not nglib or not ngcore:
+        issues.append(
+            "required Netgen DLLs missing from the Python environment "
+            "(nglib.dll / ngcore.dll)"
+        )
 
     pairs = _expected_deployments(pkg_dir, cubit_dir)
     if verbose:
@@ -344,14 +381,19 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
         if verbose:
             print(f"    [OK] {dst.name}  ({dst_size} bytes, sha256 match)")
 
-    # Stale .ccl in plugins/ shadow guard.
-    stale_ccl = cubit_dir / "bin" / "plugins" / "cubit_mesh_export.ccl"
-    if stale_ccl.is_file():
-        msg = (f"stale shadow file: {stale_ccl} -- the .ccl belongs in "
-               f"{cubit_dir / 'bin'}, not bin/plugins/. Re-run "
-               "cubit-plugin-install to clean.")
-        issues.append(msg)
-        if verbose: print(f"    [STALE] {msg}")
+    # Retired Qt5 .ccl guard.  Since radia 4.80.0 Cubit UI is PySide6-only;
+    # any remaining .ccl can load stale menus or confuse first installs.
+    for stale_ccl in [
+        cubit_dir / "bin" / "cubit_mesh_export.ccl",
+        cubit_dir / "bin" / "plugins" / "cubit_mesh_export.ccl",
+        cubit_dir / "bin" / "radia_cubit.ccl",
+        cubit_dir / "bin" / "plugins" / "radia_cubit.ccl",
+    ]:
+        if stale_ccl.is_file():
+            msg = (f"stale retired Qt5 .ccl remains: {stale_ccl}. "
+                   "Re-run cubit-plugin-install to clean it.")
+            issues.append(msg)
+            if verbose: print(f"    [STALE] {msg}")
 
     # Compat report (read-only).
     compat_ok, compat_msg = _check_radia_compat()
@@ -579,7 +621,8 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     print()
 
     if not cubit_dir:
-        print("  [FAIL] Cubit not found. Set CUBIT_PATH if installed elsewhere.")
+        print(f"  [FAIL] Coreform Cubit {MIN_CUBIT_VERSION_TEXT}+ not found.")
+        print("         Set CUBIT_PATH to the Cubit 2025.12 bin directory.")
         return False
 
     plugins_dir = cubit_dir / "bin" / "plugins"
@@ -589,6 +632,22 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
 
     if verify_only:
         ok, issues = verify_deployment(pkg_dir, cubit_dir, verbose=True)
+        try:
+            from radia.install_panels import verify_panel_installation
+        except ImportError as e:
+            verify_panel_installation = None
+            if _radia_distribution_installed():
+                issues = list(issues) + [
+                    f"radia is installed but panel verifier could not import: {e}"
+                ]
+                ok = False
+        if verify_panel_installation is not None:
+            print()
+            panel_ok, panel_issues = verify_panel_installation(
+                all_users=all_users, verbose=True)
+            if not panel_ok:
+                issues = list(issues) + list(panel_issues)
+                ok = False
         if not ok:
             raise SystemExit(4)
         return True
@@ -630,27 +689,21 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     if ccm_src.is_file():
         copy_jobs.append((ccm_src, plugins_dir / "cubit_mesh_export.ccm"))
     else:
-        print(f"  [--] cubit_mesh_export.ccm not found in {pkg_dir} -- skipping")
-
-    ccl_src = pkg_dir / "cubit_mesh_export.ccl"
-    if ccl_src.is_file():
-        # NOTE: .ccl goes in bin/, not bin/plugins/ -- Cubit loads Qt
-        # components from bin/ directly. See 2026-04-14 incident.
-        copy_jobs.append((ccl_src, cubit_dir / "bin" / "cubit_mesh_export.ccl"))
+        print(f"  [FAIL] cubit_mesh_export.ccm not found in {pkg_dir}")
 
     pyd_src = pkg_dir / "cubit_mesh_curver.pyd"
     if pyd_src.is_file():
         copy_jobs.append(
             (pyd_src, plugins_dir / "cubit_mesh_curver.cp312-win_amd64.pyd"))
     else:
-        print(f"  [--] cubit_mesh_curver.pyd not found in {pkg_dir} -- skipping")
+        print(f"  [FAIL] cubit_mesh_curver.pyd not found in {pkg_dir}")
 
     nglib, ngcore = _find_netgen_dlls()
     if nglib:
         copy_jobs.append((nglib, plugins_dir / nglib.name))
         copy_jobs.append((ngcore, plugins_dir / ngcore.name))
     else:
-        print("  [--] Netgen DLLs not found (high-order curving disabled)")
+        print("  [FAIL] Netgen DLLs not found (nglib.dll / ngcore.dll)")
 
     # Cubit-side Python helpers (Kelvin transformation, etc.).
     helpers_src = pkg_dir / "cubit_helpers"
@@ -659,10 +712,17 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
         for py in sorted(helpers_src.glob("*.py")):
             copy_jobs.append((py, helpers_dst / py.name))
     else:
-        print(f"  [--] cubit_helpers/ not found in {pkg_dir} -- "
-              "Kelvin / symmetry helpers will be unavailable in Cubit")
+        print(f"  [FAIL] cubit_helpers/ not found in {pkg_dir}")
 
     copy_errors = []
+    for required in _REQUIRED_PACKAGE_BINARIES:
+        if not (pkg_dir / required).is_file():
+            copy_errors.append(f"required package binary missing: {pkg_dir / required}")
+    if not nglib or not ngcore:
+        copy_errors.append("required Netgen DLLs missing")
+    if not helpers_src.is_dir():
+        copy_errors.append(f"required cubit_helpers/ missing: {helpers_src}")
+
     for src, dst in copy_jobs:
         try:
             _copy_verified(src, dst, start_time)
@@ -693,8 +753,12 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     try:
         from radia.install_panels import install_panels
         print()
-        install_panels(all_users=all_users)
-    except ImportError:
+        if not install_panels(all_users=all_users):
+            raise SystemExit(4)
+    except ImportError as e:
+        if _radia_distribution_installed():
+            print(f"  [FAIL] radia is installed but panel installer could not import: {e}")
+            raise SystemExit(4)
         pass  # radia not installed, panels not needed
 
     return True
@@ -705,7 +769,7 @@ def main():
     parser = argparse.ArgumentParser(
         prog="cubit-plugin-install",
         description="Install the Radia / cubit-mesh-export Cubit plugin "
-                    "(.ccm / .ccl / .pyd + Netgen DLLs).")
+                    "(.ccm / .pyd + Netgen DLLs) and Radia panels.")
     parser.add_argument("--all-users", action="store_true",
                         help="also register Radia toolbar in every "
                              "user's ~/.cubit (requires admin)")

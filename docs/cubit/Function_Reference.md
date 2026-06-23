@@ -48,7 +48,7 @@ cmake --build . --target cubit_mesh_export_ccm   # APREPRO commands (plugins/)
 # src/radia/panels/radia_export_menu.py replaces it.
 ```
 
-Installation: `pip install cubit-mesh-export && cubit-plugin-install`
+Installation: `pip install "radia[cubit,gui]" && cubit-plugin-install`
 
 ---
 
@@ -151,14 +151,18 @@ Requires: Python 3.12 with NGSolve/OCC. Set `RADIA_PYTHON` env var to override.
 
 ## Python API
 
-### extract_curved_mesh (cubit-mesh-export package)
+### In-Memory Curving
+
+The old top-level `cubit_mesh_export.extract_curved_mesh` Python helper is
+not part of the current public API.  Use the Cubit command instead:
 
 ```python
-from cubit_mesh_export import extract_curved_mesh
-ng_mesh = extract_curved_mesh(cubit, order=3)
+cubit.cmd('export netgen "model.vol" order 3 overwrite')
 ```
 
-Returns `netgen.meshing.Mesh` with high-order curving. Requires Cubit running.
+The low-level `cubit_mesh_curver.build_curved_mesh` pybind module is an
+implementation detail used by the `.ccm` plugin after Cubit has supplied
+linear mesh arrays and geometry callbacks.
 
 ### check_consistency (cubit-mesh-export package)
 
@@ -178,7 +182,7 @@ from cubit_mesh_export.check import check_consistency  # API
 ```
 Menu bar: ... Export Mesh  Help  Solve
 
-Export Mesh (C++ .ccl):        Solve (Python):
+Export Mesh (PySide6):         Solve (PySide6):
   Netgen Vol (.vol)...           Radia-NGSolve...
   GMSH...                        Generate Coil...
   Nastran BDF...                 --------
@@ -189,7 +193,7 @@ Export Mesh (C++ .ccl):        Solve (Python):
   Mesh Evaluation...
 ```
 
-- **Export Mesh**: Qt5 dialogs with settings persistence (`AppData/Roaming/Radia/export_settings.json`)
+- **Export Mesh**: PySide6 dialogs with settings persistence (`AppData/Roaming/Radia/export_settings.json`)
 - **Solve**: Python subprocess to external Python 3.12 (Cubit embeds Python 3.10)
 - **Generate Coil**: Calls `coil` APREPRO command via file dialog
 
