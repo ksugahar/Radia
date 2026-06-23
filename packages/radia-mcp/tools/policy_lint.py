@@ -7,7 +7,10 @@ Two complementary guards live here:
 A. STRUCTURE guard (``check_packaging``): MCP servers that TARGET / WRAP a
    commercial tool (COMSOL / FEMM / JMAG) must NOT be published -- regardless of
    who wrote the code. "It's my own code" is not an exemption. Catches a wrapper
-   wired into ``[project.scripts]`` or shipped in the wheel.
+   wired into ``[project.scripts]`` or shipped in the wheel. It also keeps
+   Optuna study/trial operation external to radia-mcp: use the official public
+   ``optuna/optuna-mcp`` server, while radia-mcp keeps CAE objectives, design
+   spaces, and analysis helpers.
 
 B. PROVENANCE guard (``scan_text_tree``): public artifacts must NOT attribute
    verification to commercial / licensed tools, and must not leak internal
@@ -69,6 +72,12 @@ REVIEW = {
 # "JMAG-Designer", "COMSOL multilingual RAG") that pervade an open, FEMM-parity
 # tool -- those are allowed; only their content / models / bench numbers are not.
 COMMERCIAL_NAME_RE = re.compile(r"(comsol|jmag|cst_)", re.IGNORECASE)
+OPTUNA_EXTERNAL_DEPS = {"optuna", "optuna-mcp", "optuna-dashboard"}
+
+
+def _requirement_name(req: str) -> str:
+    """Return normalized distribution name from a PEP 508-ish requirement."""
+    return re.split(r"[\[<>=!~;\s]", req, 1)[0].strip().lower().replace("_", "-")
 
 
 def _subpackage_of(target: str) -> str | None:
@@ -96,6 +105,8 @@ def check_packaging(root: Path) -> tuple[list[str], list[str]]:
         cfg = tomllib.load(f)
 
     scripts = cfg.get("project", {}).get("scripts", {})
+    deps = cfg.get("project", {}).get("dependencies", [])
+    optional_deps = cfg.get("project", {}).get("optional-dependencies", {})
     find = cfg.get("tool", {}).get("setuptools", {}).get("packages", {}).get("find", {})
     excludes = find.get("exclude", [])
 
@@ -113,6 +124,30 @@ def check_packaging(root: Path) -> tuple[list[str], list[str]]:
             warns.append(
                 f"[scripts] '{name}' exposes REVIEW subpackage '{sub}' "
                 f"(contains commercial content -- confirm it may be public).")
+        if "optuna" in name.lower() or sub == "optuna":
+            errors.append(
+                f"[scripts] '{name} = {target}' publishes Optuna operation from "
+                "radia-mcp. Use the official external optuna/optuna-mcp server "
+                "instead; keep CAE objectives/design spaces in radia-mcp.")
+
+    # 1b) radia-mcp must not depend on Optuna runtime packages; users install
+    #     optuna-mcp separately when they need Study/Trial/Dashboard operation.
+    reqs: list[tuple[str, str]] = [("project.dependencies", r) for r in deps]
+    for group, values in optional_deps.items():
+        reqs.extend((f"project.optional-dependencies.{group}", r) for r in values)
+    for group, req in reqs:
+        if _requirement_name(req) in OPTUNA_EXTERNAL_DEPS:
+            errors.append(
+                f"[dependencies] {group} contains '{req}'. Optuna runtime/MCP "
+                "packages are external to radia-mcp; install optuna-mcp "
+                "separately.")
+
+    # 1c) the old in-package radia_mcp.optuna server must not return.
+    if (src / "optuna").is_dir():
+        errors.append(
+            "[source] radia_mcp.optuna exists in the public source tree. "
+            "Optuna Study/Trial operation belongs to the external "
+            "optuna/optuna-mcp package.")
 
     # 2) wrapper subpackages must be excluded from the wheel (packages.find)
     for sub in sorted(HARD_DENY):
