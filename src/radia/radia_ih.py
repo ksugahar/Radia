@@ -1138,7 +1138,7 @@ class IHPanel(ModePanel):
     def _on_wp_vol_changed_text(self, _text):
         """Re-inspect the workpiece .vol labels after the user edits the
         wp_vol field (Browse... or manual edit).  Mirrors the legacy
-        IHWindow._on_vol_changed wiring against the panel-owned widget.
+        window-level .vol hook against the panel-owned widget.
         """
         path = self.val("wp_vol")
         # Reset label cache on empty path (e.g. user cleared the field).
@@ -1217,6 +1217,8 @@ class IHPanel(ModePanel):
     # CLI-DIFF: ignore --output -- auto-injected by calc_main wrapper
     # (calc_common.py:1173-1177).  Static scanners flag this as REJECT
     # for every builder, but the flag IS accepted at runtime.
+    # CLI-DIFF: ignore --bh-file --esim-anderson-m --esim-max-iter --esim-per-panel --esim-relax --esim-tol --h1-order --half-thickness --impedance-model --mu-r --sigma --vol --wp-label --wp-bem-backend -- coil-only mode shares calc_inductance.py but intentionally omits workpiece and ESIM flags.
+    # CLI-DIFF: ignore --coil-aca-eps --coil-gmres-tol --coil-maxh --coil-msh-output --coil-only --coil-rwg-quad-degree --coil-rwg-singular-nq --coil-saddle-solver --coupling-mode --n-threads --peec-proximity --peec-proximity-max-iter --peec-proximity-relax --peec-proximity-tol --telegen-form --wp-aca-eps --wp-gmres-tol --write-summary -- expert/diagnostic calc_inductance.py knobs are deliberately CLI-only in the production IH panel.
 
     def _build_peec_inductance_command(self):
         """Coil-only inductance (vacuum, no workpiece).
