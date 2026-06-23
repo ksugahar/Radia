@@ -379,6 +379,39 @@ def rectangular_cavity_frequency(a, b, d, m, n, p):
     return 0.5 * C0 * math.sqrt((m / a) ** 2 + (n / b) ** 2 + (p / d) ** 2)
 
 
+def cylindrical_cavity_frequency(radius, length, mode, m, n, p):
+    """Exact resonant FREQUENCY [Hz] of a cylindrical metallic CAVITY.
+
+    For a closed PEC cylinder of radius ``a`` and length ``L``:
+
+        TM_mnp: k_r = j_mn/a       (zeros of J_m)
+        TE_mnp: k_r = j'_mn/a      (zeros of J'_m)
+        f = c/(2*pi) * sqrt(k_r^2 + (p*pi/L)^2)
+
+    ``m`` is the azimuthal index, ``n`` the radial root index, and ``p`` the axial
+    half-wave index.  The familiar pillbox accelerator mode TM010 is ``mode='TM',
+    m=0, n=1, p=0``: it is independent of cavity length and equals the circular
+    waveguide TM01 cutoff.  More generally, ``p=0`` cylindrical-cavity frequencies
+    reduce to the corresponding circular-waveguide cutoffs; ``p>0`` adds the
+    standing-wave term along the closed cavity axis.
+    """
+    if radius <= 0.0 or length <= 0.0:
+        raise ValueError("radius and length must be positive")
+    if m < 0 or n < 1 or p < 0:
+        raise ValueError("indices require m>=0, n>=1, p>=0")
+    from scipy.special import jn_zeros, jnp_zeros
+    mm, nn, pp = int(m), int(n), int(p)
+    md = str(mode).upper()
+    if md == "TM":
+        kr = jn_zeros(mm, nn)[nn - 1] / radius
+    elif md == "TE":
+        kr = jnp_zeros(mm, nn)[nn - 1] / radius
+    else:
+        raise ValueError("mode must be 'TE' or 'TM'")
+    kz = pp * math.pi / length
+    return C0 * math.hypot(kr, kz) / (2.0 * math.pi)
+
+
 def maxwell_cavity_modes_3d(mesh, n_modes, shift, order=2, pec="pec"):
     """Lowest resonant frequencies [Hz] of a 3-D PEC cavity by the FULL-WAVE MAXWELL eigenproblem
 
