@@ -128,9 +128,9 @@ register_status_tool(
                 'psi, regularisation / folded-Tikhonov Pareto front, '
                 'single-stroke chain, sheet-metal (板金) levers',
     subpackage='radia_mcp.streamfunction',
-    related_servers=["radia-ngsolve", "optuna", "nmr-mri", "electromagnet",
-                     "peec"],
-    optional_deps=["radia", "ngsolve", "optuna"],
+    related_servers=["radia-ngsolve", "bayesian-opt", "nmr-mri",
+                     "electromagnet", "peec"],
+    optional_deps=["radia", "ngsolve"],
 )
 
 register_topics_tool(

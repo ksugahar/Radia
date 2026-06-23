@@ -208,9 +208,8 @@ Use Optuna's CmaEsSampler (do NOT re-implement CMA-ES):
                                               # evaluates the field, returns scalar
 
 CMA-ES is for continuous, mid-dimension (10-300) BBO; cast int/categorical with
-care.  See the optuna_* MCP tools (optuna_algorithm topic="samplers",
-optuna_recipes_advanced) for sampler choice, multi-objective (NSGA-II),
-pruning, and lab BBO recipes.
+care.  Use official `optuna/optuna-mcp` or plain Optuna APIs for sampler
+choice, multi-objective (NSGA-II), pruning, and lab BBO recipes.
 
 Example: examples/stream_function/demo_cmaes_magnet_design.py optimises 16
 magnetization angles for a uniform transverse field (16-D CMA-ES, ~3x objective

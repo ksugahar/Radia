@@ -19,7 +19,7 @@ Migration order recommended (highest pain first):
   1. ih  — historical r-string bug example
   2. ih.sibc — also hit
   3. peec.hoibc — also hit
-  4. optuna / bayesian_opt — preventive
+  4. bayesian_opt / evolutionary — preventive
 
 Migration mechanics:
   - Extract one constant `FOO_BAR = r\"\"\"...\"\"\"` into

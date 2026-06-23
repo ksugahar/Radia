@@ -1,7 +1,7 @@
 """
 MCP Server: radia_mcp.meta
 
-Cross-server catalog + health check for the 36-server radia_mcp
+Cross-server catalog + health check for the radia_mcp
 ecosystem. Use this server as the FIRST stop when you don't know
 which other server to call.
 
@@ -58,7 +58,7 @@ def radia_mcp_overview() -> dict:
 
 @mcp.tool()
 def radia_mcp_get(name: str) -> dict:
-    """Look up one server by short name (e.g. 'optuna', 'ih', 'kelvin')."""
+    """Look up one server by short name (e.g. 'bayesian-opt', 'ih', 'kelvin')."""
     info = catalog.get(name)
     if info is None:
         return {
@@ -85,8 +85,8 @@ def radia_mcp_by_tag(tag: str) -> dict:
 
 @mcp.tool()
 def radia_mcp_related(name: str) -> dict:
-    """Servers that pair well with `name` (e.g. radia_mcp_related('optuna')
-    returns optuna + bayesian-opt + topology-optimization)."""
+    """Servers that pair well with `name` (e.g. radia_mcp_related('bayesian-opt')
+    returns evolutionary + topology-optimization + related ML servers)."""
     related = catalog.find_related(name)
     return {
         "name": name,
@@ -232,8 +232,8 @@ def main():
         opt = radia_mcp_by_tag("optimization")
         print(f"  servers tagged 'optimization': {opt['n_matches']}")
         # Related query
-        rel = radia_mcp_related("optuna")
-        print(f"  related to optuna: {[r['name'] for r in rel['related']]}")
+        rel = radia_mcp_related("bayesian-opt")
+        print(f"  related to bayesian-opt: {[r['name'] for r in rel['related']]}")
         print("  PASSED")
         return
 

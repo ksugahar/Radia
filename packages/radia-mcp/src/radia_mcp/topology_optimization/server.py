@@ -81,8 +81,8 @@ def topology_opt_applications(topic: str = "all") -> str:
                  non-closed-form / manufacturable-bounds case: Nelder-Mead
                  direct search + the fminsearchbnd bound-by-transformation
                  trick (Sugahara Lab MATLAB optimizer toolbox), verified on
-                 Rosenbrock; pointer to the `evolutionary` / `optuna` servers
-                 for population / global search.
+                 Rosenbrock; pointer to the `evolutionary` and
+                 `bayesian-opt` servers for population / global search.
     """
     return get_applications_documentation(topic)
 
@@ -94,7 +94,7 @@ register_status_tool(
     server_name='mcp-server-topology-optimization',
     description='Topology optimization: SIMP, level set, ON/OFF, MMA, Wakao autoencoder+LS SynRM',
     subpackage='radia_mcp.topology_optimization',
-    related_servers=["motor", "optuna", "evolutionary"],
+    related_servers=["motor", "bayesian-opt", "evolutionary"],
     optional_deps=["scipy"],
 )
 
