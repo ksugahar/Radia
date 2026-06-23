@@ -1,7 +1,7 @@
-"""The demag-backend API: BOTH yano-type MSC and the FEEC HDiv-VIM are kept (decision 2026-06-19).
+"""The demag-backend API: BOTH moment-yano MSC and the FEEC HDiv-VIM are kept.
 
-Default is "auto" (API-split): mesh-LESS hex/wedge soft iron (ObjHexahedron/ObjWedge + MatLin) is
-solved by the yano-type collocation MSC demag; mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
+Default is "auto" (API-split): mesh-LESS hex/wedge/pyramid soft iron is
+solved by the moment-yano MSC demag; mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
 is solved by the FEEC HDiv-VIM.  set_demag_backend("yano"|"hdiv") overrides; "auto"/None restores the
 split.  Tet (MMM) and permanent-magnet solves are unaffected.  The mesh-backed HDiv routing is locked
 by tests/feec/test_hdiv_radsolve_dispatch.py."""
@@ -41,7 +41,7 @@ def test_solverconfig_both_ok():
 
 
 def test_meshless_hex_soft_iron_solves_via_yano():
-    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin) is solved by the yano-type MSC
+    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin) is solved by the moment-yano MSC
     demag (no NGSolve needed).  A cube in a uniform applied Hz magnetizes with demag ~1/3, so for
     mu_r=1000 the magnetization M_z ~ H0/(1/3) = 3*H0.  This locks that the yano path is REACHABLE
     (no Error203) and physical."""

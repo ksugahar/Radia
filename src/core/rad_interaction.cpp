@@ -245,9 +245,10 @@ radTInteraction::~radTInteraction()
 
 bool radTInteraction::HasSurfaceChargeElements() const
 {
-	// True if any relaxable element is a collocation surface-charge (Use6DOF_MSC) polyhedron --
-	// a soft-iron hexahedron (6 faces) or wedge (5 faces).  The yano-type MSC demag for these is
-	// removed; the soft iron must go through the FEEC HDiv-VIM (radia.vim.soft_iron_from_mesh).
+	// True if any relaxable element is a surface-charge (Use6DOF_MSC) polyhedron --
+	// a soft-iron hexahedron (6 faces) or wedge/pyramid (5 faces).  These are solved by
+	// the canonical moment-yano path in C++ unless the Python wrapper routes a mesh-backed
+	// soft iron to FEEC HDiv-VIM.
 	for(int i = 0; i < AmOfMainElem; i++)
 	{
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[i]);
@@ -947,7 +948,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// EIEM2 retirement (Phase 3b): the dense MSC (surface-charge) interaction blocks are no longer
 	// assembled.  After the fail-loud guards in MakeAutoRelax (mixed MMM+MSC and B-input-on-MSC are
 	// rejected), the ONLY path that reaches here with an MSC element (DOF>=5) is a pure surface-charge
-	// (hex / wedge) model solved by the parameter-free moment-yano formulation.  That path assembles its
+	// (hex / wedge / pyramid) model solved by the parameter-free moment-yano formulation.  That path assembles its
 	// own system (BuildMomentSystemCore, on-the-fly geometry via momentFaceGeom) and NEVER reads this
 	// dense interaction matrix -- it is identical to the method-2 path, which runs with no dense matrix at
 	// all (Phase 2 Increment 4).  So leave the MSC blocks zero (the matrix is already zero-initialized) and
@@ -1115,7 +1116,7 @@ void radTInteraction::SetupExternFieldArray()
 				m_flatExternFieldArray[offset + 1] += H_ext.y;
 				m_flatExternFieldArray[offset + 2] += H_ext.z;
 			}
-			// MSC (hex/wedge): no per-face external field -- the moment-yano solve samples ExternFieldArray (centroid).
+			// MSC (hex/wedge/pyramid): no per-face external field -- the moment-yano solve samples ExternFieldArray (centroid).
 		}
 	}
 	//g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
@@ -1901,13 +1902,10 @@ void radTInteraction::PrecomputeHexaGeometry()
 //=========================================================================
 // BuildLoopBasis: cell-graph cycle (loop) basis of the yano-MSC operator.
 //
-// The loops are the field-null subspace of the surface-charge collocation
-// operator N (== the HDiv ker(B) cell/internal-face cycle space).  They sit at
-// eigenvalue 1/chi in the system A = (1/chi) I - N, so cond(A) ~ mu_r and the
-// BiCGSTAB iteration count grows at high mu_r.  Deflating this basis (Stage 2)
-// makes the iteration count bounded and mu_r-independent (verified on the exact
-// C++ operator in examples/vim/yano_loop_removal_scaling.py; cf. the lab
-// loop-free collocation study, Yano & Sugahara 2023).
+// The loops are the field-null subspace of the retired EIEM2 surface-charge
+// collocation operator N (== the HDiv ker(B) cell/internal-face cycle space).
+// Runtime deflation/gauge machinery was removed; the basis remains as a
+// historical geometry probe and for comparisons with the loop-free HDiv-VIM.
 //
 // Construction is geometry-only (no dense SVD): match internal faces by
 // coincident face centers -> cell-adjacency graph -> spanning forest ->
@@ -2294,7 +2292,7 @@ void radTInteraction::CollectMomentElems(std::vector<int>& out) const
 }
 
 //=========================================================================
-// BuildCentroidFieldGrad: per-hex demag field H and gradient gradH at the element CENTROID, as linear
+// BuildCentroidFieldGrad: per moment element demag field H and gradient gradH at the element CENTROID, as linear
 // functionals of each source DOF charge -- the kernel of the parameter-free moment formulation (the fix
 // for the eval-point alpha + the finite-difference conditioning noise; validated in
 // examples/vim/yano_moment_analytic_selfterm.py).
@@ -2305,16 +2303,16 @@ void radTInteraction::CollectMomentElems(std::vector<int>& out) const
 //     per-face center charge is REQUIRED (without it a regular grid develops a charge-free dipole-free
 //     quadrupole near-null mode); the source center is at finite distance from this centroid -> finite.
 //     Excluding it for SELF is exactly where it would be singular -> the kernel is singularity-free.
-// Output Cflat ROW-MAJOR (nHex x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
+// Output Cflat ROW-MAJOR (nMom x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
 // -> Cflat[(h*9+k)*m_totalDOF + g].  Field convention H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.
 //=========================================================================
 
 void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const
 {
 	const int NK = 9;
-	std::vector<int> melem; CollectMomentElems(melem);   // hex (6) + wedge (5), e-ordered
+	std::vector<int> melem; CollectMomentElems(melem);   // hex (6) + wedge/pyramid (5), e-ordered
 	int nMom = (int)melem.size();
-	nHexOut = nMom;                                       // = moment-element count (hex+wedge)
+	nHexOut = nMom;                                       // historical name; = moment-element count (hex+wedge+pyramid)
 	Cflat.assign((size_t)nMom * NK * m_totalDOF, 0.0);
 	if(nMom == 0 || m_totalDOF == 0) return;
 
@@ -2373,16 +2371,16 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 
 //=========================================================================
 // BuildMomentSystemCore: the parameter-free MOMENT-yano system matrix A and RHS for PER-ELEMENT linear
-// susceptibility chiPerHex[h] in a PER-ELEMENT external field HextPerHex[h*3+k] (at the hex centroid) -- the
+// susceptibility chiPerHex[h] in a PER-ELEMENT external field HextPerHex[h*3+k] (at the element centroid) -- the
 // C++ port of examples/vim/yano_moment_iter_scaling.py::build, generalized for the solve (coil/source fields
-// are not uniform).  Per hex element (6 face-charge DOF sigma):
+// are not uniform).  Per moment element (hex 6 DOF, wedge/pyramid 5 DOF):
 //   3 dipole rows : (local dipole moment of sigma)/Ve - chi*H_k(centroid) . sigma = chi*Hext_k
 //   1 monopole row: sum_f area_f sigma_f = 0                       (= div B = 0)
 //   2 quad rows   : (local diagonal-quadrupole moment of sigma) - chi*(Dvec . gradH(centroid)) . sigma = 0
 // Global field/grad functionals H,gradH(centroid) come from BuildCentroidFieldGrad; the local geometric
-// moments (face center fc, outward normal n, area, d=fc-centroid, volume Ve) from the hex geometry.  Each
+// moments (face center fc, outward normal n, area, d=fc-centroid, volume Ve) from the element geometry.  Each
 // row is 2-norm normalized.  A is ROW-MAJOR (dof x dof); rhs length dof.  The column index of A is the face
-// DOF, so dgesv's solution is sigma in DOF order (drop-in for the EIEM2 LU write-back).  HEX-ONLY.
+// DOF, so dgesv's solution is sigma in DOF order (drop-in for the retired EIEM2 LU write-back).
 // The uniform BuildMomentSystem(chi,Happ,...) wrapper below broadcasts a scalar chi + uniform Happ.
 //=========================================================================
 void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex,
@@ -2390,7 +2388,7 @@ void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const doubl
 {
 	std::vector<double> Cflat; int nMom = 0;
 	BuildCentroidFieldGrad(Cflat, nMom);                 // (nMom x 9 x dof): H[3], gradH[6] per moment elem
-	std::vector<int> melem; CollectMomentElems(melem);   // SAME hex(6)+wedge(5) e-order as Cflat
+	std::vector<int> melem; CollectMomentElems(melem);   // SAME hex(6)+wedge/pyramid(5) e-order as Cflat
 	const int dof = m_totalDOF;
 	A.assign((size_t)dof * dof, 0.0);
 	rhs.assign(dof, 0.0);
@@ -2484,12 +2482,12 @@ void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const doubl
 	}
 }
 
-// Uniform-field wrapper: broadcast a scalar chi + uniform applied field Happ to every hex (verification path
-// + uniform-source linear solves).  See BuildMomentSystemCore.
+// Uniform-field wrapper: broadcast a scalar chi + uniform applied field Happ to every moment element
+// (verification path + uniform-source linear solves).  See BuildMomentSystemCore.
 void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
                                         std::vector<double>& A, std::vector<double>& rhs) const
 {
-	std::vector<int> melem; CollectMomentElems(melem);   // hex(6)+wedge(5), matches BuildMomentSystemCore order
+	std::vector<int> melem; CollectMomentElems(melem);   // hex(6)+wedge/pyramid(5), matches BuildMomentSystemCore order
 	int nMom = (int)melem.size();
 	if(nMom <= 0) { A.clear(); rhs.assign(m_totalDOF, 0.0); return; }
 	std::vector<double> chiv((size_t)nMom, chi), Hv((size_t)nMom*3);
