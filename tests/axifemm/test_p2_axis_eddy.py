@@ -28,7 +28,7 @@ if _SRC not in sys.path:
 import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import eigh
-from ngsolve import BilinearForm, CoefficientFunction as CF, Mesh
+from ngsolve import BilinearForm, CoefficientFunction as CF, Mesh, TaskManager
 from netgen.occ import OCCGeometry, WorkPlane, MoveTo, X
 from radia.axifem import (H1Henrotte, AxiHenrotteStiffnessBFI,
                           AxiHenrotteSigmaMassBFI)
@@ -48,8 +48,13 @@ def _sphere_meridian_mesh(h):
 
 
 def _assemble(fes):
-    aK = BilinearForm(fes, symmetric=True); aK += AxiHenrotteStiffnessBFI(CF(1.0)); aK.Assemble()
-    aM = BilinearForm(fes, symmetric=True); aM += AxiHenrotteSigmaMassBFI(CF(1.0)); aM.Assemble()
+    aK = BilinearForm(fes, symmetric=True)
+    aK += AxiHenrotteStiffnessBFI(CF(1.0))
+    aM = BilinearForm(fes, symmetric=True)
+    aM += AxiHenrotteSigmaMassBFI(CF(1.0))
+    with TaskManager():
+        aK.Assemble()
+        aM.Assemble()
     n = fes.ndof
     free = np.array([i for i in range(n) if fes.FreeDofs()[i]], dtype=int)
 
