@@ -2,11 +2,14 @@
 radia-core axifem knowledge base for the Radia + NGSolve MCP server.
 
 `radia.axifem` in radia-core is an NGSolve add-on (registered FESpace
-`axihenrotte`) that adds a Henrotte axisymmetric Q-element family which
+`axihenrotte`) that adds a Henrotte axisymmetric finite-element family which
 NGSolve does not ship out of the box: polynomial basis in `s = r²` (not `r`)
-representing the flux function `ψ = 2π r A_φ` (not `A_φ` itself). On the
-Cu-disk eddy-current benchmark the `p=2` Q-element matches BEM-Foster to
-0.27 % with ~6× fewer DOFs than NGSolve `H1 order=3`.
+representing the flux function `ψ = 2π r A_φ` (not `A_φ` itself). It ships
+P1/P2 triangles and Q1/Q2 axis-aligned quads. P2 triangles are curved-mesh
+aware via `mesh.Curve(2)`; true curved Q2 quads remain a Python prototype, not
+the production C++ path. On the Cu-disk eddy-current benchmark the `p=2`
+Q-element matches BEM-Foster to 0.27 % with ~6× fewer DOFs than NGSolve
+`H1 order=3`.
 
 Read this when:
 * Setting up an axisymmetric eddy-current / magnetostatic FEM problem with
@@ -18,12 +21,12 @@ Read this when:
   weak form integrated in closed form rather than by Gauss quadrature.
 
 The MCP server exposes this via axifemm_documentation(topic=...). Topics:
-overview, api, basis_p1, basis_p2, vs_standard_h1, validation, kelvin,
-file_layout, why_dropped_p3.
+overview, support_matrix, api, basis_p1, basis_p2, curved_geometry,
+vs_standard_h1, validation, kelvin, file_layout, why_dropped_p3.
 """
 
 AXIFEMM_OVERVIEW = """\
-# radia-core axifem — Henrotte Axisymmetric Q-Element FE for NGSolve
+# radia-core axifem — Henrotte Axisymmetric FE for NGSolve
 
 ## Status
 
@@ -33,9 +36,10 @@ AXIFEMM_OVERVIEW = """\
 | `p=2` Q-element | 9 (4 vertex + 4 edge + 1 face) | 223.69 µs (0.27 %, ~6× fewer DOFs than `p=1` for higher accuracy) |
 | `p=3` Q-element | dropped — raw-monomial Vandermonde cond ≈ 10³⁰ exceeds double precision; would require shifted-Legendre basis to ship safely. Not on the roadmap. |
 
-There is also a `p=1` triangle path (3 DOFs, a direct C++ axisymmetric
-port) that matches a stored axisymmetric-magnet reference to 0.1 % on an
-NMR-style benchmark.
+The same FESpace also supports P1/P2 triangles.  The P2 triangle path is
+curved-mesh aware after `mesh.Curve(2)` and is the production choice for
+curved OCC/Kelvin boundaries.  The Q2 quad path is straight and axis-aligned;
+true curved Q2 quads are not production C++.
 
 ## Key idea (why this is "an NGSolve feature NGSolve does not have")
 
@@ -67,6 +71,29 @@ polynomial in `s = r²`, no representation of `ψ` rather than `A_φ`).
 `radia-core`'s `radia.axifem` module adds it via the public NGSolve add-on
 pattern (custom `FESpace`, `DiffOp`, and `BilinearFormIntegrator`s), without
 modifying NGSolve itself.
+"""
+
+AXIFEMM_SUPPORT_MATRIX = """\
+# Implementation support matrix
+
+| Mesh element | API order | Geometry support | Local DOFs | Status |
+|--------------|-----------|------------------|------------|--------|
+| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; FEMM `prob3big.cpp` direct port |
+| Triangle P2 | `order=2` | straight or `mesh.Curve(2)` curved triangle | 3 vertex + 3 edge | shipping; NGSolve element transformation supplies the curved mid-edge coordinates |
+| Quad Q1 | `order=1` | straight axis-aligned rectangle in `(r, z)` | 4 vertex | shipping; closed-form matrices |
+| Quad Q2 | `order=2` | straight axis-aligned rectangle in `(r, z)` | 4 vertex + 4 edge + 1 face | shipping; closed-form matrices with the `s`-midpoint convention |
+| Quad Q2 curved | n/a | true 9-node biquadratic curved quad | 9 | Python prototype only; not wired into `AxiHenrotteFESpace` |
+
+Dispatch rule:
+`H1Henrotte(mesh, order=1)` returns P1 triangles or Q1 quads by mesh element
+type.  `H1Henrotte(mesh, order=2)` returns P2 triangles or Q2 quads by mesh
+element type.
+
+Important boundary:
+Calling `mesh.Curve(2)` on a triangular OCC mesh is supported by the P2
+triangle path.  Calling `mesh.Curve(2)` on a quadrilateral mesh does not turn
+the shipped Q2 quad into a curved Q2 quad; the C++ Q2 quad reads only the four
+corner coordinates and assumes an axis-aligned rectangle.
 """
 
 AXIFEMM_API = """\
@@ -102,9 +129,12 @@ exported.
 
 ## Constraints
 
-* **Mesh:** axis-aligned quadrilaterals only for `p=2` (the basis is
-  polynomial in `s = r²` and `z` on `[s_a, s_b] × [z_a, z_b]`).  P1 triangle
-  fallback exists at `p=1` for unstructured triangle meshes.
+* **Mesh dispatch:** `order=1` supports P1 triangles and Q1 axis-aligned
+  quads. `order=2` supports P2 triangles and Q2 axis-aligned quads.  P2
+  triangles are curved-mesh aware after `mesh.Curve(2)`.
+* **Q2 quad geometry:** the production Q2 quad is straight and axis-aligned.
+  True curved Q2 quads are not wired into C++; use P2 curved triangles for
+  curved boundaries.
 * **Dirichlet:** users MUST set `dirichlet="axis|..."` for any axis-touching
   geometry. The axis-restricted basis already produces zero rows / columns
   on the axis-side DOFs, so without an explicit Dirichlet flag the global
@@ -115,7 +145,22 @@ exported.
 """
 
 AXIFEMM_BASIS_P1 = """\
-# `p=1` Q-element (4 DOFs / quad)
+# `order=1`: P1 triangle and Q1 quad
+
+## Triangle P1 (3 DOFs / triangle)
+
+Basis on each triangle:
+
+```
+{1, s, z},  s = r²
+```
+
+DOFs are the 3 vertices.  This is the FEMM `prob3big.cpp`
+`StaticAxisymmetric()` direct-port path and is useful for unstructured
+triangle meshes.  Axis-touching cases use the same special-case formulas as
+FEMM.
+
+## Q1 quad (4 DOFs / axis-aligned quad)
 
 Shape monomials in `(s = r², z)`:
 
@@ -136,7 +181,26 @@ mesh).
 """
 
 AXIFEMM_BASIS_P2 = """\
-# `p=2` Q-element (9 DOFs / quad)
+# `order=2`: P2 triangle and Q2 quad
+
+## Triangle P2 (6 DOFs / triangle)
+
+Basis on each triangle:
+
+```
+{1, s, z, s², s·z, z²},  s = r²
+```
+
+DOFs are 3 vertices + 3 edge midnodes.  The production C++ FESpace obtains all
+6 physical node coordinates through NGSolve's element transformation:
+
+* straight mesh: edge nodes are chord midpoints;
+* after `mesh.Curve(2)`: edge nodes follow the curved geometry.
+
+The stiffness and sigma-mass BFIs use the same 6-node geometric map at each
+Duffy-Gauss quadrature point, so **P2 curved triangles are shipped**.
+
+## Q2 quad (9 DOFs / straight axis-aligned quad)
 
 Shape monomials in `(s = r², z)`:
 
@@ -204,6 +268,50 @@ M_V = T · V⁻ᵀ · M_sigma_phi · V⁻¹ · T
 
 with `V⁻¹` the (cached) per-element inverse Vandermonde of the
 monomial basis at the 9 nodes (6 for axis case).
+
+## What is not shipped
+
+A true curved Q2 quad is not part of the production C++ implementation.  The
+prototype lives at
+`examples/maglev/research_cln/axifemm/axifemm_quad_q2_curved.py`; the shipped
+Q2 path is `AxiHenrotteFE_Q2_AxisAligned` and reads only the four corner
+coordinates.
+"""
+
+AXIFEMM_CURVED_GEOMETRY = """\
+# Curved-geometry support
+
+## Production
+
+**P2 triangles are curved-mesh aware.**  When the user calls `mesh.Curve(2)` on
+an OCC/Netgen triangular mesh, NGSolve's element transformation returns the
+curved mid-edge coordinates. `AxiHenrotteFESpace::GetFE` samples those 6 node
+positions and constructs `AxiHenrotteFE_P2_Triangle`; the magnetic BFIs then
+integrate over the same 6-node map.
+
+Use this for:
+* spheres and spheroids in 2D axisymmetric cross-section,
+* z-offset Kelvin half-discs,
+* any OCC-generated curved boundary where a triangular mesh is natural.
+
+## Production but straight only
+
+**Q1/Q2 quads are axis-aligned straight rectangles.**  They are the fast
+closed-form path for structured disks, cylinders, and rectangular workpieces.
+The Q2 edge midnodes use the `s`-midpoint convention:
+
+```
+s_m = (s_a + s_b) / 2
+r_m = sqrt((r_a^2 + r_b^2) / 2)
+```
+
+## Prototype only
+
+**Curved Q2 quads are not production C++.**  The Python prototype
+`examples/maglev/research_cln/axifemm/axifemm_quad_q2_curved.py` verifies the
+element-level idea, but `AxiHenrotteFESpace` does not dispatch to it.  Do not
+document or depend on `mesh.Curve(2)` turning a quad mesh into a curved Q2
+Henrotte quad.
 """
 
 AXIFEMM_VS_STANDARD_H1 = """\
@@ -453,7 +561,7 @@ scripts/tests moved into the repo tree.)
 
 ```
 src/ext/axifemm/                          # C++ source (built into the radia wheel)
-  axi_henrotte_fe.{hpp,cpp}               # Q1, Q2 quad + P1 triangle FE classes
+  axi_henrotte_fe.{hpp,cpp}               # P1/P2 triangle + Q1/Q2 quad FE classes
   axi_henrotte_fespace.{hpp,cpp}          # FESpace with order=1 / order=2 dispatch
   axi_henrotte_diffop.hpp                 # DifferentialOperators (value, gradient)
   axi_henrotte_integrators.{hpp,cpp}      # closed-form K and σ-mass BFI
@@ -470,6 +578,7 @@ examples/axifemm/research/verification/   # standalone __main__ verification scr
   test_q2_assembly_diag.py                # 2-quad assembly diagnostic
 tests/axifemm/                            # pytest golden tests (CI-collected)
   test_element_matrices.py, test_heat_*.py, test_python_reference_consistency.py
+                                            # Q1 reference + P2 curved smoke
 ```
 
 The Mathematica derivation lives upstream at
@@ -609,20 +718,21 @@ overload, but the centroid path already hits machine precision on the
 sphere benchmark, so this is low priority.
 
 ### `Curve(2)` trade-off
-NGSolve `mesh.Curve(2)` on the spherical conductor boundary improves
-geometric accuracy 30× on coarse meshes (gap 0.867 % → 0.028 % on a
-typical mesh), but on a *finer* mesh `Curve(2)` actually slightly
-*increases* the gap (0.001 % straight → 0.028 % curved) because the
-biquadratic Lagrange in (r, z) — not (s, z) — does not match the
-Henrotte basis's even-power-of-r structure on curved edges. Use
-`Curve(0)` (= straight edges, default) for sphere/disk benchmarks at
-typical mesh resolution; reserve `Curve(2)` for coarse-mesh production
-runs where the geometric error dominates the FE-basis error.
+NGSolve `mesh.Curve(2)` on a triangular spherical conductor boundary engages
+the shipped **P2 triangle curved** path.  It improves geometric accuracy 30×
+on coarse meshes (gap 0.867 % → 0.028 % on a typical mesh), but on a *finer*
+mesh `Curve(2)` can slightly *increase* the gap (0.001 % straight → 0.028 %
+curved) because the biquadratic Lagrange geometric map in `(r, z)` does not
+match the Henrotte basis's even-power-of-r structure exactly. Use `Curve(0)`
+(= straight edges, default) for sphere/disk benchmarks at typical mesh
+resolution; reserve `Curve(2)` for coarse-mesh production runs where the
+geometric error dominates the FE-basis error.
 
-A proper curved Q2 element (basis space still in even powers of r, but
-on a biquadratic isoparametric mapping) is Phase B5 work — currently a
-Python prototype at
-`examples/CLN/scripts/axifemm/axifemm_quad_q2_curved.py`, C++ port deferred.
+A true **curved Q2 quad** element (basis space still in even powers of r, but
+on a biquadratic isoparametric mapping) is not production C++.  It is currently
+a Python prototype at
+`examples/maglev/research_cln/axifemm/axifemm_quad_q2_curved.py`; the shipped
+Q2 quad path remains straight and axis-aligned.
 
 ### Geometry pre-requisites for `add_kelvin_2d_axisym`
 Before calling the helper, the user-built interior must have:
@@ -783,9 +893,11 @@ def get_axifemm_documentation(topic: str = "all") -> str:
     Topics:
       "all"             - All sections concatenated
       "overview"        - What it is and why NGSolve doesn't already have it
+      "support_matrix"  - Exact implementation status for P1/P2/P2 curved/Q1/Q2/Q2 curved
       "api"             - FESpace("axihenrotte", mesh, order=k) canonical usage
-      "basis_p1"        - `p=1` Q-element (4 DOFs) basis details
-      "basis_p2"        - `p=2` Q-element (9 DOFs) basis details + s-midpoint convention
+      "basis_p1"        - order=1 P1 triangle + Q1 quad basis details
+      "basis_p2"        - order=2 P2 triangle + Q2 quad basis details
+      "curved_geometry" - P2 curved triangle shipped; Q2 curved quad prototype-only
       "vs_standard_h1"  - 6-property table comparing axihenrotte p=2 vs NGSolve H1 order=2
       "validation"      - Cross-validation references and Hessian-of-W convention
       "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
@@ -798,9 +910,11 @@ def get_axifemm_documentation(topic: str = "all") -> str:
     """
     sections = {
         "overview":       AXIFEMM_OVERVIEW,
+        "support_matrix": AXIFEMM_SUPPORT_MATRIX,
         "api":            AXIFEMM_API,
         "basis_p1":       AXIFEMM_BASIS_P1,
         "basis_p2":       AXIFEMM_BASIS_P2,
+        "curved_geometry": AXIFEMM_CURVED_GEOMETRY,
         "vs_standard_h1": AXIFEMM_VS_STANDARD_H1,
         "validation":     AXIFEMM_VALIDATION,
         "kelvin":         AXIFEMM_KELVIN,
@@ -810,7 +924,8 @@ def get_axifemm_documentation(topic: str = "all") -> str:
     }
     if topic == "all":
         return "\n\n".join(sections[k] for k in [
-            "overview", "api", "basis_p1", "basis_p2",
+            "overview", "support_matrix", "api", "basis_p1", "basis_p2",
+            "curved_geometry",
             "vs_standard_h1", "validation", "kelvin", "magnet",
             "file_layout", "why_dropped_p3"
         ])
