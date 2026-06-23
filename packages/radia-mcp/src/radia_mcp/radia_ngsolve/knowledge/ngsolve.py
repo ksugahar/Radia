@@ -6643,6 +6643,13 @@ v_p*v_g = c^2 and the lambda_g relation exact, v_g == d omega/d beta numerically
 fc to +0.000 %. Sets lambda_g/4 transformers, iris/slot spacings, and pulse-spreading (v_g) in
 waveguide components.
 
+S-PARAMETER post-processing (#221): the same propagation constants feed simple RF traces:
+``waveguide_dielectric_slab_sparams`` for a TE10 dielectric section/cascade,
+``waveguide_offset_short_s11`` for a shorted offset line, and ``reflection_metrics`` for return
+loss / delivered power / VSWR.  For phase traces, ``sparameter_group_delay(frequencies, s_values)``
+unwraps ``arg(S)`` and returns ``tau_g = -d arg(S)/d omega``; the offset-short check gives the
+round-trip delay ``2d/v_group``.
+
 QUALITY FACTOR / wall loss (#68): the lossless resonance (#59) only gives WHERE a cavity rings; the
 finite-conductivity walls give HOW SHARPLY. The unloaded Q = omega U / P_wall (stored energy over
 per-cycle wall dissipation). For the TE101 rectangular cavity
@@ -7046,6 +7053,14 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "surface_resistance": NGSOLVE_WAVEGUIDE,
         "skin_depth": NGSOLVE_WAVEGUIDE,
         "cavity_loss": NGSOLVE_WAVEGUIDE,
+        "sparameter": NGSOLVE_WAVEGUIDE,
+        "s_parameter": NGSOLVE_WAVEGUIDE,
+        "s11": NGSOLVE_WAVEGUIDE,
+        "s21": NGSOLVE_WAVEGUIDE,
+        "return_loss": NGSOLVE_WAVEGUIDE,
+        "group_delay": NGSOLVE_WAVEGUIDE,
+        "sparameter_group_delay": NGSOLVE_WAVEGUIDE,
+        "offset_short": NGSOLVE_WAVEGUIDE,
         "core_loss": NGSOLVE_CORE_LOSS,
         "eddy_loss": NGSOLVE_CORE_LOSS,
         "eddy_current_loss": NGSOLVE_CORE_LOSS,
