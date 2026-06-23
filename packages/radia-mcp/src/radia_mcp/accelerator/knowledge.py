@@ -47,7 +47,9 @@ TOPICS: dict[str, str] = {
         "The two-plane end pack CO-BAKED into ONE pole face "
         "z(x,s)=g/2-delta(x/w)^2+lift(s): the x-y shim (delta) AND the s-y Rogowski "
         "chamfer (ghat) in one gap face -> clean transverse b_3,5 AND a rounded "
-        "pole-tip corner at once (endpack_cobake.py)"
+        "pole-tip corner at once (endpack_cobake.py); the PRECISION construction is a "
+        "smooth OCC ThruSections LOFT (endpack_cobake_loft.py) that meshes baseline & "
+        "shim at the SAME density (resolves the x-prism staircase artifact)"
     ),
     "all": "Everything (all topics concatenated)",
 }
@@ -743,22 +745,38 @@ i.e. ONE pole face delivers a clean integrated transverse harmonic AND a rounded
 pole-tip corner -- the two cleanly-separated two-plane levers (delta ~ 0.41 mm from
 Plane 1; ghat the Rogowski shape from Plane 2) composed in 3-D.
 
-## Honest scope
+## Honest scope of the staircase build (endpack_cobake.py)
 
-The exact delta(x/w)^2 shim needs an x-VARYING face, built here as an x-prism
+The exact delta(x/w)^2 shim needs an x-VARYING face, built there as an x-prism
 STAIRCASE (per-slab shim offset), so the no-shim cases mesh coarser than the shim
 cases -- the per-case ABSOLUTE numbers are research-grade, not precision.  The locked
 claim is the CO-EXISTENCE of both levers in the (well-resolved) BOTH pole; the per-lever
 CAUSATION is golden-locked separately (the x-y shim zeroes b_3: accel_pole_dipole_body_2d
 / endpack_two_plane Plane 1; the s-y chamfer drives the corner over-field through 1:
-endpack_two_plane's depth sweep).  A precision tensor LOFT (OCC ThruSections) is the
-clean construction.
+endpack_two_plane's depth sweep).
 
-A separate attempt at the rotated-EFB EDGE FOCUSING extension was NOT shipped: the INT B
-effective-field-boundary angle extracted from the equipotential drive attenuated to
-~0.47*beta_cut in a way that could not be cleanly separated from the genuine fringe
-effect (it needs a reduced-Omega-with-source drive or particle tracking) -- recorded as
-the open next step, not committed as a murky result.
+## Precision construction (endpack_cobake_loft.py, OCC ThruSections, golden-tested)
+
+The clean construction the staircase pointed to.  The gap face z(x,s)=g/2-delta(x/w)^2
++lift(s) is a SMOOTH OCC ThruSections LOFT through per-x-station cross-section wires
+(each carrying its shim offset delta(x_i/w)^2 + the chamfer lift(s)), so the surface is
+smooth in x (no facets).  The headline is MESH CONSISTENCY:
+
+    smooth LOFT       ne(shim)/ne(baseline) ~ 0.97  (same density)
+    x-prism STAIRCASE ne(shim)/ne(baseline) ~ 36    (merges delta=0 slabs -> coarse;
+                                                     steps delta>0 -> fine)
+
+so the loft RESOLVES the documented staircase artifact, and the co-baked pole's b_3,5 +
+corner become a PRECISION claim.  On the consistent mesh both levers still act: the
+chamfer rounds the corner (tip 0.99), the shim REMOVES the transverse content the
+chamfer introduces (both 0.47% < chamfer-only 0.84%), and the co-baked pole is the
+lowest b_3,5 of all four cases.  (Absolute b_3,5 differs from the staircase table above
+because the meshes differ; the loft's value is the precision one.)
+
+The rotated-EFB EDGE FOCUSING extension (first attempted from the equipotential drive,
+where the INT B effective-field-boundary angle attenuated to ~0.47*beta_cut) is retried
+with a reduced-Omega + CoilBuilder source -- see topic "edge_focusing"
+(endpack_edge_focusing.py).
 """
 
 
@@ -811,7 +829,8 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                  "corner_saturation", "saturable_endpack", "efb", "edge_focusing"):
         return SPECTROMETER_ENDPACK_SATURATION
     if topic in ("endpack_cobake", "cobake", "co_bake", "tensor_pole",
-                 "shim_chamfer", "both_planes"):
+                 "shim_chamfer", "both_planes", "endpack_cobake_loft", "cobake_loft",
+                 "tensor_loft", "loft", "thrusections"):
         return ENDPACK_COBAKE
     if topic == "all":
         return "\n\n".join([

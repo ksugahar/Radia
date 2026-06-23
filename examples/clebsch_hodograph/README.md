@@ -1293,9 +1293,25 @@ harmonic AND rounded corner**.
 Honest scope: the exact `δ(x/w)²` shim is an x-prism STAIRCASE, so the no-shim cases mesh
 coarser than the shim cases (per-case absolute numbers are research-grade); the locked
 claim is the **co-existence** in the well-resolved BOTH pole, the per-lever causation
-being golden-locked separately (`accel_pole_dipole_body_2d` + `endpack_two_plane`). A
-precision tensor LOFT (OCC ThruSections) is the clean construction. Golden
-`test_endpack_cobake` (ngsolve only, ~11 s).
+being golden-locked separately (`accel_pole_dipole_body_2d` + `endpack_two_plane`). The
+precision construction is `endpack_cobake_loft.py` (below). Golden `test_endpack_cobake`
+(ngsolve only, ~11 s).
+
+### `endpack_cobake_loft.py` — the co-bake as a PRECISION tensor LOFT (OCC ThruSections)
+
+The clean construction the staircase pointed to. The gap face `z(x,s)=g/2−δ(x/w)²+lift(s)`
+is built as a SMOOTH OCC `ThruSections` loft through per-x-station cross-section wires
+(each carrying its shim offset `δ(xᵢ/w)²` + the chamfer `lift(s)`), so the surface is
+smooth in `x` (no facets). The headline is **mesh consistency**: the smooth loft meshes the
+baseline (`δ=0`) and the shim (`δ>0`) cases at the same density (`ne(shim)/ne(baseline)
+≈ 0.97`), whereas the x-prism staircase merges the `δ=0` slabs (coarse) and steps the
+`δ>0` slabs (fine) → ratio `≈ 36`. The loft thus **RESOLVES the documented staircase
+artifact**, so the co-baked pole's `b̄₃,₅` + corner are a *precision* claim. On the
+consistent mesh both levers still act: the chamfer rounds the corner (`tip 0.99`), the
+shim removes the transverse content the chamfer introduces (`both 0.47 % < chamfer-only
+0.84 %`), and the co-baked pole is the lowest `b̄₃,₅` of all four cases. The script imports
+`endpack_cobake` to put the two mesh ratios side by side; `--no-staircase` skips it.
+Golden `test_endpack_cobake_loft` (ngsolve only, ~16 s).
 
 ## Run
 
@@ -1329,6 +1345,7 @@ python twist_rate_leaf_coupling.py            # when the per-station 2-D twist b
 python endpack_two_plane.py                   # the END PACK in two planes: x-y cross-section (shim) + s-y end (Rogowski chamfer, L_eff +26%) -> 3-D equipotential reflect, corner over-field -> 0 (--fast, --fig)
 python endpack_spectrometer_saturation.py     # the spectrometer end pack NONLINEAR: pole-tip corner = saturable throat, corner knee B_K/kappa ~1.33T (12% below bulk), chamfer raises it; nonlinear design map at LINEAR cost (design-grade, kappa+BH components validated; --b-op, --fig)
 python endpack_cobake.py                      # the two planes CO-BAKED into one pole z(x,s)=g/2-delta(x/w)^2+lift(s): x-y shim + s-y Rogowski chamfer in one face -> clean transverse b_3,5 (0.07%) AND rounded corner (tip 1.02) at once (--fig)
+python endpack_cobake_loft.py                 # the co-bake as a PRECISION tensor LOFT (OCC ThruSections): smooth gap face -> baseline & shim mesh at the SAME density (ne ratio ~0.97 vs staircase ~36) -> resolves the staircase artifact, precision b_3,5 + corner (--no-staircase, --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
