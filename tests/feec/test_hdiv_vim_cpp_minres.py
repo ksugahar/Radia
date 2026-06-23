@@ -36,7 +36,7 @@ def _sphere(h=0.6):
 
 
 def test_cpp_minres_material():
-    d = tet.build_demag(_sphere(), analytic_gram=True)
+    d = tet.build_demag(_sphere())
     n_face = int(d["ndof"])
     Mm = d["M_mass"]
     mu = d["m_unit"]
@@ -45,8 +45,17 @@ def test_cpp_minres_material():
     B = d["B_csr"]
     mco = sp.coo_matrix(Mm)
     inv_chi = 1.0 / 999.0                                  # mu_r = 1000
-    rhs = Mm @ mu                                          # physical uniform-field source
-    prec = np.abs(inv_chi * np.diag(Mm) - np.diag(d["N"]))  # SPD Jacobi for the indefinite A
+
+    # demag N = B^T G B via the C++ analytic charge-Gram H-matvec; densify (small mesh) from the SAME
+    # operator the C++ solver uses, for the Jacobi diagonal + the direct-solve reference.
+    def N_apply(v):
+        v = np.asarray(v, float)
+        return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
+
+    N_dense = np.column_stack([N_apply(np.eye(n_face)[:, k]) for k in range(n_face)])
+    Mm_dense = Mm.toarray() if sp.issparse(Mm) else np.asarray(Mm)
+    rhs = np.asarray(Mm @ mu).ravel()                     # physical uniform-field source
+    prec = np.abs(inv_chi * np.diag(Mm_dense) - np.diag(N_dense))  # SPD Jacobi for the indefinite A
     prec = np.maximum(prec, prec.max() * 1e-12)
 
     res = H.solve_material_minres(
@@ -59,7 +68,7 @@ def test_cpp_minres_material():
     # (1) IMPLEMENTATION: scipy MINRES on the IDENTICAL operator + preconditioner.
     def applyA(v):
         v = np.asarray(v, float)
-        return inv_chi * (Mm @ v) - B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
+        return inv_chi * (Mm @ v) - N_apply(v)
 
     A = LinearOperator((n_face, n_face), matvec=applyA)
     Minv = LinearOperator((n_face, n_face), matvec=lambda v: np.asarray(v, float) / prec)
@@ -72,7 +81,7 @@ def test_cpp_minres_material():
     assert rel1 < 1e-4, f"C++ MINRES vs scipy MINRES (same operator): rel {rel1:.2e}"
 
     # (2) PHYSICS / CORRECTNESS GATE: the C++ MINRES finds the TRUE solution (dense direct solve of
-    # A = inv_chi*M_mass - N) within ACA_eps * cond(A) -- a recurrence bug could not reach this.
-    x_dense = np.linalg.solve(inv_chi * Mm - d["N"], rhs)
+    # A = inv_chi*M_mass - N, dense A from the SAME C++ H-matvec) within ACA_eps * cond(A).
+    x_dense = np.linalg.solve(inv_chi * Mm_dense - N_dense, rhs)
     rel2 = np.linalg.norm(x_cpp - x_dense) / np.linalg.norm(x_dense)
     assert rel2 < 5e-3, f"C++ MINRES vs dense true solution: rel {rel2:.2e}"

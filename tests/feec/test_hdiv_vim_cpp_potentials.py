@@ -1,13 +1,11 @@
 """Golden test: the C++ analytic charge-Gram potentials (rad_hdiv::TriPotential / PhiTet, exposed
-as the _hdiv_tri_potential / _hdiv_phi_tet probes) match the dense Python reference
-(radia.vim._core.tri_potential / phi_tet) to ~machine precision.
+as the _hdiv_tri_potential / _hdiv_phi_tet probes) match the analytic reference to ~machine precision.
 
-These are the M2 building blocks: the accurate Wilton triangle 1/r surface potential and the
-divergence-theorem tet Newtonian volume potential that the C++ scalable ChargeGram H-matrix entry
-function will use for near pairs (replacing the centroid-monopole approximation).  Because the C++
-is a line-by-line port of the validated Python Gram, this test pins that they stay bit-identical:
-any future edit to either side that drifts the formula is caught here, not at the (much coarser)
-H-matrix-vs-dense level.
+These are the building blocks: the accurate Wilton triangle 1/r surface potential and the
+divergence-theorem tet Newtonian volume potential that the C++ ChargeGram H-matrix entry function uses
+for near pairs.  The surface kernel is checked vs the kept radia.vim.tri_potential; the volume kernel vs
+the divergence-theorem construction over tri_potential (the Python dense Gram path was removed, so the
+volume reference is built inline here from the kept triangle potential).
 
 Pure 1/r integrals (NO 1/4pi) -- the 1/(4pi) and the measure weights live in the Gram entry, not
 in these geometric kernels.
@@ -16,7 +14,26 @@ import numpy as np
 import pytest
 
 import radia._radia_pybind as _rp
-from radia.vim._core import tri_potential, phi_tet
+from radia.vim._core import tri_potential
+
+
+def _phi_tet(V, P):
+    """Exact Newtonian potential INT_tet 1/|P-r'| dV' of a uniform tet via the divergence theorem
+    (nabla'^2 R = 2/R -> (1/2) sum_{4 faces} d_face INT_face 1/R dA'), the inner face integral = the
+    kept exact Wilton triangle potential tri_potential.  P: (3,) -> float."""
+    V = np.asarray(V, float)
+    R = np.atleast_2d(np.asarray(P, float))
+    cen = V.mean(0)
+    tot = np.zeros(len(R))
+    for f in ((1, 2, 3), (0, 2, 3), (0, 1, 3), (0, 1, 2)):
+        Fv = V[list(f)]
+        n = np.cross(Fv[1] - Fv[0], Fv[2] - Fv[0])
+        n = n / np.linalg.norm(n)
+        if np.dot(Fv.mean(0) - cen, n) < 0:
+            n = -n
+        d = (Fv[0] - R) @ n
+        tot += d * tri_potential(Fv, R)
+    return float(0.5 * tot[0])
 
 # Triangles: a flat in-plane (z=0) triangle and a tilted one (out-of-plane vertex).
 _TRIS = [
@@ -48,14 +65,14 @@ def test_cpp_tripotential_matches_python():
 
 
 def test_cpp_phitet_matches_python():
-    """C++ PhiTet == Python phi_tet to machine precision (obs outside AND inside the tet)."""
+    """C++ PhiTet == the divergence-theorem reference to machine precision (obs outside AND inside)."""
     maxrel = 0.0
     for P in _TET_OBS:
         c = _rp._hdiv_phi_tet(_TET.flatten().tolist(), [float(x) for x in P])
-        p = float(phi_tet(_TET, np.asarray(P, float)))
+        p = _phi_tet(_TET, np.asarray(P, float))
         assert p > 0.0
         maxrel = max(maxrel, abs(c - p) / abs(p))
-    assert maxrel < 1e-12, f"C++ PhiTet drifted from Python: max rel = {maxrel:.3e}"
+    assert maxrel < 1e-12, f"C++ PhiTet drifted from the reference: max rel = {maxrel:.3e}"
 
 
 def test_cpp_tripotential_translation_invariant():

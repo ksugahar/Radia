@@ -5,11 +5,11 @@ The sphere / spheroid nonlinear cases magnetise UNIFORMLY (surface charge only).
 case: non-convex with reentrant corners, and the nonlinear M is genuinely NON-uniform (div M != 0 ->
 volume charge), so it exercises the FULL operator (surface AND volume Gram).
 
-KEY (a trap worth stating): a NON-uniform-M nonlinear problem needs analytic_gram=True (the full volume
-Gram via phi_tet).  The surface-only wilton_surface Gram leaves the volume (cell) blocks crude and Newton
-does NOT converge -- now a LOUD RuntimeError (require_convergence default), not a silent wrong result.
+KEY (a trap worth stating): a NON-uniform-M nonlinear problem needs the full volume Gram (div M != 0 ->
+volume charge).  The production C++ analytic charge Gram (radia.vim.hdiv_demag_solve, exact near AND far)
+supplies it, so the C-yoke nonlinear converges; Newton fails LOUD on non-convergence (No-Fallbacks).
 
-With analytic_gram the C-yoke nonlinear:
+The C-yoke nonlinear (C++ analytic charge Gram):
   - converges in ~6 damped-Newton iters,
   - is mesh-stable (volume-avg M_z drifts ~1.5% monotonically over maxh 0.020 -> 0.013, converging),
   - matches the shipped Radia MMM solver (SAME flat mesh, SAME M-H law, SAME applied field) to < 1%.
@@ -50,9 +50,9 @@ def cyoke_mesh(h):
 
 
 def hdiv_cyoke_Mz(mesh, chi0, Msat, H0):
-    """HDiv-VIM volume-avg M_z on the C-yoke (analytic_gram = the required nonlinear Gram)."""
+    """HDiv-VIM volume-avg M_z on the C-yoke (C++ analytic charge Gram, the required nonlinear Gram)."""
     with TaskManager():
-        Mh, nit, _ = nl.solve_nonlinear_newton(mesh, chi0, Msat, H0, analytic_gram=True, maxit=60)
+        Mh, nit, _ = nl.solve_nonlinear_newton(mesh, chi0, Msat, H0, maxit=60)
     return Mh, nit
 
 
@@ -89,7 +89,7 @@ def run(hs=(0.020, 0.016, 0.013), chi0=1000.0, Msat=1.0e6, H0=2.0e5):
 
 if __name__ == "__main__":
     res = run()
-    print("C-yoke (non-convex, reentrant corners) NONLINEAR -- HDiv-VIM (analytic_gram) vs shipped Radia:")
+    print("C-yoke (non-convex, reentrant corners) NONLINEAR -- HDiv-VIM (C++ analytic Gram) vs shipped Radia:")
     print(f"  {'maxh':>6} {'ne':>5} {'HDiv M_z':>11} {'iters':>5} {'Radia M_z':>11} {'agree':>9}")
     for r in res["rows"]:
         print(f"  {r['h']:>6} {r['ne']:>5d} {r['hdiv_Mz']:>11.1f} {r['nit']:>5d} {r['radia_Mz']:>11.1f} "

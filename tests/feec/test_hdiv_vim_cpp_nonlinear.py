@@ -37,17 +37,24 @@ def _sphere(h=0.6):
 
 def test_cpp_nonlinear_picard():
     chi0, Msat, H0 = 1000.0, 1.0e6, 3.0e5        # near saturation onset (~Dscal*Msat): genuinely nonlinear
-    d = tet.build_demag(_sphere(), analytic_gram=True)
+    d = tet.build_demag(_sphere())
     n_face = int(d["ndof"])
     Mm = d["M_mass"]
     mu = d["m_unit"]
-    denom = float(mu @ Mm @ mu)
+    denom = float(mu @ np.asarray(Mm @ mu).ravel())
     H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
                                n_el=int(d["n_el"]), eps=1e-8, leaf=32, eta=2.0)
     B = d["B_csr"]
     mco = sp.coo_matrix(Mm)
-    Mmass_diag = np.diag(Mm)
-    N_diag = np.diag(d["N"])
+    Mm_dense = Mm.toarray() if sp.issparse(Mm) else np.asarray(Mm)
+    Mmass_diag = np.diag(Mm_dense)
+    # the demag N = B^T G B via the C++ analytic charge-Gram H-matvec; its diagonal feeds the Jacobi
+    # preconditioner (no dense Python Gram).
+    def _Napply0(v):
+        v = np.asarray(v, float)
+        return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
+
+    N_diag = np.array([_Napply0(np.eye(n_face)[:, k])[k] for k in range(n_face)])
 
     res = H.solve_nonlinear_picard(
         list(map(int, B.indptr)), list(map(int, B.indices)), list(B.data.astype(float)), n_face,

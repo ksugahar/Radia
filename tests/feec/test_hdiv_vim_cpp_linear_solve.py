@@ -35,16 +35,26 @@ def _sphere(h=0.6):
 
 
 def test_cpp_cg_linear_material():
-    d = tet.build_demag(_sphere(), analytic_gram=True)
+    d = tet.build_demag(_sphere())
     n_face = int(d["ndof"])
     H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
                                n_el=int(d["n_el"]), eps=1e-8, leaf=32, eta=2.0)
     B = d["B_csr"]                                  # n_charge x n_face CSR
     Mm = d["M_mass"]
     inv_chi = 1e-3
+
+    # the demag N = B^T G B applied via the C++ analytic charge-Gram H-matvec (no dense Python Gram);
+    # form it densely (small mesh) from the SAME operator the C++ solver uses, for the Jacobi diagonal +
+    # the direct-solve reference.
+    def N_apply(v):
+        v = np.asarray(v, float)
+        return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
+
+    N_dense = np.column_stack([N_apply(np.eye(n_face)[:, k]) for k in range(n_face)])
+    Mm_dense = Mm.toarray() if sp.issparse(Mm) else np.asarray(Mm)
     rng = np.random.default_rng(3)
     rhs = rng.standard_normal(n_face)
-    prec = inv_chi * np.diag(Mm) + np.diag(d["N"])  # exact Jacobi diagonal of the system
+    prec = inv_chi * np.diag(Mm_dense) + np.diag(N_dense)  # exact Jacobi diagonal of the system
 
     # M_mass as COO
     mco = sp.coo_matrix(Mm)
@@ -58,7 +68,7 @@ def test_cpp_cg_linear_material():
     # (1) IMPLEMENTATION: scipy MINRES on the IDENTICAL operator (same H-matvec) -> ~machine match.
     def apply_py(v):
         v = np.asarray(v, float)
-        return inv_chi * (Mm @ v) + B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
+        return inv_chi * (Mm @ v) + N_apply(v)
 
     A = LinearOperator((n_face, n_face), matvec=apply_py)
     Minv = LinearOperator((n_face, n_face), matvec=lambda v: np.asarray(v, float) / prec)
@@ -66,8 +76,9 @@ def test_cpp_cg_linear_material():
     rel_impl = np.linalg.norm(x_cpp - x_sp) / np.linalg.norm(x_sp)
     assert rel_impl < 1e-6, f"C++ CG vs scipy MINRES (same operator): rel {rel_impl:.2e}"
 
-    # (2) PHYSICS: matches the dense analytic direct solve within ACA tol * cond(A) (cond ~ 1/inv_chi).
-    A_dense = inv_chi * Mm + d["N"]
+    # (2) PHYSICS: matches the dense direct solve (dense A built from the SAME C++ H-matvec) within ACA
+    # tol * cond(A) (cond ~ 1/inv_chi).
+    A_dense = inv_chi * Mm_dense + N_dense
     x_dense = np.linalg.solve(A_dense, rhs)
     rel_phys = np.linalg.norm(x_cpp - x_dense) / np.linalg.norm(x_dense)
-    assert rel_phys < 5e-4, f"C++ CG vs dense analytic solve: rel {rel_phys:.2e}"
+    assert rel_phys < 5e-4, f"C++ CG vs dense solve: rel {rel_phys:.2e}"

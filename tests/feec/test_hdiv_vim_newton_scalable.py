@@ -4,12 +4,11 @@ solve_nonlinear_newton_scalable replaces the dense O(N^3)/O(N^2) demag of solve_
 the C++ HACApK charge-Gram H-matrix (_ChargeGramHMatrix, O(N log N) apply) and solves each Newton step
 ITERATIVELY (GMRES, M_mass-preconditioned) -- no dense factorization anywhere.
 
-M2b: the C++ Gram is now the ANALYTIC charge Gram (PhiTet/TriPotential, exact near AND far), so the
-demag apply is simply N v = B^T(H.matvec(B v)) -- no separate sparse near-correction.  This matches
-the dense solve_nonlinear_newton(analytic_gram=True) operator entry-by-entry, so the scalable solver
-reproduces the dense ANALYTIC Newton on BOTH a uniform-M body (sphere) AND a NON-uniform-M body (cube,
-div M != 0) -- the latter is the C-yoke-class case the old monopole-far + sparse-near split under-
-resolved.
+The C++ Gram is the ANALYTIC charge Gram (PhiTet/TriPotential, exact near AND far), so the demag apply
+is simply N v = B^T(H.matvec(B v)) -- no separate sparse near-correction.  It lands on the analytic
+uniform-sphere fixed point AND gives a physical M on a NON-uniform-M body (cube, div M != 0) -- the
+C-yoke-class case the old monopole-far + sparse-near split under-resolved.  (The dense Python Gram path
+was removed, so the references here are the analytic fixed point + physical-range checks.)
 """
 import os
 import sys
@@ -38,17 +37,15 @@ def _cube(h=0.6):
     return ng.Mesh(geo.GenerateMesh(maxh=h))
 
 
-def test_scalable_newton_matches_dense_analytic_sphere():
-    """Uniform-M body: the scalable analytic Newton reproduces the dense analytic Newton at deep
-    saturation, and both land on the analytic uniform-sphere answer."""
+def test_scalable_newton_matches_analytic_sphere():
+    """Uniform-M body: the scalable analytic Newton lands on the analytic uniform-sphere answer at deep
+    saturation, fast."""
     mesh = _sphere()
     chi0, Msat, H0 = 1000.0, 1.0e6, 1.0e6        # deep saturation
     Mof = nl._bh_curve(chi0, Msat)
     with ng.TaskManager():
-        Md, _, _ = nl.solve_nonlinear_newton(mesh, chi0, Msat, H0, analytic_gram=True)
         Ms, nit, _ = nl.solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0)
     Ma = nl._scalar_fixed_point(Mof, 1.0 / 3.0, H0)
-    assert abs(Md - Ms) < 2e-3 * abs(Md), f"scalable analytic {Ms:.1f} != dense analytic {Md:.1f}"
     assert 0.0 < Ms < Msat, f"scalable M out of range: {Ms}"
     assert abs(Ms - Ma) < 5e-3 * Ma, f"scalable {Ms:.1f} vs analytic {Ma:.1f}"
     assert nit < 30, f"scalable Newton not fast at saturation: {nit} iters"
@@ -81,15 +78,17 @@ def test_scalable_newton_fails_loud_not_silent_underconverged():
             nl.solve_nonlinear_newton_scalable(mesh, 1000.0, 1.0e6, 1.0e6, maxit=1, picard_warmstart=1)
 
 
-def test_scalable_newton_matches_dense_analytic_cube():
-    """NON-uniform-M body (cube, div M != 0 near corners -> volume charge): the scalable analytic
-    Newton reproduces the dense analytic Newton.  This is the C-yoke-class case the old monopole-far +
-    sparse-near scalable split under-resolved; the analytic C++ Gram (PhiTet volume charge) closes it."""
+def test_scalable_newton_cube_nonuniform_physical():
+    """NON-uniform-M body (cube, div M != 0 near corners -> volume charge): the scalable analytic Newton
+    gives a PHYSICAL M (in range, partially saturated) and converges.  The analytic C++ Gram (PhiTet
+    volume charge) handles the div M != 0 case the old monopole-far + sparse-near split under-resolved."""
     mesh = _cube()
     chi0, Msat, H0 = 1000.0, 1.0e6, 2.0e3        # partial saturation -> genuinely non-uniform M
     with ng.TaskManager():
-        Md, _, _ = nl.solve_nonlinear_newton(mesh, chi0, Msat, H0, analytic_gram=True)
-        Ms, nit, _ = nl.solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0)
-    assert abs(Md - Ms) < 5e-3 * abs(Md) + 1.0, f"scalable analytic {Ms:.2f} != dense analytic {Md:.2f}"
+        Ms, nit, D = nl.solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0)
+    # M well inside (0, Msat), clearly responding (not a numerical zero), and consistent with the
+    # uniform-body linear-response upper bound M <= chi0/(1+chi0 D) H0 (demag-limited; here ~6000-7000).
     assert 0.0 < Ms < Msat, f"scalable cube M out of range: {Ms}"
+    assert Ms > 100.0, f"scalable cube M suspiciously small at H0={H0}: {Ms}"
+    assert Ms < 1.5 * chi0 / (1.0 + chi0 * D) * H0, f"scalable cube M too large vs linear bound: {Ms}"
     assert nit < 60, f"scalable cube Newton too slow: {nit} iters"

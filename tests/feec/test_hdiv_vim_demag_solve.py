@@ -5,9 +5,10 @@ Locks:
   (1) PHYSICS: on a uniform-field sphere the volume-average M matches the analytic linear
       magnetization  M = chi/(1 + chi D) H_applied  (D = demag factor ~ 1/3) across mu_r 10..1000;
   (2) per-element M is ~uniform and +z-aligned (uniform applied field on a sphere);
-  (3) the scalable path (H-matvec + approximate Jacobi diagonal, no dense N^2) matches the dense
-      reference path;
-  (4) fail-loud: mu_r <= 1 RAISES (CLAUDE.md No-Fallbacks).
+  (3) exactly one of mu_r (linear) / bh_table (nonlinear) must be given -- else RAISE;
+  (4) fail-loud: mu_r <= 1 RAISES (CLAUDE.md No-Fallbacks);
+  (5) NONLINEAR: a saturating BH table reproduces the analytic uniform-sphere fixed point
+      M = Mof(H0 - D M), via the C++ charge-Gram matrix-free Newton.
 """
 import numpy as np
 import pytest
@@ -78,24 +79,31 @@ def test_requires_exactly_one_material_spec():
             hdiv_demag_solve(mesh, 100.0, _HEXT, bh_table=[[0.0, 0.0], [1e6, 2.0]])
 
 
-def test_nonlinear_sphere_vs_dense_newton():
-    """NONLINEAR hdiv_demag_solve (uniform field + a real BH table) reproduces the dense reference
-    Newton (radia.vim._nonlinear.solve_nonlinear_newton, analytic Gram) on the saturating sphere."""
-    from radia.vim._nonlinear import solve_nonlinear_newton
+def test_nonlinear_sphere_vs_analytic_fixed_point():
+    """NONLINEAR hdiv_demag_solve (uniform field + a real BH table) reproduces the analytic uniform-sphere
+    fixed point M = Mof(H0 - D M) (D = demag factor ~ 1/3) on the saturating sphere."""
     chi0, Msat, H0 = 1000.0, 1.0e6, 2.0e5
     Hs = np.concatenate([[0.0], np.logspace(-1, 7, 60)])
     Ms = chi0 * Hs / (1.0 + chi0 * Hs / Msat)
     Bs = (4e-7 * np.pi) * (Hs + Ms)
     BH = [[float(h), float(b)] for h, b in zip(Hs, Bs)]
+    Mof = lambda H: chi0 * H / (1.0 + chi0 * abs(H) / Msat)   # noqa: E731 (the table's M(H))
     mesh = _sphere()
     with ng.TaskManager():
         res = hdiv_demag_solve(mesh, bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
-        mz_dense, _nit, _D = solve_nonlinear_newton(mesh, chi0, Msat, H0,
-                                                    bh_table=(Hs, Bs), analytic_gram=True, maxit=60)
     assert res["nonlinear"] is True
-    rel = abs(res["M_avg"][2] - mz_dense) / abs(mz_dense)
-    assert rel < 2e-2, f"nonlinear scalable Mz {res['M_avg'][2]:.1f} vs dense {mz_dense:.1f} rel {rel:.2e}"
-    # the entry's nonlinear solver is the Anderson-Hantila fixed point (cheap step), so the outer count
-    # is higher than the dense reference Newton's ~5-6 (a fixed point + saturation slowdown) but bounded
-    # well inside nl_maxit; the accuracy match above is the real gate.
-    assert res["iters"] < 250, f"nonlinear Anderson-Hantila outer iters {res['iters']}"
+    # analytic uniform-sphere fixed point with the solved demag factor D
+    D = res["demag"]
+    lo, hi = -Msat, Msat
+    f = lambda M: M - Mof(H0 - D * M)                          # noqa: E731
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if f(lo) * f(mid) <= 0:
+            hi = mid
+        else:
+            lo = mid
+    M_fp = 0.5 * (lo + hi)
+    rel = abs(res["M_avg"][2] - M_fp) / abs(M_fp)
+    assert rel < 2e-2, f"nonlinear Mz {res['M_avg'][2]:.1f} vs analytic fixed point {M_fp:.1f} rel {rel:.2e}"
+    # the nonlinear solver is the damped matrix-free Newton (C++ charge Gram); bounded well inside nl_maxit.
+    assert res["iters"] < 300, f"nonlinear Newton outer iters {res['iters']}"
