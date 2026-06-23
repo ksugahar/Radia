@@ -49,6 +49,42 @@ def cutoff_frequency(kc, c=C0):
     return c * kc / (2.0 * math.pi)
 
 
+def rectangular_cavity_modes(a, b, d, max_index=3, c=C0, limit=None):
+    """Sorted closed-form mode table for a PEC rectangular cavity.
+
+    Enumerates index triples ``(m, n, p)`` with at least two non-zero indices and
+    frequency
+
+        f_mnp = (c/2) sqrt((m/a)^2 + (n/b)^2 + (p/d)^2).
+
+    The "at least two" rule keeps the physical TE/TM cavity family used by the
+    public regression tests (e.g. TE101, TM110, TE011) while excluding the
+    one-dimensional gradient/null family that appears as spurious near-zero
+    modes in shifted HCurl eigenvalue solves. Returns dictionaries sorted by
+    ``frequency`` then by indices; ``limit`` optionally truncates the list.
+    """
+    aa, bb, dd = float(a), float(b), float(d)
+    if aa <= 0.0 or bb <= 0.0 or dd <= 0.0:
+        raise ValueError("cavity dimensions must be positive")
+    mi = int(max_index)
+    if mi < 1:
+        raise ValueError("max_index must be >= 1")
+    if limit is not None and int(limit) < 1:
+        raise ValueError("limit must be >= 1 when supplied")
+
+    modes = []
+    for m in range(mi + 1):
+        for n in range(mi + 1):
+            for p in range(mi + 1):
+                if (m > 0) + (n > 0) + (p > 0) < 2:
+                    continue
+                f = rectangular_cavity_frequency(aa, bb, dd, m, n, p, c)
+                modes.append({"m": m, "n": n, "p": p,
+                              "indices": (m, n, p), "frequency": f})
+    modes.sort(key=lambda row: (row["frequency"], row["m"], row["n"], row["p"]))
+    return modes if limit is None else modes[:int(limit)]
+
+
 def circular_waveguide_cutoff(radius, mode, m, n):
     """Exact cutoff FREQUENCY [Hz] of the TE_mn / TM_mn mode of a CIRCULAR metallic waveguide of
     inner ``radius`` a -- the Bessel-function counterpart of the rectangular
@@ -399,7 +435,7 @@ def laplace_dirichlet_eigenvalues(mesh, n_modes, order=2, shift=-1.0, dirichlet=
     return vals[:n_modes]
 
 
-def rectangular_cavity_frequency(a, b, d, m, n, p):
+def rectangular_cavity_frequency(a, b, d, m, n, p, c=C0):
     """Exact resonant FREQUENCY [Hz] of the TE_mnp / TM_mnp mode of a rectangular metallic CAVITY
     (a closed PEC box a x b x d):
 
@@ -409,7 +445,7 @@ def rectangular_cavity_frequency(a, b, d, m, n, p):
     :func:`rectangular_waveguide_cutoff` -- a third index p appears for the standing wave along the
     box length. The dominant mode (for a > d > b) is TE101. Used for microwave cavity filters,
     resonators, and accelerator cavities."""
-    return 0.5 * C0 * math.sqrt((m / a) ** 2 + (n / b) ** 2 + (p / d) ** 2)
+    return 0.5 * c * math.sqrt((m / a) ** 2 + (n / b) ** 2 + (p / d) ** 2)
 
 
 def cylindrical_cavity_frequency(radius, length, mode, m, n, p):
