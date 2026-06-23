@@ -1313,6 +1313,21 @@ shim removes the transverse content the chamfer introduces (`both 0.47 % < chamf
 `endpack_cobake` to put the two mesh ratios side by side; `--no-staircase` skips it.
 Golden `test_endpack_cobake_loft` (ngsolve only, ~16 s).
 
+### `scaling_ffag_sector_saturation.py` — the saturating sector body (two planes differ)
+
+Combines the §3.5 scaling-FFAG **sector** with iron saturation: the azimuthal `(s,z)` end
+solve (from `ffag_sector_two_plane`) is made NONLINEAR (Froehlich `μ_r(|B|)`, the same knee
+as the radial Step 2) and solved at the high-r aperture edge (smallest gap, highest `B`) and
+the low-r body. The honest result for a scaling (large-gap) pole is a **contrast**: the
+azimuthal effective length `L_eff` is **ROBUST** to saturation (drift `< 0.1 %` even where
+the high-r iron `⟨μ_r⟩` collapses `1574 → 481`, `×0.3` — the sector end is
+gap-reluctance-dominated), while the radial field index `k(r)` is **FRAGILE** (it droops
+`Δk ≈ −0.26`, the achromaticity wall, reused from `scaling_ffag_pole_2d.run_step2`). So
+saturation degrades the radial field SHAPE but not the azimuthal end LENGTH — the high-r
+achromaticity needs the radial reshape (Step 3), the sector ends need no nonlinear end
+correction. `--no-radial` skips the radial cross-check. Golden
+`test_scaling_ffag_sector_saturation` (ngsolve only, ~12 s).
+
 ## Run
 
 ```bash
@@ -1346,6 +1361,7 @@ python endpack_two_plane.py                   # the END PACK in two planes: x-y 
 python endpack_spectrometer_saturation.py     # the spectrometer end pack NONLINEAR: pole-tip corner = saturable throat, corner knee B_K/kappa ~1.33T (12% below bulk), chamfer raises it; nonlinear design map at LINEAR cost (design-grade, kappa+BH components validated; --b-op, --fig)
 python endpack_cobake.py                      # the two planes CO-BAKED into one pole z(x,s)=g/2-delta(x/w)^2+lift(s): x-y shim + s-y Rogowski chamfer in one face -> clean transverse b_3,5 (0.07%) AND rounded corner (tip 1.02) at once (--fig)
 python endpack_cobake_loft.py                 # the co-bake as a PRECISION tensor LOFT (OCC ThruSections): smooth gap face -> baseline & shim mesh at the SAME density (ne ratio ~0.97 vs staircase ~36) -> resolves the staircase artifact, precision b_3,5 + corner (--no-staircase, --fig)
+python scaling_ffag_sector_saturation.py      # the saturating sector body: scaling sector's azimuthal end made NONLINEAR (Froehlich) -> azimuthal L_eff ROBUST (gap-dominated, drift <0.1% even as high-r mu_r collapses x0.3) while radial k(r) is FRAGILE (droops, achromaticity wall) -- two planes differ (--no-radial, --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
