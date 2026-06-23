@@ -1643,8 +1643,8 @@ paper) — only the surrogate L2 cost.
     step size tau.  NOT OC (Optimality Criteria).  NOT MMA.  No volume
     constraint requires MMA's multiplier loop.  For our stack: replace
     binary element-switch with density (rho in [0, 1]) field + SIMP
-    penalisation -> can use OC, or radia_mcp.optuna black-box if FEM
-    solve wrapped as objective.
+    penalisation -> can use OC, or official optuna-mcp/plain Optuna
+    black-box optimization if the FEM solve is wrapped as objective.
 
 (e) ROTATION DISCRETISATION:
     Paper uses ZERO — only one rotor position.  If real cogging torque

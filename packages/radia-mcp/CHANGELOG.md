@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- **BREAKING**: removed the in-package `radia_mcp.optuna` server and
+  `mcp-server-optuna` entry point.  Optuna operation now belongs to the
+  official public `optuna/optuna-mcp`; radia-mcp keeps the CAE objective,
+  Bayesian/surrogate, evolutionary, and topology-optimization knowledge
+  layers that pair with that external server.
 - **radia-ngsolve (dtn_coarse_mesh, accuracy)**: tightened the `p`-method
   claim after an adversarial methodology review. "mode `n` exact iff order
   `p ≥ n`" is precise only in the **reference space** / 2-D; on the curved

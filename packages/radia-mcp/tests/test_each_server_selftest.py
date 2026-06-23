@@ -14,7 +14,7 @@ Why subprocess rather than direct import + call:
 
 Why parametrized rather than one big loop:
 - per-server pytest IDs make CI failure output immediately actionable
-  ("which 3 of 37 servers regressed?" vs "the suite failed").
+  ("which servers regressed?" vs "the suite failed").
 - supports `pytest -k motor` to re-run a single server.
 
 Each selftest is given a 60s budget — well above the historical worst
@@ -41,9 +41,8 @@ import pytest
 from radia_mcp.meta import catalog
 
 
-# Map catalog short-name -> CLI script name.  Most are 1:1 (catalog
-# 'optuna' -> CLI 'mcp-server-optuna'), but one gets the 'radia-' prefix
-# from the CLI script (see catalog alias logic in catalog.py):
+# Map catalog short-name -> CLI script name.  Most are 1:1, but one
+# gets the 'radia-' prefix from the CLI script (see catalog alias logic):
 #   catalog 'meta' -> CLI 'mcp-server-radia-meta'
 _CLI_NAME_OVERRIDES = {
     "meta": "mcp-server-radia-meta",
@@ -150,11 +149,11 @@ def test_at_least_30_servers_runnable() -> None:
     """Floor check: most servers' CLI entry points must be wired.
 
     Run AFTER the parametrized tests collect SKIP results.  If fewer
-    than 30 of the ~37 servers have their CLI on PATH, the editable
+    than 30 of the cataloged servers have their CLI on PATH, the editable
     install almost certainly drifted (e.g. to the CI runner clone) —
     see CLAUDE.md "Distribution Test Policy" 2026-05-19 note.
 
-    The threshold (30) is intentionally below the actual count (37) so
+    The threshold (30) is intentionally below the actual count so
     this passes even if 2-3 brand-new servers are still being landed.
     """
     runnable = sum(1 for n in SERVERS if shutil.which(_cli_for(n)) is not None)
