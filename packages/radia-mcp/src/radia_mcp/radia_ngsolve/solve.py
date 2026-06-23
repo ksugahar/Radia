@@ -1694,6 +1694,65 @@ def inverse_park(d, q, theta_e):
     return a, b, c
 
 
+def symmetrical_components(a, b, c):
+    """Fortescue symmetrical components of three phase phasors ``a,b,c``.
+
+    Uses the standard ``alpha = exp(j 2*pi/3)`` convention:
+
+        V0 = (Va + Vb + Vc) / 3
+        V1 = (Va + alpha*Vb + alpha^2*Vc) / 3        # positive sequence
+        V2 = (Va + alpha^2*Vb + alpha*Vc) / 3        # negative sequence
+
+    A balanced abc set ``(V, alpha^2 V, alpha V)`` has only positive sequence; the reversed
+    sequence ``(V, alpha V, alpha^2 V)`` has only negative sequence; common-mode phase offset
+    has only zero sequence.  This is the phasor diagnostic layer before Park/dq extraction:
+    positive sequence is the useful rotating field, negative sequence is a counter-rotating
+    unbalance that creates 2*f ripple/loss, and zero sequence is common-mode/neutral content.
+
+    Returns a dict containing ``zero``, ``positive``, ``negative``, ``negative_unbalance`` and
+    ``zero_unbalance``.  The unbalance factors are magnitudes relative to the positive sequence.
+    """
+    alpha = complex(-0.5, math.sqrt(3.0) / 2.0)
+    va, vb, vc = complex(a), complex(b), complex(c)
+    v0 = (va + vb + vc) / 3.0
+    v1 = (va + alpha * vb + alpha * alpha * vc) / 3.0
+    v2 = (va + alpha * alpha * vb + alpha * vc) / 3.0
+    base = abs(v1)
+    scale = max(abs(v0), abs(v1), abs(v2), 1.0)
+    tol = 1e-14 * scale
+
+    def _ratio(v):
+        if base <= tol:
+            return 0.0 if abs(v) <= tol else math.inf
+        return abs(v) / base
+
+    return {
+        "zero": v0,
+        "positive": v1,
+        "negative": v2,
+        "negative_unbalance": _ratio(v2),
+        "zero_unbalance": _ratio(v0),
+    }
+
+
+def inverse_symmetrical_components(zero, positive, negative):
+    """Reconstruct phase phasors ``(a,b,c)`` from Fortescue components.
+
+    Inverse of :func:`symmetrical_components`:
+
+        Va = V0 + V1 + V2
+        Vb = V0 + alpha^2 V1 + alpha V2
+        Vc = V0 + alpha V1 + alpha^2 V2
+    """
+    alpha = complex(-0.5, math.sqrt(3.0) / 2.0)
+    v0, v1, v2 = complex(zero), complex(positive), complex(negative)
+    return (
+        v0 + v1 + v2,
+        v0 + alpha * alpha * v1 + alpha * v2,
+        v0 + alpha * v1 + alpha * alpha * v2,
+    )
+
+
 def dq_flux_torque(pole_pairs, lam_d, lam_q, i_d, i_q):
     r"""Instantaneous electromagnetic torque [N.m] from the dq flux linkages, general (no linear-
     decomposition assumption):
