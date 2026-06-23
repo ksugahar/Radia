@@ -375,6 +375,54 @@ def reflection_metrics(s11):
     }
 
 
+def sparameter_group_delay(frequencies, s_values):
+    r"""Group delay [s] from a sampled complex S-parameter trace.
+
+    The RF/VNA definition is
+
+        tau_g = - d arg(S) / d omega,
+
+    with the phase unwrapped before differentiating. Returns one group-delay
+    value per sample, using one-sided differences at the ends and central
+    differences in the interior. This is the post-processing companion to
+    :func:`waveguide_offset_short_s11`, dielectric-slab S-parameters, and measured
+    or simulated RF traces.
+    """
+    freqs = [float(f) for f in frequencies]
+    vals = [complex(s) for s in s_values]
+    if len(freqs) != len(vals):
+        raise ValueError("frequencies and s_values must have the same length")
+    if len(freqs) < 2:
+        raise ValueError("at least two samples are required")
+    if any(b <= a for a, b in zip(freqs, freqs[1:])):
+        raise ValueError("frequencies must be strictly increasing")
+
+    phases = [cmath.phase(v) for v in vals]
+    unwrapped = [phases[0]]
+    offset = 0.0
+    for phase in phases[1:]:
+        value = phase + offset
+        while value - unwrapped[-1] > math.pi:
+            offset -= 2.0 * math.pi
+            value = phase + offset
+        while value - unwrapped[-1] <= -math.pi:
+            offset += 2.0 * math.pi
+            value = phase + offset
+        unwrapped.append(value)
+
+    omegas = [2.0 * math.pi * f for f in freqs]
+    delays = []
+    for i in range(len(freqs)):
+        if i == 0:
+            slope = (unwrapped[1] - unwrapped[0]) / (omegas[1] - omegas[0])
+        elif i == len(freqs) - 1:
+            slope = (unwrapped[-1] - unwrapped[-2]) / (omegas[-1] - omegas[-2])
+        else:
+            slope = (unwrapped[i + 1] - unwrapped[i - 1]) / (omegas[i + 1] - omegas[i - 1])
+        delays.append(-slope)
+    return delays
+
+
 def helmholtz_cutoff_wavenumbers_2d(mesh, n_modes, bc="neumann", wall="wall",
                                     order=3, shift=-1.0):
     """Lowest cutoff wavenumbers k_c [1/m] of a waveguide cross-section by solving the 2D
