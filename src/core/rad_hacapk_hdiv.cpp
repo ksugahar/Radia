@@ -840,6 +840,9 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     double tol, int maxit, int& iters_out)
 {
     const int n_charge = (int)B_indptr.size() - 1;     // B is n_charge x n_face (CSR over charges)
+    // TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): keep the pool up across
+    // the whole CG loop so the Gram H-matvec is parallel without a caller `with TaskManager()`.
+    ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
     // A x = inv_chi*(M_mass x) + B^T (G (B x)), with G applied as the charge-Gram H-matvec.
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
     auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
@@ -969,6 +972,9 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
     int picard_iters, double cg_tol, int cg_maxit)
 {
     const int n_charge = (int)B_indptr.size() - 1;
+    // TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): one region around the
+    // whole Picard loop (inner CG matvecs) -> parallel without a caller `with TaskManager()`.
+    ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
     auto mmass_apply = [&](const std::vector<double>& x, std::vector<double>& y) {  // y = M_mass x
         y.assign((size_t)n_face, 0.0);
         for (size_t k = 0; k < mV.size(); ++k) y[mI[k]] += mV[k] * x[mJ[k]];

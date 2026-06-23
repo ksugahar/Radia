@@ -2129,6 +2129,12 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	sigma.assign((size_t)dof, 0.0);
 	if(dof == 0) return 0;
 
+	// TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): one region around the
+	// whole build + BiCGSTAB matvec loop so moment-yano method 2 is multi-threaded even when
+	// called via a bare rad.Solve(...,2) without `with TaskManager()`.  Mirrors
+	// RadHACApKChargeGram::SolveMaterialMINRES; nested under a panel region -> no-op.
+	ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+
 	RadHACApKMomentSystem mgr(IntrctPtr, chiPerHex);
 	RadHACApKParams prm; prm.aca_eps = aca_eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
 	if(!mgr.BuildHMatrix(prm)) return -1;
@@ -3078,6 +3084,11 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
                                                                const double* oldSigma)
 {
 	if (!m_hacapk || !m_hacapk->IsValid()) return 0;
+
+	// TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): one region around the
+	// whole MMM/MSC method-2 BiCGSTAB (init + loop matvecs) so it is multi-threaded even when
+	// driven by a bare rad.Solve(...,2) without `with TaskManager()`.  Nested -> no-op.
+	ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
 
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
 

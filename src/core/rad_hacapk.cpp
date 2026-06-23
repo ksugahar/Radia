@@ -47,9 +47,10 @@ extern "C" {
 //=========================================================================
 
 namespace {
-    // Global callback state shared across all OpenMP threads.
-    // NOT thread_local: HACApK calls cHACApK_entry_ij from OpenMP worker threads,
-    // which must see the same manager/invChi/interaction set by the main thread.
+    // Global callback state shared across all TaskManager worker threads.
+    // NOT thread_local: HACApK calls cHACApK_entry_ij from ngcore::ParallelFor
+    // (TaskManager) worker threads, which must see the same manager/invChi/interaction
+    // set by the main thread.
     // Thread safety for concurrent BuildHMatrix calls (multiple Python threads)
     // is ensured by Python's GIL; standalone C++ use would require a mutex.
     RadHACApKBase* g_currentManager = nullptr;
@@ -460,6 +461,13 @@ void RadHACApKMMMManager::PrecomputeFlatInteractMatrix() {
 }
 
 bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
+    // TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): the H-matrix leaf
+    // fill runs ngcore::ParallelFor, which silently falls back to single-threaded when NO
+    // RegionTaskManager is active.  Stand up (or reuse the caller's) pool here so EVERY
+    // HACApK build -- moment-yano, HDiv, MMM/MSC, PEEC, diagnostics -- is parallel even when
+    // a non-panel caller forgot `with TaskManager()`.  Nested -> reuses the caller's (no-op).
+    ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+
     FreeResources();
 
     auto start_time = std::chrono::high_resolution_clock::now();
