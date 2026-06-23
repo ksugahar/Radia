@@ -1112,7 +1112,14 @@ def get_lint_rules() -> str:
 			'severity': 'HIGH',
 			'description': 'Qt class used but not imported. Causes NameError at runtime in Cubit.',
 			'trigger': 'QMenu(...) without "from PySide6.QtWidgets import QMenu"',
-			'fix': 'Add the missing class to PySide6/PyQt5 import statement.',
+			'fix': 'Add the missing class to the PySide6 import statement.',
+		},
+		{
+			'rule': 'pyqt5-import-forbidden',
+			'severity': 'HIGH',
+			'description': 'PyQt5 import in Cubit UI code. Radia targets Coreform Cubit 2025.12+ and is PySide6-only.',
+			'trigger': 'from PyQt5.QtWidgets import ...',
+			'fix': 'Use PySide6 only; do not keep a PyQt5 fallback.',
 		},
 	]
 

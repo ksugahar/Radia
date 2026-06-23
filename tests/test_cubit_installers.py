@@ -1,0 +1,136 @@
+import sys
+import importlib.util
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CME_SRC = PROJECT_ROOT / "packages" / "cubit-mesh-export" / "src"
+if str(CME_SRC) not in sys.path:
+    sys.path.insert(0, str(CME_SRC))
+
+
+def _load_install_panels():
+    path = PROJECT_ROOT / "src" / "radia" / "install_panels.py"
+    spec = importlib.util.spec_from_file_location("radia_install_panels_test", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _fake_cubit(program_files: Path, version: str) -> Path:
+    root = program_files / f"Coreform Cubit {version}"
+    bin_dir = root / "bin"
+    (bin_dir / "plugins").mkdir(parents=True)
+    (bin_dir / "cubit.py").write_text("# fake cubit\n", encoding="utf-8")
+    return root
+
+
+def _patch_windows_env(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "ProgramFiles"))
+    monkeypatch.setenv("ProgramFiles(x86)", "")
+    monkeypatch.setenv("ProgramData", str(tmp_path / "ProgramData"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData" / "Roaming"))
+    monkeypatch.setenv("HOME", str(tmp_path / "Home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "Home"))
+    monkeypatch.setenv("SystemDrive", str(tmp_path / "DriveC"))
+    monkeypatch.delenv("CUBIT_PATH", raising=False)
+    (tmp_path / "Home").mkdir()
+    return Path(tmp_path / "ProgramFiles")
+
+
+def test_find_cubit_bin_prefers_2025_12_over_2025_6(monkeypatch, tmp_path):
+    install_panels = _load_install_panels()
+
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    _fake_cubit(program_files, "2025.3")
+    _fake_cubit(program_files, "2025.6")
+    expected = _fake_cubit(program_files, "2025.12") / "bin"
+
+    assert Path(install_panels.find_cubit_bin()) == expected
+
+
+def test_find_cubit_bin_rejects_pre_2025_12(monkeypatch, tmp_path):
+    install_panels = _load_install_panels()
+
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    _fake_cubit(program_files, "2025.6")
+
+    assert install_panels.find_cubit_bin() is None
+
+
+def test_cubit_mesh_export_installer_requires_2025_12(monkeypatch, tmp_path):
+    from cubit_mesh_export import install as cme_install
+
+    monkeypatch.setattr(cme_install.sys, "platform", "win32")
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    _fake_cubit(program_files, "2025.6")
+    supported = _fake_cubit(program_files, "2025.12")
+
+    assert cme_install._find_cubit_dir() == supported
+
+
+def test_cubit_mesh_export_verify_requires_curver_pyd(monkeypatch, tmp_path):
+    from cubit_mesh_export import install as cme_install
+
+    pkg_dir = tmp_path / "pkg"
+    cubit_dir = tmp_path / "Coreform Cubit 2025.12"
+    plugins = cubit_dir / "bin" / "plugins"
+    plugins.mkdir(parents=True)
+    pkg_dir.mkdir()
+    (pkg_dir / "cubit_mesh_export.ccm").write_bytes(b"ccm")
+    nglib = tmp_path / "nglib.dll"
+    ngcore = tmp_path / "ngcore.dll"
+    nglib.write_bytes(b"nglib")
+    ngcore.write_bytes(b"ngcore")
+    monkeypatch.setattr(cme_install, "_find_netgen_dlls", lambda: (nglib, ngcore))
+
+    ok, issues = cme_install.verify_deployment(pkg_dir, cubit_dir, verbose=False)
+
+    assert not ok
+    assert any("cubit_mesh_curver.pyd" in issue for issue in issues)
+
+
+def test_panel_startup_shim_is_generated_outside_package(monkeypatch, tmp_path):
+    install_panels = _load_install_panels()
+
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    _patch_windows_env(monkeypatch, tmp_path)
+    panels_dir = Path(install_panels._get_panels_dir())
+
+    startup = Path(
+        install_panels._generate_startup_script(str(panels_dir), all_users=True)
+    )
+
+    assert startup.parent == tmp_path / "ProgramData" / "Radia" / "Cubit"
+    assert panels_dir not in startup.parents
+    text = startup.read_text(encoding="utf-8")
+    assert "register_toolbar.py" in text
+    assert str(panels_dir).replace("\\", "/") in text
+
+
+def test_install_panels_writes_and_verifies_current_user(monkeypatch, tmp_path):
+    install_panels = _load_install_panels()
+
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    cubit_root = _fake_cubit(program_files, "2025.12")
+
+    assert install_panels.install_panels(all_users=False) is True
+
+    cubit_file = tmp_path / "Home" / ".cubit"
+    startup = tmp_path / "LocalAppData" / "Radia" / "Cubit" / "radia_startup.py"
+    ini = tmp_path / "AppData" / "Roaming" / "Coreform" / "Cubit.ini"
+
+    assert cubit_file.is_file()
+    assert startup.is_file()
+    assert "play" in cubit_file.read_text(encoding="utf-8")
+    assert str(startup).replace("\\", "/") in cubit_file.read_text(encoding="utf-8")
+    assert str(cubit_root / "bin" / "plugins").replace("\\", "/") in ini.read_text(
+        encoding="utf-8"
+    )
+    ok, issues = install_panels.verify_panel_installation(all_users=False)
+    assert ok, issues
