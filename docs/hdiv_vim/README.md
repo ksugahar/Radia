@@ -33,7 +33,7 @@ N = Bᵀ G B
 cut for symmetry). The contravariant Piola map preserves both `div` and the normal trace (the de Rham
 commuting diagram), so distortion cannot break it. This is the strong (everywhere) field-null property,
 versus the constant-M basis's fragile (collocation-only) field-null that breaks under distortion and
-forces the cohomology-aware `installCycle` loop-star construction in MSC/yano-type.
+forces the cohomology-aware `installCycle` loop-star construction in moment-yano MSC.
 
 ## 2. The Gram — three layers, pick by problem
 
@@ -93,9 +93,9 @@ in **6 Newton iters** and matches Radia to `<1%`.
   field-parallel mirror keeps sign, field-perpendicular flips) reconstructs the full sphere. The
   reduced models reproduce the full demag from ~1/N the DOF (1/2 +0.08%, 1/4 +0.11%, 1/8 −0.32%).
 
-## 6. HDiv-type vs yano-type
+## 6. HDiv-type vs moment-yano
 
-| Capability | yano-type (ELF) | HDiv-type VIM |
+| Capability | moment-yano MSC | HDiv-type VIM |
 |---|---|---|
 | Linear demag (sphere/spheroid/triaxial) | ✓ | ✓ exact vs analytic |
 | Nonlinear (cube / C-yoke) | ✓ | ✓ `<1%` vs Radia, 6 iters |
