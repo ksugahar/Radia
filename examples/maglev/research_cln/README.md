@@ -36,8 +36,8 @@ This example folder is the canonical working location (since 2026-05-12) for:
 
 - **`packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/cln_sphere_dd.py`**
   — markdown doc describing the DD pipeline; surfaced via the `cln_sphere_dd_pipeline` MCP tool.
-- **`src/ext/axifemm/`** — C++ Henrotte axisymmetric FE (Q1/Q2/P1/P2) used for
-  the FEM cross-check (axifemm_p2_triangle Phase B2; commit `81f6415f`).
+- **`src/ext/axifem/`** — C++ Henrotte axisymmetric FE (Q1/Q2/P1/P2) used for
+  the FEM cross-check (axifem_p2_triangle Phase B2; commit `81f6415f`).
 - **Other CLN literature**: Cauer 1958, Henrici 1958 QD-Padé, Sugahara TEAM 28
   axisymmetric matlab, Stoll Bessel ground truth, Hiruma 3-term FEM-CLN.
 
@@ -119,7 +119,7 @@ information — git history is the archive.
 | `cuboid_3D_vacuum_Born_alpha3*` | `_final.wls` | base, closed, v2, v3 |
 | `sphere_vim_axisym_linear_gpu_v*` | `_v3.py` (AGM-ellipe bugfix vs v2) | v2 (+ v2 result JSONs) |
 | `bem_disk_axisym_*` | `_v4_converge.wls` (1% target) | foster_v2, v3_refined (+ JSONs) |
-| `axifemm_disk_kameari*` | `_v2.py` (Schur air-coupling fix) | base (wrong tau) |
+| `axifem_disk_kameari*` | `_v2.py` (Schur air-coupling fix) | base (wrong tau) |
 | `cuboid_521_kameari_kelvin_v*` | `_v22h_correct_B2` (canonical, axisym J·n=0 by geometry); `_v15_canonical` (documents the HCurl-Kameari breakdown — paper motivation); `_v9_AT` (A-T formulation); `_v21_T_formulation` (T-formulation) | v2-v8, v10-v14, v16-v20b, v22-v22g (~25 debug iterations) |
 | `tanimoto_canonical/CLN_AT*` | `CLN_AT.ipynb` | `CLN_AT-Copy1.ipynb` (stale local copy) |
 

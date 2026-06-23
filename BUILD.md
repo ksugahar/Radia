@@ -55,7 +55,7 @@ Builds `radia.pyd` (which includes `RadiaField` NGSolve integration) using MSVC 
 | `-Rebuild` | switch | false | Clean + Configure + Build |
 | `-Test` | switch | false | Run import tests after build |
 | `-RadiaOnly` | switch | false | Build only radia.pyd (legacy flag, no longer needed since RadiaField is integrated) |
-| `-AxiFemmOnly` | switch | false | Rebuild ONLY the `axifem` C++ extension via direct cl/link (no CMake, no MKL) — fast C++ iteration |
+| `-AxiFemOnly` | switch | false | Rebuild ONLY the `axifem` C++ extension via direct cl/link (no CMake, no MKL) — fast C++ iteration |
 | `-InstallToSitePackages` | switch | false | After building, also copy the rebuilt `.pyd`(s) into the importable `site-packages\radia` |
 | `-Verbose` | switch | false | Show detailed build output |
 | `-NoParallel` | switch | false | Disable TaskManager parallelization (for debugging) |
@@ -81,15 +81,15 @@ Builds `radia.pyd` (which includes `RadiaField` NGSolve integration) using MSVC 
 
 ### Rebuilding only `axifem` (C++ extension iteration)
 
-When iterating on the axisymmetric FEMM C++ (`src/ext/axifemm/`: the AxiHenrotte
-FESpace / DiffOps / integrators), a full build is overkill. `-AxiFemmOnly`
+When iterating on the axisymmetric FEMM C++ (`src/ext/axifem/`: the AxiHenrotte
+FESpace / DiffOps / integrators), a full build is overkill. `-AxiFemOnly`
 compiles just the four `axifem` sources and links them directly against the
 installed NGSolve/Netgen + Python — it does **not** need Intel MKL and does **not**
 run a CMake configure (so it also sidesteps a stale `build-msvc` cache):
 
 ```powershell
 # Rebuild axifem and refresh the importable package in one step
-.\Build.ps1 -AxiFemmOnly -InstallToSitePackages
+.\Build.ps1 -AxiFemOnly -InstallToSitePackages
 ```
 
 **Why `-InstallToSitePackages` matters**: the normal build (and CMake's
@@ -106,7 +106,7 @@ reads `src/radia/` directly and does not need this.)
 > is disabled on the volume (check: `fsutil 8dot3name query C:`). A CMake **full**
 > build or reconfigure then fails with `CreateProcess failed: The system cannot
 > find the file specified`. Fix once with `.\Build.ps1 -Rebuild` (a clean
-> reconfigure regenerates resolvable long paths). `-AxiFemmOnly` bypasses CMake
+> reconfigure regenerates resolvable long paths). `-AxiFemOnly` bypasses CMake
 > entirely, so it is unaffected by this.
 
 ---
