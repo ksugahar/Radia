@@ -1080,6 +1080,13 @@ def get_lint_rules() -> str:
 			'fix': 'cubit.cmd("block 2 add tri all")',
 		},
 		{
+			'rule': 'ambiguous-face-block',
+			'severity': 'LOW',
+			'description': 'block add face is ambiguous: APREPRO face selects generic surface elements, but Python APIs split tri/quad blocks.',
+			'trigger': 'cubit.cmd("block 2 add face all in surface all")',
+			'fix': 'Use tri for tet boundaries, quad for hex boundaries, or add an explicit mixed tri/quad comment.',
+		},
+		{
 			'rule': 'wrong-file-extension',
 			'severity': 'MODERATE',
 			'description': 'Export file extension does not match the format.',
@@ -1123,7 +1130,7 @@ def get_lint_rules() -> str:
 		},
 	]
 
-	lines = ["# Cubit Export Lint Rules (16 rules)", ""]
+	lines = [f"# Cubit Export Lint Rules ({len(rules_info)} rules)", ""]
 	for r in rules_info:
 		lines.append(f"## [{r['severity']}] {r['rule']}")
 		lines.append(f"{r['description']}")
