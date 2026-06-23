@@ -408,6 +408,71 @@ def dq_torque_components(lambda_m, Ld, Lq, id_, iq, pole_pairs):
     return t_mag, t_rel, t_mag + t_rel
 
 
+def three_phase_torque_ripple_harmonics(emf_harmonics, current_peak=1.0, mechanical_speed=1.0):
+    """Balanced three-phase torque-ripple harmonics from phase back-EMF harmonics.
+
+    ``emf_harmonics`` maps electrical harmonic order ``n`` to the phase-a peak
+    back-EMF phasor ``E_n`` in
+
+        e_a(theta) = Re[sum_n E_n exp(j n theta)].
+
+    With balanced sinusoidal phase currents at the fundamental, instantaneous
+    electromagnetic power is ``p = e_a i_a + e_b i_b + e_c i_c``.  The three
+    phase sum cancels all harmonics except the familiar ``n = 6k +/- 1`` pairs:
+
+        E_5 + E_7   -> 6th power/torque ripple
+        E_11 + E_13 -> 12th power/torque ripple
+        ...
+
+    The DC electromagnetic power is ``(3/2) I Re(E_1)``; at constant mechanical
+    speed the torque harmonics are the same power harmonics divided by speed.
+    This is the pure three-phase power-balance identity behind loaded PM-machine
+    torque ripple: it is independent of any particular FE solver.
+
+    Returns a dict with ``mean_power``, ``power_ripple`` amplitudes, ``mean_torque``,
+    ``torque_ripple`` amplitudes, and ripple amplitudes normalized by ``mean_power``.
+    """
+    if current_peak < 0:
+        raise ValueError("current_peak must be non-negative")
+    if mechanical_speed <= 0:
+        raise ValueError("mechanical_speed must be positive")
+
+    coeffs = {}
+    mean_power = 0.0
+    for order, value in emf_harmonics.items():
+        n = int(order)
+        if n <= 0:
+            raise ValueError("harmonic orders must be positive integers")
+        E = complex(value)
+        if n == 1:
+            mean_power += 1.5 * current_peak * E.real
+            continue
+        if (n - 1) % 3 == 0:
+            k = n - 1
+        elif (n + 1) % 3 == 0:
+            k = n + 1
+        else:
+            continue
+        if k == 0:
+            continue
+        coeffs[k] = coeffs.get(k, 0.0j) + E
+
+    power_ripple = {k: 1.5 * current_peak * abs(v) for k, v in sorted(coeffs.items())}
+    torque_ripple = {k: amp / mechanical_speed for k, amp in power_ripple.items()}
+    mean_torque = mean_power / mechanical_speed
+    if abs(mean_power) > 0:
+        normalized = {k: amp / abs(mean_power) for k, amp in power_ripple.items()}
+    else:
+        normalized = {k: math.inf for k in power_ripple}
+    return {
+        "mean_power": mean_power,
+        "power_ripple": power_ripple,
+        "mean_torque": mean_torque,
+        "torque_ripple": torque_ripple,
+        "normalized_ripple": normalized,
+    }
+
+
 def mtpa_operating_point(lambda_m, Ld, Lq, current, pole_pairs):
     """MAXIMUM-TORQUE-PER-AMPERE operating point of a salient PM synchronous
     machine at stator current magnitude ``current``.
