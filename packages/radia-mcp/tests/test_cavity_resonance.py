@@ -14,7 +14,8 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.radia_ngsolve.waveguide import rectangular_cavity_frequency, C0
+from radia_mcp.radia_ngsolve.waveguide import (rectangular_cavity_frequency,
+                                               rectangular_cavity_modes, C0)
 
 A, B, D = 0.040, 0.020, 0.030
 
@@ -32,3 +33,32 @@ def test_cavity_closed_form():
     L = 0.05
     assert math.isclose(rectangular_cavity_frequency(L, L, L, 1, 0, 1),
                         C0 * math.sqrt(2) / (2 * L), rel_tol=1e-12)
+
+
+def test_rectangular_cavity_mode_table_sorted():
+    modes = rectangular_cavity_modes(A, B, D, max_index=2, limit=4)
+    assert modes[0]["indices"] == (1, 0, 1)
+    assert math.isclose(modes[0]["frequency"],
+                        rectangular_cavity_frequency(A, B, D, 1, 0, 1),
+                        rel_tol=1e-12)
+    assert [row["frequency"] for row in modes] == sorted(row["frequency"] for row in modes)
+    assert modes[1]["indices"] == (1, 1, 0)
+    assert {modes[2]["indices"], modes[3]["indices"]} == {(0, 1, 1), (2, 0, 1)}
+
+
+def test_cubic_cavity_mode_degeneracy():
+    L = 0.05
+    modes = rectangular_cavity_modes(L, L, L, max_index=1, limit=3)
+    assert [row["indices"] for row in modes] == [(0, 1, 1), (1, 0, 1), (1, 1, 0)]
+    assert all(math.isclose(row["frequency"], modes[0]["frequency"], rel_tol=1e-12)
+               for row in modes)
+
+
+def test_rectangular_cavity_mode_table_validation():
+    import pytest
+    with pytest.raises(ValueError):
+        rectangular_cavity_modes(0.0, B, D)
+    with pytest.raises(ValueError):
+        rectangular_cavity_modes(A, B, D, max_index=0)
+    with pytest.raises(ValueError):
+        rectangular_cavity_modes(A, B, D, limit=0)
