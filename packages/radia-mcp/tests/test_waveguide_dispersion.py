@@ -17,6 +17,7 @@ if _SRC not in sys.path:
 
 from radia_mcp.radia_ngsolve.waveguide import (rectangular_waveguide_cutoff, cutoff_frequency,
                                                waveguide_dispersion, guide_wavelength,
+                                               waveguide_wave_impedance,
                                                waveguide_evanescent_attenuation,
                                                waveguide_dielectric_slab_sparams,
                                                waveguide_cascade_sparams,
@@ -120,6 +121,31 @@ def test_dispersion_identities():
         w = lambda bb: C0 * math.sqrt(bb * bb + kc * kc)
         vg_num = (w(d["beta"] + db) - w(d["beta"] - db)) / (2.0 * db)
         assert math.isclose(vg_num, d["v_group"], rel_tol=1e-6)
+
+
+def test_waveguide_wave_impedance_limits_and_duality():
+    fc = rectangular_waveguide_cutoff(0.02286, 0.01016, 1, 0)
+    eta0 = 4.0e-7 * math.pi * C0
+
+    for f in (8e9, 10e9, 20e9):
+        zte = waveguide_wave_impedance(f, fc, "TE")
+        ztm = waveguide_wave_impedance(f, fc, "TM")
+        d = waveguide_dispersion(f, fc)
+        s = math.sqrt(1.0 - d["fc_over_f"] ** 2)
+        assert math.isclose(zte["Z"], eta0 / s, rel_tol=1e-12)
+        assert math.isclose(ztm["Z"], eta0 * s, rel_tol=1e-12)
+        assert math.isclose(zte["Z"] * ztm["Z"], eta0 ** 2, rel_tol=1e-12)
+
+    near = waveguide_wave_impedance(1.000001 * fc, fc, "TE")["Z"]
+    assert near > 700.0 * eta0
+    assert waveguide_wave_impedance(100.0 * fc, fc, "TE")["Z"] == pytest.approx(eta0, rel=1e-4)
+    assert waveguide_wave_impedance(1.000001 * fc, fc, "TM")["Z"] < eta0 / 700.0
+    assert waveguide_wave_impedance(100.0 * fc, fc, "TM")["Z"] == pytest.approx(eta0, rel=1e-4)
+
+    with pytest.raises(ValueError):
+        waveguide_wave_impedance(fc, fc, "TE")
+    with pytest.raises(ValueError):
+        waveguide_wave_impedance(10e9, fc, "TEM")
 
 
 def test_cutoff_and_high_frequency_limits():
