@@ -248,7 +248,7 @@ The flagship server for this repository turns the Radia ↔ NGSolve hybrid (FEM 
 | **Model-order reduction** | `cln_3d`, `cln_sibc_orthogonal`, `cln_sphere_dd_pipeline`, `bem_cln` | Cauer Ladder Network MOR, incl. a double-double (~32-digit) VIM pipeline |
 | **Circuit extraction** | `peec_inductance`, `ngsbem_inductance` | PEEC-from-STEP and `ngsolve.bem` inductance recipes |
 | **Surface impedance** | `esim` | ESIM nonlinear cell problem for induction-heating workpieces |
-| **Axisymmetric FE** | `axifemm_documentation` | Henrotte $Q$-element axisymmetric basis for 2D axisymmetric magnetics |
+| **Axisymmetric FE** | `axifem_documentation` | Henrotte $Q$-element axisymmetric basis for 2D axisymmetric magnetics |
 | **Force & cross-validation** | `force_validation` | EM force extraction (Maxwell stress / virtual work) with closed-form cross-checks |
 | **Parallelism** | `taskmanager` | The caller-wraps TaskManager policy + repo audit |
 | **Live linting** | `lint_radia_script`, `lint_radia_directory` | Flags NGSolve/Radia convention violations before they ship |

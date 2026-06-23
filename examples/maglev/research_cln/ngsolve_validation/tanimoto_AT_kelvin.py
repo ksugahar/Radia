@@ -1,7 +1,7 @@
 """tanimoto_AT_kelvin.py — Tanimoto A-T with Kelvin two-sphere domain.
 
 DIAGNOSTIC TEST 2026-05-09: Tanimoto+H-H on conductor-only mesh gives
-225.77 us for cylinder (vs BEM/v5/axifemm 4-way consensus 218.69 us,
+225.77 us for cylinder (vs BEM/v5/axifem 4-way consensus 218.69 us,
 +3% gap). Hypothesis: gap is caused by missing vacuum coupling.
 
 This script ports v5's Kelvin two-sphere mesh setup (cylinder + inner

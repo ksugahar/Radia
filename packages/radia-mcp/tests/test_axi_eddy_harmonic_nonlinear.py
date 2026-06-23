@@ -1,6 +1,6 @@
 """Nonlinear (saturating mu(|B|)) forced time-harmonic axisymmetric eddy currents
 (solve.solve_axi_eddy_harmonic_nonlinear) -- the Picard layer unblocked by the
-complex H1Henrotte field eval (src/ext/axifemm complex CalcMatrix fix), since each
+complex H1Henrotte field eval (src/ext/axifem complex CalcMatrix fix), since each
 sweep samples mu_of_B(|B(A)|) at element centroids from the COMPLEX A_phi.
 
 Two checks:
