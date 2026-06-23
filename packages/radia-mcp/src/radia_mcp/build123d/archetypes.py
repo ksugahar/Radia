@@ -35,7 +35,7 @@ __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cyl
            "block_magnet", "halbach_ring", "c_core", "solenoid", "pole_tip", "multipole_yoke",
            "h_dipole", "helmholtz_pair", "cos_theta_dipole", "e_core", "slotted_stator", "spm_rotor",
            "litz_packing_radius", "litz_fill_factor", "litz_wire", "hierarchical_litz",
-           "rectangular_litz", "litz_serving",
+           "rectangular_litz", "rectangular_litz_fill_factor", "litz_serving",
            "involute_gear", "threaded_rod", "airfoil", "blade",
            "gear_rack", "bevel_gear", "worm", "chain_sprocket", "vbelt_pulley",
            "ipm_rotor", "squirrel_cage_rotor", "claw_pole_rotor"]
@@ -291,6 +291,38 @@ def litz_fill_factor(n_strands, strand_radius, bundle_radius):
     if bundle_radius <= 0:
         raise ValueError("bundle_radius must be > 0")
     return n_strands * (strand_radius / bundle_radius) ** 2
+
+
+def rectangular_litz_fill_factor(nx, ny, strand_radius, pitch_x, pitch_y=None):
+    r"""Copper fill factor of a rectangular Litz bundle envelope.
+
+    ``nx`` by ``ny`` round strands of radius ``strand_radius`` sit on a rectangular grid with centre
+    spacing ``pitch_x`` and ``pitch_y`` (``pitch_y = pitch_x`` by default).  The envelope is the tight
+    rectangle spanning the outer strand tangencies:
+
+        ``width = (nx - 1) pitch_x + 2 strand_radius``
+        ``height = (ny - 1) pitch_y + 2 strand_radius``
+
+    The fill factor is total copper area divided by this rectangle area.  This is the slot-fill metric
+    for :func:`rectangular_litz` and the clean analytic counterpart of :func:`litz_fill_factor` for round
+    bundles.  Pitches must be large enough that neighbouring strands do not overlap.
+    """
+    nx = int(nx)
+    ny = int(ny)
+    rs = float(strand_radius)
+    px = float(pitch_x)
+    py = px if pitch_y is None else float(pitch_y)
+    if nx < 1 or ny < 1:
+        raise ValueError("nx and ny must be >= 1")
+    if rs <= 0.0:
+        raise ValueError("strand_radius must be > 0")
+    if px <= 0.0 or py <= 0.0:
+        raise ValueError("pitch_x and pitch_y must be > 0")
+    if (nx > 1 and px < 2.0 * rs) or (ny > 1 and py < 2.0 * rs):
+        raise ValueError("pitches must be at least 2*strand_radius to avoid overlap")
+    width = (nx - 1) * px + 2.0 * rs
+    height = (ny - 1) * py + 2.0 * rs
+    return nx * ny * math.pi * rs * rs / (width * height)
 
 
 def _sweep_section(path, section_2d):
