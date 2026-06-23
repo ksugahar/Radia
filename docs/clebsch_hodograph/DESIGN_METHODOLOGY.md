@@ -537,18 +537,38 @@ i.e. **one pole face delivers a clean transverse harmonic AND a rounded corner**
 two cleanly-separated two-plane levers composed in 3-D (`δ ≈ 0.41 mm` from §3.9 Plane 1;
 `ĝ` the Rogowski shape from Plane 2).
 
-**Honest scope.** The exact `δ(x/w)²` shim needs an *x-varying* face, built here as an
-x-prism STAIRCASE (per-slab shim offset), so the no-shim cases mesh coarser than the
-shim cases — the per-case *absolute* numbers are research-grade, not precision. The
-locked claim is the **co-existence** of both levers in the (well-resolved) BOTH pole;
-the per-lever *causation* is golden-locked separately (the `x-y` shim zeroes `b₃`:
-`accel_pole_dipole_body_2d` / §3.9 Plane 1; the `s-y` chamfer drives the corner
-over-field through `1`: §3.9's depth sweep). A precision tensor LOFT (OCC ThruSections)
-is the clean construction. (A separate attempt at the **rotated-EFB edge focusing**
-extension was *not shipped*: the `∫B` effective-field-boundary angle extracted from the
-equipotential drive attenuated to `~0.47·β_cut` in a way that could not be cleanly
-separated from the genuine fringe effect — it needs a reduced-Ω-with-source drive or
-particle tracking, recorded as the open next step.)
+**Honest scope of the staircase build (`endpack_cobake.py`).** The exact `δ(x/w)²`
+shim needs an *x-varying* face, built there as an x-prism STAIRCASE (per-slab shim
+offset), so the no-shim cases mesh coarser than the shim cases — the per-case *absolute*
+numbers are research-grade, not precision. The locked claim is the **co-existence** of
+both levers in the (well-resolved) BOTH pole; the per-lever *causation* is golden-locked
+separately (the `x-y` shim zeroes `b₃`: `accel_pole_dipole_body_2d` / §3.9 Plane 1; the
+`s-y` chamfer drives the corner over-field through `1`: §3.9's depth sweep).
+
+**Precision construction (`endpack_cobake_loft.py`, ngsolve only, golden-tested).** The
+clean construction the staircase pointed to is now built: the gap face is a SMOOTH OCC
+`ThruSections` LOFT through per-x-station cross-section wires (each carrying its shim
+offset `δ(xᵢ/w)²` + the chamfer `lift(s)`), so the surface is smooth in `x` (no facets).
+The headline is **mesh consistency**: the smooth loft meshes the baseline (`δ=0`) and the
+shim (`δ>0`) cases at the *same* density —
+
+| build | `ne(shim)/ne(baseline)` |
+|---|---|
+| smooth LOFT (`endpack_cobake_loft.py`) | **`≈ 0.97`** (same density) |
+| x-prism STAIRCASE (`endpack_cobake.py`) | `≈ 36` (merges `δ=0` slabs → coarse; steps `δ>0` → fine) |
+
+so the loft **RESOLVES the staircase artifact** and the co-baked pole's `b̄₃,₅` + corner
+become a *precision* claim. On that consistent mesh both levers still act: the chamfer
+rounds the corner (`tip 0.99`), the shim removes the transverse content the chamfer
+introduces (`both 0.47 % < chamfer-only 0.84 %`), and the co-baked pole is the lowest
+`b̄₃,₅` of all four cases. *(Absolute `b̄₃,₅` differs from the staircase table above
+because the meshes differ; the loft's value is the precision one.)*
+
+**Rotated-EFB edge focusing — retried with a reduced-Ω source.** A first attempt
+extracted the `∫B` effective-field-boundary angle from the *equipotential* drive and it
+attenuated to `~0.47·β_cut` (an extraction artifact). The retry drives a slant-ended
+(parallelogram) H-frame dipole with a *real coil* (reduced-Ω + CoilBuilder Biot-Savart)
+and measures `y_EFB(x)` directly — the genuine edge-focusing test.
 
 ---
 
@@ -679,14 +699,15 @@ coil = A-side), so the framework is one method, not two.
   design-grade (the lumped-circuit class of `clebsch_dipole_saturation_2d`), with `κ`
   from the §3.9 linear equipotential (golden) and the BH + A-formulation from
   `clebsch_dipole_saturation_3d` (committed) as its independently-validated components.
-- the **two planes CO-BAKED into one pole** (§3.11, `endpack_cobake.py`): both the `x-y`
-  shim `δ` and the `s-y` Rogowski chamfer `ĝ` baked into one gap face
-  `z(x,s)=g/2−δ(x/w)²+lift(s)` — the co-baked pole delivers a clean integrated
-  transverse `b̄₃,₅ ≈ 0.07 %` AND a rounded pole-tip corner (`tip ≈ 1.02`) at once, the
-  §3.9 two-plane levers composed in 3-D (the `δ`-shim x-prism staircase is research-grade
-  mesh; the per-lever causation is golden-locked in §3.9). The rotated-EFB edge-focusing
-  extension was attempted but not shipped (the `∫B` EFB angle attenuated `~0.47·β_cut`,
-  not cleanly attributable — needs a reduced-Ω-with-source drive or tracking).
+- the **two planes CO-BAKED into one pole** (§3.11, `endpack_cobake.py` staircase +
+  `endpack_cobake_loft.py` precision LOFT): both the `x-y` shim `δ` and the `s-y`
+  Rogowski chamfer `ĝ` baked into one gap face `z(x,s)=g/2−δ(x/w)²+lift(s)` — the
+  co-baked pole delivers a clean integrated transverse `b̄₃,₅` AND a rounded pole-tip
+  corner at once, the §3.9 two-plane levers composed in 3-D. The PRECISION construction
+  (`endpack_cobake_loft.py`, OCC `ThruSections`) builds the gap face as a SMOOTH loft so
+  the baseline + shim cases mesh at the SAME density (`ne(shim)/ne(baseline) ≈ 0.97`, vs
+  the staircase's `≈ 36`) — it RESOLVES the documented staircase artifact, making the
+  co-baked `b̄₃,₅` + corner a precision claim.
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed in two planes** (§3.9): the longitudinal
@@ -727,4 +748,5 @@ coil = A-side), so the framework is one method, not two.
 | end pack in two planes (x-y cross-section + s-y end → 3-D) | `examples/clebsch_hodograph/endpack_two_plane.py` |
 | spectrometer end pack NONLINEAR (corner saturable throat) | `examples/clebsch_hodograph/endpack_spectrometer_saturation.py` |
 | two planes co-baked into one pole (δ shim + ĝ chamfer) | `examples/clebsch_hodograph/endpack_cobake.py` |
+| co-bake as a PRECISION tensor loft (OCC ThruSections) | `examples/clebsch_hodograph/endpack_cobake_loft.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |

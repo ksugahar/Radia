@@ -1,0 +1,45 @@
+{
+  "shim_delta_m": 0.00040579577929101076,
+  "chamfer_depth_m": 0.0024,
+  "chamfer_len_m": 0.03,
+  "n_station": 7,
+  "cases": {
+    "baseline": {
+      "ne": 15442,
+      "tip_enhancement": 1.124747472387206,
+      "integrated_spurious_rel": 0.004911183060305654,
+      "L_eff_m": 0.1455321127049234
+    },
+    "shim_only": {
+      "ne": 14964,
+      "tip_enhancement": 1.1211298818175675,
+      "integrated_spurious_rel": 0.0056484250429443454,
+      "L_eff_m": 0.14587294828980324
+    },
+    "chamfer_only": {
+      "ne": 22255,
+      "tip_enhancement": 0.9853823731280189,
+      "integrated_spurious_rel": 0.008404510445075036,
+      "L_eff_m": 0.14079001009999254
+    },
+    "both": {
+      "ne": 22213,
+      "tip_enhancement": 0.995367425233118,
+      "integrated_spurious_rel": 0.004742753460809976,
+      "L_eff_m": 0.14168246443340465
+    }
+  },
+  "both_clean_transverse_rel": 0.004742753460809976,
+  "both_corner_tip": 0.995367425233118,
+  "chamfer_rounds_corner": true,
+  "shim_cleans_chamfer_transverse": true,
+  "both_is_lowest_transverse": true,
+  "shim_only_vs_baseline_transverse": 0.0007372419826386914,
+  "loft_ne_ratio_shim_over_baseline": 0.9690454604325864,
+  "staircase": {
+    "baseline_ne": 766,
+    "shim_only_ne": 27909,
+    "ne_ratio_shim_over_baseline": 36.43472584856397
+  },
+  "loft_more_consistent_than_staircase": true
+}
