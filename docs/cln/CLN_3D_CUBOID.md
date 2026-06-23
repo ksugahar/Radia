@@ -4,7 +4,7 @@ This document describes the path from the (working) 2D axisymmetric Cu disk
 Cauer cross-validation to the 3D Cu cuboid analysis that is the actual
 target of the Nagamine 2026 paper [^Nagamine2026].
 
-The 2D disk benchmark (see [`docs/axifemm/AXIFEMM.md`](../axifemm/AXIFEMM.md))
+The 2D disk benchmark (see [`docs/axifem/AXIFEM.md`](../axifem/AXIFEM.md))
 showed that two completely different formulations -- BEM-Foster integral
 equation (Mathematica + 50-digit mpmath Nagamine pipeline) and Henrotte
 axisymmetric FE (`radia.axifem` in radia-core, `axihenrotte` order=1/2) +
@@ -118,7 +118,7 @@ side and the **Hiruma 3-term** on the HCurl side.
 
 ---
 
-## 3.5 Pre-flight: 3D HCurl validation against axifemm p=2 on the Cu disk
+## 3.5 Pre-flight: 3D HCurl validation against axifem p=2 on the Cu disk
 
 Before tackling the cuboid (which has no axisymmetric reference solution),
 the 3D HCurl + Hiruma 3-term pipeline is **first calibrated on the Cu disk**
@@ -166,7 +166,7 @@ B_z).
 
 ### Expected outcome and what failure means
 
-* If the 3D HCurl + Hiruma 3-term result matches axifemm p=2 to ≲ 1 % at
+* If the 3D HCurl + Hiruma 3-term result matches axifem p=2 to ≲ 1 % at
   `tau_pair[0]`: the 3D HCurl pipeline is correctly implemented, and we
   can confidently move to the cuboid (where no axisymmetric reference
   exists).
@@ -203,7 +203,7 @@ For each direction `k_dir ∈ {x, y, z}`:
 2. compute `b = M @ A_ext_h_vec` (the Hiruma RHS — the σ-mass-weighted
    external A);
 3. apply the Hiruma 3-term recursion (port from
-   [`examples/axifemm/research/verification/test_hiruma_disk_q1.py:hiruma_3term`](../../examples/axifemm/research/verification/test_hiruma_disk_q1.py))
+   [`examples/axifem/research/verification/test_hiruma_disk_q1.py:hiruma_3term`](../../examples/axifem/research/verification/test_hiruma_disk_q1.py))
    on `(K_red, M_red, b_red)`, where `_red` = restriction to FreeDofs;
 4. read off Nagamine `R_{2k}, L_{2k+1}, tau_pair[k]` per stage as in the
    disk script.
@@ -228,7 +228,7 @@ This is a direct copy of the disk pipeline
 
 ### 4.3 3-way validation test
 
-Mirror [`tests/test_3way_cauer_cross_validation.py`](../../examples/axifemm/research/verification/test_3way_cauer_cross_validation.py)
+Mirror [`tests/test_3way_cauer_cross_validation.py`](../../examples/axifem/research/verification/test_3way_cauer_cross_validation.py)
 in `cuboid_521_3way_cauer_cross_validation.py`: load BEM Cauer + HCurl
 Hiruma JSON files, print the per-direction `τ_pair[k]` table, and assert
 the leading rung agrees to ≲ 1 %.
@@ -262,7 +262,7 @@ the leading rung agrees to ≲ 1 %.
 ## 6. Connection to radia-core axifem
 
 The `radia-core` `radia.axifem` module
-([`docs/axifemm/AXIFEMM.md`](../axifemm/AXIFEMM.md)) is **specific to
+([`docs/axifem/AXIFEM.md`](../axifem/AXIFEM.md)) is **specific to
 axisymmetric problems** -- its Henrotte basis polynomial in `s = r²` only
 makes sense when the integrand has the axisymmetric `1/r` weight. The 3D
 cuboid problem does not need a special basis; it uses standard NGSolve

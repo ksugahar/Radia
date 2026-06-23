@@ -2,7 +2,7 @@
 the interior PEC eddy current problem.
 
 DIAGNOSTIC for 2026-05-09: Tanimoto+H-H gives 225.77 us for cylinder
-R=10 t=2, while BEM/v5/axifemm 4-way consensus gives 218.69 us. The
+R=10 t=2, while BEM/v5/axifem 4-way consensus gives 218.69 us. The
 hypothesis is that Tanimoto+H-H is solving the **interior PEC**
 problem (n×A=0 on conductor surface) rather than vacuum-coupled.
 
@@ -156,7 +156,7 @@ def main():
     print()
     print(" Comparison with reference values:", flush=True)
     print(f"  Tanimoto+H-H stage 2 = 225.77 μs", flush=True)
-    print(f"  BEM-Foster / v5 / axifemm 4-way = 218.69 ± 0.5 μs", flush=True)
+    print(f"  BEM-Foster / v5 / axifem 4-way = 218.69 ± 0.5 μs", flush=True)
     if tau_us_list:
         print(f"  PEC interior eig leading τ = {tau_us_list[0]:.4f} μs",
               flush=True)
