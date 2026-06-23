@@ -15,7 +15,7 @@ These tests pin the new behaviour:
   3. restore_state with legacy INT bounds-checks against
      current item count and falls back to the panel default
 
-Refreshed 2026-04-26 to use the canonical 4-method names from
+Refreshed 2026-04-26 to use the canonical method names from
 radia_ih.METHOD_* constants (was hardcoded to the obsolete 2-item
 combo strings "PEEC+FEM"/"FEM").  Round-trip widgets updated to
 the post-2026-04-19 panel structure (impedance_model in place of
@@ -73,8 +73,9 @@ class TestLegacyIndexRestore:
     for backward compatibility, but only when they are in range."""
 
     def test_legacy_index_in_range(self, ih_panel, methods):
-        # 4-method combo: PEEC_IND=0, PEEC_BEM=1, PEEC_FEM_K=2, FEM_FULL=3
-        ih_panel.restore_state({"method": 3})
+        target_index = ih_panel._method_combo.findText(methods["FEM_FULL"])
+        assert target_index >= 0
+        ih_panel.restore_state({"method": target_index})
         assert ih_panel._method_combo.currentText() == methods["FEM_FULL"]
 
     def test_legacy_index_out_of_range_keeps_default(self, ih_panel):

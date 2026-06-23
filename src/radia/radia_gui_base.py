@@ -817,6 +817,7 @@ class AnalysisWindow(QMainWindow):
         self._last_msh = None
         self._panel = None  # set by subclass via _set_panel()
         self._vol_path = vol_path
+        self._has_explicit_vol_path = bool(vol_path)
         # Working folder = root for all per-panel file pickers.  Defaults
         # to the directory of the .vol the launcher passed in (set by
         # Cubit's startDetached at .jou's directory) or cwd otherwise.
@@ -1708,7 +1709,7 @@ class AnalysisWindow(QMainWindow):
         # Restore working folder first (the panel's restore_state may
         # display relative paths against it).
         wf = data.get("working_folder")
-        if wf and not self._folder_edit.text():
+        if wf and not self._has_explicit_vol_path:
             self._folder_edit.setText(wf)
             self._working_folder = os.path.abspath(wf)
         if not self._vol_edit.text() and "vol" in data:

@@ -2,25 +2,34 @@
 SIBC / ESIM knowledge for induction heating MCP server.
 
 =============================================================================
-2026-04-19 PANEL MIGRATION NOTICE
+2026-06-24 PANEL PIPELINE NOTICE
 =============================================================================
-The IH panel was rebuilt on 2026-04-19.  Two methods only:
+The IH panel is now a unified production panel with six EM methods plus
+three integrated thermal follow-up methods:
 
-  (a) PEEC+BEM (1-way)   -> calc_peec_bem.py       (P_wp focus)
-  (b) FEM A-V (coil mesh) -> calc_fem_coilmesh.py   (L + P_wp + P_coil)
+  (a) PEEC inductance              -> calc_inductance.py --coil-solver peec
+  (b) BEM-A inductance             -> calc_inductance.py --coil-solver bem-a
+  (c) PEEC+BEM weak coupling       -> calc_inductance.py --coil-solver peec --vol <wp>
+  (d) BEM-A+BEM weak coupling      -> calc_inductance.py --coil-solver bem-a --vol <wp>
+  (e) PEEC + FEM wp + Kelvin       -> calc_fem_kelvin.py --formulation total
+  (f) Full FEM A-V + wp SIBC       -> calc_fem_coilmesh.py
+  (g-i) Thermal 3D/static, 3D/rotating, and 2D-axisym -> calc_heat*.py
 
-References below to `calc_inductance.py`, `calc_heating_bem.py`, and
-`calc_fem_kelvin.py` describe RETIRED (or moved to examples/) panel
-scripts.  The PHYSICS knowledge is still correct and useful; the
-panel-script file names are NOT.  For current panel pipeline, see
-`ih_knowledge.py::INDUCTION_HEATING_PEEC_BEM_SIBC` and
-`::INDUCTION_HEATING_AV_COIL_SIGMA`.
+The current GUI owns per-panel browse rows under a top-level Working
+folder.  The workpiece mesh is `IHPanel.wp_vol`, not the hidden legacy
+`AnalysisWindow._vol_edit` compatibility shim.
+
+References below that mention retired helpers such as
+`calc_heating_bem.py` are historical physics notes.  Current panel
+entry points are the calc scripts listed above.
 
 Historical context:
   2026-04-17: BEM modules moved examples/induction_heating/bem_reference/
   2026-04-18: T0 + A-V compound retired from panel (gap-corner 1/r cusps)
   2026-04-19: calc_peec_bem + calc_fem_coilmesh become the panel
               (A-V is BACK, this time gapped-torus-only + proper source/sink)
+  2026-04-24: calc_fem_kelvin scattered formulation retired from the panel
+  2026-06-24: docs refreshed for unified calc_inductance + working-folder UI
 =============================================================================
 """
 
