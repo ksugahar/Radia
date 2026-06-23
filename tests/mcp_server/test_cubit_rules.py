@@ -218,7 +218,7 @@ class TestCubitHardcodedAbsolutePaths:
         assert len(findings) == 1
 
     def test_allows_cubit_path(self):
-        code = "sys.path.insert(0, r'C:\\Program Files\\Coreform Cubit 2024.3\\bin')"
+        code = "sys.path.insert(0, r'C:\\Program Files\\Coreform Cubit 2025.12\\bin')"
         assert _run(check_hardcoded_absolute_paths, code) == []
 
     def test_allows_ngsolve_path(self):
