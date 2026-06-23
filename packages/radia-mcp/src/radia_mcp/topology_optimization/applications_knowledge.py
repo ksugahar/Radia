@@ -226,7 +226,8 @@ internal regression reference.
 When the geometry is constrained (manufacturable segment angles, discrete
 magnetization directions, soft-iron return paths) the linear inverse becomes
 a bounded nonlinear fit — drive it with a DERIVATIVE-FREE optimizer:
-Nelder-Mead simplex / swarm (see the `evolutionary` and `optuna` servers).
+Nelder-Mead simplex / swarm (see the `evolutionary` server and official
+`optuna/optuna-mcp`).
 The analytic multipole map makes a cheap, exactly-differentiable surrogate
 for the inner objective.
 
@@ -280,8 +281,8 @@ outer loop; the canonical members:
     The optimizer sees the unconstrained t; the objective sees the feasible x.
   * POPULATION / GLOBAL members for multimodal or discrete design -- PSO
     (Kennedy-Eberhart 1995; lab EQC_PSO / PSO dirs), GA (lab GA dirs), CMA-ES.
-    See the `evolutionary` server (ga_de / pso / cma_es / immune_nsga) and the
-    `optuna` server (TPE / CMA-ES sampler, pruning) -- THIS topic is the
+    See the `evolutionary` server (ga_de / pso / cma_es / immune_nsga) and
+    official `optuna/optuna-mcp` (TPE / CMA-ES sampler, pruning) -- THIS topic is the
     direct-search LOCAL sibling those servers do not cover.
 
 VERIFICATION (golden-locked by tests/mcp_server/test_topology_field_synthesis.py):
@@ -295,7 +296,7 @@ WHERE IT PLUGS IN: the analytic PM-multipole / stream-function inverse
 inner objective; this outer loop then searches the manufacturable parameters
 (segment count/angles, former size, discrete easy-axis) against the Radia/FE
 forward field.  Local direct search for fine tuning; population/global
-(`evolutionary`, `optuna`) when the field landscape is multimodal.
+(`evolutionary`, official `optuna/optuna-mcp`) when the field landscape is multimodal.
 """
 
 
@@ -409,7 +410,7 @@ def get_applications_documentation(topic: str = "all") -> str:
                          field_synthesis, verified vs the SVD pseudo-inverse
       "outer_loop"     - Derivative-free outer-loop optimizers (Nelder-Mead +
                          fminsearchbnd bound transform; pointer to evolutionary
-                         / optuna for population/global), verified on Rosenbrock
+                         / official optuna-mcp for population/global), verified on Rosenbrock
       "nonlinear_lsq"  - Levenberg-Marquardt nonlinear least squares (lsqnonlin):
                          the nonlinear sum-of-squares solver for field/curve fitting
                          and inverse design, verified vs known optima + scipy

@@ -25,7 +25,6 @@ Total: **332 tools** across 39 MCP servers.
 | [`mcp-server-litz-transmission`](#mcp-server-litz-transmission) | `radia_mcp.litz_transmission` | 3 |
 | [`mcp-server-rna-mec`](#mcp-server-rna-mec) | `radia_mcp.rna_mec` | 3 |
 | [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 4 |
-| [`mcp-server-optuna`](#mcp-server-optuna) | `radia_mcp.optuna` | 6 |
 | [`mcp-server-bayesian-opt`](#mcp-server-bayesian-opt) | `radia_mcp.bayesian_opt` | 3 |
 | [`mcp-server-evolutionary`](#mcp-server-evolutionary) | `radia_mcp.evolutionary` | 3 |
 | [`mcp-server-data-assimilation`](#mcp-server-data-assimilation) | `radia_mcp.data_assimilation` | 3 |
@@ -420,21 +419,6 @@ Module: `radia_mcp.topology_optimization.server`
 | `topology_opt_topology_derivative` | Topological derivative for changing topology (adding/removing material). |
 | `topology_optimization_status` | (no description) |
 
-## `mcp-server-optuna`
-
-_Optuna black-box optimization (Sano-Akiba-Imamura 2023 textbook)_
-
-Module: `radia_mcp.optuna.server`
-
-| Tool | Description |
-|---|---|
-| `optuna_algorithm` | Optuna algorithm internals: samplers, MO, constraints, pruning. |
-| `optuna_kanamori2016_textbook` | Kanamori et al. (2016) continuous-optimization textbook companion. |
-| `optuna_lab_applications` | Lab applications: how Optuna plugs into Radia / NGSolve work. |
-| `optuna_recipes_advanced` | Advanced lab BBO recipes that wire Optuna onto a Stage-2 calc_*.py. |
-| `optuna_status` | (no description) |
-| `optuna_usage` | Optuna usage: basics, storage, visualization. |
-
 ## `mcp-server-bayesian-opt`
 
 _BO + GP regression + FMQA + surrogate models (57 lab files; ARD kernel, PI-GP, multi-fidelity)_
@@ -711,10 +695,10 @@ Module: `radia_mcp.meta.server`
 | `bug_patterns_lookup` | Query the learned bug-pattern catalog. |
 | `bug_patterns_stats` | Counts of catalogued bug patterns by severity + topic. |
 | `radia_mcp_by_tag` | Servers tagged with `tag`. |
-| `radia_mcp_get` | Look up one server by short name (e.g. 'optuna', 'ih', 'kelvin'). |
+| `radia_mcp_get` | Look up one server by short name (e.g. 'bayesian-opt', 'ih', 'kelvin'). |
 | `radia_mcp_health` | Probe importability of every radia_mcp.* subpackage. |
 | `radia_mcp_overview` | Authoritative catalog of all radia_mcp.* servers. |
-| `radia_mcp_related` | Servers that pair well with `name` (e.g. radia_mcp_related('optuna') |
+| `radia_mcp_related` | Servers that pair well with `name` (e.g. radia_mcp_related('bayesian-opt') |
 | `radia_meta_status` | (no description) |
 
 ## `mcp-server-panel-review`
@@ -728,4 +712,3 @@ Module: `radia_mcp.panel_review.server`
 | `panel_review` | Get Radia GUI panel review skill-chain documentation and bug catalogue. |
 | `panel_review_status` | (no description) |
 | `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
-

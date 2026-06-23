@@ -13,9 +13,9 @@ Distilled from W:/.../04_最適化_ベイズ_BBO/ (57 lab files), including:
   - LLM-enhanced BO (Large Language Models to Enhance Bayesian Opt)
 
 Cross-links:
-  - `radia_mcp.optuna` — Optuna's BO sampler (BoTorchSampler) is the
-    main practical BO entry point in the lab pipeline
-    needed (not just point estimate)
+  - official `optuna/optuna-mcp` — practical Optuna study/trial
+    orchestration when the workflow needs TPE, pruning, or dashboard
+    analysis outside radia-mcp
   - `radia_mcp.pinn` — Physics-Informed Neural Networks (sister to
     Physics-Informed Gaussian Processes covered here)
   - `radia_mcp.topology_optimization` — gradient-based alternative

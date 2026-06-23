@@ -357,7 +357,7 @@ study.optimize(my_objective, n_trials=5000)
 
 ## Cross-links
 
-- `radia_mcp.optuna(topic="samplers")` — Optuna CmaEsSampler config
+- official `optuna/optuna-mcp` / plain Optuna API — CmaEsSampler config
   MCTS leaves for inductor geometry optimization
 """
 
@@ -442,7 +442,7 @@ For Pareto fronts that need smooth coverage, UNDX > SBX > Uniform.
 
 ## Cross-links
 
-- `radia_mcp.optuna(topic="samplers")` — NSGA-II / NSGA-III in Optuna
+- official `optuna/optuna-mcp` / plain Optuna API — NSGA-II / NSGA-III in Optuna
 """
 
 
@@ -522,7 +522,7 @@ study = optuna.create_study(
 
 ## Cross-references
 
-- `radia_mcp.optuna` — full Optuna documentation
+- official `optuna/optuna-mcp` — full Optuna MCP workflow
   at leaves
 """
 

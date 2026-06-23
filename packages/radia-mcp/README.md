@@ -169,16 +169,16 @@ non-standard.
 
 Before calling any specific server, ask **`mcp-server-radia-meta`** which
 server has the knowledge you need. It is the authoritative cross-server
-catalog of all 36 radia-mcp servers and answers "which tool covers
+catalog of all 38 radia-mcp servers and answers "which tool covers
 concept X?" without trial-and-error.
 
 ```python
 # 4 catalog tools + 1 health probe
-radia_mcp_overview()                  # all 36 servers + 43 tags
-radia_mcp_get("optuna")               # full info for one server
-radia_mcp_by_tag("optimization")      # filter (returns 6 matches)
-radia_mcp_related("optuna")           # cross-link map (optuna → bayesian-opt, ...)
-radia_mcp_health()                    # importability probe of all 36
+radia_mcp_overview()                  # all 38 servers + live tags
+radia_mcp_get("bayesian-opt")         # full info for one server
+radia_mcp_by_tag("optimization")      # filter optimization/theory servers
+radia_mcp_related("bayesian-opt")     # cross-link map for optimization servers
+radia_mcp_health()                    # importability probe of all 38
 ```
 
 Then drill into a specific server with its `<short>_status()` (auto-
@@ -189,18 +189,17 @@ dispatcher-style servers: the topic enum) tools.
 
 ```
 radia_mcp_by_tag("optimization")
-  → [optuna, bayesian-opt, evolutionary, topology-optimization,
+  → [bayesian-opt, evolutionary, topology-optimization,
      data-assimilation, gnn, pinn]
-  → optuna_status()              # confirm tools available
-  → optuna_topics()              # ['usage', 'algorithm',
-                                  'lab_applications', 'all']
-  → optuna(topic='algorithm')    # get the content
+  → bayesian_opt_status()        # confirm radia-side theory tools
+  → bayesian_opt_topics()        # topic enum for BO / GP / FMQA
+  → use official optuna-mcp      # Study/Trial/Dashboard operations
 ```
 
 ## MCP servers
 
 The catalog is the **source of truth** — call `radia_mcp_overview()` for
-the full 36-server live list. The historically primary servers are
+the full 38-server live list. The historically primary servers are
 shown below for reference; everything else is discoverable via meta.
 
 ### Standalone (no Radia core dependency — `pip install radia-mcp`)
@@ -247,7 +246,7 @@ Continue, …):
 
 Registering more than the 8 above is rarely necessary — once you have
 **meta**, `radia_mcp_get(name)` returns the entry point for any of the
-36 servers and you can register them on demand. The full list of
+38 servers and you can register them on demand. The full list of
 catalog-driven server names is in
 `radia_mcp.meta.catalog.CATALOG`.
 

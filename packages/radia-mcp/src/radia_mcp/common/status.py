@@ -23,16 +23,16 @@ Usage in a server's server.py:
     from mcp.server.fastmcp import FastMCP
     from radia_mcp.common.status import register_status_tool
 
-    mcp = FastMCP("mcp-server-optuna")
+    mcp = FastMCP("mcp-server-bayesian-opt")
 
     # ... register your @mcp.tool() decorators here ...
 
     register_status_tool(
         mcp,
-        server_name="mcp-server-optuna",
-        description="Optuna BBO for EM engineering",
-        subpackage="radia_mcp.optuna",
-        related_servers=["radia-optuna", "radia-bayesian-opt"],
+        server_name="mcp-server-bayesian-opt",
+        description="Bayesian optimization for EM engineering",
+        subpackage="radia_mcp.bayesian_opt",
+        related_servers=["topology-optimization", "evolutionary"],
         optional_deps=["pymc", "emcee", "numpyro"],
     )
 """
@@ -124,11 +124,11 @@ def register_status_tool(
 
     Args:
         mcp: FastMCP instance (already created in the server module)
-        server_name: e.g. "mcp-server-optuna"
+        server_name: e.g. "mcp-server-bayesian-opt"
         description: one-line "what am I for"
-        subpackage: e.g. "radia_mcp.optuna"
+        subpackage: e.g. "radia_mcp.bayesian_opt"
         related_servers: list of MCP server short names that pair well
-                          (e.g. ["radia-optuna", "radia-bayesian-opt"])
+                          (e.g. ["topology-optimization", "evolutionary"])
         optional_deps: pip package names to probe (chromadb, pymc, etc.)
         tool_name: override the auto-generated tool name (default:
                     derives from server_name by stripping "mcp-server-"

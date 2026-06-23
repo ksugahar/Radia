@@ -1271,8 +1271,8 @@ topics supply the lift side.  A full EML model couples:
 3. Heat = SIBC surface Joule loss; cross-check sample temperature vs the
    melting point using `radia_mcp.ih` workpiece-power recipes.
 4. The conical-coil field minimum is a geometry-optimisation target --
-   pair with `radia_mcp.optuna` / `radia_mcp.bayesian_opt` to trade lift
-   margin against overheating.
+   pair `radia_mcp.bayesian_opt` with official `optuna/optuna-mcp`
+   when trading lift margin against overheating.
 
 ## Cross-references
 - `radia_mcp.ih` -- the heating side (skin depth, SIBC, P_wp)

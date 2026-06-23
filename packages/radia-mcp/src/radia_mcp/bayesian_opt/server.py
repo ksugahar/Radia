@@ -55,7 +55,7 @@ register_status_tool(
     server_name='mcp-server-bayesian-opt',
     description='BO + GP regression + FMQA + surrogate models (57 lab files; ARD kernel, PI-GP, multi-fidelity)',
     subpackage='radia_mcp.bayesian_opt',
-    related_servers=["optuna", "pinn"],
+    related_servers=["evolutionary", "pinn", "topology-optimization"],
     optional_deps=["botorch", "gpytorch", "GPy"],
 )
 
