@@ -146,13 +146,14 @@ Cubit → export netgen "mesh.vol" → NGSolve Mesh("mesh.vol") → netgen_mesh_
 | **Extruded Polygon** | `ObjThckPgn()` | N-gon extruded | 3 | General prism shapes |
 | **Hexahedron (MSC)** | `ObjHexahedron()` | 6 quad | 6 | Permanent magnets, soft iron |
 | **Tetrahedron** | `ObjTetrahedron()` | 4 tri | 3 | Complex curved geometry |
-| **Wedge/Prism** | `ObjPolyhdr()` + `WEDGE_FACES` | 5 | 3 | Hybrid meshes |
-| **Pyramid** | `ObjPolyhdr()` + `PYRAMID_FACES` | 5 | 3 | Mesh transitions |
-| **General** | `ObjPolyhdr()` | custom | 3-6 | Arbitrary polyhedra |
+| **Wedge/Prism (MSC)** | `ObjWedge()` | 5 | 5 | Hybrid surface-charge meshes |
+| **Pyramid (MSC)** | `ObjPyramid()` | 5 | 5 | Mesh transitions |
+| **General** | `ObjPolyhdr()` | custom | 3/5/6 | Arbitrary polyhedra |
 
 **DOF (Degrees of Freedom)**:
-- **Hexahedra (6 faces)**: 6 DOF - Surface charge density (sigma) per face (MSC method)
-- **Other elements (4-5 faces)**: 3 DOF - Magnetization vector (Mx, My, Mz)
+- **Surface-charge MSC elements**: 6 DOF for hexahedra, 5 DOF for wedge/pyramid (sigma per face)
+- **MMM elements**: 3 DOF magnetization vector (Mx, My, Mz), e.g. tetrahedra / `ObjRecMag`
+- A single soft-iron `rad.Solve` may mix surface-charge MSC element types (hex+wedge+pyramid), but not MMM tet/RecMag with MSC; that fails loud with `Radia::Error204`.
 - All meshes are expected to be generated externally (Netgen, GMSH, Cubit, etc.)
 
 ### Simplified APIs (Recommended)
@@ -284,12 +285,11 @@ obj = rad.ObjPolyhdr(vertices, faces, magnetization)
 | `faces` | [[v1,v2,...], ...] | Face vertex indices (**1-indexed!**) |
 | `magnetization` | [Mx, My, Mz] | Initial magnetization |
 
-Use `ObjPolyhdr` for wedge, pyramid, or custom polyhedra. For tetrahedra and hexahedra, prefer `ObjTetrahedron` and `ObjHexahedron`.
+Use dedicated constructors (`ObjTetrahedron`, `ObjHexahedron`, `ObjWedge`, `ObjPyramid`) when available; reserve `ObjPolyhdr` for custom polyhedra.
 
 ```python
-from netgen_mesh_import import WEDGE_FACES
 vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0,0,1], [1,0,1], [0.5,0.866,1]]
-wedge = rad.ObjPolyhdr(vertices, WEDGE_FACES, [0, 0, 1e6])
+wedge = rad.ObjWedge(vertices, [0, 0, 1e6])
 ```
 
 ### ObjBckg - Background Field (Callback)

@@ -1001,7 +1001,7 @@ def check_msc_wrong_sign(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 def check_msc_eval_face_center(filepath: str, lines: List[str]) -> List[Dict]:
-    """MODERATE: MSC eval point should be midpoint, not face center."""
+    """MODERATE: retired EIEM2-style MSC eval point should not use the face center."""
     findings = []
     has_msc = any(kw in line for line in lines
                   for kw in ['eval_point', 'eval_pts', 'MMMBuilder', 'Yano'])
@@ -1012,7 +1012,7 @@ def check_msc_eval_face_center(filepath: str, lines: List[str]) -> List[Dict]:
         if not line.strip().startswith('#') and pattern.search(line.strip()):
             findings.append({
                 'line': i, 'severity': 'MODERATE', 'rule': 'msc-eval-face-center',
-                'message': 'Use (face_center + element_center) / 2, not face_center.',
+                    'message': 'Do not use face_center as a Yano/EIEM2 eval point; production surface-charge demag uses moment-yano instead.',
             })
     return findings
 

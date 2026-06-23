@@ -48,14 +48,16 @@ RADIA_GEOMETRY = """
 | `ObjRecMag(center, dims, M)` | Rectangular magnet | 3 DOF (MMM) |
 | `ObjHexahedron(vertices, M)` | 8-vertex hexahedron | 6 DOF (MSC) |
 | `ObjTetrahedron(vertices, M)` | 4-vertex tetrahedron | 3 DOF (MMM) |
+| `ObjWedge(vertices, M)` | 6-vertex wedge/prism | 5 DOF (MSC) |
+| `ObjPyramid(vertices, M)` | 5-vertex square-base pyramid | 5 DOF (MSC) |
 | `ObjThckPgn(z, dz, polygon, axis, M)` | Extruded polygon | varies |
 | `ObjPolyhdr(vertices, faces, M)` | General polyhedron | varies |
 
 ## DOF Types
 
-- **MMM (3 DOF)**: Volume magnetization, 3 components. For tetrahedra.
-- **MSC (6 DOF)**: Magnetic surface charge on faces. For hexahedra.
-  Better accuracy per element but requires convex shapes.
+- **MMM (3 DOF)**: Volume magnetization, 3 components. For tetrahedra / RecMag.
+- **MSC (5/6 DOF)**: Moment-yano magnetic surface charge on faces. Hexahedra have 6 DOF;
+  wedge/pyramid elements have 5 DOF.
 
 ## Examples
 
@@ -356,7 +358,9 @@ Newton+Hantila Hybrid:
 | `b_input_newton=True` | Hysteresis, few elements, fast convergence needed |
 | `b_input_hantila=True` | **Hysteresis, any size** (recommended) |
 
-**Current limitation**: MMM (tetrahedra, 3 DOF) only. MSC (hexahedra) future.
+**Current limitation**: B-input hysteresis is MMM-only (tetrahedra / RecMag, 3 DOF).
+Surface-charge MSC (hex/wedge/pyramid, 5-6 DOF) supports MatLin / MatSatIsoTab through
+moment-yano, but `b_input_newton` / `b_input_hantila` on MSC raises `Radia::Error205`.
 
 **Verified**: 0.00% error across 11-step hysteresis loop, 3-47 iterations per step.
 
@@ -735,7 +739,7 @@ from radia.netgen_mesh_import import netgen_mesh_to_radia
 | Tetrahedron (ET.TET) | ObjTetrahedron | 3 DOF (MMM) |
 | Hexahedron (ET.HEX) | ObjHexahedron | 6 DOF (MSC) |
 | Wedge (ET.PRISM) | ObjWedge | 5 DOF |
-| Pyramid | ObjPolyhdr | varies |
+| Pyramid | ObjPyramid | 5 DOF |
 
 ## Basic Usage
 
@@ -2280,9 +2284,13 @@ Radia uses two integral methods depending on element type:
 | **MMM** | Tetrahedron (4 vtx) | 3 (Mx,My,Mz) | Volume magnetization |
 | **MSC** | Hexahedron (8 vtx) | 6 (sigma/face) | Surface charge on faces |
 | **MSC** | Wedge (6 vtx) | 5 (sigma/face) | Transition elements |
+| **MSC** | Pyramid (5 vtx) | 5 (sigma/face) | Hex/tet transition caps |
 | **MMM** | ObjRecMag (center+dims) | 3 | Optimized rectangular block |
 
-Mixed meshes (hex+tet+wedge) are fully supported by all solvers.
+Mixed surface-charge meshes (hex+wedge+pyramid) are supported by the dense moment-yano
+path. A single soft-iron `rad.Solve` mixing MMM tet/RecMag elements with MSC
+hex/wedge/pyramid elements is rejected with `Radia::Error204`; split the solve or use
+the mesh-backed HDiv-VIM path.
 
 ---
 
@@ -2414,9 +2422,10 @@ rad.UtiDelAll()
 
 ---
 
-## Pattern E: Mixed Element Types (Hex + Tet)
+## Pattern E: Mixed Surface-Charge Element Types
 
-Use netgen_mesh_to_radia() for complex geometries.
+Use netgen_mesh_to_radia() for complex geometries, but keep the soft-iron solve in one
+formulation. Hex+wedge+pyramid are moment-yano MSC; tetrahedra are MMM.
 
 ```python
 import radia as rad
@@ -2424,7 +2433,7 @@ from radia.netgen_mesh_import import netgen_mesh_to_radia
 
 rad.UtiDelAll()
 
-# Import NGSolve mesh -> Radia (auto-creates hex/tet/wedge elements)
+# Import NGSolve mesh -> Radia (auto-creates hex/wedge/pyramid/tet elements)
 container = netgen_mesh_to_radia(
     mesh,
     material={'magnetization': [0, 0, 0]},  # or callable per element
@@ -2436,11 +2445,14 @@ rad.MatApl(container, rad.MatLin(1000))
 
 bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])
 grp = rad.ObjCnt([container, bkg])
-result = rad.Solve(grp, 0.001, 100, 1)  # BiCGSTAB for medium size
+result = rad.Solve(grp, 0.001, 100, 0)  # dense moment path for mixed surface-charge MSC
 rad.UtiDelAll()
 ```
 
-**DOF**: Mixed -- each hex has 6 DOF (MSC), each tet has 3 DOF (MMM).
+**DOF**: surface-charge mixed -- hex has 6 DOF; wedge/pyramid have 5 DOF. If the
+imported soft iron contains tetrahedra together with MSC elements, do not run one C++
+soft-iron solve on the mixed container; use all-MSC/all-MMM geometry, split the solve, or
+build a mesh-backed HDiv-VIM soft iron.
 **Example**: `examples/ngsolve_integration/mesh_magnetization_import/`
 
 ---
@@ -3664,13 +3676,17 @@ RADIA_PEEC_CORE_PITFALLS = """
 4. **NGSBEM: Set maxh <= min_cross_section / 2**:
    For 1mm wire: `maxh=0.5e-3`. Larger creates elongated triangles → bad SL entries.
 
-5. **MSC sign: `(1/chi + N) sigma = H_ext`**, not `(-1/chi - N)`.
+5. **Current MSC solve is moment-yano**:
+   Use `BuildMomentSystem` / `MomentSystemDenseRaw` / `MomentHMatrixProbe` when inspecting
+   the surface-charge system. The retired EIEM2 eval-point matrix is not the production path.
 
-6. **Yano eval point = midpoint(face_center, element_center)**:
-   Using face_center makes the self-term singular.
+6. **No production Yano eval point**:
+   The old midpoint `(face_center + element_center)/2` was EIEM2-only and has been deleted.
+   Current moment-yano uses element-centroid applied fields and centroid field/gradient rows.
 
-7. **Point charge correction required for multi-element**:
-   Without it, 3x3x3 hex has 650% error. With it, 0.03%.
+7. **Center-charge correction is internal**:
+   Mutual face-center cancellation is inside `CentroidFieldGradFromFace`; user code should not
+   rebuild the retired point-collocation correction.
 
 8. **Loop port**: Don't use `add_port(n1, n1)`. Split the loop:
    ```python
@@ -3787,30 +3803,32 @@ The analytical formula returns H pointing INTO the charged surface (negative of
 the physical field from positive sigma). The result must be **negated** to match
 Radia's sign convention where positive sigma produces H pointing away from the surface.
 
-### Yano evaluation point
+### Retired EIEM2 evaluation point
 
-For MSC hexahedra, the evaluation point for each face is the **midpoint between
-the face center and the element center**, NOT the face center itself:
+The old EIEM2 MSC kernel evaluated each hexahedron face at the midpoint between
+the face center and the element center:
 
 ```
 eval_point = 0.5 * (face_center + element_center)
 ```
 
-Using the face center directly causes the self-interaction term (same face)
-to be singular (solid angle = 2*pi on the surface).
+That point-collocation kernel was removed. Current surface-charge soft iron uses
+the moment-yano path (`BuildMomentSystemCore` / centroid field-gradient coupling)
+and samples the applied field at the element centroid. Keep the midpoint rule only
+when reading or reproducing historical EIEM2 validation notes.
 
-### Point charge correction (multi-element only)
+### Retired EIEM2 center-charge correction
 
-For multi-element problems, Radia adds a point charge correction term at the
-source element center to improve convergence of the far-field expansion:
+The retired EIEM2 kernel added a point charge correction term at the source
+element center:
 
 ```
 H_point = -area_face * (obs - src_center) / |obs - src_center|^3
 ```
 
-This was included in the retired EIEM2 `Compute6x6BlockFast` kernel. Current surface-charge soft iron uses
-the moment-yano path (`BuildMomentSystemCore` / centroid field-gradient coupling), where the center-charge
-cancellation is internal to the moment assembly.
+Current surface-charge soft iron uses the moment-yano path, where the corresponding
+center-charge cancellation is internal to `CentroidFieldGradFromFace` and the moment
+assembly.
 
 ### Schur complement for PEEC-MSC coupling
 

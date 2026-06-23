@@ -1,8 +1,8 @@
-"""calc_accel_msc.solve_msc with the FEEC HDiv-VIM backend (the only soft-iron demag backend).
+"""calc_accel_msc.solve_msc with the FEEC HDiv-VIM backend (the only backend exposed by this panel).
 
 The accelerator-magnet MSC panel drives the HDiv-VIM (radia.vim.soft_iron_from_mesh + rad.Solve, which
-auto-routes a mesh-backed soft iron to the HDiv-VIM).  The legacy yano-type collocation MSC backend has
-been REMOVED.  The HDiv-VIM is KELVIN-less / iron-only, so the .vol must contain only the 'yoke' volume
+auto-routes a mesh-backed soft iron to the HDiv-VIM).  This panel intentionally does not expose the
+mesh-less moment-yano backend.  The HDiv-VIM is KELVIN-less / iron-only, so the .vol must contain only the 'yoke' volume
 material, and IMA symmetry is not supported there yet.
 
 Locks:
@@ -10,7 +10,7 @@ Locks:
       panel routes the coil field into the HDiv-VIM solve correctly;
   (2) demag_backend='hdiv' on a MULTI-material .vol (yoke + air) returns a clean error (iron-only);
   (3) demag_backend='hdiv' with an IMA symmetry string returns a clean error (not supported yet);
-  (4) demag_backend='yano' returns a clean error (the yano backend was removed).
+  (4) demag_backend='yano' returns a clean error (not a backend for this panel).
 
 Also guards the 2026-06-17 coil-bug fix: solve_msc used to rad.UtiDelAll() AFTER building the coil
 (destroying it); now the iron responds to the coil, so M_avg is large (~1e5 A/m), not ~0.
@@ -100,13 +100,13 @@ def test_hdiv_panel_magnetizes(tmp_path, coil_script):
 
 
 def test_yano_backend_removed(tmp_path, coil_script):
-    """demag_backend='yano' returns a clean error -- the yano-type collocation MSC was removed."""
+    """demag_backend='yano' returns a clean error -- this panel is HDiv-VIM only."""
     from calc_accel_msc import solve_msc
     vol = _iron_only_yoke_vol(tmp_path / "yoke.vol")
     r = solve_msc(coil_script=coil_script, vol_file=vol, mat=_linear_mat(),
                   demag_backend="yano", solver=0, tol=1e-6, max_iter=400)
     assert "error" in r, r
-    assert "yano" in r["error"].lower() and "removed" in r["error"].lower()
+    assert "yano" in r["error"].lower() and "panel" in r["error"].lower()
 
 
 def test_hdiv_rejects_multimaterial(tmp_path, coil_script):
