@@ -36,15 +36,23 @@ sys.path.insert(0, str(REPO / "src" / "radia"))
 
 @pytest.fixture
 def msc_panel(qapp):
-    """EMPanel pre-set to MSC formulation."""
+    """The EM panel's MSC sub-panel.
+
+    EMPanel was refactored (committed) from a single panel with a
+    'formulation' combo into a Method combo + per-method sub-panels
+    (QStackedWidget).  MSC now lives in its own ``_MSCPanel``, reached
+    via ``EMPanel._sub_panels[FORM_MSC]``.  Yield that sub-panel so the
+    build_command / widget assertions below target the MSC mode (its
+    widgets are bound from calc_accel_msc.py's argparser).
+    """
     from radia_em import EMPanel, FORM_MSC
     panel = EMPanel()
-    panel._widgets["formulation"].setCurrentText(FORM_MSC)
-    panel._on_formulation_changed(FORM_MSC)
-    panel._widgets["coil_script"].setText(
+    panel._method_combo.setCurrentText(FORM_MSC)   # fires _on_method_changed
+    msc = panel._sub_panels[FORM_MSC]
+    msc._widgets["coil_script"].setText(
         str(REPO / "src" / "radia" / "panels" / "samples"
             / "em_sample_coil.py"))
-    yield panel
+    yield msc
     panel.deleteLater()
 
 
@@ -71,8 +79,13 @@ def test_msc_command_uses_calc_accel_msc(msc_panel):
 
 
 def test_msc_linear_material_argparse(msc_panel):
-    """Material = 'mu_r (Linear)' (idx 0) -> --material custom + --mu-r."""
-    msc_panel._widgets["material"].setCurrentIndex(0)
+    """Material = 'custom' -> --material custom + --mu-r.
+
+    Select by VALUE (not index): the material combo is bound directly
+    from calc_accel_msc.py's --material choices, so the index order is
+    an implementation detail; the *value* is the panel<->CLI contract.
+    """
+    msc_panel._widgets["material"].setCurrentText("custom")
     msc_panel._widgets["mu_r"].setText("1000")
     cmd = msc_panel.build_command("model.vol")
     assert "--material" in cmd
@@ -83,8 +96,8 @@ def test_msc_linear_material_argparse(msc_panel):
 
 
 def test_msc_bh_curve_material_argparse(msc_panel):
-    """Material = 'BH Curve' (idx 1) -> --material steel + --bh-file."""
-    msc_panel._widgets["material"].setCurrentIndex(1)
+    """Material = 'steel' (library BH-curve soft iron) -> --material steel."""
+    msc_panel._widgets["material"].setCurrentText("steel")
     msc_panel._widgets["bh_file"].setText(str(
         REPO / "src" / "radia" / "panels" / "samples" / "em_sample_bh.txt"))
     cmd = msc_panel.build_command("model.vol")
@@ -95,8 +108,8 @@ def test_msc_bh_curve_material_argparse(msc_panel):
 
 
 def test_msc_hysteresis_material_argparse(msc_panel):
-    """Material = 'Hysteresis (.hys)' (idx 2) -> --material hysteresis."""
-    msc_panel._widgets["material"].setCurrentIndex(2)
+    """Material = 'hysteresis' -> --material hysteresis."""
+    msc_panel._widgets["material"].setCurrentText("hysteresis")
     cmd = msc_panel.build_command("model.vol")
     assert "--material" in cmd
     assert cmd[cmd.index("--material") + 1] == "hysteresis"
