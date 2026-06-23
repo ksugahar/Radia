@@ -180,8 +180,3 @@ mcp-server-research-project = "radia_mcp.research_project.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.pytest.ini_options]
-markers = [
-    "xval: heavy COMSOL<->NGSolve cross-validation regression (FEM solve, minutes; needs ngsolve/netgen). Run the cross-validation suite with -m xval, or skip it with -m 'not xval'.",
-]

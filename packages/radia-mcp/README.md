@@ -119,9 +119,10 @@ before they cost a debug session.
 ### How it's built
 
 Pure-Python NGSolve (H1 / HCurl / axisymmetric H1Henrotte / VectorH1 elasticity), small
-reusable solvers chained for couplings, and a regression suite (`pytest -m xval`) that
-locks every number above. Open source (BSD-3); validated against closed-form analytics,
-with commercial solvers used only as an internal benchmark.
+reusable solvers chained for couplings, fast pytest contracts for package health, and
+explicit validation scripts under `validation/` that lock every number above. Open
+source (BSD-3); validated against closed-form analytics, with commercial solvers used
+only as an internal benchmark.
 
 ---
 

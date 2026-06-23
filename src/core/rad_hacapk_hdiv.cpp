@@ -7,6 +7,7 @@
 #include <utility>
 #include <algorithm>
 #include <core/taskmanager.hpp>   // ngcore::RegionTaskManager (parallel H-matvec under TaskManager)
+#include <core/utils.hpp>         // ngcore::AtomicAdd
 #include <unordered_map>
 #include <atomic>
 // Per-thread memo for the high-order QuadDot lives inside QuadDot (a function-local static thread_local map):
@@ -840,46 +841,57 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     double tol, int maxit, int& iters_out)
 {
     const int n_charge = (int)B_indptr.size() - 1;     // B is n_charge x n_face (CSR over charges)
-    // TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): keep the pool up across
+    // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): keep the pool up across
     // the whole CG loop so the Gram H-matvec is parallel without a caller `with TaskManager()`.
     ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
     // A x = inv_chi*(M_mass x) + B^T (G (B x)), with G applied as the charge-Gram H-matvec.
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
     auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
         std::fill(q.begin(), q.end(), 0.0);
-        for (int a = 0; a < n_charge; ++a) {
+        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
             double s = 0.0;
             for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
             q[a] = s;
-        }
+        });
         std::fill(Gq.begin(), Gq.end(), 0.0);
         MatVec(q, Gq);                                 // O(N log N) Gram H-matvec
         y.assign((size_t)n_face, 0.0);
-        for (int a = 0; a < n_charge; ++a) {
+        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
             double ga = Gq[a];
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) y[B_indices[k]] += B_data[k] * ga;
-        }
-        for (size_t k = 0; k < mV.size(); ++k) y[mI[k]] += inv_chi * mV[k] * x[mJ[k]];
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) ngcore::AtomicAdd(y[B_indices[k]], B_data[k] * ga);
+        });
+        ngcore::ParallelFor(ngcore::IntRange((int)mV.size()), [&](size_t k) {
+            ngcore::AtomicAdd(y[mI[k]], inv_chi * mV[k] * x[mJ[k]]);
+        });
+    };
+    auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
+        double s = 0.0;
+        ngcore::ParallelForRange(ngcore::IntRange(n_face), [&](ngcore::IntRange r) {
+            double local = 0.0;
+            for (auto f : r) local += a[f] * b[f];
+            ngcore::AtomicAdd(s, local);
+        });
+        return s;
     };
     // Jacobi-preconditioned conjugate gradients (the SPD system M^{-1} = 1/prec).
     std::vector<double> x((size_t)n_face, 0.0), r = rhs, z((size_t)n_face), p((size_t)n_face), Ap;
-    for (int f = 0; f < n_face; ++f) z[f] = r[f] / prec[f];
+    ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { z[f] = r[f] / prec[f]; });
     p = z;
-    double rz = 0.0; for (int f = 0; f < n_face; ++f) rz += r[f] * z[f];
-    double bnorm = 0.0; for (int f = 0; f < n_face; ++f) bnorm += rhs[f] * rhs[f];
+    double rz = dot(r, z);
+    double bnorm = dot(rhs, rhs);
     bnorm = std::sqrt(bnorm); if (bnorm == 0.0) bnorm = 1.0;
     int it = 0;
     for (; it < maxit; ++it) {
-        double rnorm = 0.0; for (int f = 0; f < n_face; ++f) rnorm += r[f] * r[f];
+        double rnorm = dot(r, r);
         if (std::sqrt(rnorm) <= tol * bnorm) break;
         applyA(p, Ap);
-        double pAp = 0.0; for (int f = 0; f < n_face; ++f) pAp += p[f] * Ap[f];
+        double pAp = dot(p, Ap);
         double alpha = rz / pAp;
-        for (int f = 0; f < n_face; ++f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; }
-        for (int f = 0; f < n_face; ++f) z[f] = r[f] / prec[f];
-        double rz_new = 0.0; for (int f = 0; f < n_face; ++f) rz_new += r[f] * z[f];
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { z[f] = r[f] / prec[f]; });
+        double rz_new = dot(r, z);
         double beta = rz_new / rz;
-        for (int f = 0; f < n_face; ++f) p[f] = z[f] + beta * p[f];
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
         rz = rz_new;
     }
     iters_out = it;
@@ -901,27 +913,35 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
     auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
         std::fill(q.begin(), q.end(), 0.0);
-        for (int a = 0; a < n_charge; ++a) {
+        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
             double s = 0.0;
             for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
             q[a] = s;
-        }
+        });
         std::fill(Gq.begin(), Gq.end(), 0.0);
         MatVec(q, Gq);                                              // O(N log N) HACApK H-matvec (parallel)
         y.assign((size_t)n_face, 0.0);
-        for (int a = 0; a < n_charge; ++a) {                        // y = -B^T (G B x)
+        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) { // y = -B^T (G B x)
             double ga = Gq[a];
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) y[B_indices[k]] -= B_data[k] * ga;
-        }
-        for (size_t k = 0; k < mV.size(); ++k) y[mI[k]] += inv_chi * mV[k] * x[mJ[k]];  // + inv_chi M_mass x
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) ngcore::AtomicAdd(y[B_indices[k]], -B_data[k] * ga);
+        });
+        ngcore::ParallelFor(ngcore::IntRange((int)mV.size()), [&](size_t k) {
+            ngcore::AtomicAdd(y[mI[k]], inv_chi * mV[k] * x[mJ[k]]);  // + inv_chi M_mass x
+        });
     };
     auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
-        double s = 0.0; for (int f = 0; f < n_face; ++f) s += a[f] * b[f]; return s;
+        double s = 0.0;
+        ngcore::ParallelForRange(ngcore::IntRange(n_face), [&](ngcore::IntRange r) {
+            double local = 0.0;
+            for (auto f : r) local += a[f] * b[f];
+            ngcore::AtomicAdd(s, local);
+        });
+        return s;
     };
 
     // ---- Jacobi-preconditioned MINRES (Paige-Saunders 1975; scipy.sparse.linalg.minres recurrence) ----
     std::vector<double> x((size_t)n_face, 0.0), r1 = rhs, r2 = rhs, y((size_t)n_face);
-    for (int f = 0; f < n_face; ++f) y[f] = r1[f] / prec[f];        // y = M^{-1} b
+    ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { y[f] = r1[f] / prec[f]; }); // y = M^{-1} b
     double beta1 = dot(r1, y);                                      // b . M^{-1} b
     iters_out = 0;
     if (beta1 <= 0.0) return x;                                     // b = 0 (or M not SPD) -> x = 0
@@ -932,13 +952,19 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
     int it = 0;
     for (; it < maxit; ++it) {
         const double s = 1.0 / beta;
-        for (int f = 0; f < n_face; ++f) v[f] = s * y[f];           // Lanczos vector
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { v[f] = s * y[f]; }); // Lanczos vector
         applyA(v, Av);
-        if (it >= 1) { const double c = beta / oldb; for (int f = 0; f < n_face; ++f) Av[f] -= c * r1[f]; }
+        if (it >= 1) {
+            const double c = beta / oldb;
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { Av[f] -= c * r1[f]; });
+        }
         const double alfa = dot(v, Av);
-        { const double c = alfa / beta; for (int f = 0; f < n_face; ++f) Av[f] -= c * r2[f]; }
+        {
+            const double c = alfa / beta;
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { Av[f] -= c * r2[f]; });
+        }
         r1 = r2; r2 = Av;
-        for (int f = 0; f < n_face; ++f) y[f] = r2[f] / prec[f];    // y = M^{-1} r2
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { y[f] = r2[f] / prec[f]; }); // y = M^{-1} r2
         oldb = beta; beta = dot(r2, y);
         if (beta < 0.0) break;                                      // preconditioner not SPD
         beta = std::sqrt(beta);
@@ -954,8 +980,8 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
         const double phi = cs * phibar; phibar = sn * phibar;
         const double denom = 1.0 / gamma;
         w1 = w2; w2 = w;
-        for (int f = 0; f < n_face; ++f) w[f] = (v[f] - oldeps * w1[f] - delta * w2[f]) * denom;
-        for (int f = 0; f < n_face; ++f) x[f] += phi * w[f];
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { w[f] = (v[f] - oldeps * w1[f] - delta * w2[f]) * denom; });
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += phi * w[f]; });
         iters_out = it + 1;
         if (phibar <= tol * beta1) break;                          // relative preconditioned residual
     }
@@ -972,33 +998,43 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
     int picard_iters, double cg_tol, int cg_maxit)
 {
     const int n_charge = (int)B_indptr.size() - 1;
-    // TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): one region around the
+    // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
     // whole Picard loop (inner CG matvecs) -> parallel without a caller `with TaskManager()`.
     ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
     auto mmass_apply = [&](const std::vector<double>& x, std::vector<double>& y) {  // y = M_mass x
         y.assign((size_t)n_face, 0.0);
-        for (size_t k = 0; k < mV.size(); ++k) y[mI[k]] += mV[k] * x[mJ[k]];
+        ngcore::ParallelFor(ngcore::IntRange((int)mV.size()), [&](size_t k) {
+            ngcore::AtomicAdd(y[mI[k]], mV[k] * x[mJ[k]]);
+        });
     };
     auto N_apply = [&](const std::vector<double>& x, std::vector<double>& y) {        // y = B^T G (B x)
         std::vector<double> q((size_t)n_charge, 0.0), Gq((size_t)n_charge, 0.0);
-        for (int a = 0; a < n_charge; ++a) {
+        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
             double s = 0.0;
             for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
             q[a] = s;
-        }
+        });
         MatVec(q, Gq);
         y.assign((size_t)n_face, 0.0);
-        for (int a = 0; a < n_charge; ++a) {
+        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
             double ga = Gq[a];
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) y[B_indices[k]] += B_data[k] * ga;
-        }
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) ngcore::AtomicAdd(y[B_indices[k]], B_data[k] * ga);
+        });
+    };
+    auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
+        double s = 0.0;
+        ngcore::ParallelForRange(ngcore::IntRange(n_face), [&](ngcore::IntRange r) {
+            double local = 0.0;
+            for (auto f : r) local += a[f] * b[f];
+            ngcore::AtomicAdd(s, local);
+        });
+        return s;
     };
     // b0 = M_mass mu ; Dscal = mu.(N mu)/denom (the uniform-mode demag factor, Rayleigh quotient).
     std::vector<double> b0, Nmu, Mmm, rhs((size_t)n_face), prec((size_t)n_face);
     mmass_apply(mu, b0);
     N_apply(mu, Nmu);
-    double Dscal = 0.0;
-    for (int f = 0; f < n_face; ++f) Dscal += mu[f] * Nmu[f];
+    double Dscal = dot(mu, Nmu);
     Dscal /= denom;
 
     std::vector<double> m((size_t)n_face, 0.0);
@@ -1006,16 +1042,15 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
     int it = 0, done = 0;
     for (; it < picard_iters; ++it) {
         const double inv_chi = 1.0 / chi;
-        for (int f = 0; f < n_face; ++f) {
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
             prec[f] = inv_chi * Mmass_diag[f] + N_diag[f];
             rhs[f]  = H0 * b0[f];
-        }
+        });
         int cg_iters = 0;
         m = SolveLinearMaterial(B_indptr, B_indices, B_data, n_face, mI, mJ, mV,
                                 inv_chi, prec, rhs, cg_tol, cg_maxit, cg_iters);
         mmass_apply(m, Mmm);
-        Mavg = 0.0;
-        for (int f = 0; f < n_face; ++f) Mavg += mu[f] * Mmm[f];
+        Mavg = dot(mu, Mmm);
         Mavg /= denom;
         const double Hi = H0 - Dscal * Mavg;
         const double chi_sec = chi0 / (1.0 + chi0 * std::fabs(Hi) / Msat);   // M(H)=chi0 H/(1+chi0|H|/Msat)

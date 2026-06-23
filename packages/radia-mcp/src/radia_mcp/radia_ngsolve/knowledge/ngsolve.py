@@ -5563,7 +5563,7 @@ of the main; all "forbidden" n (1,3,4,5,7,...) must vanish. This symmetry table 
 the first sanity check on any magnet design.
 
 Validated (examples/comsol_class/multipole_field_quality.py + tests/test_fieldquality.py,
-tests/test_force_xval.py::test_multipole_quadrupole_fem): the DFT reproduces
+validation/force/validate_force_xval.py::validate_multipole_quadrupole_fem): the DFT reproduces
 line_current_multipoles to ~1e-15; an air-cored FEM quadrupole gives main b2 to
 **0.02 %**, the allowed 12-pole at 256 units (== (R_ref/r0)^4) vs 256.00 exact, and
 forbidden leakage below **0.3 units** (1e-4) -- numerical noise.
@@ -5614,7 +5614,7 @@ DEAD ENDS (tried, FAILED -- don't repeat; "learn from failures too"):
     singularity error over a wide z-band (z/L=0.75..1.5 got worse). L2 keeps it local.
   The winner is the plain L2 projection + near-axis radial MEAN above.
 
-Validated (examples/comsol_class/cylinder_magnet.py; tests/test_force_xval.py::
+Validated (examples/comsol_class/cylinder_magnet.py; validation/force/validate_force_xval.py::
 test_cylinder_magnet_axial_field): centre field to **0.01 %**, on-axis profile to a
 few % out to z=3L. THE ONE caveat: right at the pole exit (z ~ L) a sharp-cornered
 magnet has a charge SINGULARITY at the (R,L/2) corner and the field bulges off-axis,
@@ -5642,7 +5642,7 @@ L_ind = inductance_axi(B, mesh, NU0, I)                  # 2 W / I^2  (per-turn 
 ```
 
 Two validated outputs (examples/comsol_class/solenoid_coil.py;
-tests/test_force_xval.py::test_solenoid_field_and_inductance):
+validation/force/validate_force_xval.py::validate_solenoid_field_and_inductance):
   * ON-AXIS B_z(z) = (mu0 nI/2)[(L/2-z)/sqrt((L/2-z)^2+a^2)+(L/2+z)/sqrt((L/2+z)^2+a^2)]
     (``solenoid_axial_field``). Smooth on axis (no pole corner like the bar magnet
     #14), so the L2-project + near-axis radial-mean extraction is clean: centre
@@ -5682,7 +5682,7 @@ self-field exerts ZERO net force (symmetry), so it drops out automatically.
 KEY: area-normalize the current source ``Jz = I/Integrate(MaterialCF({wire:1})*dx)``
 so int Jz = I exactly on the discrete wire (same gotcha as the multipole quad). Use a
 fine-enough wire and d >> rw so B1 is ~uniform across wire 2. Validated
-(examples/comsol_class/busbar_force.py; tests/test_force_xval.py::test_busbar_lorentz_force):
+(examples/comsol_class/busbar_force.py; validation/force/validate_force_xval.py::validate_busbar_lorentz_force):
 both attractive (parallel) and repulsive (anti-parallel) match mu0 I1 I2/(2 pi d) to
 ~1 %, correct signs, transverse force ~0.
 
@@ -5716,7 +5716,7 @@ volume -- ``max|B(z)/B0 - 1|`` over ``|z| <= a/4`` is ~0.42 % for an ideal Helmh
 To measure it from FEM, the centre value must be clean: average the near-axis radii AND a
 small +/-dz pair, because the EXACT symmetry plane (z=0) is a sampling-artifact hot spot
 (a lone z=0 sample can read ~1.5 % high). Validated
-(examples/comsol_class/helmholtz_coil.py; tests/test_force_xval.py::test_helmholtz_uniformity):
+(examples/comsol_class/helmholtz_coil.py; validation/force/validate_force_xval.py::validate_helmholtz_uniformity):
 on-axis B_z <0.5 %, centre 0.38 %, FEM uniformity 0.84 % (= the 0.42 % ideal + sub-%
 numerical scatter) -- the field is flat to <1 % across the bore.
 """
@@ -5742,7 +5742,7 @@ BUILD: 2D planar A_z, iron = ``big - window - gap`` (OCC boolean), a coil thread
 leg as +NI inside the window and -NI outside the frame (area-normalize ``Jz = I/Integrate
 (MaterialCF({coil:1})*dx)`` so int Jz = NI exactly). Read the gap field as the gap-AVERAGE
 of the across-gap B component (not a point). Validated
-(examples/comsol_class/c_magnet_gap.py; tests/test_force_xval.py::test_c_magnet_gap_field):
+(examples/comsol_class/c_magnet_gap.py; validation/force/validate_force_xval.py::validate_c_magnet_gap_field):
 g=6 mm, mu_r=2000 -> B_gap matches the reluctance model to **0.5 %**, sitting just below
 the mu_r->inf ideal (the deficit = gap fringing/leakage -- the lumped model's blind spot,
 and exactly what a COMSOL cross-check resolves). Wider gaps -> more fringing -> bigger
@@ -5809,7 +5809,7 @@ dT = solve_heat_steady(mesh, q, k, conductor="bar", dirichlet="left|right")  # T
 ``joule_heat_source`` is the DC twin of ``joule_loss_density`` (AC induction heating, #1).
 ``solve_heat_steady`` returns the temperature RISE (T=0 on the cooled ``dirichlet``).
 
-Validated (examples/comsol_class/joule_heating.py; tests/test_force_xval.py::
+Validated (examples/comsol_class/joule_heating.py; validation/force/validate_force_xval.py::
 test_joule_heating_electrothermal): a uniform bar (voltage V over length L, both ends cold,
 sides insulated) -> uniform q = sigma(V/L)^2 and the EXACT parabolic rise
 ``dT(x) = (q/2k) x (L-x)``, peak ``sigma V^2/(8k)`` (length-INDEPENDENT). FEM matches to
@@ -5900,14 +5900,14 @@ Validated EXACT (order-2 captures the linear/quadratic fields):
   * uniaxial tension: u_x(L)=s0 L/E, lateral u_y=-nu s0/E y, sigma_xx=s0 (0.00 %).
   * thermal stress, bar clamped in x both ends, uniform dT: sigma_xx=-E alpha dT (0.00 %).
   * ELECTRO-THERMO-MECHANICAL chain (examples/comsol_class/electro_thermo_mech.py;
-    tests/test_force_xval.py::test_electro_thermo_mechanical_chain): solve_current_flow ->
+    validation/force/validate_force_xval.py::validate_electro_thermo_mechanical_chain): solve_current_flow ->
     joule_heat_source -> solve_heat_steady -> solve_linear_elasticity. A Joule-heated bar
     bolted at both ends -> peak rise sigma V^2/(8k), then axial stress
     ``constrained_bar_thermal_stress = -E alpha <dT>`` (<dT>=2/3 dT_max for the parabola),
     both to 0.00 %. The same boundaries are electrode = heat sink = clamp.
 
 MAGNETO-MECHANICAL (examples/comsol_class/magneto_mechanical.py;
-tests/test_force_xval.py::test_magneto_mechanical_beam): a current-carrying cantilever in
+validation/force/validate_force_xval.py::validate_magneto_mechanical_beam): a current-carrying cantilever in
 a transverse field B0 -> Lorentz body force ``f_y = -J_x B0`` -> deflection. Tip matches
 Euler-Bernoulli ``cantilever_tip_deflection = w L^4/(8EI)`` (w = I B0, I = h^3/12) to
 **0.02 %** for a slender beam (L/h=25). The magnetic-actuator / loudspeaker / galvanometer
@@ -6023,7 +6023,7 @@ u  = solve_linear_elasticity(beam, E_mod, nu, dirichlet="clamp",
 ```
 
 Validated EXACT (examples/comsol_class/mems_electro_mechanical.py;
-tests/test_force_xval.py::test_mems_electro_mechanical): parallel plate (sides = natural-
+validation/force/validate_force_xval.py::validate_mems_electro_mechanical): parallel plate (sides = natural-
 Neumann symmetry -> 1-D field, no fringing) gives P = 1/2 eps0 (V0/d)^2 to **0.00 %**, and
 the clamped-cantilever tip under that uniform pressure matches Euler-Bernoulli
 ``w L^4/(8EI)`` (w = P, unit depth) to **0.05 %**.
@@ -6447,7 +6447,7 @@ EXACT closed form (1-D bar, uniform J, cooled ends): the ODE -k T'' = (J^2/sigma
 is LINEAR -> T(x)=(1/alpha)[cos(s x)+((1-cos sL)/sin sL) sin(s x)-1], T_max=(1/alpha)(sec(sL/2)-1),
 s=sqrt(alpha J^2/(sigma0 k)); as alpha->0 this recovers the constant-sigma parabola peak
 J^2 L^2/(8 sigma0 k).  Validated **0.00 %** (examples/comsol_class/electrothermal_sigmaT.py;
-tests/test_force_xval.py::test_electrothermal_sigmaT_2way) -- the feedback raises the peak ~7 %
+validation/force/validate_force_xval.py::validate_electrothermal_sigmaT_2way) -- the feedback raises the peak ~7 %
 over the no-feedback parabola (alpha*T_max ~ 0.09), so the 2-way effect is real and captured.
 
 ``solve_heat_steady_nonlinear`` is GENERAL (any T-dependent volumetric source: sigma(T) Joule,
@@ -6473,7 +6473,7 @@ L = 2*magnetic_energy_2d(B, mesh, "diel")/I**2          # = (mu0/2pi) ln(b/a)
 
 With the coax capacitance C = 2 pi eps0/ln(b/a): Z0 = sqrt(L/C) = (1/2pi) sqrt(mu0/eps0) ln(b/a)
 = **60 ln(b/a) ohm**, and the wave speed v = 1/sqrt(LC) = **c**.  Validated
-(examples/comsol_class/coax_line.py; tests/test_force_xval.py::test_coax_line_inductance):
+(examples/comsol_class/coax_line.py; validation/force/validate_force_xval.py::validate_coax_line_inductance):
 L_ext **0.46 %**, Z0 0.30 %, v=c to 0.2 %.
 
 LESSON: the |B|^2 energy of a 1/r field peaks at small r -> refine the mesh near the inner
