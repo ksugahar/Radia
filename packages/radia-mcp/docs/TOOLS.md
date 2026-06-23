@@ -353,7 +353,7 @@ Module: `radia_mcp.accelerator.server`
 |---|---|
 | `accelerator` | Accelerator magnet design with Radia + radia-mcp. |
 | `accelerator_status` | (no description) |
-| `accelerator_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 4 topics. |
+| `accelerator_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 12 topics. |
 
 ## `mcp-server-fusion-reactor`
 
