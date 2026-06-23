@@ -404,7 +404,8 @@ faces lie ON the symmetry plane, when observation points are also on that plane.
 RADIA_PARALLELIZATION = """
 # Parallelization Architecture
 
-Radia uses NGSolve's TaskManager for all parallelism. There is no OpenMP dependency.
+Radia follows the NGSolve-native execution model: NGSolve TaskManager is the single
+threading substrate for Radia + NGSolve workflows. There is no Radia OpenMP thread pool.
 The TaskManager is a work-stealing thread pool initialized when `import radia` loads
 ngcore.dll.
 
@@ -429,15 +430,16 @@ thread count, there can be conflicts.
 
 | Solver | Method | Parallelization |
 |--------|--------|-----------------|
-| LU (method=0) | MKL `dgesv_` | `SuspendTaskManager` + `MKLThreadGuard` enables MKL multi-threading |
-| BiCGSTAB (method=1) | Matrix-vector product | `ParallelFor` via TaskManager |
-| HACApK (method=2) | H-matrix build + BiCGSTAB | `ParallelFor` / `ParallelForRange` via TaskManager |
+| LU (method=0) | MKL `dgesv_` | External threaded kernel: `SuspendTaskManager` + `MKLThreadGuard` enables MKL multi-threading |
+| BiCGSTAB (method=1) | Dense matrix-vector product + vector ops | Solve loop stands up/reuses `RegionTaskManager`; kernels use `ParallelFor` / `ParallelForRange` |
+| HACApK (method=2) | H-matrix build + BiCGSTAB | Build/solve loops stand up or reuse `RegionTaskManager`; HACApK C callbacks bridge to `ParallelFor` / `ParallelForRange` |
 
 ### LU Solver Threading Detail
 
-NGSolve sets `mkl_set_num_threads(1)` globally to prevent conflicts with TaskManager.
-When Radia's LU solver calls `dgesv_`, it uses `MKLThreadGuard` RAII to temporarily
-re-enable multi-threaded MKL, then `SuspendTaskManager` to avoid contention:
+LU is intentionally not TaskManager-parallel internally. NGSolve sets
+`mkl_set_num_threads(1)` globally to prevent conflicts with TaskManager. When Radia's LU
+solver calls `dgesv_`, it uses `MKLThreadGuard` RAII to temporarily re-enable
+multi-threaded MKL, then `SuspendTaskManager` to avoid contention:
 
 ```cpp
 // C++ internals (rad_relaxation_methods.cpp)
@@ -448,12 +450,21 @@ re-enable multi-threaded MKL, then `SuspendTaskManager` to avoid contention:
 }   // Both guards restore original state on scope exit
 ```
 
-### HACApK (H-Matrix) Threading
+### BiCGSTAB and HACApK Threading
+
+BiCGSTAB method 1 keeps a `RegionTaskManager` active across the whole iterative solve.
+Its dense matvec, vector operations, and preconditioner loops are TaskManager
+`ParallelFor` / `ParallelForRange` kernels. It does not call MKL BLAS for iterative
+vector kernels; that keeps Radia aligned with the NGSolve scheduler.
 
 H-matrix construction and BiCGSTAB iterations use TaskManager `ParallelFor`:
 - Matrix assembly: parallel over element pairs
 - ACA+ low-rank approximation: parallel over admissible blocks
 - BiCGSTAB matrix-vector product: parallel over H-matrix leaf nodes
+
+The shipped build/solve entry points keep a `RegionTaskManager` active across the long C++ loops.
+Direct diagnostic MatVec APIs are TaskManager-preconditioned: call them under `with TaskManager():`
+unless a higher-level solve/build routine already wrapped the scope.
 
 ## Querying Thread Info
 
@@ -3797,8 +3808,9 @@ source element center to improve convergence of the far-field expansion:
 H_point = -area_face * (obs - src_center) / |obs - src_center|^3
 ```
 
-This is included in radTInteraction::Compute6x6BlockFast but may not be needed
-for single-element validation. For production use with multiple elements, include it.
+This was included in the retired EIEM2 `Compute6x6BlockFast` kernel. Current surface-charge soft iron uses
+the moment-yano path (`BuildMomentSystemCore` / centroid field-gradient coupling), where the center-charge
+cancellation is internal to the moment assembly.
 
 ### Schur complement for PEEC-MSC coupling
 

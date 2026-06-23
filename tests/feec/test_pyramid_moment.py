@@ -13,11 +13,13 @@ Locks:
       demagnetization (both ~ 3*H0 = N=1/3) to within a few percent -- the cross-element-type consistency
       check that certifies the pyramid faces / normals / eigenmode are correct.
 """
+from pathlib import Path
 import sys
 import numpy as np
 import pytest
 
-sys.path.insert(0, r"S:\Radia\01_GitHub\src\radia")
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
 import radia as rad
 
 MU0 = 4e-7 * np.pi

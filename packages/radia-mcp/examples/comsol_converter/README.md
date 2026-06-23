@@ -32,4 +32,5 @@ it is dominated by the 1.5 mm pole-yoke bottom gap, which neither mesh resolves
 * This uses a LINEAR steel (mur=1000) and a CIRCULAR coil so the external
   current density stays solenoidal -- the cleanest first cross-check. The
   production TEAM-20 (nonlinear B-H, rectangular coil) is in
-  `tests/test_force_xval.py::test_team20_static_force` (NGSolve, 7.9-8.23 N).
+  `validation/force/validate_force_xval.py::validate_team20_static_force`
+  (NGSolve, 7.9-8.23 N).
