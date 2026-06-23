@@ -69,6 +69,45 @@ void AxiHenrotteFESpace::Update() {
     }
 }
 
+void AxiHenrotteFESpace::UpdateCouplingDofArray() {
+    // Vertices/edges are shared between elements (INTERFACE); element face-center
+    // slots are LOCAL for quads (Q2 uses them) but UNUSED for triangles (P2 has
+    // no center DOF -> the reserved nv+ne+ei.Nr() slot would be a dead zero
+    // row/col that makes K/M singular).  Marking it UNUSED removes it from
+    // FreeDofs so the generalized eddy eigenvalue solve (and direct solves) see a
+    // full-rank system.
+    ctofdof.SetSize(GetNDof());
+    ctofdof = INTERFACE_DOF;
+    if (axi_order == 2) {
+        int nv = ma->GetNV();
+        int ne = ma->GetNEdges();
+        for (auto i : Range(ma->GetNE(VOL))) {
+            DofId center = nv + ne + i;
+            if (ma->GetElement(ElementId(VOL, i)).GetType() == ET_TRIG)
+                ctofdof[center] = UNUSED_DOF;   // P2 triangle: no center DOF
+            else
+                ctofdof[center] = LOCAL_DOF;     // Q2 quad: element-local center
+        }
+    }
+}
+
+void AxiHenrotteFESpace::FinalizeUpdate() {
+    FESpace::FinalizeUpdate();          // builds dirichlet_dofs, free_dofs, etc.
+    if (axi_order != 2) return;
+    UpdateCouplingDofArray();           // expose UNUSED trig-center coupling type
+    // The base built free_dofs before ctofdof existed, so drop the dead
+    // P2-triangle center slots (nv+ne+ei.Nr()) from the free-dof sets directly.
+    int nv = ma->GetNV();
+    int ne = ma->GetNEdges();
+    for (auto i : Range(ma->GetNE(VOL))) {
+        if (ma->GetElement(ElementId(VOL, i)).GetType() != ET_TRIG) continue;
+        DofId c = nv + ne + i;
+        if (free_dofs && c < free_dofs->Size()) free_dofs->Clear(c);
+        if (external_free_dofs && c < external_free_dofs->Size())
+            external_free_dofs->Clear(c);
+    }
+}
+
 FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
     Ngs_Element ngel = ma->GetElement(ei);
     auto vertices = ngel.Vertices();
