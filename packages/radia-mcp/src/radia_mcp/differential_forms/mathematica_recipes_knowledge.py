@@ -611,7 +611,7 @@ view of the inversion's effect on the de Rham complex.
 ## Committed, self-tested realization (lab .wls)
 
 The weak-form / Hodge-as-material-modulation half of this recipe is a
-committed, self-testing `.wls` pair (run via `mathematica_evaluate` or
+committed, self-testing `.wls` suite (run via `mathematica_evaluate` or
 `wolframscript -file`), in
 `packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/`:
 
@@ -622,18 +622,245 @@ committed, self-testing `.wls` pair (run via `mathematica_evaluate` or
   pullback Kelvin** law: spherical (conformal) `nu' = (r'/R)^2 nu`
   isotropic; cylindrical (non-conformal) `nu' = diag(1,1,(rho'/R)^4) nu`
   anisotropic; plus the nonlinear `Star_nu` tangent `nu I + nu'(B(x)B)/|B|`
-  is SPD (elliptic, no fold).  13 assertions, ALL PASS.
+  is SPD (elliptic, no fold).  20 assertions, ALL PASS.
 - `hodograph.wls` — the 3-axis backbone: cochain-map split (dB=0 metric-free),
   2-D Kelvin inversion conformal => weight-free, Clebsch + helicity
-  obstruction (Moffatt), `A_z`-as-Clebsch-potential.  13 assertions, ALL PASS.
+  obstruction (Moffatt), `A_z`-as-Clebsch-potential.  21 assertions, ALL PASS.
+- `canonical.wls` — the Hamiltonian / Legendre reading: flux lines are
+  canonical equations with `A_z` as Hamiltonian, `H = dw/dB` is a Legendre
+  transform, and the hodograph is a canonical transformation.  12 assertions,
+  ALL PASS.
+- `surface_derham.wls` — the HOIBC / surface-de-Rham reading: global HOIBC
+  modes are surface harmonic 1-forms counted by `b1`, while the exact exterior
+  DtN has eigenvalues `Lambda_n=(n+1)/R` and HOIBC is a local Pade/Laplace-
+  Beltrami approximation; the vector case splits into two distinct de Rham
+  Steklov ladders.  12 assertions, ALL PASS.
+- `dtn_geometry.wls` — the DtN / Steklov operator as the exterior Hodge star
+  condensed onto the boundary: Schur complement, radial Riccati fixed point,
+  shifted square-root of the surface Laplacian, self-adjoint positivity, and
+  the nonlocal reason HOIBC has an approximation knee.  9 assertions, ALL PASS.
 
 Note these use the **k-form conformal weight as the material tensor**
 `nu' = nu |det P|(P^T P)^{-1}` (the energy/cofactor route), which is the
 same fact as the `factor_k = lambda^((n-2k)/2)` table above written as a
 metric weight; the spherical k=2 (flux B) case there is the `(r'/R)^2`
-isotropic `nu'` here.  See
-`docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md` sec.1 and that directory's
-`README.md`.
+isotropic `nu'` here.  The topology half is locked by the companion
+`basis_functions/cohomology.wls`, which verifies that harmonic 1-form
+dimension is the Betti number and is invariant under SPD Hodge metrics.
+See `docs/differential_geometry/PREMETRIC_PICTURE.md` and
+`docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md`.
+"""
+
+DIFFERENTIAL_GEOMETRY_WLS_RUNBOOK = """
+# Recipe: Differential-geometry `.wls` runbook for hodograph work
+
+This is the MCP-facing index for the committed Wolfram Language scripts in
+`packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/`.
+Use it when the question is "what did the hodograph commits establish, and
+which symbolic file should I run before changing the FEM formulation?"
+
+## What is covered
+
+| file | question it answers | assertions |
+|---|---|---:|
+| `weakform_hodge.wls` | Is the weak form a Hodge pairing, and does a coordinate map move only the material/Hodge weight? | 20 |
+| `hodograph.wls` | How do Kelvin, Clebsch, Chaplygin, and the `A_z` potential fit into one hodograph diagram? | 21 |
+| `canonical.wls` | What is the Hamiltonian / Legendre / canonical-transform reading of the weak form and hodograph? | 12 |
+| `surface_derham.wls` | How do HOIBC global modes split into surface topology plus the analytic exterior DtN? | 12 |
+| `dtn_geometry.wls` | What is the DtN/Steklov operator: exterior Hodge condensation, Schur/Riccati flow, shifted `sqrt(-Delta_Gamma)`, and boundary `H^{1/2}` metric? | 9 |
+
+Every file is self-contained and prints `ALL PASS` when the symbolic
+assertions hold.  The companion topology guard is
+`../basis_functions/cohomology.wls` (16 assertions, ALL PASS): it proves that
+the harmonic-loop count lives in `d`, not in the Hodge/material tensor.
+
+## Run locally
+
+```powershell
+cd packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry
+wolframscript -file weakform_hodge.wls
+wolframscript -file hodograph.wls
+wolframscript -file canonical.wls
+wolframscript -file surface_derham.wls
+wolframscript -file dtn_geometry.wls
+wolframscript -file ../basis_functions/cohomology.wls
+```
+
+## Run through MCP
+
+Use the sibling `mcp-server-mathematica` bridge:
+
+```python
+mathematica_evaluate(code=<contents of the .wls file>, timeout=120)
+```
+
+Use this `mcp-server-differential-forms` tool for the map:
+
+- `differential_forms_mathematica_recipes("weakform_hodge")`
+- `differential_forms_mathematica_recipes("hodograph")`
+- `differential_forms_mathematica_recipes("canonical")`
+- `differential_forms_mathematica_recipes("surface_derham")`
+- `differential_forms_mathematica_recipes("dtn_geometry")`
+
+Cross-reference: `docs/clebsch_hodograph/DIFFERENTIAL_GEOMETRY_WLS.md`
+is the human-readable docs twin.
+"""
+
+WEAKFORM_HODGE_RECIPE = """
+# Recipe: Weak form = Hodge pairing; material = pulled-back Hodge weight
+
+`weakform_hodge.wls` makes the central FEM statement operational:
+
+```text
+weak form energy = integral <d test, star_nu d trial>
+```
+
+Under a coordinate map, the exterior derivative / cochain side is natural:
+`k^* d = d k^*`.  The part that changes is the Hodge star, hence the
+material tensor.
+
+The script verifies:
+
+- The scalar Dirichlet energy weight is `W = |det J| (J^T J)^-1`.
+- The magnetic material modulation is the same cofactor/Hodge rule:
+  `nu' = nu |det P| (P^T P)^-1`.
+- The pullback Kelvin laws follow from that one rule:
+  spherical inversion gives isotropic `nu' = (r'/R)^2 nu`;
+  cylindrical inversion gives anisotropic `diag(1,1,(rho'/R)^4) nu`.
+- The nonlinear tangent of `star_nu` is SPD for ordinary saturation, so
+  the magnetostatic operator stays elliptic and the material law itself
+  does not create a hodograph fold.
+- Metric is not curvature: Kelvin and polar metrics are flat; a round sphere
+  control case is curved, so the symbolic curvature check is real.
+- Transformation optics is the same statement in premetric EM language:
+  push the geometry onto the Hodge/material tensor; topology is not in the
+  Hodge.
+
+Use this before changing Kelvin weights, bidirectional-coordinate transforms,
+or nonlinear-material linearizations.
+"""
+
+HODOGRAPH_WLS_RECIPE = """
+# Recipe: Hodograph symbolic backbone
+
+`hodograph.wls` is the executable version of the three-axis hodograph map in
+`docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md`.
+
+It verifies:
+
+- The topological half (`dB = 0`) is a cochain-map statement and is preserved
+  by any smooth coordinate transform.
+- A 2-D Kelvin inversion is conformal, so the Hodge weight on 1-forms is
+  unchanged; this is why the 2-D hodograph/Kelvin cell is weight-free.
+- The complex-potential `(Phi, A_z)` chart is the Cauchy-Riemann net: the
+  potential-plane transform is classical, bounded-domain prior art.
+- The 3-D Clebsch representation `B = grad(alpha) x grad(beta)` is blocked
+  globally by helicity when `integral A.B dV` is nonzero.
+- In 2-D, `A_z` is the Clebsch potential and also the flux-line Hamiltonian.
+- The Chaplygin field-plane variables `(theta, q=|H|)` linearize the nonlinear
+  saturable 2-D equation into a self-adjoint linear elliptic equation:
+
+```text
+d/dq((q/mu) A_q) + ((mu q)'/(mu^2 q)) A_thetatheta = 0
+```
+
+The ellipticity condition is `(mu q)' > 0`, equivalently
+`nu + nu' |B| > 0`.  Ordinary magnetic saturation therefore has no gas-dynamics
+style limiting line.
+"""
+
+CANONICAL_HODOGRAPH_RECIPE = """
+# Recipe: Canonical / Hamiltonian reading of the hodograph
+
+`canonical.wls` explains the hodograph from the variational side:
+the weak form is `delta(action)=0`, and the Hamiltonian picture is its
+Legendre shadow.
+
+It verifies:
+
+- 2-D flux lines satisfy Hamilton's canonical equations with `A_z` as the
+  Hamiltonian:
+
+```text
+dx/ds =  dA_z/dy
+dy/ds = -dA_z/dx
+```
+
+  Therefore `A_z` is conserved along the line and the flow is area-preserving.
+- The constitutive law `H = dw/dB` is a Legendre transform.  The coenergy
+  `w* = H.B - w` satisfies `B = dw*/dH`.
+- The tangent `dH/dB` is the Hessian of `w`; convex magnetic energy gives an
+  SPD tangent, the same "no fold" condition seen in `weakform_hodge.wls`.
+- The hodograph is the Legendre transform of the potential: the `(x,H)` graph
+  is Lagrangian, and the dual potential satisfies `x = d chi / dH`.
+- The Poisson bracket `{x,y}=1` gives the compact formula `df/ds={f,A_z}`.
+
+Use this topic when connecting flux-line tracking, Chaplygin variables,
+coenergy, and the A-formulation into one canonical structure.
+"""
+
+SURFACE_DERHAM_HOIBC_RECIPE = """
+# Recipe: Surface de Rham + HOIBC / analytic DtN
+
+`surface_derham.wls` splits higher-order impedance boundary conditions into
+two independent pieces:
+
+1. Surface topology.  The boundary surface has its own de Rham complex with
+   `d o d = 0`.  Global HOIBC modes are surface harmonic 1-forms, counted by
+   the surface Betti number `b1`.  A sphere has `b1=0`; an annulus/cylinder
+   boundary has `b1=1`.  The count is topological and cannot be changed by a
+   material/Hodge weight.
+2. Surface geometry.  For the exterior sphere, the exact Dirichlet-to-Neumann
+   operator is diagonal in spherical harmonics:
+
+```text
+Lambda_n = (n + 1) / R
+```
+
+   Kelvin / infinite elements reproduce this nonlocal operator exactly.
+   HOIBC is a local Laplace-Beltrami polynomial/Pade approximation: order 1
+   matches low modes and then has a knee; higher order matches more modes but
+   cannot become exact because `Lambda_n` is not a polynomial in the surface
+   Laplacian eigenvalue `n(n+1)`.
+
+Use this before treating HOIBC as "just another material law": the global
+loop modes live in the surface de Rham complex, while the impedance values live
+in the surface Hodge / Steklov operator.
+"""
+
+DTN_GEOMETRY_RECIPE = """
+# Recipe: DtN / Steklov operator as condensed exterior Hodge
+
+`dtn_geometry.wls` is the capstone of the differential-geometry suite.  It
+answers: what geometric object do Kelvin transforms, infinite elements, and
+HOIBC approximate or realize?
+
+It verifies:
+
+- The DtN operator is the boundary condensation (Schur complement) of the
+  exterior Hodge-Laplace weak form:
+
+```text
+Lambda = A_BB - A_BI A_II^{-1} A_IB
+```
+
+- For a sphere, the condensed exterior solution `(R/r)^(n+1)` has conormal
+  trace `(n+1)/R`, and the same quantity is the stable fixed point of the radial
+  Riccati equation (the infinitesimal thin-shell Schur step).
+- The operator is a shifted square root of the surface Laplacian:
+
+```text
+Lambda = (1/2 + sqrt(R^2 (-Delta_Gamma) + 1/4)) / R
+```
+
+  so it is pseudodifferential and nonlocal.  A finite local HOIBC polynomial can
+  match only finitely many modes; the knee is unavoidable.
+- Green's identity / Hodge-pairing symmetry makes the DtN self-adjoint and
+  positive.  It is the boundary `H^{1/2}` metric, and its spectrum is the
+  Steklov spectrum.
+
+Use this before replacing a Kelvin / infinite-element exterior with a local
+boundary model, or before interpreting HOIBC coefficients as material constants.
 """
 
 WHITNEY_HEXAHEDRAL = """
@@ -703,6 +930,16 @@ def get_mathematica_recipes_documentation(topic: str = "all") -> str:
       "whitney_edge"       - Verify  w_e = w_m ∇w_n - w_n ∇w_m  symbolically
       "maxwell"            - Faraday + ∇·B = 0 from B = rot a, E = -∂_t a - grad ϕ
       "hodge"              - Hodge star ⋆ in R^3 and Minkowski
+      "weakform_hodge"     - Committed .wls: weak form as Hodge pairing,
+                              pulled-back material/Kelvin weights
+      "hodograph"          - Committed .wls: Kelvin/Clebsch/Chaplygin
+                              hodograph backbone
+      "canonical"          - Committed .wls: Hamiltonian/Legendre reading
+                              of the hodograph
+      "surface_derham"     - Committed .wls: HOIBC surface de Rham + DtN
+      "dtn_geometry"       - Committed .wls: DtN/Steklov as condensed exterior
+                              Hodge star / shifted sqrt(-Delta_Gamma)
+      "differential_geometry" - Index for the full committed .wls suite
       "tex"                - LaTeX (TeXForm) output for paper writing
       "lorentz"            - Lorentz boost of the EM 2-form F
       "hex_dga"            - Codecasa DGA basis functions for polyhedra
@@ -718,6 +955,23 @@ def get_mathematica_recipes_documentation(topic: str = "all") -> str:
         return VERIFY_MAXWELL_IDENTITY
     if topic == "hodge":
         return HODGE_STAR_VERIFICATION
+    if topic in ("weakform_hodge", "hodge_material", "pullback_hodge",
+                 "transformation_optics", "metric_curvature"):
+        return WEAKFORM_HODGE_RECIPE
+    if topic in ("hodograph", "clebsch_hodograph", "chaplygin",
+                 "chaplygin_hodograph"):
+        return HODOGRAPH_WLS_RECIPE
+    if topic in ("canonical", "hamiltonian", "legendre", "poisson"):
+        return CANONICAL_HODOGRAPH_RECIPE
+    if topic in ("surface_derham", "surface_de_rham", "hoibc", "surface_dtn",
+                 "vector_hoibc"):
+        return SURFACE_DERHAM_HOIBC_RECIPE
+    if topic in ("dtn_geometry", "dtn", "steklov", "boundary_metric",
+                 "schur_dtn"):
+        return DTN_GEOMETRY_RECIPE
+    if topic in ("differential_geometry", "diffgeo", "wls", "runbook",
+                 "hodograph_runbook"):
+        return DIFFERENTIAL_GEOMETRY_WLS_RUNBOOK
     if topic in ("tex", "latex"):
         return TEX_OUTPUT_FOR_PAPER
     if topic == "lorentz":
@@ -735,6 +989,12 @@ def get_mathematica_recipes_documentation(topic: str = "all") -> str:
             WHITNEY_EDGE_ELEMENT_FORMULA,
             VERIFY_MAXWELL_IDENTITY,
             HODGE_STAR_VERIFICATION,
+            DIFFERENTIAL_GEOMETRY_WLS_RUNBOOK,
+            WEAKFORM_HODGE_RECIPE,
+            HODOGRAPH_WLS_RECIPE,
+            CANONICAL_HODOGRAPH_RECIPE,
+            SURFACE_DERHAM_HOIBC_RECIPE,
+            DTN_GEOMETRY_RECIPE,
             TEX_OUTPUT_FOR_PAPER,
             LORENTZ_TRANSFORMATION,
             WHITNEY_HEXAHEDRAL,
@@ -744,5 +1004,6 @@ def get_mathematica_recipes_documentation(topic: str = "all") -> str:
     return (
         f"Unknown topic '{topic}'. Available: "
         "all, dsquared, stokes, whitney_edge, maxwell, hodge, tex, "
-        "lorentz, hex_dga, kelvin, maxwell_stress."
+        "weakform_hodge, hodograph, canonical, surface_derham, dtn_geometry, "
+        "differential_geometry, lorentz, hex_dga, kelvin, maxwell_stress."
     )
