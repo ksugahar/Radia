@@ -1,4 +1,4 @@
-"""Authoritative catalog of all 37 radia_mcp servers.
+"""Authoritative catalog of all radia_mcp servers.
 
 Source of truth: this dict. .mcp.json (in the Radia monorepo root)
 should mirror it.
@@ -81,7 +81,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["streamfunction"],
         "related": [
             "radia-ngsolve",
-            "optuna",
+            "bayesian-opt",
             "nmr-mri",
             "electromagnet",
             "peec",
@@ -280,24 +280,9 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [
             "evolutionary",
             "motor",
-            "optuna",
+            "bayesian-opt",
         ],
         "tags": ["ml", "optimization"],
-    },
-    "optuna": {
-        "subpackage": "radia_mcp.optuna",
-        "entry_point": "mcp-server-optuna",
-        "description": "Optuna black-box optimization (Sano-Akiba-Imamura "
-                       "2023 textbook)",
-        "primary_tools": ["optuna_usage", "optuna_algorithm",
-                            "optuna_lab_applications"],
-        "related": [
-            "bayesian-opt",
-            "evolutionary",
-            "radia-streamfunction",
-            "topology-optimization",
-        ],
-        "tags": ["optimization"],
     },
     "bayesian-opt": {
         "subpackage": "radia_mcp.bayesian_opt",
@@ -305,7 +290,8 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "BO + GP regression + FMQA + surrogate models (57 lab "
                        "files; ARD kernel, PI-GP, multi-fidelity)",
         "primary_tools": ["bayesian_opt"],
-        "related": ["optuna", "pinn"],
+        "related": ["evolutionary", "pinn", "radia-streamfunction",
+                    "topology-optimization"],
         "tags": ["optimization"],
     },
     "evolutionary": {
@@ -313,7 +299,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-evolutionary",
         "description": "GA / DE / PSO / CMA-ES / Immune / NSGA-II for EM",
         "primary_tools": ["evolutionary"],
-        "related": ["optuna", "topology-optimization"],
+        "related": ["bayesian-opt", "topology-optimization"],
         "tags": ["optimization"],
     },
     "data-assimilation": {

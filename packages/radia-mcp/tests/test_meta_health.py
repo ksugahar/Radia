@@ -1,4 +1,4 @@
-"""Test that all 36 radia_mcp.* subpackages import + have status_tool wired.
+"""Test that all cataloged radia_mcp.* subpackages import + have status_tool wired.
 
 This is the canonical "is the package healthy" test — run on every PR
 + release. Catches:
@@ -13,7 +13,7 @@ import pytest
 
 
 def test_meta_health_all_subpackages_import():
-    """All 35 subpackages must import cleanly."""
+    """All cataloged subpackages must import cleanly."""
     from radia_mcp.meta.server import radia_mcp_health
     h = radia_mcp_health()
     assert h["all_healthy"], (
@@ -70,7 +70,7 @@ def test_meta_overview_returns_expected_shape():
 
 
 def test_meta_by_tag_optimization_finds_at_least_4():
-    """Sanity: at least 4 optimization servers (optuna / bayesian-opt /
+    """Sanity: at least 4 optimization servers (bayesian-opt /
     evolutionary / data-assimilation / topology-optimization)."""
     from radia_mcp.meta.server import radia_mcp_by_tag
     result = radia_mcp_by_tag("optimization")

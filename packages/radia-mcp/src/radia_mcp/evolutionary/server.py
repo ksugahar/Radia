@@ -45,7 +45,7 @@ register_status_tool(
     server_name='mcp-server-evolutionary',
     description='GA / DE / PSO / CMA-ES / Immune / NSGA-II for EM',
     subpackage='radia_mcp.evolutionary',
-    related_servers=["optuna", "topology-optimization"],
+    related_servers=["bayesian-opt", "topology-optimization"],
     optional_deps=["deap", "pymoo", "cma"],
 )
 

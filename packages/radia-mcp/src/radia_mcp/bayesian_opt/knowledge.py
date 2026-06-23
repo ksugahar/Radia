@@ -156,8 +156,8 @@ BoTorch (Meta) for GP + acquisition optimization. Use it when:
 
 For more trials or mixed types, TPE (Optuna default) usually wins.
 
-Cross-link: `radia_mcp.optuna(topic="samplers")` for the Optuna-side
-view.
+Cross-link: official `optuna/optuna-mcp` or plain Optuna APIs for the
+Optuna-side sampler/pruner view.
 
 ## BO libraries
 
@@ -340,7 +340,8 @@ provides command-line FM training. Modern Python alternatives:
 - `radia_mcp.metamaterial` — physical metamaterial knowledge
 - `radia_mcp.topology_optimization` — gradient alternative for
   binary topology
-- `radia_mcp.optuna` — BO alternative when variables are continuous
+- official `optuna/optuna-mcp` — practical BO/TPE alternative when
+  variables are continuous
 """
 
 
@@ -576,7 +577,8 @@ This is BO with the **UCB** acquisition reduced to pure exploration
 
 ## Cross-links
 
-- `radia_mcp.optuna` — uses surrogates internally
+- official `optuna/optuna-mcp` — study/trial orchestration around
+  surrogate objectives
 - `radia_mcp.pinn` — neural surrogates for PDEs
 - `radia_mcp.mor` — model order reduction is the "physics-aware
   surrogate" alternative (PRIMA, Cauer ladder)
@@ -676,7 +678,7 @@ candidate, _ = optimize_acqf(acqf, bounds=bounds, q=1, num_restarts=10,
 
 ## Cross-references
 
-- `radia_mcp.optuna(topic="samplers")` — Optuna integration
+- official `optuna/optuna-mcp` — Optuna integration
 - `radia_mcp.pinn` — NN-based alternatives for high-dim / nonlinear
 """
 
@@ -759,7 +761,7 @@ will hallucinate and bias the search — use sparingly.
 
 ## Cross-references
 
-- `radia_mcp.optuna(topic="warm_start")` — enqueue_trial integration
+- official `optuna/optuna-mcp` / plain Optuna API — enqueue_trial integration
 - `radia_mcp.bayesian_opt(topic="bayesian_optimization")` — for
   pure BO
 """
