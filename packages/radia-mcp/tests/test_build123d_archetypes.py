@@ -10,6 +10,8 @@ import math
 import os
 import sys
 
+import pytest
+
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
@@ -18,7 +20,8 @@ from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetizati
                                             solenoid, pole_tip, multipole_yoke, h_dipole, helmholtz_pair,
                                             cos_theta_dipole, e_core, slotted_stator, spm_rotor,
                                             litz_wire, litz_packing_radius, litz_fill_factor,
-                                            hierarchical_litz, rectangular_litz, litz_serving)
+                                            hierarchical_litz, rectangular_litz,
+                                            rectangular_litz_fill_factor, litz_serving)
 from radia_mcp.build123d.archetypes import _carried_centerline, _superposed_centerline
 from radia_mcp.build123d.archetypes import involute_gear, threaded_rod, airfoil, blade
 from radia_mcp.build123d.archetypes import gear_rack, bevel_gear, worm, chain_sprocket, vbelt_pulley
@@ -176,6 +179,24 @@ def test_litz_fill_factor():
         s = math.sin(math.pi / n)
         assert abs(ff - n * s ** 2 / (1 + s) ** 2) < 1e-12, "single-layer fill via physical envelope"
         assert ff < 1.0, "physical fill factor is a fraction"
+
+
+def test_rectangular_litz_fill_factor():
+    """Rectangular Litz fill is copper area over the tight rectangular envelope; for a touching square
+    grid it tends to pi/4, and stretched pitch lowers the fill."""
+    rs = 0.4
+    assert abs(rectangular_litz_fill_factor(1, 1, rs, 1.0) - math.pi / 4.0) < 1e-12
+
+    ff_touch = rectangular_litz_fill_factor(5, 4, rs, 2 * rs)
+    assert abs(ff_touch - math.pi / 4.0) < 1e-12
+
+    ff_stretched = rectangular_litz_fill_factor(5, 4, rs, 1.1, 1.4)
+    expected = 5 * 4 * math.pi * rs ** 2 / (((5 - 1) * 1.1 + 2 * rs) * ((4 - 1) * 1.4 + 2 * rs))
+    assert abs(ff_stretched - expected) < 1e-12
+    assert ff_stretched < ff_touch
+
+    with pytest.raises(ValueError):
+        rectangular_litz_fill_factor(2, 1, rs, 0.5)
 
 
 def _superposed_len(levels, indices, length, n):                 # independent re-impl for the test
