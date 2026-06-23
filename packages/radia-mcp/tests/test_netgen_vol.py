@@ -60,7 +60,20 @@ def test_fem_bem_trace_view_preserves_one_based_connectivity():
     assert view["surface_triangles"][0] == [1, 2, 3]
     assert view["surface_boundary_numbers"] == [1, 1, 1, 1]
     assert view["trace_node_ids"] == [1, 2, 3, 4]
+    assert view["total_volume"] == pytest.approx(1.0 / 6.0)
+    assert view["total_surface_area"] == pytest.approx(1.5 + 0.5 * 3**0.5)
     assert view["policy"] == "netgen_vol_tri_tet_only_shared_one_based_nodes"
+
+
+def test_geometry_metrics_for_single_tetrahedron():
+    mesh = parse_netgen_tri_tet_vol(TET_VOL)
+
+    assert mesh.bounding_box() == {"x": (0.0, 1.0), "y": (0.0, 1.0), "z": (0.0, 1.0)}
+    assert mesh.tetrahedron_signed_volumes() == pytest.approx((1.0 / 6.0,))
+    assert mesh.tetrahedron_volumes() == pytest.approx((1.0 / 6.0,))
+    assert mesh.total_volume() == pytest.approx(1.0 / 6.0)
+    assert sorted(mesh.surface_triangle_areas()) == pytest.approx([0.5, 0.5, 0.5, 0.5 * 3**0.5])
+    assert mesh.surface_area_by_boundary_number() == {1: pytest.approx(1.5 + 0.5 * 3**0.5)}
 
 
 def test_quad_surface_is_rejected_not_split():
