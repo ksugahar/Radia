@@ -52,4 +52,4 @@ cme.export_Gmsh_ver4(cubit, "output.vtk")
 
 # missing-boundary-block + missing-block-names:
 # volume block without surface block, no block names
-cme.export_NGSolveCurvedMesh(cubit, "output.vol")
+cubit.cmd('export netgen "output.vol" order 2 overwrite')

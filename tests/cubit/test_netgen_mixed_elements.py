@@ -1,134 +1,35 @@
-"""
-Test script for extract_curved_mesh() with mixed element types (Hex, Wedge, Pyramid, Tet)
+"""Mixed element Netgen export through Cubit 2025.12."""
 
-Run this script:
-  python test_ngsolve_mixed_elements.py
-"""
+from tests.cubit.cubit_202512_helpers import (
+    export_netgen,
+    init_cubit,
+    load_ngsolve_mesh,
+)
 
-import sys
-import os
 
-# IMPORTANT: Import NGSolve/Netgen BEFORE Cubit to avoid DLL conflicts
-import ngsolve
+def test_mixed_tet_hex_blocks_export_and_load():
+    cubit = init_cubit()
+    cubit.cmd("reset")
+    cubit.cmd("brick x 1 y 1 z 1")
+    cubit.cmd("volume 1 move -0.75 0 0")
+    cubit.cmd("brick x 1 y 1 z 1")
+    cubit.cmd("volume 2 move 0.75 0 0")
 
-# Auto-detect Cubit installation (single source of truth)
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-from install_panels import find_cubit_bin
-_cubit_path = find_cubit_bin()
-if _cubit_path and _cubit_path not in sys.path:
-	sys.path.append(_cubit_path)
+    cubit.cmd("volume 1 scheme map")
+    cubit.cmd("volume 1 size 0.5")
+    cubit.cmd("mesh volume 1")
+    cubit.cmd("volume 2 scheme tetmesh")
+    cubit.cmd("volume 2 size 0.5")
+    cubit.cmd("mesh volume 2")
 
-print("=" * 60)
-print("Testing extract_curved_mesh() with mixed elements")
-print("=" * 60)
+    cubit.cmd("block 1 add hex all in volume 1")
+    cubit.cmd('block 1 name "hex_region"')
+    cubit.cmd("block 2 add tet all in volume 2")
+    cubit.cmd('block 2 name "tet_region"')
+    cubit.cmd("block 3 add face all in surface all")
+    cubit.cmd('block 3 name "boundary"')
 
-# Step 1: Import and initialize Cubit
-print("\nStep 1: Importing Cubit...")
-import cubit
-cubit.init(['cubit', '-nojournal', '-batch'])
-print("  [OK] Cubit initialized")
-
-# Step 2: Create geometry with multiple volumes
-print("\nStep 2: Creating geometry with hex, wedge, pyramid, tet...")
-cubit.cmd("reset")
-
-# Create brick for hex mesh
-cubit.cmd("brick x 1 y 1 z 1")
-cubit.cmd("volume 1 move 0 0 0.5")
-
-# Create brick for tet/pyramid mesh
-cubit.cmd("brick x 1 y 1 z 1")
-cubit.cmd("volume 2 move 0 0 1.5")
-
-# Create wedge by sweeping (cylinder approximation)
-cubit.cmd("create cylinder radius 0.4 height 1")
-cubit.cmd("volume 3 move 0 0 -0.5")
-
-# Imprint and merge
-cubit.cmd("imprint all")
-cubit.cmd("merge all")
-cubit.cmd("compress")
-
-# Mesh volume 1 with hex
-cubit.cmd("volume 1 scheme map")
-cubit.cmd("volume 1 size 0.5")
-cubit.cmd("mesh volume 1")
-
-# Mesh volume 2 with tet (will have some pyramids at interface)
-cubit.cmd("volume 2 scheme tetmesh")
-cubit.cmd("volume 2 size 0.5")
-cubit.cmd("mesh volume 2")
-
-# Mesh volume 3 with sweep (creates wedges)
-cubit.cmd("volume 3 scheme sweep")
-cubit.cmd("volume 3 size 0.3")
-cubit.cmd("mesh volume 3")
-
-# Add elements to blocks (1st order only for this test)
-cubit.cmd("block 1 add hex all")
-cubit.cmd("block 1 name 'hex_region'")
-
-cubit.cmd("block 2 add tet all")
-cubit.cmd("block 2 name 'tet_region'")
-
-cubit.cmd("block 3 add wedge all")
-cubit.cmd("block 3 name 'wedge_region'")
-
-cubit.cmd("block 4 add pyramid all")
-cubit.cmd("block 4 name 'pyramid_region'")
-
-# Add boundary elements
-cubit.cmd("block 5 add tri all in surface all")
-cubit.cmd("block 5 name 'tri_boundary'")
-
-cubit.cmd("block 6 add face all in surface all")
-cubit.cmd("block 6 name 'quad_boundary'")
-
-# Get mesh statistics
-num_hex = len(cubit.get_block_hexes(1))
-num_tet = len(cubit.get_block_tets(2))
-num_wedge = len(cubit.get_block_wedges(3))
-num_pyramid = len(cubit.get_block_pyramids(4))
-num_tri = len(cubit.get_block_tris(5))
-num_quad = len(cubit.get_block_faces(6))
-
-print(f"  Created mesh:")
-print(f"    Hex:     {num_hex}")
-print(f"    Tet:     {num_tet}")
-print(f"    Wedge:   {num_wedge}")
-print(f"    Pyramid: {num_pyramid}")
-print(f"    Tri:     {num_tri}")
-print(f"    Quad:    {num_quad}")
-
-# Step 3: Export geometry to STEP
-print("\nStep 3: Exporting geometry to STEP...")
-step_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_mixed.step")
-cubit.cmd(f'export step "{step_file}" overwrite')
-print(f"  [OK] Exported to {step_file}")
-
-# Step 4: Use extract_curved_mesh function
-print("\nStep 4: Using extract_curved_mesh() function...")
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import cubit_mesh_curver
-
-mesh = cubit_mesh_curver.extract_curved_mesh(order=2)
-print(f"  [OK] Created ngsolve.Mesh: ne={mesh.ne}, nv={mesh.nv}")
-
-# Step 5: Check materials and boundaries
-print("\nStep 5: Checking materials and boundaries...")
-print(f"  Materials: {mesh.GetMaterials()}")
-print(f"  Boundaries: {mesh.GetBoundaries()}")
-
-# Step 6: Verify element counts
-print("\nStep 6: Verifying element counts...")
-total_vol_elements = num_hex + num_tet + num_wedge + num_pyramid
-print(f"  Cubit total 3D elements: {total_vol_elements}")
-print(f"  NGSolve ne: {mesh.ne}")
-if mesh.ne == total_vol_elements:
-	print("  [OK] Element counts match!")
-else:
-	print(f"  [WARN] Element count mismatch: expected {total_vol_elements}, got {mesh.ne}")
-
-print("\n" + "=" * 60)
-print("Test complete!")
-print("=" * 60)
+    expected = len(cubit.get_block_hexes(1)) + len(cubit.get_block_tets(2))
+    mesh = load_ngsolve_mesh(export_netgen(cubit, "mixed", order=2))
+    assert mesh.ne == expected
+    assert set(mesh.GetMaterials()) == {"hex_region", "tet_region"}
