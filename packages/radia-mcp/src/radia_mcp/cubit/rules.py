@@ -295,6 +295,47 @@ def check_missing_boundary_block(filepath: str, lines: List[str]) -> List[Dict]:
 	return findings
 
 
+def check_ambiguous_face_block(filepath: str, lines: List[str]) -> List[Dict]:
+	"""LOW: `block add face` is ambiguous between APREPRO and Python API use.
+
+	In Cubit commands, `face` is a generic surface-element selector that can
+	collect triangles and/or quads. Python block inspection APIs are
+	element-specific (`get_block_tris`, `get_block_quads`), so export scripts
+	should normally use `tri` for tet surface meshes and `quad` for hex
+	surface meshes. Use `face` only when the block is intentionally mixed and
+	the line says so.
+	"""
+	findings = []
+	face_block_pattern = re.compile(
+		r'cubit\.cmd\s*\(\s*["\']block\s+\d+\s+add\s+face\b',
+		re.IGNORECASE,
+	)
+	for i, line in enumerate(lines, 1):
+		stripped = line.strip()
+		if stripped.startswith('#'):
+			continue
+		if not face_block_pattern.search(stripped):
+			continue
+		low = stripped.lower()
+		if 'mixed' in low and 'tri' in low and 'quad' in low:
+			continue
+		findings.append({
+			'line': i,
+			'severity': 'LOW',
+			'rule': 'ambiguous-face-block',
+			'message': (
+				'`block add face` is ambiguous: APREPRO `face` means '
+				'generic surface elements, while Python APIs split them into '
+				'tri/quads (`get_block_tris`, `get_block_quads`). Use '
+				'`block N add tri all ...` for tet boundaries or '
+				'`block N add quad all ...` for hex boundaries. If this is '
+				'intentionally a mixed tri/quad boundary, add a comment on '
+				'the same line containing "mixed tri/quad".'
+			),
+		})
+	return findings
+
+
 def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 	"""CRITICAL: Export called but no mesh command found."""
 	findings = []
@@ -847,6 +888,7 @@ ALL_RULES = [
 	check_noheal_for_named_workflow,
 	check_hardcoded_absolute_paths,
 	check_missing_boundary_block,
+	check_ambiguous_face_block,
 	check_export_file_extension,
 	check_curve_without_setgeominfo,
 	check_missing_block_names,

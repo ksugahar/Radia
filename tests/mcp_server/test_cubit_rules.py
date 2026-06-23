@@ -20,6 +20,7 @@ from radia_mcp.cubit.rules import (
     check_noheal_for_named_workflow,
     check_hardcoded_absolute_paths,
     check_missing_boundary_block,
+    check_ambiguous_face_block,
     check_export_file_extension,
     check_curve_without_setgeominfo,
     check_missing_block_names,
@@ -244,6 +245,32 @@ class TestMissingBoundaryBlock:
         assert _run(check_missing_boundary_block, code) == []
 
 
+class TestAmbiguousFaceBlock:
+    def test_detects_generic_face_block(self):
+        code = (
+            'cubit.cmd("block 1 add hex all")\n'
+            'cubit.cmd("block 2 add face all in surface all")\n'
+        )
+        findings = _run(check_ambiguous_face_block, code)
+        assert len(findings) == 1
+        assert findings[0]['rule'] == 'ambiguous-face-block'
+
+    def test_allows_explicit_quad_block(self):
+        code = 'cubit.cmd("block 2 add quad all in surface all")\n'
+        assert _run(check_ambiguous_face_block, code) == []
+
+    def test_allows_explicit_tri_block(self):
+        code = 'cubit.cmd("block 2 add tri all in surface all")\n'
+        assert _run(check_ambiguous_face_block, code) == []
+
+    def test_allows_documented_mixed_face_block(self):
+        code = (
+            'cubit.cmd("block 3 add face all in surface all")  '
+            '# mixed tri/quad boundary\n'
+        )
+        assert _run(check_ambiguous_face_block, code) == []
+
+
 class TestExportFileExtension:
     def test_detects_wrong_extension(self):
         code = 'cme.export_Gmsh_ver4(cubit, "output.txt")\n'
@@ -322,8 +349,8 @@ class TestNoPyQt5Imports:
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        # 19 original + 3 Cubit in-process toolbar rules + PySide6-only gate.
-        assert len(ALL_RULES) == 23
+        # 20 original + 3 Cubit in-process toolbar rules + PySide6-only gate.
+        assert len(ALL_RULES) == 24
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:
