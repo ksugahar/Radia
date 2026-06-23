@@ -10,6 +10,7 @@ not silently split by a downstream solver adapter.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import Path
 
 
@@ -62,6 +63,60 @@ class NetgenTriTetVolMesh:
 
         return tuple(sorted({node for tri in self.surface_triangles for node in tri.nodes}))
 
+    def bounding_box(self) -> dict[str, tuple[float, float]]:
+        """Return axis-aligned coordinate bounds."""
+
+        if not self.points:
+            raise ValueError("cannot compute a bounding box for a mesh with no points")
+        xs = [p[0] for p in self.points]
+        ys = [p[1] for p in self.points]
+        zs = [p[2] for p in self.points]
+        return {"x": (min(xs), max(xs)), "y": (min(ys), max(ys)), "z": (min(zs), max(zs))}
+
+    def tetrahedron_signed_volumes(self) -> tuple[float, ...]:
+        """Return signed tetrahedron volumes using the stored node orientation."""
+
+        volumes: list[float] = []
+        for tet in self.tetrahedra:
+            a, b, c, d = (self.points[node - 1] for node in tet.nodes)
+            ab = _sub(b, a)
+            ac = _sub(c, a)
+            ad = _sub(d, a)
+            volumes.append(_dot(ab, _cross(ac, ad)) / 6.0)
+        return tuple(volumes)
+
+    def tetrahedron_volumes(self) -> tuple[float, ...]:
+        """Return positive tetrahedron volumes."""
+
+        return tuple(abs(v) for v in self.tetrahedron_signed_volumes())
+
+    def total_volume(self) -> float:
+        """Return the sum of positive tetrahedron volumes."""
+
+        return sum(self.tetrahedron_volumes())
+
+    def surface_triangle_areas(self) -> tuple[float, ...]:
+        """Return positive boundary triangle areas."""
+
+        areas: list[float] = []
+        for tri in self.surface_triangles:
+            a, b, c = (self.points[node - 1] for node in tri.nodes)
+            areas.append(0.5 * _norm(_cross(_sub(b, a), _sub(c, a))))
+        return tuple(areas)
+
+    def total_surface_area(self) -> float:
+        """Return the sum of boundary triangle areas."""
+
+        return sum(self.surface_triangle_areas())
+
+    def surface_area_by_boundary_number(self) -> dict[int, float]:
+        """Return boundary surface area grouped by Netgen boundary number."""
+
+        areas: dict[int, float] = {}
+        for tri, area in zip(self.surface_triangles, self.surface_triangle_areas()):
+            areas[tri.bcnr] = areas.get(tri.bcnr, 0.0) + area
+        return areas
+
     def fem_bem_trace_view(self) -> dict[str, object]:
         """Return shared-node volume/surface connectivity for FEM/BEM coupling."""
 
@@ -75,6 +130,8 @@ class NetgenTriTetVolMesh:
             "trace_node_ids": trace_nodes,
             "boundary_names": dict(self.boundary_names),
             "materials": dict(self.materials),
+            "total_volume": self.total_volume(),
+            "total_surface_area": self.total_surface_area(),
             "policy": "netgen_vol_tri_tet_only_shared_one_based_nodes",
         }
 
@@ -222,3 +279,23 @@ def _validate_node_references(mesh: NetgenTriTetVolMesh) -> None:
             for node in elem.nodes:
                 if node < 1 or node > npoints:
                     raise ValueError(f"{section_name} {i} references node {node}, but point count is {npoints}")
+
+
+def _sub(a: tuple[float, float, float], b: tuple[float, float, float]) -> tuple[float, float, float]:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _dot(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _cross(a: tuple[float, float, float], b: tuple[float, float, float]) -> tuple[float, float, float]:
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def _norm(a: tuple[float, float, float]) -> float:
+    return math.sqrt(_dot(a, a))
