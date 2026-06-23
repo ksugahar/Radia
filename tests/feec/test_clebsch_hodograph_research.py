@@ -1452,3 +1452,41 @@ def test_endpack_cobake():
     assert d["cases"]["chamfer_only"]["tip_enhancement"] < 1.0, d
     assert d["cases"]["both"]["tip_enhancement"] < d["cases"]["shim_only"]["tip_enhancement"], d
     assert 2e-4 < d["shim_delta_m"] < 7e-4, d                    # ~0.4 mm shim
+
+
+def test_endpack_cobake_loft():
+    """The PRECISION construction of the co-bake: the pole gap face
+    z(x,s)=g/2-delta(x/w)^2+lift(s) built as a SMOOTH OCC ThruSections loft
+    through per-x-station cross-section wires, NOT the x-prism staircase of
+    endpack_cobake.  The headline is MESH CONSISTENCY: the smooth loft meshes the
+    baseline (delta=0) and the shim (delta>0) cases at the SAME density
+    (ne(shim)/ne(baseline) ~ 1), whereas the staircase merges the delta=0 slabs
+    (coarse) and steps the delta>0 slabs (fine) -> a large ratio.  The loft thus
+    RESOLVES the documented staircase artifact, so the co-baked pole's transverse
+    b_3,5 + corner are a precision claim.  Both two-plane levers still act on the
+    consistent mesh: the chamfer rounds the corner, the shim removes the transverse
+    content the chamfer introduces (both < chamfer_only), and the co-baked pole is
+    the lowest b_3,5 of all four cases.  ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import endpack_cobake_loft as cl
+    d = cl.cobake_loft_design(fast=True, with_staircase=True)
+
+    # the headline: the smooth loft meshes shim & baseline at the SAME density,
+    # the staircase does NOT -> the loft is more consistent (resolves the artifact).
+    assert 0.5 < d["loft_ne_ratio_shim_over_baseline"] < 2.0, d   # ~1 (smooth face)
+    assert d["staircase"]["ne_ratio_shim_over_baseline"] > 5.0, d  # staircase blow-up
+    assert d["loft_more_consistent_than_staircase"] is True, d
+
+    # the co-baked (both) pole on the consistent mesh: clean transverse AND rounded.
+    assert d["both_clean_transverse_rel"] < 1.0e-2, d            # b_3,5 ~ 0.5%
+    assert 0.88 < d["both_corner_tip"] < 1.12, d                 # rounded near the body
+
+    # both two-plane levers act (robust, large effects on the consistent mesh):
+    assert d["chamfer_rounds_corner"] is True, d                 # s-y chamfer lowers the tip
+    assert d["shim_cleans_chamfer_transverse"] is True, d        # shim removes chamfer's b_3,5
+    assert d["both_is_lowest_transverse"] is True, d             # co-bake = lowest b_3,5
+    assert d["cases"]["chamfer_only"]["tip_enhancement"] < 1.0, d
+    assert d["cases"]["both"]["tip_enhancement"] < d["cases"]["shim_only"]["tip_enhancement"], d
+    assert 2e-4 < d["shim_delta_m"] < 7e-4, d                    # ~0.4 mm shim
+    assert d["n_station"] >= 5, d
