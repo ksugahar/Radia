@@ -528,12 +528,12 @@ void P1TriangleSigmaMass(const double rn[3], const double zn[3], double sigma,
 // Weights sum to 1/2 = area of reference triangle.
 namespace {
 constexpr int N_GL = 8;
-double _gl_nodes_01[N_GL] = {
+constexpr double _gl_nodes_01[N_GL] = {
     0.01985507175123188,  0.10166676129318664,  0.23723379504183551,
     0.40828267875217508,  0.59171732124782492,  0.76276620495816449,
     0.89833323870681336,  0.98014492824876812,
 };
-double _gl_weights_01[N_GL] = {
+constexpr double _gl_weights_01[N_GL] = {
     0.05061426814518813,  0.11119051722668724,  0.15685332293894364,
     0.18134189168918100,  0.18134189168918100,  0.15685332293894364,
     0.11119051722668724,  0.05061426814518813,
