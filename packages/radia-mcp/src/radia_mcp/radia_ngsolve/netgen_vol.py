@@ -264,14 +264,15 @@ def parse_netgen_tri_tet_vol(text: str, source: str | None = None) -> NetgenTriT
             count = next_count("facedescriptors")
             for _ in range(count):
                 face_descriptors.append(tuple(int(v) for v in next_required_line("facedescriptors").split()))
-        elif key_lower == "surfaceelements":
+        elif key_lower in {"surfaceelements", "surfaceelementsuv"}:
             count = next_count("surfaceelements")
             for i in range(1, count + 1):
-                values = [int(v) for v in next_required_line("surfaceelements").split()]
-                if len(values) < 6:
+                record = next_required_line("surfaceelements").split()
+                if len(record) < 6:
                     raise ValueError("surface element line is too short")
-                node_count = values[4]
-                nodes = tuple(values[5 : 5 + node_count])
+                head = [int(v) for v in record[:5]]
+                node_count = head[4]
+                nodes = tuple(int(v) for v in record[5 : 5 + node_count])
                 if len(nodes) != node_count:
                     raise ValueError("surface element node count does not match record")
                 if node_count != 3:
@@ -279,7 +280,7 @@ def parse_netgen_tri_tet_vol(text: str, source: str | None = None) -> NetgenTriT
                         f"Netgen .vol tri/tet-only policy rejected surface element {i}: "
                         f"expected 3 nodes, got {node_count}"
                     )
-                surface_triangles.append(NetgenSurfaceTriangle(values[0], values[1], values[2], values[3], nodes))
+                surface_triangles.append(NetgenSurfaceTriangle(head[0], head[1], head[2], head[3], nodes))
         elif key_lower == "volumeelements":
             count = next_count("volumeelements")
             for i in range(1, count + 1):

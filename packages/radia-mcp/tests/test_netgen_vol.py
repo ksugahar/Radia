@@ -39,6 +39,42 @@ endmesh
 """
 
 
+TET_VOL_SURFACE_UV = """\
+mesh3d
+dimension
+3
+geomtype
+0
+facedescriptors
+1
+1 1 0 1 1
+surfaceelementsuv
+4
+1 1 1 0 3 1 2 3 0 0 1 0 0 1
+1 1 1 0 3 1 4 2 0 0 0 1 1 0
+1 1 1 0 3 2 4 3 1 0 0 1 0 0
+1 1 1 0 3 3 4 1 0 1 0 0 1 0
+volumeelements
+1
+1 4 1 2 3 4
+points
+4
+0 0 0
+1 0 0
+0 1 0
+0 0 1
+pointelements
+0
+materials
+1
+1 air
+bcnames
+1
+1 outer
+endmesh
+"""
+
+
 FOUR_TET_WITH_INTERIOR_NODE_VOL = """\
 mesh3d
 dimension
@@ -90,6 +126,15 @@ def test_parse_tri_tet_vol_summary():
         "boundary_names": 1,
     }
     assert mesh.trace_node_ids() == (1, 2, 3, 4)
+
+
+def test_surfaceelementsuv_is_parsed_as_triangles():
+    mesh = parse_netgen_tri_tet_vol(TET_VOL_SURFACE_UV)
+
+    assert mesh.summary()["surface_triangles"] == 4
+    assert mesh.surface_triangles[0].nodes == (1, 2, 3)
+    assert mesh.total_volume() == pytest.approx(1.0 / 6.0)
+    assert mesh.total_surface_area() == pytest.approx(1.5 + 0.5 * 3**0.5)
 
 
 def test_fem_bem_trace_view_preserves_one_based_connectivity():
