@@ -26,13 +26,13 @@ operator is the SYMMETRIC Galerkin form
   B = charge map   M |-> (rho = -div M per cell [P0],  sigma = M.n per boundary face [P0])
   G = Coulomb Gram (charge-charge interaction; symmetric since 1/r is symmetric)
 
-## Why it is better than the collocation MSC kernel (the whole point)
+## Why it complements moment-yano MSC
 - **Loops are FIELD-NULL BY CONSTRUCTION**: loops = ker(B) (charge-free fields).  B.loop = 0 =>
   N.loop = B^T G (B loop) = 0 for ANY G.  So the loop (circulating-magnetization) null space sits at
   EXACTLY the material eigenvalue 1/chi and never pollutes the spectrum.
 - => **mu_r-INDEPENDENT convergence**: plain-Jacobi MINRES iteration count is FLAT across mu_r
   (measured 80/82/78 across mu_r 10 -> 1e3 -> 1e5 on the 4^3 system).  The high-mu_r conditioning
-  wall that caps the collocation MSC loop-star solver (BiCGSTAB iters ~mu_r^1.5) is ABSENT.
+  wall that affects surface-charge MSC iterations is ABSENT.
 - **DISTORTED-ELEMENT ROBUSTNESS (the headline PRACTICAL value, 2026-06-07)**: the field-null-by-
   construction property holds on ANY mesh -- B.loop = 0 is exact on AFFINE *and* NON-AFFINE (distorted)
   hexes alike, so mu_r-independence SURVIVES distortion (measured: distort=0.18 grid, MINRES iters
@@ -43,7 +43,7 @@ operator is the SYMMETRIC Galerkin form
   EXACT (machine, ~4e-16) on distorted meshes by construction.  This is a robustness / generality /
   maintainability win on its OWN (any mesher, any distortion, provably correct; see the README
   productionization roadmap), independent of raw speed -- at mu_r<=1e4 it is at performance PARITY with the
-  shipped MSC (same demag spectrum), the win being correctness + no hand-crafting.  Golden-locked:
+  shipped moment-yano MSC (same demag spectrum), the win being correctness + no hand-crafting.  Golden-locked:
   tests/feec/test_hdiv_vim_symmetry_golden.py (loops field-null + PSD on distorted) and
   test_hdiv_vim_solve.py::test_minres_iters_bounded_vs_mu_r_distorted (mu_r-independence on distorted).
 - **SYMMETRIC** => MINRES (symmetric indefinite Krylov); mu_r-independent, no direct factorization.

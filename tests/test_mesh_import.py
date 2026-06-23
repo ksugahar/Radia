@@ -370,7 +370,7 @@ class TestMeshImportSolver(unittest.TestCase):
 
     def test_hex_mesh_soft_iron_solve_yano(self):
         """A hexahedral mesh of soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the
-        yano-type collocation MSC demag (kept 2026-06-19; the Error203 guard was removed).  In a
+        moment-yano MSC demag.  In a
         uniform applied field the cube magnetizes (M_avg_z > 0), like the tetrahedral (MMM) solve
         above.  (Permanent-magnet fields are unaffected.)"""
         center = [0.0, 0.0, 0.0]

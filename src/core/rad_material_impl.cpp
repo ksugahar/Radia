@@ -1068,8 +1068,8 @@ int radTApplication::GetFaceGeom(int InteractElemKey, double* pG, int* pDOF)
 
 int radTApplication::GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF)
 {
-	// Per-hex centroid demag field + gradient functionals (nHex x 9 x m_totalDOF, ROW-MAJOR).  Two-call
-	// pattern: pass pC=nullptr to read back nHex and dof, then allocate nHex*9*dof and call again to fill.
+	// Per moment-element centroid demag field + gradient functionals (nMom x 9 x m_totalDOF, ROW-MAJOR).
+	// Two-call pattern: pass pC=nullptr to read back nMom and dof, then allocate nMom*9*dof and call again.
 	try
 	{
 		radThg hg;
@@ -1078,15 +1078,17 @@ int radTApplication::GetCentroidFieldGrad(int InteractElemKey, double* pC, int* 
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
 		int totalDOF = InteractPtr->GetTotalDOF();
-		int nHex = InteractPtr->GetNumHexElements();
+		std::vector<int> momElem;
+		InteractPtr->CollectMomentElems(momElem);
+		int nMom = (int)momElem.size();
 		if(pDOF) *pDOF = totalDOF;
-		if(pNHex) *pNHex = nHex;
+		if(pNHex) *pNHex = nMom;
 
-		if(pC != nullptr && totalDOF > 0 && nHex > 0)
+		if(pC != nullptr && totalDOF > 0 && nMom > 0)
 		{
 			std::vector<double> Cflat; int nh = 0;
 			InteractPtr->BuildCentroidFieldGrad(Cflat, nh);
-			std::memcpy(pC, Cflat.data(), (size_t)nHex * 9 * totalDOF * sizeof(double));
+			std::memcpy(pC, Cflat.data(), (size_t)nh * 9 * totalDOF * sizeof(double));
 		}
 
 		return 1;
@@ -1835,14 +1837,14 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 
 		SendingIsRequired = PrevSendingIsRequired;
 
-		// yano-type MSC is KEPT (decision 2026-06-19): mesh-less hexahedral / wedge soft iron
-		// (ObjHexahedron/ObjWedge + MatLin/MatSatIsoTab + rad.Solve) is solved by the collocation
-		// surface-charge (yano-type MSC) demag here.  Mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
-		// is routed to the FEEC HDiv-VIM by the Python rad.Solve wrapper BEFORE reaching this C++ path
-		// (unless demag_backend='yano' forces yano on it).  Tet (MMM) and permanent magnets are unaffected.
+		// Mesh-less surface-charge soft iron (ObjHexahedron/ObjWedge/ObjPyramid + MatLin/MatSatIsoTab
+		// + rad.Solve) is solved by the canonical moment-yano MSC path here.  Mesh-BACKED soft iron
+		// (radia.vim.soft_iron_from_mesh) is routed to FEEC HDiv-VIM by the Python rad.Solve wrapper before
+		// reaching this C++ path, unless demag_backend='yano' forces the C++ moment-yano representation.
+		// Tet (MMM) and permanent magnets are unaffected.
 
 		// MOMENT-yano dispatch (UNCONDITIONAL since Phase 3b-1): the parameter-free MOMENT formula
-		// (BuildMomentSystemCore) is the SOLE solver for surface-charge soft iron -- hex (6 DOF) AND wedge (5 DOF,
+		// (BuildMomentSystemCore) is the SOLE solver for surface-charge soft iron -- hex (6 DOF) AND wedge/pyramid (5 DOF,
 		// Phase 3a: 3 dipole + 1 monopole + 1 axial quad).  Solver method:
 		//   - method 0 (LU)       -> dense direct moment solve (hex / wedge / mixed).
 		//   - method 1 (BiCGSTAB) -> reroute to LU (dense moment direct solve; medium N).
@@ -1858,7 +1860,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 			extern bool g_yano_moment_hacapk;
 			g_yano_moment_hacapk = false;
 			// moment-yano is UNCONDITIONAL for surface-charge polyhedra.  The allMoment check below routes pure
-			// hex/wedge to the LU/Picard moment driver (method 2 + pure-hex also sets g_yano_moment_hacapk); a
+			// hex/wedge/pyramid to the LU/Picard moment driver (method 2 + pure-hex also sets g_yano_moment_hacapk); a
 			// tet present -> not allMoment -> tet keeps the MMM dipole path, and mixed tet+MSC is rejected
 			// fail-loud (Error204), since no production case mixes surface-charge + dipole soft iron.
 			{
@@ -1884,7 +1886,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 							if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && allHex6)
 								g_yano_moment_hacapk = true;    // moment linear step via H-matrix + BiCGSTAB (hex-only)
 							if(MethNo != RadSolverMethod::LU)
-								MethNo = RadSolverMethod::LU;   // route moment (hex or wedge) to the Picard/LU driver
+								MethNo = RadSolverMethod::LU;   // route moment (hex/wedge/pyramid) to the Picard/LU driver
 						}
 					}
 				}
