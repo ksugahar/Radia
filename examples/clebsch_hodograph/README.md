@@ -1021,6 +1021,313 @@ saturation-robust achromatic scaling pole: certify the index (A/phi bracket),
 measure the saturation droop, and reshape it flat — all in the hodograph
 (log/von Mises) chart, single-valued shape optimization.*
 
+**Step 4 — ISOCHRONOUS: the OTHER achromaticity, on the NONLINEAR end pack
+(`--iso`):** a scaling pole keeps the *tune* momentum-independent (`k = const`);
+an **isochronous** magnet (cyclotron / non-scaling FFAG) keeps the revolution
+*time* momentum-independent, which needs the average field to **rise** with
+radius as the relativistic factor, `<B>(r) = B0 gamma(r)` with
+`beta(r) = beta0 (r/r0)`. The local field index is then **not** constant but the
+RISING `k_iso(r) = (beta gamma)^2` — the opposite target (and, relativistically,
+the two achromaticities are mutually exclusive). The high-`r`, highest-`B` edge
+must deliver the steepest rise **and** saturates first: the super-ferric
+isochronous wall = the **nonlinear end pack**. `run_isochronous` builds the
+linear-theory isochronous pole (`iso_geometric_reshape`), shows saturation
+breaks its field shape there (`|<B>/B0*gamma - 1|` jumps to **2.3%** at
+`B_gap ≈ 1.33 T > Bk = 1.2 T`), then drives the SATURATED `<B>(r)` back onto
+`B0*gamma(r)` with the **same 2-parameter pole reshape** — restoring isochronism
+**3.1x** (to **0.73%**) in one Newton step, A/phi-bracket-certified
+(`bracket_gap ≈ 5e-4`). Figure `scaling_ffag_pole_2d_isochronous.png` (left:
+field shape `<B>(r)` vs the `gamma(r)` target; right: the rising `k_iso(r)`
+restored in saturation). Golden `test_scaling_ffag_pole_2d_isochronous`.
+*(Honest scope: the residual 0.73% is the higher-order mismatch a 2-parameter
+quadratic reshape leaves against a 5x-rising `k_iso` — more shape DOF closes it;
+and this is the radial `<B>(r)` isochronism only — the AVF flutter / vertical
+tune / orbit-field self-consistency are separate, un-modeled here.)* This is
+exactly the answer to "make the nonlinear end pack isochronous": the **same**
+saturated-reshape + complementary-bracket machinery, retargeted from
+`k = const` (constant tune) to `k_iso(r)` (constant time).
+
+### `leaf_coupling_perturbation_3d.py` — when can you foliate the body in 2-D and treat the ends as a perturbation?
+
+The "foliate-and-perturb" program for quasi-2-D magnets: slice the 3-D magnet
+into 2-D `(x,z)` **leaves** along the beam `y`, **stack** the 2-D cross-section
+solution (0th order), and **connect** adjacent leaves by a beam-direction
+**perturbation** (1st order). This only pays off if the inter-leaf coupling is
+small and localised to the ends. This example **measures** that on a real
+finite-length C-frame dipole (reduced-Ω + CoilBuilder, geometry parametrised by
+the iron length `L` so the aspect ratio `L/gap` can be swept). For a straight,
+constant-gap magnet the **body slice y=0 IS the 2-D infinite-long leaf**, so:
+
+- `delta(y)` = `‖B⊥(·,y) − B⊥(·,body)‖ / ‖B⊥(·,body)‖` = the **0th-order
+  leaf-stacking error** (~0 in the body, grows at the ends);
+- `eps(y)` = `(g/2)|∂Bz/∂y| / |Bz_body|` = the **local perturbation parameter**
+  (transverse/beam-variation scale ratio; not an operator-norm ratio, which is
+  trapped at 1 by `∇⊥² = −∂²/∂y²` in current-free air);
+- `fringe_excess` = `(L_eff − L_iron)/L_iron` = the integrated **1st-order
+  (inter-leaf) correction**.
+
+**The result (the headline): the leaf coupling decays as ~ `gap/L`** — a log-log
+fit of the fringe excess vs aspect ratio gives slope **−0.95** (≈ −1):
+
+| L/gap | 2 | 3 | 5 | 8 |
+|---|---|---|---|---|
+| fringe excess | +180% | +111% | +70% | +48% |
+
+So a **compact** magnet (the lab's deliberately-short end-study dipole, `L/gap=3`)
+is firmly **non-perturbative** (+111% fringe, the 0th-order stack misses ~40%,
+the 3-D-ness is *not* end-localised); foliate-and-perturb lands only for **long**
+magnets, with the fringe dropping to ~10% near `L/gap ≈ 40` (typical beamline
+dipole). Figure `leaf_coupling_perturbation_3d_sweep.png` (left: fringe vs
+`L/gap` log-log with the `gap/L` line; right: body leaf-stacking error vs length),
+data `leaf_coupling_perturbation_3d_sweep.json`. Golden
+`test_leaf_coupling_perturbation_3d`. *(Honest scope: this measures the SCALING
+of the BARE-end 3-D-ness; an **equipotential-following** end (§3.2 `z_p(y)` /
+Delferriere `r(z)=Δ(½−z/L)^{1/n}`) removes the fringe's HARMONIC contamination —
+not the fringe itself (the integrated `L_eff>L_iron` is a free-space effect, the
++180→+48% in the table above) — which is the next rung: foliate the body in 2-D,
+follow the beam-referenced equipotential surface at the ends.)*
+
+### `ffag_sector_two_plane.py` — the two-plane → 3-D method, on the FFAG scaling sector
+
+**The unifying method** the §3.3 (radial index) and §3.4 (leaf coupling) pieces
+are fragments of: **design the magnet in two orthogonal 2-D planes and reflect
+the two designs into one 3-D pole** (`DESIGN_METHODOLOGY.md` §3.5). For an FFAG
+scaling **sector** cell the beam orbit is an azimuthal arc, so the two planes are:
+
+- **Plane A — transverse `(r,z)`** (⊥ orbit): the field the beam *sees* — the
+  scaling index `B_z(r) ∝ r^k`, gap `g(r)=g₀(r/r₀)^{−k}` — solved by reusing
+  `scaling_ffag_pole_2d.py`. Verified `k ≈ 4.88` (vs design 5; the naive pole's
+  droop, reshaped in §3.3), **A/φ bracket `~2e-6`** (physics, not mesh).
+- **Plane B — azimuthal `(s,z)`** (along the orbit, `s=r₀θ`; **new** here): how
+  the field *turns on/off* — a finite-length iron pole of gap `g(r₀)` over the
+  sector arc `L_sector=r₀Δθ`, scalar-potential reduced solve (ngsolve only, the
+  same machinery as Plane A in the perpendicular plane). It measures the
+  effective magnetic length `L_eff = ∫B_z ds / B_z(body)`.
+
+The 3-D pole is Plane A's `g(r)` profile **swept around the sector arc** and
+truncated at the azimuthal ends shaped by Plane B; the two 2-D designs are exact
+in the body and couple only at the ends. **The headline (the §3.4 leaf-coupling
+law, now azimuthal):** each sector end adds **~`0.75 g`** of effective length, so
+`L_eff = L_sector + ~1.5 g`, and the **fringe excess falls as ~ `gap/L`** —
+log-log slope **−0.98**:
+
+| L_sector/g | 2 | 3.5 | 6 | 10 |
+|---|---|---|---|---|
+| fringe excess | +73% | +43% | +25% | +15% |
+
+So the aspect `L_sector/g(r₀)` is the **reflection's validity lever**: a compact
+cell (`L/g=3` → **+50%** fringe) is non-perturbative — the sector ENDS are a
+genuine 3-D problem, exact two-plane reflection only as `L/g → ∞`. Figure
+`ffag_sector_two_plane.png` (left: Plane A `k(r)` with the A/φ bracket; right:
+Plane B `B_z(s)/B_body` — flat sector body + the end fringe), data
+`ffag_sector_two_plane.json`. Golden `test_ffag_sector_two_plane`.
+
+**Rung 2 (the 3-D reflection, `--rung2`, ngsolve, golden-tested).** Sweep `g(r)`
+around the sector arc — **revolve** the `(r,z)` gap cross-section about the bend
+axis — into a 3-D iron pole, and drive it as an **iron-pole equipotential**
+(upper-half model, median `z=0` the up-down antisymmetry plane, high-μ pole back
+at `Ψ=mmf`; the 3-D form of Plane A/B's scalar potential). The orbit **recovers
+`B_z(r) ∝ r^k`: field index mean `≈ 4.88`** (range `[4.6, 5.2]`, vs design 5 —
+the naive-pole droop + mesh scatter), so the swept `g(r) ∝ r^{−k}` pole reproduces
+the designed radial field in full 3-D; the azimuthal sector ends add
+`L_eff/L_sector − 1 ≈ +39%` (the Plane-B fringe, cross-checked in 3-D). Figure
+`ffag_sector_two_plane_rung2.png` (left: the recovered `k(r)` vs design; right:
+`B_z(θ)/B_body` along the arc — flat body + sector-end fringe). Golden
+`test_ffag_sector_two_plane_rung2_3d`. *(The field index is set by the pole
+GEOMETRY — a high-μ equipotential forces `B ∝ 1/g(r)` — so it is drive-independent;
+a CoilBuilder + reduced-Ω coil drive sets the field AMPLITUDE, a further step, not
+the index. Saturation is Plane A's §3.3 lever, composed orthogonally.)*
+
+### `twisting_quadrupole_pole.py` — the beam-referenced equipotential surface as design primitive (the twist)
+
+The **reframing** (`DESIGN_METHODOLOGY.md` §3.6): instead of solving a magnet and
+then multipole-**expanding** the field, make the **beam-referenced equipotential
+surface** the design SPEC. In the Frenet frame the iron pole face is
+`Ω(r,θ;s) = Σ_n r^n b_n(s) sin(nθ + φ_n(s))`, so the multipole `(b_n,φ_n)(s)` **is**
+the surface's angular Fourier mode — design = prescribe it, sweep the surface along
+the orbit, place iron there.
+
+**The twist** (the curved-orbit / combined-function axis): the transverse multipole
+**rotates** along `s` (the Frenet frame turns with the bend; a rotating-gradient
+magnet turns the pole on purpose). The **n-fold law**: rotating the equipotential
+SURFACE by `φ` rotates the order-`n` multipole PHASE by `nφ` — for the quad,
+`rotate pole by φ ⟺ (b₂,a₂) → |b₂|(cos2φ, sin2φ)`, so a quad twisted by 45° becomes
+a pure **skew** quad.
+
+**Verified (ngsolve only).** The quad pole = the hyperbola `xy = ±r₀²/2` (the
+`Ω=const` equipotential, `accel_pole_design.quad_pole_hyperbola`); a 2-D Laplace
+solve with the 4 hyperbola poles at alternating `±Ω₀` recovers a **clean quad**
+(skew `a₂/|c₂| ~ 5e-6`, forbidden `n=1,3,5` at the `~5e-5` floor, the leading
+allowed spurious the finite-pole 12-pole `b₆ ~ 5.6e-3`). **Rotating the poles by
+`φ` rotates the recovered orientation by exactly `φ`** — `α = −½ atan2(a₂,b₂)`
+tracks the prescribed twist to **slope 1.000, max error 0.00°** — and `b₆` is
+rotation-invariant. Figure `twisting_quadrupole_pole.png` (left: the hyperbola pole
+faces at φ=0/30/60° twisting around the aperture; right: recovered orientation vs
+prescribed φ, slope 1). Golden `test_twisting_quadrupole_pole`.
+*(Honest scope: the per-station 2-D design is the **slow-twist (adiabatic)** limit
+`dφ/ds → 0` — the §3.4 foliate-and-perturb stack, now twisting; a fast twist couples
+leaves (`dφ/ds` is a leaf-coupling parameter), and combined-function (dipole+quad =
+a shifted+rotated hyperbola) + the genuine curved-orbit Frenet sweep are the
+extensions the n-fold law governs.)*
+
+### `combined_function_frenet_sweep.py` — the confluence: a combined-function magnet on its curved orbit
+
+**Merges the FFAG sector (rung 1-2, a pure dipole bend) and the twist (rung 3, a
+pure rotating quad)** into a **combined-function** magnet (dipole `b1` + quad
+gradient `b2` in ONE cross-section) swept along the **curved orbit it bends**. In
+the **Frenet frame** the cross-section is fixed (`b1` bends, `b2` focuses), but the
+Frenet frame **rotates** with the bend by `θ(s) = s/ρ` (`ρ = Bρ/b1`), so in the
+**lab** the whole pole **twists by `θ(s)`**. §3.6's n-fold law gives dipole phase
+`ψ₁ = θ`, quad phase `ψ₂ = 2θ` — both orientations track the *same* Frenet angle,
+their multipole phases in the `n:1` ratio.
+
+The combined-function cross-section is a **tilted-gap** dipole (`z = ±(g/2 − t·x)`):
+the gap narrows toward `+x`, so `B_z(x) ∝ 1/g(x)` carries a dipole + a gradient —
+rung 1-2's flat gap, *tilted*. **Verified (ngsolve only):** the 2-D Laplace solve
+recovers the combined function (`b1` dipole + `b2/b1 ≈ 6%` gradient + a small
+`b3 ~ 3e-3`); rolling by `θ`, **both the dipole and quad orientations track `θ`
+(slope 1.000, err 0.00°)** and the **quad phase change is exactly 2× the dipole's**
+(`ψ₂/ψ₁ = 2.000`, the n-fold law). Figure `combined_function_frenet_sweep.png`
+(left: the tilted-gap pole at θ=0/20/40° rolling with the Frenet frame; right: both
+harmonics' recovered roll vs θ, slope 1, phase ratio 2). Golden
+`test_combined_function_frenet_sweep`.
+*(Honest scope: a pure sector (rigid Frenet roll), per-station 2-D = the slow-bend
+limit; a spiral sector (pole twist `φ ≠` orbit bend `θ`) + an s-ramped `(b1,b2)(s)`
+are extensions, and **when the per-station 2-D breaks** — the fast-twist `dφ/ds`
+leaf coupling — is the next rung.)*
+
+### `twist_rate_leaf_coupling.py` — when does the per-station 2-D twist break?
+
+The fast-twist leaf coupling (the twist analogue of rung-1's foliate-and-perturb).
+A magnet whose order-`n` multipole twists at rate `k = dφ/ds` has helical symmetry;
+the exact current-free harmonic is the **helical multipole**
+`Φ_n = I_n(nkr) sin(n(θ − ks))` (standard for helical undulators / Siberian snakes
+/ twisted quads). As `k → 0` it reduces to the pure 2-D multipole rotated by
+`φ(s) = ks` — **exactly the per-station 2-D stack** (the Frenet-sweep design). The
+leaf coupling is the deviation from that stack, controlled by the dimensionless
+**twist-per-aperture `ka = 2π a/P`** (`a` aperture, `P` pitch).
+
+**Measured (analytic, scipy Bessel — no FEM):** on the aperture circle, the
+**transverse** focusing error `ε = ‖B_⊥(3D) − B_⊥(2D)‖/‖B_⊥(2D)‖` scales as
+**`(ka)²`** (slope 2.04, 2nd order), the **longitudinal** `B_s/B_⊥` as **`ka`**
+(slope 0.97, 1st order, the genuinely-3-D component); the threshold `ε = 1%` is at
+`ka* ≈ 0.14`, i.e. **pitch/aperture `P/a ≈ 46`**. So the per-station 2-D twist
+holds when the pitch exceeds the aperture by ~ several tens — **the same
+"longitudinal ≫ transverse by ~40×" rule as rung-1** (`L/gap ~ 40`), with the
+twist replacing `gap/L` by `a/P`. Figure `twist_rate_leaf_coupling.png` (left: `ε`
+and `B_s/B_⊥` vs `ka` log-log, slopes 2 and 1; right: the validity map `ε` vs
+`P/a` with the threshold). Golden `test_twist_rate_leaf_coupling`. This closes the
+twist axis (the twist → the combined-function confluence → its validity threshold).
+
+### `endpack_two_plane.py` — the END PACK in two planes (x-y cross-section + s-y end → 3-D)
+
+The magnet **end pack** designed exactly the way one pictures it: in the `x-y`
+cross-section **and** the `s-y` longitudinal plane, reflected into one 3-D pole.
+Where `ffag_sector_two_plane.py` applied the two-plane method to a *curved* FFAG
+sector **cell**, this applies the same thought to the *straight* magnet's **end**
+— the genuinely-3-D termination.
+
+**Two cheap 2-D DESIGN solves, then a 3-D REFLECTION:**
+- **Plane 1 (`x-y` cross-section):** the transverse multipole — a finite flat pole
+  droops (`b₃/b₁ ≈ −3.6e-5`); the concave shim `z=g/2−δ(x/w)²` with `δ ≈ 0.41 mm`
+  zeroes it (`accel_pole_dipole_body_2d`).
+- **Plane 2 (`s-y` longitudinal):** a **standalone** 2-D Laplace fringe (the
+  parallel-plate end) → the **Rogowski** end-chamfer shape `ĝ(s)` and the effective
+  length `L_eff ≈ 151 mm` (**+26 %** over the 120 mm iron) — done *before* any 3-D.
+- **Reflection (3-D):** an upper-half **equipotential-pole** drive (`Ψ=mmf` on the
+  pole, `Ψ=0` on the median plane — *pure Laplace, no coil*, the same drive as the
+  FFAG rung-2). Sweeping the chamfer **depth** with the `ĝ(s)` shape drives the
+  hard-cut pole-tip corner over-field (`+11 %`) **through zero at ~2.1 mm**, while
+  the integrated transverse `b̄₃,₅` stays `~0.3 %` (the body/Plane-1 lever — the END
+  shape is the wrong lever for it).
+
+**Cross-check:** the cheap 2-D `s-y` chamfer SHAPE predicts the expensive 3-D end
+equipotential bow-out to **~7 % rms** — the two-plane reflection is sound. Figure
+`endpack_two_plane.png` (left: the `x-y` shim; middle: the `s-y` Rogowski `ĝ(s)`;
+right: the 3-D depth sweep driving the corner over-field through zero). Golden
+`test_endpack_two_plane` (`--fast`, ngsolve only, ~8 s).
+
+### `endpack_spectrometer_saturation.py` — the spectrometer end pack, NONLINEAR (the corner is a saturable throat)
+
+A large **bending spectrometer** runs near the iron knee, so the end pack must be
+designed **with saturation**. The linear §3.9 corner concentration `κ = tip_enhancement
+≈ 1.11` means, in saturating iron, the **pole-tip corner reaches the knee FIRST** — it
+saturates at `B_gap = B_K/κ ≈ 1.33 T`, **~12 % below the bulk iron knee** `B_K=1.5 T`.
+Above that the corner `μ_r` collapses and the **EFB (effective field boundary `≈ L_eff`)
+drifts with excitation** — fatal for a spectrometer, whose pole-edge **edge focusing**
+`tan β/ρ` depends on the EFB.
+
+The corner is exactly a **Chaplygin saturable throat** (`clebsch_dipole_saturation_2d.py`):
+`κ` is its inverse cross-section, it saturates first, and the **Rogowski end chamfer
+(§3.9's `s-y` design) is the throat-width knob** — `κ↓` raises the corner knee `B_K/κ`.
+The SAME chamfer that zeroes the linear corner over-field removes the premature corner
+saturation: linear and nonlinear levers point the same way, and saturation gives the
+chamfer its **hard engineering justification**.
+
+**The map at LINEAR cost:** reuse the §3.9 equipotential `κ(chamfer)` depth sweep + a
+Froehlich-BH overlay (`B_K=1.5 T`, `μ_r0=2000`, from `clebsch_dipole_saturation_3d.py`):
+corner knee flat `1.33 T` → `2.4 mm` `1.55 T` → `5 mm` `1.75 T`; clearing `B_op=1.45 T`
+needs `κ ≤ 1.034` (`≈1.4 mm` chamfer). The whole nonlinear map = **4 linear equipotential
+solves + a BH overlay** (the Chaplygin "nonlinear-done-linearly" applied to the END
+corner). This is **design-grade** (the lumped-magnetic-circuit class of
+`clebsch_dipole_saturation_2d`, ~10 % vs FEM), and its two ingredients are
+independently validated: `κ` is the linear equipotential `tip_enhancement`
+(`endpack_two_plane.py`, golden — geometry-only), and the Froehlich BH + the
+well-conditioned **B-input A-formulation** are `clebsch_dipole_saturation_3d.py`
+(committed). A fully coil-driven 3-D corner-saturation FEM is the documented expensive
+extension (a *uniform* applied field does not reproduce the corner `κ`; the coil
+`B_s` projection is the serial bottleneck). Golden `test_endpack_spectrometer_saturation`
+(the design map, ngsolve only, ~8 s).
+
+### `endpack_cobake.py` — the two planes CO-BAKED into one pole `z(x,s)=g/2−δ(x/w)²+lift(s)`
+
+The completion of `endpack_two_plane.py`: that script's 3-D reflection carried the `s-y`
+chamfer at a fixed body width (the `x-y` shim was *verified* as the transverse lever, not
+baked into the same pole). This **co-bakes both** into one gap face
+`z(x,s)=g/2−δ(x/w)²+lift(s)` and shows both levers act at once. The 4 cases (same
+equipotential drive + integrated analyzer as `endpack_two_plane`): baseline (flat) corner
+tip `1.16`, `b̄₃,₅` `0.7 %`; **shim only** `b̄₃,₅` → `0.07 %`; **chamfer only** tip → `0.96`;
+**BOTH (co-baked)** tip `1.02` AND `b̄₃,₅` `0.07 %` — **one pole face, clean transverse
+harmonic AND rounded corner**.
+
+Honest scope: the exact `δ(x/w)²` shim is an x-prism STAIRCASE, so the no-shim cases mesh
+coarser than the shim cases (per-case absolute numbers are research-grade); the locked
+claim is the **co-existence** in the well-resolved BOTH pole, the per-lever causation
+being golden-locked separately (`accel_pole_dipole_body_2d` + `endpack_two_plane`). The
+precision construction is `endpack_cobake_loft.py` (below). Golden `test_endpack_cobake`
+(ngsolve only, ~11 s).
+
+### `endpack_cobake_loft.py` — the co-bake as a PRECISION tensor LOFT (OCC ThruSections)
+
+The clean construction the staircase pointed to. The gap face `z(x,s)=g/2−δ(x/w)²+lift(s)`
+is built as a SMOOTH OCC `ThruSections` loft through per-x-station cross-section wires
+(each carrying its shim offset `δ(xᵢ/w)²` + the chamfer `lift(s)`), so the surface is
+smooth in `x` (no facets). The headline is **mesh consistency**: the smooth loft meshes the
+baseline (`δ=0`) and the shim (`δ>0`) cases at the same density (`ne(shim)/ne(baseline)
+≈ 0.97`), whereas the x-prism staircase merges the `δ=0` slabs (coarse) and steps the
+`δ>0` slabs (fine) → ratio `≈ 36`. The loft thus **RESOLVES the documented staircase
+artifact**, so the co-baked pole's `b̄₃,₅` + corner are a *precision* claim. On the
+consistent mesh both levers still act: the chamfer rounds the corner (`tip 0.99`), the
+shim removes the transverse content the chamfer introduces (`both 0.47 % < chamfer-only
+0.84 %`) and returns it to the baseline mesh-noise floor (`~0.5 %`). The script imports
+`endpack_cobake` to put the two mesh ratios side by side; `--no-staircase` skips it.
+Golden `test_endpack_cobake_loft` (ngsolve only, ~16 s).
+
+### `scaling_ffag_sector_saturation.py` — the saturating sector body (two planes differ)
+
+Combines the §3.5 scaling-FFAG **sector** with iron saturation: the azimuthal `(s,z)` end
+solve (from `ffag_sector_two_plane`) is made NONLINEAR (Froehlich `μ_r(|B|)`, the same knee
+as the radial Step 2) and solved at the high-r aperture edge (smallest gap, highest `B`) and
+the low-r body. The honest result for a scaling (large-gap) pole is a **contrast**: the
+azimuthal effective length `L_eff` is **ROBUST** to saturation (drift `< 0.1 %` even where
+the high-r iron `⟨μ_r⟩` collapses `1574 → 481`, `×0.3` — the sector end is
+gap-reluctance-dominated), while the radial field index `k(r)` is **FRAGILE** (it droops
+`Δk ≈ −0.26`, the achromaticity wall, reused from `scaling_ffag_pole_2d.run_step2`). So
+saturation degrades the radial field SHAPE but not the azimuthal end LENGTH — the high-r
+achromaticity needs the radial reshape (Step 3), the sector ends need no nonlinear end
+correction. `--no-radial` skips the radial cross-check. Golden
+`test_scaling_ffag_sector_saturation` (ngsolve only, ~12 s).
+
 ## Run
 
 ```bash
@@ -1044,7 +1351,17 @@ python accel_quad_ends_fem.py                 # the QUADRUPOLE FEM rung (any mul
 python one_turn_coil_streamfunction.py        # (B) the 1-turn stream-function limit
 python clebsch_dipole_design_workflow.py      # end-to-end: 2-D level set -> 3-D dipole (--fem for Stage C)
 python clebsch_pole_shape_optimization_2d.py  # 3-D Clebsch pole shape opt: null b3 AND b5 (2-param Newton) (--fig)
-python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 sat, --step3 reshape, --pullback no-remesh; --fig)
+python scaling_ffag_pole_2d.py                # achromatic scaling-FFAG gantry pole: k(r) index + A/phi bracket (--step2 sat, --step3 reshape, --pullback no-remesh, --iso isochronous end pack; --fig)
+python leaf_coupling_perturbation_3d.py       # foliate-and-perturb: leaf-coupling ~ gap/L, when can the body be 2-D + ends a perturbation (--sweep aspect ratio; --fig)
+python ffag_sector_two_plane.py               # the two-plane -> 3-D method: FFAG sector = transverse (r,z) + azimuthal (s,z); reflection validity ~ L/g (--sweep aspect; --rung2 the 3-D reflection B(r)~r^k; --fig)
+python twisting_quadrupole_pole.py            # beam-referenced equipotential surface as design primitive: the TWIST (n-fold law, rotating quad, slope 1.000) (--fig)
+python combined_function_frenet_sweep.py      # the confluence: combined-function (dipole+quad) on its curved orbit; the Frenet sweep IS the twist (phase ratio 2.000) (--fig)
+python twist_rate_leaf_coupling.py            # when the per-station 2-D twist breaks: helical multipole, eps~(ka)^2, threshold pitch/aperture ~46 (--fig)
+python endpack_two_plane.py                   # the END PACK in two planes: x-y cross-section (shim) + s-y end (Rogowski chamfer, L_eff +26%) -> 3-D equipotential reflect, corner over-field -> 0 (--fast, --fig)
+python endpack_spectrometer_saturation.py     # the spectrometer end pack NONLINEAR: pole-tip corner = saturable throat, corner knee B_K/kappa ~1.33T (12% below bulk), chamfer raises it; nonlinear design map at LINEAR cost (design-grade, kappa+BH components validated; --b-op, --fig)
+python endpack_cobake.py                      # the two planes CO-BAKED into one pole z(x,s)=g/2-delta(x/w)^2+lift(s): x-y shim + s-y Rogowski chamfer in one face -> clean transverse b_3,5 (0.07%) AND rounded corner (tip 1.02) at once (--fig)
+python endpack_cobake_loft.py                 # the co-bake as a PRECISION tensor LOFT (OCC ThruSections): smooth gap face -> baseline & shim mesh at the SAME density (ne ratio ~0.97 vs staircase ~36) -> resolves the staircase artifact, precision b_3,5 + corner (--no-staircase, --fig)
+python scaling_ffag_sector_saturation.py      # the saturating sector body: scaling sector's azimuthal end made NONLINEAR (Froehlich) -> azimuthal L_eff ROBUST (gap-dominated, drift <0.1% even as high-r mu_r collapses x0.3) while radial k(r) is FRAGILE (droops, achromaticity wall) -- two planes differ (--no-radial, --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
@@ -1059,12 +1376,12 @@ python derham_closure_order_sweep.py          # order vs representation: de Rham
 python clebsch_3d_closing_condition.py        # 3-D frontier: helicity obstructs the global Clebsch pair
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (26 tests; the nine
-heavy FEM rungs — forward+contour, the design loop, the curved chamfer, the
-open-boundary convergence, the quadrupole, the Chaplygin 1-shot-vs-loop, the
-3-D nonlinear Kelvin merge, the turning-guide hodograph PDE, and the
-free-boundary image — are `@pytest.mark.slow`; the von Mises inverses, linear
-and nonlinear, are fast least-squares solves).
+Locked by `tests/feec/test_clebsch_hodograph_research.py` (62 tests; 19 heavy
+FEM / NGSolve rungs are `@pytest.mark.slow`).  The newly added accelerator
+design rungs -- isochronous scaling, leaf-coupling, two-plane sector reflection,
+twist, combined-function Frenet sweep, end-pack, nonlinear spectrometer corner,
+co-bake, and sector saturation -- are golden-tested in the fast tier unless the
+test itself is explicitly marked slow.
 
 ## Prior art (honest)
 
