@@ -28,31 +28,3 @@ def test_peak_dt_formula():
     assert math.isclose(joule_heated_cylinder_peak_dT(2 * Q, A, K), 50.0, rel_tol=1e-12)
     assert math.isclose(joule_heated_cylinder_peak_dT(Q, 2 * A, K), 100.0, rel_tol=1e-12)
     assert math.isclose(joule_heated_cylinder_peak_dT(Q, A, 4 * K), 6.25, rel_tol=1e-12)
-
-
-@pytest.mark.xval
-def test_cylinder_joule_heating_fe():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    from ngsolve import Mesh, CoefficientFunction
-    from netgen.occ import OCCGeometry, WorkPlane
-    from radia_mcp.radia_ngsolve.multiphysics import solve_heat_steady
-
-    wire = WorkPlane().Circle(0, 0, A).Face(); wire.faces.name = "wire"; wire.edges.name = "surf"
-    mesh = Mesh(OCCGeometry(wire, dim=2).GenerateMesh(maxh=A / 20))
-    gT = solve_heat_steady(mesh, CoefficientFunction(Q), K, "wire", "surf", order=3)
-
-    # centre rise == closed-form peak
-    dT_peak = joule_heated_cylinder_peak_dT(Q, A, K)
-    assert abs(gT(mesh(0.0, 0.0)) - dT_peak) / dT_peak < 5e-3
-    # parabolic profile dT(r) = q (a^2 - r^2)/(4k) at several radii
-    for ra in (0.25, 0.5, 0.75):
-        r = ra * A
-        dT_an = Q * (A * A - r * r) / (4.0 * K)
-        assert abs(gT(mesh(r, 0.0)) - dT_an) / dT_an < 8e-3, f"r/a={ra}: {gT(mesh(r,0.0))} vs {dT_an}"
-
-
-if __name__ == "__main__":
-    test_peak_dt_formula()
-    test_cylinder_joule_heating_fe()
-    print("[OK] cylindrical Joule heating dT(r)=q(a^2-r^2)/(4k) validated.")

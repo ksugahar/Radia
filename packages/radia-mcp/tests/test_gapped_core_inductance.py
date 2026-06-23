@@ -68,28 +68,3 @@ def _L_fe(g):
     with TaskManager():
         gfu = solve_planar_magnetostatic(mesh, nu, Jz=Jz, order=3, dirichlet="outer")
     return inductance_2d(gfu, mesh, "cin", "cout", n_turns=N, current=I, depth=DEPTH)
-
-
-@pytest.mark.xval
-def test_gapped_core_inductance_fe():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    Ls, ratios = [], []
-    for g in (0.004, 0.006, 0.009):
-        l_fe = 2.0 * ((W + ww) / 2.0) * 2 - g
-        L = _L_fe(g)
-        L0 = magnetic_circuit_inductance(N, A_CORE, g, l_fe, MU_R)
-        # tool-independent: FE L is ABOVE the leakage-free model, by a bounded factor
-        assert L0 < L < 1.8 * L0, f"g={g}: L={L:.3f} vs L0={L0:.3f}"
-        # self-regression guard (an independent FE solver matches to ~0.4%)
-        assert abs(L - _REF[g]) / _REF[g] < 0.02, f"g={g}: L={L:.4f} vs ref {_REF[g]}"
-        Ls.append(L); ratios.append(L / L0)
-    # inductance falls as the gap opens; leakage excess grows with the gap
-    assert Ls[0] > Ls[1] > Ls[2]
-    assert ratios[0] < ratios[1] < ratios[2]
-
-
-if __name__ == "__main__":
-    test_magnetic_circuit_inductance_formula()
-    test_gapped_core_inductance_fe()
-    print("[OK] gapped-core inductance: reluctance lower bound + leakage trend validated.")

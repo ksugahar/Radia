@@ -1097,21 +1097,31 @@ powershell.exe -ExecutionPolicy Bypass -File "Build.ps1" -Rebuild  # Clean rebui
 
 ### Parallelization: NGSolve TaskManager
 
-**POLICY**: Use **NGSolve TaskManager** for thread-level parallelization, NOT raw OpenMP parallel regions.
+**POLICY**: Follow the **NGSolve-native execution model**. Use **NGSolve TaskManager** for
+thread-level parallelization, NOT raw OpenMP parallel regions, `std::thread`, `std::async`,
+or a second project-local thread pool.
 
-NGSolve's TaskManager provides work-stealing task-based parallelism that integrates with MKL and avoids nested OpenMP issues. All new parallel code in Radia should use TaskManager.
+NGSolve's TaskManager provides work-stealing task-based parallelism and is the single shared
+threading substrate for Radia + NGSolve workflows. All new Radia parallel code should use
+`ngcore::ParallelFor` / `ParallelForRange`; long C++ entry points that can be called directly
+from Python should stand up or reuse an `ngcore::RegionTaskManager` so a bare `rad.Solve(...)`
+does not accidentally run TaskManager loops serially. Python/NGSolve assembly code follows
+NGSolve convention and is caller-wrapped with `with ngsolve.TaskManager():`.
+
+External threaded kernels are the exception, not an alternative Radia threading model. Dense
+LU (`dgesv_`) uses MKL's internal threading under `radia::MKLThreadGuard` while
+`ngcore::SuspendTaskManager` prevents nested TaskManager/MKL oversubscription. Iterative
+Radia solvers (BiCGSTAB, HACApK/method 2, HDiv VIM, moment-yano) stay TaskManager-native.
 
 ```cpp
 // CORRECT: NGSolve TaskManager
-#include <ngstd.hpp>
-TaskManager::CreateJob([&](const TaskInfo& ti) {
-    // work-stealing parallel loop
-    for (size_t i = ti.task_nr; i < n; i += ti.ntasks) {
-        // compute...
-    }
+#include <core/taskmanager.hpp>
+ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
+    // compute...
 });
 
-// AVOID: Raw OpenMP parallel for (legacy code only)
+// AVOID: raw OpenMP / private thread pools
 #pragma omp parallel for
 for (int i = 0; i < n; i++) { ... }
 ```
@@ -1119,11 +1129,15 @@ for (int i = 0; i < n; i++) { ... }
 **When to use TaskManager**:
 - Field computation loops (ComputeFieldBatch)
 - Interaction matrix assembly
+- BiCGSTAB vector operations and matrix-vector products
+- HACApK H-matrix build/matvec/solve loops
+- HDiv VIM and moment-yano C++ solve loops
 - Any embarrassingly parallel loop
 
-**When OpenMP is acceptable**:
-- MKL internal threading (controlled by `mkl_set_num_threads`)
-- Legacy code not yet migrated
+**When non-TaskManager threading is acceptable**:
+- MKL internal threading for dense BLAS/LAPACK/PARDISO calls, guarded by
+  `SuspendTaskManager` + `MKLThreadGuard` where Radia controls the call
+- Legacy code only until it is migrated; do not add new OpenMP regions
 
 ### PyPI Release Workflow (Automated via GitHub Actions)
 

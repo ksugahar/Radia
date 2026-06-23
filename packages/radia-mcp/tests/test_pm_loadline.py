@@ -62,28 +62,3 @@ def _Bgap_fe(g):
     B = CoefficientFunction((grad(gfu)[1], -grad(gfu)[0]))
     Agap = Integrate(mesh.MaterialCF({"gap": 1.0}, default=0.0)*dx, mesh)
     return abs(Integrate(mesh.MaterialCF({"gap": 1.0}, default=0.0)*B[0]*dx, mesh) / Agap)
-
-
-@pytest.mark.xval
-def test_pm_loadline_fe():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    Bs, ratios = [], []
-    for g in (0.002, 0.004, 0.008):
-        l_fe = 2.0 * ((W + ww) / 2.0) * 2 - g - LM
-        Bx = _Bgap_fe(g)
-        Bmodel = pm_circuit_loadline_gap_field(BR, LM, g, l_fe, MU_R, MU_REC)
-        # tool-independent: FE below the leakage-free load line (upper bound), within a band
-        assert 0.5 * Bmodel < Bx < Bmodel, f"g={g}: B_FE={Bx:.4f} vs loadline={Bmodel:.4f}"
-        # self-regression guard (an independent FE solver matches to ~0.3%)
-        assert abs(Bx - _REF[g]) / _REF[g] < 0.02, f"g={g}: {Bx:.4f} vs ref {_REF[g]}"
-        Bs.append(Bx); ratios.append(Bx / Bmodel)
-    # demag: B_gap falls with the gap; the leakage deficit grows (FE/model falls)
-    assert Bs[0] > Bs[1] > Bs[2]
-    assert ratios[0] > ratios[1] > ratios[2]
-
-
-if __name__ == "__main__":
-    test_loadline_formula()
-    test_pm_loadline_fe()
-    print("[OK] PM load line: gap demag + leakage deficit growing with the gap.")

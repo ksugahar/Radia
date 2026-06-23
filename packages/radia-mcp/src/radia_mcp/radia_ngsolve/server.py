@@ -416,8 +416,10 @@ def taskmanager(topic: str = "overview") -> str:
     """
     NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++.
 
-    ★ CLAUDE.md policy: use NGSolve TaskManager for thread-level
-    parallelisation (NOT raw OpenMP).  This tool documents the
+    ★ AGENTS.md policy: follow the NGSolve-native execution model. Use
+    NGSolve TaskManager for Radia thread-level parallelisation (NOT raw
+    OpenMP / std::thread / private pools).  External threaded kernels
+    such as MKL dense LU are guarded with SuspendTaskManager.  This tool documents the
     `with TaskManager():` pattern, `SetNumThreads()` + `--nthreads`
     CLI convention, MKL nesting trap, and the C++ `ngcore::ParallelFor`
     equivalent.  Includes a 2026-05-27 audit of the IH panel solver
@@ -864,8 +866,8 @@ def mmm_core(topic: str = "chubar_1998") -> str:
 def hdiv_vim(topic: str = "overview") -> str:
     """
     HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT
-    alternative to the collocation MMM/MSC kernel, and the candidate replacement for the
-    yano-type distortion elements.  Canonical reference: docs/hdiv_vim/README.md.
+    alternative/complement to the canonical moment-yano MSC kernel.  Canonical reference:
+    docs/hdiv_vim/README.md.
 
     Key idea: SYMMETRIC demag operator N = B^T G B with the loop modes FIELD-NULL BY
     CONSTRUCTION (loops = ker B) -> mu_r-INDEPENDENT convergence + NO hand-crafted loop-star.
@@ -875,6 +877,11 @@ def hdiv_vim(topic: str = "overview") -> str:
     models 1/2,1/4,1/8 (loops automatic + image-method demag).  Production entry
     radia.vim.hdiv_demag_solve; the C++ _ChargeGramHMatrix kernel is the SOLE demag operator (the
     dense Python Gram path + the analytic_gram/wilton_surface kwargs were REMOVED 2026-06-23).
+    TaskManager is assumed: shared HACApK build paths and long C++ solve loops stand up or reuse
+    NGSolve RegionTaskManager; direct diagnostic `.matvec()` calls plus Python/NGSolve assembly
+    follow caller-wraps `with ng.TaskManager():`.  The C++ HDiv CG/MINRES/Picard kernels use
+    ParallelFor/ParallelForRange for charge gather, dot products, preconditioner/vector updates,
+    and AtomicAdd for sparse face-vector scatters.
 
     Args:
         topic: One of:

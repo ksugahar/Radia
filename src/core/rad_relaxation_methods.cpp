@@ -1766,10 +1766,6 @@ int radTRelaxationMethNo_0::SolveBInputLinearStep(
 
 double radTRelaxationMethNo_1::Dot(const std::vector<double>& a, const std::vector<double>& b, int n)
 {
-#ifdef HAVE_LAPACK
-	// Use Intel MKL CBLAS cblas_ddot for optimized dot product
-	return cblas_ddot(n, a.data(), 1, b.data(), 1);
-#else
 	double sum = 0.0;
 	ngcore::ParallelForRange(ngcore::IntRange(n), [&](ngcore::IntRange r) {
 		double local_sum = 0.0;
@@ -1779,53 +1775,32 @@ double radTRelaxationMethNo_1::Dot(const std::vector<double>& a, const std::vect
 		ngcore::AtomicAdd(sum, local_sum);
 	});
 	return sum;
-#endif
 }
 
 double radTRelaxationMethNo_1::Norm2(const std::vector<double>& a, int n)
 {
-#ifdef HAVE_LAPACK
-	// Use Intel MKL CBLAS cblas_dnrm2 for optimized norm
-	return cblas_dnrm2(n, a.data(), 1);
-#else
 	return std::sqrt(Dot(a, a, n));
-#endif
 }
 
 void radTRelaxationMethNo_1::Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n)
 {
-#ifdef HAVE_LAPACK
-	// Use Intel MKL CBLAS cblas_daxpy: y = alpha*x + y
-	cblas_daxpy(n, alpha, x.data(), 1, y.data(), 1);
-#else
 	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		y[i] += alpha * x[i];
 	});
-#endif
 }
 
 void radTRelaxationMethNo_1::Copy(const std::vector<double>& src, std::vector<double>& dst, int n)
 {
-#ifdef HAVE_LAPACK
-	// Use Intel MKL CBLAS cblas_dcopy for optimized copy
-	cblas_dcopy(n, src.data(), 1, dst.data(), 1);
-#else
 	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		dst[i] = src[i];
 	});
-#endif
 }
 
 void radTRelaxationMethNo_1::Scale(double alpha, std::vector<double>& x, int n)
 {
-#ifdef HAVE_LAPACK
-	// Use Intel MKL CBLAS cblas_dscal for optimized scale
-	cblas_dscal(n, alpha, x.data(), 1);
-#else
 	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		x[i] *= alpha;
 	});
-#endif
 }
 
 void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, const std::vector<double>& inv_chi, int n_elem)
@@ -2129,7 +2104,7 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	sigma.assign((size_t)dof, 0.0);
 	if(dof == 0) return 0;
 
-	// TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): one region around the
+	// TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
 	// whole build + BiCGSTAB matvec loop so moment-yano method 2 is multi-threaded even when
 	// called via a bare rad.Solve(...,2) without `with TaskManager()`.  Mirrors
 	// RadHACApKChargeGram::SolveMaterialMINRES; nested under a panel region -> no-op.
@@ -2141,32 +2116,41 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 
 	// RHS b_raw (un-normalized): dipole rows carry chi_h*Hext_h (per-element), the rest are 0.
 	std::vector<double> b((size_t)dof, 0.0);
-	for(int h = 0; h < nHex; h++)
+	ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t h) {
 		for(int t = 0; t < 3; t++) b[(size_t)6*h + t] = chiPerHex[h] * HextPerHex[(size_t)3*h + t];
+	});
 
 	// block-Jacobi: invert each element's local 6x6 A_raw block (rows/cols 6h..6h+5), per-element chi.
 	std::vector<double> Binv((size_t)dof * 6);   // [6h+i]*6 + j  = (B_h^-1)[i][j], row-major per block
-	{
-		std::vector<double> blk(36); std::vector<int> ipiv(6); std::vector<double> work(36);
+	ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t h) {
+		std::vector<double> blk(36);
+		std::vector<int> ipiv(6);
+		std::vector<double> work(36);
 		int six = 6, lwork = 36, info = 0;
-		for(int h = 0; h < nHex; h++)
-		{
-			for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++)
-				blk[(size_t)j*6 + i] = IntrctPtr->MomentSystemEntry(6*h+i, 6*h+j, chiPerHex.data());   // col-major for LAPACK
-			dgetrf_(&six, &six, blk.data(), &six, ipiv.data(), &info);
-			if(info == 0) { dgetri_(&six, blk.data(), &six, ipiv.data(), work.data(), &lwork, &info); }
-			if(info != 0) { for(int k = 0; k < 36; k++) blk[k] = 0.0; for(int k = 0; k < 6; k++) blk[(size_t)k*6+k] = 1.0; }
-			for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++) Binv[((size_t)6*h+i)*6 + j] = blk[(size_t)j*6 + i];
-		}
-	}
+		for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++)
+			blk[(size_t)j*6 + i] = IntrctPtr->MomentSystemEntry(6*(int)h+i, 6*(int)h+j, chiPerHex.data());   // col-major for LAPACK
+		dgetrf_(&six, &six, blk.data(), &six, ipiv.data(), &info);
+		if(info == 0) { dgetri_(&six, blk.data(), &six, ipiv.data(), work.data(), &lwork, &info); }
+		if(info != 0) { for(int k = 0; k < 36; k++) blk[k] = 0.0; for(int k = 0; k < 6; k++) blk[(size_t)k*6+k] = 1.0; }
+		for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++) Binv[((size_t)6*h+i)*6 + j] = blk[(size_t)j*6 + i];
+	});
 	auto applyM = [&](const std::vector<double>& r, std::vector<double>& z)
 	{
 		z.assign((size_t)dof, 0.0);
-		for(int h = 0; h < nHex; h++)
+		ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t h) {
 			for(int i = 0; i < 6; i++) { double s = 0.0; const double* Bi = &Binv[((size_t)6*h+i)*6];
 				for(int j = 0; j < 6; j++) s += Bi[j]*r[(size_t)6*h+j]; z[(size_t)6*h+i] = s; }
+		});
 	};
-	auto dot = [&](const std::vector<double>& a, const std::vector<double>& bb){ double s=0; for(int i=0;i<dof;i++) s+=a[i]*bb[i]; return s; };
+	auto dot = [&](const std::vector<double>& a, const std::vector<double>& bb){
+		double s = 0.0;
+		ngcore::ParallelForRange(ngcore::IntRange(dof), [&](ngcore::IntRange r) {
+			double local = 0.0;
+			for(auto i : r) local += a[(size_t)i] * bb[(size_t)i];
+			ngcore::AtomicAdd(s, local);
+		});
+		return s;
+	};
 
 	// preconditioned BiCGSTAB on the H-matvec (x0 = 0 -> r0 = b)
 	double bnorm = std::sqrt(dot(b, b)); if(bnorm < 1e-300) return 0;
@@ -2179,18 +2163,22 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		double rho_new = dot(rhat, r);
 		if(std::fabs(rho_new) < 1e-300) return -10;                 // breakdown
 		double beta = (rho_new/rho) * (alpha/omega);
-		for(int i = 0; i < dof; i++) p[i] = r[i] + beta*(p[i] - omega*v[i]);
+		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { p[i] = r[i] + beta*(p[i] - omega*v[i]); });
 		applyM(p, phat); mgr.MatVec(phat, v);
 		double rhv = dot(rhat, v); if(std::fabs(rhv) < 1e-300) return -10;
 		alpha = rho_new / rhv;
-		for(int i = 0; i < dof; i++) s[i] = r[i] - alpha*v[i];
+		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { s[i] = r[i] - alpha*v[i]; });
 		double snorm = std::sqrt(dot(s, s));
-		if(snorm/bnorm < tol) { for(int i=0;i<dof;i++) x[i] += alpha*phat[i]; it++; break; }
+		if(snorm/bnorm < tol) {
+			ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += alpha*phat[i]; });
+			it++;
+			break;
+		}
 		applyM(s, shat); mgr.MatVec(shat, tvec);
 		double tt = dot(tvec, tvec); if(tt < 1e-300) return -10;
 		omega = dot(tvec, s) / tt;
-		for(int i = 0; i < dof; i++) x[i] += alpha*phat[i] + omega*shat[i];
-		for(int i = 0; i < dof; i++) r[i] = s[i] - omega*tvec[i];
+		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += alpha*phat[i] + omega*shat[i]; });
+		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = s[i] - omega*tvec[i]; });
 		if(std::sqrt(dot(r, r))/bnorm < tol) { it++; break; }
 		if(std::fabs(omega) < 1e-300) return -10;
 		rho = rho_new;
@@ -2236,7 +2224,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	std::vector<double> RHS(totalDOF);
 
 	// MOMENT-yano: assemble the parameter-free MOMENT system (BuildMomentSystemCore) for surface-charge
-	// polyhedra (hex 6-DOF + wedge 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
+	// polyhedra (hex 6-DOF + wedge/pyramid 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
 	// sigma in DOF order -- a drop-in for the EIEM2 transpose + dgesv + write-back below.  moment is now
 	// UNCONDITIONAL (the yano_moment=False opt-out was removed in Phase 3b-1); only Tet (3 DOF = MMM) and
 	// mixed tet+MSC fall to the EIEM2 path (removed with a fail-loud guard in 3b-2).
@@ -2450,108 +2438,14 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return;
 
-	int AmOfMainElem = IntrctPtr->AmOfMainElem;
-
-#ifdef HAVE_LAPACK
-	// FAST PATH: Use Intel MKL cblas_dgemv for uniform DOF systems
-	// This is O(N^2) with highly optimized BLAS instead of manual loops
-
-	if(!IntrctPtr->HasVariableDOF())
-	{
-		// Pure 3 DOF system (tetrahedra only) - use single BLAS call with alpha=-1.0
-		// y = -1.0 * A * x + 0.0 * y
-		// Then subtract diagonal: y[i] -= inv_chi[i] * x[i] (ELF-compatible)
-
-		// Intel MKL cblas_dgemv:
-		// y := alpha*A*x + beta*y (for CblasNoTrans)
-		// A is m x n, x is n, y is m
-		// ROW-MAJOR (CblasRowMajor): lda = leading dimension = n = totalDOF (columns)
-		// A[target][source] format: cache-efficient for matvec
-		cblas_dgemv(CblasRowMajor, CblasNoTrans,
-		            totalDOF, totalDOF,      // m, n (matrix dimensions)
-		            -1.0,                     // alpha = -1.0 (negate for 3DOF)
-		            FlatInteract, totalDOF,   // A, lda (row-major: lda = n)
-		            x.data(), 1,              // x, incx
-		            0.0,                      // beta
-		            y.data(), 1);             // y, incy
-
-		// Add diagonal contribution: y[i] += inv_chi[i] * x[i] (physically correct)
-		// This is element-wise multiplication and addition
-		ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
-			y[i] += inv_chi[i] * x[i];  // Physically correct: +1/chi
-		});
-		return;
-	}
-
-	// Check if pure 6 DOF system (all hexahedra MSC)
-	bool allMSC = true;
-	for(int elem = 0; elem < AmOfMainElem && allMSC; elem++)
-	{
-		if(IntrctPtr->GetElementDOF(elem) != 6) allMSC = false;
-	}
-
-	if(allMSC)
-	{
-		// Pure 6 DOF MSC system - use single BLAS call with alpha=-1.0
-		// Physical equation: A = -K/(4pi) + diag(1/chi)
-		// FlatInteract stores K/(4pi), so we need to negate
-		// ROW-MAJOR (CblasRowMajor): A[target][source] format
-		cblas_dgemv(CblasRowMajor, CblasNoTrans,
-		            totalDOF, totalDOF,
-		            -1.0,                     // alpha = -1.0 (negate to get -K/(4pi))
-		            FlatInteract, totalDOF,   // A, lda (row-major: lda = n)
-		            x.data(), 1,
-		            0.0,
-		            y.data(), 1);
-
-		// Add diagonal contribution (physically correct: +1/chi)
-		ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
-			y[i] += inv_chi[i] * x[i];  // Physically correct: +1/chi
-		});
-		return;
-	}
-#endif
-
-	// SLOW PATH: Mixed DOF system (rare) - use block-wise loops
-	// This handles the case where 3DOF and 6DOF elements are mixed
-	std::fill(y.begin(), y.end(), 0.0);
-
-	ngcore::ParallelFor(ngcore::IntRange(AmOfMainElem), [&](size_t row_elem) {
-		int dof_row = IntrctPtr->GetElementDOF(row_elem);
-		int offset_row = IntrctPtr->GetElementDOFOffset(row_elem);
-
-		// Diagonal contribution: +(1/chi) * x (physically correct)
-		for(int k = 0; k < dof_row; k++)
-		{
-			y[offset_row + k] = inv_chi[offset_row + k] * x[offset_row + k];  // Physically correct: +1/chi
-		}
-
-		// Matrix-vector product
-		for(int col_elem = 0; col_elem < AmOfMainElem; col_elem++)
-		{
-			int dof_col = IntrctPtr->GetElementDOF(col_elem);
-			int offset_col = IntrctPtr->GetElementDOFOffset(col_elem);
-
-			// Get block from flat matrix - ROW-MAJOR: block starts at [row * totalDOF + col]
-			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-			const double* block = &FlatInteract[(size_t)offset_row * totalDOF + offset_col];
-
-			// Physical equation: A = -K/(4pi) + diag(1/chi)
-			// FlatInteract stores K/(4pi) for MSC and N for MMM - negate both
-			double sign = -1.0;
-
-			// Row-major block access: element (i, j) within block is at [i * totalDOF + j]
-			// CRITICAL: Use size_t cast for indexing with totalDOF
-			for(int i = 0; i < dof_row; i++)
-			{
-				double sum = 0.0;
-				for(int j = 0; j < dof_col; j++)
-				{
-					sum += block[(size_t)i * totalDOF + j] * x[offset_col + j];
-				}
-				y[offset_row + i] += sign * sum;
-			}
-		}
+	// TaskManager path for all dense BiCGSTAB systems (pure 3DOF, pure 6DOF, and mixed DOF).
+	// FlatInteract stores the demag/base matrix in row-major target/source order.  The BiCGSTAB
+	// equation uses -FlatInteract plus the positive diagonal 1/chi contribution.
+	ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t row) {
+		const double* Arow = &FlatInteract[(size_t)row * totalDOF];
+		double sum = 0.0;
+		for(int col = 0; col < totalDOF; col++) sum += Arow[col] * x[col];
+		y[row] = -sum + inv_chi[row] * x[row];
 	});
 }
 
@@ -2714,6 +2608,10 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
                                                        const double* oldSigma)
 {
 	// BiCGSTAB with Jacobi preconditioner for variable DOF systems
+	// Keep a TaskManager region active across the whole method-1 solve so every ParallelFor
+	// matvec/vector/preconditioner operation is multi-threaded even from a bare rad.Solve(..., 1).
+	ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
 
 	// Allocate work vectors
@@ -3008,9 +2906,6 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 double radTRelaxationMethNo_2::Dot(const std::vector<double>& a, const std::vector<double>& b, int n)
 {
-#ifdef HAVE_LAPACK
-	return cblas_ddot(n, a.data(), 1, b.data(), 1);
-#else
 	double sum = 0.0;
 	ngcore::ParallelForRange(ngcore::IntRange(n), [&](ngcore::IntRange r) {
 		double local_sum = 0.0;
@@ -3020,49 +2915,32 @@ double radTRelaxationMethNo_2::Dot(const std::vector<double>& a, const std::vect
 		ngcore::AtomicAdd(sum, local_sum);
 	});
 	return sum;
-#endif
 }
 
 double radTRelaxationMethNo_2::Norm2(const std::vector<double>& a, int n)
 {
-#ifdef HAVE_LAPACK
-	return cblas_dnrm2(n, a.data(), 1);
-#else
 	return std::sqrt(Dot(a, a, n));
-#endif
 }
 
 void radTRelaxationMethNo_2::Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n)
 {
-#ifdef HAVE_LAPACK
-	cblas_daxpy(n, alpha, x.data(), 1, y.data(), 1);
-#else
 	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		y[i] += alpha * x[i];
 	});
-#endif
 }
 
 void radTRelaxationMethNo_2::Copy(const std::vector<double>& src, std::vector<double>& dst, int n)
 {
-#ifdef HAVE_LAPACK
-	cblas_dcopy(n, src.data(), 1, dst.data(), 1);
-#else
 	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		dst[i] = src[i];
 	});
-#endif
 }
 
 void radTRelaxationMethNo_2::Scale(double alpha, std::vector<double>& x, int n)
 {
-#ifdef HAVE_LAPACK
-	cblas_dscal(n, alpha, x.data(), 1);
-#else
 	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		x[i] *= alpha;
 	});
-#endif
 }
 
 int radTRelaxationMethNo_2::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
@@ -3085,7 +2963,7 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 {
 	if (!m_hacapk || !m_hacapk->IsValid()) return 0;
 
-	// TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): one region around the
+	// TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
 	// whole MMM/MSC method-2 BiCGSTAB (init + loop matvecs) so it is multi-threaded even when
 	// driven by a bare rad.Solve(...,2) without `with TaskManager()`.  Nested -> no-op.
 	ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
@@ -3337,8 +3215,8 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 }
 
 //-------------------------------------------------------------------------
-// Block Jacobi preconditioner for H-matrix BiCGSTAB
-// Extracts 6x6 diagonal blocks from H-matrix using Compute6x6BlockFast
+// Block Jacobi preconditioner for H-matrix BiCGSTAB.
+// Extracts diagonal blocks DOF-generically through GetInteractionMatrixElement.
 //-------------------------------------------------------------------------
 
 #ifdef HAVE_LAPACK
@@ -3542,8 +3420,8 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	}
 
 
-	// NOTE: 3DOF tetrahedra use PrecomputeFlatInteractMatrix() for fast O(1) access
-	// 6DOF hexahedra use PrecomputeGeometry() + Compute6x6BlockFast()
+	// NOTE: 3DOF tetrahedra use precomputed geometry for fast O(1) access.
+	// Surface-charge moment-yano method-2 solves use RadHACApKMomentSystem, not this MMM manager.
 
 	std::vector<double> OldMagn(totalDOF);
 	// Store current isotropic chi for ALL elements (unified 3DOF/6DOF handling, same as LU/BiCGSTAB)

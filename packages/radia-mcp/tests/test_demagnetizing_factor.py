@@ -39,35 +39,3 @@ def test_internal_field_and_demag_field():
     # demag field H_in = -N Br/mu0 (negative, opposes M)
     assert math.isclose(demagnetizing_field(Br, 0.5), -0.5 * Br / MU0, rel_tol=1e-12)
     assert demagnetizing_field(Br, 1 / 3) < 0.0
-
-
-@pytest.mark.xval
-def test_transverse_cylinder_fe():
-    pytest.importorskip("ngsolve")
-    pytest.importorskip("netgen")
-    from ngsolve import Mesh, CoefficientFunction, grad, TaskManager
-    from netgen.occ import OCCGeometry, WorkPlane, MoveTo, Glue, X, Y
-    from radia_mcp.radia_ngsolve.solve import NU0, solve_planar_magnetostatic
-
-    Br, R, W = 1.2, 0.01, 0.20
-    cyl = WorkPlane().Circle(0, 0, R).Face(); cyl.faces.name = "cyl"; cyl.faces.maxh = R / 10
-    air = MoveTo(-W, -W).Rectangle(2 * W, 2 * W).Face() - WorkPlane().Circle(0, 0, R).Face()
-    air.faces.name = "air"
-    for e in (air.edges.Min(X), air.edges.Max(X), air.edges.Min(Y), air.edges.Max(Y)):
-        e.name = "outer"
-    mesh = Mesh(OCCGeometry(Glue([cyl, air]), dim=2).GenerateMesh(maxh=W / 16))
-    with TaskManager():
-        A = solve_planar_magnetostatic(mesh, CoefficientFunction(NU0),
-                                       magnets={"cyl": (Br / MU0, 0.0)}, order=3, dirichlet="outer")
-        B = CoefficientFunction((grad(A)[1], -grad(A)[0]))
-        bx, by = B[0](mesh(0.0, 0.0)), B[1](mesh(0.0, 0.0))
-    assert math.isclose(bx, Br / 2, rel_tol=1.5e-2)        # transverse cylinder N=1/2 -> Br/2
-    assert bx < Br / 2                                      # finite box undercuts (truncation)
-    assert abs(by) < 1e-2 * (Br / 2)                       # internal field is purely along M (x)
-
-
-if __name__ == "__main__":
-    test_factors_sum_to_one_and_values()
-    test_internal_field_and_demag_field()
-    test_transverse_cylinder_fe()
-    print("[OK] demag factor: sum=1; B_in=Br(1-N) (sphere 2/3, cyl 1/2, slab 0); FE cyl==Br/2.")

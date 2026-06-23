@@ -4,13 +4,14 @@ This directory holds the **frozen yano-type collocation-MSC (distortion-element)
 reference numbers** that the live HDiv-VIM C-yoke head-to-head
 ([`../hdiv_cyoke_headtohead.py`](../hdiv_cyoke_headtohead.py)) is compared against.
 
-The yano-type *method* has been overwritten in this repository by the
-HDiv-VIM (`radia.vim`); these are **reference data only**, not a runnable
-yano solver. The mesh-less hex/wedge yano `rad.Solve` path raises
-`Radia::Error203` on current radia (see CLAUDE.md, 2026-06-19). Until now these
-numbers lived only as a comment in `hdiv_cyoke_headtohead.py` ("the yano JSON is
-not committed to this repo"); this directory **commits the source JSONs** so the
-embedded `YANO_REF` has a tracked provenance.
+The historical collocation yano-type method has been replaced in live Radia by
+the canonical moment-yano surface-charge formulation; these are **reference data
+only**, not a runnable reproduction of the old EIEM2 collocation kernel. Current
+mesh-less hex/wedge/pyramid soft iron still solves through `rad.Solve`, but it
+uses moment-yano. Until now these numbers lived only as a comment in
+`hdiv_cyoke_headtohead.py` ("the yano JSON is not committed to this repo"); this
+directory **commits the source JSONs** so the embedded `YANO_REF` has a tracked
+provenance.
 
 ## Model
 
