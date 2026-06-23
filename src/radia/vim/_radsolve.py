@@ -46,7 +46,7 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     ``rad.Solve`` can dispatch the FEEC HDiv-VIM backend.
 
     The returned container works with BOTH demag backends: ``'yano'`` (the applied
-    ``MatLin`` / ``MatSatIsoTab`` MSC -- the legacy path) and ``'hdiv'`` (the FEEC
+    ``MatLin`` / ``MatSatIsoTab`` moment-yano MSC path) and ``'hdiv'`` (the FEEC
     HDiv-VIM on the registered mesh).  Exactly one of ``mu_r`` (linear) or
     ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
 
@@ -78,7 +78,7 @@ def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None,
     which avoids the hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding that silently
     breaks the HDiv surface charge).  Both backends then read the SAME mesh: the default/'hdiv' path
     solves on the registered mesh (FEEC HDiv-VIM); set_demag_backend('yano') solves the built
-    ObjHexahedron/Tetrahedron/Wedge elements (yano-type MSC).  Exactly one of ``mu_r`` (linear) or
+    ObjHexahedron/Tetrahedron/Wedge elements (moment-yano MSC).  Exactly one of ``mu_r`` (linear) or
     ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.  (Caller opens ``with ng.TaskManager():``.)
     """
     import ngsolve as ng
