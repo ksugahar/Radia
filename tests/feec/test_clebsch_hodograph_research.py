@@ -1276,7 +1276,37 @@ def test_ffag_sector_two_plane_rung2_3d():
     assert r2["ne"] > 3000, r2["ne"]
 
 
-def test_twisting_quadrupole_pole():
+def test_scaling_ffag_sector_saturation():
+    """The scaling-FFAG SECTOR body driven into SATURATION: the azimuthal (s,z) end
+    solve made NONLINEAR (Froehlich mu_r(|B|)).  At the high-r aperture edge (smallest
+    gap, highest B) the iron SATURATES hard (its <mu_r> collapses by ~3x), yet the
+    azimuthal effective length L_eff is ROBUST (drift < 2 %) -- the sector end is
+    gap-reluctance-dominated (the same honest scope as clebsch_dipole_saturation_3d).
+    This contrasts with the RADIAL field index k(r), which IS fragile under the same
+    high-r saturation (it droops -- golden-locked in test_scaling_ffag_pole_2d_step2_
+    saturation): the two sector planes respond OPPOSITELY to saturation.  ngsolve
+    only; the azimuthal solve here, the radial droop reused/locked separately."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_sector_saturation as ss
+    d = ss.sector_saturation(dtheta=0.30)
+
+    hi = d["radii"]["high_r_edge"]
+    lo = d["radii"]["low_r_body"]
+    # the high-r edge iron SATURATES hard (its <mu_r> collapses below half).
+    assert d["high_r_iron_saturates"] is True, d
+    assert d["high_r_mur_collapse_factor"] < 0.5, d           # <mu_r> falls > 2x
+    assert hi["mur_mean_linear"] > 800, hi                    # high before saturation
+    assert hi["mur_mean_saturated"] < 1000, hi                # collapsed after
+    assert hi["B_local_saturated_T"] > d["B_K_iron_T"], hi    # above the iron knee
+
+    # YET the azimuthal L_eff is ROBUST (gap-reluctance-dominated): drift < 2 %.
+    assert d["L_eff_robust_under_saturation"] is True, d
+    assert abs(d["high_r_L_eff_drift_rel"]) < 0.02, d
+    assert abs(lo["L_eff_drift_rel"]) < 0.02, lo
+    # the fringe is ~one gap at both radii, and stable under saturation.
+    assert 1.0 < hi["fringe_per_gap_saturated"] < 2.5, hi
+    assert d["fringe_per_gap_stable"] is True, d
     """The beam-referenced equipotential surface as the design primitive + the
     TWIST (the curved-orbit / combined-function axis).  The quad pole = the
     hyperbola equipotential (xy = r0^2/2); a 2-D Laplace solve recovers a clean

@@ -584,6 +584,32 @@ fringe — so it needs **particle tracking**, not a field-EFB slope. Per the rep
 honest-results policy this is kept as a characterized open problem (recorded here), not
 shipped as a working example.
 
+### 3.12 The saturating sector body — the two planes respond OPPOSITELY to saturation
+
+§3.5's scaling-FFAG **sector** is designed in two planes — the radial `(r,z)` field index
+`k(r) ~ r^k` (the achromaticity) and the azimuthal `(s,z)` sector end (the effective length
+`L_eff`). `scaling_ffag_pole_2d.py` showed the RADIAL plane droops `k(r)` at the high-r edge
+under iron saturation (Step 2, the achromaticity wall); the azimuthal end was solved only
+*linearly*. This rung drives the **sector body** into saturation by making the azimuthal
+end solve NONLINEAR (Froehlich `μ_r(|B|)`, the same knee as Step 2) and solving it at the
+high-r aperture edge (smallest gap, highest `B`) and the low-r body.
+
+**Verified (`scaling_ffag_sector_saturation.py`, ngsolve only, golden-tested).** The honest
+result for a scaling (large-gap) pole is a **contrast** between the two planes:
+
+| plane | quantity | under saturation |
+|---|---|---|
+| azimuthal `(s,z)` | effective length `L_eff` | **ROBUST** — drift `< 0.1 %` even where the high-r iron `⟨μ_r⟩` collapses `×0.3` |
+| radial `(r,z)` | field index `k(r)` | **FRAGILE** — droops `Δk ≈ −0.26` at the high-r edge |
+
+The sector END is **gap-reluctance-dominated**: the high-r iron saturates hardest (its
+`⟨μ_r⟩` collapses `1574 → 481`, `×0.3`), yet `L_eff` barely moves (the fringe stays `~1.5`
+gaps) — the same honest scope as §3.6 / `clebsch_dipole_saturation_3d` (a large-gap magnet's
+gap field softens only mildly with iron saturation). So **saturation degrades the radial
+field SHAPE (achromaticity) but not the azimuthal end LENGTH** — a real design insight: the
+high-r achromaticity needs the radial reshape (§3.5 Step 3), while the sector ENDS are
+saturation-robust and need no nonlinear end correction.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -726,6 +752,12 @@ coil = A-side), so the framework is one method, not two.
   source, the field-EFB slope does NOT recover the geometric edge angle (it is the wrong
   observable; the genuine focusing is a particle-tracking quantity), kept as a characterized
   negative (§3.11).
+- the **saturating sector body** (§3.12, `scaling_ffag_sector_saturation.py`): the
+  scaling-FFAG sector's azimuthal `(s,z)` end made NONLINEAR (Froehlich `μ_r(|B|)`) — the
+  two sector planes respond OPPOSITELY to iron saturation: the azimuthal effective length
+  `L_eff` is ROBUST (gap-reluctance-dominated; drift `< 0.1 %` even where the high-r iron
+  `⟨μ_r⟩` collapses `×0.3`), while the radial field index `k(r)` is FRAGILE (`Δk ≈ −0.26`,
+  the §3.5 achromaticity wall). Saturation degrades the field SHAPE, not the end LENGTH.
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed in two planes** (§3.9): the longitudinal
@@ -767,4 +799,5 @@ coil = A-side), so the framework is one method, not two.
 | spectrometer end pack NONLINEAR (corner saturable throat) | `examples/clebsch_hodograph/endpack_spectrometer_saturation.py` |
 | two planes co-baked into one pole (δ shim + ĝ chamfer) | `examples/clebsch_hodograph/endpack_cobake.py` |
 | co-bake as a PRECISION tensor loft (OCC ThruSections) | `examples/clebsch_hodograph/endpack_cobake_loft.py` |
+| saturating sector body (azimuthal L_eff robust, radial k fragile) | `examples/clebsch_hodograph/scaling_ffag_sector_saturation.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
