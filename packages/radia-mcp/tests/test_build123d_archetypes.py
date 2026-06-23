@@ -20,7 +20,7 @@ from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetizati
                                             solenoid, pole_tip, multipole_yoke, h_dipole, helmholtz_pair,
                                             cos_theta_dipole, e_core, slotted_stator, spm_rotor,
                                             litz_wire, litz_packing_radius, litz_fill_factor,
-                                            hierarchical_litz, rectangular_litz,
+                                            litz_single_layer_metrics, hierarchical_litz, rectangular_litz,
                                             rectangular_litz_fill_factor, litz_serving)
 from radia_mcp.build123d.archetypes import _carried_centerline, _superposed_centerline
 from radia_mcp.build123d.archetypes import involute_gear, threaded_rod, airfoil, blade
@@ -179,6 +179,45 @@ def test_litz_fill_factor():
         s = math.sin(math.pi / n)
         assert abs(ff - n * s ** 2 / (1 + s) ** 2) < 1e-12, "single-layer fill via physical envelope"
         assert ff < 1.0, "physical fill factor is a fraction"
+
+
+def test_litz_single_layer_metrics_round_envelope():
+    """Single-layer round Litz metrics bridge the strand centre ring, bare envelope, serving envelope,
+    and fill-factor report used by the CAD + solver handoff."""
+    rs = 0.5
+    for n in (6, 12, 19):
+        m = litz_single_layer_metrics(n, rs)
+        assert abs(m["center_radius"] - litz_packing_radius(n, rs)) < 1e-12
+        assert abs(m["envelope_radius"] - (litz_packing_radius(n, rs) + rs)) < 1e-12
+        assert abs(m["center_spacing"] - 2.0 * rs) < 1e-12
+        assert abs(m["fill_factor"] - litz_fill_factor(n, rs, m["envelope_radius"])) < 1e-12
+
+    gapped = litz_single_layer_metrics(12, rs, strand_gap=0.2, serving_thickness=0.3)
+    touch = litz_single_layer_metrics(12, rs)
+    assert gapped["center_spacing"] == 2.0 * rs + 0.2
+    assert gapped["envelope_radius"] > touch["envelope_radius"]
+    assert gapped["served_radius"] == gapped["envelope_radius"] + 0.3
+    assert gapped["fill_factor"] < touch["fill_factor"]
+    assert gapped["served_fill_factor"] < gapped["fill_factor"]
+
+    for bad in (
+        lambda: litz_single_layer_metrics(2, rs),
+        lambda: litz_single_layer_metrics(6, 0.0),
+        lambda: litz_single_layer_metrics(6, rs, strand_gap=-1e-3),
+        lambda: litz_single_layer_metrics(6, rs, serving_thickness=-1e-3),
+    ):
+        with pytest.raises(ValueError):
+            bad()
+
+
+def test_litz_single_layer_metrics_match_build123d_bbox():
+    """The analytic envelope radius matches the actual build123d strand bundle XY bounding box."""
+    n, rs, L, pitch = 6, 0.35, 14.0, 14.0
+    m = litz_single_layer_metrics(n, rs, strand_gap=0.1)
+    litz = litz_wire(n, rs, m["center_radius"], L, pitch, name="round")
+    bb = litz.bounding_box()
+    assert abs(bb.size.X / 2.0 - m["envelope_radius"]) < 1e-6
+    assert abs(bb.size.Y / 2.0 - m["envelope_radius"]) < 1e-6
 
 
 def test_rectangular_litz_fill_factor():
@@ -454,6 +493,8 @@ def main():
     test_litz_strand_meshes_in_netgen()
     test_litz_wire_noncircular_section()
     test_litz_fill_factor()
+    test_litz_single_layer_metrics_round_envelope()
+    test_litz_single_layer_metrics_match_build123d_bbox()
     test_hierarchical_litz_coiled_coil()
     test_rectangular_litz_grid_and_twist()
     test_hierarchical_litz_carried()
