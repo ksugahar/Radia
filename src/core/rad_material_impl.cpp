@@ -1262,6 +1262,9 @@ int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* p
 				std::memset(pMatrix, 0, matrixSize * sizeof(double));
 				return 0;
 			}
+			// TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): keep the pool up
+			// across the densify loop (totalDOF H-matvecs) without a caller `with TaskManager()`.
+			ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
 			std::vector<double> x((size_t)totalDOF, 0.0), y((size_t)totalDOF, 0.0);
 			for(int j = 0; j < totalDOF; j++)
 			{

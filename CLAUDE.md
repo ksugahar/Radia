@@ -1719,6 +1719,58 @@ wrapping):
 - `concurrent.futures.ThreadPoolExecutor` for NGSolve work
 - `#pragma omp parallel` in new C++ that calls NGSolve
 
+### C++ HACApK Self-Wrap Policy: every BUILD and SOLVE-LOOP stands up a RegionTaskManager (2026-06-23)
+
+**POLICY**: The "Caller Wraps, Helper Does NOT" rule above governs **Python**
+helpers.  The **C++ HACApK kernels are the opposite**: the H-matrix leaf fill and
+the H-matvec call `ngcore::ParallelFor`, which **silently falls back to
+single-threaded when NO `RegionTaskManager` region is active**.  A non-panel
+caller of `rad.Solve(..., method=2)` (or a bare `hdiv_demag_solve`) does NOT open
+a `with TaskManager()` region, so without a C++ self-wrap the **entire HACApK
+build + Krylov solve runs serial** -- the exact failure mode that made moment-yano
+method 2 silently single-threaded off the panel path (2026-06-23).
+
+**RULE**: every C++ entry point that drives an HACApK `ngcore::ParallelFor` MUST
+self-wrap **exactly once, at the right granularity**:
+
+- **BUILD** -- `RadHACApKBase::BuildHMatrix` stands up the region at the top of
+  its body.  This is the **single central** protection for EVERY build site
+  (moment-yano, HDiv ChargeGram, MMM/MSC, PEEC, the diagnostic densify/smoke
+  entries).  Do NOT duplicate it per build caller.
+- **SOLVE LOOP** -- each Krylov / iterative loop (BiCGSTAB, CG, MINRES, Picard)
+  that repeatedly calls `MatVec` stands up **ONE** region around the whole loop.
+  **NEVER wrap inside `RadHACApKBase::MatVec` itself**: a per-matvec region would
+  stand up / tear down the threadpool on every iteration (the very case we are
+  fixing), far slower than wrapping the loop once.
+- **One-shot `MatVec`** (single apply / smoke test) needs no wrap -- the build it
+  follows is already covered, and a lone matvec gains nothing from a persistent
+  pool.
+
+**The reference pattern** (use verbatim):
+```cpp
+ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+```
+
+**Nesting is always safe**: `RegionTaskManager` **reuses the caller's pool when
+one is already active** (no-op), so a panel that already opened `with
+TaskManager()` is unaffected, and a build's self-wrap nesting inside a solver's
+self-wrap is a no-op.  The self-wrap is belt-and-suspenders, never a conflict.
+This does NOT contradict "Caller Wraps, Helper Does NOT" (that rule is about
+**Python** helpers); C++ HACApK kernels self-wrapping with `RegionTaskManager`
+is the established C++ pattern -- already used by
+`RadHACApKChargeGram::SolveMaterialMINRES` (`rad_hacapk_hdiv.cpp`) and the H-LU
+bridge `chacapk_par_region` (`cHACApK_harith_par.cpp`).
+
+**Self-wrapped surface (2026-06-23 sweep)** -- BUILD: `RadHACApKBase::BuildHMatrix`;
+SOLVE LOOPS: `SolveMomentHACApK` (moment-yano, `rad_relaxation_methods.cpp`),
+`radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF` (MMM/MSC method 2),
+`RadHACApKChargeGram::SolveLinearMaterial` / `SolveNonlinearPicard` (HDiv;
+`SolveMaterialMINRES` already had it), and the `HMatrixDensify` densify loop.
+**Any NEW HACApK solver loop or build path MUST add the self-wrap.**  (The stale
+`OpenMP`-worded comments in the HACApK callback state were corrected to
+`TaskManager` in the same sweep -- HACApK has zero OpenMP; its parallelism IS
+TaskManager via `hacapk_parallel_for` = `ngcore::ParallelFor`.)
+
 ### PyPI Release Workflow (Automated via GitHub Actions)
 
 **POLICY**: PyPI publishing is automatic. Push a version tag (`v*`) and CI/CD handles the rest.
