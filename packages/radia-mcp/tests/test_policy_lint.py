@@ -12,10 +12,18 @@ policy_lint = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(policy_lint)
 
 
-def _make_repo(tmp, scripts, exclude=None, token_files=None):
+def _make_repo(tmp, scripts, exclude=None, token_files=None, dependencies=None,
+               optional_dependencies=None):
     src = tmp / "src" / "radia_mcp"
     src.mkdir(parents=True, exist_ok=True)
-    py = ['[project]', 'name = "radia-mcp-test"', 'version = "0.0.0"', '', '[project.scripts]']
+    py = ['[project]', 'name = "radia-mcp-test"', 'version = "0.0.0"']
+    if dependencies is not None:
+        py.append(f"dependencies = {list(dependencies)!r}")
+    if optional_dependencies is not None:
+        py += ['', '[project.optional-dependencies]']
+        for key, values in optional_dependencies.items():
+            py.append(f"{key} = {list(values)!r}")
+    py += ['', '[project.scripts]']
     for k, v in scripts.items():
         py.append(f'{k} = "{v}"')
     if exclude is not None:
@@ -83,3 +91,17 @@ def test_benchmark_mention_not_flagged(tmp_path):
                token_files={"motor/notes.py": "# supports the .mph and JMAG-Designer formats\n"})
     assert _run(tmp_path) == 0
     assert _run(tmp_path, strict=True) == 0   # mention alone is not a violation
+
+
+def test_optuna_server_must_stay_external(tmp_path):
+    _make_repo(tmp_path, {
+        "mcp-server-optuna": "radia_mcp.optuna.server:main",
+    })
+    assert _run(tmp_path) == 1
+
+
+def test_optuna_dependency_must_stay_external(tmp_path):
+    _make_repo(tmp_path, {"mcp-server-cubit": "radia_mcp.cubit.server:main"},
+               dependencies=["optuna>=4"],
+               optional_dependencies={"external": ["optuna-mcp>=0.2"]})
+    assert _run(tmp_path) == 1
