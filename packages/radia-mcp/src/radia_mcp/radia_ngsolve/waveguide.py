@@ -107,6 +107,34 @@ def guide_wavelength(frequency, fc, c=C0):
     return waveguide_dispersion(frequency, fc, c)["lambda_g"]
 
 
+def waveguide_wave_impedance(frequency, fc, mode="TE", eta=MU0 * C0):
+    """Wave impedance [Ohm] of a propagating hollow-guide mode above cutoff.
+
+    For a mode with cutoff ``fc`` driven at ``frequency > fc`` and intrinsic
+    medium impedance ``eta``:
+
+        Z_TE = eta / sqrt(1 - (fc/f)^2)
+        Z_TM = eta * sqrt(1 - (fc/f)^2)
+
+    Thus TE impedance tends to infinity at cutoff while TM impedance tends to
+    zero; both tend to ``eta`` far above cutoff, and ``Z_TE * Z_TM = eta^2``.
+    These impedances set the port normalization and the interface reflection
+    coefficient used by dielectric-slab / cascade S-parameter helpers.
+    """
+    f = float(frequency)
+    if f <= fc:
+        raise ValueError("frequency must exceed cutoff for propagating wave impedance")
+    s = math.sqrt(1.0 - (fc / f) ** 2)
+    m = str(mode).upper()
+    if m == "TE":
+        z = eta / s
+    elif m == "TM":
+        z = eta * s
+    else:
+        raise ValueError("mode must be 'TE' or 'TM'")
+    return {"mode": m, "frequency": f, "fc": fc, "eta": eta, "Z": z, "fc_over_f": fc / f}
+
+
 def waveguide_evanescent_attenuation(frequency, fc, c=C0):
     """BELOW cutoff (f < fc) the mode does NOT propagate; its amplitude decays as exp(-alpha z) with
 
