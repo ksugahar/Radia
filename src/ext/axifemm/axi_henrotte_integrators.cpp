@@ -195,6 +195,50 @@ void Q1ElementMatrix(double ra, double rb, double za, double zb,
 }
 
 // ---------------------------------------------------------------------------
+// Q1 axis-aligned quad stiffness in TRUE V-DOF form (matches P1TriangleStiffness
+// / Q2): K_ij = (2 pi / mu) r_i r_j INT_quad grad(psi_i).grad(psi_j)/r dr dz,
+// psi in {1, s, z, s z} with s = r^2 (dpsi/dr = 2 r (b + d z), dpsi/dz = c + d s).
+// A uniform axial B_z (V_i = B0 r_i/2) lies in its kernel, so order-1 quad
+// magnetostatics converges -- unlike Q1StiffnessCoef, which is the A=psi energy
+// form (does NOT annihilate the uniform field).  16-point Gauss is exact for the
+// rational-polynomial integrand on the rectangle.
+// ---------------------------------------------------------------------------
+void Q1StiffnessVDof(double ra, double rb, double za, double zb, double mu,
+                     FlatMatrix<double> elmat)
+{
+    Mat<4,4> inv_V;
+    Q1InverseVandermonde(ra, rb, za, zb, inv_V);   // column i = (a,b,c,d) of psi_i
+    double r_nodes[4] = { ra, rb, rb, ra };
+    static const double gp[4] = { -0.8611363115940526, -0.3399810435848563,
+                                   0.3399810435848563,  0.8611363115940526 };
+    static const double gw[4] = { 0.3478548451374538, 0.6521451548625461,
+                                  0.6521451548625461, 0.3478548451374538 };
+    Mat<4,4> Ke; Ke = 0.0;
+    for (int ir = 0; ir < 4; ++ir)
+        for (int iz = 0; iz < 4; ++iz) {
+            double rq = 0.5*(ra+rb) + 0.5*(rb-ra)*gp[ir];
+            double zq = 0.5*(za+zb) + 0.5*(zb-za)*gp[iz];
+            if (rq <= EPS_AXIS) continue;
+            double w = gw[ir]*gw[iz] * 0.25*(rb-ra)*(zb-za);
+            double s = rq*rq;
+            double dpr[4], dpz[4];
+            for (int i = 0; i < 4; ++i) {
+                double b = inv_V(1,i), c = inv_V(2,i), d = inv_V(3,i);
+                dpr[i] = 2.0*rq*(b + d*zq);
+                dpz[i] = c + d*s;
+            }
+            double fac = w / rq;
+            for (int i = 0; i < 4; ++i)
+                for (int j = 0; j < 4; ++j)
+                    Ke(i,j) += fac*(dpr[i]*dpr[j] + dpz[i]*dpz[j]);
+        }
+    double inv_mu = 1.0 / mu;
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            elmat(i,j) = 2.0*PI*inv_mu*r_nodes[i]*r_nodes[j]*Ke(i,j);
+}
+
+// ---------------------------------------------------------------------------
 // Q2 element matrix (interior or axis-touching, 9 DOFs in V-DOF basis).
 //
 //   M_phi (monomial)  =  KPhiGeneral / MSigmaPhiGeneral / KPhiAxis / ...
@@ -314,87 +358,75 @@ void Q2SigmaMassElement(const AxiHenrotteFE_Q2_AxisAligned & fe, double sigma,
 }
 
 // ---------------------------------------------------------------------------
-// P1 triangle stiffness (FEMM prob3big.cpp via axifemm_core.element_matrices).
-// Inputs: rn[3], zn[3] vertex coords, mu (isotropic).
-// Returns 3x3 in psi-DOF (= phi/V_FEMM = nodal value of FE function).
+// P1 triangle stiffness in V-DOF (matches P2TriangleStiffness / the Q2 closed
+// form):  K_ij = (2 pi / mu) r_i r_j INT_T grad(psi_i).grad(psi_j)/r dA,
+// psi_i = alpha_i + beta_i r^2 + gamma_i z (the {1, r^2, z} Henrotte basis).
+//
+// This is the CORRECT axisymmetric V-DOF stiffness: a uniform axial B_z has
+// nodal A_phi V_i = B0 r_i/2 with  sum_j r_j^2 psi_j == r^2, so V lies in the
+// kernel (interior) and order-1 magnetostatics converges (magnetized sphere
+// O(h): -1.8% -> -0.6%, FEMM-P1-like).  It REPLACES the earlier FEMM prob3big
+// A=psi port, which is NOT a V-DOF operator (it does not annihilate the uniform
+// field -- ||(K V_unif)_interior||/scale ~ 0.6 -- so order-1 magnetostatic
+// solves gave a wrong, non-uniform interior field).  The matching V-DOF
+// sigma-mass (P1TriangleSigmaMass) is unchanged, so the eddy path stays
+// consistent.  Axis-touching cells use the same r_q<=EPS_AXIS skip as P2.
 // ---------------------------------------------------------------------------
 void P1TriangleStiffness(const double rn[3], const double zn[3], double mu,
                           FlatMatrix<double> elmat)
 {
-    // Geometric coefficients.
-    double p[3] = { zn[1] - zn[2], zn[2] - zn[0], zn[0] - zn[1] };
-    double q[3] = { rn[2] - rn[1], rn[0] - rn[2], rn[1] - rn[0] };
-    double g[3] = { 0.5*(rn[1]+rn[2]), 0.5*(rn[0]+rn[2]), 0.5*(rn[0]+rn[1]) };
-
-    double R = (rn[0] + rn[1] + rn[2]) / 3.0;
-    double a_hat = 0.0;
-    for (int j = 0; j < 3; ++j) a_hat += rn[j]*rn[j] * p[j] / (4.0 * R);
-
-    int flag = 0;
-    for (int j = 0; j < 3; ++j) if (abs(rn[j]) < EPS_AXIS) ++flag;
-
-    double R_hat;
-    if (flag == 2) {
-        R_hat = R;
-    } else if (flag == 1) {
-        double r1, r2;
-        if (abs(rn[0]) < EPS_AXIS)      { r1 = rn[1]; r2 = rn[2]; }
-        else if (abs(rn[1]) < EPS_AXIS) { r1 = rn[2]; r2 = rn[0]; }
-        else                            { r1 = rn[0]; r2 = rn[1]; }
-        if (abs(r1 - r2) < EPS_AXIS)
-            R_hat = 0.5 * r2;
-        else
-            R_hat = (r1 - r2) / (2.0 * (log(r1) - log(r2)));
-    } else {
-        // interior; q[i]=0 sub-cases first
-        if (abs(q[0]) < EPS_AXIS)
-            R_hat = q[1]*q[1] / (2.0 * (-q[1] + rn[0] * log(rn[0]/rn[2])));
-        else if (abs(q[1]) < EPS_AXIS)
-            R_hat = q[2]*q[2] / (2.0 * (-q[2] + rn[1] * log(rn[1]/rn[0])));
-        else if (abs(q[2]) < EPS_AXIS)
-            R_hat = q[0]*q[0] / (2.0 * (-q[0] + rn[2] * log(rn[2]/rn[1])));
-        else
-            R_hat = -(q[0]*q[1]*q[2]) /
-                    (2.0 * (q[0]*rn[0]*log(rn[0])
-                          + q[1]*rn[1]*log(rn[1])
-                          + q[2]*rn[2]*log(rn[2])));
+    Mat<3,3> M_vand;
+    for (int j = 0; j < 3; ++j) {
+        M_vand(j, 0) = 1.0;
+        M_vand(j, 1) = rn[j] * rn[j];
+        M_vand(j, 2) = zn[j];
     }
+    Mat<3,3> inv_vand;
+    CalcInverse(M_vand, inv_vand);
+    double beta[3]  = { inv_vand(1,0), inv_vand(1,1), inv_vand(1,2) };
+    double gamma[3] = { inv_vand(2,0), inv_vand(2,1), inv_vand(2,2) };
 
-    double K_r = -1.0 / (2.0 * a_hat * R);
-    Mat<3,3> Mr;
-    Mr = 0.0;
-    for (int j = 0; j < 3; ++j)
-        for (int k = j; k < 3; ++k) {
-            Mr(j, k) = K_r * p[j] * rn[j] * p[k] * rn[k];
-            Mr(k, j) = Mr(j, k);
+    double drxi  = rn[1] - rn[0];
+    double dreta = rn[2] - rn[0];
+    double dzxi  = zn[1] - zn[0];
+    double dzeta = zn[2] - zn[0];
+    double detJ  = abs(drxi * dzeta - dreta * dzxi);
+
+    // Hammer 7-point (same rule as P1TriangleSigmaMass).
+    const double s15 = 3.872983346207417;
+    const double w_a = 9.0 / 80.0;
+    const double w_b = (155.0 - s15) / 2400.0;
+    const double w_c = (155.0 + s15) / 2400.0;
+    const double a1  = (6.0 + s15) / 21.0;
+    const double a2  = (9.0 - 2.0 * s15) / 21.0;
+    const double b1  = (6.0 - s15) / 21.0;
+    const double b2  = (9.0 + 2.0 * s15) / 21.0;
+    const double pts[7][3] = {
+        {1.0/3.0, 1.0/3.0, w_a},
+        {a1, a1, w_b}, {a2, a1, w_b}, {a1, a2, w_b},
+        {b1, b1, w_c}, {b2, b1, w_c}, {b1, b2, w_c},
+    };
+
+    Mat<3,3> Ke;
+    Ke = 0.0;
+    for (int q = 0; q < 7; ++q) {
+        double xi = pts[q][0], eta = pts[q][1], w = pts[q][2];
+        double r_q = rn[0] + drxi * xi + dreta * eta;
+        if (r_q <= EPS_AXIS) continue;          // integrable 1/r near axis
+        double dpsi_dr[3], dpsi_dz[3];
+        for (int j = 0; j < 3; ++j) {
+            dpsi_dr[j] = 2.0 * beta[j] * r_q;   // d/dr (alpha + beta r^2 + gamma z)
+            dpsi_dz[j] = gamma[j];
         }
-    // axis-singular diagonal boost (prob3big.cpp 250-251)
-    double diag_sum = Mr(0,0) + Mr(1,1) + Mr(2,2);
-    for (int j = 0; j < 3; ++j)
-        if (abs(rn[j]) < EPS_AXIS)
-            Mr(j, j) += diag_sum;
-
-    double K_z = -1.0 / (2.0 * a_hat * R_hat);
-    Mat<3,3> Mz;
-    Mz = 0.0;
-    for (int j = 0; j < 3; ++j)
-        for (int k = j; k < 3; ++k) {
-            Mz(j, k) = K_z * (q[j] * rn[j]) * (q[k] * rn[k])
-                            * (g[j] / R) * (g[k] / R);
-            Mz(k, j) = Mz(j, k);
-        }
-
-    // FEMM convention: Me = Mr/mu + Mz/mu (isotropic mu).
-    // The Python prototype uses Mr / mu_z + Mz / mu_r; we collapse to one mu.
+        double factor = w * detJ / r_q;
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                Ke(i, j) += factor * (dpsi_dr[i]*dpsi_dr[j] + dpsi_dz[i]*dpsi_dz[j]);
+    }
     double inv_mu = 1.0 / mu;
-    Mat<3,3> Me = inv_mu * (Mr + Mz);
-
-    // FEMM element matrix has FEMM-internal sign; flip via -pi prefactor so
-    // that the assembled K is positive-definite and matches the Q1 closed form
-    // convention.
     for (int i = 0; i < 3; ++i)
         for (int j = 0; j < 3; ++j)
-            elmat(i, j) = -PI * Me(i, j);
+            elmat(i, j) = 2.0 * PI * inv_mu * rn[i] * rn[j] * Ke(i, j);
 }
 
 // ---------------------------------------------------------------------------
@@ -818,11 +850,7 @@ void AxiHenrotteStiffnessBFI::CalcElementMatrix(
     double mu = SampleAtCentroid(*mu_cf, eltrans, et, lh);
 
     if (auto * q1 = dynamic_cast<const AxiHenrotteFE_Q1_AxisAligned*>(&fel)) {
-        Q1ElementMatrix(q1->r_a, q1->r_b, q1->z_a, q1->z_b,
-                        [mu](double sa, double sb, double za, double zb) {
-                            return Q1StiffnessCoef(sa, sb, za, zb, mu);
-                        },
-                        elmat);
+        Q1StiffnessVDof(q1->r_a, q1->r_b, q1->z_a, q1->z_b, mu, elmat);
         return;
     }
     if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
