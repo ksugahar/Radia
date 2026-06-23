@@ -808,6 +808,27 @@ def characteristic_current(lambda_m, Ld):
     return lambda_m / Ld
 
 
+def field_weakening_speed_capability(lambda_m, Ld, Imax):
+    """Characteristic-current design readout for PM-machine field weakening.
+
+    ``Ich = lambda_m/Ld`` is the d-axis current that cancels the PM d-flux. If
+    that zero-flux point lies inside the current circle (``Ich <= Imax``), the
+    ideal R=0 dq model has no finite voltage-limited maximum speed; if it lies
+    strictly inside (``Ich < Imax``), the high-speed optimum can enter the MTPV
+    region. Returns a small dict so teaching scripts can state the CPSR verdict
+    without re-deriving the geometry of the voltage ellipse.
+    """
+    ich = characteristic_current(lambda_m, Ld)
+    return {
+        "characteristic_current": ich,
+        "infinite_speed_possible": ich <= Imax,
+        "finite_max_speed": ich > Imax,
+        "mtpv_possible": ich < Imax,
+        "current_margin": Imax - ich,
+        "current_ratio": math.inf if ich == 0 else Imax / ich,
+    }
+
+
 def short_circuit_dq_currents(R, Ld, Lq, lambda_m, omega_e):
     """Steady-state dq currents of a PM synchronous machine with the 3-phase terminals SHORTED
     (v_d = v_q = 0) at electrical speed ``omega_e``. The dq voltage equations give
