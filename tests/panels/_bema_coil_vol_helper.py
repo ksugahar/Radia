@@ -11,11 +11,11 @@ The labelling logic mirrors the retired _build_bema_coil_mesh() in
 calc_inductance.py: face.name == 'source'/'sink' if present, else the
 two smallest PLANE faces are auto-detected by |y-centroid|.
 """
-from ngsolve import TaskManager
-
 from __future__ import annotations
 
 import os
+
+from ngsolve import TaskManager
 
 
 def step_to_coil_vol(step_path, vol_path, maxh=0.012,
