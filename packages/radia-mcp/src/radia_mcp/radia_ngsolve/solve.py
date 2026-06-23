@@ -1495,8 +1495,9 @@ def skin_effect_resistance_ratio(q):
 
         Rac/Rdc = (q/2) [ber(q) bei'(q) - bei(q) ber'(q)] / [ber'(q)^2 + bei'(q)^2]
 
-    (Kelvin ber/bei). q -> 0 : Rac/Rdc -> 1 (uniform DC current); q >> 1 : -> q/2 + ... (current
-    crowds into the ~delta-thick skin). The real part of the round-wire INTERNAL impedance.
+    (Kelvin ber/bei). q -> 0 : Rac/Rdc -> 1 (uniform DC current); q >> 1 :
+    -> q/(2 sqrt(2)) + 1/4 + ... (current crowds into the ~delta-thick skin). The real part of
+    the round-wire INTERNAL impedance.
     Needs scipy. Validated vs the radia eddy solve (tests/test_planar_eddy.py)."""
     from scipy.special import kelvin
     be, ke, bep, kep = kelvin(q)
@@ -1511,8 +1512,9 @@ def skin_effect_internal_inductance_ratio(q):
 
         L_int/L_int_dc = (4/q) [ber(q) ber'(q) + bei(q) bei'(q)] / [ber'(q)^2 + bei'(q)^2]
 
-    (Kelvin ber/bei). q -> 0 : -> 1 (the DC mu0/8pi, #36); q >> 1 : -> 4/q -> 0 (the skin effect
-    expels current from the core, so the interior stores less magnetic energy). The imaginary
+    (Kelvin ber/bei). q -> 0 : -> 1 (the DC mu0/8pi, #36); q >> 1 :
+    -> 2 sqrt(2)/q -> 0 (the skin effect expels current from the core, so the interior stores
+    less magnetic energy). The imaginary
     part /omega of the round-wire INTERNAL impedance -- the inductive twin of
     :func:`skin_effect_resistance_ratio`; together Z_internal(omega) = Rdc*Rac_ratio +
     j*omega*(mu0/8pi)*Lint_ratio. Needs scipy. Validated vs the radia eddy solve
@@ -1521,6 +1523,64 @@ def skin_effect_internal_inductance_ratio(q):
     be, ke, bep, kep = kelvin(q)
     ber, bei, berp, beip = be.real, be.imag, bep.real, bep.imag
     return (4.0 / q) * (ber * berp + bei * beip) / (berp ** 2 + beip ** 2)
+
+
+def round_wire_internal_impedance(radius, sigma, frequency, mu_r=1.0):
+    """Per-unit-length INTERNAL impedance of an isolated round wire [ohm/m].
+
+    The returned impedance excludes the external magnetic field energy; add the appropriate
+    line external inductance (coax, two-wire, wire-over-plane) separately.  For a wire of radius
+    ``a`` and conductivity ``sigma``:
+
+        R_dc = 1 / (sigma*pi*a^2)
+        L_int,dc = mu0*mu_r / (8*pi)
+        q = a * sqrt(omega*mu0*mu_r*sigma)
+        Z_int = R_dc * F_R(q) + j*omega*L_int,dc*F_L(q)
+
+    where ``F_R`` and ``F_L`` are the Kelvin-function skin-effect resistance and internal-
+    inductance ratios.  This is the circuit-level companion to
+    :func:`skin_effect_resistance_ratio` and :func:`skin_effect_internal_inductance_ratio`:
+    low frequency gives ``R_dc + j*omega*L_int,dc``; high frequency tends toward the surface-
+    impedance limit with resistance rising as sqrt(f) and internal inductance rolling off.
+
+    Returns a dict with ``Z_per_m``, ``Rdc_per_m``, ``Rac_per_m``, ``Lint_per_m``, ``q`` and
+    ``skin_depth``.  ``frequency=0`` is accepted and returns the DC impedance.
+    """
+    if radius <= 0.0:
+        raise ValueError("radius must be positive")
+    if sigma <= 0.0:
+        raise ValueError("sigma must be positive")
+    if frequency < 0.0:
+        raise ValueError("frequency must be non-negative")
+    if mu_r <= 0.0:
+        raise ValueError("mu_r must be positive")
+
+    rdc = 1.0 / (sigma * math.pi * radius * radius)
+    lint_dc = MU0 * mu_r / (8.0 * math.pi)
+    if frequency == 0.0:
+        return {
+            "Z_per_m": complex(rdc, 0.0),
+            "Rdc_per_m": rdc,
+            "Rac_per_m": rdc,
+            "Lint_per_m": lint_dc,
+            "q": 0.0,
+            "skin_depth": math.inf,
+        }
+
+    omega = 2.0 * math.pi * frequency
+    mu = MU0 * mu_r
+    q = radius * math.sqrt(omega * mu * sigma)
+    skin_depth = math.sqrt(2.0 / (omega * mu * sigma))
+    rac = rdc * skin_effect_resistance_ratio(q)
+    lint = lint_dc * skin_effect_internal_inductance_ratio(q)
+    return {
+        "Z_per_m": complex(rac, omega * lint),
+        "Rdc_per_m": rdc,
+        "Rac_per_m": rac,
+        "Lint_per_m": lint,
+        "q": q,
+        "skin_depth": skin_depth,
+    }
 
 
 def skin_effect_slab_attenuation(sigma, frequency, half_thickness, mu_r=1.0):
