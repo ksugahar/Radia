@@ -29,7 +29,7 @@ from ngsolve import (
 
 def _cpp_q1_quad_matrices(ra, rb, za, zb, mu, sigma):
     """Assemble C++ K, M for a single Q1 quad spanning (ra,rb) x (za,zb)."""
-    axifem = pytest.importorskip("axifem")
+    axifem = pytest.importorskip("radia.axifem")
     box = MoveTo(ra, za).Rectangle(rb - ra, zb - za).Face()
     box.faces.name = "conductor"
     # maxh must dominate both dimensions to coerce Netgen into producing
@@ -141,3 +141,41 @@ def test_python_ref_self_consistency_p1_triangle():
     assert np.all(np.isfinite(Mz))
     assert np.allclose(Mr, Mr.T, atol=1e-15)
     assert np.allclose(Mz, Mz.T, atol=1e-15)
+
+
+def test_p2_triangle_curved_mesh_assembles():
+    """C++ order=2 triangle path assembles on a curved OCC mesh.
+
+    This pins the public `radia.axifem` import surface and the production
+    P2-triangle/mesh.Curve(2) path.  Q2 curved quads are not exercised here:
+    the shipped Q2 quad is the straight, axis-aligned closed-form element.
+    """
+    axifem = pytest.importorskip("radia.axifem")
+    from netgen.geom2d import SplineGeometry
+
+    geo = SplineGeometry()
+    geo.AddCircle((2.0e-3, 0.0), 6.0e-4, leftdomain=1, rightdomain=0,
+                  bc="outer")
+    geo.SetMaterial(1, "conductor")
+    mesh = Mesh(geo.GenerateMesh(maxh=4.0e-4))
+    mesh.Curve(2)
+
+    fes = axifem.H1Henrotte(mesh, order=2)
+    assert fes.ndof > mesh.nv, "order=2 triangle path did not allocate edge DOFs"
+
+    mu0 = 4 * pi * 1e-7
+    sigma = 5.8e7
+    a = BilinearForm(fes, symmetric=True, check_unused=False)
+    a += axifem.AxiHenrotteStiffnessBFI(CoefficientFunction(mu0))
+    m = BilinearForm(fes, symmetric=True, check_unused=False)
+    m += axifem.AxiHenrotteSigmaMassBFI(CoefficientFunction(sigma))
+    with TaskManager():
+        a.Assemble()
+        m.Assemble()
+
+    K_vals = np.asarray(a.mat.COO()[2], dtype=float)
+    M_vals = np.asarray(m.mat.COO()[2], dtype=float)
+    assert K_vals.size > 0
+    assert M_vals.size > 0
+    assert np.all(np.isfinite(K_vals))
+    assert np.all(np.isfinite(M_vals))
