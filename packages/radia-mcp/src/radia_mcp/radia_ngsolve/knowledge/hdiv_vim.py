@@ -1,12 +1,12 @@
 """HDiv-type VIM (Volume Integral Method) demag operator -- knowledge module.
 
-The HDiv-type VIM is the lab's FEEC (H(div) RT) alternative to the collocation MMM/MSC kernel and the
-candidate replacement for the yano-type distortion elements: a SYMMETRIC demag operator N = B^T G B
-whose loop modes are FIELD-NULL BY CONSTRUCTION, giving mu_r-INDEPENDENT convergence with no hand-crafted
-loop-star.  Validated on: linear demag (sphere/spheroid/triaxial exact vs analytic), NONLINEAR (damped
-Newton; cube & C-yoke <1-3% vs shipped Radia), distorted-mesh mu_r-independence, CURVED + high-order
-(accuracy-per-DOF ~10-30x vs flat Radia), and SYMMETRY models 1/2,1/4,1/8 (loops automatic + image-method
-demag).  Canonical reference: docs/hdiv_vim/README.md.
+The HDiv-type VIM is the lab's FEEC (H(div) RT) alternative/complement to the canonical moment-yano MSC
+kernel: a SYMMETRIC demag operator N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving
+mu_r-INDEPENDENT convergence with no hand-crafted loop-star.  Validated on: linear demag
+(sphere/spheroid/triaxial exact vs analytic), NONLINEAR (damped Newton; cube & C-yoke <1-3% vs shipped
+Radia), distorted-mesh mu_r-independence, CURVED + high-order (accuracy-per-DOF ~10-30x vs flat Radia),
+and SYMMETRY models 1/2,1/4,1/8 (loops automatic + image-method demag).  Canonical reference:
+docs/hdiv_vim/README.md.
 
 CURRENT API (2026-06-23 -- the dense Python Gram path was REMOVED): the C++ `_ChargeGramHMatrix` kernel
 is the SOLE demag operator (N v = B^T (H.matvec(B v)); EXACT analytic near AND far; tet via
@@ -17,6 +17,12 @@ switch); `build_demag(mesh, nsub)` returns only SPARSE pieces (charge map B + HD
 NO dense N/G.  Several sections below describe the OLD dense-Python call options (`analytic_gram=`,
 `wilton_surface=`, `skip_dense_gram=`, `build_near_correction`, the monopole+near-correction split) --
 those NO LONGER EXIST; read them as the research history behind the always-exact C++ charge Gram.
+
+TaskManager is assumed: shared HACApK build paths and long C++ solve loops stand up or reuse NGSolve
+RegionTaskManager; direct diagnostic `.matvec()` calls plus Python/NGSolve assembly follow the
+caller-wraps `with ng.TaskManager():` convention.  The C++ HDiv CG/MINRES/Picard kernels use
+ParallelFor/ParallelForRange for charge gather, dot products, preconditioner/vector updates, and
+AtomicAdd for sparse face-vector scatters.
 
 Exposed as the radia-ngsolve MCP tool `hdiv_vim(topic=...)`: overview, implementation, scaling,
 verification, nonlinear, curved, symmetry, status, all.
@@ -49,8 +55,8 @@ operator is the SYMMETRIC Galerkin form
   the hand-crafted Yano elements / the shipped MSC's installCycle retrofit (~6e-9 local-null-vector)
   exist precisely to patch this.  HDiv-VIM needs NO hand-crafted elements and NO retrofit -- it is
   EXACT (machine, ~4e-16) on distorted meshes by construction.  This is a robustness / generality /
-  maintainability win on its OWN (any mesher, any distortion, provably correct; the README "retire the
-  yano-type" goal), independent of raw speed -- at mu_r<=1e4 it is at performance PARITY with the
+  maintainability win on its OWN (any mesher, any distortion, provably correct; see the README
+  productionization roadmap), independent of raw speed -- at mu_r<=1e4 it is at performance PARITY with the
   shipped MSC (same demag spectrum), the win being correctness + no hand-crafting.  Golden-locked:
   tests/feec/test_hdiv_vim_symmetry_golden.py (loops field-null + PSD on distorted) and
   test_hdiv_vim_solve.py::test_minres_iters_bounded_vs_mu_r_distorted (mu_r-independence on distorted).
@@ -435,7 +441,7 @@ golden tests/feec/test_hdiv_vim_curved.py):
     geometry (demag-factor proof done; operator+solve is next); (2) the VOLUME charge (div M != 0,
     nonlinear) on curved/high-order -- ngsolve.bem is boundary-only so this still needs the Newtonian
     volume potential phi_tet (built) on curved cells; (3) C++ maturity (single-layer surface + phi_tet
-    volume Gram + Newton loop behind a Radia API) = the lift to actually retire yano-type.
+    volume Gram + Newton loop behind a Radia API) = the productionization lift.
 
 ## CURVED x NONLINEAR -- the honest magnitude (verify-first, 2026-06-08; golden test_hdiv_vim_curved_nonlinear.py)
 The curved win on the nonlinear MAGNETIZATION is MODEST (~0.3%), NOT a dramatic differentiator -- an
@@ -551,7 +557,8 @@ H(div)-conforming (Raviart-Thomas) pyramid space CANNOT be polynomial -- it need
 functions (Nigam-Phillips 2012; Bergot-Cohen-Durufle 2010).  H1/HCurl pyramids need rational functions
 too but were implemented first; HDiv is the HARDEST of the three because the normal-flux continuity must
 match adjacent tet(RT)/hex(RT) traces AND keep the de Rham sequence exact.  => HDiv-VIM pyramids are an
-NGSolve-version-upgrade away (FAVORABLE: Radia MSC has NO ObjPyramid at all), not a VIM design flaw.
+NGSolve-version-upgrade away. Radia now has `ObjPyramid` on the moment-yano MSC path, so pyramid meshes
+should use moment-yano today; this remains an NGSolve HDiv-space limitation, not a VIM design flaw.
 
 ## NEXT (open): higher-order charge Gram (high-order build); Wilton/phi_tet-in-C++
 - HIGH-ORDER charge Gram (the speed-win build above): polynomial-density singular quadrature.
@@ -668,12 +675,11 @@ CLOSED since the 2026-06-07 status (do NOT re-open):
     gap closed (cube -0.08%, C-yoke <1% vs Radia, volume-avg); the old "~8.7%/13%" were the wrong Gram.
   - real BH table + C-yoke validation: DONE (see DONE list).
 
-OPEN (honest boundaries / next increments) -- the lift to RETIRE yano-type in production:
+OPEN (honest boundaries / next increments) -- the lift to productionize HDiv-VIM alongside moment-yano:
   - C++ PRODUCTIONIZATION (the big one): the charge Gram (Wilton surface / phi_tet volume / ngsolve.bem
     single-layer) + the Newton loop in C++ behind a Radia API.  This also enables a fair WALL-CLOCK
     comparison -- all present wins are accuracy-per-DOF (geometry-driven); the Python prototype is not
-    time-optimized.  Until this lands, "retire yano-type" is conference-ready (validated method) but not
-    production-sealed.
+    time-optimized.  Until this lands, HDiv-VIM is a validated method but not production-sealed.
   - CURVED nonlinear VOLUME charge: ngsolve.bem is boundary-only, so non-uniform nonlinear on CURVED
     cells still needs the Newtonian volume potential (phi_tet) on curved geometry.
   - symmetry-model demag at HIGH ORDER / CURVED via the ngsolve.bem single-layer + image kernels (the

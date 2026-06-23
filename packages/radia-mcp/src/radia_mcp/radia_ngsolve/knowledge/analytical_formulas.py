@@ -489,10 +489,10 @@ practical mapping from "what kind of analysis am I running" to
 * ``examples/analytical_formulas/cross_validation_3d_vs_2d.py``
 * ``examples/analytical_formulas/cross_validation_solenoid_currentloop.py``
 
-## NGSolve (FEM) cross-validation suite -- tests/test_force_xval.py
+## NGSolve (FEM) cross-validation suite -- validation/force/validate_force_xval.py
 
 The radia-ngsolve A-form / A-Phi solvers are checked against these
-closed-forms (``pytest -m xval``; each is a real 3D solve). Besides the
+closed-forms (``python validation/force/validate_force_xval.py``; each is a real 3D solve). Besides the
 TEAM problems (6/7/13/20/21) and COMSOL-recorded values, the analytic
 cases include:
   - magnetised / permeable sphere demag: B_in = 3 mu_r/(mu_r+2) B0

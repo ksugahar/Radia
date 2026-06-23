@@ -461,7 +461,7 @@ void RadHACApKMMMManager::PrecomputeFlatInteractMatrix() {
 }
 
 bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
-    // TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): the H-matrix leaf
+    // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): the H-matrix leaf
     // fill runs ngcore::ParallelFor, which silently falls back to single-threaded when NO
     // RegionTaskManager is active.  Stand up (or reuse the caller's) pool here so EVERY
     // HACApK build -- moment-yano, HDiv, MMM/MSC, PEEC, diagnostics -- is parallel even when

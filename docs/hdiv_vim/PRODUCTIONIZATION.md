@@ -1,23 +1,29 @@
-# HDiv-type VIM — productionization roadmap (the path to retire yano-type)
+# HDiv-type VIM — productionization roadmap
 
 The HDiv-type VIM method is validated (see [README.md](README.md), feec suite 85/85). This document is
-the roadmap to make it a **shipped production solver that retires the yano-type distortion elements** —
-i.e. a drop-in MMM/MSC replacement that is at-least-as-good as the shipped solver on **every** case
-yano-type handles, behind a clean Radia API. Honest scope, milestone-based, with a hard
-**definition-of-done** (the parity gate).
+the roadmap to make it a **shipped production solver alongside the canonical moment-yano MSC backend**:
+a clean Radia API for the FEEC H(div) operator, plus parity and speed evidence on the cases where flat
+MSC is already strong and a clear win on curved/high-order cases. Honest scope, milestone-based, with a
+hard **definition-of-done** (the parity gate).
 
-## Current state (inventory, 2026-06-08)
+## Current state (inventory, 2026-06-23)
 
 | Layer | C++ (compiled, `_radia_pybind.pyd`) | Python-only (prototype) |
 |---|---|---|
 | Charge map B + HDiv mass | structured **hex** (`rad_hdiv_vim.cpp`) | unstructured **tet, hex, wedge** (NGSolve HDiv extraction + polytope analytic Gram, `examples/vim/`) |
-| Coulomb Gram G | monopole + sub-point (`CoulombGramEntry`); **analytic Wilton `TriPotential` + `PhiTet` WIRED into the `_ChargeGramHMatrix` analytic entry (M2a+M2b, golden-locked == dense `analytic_gram` ~1e-9)** | Wilton surface + `phi_tet` volume (analytic), dense `build_demag` |
-| Scalable Gram H-matrix | **`_ChargeGramHMatrix`** monopole **+ analytic mode (M2b)**, `_HDivVimHMatrix` (hex) | (assembly driven from Python) |
-| Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)** | scipy MINRES / CG |
-| Nonlinear demag | **scalar-chi Picard `SolveNonlinearPicard` in C++ (M3): isotropic nonlinear demag M=Mof(H0−Dscal·M), golden vs Python Picard <1e-5 + analytic fixed point <1%**; per-element tensor-tangent Newton (non-uniform M) still NGSolve | `solve_nonlinear_newton` (dense + scalable; scalable uses the analytic C++ Gram, M2b) |
+| Coulomb Gram G | **`_ChargeGramHMatrix` analytic charge Gram is the sole scalable demag operator**: exact Wilton surface + `PhiTet`/polytope volume entries; tet via `cell_verts/face_verts`, hex/wedge via triangle-soup polytope ctor; IMA image charges folded into the C++ Gram | dense Python Gram is historical/reference-only; production entry no longer exposes `analytic_gram=` / `wilton_surface=` switches |
+| Scalable Gram H-matrix | **`_ChargeGramHMatrix`** analytic tet/polytope modes, `_HDivVimHMatrix` structured hex diagnostics | NGSolve extraction supplies sparse B/Mass/geometry only |
+| Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)**; `SolveMaterialMINRES` remains the mu_r-independent diagnostic/operator solve | scipy GMRES wrapper for the public `hdiv_demag_solve` orchestration |
+| Nonlinear demag | **scalar-chi Picard `SolveNonlinearPicard` in C++ (M3): isotropic nonlinear demag M=Mof(H0-Dscal*M), golden vs Python Picard <1e-5 + analytic fixed point <1%**; per-element tensor-tangent Newton (non-uniform M) still NGSolve | `hdiv_demag_solve` damped Newton uses the C++ Gram H-matvec |
 | Curved + high-order Gram | — (uses NGSolve) | `ngsolve.bem` single-layer (sphere/spheroid/ellipsoid validation) |
-| Symmetry image method | — | `hdiv_demag_symmetry_image.py` (sphere 1/2,1/4,1/8 validation, crude Gram) |
-| **Public Radia API** | analytic `_ChargeGramHMatrix` + `SolveLinearMaterial` (scalable demag + linear solve) | `radia.vim` package (build_demag / solve_nonlinear_newton[_scalable]) |
+| Symmetry image method | **C++ `_ChargeGramHMatrix` image masks/signs** (`image=` in `hdiv_demag_solve`) | old dense image prototype retained as research history |
+| **Public Radia API** | `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` and `rad.Solve(demag_backend='hdiv')` dispatch | `build_demag` returns sparse B/Mass/geometry for diagnostics |
+
+TaskManager is the threading substrate.  The shared HACApK build path and the long C++ HDiv solve loops
+stand up/reuse an NGSolve `RegionTaskManager`; direct Python/NGSolve assembly and diagnostic `.matvec()`
+calls are caller-wrapped with `with ng.TaskManager():`.  The C++ HDiv CG/MINRES/Picard kernels use
+`ParallelFor` / `ParallelForRange` for charge gather, dot products, preconditioner/vector updates, and
+`AtomicAdd` for sparse scatters into face vectors.
 
 Progress (2026-06-08): **M2 DONE** (the accurate analytic charge Gram is in the C++ scalable path,
 golden-locked; the scalable nonlinear Newton rewired onto it). **M3 DONE** (the warranted C++ work:
@@ -201,7 +207,8 @@ instrumented diagnosis (per-iter ‖F‖/λ/Mavg trajectory) found:
        restart — but no auxiliary-space machinery is needed at ≤ ~100k.
 
      - **CORRECTED COMPARISON (2026-06-09): the yano-type reference is NO-loop-star + BLOCK JACOBI, NOT
-       H-ILU.** H-ILU is the SEPARATE loop-star `A_SS` "star block" solver (`RadHACApKMSCManager` mode 2)
+       H-ILU.** H-ILU is the SEPARATE loop-star `A_SS` "star block" solver (the former
+       `RadHACApKMSCManager` mode 2; the live class is now `RadHACApKMMMManager` for MMM)
        — conflating it with yano-type is the exact mistake this doc earlier warned against. yano-type
        scaled to 165600 at 2686 linear iters with **Block Jacobi** + the robust **修正反復法 / Picard**
        outer loop, which TOLERATES a loose inner solve (it does not need the inner solve to converge
@@ -223,8 +230,8 @@ ndof toward the 165600 scale.** The head-to-head JSON is honest at the measured 
 ## Milestones
 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
-  definition-of-done above + the honest speed number. Until M0, "retire yano-type" is conference-ready
-  (validated method) but the production gap is unquantified.
+  definition-of-done above + the honest speed number. Until M0, HDiv-VIM is a validated method but not a
+  production-sealed backend.
 - **M1 — production module + public Radia API.** Move the validated solve out of `examples/vim/`
   into `src/radia/` with a clean entry (e.g. `rad.hdiv_demag_solve(mesh, materials, source)`), driving
   the existing C++ `_ChargeGramHMatrix` + the Newton. Golden-test against the examples' validated
@@ -285,8 +292,9 @@ ndof toward the 165600 scale.** The head-to-head JSON is honest at the measured 
   `ngsolve.bem` single-layer (curved Gram) + the symmetry image method + a true reduced-DOF symmetry-BC
   solve into the API. Build the genuine method gap: the curved nonlinear **volume** charge (`phi_tet` on
   curved cells; `ngsolve.bem` is boundary-only).
-- **M5 — the seal.** HDiv-VIM passes the M0 parity gate on the full matrix → flip the production
-  default, deprecate + seal yano-type (preserve in the private ELF repo, per the original plan).
+- **M5 — the seal.** HDiv-VIM passes the M0 parity gate on the full matrix -> ship it as a production
+  backend with explicit support guarantees. Any default-backend change is a separate decision after the
+  parity and speed evidence are in.
 
 ## Honest unknowns / risks
 
@@ -300,6 +308,6 @@ ndof toward the 165600 scale.** The head-to-head JSON is honest at the measured 
 
 ## Sequencing note
 
-M0 → M1 are the immediate, low-risk, high-value steps (measure the gap; ship a usable API). M2/M3 (the
-heavy C++) are justified *by M0's speed number*. Do M0 first — it converts "retire yano-type" from a
-goal into a quantified, executable plan.
+M0 -> M1 are the immediate, low-risk, high-value steps (measure the gap; ship a usable API). M2/M3 (the
+heavy C++) are justified *by M0's speed number*. Do M0 first -- it converts HDiv-VIM productionization
+from a goal into a quantified, executable plan.
