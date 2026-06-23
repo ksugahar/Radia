@@ -18,8 +18,8 @@ Read this when:
   weak form integrated in closed form rather than by Gauss quadrature.
 
 The MCP server exposes this via axifem_documentation(topic=...). Topics:
-overview, api, basis_p1, basis_p2, vs_standard_h1, validation, kelvin,
-file_layout, why_dropped_p3.
+overview, api, taskmanager, basis_p1, basis_p2, vs_standard_h1,
+validation, kelvin, file_layout, why_dropped_p3.
 """
 
 AXIFEMM_OVERVIEW = """\
@@ -73,7 +73,7 @@ AXIFEMM_API = """\
 # Canonical API
 
 ```python
-from ngsolve import Mesh, FESpace, BilinearForm, CoefficientFunction
+from ngsolve import Mesh, FESpace, BilinearForm, CoefficientFunction, TaskManager
 from radia.axifem import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
 import radia.axifem   # import once to register the FESpace
 
@@ -86,11 +86,13 @@ sigma_cf = mesh.MaterialCF({"conductor": 5.8e7}, default=0.0)
 
 a = BilinearForm(fes, symmetric=True)
 a += AxiHenrotteStiffnessBFI(mu_cf)
-a.Assemble()
 
 m = BilinearForm(fes, symmetric=True)
 m += AxiHenrotteSigmaMassBFI(sigma_cf)
-m.Assemble()
+
+with TaskManager():
+    a.Assemble()
+    m.Assemble()
 
 # Solve K v = λ M v as you would with any NGSolve eigenproblem.
 ```
@@ -112,6 +114,30 @@ exported.
 * **Boundary 1D segments:** in `order=2` mode, a boundary segment exposes
   2 vertex DOFs and 1 edge midnode DOF, so `dirichlet="…"` on a boundary
   marks all three.
+"""
+
+AXIFEMM_TASKMANAGER = """\
+# TaskManager contract
+
+`radia.axifem` follows NGSolve's native parallel model:
+
+* Python callers wrap heavy FE work in `with TaskManager():`.
+* The custom C++ FESpace, DiffOps, and BFIs do not create a private thread
+  pool and do not use OpenMP.
+* `AxiHenrotteFESpace::GetFE` placement-news element objects from NGSolve's
+  per-thread `Allocator`.
+* The closed-form BFIs are `const` element integrators; per-call scratch lives
+  in `LocalHeap`, and quadrature tables are immutable.
+
+This covers the shipping paths: P1/P2 triangles, Q1/Q2 quads, and curved Q2.
+The regression gate is `tests/axifemm/test_taskmanager_race.py`, which assembles
+both the order-1 V-DOF custom-BFI path and the order-2 symbolic DiffOp/GetFE
+path at `SetNumThreads(1)` and `SetNumThreads(4)` and compares a deterministic
+matrix checksum.
+
+When writing docs, examples, panels, or tests, show assembly and FE-heavy solves
+inside `with TaskManager():` so the code follows the same execution contract as
+stock NGSolve examples.
 """
 
 AXIFEMM_BASIS_P1 = """\
@@ -470,6 +496,7 @@ examples/axifemm/research/verification/   # standalone __main__ verification scr
   test_q2_assembly_diag.py                # 2-quad assembly diagnostic
 tests/axifemm/                            # pytest golden tests (CI-collected)
   test_element_matrices.py, test_heat_*.py, test_python_reference_consistency.py
+  test_taskmanager_race.py                # 1-vs-4 thread race-free assembly gate
 ```
 
 The Mathematica derivation lives upstream at
@@ -784,6 +811,7 @@ def get_axifem_documentation(topic: str = "all") -> str:
       "all"             - All sections concatenated
       "overview"        - What it is and why NGSolve doesn't already have it
       "api"             - FESpace("axihenrotte", mesh, order=k) canonical usage
+      "taskmanager"     - NGSolve-native parallel execution contract
       "basis_p1"        - `p=1` Q-element (4 DOFs) basis details
       "basis_p2"        - `p=2` Q-element (9 DOFs) basis details + s-midpoint convention
       "vs_standard_h1"  - 6-property table comparing axihenrotte p=2 vs NGSolve H1 order=2
@@ -799,6 +827,7 @@ def get_axifem_documentation(topic: str = "all") -> str:
     sections = {
         "overview":       AXIFEMM_OVERVIEW,
         "api":            AXIFEMM_API,
+        "taskmanager":    AXIFEMM_TASKMANAGER,
         "basis_p1":       AXIFEMM_BASIS_P1,
         "basis_p2":       AXIFEMM_BASIS_P2,
         "vs_standard_h1": AXIFEMM_VS_STANDARD_H1,
@@ -810,7 +839,7 @@ def get_axifem_documentation(topic: str = "all") -> str:
     }
     if topic == "all":
         return "\n\n".join(sections[k] for k in [
-            "overview", "api", "basis_p1", "basis_p2",
+            "overview", "api", "taskmanager", "basis_p1", "basis_p2",
             "vs_standard_h1", "validation", "kelvin", "magnet",
             "file_layout", "why_dropped_p3"
         ])

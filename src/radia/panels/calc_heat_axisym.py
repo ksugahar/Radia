@@ -281,11 +281,12 @@ def solve_heat_axisym(wp_vol,
     a_form = BilinearForm(fes_T, symmetric=True)
     a_form += K_cf * InnerProduct(grad(u), grad(v)) * weight * dx
     a_form += float(h_conv) * v * u * weight * ds(surface_label_eff)
-    a_form.Assemble()
 
     m_form = BilinearForm(fes_T, symmetric=True)
     m_form += rho_cp * u * v * weight * dx
-    m_form.Assemble()
+    with TaskManager():
+        a_form.Assemble()
+        m_form.Assemble()
 
     if time_scheme not in ("backward-euler", "crank-nicolson"):
         raise ValueError(
@@ -344,8 +345,8 @@ def solve_heat_axisym(wp_vol,
             f_form += -float(emissivity) * SIGMA_SB \
                 * (_TK**4 - (float(t_ext) + 273.15)**4) * v * weight \
                 * ds(surface_label_eff)
-        f_form.Assemble()
         with TaskManager():
+            f_form.Assemble()
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
             gfT.vec.data += float(dt) * (inv * res_vec)
         Q_input_J += q_int * float(dt)
