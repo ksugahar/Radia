@@ -6172,8 +6172,10 @@ bound the (id,iq) plane (stator R neglected, electrical speed omega_e):
 
 ```python
 from radia_mcp.radia_ngsolve.solve import (field_weakening_operating_point,
+                                           field_weakening_speed_capability,
                                            base_speed_electrical)
 wb = base_speed_electrical(lambda_m, Ld, Lq, Imax, Vmax, p)        # MTPA@Imax hits the V limit
+cap = field_weakening_speed_capability(lambda_m, Ld, Imax)         # Ich / CPSR / MTPV verdict
 op = field_weakening_operating_point(lambda_m, Ld, Lq, Imax, Vmax, omega_e, p)
 # op = (id, iq, torque, region) or None (None = omega_e beyond the machine's max speed)
 ```
@@ -6191,6 +6193,10 @@ closed-form candidates):
     cos(theta). If Ich >= Imax there is NO MTPV region and a FINITE max speed (feasible set goes
     empty -> the helper returns None) -- the rule of thumb Ich = Imax is the "infinite max speed"
     design target.
+
+``field_weakening_speed_capability`` exposes the geometry in one readable dict:
+``characteristic_current`` (Ich), ``infinite_speed_possible`` (Ich <= Imax),
+``finite_max_speed`` (Ich > Imax), ``mtpv_possible`` (Ich < Imax), and the current margin/ratio.
 
 VALIDATION (tests/test_field_weakening.py, examples/comsol_class/field_weakening.py): the
 closed-form operating point == an INDEPENDENT brute-force numeric constrained argmax of T over
@@ -7194,6 +7200,8 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "constant_power": NGSOLVE_FIELD_WEAKENING,
         "operating_region": NGSOLVE_FIELD_WEAKENING,
         "cpsr": NGSOLVE_FIELD_WEAKENING,
+        "characteristic_current_cpsr": NGSOLVE_FIELD_WEAKENING,
+        "field_weakening_speed_capability": NGSOLVE_FIELD_WEAKENING,
         "induction_machine": NGSOLVE_INDUCTION_MACHINE,
         "induction_motor": NGSOLVE_INDUCTION_MACHINE,
         "torque_slip": NGSOLVE_INDUCTION_MACHINE,
