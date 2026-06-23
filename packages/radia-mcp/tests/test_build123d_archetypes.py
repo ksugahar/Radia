@@ -21,7 +21,8 @@ from radia_mcp.build123d.archetypes import (magnetization_tag, parse_magnetizati
                                             cos_theta_dipole, e_core, slotted_stator, spm_rotor,
                                             litz_wire, litz_packing_radius, litz_fill_factor,
                                             litz_single_layer_metrics, hierarchical_litz, rectangular_litz,
-                                            rectangular_litz_fill_factor, litz_serving)
+                                            rectangular_litz_fill_factor, litz_serving,
+                                            cos_theta_dipole_layout)
 from radia_mcp.build123d.archetypes import _carried_centerline, _superposed_centerline
 from radia_mcp.build123d.archetypes import involute_gear, threaded_rod, airfoil, blade
 from radia_mcp.build123d.archetypes import gear_rack, bevel_gear, worm, chain_sprocket, vbelt_pulley
@@ -92,6 +93,26 @@ def test_cos_theta_dipole_arcsin_spacing():
     diffs = [sins[i+1]-sins[i] for i in range(len(sins)-1)]
     # cos-theta layout: sin(theta) is UNIFORMLY spaced (density ~ cos theta)
     assert max(diffs)/min(diffs) < 1.05, "bars must be arcsin-spaced (uniform sin theta)"
+
+
+def test_cos_theta_dipole_layout_matches_geometry():
+    layout = cos_theta_dipole_layout(8)
+    assert len(layout) == 16
+    assert [row["current_sign"] for row in layout[:2]] == [1, -1]
+    go = [row for row in layout if row["group"] == "go"]
+    assert [row["index"] for row in go] == list(range(8))
+    diffs = [go[i + 1]["sin_theta"] - go[i]["sin_theta"] for i in range(len(go) - 1)]
+    assert max(diffs) == pytest.approx(min(diffs))
+
+    ct = cos_theta_dipole(45, 4, 8, 120, n_per_half=8, name="ct")
+    got = {c.label: math.degrees(math.atan2(c.center().Y, c.center().X)) % 360.0
+           for c in ct.children}
+    for row in layout:
+        label = f"ct_{row['group']}_{row['index']:02d}"
+        assert got[label] == pytest.approx(row["angle_deg"])
+
+    with pytest.raises(ValueError):
+        cos_theta_dipole_layout(1)
 
 
 def test_e_core_two_windows():
