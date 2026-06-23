@@ -1892,28 +1892,23 @@ def solve_axi_magnetostatic(mesh, nu, Jr=None, magnets=None, order=2,
     Jr        : phi-direction current density [A/m^2] CF or None.
     magnets   : {material: (Hc, theta_deg)} where theta is from the r-axis [deg].
                 theta=90 => axial (+z) magnetization (FEMM MagDir convention).
-    order     : H1Henrotte order (MUST be >= 2).  order=1 is rejected: the
-                {1, r^2, z} P1/Q1 basis cannot represent a uniform axial field
-                (see the guard below).  Default 2.
+    order     : H1Henrotte order.  order>=2 (P2/Q2) uses the symbolic A=psi weak
+                form below.  order=1 (P1/Q1) is dispatched to the V-DOF custom-BFI
+                path (:func:`_solve_axi_magnetostatic_vdof_order1`): the {1,r^2,z}
+                A=psi reconstruction B_z=dA/dr+A/r cannot represent a uniform axial
+                B_z at order 1, but the V-DOF stiffness K_ij=2pi/mu r_i r_j INT
+                grad(psi_i).grad(psi_j)/r CAN (the flux-function / FEMM linear-
+                element formulation), so order 1 now converges (sphere O(h):
+                -1.8% -> -0.6%, FEMM-P1-like).  Default 2.
     dirichlet : boundary tag for A_phi = 0 (must include the r=0 axis).
 
     Returns the H1Henrotte GridFunction ``gfu`` (A_phi at DOFs). Validated:
-    magnetized sphere B_in = 2 mu0 mu_r Hc/(mu_r+2) to -0.05 %
-    (tests/test_axi_magnetostatic.py).
+    magnetized sphere B_in = 2 mu0 mu_r Hc/(mu_r+2) to -0.05 % at order 2
+    (tests/test_axi_magnetostatic.py).  For order=1 the gfu is in the V-DOF basis;
+    the average flux density is :func:`axi_vdof_magnet_bz_average`.
     """
     if order < 2:
-        # order=1 is a REPRESENTATION defect, not a solver issue: the H1Henrotte
-        # order-1 basis monomials are {1, r^2, z}; the reconstructed flux density
-        # B_z = dA/dr + A/r maps these to {1/r, r, z/r}, which has NO constant
-        # term, so a uniform axial B_z is unrepresentable.  Verified by a patch
-        # test (project the exact A_phi = B0*r/2 in, no solve): |B_z error|
-        # plateaus at ~74 % RMS and does NOT decrease from h=0.2 to h=0.025,
-        # while order=2 converges O(h^2).  (radia.axifem, 2026-06-23.)
-        raise ValueError(
-            "solve_axi_magnetostatic requires order >= 2; order=1 (P1 triangle / "
-            "Q1 quad) cannot represent a uniform axial B_z -- its reconstructed "
-            "B_z carries ~74 % RMS error that does not converge under refinement. "
-            "Use order=2.")
+        return _solve_axi_magnetostatic_vdof_order1(mesh, nu, Jr, magnets, dirichlet)
     from radia.axifem import H1Henrotte
     fes = H1Henrotte(mesh, order=order, dirichlet=dirichlet)
     u, v = fes.TnT()
@@ -1935,6 +1930,84 @@ def solve_axi_magnetostatic(mesh, nu, Jr=None, magnets=None, order=2,
     gfu = GridFunction(fes)
     gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
     return gfu
+
+
+def _solve_axi_magnetostatic_vdof_order1(mesh, nu, Jr, magnets, dirichlet):
+    """Order-1 (P1/Q1) axisymmetric magnetostatics via the V-DOF custom-BFI path.
+
+    The order-1 {1,r^2,z} A=psi reconstruction B_z=dA/dr+A/r cannot represent a
+    uniform axial B_z, but the V-DOF stiffness  K_ij = 2pi/mu r_i r_j INT
+    grad(psi_i).grad(psi_j)/r  (the flux-function / FEMM linear-element form, =
+    AxiHenrotteStiffnessBFI on the V-DOF P1/Q1 elements) CAN.  The magnet source is
+    built GRAD-FREE as  f = K_magnet . V_M, where V_M is the magnetization
+    potential nodal vector (curl A_M = Hc M_hat); choosing mu=1 inside the magnet
+    for K_magnet makes mu cancel.  Only the reliable Id evaluator is used (current
+    source); the unreliable grad-in-LinearForm path is avoided.  The dead axis DOFs
+    (r~0, where the V-DOF basis N_A=r psi/r vanishes) are pinned to A_phi=0 on top
+    of ``dirichlet``.  Returns the V-DOF GridFunction (A_phi at vertices); use
+    :func:`axi_vdof_magnet_bz_average` for the average flux density.
+    """
+    import numpy as np
+    from ngsolve import BitArray, CoefficientFunction as CF
+    from radia.axifem import H1Henrotte, AxiHenrotteStiffnessBFI
+
+    mu_cf = 1.0 / nu
+    fes = H1Henrotte(mesh, order=1, dirichlet=dirichlet)
+    aK = BilinearForm(fes, symmetric=True); aK += AxiHenrotteStiffnessBFI(mu_cf); aK.Assemble()
+    nv = fes.ndof
+    r_node = np.array([mesh[v_].point[0] for v_ in mesh.vertices])
+    z_node = np.array([mesh[v_].point[1] for v_ in mesh.vertices])
+
+    fvec = aK.mat.CreateColVector(); fvec.FV().NumPy()[:] = 0.0
+    if Jr is not None:
+        # phi-current source: f_i = 2 pi r_i INT Jr psi_i  (Id LinearForm = reliable)
+        v = fes.TestFunction()
+        bj = LinearForm(fes); bj += Jr * v * dx; bj.Assemble()
+        fvec.FV().NumPy()[:] += 2.0 * math.pi * r_node * np.asarray(bj.vec, dtype=float)
+    if magnets is not None:
+        VM = GridFunction(fes)
+        tmp = aK.mat.CreateColVector()
+        for mat, (Hc, theta_deg) in magnets.items():
+            th = math.radians(theta_deg)
+            mu_src = CF(mesh.MaterialCF({mat: 1.0}, default=1e30))   # mu=1 in magnet
+            aKm = BilinearForm(fes, symmetric=True); aKm += AxiHenrotteStiffnessBFI(mu_src); aKm.Assemble()
+            VM.vec.FV().NumPy()[:] = Hc * (math.sin(th) * r_node / 2.0 - math.cos(th) * z_node)
+            tmp.data = aKm.mat * VM.vec
+            fvec.data += tmp
+
+    free = fes.FreeDofs()
+    freeb = BitArray(nv)
+    for i in range(nv):
+        freeb[i] = bool(free[i]) and (r_node[i] > 1e-9)   # drop dead axis (r~0) DOFs
+    gfu = GridFunction(fes)
+    gfu.vec.data = aK.mat.Inverse(freeb, inverse="sparsecholesky") * fvec
+    return gfu
+
+
+def axi_vdof_magnet_bz_average(mesh, nu, magnets, gfu):
+    """Volume-averaged magnetization-direction flux density for an order-1 V-DOF
+    solution (:func:`solve_axi_magnetostatic` with order=1).  Exact and grad-free:
+    <M_hat.B>_mat = (f.V) / (2 pi Hc INT_mat r dr dz), where f = K_mat.V_M is the
+    same source the solver built and  f.V = INT_mat Hc M_hat.B dV.  For an axial
+    magnet (theta=90) this is <B_z>.  Returns a dict {material: <M_hat.B>}.
+    """
+    import numpy as np
+    from ngsolve import CoefficientFunction as CF, InnerProduct, Integrate, x as r_cf
+    from radia.axifem import H1Henrotte, AxiHenrotteStiffnessBFI
+    fes = gfu.space
+    r_node = np.array([mesh[v_].point[0] for v_ in mesh.vertices])
+    z_node = np.array([mesh[v_].point[1] for v_ in mesh.vertices])
+    out = {}
+    VM = GridFunction(fes)
+    for mat, (Hc, theta_deg) in magnets.items():
+        th = math.radians(theta_deg)
+        mu_src = CF(mesh.MaterialCF({mat: 1.0}, default=1e30))
+        aKm = BilinearForm(fes, symmetric=True); aKm += AxiHenrotteStiffnessBFI(mu_src); aKm.Assemble()
+        VM.vec.FV().NumPy()[:] = Hc * (math.sin(th) * r_node / 2.0 - math.cos(th) * z_node)
+        f = aKm.mat * VM.vec
+        volr = Integrate(r_cf, mesh, definedon=mesh.Materials(mat))
+        out[mat] = InnerProduct(f, gfu.vec) / (2.0 * math.pi * Hc * volr)
+    return out
 
 
 def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=None,
@@ -2076,7 +2149,14 @@ def solve_axi_eddy_harmonic(mesh, mu_cf, sigma_cf, omega, applied_A,
     ``b_i = int sigma * applied_A * v_i`` (eddy driven by an imposed A_phi field,
     e.g. ``applied_A = B0*x/2`` for a uniform axial B0 -- the Kameari convention).
 
-    ORDER=1 ONLY: the P2 AxiHenrotte element has an axis-singularity NaN.
+    ORDER 1 (P1 triangle) is the default workhorse.  ORDER=2 (P2 triangle / Q2
+    quad) now also works: the earlier "axis-singularity" was a dead per-element
+    face-center DOF that the FESpace reserved for Q2 quads but P2 triangles never
+    use, leaving K/M rank-deficient on triangle meshes.  AxiHenrotteFESpace now
+    marks those trig-center slots UNUSED (axi_henrotte_fespace FinalizeUpdate), so
+    P2 assembles full rank -- verified: Cu-disk P_eddy(order=2)=5.55e-2 W vs
+    (order=1)=5.44e-2 W, and the sphere eddy eigenvalue lam_min(P2)=20.28 is closer
+    to the exact j1^2=20.19 than P1's 20.89 (the expected higher-order gain).
 
     Returns ``(gfu, P_eddy)``:
       * ``P_eddy`` -- time-averaged 3-D eddy loss [W] = 0.5*w^2 * Re(x^H M x)
