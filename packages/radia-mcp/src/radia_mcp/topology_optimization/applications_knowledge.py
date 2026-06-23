@@ -345,6 +345,29 @@ inverts it stably; `outer_loop` then tunes the manufacturable parameters around 
 """
 
 
+KRYLOV_SOLVERS = r"""
+## Krylov inner solves -- Linear Conjugate Gradient (the `pcg` member)
+
+`krylov.linear_conjugate_gradient(operator, b, x0=None, ...)` solves SPD systems
+`A x = b` using only matrix-vector products.  It is the quadratic-minimization
+workhorse behind PDE-constrained optimization, Newton/LM inner systems, and
+regularized inverse problems when `A` is too large to factor:
+
+    alpha = (r^T z)/(p^T A p),   x <- x + alpha p,   r <- r - alpha A p,
+    beta  = (r_new^T z_new)/(r_old^T z_old),         p <- z_new + beta p.
+
+With no preconditioner, `z=r`; with a preconditioner, `z=M^{-1}r`.  For an
+n-dimensional SPD matrix, exact arithmetic terminates in <= n steps; in practice
+the relative residual criterion is the stopping gate.  This is the readable,
+matrix-free counterpart of dense `numpy.linalg.solve` / MATLAB `pcg`.
+
+Verified (test_topology_krylov): dense SPD solve matches `numpy.linalg.solve` to
+roundoff and converges within the matrix dimension; callable `matvec` path gives
+the same answer; Jacobi-exact diagonal preconditioning converges in one step; and
+non-SPD / invalid inputs fail loudly.
+"""
+
+
 NONLINEAR_LSQ = r"""
 ## Nonlinear least squares -- Levenberg-Marquardt (the `lsqnonlin` member)
 
@@ -408,6 +431,8 @@ def get_applications_documentation(topic: str = "all") -> str:
       "linear_inverse" - Regularized linear inversion (TSVD / Tikhonov filter
                          factors + L-curve), the stable solver behind
                          field_synthesis, verified vs the SVD pseudo-inverse
+      "krylov"         - Linear Conjugate Gradient / PCG for matrix-free SPD
+                         inner solves in optimization and inverse design
       "outer_loop"     - Derivative-free outer-loop optimizers (Nelder-Mead +
                          fminsearchbnd bound transform; pointer to evolutionary
                          / official optuna-mcp for population/global), verified on Rosenbrock
@@ -422,7 +447,8 @@ def get_applications_documentation(topic: str = "all") -> str:
     if t == "all":
         return (MOTOR_OPTIMIZATION + "\n\n" + FIELD_SYNTHESIS
                 + "\n\n" + LINEAR_INVERSE + "\n\n" + OUTER_LOOP_OPTIMIZERS
-                + "\n\n" + NONLINEAR_LSQ + "\n\n" + GLOBAL_OPTIMIZERS)
+                + "\n\n" + KRYLOV_SOLVERS + "\n\n" + NONLINEAR_LSQ
+                + "\n\n" + GLOBAL_OPTIMIZERS)
     if t in ("motor", "ipm"):
         return MOTOR_OPTIMIZATION
     if t in ("field_synthesis", "field-synthesis", "fieldsynthesis",
@@ -435,6 +461,10 @@ def get_applications_documentation(topic: str = "all") -> str:
              "truncated_svd", "tikhonov", "regularization", "regularisation",
              "svd", "pinv", "pseudoinverse", "l_curve", "lcurve", "ill_posed"):
         return LINEAR_INVERSE
+    if t in ("krylov", "linear_cg", "conjugate_gradient", "cg", "pcg",
+             "hestenes_stiefel", "hestenes-stiefel", "spd_solver",
+             "matrix_free", "matrix-free"):
+        return KRYLOV_SOLVERS
     if t in ("outer_loop", "outer-loop", "outerloop", "derivative_free",
              "derivative-free", "nelder_mead", "nelder-mead", "neldermead",
              "simplex", "fminsearch", "fminsearchbnd", "direct_search",
@@ -450,4 +480,4 @@ def get_applications_documentation(topic: str = "all") -> str:
              "pso", "stochastic", "multimodal", "global_search"):
         return GLOBAL_OPTIMIZERS
     return ("Unknown topic '%s'. Available: all, motor, field_synthesis, "
-            "linear_inverse, outer_loop, nonlinear_lsq, global_optimizers." % topic)
+            "linear_inverse, krylov, outer_loop, nonlinear_lsq, global_optimizers." % topic)
