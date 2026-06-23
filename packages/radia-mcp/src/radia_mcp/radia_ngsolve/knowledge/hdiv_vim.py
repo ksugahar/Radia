@@ -3,12 +3,20 @@
 The HDiv-type VIM is the lab's FEEC (H(div) RT) alternative to the collocation MMM/MSC kernel and the
 candidate replacement for the yano-type distortion elements: a SYMMETRIC demag operator N = B^T G B
 whose loop modes are FIELD-NULL BY CONSTRUCTION, giving mu_r-INDEPENDENT convergence with no hand-crafted
-loop-star.  As of 2026-06-08 (feec suite 85/85) it is validated on: linear demag (sphere/spheroid/
-triaxial exact vs analytic), NONLINEAR (damped Newton; cube & C-yoke <1% vs shipped Radia; analytic_gram
-required for div M != 0), distorted-mesh mu_r-independence, CURVED + high-order (accuracy-per-DOF
-~10-30x vs flat Radia), and SYMMETRY models 1/2,1/4,1/8 (loops automatic + image-method demag).  It is a
-Python+NGSolve prototype; the remaining lift to RETIRE yano-type in production is the C++
-productionization.  Canonical reference: docs/hdiv_vim/README.md.
+loop-star.  Validated on: linear demag (sphere/spheroid/triaxial exact vs analytic), NONLINEAR (damped
+Newton; cube & C-yoke <1-3% vs shipped Radia), distorted-mesh mu_r-independence, CURVED + high-order
+(accuracy-per-DOF ~10-30x vs flat Radia), and SYMMETRY models 1/2,1/4,1/8 (loops automatic + image-method
+demag).  Canonical reference: docs/hdiv_vim/README.md.
+
+CURRENT API (2026-06-23 -- the dense Python Gram path was REMOVED): the C++ `_ChargeGramHMatrix` kernel
+is the SOLE demag operator (N v = B^T (H.matvec(B v)); EXACT analytic near AND far; tet via
+cell_verts/face_verts, hex/wedge via the polytope triangle soup), and folds IMA (image charges /
+symmetry models) IN via image_masks / image_signs.  Production entry:
+`radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` (linear or nonlinear, no Gram
+switch); `build_demag(mesh, nsub)` returns only SPARSE pieces (charge map B + HDiv mass + geometry),
+NO dense N/G.  Several sections below describe the OLD dense-Python call options (`analytic_gram=`,
+`wilton_surface=`, `skip_dense_gram=`, `build_near_correction`, the monopole+near-correction split) --
+those NO LONGER EXIST; read them as the research history behind the always-exact C++ charge Gram.
 
 Exposed as the radia-ngsolve MCP tool `hdiv_vim(topic=...)`: overview, implementation, scaling,
 verification, nonlinear, curved, symmetry, status, all.
@@ -60,7 +68,14 @@ hexes AND tets.
 """
 
 _IMPLEMENTATION = r"""
-# Current implementation (files + APIs), main @ feaade25
+# Current implementation (files + APIs)
+
+[API UPDATE 2026-06-23] The dense Python Gram path -- the `analytic_gram=` / `wilton_surface=` /
+`skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
+`wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
+-- was REMOVED.  The C++ `_ChargeGramHMatrix` (exact analytic near AND far, IMA via image_masks/image_signs)
+is now the SOLE demag operator and `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
+production entry; read the removed names below as the research history behind the always-exact C++ Gram.
 
 ## C++ core
 - **src/core/rad_hdiv_vim.{h,cpp}** -- structured-hex RT0 topology + charge map B + Coulomb Gram G +
@@ -102,7 +117,14 @@ _IMPLEMENTATION = r"""
 """
 
 _SCALING = r"""
-# Scaling: charge-Gram H-matrix + near-field correction
+# Scaling: charge-Gram H-matrix
+
+[API UPDATE 2026-06-23] The dense Python Gram path -- the `analytic_gram=` / `wilton_surface=` /
+`skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
+`wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
+-- was REMOVED.  The C++ `_ChargeGramHMatrix` (exact analytic near AND far, IMA via image_masks/image_signs)
+is now the SOLE demag operator and `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
+production entry; read the removed names below as the research history behind the always-exact C++ Gram.
 
 The scalable Gram is the standard H-matrix split:
   - FAR field: compressed CENTROID-MONOPOLE charge H-matrix (RadHACApKChargeGram / _ChargeGramHMatrix),
@@ -124,7 +146,16 @@ RadScalarPotentialFromTriangleFaceGlobal) + the volume-potential reduction INT_V
 """
 
 _VERIFICATION = r"""
-# Verification (golden tests, tests/feec/, 45/45)
+# Verification (golden tests, tests/feec/)
+
+[API UPDATE 2026-06-23] The dense Python Gram path -- the `analytic_gram=` / `wilton_surface=` /
+`skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
+`wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
+-- was REMOVED.  The C++ `_ChargeGramHMatrix` (exact analytic near AND far, IMA via image_masks/image_signs)
+is now the SOLE demag operator and `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
+production entry; read the removed names below as the research history behind the always-exact C++ Gram.
+The dense-only tests named below (test_hdiv_vim_tet_hmatrix / tet_nearcorr) were deleted; the structural
+goldens (symmetry_golden, solve) now build N from the C++ kernel (conftest.hdiv_vim_dense_N_and_loops).
 
 - test_hdiv_vim_symmetry_golden.py -- N symmetric + loops field-null (1^3..5^3); Gauss rank(B);
   PSD demag factors (accurate Gram); distorted-hex trilinear PSD.
@@ -144,7 +175,16 @@ robust to the scheme (cross-sum extrapolation -> same INT INT 1/r).
 """
 
 _NONLINEAR = r"""
-# NONLINEAR HDiv-type VIM -- ROBUST SOLVER = DAMPED NEWTON-RAPHSON (SOLVED 2026-06-07)
+# NONLINEAR HDiv-type VIM -- ROBUST SOLVER = DAMPED NEWTON-RAPHSON
+
+[API UPDATE 2026-06-23] The dense Python Gram path -- the `analytic_gram=` / `wilton_surface=` /
+`skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
+`wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
+-- was REMOVED.  The nonlinear solve now ALWAYS uses the exact C++ `_ChargeGramHMatrix` (analytic near AND
+far -- so the "needs analytic_gram for div M != 0" trap is GONE, the volume Gram is always exact); the
+production entry is `radia.vim.hdiv_demag_solve(mesh, bh_table=, H_ext=, image=)` (and
+`solve_nonlinear_newton(mesh, chi0, Msat, H0, ...)`), with NO Gram kwarg.  Read the removed names below as
+the research history behind the always-exact C++ charge Gram.
 
 Goal: make the HDiv-type VIM work for NONLINEAR soft-magnetic materials (BH curve / saturation).
 
@@ -567,7 +607,16 @@ Hantila for the factor-once speed-up at the knee (Newton already gives correctne
 """
 
 _STATUS = r"""
-# Status summary (2026-06-08)
+# Status summary
+
+[API UPDATE 2026-06-23] The dense Python Gram path -- the `analytic_gram=` / `wilton_surface=` /
+`skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
+`wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
+-- was REMOVED.  The C++ `_ChargeGramHMatrix` (exact analytic near AND far, IMA via image_masks/image_signs)
+is now the SOLE demag operator and `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
+production entry; read the removed names below as the research history behind the always-exact C++ Gram.
+
+## Snapshot (2026-06-08, historical -- see the API UPDATE above for current call signatures)
 
 DONE + golden-locked (feec 85/85):
   #1  scalable mu_r-independent HDiv-VIM demag solver on REAL tet meshes (Layer A/A.5 + tet ingest)
