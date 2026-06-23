@@ -1150,3 +1150,375 @@ def test_scaling_ffag_pole_2d_pullback_solver():
     #       (more negative gamma -> the tilt falls), monotonically.
     tilts = [s["k_tilt"] for s in out["sweep"]]
     assert tilts[0] > tilts[1] > tilts[2], tilts
+
+
+def test_scaling_ffag_pole_2d_isochronous():
+    """ISOCHRONOUS design (Step 4): a DIFFERENT achromaticity -- constant
+    revolution TIME, not constant tune.  The isochronous law <B>(r) = B0 gamma(r)
+    needs a RISING field index k_iso(r) = (beta gamma)^2 (opposite of the scaling
+    k = const).  The high-r (highest-B) edge -- the NONLINEAR END PACK -- must
+    deliver the steepest rise AND saturates first, so the linear-theory
+    isochronous pole loses isochronism there; the SAME 2-parameter pole reshape
+    drives the SATURATED <B>(r) back onto B0 gamma(r), A/phi-certified.
+
+    Locks: (i) k_iso(r) genuinely RISES across the aperture; (ii) the end pack is
+    genuinely saturated (B_gap > knee); (iii) saturation breaks the naive iso
+    pole's field shape; (iv) the reshape restores it (smaller residual, real
+    improvement); (v) the saturated reshaped design is A/phi-bracket certified."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_pole_2d as sf
+    out = sf.run_isochronous(maxh=0.012)
+    n, o = out["naive"], out["reshaped"]
+    # (i) the isochronous index RISES (not the scaling k = const).
+    assert out["k_iso_max"] - out["k_iso_min"] > 0.8, out
+    assert out["k_iso_min"] > 0.0, out
+    # (ii) the end pack genuinely saturates (gap field crosses the iron knee).
+    assert n["_s"]["B_gap_max"] > 1.25 > sf.BK_IRON - 0.1, n["_s"]["B_gap_max"]
+    # (iii) saturation breaks the naive (linear-theory) isochronous field shape.
+    assert n["iso_resid"] > 0.012, n
+    # (iv) the 2-parameter reshape restores isochronism into saturation.
+    assert o["iso_resid"] < 0.013, o
+    assert out["iso_improvement"] > 2.0, out
+    # (v) the saturated reshaped <B>(r) is A/phi-bracket certified.
+    rmin_i, rmax_i = out["aperture"]
+    bk = sf.bracket_saturated(B_design=out["B_design"], k=out["k_iso0"],
+                              gamma=o["gamma"], gamma2=o["gamma2"],
+                              r_min=rmin_i, r_max=rmax_i, maxh=0.012)
+    assert bk["bracket_gap_max"] < 5e-3, bk
+
+
+@pytest.mark.filterwarnings("ignore:Gimbal lock detected:UserWarning")
+def test_leaf_coupling_perturbation_3d():
+    """Foliate-and-perturb diagnostic for a straight dipole: the 3-D magnet is
+    sliced into 2-D (x,z) LEAVES along the beam (y).  For a constant-gap magnet
+    the BODY slice IS the 2-D infinite-long leaf, so delta(y) = ||B_perp(.,y) -
+    B_perp(.,body)|| is the 0th-order leaf-stacking error and the fringe excess
+    (L_eff - L_iron)/L_iron is the 1st-order (inter-leaf) correction.
+
+    Locks the SCALING -- the headline result: the leaf coupling decays as
+    ~ gap/L (a log-log slope near -1), so a COMPACT magnet (L/gap ~ 2) is
+    strongly NON-perturbative and the foliate-and-perturb scheme lands only for
+    LONG (L/gap >> 1) dipoles.  Two-point sweep (L = 80, 200 mm; gap 40 mm =>
+    L/gap = 2, 5) to keep the 3-D solve cost bounded; the 4-point scaling is in
+    the committed leaf_coupling_perturbation_3d_sweep.json."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    pytest.importorskip("radia")
+    import leaf_coupling_perturbation_3d as lc
+    sw = lc.aspect_sweep(Ls=(0.08, 0.20))
+    fr = sw["fringe_excess"]
+    # (i) the leaf coupling DECREASES with aspect ratio (longer magnet = more 2-D).
+    assert sw["monotone_decay"], fr
+    assert fr[0] > fr[1], fr
+    # (ii) the compact magnet (L/gap=2) is strongly NON-perturbative (>100% fringe).
+    assert fr[0] > 1.2, fr
+    assert fr[1] < 1.1, fr
+    # (iii) the coupling scales as ~ gap/L (log-log slope near -1).
+    assert -1.5 < sw["fringe_scaling_exponent"] < -0.6, sw["fringe_scaling_exponent"]
+    # (iv) the ENDS are genuinely 3-D while the body is roughly 2-D (compact case).
+    r0 = sw["rows"][0]
+    assert r0["delta_farend_max"] > 0.3, r0["delta_farend_max"]
+    assert r0["delta_body_max"] < 0.15, r0["delta_body_max"]
+
+
+def test_ffag_sector_two_plane():
+    """The two-plane -> 3-D method on the FFAG scaling sector (rung 1, ngsolve
+    only -- no radia).  Plane A (r,z) = the scaling field index; Plane B (s,z) =
+    the sector ENDS.  Locks: Plane A recovers k ~ 5 with a tight A/phi bracket;
+    Plane B's sector ends add ~0.75 g each (L_eff = L_sector + ~1.5 g) so the
+    fringe excess falls as ~ gap/L (the leaf-coupling law on the azimuthal
+    plane, slope ~ -1)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import ffag_sector_two_plane as fs
+    d = fs.design_two_plane(dtheta=0.30)
+    A, C = d["plane_A"], d["compose"]
+    # Plane A: the scaling index is recovered near the design (the naive-pole
+    # droop), and the A/phi bracket is tight (the index is physics, not mesh).
+    assert 4.7 < A["k_interior_mean"] < 5.0, A
+    assert A["k_interior_dev_from_design"] < 0.30, A
+    assert A["bracket_gap_max"] < 1e-5, A
+    # Plane B compose: gap at r0 is g0; the aspect is L_sector / g(r0).
+    assert abs(C["g_r0"] - fs.G0) < 1e-9, C
+    assert abs(C["aspect_L_over_g"] - 3.0) < 1e-6, C            # dtheta 0.3, r0 1, g 0.1
+    # each sector end adds ~0.75 g -> L_eff = L_sector + ~1.5 g -> ~+50% at L/g=3.
+    assert 0.40 < C["fringe_excess"] < 0.60, C
+    # the AZIMUTHAL leaf coupling falls as ~ gap/L (log-log slope near -1).
+    sw = fs.aspect_sweep(dthetas=(0.20, 0.35, 0.60, 1.00))
+    assert sw["monotone_decay"], sw["rows"]
+    assert -1.15 < sw["fringe_vs_aspect_slope"] < -0.80, sw["fringe_vs_aspect_slope"]
+    fr = [row["fringe_excess"] for row in sw["rows"]]
+    assert fr[0] > fr[-1], fr                                   # compact -> more fringe
+    assert fr[0] > 0.5, fr                                      # L/g=2 strongly non-perturbative
+
+
+def test_ffag_sector_two_plane_rung2_3d():
+    """Rung 2: the 3-D REFLECTION.  Revolve the (r,z) scaling gap profile around
+    the sector arc into a 3-D iron pole and forward-solve (iron-pole equipotential
+    drive).  The orbit must see B_z(r) ~ r^k -- the swept g(r) ~ r^(-k) pole
+    reproduces the designed field index in full 3-D.  Cross-checks Plane B's
+    azimuthal end (L_eff > L_sector).  ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import ffag_sector_two_plane as fs
+    r2 = fs.solve_sector_field_index(dtheta=0.30)
+    # the field index is recovered near the design (the naive-pole droop + mesh
+    # scatter); the swept-gap pole gives B_z(r) ~ r^k along the 3-D orbit.
+    assert 4.5 < r2["k_mean"] < 5.2, r2["k_mean"]
+    assert r2["k_min"] > 3.5 and r2["k_max"] < 6.6, (r2["k_min"], r2["k_max"])
+    # the mmf calibration lands the body field near B_design (1 T).
+    assert 0.8 < abs(r2["Bz_body_T"]) < 1.2, r2["Bz_body_T"]
+    # the azimuthal sector ends ADD effective length (the fringe; positive excess,
+    # the same non-perturbative regime as Plane B at L/g=3).
+    assert r2["L_eff_arc"] > r2["L_sector"], (r2["L_eff_arc"], r2["L_sector"])
+    excess = (r2["L_eff_arc"] - r2["L_sector"]) / r2["L_sector"]
+    assert 0.20 < excess < 0.70, excess
+    assert r2["ne"] > 3000, r2["ne"]
+
+
+def test_scaling_ffag_sector_saturation():
+    """The scaling-FFAG SECTOR body driven into SATURATION: the azimuthal (s,z) end
+    solve made NONLINEAR (Froehlich mu_r(|B|)).  At the high-r aperture edge (smallest
+    gap, highest B) the iron SATURATES hard (its <mu_r> collapses by ~3x), yet the
+    azimuthal effective length L_eff is ROBUST (drift < 2 %) -- the sector end is
+    gap-reluctance-dominated (the same honest scope as clebsch_dipole_saturation_3d).
+    This contrasts with the RADIAL field index k(r), which IS fragile under the same
+    high-r saturation (it droops -- golden-locked in test_scaling_ffag_pole_2d_step2_
+    saturation): the two sector planes respond OPPOSITELY to saturation.  ngsolve
+    only; the azimuthal solve here, the radial droop reused/locked separately."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import scaling_ffag_sector_saturation as ss
+    d = ss.sector_saturation(dtheta=0.30)
+
+    hi = d["radii"]["high_r_edge"]
+    lo = d["radii"]["low_r_body"]
+    # the high-r edge iron SATURATES hard (its <mu_r> collapses below half).
+    assert d["high_r_iron_saturates"] is True, d
+    assert d["high_r_mur_collapse_factor"] < 0.5, d           # <mu_r> falls > 2x
+    assert hi["mur_mean_linear"] > 800, hi                    # high before saturation
+    assert hi["mur_mean_saturated"] < 1000, hi                # collapsed after
+    assert hi["B_local_saturated_T"] > d["B_K_iron_T"], hi    # above the iron knee
+
+    # YET the azimuthal L_eff is ROBUST (gap-reluctance-dominated): drift < 2 %.
+    assert d["L_eff_robust_under_saturation"] is True, d
+    assert abs(d["high_r_L_eff_drift_rel"]) < 0.02, d
+    assert abs(lo["L_eff_drift_rel"]) < 0.02, lo
+    # the fringe is ~one gap at both radii, and stable under saturation.
+    assert 1.0 < hi["fringe_per_gap_saturated"] < 2.5, hi
+    assert d["fringe_per_gap_stable"] is True, d
+    """The beam-referenced equipotential surface as the design primitive + the
+    TWIST (the curved-orbit / combined-function axis).  The quad pole = the
+    hyperbola equipotential (xy = r0^2/2); a 2-D Laplace solve recovers a clean
+    quad, and rotating the pole by phi rotates the recovered orientation by
+    exactly phi (the n-fold law: surface twist phi <=> multipole phase 2 phi).
+    ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import twisting_quadrupole_pole as tq
+    base = tq.solve_quad(0.0)
+    # a clean quad: skew ~0, forbidden harmonics at the floor, the leading
+    # allowed spurious the finite-pole 12-pole b_6.
+    assert abs(base["a2"]) / base["main"] < 1e-3, base
+    assert base["forbidden_max_rel"] < 1e-3, base
+    assert 1e-3 < base["b6_rel"] < 2e-2, base
+    # the TWIST: recovered pole orientation tracks the prescribed phi (slope 1).
+    sw = tq.twist_sweep(phis_deg=(0.0, 20.0, 40.0, 60.0))
+    assert abs(sw["tracking_slope"] - 1.0) < 0.05, sw["tracking_slope"]
+    assert sw["tracking_err_deg"] < 1.5, sw["tracking_err_deg"]
+    # the finite-pole spurious b_6 is rotation-INVARIANT (the twist is clean).
+    b6 = [r["b6_rel"] for r in sw["rows"]]
+    assert max(b6) - min(b6) < 5e-4, b6
+
+
+def test_combined_function_frenet_sweep():
+    """The confluence (rung 1-2 + rung 3): a COMBINED-FUNCTION magnet (dipole +
+    quad gradient in ONE cross-section) swept along its CURVED orbit.  In the
+    Frenet frame the cross-section is fixed; the Frenet rotation theta(s) twists
+    the lab pole, and the n-fold law gives dipole phase theta, quad phase 2 theta
+    (so both orientations roll with the frame, the phase CHANGE ratio is 2).
+    ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import combined_function_frenet_sweep as cf
+    base = cf.solve_combined(roll_deg=0.0)
+    # the combined-function cross-section: a dipole AND a real gradient (quad).
+    assert base["b1"] > 1.0, base
+    assert 0.02 < base["b2_rel"] < 0.12, base["b2_rel"]        # ~6% gradient
+    assert base["b3_rel"] < 0.02, base["b3_rel"]               # small sextupole
+    # the Frenet sweep: BOTH harmonics roll with the frame (slope 1)...
+    sw = cf.frenet_sweep(rolls_deg=(0.0, 15.0, 30.0, 45.0))
+    assert abs(sw["slope_dipole"] - 1.0) < 0.03, sw["slope_dipole"]
+    assert abs(sw["slope_quad"] - 1.0) < 0.03, sw["slope_quad"]
+    assert sw["track_err_dipole_deg"] < 1.0, sw["track_err_dipole_deg"]
+    assert sw["track_err_quad_deg"] < 1.0, sw["track_err_quad_deg"]
+    # ...and the n-fold law: the quad phase CHANGE is 2x the dipole's.
+    assert abs(sw["phase_ratio_n2_over_n1"] - 2.0) < 0.05, sw["phase_ratio_n2_over_n1"]
+
+
+def test_twist_rate_leaf_coupling():
+    """The fast-twist leaf coupling: when does the per-station 2-D twist design
+    break?  The exact helical multipole (Phi = I_n(n k r) sin n(theta - k s))
+    deviates from the 2-D stack as eps ~ (ka)^2 (transverse, 2nd order) with a
+    longitudinal B_s ~ ka (1st order); the per-station 2-D holds for
+    pitch/aperture >> 1 -- the twist analogue of rung-1's L/gap ~ 40.  scipy
+    only (analytic, no FEM)."""
+    pytest.importorskip("scipy")
+    import twist_rate_leaf_coupling as tw
+    sw = tw.twist_sweep(n=2)
+    # the transverse focusing error is 2nd order in ka; the longitudinal field 1st.
+    assert abs(sw["eps_slope"] - 2.0) < 0.15, sw["eps_slope"]
+    assert abs(sw["bs_slope"] - 1.0) < 0.15, sw["bs_slope"]
+    # monotone growth with the twist-per-aperture.
+    eps = sw["eps_transverse"]
+    assert all(eps[i] < eps[i + 1] for i in range(len(eps) - 1)), eps
+    # the threshold: per-station 2-D good only for pitch/aperture of order tens.
+    assert 30.0 < sw["pitch_over_aperture_star"] < 70.0, sw["pitch_over_aperture_star"]
+    assert 0.08 < sw["ka_star"] < 0.20, sw["ka_star"]
+
+
+def test_endpack_two_plane():
+    """The END PACK in two planes -> 3-D.  Design the magnet END in the x-y
+    cross-section (the transverse multipole + the shim that zeroes b_3) AND the
+    s-y longitudinal plane (a standalone 2-D Laplace fringe -> the Rogowski end
+    chamfer + L_eff), then REFLECT into one 3-D pole (equipotential-pole drive,
+    pure Laplace -- no coil) and verify.  Locks: Plane-1 the flat-pole droop +
+    the shim; Plane-2 L_eff excess ~+26%; the 3-D reflection's chamfer-depth
+    sweep drives the pole-tip corner over-field through zero; the cheap 2-D s-y
+    chamfer SHAPE predicts the 3-D end equipotential to a few %.  ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import endpack_two_plane as ep
+    d = ep.design_two_plane(fast=True)
+
+    # Plane 1 (x-y): the finite flat pole droops (b_3 < 0), the shim zeroes it.
+    p1 = d["plane1_xy"]
+    assert -6e-5 < p1["b3_over_b1_flat_body"] < -1e-5, p1
+    assert 2e-4 < p1["shim_delta_opt_m"] < 7e-4, p1               # ~0.4 mm concavity
+    assert p1["spurious_at_shim_opt"] < 1e-3, p1                  # residual quality at b_3=0
+
+    # Plane 2 (s-y): a standalone 2-D design -> a real end fringe (L_eff > L).
+    p2 = d["plane2_sy"]
+    assert 0.15 < p2["L_eff_excess_2d"] < 0.40, p2               # each end ~0.75 g
+    assert p2["end_lift_m"] > 0.005, p2                          # a real Rogowski bow-out
+
+    # Reflection (3-D): the hard-cut pole tip OVER-fields (corner enhancement),
+    # and the chamfer-depth sweep drives it through 1 (zero over-field).
+    r3 = d["reflect_3d"]
+    assert 1.05 < r3["flat_tip_enhancement"] < 1.25, r3          # +5..25% corner over-field
+    tip = [s["tip_enhancement"] for s in r3["depth_sweep"]]
+    assert all(tip[i] > tip[i + 1] for i in range(len(tip) - 1)), tip   # monotone down
+    assert 0.03 < r3["designed_depth_frac_zero"] < 0.20, r3      # a few-mm designed taper
+    assert r3["integrated_spurious_flat"] < 1e-2, r3            # clean integrated dipole
+    assert r3["ne"] > 5000, r3
+
+    # the transverse b_3,5 is a body/cross-section (Plane-1) lever -- the END
+    # shape barely moves it (both small, same order).
+    tl = d["transverse_lever_consistency"]
+    assert tl["3d_integrated_spurious_flat"] < 1e-2, tl
+
+    # CROSS-CHECK: the cheap 2-D s-y chamfer SHAPE predicts the 3-D end
+    # equipotential bow-out (both normalized) to a few percent rms.
+    assert d["crosscheck_2d_vs_3d_contour_rms_rel"] < 0.20, d
+
+
+def test_endpack_spectrometer_saturation():
+    """The SPECTROMETER end pack, NONLINEAR: the pole-tip corner is a saturable
+    throat.  The linear corner concentration kappa = tip_enhancement (~1.13) means
+    the corner reaches the iron knee FIRST -- it saturates at B_gap = B_K/kappa
+    (~1.33 T, ~12% BELOW the bulk knee B_K=1.5 T), so the EFB / edge focusing
+    drifts before the bulk saturates.  The Rogowski chamfer is the corner-throat
+    width knob (kappa -> knee = B_K/kappa); the SAME chamfer that zeroes the linear
+    over-field clears the premature corner saturation.  The whole nonlinear map is
+    the linear equipotential sweep + a Froehlich-BH overlay (Chaplygin
+    'nonlinear-done-linearly' on the END corner).  ngsolve only (the design map; the
+    A-formulation FEM validation is gated behind --fem, not run here)."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import endpack_spectrometer_saturation as es
+    d = es.design(B_op=1.45, fast=True)
+
+    # the FLAT corner concentrates flux and saturates BEFORE the bulk iron.
+    assert 1.05 < d["flat_corner_kappa"] < 1.25, d
+    assert 1.25 < d["flat_corner_knee_Bgap_T"] < 1.45, d           # ~1.33 T
+    assert d["flat_corner_knee_Bgap_T"] < d["B_K_T"], d           # below the bulk knee
+    assert 0.05 < d["corner_premature_fraction"] < 0.20, d        # ~12% early
+    assert d["flat_corner_saturates_below_Bop"] is True, d        # 1.33 < 1.45
+
+    # the chamfer raises the corner knee (kappa decreases monotonically -> knee up).
+    knee = [r["corner_knee_Bgap_T"] for r in d["sweep"]]
+    assert all(knee[i] < knee[i + 1] for i in range(len(knee) - 1)), knee
+    kap = [r["kappa"] for r in d["sweep"]]
+    assert all(kap[i] > kap[i + 1] for i in range(len(kap) - 1)), kap
+
+    # a finite chamfer clears the operating field; the linear cosmetic optimum
+    # (kappa=1) is the SAME lever, with a hard saturation justification.
+    assert 0.0005 < d["depth_required_for_Bop_m"] < 0.005, d      # ~1-2 mm
+    assert d["depth_linear_cosmetic_m"] > 0.0, d
+    assert d["n_linear_solves"] >= 4, d
+
+
+def test_endpack_cobake():
+    """The completion of endpack_two_plane: BOTH the x-y shim (delta) AND the s-y
+    Rogowski chamfer (ghat) baked into ONE 3-D pole face z(x,s)=g/2-delta(x/w)^2+
+    lift(s).  The CO-BAKED (both) pole achieves a clean integrated transverse b_3,5
+    AND a rounded pole-tip corner at once -- the two cleanly-separated two-plane
+    levers composed in 3-D.  (The per-lever causation is golden-locked separately;
+    the delta-shim x-prism staircase makes the no-shim cases mesh coarser, so this
+    locks the WELL-RESOLVED both pole + the robust per-lever directions, not the
+    coarse-baseline absolute numbers.)  ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import endpack_cobake as cb
+    d = cb.cobake_design(fast=True)
+
+    # the headline: the co-baked (both) pole -- clean transverse AND rounded corner.
+    assert d["both_clean_transverse_rel"] < 1.5e-3, d            # b_3,5 ~ 0.07%
+    assert 0.88 < d["both_corner_tip"] < 1.12, d                 # rounded near the body
+    # both two-plane levers act (large, robust to the staircase mesh):
+    assert d["chamfer_rounds_corner"] is True, d                 # s-y chamfer lowers the tip
+    assert d["shim_cleans_transverse"] is True, d                # x-y shim lowers b_3,5
+    # the chamfer-only corner is rounded below the flat-cut corner, below ~1.0:
+    assert d["cases"]["chamfer_only"]["tip_enhancement"] < 1.0, d
+    assert d["cases"]["both"]["tip_enhancement"] < d["cases"]["shim_only"]["tip_enhancement"], d
+    assert 2e-4 < d["shim_delta_m"] < 7e-4, d                    # ~0.4 mm shim
+
+
+def test_endpack_cobake_loft():
+    """The PRECISION construction of the co-bake: the pole gap face
+    z(x,s)=g/2-delta(x/w)^2+lift(s) built as a SMOOTH OCC ThruSections loft
+    through per-x-station cross-section wires, NOT the x-prism staircase of
+    endpack_cobake.  The headline is MESH CONSISTENCY: the smooth loft meshes the
+    baseline (delta=0) and the shim (delta>0) cases at the SAME density
+    (ne(shim)/ne(baseline) ~ 1), whereas the staircase merges the delta=0 slabs
+    (coarse) and steps the delta>0 slabs (fine) -> a large ratio.  The loft thus
+    RESOLVES the documented staircase artifact, so the co-baked pole's transverse
+    b_3,5 + corner are a precision claim.  Both two-plane levers still act on the
+    consistent mesh: the chamfer rounds the corner, the shim removes the transverse
+    content the chamfer introduces (both < chamfer_only) and returns the
+    transverse content to the baseline mesh-noise floor.  ngsolve only."""
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    import endpack_cobake_loft as cl
+    d = cl.cobake_loft_design(fast=True, with_staircase=True)
+
+    # the headline: the smooth loft meshes shim & baseline at the SAME density,
+    # the staircase does NOT -> the loft is more consistent (resolves the artifact).
+    assert 0.5 < d["loft_ne_ratio_shim_over_baseline"] < 2.0, d   # ~1 (smooth face)
+    assert d["staircase"]["ne_ratio_shim_over_baseline"] > 5.0, d  # staircase blow-up
+    assert d["loft_more_consistent_than_staircase"] is True, d
+
+    # the co-baked (both) pole on the consistent mesh: clean transverse AND rounded.
+    assert d["both_clean_transverse_rel"] < 1.0e-2, d            # b_3,5 ~ 0.5%
+    assert 0.88 < d["both_corner_tip"] < 1.12, d                 # rounded near the body
+
+    # both two-plane levers act (robust, large effects on the consistent mesh):
+    assert d["chamfer_rounds_corner"] is True, d                 # s-y chamfer lowers the tip
+    assert d["shim_cleans_chamfer_transverse"] is True, d        # shim removes chamfer's b_3,5
+    assert d["cases"]["both"]["integrated_spurious_rel"] < d["cases"]["shim_only"]["integrated_spurious_rel"], d
+    assert d["cases"]["both"]["integrated_spurious_rel"] <= 1.2 * d["cases"]["baseline"]["integrated_spurious_rel"], d
+    assert d["cases"]["chamfer_only"]["tip_enhancement"] < 1.0, d
+    assert d["cases"]["both"]["tip_enhancement"] < d["cases"]["shim_only"]["tip_enhancement"], d
+    assert 2e-4 < d["shim_delta_m"] < 7e-4, d                    # ~0.4 mm shim
+    assert d["n_station"] >= 5, d
