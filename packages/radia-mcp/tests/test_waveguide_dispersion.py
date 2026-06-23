@@ -22,7 +22,8 @@ from radia_mcp.radia_ngsolve.waveguide import (rectangular_waveguide_cutoff, cut
                                                waveguide_dielectric_slab_sparams,
                                                waveguide_cascade_sparams,
                                                waveguide_offset_short_s11,
-                                               reflection_metrics, C0)
+                                               reflection_metrics,
+                                               sparameter_group_delay, C0)
 
 
 def test_dielectric_slab_sparams():
@@ -132,6 +133,28 @@ def test_cascade_and_offset_short():
         waveguide_cascade_sparams(f, a, [])                     # empty cascade
     with pytest.raises(ValueError):
         waveguide_offset_short_s11(5e9, a, d)                   # below cutoff
+
+
+def test_sparameter_group_delay_matches_offset_short_phase_slope():
+    a = 0.02286
+    f0 = 10e9
+    d = 0.040
+    df = 1.0e6
+    freqs = [f0 + k * df for k in range(-2, 3)]
+    trace = [waveguide_offset_short_s11(f, a, d)["S11"] for f in freqs]
+    delays = sparameter_group_delay(freqs, trace)
+    ref = waveguide_offset_short_s11(f0, a, d)["group_delay"]
+
+    assert delays[2] == pytest.approx(ref, rel=5e-7)
+    assert all(t > 0.0 for t in delays)
+    assert sparameter_group_delay([1.0, 2.0], [1.0, 1.0]) == pytest.approx([0.0, 0.0])
+
+    with pytest.raises(ValueError):
+        sparameter_group_delay([1.0], [1.0])
+    with pytest.raises(ValueError):
+        sparameter_group_delay([1.0, 1.0], [1.0, 1.0])
+    with pytest.raises(ValueError):
+        sparameter_group_delay([1.0, 2.0], [1.0])
 
 
 def test_dispersion_identities():
