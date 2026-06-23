@@ -28,7 +28,7 @@ Weak form (in flux variable psi, after Henrotte change of variable):
       + j w sigma psi psi' / (2 pi r)
       = int J_phi_source psi' . (r-weighted)
 
-(Closed-form per-element by axifemm BFIs.)
+(Closed-form per-element by axifem BFIs.)
 
 Boundary conditions
 -------------------
@@ -340,7 +340,7 @@ def run_axisym_linear(args):
     # Use TWO REAL FE solves coupled via:
     #   [ K   -wM ] [Re A]   [Re J]
     #   [ wM   K  ] [Im A] = [Im J]
-    # because axifemm BFIs accept only real CFs.  Standard NGSolve
+    # because axifem BFIs accept only real CFs.  Standard NGSolve
     # H1 with 2 pi r weighting works equivalently for axisym; the
     # Henrotte BFI is preferred for accuracy near r=0 but for our
     # workpiece interior (r > 0 mostly) standard H1 is fine.

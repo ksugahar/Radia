@@ -22,7 +22,7 @@ overview, api, basis_p1, basis_p2, vs_standard_h1, validation, kelvin,
 file_layout, why_dropped_p3.
 """
 
-AXIFEMM_OVERVIEW = """\
+AXIFEM_OVERVIEW = """\
 # radia-core axifem — Henrotte Axisymmetric Q-Element FE for NGSolve
 
 ## Status
@@ -69,7 +69,7 @@ pattern (custom `FESpace`, `DiffOp`, and `BilinearFormIntegrator`s), without
 modifying NGSolve itself.
 """
 
-AXIFEMM_API = """\
+AXIFEM_API = """\
 # Canonical API
 
 ```python
@@ -114,7 +114,7 @@ exported.
   marks all three.
 """
 
-AXIFEMM_BASIS_P1 = """\
+AXIFEM_BASIS_P1 = """\
 # `p=1` Q-element (4 DOFs / quad)
 
 Shape monomials in `(s = r², z)`:
@@ -129,13 +129,13 @@ DOFs: one per vertex. Lagrange-interpolatory at the 4 corners
 `(s_a, z_a), (s_b, z_a), (s_b, z_b), (s_a, z_b)`.
 
 The closed-form element matrices are derived in
-`axifemm_quad.py:_element_matrices_quad_closed_form` and
-`axifemm_quad.py:element_sigma_mass_quad`, validated against BEM v3 to
+`axifem_quad.py:_element_matrices_quad_closed_form` and
+`axifem_quad.py:element_sigma_mass_quad`, validated against BEM v3 to
 0.55 % on the Cu disk benchmark (τ₁ = 223.06 µs, ne = 15170, very-fine
 mesh).
 """
 
-AXIFEMM_BASIS_P2 = """\
+AXIFEM_BASIS_P2 = """\
 # `p=2` Q-element (9 DOFs / quad)
 
 Shape monomials in `(s = r², z)`:
@@ -206,7 +206,7 @@ with `V⁻¹` the (cached) per-element inverse Vandermonde of the
 monomial basis at the 9 nodes (6 for axis case).
 """
 
-AXIFEMM_VS_STANDARD_H1 = """\
+AXIFEM_VS_STANDARD_H1 = """\
 # `axihenrotte p=2` vs NGSolve `H1 order=2` — the deeper differences
 
 Beyond the obvious "the basis is in `r²`":
@@ -233,19 +233,19 @@ Empirical comparison on the Cu disk eddy-current benchmark
 the value of the axisymmetric-specific basis.
 """
 
-AXIFEMM_VALIDATION = """\
+AXIFEM_VALIDATION = """\
 # Cross-validation references (per-element, machine precision)
 
-* `axifemm/axifemm_quad.py` — validated Python prototype for `p=1`, gives
+* `axifem/axifem_quad.py` — validated Python prototype for `p=1`, gives
   τ₁ = 223.06 µs on the Cu disk (matches BEM v3 to 0.55 %).
-* `axifemm/axifemm_quad_q2.py` — Python `p=2` Gauss-8×8 prototype; agrees
+* `axifem/axifem_quad_q2.py` — Python `p=2` Gauss-8×8 prototype; agrees
   with the Mathematica closed form to ~ 3.4 × 10⁻⁸ relative.
-* `examples/axifemm/research/validate_q2_codegen.py` — runs both at the
+* `examples/axifem/research/validate_q2_codegen.py` — runs both at the
   per-entry level after every `derive_quad_q2_henrotte.wls` re-run.
-* `examples/axifemm/research/verification/test_q2_single_element.py` — end-to-end
+* `examples/axifem/research/verification/test_q2_single_element.py` — end-to-end
   per-element BFI eigenvalue match (closed-form vs Gauss prototype, 1e-7
   tolerance).
-* `examples/axifemm/research/verification/test_hiruma_disk_q2.py` — full disk Cu disk
+* `examples/axifem/research/verification/test_hiruma_disk_q2.py` — full disk Cu disk
   eddy-current Hiruma 3-term, expects τ₁ ≈ 223.7 µs.
 
 ## Cauer-ladder cross-validation against BEM (Phase 3-(3), Nagamine pipeline)
@@ -309,7 +309,7 @@ Reference:
   Prism Conductor", manuscript 2026-05-04 (Japan J. Industrial Appl.
   Math. submission).
 
-Test: `examples/axifemm/research/verification/test_3way_cauer_cross_validation.py`
+Test: `examples/axifem/research/verification/test_3way_cauer_cross_validation.py`
 Reference data (separate working tree, not in this repo):
   W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
     bem_disk_axisym_cauer.wls     (Mathematica BEM + Foster amplitudes)
@@ -333,7 +333,7 @@ Sphere ground truth (Cu a=10 mm, B₀=1 T uniform; Mathematica Hankel-Padé
   k=1  Stoll/Kameari τ = 154.604 μs  Hiruma 3-term τ = 171.51  (+10.9%)
   k=2  Stoll/Kameari τ =  64.075 μs  Hiruma 3-term τ =  71.68  (+11.9%)
 
-Implication for axifemm: the τ₁ ≈ 223.7 μs cylinder reference (Hiruma) is
+Implication for axifem: the τ₁ ≈ 223.7 μs cylinder reference (Hiruma) is
 in the **Hiruma convention** and should not be mixed with BEM-Foster Cauer
 values (which are in the Stoll/χ-Foster convention) without conversion.
 
@@ -345,7 +345,7 @@ then run identical Hankel-Padé continued-fraction extraction.
 
 POLICY (2026-05-10): Project repository (CauerLadderNetwork) has dropped
 Hiruma in favour of Kameari accumulation as the canonical extractor. The
-axifemm package retains its Hiruma routine for legacy verification, but
+axifem package retains its Hiruma routine for legacy verification, but
 **new tests should target Kameari accumulation** so τ values are directly
 comparable to Stoll analytical and BEM-Foster.
 
@@ -383,7 +383,7 @@ intended canonical use:
   | mesh / curve            | τ₁ (µs) | gap to Stoll |
   |-------------------------|---------|--------------|
   | Stoll analytical        | 738.48  | —            |
-  | axifemm p=2 + Kelvin    | 738.47  | -0.001 %     |
+  | axifem p=2 + Kelvin    | 738.47  | -0.001 %     |
   | + Curve(2)              | 738.69  | +0.028 %     |
 
   This is the new canonical configuration for sphere/disk/cuboid axisym
@@ -414,7 +414,7 @@ Cross-validation reference (2026-05-10, Cu disk R=10 mm, t=2 mm,
 | Cylinder axisym VIM (144 cells)     | 211.85         | -3.4 %     |
 
 The Cylinder VIM is run at a single coarse grid as a sanity check, not for
-high accuracy; the axifemm `p=2` Q-element remains the recommended
+high accuracy; the axifem `p=2` Q-element remains the recommended
 production path for axisym Cu eddy-current Cauer extraction.
 
 The same workflow on Cu sphere R=10 mm (Stoll Bessel ground truth, τ₁ = μ₀ σ R² / π² = 738.48 µs):
@@ -422,12 +422,12 @@ The same workflow on Cu sphere R=10 mm (Stoll Bessel ground truth, τ₁ = μ₀
 | method                              | τ_pair[0] [μs] | gap to Stoll |
 |-------------------------------------|----------------|--------------|
 | Stoll analytical (μ₀ σ R²/π²)       | 738.48 (ref)   | —            |
-| **axifemm p=2 + z-offset Kelvin**   | **738.47**     | **-0.001 %** |
-| axifemm p=2 + Kelvin + Curve(2)     | 738.69         | +0.028 %     |
+| **axifem p=2 + z-offset Kelvin**   | **738.47**     | **-0.001 %** |
+| axifem p=2 + Kelvin + Curve(2)     | 738.69         | +0.028 %     |
 | 3D HCurl (NGSolve + Kelvin)         | ≈ 694          | 0.027 % at L₁ (Stoll τ=694 convention) |
 | Sphere axisym VIM (480 cells)       | 708.4          | +2.07 %      |
 
-The axifemm + Kelvin result is the closest to Stoll across all available
+The axifem + Kelvin result is the closest to Stoll across all available
 axisym/3D methods on this benchmark (machine-precision agreement on the
 leading rung). See `axifem_documentation(topic="kelvin")` for the full
 canonical recipe (Phase B3, commit 81f6415f).
@@ -435,7 +435,7 @@ canonical recipe (Phase B3, commit 81f6415f).
 ## Hessian-of-W convention (load-bearing)
 
 Both `K_phi` and `M_sigma_phi` are emitted in the **Hessian-of-W**
-convention (matches `axifemm_quad.py:274`). The original
+convention (matches `axifem_quad.py:274`). The original
 `derive_quad_q2_henrotte.wls` shipped with a coefficient-of-W convention
 that was 2× too small for `K` and 2π× too small for `M`; this combined
 multiplicatively to make the disk τ₁ off by ~ π and was diagnosed during
@@ -444,42 +444,42 @@ Hessian convention, or every assembled quantity rescales by these
 factors silently.
 """
 
-AXIFEMM_FILE_LAYOUT = """\
+AXIFEM_FILE_LAYOUT = """\
 # File layout
 
-(the former standalone axifemm add-on was dissolved into radia-core on
+(the former standalone axifem add-on was dissolved into radia-core on
 2026-06-14: the C++ ships in the radia-core wheel as `radia.axifem`;
 scripts/tests moved into the repo tree.)
 
 ```
-src/ext/axifemm/                          # C++ source (built into the radia wheel)
+src/ext/axifem/                          # C++ source (built into the radia wheel)
   axi_henrotte_fe.{hpp,cpp}               # Q1, Q2 quad + P1 triangle FE classes
   axi_henrotte_fespace.{hpp,cpp}          # FESpace with order=1 / order=2 dispatch
   axi_henrotte_diffop.hpp                 # DifferentialOperators (value, gradient)
   axi_henrotte_integrators.{hpp,cpp}      # closed-form K and σ-mass BFI
   q2_henrotte_generated.hpp               # auto-generated, do not edit
   axifem.cpp                       # pybind11 entry -> radia.axifem
-examples/axifemm/research/                # derivation + codegen scripts
+examples/axifem/research/                # derivation + codegen scripts
   codegen_q2_henrotte.py                  # JSON → C++ codegen
   validate_q2_codegen.py                  # closed-form vs Gauss prototype
   q2_henrotte_test_values.json            # numerical reference values
-examples/axifemm/research/verification/   # standalone __main__ verification scripts
+examples/axifem/research/verification/   # standalone __main__ verification scripts
   test_q2_single_element.py               # per-element BFI sanity check
   test_hiruma_disk_q1.py                  # disk Hiruma 3-term, p=1
   test_hiruma_disk_q2.py                  # disk Hiruma 3-term, p=2
   test_q2_assembly_diag.py                # 2-quad assembly diagnostic
-tests/axifemm/                            # pytest golden tests (CI-collected)
+tests/axifem/                            # pytest golden tests (CI-collected)
   test_element_matrices.py, test_heat_*.py, test_python_reference_consistency.py
 ```
 
 The Mathematica derivation lives upstream at
-`W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifemm/`
+`W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem/`
 (`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
 
-Comprehensive design + theory documentation: `docs/axifemm/AXIFEMM.md`.
+Comprehensive design + theory documentation: `docs/axifem/AXIFEM.md`.
 """
 
-AXIFEMM_KELVIN = """\
+AXIFEM_KELVIN = """\
 # `axihenrotte` + z-offset Kelvin transformation (Phase B3, 2026-05-12)
 
 The 2D axisymmetric z-offset Kelvin transformation works end-to-end with
@@ -576,7 +576,7 @@ axihenrotte p=2 + Kelvin               τ₁ = 738.47 µs   -0.001 %
 axihenrotte p=2 + Kelvin + Curve(2)    τ₁ = 738.69 µs   +0.028 %
 ```
 
-Test: `examples/CLN/scripts/axifemm/test_p2_kelvin_sphere.py`.
+Test: `examples/CLN/scripts/axifem/test_p2_kelvin_sphere.py`.
 
 ## Critical gotchas
 
@@ -622,7 +622,7 @@ runs where the geometric error dominates the FE-basis error.
 A proper curved Q2 element (basis space still in even powers of r, but
 on a biquadratic isoparametric mapping) is Phase B5 work — currently a
 Python prototype at
-`examples/CLN/scripts/axifemm/axifemm_quad_q2_curved.py`, C++ port deferred.
+`examples/CLN/scripts/axifem/axifem_quad_q2_curved.py`, C++ port deferred.
 
 ### Geometry pre-requisites for `add_kelvin_2d_axisym`
 Before calling the helper, the user-built interior must have:
@@ -649,13 +649,13 @@ src/axifem.cpp
     + pybind exports of the new overloads
 ```
 
-Test: `examples/axifemm/research/verification/test_magnetized_sphere.py`
+Test: `examples/axifem/research/verification/test_magnetized_sphere.py`
 (the sphere verification; passes against Stoll to -0.001 %, replaces the
 prior expected-failure xfail in Phase B2).
 """
 
 
-AXIFEMM_WHY_DROPPED_P3 = """\
+AXIFEM_WHY_DROPPED_P3 = """\
 # Why `p=3` was attempted and dropped
 
 `p=3` Q-element would have 16 DOFs / quad (4 corner + 8 edge + 4 face) and
@@ -720,7 +720,7 @@ escape hatch.
 """
 
 
-AXIFEMM_MAGNET = """\
+AXIFEM_MAGNET = """\
 # Permanent-magnet source term (axisymmetric magnetization edge-loop)
 
 axihenrotte solves linear/eddy-current problems; a **permanent magnet** is
@@ -797,16 +797,16 @@ def get_axifem_documentation(topic: str = "all") -> str:
       "why_dropped_p3"  - Why `p=3` was attempted, completed, and reverted
     """
     sections = {
-        "overview":       AXIFEMM_OVERVIEW,
-        "api":            AXIFEMM_API,
-        "basis_p1":       AXIFEMM_BASIS_P1,
-        "basis_p2":       AXIFEMM_BASIS_P2,
-        "vs_standard_h1": AXIFEMM_VS_STANDARD_H1,
-        "validation":     AXIFEMM_VALIDATION,
-        "kelvin":         AXIFEMM_KELVIN,
-        "magnet":         AXIFEMM_MAGNET,
-        "file_layout":    AXIFEMM_FILE_LAYOUT,
-        "why_dropped_p3": AXIFEMM_WHY_DROPPED_P3,
+        "overview":       AXIFEM_OVERVIEW,
+        "api":            AXIFEM_API,
+        "basis_p1":       AXIFEM_BASIS_P1,
+        "basis_p2":       AXIFEM_BASIS_P2,
+        "vs_standard_h1": AXIFEM_VS_STANDARD_H1,
+        "validation":     AXIFEM_VALIDATION,
+        "kelvin":         AXIFEM_KELVIN,
+        "magnet":         AXIFEM_MAGNET,
+        "file_layout":    AXIFEM_FILE_LAYOUT,
+        "why_dropped_p3": AXIFEM_WHY_DROPPED_P3,
     }
     if topic == "all":
         return "\n\n".join(sections[k] for k in [
@@ -818,5 +818,5 @@ def get_axifem_documentation(topic: str = "all") -> str:
         return sections[topic]
     available = ", ".join(sections.keys())
     raise ValueError(
-        f"Unknown axifemm topic '{topic}'. Available: {available}, all"
+        f"Unknown axifem topic '{topic}'. Available: {available}, all"
     )

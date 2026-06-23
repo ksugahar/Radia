@@ -35,7 +35,7 @@ S:\Radia\01_GitHub\
     radia-mcp/            # pip install radia-mcp (MCP servers + skills)
   src/radia/axifem.pyd  # CORE METHOD (not a package): axisymmetric FE
                           # (Henrotte basis), ships in the radia wheel.
-                          # examples/axifemm/ (+ research/), tests/axifemm/.
+                          # examples/axifem/ (+ research/), tests/axifem/.
   src/radia/hdiv_vim/     # CORE METHOD (not a package): FEEC HDiv-VIM
                           # (C++ src/core/rad_hdiv_vim.cpp). examples/vim/.
                           # This is the SOLE VIM (the radia_vim Galerkin
@@ -47,7 +47,7 @@ S:\Radia\01_GitHub\
                           # as radia.ih / the electromagnet panel; ships
                           # inside the radia wheel.  Knowledge lives in
                           # radia_mcp.maglev.  Absorbs 100% of CLN scope
-                          # (axifemm/CLN incl.) under examples/levitation/.
+                          # (axifem/CLN incl.) under examples/levitation/.
   tests/                  # Radia tests + tests/mcp/
   examples/
     levitation/           # radia.levitation examples + research_cln/ corpus
@@ -88,7 +88,7 @@ Decision rule for new work:
   `radia.<domain>` is ever its own PyPI package -- they all ship inside the `radia`
   wheel.
 
-This is why `radia-mmm` / `radia-axifemm` / `radia-vim` were dissolved into radia
+This is why `radia-mmm` / `radia-axifem` / `radia-vim` were dissolved into radia
 on 2026-06-14 (they were compute methods mis-packaged as `radia-<X>`); `packages/`
 now holds only the two genuine PyPI packages above.
 
@@ -98,7 +98,7 @@ now holds only the two genuine PyPI packages above.
 | Method | Code (ships in radia wheel) | Examples / Tests |
 |--------|------------------------------|------------------|
 | **MMM / MSC** (collocation demag) | `mmm_core.pyd` + `radia.ObjHexahedron/Tetrahedron/Wedge` (`import radia`; the old `radia_mmm` namespace is gone) | `examples/hantila_solver/`, `examples/smco_magnet_array/` |
-| **Axisymmetric FE** (Henrotte basis) | `radia.axifem` (`src/radia/axifem.pyd`) | `examples/axifemm/` (+ `research/`), `tests/axifemm/` |
+| **Axisymmetric FE** (Henrotte basis) | `radia.axifem` (`src/radia/axifem.pyd`) | `examples/axifem/` (+ `research/`), `tests/axifem/` |
 | **FEEC HDiv-VIM** (the VIM) | `radia.vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) -- the SOLE VIM. The separate Newton-kernel Galerkin VIM prototype (`src/ext/radia_vim/`) was deleted 2026-06-14 as unnecessary (recover from git history if ever needed). | `examples/vim/` |
 | **DtN / FEM-Kelvin operator** (compute core) | the FEM-Kelvin sparse generator of the layered (Sommerfeld-type) Green's operator -- a **core** capability, NOT an application. Currently research-stage under `examples/kelvin_transformation/DtN_spectrum/` + `radia_mcp.radia_ngsolve` knowledge (`dtn_coarse_mesh`); promotes into `src/radia/` (like `hdiv_vim` did) when stable. **Two write-up tracks (2026-06-15):** Track A = this DtN+Kelvin core (the SA/Hachinohe paper: DtN-spectrum datasheet, sparse Kelvin open boundary, Sommerfeld isomorphism/surrogate, the directly-assembled material-aware DtN matrix, FEM-condensed≠BEM); Track B = its use as the **stream-function coil-design** kernel with iron (SEPARATE paper, see the Stream-function domain row + `HANDOFF_sommerfeld_dtn_kelvin_streamfunction.md`). | `examples/kelvin_transformation/DtN_spectrum/`, `packages/radia-mcp/tests/test_dtn_*` |
 | **PEEC** (Partial Element Equivalent Circuit) | `peec_matrices.pyd` (`src/core/rad_peec_matrices.*` + `src/lib/rad_peec_matrices_api.cpp`) + `radia.peec_topology` / `peec_coupled` / `peec_msc_schur` / `fasthenry_parser` -- filament/panel (FastImp-style) L,R,C,M circuit extraction, SIBC/ESIM surface impedance, PRIMA/Lanczos MOR. A **core** integral-equation / circuit-extraction method (same rank as MMM/MSC), consumed by the PCB and IH application domains; **never** a `radia-peec` package. | `examples/peec_integration/`, PEEC `tests/` suite |
@@ -120,7 +120,7 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 |--------|------|-----------|-------|
 | Induction heating | `radia.ih` / `radia_ih.py` panel + `calc_*.py` (incl. the **thermal step**: `calc_heat.py` / `calc_heat_axisym.py` / `calc_heat_with_em_table.py`, and a `radia_heat.py` panel) | `radia_mcp.ih` | ESIM, SIBC, Karl iteration; eddy-current heating + thermal solve. **The thermal solve stays part of IH -- NOT a separate `thermal`/`heat` domain** (decision 2026-06-15) |
 | Electromagnet | `radia_em.py` panel + `calc_em_table.py` / `calc_accel_magnet.py` / `calc_accel_msc.py` | `radia_mcp.electromagnet` + `radia_mcp.accelerator` | Omega-reduced, hysteresis. **Accelerator-magnet design** (the CoilBuilder + Omega-reduced + Kelvin pipeline of the "Accelerator Magnet Solver Architecture" section; knowledge in `radia_mcp.accelerator`) and **Clebsch-hodograph pole-face inverse design** (`examples/clebsch_hodograph/`, `docs/clebsch_hodograph/`) are both part of this domain (accelerator magnets are electromagnets -- no separate domain row) |
-| **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifemm/CLN incl.)** under `examples/levitation/` (research_cln/ corpus + IGTE 2026 paper). radia-cln is NOT a separate package. |
+| **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifem/CLN incl.)** under `examples/levitation/` (research_cln/ corpus + IGTE 2026 paper). radia-cln is NOT a separate package. |
 | Motor | `radia_motor.py` panel + `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
 | PCB | `radia_pcb.py` panel + `calc_pcb_peec.py` | `radia_mcp.pcb` | planar coils -- **consumes the core PEEC and BEM solvers** (`--coil-solver peec | bem-a`, user-selectable; the application owns neither method); **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
 | Stream-function | `radia_streamfunction.py` panel + `calc_streamfunction.py` / `calc_streamfunction_volume.py` | `radia_mcp.streamfunction` | SF coil design (Design / Pareto / Manufacture); ACA-TSVD. **CROSS-SESSION HANDOFF (Track B, 2026-06-15):** material-aware (iron yoke/shield/core) SF coil design by using the **DtN/FEM-Kelvin core** (core table above) as the design kernel — the free-space Biot-Savart kernel breaks with iron; the Kelvin-FEM Schur-condenses to a material-aware transfer matrix `M`, design = invert `M`. **SHIPPED in production (2026-06-19): `--iron-vol`/`--mu-r`/`--iron-mat` fold the Kelvin-FEM iron reaction into the whole design/pareto/manufacture pipeline (obs-adjoint scalability; opt-in `--iron-exact-source`); MCP topic `material_aware`.** **Low/many-turn manufacture levers (discrete refinement of psi): `--greedy-turns` (greedy constructive, MONOTONE) + `--greedy-connector-weight` (short rungs) + `--pin-tiling` (dense bubble-tiling DRIVEN pin/shim ARRAY) + `--optimize-levels`; MCP topic `low_turn`.** **Self-contained handoff for another lab's Claude session:** `examples/kelvin_transformation/DtN_spectrum/HANDOFF_sommerfeld_dtn_kelvin_streamfunction.md` (+ `PATHWAY_streamfunction_with_iron.md`). Verified bridge demos: `demo_ee`/`demo_ff` (free-space design misses by 77% in iron; material-aware matches ~1e-4). Novelty: **NOVEL conf 0.83** — fuses Sugahara's OWN two threads (Kelvin open-boundary FEM + free-space SF coil design); phrase "to the best of our knowledge", residual Japanese grey-lit / in-press self-check pending. |
@@ -646,7 +646,7 @@ Henrotte vs standard H1 on a scalar problem).  They are NOT used by
 production heat solvers and are NOT required.
 
 **Reference**: see
-[`docs/axifemm/FORMULATION.md`](docs/axifemm/FORMULATION.md)
+[`docs/axifem/FORMULATION.md`](docs/axifem/FORMULATION.md)
 sections 5-6 (Henrotte basis derivation for magnetic) and 10b/10c
 (optional heat BFIs).  The FEMM convention split is documented in
 `memory/reference_femm_source_axisym_conventions.md`.
