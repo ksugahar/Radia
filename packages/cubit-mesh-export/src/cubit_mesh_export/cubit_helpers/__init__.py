@@ -7,7 +7,7 @@ APREPRO commands.  They are radia-neutral: they depend only on
 and optionally ``netgen.occ`` / ``ngsolve`` for the OCC entry points.
 
 When the cubit plugin is deployed via ``cubit-plugin-install``, these
-files are copied alongside the .ccm/.ccl/.pyd into Cubit's
+files are copied alongside the .ccm/.pyd into Cubit's
 ``bin/plugins/cubit_helpers/`` directory.  The .ccm command code adds
 that directory to Cubit's embedded ``sys.path`` so that
 ``from add_kelvin import add_kelvin_cubit`` works inside any .jou

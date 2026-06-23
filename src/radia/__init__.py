@@ -11,10 +11,10 @@
 
 __version__ = "4.93.0"
 
-# Compatibility window with the cubit-mesh-export package. The .ccm/.ccl
-# plugin binaries built there must match this radia minor series; the
-# 2026-04-14 incident (stale .ccl on 100号機) is the canonical reason
-# this matters. cubit-plugin-install enforces this at deploy time.
+# Compatibility window with the cubit-mesh-export package. The .ccm/.pyd
+# plugin binaries built there must match this radia minor series. The
+# 2026-04-14 stale Cubit-plugin incident is the canonical reason this
+# matters. cubit-plugin-install enforces this at deploy time.
 COMPAT_CUBIT_MESH_EXPORT_MIN = "0.5.0"
 COMPAT_CUBIT_MESH_EXPORT_MAX = "0.999.999"  # bumped on next radia minor
 

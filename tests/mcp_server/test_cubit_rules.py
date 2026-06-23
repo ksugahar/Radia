@@ -23,6 +23,7 @@ from radia_mcp.cubit.rules import (
     check_export_file_extension,
     check_curve_without_setgeominfo,
     check_missing_block_names,
+    check_no_pyqt5_imports,
 )
 
 
@@ -297,15 +298,32 @@ class TestMissingBlockNames:
         assert _run(check_missing_block_names, code) == []
 
 
+class TestNoPyQt5Imports:
+    def test_detects_pyqt5_import(self):
+        code = (
+            'from PyQt5.QtWidgets import QDialog\n'
+            'dlg = QDialog()\n'
+        )
+        findings = _run(check_no_pyqt5_imports, code)
+        assert len(findings) == 1
+        assert findings[0]['rule'] == 'pyqt5-import-forbidden'
+
+    def test_allows_pyside6_import(self):
+        code = (
+            'from PySide6.QtWidgets import QDialog\n'
+            'dlg = QDialog()\n'
+        )
+        assert _run(check_no_pyqt5_imports, code) == []
+
+
 # ============================================================
 # Meta-tests
 # ============================================================
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        # 19 original + 3 Cubit in-process toolbar rules added 2026-04-21
-        # (import-parens, missing-shebang, missing-claro-parent)
-        assert len(ALL_RULES) == 22
+        # 19 original + 3 Cubit in-process toolbar rules + PySide6-only gate.
+        assert len(ALL_RULES) == 23
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:

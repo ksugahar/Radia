@@ -14,7 +14,7 @@ The MCP server exposes this via install_deploy(topic=...). Topics:
 two_tier, lab_editable, hyaku_pypi, mdx_pypi, gui_extra,
 editable_to_pypi_migration, pypi_to_editable_migration,
 metadata_sync, pyd_dll_bootstrap, cubit_plugin_layers,
-common_failure_modes
+first_install_panel_registration, common_failure_modes
 """
 
 INSTALL_DEPLOY = """\
@@ -32,7 +32,7 @@ The current 2-tier policy was set 2026-05-02 by the user:
 Topics: two_tier, lab_editable, hyaku_pypi, mdx_pypi, gui_extra,
         editable_to_pypi_migration, pypi_to_editable_migration,
         metadata_sync, pyd_dll_bootstrap, cubit_plugin_layers,
-        common_failure_modes
+        first_install_panel_registration, common_failure_modes
 
 ============================================================
 ## two_tier — current 2-tier configuration (2026-05-02)
@@ -112,12 +112,14 @@ pip install --upgrade --no-cache-dir \\
 
 # Deploy Cubit plugin from PyPI wheel for all 21 users
 cubit-plugin-install --all-users
-cubit-plugin-install --verify-only
+cubit-plugin-install --verify-only --all-users
 ```
 
 The `--all-users` flag writes the Cubit plugin to
-`C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\` (admin
-privilege required) so all users see the same version.
+`C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\` and registers
+the Radia toolbar startup shim for all existing profiles plus the Default
+profile (admin privilege required).  `--verify-only --all-users` checks
+both binary hashes and panel startup registration.
 
 ============================================================
 ## mdx_pypi — mdx PyPI install (identical to 100号機)
@@ -140,13 +142,14 @@ pip install --upgrade --no-cache-dir \\
     'cubit-mesh-export==<X.Y.Z>'
 
 cubit-plugin-install --all-users
-cubit-plugin-install --verify-only
+cubit-plugin-install --verify-only --all-users
 ```
 
 mdx HAS Cubit installed at
 `C:\\Program Files\\Coreform Cubit 2025.12` (Coreform Cubit Learn
-Edition).  `cubit-plugin-install --verify-only` validates 5/5 sha256
-match. Headless smoke test: the `cubit-smoke-test` CLI (shipped with
+Edition).  `cubit-plugin-install --verify-only --all-users` validates
+plugin binary sha256 hashes and Radia panel startup registration.
+Headless smoke test: the `cubit-smoke-test` CLI (shipped with
 cubit-mesh-export >= 0.5.3) runs `coreform_cubit -batch -nographics`
 and verifies `export netgen` writes a valid .vol.
 
@@ -225,7 +228,8 @@ pip install --no-cache-dir \\
 
 # Cubit plugin: regular-file deploy from PyPI wheel
 cubit-plugin-install --all-users
-cubit-plugin-install --verify-only   # all sha256 must match
+cubit-plugin-install --verify-only --all-users
+# sha256 plus Radia toolbar startup registration must match
 ```
 
 Sanity:
@@ -334,29 +338,64 @@ paths via its own hooks, so the bootstrap is automatic.
 ## cubit_plugin_layers — Cubit plugin lives in TWO independent places
 ============================================================
 
-The Cubit plugin (`cubit_mesh_export.ccm`, `cubit_mesh_export.ccl`,
+The Cubit plugin (`cubit_mesh_export.ccm`,
 `cubit_mesh_curver.cp312-win_amd64.pyd`, `nglib.dll`, `ngcore.dll`) is
-deployed to `C:\\Program Files\\Coreform Cubit 2025.12\\bin\\` by
-`cubit-plugin-install`. This is INDEPENDENT of the Python editable
-install: Cubit reads its plugin directory directly, not via Python's
-import system.
+deployed to `C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\`
+by `cubit-plugin-install`.  The old Qt5 `.ccl` path was retired in
+radia 4.80.0; any remaining `cubit_mesh_export.ccl` or `radia_cubit.ccl`
+is stale and `cubit-plugin-install --verify-only` reports it as a failure.
+This is INDEPENDENT of the Python editable install: Cubit reads its
+plugin directory directly, not via Python's import system.
 
 Two layers:
 
 | Layer | Location | Used by |
 |-------|----------|---------|
 | Python import | `<package>/cubit_mesh_export/` | `from cubit_mesh_export import ...` |
-| Cubit plugin  | `Coreform Cubit 2025.12\\bin\\plugins\\` (+ ccl in `bin\\`) | Cubit GUI / `coreform_cubit -batch` |
+| Cubit plugin  | `Coreform Cubit 2025.12\\bin\\plugins\\` | Cubit GUI / `coreform_cubit -batch` |
 
 Implications:
 
 * On 100号機 / mdx (PyPI install), `pip install --upgrade
   cubit-mesh-export==X.Y.Z` updates the Python side. You MUST then
-  run `cubit-plugin-install --all-users` to update the Cubit side.
+  run `cubit-plugin-install --all-users` to update the Cubit side and
+  panel startup registration.
 * On LAB (editable install), Build.ps1 writes the binaries to BOTH
   the local clone AND the Cubit\\bin\\plugins location (via the
   Build.ps1 post-build step). No separate cubit-plugin-install
   needed in routine dev.
+
+============================================================
+## first_install_panel_registration — why first install used to miss panels
+============================================================
+
+The Cubit plugin and the Radia Solve menu are separate layers:
+
+1. Cubit loads `cubit_mesh_export.ccm` from
+   `Coreform Cubit 2025.12\\bin\\plugins\\`.
+2. Cubit replays each user's `.cubit` startup file.
+3. The startup file plays a generated Radia shim:
+   * current-user install:
+     `%LOCALAPPDATA%\\Radia\\Cubit\\radia_startup.py`
+   * `--all-users` install:
+     `%ProgramData%\\Radia\\Cubit\\radia_startup.py`
+4. The shim loads `site-packages\\radia\\panels\\register_toolbar.py`,
+   which creates the PySide6 Solve menu entries.
+
+Historical failure: the installer wrote `startup.py` inside the Python
+package tree and `--verify-only` checked only plugin hashes.  A deploy
+could therefore be "green" while the user's `.cubit` file still pointed
+at an old or missing startup script.  Current policy:
+
+```powershell
+cubit-plugin-install --all-users
+cubit-plugin-install --verify-only --all-users
+```
+
+`--verify-only --all-users` fails if any targeted `.cubit` startup block,
+generated startup shim, `register_toolbar.py` path, or Cubit.ini
+`plugin\\paths` entry is missing.  Do not report a first install as done
+until this passes.
 
 ============================================================
 ## common_failure_modes — symptoms and fixes
@@ -370,8 +409,9 @@ Implications:
 | `AttributeError: module 'cubit_mesh_export' has no attribute '__version__'` | same legacy shadow                                                     | same |
 | `ImportError: DLL load failed while importing cubit_mesh_curver` | `import radia` not done first (DLL bootstrap) — only on legacy editable | `import radia` before `from cubit_mesh_export import cubit_mesh_curver`; on PyPI installs this is automatic |
 | `cubit-smoke-test` fails with "Learn Edition restriction"     | mdx (or 100号機) has Cubit Learn Edition; harmless ERROR line on export | Ignore — `export netgen` writes the .vol successfully despite the message; the smoke test tolerates this |
-| `Phase 9 cross-machine drift on cme/cubit_mesh_export.ccl` | LAB has been doing local Cubit-plugin rebuilds; mdx / 100号機 have the published PyPI binary which differs slightly (PE timestamps, embedded paths) | Acceptable drift if no `src/cubit_plugin/` source change since cubit-mesh-export tag |
-| `cubit-plugin-install --verify-only` reports `[SIZE]` or `[HASH]` mismatch | binary deploy partial / Cubit was running during last install         | Stop Cubit, re-run `cubit-plugin-install --all-users` |
+| Phase 9 cross-machine drift on `cubit_mesh_export.ccm` / `cubit_mesh_curver.pyd` | LAB has been doing local Cubit-plugin rebuilds; mdx / 100号機 have the published PyPI binary which differs slightly (PE timestamps, embedded paths) | Acceptable drift if no `src/cubit_plugin/` source change since cubit-mesh-export tag |
+| Cubit Solve menu missing after first install | `.cubit` startup block, generated Radia startup shim, or Cubit.ini `plugin\\paths` was not registered | Re-run `cubit-plugin-install --all-users`; then require `cubit-plugin-install --verify-only --all-users` to pass |
+| `cubit-plugin-install --verify-only` reports `[SIZE]`, `[HASH]`, `[STALE]`, or panel-registration failure | binary deploy partial / Cubit was running during last install / stale Qt5 `.ccl` / startup registration missing | Stop Cubit, re-run `cubit-plugin-install --all-users` |
 | panel windows die in headless test with `QFontDatabase: Cannot find font directory`     | benign warning on `QT_QPA_PLATFORM=offscreen`                          | Ignore — not a failure; for production rendering Qt finds system fonts |
 
 ============================================================
@@ -401,6 +441,7 @@ _TOPICS = (
     "metadata_sync",
     "pyd_dll_bootstrap",
     "cubit_plugin_layers",
+    "first_install_panel_registration",
     "common_failure_modes",
 )
 

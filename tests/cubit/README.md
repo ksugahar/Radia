@@ -9,7 +9,7 @@ Tests should be run using **system Python** with the `CUBIT_PATH` environment va
 Either add Cubit's `bin` directory to your system PATH, or set the `CUBIT_PATH` environment variable:
 
 ```bash
-# Windows (PowerShell) — Cubit 2025.8+ (Qt5-free PySide6 plugin)
+# Windows (PowerShell) -- Coreform Cubit 2025.12+ (PySide6 plugin)
 $env:CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.12/bin"
 
 # Windows (cmd)
