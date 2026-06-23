@@ -11,6 +11,7 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.radia_ngsolve.solve import cogging_torque_order, cogging_period_deg
+from radia_mcp.radia_ngsolve.solve import machine_symmetry_sector
 
 
 def test_cogging_order_and_period():
@@ -26,6 +27,40 @@ def test_fractional_slot_reduces_cogging():
     assert cogging_period_deg(12, 10) < cogging_period_deg(12, 4)   # 6 deg < 30 deg
     # slots == poles is the pathological (huge cogging) case: order collapses to the pole count
     assert cogging_torque_order(8, 8) == 8
+
+
+def test_machine_symmetry_sector_is_gcd_pair_to_cogging_lcm():
+    cases = {
+        (36, 4): (4, 90.0, 9, 1, "anti-periodic"),
+        (12, 10): (2, 180.0, 6, 5, "anti-periodic"),
+        (24, 8): (8, 45.0, 3, 1, "anti-periodic"),
+        (18, 6): (6, 60.0, 3, 1, "anti-periodic"),
+        (24, 4): (4, 90.0, 6, 1, "anti-periodic"),
+        (12, 12): (12, 30.0, 1, 1, "anti-periodic"),
+    }
+    for (slots, poles), (sectors, angle, qsec, psec, bc) in cases.items():
+        out = machine_symmetry_sector(slots, poles)
+        assert out["sectors"] == sectors
+        assert out["symmetry_factor"] == sectors
+        assert out["sector_angle_deg"] == angle
+        assert out["slots_per_sector"] == qsec
+        assert out["poles_per_sector"] == psec
+        assert out["boundary"] == bc
+        assert cogging_torque_order(slots, poles) == slots * poles // sectors
+
+    assert machine_symmetry_sector(12, 8)["boundary"] == "periodic"  # two poles per 90-degree sector
+
+
+def test_machine_symmetry_sector_validation():
+    for bad in (
+        lambda: machine_symmetry_sector(0, 4),
+        lambda: machine_symmetry_sector(12, 0),
+    ):
+        try:
+            bad()
+            assert False, "invalid slot/pole count accepted"
+        except ValueError:
+            pass
 
 
 def main():
