@@ -1891,7 +1891,7 @@ def standalone_panels(topic: str = "") -> str:
       four_panels      -- what each launcher does
       vol_sources      -- Cubit / Netgen-OCC / build123d / etc.
       vs_cubit         -- standalone vs Cubit Solve menu
-      ih_methods       -- 6 IH methods + their .vol requirements
+      ih_methods       -- 9 IH methods + their file/label requirements
       troubleshooting  -- common errors when launching standalone
 
     Args:

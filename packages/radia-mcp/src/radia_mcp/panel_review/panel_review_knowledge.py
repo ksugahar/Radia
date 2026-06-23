@@ -305,6 +305,21 @@ state.
 **Fix**: update the assertion to match current state, add a comment
 noting which feature change made the old assertion stale.
 
+## Pattern F2: Legacy .vol row tests after working-folder migration
+**Symptom**: IH panel tests fail with missing
+`AnalysisWindow._on_vol_changed`, `_browse_vol`, or stale `_vol_edit`
+assertions.
+**Root cause**: radia 4.35.0 moved file selection to a top-level
+`working_folder` plus panel-owned browse rows.  IH now owns its
+workpiece mesh at `IHPanel._widgets["wp_vol"]`, and label inspection
+runs through `IHPanel._on_wp_vol_changed_text`.
+**Detection**: `tests/panels/test_run_button_browse.py` should exercise
+`panel.wp_vol_path()`, saved `working_folder` + relative `panel.wp_vol`,
+and constructor `vol_path` override semantics.
+**Fix**: update tests and review checklists to the panel-owned
+`wp_vol` contract.  Do not resurrect the hidden `_vol_edit` shim as a
+source of truth; it exists only for old settings JSON compatibility.
+
 ## Pattern G: Layout regression in offscreen render
 **Symptom**: panel-preview screenshot shows label overlap on a
 section header.
