@@ -1,31 +1,21 @@
-"""hdiv_demag_tet_nonlinear.py -- NONLINEAR HDiv-type VIM demag (applied-field solve + BH-curve Picard).
+"""radia.vim._nonlinear -- NONLINEAR HDiv-type VIM demag (applied-field BH-curve Newton).
 
-The linear HDiv-VIM (hdiv_demag_tet.py) computes demag FACTORS via eig(N, M_mass).  A NONLINEAR solve
-needs an APPLIED-FIELD solve (M for a given H_ext), then a per-element constitutive iteration.
+A NONLINEAR demag solve needs an APPLIED-FIELD solve (M for a given H_ext) + a per-element constitutive
+iteration.  Both public entries route through the C++ scalable charge-Gram operator (the dense Python
+charge-Gram path was removed):
 
-## Applied-field formulation (verify-first result, 2026-06-07)
-The eigenvalue framing A_eig = (1/chi) M_mass - N is NOT the applied-field system.  The physical
-applied-field weak form is
+  solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, ...)
+      -- damped matrix-free Newton on the C++ analytic _ChargeGramHMatrix demag operator
+         N v = B^T (H.matvec(B v)); M_mass-preconditioned GMRES per Newton step + Armijo line search +
+         scalar-chi Picard warmstart; FAILS LOUD on non-convergence (CLAUDE.md No-Fallbacks).
+  solve_nonlinear_newton(mesh, chi0, Msat, H0, bh_table=..., ...)
+      -- thin wrapper over the production radia.vim.hdiv_demag_solve (the same C++ damped Newton), for
+         either the analytic saturating curve (chi0, Msat) or an explicit [[H,B]] table.
 
-    A+ m = M_mass h_ext ,   A+ = (1/chi) M_mass + N         (PLUS N)
-
-  because  M = chi (H_ext + H_demag),  H_demag,weak = -N m  =>  (1/chi) M_mass m + N m = M_mass h_ext.
-For a sphere this reproduces the analytic  M/H = chi/(1 + chi D)  (D = demag factor) -- VERIFIED here
-to <=2.5% for mu_r<=100 (A+); the minus-sign system gives nonsense (negative / divergent).
-
-## Nonlinear (Picard, secant susceptibility)
-With a BH curve M(H), iterate:  solve A+(chi^k) m -> M_avg, internal field H_int = H0 - D M_avg,
-chi^{k+1} = M(H_int)/H_int (secant), re-solve.  Converges + saturates (M -> M_sat).  This prototype
-uses the SCALAR (uniform-M sphere) update; the per-element (non-uniform body) generalization needs the
-per-cell field reconstruction (RT0 -> cell H) and an MMM/MSC cross-check -- the next increment.
-
-## Honest accuracy
-The nonlinear M value carries the SAME operator accuracy as the linear demag: the centroid-monopole N
-UNDER-estimates the sphere demag (D~0.31 vs analytic 1/3), so the high-chi (deep-saturation-onset)
-response is off by ~the same amount.  The #3 near-field correction (build_near_correction) raises D
-toward 1/3 and tightens it -- demonstrated below.
+The constitutive-tangent helpers (_tensor_tangent_cfs, _table_tensor_tangent[_multi]) are the consistent
+TENSOR tangent dM/dH = chi_diff Hhat(x)Hhat + chi_sec (I - Hhat(x)Hhat) (the scalar chi_diff*I stalls at
+moderate drive); they are also consumed by _solve.hdiv_demag_solve.
 """
-import os
 from math import pi
 
 import numpy as np
@@ -35,11 +25,6 @@ import ngsolve as ng
 from netgen.csg import CSGeometry, Sphere, Pnt
 
 from radia.vim import _core as tet   # M1: core promoted to radia.vim (was examples/vim)
-
-
-def _bf_to_dense(bf):
-    """NGSolve BilinearForm -> dense numpy (prototype-scale matrices only)."""
-    return _bf_to_csr(bf).toarray()
 
 
 def _bf_to_csr(bf):
@@ -84,32 +69,6 @@ def _scalar_fixed_point(Mof, D, H0):
     return 0.5 * (lo + hi)
 
 
-def solve_nonlinear(mesh, Mof, H0, near_correction=False, nsub=4, maxit=300, tol=1e-9):
-    """Nonlinear applied-field HDiv-VIM solve (scalar-chi Picard on the A+ system).  Returns
-    (M_avg, n_iter, D_used)."""
-    d = tet.build_demag(mesh, nsub)
-    N = d["N"].copy()
-    M = d["M_mass"]
-    mu = d["m_unit"]
-    denom = mu @ M @ mu
-    if near_correction:
-        # demag operator with the #3 near-field correction folded in: N_eff = B^T (G + corr) B
-        corr = tet.build_near_correction(mesh, d, nsub=nsub, near_factor=2.0)
-        B = d["B_csr"]
-        N = N + np.asarray((B.T @ corr @ B).todense())
-    D = float((mu @ N @ mu) / denom)
-    b0 = M @ mu
-    chi, Mavg = 1000.0, 0.0
-    for it in range(maxit):
-        A = (1.0 / chi) * M + N
-        m = np.linalg.solve(A, H0 * b0)
-        Mavg = float((mu @ M @ m) / denom)
-        Hint = H0 - D * Mavg
-        chi_new = Mof(Hint) / Hint if abs(Hint) > 1e-30 else 1000.0
-        if abs(chi_new - chi) < tol * chi:
-            break
-        chi = 0.5 * chi + 0.5 * chi_new
-    return Mavg, it + 1, D
 
 
 def _tensor_tangent_cfs(gfH, chi0, Msat, Id):
@@ -217,156 +176,53 @@ def _table_tensor_tangent_multi(gfH, mesh, region_funcs, elem_region, Id):
 
 
 def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
-                           picard_warmstart=8, maxit=200, tol=1e-10, wilton_surface=False,
-                           bh_table=None, analytic_gram=False, require_convergence=True):
-    """Robust NONLINEAR HDiv-VIM solve via damped (line-search) Newton-Raphson.
+                           picard_warmstart=8, maxit=200, tol=1e-10,
+                           bh_table=None, require_convergence=True):
+    """NONLINEAR HDiv-VIM solve on a +z uniform applied field H0 -- the C++ scalable charge-Gram path.
 
-    Newton on the constitutive residual in RT0 coefficient form
+    The dense Python charge-Gram Newton was REMOVED; this is a thin wrapper over the production
+    `radia.vim.hdiv_demag_solve` (the damped matrix-free Newton on the C++ analytic `_ChargeGramHMatrix`
+    demag operator N v = B^T (H.matvec(B v))).  The constitutive law is either the analytic saturating
+    curve (chi0, Msat) -- supplied to the C++ path as the equivalent [[H,B]] table -- or an explicit
+    `bh_table = (Harr, Barr)` (the same data Radia's MatSatIsoTab consumes).
 
-        F(m) = M_mass m - b_M(H),   H = h_ext - D_op m,   D_op = M_mass^{-1} N,
-        b_M(H) = INT M(H).v dx      (L2 projection of the constitutive M onto RT0),
+    `near_correction`, `picard_warmstart`, `tol` are accepted for call-site stability but are NOT used by
+    the C++ path (its analytic Gram is exact near AND far, so no near-correction is needed; its warmstart
+    + inner-GMRES tolerances are internal).  `require_convergence` is informational: the C++ path ALWAYS
+    fails loud on non-convergence (CLAUDE.md No-Fallbacks).
 
-    with the CONSISTENT TENSOR Jacobian (derived, not the scalar approximation)
-
-        J = M_mass + T D_op,   T = INT (dM/dH) u.v dx     (tensor tangent mass).
-
-    Three ingredients make it robust AND accurate (verify-first, 2026-06-07):
-      (a) the tensor tangent dM/dH (see _tensor_tangent_cfs) -- the scalar chi_diff*I stalls at
-          moderate drive;
-      (b) the #3 NEAR-FIELD CORRECTION on N -- the centroid-monopole N has poor PER-ELEMENT (local)
-          field accuracy, so per-element Newton converges to a WRONG root (e.g. M=0.09 instead of 0.30
-          on the sphere at H0=0.1); the near correction restores the local fields -> correct root;
-      (c) line-search DAMPING (Armijo backtracking) for global robustness + a scalar-chi PICARD
-          warmstart to enter the basin at the BH knee (chi_sec/chi_diff ~ 8x), where pure Newton
-          crawls.
-
-    This is the Newton-Raphson counterpart of Radia's MMM/MSC newton_damping=True path; the outer
-    Newton machinery (tangent susceptibility + damping) is SHARED -- only the demag operator N differs
-    (here N = B^T G B, the HDiv-VIM charge form).
-
-    Returns (M_avg, n_newton_iter, D_used).  The caller must open `with ng.TaskManager():`.
+    Returns (M_avg_z, n_newton_iter, D_used) on a +z drive.  The caller must open `with ng.TaskManager():`.
     """
-    # constitutive: analytic saturating curve (chi0, Msat) OR a REAL tabulated BH curve (bh_table =
-    # (Harr, Barr), the same data Radia's MatSatIsoTab consumes).
+    del near_correction, picard_warmstart, tol, require_convergence   # not used by the C++ path
+    from ._solve import hdiv_demag_solve
     if bh_table is not None:
-        Mof, _Bpch, _Bder, _Hmax, _Mmax = _bh_table_funcs(bh_table[0], bh_table[1])
-        chi_init = max(float(_Bder(0.0)) / _MU0 - 1.0, 1.0)   # table's zero-field susceptibility
+        Harr = np.asarray(bh_table[0], float)
+        Barr = np.asarray(bh_table[1], float)
     else:
+        # synthesize the [[H,B]] table of the analytic saturating curve M(H)=chi0 H/(1+chi0|H|/Msat),
+        # B = mu0 (H + M), so the C++ table-driven nonlinear path sees the SAME constitutive law.
+        Harr = np.concatenate([[0.0], np.logspace(-1, 7, 60)])
         Mof = _bh_curve(chi0, Msat)
-        chi_init = chi0
-    d = tet.build_demag(mesh, nsub, wilton_surface=wilton_surface, analytic_gram=analytic_gram)
-    M_mass = d["M_mass"]
-    mu = d["m_unit"]
-    denom = mu @ M_mass @ mu
-    N = d["N"].copy()
-    if near_correction and not analytic_gram:
-        # near-field correction.  With wilton_surface the surface-surface block is already exact, so
-        # correct only the VOLUME-involving (cell-cell, cell-face) near pairs (skip_surface_surface)
-        # -- the per-element nonlinear Newton needs the volume near-field, and double-correcting the
-        # surface would over-count.  Without wilton_surface, correct all near pairs (the old path).
-        # analytic_gram makes the WHOLE Gram exact -> no near-correction needed (skip it).
-        corr = tet.build_near_correction(mesh, d, nsub=nsub, near_factor=2.0,
-                                         skip_surface_surface=wilton_surface)
-        B = d["B_csr"]
-        N = N + np.asarray((B.T @ corr @ B).todense())
-    Dop = np.linalg.solve(M_mass, N)
-    Dscal = float((mu @ N @ mu) / denom)
-    b0 = M_mass @ mu
-
-    def Mavg(m):
-        return float((mu @ M_mass @ m) / denom)
-
-    fes = ng.HDiv(mesh, order=0)
-    u, v = fes.TnT()
-    gfH = ng.GridFunction(fes)
-    Id = ng.Id(3)
-
-    def constit():
-        """(M(H) field, consistent tensor tangent) at the current gfH -- analytic or table."""
-        if bh_table is not None:
-            return _table_tensor_tangent(gfH, mesh, _Bpch, _Bder, _Hmax, _Mmax, Id)
-        return _tensor_tangent_cfs(gfH, chi0, Msat, Id)
-
-    def set_field(m):
-        gfH.vec.FV().NumPy()[:] = H0 * mu - Dop @ m
-
-    def bM():
-        Mcf, _ = constit()
-        lf = ng.LinearForm(fes)
-        lf += Mcf * v * ng.dx
-        lf.Assemble()
-        return lf.vec.FV().NumPy().copy()
-
-    def Fnorm(m):
-        set_field(m)
-        return np.linalg.norm(M_mass @ m - bM())
-
-    # (c) scalar-chi Picard warmstart: cheap, robust, lands inside the Newton basin (matters at the knee).
-    chi = chi_init
-    m = np.zeros(M_mass.shape[0])
-    for _ in range(picard_warmstart):
-        m = np.linalg.solve((1.0 / chi) * M_mass + N, H0 * b0)
-        Hi = H0 - Dscal * Mavg(m)
-        chi = 0.5 * chi + 0.5 * (Mof(Hi) / Hi if abs(Hi) > 1e-30 else chi)
-
-    # damped operator Newton on the constitutive residual
-    nit = 0
-    M_prev = Mavg(m)
-    converged = False
-    for it in range(maxit):
-        nit = it + 1
-        set_field(m)
-        Mcf, tang = constit()
-        lf = ng.LinearForm(fes)
-        lf += Mcf * v * ng.dx
-        lf.Assemble()
-        F = M_mass @ m - lf.vec.FV().NumPy()
-        nF = np.linalg.norm(F)
-        if nF < tol * (np.linalg.norm(M_mass @ m) + 1e-30):
-            converged = True; break
-        T = ng.BilinearForm(fes)
-        T += ng.InnerProduct(tang * u, v) * ng.dx
-        T.Assemble()
-        dm = np.linalg.solve(M_mass + _bf_to_dense(T) @ Dop, -F)
-        lam = 1.0                                   # (c) Armijo backtracking line search
-        while lam > 1e-7 and Fnorm(m + lam * dm) >= nF:
-            lam *= 0.5
-        m = m + lam * dm
-        # Physically meaningful convergence: the quantity of interest (M_avg) has stopped moving.
-        # Near the knee the line search takes tiny steps, so the tight residual tol is never met even
-        # though M_avg is already correct -- key on the observable, not the raw residual norm.
-        M_now = Mavg(m)
-        if abs(M_now - M_prev) < 1e-8 * (abs(M_now) + 1e-30):
-            converged = True; break
-        M_prev = M_now
-    if require_convergence and not converged:
-        # fail loud (no silent non-converged result): the most common cause is the WRONG Gram for a
-        # NON-uniform-M nonlinear problem -- the surface-only wilton_surface leaves the volume (cell)
-        # blocks crude so Newton stalls; div M != 0 bodies (cube, C-yoke, ...) need analytic_gram=True.
-        raise RuntimeError(
-            f"solve_nonlinear_newton did NOT converge in maxit={maxit} iters (last M_avg={Mavg(m):.1f}). "
-            f"For NON-uniform-M nonlinear problems (div M != 0: cube, C-yoke, any non-ellipsoid) pass "
-            f"analytic_gram=True -- the surface-only wilton_surface Gram leaves the volume blocks crude "
-            f"and Newton cannot converge. Pass require_convergence=False to inspect the non-converged iterate.")
-    return Mavg(m), nit, Dscal
+        Barr = _MU0 * (Harr + np.array([Mof(h) for h in Harr]))
+    BH = [[float(h), float(b)] for h, b in zip(Harr, Barr)]
+    res = hdiv_demag_solve(mesh, bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
+                           nl_maxit=maxit)
+    return float(res["M_avg"][2]), int(res["iters"]), float(res["demag"])
 
 
 def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-10,
                                     picard_warmstart=8, maxit=200, gmres_tol=1e-8, newton_tol=1e-6,
                                     near_factor=1e30, gmres_restart=400, return_timing=False, verbose=False):
-    """SCALABLE damped Newton (production #2): the dense O(N^3)/O(N^2) demag is replaced by the C++
-    HACApK charge-Gram H-matrix (O(N log N) apply), and the Newton system is solved ITERATIVELY
-    (GMRES) -- no dense factorization anywhere.
+    """SCALABLE damped Newton (production #2): the demag is the C++ HACApK charge-Gram H-matrix
+    (O(N log N) apply), and the Newton system is solved ITERATIVELY (GMRES) -- no dense factorization
+    anywhere.
 
-    M2b: the C++ Gram is the ANALYTIC charge Gram (PhiTet/TriPotential, exact near AND far), so the
-    demag apply is simply  N v = B^T ( H.matvec(B v) )  with H = the analytic _ChargeGramHMatrix --
-    no separate sparse near-correction.  This matches the dense solve_nonlinear_newton(analytic_gram=
-    True) operator entry-by-entry, so the scalable solver reproduces the dense ANALYTIC Newton (the
-    correct reference for NON-uniform M: cube, C-yoke, any div M != 0 body), closing the under-
-    resolution the old monopole-far + sparse-near split left.  The Jacobian
-    J v = M_mass v + T M_mass^{-1} N v is applied matrix-free (M_mass factored once, sparse); GMRES
-    (M_mass-preconditioned) solves each Newton step; Armijo line search + Picard warmstart as in the
-    dense solver.  Returns (M_avg, n_newton_iter, D_used)."""
+    The C++ Gram is the ANALYTIC charge Gram (PhiTet/TriPotential, exact near AND far), so the demag
+    apply is simply  N v = B^T ( H.matvec(B v) )  with H = the analytic _ChargeGramHMatrix -- no separate
+    sparse near-correction.  This is exact for NON-uniform M (cube, C-yoke, any div M != 0 body).  The
+    Jacobian J v = M_mass v + T M_mass^{-1} N v is applied matrix-free (M_mass factored once, sparse);
+    GMRES (M_mass-preconditioned) solves each Newton step; Armijo line search + Picard warmstart.
+    Returns (M_avg, n_newton_iter, D_used)."""
     import scipy.sparse as sp
     import scipy.sparse.linalg as spla
     import radia._radia_pybind as _rp
@@ -374,17 +230,16 @@ def solve_nonlinear_newton_scalable(mesh, chi0, Msat, H0, nsub=4, gram_eps=1e-10
 
     _t0 = time.perf_counter()
     Mof = _bh_curve(chi0, Msat)
-    # SCALABLE build: skip the dense O(N^2) G/N and the loop SVD; M_mass + B come back SPARSE.  The demag
-    # apply is the analytic charge-Gram H-matvec (Hg) below, so the dense N is never needed here.
-    d = tet.build_demag(mesh, nsub, skip_dense_gram=True)
+    # SPARSE build: M_mass + B come back SPARSE; the demag apply is the analytic charge-Gram H-matvec
+    # (Hg) below (no dense n_charge^2 object anywhere).
+    d = tet.build_demag(mesh, nsub)
     M_mass = d["M_mass"]                         # sparse CSR
     mu = d["m_unit"]
     denom = float(mu @ (M_mass @ mu))            # sparse-safe Rayleigh denominator
     B = d["B_csr"]
-    # M2b: the C++ ANALYTIC charge Gram H-matrix is exact near AND far (matches dense analytic_gram
-    # entry-by-entry), so the demag apply is just B^T (G_analytic-Hmatvec (B v)) -- NO separate Python
-    # near-correction.  This closes the non-uniform-M (div M != 0: cube, C-yoke) scalable gap that the
-    # old monopole-far + sparse-near split left, while staying O(N log N).
+    # The C++ ANALYTIC charge Gram H-matrix is exact near AND far, so the demag apply is just
+    # B^T (G_analytic-Hmatvec (B v)) -- NO separate Python near-correction.  This handles the non-uniform-M
+    # (div M != 0: cube, C-yoke) case while staying O(N log N).
     # near_factor=1e30 (default) = all-analytic (the tight scalable golden); a finite near_factor (e.g. 2.0)
     # enables the near/far split (analytic near, monopole far) -> the BUILD speedup, accurate to ~3% Gram.
     Hg = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
@@ -509,26 +364,17 @@ def main():
     mesh = _sphere(0.35)
     chi0, Msat = 1000.0, 1.0
     Mof = _bh_curve(chi0, Msat)
-    # self-test runs serial: per the caller-wraps policy this HELPER module contains NO `with TaskManager()`.
-    print(f"Nonlinear HDiv-VIM sphere demag (chi0={chi0}, Msat={Msat})")
-    print(f"{'H0':>8} {'Picard M':>10} {'+nearcorr':>10} {'analytic(1/3)':>14} {'M/Msat':>8}")
-    for H0 in (1e-4, 1e-3, 1e-2, 1e-1):
-        Mmono, it1, Dm = solve_nonlinear(mesh, Mof, H0, near_correction=False)
-        Mcorr, it2, Dc = solve_nonlinear(mesh, Mof, H0, near_correction=True)
-        Mana = _scalar_fixed_point(Mof, 1.0 / 3.0, H0)   # analytic uses the EXACT sphere D=1/3
-        print(f"{H0:8.0e} {Mmono:10.5f} {Mcorr:10.5f} {Mana:14.5f} {Mcorr/Msat:8.3f}")
-    print(f"  (monopole D={Dm:.4f}, near-corrected D={Dc:.4f}, analytic D=0.3333)")
-    print("  => Picard converges + saturates; near-correction moves D toward 1/3 -> closer to analytic.\n")
-
-    # ---- damped Newton-Raphson (robust at ALL drive incl. deep saturation) ----
-    print("Damped Newton-Raphson (tensor tangent + near corr + line search + Picard warmstart):")
+    # ---- damped Newton-Raphson on the C++ scalable charge-Gram operator (robust at ALL drive) ----
+    # solve_nonlinear_newton routes through the production hdiv_demag_solve (NGSolve work), so this CALLER
+    # opens the TaskManager (CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT").
+    print(f"Nonlinear HDiv-VIM sphere demag (chi0={chi0}, Msat={Msat}) -- damped Newton (C++ charge Gram):")
     print(f"{'H0':>8} {'Newton M':>10} {'newton it':>10} {'analytic(1/3)':>14} {'rel':>9}")
-    for H0 in (1e-2, 1e-1, 3e-1, 1.0, 5.0):
-        Mn, nit, Dn = solve_nonlinear_newton(mesh, chi0, Msat, H0)
-        Mana = _scalar_fixed_point(Mof, 1.0 / 3.0, H0)
-        print(f"{H0:8.0e} {Mn:10.5f} {nit:10d} {Mana:14.5f} {abs(Mn - Mana) / Mana:9.1e}")
-    print("  => Newton matches the analytic at every drive (where the scalar-Picard saturates but"
-          " the simple per-element Picard/Hantila of earlier sessions failed).")
+    with ng.TaskManager():
+        for H0 in (1e-2, 1e-1, 3e-1, 1.0, 5.0):
+            Mn, nit, Dn = solve_nonlinear_newton(mesh, chi0, Msat, H0)
+            Mana = _scalar_fixed_point(Mof, 1.0 / 3.0, H0)
+            print(f"{H0:8.0e} {Mn:10.5f} {nit:10d} {Mana:14.5f} {abs(Mn - Mana) / Mana:9.1e}")
+    print("  => Newton matches the analytic at every drive (deep saturation included).")
 
 
 if __name__ == "__main__":

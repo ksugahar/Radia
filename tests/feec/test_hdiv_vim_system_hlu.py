@@ -104,7 +104,7 @@ def _tet_cube_operator(maxh):
     import scipy.sparse as sp
     with ngsolve.TaskManager():
         mesh = ngsolve.Mesh(geo.GenerateMesh(maxh=maxh))
-        d = _core.build_demag(mesh, skip_dense_gram=True)
+        d = _core.build_demag(mesh)
     Mm = sp.coo_matrix(d["M_mass"])
     Bc = d["B_csr"].tocsc()
     cent = np.asarray(d["cent"], float)

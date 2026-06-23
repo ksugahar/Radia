@@ -122,7 +122,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
         for axes, sign in _tet.image_group(_tet.parse_image_string(image)):
             image_masks.append(int(sum(1 << a for a in axes)))
             image_signs.append(float(sign))
-    d = _tet.build_demag(mesh, skip_dense_gram=True)
+    d = _tet.build_demag(mesh)
     Mm, B = d["M_mass"], d["B_csr"]
     if all_tet:
         H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),

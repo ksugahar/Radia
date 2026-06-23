@@ -8,9 +8,9 @@ now accepts bh_table=(Harr,Barr): it builds M(H) via a monotone PCHIP interpolat
 mu0 => M -> M(Hmax) const, dM/dH -> 0 -- matching Radia's linear-B extension; raw PCHIP extrapolation
 would blow up).
 
-Locks that the table-driven operator Newton reproduces the analytic uniform-sphere fixed point (with the
-SAME table M(H), exact demag D=1/3 via the Wilton surface Gram) across moderate -> deep saturation, and
-saturates to the table's Msat.
+Locks that the table-driven operator Newton (routed through the production C++ analytic charge Gram)
+reproduces the analytic uniform-sphere fixed point (with the SAME table M(H), demag D ~ 1/3) across
+moderate -> deep saturation, and saturates to the table's Msat.
 """
 import os
 import sys
@@ -46,8 +46,7 @@ def test_real_bh_table_newton_matches_analytic():
     Mof, _, _, _, Mmax = nl._bh_table_funcs(_HARR, _BARR)
     with ng.TaskManager():
         for H0 in (1e4, 1e6, 3e6):
-            Mh, nit, _ = nl.solve_nonlinear_newton(mesh, 0, 0, H0, bh_table=(_HARR, _BARR),
-                                                   wilton_surface=True, maxit=150)
+            Mh, nit, _ = nl.solve_nonlinear_newton(mesh, 0, 0, H0, bh_table=(_HARR, _BARR), maxit=150)
             Ma = nl._scalar_fixed_point(Mof, 1.0 / 3.0, H0)
             assert abs(Mh - Ma) < 1e-2 * abs(Ma), \
                 f"table Newton {Mh:.1f} vs analytic {Ma:.1f} at H0={H0:.0e} (rel {abs(Mh-Ma)/abs(Ma):.1e})"
@@ -60,6 +59,5 @@ def test_real_bh_table_saturates_to_table_Msat():
     mesh = _sphere()
     _, _, _, _, Mmax = nl._bh_table_funcs(_HARR, _BARR)
     with ng.TaskManager():
-        Mh, _, _ = nl.solve_nonlinear_newton(mesh, 0, 0, 5e6, bh_table=(_HARR, _BARR),
-                                             wilton_surface=True, maxit=150)
+        Mh, _, _ = nl.solve_nonlinear_newton(mesh, 0, 0, 5e6, bh_table=(_HARR, _BARR), maxit=150)
     assert 0.95 * Mmax < Mh < 1.02 * Mmax, f"deep-drive M {Mh:.1f} not saturated to table Msat {Mmax:.1f}"

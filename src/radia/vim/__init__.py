@@ -8,14 +8,16 @@ This is the PRODUCTION home (productionization milestone M1): the validated core
 examples/vim.  Canonical docs: docs/hdiv_vim/README.md; roadmap: docs/hdiv_vim/PRODUCTIONIZATION.md.
 
 Public API (validated solve primitives):
-  build_demag(mesh, nsub=4, wilton_surface=False, analytic_gram=False)
-      -> dict(N, M_mass, B, loops, ...): the linear demag operator N = B^T G B.
-         wilton_surface=True : exact analytic SURFACE Gram (uniform-M linear demag, demag factor 1/3).
-         analytic_gram=True  : full analytic volume Gram (REQUIRED for non-uniform / nonlinear, div M!=0).
-  demag_factor(d) -> the demag factor (Rayleigh quotient) from a build_demag result.
-  solve_nonlinear_newton(mesh, chi0, Msat, H0, analytic_gram=..., bh_table=..., require_convergence=True)
-      -> (M_avg, n_iter, D): damped Newton (fail-loud on non-convergence).
-  Gram building blocks: tri_potential, phi_tet, wilton_surface_block, analytic_charge_gram.
+  build_demag(mesh, nsub=4)
+      -> dict(M_mass, B, cell_verts, face_verts, poly, ...): the SPARSE pieces + the C++ charge-Gram
+         geometry.  There is NO dense N: the C++ `_ChargeGramHMatrix` kernel IS the demag operator
+         (N v = B^T (H.matvec(B v))) and folds IMA in via image_masks/image_signs (see hdiv_demag_solve).
+         The dense Python charge-Gram path (the O(N^2) Gram, the SVD loop basis, the analytic / image /
+         Wilton dense Gram builders) was REMOVED.
+  hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=..) -> the production demag solve (C++ charge Gram).
+  solve_nonlinear_newton(mesh, chi0, Msat, H0, bh_table=..., require_convergence=True)
+      -> (M_avg, n_iter, D): damped Newton on the C++ scalable charge-Gram operator (fail-loud).
+  Gram building block: tri_potential (the exact flat-triangle potential).
 
   ngsolve.bem-STYLE API (._vim): DemagOperator(fes, intorder=, eps=) -- construct from an HDiv FESpace
       (the order comes from the fes); `.mat` is the H-matrix-backed NGSolve BaseMatrix N = B^T G B, which
@@ -28,18 +30,13 @@ not require the C++ core, but the production home is the radia package.
 from . import _core, _nonlinear  # noqa: F401
 from ._core import (  # noqa: F401
     build_demag,
-    demag_factor,
     tri_potential,
-    phi_tet,
-    wilton_surface_block,
-    analytic_charge_gram,
     build_near_correction,
     C_TRI,
 )
 from ._nonlinear import (  # noqa: F401
     solve_nonlinear_newton,
     solve_nonlinear_newton_scalable,
-    solve_nonlinear,
 )
 from ._vim import DemagOperator, build_charge_gram  # noqa: F401  (ngsolve.bem-style operator + .mat)
 from ._solve import hdiv_demag_solve  # noqa: F401  (M1 production entry: linear soft-iron demag solve)
@@ -80,9 +77,8 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
 )
 
 __all__ = [
-    "build_demag", "demag_factor", "tri_potential", "phi_tet", "wilton_surface_block",
-    "analytic_charge_gram", "build_near_correction", "C_TRI",
-    "solve_nonlinear_newton", "solve_nonlinear_newton_scalable", "solve_nonlinear",
+    "build_demag", "tri_potential", "build_near_correction", "C_TRI",
+    "solve_nonlinear_newton", "solve_nonlinear_newton_scalable",
     "DemagOperator", "build_charge_gram", "hdiv_demag_solve", "soft_iron_from_mesh", "soft_iron_from_vol",
     "reconstruct_field", "reconstruct_field_polynomial",
     "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",

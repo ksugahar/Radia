@@ -80,14 +80,15 @@ solver but NOT ground truth on a coarse mesh):
 |---|---|---|---|
 | Loops field-null on distorted hex | `ngsolve_loopfree_verify.py` | exact (charge-form field `3.7e-16`) | ✅ machine zero |
 | Loop/star (Hodge) split | `hdiv_loop_star_split.py` | exact (`ker Q` charge-free `~1e-16`) | ✅ |
-| Linear demag (sphere/cube → 1/3) | `hdiv_demag_tet.py` | **ANALYTIC** 1/3 | ✅ `<0.15%` (Wilton surface Gram) |
-| Nonlinear (damped Newton) | `hdiv_demag_tet_nonlinear.py` | **ANALYTIC** sphere fixed point | ✅ `<0.05%` deep-saturation |
+| **yano-MSC ↔ HDiv-VIM loop bridge** | `yano_hdiv_loop_bridge.py` | exact (collocation near-null `==` HDiv `ker(B)` `==` cell-graph cycle) | ✅ the yano-type collocation matrix carries the SAME loops as a LATENT near-null: dim `== n_loop` (cycle count) on every grid; yano cond `~1e16` (HDiv `loop_res ~1e-16`); cond(`-N+I/χ`) `~μr` (loops regularized by `1/χ` → bite at high μr) while **star projection → `~40-65`, μr-INDEPENDENT** (the HDiv-VIM regime). The collocation-side reading of Problem A. |
+| Linear demag (sphere/cube → 1/3) | `hdiv_demag_solve` (`test_hdiv_vim_demag_solve.py`) | **ANALYTIC** 1/3 | ✅ `<0.5%` (C++ analytic charge Gram) |
+| Nonlinear (damped Newton) | `solve_nonlinear_newton` (`test_hdiv_vim_tet_newton.py`) | **ANALYTIC** sphere fixed point | ✅ `<2%` deep-saturation (C++ charge Gram) |
 | Nonlinear cross-check | `test_hdiv_vim_newton_vs_radia.py` | Radia MMM/MSC (`MatSatIsoTab`) | ✅ agree `<0.05%` (sphere) |
-| Real BH table | `test_hdiv_vim_newton_table.py` | **ANALYTIC** uniform-sphere | ✅ `<0.2%` |
+| Real BH table | `test_hdiv_vim_newton_table.py` | **ANALYTIC** uniform-sphere | ✅ `<1%` |
 | Ellipsoid (D≠1/3) | `test_hdiv_vim_ellipsoid.py` | **ANALYTIC** prolate `N_z` | ✅ 2:1 `0.3%` |
-| Volume Gram (`phi_tet`) | `test_hdiv_vim_volume_gram.py` | **ANALYTIC** (linear demag → 1/3) | ✅ the full volume Gram (`analytic_gram`); required for non-uniform nonlinear |
-| **Non-uniform nonlinear vs Radia** (cube + C-yoke) | `hdiv_cyoke_nonlinear.py`, `test_hdiv_vim_cyoke_nonlinear.py` | shipped **Radia** (both flat → valid) | ✅ volume-avg M_z agrees **<1% at every mesh** (cube −0.08%, C-yoke −0.25%/+0.71%/−0.37%), 5–6 iters, mesh-stable. **Needs `analytic_gram`** for div M≠0 (`wilton_surface` stalls → now fail-loud). The old "13%/6.2%/4%" were stale wrong-Gram/metric artifacts. |
-| Scalable (C++ H-matrix + GMRES) | `test_hdiv_vim_newton_scalable.py` | dense reference | ✅ machine precision |
+| Volume Gram (analytic, div M≠0) | `test_hdiv_vim_volume_gram.py` | **ANALYTIC** (linear demag → 1/3) | ✅ the C++ analytic charge Gram (exact near AND far); required for non-uniform nonlinear |
+| **Non-uniform nonlinear vs Radia** (cube + C-yoke) | `hdiv_cyoke_nonlinear.py`, `test_hdiv_vim_cyoke_nonlinear.py` | shipped **Radia** (both flat → valid) | ✅ volume-avg M_z agrees **<3%**, converges, mesh-stable. The C++ analytic charge Gram supplies the volume Gram required for div M≠0. |
+| Scalable (C++ H-matrix + GMRES) | `test_hdiv_vim_newton_scalable.py` | **ANALYTIC** sphere fixed point + physical range | ✅ deep-saturation match, bounded iters |
 | Distorted μr-independence | `test_hdiv_vim_solve.py` | iters bounded vs μr 10→1e4 | ✅ golden-locked |
 | **Curved-mesh win** (elementary) | `hdiv_demag_curved.py` | **ANALYTIC** dipole / volume | ✅ external field flat `−10%` → Curve(3) `−0.26%` (~38× at same ndof) |
 | **Curved + high-order demag** (production) | `hdiv_demag_bem_singlelayer.py` | **ANALYTIC** sphere 1/3 + spheroid + triaxial tensor | ✅ flat floored → curved + order-2 EXACT: sphere `~1e-4%`; prolate & oblate polar+transverse `<0.05%`; **triaxial ellipsoid** (a≠b≠c) all three distinct factors EXACT vs Osborn integral; sum rule `N_x+N_y+N_z=1` to `~1e-6`; Gram = `ngsolve.bem` single-layer |
