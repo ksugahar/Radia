@@ -21,7 +21,8 @@ from radia_mcp.radia_ngsolve.waveguide import (rectangular_waveguide_cutoff, cut
                                                waveguide_evanescent_attenuation,
                                                waveguide_dielectric_slab_sparams,
                                                waveguide_cascade_sparams,
-                                               waveguide_offset_short_s11, C0)
+                                               waveguide_offset_short_s11,
+                                               reflection_metrics, C0)
 
 
 def test_dielectric_slab_sparams():
@@ -52,6 +53,37 @@ def test_dielectric_slab_sparams():
         waveguide_dielectric_slab_sparams(5e9, a, 2.2, 0.010)        # below TE10 cutoff
     with pytest.raises(ValueError):
         waveguide_dielectric_slab_sparams(10e9, a, 0.0, 0.010)       # eps_r must be > 0
+
+
+def test_reflection_metrics_return_loss_vswr():
+    matched = reflection_metrics(0.0)
+    assert math.isinf(matched["return_loss_db"])
+    assert matched["vswr"] == 1.0
+    assert matched["reflected_power_fraction"] == 0.0
+    assert matched["delivered_power_fraction"] == 1.0
+    assert matched["mismatch_loss_db"] == 0.0
+
+    m = reflection_metrics(0.1j)
+    assert m["gamma"] == pytest.approx(0.1)
+    assert m["return_loss_db"] == pytest.approx(20.0)
+    assert m["reflected_power_fraction"] == pytest.approx(0.01)
+    assert m["delivered_power_fraction"] == pytest.approx(0.99)
+    assert m["mismatch_loss_db"] == pytest.approx(-10.0 * math.log10(0.99))
+    assert m["vswr"] == pytest.approx(1.1 / 0.9)
+
+    short = reflection_metrics(-1.0)
+    assert short["return_loss_db"] == pytest.approx(0.0)
+    assert math.isinf(short["vswr"])
+    assert math.isinf(short["mismatch_loss_db"])
+    assert short["delivered_power_fraction"] == 0.0
+
+    slab = waveguide_dielectric_slab_sparams(10e9, 0.02286, 2.2, 0.010)
+    sm = reflection_metrics(slab["S11"])
+    assert sm["gamma"] == pytest.approx(slab["S11_mag"])
+    assert sm["delivered_power_fraction"] == pytest.approx(slab["S21_mag"] ** 2)
+
+    with pytest.raises(ValueError):
+        reflection_metrics(1.01)
 
 
 def test_cascade_and_offset_short():
