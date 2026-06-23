@@ -135,6 +135,72 @@ class NetgenTriTetVolMesh:
             "policy": "netgen_vol_tri_tet_only_shared_one_based_nodes",
         }
 
+    def first_order_fem_bem_topology(self) -> dict[str, object]:
+        """Return first-order H1/HCurl/P1/RWG topology with one-based ids.
+
+        This mirrors the small MATLAB prototype API: H1 uses volume nodes,
+        HCurl uses first-order tetrahedron edges, scalar BEM uses compacted
+        boundary nodes, and RWG uses closed-manifold boundary edges.
+        """
+
+        volume_edges, tet_edges, tet_edge_signs = _build_tet_edges(
+            [tet.nodes for tet in self.tetrahedra]
+        )
+        trace_nodes = self.trace_node_ids()
+        trace_node_to_local = {node: i for i, node in enumerate(trace_nodes, start=1)}
+        boundary_triangles = tuple(
+            tuple(trace_node_to_local[node] for node in tri.nodes) for tri in self.surface_triangles
+        )
+        surface_edges_local, tri_edges, tri_edge_signs, edge_triangles, opposite_vertices = _build_tri_edges(
+            boundary_triangles
+        )
+        surface_edges_global = tuple(
+            tuple(trace_nodes[node - 1] for node in edge) for edge in surface_edges_local
+        )
+        volume_edge_to_id = {edge: i for i, edge in enumerate(volume_edges, start=1)}
+        try:
+            surface_to_hcurl = tuple(volume_edge_to_id[edge] for edge in surface_edges_global)
+        except KeyError as exc:
+            raise ValueError("a boundary RWG edge is not present in the volume HCurl edge set") from exc
+
+        rwg_dof_edge_ids = tuple(i for i, adjacent in enumerate(edge_triangles, start=1) if all(adjacent))
+        rwg_to_hcurl_edge_ids = tuple(surface_to_hcurl[i - 1] for i in rwg_dof_edge_ids)
+
+        return {
+            "h1": {
+                "node_ids": list(range(1, len(self.points) + 1)),
+                "trace_node_ids": list(trace_nodes),
+            },
+            "hcurl": {
+                "edges": [list(edge) for edge in volume_edges],
+                "tet_edges": [list(row) for row in tet_edges],
+                "tet_edge_signs": [list(row) for row in tet_edge_signs],
+            },
+            "scalar_bem": {
+                "node_ids": list(range(1, len(trace_nodes) + 1)),
+                "global_node_ids": list(trace_nodes),
+                "triangles": [list(tri) for tri in boundary_triangles],
+            },
+            "rwg": {
+                "edges_local": [list(edge) for edge in surface_edges_local],
+                "edges_global": [list(edge) for edge in surface_edges_global],
+                "tri_edges": [list(row) for row in tri_edges],
+                "tri_edge_signs": [list(row) for row in tri_edge_signs],
+                "edge_triangles": [list(row) for row in edge_triangles],
+                "opposite_vertices_local": [list(row) for row in opposite_vertices],
+                "dof_edge_ids": list(rwg_dof_edge_ids),
+                "dof_edges_local": [list(surface_edges_local[i - 1]) for i in rwg_dof_edge_ids],
+                "dof_edges_global": [list(surface_edges_global[i - 1]) for i in rwg_dof_edge_ids],
+                "hcurl_edge_ids": list(rwg_to_hcurl_edge_ids),
+            },
+            "trace": {
+                "h1_to_scalar_bem_rows": list(range(1, len(trace_nodes) + 1)),
+                "h1_to_scalar_bem_cols": list(trace_nodes),
+                "rwg_to_hcurl_edge_ids": list(rwg_to_hcurl_edge_ids),
+            },
+            "policy": "first_order_h1_p1_hcurl_nedelec0_bem_p1_rwg_only",
+        }
+
 
 def read_netgen_tri_tet_vol(path: str | Path) -> NetgenTriTetVolMesh:
     """Read a tri/tet Netgen ``.vol`` file from disk."""
@@ -279,6 +345,96 @@ def _validate_node_references(mesh: NetgenTriTetVolMesh) -> None:
             for node in elem.nodes:
                 if node < 1 or node > npoints:
                     raise ValueError(f"{section_name} {i} references node {node}, but point count is {npoints}")
+
+
+def _build_tet_edges(
+    tetrahedra: list[tuple[int, int, int, int]],
+) -> tuple[
+    tuple[tuple[int, int], ...],
+    tuple[tuple[int, ...], ...],
+    tuple[tuple[int, ...], ...],
+]:
+    local_pairs = ((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3))
+    raw_edges: list[tuple[int, int]] = []
+    raw_signs: list[int] = []
+    for tet in tetrahedra:
+        for a, b in local_pairs:
+            pair = (tet[a], tet[b])
+            sorted_pair = tuple(sorted(pair))
+            raw_edges.append(sorted_pair)
+            raw_signs.append(1 if pair == sorted_pair else -1)
+
+    edges = tuple(sorted(set(raw_edges)))
+    edge_to_id = {edge: i for i, edge in enumerate(edges, start=1)}
+    tet_edges: list[tuple[int, ...]] = []
+    tet_edge_signs: list[tuple[int, ...]] = []
+    index = 0
+    for _ in tetrahedra:
+        tet_edges.append(
+            tuple(edge_to_id[raw_edges[index + k]] for k in range(len(local_pairs)))
+        )
+        tet_edge_signs.append(
+            tuple(raw_signs[index + k] for k in range(len(local_pairs)))
+        )
+        index += len(local_pairs)
+
+    return edges, tuple(tet_edges), tuple(tet_edge_signs)
+
+
+def _build_tri_edges(
+    triangles: tuple[tuple[int, int, int], ...],
+) -> tuple[
+    tuple[tuple[int, int], ...],
+    tuple[tuple[int, ...], ...],
+    tuple[tuple[int, ...], ...],
+    tuple[tuple[int, int], ...],
+    tuple[tuple[int, int], ...],
+]:
+    local_pairs = ((0, 1), (1, 2), (2, 0))
+    raw_edges: list[tuple[int, int]] = []
+    raw_signs: list[int] = []
+    raw_opposites: list[int] = []
+    for tri in triangles:
+        for a, b in local_pairs:
+            pair = (tri[a], tri[b])
+            sorted_pair = tuple(sorted(pair))
+            raw_edges.append(sorted_pair)
+            raw_signs.append(1 if pair == sorted_pair else -1)
+            raw_opposites.append(next(tri[i] for i in range(3) if i not in (a, b)))
+
+    edges = tuple(sorted(set(raw_edges)))
+    edge_to_id = {edge: i for i, edge in enumerate(edges, start=1)}
+    tri_edges: list[tuple[int, ...]] = []
+    tri_edge_signs: list[tuple[int, ...]] = []
+    edge_triangles = [[0, 0] for _ in edges]
+    opposite_vertices = [[0, 0] for _ in edges]
+
+    index = 0
+    for tri_id, _tri in enumerate(triangles, start=1):
+        tri_edges.append(
+            tuple(edge_to_id[raw_edges[index + k]] for k in range(len(local_pairs)))
+        )
+        tri_edge_signs.append(
+            tuple(raw_signs[index + k] for k in range(len(local_pairs)))
+        )
+        for k in range(len(local_pairs)):
+            edge_id = edge_to_id[raw_edges[index + k]]
+            slots = edge_triangles[edge_id - 1]
+            try:
+                slot = slots.index(0)
+            except ValueError as exc:
+                raise ValueError("surface edge belongs to more than two triangles") from exc
+            slots[slot] = tri_id
+            opposite_vertices[edge_id - 1][slot] = raw_opposites[index + k]
+        index += len(local_pairs)
+
+    return (
+        edges,
+        tuple(tri_edges),
+        tuple(tri_edge_signs),
+        tuple(tuple(row) for row in edge_triangles),
+        tuple(tuple(row) for row in opposite_vertices),
+    )
 
 
 def _sub(a: tuple[float, float, float], b: tuple[float, float, float]) -> tuple[float, float, float]:
