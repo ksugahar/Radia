@@ -1034,24 +1034,24 @@ py::array_t<double> GetFaceGeom(int intrc_handle) {
 }
 
 /**
- * @brief Per-hex centroid demag field + gradient functionals (the moment-formulation kernel)
+ * @brief Per moment-element centroid demag field + gradient functionals (the moment-formulation kernel)
  * @param intrc_handle Interaction handle from BuildMatrix
- * @return numpy array (nHex, 9, dof): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
+ * @return numpy array (nMom, 9, dof): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
  */
 py::array_t<double> GetCentroidFieldGrad(int intrc_handle) {
-    int nHex = 0, dof = 0;
-    int err = RadGetCentroidFieldGrad(nullptr, &nHex, &dof, intrc_handle);
+    int nMom = 0, dof = 0;
+    int err = RadGetCentroidFieldGrad(nullptr, &nMom, &dof, intrc_handle);
     check_error(err);
-    if (nHex <= 0 || dof <= 0) {
-        throw std::runtime_error("No hex DOFs in interaction matrix");
+    if (nMom <= 0 || dof <= 0) {
+        throw std::runtime_error("No moment MSC DOFs in interaction matrix");
     }
-    py::array_t<double> result({nHex, 9, dof});
-    std::vector<double> data((size_t)nHex * 9 * dof);
-    err = RadGetCentroidFieldGrad(data.data(), &nHex, &dof, intrc_handle);
+    py::array_t<double> result({nMom, 9, dof});
+    std::vector<double> data((size_t)nMom * 9 * dof);
+    err = RadGetCentroidFieldGrad(data.data(), &nMom, &dof, intrc_handle);
     check_error(err);
     auto r = result.mutable_unchecked<3>();
     // C is ROW-MAJOR: C[(h*9 + k)*dof + g]
-    for (int h = 0; h < nHex; h++)
+    for (int h = 0; h < nMom; h++)
         for (int k = 0; k < 9; k++)
             for (int g = 0; g < dof; g++)
                 r(h, k, g) = data[((size_t)h * 9 + (size_t)k) * dof + (size_t)g];
@@ -3711,13 +3711,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("GetLoopBasis", &radia_solver::GetLoopBasis,
           py::arg("intrc_handle"),
           R"pbdoc(
-              Get the yano-MSC cell-graph cycle (loop) basis L of an interaction matrix.
+              Get the historical yano-MSC cell-graph cycle (loop) basis L of an interaction matrix.
 
-              The loops are the field-null subspace of the surface-charge collocation
-              operator N (== HDiv ker(B), the cell/internal-face cycle space).  They sit
-              at eigenvalue 1/chi in A = (1/chi) I - N, so cond(A) ~ mu_r; deflating L
-              makes the high-mu_r solve bounded and mu_r-independent.  Built geometry-only
-              (no SVD): face-center matching -> cell adjacency -> fundamental cycles.
+              The loops are the field-null subspace of the retired EIEM2 surface-charge
+              collocation operator N (== HDiv ker(B), the cell/internal-face cycle space).
+              Runtime deflation/gauge machinery was removed; current surface-charge soft
+              iron uses moment-yano, and HDiv-VIM is the loop-free FEEC complement.  Built
+              geometry-only (no SVD): face-center matching -> cell adjacency -> fundamental cycles.
 
               Args:
                   intrc_handle: Interaction handle from BuildMatrix()
@@ -3749,12 +3749,12 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("GetCentroidFieldGrad", &radia_solver::GetCentroidFieldGrad,
           py::arg("intrc_handle"),
           R"pbdoc(
-              Per-hex centroid demag field + gradient functionals -- the kernel of the
+              Per moment-element centroid demag field + gradient functionals -- the kernel of the
               parameter-free yano-MSC moment formulation (replaces the eval-point alpha and
               the finite-difference conditioning noise; see examples/vim/
               yano_moment_analytic_selfterm.py).
 
-              For each hex element, the demag field H and gradient gradH at the element
+              For each moment element, the demag field H and gradient gradH at the element
               CENTROID as linear functionals of every source DOF charge:
                 SELF face  -> bare charged-face field (interior centroid, finite, no center
                               charge -- patch-test exact: single cube -> demag N=1/3);
@@ -3766,7 +3766,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   intrc_handle: Interaction handle from BuildMatrix()
 
               Returns:
-                  numpy array (nHex, 9, dof): component k in
+                  numpy array (nMom, 9, dof): component k in
                   (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g.  Use C[e,0:3,:] as the
                   centroid field functional F0 and C[e,3:9,:] as the symmetric gradient Ginv.
           )pbdoc");
@@ -3775,8 +3775,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
           py::arg("intrc_handle"), py::arg("chi"), py::arg("hx"), py::arg("hy"), py::arg("hz"),
           R"pbdoc(
               Parameter-free MOMENT-yano system matrix A (dof x dof, row-major) + rhs (dof) for a
-              UNIFORM linear material (chi) in a UNIFORM applied field (hx,hy,hz).  Per hex (6 face-
-              charge DOF): 3 dipole + 1 monopole + 2 diagonal-quadrupole rows = moment of sigma matched
+              UNIFORM linear material (chi) in a UNIFORM applied field (hx,hy,hz).  Per moment
+              element: 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched
               to chi*{H,gradH}(centroid) via GetCentroidFieldGrad.  Step-1 verification of the
               EIEM2 -> moment-yano upgrade (matches examples/vim/yano_moment_iter_scaling.py::build).
 
@@ -3805,12 +3805,12 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("HMatrixDensify", &radia_solver::HMatrixDensify,
           py::arg("intrc_handle"),
           R"pbdoc(
-              Densify the actual HACApK (ACA+) system operator.
+              Densify the actual MMM HACApK (ACA+) system operator.
 
-              Builds the MSC H-matrix for the interaction handle and applies it
+              Builds the MMM H-matrix for the interaction handle and applies it
               to unit vectors, returning the dense A = -N + diag(1/chi) in the
-              original DOF ordering. Use to validate the H-matrix against the
-              exact dense matrix (eigenvalues, deflation).
+              original DOF ordering. Current moment-yano MSC H-matrix validation uses
+              MomentHMatrixProbe instead.
 
               Args:
                   intrc_handle: Interaction handle from BuildMatrix()
