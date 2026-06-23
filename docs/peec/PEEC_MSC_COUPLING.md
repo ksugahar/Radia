@@ -187,8 +187,10 @@ In practice:
 
 **n_msc_dof**:
 - Hexahedron: 6 DOF/element (6 faces)
-- Tetrahedron: 3 DOF/element (Mx, My, Mz)
-- Mixed mesh: Variable DOF per element
+- Wedge / pyramid: 5 DOF/element (5 faces)
+- Tetrahedron / RecMag: 3 DOF/element (MMM Mx, My, Mz)
+- Mixed surface-charge meshes (hex+wedge+pyramid) use variable DOF per element.
+- A single soft-iron `rad.Solve` that mixes MMM tet/RecMag elements with MSC hex/wedge/pyramid elements is rejected with `Radia::Error204`; split the solve or use the mesh-backed HDiv-VIM path.
 
 ### Linear vs Nonlinear
 

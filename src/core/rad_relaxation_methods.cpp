@@ -2210,7 +2210,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	size_t matrix_size = (size_t)totalDOF * (size_t)totalDOF;
 	// SystemMatrix (the dense O(N^2) working copy for dgesv) is allocated LAZILY (Phase 2 Increment 4):
 	// the moment+method2 H-BiCGSTAB path returns before any dense solve, so on that scalable path we never
-	// pay the O(N^2).  Both dense paths (the moment dense-LU fallback and the EIEM2 collocation path) call
+	// pay the O(N^2).  Dense paths (moment dense-LU fallback and MMM dense LU) call
 	// ensureSystemMatrix() first; it returns false on OOM (-> caller returns -2).
 	std::vector<double> SystemMatrix;
 	bool systemMatrixReady = false;
@@ -2231,15 +2231,15 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 	// MOMENT-yano: assemble the parameter-free MOMENT system (BuildMomentSystemCore) for surface-charge
 	// polyhedra (hex 6-DOF + wedge/pyramid 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
-	// sigma in DOF order -- a drop-in for the EIEM2 transpose + dgesv + write-back below.  moment is now
-	// UNCONDITIONAL (the yano_moment=False opt-out was removed in Phase 3b-1); only Tet (3 DOF = MMM) and
-	// mixed tet+MSC fall to the EIEM2 path (removed with a fail-loud guard in 3b-2).
+	// sigma in DOF order -- a drop-in for the retired EIEM2 transpose + dgesv + write-back.  moment is now
+	// UNCONDITIONAL (the yano_moment=False opt-out was removed in Phase 3b-1).  Pure tet (3 DOF = MMM)
+	// uses the dense MMM path below; mixed tet+MSC is rejected fail-loud in MakeAutoRelax.
 	bool useMoment = true;
 	if(useMoment) { for(int e = 0; e < AmOfMainElem; e++) { int dd = IntrctPtr->GetElementDOF(e); if(dd != 6 && dd != 5) { useMoment = false; break; } } }
 
 	if(useMoment)
 	{
-		std::vector<int> momElem; IntrctPtr->CollectMomentElems(momElem);   // hex(6)+wedge(5), matches BuildMomentSystemCore
+		std::vector<int> momElem; IntrctPtr->CollectMomentElems(momElem);   // hex(6)+wedge/pyramid(5), matches BuildMomentSystemCore
 		int nMom = (int)momElem.size();
 		std::vector<double> chiPerHex((size_t)nMom), HextPerHex((size_t)nMom*3);
 		for(int h = 0; h < nMom; h++)
@@ -2276,7 +2276,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	}
 	else
 	{
-	if(!ensureSystemMatrix()) return -2;   // EIEM2 collocation path needs the dense BaseMatrix copy
+	if(!ensureSystemMatrix()) return -2;   // pure-MMM dense path needs the dense BaseMatrix copy
 	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), matrix_size * sizeof(double));
 
 	// Update diagonal and RHS based on current chi
@@ -2340,7 +2340,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			}
 		}
 	}
-	}  // end else (EIEM2 collocation path; the moment path above already filled SystemMatrix + RHS)
+	}  // end else (pure-MMM dense path; the moment path above already filled SystemMatrix + RHS)
 
 	// Solve using LAPACK LU (dgesv solves A*x = b in-place)
 	auto t_lu_start = std::chrono::high_resolution_clock::now();
@@ -3365,7 +3365,7 @@ bool radTRelaxationMethNo_2::BuildBlockJacobiPreconditioner_HMatrix(
 
 		// Diagonal block A_block = -N_block + (1/chi) I, extracted DOF-generically from the H-matrix
 		// kernel via GetInteractionMatrixElement (returns +N).  Works for any element DOF; the moment-yano
-		// MSC path never reaches method 2 here (pure hex/wedge is rerouted to the LU/Picard moment driver
+		// MSC path never reaches method 2 here (pure hex/wedge/pyramid is rerouted to the LU/Picard moment driver
 		// in SolveGen), so this block-Jacobi only ever sees 3-DOF tetrahedra (MMM).
 		for(int i = 0; i < dof; i++)
 		{

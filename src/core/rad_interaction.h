@@ -502,18 +502,18 @@ public:
 	void BuildLoopBasis(std::vector<double>& Lflat, int& nLoop) const;
 	// Per-DOF hex face geometry in the matrix DOF order (for div(B)=0 / RHS / moment studies in Python).
 	// Gflat is ROW-MAJOR (m_totalDOF x 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz].
-	// Non-hex DOFs (tet/wedge) get elem_local=-1 and zeros.  See .cpp.
+	// Non-hex DOFs (tet/wedge/pyramid) get elem_local=-1 and zeros.  See .cpp.
 	void BuildFaceGeom(std::vector<double>& Gflat) const;
-	// Per-hex demag field H and gradient gradH at the element CENTROID, as linear functionals of each
+	// Per moment element demag field H and gradient gradH at the element CENTROID, as linear functionals of each
 	// source DOF charge -- the analytic self-term kernel of the parameter-free moment formulation.
 	// SELF face: bare charged-face field (centroid is interior -> finite, no center charge needed).
 	// MUTUAL face: yano dipole layer = bare face - area*(point charge @ source center) (finite distance).
-	// Cflat is ROW-MAJOR (nHex x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
+	// Cflat is ROW-MAJOR (nMom x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
 	// -> Cflat[(h*9+k)*m_totalDOF + g].  H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.  See .cpp.
 	void BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const;
 	// e-ordered list of MOMENT elements (hex 6-DOF + wedge/pyramid 5-DOF surface-charge polyhedra); for a pure-hex
 	// model this equals m_hexaElemIndices order.  Single source of moment element ordering (dense path +
-	// the SolveLinearStep moment branch).  Generalizes the moment formula from hex-only to hex+wedge.
+	// the SolveLinearStep moment branch).  Generalizes the moment formula from hex-only to all 5/6-face MSC elements.
 	void CollectMomentElems(std::vector<int>& out) const;
 	// Field H[3] + grad gH[6] (xx,yy,zz,xy,xz,yz) at a target centroid ce3 from ONE unit-charge face (V4
 	// corners, srcCenter = the face's element center, area), INCLUDING the IMA mirror images.  isSelf =
@@ -531,9 +531,9 @@ public:
 	// 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
 	// (global field/grad from BuildCentroidFieldGrad, local moments from the element geometry).  Rows 2-norm
 	// normalized.  A row-major (dof x dof), rhs length dof.  Uniform linear chi + uniform applied field Happ
-	// (Step-1 verification path vs examples/vim moment prototype; hex-only).
+	// (Step-1 verification path vs examples/vim moment prototype; hex/wedge/pyramid).
 	void BuildMomentSystem(double chi, const double Happ[3], std::vector<double>& A, std::vector<double>& rhs) const;  // uniform-field wrapper
-	// Per-element chi + per-element external field (at hex centroid, HextPerHex[h*3+k]); A column = face DOF
+	// Per-element chi + per-element external field (at moment-element centroid, HextPerHex[h*3+k]); A column = face DOF
 	// so dgesv's solution is sigma in DOF order.  The solve path uses this (coil sources are not uniform).
 	void BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex, std::vector<double>& A, std::vector<double>& rhs, bool normalize = true) const;
 	// EIEM2 surface-charge block kernels (Compute6x6BlockFast / Compute5x5BlockFast /

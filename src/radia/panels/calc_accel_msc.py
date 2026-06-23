@@ -189,7 +189,7 @@ def solve_msc(coil_script="", vol_file="",
         tol: Convergence tolerance
         relax: Under-relaxation (0=full step)
         msh_output: Optional GMSH .msh output path
-        demag_backend: 'yano' (legacy collocation MSC, the default) or 'hdiv'
+        demag_backend: only 'hdiv' is exposed by this panel
             (the FEEC HDiv-VIM via radia.vim.soft_iron_from_mesh + rad.Solve).
             The 'hdiv' backend is KELVIN-LESS and iron-only: the .vol must
             contain ONLY the 'yoke' volume material (no air / kelvin elements),
@@ -279,13 +279,14 @@ def solve_msc(coil_script="", vol_file="",
     solver_names = {0: "LU", 1: "BiCGSTAB", 2: "HACApK"}
     n_dof = n_hex * 6 + n_tet * 3 + n_wedge * 5
 
-    # --- FEEC HDiv-VIM backend (radia.vim) -- the only soft-iron demag backend.  KELVIN-less, IRON-ONLY:
+    # --- FEEC HDiv-VIM backend (radia.vim) -- the only backend exposed by this panel.  KELVIN-less, IRON-ONLY:
     # the VIM solves the WHOLE registered mesh as iron, so the .vol must contain ONLY 'yoke' volume
     # elements (no air / kelvin).  Tet / hex / wedge all supported.  IMA mirror symmetry (the reduced
     # 1/2,1/4,1/8 model) is supported via the image-charge Gram (currently the DENSE analytic path).
     if demag_backend != "hdiv":
-        return {"error": "demag_backend=%r is not available: the yano-type collocation MSC demag has "
-                         "been removed from Radia.  Use demag_backend='hdiv' (the FEEC HDiv-VIM)."
+        return {"error": "demag_backend=%r is not available in this panel. Use demag_backend='hdiv' "
+                         "(the FEEC HDiv-VIM). Mesh-less moment-yano MSC remains available through "
+                         "rad.Solve on ObjHexahedron/ObjWedge/ObjPyramid models."
                          % (demag_backend,)}
     from ngsolve import VOL as _VOL, TaskManager as _TM
     n_nonyoke = sum(1 for el in mesh.Elements(_VOL) if el.mat != "yoke")
@@ -486,8 +487,7 @@ def build_argparser():
     parser.add_argument("--demag-backend", default="hdiv",
                         choices=["hdiv"],
                         help="Demag backend: 'hdiv' (the FEEC HDiv-VIM; KELVIN-less, requires an "
-                             "iron-only .vol, does not support IMA symmetry yet).  The legacy "
-                             "'yano' collocation MSC backend has been removed.")
+                             "iron-only .vol, does not support IMA symmetry yet).")
     parser.add_argument("--max-iter", type=int, default=100,
                         help="Max nonlinear iterations")
     parser.add_argument("--tol", type=float, default=1e-3,
