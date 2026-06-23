@@ -1663,6 +1663,37 @@ def cogging_torque_order(slots, poles):
     return slots * poles // gcd(slots, poles)
 
 
+def machine_symmetry_sector(slots, poles):
+    """Minimal slot/pole symmetry sector for a rotating-machine FE model.
+
+    ``slots`` is the stator slot count and ``poles`` is the rotor pole count (not pole pairs).  The
+    common geometry repeats ``g = gcd(slots, poles)`` times per mechanical revolution, so the smallest
+    sector angle is ``360/g`` degrees and whole-machine forces/torques from that sector are multiplied
+    by ``g``.
+
+    If the sector contains an odd number of poles, the PM polarity flips across the sector boundary and
+    magnetic-vector-potential models normally use an anti-periodic boundary.  If it contains an even
+    number of poles, a periodic boundary is the usual symmetry.
+    """
+    from math import gcd
+    s = int(slots)
+    p = int(poles)
+    if s < 1 or p < 1:
+        raise ValueError("slots and poles must be positive")
+    g = gcd(s, p)
+    poles_per_sector = p // g
+    return {
+        "slots": s,
+        "poles": p,
+        "sectors": g,
+        "symmetry_factor": g,
+        "sector_angle_deg": 360.0 / g,
+        "slots_per_sector": s // g,
+        "poles_per_sector": poles_per_sector,
+        "boundary": "anti-periodic" if poles_per_sector % 2 else "periodic",
+    }
+
+
 def cogging_period_deg(slots, poles):
     """Mechanical-angle period [deg] of the cogging torque = 360 / LCM(slots, poles)
     (:func:`cogging_torque_order`).  One cogging cycle spans this angle; a one-slot-pitch skew
