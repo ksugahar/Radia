@@ -1157,6 +1157,18 @@ def effective_air_gap(slot_pitch, gap, slot_opening):
     return carter_coefficient(slot_pitch, gap, slot_opening) * gap
 
 
+def slotted_air_gap_permeance_factor(slot_pitch, gap, slot_opening):
+    """Mean air-gap permeance factor of a slotted gap relative to a smooth gap.
+
+    Carter's coefficient is defined as ``k_C = P_smooth / P_slot`` and
+    ``g_eff = k_C * g``. This helper returns the companion ratio
+    ``P_slot / P_smooth = 1/k_C`` (<= 1): a compact way to apply slotting to
+    average gap flux, magnetising permeance, or simple load-line estimates while
+    keeping the physical gap ``g`` explicit.
+    """
+    return 1.0 / carter_coefficient(slot_pitch, gap, slot_opening)
+
+
 def magnetizing_inductance_per_phase(gap_diameter, stack_length, effective_gap, pole_pairs,
                                      kw1, turns_per_phase):
     """Per-phase (self) MAGNETISING inductance L_mu of an AC machine -- the air-gap main-flux
