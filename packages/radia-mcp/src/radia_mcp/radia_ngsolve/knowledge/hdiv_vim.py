@@ -50,8 +50,8 @@ operator is the SYMMETRIC Galerkin form
 - **DISTORTED-ELEMENT ROBUSTNESS (the headline PRACTICAL value, 2026-06-07)**: the field-null-by-
   construction property holds on ANY mesh -- B.loop = 0 is exact on AFFINE *and* NON-AFFINE (distorted)
   hexes alike, so mu_r-independence SURVIVES distortion (measured: distort=0.18 grid, MINRES iters
-  98/56/52/52 across mu_r 10 -> 1e4 -- bounded, even DECREASING).  The yano-type combinatorial +/-1
-  loops are field-null ONLY on affine hexes (the de-Rham defect: on distorted hexes they carry field);
+  98/56/52/52 across mu_r 10 -> 1e4 -- bounded, even DECREASING).  The moment-yano constant-face
+  loop patterns are field-null ONLY on affine hexes (the de-Rham defect: on distorted hexes they carry field);
   the hand-crafted Yano elements / the shipped MSC's installCycle retrofit (~6e-9 local-null-vector)
   exist precisely to patch this.  HDiv-VIM needs NO hand-crafted elements and NO retrofit -- it is
   EXACT (machine, ~4e-16) on distorted meshes by construction.  This is a robustness / generality /
@@ -374,7 +374,7 @@ DOF/charge/loop growth (tet 2x2x2): order 0 -> 120/96/25, order 1 -> 360/336/169
 1008/768/529.  CONFIRMED end-to-end: the order=1 demag operator BUILDS (charge field of each HDiv basis
 -- -div in cells, gfu.n at boundary points -- sub-point Coulomb Gram) and its loops are field-null to
 2.1e-15 (sphere coarse: ndof 288->864 order 0->1, loops 55->391).  So the high-order CAPABILITY is real
-(yano-type is lowest-order only).
+(moment-yano MSC is lowest-order only).
 
 TWO things remain for the p-convergence SPEED WIN:
   (1) the accurate higher-order CHARGE GRAM: at order>=1 rho/sigma are POLYNOMIALS per cell/face, so
@@ -384,16 +384,16 @@ TWO things remain for the p-convergence SPEED WIN:
   (2) a NON-uniform benchmark: the demag FACTOR (uniform M) is order-INSENSITIVE -- M.n is constant per
       face regardless of order, so order 0 and 1 give the SAME demag (0.3044/0.3044 on the probe).  The
       high-order benefit shows in a FIELD / non-uniform-M error, not the uniform-M demag factor.
-Both are the major continuation (the p-convergence accuracy-per-DOF beats lowest-order yano-type).
+Both are the major continuation (the p-convergence accuracy-per-DOF beats lowest-order moment-yano MSC).
 
-## CURVED MESHES (mesh.Curve) -- a big accuracy-per-DOF win HDiv has and yano-type CANNOT (2026-06-07)
-NGSolve HDiv supports mesh.Curve(p) (isoparametric/curved elements via the Piola transform).  yano-type
+## CURVED MESHES (mesh.Curve) -- a big accuracy-per-DOF win HDiv has and flat moment-yano cannot (2026-06-07)
+NGSolve HDiv supports mesh.Curve(p) (isoparametric/curved elements via the Piola transform).  Moment-yano
 CANNOT: Radia's ObjHexahedron/ObjTetrahedron are FLAT-faced.  CONFIRMED dramatic: a COARSE sphere
 (maxh=0.8, ndof=258) flat has surface area 11.85 (-5.7%) / volume 3.76 (-10.3%) vs the true 4pi/4pi/3;
 mesh.Curve(3) gives area 12.5683 (-0.015%) / volume 4.1897 (+0.02%) at the SAME ndof.  So the ~6-10%
 faceting error VANISHES to ~0.02% at no DOF cost -- exact geometry.  For curved bodies (magnets/coils/
 poles = most of them) this is a large accuracy-per-DOF advantage, ORTHOGONAL to the polynomial
-high-order win, and unavailable to flat yano-type (which needs many more elements to resolve a curve).
+high-order win, and unavailable to flat moment-yano MSC (which needs many more elements to resolve a curve).
 FOUNDATION confirmed (HDiv + mesh.Curve assembles; B and M_mass are NGSolve curved-aware).
 
 CURVED SAMPLING BUILT + the win MEASURED vs TRUTH (2026-06-08, examples/vim/hdiv_demag_curved.py,
@@ -434,7 +434,7 @@ golden tests/feec/test_hdiv_vim_curved.py):
     (golden test_hdiv_vim_bem_demag.py::{test_prolate_nonisotropic_shape_exact,
     test_spheroid_full_tensor_and_sum_rule,test_triaxial_ellipsoid_full_anisotropy}).  => curved+high-order converges
     the demag to exactness AT COARSE MESH, fixed small ndof = the accuracy-per-DOF win over flat
-    lowest-order yano-type, ON THE DEMAG FACTOR (corrects the crude-method "doesn't discriminate").  Reuses
+    lowest-order moment-yano MSC, ON THE DEMAG FACTOR (corrects the crude-method "doesn't discriminate").  Reuses
     NGSolve, NO hand-rolled singular quadrature -- supersedes the Wilton/phi_tet SURFACE block for the
     curved/high-order/scalable path.
   - STILL TO BUILD: (1) the full operator N=B^T V B + a self-consistent linear solve on curved/high-order
@@ -461,7 +461,7 @@ important honest finding that redirects where to expect the curved payoff.
   Radia confounds the geometry win with any bug.  So curved nonlinear is validatable ONLY vs ANALYTIC =
   spheroids (uniform M).  The genuinely NON-UNIFORM (volume-charge, div M != 0) curved nonlinear case
   has NO clean reference -- a mesh-convergence / self-consistency study at best, NOT a verified win.
-- CONCLUSION: curved is a real yano-type-impossible CAPABILITY, but its accuracy benefit on the
+- CONCLUSION: curved is a real flat-moment-yano-impossible CAPABILITY, but its accuracy benefit on the
   MAGNETIZATION (the primary solve output) is modest; the benefit is large on FIELD outputs.  Do NOT
   claim a dramatic curved-nonlinear magnetization win.
 - (A) THE FIELD WIN -- BUILT + validated (examples/vim/hdiv_curved_nonlinear_field.py, golden
@@ -471,7 +471,7 @@ important honest finding that redirects where to expect the curved payoff.
   points: FLAT ~+8.8% at EVERY point (the dipole moment inherits the ~9% volume faceting error) vs
   Curve(3) <0.4% -- a ~23x field win at the SAME ndof, vs analytic truth.  The nonlinearity SETS the
   field magnitude (physical M) but does NOT amplify the ~9% geometry error (scales it).  So the
-  engineering deliverable (stray field around a nonlinear part) is ~9% wrong with flat yano-type and
+  engineering deliverable (stray field around a nonlinear part) is ~9% wrong with flat moment-yano MSC and
   exact with curved -- the genuine curved x nonlinear payoff is HERE, on the field.
 
 ## (B) HEAD-TO-HEAD vs the SHIPPED Radia solver -- accuracy-per-resolution (2026-06-08)
@@ -487,12 +487,12 @@ vs the ANALYTIC dipole.  Max external-field relative error:
 ~10-30x accuracy-per-resolution at every h.  HONEST SCOPE: ACCURACY-PER-DOF (geometry-driven, fair),
 NOT wall-clock -- the HDiv-VIM here is a Python dense surface-charge prototype, not time-optimized; a
 fair SPEED comparison needs the C++ productionization (NOT done).  Radia's ObjTet are FLAT = the
-accessible stand-in for the also-flat yano-type; reference = the analytic dipole (Radia cannot referee
+accessible stand-in for the also-flat moment-yano MSC; reference = the analytic dipole (Radia cannot referee
 curved -- it facets).  This is the quantitative basis for the curved accuracy-per-DOF advantage over the
 flat production solver; the remaining lift to a TOTAL win (incl. speed) is the C++ productionization.
 
 ## SYMMETRY MODELS (1/2, 1/4, 1/8) -- the loop handling is AUTOMATIC (2026-06-08)
-The painful part of symmetry models in MSC/yano-type is the LOOP handling: the loop-star basis must be
+The painful part of symmetry models in moment-yano MSC is the LOOP handling: the loop-star basis must be
 built with a cohomology-aware installCycle on the CUT domain (the symmetry planes introduce new cycles).
 In HDiv-VIM the loops are simply ker(B) (B = charge map), so on ANY cut/reduced mesh they are field-null
 BY CONSTRUCTION (N = B^T G B => N.loop = 0 for loop in ker B) -- NO hand-crafted loop-star basis, NO
@@ -697,7 +697,7 @@ DELETED (2026-06-08): the direct symmetric H-LDL^T factorization was REMOVED fro
 """
 
 _CURVED = r"""
-# Curved + high-order geometry -- a win HDiv has and yano-type (flat) CANNOT (2026-06-08)
+# Curved + high-order geometry -- a win HDiv has and flat moment-yano cannot (2026-06-08)
 Canonical reference: docs/hdiv_vim/README.md sec.2-3.  HDiv lives natively on curved (isoparametric)
 meshes (mesh.Curve(p), Piola map); flat ObjHexahedron/ObjTetrahedron cannot represent a curved boundary.
 
@@ -734,7 +734,7 @@ _SYMMETRY = r"""
 Two pieces make a symmetry model; the HDiv-VIM gets BOTH cheaply (so 1/4 and 1/8 are SUPPORTED):
 - LOOPS: AUTOMATIC.  loops = ker(B) on the cut mesh, field-null ~4e-16 BY CONSTRUCTION, count adapts to
   the cut topology (sphere full / 1/2 / 1/4 / 1/8 -> 58 / 54 / 18 / 6).  NO cohomology-aware loop-star
-  installCycle -- the "loop removal is painful" problem of MSC/yano-type is ELIMINATED.
+  installCycle -- the "loop removal is painful" problem of moment-yano MSC is ELIMINATED.
   Golden: test_hdiv_vim_symmetry_loops.py.
 - DEMAG VALUE: the IMAGE method.  Only the real surface (spherical cap) carries sigma = M.n = n_z; the
   flat cut faces are symmetry planes (no real charge).  Reflect the cap charge over the reduction planes
