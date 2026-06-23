@@ -1,20 +1,16 @@
 """Gate-2 hex/wedge: the FEEC HDiv-VIM demag solve on HEX and WEDGE meshes, via the POLYTOPE charge Gram
-(build_demag's analytic Gram generalized from tet/triangle to any flat-faced convex cell + quad face: cell
-Newtonian potential = divergence-theorem sum over the convex-hull faces of the exact Wilton triangle
-potential; a quad face = two flat triangles; centroid-fan / Dunavant outer quadrature).  Both the dense
-Python path (analytic_charge_gram) AND the scalable C++ charge-Gram H-matrix (the polytope triangle-soup
-_ChargeGramHMatrix ctor) handle hex/wedge -- scalable=None (default) now uses the C++ H-matrix for ANY
-element type.
+(the C++ polytope triangle-soup _ChargeGramHMatrix ctor: cell Newtonian potential = divergence-theorem
+sum over the convex-hull faces of the exact flat-triangle potential; a quad face = two flat triangles).
+hdiv_demag_solve auto-selects the C++ charge-Gram H-matrix path for ANY element type (tet via
+cell_verts/face_verts, hex/wedge via the polytope triangle soup).
 
 Locks:
   (1) hex- and wedge-meshed cubes have demag_z ~ 1/3 (the physics gate -- isotropic uniform-M body);
   (2) a hex cube's M_avg matches a tet mesh of the same cube (element-type-independent physics);
-  (3) hdiv_demag_solve(scalable=True) on a hex mesh now WORKS (the C++ polytope Gram) and matches the
-      dense polytope Gram (scalable=False) -- the Item-1 scalable hex/wedge increment;
+  (3) NONLINEAR (bh_table) soft iron on a hex cube matches a tet mesh of the same cube;
   (4) rad.Solve(demag_backend='hdiv') dispatches the HEX solve == direct hdiv_demag_solve to machine
       precision and writes per-element M back (ObjM) onto the Radia hex elements;
-  (5) soft_iron_from_mesh on a WEDGE mesh raises a clean NotImplementedError (the container write-back
-      has no ObjWedge import yet) -- while direct hdiv_demag_solve(wedge) DOES solve it (locked by (1)).
+  (5) the same dispatch on a WEDGE mesh (ObjWedge per element).
 """
 import math
 

@@ -85,7 +85,7 @@ def run():
     for maxh in (0.30, 0.22, 0.16, 0.12):
         with ng.TaskManager():
             mesh = ng.Mesh(geo.GenerateMesh(maxh=maxh))
-            d = _core.build_demag(mesh, skip_dense_gram=True)
+            d = _core.build_demag(mesh)
             Mm = d["M_mass"]
             Bcsr = d["B_csr"]
             cell_verts = np.asarray(d["cell_verts"], float)

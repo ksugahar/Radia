@@ -19,7 +19,6 @@ This is a transitional gate: it compares against yano-type while it still ships;
 yano-type is sealed (M5).
 """
 import math
-import warnings
 
 import numpy as np
 import pytest
@@ -30,8 +29,8 @@ import radia as rad  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Box, OCCGeometry  # noqa: E402
 
-from radia.vim import hdiv_demag_solve  # noqa: E402
-from radia.netgen_mesh_import import create_hex_mesh_grid  # noqa: E402
+from radia.vim import hdiv_demag_solve, soft_iron_from_mesh  # noqa: E402
+from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
 MU0 = 4.0e-7 * math.pi
 H0 = 1000.0     # uniform applied field, +z (A/m)
@@ -40,17 +39,18 @@ MU_R = 100.0
 
 
 def _yano_cube_Mz(n):
-    """Volume-average M_z of the soft-iron cube via the yano-type MSC rad.Solve (n x n x n hexes,
-    equal volume -> mean of per-element M_z).  Applied field via ObjBckg B = mu0 H0 (the free-space
-    source field whose H is H0)."""
+    """Volume-average M_z of the soft-iron cube via the yano-type MSC (n x n x n hexes).  The cube is a
+    MakeStructured3DMesh hex mesh -> soft_iron_from_mesh (the canonical .vol/mesh ingestion); demag_backend
+    ='yano' forces the MSC solve on the built ObjHexahedron elements.  Applied field via ObjBckg B = mu0 H0
+    (the free-space source field whose H is H0)."""
     rad.UtiDelAll()
-    core = create_hex_mesh_grid(center=[0, 0, 0], size=[L, L, L], divisions=[n, n, n],
-                                mu_r=MU_R, verbose=False)
+    with ng.TaskManager():
+        mesh = MakeStructured3DMesh(hexes=True, nx=n, ny=n, nz=n,
+                                    mapping=lambda x, y, z: (L * (x - 0.5), L * (y - 0.5), L * (z - 0.5)))
+        core = soft_iron_from_mesh(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     cont = rad.ObjCnt([core, bkg])
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)   # yano backend is deprecated; expected here
-        rad.Solve(cont, 1e-6, 3000, 0)                        # LU
+    rad.Solve(cont, 1e-6, 3000, 0, demag_backend="yano")      # force yano-MSC (LU) on the registered iron
     res = rad.ObjM(core)
     return float(np.mean([m[2] for (_c, m) in res]))
 

@@ -17,12 +17,11 @@ RESULT (sphere, eps=1e-4, leaf=32): the compression IMPROVES with N --
 Over N 322->3560 (11x): dense memory 122x (= N^2, confirming O(N^2)) but H-matrix memory only 45x
 (~ N^1.6) -- SUB-QUADRATIC, trending to O(N log N).  ACA genuinely compresses the far blocks
 (n_lowrank 0->1780).  This is BETTER than the compact MMM/MSC materialize-fallback caveat: the charge
-Gram is a cleaner far-field 1/r kernel.  matvec rel err stays within the ACA eps (1e-4..1e-3; tighter
-eps for large N trades some compression for accuracy).
+Gram is a cleaner far-field 1/r kernel.
 
-HONEST SCOPE: demonstrated to n~3560 here (build_demag forms the dense G as the test reference, which
-is O(N^2) and caps N); the TREND is clear + favorable.  Larger-N (10k+) confirmation needs a charge
-extraction that bypasses the dense-G reference -- the remaining M0 scalability item.
+This demo reports the HACApK build time, memory, and compression vs problem size (the H-matrix matvec is
+the only O(N log N) cost); the charge geometry is extracted straight from the tet mesh via build_demag
+(sparse, no dense Gram).
 """
 import json
 import os
@@ -58,16 +57,16 @@ def run():
             rng = np.random.default_rng(0)
             q = rng.standard_normal(n)
             t0 = time.perf_counter()
-            y = np.asarray(H.matvec(q.tolist()), float)
+            _y = np.asarray(H.matvec(q.tolist()), float)
             t_mv = time.perf_counter() - t0
-            relerr = float(np.linalg.norm(y - d["G"] @ q) / np.linalg.norm(d["G"] @ q))
             rows.append(dict(maxh=h, n_charge=int(n), n_dense=int(st["n_dense"]),
                              n_lowrank=int(st["n_lowrank"]), memory_mb=float(st["memory_mb"]),
                              dense_memory_mb=float(st["dense_memory_mb"]),
                              compression=float(st["compression"]), build_s=float(t_build),
-                             matvec_ms=float(t_mv * 1e3), matvec_relerr=relerr))
+                             matvec_ms=float(t_mv * 1e3)))
             print(f"  n={n:>5}  n_lowrank={st['n_lowrank']:>5}  memMB={st['memory_mb']:>7.2f}  "
-                  f"denseMB={st['dense_memory_mb']:>7.2f}  compr={st['compression']:.3f}  relerr={relerr:.1e}")
+                  f"denseMB={st['dense_memory_mb']:>7.2f}  compr={st['compression']:.3f}  "
+                  f"matvec_ms={t_mv*1e3:.2f}")
     return rows
 
 

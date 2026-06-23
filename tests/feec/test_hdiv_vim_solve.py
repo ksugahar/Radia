@@ -3,7 +3,7 @@ H-matrix operator (rad_hacapk_hdiv, _HDivVimHMatrix).  This is Layer A.5 -- turn
 operator into an actual solver.
 
 The material system is A x = b with A = inv_chi * M_mass - N (symmetric INDEFINITE; its generalized
-eigenvalues vs M_mass are inv_chi - demag_factor, demag_factor in [0,1]).  We solve it with MINRES
+eigenvalues vs M_mass are inv_chi minus the demag factors, which lie in [0,1]).  We solve it with MINRES
 (the principled symmetric-indefinite Krylov method) driven entirely by the build-once H-matrix
 operator's apply_system (= inv_chi M_mass x - N x; N x is the O(N log N) H-matvec) and Jacobi
 preconditioner (diag_system).  Nothing dense enters the solve -- the H-matvec is the only cost.

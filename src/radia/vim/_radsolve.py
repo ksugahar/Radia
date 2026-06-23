@@ -15,11 +15,11 @@ material getter), so this bridge keeps a registry populated at build time by
 magnetization back onto the iron's Radia elements via ``ObjSetM`` so that
 ``rad.Fld`` / ``rad.ObjM`` reflect the HDiv-VIM solution.
 
-Element types: TET meshes use the scalable C++ charge-Gram H-matrix; HEX/WEDGE
-meshes use the dense analytic polytope charge Gram (O(N^2), correct -- verified
-demag_z -> 1/3 on hex/wedge cubes).  :func:`hdiv_demag_solve` (scalable=None)
-auto-selects the path from the mesh element type, so this dispatch is element-agnostic.
-The per-element write-back container is ObjTetrahedron / ObjHexahedron / ObjWedge
+Element types: TET meshes use the C++ charge-Gram H-matrix (cell_verts/face_verts);
+HEX/WEDGE meshes use the C++ polytope triangle-soup charge-Gram H-matrix (verified
+demag -> 1/3 on hex/wedge cubes).  :func:`hdiv_demag_solve` auto-selects the path
+from the mesh element type, so this dispatch is element-agnostic.  The per-element
+write-back container is ObjTetrahedron / ObjHexahedron / ObjWedge
 (netgen_mesh_to_radia allow_hex=allow_wedge=True), so tet/hex/wedge all round-trip.
 """
 import radia as rad

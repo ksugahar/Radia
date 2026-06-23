@@ -67,7 +67,7 @@ _TOL_KW = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "tol
 def _one(maxh, geo):
     with ng.TaskManager():
         mesh = ng.Mesh(geo.GenerateMesh(maxh=maxh))
-        d = _core.build_demag(mesh, skip_dense_gram=True)
+        d = _core.build_demag(mesh)
         Mm = d["M_mass"]; Bcsr = d["B_csr"]
         cell_verts = np.asarray(d["cell_verts"], float)
         face_verts = np.asarray(d["face_verts"], float)

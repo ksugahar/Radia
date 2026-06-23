@@ -12,10 +12,9 @@ REDUCED (1/2, 1/4, 1/8) mesh reproduce the FULL model.
 
 Locks (high mu_r -> non-uniform M -> exercises rho AND sigma signs):
   (1) half (1 plane), quarter (2 planes), octant (3 planes) of a cube + IMA reproduce the FULL cube
-      M_avg and demag to ~1e-3 (operator to machine precision; M via the iterative solve);
+      M_avg and demag to ~1e-3 (the C++ charge-Gram H-matrix folds the images via image_masks/signs);
   (2) a NONLINEAR quarter + IMA matches the full nonlinear cube (rho path under saturation);
-  (3) parse_image_string / image_group give the documented (axis, sign) + product-sign group;
-  (4) hdiv_demag_solve(image=..., scalable=True) is a fail-loud conflict (dense-only for now).
+  (3) parse_image_string / image_group give the documented (axis, sign) + product-sign group.
 """
 import math
 
