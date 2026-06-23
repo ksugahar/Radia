@@ -34,7 +34,8 @@ from .modeling import annular_segment, assembly, polar_array, tube
 __all__ = ["magnetization_tag", "parse_magnetization", "magnetization_map", "cylindrical_magnet",
            "block_magnet", "halbach_ring", "c_core", "solenoid", "pole_tip", "multipole_yoke",
            "h_dipole", "helmholtz_pair", "cos_theta_dipole", "e_core", "slotted_stator", "spm_rotor",
-           "litz_packing_radius", "litz_fill_factor", "litz_wire", "hierarchical_litz",
+           "litz_packing_radius", "litz_fill_factor", "litz_single_layer_metrics", "litz_wire",
+           "hierarchical_litz",
            "rectangular_litz", "rectangular_litz_fill_factor", "litz_serving",
            "involute_gear", "threaded_rod", "airfoil", "blade",
            "gear_rack", "bevel_gear", "worm", "chain_sprocket", "vbelt_pulley",
@@ -291,6 +292,51 @@ def litz_fill_factor(n_strands, strand_radius, bundle_radius):
     if bundle_radius <= 0:
         raise ValueError("bundle_radius must be > 0")
     return n_strands * (strand_radius / bundle_radius) ** 2
+
+
+def litz_single_layer_metrics(n_strands, strand_radius, strand_gap=0.0, serving_thickness=0.0):
+    r"""Geometry metrics for a single-layer round Litz bundle.
+
+    ``n_strands`` equal round strands of copper radius ``strand_radius`` are placed on one circular
+    centre ring.  Adjacent strand edges are separated by ``strand_gap`` (zero means touching), and an
+    optional outer serving/jacket thickness is included in ``served_radius``.  The returned dict contains
+    the centre spacing, centre-ring radius, bare copper envelope radius, served outer radius, and copper
+    fill factors before/after serving.
+
+    This is the compact design table that precedes :func:`litz_wire` and :func:`litz_serving`: it answers
+    "what bundle radius should the CAD use, and what fill factor should the solver/report carry?" before
+    a helical strand is swept.
+    """
+    n = int(n_strands)
+    rs = float(strand_radius)
+    gap = float(strand_gap)
+    serving = float(serving_thickness)
+    if n < 3:
+        raise ValueError("single-layer Litz metrics need >= 3 strands")
+    if rs <= 0.0:
+        raise ValueError("strand_radius must be > 0")
+    if gap < 0.0:
+        raise ValueError("strand_gap must be >= 0")
+    if serving < 0.0:
+        raise ValueError("serving_thickness must be >= 0")
+    center_spacing = 2.0 * rs + gap
+    center_radius = center_spacing / (2.0 * math.sin(math.pi / n))
+    envelope_radius = center_radius + rs
+    served_radius = envelope_radius + serving
+    copper_area = n * math.pi * rs * rs
+    return {
+        "n_strands": n,
+        "strand_radius": rs,
+        "strand_gap": gap,
+        "center_spacing": center_spacing,
+        "center_radius": center_radius,
+        "envelope_radius": envelope_radius,
+        "serving_thickness": serving,
+        "served_radius": served_radius,
+        "copper_area": copper_area,
+        "fill_factor": copper_area / (math.pi * envelope_radius * envelope_radius),
+        "served_fill_factor": copper_area / (math.pi * served_radius * served_radius),
+    }
 
 
 def rectangular_litz_fill_factor(nx, ny, strand_radius, pitch_x, pitch_y=None):
