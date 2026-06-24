@@ -720,6 +720,113 @@ def field_weakening_operating_point(lambda_m, Ld, Lq, Imax, Vmax, omega_e, pole_
     return max(feasible, key=lambda c: c[2]) if feasible else None
 
 
+def pm_drive_operating_point(lambda_m, Ld, Lq, Imax, Vmax, omega_e, pole_pairs,
+                             R=0.0):
+    """Readable PM-machine drive operating point at one speed.
+
+    This wraps the closed-form MTPA/FW/MTPV selector
+    (:func:`field_weakening_operating_point`) and immediately evaluates the dq
+    terminal quantities (:func:`dq_operating_point`).  The returned dict is the
+    row students usually want in a speed-map table: region, ``id/iq``, torque,
+    power, power factor, current utilization, voltage utilization, and margins.
+
+    The selector itself uses the standard ``R=0`` voltage ellipse.  The optional
+    ``R`` is then used only for reporting the terminal voltage and copper loss.
+    With the default ``R=0``, ``voltage_utilization`` and
+    ``voltage_utilization_lossless`` are identical.
+    """
+    if omega_e <= 0.0:
+        raise ValueError("omega_e must be positive")
+    if Imax <= 0.0:
+        raise ValueError("Imax must be positive")
+    if Vmax <= 0.0:
+        raise ValueError("Vmax must be positive")
+
+    omega_base = base_speed_electrical(lambda_m, Ld, Lq, Imax, Vmax, pole_pairs)
+    row = {
+        "omega_e": omega_e,
+        "omega_mech": omega_e / pole_pairs,
+        "omega_base": omega_base,
+        "speed_multiple": omega_e / omega_base if omega_base != 0.0 else math.inf,
+    }
+    selected = field_weakening_operating_point(
+        lambda_m,
+        Ld,
+        Lq,
+        Imax,
+        Vmax,
+        omega_e,
+        pole_pairs,
+    )
+    if selected is None:
+        row.update({
+            "feasible": False,
+            "region": "infeasible",
+        })
+        return row
+
+    id_, iq, torque, region = selected
+    op = dq_operating_point(R, Ld, Lq, lambda_m, id_, iq, omega_e, pole_pairs)
+    voltage_lossless = omega_e * math.hypot(Ld * id_ + lambda_m, Lq * iq)
+    row.update(op)
+    row.update({
+        "feasible": True,
+        "region": region,
+        "id": id_,
+        "iq": iq,
+        "selected_torque": torque,
+        "current_utilization": op["Imag"] / Imax,
+        "current_margin_A": Imax - op["Imag"],
+        "voltage_lossless": voltage_lossless,
+        "voltage_utilization_lossless": voltage_lossless / Vmax,
+        "voltage_utilization": op["Vmag"] / Vmax,
+        "voltage_margin_V": Vmax - op["Vmag"],
+        "voltage_margin_lossless_V": Vmax - voltage_lossless,
+    })
+    return row
+
+
+def pm_drive_speed_sweep(lambda_m, Ld, Lq, Imax, Vmax, pole_pairs,
+                         speed_multiples=(0.5, 1.0, 2.0, 5.0, 10.0), R=0.0):
+    """Build a compact PM-machine drive speed-map table.
+
+    ``speed_multiples`` are relative to :func:`base_speed_electrical`.  The
+    returned dict contains the machine capability verdict, the base speed, and one
+    :func:`pm_drive_operating_point` row per speed multiple.  It is intentionally a
+    small table builder rather than an optimiser; heavy map generation can keep
+    using the lower-level dq helpers directly.
+    """
+    omega_base = base_speed_electrical(lambda_m, Ld, Lq, Imax, Vmax, pole_pairs)
+    rows = [
+        pm_drive_operating_point(
+            lambda_m,
+            Ld,
+            Lq,
+            Imax,
+            Vmax,
+            float(multiple) * omega_base,
+            pole_pairs,
+            R=R,
+        )
+        for multiple in speed_multiples
+    ]
+    return {
+        "parameters": {
+            "lambda_m": lambda_m,
+            "Ld": Ld,
+            "Lq": Lq,
+            "Imax": Imax,
+            "Vmax": Vmax,
+            "pole_pairs": pole_pairs,
+            "R": R,
+        },
+        "speed_multiples": [float(multiple) for multiple in speed_multiples],
+        "speed_capability": field_weakening_speed_capability(lambda_m, Ld, Imax),
+        "omega_base": omega_base,
+        "rows": rows,
+    }
+
+
 def induction_machine_thevenin(V1, R1, X1, Xm):
     """Thevenin source the rotor branch sees in a 3-phase induction-machine single-cage
     equivalent circuit (the shunt magnetizing reactance ``Xm`` moved to the source):

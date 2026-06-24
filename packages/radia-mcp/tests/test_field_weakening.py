@@ -22,6 +22,8 @@ from radia_mcp.radia_ngsolve.solve import (
     dq_torque,
     field_weakening_operating_point,
     field_weakening_speed_capability,
+    pm_drive_operating_point,
+    pm_drive_speed_sweep,
 )
 
 
@@ -138,3 +140,58 @@ def test_wide_cpsr_asymptote_and_finite_speed_cutoff():
     assert field_weakening_operating_point(
         lambda_m, Ld, Lq, Imax, Vmax, 2.0 * omega_base, pole_pairs) is None
     assert _numeric_fw_argmax(lambda_m, Ld, Lq, Imax, Vmax, 2.0 * omega_base, pole_pairs) is None
+
+
+def test_pm_drive_operating_point_rows_match_selector_and_terminal_quantities():
+    lambda_m, Ld, Lq, Imax, Vmax, pole_pairs = (0.1, 8.0e-3, 16.0e-3, 20.0, 120.0, 4)
+    omega_base = base_speed_electrical(lambda_m, Ld, Lq, Imax, Vmax, pole_pairs)
+
+    mtpa = pm_drive_operating_point(lambda_m, Ld, Lq, Imax, Vmax, 0.5 * omega_base, pole_pairs)
+    fw = pm_drive_operating_point(lambda_m, Ld, Lq, Imax, Vmax, 2.0 * omega_base, pole_pairs)
+    mtpv = pm_drive_operating_point(lambda_m, Ld, Lq, Imax, Vmax, 10.0 * omega_base, pole_pairs)
+
+    assert mtpa["region"] == "MTPA"
+    assert fw["region"] == "FW"
+    assert mtpv["region"] == "MTPV"
+    for row in (mtpa, fw, mtpv):
+        assert row["feasible"] is True
+        assert row["selected_torque"] == pytest.approx(row["torque"], rel=1e-12)
+        assert row["current_utilization"] <= 1.0 + 1e-12
+        assert row["voltage_utilization_lossless"] <= 1.0 + 1e-12
+        assert row["voltage_utilization"] == pytest.approx(row["voltage_utilization_lossless"])
+        assert row["omega_mech"] == pytest.approx(row["omega_e"] / pole_pairs)
+    assert fw["current_utilization"] == pytest.approx(1.0, rel=1e-9)
+    assert fw["voltage_utilization"] == pytest.approx(1.0, rel=1e-9)
+    assert mtpv["current_utilization"] < 1.0
+
+
+def test_pm_drive_speed_sweep_records_infeasible_rows():
+    finite = pm_drive_speed_sweep(
+        0.1,
+        0.8e-3,
+        1.6e-3,
+        20.0,
+        120.0,
+        4,
+        speed_multiples=(0.5, 1.0, 1.2, 2.0),
+    )
+    assert finite["speed_capability"]["finite_max_speed"] is True
+    assert finite["rows"][0]["region"] == "MTPA"
+    assert finite["rows"][2]["region"] == "FW"
+    assert finite["rows"][3]["region"] == "infeasible"
+    assert finite["rows"][3]["feasible"] is False
+    assert finite["rows"][3]["speed_multiple"] == pytest.approx(2.0)
+
+    wide = pm_drive_speed_sweep(
+        0.1,
+        8.0e-3,
+        16.0e-3,
+        20.0,
+        120.0,
+        4,
+        speed_multiples=(0.5, 2.0, 10.0),
+        R=0.05,
+    )
+    assert [row["region"] for row in wide["rows"]] == ["MTPA", "FW", "MTPV"]
+    assert wide["rows"][0]["P_cu"] > 0.0
+    assert wide["rows"][0]["voltage_utilization"] > wide["rows"][0]["voltage_utilization_lossless"]
