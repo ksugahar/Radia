@@ -1,0 +1,432 @@
+{
+  "kind": "netgen_vol_boundary_traction_moment_validation",
+  "validation_class": true,
+  "force_learning": "boundary vector traction rows reduce to force and pivot moments by triangle-centroid integration",
+  "checks": {
+    "builtin_zmax_centroid_m": [
+      1.0,
+      1.5,
+      5.0
+    ],
+    "builtin_zmax_force_N": [
+      6.0,
+      -12.0,
+      18.0
+    ],
+    "builtin_zmax_moment_Nm": [
+      87.0,
+      12.0,
+      -21.0
+    ],
+    "builtin_zmax_shifted_moment_Nm": [
+      0.0,
+      1.3322676295501878e-15,
+      4.440892098500626e-16
+    ],
+    "builtin_zmax_resultant_force_error_N": 0.0,
+    "builtin_zmax_resultant_moment_error_Nm": 0.0
+  },
+  "records": [
+    {
+      "label": "builtin_named_box",
+      "mesh_summary": {
+        "points": 9,
+        "surface_triangles": 12,
+        "tetrahedra": 12,
+        "materials": 1,
+        "boundary_names": 6
+      },
+      "traction_N_per_m2": [
+        1.0,
+        -2.0,
+        3.0
+      ],
+      "rows": [
+        {
+          "boundary_number": 1,
+          "name": "xmin",
+          "traction_N_per_m2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "traction_source": "default",
+          "surface_area": 15.0,
+          "vector_area": [
+            -15.0,
+            0.0,
+            0.0
+          ],
+          "unit_normal": [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          "centroid_m": [
+            0.0,
+            1.5,
+            2.5
+          ],
+          "force_N": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "force_magnitude_N": 0.0,
+          "pivot_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_about_pivot_Nm": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_magnitude_Nm": 0.0
+        },
+        {
+          "boundary_number": 2,
+          "name": "xmax",
+          "traction_N_per_m2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "traction_source": "default",
+          "surface_area": 15.0,
+          "vector_area": [
+            15.0,
+            0.0,
+            0.0
+          ],
+          "unit_normal": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "centroid_m": [
+            2.0,
+            1.5,
+            2.5
+          ],
+          "force_N": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "force_magnitude_N": 0.0,
+          "pivot_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_about_pivot_Nm": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_magnitude_Nm": 0.0
+        },
+        {
+          "boundary_number": 3,
+          "name": "ymin",
+          "traction_N_per_m2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "traction_source": "default",
+          "surface_area": 10.0,
+          "vector_area": [
+            0.0,
+            -10.0,
+            0.0
+          ],
+          "unit_normal": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "centroid_m": [
+            1.0,
+            0.0,
+            2.5
+          ],
+          "force_N": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "force_magnitude_N": 0.0,
+          "pivot_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_about_pivot_Nm": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_magnitude_Nm": 0.0
+        },
+        {
+          "boundary_number": 4,
+          "name": "ymax",
+          "traction_N_per_m2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "traction_source": "default",
+          "surface_area": 10.0,
+          "vector_area": [
+            0.0,
+            10.0,
+            0.0
+          ],
+          "unit_normal": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "centroid_m": [
+            1.0,
+            3.0,
+            2.5
+          ],
+          "force_N": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "force_magnitude_N": 0.0,
+          "pivot_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_about_pivot_Nm": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_magnitude_Nm": 0.0
+        },
+        {
+          "boundary_number": 5,
+          "name": "zmin",
+          "traction_N_per_m2": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "traction_source": "default",
+          "surface_area": 6.0,
+          "vector_area": [
+            0.0,
+            0.0,
+            -6.0
+          ],
+          "unit_normal": [
+            0.0,
+            0.0,
+            -1.0
+          ],
+          "centroid_m": [
+            1.0,
+            1.5,
+            0.0
+          ],
+          "force_N": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "force_magnitude_N": 0.0,
+          "pivot_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_about_pivot_Nm": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_magnitude_Nm": 0.0
+        },
+        {
+          "boundary_number": 6,
+          "name": "zmax",
+          "traction_N_per_m2": [
+            1.0,
+            -2.0,
+            3.0
+          ],
+          "traction_source": "name",
+          "surface_area": 6.0,
+          "vector_area": [
+            0.0,
+            0.0,
+            6.0
+          ],
+          "unit_normal": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "centroid_m": [
+            1.0,
+            1.5,
+            5.0
+          ],
+          "force_N": [
+            6.0,
+            -12.0,
+            18.0
+          ],
+          "force_magnitude_N": 22.44994432064365,
+          "pivot_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment_about_pivot_Nm": [
+            87.0,
+            12.0,
+            -21.0
+          ],
+          "moment_magnitude_Nm": 90.29950165975447
+        }
+      ],
+      "zmax_row": {
+        "boundary_number": 6,
+        "name": "zmax",
+        "traction_N_per_m2": [
+          1.0,
+          -2.0,
+          3.0
+        ],
+        "traction_source": "name",
+        "surface_area": 6.0,
+        "vector_area": [
+          0.0,
+          0.0,
+          6.0
+        ],
+        "unit_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "centroid_m": [
+          1.0,
+          1.5,
+          5.0
+        ],
+        "force_N": [
+          6.0,
+          -12.0,
+          18.0
+        ],
+        "force_magnitude_N": 22.44994432064365,
+        "pivot_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "moment_about_pivot_Nm": [
+          87.0,
+          12.0,
+          -21.0
+        ],
+        "moment_magnitude_Nm": 90.29950165975447
+      },
+      "zmax_resultant": {
+        "n_rows": 6,
+        "pivot_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "total_force": [
+          6.0,
+          -12.0,
+          18.0
+        ],
+        "total_force_magnitude": 22.44994432064365,
+        "total_moment": [
+          87.0,
+          12.0,
+          -21.0
+        ],
+        "total_moment_magnitude": 90.29950165975447
+      },
+      "zmax_shifted_pivot_row": {
+        "boundary_number": 6,
+        "name": "zmax",
+        "traction_N_per_m2": [
+          1.0,
+          -2.0,
+          3.0
+        ],
+        "traction_source": "name",
+        "surface_area": 6.0,
+        "vector_area": [
+          0.0,
+          0.0,
+          6.0
+        ],
+        "unit_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "centroid_m": [
+          1.0,
+          1.5,
+          5.0
+        ],
+        "force_N": [
+          6.0,
+          -12.0,
+          18.0
+        ],
+        "force_magnitude_N": 22.44994432064365,
+        "pivot_m": [
+          1.0,
+          1.5,
+          5.0
+        ],
+        "moment_about_pivot_Nm": [
+          0.0,
+          1.3322676295501878e-15,
+          4.440892098500626e-16
+        ],
+        "moment_magnitude_Nm": 1.4043333874306805e-15
+      },
+      "zmax_shifted_resultant": {
+        "n_rows": 6,
+        "pivot_m": [
+          1.0,
+          1.5,
+          5.0
+        ],
+        "total_force": [
+          6.0,
+          -12.0,
+          18.0
+        ],
+        "total_force_magnitude": 22.44994432064365,
+        "total_moment": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "total_moment_magnitude": 0.0
+      }
+    }
+  ]
+}
