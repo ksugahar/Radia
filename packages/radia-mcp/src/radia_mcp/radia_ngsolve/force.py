@@ -23,7 +23,7 @@ import math
 from ngsolve import (CoefficientFunction, InnerProduct, sqrt, dx, ds, Integrate,
                      IfPos, specialcf, Conj, x, y, z)
 
-from .scalar_fem3d import p1_surface_triangle_geometry
+from .scalar_fem3d import p1_surface_triangle_geometry, p1_tetrahedron_geometry
 
 MU0 = 4.0e-7 * math.pi
 EPS0 = 8.8541878128e-12
@@ -443,6 +443,42 @@ def surface_triangle_maxwell_traction_summary(vertices, B, mu=MU0):
         "traction_Pa": traction,
         "integrated_force_N": force,
         "nodal_force_loads_N": [[value / 3.0 for value in force] for _ in range(3)],
+    }
+
+
+def tetrahedron_lorentz_force_summary(vertices, current_density, B):
+    """P1 tetrahedron equivalent nodal load for constant Lorentz force density.
+
+    ``current_density`` is ``J`` [A/m2] and ``B`` is flux density [T].  For a
+    constant field over a first-order tetrahedron,
+
+        f = J x B,    F_e = volume * f
+
+    and the consistent P1 body-force load gives one quarter of ``F_e`` to each
+    vertex.  This is the volume counterpart of
+    :func:`surface_triangle_maxwell_traction_summary`.
+    """
+
+    geom = p1_tetrahedron_geometry(vertices)
+    volume = geom["volume"]
+    j = _float_vector(current_density, "current_density")
+    b = _float_vector(B, "B")
+    if len(j) != 3 or len(b) != 3:
+        raise ValueError("current_density and B must have length 3")
+    force_density = [
+        j[1] * b[2] - j[2] * b[1],
+        j[2] * b[0] - j[0] * b[2],
+        j[0] * b[1] - j[1] * b[0],
+    ]
+    force = [volume * value for value in force_density]
+    return {
+        "volume_m3": volume,
+        "current_density_A_per_m2": j,
+        "B_T": b,
+        "force_density_N_per_m3": force_density,
+        "integrated_force_N": force,
+        "nodal_force_loads_N": [[value / 4.0 for value in force] for _ in range(4)],
+        "p1_shape_function_integral_m3": volume / 4.0,
     }
 
 
