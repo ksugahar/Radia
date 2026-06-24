@@ -98,6 +98,53 @@ class NetgenTriTetVolMesh:
 
         return tuple(abs(v) for v in self.tetrahedron_signed_volumes())
 
+    def tetrahedron_edge_lengths(self) -> tuple[tuple[float, ...], ...]:
+        """Return the six edge lengths of each tetrahedron.
+
+        The local edge order is ``(1,2), (1,3), (1,4), (2,3), (2,4), (3,4)``
+        in the tetrahedron's stored one-based node order.
+        """
+
+        local_pairs = ((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3))
+        rows: list[tuple[float, ...]] = []
+        for tet in self.tetrahedra:
+            coords = [self.points[node - 1] for node in tet.nodes]
+            rows.append(tuple(_norm(_sub(coords[j], coords[i])) for i, j in local_pairs))
+        return tuple(rows)
+
+    def tetrahedron_edge_length_ratios(self) -> tuple[float, ...]:
+        """Return ``max(edge_length) / min(edge_length)`` for each tetrahedron."""
+
+        ratios: list[float] = []
+        for lengths in self.tetrahedron_edge_lengths():
+            min_len = min(lengths)
+            if min_len <= 0.0:
+                raise ValueError("tetrahedron contains a zero-length edge")
+            ratios.append(max(lengths) / min_len)
+        return tuple(ratios)
+
+    def tetrahedron_edge_length_summary(self) -> dict[str, float | int | None]:
+        """Return compact edge-length and edge-ratio summary statistics."""
+
+        rows = self.tetrahedron_edge_lengths()
+        if not rows:
+            return {
+                "tetrahedra": 0,
+                "min_edge": None,
+                "max_edge": None,
+                "mean_edge": None,
+                "max_edge_ratio": None,
+            }
+        lengths = [value for row in rows for value in row]
+        ratios = self.tetrahedron_edge_length_ratios()
+        return {
+            "tetrahedra": len(rows),
+            "min_edge": min(lengths),
+            "max_edge": max(lengths),
+            "mean_edge": sum(lengths) / len(lengths),
+            "max_edge_ratio": max(ratios),
+        }
+
     def total_volume(self) -> float:
         """Return the sum of positive tetrahedron volumes."""
 
