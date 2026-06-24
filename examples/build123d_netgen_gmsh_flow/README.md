@@ -37,6 +37,7 @@ See `docs/research/policy/strategy.md` and `toolchain.md` for the full rationale
 | `demo_ih_multi.py` | Multi-region demo (workpiece + coil + air) |
 | `sweep.py` | 19-case parametric sweep across 4 geometry families (3 single + 1 multi) |
 | `validation_helix_mesh_sweep.py` | Heavier validation-class helix conductor sweep; records analytic/CAD volume error plus mesh/post stats |
+| `validation_halbach_region_sweep.py` | Heavier validation-class segmented Halbach sweep; checks CAD volume, magnetization labels, and one mesh region per segment |
 | `runs/` | Output directory (`*.brep` / `*.step`, `*.msh`, `*_post.msh`, `*.json`, `sweep_summary.json`) |
 
 ## Run
@@ -49,6 +50,8 @@ python sweep.py --quick         # 4 cases (one per family, smoke)
 python sweep.py                 # full sweep (19 cases)
 python validation_helix_mesh_sweep.py --quick  # validation-class baseline
 python validation_helix_mesh_sweep.py          # heavier 4-case helix sweep
+python validation_halbach_region_sweep.py --quick
+python validation_halbach_region_sweep.py
 ```
 
 On a warm Python (all imports cached) the full sweep takes tens of seconds.
