@@ -17,6 +17,7 @@ NGSolve's high-order curved elements.
 | [`validation_cogging_skew_plan.py`](validation_cogging_skew_plan.py) | Validation-class cogging order and one-slot-pitch skew planning table across integer/fractional slot-pole layouts | `cogging_skew_plan`, `cogging_torque_order`, `machine_symmetry_sector`, `skew_factor` |
 | [`validation_nonlinear_bh_circuit_sweep.py`](validation_nonlinear_bh_circuit_sweep.py) | Validation-class nonlinear B-H magnetic-circuit sweep with secant/incremental permeability and MMF split checks | `magnetic_circuit_bh_operating_summary` |
 | [`validation_nonlinear_bh_inductance_sweep.py`](validation_nonlinear_bh_inductance_sweep.py) | Validation-class nonlinear B-H winding-inductance sweep with secant/incremental inductance and constant-mu limit checks | `magnetic_circuit_bh_inductance_summary` |
+| [`validation_air_gap_force_sweep.py`](validation_air_gap_force_sweep.py) | Validation-class air-gap Maxwell pressure / holding-force sweep linked to nonlinear magnetic-circuit B | `air_gap_maxwell_pressure`, `air_gap_holding_force`, `air_gap_force_summary`, `magnetic_circuit_bh_operating_summary` |
 | [`validation_torque_ripple_harmonic_budget.py`](validation_torque_ripple_harmonic_budget.py) | Validation-class three-phase back-EMF harmonic pair budget for 6k torque ripple, including pitch/skew filtering | `three_phase_torque_ripple_pair_table`, `three_phase_torque_ripple_harmonics`, `skewed_winding_factor` |
 
 ```powershell
@@ -31,6 +32,7 @@ python validation_pm_loadline_demag_sweep.py
 python validation_cogging_skew_plan.py
 python validation_nonlinear_bh_circuit_sweep.py
 python validation_nonlinear_bh_inductance_sweep.py
+python validation_air_gap_force_sweep.py
 python validation_torque_ripple_harmonic_budget.py
 ```
 
