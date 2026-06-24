@@ -813,6 +813,114 @@ def air_gap_shear_torque_summary(
     }
 
 
+def air_gap_shear_torque_from_angle_samples(
+    angles_rad,
+    B_radial_T,
+    B_tangential_T,
+    radius_m,
+    axial_length_m=1.0,
+    periodic=True,
+    period_rad=2.0 * math.pi,
+    mu=MU0,
+):
+    """Integrate sampled air-gap Maxwell shear stress into machine torque.
+
+    Electric-machine solvers often export air-gap samples around a cylindrical
+    contour.  For each angle sample,
+
+        tau(theta) = Br(theta) Bt(theta) / mu
+
+    and the torque is
+
+        T = r^2 L integral tau(theta) dtheta.
+
+    If ``periodic=True`` the last segment wraps from the last sample to the
+    first sample plus ``period_rad``; omit a duplicate endpoint.  If
+    ``periodic=False`` only the provided angular span is integrated.  The
+    returned rows are segment contributions, useful for teaching and for
+    checking sector-model scaling before comparing whole-machine torque.
+    """
+
+    angles = [float(value) for value in angles_rad]
+    br = [float(value) for value in B_radial_T]
+    bt = [float(value) for value in B_tangential_T]
+    if len(angles) != len(br) or len(angles) != len(bt):
+        raise ValueError("angles_rad, B_radial_T, and B_tangential_T must have the same length")
+    if len(angles) < 2:
+        raise ValueError("at least two angle samples are required")
+    if any(angles[i + 1] <= angles[i] for i in range(len(angles) - 1)):
+        raise ValueError("angles_rad must be strictly increasing")
+    radius = float(radius_m)
+    length = float(axial_length_m)
+    if radius < 0.0:
+        raise ValueError("radius_m must be >= 0")
+    if length < 0.0:
+        raise ValueError("axial_length_m must be >= 0")
+    mu = float(mu)
+    if mu <= 0.0:
+        raise ValueError("mu must be > 0")
+    period = float(period_rad)
+    if periodic and period <= 0.0:
+        raise ValueError("period_rad must be > 0")
+
+    shear = [
+        air_gap_shear_stress(bri, bti, mu=mu)
+        for bri, bti in zip(br, bt)
+    ]
+    n = len(angles)
+    segment_count = n if periodic else n - 1
+    rows = []
+    integral_shear = 0.0
+    for i in range(segment_count):
+        j = (i + 1) % n
+        theta0 = angles[i]
+        theta1 = angles[j]
+        if periodic and j == 0:
+            theta1 += period
+        dtheta = theta1 - theta0
+        if dtheta <= 0.0:
+            raise ValueError("angle segment width must be > 0")
+        shear_avg = 0.5 * (shear[i] + shear[j])
+        tangential_force = shear_avg * radius * length * dtheta
+        torque = tangential_force * radius
+        integral_shear += shear_avg * dtheta
+        rows.append({
+            "segment_index": i + 1,
+            "angle_start_rad": theta0,
+            "angle_end_rad": theta1,
+            "angle_width_rad": dtheta,
+            "B_radial_start_T": br[i],
+            "B_radial_end_T": br[j],
+            "B_tangential_start_T": bt[i],
+            "B_tangential_end_T": bt[j],
+            "shear_start_Pa": shear[i],
+            "shear_end_Pa": shear[j],
+            "shear_average_Pa": shear_avg,
+            "tangential_force_N": tangential_force,
+            "torque_Nm": torque,
+        })
+
+    torque_total = radius * radius * length * integral_shear
+    force_total = radius * length * integral_shear
+    integrated_angle = sum(row["angle_width_rad"] for row in rows)
+    return {
+        "n_samples": n,
+        "n_segments": len(rows),
+        "periodic": bool(periodic),
+        "period_rad": period,
+        "radius_m": radius,
+        "axial_length_m": length,
+        "mu": mu,
+        "integrated_angle_rad": integrated_angle,
+        "integral_shear_dtheta_Pa_rad": integral_shear,
+        "average_shear_stress_Pa": integral_shear / integrated_angle if integrated_angle > 0.0 else math.nan,
+        "tangential_force_N": force_total,
+        "torque_Nm": torque_total,
+        "torque_per_axial_length_N": torque_total / length if length > 0.0 else math.inf,
+        "rows": rows,
+    }
+
+
 def coenergy_torque_from_angle_samples(
     angles_rad,
     coenergy_J,
