@@ -38,6 +38,7 @@ from radia_mcp.build123d.archetypes import (  # noqa: E402
 
 
 OUT = HERE / "runs" / "validation_halbach_region_sweep"
+SUMMARY_JSON = HERE / "validation_halbach_region_sweep_summary.json"
 
 
 CASES = [
@@ -186,6 +187,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true", help="run only the 8-segment baseline")
     parser.add_argument("--out-dir", type=Path, default=OUT)
+    parser.add_argument("--summary", type=Path, default=SUMMARY_JSON)
     parser.add_argument("--volume-rtol", type=float, default=1.0e-6)
     args = parser.parse_args()
 
@@ -223,7 +225,8 @@ def main() -> int:
         "n_ok": sum(1 for record in records if record.get("validation", {}).get("passed")),
         "n_total": len(records),
     }
-    summary_path = args.out_dir / "validation_halbach_region_sweep_summary.json"
+    summary_path = args.summary
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(
         f"[validation_halbach] {summary['n_ok']} ok / {summary['n_total']} total "
