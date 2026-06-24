@@ -1582,6 +1582,67 @@ def magnetic_circuit_bh_operating_point(mmf, iron_path, h_of_b, gap=0.0):
     return 0.5 * (lo + hi)
 
 
+def _numeric_dh_db(h_of_b, B):
+    """Numerically differentiate a monotone positive-branch B-H curve."""
+    step = max(1.0e-8, abs(B) * 1.0e-6)
+    if B > step:
+        return (h_of_b(B + step) - h_of_b(B - step)) / (2.0 * step)
+    return (h_of_b(B + step) - h_of_b(B)) / step
+
+
+def magnetic_circuit_bh_operating_summary(mmf, iron_path, h_of_b, gap=0.0, dh_db=None):
+    """Readable operating-point summary for a nonlinear series magnetic circuit.
+
+    This wraps :func:`magnetic_circuit_bh_operating_point` and returns the quantities
+    that are usually needed when comparing a lumped B-H circuit, a nonlinear FEM
+    run, and a classroom hand calculation:
+
+    - flux density ``B_T`` and iron field ``H_iron_A_per_m``;
+    - MMF split between iron and air gap;
+    - Ampere-law residual;
+    - apparent/secant and incremental relative permeability of the iron;
+    - secant and incremental circuit permeance in ``T / A-turn``.
+
+    ``dh_db`` may be supplied for an analytic B-H derivative.  If omitted, a centered
+    finite difference is used on the positive B branch.  The returned values are area
+    independent because the same cross-section is assumed in iron and gap.
+    """
+    if mmf < 0.0:
+        raise ValueError("mmf must be non-negative")
+    if iron_path < 0.0:
+        raise ValueError("iron_path must be non-negative")
+    if gap < 0.0:
+        raise ValueError("gap must be non-negative")
+
+    B = magnetic_circuit_bh_operating_point(mmf, iron_path, h_of_b, gap=gap)
+    H = h_of_b(B)
+    mmf_iron = H * iron_path
+    mmf_gap = (B / MU0) * gap
+    residual = mmf - mmf_iron - mmf_gap
+
+    slope = dh_db(B) if dh_db is not None else _numeric_dh_db(h_of_b, B)
+    apparent_mu_r = math.inf if H == 0.0 else B / (MU0 * H)
+    incremental_mu_r = math.inf if slope == 0.0 else 1.0 / (MU0 * slope)
+    dmmf_dB = iron_path * slope + gap / MU0
+
+    return {
+        "mmf_A_turn": mmf,
+        "iron_path_m": iron_path,
+        "gap_m": gap,
+        "B_T": B,
+        "H_iron_A_per_m": H,
+        "mmf_iron_A_turn": mmf_iron,
+        "mmf_gap_A_turn": mmf_gap,
+        "mmf_residual_A_turn": residual,
+        "gap_mmf_fraction": mmf_gap / mmf if mmf != 0.0 else math.nan,
+        "apparent_mu_r": apparent_mu_r,
+        "incremental_mu_r": incremental_mu_r,
+        "dh_db_A_per_m_per_T": slope,
+        "secant_permeance_T_per_A_turn": B / mmf if mmf != 0.0 else math.nan,
+        "incremental_permeance_T_per_A_turn": 1.0 / dmmf_dB if dmmf_dB != 0.0 else math.inf,
+    }
+
+
 def pm_circuit_loadline_gap_field(Br, magnet_len, gap, iron_path, mu_r, mu_rec=1.0):
     """PM operating point -- the air-gap flux density of a PERMANENT-MAGNET-driven iron
     circuit (magnet length ``magnet_len`` and the gap/iron in series, equal cross-section).

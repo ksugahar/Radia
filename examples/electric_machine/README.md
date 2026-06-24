@@ -15,6 +15,7 @@ NGSolve's high-order curved elements.
 | [`validation_mtpa_saliency_sweep.py`](validation_mtpa_saliency_sweep.py) | Validation-class MTPA current-angle sweep across non-salient PM, IPM, SynRM, and salient-PM cases | `mtpa_operating_point`, `dq_torque`, `dq_torque_components` |
 | [`validation_pm_loadline_demag_sweep.py`](validation_pm_loadline_demag_sweep.py) | Validation-class PM load-line and irreversible-demag margin sweep across gap, magnet length, knee, and shape factors | `pm_circuit_loadline_operating_point`, `demag_operating_field`, `demag_margin` |
 | [`validation_cogging_skew_plan.py`](validation_cogging_skew_plan.py) | Validation-class cogging order and one-slot-pitch skew planning table across integer/fractional slot-pole layouts | `cogging_skew_plan`, `cogging_torque_order`, `machine_symmetry_sector`, `skew_factor` |
+| [`validation_nonlinear_bh_circuit_sweep.py`](validation_nonlinear_bh_circuit_sweep.py) | Validation-class nonlinear B-H magnetic-circuit sweep with secant/incremental permeability and MMF split checks | `magnetic_circuit_bh_operating_summary` |
 
 ```powershell
 python cogging_skew_demo.py
@@ -26,6 +27,7 @@ python validation_carter_magnetizing_sweep.py
 python validation_mtpa_saliency_sweep.py
 python validation_pm_loadline_demag_sweep.py
 python validation_cogging_skew_plan.py
+python validation_nonlinear_bh_circuit_sweep.py
 ```
 
 What it validates (no commercial tool needed to run or check):

@@ -12,9 +12,14 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.radia_ngsolve.solve import magnetic_circuit_bh_operating_point, MU0
+from radia_mcp.radia_ngsolve.solve import (
+    MU0,
+    magnetic_circuit_bh_operating_point,
+    magnetic_circuit_bh_operating_summary,
+)
 
 H_of_B = lambda B: 51.0 * B + 2.5 * B ** 15            # the iron BH curve [A/m]
+dH_dB = lambda B: 51.0 + 37.5 * B ** 14                # analytic derivative [A/m/T]
 L_FE = 0.0156                                          # mean iron path [m]
 
 
@@ -59,10 +64,53 @@ def test_stored_operating_point():
     assert 1900.0 < H_of_B(B) < 2200.0
 
 
+def test_operating_summary_mmf_split_and_incremental_mu():
+    rows = [
+        magnetic_circuit_bh_operating_summary(NI, L_FE, H_of_B, dh_db=dH_dB)
+        for NI in (8.0, 16.0, 32.0, 64.0, 128.0)
+    ]
+    assert max(abs(row["mmf_residual_A_turn"]) for row in rows) < 1.0e-9
+    assert all(row["mmf_gap_A_turn"] == 0.0 for row in rows)
+    assert all(row["incremental_mu_r"] < row["apparent_mu_r"] for row in rows)
+    assert all(a["B_T"] < b["B_T"] for a, b in zip(rows, rows[1:]))
+    assert all(a["incremental_mu_r"] > b["incremental_mu_r"] for a, b in zip(rows, rows[1:]))
+
+
+def test_operating_summary_constant_mu_limit():
+    mu_r = 750.0
+    lin = lambda B: B / (MU0 * mu_r)
+    dlin = lambda B: 1.0 / (MU0 * mu_r)
+    row = magnetic_circuit_bh_operating_summary(80.0, L_FE, lin, gap=0.8e-3, dh_db=dlin)
+    B_exact = 80.0 / (L_FE / (MU0 * mu_r) + 0.8e-3 / MU0)
+    assert math.isclose(row["B_T"], B_exact, rel_tol=1e-9)
+    assert math.isclose(row["apparent_mu_r"], mu_r, rel_tol=1e-12)
+    assert math.isclose(row["incremental_mu_r"], mu_r, rel_tol=1e-12)
+    assert math.isclose(
+        row["secant_permeance_T_per_A_turn"],
+        row["incremental_permeance_T_per_A_turn"],
+        rel_tol=1e-12,
+    )
+
+
+def test_operating_summary_gap_drops_but_linearizes_iron():
+    rows = [
+        magnetic_circuit_bh_operating_summary(96.0, L_FE, H_of_B, gap=gap, dh_db=dH_dB)
+        for gap in (0.0, 0.2e-3, 0.5e-3, 1.0e-3)
+    ]
+    assert all(a["B_T"] > b["B_T"] for a, b in zip(rows, rows[1:]))
+    assert all(a["incremental_mu_r"] < b["incremental_mu_r"] for a, b in zip(rows, rows[1:]))
+    gap_rows = rows[1:]
+    assert all(a["gap_mmf_fraction"] < b["gap_mmf_fraction"] for a, b in zip(gap_rows, gap_rows[1:]))
+    assert rows[-1]["gap_mmf_fraction"] > 0.9
+
+
 if __name__ == "__main__":
     test_self_consistent_and_monotone()
     test_constant_mu_limit_is_exact()
     test_gap_desaturates()
     test_stored_operating_point()
+    test_operating_summary_mmf_split_and_incremental_mu()
+    test_operating_summary_constant_mu_limit()
+    test_operating_summary_gap_drops_but_linearizes_iron()
     print("[OK] nonlinear magnetic circuit: NI=H(B)l_fe+(B/mu0)gap; self-consistent, const-mu exact, "
           "gap de-saturates, 1.56 T @ NI=32.")
