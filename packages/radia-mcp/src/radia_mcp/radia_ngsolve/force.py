@@ -195,6 +195,91 @@ def air_gap_force_summary(B_T, area_m2, faces=1, mu=MU0):
     }
 
 
+def air_gap_shear_stress(B_radial_T, B_tangential_T, mu=MU0):
+    """Tangential Maxwell shear stress [Pa] in a cylindrical air gap.
+
+    For radial and tangential flux-density components ``Br`` and ``Bt`` on a
+    cylindrical integration surface, the tangential traction is
+
+        tau = Br Bt / mu
+
+    with sign set by ``Bt``.  This is the local stress used by air-gap motor
+    torque estimates and by FE Maxwell-stress post-processing.
+    """
+
+    mu = float(mu)
+    if mu <= 0.0:
+        raise ValueError("mu must be > 0")
+    return float(B_radial_T) * float(B_tangential_T) / mu
+
+
+def air_gap_shear_torque(
+    B_radial_T,
+    B_tangential_T,
+    radius_m,
+    axial_length_m=1.0,
+    angle_rad=2.0 * math.pi,
+    mu=MU0,
+):
+    """Torque [N.m] from uniform air-gap Maxwell shear stress.
+
+    For a cylindrical surface patch, ``area = radius * angle * axial_length``
+    and ``torque = radius * tau * area``.  Use ``angle_rad=2*pi`` for a full
+    machine, or a sector angle for a symmetry-sector result before multiplying
+    by the sector count.
+    """
+
+    radius = float(radius_m)
+    length = float(axial_length_m)
+    angle = float(angle_rad)
+    if radius < 0.0:
+        raise ValueError("radius_m must be >= 0")
+    if length < 0.0:
+        raise ValueError("axial_length_m must be >= 0")
+    if angle < 0.0:
+        raise ValueError("angle_rad must be >= 0")
+    shear = air_gap_shear_stress(B_radial_T, B_tangential_T, mu=mu)
+    return shear * radius * radius * angle * length
+
+
+def air_gap_shear_torque_summary(
+    B_radial_T,
+    B_tangential_T,
+    radius_m,
+    axial_length_m=1.0,
+    angle_rad=2.0 * math.pi,
+    mu=MU0,
+):
+    """JSON-friendly air-gap shear-stress torque summary."""
+
+    radius = float(radius_m)
+    length = float(axial_length_m)
+    angle = float(angle_rad)
+    if radius < 0.0:
+        raise ValueError("radius_m must be >= 0")
+    if length < 0.0:
+        raise ValueError("axial_length_m must be >= 0")
+    if angle < 0.0:
+        raise ValueError("angle_rad must be >= 0")
+    shear = air_gap_shear_stress(B_radial_T, B_tangential_T, mu=mu)
+    area = radius * angle * length
+    force = shear * area
+    torque = force * radius
+    return {
+        "B_radial_T": float(B_radial_T),
+        "B_tangential_T": float(B_tangential_T),
+        "mu": float(mu),
+        "radius_m": radius,
+        "axial_length_m": length,
+        "angle_rad": angle,
+        "surface_area_m2": area,
+        "shear_stress_Pa": shear,
+        "tangential_force_N": force,
+        "torque_Nm": torque,
+        "torque_per_axial_length_N": torque / length if length > 0.0 else math.inf,
+    }
+
+
 def electrostatic_eggshell_force(E, mesh, gradg, air_region="air"):
     """Weighted Maxwell-stress ("eggshell") ELECTROSTATIC force -- the electric twin
     of :func:`eggshell_force` (ε0 E in place of B/μ0). ``E`` is the electric field

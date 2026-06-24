@@ -15,6 +15,9 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     air_gap_force_summary,
     air_gap_holding_force,
     air_gap_maxwell_pressure,
+    air_gap_shear_stress,
+    air_gap_shear_torque,
+    air_gap_shear_torque_summary,
     maxwell_stress_tensor_air,
     maxwell_traction_air,
     maxwell_traction_summary,
@@ -67,6 +70,36 @@ def test_maxwell_traction_oblique_field_decomposes_into_normal_and_tangent():
     assert summary["tangential_traction_magnitude_Pa"] == pytest.approx(12.0 / MU0)
 
 
+def test_air_gap_shear_stress_matches_maxwell_tangential_traction():
+    Br = 0.8
+    Bt = 0.1
+    shear = air_gap_shear_stress(Br, Bt)
+    traction = maxwell_traction_summary((Br, Bt, 0.0), (1.0, 0.0, 0.0))
+
+    assert shear == pytest.approx(Br * Bt / MU0)
+    assert traction["tangential_traction_Pa"] == pytest.approx([0.0, shear, 0.0])
+    assert traction["tangential_traction_magnitude_Pa"] == pytest.approx(abs(shear))
+
+
+def test_air_gap_shear_torque_scales_with_radius_length_angle_and_sign():
+    Br = 0.8
+    Bt = 0.1
+    radius = 0.05
+    length = 0.1
+    full = air_gap_shear_torque(Br, Bt, radius, axial_length_m=length)
+    half = air_gap_shear_torque(Br, Bt, radius, axial_length_m=length, angle_rad=math.pi)
+    reverse = air_gap_shear_torque(Br, -Bt, radius, axial_length_m=length)
+    summary = air_gap_shear_torque_summary(Br, Bt, radius, axial_length_m=length)
+
+    assert full == pytest.approx(100.0)
+    assert half == pytest.approx(50.0)
+    assert reverse == pytest.approx(-100.0)
+    assert summary["surface_area_m2"] == pytest.approx(2.0 * math.pi * radius * length)
+    assert summary["tangential_force_N"] == pytest.approx(full / radius)
+    assert summary["torque_Nm"] == pytest.approx(full)
+    assert summary["torque_per_axial_length_N"] == pytest.approx(full / length)
+
+
 def test_air_gap_force_scales_with_b_squared_area_and_faces():
     base = air_gap_holding_force(0.5, area_m2=2.0e-4)
     assert air_gap_holding_force(1.0, area_m2=2.0e-4) == pytest.approx(4.0 * base)
@@ -97,6 +130,12 @@ def test_air_gap_force_rejects_invalid_inputs():
         maxwell_traction_air((1.0, 0.0, 0.0), (0.0, 0.0, 0.0))
     with pytest.raises(ValueError):
         maxwell_traction_summary((1.0, 0.0), (1.0, 0.0, 0.0))
+    with pytest.raises(ValueError):
+        air_gap_shear_stress(1.0, 0.1, mu=0.0)
+    with pytest.raises(ValueError):
+        air_gap_shear_torque(1.0, 0.1, radius_m=-1.0)
+    with pytest.raises(ValueError):
+        air_gap_shear_torque_summary(1.0, 0.1, radius_m=1.0, axial_length_m=-1.0)
 
 
 if __name__ == "__main__":
@@ -104,6 +143,8 @@ if __name__ == "__main__":
     test_maxwell_tensor_normal_field_reduces_to_air_gap_pressure()
     test_maxwell_tensor_tangential_field_is_magnetic_tension()
     test_maxwell_traction_oblique_field_decomposes_into_normal_and_tangent()
+    test_air_gap_shear_stress_matches_maxwell_tangential_traction()
+    test_air_gap_shear_torque_scales_with_radius_length_angle_and_sign()
     test_air_gap_force_scales_with_b_squared_area_and_faces()
     test_air_gap_force_summary_is_json_friendly_and_self_consistent()
     test_air_gap_force_rejects_invalid_inputs()
