@@ -18,6 +18,7 @@ S-parameters, and cavity-style post-processing.
 | [`validation_time_harmonic_maxwell_stress.py`](validation_time_harmonic_maxwell_stress.py) | Validation-class complex phasor Maxwell stress: peak/RMS conventions, plane-wave momentum flux, and local traction sign | `time_average_maxwell_stress_tensor`, `time_average_maxwell_traction_summary`, `radiation_pressure_from_intensity` |
 | [`validation_scattering_radiation_force.py`](validation_scattering_radiation_force.py) | Validation-class normal-incidence scattering force from reflectance/transmittance, matching `F=(1+R-T)P/c=(A+2R)P/c` | `radiation_scattering_force_summary`, `radiation_force_from_normal_scattering` |
 | [`validation_two_port_scattering_momentum_force.py`](validation_two_port_scattering_momentum_force.py) | Validation-class vector momentum balance for a two-port scatterer: straight through-line, short, absorber, lossy line, and 90-degree bend | `two_port_scattering_momentum_force_summary` |
+| [`validation_one_port_reflection_momentum_force.py`](validation_one_port_reflection_momentum_force.py) | Validation-class one-port S11 momentum force: matched load, perfect short, and phase-independent partial reflection | `one_port_reflection_momentum_force_summary` |
 
 ```powershell
 python validation_waveguide_vna_calibration.py
@@ -33,6 +34,7 @@ python validation_poynting_patch_force_vector.py
 python validation_time_harmonic_maxwell_stress.py
 python validation_scattering_radiation_force.py
 python validation_two_port_scattering_momentum_force.py
+python validation_one_port_reflection_momentum_force.py
 ```
 
 The examples are self-contained and use closed-form transmission-line /
