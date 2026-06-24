@@ -32,6 +32,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "mirrored", "assembly", "shape_envelope_row", "enclosing_box",
            "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
+           "box_face_vector_area_rows", "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
            "swept", "revolved", "lofted", "coil", "helix_centerline_length",
@@ -363,6 +364,167 @@ def shape_measurement_rows(shapes):
         else:
             shape, name = item, None
         rows.append(shape_measurement_row(shape, name=name, index=index))
+    return rows
+
+
+def box_face_vector_area_rows(size, center=(0.0, 0.0, 0.0), names=None):
+    """Return analytic oriented area vectors for the six faces of an axis-aligned box.
+
+    The row vocabulary mirrors
+    ``radia_mcp.radia_ngsolve.netgen_vol.NetgenTriTetVolMesh.boundary_normal_summary_rows``:
+    each face has a scalar ``surface_area``, an oriented ``vector_area`` equal
+    to ``normal * area``, a unit normal, and the face center.  This gives CAD
+    scripts a compact reference for checking boundary orientation before
+    Maxwell-stress or pressure loads are integrated on a surface mesh.
+    """
+
+    sx, sy, sz = [float(value) for value in size]
+    cx, cy, cz = [float(value) for value in center]
+    if sx <= 0.0 or sy <= 0.0 or sz <= 0.0:
+        raise ValueError("box size values must be positive")
+
+    default_names = ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"]
+    if names is None:
+        labels = default_names
+    elif isinstance(names, dict):
+        labels = [str(names.get(name, name)) for name in default_names]
+    else:
+        labels = [str(name) for name in names]
+        if len(labels) != 6:
+            raise ValueError("names must have exactly six entries")
+
+    specs = [
+        ((-1.0, 0.0, 0.0), sy * sz, (cx - 0.5 * sx, cy, cz)),
+        ((1.0, 0.0, 0.0), sy * sz, (cx + 0.5 * sx, cy, cz)),
+        ((0.0, -1.0, 0.0), sx * sz, (cx, cy - 0.5 * sy, cz)),
+        ((0.0, 1.0, 0.0), sx * sz, (cx, cy + 0.5 * sy, cz)),
+        ((0.0, 0.0, -1.0), sx * sy, (cx, cy, cz - 0.5 * sz)),
+        ((0.0, 0.0, 1.0), sx * sy, (cx, cy, cz + 0.5 * sz)),
+    ]
+
+    rows = []
+    for index, (label, (unit_normal, area, face_center)) in enumerate(zip(labels, specs), start=1):
+        vector_area = tuple(component * area for component in unit_normal)
+        vector_norm = math.sqrt(sum(component * component for component in vector_area))
+        rows.append({
+            "index": index,
+            "name": label,
+            "surface_area": float(area),
+            "vector_area": vector_area,
+            "vector_area_norm": float(vector_norm),
+            "vector_area_norm_over_area": vector_norm / area,
+            "unit_normal": tuple(float(component) for component in unit_normal),
+            "face_center": tuple(float(component) for component in face_center),
+            "box_center": (cx, cy, cz),
+            "box_size": (sx, sy, sz),
+        })
+    return rows
+
+
+def _surface_area_from_row(row):
+    if "surface_area" in row:
+        return float(row["surface_area"])
+    if "area" in row:
+        return float(row["area"])
+    return None
+
+
+def _row_vector(row, key):
+    values = row.get(key)
+    if values is None:
+        return None
+    vector = list(values)
+    if len(vector) != 3:
+        return None
+    return [float(value) for value in vector]
+
+
+def _vector_norm(values):
+    return math.sqrt(sum(float(value) * float(value) for value in values))
+
+
+def compare_boundary_vector_area_rows(
+    reference_rows,
+    measured_rows,
+    vector_atol=1.0e-9,
+    area_rtol=1.0e-9,
+    measured_label="measured",
+):
+    """Compare oriented boundary-area rows by name.
+
+    ``reference_rows`` can come from :func:`box_face_vector_area_rows`, while
+    ``measured_rows`` can come from a triangle/tetrahedral ``.vol`` boundary
+    summary.  The comparison checks scalar area, oriented area vector, and unit
+    normal when both sides provide one.
+    """
+
+    measured_by_name = {row["name"]: row for row in measured_rows}
+    rows = []
+    for ref in reference_rows:
+        name = ref["name"]
+        measured = measured_by_name.get(name)
+        ref_area = _surface_area_from_row(ref)
+        ref_vector = _row_vector(ref, "vector_area")
+        ref_normal = _row_vector(ref, "unit_normal")
+        if measured is None:
+            rows.append({
+                "name": name,
+                "measured_label": measured_label,
+                "reference_surface_area": ref_area,
+                "measured_surface_area": None,
+                "area_rel_error": None,
+                "reference_vector_area": ref_vector,
+                "measured_vector_area": None,
+                "vector_abs_error": None,
+                "reference_unit_normal": ref_normal,
+                "measured_unit_normal": None,
+                "unit_normal_abs_error": None,
+                "vector_atol": float(vector_atol),
+                "area_rtol": float(area_rtol),
+                "passed": False,
+                "reason": "missing measured row",
+            })
+            continue
+
+        measured_area = _surface_area_from_row(measured)
+        measured_vector = _row_vector(measured, "vector_area")
+        measured_normal = _row_vector(measured, "unit_normal")
+        area_rel_error = (
+            _relative_measurement_error(ref_area, measured_area)
+            if ref_area is not None and measured_area is not None
+            else None
+        )
+        vector_abs_error = (
+            _vector_norm(float(a) - float(b) for a, b in zip(ref_vector, measured_vector))
+            if ref_vector is not None and measured_vector is not None
+            else None
+        )
+        unit_normal_abs_error = (
+            _vector_norm(float(a) - float(b) for a, b in zip(ref_normal, measured_normal))
+            if ref_normal is not None and measured_normal is not None
+            else None
+        )
+        area_ok = area_rel_error is not None and area_rel_error <= area_rtol
+        vector_ok = vector_abs_error is not None and vector_abs_error <= vector_atol
+        normal_ok = unit_normal_abs_error is None or unit_normal_abs_error <= vector_atol
+        passed = bool(area_ok and vector_ok and normal_ok)
+        rows.append({
+            "name": name,
+            "measured_label": measured_label,
+            "reference_surface_area": ref_area,
+            "measured_surface_area": measured_area,
+            "area_rel_error": area_rel_error,
+            "reference_vector_area": ref_vector,
+            "measured_vector_area": measured_vector,
+            "vector_abs_error": vector_abs_error,
+            "reference_unit_normal": ref_normal,
+            "measured_unit_normal": measured_normal,
+            "unit_normal_abs_error": unit_normal_abs_error,
+            "vector_atol": float(vector_atol),
+            "area_rtol": float(area_rtol),
+            "passed": passed,
+            "reason": "ok" if passed else "outside tolerance",
+        })
     return rows
 
 
