@@ -33,6 +33,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
            "box_face_vector_area_rows", "box_face_pressure_force_rows",
+           "box_face_pressure_moment_rows",
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
@@ -457,6 +458,54 @@ def box_face_pressure_force_rows(
             "pressure_source": source,
             "force_N": force,
             "force_magnitude_N": math.sqrt(sum(component * component for component in force)),
+        })
+    return rows
+
+
+def _cross3(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def box_face_pressure_moment_rows(
+    size,
+    pressure_by_face,
+    center=(0.0, 0.0, 0.0),
+    names=None,
+    default_pressure=0.0,
+    pivot_m=(0.0, 0.0, 0.0),
+):
+    """Return analytic box face pressure force and pivot-moment rows.
+
+    This is the build123d-side analytic companion to
+    ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows``.  Each face is
+    planar with a constant pressure, so its resultant acts at ``face_center``:
+
+    ``F = pressure * vector_area`` and ``M = (face_center - pivot) x F``.
+    """
+
+    pivot = tuple(float(value) for value in pivot_m)
+    if len(pivot) != 3:
+        raise ValueError("pivot_m must have three components")
+    rows = []
+    for row in box_face_pressure_force_rows(
+        size,
+        pressure_by_face,
+        center=center,
+        names=names,
+        default_pressure=default_pressure,
+    ):
+        lever = tuple(row["face_center"][axis] - pivot[axis] for axis in range(3))
+        moment = _cross3(lever, row["force_N"])
+        rows.append({
+            **row,
+            "pivot_m": pivot,
+            "lever_arm_m": lever,
+            "moment_about_pivot_Nm": moment,
+            "moment_magnitude_Nm": math.sqrt(sum(component * component for component in moment)),
         })
     return rows
 

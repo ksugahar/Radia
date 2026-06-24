@@ -185,6 +185,8 @@ requires a stable geometry perturbation and matched meshes or careful remeshing.
   first-order `.vol` boundary triangles to Maxwell traction and P1 nodal force loads.
 - ``examples/cubit_mesh_export/validation_vol_boundary_pressure_moment.py``:
   named `.vol` sidesets to pressure force/moment rows and generic resultant reduction.
+- ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:
+  build123d analytic box pressure moments checked against named `.vol` rows.
 - ``examples/electrostatics/validation_parallel_plate_electrostatic_force.py``:
   capacitance-energy, Maxwell-pressure, and traction-equivalence gate.
 - ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.
