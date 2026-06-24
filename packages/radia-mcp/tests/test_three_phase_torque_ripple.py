@@ -13,7 +13,10 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.radia_ngsolve.solve import three_phase_torque_ripple_harmonics
+from radia_mcp.radia_ngsolve.solve import (
+    three_phase_torque_ripple_harmonics,
+    three_phase_torque_ripple_pair_table,
+)
 
 
 def _sample_power(emf_harmonics, current_peak, samples=4096):
@@ -50,6 +53,30 @@ def test_three_phase_harmonic_pairs_map_to_6k_ripple():
     assert math.isclose(out["normalized_ripple"][12], 0.05, abs_tol=1e-14)
     assert 3 not in out["power_ripple"]                    # triplen harmonics cancel in 3-phase power
     assert math.isclose(out["torque_ripple"][6], 0.51 / 5.0, abs_tol=1e-14)
+
+
+def test_pair_table_exposes_harmonic_budget():
+    harmonics = {1: 1.0, 3: 0.5, 5: 0.10, 7: 0.07, 11: 0.02, 13: 0.03}
+    out = three_phase_torque_ripple_harmonics(harmonics, current_peak=2.0, mechanical_speed=5.0)
+    table = three_phase_torque_ripple_pair_table(harmonics, current_peak=2.0, mechanical_speed=5.0)
+    by_order = {row["ripple_order"]: row for row in table}
+
+    assert sorted(by_order) == [6, 12]
+    assert by_order[6]["contributing_harmonics"] == [5, 7]
+    assert by_order[12]["contributing_harmonics"] == [11, 13]
+    assert math.isclose(by_order[6]["emf_phasor_abs"], 0.17, abs_tol=1e-14)
+    assert math.isclose(by_order[6]["power_ripple"], out["power_ripple"][6], abs_tol=1e-14)
+    assert math.isclose(by_order[6]["torque_ripple"], out["torque_ripple"][6], abs_tol=1e-14)
+    assert math.isclose(by_order[12]["normalized_ripple"], out["normalized_ripple"][12], abs_tol=1e-14)
+
+
+def test_pair_table_keeps_phasor_cancellation_visible():
+    harmonics = {1: 1.0, 5: 0.10, 7: -0.10}
+    table = three_phase_torque_ripple_pair_table(harmonics)
+    assert table[0]["ripple_order"] == 6
+    assert table[0]["contributing_harmonics"] == [5, 7]
+    assert math.isclose(table[0]["emf_phasor_abs"], 0.0, abs_tol=1e-14)
+    assert math.isclose(table[0]["normalized_ripple"], 0.0, abs_tol=1e-14)
 
 
 def test_closed_form_matches_direct_time_waveform_fourier():
