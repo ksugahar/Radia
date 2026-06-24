@@ -70,7 +70,7 @@ jupyter notebook jupyter_visualization_demo.ipynb
 | `demo_webgui_accurate_geometry.py` | NGSolve webgui with accurate OCC geometry display | radia, NGSolve |
 | `demo_netgen_gui.py` | Netgen native GUI for geometry and mesh quality verification | NGSolve/Netgen |
 | `demo_gmsh_workflow.py` | GMSH mesh generation and NGSolve/Radia integration workflow | gmsh, ngsolve, radia |
-| `demo_gmsh_cad_import.py` | GMSH CAD import (STEP/IGES) to NGSolve/Radia workflow | gmsh, ngsolve |
+| `demo_gmsh_cad_import.py` | CAD import to Netgen `.vol` with optional standalone GMSH display | netgen, ngsolve |
 | `demo_mesh_with_surface.py` | Demonstrates Netgen automatic surface element generation | netgen |
 | `README.md` | This file | - |
 
