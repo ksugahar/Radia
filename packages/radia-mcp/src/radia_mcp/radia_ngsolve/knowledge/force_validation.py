@@ -33,7 +33,7 @@ of the methods below, with an analytic sanity check available.
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
 | Uniform cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*`` |
 | RF beam / waveguide radiation pressure | Time-averaged Poynting momentum flux | ``force.radiation_pressure_*``, ``force.poynting_patch_force_summary``, ``force.time_average_maxwell_*`` |
-| Energy/inductance-derived checks | Field energy | ``force.magnetic_energy*``, ``force.inductance_*`` |
+| Energy/inductance-derived checks | Field energy / virtual work | ``force.magnetic_energy*``, ``force.inductance_*``, ``force.virtual_work_force_*`` |
 | dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
 | Synchronous/induction machine torque curves | Circuit-level machine model | ``solve.synchronous_power_angle_torque`` / ``solve.induction_machine_torque`` |
 | MEMS/electrostatic force | Electric Maxwell stress / weighted stress | ``electrostatics.parallel_plate_capacitor_energy_force``, ``force.electrostatic_traction_summary``, ``force.electrostatic_eggshell_force*`` |
@@ -141,12 +141,17 @@ Energy/coenergy:
 
 ```text
 constant current:      F = dW_co/dx
+fixed flux/field:      F = -dW/dx
 linear energy check:   L = 2 W / I^2
 ```
 
 For nonlinear B-H force, prefer a weighted-stress or coenergy virtual-work
-method.  Finite-difference energy is useful as an independent check, but it
-requires a stable geometry perturbation and matched meshes or careful remeshing.
+method.  ``force.virtual_work_force_from_displacement_samples`` is the readable
+post-processor for displacement sweeps: use ``energy_kind="coenergy"`` for
+fixed-current samples and ``energy_kind="stored_energy"`` for the negative
+stored-energy derivative.  Finite-difference energy is useful as an independent
+check, but it requires a stable geometry perturbation and matched meshes or
+careful remeshing.
 
 ## Validation anchors to remember
 
@@ -187,6 +192,9 @@ requires a stable geometry perturbation and matched meshes or careful remeshing.
   named `.vol` sidesets to pressure force/moment rows and generic resultant reduction.
 - ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:
   build123d analytic box pressure moments checked against named `.vol` rows.
+- ``examples/electric_machine/validation_virtual_work_force_displacement_sweep.py``:
+  displacement energy/coenergy samples to force, including the fixed-current
+  versus fixed-flux sign gate.
 - ``examples/electrostatics/validation_parallel_plate_electrostatic_force.py``:
   capacitance-energy, Maxwell-pressure, and traction-equivalence gate.
 - ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.
