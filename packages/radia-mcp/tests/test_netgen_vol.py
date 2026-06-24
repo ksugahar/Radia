@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from radia_mcp.radia_ngsolve.netgen_vol import parse_netgen_tri_tet_vol
@@ -290,6 +292,35 @@ def test_geometry_metrics_for_single_tetrahedron():
     assert mesh.total_volume() == pytest.approx(1.0 / 6.0)
     assert sorted(mesh.surface_triangle_areas()) == pytest.approx([0.5, 0.5, 0.5, 0.5 * 3**0.5])
     assert mesh.surface_area_by_boundary_number() == {1: pytest.approx(1.5 + 0.5 * 3**0.5)}
+
+
+def test_tetrahedron_quality_rows_for_right_and_equilateral_tets():
+    right = parse_netgen_tri_tet_vol(TET_VOL)
+    row = right.tetrahedron_quality_rows()[0]
+    expected_surface_area = 1.5 + 0.5 * math.sqrt(3.0)
+    expected_inradius = 0.5 / expected_surface_area
+    expected_circumradius = math.sqrt(3.0) / 2.0
+    expected_quality = 3.0 * expected_inradius / expected_circumradius
+
+    assert row["volume"] == pytest.approx(1.0 / 6.0)
+    assert row["surface_area"] == pytest.approx(expected_surface_area)
+    assert row["inradius"] == pytest.approx(expected_inradius)
+    assert row["circumradius"] == pytest.approx(expected_circumradius)
+    assert row["radius_ratio_quality"] == pytest.approx(expected_quality)
+    assert row["edge_ratio"] == pytest.approx(math.sqrt(2.0))
+    assert right.tetrahedron_quality_summary()["min_radius_ratio_quality"] == pytest.approx(expected_quality)
+
+    h = math.sqrt(3.0) / 2.0
+    z = math.sqrt(2.0 / 3.0)
+    equilateral_vol = TET_VOL.replace(
+        "0 0 0\n1 0 0\n0 1 0\n0 0 1",
+        f"0 0 0\n1 0 0\n0.5 {h} 0\n0.5 {math.sqrt(3.0) / 6.0} {z}",
+    )
+    equilateral = parse_netgen_tri_tet_vol(equilateral_vol)
+    eq_summary = equilateral.tetrahedron_quality_summary()
+    assert eq_summary["min_radius_ratio_quality"] == pytest.approx(1.0)
+    assert eq_summary["max_radius_ratio_quality"] == pytest.approx(1.0)
+    assert eq_summary["max_edge_ratio"] == pytest.approx(1.0)
 
 
 def test_surface_closure_summary_for_single_tetrahedron():

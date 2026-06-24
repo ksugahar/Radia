@@ -145,6 +145,73 @@ class NetgenTriTetVolMesh:
             "max_edge_ratio": max(ratios),
         }
 
+    def tetrahedron_quality_rows(self) -> tuple[dict[str, float | int], ...]:
+        """Return per-tetrahedron volume/radius quality records.
+
+        ``radius_ratio_quality = 3 * inradius / circumradius`` is one for an
+        equilateral tetrahedron and tends to zero for flat/sliver elements.  It
+        is a compact mesh-quality companion to the edge-ratio summary and maps
+        well to Cubit/Coreform tet quality checks.
+        """
+
+        rows: list[dict[str, float | int]] = []
+        edge_rows = self.tetrahedron_edge_lengths()
+        signed_volumes = self.tetrahedron_signed_volumes()
+        for index, (tet, edge_lengths, signed_volume) in enumerate(
+            zip(self.tetrahedra, edge_rows, signed_volumes), start=1
+        ):
+            coords = tuple(self.points[node - 1] for node in tet.nodes)
+            volume = abs(signed_volume)
+            if volume <= 0.0:
+                raise ValueError(f"tetrahedron {index} has zero volume")
+            surface_area = _tetrahedron_surface_area(coords)
+            inradius = 3.0 * volume / surface_area
+            circumradius = _tetrahedron_circumradius(coords)
+            if circumradius <= 0.0:
+                raise ValueError(f"tetrahedron {index} has zero circumradius")
+            min_edge = min(edge_lengths)
+            max_edge = max(edge_lengths)
+            rows.append({
+                "tetrahedron": index,
+                "volume": volume,
+                "surface_area": surface_area,
+                "inradius": inradius,
+                "circumradius": circumradius,
+                "radius_ratio_quality": 3.0 * inradius / circumradius,
+                "min_edge": min_edge,
+                "max_edge": max_edge,
+                "edge_ratio": max_edge / min_edge,
+            })
+        return tuple(rows)
+
+    def tetrahedron_quality_summary(self) -> dict[str, float | int | None]:
+        """Return compact radius-ratio and edge-ratio quality statistics."""
+
+        rows = self.tetrahedron_quality_rows()
+        if not rows:
+            return {
+                "tetrahedra": 0,
+                "min_radius_ratio_quality": None,
+                "max_radius_ratio_quality": None,
+                "mean_radius_ratio_quality": None,
+                "min_inradius": None,
+                "max_circumradius": None,
+                "max_edge_ratio": None,
+            }
+        qualities = [float(row["radius_ratio_quality"]) for row in rows]
+        inradii = [float(row["inradius"]) for row in rows]
+        circumradii = [float(row["circumradius"]) for row in rows]
+        edge_ratios = [float(row["edge_ratio"]) for row in rows]
+        return {
+            "tetrahedra": len(rows),
+            "min_radius_ratio_quality": min(qualities),
+            "max_radius_ratio_quality": max(qualities),
+            "mean_radius_ratio_quality": sum(qualities) / len(qualities),
+            "min_inradius": min(inradii),
+            "max_circumradius": max(circumradii),
+            "max_edge_ratio": max(edge_ratios),
+        }
+
     def total_volume(self) -> float:
         """Return the sum of positive tetrahedron volumes."""
 
@@ -632,3 +699,55 @@ def _scale(a: tuple[float, float, float], value: float) -> tuple[float, float, f
 
 def _norm(a: tuple[float, float, float]) -> float:
     return math.sqrt(_dot(a, a))
+
+
+def _triangle_area(
+    a: tuple[float, float, float],
+    b: tuple[float, float, float],
+    c: tuple[float, float, float],
+) -> float:
+    return 0.5 * _norm(_cross(_sub(b, a), _sub(c, a)))
+
+
+def _tetrahedron_surface_area(points: tuple[tuple[float, float, float], ...]) -> float:
+    a, b, c, d = points
+    return (
+        _triangle_area(a, b, c)
+        + _triangle_area(a, b, d)
+        + _triangle_area(a, c, d)
+        + _triangle_area(b, c, d)
+    )
+
+
+def _det3(rows: tuple[tuple[float, float, float], ...]) -> float:
+    return (
+        rows[0][0] * (rows[1][1] * rows[2][2] - rows[1][2] * rows[2][1])
+        - rows[0][1] * (rows[1][0] * rows[2][2] - rows[1][2] * rows[2][0])
+        + rows[0][2] * (rows[1][0] * rows[2][1] - rows[1][1] * rows[2][0])
+    )
+
+
+def _solve3_rows(
+    rows: tuple[tuple[float, float, float], ...],
+    rhs: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    det = _det3(rows)
+    if det == 0.0:
+        raise ValueError("singular 3x3 system")
+    cols = []
+    for col in range(3):
+        replaced = tuple(
+            tuple(rhs[i] if j == col else rows[i][j] for j in range(3))
+            for i in range(3)
+        )
+        cols.append(_det3(replaced) / det)
+    return (cols[0], cols[1], cols[2])
+
+
+def _tetrahedron_circumradius(points: tuple[tuple[float, float, float], ...]) -> float:
+    a, b, c, d = points
+    edges = (_sub(b, a), _sub(c, a), _sub(d, a))
+    rows = tuple(tuple(2.0 * value for value in edge) for edge in edges)
+    rhs = tuple(_dot(edge, edge) for edge in edges)
+    center_rel = _solve3_rows(rows, rhs)
+    return _norm(center_rel)
