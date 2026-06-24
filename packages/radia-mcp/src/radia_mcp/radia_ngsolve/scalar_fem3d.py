@@ -6,6 +6,8 @@ load for first-order tetrahedra.  They are intentionally small and dependency
 free so the same formulas can be mirrored in teaching MATLAB prototypes.
 """
 
+import math
+
 
 def _sub(a, b):
     return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
@@ -21,6 +23,14 @@ def _cross(a, b):
         a[2] * b[0] - a[0] * b[2],
         a[0] * b[1] - a[1] * b[0],
     )
+
+
+def _scale(a, s):
+    return (s * a[0], s * a[1], s * a[2])
+
+
+def _norm(a):
+    return math.sqrt(_dot(a, a))
 
 
 def _solve3(rows, rhs):
@@ -88,3 +98,60 @@ def p1_tetrahedron_constant_load(vertices, source=1.0):
     """Local P1 load vector for a constant source term over a tetrahedron."""
     volume = p1_tetrahedron_geometry(vertices)["volume"]
     return [float(source) * volume / 4.0] * 4
+
+
+def p1_surface_triangle_geometry(vertices):
+    """Area, oriented normal, and surface gradients for a 3D P1 triangle.
+
+    ``vertices`` is ``[(x0,y0,z0), (x1,y1,z1), (x2,y2,z2)]``.  Returns
+    ``{"area", "area_vector", "unit_normal", "gradients"}``, where each
+    gradient is the constant tangential gradient of the corresponding P1 shape
+    function.  This is the boundary-triangle counterpart of the tetrahedron
+    formulas and is the small clean-room block behind readable SurfaceL2/BEM
+    assembly.
+    """
+    if len(vertices) != 3:
+        raise ValueError("a surface triangle needs exactly three vertices")
+    a, b, c = [tuple(float(x) for x in p) for p in vertices]
+    if any(len(p) != 3 for p in (a, b, c)):
+        raise ValueError("surface triangle vertices must be 3D points")
+
+    normal2 = _cross(_sub(b, a), _sub(c, a))
+    double_area = _norm(normal2)
+    if double_area == 0.0:
+        raise ValueError("degenerate surface triangle")
+    area = 0.5 * double_area
+    unit_normal = _scale(normal2, 1.0 / double_area)
+    gradients = [
+        _scale(_cross(unit_normal, _sub(c, b)), 1.0 / double_area),
+        _scale(_cross(unit_normal, _sub(a, c)), 1.0 / double_area),
+        _scale(_cross(unit_normal, _sub(b, a)), 1.0 / double_area),
+    ]
+    return {
+        "area": area,
+        "area_vector": _scale(normal2, 0.5),
+        "unit_normal": unit_normal,
+        "gradients": gradients,
+    }
+
+
+def p1_surface_triangle_stiffness(vertices, coeff=1.0):
+    """Local P1 surface stiffness ``int coeff grad_s N_i . grad_s N_j dS``."""
+    g = p1_surface_triangle_geometry(vertices)
+    area = g["area"]
+    grads = g["gradients"]
+    c = float(coeff)
+    return [[c * area * _dot(gi, gj) for gj in grads] for gi in grads]
+
+
+def p1_surface_triangle_mass(vertices, density=1.0):
+    """Consistent P1 surface mass matrix ``int density N_i N_j dS``."""
+    area = p1_surface_triangle_geometry(vertices)["area"]
+    d = float(density)
+    return [[d * area * (2.0 if i == j else 1.0) / 12.0 for j in range(3)] for i in range(3)]
+
+
+def p1_surface_triangle_constant_load(vertices, source=1.0):
+    """Local P1 surface load vector for a constant source over a triangle."""
+    area = p1_surface_triangle_geometry(vertices)["area"]
+    return [float(source) * area / 3.0] * 3

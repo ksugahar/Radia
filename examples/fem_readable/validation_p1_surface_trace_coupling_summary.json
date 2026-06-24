@@ -1,0 +1,237 @@
+{
+  "kind": "p1_surface_trace_coupling_validation",
+  "validation_class": true,
+  "mesh_summary": {
+    "points": 4,
+    "surface_triangles": 4,
+    "tetrahedra": 1,
+    "materials": 1,
+    "boundary_names": 1
+  },
+  "topology_policy": "first_order_h1_p1_hcurl_nedelec0_bem_p1_rwg_only",
+  "closure": {
+    "surface_triangles": 4,
+    "tetrahedra": 1,
+    "total_surface_area": 2.3660254037844384,
+    "surface_vector_area": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "surface_vector_area_norm": 0.0,
+    "surface_vector_area_norm_over_area": 0.0,
+    "surface_signed_volume": -0.16666666666666666,
+    "surface_abs_volume": 0.16666666666666666,
+    "tetrahedron_total_volume": 0.16666666666666666,
+    "surface_abs_volume_error": 0.0,
+    "surface_abs_volume_rel_error": 0.0,
+    "boundary_orientation": "inward"
+  },
+  "manifold": {
+    "trace_nodes": 4,
+    "surface_edges": 6,
+    "surface_triangles": 4,
+    "closed_edges": 6,
+    "open_edges": 0,
+    "is_closed_manifold": true,
+    "euler_characteristic": 2
+  },
+  "face_rows": [
+    {
+      "nodes": [
+        1,
+        2,
+        3
+      ],
+      "area": 0.5,
+      "unit_normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "area_vector": [
+        0.0,
+        0.0,
+        0.5
+      ]
+    },
+    {
+      "nodes": [
+        1,
+        4,
+        2
+      ],
+      "area": 0.5,
+      "unit_normal": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "area_vector": [
+        0.0,
+        0.5,
+        0.0
+      ]
+    },
+    {
+      "nodes": [
+        2,
+        4,
+        3
+      ],
+      "area": 0.8660254037844386,
+      "unit_normal": [
+        -0.5773502691896258,
+        -0.5773502691896258,
+        -0.5773502691896258
+      ],
+      "area_vector": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    {
+      "nodes": [
+        3,
+        4,
+        1
+      ],
+      "area": 0.5,
+      "unit_normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "area_vector": [
+        0.5,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "surface_mass_matrix": [
+    [
+      0.25,
+      0.08333333333333333,
+      0.08333333333333333,
+      0.08333333333333333
+    ],
+    [
+      0.08333333333333333,
+      0.31100423396407306,
+      0.11383545031536987,
+      0.11383545031536987
+    ],
+    [
+      0.08333333333333333,
+      0.11383545031536987,
+      0.31100423396407306,
+      0.11383545031536987
+    ],
+    [
+      0.08333333333333333,
+      0.11383545031536987,
+      0.11383545031536987,
+      0.31100423396407306
+    ]
+  ],
+  "surface_stiffness_matrix": [
+    [
+      3.0,
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    [
+      -1.0,
+      1.5773502691896262,
+      -0.28867513459481303,
+      -0.28867513459481303
+    ],
+    [
+      -1.0,
+      -0.28867513459481303,
+      1.5773502691896262,
+      -0.28867513459481303
+    ],
+    [
+      -1.0,
+      -0.28867513459481303,
+      -0.28867513459481303,
+      1.5773502691896262
+    ]
+  ],
+  "surface_load_vector": [
+    0.5,
+    0.6220084679281461,
+    0.6220084679281461,
+    0.6220084679281461
+  ],
+  "coordinate_moments_via_mass": [
+    0.6220084679281461,
+    0.6220084679281462,
+    0.6220084679281461
+  ],
+  "coordinate_moments_direct": [
+    0.6220084679281461,
+    0.6220084679281461,
+    0.6220084679281461
+  ],
+  "coordinate_energies_via_stiffness": [
+    1.5773502691896262,
+    1.5773502691896262,
+    1.5773502691896262
+  ],
+  "coordinate_energies_direct": [
+    1.5773502691896257,
+    1.5773502691896257,
+    1.5773502691896257
+  ],
+  "trace": {
+    "h1_to_scalar_bem_rows": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "h1_to_scalar_bem_cols": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "rwg_to_hcurl_edge_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ]
+  },
+  "checks": {
+    "total_area": 2.3660254037844384,
+    "expected_area": 2.3660254037844384,
+    "area_abs_error": 0.0,
+    "mass_area_abs_error": 0.0,
+    "load_area_abs_error": 0.0,
+    "coordinate_moment_abs_errors": [
+      0.0,
+      1.1102230246251565e-16,
+      0.0
+    ],
+    "coordinate_energy_abs_errors": [
+      4.440892098500626e-16,
+      4.440892098500626e-16,
+      4.440892098500626e-16
+    ],
+    "stiffness_row_sum_max_abs": 1.1102230246251565e-16,
+    "surface_area_vector_norm": 0.0,
+    "surface_volume_abs_error": 0.0,
+    "expected_coordinate_first_moment": 0.6220084679281462,
+    "expected_coordinate_energy": 1.5773502691896257,
+    "trace_is_identity_on_unit_tet": true,
+    "rwg_hcurl_edge_id_match": true
+  }
+}
