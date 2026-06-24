@@ -11,3 +11,15 @@ against the same numbers.
 solution for a uniformly pulsating sphere. It records low-frequency radiation
 resistance scaling, high-frequency efficiency, exact spherical power
 conservation, and near-to-far pressure decay.
+
+## Low-frequency Helmholtz kernel
+
+`validation_low_frequency_helmholtz_kernel.py` validates the outgoing 3D
+Helmholtz Green function split into the static Laplace singular term and smooth
+low-frequency corrections. It is a kernel-level gate for stable acoustic BEM
+assembly before moving to full FEM/BEM coupling examples.
+
+```powershell
+python validation_pulsating_sphere_radiation.py
+python validation_low_frequency_helmholtz_kernel.py
+```
