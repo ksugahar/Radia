@@ -456,6 +456,24 @@ The main contributions of this paper are:
     図幅・caption長・figureのソース位置を調整する。full-paper 予告は、実際に検証計画がある場合だけ
     "will examine extension to three-dimensional conductors" 程度に留め、1-page
     digest の現在成果として 3D 結果を匂わせない。
+    In research plans and proposal notes, do not title sections with the
+    author's drafting activity ("plain explanation", "notes", "miscellaneous").
+    Use section titles that state the theoretical or design role the reader
+    gets from that section.  Do not present immature ideas as result-like
+    integrated graphs; show them as an iteration flow or working hypothesis.
+    Keep internal tool improvements, MCP implementation notes, and generation
+    provenance out of public manuscripts; move them to development notes when
+    they matter.  When claiming a coordinate transform or perturbation, state
+    what remains invariant and what changes.  For differential-form arguments,
+    say immediately after the equation whether the exterior derivative,
+    conservation law, unknown, Hodge operator, metric, or coefficient changed;
+    do not merely say "the nonlinearity is linearized."  For proposal-stage
+    figures, prefer either (a) real calculation or measurement data that ground
+    the proposal, or (b) an iteration flow showing how an unverified hypothesis
+    will be tested.  Do not write defensively that a combined figure is "not
+    ready"; state what evidence or procedure each shown figure contributes.
+    Put unverified implementation ideas in a clearly marked inventory table or
+    working-hypothesis list, not in a summary-result figure.
 
 ---
 
@@ -496,6 +514,15 @@ author = {Niels K{\"o}ster}     % accent が壊れる可能性
 ```
 
 追加前に `grep "<doi>" references.bib` で重複確認。
+
+### Rule 2.5: Numbered references follow first citation order
+
+For IEEE-style numbered references and manual `thebibliography` lists, order
+the reference list by the first appearance of each `\cite{}` key in the text.
+After moving related-work sections, tables, or citation paragraphs, re-check
+the first-citation order against the bibliography.  Mixing author order, year
+order, and drafting order breaks the meaning of in-text [N] labels and makes
+the prior-work flow harder to follow.
 
 ### Rule 3: Cite key は `AuthorYearTopic` 形式に統一
 
