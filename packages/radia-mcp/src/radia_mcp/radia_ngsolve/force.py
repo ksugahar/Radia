@@ -25,6 +25,8 @@ from ngsolve import (CoefficientFunction, InnerProduct, sqrt, dx, ds, Integrate,
 
 MU0 = 4.0e-7 * math.pi
 EPS0 = 8.8541878128e-12
+C0 = 299792458.0
+ETA0 = MU0 * C0
 
 
 def _float_vector(values, name):
@@ -277,6 +279,125 @@ def air_gap_shear_torque_summary(
         "tangential_force_N": force,
         "torque_Nm": torque,
         "torque_per_axial_length_N": torque / length if length > 0.0 else math.inf,
+    }
+
+
+def _validate_optical_coefficients(absorptance, reflectance):
+    absorptance = float(absorptance)
+    reflectance = float(reflectance)
+    if absorptance < 0.0:
+        raise ValueError("absorptance must be >= 0")
+    if reflectance < 0.0:
+        raise ValueError("reflectance must be >= 0")
+    if absorptance + reflectance > 1.0 + 1e-15:
+        raise ValueError("absorptance + reflectance must be <= 1")
+    return absorptance, reflectance
+
+
+def plane_wave_intensity_from_electric_field(
+    electric_field_V_per_m,
+    impedance_ohm=ETA0,
+    amplitude="rms",
+):
+    """Time-average plane-wave intensity [W/m2] from electric-field amplitude.
+
+    ``amplitude="rms"`` uses ``I = E_rms^2 / eta``.  ``amplitude="peak"`` uses
+    ``I = E_peak^2 / (2 eta)``.  This small helper makes RF power-flow examples
+    use the same RMS/peak convention before converting Poynting flux to force.
+    """
+
+    field = float(electric_field_V_per_m)
+    impedance = float(impedance_ohm)
+    if impedance <= 0.0:
+        raise ValueError("impedance_ohm must be > 0")
+    if field < 0.0:
+        raise ValueError("electric_field_V_per_m must be >= 0")
+    if amplitude == "rms":
+        return field * field / impedance
+    if amplitude == "peak":
+        return field * field / (2.0 * impedance)
+    raise ValueError("amplitude must be 'rms' or 'peak'")
+
+
+def radiation_pressure_from_intensity(
+    intensity_W_per_m2,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """Normal-incidence radiation pressure [Pa] from time-average intensity.
+
+    For a normally incident wave with intensity ``I``, the normal momentum flux
+    is ``I / c``.  A perfectly absorbing surface takes one unit of photon
+    momentum, while a perfect mirror reverses it:
+
+        p = (absorptance + 2 reflectance) I / c
+
+    The remaining fraction is transmitted and contributes no force on the
+    surface.  This is the RF/time-harmonic counterpart of the static Maxwell
+    stress helpers above.
+    """
+
+    intensity = float(intensity_W_per_m2)
+    speed = float(speed)
+    if intensity < 0.0:
+        raise ValueError("intensity_W_per_m2 must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    absorptance, reflectance = _validate_optical_coefficients(absorptance, reflectance)
+    return (absorptance + 2.0 * reflectance) * intensity / speed
+
+
+def radiation_force_from_power(
+    power_W,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """Normal force [N] from normally incident time-average RF/optical power."""
+
+    power = float(power_W)
+    speed = float(speed)
+    if power < 0.0:
+        raise ValueError("power_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    absorptance, reflectance = _validate_optical_coefficients(absorptance, reflectance)
+    return (absorptance + 2.0 * reflectance) * power / speed
+
+
+def radiation_pressure_summary(
+    intensity_W_per_m2,
+    area_m2=1.0,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """JSON-friendly radiation-pressure and force summary for a flat patch."""
+
+    intensity = float(intensity_W_per_m2)
+    area = float(area_m2)
+    if intensity < 0.0:
+        raise ValueError("intensity_W_per_m2 must be >= 0")
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    pressure = radiation_pressure_from_intensity(
+        intensity,
+        absorptance=absorptance,
+        reflectance=reflectance,
+        speed=speed,
+    )
+    return {
+        "intensity_W_per_m2": intensity,
+        "area_m2": area,
+        "absorptance": float(absorptance),
+        "reflectance": float(reflectance),
+        "transmittance": 1.0 - float(absorptance) - float(reflectance),
+        "speed_m_per_s": float(speed),
+        "momentum_transfer_factor": float(absorptance) + 2.0 * float(reflectance),
+        "incident_power_W": intensity * area,
+        "pressure_Pa": pressure,
+        "force_N": pressure * area,
     }
 
 
