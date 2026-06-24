@@ -44,6 +44,89 @@ def rectangular_waveguide_cutoff(a, b, m, n):
     return 0.5 * C0 * math.hypot(m / a, n / b)
 
 
+def rectangular_waveguide_mode_table(a, b, max_m=3, max_n=3, families=("TE", "TM"), c=C0):
+    """Sorted cutoff-mode table for a PEC rectangular waveguide.
+
+    ``TE`` modes allow ``m,n >= 0`` except ``TE00``; ``TM`` modes require
+    ``m,n >= 1``.  Each returned row contains ``family``, ``mode``, ``m``,
+    ``n``, ``cutoff_frequency`` [Hz], and ``cutoff_wavenumber`` [1/m].  The
+    table is intentionally small and transparent: it is the analytic checklist
+    for deciding whether a port solve is below cutoff, single-mode, or already
+    multi-mode.
+    """
+    aa, bb = float(a), float(b)
+    if aa <= 0.0 or bb <= 0.0:
+        raise ValueError("waveguide dimensions must be positive")
+    mm, nn = int(max_m), int(max_n)
+    if mm < 0 or nn < 0:
+        raise ValueError("max_m and max_n must be >= 0")
+
+    selected = tuple(str(f).upper() for f in families)
+    unknown = [f for f in selected if f not in ("TE", "TM")]
+    if unknown:
+        raise ValueError("families may contain only 'TE' and 'TM'")
+
+    modes = []
+    for family in selected:
+        for m in range(mm + 1):
+            for n in range(nn + 1):
+                if family == "TE":
+                    if m == 0 and n == 0:
+                        continue
+                elif m == 0 or n == 0:
+                    continue
+                fc = 0.5 * c * math.hypot(m / aa, n / bb)
+                modes.append({
+                    "family": family,
+                    "mode": f"{family}{m}{n}",
+                    "m": m,
+                    "n": n,
+                    "cutoff_frequency": fc,
+                    "cutoff_wavenumber": 2.0 * math.pi * fc / c,
+                })
+    modes.sort(key=lambda row: (
+        row["cutoff_frequency"],
+        0 if row["family"] == "TE" else 1,
+        row["m"],
+        row["n"],
+    ))
+    return modes
+
+
+def rectangular_waveguide_band_summary(a, b, frequency, max_m=3, max_n=3, c=C0):
+    """Classify a rectangular guide at one frequency from its cutoff table.
+
+    Modes with ``frequency > cutoff_frequency`` are listed as propagating; the
+    next higher cutoff is reported for margin checks.  ``single_mode`` is true
+    only when the sole propagating mode is the dominant ``TE10``.  This mirrors
+    the practical RF-port workflow without needing any solver-specific output.
+    """
+    f = float(frequency)
+    if f <= 0.0:
+        raise ValueError("frequency must be positive")
+    table = rectangular_waveguide_mode_table(a, b, max_m=max_m, max_n=max_n, c=c)
+    propagating = [row for row in table if f > row["cutoff_frequency"]]
+    next_rows = [row for row in table if f <= row["cutoff_frequency"]]
+    dominant = table[0] if table else None
+    next_mode = next_rows[0] if next_rows else None
+    single_mode = (
+        len(propagating) == 1
+        and propagating[0]["family"] == "TE"
+        and propagating[0]["m"] == 1
+        and propagating[0]["n"] == 0
+    )
+    return {
+        "frequency": f,
+        "dominant_mode": dominant,
+        "propagating_modes": propagating,
+        "n_propagating": len(propagating),
+        "next_mode": next_mode,
+        "below_dominant_cutoff": len(propagating) == 0,
+        "single_mode": single_mode,
+        "single_mode_upper_cutoff": table[1]["cutoff_frequency"] if len(table) > 1 else None,
+    }
+
+
 def cutoff_frequency(kc, c=C0):
     """Cutoff frequency f_c = c k_c/(2 pi) [Hz] from a cutoff wavenumber k_c [1/m]."""
     return c * kc / (2.0 * math.pi)
