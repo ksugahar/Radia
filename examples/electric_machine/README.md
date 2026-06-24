@@ -24,6 +24,7 @@ NGSolve's high-order curved elements.
 | [`validation_air_gap_shear_torque.py`](validation_air_gap_shear_torque.py) | Validation-class air-gap Maxwell shear stress to motor torque identity | `air_gap_shear_stress`, `air_gap_shear_torque`, `air_gap_shear_torque_summary`, `maxwell_traction_summary` |
 | [`validation_sampled_air_gap_shear_torque.py`](validation_sampled_air_gap_shear_torque.py) | Validation-class sampled air-gap `Br(θ), Bt(θ)` Maxwell shear torque integral, with uniform and harmonic gates | `air_gap_shear_torque_from_angle_samples`, `air_gap_shear_torque` |
 | [`validation_force_resultant_torque.py`](validation_force_resultant_torque.py) | Validation-class force-row resultant and pivot torque identities for patch, element, pressure, or nodal loads | `force_moment_resultant_summary` |
+| [`validation_torque_angle_sweep_summary.py`](validation_torque_angle_sweep_summary.py) | Validation-class periodic torque-angle table metrics: mean, peak-to-peak, RMS, and harmonic amplitudes | `torque_angle_sweep_summary` |
 | [`validation_planar_maxwell_contour_force.py`](validation_planar_maxwell_contour_force.py) | Validation-class 2D Maxwell-stress contour force, per unit depth, with pole-face pressure and closed-contour cancellation checks | `maxwell_line_segment_force_2d`, `maxwell_contour_force_2d`, `air_gap_maxwell_pressure` |
 | [`validation_planar_lorentz_block_force.py`](validation_planar_lorentz_block_force.py) | Validation-class 2D Lorentz block force, per unit depth, checked against Ampere's two-wire force law | `planar_lorentz_force_summary`, `parallel_wire_lorentz_force_summary`, `two_wire_force_per_length` |
 | [`validation_coenergy_torque_angle_sweep.py`](validation_coenergy_torque_angle_sweep.py) | Validation-class virtual-work torque from fixed-current coenergy angle samples | `coenergy_torque_from_angle_samples`, `coenergy_torque_summary` |
@@ -50,6 +51,7 @@ python validation_air_gap_force_sweep.py
 python validation_air_gap_shear_torque.py
 python validation_sampled_air_gap_shear_torque.py
 python validation_force_resultant_torque.py
+python validation_torque_angle_sweep_summary.py
 python validation_planar_maxwell_contour_force.py
 python validation_planar_lorentz_block_force.py
 python validation_coenergy_torque_angle_sweep.py
