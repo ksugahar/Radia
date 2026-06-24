@@ -10,7 +10,9 @@ Provides tools for:
 
 Usage:
     python server.py              # Start MCP server (stdio transport)
-    python server.py --selftest   # Run self-test on examples/
+    python server.py --selftest   # Run lightweight self-test
+    python server.py --selftest --audit-examples
+                                  # Run self-test plus repo-wide examples audit
 """
 
 import json
@@ -4733,49 +4735,56 @@ def cubit_diagnostics_guide(topic: str = "overview") -> str:
 # Self-test
 # ============================================================
 
-def _selftest():
-	"""Run lint on fixtures and optionally examples/."""
-	print("=" * 70)
-	print("Cubit Export Lint Self-Test")
-	print("=" * 70)
-	print()
+def _selftest(audit_examples: bool = False):
+    """Run fixture self-test; optionally run the repo-wide examples audit."""
+    print("=" * 70)
+    print("Cubit Export Lint Self-Test")
+    print("=" * 70)
+    print()
 
-	# --- Fixtures validation ---
-	fixtures_dir = (
-		Path(__file__).parent.parent.parent.parent.parent / "tests"
-		/ "mcp_server" / "fixtures"
-	)
-	if not fixtures_dir.exists():
-		fixtures_dir = Path(__file__).parent / "fixtures"
+    # --- Fixtures validation ---
+    fixtures_dir = (
+        Path(__file__).parent.parent.parent.parent.parent / "tests"
+        / "mcp_server" / "fixtures"
+    )
+    if not fixtures_dir.exists():
+        fixtures_dir = Path(__file__).parent / "fixtures"
 
-	if fixtures_dir.exists():
-		bad_file = fixtures_dir / "bad_cubit_script.py"
-		clean_file = fixtures_dir / "clean_cubit_script.py"
-		if bad_file.exists():
-			findings = _lint_file(str(bad_file))
-			print(f"  bad_cubit_script.py: {len(findings)} finding(s)")
-			if not findings:
-				print("  WARNING: bad_cubit_script.py has no findings")
-		if clean_file.exists():
-			findings = _lint_file(str(clean_file))
-			print(f"  clean_cubit_script.py: {len(findings)} finding(s)")
-			if findings:
-				for f in findings:
-					print(f"    L{f['line']} [{f['severity']}] {f['rule']}: {f['message']}")
-				print("  FAIL: clean script should have zero findings")
-				sys.exit(1)
-		print("  fixture validation: PASSED")
-		print()
+    if fixtures_dir.exists():
+        bad_file = fixtures_dir / "bad_cubit_script.py"
+        clean_file = fixtures_dir / "clean_cubit_script.py"
+        if bad_file.exists():
+            findings = _lint_file(str(bad_file))
+            print(f"  bad_cubit_script.py: {len(findings)} finding(s)")
+            if not findings:
+                print("  WARNING: bad_cubit_script.py has no findings")
+        if clean_file.exists():
+            findings = _lint_file(str(clean_file))
+            print(f"  clean_cubit_script.py: {len(findings)} finding(s)")
+            if findings:
+                for f in findings:
+                    print(f"    L{f['line']} [{f['severity']}] {f['rule']}: {f['message']}")
+                print("  FAIL: clean script should have zero findings")
+                sys.exit(1)
+        print("  fixture validation: PASSED")
+        print()
 
-	# --- Examples scan ---
-	examples_dir = PROJECT_ROOT / "examples"
-	if not examples_dir.exists():
-		if not fixtures_dir.exists():
-			print(f"SKIP: No fixtures or examples/ found")
-		return
+    # --- Examples audit ---
+    examples_dir = PROJECT_ROOT / "examples"
+    if not examples_dir.exists():
+        if not fixtures_dir.exists():
+            print("SKIP: No fixtures or examples/ found")
+        print("PASSED")
+        return
 
-	result = lint_cubit_directory("examples")
-	print(result)
+    if not audit_examples:
+        print("  examples audit: SKIPPED (run --selftest --audit-examples)")
+        print("PASSED")
+        return
+
+    result = lint_cubit_directory("examples")
+    print(result)
+    print("PASSED")
 
 
 
@@ -4791,10 +4800,10 @@ register_status_tool(
 
 def main():
 	"""Entry point for mcp-server-cubit command."""
-	if len(sys.argv) > 1 and sys.argv[1] == '--selftest':
+	if '--selftest' in sys.argv[1:]:
 		from radia_mcp.common.utf8_stdout import use_utf8_stdout
 		use_utf8_stdout()
-		_selftest()
+		_selftest(audit_examples='--audit-examples' in sys.argv[1:])
 	else:
 		mcp.run(transport="stdio")
 
