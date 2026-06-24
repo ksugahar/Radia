@@ -529,6 +529,43 @@ def test_boundary_pressure_force_moment_rows_for_named_box_faces():
         mesh.boundary_pressure_force_moment_rows({"zmax": 2.0}, default_pressure=None)
 
 
+def test_boundary_traction_force_moment_rows_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+
+    one_face = mesh.boundary_traction_force_moment_rows(
+        {"zmax": (1.0, -2.0, 3.0)},
+        default_traction=(0.0, 0.0, 0.0),
+    )
+    by_name = {row["name"]: row for row in one_face}
+    zmax = by_name["zmax"]
+
+    assert zmax["surface_area"] == pytest.approx(6.0)
+    assert zmax["centroid_m"] == pytest.approx((1.0, 1.5, 5.0))
+    assert zmax["force_N"] == pytest.approx((6.0, -12.0, 18.0))
+    assert zmax["moment_about_pivot_Nm"] == pytest.approx((87.0, 12.0, -21.0))
+    assert zmax["traction_source"] == "name"
+    assert by_name["xmin"]["traction_source"] == "default"
+    assert by_name["xmin"]["force_N"] == pytest.approx((0.0, 0.0, 0.0))
+
+    shifted = mesh.boundary_traction_force_moment_rows(
+        {"zmax": (1.0, -2.0, 3.0)},
+        default_traction=(0.0, 0.0, 0.0),
+        pivot_m=(1.0, 1.5, 5.0),
+    )
+    assert {row["name"]: row for row in shifted}["zmax"]["moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    by_number = mesh.boundary_traction_force_moment_rows(
+        {6: (0.0, 0.0, 2.0)},
+        default_traction=(0.0, 0.0, 0.0),
+    )
+    assert {row["name"]: row for row in by_number}["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+
+    with pytest.raises(KeyError):
+        mesh.boundary_traction_force_moment_rows({"zmax": (1.0, 0.0, 0.0)}, default_traction=None)
+    with pytest.raises(ValueError):
+        mesh.boundary_traction_force_moment_rows({"zmax": (1.0, 0.0)}, default_traction=(0.0, 0.0, 0.0))
+
+
 def test_material_summary_rows_for_two_material_interface():
     mesh = parse_netgen_tri_tet_vol(TWO_MATERIAL_INTERFACE_VOL)
     rows = mesh.material_summary_rows()

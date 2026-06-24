@@ -26,7 +26,7 @@ of the methods below, with an analytic sanity check available.
 | Rotating machine torque from field solution | Weighted Maxwell stress torque | ``force.eggshell_torque*`` |
 | Simple closed integration surface in air | Maxwell surface stress | ``force.maxwell_surface_force*`` |
 | One surface patch / sign convention teaching | Local Maxwell traction | ``force.maxwell_stress_tensor_air`` / ``force.maxwell_traction_summary`` |
-| First-order `.vol` boundary triangle force trace | P1 triangle traction load / Maxwell traction / boundary pressure rows | ``force.surface_triangle_constant_traction_load_summary``, ``force.surface_triangle_maxwell_traction_summary``, ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows`` |
+| First-order `.vol` boundary triangle force trace | P1 triangle traction load / Maxwell traction / boundary pressure/vector-traction rows | ``force.surface_triangle_constant_traction_load_summary``, ``force.surface_triangle_maxwell_traction_summary``, ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows``, ``NetgenTriTetVolMesh.boundary_traction_force_moment_rows`` |
 | Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
 | Discrete force rows to net force/torque | Resultant and pivot moment sum | ``force.force_moment_resultant_summary`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
@@ -222,6 +222,9 @@ careful remeshing.
   force/moment preservation.
 - ``examples/cubit_mesh_export/validation_vol_boundary_pressure_moment.py``:
   named `.vol` sidesets to pressure force/moment rows and generic resultant reduction.
+- ``examples/cubit_mesh_export/validation_vol_boundary_traction_moment.py``:
+  named `.vol` sidesets to constant vector-traction force/moment rows and
+  generic resultant reduction.
 - ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:
   build123d analytic box pressure moments checked against named `.vol` rows.
 - ``examples/electric_machine/validation_virtual_work_force_displacement_sweep.py``:
