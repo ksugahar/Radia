@@ -306,6 +306,52 @@ endmesh
 """
 
 
+TWO_MATERIAL_INTERFACE_VOL = """\
+mesh3d
+dimension
+3
+geomtype
+0
+facedescriptors
+3
+1 1 0 1 1
+2 1 0 2 1
+3 1 2 2 1
+surfaceelements
+7
+1 1 1 0 3 1 4 2
+1 1 1 0 3 2 4 3
+1 1 1 0 3 3 4 1
+2 2 2 0 3 1 2 5
+2 2 2 0 3 2 3 5
+2 2 2 0 3 3 1 5
+3 3 1 2 3 1 2 3
+volumeelements
+2
+1 4 1 2 3 4
+2 4 1 3 2 5
+points
+5
+0 0 0
+1 0 0
+0 1 0
+0 0 1
+0 0 -1
+pointelements
+0
+materials
+2
+1 air
+2 core
+bcnames
+3
+1 air_outer
+2 core_outer
+3 air_core_interface
+endmesh
+"""
+
+
 def test_parse_tri_tet_vol_summary():
     mesh = parse_netgen_tri_tet_vol(TET_VOL)
 
@@ -383,6 +429,66 @@ def test_boundary_summary_rows_for_named_box_faces():
     assert sum(row["surface_area"] for row in rows) == pytest.approx(mesh.total_surface_area())
     assert all(row["trace_node_count"] == 4 for row in rows)
     assert mesh.total_volume() == pytest.approx(30.0)
+
+
+def test_material_summary_rows_for_two_material_interface():
+    mesh = parse_netgen_tri_tet_vol(TWO_MATERIAL_INTERFACE_VOL)
+    rows = mesh.material_summary_rows()
+    by_name = {row["name"]: row for row in rows}
+    outer_area = 1.0 + 0.5 * math.sqrt(3.0)
+
+    assert [row["material_number"] for row in rows] == [1, 2]
+    assert by_name["air"]["tetrahedra"] == 1
+    assert by_name["core"]["tetrahedra"] == 1
+    assert by_name["air"]["volume"] == pytest.approx(1.0 / 6.0)
+    assert by_name["core"]["volume"] == pytest.approx(1.0 / 6.0)
+    assert by_name["air"]["volume_fraction"] == pytest.approx(0.5)
+    assert by_name["core"]["volume_fraction"] == pytest.approx(0.5)
+    assert by_name["air"]["boundary_names"] == ["air_outer", "air_core_interface"]
+    assert by_name["core"]["boundary_names"] == ["core_outer", "air_core_interface"]
+    assert by_name["air"]["exterior_boundary_numbers"] == [1]
+    assert by_name["core"]["exterior_boundary_numbers"] == [2]
+    assert by_name["air"]["interface_boundary_numbers"] == [3]
+    assert by_name["core"]["interface_boundary_numbers"] == [3]
+    assert by_name["air"]["neighboring_material_numbers"] == [2]
+    assert by_name["core"]["neighboring_material_numbers"] == [1]
+    assert by_name["air"]["exterior_surface_area"] == pytest.approx(outer_area)
+    assert by_name["core"]["exterior_surface_area"] == pytest.approx(outer_area)
+    assert by_name["air"]["interface_surface_area"] == pytest.approx(0.5)
+    assert by_name["core"]["interface_surface_area"] == pytest.approx(0.5)
+
+
+def test_domain_boundary_incidence_rows_preserve_domin_domout():
+    mesh = parse_netgen_tri_tet_vol(TWO_MATERIAL_INTERFACE_VOL)
+    rows = mesh.domain_boundary_incidence_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert [row["name"] for row in rows] == [
+        "air_outer",
+        "core_outer",
+        "air_core_interface",
+    ]
+    assert by_name["air_outer"]["kind"] == "exterior"
+    assert by_name["air_outer"]["domin"] == 1
+    assert by_name["air_outer"]["domout"] == 0
+    assert by_name["air_outer"]["domin_material"] == "air"
+    assert by_name["air_outer"]["domout_material"] is None
+    assert by_name["air_outer"]["surface_triangles"] == 3
+    assert by_name["air_outer"]["trace_node_ids"] == [1, 2, 3, 4]
+
+    assert by_name["core_outer"]["kind"] == "exterior"
+    assert by_name["core_outer"]["domin_material"] == "core"
+    assert by_name["core_outer"]["trace_node_ids"] == [1, 2, 3, 5]
+
+    interface = by_name["air_core_interface"]
+    assert interface["kind"] == "interface"
+    assert interface["domin"] == 1
+    assert interface["domout"] == 2
+    assert interface["domin_material"] == "air"
+    assert interface["domout_material"] == "core"
+    assert interface["surface_triangles"] == 1
+    assert interface["surface_area"] == pytest.approx(0.5)
+    assert interface["trace_node_ids"] == [1, 2, 3]
 
 
 def test_surface_connected_components_single_open_and_disconnected():

@@ -270,6 +270,107 @@ class NetgenTriTetVolMesh:
             })
         return tuple(rows)
 
+    def domain_boundary_incidence_rows(self) -> tuple[dict[str, object], ...]:
+        """Return boundary rows grouped by adjacent volume domains.
+
+        Netgen ``surfaceelements`` carry ``domin`` and ``domout`` integers.  For
+        Coreform/Cubit exports these are the small but important bridge from a
+        named sideset to the volume material(s) it touches: ``domout == 0`` is an
+        exterior boundary, while two nonzero domains mark an interface.  Keeping
+        this as a readable table makes FEM material assignment and BEM/interface
+        operator setup share the same one-based node ids.
+        """
+
+        groups: dict[tuple[int, int, int], list[tuple[NetgenSurfaceTriangle, float]]] = {}
+        for tri, area in zip(self.surface_triangles, self.surface_triangle_areas()):
+            groups.setdefault((tri.bcnr, tri.domin, tri.domout), []).append((tri, area))
+
+        rows: list[dict[str, object]] = []
+        for (bcnr, domin, domout), entries in sorted(groups.items()):
+            node_ids = sorted({node for tri, _area in entries for node in tri.nodes})
+            rows.append({
+                "boundary_number": bcnr,
+                "name": self.boundary_names.get(bcnr, f"boundary_{bcnr}"),
+                "domin": domin,
+                "domout": domout,
+                "domin_material": self.materials.get(domin) if domin else None,
+                "domout_material": self.materials.get(domout) if domout else None,
+                "kind": "exterior" if 0 in (domin, domout) else "interface",
+                "surface_triangles": len(entries),
+                "surface_area": sum(area for _tri, area in entries),
+                "trace_node_count": len(node_ids),
+                "trace_node_ids": node_ids,
+            })
+        return tuple(rows)
+
+    def material_summary_rows(self) -> tuple[dict[str, object], ...]:
+        """Return volume/material inventory with boundary incidence.
+
+        The rows are keyed by ``volumeelements`` material number and include
+        tetrahedron count, volume, node ids, touching boundary names, exterior
+        area, and interface area.  This is the volume-side companion to
+        :meth:`boundary_summary_rows`.
+        """
+
+        signed_volumes = self.tetrahedron_signed_volumes()
+        material_numbers = sorted(
+            set(self.materials) | {tet.matnr for tet in self.tetrahedra}
+        )
+        total = self.total_volume()
+        rows: list[dict[str, object]] = []
+        for matnr in material_numbers:
+            tet_ids = [
+                index
+                for index, tet in enumerate(self.tetrahedra, start=1)
+                if tet.matnr == matnr
+            ]
+            node_ids = sorted({
+                node
+                for tet_id in tet_ids
+                for node in self.tetrahedra[tet_id - 1].nodes
+            })
+            volume = sum(abs(signed_volumes[tet_id - 1]) for tet_id in tet_ids)
+            boundary_numbers: set[int] = set()
+            exterior_boundary_numbers: set[int] = set()
+            interface_boundary_numbers: set[int] = set()
+            neighboring_material_numbers: set[int] = set()
+            exterior_area = 0.0
+            interface_area = 0.0
+            for tri, area in zip(self.surface_triangles, self.surface_triangle_areas()):
+                if matnr not in (tri.domin, tri.domout):
+                    continue
+                boundary_numbers.add(tri.bcnr)
+                other = tri.domout if tri.domin == matnr else tri.domin
+                if other == 0:
+                    exterior_boundary_numbers.add(tri.bcnr)
+                    exterior_area += area
+                else:
+                    interface_boundary_numbers.add(tri.bcnr)
+                    neighboring_material_numbers.add(other)
+                    interface_area += area
+
+            rows.append({
+                "material_number": matnr,
+                "name": self.materials.get(matnr, f"material_{matnr}"),
+                "tetrahedra": len(tet_ids),
+                "tetrahedron_ids": tet_ids,
+                "volume": volume,
+                "volume_fraction": volume / total if total > 0.0 else None,
+                "node_count": len(node_ids),
+                "node_ids": node_ids,
+                "boundary_numbers": sorted(boundary_numbers),
+                "boundary_names": [
+                    self.boundary_names.get(bcnr, f"boundary_{bcnr}")
+                    for bcnr in sorted(boundary_numbers)
+                ],
+                "exterior_boundary_numbers": sorted(exterior_boundary_numbers),
+                "interface_boundary_numbers": sorted(interface_boundary_numbers),
+                "neighboring_material_numbers": sorted(neighboring_material_numbers),
+                "exterior_surface_area": exterior_area,
+                "interface_surface_area": interface_area,
+            })
+        return tuple(rows)
+
     def surface_triangle_area_vectors(self) -> tuple[tuple[float, float, float], ...]:
         """Return oriented boundary triangle area vectors.
 
