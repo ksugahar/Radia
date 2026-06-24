@@ -19,6 +19,7 @@ from radia_mcp.radia_ngsolve.electrostatics import (
     isolated_disk_capacitance,
     spreading_resistance_disk,
     coaxial_shell_resistance,
+    coaxial_capacitor_energy_force,
     layered_parallel_plate_capacitance,
     parallel_plate_capacitor_energy_force,
     capacitance_gradient_force_summary,
@@ -66,6 +67,44 @@ def test_coaxial_shell_resistance():
     assert math.isclose(R * C_coax, rho * EPS0, rel_tol=1e-12)
     with pytest.raises(ValueError):
         coaxial_shell_resistance(rho, 0.02, 0.01, L)   # r_outer < r_inner
+
+
+def test_coaxial_capacitor_energy_force():
+    er, a, b, length, voltage = 2.5, 0.01, 0.03, 0.2, 120.0
+    out = coaxial_capacitor_energy_force(er, a, b, length, voltage)
+    eps = EPS0 * er
+    log_ratio = math.log(b / a)
+    capacitance = 2.0 * math.pi * eps * length / log_ratio
+    e_inner = voltage / (a * log_ratio)
+    e_outer = voltage / (b * log_ratio)
+
+    assert out["C"] == pytest.approx(capacitance)
+    assert out["energy"] == pytest.approx(0.5 * capacitance * voltage * voltage)
+    assert out["electric_field_inner_V_per_m"] == pytest.approx(e_inner)
+    assert out["electric_field_outer_V_per_m"] == pytest.approx(e_outer)
+    assert out["pressure_inner_Pa"] == pytest.approx(0.5 * eps * e_inner * e_inner)
+    assert out["pressure_outer_Pa"] == pytest.approx(0.5 * eps * e_outer * e_outer)
+    assert out["inner_radius_force_N"] == pytest.approx(out["inner_pressure_area_force_N"])
+    assert out["outer_radius_force_N"] == pytest.approx(out["outer_pressure_area_force_N"])
+
+    inner_gradient = capacitance_gradient_force_summary(
+        out["C"],
+        out["dCdr_inner_F_per_m"],
+        voltage_V=voltage,
+    )
+    outer_gradient = capacitance_gradient_force_summary(
+        out["C"],
+        out["dCdr_outer_F_per_m"],
+        voltage_V=voltage,
+    )
+    assert inner_gradient["fixed_voltage_force_N"] == pytest.approx(out["inner_radius_force_N"])
+    assert outer_gradient["fixed_voltage_force_N"] == pytest.approx(out["outer_radius_force_N"])
+    assert out["inner_radius_force_N"] > 0.0
+    assert out["outer_radius_force_N"] < 0.0
+    assert out["pressure_inner_Pa"] / out["pressure_outer_Pa"] == pytest.approx((b / a) ** 2)
+
+    with pytest.raises(ValueError):
+        coaxial_capacitor_energy_force(er, b, a, length, voltage)
 
 
 def test_layered_parallel_plate_capacitance():
