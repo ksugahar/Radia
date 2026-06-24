@@ -16,10 +16,12 @@ Example scripts for the radia Cubit C++ plugin (`cubit_mesh_export.ccm`), organi
 |---|---|
 | [`validation_vol_surface_closure.py`](validation_vol_surface_closure.py) | Netgen `.vol` boundary orientation, vector-area closure, and boundary/tet volume agreement |
 | [`validation_vol_fem_bem_topology.py`](validation_vol_fem_bem_topology.py) | First-order FEM/BEM topology view: closed surface edge manifold, Euler characteristic, compact scalar-BEM nodes, RWG-to-HCurl edge trace |
+| [`validation_vol_tet_quality.py`](validation_vol_tet_quality.py) | Netgen `.vol` tetrahedron quality: edge ratio, inradius, circumradius, radius-ratio quality, and optional real Cubit export evaluation |
 
 ```powershell
 python validation_vol_surface_closure.py
 python validation_vol_fem_bem_topology.py
+python validation_vol_tet_quality.py
 ```
 
 Each folder contains:
@@ -29,7 +31,7 @@ Each folder contains:
 
 ## Running Examples
 
-```bash
+```powershell
 python <folder>/<script>.py
 ```
 
