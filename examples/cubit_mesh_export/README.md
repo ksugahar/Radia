@@ -10,6 +10,18 @@ Example scripts for the radia Cubit C++ plugin (`cubit_mesh_export.ccm`), organi
 | [nastran/](nastran/) | Nastran BDF (.bdf) | CTETRA/CHEXA/CTRIA, order 1-2 |
 | [other_formats/](other_formats/) | Custom formats | FreeFEM, ANSYS CDB, Lukas 2D |
 
+## Validation examples
+
+| Example | Shows |
+|---|---|
+| [`validation_vol_surface_closure.py`](validation_vol_surface_closure.py) | Netgen `.vol` boundary orientation, vector-area closure, and boundary/tet volume agreement |
+| [`validation_vol_fem_bem_topology.py`](validation_vol_fem_bem_topology.py) | First-order FEM/BEM topology view: closed surface edge manifold, Euler characteristic, compact scalar-BEM nodes, RWG-to-HCurl edge trace |
+
+```powershell
+python validation_vol_surface_closure.py
+python validation_vol_fem_bem_topology.py
+```
+
 Each folder contains:
 - Example Python scripts (using `cubit.cmd('export ...')`)
 - Pre-generated sample output files
