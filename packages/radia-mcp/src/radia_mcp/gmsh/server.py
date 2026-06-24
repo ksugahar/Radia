@@ -174,6 +174,12 @@ def _directory_numsubedges_companion(directory: str) -> dict:
     }
 
 
+def _line_excerpt(lines: list[str], line_number: int) -> str:
+    if line_number <= 0 or line_number > len(lines):
+        return ""
+    return lines[line_number - 1].strip()
+
+
 # ============================================================
 # Tools
 # ============================================================
@@ -327,6 +333,89 @@ def gmsh_numsubedges_remediation_plan(directory: str = "examples",
                 "count": count,
                 "directory_companion": _directory_numsubedges_companion(directory),
             }
+            for directory, count in sorted(
+                by_directory.items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+        ],
+        "affected": affected,
+    }
+
+
+@mcp.tool()
+def gmsh_mesh_generation_remediation_plan(directory: str = "examples",
+                                          limit: int = 20) -> dict:
+    """
+    List scripts that still use GMSH as a mesh generator.
+
+    This is the actionable companion to the `gmsh-mesh-generation` audit rule.
+    It reports affected files, line snippets, directory grouping, and a
+    public-safe migration hint toward Netgen/Cubit `.vol` mesh generation plus
+    GMSH-only visualization.
+    """
+    d = Path(directory)
+    if not d.is_absolute():
+        d = PROJECT_ROOT / d
+    if not d.exists():
+        return {
+            "ok": False,
+            "error": f"Directory not found: {d}",
+            "directory": str(d),
+        }
+
+    max_items = max(0, min(int(limit), 200))
+    affected = []
+    by_directory: Counter[str] = Counter()
+    total = 0
+    total_findings = 0
+
+    for py_file in sorted(d.rglob("*.py")):
+        findings = [
+            finding
+            for finding in _lint_file(str(py_file))
+            if finding.get("rule") == "gmsh-mesh-generation"
+        ]
+        if not findings:
+            continue
+        total += 1
+        total_findings += len(findings)
+        rel = _relative_to_project(py_file)
+        by_directory[str(Path(rel).parent)] += len(findings)
+        if len(affected) >= max_items:
+            continue
+        try:
+            lines = py_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            lines = []
+        affected.append({
+            "script": rel,
+            "findings": [
+                {
+                    "line": finding.get("line", 0),
+                    "message": finding.get("message", ""),
+                    "snippet": _line_excerpt(lines, int(finding.get("line", 0))),
+                }
+                for finding in findings
+            ],
+            "migration_hint": (
+                "Replace GMSH geometry/mesh generation with Netgen OCC or "
+                "Cubit/Coreform export netgen .vol. Keep GMSH only for opening "
+                "or post-processing existing .msh/.geo visualization files."
+            ),
+            "mesh_output_hint": "Prefer Mesh('model.vol') for NGSolve inputs.",
+        })
+
+    return {
+        "ok": True,
+        "directory": str(d),
+        "rule": "gmsh-mesh-generation",
+        "total_affected": total,
+        "total_findings": total_findings,
+        "returned": len(affected),
+        "truncated": total > len(affected),
+        "action": _RULE_REMEDIATIONS["gmsh-mesh-generation"],
+        "directory_groups": [
+            {"directory": directory, "findings": count}
             for directory, count in sorted(
                 by_directory.items(),
                 key=lambda item: (-item[1], item[0]),
