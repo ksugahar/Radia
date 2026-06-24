@@ -1,0 +1,277 @@
+{
+  "kind": "slot_table_winding_spectrum_validation",
+  "validation_class": true,
+  "harmonics": [
+    1,
+    3,
+    5,
+    7,
+    9,
+    11,
+    13
+  ],
+  "layouts": [
+    {
+      "label": "integral_36s4p",
+      "slots": 36,
+      "poles": 4,
+      "slots_per_pole_per_phase": 3.0,
+      "phase_a_signs": [
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "active_phase_a_slots": 12.0,
+      "harmonics": [
+        {
+          "harmonic": 1,
+          "kw_abs": 0.9597950805239391,
+          "kw_angle_deg": 1.1322099250326355e-14,
+          "direction": 1,
+          "integral_slot_closed_form": 0.9597950805239389,
+          "integral_slot_abs_error": 2.220446049250313e-16
+        },
+        {
+          "harmonic": 3,
+          "kw_abs": 0.666666666666667,
+          "kw_angle_deg": 3.339582415536691e-14,
+          "direction": 0,
+          "integral_slot_closed_form": 0.6666666666666667,
+          "integral_slot_abs_error": 2.220446049250313e-16
+        },
+        {
+          "harmonic": 5,
+          "kw_abs": 0.21756788155538032,
+          "kw_angle_deg": 1.681147905442109e-13,
+          "direction": -1,
+          "integral_slot_closed_form": 0.21756788155537973,
+          "integral_slot_abs_error": 5.828670879282072e-16
+        },
+        {
+          "harmonic": 7,
+          "kw_abs": 0.1773629620793178,
+          "kw_angle_deg": -179.99999999999983,
+          "direction": 1,
+          "integral_slot_closed_form": 0.17736296207931862,
+          "integral_slot_abs_error": 8.326672684688674e-16
+        },
+        {
+          "harmonic": 9,
+          "kw_abs": 0.3333333333333333,
+          "kw_angle_deg": -179.99999999999994,
+          "direction": 0,
+          "integral_slot_closed_form": 0.3333333333333333,
+          "integral_slot_abs_error": 0.0
+        },
+        {
+          "harmonic": 11,
+          "kw_abs": 0.1773629620793201,
+          "kw_angle_deg": 179.99999999999994,
+          "direction": -1,
+          "integral_slot_closed_form": 0.17736296207931884,
+          "integral_slot_abs_error": 1.2490009027033011e-15
+        },
+        {
+          "harmonic": 13,
+          "kw_abs": 0.2175678815553784,
+          "kw_angle_deg": -2.4364462397711935e-14,
+          "direction": 1,
+          "integral_slot_closed_form": 0.21756788155537976,
+          "integral_slot_abs_error": 1.3600232051658168e-15
+        }
+      ],
+      "max_integral_slot_abs_error": 1.3600232051658168e-15
+    },
+    {
+      "label": "fractional_12s10p",
+      "slots": 12,
+      "poles": 10,
+      "slots_per_pole_per_phase": 0.4,
+      "phase_a_signs": [
+        1.0,
+        -1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        -1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "active_phase_a_slots": 6.0,
+      "harmonics": [
+        {
+          "harmonic": 1,
+          "kw_abs": 0.9106836025229589,
+          "kw_angle_deg": 3.492491434623512e-15,
+          "direction": 1,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 3,
+          "kw_abs": 0.33333333333333226,
+          "kw_angle_deg": 1.526666247102493e-13,
+          "direction": 0,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 5,
+          "kw_abs": 0.24401693585629183,
+          "kw_angle_deg": 179.99999999999946,
+          "direction": -1,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 7,
+          "kw_abs": 0.24401693585629103,
+          "kw_angle_deg": 179.9999999999989,
+          "direction": 1,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 9,
+          "kw_abs": 0.3333333333333374,
+          "kw_angle_deg": 8.714719827209929e-13,
+          "direction": 0,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 11,
+          "kw_abs": 0.9106836025229607,
+          "kw_angle_deg": -1.1234180781372273e-13,
+          "direction": -1,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 13,
+          "kw_abs": 0.9106836025229543,
+          "kw_angle_deg": -9.546143254637647e-14,
+          "direction": 1,
+          "integral_slot_closed_form": null
+        }
+      ],
+      "max_integral_slot_abs_error": null
+    },
+    {
+      "label": "fractional_24s22p",
+      "slots": 24,
+      "poles": 22,
+      "slots_per_pole_per_phase": 0.36363636363636365,
+      "phase_a_signs": [
+        1.0,
+        -1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.0,
+        1.0,
+        -1.0,
+        1.0,
+        -1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        -1.0
+      ],
+      "active_phase_a_slots": 10.0,
+      "harmonics": [
+        {
+          "harmonic": 1,
+          "kw_abs": 0.9327804920294032,
+          "kw_angle_deg": 2.0458541159305845e-13,
+          "direction": 1,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 3,
+          "kw_abs": 0.48284271247462274,
+          "kw_angle_deg": 6.679364446602288e-13,
+          "direction": 0,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 5,
+          "kw_abs": 0.04288254347276553,
+          "kw_angle_deg": -179.99999999999216,
+          "direction": -1,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 7,
+          "kw_abs": 0.2499377795547777,
+          "kw_angle_deg": -179.99999999999744,
+          "direction": 1,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 9,
+          "kw_abs": 0.08284271247461969,
+          "kw_angle_deg": -179.99999999999443,
+          "direction": 0,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 11,
+          "kw_abs": 0.16003983099814817,
+          "kw_angle_deg": 3.815715719220306e-12,
+          "direction": -1,
+          "integral_slot_closed_form": null
+        },
+        {
+          "harmonic": 13,
+          "kw_abs": 0.16003983099814842,
+          "kw_angle_deg": 6.476779962989041e-12,
+          "direction": 1,
+          "integral_slot_closed_form": null
+        }
+      ],
+      "max_integral_slot_abs_error": null
+    }
+  ]
+}
