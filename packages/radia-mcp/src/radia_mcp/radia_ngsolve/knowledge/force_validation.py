@@ -31,7 +31,7 @@ of the methods below, with an analytic sanity check available.
 | Discrete force rows to net force/torque | Resultant and pivot moment sum | ``force.force_moment_resultant_summary`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
-| Uniform cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*`` |
+| Uniform / sampled cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*``, ``force.air_gap_shear_torque_from_angle_samples`` |
 | RF beam / waveguide radiation pressure | Time-averaged Poynting momentum flux | ``force.radiation_pressure_*``, ``force.poynting_patch_force_summary``, ``force.time_average_maxwell_*`` |
 | Energy/inductance-derived checks | Field energy / virtual work | ``force.magnetic_energy*``, ``force.inductance_*``, ``force.virtual_work_force_*`` |
 | dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
@@ -87,6 +87,17 @@ p = B_gap^2 / (2 mu0),     F = p A
 
 This is the fast sanity check for solenoids, relays, magnetic circuits, and
 pole-face holding force.  It is the local Maxwell stress evaluated in the gap.
+
+Sampled cylindrical air-gap torque:
+
+```text
+tau(theta) = Br(theta) Bt(theta) / mu0
+T = r^2 L integral tau(theta) dtheta
+```
+
+This is the machine-torque post-processing path for exported air-gap samples.
+The uniform helper is a closed-form special case; the sampled helper integrates
+segment contributions so sector scaling and harmonic signs stay visible.
 
 Electrostatic normal pressure:
 
@@ -195,6 +206,9 @@ careful remeshing.
 - ``examples/electric_machine/validation_virtual_work_force_displacement_sweep.py``:
   displacement energy/coenergy samples to force, including the fixed-current
   versus fixed-flux sign gate.
+- ``examples/electric_machine/validation_sampled_air_gap_shear_torque.py``:
+  sampled cylindrical air-gap ``Br``/``Bt`` to torque, including uniform and
+  harmonic analytic gates.
 - ``examples/electrostatics/validation_parallel_plate_electrostatic_force.py``:
   capacitance-energy, Maxwell-pressure, and traction-equivalence gate.
 - ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.
