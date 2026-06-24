@@ -16,6 +16,56 @@ generations to reliably reach the global optimum (smaller budgets stall one Rast
 import numpy as np
 
 
+def constraint_violation(constraints, norm="l1"):
+    """Positive-part violation for constraints written in Optuna's ``c <= 0`` style.
+
+    ``constraints`` is an iterable of scalar constraint residuals: values <= 0
+    are feasible, positive values violate the constraint.  The default L1 sum is
+    easy to read in logs; L2 and L-infinity are available for alternative
+    ranking/reporting.
+    """
+    vals = np.asarray(list(constraints), dtype=float)
+    if vals.ndim != 1:
+        raise ValueError("constraints must be a one-dimensional sequence")
+    pos = np.maximum(vals, 0.0)
+    if norm == "l1":
+        return float(np.sum(pos))
+    if norm == "l2":
+        return float(np.sqrt(np.sum(pos * pos)))
+    if norm in ("linf", "inf"):
+        return float(np.max(pos)) if len(pos) else 0.0
+    raise ValueError("norm must be 'l1', 'l2', or 'linf'")
+
+
+def best_feasible_record(records, value_key="value", constraints_key="constraints",
+                         minimize=True):
+    """Select the best feasible optimization record with transparent fallback.
+
+    Records are dictionaries carrying a scalar objective value and a constraint
+    residual sequence in the ``c <= 0`` convention used by Optuna constrained
+    samplers.  If at least one record is feasible, the best objective among
+    feasible records is returned.  If none are feasible, the least-violating
+    record is returned, with objective value as the tie-breaker.  The returned
+    copy includes ``feasible`` and ``constraint_violation`` fields.
+    """
+    rows = [dict(r) for r in records]
+    if not rows:
+        raise ValueError("records must be non-empty")
+    for row in rows:
+        row["constraint_violation"] = constraint_violation(row.get(constraints_key, ()))
+        row["feasible"] = row["constraint_violation"] == 0.0
+        row["_objective_sort"] = float(row[value_key]) if minimize else -float(row[value_key])
+
+    feasible = [row for row in rows if row["feasible"]]
+    pool = feasible if feasible else rows
+    if feasible:
+        best = min(pool, key=lambda row: row["_objective_sort"])
+    else:
+        best = min(pool, key=lambda row: (row["constraint_violation"], row["_objective_sort"]))
+    best.pop("_objective_sort", None)
+    return best
+
+
 def differential_evolution(func, bounds, popsize=15, F=0.7, CR=0.9, maxiter=400,
                            tol=1e-12, seed=0):
     """Minimize ``func(x)`` over the box ``bounds`` (list of (lo, hi) per dimension) by Differential
