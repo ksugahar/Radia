@@ -378,6 +378,49 @@ class NetgenTriTetVolMesh:
             })
         return tuple(rows)
 
+    def boundary_pressure_force_rows(
+        self,
+        pressure_by_boundary: dict[int | str, float],
+        default_pressure: float | None = 0.0,
+    ) -> tuple[dict[str, object], ...]:
+        """Return per-boundary force rows from scalar pressure and vector area.
+
+        Pressure is positive along the boundary's oriented outward normal:
+        ``force = pressure * vector_area``.  Keys may be Netgen boundary numbers
+        or boundary names.  Set ``default_pressure=None`` to require every
+        boundary to be explicitly present.
+        """
+
+        rows: list[dict[str, object]] = []
+        for normal_row in self.boundary_normal_summary_rows():
+            bcnr = int(normal_row["boundary_number"])
+            name = str(normal_row["name"])
+            if bcnr in pressure_by_boundary:
+                pressure = float(pressure_by_boundary[bcnr])
+                source = "boundary_number"
+            elif name in pressure_by_boundary:
+                pressure = float(pressure_by_boundary[name])
+                source = "name"
+            elif default_pressure is not None:
+                pressure = float(default_pressure)
+                source = "default"
+            else:
+                raise KeyError(f"missing pressure for boundary {bcnr} ({name})")
+            vector = tuple(float(value) for value in normal_row["vector_area"])
+            force = tuple(pressure * value for value in vector)
+            rows.append({
+                "boundary_number": bcnr,
+                "name": name,
+                "pressure_Pa": pressure,
+                "pressure_source": source,
+                "surface_area": normal_row["surface_area"],
+                "vector_area": vector,
+                "unit_normal": normal_row["unit_normal"],
+                "force_N": force,
+                "force_magnitude_N": _norm(force),
+            })
+        return tuple(rows)
+
     def boundary_summary_rows(self) -> tuple[dict[str, object], ...]:
         """Return named boundary inventory rows for FEM/BEM conditions.
 

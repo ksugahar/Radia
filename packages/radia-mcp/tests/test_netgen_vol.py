@@ -465,6 +465,30 @@ def test_boundary_normal_summary_rows_for_named_box_faces():
         assert by_name[name]["unit_normal"] == pytest.approx(expected_normals[name])
 
 
+def test_boundary_pressure_force_rows_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+
+    uniform = mesh.boundary_pressure_force_rows({"xmin": 2.0, "xmax": 2.0, "ymin": 2.0, "ymax": 2.0, "zmin": 2.0, "zmax": 2.0})
+    total_uniform = [
+        sum(row["force_N"][axis] for row in uniform)
+        for axis in range(3)
+    ]
+    assert total_uniform == pytest.approx([0.0, 0.0, 0.0])
+
+    one_face = mesh.boundary_pressure_force_rows({"zmax": 2.0}, default_pressure=0.0)
+    by_name = {row["name"]: row for row in one_face}
+    assert by_name["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert by_name["zmax"]["force_magnitude_N"] == pytest.approx(12.0)
+    assert by_name["zmax"]["pressure_source"] == "name"
+    assert by_name["xmin"]["pressure_source"] == "default"
+
+    by_number = mesh.boundary_pressure_force_rows({6: 3.0}, default_pressure=0.0)
+    assert {row["name"]: row for row in by_number}["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 18.0))
+
+    with pytest.raises(KeyError):
+        mesh.boundary_pressure_force_rows({"zmax": 2.0}, default_pressure=None)
+
+
 def test_material_summary_rows_for_two_material_interface():
     mesh = parse_netgen_tri_tet_vol(TWO_MATERIAL_INTERFACE_VOL)
     rows = mesh.material_summary_rows()
