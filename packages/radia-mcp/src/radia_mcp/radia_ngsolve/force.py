@@ -27,6 +27,117 @@ MU0 = 4.0e-7 * math.pi
 EPS0 = 8.8541878128e-12
 
 
+def _float_vector(values, name):
+    vec = [float(value) for value in values]
+    if len(vec) not in (2, 3):
+        raise ValueError(f"{name} must have length 2 or 3")
+    return vec
+
+
+def _unit_vector(values, name):
+    vec = _float_vector(values, name)
+    norm = math.sqrt(sum(value * value for value in vec))
+    if norm <= 0.0:
+        raise ValueError(f"{name} must be nonzero")
+    return [value / norm for value in vec]
+
+
+def maxwell_stress_tensor_air(B, mu=MU0):
+    """Pointwise magnetic Maxwell stress tensor in air.
+
+    ``B`` is a 2- or 3-component flux-density vector [T].  The returned nested
+    list is
+
+        T_ij = (B_i B_j - 0.5 |B|^2 delta_ij) / mu
+
+    in pascals.  This dependency-free helper mirrors the integrand used by the
+    surface and weighted-stress FEM extractors, so examples can teach the local
+    traction identity before moving to mesh integrals.
+    """
+
+    mu = float(mu)
+    if mu <= 0.0:
+        raise ValueError("mu must be > 0")
+    b = _float_vector(B, "B")
+    b2 = sum(value * value for value in b)
+    dim = len(b)
+    return [
+        [
+            (b[i] * b[j] - (0.5 * b2 if i == j else 0.0)) / mu
+            for j in range(dim)
+        ]
+        for i in range(dim)
+    ]
+
+
+def maxwell_traction_air(B, normal, mu=MU0):
+    """Maxwell traction vector ``T n`` in air for a unit surface normal.
+
+    ``normal`` is normalised internally; it must have the same length as ``B``.
+    For a uniform normal field this returns ``p n`` with
+    ``p = B^2/(2 mu)``, which is exactly :func:`air_gap_maxwell_pressure`.
+    A purely tangential field gives ``-p n`` (magnetic tension).
+    """
+
+    b = _float_vector(B, "B")
+    n = _unit_vector(normal, "normal")
+    if len(b) != len(n):
+        raise ValueError("B and normal must have the same length")
+    tensor = maxwell_stress_tensor_air(b, mu=mu)
+    return [
+        sum(tensor[i][j] * n[j] for j in range(len(n)))
+        for i in range(len(n))
+    ]
+
+
+def maxwell_traction_summary(B, normal, area_m2=1.0, mu=MU0):
+    """JSON-friendly Maxwell traction decomposition for one surface patch.
+
+    The normal component is
+
+        traction . n = (B_n^2 - |B_t|^2) / (2 mu)
+
+    and the tangential component has magnitude ``|B_n B_t| / mu``.  ``area_m2``
+    scales the traction to a force vector for simple patch/air-gap examples.
+    """
+
+    area = float(area_m2)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    mu = float(mu)
+    if mu <= 0.0:
+        raise ValueError("mu must be > 0")
+    b = _float_vector(B, "B")
+    n = _unit_vector(normal, "normal")
+    if len(b) != len(n):
+        raise ValueError("B and normal must have the same length")
+    traction = maxwell_traction_air(b, n, mu=mu)
+    b_normal = sum(bi * ni for bi, ni in zip(b, n))
+    b2 = sum(bi * bi for bi in b)
+    b_tangent2 = max(0.0, b2 - b_normal * b_normal)
+    normal_traction = sum(ti * ni for ti, ni in zip(traction, n))
+    tangential_traction = [
+        ti - normal_traction * ni
+        for ti, ni in zip(traction, n)
+    ]
+    return {
+        "B": b,
+        "normal": n,
+        "mu": mu,
+        "area_m2": area,
+        "B_normal_T": b_normal,
+        "B_tangent_T": math.sqrt(b_tangent2),
+        "traction_Pa": traction,
+        "normal_traction_Pa": normal_traction,
+        "normal_traction_identity_Pa": (b_normal * b_normal - b_tangent2) / (2.0 * mu),
+        "tangential_traction_Pa": tangential_traction,
+        "tangential_traction_magnitude_Pa": math.sqrt(
+            sum(value * value for value in tangential_traction)
+        ),
+        "force_N": [area * value for value in traction],
+    }
+
+
 def air_gap_maxwell_pressure(B_T, mu=MU0):
     """Magnetic pressure [Pa] for a normal flux density in an air gap.
 
