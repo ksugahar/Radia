@@ -18,6 +18,7 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.waveguide import (rectangular_waveguide_cutoff, cutoff_frequency,
                                                waveguide_dispersion, guide_wavelength,
                                                waveguide_wave_impedance,
+                                               rectangular_waveguide_te10_conductor_loss,
                                                waveguide_evanescent_attenuation,
                                                waveguide_dielectric_slab_sparams,
                                                waveguide_cascade_sparams,
@@ -211,6 +212,43 @@ def test_waveguide_wave_impedance_limits_and_duality():
         waveguide_wave_impedance(fc, fc, "TE")
     with pytest.raises(ValueError):
         waveguide_wave_impedance(10e9, fc, "TEM")
+
+
+def test_rectangular_waveguide_te10_conductor_loss():
+    a, b, sigma = 0.02286, 0.01016, 5.8e7
+    f = 10.0e9
+    loss = rectangular_waveguide_te10_conductor_loss(f, a, b, sigma, length=0.10)
+
+    fc = rectangular_waveguide_cutoff(a, b, 1, 0)
+    k0 = 2.0 * math.pi * f / C0
+    kc = math.pi / a
+    beta = math.sqrt(k0 * k0 - kc * kc)
+    eta0 = 4.0e-7 * math.pi * C0
+    rs = math.sqrt(2.0 * math.pi * f * 4.0e-7 * math.pi / (2.0 * sigma))
+    alpha = rs * (2.0 * b * kc * kc + a * k0 * k0) / (eta0 * k0 * beta * a * b)
+
+    assert loss["fc"] == pytest.approx(fc)
+    assert loss["surface_resistance_ohm"] == pytest.approx(rs)
+    assert loss["alpha_np_per_m"] == pytest.approx(alpha)
+    assert loss["alpha_db_per_m"] == pytest.approx(20.0 * math.log10(math.e) * alpha)
+    assert loss["S21_mag"] == pytest.approx(math.exp(-alpha * 0.10))
+    assert loss["insertion_loss_db"] == pytest.approx(20.0 * math.log10(math.e) * alpha * 0.10)
+    assert loss["power_loss_fraction"] == pytest.approx(1.0 - math.exp(-2.0 * alpha * 0.10))
+
+    # Conductivity scaling is exact at fixed frequency: R_s and alpha are proportional to 1/sqrt(sigma).
+    better = rectangular_waveguide_te10_conductor_loss(f, a, b, 4.0 * sigma)
+    assert better["alpha_np_per_m"] == pytest.approx(0.5 * loss["alpha_np_per_m"])
+    assert better["skin_depth_m"] == pytest.approx(0.5 * loss["skin_depth_m"])
+
+    # Near cutoff the transmitted power collapses, so wall-loss attenuation rises sharply.
+    near = rectangular_waveguide_te10_conductor_loss(1.001 * fc, a, b, sigma)
+    high = rectangular_waveguide_te10_conductor_loss(5.0 * fc, a, b, sigma)
+    assert near["alpha_np_per_m"] > 5.0 * high["alpha_np_per_m"]
+
+    with pytest.raises(ValueError):
+        rectangular_waveguide_te10_conductor_loss(fc, a, b, sigma)
+    with pytest.raises(ValueError):
+        rectangular_waveguide_te10_conductor_loss(f, a, b, sigma, length=-1.0)
 
 
 def test_cutoff_and_high_frequency_limits():

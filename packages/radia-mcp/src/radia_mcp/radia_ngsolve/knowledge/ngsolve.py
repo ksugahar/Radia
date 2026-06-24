@@ -6650,6 +6650,13 @@ loss / delivered power / VSWR.  For phase traces, ``sparameter_group_delay(frequ
 unwraps ``arg(S)`` and returns ``tau_g = -d arg(S)/d omega``; the offset-short check gives the
 round-trip delay ``2d/v_group``.
 
+TE10 conductor loss: finite-conductivity rectangular-guide walls are a matched lossy line section.
+``rectangular_waveguide_te10_conductor_loss(f, a, b, sigma, length=None)`` integrates
+``(R_s/2)|H_t|^2`` over the four walls and returns ``alpha_np_per_m``, ``alpha_db_per_m``,
+``surface_resistance_ohm``, ``skin_depth_m``, and optional ``S21_mag`` / insertion loss for a
+length. The checks to remember are: loss diverges near cutoff because transmitted power collapses,
+insertion loss is linear in length in dB, and alpha scales as ``1/sqrt(sigma)`` at fixed frequency.
+
 QUALITY FACTOR / wall loss (#68): the lossless resonance (#59) only gives WHERE a cavity rings; the
 finite-conductivity walls give HOW SHARPLY. The unloaded Q = omega U / P_wall (stored energy over
 per-cycle wall dissipation). For the TE101 rectangular cavity
