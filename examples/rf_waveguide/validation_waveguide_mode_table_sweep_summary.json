@@ -1,0 +1,550 @@
+{
+  "kind": "waveguide_mode_table_sweep_validation",
+  "validation_class": true,
+  "guide": {
+    "name": "WR-90-like",
+    "width_a_m": 0.02286,
+    "height_b_m": 0.01016
+  },
+  "mode_table": [
+    {
+      "mode": "TE10",
+      "family": "TE",
+      "m": 1,
+      "n": 0,
+      "cutoff_frequency_hz": 6557140376.202975,
+      "cutoff_frequency_ghz": 6.557140376202975,
+      "cutoff_wavenumber_per_m": 137.42750015703382
+    },
+    {
+      "mode": "TE20",
+      "family": "TE",
+      "m": 2,
+      "n": 0,
+      "cutoff_frequency_hz": 13114280752.40595,
+      "cutoff_frequency_ghz": 13.11428075240595,
+      "cutoff_wavenumber_per_m": 274.85500031406764
+    },
+    {
+      "mode": "TE01",
+      "family": "TE",
+      "m": 0,
+      "n": 1,
+      "cutoff_frequency_hz": 14753565846.456692,
+      "cutoff_frequency_ghz": 14.753565846456691,
+      "cutoff_wavenumber_per_m": 309.2118753533261
+    },
+    {
+      "mode": "TE11",
+      "family": "TE",
+      "m": 1,
+      "n": 1,
+      "cutoff_frequency_hz": 16145085787.909725,
+      "cutoff_frequency_ghz": 16.145085787909725,
+      "cutoff_wavenumber_per_m": 338.37597677573444
+    },
+    {
+      "mode": "TM11",
+      "family": "TM",
+      "m": 1,
+      "n": 1,
+      "cutoff_frequency_hz": 16145085787.909725,
+      "cutoff_frequency_ghz": 16.145085787909725,
+      "cutoff_wavenumber_per_m": 338.37597677573444
+    },
+    {
+      "mode": "TE30",
+      "family": "TE",
+      "m": 3,
+      "n": 0,
+      "cutoff_frequency_hz": 19671421128.608925,
+      "cutoff_frequency_ghz": 19.671421128608923,
+      "cutoff_wavenumber_per_m": 412.2825004711015
+    },
+    {
+      "mode": "TE21",
+      "family": "TE",
+      "m": 2,
+      "n": 1,
+      "cutoff_frequency_hz": 19739606501.61645,
+      "cutoff_frequency_ghz": 19.73960650161645,
+      "cutoff_wavenumber_per_m": 413.7115602169789
+    },
+    {
+      "mode": "TM21",
+      "family": "TM",
+      "m": 2,
+      "n": 1,
+      "cutoff_frequency_hz": 19739606501.61645,
+      "cutoff_frequency_ghz": 19.73960650161645,
+      "cutoff_wavenumber_per_m": 413.7115602169789
+    },
+    {
+      "mode": "TE31",
+      "family": "TE",
+      "m": 3,
+      "n": 1,
+      "cutoff_frequency_hz": 24589276410.761154,
+      "cutoff_frequency_ghz": 24.589276410761155,
+      "cutoff_wavenumber_per_m": 515.3531255888768
+    },
+    {
+      "mode": "TM31",
+      "family": "TM",
+      "m": 3,
+      "n": 1,
+      "cutoff_frequency_hz": 24589276410.761154,
+      "cutoff_frequency_ghz": 24.589276410761155,
+      "cutoff_wavenumber_per_m": 515.3531255888768
+    },
+    {
+      "mode": "TE02",
+      "family": "TE",
+      "m": 0,
+      "n": 2,
+      "cutoff_frequency_hz": 29507131692.913383,
+      "cutoff_frequency_ghz": 29.507131692913383,
+      "cutoff_wavenumber_per_m": 618.4237507066522
+    },
+    {
+      "mode": "TE12",
+      "family": "TE",
+      "m": 1,
+      "n": 2,
+      "cutoff_frequency_hz": 30226923605.556763,
+      "cutoff_frequency_ghz": 30.226923605556763,
+      "cutoff_wavenumber_per_m": 633.5094736761991
+    },
+    {
+      "mode": "TM12",
+      "family": "TM",
+      "m": 1,
+      "n": 2,
+      "cutoff_frequency_hz": 30226923605.556763,
+      "cutoff_frequency_ghz": 30.226923605556763,
+      "cutoff_wavenumber_per_m": 633.5094736761991
+    },
+    {
+      "mode": "TE22",
+      "family": "TE",
+      "m": 2,
+      "n": 2,
+      "cutoff_frequency_hz": 32290171575.81945,
+      "cutoff_frequency_ghz": 32.29017157581945,
+      "cutoff_wavenumber_per_m": 676.7519535514689
+    },
+    {
+      "mode": "TM22",
+      "family": "TM",
+      "m": 2,
+      "n": 2,
+      "cutoff_frequency_hz": 32290171575.81945,
+      "cutoff_frequency_ghz": 32.29017157581945,
+      "cutoff_wavenumber_per_m": 676.7519535514689
+    },
+    {
+      "mode": "TE32",
+      "family": "TE",
+      "m": 3,
+      "n": 2,
+      "cutoff_frequency_hz": 35463158770.22258,
+      "cutoff_frequency_ghz": 35.46315877022258,
+      "cutoff_wavenumber_per_m": 743.2528477125312
+    },
+    {
+      "mode": "TM32",
+      "family": "TM",
+      "m": 3,
+      "n": 2,
+      "cutoff_frequency_hz": 35463158770.22258,
+      "cutoff_frequency_ghz": 35.46315877022258,
+      "cutoff_wavenumber_per_m": 743.2528477125312
+    },
+    {
+      "mode": "TE03",
+      "family": "TE",
+      "m": 0,
+      "n": 3,
+      "cutoff_frequency_hz": 44260697539.37008,
+      "cutoff_frequency_ghz": 44.26069753937008,
+      "cutoff_wavenumber_per_m": 927.6356260599783
+    },
+    {
+      "mode": "TE13",
+      "family": "TE",
+      "m": 1,
+      "n": 3,
+      "cutoff_frequency_hz": 44743775394.85053,
+      "cutoff_frequency_ghz": 44.74377539485053,
+      "cutoff_wavenumber_per_m": 937.7601892462162
+    },
+    {
+      "mode": "TM13",
+      "family": "TM",
+      "m": 1,
+      "n": 3,
+      "cutoff_frequency_hz": 44743775394.85053,
+      "cutoff_frequency_ghz": 44.74377539485053,
+      "cutoff_wavenumber_per_m": 937.7601892462162
+    },
+    {
+      "mode": "TE23",
+      "family": "TE",
+      "m": 2,
+      "n": 3,
+      "cutoff_frequency_hz": 46162687381.95953,
+      "cutoff_frequency_ghz": 46.162687381959536,
+      "cutoff_wavenumber_per_m": 967.498385493916
+    },
+    {
+      "mode": "TM23",
+      "family": "TM",
+      "m": 2,
+      "n": 3,
+      "cutoff_frequency_hz": 46162687381.95953,
+      "cutoff_frequency_ghz": 46.162687381959536,
+      "cutoff_wavenumber_per_m": 967.498385493916
+    },
+    {
+      "mode": "TE33",
+      "family": "TE",
+      "m": 3,
+      "n": 3,
+      "cutoff_frequency_hz": 48435257363.72919,
+      "cutoff_frequency_ghz": 48.435257363729185,
+      "cutoff_wavenumber_per_m": 1015.1279303272037
+    },
+    {
+      "mode": "TM33",
+      "family": "TM",
+      "m": 3,
+      "n": 3,
+      "cutoff_frequency_hz": 48435257363.72919,
+      "cutoff_frequency_ghz": 48.435257363729185,
+      "cutoff_wavenumber_per_m": 1015.1279303272037
+    }
+  ],
+  "frequency_rows": [
+    {
+      "frequency_hz": 5000000000.0,
+      "frequency_ghz": 5.0,
+      "below_dominant_cutoff": true,
+      "single_mode": false,
+      "n_propagating": 0,
+      "propagating_modes": [],
+      "next_mode": {
+        "mode": "TE10",
+        "family": "TE",
+        "m": 1,
+        "n": 0,
+        "cutoff_frequency_hz": 6557140376.202975,
+        "cutoff_frequency_ghz": 6.557140376202975,
+        "cutoff_wavenumber_per_m": 137.42750015703382
+      },
+      "te10_evanescent_alpha_per_m": 88.90951529117915
+    },
+    {
+      "frequency_hz": 8200000000.0,
+      "frequency_ghz": 8.2,
+      "below_dominant_cutoff": false,
+      "single_mode": true,
+      "n_propagating": 1,
+      "propagating_modes": [
+        {
+          "mode": "TE10",
+          "family": "TE",
+          "m": 1,
+          "n": 0,
+          "cutoff_frequency_hz": 6557140376.202975,
+          "cutoff_frequency_ghz": 6.557140376202975,
+          "cutoff_wavenumber_per_m": 137.42750015703382
+        }
+      ],
+      "next_mode": {
+        "mode": "TE20",
+        "family": "TE",
+        "m": 2,
+        "n": 0,
+        "cutoff_frequency_hz": 13114280752.40595,
+        "cutoff_frequency_ghz": 13.11428075240595,
+        "cutoff_wavenumber_per_m": 274.85500031406764
+      },
+      "dominant_mode_propagation": {
+        "mode": "TE10",
+        "beta_per_m": 103.195437779967,
+        "guide_wavelength_m": 0.06088627019129058,
+        "v_group_over_c": 0.6004646981790033,
+        "v_phase_over_c": 1.6653768373605404
+      }
+    },
+    {
+      "frequency_hz": 10000000000.0,
+      "frequency_ghz": 10.0,
+      "below_dominant_cutoff": false,
+      "single_mode": true,
+      "n_propagating": 1,
+      "propagating_modes": [
+        {
+          "mode": "TE10",
+          "family": "TE",
+          "m": 1,
+          "n": 0,
+          "cutoff_frequency_hz": 6557140376.202975,
+          "cutoff_frequency_ghz": 6.557140376202975,
+          "cutoff_wavenumber_per_m": 137.42750015703382
+        }
+      ],
+      "next_mode": {
+        "mode": "TE20",
+        "family": "TE",
+        "m": 2,
+        "n": 0,
+        "cutoff_frequency_hz": 13114280752.40595,
+        "cutoff_frequency_ghz": 13.11428075240595,
+        "cutoff_wavenumber_per_m": 274.85500031406764
+      },
+      "dominant_mode_propagation": {
+        "mode": "TE10",
+        "beta_per_m": 158.2382563130197,
+        "guide_wavelength_m": 0.03970711921111211,
+        "v_group_over_c": 0.7550093382652211,
+        "v_phase_over_c": 1.324486929257977
+      }
+    },
+    {
+      "frequency_hz": 12400000000.0,
+      "frequency_ghz": 12.4,
+      "below_dominant_cutoff": false,
+      "single_mode": true,
+      "n_propagating": 1,
+      "propagating_modes": [
+        {
+          "mode": "TE10",
+          "family": "TE",
+          "m": 1,
+          "n": 0,
+          "cutoff_frequency_hz": 6557140376.202975,
+          "cutoff_frequency_ghz": 6.557140376202975,
+          "cutoff_wavenumber_per_m": 137.42750015703382
+        }
+      ],
+      "next_mode": {
+        "mode": "TE20",
+        "family": "TE",
+        "m": 2,
+        "n": 0,
+        "cutoff_frequency_hz": 13114280752.40595,
+        "cutoff_frequency_ghz": 13.11428075240595,
+        "cutoff_wavenumber_per_m": 274.85500031406764
+      },
+      "dominant_mode_propagation": {
+        "mode": "TE10",
+        "beta_per_m": 220.57602428880176,
+        "guide_wavelength_m": 0.02848535024347418,
+        "v_group_over_c": 0.8487454401081488,
+        "v_phase_over_c": 1.1782095699654989
+      }
+    },
+    {
+      "frequency_hz": 13200000000.0,
+      "frequency_ghz": 13.2,
+      "below_dominant_cutoff": false,
+      "single_mode": false,
+      "n_propagating": 2,
+      "propagating_modes": [
+        {
+          "mode": "TE10",
+          "family": "TE",
+          "m": 1,
+          "n": 0,
+          "cutoff_frequency_hz": 6557140376.202975,
+          "cutoff_frequency_ghz": 6.557140376202975,
+          "cutoff_wavenumber_per_m": 137.42750015703382
+        },
+        {
+          "mode": "TE20",
+          "family": "TE",
+          "m": 2,
+          "n": 0,
+          "cutoff_frequency_hz": 13114280752.40595,
+          "cutoff_frequency_ghz": 13.11428075240595,
+          "cutoff_wavenumber_per_m": 274.85500031406764
+        }
+      ],
+      "next_mode": {
+        "mode": "TE01",
+        "family": "TE",
+        "m": 0,
+        "n": 1,
+        "cutoff_frequency_hz": 14753565846.456692,
+        "cutoff_frequency_ghz": 14.753565846456691,
+        "cutoff_wavenumber_per_m": 309.2118753533261
+      },
+      "dominant_mode_propagation": {
+        "mode": "TE10",
+        "beta_per_m": 240.10364093079312,
+        "guide_wavelength_m": 0.0261686381881674,
+        "v_group_over_c": 0.8678919279320491,
+        "v_phase_over_c": 1.1522171918141104
+      }
+    },
+    {
+      "frequency_hz": 15000000000.0,
+      "frequency_ghz": 15.0,
+      "below_dominant_cutoff": false,
+      "single_mode": false,
+      "n_propagating": 3,
+      "propagating_modes": [
+        {
+          "mode": "TE10",
+          "family": "TE",
+          "m": 1,
+          "n": 0,
+          "cutoff_frequency_hz": 6557140376.202975,
+          "cutoff_frequency_ghz": 6.557140376202975,
+          "cutoff_wavenumber_per_m": 137.42750015703382
+        },
+        {
+          "mode": "TE20",
+          "family": "TE",
+          "m": 2,
+          "n": 0,
+          "cutoff_frequency_hz": 13114280752.40595,
+          "cutoff_frequency_ghz": 13.11428075240595,
+          "cutoff_wavenumber_per_m": 274.85500031406764
+        },
+        {
+          "mode": "TE01",
+          "family": "TE",
+          "m": 0,
+          "n": 1,
+          "cutoff_frequency_hz": 14753565846.456692,
+          "cutoff_frequency_ghz": 14.753565846456691,
+          "cutoff_wavenumber_per_m": 309.2118753533261
+        }
+      ],
+      "next_mode": {
+        "mode": "TE11",
+        "family": "TE",
+        "m": 1,
+        "n": 1,
+        "cutoff_frequency_hz": 16145085787.909725,
+        "cutoff_frequency_ghz": 16.145085787909725,
+        "cutoff_wavenumber_per_m": 338.37597677573444
+      },
+      "dominant_mode_propagation": {
+        "mode": "TE10",
+        "beta_per_m": 282.7479888725656,
+        "guide_wavelength_m": 0.02222185675743715,
+        "v_group_over_c": 0.8993921653273979,
+        "v_phase_over_c": 1.1118620314376195
+      }
+    },
+    {
+      "frequency_hz": 18000000000.0,
+      "frequency_ghz": 18.0,
+      "below_dominant_cutoff": false,
+      "single_mode": false,
+      "n_propagating": 5,
+      "propagating_modes": [
+        {
+          "mode": "TE10",
+          "family": "TE",
+          "m": 1,
+          "n": 0,
+          "cutoff_frequency_hz": 6557140376.202975,
+          "cutoff_frequency_ghz": 6.557140376202975,
+          "cutoff_wavenumber_per_m": 137.42750015703382
+        },
+        {
+          "mode": "TE20",
+          "family": "TE",
+          "m": 2,
+          "n": 0,
+          "cutoff_frequency_hz": 13114280752.40595,
+          "cutoff_frequency_ghz": 13.11428075240595,
+          "cutoff_wavenumber_per_m": 274.85500031406764
+        },
+        {
+          "mode": "TE01",
+          "family": "TE",
+          "m": 0,
+          "n": 1,
+          "cutoff_frequency_hz": 14753565846.456692,
+          "cutoff_frequency_ghz": 14.753565846456691,
+          "cutoff_wavenumber_per_m": 309.2118753533261
+        },
+        {
+          "mode": "TE11",
+          "family": "TE",
+          "m": 1,
+          "n": 1,
+          "cutoff_frequency_hz": 16145085787.909725,
+          "cutoff_frequency_ghz": 16.145085787909725,
+          "cutoff_wavenumber_per_m": 338.37597677573444
+        },
+        {
+          "mode": "TM11",
+          "family": "TM",
+          "m": 1,
+          "n": 1,
+          "cutoff_frequency_hz": 16145085787.909725,
+          "cutoff_frequency_ghz": 16.145085787909725,
+          "cutoff_wavenumber_per_m": 338.37597677573444
+        }
+      ],
+      "next_mode": {
+        "mode": "TE30",
+        "family": "TE",
+        "m": 3,
+        "n": 0,
+        "cutoff_frequency_hz": 19671421128.608925,
+        "cutoff_frequency_ghz": 19.671421128608923,
+        "cutoff_wavenumber_per_m": 412.2825004711015
+      },
+      "dominant_mode_propagation": {
+        "mode": "TE10",
+        "beta_per_m": 351.33008999553823,
+        "guide_wavelength_m": 0.01788399424387299,
+        "v_group_over_c": 0.9312872912191615,
+        "v_phase_over_c": 1.0737825045275617
+      }
+    }
+  ],
+  "checks": {
+    "first_five_modes": [
+      "TE10",
+      "TE20",
+      "TE01",
+      "TE11",
+      "TM11"
+    ],
+    "te10_cutoff_hz": 6557140376.202975,
+    "te20_over_te10": 2.0,
+    "te01_cutoff_hz": 14753565846.456692,
+    "te11_tm11_degeneracy_abs_hz": 0.0,
+    "single_mode_upper_cutoff_hz": 13114280752.40595,
+    "xband_lower_single_mode": true,
+    "xband_center_single_mode": true,
+    "xband_upper_single_mode": true,
+    "five_ghz_propagating_count": 0,
+    "thirteen_two_ghz_modes": [
+      "TE10",
+      "TE20"
+    ],
+    "fifteen_ghz_modes": [
+      "TE10",
+      "TE20",
+      "TE01"
+    ],
+    "eighteen_ghz_modes": [
+      "TE10",
+      "TE20",
+      "TE01",
+      "TE11",
+      "TM11"
+    ],
+    "ten_ghz_te10_guide_wavelength_m": 0.03970711921111211,
+    "five_ghz_te10_alpha_per_m": 88.90951529117915
+  }
+}
