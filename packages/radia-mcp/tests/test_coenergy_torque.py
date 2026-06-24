@@ -15,6 +15,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     coenergy_torque_summary,
     virtual_work_force_from_displacement_samples,
     virtual_work_force_summary,
+    virtual_work_symmetric_pair_force_summary,
 )
 
 
@@ -105,6 +106,42 @@ def test_virtual_work_force_quadratic_center_matches_analytic_gradient():
     assert rows[3]["force_N"] == pytest.approx(-stiffness * positions[3])
 
 
+def test_virtual_work_symmetric_pair_force_summary_matches_center_gradient():
+    h = 1.0e-3
+    expected_force = 12.5
+    stiffness = 1000.0
+    offset = 0.25
+    e_minus = offset - expected_force * h + 0.5 * stiffness * h * h
+    e_center = offset
+    e_plus = offset + expected_force * h + 0.5 * stiffness * h * h
+
+    row = virtual_work_symmetric_pair_force_summary(
+        h,
+        e_minus,
+        e_plus,
+        energy_kind="constant_current",
+        energy_center_J=e_center,
+    )
+
+    assert row["energy_kind"] == "coenergy"
+    assert row["virtual_work_identity"] == "F = dW_co/dx at fixed current"
+    assert row["denergy_dx_N"] == pytest.approx(expected_force)
+    assert row["force_N"] == pytest.approx(expected_force)
+    assert row["even_energy_residual_J"] == pytest.approx(0.5 * stiffness * h * h)
+    assert row["position_minus_m"] == pytest.approx(-h)
+    assert row["position_plus_m"] == pytest.approx(h)
+
+    stored = virtual_work_symmetric_pair_force_summary(
+        h,
+        offset + expected_force * h,
+        offset - expected_force * h,
+        energy_kind="stored_energy",
+    )
+    assert stored["denergy_dx_N"] == pytest.approx(-expected_force)
+    assert stored["force_N"] == pytest.approx(expected_force)
+    assert stored["even_energy_residual_J"] is None
+
+
 def test_virtual_work_force_rejects_bad_tables():
     with pytest.raises(ValueError):
         virtual_work_force_from_displacement_samples([0.0, 1.0], [0.0, 1.0])
@@ -114,3 +151,7 @@ def test_virtual_work_force_rejects_bad_tables():
         virtual_work_force_from_displacement_samples([0.0, 1.0, 1.0], [0.0, 1.0, 2.0])
     with pytest.raises(ValueError):
         virtual_work_force_from_displacement_samples([0.0, 1.0, 2.0], [0.0, 1.0, 2.0], energy_kind="unknown")
+    with pytest.raises(ValueError):
+        virtual_work_symmetric_pair_force_summary(0.0, 0.0, 1.0)
+    with pytest.raises(ValueError):
+        virtual_work_symmetric_pair_force_summary(1.0e-3, 0.0, 1.0, energy_kind="unknown")
