@@ -27,6 +27,63 @@ MU0 = 4.0e-7 * math.pi
 EPS0 = 8.8541878128e-12
 
 
+def air_gap_maxwell_pressure(B_T, mu=MU0):
+    """Magnetic pressure [Pa] for a normal flux density in an air gap.
+
+    For a locally uniform normal field at an iron/air interface, the Maxwell
+    stress gives
+
+        p = B^2 / (2 mu)
+
+    with ``mu=mu0`` for air.  The same value is the magnetic energy density in
+    the gap.  This tiny helper is intentionally dependency-free so magnetic
+    circuit examples can turn a solved ``B_T`` directly into a holding-force
+    estimate before running a full weighted-stress FEM extraction.
+    """
+
+    B = float(B_T)
+    mu = float(mu)
+    if mu <= 0.0:
+        raise ValueError("mu must be > 0")
+    return B * B / (2.0 * mu)
+
+
+def air_gap_holding_force(B_T, area_m2, faces=1, mu=MU0):
+    """Uniform-gap holding force [N] from flux density and active pole area.
+
+    ``faces`` is the number of active, equal pole faces/gaps contributing the
+    same pressure.  Use ``faces=2`` for a symmetric two-pole yoke with two equal
+    gaps; keep ``faces=1`` for a single plunger or one pole face.
+    """
+
+    area = float(area_m2)
+    faces = int(faces)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    if faces < 1:
+        raise ValueError("faces must be >= 1")
+    return air_gap_maxwell_pressure(B_T, mu=mu) * area * faces
+
+
+def air_gap_force_summary(B_T, area_m2, faces=1, mu=MU0):
+    """Readable JSON-friendly air-gap force summary."""
+
+    pressure = air_gap_maxwell_pressure(B_T, mu=mu)
+    area = float(area_m2)
+    faces = int(faces)
+    force = air_gap_holding_force(B_T, area, faces=faces, mu=mu)
+    return {
+        "B_T": float(B_T),
+        "mu": float(mu),
+        "area_m2": area,
+        "faces": faces,
+        "pressure_Pa": pressure,
+        "energy_density_J_per_m3": pressure,
+        "force_N": force,
+        "force_per_area_N_per_m2": force / (area * faces) if area > 0.0 else math.inf,
+    }
+
+
 def electrostatic_eggshell_force(E, mesh, gradg, air_region="air"):
     """Weighted Maxwell-stress ("eggshell") ELECTROSTATIC force -- the electric twin
     of :func:`eggshell_force` (ε0 E in place of B/μ0). ``E`` is the electric field
