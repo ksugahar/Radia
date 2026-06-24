@@ -246,6 +246,17 @@ def test_geometry_metrics_for_single_tetrahedron():
     assert mesh.bounding_box() == {"x": (0.0, 1.0), "y": (0.0, 1.0), "z": (0.0, 1.0)}
     assert mesh.tetrahedron_signed_volumes() == pytest.approx((1.0 / 6.0,))
     assert mesh.tetrahedron_volumes() == pytest.approx((1.0 / 6.0,))
+    edge_lengths = mesh.tetrahedron_edge_lengths()
+    assert len(edge_lengths) == 1
+    assert edge_lengths[0] == pytest.approx((1.0, 1.0, 1.0, 2**0.5, 2**0.5, 2**0.5))
+    assert mesh.tetrahedron_edge_length_ratios() == pytest.approx((2**0.5,))
+    assert mesh.tetrahedron_edge_length_summary() == {
+        "tetrahedra": 1,
+        "min_edge": pytest.approx(1.0),
+        "max_edge": pytest.approx(2**0.5),
+        "mean_edge": pytest.approx((3.0 + 3.0 * 2**0.5) / 6.0),
+        "max_edge_ratio": pytest.approx(2**0.5),
+    }
     assert mesh.total_volume() == pytest.approx(1.0 / 6.0)
     assert sorted(mesh.surface_triangle_areas()) == pytest.approx([0.5, 0.5, 0.5, 0.5 * 3**0.5])
     assert mesh.surface_area_by_boundary_number() == {1: pytest.approx(1.5 + 0.5 * 3**0.5)}
