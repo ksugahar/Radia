@@ -39,6 +39,7 @@ See `docs/research/policy/strategy.md` and `toolchain.md` for the full rationale
 | `validation_helix_mesh_sweep.py` | Heavier validation-class helix conductor sweep; records analytic/CAD volume error plus mesh/post stats |
 | `validation_halbach_region_sweep.py` | Heavier validation-class segmented Halbach sweep; checks CAD volume, magnetization labels, and one mesh region per segment |
 | `validation_coaxial_region_stack.py` | Validation-class touching coaxial regions; checks analytic shell volumes and region-name preservation through STEP/Netgen/Gmsh |
+| `validation_laminated_stack_region_sweep.py` | Validation-class touching laminated box stack; checks per-layer volumes, fill factor, and named region preservation |
 | `runs/` | Output directory (`*.brep` / `*.step`, `*.msh`, `*_post.msh`, `*.json`, `sweep_summary.json`) |
 
 ## Run
@@ -55,6 +56,8 @@ python validation_halbach_region_sweep.py --quick
 python validation_halbach_region_sweep.py
 python validation_coaxial_region_stack.py --quick
 python validation_coaxial_region_stack.py
+python validation_laminated_stack_region_sweep.py --quick
+python validation_laminated_stack_region_sweep.py
 ```
 
 On a warm Python (all imports cached) the full sweep takes tens of seconds.
