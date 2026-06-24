@@ -1,0 +1,173 @@
+# build123d → Netgen → Gmsh pipeline scaffold
+
+Minimal, loopable scaffold exercising the lab's main CAD/mesh/post stack:
+
+```
+build123d (OCCT)  →  Netgen (tet via netgen.occ)  →  Gmsh (Python API, post only)
+    CAD                    mesh                              visualization
+```
+
+**Purpose**:
+1. Keep a known-good end-to-end integration under version control.
+2. Serve as **training input for the lab mcp-servers**
+   (`mcp-server-build123d`, `mcp-server-gmsh`) — every run produces a
+   `.brep / .msh / _post.msh / .json` quartet that Claude Code can inspect
+   and reason about.
+3. Be a drop-in skeleton that research projects can fork.
+
+## Lab policy reminder (2026-04-19)
+
+- **CAD**: build123d (Python, OCCT). FreeCAD is not used on dev machines.
+- **Mesh (tet, main)**: Netgen via `netgen.occ.OCCGeometry`.
+- **Mesh (hex, sub)**: Cubit (required for Radia/ELF hex). Not exercised here.
+- **Post**: Gmsh, **Python API only** (`gmsh.view.*`, `gmsh.plugin.*`).
+  `.geo` / GUI are not used. Netgen is **not** used for post (Tcl core,
+  not Python-driven).
+- **Mesh generation through Gmsh is forbidden** (covered by the
+  `mcp-server-gmsh` lint rules).
+
+See `docs/research/policy/strategy.md` and `toolchain.md` for the full rationale.
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `_pipeline.py` | Core helpers: `run_pipeline(part, …)` single-region, `run_pipeline_multi(regions, …)` multi-region |
+| `demo_box.py` | Minimal one-case demo (plate with hole, single region) |
+| `demo_ih_multi.py` | Multi-region demo (workpiece + coil + air) |
+| `sweep.py` | 19-case parametric sweep across 4 geometry families (3 single + 1 multi) |
+| `validation_helix_mesh_sweep.py` | Heavier validation-class helix conductor sweep; records analytic/CAD volume error plus mesh/post stats |
+| `runs/` | Output directory (`*.brep` / `*.step`, `*.msh`, `*_post.msh`, `*.json`, `sweep_summary.json`) |
+
+## Run
+
+```
+cd examples/build123d_netgen_gmsh_flow
+python demo_box.py              # single-region demo
+python demo_ih_multi.py         # multi-region demo (workpiece/coil/air)
+python sweep.py --quick         # 4 cases (one per family, smoke)
+python sweep.py                 # full sweep (19 cases)
+python validation_helix_mesh_sweep.py --quick  # validation-class baseline
+python validation_helix_mesh_sweep.py          # heavier 4-case helix sweep
+```
+
+On a warm Python (all imports cached) the full sweep takes tens of seconds.
+The helix validation is deliberately not a pytest test; it is a heavier
+example that writes reusable records under `runs/validation_helix_mesh_sweep/`.
+
+## Pipeline stages
+
+### 1. CAD — build123d → BREP
+- `export_brep(part, "<label>.brep")`
+- record: `volume`, `area`, `faces`, `edges`, `min_edge`, `bbox_size`,
+  `is_valid`
+- units: build123d default (mm)
+
+### 2. Mesh — Netgen tet
+- `OCCGeometry("<label>.brep")` → `.GenerateMesh(maxh=...)`
+- export via `NgMesh.Export("<label>.msh", "Gmsh2 Format")`
+  (Gmsh v2.2 ASCII; v4 is also available as `"Gmsh Format"` if needed)
+- record: `nv / ne / nface / nedge`, `gen_seconds`, `maxh`
+
+### 3. Post — Gmsh Python API
+- `gmsh.open("<label>.msh")`
+- fetches node tags + coords via `gmsh.model.mesh.getNodes()`
+- builds a **dummy scalar field** `f(x,y,z) = x + 2y + 3z`
+  (placeholder for real solver output)
+- `gmsh.view.add(...)` + `gmsh.view.addModelData(..., dataType="NodeData",
+  numComponents=1)`
+- `gmsh.view.probe(view, 0, 0, 0)` sanity check
+- `gmsh.write("<label>_post.msh")` — the mesh **plus** view bundled in
+  one `.msh` file
+- no GUI (`-nopopup`), fully batch-able
+
+## Multi-region flow (`run_pipeline_multi`)
+
+**Why it's tricky**: build123d's STEP export does not emit region names in
+a form Netgen picks up, and Netgen's Gmsh-v4 exporter preserves per-solid
+physical *tags* but not *names*. We bridge the three-step gap explicitly:
+
+1. **build123d side**: pack regions into a `Compound(children=[...])` and
+   export as STEP. Children order is the contract — it becomes the region
+   index.
+2. **Netgen side**: load the STEP, iterate `geo.shape.solids` in order,
+   call `s.mat(name)`, then `Glue(sols)` and rebuild the `OCCGeometry`.
+   `Glue` is what makes Netgen treat the named solids as separate domains
+   that survive to meshing. `ngsolve.Mesh(ng_mesh).GetMaterials()` now
+   returns the right names.
+3. **Gmsh side**: open the exported `.msh`, sort physical groups by tag,
+   re-apply names via `gmsh.model.setPhysicalName(3, tag, name)`, write
+   back the named `.msh`. Also emit an `ElementData` view called
+   `<label>_region_id` where each element carries its 1-based region
+   index — gmsh renders each region a different color by default.
+
+Usage:
+
+```python
+from _pipeline import run_pipeline_multi
+
+regions = [
+    (workpiece_part, "workpiece"),
+    (coil_part,      "coil"),
+    (air_part,       "air"),
+]
+rec = run_pipeline_multi(regions, out_dir="./runs", label="ih_multi",
+                         maxh=6.0)
+```
+
+Output extras (multi mode):
+- `<label>.step` — Compound with all regions
+- `<label>.msh` — Netgen Gmsh-v4 output (physical tags only)
+- `<label>_post.msh` — **named** physical groups + region_id view
+- `<label>.json` — per-region element counts, physical tags, names
+
+Region-order is a load-bearing contract — the list you pass to
+`run_pipeline_multi` must match the spatial containment you want in the
+mesh (usually: small inner regions first, large surrounding region last).
+
+## Extending
+
+### Add a geometry family to the sweep
+
+1. Add a builder function in `sweep.py` returning a build123d Shape
+   (set `.label`).
+2. Add a generator `XXX_grid()` yielding dicts with `builder`, `kwargs`,
+   `label`, `maxh`.
+3. Append the generator to `all_cases()`.
+
+### Replace the dummy field with real solver data
+
+In `_pipeline.py::_stage_post`, swap the `values = [...]` expression for
+data from your solver (Radia B-field, NGSolve potential, etc.). Keep the
+tag / data order consistent with `node_tags` from `getNodes()`.
+
+For model-based data referencing mesh entity tags directly (rather than
+node coords), use `dataType="ElementData"` or `"ElementNodeData"` with
+element tags from `gmsh.model.mesh.getElements()`.
+
+### Replay / inspect via mcp-server
+
+After a run, the `.json` record is a compact summary; the `.brep` +
+`_post.msh` are browsable:
+
+- `mcp-server-build123d`: `inspect_geometry("runs/<label>.brep")` for CAD
+  quality warnings (micro-edges, non-valid shapes, face/edge histograms).
+- `mcp-server-gmsh`: `gmsh_reference("python_api_postproc")` for the full
+  post-processing API surface (view / plugin / I/O).
+
+## Known limitations / TODO
+
+- Single-region pipeline writes `.msh` in Gmsh v2.2 (2nd order cap).
+  Multi-region pipeline writes v4 ("Gmsh Format") because v2.2 flattens
+  physical groups.  Bumping the single-region path to v4 is cheap if
+  higher-order elements are needed later.
+- **Region contract is positional, not by label**. build123d-side labels
+  are collected but don't propagate through STEP; the `(part, name)`
+  tuple order is the single source of truth. If you add/reorder regions,
+  re-check every consumer.
+- `run_pipeline_multi` assumes **boolean-disjoint regions** (typically
+  built as `outer - inner1 - inner2`). Overlapping regions confuse
+  `Glue`. Always subtract inner regions from the outer air domain.
+- No hex path. Cubit (`.jou`) path is a separate scaffold (not yet built).
+- Real solver data (Radia B-field, NGSolve potential) is not wired up —
+  see the "Replace the dummy field" note above.
