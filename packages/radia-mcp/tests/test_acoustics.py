@@ -11,6 +11,8 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from radia_mcp.radia_ngsolve.acoustics import (
+    acoustic_dtn_from_impedance,
+    acoustic_impedance_from_dtn,
     baffled_circular_piston_radiation,
     helmholtz_green_3d,
     helmholtz_green_low_frequency_series,
@@ -225,6 +227,42 @@ def test_planar_acoustic_helpers_validate_inputs():
         planar_mode_radiation_impedance(100.0, tangential_wavenumber=1.0, incidence_angle_rad=0.0)
     with pytest.raises(ValueError):
         planar_mode_radiation_impedance(100.0, incidence_angle_rad=0.5 * math.pi)
+
+
+def test_acoustic_impedance_dtn_conversion_matches_planar_and_spherical_modes():
+    rho, c, f = 1.2, 340.0, 1000.0
+    omega = 2.0 * math.pi * f
+    k = omega / c
+
+    normal = acoustic_dtn_from_impedance(f, specific_impedance=rho * c, rho=rho)
+    assert normal["dtn_eigenvalue"] == pytest.approx(-1j * k)
+    roundtrip_normal = acoustic_impedance_from_dtn(f, normal["dtn_eigenvalue"], rho=rho)
+    assert roundtrip_normal["specific_impedance"] == pytest.approx(rho * c)
+
+    oblique = planar_mode_radiation_impedance(f, incidence_angle_rad=math.radians(50.0), rho=rho, c=c)
+    from_imp = acoustic_dtn_from_impedance(f, specific_impedance=oblique["specific_impedance"], rho=rho)
+    from_adm = acoustic_dtn_from_impedance(f, specific_admittance=1.0 / oblique["specific_impedance"], rho=rho)
+    assert from_imp["dtn_eigenvalue"] == pytest.approx(oblique["dtn_eigenvalue"])
+    assert from_adm["dtn_eigenvalue"] == pytest.approx(oblique["dtn_eigenvalue"])
+
+    sphere = spherical_mode_radiation_impedance(0.17, f, 2, rho=rho, c=c)
+    roundtrip = acoustic_impedance_from_dtn(f, sphere["dtn_eigenvalue"], rho=rho)
+    assert roundtrip["specific_impedance"] == pytest.approx(sphere["specific_impedance"])
+
+
+def test_acoustic_impedance_dtn_conversion_validation():
+    with pytest.raises(ValueError):
+        acoustic_dtn_from_impedance(0.0, specific_impedance=1.0)
+    with pytest.raises(ValueError):
+        acoustic_dtn_from_impedance(100.0, specific_impedance=0.0)
+    with pytest.raises(ValueError):
+        acoustic_dtn_from_impedance(100.0)
+    with pytest.raises(ValueError):
+        acoustic_dtn_from_impedance(100.0, specific_impedance=1.0, specific_admittance=1.0)
+    with pytest.raises(ValueError):
+        acoustic_impedance_from_dtn(100.0, 0.0)
+    with pytest.raises(ValueError):
+        acoustic_impedance_from_dtn(100.0, 1.0, rho=0.0)
 
 
 def test_baffled_circular_piston_impedance_scaling_and_power():
