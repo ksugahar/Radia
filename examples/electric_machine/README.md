@@ -20,6 +20,7 @@ NGSolve's high-order curved elements.
 | [`validation_nonlinear_bh_inductance_sweep.py`](validation_nonlinear_bh_inductance_sweep.py) | Validation-class nonlinear B-H winding-inductance sweep with secant/incremental inductance and constant-mu limit checks | `magnetic_circuit_bh_inductance_summary` |
 | [`validation_maxwell_stress_traction.py`](validation_maxwell_stress_traction.py) | Validation-class Maxwell stress tensor / traction identities for normal, tangential, and oblique fields | `maxwell_stress_tensor_air`, `maxwell_traction_air`, `maxwell_traction_summary`, `air_gap_maxwell_pressure` |
 | [`validation_air_gap_force_sweep.py`](validation_air_gap_force_sweep.py) | Validation-class air-gap Maxwell pressure / holding-force sweep linked to nonlinear magnetic-circuit B | `air_gap_maxwell_pressure`, `air_gap_holding_force`, `air_gap_force_summary`, `magnetic_circuit_bh_operating_summary` |
+| [`validation_air_gap_shear_torque.py`](validation_air_gap_shear_torque.py) | Validation-class air-gap Maxwell shear stress to motor torque identity | `air_gap_shear_stress`, `air_gap_shear_torque`, `air_gap_shear_torque_summary`, `maxwell_traction_summary` |
 | [`validation_torque_ripple_harmonic_budget.py`](validation_torque_ripple_harmonic_budget.py) | Validation-class three-phase back-EMF harmonic pair budget for 6k torque ripple, including pitch/skew filtering | `three_phase_torque_ripple_pair_table`, `three_phase_torque_ripple_harmonics`, `skewed_winding_factor` |
 
 ```powershell
@@ -37,6 +38,7 @@ python validation_nonlinear_bh_circuit_sweep.py
 python validation_nonlinear_bh_inductance_sweep.py
 python validation_maxwell_stress_traction.py
 python validation_air_gap_force_sweep.py
+python validation_air_gap_shear_torque.py
 python validation_torque_ripple_harmonic_budget.py
 ```
 
