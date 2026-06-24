@@ -63,6 +63,14 @@ class NetgenTriTetVolMesh:
 
         return tuple(sorted({node for tri in self.surface_triangles for node in tri.nodes}))
 
+    def trace_node_ids_by_boundary_number(self) -> dict[int, tuple[int, ...]]:
+        """Return one-based trace node ids grouped by Netgen boundary number."""
+
+        groups: dict[int, set[int]] = {}
+        for tri in self.surface_triangles:
+            groups.setdefault(tri.bcnr, set()).update(tri.nodes)
+        return {bcnr: tuple(sorted(nodes)) for bcnr, nodes in sorted(groups.items())}
+
     def bounding_box(self) -> dict[str, tuple[float, float]]:
         """Return axis-aligned coordinate bounds."""
 
@@ -128,6 +136,9 @@ class NetgenTriTetVolMesh:
             "surface_triangles": [list(tri.nodes) for tri in self.surface_triangles],
             "surface_boundary_numbers": [tri.bcnr for tri in self.surface_triangles],
             "trace_node_ids": trace_nodes,
+            "trace_node_ids_by_boundary_number": {
+                bcnr: list(nodes) for bcnr, nodes in self.trace_node_ids_by_boundary_number().items()
+            },
             "boundary_names": dict(self.boundary_names),
             "materials": dict(self.materials),
             "total_volume": self.total_volume(),
