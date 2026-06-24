@@ -1700,6 +1700,58 @@ def magnetic_circuit_bh_operating_summary(mmf, iron_path, h_of_b, gap=0.0, dh_db
     }
 
 
+def magnetic_circuit_bh_inductance_summary(turns, current, area, iron_path, h_of_b,
+                                           gap=0.0, dh_db=None):
+    """Readable winding-inductance summary for a nonlinear B-H magnetic circuit.
+
+    A single winding drives the same series circuit used by
+    :func:`magnetic_circuit_bh_operating_summary`:
+
+        N I = H_iron(B) l_fe + (B/mu0) g.
+
+    This helper converts that operating point into the coil quantities students and
+    validation scripts usually compare:
+
+    - flux ``Phi = B A`` and flux linkage ``lambda = N Phi``;
+    - secant/apparent inductance ``L_sec = lambda / I``;
+    - incremental inductance ``L_inc = d lambda / d I`` using the B-H tangent.
+
+    In the constant-mu limit, ``L_sec == L_inc == magnetic_circuit_inductance(...)``.
+    In saturation, ``L_inc`` falls below ``L_sec``; that is the small-signal
+    inductance a current controller or perturbation solve sees.
+    """
+    if turns <= 0.0:
+        raise ValueError("turns must be positive")
+    if current <= 0.0:
+        raise ValueError("current must be positive")
+    if area <= 0.0:
+        raise ValueError("area must be positive")
+
+    mmf = turns * current
+    row = magnetic_circuit_bh_operating_summary(
+        mmf,
+        iron_path,
+        h_of_b,
+        gap=gap,
+        dh_db=dh_db,
+    )
+    flux = row["B_T"] * area
+    linkage = turns * flux
+    secant_L = linkage / current
+    incremental_L = turns * turns * area * row["incremental_permeance_T_per_A_turn"]
+    row.update({
+        "turns": turns,
+        "current_A": current,
+        "area_m2": area,
+        "flux_Wb": flux,
+        "flux_linkage_Wb_turn": linkage,
+        "secant_inductance_H": secant_L,
+        "incremental_inductance_H": incremental_L,
+        "incremental_over_secant": incremental_L / secant_L if secant_L != 0.0 else math.nan,
+    })
+    return row
+
+
 def pm_circuit_loadline_gap_field(Br, magnet_len, gap, iron_path, mu_r, mu_rec=1.0):
     """PM operating point -- the air-gap flux density of a PERMANENT-MAGNET-driven iron
     circuit (magnet length ``magnet_len`` and the gap/iron in series, equal cross-section).
