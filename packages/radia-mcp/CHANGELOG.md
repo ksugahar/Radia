@@ -13,6 +13,9 @@ crystallized as its own package.
   SynRM/hysteresis intent to explicit NGSolve AGE gates, physical quantities,
   pytest targets, and publication labels without exposing private solver
   provenance.
+- **CI / optional dependencies**: the baffled-piston acoustics regression now
+  skips when scipy is unavailable, matching the package's lightweight
+  selftest policy.  This patch supersedes the failed 1.4.2 tag run.
 - **BREAKING**: removed the in-package `radia_mcp.optuna` server and
   `mcp-server-optuna` entry point.  Optuna operation now belongs to the
   official public `optuna/optuna-mcp`; radia-mcp keeps the CAE objective,
