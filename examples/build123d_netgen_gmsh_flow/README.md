@@ -45,6 +45,7 @@ See `docs/research/policy/strategy.md` and `toolchain.md` for the full rationale
 | `validation_enclosure_cubit_measurement.py` | Validation-class enclosing-box/void-region STEP round-trip measured by headless Cubit API; checks bbox margin, analytic volume/area, and Cubit volume/area/bbox parity |
 | `validation_build123d_cubit_boundary_normals.py` | Validation-class box boundary normals; checks analytic build123d face vector areas, optionally against a named Netgen `.vol` boundary mesh |
 | `validation_build123d_cubit_pressure_force.py` | Validation-class box pressure force; checks analytic build123d face forces, optionally against named Netgen `.vol` pressure-force rows |
+| `validation_build123d_cubit_pressure_moment.py` | Validation-class box pressure force/moment; checks analytic build123d face moments, optionally against named Netgen `.vol` pressure-moment rows |
 | `runs/` | Output directory (`*.brep` / `*.step`, `*.msh`, `*_post.msh`, `*.json`, `sweep_summary.json`) |
 
 ## Run
@@ -71,6 +72,8 @@ python validation_build123d_cubit_boundary_normals.py
 python validation_build123d_cubit_boundary_normals.py --vol C:\temp\box.vol --out C:\temp\box_boundary_normals_summary.json
 python validation_build123d_cubit_pressure_force.py
 python validation_build123d_cubit_pressure_force.py --vol C:\temp\box.vol --out C:\temp\box_pressure_force_summary.json
+python validation_build123d_cubit_pressure_moment.py
+python validation_build123d_cubit_pressure_moment.py --vol C:\temp\box.vol --out C:\temp\box_pressure_moment_summary.json
 ```
 
 On a warm Python (all imports cached) the full sweep takes tens of seconds.
