@@ -26,8 +26,16 @@ Helmholtz Dirichlet-to-Neumann eigenvalues and radiation impedances for
 low-order modes. It is the smallest readable open-boundary FEM/BEM coupling
 gate: FEM pressure trace in, exterior normal derivative out.
 
+## Planar DtN symbol
+
+`validation_planar_dtn_symbol.py` validates the exact outgoing half-space
+Helmholtz DtN symbol for planar trace modes. It records normal/oblique
+propagating modes and evanescent modes, making the FEM/BEM sign convention and
+low-frequency radiation/near-field split visible without a mesh.
+
 ```powershell
 python validation_pulsating_sphere_radiation.py
 python validation_low_frequency_helmholtz_kernel.py
 python validation_spherical_dtn_modes.py
+python validation_planar_dtn_symbol.py
 ```
