@@ -640,6 +640,70 @@ def three_phase_torque_ripple_pair_table(emf_harmonics, current_peak=1.0, mechan
     return rows
 
 
+def torque_angle_sweep_summary(torque_Nm, max_harmonic=None):
+    """Fourier summary of one periodic torque-angle sweep.
+
+    ``torque_Nm`` is one uniformly sampled mechanical/electrical period without
+    repeating the endpoint.  The helper is intentionally solver-neutral: it
+    turns a rotor-position torque table into mean torque, peak-to-peak ripple,
+    AC RMS, harmonic amplitudes, and the dominant ripple order.
+    """
+
+    values = [float(value) for value in torque_Nm]
+    n = len(values)
+    if n < 3:
+        raise ValueError("at least three torque samples are required")
+    mean = sum(values) / n
+    ac = [value - mean for value in values]
+    ac_rms = math.sqrt(sum(value * value for value in ac) / n)
+    peak_to_peak = max(values) - min(values)
+    if max_harmonic is None:
+        hmax = n // 2
+    else:
+        hmax = int(max_harmonic)
+        if hmax <= 0:
+            raise ValueError("max_harmonic must be positive")
+        hmax = min(hmax, n // 2)
+
+    harmonic_rows = []
+    for order in range(1, hmax + 1):
+        coeff = sum(
+            values[idx] * complex(
+                math.cos(-2.0 * math.pi * order * idx / n),
+                math.sin(-2.0 * math.pi * order * idx / n),
+            )
+            for idx in range(n)
+        ) / n
+        amplitude = 2.0 * abs(coeff)
+        harmonic_rows.append({
+            "order": order,
+            "cos_coefficient_Nm": 2.0 * coeff.real,
+            "sin_coefficient_Nm": -2.0 * coeff.imag,
+            "amplitude_Nm": amplitude,
+            "phase_rad": math.atan2(coeff.imag, coeff.real),
+            "amplitude_over_mean": math.inf if mean == 0.0 else amplitude / abs(mean),
+        })
+    dominant = max(harmonic_rows, key=lambda row: row["amplitude_Nm"]) if harmonic_rows else None
+    return {
+        "n_samples": n,
+        "mean_torque_Nm": mean,
+        "min_torque_Nm": min(values),
+        "max_torque_Nm": max(values),
+        "peak_to_peak_torque_Nm": peak_to_peak,
+        "peak_to_peak_over_mean": math.inf if mean == 0.0 else peak_to_peak / abs(mean),
+        "ac_rms_torque_Nm": ac_rms,
+        "ac_rms_over_mean": math.inf if mean == 0.0 else ac_rms / abs(mean),
+        "max_harmonic": hmax,
+        "harmonic_rows": harmonic_rows,
+        "dominant_harmonic": None if dominant is None else dominant["order"],
+        "dominant_harmonic_amplitude_Nm": 0.0 if dominant is None else dominant["amplitude_Nm"],
+        "dominant_harmonic_over_mean": (
+            math.inf if mean == 0.0 and dominant is not None
+            else (0.0 if dominant is None else dominant["amplitude_Nm"] / abs(mean))
+        ),
+    }
+
+
 def mtpa_operating_point(lambda_m, Ld, Lq, current, pole_pairs):
     """MAXIMUM-TORQUE-PER-AMPERE operating point of a salient PM synchronous
     machine at stator current magnitude ``current``.

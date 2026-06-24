@@ -16,6 +16,7 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.solve import (
     three_phase_torque_ripple_harmonics,
     three_phase_torque_ripple_pair_table,
+    torque_angle_sweep_summary,
 )
 
 
@@ -91,6 +92,32 @@ def test_closed_form_matches_direct_time_waveform_fourier():
     assert math.isclose(_fourier_amplitude(p, 12), out["power_ripple"][12], abs_tol=1e-12)
 
 
+def test_torque_angle_sweep_summary_extracts_ripple_harmonics():
+    samples = 720
+    mean = 10.0
+    ripple6 = 0.4
+    ripple12 = 0.1
+    torque = [
+        mean
+        + ripple6 * math.cos(6 * 2.0 * math.pi * idx / samples)
+        + ripple12 * math.sin(12 * 2.0 * math.pi * idx / samples)
+        for idx in range(samples)
+    ]
+
+    summary = torque_angle_sweep_summary(torque, max_harmonic=18)
+    by_order = {row["order"]: row for row in summary["harmonic_rows"]}
+
+    assert math.isclose(summary["mean_torque_Nm"], mean, abs_tol=1.0e-14)
+    assert math.isclose(summary["ac_rms_torque_Nm"], math.sqrt((ripple6 * ripple6 + ripple12 * ripple12) / 2.0), rel_tol=1.0e-12)
+    assert summary["dominant_harmonic"] == 6
+    assert math.isclose(by_order[6]["cos_coefficient_Nm"], ripple6, abs_tol=1.0e-14)
+    assert math.isclose(by_order[6]["sin_coefficient_Nm"], 0.0, abs_tol=1.0e-14)
+    assert math.isclose(by_order[6]["amplitude_Nm"], ripple6, abs_tol=1.0e-14)
+    assert math.isclose(by_order[12]["cos_coefficient_Nm"], 0.0, abs_tol=1.0e-14)
+    assert math.isclose(by_order[12]["sin_coefficient_Nm"], ripple12, abs_tol=1.0e-14)
+    assert math.isclose(by_order[12]["amplitude_Nm"], ripple12, abs_tol=1.0e-14)
+
+
 def test_invalid_inputs():
     for bad in ({0: 1.0}, {-1: 1.0}):
         try:
@@ -106,3 +133,10 @@ def test_invalid_inputs():
             pass
         else:
             raise AssertionError("invalid operating input accepted")
+    for kwargs in ({"torque_Nm": [1.0, 2.0]}, {"torque_Nm": [1.0, 2.0, 3.0], "max_harmonic": 0}):
+        try:
+            torque_angle_sweep_summary(**kwargs)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid torque sweep input accepted")
