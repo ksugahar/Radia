@@ -16,7 +16,11 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.radia_ngsolve.solve import pm_circuit_loadline_gap_field, MU0
+from radia_mcp.radia_ngsolve.solve import (
+    pm_circuit_loadline_gap_field,
+    pm_circuit_loadline_operating_point,
+    MU0,
+)
 
 W, ww, b = 0.24, 0.12, 0.06
 MU_R, RBOX = 2000.0, 0.60
@@ -34,6 +38,33 @@ def test_loadline_formula():
     assert pm_circuit_loadline_gap_field(BR, LM, 0.008, lfe, MU_R) < B      # bigger gap -> lower
     # zero gap, ideal iron -> B_gap -> Br (magnet fully short-circuited)
     assert math.isclose(pm_circuit_loadline_gap_field(BR, LM, 0.0, 0.0, 1e12), BR, rel_tol=1e-9)
+
+
+def test_loadline_operating_point_identities():
+    g, lfe, mu_rec, hknee = 0.004, 0.6, 1.05, -6.0e5
+    op = pm_circuit_loadline_operating_point(BR, LM, g, lfe, MU_R, mu_rec, H_knee=hknee)
+    expected_b = pm_circuit_loadline_gap_field(BR, LM, g, lfe, MU_R, mu_rec)
+    expected_pc = LM / (g + lfe / (mu_rec * MU_R))
+
+    assert op["B_gap_T"] == pytest.approx(expected_b)
+    assert op["H_m_A_per_m"] == pytest.approx((expected_b - BR) / (MU0 * mu_rec))
+    assert op["permeance_coefficient"] == pytest.approx(expected_pc)
+    assert op["B_from_permeance_coefficient_T"] == pytest.approx(expected_b)
+    assert op["B_identity_abs_error_T"] < 1.0e-15
+    assert op["demag_margin_A_per_m"] == pytest.approx(op["H_m_A_per_m"] - hknee)
+    assert op["safe_against_knee"] is True
+
+
+def test_loadline_operating_point_gap_sweep_monotone():
+    gaps = (0.001, 0.002, 0.004, 0.008)
+    ops = [pm_circuit_loadline_operating_point(BR, LM, g, 0.6, MU_R, MU_REC) for g in gaps]
+    bs = [op["B_gap_T"] for op in ops]
+    hs = [op["H_m_A_per_m"] for op in ops]
+    pcs = [op["permeance_coefficient"] for op in ops]
+
+    assert all(a > b for a, b in zip(bs, bs[1:]))
+    assert all(a > b for a, b in zip(hs, hs[1:]))  # H_m becomes more negative.
+    assert all(a > b for a, b in zip(pcs, pcs[1:]))
 
 
 def _rect(wp, x0, y0, w, h):
