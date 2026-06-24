@@ -16,7 +16,7 @@ Example scripts for the radia Cubit C++ plugin (`cubit_mesh_export.ccm`), organi
 |---|---|
 | [`validation_vol_surface_closure.py`](validation_vol_surface_closure.py) | Netgen `.vol` boundary orientation, vector-area closure, and boundary/tet volume agreement |
 | [`validation_vol_fem_bem_topology.py`](validation_vol_fem_bem_topology.py) | First-order FEM/BEM topology view: closed surface edge manifold, Euler characteristic, compact scalar-BEM nodes, RWG-to-HCurl edge trace |
-| [`validation_vol_tet_quality.py`](validation_vol_tet_quality.py) | Netgen `.vol` tetrahedron quality: edge ratio, inradius, circumradius, radius-ratio quality, and optional real Cubit export evaluation |
+| [`validation_vol_tet_quality.py`](validation_vol_tet_quality.py) | Netgen `.vol` tetrahedron quality: edge ratio, inradius, circumradius, radius-ratio quality, corner-normalized Jacobian quality, and optional real Cubit export evaluation |
 | [`validation_vol_boundary_inventory.py`](validation_vol_boundary_inventory.py) | Netgen `.vol` named-boundary inventory for Cubit/Coreform sidesets: per-boundary area, triangle count, and trace-node ids |
 | [`validation_vol_material_interface.py`](validation_vol_material_interface.py) | Netgen `.vol` material/interface inventory: material volumes, exterior/interface areas, and `domin/domout` boundary incidence |
 
