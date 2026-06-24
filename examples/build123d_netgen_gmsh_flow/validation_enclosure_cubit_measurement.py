@@ -4,8 +4,9 @@ This example exercises the build123d helpers used before multi-region meshing:
 
     inner material regions -> enclosing box with bbox margin -> void/air region
 
-The same STEP geometry is measured by headless Cubit so the build123d volume
-and surface-area measurements are cross-checked by an external CAD kernel.
+The same STEP geometry is measured by headless Cubit so the build123d volume,
+surface-area, and bounding-box measurements are cross-checked by an external
+CAD kernel.
 
 Run:
 
@@ -124,7 +125,13 @@ def analytic_comparison_rows(build_rows: list[dict], analytic: dict, rtol: float
     return rows
 
 
-def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool, rtol: float) -> dict:
+def build_summary(
+    out_dir: Path,
+    cubit_bin_arg: str | None,
+    require_cubit: bool,
+    rtol: float,
+    bbox_atol: float,
+) -> dict:
     t0 = time.perf_counter()
     cases, analytic, clearance = build_model()
     build_rows = shape_measurement_rows(cases)
@@ -144,6 +151,7 @@ def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool,
         cubit.get("rows", []),
         rtol=rtol,
         measured_label="cubit",
+        bbox_atol=bbox_atol,
     )
     cubit_by_name = {row["name"]: row for row in cubit.get("rows", [])}
     cubit_cmp_by_name = {row["name"]: row for row in cubit_comparison["rows"]}
@@ -158,6 +166,7 @@ def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool,
                 "edges": row["edges"],
                 "vertices": row["vertices"],
                 "bbox_size": row["bounding_box"]["size"],
+                "bounding_box": row["bounding_box"],
             },
             "analytic": analytic[row["name"]],
             "analytic_comparison": next(r for r in analytic_rows if r["name"] == row["name"]),
@@ -174,8 +183,11 @@ def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool,
         "max_analytic_area_rel_error": max(row["area_rel_error"] for row in analytic_rows),
         "max_cubit_volume_rel_error": cubit_comparison["max_volume_rel_error"],
         "max_cubit_area_rel_error": cubit_comparison["max_area_rel_error"],
+        "max_cubit_bbox_abs_error": cubit_comparison["max_bbox_abs_error"],
+        "n_cubit_bbox_compared": cubit_comparison["n_bbox_compared"],
         "cubit_available": bool(cubit.get("available")),
         "cubit_bin_name": cubit.get("bin_name"),
+        "bbox_atol": bbox_atol,
         "min_bbox_clearance": clearance["min_clearance"],
         "nominal_void_volume": clearance["nominal_void_volume"],
         "contained_by_bbox": clearance["contained_by_bbox"],
@@ -187,7 +199,7 @@ def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool,
     )
 
     return {
-        "kind": "build123d_enclosure_cubit_volume_area_cross_validation",
+        "kind": "build123d_enclosure_cubit_volume_area_bbox_cross_validation",
         "validation_class": True,
         "elapsed_seconds": round(time.perf_counter() - t0, 3),
         "checks": checks,
@@ -203,14 +215,21 @@ def main() -> int:
     parser.add_argument("--cubit-bin")
     parser.add_argument("--require-cubit", action="store_true")
     parser.add_argument("--rtol", type=float, default=1.0e-5)
+    parser.add_argument("--bbox-atol", type=float, default=1.0e-6)
     args = parser.parse_args()
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    summary = build_summary(args.out_dir, args.cubit_bin, args.require_cubit, args.rtol)
+    summary = build_summary(
+        args.out_dir,
+        args.cubit_bin,
+        args.require_cubit,
+        args.rtol,
+        args.bbox_atol,
+    )
     args.summary.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     checks = summary["checks"]
-    print("[build123d enclosure -> Cubit volume/area cross validation]")
+    print("[build123d enclosure -> Cubit volume/area/bbox cross validation]")
     print(
         f"  cases={checks['n_cases']} analytic={checks['n_analytic_passed']} "
         f"cubit={checks['n_cubit_passed']} Cubit available={checks['cubit_available']} "
@@ -223,6 +242,10 @@ def main() -> int:
     print(
         f"  max Cubit rel errors: volume={checks['max_cubit_volume_rel_error']:.3e}, "
         f"area={checks['max_cubit_area_rel_error']:.3e}"
+    )
+    print(
+        f"  max Cubit bbox abs error={checks['max_cubit_bbox_abs_error']:.3e} "
+        f"({checks['n_cubit_bbox_compared']} bbox comparisons)"
     )
     print(
         f"  min bbox clearance={checks['min_bbox_clearance']:.6g}, "
