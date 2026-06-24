@@ -32,7 +32,7 @@ of the methods below, with an analytic sanity check available.
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
 | Uniform cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*`` |
-| RF beam / waveguide radiation pressure | Time-averaged Poynting momentum flux | ``force.radiation_pressure_*``, ``force.radiation_force_from_power``, ``force.time_average_maxwell_*`` |
+| RF beam / waveguide radiation pressure | Time-averaged Poynting momentum flux | ``force.radiation_pressure_*``, ``force.poynting_patch_force_summary``, ``force.time_average_maxwell_*`` |
 | Energy/inductance-derived checks | Field energy | ``force.magnetic_energy*``, ``force.inductance_*`` |
 | dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
 | Synchronous/induction machine torque curves | Circuit-level machine model | ``solve.synchronous_power_angle_torque`` / ``solve.induction_machine_torque`` |
@@ -98,6 +98,18 @@ where ``I`` is time-average Poynting intensity, ``P`` is integrated incident
 power, ``A`` is absorptance, and ``R`` is reflectance.  Use this for absorber,
 short, mirror, and waveguide-port force sanity checks before attempting a full
 time-averaged Maxwell-stress surface integral.
+
+For a vector Poynting patch calculation with propagation direction ``k`` and
+surface normal ``n`` pointing out of the illuminated side:
+
+```text
+P_inc = |S| A_patch max(0, -k.n)
+F_abs = absorptance * P_inc k / c
+F_ref = -2 reflectance * P_inc max(0, -k.n) n / c
+```
+
+This reproduces the oblique-incidence ``cos^2(theta)`` normal force and the
+absorbed tangential momentum term.
 
 Complex phasor Maxwell stress:
 
