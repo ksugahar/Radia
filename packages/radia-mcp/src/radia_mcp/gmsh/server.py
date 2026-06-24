@@ -31,6 +31,21 @@ from .gmsh_knowledge import get_gmsh_documentation
 from .gmsh_reference import get_gmsh_reference
 from .gmsh_examples import get_gmsh_examples
 
+_RULE_REMEDIATIONS = {
+    "numsubedges-missing": (
+        "For high-order curved display, add a companion .geo with "
+        "Mesh.NumSubEdges = 4 or launch gmsh with -numsubedges 4."
+    ),
+    "gmsh-mesh-generation": (
+        "Keep GMSH as visualization/post-processing only. Generate meshes with "
+        "Netgen or Cubit, then open/export files for display."
+    ),
+    "pip-gmsh-import": (
+        "Avoid the pip gmsh runtime in public examples. Prefer standalone "
+        "gmsh.exe via subprocess or file-based visualization workflows."
+    ),
+}
+
 # Create MCP server
 mcp = FastMCP("gmsh-lint")
 
@@ -104,6 +119,18 @@ def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dic
             by_severity[str(finding.get("severity", "UNKNOWN"))] += 1
             by_rule[str(finding.get("rule", "unknown"))] += 1
 
+    top_rules = [
+        {
+            "rule": rule,
+            "count": count,
+            "action": _RULE_REMEDIATIONS.get(
+                rule,
+                "Inspect representative findings and add a specific remediation note.",
+            ),
+        }
+        for rule, count in sorted(by_rule.items(), key=lambda item: (-item[1], item[0]))[:limit]
+    ]
+
     return {
         "ok": True,
         "directory": str(d),
@@ -112,10 +139,8 @@ def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dic
         "total_findings": total_findings,
         "clean": total_findings == 0,
         "by_severity": dict(by_severity),
-        "top_rules": [
-            {"rule": rule, "count": count}
-            for rule, count in sorted(by_rule.items(), key=lambda item: (-item[1], item[0]))[:limit]
-        ],
+        "top_rules": top_rules,
+        "dominant_rule": top_rules[0] if top_rules else None,
         "top_files": sorted(top_files, key=lambda item: (-item["findings"], item["path"]))[:limit],
     }
 
