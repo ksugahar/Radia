@@ -100,5 +100,10 @@ def test_mesh_audit_summary_tools_are_machine_readable(monkeypatch, tmp_path):
         assert summary["by_severity"]["HIGH"] == 1
         assert summary["by_severity"]["LOW"] == 1
         assert summary["by_severity"]["CRITICAL"] == 1
-        assert summary["top_rules"] == [{"rule": "alpha", "count": 2}]
+        assert summary["top_rules"] == [{
+            "rule": "alpha",
+            "count": 2,
+            "action": "Inspect representative findings and add a specific remediation note.",
+        }]
+        assert summary["dominant_rule"] == summary["top_rules"][0]
         assert summary["top_files"][0]["path"] == "examples\\a.py"
