@@ -127,7 +127,7 @@ def _check_binary_freshness():
             "\n  Rebuild BEFORE packaging:\n"
             "    powershell.exe -ExecutionPolicy Bypass "
             "-File Build.ps1 -Rebuild    # full rebuild (~10 min)\n"
-            "  OR: targeted rebuild — see the `release-triple` skill,\n"
+            "  OR: targeted rebuild — see the `release-qud` skill,\n"
             "  Phase 0. Then re-run `pip wheel` / `pip install`.\n"
             "\n  To override (not recommended):\n"
             "    set CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK=1\n\n")
