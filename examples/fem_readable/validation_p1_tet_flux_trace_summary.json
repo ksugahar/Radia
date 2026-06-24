@@ -1,0 +1,114 @@
+{
+  "kind": "p1_tet_flux_trace_validation",
+  "validation_class": true,
+  "mesh_summary": {
+    "points": 4,
+    "surface_triangles": 4,
+    "tetrahedra": 1,
+    "materials": 1,
+    "boundary_names": 4
+  },
+  "coeff": 2.75,
+  "nodal_values": [
+    0.25,
+    1.25,
+    -1.75,
+    0.75
+  ],
+  "gradient": [
+    1.0,
+    -2.0,
+    0.5
+  ],
+  "flux": [
+    -2.75,
+    5.5,
+    -1.375
+  ],
+  "face_flux_rows": [
+    {
+      "opposite_local_node": 0,
+      "face_local_nodes": [
+        1,
+        2,
+        3
+      ],
+      "area": 0.8660254037844386,
+      "outward_area_vector": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "normal_flux_density": 0.7938566201357354,
+      "integrated_flux": 0.6875
+    },
+    {
+      "opposite_local_node": 1,
+      "face_local_nodes": [
+        0,
+        2,
+        3
+      ],
+      "area": 0.5,
+      "outward_area_vector": [
+        -0.5,
+        0.0,
+        0.0
+      ],
+      "normal_flux_density": 2.75,
+      "integrated_flux": 1.375
+    },
+    {
+      "opposite_local_node": 2,
+      "face_local_nodes": [
+        0,
+        1,
+        3
+      ],
+      "area": 0.5,
+      "outward_area_vector": [
+        0.0,
+        -0.5,
+        0.0
+      ],
+      "normal_flux_density": -5.5,
+      "integrated_flux": -2.75
+    },
+    {
+      "opposite_local_node": 3,
+      "face_local_nodes": [
+        0,
+        1,
+        2
+      ],
+      "area": 0.5,
+      "outward_area_vector": [
+        0.0,
+        0.0,
+        -0.5
+      ],
+      "normal_flux_density": 1.375,
+      "integrated_flux": 0.6875
+    }
+  ],
+  "energy_matrix": 2.40625,
+  "energy_direct": 2.40625,
+  "checks": {
+    "volume": 0.16666666666666666,
+    "gradient_abs_errors": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "flux_abs_errors": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "energy_abs_error": 0.0,
+    "total_integrated_flux_abs": 0.0,
+    "max_face_identity_error": 0.0,
+    "face_count": 4,
+    "surface_triangle_count": 4
+  }
+}
