@@ -189,6 +189,87 @@ def circular_waveguide_cutoff(radius, mode, m, n):
     return C0 * z / (2.0 * math.pi * radius)
 
 
+def circular_waveguide_mode_table(radius, max_m=3, max_n=2, families=("TE", "TM"), c=C0):
+    """Sorted cutoff-mode table for a PEC circular waveguide.
+
+    ``TE`` modes use zeros of ``J'_m`` and ``TM`` modes use zeros of ``J_m``.  The azimuthal
+    degeneracy is reported explicitly: modes with ``m=0`` have one angular pattern, while
+    ``m>0`` has the usual twofold ``cos(m phi)`` / ``sin(m phi)`` degeneracy.  Each row contains
+    ``family``, ``mode``, ``m``, ``n``, ``cutoff_frequency`` [Hz], ``cutoff_wavenumber`` [1/m],
+    and ``angular_degeneracy``.
+    """
+    r = float(radius)
+    if r <= 0.0:
+        raise ValueError("radius must be positive")
+    mm, nn = int(max_m), int(max_n)
+    if mm < 0:
+        raise ValueError("max_m must be >= 0")
+    if nn < 1:
+        raise ValueError("max_n must be >= 1")
+
+    selected = tuple(str(f).upper() for f in families)
+    unknown = [f for f in selected if f not in ("TE", "TM")]
+    if unknown:
+        raise ValueError("families may contain only 'TE' and 'TM'")
+
+    modes = []
+    for family in selected:
+        for m in range(mm + 1):
+            for n in range(1, nn + 1):
+                fc = circular_waveguide_cutoff(r, family, m, n)
+                modes.append({
+                    "family": family,
+                    "mode": f"{family}{m}{n}",
+                    "m": m,
+                    "n": n,
+                    "cutoff_frequency": fc,
+                    "cutoff_wavenumber": 2.0 * math.pi * fc / c,
+                    "angular_degeneracy": 1 if m == 0 else 2,
+                })
+    modes.sort(key=lambda row: (
+        row["cutoff_frequency"],
+        0 if row["family"] == "TE" else 1,
+        row["m"],
+        row["n"],
+    ))
+    return modes
+
+
+def circular_waveguide_band_summary(radius, frequency, max_m=3, max_n=2, c=C0):
+    """Classify a circular guide at one frequency from its cutoff table.
+
+    Modes with ``frequency > cutoff_frequency`` are listed as propagating.  ``single_mode`` is
+    true when the only propagating row is the dominant ``TE11`` pair.  The row still reports
+    ``angular_degeneracy=2``, so callers can distinguish the two polarizations from the next
+    physical cutoff.
+    """
+    f = float(frequency)
+    if f <= 0.0:
+        raise ValueError("frequency must be positive")
+    table = circular_waveguide_mode_table(radius, max_m=max_m, max_n=max_n, c=c)
+    propagating = [row for row in table if f > row["cutoff_frequency"]]
+    next_rows = [row for row in table if f <= row["cutoff_frequency"]]
+    dominant = table[0] if table else None
+    next_mode = next_rows[0] if next_rows else None
+    single_mode = (
+        len(propagating) == 1
+        and propagating[0]["family"] == "TE"
+        and propagating[0]["m"] == 1
+        and propagating[0]["n"] == 1
+    )
+    return {
+        "frequency": f,
+        "dominant_mode": dominant,
+        "propagating_modes": propagating,
+        "n_propagating_rows": len(propagating),
+        "n_propagating_with_degeneracy": sum(row["angular_degeneracy"] for row in propagating),
+        "next_mode": next_mode,
+        "below_dominant_cutoff": len(propagating) == 0,
+        "single_mode": single_mode,
+        "single_mode_upper_cutoff": table[1]["cutoff_frequency"] if len(table) > 1 else None,
+    }
+
+
 def waveguide_dispersion(frequency, fc, c=C0):
     """Dispersion of a hollow metallic waveguide mode ABOVE cutoff -- the propagation sequel to the
     cutoff eigenvalue (:func:`rectangular_waveguide_cutoff` / :func:`circular_waveguide_cutoff` /
