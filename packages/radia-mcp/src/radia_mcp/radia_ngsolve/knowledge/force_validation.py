@@ -26,6 +26,7 @@ of the methods below, with an analytic sanity check available.
 | Rotating machine torque from field solution | Weighted Maxwell stress torque | ``force.eggshell_torque*`` |
 | Simple closed integration surface in air | Maxwell surface stress | ``force.maxwell_surface_force*`` |
 | One surface patch / sign convention teaching | Local Maxwell traction | ``force.maxwell_stress_tensor_air`` / ``force.maxwell_traction_summary`` |
+| First-order `.vol` boundary triangle force trace | P1 triangle Maxwell traction load | ``force.surface_triangle_maxwell_traction_summary`` |
 | Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
@@ -128,6 +129,8 @@ requires a stable geometry perturbation and matched meshes or careful remeshing.
 
 - ``ngsolve_usage("lorentz_force")``: conductor force, image force, busbars.
 - ``ngsolve_usage("air_gap_force")``: magnetic-circuit holding force.
+- ``examples/fem_readable/validation_surface_maxwell_force_trace.py``:
+  first-order `.vol` boundary triangles to Maxwell traction and P1 nodal force loads.
 - ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.
 - ``ngsolve_usage("electrostatic_force")``: MEMS electric force.
 - ``force_validation("cross_validation")``: stored regression-reference cases.
