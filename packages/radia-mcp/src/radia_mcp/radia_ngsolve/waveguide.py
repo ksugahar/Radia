@@ -342,6 +342,30 @@ def waveguide_offset_short_s11(frequency, width_a, offset_length, c=C0):
             "group_delay": 2.0 * d / vg}
 
 
+def waveguide_offset_short_length_from_group_delay(frequency, width_a, group_delay, c=C0):
+    r"""Recover offset-short length [m] from measured/simulated reflection group delay.
+
+    For a shorted air-filled rectangular TE10 guide section,
+
+        tau_g = 2 d / v_group,     v_group = c sqrt(1 - (fc/f)^2),     fc = c/(2a),
+
+    so the physical offset length is ``d = tau_g v_group / 2``.  This is the
+    inverse post-processing companion to :func:`waveguide_offset_short_s11` and
+    is useful when a port trace is available but the reference-plane offset is
+    what should be calibrated. Raises ValueError at/below TE10 cutoff.
+    """
+    f = float(frequency); a = float(width_a); tau = float(group_delay)
+    if a <= 0.0:
+        raise ValueError("width_a must be > 0 (got %r)" % (width_a,))
+    if tau < 0.0:
+        raise ValueError("group_delay must be >= 0 (got %r)" % (group_delay,))
+    fc = 0.5 * c / a
+    disp = waveguide_dispersion(f, fc, c)
+    length = 0.5 * tau * disp["v_group"]
+    return {"frequency": f, "fc": fc, "group_delay": tau,
+            "v_group": disp["v_group"], "offset_length": length}
+
+
 def reflection_metrics(s11):
     r"""Common scalar readouts of a one-port reflection coefficient ``S11``.
 
