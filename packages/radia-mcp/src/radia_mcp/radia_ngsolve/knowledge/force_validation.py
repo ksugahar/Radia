@@ -31,7 +31,7 @@ of the methods below, with an analytic sanity check available.
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
 | Uniform cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*`` |
-| RF beam / waveguide radiation pressure | Time-averaged Poynting momentum flux | ``force.radiation_pressure_*`` and ``force.radiation_force_from_power`` |
+| RF beam / waveguide radiation pressure | Time-averaged Poynting momentum flux | ``force.radiation_pressure_*``, ``force.radiation_force_from_power``, ``force.time_average_maxwell_*`` |
 | Energy/inductance-derived checks | Field energy | ``force.magnetic_energy*``, ``force.inductance_*`` |
 | dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
 | Synchronous/induction machine torque curves | Circuit-level machine model | ``solve.synchronous_power_angle_torque`` / ``solve.induction_machine_torque`` |
@@ -86,6 +86,19 @@ where ``I`` is time-average Poynting intensity, ``P`` is integrated incident
 power, ``A`` is absorptance, and ``R`` is reflectance.  Use this for absorber,
 short, mirror, and waveguide-port force sanity checks before attempting a full
 time-averaged Maxwell-stress surface integral.
+
+Complex phasor Maxwell stress:
+
+```text
+<T_ij> = q Re(eps E_i E_j* + mu H_i H_j*)
+         - q/2 (eps |E|^2 + mu |H|^2) delta_ij
+q = 1/2 for peak phasors, q = 1 for RMS phasors
+```
+
+For a normally incident plane wave, ``<T> n = -(I/c) n`` on a control surface
+whose normal points along propagation.  The receiving surface force is the
+opposite sign, with the reflected field doubling the pressure for an ideal
+mirror.
 
 Energy/coenergy:
 

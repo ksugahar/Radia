@@ -38,12 +38,27 @@ def _float_vector(values, name):
     return vec
 
 
+def _complex_vector(values, name):
+    vec = [complex(value) for value in values]
+    if len(vec) not in (2, 3):
+        raise ValueError(f"{name} must have length 2 or 3")
+    return vec
+
+
 def _unit_vector(values, name):
     vec = _float_vector(values, name)
     norm = math.sqrt(sum(value * value for value in vec))
     if norm <= 0.0:
         raise ValueError(f"{name} must be nonzero")
     return [value / norm for value in vec]
+
+
+def _phasor_average_factor(amplitude):
+    if amplitude == "peak":
+        return 0.5
+    if amplitude == "rms":
+        return 1.0
+    raise ValueError("amplitude must be 'peak' or 'rms'")
 
 
 def maxwell_stress_tensor_air(B, mu=MU0):
@@ -139,6 +154,110 @@ def maxwell_traction_summary(B, normal, area_m2=1.0, mu=MU0):
             sum(value * value for value in tangential_traction)
         ),
         "force_N": [area * value for value in traction],
+    }
+
+
+def time_average_maxwell_stress_tensor(E, H, eps=EPS0, mu=MU0, amplitude="peak"):
+    """Time-average Maxwell stress tensor [Pa] for complex harmonic phasors.
+
+    For peak phasors, the average dyadic factor is ``1/2``:
+
+        <T_ij> = 1/2 Re(eps E_i E_j* + mu H_i H_j*)
+                 - 1/4 (eps |E|^2 + mu |H|^2) delta_ij
+
+    For RMS phasors, set ``amplitude="rms"`` and the dyadic factor becomes
+    one.  The function returns a real nested list in pascals.  It is the local
+    time-harmonic counterpart of :func:`maxwell_stress_tensor_air`.
+    """
+
+    eps = float(eps)
+    mu = float(mu)
+    if eps <= 0.0:
+        raise ValueError("eps must be > 0")
+    if mu <= 0.0:
+        raise ValueError("mu must be > 0")
+    e = _complex_vector(E, "E")
+    h = _complex_vector(H, "H")
+    if len(e) != len(h):
+        raise ValueError("E and H must have the same length")
+    factor = _phasor_average_factor(amplitude)
+    e2 = sum(abs(value) ** 2 for value in e)
+    h2 = sum(abs(value) ** 2 for value in h)
+    scalar = 0.5 * (eps * e2 + mu * h2)
+    dim = len(e)
+    return [
+        [
+            factor * (
+                eps * (e[i] * e[j].conjugate()).real
+                + mu * (h[i] * h[j].conjugate()).real
+                - (scalar if i == j else 0.0)
+            )
+            for j in range(dim)
+        ]
+        for i in range(dim)
+    ]
+
+
+def time_average_maxwell_traction(E, H, normal, eps=EPS0, mu=MU0, amplitude="peak"):
+    """Time-average Maxwell traction vector ``<T> n`` for harmonic fields."""
+
+    e = _complex_vector(E, "E")
+    h = _complex_vector(H, "H")
+    n = _unit_vector(normal, "normal")
+    if len(e) != len(n) or len(h) != len(n):
+        raise ValueError("E, H, and normal must have the same length")
+    tensor = time_average_maxwell_stress_tensor(e, h, eps=eps, mu=mu, amplitude=amplitude)
+    return [
+        sum(tensor[i][j] * n[j] for j in range(len(n)))
+        for i in range(len(n))
+    ]
+
+
+def time_average_maxwell_traction_summary(
+    E,
+    H,
+    normal,
+    area_m2=1.0,
+    eps=EPS0,
+    mu=MU0,
+    amplitude="peak",
+):
+    """JSON-friendly time-harmonic Maxwell traction summary for one patch."""
+
+    area = float(area_m2)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    n = _unit_vector(normal, "normal")
+    e = _complex_vector(E, "E")
+    h = _complex_vector(H, "H")
+    if len(e) != len(n) or len(h) != len(n):
+        raise ValueError("E, H, and normal must have the same length")
+    factor = _phasor_average_factor(amplitude)
+    tensor = time_average_maxwell_stress_tensor(e, h, eps=eps, mu=mu, amplitude=amplitude)
+    traction = [sum(tensor[i][j] * n[j] for j in range(len(n))) for i in range(len(n))]
+    normal_traction = sum(ti * ni for ti, ni in zip(traction, n))
+    tangential_traction = [ti - normal_traction * ni for ti, ni in zip(traction, n)]
+    energy_density = factor * 0.5 * (
+        float(eps) * sum(abs(value) ** 2 for value in e)
+        + float(mu) * sum(abs(value) ** 2 for value in h)
+    )
+    return {
+        "E": [[value.real, value.imag] for value in e],
+        "H": [[value.real, value.imag] for value in h],
+        "normal": n,
+        "eps": float(eps),
+        "mu": float(mu),
+        "amplitude": amplitude,
+        "area_m2": area,
+        "stress_tensor_Pa": tensor,
+        "traction_Pa": traction,
+        "normal_traction_Pa": normal_traction,
+        "tangential_traction_Pa": tangential_traction,
+        "tangential_traction_magnitude_Pa": math.sqrt(
+            sum(value * value for value in tangential_traction)
+        ),
+        "force_N": [area * value for value in traction],
+        "average_energy_density_J_per_m3": energy_density,
     }
 
 
