@@ -1,5 +1,6 @@
 """Closed-form acoustic radiation helpers -- fast regression checks."""
 
+import builtins
 import math
 import os
 import sys
@@ -11,6 +12,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from radia_mcp.radia_ngsolve.acoustics import (
+    _baffled_piston_resistance_reactance_ratios,
     acoustic_dtn_from_impedance,
     acoustic_impedance_from_dtn,
     baffled_circular_piston_radiation,
@@ -291,3 +293,34 @@ def test_baffled_circular_piston_impedance_scaling_and_power():
         baffled_circular_piston_radiation(0.0, 100.0)
     with pytest.raises(ValueError):
         baffled_circular_piston_radiation(a, 0.0)
+
+
+def test_baffled_circular_piston_fallback_without_scipy():
+    low1 = _baffled_piston_resistance_reactance_ratios(0.025, prefer_scipy=False)
+    low2 = _baffled_piston_resistance_reactance_ratios(0.050, prefer_scipy=False)
+    high = _baffled_piston_resistance_reactance_ratios(20.0, prefer_scipy=False)
+
+    assert low1[2] == "fallback"
+    assert low2[0] / low1[0] == pytest.approx(4.0, rel=1.0e-3)
+    assert low2[1] / low1[1] == pytest.approx(2.0, rel=1.0e-3)
+    assert low1[0] == pytest.approx(0.5 * 0.025 * 0.025, rel=5.0e-4)
+    assert low1[1] == pytest.approx(8.0 * 0.025 / (3.0 * math.pi), rel=5.0e-4)
+    assert high[0] == pytest.approx(1.0, abs=0.05)
+
+    with pytest.raises(ValueError):
+        _baffled_piston_resistance_reactance_ratios(0.0, prefer_scipy=False)
+
+
+def test_baffled_circular_piston_public_fallback_when_scipy_missing(monkeypatch):
+    original_import = builtins.__import__
+
+    def _blocked_import(name, *args, **kwargs):
+        if name == "scipy" or name.startswith("scipy."):
+            raise ModuleNotFoundError("No module named 'scipy'")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _blocked_import)
+
+    out = baffled_circular_piston_radiation(0.08, 0.025 * 343.0 / (2.0 * math.pi * 0.08))
+    assert out["special_function_source"] == "fallback"
+    assert out["radiation_efficiency"] == pytest.approx(out["low_ka_resistance_asymptote"], rel=5.0e-4)
