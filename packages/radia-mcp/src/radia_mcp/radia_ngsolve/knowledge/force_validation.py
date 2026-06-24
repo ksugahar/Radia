@@ -24,6 +24,7 @@ of the methods below, with an analytic sanity check available.
 |---|---|---|
 | Body in air, global 2D/3D force | Weighted Maxwell stress | ``force.eggshell_force*`` |
 | Rotating machine torque from field solution | Weighted Maxwell stress torque | ``force.eggshell_torque*`` |
+| 2D sector torque to whole-machine torque | Stack/symmetry scaling | ``machine_scaling.MachineScaling``, ``machine_scaling.torque_scaling_summary`` |
 | Simple closed integration surface in air | Maxwell surface stress | ``force.maxwell_surface_force*`` |
 | One surface patch / sign convention teaching | Local Maxwell traction | ``force.maxwell_stress_tensor_air`` / ``force.maxwell_traction_summary`` |
 | First-order `.vol` boundary triangle force trace | P1 triangle traction load / Maxwell traction / boundary pressure/vector-traction rows | ``force.surface_triangle_constant_traction_load_summary``, ``force.surface_triangle_maxwell_traction_summary``, ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows``, ``NetgenTriTetVolMesh.boundary_traction_force_moment_rows`` |
@@ -134,6 +135,18 @@ T = r^2 L integral tau(theta) dtheta
 This is the machine-torque post-processing path for exported air-gap samples.
 The uniform helper is a closed-form special case; the sampled helper integrates
 segment contributions so sector scaling and harmonic signs stay visible.
+
+2D sector-to-machine torque scaling:
+
+```text
+T_whole = T_2d * length_unit_m^2 * stack_length_m * symmetry_factor
+```
+
+Use ``machine_scaling.torque_scaling_summary`` when a 2D torque is per unit
+axial depth and was solved on a rotational sector.  The helper makes the mesh
+unit, active stack length, and modelled-sector multiplier visible in the JSON
+record, which prevents comparing a sector N/m value against a whole-machine
+N m target by accident.
 
 Electrostatic normal pressure:
 
@@ -258,6 +271,9 @@ careful remeshing.
 - ``examples/electric_machine/validation_planar_lorentz_block_force.py``:
   planar ``Jz x B`` block force checked against the directional two-wire
   Lorentz summary.
+- ``examples/electric_machine/validation_machine_torque_scaling.py``:
+  2D sector torque to whole-machine N m scaling with stack length, mesh unit,
+  and symmetry factor visible.
 - ``examples/electric_machine/validation_virtual_work_force_displacement_sweep.py``:
   displacement energy/coenergy samples to force, including the fixed-current
   versus fixed-flux sign gate.

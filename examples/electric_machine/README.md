@@ -7,6 +7,7 @@ NGSolve's high-order curved elements.
 | Example | Shows | Capabilities used |
 |---------|-------|-------------------|
 | [`cogging_skew_demo.py`](cogging_skew_demo.py) | Reluctance/cogging torque `tau(theta)` of a PM rotor in a salient stator; conversion to physical N·m for a real stack; and **skew ripple cancellation** | `eggshell_torque_2d`, `MachineScaling` (axial length × symmetry), `skew_average` ↔ `skew_factor` |
+| [`validation_machine_torque_scaling.py`](validation_machine_torque_scaling.py) | Validation-class 2D sector torque to whole-machine N·m scaling, including mesh unit, stack length, and symmetry factor | `MachineScaling`, `torque_scaling_summary` |
 | [`validation_slot_winding_spectrum.py`](validation_slot_winding_spectrum.py) | Validation-class harmonic spectrum from explicit slot sign tables, including fractional-slot layouts | `slot_table_winding_factor`, `integral_slot_winding_factor`, `mmf_harmonic_direction` |
 | [`validation_pm_drive_speed_map.py`](validation_pm_drive_speed_map.py) | Validation-class PM-machine speed map across MTPA/FW/MTPV/infeasible regions plus short-circuit demagnetising trend | `pm_drive_speed_sweep`, `pm_drive_operating_point`, `field_weakening_operating_point`, `short_circuit_operating_point` |
 | [`validation_pm_emf_constant_table.py`](validation_pm_emf_constant_table.py) | Validation-class PM back-EMF / torque-constant table with phase/line and peak/RMS conversions | `pm_flux_linkage_constants`, `pm_no_load_back_emf`, `dq_voltages`, `dq_torque` |
@@ -31,6 +32,7 @@ NGSolve's high-order curved elements.
 
 ```powershell
 python cogging_skew_demo.py
+python validation_machine_torque_scaling.py
 python validation_slot_winding_spectrum.py
 python validation_pm_drive_speed_map.py
 python validation_pm_emf_constant_table.py
