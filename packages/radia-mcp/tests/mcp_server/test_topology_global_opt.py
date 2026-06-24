@@ -14,7 +14,11 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.topology_optimization.global_optimizers import differential_evolution
+from radia_mcp.topology_optimization.global_optimizers import (
+    best_feasible_record,
+    constraint_violation,
+    differential_evolution,
+)
 
 
 def rastrigin(x):
@@ -71,3 +75,44 @@ def test_agreement_with_scipy_de():
     theirs = sp.differential_evolution(rastrigin, [(-5.12, 5.12)] * 2, seed=1, tol=1e-10)
     assert mine["fun"] < 1e-6 and theirs.fun < 1e-6
     assert np.max(np.abs(mine["x"])) < 1e-3 and np.max(np.abs(theirs.x)) < 1e-3
+
+
+def test_constraint_violation_norms():
+    vals = [-1.0, 0.0, 2.0, 3.0]
+    assert constraint_violation(vals) == pytest.approx(5.0)
+    assert constraint_violation(vals, norm="l2") == pytest.approx(math.sqrt(13.0))
+    assert constraint_violation(vals, norm="linf") == pytest.approx(3.0)
+    assert constraint_violation([]) == pytest.approx(0.0)
+    with pytest.raises(ValueError):
+        constraint_violation(vals, norm="bad")
+
+
+def test_best_feasible_record_prefers_feasible_objective():
+    rows = [
+        {"value": 0.1, "constraints": [0.2], "params": {"x": 0}},
+        {"value": 3.0, "constraints": [-1.0, 0.0], "params": {"x": 1}},
+        {"value": 4.0, "constraints": [-0.5], "params": {"x": 2}},
+    ]
+    best = best_feasible_record(rows)
+    assert best["params"] == {"x": 1}
+    assert best["feasible"] is True
+    assert best["constraint_violation"] == pytest.approx(0.0)
+    assert "_objective_sort" not in best
+
+    best_max = best_feasible_record(rows, minimize=False)
+    assert best_max["params"] == {"x": 2}
+
+
+def test_best_feasible_record_falls_back_to_least_violation():
+    rows = [
+        {"value": 1.0, "constraints": [0.4], "params": {"x": 0}},
+        {"value": 2.0, "constraints": [0.1, 0.2], "params": {"x": 1}},
+        {"value": 0.5, "constraints": [0.3], "params": {"x": 2}},
+    ]
+    best = best_feasible_record(rows)
+    assert best["params"] == {"x": 2}
+    assert best["feasible"] is False
+    assert best["constraint_violation"] == pytest.approx(0.3)
+
+    with pytest.raises(ValueError):
+        best_feasible_record([])
