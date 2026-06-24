@@ -1,12 +1,12 @@
 """
-Triple-package release workflow for the Radia monorepo
-(radia / cubit-mesh-export / radia-mcp).
+Release-QUD workflow for the Radia monorepo
+(3 packages / 4 deployment-verification machines).
 
 The Radia monorepo ships three independent PyPI packages from one
-git tree.  Releases are atomic across the three so users on 100号機
-and mdx never see a mismatched (radia X, radia-mcp Y, cubit-mesh-
-export Z) combination that would silently break the panel <-> MCP
-<-> Cubit pipeline.
+git tree.  Releases are checked across LAB, 100号機, mdx, and hibino
+so users never see a mismatched (radia X, radia-mcp Y, cubit-mesh-export
+Z) combination that would silently break the panel <-> MCP <-> Cubit
+pipeline.
 
 This module is the canonical AI-readable record of the workflow,
 the gates that must pass at each phase, the failure modes that have
@@ -27,11 +27,11 @@ ci_monitor_skill.
 """
 
 RELEASE_WORKFLOW = """\
-# Triple-package release workflow (radia + radia-mcp + cubit-mesh-export)
+# Release-QUD workflow (3 packages / 4 machines)
 
 This document is the AI-readable canonical reference for the Radia
-release flow.  It is the persistent equivalent of the Claude Code
-``release-triple`` skill (`.claude/skills/release-triple/SKILL.md`).
+release flow.  Its canonical local orchestrator is
+`tools/release_qud.py`; the former triple-machine workflow is retired.
 Topics: overview, phases, preflight_gates, ci_failure_modes,
 recovery, patch_bump_protocol, lab_lock_release, monorepo_lockstep,
 ci_monitor_skill.
@@ -40,8 +40,8 @@ ci_monitor_skill.
 ## overview — what gets released and why atomically
 ## ===
 
-The Radia monorepo (`ksugahar/Radia`) ships three independent
-packages to PyPI:
+The Radia monorepo (`ksugahar/Radia`) ships three independent packages
+to PyPI and verifies the release on four machines:
 
 | Package           | Tag prefix              | What it ships                                     |
 |-------------------|-------------------------|---------------------------------------------------|
@@ -50,24 +50,33 @@ packages to PyPI:
 | radia-mcp         | `radia-mcp-v`           | MCP servers (radia-ngsolve, cubit, build123d,     |
 |                   |                         | gmsh, electromagnet, ih, peec, ...)               |
 
-All three are released in lock-step from one composite git commit
-because:
+The packages may be released independently when only one changed, but
+the release gate treats the deployment as QUD: two editable machines
+(LAB, 100号機) plus two PyPI consumer machines (mdx, hibino).  mdx is a
+compute/Cubit verification point and intentionally does not install
+`radia-mcp`; hibino is the PyPI MCP consumer.  The reason is operational:
 * radia-mcp imports radia at runtime for several tools, and a
   schema mismatch is silent until a tool crashes.
 * cubit-mesh-export ships the Cubit C++ plugin binaries that
   radia's panels expect via APREPRO commands.  A 0.7.4 plugin with
   a 4.27.x panel that emits a flag the plugin doesn't know is a
   silent mismatch that only surfaces at user clicktime.
-* End-to-end production target machines (100号機, mdx) install all
-  three together with `pip install 'radia[cubit,gui]==X.Y.Z'`,
-  which pulls a compatible cubit-mesh-export and a compatible
-  radia-mcp.  Users never deal with version arithmetic.
+* LAB and 100号機 use NAS editable installs for `radia`,
+  `cubit-mesh-export`, and `radia-mcp`.
+* mdx installs pinned PyPI wheels for `radia` and `cubit-mesh-export`
+  only; `radia-mcp` is not needed there.
+* hibino installs pinned PyPI wheels including `radia-mcp`; use
+  `py -3.12` because its bare `python` command is a Windows Store alias.
+  Cubit is optional on hibino, so release-QUD skips plugin/smoke there
+  when Coreform Cubit 2025.12+ is not installed.
+  Both tiers must converge in Phase 9 so users never deal with version
+  arithmetic.
 
 ## ===
 ## phases — the 9-phase pipeline
 ## ===
 
-Phases are the INTERNAL CONTRACT of `tools/release_triple.py`.  The
+Phases are the INTERNAL CONTRACT of `tools/release_qud.py`.  The
 skill's narrative description maps 1:1 to script subcommands; this
 table is the AI-readable summary.
 
@@ -82,8 +91,8 @@ table is the AI-readable summary.
 | 5 | Three (or two) annotated tags | always | only bump packages with changes |
 | 6 | Push main + all tags | always | tag push triggers CI; CI workflow_run gates Release workflows |
 | 7 | Monitor CI propagation to PyPI | always | use ci-monitor skill |
-| 8 | Deploy 100号機 + mdx (PyPI install + cubit-plugin-install) | always | shared lab box must not be left to users |
-| 9 | Cross-machine consistency probe (LAB / 100号機 / mdx hashes) | always | DRIFT row = a phase 2/3/CI bug |
+| 8 | Deploy LAB + 100号機 editable, hibino PyPI, then mdx PyPI via Phase 8e | always | mdx skips radia-mcp |
+| 9 | Cross-machine consistency probe (LAB / 100号機 / mdx / hibino hashes) | always | mdx reports radia-mcp as N/A |
 
 ## ===
 ## preflight_gates — Phase 2.5 4-gate pre-push validation (2026-05-03)
@@ -172,7 +181,7 @@ must NOT be in the .yml matrix.
 | `--selftest: ModuleNotFoundError: No module named 'radia_mcp.<sub>'`    | .yml matrix lists removed subpackage                             | Gate 4 (--selftest import)     | (multiple)   |
 | `gh release download ... no assets match the file pattern`              | binaries-release upload race vs tag-CI start                     | (CI has 6-attempt retry as of v4.26)| v4.25.1, v4.27.0|
 | `Basic tests failed` w/ collected 0 tests                               | pytest config conflict (pyproject.toml vs pytest.ini)            | Gate 2 (collect-only sweep)    | (rare)       |
-| `_radia_pybind import failure: DLL load failed`                         | Cubit plugin .pyd / cubit-mesh-export .pyd built against wrong Python ABI | Phase 0 clean rebuild | release-triple Phase 0 |
+| `_radia_pybind import failure: DLL load failed`                         | Cubit plugin .pyd / cubit-mesh-export .pyd built against wrong Python ABI | Phase 0 clean rebuild | release-qud Phase 0 |
 
 ## ===
 ## recovery — when CI on a tag fails AFTER push
@@ -248,7 +257,9 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {
 Start-Sleep -Seconds 2"
 ```
 
-For 100号機 / mdx, prefix with `cat << 'PS' | ssh ... 'pwsh ...'`.
+For 100号機 / mdx / hibino, send the same PowerShell block through
+`ssh <host> pwsh -NoProfile -EncodedCommand ...`; do not rely on bash
+heredocs on Windows.
 Do not wait for human users to close Cubit; on shared lab machines
 the deploy responsibility is Claude's per the lab policy
 (feedback_deploy_responsibility.md), and Cubit is re-launchable.
@@ -272,7 +283,7 @@ causes:
 * `tests/test_*_version_consistency.py` failures on CI.
 * Users seeing `radia.__version__` not match `pip show radia`.
 
-The `tools/release_triple.py preflight` subcommand checks this
+The `tools/release_qud.py preflight` subcommand checks this
 lockstep and exits non-zero if violated.
 
 ## ===
@@ -293,7 +304,7 @@ python .claude/skills/ci-monitor/monitor.py --auto 3
 Exit 0 = all green, exit 1 = at least one failure (with log tail
 already printed for diagnosis).
 
-This is the standard companion to release-triple Phase 7 -- after
+This is the standard companion to release-qud Phase 7 -- after
 `git push --tags` the agent should immediately call ci-monitor with
 the 3 (or 2) new run IDs and not declare the release "done" until
 the monitor exits 0.
@@ -314,7 +325,7 @@ _TOPICS = (
 
 
 def get_release_workflow_documentation(topic: str = "") -> str:
-    """Return the triple-package release workflow knowledge.
+    """Return the release-qud workflow knowledge.
 
     Args:
         topic: empty for the full document, or one of the entries in

@@ -4130,15 +4130,17 @@ Python- or build-specific details.
 
 ## Upgrade notes for existing users
 
-- LAB / 100号機: `release_triple.py` has already deployed; on each user's
+- LAB / 100号機: `release_qud.py` deploys editable installs; on each user's
   next Windows logon the scheduled task `\\Coreform\\CubitLicenseRefresh`
   will prime the RLM cache automatically.  Users in an existing logon
   session can double-click `Coreform Cubit (warm launch)` on the desktop
   or run `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` to get the
   same effect immediately.
-- mdx / external users: `pip install --upgrade "radia[cubit,gui]"
+- hibino / external users: `pip install --upgrade "radia[cubit,gui]"
   radia-mcp cubit-mesh-export` + `cubit-plugin-install` +
   `cubit-plugin-install --verify-only`.
+- mdx: `release_qud.py phase8e` installs PyPI wheels for `radia` and
+  `cubit-mesh-export`; `radia-mcp` is intentionally absent there.
 - VSCode MCP users: restart VSCode once to pick up the new daemon code.
   After that, subsequent restarts attach in 0.01 s.
 
