@@ -65,3 +65,40 @@ def test_mesh_status_tools_expose_selftest_and_audit_commands():
     assert gmsh["selftest_command"] == "mcp-server-gmsh --selftest"
     assert gmsh["audit_command"] == "mcp-server-gmsh --selftest --audit-examples"
     assert "gmsh_status" in gmsh["tools"]
+
+
+def test_mesh_audit_summary_tools_are_machine_readable(monkeypatch, tmp_path):
+    from radia_mcp.cubit import server as cubit_server
+    from radia_mcp.gmsh import server as gmsh_server
+
+    examples = tmp_path / "examples"
+    examples.mkdir()
+    (examples / "a.py").write_text("print('a')\n", encoding="utf-8")
+    (examples / "b.py").write_text("print('b')\n", encoding="utf-8")
+
+    def fake_lint(filepath: str):
+        if filepath.endswith("a.py"):
+            return [
+                {"line": 1, "severity": "HIGH", "rule": "alpha", "message": "x"},
+                {"line": 2, "severity": "LOW", "rule": "alpha", "message": "y"},
+                {"line": 3, "severity": "CRITICAL", "rule": "beta", "message": "z"},
+            ]
+        return []
+
+    for module, tool_name in (
+        (cubit_server, "cubit_audit_summary"),
+        (gmsh_server, "gmsh_audit_summary"),
+    ):
+        monkeypatch.setattr(module, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(module, "_lint_file", fake_lint)
+        summary = getattr(module, tool_name)("examples", top_n=1)
+        assert summary["ok"] is True
+        assert summary["files_scanned"] == 2
+        assert summary["files_with_findings"] == 1
+        assert summary["total_findings"] == 3
+        assert summary["clean"] is False
+        assert summary["by_severity"]["HIGH"] == 1
+        assert summary["by_severity"]["LOW"] == 1
+        assert summary["by_severity"]["CRITICAL"] == 1
+        assert summary["top_rules"] == [{"rule": "alpha", "count": 2}]
+        assert summary["top_files"][0]["path"] == "examples\\a.py"
