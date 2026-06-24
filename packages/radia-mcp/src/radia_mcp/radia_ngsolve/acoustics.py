@@ -219,6 +219,124 @@ def spherical_mode_radiation_impedance(
     }
 
 
+def planar_helmholtz_dtn_symbol(wavenumber, tangential_wavenumber=0.0):
+    r"""Exterior half-space Helmholtz DtN symbol for one planar trace mode.
+
+    On a flat boundary with outward normal ``n`` into the exterior half-space,
+    a pressure trace Fourier mode with tangential wavenumber ``k_t`` has an
+    outgoing/decaying exterior field
+
+        p(x_t, n) = p_0 exp(i k_t x_t) exp(-i q n),
+
+    where ``q^2 = k^2 - k_t^2``.  The Dirichlet-to-Neumann symbol is therefore
+
+        lambda(k_t) = partial_n p / p = -i q.
+
+    The square-root branch is chosen so propagating modes have ``Re(q) >= 0``
+    and evanescent modes decay into the exterior (``Im(q) <= 0``).  This is the
+    planar analogue of :func:`spherical_helmholtz_dtn_eigenvalue` and is a tiny
+    readable FEM/BEM coupling gate: FEM pressure trace in, exterior normal
+    derivative out.
+    """
+
+    k = complex(wavenumber)
+    kt = float(tangential_wavenumber)
+    if abs(k) <= 0.0:
+        raise ValueError("wavenumber must be nonzero")
+    if kt < 0.0:
+        raise ValueError("tangential_wavenumber must be >= 0")
+
+    q = cmath.sqrt(k * k - kt * kt)
+    if q.imag > 0.0 or (abs(q.imag) <= 1.0e-15 and q.real < 0.0):
+        q = -q
+
+    if abs(k.imag) <= 1.0e-15 and k.real > 0.0:
+        if abs(kt - k.real) <= 1.0e-14 * max(1.0, k.real):
+            regime = "grazing"
+        elif kt < k.real:
+            regime = "propagating"
+        else:
+            regime = "evanescent"
+    else:
+        regime = "complex"
+
+    dtn = -1j * q
+    return {
+        "wavenumber": k,
+        "tangential_wavenumber": kt,
+        "normal_wavenumber": q,
+        "dtn_eigenvalue": dtn,
+        "symbol_identity_residual": dtn * dtn - (kt * kt - k * k),
+        "regime": regime,
+    }
+
+
+def planar_mode_radiation_impedance(
+    frequency,
+    tangential_wavenumber=None,
+    incidence_angle_rad=None,
+    rho=1.2041,
+    c=343.0,
+):
+    r"""Specific acoustic impedance for a planar outgoing exterior mode.
+
+    Exactly one of ``tangential_wavenumber`` or ``incidence_angle_rad`` must be
+    provided.  For a propagating plane wave at angle ``theta`` from the normal,
+
+        z_n = p / v_n = rho c / cos(theta),
+
+    while evanescent modes have zero active radiation resistance and a purely
+    reactive normal impedance.  The return dictionary includes the matching DtN
+    symbol so FEM/BEM sign conventions can be checked in one place.
+    """
+
+    f = float(frequency)
+    rrho = float(rho)
+    cc = float(c)
+    if f <= 0.0:
+        raise ValueError("frequency must be > 0")
+    if rrho <= 0.0:
+        raise ValueError("rho must be > 0")
+    if cc <= 0.0:
+        raise ValueError("c must be > 0")
+    if (tangential_wavenumber is None) == (incidence_angle_rad is None):
+        raise ValueError("provide exactly one of tangential_wavenumber or incidence_angle_rad")
+
+    omega = 2.0 * math.pi * f
+    k = omega / cc
+    angle = None
+    if incidence_angle_rad is not None:
+        angle = float(incidence_angle_rad)
+        if abs(angle) >= 0.5 * math.pi:
+            raise ValueError("incidence_angle_rad must be strictly between -pi/2 and pi/2")
+        kt = k * abs(math.sin(angle))
+    else:
+        kt = float(tangential_wavenumber)
+
+    symbol = planar_helmholtz_dtn_symbol(k, kt)
+    q = symbol["normal_wavenumber"]
+    if abs(q) <= 0.0:
+        raise ValueError("grazing modes have infinite normal impedance")
+
+    z_specific = omega * rrho / q
+    return {
+        "frequency": f,
+        "omega": omega,
+        "wavenumber": k,
+        "tangential_wavenumber": kt,
+        "incidence_angle_rad": angle,
+        "rho": rrho,
+        "c": cc,
+        "regime": symbol["regime"],
+        "normal_wavenumber": q,
+        "dtn_eigenvalue": symbol["dtn_eigenvalue"],
+        "specific_impedance": z_specific,
+        "normalized_impedance": z_specific / (rrho * cc),
+        "radiation_efficiency": z_specific.real / (rrho * cc),
+        "reactance_ratio": z_specific.imag / (rrho * cc),
+    }
+
+
 def _specific_spherical_impedance(k_radius, rho, c):
     kr = float(k_radius)
     if kr <= 0.0:
