@@ -17,6 +17,7 @@ EXPECTED_TOPICS = {
     "getting_started", "advanced_meshing", "ml_and_gui",
     "neutronics_fusion", "domain_applications",
     "getting_started_2025", "flex_iga", "clips_highlights",
+    "release_2026_6",
 }
 
 
@@ -46,6 +47,7 @@ def test_all_concatenates_everything():
     assert "U-spline" in all_doc       # from flex_iga
     assert "Enceladus" in all_doc      # from clips_highlights
     assert "Power Tools" in all_doc    # from getting_started_2025
+    assert "Anisotropic tetrahedral" in all_doc  # from release_2026_6
 
 
 @pytest.mark.parametrize("alias,expected", [
@@ -61,6 +63,12 @@ def test_all_concatenates_everything():
     ("geodynamics", "clips_highlights"),
     ("enceladus", "clips_highlights"),
     ("clips", "clips_highlights"),
+    ("2026_6", "release_2026_6"),
+    ("2026.6", "release_2026_6"),
+    ("anisotropic_tet", "release_2026_6"),
+    ("cohesive_elements", "release_2026_6"),
+    ("exodus_64bit", "release_2026_6"),
+    ("gnn_features", "release_2026_6"),
     # pre-existing aliases still resolve
     ("hex", "meshing_strategy"),
     ("dagmc", "neutronics_fusion"),
@@ -85,3 +93,8 @@ def test_new_topic_content_markers():
     assert "Associate" in gs or "Cubit Learn" in gs
     clips = get_doc("clips_highlights")
     assert "geodynamic" in clips.lower()
+    rel = get_doc("release_2026_6")
+    assert "Tetra10" in rel
+    assert "Tri6" in rel
+    assert "set exodus 64bit" in rel
+    assert "get_ML_features" in rel
