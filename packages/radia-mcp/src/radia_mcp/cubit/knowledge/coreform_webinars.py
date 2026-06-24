@@ -1342,6 +1342,12 @@ that matter for `.vol`/NGSolve validation loops.
    node/interface semantics.
 5. Use namespace naming in generated Cubit journals where stable downstream block
    names matter after webcuts.
+6. Run the public `.vol` intake examples after export:
+   `validation_vol_tet_quality.py` for volume tets and
+   `validation_vol_surface_triangle_quality.py` for FEM/BEM boundary triangles.
+   The latter records area, edge ratio, angle range, and
+   `2 * inradius / circumradius` so sliver boundary triangles are caught before
+   they become scalar-BEM/RWG trace elements.
 
 ### Sources
 

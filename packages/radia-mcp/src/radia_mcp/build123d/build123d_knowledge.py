@@ -2371,6 +2371,7 @@ library OR copy-paste into an `execute_build123d` subprocess.
 | `assembly(*parts)` | group labelled regions into ONE multi-region Compound (does NOT fuse) |
 | `shape_envelope_row(shapes, margin)` / `enclosing_box(...)` | union bbox report and labelled outer box for air/void domains |
 | `enclosure_clearance_row(enclosure, inner_shapes)` / `enclosure_difference_region(...)` | bbox clearance + `outer - inner` void-region helper for boolean-disjoint multi-region meshes |
+| `shape_measurement_rows(...)` / `shape_measurement_comparison_summary(...)` | JSON-friendly volume/area/topology/bbox rows and external-kernel comparison for STEP round-trip validation |
 
 ## archetypes -- EM devices (composed from the ops)
 
@@ -2427,7 +2428,9 @@ mags = {seg.label: parse_magnetization(seg.label) for seg in hb.children}
 ```
 
 Validated: tests/test_build123d_modeling.py, tests/test_build123d_archetypes.py (analytic volumes,
-OCCT-valid, region labels, Netgen-meshable, Mallinson easy axes).
+OCCT-valid, region labels, Netgen-meshable, Mallinson easy axes).  Heavier examples under
+`examples/build123d_netgen_gmsh_flow/` cross-check STEP round trips by comparing volume, area, and
+bounding boxes against an external CAD kernel before meshing.
 """
 
 

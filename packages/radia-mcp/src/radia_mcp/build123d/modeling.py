@@ -303,9 +303,10 @@ def shape_measurement_row(shape, name=None, index=1):
     """Return a JSON-friendly build123d measurement row for one shape.
 
     The row is intentionally close to Cubit's geometry API vocabulary:
-    volume, surface area, topology counts, and bounding-box size.  It is useful
-    both as a quick sanity report for generated CAD and as the build123d side of
-    a STEP round-trip cross validation against an external geometry kernel.
+    volume, surface area, topology counts, and bounding-box coordinates.  It is
+    useful both as a quick sanity report for generated CAD and as the build123d
+    side of a STEP round-trip cross validation against an external geometry
+    kernel.
     """
 
     label = name or getattr(shape, "label", "") or f"shape_{index}"
@@ -315,7 +316,11 @@ def shape_measurement_row(shape, name=None, index=1):
     vertices = shape.vertices()
     solids = shape.solids()
     is_valid = bool(all(s.is_valid for s in solids)) if isinstance(shape, Compound) else bool(shape.is_valid)
+    bbox_min = [float(bb.min.X), float(bb.min.Y), float(bb.min.Z)]
+    bbox_max = [float(bb.max.X), float(bb.max.Y), float(bb.max.Z)]
     bbox_size = [float(bb.size.X), float(bb.size.Y), float(bb.size.Z)]
+    bbox_center = [(lo + hi) / 2.0 for lo, hi in zip(bbox_min, bbox_max)]
+    bbox_diagonal = math.sqrt(sum(value * value for value in bbox_size))
     return {
         "index": int(index),
         "name": str(label),
@@ -328,9 +333,11 @@ def shape_measurement_row(shape, name=None, index=1):
         "vertices": len(vertices),
         "solids": len(solids),
         "bounding_box": {
-            "min": [float(bb.min.X), float(bb.min.Y), float(bb.min.Z)],
-            "max": [float(bb.max.X), float(bb.max.Y), float(bb.max.Z)],
+            "min": bbox_min,
+            "max": bbox_max,
+            "center": bbox_center,
             "size": bbox_size,
+            "diagonal": bbox_diagonal,
         },
         "characteristic_length": max(bbox_size),
     }
@@ -367,13 +374,73 @@ def _relative_measurement_error(reference, measured):
     )
 
 
-def compare_shape_measurement_rows(reference_rows, measured_rows, rtol=1.0e-5, measured_label="measured"):
-    """Compare build123d measurement rows with external volume/area rows.
+def _xyz(values):
+    if values is None:
+        return None
+    xyz = list(values)
+    if len(xyz) != 3:
+        return None
+    return [float(value) for value in xyz]
+
+
+def _row_bounding_box(row):
+    if not isinstance(row, dict):
+        return None
+    box = row.get("bounding_box")
+    if isinstance(box, dict):
+        bbox_min = _xyz(box.get("min"))
+        bbox_max = _xyz(box.get("max"))
+        bbox_center = _xyz(box.get("center"))
+        bbox_size = _xyz(box.get("size"))
+        bbox_diagonal = box.get("diagonal")
+    else:
+        bbox_min = _xyz(row.get("bbox_min"))
+        bbox_max = _xyz(row.get("bbox_max"))
+        bbox_center = _xyz(row.get("bbox_center"))
+        bbox_size = _xyz(row.get("bbox_size"))
+        bbox_diagonal = row.get("bbox_diagonal")
+
+    if bbox_min is None and bbox_center is not None and bbox_size is not None:
+        bbox_min = [center - 0.5 * size for center, size in zip(bbox_center, bbox_size)]
+    if bbox_max is None and bbox_center is not None and bbox_size is not None:
+        bbox_max = [center + 0.5 * size for center, size in zip(bbox_center, bbox_size)]
+    if bbox_min is None or bbox_max is None:
+        return None
+    if bbox_size is None:
+        bbox_size = [hi - lo for lo, hi in zip(bbox_min, bbox_max)]
+    if bbox_center is None:
+        bbox_center = [(lo + hi) / 2.0 for lo, hi in zip(bbox_min, bbox_max)]
+    if bbox_diagonal is None:
+        bbox_diagonal = math.sqrt(sum(value * value for value in bbox_size))
+
+    return {
+        "min": bbox_min,
+        "max": bbox_max,
+        "center": bbox_center,
+        "size": bbox_size,
+        "diagonal": float(bbox_diagonal),
+    }
+
+
+def _max_abs_delta(reference, measured):
+    return max(abs(float(a) - float(b)) for a, b in zip(reference, measured))
+
+
+def compare_shape_measurement_rows(
+    reference_rows,
+    measured_rows,
+    rtol=1.0e-5,
+    measured_label="measured",
+    bbox_atol=1.0e-6,
+):
+    """Compare build123d measurement rows with external measurement rows.
 
     ``reference_rows`` are normally from :func:`shape_measurement_rows`.
-    ``measured_rows`` only need ``name``, ``volume`` and ``area`` keys, so they
-    can come from Cubit, another CAD kernel, a mesher, or an analytic table.
-    The return value is a list of JSON-friendly pass/fail rows.
+    ``measured_rows`` only need ``name``, ``volume`` and ``area`` keys.  If both
+    sides also provide ``bounding_box`` data, the bounding box is compared with
+    ``bbox_atol``.  Rows can come from Cubit, another CAD kernel, a mesher, or
+    an analytic table.  The return value is a list of JSON-friendly pass/fail
+    rows.
     """
 
     measured_by_name = {row["name"]: row for row in measured_rows}
@@ -381,17 +448,27 @@ def compare_shape_measurement_rows(reference_rows, measured_rows, rtol=1.0e-5, m
     for ref in reference_rows:
         name = ref["name"]
         measured = measured_by_name.get(name)
+        ref_bbox = _row_bounding_box(ref)
         if measured is None:
             rows.append({
                 "name": name,
                 "measured_label": measured_label,
                 "reference_volume": ref["volume"],
                 "reference_area": ref["area"],
+                "reference_bounding_box": ref_bbox,
                 "measured_volume": None,
                 "measured_area": None,
+                "measured_bounding_box": None,
                 "volume_rel_error": None,
                 "area_rel_error": None,
+                "bbox_compared": False,
+                "bbox_min_abs_error": None,
+                "bbox_max_abs_error": None,
+                "bbox_center_abs_error": None,
+                "bbox_size_abs_error": None,
+                "bbox_abs_error": None,
                 "rtol": float(rtol),
+                "bbox_atol": float(bbox_atol),
                 "passed": False,
                 "reason": "missing measured row",
             })
@@ -399,19 +476,56 @@ def compare_shape_measurement_rows(reference_rows, measured_rows, rtol=1.0e-5, m
 
         volume_rel_error = _relative_measurement_error(ref["volume"], measured["volume"])
         area_rel_error = _relative_measurement_error(ref["area"], measured["area"])
-        passed = volume_rel_error <= rtol and area_rel_error <= rtol
+        measured_bbox = _row_bounding_box(measured)
+        bbox_compared = ref_bbox is not None and measured_bbox is not None
+        bbox_min_abs_error = None
+        bbox_max_abs_error = None
+        bbox_center_abs_error = None
+        bbox_size_abs_error = None
+        bbox_abs_error = None
+        bbox_passed = True
+        if bbox_compared:
+            bbox_min_abs_error = _max_abs_delta(ref_bbox["min"], measured_bbox["min"])
+            bbox_max_abs_error = _max_abs_delta(ref_bbox["max"], measured_bbox["max"])
+            bbox_center_abs_error = _max_abs_delta(ref_bbox["center"], measured_bbox["center"])
+            bbox_size_abs_error = _max_abs_delta(ref_bbox["size"], measured_bbox["size"])
+            bbox_abs_error = max(
+                bbox_min_abs_error,
+                bbox_max_abs_error,
+                bbox_center_abs_error,
+                bbox_size_abs_error,
+            )
+            bbox_passed = bbox_abs_error <= bbox_atol
+
+        volume_area_passed = volume_rel_error <= rtol and area_rel_error <= rtol
+        passed = volume_area_passed and bbox_passed
+        if passed:
+            reason = "ok"
+        elif not volume_area_passed:
+            reason = "outside tolerance"
+        else:
+            reason = "bbox outside tolerance"
         rows.append({
             "name": name,
             "measured_label": measured_label,
             "reference_volume": ref["volume"],
             "reference_area": ref["area"],
+            "reference_bounding_box": ref_bbox,
             "measured_volume": measured["volume"],
             "measured_area": measured["area"],
+            "measured_bounding_box": measured_bbox,
             "volume_rel_error": volume_rel_error,
             "area_rel_error": area_rel_error,
+            "bbox_compared": bbox_compared,
+            "bbox_min_abs_error": bbox_min_abs_error,
+            "bbox_max_abs_error": bbox_max_abs_error,
+            "bbox_center_abs_error": bbox_center_abs_error,
+            "bbox_size_abs_error": bbox_size_abs_error,
+            "bbox_abs_error": bbox_abs_error,
             "rtol": float(rtol),
+            "bbox_atol": float(bbox_atol),
             "passed": passed,
-            "reason": "ok" if passed else "outside tolerance",
+            "reason": reason,
         })
     return rows
 
@@ -421,6 +535,7 @@ def shape_measurement_comparison_summary(
     measured_rows,
     rtol=1.0e-5,
     measured_label="measured",
+    bbox_atol=1.0e-6,
 ):
     """Return compact summary statistics for a measurement comparison."""
 
@@ -429,16 +544,21 @@ def shape_measurement_comparison_summary(
         measured_rows,
         rtol=rtol,
         measured_label=measured_label,
+        bbox_atol=bbox_atol,
     )
     volume_errors = [row["volume_rel_error"] or 0.0 for row in rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in rows]
+    bbox_errors = [row["bbox_abs_error"] or 0.0 for row in rows]
     return {
         "measured_label": measured_label,
         "rtol": float(rtol),
+        "bbox_atol": float(bbox_atol),
         "n_cases": len(rows),
         "n_passed": sum(1 for row in rows if row["passed"]),
+        "n_bbox_compared": sum(1 for row in rows if row["bbox_compared"]),
         "max_volume_rel_error": max(volume_errors) if volume_errors else 0.0,
         "max_area_rel_error": max(area_errors) if area_errors else 0.0,
+        "max_bbox_abs_error": max(bbox_errors) if bbox_errors else 0.0,
         "rows": rows,
     }
 

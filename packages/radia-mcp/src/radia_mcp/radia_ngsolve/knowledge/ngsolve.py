@@ -990,8 +990,24 @@ print("Boundaries:", mesh.GetBoundaries())
 - .vol files preserve material labels and boundary labels
 - Supports high-order curved elements (order 1-5)
 - Use `dx("region_name")` and `ds("boundary_name")` in weak forms
-- Use `dx("region_name")` and `ds("boundary_name")` in weak forms
 - Material properties via `CoefficientFunction([... for mat in mesh.GetMaterials()])`
+
+For Cubit/Coreform exports, run the lightweight parser before solving when
+you need a readable FEM/BEM intake gate:
+
+```python
+from radia_mcp.radia_ngsolve.netgen_vol import read_netgen_tri_tet_vol
+
+v = read_netgen_tri_tet_vol("model.vol")
+print(v.tetrahedron_quality_summary())
+print(v.surface_triangle_quality_summary())
+```
+
+`surface_triangle_quality_summary()` checks the boundary trace triangles
+used by scalar-BEM/RWG operators: area, edge ratio, angle range, and
+`2 * inradius / circumradius` quality. This complements Cubit 2026.6's
+stronger triangle/tet quality tooling with an independent `.vol`-side
+validation after export.
 
 ```python
 # Material properties from Gmsh physical groups
@@ -4174,6 +4190,71 @@ In time-stepping: use backward difference (A^n - A^{n-1})/dt.
 """
 
 
+NGSOLVE_ELECTROMAGNETIC_FORCE = """
+# Electromagnetic force/torque extraction map in radia-ngsolve
+
+Use this as the front door for force work.  The detailed validation tables live
+in `force_validation("method_map")` and `force_validation("cross_validation")`;
+this topic connects the practical NGSolve helper functions to the physics.
+
+## Fast method selection
+
+| Problem | Use | Function/topic |
+|---|---|---|
+| Global force on a body surrounded by air | weighted Maxwell stress | `force.eggshell_force`, `force.eggshell_force_2d` |
+| Global torque from the same field | weighted Maxwell stress torque | `force.eggshell_torque`, `force.eggshell_torque_2d` |
+| Clean closed surface in air | Maxwell surface stress | `force.maxwell_surface_force` |
+| Complex harmonic field | time-averaged Maxwell stress | `force.maxwell_surface_force_harmonic` |
+| Current conductor / busbar | Lorentz body force | `force.lorentz_force_2d`, `ngsolve_usage("lorentz_force")` |
+| Axisymmetric actuator or coil pull | `2*pi*r` weighted stress | `force.eggshell_force_axi` |
+| Air-gap holding force | magnetic pressure | `force.air_gap_force_summary`, `ngsolve_usage("air_gap_force")` |
+| Motor dq operating torque | lumped dq torque | `solve.dq_torque`, `ngsolve_usage("dq_torque")` |
+| Electrostatic/MEMS force | electric weighted stress | `force.electrostatic_eggshell_force_2d` |
+
+## The key convention
+
+Maxwell stress is a stress in the surrounding air.  Put the integration surface
+or eggshell band fully in air:
+
+```text
+T = (1/mu0) (B tensor B - 0.5 |B|^2 I)
+F = integral_S T n dS
+```
+
+The eggshell form is the same physics written as a volume integral with a
+smooth weight `g` that goes from 1 near the body to 0 outside the band:
+
+```text
+F_k = - integral_band [(1/mu0) B_k (B.grad g)
+                       - (1/(2 mu0)) |B|^2 d_k g] dV
+```
+
+This is usually the robust FEM answer: it avoids noisy field traces on material
+interfaces and averages over a band of elements.
+
+## Checks before trusting a force number
+
+- Curve circular/curved geometry; force is quadratic in `B`, so geometry error is
+  amplified.
+- Compare against at least one analytic anchor when possible: two-wire force,
+  air-gap pressure, magnetized sphere, dq torque identity, or energy/inductance.
+- In 2D planar solves, report force per unit length.  Axisymmetric helpers return
+  full 3D quantities because they include the `2*pi*r` weight.
+- For nonlinear B-H, keep the body directly in air and use an analytic eggshell
+  band; do not introduce a nested artificial shell that isolates the HCurl field.
+- For harmonic fields, use time-average factors (`1/(2 mu0)` and `1/(4 mu0)`),
+  not the static stress tensor.
+
+## Good companion topics
+
+- `force_validation("method_map")`: fuller method map and validation anchors.
+- `force_validation("eggshell")`: derivation and implementation details.
+- `ngsolve_usage("lorentz_force")`: busbar and image-force recipes.
+- `ngsolve_usage("air_gap_force")`: pole-face pressure and magnetic circuit force.
+- `ngsolve_usage("electrostatic_force")`: MEMS electric-force chain.
+"""
+
+
 NGSOLVE_AXISYMMETRIC = """
 # Axisymmetric Magnetostatics in NGSolve
 
@@ -7159,6 +7240,19 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "acoustic_impedance": NGSOLVE_ACOUSTIC_BEM,
         "impedance_dtn": NGSOLVE_ACOUSTIC_BEM,
         "radiation_impedance": NGSOLVE_ACOUSTIC_BEM,
+        "force": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "forces": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "electromagnetic_force": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "em_force": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "maxwell_stress": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "maxwell_stress_tensor": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "mst": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "eggshell_force": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "weighted_stress": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "nodal_force": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "force_method": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "force_extraction": NGSOLVE_ELECTROMAGNETIC_FORCE,
+        "torque": NGSOLVE_ELECTROMAGNETIC_FORCE,
         "core_loss": NGSOLVE_CORE_LOSS,
         "eddy_loss": NGSOLVE_CORE_LOSS,
         "eddy_current_loss": NGSOLVE_CORE_LOSS,
