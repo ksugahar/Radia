@@ -27,7 +27,7 @@ Key operators:
 | Operator | Kernel | Use |
 |----------|--------|-----|
 | `LaplaceSL` | 1/(4*pi*r) | MQS inductance (L matrix) |
-| `LaplaceDL` | d/dn[1/(4*pi*r)] | Scalar DL for scalar BIE + SIBC; also MFIE K operator with HDivSurface |
+| `LaplaceDL` | d/dn[1/(4*pi*r)] | Scalar DL for scalar BIE + SIBC; **not** the MFIE `n x curl(SL)` operator |
 | `HelmholtzSL` | exp(-jkr)/(4*pi*r) | Full-wave BEM |
 | `HelmholtzDL` | d/dn[exp(-jkr)/(4*pi*r)] | Full-wave BEM |
 | `MaxwellSL` | Full Maxwell kernel | High-frequency |
@@ -1308,6 +1308,16 @@ The MFIE K operator is not available in current ngsolve.bem.
 
 **Consequence**: The original PMCHWT formulation `(1/2 M + K)*J = n x H_inc` was
 incorrect because `LaplaceDL != MFIE K`. The correct formulation is the EFIE above.
+
+**Validation snapshot (2026-06-25)**:
+`examples/cubit_panels/inductance/verify_laplace_bem.py` on a unit sphere
+(`maxh=0.25`, 456 surface elements, 684 HDivSurface DOFs) confirms:
+
+- scalar `LaplaceDL` l=1 eigenvalue: `-0.166384` vs exact `-1/6`
+- EFIE PEC current ratio: `J/J_pec = 1.002233`
+- EFIE PEC shape error: `1.7465e-02`
+- SIBC screening sweep: `|J/J_pec| = 1.0022` at `Z_s=1e-7`, `2.63e-4` at `Z_s=10`
+- Overall: PASS
 
 ## KNOWN LIMITATION: BEM EFIE-SIBC Incorrect for Finite Z_s (2026-03-28)
 
