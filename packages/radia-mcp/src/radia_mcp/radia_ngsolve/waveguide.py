@@ -335,6 +335,76 @@ def waveguide_wave_impedance(frequency, fc, mode="TE", eta=MU0 * C0):
     return {"mode": m, "frequency": f, "fc": fc, "eta": eta, "Z": z, "fc_over_f": fc / f}
 
 
+def rectangular_waveguide_te10_conductor_loss(frequency, width_a, height_b, sigma,
+                                              length=None, mu_r=1.0, c=C0):
+    """Conductor-loss attenuation of the TE10 mode in a rectangular metal waveguide.
+
+    For an air-filled PEC-shaped guide with finite-conductivity walls, the good-conductor
+    surface resistance ``R_s`` dissipates wall power ``(R_s/2)|H_t|^2``.  Integrating the
+    TE10 fields over the four walls and normalising by transmitted power gives the
+    amplitude attenuation constant
+
+        alpha_c = R_s (2 b k_c^2 + a k_0^2) / (eta k_0 beta a b)   [Np/m],
+
+    where ``a`` is width, ``b`` is height, ``k_c=pi/a``, ``k_0=2*pi*f/c``, and
+    ``beta=sqrt(k_0^2-k_c^2)``.  The loss diverges near cutoff because group
+    velocity and transmitted power collapse; far above cutoff it approaches the
+    broad-wall skin-loss scale.  If ``length`` is supplied, the returned row also
+    includes ``S21_mag=exp(-alpha_c length)`` and insertion loss in dB.
+    """
+    f = float(frequency)
+    a = float(width_a)
+    b = float(height_b)
+    sig = float(sigma)
+    if f <= 0.0:
+        raise ValueError("frequency must be positive")
+    if a <= 0.0 or b <= 0.0:
+        raise ValueError("width_a and height_b must be positive")
+    if sig <= 0.0:
+        raise ValueError("sigma must be positive")
+    if mu_r <= 0.0:
+        raise ValueError("mu_r must be positive")
+
+    fc = 0.5 * c / a
+    if f <= fc:
+        raise ValueError("frequency must exceed TE10 cutoff")
+    k0 = 2.0 * math.pi * f / c
+    kc = math.pi / a
+    beta = math.sqrt(k0 * k0 - kc * kc)
+    eta = MU0 * c
+    rs = surface_resistance(f, sig, mu_r=mu_r)
+    delta = skin_depth(f, sig, mu_r=mu_r)
+    alpha = rs * (2.0 * b * kc * kc + a * k0 * k0) / (eta * k0 * beta * a * b)
+    out = {
+        "frequency": f,
+        "width_a": a,
+        "height_b": b,
+        "sigma": sig,
+        "mu_r": float(mu_r),
+        "fc": fc,
+        "k0": k0,
+        "kc": kc,
+        "beta": beta,
+        "surface_resistance_ohm": rs,
+        "skin_depth_m": delta,
+        "alpha_np_per_m": alpha,
+        "alpha_db_per_m": 20.0 * math.log10(math.e) * alpha,
+    }
+    if length is not None:
+        ell = float(length)
+        if ell < 0.0:
+            raise ValueError("length must be non-negative")
+        s21 = math.exp(-alpha * ell)
+        out.update({
+            "length_m": ell,
+            "S21_mag": s21,
+            "insertion_loss_db": -20.0 * math.log10(s21),
+            "power_transmission_fraction": s21 * s21,
+            "power_loss_fraction": 1.0 - s21 * s21,
+        })
+    return out
+
+
 def waveguide_evanescent_attenuation(frequency, fc, c=C0):
     """BELOW cutoff (f < fc) the mode does NOT propagate; its amplitude decays as exp(-alpha z) with
 
