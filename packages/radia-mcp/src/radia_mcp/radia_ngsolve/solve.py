@@ -1909,8 +1909,53 @@ def machine_symmetry_sector(slots, poles):
 def cogging_period_deg(slots, poles):
     """Mechanical-angle period [deg] of the cogging torque = 360 / LCM(slots, poles)
     (:func:`cogging_torque_order`).  One cogging cycle spans this angle; a one-slot-pitch skew
-    (360/slots) nulls the fundamental (sinc(pi)=0, :func:`skew_factor`)."""
+    (360/slots) nulls the cogging fundamental (sinc(pi)=0, :func:`skew_factor`)."""
     return 360.0 / cogging_torque_order(slots, poles)
+
+
+def cogging_skew_plan(slots, poles, skew_slot_pitches=1.0, emf_harmonics=(1, 5, 7)):
+    """Slot/pole cogging and skew planning table for readable motor design scripts.
+
+    ``slots`` is the stator slot count and ``poles`` is the rotor pole count.  The cogging torque
+    order is ``LCM(slots, poles)`` cycles per mechanical revolution.  A skew of
+    ``skew_slot_pitches`` stator slot pitches spans ``skew_slot_pitches * 360/slots`` mechanical
+    degrees; the cogging ripple is reduced by the same sinc factor used by :func:`skew_factor`,
+    but evaluated with the mechanical cogging order and mechanical skew angle.  EMF harmonics use
+    the electrical skew angle ``p * theta_mech``.
+
+    A one-slot-pitch skew normally nulls the cogging order while leaving the fundamental EMF close
+    to one for high-slot-count integer-slot machines.  Low-slot-count fractional-slot machines can
+    pay a larger fundamental skew cost; this helper makes that tradeoff explicit.
+    """
+    if slots <= 0:
+        raise ValueError("slots must be positive")
+    if poles <= 0:
+        raise ValueError("poles must be positive")
+    if skew_slot_pitches < 0.0:
+        raise ValueError("skew_slot_pitches must be non-negative")
+
+    pole_pairs = poles / 2.0
+    skew_angle_mech = 2.0 * math.pi * skew_slot_pitches / slots
+    skew_angle_elec = skew_angle_mech * pole_pairs
+    order = cogging_torque_order(slots, poles)
+    symmetry = machine_symmetry_sector(slots, poles)
+    return {
+        "slots": int(slots),
+        "poles": int(poles),
+        "pole_pairs": pole_pairs,
+        "skew_slot_pitches": skew_slot_pitches,
+        "skew_angle_mech_deg": math.degrees(skew_angle_mech),
+        "skew_angle_elec_deg": math.degrees(skew_angle_elec),
+        "cogging_order_per_rev": order,
+        "cogging_period_mech_deg": 360.0 / order,
+        "cogging_skew_factor": skew_factor(order, skew_angle_mech),
+        "fundamental_emf_skew_factor": skew_factor(1, skew_angle_elec),
+        "emf_harmonic_skew_factors": {
+            int(n): skew_factor(int(n), skew_angle_elec)
+            for n in emf_harmonics
+        },
+        "symmetry": symmetry,
+    }
 
 
 def annular_radial_resistance(sigma, r_inner, r_outer, length=1.0):
