@@ -17,6 +17,38 @@
         -9.999999999999999e-06,
         0.0
       ]
+    },
+    "two_wire_vector_summary": {
+      "current1_A": 1.0,
+      "current2_A": 1.0,
+      "field_from_wire1_at_wire2_T": [
+        -0.0,
+        9.999999999999999e-06
+      ],
+      "force_magnitude_per_length_N_per_m": 9.999999999999999e-06,
+      "force_on_wire1_N_per_m": [
+        9.999999999999999e-06,
+        0.0
+      ],
+      "force_on_wire2_N_per_m": [
+        -9.999999999999999e-06,
+        -0.0
+      ],
+      "interaction": "attraction",
+      "right_hand_tangent_at_wire2": [
+        -0.0,
+        1.0
+      ],
+      "separation_m": 0.02,
+      "separation_xy_m": [
+        0.02,
+        0.0
+      ],
+      "signed_ampere_force_per_length_N_per_m": 9.999999999999999e-06,
+      "unit_from_wire1_to_wire2": [
+        1.0,
+        0.0
+      ]
     }
   },
   "checks": {
@@ -28,12 +60,16 @@
     "current_density_A_per_m2": 79577.47154594767,
     "expected_force_per_depth_N_per_m": [
       -9.999999999999999e-06,
-      0.0
+      -0.0
     ],
     "expected_two_wire_force_magnitude_N_per_m": 9.999999999999999e-06,
     "external_By_T": 9.999999999999999e-06,
     "force_abs_error_N_per_m": 0.0,
     "mu0": 1.2566370614359173e-06,
+    "pair_force_on_wire2_N_per_m": [
+      -9.999999999999999e-06,
+      -0.0
+    ],
     "wire_area_m2": 1.2566370614359173e-05
   },
   "force_learning": "2D Jz x B area integrals reproduce Ampere two-wire force per unit depth",
