@@ -133,6 +133,7 @@ def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
     assert plan["total_affected"] == 1
     assert plan["returned"] == 1
     assert plan["truncated"] is False
+    assert plan["directory_groups"] == [{"directory": "examples", "count": 1}]
     item = plan["affected"][0]
     assert item["script"] == "examples\\curved.py"
     assert item["triggers"] == ["high_order_curve"]
