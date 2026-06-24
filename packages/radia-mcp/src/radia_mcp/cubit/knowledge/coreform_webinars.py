@@ -1247,6 +1247,110 @@ wrong, "regularize" reverts a volume back to its un-imprinted CAD.
 - Useful commands when meshing a large assembly with Coreform Cubit
 """
 
+RELEASE_2026_6 = r"""
+## Coreform Cubit 2026.6 release highlights
+
+Coreform Cubit 2026.6 was released on 2026-06-01. For the radia-mcp/Cubit
+workflow, the headline is not the GUI polish; it is that Cubit is becoming a
+stronger tetrahedral and downstream-export preprocessor in exactly the places
+that matter for `.vol`/NGSolve validation loops.
+
+### Highest-priority features for radia-mcp
+
+- **Anisotropic tetrahedral meshing**: this is the most important meshing feature
+  to watch for FEM/BEM and open-boundary examples. It should help when boundary
+  layers, stretched field regions, crack-front neighborhoods, or long thin
+  CAD features need directional resolution without a uniform tet explosion.
+  Next validation target: compare Cubit-measured volume/area and `.vol` import
+  quality on stretched tetrahedral meshes against isotropic tet baselines.
+- **Cohesive element generation**: new cohesive element block creation supports
+  crack and interface modeling by unmerging selected surfaces and inserting
+  cohesive elements. This is not directly a `.vol` tri/tet FEM/BEM input yet, but
+  it is valuable knowledge for interface bookkeeping: sideset pairs, duplicated
+  nodes, and contact/cohesive surfaces should be treated explicitly rather than
+  hidden behind a single merged surface.
+- **Higher-order quality metrics**: Jacobian and scaled-Jacobian checks now cover
+  Tetra10 and Tri6. This is directly relevant to curved/high-order export, because
+  a linear-corner quality check can miss bad mid-edge node placement. Any radia
+  high-order Cubit route should record at least linear quality plus Tetra10/Tri6
+  Jacobian-style diagnostics when available.
+- **More robust triangle/tet meshing and metric precision**: the release notes
+  call out better stability on composite surfaces and more accurate normalized
+  quality metrics. For radia-mcp this reinforces the existing rule: export `.vol`,
+  then independently validate surface closure, signed volume, boundary inventory,
+  area, tet quality, and named blocks/sidesets.
+- **Sculpt refinement memory/performance**: parallel Sculpt refinement uses less
+  memory in ghost-cell refinement layers. This matters for large assemblies and
+  HPC batch meshing, even if radia-mcp's default verification should stay small.
+- **64-bit Exodus IDs and solver element mapping**: Cubit can write Exodus with
+  64-bit IDs (`set exodus 64bit {on|off}`), and `solver_element` mappings can map
+  Exodus element types to solver-specific element names globally or per block.
+  This is a downstream compatibility feature, especially when large meshes exceed
+  32-bit ID assumptions or solver import wants named element flavors.
+- **Improved degenerate-element import/export**: degenerate hexes can be treated
+  as their true element types on import and written compatibly on export. For
+  radia-mcp this is a warning: do not silently reinterpret element topology in
+  `.vol` parsing; keep the tri/tet-only contract strict and reject quads/hexes/
+  wedges/pyramids unless a dedicated converter explicitly handles them.
+
+### Useful release details beyond the headline
+
+- **Namespaces for names**: object names can include `:` and a namespace stack can
+  be pushed/popped, e.g. entities created by a cut can inherit names like
+  `left::part`. This is promising for stable block/sideset names after webcuts,
+  and should be preferred over brittle ID tracking in generated journals.
+- **Composite surface robustness**: large composite-surface facet generation is
+  faster and triangle meshing of composite surfaces is more robust. This fits the
+  existing Cubit strategy of using virtual/composite surfaces to make meshing
+  easier without editing CAD permanently.
+- **Sweep robustness with redistributed nodes**: consecutive four-sided linking
+  surfaces and non-planar surface redistribution are more reliable. Keep this in
+  mind for swept hex or semi-structured meshes, although the current readable
+  `.vol` MATLAB/Gypsilab lane remains tri/tet-only.
+- **I/O expansion**: additional Abaqus cards such as MASS and CONNECTOR are
+  supported on import, I-DEAS UNV pressure-load datasets can become sidesets,
+  assembly-containing Cubit files open faster, and MCNP import was rewritten more
+  robustly for neutronics workflows.
+- **Machine-learning API additions**: the Cubit Python API exposes new graph
+  neural-network feature strategies through `get_ML_features`, including
+  vertex/curve/surface node strategies and vertex-curve / vertex-surface edge
+  strategies. These are BRep graph features, not solver results; they may be useful
+  for future meshability prediction or automated meshing strategy selection.
+- **Python 3.12 inside Cubit**: Cubit's embedded Python runtime is now Python 3.12.
+  External Python can still import Cubit when compatible, but scripts should avoid
+  assuming the older bundled runtime.
+- **Scripting quality of life**: `set error {on|off}` filters error messages, the
+  journal editor gained whole-script/selection run shortcuts, and multi-line
+  Python statements are handled more robustly interactively.
+- **GUI quality of life**: dark mode support and icon clarity improved; graphics
+  snapshots default to PNG; higher-order element shrink visualization and sideset
+  pair visualization make inspection easier. These are useful for humans, but they
+  should not change headless radia-mcp validation policy.
+
+### radia-mcp action items
+
+1. Keep default Cubit automation headless (`-nographics -batch -nojournal`) and
+   continue validating Cubit output by independent `.vol` geometry/topology checks.
+2. Add future validation cases for anisotropic tet meshing once a 2026.6 install is
+   available on the machine: compare area/volume/quality versus an isotropic tet
+   baseline on stretched CAD.
+3. For higher-order export, record Tetra10/Tri6 Jacobian-style quality if Cubit
+   exposes it through command/API output, and keep the existing surface-closure and
+   volume checks as independent gates.
+4. Treat cohesive/contact/interface outputs as a separate interface-modeling lane;
+   do not fold them into the simple tri/tet `.vol` parser without explicit duplicated
+   node/interface semantics.
+5. Use namespace naming in generated Cubit journals where stable downstream block
+   names matter after webcuts.
+
+### Sources
+
+- Official Coreform Cubit 2026.6 release notes:
+  https://coreform.com/coreform-cubit/release-notes/v2026-6/
+- User-provided Coreform announcement screenshot, checked against the official
+  release notes on 2026-06-24.
+"""
+
 _TOPICS = {
     "python_automation": PYTHON_AUTOMATION,
     "meshing_strategy": MESHING_STRATEGY,
@@ -1259,6 +1363,7 @@ _TOPICS = {
     "getting_started_2025": GETTING_STARTED_2025,
     "flex_iga": FLEX_IGA,
     "clips_highlights": CLIPS_HIGHLIGHTS,
+    "release_2026_6": RELEASE_2026_6,
 }
 
 _ALIASES = {
@@ -1320,6 +1425,12 @@ _ALIASES = {
     "geodynamics": "clips_highlights", "geodynamic": "clips_highlights",
     "planetary": "clips_highlights", "enceladus": "clips_highlights",
     "geology": "clips_highlights",
+    "release_2026_6": "release_2026_6", "2026_6": "release_2026_6",
+    "2026.6": "release_2026_6", "cubit_2026_6": "release_2026_6",
+    "anisotropic_tet": "release_2026_6", "anisotropic_tetrahedral": "release_2026_6",
+    "cohesive_elements": "release_2026_6", "tetra10": "release_2026_6",
+    "tri6": "release_2026_6", "solver_element": "release_2026_6",
+    "exodus_64bit": "release_2026_6", "gnn_features": "release_2026_6",
 }
 
 _INDEX = """# Coreform Cubit webinar/tutorial knowledge (synthesized from @Coreform YouTube)
@@ -1377,8 +1488,15 @@ Additional playlists (3 more, ingested separately):
   clips_highlights   - Clips playlist (short excerpts, mostly cross-ref other topics): the new
                        geodynamics/planetary domain (Enceladus crust, Python faults), value
                        framing, large-assembly selection qualifiers (except/in/with is_merged).
+  release_2026_6     - Official Coreform Cubit 2026.6 release highlights: anisotropic tet
+                       meshing, cohesive elements, Tetra10/Tri6 Jacobian metrics, Sculpt
+                       refinement memory/performance, 64-bit Exodus IDs, solver_element
+                       mapping, GNN features, Python 3.12, namespace naming, and radia-mcp
+                       validation action items.
 Aliases: power_tools/journaling/pillowing/associate_edition/trelis -> getting_started_2025;
 iga/isogeometric/u_splines/flex/bezier/frm/nurbs -> flex_iga; clips/geodynamics/planetary -> clips_highlights.
+release_2026_6/2026_6/2026.6/anisotropic_tet/cohesive_elements/tetra10/tri6/exodus_64bit/
+gnn_features -> release_2026_6.
 
 (C++ SDK lives in cpp_sdk). "coreform_all" concatenates every topic.
 """
@@ -1400,7 +1518,8 @@ def get_coreform_webinar_documentation(topic: str = "index") -> str:
                            ("python_automation", "meshing_strategy", "solver_workflows",
                             "getting_started", "advanced_meshing", "ml_and_gui",
                             "neutronics_fusion", "domain_applications",
-                            "getting_started_2025", "flex_iga", "clips_highlights"))
+                            "getting_started_2025", "flex_iga", "clips_highlights",
+                            "release_2026_6"))
     resolved = _ALIASES.get(topic, topic)
     if resolved in _TOPICS:
         return _TOPICS[resolved]
