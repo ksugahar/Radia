@@ -811,6 +811,64 @@ def radiation_pressure_summary(
     }
 
 
+def oblique_radiation_pressure_summary(
+    intensity_W_per_m2,
+    incidence_angle_rad,
+    area_m2=1.0,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """Radiation force on a flat patch for oblique plane-wave incidence.
+
+    ``incidence_angle_rad`` is measured from the surface normal: zero is normal
+    incidence and ``pi/2`` is grazing.  The normal force scales with
+    ``cos(angle)^2`` because both intercepted power and normal momentum carry a
+    cosine factor.  Absorption also transfers tangential momentum; specular
+    reflection reverses only the normal momentum component.
+    """
+
+    intensity = float(intensity_W_per_m2)
+    angle = float(incidence_angle_rad)
+    area = float(area_m2)
+    speed = float(speed)
+    if intensity < 0.0:
+        raise ValueError("intensity_W_per_m2 must be >= 0")
+    if angle < 0.0 or angle > 0.5 * math.pi:
+        raise ValueError("incidence_angle_rad must be in [0, pi/2]")
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    absorptance, reflectance = _validate_optical_coefficients(absorptance, reflectance)
+    c = math.cos(angle)
+    s = math.sin(angle)
+    incident_power = intensity * area * c
+    normal_pressure = (absorptance + 2.0 * reflectance) * intensity * c * c / speed
+    tangential_pressure = absorptance * intensity * s * c / speed
+    return {
+        "intensity_W_per_m2": intensity,
+        "incidence_angle_rad": angle,
+        "incidence_angle_deg": math.degrees(angle),
+        "area_m2": area,
+        "absorptance": absorptance,
+        "reflectance": reflectance,
+        "transmittance": 1.0 - absorptance - reflectance,
+        "speed_m_per_s": speed,
+        "incident_power_on_patch_W": incident_power,
+        "normal_pressure_Pa": normal_pressure,
+        "tangential_pressure_Pa": tangential_pressure,
+        "normal_force_N": normal_pressure * area,
+        "tangential_force_N": tangential_pressure * area,
+        "force_components_N": {
+            "tangent": tangential_pressure * area,
+            "normal": normal_pressure * area,
+        },
+        "normal_momentum_factor": absorptance + 2.0 * reflectance,
+        "tangential_momentum_factor": absorptance,
+    }
+
+
 def electrostatic_eggshell_force(E, mesh, gradg, air_region="air"):
     """Weighted Maxwell-stress ("eggshell") ELECTROSTATIC force -- the electric twin
     of :func:`eggshell_force` (ε0 E in place of B/μ0). ``E`` is the electric field
