@@ -61,13 +61,14 @@ def kelvin_panel(panel_module):
     sys.path.insert(0, str(REPO / "src" / "radia"))
     from radia_em import EMPanel, FORM_KELVIN_BENCH
     panel = EMPanel()
-    panel._widgets["formulation"].setCurrentText(FORM_KELVIN_BENCH)
-    panel._on_formulation_changed(FORM_KELVIN_BENCH)
-    panel._widgets["mu_r"].setText("100")
-    panel._widgets["H0"].setText("1.0")
-    panel._widgets["field_axis"].setCurrentText("z")
-    panel._widgets["fes_order"].setValue(2)
-    panel._widgets["R_kelvin"].setText("0.20")
+    panel._widgets["method"].setCurrentText(FORM_KELVIN_BENCH)
+    panel._on_method_changed(FORM_KELVIN_BENCH)
+    sub = panel._sub_panels[FORM_KELVIN_BENCH]
+    sub._widgets["mu_r"].setText("100")
+    sub._widgets["H0"].setText("1.0")
+    sub._widgets["field_axis"].setCurrentText("z")
+    sub._widgets["fes_order"].setValue(2)
+    sub._widgets["R_kelvin"].setText("0.20")
     yield panel
 
 

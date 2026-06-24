@@ -318,8 +318,8 @@ Once you have the 3 files, the user gets all of these for free:
 Read these for working examples of the pattern:
 
 - `src/radia/radia_em.py` -- multi-mode panel (Omega / A-Phi / MSC /
-  KelvinBench), `QStackedWidget` over 4 generator-driven sub-panels.
-  ~360 lines for 4 modes.
+  KelvinBench / Clebsch hodograph), `QStackedWidget` over 5 generator-driven
+  sub-panels.
 - `src/radia/panels/calc_accel_magnet.py` -- the CLI counterpart
   with `build_argparser()` + `calc()` + `calc_main()`.
 - `src/radia/panels/calc_volume.py` -- minimal single-mode example

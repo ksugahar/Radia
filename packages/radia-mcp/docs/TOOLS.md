@@ -318,7 +318,7 @@ Module: `radia_mcp.electromagnet.server`
 | Tool | Description |
 |---|---|
 | `electromagnet_status` | (no description) |
-| `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |
+| `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 14 topics. |
 | `electromagnet_usage` | Get accelerator electromagnet analysis documentation. |
 
 ## `mcp-server-motor`

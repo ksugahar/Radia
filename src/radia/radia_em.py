@@ -3,7 +3,7 @@ Radia EM (Electromagnet) analysis window -- generator-driven (POLICY
 2026-05-30 in radia_gui_base.py).
 
 Architecture:
-    EMPanel = wp_vol + Method combo + QStackedWidget over 4 sub-panels.
+    EMPanel = wp_vol + Method combo + QStackedWidget over 5 sub-panels.
     Each sub-panel is a ModePanel that calls bind_argparser() with the
     matching calc_*.py.  Method switch reveals the corresponding
     sub-panel; per-method widget state survives across switches via
@@ -12,6 +12,7 @@ Architecture:
     Omega / A-Phi   -> _AccelMagnetPanel(calc_accel_magnet.py)
     MSC             -> _MSCPanel       (calc_accel_msc.py)
     Kelvin Benchmark-> _KelvinBenchPanel(calc_kelvin_benchmark.py)
+    Clebsch hodograph -> _ClebschPanel(calc_clebsch_hodograph.py)
 
 The old union-of-widgets EMPanel with method-driven visibility toggles
 (437 lines as of 2026-05-30) was replaced by this composite design.
@@ -38,12 +39,20 @@ OPTIONAL_FILES = {"Coil script": "Python (*.py)",
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from PySide6.QtWidgets import QStackedWidget, QFileDialog, QMessageBox
-
-from radia_gui_base import (
-    ModePanel, AnalysisWindow, calc_script, msh_output, json_output,
-    run_app, COIL_TEMPLATE,
-)
+try:
+    from PySide6.QtWidgets import QStackedWidget, QFileDialog, QMessageBox
+    from radia_gui_base import (
+        ModePanel, AnalysisWindow, calc_script, msh_output, json_output,
+        run_app, COIL_TEMPLATE,
+    )
+except ImportError as e:
+    sys.stderr.write(
+        "Radia electromagnet panel requires PySide6 but it could not be "
+        "imported:\n"
+        "  {}\n\n"
+        "Install with:\n"
+        "  pip install --upgrade 'radia[gui]'\n".format(e))
+    sys.exit(1)
 
 
 # ============================================================
@@ -298,7 +307,7 @@ class EMPanel(ModePanel):
     """Composite top-level panel.
 
     Owns: wp_vol Browse (per-panel .vol, 4.35.0+ legacy mechanism) +
-    Method combo + QStackedWidget hosting the 4 sub-panels.
+    Method combo + QStackedWidget hosting the 5 sub-panels.
 
     Per-method state is namespaced as "<method>/<key>" in save_state /
     restore_state, so switching methods preserves what the user typed
@@ -316,7 +325,7 @@ class EMPanel(ModePanel):
             "method", "Method:",
             [name for name, _ in _METHOD_FACTORIES])
 
-        # 3. QStackedWidget hosting the 4 sub-panels.
+        # 3. QStackedWidget hosting the 5 sub-panels.
         self._sub_panels = {name: factory()
                             for name, factory in _METHOD_FACTORIES}
         self._stack = QStackedWidget()
