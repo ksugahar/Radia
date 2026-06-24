@@ -16,6 +16,7 @@ Usage:
 """
 
 import json
+import errno
 import os
 import sys
 import time
@@ -4798,12 +4799,25 @@ register_status_tool(
 )
 
 
+def _is_closed_stdout_error(exc: BaseException) -> bool:
+    """Windows raises EINVAL when a downstream PowerShell pipe closes early."""
+    return isinstance(exc, BrokenPipeError) or (
+        isinstance(exc, OSError)
+        and getattr(exc, "errno", None) in {errno.EPIPE, errno.EINVAL}
+    )
+
+
 def main():
 	"""Entry point for mcp-server-cubit command."""
 	if '--selftest' in sys.argv[1:]:
 		from radia_mcp.common.utf8_stdout import use_utf8_stdout
 		use_utf8_stdout()
-		_selftest(audit_examples='--audit-examples' in sys.argv[1:])
+		try:
+			_selftest(audit_examples='--audit-examples' in sys.argv[1:])
+		except (BrokenPipeError, OSError) as exc:
+			if _is_closed_stdout_error(exc):
+				return
+			raise
 	else:
 		mcp.run(transport="stdio")
 
