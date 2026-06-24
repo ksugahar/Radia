@@ -593,6 +593,84 @@ def planar_lorentz_force_summary(Jz_A_per_m2, B_xy_T, area_m2=1.0):
     }
 
 
+def force_moment_resultant_summary(points_m, forces, pivot_m=None):
+    """Resultant force and torque from discrete force rows.
+
+    ``points_m`` and ``forces`` are matching 2D or 3D vectors.  The returned
+    moment is
+
+        M_p = sum_i (r_i - p) x F_i
+
+    about ``pivot_m``.  For 2D inputs the cross product is the scalar out-of-
+    plane moment ``Mz``; for 3D inputs it is a 3-vector.  This dependency-free
+    helper is the common final post-processing step for Maxwell-stress patches,
+    Lorentz body-force elements, nodal loads, and mesh boundary pressure rows.
+    """
+
+    points = [_float_vector(point, f"points_m[{index}]") for index, point in enumerate(points_m)]
+    force_rows = [_float_vector(force, f"forces[{index}]") for index, force in enumerate(forces)]
+    if not points:
+        raise ValueError("at least one force row is required")
+    if len(points) != len(force_rows):
+        raise ValueError("points_m and forces must have the same length")
+    dim = len(points[0])
+    if dim not in (2, 3):
+        raise ValueError("force rows must be 2D or 3D")
+    if any(len(point) != dim for point in points):
+        raise ValueError("all points_m rows must have the same dimension")
+    if any(len(force) != dim for force in force_rows):
+        raise ValueError("all forces rows must match the point dimension")
+    pivot = [0.0] * dim if pivot_m is None else _float_vector(pivot_m, "pivot_m")
+    if len(pivot) != dim:
+        raise ValueError("pivot_m must match the point dimension")
+
+    total_force = [sum(force[axis] for force in force_rows) for axis in range(dim)]
+    rows = []
+    if dim == 2:
+        total_moment = 0.0
+        for index, (point, force) in enumerate(zip(points, force_rows), start=1):
+            lever = [point[0] - pivot[0], point[1] - pivot[1]]
+            moment = lever[0] * force[1] - lever[1] * force[0]
+            total_moment += moment
+            rows.append({
+                "index": index,
+                "point_m": point,
+                "force": force,
+                "lever_arm_m": lever,
+                "moment_z": moment,
+            })
+        moment_magnitude = abs(total_moment)
+    else:
+        total_moment = [0.0, 0.0, 0.0]
+        for index, (point, force) in enumerate(zip(points, force_rows), start=1):
+            lever = [point[axis] - pivot[axis] for axis in range(3)]
+            moment = [
+                lever[1] * force[2] - lever[2] * force[1],
+                lever[2] * force[0] - lever[0] * force[2],
+                lever[0] * force[1] - lever[1] * force[0],
+            ]
+            total_moment = [total_moment[axis] + moment[axis] for axis in range(3)]
+            rows.append({
+                "index": index,
+                "point_m": point,
+                "force": force,
+                "lever_arm_m": lever,
+                "moment": moment,
+            })
+        moment_magnitude = math.sqrt(sum(value * value for value in total_moment))
+
+    return {
+        "dimension": dim,
+        "n_rows": len(rows),
+        "pivot_m": pivot,
+        "rows": rows,
+        "total_force": total_force,
+        "total_force_magnitude": math.sqrt(sum(value * value for value in total_force)),
+        "total_moment": total_moment,
+        "total_moment_magnitude": moment_magnitude,
+    }
+
+
 def air_gap_maxwell_pressure(B_T, mu=MU0):
     """Magnetic pressure [Pa] for a normal flux density in an air gap.
 

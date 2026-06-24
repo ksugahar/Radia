@@ -18,6 +18,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     air_gap_shear_stress,
     air_gap_shear_torque,
     air_gap_shear_torque_summary,
+    force_moment_resultant_summary,
     maxwell_contour_force_2d,
     maxwell_line_segment_force_2d,
     maxwell_stress_tensor_air,
@@ -102,6 +103,38 @@ def test_air_gap_shear_torque_scales_with_radius_length_angle_and_sign():
     assert summary["torque_per_axial_length_N"] == pytest.approx(full / length)
 
 
+def test_force_moment_resultant_summary_handles_2d_force_couple():
+    radius = 0.05
+    force = 10.0
+    summary = force_moment_resultant_summary(
+        [(radius, 0.0), (-radius, 0.0)],
+        [(0.0, force), (0.0, -force)],
+    )
+    shifted = force_moment_resultant_summary(
+        [(radius, 0.0), (-radius, 0.0)],
+        [(0.0, force), (0.0, -force)],
+        pivot_m=(0.2, -0.1),
+    )
+
+    assert summary["dimension"] == 2
+    assert summary["total_force"] == pytest.approx([0.0, 0.0])
+    assert summary["total_moment"] == pytest.approx(2.0 * radius * force)
+    assert summary["total_moment_magnitude"] == pytest.approx(2.0 * radius * force)
+    assert shifted["total_moment"] == pytest.approx(summary["total_moment"])
+
+
+def test_force_moment_resultant_summary_handles_3d_single_force():
+    summary = force_moment_resultant_summary(
+        [(0.0, 0.2, 0.0)],
+        [(3.0, 0.0, 0.0)],
+    )
+
+    assert summary["dimension"] == 3
+    assert summary["total_force"] == pytest.approx([3.0, 0.0, 0.0])
+    assert summary["total_moment"] == pytest.approx([0.0, 0.0, -0.6])
+    assert summary["total_moment_magnitude"] == pytest.approx(0.6)
+
+
 def test_maxwell_line_segment_force_2d_matches_air_gap_pressure():
     pressure = air_gap_maxwell_pressure(1.0)
     row = maxwell_line_segment_force_2d(
@@ -169,6 +202,10 @@ def test_air_gap_force_rejects_invalid_inputs():
         maxwell_line_segment_force_2d((0.0, 0.0), (0.0, 0.0), (1.0, 0.0))
     with pytest.raises(ValueError):
         maxwell_contour_force_2d([(0.0, 0.0), (1.0, 0.0)], (1.0, 0.0))
+    with pytest.raises(ValueError):
+        force_moment_resultant_summary([], [])
+    with pytest.raises(ValueError):
+        force_moment_resultant_summary([(0.0, 0.0)], [(1.0, 0.0, 0.0)])
 
 
 if __name__ == "__main__":
@@ -178,6 +215,8 @@ if __name__ == "__main__":
     test_maxwell_traction_oblique_field_decomposes_into_normal_and_tangent()
     test_air_gap_shear_stress_matches_maxwell_tangential_traction()
     test_air_gap_shear_torque_scales_with_radius_length_angle_and_sign()
+    test_force_moment_resultant_summary_handles_2d_force_couple()
+    test_force_moment_resultant_summary_handles_3d_single_force()
     test_maxwell_line_segment_force_2d_matches_air_gap_pressure()
     test_maxwell_contour_force_2d_closed_uniform_field_cancels()
     test_air_gap_force_scales_with_b_squared_area_and_faces()

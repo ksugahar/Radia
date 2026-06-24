@@ -28,6 +28,7 @@ of the methods below, with an analytic sanity check available.
 | One surface patch / sign convention teaching | Local Maxwell traction | ``force.maxwell_stress_tensor_air`` / ``force.maxwell_traction_summary`` |
 | First-order `.vol` boundary triangle force trace | P1 triangle Maxwell traction load | ``force.surface_triangle_maxwell_traction_summary`` |
 | Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
+| Discrete force rows to net force/torque | Resultant and pivot moment sum | ``force.force_moment_resultant_summary`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
 | Uniform cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*`` |
@@ -66,6 +67,17 @@ F = integral J x B dV
 For 2D out-of-plane current ``Jz`` and in-plane ``B=(Bx, By)``:
 ``Fx = -int Jz By dA`` and ``Fy = int Jz Bx dA``.  Pass the total field; the
 self-field integrates to zero by symmetry for the net conductor force.
+
+Discrete force rows to force/torque:
+
+```text
+F = sum_i F_i
+M_p = sum_i (r_i - p) x F_i
+```
+
+This is the final common reduction for force rows from Maxwell-stress patches,
+Lorentz elements, pressure faces, and nodal loads.  A force couple has zero net
+force and a pivot-independent moment.
 
 Uniform air-gap pressure:
 
@@ -115,6 +127,8 @@ requires a stable geometry perturbation and matched meshes or careful remeshing.
 
 - Uniform magnetized sphere: average interior ``B`` should approach ``2 Br / 3``.
 - Two long parallel wires: ``F/L = mu0 I1 I2 / (2 pi d)``.
+- Force couple: two opposite tangential forces at radius ``r`` give
+  ``T = 2 r F`` and zero net force.
 - Wire above high-permeability plane: image-current limit gives
   ``F/L = mu0 I^2 / (4 pi h)``.
 - Uniform air gap: ``p(1 T) = 1 / (2 mu0) = 397887.35772973835 Pa``.
