@@ -161,6 +161,19 @@ def _numsubedges_triggers(lines: list[str]) -> list[str]:
     return triggers
 
 
+def _directory_numsubedges_companion(directory: str) -> dict:
+    companion = str(Path(directory) / "_gmsh_display.geo")
+    return {
+        "geo_companion": companion,
+        "geo_template": (
+            f"// Shared GMSH display companion for {directory}\n"
+            "// Use with any high-order .msh output from this directory.\n"
+            "Mesh.NumSubEdges = 4;\n"
+            "// Merge \"<result>.msh\";\n"
+        ),
+    }
+
+
 # ============================================================
 # Tools
 # ============================================================
@@ -309,7 +322,11 @@ def gmsh_numsubedges_remediation_plan(directory: str = "examples",
         "truncated": total > len(affected),
         "action": _RULE_REMEDIATIONS["numsubedges-missing"],
         "directory_groups": [
-            {"directory": directory, "count": count}
+            {
+                "directory": directory,
+                "count": count,
+                "directory_companion": _directory_numsubedges_companion(directory),
+            }
             for directory, count in sorted(
                 by_directory.items(),
                 key=lambda item: (-item[1], item[0]),

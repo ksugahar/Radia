@@ -789,6 +789,15 @@ elements. Default value (2) draws nearly straight edges.
 3. **GMSH console**: Type `Mesh.NumSubEdges = 4;`
 4. **GUI**: Tools -> Options -> Mesh -> NumSubEdges
 
+For directories with many related high-order examples, keep one shared
+`_gmsh_display.geo` companion in that directory:
+
+```
+// Shared GMSH display companion
+Mesh.NumSubEdges = 4;
+// Merge "<result>.msh";
+```
+
 ## GmshPostExport (Radia -> GMSH)
 
 `GmshPostExport` writes high-order curved mesh + field data to .msh.
