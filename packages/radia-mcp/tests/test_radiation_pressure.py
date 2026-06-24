@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
 from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     C0,
     ETA0,
+    oblique_radiation_pressure_summary,
     plane_wave_intensity_from_electric_field,
     radiation_force_from_power,
     radiation_pressure_from_intensity,
@@ -63,6 +64,39 @@ def test_radiation_force_from_power_is_area_integrated_pressure():
     assert summary["momentum_transfer_factor"] == pytest.approx(2.0)
 
 
+def test_oblique_radiation_pressure_reduces_to_normal_incidence():
+    intensity = 7.0
+    area = 0.25
+    normal = radiation_pressure_summary(intensity, area_m2=area)
+    oblique = oblique_radiation_pressure_summary(intensity, 0.0, area_m2=area)
+
+    assert oblique["normal_pressure_Pa"] == pytest.approx(normal["pressure_Pa"])
+    assert oblique["normal_force_N"] == pytest.approx(normal["force_N"])
+    assert oblique["tangential_force_N"] == pytest.approx(0.0)
+    assert oblique["incident_power_on_patch_W"] == pytest.approx(intensity * area)
+
+
+def test_oblique_radiation_pressure_splits_absorbed_tangential_momentum():
+    intensity = 9.0
+    area = 0.5
+    angle = math.radians(60.0)
+    c = math.cos(angle)
+    s = math.sin(angle)
+
+    absorber = oblique_radiation_pressure_summary(
+        intensity, angle, area_m2=area, absorptance=1.0, reflectance=0.0
+    )
+    reflector = oblique_radiation_pressure_summary(
+        intensity, angle, area_m2=area, absorptance=0.0, reflectance=1.0
+    )
+
+    assert absorber["normal_force_N"] == pytest.approx(intensity * area * c * c / C0)
+    assert absorber["tangential_force_N"] == pytest.approx(intensity * area * s * c / C0)
+    assert reflector["normal_force_N"] == pytest.approx(2.0 * intensity * area * c * c / C0)
+    assert reflector["tangential_force_N"] == pytest.approx(0.0)
+    assert reflector["incident_power_on_patch_W"] == pytest.approx(intensity * area * c)
+
+
 def test_radiation_pressure_rejects_invalid_inputs():
     with pytest.raises(ValueError):
         plane_wave_intensity_from_electric_field(1.0, impedance_ohm=0.0)
@@ -76,11 +110,19 @@ def test_radiation_pressure_rejects_invalid_inputs():
         radiation_pressure_summary(1.0, area_m2=-1.0)
     with pytest.raises(ValueError):
         radiation_pressure_from_intensity(1.0, absorptance=0.6, reflectance=0.5)
+    with pytest.raises(ValueError):
+        oblique_radiation_pressure_summary(1.0, -0.1)
+    with pytest.raises(ValueError):
+        oblique_radiation_pressure_summary(1.0, math.pi)
+    with pytest.raises(ValueError):
+        oblique_radiation_pressure_summary(1.0, 0.0, area_m2=-1.0)
 
 
 if __name__ == "__main__":
     test_plane_wave_intensity_accepts_rms_and_peak_conventions()
     test_radiation_pressure_absorber_and_reflector_limits()
     test_radiation_force_from_power_is_area_integrated_pressure()
+    test_oblique_radiation_pressure_reduces_to_normal_incidence()
+    test_oblique_radiation_pressure_splits_absorbed_tangential_momentum()
     test_radiation_pressure_rejects_invalid_inputs()
     print("[OK] radiation-pressure helpers validated.")
