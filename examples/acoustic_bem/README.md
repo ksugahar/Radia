@@ -33,9 +33,17 @@ Helmholtz DtN symbol for planar trace modes. It records normal/oblique
 propagating modes and evanescent modes, making the FEM/BEM sign convention and
 low-frequency radiation/near-field split visible without a mesh.
 
+## Baffled piston radiation
+
+`validation_baffled_piston_radiation.py` validates the closed-form radiation
+impedance of a uniformly vibrating circular piston in an infinite baffle. It
+records low-frequency resistance/reactance asymptotes, high-frequency
+plane-wave limit, and radiated active power.
+
 ```powershell
 python validation_pulsating_sphere_radiation.py
 python validation_low_frequency_helmholtz_kernel.py
 python validation_spherical_dtn_modes.py
 python validation_planar_dtn_symbol.py
+python validation_baffled_piston_radiation.py
 ```
