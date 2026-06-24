@@ -529,6 +529,36 @@ def test_boundary_pressure_force_moment_rows_for_named_box_faces():
         mesh.boundary_pressure_force_moment_rows({"zmax": 2.0}, default_pressure=None)
 
 
+def test_boundary_pressure_resultant_summary_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+
+    uniform = mesh.boundary_pressure_resultant_summary({}, default_pressure=2.0)
+    assert uniform["boundary_count"] == 6
+    assert uniform["total_force_N"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["total_moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["absolute_force_sum_N"] == pytest.approx(124.0)
+    assert uniform["force_balance_ratio"] == pytest.approx(0.0)
+    assert uniform["moment_balance_ratio"] == pytest.approx(0.0)
+    assert uniform["surface_vector_area"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["surface_vector_area_norm_over_area"] == pytest.approx(0.0)
+
+    zmax = mesh.boundary_pressure_resultant_summary({"zmax": 2.0}, default_pressure=0.0)
+    assert zmax["total_force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert zmax["total_moment_about_pivot_Nm"] == pytest.approx((18.0, -12.0, 0.0))
+    assert zmax["total_force_magnitude_N"] == pytest.approx(12.0)
+    assert zmax["force_balance_ratio"] == pytest.approx(1.0)
+
+    shifted = mesh.boundary_pressure_resultant_summary(
+        {"zmax": 2.0},
+        default_pressure=0.0,
+        pivot_m=(1.0, 1.5, 0.0),
+    )
+    assert shifted["total_moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    with pytest.raises(KeyError):
+        mesh.boundary_pressure_resultant_summary({"zmax": 2.0}, default_pressure=None)
+
+
 def test_boundary_traction_force_moment_rows_for_named_box_faces():
     mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
 
