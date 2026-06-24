@@ -1,0 +1,156 @@
+{
+  "kind": "mtpa_saliency_sweep_validation",
+  "validation_class": true,
+  "rows": [
+    {
+      "label": "surface_pm_nonsalient",
+      "case": {
+        "label": "surface_pm_nonsalient",
+        "lambda_m": 0.12,
+        "Ld": 0.003,
+        "Lq": 0.003,
+        "current": 20.0,
+        "pole_pairs": 4
+      },
+      "closed_form": {
+        "gamma_rad": 0.0,
+        "gamma_deg": 0.0,
+        "id_A": -0.0,
+        "iq_A": 20.0,
+        "torque_Nm": 14.399999999999999,
+        "magnet_torque_Nm": 14.399999999999999,
+        "reluctance_torque_Nm": -0.0,
+        "components_total_Nm": 14.399999999999999,
+        "pure_q_torque_Nm": 14.399999999999999,
+        "torque_gain_vs_pure_q": 1.0
+      },
+      "numeric_argmax": {
+        "gamma_rad": 0.0,
+        "gamma_deg": 0.0,
+        "torque_Nm": 14.399999999999999
+      },
+      "errors": {
+        "gamma_abs_error_deg": 0.0,
+        "torque_abs_error_Nm": 0.0,
+        "torque_rel_error": 0.0,
+        "component_sum_abs_error_Nm": 0.0,
+        "current_magnitude_error_A": 0.0
+      }
+    },
+    {
+      "label": "ipm_strong_saliency",
+      "case": {
+        "label": "ipm_strong_saliency",
+        "lambda_m": 0.12,
+        "Ld": 0.002,
+        "Lq": 0.006,
+        "current": 20.0,
+        "pole_pairs": 4
+      },
+      "closed_form": {
+        "gamma_rad": 0.4393933616616964,
+        "gamma_deg": 25.175385169280595,
+        "id_A": -8.507810593582121,
+        "iq_A": 18.10019775869125,
+        "torque_Nm": 16.727975687953496,
+        "magnet_torque_Nm": 13.0321423862577,
+        "reluctance_torque_Nm": 3.6958333016957954,
+        "components_total_Nm": 16.727975687953496,
+        "pure_q_torque_Nm": 14.399999999999999,
+        "torque_gain_vs_pure_q": 1.161664978330104
+      },
+      "numeric_argmax": {
+        "gamma_rad": 0.43935173260453286,
+        "gamma_deg": 25.173000000000016,
+        "torque_Nm": 16.72797566385191
+      },
+      "errors": {
+        "gamma_abs_error_deg": 0.0023851692805791913,
+        "torque_abs_error_Nm": 2.4101584727986847e-08,
+        "torque_rel_error": 1.4407950616564343e-09,
+        "component_sum_abs_error_Nm": 0.0,
+        "current_magnitude_error_A": 0.0
+      }
+    },
+    {
+      "label": "synrel_no_magnet",
+      "case": {
+        "label": "synrel_no_magnet",
+        "lambda_m": 0.0,
+        "Ld": 0.006,
+        "Lq": 0.002,
+        "current": 20.0,
+        "pole_pairs": 2
+      },
+      "closed_form": {
+        "gamma_rad": -0.7853981633974484,
+        "gamma_deg": -45.00000000000001,
+        "id_A": 14.142135623730951,
+        "iq_A": 14.14213562373095,
+        "torque_Nm": 2.4,
+        "magnet_torque_Nm": 0.0,
+        "reluctance_torque_Nm": 2.4,
+        "components_total_Nm": 2.4,
+        "pure_q_torque_Nm": 0.0,
+        "torque_gain_vs_pure_q": null
+      },
+      "numeric_argmax": {
+        "gamma_rad": -0.7853981633974483,
+        "gamma_deg": -45.0,
+        "torque_Nm": 2.4000000000000004
+      },
+      "errors": {
+        "gamma_abs_error_deg": 7.105427357601002e-15,
+        "torque_abs_error_Nm": 4.440892098500626e-16,
+        "torque_rel_error": 1.850371707708594e-16,
+        "component_sum_abs_error_Nm": 0.0,
+        "current_magnitude_error_A": 0.0
+      }
+    },
+    {
+      "label": "salient_pm_Ld_gt_Lq",
+      "case": {
+        "label": "salient_pm_Ld_gt_Lq",
+        "lambda_m": 0.08,
+        "Ld": 0.0036,
+        "Lq": 0.0024,
+        "current": 18.0,
+        "pole_pairs": 3
+      },
+      "closed_form": {
+        "gamma_rad": -0.2414624685554796,
+        "gamma_deg": -13.834780359039332,
+        "id_A": 4.304212613367774,
+        "iq_A": 17.477807464866,
+        "torque_Nm": 6.698242963810924,
+        "magnet_torque_Nm": 6.29201068735176,
+        "reluctance_torque_Nm": 0.40623227645916427,
+        "components_total_Nm": 6.698242963810924,
+        "pure_q_torque_Nm": 6.4799999999999995,
+        "torque_gain_vs_pure_q": 1.033679469723908
+      },
+      "numeric_argmax": {
+        "gamma_rad": -0.24143139542837555,
+        "gamma_deg": -13.832999999999997,
+        "torque_Nm": 6.698242959988891
+      },
+      "errors": {
+        "gamma_abs_error_deg": 0.0017803590393352664,
+        "torque_abs_error_Nm": 3.822033356470911e-09,
+        "torque_rel_error": 5.706023772654031e-10,
+        "component_sum_abs_error_Nm": 0.0,
+        "current_magnitude_error_A": 3.552713678800501e-15
+      }
+    }
+  ],
+  "checks": {
+    "max_gamma_abs_error_deg": 0.0023851692805791913,
+    "max_torque_rel_error": 1.4407950616564343e-09,
+    "max_component_sum_abs_error_Nm": 0.0,
+    "surface_pm_gamma_deg": 0.0,
+    "ipm_gamma_deg": 25.175385169280595,
+    "ipm_torque_gain_vs_pure_q": 1.161664978330104,
+    "synrel_gamma_deg": -45.00000000000001,
+    "salient_pm_Ld_gt_Lq_gamma_deg": -13.834780359039332
+  }
+}
