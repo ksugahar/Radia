@@ -17,7 +17,10 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.scalar_fem3d import (
     assemble_p1_tet_robin_system,
     p1_tetrahedron_constant_load,
+    p1_tetrahedron_boundary_fluxes,
+    p1_tetrahedron_flux,
     p1_tetrahedron_geometry,
+    p1_tetrahedron_gradient,
     p1_tetrahedron_mass,
     p1_tetrahedron_stiffness,
 )
@@ -81,6 +84,39 @@ def test_mass_and_constant_load_integrals():
     assert math.isclose(sum(F), 7.0 * volume, rel_tol=1e-15)
 
 
+def test_p1_tet_gradient_flux_and_energy_identity():
+    tet = [(-0.1, 0.2, 0.0), (1.1, 0.3, 0.2), (0.2, 1.4, 0.1), (0.1, 0.4, 1.2)]
+    coeff = 3.5
+    nodal = [2.0 + x - 3.0 * y + 0.25 * z for x, y, z in tet]
+    grad = p1_tetrahedron_gradient(tet, nodal)
+    flux = p1_tetrahedron_flux(tet, nodal, coeff=coeff)
+    K = p1_tetrahedron_stiffness(tet, coeff=coeff)
+    volume = p1_tetrahedron_geometry(tet)["volume"]
+
+    assert grad == pytest.approx((1.0, -3.0, 0.25))
+    assert flux == pytest.approx((-coeff, 3.0 * coeff, -0.25 * coeff))
+    assert _quad(nodal, K) == pytest.approx(coeff * volume * (1.0 + 9.0 + 0.25 * 0.25))
+
+
+def test_p1_tet_boundary_fluxes_are_outward_and_balanced():
+    tet = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]
+    coeff = 3.0
+    nodal = [x + 2.0 * y - 0.5 * z for x, y, z in tet]
+    rows = p1_tetrahedron_boundary_fluxes(tet, nodal, coeff=coeff)
+    q = p1_tetrahedron_flux(tet, nodal, coeff=coeff)
+
+    assert len(rows) == 4
+    assert sum(row["integrated_flux"] for row in rows) == pytest.approx(0.0, abs=1e-15)
+    for row in rows:
+        av = row["outward_area_vector"]
+        assert row["integrated_flux"] == pytest.approx(sum(q[i] * av[i] for i in range(3)))
+        assert row["normal_flux_density"] == pytest.approx(row["integrated_flux"] / row["area"])
+    x0_face = next(row for row in rows if row["opposite_local_node"] == 1)
+    assert x0_face["face_local_nodes"] == (0, 2, 3)
+    assert x0_face["outward_area_vector"] == pytest.approx((-0.5, 0.0, 0.0))
+    assert x0_face["integrated_flux"] == pytest.approx(1.5)
+
+
 def test_orientation_reversal_and_degenerate_guard():
     tet = [(0.1, 0.0, 0.2), (1.0, 0.2, 0.0), (0.3, 1.4, 0.1), (0.2, 0.4, 1.5)]
     K1 = p1_tetrahedron_stiffness(tet)
@@ -93,6 +129,8 @@ def test_orientation_reversal_and_degenerate_guard():
         p1_tetrahedron_geometry([(0, 0, 0), (1, 0, 0), (0, 1, 0), (2, 2, 0)])
     with pytest.raises(ValueError):
         p1_tetrahedron_geometry([(0, 0, 0), (1, 0, 0), (0, 1, 0)])
+    with pytest.raises(ValueError):
+        p1_tetrahedron_gradient(tet, [1.0, 2.0, 3.0])
 
 
 def test_p1_tet_robin_assembly_constant_solution_gate():
