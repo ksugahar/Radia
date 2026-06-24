@@ -15,6 +15,9 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     air_gap_force_summary,
     air_gap_holding_force,
     air_gap_maxwell_pressure,
+    maxwell_stress_tensor_air,
+    maxwell_traction_air,
+    maxwell_traction_summary,
 )
 
 
@@ -22,6 +25,46 @@ def test_air_gap_pressure_matches_maxwell_stress_at_one_tesla():
     expected = 1.0 / (2.0 * MU0)
     assert air_gap_maxwell_pressure(1.0) == pytest.approx(expected)
     assert air_gap_maxwell_pressure(-1.0) == pytest.approx(expected)
+
+
+def test_maxwell_tensor_normal_field_reduces_to_air_gap_pressure():
+    pressure = air_gap_maxwell_pressure(1.0)
+    tensor = maxwell_stress_tensor_air((0.0, 0.0, 1.0))
+    traction = maxwell_traction_air((0.0, 0.0, 1.0), (0.0, 0.0, 1.0))
+    summary = maxwell_traction_summary((0.0, 0.0, 1.0), (0.0, 0.0, 2.0), area_m2=2.0e-4)
+
+    assert tensor[0][0] == pytest.approx(-pressure)
+    assert tensor[1][1] == pytest.approx(-pressure)
+    assert tensor[2][2] == pytest.approx(pressure)
+    assert traction == pytest.approx([0.0, 0.0, pressure])
+    assert summary["normal_traction_Pa"] == pytest.approx(pressure)
+    assert summary["normal_traction_identity_Pa"] == pytest.approx(pressure)
+    assert summary["force_N"] == pytest.approx([0.0, 0.0, pressure * 2.0e-4])
+
+
+def test_maxwell_tensor_tangential_field_is_magnetic_tension():
+    pressure = air_gap_maxwell_pressure(1.0)
+    traction = maxwell_traction_air((1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+    summary = maxwell_traction_summary((1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+
+    assert traction == pytest.approx([0.0, 0.0, -pressure])
+    assert summary["B_normal_T"] == pytest.approx(0.0)
+    assert summary["B_tangent_T"] == pytest.approx(1.0)
+    assert summary["normal_traction_Pa"] == pytest.approx(-pressure)
+    assert summary["tangential_traction_magnitude_Pa"] == pytest.approx(0.0)
+
+
+def test_maxwell_traction_oblique_field_decomposes_into_normal_and_tangent():
+    # B=(3,4,0), n=x gives Bn=3, Bt=4:
+    # traction.n=(9-16)/(2mu), tangent traction=(Bn*Bt)/mu in y.
+    summary = maxwell_traction_summary((3.0, 4.0, 0.0), (1.0, 0.0, 0.0))
+
+    assert summary["B_normal_T"] == pytest.approx(3.0)
+    assert summary["B_tangent_T"] == pytest.approx(4.0)
+    assert summary["normal_traction_Pa"] == pytest.approx(-3.5 / MU0)
+    assert summary["normal_traction_identity_Pa"] == pytest.approx(-3.5 / MU0)
+    assert summary["tangential_traction_Pa"] == pytest.approx([0.0, 12.0 / MU0, 0.0])
+    assert summary["tangential_traction_magnitude_Pa"] == pytest.approx(12.0 / MU0)
 
 
 def test_air_gap_force_scales_with_b_squared_area_and_faces():
@@ -48,10 +91,19 @@ def test_air_gap_force_rejects_invalid_inputs():
         air_gap_holding_force(1.0, area_m2=-1.0)
     with pytest.raises(ValueError):
         air_gap_holding_force(1.0, area_m2=1.0, faces=0)
+    with pytest.raises(ValueError):
+        maxwell_stress_tensor_air((1.0,), mu=MU0)
+    with pytest.raises(ValueError):
+        maxwell_traction_air((1.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+    with pytest.raises(ValueError):
+        maxwell_traction_summary((1.0, 0.0), (1.0, 0.0, 0.0))
 
 
 if __name__ == "__main__":
     test_air_gap_pressure_matches_maxwell_stress_at_one_tesla()
+    test_maxwell_tensor_normal_field_reduces_to_air_gap_pressure()
+    test_maxwell_tensor_tangential_field_is_magnetic_tension()
+    test_maxwell_traction_oblique_field_decomposes_into_normal_and_tangent()
     test_air_gap_force_scales_with_b_squared_area_and_faces()
     test_air_gap_force_summary_is_json_friendly_and_self_consistent()
     test_air_gap_force_rejects_invalid_inputs()

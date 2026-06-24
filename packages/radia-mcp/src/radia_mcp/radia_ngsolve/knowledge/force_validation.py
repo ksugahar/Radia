@@ -25,6 +25,7 @@ of the methods below, with an analytic sanity check available.
 | Body in air, global 2D/3D force | Weighted Maxwell stress | ``force.eggshell_force*`` |
 | Rotating machine torque from field solution | Weighted Maxwell stress torque | ``force.eggshell_torque*`` |
 | Simple closed integration surface in air | Maxwell surface stress | ``force.maxwell_surface_force*`` |
+| One surface patch / sign convention teaching | Local Maxwell traction | ``force.maxwell_stress_tensor_air`` / ``force.maxwell_traction_summary`` |
 | Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
