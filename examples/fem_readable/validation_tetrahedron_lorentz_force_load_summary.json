@@ -5,6 +5,16 @@
     0.0
   ],
   "checks": {
+    "centroid_m": [
+      0.25,
+      0.25,
+      0.25
+    ],
+    "element_centroid_moment_Nm": [
+      0.25,
+      -0.25,
+      0.0
+    ],
     "expected_force_density_N_per_m3": [
       0.0,
       0.0,
@@ -26,6 +36,11 @@
       0.0,
       6.0
     ],
+    "force_moment_abs_errors": [
+      0.0,
+      0.0,
+      0.0
+    ],
     "integrated_force_N": [
       0.0,
       0.0,
@@ -36,6 +51,11 @@
       0.0,
       1.0
     ],
+    "nodal_total_moment_Nm": [
+      0.25,
+      -0.25,
+      0.0
+    ],
     "volume_m3": 0.16666666666666666
   },
   "current_density_A_per_m2": [
@@ -43,7 +63,168 @@
     0.0,
     0.0
   ],
+  "element_centroid_resultant": {
+    "dimension": 3,
+    "n_rows": 1,
+    "pivot_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "rows": [
+      {
+        "force": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "index": 1,
+        "lever_arm_m": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "moment": [
+          0.25,
+          -0.25,
+          0.0
+        ],
+        "point_m": [
+          0.25,
+          0.25,
+          0.25
+        ]
+      }
+    ],
+    "total_force": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "total_force_magnitude": 1.0,
+    "total_moment": [
+      0.25,
+      -0.25,
+      0.0
+    ],
+    "total_moment_magnitude": 0.3535533905932738
+  },
   "kind": "p1_tetrahedron_lorentz_force_load",
+  "nodal_resultant": {
+    "dimension": 3,
+    "n_rows": 4,
+    "pivot_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "rows": [
+      {
+        "force": [
+          0.0,
+          0.0,
+          0.25
+        ],
+        "index": 1,
+        "lever_arm_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "moment": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "point_m": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "force": [
+          0.0,
+          0.0,
+          0.25
+        ],
+        "index": 2,
+        "lever_arm_m": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "moment": [
+          0.0,
+          -0.25,
+          0.0
+        ],
+        "point_m": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "force": [
+          0.0,
+          0.0,
+          0.25
+        ],
+        "index": 3,
+        "lever_arm_m": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "moment": [
+          0.25,
+          0.0,
+          0.0
+        ],
+        "point_m": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "force": [
+          0.0,
+          0.0,
+          0.25
+        ],
+        "index": 4,
+        "lever_arm_m": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "moment": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "point_m": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    ],
+    "total_force": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "total_force_magnitude": 1.0,
+    "total_moment": [
+      0.25,
+      -0.25,
+      0.0
+    ],
+    "total_moment_magnitude": 0.3535533905932738
+  },
   "row": {
     "B_T": [
       0.0,
