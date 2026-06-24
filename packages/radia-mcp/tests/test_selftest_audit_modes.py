@@ -179,3 +179,43 @@ def test_gmsh_numsubedges_rule_respects_directory_display_companion(tmp_path):
         encoding="utf-8",
     )
     assert check_numsubedges_missing(str(script), lines) == []
+
+
+def test_gmsh_mesh_generation_remediation_plan(monkeypatch, tmp_path):
+    from radia_mcp.gmsh import server
+
+    examples = tmp_path / "examples"
+    examples.mkdir()
+    target = examples / "makes_mesh.py"
+    target.write_text(
+        "import gmsh\n"
+        "gmsh.model.occ.addBox(0, 0, 0, 1, 1, 1)\n"
+        "gmsh.model.mesh.generate(3)\n",
+        encoding="utf-8",
+    )
+    clean = examples / "display_only.py"
+    clean.write_text("print('display')\n", encoding="utf-8")
+
+    def fake_lint(filepath: str):
+        if filepath.endswith("makes_mesh.py"):
+            return [
+                {"line": 2, "severity": "CRITICAL",
+                 "rule": "gmsh-mesh-generation", "message": "occ"},
+                {"line": 3, "severity": "CRITICAL",
+                 "rule": "gmsh-mesh-generation", "message": "mesh"},
+            ]
+        return []
+
+    monkeypatch.setattr(server, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(server, "_lint_file", fake_lint)
+
+    plan = server.gmsh_mesh_generation_remediation_plan("examples", limit=1)
+    assert plan["ok"] is True
+    assert plan["total_affected"] == 1
+    assert plan["total_findings"] == 2
+    assert plan["directory_groups"] == [{"directory": "examples", "findings": 2}]
+    item = plan["affected"][0]
+    assert item["script"] == "examples\\makes_mesh.py"
+    assert item["findings"][0]["line"] == 2
+    assert "gmsh.model.occ.addBox" in item["findings"][0]["snippet"]
+    assert "Mesh('model.vol')" in item["mesh_output_hint"]
