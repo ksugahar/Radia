@@ -149,9 +149,12 @@ class NetgenTriTetVolMesh:
         """Return per-tetrahedron volume/radius quality records.
 
         ``radius_ratio_quality = 3 * inradius / circumradius`` is one for an
-        equilateral tetrahedron and tends to zero for flat/sliver elements.  It
-        is a compact mesh-quality companion to the edge-ratio summary and maps
-        well to Cubit/Coreform tet quality checks.
+        equilateral tetrahedron and tends to zero for flat/sliver elements.
+        ``corner_normalized_jacobians`` are the absolute triple product of the
+        three incident edges at each corner divided by the product of their
+        lengths.  They are one for a locally orthogonal corner and approach zero
+        as the corner becomes flat.  Together these form a compact, public-safe
+        companion to Cubit/Coreform tet quality checks.
         """
 
         rows: list[dict[str, float | int]] = []
@@ -171,6 +174,7 @@ class NetgenTriTetVolMesh:
                 raise ValueError(f"tetrahedron {index} has zero circumradius")
             min_edge = min(edge_lengths)
             max_edge = max(edge_lengths)
+            corner_jacobians = _tetrahedron_corner_normalized_jacobians(coords)
             rows.append({
                 "tetrahedron": index,
                 "volume": volume,
@@ -178,6 +182,9 @@ class NetgenTriTetVolMesh:
                 "inradius": inradius,
                 "circumradius": circumradius,
                 "radius_ratio_quality": 3.0 * inradius / circumradius,
+                "corner_normalized_jacobians": list(corner_jacobians),
+                "min_normalized_corner_jacobian": min(corner_jacobians),
+                "max_normalized_corner_jacobian": max(corner_jacobians),
                 "min_edge": min_edge,
                 "max_edge": max_edge,
                 "edge_ratio": max_edge / min_edge,
@@ -196,9 +203,12 @@ class NetgenTriTetVolMesh:
                 "mean_radius_ratio_quality": None,
                 "min_inradius": None,
                 "max_circumradius": None,
+                "min_normalized_corner_jacobian": None,
+                "mean_min_normalized_corner_jacobian": None,
                 "max_edge_ratio": None,
             }
         qualities = [float(row["radius_ratio_quality"]) for row in rows]
+        corner_minima = [float(row["min_normalized_corner_jacobian"]) for row in rows]
         inradii = [float(row["inradius"]) for row in rows]
         circumradii = [float(row["circumradius"]) for row in rows]
         edge_ratios = [float(row["edge_ratio"]) for row in rows]
@@ -209,6 +219,8 @@ class NetgenTriTetVolMesh:
             "mean_radius_ratio_quality": sum(qualities) / len(qualities),
             "min_inradius": min(inradii),
             "max_circumradius": max(circumradii),
+            "min_normalized_corner_jacobian": min(corner_minima),
+            "mean_min_normalized_corner_jacobian": sum(corner_minima) / len(corner_minima),
             "max_edge_ratio": max(edge_ratios),
         }
 
@@ -985,3 +997,19 @@ def _tetrahedron_circumradius(points: tuple[tuple[float, float, float], ...]) ->
     rhs = tuple(_dot(edge, edge) for edge in edges)
     center_rel = _solve3_rows(rows, rhs)
     return _norm(center_rel)
+
+
+def _tetrahedron_corner_normalized_jacobians(
+    points: tuple[tuple[float, float, float], ...],
+) -> tuple[float, float, float, float]:
+    rows: list[float] = []
+    for i, origin in enumerate(points):
+        edges = tuple(_sub(points[j], origin) for j in range(4) if j != i)
+        denom = 1.0
+        for edge in edges:
+            length = _norm(edge)
+            if length <= 0.0:
+                raise ValueError("tetrahedron contains a zero-length edge")
+            denom *= length
+        rows.append(abs(_det3(edges)) / denom)
+    return (rows[0], rows[1], rows[2], rows[3])
