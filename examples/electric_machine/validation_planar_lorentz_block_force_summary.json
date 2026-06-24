@@ -1,0 +1,47 @@
+{
+  "cases": {
+    "right_wire_in_left_wire_field": {
+      "B_xy_T": [
+        0.0,
+        9.999999999999999e-06
+      ],
+      "Jz_A_per_m2": 79577.47154594767,
+      "area_m2": 1.2566370614359173e-05,
+      "current_A": 1.0,
+      "force_density_N_per_m3": [
+        -0.7957747154594766,
+        0.0
+      ],
+      "force_magnitude_per_depth_N_per_m": 9.999999999999999e-06,
+      "force_per_depth_N_per_m": [
+        -9.999999999999999e-06,
+        0.0
+      ]
+    }
+  },
+  "checks": {
+    "block_force_per_depth_N_per_m": [
+      -9.999999999999999e-06,
+      0.0
+    ],
+    "current_abs_error_A": 0.0,
+    "current_density_A_per_m2": 79577.47154594767,
+    "expected_force_per_depth_N_per_m": [
+      -9.999999999999999e-06,
+      0.0
+    ],
+    "expected_two_wire_force_magnitude_N_per_m": 9.999999999999999e-06,
+    "external_By_T": 9.999999999999999e-06,
+    "force_abs_error_N_per_m": 0.0,
+    "mu0": 1.2566370614359173e-06,
+    "wire_area_m2": 1.2566370614359173e-05
+  },
+  "force_learning": "2D Jz x B area integrals reproduce Ampere two-wire force per unit depth",
+  "kind": "planar_lorentz_block_force",
+  "parameters": {
+    "current_A": 1.0,
+    "wire_radius_m": 0.002,
+    "wire_spacing_m": 0.02
+  },
+  "validation_class": true
+}

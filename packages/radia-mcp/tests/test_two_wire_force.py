@@ -18,6 +18,7 @@ if _SRC not in sys.path:
 
 from radia_mcp.radia_ngsolve.solve import (two_wire_force_per_length, image_force_wire_iron,
                                            MU0)
+from radia_mcp.radia_ngsolve.force import planar_lorentz_force_summary
 
 a, d, I = 0.002, 0.02, 1.0
 
@@ -34,3 +35,21 @@ def test_two_wire_force_closed_form():
     # image-wire force is the special case I1=I2=I at separation 2h
     h = d / 2
     assert image_force_wire_iron(I, h) == pytest.approx(two_wire_force_per_length(I, I, 2 * h))
+
+
+def test_planar_lorentz_block_force_matches_two_wire_field():
+    area = math.pi * a * a
+    jz_right = I / area
+    by_from_left = MU0 * I / (2.0 * math.pi * d)
+    row = planar_lorentz_force_summary(jz_right, (0.0, by_from_left), area_m2=area)
+
+    assert row["current_A"] == pytest.approx(I)
+    assert row["force_per_depth_N_per_m"] == pytest.approx([-two_wire_force_per_length(I, I, d), 0.0])
+    assert row["force_magnitude_per_depth_N_per_m"] == pytest.approx(two_wire_force_per_length(I, I, d))
+
+
+def test_planar_lorentz_force_rejects_bad_inputs():
+    with pytest.raises(ValueError):
+        planar_lorentz_force_summary(1.0, (0.0, 1.0, 0.0))
+    with pytest.raises(ValueError):
+        planar_lorentz_force_summary(1.0, (0.0, 1.0), area_m2=-1.0)
