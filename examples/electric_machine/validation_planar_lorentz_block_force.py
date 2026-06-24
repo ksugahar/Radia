@@ -29,7 +29,11 @@ SRC = REPO / "packages" / "radia-mcp" / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from radia_mcp.radia_ngsolve.force import MU0, planar_lorentz_force_summary  # noqa: E402
+from radia_mcp.radia_ngsolve.force import (  # noqa: E402
+    MU0,
+    parallel_wire_lorentz_force_summary,
+    planar_lorentz_force_summary,
+)
 from radia_mcp.radia_ngsolve.solve import two_wire_force_per_length  # noqa: E402
 
 
@@ -59,8 +63,9 @@ def build_summary() -> dict:
         (0.0, by_from_left_wire),
         area_m2=area,
     )
+    pair = parallel_wire_lorentz_force_summary(CURRENT_A, CURRENT_A, WIRE_SPACING_M)
     expected_magnitude = two_wire_force_per_length(CURRENT_A, CURRENT_A, WIRE_SPACING_M)
-    expected_force = [-expected_magnitude, 0.0]
+    expected_force = pair["force_on_wire2_N_per_m"]
     force_error = [
         block["force_per_depth_N_per_m"][0] - expected_force[0],
         block["force_per_depth_N_per_m"][1] - expected_force[1],
@@ -72,6 +77,7 @@ def build_summary() -> dict:
         "expected_two_wire_force_magnitude_N_per_m": expected_magnitude,
         "expected_force_per_depth_N_per_m": expected_force,
         "block_force_per_depth_N_per_m": block["force_per_depth_N_per_m"],
+        "pair_force_on_wire2_N_per_m": pair["force_on_wire2_N_per_m"],
         "force_abs_error_N_per_m": _norm2(force_error),
         "current_abs_error_A": abs(block["current_A"] - CURRENT_A),
         "mu0": MU0,
@@ -92,6 +98,7 @@ def build_summary() -> dict:
         },
         "cases": {
             "right_wire_in_left_wire_field": block,
+            "two_wire_vector_summary": pair,
         },
         "checks": checks,
     }
