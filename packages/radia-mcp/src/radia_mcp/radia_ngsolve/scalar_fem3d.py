@@ -216,6 +216,84 @@ def p1_surface_triangle_constant_load(vertices, source=1.0):
     return [float(source) * area / 3.0] * 3
 
 
+def p1_surface_triangle_density_moments(vertices, nodal_density):
+    """Exact P1 surface-density moments on one triangle.
+
+    This is the small BEM bookkeeping block behind a readable single-layer
+    assembly.  For a P1 density ``sigma = sum_i sigma_i N_i`` it returns
+
+        Q = int_T sigma dS,
+        m = int_T sigma x dS.
+
+    The first moment uses only the surface mass matrix:
+    ``m = sum_j x_j sum_i sigma_i int_T N_i N_j dS``.  That makes the formula
+    short enough to mirror directly in MATLAB/Gypsilab-style teaching code.
+    """
+
+    sigma = [float(value) for value in nodal_density]
+    if len(sigma) != 3:
+        raise ValueError("nodal_density must contain three values")
+    verts = [tuple(float(x) for x in point) for point in vertices]
+    if len(verts) != 3 or any(len(point) != 3 for point in verts):
+        raise ValueError("surface triangle vertices must be 3D points")
+    geom = p1_surface_triangle_geometry(verts)
+    mass = p1_surface_triangle_mass(verts)
+    vertex_weights = [
+        sum(sigma[i] * mass[i][j] for i in range(3))
+        for j in range(3)
+    ]
+    first_moment = tuple(
+        sum(vertex_weights[j] * verts[j][axis] for j in range(3))
+        for axis in range(3)
+    )
+    total = sum(vertex_weights)
+    return {
+        "area": geom["area"],
+        "centroid": tuple(sum(point[axis] for point in verts) / 3.0 for axis in range(3)),
+        "nodal_density": sigma,
+        "vertex_moment_weights": vertex_weights,
+        "total_source": total,
+        "first_moment": first_moment,
+    }
+
+
+def laplace_single_layer_far_potential(observation_point, total_source, first_moment):
+    """Monopole+dipole far-field of a Laplace single-layer density.
+
+    For ``|x|`` larger than the source support,
+
+        int sigma(y) / (4 pi |x-y|) dS_y
+        = Q/(4 pi r) + (xhat . m)/(4 pi r^2) + O(r^-3),
+
+    where ``Q = int sigma dS`` and ``m = int sigma y dS``.  This is not a near
+    singular quadrature rule; it is a readable far-field moment gate.
+    """
+
+    x = tuple(float(value) for value in observation_point)
+    m = tuple(float(value) for value in first_moment)
+    if len(x) != 3:
+        raise ValueError("observation_point must be a 3D point")
+    if len(m) != 3:
+        raise ValueError("first_moment must have length 3")
+    r = _norm(x)
+    if r <= 0.0:
+        raise ValueError("observation_point must be away from the origin")
+    q = float(total_source)
+    xhat = tuple(value / r for value in x)
+    monopole = q / (4.0 * math.pi * r)
+    dipole = _dot(xhat, m) / (4.0 * math.pi * r * r)
+    return {
+        "observation_point": x,
+        "radius": r,
+        "direction": xhat,
+        "total_source": q,
+        "first_moment": m,
+        "monopole_potential": monopole,
+        "dipole_potential": dipole,
+        "far_potential": monopole + dipole,
+    }
+
+
 def assemble_p1_tet_robin_system(points, tetrahedra, surface_triangles,
                                   volume_coeff=1.0, source=0.0,
                                   robin_coeff=0.0, boundary_flux=0.0):

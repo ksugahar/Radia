@@ -11,7 +11,9 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from radia_mcp.radia_ngsolve.scalar_fem3d import (
+    laplace_single_layer_far_potential,
     p1_surface_triangle_constant_load,
+    p1_surface_triangle_density_moments,
     p1_surface_triangle_geometry,
     p1_surface_triangle_mass,
     p1_surface_triangle_stiffness,
@@ -64,6 +66,33 @@ def test_surface_mass_and_constant_load_integrals():
     assert sum(F) == pytest.approx(5.0 * area)
 
 
+def test_surface_density_moments_for_single_layer_bem_gate():
+    tri = [(1.0, 0.0, 0.0), (1.0, 2.0, 0.0), (1.0, 0.0, 3.0)]
+    area = p1_surface_triangle_geometry(tri)["area"]
+    centroid = (1.0, 2.0 / 3.0, 1.0)
+
+    const = p1_surface_triangle_density_moments(tri, [2.0, 2.0, 2.0])
+    assert const["total_source"] == pytest.approx(2.0 * area)
+    assert const["first_moment"] == pytest.approx(tuple(2.0 * area * c for c in centroid))
+
+    zero_net = p1_surface_triangle_density_moments(tri, [1.0, -1.0, 0.0])
+    shifted = [(x + 5.0, y - 4.0, z + 2.0) for x, y, z in tri]
+    zero_net_shifted = p1_surface_triangle_density_moments(shifted, [1.0, -1.0, 0.0])
+    assert zero_net["total_source"] == pytest.approx(0.0)
+    assert zero_net_shifted["first_moment"] == pytest.approx(zero_net["first_moment"])
+
+    far = laplace_single_layer_far_potential(
+        (10.0, 0.0, 0.0),
+        const["total_source"],
+        const["first_moment"],
+    )
+    assert far["monopole_potential"] == pytest.approx(const["total_source"] / (40.0 * math.pi))
+    assert far["dipole_potential"] == pytest.approx(const["first_moment"][0] / (400.0 * math.pi))
+    assert far["far_potential"] == pytest.approx(
+        far["monopole_potential"] + far["dipole_potential"]
+    )
+
+
 def test_tilted_surface_affine_energy_uses_tangential_gradient():
     tri = [(0.2, -0.1, 0.3), (1.1, 0.4, 0.6), (0.1, 1.2, 1.3)]
     coeff = 2.0
@@ -95,3 +124,7 @@ def test_orientation_reversal_permutates_surface_matrix_and_normal():
 
     with pytest.raises(ValueError):
         p1_surface_triangle_geometry([(0, 0, 0), (1, 1, 1), (2, 2, 2)])
+    with pytest.raises(ValueError):
+        p1_surface_triangle_density_moments(tri, [1.0, 2.0])
+    with pytest.raises(ValueError):
+        laplace_single_layer_far_potential((0.0, 0.0, 0.0), 1.0, (1.0, 0.0, 0.0))
