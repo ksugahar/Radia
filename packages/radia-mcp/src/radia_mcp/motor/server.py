@@ -27,6 +27,19 @@ from .henrotte_lineage_knowledge import get_henrotte_lineage_knowledge
 from .hollaus_eddy_knowledge import get_hollaus_eddy_knowledge
 from .hollaus_genealogy_knowledge import get_hollaus_genealogy
 from .tritool_cross_reference_knowledge import get_tritool_cross_reference
+from .elf_magic_bridge_knowledge import get_elf_magic_bridge
+from .age_quality_knowledge import (
+    format_age_validation_plan,
+    get_age_quality_report,
+    route_age_validation_plan,
+)
+from .simple_mmm_2d import (
+    MmmQuickInput,
+    evaluate_mmm_quick_check,
+    format_mmm_quick_check,
+    format_motor_validation_route,
+    route_motor_validation,
+)
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -300,6 +313,134 @@ def motor_tritool_cross_reference(topic: str = "overview") -> str:
     return get_tritool_cross_reference(topic)
 
 
+@mcp.tool()
+def motor_elf_magic_bridge(topic: str = "overview") -> str:
+    """
+    Public-safe ELF/MAGIC motor corpus bridge for radia-motor.
+
+    Explains what the ELF-mcp-server motor corpus already covers, where its
+    validation depth is still thin, and which radia-motor / radia-ngsolve
+    anchors should be strengthened next.
+
+    Args:
+        topic: One of:
+            "overview"                  - ELF public motor corpus status
+            "coverage_matrix"           - ELF archetypes -> radia targets
+            "insufficiency_audit"       - What is broad vs still only proxy-validated
+            "routing_playbook"          - How to use ELF and radia-motor together
+            "radia_strengthening_queue" - Next radia-side upgrades
+            "jmag_coverage_reality"     - Turnkey production motor coverage boundary
+            "age_vs_mmm_strategy"       - Why AGE is the main 2D path; where MMM helps
+            "all"                       - Everything
+    """
+    return get_elf_magic_bridge(topic)
+
+
+@mcp.tool()
+def motor_age_quality(topic: str = "overview") -> str:
+    """
+    NGSolve AGE quality gates for radia-motor.
+
+    This is the public-safe readiness layer for treating AGE as the main
+    radia-motor validation path. It lists physical quantities, test evidence,
+    acceptance conditions, family coverage, publication labels, and limitations.
+
+    Args:
+        topic: One of:
+            "overview"           - AGE readiness policy
+            "gate_matrix"        - Gate -> quantity/test/acceptance table
+            "family_matrix"      - Motor family -> required AGE gates
+            "publication_policy" - What can be called AGE-verified
+            "runbook"            - Targeted pytest commands
+            "limitations"        - Required caveats for public claims
+            "all"                - Everything
+    """
+    return get_age_quality_report(topic)
+
+
+@mcp.tool()
+def motor_age_validation_plan(goal: str) -> str:
+    """
+    Route a motor prompt to the required NGSolve AGE quality gates.
+
+    Args:
+        goal: Natural-language motor analysis request, e.g. "IPM hairpin MTPA"
+            or "induction cage slip loss".
+    """
+    return format_age_validation_plan(route_age_validation_plan(goal))
+
+
+@mcp.tool()
+def motor_mmm_quick_check(
+    motor_type: str = "spm",
+    pole_pairs: int = 4,
+    airgap_radius_m: float = 0.05,
+    stack_length_m: float = 0.05,
+    airgap_m: float = 1.0e-3,
+    turns_per_phase: float = 50.0,
+    phase_current_a: float = 10.0,
+    electrical_angle_deg: float = 0.0,
+    magnet_br_t: float = 1.2,
+    magnet_thickness_m: float = 3.0e-3,
+    magnet_arc_fraction: float = 0.75,
+    saliency_ratio_lq_over_ld: float = 1.5,
+    slip_hz: float = 5.0,
+) -> str:
+    """
+    First-order 2D MMM/BEM-like motor quick check.
+
+    This is a public-safe, approximate magnetic-circuit evaluator for prompt-time
+    sanity checks. It estimates PM flux linkage, back-EMF constant, dq torque
+    proxy, and an induction slip-loss proxy, then routes the result to the
+    NGSolve AGE validation targets that should be used for real verification.
+
+    Args:
+        motor_type: "spm", "ipm", "induction", "srm", "synrm",
+            "hysteresis", etc.
+        pole_pairs: Number of pole pairs.
+        airgap_radius_m: Air-gap radius in meters.
+        stack_length_m: Active stack length in meters.
+        airgap_m: Mechanical air gap in meters.
+        turns_per_phase: Effective series turns per phase.
+        phase_current_a: Peak phase current.
+        electrical_angle_deg: Electrical current angle from q-axis convention.
+        magnet_br_t: PM remanence in tesla.
+        magnet_thickness_m: Magnet thickness in meters.
+        magnet_arc_fraction: Fraction of pole pitch covered by magnet.
+        saliency_ratio_lq_over_ld: Lq/Ld proxy for IPM/SynRM/SRM checks.
+        slip_hz: Slip frequency for induction-machine proxy checks.
+    """
+    inp = MmmQuickInput(
+        motor_type=motor_type,
+        pole_pairs=pole_pairs,
+        airgap_radius_m=airgap_radius_m,
+        stack_length_m=stack_length_m,
+        airgap_m=airgap_m,
+        turns_per_phase=turns_per_phase,
+        phase_current_a=phase_current_a,
+        electrical_angle_deg=electrical_angle_deg,
+        magnet_br_t=magnet_br_t,
+        magnet_thickness_m=magnet_thickness_m,
+        magnet_arc_fraction=magnet_arc_fraction,
+        saliency_ratio_lq_over_ld=saliency_ratio_lq_over_ld,
+        slip_hz=slip_hz,
+    )
+    return format_mmm_quick_check(evaluate_mmm_quick_check(inp))
+
+
+@mcp.tool()
+def motor_validation_router(goal: str) -> str:
+    """
+    Route a motor prompt to ELF deck, MMM quick check, and NGSolve AGE validation.
+
+    This is the dispatch layer for the hybrid workflow:
+    ELF/MAGIC public decks for input authoring, the lightweight 2D MMM quick
+    check for first-order sign/scale checks, and NGSolve AGE / radia-ngsolve for
+    independent motor-physics validation.
+    """
+    return format_motor_validation_route(route_motor_validation(goal))
+
+
 # ============================================================
 # MCP Prompts
 # ============================================================
@@ -392,6 +533,8 @@ def main():
         from .henrotte_lineage_knowledge import SECTIONS as H_SEC
         from .hollaus_eddy_knowledge import SECTIONS as E_SEC
         from .tritool_cross_reference_knowledge import SECTIONS as X_SEC
+        from .elf_magic_bridge_knowledge import SECTIONS as M_SEC
+        from .age_quality_knowledge import SECTIONS as A_SEC
         for k in O_SEC:
             r = motor_onelab(k)
             print(f"  motor_onelab({k!r}): {len(r)} chars")
@@ -420,6 +563,38 @@ def main():
             r = motor_tritool_cross_reference(k)
             print(f"  motor_tritool_cross_reference({k!r}): {len(r)} chars")
             assert len(r) > 100, f"Tri-tool topic {k} too short"
+        for k in M_SEC:
+            r = motor_elf_magic_bridge(k)
+            print(f"  motor_elf_magic_bridge({k!r}): {len(r)} chars")
+            assert len(r) > 100, f"ELF/MAGIC bridge topic {k} too short"
+        for k in A_SEC:
+            r = motor_age_quality(k)
+            print(f"  motor_age_quality({k!r}): {len(r)} chars")
+            assert len(r) > 100, f"AGE quality topic {k} too short"
+        bridge = motor_elf_magic_bridge("insufficiency_audit")
+        assert "gold_numeric_invariant" in bridge
+        assert "radia-motor" in motor_elf_magic_bridge("radia_strengthening_queue")
+        assert "not a full" in motor_elf_magic_bridge("jmag_coverage_reality")
+        assert "NGSolve AGE" in motor_elf_magic_bridge("age_vs_mmm_strategy")
+        assert "gold_age_invariant" in motor_age_quality("publication_policy")
+        assert "tests/test_airgap_eddy_machine.py" in motor_age_quality("gate_matrix")
+        age_plan = motor_age_validation_plan("IPM hairpin MTPA field weakening")
+        print(f"  motor_age_validation_plan('IPM ...'): {len(age_plan)} chars")
+        assert "dq_control_layer" in age_plan
+        assert "tests/test_field_weakening.py" in age_plan
+        im_plan = motor_age_validation_plan("induction cage slip loss")
+        print(f"  motor_age_validation_plan('induction ...'): {len(im_plan)} chars")
+        assert "age_eddy_machine" in im_plan
+        assert "tests/test_motor_induction_coupling.py" in im_plan
+        mmm = motor_mmm_quick_check(motor_type="ipm", electrical_angle_deg=25)
+        print(f"  motor_mmm_quick_check('ipm'): {len(mmm)} chars")
+        assert "2D MMM/BEM-like motor quick check" in mmm
+        assert "ld_lq" in mmm
+        assert "not a production solver" in mmm
+        route = motor_validation_router("IPM hairpin motor flux linkage and MTPA")
+        print(f"  motor_validation_router('IPM ...'): {len(route)} chars")
+        assert "application/motor/emdlab_ipm_hairpin_10" in route
+        assert "ngsolve_usage(\"mtpa\")" in route
         p = new_motor_simulation("synrm")
         print(f"  new_motor_simulation('synrm'): {len(p)} chars")
         assert "wakao_ae_ls" in p
