@@ -22,6 +22,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     radiation_pressure_from_intensity,
     radiation_pressure_summary,
     radiation_scattering_force_summary,
+    two_port_scattering_momentum_force_summary,
 )
 
 
@@ -86,6 +87,48 @@ def test_radiation_force_from_normal_scattering_matches_momentum_balance():
     )
     assert lossy_partial["force_from_absorptance_reflectance_N"] == pytest.approx(
         lossy_partial["force_N"]
+    )
+
+
+def test_two_port_scattering_momentum_force_vector():
+    power = 3.0
+    kin = (1.0, 0.0, 0.0)
+
+    straight = two_port_scattering_momentum_force_summary(
+        power,
+        kin,
+        reflectance=0.0,
+        transmittance=1.0,
+        transmitted_direction=kin,
+    )
+    mirror = two_port_scattering_momentum_force_summary(
+        power,
+        kin,
+        reflectance=1.0,
+        transmittance=0.0,
+    )
+    bend = two_port_scattering_momentum_force_summary(
+        power,
+        kin,
+        reflectance=0.0,
+        transmittance=1.0,
+        transmitted_direction=(0.0, 1.0, 0.0),
+    )
+    lossy_straight = two_port_scattering_momentum_force_summary(
+        power,
+        kin,
+        reflectance=0.1,
+        transmittance=0.6,
+        transmitted_direction=kin,
+    )
+
+    assert straight["force_N"] == pytest.approx([0.0, 0.0, 0.0])
+    assert mirror["force_N"] == pytest.approx([2.0 * power / C0, 0.0, 0.0])
+    assert bend["force_N"] == pytest.approx([power / C0, -power / C0, 0.0])
+    assert bend["force_magnitude_N"] == pytest.approx(math.sqrt(2.0) * power / C0)
+    assert lossy_straight["force_N"] == pytest.approx([0.5 * power / C0, 0.0, 0.0])
+    assert lossy_straight["axial_force_along_incident_direction_N"] == pytest.approx(
+        lossy_straight["straight_through_equivalent_force_N"]
     )
 
 
@@ -174,6 +217,16 @@ def test_radiation_pressure_rejects_invalid_inputs():
     with pytest.raises(ValueError):
         radiation_scattering_force_summary(1.0, 0.0, -0.1)
     with pytest.raises(ValueError):
+        two_port_scattering_momentum_force_summary(1.0, (0.0, 0.0, 0.0), 0.0, 0.0)
+    with pytest.raises(ValueError):
+        two_port_scattering_momentum_force_summary(
+            1.0,
+            (1.0, 0.0, 0.0),
+            0.0,
+            0.5,
+            transmitted_direction=(1.0, 0.0),
+        )
+    with pytest.raises(ValueError):
         radiation_pressure_summary(1.0, area_m2=-1.0)
     with pytest.raises(ValueError):
         radiation_pressure_from_intensity(1.0, absorptance=0.6, reflectance=0.5)
@@ -194,6 +247,7 @@ if __name__ == "__main__":
     test_radiation_pressure_absorber_and_reflector_limits()
     test_radiation_force_from_power_is_area_integrated_pressure()
     test_radiation_force_from_normal_scattering_matches_momentum_balance()
+    test_two_port_scattering_momentum_force_vector()
     test_oblique_radiation_pressure_reduces_to_normal_incidence()
     test_oblique_radiation_pressure_splits_absorbed_tangential_momentum()
     test_poynting_patch_force_vector_matches_oblique_summary()
