@@ -30,6 +30,72 @@ import cmath
 import math
 
 
+def helmholtz_green_3d(distance, wavenumber):
+    r"""Outgoing 3D scalar Helmholtz Green function.
+
+    With the module's ``exp(+i omega t)`` convention, the outgoing free-space
+    kernel is
+
+        G_k(r) = exp(-i k r) / (4 pi r).
+
+    This is the point-source kernel behind acoustic single-layer BEM.  Use
+    :func:`helmholtz_green_low_frequency_series` when studying the low-frequency
+    split into the singular Laplace kernel plus smooth corrections.
+    """
+
+    r = float(distance)
+    if r <= 0.0:
+        raise ValueError("distance must be > 0")
+    k = complex(wavenumber)
+    return cmath.exp(-1j * k * r) / (4.0 * math.pi * r)
+
+
+def helmholtz_green_low_frequency_series(distance, wavenumber, order=6):
+    r"""Low-frequency series/split of the outgoing 3D Helmholtz Green function.
+
+    The expansion
+
+        exp(-i k r)/(4 pi r)
+          = 1/(4 pi r) - i k/(4 pi) - k^2 r/(8 pi)
+            + i k^3 r^2/(24 pi) + ...
+
+    cleanly separates the static Laplace singularity from a smooth regular
+    remainder.  That split is the readable low-frequency BEM gate: the singular
+    quadrature is the same as electrostatics, while the frequency-dependent
+    corrections are regular panel integrals.
+
+    Returns a dictionary with the complex ``terms`` through ``order``, the
+    ``laplace_term`` (n=0), the ``regular_part`` (n>=1), ``approx``, ``exact``,
+    and absolute error.  ``order`` is the highest Taylor index retained.
+    """
+
+    r = float(distance)
+    if r <= 0.0:
+        raise ValueError("distance must be > 0")
+    nmax = int(order)
+    if nmax < 0:
+        raise ValueError("order must be >= 0")
+    k = complex(wavenumber)
+    terms = []
+    for n in range(nmax + 1):
+        term = ((-1j * k) ** n) * (r ** (n - 1)) / (4.0 * math.pi * math.factorial(n))
+        terms.append(term)
+    approx = sum(terms)
+    exact = helmholtz_green_3d(r, k)
+    return {
+        "distance": r,
+        "wavenumber": k,
+        "order": nmax,
+        "kr_abs": abs(k * r),
+        "terms": terms,
+        "laplace_term": terms[0],
+        "regular_part": sum(terms[1:]) if len(terms) > 1 else 0.0j,
+        "approx": approx,
+        "exact": exact,
+        "abs_error": abs(approx - exact),
+    }
+
+
 def _specific_spherical_impedance(k_radius, rho, c):
     kr = float(k_radius)
     if kr <= 0.0:
