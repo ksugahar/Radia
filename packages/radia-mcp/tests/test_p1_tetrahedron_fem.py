@@ -18,6 +18,7 @@ from radia_mcp.radia_ngsolve.scalar_fem3d import (
     assemble_p1_tet_robin_system,
     p1_tetrahedron_constant_load,
     p1_tetrahedron_boundary_fluxes,
+    p1_tetrahedron_face_trace_summary,
     p1_tetrahedron_flux,
     p1_tetrahedron_geometry,
     p1_tetrahedron_gradient,
@@ -117,6 +118,32 @@ def test_p1_tet_boundary_fluxes_are_outward_and_balanced():
     assert x0_face["integrated_flux"] == pytest.approx(1.5)
 
 
+def test_p1_tet_face_trace_projection_matches_surface_mass():
+    tet = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]
+    nodal = [2.0 + x + 2.0 * y + 3.0 * z for x, y, z in tet]
+    face = (1, 2, 3)
+    summary = p1_tetrahedron_face_trace_summary(tet, nodal, face)
+    area = math.sqrt(3.0) / 2.0
+    trace = [nodal[i] for i in face]
+    expected_integral = area * sum(trace) / 3.0
+    expected_l2 = area / 6.0 * (
+        sum(value * value for value in trace)
+        + sum(trace[i] * trace[j] for i in range(3) for j in range(i + 1, 3))
+    )
+
+    assert summary["face_local_nodes"] == face
+    assert summary["trace_nodal_values"] == pytest.approx(trace)
+    assert summary["area"] == pytest.approx(area)
+    assert sum(summary["projected_trace_load"]) == pytest.approx(expected_integral)
+    assert summary["trace_integral"] == pytest.approx(expected_integral)
+    assert summary["trace_mean"] == pytest.approx(sum(trace) / 3.0)
+    assert summary["trace_l2_norm_squared"] == pytest.approx(expected_l2)
+    assert summary["projected_trace_load"] == pytest.approx(_matvec_n(
+        summary["surface_mass_matrix"],
+        trace,
+    ))
+
+
 def test_orientation_reversal_and_degenerate_guard():
     tet = [(0.1, 0.0, 0.2), (1.0, 0.2, 0.0), (0.3, 1.4, 0.1), (0.2, 0.4, 1.5)]
     K1 = p1_tetrahedron_stiffness(tet)
@@ -131,6 +158,10 @@ def test_orientation_reversal_and_degenerate_guard():
         p1_tetrahedron_geometry([(0, 0, 0), (1, 0, 0), (0, 1, 0)])
     with pytest.raises(ValueError):
         p1_tetrahedron_gradient(tet, [1.0, 2.0, 3.0])
+    with pytest.raises(ValueError):
+        p1_tetrahedron_face_trace_summary(tet, [1.0, 2.0, 3.0, 4.0], (0, 1, 1))
+    with pytest.raises(ValueError):
+        p1_tetrahedron_face_trace_summary(tet, [1.0, 2.0, 3.0, 4.0], (0, 1, 4))
 
 
 def test_p1_tet_robin_assembly_constant_solution_gate():
