@@ -298,6 +298,7 @@ register_status_tool(
     subpackage='radia_mcp.gmsh',
     related_servers=["cubit"],
     optional_deps=["gmsh"],
+    audit_command="mcp-server-gmsh --selftest --audit-examples",
 )
 
 
