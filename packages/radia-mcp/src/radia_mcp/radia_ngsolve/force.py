@@ -1139,6 +1139,19 @@ def _validate_optical_coefficients(absorptance, reflectance):
     return absorptance, reflectance
 
 
+def _validate_reflectance_transmittance(reflectance, transmittance):
+    reflectance = float(reflectance)
+    transmittance = float(transmittance)
+    if reflectance < 0.0:
+        raise ValueError("reflectance must be >= 0")
+    if transmittance < 0.0:
+        raise ValueError("transmittance must be >= 0")
+    if reflectance + transmittance > 1.0 + 1e-15:
+        raise ValueError("reflectance + transmittance must be <= 1")
+    absorptance = max(0.0, 1.0 - reflectance - transmittance)
+    return reflectance, transmittance, absorptance
+
+
 def plane_wave_intensity_from_electric_field(
     electric_field_V_per_m,
     impedance_ohm=ETA0,
@@ -1209,6 +1222,79 @@ def radiation_force_from_power(
         raise ValueError("speed must be > 0")
     absorptance, reflectance = _validate_optical_coefficients(absorptance, reflectance)
     return (absorptance + 2.0 * reflectance) * power / speed
+
+
+def radiation_force_from_normal_scattering(
+    power_incident_W,
+    reflectance,
+    transmittance=0.0,
+    speed=C0,
+):
+    """Normal force [N] from one-sided normal-incidence scattering powers.
+
+    Use ``reflectance=|S11|^2`` and ``transmittance=|S21|^2`` when the input and
+    output ports have the same power normalization.  The momentum balance on the
+    scatterer is
+
+        F = (1 + R - T) P_inc / c
+
+    which is identical to ``(A + 2R) P_inc/c`` with
+    ``A = 1 - R - T``.  The limits are: absorber ``P/c``, mirror ``2P/c``,
+    and transparent through-line ``0``.
+    """
+
+    power = float(power_incident_W)
+    speed = float(speed)
+    if power < 0.0:
+        raise ValueError("power_incident_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    reflectance, transmittance, _absorptance = _validate_reflectance_transmittance(
+        reflectance,
+        transmittance,
+    )
+    return (1.0 + reflectance - transmittance) * power / speed
+
+
+def radiation_scattering_force_summary(
+    power_incident_W,
+    reflectance,
+    transmittance=0.0,
+    speed=C0,
+):
+    """JSON-friendly normal-incidence scattering radiation-force summary."""
+
+    power = float(power_incident_W)
+    speed = float(speed)
+    if power < 0.0:
+        raise ValueError("power_incident_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    reflectance, transmittance, absorptance = _validate_reflectance_transmittance(
+        reflectance,
+        transmittance,
+    )
+    factor = 1.0 + reflectance - transmittance
+    force = factor * power / speed
+    return {
+        "power_incident_W": power,
+        "reflectance": reflectance,
+        "transmittance": transmittance,
+        "absorptance": absorptance,
+        "power_reflected_W": reflectance * power,
+        "power_transmitted_W": transmittance * power,
+        "power_absorbed_W": absorptance * power,
+        "speed_m_per_s": speed,
+        "momentum_transfer_factor": factor,
+        "absorber_reflector_equivalent_factor": absorptance + 2.0 * reflectance,
+        "force_N": force,
+        "force_from_absorptance_reflectance_N": radiation_force_from_power(
+            power,
+            absorptance=absorptance,
+            reflectance=reflectance,
+            speed=speed,
+        ),
+    }
 
 
 def radiation_pressure_summary(
