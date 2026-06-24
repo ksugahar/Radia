@@ -21,6 +21,7 @@ from radia_mcp.radia_ngsolve.transmission_line import (
     MU0,
     C0,
     coaxial_line_parameters,
+    tem_lc_identity_summary,
     two_wire_line_parameters,
     microstrip_line_parameters,
     wire_capacitance_per_length,
@@ -47,6 +48,25 @@ def test_coaxial_line_parameters():
 
     with pytest.raises(ValueError):
         coaxial_line_parameters(3.0e-3, 1.0e-3)  # outer <= inner
+
+
+def test_tem_lc_identity_summary_matches_geometry_helpers():
+    coax = coaxial_line_parameters(0.8e-3, 3.2e-3, eps_r=2.2, mu_r=1.0)
+    ident = tem_lc_identity_summary(coax["C_per_m"], coax["L_per_m"], eps_r=2.2, mu_r=1.0)
+    assert math.isclose(ident["Z0"], coax["Z0"], rel_tol=1e-12)
+    assert math.isclose(ident["vp"], coax["vp"], rel_tol=1e-12)
+    assert abs(ident["LC_relative_error"]) < 1e-12
+    assert abs(ident["vp_relative_error"]) < 1e-9
+
+    two = two_wire_line_parameters(0.4e-3, 5.0e-3, eps_r=1.7, mu_r=1.2)
+    ident_two = tem_lc_identity_summary(two["C_per_m"], two["L_per_m"], eps_r=1.7, mu_r=1.2)
+    assert math.isclose(ident_two["LC_product"], MU0 * 1.2 * EPS0 * 1.7, rel_tol=1e-12)
+    assert math.isclose(ident_two["vp_expected"], C0 / math.sqrt(1.7 * 1.2), rel_tol=1e-12)
+
+    with pytest.raises(ValueError):
+        tem_lc_identity_summary(0.0, coax["L_per_m"])
+    with pytest.raises(ValueError):
+        tem_lc_identity_summary(coax["C_per_m"], coax["L_per_m"], eps_r=0.0)
 
 
 def test_two_wire_line_parameters():

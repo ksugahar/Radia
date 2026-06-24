@@ -33,6 +33,42 @@ C0 = 299792458.0              # speed of light in vacuum [m/s]
 ETA0 = 376.730313668          # impedance of free space [Ohm] = sqrt(MU0/EPS0)
 
 
+def tem_lc_identity_summary(C_per_m, L_per_m, eps_r=1.0, mu_r=1.0):
+    """Summarize the lossless TEM ``L*C`` identity for a homogeneous line.
+
+    A quasi-static electrostatic solve gives ``C_per_m`` and an independent
+    magnetostatic solve gives ``L_per_m``.  For any homogeneous lossless TEM
+    two-conductor line their product must satisfy
+
+        L C = mu0 mu_r eps0 eps_r,
+
+    independent of the cross-section geometry.  This helper packages the
+    characteristic impedance, phase velocity, and relative identity errors in a
+    form suitable for CST/radia/analytic cross-validation tables.
+    """
+    if C_per_m <= 0.0 or L_per_m <= 0.0:
+        raise ValueError("C_per_m and L_per_m must be positive")
+    if eps_r <= 0.0 or mu_r <= 0.0:
+        raise ValueError("eps_r and mu_r must be positive")
+
+    lc = L_per_m * C_per_m
+    expected_lc = MU0 * mu_r * EPS0 * eps_r
+    vp = 1.0 / math.sqrt(lc)
+    vp_expected = C0 / math.sqrt(eps_r * mu_r)
+    z0 = math.sqrt(L_per_m / C_per_m)
+    return {
+        "C_per_m": C_per_m,
+        "L_per_m": L_per_m,
+        "Z0": z0,
+        "vp": vp,
+        "LC_product": lc,
+        "LC_expected": expected_lc,
+        "LC_relative_error": (lc - expected_lc) / expected_lc,
+        "vp_expected": vp_expected,
+        "vp_relative_error": (vp - vp_expected) / vp_expected,
+    }
+
+
 def coaxial_line_parameters(inner_radius_a, outer_radius_b, eps_r=1.0, mu_r=1.0):
     """Per-unit-length parameters of a coaxial line (inner radius a, outer radius b).
 
