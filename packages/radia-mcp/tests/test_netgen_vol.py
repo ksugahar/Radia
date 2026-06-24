@@ -489,6 +489,46 @@ def test_boundary_pressure_force_rows_for_named_box_faces():
         mesh.boundary_pressure_force_rows({"zmax": 2.0}, default_pressure=None)
 
 
+def test_boundary_pressure_force_moment_rows_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+
+    one_face = mesh.boundary_pressure_force_moment_rows({"zmax": 2.0}, default_pressure=0.0)
+    by_name = {row["name"]: row for row in one_face}
+    zmax = by_name["zmax"]
+    assert zmax["centroid_m"] == pytest.approx((1.0, 1.5, 5.0))
+    assert zmax["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert zmax["moment_about_pivot_Nm"] == pytest.approx((18.0, -12.0, 0.0))
+
+    shifted = mesh.boundary_pressure_force_moment_rows(
+        {"zmax": 2.0},
+        default_pressure=0.0,
+        pivot_m=(1.0, 1.5, 0.0),
+    )
+    assert {row["name"]: row for row in shifted}["zmax"]["moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    uniform = mesh.boundary_pressure_force_moment_rows({
+        "xmin": 2.0,
+        "xmax": 2.0,
+        "ymin": 2.0,
+        "ymax": 2.0,
+        "zmin": 2.0,
+        "zmax": 2.0,
+    })
+    total_force = [
+        sum(row["force_N"][axis] for row in uniform)
+        for axis in range(3)
+    ]
+    total_moment = [
+        sum(row["moment_about_pivot_Nm"][axis] for row in uniform)
+        for axis in range(3)
+    ]
+    assert total_force == pytest.approx((0.0, 0.0, 0.0))
+    assert total_moment == pytest.approx((0.0, 0.0, 0.0))
+
+    with pytest.raises(KeyError):
+        mesh.boundary_pressure_force_moment_rows({"zmax": 2.0}, default_pressure=None)
+
+
 def test_material_summary_rows_for_two_material_interface():
     mesh = parse_netgen_tri_tet_vol(TWO_MATERIAL_INTERFACE_VOL)
     rows = mesh.material_summary_rows()
