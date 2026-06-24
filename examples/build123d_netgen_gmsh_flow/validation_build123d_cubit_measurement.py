@@ -37,6 +37,7 @@ from build123d import Box, export_step  # noqa: E402
 
 from radia_mcp.build123d.modeling import (  # noqa: E402
     racetrack_coil,
+    shape_measurement_comparison_summary,
     shape_measurement_rows,
     tube,
 )
@@ -162,11 +163,19 @@ def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool,
     else:
         cubit = measure_steps_with_cubit(step_paths, cubit_bin)
 
+    cubit_comparison = shape_measurement_comparison_summary(
+        build_rows,
+        cubit.get("rows", []),
+        rtol=rtol,
+        measured_label="cubit",
+    )
     cubit_by_name = {row["name"]: row for row in cubit.get("rows", [])}
+    comparison_by_name = {row["name"]: row for row in cubit_comparison["rows"]}
     rows = []
     for row in build_rows:
         ref = analytic_reference(row["name"])
         cubit_row = cubit_by_name.get(row["name"])
+        comparison = comparison_by_name.get(row["name"])
         record = {
             "name": row["name"],
             "build123d": {
@@ -185,6 +194,7 @@ def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool,
                 _rel_error(row["area"], ref["area"]) if ref else None
             ),
             "cubit": None,
+            "measurement_comparison": comparison,
             "cubit_volume_rel_error": None,
             "cubit_area_rel_error": None,
             "passed": False,
@@ -196,8 +206,8 @@ def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool,
                 "volumes": cubit_row["volumes"],
                 "surfaces": cubit_row["surfaces"],
             }
-            record["cubit_volume_rel_error"] = _rel_error(row["volume"], cubit_row["volume"])
-            record["cubit_area_rel_error"] = _rel_error(row["area"], cubit_row["area"])
+            record["cubit_volume_rel_error"] = comparison["volume_rel_error"]
+            record["cubit_area_rel_error"] = comparison["area_rel_error"]
 
         analytic_ok = (
             ref is None
@@ -206,11 +216,7 @@ def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool,
                 and record["analytic_area_rel_error"] <= rtol
             )
         )
-        cubit_ok = (
-            cubit_row is not None
-            and record["cubit_volume_rel_error"] <= rtol
-            and record["cubit_area_rel_error"] <= rtol
-        )
+        cubit_ok = comparison is not None and comparison["passed"]
         record["passed"] = bool(row["is_valid"] and analytic_ok and cubit_ok)
         rows.append(record)
 
@@ -218,12 +224,8 @@ def build_summary(out_dir: Path, cubit_bin_arg: str | None, require_cubit: bool,
         "rtol": rtol,
         "n_cases": len(rows),
         "n_passed": sum(1 for row in rows if row["passed"]),
-        "max_cubit_volume_rel_error": max(
-            (row["cubit_volume_rel_error"] or 0.0) for row in rows
-        ),
-        "max_cubit_area_rel_error": max(
-            (row["cubit_area_rel_error"] or 0.0) for row in rows
-        ),
+        "max_cubit_volume_rel_error": cubit_comparison["max_volume_rel_error"],
+        "max_cubit_area_rel_error": cubit_comparison["max_area_rel_error"],
         "max_analytic_volume_rel_error": max(
             (row["analytic_volume_rel_error"] or 0.0) for row in rows
         ),
