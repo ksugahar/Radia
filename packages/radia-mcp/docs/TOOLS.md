@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **326 tools** across 38 MCP servers.
+Total: **331 tools** across 38 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **326 tools** across 38 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 12 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 17 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 3 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 7 |
@@ -177,7 +177,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
-| `install_deploy` | Radia install / deploy policy and recipes — 3-tier configuration |
+| `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
@@ -194,7 +194,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
 | `radia_ngsolve_status` | (no description) |
 | `radia_usage` | Get Radia C++ library usage documentation. |
-| `release_workflow` | Triple-package release workflow for the Radia monorepo |
+| `release_workflow` | Release-QUD workflow for the Radia monorepo |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
@@ -329,18 +329,23 @@ Module: `radia_mcp.motor.server`
 
 | Tool | Description |
 |---|---|
+| `motor_age_quality` | NGSolve AGE quality gates for radia-motor. |
+| `motor_age_validation_plan` | Route a motor prompt to the required NGSolve AGE quality gates. |
 | `motor_bibliography` | Search the motor analysis bibliography catalog. |
 | `motor_darwin_model` | Darwin-model time-domain formulation (capacitive + inductive coupling). |
+| `motor_deck_bridge` | Public-safe motor deck corpus bridge for radia-motor. |
 | `motor_em_force_extras` | Forward to `differential_forms_em_force_extras` -- advanced EM force |
 | `motor_em_force_recipe` | Practical NGSolve EM-force recipe for motor analysis. |
 | `motor_femm_transient` | FEMM newbuild transient solver — Lange-Henrotte-Hameyer 2009 |
 | `motor_henrotte_lineage` | The Henrotte–Hameyer–RWTH research arc (energy-consistent E&M FE). |
 | `motor_hollaus_eddy` | Karl Hollaus / TU Wien MSFEM for laminated-iron eddy currents. |
 | `motor_hollaus_genealogy` | Visualize the Karl Hollaus / TU Wien MSFEM research genealogy |
+| `motor_mmm_quick_check` | First-order 2D MMM/BEM-like motor quick check. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
 | `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
+| `motor_validation_router` | Route a motor prompt to a public deck, MMM quick check, and NGSolve AGE validation. |
 
 ## `mcp-server-accelerator`
 
