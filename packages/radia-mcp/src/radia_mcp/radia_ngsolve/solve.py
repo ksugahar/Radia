@@ -847,6 +847,34 @@ def short_circuit_dq_currents(R, Ld, Lq, lambda_m, omega_e):
             -omega_e * R * lambda_m / den)
 
 
+def short_circuit_operating_point(R, Ld, Lq, lambda_m, omega_e, pole_pairs):
+    """Readable PM-machine short-circuit fault summary.
+
+    Wraps :func:`short_circuit_dq_currents` with the derived quantities usually plotted in a fault /
+    demagnetisation-risk study: current magnitude, ratio to characteristic current, d-axis
+    demagnetising fraction, braking torque, mechanical power and the residual shorted-terminal
+    voltages.  The high-speed limit tends to ``id=-lambda_m/Ld``, ``iq=0`` and torque -> 0.
+    """
+    id_, iq = short_circuit_dq_currents(R, Ld, Lq, lambda_m, omega_e)
+    ich = characteristic_current(lambda_m, Ld)
+    imag = math.hypot(id_, iq)
+    torque = dq_torque(lambda_m, Ld, Lq, id_, iq, pole_pairs)
+    vd = R * id_ - omega_e * Lq * iq
+    vq = R * iq + omega_e * (Ld * id_ + lambda_m)
+    return {
+        "id": id_,
+        "iq": iq,
+        "current_magnitude": imag,
+        "characteristic_current": ich,
+        "current_ratio_to_characteristic": math.inf if ich == 0.0 else imag / abs(ich),
+        "d_axis_demag_fraction": math.inf if ich == 0.0 else -id_ / ich,
+        "torque": torque,
+        "mechanical_power": torque * omega_e / pole_pairs,
+        "vd_residual": vd,
+        "vq_residual": vq,
+    }
+
+
 def winding_distribution_factor(harmonic, slots_per_pole_per_phase, slot_angle_elec_deg):
     """DISTRIBUTION factor k_d,n of a distributed AC winding -- the reduction of the n-th
     harmonic EMF because the ``q = slots_per_pole_per_phase`` coils of a phase belt are spread
