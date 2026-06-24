@@ -137,3 +137,5 @@ jobs:
       - name: Publish to PyPI
         if: steps.tag_check.outputs.found == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
