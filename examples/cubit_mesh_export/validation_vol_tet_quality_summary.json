@@ -1,0 +1,164 @@
+{
+  "kind": "netgen_vol_tetrahedron_quality_validation",
+  "validation_class": true,
+  "quality_definition": "radius_ratio_quality = 3 * inradius / circumradius",
+  "builtin_cases": [
+    {
+      "label": "right_unit_tetrahedron",
+      "mesh_summary": {
+        "points": 4,
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "materials": 1,
+        "boundary_names": 1
+      },
+      "quality_row": {
+        "tetrahedron": 1,
+        "volume": 0.16666666666666666,
+        "surface_area": 2.3660254037844384,
+        "inradius": 0.21132486540518713,
+        "circumradius": 0.8660254037844386,
+        "radius_ratio_quality": 0.7320508075688774,
+        "min_edge": 1.0,
+        "max_edge": 1.4142135623730951,
+        "edge_ratio": 1.4142135623730951
+      },
+      "quality_summary": {
+        "tetrahedra": 1,
+        "min_radius_ratio_quality": 0.7320508075688774,
+        "max_radius_ratio_quality": 0.7320508075688774,
+        "mean_radius_ratio_quality": 0.7320508075688774,
+        "min_inradius": 0.21132486540518713,
+        "max_circumradius": 0.8660254037844386,
+        "max_edge_ratio": 1.4142135623730951
+      },
+      "closure": {
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "total_surface_area": 2.3660254037844384,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "surface_vector_area_norm": 0.0,
+        "surface_vector_area_norm_over_area": 0.0,
+        "surface_signed_volume": -0.16666666666666666,
+        "surface_abs_volume": 0.16666666666666666,
+        "tetrahedron_total_volume": 0.16666666666666666,
+        "surface_abs_volume_error": 0.0,
+        "surface_abs_volume_rel_error": 0.0,
+        "boundary_orientation": "inward"
+      }
+    },
+    {
+      "label": "equilateral_unit_edge",
+      "mesh_summary": {
+        "points": 4,
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "materials": 1,
+        "boundary_names": 1
+      },
+      "quality_row": {
+        "tetrahedron": 1,
+        "volume": 0.1178511301977579,
+        "surface_area": 1.7320508075688772,
+        "inradius": 0.2041241452319315,
+        "circumradius": 0.6123724356957945,
+        "radius_ratio_quality": 1.0,
+        "min_edge": 0.9999999999999999,
+        "max_edge": 1.0,
+        "edge_ratio": 1.0000000000000002
+      },
+      "quality_summary": {
+        "tetrahedra": 1,
+        "min_radius_ratio_quality": 1.0,
+        "max_radius_ratio_quality": 1.0,
+        "mean_radius_ratio_quality": 1.0,
+        "min_inradius": 0.2041241452319315,
+        "max_circumradius": 0.6123724356957945,
+        "max_edge_ratio": 1.0000000000000002
+      },
+      "closure": {
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "total_surface_area": 1.7320508075688772,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "surface_vector_area_norm": 0.0,
+        "surface_vector_area_norm_over_area": 0.0,
+        "surface_signed_volume": -0.1178511301977579,
+        "surface_abs_volume": 0.1178511301977579,
+        "tetrahedron_total_volume": 0.1178511301977579,
+        "surface_abs_volume_error": 0.0,
+        "surface_abs_volume_rel_error": 0.0,
+        "boundary_orientation": "inward"
+      }
+    },
+    {
+      "label": "thin_sliver_gate",
+      "mesh_summary": {
+        "points": 4,
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "materials": 1,
+        "boundary_names": 1
+      },
+      "quality_row": {
+        "tetrahedron": 1,
+        "volume": 0.00016666666666666666,
+        "surface_area": 1.0004147145641256,
+        "inradius": 0.0004997927286763739,
+        "circumradius": 1.2235204330128697,
+        "radius_ratio_quality": 0.0012254623180562366,
+        "min_edge": 0.0017320508075688774,
+        "max_edge": 1.4142135623730951,
+        "edge_ratio": 816.4965809277261
+      },
+      "quality_summary": {
+        "tetrahedra": 1,
+        "min_radius_ratio_quality": 0.0012254623180562366,
+        "max_radius_ratio_quality": 0.0012254623180562366,
+        "mean_radius_ratio_quality": 0.0012254623180562366,
+        "min_inradius": 0.0004997927286763739,
+        "max_circumradius": 1.2235204330128697,
+        "max_edge_ratio": 816.4965809277261
+      },
+      "closure": {
+        "surface_triangles": 4,
+        "tetrahedra": 1,
+        "total_surface_area": 1.0004147145641256,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          4.336808689942018e-19
+        ],
+        "surface_vector_area_norm": 4.336808689942018e-19,
+        "surface_vector_area_norm_over_area": 4.3350108977870625e-19,
+        "surface_signed_volume": -0.00016666666666666666,
+        "surface_abs_volume": 0.00016666666666666666,
+        "tetrahedron_total_volume": 0.00016666666666666666,
+        "surface_abs_volume_error": 0.0,
+        "surface_abs_volume_rel_error": 0.0,
+        "boundary_orientation": "inward"
+      }
+    }
+  ],
+  "checks": {
+    "right_volume": 0.16666666666666666,
+    "right_surface_area": 2.3660254037844384,
+    "right_inradius": 0.21132486540518713,
+    "right_circumradius": 0.8660254037844386,
+    "right_radius_ratio_quality": 0.7320508075688774,
+    "right_expected_radius_ratio_quality": 0.7320508075688774,
+    "right_edge_ratio": 1.4142135623730951,
+    "equilateral_radius_ratio_quality": 1.0,
+    "equilateral_edge_ratio": 1.0000000000000002,
+    "sliver_radius_ratio_quality": 0.0012254623180562366,
+    "sliver_edge_ratio": 816.4965809277261
+  }
+}
