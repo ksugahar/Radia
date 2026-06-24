@@ -9,6 +9,7 @@ not mesh generation. Catch common mistakes in .msh handling.
 """
 
 import re
+from pathlib import Path
 from typing import List, Dict
 
 
@@ -85,7 +86,10 @@ def check_numsubedges_missing(filepath: str, lines: List[str]) -> List[Dict]:
     has_curve = any("mesh.Curve(" in line or "Curve(" in line.split("#")[0]
                     for line in lines)
     has_gmsh_post = any("GmshPostExport" in line for line in lines)
-    has_numsubedges = any("NumSubEdges" in line for line in lines)
+    has_numsubedges = (
+        any("NumSubEdges" in line for line in lines)
+        or _has_numsubedges_companion(filepath)
+    )
 
     if (has_curve or has_gmsh_post) and not has_numsubedges:
         findings.append({
@@ -99,6 +103,25 @@ def check_numsubedges_missing(filepath: str, lines: List[str]) -> List[Dict]:
             ),
         })
     return findings
+
+
+def _has_numsubedges_companion(filepath: str) -> bool:
+    """Return True if a nearby GMSH display companion sets NumSubEdges."""
+    p = Path(filepath)
+    candidates = [
+        p.with_suffix(".geo"),
+        p.with_name(f"{p.stem}_display.geo"),
+        p.with_suffix(".msh.opt"),
+        p.with_name(f"{p.stem}_display.msh.opt"),
+    ]
+    for candidate in candidates:
+        try:
+            text = candidate.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if "Mesh.NumSubEdges" in text:
+            return True
+    return False
 
 
 def check_pip_gmsh_import(filepath: str, lines: List[str]) -> List[Dict]:

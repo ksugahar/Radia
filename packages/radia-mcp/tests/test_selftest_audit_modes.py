@@ -138,3 +138,17 @@ def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
     assert item["triggers"] == ["high_order_curve"]
     assert item["geo_companion"] == "examples\\curved_display.geo"
     assert "Mesh.NumSubEdges = 4;" in item["geo_template"]
+
+
+def test_gmsh_numsubedges_rule_respects_display_companion(tmp_path):
+    from radia_mcp.gmsh.rules import check_numsubedges_missing
+
+    script = tmp_path / "curved.py"
+    lines = ["mesh.Curve(3)\n"]
+    assert check_numsubedges_missing(str(script), lines)
+
+    (tmp_path / "curved_display.geo").write_text(
+        "Mesh.NumSubEdges = 4;\n",
+        encoding="utf-8",
+    )
+    assert check_numsubedges_missing(str(script), lines) == []
