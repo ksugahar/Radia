@@ -1,0 +1,21 @@
+{
+  "kind": "build123d_halbach_region_validation",
+  "validation_class": true,
+  "quick": true,
+  "elapsed_seconds": 0.646,
+  "cases": [
+    {
+      "label": "halbach_dipole_8_gapless",
+      "status": "ok",
+      "passed": true,
+      "volume_rel_error": 4.690990937598865e-15,
+      "fill_factor": 1.0,
+      "max_mallinson_angle_error_deg": 0.0,
+      "region_count": 8,
+      "mesh_elements": 120,
+      "mesh_vertices": 80
+    }
+  ],
+  "n_ok": 1,
+  "n_total": 1
+}
