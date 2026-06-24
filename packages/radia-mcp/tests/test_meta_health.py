@@ -107,6 +107,21 @@ def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():
     assert optuna[0]["entry_point"] == "optuna-mcp"
 
 
+def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
+    """CAD/mesh servers should point agents toward radia-ngsolve validation."""
+    from radia_mcp.meta.server import radia_mcp_related
+
+    for name in ("cubit", "build123d", "gmsh"):
+        related = radia_mcp_related(name)
+        names = [r["name"] for r in related["related"]]
+        assert "radia-ngsolve" in names, f"{name} related: {names}"
+
+    reverse = radia_mcp_related("radia-ngsolve")
+    reverse_names = [r["name"] for r in reverse["related"]]
+    for name in ("cubit", "build123d", "gmsh"):
+        assert name in reverse_names, f"radia-ngsolve related: {reverse_names}"
+
+
 def test_all_related_links_are_bidirectional():
     """If A's related list contains B, then B's must contain A.
 

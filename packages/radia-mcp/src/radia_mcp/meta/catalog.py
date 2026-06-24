@@ -31,7 +31,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-cubit",
         "description": "Cubit mesh scripting, hex/tet workflow, export formats",
         "primary_tools": ["cubit_exec", "cubit_mesh_auto", "cubit_docs"],
-        "related": ["build123d", "gmsh"],
+        "related": ["build123d", "gmsh", "radia-ngsolve"],
         "tags": ["cad", "mesh"],
     },
     "build123d": {
@@ -40,7 +40,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "build123d STEP authoring (CAD-as-code) + Cubit interop",
         "primary_tools": ["build123d_api", "execute_build123d",
                             "build123d_to_cubit_hex"],
-        "related": ["cubit"],
+        "related": ["cubit", "gmsh", "radia-ngsolve"],
         "tags": ["cad"],
     },
     "gmsh": {
@@ -48,7 +48,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-gmsh",
         "description": "GMSH MSH v4.1 inspect/validate/convert/write_node_data",
         "primary_tools": ["gmsh_usage", "gmsh_reference"],
-        "related": ["cubit"],
+        "related": ["build123d", "cubit", "radia-ngsolve"],
         "tags": ["mesh"],
     },
     # ============================================================
@@ -63,7 +63,10 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "analytical_formulas", "peec_inductance"],
         "related": [
             "bem",
+            "build123d",
+            "cubit",
             "fem",
+            "gmsh",
             "mathematica",
             "matrix-solvers",
             "mor",
