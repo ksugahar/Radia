@@ -420,6 +420,65 @@ def acoustic_impedance_from_dtn(frequency, dtn_eigenvalue, rho=1.2041):
     }
 
 
+def acoustic_boundary_power_summary(
+    pressure,
+    normal_velocity,
+    area=1.0,
+    amplitude="peak",
+):
+    r"""Active/reactive acoustic power from boundary pressure and normal velocity.
+
+    For complex pressure ``p`` and outward normal velocity ``v_n`` on a boundary
+    patch, the complex normal intensity is
+
+        I_n = alpha p conj(v_n),
+
+    where ``alpha=0.5`` for peak phasors and ``alpha=1`` for RMS phasors.  The
+    real part is active outward power density and the imaginary part is the
+    reactive near-field exchange.  This is the mesh-postprocessing scalar that
+    acoustic FEM/BEM models use after solving for pressure and boundary
+    velocity traces.
+    """
+
+    p = complex(pressure)
+    v = complex(normal_velocity)
+    if not (
+        math.isfinite(p.real)
+        and math.isfinite(p.imag)
+        and math.isfinite(v.real)
+        and math.isfinite(v.imag)
+    ):
+        raise ValueError("pressure and normal_velocity must be finite")
+    patch_area = float(area)
+    if patch_area < 0.0:
+        raise ValueError("area must be >= 0")
+    if amplitude == "peak":
+        factor = 0.5
+    elif amplitude == "rms":
+        factor = 1.0
+    else:
+        raise ValueError("amplitude must be 'peak' or 'rms'")
+
+    intensity = factor * p * v.conjugate()
+    return {
+        "pressure": p,
+        "normal_velocity": v,
+        "area": patch_area,
+        "amplitude": amplitude,
+        "phasor_average_factor": factor,
+        "complex_intensity": intensity,
+        "active_intensity": intensity.real,
+        "reactive_intensity": intensity.imag,
+        "active_power": patch_area * intensity.real,
+        "reactive_power": patch_area * intensity.imag,
+        "apparent_intensity": abs(intensity),
+        "apparent_power": patch_area * abs(intensity),
+        "specific_impedance": None if v == 0.0 else p / v,
+        "specific_admittance": None if p == 0.0 else v / p,
+        "policy": "outward_active_power_positive_for_pressure_times_conjugate_normal_velocity",
+    }
+
+
 def _bessel_j1_fallback(x):
     """Small dependency-free J1 approximation for acoustic piston gates."""
 

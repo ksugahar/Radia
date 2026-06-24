@@ -1,0 +1,168 @@
+{
+  "area": 0.32,
+  "c": 343.0,
+  "checks": {
+    "expected_mixed_active_intensity": 0.09679835156250002,
+    "expected_mixed_reactive_intensity": 0.032266117187500006,
+    "expected_plane_active_intensity": 0.004842541142834867,
+    "expected_reactive_intensity": 0.05999999999999999,
+    "mixed_active_intensity": 0.0967983515625,
+    "mixed_reactive_intensity": 0.0322661171875,
+    "plane_peak_active_power": 0.0015496131657071574,
+    "plane_rms_over_peak_power": 2.0,
+    "reactive_active_power_abs": 0.0
+  },
+  "kind": "acoustic_boundary_power_validation",
+  "rho": 1.2041,
+  "rows": {
+    "mixed_impedance_peak": {
+      "active_intensity": 0.0967983515625,
+      "active_power": 0.0309754725,
+      "amplitude": "peak",
+      "apparent_intensity": 0.10203442156240623,
+      "apparent_power": 0.03265101489996999,
+      "area": 0.32,
+      "complex_intensity": {
+        "abs": 0.10203442156240623,
+        "imag": 0.0322661171875,
+        "real": 0.0967983515625
+      },
+      "normal_velocity": {
+        "abs": 0.025,
+        "imag": 0.015,
+        "real": 0.02
+      },
+      "phasor_average_factor": 0.5,
+      "policy": "outward_active_power_positive_for_pressure_times_conjugate_normal_velocity",
+      "pressure": {
+        "abs": 8.162753724992498,
+        "imag": 6.711352375,
+        "real": 4.646320875000001
+      },
+      "reactive_intensity": 0.0322661171875,
+      "reactive_power": 0.0103251575,
+      "specific_admittance": {
+        "abs": 0.0030626919348865906,
+        "imag": -0.0009685082285669733,
+        "real": 0.00290552468570092
+      },
+      "specific_impedance": {
+        "abs": 326.51014899969994,
+        "imag": 103.25157499999997,
+        "real": 309.754725
+      }
+    },
+    "plane_wave_peak": {
+      "active_intensity": 0.004842541142834867,
+      "active_power": 0.0015496131657071574,
+      "amplitude": "peak",
+      "apparent_intensity": 0.004842541142834867,
+      "apparent_power": 0.0015496131657071574,
+      "area": 0.32,
+      "complex_intensity": {
+        "abs": 0.004842541142834867,
+        "imag": 0.0,
+        "real": 0.004842541142834867
+      },
+      "normal_velocity": {
+        "abs": 0.004842541142834867,
+        "imag": 0.0,
+        "real": 0.004842541142834867
+      },
+      "phasor_average_factor": 0.5,
+      "policy": "outward_active_power_positive_for_pressure_times_conjugate_normal_velocity",
+      "pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "reactive_intensity": 0.0,
+      "reactive_power": 0.0,
+      "specific_admittance": {
+        "abs": 0.0024212705714174334,
+        "imag": 0.0,
+        "real": 0.0024212705714174334
+      },
+      "specific_impedance": {
+        "abs": 413.0063,
+        "imag": 0.0,
+        "real": 413.0063
+      }
+    },
+    "plane_wave_rms": {
+      "active_intensity": 0.009685082285669734,
+      "active_power": 0.003099226331414315,
+      "amplitude": "rms",
+      "apparent_intensity": 0.009685082285669734,
+      "apparent_power": 0.003099226331414315,
+      "area": 0.32,
+      "complex_intensity": {
+        "abs": 0.009685082285669734,
+        "imag": 0.0,
+        "real": 0.009685082285669734
+      },
+      "normal_velocity": {
+        "abs": 0.004842541142834867,
+        "imag": 0.0,
+        "real": 0.004842541142834867
+      },
+      "phasor_average_factor": 1.0,
+      "policy": "outward_active_power_positive_for_pressure_times_conjugate_normal_velocity",
+      "pressure": {
+        "abs": 2.0,
+        "imag": 0.0,
+        "real": 2.0
+      },
+      "reactive_intensity": 0.0,
+      "reactive_power": 0.0,
+      "specific_admittance": {
+        "abs": 0.0024212705714174334,
+        "imag": 0.0,
+        "real": 0.0024212705714174334
+      },
+      "specific_impedance": {
+        "abs": 413.0063,
+        "imag": 0.0,
+        "real": 413.0063
+      }
+    },
+    "pure_reactive_peak": {
+      "active_intensity": 0.0,
+      "active_power": 0.0,
+      "amplitude": "peak",
+      "apparent_intensity": 0.05999999999999999,
+      "apparent_power": 0.0192,
+      "area": 0.32,
+      "complex_intensity": {
+        "abs": 0.05999999999999999,
+        "imag": 0.05999999999999999,
+        "real": 0.0
+      },
+      "normal_velocity": {
+        "abs": 0.03162277660168379,
+        "imag": -0.01,
+        "real": 0.03
+      },
+      "phasor_average_factor": 0.5,
+      "policy": "outward_active_power_positive_for_pressure_times_conjugate_normal_velocity",
+      "pressure": {
+        "abs": 3.7947331922020546,
+        "imag": 3.5999999999999996,
+        "real": 1.2
+      },
+      "reactive_intensity": 0.05999999999999999,
+      "reactive_power": 0.0192,
+      "specific_admittance": {
+        "abs": 0.008333333333333335,
+        "imag": -0.008333333333333335,
+        "real": 0.0
+      },
+      "specific_impedance": {
+        "abs": 119.99999999999999,
+        "imag": 119.99999999999999,
+        "real": 0.0
+      }
+    }
+  },
+  "validation_class": true
+}
