@@ -164,6 +164,84 @@ def maxwell_traction_summary(B, normal, area_m2=1.0, mu=MU0):
     }
 
 
+def electrostatic_stress_tensor(E, eps=EPS0):
+    """Pointwise electrostatic Maxwell stress tensor.
+
+    ``E`` is a 2- or 3-component electric-field vector [V/m].  The returned
+    tensor is
+
+        T_ij = eps (E_i E_j - 0.5 |E|^2 delta_ij)
+
+    in pascals, the electric counterpart of
+    :func:`maxwell_stress_tensor_air`.
+    """
+
+    eps = float(eps)
+    if eps <= 0.0:
+        raise ValueError("eps must be > 0")
+    e = _float_vector(E, "E")
+    e2 = sum(value * value for value in e)
+    dim = len(e)
+    return [
+        [
+            eps * (e[i] * e[j] - (0.5 * e2 if i == j else 0.0))
+            for j in range(dim)
+        ]
+        for i in range(dim)
+    ]
+
+
+def electrostatic_traction(E, normal, eps=EPS0):
+    """Electrostatic Maxwell traction vector ``T n`` for a unit normal."""
+
+    e = _float_vector(E, "E")
+    n = _unit_vector(normal, "normal")
+    if len(e) != len(n):
+        raise ValueError("E and normal must have the same length")
+    tensor = electrostatic_stress_tensor(e, eps=eps)
+    return [
+        sum(tensor[i][j] * n[j] for j in range(len(n)))
+        for i in range(len(n))
+    ]
+
+
+def electrostatic_traction_summary(E, normal, area_m2=1.0, eps=EPS0):
+    """JSON-friendly electrostatic Maxwell traction decomposition."""
+
+    area = float(area_m2)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    e = _float_vector(E, "E")
+    n = _unit_vector(normal, "normal")
+    if len(e) != len(n):
+        raise ValueError("E and normal must have the same length")
+    traction = electrostatic_traction(e, n, eps=eps)
+    e_normal = sum(ei * ni for ei, ni in zip(e, n))
+    e2 = sum(ei * ei for ei in e)
+    e_tangent2 = max(0.0, e2 - e_normal * e_normal)
+    normal_traction = sum(ti * ni for ti, ni in zip(traction, n))
+    tangential_traction = [
+        ti - normal_traction * ni
+        for ti, ni in zip(traction, n)
+    ]
+    return {
+        "E_V_per_m": e,
+        "normal": n,
+        "eps": float(eps),
+        "area_m2": area,
+        "E_normal_V_per_m": e_normal,
+        "E_tangent_V_per_m": math.sqrt(e_tangent2),
+        "traction_Pa": traction,
+        "normal_traction_Pa": normal_traction,
+        "normal_traction_identity_Pa": float(eps) * (e_normal * e_normal - e_tangent2) / 2.0,
+        "tangential_traction_Pa": tangential_traction,
+        "tangential_traction_magnitude_Pa": math.sqrt(
+            sum(value * value for value in tangential_traction)
+        ),
+        "force_N": [area * value for value in traction],
+    }
+
+
 def maxwell_line_segment_force_2d(p0, p1, B, mu=MU0, normal_side="right"):
     """Maxwell-stress force on one 2D contour segment, per unit depth.
 
