@@ -484,6 +484,9 @@ def ngsolve_usage(topic: str = "all") -> str:
             "practical"        - Practical techniques: voltage source, force/torque, rotation, coupling
             "team7"            - TEAM Problem 7: eddy current benchmark (A-formulation, OCC geometry, BDDC/AMS solver)
             "multiphysics"     - COMSOL-class couplings: induction heating EM->thermal (joule_loss_density + solve_heat_steady), the scattered-field A0 gotcha
+            "cross_validation_registry"
+                               - Reusable validation scripts/summary JSONs and the
+                                 public-safe MCP knowledge hooks that learned from them
     """
     return get_ngsolve_documentation(topic)
 
