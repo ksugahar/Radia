@@ -6,6 +6,17 @@ The FE-direct stream-function designer is exposed as a Layer-3 PySide6 panel
 both; the panel is a composite `ModePanel` (a coil-`.vol` Browse + a Method
 combo + a `QStackedWidget` over three sub-panels).
 
+Standalone launch is provided by the `radia-streamfunction` console script:
+
+```bash
+radia-streamfunction path/to/coil.vol
+```
+
+The Cubit `Solve -> Radia-NGSolve` launcher and this standalone entry point use
+the same Layer-3 window and Layer-4 calc scripts.  The command-line argument is
+used as the panel's coil/conductor `.vol` path, while each mode keeps its own
+additional browse fields such as `--eval-vol`.
+
 This file documents the panel/calc workflow and the boundary-condition /
 contour / flux features.  The math core (the `(ACA+)+TSVD` least-norm solver,
 `RegularizedTSVD`, the folded-Tikhonov Pareto front) is in
@@ -225,9 +236,9 @@ the same density rule the flux-line **bubble system**
 - **`--steps-plot out.png` (per-step manufacturing view).** A 2×2 3D figure
   showing the coil at each stage: (1) the equal-current iso-contours
   (`N = --nlevels` turns -- this is how you set the number of lines),
-  (2) the single-stroke (一筆書き) wire, (3) the sheet-metal (板金) `--distort`
-  distorted wire, (4) the wire WITH thickness (太さ, `--wire-diam`, swept with a
-  twist-free parallel-transport frame) + distortion.
+  (2) the single-stroke wire, (3) the sheet-metal `--distort` distorted wire,
+  (4) the wire WITH thickness (`--wire-diam`, swept with a twist-free
+  parallel-transport frame) + distortion.
 
 ## Single-stroke chain (`--chain {field_aware, nn}`)
 
