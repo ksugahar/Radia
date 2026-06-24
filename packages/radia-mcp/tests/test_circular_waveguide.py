@@ -13,7 +13,13 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.radia_ngsolve.waveguide import circular_waveguide_cutoff, cutoff_frequency, C0
+from radia_mcp.radia_ngsolve.waveguide import (
+    C0,
+    circular_waveguide_band_summary,
+    circular_waveguide_cutoff,
+    circular_waveguide_mode_table,
+    cutoff_frequency,
+)
 
 A = 0.0127
 
@@ -33,3 +39,23 @@ def test_circular_cutoff_closed_form():
     assert math.isclose(circular_waveguide_cutoff(2 * A, "TE", 1, 1), f_te11 / 2, rel_tol=1e-12)
     with pytest.raises(ValueError):
         circular_waveguide_cutoff(A, "XX", 1, 1)
+
+
+def test_circular_mode_table_and_band_summary():
+    table = circular_waveguide_mode_table(A, max_m=3, max_n=2)
+    assert [row["mode"] for row in table[:4]] == ["TE11", "TM01", "TE21", "TE01"]
+    assert table[0]["angular_degeneracy"] == 2
+    assert table[1]["angular_degeneracy"] == 1
+    assert math.isclose(table[3]["cutoff_frequency"], table[4]["cutoff_frequency"], rel_tol=1e-12)
+    assert table[3]["mode"] == "TE01" and table[4]["mode"] == "TM11"
+
+    f_te11 = table[0]["cutoff_frequency"]
+    f_tm01 = table[1]["cutoff_frequency"]
+    below = circular_waveguide_band_summary(A, 0.95 * f_te11)
+    single = circular_waveguide_band_summary(A, 0.5 * (f_te11 + f_tm01))
+    multi = circular_waveguide_band_summary(A, 1.01 * f_tm01)
+    assert below["below_dominant_cutoff"]
+    assert single["single_mode"]
+    assert single["n_propagating_with_degeneracy"] == 2
+    assert not multi["single_mode"]
+    assert [row["mode"] for row in multi["propagating_modes"]] == ["TE11", "TM01"]
