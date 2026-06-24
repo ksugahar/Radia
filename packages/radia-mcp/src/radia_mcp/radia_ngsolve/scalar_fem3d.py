@@ -155,3 +155,124 @@ def p1_surface_triangle_constant_load(vertices, source=1.0):
     """Local P1 surface load vector for a constant source over a triangle."""
     area = p1_surface_triangle_geometry(vertices)["area"]
     return [float(source) * area / 3.0] * 3
+
+
+def assemble_p1_tet_robin_system(points, tetrahedra, surface_triangles,
+                                  volume_coeff=1.0, source=0.0,
+                                  robin_coeff=0.0, boundary_flux=0.0):
+    """Assemble a readable dense P1 tet system with boundary Robin terms.
+
+    This is the small clean-room volume/surface trace system that MATLAB or
+    Gypsilab-style teaching scripts can mirror directly.  Inputs use one-based
+    element node ids, so a parsed Netgen ``.vol`` mesh can be passed without
+    renumbering:
+
+    ``tetrahedra`` may contain plain ``(n1,n2,n3,n4)`` tuples or records with
+    ``nodes`` and optional ``matnr`` attributes. ``surface_triangles`` may
+    contain plain ``(n1,n2,n3)`` tuples or records with ``nodes`` and optional
+    ``bcnr`` attributes.
+
+    The weak form is
+
+        int_Omega k grad(u).grad(v) dV + int_Gamma r u v dS
+        = int_Omega f v dV + int_Gamma g v dS.
+
+    ``volume_coeff`` and ``source`` may be scalars or dictionaries keyed by
+    material number.  ``robin_coeff`` and ``boundary_flux`` may be scalars or
+    dictionaries keyed by boundary number.  The returned matrix is dense for
+    readability; ``matrix_triplets`` gives one-based sparse triplets for MATLAB.
+    """
+    pts = [tuple(float(x) for x in point) for point in points]
+    if any(len(point) != 3 for point in pts):
+        raise ValueError("points must be 3D coordinates")
+    n = len(pts)
+    matrix = [[0.0 for _ in range(n)] for _ in range(n)]
+    rhs = [0.0 for _ in range(n)]
+    volume_by_material: dict[int, float] = {}
+    boundary_area_by_number: dict[int, float] = {}
+    robin_area_weight = 0.0
+    flux_area_weight = 0.0
+
+    for tet in tetrahedra:
+        nodes = _one_based_nodes(tet, 4)
+        matnr = int(getattr(tet, "matnr", 0))
+        ids = _zero_based_ids(nodes, n)
+        coords = [pts[i] for i in ids]
+        coeff = _coefficient_value(volume_coeff, matnr, default=1.0)
+        src = _coefficient_value(source, matnr, default=0.0)
+        kloc = p1_tetrahedron_stiffness(coords, coeff=coeff)
+        floc = p1_tetrahedron_constant_load(coords, source=src)
+        volume = p1_tetrahedron_geometry(coords)["volume"]
+        volume_by_material[matnr] = volume_by_material.get(matnr, 0.0) + volume
+        for a, ia in enumerate(ids):
+            rhs[ia] += floc[a]
+            for b, ib in enumerate(ids):
+                matrix[ia][ib] += kloc[a][b]
+
+    for tri in surface_triangles:
+        nodes = _one_based_nodes(tri, 3)
+        bcnr = int(getattr(tri, "bcnr", 0))
+        ids = _zero_based_ids(nodes, n)
+        coords = [pts[i] for i in ids]
+        geom = p1_surface_triangle_geometry(coords)
+        area = geom["area"]
+        rcoeff = _coefficient_value(robin_coeff, bcnr, default=0.0)
+        flux = _coefficient_value(boundary_flux, bcnr, default=0.0)
+        boundary_area_by_number[bcnr] = boundary_area_by_number.get(bcnr, 0.0) + area
+        robin_area_weight += rcoeff * area
+        flux_area_weight += flux * area
+        if rcoeff:
+            mloc = p1_surface_triangle_mass(coords, density=rcoeff)
+            for a, ia in enumerate(ids):
+                for b, ib in enumerate(ids):
+                    matrix[ia][ib] += mloc[a][b]
+        if flux:
+            floc = p1_surface_triangle_constant_load(coords, source=flux)
+            for a, ia in enumerate(ids):
+                rhs[ia] += floc[a]
+
+    return {
+        "matrix": matrix,
+        "rhs": rhs,
+        "matrix_triplets": _dense_triplets(matrix),
+        "node_count": n,
+        "volume_by_material": dict(sorted(volume_by_material.items())),
+        "boundary_area_by_number": dict(sorted(boundary_area_by_number.items())),
+        "robin_area_weight": robin_area_weight,
+        "flux_area_weight": flux_area_weight,
+        "policy": "dense_readable_p1_tet_with_p1_boundary_robin_trace",
+    }
+
+
+def _one_based_nodes(record, expected_count):
+    nodes = getattr(record, "nodes", record)
+    nodes = tuple(int(node) for node in nodes)
+    if len(nodes) != expected_count:
+        raise ValueError(f"expected {expected_count} one-based nodes, got {len(nodes)}")
+    return nodes
+
+
+def _zero_based_ids(nodes, point_count):
+    ids = []
+    for node in nodes:
+        if node < 1 or node > point_count:
+            raise ValueError(f"node id {node} outside 1..{point_count}")
+        ids.append(node - 1)
+    return ids
+
+
+def _coefficient_value(value, key, default):
+    if value is None:
+        return float(default)
+    if isinstance(value, dict):
+        return float(value.get(key, default))
+    return float(value)
+
+
+def _dense_triplets(matrix):
+    triplets = []
+    for i, row in enumerate(matrix, start=1):
+        for j, value in enumerate(row, start=1):
+            if value != 0.0:
+                triplets.append({"row": i, "col": j, "value": value})
+    return triplets
