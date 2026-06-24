@@ -1,4 +1,4 @@
-"""Golden test for rad.ObjPyramid -- the 5-face pyramid MSC element solved by the moment-yano path.
+"""Golden test for rad.ObjPyramid -- the 5-face pyramid MSC element solved by the multipole-moment MMM path.
 
 A square-base pyramid has 5 faces (1 quad base + 4 triangles) -> 5 surface-charge DOF, the same count as
 the wedge.  Its single quadrupole moment row is the per-element RESIDUAL EIGENMODE (the in-plane dx^2-dy^2

@@ -14,7 +14,7 @@ demag factor.  Two things are locked here:
      hdiv_demag_curved.py external-field probe), NOT in the magnetization.
 
 So this test deliberately asserts the flat error is SMALL -- documenting that curved x nonlinear is a
-real yano-type-impossible *capability* whose accuracy benefit on the *magnetization* is modest.  (Radia
+real six-face surface-charge-impossible *capability* whose accuracy benefit on the *magnetization* is modest.  (Radia
 is not a clean reference for curved geometry -- its ObjHex/Tet facet the body -- so the validatable
 curved nonlinear case is the analytic spheroid; the genuinely non-uniform volume-charge case has no
 clean curved reference.)

@@ -6,7 +6,7 @@ machine precision.  (Temp scratch; promote to a test once green.)
 """
 import numpy as np
 import radia as rad
-from yano_moment_iter_scaling import build_cyoke_hexes
+from multipole_moment_iter_scaling import build_cyoke_hexes
 
 
 def _norm(row, rhs):

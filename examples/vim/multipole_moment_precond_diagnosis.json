@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-06-22T00:33:41.365387",
   "hostname": "lab",
-  "benchmark": "yano_moment_precond_diagnosis",
+  "benchmark": "multipole_moment_precond_diagnosis",
   "nxy": 16,
   "results": [
     {

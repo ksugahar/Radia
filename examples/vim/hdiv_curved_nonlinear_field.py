@@ -6,7 +6,7 @@ scalar fixed point  M = M(H_ext - D M)  with the curved demag D = 1/3.  The EXTE
 EXACT point dipole, m = M V.  The curved win lives HERE: the flat faceted sphere's volume is ~9% low, so
 its dipole moment -- hence the WHOLE external field -- is ~9% WRONG; mesh.Curve(3) at the SAME ndof is
 <0.4% at every external point.  This is the engineering deliverable (the stray field around a nonlinear
-soft-iron part) being ~9% off with flat elements (yano-type) and EXACT with curved (HDiv-VIM).
+soft-iron part) being ~9% off with flat elements (six-face surface-charge) and EXACT with curved (HDiv-VIM).
 
 H(r) = (1/4pi) INT_S sigma(r') (r-r')/|r-r'|^3 dS',  sigma = M.n  (the surface-charge stray field; no
 singular quadrature at an EXTERNAL point -> the only error is the geometry).  Validated vs the ANALYTIC
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     flat = next(c for c in res["cases"] if not c["curved"])
     curv = next(c for c in res["cases"] if c["curved"])
     print(f"=> the curved field win is ~{flat['max_err']/curv['max_err']:.0f}x: the stray field of a "
-          f"nonlinear soft-iron part is ~{100*flat['max_err']:.0f}% wrong with FLAT elements (yano-type)")
+          f"nonlinear soft-iron part is ~{100*flat['max_err']:.0f}% wrong with FLAT elements (six-face surface-charge)")
     print("   and <0.4% with curved -- THIS is where curved x nonlinear matters (the field, not M).")
     with open(os.path.join(HERE, "hdiv_curved_nonlinear_field.json"), "w") as f:
         json.dump(res, f, indent=2)

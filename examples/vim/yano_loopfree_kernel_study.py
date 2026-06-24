@@ -1,5 +1,5 @@
 """yano_loopfree_kernel_study.py -- RESEARCH: can the (evaluation point, central cancellation charge)
-make the yano-type collocation matrix INTRINSICALLY loop-free (loops lifted off 0 WITHOUT the star
+make the six-face surface-charge collocation matrix INTRINSICALLY loop-free (loops lifted off 0 WITHOUT the star
 projection), while reducing to EIEM2 on undistorted elements (accuracy preserved)?
 
 Context: yano_pyr_faces12_star.py showed the loop-free-ness there comes from the STAR PROJECTION
@@ -33,7 +33,7 @@ from yano_pyr_faces12_star import (
 
 
 def collocation_matrix_alpha(hexes, eval_alpha, layout):
-    """yano-type collocation matrix with a PARAMETERIZED eval point:
+    """six-face surface-charge collocation matrix with a PARAMETERIZED eval point:
         eval = eval_alpha * face_area_centroid + (1 - eval_alpha) * trilinear_centroid
     (EIEM2 = 0.5; pyramid = 0.75).  layout = central cancellation cloud ('single' / 'pyr_faces12')."""
     n = len(hexes)

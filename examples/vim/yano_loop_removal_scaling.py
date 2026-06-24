@@ -1,7 +1,7 @@
 """yano_loop_removal_scaling.py -- exact-field + scaling validation of LOOP REMOVAL (star projection)
-on the REAL C++ EIEM2 yano-MSC interaction matrix (not the monopole Python prototype).
+on the REAL C++ EIEM2 surface-charge MSC interaction matrix (not the monopole Python prototype).
 
-This is the "本筋" verification step that justifies wiring loop removal into the production yano-MSC
+This is the "本筋" verification step that justifies wiring loop removal into the production surface-charge MSC
 solve: prove, on the EXACT field (rad.BuildMatrix / rad.GetInteractMatrix builds the C++ EIEM2
 surface-charge operator), that
 
@@ -92,7 +92,7 @@ def cycle_count(elems):
 
 
 def yano_matrix(hex_verts, mu_r=1000.0, scale=1e-2):
-    """build the C++ EIEM2 yano-MSC interaction matrix N (+N convention; loops at eigenvalue 0)."""
+    """build the C++ EIEM2 surface-charge MSC interaction matrix N (+N convention; loops at eigenvalue 0)."""
     rad.UtiDelAll()
     rad.set_demag_backend("yano")
     objs = []
@@ -199,7 +199,7 @@ def main():
     print("\nReadout: on the EXACT C++ EIEM2 yano matrix, svd_near_null == cycle (loops topological);")
     print("full cond ~ mu_r with growing iters; star cond + iters BOUNDED and mu_r-independent; field")
     print("preserved to round-off (loop removal is accuracy-neutral on the exact field) and the bound")
-    print("holds as N grows -> loop removal (star) is the accurate + loop-free + bounded-iter yano-MSC.")
+    print("holds as N grows -> loop removal (star) is the accurate + loop-free + bounded-iter surface-charge MSC.")
     print("saved", os.path.join(HERE, "yano_loop_removal_scaling.json"))
 
 

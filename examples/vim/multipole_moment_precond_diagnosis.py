@@ -1,4 +1,4 @@
-"""WHY does local block-Jacobi not bound GMRES iters for moment-yano?  Test the 3 hypotheses against the
+"""WHY does local block-Jacobi not bound GMRES iters for multipole-moment MMM?  Test the 3 hypotheses against the
 actual matrices (user, 2026-06-22): (1) loops not deflated, (2) div(B)=0 imposed as a row (Lagrange-like),
 (3) the self-term dropped the center magnetic charge (weak local diagonal).
 
@@ -118,7 +118,7 @@ def main():
     nxy = 16
     hexes = build_cyoke_hexes(nxy, 2)
     Happ = np.array([0.0, H0, 0.0])
-    print(f"\nPrecond diagnosis for moment-yano (nxy={nxy}). A = M(block-Jacobi) + R(mutual); M^-1 A = I + M^-1 R.\n")
+    print(f"\nPrecond diagnosis for multipole-moment MMM (nxy={nxy}). A = M(block-Jacobi) + R(mutual); M^-1 A = I + M^-1 R.\n")
     print("  HYPOTHESIS TESTS:")
     print(f"  {'mu_r':>6} {'dof':>5} {'nLoop':>6} | {'rho(M^-1R)':>11} {'eig spread':>11} | {'cond(M_e) med/max':>18} "
           f"| {'slowmode loop-overlap':>21}")
@@ -168,7 +168,7 @@ def main():
     local_block_healthy = all(r["cond_Me_max"] < 1e3 for r in rows)
     mono_insensitive = max(m["gmres_iters"] for m in mono_rows) < 2 * min(m["gmres_iters"] for m in mono_rows)
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_precond_diagnosis", nxy=nxy, results=rows, mono_weight_sweep=mono_rows,
+               benchmark="multipole_moment_precond_diagnosis", nxy=nxy, results=rows, mono_weight_sweep=mono_rows,
                chi_scaled_offblock=bool(chi_scaled), loops_innocent=bool(loops_innocent),
                local_block_healthy=bool(local_block_healthy), monopole_insensitive=bool(mono_insensitive),
                conclusion=(
@@ -187,7 +187,7 @@ def main():
                    "long-range mutual coupling. So: bounded iters need an H-LU / coarse-space preconditioner that "
                    "captures the demag global mode -- a property of the DEMAG OPERATOR at high mu_r, not of loops/"
                    "div(B)=0/center-charge. The moment formulation is no worse than EIEM2 here."))
-    with open(os.path.join(HERE, "yano_moment_precond_diagnosis.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_precond_diagnosis.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print("\n  VERDICT:")
     print(f"    chi-scaled off-block (demag)     : {chi_scaled}  (rho {rho_lo:.2e}->{rho_hi:.2e})")
@@ -195,7 +195,7 @@ def main():
     print(f"    H3 local block healthy (cond<1e3): {local_block_healthy}")
     print(f"    H2 monopole-row insensitive      : {mono_insensitive}")
     print("  => block-Jacobi fails on the DEMAG mutual coupling (mu_r-scaled), not loops/div(B)/center-charge.")
-    print("  saved", os.path.join(HERE, "yano_moment_precond_diagnosis.json"))
+    print("  saved", os.path.join(HERE, "multipole_moment_precond_diagnosis.json"))
 
 
 if __name__ == "__main__":

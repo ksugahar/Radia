@@ -1,9 +1,9 @@
-"""Compressibility GATE for the HACApK phase of moment-yano.
+"""Compressibility GATE for the HACApK phase of multipole-moment MMM.
 
 The moment system is A = L - chi D, where L is the cheap block-diagonal LOCAL part (each hex's 6 rows touch
 only its own 6 face charges) and D is the NONLOCAL operator: face charges sigma -> per-element centroid field
 H(3) + gradient gradH(6) (the (nHex,9,dof) array from rad.GetCentroidFieldGrad).  D is dense -> the O(dof^2)
-wall measured in bench_yano_moment_scaling.py.  HACApK breaks that wall ONLY if well-separated off-diagonal
+wall measured in bench_multipole_moment_scaling.py.  HACApK breaks that wall ONLY if well-separated off-diagonal
 blocks of D are LOW RANK.
 
 This script MEASURES that, on the voxelized hex C-yoke, for a genuinely separated target-element / source-face
@@ -13,7 +13,7 @@ cluster pair:
   - numerical rank at tol 1e-4 / 1e-6 vs the full block dimension (the compression ratio),
   - a NEAR block (same cluster) for contrast (should be near-full-rank = the dense near-field HACApK keeps).
 
-PASS = far blocks rank << block dim (like the existing yano-MSC EIEM2 interaction, natural rank ~13) -> ACA /
+PASS = far blocks rank << block dim (like the existing surface-charge MSC EIEM2 interaction, natural rank ~13) -> ACA /
 HACApK applies, the C++ on-demand kernel is justified.  FAIL = slow decay -> HACApK won't help, stay dense.
 mdx-clean import (radia direct).
 
@@ -23,7 +23,7 @@ actual admissibility (cHACApK_base.c) is `min(cluster_diameter) <= hacapk_eta * 
 radius the two relate INVERSELY: HACApK admits a block when `sep >= 1/hacapk_eta`.  So the production
 hacapk_eta=2.0 admits sep>=0.5 blocks; a `sep>=1.5` separation corresponds to hacapk_eta~0.67 (STRICTER than
 2.0), NOT 1.5.  DO NOT read a `hacapk_eta` value off this script's `sep` column.  USE the production
-hacapk_eta=2.0 (proven for the field part = the existing yano-MSC interaction); the more-peaked gradient (1/r^4)
+hacapk_eta=2.0 (proven for the field part = the existing surface-charge MSC interaction); the more-peaked gradient (1/r^4)
 just carries a higher BOUNDED ACA rank at that setting, with accuracy guarded by aca_eps, not by tightening eta.
 """
 import json
@@ -125,9 +125,9 @@ def grad_rows(tgt_el):
 
 
 def main():
-    print("\nHACApK compressibility gate for moment-yano: numerical rank (tol 1e-4) of D blocks vs the cluster")
+    print("\nHACApK compressibility gate for multipole-moment MMM: numerical rank (tol 1e-4) of D blocks vs the cluster")
     print("separation ratio sep=dist/(rt+rs) (NOT hacapk_eta).  PASS = well-separated blocks are LOW rank for")
-    print("BOTH field and gradient, bounded and ~N-independent (the H-matrix structure of yano-MSC).\n")
+    print("BOTH field and gradient, bounded and ~N-independent (the H-matrix structure of surface-charge MSC).\n")
     rows = []
     far_field = []; far_grad = []
     for nxy in (12, 16, 20):
@@ -148,13 +148,13 @@ def main():
     full20 = next(r["full"] for r in rows if r["nxy"] == 20)
     bounded = fmax <= 25 and gmax <= 25
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_hmatrix_compressibility", results=rows,
+               benchmark="multipole_moment_hmatrix_compressibility", results=rows,
                far_field_rank_max=int(fmax), far_grad_rank_max=int(gmax), full_block_dim_nxy20=int(full20),
                recommended_hacapk_eta=2.0, gate_pass=bool(bounded),
                conclusion=("Well-separated (sep>=1) blocks of the centroid field+gradient operator D have "
                            f"BOUNDED, ~N-independent rank (field ~12-{fmax}, gradient ~16-{gmax} at tol 1e-4, "
                            "flat over nxy 12/16/20) while near blocks stay full-rank. The field rank ~13 matches "
-                           "the existing yano-MSC EIEM2 interaction's production natural rank ~13 -- same 1/r^3 "
+                           "the existing surface-charge MSC EIEM2 interaction's production natural rank ~13 -- same 1/r^3 "
                            "kernel -- and that interaction ALREADY runs HACApK in production at hacapk_eta=2.0, so "
                            "scalability of the field part is proven, not just plausible. The gradient (1/r^4) ranks "
                            "higher (compresses well only for sep>=~1.5; at sep~1 still ~full for these clusters). "
@@ -170,13 +170,13 @@ def main():
                            "field-HACApK (eval at centroid) + add a gradient H-matrix, both at hacapk_eta=2.0, and "
                            "verify HACApK-matvec vs dense for the gradient at build time.") if bounded else
                           (f"Far-block rank too high (field {fmax}, grad {gmax}) -- reconsider before the HACApK kernel."))
-    with open(os.path.join(HERE, "yano_moment_hmatrix_compressibility.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_hmatrix_compressibility.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print(f"  GATE {'PASS' if bounded else 'FAIL'}: well-separated (sep>=1) block rank@1e-4 -- field<={fmax}, "
           f"grad<={gmax} (full block dim {full20} at nxy=20), bounded + ~N-independent.")
     print("  => HACApK applies; use the production hacapk_eta=2.0 (sep is NOT hacapk_eta -- see docstring)."
           if bounded else "  => reconsider.")
-    print("  saved", os.path.join(HERE, "yano_moment_hmatrix_compressibility.json"))
+    print("  saved", os.path.join(HERE, "multipole_moment_hmatrix_compressibility.json"))
 
 
 if __name__ == "__main__":

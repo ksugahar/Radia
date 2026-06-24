@@ -1,5 +1,5 @@
 """The unified .vol geometry path (decision 2026-06-19): a soft iron loaded from a netgen .vol FILE
-solves with BOTH demag backends -- yano-type MSC and the FEEC HDiv-VIM -- selected by
+solves with BOTH demag backends -- six-face surface-charge MSC and the FEEC HDiv-VIM -- selected by
 set_demag_backend.  .vol is the SOLE Cubit<->NGSolve mesh interchange, so netgen owns the mesh
 orientation (no hand-built-mesh boundary-winding pitfalls).  This locks:
   (1) radia.vim.soft_iron_from_vol(path) round-trips a .vol into a both-backend soft-iron container;

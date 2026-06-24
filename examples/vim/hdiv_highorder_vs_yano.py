@@ -1,8 +1,8 @@
 """
-hdiv_highorder_vs_yano.py -- (B) CAN higher-order HDiv-VIM match (or exceed) yano-type per-element
+hdiv_highorder_vs_yano.py -- (B) CAN higher-order HDiv-VIM match (or exceed) six-face surface-charge per-element
 accuracy?  The (A) result showed the analytic charge Gram makes the demag operator EXACT to ~0.03%
 on the UNIFORM mode at RT0 -- so the Gram is no longer the accuracy bottleneck.  The only remaining
-gap vs yano-MSC (6 surface-charge sigma/hex = an effectively higher per-element order) is the RT0
+gap vs surface-charge MSC (6 surface-charge sigma/hex = an effectively higher per-element order) is the RT0
 discretisation ORDER (1 flux/face = lowest order).  This script measures the ORDER STAIRCASE:
 
   demag factor of an IMPOSED magnetisation M (Rayleigh quotient <c,Gc>/<m,M_mass m>, c = B_mono m),
@@ -15,7 +15,7 @@ discretisation ORDER (1 flux/face = lowest order).  This script measures the ORD
     M = (0,0,z^3)  degree 3            -> p<=2 OFF, p>=3 converged.
 
 If a degree-k M needs order p>=k to converge, then HDiv per-element accuracy IS purely the basis
-order, and RTk recovers it EXACTLY (the analytic Gram has no residual error).  yano-MSC's 6 sigma/hex
+order, and RTk recovers it EXACTLY (the analytic Gram has no residual error).  surface-charge MSC's 6 sigma/hex
 captures ~ up to linear surface charge per face, so yano ~ HDiv around p=1; HDiv at p>=2 then EXCEEDS
 yano per-element -- while staying loop-free (structural at every order) + distortion-robust + exact-Gram.
 
@@ -164,7 +164,7 @@ def main():
     print("  - deg0 (uniform) converged at ALL p == 1/3: the analytic Gram is order-invariant on the")
     print("    constant mode (RT0 ALREADY exact there -- matches (A)'s 0.03%).")
     print("  - deg-k M converges once p>=k -> HDiv per-element accuracy IS the basis order; the analytic")
-    print("    Gram leaves NO residual.  yano-MSC (6 sigma/hex ~ order-1ish) <-> HDiv around p=1;")
+    print("    Gram leaves NO residual.  surface-charge MSC (6 sigma/hex ~ order-1ish) <-> HDiv around p=1;")
     print("    HDiv p>=2 EXCEEDS yano per-element, while staying loop-free + distortion-robust + exact-Gram.")
     with open(os.path.join(HERE, "hdiv_highorder_vs_yano.json"), "w") as f:
         json.dump(out, f, indent=2)

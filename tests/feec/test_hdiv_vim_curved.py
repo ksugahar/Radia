@@ -1,6 +1,6 @@
 """Golden test: the CURVED-MESH geometry win for the HDiv-type VIM, measured vs ANALYTIC truth.
 
-HDiv (RT0) lives natively on curved (isoparametric) meshes via mesh.Curve(p); yano-type flat elements
+HDiv (RT0) lives natively on curved (isoparametric) meshes via mesh.Curve(p); six-face surface-charge flat elements
 cannot.  The win is measured against the EXACT uniform-sphere dipole / volume (NOT vs Radia):
 
   - the external field of a uniform-M sphere is the exact point dipole; a FLAT coarse mesh gets it ~10%

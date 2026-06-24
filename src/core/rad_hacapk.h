@@ -11,7 +11,7 @@
 *                 - RadHACApKBase owns the kernel-agnostic H-matrix lifecycle
 *                 - RadHACApKMMMManager : public RadHACApKBase implements the
 *                   MMM 3-DOF tetrahedron kernel. Surface-charge MSC is handled
-*                   by the moment-yano RadHACApKMomentSystem. A future RadHACApKPEECManager will
+*                   by the multipole-moment MMM RadHACApKMomentSystem. A future RadHACApKPEECManager will
 *                   implement Ruehli finite-filament mutual inductance.
 *
 * First release:  2025
@@ -252,7 +252,7 @@ private:
 /**
  * RadHACApKMMMManager implements the HACApK kernel for Radia's Magnetic
  * Moment Method (MMM, tetrahedra, 3 DOF).  Magnetic Surface Charge
- * elements (hex/wedge/pyramid, 5-6 DOF) use the separate moment-yano
+ * elements (hex/wedge/pyramid, 5-6 DOF) use the separate multipole-moment MMM
  * RadHACApKMomentSystem or dense moment LU path.
  *
  * All kernel-specific precomputation (PrecomputeHexaGeometry, etc.),
@@ -322,7 +322,7 @@ private:
     void PrecomputeGeometry3DOF();
 
     // 3DOF tetrahedron block computation (MMM -- the only element type this manager solves;
-    // EIEM2 surface-charge 6x6/5x5/mixed kernels were retired in Phase 3b, the moment-yano
+    // EIEM2 surface-charge 6x6/5x5/mixed kernels were retired in Phase 3b, the multipole-moment MMM
     // H-matrix RadHACApKMomentSystem now owns hex/wedge/pyramid MSC)
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
     void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
@@ -333,8 +333,8 @@ private:
 };
 
 //-------------------------------------------------------------------------
-// RadHACApKMomentSystem: the parameter-free MOMENT-yano system A_raw as a HACApK
-// H-matrix (Phase 2 of the EIEM2 full-deletion track; docs/moment_yano/ACA_MOMENT_DESIGN.md).
+// RadHACApKMomentSystem: the parameter-free multipole-moment MMM system A_raw as a HACApK
+// H-matrix (Phase 2 of the EIEM2 full-deletion track; docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).
 //-------------------------------------------------------------------------
 
 /* The moment system A_raw = L(block-diag local moment) - chi*C(centroid field/grad coupling).

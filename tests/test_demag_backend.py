@@ -1,7 +1,7 @@
-"""The demag-backend API: BOTH moment-yano MSC and the FEEC HDiv-VIM are kept.
+"""The demag-backend API: BOTH multipole-moment MMM MSC and the FEEC HDiv-VIM are kept.
 
 Default is "auto" (API-split): mesh-LESS hex/wedge/pyramid soft iron is
-solved by the moment-yano MSC demag; mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
+solved by the multipole-moment MMM MSC demag; mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
 is solved by the FEEC HDiv-VIM.  set_demag_backend("yano"|"hdiv") overrides; "auto"/None restores the
 split.  Tet (MMM) and permanent-magnet solves are unaffected.  The mesh-backed HDiv routing is locked
 by tests/feec/test_hdiv_radsolve_dispatch.py."""
@@ -41,7 +41,7 @@ def test_solverconfig_both_ok():
 
 
 def test_meshless_hex_soft_iron_solves_via_yano():
-    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin) is solved by the moment-yano MSC
+    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin) is solved by the multipole-moment MMM MSC
     demag (no NGSolve needed).  A cube in a uniform applied Hz magnetizes with demag ~1/3, so for
     mu_r=1000 the magnetization M_z ~ H0/(1/3) = 3*H0.  This locks that the yano path is REACHABLE
     (no Error203) and physical."""
@@ -58,7 +58,7 @@ def test_meshless_hex_soft_iron_solves_via_yano():
     rad.Solve(cont, 1e-6, 1000, 0)
     M = rad.ObjM(h)["magnetization"]
     # demag ~1/3 -> M_z ~ 3*H0 (chi=999); accept a generous band for a single coarse cube
-    assert 2.0 * H0 < M[2] < 4.0 * H0, f"yano-MSC cube M_z={M[2]:.1f} not ~3*H0={3*H0}"
+    assert 2.0 * H0 < M[2] < 4.0 * H0, f"surface-charge MSC cube M_z={M[2]:.1f} not ~3*H0={3*H0}"
     assert abs(M[0]) < 0.05 * abs(M[2]) and abs(M[1]) < 0.05 * abs(M[2])
     rad.UtiDelAll()
     rad.set_demag_backend("auto")

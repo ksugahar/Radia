@@ -32,9 +32,13 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 - [IMA_SYMMETRY_DESIGN.md](solver/IMA_SYMMETRY_DESIGN.md) - Image symmetry implementation for MSC hexahedra
 - [NGBEM_INTEGRATION_DESIGN.md](solver/NGBEM_INTEGRATION_DESIGN.md) - Unified PEEC Loop-Star + MMM + MSC architecture with ngbem
 
-## FEEC / HDiv-type VIM (moment-yano complement)
+## Multipole-Moment MMM
 
-- [hdiv_vim/README.md](hdiv_vim/README.md) - The **HDiv-type Volume Integral Method**: a symmetric FEEC H(div) demag operator `N = BᵀGB` whose loop modes are **field-null by construction** (de Rham). It complements the canonical moment-yano MSC backend with curved/high-order geometry, general FEEC loops, and symmetry-model machinery. Validated (feec 85/85): linear demag (sphere/spheroid/triaxial exact vs analytic), nonlinear (damped Newton; cube/C-yoke `<1%` vs shipped Radia; `analytic_gram` required for `div M ≠ 0`), distorted-mesh μr-independence, **curved + high-order** (`~10-30×` accuracy-per-DOF vs flat Radia), and **symmetry models** (1/2, 1/4, 1/8). The runnable layer is the radia-mcp `hdiv_vim(topic=...)` tool.
+- [multipole_moment_mmm/ACA_MOMENT_DESIGN.md](multipole_moment_mmm/ACA_MOMENT_DESIGN.md) - The production moment formulation for MMM/MSC. It should not be described with the old Yano-centered label: the contribution is the symbolic multipole-moment derivation that closes 3-DOF MMM and 5/6-DOF surface-charge elements by monopole, dipole, and residual-quadrupole conditions. This keeps matrix entries local and cheap compared with the HDiv Galerkin charge-Gram route, while retaining the open-boundary MMM workflow.
+
+## FEEC / HDiv-type VIM (multipole-moment MMM complement)
+
+- [hdiv_vim/README.md](hdiv_vim/README.md) - The **HDiv-type Volume Integral Method**: a symmetric FEEC H(div) demag operator `N = BᵀGB` whose loop modes are **field-null by construction** (de Rham). It complements the canonical multipole-moment MMM MSC backend with curved/high-order geometry, general FEEC loops, and symmetry-model machinery. Validated (feec 85/85): linear demag (sphere/spheroid/triaxial exact vs analytic), nonlinear (damped Newton; cube/C-yoke `<1%` vs shipped Radia; `analytic_gram` required for `div M ≠ 0`), distorted-mesh μr-independence, **curved + high-order** (`~10-30×` accuracy-per-DOF vs flat Radia), and **symmetry models** (1/2, 1/4, 1/8). The runnable layer is the radia-mcp `hdiv_vim(topic=...)` tool.
 - [loop_star_breakdown.md](loop_star_breakdown.md) - The *problem* the HDiv-type VIM solves: the high-μ magnetostatic loop-mode breakdown ↔ the low-frequency EFIE/MoM breakdown (same cause, same Loop-Star remedy).
 
 ## Kelvin Transformation

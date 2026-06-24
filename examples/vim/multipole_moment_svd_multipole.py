@@ -17,7 +17,7 @@ Findings (cubic vs anisotropic):
     does not actually enter the solve.  The PHYSICALLY RELEVANT conditioning is the DIPOLE/QUADRUPOLE strength
     spread (cond with the monopole removed): ~1.4 on a cubic cell (dipole and quadrupole fields almost equally
     strong) and ~6-7 on an anisotropic cell.
-  - So the aspect-ratio sensitivity (yano_moment_aspect_ratio.py) is exactly this: the quadrupole is the
+  - So the aspect-ratio sensitivity (multipole_moment_aspect_ratio.py) is exactly this: the quadrupole is the
     weakest field mode, and on an anisotropic cell the thin-direction quadrupole field weakens further, opening
     the dipole/quadrupole gap.  Block-Jacobi inverts the local block, AMPLIFYING that weak quadrupole mode ->
     the iteration trouble.  Condition number, read physically, = which multipole fields the 6 DoF make and how
@@ -81,7 +81,7 @@ def main():
             print(f"   sv={m['sv']:.3e} -> {m['dominant']:>6} ({shown})")
     cond_nm = [r["cond_without_monopole"] for r in results]
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_svd_multipole", results=results,
+               benchmark="multipole_moment_svd_multipole", results=results,
                conclusion=(
                    "SVD of the 6-DoF MSC interaction matrix N shows the element creates PURE MULTIPOLE fields: "
                    "1 monopole + 3 dipole + 2 diagonal quadrupole (on a cubic cell each singular mode is ~100% "
@@ -96,11 +96,11 @@ def main():
                    "dipole/quadrupole gap -- exactly the aspect-ratio sensitivity, now read physically.  "
                    "Block-Jacobi inverts the local block and amplifies that weakest (quadrupole) mode, which is "
                    "the iteration trouble on anisotropic cells."))
-    with open(os.path.join(HERE, "yano_moment_svd_multipole.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_svd_multipole.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print(f"\n  => 6-DoF creates pure multipoles (mono+dipole+2 quad); physical cond = dipole/quadrupole "
           f"spread = {cond_nm[0]:.1f} cubic -> {max(cond_nm):.1f} anisotropic.")
-    print("  saved", os.path.join(HERE, "yano_moment_svd_multipole.json"))
+    print("  saved", os.path.join(HERE, "multipole_moment_svd_multipole.json"))
 
 
 if __name__ == "__main__":

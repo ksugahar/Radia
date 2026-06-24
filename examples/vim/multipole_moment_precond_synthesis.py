@@ -1,6 +1,6 @@
-"""COMPLETE synthesis: why no CHEAP preconditioner bounds moment-yano GMRES iters at high mu_r, and what the
-loops actually do.  This reconciles the whole 2026-06-22 investigation (refines yano_moment_precond_diagnosis.py
-+ yano_moment_block_size_test.py) and resolves the user's loop / block / center-charge hypotheses.
+"""COMPLETE synthesis: why no CHEAP preconditioner bounds multipole-moment MMM GMRES iters at high mu_r, and what the
+loops actually do.  This reconciles the whole 2026-06-22 investigation (refines multipole_moment_precond_diagnosis.py
++ multipole_moment_block_size_test.py) and resolves the user's loop / block / center-charge hypotheses.
 
 Chain of decisive facts (C-yoke, nxy=16, per-element block-Jacobi baseline = 174 GMRES iters at mu_r=1000):
 
@@ -18,7 +18,7 @@ Chain of decisive facts (C-yoke, nxy=16, per-element block-Jacobi baseline = 174
    eigenvalues.  TRUE operator-deflation of ALL 205 loop modes ((I - A Q) A, Q = Lb (Lb^T A Lb)^-1 Lb^T)
    improves only 174 -> 160.  Removing the entire near-zero cluster barely helps -> eigenvalues do not drive
    the count here.  The ~160 that remain are the NON-NORMAL DEMAG-COMPLEMENT -- the real bottleneck (this is
-   what yano_moment_precond_diagnosis.py correctly called "the demag mutual coupling").
+   what multipole_moment_precond_diagnosis.py correctly called "the demag mutual coupling").
 
 VERDICT.  Every CHEAP lever fails to bound iters, each for the reason above:
   - per-element / bigger / flux-path-reordered BLOCKS: block_size_test -- loop-range HURTS (174->219), only
@@ -28,7 +28,7 @@ VERDICT.  Every CHEAP lever fails to bound iters, each for the reason above:
 The robust cure is an approximate FACTORIZATION that addresses the non-normal structure as a whole = H-LU on
 the cluster tree (heavy A-build, but bounded iters -- the lab's standing conclusion, see HDiv-VIM memory).  If
 H-LU is too heavy, the practical path is to ACCEPT the iter growth (it is ~dof^1.06, sub-linear; each iter is
-a cheap HACApK matvec), exactly what the production yano-MSC / HDiv-VIM do at scale.  There is no free cheap
+a cheap HACApK matvec), exactly what the production surface-charge MSC / HDiv-VIM do at scale.  There is no free cheap
 preconditioner here -- the obstacle is the non-normal high-mu_r demag operator, not loops / div(B) / blocks.
 
 mdx-clean import (radia direct).
@@ -130,7 +130,7 @@ def main():
     hexes = build_cyoke_hexes(nxy, 2); Happ = np.array([0.0, 1e3, 0.0])
 
     # --- mechanism: D@Lb=0, near-zero cluster grows with chi as 1/chi, modes are loops ---
-    print(f"\nmoment-yano preconditioner SYNTHESIS (C-yoke nxy={nxy}).\n")
+    print(f"\nmultipole-moment MMM preconditioner SYNTHESIS (C-yoke nxy={nxy}).\n")
     rows_mech = []
     A0, b0, row_of0, dof, n_el, Lb0, Dop0 = assemble(hexes, Happ, 1000.0)
     Qloop, _ = np.linalg.qr(Lb0)
@@ -173,7 +173,7 @@ def main():
     print(f"     demag-complement, not the loops.\n")
 
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_precond_synthesis", nxy=nxy, n_el=n_el, dof=dof,
+               benchmark="multipole_moment_precond_synthesis", nxy=nxy, n_el=n_el, dof=dof,
                D_dot_loop_rel=dlb, nonnormality=nonnormal, mechanism=rows_mech,
                iters_block_jacobi=it_base, iters_loop_deflated=it_defl, loop_deflation_residual=res,
                conclusion=(
@@ -187,14 +187,14 @@ def main():
                    "lever fails -- blocks (loop-range hurts), net-charge handling (0 overlap), eigenvalue/loop "
                    "deflation (non-normal). Robust cure = H-LU on the cluster tree (heavy A-build, bounded iters, "
                    "the lab's standing conclusion); cheap alternative = ACCEPT the sub-linear iter growth "
-                   "(~dof^1.06) with cheap HACApK matvecs, as the production yano-MSC / HDiv-VIM do. No free cheap "
+                   "(~dof^1.06) with cheap HACApK matvecs, as the production surface-charge MSC / HDiv-VIM do. No free cheap "
                    "preconditioner exists here: the obstacle is the non-normal high-mu_r demag operator."))
-    with open(os.path.join(HERE, "yano_moment_precond_synthesis.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_precond_synthesis.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print("  VERDICT: cheap preconditioners (blocks / deflation / loop / center-charge) do NOT bound iters --")
     print("  the obstacle is the NON-NORMAL high-mu_r demag operator. H-LU (heavy, robust) or accept sub-linear")
-    print("  iter growth with cheap HACApK matvecs (production yano-MSC / HDiv-VIM path).")
-    print("  saved", os.path.join(HERE, "yano_moment_precond_synthesis.json"))
+    print("  iter growth with cheap HACApK matvecs (production surface-charge MSC / HDiv-VIM path).")
+    print("  saved", os.path.join(HERE, "multipole_moment_precond_synthesis.json"))
 
 
 if __name__ == "__main__":

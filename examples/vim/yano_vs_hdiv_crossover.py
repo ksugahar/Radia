@@ -1,4 +1,4 @@
-"""Net-cost crossover model: improved yano-MSC (star + cell-graph-Laplacian AMG) vs HDiv-VIM
+"""Net-cost crossover model: improved surface-charge MSC (star + cell-graph-Laplacian AMG) vs HDiv-VIM
 (charge-Gram + M_mass^-1 GMRES), from MEASURED component scalings.  Per-solve cost ~ iters x matvec,
 matvec ~ H-matrix storage (every stored block touched once).  This is a MODEL combining measured
 scalings -- NOT a direct head-to-head (that needs the C++ port); it estimates WHERE yano's bounded

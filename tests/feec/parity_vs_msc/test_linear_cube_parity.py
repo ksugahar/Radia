@@ -1,5 +1,5 @@
 """M0-linear parity gate (productionization, docs/hdiv_vim/PRODUCTIONIZATION.md): the HDiv-VIM
-production entry `radia.vim.hdiv_demag_solve` vs the shipped yano-type MSC (`rad.Solve`) on the SAME
+production entry `radia.vim.hdiv_demag_solve` vs the shipped six-face surface-charge MSC (`rad.Solve`) on the SAME
 soft-iron body -- a cube under a uniform applied field.
 
 A cube's volume-averaged demag factor is exactly 1/3 (cubic symmetry, Dx=Dy=Dz, sum=1), but its M is
@@ -15,8 +15,8 @@ The gate locks (1) yano == HDiv within 3% at a moderate resolution, (2) HDiv dem
 (3) HDiv mesh-robustness (the M_mass^-1 preconditioner keeps the +N iteration count bounded as the
 mesh refines -- a Jacobi diagonal blew past 5000 iters at 7224 faces, the bug this gate guards).
 
-This is a transitional gate: it compares against yano-type while it still ships; it retires when
-yano-type is sealed (M5).
+This is a transitional gate: it compares against six-face surface-charge while it still ships; it retires when
+six-face surface-charge is sealed (M5).
 """
 import math
 
@@ -39,7 +39,7 @@ MU_R = 100.0
 
 
 def _yano_cube_Mz(n):
-    """Volume-average M_z of the soft-iron cube via the yano-type MSC (n x n x n hexes).  The cube is a
+    """Volume-average M_z of the soft-iron cube via the six-face surface-charge MSC (n x n x n hexes).  The cube is a
     MakeStructured3DMesh hex mesh -> soft_iron_from_mesh (the canonical .vol/mesh ingestion); demag_backend
     ='yano' forces the MSC solve on the built ObjHexahedron elements.  Applied field via ObjBckg B = mu0 H0
     (the free-space source field whose H is H0)."""
@@ -50,7 +50,7 @@ def _yano_cube_Mz(n):
         core = soft_iron_from_mesh(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     cont = rad.ObjCnt([core, bkg])
-    rad.Solve(cont, 1e-6, 3000, 0, demag_backend="yano")      # force yano-MSC (LU) on the registered iron
+    rad.Solve(cont, 1e-6, 3000, 0, demag_backend="yano")      # force surface-charge MSC (LU) on the registered iron
     res = rad.ObjM(core)
     return float(np.mean([m[2] for (_c, m) in res]))
 
@@ -64,7 +64,7 @@ def _hdiv_cube(maxh):
 
 
 def test_yano_hdiv_cube_linear_parity():
-    """yano-type MSC and HDiv-VIM agree within 3% on the soft-iron cube (volume-average M_z)."""
+    """six-face surface-charge MSC and HDiv-VIM agree within 3% on the soft-iron cube (volume-average M_z)."""
     mz_yano = _yano_cube_Mz(8)                       # 512 hexes
     res = _hdiv_cube(L / 6)                           # 860 tets
     mz_hdiv = res["M_avg"][2]

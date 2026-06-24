@@ -1,6 +1,6 @@
 """radia.SoftIron -- the unified intent-based soft-iron object (2-layer API, 2026-06-19).
 
-Locks that ONE object built from a .vol drives BOTH demag backends (yano-MSC and HDiv-VIM) with no
+Locks that ONE object built from a .vol drives BOTH demag backends (surface-charge MSC and HDiv-VIM) with no
 ObjHexahedron in the user's hands: build -> solve(backend=...) -> field(), backend-agnostic, and the
 two backends agree on the same .vol within the RT0-vs-MSC discretization gap."""
 import math
