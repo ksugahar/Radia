@@ -20,6 +20,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           enclosure_clearance_row, enclosure_difference_region,
                                           shape_measurement_row, shape_measurement_rows,
                                           box_face_vector_area_rows,
+                                          box_face_pressure_force_rows,
                                           compare_boundary_vector_area_rows,
                                           compare_shape_measurement_rows,
                                           shape_measurement_comparison_summary)
@@ -163,6 +164,28 @@ def test_compare_boundary_vector_area_rows_marks_direction_mismatch():
     assert by_name["xmin"]["vector_abs_error"] == pytest.approx(30.0)
     assert by_name["xmin"]["unit_normal_abs_error"] == pytest.approx(2.0)
     assert by_name["xmax"]["passed"]
+
+
+def test_box_face_pressure_force_rows_integrate_pressure_loads():
+    uniform = box_face_pressure_force_rows(
+        (2, 3, 5),
+        {"xmin": 2.0, "xmax": 2.0, "ymin": 2.0, "ymax": 2.0, "zmin": 2.0, "zmax": 2.0},
+    )
+    total = [sum(row["force_N"][axis] for row in uniform) for axis in range(3)]
+    assert total == pytest.approx([0.0, 0.0, 0.0])
+
+    zmax = box_face_pressure_force_rows((2, 3, 5), {"zmax": 2.0}, default_pressure=0.0)
+    by_name = {row["name"]: row for row in zmax}
+    assert by_name["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert by_name["zmax"]["force_magnitude_N"] == pytest.approx(12.0)
+    assert by_name["zmax"]["pressure_source"] == "name"
+    assert by_name["xmin"]["pressure_source"] == "default"
+
+    by_index = box_face_pressure_force_rows((2, 3, 5), {6: 3.0}, default_pressure=0.0)
+    assert {row["name"]: row for row in by_index}["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 18.0))
+
+    with pytest.raises(KeyError):
+        box_face_pressure_force_rows((2, 3, 5), {"zmax": 2.0}, default_pressure=None)
 
 
 def test_shape_envelope_row_and_enclosing_box_use_union_bbox_margin():
