@@ -242,6 +242,46 @@ class NetgenTriTetVolMesh:
             "boundary_orientation": orientation,
         }
 
+    def surface_edge_manifold_summary(self) -> dict[str, object]:
+        """Return boundary-edge adjacency and Euler-characteristic checks.
+
+        A closed first-order RWG surface should have every boundary edge shared
+        by exactly two triangles.  The Euler characteristic is a compact sanity
+        check for simple connected surfaces: a triangulated sphere-like boundary
+        has ``V - E + F = 2``.
+        """
+
+        trace_nodes = self.trace_node_ids()
+        if not self.surface_triangles:
+            return {
+                "trace_nodes": len(trace_nodes),
+                "surface_edges": 0,
+                "surface_triangles": 0,
+                "closed_edges": 0,
+                "open_edges": 0,
+                "is_closed_manifold": False,
+                "euler_characteristic": len(trace_nodes),
+            }
+        trace_node_to_local = {node: i for i, node in enumerate(trace_nodes, start=1)}
+        boundary_triangles = tuple(
+            tuple(trace_node_to_local[node] for node in tri.nodes) for tri in self.surface_triangles
+        )
+        surface_edges, _tri_edges, _tri_edge_signs, edge_triangles, _opposites = _build_tri_edges(
+            boundary_triangles
+        )
+        adjacency_counts = tuple(sum(1 for tri_id in adjacent if tri_id) for adjacent in edge_triangles)
+        closed_edges = sum(1 for count in adjacency_counts if count == 2)
+        open_edges = sum(1 for count in adjacency_counts if count == 1)
+        return {
+            "trace_nodes": len(trace_nodes),
+            "surface_edges": len(surface_edges),
+            "surface_triangles": len(self.surface_triangles),
+            "closed_edges": closed_edges,
+            "open_edges": open_edges,
+            "is_closed_manifold": open_edges == 0 and closed_edges == len(surface_edges),
+            "euler_characteristic": len(trace_nodes) - len(surface_edges) + len(self.surface_triangles),
+        }
+
     def fem_bem_trace_view(self) -> dict[str, object]:
         """Return shared-node volume/surface connectivity for FEM/BEM coupling."""
 
