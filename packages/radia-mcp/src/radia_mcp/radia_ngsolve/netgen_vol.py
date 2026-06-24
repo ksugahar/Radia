@@ -759,6 +759,99 @@ class NetgenTriTetVolMesh:
             })
         return tuple(rows)
 
+    def boundary_tet_face_incidence_rows(self) -> tuple[dict[str, object], ...]:
+        """Match each boundary triangle to adjacent tetrahedron faces.
+
+        This is a `.vol` export sanity gate for FEM/BEM coupling: every
+        exterior surface triangle should match exactly one volume tetrahedron
+        face, while a material interface triangle should match two.  The rows
+        also compare the matched tetrahedron material numbers with the
+        ``domin/domout`` domain ids stored by Netgen/Coreform export.
+        """
+
+        tet_faces: dict[tuple[int, int, int], list[dict[str, object]]] = {}
+        local_faces = ((1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1))
+        for tet_index, tet in enumerate(self.tetrahedra, start=1):
+            for opposite, local in enumerate(local_faces):
+                nodes = tuple(tet.nodes[i] for i in local)
+                key = tuple(sorted(nodes))
+                tet_faces.setdefault(key, []).append({
+                    "tetrahedron": tet_index,
+                    "material_number": tet.matnr,
+                    "material_name": self.materials.get(tet.matnr, f"material_{tet.matnr}"),
+                    "opposite_local_node": opposite,
+                    "face_local_nodes": list(local),
+                    "face_nodes": list(nodes),
+                })
+
+        rows: list[dict[str, object]] = []
+        for tri_index, tri in enumerate(self.surface_triangles, start=1):
+            key = tuple(sorted(tri.nodes))
+            adjacent = tet_faces.get(key, [])
+            adjacent_materials = sorted({int(item["material_number"]) for item in adjacent})
+            declared_domains = sorted(domain for domain in (tri.domin, tri.domout) if domain != 0)
+            if len(adjacent) == 0:
+                kind = "orphan"
+            elif len(adjacent) == 1:
+                kind = "exterior"
+            elif len(adjacent) == 2:
+                kind = "interface"
+            else:
+                kind = "overconnected"
+            rows.append({
+                "surface_triangle": tri_index,
+                "boundary_number": tri.bcnr,
+                "name": self.boundary_names.get(tri.bcnr, f"boundary_{tri.bcnr}"),
+                "nodes": list(tri.nodes),
+                "domin": tri.domin,
+                "domout": tri.domout,
+                "declared_domain_numbers": declared_domains,
+                "declared_domain_names": [
+                    self.materials.get(domain, f"material_{domain}")
+                    for domain in declared_domains
+                ],
+                "adjacent_tetrahedron_faces": adjacent,
+                "adjacent_tetrahedron_count": len(adjacent),
+                "adjacent_material_numbers": adjacent_materials,
+                "adjacent_material_names": [
+                    self.materials.get(matnr, f"material_{matnr}")
+                    for matnr in adjacent_materials
+                ],
+                "domain_material_match": declared_domains == adjacent_materials,
+                "kind": kind,
+            })
+        return tuple(rows)
+
+    def boundary_tet_face_incidence_summary(self) -> dict[str, object]:
+        """Return compact counts for boundary-triangle to tetra-face incidence."""
+
+        rows = self.boundary_tet_face_incidence_rows()
+        kind_counts: dict[str, int] = {}
+        for row in rows:
+            kind = str(row["kind"])
+            kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        mismatches = [row for row in rows if not bool(row["domain_material_match"])]
+        return {
+            "surface_triangles": len(rows),
+            "tetrahedra": len(self.tetrahedra),
+            "exterior_surface_triangles": kind_counts.get("exterior", 0),
+            "interface_surface_triangles": kind_counts.get("interface", 0),
+            "orphan_surface_triangles": kind_counts.get("orphan", 0),
+            "overconnected_surface_triangles": kind_counts.get("overconnected", 0),
+            "domain_material_mismatch_count": len(mismatches),
+            "max_adjacent_tetrahedra": max(
+                (int(row["adjacent_tetrahedron_count"]) for row in rows),
+                default=0,
+            ),
+            "is_volume_boundary_consistent": (
+                kind_counts.get("orphan", 0) == 0
+                and kind_counts.get("overconnected", 0) == 0
+                and not mismatches
+            ),
+            "rows": rows,
+            "policy": "surface_triangles_match_volume_tet_faces_for_tri_tet_vol",
+        }
+
     def material_summary_rows(self) -> tuple[dict[str, object], ...]:
         """Return volume/material inventory with boundary incidence.
 
