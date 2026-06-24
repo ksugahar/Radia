@@ -24,6 +24,9 @@ def accelerator(topic: str = "all") -> str:
       "kolkata"       - Kolkata SC Cyclotron case study (Pradhan 2007)
                         — Radia + TOSCA + Mathematica integration
       "rotating_coil" - Multipole measurement + 3D field reconstruction
+      "two_plane_design" / "endpack_two_plane" / "endpack_cobake" /
+      "sector_saturation" - Clebsch-hodograph accelerator pole-face design
+                        examples used by the radia-em Clebsch hodograph line
     """
     return get_accelerator_documentation(topic)
 

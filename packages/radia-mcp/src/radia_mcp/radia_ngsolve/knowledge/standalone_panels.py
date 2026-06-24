@@ -95,7 +95,7 @@ before subprocess launch.
 
 | Launcher       | Window class | Purpose                                                        | Required input             |
 |----------------|--------------|----------------------------------------------------------------|----------------------------|
-| `radia-em`     | `EMWindow`   | Electromagnet: Omega-reduced / A-Phi / MSC / Kelvin Benchmark | `.vol`                     |
+| `radia-em`     | `EMWindow`   | Electromagnet: Omega-reduced / A-Phi / MSC / Kelvin Benchmark / Clebsch hodograph | `.vol` for mesh-backed modes; Clebsch self-meshes |
 | `radia-ih`     | `IHWindow`   | Induction Heating + Thermal: PEEC / BEM-A / FEM A-V + q_surf->T post | STEP (PEEC) + `.vol` (BEM/FEM/thermal) |
 | `radia-pcb`    | `PCBWindow`  | PCB / FastHenry impedance sweep                                | FastHenry `.inp`           |
 | `radia-streamfunction` | `StreamFunctionWindow` | Stream-function coil design: Design / Pareto / Manufacture / Volume 3D | coil or conductor `.vol` |

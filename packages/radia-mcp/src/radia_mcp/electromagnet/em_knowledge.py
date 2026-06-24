@@ -33,6 +33,8 @@ TOPICS: dict[str, str] = {
                              "perp-to-mirror (-), boundary element on-plane limitation",
     "harmonics":            "Magnetic field harmonic analysis on circular bore "
                              "(dipole/quad/sext quality, multipole expansion)",
+    "clebsch_hodograph":    "radia-em Clebsch hodograph mode and accelerator "
+                             "pole-face inverse-design references",
     "symmetry_reductions":  "1/2, 1/4, 1/8 sector reductions: identify pairing + "
                              "anti-pairing planes, periodic master/slave BC setup",
     "1_8":                  "(alias) 1/8 sector reduction",
@@ -92,6 +94,24 @@ The coordinate system follows accelerator convention:
 - z = beam direction (longitudinal)
 
 Cubit journal files use the SAME coordinate system. No rotation needed.
+
+## radia-em panel modes
+
+The standalone `radia-em` panel exposes five Method choices:
+
+| Method | Layer-4 script | Purpose |
+|--------|----------------|---------|
+| Omega | `calc_accel_magnet.py --formulation omega` | Reduced scalar-potential FEM with Kelvin open boundary |
+| A-Phi | `calc_accel_magnet.py --formulation a` | Vector-potential FEM path |
+| MSC | `calc_accel_msc.py` | Magnetic surface charge / HDiv-VIM path for iron-yoke magnets |
+| Kelvin Benchmark | `calc_kelvin_benchmark.py` | Analytical sphere-in-uniform-field check for the Kelvin pipeline |
+| Clebsch hodograph | `calc_clebsch_hodograph.py` | Self-meshed reduced-potential demonstration; forward field quality and Clebsch potentials |
+
+The Clebsch hodograph mode is the panel-facing, verified forward demo.  The
+broader accelerator pole-face inverse-design examples and saturation/end-pack
+studies live under `docs/clebsch_hodograph/`,
+`examples/clebsch_hodograph/`, and the `mcp-server-accelerator`
+`accelerator("two_plane_design")` / `accelerator("endpack_cobake")` topics.
 
 ## Typical Parameters
 
@@ -809,6 +829,43 @@ Allowed harmonics depend on magnet symmetry:
 
 
 # ============================================================
+# Topic: Clebsch hodograph panel mode
+# ============================================================
+CLEBSCH_HODOGRAPH = """
+# Clebsch Hodograph Mode in `radia-em`
+
+`radia-em` includes a **Clebsch hodograph** Method backed by
+`src/radia/panels/calc_clebsch_hodograph.py`.  It is intentionally a
+verified forward-analysis panel mode, not the entire inverse pole-design
+research program:
+
+- The mode self-meshes its demonstration geometry, so it does not require a
+  user-supplied `.vol` file.
+- It solves the reduced scalar potential `Omega`, recovers the field, and
+  post-processes conjugate Clebsch potentials (`psi`, `Phi`) as an
+  a-posteriori field-quality diagnostic.
+- It emits JSON plus a GMSH `.msh` visualization through the same Layer-3 /
+  Layer-4 panel contract as the other `radia-em` methods.
+
+For pole-face inverse design, end-pack construction, FFAG sectors, and
+saturation studies, use the accelerator knowledge server:
+
+```python
+accelerator("two_plane_design")
+accelerator("endpack_two_plane")
+accelerator("endpack_cobake")
+accelerator("sector_saturation")
+```
+
+Repository anchors:
+
+- `docs/clebsch_hodograph/DESIGN_METHODOLOGY.md`
+- `examples/clebsch_hodograph/`
+- `tests/feec/test_clebsch_hodograph_research.py`
+"""
+
+
+# ============================================================
 # Dispatcher
 # ============================================================
 _TOPICS = {
@@ -819,6 +876,9 @@ _TOPICS = {
     "hysteresis": HYSTERESIS,
     "ima": IMA,
     "harmonics": HARMONICS,
+    "clebsch_hodograph": CLEBSCH_HODOGRAPH,
+    "clebsch": CLEBSCH_HODOGRAPH,
+    "hodograph": CLEBSCH_HODOGRAPH,
     "symmetry_reductions": SYMMETRY_REDUCTIONS,
     "1_8": SYMMETRY_REDUCTIONS,  # alias
     "eighth": SYMMETRY_REDUCTIONS,  # alias
@@ -832,7 +892,8 @@ def get_electromagnet_documentation(topic: str = "overview") -> str:
 
     Args:
         topic: One of: overview, coilbuilder, kelvin_workflow, hantila,
-               hysteresis, ima, harmonics, symmetry_reductions, all
+               hysteresis, ima, harmonics, clebsch_hodograph,
+               symmetry_reductions, all
 
     Returns:
         Documentation string for the requested topic.

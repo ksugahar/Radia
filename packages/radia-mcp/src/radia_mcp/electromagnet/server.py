@@ -9,6 +9,7 @@ Provides tools for:
 - B-input Play/Energy hysteresis models
 - IMA (Image Method of Analysis) sign selection
 - Field harmonics / multipole analysis
+- radia-em Clebsch hodograph panel mode and accelerator design references
 
 Usage:
     mcp-server-electromagnet              # Start MCP server (stdio transport)
@@ -57,6 +58,8 @@ def electromagnet_usage(topic: str = "overview") -> str:
             "hysteresis"       - B-input Play/Energy models
             "ima"              - Image Method sign selection
             "harmonics"        - Multipole analysis, FFT extraction
+            "clebsch_hodograph" - radia-em Clebsch hodograph mode and links
+                                  to accelerator pole-face design topics
             "all"              - Complete documentation
     """
     return get_electromagnet_documentation(topic)
@@ -151,6 +154,7 @@ def main():
         topics = [
             "overview", "coilbuilder", "kelvin_workflow",
             "hantila", "hysteresis", "ima", "harmonics",
+            "clebsch_hodograph",
         ]
         for t in topics:
             result = electromagnet_usage(t)

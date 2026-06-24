@@ -414,7 +414,8 @@ This is the smallest footprint, but you lose the panel windows and the Cubit lau
 `radia[gui]` registers four console entry points that open the analysis panels as standalone PySide6 applications.  **Cubit is not needed** — bring your own `.vol` mesh (from Cubit, from Netgen standalone via NGSolve OCC, or any other source that can write the Netgen `.vol` text format):
 
 ```bash
-radia-em   [model.vol]    # Electromagnet: Omega / A-Phi / MSC / Kelvin Benchmark
+radia-em   [model.vol]    # Electromagnet: Omega / A-Phi / MSC /
+                          #                Kelvin Benchmark / Clebsch hodograph
 radia-ih   [model.vol]    # Induction Heating: PEEC inductance / BEM-A inductance /
                           #                    PEEC+BEM weak / BEM-A+BEM weak /
                           #                    PEEC+FEM-Kelvin / FEM-FULL
