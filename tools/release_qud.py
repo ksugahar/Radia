@@ -1,32 +1,34 @@
 #!/usr/bin/env python
-"""release_triple.py — orchestrator for the 3-package release flow.
+"""release_qud.py — orchestrator for the 3-package / 4-machine release flow.
 
-Walks Phase 0 -> 9 of the release-triple skill in order, gating each
+Walks Phase 0 -> 9 of the release-qud skill in order, gating each
 phase on the success of the previous one. Refuses to skip steps that
 have caused real outages (2026-04-14 incident series).
 
 Usage:
-    python tools/release_triple.py preflight
+    python tools/release_qud.py preflight
         Read-only: report current state and consistency. Use anytime.
 
-    python tools/release_triple.py phase0
+    python tools/release_qud.py phase0
         Mandatory clean rebuild of the Cubit plugin (~3-4 min).
 
-    python tools/release_triple.py phase8 [--target lab|100|all]
-        Run Phase 8a..8d on each target: kill Cubit, install from NAS,
-        cubit-plugin-install, --verify-only, cubit-smoke-test. Refuses
+    python tools/release_qud.py phase8 [--target lab|100|hibino|all]
+        Run Phase 8a..8d on each target: kill Cubit, install by the
+        target's tier (LAB/100 editable, hibino PyPI), cubit-plugin-install,
+        --verify-only, cubit-smoke-test. Refuses
         to start if Phase 0 has not been done since the last source
         change in src/cubit_plugin/.
 
-    python tools/release_triple.py phase8e
+    python tools/release_qud.py phase8e
         Upgrade mdx from PyPI. Refuses to run if pip index versions
-        radia / cubit-mesh-export / radia-mcp don't match the local
-        repo (i.e. PyPI hasn't propagated yet).
+        radia / cubit-mesh-export don't match the local repo
+        (i.e. PyPI hasn't propagated yet). radia-mcp is intentionally
+        not installed on mdx.
 
-    python tools/release_triple.py phase9
+    python tools/release_qud.py phase9
         Cross-machine consistency probe. Final gate.
 
-    python tools/release_triple.py all
+    python tools/release_qud.py all
         phase8 -> phase8e -> phase9 with all preconditions enforced.
 
 Exit codes:
@@ -62,9 +64,11 @@ if hasattr(sys.stdout, "reconfigure"):
 
 REPO = Path(__file__).resolve().parent.parent
 NAS_REPO_LAB = "S:/Radia/01_GitHub"
-NAS_REPO_100 = "//192.168.11.100/work/00_CAE/Radia/01_GitHub"
+NAS_REPO_100 = r"\\192.168.11.100\work\00_CAE\Radia\01_GitHub"
 SSH_100 = "192.168.11.100"
 SSH_MDX = "mdx"
+SSH_HIBINO = "hibino"
+PY_HIBINO = "py -3.12"
 
 
 # ============================================================
@@ -198,7 +202,7 @@ def cmd_preflight(args):
         from datetime import datetime
         fail(f"bundled .ccm ({datetime.fromtimestamp(bin_mtime)}) older than "
               f"src/cubit_plugin/ ({datetime.fromtimestamp(src_mtime)}). "
-              "Run `python tools/release_triple.py phase0`.")
+              "Run `python tools/release_qud.py phase0`.")
         return 2
     else:
         ok("bundled plugin .ccm >= src/cubit_plugin/ mtime")
@@ -279,19 +283,57 @@ def _deploy_lab():
     run(["cubit-plugin-install", "--verify-only"])
     run(["cubit-smoke-test"])
     ok("Phase 8 complete on LAB")
+    return 0
 
 
-def _check_pypi_propagation(versions):
+def _deploy_editable_remote(ssh_host, label, repo):
+    """Editable-install recipe for machines that should read NAS source.
+
+    LAB and 100号機 are the editable tier.  PyPI propagation is not a
+    precondition for this tier; hibino/mdx remain the wheel-consumer
+    verification tier.
+    """
+    step(f"Phase 8 ({label}): kill + NAS editable install + plugin install + verify + smoke (over SSH)")
+    ps_block = f"""
+$ErrorActionPreference = 'Continue'
+Get-Process -ErrorAction SilentlyContinue | Where-Object {{
+  $_.ProcessName -eq 'coreform_cubit' -or $_.ProcessName -eq 'cubit' -or
+  $_.Name -like 'mcp-server*' -or
+  $_.Name -like 'radia-*' -or $_.Name -like 'radia_*'
+}} | ForEach-Object {{
+  Write-Host "Stopping $($_.ProcessName) pid=$($_.Id)"
+  Stop-Process -Id $_.Id -Force
+}}
+Start-Sleep -Seconds 2
+pip install -e "{repo}" -e "{repo}\\packages\\cubit-mesh-export" -e "{repo}\\packages\\radia-mcp" --no-deps --no-cache-dir
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+cubit-plugin-install --all-users
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+cubit-plugin-install --verify-only
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+cubit-smoke-test
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+"""
+    encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
+    run(["ssh", ssh_host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+         "-EncodedCommand", encoded])
+    ok(f"Phase 8 complete on {label}")
+    return 0
+
+
+def _check_pypi_propagation(versions, *, include_mcp=True):
     """Refuse to deploy if PyPI hasn't propagated to repo's current versions.
 
     Returns 0 on success, 2 if any package is stale.  Used by every PyPI
-    install target (100号機 + mdx) to prevent installing the OLD version
+    install target (hibino + mdx) to prevent installing the OLD version
     while CI is still publishing the new one.
     """
     info("checking PyPI propagation...")
-    for pkg, want in [("radia", versions["radia"]),
-                       ("cubit-mesh-export", versions["cubit-mesh-export"]),
-                       ("radia-mcp", versions["radia-mcp"])]:
+    packages = [("radia", versions["radia"]),
+                ("cubit-mesh-export", versions["cubit-mesh-export"])]
+    if include_mcp:
+        packages.append(("radia-mcp", versions["radia-mcp"]))
+    for pkg, want in packages:
         p = run(["python", "-m", "pip", "index", "versions", pkg],
                 capture=True, check=False)
         first = p.stdout.splitlines()[0] if p.stdout else ""
@@ -304,15 +346,11 @@ def _check_pypi_propagation(versions):
     return 0
 
 
-def _deploy_pypi(ssh_host, label):
+def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python", cubit_optional=False):
     """PyPI-install recipe for downstream Cubit-equipped machines.
 
-    Used identically for 100号機 and mdx per the 2-tier distribution
-    policy (CLAUDE.md: "LAB = NAS editable, 100号機 + mdx = PyPI").
-    Before this refactor, _deploy_100 used `pip install <NAS path>` which
-    SHIPPED LAB WORKTREE BITS (including unreleased dev bumps) onto the
-    21-user shared lab box -- a quiet policy violation that defeated the
-    point of the "PyPI is the verified release channel" gate.
+    Used for hibino and mdx.  hibino gets radia-mcp; mdx is a compute
+    consumer and intentionally skips the MCP server package.
 
     Recipe:
       1. PyPI propagation check (refuse if stale)
@@ -321,19 +359,22 @@ def _deploy_pypi(ssh_host, label):
       3. pip install --upgrade --no-cache-dir from PyPI, pinned to the
          repo's current versions
       4. cubit-plugin-install --all-users (regular-file deploy of the
-         freshly-installed wheel's plugin)
+         freshly-installed wheel's plugin; skipped on optional-Cubit
+         targets when Cubit is not installed)
       5. cubit-plugin-install --verify-only (sha256 sanity)
       6. cubit-smoke-test (Cubit 2025.3 -batch run on ih_bem_sample.jou)
     """
     step(f"Phase 8 ({label}): kill + PyPI install + plugin install + verify + smoke (over SSH)")
     v = _read_repo_versions()
-    rc = _check_pypi_propagation(v)
+    rc = _check_pypi_propagation(v, include_mcp=include_mcp)
     if rc != 0:
         return rc
 
     v_radia = v["radia"]
     v_cme   = v["cubit-mesh-export"]
     v_mcp   = v["radia-mcp"]
+    mcp_pin = f' "radia-mcp=={v_mcp}"' if include_mcp else ""
+    cubit_optional_ps = "$true" if cubit_optional else "$false"
 
     ps_block = f"""
 $ErrorActionPreference = 'Continue'
@@ -355,8 +396,24 @@ Start-Sleep -Seconds 2
         # different binary (ef49da18...). Force-reinstall guarantees the
         # PyPI wheel's bytes overwrite whatever is on disk, which is the
         # whole point of "PyPI is the canonical channel" in the 2-tier policy.
-pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia[cubit,gui]=={v_radia}" "radia-mcp=={v_mcp}" "cubit-mesh-export=={v_cme}"
+{python_cmd} -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia[cubit,gui]=={v_radia}" "cubit-mesh-export=={v_cme}"{mcp_pin}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+$pyExe = (& {python_cmd} -c "import sys; print(sys.executable)").Trim()
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+$scriptDir = Join-Path (Split-Path -Parent $pyExe) "Scripts"
+$env:PATH = $scriptDir + ";" + $env:PATH
+$cubitOptional = {cubit_optional_ps}
+$cubitExeCandidates = @()
+if ($env:CUBIT_PATH) {{ $cubitExeCandidates += (Join-Path $env:CUBIT_PATH "coreform_cubit.exe") }}
+$cubitExeCandidates += "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.exe"
+$cubitFound = $false
+foreach ($candidate in $cubitExeCandidates) {{
+  if (Test-Path $candidate) {{ $cubitFound = $true; break }}
+}}
+if (-not $cubitFound -and $cubitOptional) {{
+  Write-Host "[WARN] Coreform Cubit 2025.12+ not found; skipping Cubit plugin install on optional-Cubit target."
+  exit 0
+}}
 cubit-plugin-install --all-users
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 cubit-plugin-install --verify-only
@@ -372,11 +429,15 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 
 
 def _deploy_100():
-    return _deploy_pypi(SSH_100, "100号機")
+    return _deploy_editable_remote(SSH_100, "100号機", NAS_REPO_100)
+
+
+def _deploy_hibino():
+    return _deploy_pypi(SSH_HIBINO, "hibino", python_cmd=PY_HIBINO, cubit_optional=True)
 
 
 def cmd_phase8(args):
-    """Deploy + verify + smoke on LAB and/or 100号機."""
+    """Deploy + verify + smoke on LAB, 100号機, and/or hibino."""
     # precondition: Phase 0 freshness
     rc = cmd_preflight(args)
     if rc != 0:
@@ -392,9 +453,16 @@ def cmd_phase8(args):
             rc = _deploy_100()
             if rc != 0:
                 return rc
+        elif t == "hibino":
+            rc = _deploy_hibino()
+            if rc != 0:
+                return rc
         elif t == "all":
             _deploy_lab()
             rc = _deploy_100()
+            if rc != 0:
+                return rc
+            rc = _deploy_hibino()
             if rc != 0:
                 return rc
         else:
@@ -404,10 +472,8 @@ def cmd_phase8(args):
 
 
 def cmd_phase8e(args):
-    """Upgrade mdx from PyPI (only after PyPI propagation).  Same recipe
-    as Phase 8 for 100号機; the only difference is the SSH host.  Both
-    are PyPI verification points per CLAUDE.md 2-tier policy."""
-    return _deploy_pypi(SSH_MDX, "mdx")
+    """Upgrade mdx from PyPI (radia + cubit-mesh-export only)."""
+    return _deploy_pypi(SSH_MDX, "mdx", include_mcp=False)
 
 
 CROSS_MACHINE_PROBE = '''import hashlib, os
@@ -440,7 +506,13 @@ for r in ["panels/register_toolbar.py",
 '''
 
 
-# LAB probe (2026-05-28 fix).  LAB is the editable DEV checkout, so
+CROSS_MACHINE_PROBE_NO_MCP = CROSS_MACHINE_PROBE.replace(
+    "print(f\"VER radia-mcp          = {ver('radia-mcp')}\")",
+    'print("VER radia-mcp          = N/A")',
+)
+
+
+# Editable-tier probe (2026-05-28 fix).  LAB/100号機 are editable DEV checkouts, so
 # os.path.dirname(radia.__file__) is the *working tree* -- full of
 # uncommitted dev WIP that has nothing to do with the released wheel.
 # Hashing that guaranteed perpetual false-positive drift (the whole reason
@@ -502,56 +574,66 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
 
 def cmd_phase9(args):
     """Cross-machine consistency probe."""
-    step("Phase 9: cross-machine consistency (LAB / 100号機 / mdx)")
-    out_lab = _probe("LAB", ["python", "-"], CROSS_MACHINE_PROBE_LAB)
-    out_100 = _probe("100号機", ["ssh", SSH_100, "python", "-"])
-    out_mdx = _probe("mdx", ["ssh", SSH_MDX, "python", "-"])
-    if not (out_lab and out_100 and out_mdx):
-        fail("could not collect probe data from all 3 machines")
+    targets = [
+        ("LAB", ["python", "-"], CROSS_MACHINE_PROBE_LAB),
+        ("100号機", ["ssh", SSH_100, "python", "-"], CROSS_MACHINE_PROBE_LAB),
+        ("mdx", ["ssh", SSH_MDX, "python", "-"], CROSS_MACHINE_PROBE_NO_MCP),
+        ("hibino", ["ssh", SSH_HIBINO, "py", "-3.12", "-"], CROSS_MACHINE_PROBE),
+    ]
+    step("Phase 9: cross-machine consistency (LAB / 100号機 / mdx / hibino)")
+    outputs = []
+    for label, cmd_prefix, probe_src in targets:
+        out = _probe(label, cmd_prefix, probe_src)
+        if not out:
+            fail(f"could not collect probe data from {label}")
+            return 4
+        outputs.append((label, out.strip().splitlines()))
+
+    if not outputs:
+        fail("could not collect probe data from any machine")
         return 4
 
-    rows_lab = out_lab.strip().splitlines()
-    rows_100 = out_100.strip().splitlines()
-    rows_mdx = out_mdx.strip().splitlines()
-    n = min(len(rows_lab), len(rows_100), len(rows_mdx))
+    n = min(len(rows) for _, rows in outputs)
     drift = 0
 
-    print(f"\n  {'field':<44} | {'LAB':<18} | {'100号機':<18} | {'mdx':<18}")
-    print("  " + "-" * 110)
+    def split(s):
+        k, _, v = s.partition("=")
+        k = k.strip()
+        # strip leading "VER " / "SHA " / "COMPAT " from key
+        for prefix in ("VER ", "SHA ", "COMPAT "):
+            if k.startswith(prefix):
+                k = k[len(prefix):]
+        return k.strip(), v.strip()
+
+    labels = [label for label, _ in outputs]
+    header = f"\n  {'field':<44} | " + " | ".join(f"{label:<18}" for label in labels)
+    print(header)
+    print("  " + "-" * max(110, len(header) - 2))
     for i in range(n):
-        a, b, c = rows_lab[i], rows_100[i], rows_mdx[i]
-
-        def split(s):
-            k, _, v = s.partition("=")
-            k = k.strip()
-            # strip leading "VER " / "SHA " / "COMPAT " from key
-            for prefix in ("VER ", "SHA ", "COMPAT "):
-                if k.startswith(prefix):
-                    k = k[len(prefix):]
-            return k.strip(), v.strip()
-
-        ka, va = split(a)
-        kb, vb = split(b)
-        kc, vc = split(c)
-        match = (va == vb == vc)
+        parsed = [split(rows[i]) for _, rows in outputs]
+        key = parsed[0][0]
+        values = [value for _, value in parsed]
+        comparable = [value for value in values if value != "N/A"]
+        match = bool(comparable) and all(value == comparable[0] for value in comparable)
         marker = ok.__name__.upper() if match else "DRIFT"
         marker = _color("32;1", "OK") if match else _color("31;1", "DRIFT")
         if not match:
             drift += 1
-        print(f"  {ka:<44} | {va:<18} | {vb:<18} | {vc:<18}  [{marker}]")
+        row = f"  {key:<44} | " + " | ".join(f"{value:<18}" for value in values)
+        print(f"{row}  [{marker}]")
 
     if drift:
         print("")
         fail(f"{drift} field(s) drift across machines — release NOT done.")
         return 4
     print("")
-    ok("all fields match across LAB / 100号機 / mdx — release verified.")
+    ok("all fields match across LAB / 100号機 / mdx / hibino — release verified.")
     return 0
 
 
 def cmd_all(args):
-    """Run the full deploy + verify chain (phase8 LAB+100, phase8e mdx, phase9)."""
-    rc = cmd_phase8(argparse.Namespace(target="lab,100"))
+    """Run the full deploy + verify chain (phase8 LAB+100+hibino, phase8e mdx, phase9)."""
+    rc = cmd_phase8(argparse.Namespace(target="lab,100,hibino"))
     if rc != 0: return rc
     rc = cmd_phase8e(args)
     if rc != 0:
@@ -575,6 +657,12 @@ LAB_EDITABLE_PKGS = [
     ("radia-mcp",           "S:/Radia/01_GitHub/packages/radia-mcp"),
     # LAB-private; tolerated as missing if pip show says not installed.
     ("mcp-server-document", "S:/mcp-server"),
+]
+
+REMOTE_100_EDITABLE_PKGS = [
+    ("radia",               NAS_REPO_100),
+    ("cubit-mesh-export",   NAS_REPO_100 + r"\packages\cubit-mesh-export"),
+    ("radia-mcp",           NAS_REPO_100 + r"\packages\radia-mcp"),
 ]
 
 
@@ -696,13 +784,99 @@ def _verify_lab_editable():
     return n_drift
 
 
+REMOTE_EDITABLE_VERIFY = r'''
+import importlib.metadata as md
+import json
+import sys
+from urllib.parse import urlparse
+from urllib.request import url2pathname
+
+EXPECT = __EXPECT__
+
+def norm(p):
+    p = (p or "").replace("\\", "/").rstrip("/").lower()
+    p = p.replace("//192.168.11.100/work/00_cae/radia/01_github",
+                  "s:/radia/01_github")
+    return p
+
+def editable_location(dist):
+    direct_url = dist.read_text("direct_url.json")
+    if not direct_url:
+        return None
+    try:
+        data = json.loads(direct_url)
+    except json.JSONDecodeError:
+        return None
+    if not data.get("dir_info", {}).get("editable"):
+        return None
+    url = data.get("url")
+    if not url:
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme == "file":
+        path = url2pathname(parsed.path)
+        if parsed.netloc:
+            path = f"//{parsed.netloc}{path}"
+        elif sys.platform.startswith("win") and path.startswith("/") and len(path) > 2 and path[2] == ":":
+            path = path[1:]
+        return path
+    return url
+
+bad = 0
+for pkg, want in EXPECT:
+    try:
+        dist = md.distribution(pkg)
+    except md.PackageNotFoundError:
+        print(f"FAIL {pkg}: not installed; expected editable @ {want}")
+        bad += 1
+        continue
+    got = editable_location(dist)
+    if not got:
+        print(f"FAIL {pkg}: installed v{dist.version}, but not editable")
+        bad += 1
+        continue
+    if norm(got) != norm(want):
+        print(f"FAIL {pkg}: editable drift")
+        print(f"  got:      {got}")
+        print(f"  expected: {want}")
+        bad += 1
+    else:
+        print(f"OK   {pkg}: v{dist.version} editable -> {got}")
+
+sys.exit(1 if bad else 0)
+'''
+
+
+def _verify_remote_editable(ssh_host, label, expected):
+    """Check remote editable installs by reading package direct_url.json."""
+    step(f"{label} editable verify")
+    script = REMOTE_EDITABLE_VERIFY.replace("__EXPECT__", repr(expected))
+    p = subprocess.run(["ssh", ssh_host, "python", "-"], input=script,
+                       capture_output=True, text=True)
+    if p.stdout:
+        print(p.stdout.rstrip())
+    if p.stderr:
+        print(p.stderr.rstrip())
+    if p.returncode == 0:
+        ok(f"{label} editable packages point at NAS source")
+        return 0
+    fail(f"{label} editable package drift detected")
+    return 1
+
+
+def _verify_100_editable():
+    return _verify_remote_editable(SSH_100, "100号機", REMOTE_100_EDITABLE_PKGS)
+
+
 def cmd_verify_editable(args):
     """Standalone editable verifier (no preflight, no phase9).
 
     Use this between deploys, or any time pip operations have run on
-    LAB and you want to confirm dev-loop integrity is intact.
+    LAB/100号機 and you want to confirm editable-loop integrity is intact.
     """
-    return _verify_lab_editable()
+    drift = _verify_lab_editable()
+    drift += _verify_100_editable()
+    return 1 if drift else 0
 
 
 # ============================================================
@@ -761,7 +935,7 @@ def _check_github_hosted_workflows(sha, *, timeout_sec=1800, poll_sec=20):
            "?per_page=100")
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "radia-release_triple",
+        "User-Agent": "radia-release_qud",
     }
 
     def _fetch():
@@ -946,25 +1120,26 @@ def _run_pyside6_health_audit():
 
 
 def cmd_done(args):
-    """Definition-of-done check: preflight + LAB-editable verify + phase9 + pyside6-health.
+    """Definition-of-done check: preflight + editable verify + phase9 + pyside6-health.
 
     Read-only. Exit 0 means the release is consistent across LAB / 100号機 /
-    mdx, the repo is release-ready, the LAB dev loop is intact, AND the
+    mdx / hibino, the repo is release-ready, the editable tier is intact, AND the
     panel GUI is PySide6-only with every panel window constructible
     headlessly. Exit non-zero means do NOT tell the user "release done" yet.
     """
     step("Definition-of-done check "
-         "(preflight + LAB editable + phase9 + pyside6-health)")
+         "(preflight + editable tier + phase9 + pyside6-health)")
     rc = cmd_preflight(args)
     if rc != 0:
         fail("preflight failed — repo state not release-ready.")
         return rc
 
     drift = _verify_lab_editable()
+    drift += _verify_100_editable()
     if drift > 0:
-        fail(f"{drift} LAB-editable package(s) drifted.  "
+        fail(f"{drift} editable-tier check(s) drifted.  "
              "Run the printed recovery commands, then re-run "
-             "`release_triple done`.")
+             "`release_qud done`.")
         return 1
 
     rc = cmd_phase9(args)
@@ -976,12 +1151,12 @@ def cmd_done(args):
     if rc != 0:
         fail("pyside6-health audit failed -- a Qt5/PyQt5 reference or "
              "panel construction regression slipped in. Fix per the audit "
-             "output, then re-run `release_triple done`.")
+             "output, then re-run `release_qud done`.")
         return rc
 
     print("")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx, LAB dev loop is intact, and the panel GUI is PySide6-only.")
+       "mdx / hibino, the editable tier is intact, and the panel GUI is PySide6-only.")
     return 0
 
 
@@ -990,8 +1165,8 @@ def cmd_done(args):
 # ============================================================
 
 def main():
-    p = argparse.ArgumentParser(prog="release_triple",
-                                 description="Enforce the release-triple flow.")
+    p = argparse.ArgumentParser(prog="release_qud",
+                                 description="Enforce the release-qud flow.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("preflight",
@@ -999,9 +1174,9 @@ def main():
     sub.add_parser("phase0",
                     help="clean rebuild of the Cubit plugin")
     s8 = sub.add_parser("phase8",
-                         help="deploy + verify + smoke on LAB / 100号機")
+                         help="deploy + verify + smoke on LAB / 100号機 / hibino")
     s8.add_argument("--target", default="lab,100",
-                     help="comma list: lab, 100, all (default lab,100)")
+                     help="comma list: lab, 100, hibino, all (default lab,100)")
     sub.add_parser("phase8e",
                     help="upgrade mdx from PyPI (after PyPI propagation)")
     sub.add_parser("phase9",
@@ -1009,11 +1184,11 @@ def main():
     sub.add_parser("all",
                     help="phase8 -> phase8e -> phase9 in one shot")
     sub.add_parser("verify-editable",
-                    help="LAB editable-install pointers check (read-only)")
+                    help="LAB/100号機 editable-install pointers check (read-only)")
     sub.add_parser("ci-verify",
                     help="Phase 5.5: gh-free CI-green gate (run after push main, before tag)")
     sub.add_parser("done",
-                    help="definition-of-done: preflight + LAB editable + "
+                    help="definition-of-done: preflight + editable-tier + "
                          "phase9 (read-only)")
 
     args = p.parse_args()
