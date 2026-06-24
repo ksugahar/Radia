@@ -26,7 +26,7 @@ of the methods below, with an analytic sanity check available.
 | Rotating machine torque from field solution | Weighted Maxwell stress torque | ``force.eggshell_torque*`` |
 | Simple closed integration surface in air | Maxwell surface stress | ``force.maxwell_surface_force*`` |
 | One surface patch / sign convention teaching | Local Maxwell traction | ``force.maxwell_stress_tensor_air`` / ``force.maxwell_traction_summary`` |
-| First-order `.vol` boundary triangle force trace | P1 triangle Maxwell traction load / boundary pressure rows | ``force.surface_triangle_maxwell_traction_summary``, ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows`` |
+| First-order `.vol` boundary triangle force trace | P1 triangle traction load / Maxwell traction / boundary pressure rows | ``force.surface_triangle_constant_traction_load_summary``, ``force.surface_triangle_maxwell_traction_summary``, ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows`` |
 | Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
 | Discrete force rows to net force/torque | Resultant and pivot moment sum | ``force.force_moment_resultant_summary`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
@@ -78,6 +78,17 @@ M_p = sum_i (r_i - p) x F_i
 This is the final common reduction for force rows from Maxwell-stress patches,
 Lorentz elements, pressure faces, and nodal loads.  A force couple has zero net
 force and a pivot-independent moment.
+
+P1 constant surface traction load:
+
+```text
+F_e = A t,      f_i = F_e / 3
+```
+
+The equal nodal load preserves force and moment because the centroid of a
+linear triangle is the mean of its three vertices.  Use this as the readable
+boundary-load gate before replacing ``t`` with Maxwell traction on `.vol`
+surface triangles.
 
 Uniform air-gap pressure:
 
@@ -201,6 +212,9 @@ careful remeshing.
 - ``ngsolve_usage("air_gap_force")``: magnetic-circuit holding force.
 - ``examples/fem_readable/validation_surface_maxwell_force_trace.py``:
   first-order `.vol` boundary triangles to Maxwell traction and P1 nodal force loads.
+- ``examples/fem_readable/validation_surface_triangle_constant_traction_load.py``:
+  constant P1 surface-triangle traction to equivalent nodal loads, with
+  force/moment preservation.
 - ``examples/cubit_mesh_export/validation_vol_boundary_pressure_moment.py``:
   named `.vol` sidesets to pressure force/moment rows and generic resultant reduction.
 - ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:
