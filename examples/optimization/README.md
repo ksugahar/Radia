@@ -8,9 +8,11 @@ separately when needed.
 | Example | Shows | Capabilities used |
 |---|---|---|
 | [`validation_optuna_waveguide_slab.py`](validation_optuna_waveguide_slab.py) | Validation-class Optuna study for a waveguide dielectric slab: enqueue analytic half-wave candidates, minimize `|S11|`, record feasible trials | `optuna`, `waveguide_dielectric_slab_sparams`, `best_feasible_record`, `constraint_violation` |
+| [`validation_optuna_waveguide_bragg_filter.py`](validation_optuna_waveguide_bragg_filter.py) | Validation-class Optuna study for a TE10 Bragg stopband filter: enqueue quarter-wave candidates, minimize `|S21|`, record feasible trials | `optuna`, `waveguide_cascade_sparams`, `best_feasible_record`, `constraint_violation` |
 
 ```powershell
 python validation_optuna_waveguide_slab.py
+python validation_optuna_waveguide_bragg_filter.py
 ```
 
 The public example contains only open, analytic waveguide formulas and optional
