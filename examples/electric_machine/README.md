@@ -7,9 +7,11 @@ NGSolve's high-order curved elements.
 | Example | Shows | Capabilities used |
 |---------|-------|-------------------|
 | [`cogging_skew_demo.py`](cogging_skew_demo.py) | Reluctance/cogging torque `tau(theta)` of a PM rotor in a salient stator; conversion to physical N·m for a real stack; and **skew ripple cancellation** | `eggshell_torque_2d`, `MachineScaling` (axial length × symmetry), `skew_average` ↔ `skew_factor` |
+| [`validation_slot_winding_spectrum.py`](validation_slot_winding_spectrum.py) | Validation-class harmonic spectrum from explicit slot sign tables, including fractional-slot layouts | `slot_table_winding_factor`, `integral_slot_winding_factor`, `mmf_harmonic_direction` |
 
 ```bash
 python cogging_skew_demo.py
+python validation_slot_winding_spectrum.py
 ```
 
 What it validates (no commercial tool needed to run or check):

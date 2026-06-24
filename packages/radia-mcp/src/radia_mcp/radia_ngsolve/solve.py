@@ -955,6 +955,59 @@ def integral_slot_winding_factor(slots, poles, harmonic=1, phases=3, pitch_fract
     }
 
 
+def slot_table_winding_factor(slot_signs, poles, harmonic=1, first_slot_angle_elec_deg=0.0):
+    """Direct winding factor from an explicit one-phase slot sign table.
+
+    ``slot_signs[k]`` is the signed coil-side weight for slot ``k`` of the
+    selected phase: ``+1`` for an outgoing side, ``-1`` for a return side and
+    ``0`` for slots owned by other phases.  Non-unit magnitudes are accepted for
+    parallel branches or unequal turns.  The result is the normalized phasor sum
+
+        k_w,n = sum_k s_k exp(-j n theta_k) / sum_k |s_k|,
+        theta_k = theta_0 + 2 pi (poles/2) k / slots.
+
+    This is the layout-table counterpart to :func:`integral_slot_winding_factor`.
+    It works for fractional-slot and concentrated windings, where a single
+    integer ``q`` and closed-form distribution factor are not enough to describe
+    the winding.
+    """
+    signs = [float(s) for s in slot_signs]
+    s = len(signs)
+    pole_count = int(poles)
+    n = int(harmonic)
+    if s <= 0 or pole_count <= 0 or n <= 0:
+        raise ValueError("slot_signs must be non-empty, and poles/harmonic must be positive")
+    if pole_count % 2:
+        raise ValueError("poles must be an even pole count")
+    active = sum(abs(v) for v in signs)
+    if active <= 0.0:
+        raise ValueError("slot_signs must contain at least one non-zero coil side")
+
+    pole_pairs = pole_count // 2
+    slot_angle = 360.0 * pole_pairs / s
+    offset = math.radians(float(first_slot_angle_elec_deg))
+    phasor = 0.0j
+    for k, sign in enumerate(signs):
+        if sign:
+            theta = offset + 2.0 * math.pi * pole_pairs * k / s
+            phasor += sign * cmath.exp(-1j * n * theta)
+    kw = phasor / active
+    return {
+        "slots": s,
+        "poles": pole_count,
+        "pole_pairs": pole_pairs,
+        "harmonic": n,
+        "active_slots": active,
+        "slot_angle_elec_deg": slot_angle,
+        "first_slot_angle_elec_deg": float(first_slot_angle_elec_deg),
+        "phasor_re": phasor.real,
+        "phasor_im": phasor.imag,
+        "winding_factor": kw,
+        "winding_factor_abs": abs(kw),
+        "winding_factor_angle_deg": math.degrees(cmath.phase(kw)),
+    }
+
+
 def single_phase_mmf_harmonic(harmonic, winding_factor_n, turns_per_phase, current, pole_pairs):
     """Peak amplitude [A] of the n-th SPACE harmonic of one phase's air-gap MMF:
 
