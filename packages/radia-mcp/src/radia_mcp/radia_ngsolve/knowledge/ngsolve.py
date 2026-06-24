@@ -5757,6 +5757,15 @@ F*(gap+iron_path/mu_r)^2 is constant to **<1 %** across a 2.25x gap range -- the
 reluctance force law. Validated examples/comsol_class/reluctance_actuator.py;
 tests/test_reluctance_actuator.py.
 
+If ``B_gap`` is already known from a nonlinear magnetic circuit or an FE solve,
+use the dependency-free force helpers directly:
+``air_gap_maxwell_pressure(B_T)``, ``air_gap_holding_force(B_T, area_m2, faces=1)``,
+and ``air_gap_force_summary``.  `validation_air_gap_force_sweep.py` connects the
+nonlinear B-H circuit to this pressure law: for a 96 A-turn example with
+`A=2.5e-4 m^2` and two active faces, force falls from `562.442916 N` at closed
+gap to `0.723099826 N` at 2 mm; `p(1 T)=397887.35772973835 Pa`; pressure/force
+identities are exact to machine precision.
+
 GAPPED-CORE INDUCTANCE (#39) -- the inductance twin of the actuator force, SAME window
 frame: ``magnetic_circuit_inductance(N,A,gap,iron_path,mu_r)`` = N^2/R =
 ``N^2 mu0 A/(gap + iron_path/mu_r)`` (the gap-force effective gap, again; mu_r->inf =>
@@ -7140,6 +7149,9 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "reluctance": NGSOLVE_C_MAGNET,
         "reluctance_actuator": NGSOLVE_C_MAGNET,
         "holding_force": NGSOLVE_C_MAGNET,
+        "air_gap_force": NGSOLVE_C_MAGNET,
+        "air_gap_holding_force": NGSOLVE_C_MAGNET,
+        "maxwell_pressure": NGSOLVE_C_MAGNET,
         "gapped_core_inductance": NGSOLVE_C_MAGNET,
         "magnetic_circuit_inductance": NGSOLVE_C_MAGNET,
         "core_inductor": NGSOLVE_C_MAGNET,
