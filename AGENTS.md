@@ -70,6 +70,16 @@ came from running the code, never an estimate), recorded to the project's intern
 validation notes. **Never overclaim** — a "pass" must trace to a checked value. Stop
 and ask only where the decision is genuinely the user's.
 
+### Validation-Class Examples (2026-06-24)
+
+Do not force long-running or solver-heavy validation problems into `tests/`.
+Keep CI tests small and fast enough to catch regressions, but still run heavier
+research examples when they teach something new. Put those problems under
+`examples/<topic>/` (or an explicitly named validation example), write JSON/plots
+next to the script, and record the actual run numbers in the internal `_crossval`
+notes. A validation-class example may be too slow for pytest and still be
+mandatory learning material.
+
 ### Publish Boundary: No Validation Provenance in Public Artifacts (2026-06-24)
 
 Public artifacts (this repo, PyPI packages, public docs) **lead with analytic
