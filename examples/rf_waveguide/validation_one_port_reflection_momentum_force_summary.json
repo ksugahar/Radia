@@ -1,0 +1,269 @@
+{
+  "checks": {
+    "matched_load_force_N": 8.339102379953801e-09,
+    "max_force_abs_error_N": 0.0,
+    "partial_reflection_force_N": 1.0423877974942251e-08,
+    "perfect_short_force_N": 1.6678204759907603e-08,
+    "phase_independent_force_error_N": 0.0
+  },
+  "force_learning": "one-port S11 force: F=(1+|S11|^2)P_inc k_inc/c",
+  "incident_direction": [
+    0.0,
+    0.0,
+    1.0
+  ],
+  "incident_power_W": 2.5,
+  "kind": "one_port_reflection_momentum_force_validation",
+  "p_over_c_N": 8.339102379953801e-09,
+  "rows": [
+    {
+      "expected_factor": 1.0,
+      "expected_force_N": 8.339102379953801e-09,
+      "force_abs_error_N": 0.0,
+      "label": "matched_load",
+      "s11_imag": 0.0,
+      "s11_real": 0.0,
+      "summary": {
+        "absorptance": 1.0,
+        "axial_force_along_incident_direction_N": 8.339102379953801e-09,
+        "force_N": [
+          0.0,
+          0.0,
+          8.339102379953801e-09
+        ],
+        "force_magnitude_N": 8.339102379953801e-09,
+        "incident_direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "incident_momentum_flow_N": [
+          0.0,
+          0.0,
+          8.339102379953801e-09
+        ],
+        "mismatch_loss_dB": 0.0,
+        "mismatch_loss_is_infinite": false,
+        "one_port_force_formula": "F=(1+|S11|^2)P_inc k_inc/c",
+        "power_absorbed_W": 2.5,
+        "power_delivered_to_one_port_W": 2.5,
+        "power_incident_W": 2.5,
+        "power_reflected_W": 0.0,
+        "power_transmitted_W": 0.0,
+        "reflectance": 0.0,
+        "reflected_momentum_flow_N": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "return_loss_dB": null,
+        "return_loss_is_infinite": true,
+        "s11_imag": 0.0,
+        "s11_magnitude": 0.0,
+        "s11_phase_deg": 0.0,
+        "s11_phase_rad": 0.0,
+        "s11_real": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "straight_through_equivalent_force_N": 8.339102379953801e-09,
+        "transmittance": 0.0,
+        "transmitted_direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "transmitted_momentum_flow_N": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "expected_factor": 2.0,
+      "expected_force_N": 1.6678204759907603e-08,
+      "force_abs_error_N": 0.0,
+      "label": "perfect_short",
+      "s11_imag": 0.0,
+      "s11_real": -1.0,
+      "summary": {
+        "absorptance": 0.0,
+        "axial_force_along_incident_direction_N": 1.6678204759907603e-08,
+        "force_N": [
+          0.0,
+          0.0,
+          1.6678204759907603e-08
+        ],
+        "force_magnitude_N": 1.6678204759907603e-08,
+        "incident_direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "incident_momentum_flow_N": [
+          0.0,
+          0.0,
+          8.339102379953801e-09
+        ],
+        "mismatch_loss_dB": null,
+        "mismatch_loss_is_infinite": true,
+        "one_port_force_formula": "F=(1+|S11|^2)P_inc k_inc/c",
+        "power_absorbed_W": 0.0,
+        "power_delivered_to_one_port_W": 0.0,
+        "power_incident_W": 2.5,
+        "power_reflected_W": 2.5,
+        "power_transmitted_W": 0.0,
+        "reflectance": 1.0,
+        "reflected_momentum_flow_N": [
+          0.0,
+          0.0,
+          -8.339102379953801e-09
+        ],
+        "return_loss_dB": 0.0,
+        "return_loss_is_infinite": false,
+        "s11_imag": 0.0,
+        "s11_magnitude": 1.0,
+        "s11_phase_deg": 180.0,
+        "s11_phase_rad": 3.141592653589793,
+        "s11_real": -1.0,
+        "speed_m_per_s": 299792458.0,
+        "straight_through_equivalent_force_N": 1.6678204759907603e-08,
+        "transmittance": 0.0,
+        "transmitted_direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "transmitted_momentum_flow_N": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "expected_factor": 1.25,
+      "expected_force_N": 1.0423877974942251e-08,
+      "force_abs_error_N": 0.0,
+      "label": "partial_reflection_plus90deg",
+      "s11_imag": 0.5,
+      "s11_real": 0.0,
+      "summary": {
+        "absorptance": 0.75,
+        "axial_force_along_incident_direction_N": 1.0423877974942251e-08,
+        "force_N": [
+          0.0,
+          0.0,
+          1.0423877974942251e-08
+        ],
+        "force_magnitude_N": 1.0423877974942251e-08,
+        "incident_direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "incident_momentum_flow_N": [
+          0.0,
+          0.0,
+          8.339102379953801e-09
+        ],
+        "mismatch_loss_dB": 1.2493873660829995,
+        "mismatch_loss_is_infinite": false,
+        "one_port_force_formula": "F=(1+|S11|^2)P_inc k_inc/c",
+        "power_absorbed_W": 1.875,
+        "power_delivered_to_one_port_W": 1.875,
+        "power_incident_W": 2.5,
+        "power_reflected_W": 0.625,
+        "power_transmitted_W": 0.0,
+        "reflectance": 0.25,
+        "reflected_momentum_flow_N": [
+          0.0,
+          0.0,
+          -2.0847755949884503e-09
+        ],
+        "return_loss_dB": 6.020599913279624,
+        "return_loss_is_infinite": false,
+        "s11_imag": 0.5,
+        "s11_magnitude": 0.5,
+        "s11_phase_deg": 90.0,
+        "s11_phase_rad": 1.5707963267948966,
+        "s11_real": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "straight_through_equivalent_force_N": 1.0423877974942251e-08,
+        "transmittance": 0.0,
+        "transmitted_direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "transmitted_momentum_flow_N": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "expected_factor": 1.25,
+      "expected_force_N": 1.0423877974942251e-08,
+      "force_abs_error_N": 0.0,
+      "label": "partial_reflection_minus90deg",
+      "s11_imag": -0.5,
+      "s11_real": 0.0,
+      "summary": {
+        "absorptance": 0.75,
+        "axial_force_along_incident_direction_N": 1.0423877974942251e-08,
+        "force_N": [
+          0.0,
+          0.0,
+          1.0423877974942251e-08
+        ],
+        "force_magnitude_N": 1.0423877974942251e-08,
+        "incident_direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "incident_momentum_flow_N": [
+          0.0,
+          0.0,
+          8.339102379953801e-09
+        ],
+        "mismatch_loss_dB": 1.2493873660829995,
+        "mismatch_loss_is_infinite": false,
+        "one_port_force_formula": "F=(1+|S11|^2)P_inc k_inc/c",
+        "power_absorbed_W": 1.875,
+        "power_delivered_to_one_port_W": 1.875,
+        "power_incident_W": 2.5,
+        "power_reflected_W": 0.625,
+        "power_transmitted_W": 0.0,
+        "reflectance": 0.25,
+        "reflected_momentum_flow_N": [
+          0.0,
+          0.0,
+          -2.0847755949884503e-09
+        ],
+        "return_loss_dB": 6.020599913279624,
+        "return_loss_is_infinite": false,
+        "s11_imag": -0.5,
+        "s11_magnitude": 0.5,
+        "s11_phase_deg": -90.0,
+        "s11_phase_rad": -1.5707963267948966,
+        "s11_real": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "straight_through_equivalent_force_N": 1.0423877974942251e-08,
+        "transmittance": 0.0,
+        "transmitted_direction": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "transmitted_momentum_flow_N": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    }
+  ],
+  "validation_class": true
+}
