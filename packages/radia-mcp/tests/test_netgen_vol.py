@@ -584,6 +584,41 @@ def test_geometry_metrics_for_single_tetrahedron():
     assert mesh.surface_area_by_boundary_number() == {1: pytest.approx(1.5 + 0.5 * 3**0.5)}
 
 
+def test_surface_triangle_quality_rows_for_right_and_equilateral_faces():
+    mesh = parse_netgen_tri_tet_vol(TET_VOL)
+    rows = mesh.surface_triangle_quality_rows()
+
+    assert len(rows) == 4
+    right_rows = [row for row in rows if row["edge_ratio"] == pytest.approx(math.sqrt(2.0))]
+    equilateral_rows = [row for row in rows if row["edge_ratio"] == pytest.approx(1.0)]
+    assert len(right_rows) == 3
+    assert len(equilateral_rows) == 1
+    assert [row["area"] for row in right_rows] == pytest.approx([0.5, 0.5, 0.5])
+    assert equilateral_rows[0]["area"] == pytest.approx(0.5 * math.sqrt(3.0))
+
+    right_quality = 2.0 * (1.0 / (2.0 + math.sqrt(2.0))) / (math.sqrt(2.0) / 2.0)
+    for row in right_rows:
+        assert row["radius_ratio_quality"] == pytest.approx(right_quality)
+        assert row["edge_ratio"] == pytest.approx(math.sqrt(2.0))
+        assert row["min_angle_deg"] == pytest.approx(45.0)
+        assert row["max_angle_deg"] == pytest.approx(90.0)
+
+    equilateral = equilateral_rows[0]
+    assert equilateral["radius_ratio_quality"] == pytest.approx(1.0)
+    assert equilateral["edge_ratio"] == pytest.approx(1.0)
+    assert equilateral["min_angle_deg"] == pytest.approx(60.0)
+    assert equilateral["max_angle_deg"] == pytest.approx(60.0)
+
+    summary = mesh.surface_triangle_quality_summary()
+    assert summary["surface_triangles"] == 4
+    assert summary["min_radius_ratio_quality"] == pytest.approx(right_quality)
+    assert summary["max_radius_ratio_quality"] == pytest.approx(1.0)
+    assert summary["min_area"] == pytest.approx(0.5)
+    assert summary["max_edge_ratio"] == pytest.approx(math.sqrt(2.0))
+    assert summary["min_angle_deg"] == pytest.approx(45.0)
+    assert summary["max_angle_deg"] == pytest.approx(90.0)
+
+
 def test_tetrahedron_quality_rows_for_right_and_equilateral_tets():
     right = parse_netgen_tri_tet_vol(TET_VOL)
     row = right.tetrahedron_quality_rows()[0]
