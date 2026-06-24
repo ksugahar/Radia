@@ -6594,6 +6594,33 @@ boundary Neumann data.
 """
 
 
+NGSOLVE_ACOUSTIC_BEM = r"""
+# Acoustic FEM/BEM readable gates -- Helmholtz DtN, radiation impedance, Robin rows
+
+Scalar acoustics is the cleanest FEM/BEM coupling classroom: the FEM side owns a pressure trace,
+and the exterior radiation/BEM side returns a normal derivative or impedance.  The public helpers
+in ``radia_mcp.radia_ngsolve.acoustics`` keep the sign conventions explicit:
+
+```python
+from radia_mcp.radia_ngsolve.acoustics import (
+    acoustic_dtn_from_impedance, acoustic_impedance_from_dtn,
+    planar_helmholtz_dtn_symbol, spherical_helmholtz_dtn_eigenvalue,
+    planar_mode_radiation_impedance, spherical_mode_radiation_impedance)
+
+lam = acoustic_dtn_from_impedance(f, specific_impedance=z, rho=rho)["dtn_eigenvalue"]
+z = acoustic_impedance_from_dtn(f, lam, rho=rho)["specific_impedance"]
+```
+
+With ``exp(+i omega t)``, Euler's equation gives ``v_n = i (partial_n p)/(omega rho)``.  Therefore
+an impedance/admittance boundary is the Robin/DtN coefficient
+``partial_n p = lambda p`` with ``lambda = -i omega rho / z = -i omega rho Y``.  The validation
+example `validation_acoustic_impedance_dtn_bridge.py` checks this bridge against planar and
+spherical radiation modes and a baffled piston average impedance round trip.  Companion examples
+cover low-frequency Helmholtz kernel splitting, spherical/planar DtN modes, pulsating spheres, and
+baffled-piston radiation.
+"""
+
+
 NGSOLVE_WAVEGUIDE = r"""
 # Waveguide / cavity cutoff modes -- the 2D Helmholtz EIGENVALUE problem
 
@@ -7125,6 +7152,13 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "p1_tet": NGSOLVE_READABLE_P1_FEM,
         "p1_flux_trace": NGSOLVE_READABLE_P1_FEM,
         "fem_bem_trace": NGSOLVE_READABLE_P1_FEM,
+        "acoustic": NGSOLVE_ACOUSTIC_BEM,
+        "acoustics": NGSOLVE_ACOUSTIC_BEM,
+        "acoustic_bem": NGSOLVE_ACOUSTIC_BEM,
+        "helmholtz_dtn": NGSOLVE_ACOUSTIC_BEM,
+        "acoustic_impedance": NGSOLVE_ACOUSTIC_BEM,
+        "impedance_dtn": NGSOLVE_ACOUSTIC_BEM,
+        "radiation_impedance": NGSOLVE_ACOUSTIC_BEM,
         "core_loss": NGSOLVE_CORE_LOSS,
         "eddy_loss": NGSOLVE_CORE_LOSS,
         "eddy_current_loss": NGSOLVE_CORE_LOSS,

@@ -337,6 +337,89 @@ def planar_mode_radiation_impedance(
     }
 
 
+def acoustic_dtn_from_impedance(
+    frequency,
+    specific_impedance=None,
+    specific_admittance=None,
+    rho=1.2041,
+):
+    r"""Convert acoustic impedance/admittance to a Helmholtz DtN coefficient.
+
+    With the module's ``exp(+i omega t)`` convention, Euler's equation gives
+
+        v_n = i (partial_n p) / (omega rho).
+
+    For a boundary specific impedance ``z = p/v_n`` or admittance ``Y=v_n/p``,
+    the equivalent scalar Helmholtz Robin/DtN coefficient is
+
+        partial_n p = lambda p,     lambda = -i omega rho / z = -i omega rho Y.
+
+    This is the tiny conversion bridge between FEM impedance-boundary rows and
+    exterior BEM/DtN operators.  Exactly one of ``specific_impedance`` or
+    ``specific_admittance`` must be supplied.
+    """
+
+    f = float(frequency)
+    rrho = float(rho)
+    if f <= 0.0:
+        raise ValueError("frequency must be > 0")
+    if rrho <= 0.0:
+        raise ValueError("rho must be > 0")
+    if (specific_impedance is None) == (specific_admittance is None):
+        raise ValueError("provide exactly one of specific_impedance or specific_admittance")
+
+    omega = 2.0 * math.pi * f
+    if specific_impedance is not None:
+        z = complex(specific_impedance)
+        if z == 0.0:
+            raise ValueError("specific_impedance must be nonzero")
+        y = 1.0 / z
+    else:
+        y = complex(specific_admittance)
+    dtn = -1j * omega * rrho * y
+    return {
+        "frequency": f,
+        "omega": omega,
+        "rho": rrho,
+        "specific_impedance": math.inf if y == 0.0 else 1.0 / y,
+        "specific_admittance": y,
+        "dtn_eigenvalue": dtn,
+        "robin_coefficient": dtn,
+    }
+
+
+def acoustic_impedance_from_dtn(frequency, dtn_eigenvalue, rho=1.2041):
+    r"""Convert a Helmholtz DtN/Robin coefficient to acoustic impedance.
+
+    This is the inverse of :func:`acoustic_dtn_from_impedance`:
+
+        z = -i omega rho / lambda,     Y = i lambda / (omega rho).
+
+    It is useful for checking whether a boundary operator is active/radiating
+    (``Re(z)>0``) or purely reactive.
+    """
+
+    f = float(frequency)
+    rrho = float(rho)
+    if f <= 0.0:
+        raise ValueError("frequency must be > 0")
+    if rrho <= 0.0:
+        raise ValueError("rho must be > 0")
+    lam = complex(dtn_eigenvalue)
+    if lam == 0.0:
+        raise ValueError("dtn_eigenvalue must be nonzero")
+    omega = 2.0 * math.pi * f
+    z = -1j * omega * rrho / lam
+    return {
+        "frequency": f,
+        "omega": omega,
+        "rho": rrho,
+        "dtn_eigenvalue": lam,
+        "specific_impedance": z,
+        "specific_admittance": 1.0 / z,
+    }
+
+
 def baffled_circular_piston_radiation(
     radius,
     frequency,
