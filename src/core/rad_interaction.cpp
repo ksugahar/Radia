@@ -195,7 +195,7 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 		NewMagnArray = vNewMagnArray.data();
 		NewFieldArray = vNewFieldArray.data();
 		ExternFieldArray = vExternFieldArray.data();
-		// The moment-yano H-matrix path (method 2) enumerates hexes via m_hexaElemIndices, populated by
+		// The multipole-moment MMM H-matrix path (method 2) enumerates hexes via m_hexaElemIndices, populated by
 		// PrecomputeHexaGeometry() -- normally done inside SetupInteractMatrix_VariableDOF (skipped here).
 		// Call it directly (O(N) per-element geometry, idempotent) so the scalable moment solve sees the
 		// hexes even with the dense matrix skipped (Phase 2 Increment 4 storage decoupling).  Harmless for
@@ -247,7 +247,7 @@ bool radTInteraction::HasSurfaceChargeElements() const
 {
 	// True if any relaxable element is a surface-charge (Use6DOF_MSC) polyhedron --
 	// a soft-iron hexahedron (6 faces) or wedge/pyramid (5 faces).  These are solved by
-	// the canonical moment-yano path in C++ unless the Python wrapper routes a mesh-backed
+	// the canonical multipole-moment MMM path in C++ unless the Python wrapper routes a mesh-backed
 	// soft iron to FEEC HDiv-VIM.
 	for(int i = 0; i < AmOfMainElem; i++)
 	{
@@ -948,7 +948,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// EIEM2 retirement (Phase 3b): the dense MSC (surface-charge) interaction blocks are no longer
 	// assembled.  After the fail-loud guards in MakeAutoRelax (mixed MMM+MSC and B-input-on-MSC are
 	// rejected), the ONLY path that reaches here with an MSC element (DOF>=5) is a pure surface-charge
-	// (hex / wedge / pyramid) model solved by the parameter-free moment-yano formulation.  That path assembles its
+	// (hex / wedge / pyramid) model solved by the parameter-free multipole-moment MMM formulation.  That path assembles its
 	// own system (BuildMomentSystemCore, on-the-fly geometry via momentFaceGeom) and NEVER reads this
 	// dense interaction matrix -- it is identical to the method-2 path, which runs with no dense matrix at
 	// all (Phase 2 Increment 4).  So leave the MSC blocks zero (the matrix is already zero-initialized) and
@@ -965,7 +965,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 	// EIEM2 retirement (Phase 3b): the dense MSC fast paths (pure-hex / pure-wedge via Compute6x6/5x5BlockFast)
 	// and the no-symmetry MEDIUM MSC path were deleted.  The only surface-charge path now reaches the
-	// hasMSCElements early-return above (moment-yano assembles its own system and never reads this dense
+	// hasMSCElements early-return above (multipole-moment MMM assembles its own system and never reads this dense
 	// matrix).  What remains below is the SLOW PATH, now MMM-only (3x3, symmetry-aware) -- reached only by
 	// an all-tetrahedron model WITH space-group symmetry (pure-tet without symmetry returned via the fast
 	// path at the top of this function).
@@ -1116,7 +1116,7 @@ void radTInteraction::SetupExternFieldArray()
 				m_flatExternFieldArray[offset + 1] += H_ext.y;
 				m_flatExternFieldArray[offset + 2] += H_ext.z;
 			}
-			// MSC (hex/wedge/pyramid): no per-face external field -- the moment-yano solve samples ExternFieldArray (centroid).
+			// MSC (hex/wedge/pyramid): no per-face external field -- the multipole-moment MMM solve samples ExternFieldArray (centroid).
 		}
 	}
 	//g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
@@ -1163,7 +1163,7 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 					m_flatExternFieldArray[offset + 1] = H_ext.y;
 					m_flatExternFieldArray[offset + 2] = H_ext.z;
 				}
-				// MSC: no per-face external field (moment-yano uses the centroid ExternFieldArray).
+				// MSC: no per-face external field (multipole-moment MMM uses the centroid ExternFieldArray).
 			}
 		}
 	}
@@ -1900,7 +1900,7 @@ void radTInteraction::PrecomputeHexaGeometry()
 }
 
 //=========================================================================
-// BuildLoopBasis: cell-graph cycle (loop) basis of the yano-MSC operator.
+// BuildLoopBasis: cell-graph cycle (loop) basis of the surface-charge MSC operator.
 //
 // The loops are the field-null subspace of the retired EIEM2 surface-charge
 // collocation operator N (== the HDiv ker(B) cell/internal-face cycle space).
@@ -2295,7 +2295,7 @@ void radTInteraction::CollectMomentElems(std::vector<int>& out) const
 // BuildCentroidFieldGrad: per moment element demag field H and gradient gradH at the element CENTROID, as linear
 // functionals of each source DOF charge -- the kernel of the parameter-free moment formulation (the fix
 // for the eval-point alpha + the finite-difference conditioning noise; validated in
-// examples/vim/yano_moment_analytic_selfterm.py).
+// examples/vim/multipole_moment_analytic_selfterm.py).
 //   SELF face (same element): bare charged-face field, no center charge.  The centroid is interior, at
 //     finite distance from every face, so the integrand is smooth -> exact by Gauss quadrature, and it is
 //     patch-test exact (single cube -> demag N=1/3).
@@ -2370,9 +2370,9 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 }
 
 //=========================================================================
-// BuildMomentSystemCore: the parameter-free MOMENT-yano system matrix A and RHS for PER-ELEMENT linear
+// BuildMomentSystemCore: the parameter-free multipole-moment MMM system matrix A and RHS for PER-ELEMENT linear
 // susceptibility chiPerHex[h] in a PER-ELEMENT external field HextPerHex[h*3+k] (at the element centroid) -- the
-// C++ port of examples/vim/yano_moment_iter_scaling.py::build, generalized for the solve (coil/source fields
+// C++ port of examples/vim/multipole_moment_iter_scaling.py::build, generalized for the solve (coil/source fields
 // are not uniform).  Per moment element (hex 6 DOF, wedge/pyramid 5 DOF):
 //   3 dipole rows : (local dipole moment of sigma)/Ve - chi*H_k(centroid) . sigma = chi*Hext_k
 //   1 monopole row: sum_f area_f sigma_f = 0                       (= div B = 0)
@@ -2497,7 +2497,7 @@ void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
 
 //=========================================================================
 // MomentSystemEntry: the ON-DEMAND un-normalized moment system entry A_raw[rowGlobal][colDOF] (the HACApK
-// H-matrix entry; see docs/moment_yano/ACA_MOMENT_DESIGN.md).  Reproduces BuildMomentSystemCore's row math
+// H-matrix entry; see docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  Reproduces BuildMomentSystemCore's row math
 // for a SINGLE (row,col) WITHOUT building the full system or normalizing -- the row 2-norm is a diagonal
 // scaling that leaves the direct solve invariant, so the H-LU path uses A_raw.  HEX-ONLY; assumes all
 // m_hexaElemIndices are valid 6-face hexes (rowGlobal = 6*h + t).
@@ -2940,7 +2940,7 @@ void radTInteraction::PrecomputeWedgeGeometry()
 }
 
 // EIEM2 surface-charge kernels retired (Phase 3b, live/dead step C): Compute5x5BlockFast (wedge),
-// Compute6x6BlockFast (hex), and ComputeMixedBlockFast (cross-DOF) are deleted -- the moment-yano
+// Compute6x6BlockFast (hex), and ComputeMixedBlockFast (cross-DOF) are deleted -- the multipole-moment MMM
 // formulation (BuildMomentSystemCore) is the sole surface-charge demag, and the method-2 HACApK
 // path is MMM-only (3x3) for the remaining tetrahedron solves.
 
@@ -3118,12 +3118,12 @@ int radTInteraction::GetMirrorElementIndex(int elemIdx, int symmetryAxis) const
 
 // Legacy ELF face-permutation + IMA-mirror block (ApplyDOFPermutation, ApplyRowPermutation,
 // Compute6x6BlockIMA, Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget) deleted (Phase 3b).
-// It was #if 0 dead code (kernel-based IMA replaced it); the moment-yano path adds IMA mirror
+// It was #if 0 dead code (kernel-based IMA replaced it); the multipole-moment MMM path adds IMA mirror
 // images via CentroidFieldGradFromFace.
 
 //-------------------------------------------------------------------------
 // SetupInteractMatrix_IMA: Build IMA interaction matrix.
-// The tet MMM path uses Compute3x3BlockFast. Surface-charge moment-yano handles IMA in
+// The tet MMM path uses Compute3x3BlockFast. Surface-charge multipole-moment MMM handles IMA in
 // BuildMomentSystemCore / CentroidFieldGradFromFace and skips this dense MSC matrix.
 //-------------------------------------------------------------------------
 int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
@@ -3246,7 +3246,7 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
 	// For HACApK: skip dense matrix. Pure tet MMM computes entries on demand through
-	// Compute3x3BlockFast; surface-charge moment-yano uses RadHACApKMomentSystem instead.
+	// Compute3x3BlockFast; surface-charge multipole-moment MMM uses RadHACApKMomentSystem instead.
 	// Reset geometry so it gets recomputed for the reduced IMA element set.
 	if(skipDenseMatrix)
 	{

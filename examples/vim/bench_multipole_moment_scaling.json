@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-06-22T00:03:56.632239",
   "hostname": "lab",
-  "benchmark": "yano_moment_scaling",
+  "benchmark": "multipole_moment_scaling",
   "problem": {
     "geometry": "voxelized hex C-yoke",
     "mu_r0": 1000.0,
@@ -82,5 +82,5 @@
       "constit_resid": 6.683543229799265e-11
     }
   ],
-  "note": "Dense baseline for the parameter-free moment-yano nonlinear solver. Memory is O(dof^2) (dense_matrix_mb) and the per-iteration solve is O(dof^3), so this path caps at a few thousand dof -- the HACApK phase (ACA-compression of the centroid field+gradient operator F0/Ginv) must reproduce these moment_my / div(B) / constit numbers and beat peak_memory_mb + t_solve at scale. mdx-ready: imports radia directly (no src-path hack)."
+  "note": "Dense baseline for the parameter-free multipole-moment MMM nonlinear solver. Memory is O(dof^2) (dense_matrix_mb) and the per-iteration solve is O(dof^3), so this path caps at a few thousand dof -- the HACApK phase (ACA-compression of the centroid field+gradient operator F0/Ginv) must reproduce these moment_my / div(B) / constit numbers and beat peak_memory_mb + t_solve at scale. mdx-ready: imports radia directly (no src-path hack)."
 }

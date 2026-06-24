@@ -1,6 +1,6 @@
 """Verify-before-build gate for the "HACApK matvec + accept-growth" path (the chosen route over H-LU).
 
-The synthesis showed no cheap preconditioner BOUNDS moment-yano GMRES iters at high mu_r (non-normal demag),
+The synthesis showed no cheap preconditioner BOUNDS multipole-moment MMM GMRES iters at high mu_r (non-normal demag),
 so the practical path is: HACApK matvec (O(N log N), compressibility gate confirmed) + cheap block-Jacobi,
 ACCEPTING the iter growth.  That path is only worth the C++ build if the iter growth is genuinely SUB-LINEAR
 in N -- otherwise the total work (iters x matvec) is not sub-cubic.  This measures the clean FULL-GMRES (no
@@ -115,7 +115,7 @@ def bicgstab_iters(A, b, apply, dof, rtol=1e-8, maxiter=3000):
 
 
 def main():
-    print(f"\nmoment-yano FULL-GMRES iteration scaling (linear, mu_r={MU_R:.0f}, block-Jacobi, no restart).")
+    print(f"\nmultipole-moment MMM FULL-GMRES iteration scaling (linear, mu_r={MU_R:.0f}, block-Jacobi, no restart).")
     print("Verify the iter growth is sub-linear -> the HACApK-matvec + accept-growth path is worth building.\n")
     print(f"  {'mesh':>9} {'nhex':>6} {'dof':>6} | {'GMRES iters':>11} {'ginfo':>6} | {'BiCGSTAB mv':>11} {'binfo':>6}")
     print("  " + "-" * 74)
@@ -137,7 +137,7 @@ def main():
     bicg_fails = any(not r["bicgstab_converged"] for r in rows)
     gmres_erratic = p > 1.3
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_iter_scaling", mu_r=MU_R, solver="linear, block-Jacobi, GMRES + BiCGSTAB",
+               benchmark="multipole_moment_iter_scaling", mu_r=MU_R, solver="linear, block-Jacobi, GMRES + BiCGSTAB",
                results=rows, gmres_iter_growth_exponent=p, bicgstab_breaks_down=bool(bicg_fails),
                accept_growth_viable=bool(not bicg_fails and not gmres_erratic),
                conclusion=(
@@ -150,16 +150,16 @@ def main():
                    "same sizes (no breakdown) -- i.e. the parameter-free MOMENT system is iteratively HARDER than "
                    "EIEM2 (the price of its accuracy). So the cheap 'HACApK matvec + accept iter-growth' route is "
                    "NOT viable for the moment formulation at scale; the reliable scalable solve needs H-LU "
-                   "(bounded, predictable, heavy A-build). PRACTICAL UPSHOT: use moment-yano at MEDIUM scale "
+                   "(bounded, predictable, heavy A-build). PRACTICAL UPSHOT: use multipole-moment MMM at MEDIUM scale "
                    "(dense, already validated, mdx-ready after the accessor release) for its 7-10x accuracy; at "
                    "LARGE scale either build H-LU or keep EIEM2 (iteratively easier). The verify-first gate saved "
                    "a C++ HACApK-matvec build that would not have scaled."))
-    with open(os.path.join(HERE, "yano_moment_iter_scaling.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_iter_scaling.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print(f"\n  GMRES iters erratic (fit dof^{p:.2f}); BiCGSTAB {'BREAKS DOWN' if bicg_fails else 'ok'} at scale.")
     print("  => ACCEPT-GROWTH path REJECTED (non-normal moment system); reliable scale needs H-LU, or use")
-    print("     moment-yano dense at medium scale + EIEM2 at large scale. (verify-first saved the C++ build.)")
-    print("  saved", os.path.join(HERE, "yano_moment_iter_scaling.json"))
+    print("     multipole-moment MMM dense at medium scale + EIEM2 at large scale. (verify-first saved the C++ build.)")
+    print("  saved", os.path.join(HERE, "multipole_moment_iter_scaling.json"))
 
 
 if __name__ == "__main__":

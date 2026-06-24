@@ -1,6 +1,6 @@
-"""CAN moment-yano scale? -- the definitive answer (user 2026-06-22: "moment-yano de scale saseta i, te wa nai noka").
+"""CAN multipole-moment MMM scale? -- the definitive answer (user 2026-06-22: "multipole-moment MMM de scale saseta i, te wa nai noka").
 
-Earlier I wrongly retreated to "moment-yano dense at medium scale + EIEM2 at large scale" and called H-LU "too
+Earlier I wrongly retreated to "multipole-moment MMM dense at medium scale + EIEM2 at large scale" and called H-LU "too
 heavy". Both were wrong. This consolidates the corrected, MEASURED picture:
 
 1. BUILD is CHEAP. The moment matrix-gen kernel (rad.GetCentroidFieldGrad: centroid field+gradient, a SINGLE
@@ -20,9 +20,9 @@ heavy". Both were wrong. This consolidates the corrected, MEASURED picture:
    cluster tree). It is NOT "too heavy": the H-LU FACTOR is cheap (~6s @ N=2302 per the HDiv data) and the
    A-build is the cheap-entry HACApK build from (1). So:
 
-       SCALABLE moment-yano = HACApK A-build (cheap entries, sub-cubic) + H-LU factor (cheap) -> bounded iters.
+       SCALABLE multipole-moment MMM = HACApK A-build (cheap entries, sub-cubic) + H-LU factor (cheap) -> bounded iters.
 
-   No cheaper preconditioner works (measured); H-LU is the price, and it is affordable. moment-yano CAN scale.
+   No cheaper preconditioner works (measured); H-LU is the price, and it is affordable. multipole-moment MMM CAN scale.
 
 This script reproduces (1) the cheap build cost and (2) the sparse-LU failure, and states the H-LU path. The
 H-LU factor itself is the C++ piece (the lab already ships H-LU: HLUSetAccumCap etc.); this gate establishes it
@@ -126,7 +126,7 @@ def sparse_lu_apply(A, dof, k):
 
 
 def main():
-    print("\nCAN moment-yano scale? build cost + why cheap preconditioners fail -> H-LU is the affordable answer.\n")
+    print("\nCAN multipole-moment MMM scale? build cost + why cheap preconditioners fail -> H-LU is the affordable answer.\n")
     print("  (1) BUILD cost -- moment matrix-gen kernel (centroid field+gradient, single integral):")
     print(f"      {'nxy':>4} {'n_el':>5} {'dof':>5} {'CentroidFG':>11} {'us/(el*face)':>12}")
     build_rows = []
@@ -149,10 +149,10 @@ def main():
         solve_rows.append(dict(precond=f"sparse-LU top-{k}", k=k, nnz_frac=nnzf, iters=it, converged=bool(info == 0)))
     per_pair = float(np.median([r["us_per_pair"] for r in build_rows]))
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_scalable_path", build=build_rows, solve=solve_rows,
+               benchmark="multipole_moment_scalable_path", build=build_rows, solve=solve_rows,
                build_us_per_pair=per_pair,
                conclusion=(
-                   f"moment-yano CAN scale. (1) BUILD is cheap: the centroid field+gradient kernel is ~{per_pair:.1f} "
+                   f"multipole-moment MMM CAN scale. (1) BUILD is cheap: the centroid field+gradient kernel is ~{per_pair:.1f} "
                    "us per (element,face) pair (single centroid->face integral, all 9 functionals per pass) -- far "
                    "lighter than HDiv's face->face DOUBLE-integral charge-Gram (~270 us/entry from 68s@N=2302). So "
                    "the build is NOT the obstacle: dense is sub-second at medium scale; the HACApK ACA build is "
@@ -161,18 +161,18 @@ def main():
                    "(precond_synthesis), and sparse-LU (top-k, far-field dropped) is FAR worse than block-Jacobi "
                    "(thousands of iters) -- the long-range coupling MUST be in the preconditioner. (3) THEREFORE "
                    "H-LU is necessary AND sufficient (it keeps the far-field as low-rank) AND affordable (factor "
-                   "~6s per HDiv; A-build cheap per (1)). SCALABLE moment-yano = HACApK A-build + H-LU factor -> "
+                   "~6s per HDiv; A-build cheap per (1)). SCALABLE multipole-moment MMM = HACApK A-build + H-LU factor -> "
                    "bounded iters. The earlier 'too heavy / use EIEM2 at scale' was wrong: build is cheap, H-LU "
                    "factor is cheap, and no cheaper preconditioner works. The C++ piece to build is the H-LU on the "
                    "moment HACApK matrix (the lab already ships H-LU machinery)."))
-    with open(os.path.join(HERE, "yano_moment_scalable_path.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_scalable_path.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print(f"\n  VERDICT: BUILD cheap ({per_pair:.1f} us/pair, lighter than HDiv); cheap preconditioners FAIL "
           "(far-field essential);")
-    print("  H-LU is necessary + sufficient + AFFORDABLE (cheap factor + cheap build) => moment-yano SCALES.")
+    print("  H-LU is necessary + sufficient + AFFORDABLE (cheap factor + cheap build) => multipole-moment MMM SCALES.")
     print("  Scalable path = HACApK A-build (cheap) + H-LU factor (cheap) -> bounded iters. (C++ piece: H-LU on")
     print("  the moment HACApK matrix; lab already ships H-LU.)")
-    print("  saved", os.path.join(HERE, "yano_moment_scalable_path.json"))
+    print("  saved", os.path.join(HERE, "multipole_moment_scalable_path.json"))
 
 
 if __name__ == "__main__":

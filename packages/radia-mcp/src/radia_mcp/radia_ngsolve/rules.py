@@ -1012,7 +1012,7 @@ def check_msc_eval_face_center(filepath: str, lines: List[str]) -> List[Dict]:
         if not line.strip().startswith('#') and pattern.search(line.strip()):
             findings.append({
                 'line': i, 'severity': 'MODERATE', 'rule': 'msc-eval-face-center',
-                    'message': 'Do not use face_center as a Yano/EIEM2 eval point; production surface-charge demag uses moment-yano instead.',
+                    'message': 'Do not use face_center as a Yano/EIEM2 eval point; production surface-charge demag uses multipole-moment MMM instead.',
             })
     return findings
 

@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-06-22T08:43:36.659911",
   "hostname": "lab",
-  "benchmark": "yano_moment_shear_gradient",
+  "benchmark": "multipole_moment_shear_gradient",
   "eiem2_normal_rank": 3,
   "eiem2_fullvector_rank": 6,
   "moment_rank": 6,

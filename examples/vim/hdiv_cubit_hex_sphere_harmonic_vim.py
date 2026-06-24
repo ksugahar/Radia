@@ -22,7 +22,7 @@ solid-harmonic subspace, so this scalar Rayleigh solve is the correct
 self-consistent benchmark.
 
 The important geometry point remains the same: Cubit's high-order ``.vol`` carries
-curved hex nodes that moment-yano's flat per-cell surface formulation does not use.
+curved hex nodes that multipole-moment MMM's flat per-cell surface formulation does not use.
 
 Run:
     python hdiv_cubit_hex_sphere_harmonic_vim.py

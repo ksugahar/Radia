@@ -4,7 +4,7 @@
 Locks the quantitative curved accuracy-per-DOF win against the production code: at the same mesh h the
 curved field is >10x more accurate, and curved at a COARSE mesh beats shipped-Radia-flat at a FINER one.
 (Accuracy-per-resolution, geometry-driven; wall-clock is the C++ productionization, not claimed.  Radia
-is the accessible FLAT stand-in for the also-flat yano-type; the reference is the analytic dipole because
+is the accessible FLAT stand-in for the also-flat six-face surface-charge; the reference is the analytic dipole because
 Radia cannot referee curved geometry -- it facets.)
 """
 import os

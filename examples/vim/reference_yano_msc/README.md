@@ -1,14 +1,14 @@
-# yano-type MSC reference (frozen baseline for the HDiv-VIM C-yoke)
+# six-face surface-charge MSC reference (frozen baseline for the HDiv-VIM C-yoke)
 
-This directory holds the **frozen yano-type collocation-MSC (distortion-element)
+This directory holds the **frozen six-face surface-charge collocation-MSC (distortion-element)
 reference numbers** that the live HDiv-VIM C-yoke head-to-head
 ([`../hdiv_cyoke_headtohead.py`](../hdiv_cyoke_headtohead.py)) is compared against.
 
-The historical collocation yano-type method has been replaced in live Radia by
-the canonical moment-yano surface-charge formulation; these are **reference data
+The historical collocation six-face surface-charge method has been replaced in live Radia by
+the canonical multipole-moment MMM surface-charge formulation; these are **reference data
 only**, not a runnable reproduction of the old EIEM2 collocation kernel. Current
 mesh-less hex/wedge/pyramid soft iron still solves through `rad.Solve`, but it
-uses moment-yano. Until now these numbers lived only as a comment in
+uses multipole-moment MMM. Until now these numbers lived only as a comment in
 `hdiv_cyoke_headtohead.py` ("the yano JSON is not committed to this repo"); this
 directory **commits the source JSONs** so the embedded `YANO_REF` has a tracked
 provenance.
@@ -23,7 +23,7 @@ Recovered from git history (commit `20cc1696`, deleted 2026-06-17) — see
 [`RESCUE_MANIFEST.md`](RESCUE_MANIFEST.md). Geometry generator:
 [`generate_hex_mesh.py`](generate_hex_mesh.py) (requires Cubit).
 
-## golden/ — yano-MSC nonlinear (Newton) reference matrix
+## golden/ — surface-charge MSC nonlinear (Newton) reference matrix
 
 | file | solver | DoF | nelem | nonl_it | lin_it | Bz (mT) | t_solve (s) |
 |---|---|---|---|---|---|---|---|
@@ -40,12 +40,12 @@ Recovered from git history (commit `20cc1696`, deleted 2026-06-17) — see
 
 ## Honest comparison caveat (Repository-First)
 
-These are the yano-type **HACApK + Newton** (or LU / BiCGSTAB + Newton) runs.
+These are the six-face surface-charge **HACApK + Newton** (or LU / BiCGSTAB + Newton) runs.
 The large *linear* (Krylov) iteration counts of the HACApK rows (1506-2686) are
 the loop-mode pollution the loop-free HDiv-VIM (ker(B) field-null) collapses to
 ~6 mesh/mu_r-independent Newton iterations. **However**, a strictly fair
 same-solver head-to-head (identical Picard + Block-Jacobi for both methods) at
 165600 DoF has **not** been run on current radia — the HDiv-VIM inner +N solve
 does not yet scale past ~20-40k DoF (see the `status_2026_06_09` note in
-`../hdiv_cyoke_headtohead.json`). Read these as the **historical yano-type
+`../hdiv_cyoke_headtohead.json`). Read these as the **historical six-face surface-charge
 baseline**, not as a head-to-head win at 165600 DoF.

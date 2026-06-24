@@ -1,17 +1,17 @@
-"""Real-geometry GATE for the parameter-free yano-MSC moment formulation: does it hold on a NON-CONVEX
+"""Real-geometry GATE for the parameter-free surface-charge MSC moment formulation: does it hold on a NON-CONVEX
 flux-path body (a voxelized hex C-yoke), not just the cube-in-uniform-field?
 
 The moment formulation (dipole<-H(centroid), quadrupole<-gradH(centroid), monopole=div(B)=0, loops
 deflated) is assembled here straight from the shipped C++ kernel rad.GetCentroidFieldGrad (the
-(nHex,9,dof) centroid field+gradient functionals; see yano_moment_analytic_selfterm.py + the accessor
+(nHex,9,dof) centroid field+gradient functionals; see multipole_moment_analytic_selfterm.py + the accessor
 golden tests/feec/test_centroid_field_grad.py).  We compare, with an in-plane applied field that drives
 flux around the C:
 
-   moment-yano (C++ accessor + moment assembly)  vs  EIEM2-yano (shipped rad.Solve)  vs  MMM (tets).
+   multipole-moment MMM (C++ accessor + moment assembly)  vs  EIEM2-yano (shipped rad.Solve)  vs  MMM (tets).
 
 Observable = the magnetization moment m = int M dV (dominant component), at two voxel resolutions.
 
-RESULT: on the C-yoke, moment-yano lands ~0.2% from the MMM reference while the (alpha-tuned) EIEM2
+RESULT: on the C-yoke, multipole-moment MMM lands ~0.2% from the MMM reference while the (alpha-tuned) EIEM2
 collocation is ~1.5-2% off -- i.e. the ~7-10x accuracy advantage measured on the cube carries over to a
 real non-convex flux path, with bounded conditioning.  The moment formulation is NOT accuracy-negative on
 a real geometry -> it is sound to build on (the pyramid-kernel lesson: prove the real-geometry gate before
@@ -57,7 +57,7 @@ def _norm(row, rhs):
     return (row / nn, rhs / nn) if nn > 1e-300 else (row, rhs)
 
 
-def moment_yano(hexes, Happ):
+def multipole_moment_mmm(hexes, Happ):
     """moment formulation, assembled from the C++ rad.GetCentroidFieldGrad accessor."""
     rad.UtiDelAll(); rad.set_demag_backend("yano")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
@@ -137,14 +137,14 @@ def main():
     rows = []
     for (nxy, nz) in [(8, 2), (12, 2)]:
         hexes = build_cyoke_hexes(nxy, nz)
-        m_mom, cond, nel, dof = moment_yano(hexes, Happ)
+        m_mom, cond, nel, dof = multipole_moment_mmm(hexes, Happ)
         m_ei = eiem2_yano(hexes, Happ); m_mmm = mmm_ref(hexes, Happ)
         em = m_mom[1] / m_mmm[1] - 1; ee = m_ei[1] / m_mmm[1] - 1
         print(f"  {nxy}x{nxy}x{nz:>2} {nel:>5} | {m_mom[1]:>11.3e} {cond:>8.0e} | {m_ei[1]:>11.3e} | "
               f"{m_mmm[1]:>13.3e} | {em:>+7.2%} {ee:>+8.2%}")
         rows.append(dict(nxy=nxy, nz=nz, nhex=nel, dof=dof, moment_my=float(m_mom[1]), cond=cond,
                          eiem2_my=float(m_ei[1]), mmm_my=float(m_mmm[1]), moment_err=em, eiem2_err=ee))
-    with open(os.path.join(HERE, "yano_moment_cyoke_gate.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_cyoke_gate.json"), "w") as f:
         json.dump(dict(mu_r=MU_R, H0=H0, applied="in-plane +y", rows=rows,
                        conclusion=("On a voxelized non-convex hex C-yoke (real flux path), the moment "
                                    "formulation assembled from rad.GetCentroidFieldGrad lands ~0.2% from "
@@ -153,7 +153,7 @@ def main():
                                    "bounded conditioning. NOT accuracy-negative -> sound to build on.")),
                   f, indent=2, default=float)
     print("\n  moment ~0.2% vs MMM, EIEM2 ~1.5-2% -> the accuracy advantage holds on a real non-convex flux")
-    print("  path. saved", os.path.join(HERE, "yano_moment_cyoke_gate.json"))
+    print("  path. saved", os.path.join(HERE, "multipole_moment_cyoke_gate.json"))
 
 
 if __name__ == "__main__":

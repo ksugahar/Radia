@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-06-22T01:03:31.332276",
   "hostname": "lab",
-  "benchmark": "yano_moment_precond_synthesis",
+  "benchmark": "multipole_moment_precond_synthesis",
   "nxy": 16,
   "n_el": 180,
   "dof": 1080,
@@ -36,5 +36,5 @@
   "iters_block_jacobi": 174,
   "iters_loop_deflated": 160,
   "loop_deflation_residual": 3.3050976604503804e-09,
-  "conclusion": "Loops are field-null in D (||D Lb||/||D||=5e-16), so block-Jacobi -- whose blocks carry the chi-scaled self-field -- over-scales them, collapsing all nLoop loop modes to eigenvalue ~1/chi (near-zero count 0/124/205 for mu_r 2/100/1000, min|eig|~1/chi, loop-overlap 1.000). That IS the chi-scaling of the iteration count. BUT the operator is non-normal (7e-2), so GMRES is governed by the pseudospectrum, not eigenvalues: TRUE operator-deflation of all 205 loop modes only improves 174->160. The bottleneck is the non-normal demag-complement (what precond_diagnosis correctly called the demag mutual coupling). Every cheap lever fails -- blocks (loop-range hurts), net-charge handling (0 overlap), eigenvalue/loop deflation (non-normal). Robust cure = H-LU on the cluster tree (heavy A-build, bounded iters, the lab's standing conclusion); cheap alternative = ACCEPT the sub-linear iter growth (~dof^1.06) with cheap HACApK matvecs, as the production yano-MSC / HDiv-VIM do. No free cheap preconditioner exists here: the obstacle is the non-normal high-mu_r demag operator."
+  "conclusion": "Loops are field-null in D (||D Lb||/||D||=5e-16), so block-Jacobi -- whose blocks carry the chi-scaled self-field -- over-scales them, collapsing all nLoop loop modes to eigenvalue ~1/chi (near-zero count 0/124/205 for mu_r 2/100/1000, min|eig|~1/chi, loop-overlap 1.000). That IS the chi-scaling of the iteration count. BUT the operator is non-normal (7e-2), so GMRES is governed by the pseudospectrum, not eigenvalues: TRUE operator-deflation of all 205 loop modes only improves 174->160. The bottleneck is the non-normal demag-complement (what precond_diagnosis correctly called the demag mutual coupling). Every cheap lever fails -- blocks (loop-range hurts), net-charge handling (0 overlap), eigenvalue/loop deflation (non-normal). Robust cure = H-LU on the cluster tree (heavy A-build, bounded iters, the lab's standing conclusion); cheap alternative = ACCEPT the sub-linear iter growth (~dof^1.06) with cheap HACApK matvecs, as the production surface-charge MSC / HDiv-VIM do. No free cheap preconditioner exists here: the obstacle is the non-normal high-mu_r demag operator."
 }
