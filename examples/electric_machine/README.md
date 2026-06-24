@@ -11,13 +11,15 @@ NGSolve's high-order curved elements.
 | [`validation_pm_drive_speed_map.py`](validation_pm_drive_speed_map.py) | Validation-class PM-machine speed map across MTPA/FW/MTPV/infeasible regions plus short-circuit demagnetising trend | `field_weakening_operating_point`, `dq_operating_point`, `short_circuit_operating_point` |
 | [`validation_lamination_mu_eff_sweep.py`](validation_lamination_mu_eff_sweep.py) | Validation-class laminated-steel complex-permeability sweep from static limit into deep skin effect | `laminated_mu_eff` |
 | [`validation_cross_saturation_flux_map.py`](validation_cross_saturation_flux_map.py) | Validation-class d-q cross-saturation flux map with reciprocity and incremental inductance rolloff | `incremental_inductance_matrix`, `dq_flux_torque` |
+| [`validation_carter_magnetizing_sweep.py`](validation_carter_magnetizing_sweep.py) | Validation-class Carter air-gap opening sweep linked to AC-machine magnetizing inductance | `carter_coefficient`, `effective_air_gap`, `slotted_air_gap_permeance_factor`, `magnetizing_inductance_per_phase` |
 
-```bash
+```powershell
 python cogging_skew_demo.py
 python validation_slot_winding_spectrum.py
 python validation_pm_drive_speed_map.py
 python validation_lamination_mu_eff_sweep.py
 python validation_cross_saturation_flux_map.py
+python validation_carter_magnetizing_sweep.py
 ```
 
 What it validates (no commercial tool needed to run or check):
