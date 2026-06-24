@@ -244,7 +244,7 @@ jobs:
           # previous CI run hold Scripts/mcp-server-*.exe and block
           # the editable install with WinError 32 (file in use).
           # 2026-05-22 v4.72.0 hit this on mcp-server-build123d.exe;
-          # mirror release_triple.py phase 8's force-kill.
+          # mirror release_qud.py phase 8's force-kill.
           Write-Host "Stopping any orphan mcp-server-*.exe..."
           Get-Process -ErrorAction SilentlyContinue | Where-Object {
             $_.Name -like 'mcp-server*'
