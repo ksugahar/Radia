@@ -133,7 +133,19 @@ def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
     assert plan["total_affected"] == 1
     assert plan["returned"] == 1
     assert plan["truncated"] is False
-    assert plan["directory_groups"] == [{"directory": "examples", "count": 1}]
+    assert plan["directory_groups"] == [{
+        "directory": "examples",
+        "count": 1,
+        "directory_companion": {
+            "geo_companion": "examples\\_gmsh_display.geo",
+            "geo_template": (
+                "// Shared GMSH display companion for examples\n"
+                "// Use with any high-order .msh output from this directory.\n"
+                "Mesh.NumSubEdges = 4;\n"
+                "// Merge \"<result>.msh\";\n"
+            ),
+        },
+    }]
     item = plan["affected"][0]
     assert item["script"] == "examples\\curved.py"
     assert item["triggers"] == ["high_order_curve"]
@@ -149,6 +161,20 @@ def test_gmsh_numsubedges_rule_respects_display_companion(tmp_path):
     assert check_numsubedges_missing(str(script), lines)
 
     (tmp_path / "curved_display.geo").write_text(
+        "Mesh.NumSubEdges = 4;\n",
+        encoding="utf-8",
+    )
+    assert check_numsubedges_missing(str(script), lines) == []
+
+
+def test_gmsh_numsubedges_rule_respects_directory_display_companion(tmp_path):
+    from radia_mcp.gmsh.rules import check_numsubedges_missing
+
+    script = tmp_path / "curved.py"
+    lines = ["mesh.Curve(3)\n"]
+    assert check_numsubedges_missing(str(script), lines)
+
+    (tmp_path / "_gmsh_display.geo").write_text(
         "Mesh.NumSubEdges = 4;\n",
         encoding="utf-8",
     )
