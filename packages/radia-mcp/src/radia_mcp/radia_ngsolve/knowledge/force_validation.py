@@ -29,6 +29,7 @@ of the methods below, with an analytic sanity check available.
 | Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
+| Uniform cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*`` |
 | Energy/inductance-derived checks | Field energy | ``force.magnetic_energy*``, ``force.inductance_*`` |
 | dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
 | Synchronous/induction machine torque curves | Circuit-level machine model | ``solve.synchronous_power_angle_torque`` / ``solve.induction_machine_torque`` |
