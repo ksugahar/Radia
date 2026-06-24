@@ -1,6 +1,6 @@
 """
 Radia install / deploy policy and recipes — 2-tier configuration
-(LAB editable / 100号機 + mdx PyPI), reversible migration steps,
+(LAB + 100号機 editable / mdx + hibino PyPI), reversible migration steps,
 and the non-obvious gotchas that cause silent breakage.
 
 Read this when:
@@ -11,7 +11,7 @@ Read this when:
   freshly-deployed machine.
 
 The MCP server exposes this via install_deploy(topic=...). Topics:
-two_tier, lab_editable, hyaku_pypi, mdx_pypi, gui_extra,
+two_tier, lab_editable, hyaku_editable, mdx_pypi, hibino_pypi, gui_extra,
 editable_to_pypi_migration, pypi_to_editable_migration,
 metadata_sync, pyd_dll_bootstrap, cubit_plugin_layers,
 first_install_panel_registration, common_failure_modes
@@ -20,16 +20,21 @@ first_install_panel_registration, common_failure_modes
 INSTALL_DEPLOY = """\
 # Radia install / deploy policy (2026-05-02 simplified to 2-tier)
 
-This document is the canonical record of how the three Radia
-machines (LAB, 100号機, mdx) are installed and kept in sync. It
+This document is the canonical record of how the Radia deployment
+machines (LAB, 100号機, mdx, hibino) are installed and kept in sync. It
 supersedes:
 * the 2026-04-24 policy (LAB+100号機 = NAS editable, mdx = PyPI),
 * the 2026-05-01 3-tier policy (LAB editable, mdx editable, 100号機 PyPI).
 
-The current 2-tier policy was set 2026-05-02 by the user:
-"radia は mdx に対しても editable install をやめ pypi 経由の配布にする".
+The current 2-tier policy is:
+* LAB + 100号機 are NAS editable installs.
+* mdx + hibino are PyPI wheel consumers.
 
-Topics: two_tier, lab_editable, hyaku_pypi, mdx_pypi, gui_extra,
+The user set the 100号機 editable / mdx PyPI split explicitly, and on
+2026-06-25 added hibino as another PyPI consumer reached by `ssh hibino`.
+The release gate is QUD: four machines must agree at Phase 9.
+
+Topics: two_tier, lab_editable, hyaku_editable, mdx_pypi, hibino_pypi, gui_extra,
         editable_to_pypi_migration, pypi_to_editable_migration,
         metadata_sync, pyd_dll_bootstrap, cubit_plugin_layers,
         first_install_panel_registration, common_failure_modes
@@ -38,22 +43,29 @@ Topics: two_tier, lab_editable, hyaku_pypi, mdx_pypi, gui_extra,
 ## two_tier — current 2-tier configuration (2026-05-02)
 ============================================================
 
-| Machine  | Install                                               | Source                                            |
-|----------|-------------------------------------------------------|---------------------------------------------------|
-| LAB      | editable (`pip install -e`)                           | NAS `S:\\Radia\\01_GitHub`                        |
-| 100号機  | PyPI (`pip install 'radia[cubit,gui]==X.Y.Z' ...`)    | `C:\\Program Files\\Python312\\Lib\\site-packages` |
-| mdx      | PyPI (IDENTICAL recipe)                               | `C:\\Program Files\\Python312\\Lib\\site-packages` |
+| Machine  | Install                                  | Source                                            |
+|----------|------------------------------------------|---------------------------------------------------|
+| LAB      | editable (`pip install -e`)              | NAS `S:\\Radia\\01_GitHub`                        |
+| 100号機  | editable (`pip install -e`)              | NAS `\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub` |
+| mdx      | PyPI wheel consumer                      | `C:\\Program Files\\Python312\\Lib\\site-packages` |
+| hibino   | PyPI wheel consumer via `ssh hibino`     | `C:\\Program Files\\Python312\\Lib\\site-packages` |
 
 Roles:
 
 * **LAB** — dev iteration; Build.ps1 outputs are immediately live via
   the editable install.
-* **100号機** — the lab's shared 21-user box. End-to-end PyPI wheel +
-  Cubit plugin verification on the production machine.
-* **mdx** — second PyPI verification point, isolated from NAS, used as
-  the cross-machine consistency probe (release-triple Phase 9). mdx
-  HAS Cubit installed and runs `cubit-plugin-install --all-users`
-  exactly like 100号機.
+* **100号機** — the lab's shared 21-user box. It reads the NAS source
+  editably so LAB-side fixes can be reflected by metadata refresh plus
+  plugin deploy, not by waiting for PyPI.
+* **mdx** — PyPI verification point, isolated from NAS, used as a wheel
+  consumer in `release_qud.py phase8e` and the Phase 9 drift probe.
+* **hibino** — PyPI verification / deployment point, reached by
+  `ssh hibino`. It installs `radia`, `cubit-mesh-export`, and
+  `radia-mcp` from PyPI and is included in `release_qud.py phase9`.
+  Cubit is optional on hibino: if Coreform Cubit 2025.12+ is absent,
+  `release_qud.py phase8 --target hibino` skips the plugin/smoke part
+  after the PyPI install. Its bare `python` command is a Windows Store
+  alias, so release probes and deploys use `py -3.12`.
 
 The 2026-05-01 3-tier policy (mdx editable from a local clone) was
 retired 2026-05-02 because mdx editable required (a) a base64-over-ssh
@@ -83,20 +95,22 @@ pip install -e packages/radia-mcp --no-deps --no-cache-dir
 This is the **metadata_sync** step (see topic). Don't skip it after a
 release — `importlib.metadata.version("radia")` will lag.
 
-LAB ↔ 100号機 NAS-share is preserved (filesystem same), but 100号機's
-Python install path is now independent (PyPI), so LAB edits do NOT
-auto-propagate to 100号機 anymore.  mdx has no NAS access at all.
+LAB ↔ 100号機 NAS-share is preserved (filesystem same), and 100号機 is
+also editable from that share. mdx and hibino are wheel consumers and
+do not read the NAS source during the release gate.
 
 ============================================================
-## hyaku_pypi — 100号機 PyPI install
+## hyaku_editable — 100号機 NAS editable install
 ============================================================
 
-100号機 (the lab's shared 21-user box) receives Radia exclusively via
-PyPI install. All three packages go to machine-wide site-packages.
+100号機 (the lab's shared 21-user box) receives Radia from the NAS
+checkout via editable install. The SSH host remains `192.168.11.100`.
 
-After every release, the admin runs:
+After every release or source-side deploy, `release_qud.py phase8
+--target 100` runs the equivalent of:
 
 ```powershell
+cat << 'PS' | ssh 192.168.11.100 'pwsh -ExecutionPolicy Bypass -Command -'
 # Stop locks
 Get-Process -ErrorAction SilentlyContinue | Where-Object {
     $_.Name -like 'mcp-server*' -or
@@ -104,15 +118,15 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {
 } | ForEach-Object { Stop-Process -Id $_.Id -Force }
 Start-Sleep -Seconds 2
 
-# Upgrade from PyPI (NOT NAS source).  [cubit,gui] extras MANDATORY.
-pip install --upgrade --no-cache-dir \\
-    'radia[cubit,gui]==<X.Y.Z>' \\
-    'radia-mcp==<X.Y.Z>' \\
-    'cubit-mesh-export==<X.Y.Z>'
+pip install -e "\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub" `
+    -e "\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\packages\\cubit-mesh-export" `
+    -e "\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\packages\\radia-mcp" `
+    --no-deps --no-cache-dir
 
-# Deploy Cubit plugin from PyPI wheel for all 21 users
 cubit-plugin-install --all-users
 cubit-plugin-install --verify-only --all-users
+cubit-smoke-test
+PS
 ```
 
 The `--all-users` flag writes the Cubit plugin to
@@ -122,11 +136,13 @@ profile (admin privilege required).  `--verify-only --all-users` checks
 both binary hashes and panel startup registration.
 
 ============================================================
-## mdx_pypi — mdx PyPI install (identical to 100号機)
+## mdx_pypi — mdx PyPI install
 ============================================================
 
-mdx is the second PyPI verification point.  The recipe is BYTE-FOR-BYTE
-identical to 100号機:
+mdx is a PyPI verification point and intentionally does not read NAS
+source during the release gate. It installs `radia` and
+`cubit-mesh-export`; `radia-mcp` is intentionally omitted on mdx and
+appears as `N/A` in the Phase 9 drift table.
 
 ```powershell
 # Stop locks (python / mcp-server / Cubit hold .pyd open)
@@ -138,7 +154,6 @@ Start-Sleep -Seconds 2
 
 pip install --upgrade --no-cache-dir \\
     'radia[cubit,gui]==<X.Y.Z>' \\
-    'radia-mcp==<X.Y.Z>' \\
     'cubit-mesh-export==<X.Y.Z>'
 
 cubit-plugin-install --all-users
@@ -158,6 +173,44 @@ fixture reads (`tests/panels/golden/*.step` etc.) but Python no
 longer imports from it.  `tools/push_pyds_to_mdx.py` is preserved
 for branch-test scenarios only (testing a pre-release `.pyd` without
 cutting a tag); it's NOT part of the standard release path anymore.
+
+============================================================
+## hibino_pypi — hibino PyPI install
+============================================================
+
+hibino is the second PyPI consumer machine in the release-qud gate. Use
+the SSH alias `hibino`; do not pass Japanese paths or long PowerShell
+commands as SSH arguments. Use `py -3.12` for Python on hibino; the
+bare `python` command is the Windows Store alias and will only print
+`Python`.  `C:\\Python312\\Scripts` may be absent from PATH, so
+`release_qud.py` derives the Scripts directory from `py -3.12 -c
+"import sys; print(sys.executable)"` before calling
+`cubit-plugin-install` or `cubit-smoke-test`.  If Coreform Cubit
+2025.12+ is not installed, hibino remains a package/MCP verification
+target and the Cubit plugin/smoke step is skipped.
+
+```powershell
+cat << 'PS' | ssh hibino 'pwsh -ExecutionPolicy Bypass -Command -'
+Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.Name -like 'mcp-server*' -or
+    $_.ProcessName -in 'coreform_cubit','cubit'
+} | ForEach-Object { Stop-Process -Id $_.Id -Force }
+Start-Sleep -Seconds 2
+
+py -3.12 -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir `
+    'radia[cubit,gui]==<X.Y.Z>' `
+    'radia-mcp==<X.Y.Z>' `
+    'cubit-mesh-export==<X.Y.Z>'
+
+cubit-plugin-install --all-users
+cubit-plugin-install --verify-only --all-users
+cubit-smoke-test
+PS
+```
+
+`tools/release_qud.py phase8 --target hibino` runs this recipe through
+the common PyPI deploy helper. `tools/release_qud.py phase9` includes
+hibino in the version/hash drift table.
 
 ============================================================
 ## gui_extra — `radia[cubit,gui]` MANDATORY for production
@@ -198,9 +251,9 @@ print(IHWindow().sizeHint())   # should print a (W, H) Qt size
 ## editable_to_pypi_migration — switch a machine from editable to PyPI
 ============================================================
 
-Use this when, e.g., 100号機 was on NAS-editable and you're moving it
-to PyPI (the 2026-05-01 100号機 migration), or mdx was on
-local-clone-editable (the 2026-05-02 mdx migration).
+Use this when moving a machine from editable to PyPI, e.g. mdx or
+hibino. 100号機 is intentionally editable in the current release-qud
+policy.
 
 ```powershell
 # Stop locks (mcp-server, Cubit, jupyter, python)
@@ -302,14 +355,15 @@ pip install -e packages/cubit-mesh-export --no-deps --no-cache-dir
 pip install -e packages/radia-mcp --no-deps --no-cache-dir
 ```
 
-`tools/release_triple.py done` runs a Phase 9 cross-machine probe
+`tools/release_qud.py done` runs a Phase 9 cross-machine probe
 that compares `__version__` and `pip list` outputs. A DRIFT row in
 that report usually means metadata_sync was skipped on LAB (the
 only editable machine left).
 
-For 100号機 / mdx (PyPI install), the metadata is synced
+For mdx / hibino (PyPI install), the metadata is synced
 automatically by `pip install --upgrade radia==<X.Y.Z>` because
 PyPI installs are not editable.
+mdx intentionally lacks `radia-mcp`; hibino installs it.
 
 ============================================================
 ## pyd_dll_bootstrap — `cubit_mesh_curver.pyd` requires `import radia` first
@@ -331,7 +385,7 @@ Without the `import radia` first, you get
 `ImportError: DLL load failed while importing cubit_mesh_curver: ...`.
 
 This issue applied historically to mdx editable; on a PyPI install
-(both 100号機 and mdx now) the wheel installer registers DLL search
+(mdx and hibino now) the wheel installer registers DLL search
 paths via its own hooks, so the bootstrap is automatic.
 
 ============================================================
@@ -356,7 +410,7 @@ Two layers:
 
 Implications:
 
-* On 100号機 / mdx (PyPI install), `pip install --upgrade
+* On mdx / hibino (PyPI install), `pip install --upgrade
   cubit-mesh-export==X.Y.Z` updates the Python side. You MUST then
   run `cubit-plugin-install --all-users` to update the Cubit side and
   panel startup registration.
@@ -418,14 +472,14 @@ until this passes.
 ## Tooling reference
 ============================================================
 
-* `.claude/skills/deploy/SKILL.md` — Stage 2 (100号機 + mdx PyPI),
-  identical recipe.
-* `.claude/skills/release-triple/SKILL.md` — Phase 8a-8e deploy
+* `.claude/skills/deploy/SKILL.md` — deployment background for 100号機,
+  mdx, and hibino.
+* `tools/release_qud.py` — Phase 8a-8e deploy
   steps after a release.
 * `tools/push_pyds_to_mdx.py` — LAB → mdx C++ artifact pusher (with
   lock-killer prelude).  RETIRED 2026-05-02 from standard release
   flow; preserved for branch-test scenarios only.
-* `tools/release_triple.py done` — Phase 9 cross-machine drift
+* `tools/release_qud.py done` — Phase 9 cross-machine drift
   probe (the Definition Of Done gate).
 """
 
@@ -433,8 +487,9 @@ until this passes.
 _TOPICS = (
     "two_tier",
     "lab_editable",
-    "hyaku_pypi",
+    "hyaku_editable",
     "mdx_pypi",
+    "hibino_pypi",
     "gui_extra",
     "editable_to_pypi_migration",
     "pypi_to_editable_migration",
@@ -450,7 +505,9 @@ _TOPICS = (
 # 2-tier transition.
 _TOPIC_ALIASES = {
     "three_tier": "two_tier",
+    "hyaku_pypi": "hyaku_editable",
     "mdx_editable": "mdx_pypi",
+    "hibino": "hibino_pypi",
 }
 
 
