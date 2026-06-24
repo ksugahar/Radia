@@ -1,0 +1,314 @@
+{
+  "kind": "pm_drive_speed_map_validation",
+  "validation_class": true,
+  "speed_multiples": [
+    0.5,
+    1.0,
+    2.0,
+    5.0,
+    10.0,
+    100.0
+  ],
+  "drive_maps": [
+    {
+      "label": "wide_cpsr_ipm",
+      "parameters": {
+        "label": "wide_cpsr_ipm",
+        "lambda_m": 0.1,
+        "Ld": 0.008,
+        "Lq": 0.016,
+        "Imax": 20.0,
+        "Vmax": 120.0,
+        "pole_pairs": 4
+      },
+      "characteristic_current": 12.5,
+      "speed_capability": {
+        "characteristic_current": 12.5,
+        "infinite_speed_possible": true,
+        "finite_max_speed": false,
+        "mtpv_possible": true,
+        "current_margin": 7.5,
+        "current_ratio": 1.6
+      },
+      "omega_base": 455.32785624862885,
+      "rows": [
+        {
+          "speed_multiple": 0.5,
+          "omega_e": 227.66392812431442,
+          "omega_mech": 56.915982031078606,
+          "region": "MTPA",
+          "id": -11.358287782820584,
+          "iq": 16.46175259936282,
+          "torque": 18.851963084409263,
+          "current_magnitude": 20.0,
+          "current_utilization": 1.0,
+          "voltage_lossless": 60.0,
+          "voltage_utilization": 0.5,
+          "mechanical_power": 1072.9779921627949
+        },
+        {
+          "speed_multiple": 1.0,
+          "omega_e": 455.32785624862885,
+          "omega_mech": 113.83196406215721,
+          "region": "FW",
+          "id": -11.358287782820584,
+          "iq": 16.461752599362825,
+          "torque": 18.85196308440927,
+          "current_magnitude": 20.0,
+          "current_utilization": 1.0,
+          "voltage_lossless": 120.00000000000003,
+          "voltage_utilization": 1.0000000000000002,
+          "mechanical_power": 2145.9559843255906
+        },
+        {
+          "speed_multiple": 2.0,
+          "omega_e": 910.6557124972577,
+          "omega_mech": 227.66392812431442,
+          "region": "FW",
+          "id": -18.468248530832902,
+          "iq": 7.6761837004717615,
+          "torque": 11.410462301017828,
+          "current_magnitude": 20.0,
+          "current_utilization": 1.0,
+          "voltage_lossless": 119.99999999999993,
+          "voltage_utilization": 0.9999999999999994,
+          "mechanical_power": 2597.750669164122
+        },
+        {
+          "speed_multiple": 5.0,
+          "omega_e": 2276.639281243144,
+          "omega_mech": 569.159820310786,
+          "region": "MTPV",
+          "id": -14.045364906606197,
+          "iq": 3.2024317073016904,
+          "torque": 4.080466476422845,
+          "current_magnitude": 14.40582674474659,
+          "current_utilization": 0.7202913372373295,
+          "voltage_lossless": 120.0,
+          "voltage_utilization": 1.0,
+          "mechanical_power": 2322.4375665050125
+        },
+        {
+          "speed_multiple": 10.0,
+          "omega_e": 4553.278562486288,
+          "omega_mech": 1138.319640621572,
+          "region": "MTPV",
+          "id": -12.91999276662178,
+          "iq": 1.633723744208235,
+          "torque": 1.993403796500716,
+          "current_magnitude": 13.022874734940396,
+          "current_utilization": 0.6511437367470199,
+          "voltage_lossless": 120.0,
+          "voltage_utilization": 1.0,
+          "mechanical_power": 2269.1306932463726
+        },
+        {
+          "speed_multiple": 100.0,
+          "omega_e": 45532.78562486288,
+          "omega_mech": 11383.19640621572,
+          "region": "MTPV",
+          "id": -12.504339536279419,
+          "iq": 0.1647021846854321,
+          "torque": 0.1976769287155941,
+          "current_magnitude": 12.50542418505669,
+          "current_utilization": 0.6252712092528345,
+          "voltage_lossless": 120.0,
+          "voltage_utilization": 1.0,
+          "mechanical_power": 2250.1953045471123
+        }
+      ]
+    },
+    {
+      "label": "finite_speed_pm",
+      "parameters": {
+        "label": "finite_speed_pm",
+        "lambda_m": 0.1,
+        "Ld": 0.0008,
+        "Lq": 0.0016,
+        "Imax": 20.0,
+        "Vmax": 120.0,
+        "pole_pairs": 4
+      },
+      "characteristic_current": 125.0,
+      "speed_capability": {
+        "characteristic_current": 125.0,
+        "infinite_speed_possible": false,
+        "finite_max_speed": true,
+        "mtpv_possible": false,
+        "current_margin": -105.0,
+        "current_ratio": 0.16
+      },
+      "omega_base": 1170.079944707938,
+      "rows": [
+        {
+          "speed_multiple": 0.5,
+          "omega_e": 585.039972353969,
+          "omega_mech": 146.25999308849225,
+          "region": "MTPA",
+          "id": -3.0510568350306095,
+          "iq": 19.765906308323252,
+          "torque": 12.149016921998356,
+          "current_magnitude": 20.0,
+          "current_utilization": 1.0,
+          "voltage_lossless": 60.0,
+          "voltage_utilization": 0.5,
+          "mechanical_power": 1776.915131043455
+        },
+        {
+          "speed_multiple": 1.0,
+          "omega_e": 1170.079944707938,
+          "omega_mech": 292.5199861769845,
+          "region": "FW",
+          "id": -3.051056835030625,
+          "iq": 19.765906308323252,
+          "torque": 12.149016921998358,
+          "current_magnitude": 20.0,
+          "current_utilization": 1.0,
+          "voltage_lossless": 119.99999999999999,
+          "voltage_utilization": 0.9999999999999999,
+          "mechanical_power": 3553.8302620869104
+        },
+        {
+          "speed_multiple": 2.0,
+          "omega_e": 2340.159889415876,
+          "omega_mech": 585.039972353969,
+          "region": "infeasible"
+        },
+        {
+          "speed_multiple": 5.0,
+          "omega_e": 5850.39972353969,
+          "omega_mech": 1462.5999308849225,
+          "region": "infeasible"
+        },
+        {
+          "speed_multiple": 10.0,
+          "omega_e": 11700.79944707938,
+          "omega_mech": 2925.199861769845,
+          "region": "infeasible"
+        },
+        {
+          "speed_multiple": 100.0,
+          "omega_e": 117007.9944707938,
+          "omega_mech": 29251.99861769845,
+          "region": "infeasible"
+        }
+      ]
+    }
+  ],
+  "short_circuit_maps": {
+    "wide_cpsr_ipm": {
+      "resistance": 0.05,
+      "rows": [
+        {
+          "id": -8.362701233348888,
+          "iq": -4.159266371525517,
+          "current_magnitude": 9.339928729254739,
+          "characteristic_current": 12.5,
+          "current_ratio_to_characteristic": 0.7471942983403791,
+          "d_axis_demag_fraction": 0.669016098667911,
+          "torque": -4.165129519634494,
+          "mechanical_power": -6.542570150066855,
+          "vd_residual": 5.551115123125783e-17,
+          "vq_residual": 5.551115123125783e-17,
+          "frequency_hz": 1.0
+        },
+        {
+          "id": -12.484558712573119,
+          "iq": -0.31046550491046887,
+          "current_magnitude": 12.488418437793662,
+          "characteristic_current": 12.5,
+          "current_ratio_to_characteristic": 0.999073475023493,
+          "d_axis_demag_fraction": 0.9987646970058495,
+          "torque": -0.3723284945118848,
+          "mechanical_power": -11.69704463080685,
+          "vd_residual": 0.0,
+          "vq_residual": 4.163336342344337e-16,
+          "frequency_hz": 20.0
+        },
+        {
+          "id": -12.499381615165994,
+          "iq": -0.06216682405142583,
+          "current_magnitude": 12.49953621041846,
+          "characteristic_current": 12.5,
+          "current_ratio_to_characteristic": 0.9999628968334768,
+          "d_axis_demag_fraction": 0.9999505292132795,
+          "torque": -0.07459834359669476,
+          "mechanical_power": -11.717880410667172,
+          "vd_residual": 0.0,
+          "vq_residual": -5.045009549009549e-15,
+          "frequency_hz": 100.0
+        },
+        {
+          "id": -12.499999999993818,
+          "iq": -6.216989964524087e-06,
+          "current_magnitude": 12.499999999995364,
+          "characteristic_current": 12.5,
+          "current_ratio_to_characteristic": 0.9999999999996291,
+          "d_axis_demag_fraction": 0.9999999999995055,
+          "torque": -7.46038795742706e-06,
+          "mechanical_power": -11.718749999991307,
+          "vd_residual": -1.1102230246251565e-16,
+          "vq_residual": -8.041505363529883e-11,
+          "frequency_hz": 1000000.0
+        }
+      ]
+    },
+    "finite_speed_pm": {
+      "resistance": 0.05,
+      "rows": [
+        {
+          "id": -2.4765601408420905,
+          "iq": -12.3173996337306,
+          "current_magnitude": 12.56390400585083,
+          "characteristic_current": 125.0,
+          "current_ratio_to_characteristic": 0.10051123204680663,
+          "d_axis_demag_fraction": 0.019812481126736725,
+          "torque": -7.5368627289026175,
+          "mechanical_power": -11.838876290117591,
+          "vd_residual": -1.3877787807814457e-17,
+          "vq_residual": 1.1102230246251565e-16,
+          "frequency_hz": 1.0
+        },
+        {
+          "id": -111.24132917269924,
+          "iq": -27.663449084293344,
+          "current_magnitude": 114.62940168799678,
+          "characteristic_current": 125.0,
+          "current_ratio_to_characteristic": 0.9170352135039742,
+          "d_axis_demag_fraction": 0.889930633381594,
+          "torque": -31.3691999096388,
+          "mechanical_power": -985.4924798511087,
+          "vd_residual": -1.7763568394002505e-15,
+          "vq_residual": -3.1086244689504383e-15,
+          "frequency_hz": 20.0
+        },
+        {
+          "id": -124.38462901179744,
+          "iq": -6.1863839224622295,
+          "current_magnitude": 124.5383767376088,
+          "characteristic_current": 125.0,
+          "current_ratio_to_characteristic": 0.9963070139008704,
+          "d_axis_demag_fraction": 0.9950770320943796,
+          "torque": -7.405387485253399,
+          "mechanical_power": -1163.2355460328936,
+          "vd_residual": -8.881784197001252e-16,
+          "vq_residual": 2.1094237467877974e-15,
+          "frequency_hz": 100.0
+        },
+        {
+          "id": -124.99999999381585,
+          "iq": -0.0006216989964219587,
+          "current_magnitude": 124.99999999536189,
+          "characteristic_current": 125.0,
+          "current_ratio_to_characteristic": 0.9999999999628951,
+          "d_axis_demag_fraction": 0.9999999999505268,
+          "torque": -0.000746038795687896,
+          "mechanical_power": -1171.8749999130353,
+          "vd_residual": -8.881784197001252e-16,
+          "vq_residual": -1.9406295608025495e-11,
+          "frequency_hz": 1000000.0
+        }
+      ]
+    }
+  }
+}
