@@ -10,7 +10,11 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.radia_ngsolve.acoustics import pulsating_sphere_radiation
+from radia_mcp.radia_ngsolve.acoustics import (
+    helmholtz_green_3d,
+    helmholtz_green_low_frequency_series,
+    pulsating_sphere_radiation,
+)
 
 
 def test_pulsating_sphere_impedance_and_power_conservation():
@@ -56,3 +60,33 @@ def test_pulsating_sphere_validation():
         pulsating_sphere_radiation(0.1, 0.0, 1.0)
     with pytest.raises(ValueError):
         pulsating_sphere_radiation(0.1, 100.0, 1.0, sample_radius=0.05)
+
+
+def test_helmholtz_green_low_frequency_series_terms():
+    r = 2.0
+    k = 1.0e-3
+    out = helmholtz_green_low_frequency_series(r, k, order=4)
+
+    assert out["laplace_term"].real == pytest.approx(1.0 / (4.0 * math.pi * r))
+    assert out["laplace_term"].imag == pytest.approx(0.0)
+    assert out["terms"][1].real == pytest.approx(0.0)
+    assert out["terms"][1].imag == pytest.approx(-k / (4.0 * math.pi))
+    assert out["terms"][2].real == pytest.approx(-(k * k) * r / (8.0 * math.pi))
+    assert out["terms"][2].imag == pytest.approx(0.0)
+    assert out["abs_error"] < 2.0e-17
+    assert out["approx"] == pytest.approx(helmholtz_green_3d(r, k))
+
+
+def test_helmholtz_green_series_convergence_and_validation():
+    r = 0.3
+    for kr in (1.0e-4, 1.0e-2, 0.1, 0.5):
+        k = kr / r
+        err2 = helmholtz_green_low_frequency_series(r, k, order=2)["abs_error"]
+        err6 = helmholtz_green_low_frequency_series(r, k, order=6)["abs_error"]
+        assert err6 < err2
+        assert err6 < 1.0e-6
+
+    with pytest.raises(ValueError):
+        helmholtz_green_3d(0.0, 1.0)
+    with pytest.raises(ValueError):
+        helmholtz_green_low_frequency_series(1.0, 1.0, order=-1)
