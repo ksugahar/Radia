@@ -13,6 +13,7 @@ NGSolve's high-order curved elements.
 | [`validation_cross_saturation_flux_map.py`](validation_cross_saturation_flux_map.py) | Validation-class d-q cross-saturation flux map with reciprocity and incremental inductance rolloff | `incremental_inductance_matrix`, `dq_flux_torque` |
 | [`validation_carter_magnetizing_sweep.py`](validation_carter_magnetizing_sweep.py) | Validation-class Carter air-gap opening sweep linked to AC-machine magnetizing inductance | `carter_coefficient`, `effective_air_gap`, `slotted_air_gap_permeance_factor`, `magnetizing_inductance_per_phase` |
 | [`validation_mtpa_saliency_sweep.py`](validation_mtpa_saliency_sweep.py) | Validation-class MTPA current-angle sweep across non-salient PM, IPM, SynRM, and salient-PM cases | `mtpa_operating_point`, `dq_torque`, `dq_torque_components` |
+| [`validation_pm_loadline_demag_sweep.py`](validation_pm_loadline_demag_sweep.py) | Validation-class PM load-line and irreversible-demag margin sweep across gap, magnet length, knee, and shape factors | `pm_circuit_loadline_operating_point`, `demag_operating_field`, `demag_margin` |
 
 ```powershell
 python cogging_skew_demo.py
@@ -22,6 +23,7 @@ python validation_lamination_mu_eff_sweep.py
 python validation_cross_saturation_flux_map.py
 python validation_carter_magnetizing_sweep.py
 python validation_mtpa_saliency_sweep.py
+python validation_pm_loadline_demag_sweep.py
 ```
 
 What it validates (no commercial tool needed to run or check):

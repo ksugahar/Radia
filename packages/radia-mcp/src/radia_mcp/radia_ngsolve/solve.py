@@ -1603,6 +1603,58 @@ def pm_circuit_loadline_gap_field(Br, magnet_len, gap, iron_path, mu_r, mu_rec=1
     return Br * magnet_len / (magnet_len + mu_rec * gap + iron_path / mu_r)
 
 
+def pm_circuit_loadline_operating_point(Br, magnet_len, gap, iron_path, mu_r, mu_rec=1.0,
+                                        H_knee=None):
+    """Readable PM load-line operating point for a leakage-free gapped iron circuit.
+
+    This is the companion summary to :func:`pm_circuit_loadline_gap_field`.  It returns the
+    air-gap flux density, the magnet's second-quadrant operating field
+
+        H_m = (B_gap - Br) / (mu0 mu_rec),
+
+    and the dimensionless permeance coefficient, written in the same convention as
+    :func:`pm_circuit_loadline_gap_field`,
+
+        P_c = l_m / (g + l_fe / (mu_rec mu_r)),
+
+    which gives the same point as ``B_gap = Br P_c / (P_c + mu_rec)``.  If ``H_knee`` is supplied,
+    the returned ``demag_margin_A_per_m`` is positive when the load-line operating point is above
+    the irreversible-demagnetization knee.
+    """
+    if magnet_len <= 0.0:
+        raise ValueError("magnet_len must be positive")
+    if gap < 0.0:
+        raise ValueError("gap must be non-negative")
+    if iron_path < 0.0:
+        raise ValueError("iron_path must be non-negative")
+    if mu_r <= 0.0:
+        raise ValueError("mu_r must be positive")
+    if mu_rec <= 0.0:
+        raise ValueError("mu_rec must be positive")
+
+    b_gap = pm_circuit_loadline_gap_field(Br, magnet_len, gap, iron_path, mu_r, mu_rec)
+    h_m = (b_gap - Br) / (MU0 * mu_rec)
+    reluctance_length = gap + iron_path / (mu_rec * mu_r)
+    pc = math.inf if reluctance_length == 0.0 else magnet_len / reluctance_length
+    b_from_pc = Br if math.isinf(pc) else Br * pc / (pc + mu_rec)
+    out = {
+        "B_gap_T": b_gap,
+        "B_over_Br": b_gap / Br if Br != 0.0 else math.nan,
+        "H_m_A_per_m": h_m,
+        "permeance_coefficient": pc,
+        "B_from_permeance_coefficient_T": b_from_pc,
+        "B_identity_abs_error_T": abs(b_from_pc - b_gap),
+    }
+    if H_knee is not None:
+        margin = demag_margin(h_m, H_knee)
+        out.update({
+            "H_knee_A_per_m": H_knee,
+            "demag_margin_A_per_m": margin,
+            "safe_against_knee": margin >= 0.0,
+        })
+    return out
+
+
 def two_wire_external_inductance(separation, radius):
     """External inductance per unit length of a TWO-WIRE line (parallel wires, radius a,
     centre separation D) -- the magnetic dual of the two-wire capacitance:
