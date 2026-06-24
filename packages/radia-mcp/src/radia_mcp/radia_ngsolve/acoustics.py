@@ -96,6 +96,129 @@ def helmholtz_green_low_frequency_series(distance, wavenumber, order=6):
     }
 
 
+def spherical_hankel2(degree, argument):
+    r"""Spherical Hankel function ``h_l^(2)(z)`` for outgoing waves.
+
+    The module uses the ``exp(+i omega t)`` convention, so outgoing scalar
+    Helmholtz waves are represented by ``h_l^(2)(k r)``.  A small recurrence is
+    enough for low-order educational FEM/BEM checks and avoids a SciPy
+    dependency in the public helper.
+    """
+
+    ell = int(degree)
+    if ell < 0:
+        raise ValueError("degree must be >= 0")
+    z = complex(argument)
+    if z == 0.0:
+        raise ValueError("argument must be nonzero")
+
+    h0 = 1j * cmath.exp(-1j * z) / z
+    if ell == 0:
+        return h0
+
+    h1 = -cmath.exp(-1j * z) * (1.0 / z - 1j / (z * z))
+    if ell == 1:
+        return h1
+
+    prev, current = h0, h1
+    for n in range(1, ell):
+        nxt = (2 * n + 1) * current / z - prev
+        prev, current = current, nxt
+    return current
+
+
+def spherical_helmholtz_dtn_eigenvalue(radius, wavenumber, degree):
+    r"""Exterior spherical Helmholtz DtN eigenvalue for one angular degree.
+
+    For a pressure trace ``p(a) Y_l^m`` on a sphere of radius ``a``, the
+    outgoing exterior field is proportional to ``h_l^(2)(k r) Y_l^m``.  The
+    exact Dirichlet-to-Neumann eigenvalue is
+
+        lambda_l = (partial_r p / p)|_{r=a}
+                 = k h_l^(2)'(k a) / h_l^(2)(k a).
+
+    It is a compact analytic gate for acoustic FEM/BEM coupling: the FEM trace
+    supplies pressure on the sphere, while the exterior BEM or radiation
+    condition supplies the normal derivative.  The outward normal is the
+    increasing-radius direction.
+    """
+
+    a = float(radius)
+    if a <= 0.0:
+        raise ValueError("radius must be > 0")
+    ell = int(degree)
+    if ell < 0:
+        raise ValueError("degree must be >= 0")
+    k = complex(wavenumber)
+    z = k * a
+    if z == 0.0:
+        raise ValueError("wavenumber * radius must be nonzero")
+
+    if ell == 0:
+        derivative_ratio = -1j - 1.0 / z
+    else:
+        h_l = spherical_hankel2(ell, z)
+        derivative_ratio = spherical_hankel2(ell - 1, z) / h_l - (ell + 1) / z
+    return k * derivative_ratio
+
+
+def spherical_mode_radiation_impedance(
+    radius,
+    frequency,
+    degree,
+    rho=1.2041,
+    c=343.0,
+):
+    r"""Radiation impedance of one outgoing spherical acoustic mode.
+
+    The returned ``specific_impedance`` is ``p / v_n`` on the spherical
+    boundary for one ``Y_l^m`` pressure/normal-velocity mode.  With
+    ``exp(+i omega t)``, Euler's equation gives
+
+        v_n = i * lambda_l * p / (omega rho),
+        p / v_n = -i * omega rho / lambda_l.
+
+    Degree zero matches :func:`pulsating_sphere_radiation`.  Higher degrees are
+    useful as readable FEM/BEM gates because each spherical-harmonic trace mode
+    has an exact exterior DtN value.
+    """
+
+    a = float(radius)
+    f = float(frequency)
+    rrho = float(rho)
+    cc = float(c)
+    ell = int(degree)
+    if a <= 0.0:
+        raise ValueError("radius must be > 0")
+    if f <= 0.0:
+        raise ValueError("frequency must be > 0")
+    if rrho <= 0.0:
+        raise ValueError("rho must be > 0")
+    if cc <= 0.0:
+        raise ValueError("c must be > 0")
+    if ell < 0:
+        raise ValueError("degree must be >= 0")
+
+    omega = 2.0 * math.pi * f
+    k = omega / cc
+    dtn = spherical_helmholtz_dtn_eigenvalue(a, k, ell)
+    z_specific = -1j * omega * rrho / dtn
+    return {
+        "radius": a,
+        "frequency": f,
+        "omega": omega,
+        "wavenumber": k,
+        "ka": k * a,
+        "degree": ell,
+        "rho": rrho,
+        "c": cc,
+        "dtn_eigenvalue": dtn,
+        "specific_impedance": z_specific,
+        "radiation_efficiency": z_specific.real / (rrho * cc),
+        "reactance_ratio": z_specific.imag / (rrho * cc),
+    }
+
+
 def _specific_spherical_impedance(k_radius, rho, c):
     kr = float(k_radius)
     if kr <= 0.0:

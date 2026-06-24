@@ -14,6 +14,9 @@ from radia_mcp.radia_ngsolve.acoustics import (
     helmholtz_green_3d,
     helmholtz_green_low_frequency_series,
     pulsating_sphere_radiation,
+    spherical_hankel2,
+    spherical_helmholtz_dtn_eigenvalue,
+    spherical_mode_radiation_impedance,
 )
 
 
@@ -90,3 +93,70 @@ def test_helmholtz_green_series_convergence_and_validation():
         helmholtz_green_3d(0.0, 1.0)
     with pytest.raises(ValueError):
         helmholtz_green_low_frequency_series(1.0, 1.0, order=-1)
+
+
+def test_spherical_dtn_monopole_matches_closed_form_and_impedance():
+    a = 0.2
+    c = 343.0
+    rho = 1.2041
+    ka = 1.25
+    k = ka / a
+    f = k * c / (2.0 * math.pi)
+
+    h0 = spherical_hankel2(0, ka)
+    assert h0 == pytest.approx(1j * complex(math.cos(ka), -math.sin(ka)) / ka)
+
+    dtn0 = spherical_helmholtz_dtn_eigenvalue(a, k, 0)
+    assert dtn0 == pytest.approx(-1.0 / a - 1j * k)
+
+    mode = spherical_mode_radiation_impedance(a, f, 0, rho=rho, c=c)
+    sphere = pulsating_sphere_radiation(a, f, 1.0, rho=rho, c=c)
+    assert mode["specific_impedance"] == pytest.approx(sphere["specific_impedance"])
+    assert mode["radiation_efficiency"] == pytest.approx(sphere["radiation_efficiency"])
+    assert mode["reactance_ratio"] == pytest.approx(sphere["reactance_ratio"])
+
+
+def test_spherical_dtn_matches_radial_finite_difference_for_higher_modes():
+    a = 0.4
+    k = 5.0
+    delta = 1.0e-6 * a
+    for degree in range(1, 5):
+        h_boundary = spherical_hankel2(degree, k * a)
+
+        def normalized_outgoing(r):
+            return spherical_hankel2(degree, k * r) / h_boundary
+
+        finite_difference = (
+            normalized_outgoing(a + delta) - normalized_outgoing(a - delta)
+        ) / (2.0 * delta)
+        dtn = spherical_helmholtz_dtn_eigenvalue(a, k, degree)
+        assert dtn == pytest.approx(finite_difference, rel=1.0e-9, abs=1.0e-9)
+
+
+def test_spherical_mode_radiation_impedance_low_frequency_ordering():
+    a = 0.1
+    c = 343.0
+    low_ka = 0.05
+    high_ka = 0.10
+    previous_ratio = 0.0
+    for degree in range(4):
+        low = spherical_mode_radiation_impedance(a, low_ka * c / (2.0 * math.pi * a), degree)
+        high = spherical_mode_radiation_impedance(a, high_ka * c / (2.0 * math.pi * a), degree)
+        ratio = high["radiation_efficiency"] / low["radiation_efficiency"]
+        assert high["radiation_efficiency"] > low["radiation_efficiency"] > 0.0
+        assert high["reactance_ratio"] > low["reactance_ratio"] > 0.0
+        assert ratio > previous_ratio
+        previous_ratio = ratio
+
+
+def test_spherical_acoustic_helpers_validate_inputs():
+    with pytest.raises(ValueError):
+        spherical_hankel2(-1, 1.0)
+    with pytest.raises(ValueError):
+        spherical_hankel2(0, 0.0)
+    with pytest.raises(ValueError):
+        spherical_helmholtz_dtn_eigenvalue(0.0, 1.0, 0)
+    with pytest.raises(ValueError):
+        spherical_helmholtz_dtn_eigenvalue(1.0, 0.0, 0)
+    with pytest.raises(ValueError):
+        spherical_mode_radiation_impedance(1.0, 0.0, 0)

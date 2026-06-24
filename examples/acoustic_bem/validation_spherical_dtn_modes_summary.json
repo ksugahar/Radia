@@ -1,0 +1,897 @@
+{
+  "checks": {
+    "low_frequency_ratios_increase_with_degree": true,
+    "max_finite_difference_dtn_rel_error": 1.397329341332187e-10,
+    "max_high_ka_sommerfeld_curvature_rel_error": 0.001563354526977658,
+    "monopole_dtn_imag_abs_error": 0.0,
+    "monopole_dtn_real_abs_error": 8.881784197001252e-16,
+    "monopole_impedance_abs_error_vs_pulsating_sphere": 4.0194366942304644e-14
+  },
+  "degrees": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "high_ka_sommerfeld_curvature_errors": [
+    {
+      "degree": 0,
+      "relative_error_vs_minus_ik_minus_1_over_a": 1.9982453375059738e-18
+    },
+    {
+      "degree": 1,
+      "relative_error_vs_minus_ik_minus_1_over_a": 0.00015622558975186943
+    },
+    {
+      "degree": 2,
+      "relative_error_vs_minus_ik_minus_1_over_a": 0.00046874993137025324
+    },
+    {
+      "degree": 3,
+      "relative_error_vs_minus_ik_minus_1_over_a": 0.0009377195200586279
+    },
+    {
+      "degree": 4,
+      "relative_error_vs_minus_ik_minus_1_over_a": 0.001563354526977658
+    }
+  ],
+  "ka_values": [
+    0.05,
+    0.1,
+    0.3,
+    1.0,
+    3.0,
+    20.0
+  ],
+  "kind": "spherical_helmholtz_dtn_mode_validation",
+  "low_frequency_ratios": [
+    {
+      "degree": 0,
+      "doubling_ratio": 3.970297029702971,
+      "radiation_efficiency_ka_0p05": 0.0024937655860349127,
+      "radiation_efficiency_ka_0p1": 0.009900990099009903
+    },
+    {
+      "degree": 1,
+      "doubling_ratio": 15.99962500937476,
+      "radiation_efficiency_ka_0p05": 1.562497558597565e-06,
+      "radiation_efficiency_ka_0p1": 2.4999375015624605e-05
+    },
+    {
+      "degree": 2,
+      "doubling_ratio": 63.946872936585464,
+      "radiation_efficiency_ka_0p05": 1.9284769548684563e-10,
+      "radiation_efficiency_ka_0p1": 1.2332007079410644e-08
+    },
+    {
+      "degree": 3,
+      "doubling_ratio": 255.80813226472785,
+      "radiation_efficiency_ka_0p05": 1.084798227961012e-14,
+      "radiation_efficiency_ka_0p1": 2.7750020857879294e-12
+    },
+    {
+      "degree": 4,
+      "doubling_ratio": 1023.3419650797337,
+      "radiation_efficiency_ka_0p05": 3.5423247583443503e-19,
+      "radiation_efficiency_ka_0p1": 3.6250095791547e-16
+    }
+  ],
+  "radius_m": 0.18,
+  "rho_kg_m3": 1.2041,
+  "rows": [
+    {
+      "degree": 0,
+      "dtn_eigenvalue": {
+        "abs": 5.5624956651391075,
+        "imag": -0.2777777777777778,
+        "phase_rad": -3.0916342578678506,
+        "real": -5.555555555555555
+      },
+      "finite_difference_abs_error": 4.5781953682904556e-10,
+      "finite_difference_dtn": {
+        "abs": 5.562495664681304,
+        "imag": -0.2777777777510074,
+        "phase_rad": -3.091634257868554,
+        "real": -5.555555555098519
+      },
+      "finite_difference_rel_error": 8.230469997455653e-11,
+      "frequency_hz": 15.163929300144474,
+      "ka": 0.05,
+      "radiation_efficiency": 0.0024937655860349127,
+      "reactance_ratio": 0.04987531172069826,
+      "specific_impedance": {
+        "abs": 20.62455040481424,
+        "imag": 20.59881795511222,
+        "phase_rad": 1.5208379310729538,
+        "real": 1.029940897755611
+      }
+    },
+    {
+      "degree": 0,
+      "dtn_eigenvalue": {
+        "abs": 5.58326423395605,
+        "imag": -0.5555555555555556,
+        "phase_rad": -3.0419240010986313,
+        "real": -5.555555555555555
+      },
+      "finite_difference_abs_error": 4.5914187869464135e-10,
+      "finite_difference_dtn": {
+        "abs": 5.583264233496911,
+        "imag": -0.555555555511633,
+        "phase_rad": -3.0419240010983137,
+        "real": -5.555555555098519
+      },
+      "finite_difference_rel_error": 8.223538407912929e-11,
+      "frequency_hz": 30.32785860028895,
+      "ka": 0.1,
+      "radiation_efficiency": 0.009900990099009903,
+      "reactance_ratio": 0.09900990099009901,
+      "specific_impedance": {
+        "abs": 41.09566282910239,
+        "imag": 40.89171287128713,
+        "phase_rad": 1.4711276743037345,
+        "real": 4.089171287128714
+      }
+    },
+    {
+      "degree": 0,
+      "dtn_eigenvalue": {
+        "abs": 5.800170282728084,
+        "imag": -1.6666666666666667,
+        "phase_rad": -2.8501358591119264,
+        "real": -5.555555555555556
+      },
+      "finite_difference_abs_error": 1.0824825115598986e-09,
+      "finite_difference_dtn": {
+        "abs": 5.800170281660289,
+        "imag": -1.6666666665300596,
+        "phase_rad": -2.8501358590812864,
+        "real": -5.555555554481728
+      },
+      "finite_difference_rel_error": 1.8662943651557034e-10,
+      "frequency_hz": 90.98357580086683,
+      "ka": 0.3,
+      "radiation_efficiency": 0.08256880733944953,
+      "reactance_ratio": 0.2752293577981651,
+      "specific_impedance": {
+        "abs": 118.67648703057971,
+        "imag": 113.67145871559632,
+        "phase_rad": 1.2793395323170296,
+        "real": 34.10143761467889
+      }
+    },
+    {
+      "degree": 0,
+      "dtn_eigenvalue": {
+        "abs": 7.856742013183862,
+        "imag": -5.555555555555555,
+        "phase_rad": -2.356194490192345,
+        "real": -5.555555555555556
+      },
+      "finite_difference_abs_error": 1.683837892509898e-10,
+      "finite_difference_dtn": {
+        "abs": 7.856742013259194,
+        "imag": -5.555555555502338,
+        "phase_rad": -2.356194490211512,
+        "real": -5.555555555715309
+      },
+      "finite_difference_rel_error": 2.143175745982705e-11,
+      "frequency_hz": 303.2785860028894,
+      "ka": 1.0,
+      "radiation_efficiency": 0.4999999999999999,
+      "reactance_ratio": 0.49999999999999994,
+      "specific_impedance": {
+        "abs": 292.03955540276553,
+        "imag": 206.50314999999998,
+        "phase_rad": 0.7853981633974484,
+        "real": 206.50314999999995
+      }
+    },
+    {
+      "degree": 0,
+      "dtn_eigenvalue": {
+        "abs": 17.568209223157666,
+        "imag": -16.666666666666668,
+        "phase_rad": -1.8925468811915387,
+        "real": -5.555555555555555
+      },
+      "finite_difference_abs_error": 1.6111109050558866e-09,
+      "finite_difference_dtn": {
+        "abs": 17.568209221570694,
+        "imag": -16.666666665248997,
+        "phase_rad": -1.8925468811757236,
+        "real": -5.555555554790123
+      },
+      "finite_difference_rel_error": 9.170604041601399e-11,
+      "frequency_hz": 909.8357580086683,
+      "ka": 3.0,
+      "radiation_efficiency": 0.9,
+      "reactance_ratio": 0.3000000000000001,
+      "specific_impedance": {
+        "abs": 391.8121787996399,
+        "imag": 123.90189000000004,
+        "phase_rad": 0.3217505543966423,
+        "real": 371.70567
+      }
+    },
+    {
+      "degree": 0,
+      "dtn_eigenvalue": {
+        "abs": 111.24991330278215,
+        "imag": -111.11111111111111,
+        "phase_rad": -1.6207547225168395,
+        "real": -5.555555555555556
+      },
+      "finite_difference_abs_error": 1.16571207359125e-08,
+      "finite_difference_dtn": {
+        "abs": 111.24991329115268,
+        "imag": -111.11111109953623,
+        "phase_rad": -1.6207547225096262,
+        "real": -5.555555554173333
+      },
+      "finite_difference_rel_error": 1.0478318939616627e-10,
+      "frequency_hz": 6065.571720057789,
+      "ka": 20.0,
+      "radiation_efficiency": 0.9975062344139651,
+      "reactance_ratio": 0.049875311720698264,
+      "specific_impedance": {
+        "abs": 412.4910080962848,
+        "imag": 20.598817955112224,
+        "phase_rad": 0.049958395721942765,
+        "real": 411.97635910224443
+      }
+    },
+    {
+      "degree": 1,
+      "dtn_eigenvalue": {
+        "abs": 11.097256879475607,
+        "imag": -0.0006927126627874759,
+        "phase_rad": -3.14153023161734,
+        "real": -11.097256857855362
+      },
+      "finite_difference_abs_error": 8.969061345585201e-10,
+      "finite_difference_dtn": {
+        "abs": 11.097256878578825,
+        "imag": -0.000692712677643441,
+        "phase_rad": -3.141530231615996,
+        "real": -11.097256856958579
+      },
+      "finite_difference_rel_error": 8.082232792297971e-11,
+      "frequency_hz": 15.163929300144474,
+      "ka": 0.05,
+      "radiation_efficiency": 1.562497558597565e-06,
+      "reactance_ratio": 0.02503121088873299,
+      "specific_impedance": {
+        "abs": 10.33804781381644,
+        "imag": 10.338047793675324,
+        "phase_rad": 1.5707339048224433,
+        "real": 0.0006453213354354135
+      }
+    },
+    {
+      "degree": 1,
+      "dtn_eigenvalue": {
+        "abs": 11.056106978857008,
+        "imag": -0.005500550055005502,
+        "phase_rad": -3.14109514119303,
+        "real": -11.056105610561058
+      },
+      "finite_difference_abs_error": 8.2883414786029e-10,
+      "finite_difference_dtn": {
+        "abs": 11.056106978029925,
+        "imag": -0.0055005501084533035,
+        "phase_rad": -3.141095141188159,
+        "real": -11.05610560973395
+      },
+      "finite_difference_rel_error": 7.49661837973619e-11,
+      "frequency_hz": 30.32785860028895,
+      "ka": 0.1,
+      "radiation_efficiency": 2.4999375015624605e-05,
+      "reactance_ratio": 0.05024874378140546,
+      "specific_impedance": {
+        "abs": 20.75305031718905,
+        "imag": 20.753047748806278,
+        "phase_rad": 1.5702988143981336,
+        "real": 0.01032489937751556
+      }
+    },
+    {
+      "degree": 1,
+      "dtn_eigenvalue": {
+        "abs": 10.653284376340068,
+        "imag": -0.1376146788990826,
+        "phase_rad": -3.1286747119035083,
+        "real": -10.652395514780837
+      },
+      "finite_difference_abs_error": 9.576995712538204e-10,
+      "finite_difference_dtn": {
+        "abs": 10.653284375385415,
+        "imag": -0.13761467896307564,
+        "phase_rad": -3.1286747118963434,
+        "real": -10.652395513825278
+      },
+      "finite_difference_rel_error": 8.989711880598814e-11,
+      "frequency_hz": 90.98357580086683,
+      "ka": 0.3,
+      "radiation_efficiency": 0.0020209076619844817,
+      "reactance_ratio": 0.15643322272398394,
+      "specific_impedance": {
+        "abs": 64.6132975537647,
+        "imag": 64.60790651430852,
+        "phase_rad": 1.557878385108612,
+        "real": 0.8346475961178614
+      }
+    },
+    {
+      "degree": 1,
+      "dtn_eigenvalue": {
+        "abs": 8.784104611578833,
+        "imag": -2.7777777777777772,
+        "phase_rad": -2.819842099193151,
+        "real": -8.333333333333336
+      },
+      "finite_difference_abs_error": 8.377084091974173e-11,
+      "finite_difference_dtn": {
+        "abs": 8.784104611528724,
+        "imag": -2.777777777825618,
+        "phase_rad": -2.8198420991855087,
+        "real": -8.33333333326457
+      },
+      "finite_difference_rel_error": 9.536639717304661e-12,
+      "frequency_hz": 303.2785860028894,
+      "ka": 1.0,
+      "radiation_efficiency": 0.19999999999999982,
+      "reactance_ratio": 0.5999999999999999,
+      "specific_impedance": {
+        "abs": 261.2081191997599,
+        "imag": 247.80377999999993,
+        "phase_rad": 1.2490457723982547,
+        "real": 82.60125999999993
+      }
+    },
+    {
+      "degree": 1,
+      "dtn_eigenvalue": {
+        "abs": 16.197088596792504,
+        "imag": -15.000000000000002,
+        "phase_rad": -1.9576720445259246,
+        "real": -6.11111111111111
+      },
+      "finite_difference_abs_error": 1.4309775359168044e-09,
+      "finite_difference_dtn": {
+        "abs": 16.19708859538081,
+        "imag": -14.99999999878098,
+        "phase_rad": -1.9576720445114695,
+        "real": -6.111111110361654
+      },
+      "finite_difference_rel_error": 8.83478242009604e-11,
+      "frequency_hz": 909.8357580086683,
+      "ka": 3.0,
+      "radiation_efficiency": 0.9529411764705884,
+      "reactance_ratio": 0.3882352941176472,
+      "specific_impedance": {
+        "abs": 424.9799766296553,
+        "imag": 160.34362235294122,
+        "phase_rad": 0.38687571773102813,
+        "real": 393.57070941176477
+      }
+    },
+    {
+      "degree": 1,
+      "dtn_eigenvalue": {
+        "abs": 110.97386924489489,
+        "imag": -110.83402604599611,
+        "phase_rad": -1.6210040959608791,
+        "real": -5.569409808811312
+      },
+      "finite_difference_abs_error": 1.1436414611316017e-08,
+      "finite_difference_dtn": {
+        "abs": 110.97386923347023,
+        "imag": -110.83402603461187,
+        "phase_rad": -1.6210040959562075,
+        "real": -5.569409807720188
+      },
+      "finite_difference_rel_error": 1.0305502267455745e-10,
+      "frequency_hz": 6065.571720057789,
+      "ka": 20.0,
+      "radiation_efficiency": 0.9999750006249846,
+      "reactance_ratio": 0.0502487437814055,
+      "specific_impedance": {
+        "abs": 413.51706668549764,
+        "imag": 20.753047748806296,
+        "phase_rad": 0.05020776916598238,
+        "real": 412.99597510062256
+      }
+    },
+    {
+      "degree": 2,
+      "dtn_eigenvalue": {
+        "abs": 16.662033185439707,
+        "imag": -1.9274048365063438e-07,
+        "phase_rad": -3.1415926420221485,
+        "real": -16.662033185439707
+      },
+      "finite_difference_abs_error": 7.805028513925403e-10,
+      "finite_difference_dtn": {
+        "abs": 16.662033184659347,
+        "imag": -1.9275538108632903e-07,
+        "phase_rad": -3.141592642021254,
+        "real": -16.662033184659347
+      },
+      "finite_difference_rel_error": 4.6843193907127184e-11,
+      "frequency_hz": 15.163929300144474,
+      "ka": 0.05,
+      "radiation_efficiency": 1.9284769548684563e-10,
+      "reactance_ratio": 0.016671301436400734,
+      "specific_impedance": {
+        "abs": 6.885352522432553,
+        "imag": 6.885352522432553,
+        "phase_rad": 1.5707963152272517,
+        "real": 7.964731317654882e-08
+      }
+    },
+    {
+      "degree": 2,
+      "dtn_eigenvalue": {
+        "abs": 16.648086830588714,
+        "imag": -6.152263602347213e-06,
+        "phase_rad": -3.1415922840420087,
+        "real": -16.648086830587577
+      },
+      "finite_difference_abs_error": 8.034732577698678e-10,
+      "finite_difference_dtn": {
+        "abs": 16.64808682978706,
+        "imag": -6.1523176691734994e-06,
+        "phase_rad": -3.141592284038761,
+        "real": -16.648086829785925
+      },
+      "finite_difference_rel_error": 4.8262197689502027e-11,
+      "frequency_hz": 30.32785860028895,
+      "ka": 0.1,
+      "radiation_efficiency": 1.2332007079410644e-08,
+      "reactance_ratio": 0.03337053447695599,
+      "specific_impedance": {
+        "abs": 13.782240973350971,
+        "imag": 13.78224097335003,
+        "phase_rad": 1.5707959572471122,
+        "real": 5.0931966154411965e-06
+      }
+    },
+    {
+      "degree": 2,
+      "dtn_eigenvalue": {
+        "abs": 16.495295437149107,
+        "imag": -0.001455039286060724,
+        "phase_rad": -3.141504444239831,
+        "real": -16.49529537297507
+      },
+      "finite_difference_abs_error": 2.304936030827139e-09,
+      "finite_difference_dtn": {
+        "abs": 16.495295434845495,
+        "imag": -0.0014550393639793833,
+        "phase_rad": -3.141504444235095,
+        "real": -16.495295370671453
+      },
+      "finite_difference_rel_error": 1.397329341332187e-10,
+      "frequency_hz": 90.98357580086683,
+      "ka": 0.3,
+      "radiation_efficiency": 8.912576536751005e-06,
+      "reactance_ratio": 0.10103890933830058,
+      "specific_impedance": {
+        "abs": 41.729706264194085,
+        "imag": 41.72970610184697,
+        "phase_rad": 1.5707081174449342,
+        "real": 0.003680950258910347
+      }
+    },
+    {
+      "degree": 2,
+      "dtn_eigenvalue": {
+        "abs": 14.53619773649141,
+        "imag": -0.4273504273504271,
+        "phase_rad": -3.112189365385788,
+        "real": -14.529914529914532
+      },
+      "finite_difference_abs_error": 2.8024307633279513e-10,
+      "finite_difference_dtn": {
+        "abs": 14.536197736768283,
+        "imag": -0.42735042740187995,
+        "phase_rad": -3.112189365382807,
+        "real": -14.52991453019001
+      },
+      "finite_difference_rel_error": 1.927898074950356e-11,
+      "frequency_hz": 303.2785860028894,
+      "ka": 1.0,
+      "radiation_efficiency": 0.011235955056179765,
+      "reactance_ratio": 0.3820224719101123,
+      "specific_impedance": {
+        "abs": 157.8459158328883,
+        "imag": 157.77768764044941,
+        "phase_rad": 1.5413930385908916,
+        "real": 4.640520224719097
+      }
+    },
+    {
+      "degree": 2,
+      "dtn_eigenvalue": {
+        "abs": 13.867504905630728,
+        "imag": -11.538461538461538,
+        "phase_rad": -2.1587989303424644,
+        "real": -7.692307692307693
+      },
+      "finite_difference_abs_error": 1.2662995166190858e-09,
+      "finite_difference_dtn": {
+        "abs": 13.867504904382567,
+        "imag": -11.538461537541467,
+        "phase_rad": -2.1587989303270643,
+        "real": -7.692307691437645
+      },
+      "finite_difference_rel_error": 9.131415674530756e-11,
+      "frequency_hz": 909.8357580086683,
+      "ka": 3.0,
+      "radiation_efficiency": 0.9999999999999996,
+      "reactance_ratio": 0.6666666666666669,
+      "specific_impedance": {
+        "abs": 496.37179724655425,
+        "imag": 275.3375333333334,
+        "phase_rad": 0.5880026035475678,
+        "real": 413.00629999999984
+      }
+    },
+    {
+      "degree": 2,
+      "dtn_eigenvalue": {
+        "abs": 110.41979385645446,
+        "imag": -110.27782430123492,
+        "phase_rad": -1.6215112398901594,
+        "real": -5.597530052430202
+      },
+      "finite_difference_abs_error": 1.1396237129673928e-08,
+      "finite_difference_dtn": {
+        "abs": 110.41979384509912,
+        "imag": -110.27782428994307,
+        "phase_rad": -1.621511239881424,
+        "real": -5.597530050891228
+      },
+      "finite_difference_rel_error": 1.0320828115735314e-10,
+      "frequency_hz": 6065.571720057789,
+      "ka": 20.0,
+      "radiation_efficiency": 1.0049670338622543,
+      "reactance_ratio": 0.05101055637785763,
+      "specific_impedance": {
+        "abs": 415.5920536180794,
+        "imag": 21.067681150560382,
+        "phase_rad": 0.050714913095262916,
+        "real": 415.0577162774244
+      }
+    },
+    {
+      "degree": 3,
+      "dtn_eigenvalue": {
+        "abs": 22.219443981019023,
+        "imag": -1.9280480002036857e-11,
+        "phase_rad": -3.1415926535889254,
+        "real": -22.219443981019023
+      },
+      "finite_difference_abs_error": 3.0066952210434767e-10,
+      "finite_difference_dtn": {
+        "abs": 22.219443980718722,
+        "imag": -3.417792636527505e-11,
+        "phase_rad": -3.1415926535882552,
+        "real": -22.219443980718722
+      },
+      "finite_difference_rel_error": 1.3531820254421976e-11,
+      "frequency_hz": 15.163929300144474,
+      "ka": 0.05,
+      "radiation_efficiency": 1.084798227961012e-14,
+      "reactance_ratio": 0.012501562956078904,
+      "specific_impedance": {
+        "abs": 5.163224260707211,
+        "imag": 5.163224260707211,
+        "phase_rad": 1.5707963267940288,
+        "real": 4.480285023767341e-12
+      }
+    },
+    {
+      "degree": 3,
+      "dtn_eigenvalue": {
+        "abs": 22.211103674202327,
+        "imag": -2.4642008186775944e-09,
+        "phase_rad": -3.1415926534788485,
+        "real": -22.211103674202327
+      },
+      "finite_difference_abs_error": 6.345308456349802e-10,
+      "finite_difference_dtn": {
+        "abs": 22.211103673570104,
+        "imag": -2.518268060090629e-09,
+        "phase_rad": -3.1415926534764145,
+        "real": -22.211103673570104
+      },
+      "finite_difference_rel_error": 2.8568181705079912e-11,
+      "frequency_hz": 30.32785860028895,
+      "ka": 0.1,
+      "radiation_efficiency": 2.7750020857879294e-12,
+      "reactance_ratio": 0.025012514628024552,
+      "specific_impedance": {
+        "abs": 10.330326120216297,
+        "imag": 10.330326120216297,
+        "phase_rad": 1.570796326683952,
+        "real": 1.1460933439435554e-09
+      }
+    },
+    {
+      "degree": 3,
+      "dtn_eigenvalue": {
+        "abs": 22.12160145610966,
+        "imag": -5.303376510544037e-06,
+        "phase_rad": -3.141592413852335,
+        "real": -22.121601456109023
+      },
+      "finite_difference_abs_error": 2.373235686452301e-09,
+      "finite_difference_dtn": {
+        "abs": 22.121601453737707,
+        "imag": -5.3034545719996486e-06,
+        "phase_rad": -3.141592413848806,
+        "real": -22.12160145373707
+      },
+      "finite_difference_rel_error": 1.072813688991241e-10,
+      "frequency_hz": 90.98357580086683,
+      "ka": 0.3,
+      "radiation_efficiency": 1.8062093361047886e-08,
+      "reactance_ratio": 0.07534113974403558,
+      "specific_impedance": {
+        "abs": 31.116365363467974,
+        "imag": 31.116365363467082,
+        "phase_rad": 1.5707960870574382,
+        "real": 7.459758349300952e-06
+      }
+    },
+    {
+      "degree": 3,
+      "dtn_eigenvalue": {
+        "abs": 21.018862356580993,
+        "imag": -0.020056157240272748,
+        "phase_rad": -3.140638455406108,
+        "real": -21.018852787805862
+      },
+      "finite_difference_abs_error": 5.262244449701812e-10,
+      "finite_difference_dtn": {
+        "abs": 21.018862356056513,
+        "imag": -0.020056157282559373,
+        "phase_rad": -3.1406384554040727,
+        "real": -21.01885278728134
+      },
+      "finite_difference_rel_error": 2.503581954355492e-11,
+      "frequency_hz": 303.2785860028894,
+      "ka": 1.0,
+      "radiation_efficiency": 0.0002522068095838584,
+      "reactance_ratio": 0.26431273644388387,
+      "specific_impedance": {
+        "abs": 109.1628750176407,
+        "imag": 109.16282532156363,
+        "phase_rad": 1.5698421286112116,
+        "real": 0.1041630012610339
+      }
+    },
+    {
+      "degree": 3,
+      "dtn_eigenvalue": {
+        "abs": 13.243827853456276,
+        "imag": -6.585365853658537,
+        "phase_rad": -2.6211775044915147,
+        "real": -11.490514905149048
+      },
+      "finite_difference_abs_error": 1.7071030075939347e-09,
+      "finite_difference_dtn": {
+        "abs": 13.243827851878384,
+        "imag": -6.585365853439198,
+        "phase_rad": -2.6211775044423216,
+        "real": -11.490514903456095
+      },
+      "finite_difference_rel_error": 1.2889800641348775e-10,
+      "frequency_hz": 909.8357580086683,
+      "ka": 3.0,
+      "radiation_efficiency": 0.6257510729613727,
+      "reactance_ratio": 1.0918454935622317,
+      "specific_impedance": {
+        "abs": 519.7468896076705,
+        "imag": 450.9390674678111,
+        "phase_rad": 1.0503811776966185,
+        "real": 258.4391353648066
+      }
+    },
+    {
+      "degree": 3,
+      "dtn_eigenvalue": {
+        "abs": 109.58364562914771,
+        "imag": -109.43837125608019,
+        "phase_rad": -1.6222936458958674,
+        "real": -5.640769999830295
+      },
+      "finite_difference_abs_error": 1.114358920197876e-08,
+      "finite_difference_dtn": {
+        "abs": 109.58364561800413,
+        "imag": -109.43837124495217,
+        "phase_rad": -1.6222936458957284,
+        "real": -5.640769999241495
+      },
+      "finite_difference_rel_error": 1.016902580490051e-10,
+      "frequency_hz": 6065.571720057789,
+      "ka": 20.0,
+      "radiation_efficiency": 1.012594636264061,
+      "reactance_ratio": 0.052192054584420125,
+      "specific_impedance": {
+        "abs": 418.76311584110044,
+        "imag": 21.555647353309393,
+        "phase_rad": 0.05149731910097061,
+        "real": 418.20796412326564
+      }
+    },
+    {
+      "degree": 4,
+      "dtn_eigenvalue": {
+        "abs": 27.775793509036525,
+        "imag": -9.838385260753293e-16,
+        "phase_rad": -3.141592653589793,
+        "real": -27.775793509036525
+      },
+      "finite_difference_abs_error": 3.0753931672714614e-10,
+      "finite_difference_dtn": {
+        "abs": 27.775793508729347,
+        "imag": -1.4898430023060364e-11,
+        "phase_rad": -3.1415926535892567,
+        "real": -27.775793508729347
+      },
+      "finite_difference_rel_error": 1.1072206330562324e-11,
+      "frequency_hz": 15.163929300144474,
+      "ka": 0.05,
+      "radiation_efficiency": 3.5423247583443503e-19,
+      "reactance_ratio": 0.010000714387778196,
+      "specific_impedance": {
+        "abs": 4.130358046653038,
+        "imag": 4.130358046653038,
+        "phase_rad": 1.5707963267948966,
+        "real": 1.4630024418421942e-16
+      }
+    },
+    {
+      "degree": 4,
+      "dtn_eigenvalue": {
+        "abs": 27.769839000100905,
+        "imag": -5.031858123325138e-13,
+        "phase_rad": -3.141592653589775,
+        "real": -27.769839000100905
+      },
+      "finite_difference_abs_error": 7.898126964356194e-10,
+      "finite_difference_dtn": {
+        "abs": 27.769838999312945,
+        "imag": -5.457037232642258e-11,
+        "phase_rad": -3.141592653587828,
+        "real": -27.769838999312945
+      },
+      "finite_difference_rel_error": 2.8441385505790997e-11,
+      "frequency_hz": 30.32785860028895,
+      "ka": 0.1,
+      "radiation_efficiency": 3.6250095791547e-16,
+      "reactance_ratio": 0.020005717553981384,
+      "specific_impedance": {
+        "abs": 8.262487385814902,
+        "imag": 8.262487385814902,
+        "phase_rad": 1.5707963267948786,
+        "real": 1.49715179375124e-13
+      }
+    },
+    {
+      "degree": 4,
+      "dtn_eigenvalue": {
+        "abs": 27.706163913271503,
+        "imag": -9.791498956584802e-09,
+        "phase_rad": -3.1415926532363883,
+        "real": -27.706163913271503
+      },
+      "finite_difference_abs_error": 2.001867342645175e-09,
+      "finite_difference_dtn": {
+        "abs": 27.706163911271158,
+        "imag": -9.869560623531876e-09,
+        "phase_rad": -3.1415926532335705,
+        "real": -27.706163911271158
+      },
+      "finite_difference_rel_error": 7.225350102279091e-11,
+      "frequency_hz": 90.98357580086683,
+      "ka": 0.3,
+      "radiation_efficiency": 2.1259112644807334e-11,
+      "reactance_ratio": 0.06015508577383094,
+      "specific_impedance": {
+        "abs": 24.844429401632553,
+        "imag": 24.844429401632553,
+        "phase_rad": 1.5707963264414915,
+        "real": 8.780147454715091e-09
+      }
+    },
+    {
+      "degree": 4,
+      "dtn_eigenvalue": {
+        "abs": 26.958784458777462,
+        "imag": -0.00043586658995414617,
+        "phase_rad": -3.1415764857024526,
+        "real": -26.95878445525394
+      },
+      "finite_difference_abs_error": 1.0713320830394158e-09,
+      "finite_difference_dtn": {
+        "abs": 26.958784457706997,
+        "imag": -0.00043586663305820376,
+        "phase_rad": -3.141576485700853,
+        "real": -26.958784454183476
+      },
+      "finite_difference_rel_error": 3.973962864229224e-11,
+      "frequency_hz": 303.2785860028894,
+      "ka": 1.0,
+      "radiation_efficiency": 3.331811805941946e-06,
+      "reactance_ratio": 0.2060758920093157,
+      "specific_impedance": {
+        "abs": 85.11064168909103,
+        "imag": 85.11064167796704,
+        "phase_rad": 1.5707801589075558,
+        "real": 0.0013760592662684012
+      }
+    },
+    {
+      "degree": 4,
+      "dtn_eigenvalue": {
+        "abs": 18.553578489494246,
+        "imag": -2.187612531508823,
+        "phase_rad": -3.0234098835395953,
+        "real": -18.424158764454052
+      },
+      "finite_difference_abs_error": 1.3198966343132568e-09,
+      "finite_difference_dtn": {
+        "abs": 18.55357848819604,
+        "imag": -2.1876125315924178,
+        "phase_rad": -3.02340988352675,
+        "real": -18.424158763136806
+      },
+      "finite_difference_rel_error": 7.113973377484206e-11,
+      "frequency_hz": 909.8357580086683,
+      "ka": 3.0,
+      "radiation_efficiency": 0.10591653886512208,
+      "reactance_ratio": 0.892033255307127,
+      "specific_impedance": {
+        "abs": 371.0032723461408,
+        "imag": 368.41535425135186,
+        "phase_rad": 1.452613556744699,
+        "real": 43.74419782549027
+      }
+    },
+    {
+      "degree": 4,
+      "dtn_eigenvalue": {
+        "abs": 108.45919024589759,
+        "imag": -108.30928106008595,
+        "phase_rad": -1.6233794014633152,
+        "real": -5.700489895010131
+      },
+      "finite_difference_abs_error": 1.1041273124355133e-08,
+      "finite_difference_dtn": {
+        "abs": 108.45919023490531,
+        "imag": -108.30928104916347,
+        "phase_rad": -1.6233794014537355,
+        "real": -5.700489893394828
+      },
+      "finite_difference_rel_error": 1.0180117608588511e-10,
+      "frequency_hz": 6065.571720057789,
+      "ka": 20.0,
+      "radiation_efficiency": 1.0230348969477396,
+      "reactance_ratio": 0.05384395533987603,
+      "specific_impedance": {
+        "abs": 423.10466070093725,
+        "imag": 22.23789277228744,
+        "phase_rad": 0.05258307466841875,
+        "real": 422.5198575592672
+      }
+    }
+  ],
+  "sound_speed_m_s": 343.0,
+  "time_convention": "peak phasors with exp(+i omega t); outgoing h_l^(2)(k r)",
+  "validation_class": true
+}
