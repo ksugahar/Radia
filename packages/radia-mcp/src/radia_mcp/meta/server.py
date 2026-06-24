@@ -33,7 +33,8 @@ def radia_mcp_overview() -> dict:
     server has the knowledge you need. Returns a dict with:
         - n_servers: how many subpackages exist
         - servers: list of {name, subpackage, entry_point,
-                              description, primary_tools, related, tags}
+                              description, primary_tools, related, tags,
+                              selftest_command, optional audit_command}
 
     Filter by tag with `radia_mcp_by_tag`; drill into a single server
     with `radia_mcp_get`.
