@@ -11,6 +11,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from radia_mcp.radia_ngsolve.acoustics import (
+    baffled_circular_piston_radiation,
     helmholtz_green_3d,
     helmholtz_green_low_frequency_series,
     planar_helmholtz_dtn_symbol,
@@ -224,3 +225,31 @@ def test_planar_acoustic_helpers_validate_inputs():
         planar_mode_radiation_impedance(100.0, tangential_wavenumber=1.0, incidence_angle_rad=0.0)
     with pytest.raises(ValueError):
         planar_mode_radiation_impedance(100.0, incidence_angle_rad=0.5 * math.pi)
+
+
+def test_baffled_circular_piston_impedance_scaling_and_power():
+    a = 0.08
+    c = 343.0
+    rho = 1.2041
+    v0 = 0.02
+    low1 = baffled_circular_piston_radiation(a, 0.025 * c / (2.0 * math.pi * a), v0, rho=rho, c=c)
+    low2 = baffled_circular_piston_radiation(a, 0.050 * c / (2.0 * math.pi * a), v0, rho=rho, c=c)
+    mid = baffled_circular_piston_radiation(a, 1.0 * c / (2.0 * math.pi * a), v0, rho=rho, c=c)
+    high = baffled_circular_piston_radiation(a, 20.0 * c / (2.0 * math.pi * a), v0, rho=rho, c=c)
+
+    assert low2["radiation_efficiency"] / low1["radiation_efficiency"] == pytest.approx(4.0, rel=1.0e-3)
+    assert low2["reactance_ratio"] / low1["reactance_ratio"] == pytest.approx(2.0, rel=1.0e-3)
+    assert low1["radiation_efficiency"] == pytest.approx(low1["low_ka_resistance_asymptote"], rel=5.0e-4)
+    assert low1["reactance_ratio"] == pytest.approx(low1["low_ka_reactance_asymptote"], rel=5.0e-4)
+    assert high["radiation_efficiency"] == pytest.approx(1.0, abs=0.05)
+    assert mid["radiated_power"] == pytest.approx(
+        0.5 * mid["surface_area"] * mid["specific_resistance"] * v0 * v0
+    )
+    assert mid["volume_velocity_impedance"] == pytest.approx(
+        mid["specific_impedance"] / mid["surface_area"]
+    )
+
+    with pytest.raises(ValueError):
+        baffled_circular_piston_radiation(0.0, 100.0)
+    with pytest.raises(ValueError):
+        baffled_circular_piston_radiation(a, 0.0)
