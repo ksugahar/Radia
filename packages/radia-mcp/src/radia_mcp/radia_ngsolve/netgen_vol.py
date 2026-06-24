@@ -239,6 +239,37 @@ class NetgenTriTetVolMesh:
             areas[tri.bcnr] = areas.get(tri.bcnr, 0.0) + area
         return areas
 
+    def boundary_summary_rows(self) -> tuple[dict[str, object], ...]:
+        """Return named boundary inventory rows for FEM/BEM conditions.
+
+        Coreform/Cubit sidesets and Netgen boundary names arrive as integer
+        boundary numbers plus optional names.  This compact table keeps the
+        per-boundary triangle count, area, and one-based trace nodes together
+        so teaching scripts can build readable boundary-condition maps without
+        re-walking the raw triangle records.
+        """
+
+        areas = self.surface_area_by_boundary_number()
+        nodes = self.trace_node_ids_by_boundary_number()
+        triangle_counts: dict[int, int] = {}
+        for tri in self.surface_triangles:
+            triangle_counts[tri.bcnr] = triangle_counts.get(tri.bcnr, 0) + 1
+        boundary_numbers = sorted(
+            set(self.boundary_names) | set(areas) | set(nodes) | set(triangle_counts)
+        )
+        rows: list[dict[str, object]] = []
+        for bcnr in boundary_numbers:
+            trace_nodes = nodes.get(bcnr, ())
+            rows.append({
+                "boundary_number": bcnr,
+                "name": self.boundary_names.get(bcnr, f"boundary_{bcnr}"),
+                "surface_triangles": triangle_counts.get(bcnr, 0),
+                "surface_area": areas.get(bcnr, 0.0),
+                "trace_node_count": len(trace_nodes),
+                "trace_node_ids": list(trace_nodes),
+            })
+        return tuple(rows)
+
     def surface_triangle_area_vectors(self) -> tuple[tuple[float, float, float], ...]:
         """Return oriented boundary triangle area vectors.
 
