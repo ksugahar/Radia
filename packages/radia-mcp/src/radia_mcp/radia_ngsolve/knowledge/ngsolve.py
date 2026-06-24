@@ -6676,6 +6676,12 @@ TE10 conductor loss: finite-conductivity rectangular-guide walls are a matched l
 length. The checks to remember are: loss diverges near cutoff because transmitted power collapses,
 insertion loss is linear in length in dB, and alpha scales as ``1/sqrt(sigma)`` at fixed frequency.
 
+TE10 port NORMALIZATION: ``rectangular_waveguide_te10_port_normalization(f, a, b, power_w=1)``
+returns the peak ``E_y`` / ``H_x`` / wall ``H_z`` amplitudes that carry the requested time-average
+power. The closed-form anchor is ``P=(1/2) integral E_y H_x dA = a b E0^2/(4 Z_TE)`` with
+``E_y=E0 sin(pi x/a)`` and ``H_x=E_y/Z_TE``.  `validation_waveguide_te10_port_normalization.py`
+checks WR-90 1 W rows, power scaling, ``H_z/H_x=k_c/beta``, and frequency trends to roundoff.
+
 QUALITY FACTOR / wall loss (#68): the lossless resonance (#59) only gives WHERE a cavity rings; the
 finite-conductivity walls give HOW SHARPLY. The unloaded Q = omega U / P_wall (stored energy over
 per-cycle wall dissipation). For the TE101 rectangular cavity
