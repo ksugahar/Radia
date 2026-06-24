@@ -22,6 +22,7 @@ from radia_mcp.radia_ngsolve.electrostatics import (
     layered_parallel_plate_capacitance,
     parallel_plate_capacitor_energy_force,
     dielectric_sphere_polarizability,
+    dielectric_sphere_uniform_field,
     uniformly_polarized_sphere_field,
     charged_conducting_sphere_surface_stress,
     sphere_above_plane_capacitance,
@@ -111,6 +112,28 @@ def test_dielectric_sphere_polarizability():
     assert math.isclose(big, 4.0 * math.pi * EPS0 * a ** 3, rel_tol=1e-6)
     with pytest.raises(ValueError):
         dielectric_sphere_polarizability(a, 0.0)
+
+
+def test_dielectric_sphere_uniform_field():
+    a, er, E0 = 0.01, 5.0, 1.0
+    out = dielectric_sphere_uniform_field(a, er, E0, sample_radius=3.0 * a)
+    cm = (er - 1.0) / (er + 2.0)
+    assert math.isclose(out["clausius_mossotti"], cm, rel_tol=1e-12)
+    assert math.isclose(out["interior_field"], 3.0 * E0 / (er + 2.0), rel_tol=1e-12)
+    assert math.isclose(out["polarizability"],
+                        dielectric_sphere_polarizability(a, er)["alpha"], rel_tol=1e-12)
+    assert math.isclose(out["dipole_moment"], out["polarizability"] * E0, rel_tol=1e-12)
+    assert math.isclose(out["axial_field"], E0 * (1.0 + 2.0 * cm / 27.0), rel_tol=1e-12)
+    assert math.isclose(out["equatorial_field"], E0 * (1.0 - cm / 27.0), rel_tol=1e-12)
+
+    vacuum = dielectric_sphere_uniform_field(a, 1.0, E0, sample_radius=2.0 * a)
+    assert vacuum["interior_field"] == E0
+    assert vacuum["axial_field"] == E0
+    assert vacuum["equatorial_field"] == E0
+    assert dielectric_sphere_uniform_field(a, 1e9)["interior_field"] < 1e-8 * E0
+
+    with pytest.raises(ValueError):
+        dielectric_sphere_uniform_field(a, er, E0, sample_radius=a)
 
 
 def test_uniformly_polarized_sphere_field():

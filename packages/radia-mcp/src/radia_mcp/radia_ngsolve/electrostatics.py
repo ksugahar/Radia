@@ -162,6 +162,54 @@ def dielectric_sphere_polarizability(radius_a, eps_r):
     }
 
 
+def dielectric_sphere_uniform_field(radius_a, eps_r, applied_field_E0=1.0,
+                                    sample_radius=None):
+    r"""Dielectric sphere in a uniform applied field along the z-axis.
+
+    A sphere of radius ``a`` and relative permittivity ``eps_r`` embedded in
+    vacuum and driven by an applied field ``E0 zhat`` has a uniform interior
+    field
+
+        E_in = 3 E0 / (eps_r + 2),
+
+    and an exterior dipole correction set by the Clausius-Mossotti factor
+    ``K = (eps_r - 1)/(eps_r + 2)``.  On the axis and equator at radius ``r>a``:
+
+        E_z,axis = E0 (1 + 2 K (a/r)^3),
+        E_z,eq   = E0 (1 -   K (a/r)^3).
+
+    Returns the interior field, polarizability, dipole moment, and, when
+    ``sample_radius`` is supplied, the axial/equatorial exterior field samples.
+    """
+    if radius_a <= 0:
+        raise ValueError("radius_a must be > 0")
+    if eps_r <= 0:
+        raise ValueError("eps_r must be > 0")
+    a = float(radius_a)
+    er = float(eps_r)
+    e0 = float(applied_field_E0)
+    cm = (er - 1.0) / (er + 2.0)
+    alpha = 4.0 * math.pi * EPS0 * a ** 3 * cm
+    out = {
+        "clausius_mossotti": cm,
+        "interior_field": 3.0 * e0 / (er + 2.0),
+        "interior_field_factor": 3.0 / (er + 2.0),
+        "polarizability": alpha,
+        "dipole_moment": alpha * e0,
+    }
+    if sample_radius is not None:
+        r = float(sample_radius)
+        if r <= a:
+            raise ValueError("sample_radius must be > radius_a for exterior field samples")
+        q = (a / r) ** 3
+        out.update({
+            "sample_radius": r,
+            "axial_field": e0 * (1.0 + 2.0 * cm * q),
+            "equatorial_field": e0 * (1.0 - cm * q),
+        })
+    return out
+
+
 def uniformly_polarized_sphere_field(polarization_P, radius_a):
     r"""Fields of a uniformly polarized dielectric sphere (frozen polarization
     ``P`` [C/m^2], radius ``a``):
