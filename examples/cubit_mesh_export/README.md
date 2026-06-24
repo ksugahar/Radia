@@ -18,6 +18,7 @@ Example scripts for the radia Cubit C++ plugin (`cubit_mesh_export.ccm`), organi
 | [`validation_vol_fem_bem_topology.py`](validation_vol_fem_bem_topology.py) | First-order FEM/BEM topology view: closed surface edge manifold, Euler characteristic, compact scalar-BEM nodes, RWG-to-HCurl edge trace |
 | [`validation_vol_tet_quality.py`](validation_vol_tet_quality.py) | Netgen `.vol` tetrahedron quality: edge ratio, inradius, circumradius, radius-ratio quality, corner-normalized Jacobian quality, and optional real Cubit export evaluation |
 | [`validation_vol_surface_triangle_quality.py`](validation_vol_surface_triangle_quality.py) | Netgen `.vol` boundary-triangle quality: area, edge ratio, inradius/circumradius quality, angle range, sliver detection, and optional real Cubit export evaluation |
+| [`validation_vol_boundary_normal_vectors.py`](validation_vol_boundary_normal_vectors.py) | Netgen `.vol` boundary normal/vector-area rows for Maxwell-stress force integration over named sidesets |
 | [`validation_vol_boundary_inventory.py`](validation_vol_boundary_inventory.py) | Netgen `.vol` named-boundary inventory for Cubit/Coreform sidesets: per-boundary area, triangle count, and trace-node ids |
 | [`validation_vol_material_interface.py`](validation_vol_material_interface.py) | Netgen `.vol` material/interface inventory: material volumes, exterior/interface areas, and `domin/domout` boundary incidence |
 
@@ -26,6 +27,7 @@ python validation_vol_surface_closure.py
 python validation_vol_fem_bem_topology.py
 python validation_vol_tet_quality.py
 python validation_vol_surface_triangle_quality.py
+python validation_vol_boundary_normal_vectors.py
 python validation_vol_boundary_inventory.py
 python validation_vol_material_interface.py
 ```
