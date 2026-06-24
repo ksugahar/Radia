@@ -1,1 +1,1 @@
-"""Tests for Cubit mesh export (cubit_mesh_curver plugin + cubit.cmd)."""
+"""Tests for Coreform Cubit 2025.12 mesh export commands."""

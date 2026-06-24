@@ -338,7 +338,7 @@ Full design document (defensive prior-art publication, BSD-3-Clause):
 
 The Cubit server uses **Plan A**: launch
 `coreform_cubit.exe -nojournal cubit_bootstrap.py`, which installs a
-PyQt5 `QTimer` (200 ms poll) inside Cubit's Qt event loop. The MCP
+PySide6 `QTimer` (200 ms poll) inside Cubit's Qt event loop. The MCP
 side drops `*.req.json` into a temp directory; the bootstrap polls,
 runs `cubit.cmd()` on the Qt main thread, and writes `out/*.resp.json`
 back. **No sockets, no pipes** — just atomically-renamed JSON files.

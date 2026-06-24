@@ -827,8 +827,8 @@ def mmm_core(topic: str = "chubar_1998") -> str:
     eigenvalue behavior, plus Radia heritage.
 
     Practical "how to make an MMM/MSC model" recipes: topic
-    "build_msc_mmm". Interaction-matrix internals (BuildMatrix /
-    GetInteractMatrix gotchas): "matrix_structure". Near-null "loop"
+    "build_msc_mmm". Matrix/system probes (MMM dense N vs current
+    moment-yano MSC system): "matrix_structure". Near-null "loop"
     modes / conditioning / beautiful->ugly BiCGSTAB (CEFC 2026 study):
     "eigenvalue_nullspace". Heritage (Chubar 1998, Wakao 2007 ACA,
     Janet MMM+RNM, Le-Duc PEEC+MMM, Weddemann FEM-BEM): remaining
@@ -838,8 +838,10 @@ def mmm_core(topic: str = "chubar_1998") -> str:
         topic: One of:
             "build_msc_mmm"      - HOW TO BUILD an MMM/MSC model
                                    (elements, materials, solve, results)
-            "matrix_structure"   - Interaction matrix: BuildMatrix /
-                                   GetInteractMatrix returns mu_r-independent N
+            "matrix_structure"   - Matrix probes: GetInteractMatrix is
+                                   MMM/dense legacy; moment-yano MSC uses
+                                   BuildMomentSystem / MomentSystemDenseRaw /
+                                   MomentHMatrixProbe
             "eigenvalue_nullspace" - Near-null loop modes, cond ~ mu_r,
                                    beautiful->ugly BiCGSTAB (CEFC 2026)
             "multipole_modes"    - What field the 6-DoF MSC creates:
@@ -1099,7 +1101,7 @@ def radia_usage(topic: str = "all") -> str:
         topic: Documentation topic. Options:
             "all"            - Complete documentation
             "overview"       - Architecture, MMM vs MSC vs BEM
-            "elements"       - ObjRecMag, ObjHexahedron, ObjTetrahedron, ObjWedge
+            "elements"       - ObjRecMag, ObjHexahedron, ObjTetrahedron, ObjWedge, ObjPyramid
             "materials"      - MatLin, MatSatIsoTab, hysteresis, permanent magnets
             "solver"         - rad.Solve, SolverConfig, LU/BiCGSTAB/HACApK
             "field"          - rad.Fld, batch evaluation, A field
@@ -1891,7 +1893,7 @@ def standalone_panels(topic: str = "") -> str:
       four_panels      -- what each launcher does
       vol_sources      -- Cubit / Netgen-OCC / build123d / etc.
       vs_cubit         -- standalone vs Cubit Solve menu
-      ih_methods       -- 6 IH methods + their .vol requirements
+      ih_methods       -- 9 IH methods + their file/label requirements
       troubleshooting  -- common errors when launching standalone
 
     Args:

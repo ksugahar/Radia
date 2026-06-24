@@ -745,7 +745,7 @@ void RadHACApKBase::UpdateDiagonal(const std::vector<double>& inv_chi) {
 
 //=========================================================================
 // GetInteractionMatrixElement: Optimized with O(1) lookup and LRU cache
-// Supports 3DOF tetrahedra, 6DOF hexahedra, and mixed meshes
+// Supports the MMM 3DOF tetrahedron HACApK path. Surface-charge MSC uses RadHACApKMomentSystem.
 //=========================================================================
 
 double RadHACApKMMMManager::GetInteractionMatrixElement(int dof_i, int dof_j) const {
@@ -775,7 +775,7 @@ double RadHACApKMMMManager::GetInteractionMatrixElement(int dof_i, int dof_j) co
     int dof_elem_j = m_dof_offset[elem_j + 1] - m_dof_offset[elem_j];
 
     // EIEM2 retirement (Phase 3b): RadHACApKMMMManager is now MMM-only (tetrahedron, 3 DOF).  MSC
-    // surface-charge models (hexahedron / wedge) are solved by the moment-yano H-matrix
+    // surface-charge models (hexahedron / wedge / pyramid) are solved by the moment-yano H-matrix
     // (RadHACApKMomentSystem) or the dense moment LU -- never this manager -- and mixed MMM+MSC is
     // rejected fail-loud in MakeAutoRelax.  So only the 3x3 (tet-tet) block can occur here.
     if (dof_elem_i == 3 && dof_elem_j == 3) {

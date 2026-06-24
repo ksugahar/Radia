@@ -31,4 +31,4 @@ cubit.cmd("block 1 element type tetra4")
 # Correct: export with matching extension and proper setup
 import cubit_mesh_export as cme
 cme.export_Gmsh_ver4(cubit, "output.msh")
-cme.export_NGSolveCurvedMesh(cubit, "output.vol")
+cubit.cmd('export netgen "output.vol" order 2 overwrite')

@@ -508,8 +508,10 @@ Modern problems often need >1 method:
 BUILD_MSC_MMM = """\
 ## How to build an MMM / MSC model in Radia (practical recipe)
 
-MMM (tetrahedra, 3 DOF) and MSC (hexahedra 6 DOF / wedges 5 DOF) are
-built from the SAME pipeline; only the element constructor differs.
+MMM (tetrahedra / RecMag, 3 DOF) and moment-yano MSC
+(hexahedra 6 DOF, wedges/pyramids 5 DOF) are built from the SAME
+object/material pipeline; only the element constructor and solve
+formulation differ.
 Units are SI: coordinates in METERS, magnetization M in A/m (NOT
 Tesla; M = Br/mu_0, e.g. Br=1.2 T -> M=954930 A/m).
 
@@ -519,6 +521,7 @@ Tesla; M = Br/mu_0, e.g. Br=1.2 T -> M=954930 A/m).
 |-------------|----------|-----|--------|
 | `rad.ObjTetrahedron(verts, M)` | 4 | 3 (Mx,My,Mz) | MMM |
 | `rad.ObjWedge(verts, M)` | 6 | 5 (face charges) | MSC |
+| `rad.ObjPyramid(verts, M)` | 5 | 5 (face charges) | MSC |
 | `rad.ObjHexahedron(verts, M)` | 8 | 6 (face charges) | MSC |
 | `rad.ObjRecMag(center, dims, M)` | - | 3 | surface-current brick |
 
@@ -582,6 +585,13 @@ returns [Bx,By,Bz] (Tesla). The legacy array form
 - method 2 = HACApK     (N > 2000, O(N log N) memory)
 - `image='+x-z'` etc. applies mirror symmetry (IMA) in the SAME call.
 
+For surface-charge soft iron, current production is the parameter-free
+moment-yano system (`BuildMomentSystemCore`).  Method 2 uses the
+moment H-matrix path for pure-hex 6-DOF models; wedge/pyramid and
+mixed surface-charge models currently route to dense moment LU.  Do
+not mix MMM tet/RecMag soft iron with MSC hex/wedge/pyramid soft iron
+in one `rad.Solve`; that is rejected fail-loud with `Radia::Error204`.
+
 `rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0,
 bicgstab_tol=1e-4, relax_param=0.0, newton_method=False)` tunes the
 solver; `rad.GetSolveStats()` returns timing / iteration counts.
@@ -598,9 +608,12 @@ behavior: "eigenvalue_nullspace".
 """
 
 MATRIX_STRUCTURE = """\
-## The MMM/MSC interaction matrix -- extraction and structure
+## Matrix/system probes after the moment-yano transition
 
-Inspect the dense interaction matrix WITHOUT solving:
+### MMM dense interaction matrix
+
+For pure MMM tetrahedron / RecMag models, inspect the dense geometric
+interaction matrix WITHOUT solving:
 ```python
 handle = rad.BuildMatrix(obj, image="")    # builds, does not solve
 N, dof = rad.GetInteractMatrix(handle)     # (dof x dof) row-major numpy
@@ -608,10 +621,9 @@ N, dof = rad.GetInteractMatrix(handle)     # (dof x dof) row-major numpy
 
 ### Critical gotcha: what GetInteractMatrix returns
 
-It returns the GEOMETRIC interaction matrix N (stored +N, the
-demagnetization tensor), which is INDEPENDENT of permeability --
-building it at mu_r=10 vs mu_r=5000 gives the identical matrix
-(verified). It is NOT the system matrix the solver factorizes.
+For MMM, it returns the GEOMETRIC interaction matrix N (stored +N,
+the demagnetization tensor), which is INDEPENDENT of permeability.
+It is NOT the system matrix the solver factorizes.
 
 Form the SYSTEM matrix yourself (sign per Radia's ComputeEntry,
 A = -N + diag(1/chi)):
@@ -623,31 +635,51 @@ In the digest/paper notation A_ij = delta_ij/(mu_r-1) + G_ij, that
 "G" equals -N (the returned matrix); the +N/-N flip is a storage
 convention, not physics.
 
+For current surface-charge MSC, `GetInteractMatrix` is NOT the
+production solve matrix.  The retired EIEM2 dense MSC blocks are no
+longer assembled; moment-yano builds its own system from centroid
+field/gradient moment rows.  Use these probes instead:
+
+```python
+handle = rad.BuildMatrix(obj)
+A, rhs, dof = rad.BuildMomentSystem(handle, chi, hx, hy, hz)
+A_raw, dof = rad.MomentSystemDenseRaw(handle, chi)
+probe = rad.MomentHMatrixProbe(handle, chi)
+```
+
+`BuildMomentSystem` returns the normalized dense moment-yano system
+for a uniform field.  `MomentSystemDenseRaw` is the unnormalized
+entry-by-entry matrix used by the H-matrix entry.  `MomentHMatrixProbe`
+checks the HACApK moment matvec against `A_raw`.
+
 ### Properties (verified)
 
-- dof = sum of per-element DOF (tet 3, wedge 5, hex 6). A 32-hex block
+- dof = sum of per-element DOF (tet/RecMag 3, wedge/pyramid 5, hex 6). A 32-hex block
   -> 192 dof.
-- N is NON-symmetric (MSC collocation evaluates the normal field at
-  face centers; relative asymmetry ~ a few %).
+- The moment-yano MSC system is NON-symmetric because rows are moment
+  functionals and columns are face charges.
 - Row-major [target][source]: `N[i,j]` = effect ON dof i FROM dof j.
 - Element-major ordering: element e owns dof [k*e, k*e+k) with k its
   per-element DOF count.
 
-### Densifying the ACTUAL HACApK (ACA+) operator
+### Densifying the ACTUAL MMM HACApK (ACA+) operator
 
-`rad.GetInteractMatrix` always returns the EXACT geometric N (never the
-ACA-compressed one). To obtain the actual ACA-approximated SYSTEM matrix
-A = -N + diag(1/chi):
+For MMM method-2 work, `rad.GetInteractMatrix` returns the exact
+geometric N (never the ACA-compressed one). To obtain the actual
+ACA-approximated SYSTEM matrix A = -N + diag(1/chi):
 ```python
 A_haca, dof = rad.HMatrixDensify(handle)   # MatVec on unit vectors
 ```
-It builds the MSC H-matrix and applies its `MatVec` to unit vectors,
+It builds the MMM H-matrix and applies its `MatVec` to unit vectors,
 returning the dense A in the ORIGINAL DOF ordering (directly comparable to
 `diag(1/chi) - N`, and usable with a loop basis). Use it to check whether
 the real ACA+ shifts the near-zero eigenvalues (it does not materially --
 see "eigenvalue_nullspace"). C++ path: `RadHACApKMMMManager::MatVec`
-(formerly `RadHACApKMSCManager` before the 2026-06-23 moment-yano cleanup)
 exposed via `radTApplication::HMatrixDensify`.
+
+For moment-yano MSC method 2, use `MomentHMatrixProbe`; the moment
+H-matrix stores `A_raw` directly and is not an `A = -N + diag(1/chi)`
+operator.
 
 See "eigenvalue_nullspace" for why the spectrum of A matters, and
 `docs/solver/MSC_NULLSPACE_DEFLATION.md` for the full treatment.
@@ -729,7 +761,7 @@ eigenvalues BELOW 1/(mu_r-1), worsening cond 7.7e5 -> 1.08e6 at eps=1e-4
 NOT spectral regularization -- the "H-matrix suppresses the bad modes"
 hypothesis is refuted by both the SVD proxy and the real ACA+.
 
-### Loop modes: RESOLVED by consolidating on HDiv-VIM (deflation removed 2026-06-09)
+### Loop modes and current backends
 
 The loop null space above is a genuine property of A = diag(1/(mu_r-1)) - N:
 the div-side tree-cotree gauge (dual of FEM-A's gradient gauge). Helmholtz
@@ -742,14 +774,19 @@ matrix-free deflation (SetHACApKDeflation / SetDeflateNullspace via the
 BuildLoopBasis cycle basis), an alpha-free loop-star gauge (SolveLoopStar:
 the reduced A_SS = S^T A S star block with an H-LU preconditioner), and a
 post-solve Helmholtz-Hodge loop projection (SetLoopProjection). ALL of these
-were REMOVED on 2026-06-09 -- the project consolidated on the HDiv-VIM operator.
+were REMOVED on 2026-06-09.
 
-WHY HDiv-VIM instead: the FEEC H(div) RT0 demag operator N = B^T G B builds the
+HDiv-VIM remains the loop-free FEEC complement: the H(div) RT0 demag operator N = B^T G B builds the
 charge map B (rho = -div M on L2, sigma = M.n on SurfaceL2) so the loop space is
 exactly ker(B) -- field-null BY CONSTRUCTION via the de Rham complex,
 mu_r-INDEPENDENT, with no runtime deflation / gauge / projection. M^{-1} mass
 preconditioning already deflates the loops, so a plain symmetric Krylov is
 well-conditioned at every mu_r. See `radia.vim` and `tests/feec/test_hdiv_vim_*`.
+
+Moment-yano is still the canonical mesh-less surface-charge path in
+`rad.Solve` for hex/wedge/pyramid soft iron.  Its method-2 pure-hex
+path uses the moment H-matrix matvec plus block-Jacobi BiCGSTAB; this
+buys storage scaling, not a bounded-iteration proof.
 
 Effect on the MSC/MMM default solver (Block-Jacobi BiCGSTAB, HACApK Method 2):
 it no longer projects out loops. Fields are UNAFFECTED (N L = 0) -- rad.Fld is

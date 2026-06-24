@@ -10,8 +10,8 @@
 *                 Refactored 2026-04-16:
 *                 - RadHACApKBase owns the kernel-agnostic H-matrix lifecycle
 *                 - RadHACApKMMMManager : public RadHACApKBase implements the
-*                   MMM/MSC kernel (tetra/wedge/hex magnetization moments and
-*                   surface charges). A future RadHACApKPEECManager will
+*                   MMM 3-DOF tetrahedron kernel. Surface-charge MSC is handled
+*                   by the moment-yano RadHACApKMomentSystem. A future RadHACApKPEECManager will
 *                   implement Ruehli finite-filament mutual inductance.
 *
 * First release:  2025
@@ -246,14 +246,14 @@ private:
 };
 
 //-------------------------------------------------------------------------
-// RadHACApKMMMManager: MMM/MSC kernel (tetra 3DOF, wedge 5DOF, hex 6DOF)
+// RadHACApKMMMManager: MMM kernel (tetra 3DOF)
 //-------------------------------------------------------------------------
 
 /**
  * RadHACApKMMMManager implements the HACApK kernel for Radia's Magnetic
- * Moment Method (MMM, tetrahedra, 3 DOF) and Magnetic Surface Charge
- * method (MSC, wedges 5 DOF / hexahedra 6 DOF) element types, including
- * mixed meshes.
+ * Moment Method (MMM, tetrahedra, 3 DOF).  Magnetic Surface Charge
+ * elements (hex/wedge/pyramid, 5-6 DOF) use the separate moment-yano
+ * RadHACApKMomentSystem or dense moment LU path.
  *
  * All kernel-specific precomputation (PrecomputeHexaGeometry, etc.),
  * flat matrix caching, and on-demand block computation routines live
@@ -323,7 +323,7 @@ private:
 
     // 3DOF tetrahedron block computation (MMM -- the only element type this manager solves;
     // EIEM2 surface-charge 6x6/5x5/mixed kernels were retired in Phase 3b, the moment-yano
-    // H-matrix RadHACApKMomentSystem now owns hex/wedge MSC)
+    // H-matrix RadHACApKMomentSystem now owns hex/wedge/pyramid MSC)
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
     void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
     void Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const;
