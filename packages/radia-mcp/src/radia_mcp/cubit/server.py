@@ -4796,6 +4796,7 @@ register_status_tool(
     description='Cubit mesh scripting, hex/tet workflow, export formats',
     subpackage='radia_mcp.cubit',
     related_servers=["build123d"],
+    audit_command="mcp-server-cubit --selftest --audit-examples",
 )
 
 
