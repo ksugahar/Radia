@@ -122,6 +122,23 @@ def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
         assert name in reverse_names, f"radia-ngsolve related: {reverse_names}"
 
 
+def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
+    """Agents should discover lightweight health checks separately from audits."""
+    from radia_mcp.meta.server import radia_mcp_get, radia_mcp_overview
+
+    overview = radia_mcp_overview()
+    by_name = {entry["name"]: entry for entry in overview["servers"]}
+
+    for name, entry in by_name.items():
+        assert entry["selftest_command"] == f"{entry['entry_point']} --selftest", name
+
+    cubit = radia_mcp_get("cubit")
+    gmsh = radia_mcp_get("mcp-server-gmsh")
+    assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-examples"
+    assert gmsh["audit_command"] == "mcp-server-gmsh --selftest --audit-examples"
+    assert "audit_command" not in radia_mcp_get("radia-ngsolve")
+
+
 def test_all_related_links_are_bidirectional():
     """If A's related list contains B, then B's must contain A.
 
