@@ -22,6 +22,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           box_face_vector_area_rows,
                                           box_face_pressure_force_rows,
                                           box_face_pressure_moment_rows,
+                                          box_face_pressure_resultant_summary,
                                           box_face_traction_moment_rows,
                                           compare_boundary_vector_area_rows,
                                           compare_shape_measurement_rows,
@@ -223,6 +224,45 @@ def test_box_face_pressure_moment_rows_integrate_pivot_moments():
 
     with pytest.raises(KeyError):
         box_face_pressure_moment_rows((2, 3, 5), {"zmax": 2.0}, default_pressure=None)
+
+
+def test_box_face_pressure_resultant_summary_matches_closed_box_balance():
+    box = (Pos(1.0, 1.5, 2.5) * Box(2, 3, 5)).solid()
+    measurement = shape_measurement_row(box)
+    size = measurement["bounding_box"]["size"]
+    center = measurement["bounding_box"]["center"]
+
+    uniform = box_face_pressure_resultant_summary(size, {}, center=center, default_pressure=2.0)
+    assert uniform["boundary_count"] == 6
+    assert uniform["box_size"] == pytest.approx((2.0, 3.0, 5.0))
+    assert uniform["box_center"] == pytest.approx((1.0, 1.5, 2.5))
+    assert uniform["total_force_N"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["total_moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["absolute_force_sum_N"] == pytest.approx(124.0)
+    assert uniform["force_balance_ratio"] == pytest.approx(0.0)
+    assert uniform["surface_vector_area"] == pytest.approx((0.0, 0.0, 0.0))
+
+    zmax = box_face_pressure_resultant_summary(
+        size,
+        {"zmax": 2.0},
+        center=center,
+        default_pressure=0.0,
+    )
+    assert zmax["total_force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert zmax["total_moment_about_pivot_Nm"] == pytest.approx((18.0, -12.0, 0.0))
+    assert zmax["force_balance_ratio"] == pytest.approx(1.0)
+
+    shifted = box_face_pressure_resultant_summary(
+        size,
+        {"zmax": 2.0},
+        center=center,
+        default_pressure=0.0,
+        pivot_m=(1.0, 1.5, 0.0),
+    )
+    assert shifted["total_moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    with pytest.raises(KeyError):
+        box_face_pressure_resultant_summary(size, {"zmax": 2.0}, default_pressure=None)
 
 
 def test_box_face_traction_moment_rows_integrate_vector_tractions():

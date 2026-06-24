@@ -33,7 +33,8 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
            "box_face_vector_area_rows", "box_face_pressure_force_rows",
-           "box_face_pressure_moment_rows", "box_face_traction_moment_rows",
+           "box_face_pressure_moment_rows", "box_face_pressure_resultant_summary",
+           "box_face_traction_moment_rows",
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
@@ -508,6 +509,78 @@ def box_face_pressure_moment_rows(
             "moment_magnitude_Nm": math.sqrt(sum(component * component for component in moment)),
         })
     return rows
+
+
+def box_face_pressure_resultant_summary(
+    size,
+    pressure_by_face,
+    center=(0.0, 0.0, 0.0),
+    names=None,
+    default_pressure=0.0,
+    pivot_m=(0.0, 0.0, 0.0),
+):
+    """Return analytic box-face pressure rows plus net force/moment metrics.
+
+    The return vocabulary mirrors
+    ``NetgenTriTetVolMesh.boundary_pressure_resultant_summary`` so a CAD-side
+    build123d box reference and a Cubit/Coreform-exported `.vol` boundary mesh
+    can be compared without adapter code.
+    """
+
+    rows = box_face_pressure_moment_rows(
+        size,
+        pressure_by_face,
+        center=center,
+        names=names,
+        default_pressure=default_pressure,
+        pivot_m=pivot_m,
+    )
+    total_force = tuple(sum(row["force_N"][axis] for row in rows) for axis in range(3))
+    total_moment = tuple(
+        sum(row["moment_about_pivot_Nm"][axis] for row in rows)
+        for axis in range(3)
+    )
+    total_force_norm = math.sqrt(sum(component * component for component in total_force))
+    total_moment_norm = math.sqrt(sum(component * component for component in total_moment))
+    absolute_force_sum = sum(row["force_magnitude_N"] for row in rows)
+    absolute_moment_sum = sum(row["moment_magnitude_Nm"] for row in rows)
+    surface_vector_area = tuple(
+        sum(row["vector_area"][axis] for row in rows)
+        for axis in range(3)
+    )
+    surface_vector_area_norm = math.sqrt(
+        sum(component * component for component in surface_vector_area)
+    )
+    total_area = sum(row["surface_area"] for row in rows)
+
+    return {
+        "boundary_count": len(rows),
+        "rows": rows,
+        "pivot_m": tuple(float(value) for value in pivot_m),
+        "total_force_N": total_force,
+        "total_force_magnitude_N": total_force_norm,
+        "total_moment_about_pivot_Nm": total_moment,
+        "total_moment_magnitude_Nm": total_moment_norm,
+        "absolute_force_sum_N": absolute_force_sum,
+        "absolute_moment_sum_Nm": absolute_moment_sum,
+        "force_balance_ratio": (
+            total_force_norm / absolute_force_sum
+            if absolute_force_sum > 0.0
+            else 0.0
+        ),
+        "moment_balance_ratio": (
+            total_moment_norm / absolute_moment_sum
+            if absolute_moment_sum > 0.0
+            else 0.0
+        ),
+        "surface_vector_area": surface_vector_area,
+        "surface_vector_area_norm": surface_vector_area_norm,
+        "surface_vector_area_norm_over_area": (
+            surface_vector_area_norm / total_area if total_area > 0.0 else None
+        ),
+        "box_center": tuple(float(value) for value in center),
+        "box_size": tuple(float(value) for value in size),
+    }
 
 
 def _face_vector_value(vector_by_face, area_row, default_vector, value_name):
