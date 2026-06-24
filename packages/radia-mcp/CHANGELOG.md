@@ -7,6 +7,12 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- **motor / AGE validation routing**: added public-safe `motor_age_quality`
+  and `motor_age_validation_plan` tools, plus the ELF/MAGIC motor bridge
+  and MMM quick-check router.  Motor prompts now route from SPM/IPM/IM/SRM/
+  SynRM/hysteresis intent to explicit NGSolve AGE gates, physical quantities,
+  pytest targets, and publication labels without exposing private solver
+  provenance.
 - **BREAKING**: removed the in-package `radia_mcp.optuna` server and
   `mcp-server-optuna` entry point.  Optuna operation now belongs to the
   official public `optuna/optuna-mcp`; radia-mcp keeps the CAE objective,
