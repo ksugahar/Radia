@@ -1,0 +1,95 @@
+{
+  "kind": "acoustic_impedance_dtn_bridge_validation",
+  "validation_class": true,
+  "rho": 1.2041,
+  "c": 343.0,
+  "frequency": 1000.0,
+  "rows": [
+    {
+      "label": "planar_normal",
+      "frequency": 1000.0,
+      "specific_impedance": {
+        "real": 413.0063,
+        "imag": 0.0,
+        "abs": 413.0063
+      },
+      "dtn_eigenvalue": {
+        "real": 0.0,
+        "imag": -18.318324510727653,
+        "abs": 18.318324510727653
+      },
+      "reference_dtn_eigenvalue": {
+        "real": 0.0,
+        "imag": -18.318324510727656,
+        "abs": 18.318324510727656
+      },
+      "dtn_abs_error": 3.552713678800501e-15,
+      "roundtrip_impedance_abs_error": 5.684341886080802e-14
+    },
+    {
+      "label": "planar_oblique_55deg",
+      "frequency": 1000.0,
+      "specific_impedance": {
+        "real": 720.0545103063259,
+        "imag": 0.0,
+        "abs": 720.0545103063259
+      },
+      "dtn_eigenvalue": {
+        "real": 0.0,
+        "imag": -10.506959292785188,
+        "abs": 10.506959292785188
+      },
+      "reference_dtn_eigenvalue": {
+        "real": 0.0,
+        "imag": -10.506959292785188,
+        "abs": 10.506959292785188
+      },
+      "dtn_abs_error": 0.0,
+      "roundtrip_impedance_abs_error": 0.0
+    },
+    {
+      "label": "spherical_degree_1",
+      "frequency": 1000.0,
+      "specific_impedance": {
+        "real": 399.4877399883125,
+        "imag": 143.44344013821066,
+        "abs": 424.46021594450286
+      },
+      "dtn_eigenvalue": {
+        "real": -6.023503063501151,
+        "imag": -16.775361935911587,
+        "abs": 17.82401069447724
+      },
+      "reference_dtn_eigenvalue": {
+        "real": -6.023503063501149,
+        "imag": -16.775361935911587,
+        "abs": 17.82401069447724
+      },
+      "dtn_abs_error": 1.7763568394002505e-15,
+      "roundtrip_impedance_abs_error": 2.842170943040401e-14
+    }
+  ],
+  "piston_row": {
+    "label": "baffled_piston_average_impedance",
+    "frequency": 1000.0,
+    "ka": 1.3738743383045742,
+    "specific_impedance": {
+      "real": 284.73719897557623,
+      "imag": 285.69325260629853,
+      "abs": 403.3558070304966
+    },
+    "dtn_eigenvalue": {
+      "real": -13.285129149870066,
+      "imag": -13.240671341215231,
+      "abs": 18.756599747683634
+    },
+    "roundtrip_impedance_abs_error": 8.038873388460929e-14,
+    "radiated_active_power_W": 0.00025158608226714534
+  },
+  "checks": {
+    "normal_dtn_abs_error": 3.552713678800501e-15,
+    "max_reference_dtn_abs_error": 3.552713678800501e-15,
+    "max_roundtrip_impedance_abs_error": 8.038873388460929e-14,
+    "piston_radiated_active_power_W": 0.00025158608226714534
+  }
+}
