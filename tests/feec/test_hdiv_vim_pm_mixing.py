@@ -13,7 +13,7 @@ mixed"):
     interface DIVERGES under refinement (~20% external-field error).  The touching-interface formulation
     is the next step.
 
-This is a transitional gate: it compares against yano-type while it still ships (M5 retires it)."""
+This is a transitional gate: it compares against six-face surface-charge while it still ships (M5 retires it)."""
 import warnings
 
 import numpy as np

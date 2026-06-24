@@ -270,7 +270,7 @@ void RadHACApKMMMManager::ExtractCoordinates() {
     m_dof_offset.resize(m_n_elem + 1);
 
     // MMM-only manager: uniform 3-DOF tetrahedra.  Surface-charge MSC (hex 6-DOF, wedge 5-DOF) is
-    // solved by the moment-yano path (SolveGen forces pure-MSC to the LU/Picard moment driver) and mixed
+    // solved by the multipole-moment MMM path (SolveGen forces pure-MSC to the LU/Picard moment driver) and mixed
     // MMM+MSC is rejected fail-loud in MakeAutoRelax (Error204), so ONLY 3-DOF tets reach this manager
     // (the EIEM2 surface-charge collocation kernels were retired in Phase 3b).
     int total_dof = 0;
@@ -280,7 +280,7 @@ void RadHACApKMMMManager::ExtractCoordinates() {
         if (elem_dof != 3) {
             std::cerr << "[HACApK] Error: Element " << i << " has " << elem_dof
                       << " DOF; the MMM (HACApK) manager handles 3-DOF tetrahedra only "
-                      << "(surface-charge MSC uses the moment-yano solver)" << std::endl;
+                      << "(surface-charge MSC uses the multipole-moment MMM solver)" << std::endl;
             m_ndof = 0;
             m_nffc = 0;
             return;
@@ -464,7 +464,7 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): the H-matrix leaf
     // fill runs ngcore::ParallelFor, which silently falls back to single-threaded when NO
     // RegionTaskManager is active.  Stand up (or reuse the caller's) pool here so EVERY
-    // HACApK build -- moment-yano, HDiv, MMM/MSC, PEEC, diagnostics -- is parallel even when
+    // HACApK build -- multipole-moment MMM, HDiv, MMM/MSC, PEEC, diagnostics -- is parallel even when
     // a non-panel caller forgot `with TaskManager()`.  Nested -> reuses the caller's (no-op).
     ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
 
@@ -775,7 +775,7 @@ double RadHACApKMMMManager::GetInteractionMatrixElement(int dof_i, int dof_j) co
     int dof_elem_j = m_dof_offset[elem_j + 1] - m_dof_offset[elem_j];
 
     // EIEM2 retirement (Phase 3b): RadHACApKMMMManager is now MMM-only (tetrahedron, 3 DOF).  MSC
-    // surface-charge models (hexahedron / wedge / pyramid) are solved by the moment-yano H-matrix
+    // surface-charge models (hexahedron / wedge / pyramid) are solved by the multipole-moment MMM H-matrix
     // (RadHACApKMomentSystem) or the dense moment LU -- never this manager -- and mixed MMM+MSC is
     // rejected fail-loud in MakeAutoRelax.  So only the 3x3 (tet-tet) block can occur here.
     if (dof_elem_i == 3 && dof_elem_j == 3) {
@@ -1124,8 +1124,8 @@ double RadHACApKMMMManager::GetGenericElement(int elem_i, int elem_j, int local_
 }
 
 //=========================================================================
-// RadHACApKMomentSystem: the moment-yano system A_raw as a HACApK H-matrix
-// (docs/moment_yano/ACA_MOMENT_DESIGN.md, Phase 2 Increment 2).
+// RadHACApKMomentSystem: the multipole-moment MMM system A_raw as a HACApK H-matrix
+// (docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md, Phase 2 Increment 2).
 //=========================================================================
 
 RadHACApKMomentSystem::RadHACApKMomentSystem(radTInteraction* interaction, double chi)

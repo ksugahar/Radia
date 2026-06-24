@@ -2,9 +2,9 @@
 (* ::Package:: *)
 
 (*
-  yano_6dof_multipole.wls -- WHAT FIELD does the 6-DoF MSC (yano) hexahedron element create?
+  six_face_charge_multipole.wls -- WHAT FIELD does the 6-DoF MSC (yano) hexahedron element create?
   The symbolic counterpart of the numerical SVD / eigenmode analysis
-  (examples/vim/yano_moment_svd_multipole.py).  Cleanly, for an ARBITRARY (sheared)
+  (examples/vim/multipole_moment_svd_multipole.py).  Cleanly, for an ARBITRARY (sheared)
   hexahedron and for ALL shear s at once, the 6 uniform face charges produce a field whose
   INDEPENDENT multipole content is exactly
 
@@ -59,7 +59,7 @@ matFor[s_, degs_] := momentRow[s, #] & /@ degs;
 (* ============================ self-test ============================ *)
 Module[{ok = True, chk, rMD, rQ, rO, shear, shearCoeff},     (* s left global so it prints cleanly as "s" *)
   chk[name_, cond_] := (Print["  ", If[cond, "ok  ", "FAIL"], name]; ok = ok && cond);
-  Print["yano_6dof_multipole.wls self-test (6-DoF MSC field content, symbolic in shear s):"];
+  Print["six_face_charge_multipole.wls self-test (6-DoF MSC field content, symbolic in shear s):"];
 
   (* ---- (1) rank structure for GENERIC (symbolic) s -- a proof for ALL distortions ---- *)
   rMD = MatrixRank[matFor[s, Join[degMono, degDip]]];

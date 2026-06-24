@@ -1,6 +1,6 @@
-"""Matrix-free SOLVE gate for the HACApK phase of moment-yano.
+"""Matrix-free SOLVE gate for the HACApK phase of multipole-moment MMM.
 
-The compressibility gate (yano_moment_hmatrix_compressibility.py) proved the nonlocal operator D in the moment
+The compressibility gate (multipole_moment_hmatrix_compressibility.py) proved the nonlocal operator D in the moment
 system A = L - chi D is H-compressible.  This script proves the OTHER half: that the system SOLVES well
 matrix-free, so the C++ HACApK is just "swap the dense matvec for the H-matrix matvec".
 
@@ -14,7 +14,7 @@ Here the dense A is the matvec STAND-IN (medium scale).  MEASURED two-part resul
   (2) PRECONDITIONER (caveat): the cheap local block-Jacobi does NOT bound iterations -- they grow ~dof^1.06
       and rise with the mu_r contrast (the probe), i.e. M^-1 A is NOT "I + compact": at mu_r=1000 the long-range
       demag coupling is strong, not a small perturbation.  This is the high-mu_r demag conditioning wall, the
-      SAME one the production yano-MSC and the HDiv-VIM hit (memory) -- bounded iters need an H-LU-class
+      SAME one the production surface-charge MSC and the HDiv-VIM hit (memory) -- bounded iters need an H-LU-class
       preconditioner (at the A-build cost), not local block-Jacobi.  It is NOT a moment-formulation defect.
 
 So: the C++ HACApK matvec is justified (storage + matvec scale; answer unchanged), and the preconditioner
@@ -61,7 +61,7 @@ def _norm(row, rhs):
 
 
 def build_linear_system(hexes, Happ, mu_r=MU_R):
-    """Assemble the dense LINEAR moment system (fixed chi), exactly as yano_moment_cyoke_gate.moment_yano,
+    """Assemble the dense LINEAR moment system (fixed chi), exactly as multipole_moment_cyoke_gate.multipole_moment_mmm,
     and return A, b, plus the per-element row block 6e..6e+5 and own-face DOF set for block-Jacobi."""
     chi = mu_r - 1.0
     rad.UtiDelAll(); rad.set_demag_backend("yano")
@@ -145,7 +145,7 @@ def run_case(nxy, nz, mu_r=MU_R, rtol=1e-10):
 
 
 def main():
-    print("\nMatrix-free SOLVE gate for moment-yano: block-Jacobi (local 6x6, incl. self-term) preconditioned")
+    print("\nMatrix-free SOLVE gate for multipole-moment MMM: block-Jacobi (local 6x6, incl. self-term) preconditioned")
     print("GMRES vs the dense DIRECT solve.  Two questions: (1) does the matrix-free iteration reproduce the")
     print("dense answer (= is it valid to swap dense matvec -> HACApK matvec)?  (2) does the cheap precond bound")
     print("iterations in N?  Linear (chi const); dense A is the matvec stand-in for the HACApK matvec.\n")
@@ -164,7 +164,7 @@ def main():
     iter_exponent = float(np.log(iters[-1] / iters[0]) / np.log(dofs[-1] / dofs[0]))
 
     # mu_r-contrast probe at fixed N: is the iter growth contrast-driven (= the high-mu_r demag conditioning,
-    # shared with production yano-MSC / HDiv-VIM) rather than a moment-formulation defect?
+    # shared with production surface-charge MSC / HDiv-VIM) rather than a moment-formulation defect?
     print("\n  -- mu_r-contrast probe at nxy=16 (fixed N) --")
     print(f"  {'mu_r':>6} {'dof':>5} | {'GMRES it':>8} {'sig relerr':>11}")
     print("  " + "-" * 40)
@@ -177,7 +177,7 @@ def main():
     accuracy_ok = max(relerrs) < 1e-6
     contrast_driven = probe[-1]["gmres_iters"] > 3 * probe[0]["gmres_iters"]
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_matfree_solve", results=results, mu_r_probe=probe,
+               benchmark="multipole_moment_matfree_solve", results=results, mu_r_probe=probe,
                gmres_iters_max=int(max(iters)), iter_growth_exponent_vs_dof=iter_exponent,
                sigma_rel_err_max=float(max(relerrs)), accuracy_pass=bool(accuracy_ok),
                iters_contrast_driven=bool(contrast_driven),
@@ -189,20 +189,20 @@ def main():
                    f"(2) PRECONDITIONER (caveat): the cheap local block-Jacobi does NOT bound iterations -- they "
                    f"grow ~dof^{iter_exponent:.2f} (66->{iters[-1]} over nxy 8..20) and rise steeply with the "
                    "mu_r contrast at fixed N (the probe), so the iter growth is the high-mu_r DEMAG conditioning, "
-                   "NOT a moment defect. This is the SAME wall the production yano-MSC and the HDiv-VIM hit "
+                   "NOT a moment defect. This is the SAME wall the production surface-charge MSC and the HDiv-VIM hit "
                    "(memory: cheap precond not N-robust; an H-LU-class preconditioner restores bounded iters at "
                    "the A-build cost). So the moment formulation is NO WORSE than the existing scalable backend: "
                    "HACApK gives scalable storage + matvec, and bounded-iter preconditioning is the shared open "
                    "problem, not a moment-specific blocker. The C++ HACApK matvec is justified (gates 1-2); the "
                    "preconditioner choice (cheap + iter-growth vs H-LU + bounded) is the documented trade-off."))
-    with open(os.path.join(HERE, "yano_moment_matfree_solve.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_matfree_solve.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print(f"\n  VALIDITY {'PASS' if accuracy_ok else 'FAIL'}: matrix-free reproduces dense to "
           f"{max(relerrs):.1e} (sigma) -> swapping dense matvec for HACApK matvec keeps the same answer.")
     print(f"  PRECOND caveat: cheap block-Jacobi iters grow ~dof^{iter_exponent:.2f}; "
-          f"{'contrast-driven (high-mu_r demag, shared with yano-MSC/HDiv-VIM)' if contrast_driven else 'check'} "
+          f"{'contrast-driven (high-mu_r demag, shared with surface-charge MSC/HDiv-VIM)' if contrast_driven else 'check'} "
           "-> H-LU-class precond needed for bounded iters.")
-    print("  saved", os.path.join(HERE, "yano_moment_matfree_solve.json"))
+    print("  saved", os.path.join(HERE, "multipole_moment_matfree_solve.json"))
 
 
 if __name__ == "__main__":

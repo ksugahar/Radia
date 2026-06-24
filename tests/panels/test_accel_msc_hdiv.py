@@ -2,7 +2,7 @@
 
 The accelerator-magnet MSC panel drives the HDiv-VIM (radia.vim.soft_iron_from_mesh + rad.Solve, which
 auto-routes a mesh-backed soft iron to the HDiv-VIM).  This panel intentionally does not expose the
-mesh-less moment-yano backend.  The HDiv-VIM is KELVIN-less / iron-only, so the .vol must contain only the 'yoke' volume
+mesh-less multipole-moment MMM backend.  The HDiv-VIM is KELVIN-less / iron-only, so the .vol must contain only the 'yoke' volume
 material, and IMA symmetry is not supported there yet.
 
 Locks:

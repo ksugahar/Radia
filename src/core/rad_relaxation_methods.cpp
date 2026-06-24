@@ -1657,7 +1657,7 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	return AutoRelax_Unified(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 }
 
-// Phase 2 Increment 4 (storage decoupling): when moment+method2 routes here (g_yano_moment_hacapk), the
+// Phase 2 Increment 4 (storage decoupling): when moment+method2 routes here (g_multipole_moment_hacapk), the
 // Picard linear step uses the scalable moment H-BiCGSTAB (SolveMomentHACApK) and the convergence scaffold
 // (ComputeActualHFieldFromSigma / StoreOldValuesAndComputeBnorm / UpdateChiAndCheckConvergence) uses the
 // constitutive H=M/chi -- NONE of these read the dense interaction/base matrix, so it can be skipped (no
@@ -1665,8 +1665,8 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 // NpI from the dense BaseMatrix, so it still needs it -> keep dense there.
 bool radTRelaxationMethNo_0::NeedsDenseMatrix() const
 {
-	extern bool g_yano_moment_hacapk;
-	if(g_yano_moment_hacapk && !rad.m_b_input_newton && !rad.m_b_input_hantila)
+	extern bool g_multipole_moment_hacapk;
+	if(g_multipole_moment_hacapk && !rad.m_b_input_newton && !rad.m_b_input_hantila)
 		return false;
 	return true;
 }
@@ -2087,7 +2087,7 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 #ifdef RADIA_USE_HACAPK
 //-------------------------------------------------------------------------
 // SolveMomentHACApK: the SCALABLE-storage moment linear step (Phase 2 Increments 3-4,
-// docs/moment_yano/ACA_MOMENT_DESIGN.md).  Solves A_raw sigma = b_raw with the moment system
+// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  Solves A_raw sigma = b_raw with the moment system
 // as a HACApK H-matrix (RadHACApKMomentSystem, O(N log N) matvec) + block-Jacobi BiCGSTAB.
 // chiPerHex is PER-ELEMENT (Increment 4): each row 6h+* folds chiPerHex[h], so the nonlinear Picard outer
 // loop just calls this each iteration with the current chi (no uniform-chi restriction).
@@ -2105,7 +2105,7 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	if(dof == 0) return 0;
 
 	// TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
-	// whole build + BiCGSTAB matvec loop so moment-yano method 2 is multi-threaded even when
+	// whole build + BiCGSTAB matvec loop so multipole-moment MMM method 2 is multi-threaded even when
 	// called via a bare rad.Solve(...,2) without `with TaskManager()`.  Mirrors
 	// RadHACApKChargeGram::SolveMaterialMINRES; nested under a panel region -> no-op.
 	ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
@@ -2223,10 +2223,10 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// in SetupBaseMatrix_VariableDOF.  Build RHS vector (will be overwritten with solution by dgesv).
 	std::vector<double> RHS(totalDOF);
 
-	// MOMENT-yano: assemble the parameter-free MOMENT system (BuildMomentSystemCore) for surface-charge
+	// multipole-moment MMM: assemble the parameter-free MOMENT system (BuildMomentSystemCore) for surface-charge
 	// polyhedra (hex 6-DOF + wedge/pyramid 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
 	// sigma in DOF order -- a drop-in for the retired EIEM2 transpose + dgesv + write-back.  moment is now
-	// UNCONDITIONAL (the yano_moment=False opt-out was removed in Phase 3b-1).  Pure tet (3 DOF = MMM)
+	// UNCONDITIONAL (the old EIEM2/moment opt-out was removed in Phase 3b-1).  Pure tet (3 DOF = MMM)
 	// uses the dense MMM path below; mixed tet+MSC is rejected fail-loud in MakeAutoRelax.
 	bool useMoment = true;
 	if(useMoment) { for(int e = 0; e < AmOfMainElem; e++) { int dd = IntrctPtr->GetElementDOF(e); if(dd != 6 && dd != 5) { useMoment = false; break; } } }
@@ -2250,8 +2250,8 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		// (O(N log N) matvec) instead of the dense O(N^3) LU.  PER-ELEMENT chi (Increment 4): the nonlinear
 		// Picard outer loop calls this each iteration with the current chiPerHex (no uniform-chi restriction);
 		// breakdown/build-fail falls through to the dense moment LU below (same answer).
-		extern bool g_yano_moment_hacapk;
-		if(g_yano_moment_hacapk && nMom > 0)
+		extern bool g_multipole_moment_hacapk;
+		if(g_multipole_moment_hacapk && nMom > 0)
 		{
 			std::vector<double> sigma;
 			int nit = SolveMomentHACApK(IntrctPtr, chiPerHex, HextPerHex,
@@ -3253,7 +3253,7 @@ bool radTRelaxationMethNo_2::BuildBlockJacobiPreconditioner_HMatrix(
 		int block_offset = blockOffsets[elem];
 
 		// Diagonal block A_block = -N_block + (1/chi) I, extracted DOF-generically from the H-matrix
-		// kernel via GetInteractionMatrixElement (returns +N).  Works for any element DOF; the moment-yano
+		// kernel via GetInteractionMatrixElement (returns +N).  Works for any element DOF; the multipole-moment MMM
 		// MSC path never reaches method 2 here (pure hex/wedge/pyramid is rerouted to the LU/Picard moment driver
 		// in SolveGen), so this block-Jacobi only ever sees 3-DOF tetrahedra (MMM).
 		for(int i = 0; i < dof; i++)
@@ -3421,7 +3421,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 
 	// NOTE: 3DOF tetrahedra use precomputed geometry for fast O(1) access.
-	// Surface-charge moment-yano method-2 solves use RadHACApKMomentSystem, not this MMM manager.
+	// Surface-charge multipole-moment MMM method-2 solves use RadHACApKMomentSystem, not this MMM manager.
 
 	std::vector<double> OldMagn(totalDOF);
 	// Store current isotropic chi for ALL elements (unified 3DOF/6DOF handling, same as LU/BiCGSTAB)

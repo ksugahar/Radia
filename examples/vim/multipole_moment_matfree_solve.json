@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-06-22T00:18:40.581281",
   "hostname": "lab",
-  "benchmark": "yano_moment_matfree_solve",
+  "benchmark": "multipole_moment_matfree_solve",
   "results": [
     {
       "nxy": 8,
@@ -123,5 +123,5 @@
   "sigma_rel_err_max": 4.218999180741425e-09,
   "accuracy_pass": true,
   "iters_contrast_driven": true,
-  "conclusion": "TWO-PART honest result. (1) VALIDITY (PASS): block-Jacobi (local own-face 6x6, incl. the centroid self-term) preconditioned GMRES reproduces the dense DIRECT solve to <1e-6 (sigma + moment + div(B)) at every size -- so the matrix-free iteration is CORRECT and it is valid to swap the dense matvec A.sigma for the gate-confirmed HACApK matvec; the answer is unchanged. (2) PRECONDITIONER (caveat): the cheap local block-Jacobi does NOT bound iterations -- they grow ~dof^1.06 (66->395 over nxy 8..20) and rise steeply with the mu_r contrast at fixed N (the probe), so the iter growth is the high-mu_r DEMAG conditioning, NOT a moment defect. This is the SAME wall the production yano-MSC and the HDiv-VIM hit (memory: cheap precond not N-robust; an H-LU-class preconditioner restores bounded iters at the A-build cost). So the moment formulation is NO WORSE than the existing scalable backend: HACApK gives scalable storage + matvec, and bounded-iter preconditioning is the shared open problem, not a moment-specific blocker. The C++ HACApK matvec is justified (gates 1-2); the preconditioner choice (cheap + iter-growth vs H-LU + bounded) is the documented trade-off."
+  "conclusion": "TWO-PART honest result. (1) VALIDITY (PASS): block-Jacobi (local own-face 6x6, incl. the centroid self-term) preconditioned GMRES reproduces the dense DIRECT solve to <1e-6 (sigma + moment + div(B)) at every size -- so the matrix-free iteration is CORRECT and it is valid to swap the dense matvec A.sigma for the gate-confirmed HACApK matvec; the answer is unchanged. (2) PRECONDITIONER (caveat): the cheap local block-Jacobi does NOT bound iterations -- they grow ~dof^1.06 (66->395 over nxy 8..20) and rise steeply with the mu_r contrast at fixed N (the probe), so the iter growth is the high-mu_r DEMAG conditioning, NOT a moment defect. This is the SAME wall the production surface-charge MSC and the HDiv-VIM hit (memory: cheap precond not N-robust; an H-LU-class preconditioner restores bounded iters at the A-build cost). So the moment formulation is NO WORSE than the existing scalable backend: HACApK gives scalable storage + matvec, and bounded-iter preconditioning is the shared open problem, not a moment-specific blocker. The C++ HACApK matvec is justified (gates 1-2); the preconditioner choice (cheap + iter-growth vs H-LU + bounded) is the documented trade-off."
 }

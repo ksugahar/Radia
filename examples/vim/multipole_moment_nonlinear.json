@@ -75,5 +75,5 @@
       "constit_resid": 1.582221120997529e-10
     }
   ],
-  "conclusion": "Nonlinear (BH-curve) moment-yano with NO loop deflation matches the shipped Radia MMM-MatSatIsoTab solver to <1% across linear/knee/saturated at two mesh densities, with div(B)=0 and the per-element constitutive exact (~1e-11). The loop deflation (an earlier prototype artifact) was the whole nonlinear bug: A is non-singular, the loops carry per-element dipole, and deflating them broke the per-element constitutive + div(B)=0 invisibly (the external moment is loop-invariant, so linear looked fine). Solve A directly. The parameter-free moment formulation is NOT linear-only -- it handles real soft iron."
+  "conclusion": "Nonlinear (BH-curve) multipole-moment MMM with NO loop deflation matches the shipped Radia MMM-MatSatIsoTab solver to <1% across linear/knee/saturated at two mesh densities, with div(B)=0 and the per-element constitutive exact (~1e-11). The loop deflation (an earlier prototype artifact) was the whole nonlinear bug: A is non-singular, the loops carry per-element dipole, and deflating them broke the per-element constitutive + div(B)=0 invisibly (the external moment is loop-invariant, so linear looked fine). Solve A directly. The parameter-free moment formulation is NOT linear-only -- it handles real soft iron."
 }

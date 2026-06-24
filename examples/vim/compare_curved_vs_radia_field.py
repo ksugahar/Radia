@@ -3,7 +3,7 @@ the SHIPPED Radia solver (FLAT tets) vs HDiv-VIM (CURVED single-layer surface ch
 dipole of a uniform-M sphere.
 
 This is the quantitative basis for the curved accuracy-per-DOF win against the PRODUCTION code.  Radia's
-ObjTetrahedron are FLAT -- the accessible stand-in for the yano-type distortion elements, which are also
+ObjTetrahedron are FLAT -- the accessible stand-in for the six-face surface-charge distortion elements, which are also
 flat.  At the SAME mesh parameter h, the HDiv curved field is ~10-30x more accurate; and curved at the
 COARSEST mesh beats shipped-Radia-flat at the FINEST.
 

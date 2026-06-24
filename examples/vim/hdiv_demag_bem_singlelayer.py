@@ -23,7 +23,7 @@ like "the demag factor does not discriminate the curved win"):
                       ~0.1-0.25%.
 
 => curved + high-order converges the demag to machine-meaningful exactness at a coarse mesh, at fixed
-(small) ndof -- the accuracy-per-DOF win over flat lowest-order yano-type, ON THE DEMAG FACTOR directly.
+(small) ndof -- the accuracy-per-DOF win over flat lowest-order six-face surface-charge, ON THE DEMAG FACTOR directly.
 This single-layer is the surface Gram engine for the production curved+high-order HDiv-VIM operator
 (N = B^T V B); the nonlinear / volume-charge part (div M != 0) still uses the hand-rolled Newtonian
 potential phi_tet (hdiv_demag_tet.py).

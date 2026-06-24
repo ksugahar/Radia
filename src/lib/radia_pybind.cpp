@@ -455,7 +455,7 @@ int ObjWedge(py::list vertices, py::array_t<double> magnetization) {
  * @brief Create pyramid element from 5 vertices
  *
  * Square-base pyramid: 1 quadrilateral base + 4 triangular sides.
- * 5 faces total -> 5 surface-charge DOF for the moment-yano MSC method.  The single quadrupole row is
+ * 5 faces total -> 5 surface-charge DOF for the multipole-moment MMM MSC method.  The single quadrupole row is
  * the per-element RESIDUAL EIGENMODE (the in-plane dx^2-dy^2-type mode for a symmetric pyramid -- DISTINCT
  * from the wedge's axial mode; both are derived/verified in examples/vim/eigenmode_quadrupole_derivation.wls),
  * so the pyramid solves through the same moment path as hex (6) and wedge (5) with no extra kernel.
@@ -981,7 +981,7 @@ py::tuple GetInteractMatrix(int intrc_handle) {
 }
 
 /**
- * @brief Get the yano-MSC cell-graph cycle (loop) basis as a numpy array
+ * @brief Get the surface-charge MSC cell-graph cycle (loop) basis as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
  * @return Tuple (L as 2D numpy array (dof x nLoop), nLoop)
  */
@@ -1058,8 +1058,8 @@ py::array_t<double> GetCentroidFieldGrad(int intrc_handle) {
     return result;
 }
 
-// Moment-yano system matrix A (dof x dof, row-major) + rhs (dof) for uniform linear chi + uniform applied
-// field (hx,hy,hz).  Step-1 verification of the EIEM2 -> moment-yano upgrade (vs examples/vim prototype).
+// Multipole-moment MMM system matrix A (dof x dof, row-major) + rhs (dof) for uniform linear chi + uniform applied
+// field (hx,hy,hz).  Step-1 verification of the EIEM2 -> multipole-moment MMM upgrade (vs examples/vim prototype).
 py::tuple BuildMomentSystem(int intrc_handle, double chi, double hx, double hy, double hz) {
     double Happ[3] = {hx, hy, hz};
     int dof = 0;
@@ -2122,7 +2122,7 @@ void SolverConfig(py::kwargs kwargs) {
         SetKeepMagnetization(kwargs["keep_magnetization"].cast<bool>());
     }
 
-    // (the yano_moment=False opt-out was REMOVED in Phase 3b-1: moment is the sole surface-charge demag.)
+    // (the old EIEM2/moment opt-out was REMOVED in Phase 3b-1: moment is the sole surface-charge demag.)
 }
 
 py::dict GetSolverConfig() {
@@ -3502,7 +3502,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Create pyramid element from 5 vertices.
 
               Square-base pyramid: 1 quadrilateral base + 4 triangular sides (5 faces total).
-              5 DOF for the moment-yano MSC method; the single quadrupole row is the per-element
+              5 DOF for the multipole-moment MMM MSC method; the single quadrupole row is the per-element
               residual eigenmode (same moment path as hex/wedge -- no extra kernel).
 
               Vertex convention (matches netgen_mesh_import.PYRAMID_FACES):
@@ -3711,12 +3711,12 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("GetLoopBasis", &radia_solver::GetLoopBasis,
           py::arg("intrc_handle"),
           R"pbdoc(
-              Get the historical yano-MSC cell-graph cycle (loop) basis L of an interaction matrix.
+              Get the historical surface-charge MSC cell-graph cycle (loop) basis L of an interaction matrix.
 
               The loops are the field-null subspace of the retired EIEM2 surface-charge
               collocation operator N (== HDiv ker(B), the cell/internal-face cycle space).
               Runtime deflation/gauge machinery was removed; current surface-charge soft
-              iron uses moment-yano, and HDiv-VIM is the loop-free FEEC complement.  Built
+              iron uses multipole-moment MMM, and HDiv-VIM is the loop-free FEEC complement.  Built
               geometry-only (no SVD): face-center matching -> cell adjacency -> fundamental cycles.
 
               Args:
@@ -3750,9 +3750,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
           py::arg("intrc_handle"),
           R"pbdoc(
               Per moment-element centroid demag field + gradient functionals -- the kernel of the
-              parameter-free yano-MSC moment formulation (replaces the eval-point alpha and
+              parameter-free surface-charge MSC moment formulation (replaces the eval-point alpha and
               the finite-difference conditioning noise; see examples/vim/
-              yano_moment_analytic_selfterm.py).
+              multipole_moment_analytic_selfterm.py).
 
               For each moment element, the demag field H and gradient gradH at the element
               CENTROID as linear functionals of every source DOF charge:
@@ -3774,11 +3774,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("BuildMomentSystem", &radia_solver::BuildMomentSystem,
           py::arg("intrc_handle"), py::arg("chi"), py::arg("hx"), py::arg("hy"), py::arg("hz"),
           R"pbdoc(
-              Parameter-free MOMENT-yano system matrix A (dof x dof, row-major) + rhs (dof) for a
+              Parameter-free multipole-moment MMM system matrix A (dof x dof, row-major) + rhs (dof) for a
               UNIFORM linear material (chi) in a UNIFORM applied field (hx,hy,hz).  Per moment
               element: 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched
               to chi*{H,gradH}(centroid) via GetCentroidFieldGrad.  Step-1 verification of the
-              EIEM2 -> moment-yano upgrade (matches examples/vim/yano_moment_iter_scaling.py::build).
+              EIEM2 -> multipole-moment MMM upgrade (matches examples/vim/multipole_moment_iter_scaling.py::build).
 
               Returns: (A, rhs, dof) -- A is (dof, dof), rhs is (dof,).
           )pbdoc");
@@ -3809,7 +3809,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Builds the MMM H-matrix for the interaction handle and applies it
               to unit vectors, returning the dense A = -N + diag(1/chi) in the
-              original DOF ordering. Current moment-yano MSC H-matrix validation uses
+              original DOF ordering. Current multipole-moment MMM MSC H-matrix validation uses
               MomentHMatrixProbe instead.
 
               Args:

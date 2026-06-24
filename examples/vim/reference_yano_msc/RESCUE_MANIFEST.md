@@ -1,17 +1,17 @@
-# yano-type past-data rescue (from git history)
+# six-face surface-charge past-data rescue (from git history)
 
 Rescued 2026-06-19 from the Radia git history into `C:\temp\yano_rescue\`.
 These files were deleted from the working tree during the drop-yano /
 HDiv-VIM consolidation. They are recoverable from git anytime, but are
-extracted here as the **yano-MSC reference corpus for the CEFC 2026 paper**
-(C-yoke: yano-MSC vs HDiv-VIM, loop-mode / iteration headline).
+extracted here as the **surface-charge MSC reference corpus for the CEFC 2026 paper**
+(C-yoke: surface-charge MSC vs HDiv-VIM, loop-mode / iteration headline).
 
 ## Provenance (which commit deleted what)
 
 | Item | Deleted in | Date | Recovered from |
 |---|---|---|---|
 | `examples/c_type_electromagnet/` (whole tree, 35 files) | `20cc1696` "Consolidate in-flight drop-yano working tree" | 2026-06-17 | `20cc1696^` |
-| `examples/mmm_eigenvalue_study/null_removed_mmm_msc.py` | `2a0adc3d` "Remove yano-type loop-star / deflation / loop-projection" | 2026-06-09 | `2a0adc3d^` |
+| `examples/mmm_eigenvalue_study/null_removed_mmm_msc.py` | `2a0adc3d` "Remove six-face surface-charge loop-star / deflation / loop-projection" | 2026-06-09 | `2a0adc3d^` |
 | `tests/test_hex_demag_convergence.py` | `9facc2e7` "hdiv-vim: gate removed yano demag path" | 2026-06-19 | `9facc2e7^` |
 
 Model lineage: `examples/c_type_electromagnet` is a direct port of the
@@ -19,7 +19,7 @@ Model lineage: `examples/c_type_electromagnet` is a direct port of the
 Trelis.jou, 1x1x1 / 3x3x3 / 6x6x6 hex). Quarter model + Image symmetry
 `+x-z`, racetrack coil, C-type yoke. Verified against ELF_MAGIC.
 
-## KEY: yano-MSC reference numbers (nonlinear, Newton, BH curve)
+## KEY: surface-charge MSC reference numbers (nonlinear, Newton, BH curve)
 
 `nonlinear/quarter/{LU,bicgstab,hacapk}/*DOF.json` — hex MSC, 6 DOF/face.
 These are the **baseline the HDiv-VIM is compared against**. Note the large
@@ -53,9 +53,9 @@ HDiv-VIM collapses.
 
 ## Runnability caveat
 
-These scripts solved hex soft iron via the old EIEM2 collocation yano-MSC path.
+These scripts solved hex soft iron via the old EIEM2 collocation surface-charge MSC path.
 Current Radia routes mesh-less hex/wedge/pyramid surface-charge soft iron to the
-canonical moment-yano formulation instead, so these scripts are no longer a
+canonical multipole-moment MMM formulation instead, so these scripts are no longer a
 reproduction path for the historical JSONs. The durable value here is:
   1. the **golden reference numbers** (JSONs above) — frozen, citeable;
   2. the **hex geometry** (generate_hex_mesh.py + .step) — reusable to

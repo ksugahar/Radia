@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-06-22T02:10:17.099567",
   "hostname": "lab",
-  "benchmark": "yano_moment_scalable_path",
+  "benchmark": "multipole_moment_scalable_path",
   "build": [
     {
       "nxy": 8,
@@ -56,5 +56,5 @@
     }
   ],
   "build_us_per_pair": 0.8498477485341509,
-  "conclusion": "moment-yano CAN scale. (1) BUILD is cheap: the centroid field+gradient kernel is ~0.8 us per (element,face) pair (single centroid->face integral, all 9 functionals per pass) -- far lighter than HDiv's face->face DOUBLE-integral charge-Gram (~270 us/entry from 68s@N=2302). So the build is NOT the obstacle: dense is sub-second at medium scale; the HACApK ACA build is rank-driven (field ~13, gradient ~24) and sub-cubic. (2) the SOLVE is the obstacle (non-normal demag): block-Jacobi grows / BiCGSTAB breaks down (iter_scaling), deflation fails (precond_synthesis), and sparse-LU (top-k, far-field dropped) is FAR worse than block-Jacobi (thousands of iters) -- the long-range coupling MUST be in the preconditioner. (3) THEREFORE H-LU is necessary AND sufficient (it keeps the far-field as low-rank) AND affordable (factor ~6s per HDiv; A-build cheap per (1)). SCALABLE moment-yano = HACApK A-build + H-LU factor -> bounded iters. The earlier 'too heavy / use EIEM2 at scale' was wrong: build is cheap, H-LU factor is cheap, and no cheaper preconditioner works. The C++ piece to build is the H-LU on the moment HACApK matrix (the lab already ships H-LU machinery)."
+  "conclusion": "multipole-moment MMM CAN scale. (1) BUILD is cheap: the centroid field+gradient kernel is ~0.8 us per (element,face) pair (single centroid->face integral, all 9 functionals per pass) -- far lighter than HDiv's face->face DOUBLE-integral charge-Gram (~270 us/entry from 68s@N=2302). So the build is NOT the obstacle: dense is sub-second at medium scale; the HACApK ACA build is rank-driven (field ~13, gradient ~24) and sub-cubic. (2) the SOLVE is the obstacle (non-normal demag): block-Jacobi grows / BiCGSTAB breaks down (iter_scaling), deflation fails (precond_synthesis), and sparse-LU (top-k, far-field dropped) is FAR worse than block-Jacobi (thousands of iters) -- the long-range coupling MUST be in the preconditioner. (3) THEREFORE H-LU is necessary AND sufficient (it keeps the far-field as low-rank) AND affordable (factor ~6s per HDiv; A-build cheap per (1)). SCALABLE multipole-moment MMM = HACApK A-build + H-LU factor -> bounded iters. The earlier 'too heavy / use EIEM2 at scale' was wrong: build is cheap, H-LU factor is cheap, and no cheaper preconditioner works. The C++ piece to build is the H-LU on the moment HACApK matrix (the lab already ships H-LU machinery)."
 }

@@ -1,4 +1,4 @@
-"""bench_yano_moment_scaling.py -- scale benchmark for the parameter-free moment-yano NONLINEAR solver.
+"""bench_multipole_moment_scaling.py -- scale benchmark for the parameter-free multipole-moment MMM NONLINEAR solver.
 
 Runs the validated (no-deflation, Anderson-accelerated secant) moment formulation on the voxelized hex
 C-yoke at increasing resolution and records the Benchmark-Policy fields (peak_memory_mb, t_setup, t_solve,
@@ -8,10 +8,10 @@ operator footprint dof^2 (the O(N^2) wall that motivates the HACApK phase).
 mdx-ready: imports `radia` DIRECTLY (PyPI on mdx / editable on LAB) -- NO src-path hack that would shadow the
 PyPI install -- and is fully self-contained (no sibling-module import), so
 
-    python bench_yano_moment_scaling.py --sizes 20 30 40 50
+    python bench_multipole_moment_scaling.py --sizes 20 30 40 50
 
 runs on mdx the moment a radia release carrying rad.GetCentroidFieldGrad / rad.GetFaceGeom lands.  The solver
-here is byte-identical to the validated examples/vim/yano_moment_nonlinear.py moment_nonlinear (split into a
+here is byte-identical to the validated examples/vim/multipole_moment_nonlinear.py moment_nonlinear (split into a
 SETUP phase = objs + C++ accessors + per-element local geometry, and a SOLVE phase = the Anderson iteration,
 so the two costs are timed separately).  Kept inline so the benchmark has zero import-path dependency.
 
@@ -109,7 +109,7 @@ def moment_setup(hexes):
 
 def moment_solve(S, Happ, maxit=80, tol=1e-10, m_depth=6):
     """SOLVE phase: Anderson-accelerated secant fixed-point on the DENSE moment system, NO loop deflation
-    (A is non-singular -- solve directly).  Same map as yano_moment_nonlinear.py."""
+    (A is non-singular -- solve directly).  Same map as multipole_moment_nonlinear.py."""
     dof = S["dof"]; n_el = S["n_el"]; EL = S["EL"]; area = S["area"]
 
     def Gmap(sig):
@@ -173,11 +173,11 @@ def main():
     ap.add_argument("--nz", type=int, default=2, help="through-thickness layers")
     ap.add_argument("--field", type=float, default=5.0e4, help="applied H_y in A/m (default 5e4 = BH knee)")
     ap.add_argument("--maxit", type=int, default=80, help="max Anderson iterations")
-    ap.add_argument("--out", default=os.path.join(HERE, "bench_yano_moment_scaling.json"),
+    ap.add_argument("--out", default=os.path.join(HERE, "bench_multipole_moment_scaling.json"),
                     help="output JSON path (committed next to the script per the Data Persistence Policy)")
     args = ap.parse_args()
 
-    print(f"\nyano-moment NONLINEAR scale benchmark (dense baseline): chi0={CHI0:.0f}, Msat={MSAT:.0e}, "
+    print(f"\nmultipole-moment MMM NONLINEAR scale benchmark (dense baseline): chi0={CHI0:.0f}, Msat={MSAT:.0e}, "
           f"H_app={args.field:.0e} A/m\n")
     print(f"  {'mesh':>10} {'nhex':>6} {'dof':>6} | {'iters':>5} {'conv':>5} | {'t_setup':>8} {'t_solve':>8} "
           f"{'peak_MB':>8} {'denseMB':>8} | {'div(B)':>8} {'constit':>8}")
@@ -194,11 +194,11 @@ def main():
     data = {
         "timestamp": datetime.now().isoformat(),
         "hostname": platform.node(),
-        "benchmark": "yano_moment_scaling",
+        "benchmark": "multipole_moment_scaling",
         "problem": dict(geometry="voxelized hex C-yoke", mu_r0=MU_R0, Msat=MSAT, H_applied=args.field,
                         nz=args.nz, sizes=args.sizes, solver="Anderson-accelerated secant, dense, no deflation"),
         "results": results,
-        "note": ("Dense baseline for the parameter-free moment-yano nonlinear solver. Memory is O(dof^2) "
+        "note": ("Dense baseline for the parameter-free multipole-moment MMM nonlinear solver. Memory is O(dof^2) "
                  "(dense_matrix_mb) and the per-iteration solve is O(dof^3), so this path caps at a few "
                  "thousand dof -- the HACApK phase (ACA-compression of the centroid field+gradient operator "
                  "F0/Ginv) must reproduce these moment_my / div(B) / constit numbers and beat peak_memory_mb "

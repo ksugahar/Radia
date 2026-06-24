@@ -370,7 +370,7 @@ class TestMeshImportSolver(unittest.TestCase):
 
     def test_hex_mesh_soft_iron_solve_yano(self):
         """A hexahedral mesh of soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the
-        moment-yano MSC demag.  In a
+        multipole-moment MMM MSC demag.  In a
         uniform applied field the cube magnetizes (M_avg_z > 0), like the tetrahedral (MMM) solve
         above.  (Permanent-magnet fields are unaffected.)"""
         center = [0.0, 0.0, 0.0]
@@ -387,9 +387,9 @@ class TestMeshImportSolver(unittest.TestCase):
         rad.MatApl(cube_hex, rad.MatLin(mu_r))
         grp_hex = rad.ObjCnt([cube_hex, rad.ObjBckg(lambda p: [0, 0, B_ext])])
 
-        rad.Solve(grp_hex, 0.001, 100, 1)        # yano-MSC; no Error203
+        rad.Solve(grp_hex, 0.001, 100, 1)        # surface-charge MSC; no Error203
         M_avg_z = sum(rad.ObjM(p)["magnetization"][2] for p in polyhedra) / len(polyhedra)
-        self.assertGreater(M_avg_z, 0, "yano-MSC: hex cube should magnetize in the applied field")
+        self.assertGreater(M_avg_z, 0, "surface-charge MSC: hex cube should magnetize in the applied field")
 
 
 class TestMethodComparison(unittest.TestCase):

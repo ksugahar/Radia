@@ -39,6 +39,6 @@
     "reduced-Omega MUST use p>=2: p=1 here is +7.8% (unreliable).",
     "FE order MUST be matched to the mesh geometry-curving order (solve order p on the order-p curved mesh); p=3 on an order-2 mesh is a geometry mismatch, not true p=3.",
     "Order-matched, the p=2/3 residual (~0.5-0.7%, == the locked golden bands) is the coarse academic mesh's h + Kelvin-truncation floor -- not FE-order, not a code bug.  The no-air-mesh IEM (MMM) lands closest.",
-    "MMM is the tet variant of the Radia surface-charge IEM; yano-type MSC is the hex variant (parity locked by tests/feec/parity_vs_msc). Loop removal (rad.GetLoopBasis) is field-preserving and does not change this accuracy."
+    "MMM is the tet variant of the Radia surface-charge IEM; six-face surface-charge MSC is the hex variant (parity locked by tests/feec/parity_vs_msc). Loop removal (rad.GetLoopBasis) is field-preserving and does not change this accuracy."
   ]
 }

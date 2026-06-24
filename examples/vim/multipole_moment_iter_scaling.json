@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-06-22T01:22:20.044066",
   "hostname": "lab",
-  "benchmark": "yano_moment_iter_scaling",
+  "benchmark": "multipole_moment_iter_scaling",
   "mu_r": 1000.0,
   "solver": "linear, block-Jacobi, GMRES + BiCGSTAB",
   "results": [
@@ -69,5 +69,5 @@
   "gmres_iter_growth_exponent": 1.363391281582712,
   "bicgstab_breaks_down": true,
   "accept_growth_viable": false,
-  "conclusion": "ACCEPT-GROWTH PATH REJECTED by this verify-before-build gate. On the strongly NON-NORMAL moment system at mu_r=1000 with cheap block-Jacobi, neither Krylov solver scales: GMRES grows ERRATICALLY (51->1108 over dof 336..3744, regime jump at nxy~22-23, fit dof^1.36 but it is not a clean power law), and BiCGSTAB (the PRODUCTION solver) BREAKS DOWN (info=-10) at nxy>=24. cond(A) grows smoothly (1.2e4->3.9e4), so it is not an A-conditioning event -- it is the non-normal pseudospectrum. By contrast the EIEM2 production rad.Solve runs robustly at the same sizes (no breakdown) -- i.e. the parameter-free MOMENT system is iteratively HARDER than EIEM2 (the price of its accuracy). So the cheap 'HACApK matvec + accept iter-growth' route is NOT viable for the moment formulation at scale; the reliable scalable solve needs H-LU (bounded, predictable, heavy A-build). PRACTICAL UPSHOT: use moment-yano at MEDIUM scale (dense, already validated, mdx-ready after the accessor release) for its 7-10x accuracy; at LARGE scale either build H-LU or keep EIEM2 (iteratively easier). The verify-first gate saved a C++ HACApK-matvec build that would not have scaled."
+  "conclusion": "ACCEPT-GROWTH PATH REJECTED by this verify-before-build gate. On the strongly NON-NORMAL moment system at mu_r=1000 with cheap block-Jacobi, neither Krylov solver scales: GMRES grows ERRATICALLY (51->1108 over dof 336..3744, regime jump at nxy~22-23, fit dof^1.36 but it is not a clean power law), and BiCGSTAB (the PRODUCTION solver) BREAKS DOWN (info=-10) at nxy>=24. cond(A) grows smoothly (1.2e4->3.9e4), so it is not an A-conditioning event -- it is the non-normal pseudospectrum. By contrast the EIEM2 production rad.Solve runs robustly at the same sizes (no breakdown) -- i.e. the parameter-free MOMENT system is iteratively HARDER than EIEM2 (the price of its accuracy). So the cheap 'HACApK matvec + accept iter-growth' route is NOT viable for the moment formulation at scale; the reliable scalable solve needs H-LU (bounded, predictable, heavy A-build). PRACTICAL UPSHOT: use multipole-moment MMM at MEDIUM scale (dense, already validated, mdx-ready after the accessor release) for its 7-10x accuracy; at LARGE scale either build H-LU or keep EIEM2 (iteratively easier). The verify-first gate saved a C++ HACApK-matvec build that would not have scaled."
 }

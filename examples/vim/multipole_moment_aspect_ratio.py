@@ -1,7 +1,7 @@
-"""moment-yano's iterative difficulty is dominantly an ELEMENT ASPECT-RATIO effect -- not a fundamental
+"""multipole-moment MMM's iterative difficulty is dominantly an ELEMENT ASPECT-RATIO effect -- not a fundamental
 scaling wall, and not a condition-number problem (Sugahara-led investigation 2026-06-22).
 
-Background.  An earlier gate (yano_moment_iter_scaling.py) saw moment-yano GMRES grow erratically and BiCGSTAB
+Background.  An earlier gate (multipole_moment_iter_scaling.py) saw multipole-moment MMM GMRES grow erratically and BiCGSTAB
 break down at nxy>=24 on the C-yoke, and concluded "moment is iteratively harder than EIEM2 / needs H-LU".
 That benchmark used nz=2 FIXED, so the cells got flatter as nxy grew (nxy=24 -> 0.005 x 0.005 x 0.02 = 1:1:4).
 The blowup was the GROWING ANISOTROPY, not the problem size.
@@ -16,16 +16,16 @@ that block) amplifies it -> iteration blowup.
 This script measures three things:
   A. Aspect-ratio V-curve at FIXED nxy (vary nz): iters minimize at aspect ratio ~1 and grow on both sides.
      dof grows monotonically with nz, but iters are V-shaped -> it is aspect ratio, NOT size.
-  B. CUBIC-cell scaling (nz ~ nxy/3 keeps cells ~cubic): iters stay BOUNDED as N grows -> moment-yano DOES
+  B. CUBIC-cell scaling (nz ~ nxy/3 keeps cells ~cubic): iters stay BOUNDED as N grows -> multipole-moment MMM DOES
      scale with cheap block-Jacobi (no H-LU) on well-shaped cells.
   C. point-matching (EIEM2 collocation, A=-N+(1/chi)I) vs moment-matching, same block-Jacobi + same RHS:
      point-matching is lower AND less aspect-sensitive at every aspect ratio (it collocates a SINGLE physical
      quantity -- the field -- at points, so it does not mix the L^2/L^3/L^4 orders), but is NOT fully immune
      (it still has a shallower V: a thin cell puts the normal-offset eval point too close to its face).
 
-Upshot for improving moment-yano: (1) iteration health is governed by element aspect ratio + the
+Upshot for improving multipole-moment MMM: (1) iteration health is governed by element aspect ratio + the
 discretization (point- vs moment-matching), NOT by condition number or problem size; (2) on well-shaped cells
-moment-yano scales with block-Jacobi alone; (3) point-matching is the better-conditioned discretization, so
+multipole-moment MMM scales with block-Jacobi alone; (3) point-matching is the better-conditioned discretization, so
 the ideal element is a SHEAR-capturing point-matching one (EIEM2 point-matching is well-conditioned but blind
 to the off-diagonal gradient; moment-matching captures the full tensor but is more aspect-sensitive).
 
@@ -39,7 +39,7 @@ from datetime import datetime
 import numpy as np
 
 import radia as rad
-from yano_moment_iter_scaling import build_cyoke_hexes, build as build_moment, block_jacobi, full_gmres_iters
+from multipole_moment_iter_scaling import build_cyoke_hexes, build as build_moment, block_jacobi, full_gmres_iters
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 XW, ZW = 0.12, 0.04                       # C-yoke extents (x,y span 0.12; z span 0.04) used by build_cyoke_hexes
@@ -78,7 +78,7 @@ def gmres_count(A, rhs, apply, dof):
 
 def main():
     Happ = np.array([0.0, 1e3, 0.0]); mu_r = 1000.0
-    print("\nmoment-yano: iteration health is an ELEMENT ASPECT-RATIO effect (C-yoke, mu_r=1000).\n")
+    print("\nmultipole-moment MMM: iteration health is an ELEMENT ASPECT-RATIO effect (C-yoke, mu_r=1000).\n")
 
     # ---- A: aspect-ratio V-curve at fixed nxy (moment-matching), + point-matching for contrast ----
     nxy_A = 16
@@ -97,7 +97,7 @@ def main():
         A_rows.append(dict(nz=nz, aspect_ratio=float(ar), dof=int(dof), moment_gmres=gm, eiem2_gmres=ge))
 
     # ---- B: cubic-cell scaling (nz ~ nxy/3) -> bounded iters ----
-    print(f"\nB. CUBIC-cell scaling (nz~nxy/3 keeps cells ~cubic) -> moment-yano iters stay BOUNDED:")
+    print(f"\nB. CUBIC-cell scaling (nz~nxy/3 keeps cells ~cubic) -> multipole-moment MMM iters stay BOUNDED:")
     print(f"   {'nxy':>3} {'nz':>3} {'dx/dz':>6} {'dof':>6} | {'moment GMRES':>12}")
     B_rows = []
     for nxy in (12, 16, 20, 24):
@@ -115,11 +115,11 @@ def main():
     bounded = max(cubic_iters) <= 1.6 * min(cubic_iters)
     point_better = all(r["eiem2_gmres"] <= r["moment_gmres"] for r in A_rows)
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_aspect_ratio", mu_r=mu_r,
+               benchmark="multipole_moment_aspect_ratio", mu_r=mu_r,
                aspect_sweep=A_rows, cubic_scaling=B_rows,
                cubic_iters_bounded=bool(bounded), point_matching_better_all_ar=bool(point_better),
                conclusion=(
-                   "moment-yano's iterative difficulty is dominantly an ELEMENT ASPECT-RATIO effect, not a "
+                   "multipole-moment MMM's iterative difficulty is dominantly an ELEMENT ASPECT-RATIO effect, not a "
                    "scaling wall or a condition-number problem.  (A) At fixed nxy the iters trace a V in cell "
                    f"aspect ratio (moment {moment_min}->{moment_max}, min at dx/dz~1) while dof grows "
                    "MONOTONICALLY -> it is aspect ratio, not size.  Mechanism: the moment match mixes "
@@ -127,7 +127,7 @@ def main():
                    "anisotropic cell the thin-direction moments collapse and the local 6x6 block (which "
                    "block-Jacobi inverts) becomes ill-conditioned.  (B) With ~cubic cells (nz~nxy/3) the iters "
                    f"stay BOUNDED ({min(cubic_iters)}-{max(cubic_iters)}) as dof grows {min(cubic_dofs)}->"
-                   f"{max(cubic_dofs)} -> moment-yano SCALES with cheap block-Jacobi (no H-LU) on well-shaped "
+                   f"{max(cubic_dofs)} -> multipole-moment MMM SCALES with cheap block-Jacobi (no H-LU) on well-shaped "
                    "cells; the earlier 'needs H-LU / harder than EIEM2' conclusion was a flat-cell (nz=2) "
                    "benchmark artifact.  (C) point-matching (EIEM2 collocation) is lower at EVERY aspect ratio "
                    f"(EIEM2 {eiem2_min}-{eiem2_max} vs moment {moment_min}-{moment_max}) and has a shallower V "
@@ -135,14 +135,14 @@ def main():
                    "L^2/L^3/L^4 orders -- but it is NOT fully immune (a thin cell puts the normal-offset eval "
                    "point too close to its face).  IMPROVEMENT DIRECTION: a SHEAR-capturing point-matching "
                    "element -- point-matching is the better-conditioned discretization, but EIEM2 point-matching "
-                   "is blind to the off-diagonal (shear) gradient; the ideal moment-yano combines point-matching "
+                   "is blind to the off-diagonal (shear) gradient; the ideal multipole-moment MMM combines point-matching "
                    "conditioning with full-tensor (shear) capture."))
-    with open(os.path.join(HERE, "yano_moment_aspect_ratio.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_aspect_ratio.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print(f"\n  => aspect-ratio V (moment {moment_min}-{moment_max}); cubic-cell iters bounded={bounded} "
           f"({min(cubic_iters)}-{max(cubic_iters)} over dof {min(cubic_dofs)}-{max(cubic_dofs)}); "
           f"point-matching lower at all AR={point_better}.")
-    print("  saved", os.path.join(HERE, "yano_moment_aspect_ratio.json"))
+    print("  saved", os.path.join(HERE, "multipole_moment_aspect_ratio.json"))
 
 
 if __name__ == "__main__":
