@@ -10,8 +10,12 @@ import sys
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
-from radia_mcp.radia_ngsolve.solve import cogging_torque_order, cogging_period_deg
-from radia_mcp.radia_ngsolve.solve import machine_symmetry_sector
+from radia_mcp.radia_ngsolve.solve import (
+    cogging_period_deg,
+    cogging_skew_plan,
+    cogging_torque_order,
+    machine_symmetry_sector,
+)
 
 
 def test_cogging_order_and_period():
@@ -61,6 +65,30 @@ def test_machine_symmetry_sector_validation():
             assert False, "invalid slot/pole count accepted"
         except ValueError:
             pass
+
+
+def test_cogging_skew_plan_one_slot_cancels_cogging():
+    plan = cogging_skew_plan(36, 4)
+    assert plan["cogging_order_per_rev"] == 36
+    assert plan["cogging_period_mech_deg"] == 10.0
+    assert plan["skew_angle_mech_deg"] == 10.0
+    assert plan["skew_angle_elec_deg"] == 20.0
+    assert abs(plan["cogging_skew_factor"]) < 1.0e-12
+    assert plan["fundamental_emf_skew_factor"] > 0.99
+    assert plan["symmetry"]["sectors"] == 4
+
+
+def test_cogging_skew_plan_fractional_slot_tradeoff():
+    integer_slot = cogging_skew_plan(36, 4)
+    fractional_slot = cogging_skew_plan(12, 10)
+    half_slot = cogging_skew_plan(12, 10, skew_slot_pitches=0.5)
+
+    assert fractional_slot["cogging_order_per_rev"] == 60
+    assert fractional_slot["cogging_period_mech_deg"] == 6.0
+    assert abs(fractional_slot["cogging_skew_factor"]) < 1.0e-12
+    assert fractional_slot["fundamental_emf_skew_factor"] < integer_slot["fundamental_emf_skew_factor"]
+    assert abs(half_slot["cogging_skew_factor"]) > abs(fractional_slot["cogging_skew_factor"])
+    assert half_slot["fundamental_emf_skew_factor"] > fractional_slot["fundamental_emf_skew_factor"]
 
 
 def main():
