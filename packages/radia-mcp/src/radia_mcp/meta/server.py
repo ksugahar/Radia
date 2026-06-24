@@ -51,7 +51,7 @@ def radia_mcp_overview() -> dict:
         "next_step_hint":
             "Call <server>_status() on a specific server for full "
             "introspection + dependency probe. External packages "
-            "(elf / comsol / mcp-server-document) ship from their own "
+            "(optuna-mcp / elf / comsol / mcp-server-document) ship from their own "
             "repos — see entries in `external_packages` for install paths.",
     }
 

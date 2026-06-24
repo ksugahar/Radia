@@ -19,6 +19,7 @@ Python callable helpers (importable; NOT MCP tools):
   - lab_figsize / apply_lab_style / lab_savefig
   - tighten_margins, label_curve_endpoints, add_slope_guide
   - check_legend_overlap, find_best_legend_loc
+  - audit_text_overflow
   - plot_asymptote_ratio_sweep, plot_basis_size_convergence
 
 The helpers require matplotlib at runtime, but only when called -- the
@@ -77,6 +78,7 @@ from ._paper_figure import (  # noqa: F401
     measure_figure_efficiency,
     auto_tighten,
     add_panel_labels,
+    audit_text_overflow,
     emit_paper_figure,
     # v0.80.0 additions (GitHub MCP plotting servers + tueplots + Wong 2011):
     OKABE_ITO,                       # CVD-safe palette

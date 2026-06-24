@@ -25,6 +25,21 @@ matplotlib = pytest.importorskip("matplotlib")
 import matplotlib  # noqa: E402
 matplotlib.use("Agg")  # headless
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.font_manager as fm  # noqa: E402
+
+
+def _tnr_available():
+    try:
+        p = fm.findfont("Times New Roman", fallback_to_default=False)
+        return "times" in Path(str(p)).name.lower()
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _tnr_available(),
+    reason="Times New Roman is required by the Sugahara Lab figure standard",
+)
 
 from radia_mcp.figure import (  # noqa: E402
     PROFILES,
@@ -35,6 +50,7 @@ from radia_mcp.figure import (  # noqa: E402
     auto_tighten,
     emit_paper_figure,
     add_panel_labels,
+    audit_text_overflow,
 )
 
 
@@ -334,6 +350,46 @@ def test_paper_figure_rcparams_have_type42_font():
     assert plt.rcParams["ps.fonttype"] == 42
 
 
+def test_paper_figure_rcparams_use_times_new_roman():
+    """Sugahara Lab standard: paper_figure() generates TNR figures."""
+    fig, _ = paper_figure("ieee_double_column")
+    plt.close(fig)
+    fam = plt.rcParams["font.family"]
+    fam = [fam] if isinstance(fam, str) else list(fam)
+    assert "serif" in [str(x).lower() for x in fam]
+    assert plt.rcParams["font.serif"][0] == "Times New Roman"
+    assert plt.rcParams["mathtext.fontset"] == "stix"
+
+
+def test_emit_raises_when_times_new_roman_not_requested(tmp_path):
+    """emit_paper_figure() must reject non-TNR rcParams."""
+    old_family = plt.rcParams["font.family"]
+    old_serif = list(plt.rcParams["font.serif"])
+    old_math = plt.rcParams["mathtext.fontset"]
+    try:
+        plt.rcParams["font.family"] = "serif"
+        plt.rcParams["font.serif"] = ["DejaVu Serif"]
+        plt.rcParams["mathtext.fontset"] = "dejavuserif"
+        fig, ax = plt.subplots(figsize=(3.5, 2.4), dpi=100)
+        ax.plot([0, 1], [0, 1], color="0.4")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        with pytest.raises(ValueError, match=r"Times New Roman"):
+            emit_paper_figure(
+                fig, str(tmp_path / "bad_font"), "ieee_single_column",
+                min_axes_fraction=0.20,
+                on_fail="raise",
+                verbose=False,
+                check_colorblind_safe=False,
+                check_legend_overlap=False,
+            )
+    finally:
+        plt.rcParams["font.family"] = old_family
+        plt.rcParams["font.serif"] = old_serif
+        plt.rcParams["mathtext.fontset"] = old_math
+        plt.close("all")
+
+
 # --------------------------------------------------------------------
 # LAB FONT RULE: 10 pt @ 8 cm, absolute (not relative to column width)
 # --------------------------------------------------------------------
@@ -434,6 +490,64 @@ def test_emit_title_check_can_be_disabled(tmp_path):
         on_fail="raise", verbose=False,
         check_title_in_figure=False,
         check_legend_overlap=False,
+    )
+    plt.close(fig)
+    assert out.with_suffix(".pdf").exists()
+
+
+# --------------------------------------------------------------------
+# Diagram text overflow gate
+# --------------------------------------------------------------------
+
+
+def test_audit_text_overflow_detects_ax_text_outside_canvas():
+    """Free diagram labels made with ax.text() must be lintable."""
+    fig, axes = paper_figure("ieee_double_column", nrows=1, ncols=1)
+    ax = axes[0, 0]
+    ax.text(-0.20, 0.5, "outside label", transform=ax.transAxes)
+    rep = audit_text_overflow(fig)
+    plt.close(fig)
+    assert rep, "expected free-text overflow to be reported"
+    assert rep[0]["kind"] == "text"
+    assert rep[0]["side"] == "left"
+    assert rep[0]["overhang_pt"] > 0
+
+
+def test_emit_raises_on_diagram_text_overflow(tmp_path):
+    """emit_paper_figure must not ship clipped diagram labels."""
+    fig, axes = paper_figure("ieee_double_column", nrows=1, ncols=1)
+    ax = axes[0, 0]
+    ax.plot([0, 1], [0, 1])
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.text(-0.20, 0.5, "outside label", transform=ax.transAxes)
+    with pytest.raises(ValueError, match=r"diagram text extends"):
+        emit_paper_figure(
+            fig, str(tmp_path / "fig"), "ieee_double_column",
+            min_axes_fraction=0.40,
+            on_fail="raise",
+            verbose=False,
+            check_legend_overlap=False,
+        )
+    plt.close(fig)
+
+
+def test_emit_text_overflow_check_can_be_disabled(tmp_path):
+    """Known intentional outside text can be allowed explicitly."""
+    fig, axes = paper_figure("ieee_double_column", nrows=1, ncols=1)
+    ax = axes[0, 0]
+    ax.plot([0, 1], [0, 1])
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.text(-0.20, 0.5, "outside label", transform=ax.transAxes)
+    out = tmp_path / "fig_text_overflow_off"
+    emit_paper_figure(
+        fig, str(out), "ieee_double_column",
+        min_axes_fraction=0.40,
+        on_fail="raise",
+        verbose=False,
+        check_legend_overlap=False,
+        check_text_overflow=False,
     )
     plt.close(fig)
     assert out.with_suffix(".pdf").exists()

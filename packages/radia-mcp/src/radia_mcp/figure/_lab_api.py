@@ -41,10 +41,16 @@ from ._paper_figure import (
 # ------------------------------------------------------------------
 # Times New Roman strictness (no silent DejaVu fallback)
 # ------------------------------------------------------------------
-def _assert_times_new_roman(strict: bool = True) -> None:
-    """Raise if Times New Roman is REQUESTED in rcParams but matplotlib would
-    silently fall back to another serif (DejaVu).  No-op when TNR is not the
-    requested serif (e.g. a deliberately sans figure)."""
+def _assert_times_new_roman(
+    strict: bool = True,
+    require_requested: bool = True,
+) -> None:
+    """Raise unless rcParams request a resolvable Times New Roman.
+
+    Sugahara Lab standard: publication figures are generated in Times
+    New Roman.  The old behaviour only caught silent fallback after TNR
+    had been requested; the standard is stronger than that.
+    """
     plt, _ = _get_mpl()
     serifs = [str(s).lower() for s in plt.rcParams.get("font.serif", [])]
     fam = plt.rcParams.get("font.family", [])
@@ -52,6 +58,13 @@ def _assert_times_new_roman(strict: bool = True) -> None:
     requests_tnr = ("serif" in [str(f).lower() for f in fam]
                     and "times new roman" in serifs)
     if not requests_tnr:
+        if strict and require_requested:
+            raise RuntimeError(
+                "Times New Roman is required by the Sugahara Lab figure "
+                "standard, but matplotlib rcParams do not request it. "
+                "Build figures with lab_figure()/paper_figure(), or set "
+                "font.family='serif' and font.serif=['Times New Roman']."
+            )
         return
     import matplotlib.font_manager as fm
     try:
@@ -134,13 +147,15 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
                     allow_in_figure_title: bool = False, check_cvd: bool = False,
                     save_pdf: bool = True, save_png: bool = True, dpi: int = 300,
                     tighten=True, check_label_overflow: bool = True,
-                    label_overflow_tol_pt: float = 0.5) -> dict:
+                    label_overflow_tol_pt: float = 0.5,
+                    check_times_new_roman: bool = True) -> dict:
     """Save a figure with FAIL-LOUD lab gates; return a dict whose ``latex``
     key is the exact ``\\includegraphics`` snippet (embed at 100% -> 10 pt)
     and whose ``axes_fraction`` reports how much of the figure the axes fill.
 
     Gates (each raises on violation): no in-figure title (unless
-    ``allow_in_figure_title``), Times New Roman actually used (pre + post),
+    ``allow_in_figure_title``), Times New Roman requested and actually
+    used (pre + post),
     TrueType embedding, no Japanese, and optionally CVD-safe colors.
 
     ``tighten`` (True / a float target, default 0.80): push the axes box to
@@ -162,7 +177,8 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
                 "save_lab_figure: in-figure title detected -- the LaTeX "
                 "\\caption{} / beamer frametitle carries the title, not the "
                 "figure.  Remove:\n  " + "\n  ".join(v))
-    _assert_times_new_roman()
+    if check_times_new_roman:
+        _assert_times_new_roman(require_requested=True)
     jv = _check_no_japanese_text(fig)
     if jv:
         raise ValueError(
