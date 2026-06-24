@@ -50,3 +50,18 @@ def test_mesh_selftest_cli_tolerates_closed_stdout(monkeypatch):
         monkeypatch.setattr(module, "_selftest", raise_closed_pipe)
         monkeypatch.setattr(module.sys, "argv", ["cmd", "--selftest", "--audit-examples"])
         module.main()
+
+
+def test_mesh_status_tools_expose_selftest_and_audit_commands():
+    from radia_mcp.cubit import server as cubit_server
+    from radia_mcp.gmsh import server as gmsh_server
+
+    cubit = cubit_server.mcp._tool_manager._tools["cubit_status"].fn()
+    gmsh = gmsh_server.mcp._tool_manager._tools["gmsh_status"].fn()
+
+    assert cubit["selftest_command"] == "mcp-server-cubit --selftest"
+    assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-examples"
+    assert "cubit_status" in cubit["tools"]
+    assert gmsh["selftest_command"] == "mcp-server-gmsh --selftest"
+    assert gmsh["audit_command"] == "mcp-server-gmsh --selftest --audit-examples"
+    assert "gmsh_status" in gmsh["tools"]
