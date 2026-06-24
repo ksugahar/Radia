@@ -118,7 +118,7 @@ def render() -> str:
             out.append(f"| `{t.name}` | {desc} |")
         out.append("")
 
-    return "\n".join(out) + "\n"
+    return "\n".join(out).rstrip() + "\n"
 
 
 def write() -> Path:
