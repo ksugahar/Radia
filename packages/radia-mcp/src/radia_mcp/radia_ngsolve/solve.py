@@ -520,6 +520,63 @@ def three_phase_torque_ripple_harmonics(emf_harmonics, current_peak=1.0, mechani
     }
 
 
+def three_phase_torque_ripple_pair_table(emf_harmonics, current_peak=1.0, mechanical_speed=1.0):
+    """Readable 6k torque-ripple budget from phase back-EMF harmonic pairs.
+
+    This is the table-oriented companion to :func:`three_phase_torque_ripple_harmonics`.
+    It preserves the identity that a balanced sinusoidal current mixes phase back-EMF
+    harmonics ``n = 3m +/- 1`` into instantaneous-power ripple order ``3m``.  For a
+    half-wave-symmetric three-phase PM machine this is the familiar ``6k +/- 1`` pair:
+
+    - ``5`` and ``7`` -> sixth torque ripple,
+    - ``11`` and ``13`` -> twelfth torque ripple,
+    - triplen harmonics cancel from line-line torque production.
+
+    Each returned row exposes the contributing harmonic orders, their complex phasor
+    sum, and the corresponding power/torque ripple amplitudes.  Use this when a design
+    review needs to say *why* a 6th or 12th ripple changed after pitch/skew/harmonic
+    filtering, not just the final amplitude.
+    """
+    summary = three_phase_torque_ripple_harmonics(
+        emf_harmonics,
+        current_peak=current_peak,
+        mechanical_speed=mechanical_speed,
+    )
+
+    contributors = {}
+    for order, value in emf_harmonics.items():
+        n = int(order)
+        if n <= 0:
+            raise ValueError("harmonic orders must be positive integers")
+        if n == 1:
+            continue
+        if (n - 1) % 3 == 0:
+            ripple_order = n - 1
+        elif (n + 1) % 3 == 0:
+            ripple_order = n + 1
+        else:
+            continue
+        if ripple_order == 0:
+            continue
+        contributors.setdefault(ripple_order, {})[n] = complex(value)
+
+    rows = []
+    for ripple_order in sorted(contributors):
+        phasor = sum(contributors[ripple_order].values(), 0.0j)
+        rows.append({
+            "ripple_order": ripple_order,
+            "contributing_harmonics": sorted(contributors[ripple_order]),
+            "emf_phasor_real": phasor.real,
+            "emf_phasor_imag": phasor.imag,
+            "emf_phasor_abs": abs(phasor),
+            "emf_phasor_phase_rad": cmath.phase(phasor),
+            "power_ripple": summary["power_ripple"].get(ripple_order, 0.0),
+            "torque_ripple": summary["torque_ripple"].get(ripple_order, 0.0),
+            "normalized_ripple": summary["normalized_ripple"].get(ripple_order, 0.0),
+        })
+    return rows
+
+
 def mtpa_operating_point(lambda_m, Ld, Lq, current, pole_pairs):
     """MAXIMUM-TORQUE-PER-AMPERE operating point of a salient PM synchronous
     machine at stator current magnitude ``current``.

@@ -1,0 +1,362 @@
+{
+  "kind": "torque_ripple_harmonic_budget_validation",
+  "validation_class": true,
+  "machine": {
+    "slots": 36,
+    "poles": 4,
+    "phases": 3,
+    "slots_per_pole_per_phase": 3,
+    "slot_angle_elec_deg": 20.0,
+    "current_peak_A": 120.0,
+    "mechanical_speed_rad_per_s": 157.07963267948966
+  },
+  "raw_emf_harmonics": {
+    "1": 1.0,
+    "3": 0.2,
+    "5": 0.16,
+    "7": 0.11,
+    "11": 0.045,
+    "13": 0.035
+  },
+  "cases": [
+    {
+      "label": "full_pitch_no_skew",
+      "pitch_fraction": 1.0,
+      "skew_slot_pitches": 0.0,
+      "fundamental_winding_skew_factor": 0.9597950805239389,
+      "skew_angle_elec_rad": 0.0,
+      "harmonic_factors": {
+        "1": {
+          "winding_skew_factor": 0.9597950805239389,
+          "relative_to_fundamental": 1.0
+        },
+        "3": {
+          "winding_skew_factor": -0.6666666666666667,
+          "relative_to_fundamental": -0.6945927106677214
+        },
+        "5": {
+          "winding_skew_factor": 0.21756788155537973,
+          "relative_to_fundamental": 0.22668159690567743
+        },
+        "7": {
+          "winding_skew_factor": 0.17736296207931862,
+          "relative_to_fundamental": 0.1847925309040953
+        },
+        "11": {
+          "winding_skew_factor": 0.17736296207931884,
+          "relative_to_fundamental": 0.18479253090409553
+        },
+        "13": {
+          "winding_skew_factor": 0.21756788155537976,
+          "relative_to_fundamental": 0.22668159690567746
+        }
+      },
+      "emf_harmonics": {
+        "1": 1.0,
+        "3": -0.1389185421335443,
+        "5": 0.03626905550490839,
+        "7": 0.020327178399450484,
+        "11": 0.008315663890684298,
+        "13": 0.007933855891698711
+      },
+      "mean_power": 180.0,
+      "mean_torque": 1.1459155902616465,
+      "pair_table": [
+        {
+          "ripple_order": 6,
+          "contributing_harmonics": [
+            5,
+            7
+          ],
+          "emf_phasor_real": 0.056596233904358875,
+          "emf_phasor_imag": 0.0,
+          "emf_phasor_abs": 0.056596233904358875,
+          "emf_phasor_phase_rad": 0.0,
+          "power_ripple": 10.187322102784597,
+          "torque_ripple": 0.06485450678109961,
+          "normalized_ripple": 0.05659623390435887
+        },
+        {
+          "ripple_order": 12,
+          "contributing_harmonics": [
+            11,
+            13
+          ],
+          "emf_phasor_real": 0.01624951978238301,
+          "emf_phasor_imag": 0.0,
+          "emf_phasor_abs": 0.01624951978238301,
+          "emf_phasor_phase_rad": 0.0,
+          "power_ripple": 2.9249135608289416,
+          "torque_ripple": 0.018620578052897727,
+          "normalized_ripple": 0.01624951978238301
+        }
+      ],
+      "normalized_ripple": {
+        "6": 0.05659623390435887,
+        "12": 0.01624951978238301
+      },
+      "fourier_power_ripple_abs_errors": {
+        "6": 2.6645352591003757e-14,
+        "12": 1.1102230246251565e-14
+      }
+    },
+    {
+      "label": "five_sixth_pitch_no_skew",
+      "pitch_fraction": 0.8333333333333334,
+      "skew_slot_pitches": 0.0,
+      "fundamental_winding_skew_factor": 0.9270908562232686,
+      "skew_angle_elec_rad": 0.0,
+      "harmonic_factors": {
+        "1": {
+          "winding_skew_factor": 0.9270908562232686,
+          "relative_to_fundamental": 1.0
+        },
+        "3": {
+          "winding_skew_factor": -0.4714045207910317,
+          "relative_to_fundamental": -0.5084771547757609
+        },
+        "5": {
+          "winding_skew_factor": 0.05631071134914179,
+          "relative_to_fundamental": 0.06073915082987362
+        },
+        "7": {
+          "winding_skew_factor": -0.045904912481923854,
+          "relative_to_fundamental": -0.04951500942305563
+        },
+        "11": {
+          "winding_skew_factor": -0.1713194656995427,
+          "relative_to_fundamental": -0.18479253090409548
+        },
+        "13": {
+          "winding_skew_factor": -0.21015443576534232,
+          "relative_to_fundamental": -0.22668159690567743
+        }
+      },
+      "emf_harmonics": {
+        "1": 1.0,
+        "3": -0.1016954309551522,
+        "5": 0.00971826413277978,
+        "7": -0.005446651036536119,
+        "11": -0.008315663890684296,
+        "13": -0.007933855891698711
+      },
+      "mean_power": 180.0,
+      "mean_torque": 1.1459155902616465,
+      "pair_table": [
+        {
+          "ripple_order": 6,
+          "contributing_harmonics": [
+            5,
+            7
+          ],
+          "emf_phasor_real": 0.00427161309624366,
+          "emf_phasor_imag": 0.0,
+          "emf_phasor_abs": 0.00427161309624366,
+          "emf_phasor_phase_rad": 0.0,
+          "power_ripple": 0.7688903573238588,
+          "torque_ripple": 0.004894908042551433,
+          "normalized_ripple": 0.00427161309624366
+        },
+        {
+          "ripple_order": 12,
+          "contributing_harmonics": [
+            11,
+            13
+          ],
+          "emf_phasor_real": -0.01624951978238301,
+          "emf_phasor_imag": 0.0,
+          "emf_phasor_abs": 0.01624951978238301,
+          "emf_phasor_phase_rad": 3.141592653589793,
+          "power_ripple": 2.9249135608289416,
+          "torque_ripple": 0.018620578052897727,
+          "normalized_ripple": 0.01624951978238301
+        }
+      ],
+      "normalized_ripple": {
+        "6": 0.00427161309624366,
+        "12": 0.01624951978238301
+      },
+      "fourier_power_ripple_abs_errors": {
+        "6": 4.163336342344337e-14,
+        "12": 8.43769498715119e-15
+      }
+    },
+    {
+      "label": "five_sixth_pitch_one_slot_skew",
+      "pitch_fraction": 0.8333333333333334,
+      "skew_slot_pitches": 1.0,
+      "fundamental_winding_skew_factor": 0.9223912194841718,
+      "skew_angle_elec_rad": 0.3490658503988659,
+      "harmonic_factors": {
+        "1": {
+          "winding_skew_factor": 0.9223912194841718,
+          "relative_to_fundamental": 1.0
+        },
+        "3": {
+          "winding_skew_factor": -0.45015815807855303,
+          "relative_to_fundamental": -0.4880338717125849
+        },
+        "5": {
+          "winding_skew_factor": 0.049430796473268514,
+          "relative_to_fundamental": 0.0535898384862246
+        },
+        "7": {
+          "winding_skew_factor": -0.03530771176662032,
+          "relative_to_fundamental": -0.03827845606158895
+        },
+        "11": {
+          "winding_skew_factor": -0.08385374722583387,
+          "relative_to_fundamental": -0.09090909090909098
+        },
+        "13": {
+          "winding_skew_factor": -0.07095317072955167,
+          "relative_to_fundamental": -0.07692307692307691
+        }
+      },
+      "emf_harmonics": {
+        "1": 1.0,
+        "3": -0.09760677434251698,
+        "5": 0.008574374157795937,
+        "7": -0.004210630166774785,
+        "11": -0.004090909090909094,
+        "13": -0.002692307692307692
+      },
+      "mean_power": 180.0,
+      "mean_torque": 1.1459155902616465,
+      "pair_table": [
+        {
+          "ripple_order": 6,
+          "contributing_harmonics": [
+            5,
+            7
+          ],
+          "emf_phasor_real": 0.004363743991021152,
+          "emf_phasor_imag": 0.0,
+          "emf_phasor_abs": 0.004363743991021152,
+          "emf_phasor_phase_rad": 0.0,
+          "power_ripple": 0.7854739183838074,
+          "torque_ripple": 0.005000482271221717,
+          "normalized_ripple": 0.004363743991021152
+        },
+        {
+          "ripple_order": 12,
+          "contributing_harmonics": [
+            11,
+            13
+          ],
+          "emf_phasor_real": -0.0067832167832167865,
+          "emf_phasor_imag": 0.0,
+          "emf_phasor_abs": 0.0067832167832167865,
+          "emf_phasor_phase_rad": 3.141592653589793,
+          "power_ripple": 1.2209790209790217,
+          "torque_ripple": 0.007772993864012571,
+          "normalized_ripple": 0.006783216783216787
+        }
+      ],
+      "normalized_ripple": {
+        "6": 0.004363743991021152,
+        "12": 0.006783216783216787
+      },
+      "fourier_power_ripple_abs_errors": {
+        "6": 5.651035195342047e-14,
+        "12": 2.731148640577885e-14
+      }
+    },
+    {
+      "label": "full_pitch_two_slot_skew",
+      "pitch_fraction": 1.0,
+      "skew_slot_pitches": 2.0,
+      "fundamental_winding_skew_factor": 0.9404221313226917,
+      "skew_angle_elec_rad": 0.6981317007977318,
+      "harmonic_factors": {
+        "1": {
+          "winding_skew_factor": 0.9404221313226917,
+          "relative_to_fundamental": 1.0
+        },
+        "3": {
+          "winding_skew_factor": -0.5513288954217922,
+          "relative_to_fundamental": -0.5862568277145447
+        },
+        "5": {
+          "winding_skew_factor": 0.12276339052780391,
+          "relative_to_fundamental": 0.13054072893322785
+        },
+        "7": {
+          "winding_skew_factor": 0.04665788266909602,
+          "relative_to_fundamental": 0.04961376504769439
+        },
+        "11": {
+          "winding_skew_factor": -0.029691379880333855,
+          "relative_to_fundamental": -0.03157239593944191
+        },
+        "13": {
+          "winding_skew_factor": -0.047216688664539964,
+          "relative_to_fundamental": -0.0502079726666261
+        }
+      },
+      "emf_harmonics": {
+        "1": 1.0,
+        "3": -0.11725136554290894,
+        "5": 0.020886516629316457,
+        "7": 0.005457514155246383,
+        "11": -0.001420757817274886,
+        "13": -0.0017572790433319136
+      },
+      "mean_power": 180.0,
+      "mean_torque": 1.1459155902616465,
+      "pair_table": [
+        {
+          "ripple_order": 6,
+          "contributing_harmonics": [
+            5,
+            7
+          ],
+          "emf_phasor_real": 0.02634403078456284,
+          "emf_phasor_imag": 0.0,
+          "emf_phasor_abs": 0.02634403078456284,
+          "emf_phasor_phase_rad": 0.0,
+          "power_ripple": 4.7419255412213115,
+          "torque_ripple": 0.030188035586363314,
+          "normalized_ripple": 0.026344030784562843
+        },
+        {
+          "ripple_order": 12,
+          "contributing_harmonics": [
+            11,
+            13
+          ],
+          "emf_phasor_real": -0.0031780368606067998,
+          "emf_phasor_imag": 0.0,
+          "emf_phasor_abs": 0.0031780368606067998,
+          "emf_phasor_phase_rad": 3.141592653589793,
+          "power_ripple": 0.5720466349092239,
+          "torque_ripple": 0.0036417619849955104,
+          "normalized_ripple": 0.0031780368606067993
+        }
+      ],
+      "normalized_ripple": {
+        "6": 0.026344030784562843,
+        "12": 0.0031780368606067993
+      },
+      "fourier_power_ripple_abs_errors": {
+        "6": 2.7533531010703882e-14,
+        "12": 4.440892098500626e-15
+      }
+    }
+  ],
+  "checks": {
+    "all_tables_have_only_6_and_12": true,
+    "triplen_absent_from_pair_tables": true,
+    "short_pitch_reduces_6th": true,
+    "short_pitch_preserves_12th_for_this_layout": true,
+    "one_slot_skew_reduces_12th": true,
+    "two_slot_skew_reduces_6th_vs_full": true,
+    "two_slot_skew_reduces_12th_vs_full": true,
+    "max_fourier_power_ripple_abs_error": 5.651035195342047e-14,
+    "full_pitch_6th_normalized": 0.05659623390435887,
+    "short_pitch_6th_normalized": 0.00427161309624366,
+    "short_pitch_one_slot_skew_6th_normalized": 0.004363743991021152,
+    "full_pitch_two_slot_skew_6th_normalized": 0.026344030784562843,
+    "fundamental_factor_cost_one_slot_short_pitch": 0.9610293261564241
+  }
+}
