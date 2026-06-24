@@ -420,6 +420,87 @@ def acoustic_impedance_from_dtn(frequency, dtn_eigenvalue, rho=1.2041):
     }
 
 
+def _bessel_j1_fallback(x):
+    """Small dependency-free J1 approximation for acoustic piston gates."""
+
+    value = float(x)
+    ax = abs(value)
+    if ax == 0.0:
+        return 0.0
+    if ax <= 20.0:
+        term = value / 2.0
+        total = term
+        x2_over4 = value * value / 4.0
+        for k in range(1, 80):
+            term *= -x2_over4 / (k * (k + 1.0))
+            total += term
+            if abs(term) <= max(1.0e-18, 1.0e-16 * abs(total)):
+                break
+        return total
+
+    phase = ax - 0.75 * math.pi
+    root = math.sqrt(2.0 / (math.pi * ax))
+    approx = root * (
+        math.cos(phase)
+        - 3.0 * math.sin(phase) / (8.0 * ax)
+        + 15.0 * math.cos(phase) / (128.0 * ax * ax)
+    )
+    return -approx if value < 0.0 else approx
+
+
+def _struve_h1_fallback(x):
+    """Small dependency-free H1 approximation for acoustic piston gates."""
+
+    value = float(x)
+    ax = abs(value)
+    if ax == 0.0:
+        return 0.0
+    if ax <= 20.0:
+        term = 2.0 * ax * ax / (3.0 * math.pi)
+        total = term
+        x2_over4 = ax * ax / 4.0
+        for k in range(80):
+            term *= -x2_over4 / ((k + 1.5) * (k + 2.5))
+            total += term
+            if abs(term) <= max(1.0e-18, 1.0e-16 * abs(total)):
+                break
+        return total
+
+    # H1(x) approaches Y1(x) + 2/pi.  This is sufficient for the high-ka
+    # sanity gate where the piston resistance tends to rho*c and the reactance
+    # is small compared with the plane-wave resistance.
+    phase = ax - 0.75 * math.pi
+    root = math.sqrt(2.0 / (math.pi * ax))
+    y1 = root * (
+        math.sin(phase)
+        + 3.0 * math.cos(phase) / (8.0 * ax)
+        - 15.0 * math.sin(phase) / (128.0 * ax * ax)
+    )
+    return 2.0 / math.pi + y1
+
+
+def _baffled_piston_resistance_reactance_ratios(ka, prefer_scipy=True):
+    """Return piston resistance/reactance ratios, with SciPy optional."""
+
+    value = float(ka)
+    if value <= 0.0:
+        raise ValueError("ka must be > 0")
+    x = 2.0 * value
+    if prefer_scipy:
+        try:
+            from scipy.special import j1, struve
+
+            return 1.0 - float(j1(x)) / value, float(struve(1, x)) / value, "scipy"
+        except ModuleNotFoundError:
+            pass
+
+    return (
+        1.0 - _bessel_j1_fallback(x) / value,
+        _struve_h1_fallback(x) / value,
+        "fallback",
+    )
+
+
 def baffled_circular_piston_radiation(
     radius,
     frequency,
@@ -455,15 +536,14 @@ def baffled_circular_piston_radiation(
     if cc <= 0.0:
         raise ValueError("c must be > 0")
 
-    from scipy.special import j1, struve
-
     velocity = complex(surface_velocity)
     omega = 2.0 * math.pi * f
     k = omega / cc
     ka = k * a
     area = math.pi * a * a
-    resistance_ratio = 1.0 - float(j1(2.0 * ka)) / ka
-    reactance_ratio = float(struve(1, 2.0 * ka)) / ka
+    resistance_ratio, reactance_ratio, special_function_source = (
+        _baffled_piston_resistance_reactance_ratios(ka)
+    )
     z_specific = rrho * cc * complex(resistance_ratio, reactance_ratio)
     volume_velocity = area * velocity
     z_volume_velocity = z_specific / area
@@ -478,6 +558,7 @@ def baffled_circular_piston_radiation(
         "c": cc,
         "surface_area": area,
         "surface_velocity": velocity,
+        "special_function_source": special_function_source,
         "volume_velocity": volume_velocity,
         "specific_impedance": z_specific,
         "specific_resistance": z_specific.real,
