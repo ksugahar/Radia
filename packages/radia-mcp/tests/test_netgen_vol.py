@@ -656,6 +656,49 @@ def test_domain_boundary_incidence_rows_preserve_domin_domout():
     assert interface["trace_node_ids"] == [1, 2, 3]
 
 
+def test_boundary_tet_face_incidence_rows_match_volume_faces():
+    mesh = parse_netgen_tri_tet_vol(TWO_MATERIAL_INTERFACE_VOL)
+    summary = mesh.boundary_tet_face_incidence_summary()
+    rows = mesh.boundary_tet_face_incidence_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert summary["surface_triangles"] == 7
+    assert summary["tetrahedra"] == 2
+    assert summary["exterior_surface_triangles"] == 6
+    assert summary["interface_surface_triangles"] == 1
+    assert summary["orphan_surface_triangles"] == 0
+    assert summary["overconnected_surface_triangles"] == 0
+    assert summary["domain_material_mismatch_count"] == 0
+    assert summary["max_adjacent_tetrahedra"] == 2
+    assert summary["is_volume_boundary_consistent"]
+
+    outer = by_name["air_outer"]
+    assert outer["kind"] == "exterior"
+    assert outer["adjacent_tetrahedron_count"] == 1
+    assert outer["adjacent_material_numbers"] == [1]
+    assert outer["declared_domain_numbers"] == [1]
+    assert outer["domain_material_match"]
+
+    interface = by_name["air_core_interface"]
+    assert interface["kind"] == "interface"
+    assert interface["nodes"] == [1, 2, 3]
+    assert interface["adjacent_tetrahedron_count"] == 2
+    assert interface["adjacent_material_numbers"] == [1, 2]
+    assert interface["declared_domain_numbers"] == [1, 2]
+    assert interface["domain_material_match"]
+
+
+def test_boundary_tet_face_incidence_detects_orphan_open_surface():
+    summary = parse_netgen_tri_tet_vol(OPEN_SURFACE_VOL).boundary_tet_face_incidence_summary()
+
+    assert summary["surface_triangles"] == 1
+    assert summary["tetrahedra"] == 0
+    assert summary["orphan_surface_triangles"] == 1
+    assert summary["is_volume_boundary_consistent"] is False
+    assert summary["rows"][0]["kind"] == "orphan"
+    assert summary["rows"][0]["adjacent_tetrahedron_count"] == 0
+
+
 def test_surface_connected_components_single_open_and_disconnected():
     single = parse_netgen_tri_tet_vol(TET_VOL).surface_connected_components()
     assert len(single) == 1
