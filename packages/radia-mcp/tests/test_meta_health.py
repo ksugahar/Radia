@@ -91,6 +91,22 @@ def test_meta_related_to_chart2d_includes_figure():
     assert "figure" in names, f"chart2d related: {names}"
 
 
+def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():
+    """Official optuna-mcp is external but should still be discoverable."""
+    from radia_mcp.meta.server import radia_mcp_related
+
+    from_optuna = radia_mcp_related("optuna-mcp")
+    from_optuna_names = [r["name"] for r in from_optuna["related"]]
+    assert {"bayesian-opt", "evolutionary", "topology-optimization",
+            "radia-streamfunction"}.issubset(from_optuna_names)
+
+    from_bayes = radia_mcp_related("bayesian-opt")
+    optuna = [r for r in from_bayes["related"] if r["name"] == "optuna-mcp"]
+    assert optuna, f"bayesian-opt related: {[r['name'] for r in from_bayes['related']]}"
+    assert optuna[0]["external"] is True
+    assert optuna[0]["entry_point"] == "optuna-mcp"
+
+
 def test_all_related_links_are_bidirectional():
     """If A's related list contains B, then B's must contain A.
 
