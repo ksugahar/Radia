@@ -378,6 +378,22 @@ class NetgenTriTetVolMesh:
             })
         return tuple(rows)
 
+    def _boundary_pressure_value(
+        self,
+        normal_row: dict[str, object],
+        pressure_by_boundary: dict[int | str, float],
+        default_pressure: float | None,
+    ) -> tuple[float, str]:
+        bcnr = int(normal_row["boundary_number"])
+        name = str(normal_row["name"])
+        if bcnr in pressure_by_boundary:
+            return float(pressure_by_boundary[bcnr]), "boundary_number"
+        if name in pressure_by_boundary:
+            return float(pressure_by_boundary[name]), "name"
+        if default_pressure is not None:
+            return float(default_pressure), "default"
+        raise KeyError(f"missing pressure for boundary {bcnr} ({name})")
+
     def boundary_pressure_force_rows(
         self,
         pressure_by_boundary: dict[int | str, float],
@@ -395,17 +411,11 @@ class NetgenTriTetVolMesh:
         for normal_row in self.boundary_normal_summary_rows():
             bcnr = int(normal_row["boundary_number"])
             name = str(normal_row["name"])
-            if bcnr in pressure_by_boundary:
-                pressure = float(pressure_by_boundary[bcnr])
-                source = "boundary_number"
-            elif name in pressure_by_boundary:
-                pressure = float(pressure_by_boundary[name])
-                source = "name"
-            elif default_pressure is not None:
-                pressure = float(default_pressure)
-                source = "default"
-            else:
-                raise KeyError(f"missing pressure for boundary {bcnr} ({name})")
+            pressure, source = self._boundary_pressure_value(
+                normal_row,
+                pressure_by_boundary,
+                default_pressure,
+            )
             vector = tuple(float(value) for value in normal_row["vector_area"])
             force = tuple(pressure * value for value in vector)
             rows.append({
@@ -418,6 +428,93 @@ class NetgenTriTetVolMesh:
                 "unit_normal": normal_row["unit_normal"],
                 "force_N": force,
                 "force_magnitude_N": _norm(force),
+            })
+        return tuple(rows)
+
+    def boundary_pressure_force_moment_rows(
+        self,
+        pressure_by_boundary: dict[int | str, float],
+        default_pressure: float | None = 0.0,
+        pivot_m: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    ) -> tuple[dict[str, object], ...]:
+        """Return per-boundary pressure resultant force and moment rows.
+
+        Pressure is constant on each named boundary and positive along the
+        oriented outward normal.  Force is integrated from each triangle's
+        area vector; moment is integrated as ``sum((centroid - pivot) x dF)``.
+        This makes the rows suitable for Maxwell-pressure, electrostatic
+        pressure, radiation-pressure, and acoustic-pressure teaching examples.
+        """
+
+        pivot = tuple(float(value) for value in pivot_m)
+        if len(pivot) != 3:
+            raise ValueError("pivot_m must have three components")
+
+        normal_rows = {
+            int(row["boundary_number"]): row
+            for row in self.boundary_normal_summary_rows()
+        }
+        accum: dict[int, dict[str, object]] = {}
+        for bcnr, normal_row in normal_rows.items():
+            pressure, source = self._boundary_pressure_value(
+                normal_row,
+                pressure_by_boundary,
+                default_pressure,
+            )
+            accum[bcnr] = {
+                "boundary_number": bcnr,
+                "name": str(normal_row["name"]),
+                "pressure_Pa": pressure,
+                "pressure_source": source,
+                "surface_area": float(normal_row["surface_area"]),
+                "vector_area": tuple(float(value) for value in normal_row["vector_area"]),
+                "unit_normal": normal_row["unit_normal"],
+                "_force": (0.0, 0.0, 0.0),
+                "_moment": (0.0, 0.0, 0.0),
+                "_centroid_weight": (0.0, 0.0, 0.0),
+            }
+
+        for tri, area_vector in zip(self.surface_triangles, self.surface_triangle_area_vectors()):
+            row = accum[tri.bcnr]
+            pressure = float(row["pressure_Pa"])
+            force = _scale(area_vector, pressure)
+            a, b, c = (self.points[node - 1] for node in tri.nodes)
+            centroid = (
+                (a[0] + b[0] + c[0]) / 3.0,
+                (a[1] + b[1] + c[1]) / 3.0,
+                (a[2] + b[2] + c[2]) / 3.0,
+            )
+            area = _norm(area_vector)
+            moment = _cross(_sub(centroid, pivot), force)
+            row["_force"] = _add(row["_force"], force)
+            row["_moment"] = _add(row["_moment"], moment)
+            row["_centroid_weight"] = _add(row["_centroid_weight"], _scale(centroid, area))
+
+        rows: list[dict[str, object]] = []
+        for bcnr in sorted(accum):
+            row = accum[bcnr]
+            force = tuple(float(value) for value in row["_force"])
+            moment = tuple(float(value) for value in row["_moment"])
+            area = float(row["surface_area"])
+            centroid = (
+                _scale(row["_centroid_weight"], 1.0 / area)
+                if area > 0.0
+                else None
+            )
+            rows.append({
+                "boundary_number": row["boundary_number"],
+                "name": row["name"],
+                "pressure_Pa": row["pressure_Pa"],
+                "pressure_source": row["pressure_source"],
+                "surface_area": area,
+                "vector_area": row["vector_area"],
+                "unit_normal": row["unit_normal"],
+                "centroid_m": centroid,
+                "force_N": force,
+                "force_magnitude_N": _norm(force),
+                "pivot_m": pivot,
+                "moment_about_pivot_Nm": moment,
+                "moment_magnitude_Nm": _norm(moment),
             })
         return tuple(rows)
 

@@ -20,6 +20,7 @@ Example scripts for the radia Cubit C++ plugin (`cubit_mesh_export.ccm`), organi
 | [`validation_vol_surface_triangle_quality.py`](validation_vol_surface_triangle_quality.py) | Netgen `.vol` boundary-triangle quality: area, edge ratio, inradius/circumradius quality, angle range, sliver detection, and optional real Cubit export evaluation |
 | [`validation_vol_boundary_normal_vectors.py`](validation_vol_boundary_normal_vectors.py) | Netgen `.vol` boundary normal/vector-area rows for Maxwell-stress force integration over named sidesets |
 | [`validation_vol_boundary_pressure_force.py`](validation_vol_boundary_pressure_force.py) | Netgen `.vol` boundary pressure-force rows: scalar pressure times oriented vector area over named sidesets |
+| [`validation_vol_boundary_pressure_moment.py`](validation_vol_boundary_pressure_moment.py) | Netgen `.vol` boundary pressure-force/moment rows: triangle-centroid moment integration and generic resultant reduction |
 | [`validation_vol_boundary_inventory.py`](validation_vol_boundary_inventory.py) | Netgen `.vol` named-boundary inventory for Cubit/Coreform sidesets: per-boundary area, triangle count, and trace-node ids |
 | [`validation_vol_material_interface.py`](validation_vol_material_interface.py) | Netgen `.vol` material/interface inventory: material volumes, exterior/interface areas, and `domin/domout` boundary incidence |
 
@@ -30,6 +31,7 @@ python validation_vol_tet_quality.py
 python validation_vol_surface_triangle_quality.py
 python validation_vol_boundary_normal_vectors.py
 python validation_vol_boundary_pressure_force.py
+python validation_vol_boundary_pressure_moment.py
 python validation_vol_boundary_inventory.py
 python validation_vol_material_interface.py
 ```
