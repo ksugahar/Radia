@@ -1,0 +1,481 @@
+{
+  "kind": "hcurl_rwg_trace_orientation_validation",
+  "validation_class": true,
+  "mesh_summary": {
+    "points": 5,
+    "surface_triangles": 4,
+    "tetrahedra": 4,
+    "materials": 1,
+    "boundary_names": 1
+  },
+  "topology_policy": "first_order_h1_p1_hcurl_nedelec0_bem_p1_rwg_only",
+  "hcurl_edges": [
+    [
+      1,
+      2
+    ],
+    [
+      1,
+      3
+    ],
+    [
+      1,
+      4
+    ],
+    [
+      1,
+      5
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      2,
+      4
+    ],
+    [
+      2,
+      5
+    ],
+    [
+      3,
+      4
+    ],
+    [
+      3,
+      5
+    ],
+    [
+      4,
+      5
+    ]
+  ],
+  "hcurl_tet_edges": [
+    [
+      1,
+      2,
+      4,
+      5,
+      7,
+      9
+    ],
+    [
+      3,
+      1,
+      4,
+      6,
+      10,
+      7
+    ],
+    [
+      2,
+      3,
+      4,
+      8,
+      9,
+      10
+    ],
+    [
+      6,
+      5,
+      7,
+      8,
+      10,
+      9
+    ]
+  ],
+  "hcurl_tet_edge_signs": [
+    [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      1,
+      -1,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      1,
+      -1,
+      1,
+      1
+    ]
+  ],
+  "scalar_bem": {
+    "node_ids": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "global_node_ids": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "triangles": [
+      [
+        1,
+        2,
+        3
+      ],
+      [
+        1,
+        4,
+        2
+      ],
+      [
+        1,
+        3,
+        4
+      ],
+      [
+        2,
+        4,
+        3
+      ]
+    ]
+  },
+  "rwg_edges_global": [
+    [
+      1,
+      2
+    ],
+    [
+      1,
+      3
+    ],
+    [
+      1,
+      4
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      2,
+      4
+    ],
+    [
+      3,
+      4
+    ]
+  ],
+  "rwg_edge_triangles": [
+    [
+      1,
+      2
+    ],
+    [
+      1,
+      3
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      1,
+      4
+    ],
+    [
+      2,
+      4
+    ],
+    [
+      3,
+      4
+    ]
+  ],
+  "rwg_tri_edges": [
+    [
+      1,
+      4,
+      2
+    ],
+    [
+      3,
+      5,
+      1
+    ],
+    [
+      2,
+      6,
+      3
+    ],
+    [
+      5,
+      6,
+      4
+    ]
+  ],
+  "rwg_tri_edge_signs": [
+    [
+      1,
+      1,
+      -1
+    ],
+    [
+      1,
+      -1,
+      -1
+    ],
+    [
+      1,
+      1,
+      -1
+    ],
+    [
+      1,
+      -1,
+      -1
+    ]
+  ],
+  "rwg_opposite_vertices_local": [
+    [
+      3,
+      4
+    ],
+    [
+      2,
+      4
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      1,
+      4
+    ],
+    [
+      1,
+      3
+    ],
+    [
+      1,
+      2
+    ]
+  ],
+  "trace": {
+    "h1_to_scalar_bem_rows": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "h1_to_scalar_bem_cols": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "rwg_to_hcurl_edge_ids": [
+      1,
+      2,
+      3,
+      5,
+      6,
+      8
+    ]
+  },
+  "trace_triplets": {
+    "h1_to_scalar_bem": [
+      {
+        "row": 1,
+        "col": 1,
+        "value": 1.0
+      },
+      {
+        "row": 2,
+        "col": 2,
+        "value": 1.0
+      },
+      {
+        "row": 3,
+        "col": 3,
+        "value": 1.0
+      },
+      {
+        "row": 4,
+        "col": 4,
+        "value": 1.0
+      }
+    ],
+    "rwg_to_hcurl": [
+      {
+        "row": 1,
+        "col": 1,
+        "value": 1.0
+      },
+      {
+        "row": 2,
+        "col": 2,
+        "value": 1.0
+      },
+      {
+        "row": 3,
+        "col": 3,
+        "value": 1.0
+      },
+      {
+        "row": 4,
+        "col": 5,
+        "value": 1.0
+      },
+      {
+        "row": 5,
+        "col": 6,
+        "value": 1.0
+      },
+      {
+        "row": 6,
+        "col": 8,
+        "value": 1.0
+      }
+    ]
+  },
+  "edge_sign_balance": [
+    {
+      "edge_id": 1,
+      "signs": [
+        1,
+        -1
+      ],
+      "sign_sum": 0,
+      "has_opposite_orientations": true
+    },
+    {
+      "edge_id": 2,
+      "signs": [
+        -1,
+        1
+      ],
+      "sign_sum": 0,
+      "has_opposite_orientations": true
+    },
+    {
+      "edge_id": 3,
+      "signs": [
+        1,
+        -1
+      ],
+      "sign_sum": 0,
+      "has_opposite_orientations": true
+    },
+    {
+      "edge_id": 4,
+      "signs": [
+        1,
+        -1
+      ],
+      "sign_sum": 0,
+      "has_opposite_orientations": true
+    },
+    {
+      "edge_id": 5,
+      "signs": [
+        -1,
+        1
+      ],
+      "sign_sum": 0,
+      "has_opposite_orientations": true
+    },
+    {
+      "edge_id": 6,
+      "signs": [
+        1,
+        -1
+      ],
+      "sign_sum": 0,
+      "has_opposite_orientations": true
+    }
+  ],
+  "manifold": {
+    "trace_nodes": 4,
+    "surface_edges": 6,
+    "surface_triangles": 4,
+    "closed_edges": 6,
+    "open_edges": 0,
+    "is_closed_manifold": true,
+    "euler_characteristic": 2
+  },
+  "closure": {
+    "surface_triangles": 4,
+    "tetrahedra": 4,
+    "total_surface_area": 2.3660254037844384,
+    "surface_vector_area": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "surface_vector_area_norm": 0.0,
+    "surface_vector_area_norm_over_area": 0.0,
+    "surface_signed_volume": -0.16666666666666666,
+    "surface_abs_volume": 0.16666666666666666,
+    "tetrahedron_total_volume": 0.16666666666666666,
+    "surface_abs_volume_error": 0.0,
+    "surface_abs_volume_rel_error": 0.0,
+    "boundary_orientation": "inward"
+  },
+  "checks": {
+    "trace_nodes_exclude_interior_node": true,
+    "scalar_bem_compacts_boundary_nodes": true,
+    "hcurl_edge_count": 10,
+    "rwg_edge_count": 6,
+    "rwg_to_hcurl_edge_ids": [
+      1,
+      2,
+      3,
+      5,
+      6,
+      8
+    ],
+    "rwg_to_hcurl_edge_ids_match_expected": true,
+    "interior_hcurl_edges": [
+      [
+        1,
+        5
+      ],
+      [
+        2,
+        5
+      ],
+      [
+        3,
+        5
+      ],
+      [
+        4,
+        5
+      ]
+    ],
+    "interior_edges_are_spokes_to_node5": true,
+    "all_rwg_edges_are_hcurl_edges": true,
+    "rwg_edge_signs_are_balanced": true,
+    "tet_edge_signs_include_reversed_local_orientations": true,
+    "closed_boundary_manifold": true,
+    "euler_characteristic_is_two": true,
+    "surface_volume_matches_tets": true
+  }
+}
