@@ -27,6 +27,7 @@ of the methods below, with an analytic sanity check available.
 | Simple closed integration surface in air | Maxwell surface stress | ``force.maxwell_surface_force*`` |
 | One surface patch / sign convention teaching | Local Maxwell traction | ``force.maxwell_stress_tensor_air`` / ``force.maxwell_traction_summary`` |
 | First-order `.vol` boundary triangle force trace | P1 triangle traction load / Maxwell traction / boundary pressure/vector-traction rows | ``force.surface_triangle_constant_traction_load_summary``, ``force.surface_triangle_maxwell_traction_summary``, ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows``, ``NetgenTriTetVolMesh.boundary_traction_force_moment_rows`` |
+| CAD-side analytic box face loads | build123d face pressure / vector traction rows | ``build123d.modeling.box_face_pressure_moment_rows``, ``build123d.modeling.box_face_traction_moment_rows`` |
 | Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
 | Discrete force rows to net force/torque | Resultant and pivot moment sum | ``force.force_moment_resultant_summary`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
@@ -89,6 +90,17 @@ The equal nodal load preserves force and moment because the centroid of a
 linear triangle is the mean of its three vertices.  Use this as the readable
 boundary-load gate before replacing ``t`` with Maxwell traction on `.vol`
 surface triangles.
+
+Planar CAD face vector traction:
+
+```text
+F_face = A_face t,      M_p = (c_face - p) x F_face
+```
+
+Use this when checking a mesh or CAD handoff before the traction is generated
+from fields.  Scalar pressure is tied to the oriented normal
+(``F = p n A``); vector traction is already a global vector, so it does not
+change direction when it is applied to another box face.
 
 Uniform air-gap pressure:
 
@@ -227,6 +239,9 @@ careful remeshing.
   generic resultant reduction.
 - ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:
   build123d analytic box pressure moments checked against named `.vol` rows.
+- ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_traction_moment.py``:
+  build123d analytic box vector-traction moments checked against named `.vol`
+  rows.
 - ``examples/electric_machine/validation_virtual_work_force_displacement_sweep.py``:
   displacement energy/coenergy samples to force, including the fixed-current
   versus fixed-flux sign gate.

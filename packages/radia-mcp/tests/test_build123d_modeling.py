@@ -22,6 +22,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           box_face_vector_area_rows,
                                           box_face_pressure_force_rows,
                                           box_face_pressure_moment_rows,
+                                          box_face_traction_moment_rows,
                                           compare_boundary_vector_area_rows,
                                           compare_shape_measurement_rows,
                                           shape_measurement_comparison_summary)
@@ -222,6 +223,39 @@ def test_box_face_pressure_moment_rows_integrate_pivot_moments():
 
     with pytest.raises(KeyError):
         box_face_pressure_moment_rows((2, 3, 5), {"zmax": 2.0}, default_pressure=None)
+
+
+def test_box_face_traction_moment_rows_integrate_vector_tractions():
+    rows = box_face_traction_moment_rows(
+        (2, 3, 5),
+        {"zmax": (1.0, -2.0, 3.0)},
+        center=(1.0, 1.5, 2.5),
+        default_traction=(0.0, 0.0, 0.0),
+    )
+    by_name = {row["name"]: row for row in rows}
+    assert by_name["zmax"]["face_center"] == pytest.approx((1.0, 1.5, 5.0))
+    assert by_name["zmax"]["traction_N_per_m2"] == pytest.approx((1.0, -2.0, 3.0))
+    assert by_name["zmax"]["force_N"] == pytest.approx((6.0, -12.0, 18.0))
+    assert by_name["zmax"]["moment_about_pivot_Nm"] == pytest.approx((87.0, 12.0, -21.0))
+    assert by_name["zmax"]["traction_source"] == "name"
+    assert by_name["xmin"]["traction_source"] == "default"
+
+    shifted = box_face_traction_moment_rows(
+        (2, 3, 5),
+        {"zmax": (1.0, -2.0, 3.0)},
+        center=(1.0, 1.5, 2.5),
+        default_traction=(0.0, 0.0, 0.0),
+        pivot_m=(1.0, 1.5, 5.0),
+    )
+    assert {row["name"]: row for row in shifted}["zmax"]["moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    by_index = box_face_traction_moment_rows((2, 3, 5), {6: (0.0, 0.0, 2.0)}, default_traction=(0.0, 0.0, 0.0))
+    assert {row["name"]: row for row in by_index}["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+
+    with pytest.raises(KeyError):
+        box_face_traction_moment_rows((2, 3, 5), {"zmax": (1.0, -2.0, 3.0)}, default_traction=None)
+    with pytest.raises(ValueError):
+        box_face_traction_moment_rows((2, 3, 5), {"zmax": (1.0, -2.0)}, default_traction=(0.0, 0.0, 0.0))
 
 
 def test_shape_envelope_row_and_enclosing_box_use_union_bbox_margin():
