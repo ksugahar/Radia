@@ -47,6 +47,13 @@ between acoustic specific impedance/admittance and Helmholtz DtN/Robin
 coefficients. It checks planar and spherical radiation modes and a baffled
 piston average impedance round trip.
 
+## Boundary power
+
+`validation_acoustic_boundary_power.py` validates active/reactive acoustic
+boundary power from complex pressure and outward normal velocity phasors. It
+checks peak/RMS conventions, a plane-wave resistive load, a purely reactive
+near-field load, and a mixed impedance boundary.
+
 ```powershell
 python validation_pulsating_sphere_radiation.py
 python validation_low_frequency_helmholtz_kernel.py
@@ -54,4 +61,5 @@ python validation_spherical_dtn_modes.py
 python validation_planar_dtn_symbol.py
 python validation_baffled_piston_radiation.py
 python validation_acoustic_impedance_dtn_bridge.py
+python validation_acoustic_boundary_power.py
 ```
