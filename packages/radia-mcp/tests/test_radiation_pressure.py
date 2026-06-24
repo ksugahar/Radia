@@ -17,9 +17,11 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     oblique_radiation_pressure_summary,
     plane_wave_intensity_from_electric_field,
     poynting_patch_force_summary,
+    radiation_force_from_normal_scattering,
     radiation_force_from_power,
     radiation_pressure_from_intensity,
     radiation_pressure_summary,
+    radiation_scattering_force_summary,
 )
 
 
@@ -63,6 +65,28 @@ def test_radiation_force_from_power_is_area_integrated_pressure():
     assert summary["pressure_Pa"] == pytest.approx(2.0 * intensity / C0)
     assert summary["force_N"] == pytest.approx(2.0 * power / C0)
     assert summary["momentum_transfer_factor"] == pytest.approx(2.0)
+
+
+def test_radiation_force_from_normal_scattering_matches_momentum_balance():
+    power = 5.0
+
+    absorber = radiation_scattering_force_summary(power, reflectance=0.0, transmittance=0.0)
+    reflector = radiation_scattering_force_summary(power, reflectance=1.0, transmittance=0.0)
+    transparent = radiation_scattering_force_summary(power, reflectance=0.0, transmittance=1.0)
+    lossy_partial = radiation_scattering_force_summary(power, reflectance=0.5, transmittance=0.25)
+
+    assert radiation_force_from_normal_scattering(power, 0.0, 0.0) == pytest.approx(power / C0)
+    assert absorber["force_N"] == pytest.approx(power / C0)
+    assert reflector["force_N"] == pytest.approx(2.0 * power / C0)
+    assert transparent["force_N"] == pytest.approx(0.0)
+    assert lossy_partial["absorptance"] == pytest.approx(0.25)
+    assert lossy_partial["momentum_transfer_factor"] == pytest.approx(1.25)
+    assert lossy_partial["force_N"] == pytest.approx(
+        radiation_force_from_power(power, absorptance=0.25, reflectance=0.5)
+    )
+    assert lossy_partial["force_from_absorptance_reflectance_N"] == pytest.approx(
+        lossy_partial["force_N"]
+    )
 
 
 def test_oblique_radiation_pressure_reduces_to_normal_incidence():
@@ -142,6 +166,14 @@ def test_radiation_pressure_rejects_invalid_inputs():
     with pytest.raises(ValueError):
         radiation_force_from_power(-1.0)
     with pytest.raises(ValueError):
+        radiation_force_from_normal_scattering(-1.0, 0.0, 0.0)
+    with pytest.raises(ValueError):
+        radiation_force_from_normal_scattering(1.0, -0.1, 0.0)
+    with pytest.raises(ValueError):
+        radiation_force_from_normal_scattering(1.0, 0.5, 0.6)
+    with pytest.raises(ValueError):
+        radiation_scattering_force_summary(1.0, 0.0, -0.1)
+    with pytest.raises(ValueError):
         radiation_pressure_summary(1.0, area_m2=-1.0)
     with pytest.raises(ValueError):
         radiation_pressure_from_intensity(1.0, absorptance=0.6, reflectance=0.5)
@@ -161,6 +193,7 @@ if __name__ == "__main__":
     test_plane_wave_intensity_accepts_rms_and_peak_conventions()
     test_radiation_pressure_absorber_and_reflector_limits()
     test_radiation_force_from_power_is_area_integrated_pressure()
+    test_radiation_force_from_normal_scattering_matches_momentum_balance()
     test_oblique_radiation_pressure_reduces_to_normal_incidence()
     test_oblique_radiation_pressure_splits_absorbed_tangential_momentum()
     test_poynting_patch_force_vector_matches_oblique_summary()
