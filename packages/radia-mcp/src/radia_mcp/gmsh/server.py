@@ -145,6 +145,22 @@ def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dic
     }
 
 
+def _relative_to_project(path: Path) -> str:
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _numsubedges_triggers(lines: list[str]) -> list[str]:
+    triggers = []
+    if any("mesh.Curve(" in line or "Curve(" in line.split("#")[0] for line in lines):
+        triggers.append("high_order_curve")
+    if any("GmshPostExport" in line for line in lines):
+        triggers.append("gmsh_post_export")
+    return triggers
+
+
 # ============================================================
 # Tools
 # ============================================================
@@ -231,6 +247,66 @@ def gmsh_audit_summary(directory: str = "examples", top_n: int = 10) -> dict:
     without printing the long per-file audit body.
     """
     return _lint_directory_summary(directory, top_n)
+
+
+@mcp.tool()
+def gmsh_numsubedges_remediation_plan(directory: str = "examples",
+                                      limit: int = 20) -> dict:
+    """
+    List scripts that need high-order GMSH display settings.
+
+    This is the actionable companion to the `numsubedges-missing` audit rule.
+    It does not edit files; it returns a bounded list of affected scripts,
+    trigger reasons, CLI hints, and a companion `.geo` template.
+    """
+    d = Path(directory)
+    if not d.is_absolute():
+        d = PROJECT_ROOT / d
+    if not d.exists():
+        return {
+            "ok": False,
+            "error": f"Directory not found: {d}",
+            "directory": str(d),
+        }
+
+    max_items = max(0, min(int(limit), 200))
+    affected = []
+    total = 0
+    for py_file in sorted(d.rglob("*.py")):
+        findings = _lint_file(str(py_file))
+        if not any(f.get("rule") == "numsubedges-missing" for f in findings):
+            continue
+        total += 1
+        if len(affected) >= max_items:
+            continue
+        try:
+            lines = py_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            lines = []
+        rel = _relative_to_project(py_file)
+        geo_name = f"{py_file.stem}_display.geo"
+        affected.append({
+            "script": rel,
+            "triggers": _numsubedges_triggers(lines),
+            "cli_hint": "gmsh <result>.msh -numsubedges 4",
+            "geo_companion": str(Path(rel).with_name(geo_name)),
+            "geo_template": (
+                f"// Display companion for outputs from {rel}\n"
+                "Mesh.NumSubEdges = 4;\n"
+                "// Merge \"<result>.msh\";\n"
+            ),
+        })
+
+    return {
+        "ok": True,
+        "directory": str(d),
+        "rule": "numsubedges-missing",
+        "total_affected": total,
+        "returned": len(affected),
+        "truncated": total > len(affected),
+        "action": _RULE_REMEDIATIONS["numsubedges-missing"],
+        "affected": affected,
+    }
 
 
 @mcp.tool()

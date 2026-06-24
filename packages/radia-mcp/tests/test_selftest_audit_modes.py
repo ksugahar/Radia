@@ -107,3 +107,34 @@ def test_mesh_audit_summary_tools_are_machine_readable(monkeypatch, tmp_path):
         }]
         assert summary["dominant_rule"] == summary["top_rules"][0]
         assert summary["top_files"][0]["path"] == "examples\\a.py"
+
+
+def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
+    from radia_mcp.gmsh import server
+
+    examples = tmp_path / "examples"
+    examples.mkdir()
+    target = examples / "curved.py"
+    target.write_text("mesh.Curve(3)\n", encoding="utf-8")
+    clean = examples / "flat.py"
+    clean.write_text("print('flat')\n", encoding="utf-8")
+
+    def fake_lint(filepath: str):
+        if filepath.endswith("curved.py"):
+            return [{"line": 0, "severity": "MODERATE",
+                     "rule": "numsubedges-missing", "message": "x"}]
+        return []
+
+    monkeypatch.setattr(server, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(server, "_lint_file", fake_lint)
+
+    plan = server.gmsh_numsubedges_remediation_plan("examples", limit=1)
+    assert plan["ok"] is True
+    assert plan["total_affected"] == 1
+    assert plan["returned"] == 1
+    assert plan["truncated"] is False
+    item = plan["affected"][0]
+    assert item["script"] == "examples\\curved.py"
+    assert item["triggers"] == ["high_order_curve"]
+    assert item["geo_companion"] == "examples\\curved_display.geo"
+    assert "Mesh.NumSubEdges = 4;" in item["geo_template"]
