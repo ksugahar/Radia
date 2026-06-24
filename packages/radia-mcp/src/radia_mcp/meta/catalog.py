@@ -519,6 +519,22 @@ CATALOG: dict[str, dict[str, Any]] = {
 # policy (different repos, different conventions).
 # ============================================================
 EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
+    "optuna-mcp": {
+        "pypi": "optuna-mcp",
+        "github": "https://github.com/optuna/optuna-mcp",
+        "install": "pip install --upgrade optuna optuna-mcp",
+        "entry_point": "optuna-mcp",
+        "description": "Official Optuna MCP server for Study, Trial, "
+                       "Visualization, and Dashboard operations. Use "
+                       "`--storage sqlite:///C:/temp/optuna_mcp.db` for "
+                       "persistent lab sessions.",
+        "related": [
+            "bayesian-opt",
+            "evolutionary",
+            "topology-optimization",
+            "radia-streamfunction",
+        ],
+    },
     "elf": {
         "pypi": "mcp-server-elf",
         "github": "https://github.com/ksugahar/mcp-server-elf",

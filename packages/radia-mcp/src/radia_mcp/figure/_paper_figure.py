@@ -74,6 +74,47 @@ def _get_mpl():
     return _MPL
 
 
+def _assert_times_new_roman_available() -> str:
+    """Return the resolved Times New Roman font path, or raise.
+
+    Sugahara Lab standard: publication figures are generated in Times
+    New Roman.  Silent fallback to DejaVu / Liberation / generic Times
+    is not acceptable because it changes the delivered typography and
+    can desync figure text from the paper body.
+    """
+    _, matplotlib = _get_mpl()
+    import os
+    try:
+        path = matplotlib.font_manager.findfont(
+            "Times New Roman", fallback_to_default=False
+        )
+    except Exception as e:
+        raise RuntimeError(
+            "Times New Roman is required by the Sugahara Lab figure "
+            "standard, but matplotlib cannot resolve it. Install Times "
+            "New Roman and rebuild the matplotlib font cache "
+            "(matplotlib.font_manager._load_fontmanager("
+            "try_read_cache=False))."
+        ) from e
+    if not path or "times" not in os.path.basename(str(path)).lower():
+        raise RuntimeError(
+            "Times New Roman is required by the Sugahara Lab figure "
+            f"standard, but matplotlib resolved {path!r}."
+        )
+    return str(path)
+
+
+def _rcparams_request_times_new_roman() -> bool:
+    """True when rcParams are configured to render serif text as TNR."""
+    plt, _ = _get_mpl()
+    fam = plt.rcParams.get("font.family", [])
+    fam = [fam] if isinstance(fam, str) else list(fam)
+    serifs = plt.rcParams.get("font.serif", [])
+    serifs = [serifs] if isinstance(serifs, str) else list(serifs)
+    names = [str(x).lower() for x in fam + serifs]
+    return "times new roman" in names
+
+
 # ============================================================
 # Color palette: Okabe-Ito 8-color colorblind-safe (Wong 2011 Nature
 # Methods).  Lab default for every paper profile.  Distinguishable
@@ -498,7 +539,8 @@ def paper_figure(
             both rel_width AND the journal-width derivation.  Use for
             truly non-standard layouts only.
         sharex, sharey: forwarded to plt.subplots.
-        use_times_roman: serif font (False = matplotlib default).
+        use_times_roman: enforce Times New Roman, the Sugahara Lab
+            standard.  False is only for deliberate non-public drafts.
         panel_labels: "auto" (default) places (a), (b), (c) labels
             automatically iff nrows*ncols > 1.  True forces labels
             even on single-panel; False suppresses them.  Mirrors the
@@ -564,20 +606,10 @@ def paper_figure(
         "axes.prop_cycle": _make_axes_prop_cycle(list(prof.color_cycle)),
     }
     if use_times_roman:
-        available = {f.name for f in matplotlib.font_manager.fontManager.ttflist}
-        if "Times New Roman" in available:
-            rc["font.family"] = "serif"
-            rc["font.serif"] = ["Times New Roman"] + plt.rcParams.get(
-                "font.serif", [])
-            rc["mathtext.fontset"] = "stix"
-        elif "Times" in available:
-            rc["font.family"] = "serif"
-            rc["font.serif"] = ["Times"] + plt.rcParams.get("font.serif", [])
-            rc["mathtext.fontset"] = "stix"
-        else:
-            rc["font.family"] = "serif"
-            rc["font.serif"] = ["DejaVu Serif"]
-            rc["mathtext.fontset"] = "dejavuserif"
+        _assert_times_new_roman_available()
+        rc["font.family"] = "serif"
+        rc["font.serif"] = ["Times New Roman"]
+        rc["mathtext.fontset"] = "stix"
         rc["mathtext.default"] = "it"
     plt.rcParams.update(rc)
 
@@ -1170,6 +1202,37 @@ def _check_pdf_fonts_embedded(pdf_path) -> list[str]:
     return violations
 
 
+_BAD_SERIF_FALLBACK_FONT_FRAGMENTS = (
+    b"DejaVuSerif", b"DejaVu Serif",
+    b"LiberationSerif", b"Liberation Serif",
+    b"NimbusRomNo9", b"Nimbus Roman",
+)
+
+
+def _check_pdf_times_new_roman(pdf_path) -> list[str]:
+    """Post-save check for common serif fallbacks in the final PDF."""
+    from pathlib import Path
+    p = Path(pdf_path)
+    if not p.exists() or p.suffix.lower() != ".pdf":
+        return []
+    try:
+        blob = p.read_bytes()
+    except OSError as e:
+        return [f"could not read {p}: {e}"]
+    hits = sorted({
+        frag.decode("ascii", "replace")
+        for frag in _BAD_SERIF_FALLBACK_FONT_FRAGMENTS
+        if frag in blob
+    })
+    if hits:
+        return [
+            f"{p.name} embeds serif fallback font(s): {', '.join(hits)}. "
+            "Sugahara Lab figures must be generated with Times New Roman, "
+            "not a fallback family."
+        ]
+    return []
+
+
 def _contains_cjk(s: str) -> bool:
     """True if the string contains any Japanese / CJK character.
 
@@ -1242,6 +1305,82 @@ def _check_no_japanese_text(fig) -> list[dict]:
     if sup is not None and _contains_cjk(sup.get_text()):
         out.append({"kind": "suptitle", "axis": -1, "text": sup.get_text()})
     return out
+
+
+def _check_text_overflow(fig, tol_pt: float = 0.5) -> list[dict]:
+    """Return free-text artists whose drawn bbox exits the figure canvas.
+
+    This complements the axis-label clipping checks in ``_lab_api``.
+    Concept diagrams often use ``ax.text(...)`` / ``annotate(...)``
+    instead of axis labels; those labels can be cut off while ordinary
+    plot gates still pass.  We scan only free diagram text here:
+    axis labels, tick labels, titles, and legend entries are handled by
+    their own dedicated gates.
+    """
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    dpi = float(fig.dpi)
+    tol_px = tol_pt * dpi / 72.0
+    fb = fig.bbox
+    out = []
+
+    def _record(artist, *, axis, kind):
+        if artist is None or not artist.get_visible():
+            return
+        text = artist.get_text()
+        if not text:
+            return
+        try:
+            bb = artist.get_window_extent(renderer=renderer)
+        except Exception:
+            return
+        for side, over_px in (
+            ("left", fb.x0 - bb.x0),
+            ("bottom", fb.y0 - bb.y0),
+            ("right", bb.x1 - fb.x1),
+            ("top", bb.y1 - fb.y1),
+        ):
+            if over_px > tol_px:
+                out.append({
+                    "axis": axis,
+                    "kind": kind,
+                    "text": text,
+                    "side": side,
+                    "overhang_pt": round(over_px * 72.0 / dpi, 2),
+                })
+
+    for i, ax in enumerate(fig.get_axes()):
+        excluded = {
+            id(ax.xaxis.label),
+            id(ax.yaxis.label),
+            id(ax.title),
+            id(getattr(ax, "_left_title", None)),
+            id(getattr(ax, "_right_title", None)),
+        }
+        excluded.update(id(t) for t in ax.get_xticklabels())
+        excluded.update(id(t) for t in ax.get_yticklabels())
+        leg = ax.get_legend()
+        if leg is not None:
+            excluded.update(id(t) for t in leg.get_texts())
+        for t in ax.texts:
+            if id(t) not in excluded:
+                _record(t, axis=i, kind="text")
+
+    for t in fig.texts:
+        if t is getattr(fig, "_suptitle", None):
+            continue
+        _record(t, axis=-1, kind="figure_text")
+    return out
+
+
+def audit_text_overflow(fig, tol_pt: float = 0.5) -> list[dict]:
+    """Lint free diagram text for canvas overflow.
+
+    Returns ``[{"axis", "kind", "text", "side", "overhang_pt"}, ...]``;
+    an empty list means every ``ax.text`` / ``fig.text`` label fits
+    inside the fixed figure canvas.
+    """
+    return _check_text_overflow(fig, tol_pt=tol_pt)
 
 
 # Japanese / CJK font-name fragments that, if present in a saved PDF's
@@ -1383,6 +1522,9 @@ def emit_paper_figure(
     check_colorblind_safe: bool = True,
     check_font_embedding: bool = True,
     check_no_japanese: bool = True,
+    check_times_new_roman: bool = True,
+    check_text_overflow: bool = True,
+    text_overflow_tol_pt: float = 0.5,
     dpi: int = 600,
     save_pdf: bool = True,
     save_png: bool = True,
@@ -1422,6 +1564,14 @@ def emit_paper_figure(
             that embed a Japanese font.  Paper figures must use English
             labels only.  Set False only for a figure deliberately
             targeting a Japanese-language venue.
+        check_times_new_roman: when True (default), require matplotlib
+            rcParams to request Times New Roman and reject saved PDFs
+            that contain common serif fallback fonts.
+        check_text_overflow: when True (default), reject free diagram
+            labels created with ``ax.text`` / ``fig.text`` if their
+            rendered bbox extends past the fixed figure canvas.  Axis
+            labels, tick labels, legends, and titles are handled by
+            separate gates.
         dpi: PNG/JPEG resolution.  600 for line-art with thin strokes,
             300 for general use, 1200 for IEEE camera-ready.
         save_pdf, save_png: which formats to emit.
@@ -1530,6 +1680,55 @@ def emit_paper_figure(
                 warnings.warn(msg)
             elif on_fail in ("raise", "auto_tighten"):
                 # auto_tighten cannot fix Japanese text, so escalate.
+                raise ValueError(msg)
+
+    # --- Pre-flight (1d): Times New Roman is the lab standard ---
+    if check_times_new_roman:
+        _assert_times_new_roman_available()
+        if not _rcparams_request_times_new_roman():
+            msg = (
+                "emit_paper_figure: Times New Roman is not requested in "
+                "matplotlib rcParams.\n"
+                "Sugahara Lab standard: publication figures are generated "
+                "with Times New Roman.  Build the figure with "
+                "paper_figure(..., use_times_roman=True) or set:\n"
+                "  plt.rcParams['font.family'] = 'serif'\n"
+                "  plt.rcParams['font.serif'] = ['Times New Roman']"
+            )
+            if on_fail == "warn":
+                import warnings
+                warnings.warn(msg)
+            elif on_fail in ("raise", "auto_tighten"):
+                raise ValueError(msg)
+
+    # --- Pre-flight (1d): free diagram text must fit the canvas ---
+    # This catches concept diagrams where ax.text() / annotate() labels
+    # are clipped by tight margins.  It deliberately excludes axis
+    # labels, tick labels, titles, and legends; those have dedicated
+    # checks elsewhere.
+    if check_text_overflow:
+        text_overflow = _check_text_overflow(fig, tol_pt=text_overflow_tol_pt)
+        if text_overflow:
+            lines = [
+                f"  axis {v['axis']} {v['kind']} {v['text']!r} "
+                f"extends {v['overhang_pt']:.1f} pt past the {v['side']} edge"
+                for v in text_overflow
+            ]
+            msg = (
+                "emit_paper_figure: diagram text extends past the figure "
+                "canvas.\n"
+                + "\n".join(lines) + "\n"
+                "Fix:\n"
+                "  - move the text inside the axes / figure,\n"
+                "  - shorten the label,\n"
+                "  - increase aspect / width, or\n"
+                "  - reserve margin with fig.subplots_adjust(...)."
+            )
+            if on_fail == "warn":
+                import warnings
+                warnings.warn(msg)
+            elif on_fail in ("raise", "auto_tighten"):
+                # auto_tighten cannot know which diagram label to move.
                 raise ValueError(msg)
 
     # --- Pre-flight (2): no legend overlapping data lines ---
@@ -1647,6 +1846,26 @@ def emit_paper_figure(
                 # can still inspect what was produced.
                 raise ValueError(msg)
 
+    # --- Post-save: verify Times New Roman did not silently fall back ---
+    times_new_roman_violations = []
+    if check_times_new_roman and save_pdf:
+        pdf_path = p.with_suffix(".pdf")
+        times_new_roman_violations = _check_pdf_times_new_roman(pdf_path)
+        if times_new_roman_violations:
+            msg = (
+                "emit_paper_figure: saved PDF appears to use a serif "
+                "fallback instead of Times New Roman:\n  "
+                + "\n  ".join(times_new_roman_violations) + "\n"
+                "Fix: rebuild the figure with paper_figure() after "
+                "installing Times New Roman / rebuilding the matplotlib "
+                "font cache."
+            )
+            if on_fail == "warn":
+                import warnings
+                warnings.warn(msg)
+            elif on_fail in ("raise", "auto_tighten"):
+                raise ValueError(msg)
+
     # --- Post-save: verify NO Japanese font embedded in the PDF ---
     # The live-artist scan above (_check_no_japanese_text) catches the
     # common case; this confirms the FINAL bytes also carry no CJK font
@@ -1675,6 +1894,7 @@ def emit_paper_figure(
     final["auto_tightened"] = auto_tightened
     final["profile"] = prof.name
     final["font_violations"] = font_violations
+    final["times_new_roman_violations"] = times_new_roman_violations
     final["japanese_font_violations"] = japanese_font_violations
 
     if verbose:

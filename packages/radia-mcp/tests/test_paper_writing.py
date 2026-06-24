@@ -207,6 +207,156 @@ def test_abstract_strength_returns_dict():
     assert isinstance(r, dict)
 
 
+def test_abstract_no_math_no_citation_flags_domain_acronym():
+    r = pw.paper_writing_check_abstract_no_math_no_citation(
+        "This paper combines MMM and FEM for magnetic levitation design."
+    )
+    assert r["status"] == "warning"
+    assert r["n_acronyms"] == 2
+    assert r["acronyms"] == ["FEM", "MMM"]
+
+
+def test_abstract_no_math_no_citation_flags_numeric_reference_marker():
+    r = pw.paper_writing_check_abstract_no_math_no_citation(
+        "This paper extends the reduced-potential formulation [1]."
+    )
+    assert r["status"] == "fail"
+    assert r["n_citation_markers"] == 1
+    assert r["n_citations"] == 1
+
+
+def test_abstract_no_math_no_citation_keeps_universal_acronyms_clean():
+    r = pw.paper_writing_check_abstract_no_math_no_citation(
+        "This paper provides a PDF report and a CPU-time comparison."
+    )
+    assert r["status"] == "clean"
+    assert r["n_acronyms"] == 0
+
+
+def test_digest_human_review_triggers_flag_cauer_digest_patterns():
+    tex = r"""
+\begin{abstract}
+Finite Cauer ladder models are used for eddy-current analysis.
+The model agrees with errors of 0.04\%, 0.001\%, and 0.33\%.
+\end{abstract}
+\section{Introduction}
+We propose a new Warburg-type CLN termination for a circular conductor.
+The transition frequency remains outside the Galerkin reduction.
+The HOIBC envelope is used for the surface tail with $p_{\mathrm H}=0$.
+The CLN bulk modes and HOIBC surface modes are coupled by a Schur
+complement, the algebraic form of a discrete Steklov-Poincare map.
+The method preserves the high-frequency SIBC scaling.
+The mixed system is
+\[
+\begin{bmatrix}K_{bb}&K_{bs}\\K_{sb}&K_{ss}\end{bmatrix}
+\begin{bmatrix}c_b\\c_s\end{bmatrix}=g,\quad
+S=K_{ss}-K_{sb}K_{bb}^{-1}K_{bs}.
+\]
+The uniform dc term is not included in this count.  The model uses
+$N_b=1$ with the HOIBC envelope, and the
+bulk CLN uses $N=10$.  The L-term and R-term references are compared.
+\begin{figure}[!t]
+\caption{Admittance comparison; the proposed model is compared with the
+reference and demonstrates improved accuracy whereas finite ladders miss
+the asymptote.  The gray line marks $f_N$.}
+\end{figure}
+The rank-(1,1) case is demonstrated for a cylinder, sphere, and cube.
+In the one-bulk/one-surface specialization, the transition is automatic.
+\textbf{Verification.}  The plotted benchmark is described here.
+The Japanese text calls this region 壁帯.
+"""
+    r = pw.paper_writing_check_digest_human_review_triggers(tex, max_report=40)
+    rules = {f["rule"] for f in r["findings"]}
+    assert r["status"] == "warning"
+    assert "abstract_generic_cauer_ladder" in rules
+    assert "abstract_numeric_overload" in rules
+    assert "known_construct_framing" in rules
+    assert "over_narrow_galerkin_transition_framing" in rules
+    assert "technical_term_without_citation" in rules
+    assert "opaque_rank_tuple" in rules
+    assert "misleading_minimal_basis_claim" in rules
+    assert "unnumbered_core_equation" in rules
+    assert "block_matrix_missing_s_dependence" in rules
+    assert "undefined_block_matrices" in rules
+    assert "unexplained_schur_dtn_equivalence" in rules
+    assert "vague_sibc_scaling" in rules
+    assert "ambiguous_nb_definition" in rules
+    assert "confusing_dc_count_exclusion" in rules
+    assert "ambiguous_n_vs_nb_order" in rules
+    assert "undefined_lr_termination" in rules
+    assert "minimal_bulk_order_misread" in rules
+    assert "ph_zero_higher_order_mismatch" in rules
+    assert "one_page_scope_creep_shapes" in rules
+    assert "unclear_wall_band_term" in rules
+    assert "result_figure_before_numerical_section" in rules
+    assert "hidden_numerical_example_section" in rules
+    assert "ambiguous_fn_marker" in rules
+    assert "caption_overloaded" in rules
+
+
+def test_digest_human_review_triggers_flag_missing_cln_hoibc_orders():
+    tex = r"""
+\section{Introduction}
+The CLN bulk modes and HOIBC surface envelope are coupled by a Schur
+complement.  This mixed CLN/HOIBC model is evaluated on a circular
+conductor benchmark with radius 5 mm, conductivity 5.8e7 S/m, and a
+Bessel reference solution.
+"""
+    r = pw.paper_writing_check_digest_human_review_triggers(tex, max_report=20)
+    rules = {f["rule"] for f in r["findings"]}
+    assert r["status"] == "warning"
+    assert "missing_model_order_disclosure" in rules
+
+
+def test_digest_human_review_triggers_accept_reframed_cauer_digest():
+    tex = r"""
+\begin{abstract}
+The model agrees with the circular-conductor reference with sub-percent
+accuracy across the skin-effect transition region and surface-impedance tail.
+\end{abstract}
+\section{Introduction}
+Warburg-type circuit elements are a known way to represent the
+square-root tail~\cite{Warburg1899,Randles1947}.  We instead replace
+the fitted transition by a frequency-dependent surface-impedance
+boundary condition (SIBC) envelope~\cite{YuferevIda2010}.  Higher-order
+impedance terms can be included in the same framework and can be needed
+for curved or three-dimensional applications, whereas this benchmark
+uses the leading surface term~\cite{Senior1962}.
+\section{Numerical Example}
+We consider a circular copper conductor of radius 5 mm and conductivity
+5.8e7 S/m.  The Bessel solution of the radial diffusion problem is used
+as the reference.  The
+mixed system is written as
+\begin{equation}
+\label{eq:mixed-block}
+\begin{aligned}
+\begin{bmatrix}K_{bb}(s)&K_{bs}(s)\\K_{sb}(s)&K_{ss}(s)\end{bmatrix}
+\begin{bmatrix}c_b\\c_s\end{bmatrix} &= g(s),\\
+S(s) &= K_{ss}(s)-K_{sb}(s)K_{bb}(s)^{-1}K_{bs}(s).
+\end{aligned}
+\end{equation}
+Here $K_{bb}(s)$, $K_{ss}(s)$, and $K_{bs}(s),K_{sb}(s)$ are the
+bulk, surface, and coupling Galerkin blocks.  Eliminating the bulk
+unknowns in~\eqref{eq:mixed-block} gives the Schur complement, which
+maps surface Dirichlet data to Neumann flux.
+Let $N_b$ denote the number of bulk CLN rungs in the mixed model.  The
+mixed model uses $N_b=2$ and the added leading SIBC surface envelope
+($p_{\mathrm H}=0$) to supply the non-rational skin-effect tail.
+The bulk-only CLN references use order $N=10$, distinct from $N_b$ in the
+mixed model; the L-terminated ladder closes the last rung inductively,
+and the R-terminated ladder closes it resistively.  The Schur composition
+preserves the f^{-1/2} SIBC scaling.
+\begin{figure}
+\caption{Per-unit-length admittance of a circular copper conductor
+(radius 5 mm).  The gray line marks $f_N$, the highest pole frequency
+of the bulk CLN.}
+\end{figure}
+"""
+    r = pw.paper_writing_check_digest_human_review_triggers(tex)
+    assert r["status"] == "clean"
+    assert r["n_findings"] == 0
+
+
 # =====================================================================
 # Figure / equation / table tools
 # =====================================================================
@@ -291,6 +441,25 @@ def test_find_undefined_acronyms_in_text():
         "BEM is faster than FEM.  We use BEM for the open boundary."
     )
     assert isinstance(r, dict)
+
+
+def test_latex_acronym_first_use_accepts_full_name_before_acronym(tmp_path):
+    from radia_mcp.paper_writing._undefined_acronyms import (
+        paper_writing_check_undefined_acronyms,
+    )
+    tex = tmp_path / "paper.tex"
+    tex.write_text(
+        r"\documentclass{article}\begin{document}"
+        r"\begin{abstract}This paper presents a magnetic analysis method."
+        r"\end{abstract}"
+        r"\section{Introduction}"
+        r"We use the Finite Element Method (FEM) for the local solve. "
+        r"The FEM solution is then reduced."
+        r"\end{document}",
+        encoding="utf-8",
+    )
+    r = paper_writing_check_undefined_acronyms(str(tex))
+    assert r["n_undefined"] == 0
 
 
 def test_acronym_usage_audit_low_usage_flagged():

@@ -159,6 +159,13 @@ pip install radia-mcp[radia]          # adds Radia core (radia-coupled servers)
 pip install radia-mcp[full]           # everything above
 ```
 
+Optuna is intentionally external to `radia-mcp`; install the official
+Optuna MCP server separately:
+
+```bash
+pip install --upgrade optuna optuna-mcp
+```
+
 Requires Python ≥ 3.10. Coreform Cubit is auto-discovered from
 standard install paths; set `CUBIT_BIN_DIR` env var if installed
 non-standard.
@@ -239,7 +246,11 @@ Continue, …):
     "build123d":           {"command": "mcp-server-build123d"},
     "gmsh-post":           {"command": "mcp-server-gmsh-post"},
     "differential-forms":  {"command": "mcp-server-differential-forms"},
-    "mathematica":         {"command": "mcp-server-mathematica"}
+    "mathematica":         {"command": "mcp-server-mathematica"},
+    "optuna": {
+      "command": "optuna-mcp",
+      "args": ["--storage", "sqlite:///C:/temp/optuna_mcp.db"]
+    }
   }
 }
 ```

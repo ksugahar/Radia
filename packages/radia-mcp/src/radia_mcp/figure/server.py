@@ -255,6 +255,7 @@ def paper_figure_quality_rules(query: str = "all") -> str:
         'efficiency'      - how axes_area_fraction is computed + thresholds
         'margins'         - per-margin breakdown reading guide
         'units'           - units in parentheses convention (IEEE/IEEJ)
+        'font_family'     - Times New Roman, no fallback
         'font_embedding'  - Type 42 requirement
         'multipanel'      - 1x2 / 2x1 / 2x2 layout tactics
         'side_by_side'    - two figures in 8 cm -> each <= 4 cm,
@@ -350,6 +351,33 @@ EXCEPTION -- two panels side-by-side in 8 cm (each ~4 cm wide):
   See the `side_by_side` topic and the
   'digest_double_column_side_by_side' profile.
 """,
+        "font_family": """\
+[font_family]
+
+LAB RULE: FIGURES ARE GENERATED IN TIMES NEW ROMAN.
+
+Times New Roman is not a preference here; it is the Sugahara Lab
+standard for publication figures.  It matches the expected IEEE /
+IEEJ / Elsevier paper typography and keeps labels, tick text, legends,
+and math-adjacent text visually consistent across figures.
+
+paper_figure(..., use_times_roman=True) is the default and now fails
+loudly if matplotlib cannot resolve Times New Roman.  It does NOT
+silently fall back to DejaVu Serif, Liberation Serif, or a generic
+Times-like family.
+
+Required rcParams (paper_figure() sets these):
+    font.family = 'serif'
+    font.serif  = ['Times New Roman']
+    mathtext.fontset = 'stix'
+
+emit_paper_figure() also checks the save path.  If a figure was built
+outside paper_figure(), it requires rcParams to request Times New Roman
+and scans the final PDF for common serif fallback fonts.
+
+Use use_times_roman=False only for deliberate non-public scratch plots.
+Do not use it for paper, slide, report, or NotebookLM source figures.
+""",
         "no_title_in_figure": """\
 [no_title_in_figure]
 
@@ -371,6 +399,28 @@ Reason:
 emit_paper_figure() defaults to `check_title_in_figure=True` and
 RAISES ValueError when a title is found.  Pass `False` only if you
 are intentionally producing a slide-deck figure (not a paper figure).
+""",
+        "text_overflow": """\
+[text_overflow]
+
+LAB RULE: DIAGRAM TEXT MUST FIT INSIDE THE FIXED FIGURE CANVAS.
+
+Concept diagrams often use `ax.text(...)`, `annotate(...)`, or
+`fig.text(...)` instead of x/y axis labels.  These free labels can be
+cut off at the canvas edge even when ordinary graph checks pass.
+
+emit_paper_figure() defaults to `check_text_overflow=True` and scans
+free diagram text before saving.  If a label extends past the figure
+canvas, it raises with the side and overhang in points.
+
+Fixes:
+  - move the label inside the axes or figure,
+  - shorten the label,
+  - increase aspect / width,
+  - reserve margin with `fig.subplots_adjust(...)`.
+
+Use `audit_text_overflow(fig)` directly while building a diagram to
+inspect offenders before calling `emit_paper_figure()`.
 """,
         "colorblind_safe": """\
 [colorblind_safe]
