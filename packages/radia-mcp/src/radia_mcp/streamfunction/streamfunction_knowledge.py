@@ -5,7 +5,7 @@ The detailed, self-contained knowledge lives in THIS server's own
 ``radia_mcp.streamfunction.knowledge.aca_tsvd`` (overview / method / api /
 kernel_agnostic / performance / cmaes / validation / literature / workflow /
 single_stroke / regularized -- the last carries the folded-Tikhonov + Pareto
-front + sheet-metal (板金) lever section).  It was MOVED here from
+front + sheet-metal lever section).  It was MOVED here from
 ``radia_mcp.radia_ngsolve`` in 2026-06 because SF coil design is not a general
 NGSolve usage and was making radia_ngsolve too large.  This module adds a
 dedicated SF OVERVIEW + topic map and dispatches every other topic to
@@ -70,11 +70,11 @@ WHAT THIS FRAMEWORK PROVIDES
   * Folded TIKHONOV (the "+ alpha I" core) -> the (field homogeneity, PEAK
     current density) PARETO FRONT swept at ~50 us/point, with FOUR stackable
     levers: Tikhonov alpha (L-curve), L-inf minimax, geometry (former size /
-    cylinder length), and SHEET-METAL (板金) surface forming.  [topic: pareto]
-  * Single-stroke ("一筆書き") chain -- connect the contour family into ONE
+    cylinder length), and sheet-metal surface forming.  [topic: pareto]
+  * Single-stroke chain -- connect the contour family into ONE
     continuous wire with least stray-field impact (field_aware / Kuijpers).
     [topic: single_stroke]
-  * Sheet-metal (板金), TWO distinct kinds:
+  * Sheet-metal, TWO distinct kinds:
       - WIRE distortion: bend the manufactured single wire (psi fixed) to
         cancel the single-stroke residual -- one feed, no extra shims.
       - SURFACE forming: reshape the conductor SURFACE + re-solve psi to lower
@@ -106,7 +106,7 @@ TOPIC MAP  (query: streamfunction("<topic>"))
   low_turn          low/many-turn discrete refinement: greedy constructive
                     (--greedy-turns, monotone) + connector-aware; --pin-tiling
                     driven array; --optimize-levels; --distort; single-pass
-  single_stroke     one-wire chain, FE-direct on arbitrary formers, wire 板金
+  single_stroke     one-wire chain, FE-direct on arbitrary formers, wire forming
   cmaes             SA-25-020 CMA-ES outer loop
   performance       ACA+ amortisation numbers
   validation        analytic-benchmark checks
@@ -145,6 +145,15 @@ SF coil-design PANEL + FE-direct calc  (calc_streamfunction.py)
 The GUI panel (radia_streamfunction.py, Layer 3) wraps the headless calc
 ``src/radia/panels/calc_streamfunction.py`` (Layer 4).  ONE argparser drives
 both, with THREE modes (--method):
+
+Standalone launch:
+
+  radia-streamfunction path/to/coil.vol
+
+The Cubit ``Solve -> Radia-NGSolve`` launcher and the standalone entry point
+use the same Layer-3 window and Layer-4 calc scripts.  The command-line
+argument fills the panel's coil/conductor ``.vol`` browse row; each mode keeps
+its own additional inputs such as ``--eval-vol``.
 
   design       target -> A psi = B (folded-Tikhonov RegularizedTSVD) -> psi,
                field homogeneity over the eval region, peak surface current.
@@ -215,9 +224,9 @@ r ~ 1/sqrt|B|) enforces.  Two manufacture refinements:
                     gradient saddle renders correctly).
   --steps-plot p.png  per-step manufacturing 2x2 3D view: (1) equal-current
                     contours (N = --nlevels turns -- this sets the line count),
-                    (2) single-stroke (一筆書き) wire, (3) sheet-metal (板金)
-                    --distort wire, (4) wire WITH thickness (太さ, --wire-diam,
-                    twist-free parallel-transport tube) + distortion.
+                    (2) single-stroke wire, (3) sheet-metal --distort wire,
+                    (4) wire WITH thickness (--wire-diam, twist-free
+                    parallel-transport tube) + distortion.
 
 CHAIN (--chain {field_aware, nn})
 ---------------------------------
@@ -953,9 +962,9 @@ TOPICS = {
     "api": "radia.stream_function API: aca_tsvd, RegularizedTSVD, pseudo_inverse_solve",
     "kernel_agnostic": "callback matrix-entry contract -- coils (Biot-Savart) OR magnets (MMM)",
     "regularized": "regularisation menu (L2/H1/sigma/inductance/L-inf) + folded Tikhonov closed form",
-    "pareto": "(homogeneity, peak current density) Pareto front + 4 levers + sheet-metal (板金)",
-    "sheet_metal": "sheet-metal (板金): wire distortion + surface forming (-> pareto / single_stroke)",
-    "single_stroke": "one-wire (一筆書き) chain, FE-direct on arbitrary formers, wire distortion",
+    "pareto": "(homogeneity, peak current density) Pareto front + 4 levers + sheet-metal",
+    "sheet_metal": "sheet-metal: wire distortion + surface forming (-> pareto / single_stroke)",
+    "single_stroke": "one-wire chain, FE-direct on arbitrary formers, wire distortion",
     "deformation": "surface-deformation outer loop (accuracy) -- see also pareto for the peak front",
     "fe_direct": "FE-direct H1 psi on plane / cylinder / sphere / conformal formers",
     "cmaes": "SA-25-020 CMA-ES outer loop",

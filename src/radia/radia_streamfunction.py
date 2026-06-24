@@ -17,13 +17,27 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from PySide6.QtWidgets import QStackedWidget
-
-from radia_gui_base import (
-    ModePanel, AnalysisWindow, calc_script, msh_output, json_output, run_app,
-)
-
 TITLE = "Radia - Stream-Function Coil Design"
+REQUIRED_LABELS = []
+OPTIONAL_LABELS = []
+OPTIONAL_FILES = {}
+
+try:
+    from radia_gui_base import (
+        ModePanel, AnalysisWindow, calc_script, msh_output, json_output,
+        run_app,
+    )
+    from PySide6.QtWidgets import QStackedWidget
+except ImportError as e:
+    # Standalone panel entry points are often launched from a terminal or from
+    # Cubit as a subprocess; make a missing [gui] extra visible immediately.
+    sys.stderr.write(
+        "Radia stream-function panel requires PySide6 but it could not be "
+        "imported:\n"
+        "  {}\n\n"
+        "Install with:\n"
+        "  pip install --upgrade 'radia[gui]'\n".format(e))
+    sys.exit(1)
 
 _EVAL_BROWSE = {"eval_vol": ("Eval region .vol",
                              "Netgen Vol (*.vol);;All (*)")}
@@ -229,5 +243,9 @@ class StreamFunctionWindow(AnalysisWindow):
             panel._widgets["wp_vol"].setText(self.display_path(vol_path))
 
 
+def main():
+    run_app(StreamFunctionWindow)
+
+
 if __name__ == "__main__":
-    run_app(StreamFunctionWindow, sys.argv)
+    main()
