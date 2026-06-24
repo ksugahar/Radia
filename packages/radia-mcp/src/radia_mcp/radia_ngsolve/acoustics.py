@@ -337,6 +337,77 @@ def planar_mode_radiation_impedance(
     }
 
 
+def baffled_circular_piston_radiation(
+    radius,
+    frequency,
+    surface_velocity=1.0,
+    rho=1.2041,
+    c=343.0,
+):
+    r"""Radiation impedance of a uniformly vibrating circular piston in an infinite baffle.
+
+    A flat circular piston of radius ``a`` with uniform normal velocity ``v0``
+    is the canonical acoustic FEM/BEM boundary example for a baffled speaker,
+    transducer, or duct opening.  The average specific radiation impedance is
+
+        z / (rho c) = 1 - J_1(2ka)/(ka) + i H_1(2ka)/(ka),
+
+    where ``J_1`` is a Bessel function and ``H_1`` is a Struve function.  At low
+    frequency, the radiation resistance scales as ``(ka)^2/2`` and the
+    reactance as ``8 ka/(3 pi)``; at high frequency the resistance tends to the
+    plane-wave value ``rho c``.  Peak phasors are used, so active power is
+    ``0.5 * area * Re(z) * |v0|^2``.
+    """
+
+    a = float(radius)
+    f = float(frequency)
+    rrho = float(rho)
+    cc = float(c)
+    if a <= 0.0:
+        raise ValueError("radius must be > 0")
+    if f <= 0.0:
+        raise ValueError("frequency must be > 0")
+    if rrho <= 0.0:
+        raise ValueError("rho must be > 0")
+    if cc <= 0.0:
+        raise ValueError("c must be > 0")
+
+    from scipy.special import j1, struve
+
+    velocity = complex(surface_velocity)
+    omega = 2.0 * math.pi * f
+    k = omega / cc
+    ka = k * a
+    area = math.pi * a * a
+    resistance_ratio = 1.0 - float(j1(2.0 * ka)) / ka
+    reactance_ratio = float(struve(1, 2.0 * ka)) / ka
+    z_specific = rrho * cc * complex(resistance_ratio, reactance_ratio)
+    volume_velocity = area * velocity
+    z_volume_velocity = z_specific / area
+    radiated_power = 0.5 * area * z_specific.real * abs(velocity) ** 2
+    return {
+        "radius": a,
+        "frequency": f,
+        "omega": omega,
+        "wavenumber": k,
+        "ka": ka,
+        "rho": rrho,
+        "c": cc,
+        "surface_area": area,
+        "surface_velocity": velocity,
+        "volume_velocity": volume_velocity,
+        "specific_impedance": z_specific,
+        "specific_resistance": z_specific.real,
+        "specific_reactance": z_specific.imag,
+        "radiation_efficiency": resistance_ratio,
+        "reactance_ratio": reactance_ratio,
+        "volume_velocity_impedance": z_volume_velocity,
+        "radiated_power": radiated_power,
+        "low_ka_resistance_asymptote": 0.5 * ka * ka,
+        "low_ka_reactance_asymptote": 8.0 * ka / (3.0 * math.pi),
+    }
+
+
 def _specific_spherical_impedance(k_radius, rho, c):
     kr = float(k_radius)
     if kr <= 0.0:
