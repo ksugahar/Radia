@@ -9,11 +9,14 @@ import math
 import os
 import sys
 
+import pytest
+
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil, polar_array,
-                                          linear_array, mirrored, assembly)
+                                          linear_array, mirrored, assembly,
+                                          shape_measurement_row, shape_measurement_rows)
 from build123d import Box, Compound
 
 
@@ -89,6 +92,36 @@ def test_assembly_accepts_raw_primitives():
     assert len(asm.solids()) == 2 and len(asm.children) == 2, "raw primitives are kept, not dropped"
     assert abs(asm.volume - (1.0 + math.pi * 0.5 ** 2 * 2)) < 1e-6
     assert "core" in {c.label for c in asm.children}, "a label on a raw Part carries onto its solid"
+
+
+def test_shape_measurement_row_matches_box_geometry():
+    box = Box(2, 3, 4).solid()
+    box.label = "box"
+    row = shape_measurement_row(box)
+
+    assert row["name"] == "box"
+    assert row["is_valid"]
+    assert row["volume"] == pytest.approx(24.0)
+    assert row["area"] == pytest.approx(52.0)
+    assert row["faces"] == 6
+    assert row["edges"] == 12
+    assert row["vertices"] == 8
+    assert row["solids"] == 1
+    assert row["bounding_box"]["size"] == pytest.approx([2.0, 3.0, 4.0])
+    assert row["characteristic_length"] == pytest.approx(4.0)
+
+
+def test_shape_measurement_rows_follow_assembly_children():
+    left = Box(1, 2, 3).solid()
+    left.label = "left"
+    right = Box(2, 2, 1).solid()
+    right.label = "right"
+    asm = assembly(left, right, label="two_region")
+    rows = shape_measurement_rows(asm)
+
+    assert [row["name"] for row in rows] == ["left", "right"]
+    assert [row["volume"] for row in rows] == pytest.approx([6.0, 4.0])
+    assert [row["area"] for row in rows] == pytest.approx([22.0, 16.0])
 
 
 def test_segment_meshes_in_netgen():

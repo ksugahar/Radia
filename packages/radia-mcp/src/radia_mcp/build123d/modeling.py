@@ -30,6 +30,7 @@ from build123d import (Axis, Box, BuildLine, BuildSketch, CenterArc, Circle, Com
 
 __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_array",
            "mirrored", "assembly",
+           "shape_measurement_row", "shape_measurement_rows",
            # generic solid-modelling operations (constructors / local mods / arrays)
            "swept", "revolved", "lofted", "coil", "helix_centerline_length",
            "round_wire_helix_metrics", "strut", "thicken", "draft_extrude",
@@ -169,6 +170,66 @@ def assembly(*parts, label="assembly"):
         else:
             children.append(p)                   # a bare Solid
     return Compound(children=children, label=label)
+
+
+def shape_measurement_row(shape, name=None, index=1):
+    """Return a JSON-friendly build123d measurement row for one shape.
+
+    The row is intentionally close to Cubit's geometry API vocabulary:
+    volume, surface area, topology counts, and bounding-box size.  It is useful
+    both as a quick sanity report for generated CAD and as the build123d side of
+    a STEP round-trip cross validation against an external geometry kernel.
+    """
+
+    label = name or getattr(shape, "label", "") or f"shape_{index}"
+    bb = shape.bounding_box()
+    faces = shape.faces()
+    edges = shape.edges()
+    vertices = shape.vertices()
+    solids = shape.solids()
+    is_valid = bool(all(s.is_valid for s in solids)) if isinstance(shape, Compound) else bool(shape.is_valid)
+    bbox_size = [float(bb.size.X), float(bb.size.Y), float(bb.size.Z)]
+    return {
+        "index": int(index),
+        "name": str(label),
+        "type": type(shape).__name__,
+        "is_valid": is_valid,
+        "volume": float(shape.volume),
+        "area": float(shape.area),
+        "faces": len(faces),
+        "edges": len(edges),
+        "vertices": len(vertices),
+        "solids": len(solids),
+        "bounding_box": {
+            "min": [float(bb.min.X), float(bb.min.Y), float(bb.min.Z)],
+            "max": [float(bb.max.X), float(bb.max.Y), float(bb.max.Z)],
+            "size": bbox_size,
+        },
+        "characteristic_length": max(bbox_size),
+    }
+
+
+def shape_measurement_rows(shapes):
+    """Return measurement rows for labelled shapes or ``(shape, name)`` tuples.
+
+    If a single labelled :class:`~build123d.Compound` with children is passed,
+    the children are measured as separate rows.  That mirrors multi-region CAE
+    assemblies where each child maps to a material/block.
+    """
+
+    if isinstance(shapes, Compound):
+        items = list(shapes.children) if shapes.children else list(shapes.solids())
+    else:
+        items = list(shapes)
+
+    rows = []
+    for index, item in enumerate(items, start=1):
+        if isinstance(item, tuple) and len(item) == 2:
+            shape, name = item
+        else:
+            shape, name = item, None
+        rows.append(shape_measurement_row(shape, name=name, index=index))
+    return rows
 
 
 # =====================================================================================================
