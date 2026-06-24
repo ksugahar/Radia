@@ -28,7 +28,7 @@ of the methods below, with an analytic sanity check available.
 | One surface patch / sign convention teaching | Local Maxwell traction | ``force.maxwell_stress_tensor_air`` / ``force.maxwell_traction_summary`` |
 | First-order `.vol` boundary triangle force trace | P1 triangle traction load / Maxwell traction / boundary pressure/vector-traction rows | ``force.surface_triangle_constant_traction_load_summary``, ``force.surface_triangle_maxwell_traction_summary``, ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows``, ``NetgenTriTetVolMesh.boundary_traction_force_moment_rows`` |
 | CAD-side analytic box face loads | build123d face pressure / vector traction rows | ``build123d.modeling.box_face_pressure_moment_rows``, ``build123d.modeling.box_face_traction_moment_rows`` |
-| Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
+| Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d``, ``force.planar_lorentz_force_summary``, ``force.parallel_wire_lorentz_force_summary`` |
 | Discrete force rows to net force/torque | Resultant and pivot moment sum | ``force.force_moment_resultant_summary`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
@@ -68,6 +68,19 @@ F = integral J x B dV
 For 2D out-of-plane current ``Jz`` and in-plane ``B=(Bx, By)``:
 ``Fx = -int Jz By dA`` and ``Fy = int Jz Bx dA``.  Pass the total field; the
 self-field integrates to zero by symmetry for the net conductor force.
+
+For two long parallel wires, put wire 1 at the origin and wire 2 at separation
+vector ``r`` in the xy plane.  With positive current along ``+z``:
+
+```text
+B_1(r) = mu0 I1 / (2 pi |r|) (zhat x rhat)
+F_2/L = I2 zhat x B_1 = -mu0 I1 I2 / (2 pi |r|) rhat
+```
+
+Like currents attract, so the right-hand wire feels a force back toward wire 1.
+This is the signed/directional gate behind
+``force.parallel_wire_lorentz_force_summary`` and the scalar
+``solve.two_wire_force_per_length``.
 
 Discrete force rows to force/torque:
 
@@ -242,6 +255,9 @@ careful remeshing.
 - ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_traction_moment.py``:
   build123d analytic box vector-traction moments checked against named `.vol`
   rows.
+- ``examples/electric_machine/validation_planar_lorentz_block_force.py``:
+  planar ``Jz x B`` block force checked against the directional two-wire
+  Lorentz summary.
 - ``examples/electric_machine/validation_virtual_work_force_displacement_sweep.py``:
   displacement energy/coenergy samples to force, including the fixed-current
   versus fixed-flux sign gate.

@@ -660,6 +660,64 @@ def planar_lorentz_force_summary(Jz_A_per_m2, B_xy_T, area_m2=1.0):
     }
 
 
+def _xy_separation_vector(separation_xy_m):
+    try:
+        values = [float(value) for value in separation_xy_m]
+    except TypeError:
+        distance = float(separation_xy_m)
+        if distance <= 0.0:
+            raise ValueError("scalar separation must be > 0")
+        values = [distance, 0.0]
+    if len(values) != 2:
+        raise ValueError("separation_xy_m must be a scalar distance or a 2D vector")
+    distance = math.hypot(values[0], values[1])
+    if distance <= 0.0:
+        raise ValueError("separation_xy_m must be nonzero")
+    return values, distance
+
+
+def parallel_wire_lorentz_force_summary(current1_A, current2_A, separation_xy_m):
+    """Ampere two-wire force as a signed 2D Lorentz-force summary.
+
+    Wire 1 is at the origin, wire 2 is displaced by ``separation_xy_m``, and
+    positive current flows along ``+z``.  The magnetic field from wire 1 at wire
+    2 is evaluated with the right-hand rule, then the force on wire 2 is
+    ``I2 zhat x B1``.  Like currents attract, so for a scalar positive
+    separation the force on wire 2 points in ``-x``.
+    """
+
+    i1 = float(current1_A)
+    i2 = float(current2_A)
+    separation, distance = _xy_separation_vector(separation_xy_m)
+    unit = [separation[0] / distance, separation[1] / distance]
+    tangent = [-unit[1], unit[0]]
+    b_mag = MU0 * i1 / (2.0 * math.pi * distance)
+    field_at_wire2 = [b_mag * tangent[0], b_mag * tangent[1]]
+    signed_ampere_force = MU0 * i1 * i2 / (2.0 * math.pi * distance)
+    force_on_wire2 = [-signed_ampere_force * unit[0], -signed_ampere_force * unit[1]]
+    force_on_wire1 = [signed_ampere_force * unit[0], signed_ampere_force * unit[1]]
+    if signed_ampere_force > 0.0:
+        interaction = "attraction"
+    elif signed_ampere_force < 0.0:
+        interaction = "repulsion"
+    else:
+        interaction = "zero"
+    return {
+        "current1_A": i1,
+        "current2_A": i2,
+        "separation_xy_m": separation,
+        "separation_m": distance,
+        "unit_from_wire1_to_wire2": unit,
+        "right_hand_tangent_at_wire2": tangent,
+        "field_from_wire1_at_wire2_T": field_at_wire2,
+        "signed_ampere_force_per_length_N_per_m": signed_ampere_force,
+        "force_magnitude_per_length_N_per_m": abs(signed_ampere_force),
+        "force_on_wire1_N_per_m": force_on_wire1,
+        "force_on_wire2_N_per_m": force_on_wire2,
+        "interaction": interaction,
+    }
+
+
 def force_moment_resultant_summary(points_m, forces, pivot_m=None):
     """Resultant force and torque from discrete force rows.
 
