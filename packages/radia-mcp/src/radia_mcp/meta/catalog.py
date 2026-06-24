@@ -14,6 +14,8 @@ Each entry:
         "description": str,
         "primary_tools": [str, ...],
         "related": [other short names that pair well],
+        "audit_command": optional heavy validation / repo-audit command,
+        "selftest_command": auto-added from entry_point by list/get helpers,
         "tags": [str, ...]   for filtered queries
     }
 """
@@ -32,6 +34,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Cubit mesh scripting, hex/tet workflow, export formats",
         "primary_tools": ["cubit_exec", "cubit_mesh_auto", "cubit_docs"],
         "related": ["build123d", "gmsh", "radia-ngsolve"],
+        "audit_command": "mcp-server-cubit --selftest --audit-examples",
         "tags": ["cad", "mesh"],
     },
     "build123d": {
@@ -49,6 +52,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "GMSH MSH v4.1 inspect/validate/convert/write_node_data",
         "primary_tools": ["gmsh_usage", "gmsh_reference"],
         "related": ["build123d", "cubit", "radia-ngsolve"],
+        "audit_command": "mcp-server-gmsh --selftest --audit-examples",
         "tags": ["mesh"],
     },
     # ============================================================
@@ -631,9 +635,18 @@ def _resolve_external(name: str) -> str | None:
     return None
 
 
+def _entry(name: str, info: dict[str, Any]) -> dict[str, Any]:
+    """Return a public catalog entry with uniform runtime commands."""
+    out = {"name": name, **info}
+    entry_point = info.get("entry_point")
+    if entry_point:
+        out.setdefault("selftest_command", f"{entry_point} --selftest")
+    return out
+
+
 def list_all() -> list[dict]:
     """Return catalog entries as a flat list."""
-    return [{"name": n, **info} for n, info in CATALOG.items()]
+    return [_entry(n, info) for n, info in CATALOG.items()]
 
 
 def list_external() -> list[dict]:
@@ -651,13 +664,13 @@ def get(name: str) -> dict | None:
         'mcp-server-meta' - full CLI name
     """
     key = _resolve(name)
-    return CATALOG.get(key) if key else None
+    return _entry(key, CATALOG[key]) if key else None
 
 
 def find_by_tag(tag: str) -> list[dict]:
     """All servers tagged with `tag` (e.g. 'optimization')."""
     return [
-        {"name": n, **info}
+        _entry(n, info)
         for n, info in CATALOG.items()
         if tag in info.get("tags", [])
     ]
@@ -683,7 +696,7 @@ def find_related(name: str) -> list[dict]:
     related = []
     for r in info.get("related", []):
         if r in CATALOG:
-            related.append({"name": r, **CATALOG[r]})
+            related.append(_entry(r, CATALOG[r]))
         elif r in EXTERNAL_PACKAGES:
             related.append({"name": r, "external": True, **EXTERNAL_PACKAGES[r]})
 
