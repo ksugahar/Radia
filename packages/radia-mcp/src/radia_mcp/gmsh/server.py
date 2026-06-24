@@ -271,19 +271,22 @@ def gmsh_numsubedges_remediation_plan(directory: str = "examples",
 
     max_items = max(0, min(int(limit), 200))
     affected = []
+    by_directory: Counter[str] = Counter()
     total = 0
     for py_file in sorted(d.rglob("*.py")):
         findings = _lint_file(str(py_file))
         if not any(f.get("rule") == "numsubedges-missing" for f in findings):
             continue
         total += 1
+        rel_for_group = _relative_to_project(py_file)
+        by_directory[str(Path(rel_for_group).parent)] += 1
         if len(affected) >= max_items:
             continue
         try:
             lines = py_file.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             lines = []
-        rel = _relative_to_project(py_file)
+        rel = rel_for_group
         geo_name = f"{py_file.stem}_display.geo"
         affected.append({
             "script": rel,
@@ -305,6 +308,13 @@ def gmsh_numsubedges_remediation_plan(directory: str = "examples",
         "returned": len(affected),
         "truncated": total > len(affected),
         "action": _RULE_REMEDIATIONS["numsubedges-missing"],
+        "directory_groups": [
+            {"directory": directory, "count": count}
+            for directory, count in sorted(
+                by_directory.items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+        ],
         "affected": affected,
     }
 
