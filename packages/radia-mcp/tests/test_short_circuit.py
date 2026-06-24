@@ -15,7 +15,8 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.radia_ngsolve.solve import (short_circuit_dq_currents, characteristic_current,
+from radia_mcp.radia_ngsolve.solve import (short_circuit_dq_currents, short_circuit_operating_point,
+                                           characteristic_current,
                                            dq_torque)
 
 LM, LD, LQ, R, P = 0.1, 0.5e-3, 1.5e-3, 0.05, 4
@@ -29,6 +30,14 @@ def test_characteristic_current():
 def test_short_circuit_equations_and_limit():
     we = 2 * math.pi * 100.0
     id_, iq = short_circuit_dq_currents(R, LD, LQ, LM, we)
+    op = short_circuit_operating_point(R, LD, LQ, LM, we, P)
+    assert op["id"] == pytest.approx(id_)
+    assert op["iq"] == pytest.approx(iq)
+    assert op["current_magnitude"] == pytest.approx(math.hypot(id_, iq))
+    assert op["torque"] == pytest.approx(dq_torque(LM, LD, LQ, id_, iq, P))
+    assert op["mechanical_power"] == pytest.approx(op["torque"] * we / P)
+    assert abs(op["vd_residual"]) < 1e-9
+    assert abs(op["vq_residual"]) < 1e-9
     # the shorted dq voltage equations hold: 0 = R id - we Lq iq ; 0 = R iq + we(Ld id + lm)
     assert abs(R * id_ - we * LQ * iq) < 1e-9
     assert abs(R * iq + we * (LD * id_ + LM)) < 1e-9
@@ -38,6 +47,9 @@ def test_short_circuit_equations_and_limit():
     assert abs(idh + Ich) / Ich < 1e-3
     assert abs(iqh) < 1e-3 * Ich
     assert abs(math.hypot(idh, iqh) - Ich) / Ich < 1e-3
+    oph = short_circuit_operating_point(R, LD, LQ, LM, 2 * math.pi * 1e6, P)
+    assert abs(oph["current_ratio_to_characteristic"] - 1.0) < 1e-3
+    assert abs(oph["d_axis_demag_fraction"] - 1.0) < 1e-3
 
 
 def test_braking_torque_peak_and_decay():
