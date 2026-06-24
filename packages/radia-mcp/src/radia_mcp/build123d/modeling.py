@@ -31,7 +31,8 @@ from build123d import (Axis, Box, BuildLine, BuildSketch, CenterArc, Circle, Com
 __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_array",
            "mirrored", "assembly",
            # generic solid-modelling operations (constructors / local mods / arrays)
-           "swept", "revolved", "lofted", "coil", "strut", "thicken", "draft_extrude",
+           "swept", "revolved", "lofted", "coil", "helix_centerline_length",
+           "round_wire_helix_metrics", "strut", "thicken", "draft_extrude",
            "shell", "fillet_edges", "chamfer_edges", "grid_array", "path_array",
            # boolean / slice / sheet-metal
            "fuse", "cut", "common", "slice_solid", "bend_sheet",
@@ -207,6 +208,55 @@ def coil(profile, pitch, height, radius, label="coil"):
     given ``pitch`` (axial advance per turn), ``height`` and ``radius``.  Solenoids, springs, helical
     conductors.  Returns a labelled :class:`~build123d.Solid` (volume ``= area(profile) * helix length``)."""
     return swept(profile, Helix(pitch=pitch, height=height, radius=radius), label=label)
+
+
+def helix_centerline_length(radius, pitch, height):
+    r"""Centreline length of a constant-radius helix.
+
+    ``pitch`` is the axial advance per turn and ``height`` is the axial span, so
+    ``turns = height / pitch`` and
+
+        ``length = sqrt(height^2 + (2*pi*radius*turns)^2)``.
+
+    This is the analytic length behind :func:`coil`, useful before CAD generation for resistance,
+    copper volume and mesh-size estimates.
+    """
+    radius = float(radius)
+    pitch = float(pitch)
+    height = float(height)
+    if radius < 0.0:
+        raise ValueError("radius must be >= 0")
+    if pitch <= 0.0:
+        raise ValueError("pitch must be > 0")
+    if height < 0.0:
+        raise ValueError("height must be >= 0")
+    turns = height / pitch
+    return math.hypot(height, 2.0 * math.pi * radius * turns)
+
+
+def round_wire_helix_metrics(radius, wire_radius, pitch, height):
+    r"""Pre-CAD metrics for a round wire swept on a constant-radius helix.
+
+    Returns turns, centreline length, circular cross-section area, conductor volume, and
+    ``resistance_per_resistivity = length / area``.  Multiply the last value by material resistivity to
+    get DC resistance before skin/proximity corrections.
+    """
+    wire_radius = float(wire_radius)
+    if wire_radius <= 0.0:
+        raise ValueError("wire_radius must be > 0")
+    length = helix_centerline_length(radius, pitch, height)
+    area = math.pi * wire_radius * wire_radius
+    return {
+        "radius": float(radius),
+        "wire_radius": wire_radius,
+        "pitch": float(pitch),
+        "height": float(height),
+        "turns": float(height) / float(pitch),
+        "centerline_length": length,
+        "cross_section_area": area,
+        "conductor_volume": area * length,
+        "resistance_per_resistivity": length / area,
+    }
 
 
 def strut(p0, p1, radius, label="strut"):
