@@ -588,6 +588,110 @@ def air_gap_shear_torque_summary(
     }
 
 
+def coenergy_torque_from_angle_samples(
+    angles_rad,
+    coenergy_J,
+    periodic=False,
+    period_rad=2.0 * math.pi,
+):
+    """Differentiate a coenergy-vs-angle table into torque samples.
+
+    For fixed currents, the virtual-work torque is
+
+        T(theta) = dW'(theta) / dtheta
+
+    where ``W'`` is magnetic coenergy.  This helper turns an angle sweep into a
+    readable finite-difference table, matching the way motor solvers often
+    report torque from a sequence of rotor-position solves.
+
+    If ``periodic=True``, the first and last samples are wrapped across
+    ``period_rad``; provide one sample per angle and omit the duplicate endpoint.
+    """
+
+    angles = [float(value) for value in angles_rad]
+    values = [float(value) for value in coenergy_J]
+    if len(angles) != len(values):
+        raise ValueError("angles_rad and coenergy_J must have the same length")
+    if len(angles) < 3:
+        raise ValueError("at least three samples are required")
+    if any(angles[i + 1] <= angles[i] for i in range(len(angles) - 1)):
+        raise ValueError("angles_rad must be strictly increasing")
+    period = float(period_rad)
+    if periodic and period <= 0.0:
+        raise ValueError("period_rad must be > 0")
+
+    rows = []
+    n = len(angles)
+    for i, (angle, value) in enumerate(zip(angles, values)):
+        if periodic:
+            im = (i - 1) % n
+            ip = (i + 1) % n
+            angle_minus = angles[im]
+            angle_plus = angles[ip]
+            if im > i:
+                angle_minus -= period
+            if ip < i:
+                angle_plus += period
+            stencil = "central_periodic"
+        elif i == 0:
+            im, ip = 0, 1
+            angle_minus = angles[im]
+            angle_plus = angles[ip]
+            stencil = "forward"
+        elif i == n - 1:
+            im, ip = n - 2, n - 1
+            angle_minus = angles[im]
+            angle_plus = angles[ip]
+            stencil = "backward"
+        else:
+            im, ip = i - 1, i + 1
+            angle_minus = angles[im]
+            angle_plus = angles[ip]
+            stencil = "central"
+
+        denom = angle_plus - angle_minus
+        if denom <= 0.0:
+            raise ValueError("finite-difference angle denominator must be > 0")
+        torque = (values[ip] - values[im]) / denom
+        rows.append({
+            "index": i + 1,
+            "angle_rad": angle,
+            "coenergy_J": value,
+            "torque_Nm": torque,
+            "stencil": stencil,
+            "angle_minus_rad": angle_minus,
+            "angle_plus_rad": angle_plus,
+        })
+    return tuple(rows)
+
+
+def coenergy_torque_summary(
+    angles_rad,
+    coenergy_J,
+    periodic=False,
+    period_rad=2.0 * math.pi,
+):
+    """JSON-friendly summary for coenergy-derived torque samples."""
+
+    rows = list(coenergy_torque_from_angle_samples(
+        angles_rad,
+        coenergy_J,
+        periodic=periodic,
+        period_rad=period_rad,
+    ))
+    torques = [row["torque_Nm"] for row in rows]
+    return {
+        "n_samples": len(rows),
+        "periodic": bool(periodic),
+        "period_rad": float(period_rad),
+        "torque_min_Nm": min(torques),
+        "torque_max_Nm": max(torques),
+        "torque_peak_abs_Nm": max(abs(value) for value in torques),
+        "torque_mean_Nm": sum(torques) / len(torques),
+        "rows": rows,
+    }
+
+
 def _validate_optical_coefficients(absorptance, reflectance):
     absorptance = float(absorptance)
     reflectance = float(reflectance)
