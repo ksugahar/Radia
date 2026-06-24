@@ -13,6 +13,8 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.acoustics import (
     helmholtz_green_3d,
     helmholtz_green_low_frequency_series,
+    planar_helmholtz_dtn_symbol,
+    planar_mode_radiation_impedance,
     pulsating_sphere_radiation,
     spherical_hankel2,
     spherical_helmholtz_dtn_eigenvalue,
@@ -160,3 +162,65 @@ def test_spherical_acoustic_helpers_validate_inputs():
         spherical_helmholtz_dtn_eigenvalue(1.0, 0.0, 0)
     with pytest.raises(ValueError):
         spherical_mode_radiation_impedance(1.0, 0.0, 0)
+
+
+def test_planar_dtn_symbol_matches_normal_oblique_and_evanescent_limits():
+    k = 4.0
+    normal = planar_helmholtz_dtn_symbol(k, 0.0)
+    assert normal["regime"] == "propagating"
+    assert normal["normal_wavenumber"] == pytest.approx(k)
+    assert normal["dtn_eigenvalue"] == pytest.approx(-1j * k)
+    assert abs(normal["symbol_identity_residual"]) < 1.0e-14
+
+    theta = math.radians(60.0)
+    kt = k * math.sin(theta)
+    oblique = planar_helmholtz_dtn_symbol(k, kt)
+    assert oblique["normal_wavenumber"] == pytest.approx(k * math.cos(theta))
+    assert oblique["dtn_eigenvalue"] == pytest.approx(-1j * k * math.cos(theta))
+    assert abs(oblique["symbol_identity_residual"]) < 1.0e-14
+
+    evanescent = planar_helmholtz_dtn_symbol(k, 2.0 * k)
+    assert evanescent["regime"] == "evanescent"
+    assert evanescent["normal_wavenumber"].real == pytest.approx(0.0)
+    assert evanescent["normal_wavenumber"].imag == pytest.approx(-math.sqrt(3.0) * k)
+    assert evanescent["dtn_eigenvalue"].real == pytest.approx(-math.sqrt(3.0) * k)
+    assert evanescent["dtn_eigenvalue"].imag == pytest.approx(0.0)
+    assert abs(evanescent["symbol_identity_residual"]) < 1.0e-14
+
+
+def test_planar_mode_radiation_impedance_angle_and_evanescent_modes():
+    rho = 1.2041
+    c = 343.0
+    f = 1000.0
+    k = 2.0 * math.pi * f / c
+
+    normal = planar_mode_radiation_impedance(f, incidence_angle_rad=0.0, rho=rho, c=c)
+    assert normal["specific_impedance"] == pytest.approx(rho * c)
+    assert normal["normalized_impedance"] == pytest.approx(1.0)
+    assert normal["radiation_efficiency"] == pytest.approx(1.0)
+
+    theta = math.radians(60.0)
+    oblique = planar_mode_radiation_impedance(f, incidence_angle_rad=theta, rho=rho, c=c)
+    assert oblique["normalized_impedance"] == pytest.approx(1.0 / math.cos(theta))
+    assert oblique["dtn_eigenvalue"] == pytest.approx(-1j * k * math.cos(theta))
+
+    evanescent = planar_mode_radiation_impedance(f, tangential_wavenumber=1.5 * k, rho=rho, c=c)
+    assert evanescent["regime"] == "evanescent"
+    assert evanescent["radiation_efficiency"] == pytest.approx(0.0)
+    assert evanescent["reactance_ratio"] == pytest.approx(1.0 / math.sqrt(1.5 * 1.5 - 1.0))
+    assert evanescent["specific_impedance"].imag > 0.0
+
+
+def test_planar_acoustic_helpers_validate_inputs():
+    with pytest.raises(ValueError):
+        planar_helmholtz_dtn_symbol(0.0, 0.0)
+    with pytest.raises(ValueError):
+        planar_helmholtz_dtn_symbol(1.0, -1.0)
+    with pytest.raises(ValueError):
+        planar_mode_radiation_impedance(0.0, incidence_angle_rad=0.0)
+    with pytest.raises(ValueError):
+        planar_mode_radiation_impedance(100.0)
+    with pytest.raises(ValueError):
+        planar_mode_radiation_impedance(100.0, tangential_wavenumber=1.0, incidence_angle_rad=0.0)
+    with pytest.raises(ValueError):
+        planar_mode_radiation_impedance(100.0, incidence_angle_rad=0.5 * math.pi)
