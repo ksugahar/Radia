@@ -42,6 +42,7 @@ See `docs/research/policy/strategy.md` and `toolchain.md` for the full rationale
 | `validation_laminated_stack_region_sweep.py` | Validation-class touching laminated box stack; checks per-layer volumes, fill factor, and named region preservation |
 | `validation_racetrack_plate_air_region.py` | Validation-class racetrack coil + conductive plate + air box; checks analytic region volumes and named region preservation |
 | `validation_build123d_cubit_measurement.py` | Validation-class build123d STEP round-trip measured by headless Cubit API; checks volume and surface-area parity |
+| `validation_enclosure_cubit_measurement.py` | Validation-class enclosing-box/void-region STEP round-trip measured by headless Cubit API; checks bbox margin, analytic volume/area, and Cubit volume/area parity |
 | `runs/` | Output directory (`*.brep` / `*.step`, `*.msh`, `*_post.msh`, `*.json`, `sweep_summary.json`) |
 
 ## Run
@@ -63,6 +64,7 @@ python validation_laminated_stack_region_sweep.py
 python validation_racetrack_plate_air_region.py --quick
 python validation_racetrack_plate_air_region.py
 python validation_build123d_cubit_measurement.py --require-cubit
+python validation_enclosure_cubit_measurement.py --require-cubit
 ```
 
 On a warm Python (all imports cached) the full sweep takes tens of seconds.
@@ -182,6 +184,8 @@ After a run, the `.json` record is a compact summary; the `.brep` +
 - `run_pipeline_multi` assumes **boolean-disjoint regions** (typically
   built as `outer - inner1 - inner2`). Overlapping regions confuse
   `Glue`. Always subtract inner regions from the outer air domain.
+  `shape_envelope_row`, `enclosing_box`, `enclosure_clearance_row`, and
+  `enclosure_difference_region` make that contract explicit before export.
 - No hex path. Cubit (`.jou`) path is a separate scaffold (not yet built).
 - Real solver data (Radia B-field, NGSolve potential) is not wired up —
   see the "Replace the dummy field" note above.

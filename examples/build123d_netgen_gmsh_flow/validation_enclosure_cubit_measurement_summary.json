@@ -1,0 +1,275 @@
+{
+  "checks": {
+    "contained_by_bbox": true,
+    "cubit_available": true,
+    "cubit_bin_name": "Coreform Cubit 2025.12",
+    "max_analytic_area_rel_error": 3.2686311425914033e-16,
+    "max_analytic_volume_rel_error": 3.9505322793289224e-16,
+    "max_cubit_area_rel_error": 1.6343155712957016e-16,
+    "max_cubit_volume_rel_error": 2.633688186219282e-16,
+    "min_bbox_clearance": 0.7000000000000001,
+    "n_analytic_passed": 4,
+    "n_cases": 4,
+    "n_cubit_passed": 4,
+    "nominal_void_volume": 100.53055763976693,
+    "passed": true,
+    "rtol": 1e-05
+  },
+  "clearance": {
+    "clearances": {
+      "xmax": 0.9000000000000004,
+      "xmin": 0.8999999999999999,
+      "ymax": 0.7999999999999998,
+      "ymin": 0.7999999999999998,
+      "zmax": 0.7000000000000002,
+      "zmin": 0.7000000000000001
+    },
+    "contained_by_bbox": true,
+    "enclosure_volume": 107.91600000000003,
+    "inner_envelope": {
+      "center": [
+        -0.050000000000000044,
+        0.0,
+        0.10000000000000003
+      ],
+      "margin": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max": [
+        2.5,
+        1.5,
+        1.1
+      ],
+      "min": [
+        -2.6,
+        -1.5,
+        -0.9
+      ],
+      "n_shapes": 2,
+      "name": "inner",
+      "size": [
+        5.1,
+        3.0,
+        2.0
+      ],
+      "volume": 30.599999999999998
+    },
+    "inner_volume_fraction": 0.06843695429994714,
+    "inner_volume_sum": 7.385442360233098,
+    "min_clearance": 0.7000000000000001,
+    "n_inner_shapes": 2,
+    "name": "enclosure_box",
+    "nominal_void_volume": 100.53055763976693
+  },
+  "elapsed_seconds": 1.148,
+  "kind": "build123d_enclosure_cubit_volume_area_cross_validation",
+  "rows": [
+    {
+      "analytic": {
+        "area": 22.0,
+        "volume": 6.0
+      },
+      "analytic_comparison": {
+        "area_rel_error": 0.0,
+        "build123d_area": 22.0,
+        "build123d_volume": 5.999999999999999,
+        "name": "block",
+        "passed": true,
+        "reference_area": 22.0,
+        "reference_volume": 6.0,
+        "rtol": 1e-05,
+        "volume_rel_error": 1.4802973661668753e-16
+      },
+      "build123d": {
+        "area": 22.0,
+        "bbox_size": [
+          2.0,
+          3.0,
+          1.0
+        ],
+        "edges": 12,
+        "faces": 6,
+        "vertices": 8,
+        "volume": 5.999999999999999
+      },
+      "cubit": {
+        "area": 22.0,
+        "index": 1,
+        "name": "block",
+        "surfaces": 6,
+        "volume": 6.0,
+        "volumes": 1
+      },
+      "cubit_comparison": {
+        "area_rel_error": 0.0,
+        "measured_area": 22.0,
+        "measured_label": "cubit",
+        "measured_volume": 6.0,
+        "name": "block",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 22.0,
+        "reference_volume": 5.999999999999999,
+        "rtol": 1e-05,
+        "volume_rel_error": 1.4802973661668753e-16
+      },
+      "name": "block"
+    },
+    {
+      "analytic": {
+        "area": 10.225884087434775,
+        "volume": 1.3854423602330985
+      },
+      "analytic_comparison": {
+        "area_rel_error": 0.0,
+        "build123d_area": 10.225884087434775,
+        "build123d_volume": 1.3854423602330985,
+        "name": "sleeve",
+        "passed": true,
+        "reference_area": 10.225884087434775,
+        "reference_volume": 1.3854423602330985,
+        "rtol": 1e-05,
+        "volume_rel_error": 0.0
+      },
+      "build123d": {
+        "area": 10.225884087434775,
+        "bbox_size": [
+          1.4,
+          1.4,
+          1.2000000000000002
+        ],
+        "edges": 6,
+        "faces": 4,
+        "vertices": 4,
+        "volume": 1.3854423602330985
+      },
+      "cubit": {
+        "area": 10.225884087434775,
+        "index": 2,
+        "name": "sleeve",
+        "surfaces": 4,
+        "volume": 1.3854423602330983,
+        "volumes": 1
+      },
+      "cubit_comparison": {
+        "area_rel_error": 0.0,
+        "measured_area": 10.225884087434775,
+        "measured_label": "cubit",
+        "measured_volume": 1.3854423602330983,
+        "name": "sleeve",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 10.225884087434775,
+        "reference_volume": 1.3854423602330985,
+        "rtol": 1e-05,
+        "volume_rel_error": 1.6026982521862017e-16
+      },
+      "name": "sleeve"
+    },
+    {
+      "analytic": {
+        "area": 141.67999999999998,
+        "volume": 107.91599999999998
+      },
+      "analytic_comparison": {
+        "area_rel_error": 2.006049508074817e-16,
+        "build123d_area": 141.68,
+        "build123d_volume": 107.91600000000003,
+        "name": "enclosure_box",
+        "passed": true,
+        "reference_area": 141.67999999999998,
+        "reference_volume": 107.91599999999998,
+        "rtol": 1e-05,
+        "volume_rel_error": 3.9505322793289224e-16
+      },
+      "build123d": {
+        "area": 141.68,
+        "bbox_size": [
+          6.9,
+          4.6,
+          3.4000000000000004
+        ],
+        "edges": 12,
+        "faces": 6,
+        "vertices": 8,
+        "volume": 107.91600000000003
+      },
+      "cubit": {
+        "area": 141.68,
+        "index": 3,
+        "name": "enclosure_box",
+        "surfaces": 6,
+        "volume": 107.916,
+        "volumes": 1
+      },
+      "cubit_comparison": {
+        "area_rel_error": 0.0,
+        "measured_area": 141.68,
+        "measured_label": "cubit",
+        "measured_volume": 107.916,
+        "name": "enclosure_box",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 141.68,
+        "reference_volume": 107.91600000000003,
+        "rtol": 1e-05,
+        "volume_rel_error": 2.633688186219282e-16
+      },
+      "name": "enclosure_box"
+    },
+    {
+      "analytic": {
+        "area": 173.90588408743474,
+        "volume": 100.53055763976688
+      },
+      "analytic_comparison": {
+        "area_rel_error": 3.2686311425914033e-16,
+        "build123d_area": 173.9058840874348,
+        "build123d_volume": 100.53055763976691,
+        "name": "enclosure_void",
+        "passed": true,
+        "reference_area": 173.90588408743474,
+        "reference_volume": 100.53055763976688,
+        "rtol": 1e-05,
+        "volume_rel_error": 2.8271711704065213e-16
+      },
+      "build123d": {
+        "area": 173.9058840874348,
+        "bbox_size": [
+          6.9,
+          4.6,
+          3.4000000000000004
+        ],
+        "edges": 30,
+        "faces": 16,
+        "vertices": 20,
+        "volume": 100.53055763976691
+      },
+      "cubit": {
+        "area": 173.90588408743477,
+        "index": 4,
+        "name": "enclosure_void",
+        "surfaces": 16,
+        "volume": 100.5305576397669,
+        "volumes": 1
+      },
+      "cubit_comparison": {
+        "area_rel_error": 1.6343155712957016e-16,
+        "measured_area": 173.90588408743477,
+        "measured_label": "cubit",
+        "measured_volume": 100.5305576397669,
+        "name": "enclosure_void",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 173.9058840874348,
+        "reference_volume": 100.53055763976691,
+        "rtol": 1e-05,
+        "volume_rel_error": 1.4135855852032606e-16
+      },
+      "name": "enclosure_void"
+    }
+  ],
+  "validation_class": true
+}
