@@ -36,7 +36,7 @@ of the methods below, with an analytic sanity check available.
 | Energy/inductance-derived checks | Field energy / virtual work | ``force.magnetic_energy*``, ``force.inductance_*``, ``force.virtual_work_force_*`` |
 | dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
 | Synchronous/induction machine torque curves | Circuit-level machine model | ``solve.synchronous_power_angle_torque`` / ``solve.induction_machine_torque`` |
-| MEMS/electrostatic force | Electric Maxwell stress / weighted stress | ``electrostatics.parallel_plate_capacitor_energy_force``, ``force.electrostatic_traction_summary``, ``force.electrostatic_eggshell_force*`` |
+| MEMS/electrostatic force | Electric Maxwell stress / capacitance gradient / weighted stress | ``electrostatics.parallel_plate_capacitor_energy_force``, ``electrostatics.capacitance_gradient_force_summary``, ``force.electrostatic_traction_summary``, ``force.electrostatic_eggshell_force*`` |
 
 ## Core identities
 
@@ -116,12 +116,17 @@ Electrostatic normal pressure:
 E = V / d
 p = 0.5 eps |E|^2
 F = p A = 0.5 eps A V^2 / d^2 = W / d
+fixed voltage coordinate force: F_x = 0.5 V^2 dC/dx
+fixed charge coordinate force:  F_x = 0.5 Q^2 C^-2 dC/dx
 ```
 
 This is the electric Maxwell-stress twin of magnetic air-gap pressure.  Use the
 parallel-plate identity as the first MEMS/electrostatic force gate, then compare
-the same pressure against ``force.electrostatic_traction_summary`` before moving
-to a full electric weighted-stress extraction.
+the same pressure against ``force.electrostatic_traction_summary``.  For shape
+or displacement sweeps, use ``electrostatics.capacitance_gradient_force_summary``:
+if the coordinate is a gap/height, ``dC/dx`` is usually negative and the signed
+force points toward smaller gap.  Then move to a full electric weighted-stress
+extraction.
 
 RF/time-harmonic radiation pressure at normal incidence:
 
@@ -227,6 +232,9 @@ careful remeshing.
   harmonic analytic gates.
 - ``examples/electrostatics/validation_parallel_plate_electrostatic_force.py``:
   capacitance-energy, Maxwell-pressure, and traction-equivalence gate.
+- ``examples/electrostatics/validation_capacitance_gradient_force.py``:
+  fixed-voltage / fixed-charge capacitance-gradient force with signed
+  gap/closing coordinates.
 - ``examples/rf_waveguide/validation_scattering_radiation_force.py``:
   one-sided normal-incidence scattering force from reflectance/transmittance,
   equivalent to the absorber/reflector radiation-pressure factor.

@@ -21,6 +21,7 @@ from radia_mcp.radia_ngsolve.electrostatics import (
     coaxial_shell_resistance,
     layered_parallel_plate_capacitance,
     parallel_plate_capacitor_energy_force,
+    capacitance_gradient_force_summary,
     dielectric_sphere_polarizability,
     dielectric_sphere_uniform_field,
     uniformly_polarized_sphere_field,
@@ -113,6 +114,32 @@ def test_parallel_plate_capacitor_energy_force():
     assert math.isclose(out2["force"], 4.0 * out["force"], rel_tol=1e-12)
     with pytest.raises(ValueError):
         parallel_plate_capacitor_energy_force(eps_r, area, 0.0, V)
+
+
+def test_capacitance_gradient_force_matches_parallel_plate_gap_force():
+    eps_r, area, gap, voltage = 2.5, 2.0e-4, 5.0e-4, 120.0
+    plate = parallel_plate_capacitor_energy_force(eps_r, area, gap, voltage)
+    dcdgap = -plate["C"] / gap
+    charge = plate["C"] * voltage
+    summary = capacitance_gradient_force_summary(
+        plate["C"],
+        dcdgap,
+        voltage_V=voltage,
+        charge_C=charge,
+    )
+
+    assert summary["fixed_voltage_force_N"] == pytest.approx(-plate["force"])
+    assert summary["fixed_charge_force_N"] == pytest.approx(-plate["force"])
+    assert summary["fixed_voltage_force_N"] == pytest.approx(-plate["energy"] / gap)
+    assert summary["charge_for_voltage_C"] == pytest.approx(charge)
+    assert summary["charge_consistency_error_C"] == pytest.approx(0.0)
+
+
+def test_capacitance_gradient_force_rejects_bad_inputs():
+    with pytest.raises(ValueError):
+        capacitance_gradient_force_summary(0.0, 1.0, voltage_V=1.0)
+    with pytest.raises(ValueError):
+        capacitance_gradient_force_summary(1.0, 1.0)
 
 
 def test_dielectric_sphere_polarizability():

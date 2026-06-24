@@ -150,6 +150,62 @@ def parallel_plate_capacitor_energy_force(eps_r, area, gap, voltage):
     }
 
 
+def capacitance_gradient_force_summary(
+    capacitance_F,
+    dCdx_F_per_m,
+    voltage_V=None,
+    charge_C=None,
+):
+    r"""Electrostatic force from a capacitance gradient.
+
+    For a generalized displacement coordinate ``x`` and capacitance ``C(x)``,
+    the signed force along increasing ``x`` is
+
+        fixed voltage:  F_x = 1/2 V^2 dC/dx ,
+        fixed charge:   F_x = 1/2 Q^2 C^-2 dC/dx .
+
+    The fixed-voltage expression is the coenergy/source-inclusive result; it is
+    the sign convention used in MEMS capacitance-gradient actuators.  If ``x``
+    is a gap or height, ``dC/dx`` is usually negative, so the returned force is
+    negative (attractive, toward smaller gap).  Provide ``voltage_V``,
+    ``charge_C``, or both.  Returns a JSON-friendly summary with whichever
+    force routes were requested.
+    """
+
+    capacitance = float(capacitance_F)
+    gradient = float(dCdx_F_per_m)
+    if capacitance <= 0.0:
+        raise ValueError("capacitance_F must be > 0")
+    if voltage_V is None and charge_C is None:
+        raise ValueError("provide voltage_V, charge_C, or both")
+
+    out = {
+        "capacitance_F": capacitance,
+        "dCdx_F_per_m": gradient,
+    }
+    if voltage_V is not None:
+        voltage = float(voltage_V)
+        force = 0.5 * voltage * voltage * gradient
+        out.update({
+            "voltage_V": voltage,
+            "fixed_voltage_force_N": force,
+            "fixed_voltage_coenergy_gradient_N": force,
+        })
+    if charge_C is not None:
+        charge = float(charge_C)
+        force = 0.5 * charge * charge * gradient / (capacitance * capacitance)
+        out.update({
+            "charge_C": charge,
+            "fixed_charge_force_N": force,
+            "fixed_charge_energy_force_N": force,
+        })
+    if voltage_V is not None and charge_C is not None:
+        consistent_charge = capacitance * float(voltage_V)
+        out["charge_for_voltage_C"] = consistent_charge
+        out["charge_consistency_error_C"] = float(charge_C) - consistent_charge
+    return out
+
+
 def dielectric_sphere_polarizability(radius_a, eps_r):
     r"""Polarizability of a uniform dielectric sphere of radius ``a`` and
     relative permittivity ``eps_r`` in a uniform external field:
