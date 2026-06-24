@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **332 tools** across 39 MCP servers.
+Total: **326 tools** across 38 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|

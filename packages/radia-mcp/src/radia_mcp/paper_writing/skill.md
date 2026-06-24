@@ -364,19 +364,21 @@ The main contributions of this paper are:
 
 ---
 
-## 🚫 NG パターン 11 (journal 特有)
+## 🚫 NG パターン 13 (journal / digest 特有)
 
-1. **Abstract に数式 / 引用** — display math (`\begin{equation}`, `\[...\]`),
-   inline math (`$...$`), `\cite{}` はすべて abstract から除外。
+1. **Abstract に数式 / 引用 / 専門略語** — display math (`\begin{equation}`, `\[...\]`),
+   inline math (`$...$`), `\cite{}` / `[1]`, MMM/FEM/BEM/MCP/LLM などの
+   domain-specific acronym はすべて abstract から除外。
    理由: (a) 検索エンジン (IEEE Xplore / Scopus / Google Scholar) は abstract
    をプレーンテキストとして index → math symbols が garble、(b) self-contained
-   原則 (引用なしで主張が独立して読めるべき)。**例外なし** — 創設論文・先行
+   原則 (引用や略語表なしで主張が独立して読めるべき)。**例外なし** — 創設論文・先行
    研究・共著者論文を引用したくても abstract には名前で言及し `\cite{}` は
    本文に移す ([[project-esim-hollaus-coauthor-bib-2026-05-29]] 参照: 共著者
    への礼儀として abstract に cite したくなる衝動を抑える)。プレーン数値
    ("18%", "50 kHz") は OK、LaTeX math symbols (`$Z_s$`, `$O(h^3)$`,
-   `$\mathcal{E}$`) は NG。`paper_writing_check_abstract_no_math_no_citation`
-   で機械検証 (display + cite = fail, inline math = warning)。
+   `$\mathcal{E}$`) は NG。略語は本文初出で `Finite Element Method (FEM)`
+   のように展開する。`paper_writing_check_abstract_no_math_no_citation`
+   で機械検証 (display + cite = fail, inline math + acronym = warning)。
 2. **Contribution が discussion 調** ("We discuss..." で終わる) — 動詞で宣言
 3. **Abstract に将来形 / 提案形** ("We will show") — 現在形 ("We show")
 4. **fair comparison なし** — 比較対象の条件を揃える (表で明示)
@@ -387,6 +389,73 @@ The main contributions of this paper are:
 9. **cover letter で journal への fit が未言及** — "why this journal"
 10. **response letter が箇条書きなし** — reviewer comment を line-by-line で
 11. **supplementary material に本論の main result** — 本文に移す
+12. **1-page digest に詳細を詰め込みすぎる** — abstract に個別誤差
+    (0.04%, 0.001%, ...) を列挙しない。abstract は
+    "sub-percent accuracy" のような包括表現にし、個別値は本文・図説明へ
+    移す。Warburg 型要素 + Cauer Ladder Network (CLN) のように既知の
+    組合せは「既知」と明示し、novelty は parameter-free Galerkin coupling,
+    Schur complement, SIBC/HOIBC surface envelope などの差分に置く。
+    HOIBC / Warburg などの専門語は
+    本文初出で citation を置く。caption は plotted quantity の同定だけに
+    近づけ、問題設定・解釈・比較は本文で説明する。`rank-(1,1)` のような
+    insider shorthand は "one bulk mode and one surface mode" のように
+    物理的に言い換える。ただし "one bulk mode + one surface mode" は
+    「円形導体全体が基底 2 個で表せる」と誤読されやすいので、有限次の
+    bulk CLN basis と追加 surface envelope/block を明確に分けて書く。
+    図・本文・caption のいずれかで、CLN 側の基底数 (`N_b=2`, `N=10`
+    など) と表面インピーダンス側の次数 (`p_H=0`, leading/zeroth-order
+    SIBC, `p_H>0` の HOIBC など) を必ず明示する。`2-rung CLN + SIBC0`
+    が主張なら、`N_b` と dc 項の含有/非含有をこねずにそのまま書く。
+    `uniform dc term is not included in this count` のような否定形の数え方は
+    1-page digest では読者の負荷になる。`p_H=0` は
+    high-order ではないので、現在のベンチマークを HOIBC 成果として
+    売らず、「この例では leading SIBC term、高次項は曲面・3D などで
+    必要になり得る拡張」と切り分ける。`N_b` は何を数えるかを必ず定義し、uniform dc term を
+    含めるのか、zero-boundary bulk correction functions だけを数えるのかを
+    書く。`N_b` と `N` を同じ図・節で使う場合は、`N_b` は混合モデルの
+    体積補正基底数、`N` は体積のみ CLN 梯子の段数、というように役割を
+    明示して表記ゆれに見せない。L-term / R-term は本文で
+    L-terminated = inductive last rung, R-terminated = resistive last rung
+    と定義する。CLN+表面インピーダンス結合の提案を示す digest で `N_b=1` だけを出すと、
+    「DC + IBC だけではないか」と読まれやすいので、少なくとも bulk
+    補正基底を 2 個使うか、`N_b=1` が十分な理由を本文で説明する。
+    混合 Galerkin / Schur 補の中心式は `\[` ではなく番号付き `equation`
+    環境に置き、本文で `\eqref{...}` する。`K_{bb}`, `K_{sb}` などの
+    ブロックは `K_{bb}(s)` のように周波数依存を明示し、体積・表面・結合
+    Galerkin ブロックのどれかを式の前後で定義する。Schur complement は
+    algebraic elimination の結果であり、Dirichlet-to-Neumann / Steklov--Poincare
+    map はその作用素としての解釈なので、同じ文でいきなり同一視しない。
+    まず「bulk 変数を消去すると Schur 補が得られる」と書き、次に
+    「それが surface Dirichlet data を Neumann flux に写す」と説明する。
+    "high-frequency SIBC scaling" とだけ書くと曖昧なので、意図が
+    admittance の `f^{-1/2}` / `s^{-1/2}` tail なら指数を明示する。
+    CLN と Warburg/表面項の接続問題は「Galerkin 縮約の外」と狭く書かず、
+    「有限段 CLN と接続する際に経験的な遷移周波数でモデルを閉じる」
+    という汎用的な課題として書く。円形導体などのベンチマークは、半径だけ
+    でなく導電率・透磁率・参照解まで本文に書き、再現可能にする。
+    "wall band" / 「壁帯」は少なくとも和文では伝わりにくいので、
+    "skin-effect transition region" / 「表皮効果の遷移領域」を使う。
+    球・立方体・多面体などの secondary geometry は 1ページ digest では
+    原則落とす。
+13. **Human review の汎用知見を使い捨てる** — coauthor / human review で
+    出た指摘のうち、特定原稿だけでなく他の paper / digest / slide にも
+    再発しそうなものは、その場の修正だけで終わらせず、radia-mcp の
+    paper-writing policy / skill / checker / tests に反映する。具体的には、
+    (a) 文章ルールなら本ファイルと `_em_paper_style.py` に追加、(b) 機械検出
+    できるなら `paper_writing_check_*` に warning として追加、(c) bad / clean
+    test を最低 1 組追加する。原稿固有の数値・著者判断・未確定な約束は
+    汎用ルール化しない。
+    図については、本文の該当 section より前に main result figure を浮かせない、
+    "Verification." を太字段落に埋めず必要なら `Numerical Example` などの
+    番号付き章にする、図中の `$f_N$` などの基準線は caption または図中ラベルで
+    何を示すか明示する、縦幅を潰して可読性を犠牲にしない、という指摘を
+    digest 汎用ルールとして扱う。図は原則として `figure` 環境を使い、
+    TeX ソース上も該当 section の直後に置く。`float` package の `[H]`、
+    `\refstepcounter{figure}` + 手書き caption、`minipage` による非float図、
+    `\clearpage` / `\newpage` による強制配置は最終手段であり、まず本文量・
+    図幅・caption長・figureのソース位置を調整する。full-paper 予告は、実際に検証計画がある場合だけ
+    "will examine extension to three-dimensional conductors" 程度に留め、1-page
+    digest の現在成果として 3D 結果を匂わせない。
 
 ---
 
@@ -885,7 +954,8 @@ A+B→C が揃って初めて Discussion として機能する。
 - `paper_writing_check_subject_verb_distance` — 主述の物理距離
 - `paper_writing_check_paragraph_length` — 段落字数の範囲
 - `paper_writing_check_abstract_background_ratio` — abstract 内 background 比率
-- `paper_writing_check_abstract_no_math_no_citation` — **abstract に数式 (TeX math) や `\cite{}` が混入していないかチェック** (IEEE / Elsevier / Springer / Nature / Science 共通の慣習: abstract は self-contained + 検索エンジン indexing 可能であるべき)。Display math (`\begin{equation}`/`\[...\]`) と `\cite{}` は `status="fail"`、inline math (`$...$`) は `status="warning"`、両方なしなら `status="clean"`。
+- `paper_writing_check_abstract_no_math_no_citation` — **abstract に数式 (TeX math)、`\cite{}` / `[1]`、domain-specific acronym (MMM/FEM/BEM/MCP/LLM など) が混入していないかチェック** (IEEE / Elsevier / Springer / Nature / Science 共通の慣習: abstract は self-contained + 検索エンジン indexing 可能であるべき)。Display math (`\begin{equation}`/`\[...\]`) と citation は `status="fail"`、inline math (`$...$`) と acronym は `status="warning"`、両方なしなら `status="clean"`。
+- `paper_writing_check_digest_human_review_triggers(tex_or_text)` — **1-page digest の human review trigger を検出**。abstract の個別 percent error 列挙、Warburg/CLN 既知事項を novelty として見せる書き方、経験的な接続周波数の問題を Galerkin 限定に見せる表現、HOIBC/Warburg 初出 citation 不足、説明過多 caption、`rank-(1,1)` 型の不透明 shorthand、「基底 2 個で円形導体を表せる」と誤読される minimal-basis 表現、重要な Schur/ブロック式の無番号・未ラベル・本文未引用、`K_{bb}`/`K_{sb}` などの `(s)` 依存や体積・表面・結合ブロック定義不足、`N_b` の定義不足、`N_b=1` が DC+IBC と誤読される構成、CLN 基底数 / HOIBC 次数の未記載、円形導体ベンチマークの導電率・参照解不足、"wall band" / 「壁帯」の不明瞭語、main result figure が Numerical Example / Verification より前に浮く配置、検証節が太字段落に埋まる構成、`$f_N$` など未説明の基準線、球・立方体・多面体まで盛る scope creep を `status="warning"` で返す。`paper_writing_em_submission_gate` からも自動実行。
 - `paper_writing_check_undefined_acronyms(tex_path)` — **略語 (IH, MQS, FEM, BEM, ...) が初出時に full name と並記されているかチェック**。`Full Name (ACRONYM)` または `ACRONYM (Full Name)` パターン (初出の ±80 文字以内)、または Nomenclature / Acronyms / Abbreviations section に listed があれば OK。万人共通の略語 (PDF, USA, CPU, USB, ...) のみ whitelist、研究室 EM 専門用語 (FEM/BEM/MQS/IH) は意図的に whitelist 外 → 必ず spell out 必要。`extra_whitelist="ABC,XYZ"` で institutional 略語追加可。
 - `paper_writing_check_citation_keys_exist(tex_path, bib_path)` — **`\cite{key}` の key が `.bib` の entry に存在するか静的チェック**。`status="fail"` = 引用キーが bib にない (compile 時 `[?]` で render される)、`status="warning"` = bib にあるが cite されていない entry あり (cleanup 推奨)、`status="clean"` = 1-to-1 一致。`\input{}` chain も自動 resolve (`auto_resolve_inputs=True` default)。bibtex compile 前の sanity check として使う。
 - `paper_writing_check_ref_label_consistency(tex_path)` — **`\ref{}` / `\eqref{}` / `\autoref{}` / `\cref{}` / `\pageref{}` の key が `\label{}` に対応するか静的チェック**。`status="fail"` = dangling ref (PDF で `[??]` 表示)、`status="warning"` = orphan label (本文で言及していない figure/eq/table = digest で空間浪費)、`status="clean"` = 1-to-1 一致。digest review の典型指摘 "Fig. 3 is never referenced" を pre-compile で catch。

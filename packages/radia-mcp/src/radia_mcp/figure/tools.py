@@ -650,7 +650,7 @@ def apply_lab_style(target: str = "digest_double_column_side_by_side",
     """Set matplotlib rcParams to Sugahara-Lab style and return figsize.
 
     Side effect: mutates ``plt.rcParams`` to match the lab style guide:
-    Times New Roman (or sans fallback), tight axes, proper line/marker
+    Times New Roman, tight axes, proper line/marker
     sizes for the chosen embed width.  Idempotent — safe to call multiple
     times within a script.
 
@@ -658,10 +658,11 @@ def apply_lab_style(target: str = "digest_double_column_side_by_side",
         (width_in, height_in) for use in ``plt.subplots(figsize=...)``.
 
     Notes:
-        - If Times New Roman is not installed on the system, falls back
-          to DejaVu Serif (still serif, IEEE-compatible).  Set
-          ``use_times_roman=False`` to skip the font setting altogether
-          (use whatever rcParams default).
+        - Times New Roman is the Sugahara Lab standard.  If it is not
+          installed, this function raises instead of silently falling
+          back to DejaVu / Liberation / generic Times.
+        - Set ``use_times_roman=False`` only for deliberate non-public
+          drafts where font standard enforcement is not desired.
         - Caller should still:
           * call ``ax.set_title('')`` to remove any default title (lab
             style forbids in-figure titles; description goes in LaTeX
@@ -729,22 +730,28 @@ def apply_lab_style(target: str = "digest_double_column_side_by_side",
         "ps.fonttype": 42,
     }
     if use_times_roman:
-        # Try Times New Roman; fall back gracefully if unavailable.
-        # ALSO unify mathtext fontset so $...$ math renders in matching serif.
-        available = {f.name for f in matplotlib.font_manager.fontManager.ttflist}
-        if "Times New Roman" in available:
-            rc["font.family"] = "serif"
-            rc["font.serif"] = ["Times New Roman"] + plt.rcParams.get(
-                "font.serif", [])
-            rc["mathtext.fontset"] = "stix"   # matches Times metrics
-        elif "Times" in available:
-            rc["font.family"] = "serif"
-            rc["font.serif"] = ["Times"] + plt.rcParams.get("font.serif", [])
-            rc["mathtext.fontset"] = "stix"
-        else:
-            rc["font.family"] = "serif"
-            rc["font.serif"] = ["DejaVu Serif"]
-            rc["mathtext.fontset"] = "dejavuserif"
+        # Lab standard: Times New Roman, fail-loud on missing font.
+        import os
+        try:
+            path = matplotlib.font_manager.findfont(
+                "Times New Roman", fallback_to_default=False
+            )
+        except Exception as e:
+            raise RuntimeError(
+                "Times New Roman is required by the Sugahara Lab figure "
+                "standard, but matplotlib cannot resolve it. Install Times "
+                "New Roman and rebuild the matplotlib font cache "
+                "(matplotlib.font_manager._load_fontmanager("
+                "try_read_cache=False))."
+            ) from e
+        if not path or "times" not in os.path.basename(str(path)).lower():
+            raise RuntimeError(
+                "Times New Roman is required by the Sugahara Lab figure "
+                f"standard, but matplotlib resolved {path!r}."
+            )
+        rc["font.family"] = "serif"
+        rc["font.serif"] = ["Times New Roman"]
+        rc["mathtext.fontset"] = "stix"   # matches Times metrics
         # Italic math variables (lab style: '{\\itB} (T)', '{\\itH} (kA/m)')
         rc["mathtext.default"] = "it"
 

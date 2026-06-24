@@ -11,7 +11,10 @@ crystallized as its own package.
   `mcp-server-optuna` entry point.  Optuna operation now belongs to the
   official public `optuna/optuna-mcp`; radia-mcp keeps the CAE objective,
   Bayesian/surrogate, evolutionary, and topology-optimization knowledge
-  layers that pair with that external server.
+  layers that pair with that external server.  Install the official
+  server separately with `pip install --upgrade optuna optuna-mcp` and
+  run it as `optuna-mcp` (optionally with
+  `--storage sqlite:///C:/temp/optuna_mcp.db` for persistence).
 - **radia-ngsolve (dtn_coarse_mesh, accuracy)**: tightened the `p`-method
   claim after an adversarial methodology review. "mode `n` exact iff order
   `p ≥ n`" is precise only in the **reference space** / 2-D; on the curved

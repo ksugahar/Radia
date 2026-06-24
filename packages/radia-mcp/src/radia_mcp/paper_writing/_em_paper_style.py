@@ -331,6 +331,39 @@ EQUATION_TYPESETTING = r"""
   (b) immediately after it ("where $X$ is ...").
   Reviewers WILL flag undefined variables.
 
+  For reduced-order / Schur-complement papers, this also applies to
+  block matrices and model-order symbols.  Write frequency-domain blocks
+  as `K_{bb}(s)`, `K_{bs}(s)`, `K_{sb}(s)`, `K_{ss}(s)` when they depend
+  on `s`, and define them in words as bulk, surface, and coupling
+  Galerkin blocks.  If the result is really "two-rung CLN + SIBC",
+  say that directly; do not make the reader parse whether a uniform dc
+  term is included in `N_b`.  Define `N_b` explicitly only when the
+  symbol is needed: what kind of rung/mode/basis function it counts.
+  If `N_b` and `N` both appear, state the distinction instead of relying
+  on convention; e.g. `N_b` counts mixed-model bulk correction functions,
+  whereas `N` is the order of the bulk-only CLN ladder.
+  For surface-impedance expansions, define the surface order explicitly.
+  In particular, `p_H=0` is the leading SIBC term, not a high-order
+  impedance-boundary result.  If the manuscript also mentions HOIBC, make
+  the separation clear: the present benchmark uses the leading SIBC term,
+  while higher-order impedance terms are the extension needed in some
+  curved or three-dimensional applications.
+  If L/R CLN terminations appear in a figure or caption, define them:
+  L-terminated means the last rung is closed inductively, and
+  R-terminated means it is closed resistively.  State whether `N=10`
+  is a rung, mode, or basis count.
+
+  Do not equate a Schur complement with a Dirichlet-to-Neumann /
+  Steklov-Poincare map in a single unexplained sentence.  The Schur
+  complement is the algebraic result of eliminating unknowns; the DtN
+  map is the interpretation that the resulting block maps surface
+  Dirichlet data to Neumann flux.  Write those two steps explicitly.
+
+  The core method equation should be numbered, labeled, and cited in
+  prose.  Do not leave the main block system in `\\[ ... \\]` with no
+  equation number, and do not number an equation that is never mentioned
+  by `\\eqref{...}` / `\\ref{...}`.
+
 ## Units inside equations: AVOID
 
   Wrong:  $f = 50~\\mathrm{Hz}$
@@ -525,7 +558,15 @@ ABSTRACT_AND_CONCISENESS = r"""
    exception" and had to be stripped on review — the renumbering to a
    body-order number is the intended outcome, not a problem to avoid.)
 
-These two rules are enforced by
+3. **NO domain-specific acronyms in the abstract.**
+   Avoid abbreviations such as MMM, FEM, BEM, MCP, or LLM in the
+   abstract, even if they are familiar inside the lab.  Write the
+   abstract in plain words, then introduce acronyms at their first body
+   use: `Finite Element Method (FEM)`, `magnetic moment method (MMM)`,
+   etc.  Universal acronyms such as PDF, USB, or CPU are ignored by the
+   checker.
+
+These rules are enforced by
 `paper_writing_check_abstract_no_math_no_citation` (and the
 `em_submission_gate` runs it automatically).  Violations are a
 reviewer-visible, database-visible defect.
@@ -558,8 +599,8 @@ Why this matters:
 
 ## How to apply
 
-  1. Draft the abstract in plain prose; remove every `$...$` and
-     every `\cite{}` — verify with
+  1. Draft the abstract in plain prose; remove every `$...$`,
+     `\cite{}` / `[1]`, and domain-specific acronym — verify with
      `paper_writing_check_abstract_no_math_no_citation`.
   2. If over the page limit, FIRST cut scope (secondary results,
      redundant figures), THEN check fit — do not reach for smaller
@@ -569,10 +610,57 @@ Why this matters:
 
 ## Cross-reference
 
-- `paper_writing_check_abstract_no_math_no_citation` — enforces rules 1-2.
+- `paper_writing_check_abstract_no_math_no_citation` — enforces rules 1-3.
 - `paper_writing_validate_abstract_length` — abstract length.
 - `bilingual` topic — page limit applies to the EN submission only.
 - `reviewer_patterns` #7 — "figure font too small" over-compression flag.
+"""
+
+
+HUMAN_REVIEW_LEARNING_POLICY = r"""
+# Human-review learning policy
+
+When a coauthor or human review finds a problem that is generic rather
+than manuscript-specific, do not treat it as a one-off edit.  Convert it
+into the paper-writing knowledge layer.
+
+## What counts as generic
+
+- Abstract conventions that will recur across venues: no math, no
+  citation markers, no local acronyms, no lists of exact percent errors.
+- Digest structure problems: main result figures floating before the
+  section that explains them, a numerical example hidden inside a bold
+  paragraph instead of a numbered section, or a one-page digest promising
+  too many future geometries.
+- Figure placement policy: use the standard LaTeX `figure` environment
+  whenever possible and place it in the source immediately after the
+  relevant section heading / first reference.  The `float` package with
+  `[H]`, manual `\refstepcounter{figure}` captions, non-float minipage
+  figures, and forced `\clearpage` / `\newpage` placement are last
+  resorts.  First reduce text, figure width, caption length, or move the
+  `figure` environment to the correct source position.
+- Figure readability problems: over-compressed aspect ratio, result
+  labels such as `f_N` that do not state what they mark, or captions that
+  carry interpretation that belongs in the text.
+- Reproducibility omissions in standard benchmarks: missing material
+  properties, reference solutions, model order, or boundary-condition
+  order.
+
+## Required action
+
+For each generic lesson, update at least one durable artifact:
+
+1. `paper_writing/skill.md` for prose policy.
+2. `_em_paper_style.py` when the rule should be returned by
+   `paper_writing_em_paper_style(...)`.
+3. `paper_writing_check_*` plus bad/clean tests when the pattern is
+   mechanically detectable.
+
+Do not generalize manuscript-specific numbers, author preferences, or
+unconfirmed future-work promises.  A full-paper outlook such as
+"extension to three-dimensional conductors will be examined" is allowed
+only when it is a real plan and is clearly framed as future scope, not as
+a current digest result.
 """
 
 
@@ -797,6 +885,9 @@ TOPICS = {
     "no_citation_abstract":      ABSTRACT_AND_CONCISENESS,
     "no_cite":                   ABSTRACT_AND_CONCISENESS,
     "citation_in_abstract":      ABSTRACT_AND_CONCISENESS,
+    "human_review_learning":     HUMAN_REVIEW_LEARNING_POLICY,
+    "review_learning":           HUMAN_REVIEW_LEARNING_POLICY,
+    "policy_learning":           HUMAN_REVIEW_LEARNING_POLICY,
     "bilingual":                 BILINGUAL_WORKFLOW,
     "bilingual_workflow":        BILINGUAL_WORKFLOW,
     "japanese_translation":      BILINGUAL_WORKFLOW,
@@ -1152,6 +1243,20 @@ def paper_writing_em_submission_gate(
                  r)
         except Exception as e:  # noqa: BLE001
             _add("ieee_keywords", "skip", f"tool error: {e}")
+
+        # 2026-06-24: one-page digest human-review triggers
+        try:
+            r = _t.paper_writing_check_digest_human_review_triggers(_scan_tex)
+            st = r.get("status", "skip")
+            status = "warn" if st == "warning" else "pass"
+            _add("digest_human_review_triggers",
+                 status,
+                 (f"{r.get('n_findings', 0)} digest-specific "
+                  "human-review triggers"),
+                 r)
+        except Exception as e:  # noqa: BLE001
+            _add("digest_human_review_triggers", "skip",
+                 f"tool error: {e}")
     else:
         _add("tex_checks", "skip", "no tex_path supplied")
 
@@ -1260,7 +1365,8 @@ def paper_writing_em_submission_gate(
                  status,
                  (f"display_math={r.get('n_math_display', 0)}, "
                   f"inline_math={r.get('n_math_inline', 0)}, "
-                  f"citations={r.get('n_citations', 0)}"),
+                  f"citations={r.get('n_citations', 0)}, "
+                  f"acronyms={r.get('n_acronyms', 0)}"),
                  r)
         except Exception as e:  # noqa: BLE001
             _add("abstract_no_math_no_citation", "skip",

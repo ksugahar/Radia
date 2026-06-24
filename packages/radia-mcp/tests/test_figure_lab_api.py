@@ -133,8 +133,35 @@ def test_save_lab_figure_raises_on_unfixable_clip(tmp_path):
     ax.set_position([0.0, 0.0, 1.0, 1.0])
     ax.plot([0, 1], [0, 1]); ax.set_xlabel("clipped x label"); ax.set_ylabel("clipped y label")
     with pytest.raises(ValueError, match="overflow the figure canvas"):
-        save_lab_figure(fig, str(tmp_path / "clip"), 8.0, save_pdf=False, tighten=False)
+        save_lab_figure(
+            fig, str(tmp_path / "clip"), 8.0, save_pdf=False, tighten=False,
+            check_times_new_roman=False,
+        )
     plt.close(fig)
+
+
+@requires_tnr
+def test_save_lab_figure_raises_when_times_new_roman_not_requested(tmp_path):
+    """save_lab_figure() is a lab-standard save path, so bare DejaVu rcParams fail."""
+    import matplotlib.pyplot as plt
+    old_family = plt.rcParams["font.family"]
+    old_serif = list(plt.rcParams["font.serif"])
+    try:
+        plt.rcParams["font.family"] = "serif"
+        plt.rcParams["font.serif"] = ["DejaVu Serif"]
+        fig, ax = plt.subplots(figsize=(3, 2))
+        ax.plot([0, 1], [0, 1])
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        with pytest.raises(RuntimeError, match="Times New Roman"):
+            save_lab_figure(
+                fig, str(tmp_path / "badfont"), 8.0, save_pdf=False,
+                check_label_overflow=False,
+            )
+    finally:
+        plt.rcParams["font.family"] = old_family
+        plt.rcParams["font.serif"] = old_serif
+        plt.close("all")
 
 
 @requires_tnr
