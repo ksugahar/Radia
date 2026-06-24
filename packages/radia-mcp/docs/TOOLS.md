@@ -203,7 +203,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 
 ## `mcp-server-radia-streamfunction`
 
-_Stream-function coil design: (ACA+)+TSVD least-norm, FE-direct psi, regularisation / folded-Tikhonov Pareto front, single-stroke chain, sheet-metal (板金) levers_
+_Stream-function coil design: (ACA+)+TSVD least-norm, FE-direct psi, regularisation / folded-Tikhonov Pareto front, single-stroke chain, sheet-metal levers_
 
 Module: `radia_mcp.streamfunction.server`
 

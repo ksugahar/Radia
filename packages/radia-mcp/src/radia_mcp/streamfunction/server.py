@@ -11,8 +11,8 @@ SF-focused front door for the Radia stream-function coil-design framework:
   onto ONE ACA factorisation via RegularizedTSVD; folded TIKHONOV ("+ alpha I"
   core) -> the (field homogeneity, PEAK current density) PARETO FRONT
 - Four stackable levers to push the front: Tikhonov alpha (L-curve), L-inf
-  minimax, geometry (former size / cylinder length), SHEET-METAL (板金) forming
-- Single-stroke ("一筆書き") chain + sheet-metal wire distortion (one feed)
+  minimax, geometry (former size / cylinder length), sheet-metal forming
+- Single-stroke chain + sheet-metal wire distortion (one feed)
 
 The detailed knowledge lives in this server's own
 ``radia_mcp.streamfunction.knowledge.aca_tsvd`` (moved from radia-ngsolve in
@@ -20,6 +20,7 @@ The detailed knowledge lives in this server's own
 tool adds a dedicated SF overview + topic map over that knowledge.
 
 Usage:
+    radia-streamfunction path/to/coil.vol       # Start GUI panel
     mcp-server-radia-streamfunction              # Start MCP server (stdio)
     mcp-server-radia-streamfunction --selftest   # Run self-test
 """
@@ -58,7 +59,7 @@ def streamfunction(topic: str = "overview") -> str:
             "kernel_agnostic" - callback matrix entry (coils OR magnets)
             "regularized"     - regularisation menu + folded Tikhonov closed form
             "pareto"          - (homogeneity, peak current density) Pareto
-                                front + 4 levers + sheet-metal (板金) forming
+                                front + 4 levers + sheet-metal forming
             "material_aware"  - SF design WITH IRON (--iron-vol): Kelvin-FEM
                                 reaction folded into the whole pipeline,
                                 obs-adjoint scalability, exact-quad source
@@ -106,7 +107,7 @@ def new_sf_coil_design(target: str = "uniform Bz") -> str:
         "   L-inf for a peak cap.\n"
         "3. If you care about (field homogeneity vs PEAK current density),\n"
         "   trace and PUSH the Pareto front: streamfunction('pareto')\n"
-        "   -- Tikhonov alpha (L-curve) + L-inf + geometry + sheet-metal (板金)\n"
+        "   -- Tikhonov alpha (L-curve) + L-inf + geometry + sheet-metal\n"
         "   forming.  Folded Tikhonov sweeps the front at ~50 us/point.\n"
         "4. Extract equal-increment iso-contours and connect them into ONE\n"
         "   wire: streamfunction('single_stroke') (field_aware / Kuijpers).\n"
@@ -126,7 +127,7 @@ register_status_tool(
     server_name='mcp-server-radia-streamfunction',
     description='Stream-function coil design: (ACA+)+TSVD least-norm, FE-direct '
                 'psi, regularisation / folded-Tikhonov Pareto front, '
-                'single-stroke chain, sheet-metal (板金) levers',
+                'single-stroke chain, sheet-metal levers',
     subpackage='radia_mcp.streamfunction',
     related_servers=["radia-ngsolve", "bayesian-opt", "nmr-mri",
                      "electromagnet", "peec"],
@@ -155,8 +156,7 @@ def main():
         print(f"  new_sf_coil_design('uniform Bz'): {len(prompt)} chars")
         assert "single_stroke" in prompt
         # the Pareto / sheet-metal section must be reachable
-        assert "板金" in streamfunction("pareto") or \
-               "sheet-metal" in streamfunction("pareto")
+        assert "sheet-metal" in streamfunction("pareto")
         print("  PASSED")
         return
 

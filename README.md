@@ -395,7 +395,7 @@ The 3 PyPI packages above are the **full lab-standard install**:
 
 **`[cubit,gui]` extras are MANDATORY for production**:
 - `[cubit]` brings in `cubit-mesh-export` (curved mesh export + `cubit-plugin-install` CLI)
-- `[gui]` brings in PySide6 (without this, `radia-em` / `radia-ih` / `radia-pcb` / `radia-heat` standalone panels die with `ModuleNotFoundError: No module named 'PySide6'`)
+- `[gui]` brings in PySide6 (without this, `radia-em` / `radia-ih` / `radia-pcb` / `radia-streamfunction` standalone panels die with `ModuleNotFoundError: No module named 'PySide6'`)
 
 **Pinning versions** (e.g. `==4.90.2`) is recommended for production / lab deploys so all team machines run an identical, audited combination.  Drop the `==` to track latest.
 
@@ -419,7 +419,9 @@ radia-ih   [model.vol]    # Induction Heating: PEEC inductance / BEM-A inductanc
                           #                    PEEC+BEM weak / BEM-A+BEM weak /
                           #                    PEEC+FEM-Kelvin / FEM-FULL
 radia-pcb                 # PCB / FastHenry .inp (no .vol needed)
-radia-heat [results.vol]  # Thermal post-processing (q_surf -> T field)
+radia-streamfunction [coil.vol]
+                          # Stream-function coil design: Design / Pareto /
+                          # Manufacture / Volume 3D
 ```
 
 Pass the `.vol` path on the command line to open the panel pre-pointed at it, or omit the argument and use the in-panel `Model (.vol): [Browse...]` field.

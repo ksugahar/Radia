@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -256,6 +257,17 @@ class TestSaveRestore:
 # Window: launcher .vol overrides the restored coil wp_vol
 # ============================================================
 class TestWindowVolOverride:
+
+    def test_module_contract_and_console_script(self):
+        import radia_streamfunction as mod
+        scripts = tomllib.loads((REPO / "pyproject.toml").read_text(
+            encoding="utf-8"))["project"]["scripts"]
+        assert callable(mod.main)
+        assert mod.REQUIRED_LABELS == []
+        assert mod.OPTIONAL_LABELS == []
+        assert mod.OPTIONAL_FILES == {}
+        assert scripts["radia-streamfunction"] == (
+            "radia.radia_streamfunction:main")
 
     def test_launcher_vol_fills_wp_vol(self, qapp, tmp_path):
         """StreamFunctionWindow must restore settings AND let the constructor

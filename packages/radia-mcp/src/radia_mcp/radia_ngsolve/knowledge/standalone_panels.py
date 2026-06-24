@@ -1,6 +1,6 @@
 """
 Cubit-bypass standalone launch of the four Radia-NGSolve panels —
-how to run radia-ih / radia-em / radia-pcb / radia-heat as plain
+how to run radia-ih / radia-em / radia-pcb / radia-streamfunction as plain
 PySide6 desktop apps without Cubit installed.
 
 Read this when:
@@ -20,7 +20,7 @@ troubleshooting.
 STANDALONE_PANELS = """\
 # Radia-NGSolve standalone panel launch (Cubit-bypass)
 
-The four PySide6 panels (radia-ih, radia-em, radia-pcb, radia-heat)
+The four PySide6 panels (radia-ih, radia-em, radia-pcb, radia-streamfunction)
 are designed to run **as plain desktop apps without Cubit**.  Each
 ships as a console entry-point installed by
 `pip install radia[cubit,gui]` (or `radia[gui]` if you don't need the
@@ -47,7 +47,7 @@ background.  Cubit literally does not appear anywhere in this flow.
 pip install --upgrade "radia[gui]" radia-mcp
 
 :: 2. confirm the four .exe launchers are on PATH.
-where radia-ih radia-em radia-pcb radia-heat
+where radia-ih radia-em radia-pcb radia-streamfunction
 
 :: 3. launch the IH panel pre-pointed at your .vol.
 ::    The panel pops up directly as a desktop app.
@@ -56,6 +56,9 @@ radia-ih C:\\path\\to\\model.vol
 :: (optional) launch with no argument and use the in-panel
 ::            Working folder + per-method Browse fields instead.
 radia-ih
+
+:: (optional) launch the stream-function coil-design panel.
+radia-streamfunction C:\\path\\to\\coil.vol
 ```
 
 Where does `model.vol` come from?  See the `vol_sources` topic — the
@@ -95,7 +98,7 @@ before subprocess launch.
 | `radia-em`     | `EMWindow`   | Electromagnet: Omega-reduced / A-Phi / MSC / Kelvin Benchmark | `.vol`                     |
 | `radia-ih`     | `IHWindow`   | Induction Heating + Thermal: PEEC / BEM-A / FEM A-V + q_surf->T post | STEP (PEEC) + `.vol` (BEM/FEM/thermal) |
 | `radia-pcb`    | `PCBWindow`  | PCB / FastHenry impedance sweep                                | FastHenry `.inp`           |
-| `radia-motor`  | `MotorWindow`| Motor: transient (Lange-Henrotte-Hameyer) + lamination (Hollaus EM) | `.vol`                  |
+| `radia-streamfunction` | `StreamFunctionWindow` | Stream-function coil design: Design / Pareto / Manufacture / Volume 3D | coil or conductor `.vol` |
 
 All four are top-level PySide6 `QMainWindow` apps.  Launching them
 spawns a single Python process (the Layer 3 panel); when the user
@@ -181,7 +184,7 @@ which labels are missing or present in your `.vol`.
 ============================================================
 
 The standalone .exe launchers (`radia-ih` / `radia-em` / `radia-pcb`
-/ `radia-heat`) are the **default and only path** that this knowledge
+/ `radia-streamfunction`) are the **default and only path** that this knowledge
 module documents.  Cubit is mentioned here only to clarify what is
 NOT needed:
 
@@ -286,11 +289,18 @@ cause: a NumPy / NGSolve import error from a stale install — run
 `python -c "import radia, ngsolve; print(radia.__version__,
 ngsolve.__version__)"` from the same Python the panel is using.
 
-### `radia-heat` is missing from `where` / `which` output
+### `radia-streamfunction` is missing from `where` / `which` output
 
-`radia-heat` was added in 4.25.1.  `pip install --upgrade
-radia[gui]==4.25.1` (or later) registers it.  4.25.0 had only three
-launchers (radia-em, radia-ih, radia-pcb).
+`radia-streamfunction` is registered by the root `radia` package's
+`[project.scripts]`.  Reinstall or upgrade the GUI extra from the
+repository or from PyPI:
+
+```cmd
+pip install --upgrade "radia[gui]"
+```
+
+If the command still does not resolve, check that `<Python>/Scripts/`
+is on PATH or run the launcher with its full path.
 """
 
 
