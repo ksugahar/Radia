@@ -111,7 +111,11 @@ def test_shape_measurement_row_matches_box_geometry():
     assert row["edges"] == 12
     assert row["vertices"] == 8
     assert row["solids"] == 1
+    assert row["bounding_box"]["min"] == pytest.approx([-1.0, -1.5, -2.0])
+    assert row["bounding_box"]["max"] == pytest.approx([1.0, 1.5, 2.0])
+    assert row["bounding_box"]["center"] == pytest.approx([0.0, 0.0, 0.0])
     assert row["bounding_box"]["size"] == pytest.approx([2.0, 3.0, 4.0])
+    assert row["bounding_box"]["diagonal"] == pytest.approx(math.sqrt(29.0))
     assert row["characteristic_length"] == pytest.approx(4.0)
 
 
@@ -197,6 +201,42 @@ def test_compare_shape_measurement_rows_marks_pass_fail_and_missing():
     assert by_name["missing"]["reason"] == "missing measured row"
 
 
+def test_compare_shape_measurement_rows_compares_bbox_when_present():
+    reference = [{
+        "name": "box",
+        "volume": 1.0,
+        "area": 6.0,
+        "bounding_box": {
+            "min": [0.0, 0.0, 0.0],
+            "max": [1.0, 1.0, 1.0],
+            "center": [0.5, 0.5, 0.5],
+            "size": [1.0, 1.0, 1.0],
+        },
+    }]
+    measured = [{
+        "name": "box",
+        "volume": 1.0,
+        "area": 6.0,
+        "bounding_box": {
+            "min": [0.0, 0.0, 0.0],
+            "max": [1.0, 1.0, 1.0000002],
+            "center": [0.5, 0.5, 0.5000001],
+            "size": [1.0, 1.0, 1.0000002],
+        },
+    }]
+
+    row = compare_shape_measurement_rows(reference, measured, bbox_atol=1.0e-5)[0]
+    assert row["passed"]
+    assert row["bbox_compared"]
+    assert row["bbox_abs_error"] == pytest.approx(2.0e-7)
+
+    measured[0]["bounding_box"]["max"] = [1.0, 1.0, 1.01]
+    measured[0]["bounding_box"]["size"] = [1.0, 1.0, 1.01]
+    bad = compare_shape_measurement_rows(reference, measured, bbox_atol=1.0e-5)[0]
+    assert not bad["passed"]
+    assert bad["reason"] == "bbox outside tolerance"
+
+
 def test_shape_measurement_comparison_summary_compacts_errors():
     reference = [{"name": "box", "volume": 24.0, "area": 52.0}]
     measured = [{"name": "box", "volume": 24.0, "area": 52.0}]
@@ -205,8 +245,10 @@ def test_shape_measurement_comparison_summary_compacts_errors():
     assert summary["measured_label"] == "cubit"
     assert summary["n_cases"] == 1
     assert summary["n_passed"] == 1
+    assert summary["n_bbox_compared"] == 0
     assert summary["max_volume_rel_error"] == pytest.approx(0.0)
     assert summary["max_area_rel_error"] == pytest.approx(0.0)
+    assert summary["max_bbox_abs_error"] == pytest.approx(0.0)
 
 
 def test_segment_meshes_in_netgen():
