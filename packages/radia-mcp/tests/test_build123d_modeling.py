@@ -21,6 +21,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_measurement_row, shape_measurement_rows,
                                           box_face_vector_area_rows,
                                           box_face_pressure_force_rows,
+                                          box_face_pressure_moment_rows,
                                           compare_boundary_vector_area_rows,
                                           compare_shape_measurement_rows,
                                           shape_measurement_comparison_summary)
@@ -186,6 +187,41 @@ def test_box_face_pressure_force_rows_integrate_pressure_loads():
 
     with pytest.raises(KeyError):
         box_face_pressure_force_rows((2, 3, 5), {"zmax": 2.0}, default_pressure=None)
+
+
+def test_box_face_pressure_moment_rows_integrate_pivot_moments():
+    uniform = box_face_pressure_moment_rows(
+        (2, 3, 5),
+        {"xmin": 2.0, "xmax": 2.0, "ymin": 2.0, "ymax": 2.0, "zmin": 2.0, "zmax": 2.0},
+        center=(1.0, 1.5, 2.5),
+    )
+    total_force = [sum(row["force_N"][axis] for row in uniform) for axis in range(3)]
+    total_moment = [sum(row["moment_about_pivot_Nm"][axis] for row in uniform) for axis in range(3)]
+    assert total_force == pytest.approx((0.0, 0.0, 0.0))
+    assert total_moment == pytest.approx((0.0, 0.0, 0.0))
+
+    zmax = box_face_pressure_moment_rows(
+        (2, 3, 5),
+        {"zmax": 2.0},
+        center=(1.0, 1.5, 2.5),
+        default_pressure=0.0,
+    )
+    by_name = {row["name"]: row for row in zmax}
+    assert by_name["zmax"]["face_center"] == pytest.approx((1.0, 1.5, 5.0))
+    assert by_name["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert by_name["zmax"]["moment_about_pivot_Nm"] == pytest.approx((18.0, -12.0, 0.0))
+
+    shifted = box_face_pressure_moment_rows(
+        (2, 3, 5),
+        {"zmax": 2.0},
+        center=(1.0, 1.5, 2.5),
+        default_pressure=0.0,
+        pivot_m=(1.0, 1.5, 0.0),
+    )
+    assert {row["name"]: row for row in shifted}["zmax"]["moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    with pytest.raises(KeyError):
+        box_face_pressure_moment_rows((2, 3, 5), {"zmax": 2.0}, default_pressure=None)
 
 
 def test_shape_envelope_row_and_enclosing_box_use_union_bbox_margin():
