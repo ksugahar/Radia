@@ -335,6 +335,65 @@ def waveguide_wave_impedance(frequency, fc, mode="TE", eta=MU0 * C0):
     return {"mode": m, "frequency": f, "fc": fc, "eta": eta, "Z": z, "fc_over_f": fc / f}
 
 
+def rectangular_waveguide_te10_port_normalization(frequency, width_a, height_b,
+                                                  power_w=1.0, c=C0):
+    """Peak field amplitudes for a power-normalised rectangular-guide TE10 port.
+
+    With the usual lossless TE10 field convention
+
+        E_y = E0 sin(pi x/a),   H_x = E_y / Z_TE,
+
+    the time-average power through the cross-section is
+
+        P = (1/2) integral(E_y H_x) dA = a b E0^2 / (4 Z_TE).
+
+    This helper turns a requested port power into the corresponding peak
+    electric and magnetic field amplitudes.  It is intentionally a closed-form
+    port-normalisation checklist: the returned ``poynting_power_W`` recomputes
+    the power integral from the amplitudes so examples/tests can catch unit or
+    peak/RMS mistakes before a full-wave solve is trusted.
+    """
+    f = float(frequency)
+    a = float(width_a)
+    b = float(height_b)
+    pwr = float(power_w)
+    if f <= 0.0:
+        raise ValueError("frequency must be positive")
+    if a <= 0.0 or b <= 0.0:
+        raise ValueError("width_a and height_b must be positive")
+    if pwr < 0.0:
+        raise ValueError("power_w must be non-negative")
+
+    fc = 0.5 * c / a
+    disp = waveguide_dispersion(f, fc, c)
+    z_te = waveguide_wave_impedance(f, fc, "TE", eta=MU0 * c)["Z"]
+    sin2_area = 0.5 * a * b
+    e0 = math.sqrt(2.0 * pwr * z_te / sin2_area) if pwr else 0.0
+    hx0 = e0 / z_te
+    kc = math.pi / a
+    omega = 2.0 * math.pi * f
+    hz0 = e0 * kc / (omega * MU0)
+    poynting = 0.5 * e0 * hx0 * sin2_area
+    return {
+        "frequency": f,
+        "width_a": a,
+        "height_b": b,
+        "power_w": pwr,
+        "fc": fc,
+        "beta": disp["beta"],
+        "lambda_g": disp["lambda_g"],
+        "v_group": disp["v_group"],
+        "Z_TE_ohm": z_te,
+        "sin2_area_integral_m2": sin2_area,
+        "E_y_peak_V_per_m": e0,
+        "H_x_peak_A_per_m": hx0,
+        "H_z_wall_peak_A_per_m": hz0,
+        "H_z_over_H_x_peak": hz0 / hx0 if hx0 else math.inf,
+        "poynting_power_W": poynting,
+        "poynting_abs_error_W": abs(poynting - pwr),
+    }
+
+
 def rectangular_waveguide_te10_conductor_loss(frequency, width_a, height_b, sigma,
                                               length=None, mu_r=1.0, c=C0):
     """Conductor-loss attenuation of the TE10 mode in a rectangular metal waveguide.
