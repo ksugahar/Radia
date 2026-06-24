@@ -31,6 +31,7 @@ from build123d import (Axis, Box, BuildLine, BuildSketch, CenterArc, Circle, Com
 __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_array",
            "mirrored", "assembly",
            "shape_measurement_row", "shape_measurement_rows",
+           "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
            "swept", "revolved", "lofted", "coil", "helix_centerline_length",
            "round_wire_helix_metrics", "strut", "thicken", "draft_extrude",
@@ -230,6 +231,90 @@ def shape_measurement_rows(shapes):
             shape, name = item, None
         rows.append(shape_measurement_row(shape, name=name, index=index))
     return rows
+
+
+def _relative_measurement_error(reference, measured):
+    return abs(float(reference) - float(measured)) / max(
+        abs(float(reference)),
+        abs(float(measured)),
+        1.0e-300,
+    )
+
+
+def compare_shape_measurement_rows(reference_rows, measured_rows, rtol=1.0e-5, measured_label="measured"):
+    """Compare build123d measurement rows with external volume/area rows.
+
+    ``reference_rows`` are normally from :func:`shape_measurement_rows`.
+    ``measured_rows`` only need ``name``, ``volume`` and ``area`` keys, so they
+    can come from Cubit, another CAD kernel, a mesher, or an analytic table.
+    The return value is a list of JSON-friendly pass/fail rows.
+    """
+
+    measured_by_name = {row["name"]: row for row in measured_rows}
+    rows = []
+    for ref in reference_rows:
+        name = ref["name"]
+        measured = measured_by_name.get(name)
+        if measured is None:
+            rows.append({
+                "name": name,
+                "measured_label": measured_label,
+                "reference_volume": ref["volume"],
+                "reference_area": ref["area"],
+                "measured_volume": None,
+                "measured_area": None,
+                "volume_rel_error": None,
+                "area_rel_error": None,
+                "rtol": float(rtol),
+                "passed": False,
+                "reason": "missing measured row",
+            })
+            continue
+
+        volume_rel_error = _relative_measurement_error(ref["volume"], measured["volume"])
+        area_rel_error = _relative_measurement_error(ref["area"], measured["area"])
+        passed = volume_rel_error <= rtol and area_rel_error <= rtol
+        rows.append({
+            "name": name,
+            "measured_label": measured_label,
+            "reference_volume": ref["volume"],
+            "reference_area": ref["area"],
+            "measured_volume": measured["volume"],
+            "measured_area": measured["area"],
+            "volume_rel_error": volume_rel_error,
+            "area_rel_error": area_rel_error,
+            "rtol": float(rtol),
+            "passed": passed,
+            "reason": "ok" if passed else "outside tolerance",
+        })
+    return rows
+
+
+def shape_measurement_comparison_summary(
+    reference_rows,
+    measured_rows,
+    rtol=1.0e-5,
+    measured_label="measured",
+):
+    """Return compact summary statistics for a measurement comparison."""
+
+    rows = compare_shape_measurement_rows(
+        reference_rows,
+        measured_rows,
+        rtol=rtol,
+        measured_label=measured_label,
+    )
+    volume_errors = [row["volume_rel_error"] or 0.0 for row in rows]
+    area_errors = [row["area_rel_error"] or 0.0 for row in rows]
+    return {
+        "measured_label": measured_label,
+        "rtol": float(rtol),
+        "n_cases": len(rows),
+        "n_passed": sum(1 for row in rows if row["passed"]),
+        "max_volume_rel_error": max(volume_errors) if volume_errors else 0.0,
+        "max_area_rel_error": max(area_errors) if area_errors else 0.0,
+        "rows": rows,
+    }
 
 
 # =====================================================================================================

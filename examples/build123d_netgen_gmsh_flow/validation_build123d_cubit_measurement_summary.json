@@ -10,7 +10,7 @@
     "n_passed": 3,
     "rtol": 1e-05
   },
-  "elapsed_seconds": 0.969,
+  "elapsed_seconds": 1.036,
   "kind": "build123d_cubit_volume_area_cross_validation",
   "rows": [
     {
@@ -40,6 +40,19 @@
       },
       "cubit_area_rel_error": 0.0,
       "cubit_volume_rel_error": 1.4802973661668753e-16,
+      "measurement_comparison": {
+        "area_rel_error": 0.0,
+        "measured_area": 52.0,
+        "measured_label": "cubit",
+        "measured_volume": 24.0,
+        "name": "box_2x3x4",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 52.0,
+        "reference_volume": 23.999999999999996,
+        "rtol": 1e-05,
+        "volume_rel_error": 1.4802973661668753e-16
+      },
       "name": "box_2x3x4",
       "passed": true
     },
@@ -70,6 +83,19 @@
       },
       "cubit_area_rel_error": 0.0,
       "cubit_volume_rel_error": 1.7669748230352874e-16,
+      "measurement_comparison": {
+        "area_rel_error": 0.0,
+        "measured_area": 29.15397982531328,
+        "measured_label": "cubit",
+        "measured_volume": 5.026548245743668,
+        "name": "tube_r0p6_1p0_h2p5",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 29.15397982531328,
+        "reference_volume": 5.026548245743667,
+        "rtol": 1e-05,
+        "volume_rel_error": 1.7669748230352874e-16
+      },
       "name": "tube_r0p6_1p0_h2p5",
       "passed": true
     },
@@ -97,6 +123,19 @@
       },
       "cubit_area_rel_error": 1.35407668256758e-16,
       "cubit_volume_rel_error": 4.047017533424446e-06,
+      "measurement_comparison": {
+        "area_rel_error": 1.35407668256758e-16,
+        "measured_area": 209.89734035232908,
+        "measured_label": "cubit",
+        "measured_volume": 78.71182118024377,
+        "name": "racetrack_12x8_band1p2",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 209.8973403523291,
+        "reference_volume": 78.71150263212337,
+        "rtol": 1e-05,
+        "volume_rel_error": 4.047017533424446e-06
+      },
       "name": "racetrack_12x8_band1p2",
       "passed": true
     }

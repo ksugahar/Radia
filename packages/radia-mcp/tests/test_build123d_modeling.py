@@ -16,7 +16,9 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil, polar_array,
                                           linear_array, mirrored, assembly,
-                                          shape_measurement_row, shape_measurement_rows)
+                                          shape_measurement_row, shape_measurement_rows,
+                                          compare_shape_measurement_rows,
+                                          shape_measurement_comparison_summary)
 from build123d import Box, Compound
 
 
@@ -122,6 +124,40 @@ def test_shape_measurement_rows_follow_assembly_children():
     assert [row["name"] for row in rows] == ["left", "right"]
     assert [row["volume"] for row in rows] == pytest.approx([6.0, 4.0])
     assert [row["area"] for row in rows] == pytest.approx([22.0, 16.0])
+
+
+def test_compare_shape_measurement_rows_marks_pass_fail_and_missing():
+    reference = [
+        {"name": "ok", "volume": 10.0, "area": 20.0},
+        {"name": "bad", "volume": 10.0, "area": 20.0},
+        {"name": "missing", "volume": 1.0, "area": 2.0},
+    ]
+    measured = [
+        {"name": "ok", "volume": 10.00001, "area": 20.00001},
+        {"name": "bad", "volume": 10.2, "area": 20.0},
+    ]
+    rows = compare_shape_measurement_rows(reference, measured, rtol=1.0e-4, measured_label="external")
+    by_name = {row["name"]: row for row in rows}
+
+    assert by_name["ok"]["passed"]
+    assert by_name["ok"]["measured_label"] == "external"
+    assert by_name["ok"]["volume_rel_error"] < 1.0e-4
+    assert not by_name["bad"]["passed"]
+    assert by_name["bad"]["reason"] == "outside tolerance"
+    assert not by_name["missing"]["passed"]
+    assert by_name["missing"]["reason"] == "missing measured row"
+
+
+def test_shape_measurement_comparison_summary_compacts_errors():
+    reference = [{"name": "box", "volume": 24.0, "area": 52.0}]
+    measured = [{"name": "box", "volume": 24.0, "area": 52.0}]
+    summary = shape_measurement_comparison_summary(reference, measured, measured_label="cubit")
+
+    assert summary["measured_label"] == "cubit"
+    assert summary["n_cases"] == 1
+    assert summary["n_passed"] == 1
+    assert summary["max_volume_rel_error"] == pytest.approx(0.0)
+    assert summary["max_area_rel_error"] == pytest.approx(0.0)
 
 
 def test_segment_meshes_in_netgen():
