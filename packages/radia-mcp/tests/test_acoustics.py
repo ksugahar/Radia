@@ -266,6 +266,7 @@ def test_acoustic_impedance_dtn_conversion_validation():
 
 
 def test_baffled_circular_piston_impedance_scaling_and_power():
+    pytest.importorskip("scipy")
     a = 0.08
     c = 343.0
     rho = 1.2041
