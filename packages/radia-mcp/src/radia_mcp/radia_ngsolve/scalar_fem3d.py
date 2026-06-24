@@ -216,6 +216,63 @@ def p1_surface_triangle_constant_load(vertices, source=1.0):
     return [float(source) * area / 3.0] * 3
 
 
+def p1_tetrahedron_face_trace_summary(vertices, nodal_values, face_local_nodes):
+    """Project a volume P1 tetrahedron field onto one P1 boundary face.
+
+    ``face_local_nodes`` gives the three zero-based tetrahedron node ids on the
+    face.  The trace nodal values are therefore just the corresponding entries
+    of ``nodal_values``; the useful FEM/BEM bookkeeping is the surface mass
+    projection
+
+        b_j = int_face u_h N_j dS
+
+    and the surface ``L2`` trace energy ``int_face u_h^2 dS``.  The formulas are
+    intentionally explicit so they can be copied into a short MATLAB/Gypsilab
+    teaching script that shares `.vol` node ids between volume H1 and boundary
+    BEM unknowns.
+    """
+
+    verts = [tuple(float(x) for x in point) for point in vertices]
+    if len(verts) != 4 or any(len(point) != 3 for point in verts):
+        raise ValueError("a tetrahedron needs exactly four 3D vertices")
+    values = [float(value) for value in nodal_values]
+    if len(values) != 4:
+        raise ValueError("nodal_values must contain four values")
+    face = tuple(int(node) for node in face_local_nodes)
+    if len(face) != 3 or len(set(face)) != 3:
+        raise ValueError("face_local_nodes must contain three distinct local ids")
+    if any(node < 0 or node > 3 for node in face):
+        raise ValueError("face_local_nodes must be zero-based ids in 0..3")
+
+    face_vertices = [verts[node] for node in face]
+    trace_values = [values[node] for node in face]
+    geom = p1_surface_triangle_geometry(face_vertices)
+    mass = p1_surface_triangle_mass(face_vertices)
+    projected_load = [
+        sum(mass[i][j] * trace_values[i] for i in range(3))
+        for j in range(3)
+    ]
+    l2_trace = sum(
+        trace_values[i] * mass[i][j] * trace_values[j]
+        for i in range(3)
+        for j in range(3)
+    )
+    integral = sum(projected_load)
+    return {
+        "face_local_nodes": face,
+        "face_vertices": face_vertices,
+        "trace_nodal_values": trace_values,
+        "area": geom["area"],
+        "unit_normal": geom["unit_normal"],
+        "surface_mass_matrix": mass,
+        "projected_trace_load": projected_load,
+        "trace_integral": integral,
+        "trace_mean": integral / geom["area"],
+        "trace_l2_norm_squared": l2_trace,
+        "policy": "p1_volume_h1_trace_to_p1_boundary_mass_projection",
+    }
+
+
 def p1_surface_triangle_density_moments(vertices, nodal_density):
     """Exact P1 surface-density moments on one triangle.
 
