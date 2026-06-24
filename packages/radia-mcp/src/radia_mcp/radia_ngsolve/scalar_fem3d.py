@@ -100,6 +100,65 @@ def p1_tetrahedron_constant_load(vertices, source=1.0):
     return [float(source) * volume / 4.0] * 4
 
 
+def p1_tetrahedron_gradient(vertices, nodal_values):
+    """Constant gradient of a scalar P1 tetrahedron field.
+
+    ``nodal_values`` follows the same local node order as ``vertices``.  The
+    result is ``sum_i u_i grad(N_i)``.  This is the local post-processing block
+    students usually need immediately after solving a readable P1 system.
+    """
+    values = [float(v) for v in nodal_values]
+    if len(values) != 4:
+        raise ValueError("nodal_values must contain four values")
+    grads = p1_tetrahedron_geometry(vertices)["gradients"]
+    return tuple(sum(values[i] * grads[i][axis] for i in range(4)) for axis in range(3))
+
+
+def p1_tetrahedron_flux(vertices, nodal_values, coeff=1.0):
+    """Constant physical flux ``-coeff grad(u)`` for a scalar P1 tetrahedron."""
+    grad_u = p1_tetrahedron_gradient(vertices, nodal_values)
+    c = float(coeff)
+    return tuple(-c * value for value in grad_u)
+
+
+def p1_tetrahedron_boundary_fluxes(vertices, nodal_values, coeff=1.0):
+    """Outward Neumann flux rows on the four faces of a P1 tetrahedron.
+
+    Each row reports the local face opposite one tetrahedron node, its outward
+    area vector, flux density ``q.n`` and integrated flux ``int_face q.n dS``
+    for ``q=-coeff grad(u)``.  The face-node ids are zero-based local ids so
+    they can be mapped directly to a local element or to one-based ``.vol``
+    nodes by the caller.
+    """
+    v = [tuple(float(x) for x in p) for p in vertices]
+    if len(v) != 4 or any(len(p) != 3 for p in v):
+        raise ValueError("a tetrahedron needs exactly four 3D vertices")
+    q = p1_tetrahedron_flux(v, nodal_values, coeff=coeff)
+    rows = []
+    for opposite in range(4):
+        face = tuple(i for i in range(4) if i != opposite)
+        a, b, cpt = (v[i] for i in face)
+        area_vector = _scale(_cross(_sub(b, a), _sub(cpt, a)), 0.5)
+        face_centroid = tuple((a[axis] + b[axis] + cpt[axis]) / 3.0 for axis in range(3))
+        to_opposite = _sub(v[opposite], face_centroid)
+        if _dot(area_vector, to_opposite) > 0.0:
+            area_vector = _scale(area_vector, -1.0)
+        area_vector = tuple(0.0 if component == 0.0 else component for component in area_vector)
+        area = _norm(area_vector)
+        if area == 0.0:
+            raise ValueError("degenerate tetrahedron face")
+        integrated = _dot(q, area_vector)
+        rows.append({
+            "opposite_local_node": opposite,
+            "face_local_nodes": face,
+            "area": area,
+            "outward_area_vector": area_vector,
+            "normal_flux_density": integrated / area,
+            "integrated_flux": integrated,
+        })
+    return rows
+
+
 def p1_surface_triangle_geometry(vertices):
     """Area, oriented normal, and surface gradients for a 3D P1 triangle.
 
