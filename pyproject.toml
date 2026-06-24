@@ -110,6 +110,7 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 radia-ih = "radia.radia_ih:main"
 radia-em = "radia.radia_em:main"
 radia-pcb = "radia.radia_pcb:main"
+radia-streamfunction = "radia.radia_streamfunction:main"
 # CLI for .vol/.sol viewer (also exposed as a gui-script below).
 # Use the CLI form when you want stdout (e.g. --register / probing);
 # use the gui-script (radia-vol-viewer-gui.exe) for the Windows file

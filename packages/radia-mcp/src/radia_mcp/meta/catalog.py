@@ -77,7 +77,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-radia-streamfunction",
         "description": "Stream-function coil design: (ACA+)+TSVD least-norm, "
                        "FE-direct psi, regularisation / folded-Tikhonov Pareto "
-                       "front, single-stroke chain, sheet-metal (板金) levers",
+                       "front, single-stroke chain, sheet-metal levers",
         "primary_tools": ["streamfunction"],
         "related": [
             "radia-ngsolve",
