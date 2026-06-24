@@ -551,6 +551,26 @@ cubit.cmd(f'export netgen "{out_path}" order 2 overwrite')
 
 See `netgen_workflow_guide workflow=accuracy` for how to verify order
 selection against analytical reference problems.
+
+## Coreform Cubit 2026.6 quality note
+
+The 2026.6 release highlights more robust triangle/tet meshing, higher
+precision normalized mesh-quality metrics, and Jacobian/scaled-Jacobian
+metrics for Tetra10/Tri6. Keep Cubit as the mesher's own quality oracle,
+but do not make it the only gate: after `export netgen`, run Radia's
+solver-neutral `.vol` intake checks as an independent confirmation.
+
+Recommended public checks:
+
+```powershell
+python examples/cubit_mesh_export/validation_vol_tet_quality.py --vol C:\\temp\\model.vol
+python examples/cubit_mesh_export/validation_vol_surface_triangle_quality.py --vol C:\\temp\\model.vol
+```
+
+`NetgenTriTetVolMesh.surface_triangle_quality_summary()` reports boundary
+triangle area, edge-ratio, angle range, and `2 * inradius / circumradius`
+quality. Use it as the FEM/BEM trace gate: bad surface triangles can break
+scalar-BEM/RWG behavior even when the volume tet inventory looks acceptable.
 """
 
 JOURNAL_TO_PYTHON_WORKFLOW = """

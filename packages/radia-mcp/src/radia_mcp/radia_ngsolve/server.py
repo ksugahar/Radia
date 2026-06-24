@@ -1175,11 +1175,11 @@ def force_validation(topic: str = "all") -> str:
     """
     EM force extraction in NGSolve + independent <-> NGSolve cross-validation.
 
-    Records how the radia-ngsolve FEM path computes electromagnetic force
-    (eggshell / weighted Maxwell stress) and the cross-validation results that
-    make the NGSolve magnetostatic path trustworthy: solved independently by a
-    reference solver and by NGSolve on the same geometry and compared to the
-    analytic answer (the reference values are kept as a stored reference).
+    Records how the radia-ngsolve FEM path chooses and computes electromagnetic
+    force/torque: weighted Maxwell stress, Maxwell surface stress, Lorentz
+    conductor force, air-gap pressure, energy/coenergy checks, dq torque, and
+    the cross-validation results that make the NGSolve magnetostatic path
+    trustworthy. Reference values are kept as stored regression references.
 
     Validated (linear magnetostatics, A-form, HCurl order 2):
       * uniformly magnetized sphere: reference == NGSolve to 0.11 %, both <0.5 %
@@ -1193,7 +1193,7 @@ def force_validation(topic: str = "all") -> str:
     geometry / material / source / force-method contract of the cross-check).
 
     Args:
-        topic: all (default) | eggshell | cross_validation | reference_note
+        topic: all (default) | method_map | eggshell | cross_validation | reference_note
     """
     return get_force_validation_documentation(topic)
 
