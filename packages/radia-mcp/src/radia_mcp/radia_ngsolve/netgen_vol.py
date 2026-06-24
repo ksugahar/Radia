@@ -632,6 +632,69 @@ class NetgenTriTetVolMesh:
             })
         return tuple(rows)
 
+    def boundary_pressure_resultant_summary(
+        self,
+        pressure_by_boundary: dict[int | str, float],
+        default_pressure: float | None = 0.0,
+        pivot_m: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    ) -> dict[str, object]:
+        """Return pressure rows plus net force/moment balance metrics.
+
+        This is the compact final reduction after importing named
+        Cubit/Coreform sidesets from a tri/tet Netgen ``.vol`` mesh.  A uniform
+        pressure over a closed, consistently oriented surface should have
+        near-zero total force and moment; a one-sided pressure load should
+        reduce to ``pressure * oriented vector area`` and the corresponding
+        pivot moment.
+        """
+
+        rows = self.boundary_pressure_force_moment_rows(
+            pressure_by_boundary,
+            default_pressure=default_pressure,
+            pivot_m=pivot_m,
+        )
+        total_force = tuple(
+            sum(float(row["force_N"][axis]) for row in rows)
+            for axis in range(3)
+        )
+        total_moment = tuple(
+            sum(float(row["moment_about_pivot_Nm"][axis]) for row in rows)
+            for axis in range(3)
+        )
+        total_force_norm = _norm(total_force)
+        total_moment_norm = _norm(total_moment)
+        absolute_force_sum = sum(float(row["force_magnitude_N"]) for row in rows)
+        absolute_moment_sum = sum(float(row["moment_magnitude_Nm"]) for row in rows)
+        surface_vector_area = self.surface_vector_area()
+        total_area = self.total_surface_area()
+
+        return {
+            "boundary_count": len(rows),
+            "rows": rows,
+            "pivot_m": tuple(float(value) for value in pivot_m),
+            "total_force_N": total_force,
+            "total_force_magnitude_N": total_force_norm,
+            "total_moment_about_pivot_Nm": total_moment,
+            "total_moment_magnitude_Nm": total_moment_norm,
+            "absolute_force_sum_N": absolute_force_sum,
+            "absolute_moment_sum_Nm": absolute_moment_sum,
+            "force_balance_ratio": (
+                total_force_norm / absolute_force_sum
+                if absolute_force_sum > 0.0
+                else 0.0
+            ),
+            "moment_balance_ratio": (
+                total_moment_norm / absolute_moment_sum
+                if absolute_moment_sum > 0.0
+                else 0.0
+            ),
+            "surface_vector_area": surface_vector_area,
+            "surface_vector_area_norm": _norm(surface_vector_area),
+            "surface_vector_area_norm_over_area": (
+                _norm(surface_vector_area) / total_area if total_area > 0.0 else None
+            ),
+        }
+
     def boundary_summary_rows(self) -> tuple[dict[str, object], ...]:
         """Return named boundary inventory rows for FEM/BEM conditions.
 
