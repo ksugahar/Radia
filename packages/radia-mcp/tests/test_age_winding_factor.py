@@ -2,8 +2,16 @@
 """Fast AGE-related algebra checks that belong in pytest."""
 
 import math
+import os
+import sys
 
 import numpy as np
+
+_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+from radia_mcp.radia_ngsolve.solve import integral_slot_winding_factor
 
 
 def _winding_factor(p, q, n):
@@ -27,6 +35,11 @@ def test_distributed_winding_factor_matches_distribution_factor():
     for p, q in [(1, 2), (2, 2), (3, 3)]:
         for n in [1, 3, 5, 7]:
             kw, kd, phase_a_slots = _winding_factor(p, q, n)
+            summary = integral_slot_winding_factor(slots=2 * p * 3 * q, poles=2 * p,
+                                                   harmonic=n, phases=3)
+            assert abs(abs(summary["winding_factor"]) - kw) < 1e-12
+            assert abs(abs(summary["distribution_factor"]) - kd) < 1e-12
+            assert summary["slots_per_phase"] == phase_a_slots
             if n == 1:
                 assert phase_a_slots == 2 * p * q
             worst = max(worst, abs(kw - kd) / max(kd, 1e-12))

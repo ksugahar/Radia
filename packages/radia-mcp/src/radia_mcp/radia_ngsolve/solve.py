@@ -881,6 +881,52 @@ def winding_factor(harmonic, slots_per_pole_per_phase, slot_angle_elec_deg, pitc
             * winding_pitch_factor(harmonic, pitch_fraction))
 
 
+def integral_slot_winding_factor(slots, poles, harmonic=1, phases=3, pitch_fraction=1.0):
+    """Convenience wrapper for an integral-slot distributed winding.
+
+    ``slots`` is the stator slot count, ``poles`` is the pole count (not pole pairs), and
+    ``phases`` is usually 3.  The helper computes
+
+        q = slots / (poles * phases)
+        gamma = 180*poles/slots   [electrical degrees per slot]
+
+    and returns the distribution, pitch and total winding factors for ``harmonic``.  Fractional-slot
+    windings need an explicit slot phasor table, so this helper rejects non-integer ``q`` rather than
+    hiding the layout choice.
+    """
+    s = int(slots)
+    pole_count = int(poles)
+    m = int(phases)
+    n = int(harmonic)
+    if s <= 0 or pole_count <= 0 or m <= 0 or n <= 0:
+        raise ValueError("slots, poles, phases and harmonic must be positive")
+    if pole_count % 2:
+        raise ValueError("poles must be an even pole count")
+    den = pole_count * m
+    if s % den:
+        raise ValueError("integral-slot winding requires slots/(poles*phases) to be an integer")
+    q = s // den
+    slot_angle = 180.0 * pole_count / s
+    kd = winding_distribution_factor(n, q, slot_angle)
+    kp = winding_pitch_factor(n, pitch_fraction)
+    kw = kd * kp
+    return {
+        "slots": s,
+        "poles": pole_count,
+        "pole_pairs": pole_count // 2,
+        "phases": m,
+        "harmonic": n,
+        "slots_per_pole_per_phase": q,
+        "slots_per_phase": s // m,
+        "slot_angle_elec_deg": slot_angle,
+        "pitch_fraction": float(pitch_fraction),
+        "distribution_factor": kd,
+        "pitch_factor": kp,
+        "winding_factor": kw,
+        "winding_factor_abs": abs(kw),
+    }
+
+
 def single_phase_mmf_harmonic(harmonic, winding_factor_n, turns_per_phase, current, pole_pairs):
     """Peak amplitude [A] of the n-th SPACE harmonic of one phase's air-gap MMF:
 
