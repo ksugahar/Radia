@@ -7,12 +7,15 @@ import math
 import os
 import sys
 
+import pytest
+
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from build123d import Axis, Box, Circle, Cylinder, Sphere, Rectangle, Plane, Pos, Line, Spline, GeomType
-from radia_mcp.build123d.modeling import (swept, revolved, lofted, coil, strut, thicken, draft_extrude,
+from radia_mcp.build123d.modeling import (swept, revolved, lofted, coil, helix_centerline_length,
+                                          round_wire_helix_metrics, strut, thicken, draft_extrude,
                                           shell, fillet_edges, chamfer_edges, grid_array, path_array,
                                           fuse, cut, common, slice_solid, bend_sheet,
                                           fillet_varied, chamfer_varied, slice_array)
@@ -44,6 +47,12 @@ def test_coil_helix():
     rw, R, pitch, h = 0.2, 2.0, 1.0, 5.0
     s = coil(Circle(rw), pitch, h, R, label="winding")
     hlen = math.sqrt(h ** 2 + (h / pitch * 2 * math.pi * R) ** 2)
+    assert helix_centerline_length(R, pitch, h) == pytest.approx(hlen)
+    metrics = round_wire_helix_metrics(R, rw, pitch, h)
+    assert metrics["turns"] == pytest.approx(5.0)
+    assert metrics["cross_section_area"] == pytest.approx(math.pi * rw ** 2)
+    assert metrics["conductor_volume"] == pytest.approx(math.pi * rw ** 2 * hlen)
+    assert metrics["resistance_per_resistivity"] == pytest.approx(hlen / (math.pi * rw ** 2))
     _close(s.volume, math.pi * rw ** 2 * hlen, rel=5e-3)
 
 
