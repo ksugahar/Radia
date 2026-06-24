@@ -13,6 +13,8 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     coenergy_torque_from_angle_samples,
     coenergy_torque_summary,
+    virtual_work_force_from_displacement_samples,
+    virtual_work_force_summary,
 )
 
 
@@ -53,3 +55,62 @@ def test_coenergy_torque_rejects_bad_tables():
         coenergy_torque_from_angle_samples([0.0, 1.0, 1.0], [0.0, 1.0, 2.0])
     with pytest.raises(ValueError):
         coenergy_torque_from_angle_samples([0.0, 1.0, 2.0], [0.0, 1.0, 2.0], periodic=True, period_rad=0.0)
+
+
+def test_virtual_work_force_linear_coenergy_table_is_exact():
+    positions = [-0.002, -0.001, 0.0, 0.001, 0.002]
+    expected_force = 12.5
+    coenergy = [0.25 + expected_force * x for x in positions]
+
+    rows = virtual_work_force_from_displacement_samples(positions, coenergy)
+    summary = virtual_work_force_summary(positions, coenergy, energy_kind="constant_current")
+
+    assert [row["stencil"] for row in rows] == ["forward", "central", "central", "central", "backward"]
+    assert [row["energy_kind"] for row in rows] == ["coenergy"] * len(rows)
+    assert [row["force_N"] for row in rows] == pytest.approx([expected_force] * len(rows))
+    assert summary["virtual_work_identity"] == "F = dW_co/dx at fixed current"
+    assert summary["force_mean_N"] == pytest.approx(expected_force)
+    assert summary["force_peak_abs_N"] == pytest.approx(expected_force)
+
+
+def test_virtual_work_force_stored_energy_flips_derivative_sign():
+    positions = [-0.002, -0.001, 0.0, 0.001, 0.002]
+    expected_force = 8.0
+    stored_energy = [0.125 - expected_force * x for x in positions]
+
+    rows = virtual_work_force_from_displacement_samples(
+        positions,
+        stored_energy,
+        energy_kind="field_energy",
+    )
+
+    assert [row["energy_kind"] for row in rows] == ["stored_energy"] * len(rows)
+    assert [row["denergy_dx_N"] for row in rows] == pytest.approx([-expected_force] * len(rows))
+    assert [row["force_N"] for row in rows] == pytest.approx([expected_force] * len(rows))
+    assert rows[2]["virtual_work_identity"] == "F = -dW/dx at fixed flux/source-free displacement"
+
+
+def test_virtual_work_force_quadratic_center_matches_analytic_gradient():
+    positions = [-0.02, -0.01, 0.0, 0.01, 0.02]
+    stiffness = 300.0
+    stored_energy = [0.5 * stiffness * x * x for x in positions]
+    rows = virtual_work_force_from_displacement_samples(
+        positions,
+        stored_energy,
+        energy_kind="stored_energy",
+    )
+
+    assert rows[1]["force_N"] == pytest.approx(-stiffness * positions[1])
+    assert rows[2]["force_N"] == pytest.approx(0.0)
+    assert rows[3]["force_N"] == pytest.approx(-stiffness * positions[3])
+
+
+def test_virtual_work_force_rejects_bad_tables():
+    with pytest.raises(ValueError):
+        virtual_work_force_from_displacement_samples([0.0, 1.0], [0.0, 1.0])
+    with pytest.raises(ValueError):
+        virtual_work_force_from_displacement_samples([0.0, 1.0, 2.0], [0.0, 1.0])
+    with pytest.raises(ValueError):
+        virtual_work_force_from_displacement_samples([0.0, 1.0, 1.0], [0.0, 1.0, 2.0])
+    with pytest.raises(ValueError):
+        virtual_work_force_from_displacement_samples([0.0, 1.0, 2.0], [0.0, 1.0, 2.0], energy_kind="unknown")
