@@ -33,7 +33,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
            "box_face_vector_area_rows", "box_face_pressure_force_rows",
-           "box_face_pressure_moment_rows",
+           "box_face_pressure_moment_rows", "box_face_traction_moment_rows",
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
@@ -502,6 +502,70 @@ def box_face_pressure_moment_rows(
         moment = _cross3(lever, row["force_N"])
         rows.append({
             **row,
+            "pivot_m": pivot,
+            "lever_arm_m": lever,
+            "moment_about_pivot_Nm": moment,
+            "moment_magnitude_Nm": math.sqrt(sum(component * component for component in moment)),
+        })
+    return rows
+
+
+def _face_vector_value(vector_by_face, area_row, default_vector, value_name):
+    name = area_row["name"]
+    if name in vector_by_face:
+        value = vector_by_face[name]
+        source = "name"
+    elif area_row["index"] in vector_by_face:
+        value = vector_by_face[area_row["index"]]
+        source = "index"
+    elif default_vector is not None:
+        value = default_vector
+        source = "default"
+    else:
+        raise KeyError(f"missing {value_name} for face {name}")
+    vector = tuple(float(component) for component in value)
+    if len(vector) != 3:
+        raise ValueError(f"{value_name} values must have three components")
+    return vector, source
+
+
+def box_face_traction_moment_rows(
+    size,
+    traction_by_face,
+    center=(0.0, 0.0, 0.0),
+    names=None,
+    default_traction=(0.0, 0.0, 0.0),
+    pivot_m=(0.0, 0.0, 0.0),
+):
+    """Return analytic box face vector-traction force and pivot-moment rows.
+
+    The traction vector is a constant global vector [N/m2] on each planar box
+    face, so ``F = traction * area`` and ``M = (face_center - pivot) x F``.
+    Unlike scalar pressure, the force direction is not tied to the face normal.
+    This is the build123d-side analytic companion to
+    ``NetgenTriTetVolMesh.boundary_traction_force_moment_rows``.
+    """
+
+    pivot = tuple(float(value) for value in pivot_m)
+    if len(pivot) != 3:
+        raise ValueError("pivot_m must have three components")
+    rows = []
+    for area_row in box_face_vector_area_rows(size, center=center, names=names):
+        traction, source = _face_vector_value(
+            traction_by_face,
+            area_row,
+            default_traction,
+            "traction",
+        )
+        force = tuple(float(area_row["surface_area"]) * component for component in traction)
+        lever = tuple(area_row["face_center"][axis] - pivot[axis] for axis in range(3))
+        moment = _cross3(lever, force)
+        rows.append({
+            **area_row,
+            "traction_N_per_m2": traction,
+            "traction_source": source,
+            "force_N": force,
+            "force_magnitude_N": math.sqrt(sum(component * component for component in force)),
             "pivot_m": pivot,
             "lever_arm_m": lever,
             "moment_about_pivot_Nm": moment,
