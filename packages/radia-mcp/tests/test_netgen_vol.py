@@ -259,6 +259,53 @@ endmesh
 """
 
 
+TWO_DISCONNECTED_TETS_VOL = """\
+mesh3d
+dimension
+3
+geomtype
+0
+facedescriptors
+2
+1 1 0 1 1
+2 1 0 1 1
+surfaceelements
+8
+1 1 1 0 3 1 2 3
+1 1 1 0 3 1 4 2
+1 1 1 0 3 2 4 3
+1 1 1 0 3 3 4 1
+2 2 1 0 3 5 6 7
+2 2 1 0 3 5 8 6
+2 2 1 0 3 6 8 7
+2 2 1 0 3 7 8 5
+volumeelements
+2
+1 4 1 2 3 4
+1 4 5 6 7 8
+points
+8
+0 0 0
+1 0 0
+0 1 0
+0 0 1
+3 0 0
+4 0 0
+3 1 0
+3 0 1
+pointelements
+0
+materials
+1
+1 air
+bcnames
+2
+1 left_outer
+2 right_outer
+endmesh
+"""
+
+
 def test_parse_tri_tet_vol_summary():
     mesh = parse_netgen_tri_tet_vol(TET_VOL)
 
@@ -336,6 +383,30 @@ def test_boundary_summary_rows_for_named_box_faces():
     assert sum(row["surface_area"] for row in rows) == pytest.approx(mesh.total_surface_area())
     assert all(row["trace_node_count"] == 4 for row in rows)
     assert mesh.total_volume() == pytest.approx(30.0)
+
+
+def test_surface_connected_components_single_open_and_disconnected():
+    single = parse_netgen_tri_tet_vol(TET_VOL).surface_connected_components()
+    assert len(single) == 1
+    assert single[0]["surface_triangles"] == 4
+    assert single[0]["boundary_names"] == ["outer"]
+    assert single[0]["is_closed_manifold"]
+    assert single[0]["euler_characteristic"] == 2
+    assert single[0]["surface_abs_volume"] == pytest.approx(1.0 / 6.0)
+
+    open_component = parse_netgen_tri_tet_vol(OPEN_SURFACE_VOL).surface_connected_components()
+    assert len(open_component) == 1
+    assert not open_component[0]["is_closed_manifold"]
+    assert open_component[0]["open_edges"] == 3
+    assert open_component[0]["euler_characteristic"] == 1
+
+    disconnected = parse_netgen_tri_tet_vol(TWO_DISCONNECTED_TETS_VOL).surface_connected_components()
+    assert len(disconnected) == 2
+    assert [row["boundary_names"] for row in disconnected] == [["left_outer"], ["right_outer"]]
+    assert [row["trace_node_ids"] for row in disconnected] == [[1, 2, 3, 4], [5, 6, 7, 8]]
+    assert all(row["is_closed_manifold"] for row in disconnected)
+    assert [row["euler_characteristic"] for row in disconnected] == [2, 2]
+    assert [row["surface_abs_volume"] for row in disconnected] == pytest.approx([1.0 / 6.0, 1.0 / 6.0])
 
 
 def test_first_order_fem_bem_topology_for_unit_tetrahedron():

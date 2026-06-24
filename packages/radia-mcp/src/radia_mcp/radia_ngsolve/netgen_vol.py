@@ -380,6 +380,108 @@ class NetgenTriTetVolMesh:
             "euler_characteristic": len(trace_nodes) - len(surface_edges) + len(self.surface_triangles),
         }
 
+    def surface_connected_components(self) -> tuple[dict[str, object], ...]:
+        """Return connected boundary-triangle components for BEM block setup.
+
+        Components are built by triangle edge adjacency on the trace surface.
+        This is the small-readable counterpart to a BEM mesh partition: one
+        component may be an exterior truncation surface, another a disconnected
+        body, and each can carry its own boundary condition/operator block.
+        """
+
+        if not self.surface_triangles:
+            return ()
+
+        trace_nodes = self.trace_node_ids()
+        trace_node_to_local = {node: i for i, node in enumerate(trace_nodes, start=1)}
+        boundary_triangles = tuple(
+            tuple(trace_node_to_local[node] for node in tri.nodes) for tri in self.surface_triangles
+        )
+        surface_edges, tri_edges, _tri_edge_signs, edge_triangles, _opposites = _build_tri_edges(
+            boundary_triangles
+        )
+
+        adjacency: list[set[int]] = [set() for _ in self.surface_triangles]
+        for adjacent in edge_triangles:
+            tri_ids = [tri_id for tri_id in adjacent if tri_id]
+            for tri_id in tri_ids:
+                adjacency[tri_id - 1].update(other for other in tri_ids if other != tri_id)
+
+        seen: set[int] = set()
+        components: list[list[int]] = []
+        for tri_id in range(1, len(self.surface_triangles) + 1):
+            if tri_id in seen:
+                continue
+            stack = [tri_id]
+            seen.add(tri_id)
+            component: list[int] = []
+            while stack:
+                current = stack.pop()
+                component.append(current)
+                for other in sorted(adjacency[current - 1]):
+                    if other not in seen:
+                        seen.add(other)
+                        stack.append(other)
+            components.append(sorted(component))
+
+        areas = self.surface_triangle_areas()
+        area_vectors = self.surface_triangle_area_vectors()
+        rows: list[dict[str, object]] = []
+        for comp_index, tri_ids in enumerate(sorted(components, key=lambda row: row[0]), start=1):
+            tri_set = set(tri_ids)
+            node_ids = sorted({
+                node
+                for tri_id in tri_ids
+                for node in self.surface_triangles[tri_id - 1].nodes
+            })
+            boundary_numbers = sorted({
+                self.surface_triangles[tri_id - 1].bcnr for tri_id in tri_ids
+            })
+            edge_ids = sorted({
+                edge_id
+                for tri_id in tri_ids
+                for edge_id in tri_edges[tri_id - 1]
+            })
+            adjacency_counts = [
+                sum(1 for adjacent_tri_id in edge_triangles[edge_id - 1] if adjacent_tri_id in tri_set)
+                for edge_id in edge_ids
+            ]
+            closed_edges = sum(1 for count in adjacency_counts if count == 2)
+            open_edges = sum(1 for count in adjacency_counts if count == 1)
+            vector_area = (0.0, 0.0, 0.0)
+            signed_volume = 0.0
+            surface_area = 0.0
+            for tri_id in tri_ids:
+                tri = self.surface_triangles[tri_id - 1]
+                a, b, c = (self.points[node - 1] for node in tri.nodes)
+                vector_area = _add(vector_area, area_vectors[tri_id - 1])
+                signed_volume += _dot(a, _cross(b, c)) / 6.0
+                surface_area += areas[tri_id - 1]
+
+            rows.append({
+                "component": comp_index,
+                "surface_triangles": len(tri_ids),
+                "triangle_ids": tri_ids,
+                "surface_edges": len(edge_ids),
+                "trace_node_count": len(node_ids),
+                "trace_node_ids": node_ids,
+                "boundary_numbers": boundary_numbers,
+                "boundary_names": [
+                    self.boundary_names.get(bcnr, f"boundary_{bcnr}")
+                    for bcnr in boundary_numbers
+                ],
+                "surface_area": surface_area,
+                "surface_vector_area": vector_area,
+                "surface_vector_area_norm": _norm(vector_area),
+                "surface_signed_volume": signed_volume,
+                "surface_abs_volume": abs(signed_volume),
+                "closed_edges": closed_edges,
+                "open_edges": open_edges,
+                "is_closed_manifold": open_edges == 0 and closed_edges == len(edge_ids),
+                "euler_characteristic": len(node_ids) - len(edge_ids) + len(tri_ids),
+            })
+        return tuple(rows)
+
     def fem_bem_trace_view(self) -> dict[str, object]:
         """Return shared-node volume/surface connectivity for FEM/BEM coupling."""
 
