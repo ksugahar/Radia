@@ -1,15 +1,15 @@
 """Executable electromagnetic force / energy extractors for the radia-ngsolve
 A-formulation FEM path.
 
-These are the COMSOL-cross-validated methods, as RUNNABLE code (not just the
-theory in ``differential_forms``). Each function takes ``B`` -- the magnetic
+These are analytic- and regression-validated methods as RUNNABLE code (not just
+the theory in ``differential_forms``). Each function takes ``B`` -- the magnetic
 flux density CoefficientFunction, ``B = curl(gfu)`` for an HCurl GridFunction
 ``gfu`` -- plus the NGSolve mesh, and returns an SI quantity (force [N],
 energy [J], inductance [H]).
 
-Validated against COMSOL (LiveLink) and analytics; see the ``force_validation``
-MCP tool for the agreement table (sphere 0.11 %, coil+iron force ~3 %,
-self-inductance 0.01 %, ...). The regression tests in
+Validated against independent references and analytics; see the
+``force_validation`` MCP tool for the agreement table (sphere 0.11 %,
+coil+iron force ~3 %, self-inductance 0.01 %, ...). The regression tests in
 ``validation/force/validate_force_xval.py`` assert these keep matching.
 
 #25 lesson baked in: for a HIGH-permeability body do NOT carve a separate nested
@@ -505,7 +505,7 @@ def surface_triangle_maxwell_traction_summary(vertices, B, mu=MU0):
     each of the three nodes receives one third of the integrated force.
 
     This is intentionally small and explicit so the same block can be mirrored
-    in MATLAB/Gypsilab-style teaching scripts before using a full FEM surface
+    in first-order teaching scripts before using a full FEM surface
     integral over a curved or high-order mesh.
     """
 
@@ -557,6 +557,39 @@ def tetrahedron_lorentz_force_summary(vertices, current_density, B):
         "integrated_force_N": force,
         "nodal_force_loads_N": [[value / 4.0 for value in force] for _ in range(4)],
         "p1_shape_function_integral_m3": volume / 4.0,
+    }
+
+
+def planar_lorentz_force_summary(Jz_A_per_m2, B_xy_T, area_m2=1.0):
+    """2D planar Lorentz force from uniform out-of-plane current density.
+
+    For magnetostatic ``A_z`` formulations and planar block integrals,
+    ``J = (0, 0, Jz)`` and ``B = (Bx, By, 0)``.  The body-force density is
+
+        J x B = (-Jz * By, Jz * Bx, 0).
+
+    Integrating over cross-section area gives force per out-of-plane depth
+    [N/m].  This dependency-free helper mirrors the local integrand of
+    :func:`lorentz_force_2d`.
+    """
+
+    jz = float(Jz_A_per_m2)
+    b = _float_vector(B_xy_T, "B_xy_T")
+    if len(b) != 2:
+        raise ValueError("B_xy_T must have length 2")
+    area = float(area_m2)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    force_density = [-jz * b[1], jz * b[0]]
+    force = [area * value for value in force_density]
+    return {
+        "Jz_A_per_m2": jz,
+        "B_xy_T": b,
+        "area_m2": area,
+        "current_A": jz * area,
+        "force_density_N_per_m3": force_density,
+        "force_per_depth_N_per_m": force,
+        "force_magnitude_per_depth_N_per_m": math.hypot(force[0], force[1]),
     }
 
 
@@ -1219,7 +1252,7 @@ def maxwell_surface_force_harmonic(B, mesh, surface):
     ``calc_fem_kelvin`` (the workpiece is a HOLE, so the only force handle is the
     Maxwell stress over its surface; ``B = curl(gfu)`` from the SIBC A-solve).
     Returns (Fx, Fy, Fz) in newtons.  Validated by reduction to the
-    COMSOL-cross-validated :func:`maxwell_surface_force` (tests/test_maxwell_surface_harmonic.py).
+    static :func:`maxwell_surface_force` reference (tests/test_maxwell_surface_harmonic.py).
     """
     n = specialcf.normal(mesh.dim)
     Bn = sum(B[k] * n[k] for k in range(3))                  # B . n  (n real)
