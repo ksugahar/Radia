@@ -41,8 +41,8 @@ See `docs/research/policy/strategy.md` and `toolchain.md` for the full rationale
 | `validation_coaxial_region_stack.py` | Validation-class touching coaxial regions; checks analytic shell volumes and region-name preservation through STEP/Netgen/Gmsh |
 | `validation_laminated_stack_region_sweep.py` | Validation-class touching laminated box stack; checks per-layer volumes, fill factor, and named region preservation |
 | `validation_racetrack_plate_air_region.py` | Validation-class racetrack coil + conductive plate + air box; checks analytic region volumes and named region preservation |
-| `validation_build123d_cubit_measurement.py` | Validation-class build123d STEP round-trip measured by headless Cubit API; checks volume and surface-area parity |
-| `validation_enclosure_cubit_measurement.py` | Validation-class enclosing-box/void-region STEP round-trip measured by headless Cubit API; checks bbox margin, analytic volume/area, and Cubit volume/area parity |
+| `validation_build123d_cubit_measurement.py` | Validation-class build123d STEP round-trip measured by headless Cubit API; checks volume, surface-area, and bbox parity |
+| `validation_enclosure_cubit_measurement.py` | Validation-class enclosing-box/void-region STEP round-trip measured by headless Cubit API; checks bbox margin, analytic volume/area, and Cubit volume/area/bbox parity |
 | `runs/` | Output directory (`*.brep` / `*.step`, `*.msh`, `*_post.msh`, `*.json`, `sweep_summary.json`) |
 
 ## Run
