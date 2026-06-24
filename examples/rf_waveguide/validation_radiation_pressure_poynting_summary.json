@@ -1,0 +1,172 @@
+{
+  "kind": "rf_radiation_pressure_poynting_validation",
+  "validation_class": true,
+  "guide": {
+    "name": "WR-90",
+    "width_a_m": 0.02286,
+    "height_b_m": 0.01016,
+    "frequency_Hz": 10000000000.0
+  },
+  "rows": [
+    {
+      "power_W": 0.25,
+      "port": {
+        "frequency": 10000000000.0,
+        "width_a": 0.02286,
+        "height_b": 0.01016,
+        "power_w": 0.25,
+        "fc": 6557140376.202975,
+        "beta": 158.2382563130197,
+        "lambda_g": 0.03970711921111211,
+        "v_group": 226346105.33148408,
+        "Z_TE_ohm": 498.97437603537577,
+        "sin2_area_integral_m2": 0.0001161288,
+        "E_y_peak_V_per_m": 1465.730600605502,
+        "H_x_peak_A_per_m": 2.937486714751834,
+        "H_z_wall_peak_A_per_m": 2.551162186432833,
+        "H_z_over_H_x_peak": 0.8684846721590573,
+        "poynting_power_W": 0.25,
+        "poynting_abs_error_W": 0.0
+      },
+      "aperture_average_intensity_W_per_m2": 1076.3910416709723,
+      "absorber": {
+        "intensity_W_per_m2": 1076.3910416709723,
+        "area_m2": 0.0002322576,
+        "absorptance": 1.0,
+        "reflectance": 0.0,
+        "transmittance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "momentum_transfer_factor": 1.0,
+        "incident_power_W": 0.25,
+        "pressure_Pa": 3.5904540389437426e-06,
+        "force_N": 8.339102379953802e-10
+      },
+      "reflector": {
+        "intensity_W_per_m2": 1076.3910416709723,
+        "area_m2": 0.0002322576,
+        "absorptance": 0.0,
+        "reflectance": 1.0,
+        "transmittance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "momentum_transfer_factor": 2.0,
+        "incident_power_W": 0.25,
+        "pressure_Pa": 7.180908077887485e-06,
+        "force_N": 1.6678204759907604e-09
+      },
+      "absorber_force_power_identity_abs_error": 1.0339757656912846e-25,
+      "reflector_force_power_identity_abs_error": 2.0679515313825692e-25
+    },
+    {
+      "power_W": 1.0,
+      "port": {
+        "frequency": 10000000000.0,
+        "width_a": 0.02286,
+        "height_b": 0.01016,
+        "power_w": 1.0,
+        "fc": 6557140376.202975,
+        "beta": 158.2382563130197,
+        "lambda_g": 0.03970711921111211,
+        "v_group": 226346105.33148408,
+        "Z_TE_ohm": 498.97437603537577,
+        "sin2_area_integral_m2": 0.0001161288,
+        "E_y_peak_V_per_m": 2931.461201211004,
+        "H_x_peak_A_per_m": 5.874973429503668,
+        "H_z_wall_peak_A_per_m": 5.102324372865666,
+        "H_z_over_H_x_peak": 0.8684846721590573,
+        "poynting_power_W": 1.0,
+        "poynting_abs_error_W": 0.0
+      },
+      "aperture_average_intensity_W_per_m2": 4305.564166683889,
+      "absorber": {
+        "intensity_W_per_m2": 4305.564166683889,
+        "area_m2": 0.0002322576,
+        "absorptance": 1.0,
+        "reflectance": 0.0,
+        "transmittance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "momentum_transfer_factor": 1.0,
+        "incident_power_W": 1.0,
+        "pressure_Pa": 1.436181615577497e-05,
+        "force_N": 3.335640951981521e-09
+      },
+      "reflector": {
+        "intensity_W_per_m2": 4305.564166683889,
+        "area_m2": 0.0002322576,
+        "absorptance": 0.0,
+        "reflectance": 1.0,
+        "transmittance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "momentum_transfer_factor": 2.0,
+        "incident_power_W": 1.0,
+        "pressure_Pa": 2.872363231154994e-05,
+        "force_N": 6.671281903963042e-09
+      },
+      "absorber_force_power_identity_abs_error": 4.1359030627651384e-25,
+      "reflector_force_power_identity_abs_error": 8.271806125530277e-25
+    },
+    {
+      "power_W": 4.0,
+      "port": {
+        "frequency": 10000000000.0,
+        "width_a": 0.02286,
+        "height_b": 0.01016,
+        "power_w": 4.0,
+        "fc": 6557140376.202975,
+        "beta": 158.2382563130197,
+        "lambda_g": 0.03970711921111211,
+        "v_group": 226346105.33148408,
+        "Z_TE_ohm": 498.97437603537577,
+        "sin2_area_integral_m2": 0.0001161288,
+        "E_y_peak_V_per_m": 5862.922402422008,
+        "H_x_peak_A_per_m": 11.749946859007336,
+        "H_z_wall_peak_A_per_m": 10.204648745731332,
+        "H_z_over_H_x_peak": 0.8684846721590573,
+        "poynting_power_W": 4.0,
+        "poynting_abs_error_W": 0.0
+      },
+      "aperture_average_intensity_W_per_m2": 17222.256666735557,
+      "absorber": {
+        "intensity_W_per_m2": 17222.256666735557,
+        "area_m2": 0.0002322576,
+        "absorptance": 1.0,
+        "reflectance": 0.0,
+        "transmittance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "momentum_transfer_factor": 1.0,
+        "incident_power_W": 4.0,
+        "pressure_Pa": 5.744726462309988e-05,
+        "force_N": 1.3342563807926083e-08
+      },
+      "reflector": {
+        "intensity_W_per_m2": 17222.256666735557,
+        "area_m2": 0.0002322576,
+        "absorptance": 0.0,
+        "reflectance": 1.0,
+        "transmittance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "momentum_transfer_factor": 2.0,
+        "incident_power_W": 4.0,
+        "pressure_Pa": 0.00011489452924619976,
+        "force_N": 2.6685127615852167e-08
+      },
+      "absorber_force_power_identity_abs_error": 1.6543612251060553e-24,
+      "reflector_force_power_identity_abs_error": 3.308722450212111e-24
+    }
+  ],
+  "checks": {
+    "aperture_area_m2": 0.0002322576,
+    "one_w_average_intensity_W_per_m2": 4305.564166683889,
+    "one_w_absorber_force_N": 3.335640951981521e-09,
+    "one_w_reflector_force_N": 6.671281903963042e-09,
+    "one_w_absorber_pressure_Pa": 1.436181615577497e-05,
+    "one_w_reflector_pressure_Pa": 2.872363231154994e-05,
+    "force_ratio_reflector_over_absorber": 2.0,
+    "force_ratio_4w_over_1w_absorber": 4.0,
+    "equivalent_plane_wave_E_rms_V_per_m": 1273.5919826006243,
+    "equivalent_plane_wave_E_peak_V_per_m": 1801.1310547234418,
+    "intensity_from_rms_abs_error": 0.0,
+    "intensity_from_peak_abs_error": 0.0,
+    "max_port_power_abs_error_W": 0.0,
+    "max_force_power_identity_abs_error": 3.308722450212111e-24
+  }
+}
