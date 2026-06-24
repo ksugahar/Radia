@@ -116,12 +116,14 @@ RF/time-harmonic radiation pressure at normal incidence:
 
 ```text
 p = (A + 2 R) I / c,     F = (A + 2 R) P / c
+one-sided scattering:    F = (1 + R - T) P_inc / c
 ```
 
 where ``I`` is time-average Poynting intensity, ``P`` is integrated incident
-power, ``A`` is absorptance, and ``R`` is reflectance.  Use this for absorber,
-short, mirror, and waveguide-port force sanity checks before attempting a full
-time-averaged Maxwell-stress surface integral.
+power, ``A`` is absorptance, ``R`` is reflectance, and ``T`` is transmittance.
+The two factors are identical because ``A = 1 - R - T``.  Use this for absorber,
+short, mirror, transmitted through-line, and waveguide-port force sanity checks
+before attempting a full time-averaged Maxwell-stress surface integral.
 
 For a vector Poynting patch calculation with propagation direction ``k`` and
 surface normal ``n`` pointing out of the illuminated side:
@@ -211,6 +213,9 @@ careful remeshing.
   harmonic analytic gates.
 - ``examples/electrostatics/validation_parallel_plate_electrostatic_force.py``:
   capacitance-energy, Maxwell-pressure, and traction-equivalence gate.
+- ``examples/rf_waveguide/validation_scattering_radiation_force.py``:
+  one-sided normal-incidence scattering force from reflectance/transmittance,
+  equivalent to the absorber/reflector radiation-pressure factor.
 - ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.
 - ``ngsolve_usage("electrostatic_force")``: MEMS electric force.
 - ``force_validation("cross_validation")``: stored regression-reference cases.
