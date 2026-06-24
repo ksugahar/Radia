@@ -1080,6 +1080,13 @@ def get_lint_rules() -> str:
 			'fix': 'cubit.cmd("block 2 add tri all")',
 		},
 		{
+			'rule': 'ambiguous-face-block',
+			'severity': 'LOW',
+			'description': 'block add face is ambiguous: APREPRO face selects generic surface elements, but Python APIs split tri/quad blocks.',
+			'trigger': 'cubit.cmd("block 2 add face all in surface all")',
+			'fix': 'Use tri for tet boundaries, quad for hex boundaries, or add an explicit mixed tri/quad comment.',
+		},
+		{
 			'rule': 'wrong-file-extension',
 			'severity': 'MODERATE',
 			'description': 'Export file extension does not match the format.',
@@ -1112,11 +1119,18 @@ def get_lint_rules() -> str:
 			'severity': 'HIGH',
 			'description': 'Qt class used but not imported. Causes NameError at runtime in Cubit.',
 			'trigger': 'QMenu(...) without "from PySide6.QtWidgets import QMenu"',
-			'fix': 'Add the missing class to PySide6/PyQt5 import statement.',
+			'fix': 'Add the missing class to the PySide6 import statement.',
+		},
+		{
+			'rule': 'pyqt5-import-forbidden',
+			'severity': 'HIGH',
+			'description': 'PyQt5 import in Cubit UI code. Radia targets Coreform Cubit 2025.12+ and is PySide6-only.',
+			'trigger': 'from PyQt5.QtWidgets import ...',
+			'fix': 'Use PySide6 only; do not keep a PyQt5 fallback.',
 		},
 	]
 
-	lines = ["# Cubit Export Lint Rules (16 rules)", ""]
+	lines = [f"# Cubit Export Lint Rules ({len(rules_info)} rules)", ""]
 	for r in rules_info:
 		lines.append(f"## [{r['severity']}] {r['rule']}")
 		lines.append(f"{r['description']}")

@@ -51,7 +51,7 @@ Per-region soft iron, LINEAR (`mu_r` scalar or `{material: mu_r}` dict) AND NONL
 [[H,B]] table or `{material: [[H,B]]}` dict).  N = B^T G B is geometry-only, so multi-grade iron enters
 ONLY through the (1/chi)-weighted HDiv mass (linear) / the per-element constitutive law (nonlinear).
 Mixed PM+iron (fixed-M source regions) + the 165k-DOF-scale preconditioner + the M0 parity gate are the
-remaining productionization steps (docs/hdiv_vim/PRODUCTIONIZATION.md).  Until they land, yano-type MSC
+remaining productionization steps (docs/hdiv_vim/PRODUCTIONIZATION.md).  Until they land, moment-yano MSC
 stays the `rad.Solve` default demag backend (`radia.set_demag_backend`); this entry does not touch it.
 
 Per CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT" -- this library helper does NOT

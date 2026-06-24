@@ -5,7 +5,7 @@ Creates a hex-meshed sphere in Cubit, exports via cubit_mesh_export
 at order=1,2,3, integrates volume in NGSolve, compares with analytical.
 
 This tests the FULL panel pipeline:
-  Cubit hex mesh -> extract_curved_mesh(order=N) -> NGSolve Integrate
+  Cubit hex mesh -> export netgen order=N -> NGSolve Integrate
 
 Usage:
   python tests/cubit/test_ngsolve_volume_hex_sphere.py

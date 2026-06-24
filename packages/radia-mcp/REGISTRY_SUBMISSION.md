@@ -25,7 +25,7 @@ Copy-paste these fields into the submission forms:
 ## Description (long, ≤ 512 chars)
 
 MCP servers for the Radia CAE ecosystem: standalone Cubit + build123d
-+ gmsh-post via Plan A (persistent Cubit GUI + PyQt5 QTimer + file-
++ gmsh-post via Plan A (persistent Cubit GUI + PySide6 QTimer + file-
 drop IPC). First-and-only public MCP for Gmsh and Cubit. Includes
 cubit_mesh_auto (scheme-ladder batch validation → live GUI replay),
 cubit_exec_safely (checkpoint + dry-run + apply), gmsh_post suite
