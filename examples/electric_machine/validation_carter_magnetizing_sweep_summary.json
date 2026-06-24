@@ -1,0 +1,96 @@
+{
+  "kind": "carter_magnetizing_inductance_validation",
+  "validation_class": true,
+  "slots": 36,
+  "poles": 4,
+  "phases": 3,
+  "gap_diameter_m": 0.1,
+  "stack_length_m": 0.1,
+  "physical_gap_m": 0.0008,
+  "turns_per_phase": 120,
+  "pitch_fraction": 0.8333333333333334,
+  "rows": [
+    {
+      "slot_opening_m": 0.0,
+      "slot_opening_over_gap": 0.0,
+      "carter_coefficient": 1.0,
+      "effective_gap_m": 0.0008,
+      "permeance_factor": 1.0,
+      "L_mu_per_phase_H": 0.030941908404940564,
+      "L_m_sync_H": 0.04641286260741084,
+      "L_mu_over_smooth": 1.0
+    },
+    {
+      "slot_opening_m": 0.0005,
+      "slot_opening_over_gap": 0.625,
+      "carter_coefficient": 1.0064069858624891,
+      "effective_gap_m": 0.0008051255886899914,
+      "permeance_factor": 0.9936338022763243,
+      "L_mu_per_phase_H": 0.03074492609808685,
+      "L_m_sync_H": 0.046117389147130275,
+      "L_mu_over_smooth": 0.9936338022763244
+    },
+    {
+      "slot_opening_m": 0.001,
+      "slot_opening_over_gap": 1.25,
+      "carter_coefficient": 1.0234558809996495,
+      "effective_gap_m": 0.0008187647047997196,
+      "permeance_factor": 0.9770816881947669,
+      "L_mu_per_phase_H": 0.030232772100267178,
+      "L_m_sync_H": 0.04534915815040077,
+      "L_mu_over_smooth": 0.977081688194767
+    },
+    {
+      "slot_opening_m": 0.0015,
+      "slot_opening_over_gap": 1.875,
+      "carter_coefficient": 1.049184032066296,
+      "effective_gap_m": 0.0008393472256530368,
+      "permeance_factor": 0.9531216349438416,
+      "L_mu_per_phase_H": 0.02949140232719955,
+      "L_m_sync_H": 0.044237103490799325,
+      "L_mu_over_smooth": 0.9531216349438417
+    },
+    {
+      "slot_opening_m": 0.0025,
+      "slot_opening_over_gap": 3.125,
+      "carter_coefficient": 1.1238280892549202,
+      "effective_gap_m": 0.0008990624714039361,
+      "permeance_factor": 0.8898158086286879,
+      "L_mu_per_phase_H": 0.027532599247856986,
+      "L_m_sync_H": 0.04129889887178548,
+      "L_mu_over_smooth": 0.889815808628688
+    },
+    {
+      "slot_opening_m": 0.004,
+      "slot_opening_over_gap": 5.0,
+      "carter_coefficient": 1.2973249852458317,
+      "effective_gap_m": 0.0010378599881966655,
+      "permeance_factor": 0.7708168819476707,
+      "L_mu_per_phase_H": 0.02385054535820671,
+      "L_m_sync_H": 0.035775818037310066,
+      "L_mu_over_smooth": 0.7708168819476707
+    },
+    {
+      "slot_opening_m": 0.0055,
+      "slot_opening_over_gap": 6.874999999999999,
+      "carter_coefficient": 1.5745146501167357,
+      "effective_gap_m": 0.0012596117200933887,
+      "permeance_factor": 0.6351163515219495,
+      "L_mu_per_phase_H": 0.019651711975272195,
+      "L_m_sync_H": 0.02947756796290829,
+      "L_mu_over_smooth": 0.6351163515219495
+    }
+  ],
+  "checks": {
+    "slot_pitch_m": 0.008726646259971648,
+    "kw1": 0.9270908562232686,
+    "smooth_L_mu_H": 0.030941908404940564,
+    "largest_opening_carter_coefficient": 1.5745146501167357,
+    "largest_opening_L_mu_drop_fraction": 0.36488364847805055,
+    "max_L_mu_vs_permeance_identity_error": 1.1102230246251565e-16,
+    "max_sync_factor_error": 2.220446049250313e-16,
+    "kc_monotone_increasing": true,
+    "permeance_monotone_decreasing": true,
+    "L_mu_monotone_decreasing": true
+  }
+}
