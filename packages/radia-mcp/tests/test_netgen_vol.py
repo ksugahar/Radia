@@ -75,6 +75,48 @@ endmesh
 """
 
 
+TET_VOL_FOUR_BOUNDARIES = """\
+mesh3d
+dimension
+3
+geomtype
+0
+facedescriptors
+4
+1 1 0 1 1
+2 1 0 1 1
+3 1 0 1 1
+4 1 0 1 1
+surfaceelements
+4
+1 1 1 0 3 1 2 3
+2 2 1 0 3 1 4 2
+3 3 1 0 3 2 4 3
+4 4 1 0 3 3 4 1
+volumeelements
+1
+1 4 1 2 3 4
+points
+4
+0 0 0
+1 0 0
+0 1 0
+0 0 1
+pointelements
+0
+materials
+1
+1 air
+bcnames
+4
+1 face123
+2 face142
+3 face243
+4 face341
+endmesh
+"""
+
+
 FOUR_TET_WITH_INTERIOR_NODE_VOL = """\
 mesh3d
 dimension
@@ -145,9 +187,27 @@ def test_fem_bem_trace_view_preserves_one_based_connectivity():
     assert view["surface_triangles"][0] == [1, 2, 3]
     assert view["surface_boundary_numbers"] == [1, 1, 1, 1]
     assert view["trace_node_ids"] == [1, 2, 3, 4]
+    assert view["trace_node_ids_by_boundary_number"] == {1: [1, 2, 3, 4]}
     assert view["total_volume"] == pytest.approx(1.0 / 6.0)
     assert view["total_surface_area"] == pytest.approx(1.5 + 0.5 * 3**0.5)
     assert view["policy"] == "netgen_vol_tri_tet_only_shared_one_based_nodes"
+
+
+def test_trace_node_ids_by_boundary_number():
+    mesh = parse_netgen_tri_tet_vol(TET_VOL_FOUR_BOUNDARIES)
+
+    assert mesh.trace_node_ids_by_boundary_number() == {
+        1: (1, 2, 3),
+        2: (1, 2, 4),
+        3: (2, 3, 4),
+        4: (1, 3, 4),
+    }
+    assert mesh.fem_bem_trace_view()["trace_node_ids_by_boundary_number"] == {
+        1: [1, 2, 3],
+        2: [1, 2, 4],
+        3: [2, 3, 4],
+        4: [1, 3, 4],
+    }
 
 
 def test_first_order_fem_bem_topology_for_unit_tetrahedron():
