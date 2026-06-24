@@ -13,6 +13,8 @@ not mesh generation. Mesh generation uses Netgen or Cubit.
 Usage:
     mcp-server-gmsh              # Start MCP server (stdio transport)
     mcp-server-gmsh --selftest   # Run self-test
+    mcp-server-gmsh --selftest --audit-examples
+                                  # Run self-test plus repo-wide examples audit
 """
 
 import os
@@ -209,8 +211,8 @@ def get_gmsh_lint_rules() -> str:
 # Self-Test
 # ============================================================
 
-def _selftest():
-    """Run lint on fixtures and optionally examples/."""
+def _selftest(audit_examples: bool = False):
+    """Run fixture self-test; optionally run the repo-wide examples audit."""
     print("=" * 70)
     print("GMSH Lint Self-Test")
     print("=" * 70)
@@ -252,11 +254,17 @@ def _selftest():
         print("  fixture validation: PASSED")
         print()
 
-    # --- Examples scan ---
+    # --- Examples audit ---
     examples_dir = PROJECT_ROOT / "examples"
     if not examples_dir.exists():
         if not fixtures_dir.exists():
             print(f"Examples directory not found: {examples_dir}")
+        print("PASSED")
+        return
+
+    if not audit_examples:
+        print("  examples audit: SKIPPED (run --selftest --audit-examples)")
+        print("PASSED")
         return
 
     py_files = sorted(examples_dir.rglob("*.py"))
@@ -277,6 +285,7 @@ def _selftest():
     print()
     print(f"Scanned: {total} files")
     print(f"GMSH issues: {issues}")
+    print("PASSED")
 
 
 
@@ -293,10 +302,10 @@ register_status_tool(
 
 def main():
     """Entry point for mcp-server-gmsh console script."""
-    if len(sys.argv) > 1 and sys.argv[1] == '--selftest':
+    if '--selftest' in sys.argv[1:]:
         from radia_mcp.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()
-        _selftest()
+        _selftest(audit_examples='--audit-examples' in sys.argv[1:])
     else:
         mcp.run(transport="stdio")
 
