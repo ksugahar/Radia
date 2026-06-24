@@ -14,6 +14,7 @@ S-parameters, and cavity-style post-processing.
 | [`validation_waveguide_te10_port_normalization.py`](validation_waveguide_te10_port_normalization.py) | Validation-class WR-90 TE10 port normalization: 1 W field amplitudes, Poynting power integral, longitudinal/transverse H ratio, and power scaling | `rectangular_waveguide_te10_port_normalization`, `waveguide_wave_impedance`, `waveguide_dispersion` |
 | [`validation_radiation_pressure_poynting.py`](validation_radiation_pressure_poynting.py) | Validation-class RF radiation pressure: TE10 Poynting power to absorber/reflector force via momentum flux | `radiation_pressure_summary`, `radiation_force_from_power`, `plane_wave_intensity_from_electric_field`, `rectangular_waveguide_te10_port_normalization` |
 | [`validation_oblique_radiation_pressure.py`](validation_oblique_radiation_pressure.py) | Validation-class oblique-incidence radiation pressure: normal `cos^2(theta)` force plus absorbed tangential momentum | `oblique_radiation_pressure_summary`, `radiation_pressure_summary` |
+| [`validation_poynting_patch_force_vector.py`](validation_poynting_patch_force_vector.py) | Validation-class vector radiation force from a 3D Poynting vector, checked against oblique-incidence pressure components | `poynting_patch_force_summary`, `oblique_radiation_pressure_summary` |
 | [`validation_time_harmonic_maxwell_stress.py`](validation_time_harmonic_maxwell_stress.py) | Validation-class complex phasor Maxwell stress: peak/RMS conventions, plane-wave momentum flux, and local traction sign | `time_average_maxwell_stress_tensor`, `time_average_maxwell_traction_summary`, `radiation_pressure_from_intensity` |
 
 ```powershell
@@ -26,6 +27,7 @@ python validation_waveguide_conductor_loss.py
 python validation_waveguide_te10_port_normalization.py
 python validation_radiation_pressure_poynting.py
 python validation_oblique_radiation_pressure.py
+python validation_poynting_patch_force_vector.py
 python validation_time_harmonic_maxwell_stress.py
 ```
 

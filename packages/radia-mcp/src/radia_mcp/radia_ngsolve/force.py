@@ -1094,6 +1094,81 @@ def oblique_radiation_pressure_summary(
     }
 
 
+def poynting_patch_force_summary(
+    poynting_W_per_m2,
+    surface_normal,
+    area_m2=1.0,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """Vector radiation force on a flat patch from a Poynting vector.
+
+    ``poynting_W_per_m2`` points along propagation.  ``surface_normal`` points
+    out of the illuminated side of the patch, so an incident wave has
+    ``dot(k, normal) < 0``.  The intercepted power is
+
+        P_inc = |S| area max(0, -k.n).
+
+    Absorption transfers momentum along ``k``; specular reflection reverses the
+    normal component.  The returned force vector is in newtons.
+    """
+
+    s_vec = _float_vector(poynting_W_per_m2, "poynting_W_per_m2")
+    normal = _unit_vector(surface_normal, "surface_normal")
+    if len(s_vec) != len(normal):
+        raise ValueError("poynting_W_per_m2 and surface_normal must have the same length")
+    area = float(area_m2)
+    speed = float(speed)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    absorptance, reflectance = _validate_optical_coefficients(absorptance, reflectance)
+
+    s_mag = math.sqrt(sum(value * value for value in s_vec))
+    if s_mag > 0.0:
+        k = [value / s_mag for value in s_vec]
+        cos_incidence = max(0.0, -sum(ki * ni for ki, ni in zip(k, normal)))
+    else:
+        k = [0.0 for _ in s_vec]
+        cos_incidence = 0.0
+    incident_intensity = s_mag * cos_incidence
+    incident_power = incident_intensity * area
+    absorption_scale = absorptance * incident_power / speed
+    reflection_scale = -2.0 * reflectance * incident_power * cos_incidence / speed
+    force = [
+        absorption_scale * k[i] + reflection_scale * normal[i]
+        for i in range(len(s_vec))
+    ]
+    normal_force_into_surface = -sum(fi * ni for fi, ni in zip(force, normal))
+    tangential_force = [
+        force[i] + normal_force_into_surface * normal[i]
+        for i in range(len(force))
+    ]
+    return {
+        "poynting_W_per_m2": s_vec,
+        "poynting_magnitude_W_per_m2": s_mag,
+        "propagation_direction": k,
+        "surface_normal": normal,
+        "area_m2": area,
+        "absorptance": absorptance,
+        "reflectance": reflectance,
+        "transmittance": 1.0 - absorptance - reflectance,
+        "speed_m_per_s": speed,
+        "cos_incidence": cos_incidence,
+        "incident_intensity_W_per_m2": incident_intensity,
+        "incident_power_on_patch_W": incident_power,
+        "force_N": force,
+        "force_magnitude_N": math.sqrt(sum(value * value for value in force)),
+        "normal_force_into_surface_N": normal_force_into_surface,
+        "tangential_force_N": tangential_force,
+        "tangential_force_magnitude_N": math.sqrt(
+            sum(value * value for value in tangential_force)
+        ),
+    }
+
+
 def electrostatic_eggshell_force(E, mesh, gradg, air_region="air"):
     """Weighted Maxwell-stress ("eggshell") ELECTROSTATIC force -- the electric twin
     of :func:`eggshell_force` (ε0 E in place of B/μ0). ``E`` is the electric field
