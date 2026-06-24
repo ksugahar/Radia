@@ -23,6 +23,8 @@ import math
 from ngsolve import (CoefficientFunction, InnerProduct, sqrt, dx, ds, Integrate,
                      IfPos, specialcf, Conj, x, y, z)
 
+from .scalar_fem3d import p1_surface_triangle_geometry
+
 MU0 = 4.0e-7 * math.pi
 EPS0 = 8.8541878128e-12
 C0 = 299792458.0
@@ -137,6 +139,34 @@ def maxwell_traction_summary(B, normal, area_m2=1.0, mu=MU0):
             sum(value * value for value in tangential_traction)
         ),
         "force_N": [area * value for value in traction],
+    }
+
+
+def surface_triangle_maxwell_traction_summary(vertices, B, mu=MU0):
+    """P1 surface-triangle Maxwell traction and equivalent nodal force load.
+
+    ``vertices`` is one 3D boundary triangle, using its stored orientation.
+    The returned force is ``area * (T n)`` for the triangle unit normal.  The
+    constant traction is also distributed as a P1 equivalent nodal load:
+    each of the three nodes receives one third of the integrated force.
+
+    This is intentionally small and explicit so the same block can be mirrored
+    in MATLAB/Gypsilab-style teaching scripts before using a full FEM surface
+    integral over a curved or high-order mesh.
+    """
+
+    geom = p1_surface_triangle_geometry(vertices)
+    traction = maxwell_traction_air(B, geom["unit_normal"], mu=mu)
+    force = [geom["area"] * value for value in traction]
+    return {
+        "area": geom["area"],
+        "unit_normal": list(geom["unit_normal"]),
+        "area_vector": list(geom["area_vector"]),
+        "B": _float_vector(B, "B"),
+        "mu": float(mu),
+        "traction_Pa": traction,
+        "integrated_force_N": force,
+        "nodal_force_loads_N": [[value / 3.0 for value in force] for _ in range(3)],
     }
 
 
