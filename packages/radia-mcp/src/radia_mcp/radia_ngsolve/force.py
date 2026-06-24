@@ -1422,6 +1422,83 @@ def radiation_scattering_force_summary(
     }
 
 
+def two_port_scattering_momentum_force_summary(
+    power_incident_W,
+    incident_direction,
+    reflectance,
+    transmittance=0.0,
+    transmitted_direction=None,
+    speed=C0,
+):
+    """Vector force [N] from a one-sided two-port scattering momentum balance.
+
+    ``incident_direction`` and ``transmitted_direction`` are propagation
+    directions of the incident and transmitted power flows.  Reflection is
+    assumed to leave back toward the source along ``-incident_direction``.
+    The force on the scatterer is the incoming field momentum minus outgoing
+    field momentum:
+
+        F = P/c * ((1 + R) k_inc - T k_out)
+
+    For a straight through-line ``k_out = k_inc`` this reduces to
+    :func:`radiation_force_from_normal_scattering`.  For a lossless 90-degree
+    bend with no reflection it gives ``P/c * (k_inc - k_out)``, the readable
+    vector gate for RF waveguide momentum bookkeeping.
+    """
+
+    power = float(power_incident_W)
+    speed = float(speed)
+    if power < 0.0:
+        raise ValueError("power_incident_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    inc = _unit_vector(incident_direction, "incident_direction")
+    if transmitted_direction is None:
+        out = list(inc)
+    else:
+        out = _unit_vector(transmitted_direction, "transmitted_direction")
+        if len(out) != len(inc):
+            raise ValueError("incident_direction and transmitted_direction must have the same length")
+    reflectance, transmittance, absorptance = _validate_reflectance_transmittance(
+        reflectance,
+        transmittance,
+    )
+
+    momentum_scale = power / speed
+    incident_momentum = [momentum_scale * value for value in inc]
+    reflected_momentum = [-reflectance * momentum_scale * value for value in inc]
+    transmitted_momentum = [transmittance * momentum_scale * value for value in out]
+    force = [
+        incident_momentum[i] - reflected_momentum[i] - transmitted_momentum[i]
+        for i in range(len(inc))
+    ]
+    axial_force = sum(fi * ki for fi, ki in zip(force, inc))
+    return {
+        "power_incident_W": power,
+        "reflectance": reflectance,
+        "transmittance": transmittance,
+        "absorptance": absorptance,
+        "power_reflected_W": reflectance * power,
+        "power_transmitted_W": transmittance * power,
+        "power_absorbed_W": absorptance * power,
+        "speed_m_per_s": speed,
+        "incident_direction": inc,
+        "transmitted_direction": out,
+        "incident_momentum_flow_N": incident_momentum,
+        "reflected_momentum_flow_N": reflected_momentum,
+        "transmitted_momentum_flow_N": transmitted_momentum,
+        "force_N": force,
+        "force_magnitude_N": math.sqrt(sum(value * value for value in force)),
+        "axial_force_along_incident_direction_N": axial_force,
+        "straight_through_equivalent_force_N": radiation_force_from_normal_scattering(
+            power,
+            reflectance,
+            transmittance,
+            speed=speed,
+        ),
+    }
+
+
 def radiation_pressure_summary(
     intensity_W_per_m2,
     area_m2=1.0,
