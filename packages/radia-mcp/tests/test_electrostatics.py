@@ -28,6 +28,7 @@ from radia_mcp.radia_ngsolve.electrostatics import (
     sphere_above_plane_capacitance,
     dielectrophoresis_force,
 )
+from radia_mcp.radia_ngsolve.force import electrostatic_traction_summary
 
 
 def test_isolated_disk_capacitance():
@@ -88,10 +89,25 @@ def test_parallel_plate_capacitor_energy_force():
     eps_r, area, gap, V = 1.0, 1e-3, 1e-3, 100.0
     out = parallel_plate_capacitor_energy_force(eps_r, area, gap, V)
     C = EPS0 * eps_r * area / gap
+    E = V / gap
+    pressure = 0.5 * EPS0 * eps_r * E * E
     assert math.isclose(out["C"], C, rel_tol=1e-12)
     assert math.isclose(out["energy"], 0.5 * C * V * V, rel_tol=1e-12)
+    assert math.isclose(out["electric_field_V_per_m"], E, rel_tol=1e-12)
+    assert math.isclose(out["pressure_Pa"], pressure, rel_tol=1e-12)
+    assert math.isclose(out["energy_density_J_per_m3"], pressure, rel_tol=1e-12)
     # GATE: identity |F| == energy/gap (force = energy density * area)
     assert math.isclose(out["force"], out["energy"] / gap, rel_tol=1e-12)
+    assert math.isclose(out["force"], pressure * area, rel_tol=1e-12)
+    # GATE: same pressure from the electrostatic Maxwell-stress traction helper
+    traction = electrostatic_traction_summary(
+        (0.0, 0.0, E),
+        (0.0, 0.0, 1.0),
+        area_m2=area,
+        eps=EPS0 * eps_r,
+    )
+    assert math.isclose(traction["normal_traction_Pa"], out["pressure_Pa"], rel_tol=1e-12)
+    assert math.isclose(traction["force_N"][2], out["force"], rel_tol=1e-12)
     # GATE: 1/gap^2 scaling -- halving the gap quadruples the force
     out2 = parallel_plate_capacitor_energy_force(eps_r, area, gap / 2.0, V)
     assert math.isclose(out2["force"], 4.0 * out["force"], rel_tol=1e-12)
