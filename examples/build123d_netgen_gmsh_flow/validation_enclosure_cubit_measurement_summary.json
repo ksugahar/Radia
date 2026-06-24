@@ -1,15 +1,18 @@
 {
   "checks": {
+    "bbox_atol": 1e-06,
     "contained_by_bbox": true,
     "cubit_available": true,
     "cubit_bin_name": "Coreform Cubit 2025.12",
     "max_analytic_area_rel_error": 3.2686311425914033e-16,
     "max_analytic_volume_rel_error": 3.9505322793289224e-16,
     "max_cubit_area_rel_error": 1.6343155712957016e-16,
+    "max_cubit_bbox_abs_error": 4.440892098500626e-16,
     "max_cubit_volume_rel_error": 2.633688186219282e-16,
     "min_bbox_clearance": 0.7000000000000001,
     "n_analytic_passed": 4,
     "n_cases": 4,
+    "n_cubit_bbox_compared": 4,
     "n_cubit_passed": 4,
     "nominal_void_volume": 100.53055763976693,
     "passed": true,
@@ -63,8 +66,8 @@
     "name": "enclosure_box",
     "nominal_void_volume": 100.53055763976693
   },
-  "elapsed_seconds": 1.148,
-  "kind": "build123d_enclosure_cubit_volume_area_cross_validation",
+  "elapsed_seconds": 1.064,
+  "kind": "build123d_enclosure_cubit_volume_area_bbox_cross_validation",
   "rows": [
     {
       "analytic": {
@@ -89,6 +92,29 @@
           3.0,
           1.0
         ],
+        "bounding_box": {
+          "center": [
+            -1.6,
+            0.0,
+            -0.4
+          ],
+          "diagonal": 3.7416573867739413,
+          "max": [
+            -0.6000000000000001,
+            1.5,
+            0.09999999999999998
+          ],
+          "min": [
+            -2.6,
+            -1.5,
+            -0.9
+          ],
+          "size": [
+            2.0,
+            3.0,
+            1.0
+          ]
+        },
         "edges": 12,
         "faces": 6,
         "vertices": 8,
@@ -96,6 +122,29 @@
       },
       "cubit": {
         "area": 22.0,
+        "bounding_box": {
+          "center": [
+            -1.6,
+            0.0,
+            -0.4
+          ],
+          "diagonal": 3.7416573867739413,
+          "max": [
+            -0.6000000000000001,
+            1.5,
+            0.09999999999999998
+          ],
+          "min": [
+            -2.6,
+            -1.5,
+            -0.9
+          ],
+          "size": [
+            2.0,
+            3.0,
+            1.0
+          ]
+        },
         "index": 1,
         "name": "block",
         "surfaces": 6,
@@ -104,13 +153,66 @@
       },
       "cubit_comparison": {
         "area_rel_error": 0.0,
+        "bbox_abs_error": 0.0,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 0.0,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 0.0,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 0.0,
         "measured_area": 22.0,
+        "measured_bounding_box": {
+          "center": [
+            -1.6,
+            0.0,
+            -0.4
+          ],
+          "diagonal": 3.7416573867739413,
+          "max": [
+            -0.6000000000000001,
+            1.5,
+            0.09999999999999998
+          ],
+          "min": [
+            -2.6,
+            -1.5,
+            -0.9
+          ],
+          "size": [
+            2.0,
+            3.0,
+            1.0
+          ]
+        },
         "measured_label": "cubit",
         "measured_volume": 6.0,
         "name": "block",
         "passed": true,
         "reason": "ok",
         "reference_area": 22.0,
+        "reference_bounding_box": {
+          "center": [
+            -1.6,
+            0.0,
+            -0.4
+          ],
+          "diagonal": 3.7416573867739413,
+          "max": [
+            -0.6000000000000001,
+            1.5,
+            0.09999999999999998
+          ],
+          "min": [
+            -2.6,
+            -1.5,
+            -0.9
+          ],
+          "size": [
+            2.0,
+            3.0,
+            1.0
+          ]
+        },
         "reference_volume": 5.999999999999999,
         "rtol": 1e-05,
         "volume_rel_error": 1.4802973661668753e-16
@@ -140,6 +242,29 @@
           1.4,
           1.2000000000000002
         ],
+        "bounding_box": {
+          "center": [
+            1.8,
+            0.0,
+            0.5
+          ],
+          "diagonal": 2.315167380558045,
+          "max": [
+            2.5,
+            0.7,
+            1.1
+          ],
+          "min": [
+            1.1,
+            -0.7,
+            -0.09999999999999998
+          ],
+          "size": [
+            1.4,
+            1.4,
+            1.2000000000000002
+          ]
+        },
         "edges": 6,
         "faces": 4,
         "vertices": 4,
@@ -147,6 +272,29 @@
       },
       "cubit": {
         "area": 10.225884087434775,
+        "bounding_box": {
+          "center": [
+            1.8,
+            0.0,
+            0.5
+          ],
+          "diagonal": 2.315167380558045,
+          "max": [
+            2.5,
+            0.7,
+            1.1
+          ],
+          "min": [
+            1.1,
+            -0.7,
+            -0.09999999999999998
+          ],
+          "size": [
+            1.4,
+            1.4,
+            1.2000000000000002
+          ]
+        },
         "index": 2,
         "name": "sleeve",
         "surfaces": 4,
@@ -155,13 +303,66 @@
       },
       "cubit_comparison": {
         "area_rel_error": 0.0,
+        "bbox_abs_error": 0.0,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 0.0,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 0.0,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 0.0,
         "measured_area": 10.225884087434775,
+        "measured_bounding_box": {
+          "center": [
+            1.8,
+            0.0,
+            0.5
+          ],
+          "diagonal": 2.315167380558045,
+          "max": [
+            2.5,
+            0.7,
+            1.1
+          ],
+          "min": [
+            1.1,
+            -0.7,
+            -0.09999999999999998
+          ],
+          "size": [
+            1.4,
+            1.4,
+            1.2000000000000002
+          ]
+        },
         "measured_label": "cubit",
         "measured_volume": 1.3854423602330983,
         "name": "sleeve",
         "passed": true,
         "reason": "ok",
         "reference_area": 10.225884087434775,
+        "reference_bounding_box": {
+          "center": [
+            1.8,
+            0.0,
+            0.5
+          ],
+          "diagonal": 2.315167380558045,
+          "max": [
+            2.5,
+            0.7,
+            1.1
+          ],
+          "min": [
+            1.1,
+            -0.7,
+            -0.09999999999999998
+          ],
+          "size": [
+            1.4,
+            1.4,
+            1.2000000000000002
+          ]
+        },
         "reference_volume": 1.3854423602330985,
         "rtol": 1e-05,
         "volume_rel_error": 1.6026982521862017e-16
@@ -191,6 +392,29 @@
           4.6,
           3.4000000000000004
         ],
+        "bounding_box": {
+          "center": [
+            -0.04999999999999982,
+            0.0,
+            0.10000000000000009
+          ],
+          "diagonal": 8.962700485902673,
+          "max": [
+            3.4000000000000004,
+            2.3,
+            1.8000000000000003
+          ],
+          "min": [
+            -3.5,
+            -2.3,
+            -1.6
+          ],
+          "size": [
+            6.9,
+            4.6,
+            3.4000000000000004
+          ]
+        },
         "edges": 12,
         "faces": 6,
         "vertices": 8,
@@ -198,6 +422,29 @@
       },
       "cubit": {
         "area": 141.68,
+        "bounding_box": {
+          "center": [
+            -0.04999999999999982,
+            0.0,
+            0.09999999999999987
+          ],
+          "diagonal": 8.962700485902673,
+          "max": [
+            3.4000000000000004,
+            2.3,
+            1.7999999999999998
+          ],
+          "min": [
+            -3.5,
+            -2.3,
+            -1.6
+          ],
+          "size": [
+            6.9,
+            4.6,
+            3.4
+          ]
+        },
         "index": 3,
         "name": "enclosure_box",
         "surfaces": 6,
@@ -206,13 +453,66 @@
       },
       "cubit_comparison": {
         "area_rel_error": 0.0,
+        "bbox_abs_error": 4.440892098500626e-16,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 2.220446049250313e-16,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 4.440892098500626e-16,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 4.440892098500626e-16,
         "measured_area": 141.68,
+        "measured_bounding_box": {
+          "center": [
+            -0.04999999999999982,
+            0.0,
+            0.09999999999999987
+          ],
+          "diagonal": 8.962700485902673,
+          "max": [
+            3.4000000000000004,
+            2.3,
+            1.7999999999999998
+          ],
+          "min": [
+            -3.5,
+            -2.3,
+            -1.6
+          ],
+          "size": [
+            6.9,
+            4.6,
+            3.4
+          ]
+        },
         "measured_label": "cubit",
         "measured_volume": 107.916,
         "name": "enclosure_box",
         "passed": true,
         "reason": "ok",
         "reference_area": 141.68,
+        "reference_bounding_box": {
+          "center": [
+            -0.04999999999999982,
+            0.0,
+            0.10000000000000009
+          ],
+          "diagonal": 8.962700485902673,
+          "max": [
+            3.4000000000000004,
+            2.3,
+            1.8000000000000003
+          ],
+          "min": [
+            -3.5,
+            -2.3,
+            -1.6
+          ],
+          "size": [
+            6.9,
+            4.6,
+            3.4000000000000004
+          ]
+        },
         "reference_volume": 107.91600000000003,
         "rtol": 1e-05,
         "volume_rel_error": 2.633688186219282e-16
@@ -242,6 +542,29 @@
           4.6,
           3.4000000000000004
         ],
+        "bounding_box": {
+          "center": [
+            -0.04999999999999982,
+            0.0,
+            0.10000000000000009
+          ],
+          "diagonal": 8.962700485902673,
+          "max": [
+            3.4000000000000004,
+            2.3,
+            1.8000000000000003
+          ],
+          "min": [
+            -3.5,
+            -2.3,
+            -1.6
+          ],
+          "size": [
+            6.9,
+            4.6,
+            3.4000000000000004
+          ]
+        },
         "edges": 30,
         "faces": 16,
         "vertices": 20,
@@ -249,6 +572,29 @@
       },
       "cubit": {
         "area": 173.90588408743477,
+        "bounding_box": {
+          "center": [
+            -0.04999999999999982,
+            0.0,
+            0.10000000000000009
+          ],
+          "diagonal": 8.962700485902673,
+          "max": [
+            3.4000000000000004,
+            2.3,
+            1.8000000000000003
+          ],
+          "min": [
+            -3.5,
+            -2.3,
+            -1.6
+          ],
+          "size": [
+            6.9,
+            4.6,
+            3.4000000000000004
+          ]
+        },
         "index": 4,
         "name": "enclosure_void",
         "surfaces": 16,
@@ -257,13 +603,66 @@
       },
       "cubit_comparison": {
         "area_rel_error": 1.6343155712957016e-16,
+        "bbox_abs_error": 0.0,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 0.0,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 0.0,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 0.0,
         "measured_area": 173.90588408743477,
+        "measured_bounding_box": {
+          "center": [
+            -0.04999999999999982,
+            0.0,
+            0.10000000000000009
+          ],
+          "diagonal": 8.962700485902673,
+          "max": [
+            3.4000000000000004,
+            2.3,
+            1.8000000000000003
+          ],
+          "min": [
+            -3.5,
+            -2.3,
+            -1.6
+          ],
+          "size": [
+            6.9,
+            4.6,
+            3.4000000000000004
+          ]
+        },
         "measured_label": "cubit",
         "measured_volume": 100.5305576397669,
         "name": "enclosure_void",
         "passed": true,
         "reason": "ok",
         "reference_area": 173.9058840874348,
+        "reference_bounding_box": {
+          "center": [
+            -0.04999999999999982,
+            0.0,
+            0.10000000000000009
+          ],
+          "diagonal": 8.962700485902673,
+          "max": [
+            3.4000000000000004,
+            2.3,
+            1.8000000000000003
+          ],
+          "min": [
+            -3.5,
+            -2.3,
+            -1.6
+          ],
+          "size": [
+            6.9,
+            4.6,
+            3.4000000000000004
+          ]
+        },
         "reference_volume": 100.53055763976691,
         "rtol": 1e-05,
         "volume_rel_error": 1.4135855852032606e-16
