@@ -440,6 +440,9 @@ def cubit_docs(topic: str = "all") -> str:
 	                                   .vol.  STEP-with-extra-tricks workarounds
 	                                   (OCC face name regex, sidecar JSON, AP242
 	                                   OCAF reader) are uniformly worse.
+	        --- Coreform public release/tutorial knowledge ---
+	        "coreform"               - Topic index for public Coreform tutorial/release knowledge
+	        "coreform_release_2026_6" - Cubit 2026.6 highlights and radia validation actions
 	"""
 	topic = topic.lower().strip()
 

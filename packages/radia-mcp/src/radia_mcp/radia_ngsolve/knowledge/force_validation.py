@@ -11,6 +11,113 @@ independent solve is run separately; NGSolve runs standalone).
 """
 
 # --------------------------------------------------------------------------
+FORCE_METHOD_MAP = r"""
+# Electromagnetic force method map for radia-ngsolve
+
+This is the index page for force/torque work in ``radia_mcp.radia_ngsolve``.
+Use it before adding a new force extractor: most practical cases reduce to one
+of the methods below, with an analytic sanity check available.
+
+## Which method to use
+
+| Situation | Primary method | radia-ngsolve entry point |
+|---|---|---|
+| Body in air, global 2D/3D force | Weighted Maxwell stress | ``force.eggshell_force*`` |
+| Rotating machine torque from field solution | Weighted Maxwell stress torque | ``force.eggshell_torque*`` |
+| Simple closed integration surface in air | Maxwell surface stress | ``force.maxwell_surface_force*`` |
+| Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
+| Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
+| Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
+| Energy/inductance-derived checks | Field energy | ``force.magnetic_energy*``, ``force.inductance_*`` |
+| dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
+| Synchronous/induction machine torque curves | Circuit-level machine model | ``solve.synchronous_power_angle_torque`` / ``solve.induction_machine_torque`` |
+| MEMS/electrostatic force | Electric weighted stress | ``force.electrostatic_eggshell_force*`` |
+
+## Core identities
+
+Magnetostatic Maxwell stress in air:
+
+```text
+T = (1/mu0) (B tensor B - 0.5 |B|^2 I)
+F = integral_S T n dS
+```
+
+Weighted-stress / eggshell form replaces a sharp surface integral by a
+volume-band integral in air:
+
+```text
+F_k = - integral_band [(1/mu0) B_k (B.grad g)
+                       - (1/(2 mu0)) |B|^2 d_k g] dV
+```
+
+Use this when possible: it averages over elements, avoids surface-trace jumps,
+and is the most robust extractor for unstructured FEM meshes.
+
+Lorentz force on an imposed-current conductor:
+
+```text
+F = integral J x B dV
+```
+
+For 2D out-of-plane current ``Jz`` and in-plane ``B=(Bx, By)``:
+``Fx = -int Jz By dA`` and ``Fy = int Jz Bx dA``.  Pass the total field; the
+self-field integrates to zero by symmetry for the net conductor force.
+
+Uniform air-gap pressure:
+
+```text
+p = B_gap^2 / (2 mu0),     F = p A
+```
+
+This is the fast sanity check for solenoids, relays, magnetic circuits, and
+pole-face holding force.  It is the local Maxwell stress evaluated in the gap.
+
+Energy/coenergy:
+
+```text
+constant current:      F = dW_co/dx
+linear energy check:   L = 2 W / I^2
+```
+
+For nonlinear B-H force, prefer a weighted-stress or coenergy virtual-work
+method.  Finite-difference energy is useful as an independent check, but it
+requires a stable geometry perturbation and matched meshes or careful remeshing.
+
+## Validation anchors to remember
+
+- Uniform magnetized sphere: average interior ``B`` should approach ``2 Br / 3``.
+- Two long parallel wires: ``F/L = mu0 I1 I2 / (2 pi d)``.
+- Wire above high-permeability plane: image-current limit gives
+  ``F/L = mu0 I^2 / (4 pi h)``.
+- Uniform air gap: ``p(1 T) = 1 / (2 mu0) = 397887.35772973835 Pa``.
+- Round-wire internal inductance at DC: ``L_int = mu0 / (8 pi)`` per length.
+- dq PM torque: ``T = (3/2) p (lambda_m iq + (Ld-Lq) id iq)``.
+
+## Practical pitfalls
+
+- Keep the Maxwell stress integration surface or eggshell band entirely in air.
+- Do not integrate on material interfaces where the magnetic field trace jumps.
+- Curve circular/curved geometry before force extraction; polygonal geometry can
+  create a systematic force error even when the algebra is correct.
+- For high-permeability or nonlinear bodies, place the body directly in the air
+  region and use an analytic eggshell band.  Do not insert a nested shell material
+  that electrically isolates the body from the surrounding HCurl region.
+- For harmonic complex fields, use the time-averaged Maxwell stress with the
+  ``1/2`` and ``1/4`` factors, not the static quadratic expression.
+- For 2D planar results, forces are per unit out-of-plane length and torque is
+  per unit length.  Axisymmetric helpers include the ``2 pi r`` weight and return
+  full 3D force/inductance.
+
+## Related radia-ngsolve topics
+
+- ``ngsolve_usage("lorentz_force")``: conductor force, image force, busbars.
+- ``ngsolve_usage("air_gap_force")``: magnetic-circuit holding force.
+- ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.
+- ``ngsolve_usage("electrostatic_force")``: MEMS electric force.
+- ``force_validation("cross_validation")``: stored regression-reference cases.
+"""
+
+# --------------------------------------------------------------------------
 EGGSHELL = r"""
 # Eggshell (weighted Maxwell stress) force -- the robust FEM method
 
@@ -234,6 +341,13 @@ stress and the reference's surface stress agree.
 """
 
 _TOPICS = {
+    "method_map": FORCE_METHOD_MAP,
+    "map": FORCE_METHOD_MAP,
+    "overview": FORCE_METHOD_MAP,
+    "electromagnetic_force": FORCE_METHOD_MAP,
+    "em_force": FORCE_METHOD_MAP,
+    "torque": FORCE_METHOD_MAP,
+    "method_selection": FORCE_METHOD_MAP,
     "eggshell": EGGSHELL,
     "maxwell_stress": EGGSHELL,
     "force": EGGSHELL,
@@ -248,12 +362,12 @@ _TOPICS = {
 def get_force_validation_documentation(topic: str = "all") -> str:
     """Return force-extraction + independent cross-validation documentation.
 
-    topic: all (default) | eggshell | cross_validation | reference_note
+    topic: all (default) | method_map | eggshell | cross_validation | reference_note
     """
     t = (topic or "all").strip().lower()
     if t in ("all", ""):
-        return "\n\n".join([CROSS_VALIDATION, EGGSHELL, REFERENCE_NOTE])
+        return "\n\n".join([FORCE_METHOD_MAP, CROSS_VALIDATION, EGGSHELL, REFERENCE_NOTE])
     if t in _TOPICS:
         return _TOPICS[t]
     return (f"Unknown topic '{topic}'. Options: all, eggshell, cross_validation, "
-            f"reference_note.\n\n" + CROSS_VALIDATION)
+            f"reference_note, method_map.\n\n" + FORCE_METHOD_MAP)
