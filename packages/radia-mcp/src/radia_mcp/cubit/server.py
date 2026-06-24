@@ -53,6 +53,37 @@ mcp = FastMCP("cubit-export")
 # Project root (current working directory for pip-installed package)
 PROJECT_ROOT = Path.cwd()
 
+_RULE_REMEDIATIONS = {
+	"non-ascii-byte": (
+		"ASCII-sanitize Cubit-facing scripts. Keep Japanese/Greek/math symbols "
+		"in docs or data files, not in Python that may run under Cubit's cp932 "
+		"console."
+	),
+	"hardcoded-absolute-path": (
+		"Replace machine-specific absolute paths with Path(__file__)-relative "
+		"paths, parameters, or environment variables."
+	),
+	"wrong-connectivity-2nd-order": (
+		"Use the canonical second-order Netgen/Cubit connectivity mapping; do "
+		"not hand-roll node permutations."
+	),
+	"missing-block-registration": (
+		"Register material/volume/sideset blocks before export so downstream "
+		"solvers can recover domains and boundaries."
+	),
+	"missing-cubit-init": (
+		"Initialize/import Cubit explicitly in headless scripts before issuing "
+		"cubit.cmd calls."
+	),
+	"missing-boundary-block": (
+		"Create explicit boundary blocks/sidesets for solver-facing surfaces."
+	),
+	"ambiguous-face-block": (
+		"Disambiguate face/surface block selection; avoid broad selectors that "
+		"can bind the wrong boundary."
+	),
+}
+
 
 # ============================================================
 # Lint helpers
@@ -124,6 +155,18 @@ def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dic
 			by_severity[str(finding.get("severity", "UNKNOWN"))] += 1
 			by_rule[str(finding.get("rule", "unknown"))] += 1
 
+	top_rules = [
+		{
+			"rule": rule,
+			"count": count,
+			"action": _RULE_REMEDIATIONS.get(
+				rule,
+				"Inspect representative findings and add a specific remediation note.",
+			),
+		}
+		for rule, count in sorted(by_rule.items(), key=lambda item: (-item[1], item[0]))[:limit]
+	]
+
 	return {
 		"ok": True,
 		"directory": str(d),
@@ -132,10 +175,8 @@ def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dic
 		"total_findings": total_findings,
 		"clean": total_findings == 0,
 		"by_severity": dict(by_severity),
-		"top_rules": [
-			{"rule": rule, "count": count}
-			for rule, count in sorted(by_rule.items(), key=lambda item: (-item[1], item[0]))[:limit]
-		],
+		"top_rules": top_rules,
+		"dominant_rule": top_rules[0] if top_rules else None,
 		"top_files": sorted(top_files, key=lambda item: (-item["findings"], item["path"]))[:limit],
 	}
 
