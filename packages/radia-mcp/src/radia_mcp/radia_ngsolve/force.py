@@ -1252,6 +1252,60 @@ def virtual_work_force_summary(
     }
 
 
+def virtual_work_symmetric_pair_force_summary(
+    displacement_m,
+    energy_minus_J,
+    energy_plus_J,
+    energy_kind="coenergy",
+    center_position_m=0.0,
+    energy_center_J=None,
+):
+    """Virtual-work force from a matched ``x0 +/- h`` energy pair.
+
+    This is the compact two-solve central-difference gate often used for
+    magnetostatic force sweeps when the displaced geometries are deliberately
+    paired:
+
+        F = +/- (E(x0 + h) - E(x0 - h)) / (2 h)
+
+    The sign is positive for fixed-current coenergy and negative for fixed-flux
+    stored energy, matching :func:`virtual_work_force_summary`.  If
+    ``energy_center_J`` is supplied, the even residual
+    ``0.5 * (E_+ + E_-) - E_0`` is reported as a curvature/noise indicator.
+    """
+
+    h = float(displacement_m)
+    if h <= 0.0:
+        raise ValueError("displacement_m must be > 0")
+    normalized_kind, sign, identity = _virtual_work_energy_sign(energy_kind)
+    e_minus = float(energy_minus_J)
+    e_plus = float(energy_plus_J)
+    derivative = (e_plus - e_minus) / (2.0 * h)
+    force = sign * derivative
+    center = float(center_position_m)
+    even_residual = None
+    if energy_center_J is not None:
+        even_residual = 0.5 * (e_plus + e_minus) - float(energy_center_J)
+
+    return {
+        "stencil": "symmetric_central_pair",
+        "center_position_m": center,
+        "displacement_m": h,
+        "position_minus_m": center - h,
+        "position_plus_m": center + h,
+        "energy_minus_J": e_minus,
+        "energy_plus_J": e_plus,
+        "energy_center_J": None if energy_center_J is None else float(energy_center_J),
+        "energy_kind": normalized_kind,
+        "energy_to_force_sign": sign,
+        "virtual_work_identity": identity,
+        "denergy_dx_N": derivative,
+        "force_N": force,
+        "even_energy_residual_J": even_residual,
+        "even_energy_residual_abs_J": None if even_residual is None else abs(even_residual),
+    }
+
+
 def _validate_optical_coefficients(absorptance, reflectance):
     absorptance = float(absorptance)
     reflectance = float(reflectance)
