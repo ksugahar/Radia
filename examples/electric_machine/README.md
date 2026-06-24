@@ -25,6 +25,7 @@ NGSolve's high-order curved elements.
 | [`validation_planar_maxwell_contour_force.py`](validation_planar_maxwell_contour_force.py) | Validation-class 2D Maxwell-stress contour force, per unit depth, with pole-face pressure and closed-contour cancellation checks | `maxwell_line_segment_force_2d`, `maxwell_contour_force_2d`, `air_gap_maxwell_pressure` |
 | [`validation_planar_lorentz_block_force.py`](validation_planar_lorentz_block_force.py) | Validation-class 2D Lorentz block force, per unit depth, checked against Ampere's two-wire force law | `planar_lorentz_force_summary`, `two_wire_force_per_length` |
 | [`validation_coenergy_torque_angle_sweep.py`](validation_coenergy_torque_angle_sweep.py) | Validation-class virtual-work torque from fixed-current coenergy angle samples | `coenergy_torque_from_angle_samples`, `coenergy_torque_summary` |
+| [`validation_virtual_work_force_displacement_sweep.py`](validation_virtual_work_force_displacement_sweep.py) | Validation-class virtual-work force from displacement energy/coenergy samples, with the fixed-current vs fixed-flux sign gate | `virtual_work_force_from_displacement_samples`, `virtual_work_force_summary` |
 | [`validation_torque_ripple_harmonic_budget.py`](validation_torque_ripple_harmonic_budget.py) | Validation-class three-phase back-EMF harmonic pair budget for 6k torque ripple, including pitch/skew filtering | `three_phase_torque_ripple_pair_table`, `three_phase_torque_ripple_harmonics`, `skewed_winding_factor` |
 
 ```powershell
@@ -47,6 +48,7 @@ python validation_force_resultant_torque.py
 python validation_planar_maxwell_contour_force.py
 python validation_planar_lorentz_block_force.py
 python validation_coenergy_torque_angle_sweep.py
+python validation_virtual_work_force_displacement_sweep.py
 python validation_torque_ripple_harmonic_budget.py
 ```
 

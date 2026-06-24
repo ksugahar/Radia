@@ -917,6 +917,108 @@ def coenergy_torque_summary(
     }
 
 
+def _virtual_work_energy_sign(energy_kind):
+    kind = str(energy_kind).lower().replace("-", "_").replace(" ", "_")
+    if kind in ("coenergy", "magnetic_coenergy", "wco", "w_prime", "constant_current"):
+        return "coenergy", 1.0, "F = dW_co/dx at fixed current"
+    if kind in ("stored_energy", "field_energy", "energy", "magnetic_energy", "constant_flux"):
+        return "stored_energy", -1.0, "F = -dW/dx at fixed flux/source-free displacement"
+    raise ValueError(
+        "energy_kind must be 'coenergy'/'constant_current' or "
+        "'stored_energy'/'field_energy'"
+    )
+
+
+def virtual_work_force_from_displacement_samples(
+    positions_m,
+    energy_J,
+    energy_kind="coenergy",
+):
+    """Differentiate an energy/coenergy-vs-displacement table into force samples.
+
+    This is the straight-line counterpart of
+    :func:`coenergy_torque_from_angle_samples`.  It makes the sign convention
+    explicit for validation sweeps and solver cross-checks:
+
+    * fixed current / magnetic coenergy: ``F = dW_co/dx``
+    * stored field energy at fixed flux: ``F = -dW/dx``
+
+    The derivative is reported in newtons because ``J/m = N``.  End points use
+    one-sided differences; interior rows use central differences.  Use matched
+    meshes or a deliberately stable remeshing recipe when the samples come from
+    separate FEM solves.
+    """
+
+    positions = [float(value) for value in positions_m]
+    values = [float(value) for value in energy_J]
+    if len(positions) != len(values):
+        raise ValueError("positions_m and energy_J must have the same length")
+    if len(positions) < 3:
+        raise ValueError("at least three samples are required")
+    if any(positions[i + 1] <= positions[i] for i in range(len(positions) - 1)):
+        raise ValueError("positions_m must be strictly increasing")
+    normalized_kind, sign, identity = _virtual_work_energy_sign(energy_kind)
+
+    rows = []
+    n = len(positions)
+    for i, (position, value) in enumerate(zip(positions, values)):
+        if i == 0:
+            im, ip = 0, 1
+            stencil = "forward"
+        elif i == n - 1:
+            im, ip = n - 2, n - 1
+            stencil = "backward"
+        else:
+            im, ip = i - 1, i + 1
+            stencil = "central"
+
+        denom = positions[ip] - positions[im]
+        if denom <= 0.0:
+            raise ValueError("finite-difference displacement denominator must be > 0")
+        derivative = (values[ip] - values[im]) / denom
+        force = sign * derivative
+        rows.append({
+            "index": i + 1,
+            "position_m": position,
+            "energy_J": value,
+            "energy_kind": normalized_kind,
+            "virtual_work_identity": identity,
+            "denergy_dx_N": derivative,
+            "force_N": force,
+            "stencil": stencil,
+            "position_minus_m": positions[im],
+            "position_plus_m": positions[ip],
+        })
+    return tuple(rows)
+
+
+def virtual_work_force_summary(
+    positions_m,
+    energy_J,
+    energy_kind="coenergy",
+):
+    """JSON-friendly summary for virtual-work force samples."""
+
+    normalized_kind, sign, identity = _virtual_work_energy_sign(energy_kind)
+    rows = list(virtual_work_force_from_displacement_samples(
+        positions_m,
+        energy_J,
+        energy_kind=normalized_kind,
+    ))
+    forces = [row["force_N"] for row in rows]
+    return {
+        "n_samples": len(rows),
+        "energy_kind": normalized_kind,
+        "energy_to_force_sign": sign,
+        "virtual_work_identity": identity,
+        "force_min_N": min(forces),
+        "force_max_N": max(forces),
+        "force_peak_abs_N": max(abs(value) for value in forces),
+        "force_mean_N": sum(forces) / len(forces),
+        "rows": rows,
+    }
+
+
 def _validate_optical_coefficients(absorptance, reflectance):
     absorptance = float(absorptance)
     reflectance = float(reflectance)
