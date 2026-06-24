@@ -1,0 +1,116 @@
+{
+  "B_T": [
+    0.0,
+    3.0,
+    0.0
+  ],
+  "checks": {
+    "expected_force_density_N_per_m3": [
+      0.0,
+      0.0,
+      6.0
+    ],
+    "expected_integrated_force_N": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "expected_node_force_N": [
+      0.0,
+      0.0,
+      0.25
+    ],
+    "expected_volume_m3": 0.16666666666666666,
+    "force_density_N_per_m3": [
+      0.0,
+      0.0,
+      6.0
+    ],
+    "integrated_force_N": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "nodal_force_sum_N": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "volume_m3": 0.16666666666666666
+  },
+  "current_density_A_per_m2": [
+    2.0,
+    0.0,
+    0.0
+  ],
+  "kind": "p1_tetrahedron_lorentz_force_load",
+  "row": {
+    "B_T": [
+      0.0,
+      3.0,
+      0.0
+    ],
+    "current_density_A_per_m2": [
+      2.0,
+      0.0,
+      0.0
+    ],
+    "force_density_N_per_m3": [
+      0.0,
+      0.0,
+      6.0
+    ],
+    "integrated_force_N": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "nodal_force_loads_N": [
+      [
+        0.0,
+        0.0,
+        0.25
+      ],
+      [
+        0.0,
+        0.0,
+        0.25
+      ],
+      [
+        0.0,
+        0.0,
+        0.25
+      ],
+      [
+        0.0,
+        0.0,
+        0.25
+      ]
+    ],
+    "p1_shape_function_integral_m3": 0.041666666666666664,
+    "volume_m3": 0.16666666666666666
+  },
+  "validation_class": true,
+  "vertices": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ]
+}
