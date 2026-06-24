@@ -1,0 +1,84 @@
+{
+  "kind": "build123d_racetrack_plate_air_region_validation",
+  "validation_class": true,
+  "quick": false,
+  "elapsed_seconds": 2.379,
+  "region_names": [
+    "plate",
+    "coil",
+    "air"
+  ],
+  "cases": [
+    {
+      "label": "racetrack_plate_baseline",
+      "status": "ok",
+      "passed": true,
+      "max_volume_rel_error": 5.062904129130197e-16,
+      "post_region_names": [
+        "plate",
+        "coil",
+        "air"
+      ],
+      "post_region_element_counts": {
+        "plate": 545,
+        "coil": 409,
+        "air": 5254
+      },
+      "mesh_elements": 6208,
+      "mesh_vertices": 1292,
+      "expected_volumes": {
+        "plate": 16000.0,
+        "coil": 1796.38934211693,
+        "air": 192203.61065788308
+      }
+    },
+    {
+      "label": "racetrack_plate_wide_coil",
+      "status": "ok",
+      "passed": true,
+      "max_volume_rel_error": 6.798093878914692e-16,
+      "post_region_names": [
+        "plate",
+        "coil",
+        "air"
+      ],
+      "post_region_element_counts": {
+        "plate": 572,
+        "coil": 373,
+        "air": 5076
+      },
+      "mesh_elements": 6021,
+      "mesh_vertices": 1279,
+      "expected_volumes": {
+        "plate": 30720.0,
+        "coil": 3344.66807156732,
+        "air": 316815.3319284327
+      }
+    },
+    {
+      "label": "racetrack_plate_tall_gap",
+      "status": "ok",
+      "passed": true,
+      "max_volume_rel_error": 3.489279975316962e-16,
+      "post_region_names": [
+        "plate",
+        "coil",
+        "air"
+      ],
+      "post_region_element_counts": {
+        "plate": 412,
+        "coil": 330,
+        "air": 5863
+      },
+      "mesh_elements": 6605,
+      "mesh_vertices": 1335,
+      "expected_volumes": {
+        "plate": 9504.0,
+        "coil": 1303.2698840543899,
+        "air": 205768.7301159456
+      }
+    }
+  ],
+  "n_ok": 3,
+  "n_total": 3
+}
