@@ -11,6 +11,7 @@ Solid block of linear soft iron (mu_r=200) in a uniform field -- predictable dof
 
 Usage:
   python bench_moment_storage_scaling.py                 # driver: sweep sizes x {method 0, 2}, write JSON
+  python bench_moment_storage_scaling.py --cases 60x46x10 --methods 2 --timeout 7200
   python bench_moment_storage_scaling.py --worker --method M --nx .. --ny .. --nz ..   # one case (internal)
 """
 import argparse
@@ -79,20 +80,36 @@ def main():
     ap.add_argument("--nx", type=int, default=8)
     ap.add_argument("--ny", type=int, default=8)
     ap.add_argument("--nz", type=int, default=4)
+    ap.add_argument("--cases", nargs="+",
+                    help="driver cases as NxXxNz, e.g. 16x16x8 60x46x10")
+    ap.add_argument("--methods", type=int, nargs="+", default=[0, 2],
+                    help="driver methods to run; use --methods 2 for large HACApK-only sweeps")
+    ap.add_argument("--timeout", type=float, default=900.0,
+                    help="per worker timeout in seconds")
+    ap.add_argument("--out", default=os.path.join(HERE, "results_moment_storage_scaling.json"),
+                    help="output JSON path")
     args = ap.parse_args()
 
     if args.worker:
         print(json.dumps(run_one(args.method, args.nx, args.ny, args.nz)))
         return 0
 
-    sizes = [(8, 8, 4), (12, 12, 4), (16, 16, 4), (16, 16, 8)]   # dof = 1536, 3456, 6144, 12288
+    if args.cases:
+        sizes = []
+        for spec in args.cases:
+            parts = spec.lower().replace("*", "x").split("x")
+            if len(parts) != 3:
+                raise SystemExit(f"invalid --cases entry {spec!r}; expected NxXxNz")
+            sizes.append(tuple(int(p) for p in parts))
+    else:
+        sizes = [(8, 8, 4), (12, 12, 4), (16, 16, 4), (16, 16, 8)]   # dof = 1536, 3456, 6144, 12288
     results = []
     for (nx, ny, nz) in sizes:
-        for method in (0, 2):
+        for method in args.methods:
             cmd = [sys.executable, os.path.abspath(__file__), "--worker", "--method", str(method),
                    "--nx", str(nx), "--ny", str(ny), "--nz", str(nz)]
             try:
-                out = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=HERE)
+                out = subprocess.run(cmd, capture_output=True, text=True, timeout=args.timeout, cwd=HERE)
                 rec = json.loads(out.stdout.strip().splitlines()[-1])
             except Exception as e:
                 rec = {"method": method, "nx": nx, "ny": ny, "nz": nz, "error": str(e),
@@ -103,13 +120,12 @@ def main():
                   f"t_solve={rec.get('t_solve', float('nan')):7.2f}s  iters={rec.get('iterations')}  "
                   f"conv={rec.get('converged')}")
 
-    out_path = os.path.join(HERE, "results_moment_storage_scaling.json")
-    with open(out_path, "w") as f:
+    with open(args.out, "w") as f:
         json.dump({"timestamp": datetime.now().isoformat(), "hostname": platform.node(),
                    "benchmark": "moment_storage_scaling",
                    "problem": {"geometry": "solid hex block", "mu_r": MU_R, "L": L},
                    "results": results}, f, indent=2)
-    print(f"Results saved to {out_path}")
+    print(f"Results saved to {args.out}")
 
     # headline: method-2 peak / method-0 peak at the largest dof (should be << 1 once O(N^2) is gone)
     by = {(r.get("method"), r.get("ndof")): r for r in results if "peak_memory_mb" in r}
