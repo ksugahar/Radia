@@ -13,6 +13,7 @@ if _SRC not in sys.path:
 
 from radia_mcp.radia_ngsolve.acoustics import (
     _baffled_piston_resistance_reactance_ratios,
+    acoustic_boundary_power_summary,
     acoustic_dtn_from_impedance,
     acoustic_impedance_from_dtn,
     baffled_circular_piston_radiation,
@@ -265,6 +266,44 @@ def test_acoustic_impedance_dtn_conversion_validation():
         acoustic_impedance_from_dtn(100.0, 0.0)
     with pytest.raises(ValueError):
         acoustic_impedance_from_dtn(100.0, 1.0, rho=0.0)
+
+
+def test_acoustic_boundary_power_summary_peak_and_rms_conventions():
+    rho, c = 1.2, 340.0
+    z0 = rho * c
+    pressure = 2.0
+    velocity = pressure / z0
+    area = 0.25
+
+    peak = acoustic_boundary_power_summary(pressure, velocity, area=area, amplitude="peak")
+    rms = acoustic_boundary_power_summary(pressure, velocity, area=area, amplitude="rms")
+
+    assert peak["specific_impedance"] == pytest.approx(z0)
+    assert peak["active_intensity"] == pytest.approx(pressure * pressure / (2.0 * z0))
+    assert peak["reactive_intensity"] == pytest.approx(0.0)
+    assert peak["active_power"] == pytest.approx(area * pressure * pressure / (2.0 * z0))
+    assert rms["active_power"] == pytest.approx(2.0 * peak["active_power"])
+    assert rms["phasor_average_factor"] == pytest.approx(1.0)
+
+
+def test_acoustic_boundary_power_summary_reactive_trace_and_validation():
+    z_reactive = 1.0j * 120.0
+    velocity = 0.03 - 0.01j
+    pressure = z_reactive * velocity
+    area = 0.4
+    out = acoustic_boundary_power_summary(pressure, velocity, area=area)
+
+    assert out["active_intensity"] == pytest.approx(0.0)
+    assert out["reactive_intensity"] == pytest.approx(0.5 * 120.0 * abs(velocity) ** 2)
+    assert out["reactive_power"] == pytest.approx(area * out["reactive_intensity"])
+    assert out["specific_impedance"] == pytest.approx(z_reactive)
+
+    with pytest.raises(ValueError):
+        acoustic_boundary_power_summary(1.0, 1.0, area=-1.0)
+    with pytest.raises(ValueError):
+        acoustic_boundary_power_summary(1.0, 1.0, amplitude="phasor")
+    with pytest.raises(ValueError):
+        acoustic_boundary_power_summary(complex(float("nan"), 0.0), 1.0)
 
 
 def test_baffled_circular_piston_impedance_scaling_and_power():
