@@ -43,19 +43,19 @@ distortion cannot break it. This is the strong (everywhere) field-null vs the co
 basis's fragile (collocation-only) field-null that breaks under distortion. The operator
 `N = BᵀGB` (B = charge map, G = Coulomb Gram) inherits `N·loop = 0` for **any** G.
 
-## HDiv-type vs yano-type — the clean win
+## HDiv-type vs moment-yano — the clean win
 
 **No fundamental inferiority.** The HDiv-type N is **symmetric**, works on **general**
 elements (tet/hex/wedge), is **distorted-robust by construction**, and its accuracy is
-comparable to yano-type. On top of parity, it has three accuracy-per-DOF advantages the
-flat, hand-crafted yano-type **structurally cannot match**:
+comparable to moment-yano MSC. On top of parity, it has three accuracy-per-DOF advantages the
+flat, hand-crafted moment-yano MSC **structurally cannot match**:
 
 1. **de-Rham-exact on ANY mesh** — loops are field-null by construction (`4e-16`) on
    distorted hexes, vs the MSC retrofit's `6e-9`; no per-mesh element engineering. This also
    makes **symmetry models (1/2, 1/4, 1/8) automatic**: on a cut/reduced mesh the loops are
    just `ker(B)` (field-null `~4e-16`, count adapts 58→54→18→6 for sphere full→1/8), with **no
    cohomology-aware loop-star `installCycle`** — the "loop-removal is painful" problem of
-   MSC/yano-type is eliminated (`test_hdiv_vim_symmetry_loops.py`). The symmetry *demag value*
+   moment-yano MSC is eliminated (`test_hdiv_vim_symmetry_loops.py`). The symmetry *demag value*
    is the **image method** (`hdiv_demag_symmetry_image.py`): reflecting the reduced model's cap
    charge over the reduction planes (sign per z-mirror) reproduces the full demag from ~1/2, 1/4,
    1/8 the DOF (1/2 +0.08%, 1/4 +0.11%, 1/8 −0.32% vs full). So 1/4 & 1/8 are supported — loops
@@ -67,7 +67,7 @@ flat, hand-crafted yano-type **structurally cannot match**:
    single-layer of `σ=M·n`, supplied high-order + curved + FMM by `ngsolve.bem`. On a coarse
    sphere the demag factor goes flat `+0.25%` (order-insensitive, faceting-floored) →
    **curved + order-2 `~1e-4%` (exact)** at fixed small ndof (`hdiv_demag_bem_singlelayer.py`).
-   This is the accuracy-per-DOF win over flat lowest-order yano-type, on the demag factor
+   This is the accuracy-per-DOF win over flat lowest-order moment-yano MSC, on the demag factor
    directly — and it reuses NGSolve, no hand-rolled singular quadrature.
 
 ## What is built + validated — with REFERENCE HONESTY
@@ -79,7 +79,7 @@ solver but NOT ground truth on a coarse mesh):
 |---|---|---|---|
 | Loops field-null on distorted hex | `ngsolve_loopfree_verify.py` | exact (charge-form field `3.7e-16`) | ✅ machine zero |
 | Loop/star (Hodge) split | `hdiv_loop_star_split.py` | exact (`ker Q` charge-free `~1e-16`) | ✅ |
-| **yano-MSC ↔ HDiv-VIM loop bridge** | `yano_hdiv_loop_bridge.py` | exact (collocation near-null `==` HDiv `ker(B)` `==` cell-graph cycle) | ✅ the yano-type collocation matrix carries the SAME loops as a LATENT near-null: dim `== n_loop` (cycle count) on every grid; yano cond `~1e16` (HDiv `loop_res ~1e-16`); cond(`-N+I/χ`) `~μr` (loops regularized by `1/χ` → bite at high μr) while **star projection → `~40-65`, μr-INDEPENDENT** (the HDiv-VIM regime). The collocation-side reading of Problem A. |
+| **moment-yano MSC ↔ HDiv-VIM loop bridge** | `yano_hdiv_loop_bridge.py` | exact (collocation near-null `==` HDiv `ker(B)` `==` cell-graph cycle) | ✅ the moment-yano collocation matrix carries the SAME loops as a LATENT near-null: dim `== n_loop` (cycle count) on every grid; yano cond `~1e16` (HDiv `loop_res ~1e-16`); cond(`-N+I/χ`) `~μr` (loops regularized by `1/χ` → bite at high μr) while **star projection → `~40-65`, μr-INDEPENDENT** (the HDiv-VIM regime). The collocation-side reading of Problem A. |
 | Linear demag (sphere/cube → 1/3) | `hdiv_demag_solve` (`test_hdiv_vim_demag_solve.py`) | **ANALYTIC** 1/3 | ✅ `<0.5%` (C++ analytic charge Gram) |
 | Nonlinear (damped Newton) | `solve_nonlinear_newton` (`test_hdiv_vim_tet_newton.py`) | **ANALYTIC** sphere fixed point | ✅ `<2%` deep-saturation (C++ charge Gram) |
 | Nonlinear cross-check | `test_hdiv_vim_newton_vs_radia.py` | Radia MMM/MSC (`MatSatIsoTab`) | ✅ agree `<0.05%` (sphere) |

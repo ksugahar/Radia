@@ -12,7 +12,7 @@ the user, NOT by this plugin.
 
 ## Features
 
-- **Cubit plugin** (`.ccm` + `.ccl` + `.pyd`):
+- **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2025.12+):
   - `export {netgen|gmsh|vtk|femeem|meg}` + `export jmag_nastran` APREPRO commands
   - **Export Mesh** GUI menu
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
@@ -29,14 +29,15 @@ the user, NOT by this plugin.
 ## Install
 
 ```bash
-pip install cubit-mesh-export
+pip install "radia[cubit,gui]"
 cubit-plugin-install
 ```
 
 The second command deploys the Cubit plugin binaries, the Netgen DLLs,
-and the Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
-`cubit_helpers/auto_kelvin_entry.py`) into your Coreform Cubit
-installation.
+the Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
+`cubit_helpers/auto_kelvin_entry.py`), and the Radia PySide6 toolbar
+startup registration into your Coreform Cubit 2025.12 installation.
+Use `cubit-plugin-install --all-users` for a shared lab machine.
 
 ### Upgrade
 
@@ -46,6 +47,9 @@ cubit-plugin-install
 ```
 
 Always re-run `cubit-plugin-install` after upgrading.
+`cubit-plugin-install --verify-only` checks both the deployed binary
+hashes and, when `radia` is installed, the Cubit panel startup
+registration.
 
 ## Cubit commands
 

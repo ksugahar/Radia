@@ -1078,6 +1078,13 @@ cubit.cmd("block 2 add tri all")   # For tet meshes
 cubit.cmd("block 2 add quad all")  # For hex meshes
 ```
 
+Do not write `block 2 add face all` by habit. In Cubit APREPRO, `face`
+is a generic surface-element selector, but Python inspection APIs are
+element-specific (`get_block_tris`, `get_block_quads`). Use `tri` or
+`quad` explicitly unless the boundary block is intentionally mixed; for a
+mixed tet/hex boundary, keep `face` only with an explicit `mixed tri/quad`
+comment so lint can tell it is intentional.
+
 ## Problem: "Interrupt Detected" During NetgenCurver (AddPoint Crash)
 
 **Cause**: ABI mismatch between the ccm plugin and nglib.dll loaded at runtime.
@@ -1091,7 +1098,7 @@ cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external pa
 ```
 
 **Verification**: ccm file size should be > 400 KB (compact_netgen ~600 KB).
-Old dynamic-linked ccm is ~238 KB. Check after radia-setup:
+Old dynamic-linked ccm is ~238 KB. Check after `cubit-plugin-install`:
 ```python
 import os
 ccm = r"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\cubit_mesh_export.ccm"
@@ -2147,11 +2154,16 @@ voltage across source/sink ports).
 
 To reload panel code after editing register_toolbar.py, run in Cubit:
 ```
-play "S:/Radia/01_GitHub/src/radia/panels/startup.py"
+play "C:/ProgramData/Radia/Cubit/radia_startup.py"
 ```
 This re-exec's register_toolbar.py, updating all class definitions.
 The menu shows "Radia menu already registered." (duplicate check), but
 dialog classes (InductanceDialog, etc.) are reloaded with new code.
+
+For current-user installs, the generated shim is under
+`%LOCALAPPDATA%/Radia/Cubit/radia_startup.py`.  Do not edit
+`src/radia/panels/startup.py`; `cubit-plugin-install` regenerates the
+shim with the correct absolute `register_toolbar.py` path.
 
 After reload, close and reopen the dialog to use updated code.
 Existing dialog instances use the OLD class definition.
@@ -3857,15 +3869,16 @@ FIRST, then size.
 
 ## 6. Cubit version drift
 
-LAB / 100号機 / mdx must run the same Cubit (currently 2025.3).  ACIS
+LAB / 100号機 / mdx must run Coreform Cubit 2025.12+.  ACIS
 version upgrades subtly change:
 - Default `merge tolerance`
 - UV parametrization of lofted surfaces (`b085b1be` reject count
   changes between ACIS versions)
 - STEP import healing aggressiveness
 
-A .jou that works on 2025.2 may produce different mesh on 2025.4.
-Pin the version across all deploy targets.
+A .jou that works on an older Cubit may produce a different mesh on
+2025.12.  `cubit-plugin-install` and Radia panel registration now reject
+pre-2025.12 installs instead of silently selecting them.
 
 ## 7. Learn Edition 50k element cap (cosmetic)
 
@@ -4123,8 +4136,9 @@ Python- or build-specific details.
   session can double-click `Coreform Cubit (warm launch)` on the desktop
   or run `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` to get the
   same effect immediately.
-- mdx / external users: `pip install --upgrade radia cubit-mesh-export
-  radia-mcp` + `cubit-plugin-install`.
+- mdx / external users: `pip install --upgrade "radia[cubit,gui]"
+  radia-mcp cubit-mesh-export` + `cubit-plugin-install` +
+  `cubit-plugin-install --verify-only`.
 - VSCode MCP users: restart VSCode once to pick up the new daemon code.
   After that, subsequent restarts attach in 0.01 s.
 

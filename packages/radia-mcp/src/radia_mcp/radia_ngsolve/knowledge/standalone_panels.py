@@ -44,7 +44,7 @@ background.  Cubit literally does not appear anywhere in this flow.
 ::    `[cubit]` would pull cubit-mesh-export which only matters if
 ::    you ALSO want the in-Cubit Solve menu launcher.  For a
 ::    Cubit-free workflow, `[gui]` alone is enough.
-pip install --upgrade "radia[gui]==4.25.1" radia-mcp==0.37.0
+pip install --upgrade "radia[gui]" radia-mcp
 
 :: 2. confirm the four .exe launchers are on PATH.
 where radia-ih radia-em radia-pcb radia-heat
@@ -54,7 +54,7 @@ where radia-ih radia-em radia-pcb radia-heat
 radia-ih C:\\path\\to\\model.vol
 
 :: (optional) launch with no argument and use the in-panel
-::            "Model (.vol):  [Browse...]" field instead.
+::            Working folder + per-method Browse fields instead.
 radia-ih
 ```
 
@@ -67,8 +67,8 @@ Inside the IH panel:
 
 | # | Action | Notes |
 |---|--------|-------|
-| 1 | **Method** dropdown — pick one of 6 | PEEC inductance / BEM-A inductance / PEEC + BEM weak / BEM-A + BEM weak / PEEC + FEM Kelvin / FEM A-V full |
-| 2 | **STEP or JOU:**  [Browse...] (if PEEC variants) | The coil STEP file.  PEEC + BEM and BEM-A + BEM weak ALSO need a `.vol` for the workpiece — the launcher arg above. |
+| 1 | **Method** dropdown — pick one of 9 | Six EM methods plus three Thermal methods integrated into `radia-ih`. |
+| 2 | Browse the visible geometry rows | PEEC modes use coil STEP. BEM-A modes use a pre-meshed coil `.vol` with `source` / `sink`. Workpiece modes use the panel-owned Workpiece `.vol` row. Thermal modes use workpiece `.vol` + qsurf `.sol` + EM `.vol`. |
 | 3 | **Frequency [Hz]** + **Coil current [A]** | Operating point for skin depth / energy / dissipation. |
 | 4 | **Coil material** + **Workpiece material** | Pick from preset (Cu / Steel mu_r=100 / etc.) or "Custom" + type sigma / mu_r. |
 | 5 | **Solver** | Dense LU (small) / HACApK (large) — affects assembly + memory. |
@@ -81,6 +81,10 @@ mesh export from a `.cub5`** — that workflow is exposed via Cubit's
 `Solve -> Radia-NGSolve` menu, NOT via the standalone .exe.  Once a
 `.vol` exists, the standalone launcher and the Cubit launcher are
 identical (both call the same Layer 4 `calc_*.py` subprocess).
+
+The top row is a **Working folder**.  Browse-row paths are displayed
+relative to it when possible, then resolved back to absolute paths
+before subprocess launch.
 
 ============================================================
 ## four_panels — what each launcher does
@@ -205,28 +209,37 @@ OCC standalone — see `vol_sources`).  Total install state: a
 Python interpreter + the radia wheel + PySide6.
 
 ============================================================
-## ih_methods — 6 IH methods on radia-ih (with/without workpiece)
+## ih_methods — 9 IH methods on radia-ih (EM + integrated thermal)
 ============================================================
 
-Since 4.25.0 the IH panel offers 6 methods.  Two pairs differ only
-in the coil solver (PEEC perimeter filaments vs BEM-A surface RWG):
+Since 4.63.0 the IH panel offers 9 methods.  The first six are EM
+methods; the last three run the integrated thermal follow-up.  Two EM
+pairs differ only in the coil solver (PEEC perimeter filaments vs
+BEM-A surface RWG):
 
 | Method                                | Coil          | Workpiece          | Inputs                  | Cost     |
 |---------------------------------------|---------------|--------------------|-------------------------|----------|
 | PEEC inductance (vacuum)              | PEEC filament | none               | STEP only               | ~30 s    |
-| BEM-A inductance (vacuum)             | BEM-A surface | none               | STEP only               | ~25 s    |
+| BEM-A inductance (vacuum)             | BEM-A surface | none               | coil `.vol`             | ~25 s    |
 | PEEC + BEM weak coupling              | PEEC filament | scalar BEM-SIBC    | STEP + `.vol`           | ~3 min   |
-| BEM-A + BEM weak coupling             | BEM-A surface | scalar BEM-SIBC    | STEP + `.vol`           | ~3-5 min |
+| BEM-A + BEM weak coupling             | BEM-A surface | scalar BEM-SIBC    | coil `.vol` + wp `.vol` | ~3-5 min |
 | PEEC coil + FEM wp (SIBC) + Kelvin    | PEEC filament | volumetric FEM SIBC | STEP + `.vol` (Kelvin) | ~4-8 min |
 | Full simulation (FEM A-V + wp SIBC)   | volumetric    | volumetric FEM SIBC | `.vol` (full labels)    | ~1-7 min |
+| Thermal: 3D static                    | none          | heat equation       | wp `.vol` + qsurf `.sol` + EM `.vol` | varies |
+| Thermal: 3D + rotation                | none          | rotating heat       | wp `.vol` + qsurf `.sol` + EM `.vol` | varies |
+| Thermal: 2D axisymmetric              | none          | axisym heat         | axisym wp `.vol` + qsurf `.sol` + EM `.vol` | fast |
 
-Vacuum modes (top 2) need only a coil STEP — **no `.vol` required**.
-This is the cheapest way to get a coil L estimate: open the panel,
-Browse the STEP, click Run, get L_coil + R_coil in <30 s.
+PEEC vacuum mode needs only a coil STEP; BEM-A vacuum mode needs a
+pre-meshed coil `.vol` with `source` and `sink` terminal labels.  Both
+skip the workpiece `.vol`.
 
 For weak-coupled and FEM modes, the `.vol` is required and must
 have the right labels (`sibc` boundary for BEM-SIBC; `coil` /
 `source` / `sink` / `sibc` / `kelvin` for FEM A-V full).
+
+File pickers resolve against the top-level **Working folder**.  The
+workpiece mesh is the panel-owned `wp_vol` row, not the hidden legacy
+`AnalysisWindow._vol_edit` shim.
 
 ============================================================
 ## troubleshooting — common errors when launching standalone

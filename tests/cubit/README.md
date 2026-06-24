@@ -1,81 +1,51 @@
-# Tests for Radia Cubit Plugin (cubit_mesh_curver)
+# Tests for the Coreform Cubit 2025.12 export plugin
+
+The Cubit export tests are opt-in because importing `cubit` can start the
+Coreform engine and license checkout during pytest collection.
+
+## Public Contract
+
+Use Cubit's APREPRO export command for Netgen/NGSolve meshes:
+
+```python
+cubit.cmd('export netgen "model.vol" order 2 overwrite')
+```
+
+The old top-level Python helpers such as `extract_curved_mesh`,
+`extract_mesh_data`, and `export_netgen()` are retired from the public API.
+The `cubit_mesh_curver` `.pyd` module is still present as a low-level plugin
+implementation detail; tests should import it only for module-shape smoke
+coverage.
 
 ## Running Tests
 
-Tests should be run using **system Python** with the `CUBIT_PATH` environment variable set to point to Cubit's bin directory.
+Set `RADIA_RUN_CUBIT_TESTS=1` explicitly. The helper auto-detects Coreform
+Cubit 2025.12+ through the same `install_panels.find_cubit_bin()` path used by
+the installer. `CUBIT_PATH` can override discovery when needed.
 
-### Setting Up Cubit Access
-
-Either add Cubit's `bin` directory to your system PATH, or set the `CUBIT_PATH` environment variable:
-
-```bash
-# Windows (PowerShell) — Cubit 2025.8+ (Qt5-free PySide6 plugin)
+```powershell
+$env:RADIA_RUN_CUBIT_TESTS = "1"
 $env:CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.12/bin"
-
-# Windows (cmd)
-set CUBIT_PATH=C:/Program Files/Coreform Cubit 2025.12/bin
-
-# Linux/Mac
-export CUBIT_PATH=/path/to/cubit/bin
+python -m pytest tests/cubit -q
 ```
 
-### Using pytest (Recommended)
+Coreform Cubit 2025.12 embeds Python 3.10. Real `import cubit` tests skip when
+run under an incompatible system Python (for example Python 3.12). To execute
+those tests instead of skipping them, run pytest from Cubit's bundled Python
+environment:
 
-```bash
-python -m pytest tests/
+```powershell
+& "C:/Program Files/Coreform Cubit 2025.12/bin/python3/python.exe" -m pytest tests/cubit -q
 ```
 
-### Running Individual Tests
+Most CI and normal repository test runs intentionally skip this directory.
 
-```bash
-python tests/cubit/test_gmsh_export.py
-python tests/cubit/test_vtk_auto_order.py
-```
+## Test Notes
 
-## Test Files
-
-| File | Description |
-|------|-------------|
-| `test_basic.py` | Module import and function signature tests |
-| `test_gmsh_export.py` | Gmsh v4.1 export tests (format, 1st/2nd order, mixed, $Entities, $PhysicalNames) |
-| `test_nastran_export.py` | Nastran BDF export tests |
-| `test_meg_export.py` | MEG format export tests |
-| `test_vtk_auto_order.py` | VTK auto element order detection tests |
-| `test_vtk_node_ordering.py` | VTK node ordering validation tests |
-| `test_vtu_export.py` | VTU XML format export tests |
-| `test_netgen_export.py` | Netgen mesh export tests |
-| `test_netgen_first_order.py` | First-order Netgen mesh tests |
-| `test_netgen_mixed_elements.py` | Mixed element type tests |
-| `test_netgen_with_ngsolve.py` | NGSolve integration tests (requires ngsolve) |
-| `test_geometry_blocks.py` | Geometry-based block export tests |
-| `test_block_geometry_api.py` | Cubit API investigation for geometry blocks |
-| `test_mixed_element_warning.py` | Mixed element type warning tests |
-| `test_setgeominfo.py` | SetGeomInfo API tests |
-| `test_setgeominfo_uv.py` | SetGeomInfo UV parameter tests |
-| `test_curve_workflow.py` | Cubit-to-NGSolve high-order curving workflow |
-
-## Notes
-
-- Most tests require Coreform Cubit installation (set `CUBIT_PATH` env var)
-- NGSolve tests require separate ngsolve installation (`pip install ngsolve`)
-- **Important**: When both NGSolve and Cubit are used in the same script, NGSolve must be imported BEFORE adding Cubit to `sys.path` and importing `cubit`. This avoids DLL conflicts on Windows.
-- Tests create temporary mesh files that are cleaned up after execution
-
-## Test Structure
-
-Each test file follows this pattern:
-
-```python
-import sys
-import os
-cubit_path = os.environ.get("CUBIT_PATH")
-if cubit_path:
-    sys.path.append(cubit_path)
-
-import cubit
-cubit.init(['cubit', '-nojournal', '-batch'])
-
-import cubit_mesh_curver
-
-# Test code here...
-```
+- NGSolve must be imported before Cubit in tests that use both packages, to
+  avoid Windows DLL load conflicts.
+- Cubit is initialized in batch/no-graphics mode with the 2025.12 plugin
+  directory passed through `-commandplugindir`.
+- Temporary `.vol` and `.msh` files are written under the system temp directory.
+- Tests should prefer `tests/cubit/cubit_202512_helpers.py` over hand-written
+  Cubit path setup.
