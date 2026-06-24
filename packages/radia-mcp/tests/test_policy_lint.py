@@ -105,3 +105,18 @@ def test_optuna_dependency_must_stay_external(tmp_path):
                dependencies=["optuna>=4"],
                optional_dependencies={"external": ["optuna-mcp>=0.2"]})
     assert _run(tmp_path) == 1
+
+
+def test_optuna_import_must_stay_external(tmp_path):
+    _make_repo(tmp_path, {"mcp-server-motor": "radia_mcp.motor.server:main"},
+               token_files={
+                   "motor/objective.py": "import optuna\n",
+                   "motor/dashboard.py": "from optuna_dashboard import run_server\n",
+               })
+    assert _run(tmp_path) == 1
+
+
+def test_optuna_import_scan_accepts_utf8_bom_python_files(tmp_path):
+    _make_repo(tmp_path, {"mcp-server-motor": "radia_mcp.motor.server:main"},
+               token_files={"motor/bom_ok.py": "\ufeff# UTF-8 BOM is allowed\nx = 1\n"})
+    assert _run(tmp_path) == 0
