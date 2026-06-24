@@ -159,6 +159,76 @@ endmesh
 """
 
 
+BOX_SIX_BOUNDARY_VOL = """\
+mesh3d
+dimension
+3
+geomtype
+0
+facedescriptors
+6
+1 1 0 1 1
+2 1 0 1 1
+3 1 0 1 1
+4 1 0 1 1
+5 1 0 1 1
+6 1 0 1 1
+surfaceelements
+12
+5 5 1 0 3 1 3 2
+5 5 1 0 3 1 4 3
+6 6 1 0 3 5 6 7
+6 6 1 0 3 5 7 8
+3 3 1 0 3 1 2 6
+3 3 1 0 3 1 6 5
+4 4 1 0 3 4 7 3
+4 4 1 0 3 4 8 7
+1 1 1 0 3 1 5 8
+1 1 1 0 3 1 8 4
+2 2 1 0 3 2 3 7
+2 2 1 0 3 2 7 6
+volumeelements
+12
+1 4 1 3 2 9
+1 4 1 4 3 9
+1 4 5 6 7 9
+1 4 5 7 8 9
+1 4 1 2 6 9
+1 4 1 6 5 9
+1 4 4 7 3 9
+1 4 4 8 7 9
+1 4 1 5 8 9
+1 4 1 8 4 9
+1 4 2 3 7 9
+1 4 2 7 6 9
+points
+9
+0 0 0
+2 0 0
+2 3 0
+0 3 0
+0 0 5
+2 0 5
+2 3 5
+0 3 5
+1 1.5 2.5
+pointelements
+0
+materials
+1
+1 air
+bcnames
+6
+1 xmin
+2 xmax
+3 ymin
+4 ymax
+5 zmin
+6 zmax
+endmesh
+"""
+
+
 OPEN_SURFACE_VOL = """\
 mesh3d
 dimension
@@ -240,6 +310,32 @@ def test_trace_node_ids_by_boundary_number():
         3: [2, 3, 4],
         4: [1, 3, 4],
     }
+
+
+def test_boundary_summary_rows_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+    rows = mesh.boundary_summary_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert [row["boundary_number"] for row in rows] == [1, 2, 3, 4, 5, 6]
+    assert sorted(by_name) == ["xmax", "xmin", "ymax", "ymin", "zmax", "zmin"]
+    assert {name: row["surface_triangles"] for name, row in by_name.items()} == {
+        "xmin": 2,
+        "xmax": 2,
+        "ymin": 2,
+        "ymax": 2,
+        "zmin": 2,
+        "zmax": 2,
+    }
+    assert by_name["xmin"]["surface_area"] == pytest.approx(15.0)
+    assert by_name["xmax"]["surface_area"] == pytest.approx(15.0)
+    assert by_name["ymin"]["surface_area"] == pytest.approx(10.0)
+    assert by_name["ymax"]["surface_area"] == pytest.approx(10.0)
+    assert by_name["zmin"]["surface_area"] == pytest.approx(6.0)
+    assert by_name["zmax"]["surface_area"] == pytest.approx(6.0)
+    assert sum(row["surface_area"] for row in rows) == pytest.approx(mesh.total_surface_area())
+    assert all(row["trace_node_count"] == 4 for row in rows)
+    assert mesh.total_volume() == pytest.approx(30.0)
 
 
 def test_first_order_fem_bem_topology_for_unit_tetrahedron():
