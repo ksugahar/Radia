@@ -9,11 +9,13 @@ NGSolve's high-order curved elements.
 | [`cogging_skew_demo.py`](cogging_skew_demo.py) | Reluctance/cogging torque `tau(theta)` of a PM rotor in a salient stator; conversion to physical N·m for a real stack; and **skew ripple cancellation** | `eggshell_torque_2d`, `MachineScaling` (axial length × symmetry), `skew_average` ↔ `skew_factor` |
 | [`validation_slot_winding_spectrum.py`](validation_slot_winding_spectrum.py) | Validation-class harmonic spectrum from explicit slot sign tables, including fractional-slot layouts | `slot_table_winding_factor`, `integral_slot_winding_factor`, `mmf_harmonic_direction` |
 | [`validation_pm_drive_speed_map.py`](validation_pm_drive_speed_map.py) | Validation-class PM-machine speed map across MTPA/FW/MTPV/infeasible regions plus short-circuit demagnetising trend | `field_weakening_operating_point`, `dq_operating_point`, `short_circuit_operating_point` |
+| [`validation_lamination_mu_eff_sweep.py`](validation_lamination_mu_eff_sweep.py) | Validation-class laminated-steel complex-permeability sweep from static limit into deep skin effect | `laminated_mu_eff` |
 
 ```bash
 python cogging_skew_demo.py
 python validation_slot_winding_spectrum.py
 python validation_pm_drive_speed_map.py
+python validation_lamination_mu_eff_sweep.py
 ```
 
 What it validates (no commercial tool needed to run or check):
@@ -33,6 +35,8 @@ additionally cross-checked against independent lab tooling internally (not shipp
 
 - Iron / eddy / excess loss from a rotor sweep: `radia_mcp.radia_ngsolve.coreloss`
   (classical-eddy term = the ONELAB lamination homogenisation; full Bertotti + harmonic).
+- Laminated-steel AC homogenisation: `radia_mcp.radia_ngsolve.solve.laminated_mu_eff`
+  (complex in-plane permeability with fill factor and lamination skin effect).
 - Winding / leakage / magnetising analytics: `radia_mcp.radia_ngsolve.solve`
   (`winding_factor`, `skew_factor`, `slot_leakage_inductance`,
   `magnetizing_inductance_per_phase`, `effective_air_gap` = Carter).
