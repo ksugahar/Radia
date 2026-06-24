@@ -16,7 +16,8 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from radia_mcp.radia_ngsolve.solve import (winding_distribution_factor, winding_pitch_factor,
-                                           winding_factor, integral_slot_winding_factor)
+                                           winding_factor, integral_slot_winding_factor,
+                                           slot_table_winding_factor)
 
 Q, P2, M = 36, 4, 3
 QPPP = Q // (P2 * M)                 # = 3 slots/pole/phase
@@ -72,9 +73,48 @@ def test_integral_slot_winding_factor_from_slots_and_poles():
         integral_slot_winding_factor(27, 8)
 
 
+def _phase_a_belt_signs(slots, poles, belt_width_deg=60.0):
+    pole_pairs = poles // 2
+    half = belt_width_deg / 2.0
+    signs = []
+    for k in range(slots):
+        angle = (360.0 * pole_pairs * k / slots) % 360.0
+        da = min((angle - 0.0) % 360.0, (0.0 - angle) % 360.0)
+        da_ret = min((angle - 180.0) % 360.0, (180.0 - angle) % 360.0)
+        if da <= half:
+            signs.append(+1.0)
+        elif da_ret <= half:
+            signs.append(-1.0)
+        else:
+            signs.append(0.0)
+    return signs
+
+
+def test_slot_table_matches_integral_slot_full_pitch_magnitude():
+    signs = _phase_a_belt_signs(Q, P2)
+    assert sum(abs(s) for s in signs) == Q // M
+    for n in (1, 3, 5, 7, 11, 13):
+        table = slot_table_winding_factor(signs, P2, harmonic=n)
+        closed = integral_slot_winding_factor(Q, P2, harmonic=n)
+        assert table["winding_factor_abs"] == pytest.approx(abs(closed["winding_factor"]))
+
+
+def test_slot_table_handles_fractional_slot_layout():
+    signs = _phase_a_belt_signs(12, 10)
+    table = slot_table_winding_factor(signs, 10, harmonic=1)
+    assert table["active_slots"] == pytest.approx(6.0)
+    assert 0.85 < table["winding_factor_abs"] < 0.95
+    with pytest.raises(ValueError, match="integral-slot"):
+        integral_slot_winding_factor(12, 10)
+    with pytest.raises(ValueError, match="non-zero"):
+        slot_table_winding_factor([0, 0, 0], 2)
+
+
 if __name__ == "__main__":
     test_kd_matches_phasor_sum()
     test_limits()
     test_short_pitch_kills_5th_7th()
     test_integral_slot_winding_factor_from_slots_and_poles()
+    test_slot_table_matches_integral_slot_full_pitch_magnitude()
+    test_slot_table_handles_fractional_slot_layout()
     print("[OK] winding factor k_w = k_d k_p validated (phasor sum, limits, harmonic suppression).")
