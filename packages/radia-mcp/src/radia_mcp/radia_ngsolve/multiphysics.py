@@ -217,6 +217,33 @@ def convective_slab_peak_dT(q, thickness, k, h):
     return q * thickness * thickness / (8.0 * k) + q * thickness / (2.0 * h)
 
 
+def fixed_temperature_slab_temperature_rise(q, thickness, k, x):
+    """Temperature RISE profile of a slab (thickness ``L``) with a UNIFORM volumetric source
+    ``q`` [W/m^3], both faces held at the reference temperature, and insulated sides:
+
+        dT(x) = q x (L - x) / (2 k),        0 <= x <= L.
+
+    ``x`` is measured from one cooled face and may be a scalar or iterable. This is the plain
+    Dirichlet heat-transfer parabola behind Joule-heated bars and the h -> infinity limit of
+    :func:`convective_slab_peak_dT`."""
+    def _dt(xx):
+        return q * xx * (thickness - xx) / (2.0 * k)
+    try:
+        return [_dt(float(xx)) for xx in x]
+    except TypeError:
+        return _dt(float(x))
+
+
+def fixed_temperature_slab_peak_dT(q, thickness, k):
+    """Centre temperature RISE of the fixed-temperature slab parabola:
+
+        dT_peak = q L^2 / (8 k).
+
+    Use this as the simplest heat-transfer gate for ``solve_heat_steady`` with a uniform
+    volumetric source and fixed-temperature faces."""
+    return q * thickness * thickness / (8.0 * k)
+
+
 def thermal_resistance_series(thicknesses, conductivities):
     """Series thermal resistance per unit area of a MULTILAYER stack (1-D conduction):
 
