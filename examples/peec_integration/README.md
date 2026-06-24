@@ -26,7 +26,7 @@ peec_integration/
 ├── verification/            # Verification, validation, and debug scripts
 ├── algorithm_development/   # Algorithm derivation scripts
 ├── analysis/                # Analysis and paper figure generation
-├── gmsh_models/             # Mesh generation and conversion utilities
+├── gmsh_models/             # Historical GMSH fixtures and .vol migration demos
 ├── data/                    # Measurement data (CSV)
 └── model/                   # Model cache
 ```
