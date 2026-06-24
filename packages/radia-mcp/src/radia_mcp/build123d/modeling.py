@@ -32,7 +32,8 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "mirrored", "assembly", "shape_envelope_row", "enclosing_box",
            "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
-           "box_face_vector_area_rows", "compare_boundary_vector_area_rows",
+           "box_face_vector_area_rows", "box_face_pressure_force_rows",
+           "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
            "swept", "revolved", "lofted", "coil", "helix_centerline_length",
@@ -417,6 +418,45 @@ def box_face_vector_area_rows(size, center=(0.0, 0.0, 0.0), names=None):
             "face_center": tuple(float(component) for component in face_center),
             "box_center": (cx, cy, cz),
             "box_size": (sx, sy, sz),
+        })
+    return rows
+
+
+def box_face_pressure_force_rows(
+    size,
+    pressure_by_face,
+    center=(0.0, 0.0, 0.0),
+    names=None,
+    default_pressure=0.0,
+):
+    """Return analytic box face force rows from scalar pressure values.
+
+    Pressure is positive along each face's outward normal:
+    ``force = pressure * vector_area``.  This is the build123d-side analytic
+    companion to ``NetgenTriTetVolMesh.boundary_pressure_force_rows``.
+    """
+
+    rows = []
+    for area_row in box_face_vector_area_rows(size, center=center, names=names):
+        name = area_row["name"]
+        if name in pressure_by_face:
+            pressure = float(pressure_by_face[name])
+            source = "name"
+        elif area_row["index"] in pressure_by_face:
+            pressure = float(pressure_by_face[area_row["index"]])
+            source = "index"
+        elif default_pressure is not None:
+            pressure = float(default_pressure)
+            source = "default"
+        else:
+            raise KeyError(f"missing pressure for face {name}")
+        force = tuple(pressure * component for component in area_row["vector_area"])
+        rows.append({
+            **area_row,
+            "pressure_Pa": pressure,
+            "pressure_source": source,
+            "force_N": force,
+            "force_magnitude_N": math.sqrt(sum(component * component for component in force)),
         })
     return rows
 
