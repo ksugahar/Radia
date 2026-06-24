@@ -146,6 +146,12 @@ def paper_writing_usage() -> str:
       override を CRITICAL/MAJOR で検出。\\vspace は INFO のみ
       (見た目のための layout tool として OK)。
       Page-limit hack hierarchy の Level 0 detector。
+    - paper_writing_check_digest_human_review_triggers — 1-page digest
+      human review trigger detector: abstract numeric overload, known
+      Warburg/CLN framing, uncited HOIBC/Warburg first use, overloaded
+      captions, opaque rank-(m,n) notation, unnumbered/uncited core
+      equations, ambiguous block-matrix/N_b notation, and geometry scope
+      creep.
 
     ## Cross-module 和文 lint (v0.13.0) — grant_writing 由来の re-export
     - paper_writing_check_notation_variants / find_undefined_acronyms
@@ -839,7 +845,7 @@ def paper_writing_check_abstract_background_ratio(abstract: str) -> dict:
 
 
 def paper_writing_check_abstract_no_math_no_citation(abstract: str) -> dict:
-    """Abstract 内に数式 (math) または citation が混入していないか検出。
+    """Abstract 内に数式 (math), citation, domain acronym が混入していないか検出。
 
     Editorial convention (IEEE, Elsevier, Springer, APA, ACS, RSC, AIP, AAAS,
     Nature, Science, ほぼ全ての主要 journal):
@@ -852,6 +858,10 @@ def paper_writing_check_abstract_no_math_no_citation(abstract: str) -> dict:
         であるべきで、引用は本文で文脈付きで導入する.  例外: critical な
         先行研究を必ず指摘する必要のある一部 conference (たとえば一部の
         ML conf) — そういう場では本 lint は warning として受け取る.
+      - **domain-specific acronym は abstract に入れない**.  MMM, FEM, BEM,
+        MCP, LLM などの略語は abstract では避け、本文初出で
+        ``Finite Element Method (FEM)`` のように展開する.  Universal acronym
+        (PDF, USB, CPU など) は除外する.
 
     Detects:
       - Inline math: ``$...$``, ``\\(...\\)`` (但し escape `\\$` は除く)
@@ -861,7 +871,10 @@ def paper_writing_check_abstract_no_math_no_citation(abstract: str) -> dict:
       - Citations: ``\\cite{...}``, ``\\citet{...}``, ``\\citep{...}``,
         ``\\citeyear{...}``, ``\\citealt{...}``, ``\\citeauthor{...}``,
         ``\\nocite{...}``, ``\\fullcite{...}``, ``\\textcite{...}``,
-        ``\\parencite{...}``
+        ``\\parencite{...}``, and bare numeric markers such as ``[1]`` or
+        ``[1, 2]``
+      - Domain-specific acronyms: all-caps 2-5-character tokens not in the
+        universal whitelist, after math/citation/comment stripping
 
     Args:
         abstract: Abstract 本文のみ (``\\begin{abstract}`` ... ``\\end{abstract}``
@@ -874,8 +887,10 @@ def paper_writing_check_abstract_no_math_no_citation(abstract: str) -> dict:
           - ``n_math_inline``: int
           - ``n_math_display``: int
           - ``n_citations``: int
+          - ``n_acronyms``: int
           - ``math_snippets``: list of up to 5 offending math snippets (truncated)
           - ``citation_snippets``: list of up to 5 offending citation snippets
+          - ``acronym_snippets``: list of up to 5 acronym contexts
           - ``status``: ``"clean"`` | ``"warning"`` | ``"fail"``
           - ``advice``: str, what to do about each finding
     """
@@ -917,19 +932,63 @@ def paper_writing_check_abstract_no_math_no_citation(abstract: str) -> dict:
         r"nocite|fullcite|textcite|parencite|footcite|autocite)"
         r"(?:\[[^\]]*\])?\{[^\}]+\}"
     )
-    citation_matches = citation_re.findall(abstract)
-    # findall returns the cite-command name only (group 1); re-find spans
-    # for snippets.
-    citation_spans = [m.group(0) for m in citation_re.finditer(abstract)]
+    citation_command_spans = [m.group(0) for m in citation_re.finditer(abstract)]
+    numeric_citation_re = re.compile(
+        r"(?<![A-Za-z0-9])\[\s*\d+(?:\s*(?:,|-|--)\s*\d+)*\s*\](?![A-Za-z0-9])"
+    )
+    numeric_citation_spans = [
+        m.group(0) for m in numeric_citation_re.finditer(abstract)
+    ]
+    citation_spans = citation_command_spans + numeric_citation_spans
+    n_citation_commands = len(citation_command_spans)
+    n_citation_markers = len(numeric_citation_spans)
     n_citations = len(citation_spans)
     citation_snippets = [s[:80] + ("..." if len(s) > 80 else "")
                          for s in citation_spans[:5]]
 
+    # ---- Domain-acronym detection --------------------------------------
+    # Abstracts should be readable without local acronym decoding.  Reuse
+    # the same conservative whitelist and stripper as the first-use acronym
+    # checker so bib keys, equations, URLs, and comments do not leak in.
+    from ._undefined_acronyms import (  # local import avoids a hard cycle
+        UNIVERSAL_ACRONYM_WHITELIST,
+        _stripped_source,
+    )
+
+    stripped_for_acronyms = _stripped_source(abstract)
+    acronym_re = re.compile(r"\b([A-Z][A-Z0-9]{1,4})\b")
+    acronym_records: dict[str, dict] = {}
+    for m in acronym_re.finditer(stripped_for_acronyms):
+        acronym = m.group(1)
+        if acronym in UNIVERSAL_ACRONYM_WHITELIST:
+            continue
+        if acronym in acronym_records:
+            acronym_records[acronym]["n_occurrences"] += 1
+            continue
+        a = max(0, m.start() - 45)
+        b = min(len(abstract), m.end() + 45)
+        acronym_records[acronym] = {
+            "acronym": acronym,
+            "first_occurrence_offset": m.start(),
+            "context": abstract[a:b].replace("\n", " "),
+            "n_occurrences": 1,
+        }
+    acronyms = sorted(acronym_records)
+    n_acronyms = len(acronyms)
+    acronym_snippets = [
+        acronym_records[a]["context"][:100]
+        + ("..." if len(acronym_records[a]["context"]) > 100 else "")
+        for a in acronyms[:5]
+    ]
+
     # ---- Status + advice ------------------------------------------------
-    n_total = n_math_inline + n_math_display + n_citations
+    n_total = n_math_inline + n_math_display + n_citations + n_acronyms
     if n_total == 0:
         status = "clean"
-        advice = "Abstract is free of math and citations — matches convention."
+        advice = (
+            "Abstract is free of math, citations, and domain acronyms — "
+            "matches convention."
+        )
     elif n_math_display > 0 or n_citations > 0:
         status = "fail"
         parts = []
@@ -951,25 +1010,48 @@ def paper_writing_check_abstract_no_math_no_citation(abstract: str) -> dict:
                 "Replace with plain text (e.g. '$E_x$' → 'the x-component "
                 "of E', '$\\sigma$' → 'sigma' or 'electrical conductivity')."
             )
+        if n_acronyms > 0:
+            parts.append(
+                f"{n_acronyms} domain acronym(s) found "
+                f"({', '.join(acronyms[:8])}).  Avoid acronyms in the "
+                "abstract; introduce them on first use in the body, e.g. "
+                "'Finite Element Method (FEM)'."
+            )
         advice = "  ".join(parts)
     else:
-        # only inline math, no display/citation
+        # only inline math and/or acronyms, no display/citation
         status = "warning"
-        advice = (
-            f"{n_math_inline} inline-math span(s) ($...$) found.  Editors at "
-            "most journals will ask you to replace these with plain text.  "
-            "Replace e.g. '$E_x$' with 'the x-component of E'."
-        )
+        parts = []
+        if n_math_inline > 0:
+            parts.append(
+                f"{n_math_inline} inline-math span(s) ($...$) found.  Editors at "
+                "most journals will ask you to replace these with plain text.  "
+                "Replace e.g. '$E_x$' with 'the x-component of E'."
+            )
+        if n_acronyms > 0:
+            parts.append(
+                f"{n_acronyms} domain acronym(s) found "
+                f"({', '.join(acronyms[:8])}).  Prefer plain words in the "
+                "abstract; define the acronym at first body use, e.g. "
+                "'Finite Element Method (FEM)'."
+            )
+        advice = "  ".join(parts)
 
     return {
         "n_math_inline": n_math_inline,
         "n_math_display": n_math_display,
         "n_citations": n_citations,
+        "n_citation_commands": n_citation_commands,
+        "n_citation_markers": n_citation_markers,
+        "n_acronyms": n_acronyms,
+        "acronyms": acronyms,
         "math_snippets": math_snippets,
         "citation_snippets": citation_snippets,
+        "acronym_snippets": acronym_snippets,
         "status": status,
         "advice": advice,
         "rule": ("abstract must be self-contained: no TeX math, no \\cite{} "
+                 "/ [N] citation markers, no unexplained domain acronyms "
                  "(IEEE / Elsevier / Springer / Nature / Science convention)"),
     }
 
@@ -1003,6 +1085,825 @@ def paper_writing_check_figure_caption_showing(caption: str) -> dict:
             "OK: 'The abundances of A and B were inversely related (Fig. 4).'"
         ) if tells else "OK: caption opens with a claim, not a describe verb.",
         "source": "Wallwork §17.9",
+    }
+
+
+def _paper_writing_text_or_path(text_or_path: str) -> tuple[str, str | None]:
+    """Return source text and an optional path label."""
+    candidate = (text_or_path or "").strip().strip("\"'")
+    if candidate and "\n" not in candidate and len(candidate) < 1024:
+        try:
+            p = pathlib.Path(candidate)
+            if p.exists() and p.is_file():
+                try:
+                    return p.read_text(encoding="utf-8"), str(p)
+                except UnicodeDecodeError:
+                    return p.read_text(encoding="cp932"), str(p)
+        except (OSError, ValueError):
+            pass
+    return text_or_path or "", None
+
+
+def _paper_writing_strip_comments(src: str) -> str:
+    """Strip TeX comments conservatively, preserving escaped percent signs."""
+    out = []
+    for line in src.splitlines():
+        cut = len(line)
+        for m in re.finditer("%", line):
+            if m.start() == 0 or line[m.start() - 1] != "\\":
+                cut = m.start()
+                break
+        out.append(line[:cut])
+    return "\n".join(out)
+
+
+def _paper_writing_extract_environment(src: str, env: str) -> str:
+    m = re.search(
+        rf"\\begin\{{{re.escape(env)}\}}(.*?)\\end\{{{re.escape(env)}\}}",
+        src,
+        flags=re.DOTALL,
+    )
+    return m.group(1).strip() if m else ""
+
+
+def _paper_writing_extract_braced_arg(src: str, open_brace: int) -> tuple[int, str]:
+    if open_brace < 0 or open_brace >= len(src) or src[open_brace] != "{":
+        return -1, ""
+    depth = 1
+    i = open_brace + 1
+    while i < len(src):
+        ch = src[i]
+        if ch == "\\" and i + 1 < len(src) and src[i + 1] in "{}":
+            i += 2
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i, src[open_brace + 1:i]
+        i += 1
+    return -1, ""
+
+
+def _paper_writing_iter_command_args(src: str, command: str) -> list[dict]:
+    args = []
+    pat = re.compile(rf"\\{re.escape(command)}(?:\[[^\]]*\])?\s*\{{")
+    for m in pat.finditer(src):
+        open_brace = m.end() - 1
+        end, arg = _paper_writing_extract_braced_arg(src, open_brace)
+        if end >= 0:
+            args.append({
+                "command": command,
+                "start": m.start(),
+                "end": end + 1,
+                "text": arg,
+            })
+    return args
+
+
+def _paper_writing_plain_text(src: str) -> str:
+    txt = _paper_writing_strip_comments(src)
+    txt = re.sub(r"\\cite[a-zA-Z]*\*?(?:\[[^\]]*\])?\{[^{}]*\}", " ", txt)
+    txt = re.sub(r"\\ref\{[^{}]*\}|\\eqref\{[^{}]*\}|\\label\{[^{}]*\}", " ", txt)
+    txt = re.sub(r"\$[^$]*\$", " MATH ", txt)
+    txt = re.sub(r"\\\(.+?\\\)|\\\[.+?\\\]", " MATH ", txt, flags=re.DOTALL)
+    txt = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?", " ", txt)
+    txt = re.sub(r"[{}]", " ", txt)
+    txt = txt.replace(r"\%", "%")
+    return re.sub(r"\s+", " ", txt).strip()
+
+
+def _paper_writing_word_count(src: str) -> int:
+    plain = _paper_writing_plain_text(src)
+    words = re.findall(
+        r"[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*|[\u3040-\u30ff\u3400-\u9fff]+",
+        plain,
+    )
+    return len(words)
+
+
+def _paper_writing_mask_abstract(src: str) -> str:
+    return re.sub(
+        r"\\begin\{abstract\}.*?\\end\{abstract\}",
+        " ",
+        src,
+        flags=re.DOTALL,
+    )
+
+
+def _paper_writing_near_cite(ctx: str) -> bool:
+    return bool(re.search(r"\\cite[a-zA-Z]*\*?(?:\[[^\]]*\])?\{", ctx))
+
+
+def paper_writing_check_digest_human_review_triggers(
+    text_or_path: str,
+    max_abstract_percent_numbers: int = 1,
+    max_caption_words: int = 24,
+    max_geometry_families: int = 1,
+    max_report: int = 20,
+) -> dict:
+    """Detect one-page digest issues learned from Sugahara human review.
+
+    This checker is intentionally a warning-level review assistant, not a
+    rigid grammar rule.  It catches patterns that repeatedly trigger
+    reviewer/coauthor questions in short EM digests:
+
+    - the abstract enumerates per-case exact percent errors instead of an
+      aggregate claim such as "sub-percent accuracy";
+    - an EM digest abstract says only "Cauer ladder models", which can
+      read as a generic equivalent circuit rather than a Cauer Ladder
+      Network field-reduction representation;
+    - a known Warburg/Randles/CLN combination is framed as the novelty;
+    - an empirical CLN--surface transition-frequency issue is described too
+      narrowly as something "outside the Galerkin reduction";
+    - HOIBC or Warburg is introduced in the body without a nearby citation;
+    - a figure caption carries interpretation that should be in the body;
+    - opaque shorthand such as rank-(1,1) appears without words;
+    - a minimal block/specialization phrase can be misread as "the whole
+      benchmark is represented by two basis functions";
+    - an important block/Schur equation is left unnumbered, unlabeled, or
+      not cited from the body;
+    - block matrices such as K_bb/K_sb are shown without (s) dependence
+      or without words defining bulk/surface/coupling blocks;
+    - N_b is used without defining what is counted and whether the dc term
+      is included;
+    - the digest explains N_b by saying the uniform dc term is not counted,
+      instead of using a simpler "two-rung CLN + SIBC" style count;
+    - N_b and N are both used without distinguishing mixed-model bulk
+      corrections from bulk-only CLN order;
+    - L/R terminations are mentioned without saying they are inductive and
+      resistive closures of the last CLN rung;
+    - a CLN/HOIBC demonstrator uses N_b=1 without explaining why it is not
+      just a dc term plus an impedance boundary condition;
+    - a p_H=0 / SIBC0 example is advertised as HOIBC or high-order
+      without separating the current benchmark from the higher-order
+      extension;
+    - Schur complement and DtN/Steklov language are equated in one sentence
+      without explaining the elimination/map interpretation;
+    - "SIBC scaling" is used without saying whether it means f^{-1/2};
+    - CLN basis count or HOIBC order is missing from a graph/model
+      description;
+    - a main result figure is placed in the source before the
+      numerical/verification section that explains it;
+    - a numerical example is hidden as a bold "Verification." paragraph
+      instead of a numbered section;
+    - a figure marker such as f_N appears without saying what it marks;
+    - a one-page digest expands from one benchmark to sphere/cube/polyhedra.
+    """
+    raw_src, source_path = _paper_writing_text_or_path(text_or_path)
+    looks_like_tex = bool(source_path or "\\" in raw_src)
+    src = _paper_writing_strip_comments(raw_src) if looks_like_tex else raw_src
+    findings: list[dict] = []
+
+    def add(rule: str, message: str, advice: str, excerpt: str = "") -> None:
+        findings.append({
+            "rule": rule,
+            "severity": "warning",
+            "message": message,
+            "advice": advice,
+            "excerpt": re.sub(r"\s+", " ", excerpt).strip()[:240],
+        })
+
+    abstract = _paper_writing_extract_environment(src, "abstract")
+    if not abstract:
+        for rec in _paper_writing_iter_command_args(src, "abstract"):
+            abstract = rec["text"].strip()
+            break
+
+    if abstract:
+        percent_re = re.compile(
+            r"(?<![A-Za-z])(?:\d+(?:\.\d+)?|"
+            r"\d+\s*\\?times\s*10\^\{?[-+]?\d+\}?)\s*(?:\\%|%|percent|per cent)",
+            flags=re.IGNORECASE,
+        )
+        percent_claims = [m.group(0) for m in percent_re.finditer(abstract)]
+        if len(percent_claims) > max_abstract_percent_numbers:
+            add(
+                "abstract_numeric_overload",
+                (f"abstract lists {len(percent_claims)} exact percent claims "
+                 f"({', '.join(percent_claims[:4])})"),
+                ("Use an aggregate expression in the abstract, such as "
+                 "'sub-percent accuracy', and move per-case errors to the "
+                 "body or figure discussion."),
+                abstract,
+            )
+
+        generic_cauer_re = re.compile(
+            r"\bCauer\s+ladder\s+models?\b|\bCauer\s+models?\b",
+            flags=re.IGNORECASE,
+        )
+        m_generic_cauer = generic_cauer_re.search(abstract)
+        if m_generic_cauer and not re.search(
+            r"Cauer\s+Ladder\s+Network|electromagnetic\s+fields?|"
+            r"field[- ]reduction|field\s+reduced|電磁場|場の縮約",
+            abstract,
+            flags=re.IGNORECASE,
+        ):
+            add(
+                "abstract_generic_cauer_ladder",
+                "abstract uses a generic Cauer-ladder phrase",
+                ("If the contribution is an electromagnetic field-reduction "
+                 "model, write 'Cauer Ladder Network representations of "
+                 "electromagnetic fields' or equivalent wording.  'Cauer "
+                 "ladder models' can read as a generic circuit model."),
+                abstract,
+            )
+
+    body_src = _paper_writing_mask_abstract(src)
+    first_section = re.search(r"\\section\*?\{", body_src)
+    content_src = body_src[first_section.start():] if first_section else body_src
+    full_plain = _paper_writing_plain_text(src)
+    section_records = _paper_writing_iter_command_args(content_src, "section")
+    numerical_section_re = re.compile(
+        r"\b(numerical\s+example|numerical\s+examples|verification|"
+        r"validation|results?)\b|数値例|検証|結果",
+        flags=re.IGNORECASE,
+    )
+    numerical_sections = [
+        rec for rec in section_records
+        if numerical_section_re.search(_paper_writing_plain_text(rec["text"]))
+    ]
+
+    over_narrow_galerkin_re = re.compile(
+        r"(transition\s+frequency|crossover|connection\s+frequency).{0,80}"
+        r"outside.{0,40}Galerkin|"
+        r"Galerkin.{0,40}outside.{0,80}"
+        r"(transition\s+frequency|crossover|connection\s+frequency)|"
+        r"(遷移周波数|接続周波数).{0,80}Galerkin.{0,20}外|"
+        r"Galerkin.{0,20}外.{0,80}(遷移周波数|接続周波数)|"
+        r"Galerkin\s*射影\s*の\s*外",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    m_narrow = over_narrow_galerkin_re.search(src)
+    if m_narrow:
+        add(
+            "over_narrow_galerkin_transition_framing",
+            "transition-frequency issue is framed too narrowly as outside Galerkin reduction",
+            ("If the real issue is coupling a finite CLN to a Warburg/surface "
+             "tail, state that the model is closed by an empirical transition "
+             "frequency; do not make the claim sound specific to Galerkin "
+             "projection unless that is essential."),
+            src[max(0, m_narrow.start() - 120):m_narrow.end() + 120],
+        )
+
+    wall_band_re = re.compile(r"\bwall[- ]band\b|壁帯", flags=re.IGNORECASE)
+    m_wall = wall_band_re.search(full_plain)
+    if m_wall:
+        add(
+            "unclear_wall_band_term",
+            "'wall band' / '壁帯' may be lab-specific or unclear",
+            ("Use a more explicit phrase such as 'skin-effect transition "
+             "region' or '表皮効果の遷移領域', especially in Japanese digest "
+             "text."),
+            full_plain[max(0, m_wall.start() - 100):m_wall.end() + 100],
+        )
+
+    # HOIBC/Warburg should be cited at first body use.  Abstract citation is
+    # forbidden by a separate checker, so this intentionally scans the body.
+    citation_terms = [
+        ("HOIBC", r"\bHOIBC\b|higher-order\s+impedance\s+boundary\s+condition"),
+        ("Warburg", r"\bWarburg\b"),
+    ]
+    for term, pat in citation_terms:
+        m = re.search(pat, content_src, flags=re.IGNORECASE)
+        if m:
+            ctx = content_src[max(0, m.start() - 180):m.end() + 180]
+            if not _paper_writing_near_cite(ctx):
+                add(
+                    "technical_term_without_citation",
+                    f"{term} appears in the body without a nearby citation",
+                    ("Define specialized boundary/circuit terminology at first "
+                     "body use and cite the source there.  Do not put the "
+                     "citation in the abstract."),
+                    ctx,
+                )
+
+    # Known constructs should be acknowledged as known, then the paper should
+    # shift novelty to the new coupling/derivation.
+    for m in re.finditer(r"\bWarburg\b", content_src, flags=re.IGNORECASE):
+        ctx = content_src[max(0, m.start() - 240):m.end() + 240]
+        has_novelty = re.search(
+            r"\b(propose|proposed|new|novel|first|develop|developed|"
+            r"introduce|introduced)\b|新規|新しい|提案|初めて",
+            ctx,
+            flags=re.IGNORECASE,
+        )
+        has_known = re.search(
+            r"\b(known|classical|classic|established|conventional|prior)\b|"
+            r"既知|古典|従来",
+            ctx,
+            flags=re.IGNORECASE,
+        )
+        if has_novelty and not has_known:
+            add(
+                "known_construct_framing",
+                "Warburg-related construction may be framed as the novelty",
+                ("If Warburg/CLN combination is already known, state that it is "
+                 "known and locate the novelty in the parameter-free Galerkin, "
+                 "Schur-complement, or HOIBC coupling."),
+                ctx,
+            )
+            break
+
+    rank_re = re.compile(
+        r"rank\s*[-–]?\s*(?:\$[^$]*\(\s*\d+\s*,\s*\d+\s*\)[^$]*\$|"
+        r"\(?\s*\d+\s*,\s*\d+\s*\)?)",
+        flags=re.IGNORECASE,
+    )
+    for m in rank_re.finditer(content_src):
+        add(
+            "opaque_rank_tuple",
+            "rank-(m,n)-style notation appears without physical words",
+            ("Spell out the meaning for digest readers, e.g. 'one bulk mode "
+             "and one surface mode', then add the compact rank notation only "
+             "if needed."),
+            content_src[max(0, m.start() - 100):m.end() + 100],
+        )
+        break
+
+    misleading_basis_re = re.compile(
+        r"one[- ]bulk\s*/\s*one[- ]surface|"
+        r"one\s+bulk\s+mode\s+and\s+one\s+surface\s+mode|"
+        r"1\s*bulk\s+mode\s*\+\s*1\s*surface\s+mode|"
+        r"1\s*体積モード\s*\+\s*1\s*表面モード|"
+        r"基底(?:関数)?\s*(?:が|は)?\s*2\s*個",
+        flags=re.IGNORECASE,
+    )
+    for m in misleading_basis_re.finditer(content_src):
+        add(
+            "misleading_minimal_basis_claim",
+            "minimal bulk/surface phrase may imply the whole benchmark uses only two basis functions",
+            ("Distinguish the finite bulk CLN basis from the added surface "
+             "envelope/block.  Avoid wording that sounds as if a circular "
+             "conductor is represented by only two spatial basis functions."),
+            content_src[max(0, m.start() - 120):m.end() + 120],
+        )
+        break
+
+    body_plain = _paper_writing_plain_text(content_src)
+    for sent in re.split(r"(?<=[.。])\s+", body_plain):
+        if (re.search(r"Schur|Schur\s+補", sent, flags=re.IGNORECASE)
+                and re.search(r"Dirichlet-to-Neumann|DtN|Steklov",
+                              sent, flags=re.IGNORECASE)
+                and not re.search(
+                    r"eliminat|Dirichlet\s+data|Neumann\s+flux|"
+                    r"surface\s+Dirichlet|surface\s+potential|"
+                    r"消去|Dirichlet\s*データ|Neumann\s*フラックス|"
+                    r"表面.*フラックス|写す|写し",
+                    sent,
+                    flags=re.IGNORECASE,
+                )):
+            add(
+                "unexplained_schur_dtn_equivalence",
+                "Schur complement is equated with a DtN/Steklov map without explanation",
+                ("Separate the algebraic operation from the operator "
+                 "interpretation.  First say that eliminating the bulk "
+                 "unknowns gives a Schur complement, then explain that the "
+                 "result maps surface Dirichlet data to Neumann flux."),
+                sent,
+            )
+            break
+
+    sibc_scaling_re = re.compile(
+        r"SIBC\s+scaling|SIBC\s*スケーリング",
+        flags=re.IGNORECASE,
+    )
+    for m in sibc_scaling_re.finditer(content_src):
+        ctx = content_src[max(0, m.start() - 120):m.end() + 120]
+        if not re.search(
+            r"f\s*\^\s*\{?\s*-?\s*1\s*/\s*2\s*\}?|"
+            r"s\s*\^\s*\{?\s*-?\s*1\s*/\s*2\s*\}?|"
+            r"square[- ]root|fractional|分数|平方根",
+            ctx,
+            flags=re.IGNORECASE,
+        ):
+            add(
+                "vague_sibc_scaling",
+                "SIBC scaling is mentioned without the actual exponent or tail",
+                ("If 'SIBC scaling' means the surface-impedance admittance "
+                 "tail, write it explicitly as f^{-1/2}, s^{-1/2}, "
+                 "square-root, or fractional scaling."),
+                ctx,
+            )
+            break
+
+    zero_order_surface_re = re.compile(
+        r"p_\{(?:\\mathrm\s*\{?H\}?|H)\}\s*=\s*0|"
+        r"p_H\s*=\s*0|SIBC0|HOIBC0|zeroth[- ]order|0\s*th[- ]order|"
+        r"先頭.{0,20}SIBC|0\s*次",
+        flags=re.IGNORECASE,
+    )
+    higher_order_surface_re = re.compile(
+        r"\bHOIBC\b|higher[- ]order\s+impedance|高次(?:インピーダンス|.*境界|.*表面)",
+        flags=re.IGNORECASE,
+    )
+    if (zero_order_surface_re.search(content_src)
+            and higher_order_surface_re.search(content_src)):
+        separated_as_extension = re.search(
+            r"higher[- ]order.{0,120}(can\s+be\s+included|can\s+be\s+needed|"
+            r"needed\s+for|extension|curved|three[- ]dimensional|3D)|"
+            r"benchmark.{0,120}(uses\s+only\s+the\s+leading|leading\s+SIBC|"
+            r"p_\{(?:\\mathrm\s*\{?H\}?|H)\}\s*=\s*0|p_H\s*=\s*0)|"
+            r"本(?:ダイジェスト|稿|例).{0,120}(先頭|p_\{(?:\\mathrm\s*\{?H\}?|H)\}\s*=\s*0|p_H\s*=\s*0)|"
+            r"高次.{0,120}(曲面|3\s*次元|必要になる場合|含められる)",
+            content_src,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not separated_as_extension:
+            add(
+                "ph_zero_higher_order_mismatch",
+                "p_H=0 / SIBC0 example is framed as HOIBC or high-order",
+                ("Do not sell a p_H=0 benchmark as a higher-order impedance "
+                 "boundary result.  Call the current example the leading "
+                 "SIBC term, and mention HOIBC only as an extension or as "
+                 "needed for curved/three-dimensional applications."),
+                content_src,
+            )
+
+    important_block_re = re.compile(
+        r"K_\{(?:bb|bs|sb|ss)\}|Schur\s+complement|Schur\s+補",
+        flags=re.IGNORECASE,
+    )
+    unnumbered_math_re = re.compile(
+        r"\\\[(?P<bracket>.*?)\\\]|"
+        r"\\begin\{(?P<env>equation\*|align\*|gather\*|multline\*)\}"
+        r"(?P<starbody>.*?)\\end\{(?P=env)\}|"
+        r"(?<!\\)\$\$(?P<dollar>.*?)(?<!\\)\$\$",
+        flags=re.DOTALL,
+    )
+    for m in unnumbered_math_re.finditer(content_src):
+        body = m.group("bracket") or m.group("starbody") or m.group("dollar") or ""
+        if important_block_re.search(body):
+            add(
+                "unnumbered_core_equation",
+                "important block/Schur equation is displayed without a number",
+                ("Use a numbered equation environment with a label for the "
+                 "main mixed-system or Schur-complement formula, then cite it "
+                 "from the surrounding prose.  Unnumbered display math is fine "
+                 "for side remarks, not for the core method definition."),
+                body,
+            )
+            break
+
+    numbered_eq_re = re.compile(
+        r"\\begin\{(?P<env>equation|align|gather|multline)\}"
+        r"(?P<body>.*?)\\end\{(?P=env)\}",
+        flags=re.DOTALL,
+    )
+    for m in numbered_eq_re.finditer(content_src):
+        body = m.group("body")
+        if not important_block_re.search(body):
+            continue
+        labels = re.findall(r"\\label\{([^}]+)\}", body)
+        if not labels:
+            add(
+                "unlabeled_core_equation",
+                "important block/Schur equation has a number but no label",
+                ("Add a \\label{eq:...} to the numbered core equation so the "
+                 "body can refer to it explicitly."),
+                body,
+            )
+            break
+        cited = any(
+            re.search(
+                r"\\(?:eqref|ref|autoref|cref|Cref)\{"
+                + re.escape(label)
+                + r"\}",
+                content_src,
+            )
+            for label in labels
+        )
+        if not cited:
+            add(
+                "uncited_core_equation",
+                "important block/Schur equation is labeled but not cited in the body",
+                ("After numbering the equation, cite it in the sentence that "
+                 "defines the Schur complement or explains its role."),
+                body,
+            )
+        break
+
+    block_symbols = re.findall(r"K_\{(?:bb|bs|sb|ss)\}", content_src)
+    if block_symbols:
+        block_without_s = re.search(
+            r"K_\{(?:bb|bs|sb|ss)\}(?!\s*\(\s*s\s*\))",
+            content_src,
+        )
+        if block_without_s:
+            add(
+                "block_matrix_missing_s_dependence",
+                "block matrix symbols appear without explicit (s) dependence",
+                ("For frequency-domain reduced models, write K_bb(s), "
+                 "K_bs(s), K_sb(s), and K_ss(s) unless the blocks are "
+                 "truly frequency independent."),
+                content_src[max(0, block_without_s.start() - 120):block_without_s.end() + 120],
+            )
+        has_block_words = re.search(
+            r"(bulk|体積).{0,120}(surface|表面).{0,120}(coupling|結合)|"
+            r"(surface|表面).{0,120}(bulk|体積).{0,120}(coupling|結合)",
+            body_plain,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not has_block_words:
+            add(
+                "undefined_block_matrices",
+                "block matrices such as K_bb/K_sb are not defined in words",
+                ("Immediately before or after the equation, state which blocks "
+                 "are bulk, surface, and coupling Galerkin blocks."),
+                content_src,
+            )
+
+    nb_re = re.compile(r"N_\{?b\}?|N_b")
+    if nb_re.search(content_src):
+        m_dc_count = re.search(
+            r"(uniform\s+)?d[.]?c[.]?\s+term.{0,100}(not\s+included|"
+            r"not\s+counted|excluded)|"
+            r"(not\s+included|not\s+counted|excluded).{0,100}"
+            r"(uniform\s+)?d[.]?c[.]?\s+term|"
+            r"(一様な)?直流項.{0,80}(数えず|含めない|含まない)",
+            content_src,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if m_dc_count:
+            add(
+                "confusing_dc_count_exclusion",
+                "model-order count is explained by excluding the dc term",
+                ("In a short digest, avoid making the reader parse whether "
+                 "the dc field is counted.  Prefer a direct physical count "
+                 "such as 'two-rung CLN + SIBC0', or define N_b in one "
+                 "simple sentence without negative exclusions."),
+                content_src[max(0, m_dc_count.start() - 120):m_dc_count.end() + 120],
+            )
+
+        has_nb_definition = re.search(
+            r"(N_\{?b\}?|N_b).{0,120}"
+            r"(count|denote|number|個数|表す).{0,120}"
+            r"(bulk|CLN|Krylov|basis|correction|体積|基底|補正)",
+            content_src,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not has_nb_definition:
+            add(
+                "ambiguous_nb_definition",
+                "N_b is used without defining what it counts",
+                ("Define N_b in words, and say whether the uniform dc term is "
+                 "included.  For example: 'N_b counts zero-boundary bulk "
+                 "Krylov correction functions; the uniform dc term is not "
+                 "included.'"),
+                content_src,
+            )
+
+    if re.search(
+        r"\b[LR][- ]term\b|\b[LR][- ]terminated\b|[LR]\s*終端",
+        content_src,
+        flags=re.IGNORECASE,
+    ):
+        has_l_def = re.search(
+            r"L[- ](?:term|terminated).{0,120}induct|induct.{0,120}"
+            r"L[- ](?:term|terminated)|L\s*終端.{0,80}誘導|誘導.{0,80}L\s*終端",
+            content_src,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        has_r_def = re.search(
+            r"R[- ](?:term|terminated).{0,120}resist|resist.{0,120}"
+            r"R[- ](?:term|terminated)|R\s*終端.{0,80}抵抗|抵抗.{0,80}R\s*終端",
+            content_src,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not (has_l_def and has_r_def):
+            add(
+                "undefined_lr_termination",
+                "L/R CLN terminations are mentioned without defining them",
+                ("Define L- and R-terminated CLNs in words: the L termination "
+                 "closes the last rung inductively, and the R termination "
+                 "closes it resistively.  Also state whether N is a rung, "
+                 "mode, or basis count."),
+                content_src,
+            )
+
+    if nb_re.search(content_src):
+        has_plain_n_order = bool(re.search(
+            r"(?<![A-Za-z_])\$?N\s*=\s*\d+",
+            content_src,
+        ))
+        if has_plain_n_order:
+            order_sentences = re.split(r"(?<=[.。])\s+", content_src)
+            has_order_distinction = any(
+                re.search(r"N_\{?b\}?|N_b", sent)
+                and re.search(r"(?<![A-Za-z_])\$?N\s*=\s*\d+", sent)
+                and re.search(
+                    r"whereas|while|distinguish|distinct|not included|"
+                    r"bulk-only|mixed model|order|ladder|counts|"
+                    r"区別|混合モデル|体積のみ|次数|梯子|数える",
+                    sent,
+                    flags=re.IGNORECASE,
+                )
+                for sent in order_sentences
+            )
+            if not has_order_distinction:
+                add(
+                    "ambiguous_n_vs_nb_order",
+                    "N_b and N appear without distinguishing their roles",
+                    ("When both N_b and N are used, define the distinction: "
+                     "N_b counts bulk correction functions in the mixed model, "
+                     "whereas N is the order of the bulk-only CLN ladder."),
+                    content_src,
+                )
+        if (re.search(r"\bCLN\b|Cauer", content_src, flags=re.IGNORECASE)
+                and re.search(r"\bHOIBC\b|higher-order\s+impedance|高次.*境界",
+                              content_src, flags=re.IGNORECASE)
+                and re.search(r"N_\{?b\}?\s*=\s*1|N_b\s*=\s*1",
+                              content_src)):
+            add(
+                "minimal_bulk_order_misread",
+                "CLN/HOIBC demonstrator uses N_b=1, which can read as dc plus IBC only",
+                ("Use at least two bulk correction functions for a mixed "
+                 "CLN/HOIBC demonstration, or explicitly explain why N_b=1 "
+                 "is sufficient and how it differs from the dc term plus an "
+                 "impedance boundary condition."),
+                content_src,
+            )
+
+    if (re.search(r"\bCLN\b|Cauer", content_src, flags=re.IGNORECASE)
+            and re.search(r"\bHOIBC\b|higher-order\s+impedance|高次.*境界",
+                          content_src, flags=re.IGNORECASE)):
+        has_cln_order = bool(re.search(
+            r"\bN\s*=\s*\d+|N_b\s*=\s*\d+|N_\{?b\}?\s*=\s*\d+|"
+            r"CLN\s*(?:basis|bases|N)\s*(?:=|of)?\s*\d+|"
+            r"\d+\s+bulk\s+CLN|"
+            r"CLN\s*Krylov\s+basis\s+function.*?\d+|"
+            r"CLN.*?基底関数.*?\d+|基底関数.*?\d+",
+            content_src,
+            flags=re.IGNORECASE,
+        ))
+        has_hoibc_order = bool(re.search(
+            r"HOIBC\s*(?:order\s*)?\d|HOIBC0|HOIBC1|HOIBC2|"
+            r"zeroth[- ]order|first[- ]order|second[- ]order|"
+            r"p_\{(?:\\mathrm\s*\{?H\}?|H)\}\s*=\s*\d+|"
+            r"p_\{?\\mathrm\{?H\}?\}?\s*=\s*\d+|p_H\s*=\s*\d+|"
+            r"\d+\s*次.*HOIBC|HOIBC.*?\d+\s*次",
+            content_src,
+            flags=re.IGNORECASE,
+        ))
+        if not (has_cln_order and has_hoibc_order):
+            add(
+                "missing_model_order_disclosure",
+                "mixed CLN/HOIBC description lacks CLN basis count and/or HOIBC order",
+                ("State the model orders in the body, caption, or legend: "
+                 "for example, 'bulk CLN N_b=2 with zeroth-order HOIBC "
+                 "(p_H=0); bulk-only CLN references use N=10'."),
+                content_src,
+            )
+
+    hidden_verification_re = re.compile(
+        r"\\textbf\{\s*(Verification|Validation|Numerical\s+Example)\.?\s*\}|"
+        r"\\paragraph\{\s*(Verification|Validation|Numerical\s+Example)\.?\s*\}|"
+        r"\\textbf\{\s*(検証|数値例)\s*[:：.]?\s*\}",
+        flags=re.IGNORECASE,
+    )
+    m_hidden = hidden_verification_re.search(content_src)
+    if m_hidden and not numerical_sections:
+        add(
+            "hidden_numerical_example_section",
+            "numerical example or verification is hidden in a bold paragraph",
+            ("Use a numbered section such as 'Numerical Example' or "
+             "'Verification' so the digest has an explicit result section.  "
+             "Do not bury the main example under a bold run-in label."),
+            content_src[max(0, m_hidden.start() - 160):m_hidden.end() + 160],
+        )
+
+    body_plain = _paper_writing_plain_text(content_src)
+    if re.search(r"\b(circular|cylindrical|circle|cylinder)\b|円形|円柱", body_plain,
+                 flags=re.IGNORECASE):
+        has_radius = bool(re.search(r"\bradius\b|半径", body_plain, flags=re.IGNORECASE))
+        has_reference = bool(re.search(r"\bBessel\b|ベッセル", body_plain,
+                                       flags=re.IGNORECASE))
+        has_conductivity = bool(re.search(
+            r"\bconductivity\b|\\sigma\s*=|sigma\s*=|\bS/m\b|導電率",
+            body_plain,
+            flags=re.IGNORECASE,
+        ))
+        if not (has_radius and has_reference and has_conductivity):
+            add(
+                "underdescribed_circular_benchmark",
+                "circular-conductor benchmark lacks radius, conductivity, and/or reference solution",
+                ("For a one-page digest, put the problem setting in the body: "
+                 "geometry, radius, conductivity/permeability when material "
+                 "properties affect the result, excitation, and the reference "
+                 "solution used for verification."),
+                body_plain,
+            )
+
+    geometry_patterns = {
+        "circular/cylindrical": r"\b(circular|cylindrical|circle|cylinder)\b|円形|円柱",
+        "sphere": r"\b(sphere|spherical)\b|球",
+        "cube": r"\b(cube|cuboid|rectangular solid)\b|立方体|直方体",
+        "polyhedra": r"\b(polyhedra|polyhedral)\b|多面体",
+    }
+    geometry_hits = [
+        name for name, pat in geometry_patterns.items()
+        if re.search(pat, body_plain, flags=re.IGNORECASE)
+    ]
+    if len(geometry_hits) > max_geometry_families:
+        add(
+            "one_page_scope_creep_shapes",
+            f"multiple geometry families appear in a short digest: {geometry_hits}",
+            ("Keep the one-page digest on the central benchmark.  Move sphere, "
+             "cube, and polyhedral extensions to the full paper unless they are "
+             "the main result."),
+            body_plain,
+        )
+
+    caption_records = _paper_writing_iter_command_args(content_src, "caption")
+    first_figure = re.search(r"\\begin\{figure\*?\}", content_src)
+    if first_figure:
+        first_numerical_start = (
+            min(rec["start"] for rec in numerical_sections)
+            if numerical_sections else None
+        )
+        first_caption_text = caption_records[0]["text"] if caption_records else ""
+        result_caption = re.search(
+            r"\b(admittance|error|comparison|result|reference|accuracy)\b|"
+            r"アドミタンス|誤差|比較|結果|参照|精度",
+            first_caption_text,
+            flags=re.IGNORECASE,
+        )
+        if result_caption and (
+            first_numerical_start is None or first_figure.start() < first_numerical_start
+        ):
+            add(
+                "result_figure_before_numerical_section",
+                "main result figure is placed before the numerical/verification section",
+                ("Use the standard figure environment where possible, but put "
+                 "the source block in or after the section that explains the "
+                 "numerical example.  Manual non-float captions, [H], "
+                 "\\clearpage, or \\newpage placement are last resorts; first "
+                 "adjust source position, text length, figure width, and "
+                 "caption length."),
+                first_caption_text,
+            )
+
+    fn_marker_re = re.compile(
+        r"\$?\s*f\s*_\s*\{?N\}?\s*\$?|\\\(.*?f\s*_\s*\{?N\}?.*?\\\)",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if fn_marker_re.search(content_src):
+        has_fn_explanation = re.search(
+            r"(highest|last|cutoff|pole\s+frequency|CLN\s+pole|"
+            r"highest\s+pole|last\s+pole).{0,80}f\s*_\s*\{?N\}?|"
+            r"f\s*_\s*\{?N\}?.{0,80}(highest|last|cutoff|pole\s+frequency|"
+            r"CLN\s+pole|highest\s+pole|last\s+pole)|"
+            r"最高極|最終極|遮断|極周波数|を示す|を表す",
+            content_src,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not has_fn_explanation:
+            add(
+                "ambiguous_fn_marker",
+                "f_N marker appears without explaining what it denotes",
+                ("If a vertical line or label such as $f_N$ is shown, state "
+                 "in the caption or nearby text what it marks, e.g. 'the "
+                 "highest pole frequency of the bulk CLN'."),
+                content_src,
+            )
+
+    caption_telling_re = re.compile(
+        r"\b(whereas|while|because|therefore|hence|compared with|compares|"
+        r"brackets?|miss(?:es)?|follows|agrees?|demonstrates|shows that|"
+        r"error|accuracy)\b",
+        flags=re.IGNORECASE,
+    )
+    for i, cap in enumerate(caption_records, start=1):
+        n_words = _paper_writing_word_count(cap["text"])
+        if n_words > max_caption_words or caption_telling_re.search(cap["text"]):
+            add(
+                "caption_overloaded",
+                f"caption {i} carries {n_words} words or interpretive phrasing",
+                ("For a one-page digest, use the caption to identify the plotted "
+                 "quantity only.  Put problem setup, comparison logic, and "
+                 "interpretation in the body."),
+                cap["text"],
+            )
+
+    status = "warning" if findings else "clean"
+    return {
+        "status": status,
+        "n_findings": len(findings),
+        "findings": findings[:max_report],
+        "truncated": len(findings) > max_report,
+        "source_path": source_path,
+        "checks": {
+            "max_abstract_percent_numbers": max_abstract_percent_numbers,
+            "max_caption_words": max_caption_words,
+            "max_geometry_families": max_geometry_families,
+        },
+        "summary": (
+            "No digest-specific human-review triggers found."
+            if not findings else
+            f"{len(findings)} digest-specific human-review trigger(s) found."
+        ),
+        "source": "Sugahara human review, IGTE Cauer digest, 2026-06-24",
     }
 
 
