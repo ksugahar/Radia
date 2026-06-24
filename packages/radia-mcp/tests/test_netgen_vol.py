@@ -157,6 +157,36 @@ endmesh
 """
 
 
+OPEN_SURFACE_VOL = """\
+mesh3d
+dimension
+3
+geomtype
+0
+facedescriptors
+1
+1 1 0 1 1
+surfaceelements
+1
+1 1 1 0 3 1 2 3
+volumeelements
+0
+points
+3
+0 0 0
+1 0 0
+0 1 0
+pointelements
+0
+materials
+0
+bcnames
+1
+1 patch
+endmesh
+"""
+
+
 def test_parse_tri_tet_vol_summary():
     mesh = parse_netgen_tri_tet_vol(TET_VOL)
 
@@ -275,6 +305,31 @@ def test_surface_closure_summary_for_single_tetrahedron():
     assert summary["surface_abs_volume"] == pytest.approx(mesh.total_volume())
     assert summary["surface_abs_volume_rel_error"] == pytest.approx(0.0)
     assert summary["boundary_orientation"] == "inward"
+
+
+def test_surface_edge_manifold_summary_for_closed_and_open_surfaces():
+    closed = parse_netgen_tri_tet_vol(TET_VOL).surface_edge_manifold_summary()
+
+    assert closed == {
+        "trace_nodes": 4,
+        "surface_edges": 6,
+        "surface_triangles": 4,
+        "closed_edges": 6,
+        "open_edges": 0,
+        "is_closed_manifold": True,
+        "euler_characteristic": 2,
+    }
+
+    open_patch = parse_netgen_tri_tet_vol(OPEN_SURFACE_VOL).surface_edge_manifold_summary()
+    assert open_patch == {
+        "trace_nodes": 3,
+        "surface_edges": 3,
+        "surface_triangles": 1,
+        "closed_edges": 0,
+        "open_edges": 3,
+        "is_closed_manifold": False,
+        "euler_characteristic": 1,
+    }
 
 
 def test_quad_surface_is_rejected_not_split():
