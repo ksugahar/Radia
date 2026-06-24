@@ -1,0 +1,89 @@
+{
+  "kind": "p1_tetrahedron_patch_test_validation",
+  "validation_class": true,
+  "patches": [
+    {
+      "label": "centered",
+      "interior": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "n_vertices": 9,
+      "n_tetrahedra": 12,
+      "volume_sum": 1.0,
+      "min_tet_volume": 0.08333333333333333,
+      "max_tet_volume": 0.08333333333333333,
+      "stiffness_row_sum_max_abs": 5.551115123125783e-17,
+      "fields": [
+        {
+          "field": "x",
+          "computed": 0.5,
+          "exact": 0.5,
+          "abs_error": 0.0
+        },
+        {
+          "field": "y",
+          "computed": 0.49999999999999994,
+          "exact": 0.5,
+          "abs_error": 5.551115123125783e-17
+        },
+        {
+          "field": "z",
+          "computed": 0.49999999999999994,
+          "exact": 0.5,
+          "abs_error": 5.551115123125783e-17
+        },
+        {
+          "field": "mixed",
+          "computed": 3.25,
+          "exact": 3.25,
+          "abs_error": 0.0
+        }
+      ],
+      "max_abs_error": 5.551115123125783e-17
+    },
+    {
+      "label": "distorted_inside",
+      "interior": [
+        0.43,
+        0.57,
+        0.48
+      ],
+      "n_vertices": 9,
+      "n_tetrahedra": 12,
+      "volume_sum": 1.0,
+      "min_tet_volume": 0.07166666666666667,
+      "max_tet_volume": 0.09500000000000001,
+      "stiffness_row_sum_max_abs": 8.881784197001252e-16,
+      "fields": [
+        {
+          "field": "x",
+          "computed": 0.43000000000000005,
+          "exact": 0.43,
+          "abs_error": 5.551115123125783e-17
+        },
+        {
+          "field": "y",
+          "computed": 0.5700000000000002,
+          "exact": 0.57,
+          "abs_error": 2.220446049250313e-16
+        },
+        {
+          "field": "z",
+          "computed": 0.4800000000000001,
+          "exact": 0.48,
+          "abs_error": 1.1102230246251565e-16
+        },
+        {
+          "field": "mixed",
+          "computed": 3.2600000000000002,
+          "exact": 3.26,
+          "abs_error": 4.440892098500626e-16
+        }
+      ],
+      "max_abs_error": 4.440892098500626e-16
+    }
+  ],
+  "max_abs_error": 4.440892098500626e-16
+}
