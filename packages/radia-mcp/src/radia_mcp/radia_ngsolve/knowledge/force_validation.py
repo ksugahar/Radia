@@ -30,6 +30,7 @@ of the methods below, with an analytic sanity check available.
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
 | Uniform cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*`` |
+| RF beam / waveguide radiation pressure | Time-averaged Poynting momentum flux | ``force.radiation_pressure_*`` and ``force.radiation_force_from_power`` |
 | Energy/inductance-derived checks | Field energy | ``force.magnetic_energy*``, ``force.inductance_*`` |
 | dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
 | Synchronous/induction machine torque curves | Circuit-level machine model | ``solve.synchronous_power_angle_torque`` / ``solve.induction_machine_torque`` |
@@ -74,6 +75,17 @@ p = B_gap^2 / (2 mu0),     F = p A
 This is the fast sanity check for solenoids, relays, magnetic circuits, and
 pole-face holding force.  It is the local Maxwell stress evaluated in the gap.
 
+RF/time-harmonic radiation pressure at normal incidence:
+
+```text
+p = (A + 2 R) I / c,     F = (A + 2 R) P / c
+```
+
+where ``I`` is time-average Poynting intensity, ``P`` is integrated incident
+power, ``A`` is absorptance, and ``R`` is reflectance.  Use this for absorber,
+short, mirror, and waveguide-port force sanity checks before attempting a full
+time-averaged Maxwell-stress surface integral.
+
 Energy/coenergy:
 
 ```text
@@ -92,6 +104,8 @@ requires a stable geometry perturbation and matched meshes or careful remeshing.
 - Wire above high-permeability plane: image-current limit gives
   ``F/L = mu0 I^2 / (4 pi h)``.
 - Uniform air gap: ``p(1 T) = 1 / (2 mu0) = 397887.35772973835 Pa``.
+- RF normal incidence: perfect absorber ``F = P/c``; perfect reflector
+  ``F = 2 P/c``.
 - Round-wire internal inductance at DC: ``L_int = mu0 / (8 pi)`` per length.
 - dq PM torque: ``T = (3/2) p (lambda_m iq + (Ld-Lq) id iq)``.
 

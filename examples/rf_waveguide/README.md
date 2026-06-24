@@ -12,6 +12,7 @@ S-parameters, and cavity-style post-processing.
 | [`validation_tem_line_geometry_sweep.py`](validation_tem_line_geometry_sweep.py) | Validation-class TEM line geometry sweep for coax, two-wire, wire-plane, and microstrip quasi-static RF checks | `coaxial_line_parameters`, `two_wire_line_parameters`, `microstrip_line_parameters`, `tem_lc_identity_summary` |
 | [`validation_waveguide_conductor_loss.py`](validation_waveguide_conductor_loss.py) | Validation-class WR-90 TE10 conductor-loss sweep: near-cutoff attenuation, length-linear insertion loss, conductivity scaling, and matched-line power balance | `rectangular_waveguide_te10_conductor_loss`, `rectangular_waveguide_cutoff` |
 | [`validation_waveguide_te10_port_normalization.py`](validation_waveguide_te10_port_normalization.py) | Validation-class WR-90 TE10 port normalization: 1 W field amplitudes, Poynting power integral, longitudinal/transverse H ratio, and power scaling | `rectangular_waveguide_te10_port_normalization`, `waveguide_wave_impedance`, `waveguide_dispersion` |
+| [`validation_radiation_pressure_poynting.py`](validation_radiation_pressure_poynting.py) | Validation-class RF radiation pressure: TE10 Poynting power to absorber/reflector force via momentum flux | `radiation_pressure_summary`, `radiation_force_from_power`, `plane_wave_intensity_from_electric_field`, `rectangular_waveguide_te10_port_normalization` |
 
 ```powershell
 python validation_waveguide_vna_calibration.py
@@ -21,6 +22,7 @@ python validation_circular_waveguide_mode_sweep.py
 python validation_tem_line_geometry_sweep.py
 python validation_waveguide_conductor_loss.py
 python validation_waveguide_te10_port_normalization.py
+python validation_radiation_pressure_poynting.py
 ```
 
 The examples are self-contained and use closed-form transmission-line /
