@@ -19,6 +19,8 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_envelope_row, enclosing_box,
                                           enclosure_clearance_row, enclosure_difference_region,
                                           shape_measurement_row, shape_measurement_rows,
+                                          box_face_vector_area_rows,
+                                          compare_boundary_vector_area_rows,
                                           compare_shape_measurement_rows,
                                           shape_measurement_comparison_summary)
 from build123d import Box, Compound, Pos
@@ -130,6 +132,37 @@ def test_shape_measurement_rows_follow_assembly_children():
     assert [row["name"] for row in rows] == ["left", "right"]
     assert [row["volume"] for row in rows] == pytest.approx([6.0, 4.0])
     assert [row["area"] for row in rows] == pytest.approx([22.0, 16.0])
+
+
+def test_box_face_vector_area_rows_match_centered_box():
+    box = Box(2, 3, 5).solid()
+    measurement = shape_measurement_row(box)
+    rows = box_face_vector_area_rows(measurement["bounding_box"]["size"])
+    by_name = {row["name"]: row for row in rows}
+
+    assert sum(row["surface_area"] for row in rows) == pytest.approx(measurement["area"])
+    assert by_name["xmin"]["vector_area"] == pytest.approx((-15.0, 0.0, 0.0))
+    assert by_name["xmax"]["vector_area"] == pytest.approx((15.0, 0.0, 0.0))
+    assert by_name["ymin"]["vector_area"] == pytest.approx((0.0, -10.0, 0.0))
+    assert by_name["ymax"]["vector_area"] == pytest.approx((0.0, 10.0, 0.0))
+    assert by_name["zmin"]["vector_area"] == pytest.approx((0.0, 0.0, -6.0))
+    assert by_name["zmax"]["vector_area"] == pytest.approx((0.0, 0.0, 6.0))
+    assert all(row["vector_area_norm_over_area"] == pytest.approx(1.0) for row in rows)
+
+
+def test_compare_boundary_vector_area_rows_marks_direction_mismatch():
+    reference = box_face_vector_area_rows((2, 3, 5))
+    measured = [dict(row) for row in reference]
+    measured[0]["vector_area"] = (15.0, 0.0, 0.0)
+    measured[0]["unit_normal"] = (1.0, 0.0, 0.0)
+
+    rows = compare_boundary_vector_area_rows(reference, measured, vector_atol=1.0e-12)
+    by_name = {row["name"]: row for row in rows}
+
+    assert not by_name["xmin"]["passed"]
+    assert by_name["xmin"]["vector_abs_error"] == pytest.approx(30.0)
+    assert by_name["xmin"]["unit_normal_abs_error"] == pytest.approx(2.0)
+    assert by_name["xmax"]["passed"]
 
 
 def test_shape_envelope_row_and_enclosing_box_use_union_bbox_margin():
