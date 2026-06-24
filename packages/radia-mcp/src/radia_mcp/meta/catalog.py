@@ -617,6 +617,17 @@ def _resolve(name: str) -> str | None:
     return None
 
 
+def _resolve_external(name: str) -> str | None:
+    """Resolve a user-typed name to an EXTERNAL_PACKAGES key."""
+    if name in EXTERNAL_PACKAGES:
+        return name
+    if name.startswith("mcp-server-"):
+        stripped = name[len("mcp-server-"):]
+        if stripped in EXTERNAL_PACKAGES:
+            return stripped
+    return None
+
+
 def list_all() -> list[dict]:
     """Return catalog entries as a flat list."""
     return [{"name": n, **info} for n, info in CATALOG.items()]
@@ -650,15 +661,32 @@ def find_by_tag(tag: str) -> list[dict]:
 
 
 def find_related(name: str) -> list[dict]:
-    """Servers listed as `related` of `name` (alias-aware)."""
+    """Servers/packages listed as `related` of `name` (alias-aware).
+
+    External packages are not part of ``CATALOG`` and are therefore not
+    imported or self-tested here.  They are still returned from related lookup
+    so the meta server can steer agents from a radia-mcp knowledge lane to the
+    official external MCP that should own a workflow, e.g. Optuna study/trial
+    operation.
+    """
     key = _resolve(name)
-    if key is None:
+    ext_key = _resolve_external(name)
+    if key is None and ext_key is None:
         return []
-    info = CATALOG.get(key)
+    info = CATALOG.get(key) if key is not None else EXTERNAL_PACKAGES.get(ext_key)
     if not info:
         return []
-    return [
-        {"name": r, **CATALOG[r]}
-        for r in info.get("related", [])
-        if r in CATALOG
-    ]
+
+    related = []
+    for r in info.get("related", []):
+        if r in CATALOG:
+            related.append({"name": r, **CATALOG[r]})
+        elif r in EXTERNAL_PACKAGES:
+            related.append({"name": r, "external": True, **EXTERNAL_PACKAGES[r]})
+
+    if key is not None:
+        for ext_name, ext_info in EXTERNAL_PACKAGES.items():
+            if key in ext_info.get("related", []):
+                related.append({"name": ext_name, "external": True, **ext_info})
+
+    return related
