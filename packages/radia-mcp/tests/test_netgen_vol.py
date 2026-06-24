@@ -262,6 +262,21 @@ def test_geometry_metrics_for_single_tetrahedron():
     assert mesh.surface_area_by_boundary_number() == {1: pytest.approx(1.5 + 0.5 * 3**0.5)}
 
 
+def test_surface_closure_summary_for_single_tetrahedron():
+    mesh = parse_netgen_tri_tet_vol(TET_VOL)
+
+    assert mesh.surface_vector_area() == pytest.approx((0.0, 0.0, 0.0))
+    assert mesh.surface_signed_volume_from_triangles() == pytest.approx(-1.0 / 6.0)
+    summary = mesh.surface_closure_summary()
+    assert summary["surface_triangles"] == 4
+    assert summary["tetrahedra"] == 1
+    assert summary["surface_vector_area_norm_over_area"] == pytest.approx(0.0)
+    assert summary["surface_signed_volume"] == pytest.approx(-1.0 / 6.0)
+    assert summary["surface_abs_volume"] == pytest.approx(mesh.total_volume())
+    assert summary["surface_abs_volume_rel_error"] == pytest.approx(0.0)
+    assert summary["boundary_orientation"] == "inward"
+
+
 def test_quad_surface_is_rejected_not_split():
     bad = TET_VOL.replace("1 1 1 0 3 1 2 3", "1 1 1 0 4 1 2 3 4", 1)
 

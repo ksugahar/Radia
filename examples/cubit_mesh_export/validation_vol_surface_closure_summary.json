@@ -1,0 +1,112 @@
+{
+  "checks": {
+    "clean_abs_volume_rel_error": 1.1102230246251565e-16,
+    "clean_boundary_orientation": "outward",
+    "clean_surface_area": 6.0,
+    "clean_vector_area_norm_over_area": 0.0,
+    "clean_volume": 1.0,
+    "flipped_abs_volume_rel_error": 0.33333333333333337,
+    "flipped_vector_area_norm_over_area": 0.16666666666666666
+  },
+  "problem": "Netgen .vol boundary closure and orientation validation",
+  "records": [
+    {
+      "bounding_box": {
+        "x": [
+          0.0,
+          1.0
+        ],
+        "y": [
+          0.0,
+          1.0
+        ],
+        "z": [
+          0.0,
+          1.0
+        ]
+      },
+      "closure": {
+        "boundary_orientation": "outward",
+        "surface_abs_volume": 0.9999999999999999,
+        "surface_abs_volume_error": 1.1102230246251565e-16,
+        "surface_abs_volume_rel_error": 1.1102230246251565e-16,
+        "surface_signed_volume": 0.9999999999999999,
+        "surface_triangles": 12,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "surface_vector_area_norm": 0.0,
+        "surface_vector_area_norm_over_area": 0.0,
+        "tetrahedra": 12,
+        "tetrahedron_total_volume": 1.0,
+        "total_surface_area": 6.0
+      },
+      "edge_length_summary": {
+        "max_edge": 1.4142135623730951,
+        "max_edge_ratio": 1.6329931618554523,
+        "mean_edge": 1.0020482956210683,
+        "min_edge": 0.8660254037844386,
+        "tetrahedra": 12
+      },
+      "mesh_summary": {
+        "boundary_names": 1,
+        "materials": 1,
+        "points": 9,
+        "surface_triangles": 12,
+        "tetrahedra": 12
+      },
+      "name": "builtin_star_cube_outward"
+    },
+    {
+      "bounding_box": {
+        "x": [
+          0.0,
+          1.0
+        ],
+        "y": [
+          0.0,
+          1.0
+        ],
+        "z": [
+          0.0,
+          1.0
+        ]
+      },
+      "closure": {
+        "boundary_orientation": "outward",
+        "surface_abs_volume": 0.6666666666666666,
+        "surface_abs_volume_error": 0.33333333333333337,
+        "surface_abs_volume_rel_error": 0.33333333333333337,
+        "surface_signed_volume": 0.6666666666666666,
+        "surface_triangles": 12,
+        "surface_vector_area": [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        "surface_vector_area_norm": 1.0,
+        "surface_vector_area_norm_over_area": 0.16666666666666666,
+        "tetrahedra": 12,
+        "tetrahedron_total_volume": 1.0,
+        "total_surface_area": 6.0
+      },
+      "edge_length_summary": {
+        "max_edge": 1.4142135623730951,
+        "max_edge_ratio": 1.6329931618554523,
+        "mean_edge": 1.0020482956210683,
+        "min_edge": 0.8660254037844386,
+        "tetrahedra": 12
+      },
+      "mesh_summary": {
+        "boundary_names": 1,
+        "materials": 1,
+        "points": 9,
+        "surface_triangles": 12,
+        "tetrahedra": 12
+      },
+      "name": "builtin_star_cube_one_triangle_flipped"
+    }
+  ]
+}

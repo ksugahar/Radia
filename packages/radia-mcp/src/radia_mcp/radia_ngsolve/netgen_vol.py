@@ -172,6 +172,76 @@ class NetgenTriTetVolMesh:
             areas[tri.bcnr] = areas.get(tri.bcnr, 0.0) + area
         return areas
 
+    def surface_triangle_area_vectors(self) -> tuple[tuple[float, float, float], ...]:
+        """Return oriented boundary triangle area vectors.
+
+        Each vector is ``0.5 * cross(b-a, c-a)`` in the stored node order. For a
+        consistently oriented closed surface, the sum of these vectors should be
+        close to zero. This is a useful early gate for BEM normal conventions.
+        """
+
+        vectors: list[tuple[float, float, float]] = []
+        for tri in self.surface_triangles:
+            a, b, c = (self.points[node - 1] for node in tri.nodes)
+            vectors.append(_scale(_cross(_sub(b, a), _sub(c, a)), 0.5))
+        return tuple(vectors)
+
+    def surface_vector_area(self) -> tuple[float, float, float]:
+        """Return the vector sum of oriented boundary triangle areas."""
+
+        total = (0.0, 0.0, 0.0)
+        for vec in self.surface_triangle_area_vectors():
+            total = _add(total, vec)
+        return total
+
+    def surface_signed_volume_from_triangles(self) -> float:
+        """Return oriented volume enclosed by boundary triangles.
+
+        The divergence-theorem formula ``sum(dot(a, cross(b, c))/6)`` is
+        positive for outward-oriented closed surfaces and negative for inward
+        orientation. Its absolute value should match ``total_volume()`` when
+        the surface triangles close the tetrahedral volume.
+        """
+
+        volume = 0.0
+        for tri in self.surface_triangles:
+            a, b, c = (self.points[node - 1] for node in tri.nodes)
+            volume += _dot(a, _cross(b, c)) / 6.0
+        return volume
+
+    def surface_closure_summary(self) -> dict[str, object]:
+        """Return closure/orientation checks for the boundary triangle mesh."""
+
+        total_area = self.total_surface_area()
+        vector_area = self.surface_vector_area()
+        vector_norm = _norm(vector_area)
+        signed_surface_volume = self.surface_signed_volume_from_triangles()
+        tet_volume = self.total_volume()
+        abs_volume_error = abs(abs(signed_surface_volume) - tet_volume)
+        rel_volume_error = abs_volume_error / tet_volume if tet_volume > 0.0 else None
+        if signed_surface_volume > 0.0:
+            orientation = "outward"
+        elif signed_surface_volume < 0.0:
+            orientation = "inward"
+        else:
+            orientation = "zero_or_open"
+        return {
+            "surface_triangles": len(self.surface_triangles),
+            "tetrahedra": len(self.tetrahedra),
+            "total_surface_area": total_area,
+            "surface_vector_area": vector_area,
+            "surface_vector_area_norm": vector_norm,
+            "surface_vector_area_norm_over_area": (
+                vector_norm / total_area if total_area > 0.0 else None
+            ),
+            "surface_signed_volume": signed_surface_volume,
+            "surface_abs_volume": abs(signed_surface_volume),
+            "tetrahedron_total_volume": tet_volume,
+            "surface_abs_volume_error": abs_volume_error,
+            "surface_abs_volume_rel_error": rel_volume_error,
+            "boundary_orientation": orientation,
+        }
+
     def fem_bem_trace_view(self) -> dict[str, object]:
         """Return shared-node volume/surface connectivity for FEM/BEM coupling."""
 
@@ -510,6 +580,14 @@ def _cross(a: tuple[float, float, float], b: tuple[float, float, float]) -> tupl
         a[2] * b[0] - a[0] * b[2],
         a[0] * b[1] - a[1] * b[0],
     )
+
+
+def _add(a: tuple[float, float, float], b: tuple[float, float, float]) -> tuple[float, float, float]:
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def _scale(a: tuple[float, float, float], value: float) -> tuple[float, float, float]:
+    return (value * a[0], value * a[1], value * a[2])
 
 
 def _norm(a: tuple[float, float, float]) -> float:
