@@ -1,10 +1,10 @@
-"""The field-gradient is a TENSOR: why moment-yano and EIEM2 are NOT the same DOF (user insight 2026-06-22:
+"""The field-gradient is a TENSOR: why multipole-moment MMM and EIEM2 are NOT the same DOF (user insight 2026-06-22:
 "the direction of the gradient is what matters; gradH is a tensor with 6 components").
 
 H = -grad(phi) is curl-free, so gradH = -Hess(phi) is a SYMMETRIC 3x3 tensor = 6 components
 [xx, yy, zz, xy, yz, zx]  (trace 0 in a charge-free region -> 5 independent = the l=2 quadrupole).
 
-EIEM2 (the shipped yano-MSC collocation): for face i the demag field is sampled at the OFFSET eval point
+EIEM2 (the shipped surface-charge MSC collocation): for face i the demag field is sampled at the OFFSET eval point
     EvalPt_i = ElementCenter + alpha*(FaceCenter_i - ElementCenter),   alpha = 0.5
 and the surface-charge constitutive relation uses the FACE-NORMAL component.  The first-order (gradient)
 content that enters is therefore the scalar
@@ -140,7 +140,7 @@ def main():
     eiem2_blind_to_shear = (r_norm == 3 and set(blind) == {"xy", "yz", "zx"}
                             and np.linalg.norm(eiem2_reads) < 1e-12)
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_shear_gradient",
+               benchmark="multipole_moment_shear_gradient",
                eiem2_normal_rank=r_norm, eiem2_fullvector_rank=r_full, moment_rank=6,
                eiem2_constrains=constrained, eiem2_blind_to=blind,
                pure_shear_eiem2_norm=float(np.linalg.norm(eiem2_reads)),
@@ -157,9 +157,9 @@ def main():
                    "A real config has ||shear||/||diag|| = O(1), so the missing shear is physically significant; "
                    "the shear (off-diagonal 1/r^3) functionals are simultaneously moment's accuracy advantage "
                    "(sheared/distorted fields) and its ~5x non-normality penalty vs EIEM2."))
-    with open(os.path.join(HERE, "yano_moment_shear_gradient.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_shear_gradient.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
-    print(f"\n  => EIEM2 blind to shear: {eiem2_blind_to_shear}.  saved yano_moment_shear_gradient.json")
+    print(f"\n  => EIEM2 blind to shear: {eiem2_blind_to_shear}.  saved multipole_moment_shear_gradient.json")
 
 
 if __name__ == "__main__":

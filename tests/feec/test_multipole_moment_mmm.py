@@ -1,6 +1,6 @@
-"""Golden lock for moment-yano (Steps 3-4 + Phase 2-3, 2026-06-22): the parameter-free MOMENT formula
+"""Golden lock for multipole-moment MMM (Steps 3-4 + Phase 2-3, 2026-06-22): the parameter-free MOMENT formula
 (BuildMomentSystemCore) is the SOLE surface-charge soft-iron demag (hex 6-DOF + wedge/pyramid 5-DOF).  The EIEM2
-collocation kernel and its `yano_moment=False` opt-out were removed (Phase 3b).  Method dispatch in SolveGen:
+collocation kernel and its old EIEM2/moment opt-out were removed (Phase 3b).  Method dispatch in SolveGen:
 
   - method 0 (LU)  : moment, physical (cube demag ~1/3 -> M_z ~ 3*H0).
   - method 1 (BiCG): reroutes to the dense moment LU -> bit-identical M to method 0.
@@ -139,7 +139,7 @@ def test_method2_nonlinear_matches_method0():
 
 
 def test_wedge_moment_matches_hex_externally():
-    """Phase-3a: moment-yano extended to 5-face WEDGE elements (3 dipole + 1 monopole + 1 AXIAL quad about the
+    """Phase-3a: multipole-moment MMM extended to 5-face WEDGE elements (3 dipole + 1 monopole + 1 AXIAL quad about the
     prism axis = 5 rows).  A unit cube as ONE hex vs the SAME cube tiled by TWO triangular-prism wedges must
     give the same EXTERNAL field (same geometry + uniform applied field).  The AXIAL quad (3*(d.a)^2-|d|^2,
     a = prism axis) is REQUIRED: the naive antisymmetric dx^2-dy^2 leaves a symmetric near-null sigma mode

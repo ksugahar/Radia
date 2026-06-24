@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-06-22T09:44:27.269358",
   "hostname": "lab",
-  "benchmark": "yano_moment_svd_multipole",
+  "benchmark": "multipole_moment_svd_multipole",
   "results": [
     {
       "half_extents": [

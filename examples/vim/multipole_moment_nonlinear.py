@@ -1,4 +1,4 @@
-"""NONLINEAR (BH-curve soft iron) moment-yano on the C-yoke -- the parameter-free moment formulation extended
+"""NONLINEAR (BH-curve soft iron) multipole-moment MMM on the C-yoke -- the parameter-free moment formulation extended
 to a saturating material, cross-validated against the shipped Radia nonlinear solver.
 
 THE KEY FIX (2026-06-21): the moment system A is NON-SINGULAR, so the loop modes must NOT be deflated.  An
@@ -28,7 +28,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "src", "radia"))
 sys.path.insert(0, HERE)
 import radia as rad  # noqa: E402
-from yano_moment_cyoke_gate import build_cyoke_hexes, _norm, FREUD  # noqa: E402
+from multipole_moment_cyoke_gate import build_cyoke_hexes, _norm, FREUD  # noqa: E402
 
 MU0 = 4e-7 * math.pi
 MU_R0 = 1000.0; CHI0 = MU_R0 - 1.0; MSAT = 1.0e6
@@ -129,7 +129,7 @@ def radia_ref(hexes, Happ):
 
 
 def main():
-    print(f"\nNONLINEAR moment-yano (no deflation) on the C-yoke -- vs shipped Radia (chi0={CHI0:.0f}, Msat={MSAT:.0e})\n")
+    print(f"\nNONLINEAR multipole-moment MMM (no deflation) on the C-yoke -- vs shipped Radia (chi0={CHI0:.0f}, Msat={MSAT:.0e})\n")
     print(f"  {'mesh':>8} {'H_app':>8} {'regime':>9} | {'m_y':>8} {'iters':>5} {'conv':>5} | {'ref':>8} {'err':>6} | {'div(B)':>8} {'constit':>8}")
     print("  " + "-" * 86)
     rows = []
@@ -143,9 +143,9 @@ def main():
             print(f"  {nxy}x{nxy}x2 {H0:>8.0e} {tag:>9} | {my:>8.2f} {nit:>5d} {str(conv):>5} | {ref:>8.2f} {err:>+5.1%} | {divB:>8.1e} {constit:>8.1e}")
             rows.append(dict(nxy=nxy, H0=H0, regime=tag, moment_my=my, iters=nit, converged=conv,
                              radia_my=ref, err=err, divB_resid=divB, constit_resid=constit))
-    with open(os.path.join(HERE, "yano_moment_nonlinear.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_nonlinear.json"), "w") as f:
         json.dump(dict(mu_r0=MU_R0, Msat=MSAT, rows=rows,
-                       conclusion=("Nonlinear (BH-curve) moment-yano with NO loop deflation matches the shipped "
+                       conclusion=("Nonlinear (BH-curve) multipole-moment MMM with NO loop deflation matches the shipped "
                                    "Radia MMM-MatSatIsoTab solver to <1% across linear/knee/saturated at two "
                                    "mesh densities, with div(B)=0 and the per-element constitutive exact (~1e-11). "
                                    "The loop deflation (an earlier prototype artifact) was the whole nonlinear "
@@ -154,8 +154,8 @@ def main():
                                    "loop-invariant, so linear looked fine). Solve A directly. The parameter-free "
                                    "moment formulation is NOT linear-only -- it handles real soft iron.")),
                   f, indent=2, default=float)
-    print("\n  moment-yano (no deflation) matches Radia <1% across saturation, div(B)=0 + constitutive exact.")
-    print("  saved", os.path.join(HERE, "yano_moment_nonlinear.json"))
+    print("\n  multipole-moment MMM (no deflation) matches Radia <1% across saturation, div(B)=0 + constitutive exact.")
+    print("  saved", os.path.join(HERE, "multipole_moment_nonlinear.json"))
 
 
 if __name__ == "__main__":

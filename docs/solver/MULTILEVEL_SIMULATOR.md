@@ -248,8 +248,8 @@ L = np.imag(Z) / (2*np.pi*1e6)
 3. **Hex vertex order**: bottom CCW (v0-v3), top CCW (v4-v7)
 4. **NGSBEM surface mesh**: Use `Glue(wire.faces)`, not volume Box
 5. **NGSBEM maxh**: `maxh <= min_cross_section / 2` for equilateral elements
-6. **MSC sign**: the current moment-yano system is assembled by `BuildMomentSystemCore`; do not reconstruct it from the retired EIEM2 collocation sign convention.
-7. **No Yano eval point in production**: the old midpoint eval point belonged to EIEM2 and was deleted. Current moment-yano samples the applied field at the element centroid and uses centroid field/gradient moment rows.
+6. **MSC sign**: the current multipole-moment MMM system is assembled by `BuildMomentSystemCore`; do not reconstruct it from the retired EIEM2 collocation sign convention.
+7. **No Yano eval point in production**: the old midpoint eval point belonged to EIEM2 and was deleted. Current multipole-moment MMM samples the applied field at the element centroid and uses centroid field/gradient moment rows.
 8. **Center-charge correction is internal**: mutual face-center cancellation lives inside the moment assembly / `CentroidFieldGradFromFace`, not in user-level PEEC coupling code.
 9. **Loop port**: Split loop with two nodes at same position, not `add_port(n,n)`
 10. **Nonlinear: Newton->Picard order**: Start Newton (fast), finish Picard (stable).

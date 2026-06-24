@@ -1,4 +1,4 @@
-"""Does ENLARGING the block-Jacobi block bound moment-yano GMRES iters? (user, 2026-06-22: "expand the block
+"""Does ENLARGING the block-Jacobi block bound multipole-moment MMM GMRES iters? (user, 2026-06-22: "expand the block
 to the range loops affect").  The precond diagnosis showed the stiff modes are the long-range DEMAG dipole
 modes (zero net-charge content, low loop overlap) -- so the fix is the preconditioner's spatial REACH, not the
 formulation.  This measures how far that reach must extend.
@@ -124,7 +124,7 @@ def main():
     nxy = 16
     hexes = build_cyoke_hexes(nxy, 2); Happ = np.array([0.0, H0, 0.0])
     A, b, row_of, dof, n_el, gi, gj, gk = build(hexes, Happ, 1000.0, nxy)
-    print(f"\nBlock-size scaling for moment-yano block-Jacobi (nxy={nxy}, n_el={n_el}, dof={dof}, mu_r=1000).")
+    print(f"\nBlock-size scaling for multipole-moment MMM block-Jacobi (nxy={nxy}, n_el={n_el}, dof={dof}, mu_r=1000).")
     print("g = super-cell size (gxg elements/block); g=1 is the per-element 6x6 (current); larger g = bigger reach.\n")
     print(f"  {'g (super-cell)':>15} {'max elems/blk':>13} {'max blk dof':>11} {'n_blocks':>9} | {'GMRES iters':>11}")
     print("  " + "-" * 70)
@@ -143,7 +143,7 @@ def main():
     itbig = rows[-1]["gmres_iters"]; big_elems = rows[-1]["max_elems_per_block"]
     loop_range_helps = it2 < it1                       # does a 2x2 "loop-range" block beat per-element?
     out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
-               benchmark="yano_moment_block_size_test", nxy=nxy, n_el=n_el, dof=dof, mu_r=1000.0, results=rows,
+               benchmark="multipole_moment_block_size_test", nxy=nxy, n_el=n_el, dof=dof, mu_r=1000.0, results=rows,
                iters_g1=it1, iters_g2=it2, iters_g3=it3, iters_biggest=itbig, biggest_block_elems=int(big_elems),
                loop_range_helps=bool(loop_range_helps),
                conclusion=(
@@ -159,13 +159,13 @@ def main():
                    "and large |eig(M^-1 R)|), added on top of the cheap local block-Jacobi (two-level). Direction "
                    "(non-local reach) was right; the realization is coarse/hierarchical, NOT bigger local blocks." if not loop_range_helps else
                    f"A 2x2 'loop-range' block already cuts iters ({it1}->{it2}) -- a modest fixed block helps."))
-    with open(os.path.join(HERE, "yano_moment_block_size_test.json"), "w") as f:
+    with open(os.path.join(HERE, "multipole_moment_block_size_test.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print(f"\n  loop-range (g=2/3) block {'HELPS' if loop_range_helps else 'HURTS'}: g=1 {it1} -> g=2 {it2}, "
           f"g=3 {it3}; biggest block ({big_elems} elems) still {itbig} iters.")
     print("  => stiff mode is GLOBAL (flux-path); fixed local blocks are the wrong lever -- need a COARSE SPACE")
     print("     (deflate the global demag modes) or H-LU on top of cheap block-Jacobi, not bigger local blocks.")
-    print("  saved", os.path.join(HERE, "yano_moment_block_size_test.json"))
+    print("  saved", os.path.join(HERE, "multipole_moment_block_size_test.json"))
 
 
 if __name__ == "__main__":

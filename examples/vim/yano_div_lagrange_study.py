@@ -1,6 +1,6 @@
 """yano_div_lagrange_study.py -- RESEARCH (user idea): impose the PHYSICAL div(B)=0 constraint
 (sum of an element's 6 face charges = 0, i.e. magnetic charge neutrality / no monopole) via LAGRANGE
-multipliers, instead of via the CANCELLATION CHARGE that the yano-MSC kernel currently uses.
+multipliers, instead of via the CANCELLATION CHARGE that the surface-charge MSC kernel currently uses.
 
 Context: yano_cancellation_study.py showed the cancellation cloud (single/pyr12/edges) sets the
 conditioning; pyr12 is best.  But the cancellation is an AD-HOC per-DOF neutralizer.  The user asks:
@@ -25,7 +25,7 @@ from yano_pyr_faces12_star import (
 
 
 def collocation(hexes, layout, eval_alpha=0.5):
-    """yano-type collocation at EIEM2 eval point; layout='raw' (face charge only, NO cancellation),
+    """six-face surface-charge collocation at EIEM2 eval point; layout='raw' (face charge only, NO cancellation),
     'single', or 'pyr_faces12'."""
     n = len(hexes)
     centers = [_trilinear_centroid(V) for V in hexes]

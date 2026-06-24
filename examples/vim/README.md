@@ -3,7 +3,7 @@
 Research demonstration of the **FEEC (Finite Element Exterior Calculus) Volume Integral
 Method** for the MMM/MSC magnetization problem. The goal: build an **HDiv-type** demag
 operator whose magnetization "loops" are **field-null by construction**, complementing the
-canonical **moment-yano** surface-charge backend with FEEC, curved/high-order geometry, and
+canonical **multipole-moment MMM** surface-charge backend with FEEC, curved/high-order geometry, and
 symmetry-model capabilities.
 
 > **Sibling research line in this directory:** a separate set of examples builds a **3D
@@ -43,19 +43,19 @@ distortion cannot break it. This is the strong (everywhere) field-null vs the co
 basis's fragile (collocation-only) field-null that breaks under distortion. The operator
 `N = BᵀGB` (B = charge map, G = Coulomb Gram) inherits `N·loop = 0` for **any** G.
 
-## HDiv-type vs moment-yano — the clean win
+## HDiv-type vs multipole-moment MMM — the clean win
 
 **No fundamental inferiority.** The HDiv-type N is **symmetric**, works on **general**
 elements (tet/hex/wedge), is **distorted-robust by construction**, and its accuracy is
-comparable to moment-yano MSC. On top of parity, it has three accuracy-per-DOF advantages the
-flat, hand-crafted moment-yano MSC **structurally cannot match**:
+comparable to multipole-moment MMM MSC. On top of parity, it has three accuracy-per-DOF advantages the
+flat, hand-crafted multipole-moment MMM MSC **structurally cannot match**:
 
 1. **de-Rham-exact on ANY mesh** — loops are field-null by construction (`4e-16`) on
    distorted hexes, vs the MSC retrofit's `6e-9`; no per-mesh element engineering. This also
    makes **symmetry models (1/2, 1/4, 1/8) automatic**: on a cut/reduced mesh the loops are
    just `ker(B)` (field-null `~4e-16`, count adapts 58→54→18→6 for sphere full→1/8), with **no
    cohomology-aware loop-star `installCycle`** — the "loop-removal is painful" problem of
-   moment-yano MSC is eliminated (`test_hdiv_vim_symmetry_loops.py`). The symmetry *demag value*
+   multipole-moment MMM MSC is eliminated (`test_hdiv_vim_symmetry_loops.py`). The symmetry *demag value*
    is the **image method** (`hdiv_demag_symmetry_image.py`): reflecting the reduced model's cap
    charge over the reduction planes (sign per z-mirror) reproduces the full demag from ~1/2, 1/4,
    1/8 the DOF (1/2 +0.08%, 1/4 +0.11%, 1/8 −0.32% vs full). So 1/4 & 1/8 are supported — loops
@@ -67,7 +67,7 @@ flat, hand-crafted moment-yano MSC **structurally cannot match**:
    single-layer of `σ=M·n`, supplied high-order + curved + FMM by `ngsolve.bem`. On a coarse
    sphere the demag factor goes flat `+0.25%` (order-insensitive, faceting-floored) →
    **curved + order-2 `~1e-4%` (exact)** at fixed small ndof (`hdiv_demag_bem_singlelayer.py`).
-   This is the accuracy-per-DOF win over flat lowest-order moment-yano MSC, on the demag factor
+   This is the accuracy-per-DOF win over flat lowest-order multipole-moment MMM MSC, on the demag factor
    directly — and it reuses NGSolve, no hand-rolled singular quadrature.
 
 ## What is built + validated — with REFERENCE HONESTY
@@ -79,7 +79,7 @@ solver but NOT ground truth on a coarse mesh):
 |---|---|---|---|
 | Loops field-null on distorted hex | `ngsolve_loopfree_verify.py` | exact (charge-form field `3.7e-16`) | ✅ machine zero |
 | Loop/star (Hodge) split | `hdiv_loop_star_split.py` | exact (`ker Q` charge-free `~1e-16`) | ✅ |
-| **moment-yano MSC ↔ HDiv-VIM loop bridge** | `yano_hdiv_loop_bridge.py` | exact (collocation near-null `==` HDiv `ker(B)` `==` cell-graph cycle) | ✅ the moment-yano collocation matrix carries the SAME loops as a LATENT near-null: dim `== n_loop` (cycle count) on every grid; yano cond `~1e16` (HDiv `loop_res ~1e-16`); cond(`-N+I/χ`) `~μr` (loops regularized by `1/χ` → bite at high μr) while **star projection → `~40-65`, μr-INDEPENDENT** (the HDiv-VIM regime). The collocation-side reading of Problem A. |
+| **multipole-moment MMM MSC ↔ HDiv-VIM loop bridge** | `yano_hdiv_loop_bridge.py` | exact (collocation near-null `==` HDiv `ker(B)` `==` cell-graph cycle) | ✅ the multipole-moment MMM collocation matrix carries the SAME loops as a LATENT near-null: dim `== n_loop` (cycle count) on every grid; yano cond `~1e16` (HDiv `loop_res ~1e-16`); cond(`-N+I/χ`) `~μr` (loops regularized by `1/χ` → bite at high μr) while **star projection → `~40-65`, μr-INDEPENDENT** (the HDiv-VIM regime). The collocation-side reading of Problem A. |
 | Linear demag (sphere/cube → 1/3) | `hdiv_demag_solve` (`test_hdiv_vim_demag_solve.py`) | **ANALYTIC** 1/3 | ✅ `<0.5%` (C++ analytic charge Gram) |
 | Nonlinear (damped Newton) | `solve_nonlinear_newton` (`test_hdiv_vim_tet_newton.py`) | **ANALYTIC** sphere fixed point | ✅ `<2%` deep-saturation (C++ charge Gram) |
 | Nonlinear cross-check | `test_hdiv_vim_newton_vs_radia.py` | Radia MMM/MSC (`MatSatIsoTab`) | ✅ agree `<0.05%` (sphere) |
@@ -97,7 +97,7 @@ solver but NOT ground truth on a coarse mesh):
 | **Curved × nonlinear** — field (the big win) | `hdiv_curved_nonlinear_field.py` | **ANALYTIC** dipole | ✅ external H field of a nonlinear soft-iron sphere: **flat `~+8.8%` at every point → Curve(3) `<0.4%` (~23×)**. The field inherits the ~9% volume error (dipole moment m=M·V); THIS is where curved × nonlinear pays off — the engineering deliverable (stray field), not M. |
 | **Head-to-head vs shipped Radia** (B) | `compare_curved_vs_radia_field.py` | **ANALYTIC** dipole + shipped **Radia** | ✅ HDiv curved at the *coarsest* mesh (0.39%) beats shipped‑Radia‑**flat** at the *finest* (1.71%, 2042 tets); **~10–30× accuracy‑per‑resolution** at every h. Honest: accuracy‑per‑DOF (geometry‑driven); wall‑clock = the C++ lift (not done); Radia‑flat stands in for the also‑flat yano‑type. |
 
-Moment-yano remains the large flat-cell moment baseline. It does not consume Cubit high-order curved
+Multipole-moment MMM remains the large flat-cell moment baseline. It does not consume Cubit high-order curved
 hex `.vol` nodes or NGSolve HDiv/Piola shape functions, so the curved-hex p-convergence and
 harmonic HDiv-VIM checks above are HDiv-only evidence.
 
@@ -135,15 +135,15 @@ python C:/temp/radia_mdx_vim/hdiv_matvec_scaling.py
 # The canonical tracked result is examples/vim/hdiv_matvec_scaling.json.
 ```
 
-For moment-yano large-scale evidence, the dense nonlinear baseline
-`bench_yano_moment_scaling.py` intentionally stops at small/medium DOF. The 165k-DOF path is the
+For multipole-moment MMM large-scale evidence, the dense nonlinear baseline
+`bench_multipole_moment_scaling.py` intentionally stops at small/medium DOF. The 165k-DOF path is the
 HACApK method-2 storage/solve benchmark:
 
 ```powershell
 python bench_moment_storage_scaling.py --cases 60x46x10 --methods 2 --timeout 7200
 ```
 
-`60x46x10` gives `60*46*10*6 = 165600` moment-yano DOF. Dense LU (`method 0`) is intentionally not
+`60x46x10` gives `60*46*10*6 = 165600` multipole-moment MMM DOF. Dense LU (`method 0`) is intentionally not
 run at that size because its dense matrix alone would exceed the mdx memory budget.
 The mdx result published on 2026-06-24 is
 `results_moment_storage_scaling_165600_mdx_20260624.json`: 165600 DOF, 13389.5 MB peak memory,
@@ -154,7 +154,7 @@ The mdx result published on 2026-06-24 is
 The narrative + decisions live in the radia-mcp **`hdiv_vim`** MCP knowledge
 (`overview` / `status` / `nonlinear`); `memory/` holds the Problem-A/B investigation record.
 
-## Honest open items (productionization alongside moment-yano)
+## Honest open items (productionization alongside multipole-moment MMM)
 
 The **surface** Gram, curved + high-order + FMM-scalable, is now SOLVED by reusing the
 `ngsolve.bem` Laplace single-layer (`hdiv_demag_bem_singlelayer.py`) — no hand-rolled singular

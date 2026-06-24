@@ -1,7 +1,7 @@
-"""Analytic self-term for the parameter-free yano-MSC MOMENT formulation -- removes BOTH the eval-point
+"""Analytic self-term for the parameter-free surface-charge MSC MOMENT formulation -- removes BOTH the eval-point
 alpha AND the finite-difference conditioning noise.
 
-Background (see yano_moment_formulation.py): the moment formulation closes the 6 face charges of each hex by
+Background (see multipole_moment_formulation.py): the moment formulation closes the 6 face charges of each hex by
 their field MOMENTS about the centroid -- parameter-free, no eval-point alpha:
 
     dipole(3)     : <M> = dipole(sigma)/V = chi * H(centroid)
@@ -10,7 +10,7 @@ their field MOMENTS about the centroid -- parameter-free, no eval-point alpha:
     loops         : NOT deflated -- the moment matrix A is non-singular, so the (field-null) cell-graph
                     cycle modes are solved, not projected out.  Deflating them to zero (an earlier prototype
                     did) breaks the per-element constitutive (the loops carry per-element dipole); that is
-                    invisible in the external moment but FATAL in nonlinear -- see yano_moment_nonlinear.py.
+                    invisible in the external moment but FATAL in nonlinear -- see multipole_moment_nonlinear.py.
 
 That prototype obtained H(centroid) and gradH(centroid) by finite-differencing the yano operator over two
 small alphas (N0 = N(a->0), N1 = dN/da).  The differencing injects noise that drives the conditioning up on
@@ -213,7 +213,7 @@ def _assemble(G, dof, get_F0_Ginv):
 def _solve(A, b, Lb, nLoop, G):
     # The moment matrix A is NON-SINGULAR -> solve directly.  Deflating the (field-null) loop modes to zero
     # (an earlier prototype did) would break the per-element constitutive -- the loops carry per-element
-    # dipole -- which is invisible in the external moment but FATAL in nonlinear (see yano_moment_nonlinear.py).
+    # dipole -- which is invisible in the external moment but FATAL in nonlinear (see multipole_moment_nonlinear.py).
     # Reporting cond(A) of the FULL system also corrects the earlier conditioning claim, which was measured on
     # the deflated P^T A P.  (Lb, nLoop kept in the signature for call-site compatibility; unused here.)
     area = G[:, 1]; fc = G[:, 2:5]; ecen = G[:, 8:11]
@@ -312,11 +312,11 @@ def main():
                            "FD ~2e5) -- a REAL benefit that survives without deflation. The mutual center charge "
                            "is a modest conditioning aid, NOT required (the 'bare' column now matches analytic; "
                            "the earlier 'bare breaks regular grids / cond 2e6' was a DEFLATION artifact). This is "
-                           "the kernel for C++ GetCentroidFieldGrad; deflation removed per yano_moment_nonlinear.py."))
-    with open(os.path.join(HERE, "yano_moment_analytic_selfterm.json"), "w") as f:
+                           "the kernel for C++ GetCentroidFieldGrad; deflation removed per multipole_moment_nonlinear.py."))
+    with open(os.path.join(HERE, "multipole_moment_analytic_selfterm.json"), "w") as f:
         json.dump(out, f, indent=2, default=float)
     print("\n  Analytic self-term: parameter-free AND well-conditioned. saved",
-          os.path.join(HERE, "yano_moment_analytic_selfterm.json"))
+          os.path.join(HERE, "multipole_moment_analytic_selfterm.json"))
 
 
 if __name__ == "__main__":

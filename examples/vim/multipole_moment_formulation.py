@@ -1,4 +1,4 @@
-"""Parameter-free MOMENT formulation of the yano-MSC -- the principled fix for the collocation-point
+"""Parameter-free MOMENT formulation of the surface-charge MSC -- the principled fix for the collocation-point
 (eval-point alpha) problem.  Designed from physics (the multipole structure of the 6 face charges):
 
   6 face charges  =  monopole(1) + dipole(3) + quadrupole(2),
@@ -100,8 +100,8 @@ def mmm_moment(cells):
 def matgeom(cells, alpha):
     raise RuntimeError(
         "This historical EIEM2 alpha-sweep prototype cannot be recomputed on current Radia. "
-        "Use yano_moment_formulation.json for the archived numbers, and use rad.BuildMomentSystem "
-        "or GetCentroidFieldGrad for the canonical moment-yano path."
+        "Use multipole_moment_formulation.json for the archived numbers, and use rad.BuildMomentSystem "
+        "or GetCentroidFieldGrad for the canonical multipole-moment MMM path."
     )
 
 
@@ -163,7 +163,7 @@ def moment_err(cells, m_mmm):
 
 
 def main():
-    json_path = os.path.join(HERE, "yano_moment_formulation.json")
+    json_path = os.path.join(HERE, "multipole_moment_formulation.json")
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     print(f"\nArchived parameter-free MOMENT formulation results (mu_r={data['mu_r']:.0f}, vs MMM)\n")

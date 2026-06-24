@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-06-22T00:44:36.749708",
   "hostname": "lab",
-  "benchmark": "yano_moment_block_size_test",
+  "benchmark": "multipole_moment_block_size_test",
   "nxy": 16,
   "n_el": 180,
   "dof": 1080,

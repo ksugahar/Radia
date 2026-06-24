@@ -1,4 +1,4 @@
-"""Phase-1 verification (EIEM2 full-deletion track): the MOMENT-yano path now supports IMA (image symmetry).
+"""Phase-1 verification (EIEM2 full-deletion track): the multipole-moment MMM path now supports IMA (image symmetry).
 BuildCentroidFieldGrad adds the mirror-image contributions (field AND the rank-2 gradient, recomputed fresh
 from the reflected geometry), so a HALF model solved with image= reproduces the EXPLICIT FULL model (the half
 plus its hand-mirrored z<0 copy) solved WITHOUT image -- to machine precision, since IMA is just the

@@ -1,7 +1,7 @@
 """radia.SoftIron -- the unified, intent-based soft-iron object.
 
 "Place soft iron, solve it, read the field" -- backend-agnostic over the two demag methods
-(moment-yano MSC and the FEEC HDiv-VIM).  Geometry comes from a ``.vol`` file (the canonical,
+(multipole-moment MMM MSC and the FEEC HDiv-VIM).  Geometry comes from a ``.vol`` file (the canonical,
 correctly-oriented netgen interchange) or an in-memory NGSolve mesh; the Radia element
 representation (ObjHexahedron / ...) is an INTERNAL detail the user no longer touches.
 
@@ -17,7 +17,7 @@ Example::
     coil = rad.ObjCnt(my_coilbuilder.to_radia())        # a mesh-free Biot-Savart source
     iron.solve(source=coil, backend="auto")             # auto: mesh-backed -> HDiv-VIM
     B = iron.field("b", [[0, 0, 0.05]])                 # total (iron + source) field, exact open bdry
-    iron.solve(source=coil, backend="yano")             # same object, yano-MSC instead
+    iron.solve(source=coil, backend="yano")             # same object, surface-charge MSC instead
 """
 import os
 
