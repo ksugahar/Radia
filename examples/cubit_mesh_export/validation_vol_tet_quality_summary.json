@@ -1,7 +1,7 @@
 {
   "kind": "netgen_vol_tetrahedron_quality_validation",
   "validation_class": true,
-  "quality_definition": "radius_ratio_quality = 3 * inradius / circumradius",
+  "quality_definition": "radius_ratio_quality = 3 * inradius / circumradius; corner_normalized_jacobian = |det(e1,e2,e3)|/(|e1||e2||e3|)",
   "builtin_cases": [
     {
       "label": "right_unit_tetrahedron",
@@ -19,6 +19,14 @@
         "inradius": 0.21132486540518713,
         "circumradius": 0.8660254037844386,
         "radius_ratio_quality": 0.7320508075688774,
+        "corner_normalized_jacobians": [
+          1.0,
+          0.4999999999999999,
+          0.4999999999999999,
+          0.4999999999999999
+        ],
+        "min_normalized_corner_jacobian": 0.4999999999999999,
+        "max_normalized_corner_jacobian": 1.0,
         "min_edge": 1.0,
         "max_edge": 1.4142135623730951,
         "edge_ratio": 1.4142135623730951
@@ -30,6 +38,8 @@
         "mean_radius_ratio_quality": 0.7320508075688774,
         "min_inradius": 0.21132486540518713,
         "max_circumradius": 0.8660254037844386,
+        "min_normalized_corner_jacobian": 0.4999999999999999,
+        "mean_min_normalized_corner_jacobian": 0.4999999999999999,
         "max_edge_ratio": 1.4142135623730951
       },
       "closure": {
@@ -67,6 +77,14 @@
         "inradius": 0.2041241452319315,
         "circumradius": 0.6123724356957945,
         "radius_ratio_quality": 1.0,
+        "corner_normalized_jacobians": [
+          0.7071067811865476,
+          0.7071067811865476,
+          0.7071067811865476,
+          0.7071067811865475
+        ],
+        "min_normalized_corner_jacobian": 0.7071067811865475,
+        "max_normalized_corner_jacobian": 0.7071067811865476,
         "min_edge": 0.9999999999999999,
         "max_edge": 1.0,
         "edge_ratio": 1.0000000000000002
@@ -78,6 +96,8 @@
         "mean_radius_ratio_quality": 1.0,
         "min_inradius": 0.2041241452319315,
         "max_circumradius": 0.6123724356957945,
+        "min_normalized_corner_jacobian": 0.7071067811865475,
+        "mean_min_normalized_corner_jacobian": 0.7071067811865475,
         "max_edge_ratio": 1.0000000000000002
       },
       "closure": {
@@ -115,6 +135,14 @@
         "inradius": 0.0004997927286763739,
         "circumradius": 1.2235204330128697,
         "radius_ratio_quality": 0.0012254623180562366,
+        "corner_normalized_jacobians": [
+          0.5773502691896257,
+          0.0007078138865510446,
+          0.0007078138865510446,
+          0.5785055447625166
+        ],
+        "min_normalized_corner_jacobian": 0.0007078138865510446,
+        "max_normalized_corner_jacobian": 0.5785055447625166,
         "min_edge": 0.0017320508075688774,
         "max_edge": 1.4142135623730951,
         "edge_ratio": 816.4965809277261
@@ -126,6 +154,8 @@
         "mean_radius_ratio_quality": 0.0012254623180562366,
         "min_inradius": 0.0004997927286763739,
         "max_circumradius": 1.2235204330128697,
+        "min_normalized_corner_jacobian": 0.0007078138865510446,
+        "mean_min_normalized_corner_jacobian": 0.0007078138865510446,
         "max_edge_ratio": 816.4965809277261
       },
       "closure": {
@@ -155,10 +185,14 @@
     "right_circumradius": 0.8660254037844386,
     "right_radius_ratio_quality": 0.7320508075688774,
     "right_expected_radius_ratio_quality": 0.7320508075688774,
+    "right_min_normalized_corner_jacobian": 0.4999999999999999,
+    "right_max_normalized_corner_jacobian": 1.0,
     "right_edge_ratio": 1.4142135623730951,
     "equilateral_radius_ratio_quality": 1.0,
+    "equilateral_min_normalized_corner_jacobian": 0.7071067811865475,
     "equilateral_edge_ratio": 1.0000000000000002,
     "sliver_radius_ratio_quality": 0.0012254623180562366,
+    "sliver_min_normalized_corner_jacobian": 0.0007078138865510446,
     "sliver_edge_ratio": 816.4965809277261
   }
 }

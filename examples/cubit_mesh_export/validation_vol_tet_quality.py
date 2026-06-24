@@ -4,7 +4,8 @@ This is an example/validation run, not a pytest test.  It keeps the Cubit/Corefo
 mesh-quality checks public-safe and solver-independent:
 
 * parse only tri/tet Netgen ``.vol`` topology
-* compute edge ratio, inradius, circumradius, and radius-ratio quality
+* compute edge ratio, inradius, circumradius, radius-ratio quality, and
+  corner-normalized Jacobian quality
 * validate analytic anchors on right, equilateral, and sliver tetrahedra
 * optionally evaluate a real exported ``.vol`` with ``--vol PATH``
 
@@ -122,10 +123,14 @@ def build_summary(external_vol: Path | None = None) -> dict:
         "right_circumradius": right["circumradius"],
         "right_radius_ratio_quality": right["radius_ratio_quality"],
         "right_expected_radius_ratio_quality": expected_quality,
+        "right_min_normalized_corner_jacobian": right["min_normalized_corner_jacobian"],
+        "right_max_normalized_corner_jacobian": right["max_normalized_corner_jacobian"],
         "right_edge_ratio": right["edge_ratio"],
         "equilateral_radius_ratio_quality": equi["radius_ratio_quality"],
+        "equilateral_min_normalized_corner_jacobian": equi["min_normalized_corner_jacobian"],
         "equilateral_edge_ratio": equi["edge_ratio"],
         "sliver_radius_ratio_quality": sliver["radius_ratio_quality"],
+        "sliver_min_normalized_corner_jacobian": sliver["min_normalized_corner_jacobian"],
         "sliver_edge_ratio": sliver["edge_ratio"],
     }
 
@@ -134,16 +139,23 @@ def build_summary(external_vol: Path | None = None) -> dict:
     assert abs(checks["right_inradius"] - expected_inradius) < 1.0e-15
     assert abs(checks["right_circumradius"] - expected_circumradius) < 1.0e-15
     assert abs(checks["right_radius_ratio_quality"] - expected_quality) < 1.0e-15
+    assert abs(checks["right_min_normalized_corner_jacobian"] - 0.5) < 1.0e-15
+    assert abs(checks["right_max_normalized_corner_jacobian"] - 1.0) < 1.0e-15
     assert abs(checks["right_edge_ratio"] - math.sqrt(2.0)) < 1.0e-15
     assert abs(checks["equilateral_radius_ratio_quality"] - 1.0) < 1.0e-14
+    assert abs(checks["equilateral_min_normalized_corner_jacobian"] - math.sqrt(0.5)) < 1.0e-14
     assert abs(checks["equilateral_edge_ratio"] - 1.0) < 1.0e-14
     assert checks["sliver_radius_ratio_quality"] < 0.01
+    assert checks["sliver_min_normalized_corner_jacobian"] < 0.01
     assert checks["sliver_edge_ratio"] > 800.0
 
     summary = {
         "kind": "netgen_vol_tetrahedron_quality_validation",
         "validation_class": True,
-        "quality_definition": "radius_ratio_quality = 3 * inradius / circumradius",
+        "quality_definition": (
+            "radius_ratio_quality = 3 * inradius / circumradius; "
+            "corner_normalized_jacobian = |det(e1,e2,e3)|/(|e1||e2||e3|)"
+        ),
         "builtin_cases": cases,
         "checks": checks,
     }
@@ -167,6 +179,7 @@ def main() -> int:
         q = case["quality_row"]
         print(
             f"  {case['label']}: quality={q['radius_ratio_quality']:.12f}, "
+            f"min_jac={q['min_normalized_corner_jacobian']:.6f}, "
             f"edge_ratio={q['edge_ratio']:.6f}, volume={q['volume']:.12g}"
         )
     if "external_vol" in summary:

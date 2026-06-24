@@ -597,8 +597,12 @@ def test_tetrahedron_quality_rows_for_right_and_equilateral_tets():
     assert row["inradius"] == pytest.approx(expected_inradius)
     assert row["circumradius"] == pytest.approx(expected_circumradius)
     assert row["radius_ratio_quality"] == pytest.approx(expected_quality)
+    assert row["corner_normalized_jacobians"] == pytest.approx([1.0, 0.5, 0.5, 0.5])
+    assert row["min_normalized_corner_jacobian"] == pytest.approx(0.5)
+    assert row["max_normalized_corner_jacobian"] == pytest.approx(1.0)
     assert row["edge_ratio"] == pytest.approx(math.sqrt(2.0))
     assert right.tetrahedron_quality_summary()["min_radius_ratio_quality"] == pytest.approx(expected_quality)
+    assert right.tetrahedron_quality_summary()["min_normalized_corner_jacobian"] == pytest.approx(0.5)
 
     h = math.sqrt(3.0) / 2.0
     z = math.sqrt(2.0 / 3.0)
@@ -610,6 +614,7 @@ def test_tetrahedron_quality_rows_for_right_and_equilateral_tets():
     eq_summary = equilateral.tetrahedron_quality_summary()
     assert eq_summary["min_radius_ratio_quality"] == pytest.approx(1.0)
     assert eq_summary["max_radius_ratio_quality"] == pytest.approx(1.0)
+    assert eq_summary["min_normalized_corner_jacobian"] == pytest.approx(math.sqrt(0.5))
     assert eq_summary["max_edge_ratio"] == pytest.approx(1.0)
 
 
