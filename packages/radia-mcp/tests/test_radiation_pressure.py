@@ -15,6 +15,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     C0,
     ETA0,
     oblique_radiation_pressure_summary,
+    one_port_reflection_momentum_force_summary,
     plane_wave_intensity_from_electric_field,
     poynting_patch_force_summary,
     radiation_force_from_normal_scattering,
@@ -132,6 +133,35 @@ def test_two_port_scattering_momentum_force_vector():
     )
 
 
+def test_one_port_reflection_momentum_force_from_s11():
+    power = 2.5
+    direction = (0.0, 0.0, -2.0)
+
+    matched = one_port_reflection_momentum_force_summary(power, 0.0j, direction)
+    short = one_port_reflection_momentum_force_summary(power, -1.0 + 0.0j, direction)
+    partial = one_port_reflection_momentum_force_summary(power, 0.0 + 0.5j, direction)
+    opposite_phase = one_port_reflection_momentum_force_summary(power, 0.0 - 0.5j, direction)
+
+    assert matched["reflectance"] == pytest.approx(0.0)
+    assert matched["power_delivered_to_one_port_W"] == pytest.approx(power)
+    assert matched["force_N"] == pytest.approx([0.0, 0.0, -power / C0])
+    assert matched["return_loss_dB"] is None
+    assert matched["return_loss_is_infinite"] is True
+
+    assert short["reflectance"] == pytest.approx(1.0)
+    assert short["force_N"] == pytest.approx([0.0, 0.0, -2.0 * power / C0])
+    assert short["power_delivered_to_one_port_W"] == pytest.approx(0.0)
+    assert short["mismatch_loss_dB"] is None
+    assert short["mismatch_loss_is_infinite"] is True
+
+    assert partial["reflectance"] == pytest.approx(0.25)
+    assert partial["power_reflected_W"] == pytest.approx(0.25 * power)
+    assert partial["power_delivered_to_one_port_W"] == pytest.approx(0.75 * power)
+    assert partial["axial_force_along_incident_direction_N"] == pytest.approx(1.25 * power / C0)
+    assert partial["force_N"] == pytest.approx([0.0, 0.0, -1.25 * power / C0])
+    assert opposite_phase["force_N"] == pytest.approx(partial["force_N"])
+
+
 def test_oblique_radiation_pressure_reduces_to_normal_incidence():
     intensity = 7.0
     area = 0.25
@@ -227,6 +257,10 @@ def test_radiation_pressure_rejects_invalid_inputs():
             transmitted_direction=(1.0, 0.0),
         )
     with pytest.raises(ValueError):
+        one_port_reflection_momentum_force_summary(1.0, 1.01 + 0.0j)
+    with pytest.raises(ValueError):
+        one_port_reflection_momentum_force_summary(1.0, complex(float("nan"), 0.0))
+    with pytest.raises(ValueError):
         radiation_pressure_summary(1.0, area_m2=-1.0)
     with pytest.raises(ValueError):
         radiation_pressure_from_intensity(1.0, absorptance=0.6, reflectance=0.5)
@@ -248,6 +282,7 @@ if __name__ == "__main__":
     test_radiation_force_from_power_is_area_integrated_pressure()
     test_radiation_force_from_normal_scattering_matches_momentum_balance()
     test_two_port_scattering_momentum_force_vector()
+    test_one_port_reflection_momentum_force_from_s11()
     test_oblique_radiation_pressure_reduces_to_normal_incidence()
     test_oblique_radiation_pressure_splits_absorbed_tangential_momentum()
     test_poynting_patch_force_vector_matches_oblique_summary()

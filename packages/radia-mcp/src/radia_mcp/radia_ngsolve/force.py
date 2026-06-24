@@ -1553,6 +1553,61 @@ def two_port_scattering_momentum_force_summary(
     }
 
 
+def one_port_reflection_momentum_force_summary(
+    power_incident_W,
+    s11,
+    incident_direction=(1.0, 0.0, 0.0),
+    speed=C0,
+):
+    """Vector force [N] from one-port reflection coefficient ``S11``.
+
+    This is the common VNA/RF-solver one-port specialization of
+    :func:`two_port_scattering_momentum_force_summary`: reflected power is
+    ``|S11|^2 P_inc`` and there is no transmitted output port.  The phase of
+    ``S11`` is still reported for bookkeeping, but the time-average momentum
+    force depends on its magnitude only:
+
+        F = (1 + |S11|^2) P_inc k_inc / c
+
+    The matched-load and perfect-short limits are therefore ``P/c`` and
+    ``2P/c`` along the incident propagation direction.
+    """
+
+    gamma = complex(s11)
+    if not math.isfinite(gamma.real) or not math.isfinite(gamma.imag):
+        raise ValueError("s11 must be finite")
+    magnitude = abs(gamma)
+    reflectance = magnitude * magnitude
+    summary = two_port_scattering_momentum_force_summary(
+        power_incident_W,
+        incident_direction,
+        reflectance=reflectance,
+        transmittance=0.0,
+        speed=speed,
+    )
+    return_loss = None if magnitude == 0.0 else max(0.0, -20.0 * math.log10(magnitude))
+    power_delivered = summary["power_absorbed_W"]
+    delivered_fraction = summary["absorptance"]
+    mismatch_loss = None if delivered_fraction == 0.0 else max(
+        0.0,
+        -10.0 * math.log10(delivered_fraction),
+    )
+    summary.update({
+        "s11_real": gamma.real,
+        "s11_imag": gamma.imag,
+        "s11_magnitude": magnitude,
+        "s11_phase_rad": math.atan2(gamma.imag, gamma.real),
+        "s11_phase_deg": math.degrees(math.atan2(gamma.imag, gamma.real)),
+        "return_loss_dB": return_loss,
+        "return_loss_is_infinite": magnitude == 0.0,
+        "power_delivered_to_one_port_W": power_delivered,
+        "mismatch_loss_dB": mismatch_loss,
+        "mismatch_loss_is_infinite": delivered_fraction == 0.0,
+        "one_port_force_formula": "F=(1+|S11|^2)P_inc k_inc/c",
+    })
+    return summary
+
+
 def radiation_pressure_summary(
     intensity_W_per_m2,
     area_m2=1.0,
