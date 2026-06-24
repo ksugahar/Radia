@@ -29,7 +29,8 @@ from build123d import (Axis, Box, BuildLine, BuildSketch, CenterArc, Circle, Com
                        extrude, fillet, loft, make_face, offset, revolve, split, sweep)
 
 __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_array",
-           "mirrored", "assembly",
+           "mirrored", "assembly", "shape_envelope_row", "enclosing_box",
+           "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
@@ -171,6 +172,131 @@ def assembly(*parts, label="assembly"):
         else:
             children.append(p)                   # a bare Solid
     return Compound(children=children, label=label)
+
+
+def _shape_list(shapes):
+    if isinstance(shapes, Compound):
+        return list(shapes.children) if shapes.children else list(shapes.solids())
+    try:
+        return list(shapes)
+    except TypeError:
+        return [shapes]
+
+
+def _margin_xyz(margin):
+    try:
+        values = [float(v) for v in margin]
+    except TypeError:
+        values = [float(margin)] * 3
+    if len(values) != 3:
+        raise ValueError("margin must be a scalar or a 3-value iterable")
+    if any(v < 0.0 for v in values):
+        raise ValueError("margin values must be >= 0")
+    return values
+
+
+def shape_envelope_row(shapes, margin=0.0, name="envelope"):
+    """Return a JSON-friendly bounding-box envelope for one or more shapes.
+
+    This is a pre-mesh guard for multi-region CAE models: compute the union
+    bounding box of labelled inner regions, expand it by a scalar or xyz
+    ``margin``, and expose centre/size/volume in the same simple vocabulary as
+    :func:`shape_measurement_row`.
+    """
+
+    items = _shape_list(shapes)
+    if not items:
+        raise ValueError("shape_envelope_row needs at least one shape")
+    boxes = [shape.bounding_box() for shape in items]
+    margin_xyz = _margin_xyz(margin)
+    mins = [
+        min(bb.min.X for bb in boxes) - margin_xyz[0],
+        min(bb.min.Y for bb in boxes) - margin_xyz[1],
+        min(bb.min.Z for bb in boxes) - margin_xyz[2],
+    ]
+    maxs = [
+        max(bb.max.X for bb in boxes) + margin_xyz[0],
+        max(bb.max.Y for bb in boxes) + margin_xyz[1],
+        max(bb.max.Z for bb in boxes) + margin_xyz[2],
+    ]
+    size = [maxs[i] - mins[i] for i in range(3)]
+    center = [(mins[i] + maxs[i]) / 2.0 for i in range(3)]
+    return {
+        "name": str(name),
+        "n_shapes": len(items),
+        "margin": margin_xyz,
+        "min": [float(v) for v in mins],
+        "max": [float(v) for v in maxs],
+        "size": [float(v) for v in size],
+        "center": [float(v) for v in center],
+        "volume": float(size[0] * size[1] * size[2]),
+    }
+
+
+def enclosing_box(shapes, margin=0.0, label="enclosure"):
+    """Build a labelled box enclosing one or more shapes with the given margin."""
+
+    row = shape_envelope_row(shapes, margin=margin, name=label)
+    sx, sy, sz = row["size"]
+    cx, cy, cz = row["center"]
+    box = (Pos(cx, cy, cz) * Box(sx, sy, sz)).solid()
+    box.label = label
+    return box
+
+
+def enclosure_clearance_row(enclosure, inner_shapes, name=None):
+    """Summarise bbox clearances and nominal void volume for an enclosure.
+
+    ``nominal_void_volume`` assumes the inner shapes are disjoint.  It is a
+    readable first check before a STEP/Cubit/Netgen round trip, not a
+    replacement for boolean validation.
+    """
+
+    inner = _shape_list(inner_shapes)
+    if not inner:
+        raise ValueError("enclosure_clearance_row needs at least one inner shape")
+    enc_bb = enclosure.bounding_box()
+    inner_row = shape_envelope_row(inner, margin=0.0, name="inner")
+    clearances = {
+        "xmin": inner_row["min"][0] - float(enc_bb.min.X),
+        "xmax": float(enc_bb.max.X) - inner_row["max"][0],
+        "ymin": inner_row["min"][1] - float(enc_bb.min.Y),
+        "ymax": float(enc_bb.max.Y) - inner_row["max"][1],
+        "zmin": inner_row["min"][2] - float(enc_bb.min.Z),
+        "zmax": float(enc_bb.max.Z) - inner_row["max"][2],
+    }
+    inner_volume = sum(float(shape.volume) for shape in inner)
+    enclosure_volume = float(enclosure.volume)
+    min_clearance = min(clearances.values())
+    return {
+        "name": str(name or getattr(enclosure, "label", "") or "enclosure"),
+        "n_inner_shapes": len(inner),
+        "inner_envelope": inner_row,
+        "clearances": {key: float(value) for key, value in clearances.items()},
+        "min_clearance": float(min_clearance),
+        "contained_by_bbox": bool(min_clearance >= -1.0e-12),
+        "enclosure_volume": enclosure_volume,
+        "inner_volume_sum": inner_volume,
+        "nominal_void_volume": enclosure_volume - inner_volume,
+        "inner_volume_fraction": inner_volume / enclosure_volume if enclosure_volume else math.inf,
+    }
+
+
+def enclosure_difference_region(enclosure, inner_shapes, label="air"):
+    """Return ``enclosure - inner_shapes`` as a labelled region.
+
+    This is the build123d-side companion to the Netgen/Gmsh multi-region
+    contract: keep inner material solids as labelled children, and make the
+    surrounding region explicitly disjoint by subtracting them from the outer
+    enclosure before meshing.
+    """
+
+    region = enclosure
+    for shape in _shape_list(inner_shapes):
+        region = region - shape
+    region = region.solid()
+    region.label = label
+    return region
 
 
 def shape_measurement_row(shape, name=None, index=1):

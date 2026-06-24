@@ -16,10 +16,12 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil, polar_array,
                                           linear_array, mirrored, assembly,
+                                          shape_envelope_row, enclosing_box,
+                                          enclosure_clearance_row, enclosure_difference_region,
                                           shape_measurement_row, shape_measurement_rows,
                                           compare_shape_measurement_rows,
                                           shape_measurement_comparison_summary)
-from build123d import Box, Compound
+from build123d import Box, Compound, Pos
 
 
 def _vol(obj):
@@ -124,6 +126,53 @@ def test_shape_measurement_rows_follow_assembly_children():
     assert [row["name"] for row in rows] == ["left", "right"]
     assert [row["volume"] for row in rows] == pytest.approx([6.0, 4.0])
     assert [row["area"] for row in rows] == pytest.approx([22.0, 16.0])
+
+
+def test_shape_envelope_row_and_enclosing_box_use_union_bbox_margin():
+    left = (Pos(-2, 0, 0) * Box(2, 4, 6)).solid()
+    right = (Pos(3, 0, 1) * Box(2, 2, 2)).solid()
+
+    row = shape_envelope_row([left, right], margin=(1, 2, 3), name="outer")
+    assert row["n_shapes"] == 2
+    assert row["min"] == pytest.approx([-4.0, -4.0, -6.0])
+    assert row["max"] == pytest.approx([5.0, 4.0, 6.0])
+    assert row["size"] == pytest.approx([9.0, 8.0, 12.0])
+    assert row["center"] == pytest.approx([0.5, 0.0, 0.0])
+    assert row["volume"] == pytest.approx(864.0)
+
+    outer = enclosing_box([left, right], margin=(1, 2, 3), label="outer")
+    assert outer.label == "outer"
+    assert outer.volume == pytest.approx(864.0)
+    size = outer.bounding_box().size
+    assert [size.X, size.Y, size.Z] == pytest.approx([9.0, 8.0, 12.0])
+
+
+def test_enclosure_difference_region_volume_area_and_clearance():
+    inner = Box(2, 2, 2).solid()
+    inner.label = "solid"
+    outer = enclosing_box([inner], margin=1.0, label="outer")
+
+    clear = enclosure_clearance_row(outer, [inner])
+    assert clear["contained_by_bbox"]
+    assert clear["min_clearance"] == pytest.approx(1.0)
+    assert clear["clearances"] == pytest.approx({
+        "xmin": 1.0,
+        "xmax": 1.0,
+        "ymin": 1.0,
+        "ymax": 1.0,
+        "zmin": 1.0,
+        "zmax": 1.0,
+    })
+    assert clear["enclosure_volume"] == pytest.approx(64.0)
+    assert clear["inner_volume_sum"] == pytest.approx(8.0)
+    assert clear["nominal_void_volume"] == pytest.approx(56.0)
+    assert clear["inner_volume_fraction"] == pytest.approx(0.125)
+
+    void = enclosure_difference_region(outer, [inner], label="void")
+    assert void.label == "void"
+    assert void.is_valid
+    assert void.volume == pytest.approx(56.0)
+    assert void.area == pytest.approx(96.0 + 24.0)
 
 
 def test_compare_shape_measurement_rows_marks_pass_fail_and_missing():

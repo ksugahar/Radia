@@ -2369,6 +2369,8 @@ library OR copy-paste into an `execute_build123d` subprocess.
 | `linear_array(part, count, spacing, direction)` | translate-with-copies |
 | `mirrored(part, about=Plane.XZ)` | symmetry completion (original + mirror) |
 | `assembly(*parts)` | group labelled regions into ONE multi-region Compound (does NOT fuse) |
+| `shape_envelope_row(shapes, margin)` / `enclosing_box(...)` | union bbox report and labelled outer box for air/void domains |
+| `enclosure_clearance_row(enclosure, inner_shapes)` / `enclosure_difference_region(...)` | bbox clearance + `outer - inner` void-region helper for boolean-disjoint multi-region meshes |
 
 ## archetypes -- EM devices (composed from the ops)
 
