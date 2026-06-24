@@ -41,6 +41,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
@@ -87,6 +88,34 @@ def _subpackage_of(target: str) -> str | None:
     if len(parts) >= 2 and parts[0] == "radia_mcp":
         return parts[1]
     return None
+
+
+def _optuna_imports(src: Path) -> list[str]:
+    """Find direct imports of Optuna runtime packages inside public source."""
+    findings = []
+    if not src.exists():
+        return findings
+    for path in src.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+        except SyntaxError as exc:
+            findings.append(f"{path}: cannot parse Python source for policy lint: {exc}")
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    root = alias.name.split(".", 1)[0].replace("_", "-").lower()
+                    if root in OPTUNA_EXTERNAL_DEPS:
+                        findings.append(
+                            f"{path}:{node.lineno}: imports '{alias.name}'. "
+                            "Optuna runtime/MCP operation must stay external to radia-mcp.")
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                root = node.module.split(".", 1)[0].replace("_", "-").lower()
+                if root in OPTUNA_EXTERNAL_DEPS:
+                    findings.append(
+                        f"{path}:{node.lineno}: imports from '{node.module}'. "
+                        "Optuna runtime/MCP operation must stay external to radia-mcp.")
+    return findings
 
 
 def check_packaging(root: Path) -> tuple[list[str], list[str]]:
@@ -148,6 +177,7 @@ def check_packaging(root: Path) -> tuple[list[str], list[str]]:
             "[source] radia_mcp.optuna exists in the public source tree. "
             "Optuna Study/Trial operation belongs to the external "
             "optuna/optuna-mcp package.")
+    errors.extend(f"[source] {finding}" for finding in _optuna_imports(src))
 
     # 2) wrapper subpackages must be excluded from the wheel (packages.find)
     for sub in sorted(HARD_DENY):
