@@ -6,9 +6,11 @@ S-parameters, and cavity-style post-processing.
 | Example | Shows | Capabilities used |
 |---|---|---|
 | [`validation_waveguide_vna_calibration.py`](validation_waveguide_vna_calibration.py) | Validation-class WR-90 offset-short calibration sweep: S11 phase -> group delay -> physical short offset, plus TE/TM impedance duality and dielectric-slab reflection metrics | `waveguide_offset_short_s11`, `sparameter_group_delay`, `waveguide_offset_short_length_from_group_delay`, `waveguide_wave_impedance`, `waveguide_dielectric_slab_sparams`, `reflection_metrics` |
+| [`validation_waveguide_multisection_filter.py`](validation_waveguide_multisection_filter.py) | Validation-class TE10 multi-section dielectric filter: quarter-wave slab consistency, Bragg reflection, unitarity, and ABCD determinant | `waveguide_cascade_sparams`, `waveguide_dielectric_slab_sparams`, `reflection_metrics` |
 
 ```powershell
 python validation_waveguide_vna_calibration.py
+python validation_waveguide_multisection_filter.py
 ```
 
 The examples are self-contained and use closed-form transmission-line /
