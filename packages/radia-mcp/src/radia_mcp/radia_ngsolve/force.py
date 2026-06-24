@@ -53,6 +53,13 @@ def _unit_vector(values, name):
     return [value / norm for value in vec]
 
 
+def _xy_point(values, name):
+    point = [float(value) for value in values]
+    if len(point) != 2:
+        raise ValueError(f"{name} must have length 2")
+    return point
+
+
 def _phasor_average_factor(amplitude):
     if amplitude == "peak":
         return 0.5
@@ -154,6 +161,156 @@ def maxwell_traction_summary(B, normal, area_m2=1.0, mu=MU0):
             sum(value * value for value in tangential_traction)
         ),
         "force_N": [area * value for value in traction],
+    }
+
+
+def maxwell_line_segment_force_2d(p0, p1, B, mu=MU0, normal_side="right"):
+    """Maxwell-stress force on one 2D contour segment, per unit depth.
+
+    ``p0`` and ``p1`` are the segment endpoints in the planar model.  ``B`` is
+    the local 2D flux density in tesla.  The returned force has units ``N/m``:
+    a Maxwell traction ``T n`` [N/m^2] integrated over contour length ``ds``
+    and one metre of out-of-plane depth.
+
+    For a counter-clockwise contour around a body, the outward normal is on the
+    segment's right side.  For a clockwise contour, use ``normal_side="left"``.
+    """
+
+    a = _xy_point(p0, "p0")
+    b = _xy_point(p1, "p1")
+    dx_seg = b[0] - a[0]
+    dy_seg = b[1] - a[1]
+    length = math.hypot(dx_seg, dy_seg)
+    if length <= 0.0:
+        raise ValueError("contour segment length must be > 0")
+    tangent = [dx_seg / length, dy_seg / length]
+    if normal_side == "right":
+        normal = [tangent[1], -tangent[0]]
+    elif normal_side == "left":
+        normal = [-tangent[1], tangent[0]]
+    else:
+        raise ValueError("normal_side must be 'right' or 'left'")
+    field = _float_vector(B, "B")
+    if len(field) != 2:
+        raise ValueError("B must have length 2 for a 2D contour segment")
+    traction = maxwell_traction_air(field, normal, mu=mu)
+    force = [length * value for value in traction]
+    normal_force = sum(value * normal[i] for i, value in enumerate(force))
+    tangential_force = [
+        force[i] - normal_force * normal[i]
+        for i in range(2)
+    ]
+    return {
+        "p0": a,
+        "p1": b,
+        "midpoint": [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5],
+        "length_m": length,
+        "tangent": tangent,
+        "normal_side": normal_side,
+        "unit_normal": normal,
+        "B_T": field,
+        "traction_N_per_m2": traction,
+        "force_per_depth_N_per_m": force,
+        "normal_force_per_depth_N_per_m": normal_force,
+        "tangential_force_per_depth_N_per_m": tangential_force,
+    }
+
+
+def _try_float_vector(values):
+    try:
+        vector = [float(value) for value in values]
+    except (TypeError, ValueError):
+        return None
+    return vector if len(vector) in (2, 3) else None
+
+
+def _contour_field_at(B, index, midpoint, n_segments):
+    if callable(B):
+        return B(midpoint)
+    values = list(B)
+    vector = _try_float_vector(values)
+    if vector is not None:
+        return vector
+    if len(values) != n_segments:
+        raise ValueError("B must be a constant vector, a callable, or one vector per segment")
+    return values[index]
+
+
+def _polygon_signed_area(points):
+    if len(points) < 3:
+        return 0.0
+    return 0.5 * sum(
+        points[i][0] * points[(i + 1) % len(points)][1]
+        - points[(i + 1) % len(points)][0] * points[i][1]
+        for i in range(len(points))
+    )
+
+
+def maxwell_contour_force_2d(vertices, B, mu=MU0, orientation="ccw", closed=True):
+    """Integrate 2D Maxwell stress around a polyline contour.
+
+    The result is a JSON-friendly summary of ``integral T n ds`` in ``N/m``
+    (force per out-of-plane depth).  ``B`` can be a constant 2-vector, a
+    callable taking a segment midpoint, or a list of one 2-vector per segment.
+
+    ``orientation="ccw"`` means the body is on the left as the vertices are
+    traversed, so the outward normal is the segment's right normal.  Set
+    ``orientation="cw"`` for clockwise vertex order.
+    """
+
+    points = [_xy_point(point, f"vertices[{index}]") for index, point in enumerate(vertices)]
+    if closed and len(points) >= 2 and points[0] == points[-1]:
+        points = points[:-1]
+    min_points = 3 if closed else 2
+    if len(points) < min_points:
+        raise ValueError(f"contour needs at least {min_points} vertices")
+    if orientation == "ccw":
+        normal_side = "right"
+    elif orientation == "cw":
+        normal_side = "left"
+    else:
+        raise ValueError("orientation must be 'ccw' or 'cw'")
+
+    pairs = [
+        (points[i], points[(i + 1) % len(points)])
+        for i in range(len(points) if closed else len(points) - 1)
+    ]
+    segments = []
+    for index, (p_start, p_end) in enumerate(pairs):
+        midpoint = [(p_start[0] + p_end[0]) * 0.5, (p_start[1] + p_end[1]) * 0.5]
+        field = _contour_field_at(B, index, midpoint, len(pairs))
+        row = maxwell_line_segment_force_2d(
+            p_start,
+            p_end,
+            field,
+            mu=mu,
+            normal_side=normal_side,
+        )
+        row["index"] = index + 1
+        segments.append(row)
+
+    total = [
+        sum(row["force_per_depth_N_per_m"][axis] for row in segments)
+        for axis in range(2)
+    ]
+    scalar_length = sum(row["length_m"] for row in segments)
+    normal_abs = sum(abs(row["normal_force_per_depth_N_per_m"]) for row in segments)
+    tangential_abs = sum(
+        math.hypot(*row["tangential_force_per_depth_N_per_m"])
+        for row in segments
+    )
+    return {
+        "closed": bool(closed),
+        "orientation": orientation,
+        "normal_side": normal_side,
+        "n_segments": len(segments),
+        "contour_length_m": scalar_length,
+        "polygon_signed_area_m2": _polygon_signed_area(points) if closed else None,
+        "segments": segments,
+        "total_force_per_depth_N_per_m": total,
+        "total_force_magnitude_per_depth_N_per_m": math.hypot(total[0], total[1]),
+        "sum_abs_normal_force_per_depth_N_per_m": normal_abs,
+        "sum_abs_tangential_force_per_depth_N_per_m": tangential_abs,
     }
 
 
