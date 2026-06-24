@@ -16,7 +16,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from radia_mcp.radia_ngsolve.solve import (winding_distribution_factor, winding_pitch_factor,
-                                           winding_factor)
+                                           winding_factor, integral_slot_winding_factor)
 
 Q, P2, M = 36, 4, 3
 QPPP = Q // (P2 * M)                 # = 3 slots/pole/phase
@@ -56,8 +56,25 @@ def test_short_pitch_kills_5th_7th():
     assert abs(winding_factor(7, QPPP, GAMMA, beta)) < 0.15 * kw1
 
 
+def test_integral_slot_winding_factor_from_slots_and_poles():
+    res = integral_slot_winding_factor(Q, P2, harmonic=1, phases=M, pitch_fraction=5.0 / 6.0)
+
+    assert res["pole_pairs"] == P2 // 2
+    assert res["slots_per_pole_per_phase"] == QPPP
+    assert res["slots_per_phase"] == Q // M
+    assert res["slot_angle_elec_deg"] == pytest.approx(GAMMA)
+    assert res["distribution_factor"] == pytest.approx(winding_distribution_factor(1, QPPP, GAMMA))
+    assert res["pitch_factor"] == pytest.approx(winding_pitch_factor(1, 5.0 / 6.0))
+    assert res["winding_factor"] == pytest.approx(winding_factor(1, QPPP, GAMMA, 5.0 / 6.0))
+    assert res["winding_factor_abs"] == pytest.approx(abs(res["winding_factor"]))
+
+    with pytest.raises(ValueError, match="integral-slot"):
+        integral_slot_winding_factor(27, 8)
+
+
 if __name__ == "__main__":
     test_kd_matches_phasor_sum()
     test_limits()
     test_short_pitch_kills_5th_7th()
+    test_integral_slot_winding_factor_from_slots_and_poles()
     print("[OK] winding factor k_w = k_d k_p validated (phasor sum, limits, harmonic suppression).")
