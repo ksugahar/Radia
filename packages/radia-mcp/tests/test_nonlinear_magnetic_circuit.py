@@ -14,13 +14,17 @@ if _SRC not in sys.path:
 
 from radia_mcp.radia_ngsolve.solve import (
     MU0,
+    magnetic_circuit_bh_inductance_summary,
     magnetic_circuit_bh_operating_point,
     magnetic_circuit_bh_operating_summary,
+    magnetic_circuit_inductance,
 )
 
 H_of_B = lambda B: 51.0 * B + 2.5 * B ** 15            # the iron BH curve [A/m]
 dH_dB = lambda B: 51.0 + 37.5 * B ** 14                # analytic derivative [A/m/T]
 L_FE = 0.0156                                          # mean iron path [m]
+N_TURNS = 40.0
+AREA = 2.5e-4
 
 
 def test_self_consistent_and_monotone():
@@ -104,6 +108,55 @@ def test_operating_summary_gap_drops_but_linearizes_iron():
     assert rows[-1]["gap_mmf_fraction"] > 0.9
 
 
+def test_bh_inductance_summary_saturation_rolloff():
+    rows = [
+        magnetic_circuit_bh_inductance_summary(N_TURNS, I, AREA, L_FE, H_of_B, dh_db=dH_dB)
+        for I in (0.2, 0.4, 0.8, 1.6, 3.2)
+    ]
+
+    assert all(a["B_T"] < b["B_T"] for a, b in zip(rows, rows[1:]))
+    assert all(a["secant_inductance_H"] > b["secant_inductance_H"]
+               for a, b in zip(rows, rows[1:]))
+    assert all(a["incremental_inductance_H"] > b["incremental_inductance_H"]
+               for a, b in zip(rows, rows[1:]))
+    assert all(row["incremental_inductance_H"] < row["secant_inductance_H"]
+               for row in rows)
+    assert rows[-1]["incremental_over_secant"] < 0.2
+
+
+def test_bh_inductance_summary_constant_mu_limit():
+    mu_r = 850.0
+    lin = lambda B: B / (MU0 * mu_r)
+    dlin = lambda B: 1.0 / (MU0 * mu_r)
+    row = magnetic_circuit_bh_inductance_summary(
+        N_TURNS,
+        1.25,
+        AREA,
+        L_FE,
+        lin,
+        gap=0.6e-3,
+        dh_db=dlin,
+    )
+    expected = magnetic_circuit_inductance(N_TURNS, AREA, 0.6e-3, L_FE, mu_r)
+    assert math.isclose(row["secant_inductance_H"], expected, rel_tol=1e-12)
+    assert math.isclose(row["incremental_inductance_H"], expected, rel_tol=1e-12)
+    assert math.isclose(row["incremental_over_secant"], 1.0, rel_tol=1e-12)
+
+
+def test_bh_inductance_summary_gap_sweep():
+    rows = [
+        magnetic_circuit_bh_inductance_summary(N_TURNS, 2.4, AREA, L_FE, H_of_B,
+                                               gap=gap, dh_db=dH_dB)
+        for gap in (0.0, 0.1e-3, 0.3e-3, 1.0e-3)
+    ]
+    assert all(a["B_T"] > b["B_T"] for a, b in zip(rows, rows[1:]))
+    assert all(a["secant_inductance_H"] > b["secant_inductance_H"]
+               for a, b in zip(rows, rows[1:]))
+    assert all(a["gap_mmf_fraction"] < b["gap_mmf_fraction"]
+               for a, b in zip(rows[1:], rows[2:]))
+    assert rows[-1]["gap_mmf_fraction"] > 0.9
+
+
 if __name__ == "__main__":
     test_self_consistent_and_monotone()
     test_constant_mu_limit_is_exact()
@@ -112,5 +165,8 @@ if __name__ == "__main__":
     test_operating_summary_mmf_split_and_incremental_mu()
     test_operating_summary_constant_mu_limit()
     test_operating_summary_gap_drops_but_linearizes_iron()
+    test_bh_inductance_summary_saturation_rolloff()
+    test_bh_inductance_summary_constant_mu_limit()
+    test_bh_inductance_summary_gap_sweep()
     print("[OK] nonlinear magnetic circuit: NI=H(B)l_fe+(B/mu0)gap; self-consistent, const-mu exact, "
-          "gap de-saturates, 1.56 T @ NI=32.")
+          "gap de-saturates, 1.56 T @ NI=32, nonlinear winding inductance validated.")
