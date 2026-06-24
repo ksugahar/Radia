@@ -433,6 +433,69 @@ def dq_torque(lambda_m, Ld, Lq, id_, iq, pole_pairs):
     return 1.5 * pole_pairs * (lambda_m * iq + (Ld - Lq) * id_ * iq)
 
 
+def pm_flux_linkage_constants(lambda_m, pole_pairs):
+    """Back-EMF and torque constants implied by PM flux linkage ``lambda_m``.
+
+    The dq model in this module uses peak phase quantities.  For a PM machine at
+    no load,
+
+        e_phase_peak = omega_e * lambda_m = omega_mech * p * lambda_m
+
+    and the surface-PM q-axis torque slope is
+
+        T / iq_peak = (3/2) p lambda_m.
+
+    The returned row spells out the common peak/RMS and phase/line-line
+    conversions so motor report tables can check Ke/Kt without unit ambiguity.
+    """
+
+    p = int(pole_pairs)
+    if p <= 0:
+        raise ValueError("pole_pairs must be positive")
+    lam = float(lambda_m)
+    phase_peak = p * lam
+    phase_rms = phase_peak / math.sqrt(2.0)
+    line_line_rms = math.sqrt(3.0) * phase_rms
+    kt_peak = 1.5 * p * lam
+    kt_rms = kt_peak * math.sqrt(2.0)
+    return {
+        "lambda_m_Wb": lam,
+        "pole_pairs": p,
+        "back_emf_constant_phase_peak_V_per_rad_per_s_mech": phase_peak,
+        "back_emf_constant_phase_rms_V_per_rad_per_s_mech": phase_rms,
+        "back_emf_constant_line_line_rms_V_per_rad_per_s_mech": line_line_rms,
+        "torque_constant_Nm_per_Aq_peak": kt_peak,
+        "torque_constant_Nm_per_Aq_rms": kt_rms,
+        "Kt_peak_over_phase_peak_Ke": kt_peak / phase_peak if phase_peak else math.inf,
+        "Kt_rms_over_line_line_rms_Ke": kt_rms / line_line_rms if line_line_rms else math.inf,
+    }
+
+
+def pm_no_load_back_emf(lambda_m, omega_mech, pole_pairs):
+    """No-load sinusoidal PM back-EMF at mechanical speed ``omega_mech``.
+
+    Returns phase peak/RMS and line-line peak/RMS voltages.  These values are the
+    open-circuit voltage side of :func:`dq_voltages` with ``id=iq=R=0``.
+    """
+
+    omega = float(omega_mech)
+    constants = pm_flux_linkage_constants(lambda_m, pole_pairs)
+    phase_peak = constants["back_emf_constant_phase_peak_V_per_rad_per_s_mech"] * omega
+    phase_rms = phase_peak / math.sqrt(2.0)
+    line_line_peak = math.sqrt(3.0) * phase_peak
+    line_line_rms = math.sqrt(3.0) * phase_rms
+    return {
+        "lambda_m_Wb": float(lambda_m),
+        "pole_pairs": int(pole_pairs),
+        "omega_mech_rad_per_s": omega,
+        "omega_e_rad_per_s": omega * int(pole_pairs),
+        "phase_peak_V": phase_peak,
+        "phase_rms_V": phase_rms,
+        "line_line_peak_V": line_line_peak,
+        "line_line_rms_V": line_line_rms,
+    }
+
+
 def dq_torque_components(lambda_m, Ld, Lq, id_, iq, pole_pairs):
     """Split the dq electromagnetic torque into its magnet and reluctance parts [N.m]:
 

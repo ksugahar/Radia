@@ -6296,6 +6296,16 @@ vd, vq = dq_voltages(R, Ld, Lq, lambda_m, id, iq, omega_e)
 op = dq_operating_point(R, Ld, Lq, lambda_m, id, iq, omega_e, p)   # dict: Vmag, P_in, PF, ...
 ```
 
+PM flux-linkage constants (motor report sanity checks): with peak phase dq
+variables, no-load ``e_phase_peak = omega_e lambda_m = omega_mech p lambda_m`` and
+surface-PM ``T/iq_peak = (3/2) p lambda_m``.  Use
+``pm_flux_linkage_constants(lambda_m, p)`` for phase-peak, phase-RMS,
+line-line-RMS Ke and peak/RMS Kt, and ``pm_no_load_back_emf(lambda_m, omega_mech, p)``
+for speed rows.  `validation_pm_emf_constant_table.py` checks dq voltage and power
+identities: baseline `lambda_m=0.1`, `p=4` gives `Ke_ll_rms=0.4898979485566356`,
+`Kt_peak=0.6000000000000001`, and `Kt_rms/Ke_ll_rms=sqrt(3)`; no-load vq equals
+phase-peak EMF exactly and `T*omega_mech=(3/2)e_phase_peak iq_peak` to roundoff.
+
     lambda_d = Ld id + lambda_m,  lambda_q = Lq iq
     v_d = R id - omega_e lambda_q,   v_q = R iq + omega_e lambda_d
     P_in = (3/2)(v_d i_d + v_q i_q),  P_em = (3/2) omega_e (lambda_d i_q - lambda_q i_d) = T omega_mech,
@@ -7253,6 +7263,10 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "power_factor": NGSOLVE_DQ_OPERATING_POINT,
         "dq_voltage": NGSOLVE_DQ_OPERATING_POINT,
         "terminal_voltage": NGSOLVE_DQ_OPERATING_POINT,
+        "back_emf_constant": NGSOLVE_DQ_OPERATING_POINT,
+        "pm_back_emf": NGSOLVE_DQ_OPERATING_POINT,
+        "pm_emf_constant": NGSOLVE_DQ_OPERATING_POINT,
+        "torque_constant": NGSOLVE_DQ_OPERATING_POINT,
         "motor_efficiency": NGSOLVE_DQ_OPERATING_POINT,
         "short_circuit": NGSOLVE_SHORT_CIRCUIT,
         "characteristic_current": NGSOLVE_SHORT_CIRCUIT,
