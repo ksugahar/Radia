@@ -238,6 +238,86 @@ class NetgenTriTetVolMesh:
             areas.append(0.5 * _norm(_cross(_sub(b, a), _sub(c, a))))
         return tuple(areas)
 
+    def surface_triangle_edge_lengths(self) -> tuple[tuple[float, float, float], ...]:
+        """Return the three edge lengths of each boundary triangle."""
+
+        rows: list[tuple[float, float, float]] = []
+        for tri in self.surface_triangles:
+            a, b, c = (self.points[node - 1] for node in tri.nodes)
+            rows.append((_norm(_sub(b, a)), _norm(_sub(c, b)), _norm(_sub(a, c))))
+        return tuple(rows)
+
+    def surface_triangle_quality_rows(self) -> tuple[dict[str, float | int], ...]:
+        """Return per-boundary-triangle quality records.
+
+        ``radius_ratio_quality = 2 * inradius / circumradius`` is one for an
+        equilateral triangle and tends to zero for sliver triangles.  This is a
+        compact, solver-neutral companion to Cubit/Coreform surface-mesh quality
+        checks before a boundary mesh is used as a scalar-BEM or RWG trace.
+        """
+
+        rows: list[dict[str, float | int]] = []
+        for index, (tri, edge_lengths, area) in enumerate(
+            zip(self.surface_triangles, self.surface_triangle_edge_lengths(), self.surface_triangle_areas()),
+            start=1,
+        ):
+            if area <= 0.0:
+                raise ValueError(f"surface triangle {index} has zero area")
+            min_edge = min(edge_lengths)
+            max_edge = max(edge_lengths)
+            if min_edge <= 0.0:
+                raise ValueError(f"surface triangle {index} contains a zero-length edge")
+            semiperimeter = 0.5 * sum(edge_lengths)
+            inradius = area / semiperimeter
+            circumradius = edge_lengths[0] * edge_lengths[1] * edge_lengths[2] / (4.0 * area)
+            angles = _triangle_angles_degrees(edge_lengths)
+            rows.append({
+                "surface_triangle": index,
+                "boundary_number": tri.bcnr,
+                "surfnr": tri.surfnr,
+                "area": area,
+                "inradius": inradius,
+                "circumradius": circumradius,
+                "radius_ratio_quality": 2.0 * inradius / circumradius,
+                "min_edge": min_edge,
+                "max_edge": max_edge,
+                "edge_ratio": max_edge / min_edge,
+                "min_angle_deg": min(angles),
+                "max_angle_deg": max(angles),
+            })
+        return tuple(rows)
+
+    def surface_triangle_quality_summary(self) -> dict[str, float | int | None]:
+        """Return compact boundary-triangle quality statistics."""
+
+        rows = self.surface_triangle_quality_rows()
+        if not rows:
+            return {
+                "surface_triangles": 0,
+                "min_radius_ratio_quality": None,
+                "max_radius_ratio_quality": None,
+                "mean_radius_ratio_quality": None,
+                "min_area": None,
+                "max_edge_ratio": None,
+                "min_angle_deg": None,
+                "max_angle_deg": None,
+            }
+        qualities = [float(row["radius_ratio_quality"]) for row in rows]
+        areas = [float(row["area"]) for row in rows]
+        edge_ratios = [float(row["edge_ratio"]) for row in rows]
+        min_angles = [float(row["min_angle_deg"]) for row in rows]
+        max_angles = [float(row["max_angle_deg"]) for row in rows]
+        return {
+            "surface_triangles": len(rows),
+            "min_radius_ratio_quality": min(qualities),
+            "max_radius_ratio_quality": max(qualities),
+            "mean_radius_ratio_quality": sum(qualities) / len(qualities),
+            "min_area": min(areas),
+            "max_edge_ratio": max(edge_ratios),
+            "min_angle_deg": min(min_angles),
+            "max_angle_deg": max(max_angles),
+        }
+
     def total_surface_area(self) -> float:
         """Return the sum of boundary triangle areas."""
 
@@ -953,6 +1033,19 @@ def _triangle_area(
     c: tuple[float, float, float],
 ) -> float:
     return 0.5 * _norm(_cross(_sub(b, a), _sub(c, a)))
+
+
+def _triangle_angles_degrees(edge_lengths: tuple[float, float, float]) -> tuple[float, float, float]:
+    angles: list[float] = []
+    for i, opposite in enumerate(edge_lengths):
+        adjacent = [edge_lengths[j] for j in range(3) if j != i]
+        denom = 2.0 * adjacent[0] * adjacent[1]
+        if denom <= 0.0:
+            raise ValueError("triangle contains a zero-length edge")
+        value = (adjacent[0] ** 2 + adjacent[1] ** 2 - opposite ** 2) / denom
+        value = max(-1.0, min(1.0, value))
+        angles.append(math.degrees(math.acos(value)))
+    return (angles[0], angles[1], angles[2])
 
 
 def _tetrahedron_surface_area(points: tuple[tuple[float, float, float], ...]) -> float:

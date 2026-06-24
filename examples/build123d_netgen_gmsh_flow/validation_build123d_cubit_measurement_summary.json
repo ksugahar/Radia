@@ -1,17 +1,20 @@
 {
   "checks": {
+    "bbox_atol": 1e-06,
     "cubit_available": true,
     "cubit_bin_name": "Coreform Cubit 2025.12",
     "max_analytic_area_rel_error": 0.0,
     "max_analytic_volume_rel_error": 3.5339496460705744e-16,
     "max_cubit_area_rel_error": 1.35407668256758e-16,
+    "max_cubit_bbox_abs_error": 0.0,
     "max_cubit_volume_rel_error": 4.047017533424446e-06,
     "n_cases": 3,
+    "n_cubit_bbox_compared": 3,
     "n_passed": 3,
     "rtol": 1e-05
   },
-  "elapsed_seconds": 1.036,
-  "kind": "build123d_cubit_volume_area_cross_validation",
+  "elapsed_seconds": 1.013,
+  "kind": "build123d_cubit_volume_area_bbox_cross_validation",
   "rows": [
     {
       "analytic": {
@@ -27,6 +30,29 @@
           3.0,
           4.0
         ],
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 5.385164807134504,
+          "max": [
+            1.0,
+            1.5,
+            2.0
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -2.0
+          ],
+          "size": [
+            2.0,
+            3.0,
+            4.0
+          ]
+        },
         "edges": 12,
         "faces": 6,
         "vertices": 8,
@@ -34,6 +60,29 @@
       },
       "cubit": {
         "area": 52.0,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 5.385164807134504,
+          "max": [
+            1.0,
+            1.5,
+            2.0
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -2.0
+          ],
+          "size": [
+            2.0,
+            3.0,
+            4.0
+          ]
+        },
         "surfaces": 6,
         "volume": 24.0,
         "volumes": 1
@@ -42,13 +91,66 @@
       "cubit_volume_rel_error": 1.4802973661668753e-16,
       "measurement_comparison": {
         "area_rel_error": 0.0,
+        "bbox_abs_error": 0.0,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 0.0,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 0.0,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 0.0,
         "measured_area": 52.0,
+        "measured_bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 5.385164807134504,
+          "max": [
+            1.0,
+            1.5,
+            2.0
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -2.0
+          ],
+          "size": [
+            2.0,
+            3.0,
+            4.0
+          ]
+        },
         "measured_label": "cubit",
         "measured_volume": 24.0,
         "name": "box_2x3x4",
         "passed": true,
         "reason": "ok",
         "reference_area": 52.0,
+        "reference_bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 5.385164807134504,
+          "max": [
+            1.0,
+            1.5,
+            2.0
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -2.0
+          ],
+          "size": [
+            2.0,
+            3.0,
+            4.0
+          ]
+        },
         "reference_volume": 23.999999999999996,
         "rtol": 1e-05,
         "volume_rel_error": 1.4802973661668753e-16
@@ -70,6 +172,29 @@
           2.0,
           2.5
         ],
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 3.774917217635375,
+          "max": [
+            1.0,
+            1.0,
+            1.25
+          ],
+          "min": [
+            -1.0,
+            -1.0,
+            -1.25
+          ],
+          "size": [
+            2.0,
+            2.0,
+            2.5
+          ]
+        },
         "edges": 6,
         "faces": 4,
         "vertices": 4,
@@ -77,6 +202,29 @@
       },
       "cubit": {
         "area": 29.15397982531328,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 3.774917217635375,
+          "max": [
+            1.0,
+            1.0,
+            1.25
+          ],
+          "min": [
+            -1.0,
+            -1.0,
+            -1.25
+          ],
+          "size": [
+            2.0,
+            2.0,
+            2.5
+          ]
+        },
         "surfaces": 4,
         "volume": 5.026548245743668,
         "volumes": 1
@@ -85,13 +233,66 @@
       "cubit_volume_rel_error": 1.7669748230352874e-16,
       "measurement_comparison": {
         "area_rel_error": 0.0,
+        "bbox_abs_error": 0.0,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 0.0,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 0.0,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 0.0,
         "measured_area": 29.15397982531328,
+        "measured_bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 3.774917217635375,
+          "max": [
+            1.0,
+            1.0,
+            1.25
+          ],
+          "min": [
+            -1.0,
+            -1.0,
+            -1.25
+          ],
+          "size": [
+            2.0,
+            2.0,
+            2.5
+          ]
+        },
         "measured_label": "cubit",
         "measured_volume": 5.026548245743668,
         "name": "tube_r0p6_1p0_h2p5",
         "passed": true,
         "reason": "ok",
         "reference_area": 29.15397982531328,
+        "reference_bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 3.774917217635375,
+          "max": [
+            1.0,
+            1.0,
+            1.25
+          ],
+          "min": [
+            -1.0,
+            -1.0,
+            -1.25
+          ],
+          "size": [
+            2.0,
+            2.0,
+            2.5
+          ]
+        },
         "reference_volume": 5.026548245743667,
         "rtol": 1e-05,
         "volume_rel_error": 1.7669748230352874e-16
@@ -110,6 +311,29 @@
           8.0,
           2.0
         ],
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 14.560219778561036,
+          "max": [
+            6.0,
+            4.0,
+            1.0
+          ],
+          "min": [
+            -6.0,
+            -4.0,
+            -1.0
+          ],
+          "size": [
+            12.0,
+            8.0,
+            2.0
+          ]
+        },
         "edges": 48,
         "faces": 18,
         "vertices": 32,
@@ -117,6 +341,29 @@
       },
       "cubit": {
         "area": 209.89734035232908,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 14.560219778561036,
+          "max": [
+            6.0,
+            4.0,
+            1.0
+          ],
+          "min": [
+            -6.0,
+            -4.0,
+            -1.0
+          ],
+          "size": [
+            12.0,
+            8.0,
+            2.0
+          ]
+        },
         "surfaces": 18,
         "volume": 78.71182118024377,
         "volumes": 1
@@ -125,13 +372,66 @@
       "cubit_volume_rel_error": 4.047017533424446e-06,
       "measurement_comparison": {
         "area_rel_error": 1.35407668256758e-16,
+        "bbox_abs_error": 0.0,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 0.0,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 0.0,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 0.0,
         "measured_area": 209.89734035232908,
+        "measured_bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 14.560219778561036,
+          "max": [
+            6.0,
+            4.0,
+            1.0
+          ],
+          "min": [
+            -6.0,
+            -4.0,
+            -1.0
+          ],
+          "size": [
+            12.0,
+            8.0,
+            2.0
+          ]
+        },
         "measured_label": "cubit",
         "measured_volume": 78.71182118024377,
         "name": "racetrack_12x8_band1p2",
         "passed": true,
         "reason": "ok",
         "reference_area": 209.8973403523291,
+        "reference_bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 14.560219778561036,
+          "max": [
+            6.0,
+            4.0,
+            1.0
+          ],
+          "min": [
+            -6.0,
+            -4.0,
+            -1.0
+          ],
+          "size": [
+            12.0,
+            8.0,
+            2.0
+          ]
+        },
         "reference_volume": 78.71150263212337,
         "rtol": 1e-05,
         "volume_rel_error": 4.047017533424446e-06
