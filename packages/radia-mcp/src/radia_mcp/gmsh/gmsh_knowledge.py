@@ -850,7 +850,24 @@ NGSolve FEM solve -> GridFunction -> GmshPostExport -> .msh -> GMSH GUI
 2. Use `GmshPostExport` to write .msh with field data
 3. Open in GMSH with `Mesh.NumSubEdges = 4`
 
-## 2. Geometry + Field Overlay
+## 2. Netgen/Cubit Mesh, GMSH Display
+
+The mesh generator owns the mesh. GMSH owns the view.
+
+```
+Netgen/Cubit -> tri/tet or hex mesh -> NGSolve/Radia validation
+             -> optional GMSH .msh/.pos display files -> standalone GMSH
+```
+
+For simple tri/tet display examples, it is OK to write a GMSH v2.2 ASCII
+`.msh` from an existing NGSolve mesh. That is a **mesh export**, not GMSH
+mesh generation. Keep the script free of `import gmsh` and `gmsh.model.*`;
+write `.vol` for the solver path and `.msh`/`.pos`/`.geo` only for display.
+
+Reference example:
+`examples/visualization/demo_gmsh_workflow.py`
+
+## 3. Geometry + Field Overlay
 
 ```
 CoilBuilder -> .step (coil geometry)
@@ -868,14 +885,14 @@ Mesh.NumSubEdges = 4;
 Mesh.VolumeEdges = 0;
 ```
 
-## 3. Cubit Panel Integration
+## 4. Cubit Panel Integration
 
 The Cubit panel opens GMSH for results display:
 - Output: `examples/cubit_panels/<solver>/results/`
 - Uses `pythonw.exe` to launch GMSH (no console window)
 - .geo companion file auto-generated with display settings
 
-## 4. BEM Inductance Results
+## 5. BEM Inductance Results
 
 Unified .msh output containing:
 - Volume B field (NodeData)
