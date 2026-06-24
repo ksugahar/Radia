@@ -1,0 +1,205 @@
+{
+  "kind": "p1_tet_robin_trace_system_validation",
+  "validation_class": true,
+  "mesh_summary": {
+    "points": 4,
+    "surface_triangles": 4,
+    "tetrahedra": 1,
+    "materials": 1,
+    "boundary_names": 2
+  },
+  "boundary_rows": [
+    {
+      "boundary_number": 1,
+      "name": "base",
+      "surface_triangles": 1,
+      "surface_area": 0.5,
+      "trace_node_count": 3,
+      "trace_node_ids": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "boundary_number": 2,
+      "name": "sides",
+      "surface_triangles": 3,
+      "surface_area": 1.8660254037844386,
+      "trace_node_count": 4,
+      "trace_node_ids": [
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  ],
+  "robin_coeff_by_boundary": {
+    "1": 1.0,
+    "2": 2.0
+  },
+  "system_policy": "dense_readable_p1_tet_with_p1_boundary_robin_trace",
+  "matrix": [
+    [
+      0.9166666666666666,
+      -0.04166666666666667,
+      -0.04166666666666667,
+      0.0
+    ],
+    [
+      -0.04166666666666667,
+      0.7053418012614795,
+      0.1860042339640731,
+      0.22767090063073975
+    ],
+    [
+      -0.04166666666666667,
+      0.1860042339640731,
+      0.7053418012614795,
+      0.22767090063073975
+    ],
+    [
+      0.0,
+      0.22767090063073975,
+      0.22767090063073975,
+      0.7886751345948128
+    ]
+  ],
+  "rhs": [
+    0.8333333333333333,
+    1.0773502691896257,
+    1.0773502691896257,
+    1.2440169358562922
+  ],
+  "matrix_triplets": [
+    {
+      "row": 1,
+      "col": 1,
+      "value": 0.9166666666666666
+    },
+    {
+      "row": 1,
+      "col": 2,
+      "value": -0.04166666666666667
+    },
+    {
+      "row": 1,
+      "col": 3,
+      "value": -0.04166666666666667
+    },
+    {
+      "row": 2,
+      "col": 1,
+      "value": -0.04166666666666667
+    },
+    {
+      "row": 2,
+      "col": 2,
+      "value": 0.7053418012614795
+    },
+    {
+      "row": 2,
+      "col": 3,
+      "value": 0.1860042339640731
+    },
+    {
+      "row": 2,
+      "col": 4,
+      "value": 0.22767090063073975
+    },
+    {
+      "row": 3,
+      "col": 1,
+      "value": -0.04166666666666667
+    },
+    {
+      "row": 3,
+      "col": 2,
+      "value": 0.1860042339640731
+    },
+    {
+      "row": 3,
+      "col": 3,
+      "value": 0.7053418012614795
+    },
+    {
+      "row": 3,
+      "col": 4,
+      "value": 0.22767090063073975
+    },
+    {
+      "row": 4,
+      "col": 2,
+      "value": 0.22767090063073975
+    },
+    {
+      "row": 4,
+      "col": 3,
+      "value": 0.22767090063073975
+    },
+    {
+      "row": 4,
+      "col": 4,
+      "value": 0.7886751345948128
+    }
+  ],
+  "volume_by_material": {
+    "1": 0.16666666666666666
+  },
+  "boundary_area_by_number": {
+    "1": 0.5,
+    "2": 1.8660254037844386
+  },
+  "robin_area_weight": 4.232050807568877,
+  "flux_area_weight": 4.232050807568877,
+  "constant_solution_residual": [
+    1.1102230246251565e-16,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "pure_neumann_row_sums": [
+    5.551115123125783e-17,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "trace": {
+    "h1_to_scalar_bem_rows": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "h1_to_scalar_bem_cols": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "rwg_to_hcurl_edge_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ]
+  },
+  "checks": {
+    "base_area": 0.5,
+    "side_area": 1.8660254037844386,
+    "expected_side_area": 1.8660254037844386,
+    "side_area_abs_error": 0.0,
+    "volume": 0.16666666666666666,
+    "constant_solution_residual_max_abs": 1.1102230246251565e-16,
+    "energy_equals_robin_weight_abs_error": 0.0,
+    "rhs_sum_equals_flux_weight_abs_error": 0.0,
+    "pure_neumann_row_sum_max_abs": 5.551115123125783e-17,
+    "pure_source_rhs_sum_abs_error": 0.0,
+    "trace_identity": true,
+    "closed_surface": true,
+    "surface_volume_abs_error": 0.0
+  }
+}
