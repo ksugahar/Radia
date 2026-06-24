@@ -15,6 +15,7 @@ Usage:
                                   # Run self-test plus repo-wide examples audit
 """
 
+from collections import Counter
 import json
 import errno
 import os
@@ -87,6 +88,56 @@ def _format_findings(filepath: str, findings: list[dict]) -> str:
 			f"  L{f['line']:>4d} [{f['severity']}] {f['rule']}: {f['message']}"
 		)
 	return '\n'.join(lines)
+
+
+def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dict:
+	"""Machine-readable directory lint summary for loop/audit bookkeeping."""
+	d = Path(directory)
+	if not d.is_absolute():
+		d = PROJECT_ROOT / d
+
+	if not d.exists():
+		return {
+			"ok": False,
+			"error": f"Directory not found: {d}",
+			"directory": str(d),
+		}
+
+	py_files = sorted(d.rglob("*.py"))
+	limit = max(0, min(int(top_n), 50))
+	by_severity = Counter({"CRITICAL": 0, "HIGH": 0, "MODERATE": 0, "LOW": 0})
+	by_rule: Counter[str] = Counter()
+	top_files = []
+	total_findings = 0
+
+	for py_file in py_files:
+		findings = _lint_file(str(py_file))
+		if not findings:
+			continue
+		total_findings += len(findings)
+		try:
+			rel_path = str(py_file.relative_to(PROJECT_ROOT))
+		except ValueError:
+			rel_path = str(py_file)
+		top_files.append({"path": rel_path, "findings": len(findings)})
+		for finding in findings:
+			by_severity[str(finding.get("severity", "UNKNOWN"))] += 1
+			by_rule[str(finding.get("rule", "unknown"))] += 1
+
+	return {
+		"ok": True,
+		"directory": str(d),
+		"files_scanned": len(py_files),
+		"files_with_findings": len(top_files),
+		"total_findings": total_findings,
+		"clean": total_findings == 0,
+		"by_severity": dict(by_severity),
+		"top_rules": [
+			{"rule": rule, "count": count}
+			for rule, count in sorted(by_rule.items(), key=lambda item: (-item[1], item[0]))[:limit]
+		],
+		"top_files": sorted(top_files, key=lambda item: (-item["findings"], item["path"]))[:limit],
+	}
 
 
 # ============================================================
@@ -709,6 +760,18 @@ def lint_cubit_directory(directory: str = "examples") -> str:
 		output_parts.append("All files passed!")
 
 	return '\n'.join(output_parts)
+
+
+@mcp.tool()
+def cubit_audit_summary(directory: str = "examples", top_n: int = 10) -> dict:
+	"""
+	Return a machine-readable Cubit export-lint audit summary.
+
+	Use this for learning-loop bookkeeping and dashboards. It reports files
+	scanned, total findings, severity counts, top rule counts, and top files
+	without printing the long per-file audit body.
+	"""
+	return _lint_directory_summary(directory, top_n)
 
 
 # ============================================================
