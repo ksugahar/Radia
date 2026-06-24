@@ -82,6 +82,72 @@ def coaxial_shell_resistance(resistivity_rho, r_inner, r_outer, length_L):
     return {"R": resistivity_rho * math.log(r_outer / r_inner) / (2.0 * math.pi * length_L)}
 
 
+def coaxial_capacitor_energy_force(eps_r, r_inner, r_outer, length_L, voltage):
+    r"""Capacitance, energy, field pressure, and radial force of a coaxial capacitor.
+
+    For a coaxial capacitor with inner radius ``a``, outer radius ``b``,
+    length ``L``, dielectric ``eps = eps0 eps_r``, and voltage ``V``:
+
+        C = 2 pi eps L / ln(b/a),
+        E(r) = V / (r ln(b/a)),
+        p(r) = 1/2 eps E(r)^2.
+
+    The fixed-voltage generalized force for increasing the inner radius is
+    positive and equals the Maxwell pressure integrated over the inner
+    conductor surface:
+
+        F_a = 1/2 V^2 dC/da = p(a) 2 pi a L.
+
+    Increasing the outer radius lowers capacitance, so ``F_b`` is negative in
+    the ``+b`` coordinate and ``|F_b| = p(b) 2 pi b L``.  A complete coax has
+    zero net vector force by angular symmetry; these are radial coordinate
+    forces / surface pressures for validation and actuator-style sweeps.
+    """
+
+    if eps_r <= 0:
+        raise ValueError("eps_r must be > 0")
+    if length_L <= 0:
+        raise ValueError("length_L must be > 0")
+    if not (r_outer > r_inner > 0):
+        raise ValueError("require r_outer > r_inner > 0")
+    eps = EPS0 * float(eps_r)
+    a = float(r_inner)
+    b = float(r_outer)
+    length = float(length_L)
+    v = float(voltage)
+    log_ratio = math.log(b / a)
+    capacitance = 2.0 * math.pi * eps * length / log_ratio
+    energy = 0.5 * capacitance * v * v
+    e_inner = v / (a * log_ratio)
+    e_outer = v / (b * log_ratio)
+    p_inner = 0.5 * eps * e_inner * e_inner
+    p_outer = 0.5 * eps * e_outer * e_outer
+    dC_da = 2.0 * math.pi * eps * length / (a * log_ratio * log_ratio)
+    dC_db = -2.0 * math.pi * eps * length / (b * log_ratio * log_ratio)
+    force_inner = 0.5 * v * v * dC_da
+    force_outer = 0.5 * v * v * dC_db
+    return {
+        "C": capacitance,
+        "energy": energy,
+        "eps_r": float(eps_r),
+        "r_inner": a,
+        "r_outer": b,
+        "length_L": length,
+        "voltage": v,
+        "log_radius_ratio": log_ratio,
+        "electric_field_inner_V_per_m": e_inner,
+        "electric_field_outer_V_per_m": e_outer,
+        "pressure_inner_Pa": p_inner,
+        "pressure_outer_Pa": p_outer,
+        "dCdr_inner_F_per_m": dC_da,
+        "dCdr_outer_F_per_m": dC_db,
+        "inner_radius_force_N": force_inner,
+        "outer_radius_force_N": force_outer,
+        "inner_pressure_area_force_N": p_inner * 2.0 * math.pi * a * length,
+        "outer_pressure_area_force_N": -p_outer * 2.0 * math.pi * b * length,
+    }
+
+
 def layered_parallel_plate_capacitance(area, thicknesses, eps_r_layers):
     r"""Capacitance of a parallel-plate stack of dielectric layers normal to the
     plates (layers in SERIES on the field line):
