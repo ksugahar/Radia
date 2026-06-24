@@ -1,0 +1,63 @@
+{
+  "checks": {
+    "capacitance_error_F": 0.0,
+    "energy_error_J": 0.0,
+    "force_energy_gap_error_N": 2.710505431213761e-20,
+    "force_error_N": 0.0,
+    "half_gap_force_ratio_error": 0.0,
+    "pressure_error_Pa": 0.0,
+    "traction_force_error_N": 2.710505431213761e-20,
+    "traction_pressure_error_Pa": 1.1102230246251565e-16
+  },
+  "half_gap_force_N": 0.00051000121801728,
+  "inputs": {
+    "area_m2": 0.0002,
+    "eps_r": 2.5,
+    "gap_m": 0.0005,
+    "voltage_V": 120.0
+  },
+  "kind": "parallel_plate_electrostatic_force",
+  "maxwell_traction": {
+    "E_V_per_m": [
+      0.0,
+      0.0,
+      240000.0
+    ],
+    "E_normal_V_per_m": 240000.0,
+    "E_tangent_V_per_m": 0.0,
+    "area_m2": 0.0002,
+    "eps": 2.2135469532e-11,
+    "force_N": [
+      0.0,
+      0.0,
+      0.00012750030450432002
+    ],
+    "normal": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "normal_traction_Pa": 0.6375015225216001,
+    "normal_traction_identity_Pa": 0.6375015225216001,
+    "tangential_traction_Pa": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "tangential_traction_magnitude_Pa": 0.0,
+    "traction_Pa": [
+      0.0,
+      0.0,
+      0.6375015225216001
+    ]
+  },
+  "parallel_plate": {
+    "C": 8.8541878128e-12,
+    "electric_field_V_per_m": 240000.0,
+    "energy": 6.375015225216001e-08,
+    "energy_density_J_per_m3": 0.6375015225216,
+    "force": 0.00012750030450432,
+    "pressure_Pa": 0.6375015225216
+  },
+  "validation_class": true
+}
