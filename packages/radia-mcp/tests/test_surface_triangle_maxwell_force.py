@@ -14,6 +14,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     MU0,
     air_gap_maxwell_pressure,
     maxwell_traction_summary,
+    surface_triangle_constant_traction_load_summary,
     surface_triangle_maxwell_traction_summary,
 )
 
@@ -61,6 +62,35 @@ def test_surface_triangle_oblique_field_matches_patch_traction_summary():
     assert row["traction_Pa"] == pytest.approx([-3.5 / MU0, 12.0 / MU0, 0.0])
 
 
+def test_surface_triangle_constant_traction_load_preserves_force_and_moment():
+    tri = [(1.0, 0.0, 0.0), (1.0, 2.0, 0.0), (1.0, 0.0, 3.0)]
+    traction = (2.0, -1.0, 4.0)
+    row = surface_triangle_constant_traction_load_summary(tri, traction)
+
+    assert row["area"] == pytest.approx(3.0)
+    assert row["centroid_m"] == pytest.approx([1.0, 2.0 / 3.0, 1.0])
+    assert row["integrated_force_N"] == pytest.approx([6.0, -3.0, 12.0])
+    for node_load in row["nodal_force_loads_N"]:
+        assert node_load == pytest.approx([2.0, -1.0, 4.0])
+    assert row["nodal_resultant"]["total_force"] == pytest.approx(row["integrated_force_N"])
+    assert row["patch_resultant"]["total_moment"] == pytest.approx([11.0, -6.0, -7.0])
+    assert row["nodal_resultant"]["total_moment"] == pytest.approx(row["patch_resultant"]["total_moment"])
+    assert max(row["force_preservation_abs_errors_N"]) == pytest.approx(0.0)
+    assert max(row["moment_preservation_abs_errors_Nm"]) == pytest.approx(0.0)
+
+
+def test_surface_triangle_constant_traction_load_respects_pivot_shift():
+    tri = [(1.0, 0.0, 0.0), (1.0, 2.0, 0.0), (1.0, 0.0, 3.0)]
+    row = surface_triangle_constant_traction_load_summary(
+        tri,
+        (2.0, -1.0, 4.0),
+        pivot_m=(1.0, 2.0 / 3.0, 1.0),
+    )
+
+    assert row["patch_resultant"]["total_moment"] == pytest.approx([0.0, 0.0, 0.0])
+    assert row["nodal_resultant"]["total_moment"] == pytest.approx([0.0, 0.0, 0.0])
+
+
 def test_surface_triangle_maxwell_traction_rejects_bad_inputs():
     with pytest.raises(ValueError):
         surface_triangle_maxwell_traction_summary(
@@ -72,11 +102,23 @@ def test_surface_triangle_maxwell_traction_rejects_bad_inputs():
             [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
             (0.0, 1.0),
         )
+    with pytest.raises(ValueError):
+        surface_triangle_constant_traction_load_summary(
+            [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)],
+            (1.0, 0.0, 0.0),
+        )
+    with pytest.raises(ValueError):
+        surface_triangle_constant_traction_load_summary(
+            [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
+            (1.0, 0.0),
+        )
 
 
 if __name__ == "__main__":
     test_surface_triangle_normal_field_distributes_p1_force_load()
     test_reversing_triangle_orientation_reverses_integrated_force()
     test_surface_triangle_oblique_field_matches_patch_traction_summary()
+    test_surface_triangle_constant_traction_load_preserves_force_and_moment()
+    test_surface_triangle_constant_traction_load_respects_pivot_shift()
     test_surface_triangle_maxwell_traction_rejects_bad_inputs()
     print("[OK] surface-triangle Maxwell traction helpers validated.")

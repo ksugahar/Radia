@@ -496,6 +496,73 @@ def time_average_maxwell_traction_summary(
     }
 
 
+def surface_triangle_constant_traction_load_summary(vertices, traction_N_per_m2, pivot_m=None):
+    """P1 equivalent nodal loads for a constant vector traction on a triangle.
+
+    This is the tiny readable FEM/BEM boundary-load block: for one flat P1
+    surface triangle with area ``A`` and constant traction ``t`` [N/m2],
+
+        F_e = A t,        f_i = F_e / 3  for i=1,2,3.
+
+    The equal nodal distribution preserves both the integrated force and the
+    moment of the constant traction, because the triangle centroid is the mean
+    of its vertices.  That makes this helper a clean bridge between MATLAB
+    teaching scripts, `.vol` boundary triangles, and the Maxwell-traction
+    special cases below.
+    """
+
+    verts = [_float_vector(vertex, f"vertices[{index}]") for index, vertex in enumerate(vertices)]
+    if len(verts) != 3:
+        raise ValueError("a surface triangle needs exactly three vertices")
+    if any(len(vertex) != 3 for vertex in verts):
+        raise ValueError("surface triangle vertices must be 3D points")
+    traction = _float_vector(traction_N_per_m2, "traction_N_per_m2")
+    if len(traction) != 3:
+        raise ValueError("traction_N_per_m2 must have length 3")
+
+    geom = p1_surface_triangle_geometry(verts)
+    area = geom["area"]
+    centroid = [
+        sum(vertex[axis] for vertex in verts) / 3.0
+        for axis in range(3)
+    ]
+    integrated_force = [area * value for value in traction]
+    nodal_loads = [[value / 3.0 for value in integrated_force] for _ in range(3)]
+    patch_resultant = force_moment_resultant_summary(
+        [centroid],
+        [integrated_force],
+        pivot_m=pivot_m,
+    )
+    nodal_resultant = force_moment_resultant_summary(
+        verts,
+        nodal_loads,
+        pivot_m=pivot_m,
+    )
+    moment_errors = [
+        abs(nodal_resultant["total_moment"][axis] - patch_resultant["total_moment"][axis])
+        for axis in range(3)
+    ]
+    force_errors = [
+        abs(nodal_resultant["total_force"][axis] - integrated_force[axis])
+        for axis in range(3)
+    ]
+    return {
+        "area": area,
+        "centroid_m": centroid,
+        "unit_normal": list(geom["unit_normal"]),
+        "area_vector": list(geom["area_vector"]),
+        "traction_N_per_m2": traction,
+        "integrated_force_N": integrated_force,
+        "nodal_force_loads_N": nodal_loads,
+        "p1_shape_function_integral_m2": area / 3.0,
+        "pivot_m": patch_resultant["pivot_m"],
+        "patch_resultant": patch_resultant,
+        "nodal_resultant": nodal_resultant,
+        "force_preservation_abs_errors_N": force_errors,
+        "moment_preservation_abs_errors_Nm": moment_errors,
+    }
+
+
 def surface_triangle_maxwell_traction_summary(vertices, B, mu=MU0):
     """P1 surface-triangle Maxwell traction and equivalent nodal force load.
 

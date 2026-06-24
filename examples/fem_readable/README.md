@@ -11,6 +11,7 @@ steps rather than production solver performance.
 | [`validation_p1_surface_trace_coupling.py`](validation_p1_surface_trace_coupling.py) | Validation-class `.vol` FEM/BEM trace example: boundary P1 surface mass, surface stiffness, load vector, closed-surface normal checks, and shared H1/BEM node ids | `parse_netgen_tri_tet_vol`, `p1_surface_triangle_*`, `first_order_fem_bem_topology` |
 | [`validation_p1_tet_robin_trace_system.py`](validation_p1_tet_robin_trace_system.py) | Validation-class `.vol` P1 volume/boundary trace system: dense tet stiffness plus boundary Robin mass/load, with constant-solution and pure-Neumann gates | `parse_netgen_tri_tet_vol`, `assemble_p1_tet_robin_system`, `first_order_fem_bem_topology` |
 | [`validation_p1_tet_flux_trace.py`](validation_p1_tet_flux_trace.py) | Validation-class P1 tetrahedron gradient/flux trace: affine field gradient, physical flux, outward face Neumann rows, and stiffness-energy identity | `p1_tetrahedron_gradient`, `p1_tetrahedron_flux`, `p1_tetrahedron_boundary_fluxes` |
+| [`validation_surface_triangle_constant_traction_load.py`](validation_surface_triangle_constant_traction_load.py) | Validation-class P1 surface-triangle constant vector traction load: integrated force, equivalent nodal loads, and force/moment preservation | `surface_triangle_constant_traction_load_summary`, `force_moment_resultant_summary` |
 | [`validation_surface_maxwell_force_trace.py`](validation_surface_maxwell_force_trace.py) | Validation-class `.vol` surface Maxwell traction trace: oriented boundary triangles, integrated force, and P1 equivalent nodal force loads | `parse_netgen_tri_tet_vol`, `surface_triangle_maxwell_traction_summary`, `air_gap_maxwell_pressure` |
 | [`validation_tetrahedron_lorentz_force_load.py`](validation_tetrahedron_lorentz_force_load.py) | Validation-class P1 tetrahedron Lorentz body-force load: constant `J x B`, integrated force, equivalent nodal loads, and force/moment preservation | `tetrahedron_lorentz_force_summary`, `force_moment_resultant_summary` |
 | [`validation_hcurl_rwg_trace_orientation.py`](validation_hcurl_rwg_trace_orientation.py) | Validation-class `.vol` first-order HCurl/RWG trace example on a four-tet star mesh with one interior node; checks RWG edge orientation, RWG-to-HCurl ids, and interior-edge exclusion | `parse_netgen_tri_tet_vol`, `first_order_fem_bem_topology`, `surface_edge_manifold_summary` |
@@ -22,6 +23,7 @@ python validation_p1_tet_poisson_convergence.py
 python validation_p1_surface_trace_coupling.py
 python validation_p1_tet_robin_trace_system.py
 python validation_p1_tet_flux_trace.py
+python validation_surface_triangle_constant_traction_load.py
 python validation_surface_maxwell_force_trace.py
 python validation_tetrahedron_lorentz_force_load.py
 python validation_hcurl_rwg_trace_orientation.py
