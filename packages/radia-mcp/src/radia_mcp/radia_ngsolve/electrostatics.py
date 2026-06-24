@@ -119,11 +119,15 @@ def parallel_plate_capacitor_energy_force(eps_r, area, gap, voltage):
 
         C = eps0 eps_r area / d ,
         W = 1/2 C V^2 ,
-        |F| = 1/2 eps0 eps_r area V^2 / d^2 = W / d .
+        E = V / d ,
+        p = 1/2 eps0 eps_r E^2 ,
+        |F| = p area = 1/2 eps0 eps_r area V^2 / d^2 = W / d .
 
     At fixed voltage the attractive force equals the energy density times the
-    plate area, i.e. |F| = W/d, and scales as 1/d^2.  Returns
-    ``{"C": ..., "energy": ..., "force": ...}``.  (Griffiths.)
+    plate area, i.e. |F| = W/d, and scales as 1/d^2.  The pressure is the
+    normal electrostatic Maxwell traction for a field normal to the plate.
+    Returns ``{"C": ..., "energy": ..., "force": ...}`` plus explicit field,
+    pressure, and energy-density entries.  (Griffiths.)
     """
     if eps_r <= 0:
         raise ValueError("eps_r must be > 0")
@@ -131,10 +135,19 @@ def parallel_plate_capacitor_energy_force(eps_r, area, gap, voltage):
         raise ValueError("area must be > 0")
     if gap <= 0:
         raise ValueError("gap must be > 0")
+    field = voltage / gap
     C = EPS0 * eps_r * area / gap
+    energy_density = 0.5 * EPS0 * eps_r * field * field
     energy = 0.5 * C * voltage * voltage
-    force = 0.5 * EPS0 * eps_r * area * voltage * voltage / (gap * gap)
-    return {"C": C, "energy": energy, "force": force}
+    force = energy_density * area
+    return {
+        "C": C,
+        "energy": energy,
+        "force": force,
+        "electric_field_V_per_m": field,
+        "pressure_Pa": energy_density,
+        "energy_density_J_per_m3": energy_density,
+    }
 
 
 def dielectric_sphere_polarizability(radius_a, eps_r):

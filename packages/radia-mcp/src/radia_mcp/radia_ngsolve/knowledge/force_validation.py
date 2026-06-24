@@ -36,7 +36,7 @@ of the methods below, with an analytic sanity check available.
 | Energy/inductance-derived checks | Field energy | ``force.magnetic_energy*``, ``force.inductance_*`` |
 | dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
 | Synchronous/induction machine torque curves | Circuit-level machine model | ``solve.synchronous_power_angle_torque`` / ``solve.induction_machine_torque`` |
-| MEMS/electrostatic force | Electric weighted stress | ``force.electrostatic_eggshell_force*`` |
+| MEMS/electrostatic force | Electric Maxwell stress / weighted stress | ``electrostatics.parallel_plate_capacitor_energy_force``, ``force.electrostatic_traction_summary``, ``force.electrostatic_eggshell_force*`` |
 
 ## Core identities
 
@@ -87,6 +87,19 @@ p = B_gap^2 / (2 mu0),     F = p A
 
 This is the fast sanity check for solenoids, relays, magnetic circuits, and
 pole-face holding force.  It is the local Maxwell stress evaluated in the gap.
+
+Electrostatic normal pressure:
+
+```text
+E = V / d
+p = 0.5 eps |E|^2
+F = p A = 0.5 eps A V^2 / d^2 = W / d
+```
+
+This is the electric Maxwell-stress twin of magnetic air-gap pressure.  Use the
+parallel-plate identity as the first MEMS/electrostatic force gate, then compare
+the same pressure against ``force.electrostatic_traction_summary`` before moving
+to a full electric weighted-stress extraction.
 
 RF/time-harmonic radiation pressure at normal incidence:
 
@@ -170,6 +183,8 @@ requires a stable geometry perturbation and matched meshes or careful remeshing.
 - ``ngsolve_usage("air_gap_force")``: magnetic-circuit holding force.
 - ``examples/fem_readable/validation_surface_maxwell_force_trace.py``:
   first-order `.vol` boundary triangles to Maxwell traction and P1 nodal force loads.
+- ``examples/electrostatics/validation_parallel_plate_electrostatic_force.py``:
+  capacitance-energy, Maxwell-pressure, and traction-equivalence gate.
 - ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.
 - ``ngsolve_usage("electrostatic_force")``: MEMS electric force.
 - ``force_validation("cross_validation")``: stored regression-reference cases.
