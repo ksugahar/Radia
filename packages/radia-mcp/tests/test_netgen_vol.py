@@ -431,6 +431,40 @@ def test_boundary_summary_rows_for_named_box_faces():
     assert mesh.total_volume() == pytest.approx(30.0)
 
 
+def test_boundary_normal_summary_rows_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+    rows = mesh.boundary_normal_summary_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    expected_vectors = {
+        "xmin": (-15.0, 0.0, 0.0),
+        "xmax": (15.0, 0.0, 0.0),
+        "ymin": (0.0, -10.0, 0.0),
+        "ymax": (0.0, 10.0, 0.0),
+        "zmin": (0.0, 0.0, -6.0),
+        "zmax": (0.0, 0.0, 6.0),
+    }
+    expected_normals = {
+        name: tuple(component / max(abs(v) for v in vector) for component in vector)
+        for name, vector in expected_vectors.items()
+    }
+
+    assert [row["boundary_number"] for row in rows] == [1, 2, 3, 4, 5, 6]
+    assert mesh.surface_vector_area_by_boundary_number() == pytest.approx({
+        1: expected_vectors["xmin"],
+        2: expected_vectors["xmax"],
+        3: expected_vectors["ymin"],
+        4: expected_vectors["ymax"],
+        5: expected_vectors["zmin"],
+        6: expected_vectors["zmax"],
+    })
+    for name, vector in expected_vectors.items():
+        assert by_name[name]["vector_area"] == pytest.approx(vector)
+        assert by_name[name]["vector_area_norm"] == pytest.approx(by_name[name]["surface_area"])
+        assert by_name[name]["vector_area_norm_over_area"] == pytest.approx(1.0)
+        assert by_name[name]["unit_normal"] == pytest.approx(expected_normals[name])
+
+
 def test_material_summary_rows_for_two_material_interface():
     mesh = parse_netgen_tri_tet_vol(TWO_MATERIAL_INTERFACE_VOL)
     rows = mesh.material_summary_rows()

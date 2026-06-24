@@ -331,6 +331,53 @@ class NetgenTriTetVolMesh:
             areas[tri.bcnr] = areas.get(tri.bcnr, 0.0) + area
         return areas
 
+    def surface_vector_area_by_boundary_number(self) -> dict[int, tuple[float, float, float]]:
+        """Return oriented boundary area vectors grouped by boundary number.
+
+        For a planar sideset with consistently oriented triangles, the vector
+        norm equals the scalar area and the unit vector is the sideset normal.
+        This is the compact `.vol`-side gate needed before Maxwell-stress force
+        integration over named Cubit/Coreform sidesets.
+        """
+
+        vectors: dict[int, tuple[float, float, float]] = {}
+        for tri, vector in zip(self.surface_triangles, self.surface_triangle_area_vectors()):
+            vectors[tri.bcnr] = _add(vectors.get(tri.bcnr, (0.0, 0.0, 0.0)), vector)
+        return vectors
+
+    def boundary_normal_summary_rows(self) -> tuple[dict[str, object], ...]:
+        """Return per-boundary oriented area vector and normal summaries."""
+
+        areas = self.surface_area_by_boundary_number()
+        vectors = self.surface_vector_area_by_boundary_number()
+        triangle_counts: dict[int, int] = {}
+        for tri in self.surface_triangles:
+            triangle_counts[tri.bcnr] = triangle_counts.get(tri.bcnr, 0) + 1
+        boundary_numbers = sorted(set(self.boundary_names) | set(areas) | set(vectors) | set(triangle_counts))
+        rows: list[dict[str, object]] = []
+        for bcnr in boundary_numbers:
+            vector = vectors.get(bcnr, (0.0, 0.0, 0.0))
+            vector_norm = _norm(vector)
+            scalar_area = areas.get(bcnr, 0.0)
+            unit_normal = (
+                tuple(component / vector_norm for component in vector)
+                if vector_norm > 0.0
+                else None
+            )
+            rows.append({
+                "boundary_number": bcnr,
+                "name": self.boundary_names.get(bcnr, f"boundary_{bcnr}"),
+                "surface_triangles": triangle_counts.get(bcnr, 0),
+                "surface_area": scalar_area,
+                "vector_area": vector,
+                "vector_area_norm": vector_norm,
+                "vector_area_norm_over_area": (
+                    vector_norm / scalar_area if scalar_area > 0.0 else None
+                ),
+                "unit_normal": unit_normal,
+            })
+        return tuple(rows)
+
     def boundary_summary_rows(self) -> tuple[dict[str, object], ...]:
         """Return named boundary inventory rows for FEM/BEM conditions.
 
