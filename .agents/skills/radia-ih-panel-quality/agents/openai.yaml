@@ -1,0 +1,4 @@
+interface:
+  display_name: "Radia IH Panel Quality"
+  short_description: "Quality gate for the IH GUI panel"
+  default_prompt: "Use $radia-ih-panel-quality to review and improve the Radia IH GUI panel before release."
