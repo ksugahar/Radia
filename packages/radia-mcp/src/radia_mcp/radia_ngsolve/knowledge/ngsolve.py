@@ -6567,6 +6567,33 @@ to the DC internal inductance (#36); the AC resistance is the existing skin-effe
 """
 
 
+NGSOLVE_READABLE_P1_FEM = r"""
+# Readable P1 tetrahedron FEM blocks -- MATLAB/Gypsilab-style teaching code
+
+The small clean-room blocks in ``radia_mcp.radia_ngsolve.scalar_fem3d`` are meant to be mirrored
+line-for-line in MATLAB teaching scripts: no solver magic, only local P1 tetrahedron formulas.
+
+```python
+from radia_mcp.radia_ngsolve.scalar_fem3d import (
+    p1_tetrahedron_geometry, p1_tetrahedron_stiffness,
+    p1_tetrahedron_gradient, p1_tetrahedron_flux,
+    p1_tetrahedron_boundary_fluxes)
+
+grad_u = p1_tetrahedron_gradient(vertices, nodal_values)
+q = p1_tetrahedron_flux(vertices, nodal_values, coeff=k)              # q = -k grad(u)
+rows = p1_tetrahedron_boundary_fluxes(vertices, nodal_values, coeff=k) # outward Neumann rows
+```
+
+For an affine field, ``grad_u`` is exact on each tetrahedron and the stiffness energy satisfies
+``u^T K u = k volume |grad_u|^2``. The face rows provide the FEM->BEM trace primitive:
+``integrated_flux = q . outward_area_vector`` and the closed tetrahedron sum is zero for a constant
+flux. `validation_p1_tet_flux_trace.py` checks these identities on a Netgen `.vol` unit tetrahedron:
+gradient/flux errors < roundoff, energy error < roundoff, four face rows matching the surface
+triangles, and total integrated outward flux ~0. This is the readable bridge from volume P1 FEM to
+boundary Neumann data.
+"""
+
+
 NGSOLVE_WAVEGUIDE = r"""
 # Waveguide / cavity cutoff modes -- the 2D Helmholtz EIGENVALUE problem
 
@@ -7093,6 +7120,11 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "group_delay": NGSOLVE_WAVEGUIDE,
         "sparameter_group_delay": NGSOLVE_WAVEGUIDE,
         "offset_short": NGSOLVE_WAVEGUIDE,
+        "readable_fem": NGSOLVE_READABLE_P1_FEM,
+        "p1_tetrahedron": NGSOLVE_READABLE_P1_FEM,
+        "p1_tet": NGSOLVE_READABLE_P1_FEM,
+        "p1_flux_trace": NGSOLVE_READABLE_P1_FEM,
+        "fem_bem_trace": NGSOLVE_READABLE_P1_FEM,
         "core_loss": NGSOLVE_CORE_LOSS,
         "eddy_loss": NGSOLVE_CORE_LOSS,
         "eddy_current_loss": NGSOLVE_CORE_LOSS,
