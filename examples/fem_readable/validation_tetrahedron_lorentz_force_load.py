@@ -6,7 +6,7 @@ For constant fields in one P1 tetrahedron,
     f = J x B,      F_e = volume * f,
 
 and the consistent P1 load gives ``F_e / 4`` to each node.  The calculation is
-small enough to mirror directly in MATLAB/Gypsilab teaching scripts.
+small enough to mirror directly in first-order teaching scripts.
 
 Run:
 
@@ -27,7 +27,10 @@ SRC = REPO / "packages" / "radia-mcp" / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from radia_mcp.radia_ngsolve.force import tetrahedron_lorentz_force_summary  # noqa: E402
+from radia_mcp.radia_ngsolve.force import (  # noqa: E402
+    force_moment_resultant_summary,
+    tetrahedron_lorentz_force_summary,
+)
 
 
 OUT_JSON = HERE / "validation_tetrahedron_lorentz_force_load_summary.json"
@@ -52,6 +55,12 @@ def _assert_close_vector(actual: list[float], expected: list[float], tol: float 
 
 def build_summary() -> dict:
     row = tetrahedron_lorentz_force_summary(VERTICES, CURRENT_DENSITY, B_FIELD)
+    centroid = [
+        sum(vertex[axis] for vertex in VERTICES) / 4.0
+        for axis in range(3)
+    ]
+    nodal_resultant = force_moment_resultant_summary(VERTICES, row["nodal_force_loads_N"])
+    element_resultant = force_moment_resultant_summary([centroid], [row["integrated_force_N"]])
     checks = {
         "volume_m3": row["volume_m3"],
         "expected_volume_m3": 1.0 / 6.0,
@@ -64,12 +73,22 @@ def build_summary() -> dict:
             for axis in range(3)
         ],
         "expected_node_force_N": [0.0, 0.0, 0.25],
+        "centroid_m": centroid,
+        "nodal_total_moment_Nm": nodal_resultant["total_moment"],
+        "element_centroid_moment_Nm": element_resultant["total_moment"],
+        "force_moment_abs_errors": [
+            abs(nodal_resultant["total_moment"][axis] - element_resultant["total_moment"][axis])
+            for axis in range(3)
+        ],
     }
     if abs(checks["volume_m3"] - checks["expected_volume_m3"]) > 1.0e-14:
         raise AssertionError("tet volume mismatch")
     _assert_close_vector(checks["force_density_N_per_m3"], checks["expected_force_density_N_per_m3"])
     _assert_close_vector(checks["integrated_force_N"], checks["expected_integrated_force_N"])
     _assert_close_vector(checks["nodal_force_sum_N"], checks["expected_integrated_force_N"])
+    _assert_close_vector(checks["nodal_total_moment_Nm"], [0.25, -0.25, 0.0])
+    _assert_close_vector(checks["element_centroid_moment_Nm"], [0.25, -0.25, 0.0])
+    _assert_close_vector(checks["force_moment_abs_errors"], [0.0, 0.0, 0.0])
     for node_force in row["nodal_force_loads_N"]:
         _assert_close_vector(node_force, checks["expected_node_force_N"])
     return {
@@ -79,6 +98,8 @@ def build_summary() -> dict:
         "current_density_A_per_m2": CURRENT_DENSITY,
         "B_T": B_FIELD,
         "row": row,
+        "nodal_resultant": nodal_resultant,
+        "element_centroid_resultant": element_resultant,
         "checks": checks,
     }
 
@@ -98,6 +119,8 @@ def main() -> int:
     print(f"  force_density_N_per_m3: {checks['force_density_N_per_m3']}")
     print(f"  integrated_force_N: {checks['integrated_force_N']}")
     print(f"  expected_node_force_N: {checks['expected_node_force_N']}")
+    print(f"  nodal_total_moment_Nm: {checks['nodal_total_moment_Nm']}")
+    print(f"  force_moment_abs_errors: {checks['force_moment_abs_errors']}")
     return 0
 
 
