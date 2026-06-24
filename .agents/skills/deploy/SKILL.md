@@ -27,7 +27,7 @@ editable / 100号機 PyPI) を 2-tier (LAB editable / 100号機 + mdx PyPI)
 - **100号機**: `pip install 'radia[cubit,gui]==X.Y.Z'` + `cubit-plugin-install
   --all-users`.  21 ラボメンバの本番。
 - **mdx**: 100号機 と完全に同じ recipe.  PyPI cross-machine consistency
-  probe (release-triple Phase 9).  C++ 変更を mdx に届けるには `v*
+  probe (release-qud Phase 9).  C++ 変更を mdx に届けるには `v*
   tag → CD/PyPI` リリースが必要 (LAB の Build.ps1 出力は届かない).
 
 **Cubit plugin (100号機 + mdx)**: 両方とも PyPI wheel から regular-file
@@ -252,7 +252,7 @@ silently corrupted a large fraction of users twice in 4 days.
 ショートカットで動いても *distribution* を検証したことにはならない。
 Stage 2 を 2 マシンで二重化することで PyPI 互換性 (wheel manifest /
 package-data / entry-points / cubit-plugin-install regular-file
-deploy) を release-triple Phase 9 cross-machine consistency probe で
+deploy) を release-qud Phase 9 cross-machine consistency probe で
 ピン留めする。
 
 ## radia-mcp Policy
@@ -988,7 +988,7 @@ for cls in (IHWindow, EMWindow, PCBWindow, HeatWindow):
 ```
 
 Both probes are mandatory before declaring the deploy complete.  See
-also `release-triple` skill Phase 8c (verify) and Phase 8d (smoke).
+also `release-qud` Phase 8c (verify) and Phase 8d (smoke).
 
 ### Stage 2 — LEGACY (mdx editable, 2026-05-01 only) -- RETIRED 2026-05-02
 
