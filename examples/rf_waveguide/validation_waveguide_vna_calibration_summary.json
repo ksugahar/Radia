@@ -1,0 +1,133 @@
+{
+  "kind": "waveguide_vna_calibration_validation",
+  "validation_class": true,
+  "guide": {
+    "name": "WR-90-like",
+    "width_a": 0.02286,
+    "height_b": 0.01016,
+    "te10_cutoff": 6557140376.202975
+  },
+  "offset_short": {
+    "true_length": 0.04,
+    "n_frequency_samples": 401,
+    "frequency_start": 8000000000.0,
+    "frequency_stop": 12000000000.0,
+    "frequency_step": 10000000.0,
+    "max_interior_length_rel_error": 4.799681243075615e-06,
+    "center_frequency": 10000000000.0,
+    "center_analytic_group_delay": 3.534410273277728e-10,
+    "center_sampled_group_delay": 3.534410296660583e-10,
+    "center_recovered_length": 0.04000000026463091,
+    "sample_rows": [
+      {
+        "frequency": 8000000000.0,
+        "group_delay": 4.6521671484908836e-10,
+        "recovered_offset_length": 0.03994901776555821,
+        "relative_length_error": 0.00127455586104476,
+        "S11": {
+          "re": -0.16895722549267453,
+          "im": 0.9856233844394204,
+          "mag": 1.0,
+          "phase_rad": 1.7405679150229703
+        }
+      },
+      {
+        "frequency": 9000000000.0,
+        "group_delay": 3.895814762869313e-10,
+        "recovered_offset_length": 0.040000059539583695,
+        "relative_length_error": 1.488489592346709e-06,
+        "S11": {
+          "re": 0.6125774782532132,
+          "im": -0.7904105472075471,
+          "mag": 1.0,
+          "phase_rad": -0.9114789043081061
+        }
+      },
+      {
+        "frequency": 10000000000.0,
+        "group_delay": 3.5344126116217165e-10,
+        "recovered_offset_length": 0.04000002646375274,
+        "relative_length_error": 6.615938184448278e-07,
+        "S11": {
+          "re": -0.9957073667197605,
+          "im": 0.09255722478553738,
+          "mag": 1.0,
+          "phase_rad": 3.0489027629073875
+        }
+      },
+      {
+        "frequency": 11000000000.0,
+        "group_delay": 3.3235631581669093e-10,
+        "recovered_offset_length": 0.04000001413277445,
+        "relative_length_error": 3.533193612681451e-07,
+        "S11": {
+          "re": 0.6219307059877068,
+          "im": 0.7830722807950953,
+          "mag": 1.0,
+          "phase_rad": 0.8995904776834399
+        }
+      },
+      {
+        "frequency": 12000000000.0,
+        "group_delay": 3.186827471653025e-10,
+        "recovered_offset_length": 0.04000710322958145,
+        "relative_length_error": 0.00017758073953631076,
+        "S11": {
+          "re": 0.4150957026187081,
+          "im": -0.9097777517984714,
+          "mag": 1.0,
+          "phase_rad": -1.142748332941362
+        }
+      }
+    ]
+  },
+  "dispersion_rows": [
+    {
+      "frequency": 8000000000.0,
+      "beta": 96.05262557183012,
+      "lambda_g": 0.06541398811093291,
+      "v_group_over_c": 0.5728752875676878,
+      "Z_TE": 657.6131343722141,
+      "Z_TM": 215.81948665987704,
+      "Z_product_rel_error": 0.0
+    },
+    {
+      "frequency": 10000000000.0,
+      "beta": 158.2382563130197,
+      "lambda_g": 0.03970711921111211,
+      "v_group_over_c": 0.7550093382652211,
+      "Z_TE": 498.97437603537577,
+      "Z_TM": 284.4349046712208,
+      "Z_product_rel_error": 0.0
+    },
+    {
+      "frequency": 12000000000.0,
+      "beta": 210.63389501112908,
+      "lambda_g": 0.02982988709793173,
+      "v_group_over_c": 0.8375058461104777,
+      "Z_TE": 449.8240999885213,
+      "Z_TM": 315.51383993126575,
+      "Z_product_rel_error": 0.0
+    }
+  ],
+  "dielectric_slab_10ghz": {
+    "eps_r": 2.2,
+    "length": 0.01,
+    "S11": {
+      "re": -0.07984794237977322,
+      "im": 0.18593170910322554,
+      "mag": 0.20235190721199064,
+      "phase_rad": 1.9764281652875468
+    },
+    "S21": {
+      "re": -0.8998448246057089,
+      "im": -0.3864362784185654,
+      "mag": 0.979312874237682,
+      "phase_rad": -2.735960815097143
+    },
+    "unitarity": 1.0,
+    "return_loss_db": 13.877853958609652,
+    "delivered_power_fraction": 0.9590537056476699,
+    "vswr": 1.5073713810427667
+  }
+}
