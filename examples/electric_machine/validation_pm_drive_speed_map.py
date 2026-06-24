@@ -29,11 +29,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.solve import (  # noqa: E402
-    base_speed_electrical,
-    characteristic_current,
-    dq_operating_point,
-    field_weakening_operating_point,
-    field_weakening_speed_capability,
+    pm_drive_speed_sweep,
     short_circuit_operating_point,
 )
 
@@ -67,58 +63,20 @@ SPEED_MULTIPLES = (0.5, 1.0, 2.0, 5.0, 10.0, 100.0)
 SHORT_CIRCUIT_HZ = (1.0, 20.0, 100.0, 1.0e6)
 
 
-def _drive_row(machine: dict, speed_multiple: float) -> dict:
-    lm = machine["lambda_m"]
-    ld = machine["Ld"]
-    lq = machine["Lq"]
-    imax = machine["Imax"]
-    vmax = machine["Vmax"]
-    p = machine["pole_pairs"]
-    omega_base = base_speed_electrical(lm, ld, lq, imax, vmax, p)
-    omega_e = speed_multiple * omega_base
-    fw = field_weakening_operating_point(lm, ld, lq, imax, vmax, omega_e, p)
-    row = {
-        "speed_multiple": speed_multiple,
-        "omega_e": omega_e,
-        "omega_mech": omega_e / p,
-    }
-    if fw is None:
-        row["region"] = "infeasible"
-        return row
-    id_, iq, torque, region = fw
-    op = dq_operating_point(0.0, ld, lq, lm, id_, iq, omega_e, p)
-    voltage_lossless = omega_e * math.hypot(ld * id_ + lm, lq * iq)
-    row.update({
-        "region": region,
-        "id": id_,
-        "iq": iq,
-        "torque": torque,
-        "current_magnitude": op["Imag"],
-        "current_utilization": op["Imag"] / imax,
-        "voltage_lossless": voltage_lossless,
-        "voltage_utilization": voltage_lossless / vmax,
-        "mechanical_power": op["P_em"],
-    })
-    return row
-
-
 def drive_map(machine: dict) -> dict:
-    lm = machine["lambda_m"]
-    ld = machine["Ld"]
-    lq = machine["Lq"]
-    imax = machine["Imax"]
-    vmax = machine["Vmax"]
-    p = machine["pole_pairs"]
-    cap = field_weakening_speed_capability(lm, ld, imax)
-    omega_base = base_speed_electrical(lm, ld, lq, imax, vmax, p)
-    rows = [_drive_row(machine, m) for m in SPEED_MULTIPLES]
+    sweep = pm_drive_speed_sweep(
+        machine["lambda_m"],
+        machine["Ld"],
+        machine["Lq"],
+        machine["Imax"],
+        machine["Vmax"],
+        machine["pole_pairs"],
+        speed_multiples=SPEED_MULTIPLES,
+        R=0.0,
+    )
     return {
         "label": machine["label"],
-        "parameters": machine,
-        "characteristic_current": characteristic_current(lm, ld),
-        "speed_capability": cap,
-        "omega_base": omega_base,
-        "rows": rows,
+        **sweep,
     }
 
 
@@ -154,7 +112,7 @@ def main() -> int:
     for rec in drive:
         cap = rec["speed_capability"]
         print(
-            f"[{rec['label']}] Ich={rec['characteristic_current']:.6g} A, "
+            f"[{rec['label']}] Ich={rec['speed_capability']['characteristic_current']:.6g} A, "
             f"Imax={rec['parameters']['Imax']:.6g} A, "
             f"infinite_speed={cap['infinite_speed_possible']}"
         )
