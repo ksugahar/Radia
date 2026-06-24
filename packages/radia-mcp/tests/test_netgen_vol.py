@@ -272,6 +272,23 @@ def test_first_order_topology_compacts_boundary_nodes_with_interior_node():
     assert topology["rwg"]["hcurl_edge_ids"] == [1, 2, 3, 5, 6, 8]
 
 
+def test_first_order_topology_balances_rwg_orientation_with_hcurl_trace():
+    topology = parse_netgen_tri_tet_vol(FOUR_TET_WITH_INTERIOR_NODE_VOL).first_order_fem_bem_topology()
+
+    hcurl_edges = {tuple(edge) for edge in topology["hcurl"]["edges"]}
+    rwg_edges = {tuple(edge) for edge in topology["rwg"]["dof_edges_global"]}
+    edge_signs = {edge_id: [] for edge_id in topology["rwg"]["dof_edge_ids"]}
+    for tri_edges, tri_signs in zip(topology["rwg"]["tri_edges"], topology["rwg"]["tri_edge_signs"]):
+        for edge_id, sign in zip(tri_edges, tri_signs):
+            edge_signs[edge_id].append(sign)
+
+    assert sorted(hcurl_edges - rwg_edges) == [(1, 5), (2, 5), (3, 5), (4, 5)]
+    assert rwg_edges.issubset(hcurl_edges)
+    assert all(sorted(signs) == [-1, 1] for signs in edge_signs.values())
+    assert -1 in {sign for row in topology["hcurl"]["tet_edge_signs"] for sign in row}
+    assert topology["trace"]["rwg_to_hcurl_edge_ids"] == [1, 2, 3, 5, 6, 8]
+
+
 def test_geometry_metrics_for_single_tetrahedron():
     mesh = parse_netgen_tri_tet_vol(TET_VOL)
 
