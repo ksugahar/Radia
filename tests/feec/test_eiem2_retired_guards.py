@@ -14,11 +14,13 @@ This test also locks that the KEPT paths are unaffected: a pure-hex (moment) and
 soft-iron solve still magnetize in an applied field, and permanent-magnet field evaluation of a mixed
 container (no Solve) is untouched.
 """
+from pathlib import Path
 import sys
 import numpy as np
 import pytest
 
-sys.path.insert(0, r"S:\Radia\01_GitHub\src\radia")
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
 import radia as rad
 
 MU0 = 4e-7 * np.pi

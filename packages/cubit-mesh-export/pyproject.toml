@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cubit-mesh-export"
-version = "0.12.0"
+version = "0.13.0"
 description = "Solver-neutral mesh export from Coreform Cubit: high-order curved .vol/.msh/.bdf, Kelvin transformation, Dirichlet/symmetry label conventions"
 readme = "README.md"
 license = {text = "MIT"}
@@ -40,7 +40,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 # Note (radia 4.80.0): "*.ccl" removed.  The Qt5 GUI .ccl was deleted
 # (RadiaComp.cpp gone); PySide6 toolbar at radia/panels/radia_export_menu.py
-# replaces it.  install.py still gracefully skips .ccl deploy if absent.
+# replaces it.  cubit-plugin-install now treats any deployed .ccl as stale.
 cubit_mesh_export = ["*.pyd", "*.so", "*.ccm"]
 "cubit_mesh_export.cubit_helpers" = ["*.py"]
 

@@ -1,7 +1,7 @@
 """radia.SoftIron -- the unified, intent-based soft-iron object.
 
 "Place soft iron, solve it, read the field" -- backend-agnostic over the two demag methods
-(yano-type MSC and the FEEC HDiv-VIM).  Geometry comes from a ``.vol`` file (the canonical,
+(moment-yano MSC and the FEEC HDiv-VIM).  Geometry comes from a ``.vol`` file (the canonical,
 correctly-oriented netgen interchange) or an in-memory NGSolve mesh; the Radia element
 representation (ObjHexahedron / ...) is an INTERNAL detail the user no longer touches.
 

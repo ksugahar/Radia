@@ -24,7 +24,7 @@ first.
 - Each MCP tool is a `@mcp.tool()` function with a docstring (the
   docstring becomes the tool description LLMs see — write it for
   AI consumers, not for humans).
-- The `cubit_session` Plan A architecture (PyQt5 QTimer + file-drop
+- The `cubit_session` Plan A architecture (PySide6 QTimer + file-drop
   IPC, no sockets) is non-negotiable for the live-Cubit path; if you
   need a different transport, justify it in the PR description.
 

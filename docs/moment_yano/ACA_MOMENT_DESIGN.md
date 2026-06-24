@@ -35,12 +35,15 @@ Bounded iterations remain future work (pivoted H-factor or a symmetrized moment 
 
 ## The system
 
-Per hex (6 face-charge DOF sigma), the moment rows are (`BuildMomentSystemCore`,
-`rad_interaction.cpp`): 3 dipole, 1 monopole, 2 diagonal-quadrupole. The dense system is
+Per moment element, the rows are (`BuildMomentSystemCore`, `rad_interaction.cpp`):
+3 dipole, 1 monopole, and the residual quadrupole rows needed to make the block
+square.  Hex has 6 face-charge DOF (2 quadrupole rows); wedge/pyramid have 5 face-charge
+DOF (1 residual quadrupole row). The dense system is
 
     A_raw = L  -  chi * R * C
 
-- `L`  : the per-element LOCAL geometric-moment block (block-diagonal, 6x6 per hex; cheap).
+- `L`  : the per-element LOCAL geometric-moment block (block-diagonal; 6x6 for hex,
+         5x5 for wedge/pyramid; cheap).
 - `C`  : the centroid field+grad coupling `C[e,k,g]` = field/grad component `k`
          (`k<3` = H, `3..8` = gradH) at element `e`'s centroid from unit charge on face
          DOF `g` (`BuildCentroidFieldGrad`; the cheap kernel, now IMA-aware).
@@ -70,7 +73,7 @@ path builds the **un-normalized `A_raw`** and gets the SAME `x` as the normalize
 the HDiv-VIM: it builds the system `A = M_mass + chi*N` as a HACApK H-matrix
 (`RadHACApKBase` subclass with an on-demand `ComputeSystemEntry(i,j)`) and applies the
 HACApK **H-LU** (`cHACApK_hlu_*`) as a scalable direct solve / strong preconditioner.
-The moment manager mirrors it:
+The moment manager mirrors it for the current scalable method-2 pure-hex path:
 
 ```
 class RadHACApKMomentSystem : public RadHACApKBase {
