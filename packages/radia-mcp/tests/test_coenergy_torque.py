@@ -15,6 +15,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     coenergy_torque_summary,
     virtual_work_force_from_displacement_samples,
     virtual_work_force_summary,
+    virtual_work_force_sweep_audit_summary,
     virtual_work_symmetric_pair_force_summary,
 )
 
@@ -104,6 +105,42 @@ def test_virtual_work_force_quadratic_center_matches_analytic_gradient():
     assert rows[1]["force_N"] == pytest.approx(-stiffness * positions[1])
     assert rows[2]["force_N"] == pytest.approx(0.0)
     assert rows[3]["force_N"] == pytest.approx(-stiffness * positions[3])
+
+
+def test_virtual_work_force_sweep_audit_compares_central_rows():
+    positions = [-0.002, -0.001, 0.0, 0.001, 0.002]
+    constant_force = 3.0
+    stiffness = 2000.0
+    coenergy = [
+        0.25 + constant_force * x + 0.5 * stiffness * x * x
+        for x in positions
+    ]
+    reference = [constant_force + stiffness * x for x in positions]
+
+    summary = virtual_work_force_sweep_audit_summary(
+        positions,
+        coenergy,
+        reference_force_N=reference,
+        force_abs_tolerance_N=1.0e-12,
+    )
+
+    assert summary["status"] == "ok"
+    assert summary["reference_checked_count"] == 3
+    assert summary["comparison_stencils"] == ["central"]
+    assert summary["max_reference_force_abs_error_N"] < 1.0e-12
+    assert summary["max_abs_force_gradient_N_per_m"] == pytest.approx(stiffness)
+    assert summary["rows"][0]["selected_for_reference_check"] is False
+    assert summary["rows"][1]["selected_for_reference_check"] is True
+    assert summary["rows"][2]["force_gradient_N_per_m"] == pytest.approx(stiffness)
+
+    bad = virtual_work_force_sweep_audit_summary(
+        positions,
+        coenergy,
+        reference_force_N=[value + 0.5 for value in reference],
+        force_abs_tolerance_N=1.0e-12,
+    )
+    assert bad["status"] == "needs_attention"
+    assert bad["reference_pass"] is False
 
 
 def test_virtual_work_symmetric_pair_force_summary_matches_center_gradient():
