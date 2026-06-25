@@ -21,6 +21,7 @@ S-parameters, and cavity-style post-processing.
 | [`validation_one_port_reflection_momentum_force.py`](validation_one_port_reflection_momentum_force.py) | Validation-class one-port S11 momentum force: matched load, perfect short, and phase-independent partial reflection | `one_port_reflection_momentum_force_summary` |
 | [`validation_one_port_reflection_sweep_force.py`](validation_one_port_reflection_sweep_force.py) | Validation-class one-port S11 sweep force audit: max/min force frequencies, mean force, and passivity flags | `one_port_reflection_sweep_momentum_force_summary` |
 | [`validation_two_port_scattering_sweep_force.py`](validation_two_port_scattering_sweep_force.py) | Validation-class two-port S11/S21 sweep force audit: extrema, mean force, absorbed fraction, and passivity flags | `two_port_scattering_sweep_momentum_force_summary` |
+| [`validation_two_port_sparameter_health.py`](validation_two_port_sparameter_health.py) | Validation-class two-port S-parameter health: passivity, reciprocity, return symmetry, and momentum-force extrema | `two_port_sparameter_sweep_health_summary` |
 
 ```powershell
 python validation_waveguide_vna_calibration.py
@@ -39,6 +40,7 @@ python validation_two_port_scattering_momentum_force.py
 python validation_one_port_reflection_momentum_force.py
 python validation_one_port_reflection_sweep_force.py
 python validation_two_port_scattering_sweep_force.py
+python validation_two_port_sparameter_health.py
 ```
 
 The examples are self-contained and use closed-form transmission-line /
