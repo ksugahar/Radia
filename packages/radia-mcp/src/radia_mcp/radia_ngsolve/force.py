@@ -392,6 +392,121 @@ def maxwell_contour_force_2d(vertices, B, mu=MU0, orientation="ccw", closed=True
     }
 
 
+def maxwell_contour_segment_balance_summary_2d(
+    vertices,
+    B,
+    mu=MU0,
+    orientation="ccw",
+    closed=True,
+    expected_force_per_depth_N_per_m=None,
+    force_abs_tolerance_N_per_m=1.0e-9,
+):
+    """Return a teaching-oriented balance audit for a 2D stress contour.
+
+    The underlying contour integral is :func:`maxwell_contour_force_2d`.  This
+    wrapper keeps the per-segment rows but adds a compact reference comparison,
+    cancellation ratio, and orientation check so rectangular sanity cases can
+    be read as a table rather than only as a net force.
+    """
+
+    tolerance = float(force_abs_tolerance_N_per_m)
+    if tolerance < 0.0:
+        raise ValueError("force_abs_tolerance_N_per_m must be >= 0")
+    contour = maxwell_contour_force_2d(
+        vertices,
+        B,
+        mu=mu,
+        orientation=orientation,
+        closed=closed,
+    )
+    segment_rows = []
+    for row in contour["segments"]:
+        tangent_force = row["tangential_force_per_depth_N_per_m"]
+        tangent_magnitude = math.hypot(tangent_force[0], tangent_force[1])
+        force = row["force_per_depth_N_per_m"]
+        force_magnitude = math.hypot(force[0], force[1])
+        normal_force = float(row["normal_force_per_depth_N_per_m"])
+        segment_rows.append({
+            "index": row["index"],
+            "p0": row["p0"],
+            "p1": row["p1"],
+            "midpoint": row["midpoint"],
+            "length_m": row["length_m"],
+            "unit_normal": row["unit_normal"],
+            "B_T": row["B_T"],
+            "force_per_depth_N_per_m": force,
+            "force_magnitude_per_depth_N_per_m": force_magnitude,
+            "normal_force_per_depth_N_per_m": normal_force,
+            "tangential_force_per_depth_N_per_m": tangent_force,
+            "tangential_force_magnitude_per_depth_N_per_m": tangent_magnitude,
+            "dominant_contribution": "normal" if abs(normal_force) >= tangent_magnitude else "tangential",
+        })
+
+    total = contour["total_force_per_depth_N_per_m"]
+    total_magnitude = contour["total_force_magnitude_per_depth_N_per_m"]
+    contribution_scale = (
+        contour["sum_abs_normal_force_per_depth_N_per_m"]
+        + contour["sum_abs_tangential_force_per_depth_N_per_m"]
+    )
+    cancellation_ratio = total_magnitude / contribution_scale if contribution_scale > 0.0 else 0.0
+
+    expected = None
+    abs_error = None
+    max_abs_error = None
+    reference_pass = None
+    if expected_force_per_depth_N_per_m is not None:
+        expected = _float_vector(expected_force_per_depth_N_per_m, "expected_force_per_depth_N_per_m")
+        if len(expected) != 2:
+            raise ValueError("expected_force_per_depth_N_per_m must have length 2")
+        abs_error = [abs(total[i] - expected[i]) for i in range(2)]
+        max_abs_error = max(abs_error)
+        reference_pass = max_abs_error <= tolerance
+
+    signed_area = contour["polygon_signed_area_m2"]
+    orientation_consistent = None
+    if closed and signed_area is not None:
+        if orientation == "ccw":
+            orientation_consistent = signed_area > tolerance
+        else:
+            orientation_consistent = signed_area < -tolerance
+
+    issues = []
+    if reference_pass is False:
+        issues.append("net contour force differs from the supplied reference")
+    if orientation_consistent is False:
+        issues.append("vertex order sign does not match the requested orientation")
+
+    dominant = max(
+        segment_rows,
+        key=lambda row: row["force_magnitude_per_depth_N_per_m"],
+        default=None,
+    )
+    return {
+        "policy": "maxwell_contour_segment_balance_2d",
+        "status": "ok" if not issues else "needs_attention",
+        "issues": issues,
+        "closed": contour["closed"],
+        "orientation": contour["orientation"],
+        "orientation_consistent": orientation_consistent,
+        "normal_side": contour["normal_side"],
+        "n_segments": contour["n_segments"],
+        "contour_length_m": contour["contour_length_m"],
+        "polygon_signed_area_m2": signed_area,
+        "total_force_per_depth_N_per_m": total,
+        "total_force_magnitude_per_depth_N_per_m": total_magnitude,
+        "sum_abs_normal_force_per_depth_N_per_m": contour["sum_abs_normal_force_per_depth_N_per_m"],
+        "sum_abs_tangential_force_per_depth_N_per_m": contour["sum_abs_tangential_force_per_depth_N_per_m"],
+        "cancellation_ratio": cancellation_ratio,
+        "expected_force_per_depth_N_per_m": expected,
+        "force_abs_tolerance_N_per_m": tolerance,
+        "reference_force_abs_error_N_per_m": abs_error,
+        "max_reference_force_abs_error_N_per_m": max_abs_error,
+        "reference_pass": reference_pass,
+        "dominant_segment_index": None if dominant is None else dominant["index"],
+        "segment_rows": segment_rows,
+    }
+
+
 def time_average_maxwell_stress_tensor(E, H, eps=EPS0, mu=MU0, amplitude="peak"):
     """Time-average Maxwell stress tensor [Pa] for complex harmonic phasors.
 
