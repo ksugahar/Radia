@@ -2890,7 +2890,7 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
 
     Validated: static limit (sigma=0) agrees with solve_axi_magnetostatic;
     time-harmonic via Cu-disk eddy eigenvalue tau_1 = 224.31 us, 0.27 % gap to
-    BEM-Foster (see examples/axifemm/research/verification/test_disk_eigenvalue.py).
+    BEM-Foster (see examples/axifem/research/verification/test_disk_eigenvalue.py).
     """
     from radia.axifem import H1Henrotte
     r = x
@@ -3024,7 +3024,7 @@ def solve_axi_eddy_harmonic(mesh, mu_cf, sigma_cf, omega, applied_A,
       * ``gfu`` -- complex H1Henrotte GridFunction holding the solution DOFs.
         Its pointwise value/gradient eval is now RELIABLE: the AxiHenrotte
         FESpace is complex-capable (iscomplex from the ``complex`` flag) and the
-        DiffOps implement the complex ``CalcMatrix`` overloads (src/ext/axifemm),
+        DiffOps implement the complex ``CalcMatrix`` overloads (src/ext/axifem),
         validated to machine precision in tests/test_axi_henrotte_complex_eval.py
         -- so |A|/B post-processing of this complex solution works (this is what
         unblocks the nonlinear mu(|B|) Picard layer).  Requires the rebuilt
@@ -3099,7 +3099,7 @@ def solve_axi_eddy_harmonic_nonlinear(mesh, mu_of_B, sigma_cf, omega, applied_A,
         def mu_of_B(Bmag):                       # Frohlich/Kennelly soft saturation
             return MU0 * (1.0 + (mu_r - 1.0) / (1.0 + (Bmag / Bsat) ** 2))
 
-    This RELIES on the complex H1Henrotte field eval (the src/ext/axifemm complex
+    This RELIES on the complex H1Henrotte field eval (the src/ext/axifem complex
     CalcMatrix fix): the BFI samples ``mu_of_B(|B(A)|)`` at element centroids, which
     evaluates the complex A_phi value AND gradient there.  ``relax`` under-relaxes
     the DOF vector (0.3-0.5 for hard saturation).  ORDER=1 ONLY (P2 AxiHenrotte has

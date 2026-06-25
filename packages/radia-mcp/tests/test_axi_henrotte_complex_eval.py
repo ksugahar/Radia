@@ -5,7 +5,7 @@ gradient) fell back to the NGSolve base-class DifferentialOperator stub and
 returned wrong values -- only the REAL CalcMatrix overloads of AxiHenrotteDiffOpId
 / AxiHenrotteDiffOpGradient were implemented.  This blocked any field-based
 post-processing of solve_axi_eddy_harmonic (|A|, |B|), and hence the nonlinear
-mu(|B|) Picard layer.  src/ext/axifemm/axi_henrotte_diffop.hpp now also provides
+mu(|B|) Picard layer.  src/ext/axifem/axi_henrotte_diffop.hpp now also provides
 the BareSliceMatrix<Complex,ColMajor> CalcMatrix overloads (shape/dshape are
 real; only the DOF coefficients are complex), so complex eval mirrors the real
 path exactly.
