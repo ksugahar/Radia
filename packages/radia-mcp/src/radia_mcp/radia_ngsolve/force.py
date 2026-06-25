@@ -1344,6 +1344,143 @@ def virtual_work_force_summary(
     }
 
 
+def virtual_work_force_sweep_audit_summary(
+    positions_m,
+    energy_J,
+    energy_kind="coenergy",
+    reference_force_N=None,
+    force_abs_tolerance_N=0.0,
+    force_rel_tolerance=1.0e-6,
+    comparison_stencils=("central",),
+):
+    """Audit a virtual-work force sweep against an optional reference table.
+
+    This wraps :func:`virtual_work_force_from_displacement_samples` with the
+    extra bookkeeping needed for validation-class sweeps: second differences
+    of the energy table, force-gradient estimates, optional reference-force
+    errors, and pass/fail tolerances.  By default only central-difference rows
+    are used for the reference check, because endpoint one-sided derivatives
+    are expected to be lower order.
+    """
+
+    positions = [float(value) for value in positions_m]
+    values = [float(value) for value in energy_J]
+    normalized_kind, sign, identity = _virtual_work_energy_sign(energy_kind)
+    rows = [
+        dict(row)
+        for row in virtual_work_force_from_displacement_samples(
+            positions,
+            values,
+            energy_kind=normalized_kind,
+        )
+    ]
+    n = len(rows)
+    for i, row in enumerate(rows):
+        if 0 < i < n - 1:
+            dx_left = positions[i] - positions[i - 1]
+            dx_right = positions[i + 1] - positions[i]
+            left_slope = (values[i] - values[i - 1]) / dx_left
+            right_slope = (values[i + 1] - values[i]) / dx_right
+            second = 2.0 * (right_slope - left_slope) / (positions[i + 1] - positions[i - 1])
+            row["energy_second_derivative_J_per_m2"] = second
+            row["force_gradient_N_per_m"] = sign * second
+        else:
+            row["energy_second_derivative_J_per_m2"] = None
+            row["force_gradient_N_per_m"] = None
+
+    if comparison_stencils is None:
+        stencil_filter = None
+    elif isinstance(comparison_stencils, str):
+        token = comparison_stencils.lower().strip()
+        stencil_filter = None if token in ("all", "*") else {token}
+    else:
+        stencil_filter = {str(value).lower().strip() for value in comparison_stencils}
+        if "all" in stencil_filter or "*" in stencil_filter:
+            stencil_filter = None
+    if stencil_filter == set():
+        raise ValueError("comparison_stencils must not be empty")
+
+    abs_tol = float(force_abs_tolerance_N)
+    rel_tol = float(force_rel_tolerance)
+    if abs_tol < 0.0:
+        raise ValueError("force_abs_tolerance_N must be >= 0")
+    if rel_tol < 0.0:
+        raise ValueError("force_rel_tolerance must be >= 0")
+
+    reference_pass = None
+    reference_checked_count = 0
+    selected_error_rows = []
+    if reference_force_N is not None:
+        references = [float(value) for value in reference_force_N]
+        if len(references) != n:
+            raise ValueError("reference_force_N must have the same length as positions_m")
+        for row, reference in zip(rows, references):
+            error = row["force_N"] - reference
+            abs_error = abs(error)
+            rel_error = abs_error / max(abs(reference), 1.0e-300)
+            row["reference_force_N"] = reference
+            row["force_error_N"] = error
+            row["force_abs_error_N"] = abs_error
+            row["force_rel_error"] = rel_error
+            selected = stencil_filter is None or row["stencil"].lower() in stencil_filter
+            row["selected_for_reference_check"] = selected
+            if selected:
+                selected_error_rows.append(row)
+        if not selected_error_rows:
+            raise ValueError("comparison_stencils selected no rows")
+        reference_checked_count = len(selected_error_rows)
+        reference_pass = all(
+            row["force_abs_error_N"]
+            <= abs_tol + rel_tol * max(abs(row["reference_force_N"]), 1.0e-300)
+            for row in selected_error_rows
+        )
+    else:
+        for row in rows:
+            row["selected_for_reference_check"] = False
+
+    forces = [row["force_N"] for row in rows]
+    gradients = [
+        row["force_gradient_N_per_m"]
+        for row in rows
+        if row["force_gradient_N_per_m"] is not None
+    ]
+    selected_abs_errors = [row["force_abs_error_N"] for row in selected_error_rows]
+    selected_rel_errors = [row["force_rel_error"] for row in selected_error_rows]
+    ok = True if reference_pass is None else bool(reference_pass)
+    return {
+        "policy": "virtual_work_force_sweep_energy_table_audit",
+        "n_samples": n,
+        "energy_kind": normalized_kind,
+        "energy_to_force_sign": sign,
+        "virtual_work_identity": identity,
+        "force_min_N": min(forces),
+        "force_max_N": max(forces),
+        "force_peak_abs_N": max(abs(value) for value in forces),
+        "force_span_N": max(forces) - min(forces),
+        "force_mean_N": sum(forces) / n,
+        "max_abs_force_gradient_N_per_m": (
+            max(abs(value) for value in gradients) if gradients else 0.0
+        ),
+        "reference_compared": reference_force_N is not None,
+        "reference_checked_count": reference_checked_count,
+        "comparison_stencils": (
+            "all" if stencil_filter is None else sorted(stencil_filter)
+        ),
+        "force_abs_tolerance_N": abs_tol,
+        "force_rel_tolerance": rel_tol,
+        "reference_pass": reference_pass,
+        "max_reference_force_abs_error_N": (
+            max(selected_abs_errors) if selected_abs_errors else None
+        ),
+        "max_reference_force_rel_error": (
+            max(selected_rel_errors) if selected_rel_errors else None
+        ),
+        "status": "ok" if ok else "needs_attention",
+        "ok_for_force_sweep": ok,
+        "rows": rows,
+    }
+
+
 def virtual_work_symmetric_pair_force_summary(
     displacement_m,
     energy_minus_J,
