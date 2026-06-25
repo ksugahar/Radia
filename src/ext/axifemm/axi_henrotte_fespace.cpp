@@ -26,7 +26,7 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
     axi_order = int(flags.GetNumFlag("order", 1.0));
     if (axi_order != 1 && axi_order != 2)
         throw Exception("AxiHenrotteFESpace: only order=1 (Q1/P1) and order=2 "
-                        "(Q2 quad-only) are supported.");
+                        "(Q2 quad or P2 triangle) are supported.");
     order = axi_order;  // base-class field; 4 = poly-degree-in-r for Q2
 
     // curved=True: order-2 QUADS sample 9 curved node positions from the mesh's
@@ -385,7 +385,8 @@ void ExportAxiHenrotteFESpace(pybind11::module & m) {
           py::arg("mesh"), py::arg("order") = 1,
           "Construct an AxiHenrotteFESpace for the given mesh.\n"
           "  order=1 (default): Q1 quad / P1 triangle, vertex DOFs only.\n"
-          "  order=2          : Q2 quad-only (9 DOFs: 4 vertex + 4 edge + 1 face).");
+          "  order=2          : Q2 axis-aligned quad (9 DOFs) or P2 triangle\n"
+          "                     (6 DOFs; curved-mesh aware via mesh.Curve(2)).");
 }
 
 }  // namespace axifem
