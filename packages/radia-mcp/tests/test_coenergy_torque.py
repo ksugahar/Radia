@@ -11,6 +11,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from radia_mcp.radia_ngsolve.force import (  # noqa: E402
+    coenergy_torque_table_consistency_summary,
     coenergy_torque_from_angle_samples,
     coenergy_torque_summary,
     virtual_work_force_from_displacement_samples,
@@ -46,6 +47,41 @@ def test_coenergy_torque_nonperiodic_linear_table_is_exact():
 
     assert [row["stencil"] for row in rows] == ["forward", "central", "central", "backward"]
     assert [row["torque_Nm"] for row in rows] == pytest.approx([4.0, 4.0, 4.0, 4.0])
+
+
+def test_coenergy_torque_table_consistency_accepts_mean_torque_sweep():
+    angles = [0.0, 0.1, 0.2, 0.3, 0.4]
+    mean_torque = 2.5
+    stiffness = 0.75
+    coenergy = [
+        1.0 + mean_torque * angle + 0.5 * stiffness * angle * angle
+        for angle in angles
+    ]
+    torque = [mean_torque + stiffness * angle for angle in angles]
+
+    summary = coenergy_torque_table_consistency_summary(
+        angles,
+        coenergy,
+        torque,
+        torque_abs_tolerance_Nm=1.0e-12,
+    )
+
+    assert summary["status"] == "ok"
+    assert summary["reference_checked_count"] == 3
+    assert summary["comparison_stencils"] == ["central"]
+    assert summary["max_torque_abs_error_Nm"] < 1.0e-12
+    assert summary["coenergy_delta_J"] == pytest.approx(coenergy[-1] - coenergy[0])
+    assert summary["rows"][0]["selected_for_reference_check"] is False
+    assert summary["rows"][1]["selected_for_reference_check"] is True
+
+    bad = coenergy_torque_table_consistency_summary(
+        angles,
+        coenergy,
+        [value + 0.2 for value in torque],
+        torque_abs_tolerance_Nm=1.0e-12,
+    )
+    assert bad["status"] == "needs_attention"
+    assert bad["reference_pass"] is False
 
 
 def test_coenergy_torque_rejects_bad_tables():
