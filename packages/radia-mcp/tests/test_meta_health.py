@@ -26,6 +26,46 @@ def test_meta_health_all_subpackages_import():
     )
 
 
+def test_meta_health_caches_repeated_probe_in_process():
+    """Repeated MCP health calls should not re-probe the whole fleet."""
+    from radia_mcp.meta.server import radia_mcp_health
+
+    fresh = radia_mcp_health(force_refresh=True)
+    assert fresh["from_cache"] is False
+    assert fresh["elapsed_ms"] >= 0.0
+    assert fresh["cache_ttl_s"] > 0.0
+
+    cached = radia_mcp_health()
+    assert cached["from_cache"] is True
+    assert cached["cache_age_s"] >= 0.0
+    assert cached["n_servers_total"] == fresh["n_servers_total"]
+    assert cached["n_servers_healthy"] == fresh["n_servers_healthy"]
+
+    refreshed = radia_mcp_health(force_refresh=True)
+    assert refreshed["from_cache"] is False
+
+
+def test_status_optional_dep_probe_avoids_runtime_import(monkeypatch):
+    """Status tools should use import metadata, not import heavy deps."""
+    from radia_mcp.common import status as status_mod
+
+    status_mod._probe_dep.cache_clear()
+
+    def _boom(name):
+        raise AssertionError(f"unexpected import of optional dependency {name}")
+
+    monkeypatch.setattr(status_mod.importlib, "import_module", _boom)
+    payload = status_mod.build_status_payload(
+        server_name="mcp-server-test",
+        description="test",
+        subpackage="radia_mcp.test",
+        optional_deps=["json"],
+    )
+
+    assert payload["optional_deps"]["json"]["installed"] is True
+    assert "version" in payload["optional_deps"]["json"]
+
+
 def test_meta_catalog_has_at_least_30_servers():
     """Sanity floor — catalog should not silently shrink."""
     from radia_mcp.meta import catalog
