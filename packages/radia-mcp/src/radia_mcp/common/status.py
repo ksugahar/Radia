@@ -39,23 +39,35 @@ Usage in a server's server.py:
 """
 
 from __future__ import annotations
+from functools import lru_cache
 import importlib
+import importlib.metadata
 import inspect
 import sys
 from typing import Optional
 
 
+@lru_cache(maxsize=None)
 def _probe_dep(module_name: str) -> dict:
-    """Check if an optional dep is importable. No version check (lazy)."""
+    """Check if an optional dep is importable without importing it.
+
+    Status tools are called frequently by agents. Importing optional packages
+    such as chromadb, matplotlib, or ngsolve just to read ``__version__`` makes
+    status calls slow and can trigger side effects. ``find_spec`` plus package
+    metadata is enough for an MCP health hint.
+    """
     spec = importlib.util.find_spec(module_name)
     if spec is None:
         return {"installed": False, "version": None}
     try:
-        m = importlib.import_module(module_name)
-        return {"installed": True,
-                "version": getattr(m, "__version__", "unknown")}
+        version = importlib.metadata.version(module_name)
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
     except Exception as e:
-        return {"installed": False, "version": None, "error": str(e)}
+        version = "unknown"
+        return {"installed": True, "version": version,
+                "version_probe_error": str(e)}
+    return {"installed": True, "version": version}
 
 
 def build_status_payload(
@@ -86,7 +98,7 @@ def build_status_payload(
         payload["related_servers"] = related_servers
     if optional_deps:
         payload["optional_deps"] = {
-            d: _probe_dep(d) for d in optional_deps
+            d: dict(_probe_dep(d)) for d in optional_deps
         }
         payload["all_optional_deps_installed"] = all(
             v["installed"] for v in payload["optional_deps"].values()
