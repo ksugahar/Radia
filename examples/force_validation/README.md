@@ -10,10 +10,12 @@ the same force identities into FEM, BEM, or CAD/mesh workflows.
 | [`validation_virtual_work_force_sweep_audit.py`](validation_virtual_work_force_sweep_audit.py) | Coenergy-vs-displacement sweeps keep finite-difference stencils, force-gradient estimates, and reference-force errors |
 | [`validation_coenergy_torque_table_consistency.py`](validation_coenergy_torque_table_consistency.py) | Torque-angle tables and coenergy-angle tables agree under fixed-current virtual work, including nonzero mean work terms |
 | [`validation_torque_waveform_comparison.py`](validation_torque_waveform_comparison.py) | Periodic torque tables can be compared by mean drift, sample error, and harmonic ripple deltas |
+| [`validation_maxwell_contour_segment_balance.py`](validation_maxwell_contour_segment_balance.py) | Closed 2D Maxwell stress contours expose large local segment forces while the symmetric net force cancels |
 
 ```powershell
 python validation_parallel_wire_virtual_work_force.py
 python validation_virtual_work_force_sweep_audit.py
 python validation_coenergy_torque_table_consistency.py
 python validation_torque_waveform_comparison.py
+python validation_maxwell_contour_segment_balance.py
 ```
