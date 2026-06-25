@@ -20,6 +20,7 @@ from radia_mcp.radia_ngsolve.solve import (two_wire_force_per_length, image_forc
                                            MU0)
 from radia_mcp.radia_ngsolve.force import (
     parallel_wire_lorentz_force_summary,
+    parallel_wire_virtual_work_force_summary,
     planar_lorentz_force_summary,
 )
 
@@ -73,6 +74,30 @@ def test_parallel_wire_lorentz_force_summary_tracks_direction_and_sign():
         parallel_wire_lorentz_force_summary(I, I, 0.0)
     with pytest.raises(ValueError):
         parallel_wire_lorentz_force_summary(I, I, (0.0, 0.0))
+
+
+def test_parallel_wire_virtual_work_force_matches_lorentz_direction():
+    like = parallel_wire_virtual_work_force_summary(I, I, d, displacement_step_m=d * 1.0e-4)
+    expected = two_wire_force_per_length(I, I, d)
+
+    assert like["interaction"] == "attraction"
+    assert like["analytic_radial_force_per_length_N_per_m"] == pytest.approx(-expected)
+    assert like["virtual_work_radial_force_per_length_N_per_m"] == pytest.approx(-expected, rel=1.0e-8)
+    assert like["virtual_work_force_on_wire2_N_per_m"] == pytest.approx(like["lorentz_force_on_wire2_N_per_m"], rel=1.0e-8)
+    assert like["force_rel_error"] < 1.0e-8
+    assert like["coenergy_minus_J_per_m"] > like["coenergy_plus_J_per_m"]
+
+    vertical_repulsion = parallel_wire_virtual_work_force_summary(I, -I, (0.0, d))
+    assert vertical_repulsion["interaction"] == "repulsion"
+    assert vertical_repulsion["analytic_radial_force_per_length_N_per_m"] > 0.0
+    assert vertical_repulsion["virtual_work_force_on_wire2_N_per_m"][1] > 0.0
+
+    with pytest.raises(ValueError):
+        parallel_wire_virtual_work_force_summary(I, I, d, displacement_step_m=0.0)
+    with pytest.raises(ValueError):
+        parallel_wire_virtual_work_force_summary(I, I, d, displacement_step_m=d)
+    with pytest.raises(ValueError):
+        parallel_wire_virtual_work_force_summary(I, I, d, reference_separation_m=0.0)
 
 
 def test_planar_lorentz_force_rejects_bad_inputs():
