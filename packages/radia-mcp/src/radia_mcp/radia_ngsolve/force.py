@@ -1700,6 +1700,123 @@ def one_port_reflection_momentum_force_summary(
     return summary
 
 
+def one_port_reflection_sweep_momentum_force_summary(
+    frequency_Hz,
+    s11_values,
+    power_incident_W=1.0,
+    incident_direction=(1.0, 0.0, 0.0),
+    speed=C0,
+    passivity_tolerance=1.0e-12,
+):
+    """Summarize one-port reflection momentum force over a frequency sweep.
+
+    ``frequency_Hz`` and ``s11_values`` are paired samples from a one-port
+    reflection sweep.  The force model is the same as
+    :func:`one_port_reflection_momentum_force_summary`:
+
+        F = (1 + |S11|^2) P_inc k_inc / c
+
+    Unlike the single-point helper, this sweep audit records passivity
+    violations instead of failing immediately, so measured/simulated data with a
+    small ``|S11| > 1`` overshoot can still be diagnosed.
+    """
+
+    frequencies = [float(value) for value in frequency_Hz]
+    gammas = [complex(value) for value in s11_values]
+    if len(frequencies) != len(gammas):
+        raise ValueError("frequency_Hz and s11_values must have the same length")
+    if not frequencies:
+        raise ValueError("at least one frequency sample is required")
+    power = float(power_incident_W)
+    speed = float(speed)
+    tolerance = float(passivity_tolerance)
+    if power < 0.0:
+        raise ValueError("power_incident_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    if tolerance < 0.0:
+        raise ValueError("passivity_tolerance must be >= 0")
+    inc = _unit_vector(incident_direction, "incident_direction")
+
+    rows = []
+    violation_rows = []
+    momentum_scale = power / speed
+    for idx, (frequency, gamma) in enumerate(zip(frequencies, gammas)):
+        if not math.isfinite(frequency) or frequency < 0.0:
+            raise ValueError("frequency samples must be finite and >= 0")
+        if not math.isfinite(gamma.real) or not math.isfinite(gamma.imag):
+            raise ValueError("s11 values must be finite")
+        magnitude = abs(gamma)
+        reflectance = magnitude * magnitude
+        factor = 1.0 + reflectance
+        axial_force = factor * momentum_scale
+        row = {
+            "index": idx,
+            "frequency_Hz": frequency,
+            "s11_real": gamma.real,
+            "s11_imag": gamma.imag,
+            "s11_magnitude": magnitude,
+            "s11_phase_rad": math.atan2(gamma.imag, gamma.real),
+            "s11_phase_deg": math.degrees(math.atan2(gamma.imag, gamma.real)),
+            "reflectance": reflectance,
+            "absorptance_one_port": 1.0 - reflectance,
+            "return_loss_dB": None if magnitude == 0.0 else max(0.0, -20.0 * math.log10(magnitude)),
+            "return_loss_is_infinite": magnitude == 0.0,
+            "momentum_transfer_factor": factor,
+            "axial_force_along_incident_direction_N": axial_force,
+            "force_magnitude_N": abs(axial_force),
+            "force_N": [axial_force * value for value in inc],
+            "power_reflected_W": reflectance * power,
+            "power_delivered_to_one_port_W": (1.0 - reflectance) * power,
+            "passivity_excess_magnitude": max(0.0, magnitude - 1.0),
+            "passivity_excess_reflectance": max(0.0, reflectance - 1.0),
+            "passivity_ok": magnitude <= 1.0 + tolerance,
+        }
+        rows.append(row)
+        if not row["passivity_ok"]:
+            violation_rows.append(row)
+
+    max_force_row = max(rows, key=lambda row: row["force_magnitude_N"])
+    min_force_row = min(rows, key=lambda row: row["force_magnitude_N"])
+    max_reflectance_row = max(rows, key=lambda row: row["reflectance"])
+    mean_force = sum(row["force_magnitude_N"] for row in rows) / len(rows)
+    mean_reflectance = sum(row["reflectance"] for row in rows) / len(rows)
+    monotonic = all(
+        frequencies[idx] < frequencies[idx + 1]
+        for idx in range(len(frequencies) - 1)
+    )
+
+    return {
+        "n_points": len(rows),
+        "frequency_min_Hz": min(frequencies),
+        "frequency_max_Hz": max(frequencies),
+        "frequency_monotonic_increasing": monotonic,
+        "power_incident_W": power,
+        "speed_m_per_s": speed,
+        "incident_direction": inc,
+        "passivity_tolerance": tolerance,
+        "passivity_ok": not violation_rows,
+        "passivity_violation_count": len(violation_rows),
+        "max_s11_magnitude": max_reflectance_row["s11_magnitude"],
+        "max_reflectance": max_reflectance_row["reflectance"],
+        "max_reflectance_frequency_Hz": max_reflectance_row["frequency_Hz"],
+        "max_passivity_excess_magnitude": max(row["passivity_excess_magnitude"] for row in rows),
+        "max_passivity_excess_reflectance": max(row["passivity_excess_reflectance"] for row in rows),
+        "mean_reflectance": mean_reflectance,
+        "mean_force_magnitude_N": mean_force,
+        "max_force_magnitude_N": max_force_row["force_magnitude_N"],
+        "max_force_frequency_Hz": max_force_row["frequency_Hz"],
+        "min_force_magnitude_N": min_force_row["force_magnitude_N"],
+        "min_force_frequency_Hz": min_force_row["frequency_Hz"],
+        "force_span_N": max_force_row["force_magnitude_N"] - min_force_row["force_magnitude_N"],
+        "max_force_row": max_force_row,
+        "min_force_row": min_force_row,
+        "passivity_violation_rows": violation_rows,
+        "rows": rows,
+        "one_port_sweep_force_formula": "F=(1+|S11|^2)P_inc k_inc/c",
+    }
+
+
 def radiation_pressure_summary(
     intensity_W_per_m2,
     area_m2=1.0,
