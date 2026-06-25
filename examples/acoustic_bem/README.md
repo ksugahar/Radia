@@ -67,6 +67,12 @@ pressure-release, and oblique-incidence limits.
 momentum pressure from an acoustic impedance reflection summary. It checks the
 matched absorber, partial reflector, and lossless reactive reflector limits.
 
+## Impedance sweep
+
+`validation_acoustic_impedance_sweep.py` validates a frequency-indexed acoustic
+impedance table. It records reflection, absorption, normal momentum pressure,
+and passive-load diagnostics in the same sweep summary.
+
 ```powershell
 python validation_pulsating_sphere_radiation.py
 python validation_low_frequency_helmholtz_kernel.py
@@ -77,4 +83,5 @@ python validation_acoustic_impedance_dtn_bridge.py
 python validation_acoustic_boundary_power.py
 python validation_acoustic_impedance_reflection.py
 python validation_acoustic_impedance_radiation_pressure.py
+python validation_acoustic_impedance_sweep.py
 ```
