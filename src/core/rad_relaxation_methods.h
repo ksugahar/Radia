@@ -368,6 +368,10 @@ protected:
 	// Override: BiCGSTAB iterative solver for linear step
 	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
 
+	// Moment method-1 builds the parameter-free moment dense matrix inside
+	// SolveLinearStep, so it does not need the legacy FlatInteract matrix.
+	bool NeedsDenseMatrix() const override;
+
 private:
 	// Variable DOF version of BiCGSTAB
 	// elemChiArray: chi for system matrix diagonal (chi_abs for Picard, chi_d for Newton)

@@ -466,7 +466,7 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     // RegionTaskManager is active.  Stand up (or reuse the caller's) pool here so EVERY
     // HACApK build -- multipole-moment MMM, HDiv, MMM/MSC, PEEC, diagnostics -- is parallel even when
     // a non-panel caller forgot `with TaskManager()`.  Nested -> reuses the caller's (no-op).
-    ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 
     FreeResources();
 

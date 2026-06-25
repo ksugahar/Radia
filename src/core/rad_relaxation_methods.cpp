@@ -912,7 +912,11 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 
 		// Solve linear system (virtual - overridden by LU, BiCGSTAB, HACApK)
 		int linearIter = SolveLinearStep(ctx, iterCount);
-		(void)linearIter;  // May be used for statistics
+		if(linearIter < 0)
+		{
+			IntrctPtr->RelaxStatusParam.MisfitM = 1.0e30;
+			return MaxIterNumber;
+		}
 
 		// Update element magnetization and compute actual H field from sigma
 		// Uses H = H_ext + H_demag (ELF-compatible) instead of circular H = M/chi
@@ -1992,6 +1996,19 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	return AutoRelax_Unified(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 }
 
+bool radTRelaxationMethNo_1::NeedsDenseMatrix() const
+{
+	if(IntrctPtr == nullptr) return true;
+	int nElem = IntrctPtr->AmOfMainElem;
+	if(nElem <= 0) return true;
+	for(int elem = 0; elem < nElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		if(dof != 6 && dof != 5) return true;
+	}
+	return false;
+}
+
 //=========================================================================
 // Variable DOF Solver Methods for Hybrid MSC + Standard Element Analysis
 // Reference: Yano & Sugahara, "MMM with MSC", J. Magn. Soc. Jpn., 2023
@@ -2108,7 +2125,7 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	// whole build + BiCGSTAB matvec loop so multipole-moment MMM method 2 is multi-threaded even when
 	// called via a bare rad.Solve(...,2) without `with TaskManager()`.  Mirrors
 	// RadHACApKChargeGram::SolveMaterialMINRES; nested under a panel region -> no-op.
-	ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 
 	RadHACApKMomentSystem mgr(IntrctPtr, chiPerHex);
 	RadHACApKParams prm; prm.aca_eps = aca_eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
@@ -2610,7 +2627,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
 	// BiCGSTAB with Jacobi preconditioner for variable DOF systems
 	// Keep a TaskManager region active across the whole method-1 solve so every ParallelFor
 	// matvec/vector/preconditioner operation is multi-threaded even from a bare rad.Solve(..., 1).
-	ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
 
@@ -2854,6 +2871,193 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	int totalDOF = ctx.totalDOF;
 	int AmOfMainElem = ctx.AmOfMainElem;
 
+	bool useMoment = (AmOfMainElem > 0);
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		if(dof != 6 && dof != 5)
+		{
+			useMoment = false;
+			break;
+		}
+	}
+
+	if(useMoment)
+	{
+		// Keep the TaskManager active for dense moment assembly, matvec, and block-Jacobi application.
+		// Without this region the method-1 moment branch falls back to effectively serial ngcore::ParallelFor
+		// execution, which makes MDX scaling measurements misleading.
+		ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+
+		std::vector<int> momElem;
+		IntrctPtr->CollectMomentElems(momElem);
+		int nMom = (int)momElem.size();
+		if(nMom <= 0) return 0;
+
+		std::vector<double> chiPerHex((size_t)nMom), HextPerHex((size_t)nMom * 3);
+		for(int h = 0; h < nMom; h++)
+		{
+			int elem = momElem[h];
+			double chi_abs = ctx.CurrentChiArray[elem];
+			if(chi_abs < 1.0e-6) chi_abs = 1.0e-6;
+			chiPerHex[h] = chi_abs;
+
+			const TVector3d& He = IntrctPtr->ExternFieldArray[elem];
+			HextPerHex[(size_t)h * 3 + 0] = He.x;
+			HextPerHex[(size_t)h * 3 + 1] = He.y;
+			HextPerHex[(size_t)h * 3 + 2] = He.z;
+
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC) poly->CurrentChi = chi_abs;
+		}
+
+		size_t matrix_size = (size_t)totalDOF * (size_t)totalDOF;
+		std::vector<double> SystemMatrix;
+		std::vector<double> RHS(totalDOF);
+		try { SystemMatrix.resize(matrix_size); }
+		catch (const std::bad_alloc&) {
+			double required_gb = (double)matrix_size * 8 / (1024.0 * 1024.0 * 1024.0);
+			fprintf(stderr, "Radia::Solve> Dense BiCGSTAB requires %.1f GB memory for DOF=%d. Use HACApK (method 2) for large problems.\n", required_gb, totalDOF);
+			return -2;
+		}
+
+		IntrctPtr->BuildMomentSystemCore(chiPerHex.data(), HextPerHex.data(), SystemMatrix, RHS);
+
+		std::vector<double> sigma(totalDOF);
+		for(int i = 0; i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];
+
+		bool use_block_jacobi = false;
+		std::vector<double> blockInverse;
+		std::vector<int> blockOffsets;
+		std::vector<double> diag_inv;
+
+#ifdef HAVE_LAPACK
+		// Moment rows strongly couple the local face DOF (dipole/monopole/quadrupole constraints).
+		// A scalar diagonal Jacobi preconditioner is too weak even for small nonlinear cubes, so use the
+		// per-element 5x5/6x6 diagonal block of the already assembled dense moment matrix.
+		use_block_jacobi = true;
+		blockOffsets.resize((size_t)nMom + 1);
+		int total_block_storage = 0;
+		for(int h = 0; h < nMom; h++)
+		{
+			int elem = momElem[h];
+			int dof = IntrctPtr->GetElementDOF(elem);
+			blockOffsets[h] = total_block_storage;
+			total_block_storage += dof * dof;
+		}
+		blockOffsets[nMom] = total_block_storage;
+		blockInverse.assign((size_t)total_block_storage, 0.0);
+
+		const int max_dof = 6;
+		std::vector<double> block_copy((size_t)max_dof * max_dof);
+		std::vector<int> ipiv(max_dof);
+		std::vector<double> work((size_t)max_dof * max_dof);
+		int lwork = max_dof * max_dof;
+		for(int h = 0; h < nMom; h++)
+		{
+			int elem = momElem[h];
+			int dof = IntrctPtr->GetElementDOF(elem);
+			int off = IntrctPtr->GetElementDOFOffset(elem);
+			int boff = blockOffsets[h];
+
+			for(int i = 0; i < dof; i++)
+			{
+				for(int j = 0; j < dof; j++)
+				{
+					// LAPACK wants column-major storage: block_copy[row + col*dof].
+					block_copy[i + j * dof] = SystemMatrix[(size_t)(off + i) * totalDOF + (off + j)];
+				}
+			}
+
+			int info = 0;
+			dgetrf_(&dof, &dof, block_copy.data(), &dof, ipiv.data(), &info);
+			if(info == 0) dgetri_(&dof, block_copy.data(), &dof, ipiv.data(), work.data(), &lwork, &info);
+			if(info != 0)
+			{
+				fprintf(stderr, "[BiCG] Warning: moment block Jacobi failed at element %d (info=%d), using scalar Jacobi\n",
+				        elem, info);
+				use_block_jacobi = false;
+				break;
+			}
+
+			for(int i = 0; i < dof; i++)
+			{
+				for(int j = 0; j < dof; j++)
+				{
+					blockInverse[boff + i * dof + j] = block_copy[i + j * dof];
+				}
+			}
+		}
+#endif
+		if(!use_block_jacobi)
+		{
+			diag_inv.resize((size_t)totalDOF);
+			for(int i = 0; i < totalDOF; i++)
+			{
+				double d = SystemMatrix[(size_t)i * totalDOF + i];
+				diag_inv[i] = (std::abs(d) > 1.0e-15) ? (1.0 / d) : 1.0;
+			}
+		}
+
+		auto matvec = [&SystemMatrix, totalDOF](const double* x, double* y) {
+			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t row) {
+				const double* Arow = &SystemMatrix[(size_t)row * totalDOF];
+				double sum = 0.0;
+				for(int col = 0; col < totalDOF; col++) sum += Arow[col] * x[col];
+				y[row] = sum;
+			});
+		};
+		auto precond = [&](const double* x, double* y) {
+			if(use_block_jacobi)
+			{
+				ngcore::ParallelFor(ngcore::IntRange(nMom), [&](size_t hh) {
+					int h = (int)hh;
+					int elem = momElem[h];
+					int dof = IntrctPtr->GetElementDOF(elem);
+					int off = IntrctPtr->GetElementDOFOffset(elem);
+					int boff = blockOffsets[h];
+					for(int i = 0; i < dof; i++)
+					{
+						double sum = 0.0;
+						for(int j = 0; j < dof; j++) sum += blockInverse[boff + i * dof + j] * x[off + j];
+						y[off + i] = sum;
+					}
+				});
+			}
+			else
+			{
+				ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
+					y[i] = diag_inv[i] * x[i];
+				});
+			}
+		};
+
+		const double bicg_tol = rad.m_bicg_tol;
+		const int bicg_max_iter = 10000;
+		auto t_bicg_start = std::chrono::high_resolution_clock::now();
+		radia::bicgstab::Result result =
+			radia::bicgstab::Solve<double>(totalDOF, matvec, precond, RHS.data(), sigma.data(),
+			                               bicg_tol, bicg_max_iter);
+		auto t_bicg_end = std::chrono::high_resolution_clock::now();
+		rad.m_solve_t_linear_solve += std::chrono::duration<double>(t_bicg_end - t_bicg_start).count();
+		rad.m_solve_linear_iterations += result.iterations;
+
+		if(!result.converged)
+		{
+			fprintf(stderr, "[BiCG] Warning: dense moment BiCGSTAB did not reach tol %.3e after %d iterations (residual=%.4e)\n",
+			        bicg_tol, result.iterations, result.residual);
+			return -3;
+		}
+
+		std::vector<double> sigma_trial = sigma;
+		double omega_ls = ApplyLineSearchDamping(ctx, this->IntrctPtr, sigma_trial);
+		if(omega_ls >= 0.999)
+		{
+			for(int i = 0; i < totalDOF; i++) ctx.FlatMagn[i] = sigma_trial[i];
+		}
+		return result.iterations;
+	}
+
 	// Update poly->CurrentChi for 6DOF elements before BiCGSTAB
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
@@ -2893,6 +3097,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	}
 	auto t_bicg_end = std::chrono::high_resolution_clock::now();
 	rad.m_solve_t_linear_solve += std::chrono::duration<double>(t_bicg_end - t_bicg_start).count();
+	rad.m_solve_linear_iterations += n_iter;
 
 	return n_iter;
 }
@@ -2966,7 +3171,7 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 	// TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
 	// whole MMM/MSC method-2 BiCGSTAB (init + loop matvecs) so it is multi-threaded even when
 	// driven by a bare rad.Solve(...,2) without `with TaskManager()`.  Nested -> no-op.
-	ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
 
