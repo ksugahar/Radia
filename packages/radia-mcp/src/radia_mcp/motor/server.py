@@ -27,7 +27,7 @@ from .henrotte_lineage_knowledge import get_henrotte_lineage_knowledge
 from .hollaus_eddy_knowledge import get_hollaus_eddy_knowledge
 from .hollaus_genealogy_knowledge import get_hollaus_genealogy
 from .tritool_cross_reference_knowledge import get_tritool_cross_reference
-from .elf_magic_bridge_knowledge import get_elf_magic_bridge
+from .deck_bridge_knowledge import get_deck_bridge
 from .age_quality_knowledge import (
     format_age_validation_plan,
     get_age_quality_report,
@@ -314,26 +314,26 @@ def motor_tritool_cross_reference(topic: str = "overview") -> str:
 
 
 @mcp.tool()
-def motor_elf_magic_bridge(topic: str = "overview") -> str:
+def motor_deck_bridge(topic: str = "overview") -> str:
     """
-    Public-safe ELF/MAGIC motor corpus bridge for radia-motor.
+    Public-safe motor deck corpus bridge for radia-motor.
 
-    Explains what the ELF-mcp-server motor corpus already covers, where its
-    validation depth is still thin, and which radia-motor / radia-ngsolve
+    Explains what the external public motor-deck corpus already covers, where
+    its validation depth is still thin, and which radia-motor / radia-ngsolve
     anchors should be strengthened next.
 
     Args:
         topic: One of:
-            "overview"                  - ELF public motor corpus status
-            "coverage_matrix"           - ELF archetypes -> radia targets
+            "overview"                  - public motor deck corpus status
+            "coverage_matrix"           - deck archetypes -> radia targets
             "insufficiency_audit"       - What is broad vs still only proxy-validated
-            "routing_playbook"          - How to use ELF and radia-motor together
+            "routing_playbook"          - How to use public decks and radia-motor together
             "radia_strengthening_queue" - Next radia-side upgrades
             "jmag_coverage_reality"     - Turnkey production motor coverage boundary
             "age_vs_mmm_strategy"       - Why AGE is the main 2D path; where MMM helps
             "all"                       - Everything
     """
-    return get_elf_magic_bridge(topic)
+    return get_deck_bridge(topic)
 
 
 @mcp.tool()
@@ -431,11 +431,11 @@ def motor_mmm_quick_check(
 @mcp.tool()
 def motor_validation_router(goal: str) -> str:
     """
-    Route a motor prompt to ELF deck, MMM quick check, and NGSolve AGE validation.
+    Route a motor prompt to a public deck, MMM quick check, and NGSolve AGE validation.
 
     This is the dispatch layer for the hybrid workflow:
-    ELF/MAGIC public decks for input authoring, the lightweight 2D MMM quick
-    check for first-order sign/scale checks, and NGSolve AGE / radia-ngsolve for
+    public decks for input authoring, the lightweight 2D MMM quick check for
+    first-order sign/scale checks, and NGSolve AGE / radia-ngsolve for
     independent motor-physics validation.
     """
     return format_motor_validation_route(route_motor_validation(goal))
@@ -533,7 +533,7 @@ def main():
         from .henrotte_lineage_knowledge import SECTIONS as H_SEC
         from .hollaus_eddy_knowledge import SECTIONS as E_SEC
         from .tritool_cross_reference_knowledge import SECTIONS as X_SEC
-        from .elf_magic_bridge_knowledge import SECTIONS as M_SEC
+        from .deck_bridge_knowledge import SECTIONS as M_SEC
         from .age_quality_knowledge import SECTIONS as A_SEC
         for k in O_SEC:
             r = motor_onelab(k)
@@ -564,18 +564,18 @@ def main():
             print(f"  motor_tritool_cross_reference({k!r}): {len(r)} chars")
             assert len(r) > 100, f"Tri-tool topic {k} too short"
         for k in M_SEC:
-            r = motor_elf_magic_bridge(k)
-            print(f"  motor_elf_magic_bridge({k!r}): {len(r)} chars")
-            assert len(r) > 100, f"ELF/MAGIC bridge topic {k} too short"
+            r = motor_deck_bridge(k)
+            print(f"  motor_deck_bridge({k!r}): {len(r)} chars")
+            assert len(r) > 100, f"Deck bridge topic {k} too short"
         for k in A_SEC:
             r = motor_age_quality(k)
             print(f"  motor_age_quality({k!r}): {len(r)} chars")
             assert len(r) > 100, f"AGE quality topic {k} too short"
-        bridge = motor_elf_magic_bridge("insufficiency_audit")
+        bridge = motor_deck_bridge("insufficiency_audit")
         assert "gold_numeric_invariant" in bridge
-        assert "radia-motor" in motor_elf_magic_bridge("radia_strengthening_queue")
-        assert "not a full" in motor_elf_magic_bridge("jmag_coverage_reality")
-        assert "NGSolve AGE" in motor_elf_magic_bridge("age_vs_mmm_strategy")
+        assert "radia-motor" in motor_deck_bridge("radia_strengthening_queue")
+        assert "not a full" in motor_deck_bridge("jmag_coverage_reality")
+        assert "NGSolve AGE" in motor_deck_bridge("age_vs_mmm_strategy")
         assert "gold_age_invariant" in motor_age_quality("publication_policy")
         assert "tests/test_airgap_eddy_machine.py" in motor_age_quality("gate_matrix")
         age_plan = motor_age_validation_plan("IPM hairpin MTPA field weakening")

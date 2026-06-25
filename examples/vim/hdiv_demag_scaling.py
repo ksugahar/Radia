@@ -3,7 +3,7 @@ hdiv_demag_scaling.py -- the SWITCH-GATE scalability question for the HDiv-type 
 
 hdiv_demag_quad_self.py established (3x3x3): loops EXACTLY field-null, plain Jacobi-MINRES is
 mu_r-INDEPENDENT (regular 8, distorted ~75), distortion-sensitive.  The remaining question for
-adopting HDiv-type over yano-type is SCALABILITY: how do plain-Jacobi iters grow with N (mesh
+adopting HDiv-type over six-face surface-charge is SCALABILITY: how do plain-Jacobi iters grow with N (mesh
 refinement) at fixed mu_r?  An integral (dense) operator's point-Jacobi iters often grow with N
 -> that is exactly where a better preconditioner (block-Jacobi / H-ILU / AMS) earns its keep.
 

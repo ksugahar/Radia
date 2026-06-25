@@ -1,0 +1,646 @@
+{
+  "checks": {
+    "area_first": 22.0,
+    "area_last": 52.0,
+    "area_monotonic": true,
+    "clean_status": "ok",
+    "constrained_status": "needs_attention",
+    "constraint_violation_count": 1,
+    "max_abs_error": 3.552713678800501e-15,
+    "n_cases": 4,
+    "parameter_values": [
+      1.0,
+      2.0,
+      3.0,
+      4.0
+    ],
+    "volume_max": 23.999999999999996,
+    "volume_min": 5.999999999999999,
+    "volume_monotonic": true
+  },
+  "clean_sweep": {
+    "constraint_violation_count": 0,
+    "constraint_violations": [],
+    "duplicate_parameter_values": false,
+    "issues": [],
+    "metric_rows": [
+      {
+        "constraint_violation_count": 0,
+        "delta_first_to_last": 17.999999999999996,
+        "first": 5.999999999999999,
+        "last": 23.999999999999996,
+        "limits": {
+          "max": null,
+          "min": null
+        },
+        "max": 23.999999999999996,
+        "max_parameter": 4.0,
+        "max_step_delta": 6.000000000000002,
+        "metric": "volume",
+        "min": 5.999999999999999,
+        "min_parameter": 1.0,
+        "min_step_delta": 5.9999999999999964,
+        "monotonic_non_decreasing": true,
+        "monotonic_non_increasing": false,
+        "relative_span": 3.0,
+        "span": 17.999999999999996
+      },
+      {
+        "constraint_violation_count": 0,
+        "delta_first_to_last": 30.0,
+        "first": 22.0,
+        "last": 52.0,
+        "limits": {
+          "max": null,
+          "min": null
+        },
+        "max": 52.0,
+        "max_parameter": 4.0,
+        "max_step_delta": 10.0,
+        "metric": "area",
+        "min": 22.0,
+        "min_parameter": 1.0,
+        "min_step_delta": 10.0,
+        "monotonic_non_decreasing": true,
+        "monotonic_non_increasing": false,
+        "relative_span": 1.3636363636363635,
+        "span": 30.0
+      }
+    ],
+    "n_cases": 4,
+    "ok_for_design_table": true,
+    "parameter_key": "height",
+    "parameter_max": 4.0,
+    "parameter_min": 1.0,
+    "parameter_strictly_increasing": true,
+    "parameter_values": [
+      1.0,
+      2.0,
+      3.0,
+      4.0
+    ],
+    "policy": "build123d_parameter_sweep_measurements_are_sorted_and_audited",
+    "rows": [
+      {
+        "area": 22.0,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 3.7416573867739413,
+          "max": [
+            1.0,
+            1.5,
+            0.5
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -0.5
+          ],
+          "size": [
+            2.0,
+            3.0,
+            1.0
+          ]
+        },
+        "characteristic_length": 3.0,
+        "edges": 12,
+        "expected_area": 22.0,
+        "expected_volume": 6.0,
+        "faces": 6,
+        "height": 1.0,
+        "index": 1,
+        "is_valid": true,
+        "name": "box_h_1",
+        "solids": 1,
+        "type": "Solid",
+        "vertices": 8,
+        "volume": 5.999999999999999
+      },
+      {
+        "area": 32.0,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 4.123105625617661,
+          "max": [
+            1.0,
+            1.5,
+            1.0
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -1.0
+          ],
+          "size": [
+            2.0,
+            3.0,
+            2.0
+          ]
+        },
+        "characteristic_length": 3.0,
+        "edges": 12,
+        "expected_area": 32.0,
+        "expected_volume": 12.0,
+        "faces": 6,
+        "height": 2.0,
+        "index": 1,
+        "is_valid": true,
+        "name": "box_h_2",
+        "solids": 1,
+        "type": "Solid",
+        "vertices": 8,
+        "volume": 11.999999999999998
+      },
+      {
+        "area": 42.0,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 4.69041575982343,
+          "max": [
+            1.0,
+            1.5,
+            1.5
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -1.5
+          ],
+          "size": [
+            2.0,
+            3.0,
+            3.0
+          ]
+        },
+        "characteristic_length": 3.0,
+        "edges": 12,
+        "expected_area": 42.0,
+        "expected_volume": 18.0,
+        "faces": 6,
+        "height": 3.0,
+        "index": 1,
+        "is_valid": true,
+        "name": "box_h_3",
+        "solids": 1,
+        "type": "Solid",
+        "vertices": 8,
+        "volume": 18.0
+      },
+      {
+        "area": 52.0,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 5.385164807134504,
+          "max": [
+            1.0,
+            1.5,
+            2.0
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -2.0
+          ],
+          "size": [
+            2.0,
+            3.0,
+            4.0
+          ]
+        },
+        "characteristic_length": 4.0,
+        "edges": 12,
+        "expected_area": 52.0,
+        "expected_volume": 24.0,
+        "faces": 6,
+        "height": 4.0,
+        "index": 1,
+        "is_valid": true,
+        "name": "box_h_4",
+        "solids": 1,
+        "type": "Solid",
+        "vertices": 8,
+        "volume": 23.999999999999996
+      }
+    ],
+    "status": "ok"
+  },
+  "constrained_sweep": {
+    "constraint_violation_count": 1,
+    "constraint_violations": [
+      {
+        "kind": "below_min",
+        "limit": 12.0,
+        "metric": "volume",
+        "parameter": 1.0,
+        "value": 5.999999999999999
+      }
+    ],
+    "duplicate_parameter_values": false,
+    "issues": [
+      "at least one metric is outside requested limits"
+    ],
+    "metric_rows": [
+      {
+        "constraint_violation_count": 1,
+        "delta_first_to_last": 17.999999999999996,
+        "first": 5.999999999999999,
+        "last": 23.999999999999996,
+        "limits": {
+          "max": 24.0,
+          "min": 12.0
+        },
+        "max": 23.999999999999996,
+        "max_parameter": 4.0,
+        "max_step_delta": 6.000000000000002,
+        "metric": "volume",
+        "min": 5.999999999999999,
+        "min_parameter": 1.0,
+        "min_step_delta": 5.9999999999999964,
+        "monotonic_non_decreasing": true,
+        "monotonic_non_increasing": false,
+        "relative_span": 3.0,
+        "span": 17.999999999999996
+      },
+      {
+        "constraint_violation_count": 0,
+        "delta_first_to_last": 30.0,
+        "first": 22.0,
+        "last": 52.0,
+        "limits": {
+          "max": null,
+          "min": null
+        },
+        "max": 52.0,
+        "max_parameter": 4.0,
+        "max_step_delta": 10.0,
+        "metric": "area",
+        "min": 22.0,
+        "min_parameter": 1.0,
+        "min_step_delta": 10.0,
+        "monotonic_non_decreasing": true,
+        "monotonic_non_increasing": false,
+        "relative_span": 1.3636363636363635,
+        "span": 30.0
+      }
+    ],
+    "n_cases": 4,
+    "ok_for_design_table": false,
+    "parameter_key": "height",
+    "parameter_max": 4.0,
+    "parameter_min": 1.0,
+    "parameter_strictly_increasing": true,
+    "parameter_values": [
+      1.0,
+      2.0,
+      3.0,
+      4.0
+    ],
+    "policy": "build123d_parameter_sweep_measurements_are_sorted_and_audited",
+    "rows": [
+      {
+        "area": 22.0,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 3.7416573867739413,
+          "max": [
+            1.0,
+            1.5,
+            0.5
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -0.5
+          ],
+          "size": [
+            2.0,
+            3.0,
+            1.0
+          ]
+        },
+        "characteristic_length": 3.0,
+        "edges": 12,
+        "expected_area": 22.0,
+        "expected_volume": 6.0,
+        "faces": 6,
+        "height": 1.0,
+        "index": 1,
+        "is_valid": true,
+        "name": "box_h_1",
+        "solids": 1,
+        "type": "Solid",
+        "vertices": 8,
+        "volume": 5.999999999999999
+      },
+      {
+        "area": 32.0,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 4.123105625617661,
+          "max": [
+            1.0,
+            1.5,
+            1.0
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -1.0
+          ],
+          "size": [
+            2.0,
+            3.0,
+            2.0
+          ]
+        },
+        "characteristic_length": 3.0,
+        "edges": 12,
+        "expected_area": 32.0,
+        "expected_volume": 12.0,
+        "faces": 6,
+        "height": 2.0,
+        "index": 1,
+        "is_valid": true,
+        "name": "box_h_2",
+        "solids": 1,
+        "type": "Solid",
+        "vertices": 8,
+        "volume": 11.999999999999998
+      },
+      {
+        "area": 42.0,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 4.69041575982343,
+          "max": [
+            1.0,
+            1.5,
+            1.5
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -1.5
+          ],
+          "size": [
+            2.0,
+            3.0,
+            3.0
+          ]
+        },
+        "characteristic_length": 3.0,
+        "edges": 12,
+        "expected_area": 42.0,
+        "expected_volume": 18.0,
+        "faces": 6,
+        "height": 3.0,
+        "index": 1,
+        "is_valid": true,
+        "name": "box_h_3",
+        "solids": 1,
+        "type": "Solid",
+        "vertices": 8,
+        "volume": 18.0
+      },
+      {
+        "area": 52.0,
+        "bounding_box": {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diagonal": 5.385164807134504,
+          "max": [
+            1.0,
+            1.5,
+            2.0
+          ],
+          "min": [
+            -1.0,
+            -1.5,
+            -2.0
+          ],
+          "size": [
+            2.0,
+            3.0,
+            4.0
+          ]
+        },
+        "characteristic_length": 4.0,
+        "edges": 12,
+        "expected_area": 52.0,
+        "expected_volume": 24.0,
+        "faces": 6,
+        "height": 4.0,
+        "index": 1,
+        "is_valid": true,
+        "name": "box_h_4",
+        "solids": 1,
+        "type": "Solid",
+        "vertices": 8,
+        "volume": 23.999999999999996
+      }
+    ],
+    "status": "needs_attention"
+  },
+  "errors": {
+    "area_h_1": 0.0,
+    "area_h_2": 0.0,
+    "area_h_3": 0.0,
+    "area_h_4": 0.0,
+    "volume_h_1": 8.881784197001252e-16,
+    "volume_h_2": 1.7763568394002505e-15,
+    "volume_h_3": 0.0,
+    "volume_h_4": 3.552713678800501e-15
+  },
+  "kind": "build123d_parameter_sweep_summary_validation",
+  "learning_theme": "CAD parameter sweeps should be reduced to measurement design tables before meshing or optimization",
+  "rows": [
+    {
+      "area": 22.0,
+      "bounding_box": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "diagonal": 3.7416573867739413,
+        "max": [
+          1.0,
+          1.5,
+          0.5
+        ],
+        "min": [
+          -1.0,
+          -1.5,
+          -0.5
+        ],
+        "size": [
+          2.0,
+          3.0,
+          1.0
+        ]
+      },
+      "characteristic_length": 3.0,
+      "edges": 12,
+      "expected_area": 22.0,
+      "expected_volume": 6.0,
+      "faces": 6,
+      "height": 1.0,
+      "index": 1,
+      "is_valid": true,
+      "name": "box_h_1",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 8,
+      "volume": 5.999999999999999
+    },
+    {
+      "area": 32.0,
+      "bounding_box": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "diagonal": 4.123105625617661,
+        "max": [
+          1.0,
+          1.5,
+          1.0
+        ],
+        "min": [
+          -1.0,
+          -1.5,
+          -1.0
+        ],
+        "size": [
+          2.0,
+          3.0,
+          2.0
+        ]
+      },
+      "characteristic_length": 3.0,
+      "edges": 12,
+      "expected_area": 32.0,
+      "expected_volume": 12.0,
+      "faces": 6,
+      "height": 2.0,
+      "index": 1,
+      "is_valid": true,
+      "name": "box_h_2",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 8,
+      "volume": 11.999999999999998
+    },
+    {
+      "area": 42.0,
+      "bounding_box": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "diagonal": 4.69041575982343,
+        "max": [
+          1.0,
+          1.5,
+          1.5
+        ],
+        "min": [
+          -1.0,
+          -1.5,
+          -1.5
+        ],
+        "size": [
+          2.0,
+          3.0,
+          3.0
+        ]
+      },
+      "characteristic_length": 3.0,
+      "edges": 12,
+      "expected_area": 42.0,
+      "expected_volume": 18.0,
+      "faces": 6,
+      "height": 3.0,
+      "index": 1,
+      "is_valid": true,
+      "name": "box_h_3",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 8,
+      "volume": 18.0
+    },
+    {
+      "area": 52.0,
+      "bounding_box": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "diagonal": 5.385164807134504,
+        "max": [
+          1.0,
+          1.5,
+          2.0
+        ],
+        "min": [
+          -1.0,
+          -1.5,
+          -2.0
+        ],
+        "size": [
+          2.0,
+          3.0,
+          4.0
+        ]
+      },
+      "characteristic_length": 4.0,
+      "edges": 12,
+      "expected_area": 52.0,
+      "expected_volume": 24.0,
+      "faces": 6,
+      "height": 4.0,
+      "index": 1,
+      "is_valid": true,
+      "name": "box_h_4",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 8,
+      "volume": 23.999999999999996
+    }
+  ],
+  "validation_class": true
+}

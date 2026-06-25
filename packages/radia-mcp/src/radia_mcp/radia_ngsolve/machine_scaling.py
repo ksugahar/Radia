@@ -94,6 +94,53 @@ class MachineScaling:
         return lambda_per_depth * self.global_scale
 
 
+def torque_scaling_summary(
+    torque_2d_per_depth,
+    stack_length_m,
+    symmetry_factor=1.0,
+    length_unit_m=1.0,
+    label="torque",
+):
+    """JSON-friendly 2D sector torque to whole-machine torque scaling row.
+
+    This spells out the common motor-postprocessing conversion:
+
+    ``T_whole = T_2d * length_unit_m^2 * stack_length_m * symmetry_factor``.
+
+    Use it when a 2D air-gap/eggshell torque comes from a rotational sector and
+    students need to see exactly which factor converts the solver number into a
+    physical whole-machine N*m value.
+    """
+
+    torque_2d = float(torque_2d_per_depth)
+    stack = float(stack_length_m)
+    symmetry = float(symmetry_factor)
+    unit = float(length_unit_m)
+    if stack <= 0.0:
+        raise ValueError("stack_length_m must be > 0")
+    if symmetry <= 0.0:
+        raise ValueError("symmetry_factor must be > 0")
+    if unit <= 0.0:
+        raise ValueError("length_unit_m must be > 0")
+    scaling = MachineScaling(stack, symmetry, unit)
+    mesh_unit_torque_scale = unit * unit
+    sector_torque = torque_2d * mesh_unit_torque_scale * stack
+    whole_torque = scaling.torque(torque_2d)
+    return {
+        "label": str(label),
+        "torque_2d_per_depth": torque_2d,
+        "length_unit_m": unit,
+        "mesh_unit_torque_scale": mesh_unit_torque_scale,
+        "stack_length_m": stack,
+        "symmetry_factor": symmetry,
+        "sector_fraction": 1.0 / symmetry,
+        "torque_one_model_sector_Nm": sector_torque,
+        "whole_machine_torque_Nm": whole_torque,
+        "whole_over_sector": whole_torque / sector_torque if sector_torque else symmetry,
+        "total_scaling_factor": mesh_unit_torque_scale * stack * symmetry,
+    }
+
+
 def winding_resistance_onelab(turns, surf_coil, sigma, stack_length,
                               factor_3d_effects=1.0, fill_factor=1.0):
     """Coil/phase DC resistance replicating ONELAB's ``Rb[]`` (machine_magstadyn_a.pro)::

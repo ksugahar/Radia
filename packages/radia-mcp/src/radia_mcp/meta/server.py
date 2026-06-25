@@ -10,8 +10,11 @@ Usage:
     mcp-server-radia-meta --selftest   # self-test
 """
 
+import copy
 import importlib
+import shutil
 import sys
+import time
 
 from mcp.server.fastmcp import FastMCP
 
@@ -19,6 +22,10 @@ from . import catalog, bug_patterns
 from ..common import register_status_tool
 
 mcp = FastMCP("mcp-server-radia-meta")
+
+_HEALTH_CACHE: dict | None = None
+_HEALTH_CACHE_AT = 0.0
+_HEALTH_CACHE_TTL_S = 30.0
 
 
 # ============================================================
@@ -33,7 +40,8 @@ def radia_mcp_overview() -> dict:
     server has the knowledge you need. Returns a dict with:
         - n_servers: how many subpackages exist
         - servers: list of {name, subpackage, entry_point,
-                              description, primary_tools, related, tags}
+                              description, primary_tools, related, tags,
+                              selftest_command, optional audit_command}
 
     Filter by tag with `radia_mcp_by_tag`; drill into a single server
     with `radia_mcp_get`.
@@ -100,12 +108,27 @@ def radia_mcp_related(name: str) -> dict:
 # ============================================================
 
 @mcp.tool()
-def radia_mcp_health() -> dict:
+def radia_mcp_health(force_refresh: bool = False) -> dict:
     """Probe importability of every radia_mcp.* subpackage.
 
     Returns per-subpackage import_ok status. Surfaces broken installs
     (missing entry points, half-applied editable install, etc.) early.
+
+    Args:
+        force_refresh: Ignore the short in-process cache and re-import/probe all
+            cataloged subpackages. Defaults to False for fast repeated MCP calls.
     """
+    global _HEALTH_CACHE, _HEALTH_CACHE_AT
+
+    now = time.monotonic()
+    if (not force_refresh and _HEALTH_CACHE is not None
+            and now - _HEALTH_CACHE_AT <= _HEALTH_CACHE_TTL_S):
+        cached = copy.deepcopy(_HEALTH_CACHE)
+        cached["from_cache"] = True
+        cached["cache_age_s"] = round(now - _HEALTH_CACHE_AT, 6)
+        return cached
+
+    t0 = time.perf_counter()
     out = []
     for name, info in catalog.CATALOG.items():
         subpkg = info["subpackage"]
@@ -122,7 +145,7 @@ def radia_mcp_health() -> dict:
         out.append(result)
 
     healthy = sum(1 for r in out if r["import_ok"])
-    return {
+    payload = {
         "n_servers_total": len(out),
         "n_servers_healthy": healthy,
         "all_healthy": healthy == len(out),
@@ -130,6 +153,138 @@ def radia_mcp_health() -> dict:
         "python_version": (f"{sys.version_info.major}."
                             f"{sys.version_info.minor}."
                             f"{sys.version_info.micro}"),
+        "elapsed_ms": round((time.perf_counter() - t0) * 1000.0, 3),
+        "from_cache": False,
+        "cache_ttl_s": _HEALTH_CACHE_TTL_S,
+    }
+    _HEALTH_CACHE = copy.deepcopy(payload)
+    _HEALTH_CACHE_AT = now
+    return payload
+
+
+@mcp.tool()
+def radia_mcp_golden_gate(check_path: bool = False) -> dict:
+    """Machine-readable golden-quality gate for the radia-mcp server fleet.
+
+    This is intentionally lightweight: it audits catalog, discovery, related
+    links, external-MCP boundaries, and optional entry-point visibility without
+    launching every server selftest. For the full gate, run the commands
+    returned under ``full_gate_commands``.
+    """
+    servers = catalog.list_all()
+    catalog_names = set(catalog.CATALOG)
+    external_names = set(catalog.EXTERNAL_PACKAGES)
+    checks: list[dict] = []
+
+    def add(name: str, ok: bool, detail: str, evidence: dict | None = None) -> None:
+        row = {"name": name, "ok": bool(ok), "detail": detail}
+        if evidence is not None:
+            row["evidence"] = evidence
+        checks.append(row)
+
+    missing_required = []
+    missing_selftest = []
+    bad_entrypoints = []
+    for entry in servers:
+        name = entry["name"]
+        for key in ("subpackage", "entry_point", "description", "primary_tools", "tags"):
+            if key not in entry or entry[key] in ("", [], None):
+                missing_required.append(f"{name}.{key}")
+        entry_point = entry.get("entry_point", "")
+        if not str(entry_point).startswith("mcp-server-"):
+            bad_entrypoints.append(f"{name}: {entry_point}")
+        expected_selftest = f"{entry_point} --selftest"
+        if entry.get("selftest_command") != expected_selftest:
+            missing_selftest.append(f"{name}: {entry.get('selftest_command')}")
+
+    add(
+        "catalog_required_fields",
+        not missing_required,
+        "Every cataloged server declares subpackage, entry point, description, tools, and tags.",
+        {"missing": missing_required[:10], "n_missing": len(missing_required)},
+    )
+    add(
+        "entrypoint_naming",
+        not bad_entrypoints,
+        "Every public radia-mcp server uses the mcp-server-* console-script convention.",
+        {"bad": bad_entrypoints[:10], "n_bad": len(bad_entrypoints)},
+    )
+    add(
+        "selftest_command_coverage",
+        not missing_selftest,
+        "Every catalog entry exposes a lightweight --selftest command.",
+        {"bad": missing_selftest[:10], "n_bad": len(missing_selftest)},
+    )
+
+    missing_related = []
+    asymmetric = []
+    for name, info in catalog.CATALOG.items():
+        related = set(info.get("related", []))
+        for other in related:
+            if other not in catalog_names and other not in external_names:
+                missing_related.append(f"{name} -> {other}")
+            elif other in catalog_names and name not in set(catalog.CATALOG[other].get("related", [])):
+                asymmetric.append(f"{name} -> {other}")
+    add(
+        "related_links_resolve",
+        not missing_related,
+        "All related links point to a cataloged server or declared external MCP package.",
+        {"missing": missing_related[:10], "n_missing": len(missing_related)},
+    )
+    add(
+        "internal_related_links_bidirectional",
+        not asymmetric,
+        "Internal related links are bidirectional for reliable agent navigation.",
+        {"asymmetric": asymmetric[:10], "n_asymmetric": len(asymmetric)},
+    )
+
+    external_entrypoints = {
+        name: info.get("entry_point", "")
+        for name, info in catalog.EXTERNAL_PACKAGES.items()
+    }
+    add(
+        "optuna_external_boundary",
+        "optuna" not in catalog_names and "optuna-mcp" in external_names,
+        "Optuna Study/Trial operation stays in the official external optuna-mcp server.",
+        {
+            "catalog_has_optuna": "optuna" in catalog_names,
+            "external_has_optuna_mcp": "optuna-mcp" in external_names,
+            "optuna_entry_point": external_entrypoints.get("optuna-mcp"),
+        },
+    )
+
+    if check_path:
+        missing_cli = [
+            entry["entry_point"]
+            for entry in servers
+            if shutil.which(entry["entry_point"]) is None
+        ]
+        add(
+            "entrypoints_on_path",
+            not missing_cli,
+            "All cataloged console scripts are visible on PATH in this environment.",
+            {"missing": missing_cli[:10], "n_missing": len(missing_cli)},
+        )
+    else:
+        add(
+            "entrypoints_on_path",
+            True,
+            "Skipped PATH probing; pass check_path=True for local editable-install verification.",
+            {"skipped": True},
+        )
+
+    all_passed = all(row["ok"] for row in checks)
+    return {
+        "level": "golden" if all_passed else "needs_attention",
+        "all_passed": all_passed,
+        "n_servers": len(servers),
+        "n_external_packages": len(external_names),
+        "checks": checks,
+        "full_gate_commands": [
+            "python tools/policy_lint.py --tracked-only",
+            "python scripts/gen_tools_doc.py --check",
+            "pytest tests/test_meta_health.py tests/test_each_server_selftest.py tests/test_policy_lint.py",
+        ],
     }
 
 
@@ -234,6 +389,9 @@ def main():
         # Related query
         rel = radia_mcp_related("bayesian-opt")
         print(f"  related to bayesian-opt: {[r['name'] for r in rel['related']]}")
+        gate = radia_mcp_golden_gate()
+        print(f"  golden gate: {gate['level']} ({len(gate['checks'])} checks)")
+        assert gate["all_passed"], gate
         print("  PASSED")
         return
 

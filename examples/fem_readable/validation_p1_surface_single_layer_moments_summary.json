@@ -1,0 +1,95 @@
+{
+  "kind": "p1_surface_single_layer_moments",
+  "triangle_vertices_m": [
+    [
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      2.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      3.0
+    ]
+  ],
+  "nodal_density": [
+    2.0,
+    2.0,
+    2.0
+  ],
+  "observation_point_m": [
+    10.0,
+    0.0,
+    0.0
+  ],
+  "area_m2": 3.0,
+  "centroid_m": [
+    1.0,
+    0.6666666666666666,
+    1.0
+  ],
+  "moments": {
+    "area": 3.0,
+    "centroid": [
+      1.0,
+      0.6666666666666666,
+      1.0
+    ],
+    "nodal_density": [
+      2.0,
+      2.0,
+      2.0
+    ],
+    "vertex_moment_weights": [
+      2.0,
+      2.0,
+      2.0
+    ],
+    "total_source": 6.0,
+    "first_moment": [
+      6.0,
+      4.0,
+      6.0
+    ]
+  },
+  "far_potential": {
+    "observation_point": [
+      10.0,
+      0.0,
+      0.0
+    ],
+    "radius": 10.0,
+    "direction": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "total_source": 6.0,
+    "first_moment": [
+      6.0,
+      4.0,
+      6.0
+    ],
+    "monopole_potential": 0.047746482927568605,
+    "dipole_potential": 0.00477464829275686,
+    "far_potential": 0.052521131220325465
+  },
+  "checks": {
+    "expected_total_source": 6.0,
+    "expected_first_moment": [
+      6.0,
+      4.0,
+      6.0
+    ],
+    "expected_monopole_potential": 0.047746482927568605,
+    "expected_dipole_potential": 0.00477464829275686,
+    "total_source_abs_error": 0.0,
+    "first_moment_max_abs_error": 0.0,
+    "far_potential_abs_error": 0.0
+  }
+}

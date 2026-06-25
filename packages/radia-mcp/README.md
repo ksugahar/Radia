@@ -150,10 +150,10 @@ user's window.
 ## Install
 
 ```bash
-pip install radia-mcp                 # core (Cubit + build123d + gmsh-post + interop)
+pip install radia-mcp                 # core (Cubit + build123d + GMSH lint/visualization + interop)
 pip install radia-mcp[build123d]      # adds build123d itself
 pip install radia-mcp[cadquery]       # adds CadQuery (interop with cadquery-mcp)
-pip install radia-mcp[gmsh]           # adds gmsh Python bindings (gmsh_post operations)
+pip install radia-mcp[gmsh]           # adds gmsh Python bindings for optional GMSH workflows
 pip install radia-mcp[youtube]        # adds youtube-transcript-api (tutorial scrape)
 pip install radia-mcp[radia]          # adds Radia core (radia-coupled servers)
 pip install radia-mcp[full]           # everything above
@@ -180,12 +180,13 @@ catalog of all 38 radia-mcp servers and answers "which tool covers
 concept X?" without trial-and-error.
 
 ```python
-# 4 catalog tools + 1 health probe
+# catalog, health, golden-gate, and bug-pattern tools
 radia_mcp_overview()                  # all 38 servers + live tags
 radia_mcp_get("bayesian-opt")         # full info for one server
 radia_mcp_by_tag("optimization")      # filter optimization/theory servers
 radia_mcp_related("bayesian-opt")     # cross-link map for optimization servers
 radia_mcp_health()                    # importability probe of all 38
+radia_mcp_golden_gate()               # catalog/discovery/public-boundary gate
 ```
 
 Then drill into a specific server with its `<short>_status()` (auto-
@@ -213,11 +214,11 @@ shown below for reference; everything else is discoverable via meta.
 
 | Server | Entry point | Tools | Highlights |
 |---|---|---|---|
-| **★ meta** | `mcp-server-radia-meta` | 6 | Cross-server catalog + health probe — RECOMMENDED FIRST CALL |
+| **★ meta** | `mcp-server-radia-meta` | 9 | Cross-server catalog + health/golden gate — RECOMMENDED FIRST CALL |
 | **literature-index** | `mcp-server-literature-index` | 9 | Full-text search across 2,339 lab literature files in W:/03_文献・論文 (ChromaDB + semantic search) |
-| **Cubit** | `mcp-server-cubit` | 52 | `cubit_mesh_auto`, `cubit_exec_safely`, `cubit_ask`, scheme ladder + geometry split, .cub5 checkpoint/restore, scrape index over Coreform forum + S:\\CoreformCubit lab archive (787 files) + YouTube + Coreform training |
-| **build123d** | `mcp-server-build123d` | 37 | `build123d_to_cubit_hex`, `lint_build123d_script` (7 rules), `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, 13 Radia/general templates, CadQuery + bd_warehouse interop |
-| **gmsh-post** | `mcp-server-gmsh-post` | 21 | `gmsh_post_inspect/validate/convert` (MSH v4.1 only), `gmsh_post_quality`, scrape over GitLab issues + StackOverflow + YouTube |
+| **Cubit** | `mcp-server-cubit` | 45 | `cubit_mesh_auto`, `cubit_exec_safely`, `cubit_ask`, scheme ladder + geometry split, .cub5 checkpoint/restore, scrape index over Coreform forum + S:\\CoreformCubit lab archive (787 files) + YouTube + Coreform training |
+| **build123d** | `mcp-server-build123d` | 29 | `build123d_to_cubit_hex`, `lint_build123d_script`, `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, Radia/general templates, CadQuery + bd_warehouse interop |
+| **GMSH** | `mcp-server-gmsh` | 10 | `lint_gmsh_script`, `gmsh_audit_summary`, `gmsh_numsubedges_remediation_plan`, `gmsh_mesh_generation_remediation_plan`, references + examples |
 | **differential-forms** | `mcp-server-differential-forms` | 8 | Differential geometry for computational EM: tangent spaces, k-forms, wedge product, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC (Arnold-Falk-Winther 2006)**, Mathematica recipes for symbolic verification. Distilled from Bossavit 1998 + Whitney 1957 + Kameari 2011 + 新しい計算電磁気学 2003 + Codecasa 2010. |
 | **mathematica** | `mcp-server-mathematica` | 10 | Wolfram Mathematica subprocess bridge: `mathematica_evaluate` + 9 high-level helpers (simplify, to_tex, vector_calc, unit_convert, solve, integrate, differentiate, check_identity, status). Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
 
@@ -244,7 +245,7 @@ Continue, …):
     "literature-index":    {"command": "mcp-server-literature-index"},
     "cubit":               {"command": "mcp-server-cubit"},
     "build123d":           {"command": "mcp-server-build123d"},
-    "gmsh-post":           {"command": "mcp-server-gmsh-post"},
+    "gmsh":                {"command": "mcp-server-gmsh"},
     "differential-forms":  {"command": "mcp-server-differential-forms"},
     "mathematica":         {"command": "mcp-server-mathematica"},
     "optuna": {
@@ -282,7 +283,7 @@ For local development from a checkout (no install needed):
 |---|---|---|
 | Cubit | `cubit_api_reference.py` (600+ functions) + scripting + forum tips + netgen workflow + export rules + panels | ≈ 29 000 |
 | build123d | Auto-generated API reference (`inspect.getmembers`, 142 classes / 65 functions) + 18 curated topics (Plane/Axis/Location cookbook, Builder ↔ Algebra rosetta, joints, assemblies, CAE workflow, …) | 1 673 |
-| gmsh-post | Auto-generated API reference (651 entries across `gmsh.model`, `.view`, `.option`, `.fltk`, …) + MSH v4.1 spec + view_data + physical_groups cookbooks | 2 008 |
+| GMSH | Visualization/post-processing policy, MSH v4.1 spec, high-order display guidance, lint rules, examples, and remediation planners | 2 008 |
 
 Plus persistent **failure log** per kind, fed into every `*_lookup` /
 `*_ask` retrieval so past mistakes are searchable next session.
@@ -390,18 +391,13 @@ cubit_ask("hex meshing tutorial")
 #   + Coreform forum + YouTube transcripts
 ```
 
-### Convert + post-process a Cubit-exported mesh
+### Audit GMSH visualization policy
 
 ```python
-gmsh_post_convert("/tmp/cubit_export.msh", "/tmp/v41.msh")  # any → v4.1
-gmsh_post_validate("/tmp/v41.msh")                          # spec compliance
-gmsh_post_quality("/tmp/v41.msh")                           # min Jacobian etc.
-gmsh_post_add_view_from_csv(
-    msh_path="/tmp/v41.msh",
-    csv_path="/tmp/B_field.csv",
-    out_path="/tmp/v41_with_B.msh",
-    view_name="B_magnitude",
-)
+gmsh_audit_summary("examples")                  # machine-readable policy audit
+gmsh_numsubedges_remediation_plan("examples")   # high-order display companions
+gmsh_mesh_generation_remediation_plan("examples")
+gmsh_reference("all")                           # MSH / API / display reference
 ```
 
 ---
@@ -412,7 +408,7 @@ Bug reports + PRs welcome — particularly for:
 
 - **Additional scrape sub-sources** under `radia_mcp.common.examples`
   (mailing list archives, more YouTube channels, blog posts).
-- **Cookbook topics** for `build123d_usage` / `gmsh_post_spec` —
+- **Cookbook topics** for `build123d_usage` / `gmsh_usage` / `gmsh_reference` —
   worked-example knowledge fragments are always welcome.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the lightweight workflow.

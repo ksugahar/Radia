@@ -645,6 +645,23 @@ into the paper-writing knowledge layer.
 - Reproducibility omissions in standard benchmarks: missing material
   properties, reference solutions, model order, or boundary-condition
   order.
+- Proposal / research-plan framing problems: section titles written as
+  the author's drafting process ("notes", "plain explanation") instead
+  of the reader-facing theoretical or design role; immature future work
+  shown as a result-like integrated graph instead of a workflow or
+  hypothesis; internal tool or MCP implementation notes left in the
+  public manuscript.
+- Proposal / research-plan figure selection: at the idea stage, figures
+  should either ground the proposal in a real calculation / measurement
+  or explain the iteration that will test an unverified hypothesis.  Do
+  not write defensively that a combined figure is "not ready"; state what
+  each shown figure contributes.  Keep unverified implementation ideas in
+  an explicitly marked inventory table or hypothesis list, not in a
+  result-like conclusion figure.
+- Coordinate-transform explanations that overclaim "the nonlinearity is
+  gone" without saying what is invariant and what changed.  State the
+  unchanged operator / conservation law and the changed metric, Hodge
+  operator, coefficient, or unknown immediately after the equation.
 
 ## Required action
 
@@ -667,7 +684,7 @@ a current digest result.
 REFERENCE_BIB_POLICY = r"""
 # reference.bib policy: shared across digest + full paper, web-verified
 
-## The two rules (Sugahara Lab)
+## The three rules (Sugahara Lab)
 
 1. **ONE shared `reference.bib`** for BOTH the digest (IGTE / Compumag
    2-page) AND the full paper (IEEE TMag / IEEJ Trans).  Do NOT keep a
@@ -681,6 +698,13 @@ REFERENCE_BIB_POLICY = r"""
    entry is confirmed against an authoritative web source (Crossref
    DOI, IEEE Xplore, Semantic Scholar, arXiv) so the authors, title,
    venue, year, volume, pages, and DOI are EXACT.
+
+3. **Numbered reference lists follow first citation order.**  For IEEE
+   styles and manual `thebibliography`, order entries by the first
+   appearance of their `\cite{}` key in the text.  After moving related
+   work sections, tables, or citations, re-check the bibliography order;
+   do not leave a mixture of author order, year order, and drafting
+   order.
 
 ## Why one shared .bib
 
@@ -734,8 +758,10 @@ digest and the full paper.
   1. Keep one `reference.bib` at the project root; both `.tex` point to it.
   2. For every new reference: web-search -> verify DOI -> add entry.
      Never paste an unverified entry.
-  3. Gate digest AND full paper with the SAME `bib_path=reference.bib`.
-  4. Lint with `paper_writing_lint_reference_format(reference.bib)` and
+  3. For numbered citation styles, confirm the bibliography follows the
+     first citation order in the compiled text.
+  4. Gate digest AND full paper with the SAME `bib_path=reference.bib`.
+  5. Lint with `paper_writing_lint_reference_format(reference.bib)` and
      `paper_writing_check_citation_keys_exist(tex, reference.bib)` for
      each document — every `\cite{}` key must exist in the shared bib.
 

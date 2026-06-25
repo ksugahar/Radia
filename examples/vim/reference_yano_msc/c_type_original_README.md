@@ -2,7 +2,7 @@
 
 Complete 3D magnetostatic simulation of beam steering electromagnet with racetrack coil and C-type magnetic yoke.
 
-Reference: `S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type`
+Reference: private CEFC-2020 C-Type model archive.
 
 ## Overview
 
@@ -229,4 +229,4 @@ Gap center Bz field [T] for different mesh densities and permeabilities:
 ---
 
 **Last Updated**: 2026-02-05
-**Reference**: S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type
+**Reference**: private CEFC-2020 C-Type model archive.

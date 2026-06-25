@@ -11,7 +11,7 @@ Both independent solvers are checked against that analytic answer on the SAME qu
   * analytic   : 3 / (mu_r + 2)
   * Radia IEM  : MMM -- the tetrahedron surface-charge / dipole OPEN-BOUNDARY integral method (no air
                  mesh, exact analytic open boundary).  The sphere meshes as tets, so MMM is the Radia IEM
-                 member here; yano-type MSC is the HEXAHEDRON variant of the same surface-charge IEM
+                 member here; six-face surface-charge MSC is the HEXAHEDRON variant of the same surface-charge IEM
                  (parity yano == MMM == HDiv-VIM locked by tests/feec/parity_vs_msc, cube 0.76%), and the
                  loop removal (rad.GetLoopBasis, Stage 1) is a field-PRESERVING yano-hex conditioning fix
                  that does not change this accuracy.  Quarter model solved with image='+x+y' (the z-field
@@ -132,7 +132,7 @@ def main():
             "Order-matched, the p=2/3 residual (~0.5-0.7%, == the locked golden bands) is the coarse "
             "academic mesh's h + Kelvin-truncation floor -- not FE-order, not a code bug.  The no-air-mesh "
             "IEM (MMM) lands closest.",
-            "MMM is the tet variant of the Radia surface-charge IEM; yano-type MSC is the hex variant "
+            "MMM is the tet variant of the Radia surface-charge IEM; six-face surface-charge MSC is the hex variant "
             "(parity locked by tests/feec/parity_vs_msc). Loop removal (rad.GetLoopBasis) is "
             "field-preserving and does not change this accuracy.",
         ],

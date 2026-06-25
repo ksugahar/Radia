@@ -1,5 +1,5 @@
 """M0 nonlinear parity gate (productionization, docs/hdiv_vim/PRODUCTIONIZATION.md): the HDiv-VIM
-production entry `radia.vim.hdiv_demag_solve` (NONLINEAR, COIL source) vs the shipped yano-type MSC/MMM
+production entry `radia.vim.hdiv_demag_solve` (NONLINEAR, COIL source) vs the shipped six-face surface-charge MSC/MMM
 (`rad.Solve`) on a coil-driven C-type electromagnet, evaluated by the ENGINEERING quantity -- the
 GAP-CENTRE flux density B.
 
@@ -19,7 +19,7 @@ The gate locks: HDiv and yano agree within 1.5% on the gap-centre flux density (
 quantity), with a bounded outer-iteration count.  A second test
 (`test_ctype_coil_nonlinear_sharp_bh_newton`) is the REGRESSION LOCK for the Newton solver: a sharp
 silicon-steel-like BH (chi0=12000) at high drive -- the regime that stalled the old Anderson-Hantila
-fixed point -- which Newton solves.  Transitional gate -- retires when yano-type is sealed (M5).
+fixed point -- which Newton solves.  Transitional gate -- retires when six-face surface-charge is sealed (M5).
 """
 import math
 import warnings
@@ -63,7 +63,7 @@ def _coil():
 
 
 def _yano_gapB(mesh, bh=BH):
-    """Gap-centre B (Tesla) via yano-type MMM rad.Solve (iron tets + coil), same field kernel."""
+    """Gap-centre B (Tesla) via six-face surface-charge MMM rad.Solve (iron tets + coil), same field kernel."""
     rad.UtiDelAll()
     coil = _coil()
     cont = nmi.netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m', verbose=False)
@@ -77,7 +77,7 @@ def _yano_gapB(mesh, bh=BH):
 
 
 def test_ctype_coil_nonlinear_gap_field():
-    """HDiv-VIM and yano-type agree within 1.5% on the GAP-CENTRE flux density B (the engineering
+    """HDiv-VIM and six-face surface-charge agree within 1.5% on the GAP-CENTRE flux density B (the engineering
     quantity) of the coil-driven nonlinear C-type; HDiv converges in a bounded outer-iter count."""
     with ng.TaskManager():
         mesh = ng.Mesh(OCCGeometry(_cyoke()).GenerateMesh(maxh=0.008))
@@ -119,7 +119,7 @@ def test_ctype_coil_nonlinear_sharp_bh_newton():
     2026-06-15).  A SHARP silicon-steel-like BH (chi0=12000, Bsat~2T) at high drive makes the
     Hantila/Picard contraction rho = (chi_max-chi_min)/(chi_max+chi_min) -> 1 as the pole saturates --
     the regime that STALLED the old Anderson-Hantila fixed point (~1e-2 after 300 iters, unsolvable).
-    Newton converges in a bounded iter count and matches the yano-type reference on the gap-centre B.
+    Newton converges in a bounded iter count and matches the six-face surface-charge reference on the gap-centre B.
     This locks that the sharp-BH case stays solved."""
     with ng.TaskManager():
         mesh = ng.Mesh(OCCGeometry(_cyoke()).GenerateMesh(maxh=0.010))

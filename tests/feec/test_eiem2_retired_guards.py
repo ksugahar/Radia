@@ -1,6 +1,6 @@
 """Golden test for the EIEM2-retirement fail-loud guards (Phase 3b).
 
-The parameter-free moment-yano formulation (BuildMomentSystemCore) is the SOLE surface-charge (MSC)
+The parameter-free multipole-moment MMM formulation (BuildMomentSystemCore) is the SOLE surface-charge (MSC)
 demag solver; the EIEM2 collocation kernel has been retired.  Two element-composition cases the EIEM2
 kernel used to cover are NOT representable by moment and are now rejected fail-loud (No Fallbacks -- a
 silent wrong number is worse than an error), raised from radTApplication::MakeAutoRelax:
@@ -67,7 +67,7 @@ def test_binput_hysteresis_on_msc_raises():
 
 
 def test_pure_hex_moment_still_solves():
-    """KEPT: a pure-hex soft iron magnetizes in an applied field via the moment-yano solver."""
+    """KEPT: a pure-hex soft iron magnetizes in an applied field via the multipole-moment MMM solver."""
     rad.UtiDelAll(); rad.set_demag_backend("yano")
     h = rad.ObjHexahedron(_hex(0.0), [0, 0, 0]); rad.MatApl(h, rad.MatLin(1000.0))
     rad.Solve(rad.ObjCnt([h, rad.ObjBckg(lambda p: [0, 0, MU0 * H0])]), 1e-6, 1000, 0)

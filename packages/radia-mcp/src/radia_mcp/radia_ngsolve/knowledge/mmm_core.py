@@ -508,7 +508,15 @@ Modern problems often need >1 method:
 BUILD_MSC_MMM = """\
 ## How to build an MMM / MSC model in Radia (practical recipe)
 
-MMM (tetrahedra / RecMag, 3 DOF) and moment-yano MSC
+Terminology: the current production path is **multipole-moment MMM**, not the
+old Yano-centered label.  The key idea is to derive element equations from a symbolic
+multipole expansion of the element field.  For the 5/6-DOF surface-charge
+elements this gives monopole, dipole, and residual-quadrupole rows; the same
+moment-formulation viewpoint also improves the classical 3-DOF MMM path.
+HDiv-VIM is the symmetric Galerkin/high-order counterpart, but its
+charge-Coulomb Gram construction is much heavier.
+
+MMM (tetrahedra / RecMag, 3 DOF) and multipole-moment MMM MSC
 (hexahedra 6 DOF, wedges/pyramids 5 DOF) are built from the SAME
 object/material pipeline; only the element constructor and solve
 formulation differ.
@@ -586,7 +594,7 @@ returns [Bx,By,Bz] (Tesla). The legacy array form
 - `image='+x-z'` etc. applies mirror symmetry (IMA) in the SAME call.
 
 For surface-charge soft iron, current production is the parameter-free
-moment-yano system (`BuildMomentSystemCore`).  Method 2 uses the
+multipole-moment MMM system (`BuildMomentSystemCore`).  Method 2 uses the
 moment H-matrix path for pure-hex 6-DOF models; wedge/pyramid and
 mixed surface-charge models currently route to dense moment LU.  Do
 not mix MMM tet/RecMag soft iron with MSC hex/wedge/pyramid soft iron
@@ -608,7 +616,7 @@ behavior: "eigenvalue_nullspace".
 """
 
 MATRIX_STRUCTURE = """\
-## Matrix/system probes after the moment-yano transition
+## Matrix/system probes after the multipole-moment MMM transition
 
 ### MMM dense interaction matrix
 
@@ -637,7 +645,7 @@ convention, not physics.
 
 For current surface-charge MSC, `GetInteractMatrix` is NOT the
 production solve matrix.  The retired EIEM2 dense MSC blocks are no
-longer assembled; moment-yano builds its own system from centroid
+longer assembled; multipole-moment MMM builds its own system from centroid
 field/gradient moment rows.  Use these probes instead:
 
 ```python
@@ -647,7 +655,7 @@ A_raw, dof = rad.MomentSystemDenseRaw(handle, chi)
 probe = rad.MomentHMatrixProbe(handle, chi)
 ```
 
-`BuildMomentSystem` returns the normalized dense moment-yano system
+`BuildMomentSystem` returns the normalized dense multipole-moment MMM system
 for a uniform field.  `MomentSystemDenseRaw` is the unnormalized
 entry-by-entry matrix used by the H-matrix entry.  `MomentHMatrixProbe`
 checks the HACApK moment matvec against `A_raw`.
@@ -656,7 +664,7 @@ checks the HACApK moment matvec against `A_raw`.
 
 - dof = sum of per-element DOF (tet/RecMag 3, wedge/pyramid 5, hex 6). A 32-hex block
   -> 192 dof.
-- The moment-yano MSC system is NON-symmetric because rows are moment
+- The multipole-moment MMM MSC system is NON-symmetric because rows are moment
   functionals and columns are face charges.
 - Row-major [target][source]: `N[i,j]` = effect ON dof i FROM dof j.
 - Element-major ordering: element e owns dof [k*e, k*e+k) with k its
@@ -677,7 +685,7 @@ the real ACA+ shifts the near-zero eigenvalues (it does not materially --
 see "eigenvalue_nullspace"). C++ path: `RadHACApKMMMManager::MatVec`
 exposed via `radTApplication::HMatrixDensify`.
 
-For moment-yano MSC method 2, use `MomentHMatrixProbe`; the moment
+For multipole-moment MMM MSC method 2, use `MomentHMatrixProbe`; the moment
 H-matrix stores `A_raw` directly and is not an `A = -N + diag(1/chi)`
 operator.
 
@@ -783,7 +791,7 @@ mu_r-INDEPENDENT, with no runtime deflation / gauge / projection. M^{-1} mass
 preconditioning already deflates the loops, so a plain symmetric Krylov is
 well-conditioned at every mu_r. See `radia.vim` and `tests/feec/test_hdiv_vim_*`.
 
-Moment-yano is still the canonical mesh-less surface-charge path in
+Multipole-moment MMM is still the canonical mesh-less surface-charge path in
 `rad.Solve` for hex/wedge/pyramid soft iron.  Its method-2 pure-hex
 path uses the moment H-matrix matvec plus block-Jacobi BiCGSTAB; this
 buys storage scaling, not a bounded-iteration proof.
@@ -806,10 +814,10 @@ makes loops ker(B), is the right consolidation.)
 MULTIPOLE_MODES = """\
 ## What field does the 6-DoF MSC element create? (multipole modes + conditioning)
 
-(Sugahara-lab study 2026-06-22. Numerics: `examples/vim/yano_moment_svd_multipole.py`
-(SVD/eig + multipole projection) and `examples/vim/yano_moment_aspect_ratio.py`
+(Sugahara-lab study 2026-06-22. Numerics: `examples/vim/multipole_moment_svd_multipole.py`
+(SVD/eig + multipole projection) and `examples/vim/multipole_moment_aspect_ratio.py`
 (iteration vs aspect ratio). Symbolic proof:
-`packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/yano_6dof_multipole.wls`.)
+`packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/six_face_charge_multipole.wls`.)
 
 ### The 6 DOF ARE exactly monopole + dipole + 2 quadrupole
 
@@ -823,7 +831,7 @@ tetrahedron also carries) + a monopole + the 2 quadrupole moments that 6 axis-al
 charges can represent**. The off-diagonal (shear) quadrupole of an axis-aligned hex is
 EXACTLY 0 (int_face x_i x_j dA = 0 by face symmetry).
 
-Symbolic proof (yano_6dof_multipole.wls, generic shear s, self-test ALL PASS) -- the RANK
+Symbolic proof (six_face_charge_multipole.wls, generic shear s, self-test ALL PASS) -- the RANK
 of the charge -> multipole-moment map:
 
     rank[mono;dipole]               = 4

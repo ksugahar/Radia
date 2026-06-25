@@ -32,7 +32,14 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "mirrored", "assembly", "shape_envelope_row", "enclosing_box",
            "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
+           "box_face_vector_area_rows", "box_face_pressure_force_rows",
+           "box_face_pressure_moment_rows", "box_face_pressure_resultant_summary",
+           "box_face_traction_moment_rows",
+           "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
+           "shape_measurement_inventory_summary", "worst_shape_measurement_comparison_rows",
+           "shape_measurement_health_summary", "shape_bbox_pair_clearance_summary",
+           "shape_parameter_sweep_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
            "swept", "revolved", "lofted", "coil", "helix_centerline_length",
            "round_wire_helix_metrics", "strut", "thicken", "draft_extrude",
@@ -366,6 +373,390 @@ def shape_measurement_rows(shapes):
     return rows
 
 
+def box_face_vector_area_rows(size, center=(0.0, 0.0, 0.0), names=None):
+    """Return analytic oriented area vectors for the six faces of an axis-aligned box.
+
+    The row vocabulary mirrors
+    ``radia_mcp.radia_ngsolve.netgen_vol.NetgenTriTetVolMesh.boundary_normal_summary_rows``:
+    each face has a scalar ``surface_area``, an oriented ``vector_area`` equal
+    to ``normal * area``, a unit normal, and the face center.  This gives CAD
+    scripts a compact reference for checking boundary orientation before
+    Maxwell-stress or pressure loads are integrated on a surface mesh.
+    """
+
+    sx, sy, sz = [float(value) for value in size]
+    cx, cy, cz = [float(value) for value in center]
+    if sx <= 0.0 or sy <= 0.0 or sz <= 0.0:
+        raise ValueError("box size values must be positive")
+
+    default_names = ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"]
+    if names is None:
+        labels = default_names
+    elif isinstance(names, dict):
+        labels = [str(names.get(name, name)) for name in default_names]
+    else:
+        labels = [str(name) for name in names]
+        if len(labels) != 6:
+            raise ValueError("names must have exactly six entries")
+
+    specs = [
+        ((-1.0, 0.0, 0.0), sy * sz, (cx - 0.5 * sx, cy, cz)),
+        ((1.0, 0.0, 0.0), sy * sz, (cx + 0.5 * sx, cy, cz)),
+        ((0.0, -1.0, 0.0), sx * sz, (cx, cy - 0.5 * sy, cz)),
+        ((0.0, 1.0, 0.0), sx * sz, (cx, cy + 0.5 * sy, cz)),
+        ((0.0, 0.0, -1.0), sx * sy, (cx, cy, cz - 0.5 * sz)),
+        ((0.0, 0.0, 1.0), sx * sy, (cx, cy, cz + 0.5 * sz)),
+    ]
+
+    rows = []
+    for index, (label, (unit_normal, area, face_center)) in enumerate(zip(labels, specs), start=1):
+        vector_area = tuple(component * area for component in unit_normal)
+        vector_norm = math.sqrt(sum(component * component for component in vector_area))
+        rows.append({
+            "index": index,
+            "name": label,
+            "surface_area": float(area),
+            "vector_area": vector_area,
+            "vector_area_norm": float(vector_norm),
+            "vector_area_norm_over_area": vector_norm / area,
+            "unit_normal": tuple(float(component) for component in unit_normal),
+            "face_center": tuple(float(component) for component in face_center),
+            "box_center": (cx, cy, cz),
+            "box_size": (sx, sy, sz),
+        })
+    return rows
+
+
+def box_face_pressure_force_rows(
+    size,
+    pressure_by_face,
+    center=(0.0, 0.0, 0.0),
+    names=None,
+    default_pressure=0.0,
+):
+    """Return analytic box face force rows from scalar pressure values.
+
+    Pressure is positive along each face's outward normal:
+    ``force = pressure * vector_area``.  This is the build123d-side analytic
+    companion to ``NetgenTriTetVolMesh.boundary_pressure_force_rows``.
+    """
+
+    rows = []
+    for area_row in box_face_vector_area_rows(size, center=center, names=names):
+        name = area_row["name"]
+        if name in pressure_by_face:
+            pressure = float(pressure_by_face[name])
+            source = "name"
+        elif area_row["index"] in pressure_by_face:
+            pressure = float(pressure_by_face[area_row["index"]])
+            source = "index"
+        elif default_pressure is not None:
+            pressure = float(default_pressure)
+            source = "default"
+        else:
+            raise KeyError(f"missing pressure for face {name}")
+        force = tuple(pressure * component for component in area_row["vector_area"])
+        rows.append({
+            **area_row,
+            "pressure_Pa": pressure,
+            "pressure_source": source,
+            "force_N": force,
+            "force_magnitude_N": math.sqrt(sum(component * component for component in force)),
+        })
+    return rows
+
+
+def _cross3(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def box_face_pressure_moment_rows(
+    size,
+    pressure_by_face,
+    center=(0.0, 0.0, 0.0),
+    names=None,
+    default_pressure=0.0,
+    pivot_m=(0.0, 0.0, 0.0),
+):
+    """Return analytic box face pressure force and pivot-moment rows.
+
+    This is the build123d-side analytic companion to
+    ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows``.  Each face is
+    planar with a constant pressure, so its resultant acts at ``face_center``:
+
+    ``F = pressure * vector_area`` and ``M = (face_center - pivot) x F``.
+    """
+
+    pivot = tuple(float(value) for value in pivot_m)
+    if len(pivot) != 3:
+        raise ValueError("pivot_m must have three components")
+    rows = []
+    for row in box_face_pressure_force_rows(
+        size,
+        pressure_by_face,
+        center=center,
+        names=names,
+        default_pressure=default_pressure,
+    ):
+        lever = tuple(row["face_center"][axis] - pivot[axis] for axis in range(3))
+        moment = _cross3(lever, row["force_N"])
+        rows.append({
+            **row,
+            "pivot_m": pivot,
+            "lever_arm_m": lever,
+            "moment_about_pivot_Nm": moment,
+            "moment_magnitude_Nm": math.sqrt(sum(component * component for component in moment)),
+        })
+    return rows
+
+
+def box_face_pressure_resultant_summary(
+    size,
+    pressure_by_face,
+    center=(0.0, 0.0, 0.0),
+    names=None,
+    default_pressure=0.0,
+    pivot_m=(0.0, 0.0, 0.0),
+):
+    """Return analytic box-face pressure rows plus net force/moment metrics.
+
+    The return vocabulary mirrors
+    ``NetgenTriTetVolMesh.boundary_pressure_resultant_summary`` so a CAD-side
+    build123d box reference and a Cubit/Coreform-exported `.vol` boundary mesh
+    can be compared without adapter code.
+    """
+
+    rows = box_face_pressure_moment_rows(
+        size,
+        pressure_by_face,
+        center=center,
+        names=names,
+        default_pressure=default_pressure,
+        pivot_m=pivot_m,
+    )
+    total_force = tuple(sum(row["force_N"][axis] for row in rows) for axis in range(3))
+    total_moment = tuple(
+        sum(row["moment_about_pivot_Nm"][axis] for row in rows)
+        for axis in range(3)
+    )
+    total_force_norm = math.sqrt(sum(component * component for component in total_force))
+    total_moment_norm = math.sqrt(sum(component * component for component in total_moment))
+    absolute_force_sum = sum(row["force_magnitude_N"] for row in rows)
+    absolute_moment_sum = sum(row["moment_magnitude_Nm"] for row in rows)
+    surface_vector_area = tuple(
+        sum(row["vector_area"][axis] for row in rows)
+        for axis in range(3)
+    )
+    surface_vector_area_norm = math.sqrt(
+        sum(component * component for component in surface_vector_area)
+    )
+    total_area = sum(row["surface_area"] for row in rows)
+
+    return {
+        "boundary_count": len(rows),
+        "rows": rows,
+        "pivot_m": tuple(float(value) for value in pivot_m),
+        "total_force_N": total_force,
+        "total_force_magnitude_N": total_force_norm,
+        "total_moment_about_pivot_Nm": total_moment,
+        "total_moment_magnitude_Nm": total_moment_norm,
+        "absolute_force_sum_N": absolute_force_sum,
+        "absolute_moment_sum_Nm": absolute_moment_sum,
+        "force_balance_ratio": (
+            total_force_norm / absolute_force_sum
+            if absolute_force_sum > 0.0
+            else 0.0
+        ),
+        "moment_balance_ratio": (
+            total_moment_norm / absolute_moment_sum
+            if absolute_moment_sum > 0.0
+            else 0.0
+        ),
+        "surface_vector_area": surface_vector_area,
+        "surface_vector_area_norm": surface_vector_area_norm,
+        "surface_vector_area_norm_over_area": (
+            surface_vector_area_norm / total_area if total_area > 0.0 else None
+        ),
+        "box_center": tuple(float(value) for value in center),
+        "box_size": tuple(float(value) for value in size),
+    }
+
+
+def _face_vector_value(vector_by_face, area_row, default_vector, value_name):
+    name = area_row["name"]
+    if name in vector_by_face:
+        value = vector_by_face[name]
+        source = "name"
+    elif area_row["index"] in vector_by_face:
+        value = vector_by_face[area_row["index"]]
+        source = "index"
+    elif default_vector is not None:
+        value = default_vector
+        source = "default"
+    else:
+        raise KeyError(f"missing {value_name} for face {name}")
+    vector = tuple(float(component) for component in value)
+    if len(vector) != 3:
+        raise ValueError(f"{value_name} values must have three components")
+    return vector, source
+
+
+def box_face_traction_moment_rows(
+    size,
+    traction_by_face,
+    center=(0.0, 0.0, 0.0),
+    names=None,
+    default_traction=(0.0, 0.0, 0.0),
+    pivot_m=(0.0, 0.0, 0.0),
+):
+    """Return analytic box face vector-traction force and pivot-moment rows.
+
+    The traction vector is a constant global vector [N/m2] on each planar box
+    face, so ``F = traction * area`` and ``M = (face_center - pivot) x F``.
+    Unlike scalar pressure, the force direction is not tied to the face normal.
+    This is the build123d-side analytic companion to
+    ``NetgenTriTetVolMesh.boundary_traction_force_moment_rows``.
+    """
+
+    pivot = tuple(float(value) for value in pivot_m)
+    if len(pivot) != 3:
+        raise ValueError("pivot_m must have three components")
+    rows = []
+    for area_row in box_face_vector_area_rows(size, center=center, names=names):
+        traction, source = _face_vector_value(
+            traction_by_face,
+            area_row,
+            default_traction,
+            "traction",
+        )
+        force = tuple(float(area_row["surface_area"]) * component for component in traction)
+        lever = tuple(area_row["face_center"][axis] - pivot[axis] for axis in range(3))
+        moment = _cross3(lever, force)
+        rows.append({
+            **area_row,
+            "traction_N_per_m2": traction,
+            "traction_source": source,
+            "force_N": force,
+            "force_magnitude_N": math.sqrt(sum(component * component for component in force)),
+            "pivot_m": pivot,
+            "lever_arm_m": lever,
+            "moment_about_pivot_Nm": moment,
+            "moment_magnitude_Nm": math.sqrt(sum(component * component for component in moment)),
+        })
+    return rows
+
+
+def _surface_area_from_row(row):
+    if "surface_area" in row:
+        return float(row["surface_area"])
+    if "area" in row:
+        return float(row["area"])
+    return None
+
+
+def _row_vector(row, key):
+    values = row.get(key)
+    if values is None:
+        return None
+    vector = list(values)
+    if len(vector) != 3:
+        return None
+    return [float(value) for value in vector]
+
+
+def _vector_norm(values):
+    return math.sqrt(sum(float(value) * float(value) for value in values))
+
+
+def compare_boundary_vector_area_rows(
+    reference_rows,
+    measured_rows,
+    vector_atol=1.0e-9,
+    area_rtol=1.0e-9,
+    measured_label="measured",
+):
+    """Compare oriented boundary-area rows by name.
+
+    ``reference_rows`` can come from :func:`box_face_vector_area_rows`, while
+    ``measured_rows`` can come from a triangle/tetrahedral ``.vol`` boundary
+    summary.  The comparison checks scalar area, oriented area vector, and unit
+    normal when both sides provide one.
+    """
+
+    measured_by_name = {row["name"]: row for row in measured_rows}
+    rows = []
+    for ref in reference_rows:
+        name = ref["name"]
+        measured = measured_by_name.get(name)
+        ref_area = _surface_area_from_row(ref)
+        ref_vector = _row_vector(ref, "vector_area")
+        ref_normal = _row_vector(ref, "unit_normal")
+        if measured is None:
+            rows.append({
+                "name": name,
+                "measured_label": measured_label,
+                "reference_surface_area": ref_area,
+                "measured_surface_area": None,
+                "area_rel_error": None,
+                "reference_vector_area": ref_vector,
+                "measured_vector_area": None,
+                "vector_abs_error": None,
+                "reference_unit_normal": ref_normal,
+                "measured_unit_normal": None,
+                "unit_normal_abs_error": None,
+                "vector_atol": float(vector_atol),
+                "area_rtol": float(area_rtol),
+                "passed": False,
+                "reason": "missing measured row",
+            })
+            continue
+
+        measured_area = _surface_area_from_row(measured)
+        measured_vector = _row_vector(measured, "vector_area")
+        measured_normal = _row_vector(measured, "unit_normal")
+        area_rel_error = (
+            _relative_measurement_error(ref_area, measured_area)
+            if ref_area is not None and measured_area is not None
+            else None
+        )
+        vector_abs_error = (
+            _vector_norm(float(a) - float(b) for a, b in zip(ref_vector, measured_vector))
+            if ref_vector is not None and measured_vector is not None
+            else None
+        )
+        unit_normal_abs_error = (
+            _vector_norm(float(a) - float(b) for a, b in zip(ref_normal, measured_normal))
+            if ref_normal is not None and measured_normal is not None
+            else None
+        )
+        area_ok = area_rel_error is not None and area_rel_error <= area_rtol
+        vector_ok = vector_abs_error is not None and vector_abs_error <= vector_atol
+        normal_ok = unit_normal_abs_error is None or unit_normal_abs_error <= vector_atol
+        passed = bool(area_ok and vector_ok and normal_ok)
+        rows.append({
+            "name": name,
+            "measured_label": measured_label,
+            "reference_surface_area": ref_area,
+            "measured_surface_area": measured_area,
+            "area_rel_error": area_rel_error,
+            "reference_vector_area": ref_vector,
+            "measured_vector_area": measured_vector,
+            "vector_abs_error": vector_abs_error,
+            "reference_unit_normal": ref_normal,
+            "measured_unit_normal": measured_normal,
+            "unit_normal_abs_error": unit_normal_abs_error,
+            "vector_atol": float(vector_atol),
+            "area_rtol": float(area_rtol),
+            "passed": passed,
+            "reason": "ok" if passed else "outside tolerance",
+        })
+    return rows
+
+
 def _relative_measurement_error(reference, measured):
     return abs(float(reference) - float(measured)) / max(
         abs(float(reference)),
@@ -424,6 +815,204 @@ def _row_bounding_box(row):
 
 def _max_abs_delta(reference, measured):
     return max(abs(float(a) - float(b)) for a, b in zip(reference, measured))
+
+
+def shape_measurement_inventory_summary(rows):
+    """Return assembly-level inventory statistics from measurement rows.
+
+    ``shape_measurement_rows`` is intentionally row-oriented.  This companion
+    answers the next question a CAE user asks: how much volume each labelled
+    region contributes, how much area is present, and how tightly the labelled
+    regions fill their union bounding box.
+    """
+
+    rows = list(rows)
+    if not rows:
+        return {
+            "n_shapes": 0,
+            "n_valid": 0,
+            "total_volume": 0.0,
+            "total_area": 0.0,
+            "total_solids": 0,
+            "total_faces": 0,
+            "total_edges": 0,
+            "total_vertices": 0,
+            "bounding_box": None,
+            "bbox_volume": None,
+            "bbox_fill_fraction": None,
+            "volume_fraction_rows": [],
+            "largest_volume_name": None,
+            "smallest_volume_name": None,
+        }
+
+    total_volume = sum(float(row["volume"]) for row in rows)
+    total_area = sum(float(row["area"]) for row in rows)
+    boxes = [_row_bounding_box(row) for row in rows]
+    complete_bbox = all(box is not None for box in boxes)
+    bounding_box = None
+    bbox_volume = None
+    fill_fraction = None
+    if complete_bbox:
+        mins = [min(box["min"][axis] for box in boxes) for axis in range(3)]
+        maxs = [max(box["max"][axis] for box in boxes) for axis in range(3)]
+        size = [maxs[axis] - mins[axis] for axis in range(3)]
+        center = [(mins[axis] + maxs[axis]) / 2.0 for axis in range(3)]
+        bbox_volume = size[0] * size[1] * size[2]
+        fill_fraction = total_volume / bbox_volume if bbox_volume > 0.0 else None
+        bounding_box = {
+            "min": [float(value) for value in mins],
+            "max": [float(value) for value in maxs],
+            "center": [float(value) for value in center],
+            "size": [float(value) for value in size],
+            "diagonal": math.sqrt(sum(value * value for value in size)),
+        }
+
+    volume_fraction_rows = []
+    for row in rows:
+        volume = float(row["volume"])
+        area = float(row["area"])
+        volume_fraction_rows.append({
+            "name": str(row["name"]),
+            "volume": volume,
+            "volume_fraction": volume / total_volume if total_volume > 0.0 else None,
+            "area": area,
+            "area_fraction": area / total_area if total_area > 0.0 else None,
+        })
+
+    by_volume = sorted(volume_fraction_rows, key=lambda row: row["volume"])
+    return {
+        "n_shapes": len(rows),
+        "n_valid": sum(1 for row in rows if bool(row.get("is_valid", True))),
+        "total_volume": total_volume,
+        "total_area": total_area,
+        "total_solids": sum(int(row.get("solids", 0)) for row in rows),
+        "total_faces": sum(int(row.get("faces", 0)) for row in rows),
+        "total_edges": sum(int(row.get("edges", 0)) for row in rows),
+        "total_vertices": sum(int(row.get("vertices", 0)) for row in rows),
+        "bounding_box": bounding_box,
+        "bbox_volume": bbox_volume,
+        "bbox_fill_fraction": fill_fraction,
+        "volume_fraction_rows": volume_fraction_rows,
+        "largest_volume_name": by_volume[-1]["name"],
+        "smallest_volume_name": by_volume[0]["name"],
+    }
+
+
+def _bbox_pair_clearance_row(row_a, box_a, row_b, box_b, tolerance):
+    axes = ("x", "y", "z")
+    axis_gaps = {}
+    axis_overlaps = {}
+    separated_axes = []
+    touching_axes = []
+    for axis, label in enumerate(axes):
+        lo_a = float(box_a["min"][axis])
+        hi_a = float(box_a["max"][axis])
+        lo_b = float(box_b["min"][axis])
+        hi_b = float(box_b["max"][axis])
+        if hi_a < lo_b:
+            gap = lo_b - hi_a
+        elif hi_b < lo_a:
+            gap = lo_a - hi_b
+        else:
+            gap = 0.0
+        overlap = min(hi_a, hi_b) - max(lo_a, lo_b)
+        if gap > tolerance:
+            separated_axes.append(label)
+        elif abs(overlap) <= tolerance:
+            touching_axes.append(label)
+        axis_gaps[label] = float(gap if gap > 0.0 else 0.0)
+        axis_overlaps[label] = float(overlap if overlap > 0.0 else 0.0)
+
+    bbox_separated = bool(separated_axes)
+    if bbox_separated:
+        status = "separated"
+    elif touching_axes:
+        status = "touching_bbox"
+    else:
+        status = "bbox_overlap_needs_precise_check"
+    intersection_size = [axis_overlaps[label] for label in axes]
+    intersection_volume = (
+        intersection_size[0] * intersection_size[1] * intersection_size[2]
+        if not bbox_separated else 0.0
+    )
+    positive_gaps = [value for value in axis_gaps.values() if value > tolerance]
+    center_distance = math.sqrt(sum(
+        (float(box_a["center"][axis]) - float(box_b["center"][axis])) ** 2
+        for axis in range(3)
+    ))
+    name_a = str(row_a.get("name", "shape_a"))
+    name_b = str(row_b.get("name", "shape_b"))
+    return {
+        "pair": f"{name_a}::{name_b}",
+        "name_a": name_a,
+        "name_b": name_b,
+        "status": status,
+        "bbox_separated": bbox_separated,
+        "bbox_intersects_or_touches": not bbox_separated,
+        "separated_axes": separated_axes,
+        "touching_axes": touching_axes,
+        "axis_gaps": axis_gaps,
+        "axis_overlaps": axis_overlaps,
+        "separation_distance": min(positive_gaps) if positive_gaps else 0.0,
+        "center_distance": float(center_distance),
+        "bbox_intersection_size": intersection_size,
+        "bbox_intersection_volume": float(intersection_volume),
+    }
+
+
+def shape_bbox_pair_clearance_summary(rows, clearance_tolerance=1.0e-12):
+    """Audit pairwise bounding-box clearances from measurement rows.
+
+    A positive gap on any one axis is a cheap proof that two shapes are
+    separated before STEP/mesh export.  If all three bbox intervals overlap the
+    pair is not declared intersecting; it is marked for precise geometry or
+    boolean checking.
+    """
+
+    rows = list(rows)
+    tolerance = float(clearance_tolerance)
+    if tolerance < 0.0:
+        raise ValueError("clearance_tolerance must be >= 0")
+    complete = []
+    missing = []
+    for index, row in enumerate(rows, start=1):
+        box = _row_bounding_box(row)
+        if box is None:
+            missing.append(str(row.get("name", f"shape_{index}") if isinstance(row, dict) else f"shape_{index}"))
+        else:
+            complete.append((row, box))
+
+    pair_rows = []
+    for i, (row_a, box_a) in enumerate(complete):
+        for row_b, box_b in complete[i + 1:]:
+            pair_rows.append(_bbox_pair_clearance_row(row_a, box_a, row_b, box_b, tolerance))
+
+    separated_count = sum(1 for row in pair_rows if row["status"] == "separated")
+    touching_count = sum(1 for row in pair_rows if row["status"] == "touching_bbox")
+    overlap_count = sum(1 for row in pair_rows if row["status"] == "bbox_overlap_needs_precise_check")
+    gaps = [row["separation_distance"] for row in pair_rows if row["separation_distance"] > tolerance]
+    overlap_volumes = [
+        row["bbox_intersection_volume"]
+        for row in pair_rows
+        if row["status"] == "bbox_overlap_needs_precise_check"
+    ]
+    ok = not missing and touching_count == 0 and overlap_count == 0
+    return {
+        "policy": "build123d_bbox_pair_clearance_pre_mesh_audit",
+        "status": "ok" if ok else "needs_attention",
+        "ok_for_bbox_clearance": ok,
+        "clearance_tolerance": tolerance,
+        "n_shapes": len(rows),
+        "n_complete_bbox_rows": len(complete),
+        "missing_bbox_names": missing,
+        "n_pairs": len(pair_rows),
+        "separated_pair_count": separated_count,
+        "touching_pair_count": touching_count,
+        "bbox_overlap_pair_count": overlap_count,
+        "min_positive_gap": min(gaps) if gaps else None,
+        "max_bbox_intersection_volume": max(overlap_volumes) if overlap_volumes else 0.0,
+        "pair_rows": pair_rows,
+    }
 
 
 def compare_shape_measurement_rows(
@@ -559,6 +1148,216 @@ def shape_measurement_comparison_summary(
         "max_volume_rel_error": max(volume_errors) if volume_errors else 0.0,
         "max_area_rel_error": max(area_errors) if area_errors else 0.0,
         "max_bbox_abs_error": max(bbox_errors) if bbox_errors else 0.0,
+        "rows": rows,
+    }
+
+
+def _shape_measurement_comparison_score(row):
+    if row.get("volume_rel_error") is None or row.get("area_rel_error") is None:
+        return math.inf
+    score = max(float(row["volume_rel_error"]), float(row["area_rel_error"]))
+    bbox_error = row.get("bbox_abs_error")
+    if bbox_error is not None:
+        bbox_atol = float(row.get("bbox_atol") or 0.0)
+        score = max(score, float(bbox_error) / bbox_atol if bbox_atol > 0.0 else float(bbox_error))
+    return score
+
+
+def worst_shape_measurement_comparison_rows(comparison_rows, limit=5):
+    """Return the largest measurement mismatches first."""
+
+    if limit < 0:
+        raise ValueError("limit must be non-negative")
+    rows = sorted(
+        list(comparison_rows),
+        key=lambda row: (
+            0 if bool(row.get("passed")) else 1,
+            _shape_measurement_comparison_score(row),
+            str(row.get("name", "")),
+        ),
+        reverse=True,
+    )
+    return rows[:limit]
+
+
+def shape_measurement_health_summary(
+    reference_rows,
+    measured_rows,
+    rtol=1.0e-5,
+    measured_label="measured",
+    bbox_atol=1.0e-6,
+    worst_limit=5,
+):
+    """Return a readable health report for CAD measurement cross validation."""
+
+    if worst_limit < 0:
+        raise ValueError("worst_limit must be non-negative")
+    reference_rows = list(reference_rows)
+    inventory = shape_measurement_inventory_summary(reference_rows)
+    comparison = shape_measurement_comparison_summary(
+        reference_rows,
+        measured_rows,
+        rtol=rtol,
+        measured_label=measured_label,
+        bbox_atol=bbox_atol,
+    )
+    checks = {
+        "all_reference_shapes_valid": inventory["n_valid"] == inventory["n_shapes"],
+        "all_measurements_present_and_within_tolerance": comparison["n_passed"] == comparison["n_cases"],
+    }
+    issues = []
+    if not checks["all_reference_shapes_valid"]:
+        issues.append("at least one reference build123d shape is invalid")
+    if not checks["all_measurements_present_and_within_tolerance"]:
+        issues.append("at least one external measurement is missing or outside tolerance")
+    ok = all(checks.values())
+    return {
+        "policy": "build123d_shape_measurement_volume_area_bbox_health",
+        "status": "ok" if ok else "needs_attention",
+        "ok_for_geometry_roundtrip": ok,
+        "measured_label": measured_label,
+        "checks": checks,
+        "issues": issues,
+        "inventory": inventory,
+        "comparison_summary": {
+            key: value
+            for key, value in comparison.items()
+            if key != "rows"
+        },
+        "worst_comparisons": worst_shape_measurement_comparison_rows(
+            comparison["rows"],
+            limit=worst_limit,
+        ),
+    }
+
+
+def shape_parameter_sweep_summary(
+    rows,
+    parameter_key,
+    metric_keys=("volume", "area"),
+    limits_by_metric=None,
+    monotonic_tolerance=1.0e-12,
+):
+    """Summarize a CAD parameter sweep from measurement rows.
+
+    Each row should contain ``parameter_key`` and the requested metric keys
+    (for example ``volume`` and ``area`` from :func:`shape_measurement_row`).
+    The summary sorts by the parameter value and reports monotonicity, extrema,
+    spans, and optional min/max constraint violations for each metric.  It is a
+    small pre-mesh design table before geometry rows are sent to meshing,
+    validation, or optimization.
+    """
+
+    rows = [dict(row) for row in rows]
+    if not rows:
+        raise ValueError("rows must not be empty")
+    tolerance = float(monotonic_tolerance)
+    if tolerance < 0.0:
+        raise ValueError("monotonic_tolerance must be >= 0")
+    metric_keys = tuple(str(key) for key in metric_keys)
+    if not metric_keys:
+        raise ValueError("metric_keys must not be empty")
+    limits_by_metric = limits_by_metric or {}
+
+    for row in rows:
+        if parameter_key not in row:
+            raise KeyError(f"missing parameter {parameter_key!r}")
+        row[parameter_key] = float(row[parameter_key])
+        if not math.isfinite(row[parameter_key]):
+            raise ValueError("parameter values must be finite")
+        for key in metric_keys:
+            if key not in row:
+                raise KeyError(f"missing metric {key!r}")
+            row[key] = float(row[key])
+            if not math.isfinite(row[key]):
+                raise ValueError("metric values must be finite")
+
+    rows.sort(key=lambda row: row[parameter_key])
+    parameter_values = [row[parameter_key] for row in rows]
+    duplicate_parameters = len(set(parameter_values)) != len(parameter_values)
+    parameter_strict = all(parameter_values[i] < parameter_values[i + 1] for i in range(len(rows) - 1))
+    metric_rows = []
+    violations = []
+
+    for key in metric_keys:
+        values = [row[key] for row in rows]
+        deltas = [values[i + 1] - values[i] for i in range(len(values) - 1)]
+        min_index = min(range(len(values)), key=lambda i: values[i])
+        max_index = max(range(len(values)), key=lambda i: values[i])
+        limits = limits_by_metric.get(key, {})
+        lower = limits.get("min") if isinstance(limits, dict) else None
+        upper = limits.get("max") if isinstance(limits, dict) else None
+        lower = None if lower is None else float(lower)
+        upper = None if upper is None else float(upper)
+        if lower is not None and not math.isfinite(lower):
+            raise ValueError(f"lower limit for metric {key!r} must be finite")
+        if upper is not None and not math.isfinite(upper):
+            raise ValueError(f"upper limit for metric {key!r} must be finite")
+        metric_violations = []
+        for row, value in zip(rows, values):
+            if lower is not None and value < lower - tolerance:
+                metric_violations.append({
+                    "parameter": row[parameter_key],
+                    "metric": key,
+                    "value": value,
+                    "limit": lower,
+                    "kind": "below_min",
+                })
+            if upper is not None and value > upper + tolerance:
+                metric_violations.append({
+                    "parameter": row[parameter_key],
+                    "metric": key,
+                    "value": value,
+                    "limit": upper,
+                    "kind": "above_max",
+                })
+        violations.extend(metric_violations)
+        min_value = values[min_index]
+        max_value = values[max_index]
+        metric_rows.append({
+            "metric": key,
+            "min": min_value,
+            "min_parameter": parameter_values[min_index],
+            "max": max_value,
+            "max_parameter": parameter_values[max_index],
+            "span": max_value - min_value,
+            "relative_span": (
+                (max_value - min_value) / abs(min_value)
+                if min_value != 0.0
+                else (0.0 if max_value == 0.0 else math.inf)
+            ),
+            "first": values[0],
+            "last": values[-1],
+            "delta_first_to_last": values[-1] - values[0],
+            "monotonic_non_decreasing": all(delta >= -tolerance for delta in deltas),
+            "monotonic_non_increasing": all(delta <= tolerance for delta in deltas),
+            "min_step_delta": min(deltas) if deltas else 0.0,
+            "max_step_delta": max(deltas) if deltas else 0.0,
+            "limits": {"min": lower, "max": upper},
+            "constraint_violation_count": len(metric_violations),
+        })
+
+    ok = not duplicate_parameters and not violations
+    issues = []
+    if duplicate_parameters:
+        issues.append("duplicate parameter values")
+    if violations:
+        issues.append("at least one metric is outside requested limits")
+    return {
+        "policy": "build123d_parameter_sweep_measurements_are_sorted_and_audited",
+        "parameter_key": str(parameter_key),
+        "n_cases": len(rows),
+        "parameter_values": parameter_values,
+        "parameter_min": parameter_values[0],
+        "parameter_max": parameter_values[-1],
+        "parameter_strictly_increasing": parameter_strict,
+        "duplicate_parameter_values": duplicate_parameters,
+        "metric_rows": metric_rows,
+        "constraint_violations": violations,
+        "constraint_violation_count": len(violations),
+        "status": "ok" if ok else "needs_attention",
+        "ok_for_design_table": ok,
+        "issues": issues,
         "rows": rows,
     }
 

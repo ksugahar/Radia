@@ -431,6 +431,241 @@ def test_boundary_summary_rows_for_named_box_faces():
     assert mesh.total_volume() == pytest.approx(30.0)
 
 
+def test_boundary_edge_inventory_rows_separate_perimeter_and_diagonal_edges():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+    summary = mesh.boundary_edge_inventory_summary()
+    rows = {row["name"]: row for row in summary["rows"]}
+
+    assert summary["policy"] == "netgen_vol_boundary_local_edge_inventory"
+    assert summary["boundary_count"] == 6
+    assert summary["surface_triangles"] == 12
+    assert summary["unique_boundary_edges_total"] == 30
+    assert summary["perimeter_edges_total"] == 24
+    assert summary["shared_diagonal_edges_total"] == 6
+    assert summary["overused_edges_total"] == 0
+    assert summary["has_overused_boundary_edges"] is False
+
+    zmax = rows["zmax"]
+    assert zmax["surface_triangles"] == 2
+    assert zmax["surface_area"] == pytest.approx(6.0)
+    assert zmax["unique_boundary_edges"] == 5
+    assert zmax["perimeter_edges"] == 4
+    assert zmax["shared_diagonal_edges"] == 1
+    assert zmax["perimeter_edge_length_sum_m"] == pytest.approx(10.0)
+    assert zmax["shared_diagonal_edge_length_sum_m"] == pytest.approx(13**0.5)
+    assert zmax["shared_diagonal_edge_nodes"] == [[5, 7]]
+
+
+def test_boundary_condition_assignment_summary_detects_missing_and_unknown_keys():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+    summary = mesh.boundary_condition_assignment_summary(
+        {
+            "zmax": "impedance",
+            "zmin": "dirichlet",
+            1: "symmetry",
+            "not_a_boundary": "neumann",
+        },
+        default_condition="open",
+    )
+    by_name = {row["name"]: row for row in summary["rows"]}
+
+    assert summary["boundary_count"] == 6
+    assert summary["assigned_boundary_count"] == 6
+    assert summary["missing_boundary_count"] == 0
+    assert summary["unknown_condition_keys"] == ["not_a_boundary"]
+    assert summary["unknown_condition_key_count"] == 1
+    assert summary["ok"] is False
+    assert summary["condition_counts"] == {
+        "dirichlet": 1,
+        "impedance": 1,
+        "open": 3,
+        "symmetry": 1,
+    }
+    assert by_name["zmax"]["condition"] == "impedance"
+    assert by_name["zmax"]["condition_source"] == "boundary_name"
+    assert by_name["xmin"]["condition"] == "symmetry"
+    assert by_name["xmin"]["condition_source"] == "boundary_number"
+    assert by_name["xmax"]["condition_source"] == "default"
+    assert by_name["zmax"]["trace_node_count"] == 4
+    assert by_name["zmax"]["adjacent_material_names"] == ["air"]
+
+    missing = mesh.boundary_condition_assignment_summary({"zmax": "impedance"})
+    assert missing["missing_boundary_count"] == 5
+    assert missing["ok"] is False
+    assert {row["name"] for row in missing["rows"] if row["condition_source"] == "missing"} == {
+        "xmax",
+        "xmin",
+        "ymax",
+        "ymin",
+        "zmin",
+    }
+
+
+def test_boundary_normal_summary_rows_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+    rows = mesh.boundary_normal_summary_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    expected_vectors = {
+        "xmin": (-15.0, 0.0, 0.0),
+        "xmax": (15.0, 0.0, 0.0),
+        "ymin": (0.0, -10.0, 0.0),
+        "ymax": (0.0, 10.0, 0.0),
+        "zmin": (0.0, 0.0, -6.0),
+        "zmax": (0.0, 0.0, 6.0),
+    }
+    expected_normals = {
+        name: tuple(component / max(abs(v) for v in vector) for component in vector)
+        for name, vector in expected_vectors.items()
+    }
+
+    assert [row["boundary_number"] for row in rows] == [1, 2, 3, 4, 5, 6]
+    assert mesh.surface_vector_area_by_boundary_number() == pytest.approx({
+        1: expected_vectors["xmin"],
+        2: expected_vectors["xmax"],
+        3: expected_vectors["ymin"],
+        4: expected_vectors["ymax"],
+        5: expected_vectors["zmin"],
+        6: expected_vectors["zmax"],
+    })
+    for name, vector in expected_vectors.items():
+        assert by_name[name]["vector_area"] == pytest.approx(vector)
+        assert by_name[name]["vector_area_norm"] == pytest.approx(by_name[name]["surface_area"])
+        assert by_name[name]["vector_area_norm_over_area"] == pytest.approx(1.0)
+        assert by_name[name]["unit_normal"] == pytest.approx(expected_normals[name])
+
+
+def test_boundary_pressure_force_rows_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+
+    uniform = mesh.boundary_pressure_force_rows({"xmin": 2.0, "xmax": 2.0, "ymin": 2.0, "ymax": 2.0, "zmin": 2.0, "zmax": 2.0})
+    total_uniform = [
+        sum(row["force_N"][axis] for row in uniform)
+        for axis in range(3)
+    ]
+    assert total_uniform == pytest.approx([0.0, 0.0, 0.0])
+
+    one_face = mesh.boundary_pressure_force_rows({"zmax": 2.0}, default_pressure=0.0)
+    by_name = {row["name"]: row for row in one_face}
+    assert by_name["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert by_name["zmax"]["force_magnitude_N"] == pytest.approx(12.0)
+    assert by_name["zmax"]["pressure_source"] == "name"
+    assert by_name["xmin"]["pressure_source"] == "default"
+
+    by_number = mesh.boundary_pressure_force_rows({6: 3.0}, default_pressure=0.0)
+    assert {row["name"]: row for row in by_number}["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 18.0))
+
+    with pytest.raises(KeyError):
+        mesh.boundary_pressure_force_rows({"zmax": 2.0}, default_pressure=None)
+
+
+def test_boundary_pressure_force_moment_rows_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+
+    one_face = mesh.boundary_pressure_force_moment_rows({"zmax": 2.0}, default_pressure=0.0)
+    by_name = {row["name"]: row for row in one_face}
+    zmax = by_name["zmax"]
+    assert zmax["centroid_m"] == pytest.approx((1.0, 1.5, 5.0))
+    assert zmax["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert zmax["moment_about_pivot_Nm"] == pytest.approx((18.0, -12.0, 0.0))
+
+    shifted = mesh.boundary_pressure_force_moment_rows(
+        {"zmax": 2.0},
+        default_pressure=0.0,
+        pivot_m=(1.0, 1.5, 0.0),
+    )
+    assert {row["name"]: row for row in shifted}["zmax"]["moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    uniform = mesh.boundary_pressure_force_moment_rows({
+        "xmin": 2.0,
+        "xmax": 2.0,
+        "ymin": 2.0,
+        "ymax": 2.0,
+        "zmin": 2.0,
+        "zmax": 2.0,
+    })
+    total_force = [
+        sum(row["force_N"][axis] for row in uniform)
+        for axis in range(3)
+    ]
+    total_moment = [
+        sum(row["moment_about_pivot_Nm"][axis] for row in uniform)
+        for axis in range(3)
+    ]
+    assert total_force == pytest.approx((0.0, 0.0, 0.0))
+    assert total_moment == pytest.approx((0.0, 0.0, 0.0))
+
+    with pytest.raises(KeyError):
+        mesh.boundary_pressure_force_moment_rows({"zmax": 2.0}, default_pressure=None)
+
+
+def test_boundary_pressure_resultant_summary_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+
+    uniform = mesh.boundary_pressure_resultant_summary({}, default_pressure=2.0)
+    assert uniform["boundary_count"] == 6
+    assert uniform["total_force_N"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["total_moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["absolute_force_sum_N"] == pytest.approx(124.0)
+    assert uniform["force_balance_ratio"] == pytest.approx(0.0)
+    assert uniform["moment_balance_ratio"] == pytest.approx(0.0)
+    assert uniform["surface_vector_area"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["surface_vector_area_norm_over_area"] == pytest.approx(0.0)
+
+    zmax = mesh.boundary_pressure_resultant_summary({"zmax": 2.0}, default_pressure=0.0)
+    assert zmax["total_force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert zmax["total_moment_about_pivot_Nm"] == pytest.approx((18.0, -12.0, 0.0))
+    assert zmax["total_force_magnitude_N"] == pytest.approx(12.0)
+    assert zmax["force_balance_ratio"] == pytest.approx(1.0)
+
+    shifted = mesh.boundary_pressure_resultant_summary(
+        {"zmax": 2.0},
+        default_pressure=0.0,
+        pivot_m=(1.0, 1.5, 0.0),
+    )
+    assert shifted["total_moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    with pytest.raises(KeyError):
+        mesh.boundary_pressure_resultant_summary({"zmax": 2.0}, default_pressure=None)
+
+
+def test_boundary_traction_force_moment_rows_for_named_box_faces():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+
+    one_face = mesh.boundary_traction_force_moment_rows(
+        {"zmax": (1.0, -2.0, 3.0)},
+        default_traction=(0.0, 0.0, 0.0),
+    )
+    by_name = {row["name"]: row for row in one_face}
+    zmax = by_name["zmax"]
+
+    assert zmax["surface_area"] == pytest.approx(6.0)
+    assert zmax["centroid_m"] == pytest.approx((1.0, 1.5, 5.0))
+    assert zmax["force_N"] == pytest.approx((6.0, -12.0, 18.0))
+    assert zmax["moment_about_pivot_Nm"] == pytest.approx((87.0, 12.0, -21.0))
+    assert zmax["traction_source"] == "name"
+    assert by_name["xmin"]["traction_source"] == "default"
+    assert by_name["xmin"]["force_N"] == pytest.approx((0.0, 0.0, 0.0))
+
+    shifted = mesh.boundary_traction_force_moment_rows(
+        {"zmax": (1.0, -2.0, 3.0)},
+        default_traction=(0.0, 0.0, 0.0),
+        pivot_m=(1.0, 1.5, 5.0),
+    )
+    assert {row["name"]: row for row in shifted}["zmax"]["moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    by_number = mesh.boundary_traction_force_moment_rows(
+        {6: (0.0, 0.0, 2.0)},
+        default_traction=(0.0, 0.0, 0.0),
+    )
+    assert {row["name"]: row for row in by_number}["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+
+    with pytest.raises(KeyError):
+        mesh.boundary_traction_force_moment_rows({"zmax": (1.0, 0.0, 0.0)}, default_traction=None)
+    with pytest.raises(ValueError):
+        mesh.boundary_traction_force_moment_rows({"zmax": (1.0, 0.0)}, default_traction=(0.0, 0.0, 0.0))
+
+
 def test_material_summary_rows_for_two_material_interface():
     mesh = parse_netgen_tri_tet_vol(TWO_MATERIAL_INTERFACE_VOL)
     rows = mesh.material_summary_rows()
@@ -491,6 +726,49 @@ def test_domain_boundary_incidence_rows_preserve_domin_domout():
     assert interface["trace_node_ids"] == [1, 2, 3]
 
 
+def test_boundary_tet_face_incidence_rows_match_volume_faces():
+    mesh = parse_netgen_tri_tet_vol(TWO_MATERIAL_INTERFACE_VOL)
+    summary = mesh.boundary_tet_face_incidence_summary()
+    rows = mesh.boundary_tet_face_incidence_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert summary["surface_triangles"] == 7
+    assert summary["tetrahedra"] == 2
+    assert summary["exterior_surface_triangles"] == 6
+    assert summary["interface_surface_triangles"] == 1
+    assert summary["orphan_surface_triangles"] == 0
+    assert summary["overconnected_surface_triangles"] == 0
+    assert summary["domain_material_mismatch_count"] == 0
+    assert summary["max_adjacent_tetrahedra"] == 2
+    assert summary["is_volume_boundary_consistent"]
+
+    outer = by_name["air_outer"]
+    assert outer["kind"] == "exterior"
+    assert outer["adjacent_tetrahedron_count"] == 1
+    assert outer["adjacent_material_numbers"] == [1]
+    assert outer["declared_domain_numbers"] == [1]
+    assert outer["domain_material_match"]
+
+    interface = by_name["air_core_interface"]
+    assert interface["kind"] == "interface"
+    assert interface["nodes"] == [1, 2, 3]
+    assert interface["adjacent_tetrahedron_count"] == 2
+    assert interface["adjacent_material_numbers"] == [1, 2]
+    assert interface["declared_domain_numbers"] == [1, 2]
+    assert interface["domain_material_match"]
+
+
+def test_boundary_tet_face_incidence_detects_orphan_open_surface():
+    summary = parse_netgen_tri_tet_vol(OPEN_SURFACE_VOL).boundary_tet_face_incidence_summary()
+
+    assert summary["surface_triangles"] == 1
+    assert summary["tetrahedra"] == 0
+    assert summary["orphan_surface_triangles"] == 1
+    assert summary["is_volume_boundary_consistent"] is False
+    assert summary["rows"][0]["kind"] == "orphan"
+    assert summary["rows"][0]["adjacent_tetrahedron_count"] == 0
+
+
 def test_surface_connected_components_single_open_and_disconnected():
     single = parse_netgen_tri_tet_vol(TET_VOL).surface_connected_components()
     assert len(single) == 1
@@ -532,6 +810,30 @@ def test_first_order_fem_bem_topology_for_unit_tetrahedron():
     assert topology["trace"]["rwg_to_hcurl_edge_ids"] == [1, 2, 3, 4, 5, 6]
 
 
+def test_boundary_oriented_edge_summary_expands_rwg_trace_rows():
+    summary = parse_netgen_tri_tet_vol(TET_VOL).boundary_oriented_edge_summary()
+    rows = summary["rows"]
+
+    assert summary["policy"] == "boundary_triangle_oriented_edges_for_first_order_rwg_trace"
+    assert summary["surface_triangles"] == 4
+    assert summary["surface_edges"] == 6
+    assert summary["rwg_dof_edges"] == 6
+    assert summary["oriented_edge_rows"] == 12
+    assert summary["open_edges"] == 0
+    assert summary["is_closed_manifold"] is True
+    assert summary["orientation_sign_counts"] == {"-1": 6, "1": 6}
+
+    first_face = rows[:3]
+    assert [row["oriented_edge_nodes_global"] for row in first_face] == [[1, 2], [2, 3], [3, 1]]
+    assert [row["edge_nodes_global"] for row in first_face] == [[1, 2], [2, 3], [1, 3]]
+    assert [row["orientation_sign"] for row in first_face] == [1, 1, -1]
+    assert all(row["is_rwg_dof"] for row in rows)
+    assert all(row["adjacent_surface_triangle_count"] == 2 for row in rows)
+    assert {row["hcurl_edge_id"] for row in rows} == {1, 2, 3, 4, 5, 6}
+    assert summary["min_edge_length_m"] == pytest.approx(1.0)
+    assert summary["max_edge_length_m"] == pytest.approx(2**0.5)
+
+
 def test_first_order_topology_compacts_boundary_nodes_with_interior_node():
     topology = parse_netgen_tri_tet_vol(FOUR_TET_WITH_INTERIOR_NODE_VOL).first_order_fem_bem_topology()
 
@@ -543,6 +845,25 @@ def test_first_order_topology_compacts_boundary_nodes_with_interior_node():
     assert topology["trace"]["h1_to_scalar_bem_cols"] == [1, 2, 3, 4]
     assert len(topology["hcurl"]["edges"]) == 10
     assert topology["rwg"]["hcurl_edge_ids"] == [1, 2, 3, 5, 6, 8]
+
+
+def test_p1_trace_matrix_summary_is_boolean_gather_for_one_based_sparse():
+    trace = parse_netgen_tri_tet_vol(FOUR_TET_WITH_INTERIOR_NODE_VOL).p1_fem_bem_trace_matrix_summary()
+
+    assert trace["policy"] == "p1_h1_to_scalar_bem_trace_is_boolean_gather"
+    assert trace["matrix_shape"] == [4, 5]
+    assert trace["nnz"] == 4
+    assert trace["rows"] == [1, 2, 3, 4]
+    assert trace["cols"] == [1, 2, 3, 4]
+    assert trace["values"] == [1.0, 1.0, 1.0, 1.0]
+    assert trace["trace_node_ids"] == [1, 2, 3, 4]
+    assert trace["interior_node_ids"] == [5]
+    assert trace["is_boolean_gather"] is True
+    assert trace["row_nnz_min"] == 1
+    assert trace["row_nnz_max"] == 1
+    assert trace["interior_column_nnz_max"] == 0
+    assert all(5 not in tri for tri in trace["surface_triangles_local"])
+    assert any(5 in tet.nodes for tet in parse_netgen_tri_tet_vol(FOUR_TET_WITH_INTERIOR_NODE_VOL).tetrahedra)
 
 
 def test_first_order_topology_balances_rwg_orientation_with_hcurl_trace():
@@ -651,6 +972,57 @@ def test_tetrahedron_quality_rows_for_right_and_equilateral_tets():
     assert eq_summary["max_radius_ratio_quality"] == pytest.approx(1.0)
     assert eq_summary["min_normalized_corner_jacobian"] == pytest.approx(math.sqrt(0.5))
     assert eq_summary["max_edge_ratio"] == pytest.approx(1.0)
+
+
+def test_worst_quality_rows_and_mesh_health_summary():
+    mesh = parse_netgen_tri_tet_vol(TET_VOL)
+
+    assert mesh.worst_tetrahedra_by_quality(limit=0) == ()
+    assert mesh.worst_surface_triangles_by_quality(limit=1)[0]["surface_triangle"] == 1
+    with pytest.raises(ValueError, match="limit must be non-negative"):
+        mesh.worst_tetrahedra_by_quality(limit=-1)
+
+    health = mesh.mesh_health_summary(worst_limit=2)
+    assert health["status"] == "ok"
+    assert health["ok_for_first_order_fem_bem"] is True
+    assert health["checks"] == {
+        "has_points": True,
+        "has_surface_triangles": True,
+        "has_tetrahedra": True,
+        "surface_is_closed_manifold": True,
+        "surface_vector_area_closes": True,
+        "surface_volume_matches_tetrahedra": True,
+        "boundary_faces_match_tetrahedra": True,
+        "surface_triangle_quality_above_threshold": True,
+        "tetrahedron_quality_above_threshold": True,
+    }
+    assert health["boundary_tet_face_incidence"]["is_volume_boundary_consistent"] is True
+    assert "rows" not in health["boundary_tet_face_incidence"]
+    assert health["worst_tetrahedra"][0]["tetrahedron"] == 1
+    assert len(health["worst_surface_triangles"]) == 2
+
+
+def test_mesh_health_summary_reports_sliver_and_open_surface_failures():
+    sliver_vol = TET_VOL.replace("0 0 1", "0.001 0.001 0.001")
+    sliver = parse_netgen_tri_tet_vol(sliver_vol)
+    sliver_health = sliver.mesh_health_summary(
+        min_surface_triangle_quality=0.0,
+        min_tetrahedron_quality=0.01,
+        worst_limit=1,
+    )
+
+    assert sliver_health["status"] == "needs_attention"
+    assert sliver_health["ok_for_first_order_fem_bem"] is False
+    assert sliver_health["checks"]["tetrahedron_quality_above_threshold"] is False
+    assert sliver_health["worst_tetrahedra"][0]["radius_ratio_quality"] < 0.01
+    assert any("tetrahedron" in issue for issue in sliver_health["issues"])
+
+    open_patch = parse_netgen_tri_tet_vol(OPEN_SURFACE_VOL).mesh_health_summary()
+    assert open_patch["status"] == "needs_attention"
+    assert open_patch["checks"]["has_tetrahedra"] is False
+    assert open_patch["checks"]["surface_is_closed_manifold"] is False
+    assert open_patch["checks"]["boundary_faces_match_tetrahedra"] is False
+    assert "mesh has no volume tetrahedra" in open_patch["issues"]
 
 
 def test_surface_closure_summary_for_single_tetrahedron():

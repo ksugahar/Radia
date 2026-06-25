@@ -29,9 +29,9 @@
 extern radTConvergRepair& radCR;
 
 //-------------------------------------------------------------------------
-// moment-yano method-2 routing flag (set by SolveGen): the moment linear step uses the HACApK
+// multipole-moment MMM method-2 routing flag (set by SolveGen): the moment linear step uses the HACApK
 // H-matrix + BiCGSTAB (scalable storage) instead of the dense LU.
-extern bool g_yano_moment_hacapk;
+extern bool g_multipole_moment_hacapk;
 
 //-------------------------------------------------------------------------
 

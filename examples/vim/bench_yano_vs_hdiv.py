@@ -5,7 +5,7 @@ NAMING (clarified 2026-06-23): MMM, MSC, and HDiv-VIM are ALL volume integral me
 is the meshed body's volume magnetization M, the kernel is the free-space Laplace Green 1/(4*pi*r), and the
 open boundary is natural (no air mesh / Kelvin / PML).  "VIM" is the method CLASS, not a single method.  The
 members differ only in the M discretization + projection:
-  * MSC (yano-type) : surface charge sigma per face, COLLOCATION (EIEM2).  hex 6 DOF / wedge 5 DOF.
+  * MSC (six-face surface-charge) : surface charge sigma per face, COLLOCATION (EIEM2).  hex 6 DOF / wedge 5 DOF.
   * HDiv (FEEC)     : M in H(div) RT_k, GALERKIN  (N = B^T G B, the C++ charge-Gram).  1 flux/face at RT0.
   (MMM is the moment/dipole collocation member on tets.)  So this bench is "MSC vs HDiv", two VIM members --
   NOT "MSC vs VIM" (that mixes a member with the class).
@@ -73,7 +73,7 @@ def _bkg():
 
 def part1_hex_hsweep(n_list):
     print("=" * 80, flush=True)
-    print("Part 1  HEX cube  --  MSC (yano-type collocation) vs HDiv (RT0, FEEC Galerkin)", flush=True)
+    print("Part 1  HEX cube  --  MSC (six-face surface-charge collocation) vs HDiv (RT0, FEEC Galerkin)", flush=True)
     print(f"        mu_r={MU_R}, H0={H0} A/m, {N_THREADS} threads, external probe B_z at {PROBE}", flush=True)
     print("=" * 80, flush=True)
     rows = []
@@ -144,7 +144,7 @@ def main():
                problem=dict(geometry="unit iron cube", mu_r=MU_R, H0_Am=H0, probe=PROBE),
                peak_memory_mb=_peak_mem_mb(), wall_time_s=time.perf_counter() - t_start,
                part1_hex_hsweep=part1, part2_tet_psweep=part2,
-               notes=("Both are VIM members: MSC=yano-type collocation (HEX), HDiv=FEEC Galerkin.  C++ "
+               notes=("Both are VIM members: MSC=six-face surface-charge collocation (HEX), HDiv=FEEC Galerkin.  C++ "
                       "_ChargeGramHMatrix is the sole demag operator (Python dense Gram removed 2026-06-23). "
                       "All solves under TaskManager (HACApK build+solve self-wrap)."))
     path = os.path.join(HERE, "bench_yano_vs_hdiv.json")

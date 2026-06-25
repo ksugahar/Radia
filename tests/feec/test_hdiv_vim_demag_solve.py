@@ -1,5 +1,5 @@
 """Golden test (productionization M1): radia.vim.hdiv_demag_solve -- the consolidated LINEAR
-soft-iron applied-field demag solve (the candidate yano-type replacement for rad.Solve).
+soft-iron applied-field demag solve (the candidate six-face surface-charge replacement for rad.Solve).
 
 Locks:
   (1) PHYSICS: on a uniform-field sphere the volume-average M matches the analytic linear

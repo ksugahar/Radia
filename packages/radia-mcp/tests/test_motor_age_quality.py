@@ -48,6 +48,5 @@ def test_induction_plan_routes_to_eddy_and_slip_gates():
 
 def test_runbook_does_not_embed_private_absolute_paths():
     runbook = get_age_quality_report("runbook")
-    assert "S:\\" not in runbook
-    assert "W:\\" not in runbook
-    assert "C:\\" not in runbook
+    for drive in ("S", "W", "C"):
+        assert f"{drive}:" + "\\" not in runbook

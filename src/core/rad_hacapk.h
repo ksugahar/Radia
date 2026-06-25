@@ -11,7 +11,7 @@
 *                 - RadHACApKBase owns the kernel-agnostic H-matrix lifecycle
 *                 - RadHACApKMMMManager : public RadHACApKBase implements the
 *                   MMM 3-DOF tetrahedron kernel. Surface-charge MSC is handled
-*                   by the moment-yano RadHACApKMomentSystem. A future RadHACApKPEECManager will
+*                   by the multipole-moment MMM RadHACApKMomentSystem. A future RadHACApKPEECManager will
 *                   implement Ruehli finite-filament mutual inductance.
 *
 * First release:  2025
@@ -252,7 +252,7 @@ private:
 /**
  * RadHACApKMMMManager implements the HACApK kernel for Radia's Magnetic
  * Moment Method (MMM, tetrahedra, 3 DOF).  Magnetic Surface Charge
- * elements (hex/wedge/pyramid, 5-6 DOF) use the separate moment-yano
+ * elements (hex/wedge/pyramid, 5-6 DOF) use the separate multipole-moment MMM
  * RadHACApKMomentSystem or dense moment LU path.
  *
  * All kernel-specific precomputation (PrecomputeHexaGeometry, etc.),
@@ -322,7 +322,7 @@ private:
     void PrecomputeGeometry3DOF();
 
     // 3DOF tetrahedron block computation (MMM -- the only element type this manager solves;
-    // EIEM2 surface-charge 6x6/5x5/mixed kernels were retired in Phase 3b, the moment-yano
+    // EIEM2 surface-charge 6x6/5x5/mixed kernels were retired in Phase 3b, the multipole-moment MMM
     // H-matrix RadHACApKMomentSystem now owns hex/wedge/pyramid MSC)
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
     void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
@@ -333,8 +333,8 @@ private:
 };
 
 //-------------------------------------------------------------------------
-// RadHACApKMomentSystem: the parameter-free MOMENT-yano system A_raw as a HACApK
-// H-matrix (Phase 2 of the EIEM2 full-deletion track; docs/moment_yano/ACA_MOMENT_DESIGN.md).
+// RadHACApKMomentSystem: the parameter-free multipole-moment MMM system A_raw as a HACApK
+// H-matrix (Phase 2 of the EIEM2 full-deletion track; docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).
 //-------------------------------------------------------------------------
 
 /* The moment system A_raw = L(block-diag local moment) - chi*C(centroid field/grad coupling).
@@ -345,24 +345,29 @@ private:
  * A_raw[i][j] is computed ON DEMAND by radTInteraction::MomentSystemEntry (no dense build, no row
  * normalization -- the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
  * A_raw is NON-symmetric (rows = moment functionals, cols = charges) -- ACA+ compresses it anyway.
- * ComputeSystemEntry stores A_raw directly (no -N/+1/chi flip); the H-LU (cHACApK_hlu_*) factors it
- * (Increment 3).  HEX-ONLY; assumes m_elemDOFOffset[m_hexaElemIndices[h]] == 6*h (pure-hex moment). */
+ * The method-2 solve normally builds the chi-free K_geometry mode once and applies
+ * A(chi)x = Lx + diag_row(chi)Kx outside HACApK; the A_raw mode is retained for diagnostics/gates.
+ * HEX-ONLY; assumes m_elemDOFOffset[m_hexaElemIndices[h]] == 6*h (pure-hex moment). */
 class RadHACApKMomentSystem : public RadHACApKBase {
 public:
     RadHACApKMomentSystem(radTInteraction* interaction, double chi);                            // uniform chi
     RadHACApKMomentSystem(radTInteraction* interaction, const std::vector<double>& chiPerHex);  // per-element chi (Increment 4)
+    RadHACApKMomentSystem(radTInteraction* interaction, bool kernelOnly);                       // chi-free K_geometry
     ~RadHACApKMomentSystem() override {}
 
     radTInteraction* GetInteraction() const { return m_interaction; }
 
     // A_raw[i][j] on demand (the un-normalized moment system entry; rows 6*h+t, cols = face DOF).
     double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
+    // Block-level callback unit used behind the scalar HACApK callback.  HACApK's current C API still asks
+    // for scalar entries, but any future leaf-fill/batched API should call this 6x6 unit directly.
+    void GetInteractionBlock6x6(int elem_i, int elem_j, double* block) const;
     // The H-matrix stores A_raw directly (no MSC sign flip / 1-chi shift).
     double ComputeSystemEntry(int dof_i, int dof_j) const override { return GetInteractionMatrixElement(dof_i, dof_j); }
 
 protected:
     void ExtractCoordinates() override;   // cluster tree = hex centroids; ndof = 6*nHex
-    void OnBeforeBuild() override {}
+    void OnBeforeBuild() override;
     void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }   // chi folded into A_raw
     bool IsVariableDOF() const override { return false; }
     int  GetUniformNFFC() const override { return 6; }                    // 6 DOF per hex
@@ -372,6 +377,7 @@ private:
     double m_chi;                     // uniform chi (fallback when m_chi_in is empty)
     std::vector<double> m_chi_in;     // per-element chi supplied by the ctor (Increment 4); empty -> uniform m_chi
     std::vector<double> m_chiv;       // chi per hex, resolved in ExtractCoordinates, for MomentSystemEntry
+    bool m_kernel_only;               // true => H-matrix stores chi-free K_geometry only (no local L block)
 };
 
 //-------------------------------------------------------------------------
