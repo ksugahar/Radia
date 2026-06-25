@@ -553,17 +553,17 @@
 - 「BEM と VIM が同じ資料に出てくるのは理解不能」
 - 「Sphere は解析解で比較、cylinder は軸対称 VIM が比較的正しい解と思う」
 - 「Cylinder は NGSolve, axis-femm, VIM の 3 者比較できるよな?」
-- 「axifemm は Hiruma 規約じゃないほうがいい」
+- 「axifem は Hiruma 規約じゃないほうがいい」
 
 **実装**:
 - 新規 `cylinder_vim_axisym.py` 作成 (Python, axisymmetric Green's function with elliptic integrals, $N_r$=24, $N_z$=6, 144 cells, n_quad=2)
   - 結果: τ_lead = 211.85 μs (Foster pole 227 μs)
   - canonical Joule R_0 = 2195 Ω 完全一致
   - L_1 1.65% gap vs NGSolve, R_2 4.35% gap
-- axifemm Kameari 抽出試行 (`axifemm_disk_kameari.py`)
+- axifem Kameari 抽出試行 (`axifem_disk_kameari.py`)
   - 物理単位 convention の違い (mu0 が K に組込, σ が M に組込) で直接 Kameari α formula 適用すると wrong scale (R_0=4.33 Ω, expected 2195)
-  - Future work: axifemm K, M を canonical 単位に変換してから Kameari 抽出
-- v2 §3.2 cylinder: \textbf{2 手法} cross-validation (軸対称 VIM + NGSolve 3D)、axifemm は Hiruma 規約参照値として note のみ
+  - Future work: axifem K, M を canonical 単位に変換してから Kameari 抽出
+- v2 §3.2 cylinder: \textbf{2 手法} cross-validation (軸対称 VIM + NGSolve 3D)、axifem は Hiruma 規約参照値として note のみ
 - BEM 文中削除完全 (radia-vim 関連は VIM, Nagamine 軸対称は VIM 等価として削除)
 
 **Cross-validation summary**:

@@ -18,8 +18,8 @@
   "leading_tau_us_validation": [
     {"geometry": "cylinder",
      "BEM_Foster_axisym_elliptic": 219.32,
-     "axifemm_Q2_Hiruma": 218.71,
-     "axifemm_Q1_Hiruma": 218.05,
+     "axifem_Q2_Hiruma": 218.71,
+     "axifem_Q1_Hiruma": 218.05,
      "FEM_v5_Hiruma_3D_HCurl": 218.67,
      "FEM_Tanimoto_AT_plus_HH_proj": 225.77,
      "FEM_v5_Hiruma_gap_pct": -0.30,

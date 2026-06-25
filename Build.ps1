@@ -28,7 +28,7 @@ param(
     [switch]$Test,
     [switch]$Verbose,
     [switch]$RadiaOnly,
-    [switch]$AxiFemmOnly,           # configure + build ONLY axifem (fast C++ iteration)
+    [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$InstallToSitePackages  # also copy rebuilt .pyd(s) into the importable site-packages\radia
 )
 
@@ -61,10 +61,10 @@ if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
     $INTEL_MKL = "C:\Program Files (x86)\Intel\oneAPI\mkl\latest"
 }
 if (-not (Test-Path "$INTEL_MKL\lib\mkl_rt.lib")) {
-    if ($AxiFemmOnly) {
+    if ($AxiFemOnly) {
         # axifem does NOT link MKL, and an incremental configure on a
         # populated build dir reuses the cached MKL paths -- so warn, don't exit.
-        Write-Host "WARNING: Intel MKL not found at $INTEL_MKL -- continuing (-AxiFemmOnly does not need MKL)" -ForegroundColor Yellow
+        Write-Host "WARNING: Intel MKL not found at $INTEL_MKL -- continuing (-AxiFemOnly does not need MKL)" -ForegroundColor Yellow
     } else {
         Write-Host "ERROR: Intel MKL not found at $INTEL_MKL" -ForegroundColor Red
         Write-Host "Install Intel oneAPI Base Toolkit (MKL component)" -ForegroundColor Yellow
@@ -134,7 +134,7 @@ if (-not (Test-Path $BUILD_DIR)) {
 # Build (via batch file for vcvars64 environment)
 # ============================================================================
 
-if ($AxiFemmOnly) {
+if ($AxiFemOnly) {
 # ---- Fast path: DIRECT compile+link of axifem only (no CMake, no MKL) ----
 # axifem links ONLY NGSolve/Netgen + Python (no MKL), so we compile its 4
 # .cpp and link directly against the installed packages.  This works on any
@@ -145,13 +145,13 @@ $netgenPkg = (& python -c "import netgen,os;print(os.path.dirname(netgen.__file_
 $pyPrefix  = (& python -c "import sys;print(sys.prefix)").Trim()
 $pyInc     = (& python -c "import sysconfig;print(sysconfig.get_path('include'))").Trim()
 $pyLib     = (& python -c "import sys;print(f'python{sys.version_info.major}{sys.version_info.minor}.lib')").Trim()
-$axiSrc    = "$PROJECT_DIR\src\ext\axifemm"
-$objDir    = "$BUILD_DIR\axifemm_direct"
+$axiSrc    = "$PROJECT_DIR\src\ext\axifem"
+$objDir    = "$BUILD_DIR\axifem_direct"
 if (-not (Test-Path $objDir)) { New-Item -ItemType Directory -Path $objDir | Out-Null }
 Write-Host "  netgen pkg: $netgenPkg" -ForegroundColor Gray
 Write-Host "  python    : $pyPrefix ($pyLib)" -ForegroundColor Gray
 # Compile flags mirror the CMake target (see `ninja -t commands axifem`).
-$axiCFlags = '/nologo /TP -DHAVE_NETGEN_SOURCES -DHAVE_STRUCT_TIMESPEC -DLAPACK -DMSVC_EXPRESS -DNDEBUG -DNETGEN_PYTHON -DNGS_PYTHON -DNG_PYTHON -DNOMINMAX -DPYBIND11_SIMPLE_GIL_MANAGEMENT -DPy_NO_LINK_LIB -DRADIA_AXIFEMM_PHASE_2B -DTCL -DUSE_TIMEOFDAY -DUSE_UMFPACK -DWIN32 -DWNT -DWNT_WINDOW -D_CRT_SECURE_NO_WARNINGS -D_WIN32_WINNT=0x1000 -Daxifem_EXPORTS /EHsc /O2 /Ob2 /MD /fp:fast /W0 /wd4244 /wd4267 /arch:AVX2 /bigobj /std:c++20 /wd4068 -DMAX_SYS_DIM=3'
+$axiCFlags = '/nologo /TP -DHAVE_NETGEN_SOURCES -DHAVE_STRUCT_TIMESPEC -DLAPACK -DMSVC_EXPRESS -DNDEBUG -DNETGEN_PYTHON -DNGS_PYTHON -DNG_PYTHON -DNOMINMAX -DPYBIND11_SIMPLE_GIL_MANAGEMENT -DPy_NO_LINK_LIB -DRADIA_AXIFEM_PHASE_2B -DTCL -DUSE_TIMEOFDAY -DUSE_UMFPACK -DWIN32 -DWNT -DWNT_WINDOW -D_CRT_SECURE_NO_WARNINGS -D_WIN32_WINNT=0x1000 -Daxifem_EXPORTS /EHsc /O2 /Ob2 /MD /fp:fast /W0 /wd4244 /wd4267 /arch:AVX2 /bigobj /std:c++20 /wd4068 -DMAX_SYS_DIM=3'
 $BatchContent = @"
 @echo off
 call "$VS_PATH\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
@@ -333,9 +333,9 @@ try {
 
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
 
-    # For -AxiFemmOnly, axifem.pyd is already placed in src/radia/ by the
+    # For -AxiFemOnly, axifem.pyd is already placed in src/radia/ by the
     # CMake POST_BUILD copy, so skip the full module/cubit copy section below.
-    if (-not $AxiFemmOnly) {
+    if (-not $AxiFemOnly) {
     # ========================================================================
     # Copy .pyd files to src/radia/
     # ========================================================================
@@ -444,7 +444,7 @@ try {
             Write-Host "  $($mod.dst): skipped" -ForegroundColor Yellow
         }
     }
-    }  # end: if (-not $AxiFemmOnly) -- full module/cubit copy section
+    }  # end: if (-not $AxiFemOnly) -- full module/cubit copy section
 
     # ====================================================================
     # Optional: install rebuilt .pyd(s) into the importable site-packages
@@ -459,7 +459,7 @@ try {
         $radiaPkg = if ($platlib) { Join-Path $platlib 'radia' } else { $null }
         if ($radiaPkg -and (Test-Path $radiaPkg)) {
             $installList = @('axifem.pyd')
-            if (-not $AxiFemmOnly) {
+            if (-not $AxiFemOnly) {
                 $installList += @('_radia_pybind.pyd')
                 if (-not $RadiaOnly) {
                     $installList += @('peec_matrices.pyd', 'cln_core.pyd')
@@ -527,7 +527,7 @@ print(f"radia {radia.__version__} OK from {radia_file}")
     $ImportCheck | python -
     if ($LASTEXITCODE -ne 0) { Write-Host "Import failed!" -ForegroundColor Red; exit 1 }
 
-    if ($RadiaOnly -or $AxiFemmOnly) {
+    if ($RadiaOnly -or $AxiFemOnly) {
         Write-Host "Skipping full pytest because only a focused build was requested." -ForegroundColor Yellow
     } else {
         Push-Location $PROJECT_DIR

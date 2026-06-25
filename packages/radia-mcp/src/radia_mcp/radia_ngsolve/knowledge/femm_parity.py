@@ -78,7 +78,7 @@ AxiHenrotteStiffnessBFI(mu) + AxiHenrotteSigmaMassBFI(sigma) (the same ones behi
 the validated Cu-disk tau_1 eigenvalue), symmetrise, form S=K+j w M in scipy and
 solve. order=1 only (P2 AxiHenrotte has an axis-singularity NaN). Use the
 matrix-based loss P_eddy=0.5 w^2 Re(x^H M x). The COMPLEX H1Henrotte field
-value/gradient eval is now RELIABLE (fixed in src/ext/axifemm: the FESpace is
+value/gradient eval is now RELIABLE (fixed in src/ext/axifem: the FESpace is
 complex-capable and the DiffOps got complex CalcMatrix overloads; validated to
 machine precision in test_axi_henrotte_complex_eval.py), so |A|/B post-processing
 of the complex solution works -- this unblocks the nonlinear mu(|B|) Picard layer

@@ -428,7 +428,7 @@ framing)**: Axisymmetric FE convention follows the FEMM 4.2 split:
 
 | Physics | Basis | Reason |
 |---------|-------|--------|
-| **Magnetic A_phi (curl-curl)** | **Henrotte** `{1, r^2, z}` (`radia.radia_axifemm`) | The cylindrical curl operator `B_z = (1/r) d(r A_phi)/dr` produces a `1/r` integrand that standard FE Gauss quadrature cannot integrate accurately near the axis.  Henrotte's `s = r^2` substitution gives clean closed-form integration. |
+| **Magnetic A_phi (curl-curl)** | **Henrotte** `{1, r^2, z}` (`radia.radia_axifem`) | The cylindrical curl operator `B_z = (1/r) d(r A_phi)/dr` produces a `1/r` integrand that standard FE Gauss quadrature cannot integrate accurately near the axis.  Henrotte's `s = r^2` substitution gives clean closed-form integration. |
 | **Scalar T / phi (Laplacian)** | **Standard NGSolve `H1`** + `2 pi r` weighting | The weak form `int k grad T . grad v . 2 pi r dr dz` has `2 pi r` as a **smooth Jacobian** (not a `1/r` integrand).  Standard FE handles this fine; no axis-special treatment is needed. |
 
 This follows the documented FEMM 4.2 axisymmetric convention:
@@ -448,7 +448,7 @@ proven convention.
 **API for magnetic axisym**:
 
 ```python
-import radia.radia_axifemm as ax
+import radia.radia_axifem as ax
 
 mesh = Mesh(...)                                  # axis-aligned (r, z) mesh
 fes  = ax.H1Henrotte(mesh, order=p)               # p = 1 (Q1) or p = 2 (Q2)
@@ -474,7 +474,7 @@ a_heat += h_conv * v * u * weight * ds(surface_label)   # Robin
 ```
 
 **Optional Henrotte heat infrastructure**: The
-`radia.radia_axifemm.AxiHenrotteHeat{Stiffness,Mass}BFI` classes
+`radia.radia_axifem.AxiHenrotteHeat{Stiffness,Mass}BFI` classes
 (added in radia 4.31.0) and the `H1Henrotte` BND DiffOp (radia
 4.32.0) are kept in the codebase as parity-conscious infrastructure
 for research / publication uses (e.g. comparing convergence rates of
@@ -482,7 +482,7 @@ Henrotte vs standard H1 on a scalar problem).  They are NOT used by
 production heat solvers and are NOT required.
 
 **Reference**: see
-[`docs/axifemm/FORMULATION.md`](docs/axifemm/FORMULATION.md)
+[`docs/axifem/FORMULATION.md`](docs/axifem/FORMULATION.md)
 sections 5-6 (Henrotte basis derivation for magnetic) and 10b/10c
 (optional heat BFIs).
 

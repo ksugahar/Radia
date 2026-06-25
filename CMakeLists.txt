@@ -676,7 +676,7 @@ message(STATUS "sparsesolv_ngsolve module configured (NGSolve preconditioners)")
 # without the standard P1 axis singularity.  P1 triangles + Q1/Q2 axis-
 # aligned quads + bilinear form integrators (Stiffness, SigmaMass).
 #
-# Source: src/ext/axifemm/ (formerly a standalone axifemm add-on; absorbed
+# Source: src/ext/axifem/ (formerly a standalone axifem add-on; absorbed
 # into the radia-core wheel 2026-05-10 to fix the
 # 100号機 / mdx ImportError that was blocking IH axisymmetric work).
 #
@@ -686,17 +686,17 @@ message(STATUS "sparsesolv_ngsolve module configured (NGSolve preconditioners)")
 # Reference: F. Henrotte et al., IEEE TMag 9(2):1352-1355, 1993.
 #            D. Meeker, FEMM 4.2 axisymmetric formulation notes.
 
-set(AXIFEMM_DIR "${EXT_DIR}/axifemm")
+set(AXIFEM_DIR "${EXT_DIR}/axifem")
 
 add_ngsolve_python_module(axifem
-	${AXIFEMM_DIR}/axifem.cpp
-	${AXIFEMM_DIR}/axi_henrotte_fe.cpp
-	${AXIFEMM_DIR}/axi_henrotte_fespace.cpp
-	${AXIFEMM_DIR}/axi_henrotte_integrators.cpp
+	${AXIFEM_DIR}/axifem.cpp
+	${AXIFEM_DIR}/axi_henrotte_fe.cpp
+	${AXIFEM_DIR}/axi_henrotte_fespace.cpp
+	${AXIFEM_DIR}/axi_henrotte_integrators.cpp
 )
 
 target_include_directories(axifem PRIVATE
-	${AXIFEMM_DIR}
+	${AXIFEM_DIR}
 )
 
 # pybind11 ABI fix (same rationale as _radia_pybind line ~575): force
@@ -709,7 +709,7 @@ target_include_directories(axifem PRIVATE
 target_include_directories(axifem BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC})
 
 target_compile_definitions(axifem PRIVATE
-	RADIA_AXIFEMM_PHASE_2B
+	RADIA_AXIFEM_PHASE_2B
 	_CRT_SECURE_NO_WARNINGS
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
