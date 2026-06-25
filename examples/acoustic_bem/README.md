@@ -54,6 +54,13 @@ boundary power from complex pressure and outward normal velocity phasors. It
 checks peak/RMS conventions, a plane-wave resistive load, a purely reactive
 near-field load, and a mixed impedance boundary.
 
+## Impedance reflection and absorption
+
+`validation_acoustic_impedance_reflection.py` validates the plane-wave
+reflection coefficient, absorption coefficient, and power balance of a local
+acoustic impedance boundary. It checks matched, mismatched, purely reactive,
+pressure-release, and oblique-incidence limits.
+
 ```powershell
 python validation_pulsating_sphere_radiation.py
 python validation_low_frequency_helmholtz_kernel.py
@@ -62,4 +69,5 @@ python validation_planar_dtn_symbol.py
 python validation_baffled_piston_radiation.py
 python validation_acoustic_impedance_dtn_bridge.py
 python validation_acoustic_boundary_power.py
+python validation_acoustic_impedance_reflection.py
 ```

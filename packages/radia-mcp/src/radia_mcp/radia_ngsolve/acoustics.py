@@ -479,6 +479,108 @@ def acoustic_boundary_power_summary(
     }
 
 
+def acoustic_impedance_reflection_summary(
+    specific_impedance,
+    incidence_angle_rad=0.0,
+    incident_pressure=1.0,
+    rho=1.2041,
+    c=343.0,
+    amplitude="peak",
+):
+    r"""Plane-wave reflection and absorption at a local acoustic impedance load.
+
+    This is the one-port companion to :func:`acoustic_boundary_power_summary`.
+    A propagating plane wave is incident on a locally reacting boundary whose
+    load impedance is measured with velocity positive *into* the load.  The
+    pressure reflection coefficient is
+
+        Gamma = (z_load - z_n) / (z_load + z_n),
+
+    where ``z_n = rho*c/cos(theta)`` is the plane-wave normal impedance.  The
+    active absorption coefficient is ``1 - |Gamma|^2``.  Peak phasors use the
+    0.5 time-average factor; RMS phasors use 1.0.
+
+    The return dictionary includes a direct power balance:
+
+        incident_intensity - reflected_intensity == absorbed_intensity
+
+    and the same absorbed complex intensity computed from total boundary
+    pressure and load normal velocity.  This is a compact sign/conjugation
+    check for acoustic FEM/BEM impedance boundaries.
+    """
+
+    rrho = float(rho)
+    cc = float(c)
+    theta = float(incidence_angle_rad)
+    if rrho <= 0.0:
+        raise ValueError("rho must be > 0")
+    if cc <= 0.0:
+        raise ValueError("c must be > 0")
+    if abs(theta) >= 0.5 * math.pi:
+        raise ValueError("incidence_angle_rad must be strictly between -pi/2 and pi/2")
+    if amplitude == "peak":
+        factor = 0.5
+    elif amplitude == "rms":
+        factor = 1.0
+    else:
+        raise ValueError("amplitude must be 'peak' or 'rms'")
+
+    z_load = complex(specific_impedance)
+    if not (
+        math.isfinite(z_load.real)
+        and math.isfinite(z_load.imag)
+    ):
+        raise ValueError("specific_impedance must be finite")
+    if z_load == 0.0:
+        gamma = -1.0 + 0.0j
+    else:
+        z_normal = rrho * cc / math.cos(theta)
+        denom = z_load + z_normal
+        if denom == 0.0:
+            raise ValueError("specific_impedance + characteristic normal impedance must be nonzero")
+        gamma = (z_load - z_normal) / denom
+
+    z_normal = rrho * cc / math.cos(theta)
+    p_inc = complex(incident_pressure)
+    if not (math.isfinite(p_inc.real) and math.isfinite(p_inc.imag)):
+        raise ValueError("incident_pressure must be finite")
+    p_ref = gamma * p_inc
+    p_total = p_inc + p_ref
+    velocity_into_load = (p_inc - p_ref) / z_normal
+    boundary_intensity = factor * p_total * velocity_into_load.conjugate()
+    incident_intensity = factor * abs(p_inc) ** 2 / z_normal
+    reflected_intensity = factor * abs(p_ref) ** 2 / z_normal
+    absorbed_intensity = incident_intensity - reflected_intensity
+    absorption = 1.0 - abs(gamma) ** 2
+
+    return {
+        "rho": rrho,
+        "c": cc,
+        "incidence_angle_rad": theta,
+        "amplitude": amplitude,
+        "phasor_average_factor": factor,
+        "characteristic_normal_impedance": z_normal,
+        "specific_impedance": z_load,
+        "normalized_impedance": z_load / z_normal,
+        "incident_pressure": p_inc,
+        "reflected_pressure": p_ref,
+        "total_boundary_pressure": p_total,
+        "normal_velocity_into_load": velocity_into_load,
+        "pressure_reflection_coefficient": gamma,
+        "velocity_reflection_coefficient": -gamma,
+        "power_reflection_coefficient": abs(gamma) ** 2,
+        "absorption_coefficient": absorption,
+        "incident_intensity": incident_intensity,
+        "reflected_intensity": reflected_intensity,
+        "absorbed_intensity": absorbed_intensity,
+        "boundary_complex_intensity_into_load": boundary_intensity,
+        "boundary_active_intensity_into_load": boundary_intensity.real,
+        "boundary_reactive_intensity_into_load": boundary_intensity.imag,
+        "power_balance_residual": incident_intensity - reflected_intensity - boundary_intensity.real,
+        "policy": "velocity_positive_into_load_pressure_reflection_gamma_zload_minus_zn_over_zload_plus_zn",
+    }
+
+
 def _bessel_j1_fallback(x):
     """Small dependency-free J1 approximation for acoustic piston gates."""
 
