@@ -764,6 +764,77 @@ class NetgenTriTetVolMesh:
             })
         return tuple(rows)
 
+    def boundary_edge_inventory_rows(self) -> tuple[dict[str, object], ...]:
+        """Return boundary-local edge inventory rows.
+
+        A named boundary made from triangles has perimeter edges used by one
+        triangle in that boundary and split/diagonal edges used by two triangles
+        in that same boundary.  Keeping these separate is useful when auditing
+        sidesets exported from a CAD/mesh tool: the perimeter is the physical
+        boundary curve, while the shared edges are triangulation details.
+        """
+
+        groups: dict[int, list[NetgenSurfaceTriangle]] = {}
+        area_by_boundary: dict[int, float] = {}
+        for tri, area in zip(self.surface_triangles, self.surface_triangle_areas()):
+            groups.setdefault(tri.bcnr, []).append(tri)
+            area_by_boundary[tri.bcnr] = area_by_boundary.get(tri.bcnr, 0.0) + area
+
+        rows: list[dict[str, object]] = []
+        for bcnr in sorted(set(self.boundary_names) | set(groups)):
+            edge_counts: dict[tuple[int, int], int] = {}
+            for tri in groups.get(bcnr, []):
+                n0, n1, n2 = tri.nodes
+                for edge in ((n0, n1), (n1, n2), (n2, n0)):
+                    key = tuple(sorted(edge))
+                    edge_counts[key] = edge_counts.get(key, 0) + 1
+
+            edge_lengths = {
+                edge: _norm(_sub(self.points[edge[1] - 1], self.points[edge[0] - 1]))
+                for edge in edge_counts
+            }
+            perimeter_edges = [edge for edge, count in edge_counts.items() if count == 1]
+            shared_edges = [edge for edge, count in edge_counts.items() if count == 2]
+            overused_edges = [edge for edge, count in edge_counts.items() if count > 2]
+            rows.append({
+                "boundary_number": bcnr,
+                "name": self.boundary_names.get(bcnr, f"boundary_{bcnr}"),
+                "surface_triangles": len(groups.get(bcnr, [])),
+                "surface_area": area_by_boundary.get(bcnr, 0.0),
+                "unique_boundary_edges": len(edge_counts),
+                "perimeter_edges": len(perimeter_edges),
+                "shared_diagonal_edges": len(shared_edges),
+                "overused_edges": len(overused_edges),
+                "perimeter_edge_length_sum_m": sum(edge_lengths[edge] for edge in perimeter_edges),
+                "shared_diagonal_edge_length_sum_m": sum(edge_lengths[edge] for edge in shared_edges),
+                "total_unique_edge_length_sum_m": sum(edge_lengths.values()),
+                "min_edge_length_m": min(edge_lengths.values()) if edge_lengths else None,
+                "max_edge_length_m": max(edge_lengths.values()) if edge_lengths else None,
+                "perimeter_edge_nodes": [list(edge) for edge in sorted(perimeter_edges)],
+                "shared_diagonal_edge_nodes": [list(edge) for edge in sorted(shared_edges)],
+                "overused_edge_nodes": [list(edge) for edge in sorted(overused_edges)],
+            })
+        return tuple(rows)
+
+    def boundary_edge_inventory_summary(self) -> dict[str, object]:
+        """Return compact boundary-local edge inventory totals."""
+
+        rows = self.boundary_edge_inventory_rows()
+        overused = [row for row in rows if int(row["overused_edges"]) > 0]
+        return {
+            "policy": "netgen_vol_boundary_local_edge_inventory",
+            "boundary_count": len(rows),
+            "surface_triangles": len(self.surface_triangles),
+            "unique_boundary_edges_total": sum(int(row["unique_boundary_edges"]) for row in rows),
+            "perimeter_edges_total": sum(int(row["perimeter_edges"]) for row in rows),
+            "shared_diagonal_edges_total": sum(int(row["shared_diagonal_edges"]) for row in rows),
+            "overused_edges_total": sum(int(row["overused_edges"]) for row in rows),
+            "has_overused_boundary_edges": bool(overused),
+            "total_perimeter_edge_length_m": sum(float(row["perimeter_edge_length_sum_m"]) for row in rows),
+            "total_shared_diagonal_edge_length_m": sum(float(row["shared_diagonal_edge_length_sum_m"]) for row in rows),
+            "rows": rows,
+        }
+
     def domain_boundary_incidence_rows(self) -> tuple[dict[str, object], ...]:
         """Return boundary rows grouped by adjacent volume domains.
 
