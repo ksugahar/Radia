@@ -2914,6 +2914,110 @@ void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const d
 	}
 }
 
+void radTInteraction::MomentKernelMatVec6x6(const double* x, const double* chiPerHex, double* y) const
+{
+	const int nHex = (int)m_hexaElemIndices.size();
+	if(!x || !chiPerHex || !y || nHex <= 0) return;
+	std::fill(y, y + (size_t)6 * nHex, 0.0);
+
+	PrecomputeMomentGeometry();
+
+	std::shared_ptr<std::vector<MomentGeomElemCache>> elems;
+	{
+		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
+		auto it = g_momentGeomCache.find(this);
+		if(it == g_momentGeomCache.end() || !it->second.elem || it->second.nHex != nHex) return;
+		elems = it->second.elem;
+	}
+	if(!elems || (int)elems->size() < nHex) return;
+
+	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
+	auto applyRow = [&](size_t hh) {
+		const int h = (int)hh;
+		const MomentGeomElemCache& row = (*elems)[h];
+		if(!row.valid) return;
+		const double chiScale = chiPerHex[h] * INV4PI;
+		double acc[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+		for(int g = 0; g < nHex; g++)
+		{
+			const MomentGeomElemCache& col = (*elems)[g];
+			if(!col.valid) continue;
+			const bool selfBlock = (row.elemIdx == col.elemIdx);
+			const double* xg = &x[(size_t)6 * g];
+
+			for(int f = 0; f < 6; f++)
+			{
+				const double xf = xg[f];
+				if(xf == 0.0) continue;
+				const MomentGeomFaceCache& src = col.face[f];
+				double H[3] = {0.0, 0.0, 0.0};
+				double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+				auto addPoint = [&](double px, double py, double pz, double q)
+				{
+					double dx = row.ce[0]-px, dy = row.ce[1]-py, dz = row.ce[2]-pz;
+					double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
+					double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
+					H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
+					G[0] += q*(inv_r3-3.0*dx*dx*inv_r5); G[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
+					G[2] += q*(inv_r3-3.0*dz*dz*inv_r5); G[3] += q*(-3.0*dx*dy*inv_r5);
+					G[4] += q*(-3.0*dx*dz*inv_r5);       G[5] += q*(-3.0*dy*dz*inv_r5);
+				};
+
+				auto addSamples = [&](int ax, bool withCenter, double sgn)
+				{
+					const double wsgn = xf * sgn;
+					for(int s = 0; s < MOM_NS; s++)
+					{
+						double px = src.P[s][0], py = src.P[s][1], pz = src.P[s][2];
+						if(ax & IMA_X) px = -px;
+						if(ax & IMA_Y) py = -py;
+						if(ax & IMA_Z) pz = -pz;
+						addPoint(px, py, pz, src.W[s]*wsgn);
+					}
+					if(withCenter)
+					{
+						double cx = col.ce[0], cy = col.ce[1], cz = col.ce[2];
+						if(ax & IMA_X) cx = -cx;
+						if(ax & IMA_Y) cy = -cy;
+						if(ax & IMA_Z) cz = -cz;
+						addPoint(cx, cy, cz, -src.area*wsgn);
+					}
+				};
+
+				addSamples(0, !selfBlock, 1.0);
+				if(m_imaEnabled)
+				{
+					bool hX = (m_imaSymmetry & IMA_X) != 0, hY = (m_imaSymmetry & IMA_Y) != 0, hZ = (m_imaSymmetry & IMA_Z) != 0;
+					if(hX) addSamples(IMA_X, true, (double)m_imaSignX);
+					if(hY) addSamples(IMA_Y, true, (double)m_imaSignY);
+					if(hZ) addSamples(IMA_Z, true, (double)m_imaSignZ);
+					if(hX && hY) addSamples(IMA_XY, true, (double)m_imaSignX*m_imaSignY);
+					if(hX && hZ) addSamples(IMA_XZ, true, (double)m_imaSignX*m_imaSignZ);
+					if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
+					if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
+				}
+
+				for(int k = 0; k < 3; k++) acc[k] -= chiScale * H[k];
+				for(int qq = 0; qq < 2; qq++)
+				{
+					const double* Dv = row.DvecQ[qq];
+					double dg = 0.0;
+					for(int m = 0; m < 6; m++) dg += Dv[m] * G[m];
+					acc[4 + qq] -= chiScale * dg;
+				}
+			}
+		}
+
+		double* yh = &y[(size_t)6 * h];
+		for(int i = 0; i < 6; i++) yh[i] = acc[i];
+	};
+
+	if(nHex <= 8) { for(int h = 0; h < nHex; h++) applyRow((size_t)h); }
+	else { ngcore::ParallelFor(ngcore::IntRange(nHex), applyRow); }
+}
+
 void radTInteraction::PrecomputeMomentAnyGeometry() const
 {
 	std::vector<int> melem;

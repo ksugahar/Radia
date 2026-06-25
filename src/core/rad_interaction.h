@@ -535,6 +535,11 @@ public:
 	// build, no row normalization (the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
 	double MomentSystemEntry(int rowGlobal, int colDOF, const double* chiPerHex) const;
 	void MomentSystemBlock6x6(int rowHexPos, int colHexPos, const double* chiPerHex, double* block, bool kernelOnly = false) const;
+	// Pure-hex hot path for method-1 matrix-free BiCGSTAB.  Computes
+	// y = diag(chi) * K_geometry * x using the same moment quadrature as
+	// MomentSystemBlock6x6(..., kernelOnly=true), but without materializing a
+	// temporary 6x6 block for every element pair.
+	void MomentKernelMatVec6x6(const double* x, const double* chiPerHex, double* y) const;
 	// Padded 6x6 on-demand moment block in CollectMomentElems order.  The active block is
 	// row_dof x col_dof, where row/col dof are 5 or 6 from the corresponding moment elements.
 	void MomentSystemBlockAny(int rowMomPos, int colMomPos, const double* chiPerMom, double* block, bool kernelOnly = false) const;
