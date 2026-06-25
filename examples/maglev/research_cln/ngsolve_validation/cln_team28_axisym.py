@@ -1,6 +1,6 @@
 """cln_team28_axisym.py — COMSOL TEAM 28 CLN algorithm in axisymmetric NGSolve.
 
-Implementation entirely in DOF space using axifemm K, M_σ matrices.
+Implementation entirely in DOF space using axifem K, M_σ matrices.
 
 Variables (DOF space, restricted to conductor DOFs where M_σ is invertible):
   A_dof_cond: continuous A_phi DOF representation on cond DOFs
@@ -26,7 +26,7 @@ from math import pi
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
-sys.path.insert(0, r"S:/Radia/01_GitHub/examples/axifemm/research/tests")
+sys.path.insert(0, r"S:/Radia/01_GitHub/examples/axifem/research/tests")
 
 import numpy as np
 import scipy.sparse as sp

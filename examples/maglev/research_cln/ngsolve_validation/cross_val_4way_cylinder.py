@@ -6,10 +6,10 @@ Compares per-stage R_2k, L_{2k+1}, tau_pair from four independent paradigms:
       Source: bem_disk_axisym_cauer.json + bem_disk_axisym_cauer_python_results.json
 
   (B) axihenrotte FE Q2 + Hiruma 3-term  (NGSolve add-on, differential, axisym)
-      Source: S:/.../examples/axifemm/research/verification/test_hiruma_disk_q2_results.json
+      Source: S:/.../examples/axifem/research/verification/test_hiruma_disk_q2_results.json
 
   (C) axihenrotte FE Q1 + Hiruma 3-term  (same FE solver, p=1 — convergence check)
-      Source: S:/.../examples/axifemm/research/verification/test_hiruma_disk_q1_results.json
+      Source: S:/.../examples/axifem/research/verification/test_hiruma_disk_q1_results.json
 
   (D) NGSolve 3D HCurl + Helmholtz-Hodge + Hiruma 3-term  (full 3D, NOT axisym)
       Source: 2026-05-08-disk_3d_kameari_hiruma_v5_orderphi2_results.json
@@ -41,9 +41,9 @@ SIGMA_CU = 5.8e7
 HERE = Path(__file__).parent
 BEM_JSON = HERE / "bem_disk_axisym_cauer_python_results.json"
 V5_JSON = HERE / "2026-05-08-disk_3d_kameari_hiruma_v5_orderphi2_results.json"
-Q2_JSON = Path("S:/Radia/01_GitHub/examples/axifemm/research/verification/"
+Q2_JSON = Path("S:/Radia/01_GitHub/examples/axifem/research/verification/"
                 "test_hiruma_disk_q2_results.json")
-Q1_JSON = Path("S:/Radia/01_GitHub/examples/axifemm/research/verification/"
+Q1_JSON = Path("S:/Radia/01_GitHub/examples/axifem/research/verification/"
                 "test_hiruma_disk_q1_results.json")
 
 
@@ -57,7 +57,7 @@ def load_bem(path):
             for k in range(min(len(R), len(tau)))]
 
 
-def load_axifemm(path, case_name):
+def load_axifem(path, case_name):
     """Returns list of dicts {k, R, L, tau_us} from axihenrotte test JSON."""
     j = json.loads(path.read_text(encoding="utf-8"))
     stages = j["results"][case_name]["stages"]
@@ -104,8 +104,8 @@ def main():
     print("=" * 92)
 
     bem = load_bem(BEM_JSON)
-    q2 = load_axifemm(Q2_JSON, "fine")
-    q1 = load_axifemm(Q1_JSON, "very fine")
+    q2 = load_axifem(Q2_JSON, "fine")
+    q1 = load_axifem(Q1_JSON, "very fine")
     v5 = load_v5_3d(V5_JSON)
 
     n_compare = min(6, len(bem), len(q2), len(q1), len(v5))

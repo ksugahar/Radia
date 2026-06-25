@@ -196,7 +196,7 @@ def main():
     b = assemble_b_vector(basis, A_M, B_M, C_M, p, n_gauss=8)
     print(f"  M, b assembled")
 
-    # axifemm convention: K (no sigma), M (with sigma), b (with sigma).
+    # axifem convention: K (no sigma), M (with sigma), b (with sigma).
     # tau in seconds directly from lam (no extra sigma factor needed).
     M_sigma = SIGMA * M
     b_sigma = SIGMA * b
