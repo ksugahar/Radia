@@ -431,6 +431,51 @@ def test_boundary_summary_rows_for_named_box_faces():
     assert mesh.total_volume() == pytest.approx(30.0)
 
 
+def test_boundary_condition_assignment_summary_detects_missing_and_unknown_keys():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+    summary = mesh.boundary_condition_assignment_summary(
+        {
+            "zmax": "impedance",
+            "zmin": "dirichlet",
+            1: "symmetry",
+            "not_a_boundary": "neumann",
+        },
+        default_condition="open",
+    )
+    by_name = {row["name"]: row for row in summary["rows"]}
+
+    assert summary["boundary_count"] == 6
+    assert summary["assigned_boundary_count"] == 6
+    assert summary["missing_boundary_count"] == 0
+    assert summary["unknown_condition_keys"] == ["not_a_boundary"]
+    assert summary["unknown_condition_key_count"] == 1
+    assert summary["ok"] is False
+    assert summary["condition_counts"] == {
+        "dirichlet": 1,
+        "impedance": 1,
+        "open": 3,
+        "symmetry": 1,
+    }
+    assert by_name["zmax"]["condition"] == "impedance"
+    assert by_name["zmax"]["condition_source"] == "boundary_name"
+    assert by_name["xmin"]["condition"] == "symmetry"
+    assert by_name["xmin"]["condition_source"] == "boundary_number"
+    assert by_name["xmax"]["condition_source"] == "default"
+    assert by_name["zmax"]["trace_node_count"] == 4
+    assert by_name["zmax"]["adjacent_material_names"] == ["air"]
+
+    missing = mesh.boundary_condition_assignment_summary({"zmax": "impedance"})
+    assert missing["missing_boundary_count"] == 5
+    assert missing["ok"] is False
+    assert {row["name"] for row in missing["rows"] if row["condition_source"] == "missing"} == {
+        "xmax",
+        "xmin",
+        "ymax",
+        "ymin",
+        "zmin",
+    }
+
+
 def test_boundary_normal_summary_rows_for_named_box_faces():
     mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
     rows = mesh.boundary_normal_summary_rows()
