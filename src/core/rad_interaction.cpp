@@ -2344,11 +2344,12 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 
 	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
 
-	for(int h = 0; h < nMom; h++)
-	{
+	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+	ngcore::ParallelFor(ngcore::IntRange(nMom), [&](size_t hh) {
+		int h = (int)hh;
 		int elemIdx = melem[h];
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly) continue;
+		if(!poly) return;
 		const TVector3d ce = poly->CentrPoint;
 		const double ce3[3] = {ce.x, ce.y, ce.z};
 		size_t base = (size_t)h * NK * m_totalDOF;
@@ -2366,7 +2367,7 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 			Cflat[base + 2*m_totalDOF + g] = H[2]*INV4PI;
 			for(int k = 0; k < 6; k++) Cflat[base + (size_t)(3+k)*m_totalDOF + g] = gH[k]*INV4PI;
 		}
-	}
+	});
 }
 
 //=========================================================================

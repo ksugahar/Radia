@@ -1,8 +1,12 @@
-"""Step-1 verification: the C++ BuildMomentSystem == the validated Python moment prototype, entry-for-entry.
+"""Step-1 verification: the C++ BuildMomentSystem == the Python moment reference, entry-for-entry.
 
 Builds the same C-yoke hexes, assembles the moment system A,rhs (a) in Python (the prototype build logic
 using GetFaceGeom + GetCentroidFieldGrad) and (b) in C++ via rad.BuildMomentSystem, and compares.  Pass =
-machine precision.  (Temp scratch; promote to a test once green.)
+machine precision.
+
+The reference mirrors the current C++ residual-eigenmode quadrupole rows: for each element, the remaining
+face-charge modes are the orthonormal complement of monopole + three dipole moment functionals.  This keeps
+the verification aligned with the hex/wedge/pyramid-capable BuildMomentSystemCore implementation.
 """
 import numpy as np
 import radia as rad
@@ -12,6 +16,37 @@ from multipole_moment_iter_scaling import build_cyoke_hexes
 def _norm(row, rhs):
     n = np.linalg.norm(row)
     return (row / n, rhs / n) if n > 1e-300 else (row, rhs)
+
+
+def _residual_eigenmodes(Ae, d):
+    nF = len(Ae)
+    basis = []
+
+    def ortho_add(v):
+        v = np.asarray(v, float).copy()
+        for b in basis:
+            v -= np.dot(b, v) * b
+        n = np.linalg.norm(v)
+        if n > 1e-9:
+            q = v / n
+            basis.append(q)
+            return q
+        return None
+
+    ortho_add(Ae)
+    for k in range(3):
+        ortho_add(Ae * d[:, k])
+
+    modes = []
+    for e in range(nF):
+        v = np.zeros(nF)
+        v[e] = 1.0
+        q = ortho_add(v)
+        if q is not None:
+            modes.append(q)
+        if len(basis) >= nF:
+            break
+    return modes
 
 
 def main():
@@ -39,7 +74,8 @@ def main():
             row, rhs = _norm(dip[k, :] / Ve - chi * F0[k, :], chi * Happ[k]); A_py[r, :] = row; b_py[r] = rhs; r += 1
         mono = np.zeros(dof); mono[fs] = Ae
         row, rhs = _norm(mono, 0.0); A_py[r, :] = row; b_py[r] = rhs; r += 1
-        for Bm in (d[:, 0]**2 - d[:, 1]**2, d[:, 1]**2 - d[:, 2]**2):
+        for phi in _residual_eigenmodes(Ae, d):
+            Bm = np.divide(phi, Ae, out=np.zeros_like(phi), where=Ae > 1e-300)
             row = np.zeros(dof); row[fs] = Ae * Bm
             cm = np.array([np.sum(Ae * ne[:, k] * Bm) for k in range(3)]); row -= (cm @ dip) / Ve
             Dm = np.array([[np.sum(Ae * d[:, jj] * ne[:, ii] * Bm) for jj in range(3)] for ii in range(3)])
