@@ -1884,6 +1884,9 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 // Additional Solver Functions
 // ============================================================================
 
+// Opt-in analytic moment kernel toggle (defined in src/core/rad_interaction.cpp)
+void RadSetMomentAnalyticKernel(bool on);
+bool RadGetMomentAnalyticKernel();
 
 namespace radia_solver_ext {
 
@@ -2159,6 +2162,10 @@ void SolverConfig(py::kwargs kwargs) {
         SetMomentAndersonDepth(kwargs["moment_anderson_depth"].cast<int>());
     }
 
+    if (kwargs.contains("moment_analytic_kernel")) {
+        ::RadSetMomentAnalyticKernel(kwargs["moment_analytic_kernel"].cast<bool>());
+    }
+
     if (kwargs.contains("relax_param")) {
         SetRelaxParam(kwargs["relax_param"].cast<double>());
     }
@@ -2208,6 +2215,7 @@ py::dict GetSolverConfig() {
     config["moment_krylov"] = GetMomentKrylovSolverName();
     config["moment_gmres_restart"] = GetMomentGMRESRestart();
     config["moment_anderson_depth"] = GetMomentAndersonDepth();
+    config["moment_analytic_kernel"] = ::RadGetMomentAnalyticKernel();
 
     // Relaxation parameter
     { double relax = 0.0;
