@@ -1031,26 +1031,29 @@ def kelvin_transformation(topic: str = "all") -> str:
 @mcp.tool()
 def axifem_documentation(topic: str = "all") -> str:
     """
-    Get radia-core axifem documentation: Henrotte axisymmetric Q-element FE
+    Get radia-core axifem documentation: Henrotte axisymmetric FE
     add-on for NGSolve (registered FESpace name: "axihenrotte").
 
     Use this when designing or reviewing axisymmetric eddy-current /
     magnetostatic FEM problems with axis-touching elements, or when
     comparing axihenrotte to standard NGSolve H1 elements.
 
-    Canonical API: ``FESpace("axihenrotte", mesh, order=k)`` for
-    k = 1 (Q-element p=1, 4 DOFs/quad) or k = 2 (Q-element p=2,
-    9 DOFs/quad). On the Cu-disk benchmark, p=2 beats NGSolve
-    H1 order=3 with fewer DOFs (0.27 % gap to BEM-Foster vs 2.5 %).
+    Canonical API: ``FESpace("axihenrotte", mesh, order=k)`` or
+    ``H1Henrotte(mesh, order=k)``.  order=1 dispatches to P1 triangles
+    or Q1 quads; order=2 dispatches to P2 triangles or Q2 quads.  P2
+    triangles are curved-mesh aware after ``mesh.Curve(2)``.  True
+    curved Q2 quads are prototype-only, not production C++.
 
     Args:
         topic: Documentation section. Options:
             "all"             - all sections concatenated
             "overview"        - what it is and why NGSolve doesn't already have it
+            "support_matrix"  - exact P1/P2/P2 curved/Q1/Q2/Q2 curved status
             "api"             - FESpace("axihenrotte", mesh, order=k) usage
             "taskmanager"     - NGSolve-native parallel execution contract
-            "basis_p1"        - p=1 Q-element (4 DOFs) basis details
-            "basis_p2"        - p=2 Q-element (9 DOFs) basis + s-midpoint convention
+            "basis_p1"        - order=1 P1 triangle + Q1 quad basis details
+            "basis_p2"        - order=2 P2 triangle + Q2 quad basis details
+            "curved_geometry" - P2 curved triangle shipped; Q2 curved quad prototype-only
             "vs_standard_h1"  - 6-property comparison table vs H1 order=2
             "validation"      - cross-validation references; Hessian-of-W convention
             "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
