@@ -3,7 +3,7 @@
 collocation kernel and its old EIEM2/moment opt-out were removed (Phase 3b).  Method dispatch in SolveGen:
 
   - method 0 (LU)  : moment, physical (cube demag ~1/3 -> M_z ~ 3*H0).
-  - method 1 (BiCG): reroutes to the dense moment LU -> bit-identical M to method 0.
+  - method 1 (BiCG): matrix-free moment BiCGSTAB + element-block Jacobi for pure hex and mixed 5/6 DOF.
   - method 2 (HACApK): the scalable moment H-matrix + block-Jacobi BiCGSTAB (Phase-2 Inc 3) -- solves the
     moment system and == method 0; LINEAR and NONLINEAR (per-element chi, Inc 4), with O(N log N) storage
     (no dense interaction/base/system matrix, Inc 4 -- see bench_moment_storage_scaling.py).
@@ -50,11 +50,37 @@ def test_moment_cube_physical():
     assert abs(M[0]) < 0.05 * abs(M[2]) and abs(M[1]) < 0.05 * abs(M[2])
 
 
-def test_method1_bicgstab_reroutes_to_moment_lu():
-    """method 1 (BiCGSTAB) is rerouted to the dense moment LU -> bit-identical to method 0."""
+def test_method1_bicgstab_matrix_free_moment():
+    """method 1 (BiCGSTAB) solves the pure-hex moment system with matrix-free matvec + block Jacobi."""
     M0 = _cube_Mz(0)
     M1 = _cube_Mz(1)
-    assert np.linalg.norm(M1 - M0) <= 1e-9 * max(np.linalg.norm(M0), 1.0), f"M1={M1} != M0={M0}"
+    rel = np.linalg.norm(M1 - M0) / max(np.linalg.norm(M0), 1.0)
+    assert rel <= 1e-8, f"M1={M1} != M0={M0} (rel {rel:.2e})"
+
+
+def test_method1_matrix_free_multihex_external_field():
+    """method 1 matrix-free matvec exercises off-diagonal moment blocks and matches method 0 externally."""
+    MU0 = 4e-7 * np.pi; mu_r = 200.0; L = 0.01
+
+    def solve_extB(method):
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-10)
+        objs = []
+        for ix in range(2):
+            for iy in range(2):
+                x0, y0, z0 = ix * L, iy * L, 0.0
+                v = [[x0, y0, z0], [x0 + L, y0, z0], [x0 + L, y0 + L, z0], [x0, y0 + L, z0],
+                     [x0, y0, z0 + L], [x0 + L, y0, z0 + L], [x0 + L, y0 + L, z0 + L], [x0, y0 + L, z0 + L]]
+                h = rad.ObjHexahedron(v, [0, 0, 0]); rad.MatApl(h, rad.MatLin(mu_r)); objs.append(h)
+        cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * 1e3])])
+        rad.Solve(cont, 1e-8, 2000, method)
+        B = np.asarray([rad.Fld(cont, "b", p) for p in ([0.04, 0.01, 0.01], [0.0, 0.04, 0.02], [0.015, 0.015, 0.05])], float)
+        rad.UtiDelAll()
+        return B
+
+    B0 = solve_extB(0)
+    B1 = solve_extB(1)
+    rel = np.linalg.norm(B1 - B0) / max(np.linalg.norm(B0), 1e-30)
+    assert rel < 1e-5, f"method1 matrix-free external B != method0 (rel {rel:.2e})"
 
 
 def test_method2_hacapk_solves_via_hmatrix():
@@ -66,6 +92,34 @@ def test_method2_hacapk_solves_via_hmatrix():
     assert np.all(np.isfinite(M2)) and np.linalg.norm(M2) > 1e-6
     rel = np.linalg.norm(M2 - M0) / max(np.linalg.norm(M0), 1e-30)
     assert rel < 1e-3, f"method2 H-BiCGSTAB M={M2} != method0 M={M0} (rel {rel:.2e})"
+
+
+def test_method2_gmres_comparison_path():
+    """The explicit moment_krylov='gmres' comparison path uses the same moment H-matvec + block Jacobi and
+    matches the production BiCGSTAB path on the one-hex lock case.  Bad solver names fail loud in SolverConfig
+    instead of silently switching to BiCGSTAB."""
+    with pytest.raises(ValueError):
+        rad.SolverConfig(moment_krylov="not-a-solver")
+    try:
+        rad.SolverConfig(moment_krylov="gmres", moment_gmres_restart=8)
+        M0 = _cube_Mz(0)
+        M2 = _cube_Mz(2)
+        rel = np.linalg.norm(M2 - M0) / max(np.linalg.norm(M0), 1e-30)
+        assert rel < 1e-3, f"method2 H-GMRES M={M2} != method0 M={M0} (rel {rel:.2e})"
+    finally:
+        rad.SolverConfig(moment_krylov="bicgstab", moment_anderson_depth=0)
+
+
+def test_removed_inexact_bicgstab_knob_fails_loud():
+    """The failed inexact-BiCGSTAB branch is documented in MEMORY, but removed from SolverConfig."""
+    with pytest.raises(ValueError):
+        rad.SolverConfig(moment_inexact_bicgstab=False)
+
+
+def test_removed_two_level_preconditioner_knob_fails_loud():
+    """The failed two-level coarse-space branch is documented in MEMORY, but removed from SolverConfig."""
+    with pytest.raises(ValueError):
+        rad.SolverConfig(moment_two_level_precond=True)
 
 
 def test_method2_hacapk_multihex_external_field():
@@ -143,7 +197,7 @@ def test_wedge_moment_matches_hex_externally():
     prism axis = 5 rows).  A unit cube as ONE hex vs the SAME cube tiled by TWO triangular-prism wedges must
     give the same EXTERNAL field (same geometry + uniform applied field).  The AXIAL quad (3*(d.a)^2-|d|^2,
     a = prism axis) is REQUIRED: the naive antisymmetric dx^2-dy^2 leaves a symmetric near-null sigma mode
-    that blows up (|M| ~ 1e9).  Locks method 0 (LU) and method 1 (-> moment LU) for wedges."""
+    that blows up (|M| ~ 1e9).  Locks method 0 (LU) and method 1 matrix-free variable-DOF moment path for wedges."""
     MU0 = 4e-7 * np.pi; L = 0.02; Happ = 1000.0
     probes = [[0.05, 0.0, 0.0], [0.0, 0.05, 0.01], [0.01, 0.01, 0.05], [-0.04, 0.02, 0.03]]
     hexv = [[0, 0, 0], [L, 0, 0], [L, L, 0], [0, L, 0], [0, 0, L], [L, 0, L], [L, L, L], [0, L, L]]
@@ -187,22 +241,23 @@ def test_mixed_hex_wedge_moment():
         return [[[0, 0, z0], [L, 0, z0], [0, L, z0], [0, 0, z0+L], [L, 0, z0+L], [0, L, z0+L]],
                 [[L, 0, z0], [L, L, z0], [0, L, z0], [L, 0, z0+L], [L, L, z0+L], [0, L, z0+L]]]
 
-    def solve(mixed):
+    def solve(mixed, method):
         rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
         objs = [rad.ObjHexahedron(hx(0.0), [0, 0, 0])]
         objs += ([rad.ObjWedge(w, [0, 0, 0]) for w in wg(L)] if mixed else [rad.ObjHexahedron(hx(L), [0, 0, 0])])
         for o in objs:
             rad.MatApl(o, rad.MatLin(500.0))
         cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * Happ])])
-        rad.Solve(cont, 1e-8, 3000, 0)
+        rad.Solve(cont, 1e-8, 3000, method)
         B = np.asarray([rad.Fld(cont, "b", p) for p in probes], float)
         rad.UtiDelAll()
         return B
 
-    B_hex = solve(False)
-    B_mix = solve(True)
-    relB = np.linalg.norm(B_mix - B_hex) / max(np.linalg.norm(B_hex), 1e-30)
-    assert np.all(np.isfinite(B_mix)) and relB < 0.01, f"mixed hex+wedge external B != all-hex (rel {relB:.2e})"
+    B_hex = solve(False, 0)
+    for method in (0, 1):
+        B_mix = solve(True, method)
+        relB = np.linalg.norm(B_mix - B_hex) / max(np.linalg.norm(B_hex), 1e-30)
+        assert np.all(np.isfinite(B_mix)) and relB < 0.01, f"mixed hex+wedge method{method} external B != all-hex (rel {relB:.2e})"
 
 
 # NOTE: moment-vs-EIEM2 agreement is NOT tested on a single cube -- the solved M is an INTERNAL,

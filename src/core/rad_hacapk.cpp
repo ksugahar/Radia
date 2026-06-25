@@ -1129,14 +1129,19 @@ double RadHACApKMMMManager::GetGenericElement(int elem_i, int elem_j, int local_
 //=========================================================================
 
 RadHACApKMomentSystem::RadHACApKMomentSystem(radTInteraction* interaction, double chi)
-    : m_interaction(interaction), m_chi(chi)
+    : m_interaction(interaction), m_chi(chi), m_kernel_only(false)
 {
 }
 
 // Per-element chi (Increment 4, nonlinear Picard): each row 6h+* folds chiPerHex[h] (the row element's
 // susceptibility) into A_raw via MomentSystemEntry; resolved in ExtractCoordinates once nHex is known.
 RadHACApKMomentSystem::RadHACApKMomentSystem(radTInteraction* interaction, const std::vector<double>& chiPerHex)
-    : m_interaction(interaction), m_chi(chiPerHex.empty() ? 1.0 : chiPerHex[0]), m_chi_in(chiPerHex)
+    : m_interaction(interaction), m_chi(chiPerHex.empty() ? 1.0 : chiPerHex[0]), m_chi_in(chiPerHex), m_kernel_only(false)
+{
+}
+
+RadHACApKMomentSystem::RadHACApKMomentSystem(radTInteraction* interaction, bool kernelOnly)
+    : m_interaction(interaction), m_chi(1.0), m_kernel_only(kernelOnly)
 {
 }
 
@@ -1159,7 +1164,8 @@ void RadHACApKMomentSystem::ExtractCoordinates()
     m_dof_offset[nHex] = 6 * nHex;
     // chi per hex for MomentSystemEntry: per-element (Increment 4, nonlinear Picard) when the vector ctor
     // supplied one of matching length, else uniform m_chi.
-    if ((int)m_chi_in.size() == nHex && nHex > 0) m_chiv = m_chi_in;
+    if (m_kernel_only) m_chiv.assign((size_t)(nHex > 0 ? nHex : 1), 1.0);
+    else if ((int)m_chi_in.size() == nHex && nHex > 0) m_chiv = m_chi_in;
     else m_chiv.assign((size_t)(nHex > 0 ? nHex : 1), m_chi);
 }
 
@@ -1168,6 +1174,16 @@ void RadHACApKMomentSystem::OnBeforeBuild()
     if (!m_interaction) return;
     RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, 6);
     m_interaction->PrecomputeMomentGeometry();
+}
+
+void RadHACApKMomentSystem::GetInteractionBlock6x6(int elem_i, int elem_j, double* block) const
+{
+    if (!block) return;
+    if (!m_interaction || m_chiv.empty() || elem_i < 0 || elem_j < 0 || elem_i >= m_n_elem || elem_j >= m_n_elem) {
+        std::fill(block, block + 36, 0.0);
+        return;
+    }
+    m_interaction->MomentSystemBlock6x6(elem_i, elem_j, m_chiv.data(), block, m_kernel_only);
 }
 
 double RadHACApKMomentSystem::GetInteractionMatrixElement(int dof_i, int dof_j) const
@@ -1182,9 +1198,11 @@ double RadHACApKMomentSystem::GetInteractionMatrixElement(int dof_i, int dof_j) 
     static thread_local uint64_t tl_cached_generation = 0;
     static thread_local int tl_single_elem_i = -1;
     static thread_local int tl_single_elem_j = -1;
+    static thread_local bool tl_single_kernel_only = false;
     static thread_local double tl_single_block[36];
     static thread_local int tl_cache_elem_i[TL_HASH_SIZE_MOMENT6];
     static thread_local int tl_cache_elem_j[TL_HASH_SIZE_MOMENT6];
+    static thread_local bool tl_cache_kernel_only[TL_HASH_SIZE_MOMENT6];
     static thread_local double tl_cache_block[TL_HASH_SIZE_MOMENT6][36];
     static thread_local bool tl_initialized = false;
 
@@ -1192,31 +1210,36 @@ double RadHACApKMomentSystem::GetInteractionMatrixElement(int dof_i, int dof_j) 
     if (tl_cached_generation != current_gen || !tl_initialized) {
         tl_single_elem_i = -1;
         tl_single_elem_j = -1;
+        tl_single_kernel_only = false;
         for (int i = 0; i < TL_HASH_SIZE_MOMENT6; i++) {
             tl_cache_elem_i[i] = -1;
             tl_cache_elem_j[i] = -1;
+            tl_cache_kernel_only[i] = false;
         }
         tl_cached_generation = current_gen;
         tl_initialized = true;
     }
 
-    if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
+    if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j && tl_single_kernel_only == m_kernel_only) {
         return tl_single_block[local_i * 6 + local_j];
     }
 
     unsigned int hash_idx = (((unsigned int)elem_i * 73856093u) ^ ((unsigned int)elem_j * 19349663u)) & TL_HASH_MASK_MOMENT6;
-    if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
+    if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j && tl_cache_kernel_only[hash_idx] == m_kernel_only) {
         std::memcpy(tl_single_block, tl_cache_block[hash_idx], 36 * sizeof(double));
         tl_single_elem_i = elem_i;
         tl_single_elem_j = elem_j;
+        tl_single_kernel_only = m_kernel_only;
         return tl_single_block[local_i * 6 + local_j];
     }
 
-    m_interaction->MomentSystemBlock6x6(elem_i, elem_j, m_chiv.data(), tl_single_block);
+    GetInteractionBlock6x6(elem_i, elem_j, tl_single_block);
     tl_single_elem_i = elem_i;
     tl_single_elem_j = elem_j;
+    tl_single_kernel_only = m_kernel_only;
     tl_cache_elem_i[hash_idx] = elem_i;
     tl_cache_elem_j[hash_idx] = elem_j;
+    tl_cache_kernel_only[hash_idx] = m_kernel_only;
     std::memcpy(tl_cache_block[hash_idx], tl_single_block, 36 * sizeof(double));
     return tl_single_block[local_i * 6 + local_j];
 }

@@ -1949,6 +1949,53 @@ double GetBiCGSTABTol() {
     return tol;
 }
 
+void SetMomentKrylovSolverByName(const std::string& name) {
+    int solver = -1;
+    if (name == "bicgstab") solver = 0;
+    else if (name == "gmres") solver = 1;
+    else throw std::invalid_argument("moment_krylov must be 'bicgstab' or 'gmres'");
+    int n = 0;
+    int err = RadSetMomentKrylovSolver(&n, solver);
+    check_error(err);
+}
+
+std::string GetMomentKrylovSolverName() {
+    int solver = 0;
+    int err = RadGetMomentKrylovSolver(&solver);
+    check_error(err);
+    if (solver == 0) return "bicgstab";
+    if (solver == 1) return "gmres";
+    return "invalid";
+}
+
+void SetMomentGMRESRestart(int restart) {
+    if (restart < 2) throw std::invalid_argument("moment_gmres_restart must be >= 2");
+    int n = 0;
+    int err = RadSetMomentGMRESRestart(&n, restart);
+    check_error(err);
+}
+
+int GetMomentGMRESRestart() {
+    int restart = 0;
+    int err = RadGetMomentGMRESRestart(&restart);
+    check_error(err);
+    return restart;
+}
+
+void SetMomentAndersonDepth(int depth) {
+    if (depth != 0 && depth != 1) throw std::invalid_argument("moment_anderson_depth currently supports 0 or 1");
+    int n = 0;
+    int err = RadSetMomentAndersonDepth(&n, depth);
+    check_error(err);
+}
+
+int GetMomentAndersonDepth() {
+    int depth = 0;
+    int err = RadGetMomentAndersonDepth(&depth);
+    check_error(err);
+    return depth;
+}
+
 void SetRelaxParam(double relax) {
     int n = 0;
     int err = RadSetRelaxParam(&n, relax);
@@ -2066,6 +2113,13 @@ double GetHantilaRelax() {
 // ---- Unified SolverConfig / GetSolverConfig ----
 
 void SolverConfig(py::kwargs kwargs) {
+    if (kwargs.contains("moment_inexact_bicgstab")) {
+        throw std::invalid_argument("moment_inexact_bicgstab was removed; use fixed bicgstab_tol and documented preconditioner options instead");
+    }
+    if (kwargs.contains("moment_two_level_precond")) {
+        throw std::invalid_argument("moment_two_level_precond was removed after the two-stage benchmark showed no iteration reduction; use the default element-block Jacobi path");
+    }
+
     // HACApK parameters
     if (kwargs.contains("hacapk_eps") || kwargs.contains("hacapk_leaf") || kwargs.contains("hacapk_eta")) {
         double eps = kwargs.contains("hacapk_eps") ? kwargs["hacapk_eps"].cast<double>() : -1;
@@ -2091,6 +2145,18 @@ void SolverConfig(py::kwargs kwargs) {
 
     if (kwargs.contains("bicgstab_tol")) {
         SetBiCGSTABTol(kwargs["bicgstab_tol"].cast<double>());
+    }
+
+    if (kwargs.contains("moment_krylov")) {
+        SetMomentKrylovSolverByName(kwargs["moment_krylov"].cast<std::string>());
+    }
+
+    if (kwargs.contains("moment_gmres_restart")) {
+        SetMomentGMRESRestart(kwargs["moment_gmres_restart"].cast<int>());
+    }
+
+    if (kwargs.contains("moment_anderson_depth")) {
+        SetMomentAndersonDepth(kwargs["moment_anderson_depth"].cast<int>());
     }
 
     if (kwargs.contains("relax_param")) {
@@ -2138,6 +2204,10 @@ py::dict GetSolverConfig() {
     { double tol = 1e-4;
       RadGetBiCGSTABTol(&tol);
       config["bicgstab_tol"] = tol; }
+
+    config["moment_krylov"] = GetMomentKrylovSolverName();
+    config["moment_gmres_restart"] = GetMomentGMRESRestart();
+    config["moment_anderson_depth"] = GetMomentAndersonDepth();
 
     // Relaxation parameter
     { double relax = 0.0;
@@ -4598,6 +4668,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   hacapk_eta (float): H-matrix admissibility parameter (default: 2.0)
                   hmatrix_eps (float): H-matrix field evaluation epsilon
                   bicgstab_tol (float): BiCGSTAB convergence tolerance (default: 1e-4)
+                  moment_krylov (str): Moment method-2 Krylov solver, "bicgstab" or "gmres"
+                  moment_gmres_restart (int): Restart length for moment GMRES (default: 40)
+                  moment_anderson_depth (int): Safeguarded moment Anderson acceleration depth, 0 or 1
                   relax_param (float): Under-relaxation (0=full step, <1=damped)
                   newton_method (bool): True=Newton-Raphson, False=Picard (default)
                   newton_damping (bool): Enable Newton line search damping
@@ -4611,6 +4684,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Example:
                   rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
                   rad.SolverConfig(bicgstab_tol=1e-6, relax_param=0.3)
+                  rad.SolverConfig(moment_krylov="gmres", moment_gmres_restart=40)
+                  rad.SolverConfig(moment_anderson_depth=1)
                   rad.SolverConfig(newton_method=True, newton_damping=True)
                   rad.SolverConfig(b_input_newton=True)  # For energy-based hysteresis
                   rad.SolverConfig(b_input_hantila=True)  # Hantila polarization (faster)
@@ -4622,7 +4697,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   Dictionary with all solver parameters:
-                  - bicgstab_tol, relax_param, newton_method, b_input_newton, b_input_hantila
+                  - bicgstab_tol, moment_krylov, moment_gmres_restart
+                  - moment_anderson_depth, relax_param, newton_method, b_input_newton, b_input_hantila
                   - newton_damping, newton_damping_max_iter, newton_damping_min_omega
                   - hacapk_stats (if H-matrix solve has been performed)
           )pbdoc");

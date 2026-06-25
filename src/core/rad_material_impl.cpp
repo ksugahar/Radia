@@ -1855,7 +1855,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// (BuildMomentSystemCore) is the SOLE solver for surface-charge soft iron -- hex (6 DOF) AND wedge/pyramid (5 DOF,
 		// Phase 3a: 3 dipole + 1 monopole + 1 axial quad).  Solver method:
 		//   - method 0 (LU)       -> dense direct moment solve (hex / wedge / mixed).
-		//   - method 1 (BiCGSTAB) -> dense moment matrix + BiCGSTAB linear step.
+		//   - method 1 (BiCGSTAB) -> matrix-free moment BiCGSTAB + element-block Jacobi (hex/wedge/mixed 5/6 DOF).
 		//   - method 2 (HACApK)   -> the moment H-matrix + block-Jacobi BiCGSTAB (scalable storage; no dense
 		//     interaction/base matrix, Increment 4), set g_multipole_moment_hacapk and route to the LU/Picard driver
 		//     whose linear step picks the H-BiCGSTAB.  HEX-ONLY for now (the H-matrix assumes uniform 6 DOF);
@@ -1898,7 +1898,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 							}
 							else if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
 							{
-								MethNo = RadSolverMethod::LU;   // method-2 wedge/mixed dense fallback until variable-DOF H-matrix
+								MethNo = RadSolverMethod::LU;   // method-2 wedge/mixed explicit dense-LU route until variable-DOF H-matrix
 							}
 						}
 					}

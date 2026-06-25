@@ -159,6 +159,12 @@ void GetHACApKStats( double*, int* );
 void GetSolveStats( double*, int* );
 void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
+void SetMomentKrylovSolver( int );
+int GetMomentKrylovSolver();
+void SetMomentGMRESRestart( int );
+int GetMomentGMRESRestart();
+void SetMomentAndersonDepth( int );
+int GetMomentAndersonDepth();
 void SetRelaxParam( double );
 double GetRelaxParam();
 void SetKeepMagnetization( bool );
@@ -1570,6 +1576,38 @@ void SetBiCGSTABTolerance(double tol)
 double GetBiCGSTABTolerance()
 {
 	return rad.m_bicg_tol;
+}
+
+//-------------------------------------------------------------------------
+
+void SetMomentKrylovSolver(int solver)
+{
+	if(solver == 0 || solver == 1) rad.m_moment_krylov_solver = solver;
+}
+
+int GetMomentKrylovSolver()
+{
+	return rad.m_moment_krylov_solver;
+}
+
+void SetMomentGMRESRestart(int restart)
+{
+	if(restart >= 2) rad.m_moment_gmres_restart = restart;
+}
+
+int GetMomentGMRESRestart()
+{
+	return rad.m_moment_gmres_restart;
+}
+
+void SetMomentAndersonDepth(int depth)
+{
+	if(depth == 0 || depth == 1) rad.m_moment_anderson_depth = depth;
+}
+
+int GetMomentAndersonDepth()
+{
+	return rad.m_moment_anderson_depth;
 }
 
 //-------------------------------------------------------------------------

@@ -30,6 +30,8 @@
 #include <cstdlib>  // For getenv
 #include <array>    // For std::array in IMA mirror computation
 #include <atomic>   // For std::atomic in parallel early-exit patterns
+#include <algorithm> // For std::min/std::max
+#include <cmath>    // For std::isfinite
 
 // Uncomment to enable chi value debugging
 // #define RADIA_DEBUG_CHI
@@ -193,6 +195,22 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 		{
 			chi_init = NonlinMater->GetInitialChi_ELF_Style();
 			if(chi_init <= 0) chi_init = 1.0;
+			double H_ext_mag = 0.0;
+			if(dof == 3)
+			{
+				for(int k = 0; k < 3; k++) H_ext_mag += ctx.FlatExtern[offset + k] * ctx.FlatExtern[offset + k];
+				H_ext_mag = std::sqrt(H_ext_mag);
+			}
+			else if(dof >= 5)
+			{
+				const TVector3d& Hext = IntrctPtr->ExternFieldArray[elem];
+				H_ext_mag = std::sqrt(Hext.x*Hext.x + Hext.y*Hext.y + Hext.z*Hext.z);
+			}
+			if(H_ext_mag > 1.0e-10)
+			{
+				double chi_ext = NonlinMater->ComputeChiDualMethod(H_ext_mag, chi_init + 1.0, 0.0);
+				if(chi_ext > 1.0e-6 && chi_ext < 1.0e10) chi_init = chi_ext;
+			}
 			ctx.all_materials_linear = false;
 			ctx.B_sat = NonlinMater->GetBsaturation();
 			if(ctx.B_sat < 1.0e-10) ctx.B_sat = 1.0;
@@ -313,6 +331,7 @@ void StoreOldValuesAndComputeBnorm(NonlinearContext& ctx, radTInteraction* Intrc
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
 		int offset = IntrctPtr->GetElementDOFOffset(elem);
+		ctx.OldChi[elem] = ctx.CurrentChiArray[elem];
 
 		if(dof == 3)
 		{
@@ -696,6 +715,111 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 }
 
 //-------------------------------------------------------------------------
+
+static void CopyVectorToFlatMagn(NonlinearContext& ctx, const std::vector<double>& src)
+{
+	const int n = std::min(ctx.totalDOF, (int)src.size());
+	for(int i = 0; i < n; i++) ctx.FlatMagn[i] = src[(size_t)i];
+}
+
+static void RestoreChiArray(NonlinearContext& ctx, radTInteraction* IntrctPtr, const std::vector<double>& chi)
+{
+	ctx.CurrentChiArray = chi;
+	for(int elem = 0; elem < ctx.AmOfMainElem && elem < (int)chi.size(); elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		if(dof >= 5)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC) poly->CurrentChi = chi[(size_t)elem];
+		}
+	}
+}
+
+static double TryMomentAndersonAcceleration(NonlinearContext& ctx, radTInteraction* IntrctPtr, double baseRelChange)
+{
+	if(rad.m_moment_anderson_depth <= 0 || !ctx.last_solve_was_moment_hacapk || ctx.use_newton ||
+	   ctx.totalDOF <= 0 || ctx.OldMagn.size() != (size_t)ctx.totalDOF)
+		return baseRelChange;
+
+	std::vector<double> baseMagn((size_t)ctx.totalDOF);
+	std::vector<double> residual((size_t)ctx.totalDOF);
+	for(int i = 0; i < ctx.totalDOF; i++)
+	{
+		baseMagn[(size_t)i] = ctx.FlatMagn[i];
+		residual[(size_t)i] = baseMagn[(size_t)i] - ctx.OldMagn[(size_t)i];
+	}
+
+	if(!ctx.moment_anderson_have_prev ||
+	   ctx.MomentAndersonPrevResidual.size() != (size_t)ctx.totalDOF ||
+	   ctx.MomentAndersonPrevImage.size() != (size_t)ctx.totalDOF)
+	{
+		ctx.MomentAndersonPrevResidual = residual;
+		ctx.MomentAndersonPrevImage = baseMagn;
+		ctx.moment_anderson_have_prev = true;
+		return baseRelChange;
+	}
+
+	double num = 0.0, den = 0.0;
+	for(int i = 0; i < ctx.totalDOF; i++)
+	{
+		const double df = residual[(size_t)i] - ctx.MomentAndersonPrevResidual[(size_t)i];
+		num += residual[(size_t)i] * df;
+		den += df * df;
+	}
+	if(den <= 1.0e-300)
+	{
+		ctx.MomentAndersonPrevResidual = residual;
+		ctx.MomentAndersonPrevImage = baseMagn;
+		ctx.moment_anderson_rejected++;
+		return baseRelChange;
+	}
+
+	const double gamma = num / den;
+	if(!std::isfinite(gamma) || gamma < -1.0 || gamma > 1.0)
+	{
+		ctx.MomentAndersonPrevResidual = residual;
+		ctx.MomentAndersonPrevImage = baseMagn;
+		ctx.moment_anderson_rejected++;
+		return baseRelChange;
+	}
+
+	std::vector<double> accelerated((size_t)ctx.totalDOF);
+	for(int i = 0; i < ctx.totalDOF; i++)
+	{
+		const double gi = baseMagn[(size_t)i];
+		const double gip = ctx.MomentAndersonPrevImage[(size_t)i];
+		accelerated[(size_t)i] = gi - gamma * (gi - gip);
+	}
+
+	const std::vector<double> baseChi = ctx.CurrentChiArray;
+	RestoreChiArray(ctx, IntrctPtr, ctx.OldChi);
+	CopyVectorToFlatMagn(ctx, accelerated);
+	ComputeActualHFieldFromSigma(ctx, IntrctPtr);
+	const double accelRelChange = UpdateChiAndCheckConvergence(ctx, IntrctPtr);
+
+	if(std::isfinite(accelRelChange) && accelRelChange < baseRelChange)
+	{
+		std::vector<double> acceptedResidual((size_t)ctx.totalDOF);
+		for(int i = 0; i < ctx.totalDOF; i++)
+			acceptedResidual[(size_t)i] = accelerated[(size_t)i] - ctx.OldMagn[(size_t)i];
+		ctx.MomentAndersonPrevResidual.swap(acceptedResidual);
+		ctx.MomentAndersonPrevImage.swap(accelerated);
+		ctx.moment_anderson_accepted++;
+		return accelRelChange;
+	}
+
+	CopyVectorToFlatMagn(ctx, baseMagn);
+	RestoreChiArray(ctx, IntrctPtr, baseChi);
+	ComputeActualHFieldFromSigma(ctx, IntrctPtr);
+	ctx.max_B_rel_change = baseRelChange;
+	ctx.MomentAndersonPrevResidual = residual;
+	ctx.MomentAndersonPrevImage = baseMagn;
+	ctx.moment_anderson_rejected++;
+	return baseRelChange;
+}
+
+//-------------------------------------------------------------------------
 /**
  * Apply adaptive line search damping to Newton-Raphson update.
  *
@@ -871,6 +995,7 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 	NonlinearContext ctx;
 	if(!InitializeNonlinearContext(ctx, IntrctPtr, MagnResetIsNotNeeded))
 		return 0;
+	ctx.nonlinear_tol = PrecOnMagnetiz;
 
 	// Newton-Raphson initialization
 	ctx.use_newton = rad.m_use_newton;
@@ -909,6 +1034,9 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 
 		// Store old values for convergence check
 		StoreOldValuesAndComputeBnorm(ctx, IntrctPtr);
+		ctx.last_solve_was_moment_hacapk = false;
+		ctx.last_moment_linear_tol = 0.0;
+		ctx.last_moment_krylov_solver = rad.m_moment_krylov_solver;
 
 		// Solve linear system (virtual - overridden by LU, BiCGSTAB, HACApK)
 		int linearIter = SolveLinearStep(ctx, iterCount);
@@ -924,6 +1052,7 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 
 		// Update chi and check convergence
 		double rel_change = UpdateChiAndCheckConvergence(ctx, IntrctPtr);
+		rel_change = TryMomentAndersonAcceleration(ctx, IntrctPtr, rel_change);
 		MisfitE2 = rel_change * rel_change;
 
 		// Linear materials: converge in exactly 1 iteration
@@ -1809,7 +1938,7 @@ void radTRelaxationMethNo_1::Scale(double alpha, std::vector<double>& x, int n)
 
 void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, const std::vector<double>& inv_chi, int n_elem)
 {
-	// Extract diagonal elements from interaction matrix for Jacobi preconditioner
+	// Extract diagonal elements from interaction matrix for legacy scalar-Jacobi diagnostics.
 	// Diagonal block [i][i] is a 3x3 matrix, we extract the diagonal of that
 	// CRITICAL FIX: Use pre-computed 1/chi values that are FIXED for this BiCGSTAB solve
 	// (chi is only updated in the outer nonlinear iteration loop)
@@ -2104,10 +2233,11 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 #ifdef RADIA_USE_HACAPK
 //-------------------------------------------------------------------------
 // SolveMomentHACApK: the SCALABLE-storage moment linear step (Phase 2 Increments 3-4,
-// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  Solves A_raw sigma = b_raw with the moment system
-// as a HACApK H-matrix (RadHACApKMomentSystem, O(N log N) matvec) + block-Jacobi BiCGSTAB.
-// chiPerHex is PER-ELEMENT (Increment 4): each row 6h+* folds chiPerHex[h], so the nonlinear Picard outer
-// loop just calls this each iteration with the current chi (no uniform-chi restriction).
+// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  Solves A_raw sigma = b_raw with the chi-free
+// moment geometry kernel K stored as a reusable HACApK H-matrix plus the exact O(N) local block L:
+// A(chi)x = Lx + diag_row(chi) Kx.  This mirrors the legacy 6-DoF nonlinear optimization: the H-matrix
+// is built once per nonlinear solve and Picard iterations update only chi, RHS, and the block-Jacobi blocks.
+// chiPerHex is PER-ELEMENT (Increment 4): each row 6h+* folds chiPerHex[h].
 // b_raw[6h+t] = chiPerHex[h]*Hext_h[t] for the 3 dipole rows (t<3), 0 for monopole/quadrupole.  Returns the
 // BiCGSTAB iteration count (>=0 converged), -1 (build fail), -10 (breakdown).  sigma length 6*nHex.
 //-------------------------------------------------------------------------
@@ -2115,6 +2245,10 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
                              const std::vector<double>& HextPerHex,
                              double aca_eps, int leaf, double eta,
                              double tol, int maxiter, std::vector<double>& sigma,
+                             int krylovSolver, int gmresRestart,
+                             std::shared_ptr<RadHACApKMomentSystem>& kernelMgr,
+                             std::vector<double>& cachedLBlock,
+                             std::vector<double>& cachedDiagKBlock,
                              double& hmatrixBuildTime, double& linearSolveTime)
 {
 	hmatrixBuildTime = 0.0;
@@ -2123,6 +2257,8 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	int dof = 6 * nHex;
 	if((int)sigma.size() != dof) sigma.assign((size_t)dof, 0.0);
 	if(dof == 0) return 0;
+	const bool serialElementOps = (nHex <= 128);
+	const bool serialVectorOps = (dof <= 2048);
 
 	// TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
 	// whole build + BiCGSTAB matvec loop so multipole-moment MMM method 2 is multi-threaded even when
@@ -2130,12 +2266,15 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	// RadHACApKChargeGram::SolveMaterialMINRES; nested under a panel region -> no-op.
 	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 
-	RadHACApKMomentSystem mgr(IntrctPtr, chiPerHex);
-	RadHACApKParams prm; prm.aca_eps = aca_eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
-	auto t_hmatrix_start = std::chrono::high_resolution_clock::now();
-	if(!mgr.BuildHMatrix(prm)) return -1;
-	auto t_hmatrix_end = std::chrono::high_resolution_clock::now();
-	hmatrixBuildTime = std::chrono::duration<double>(t_hmatrix_end - t_hmatrix_start).count();
+	if(!kernelMgr)
+	{
+		kernelMgr = std::make_shared<RadHACApKMomentSystem>(IntrctPtr, true);  // chi-free K_geometry
+		RadHACApKParams prm; prm.aca_eps = aca_eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
+		auto t_hmatrix_start = std::chrono::high_resolution_clock::now();
+		if(!kernelMgr->BuildHMatrix(prm)) { kernelMgr.reset(); return -1; }
+		auto t_hmatrix_end = std::chrono::high_resolution_clock::now();
+		hmatrixBuildTime = std::chrono::duration<double>(t_hmatrix_end - t_hmatrix_start).count();
+	}
 
 	auto t_linear_start = std::chrono::high_resolution_clock::now();
 	auto finish = [&](int code) {
@@ -2146,51 +2285,232 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 
 	// RHS b_raw (un-normalized): dipole rows carry chi_h*Hext_h (per-element), the rest are 0.
 	std::vector<double> b((size_t)dof, 0.0);
-	ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t h) {
-		for(int t = 0; t < 3; t++) b[(size_t)6*h + t] = chiPerHex[h] * HextPerHex[(size_t)3*h + t];
-	});
+	if(serialElementOps)
+	{
+		for(int h = 0; h < nHex; h++)
+			for(int t = 0; t < 3; t++) b[(size_t)6*h + t] = chiPerHex[h] * HextPerHex[(size_t)3*h + t];
+	}
+	else
+	{
+		ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t h) {
+			for(int t = 0; t < 3; t++) b[(size_t)6*h + t] = chiPerHex[h] * HextPerHex[(size_t)3*h + t];
+		});
+	}
+
+	// Local L block (chi-independent, block diagonal).  The nonlinear moment system is applied as
+	// A(chi)x = Lx + diag_row(chi) K_geometry x, so the H-matrix stores only K_geometry and is reused.
+	const size_t diagBlockSize = (size_t)nHex * 36;
+	if(cachedLBlock.size() != diagBlockSize || cachedDiagKBlock.size() != diagBlockSize)
+	{
+		cachedLBlock.assign(diagBlockSize, 0.0);
+		cachedDiagKBlock.assign(diagBlockSize, 0.0);
+		std::vector<double> zeroChi((size_t)nHex, 0.0);
+		if(serialElementOps)
+		{
+			for(int h = 0; h < nHex; h++)
+			{
+				IntrctPtr->MomentSystemBlock6x6(h, h, zeroChi.data(), &cachedLBlock[(size_t)h*36]);
+				IntrctPtr->MomentSystemBlock6x6(h, h, nullptr, &cachedDiagKBlock[(size_t)h*36], true);
+			}
+		}
+		else
+		{
+			ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t h) {
+				IntrctPtr->MomentSystemBlock6x6((int)h, (int)h, zeroChi.data(), &cachedLBlock[(size_t)h*36]);
+				IntrctPtr->MomentSystemBlock6x6((int)h, (int)h, nullptr, &cachedDiagKBlock[(size_t)h*36], true);
+			});
+		}
+	}
+	const std::vector<double>& Lblock = cachedLBlock;
+	const std::vector<double>& KdiagBlock = cachedDiagKBlock;
 
 	// block-Jacobi: invert each element's local 6x6 A_raw block (rows/cols 6h..6h+5), per-element chi.
 	std::vector<double> Binv((size_t)dof * 6);   // [6h+i]*6 + j  = (B_h^-1)[i][j], row-major per block
-	ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t h) {
-		std::vector<double> blk(36);
-		std::vector<int> ipiv(6);
-		std::vector<double> work(36);
+	std::atomic<int> bj_bad_elem{-1};
+	std::atomic<int> bj_bad_info{0};
+	auto buildBinvBlock = [&](size_t h) {
+		double blk[36];
+		int ipiv[6];
+		double work[36];
 		int six = 6, lwork = 36, info = 0;
 		double rawBlock[36];
-		IntrctPtr->MomentSystemBlock6x6((int)h, (int)h, chiPerHex.data(), rawBlock);   // row-major moment block
+		const double chi = chiPerHex[h];
+		const double* Lh = &Lblock[(size_t)h*36];
+		const double* Kh = &KdiagBlock[(size_t)h*36];
+		for(int k = 0; k < 36; k++) rawBlock[k] = Lh[k] + chi*Kh[k];
 		for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++)
 			blk[(size_t)j*6 + i] = rawBlock[i*6 + j];   // col-major for LAPACK
-		dgetrf_(&six, &six, blk.data(), &six, ipiv.data(), &info);
-		if(info == 0) { dgetri_(&six, blk.data(), &six, ipiv.data(), work.data(), &lwork, &info); }
-		if(info != 0) { for(int k = 0; k < 36; k++) blk[k] = 0.0; for(int k = 0; k < 6; k++) blk[(size_t)k*6+k] = 1.0; }
+		dgetrf_(&six, &six, blk, &six, ipiv, &info);
+		if(info == 0) { dgetri_(&six, blk, &six, ipiv, work, &lwork, &info); }
+		if(info != 0)
+		{
+			int expected = -1;
+			if(bj_bad_elem.compare_exchange_strong(expected, (int)h)) bj_bad_info.store(info);
+			return;
+		}
 		for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++) Binv[((size_t)6*h+i)*6 + j] = blk[(size_t)j*6 + i];
-	});
-	auto applyM = [&](const std::vector<double>& r, std::vector<double>& z)
+	};
+	if(serialElementOps) { for(int h = 0; h < nHex; h++) buildBinvBlock((size_t)h); }
+	else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildBinvBlock); }
+	if(bj_bad_elem.load() >= 0)
 	{
-		z.assign((size_t)dof, 0.0);
-		ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t h) {
+		fprintf(stderr, "Radia::Solve> moment block-Jacobi failed at element %d (info=%d); not using identity/scalar fallback.\n",
+		        bj_bad_elem.load(), bj_bad_info.load());
+		return finish(-11);
+	}
+	auto applyBlockJacobi = [&](const std::vector<double>& r, std::vector<double>& z)
+	{
+		if((int)z.size() != dof) z.resize((size_t)dof);
+		auto applyBlock = [&](size_t h) {
 			for(int i = 0; i < 6; i++) { double s = 0.0; const double* Bi = &Binv[((size_t)6*h+i)*6];
 				for(int j = 0; j < 6; j++) s += Bi[j]*r[(size_t)6*h+j]; z[(size_t)6*h+i] = s; }
-		});
+		};
+		if(serialElementOps) { for(int h = 0; h < nHex; h++) applyBlock((size_t)h); }
+		else { ngcore::ParallelFor(ngcore::IntRange(nHex), applyBlock); }
+	};
+	std::vector<double> kx((size_t)dof, 0.0);
+	auto matvecA = [&](const std::vector<double>& xvec, std::vector<double>& yvec)
+	{
+		kernelMgr->MatVec(xvec, kx);
+		if((int)yvec.size() != dof) yvec.resize((size_t)dof);
+		auto combineBlock = [&](size_t h) {
+			const double chi = chiPerHex[h];
+			const double* Lh = &Lblock[(size_t)h*36];
+			const double* xh = &xvec[(size_t)6*h];
+			for(int i = 0; i < 6; i++)
+			{
+				double s = chi * kx[(size_t)6*h+i];
+				const double* Li = &Lh[(size_t)i*6];
+				for(int j = 0; j < 6; j++) s += Li[j]*xh[j];
+				yvec[(size_t)6*h+i] = s;
+			}
+		};
+		if(serialElementOps) { for(int h = 0; h < nHex; h++) combineBlock((size_t)h); }
+		else { ngcore::ParallelFor(ngcore::IntRange(nHex), combineBlock); }
 	};
 	auto dot = [&](const std::vector<double>& a, const std::vector<double>& bb){
 		double s = 0.0;
-		ngcore::ParallelForRange(ngcore::IntRange(dof), [&](ngcore::IntRange r) {
-			double local = 0.0;
-			for(auto i : r) local += a[(size_t)i] * bb[(size_t)i];
-			ngcore::AtomicAdd(s, local);
-		});
+		if(serialVectorOps)
+		{
+			for(int i = 0; i < dof; i++) s += a[(size_t)i] * bb[(size_t)i];
+		}
+		else
+		{
+			ngcore::ParallelForRange(ngcore::IntRange(dof), [&](ngcore::IntRange r) {
+				double local = 0.0;
+				for(auto i : r) local += a[(size_t)i] * bb[(size_t)i];
+				ngcore::AtomicAdd(s, local);
+			});
+		}
 		return s;
 	};
 
-	// preconditioned BiCGSTAB on the H-matvec.  Use the incoming sigma as a Picard warm start; yano-type
+	auto applyM = [&](const std::vector<double>& r, std::vector<double>& z)
+	{
+		applyBlockJacobi(r, z);
+	};
+
+	// preconditioned BiCGSTAB on the H-matvec.  Use the incoming sigma as a Picard warm start; legacy 6-DoF
 	// method-2 solves should not throw away the previous nonlinear iterate.
 	double bnorm = std::sqrt(dot(b, b)); if(bnorm < 1e-300) return finish(0);
 	std::vector<double> x = sigma, Ax((size_t)dof, 0.0), r((size_t)dof), v((size_t)dof, 0.0), p((size_t)dof, 0.0);
-	mgr.MatVec(x, Ax);
-	ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = b[i] - Ax[i]; });
+	matvecA(x, Ax);
+	if(serialVectorOps) { for(int i = 0; i < dof; i++) r[(size_t)i] = b[(size_t)i] - Ax[(size_t)i]; }
+	else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = b[i] - Ax[i]; }); }
 	if(std::sqrt(dot(r, r))/bnorm < tol) { sigma = x; return finish(0); }
+
+	if(krylovSolver == 1)
+	{
+		const int restart = gmresRestart > 1 ? gmresRestart : 40;
+		std::vector<double> w((size_t)dof), ycoef;
+		int totalIt = 0;
+		double betaNorm = std::sqrt(dot(r, r));
+		while(totalIt < maxiter)
+		{
+			const int mmax = std::min(restart, maxiter - totalIt);
+			std::vector<std::vector<double>> V((size_t)mmax + 1, std::vector<double>((size_t)dof, 0.0));
+			std::vector<std::vector<double>> Z((size_t)mmax, std::vector<double>((size_t)dof, 0.0));
+			std::vector<double> H((size_t)(mmax + 1) * (size_t)mmax, 0.0);
+			std::vector<double> cs((size_t)mmax, 0.0), sn((size_t)mmax, 0.0), g((size_t)mmax + 1, 0.0);
+			auto Hc = [&](int row, int col) -> double& { return H[(size_t)col * (size_t)(mmax + 1) + (size_t)row]; };
+
+			for(int i = 0; i < dof; i++) V[0][(size_t)i] = r[(size_t)i] / betaNorm;
+			g[0] = betaNorm;
+			int used = 0;
+			for(int jArnoldi = 0; jArnoldi < mmax; jArnoldi++)
+			{
+				used = jArnoldi;
+				applyM(V[(size_t)used], Z[(size_t)used]);
+				matvecA(Z[(size_t)used], w);
+				for(int i = 0; i <= used; i++)
+				{
+					Hc(i, used) = dot(w, V[(size_t)i]);
+					const double hij = Hc(i, used);
+					if(serialVectorOps) { for(int k = 0; k < dof; k++) w[(size_t)k] -= hij * V[(size_t)i][(size_t)k]; }
+					else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t k) { w[k] -= hij * V[(size_t)i][k]; }); }
+				}
+				Hc(used + 1, used) = std::sqrt(dot(w, w));
+				if(Hc(used + 1, used) > 1.0e-300)
+				{
+					const double invh = 1.0 / Hc(used + 1, used);
+					if(serialVectorOps) { for(int k = 0; k < dof; k++) V[(size_t)used + 1][(size_t)k] = w[(size_t)k] * invh; }
+					else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t k) { V[(size_t)used + 1][k] = w[k] * invh; }); }
+				}
+
+				for(int i = 0; i < used; i++)
+				{
+					const double h0 = Hc(i, used);
+					const double h1 = Hc(i + 1, used);
+					Hc(i, used) = cs[(size_t)i] * h0 + sn[(size_t)i] * h1;
+					Hc(i + 1, used) = -sn[(size_t)i] * h0 + cs[(size_t)i] * h1;
+				}
+				const double h0 = Hc(used, used);
+				const double h1 = Hc(used + 1, used);
+				const double hn = std::sqrt(h0*h0 + h1*h1);
+				if(hn <= 1.0e-300) return finish(-10);
+				cs[(size_t)used] = h0 / hn;
+				sn[(size_t)used] = h1 / hn;
+				Hc(used, used) = hn;
+				Hc(used + 1, used) = 0.0;
+				const double g0 = g[(size_t)used];
+				g[(size_t)used] = cs[(size_t)used] * g0;
+				g[(size_t)used + 1] = -sn[(size_t)used] * g0;
+				totalIt++;
+				const double relRes = std::fabs(g[(size_t)used + 1]) / bnorm;
+				used++;
+				if(relRes < tol) break;
+			}
+
+			ycoef.assign((size_t)used, 0.0);
+			for(int i = used - 1; i >= 0; i--)
+			{
+				double ssum = g[(size_t)i];
+				for(int j = i + 1; j < used; j++) ssum -= Hc(i, j) * ycoef[(size_t)j];
+				if(std::fabs(Hc(i, i)) <= 1.0e-300) return finish(-10);
+				ycoef[(size_t)i] = ssum / Hc(i, i);
+			}
+			for(int j = 0; j < used; j++)
+			{
+				const double a = ycoef[(size_t)j];
+				if(serialVectorOps) { for(int i = 0; i < dof; i++) x[(size_t)i] += a * Z[(size_t)j][(size_t)i]; }
+				else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += a * Z[(size_t)j][i]; }); }
+			}
+
+			matvecA(x, Ax);
+			if(serialVectorOps) { for(int i = 0; i < dof; i++) r[(size_t)i] = b[(size_t)i] - Ax[(size_t)i]; }
+			else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = b[i] - Ax[i]; }); }
+			betaNorm = std::sqrt(dot(r, r));
+			if(betaNorm / bnorm < tol) { sigma = x; return finish(totalIt); }
+			if(betaNorm <= 1.0e-300) { sigma = x; return finish(totalIt); }
+		}
+		sigma = x;
+		return finish(totalIt);
+	}
+	if(krylovSolver != 0)
+	{
+		fprintf(stderr, "Radia::Solve> invalid multipole-moment Krylov solver id %d; not switching solver implicitly.\n", krylovSolver);
+		return finish(-12);
+	}
 	std::vector<double> rhat = r;
 	std::vector<double> phat((size_t)dof), s((size_t)dof), shat((size_t)dof), tvec((size_t)dof);
 	double rho = 1.0, alpha = 1.0, omega = 1.0;
@@ -2200,22 +2520,27 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		double rho_new = dot(rhat, r);
 		if(std::fabs(rho_new) < 1e-300) return finish(-10);                 // breakdown
 		double beta = (rho_new/rho) * (alpha/omega);
-		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { p[i] = r[i] + beta*(p[i] - omega*v[i]); });
-		applyM(p, phat); mgr.MatVec(phat, v);
+		if(serialVectorOps) { for(int i = 0; i < dof; i++) p[(size_t)i] = r[(size_t)i] + beta*(p[(size_t)i] - omega*v[(size_t)i]); }
+		else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { p[i] = r[i] + beta*(p[i] - omega*v[i]); }); }
+		applyM(p, phat); matvecA(phat, v);
 		double rhv = dot(rhat, v); if(std::fabs(rhv) < 1e-300) return finish(-10);
 		alpha = rho_new / rhv;
-		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { s[i] = r[i] - alpha*v[i]; });
+		if(serialVectorOps) { for(int i = 0; i < dof; i++) s[(size_t)i] = r[(size_t)i] - alpha*v[(size_t)i]; }
+		else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { s[i] = r[i] - alpha*v[i]; }); }
 		double snorm = std::sqrt(dot(s, s));
 		if(snorm/bnorm < tol) {
-			ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += alpha*phat[i]; });
+			if(serialVectorOps) { for(int i = 0; i < dof; i++) x[(size_t)i] += alpha*phat[(size_t)i]; }
+			else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += alpha*phat[i]; }); }
 			it++;
 			break;
 		}
-		applyM(s, shat); mgr.MatVec(shat, tvec);
+		applyM(s, shat); matvecA(shat, tvec);
 		double tt = dot(tvec, tvec); if(tt < 1e-300) return finish(-10);
 		omega = dot(tvec, s) / tt;
-		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += alpha*phat[i] + omega*shat[i]; });
-		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = s[i] - omega*tvec[i]; });
+		if(serialVectorOps) { for(int i = 0; i < dof; i++) x[(size_t)i] += alpha*phat[(size_t)i] + omega*shat[(size_t)i]; }
+		else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += alpha*phat[i] + omega*shat[i]; }); }
+		if(serialVectorOps) { for(int i = 0; i < dof; i++) r[(size_t)i] = s[(size_t)i] - omega*tvec[(size_t)i]; }
+		else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = s[i] - omega*tvec[i]; }); }
 		if(std::sqrt(dot(r, r))/bnorm < tol) { it++; break; }
 		if(std::fabs(omega) < 1e-300) return finish(-10);
 		rho = rho_new;
@@ -2241,7 +2566,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	size_t matrix_size = (size_t)totalDOF * (size_t)totalDOF;
 	// SystemMatrix (the dense O(N^2) working copy for dgesv) is allocated LAZILY (Phase 2 Increment 4):
 	// the moment+method2 H-BiCGSTAB path returns before any dense solve, so on that scalable path we never
-	// pay the O(N^2).  Dense paths (moment dense-LU fallback and MMM dense LU) call
+	// pay the O(N^2).  Dense paths (moment dense-LU method-0 path and MMM dense LU) call
 	// ensureSystemMatrix() first; it returns false on OOM (-> caller returns -2).
 	std::vector<double> SystemMatrix;
 	bool systemMatrixReady = false;
@@ -2270,6 +2595,11 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 	if(useMoment)
 	{
+		if(ctx.use_newton)
+		{
+			fprintf(stderr, "Radia::Solve> newton_method=True is not implemented for the multipole-moment surface-charge path; refusing to run Picard silently.\n");
+			return -4;
+		}
 		std::vector<int> momElem; IntrctPtr->CollectMomentElems(momElem);   // hex(6)+wedge/pyramid(5), matches BuildMomentSystemCore
 		int nMom = (int)momElem.size();
 		std::vector<double> chiPerHex((size_t)nMom), HextPerHex((size_t)nMom*3);
@@ -2286,7 +2616,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		// method 2 (scalable storage): solve the moment system via the HACApK H-matrix + block-Jacobi BiCGSTAB
 		// (O(N log N) matvec) instead of the dense O(N^3) LU.  PER-ELEMENT chi (Increment 4): the nonlinear
 		// Picard outer loop calls this each iteration with the current chiPerHex (no uniform-chi restriction);
-		// breakdown/build-fail falls through to the dense moment LU below (same answer).
+		// method-2 HACApK failure returns an error instead of silently routing to dense LU.
 		extern bool g_multipole_moment_hacapk;
 		if(g_multipole_moment_hacapk && nMom > 0)
 		{
@@ -2294,22 +2624,31 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			std::vector<double> sigma((size_t)hacDof, 0.0);
 			for(int i = 0; i < hacDof && i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];   // Picard warm start
 			double hmatrixBuildTime = 0.0, linearSolveTime = 0.0;
+			const double momentTol = rad.m_bicg_tol;
 			int nit = SolveMomentHACApK(IntrctPtr, chiPerHex, HextPerHex,
 			                            rad.m_hacapk_eps, rad.m_hacapk_leaf_size, rad.m_hacapk_eta,
-			                            rad.m_bicg_tol, 10000, sigma,
+			                            momentTol, 10000, sigma,
+			                            rad.m_moment_krylov_solver, rad.m_moment_gmres_restart,
+			                            ctx.MomentKernelHMatrix,
+			                            ctx.MomentLocalLBlock,
+			                            ctx.MomentDiagKBlock,
 			                            hmatrixBuildTime, linearSolveTime);
 			if(nit >= 0)
 			{
 				rad.m_timing_hmatrix_build += hmatrixBuildTime;
 				rad.m_solve_t_linear_solve += linearSolveTime;
 				rad.m_solve_linear_iterations += nit;
+				ctx.last_solve_was_moment_hacapk = true;
+				ctx.last_moment_linear_tol = momentTol;
+				ctx.last_moment_krylov_solver = rad.m_moment_krylov_solver;
 				for(int i = 0; i < totalDOF && i < (int)sigma.size(); i++) ctx.FlatMagn[i] = sigma[i];
 				return nit;   // converged -> sigma written; skip the dense LU path
 			}
-			// nit < 0 (breakdown / build fail) -> fall through to the dense moment LU below (correct answer)
+			fprintf(stderr, "Radia::Solve> HACApK moment method2 failed with code %d; not falling back to dense LU.\n", nit);
+			return nit;
 		}
 #endif
-		if(!ensureSystemMatrix()) return -2;   // dense moment fallback (H-BiCGSTAB unavailable/broke down)
+		if(!ensureSystemMatrix()) return -2;   // dense moment method-0 path
 		IntrctPtr->BuildMomentSystemCore(chiPerHex.data(), HextPerHex.data(), SystemMatrix, RHS);
 		rad.m_solve_t_moment_fieldgrad += IntrctPtr->LastMomentFieldGradTime();
 		rad.m_solve_t_moment_system_build += IntrctPtr->LastMomentSystemBuildTime();
@@ -2498,7 +2837,7 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>& diag,
                                                               const std::vector<double>& inv_chi, int totalDOF)
 {
-	// Extract diagonal elements for Jacobi preconditioner
+	// Extract diagonal elements for legacy scalar-Jacobi diagnostics.
 	// Physical equation: A = -K/(4pi) + diag(1/chi)
 	// FlatInteract stores K/(4pi) for MSC and N for MMM - negate both
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
@@ -2535,7 +2874,7 @@ bool radTRelaxationMethNo_1::BuildBlockJacobiPreconditioner_VariableDOF(
 	std::vector<double>& blockInverse, std::vector<int>& blockOffsets,
 	const std::vector<double>& inv_chi, int totalDOF)
 {
-	// Build block-Jacobi preconditioner by inverting each element's diagonal block
+	// Build element-block Jacobi preconditioner by inverting each element's natural diagonal block.
 	// This is much better than scalar Jacobi for poorly conditioned MSC matrices
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return false;
@@ -2589,20 +2928,14 @@ bool radTRelaxationMethNo_1::BuildBlockJacobiPreconditioner_VariableDOF(
 		dgetrf_(&dof, &dof, block_copy.data(), &dof, ipiv.data(), &info);
 		if(info != 0)
 		{
-			// Singular block - use identity as fallback
-			fprintf(stderr, "[Block Jacobi] Element %d: singular diagonal block (info=%d), using identity\n", elem, info);
-			for(int i = 0; i < dof * dof; i++) block_copy[i] = 0;
-			for(int i = 0; i < dof; i++) block_copy[i + i * dof] = 1.0;
+			fprintf(stderr, "[Block Jacobi] Element %d: singular diagonal block (info=%d)\n", elem, info);
+			return false;
 		}
-		else
+		dgetri_(&dof, block_copy.data(), &dof, ipiv.data(), work.data(), &lwork, &info);
+		if(info != 0)
 		{
-			dgetri_(&dof, block_copy.data(), &dof, ipiv.data(), work.data(), &lwork, &info);
-			if(info != 0)
-			{
-				fprintf(stderr, "[Block Jacobi] Element %d: inversion failed (info=%d), using identity\n", elem, info);
-				for(int i = 0; i < dof * dof; i++) block_copy[i] = 0;
-				for(int i = 0; i < dof; i++) block_copy[i + i * dof] = 1.0;
-			}
+			fprintf(stderr, "[Block Jacobi] Element %d: inversion failed (info=%d)\n", elem, info);
+			return false;
 		}
 
 		// Store inverse block in ROW-MAJOR format for efficient application
@@ -2623,7 +2956,7 @@ void radTRelaxationMethNo_1::ApplyBlockJacobiPreconditioner_VariableDOF(
 	const std::vector<double>& x, std::vector<double>& y,
 	const std::vector<double>& blockInverse, const std::vector<int>& blockOffsets)
 {
-	// Apply block-Jacobi preconditioner: y = M^{-1} * x
+	// Apply element-block Jacobi preconditioner: y = M^{-1} * x.
 	// where M is the block-diagonal of A
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
 
@@ -2653,7 +2986,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
                                                        const std::vector<double>* absChiArray,
                                                        const double* oldSigma)
 {
-	// BiCGSTAB with Jacobi preconditioner for variable DOF systems
+	// BiCGSTAB with element-block Jacobi preconditioner for variable DOF systems.
 	// Keep a TaskManager region active across the whole method-1 solve so every ParallelFor
 	// matvec/vector/preconditioner operation is multi-threaded even from a bare rad.Solve(..., 1).
 	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
@@ -2662,7 +2995,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
 
 	// Allocate work vectors
 	std::vector<double> r(totalDOF), r0(totalDOF), p(totalDOF), v(totalDOF), s(totalDOF), t(totalDOF);
-	std::vector<double> p_hat(totalDOF), s_hat(totalDOF), diag_inv(totalDOF);
+	std::vector<double> p_hat(totalDOF), s_hat(totalDOF);
 	std::vector<double> inv_chi(totalDOF);
 	std::vector<double> rhs(totalDOF);
 	std::vector<double> sol(totalDOF);
@@ -2712,38 +3045,20 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
 		sol[i] = FlatMagn[i];
 	}
 
-	// Always use block Jacobi preconditioner for MSC (6x6 block inverse per element)
-	// Block Jacobi cost is negligible (small block inversions) but gives much better
-	// preconditioning than scalar Jacobi for the coupled 6-DOF MSC formulation.
-	bool use_block_jacobi = true;
-
 	// Build preconditioner
 	std::vector<double> blockInverse;
 	std::vector<int> blockOffsets;
 
 #ifdef HAVE_LAPACK
-	if(use_block_jacobi)
+	if(!BuildBlockJacobiPreconditioner_VariableDOF(blockInverse, blockOffsets, inv_chi, totalDOF))
 	{
-		// Build block Jacobi preconditioner
-		if(!BuildBlockJacobiPreconditioner_VariableDOF(blockInverse, blockOffsets, inv_chi, totalDOF))
-		{
-			fprintf(stderr, "[BiCG] Warning: Block Jacobi build failed, falling back to scalar Jacobi\n");
-			use_block_jacobi = false;
-		}
+		fprintf(stderr, "[BiCG] Error: block-Jacobi build failed; scalar Jacobi fallback is disabled.\n");
+		return -11;
 	}
 #else
-	use_block_jacobi = false;  // Block Jacobi requires LAPACK
+	fprintf(stderr, "[BiCG] Error: block-Jacobi requires LAPACK; scalar Jacobi fallback is disabled.\n");
+	return -11;
 #endif
-
-	if(!use_block_jacobi)
-	{
-		// Build scalar Jacobi preconditioner
-		GetDiagonalElements_VariableDOF(diag_inv, inv_chi, totalDOF);
-		for(int i = 0; i < totalDOF; i++)
-		{
-			diag_inv[i] = (std::abs(diag_inv[i]) > 1.0e-15) ? (1.0 / diag_inv[i]) : 1.0;
-		}
-	}
 
 	// Initialize: r0 = b - A*x0
 	MatVec_VariableDOF(sol, v, inv_chi, totalDOF);
@@ -2788,18 +3103,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
 		}
 
 		// Apply preconditioner: p_hat = M^{-1} * p
-#ifdef HAVE_LAPACK
-		if(use_block_jacobi)
-		{
-			ApplyBlockJacobiPreconditioner_VariableDOF(p, p_hat, blockInverse, blockOffsets);
-		}
-		else
-#endif
-		{
-			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
-				p_hat[i] = diag_inv[i] * p[i];
-			});
-		}
+		ApplyBlockJacobiPreconditioner_VariableDOF(p, p_hat, blockInverse, blockOffsets);
 
 		MatVec_VariableDOF(p_hat, v, inv_chi, totalDOF);
 
@@ -2823,18 +3127,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
 		}
 
 		// Apply preconditioner: s_hat = M^{-1} * s
-#ifdef HAVE_LAPACK
-		if(use_block_jacobi)
-		{
-			ApplyBlockJacobiPreconditioner_VariableDOF(s, s_hat, blockInverse, blockOffsets);
-		}
-		else
-#endif
-		{
-			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
-				s_hat[i] = diag_inv[i] * s[i];
-			});
-		}
+		ApplyBlockJacobiPreconditioner_VariableDOF(s, s_hat, blockInverse, blockOffsets);
 
 		MatVec_VariableDOF(s_hat, t, inv_chi, totalDOF);
 
@@ -2892,7 +3185,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
 
 //-------------------------------------------------------------------------
 // BiCGSTAB Solver: SolveLinearStep override
-// Uses BiCGSTAB iterative solver with Jacobi preconditioner
+// Uses BiCGSTAB iterative solver with element-block Jacobi preconditioner.
 //-------------------------------------------------------------------------
 
 int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount)
@@ -2913,6 +3206,11 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 	if(useMoment)
 	{
+		if(ctx.use_newton)
+		{
+			fprintf(stderr, "Radia::Solve> newton_method=True is not implemented for the multipole-moment surface-charge path; refusing to run Picard silently.\n");
+			return -4;
+		}
 		// Keep the TaskManager active for dense moment assembly, matvec, and block-Jacobi application.
 		// Without this region the method-1 moment branch falls back to effectively serial ngcore::ParallelFor
 		// execution, which makes MDX scaling measurements misleading.
@@ -2940,39 +3238,212 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			if(poly && poly->Use6DOF_MSC) poly->CurrentChi = chi_abs;
 		}
 
-		size_t matrix_size = (size_t)totalDOF * (size_t)totalDOF;
-		std::vector<double> SystemMatrix;
-		std::vector<double> RHS(totalDOF);
-		try { SystemMatrix.resize(matrix_size); }
-		catch (const std::bad_alloc&) {
-			double required_gb = (double)matrix_size * 8 / (1024.0 * 1024.0 * 1024.0);
-			fprintf(stderr, "Radia::Solve> Dense BiCGSTAB requires %.1f GB memory for DOF=%d. Use HACApK (method 2) for large problems.\n", required_gb, totalDOF);
-			return -2;
+		const int nHex = IntrctPtr->GetNumHexElements();
+		const std::vector<int>& hexElem = IntrctPtr->GetHexaElemIndices();
+		bool pureHexMatrixFree = (nMom == nHex && totalDOF == 6 * nHex);
+		for(int h = 0; pureHexMatrixFree && h < nHex; h++)
+		{
+			const int elem = hexElem[h];
+			if(h >= (int)momElem.size() || momElem[h] != elem ||
+			   IntrctPtr->GetElementDOF(elem) != 6 ||
+			   IntrctPtr->GetElementDOFOffset(elem) != 6 * h)
+			{
+				pureHexMatrixFree = false;
+			}
 		}
 
-		IntrctPtr->BuildMomentSystemCore(chiPerHex.data(), HextPerHex.data(), SystemMatrix, RHS);
-		rad.m_solve_t_moment_fieldgrad += IntrctPtr->LastMomentFieldGradTime();
-		rad.m_solve_t_moment_system_build += IntrctPtr->LastMomentSystemBuildTime();
+		if(pureHexMatrixFree)
+		{
+			const bool serialElementOps = (nHex <= 128);
+			std::vector<double> RHS((size_t)totalDOF, 0.0);
+			if(serialElementOps)
+			{
+				for(int h = 0; h < nHex; h++)
+					for(int t = 0; t < 3; t++) RHS[(size_t)6 * h + t] = chiPerHex[h] * HextPerHex[(size_t)3 * h + t];
+			}
+			else
+			{
+				ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t h) {
+					for(int t = 0; t < 3; t++) RHS[(size_t)6 * h + t] = chiPerHex[h] * HextPerHex[(size_t)3 * h + t];
+				});
+			}
 
-		std::vector<double> sigma(totalDOF);
-		for(int i = 0; i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];
+			auto t_setup_start = std::chrono::high_resolution_clock::now();
+			IntrctPtr->PrecomputeMomentGeometry();
 
-		bool use_block_jacobi = false;
+			std::vector<double> localLBlock((size_t)nHex * 36, 0.0);
+			std::vector<double> diagKBlock((size_t)nHex * 36, 0.0);
+			std::vector<double> zeroChi((size_t)nHex, 0.0);
+			auto buildLocalBlocks = [&](size_t hh) {
+				const int h = (int)hh;
+				IntrctPtr->MomentSystemBlock6x6(h, h, zeroChi.data(), &localLBlock[(size_t)h * 36]);
+				IntrctPtr->MomentSystemBlock6x6(h, h, nullptr, &diagKBlock[(size_t)h * 36], true);
+			};
+			if(serialElementOps) { for(int h = 0; h < nHex; h++) buildLocalBlocks((size_t)h); }
+			else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildLocalBlocks); }
+
+			std::vector<double> blockInverse((size_t)nHex * 36, 0.0);
+#ifdef HAVE_LAPACK
+			std::atomic<int> bj_bad_elem{-1};
+			std::atomic<int> bj_bad_info{0};
+			auto buildPrecondBlock = [&](size_t hh) {
+				const int h = (int)hh;
+				double rawBlock[36];
+				double block_copy[36];
+				int ipiv[6];
+				double work[36];
+				int six = 6, lwork = 36, info = 0;
+				const double* Lh = &localLBlock[(size_t)h * 36];
+				const double* Kh = &diagKBlock[(size_t)h * 36];
+				for(int k = 0; k < 36; k++) rawBlock[k] = Lh[k] + chiPerHex[h] * Kh[k];
+				for(int i = 0; i < 6; i++)
+					for(int j = 0; j < 6; j++)
+						block_copy[i + j * 6] = rawBlock[i * 6 + j];   // LAPACK column-major
+
+				dgetrf_(&six, &six, block_copy, &six, ipiv, &info);
+				if(info == 0) dgetri_(&six, block_copy, &six, ipiv, work, &lwork, &info);
+				if(info != 0)
+				{
+					int expected = -1;
+					if(bj_bad_elem.compare_exchange_strong(expected, h)) bj_bad_info.store(info);
+					return;
+				}
+
+				double* Binv = &blockInverse[(size_t)h * 36];
+				for(int i = 0; i < 6; i++)
+					for(int j = 0; j < 6; j++)
+						Binv[i * 6 + j] = block_copy[i + j * 6];
+			};
+			if(serialElementOps) { for(int h = 0; h < nHex; h++) buildPrecondBlock((size_t)h); }
+			else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildPrecondBlock); }
+			if(bj_bad_elem.load() >= 0)
+			{
+				fprintf(stderr, "[BiCG] Error: matrix-free moment block-Jacobi failed at hex %d (info=%d); scalar/identity substitute is disabled.\n",
+				        bj_bad_elem.load(), bj_bad_info.load());
+				return -11;
+			}
+#else
+			fprintf(stderr, "[BiCG] Error: matrix-free moment block-Jacobi requires LAPACK; scalar/identity substitute is disabled.\n");
+			return -11;
+#endif
+			auto t_setup_end = std::chrono::high_resolution_clock::now();
+			rad.m_solve_t_moment_system_build += std::chrono::duration<double>(t_setup_end - t_setup_start).count();
+
+			std::vector<double> sigma(totalDOF);
+			for(int i = 0; i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];
+
+			auto matvec = [&](const double* x, double* y) {
+				auto applyRow = [&](size_t hh) {
+					const int h = (int)hh;
+					double acc[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+					double block[36];
+					for(int g = 0; g < nHex; g++)
+					{
+						IntrctPtr->MomentSystemBlock6x6(h, g, nullptr, block, true);
+						const double* xg = &x[(size_t)6 * g];
+						for(int i = 0; i < 6; i++)
+						{
+							const double* Brow = &block[i * 6];
+							for(int j = 0; j < 6; j++) acc[i] += chiPerHex[h] * Brow[j] * xg[j];
+						}
+					}
+					const double* Lh = &localLBlock[(size_t)h * 36];
+					const double* xh = &x[(size_t)6 * h];
+					for(int i = 0; i < 6; i++)
+					{
+						const double* Li = &Lh[(size_t)i * 6];
+						for(int j = 0; j < 6; j++) acc[i] += Li[j] * xh[j];
+					}
+					double* yh = &y[(size_t)6 * h];
+					for(int i = 0; i < 6; i++) yh[i] = acc[i];
+				};
+				if(serialElementOps) { for(int h = 0; h < nHex; h++) applyRow((size_t)h); }
+				else { ngcore::ParallelFor(ngcore::IntRange(nHex), applyRow); }
+			};
+			auto precond = [&](const double* x, double* y) {
+				auto applyBlock = [&](size_t hh) {
+					const int h = (int)hh;
+					const double* Binv = &blockInverse[(size_t)h * 36];
+					const double* xh = &x[(size_t)6 * h];
+					double* yh = &y[(size_t)6 * h];
+					for(int i = 0; i < 6; i++)
+					{
+						double sum = 0.0;
+						for(int j = 0; j < 6; j++) sum += Binv[i * 6 + j] * xh[j];
+						yh[i] = sum;
+					}
+				};
+				if(serialElementOps) { for(int h = 0; h < nHex; h++) applyBlock((size_t)h); }
+				else { ngcore::ParallelFor(ngcore::IntRange(nHex), applyBlock); }
+			};
+
+			const double bicg_tol = rad.m_bicg_tol;
+			const int bicg_max_iter = 10000;
+			auto t_bicg_start = std::chrono::high_resolution_clock::now();
+			radia::bicgstab::Result result =
+				radia::bicgstab::Solve<double>(totalDOF, matvec, precond, RHS.data(), sigma.data(),
+				                               bicg_tol, bicg_max_iter);
+			auto t_bicg_end = std::chrono::high_resolution_clock::now();
+			rad.m_solve_t_linear_solve += std::chrono::duration<double>(t_bicg_end - t_bicg_start).count();
+			rad.m_solve_linear_iterations += result.iterations;
+
+			if(!result.converged)
+			{
+				fprintf(stderr, "[BiCG] Warning: matrix-free moment BiCGSTAB did not reach tol %.3e after %d iterations (residual=%.4e)\n",
+				        bicg_tol, result.iterations, result.residual);
+				return -3;
+			}
+
+			std::vector<double> sigma_trial = sigma;
+			double omega_ls = ApplyLineSearchDamping(ctx, this->IntrctPtr, sigma_trial);
+			if(omega_ls >= 0.999)
+			{
+				for(int i = 0; i < totalDOF; i++) ctx.FlatMagn[i] = sigma_trial[i];
+			}
+			return result.iterations;
+		}
+
+		const bool serialMomentOps = (nMom <= 128);
+		std::vector<int> momDof((size_t)nMom), momOff((size_t)nMom);
+		for(int h = 0; h < nMom; h++)
+		{
+			const int elem = momElem[h];
+			momDof[h] = IntrctPtr->GetElementDOF(elem);
+			momOff[h] = IntrctPtr->GetElementDOFOffset(elem);
+		}
+
+		std::vector<double> RHS((size_t)totalDOF, 0.0);
+		for(int h = 0; h < nMom; h++)
+		{
+			const int off = momOff[h];
+			for(int t = 0; t < 3; t++) RHS[(size_t)off + t] = chiPerHex[h] * HextPerHex[(size_t)3 * h + t];
+		}
+
+		auto t_setup_start = std::chrono::high_resolution_clock::now();
+		IntrctPtr->PrecomputeMomentAnyGeometry();
+		std::vector<double> localLBlock((size_t)nMom * 36, 0.0);
+		std::vector<double> diagKBlock((size_t)nMom * 36, 0.0);
+		std::vector<double> zeroChi((size_t)nMom, 0.0);
+		auto buildMomentLocal = [&](size_t hh) {
+			const int h = (int)hh;
+			IntrctPtr->MomentSystemBlockAny(h, h, zeroChi.data(), &localLBlock[(size_t)h * 36]);
+			IntrctPtr->MomentSystemBlockAny(h, h, nullptr, &diagKBlock[(size_t)h * 36], true);
+		};
+		if(serialMomentOps) { for(int h = 0; h < nMom; h++) buildMomentLocal((size_t)h); }
+		else { ngcore::ParallelFor(ngcore::IntRange(nMom), buildMomentLocal); }
+
 		std::vector<double> blockInverse;
 		std::vector<int> blockOffsets;
-		std::vector<double> diag_inv;
 
 #ifdef HAVE_LAPACK
 		// Moment rows strongly couple the local face DOF (dipole/monopole/quadrupole constraints).
-		// A scalar diagonal Jacobi preconditioner is too weak even for small nonlinear cubes, so use the
-		// per-element 5x5/6x6 diagonal block of the already assembled dense moment matrix.
-		use_block_jacobi = true;
+		// A scalar diagonal Jacobi preconditioner is too weak even for small nonlinear cubes.
+		// The production local choice is the natural per-element 5x5/6x6 moment block.
 		blockOffsets.resize((size_t)nMom + 1);
 		int total_block_storage = 0;
 		for(int h = 0; h < nMom; h++)
 		{
-			int elem = momElem[h];
-			int dof = IntrctPtr->GetElementDOF(elem);
+			int dof = momDof[h];
 			blockOffsets[h] = total_block_storage;
 			total_block_storage += dof * dof;
 		}
@@ -2987,16 +3458,17 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		for(int h = 0; h < nMom; h++)
 		{
 			int elem = momElem[h];
-			int dof = IntrctPtr->GetElementDOF(elem);
-			int off = IntrctPtr->GetElementDOFOffset(elem);
+			int dof = momDof[h];
 			int boff = blockOffsets[h];
+			const double* Lh = &localLBlock[(size_t)h * 36];
+			const double* Kh = &diagKBlock[(size_t)h * 36];
 
 			for(int i = 0; i < dof; i++)
 			{
 				for(int j = 0; j < dof; j++)
 				{
 					// LAPACK wants column-major storage: block_copy[row + col*dof].
-					block_copy[i + j * dof] = SystemMatrix[(size_t)(off + i) * totalDOF + (off + j)];
+					block_copy[i + j * dof] = Lh[i * 6 + j] + chiPerHex[h] * Kh[i * 6 + j];
 				}
 			}
 
@@ -3005,10 +3477,9 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			if(info == 0) dgetri_(&dof, block_copy.data(), &dof, ipiv.data(), work.data(), &lwork, &info);
 			if(info != 0)
 			{
-				fprintf(stderr, "[BiCG] Warning: moment block Jacobi failed at element %d (info=%d), using scalar Jacobi\n",
+				fprintf(stderr, "[BiCG] Error: moment block-Jacobi failed at element %d (info=%d); scalar Jacobi fallback is disabled.\n",
 				        elem, info);
-				use_block_jacobi = false;
-				break;
+				return -11;
 			}
 
 			for(int i = 0; i < dof; i++)
@@ -3019,48 +3490,61 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 				}
 			}
 		}
+#else
+		fprintf(stderr, "[BiCG] Error: moment block-Jacobi requires LAPACK; scalar Jacobi fallback is disabled.\n");
+		return -11;
 #endif
-		if(!use_block_jacobi)
-		{
-			diag_inv.resize((size_t)totalDOF);
-			for(int i = 0; i < totalDOF; i++)
-			{
-				double d = SystemMatrix[(size_t)i * totalDOF + i];
-				diag_inv[i] = (std::abs(d) > 1.0e-15) ? (1.0 / d) : 1.0;
-			}
-		}
+		auto t_setup_end = std::chrono::high_resolution_clock::now();
+		rad.m_solve_t_moment_system_build += std::chrono::duration<double>(t_setup_end - t_setup_start).count();
 
-		auto matvec = [&SystemMatrix, totalDOF](const double* x, double* y) {
-			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t row) {
-				const double* Arow = &SystemMatrix[(size_t)row * totalDOF];
-				double sum = 0.0;
-				for(int col = 0; col < totalDOF; col++) sum += Arow[col] * x[col];
-				y[row] = sum;
-			});
+		std::vector<double> sigma(totalDOF);
+		for(int i = 0; i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];
+
+		auto matvec = [&](const double* x, double* y) {
+			auto applyRow = [&](size_t hh) {
+				const int h = (int)hh;
+				const int rdof = momDof[h];
+				const int roff = momOff[h];
+				double acc[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+				double block[36];
+				for(int g = 0; g < nMom; g++)
+				{
+					const int cdof = momDof[g];
+					const int coff = momOff[g];
+					IntrctPtr->MomentSystemBlockAny(h, g, nullptr, block, true);
+					const double rowChi = chiPerHex[h];
+					for(int i = 0; i < rdof; i++)
+					{
+						const double* Brow = &block[i * 6];
+						double sum = 0.0;
+						for(int j = 0; j < cdof; j++) sum += Brow[j] * x[(size_t)coff + j];
+						acc[i] += rowChi * sum;
+					}
+				}
+				const double* Lh = &localLBlock[(size_t)h * 36];
+				for(int i = 0; i < rdof; i++)
+				{
+					const double* Li = &Lh[i * 6];
+					for(int j = 0; j < rdof; j++) acc[i] += Li[j] * x[(size_t)roff + j];
+					y[(size_t)roff + i] = acc[i];
+				}
+			};
+			if(serialMomentOps) { for(int h = 0; h < nMom; h++) applyRow((size_t)h); }
+			else { ngcore::ParallelFor(ngcore::IntRange(nMom), applyRow); }
 		};
 		auto precond = [&](const double* x, double* y) {
-			if(use_block_jacobi)
-			{
-				ngcore::ParallelFor(ngcore::IntRange(nMom), [&](size_t hh) {
-					int h = (int)hh;
-					int elem = momElem[h];
-					int dof = IntrctPtr->GetElementDOF(elem);
-					int off = IntrctPtr->GetElementDOFOffset(elem);
-					int boff = blockOffsets[h];
-					for(int i = 0; i < dof; i++)
-					{
-						double sum = 0.0;
-						for(int j = 0; j < dof; j++) sum += blockInverse[boff + i * dof + j] * x[off + j];
-						y[off + i] = sum;
-					}
-				});
-			}
-			else
-			{
-				ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
-					y[i] = diag_inv[i] * x[i];
-				});
-			}
+			ngcore::ParallelFor(ngcore::IntRange(nMom), [&](size_t hh) {
+				int h = (int)hh;
+				int dof = momDof[h];
+				int off = momOff[h];
+				int boff = blockOffsets[h];
+				for(int i = 0; i < dof; i++)
+				{
+					double sum = 0.0;
+					for(int j = 0; j < dof; j++) sum += blockInverse[boff + i * dof + j] * x[off + j];
+					y[off + i] = sum;
+				}
+			});
 		};
 
 		const double bicg_tol = rad.m_bicg_tol;
@@ -3075,7 +3559,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 		if(!result.converged)
 		{
-			fprintf(stderr, "[BiCG] Warning: dense moment BiCGSTAB did not reach tol %.3e after %d iterations (residual=%.4e)\n",
+			fprintf(stderr, "[BiCG] Warning: variable-DOF matrix-free moment BiCGSTAB did not reach tol %.3e after %d iterations (residual=%.4e)\n",
 			        bicg_tol, result.iterations, result.residual);
 			return -3;
 		}
@@ -3208,7 +3692,7 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 
 	// Allocate work vectors
 	std::vector<double> r(totalDOF), r0(totalDOF), p(totalDOF), v(totalDOF), s(totalDOF), t(totalDOF);
-	std::vector<double> p_hat(totalDOF), s_hat(totalDOF), diag_inv(totalDOF);
+	std::vector<double> p_hat(totalDOF), s_hat(totalDOF);
 	std::vector<double> inv_chi(totalDOF);
 	std::vector<double> rhs(totalDOF);
 	std::vector<double> sol(totalDOF);
@@ -3270,25 +3754,20 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 	}
 
 	// Build preconditioner
-	bool use_block_jacobi = false;
 	std::vector<double> hmat_blockInverse;
 	std::vector<int> hmat_blockOffsets;
 
 #ifdef HAVE_LAPACK
-	// Try block Jacobi (6x6 block inverse per element) - much better for MSC
-	use_block_jacobi = BuildBlockJacobiPreconditioner_HMatrix(
-		hmat_blockInverse, hmat_blockOffsets, inv_chi, totalDOF);
-#endif
-
-	if(!use_block_jacobi)
+	// Element-wise block Jacobi is the minimum meaningful local preconditioner for mixed DOF systems.
+	if(!BuildBlockJacobiPreconditioner_HMatrix(hmat_blockInverse, hmat_blockOffsets, inv_chi, totalDOF))
 	{
-		// Fallback: scalar Jacobi preconditioner
-		GetDiagonalElements_HMatrix_VariableDOF(diag_inv, inv_chi, totalDOF);
-		for(int i = 0; i < totalDOF; i++)
-		{
-			diag_inv[i] = (std::abs(diag_inv[i]) > 1.0e-15) ? (1.0 / diag_inv[i]) : 1.0;
-		}
+		fprintf(stderr, "[HACApK BiCG] Error: block-Jacobi build failed; scalar Jacobi fallback is disabled.\n");
+		return -11;
 	}
+#else
+	fprintf(stderr, "[HACApK BiCG] Error: block-Jacobi requires LAPACK; scalar Jacobi fallback is disabled.\n");
+	return -11;
+#endif
 
 	// Initialize: r0 = b - A*x0
 	m_hacapk->MatVec(sol, v);  // v = A*x0 using H-matrix
@@ -3333,16 +3812,7 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 		}
 
 		// Apply preconditioner
-		if(use_block_jacobi)
-		{
-			this->ApplyBlockJacobiPreconditioner_HMatrix(p, p_hat, hmat_blockInverse, hmat_blockOffsets);
-		}
-		else
-		{
-			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
-				p_hat[i] = diag_inv[i] * p[i];
-			});
-		}
+		this->ApplyBlockJacobiPreconditioner_HMatrix(p, p_hat, hmat_blockInverse, hmat_blockOffsets);
 
 		// v = A * p_hat using H-matrix
 		m_hacapk->MatVec(p_hat, v);
@@ -3366,16 +3836,7 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 			break;
 		}
 
-		if(use_block_jacobi)
-		{
-			ApplyBlockJacobiPreconditioner_HMatrix(s, s_hat, hmat_blockInverse, hmat_blockOffsets);
-		}
-		else
-		{
-			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
-				s_hat[i] = diag_inv[i] * s[i];
-			});
-		}
+		ApplyBlockJacobiPreconditioner_HMatrix(s, s_hat, hmat_blockInverse, hmat_blockOffsets);
 
 		// t = A * s_hat using H-matrix
 		m_hacapk->MatVec(s_hat, t);
@@ -3451,8 +3912,8 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 }
 
 //-------------------------------------------------------------------------
-// Block Jacobi preconditioner for H-matrix BiCGSTAB.
-// Extracts diagonal blocks DOF-generically through GetInteractionMatrixElement.
+// Element-block Jacobi preconditioner for H-matrix BiCGSTAB.
+// Extracts each element's natural diagonal block DOF-generically through GetInteractionMatrixElement.
 //-------------------------------------------------------------------------
 
 #ifdef HAVE_LAPACK
@@ -3510,17 +3971,14 @@ bool radTRelaxationMethNo_2::BuildBlockJacobiPreconditioner_HMatrix(
 		dgetrf_(&dof, &dof, block_copy.data(), &dof, ipiv.data(), &info);
 		if(info != 0)
 		{
-			for(int i = 0; i < dof * dof; i++) block_copy[i] = 0;
-			for(int i = 0; i < dof; i++) block_copy[i + i * dof] = 1.0;
+			fprintf(stderr, "[HACApK Block Jacobi] Element %d: singular diagonal block (info=%d)\n", elem, info);
+			return false;
 		}
-		else
+		dgetri_(&dof, block_copy.data(), &dof, ipiv.data(), work.data(), &lwork, &info);
+		if(info != 0)
 		{
-			dgetri_(&dof, block_copy.data(), &dof, ipiv.data(), work.data(), &lwork, &info);
-			if(info != 0)
-			{
-				for(int i = 0; i < dof * dof; i++) block_copy[i] = 0;
-				for(int i = 0; i < dof; i++) block_copy[i + i * dof] = 1.0;
-			}
+			fprintf(stderr, "[HACApK Block Jacobi] Element %d: inversion failed (info=%d)\n", elem, info);
+			return false;
 		}
 
 		// Store inverse in row-major format
@@ -3651,8 +4109,8 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		auto t_hmat_end = std::chrono::high_resolution_clock::now();
 		rad.m_timing_hmatrix_build = std::chrono::duration<double>(t_hmat_end - t_hmat_start).count();
 
-		// NOTE: No longer caching Jacobi preconditioner (FIX 2025-12-27)
-		// We recompute diag_inv = 1/(N_ii - inv_chi[i]) each iteration (ELF-compatible)
+		// NOTE: The element-block Jacobi preconditioner is rebuilt each nonlinear iteration
+		// because the diagonal blocks depend on the current per-element susceptibility.
 	}
 
 
@@ -3745,7 +4203,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			{
 				FlatField[offset + k] = FlatExtern[offset + k];
 			}
-			// Initialize NewFieldArray with H_init_mag in z-direction (fallback)
+			// Initialize NewFieldArray with H_init_mag in z-direction when no element direction is available.
 			IntrctPtr->NewFieldArray[elem].x = 0.0;
 			IntrctPtr->NewFieldArray[elem].y = 0.0;
 			IntrctPtr->NewFieldArray[elem].z = H_init_mag;

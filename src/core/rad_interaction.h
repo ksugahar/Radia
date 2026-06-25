@@ -524,15 +524,20 @@ public:
 	void CentroidFieldGradFromFace(const double ce3[3], const double V4[4][3], const double srcCenter[3],
 	                               bool isSelf, double area, double Hout[3], double gHout[6]) const;
 	// O(N) geometry/sample cache for the HACApK moment callback path.  This is the multipole-moment
-	// counterpart of the old yano-type PrecomputeHexaGeometry + cached 6x6 block path.
+	// counterpart of the legacy 6-DoF PrecomputeHexaGeometry + cached 6x6 block path.
 	void PrecomputeMomentGeometry() const;
+	// O(N) geometry/sample cache for 5/6-DOF moment elements in CollectMomentElems order.
+	void PrecomputeMomentAnyGeometry() const;
 	// On-demand UN-normalized moment system entry A_raw[rowGlobal][colDOF] (the H-matrix entry; see
 	// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  rowGlobal = 6*hpos + t over the valid 6-face hexes
 	// (t: 0,1,2 dipole; 3 monopole; 4,5 diagonal-quadrupole); colDOF = global face DOF.  Computed ONLY from
 	// the row element's local geometry + the on-demand centroid field/grad from face colDOF -- no full-system
 	// build, no row normalization (the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
 	double MomentSystemEntry(int rowGlobal, int colDOF, const double* chiPerHex) const;
-	void MomentSystemBlock6x6(int rowHexPos, int colHexPos, const double* chiPerHex, double* block) const;
+	void MomentSystemBlock6x6(int rowHexPos, int colHexPos, const double* chiPerHex, double* block, bool kernelOnly = false) const;
+	// Padded 6x6 on-demand moment block in CollectMomentElems order.  The active block is
+	// row_dof x col_dof, where row/col dof are 5 or 6 from the corresponding moment elements.
+	void MomentSystemBlockAny(int rowMomPos, int colMomPos, const double* chiPerMom, double* block, bool kernelOnly = false) const;
 	// multipole-moment MMM system matrix (parameter-free replacement for EIEM2): per moment element assemble
 	// 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
 	// (global field/grad from BuildCentroidFieldGrad, local moments from the element geometry).  Rows 2-norm
