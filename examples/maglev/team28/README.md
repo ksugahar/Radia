@@ -1,13 +1,43 @@
 # TEAM 28 levitation force via 3D (axisymmetric) Cauer Ladder Network
 
-**Result (verified 2026-06-04):** a 6-stage Cauer Ladder Network (CLN)
-reduced model reproduces the **TEAM Problem 28 electrodynamic-levitation
-Lorentz force vs height** to better than 0.1%, and finds the levitation
-equilibrium at **dZ = +4.1 mm** (full-FEM ~ +4 mm) where lift equals the
-disk weight (~1.055 N).  To our knowledge this is the first time the CLN
-reduction has been carried through to the actual TEAM 28 **levitation
-force** (prior CLN-on-TEAM-28 work extracted only the decay spectrum
-R_n / L_n on a generic test disk under a uniform field).
+**Result (verified 2026-06-04; external-reference validation + force-convention
+fix 2026-06-20):** a 6-stage Cauer Ladder Network (CLN) reduced model
+reproduces the **TEAM Problem 28 electrodynamic-levitation Lorentz force vs
+height** to better than 0.1% (max |CLN - full-FEM| = 5e-4 N over the sweep),
+and the physically-correct levitation equilibrium (where the time-averaged
+lift equals the disk weight 1.055 N) lands at **absolute disk-bottom height
+z = 11.0 mm** -- matching the **published measured steady-state levitation
+height z = 11.5 mm** (Karl, Fetzer, Kurz, Lehner, Rucker -- the official
+TEAM 28 definition; laser triangulation, 4-measurement average) to **4%**.
+TEAM 28 is a genuinely **high-Rm** levitation problem (Rm ~ 57 at the in-plane
+current-loop scale R), so the lift IS the eddy reaction -- exactly the regime
+where the CLN earns its keep.
+
+**Prior art (NOT a first -- this is an open reproduction).**  The lab already
+published CLN-on-TEAM-28 levitation: K. Sugahara, N. Tanimoto, Y. Takahashi,
+T. Matsuo, "Cauer Ladder Network Representation with Constant Basis Functions
+for Eddy Current Problems Involving Conductor Movement", COMPUMAG 2023
+(Paper ID 324).  That work did MORE than this example: the full **motion-coupled
+transient** levitation height `z(t)` (Matlab/Simulink, 20000 steps) compared
+against the **measurement** and the conventional method, with a 4-stage CLN, in
+**~7 s vs ~8 h** conventional.  It also introduced the constant-basis
+`As(zgap)` expansion (`As = sum_n a_2n i_2n`) that the moving-source CLN here
+and in `radia_iem_fem` builds on.  THIS example is the **open, pip-installable,
+NGSolve + golden-tested reproduction** of (a frequency-domain slice of) that
+result -- valuable as a reproducible open artifact, not as a first.
+
+> **Force-convention note (the bug the published 11.5 mm caught).**  The
+> reported `F_z` (and the lab `.mat` `Fz1`) is the verbatim TEAM 28 surface
+> integral `Re[B_r J_t]`, which is EXACTLY **2x** the physical time-averaged
+> Lorentz force `<f_z> = -(1/2) Re[J_t conj(B_r)]` (verified ratio 1.9998).
+> The disk floats where the PHYSICAL lift == weight, i.e. `F_z/2 == 1.055 N`.
+> An earlier version balanced the 2x integral against the 1x weight and
+> reported a spurious equilibrium at dZ=+4.1 mm (absolute 14.9 mm) -- ABOVE the
+> measured 11.5 mm, which is unphysical.  Comparing to the **published** height
+> surfaced it; the equilibrium now uses `F_z/2` and lands at 11.0 mm.  The
+> force-CONVERGENCE story (CLN vs full-FEM at a fixed height) is
+> convention-independent and unaffected -- the golden still locks
+> `F_z(dZ=0) = -2.1928 N`.
 
 ## What it shows
 
@@ -39,7 +69,7 @@ over the disk.  The force converges to the full-FEM value in ~5 stages:
 |---|---|
 | `team28_axisym_fem.py` | Repo-clean port of the lab full-FEM axisymmetric TEAM 28 solve (mixed phi-B + anisotropic-nu infinite shell). Reproduces the lab `.mat` force to **0.01%** at dZ=0. The ground-truth baseline. |
 | `team28_cln_force.py`  | CLN/Cauer reduction at one height: builds K, N, F, shows the N-stage CLN force converging to full-FEM (golden). |
-| `team28_cln_sweep.py`  | CLN force **vs height**, compared to the lab full-FEM `Fz1(dZ)`; recovers the levitation equilibrium ~+4 mm. |
+| `team28_cln_sweep.py`  | CLN force **vs height**, compared to the lab full-FEM `Fz1(dZ)`; recovers the physical levitation equilibrium (`F_z/2 == weight`) at absolute z ~ 11.0 mm (published 11.5 mm). |
 | `cln_sibc_cuboid_3d.py` | Python port of the lab CLN-SIBC (Mixed Galerkin rank-(1,1) specialization) 3D cuboid core: Foster admittance + CLN reduction + Schur SIBC termination + polarizability `alpha(s)=V-Y/sigma`. The non-axisym building block. |
 | `maglev_sphere_force.py` | **Isotropic induced-dipole AC levitation force** on a conducting sphere, coefficient pinned by the analytic perfect-conductor limit, frequency response reduced by CLN/Cauer. See below. |
 | `ellipsoid_alpha_tensor.py` | **Shape-anisotropic polarizability tensor** of a conducting ellipsoid (analytic demag tensor + high-freq perfect-conductor `kappa_i = -V/(1-N_i)` + orientation-dependent lift). The analytic non-axisym anchor. See below. |
@@ -224,6 +254,14 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
 
 ## Source / provenance
 
+- **Published benchmark (external reference)**: H. Karl, J. Fetzer, S. Kurz,
+  G. Lehner, W. M. Rucker, "Description of TEAM Workshop Problem 28: An
+  Electrodynamic Levitation Device", Inst. f. Theorie der Elektrotechnik,
+  Univ. Stuttgart.  Official spec: Al disk R=65mm, t=3mm, m=0.107 kg; inner
+  coil 960 t, outer 576 t, counter-wound; `i_hat = 20 A` peak, `f = 50 Hz`;
+  rest height z=3.8mm, **measured stationary levitation height z=11.5 mm**
+  (laser triangulation, 4-measurement average, Table I).  PDF in the lab
+  corpus `05_TEAM_benchmark/23_problem28/`.
 - Geometry + full-FEM ground truth: lab learning material
   `W:\00_CAE\NGSolve\01_菅原\2024_08_TEAM28` (axisymmetric NGSolve TEAM 28,
   DC / 50Hz / 50Hz_可動 / Transient + field-validation figure).
@@ -231,6 +269,12 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
   576t/-20A (r=87.5mm) counter-wound, 50 Hz.
 - CLN theory: `radia_mcp.mor` (mor_cln); Kameari-Ebrahimi-Sugahara-
   Shindo-Matsuo 2018, IEEE TMag 54(3):7201804.
+- **Prior CLN-on-TEAM-28 (the result this reproduces)**: K. Sugahara,
+  N. Tanimoto, Y. Takahashi, T. Matsuo, "Cauer Ladder Network Representation
+  with Constant Basis Functions for Eddy Current Problems Involving Conductor
+  Movement", COMPUMAG 2023 (Paper ID 324) -- motion-coupled transient
+  levitation height vs measurement + conventional method, 4-stage CLN, ~7 s
+  vs ~8 h.
 - Method context: `radia_mcp.maglev` topics `cln_mor_control` /
   `radia_iem_fem`; the CLAUDE.md policy "Maglev Analysis: Radia + NGSolve".
 
@@ -239,7 +283,7 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
 ```bash
 python team28_axisym_fem.py      # full-FEM baseline  -> -2.1925 N @ dZ=0
 python team28_cln_force.py       # CLN convergence    -> 5-stage golden
-python team28_cln_sweep.py       # CLN force vs height -> equilibrium +4.1mm
+python team28_cln_sweep.py       # CLN force vs height -> physical equilib z~11.0mm (pub 11.5mm)
 python cln_sibc_cuboid_3d.py     # CLN-SIBC 3D cuboid core (alpha, Schur-F)
 python maglev_sphere_force.py  # isotropic levitation force, coeff pinned
 ```
