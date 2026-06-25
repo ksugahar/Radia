@@ -159,6 +159,21 @@ class RadHACApKMomentSystem : public RadHACApKBase {
      moment solve still sees the hexes (the index map normally built inside the skipped dense assembly).
      **Gate MET:** `bench_moment_storage_scaling.py` -- method2/method0 peak memory 0.69 -> 0.32 -> 0.18 ->
      0.12 across dof 1536..12288 (method 0 grows ~N^2, method 2 sub-quadratic ~N log N).
+   - *Yano-type callback acceleration port (2026-06-25):* before considering new optimizations, method 2 must
+     first inherit the old yano-type HACApK tricks.  The current moment path now does: `skipDenseMatrix=1`;
+     HACApK generation invalidation for thread-local callback caches; TaskManager-wrapped H-matrix build;
+     a 6x6 single-entry + hash thread-local block cache in `RadHACApKMomentSystem`; and an `OnBeforeBuild`
+     O(N) `PrecomputeMomentGeometry()` cache for face geometry, local moment rows, quadrupole test vectors, and
+     Gauss samples.  Thus the callback no longer rebuilds row face geometry or source quadrature samples for
+     every scalar entry; it computes one moment 6x6 block from cached geometry and reuses it across the 36 HACApK
+     entry requests.  The geometry cache lookup is also hoisted out of the hot callback path: each worker thread
+     grabs the shared O(N) geometry cache once, then uses a generation-checked thread-local pointer without a
+     mutex.  The method-2 linear step now warm-starts BiCGSTAB from the previous Picard `sigma` and builds the
+     block-Jacobi diagonal through the same cached 6x6 block path.  LAB sanity check: solid hex block, 1536 DOF,
+     method 0 vs method 2 gives external-B relative difference `8.0e-9` and magnetization relative difference
+     `3.6e-10`; method-2 H-matrix build changed from about `0.132 s` (block cache only) to `0.085-0.089 s` after
+     the geometry precompute.  Nonlinear 144 DOF block still matches the method-0 parity test after warm start;
+     a direct method-2 run used 116 outer Picard iterations and 957 total inner BiCGSTAB iterations.
    - *Residual caveat (unchanged from Increment 3):* iters still GROW with N (block-Jacobi only; the high-mu_r
      demag conditioning wall shared with surface-charge MSC / HDiv-VIM).  Bounded-iter (a pivoted H-factor or a
      symmetrized moment formulation) stays FUTURE work; it does not block Phase 3.
