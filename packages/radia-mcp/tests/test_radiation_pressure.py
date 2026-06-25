@@ -25,6 +25,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     radiation_pressure_summary,
     radiation_scattering_force_summary,
     two_port_scattering_momentum_force_summary,
+    two_port_scattering_sweep_momentum_force_summary,
 )
 
 
@@ -197,6 +198,49 @@ def test_one_port_reflection_sweep_momentum_force_finds_extrema_and_passivity():
     assert active["passivity_violation_count"] == 1
     assert active["max_passivity_excess_magnitude"] == pytest.approx(0.001)
     assert active["passivity_violation_rows"][0]["reflectance"] == pytest.approx(1.001 * 1.001)
+
+
+def test_two_port_scattering_sweep_momentum_force_tracks_passivity_and_extrema():
+    power = 4.0
+    frequencies = [2.0e9, 3.0e9, 4.0e9]
+    s11 = [0.0j, 0.2 + 0.0j, 0.5 + 0.0j]
+    s21 = [1.0 + 0.0j, 0.8 + 0.0j, 0.5 + 0.0j]
+
+    sweep = two_port_scattering_sweep_momentum_force_summary(
+        frequencies,
+        s11,
+        s21,
+        power_incident_W=power,
+        incident_direction=(2.0, 0.0, 0.0),
+        transmitted_direction=(1.0, 0.0, 0.0),
+    )
+
+    factors = [0.0, 0.4, 1.0]
+    assert sweep["n_points"] == 3
+    assert sweep["frequency_monotonic_increasing"] is True
+    assert sweep["passivity_ok"] is True
+    assert sweep["status"] == "ok"
+    assert sweep["min_force_frequency_Hz"] == pytest.approx(2.0e9)
+    assert sweep["max_force_frequency_Hz"] == pytest.approx(4.0e9)
+    assert sweep["max_force_magnitude_N"] == pytest.approx(power / C0)
+    assert sweep["mean_force_magnitude_N"] == pytest.approx(
+        sum(factors) * power / (len(factors) * C0)
+    )
+    assert sweep["rows"][1]["absorptance"] == pytest.approx(0.32)
+    assert sweep["rows"][1]["force_N"] == pytest.approx([0.4 * power / C0, 0.0, 0.0])
+
+    active = two_port_scattering_sweep_momentum_force_summary(
+        [5.0e9],
+        [0.8 + 0.0j],
+        [0.7 + 0.0j],
+        power_incident_W=power,
+        passivity_tolerance=1.0e-6,
+    )
+    assert active["passivity_ok"] is False
+    assert active["status"] == "needs_attention"
+    assert active["passivity_violation_count"] == 1
+    assert active["max_passivity_excess_power_fraction"] == pytest.approx(0.13)
+    assert active["passivity_violation_rows"][0]["absorptance"] == pytest.approx(-0.13)
 
 
 def test_oblique_radiation_pressure_reduces_to_normal_incidence():
