@@ -2163,6 +2163,147 @@ def two_port_scattering_sweep_momentum_force_summary(
     }
 
 
+def two_port_sparameter_sweep_health_summary(
+    frequency_Hz,
+    s11_values,
+    s21_values,
+    s12_values=None,
+    s22_values=None,
+    power_incident_W=1.0,
+    incident_direction=(1.0, 0.0, 0.0),
+    transmitted_direction=None,
+    speed=C0,
+    passivity_tolerance=1.0e-12,
+    reciprocity_tolerance=1.0e-6,
+    return_symmetry_tolerance=None,
+):
+    """Audit a two-port S-parameter sweep for RF force post-processing.
+
+    The base force/passivity table is computed from port-1 excitation using
+    ``S11`` and ``S21``.  If ``S12`` is supplied, the summary also checks
+    reciprocity as ``max |S21-S12|``.  If ``S22`` is supplied, return symmetry
+    can be checked as ``max |S11-S22|``.
+    """
+
+    sweep = two_port_scattering_sweep_momentum_force_summary(
+        frequency_Hz,
+        s11_values,
+        s21_values,
+        power_incident_W=power_incident_W,
+        incident_direction=incident_direction,
+        transmitted_direction=transmitted_direction,
+        speed=speed,
+        passivity_tolerance=passivity_tolerance,
+    )
+    frequencies = [float(value) for value in frequency_Hz]
+    s11 = [complex(value) for value in s11_values]
+    s21 = [complex(value) for value in s21_values]
+    reciprocity_tol = float(reciprocity_tolerance)
+    if reciprocity_tol < 0.0:
+        raise ValueError("reciprocity_tolerance must be >= 0")
+
+    reciprocity_rows = []
+    max_reciprocity_error = None
+    max_reciprocity_frequency = None
+    reciprocity_ok = None
+    if s12_values is not None:
+        s12 = [complex(value) for value in s12_values]
+        if len(s12) != len(frequencies):
+            raise ValueError("s12_values must have the same length as frequency_Hz")
+        for frequency, forward, reverse in zip(frequencies, s21, s12):
+            if not math.isfinite(reverse.real) or not math.isfinite(reverse.imag):
+                raise ValueError("s12 values must be finite")
+            error = abs(forward - reverse)
+            reciprocity_rows.append({
+                "frequency_Hz": frequency,
+                "s21_real": forward.real,
+                "s21_imag": forward.imag,
+                "s12_real": reverse.real,
+                "s12_imag": reverse.imag,
+                "s21_s12_abs_error": error,
+                "reciprocity_ok": error <= reciprocity_tol,
+            })
+        worst = max(reciprocity_rows, key=lambda row: row["s21_s12_abs_error"])
+        max_reciprocity_error = worst["s21_s12_abs_error"]
+        max_reciprocity_frequency = worst["frequency_Hz"]
+        reciprocity_ok = max_reciprocity_error <= reciprocity_tol
+
+    return_symmetry_tol = (
+        None if return_symmetry_tolerance is None else float(return_symmetry_tolerance)
+    )
+    if return_symmetry_tol is not None and return_symmetry_tol < 0.0:
+        raise ValueError("return_symmetry_tolerance must be >= 0")
+    effective_return_symmetry_tol = return_symmetry_tol
+    return_symmetry_rows = []
+    max_return_symmetry_error = None
+    max_return_symmetry_frequency = None
+    return_symmetry_ok = None
+    if s22_values is not None:
+        s22 = [complex(value) for value in s22_values]
+        if len(s22) != len(frequencies):
+            raise ValueError("s22_values must have the same length as frequency_Hz")
+        effective_return_symmetry_tol = (
+            reciprocity_tol if return_symmetry_tol is None else return_symmetry_tol
+        )
+        for frequency, port1, port2 in zip(frequencies, s11, s22):
+            if not math.isfinite(port2.real) or not math.isfinite(port2.imag):
+                raise ValueError("s22 values must be finite")
+            error = abs(port1 - port2)
+            return_symmetry_rows.append({
+                "frequency_Hz": frequency,
+                "s11_real": port1.real,
+                "s11_imag": port1.imag,
+                "s22_real": port2.real,
+                "s22_imag": port2.imag,
+                "s11_s22_abs_error": error,
+                "return_symmetry_ok": error <= effective_return_symmetry_tol,
+            })
+        worst = max(return_symmetry_rows, key=lambda row: row["s11_s22_abs_error"])
+        max_return_symmetry_error = worst["s11_s22_abs_error"]
+        max_return_symmetry_frequency = worst["frequency_Hz"]
+        return_symmetry_ok = max_return_symmetry_error <= effective_return_symmetry_tol
+
+    issues = []
+    if not sweep["passivity_ok"]:
+        issues.append("passivity violation in port-1 outgoing power")
+    if reciprocity_ok is False:
+        issues.append("S21/S12 reciprocity error exceeds tolerance")
+    if return_symmetry_ok is False:
+        issues.append("S11/S22 return symmetry error exceeds tolerance")
+
+    return {
+        "policy": "two_port_sparameter_sweep_health",
+        "status": "ok" if not issues else "needs_attention",
+        "issues": issues,
+        "n_points": sweep["n_points"],
+        "frequency_monotonic_increasing": sweep["frequency_monotonic_increasing"],
+        "passivity_ok": sweep["passivity_ok"],
+        "passivity_violation_count": sweep["passivity_violation_count"],
+        "max_passivity_excess_power_fraction": sweep["max_passivity_excess_power_fraction"],
+        "reciprocity_checked": s12_values is not None,
+        "reciprocity_tolerance": reciprocity_tol,
+        "reciprocity_ok": reciprocity_ok,
+        "max_s21_s12_abs_error": max_reciprocity_error,
+        "max_s21_s12_error_frequency_Hz": max_reciprocity_frequency,
+        "return_symmetry_checked": s22_values is not None,
+        "return_symmetry_tolerance": effective_return_symmetry_tol,
+        "return_symmetry_ok": return_symmetry_ok,
+        "max_s11_s22_abs_error": max_return_symmetry_error,
+        "max_s11_s22_error_frequency_Hz": max_return_symmetry_frequency,
+        "mean_reflectance": sweep["mean_reflectance"],
+        "mean_transmittance": sweep["mean_transmittance"],
+        "mean_absorptance": sweep["mean_absorptance"],
+        "mean_force_magnitude_N": sweep["mean_force_magnitude_N"],
+        "max_force_magnitude_N": sweep["max_force_magnitude_N"],
+        "max_force_frequency_Hz": sweep["max_force_frequency_Hz"],
+        "min_force_magnitude_N": sweep["min_force_magnitude_N"],
+        "min_force_frequency_Hz": sweep["min_force_frequency_Hz"],
+        "reciprocity_rows": reciprocity_rows,
+        "return_symmetry_rows": return_symmetry_rows,
+        "sweep": sweep,
+    }
+
+
 def one_port_reflection_momentum_force_summary(
     power_incident_W,
     s11,
