@@ -861,6 +861,57 @@ def test_tetrahedron_quality_rows_for_right_and_equilateral_tets():
     assert eq_summary["max_edge_ratio"] == pytest.approx(1.0)
 
 
+def test_worst_quality_rows_and_mesh_health_summary():
+    mesh = parse_netgen_tri_tet_vol(TET_VOL)
+
+    assert mesh.worst_tetrahedra_by_quality(limit=0) == ()
+    assert mesh.worst_surface_triangles_by_quality(limit=1)[0]["surface_triangle"] == 1
+    with pytest.raises(ValueError, match="limit must be non-negative"):
+        mesh.worst_tetrahedra_by_quality(limit=-1)
+
+    health = mesh.mesh_health_summary(worst_limit=2)
+    assert health["status"] == "ok"
+    assert health["ok_for_first_order_fem_bem"] is True
+    assert health["checks"] == {
+        "has_points": True,
+        "has_surface_triangles": True,
+        "has_tetrahedra": True,
+        "surface_is_closed_manifold": True,
+        "surface_vector_area_closes": True,
+        "surface_volume_matches_tetrahedra": True,
+        "boundary_faces_match_tetrahedra": True,
+        "surface_triangle_quality_above_threshold": True,
+        "tetrahedron_quality_above_threshold": True,
+    }
+    assert health["boundary_tet_face_incidence"]["is_volume_boundary_consistent"] is True
+    assert "rows" not in health["boundary_tet_face_incidence"]
+    assert health["worst_tetrahedra"][0]["tetrahedron"] == 1
+    assert len(health["worst_surface_triangles"]) == 2
+
+
+def test_mesh_health_summary_reports_sliver_and_open_surface_failures():
+    sliver_vol = TET_VOL.replace("0 0 1", "0.001 0.001 0.001")
+    sliver = parse_netgen_tri_tet_vol(sliver_vol)
+    sliver_health = sliver.mesh_health_summary(
+        min_surface_triangle_quality=0.0,
+        min_tetrahedron_quality=0.01,
+        worst_limit=1,
+    )
+
+    assert sliver_health["status"] == "needs_attention"
+    assert sliver_health["ok_for_first_order_fem_bem"] is False
+    assert sliver_health["checks"]["tetrahedron_quality_above_threshold"] is False
+    assert sliver_health["worst_tetrahedra"][0]["radius_ratio_quality"] < 0.01
+    assert any("tetrahedron" in issue for issue in sliver_health["issues"])
+
+    open_patch = parse_netgen_tri_tet_vol(OPEN_SURFACE_VOL).mesh_health_summary()
+    assert open_patch["status"] == "needs_attention"
+    assert open_patch["checks"]["has_tetrahedra"] is False
+    assert open_patch["checks"]["surface_is_closed_manifold"] is False
+    assert open_patch["checks"]["boundary_faces_match_tetrahedra"] is False
+    assert "mesh has no volume tetrahedra" in open_patch["issues"]
+
+
 def test_surface_closure_summary_for_single_tetrahedron():
     mesh = parse_netgen_tri_tet_vol(TET_VOL)
 
