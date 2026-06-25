@@ -3,7 +3,7 @@
 Minimal, loopable scaffold exercising the lab's main CAD/mesh/post stack:
 
 ```
-build123d (OCCT)  →  Netgen (tet via netgen.occ)  →  Gmsh (Python API, post only)
+build123d (OCCT)  →  Netgen (tet via netgen.occ)  →  Gmsh .msh/.geo files
     CAD                    mesh                              visualization
 ```
 
@@ -20,9 +20,9 @@ build123d (OCCT)  →  Netgen (tet via netgen.occ)  →  Gmsh (Python API, post 
 - **CAD**: build123d (Python, OCCT). FreeCAD is not used on dev machines.
 - **Mesh (tet, main)**: Netgen via `netgen.occ.OCCGeometry`.
 - **Mesh (hex, sub)**: Cubit (required for Radia/ELF hex). Not exercised here.
-- **Post**: Gmsh, **Python API only** (`gmsh.view.*`, `gmsh.plugin.*`).
-  `.geo` / GUI are not used. Netgen is **not** used for post (Tcl core,
-  not Python-driven).
+- **Post**: write GMSH `.msh` data blocks directly (`$NodeData`,
+  `$ElementData`, `$PhysicalNames`) and use standalone GMSH only for display.
+  The public examples do not import the pip `gmsh` runtime.
 - **Mesh generation through Gmsh is forbidden** (covered by the
   `mcp-server-gmsh` lint rules).
 
@@ -100,17 +100,13 @@ example that writes reusable records under `runs/validation_helix_mesh_sweep/`.
   (Gmsh v2.2 ASCII; v4 is also available as `"Gmsh Format"` if needed)
 - record: `nv / ne / nface / nedge`, `gen_seconds`, `maxh`
 
-### 3. Post — Gmsh Python API
-- `gmsh.open("<label>.msh")`
-- fetches node tags + coords via `gmsh.model.mesh.getNodes()`
+### 3. Post — GMSH file writer
+- reads Netgen's exported node and element tags from `<label>.msh`
 - builds a **dummy scalar field** `f(x,y,z) = x + 2y + 3z`
   (placeholder for real solver output)
-- `gmsh.view.add(...)` + `gmsh.view.addModelData(..., dataType="NodeData",
-  numComponents=1)`
-- `gmsh.view.probe(view, 0, 0, 0)` sanity check
-- `gmsh.write("<label>_post.msh")` — the mesh **plus** view bundled in
-  one `.msh` file
-- no GUI (`-nopopup`), fully batch-able
+- writes `<label>_post.msh` as GMSH v2.2 ASCII with a `$NodeData` block
+- does not import the pip `gmsh` runtime; standalone GMSH can open the file
+  later for display
 
 ## Multi-region flow (`run_pipeline_multi`)
 
@@ -126,11 +122,10 @@ physical *tags* but not *names*. We bridge the three-step gap explicitly:
    `Glue` is what makes Netgen treat the named solids as separate domains
    that survive to meshing. `ngsolve.Mesh(ng_mesh).GetMaterials()` now
    returns the right names.
-3. **Gmsh side**: open the exported `.msh`, sort physical groups by tag,
-   re-apply names via `gmsh.model.setPhysicalName(3, tag, name)`, write
-   back the named `.msh`. Also emit an `ElementData` view called
-   `<label>_region_id` where each element carries its 1-based region
-   index — gmsh renders each region a different color by default.
+3. **GMSH file side**: read Netgen's exported `.msh`, sort volume physical
+   tags, write `$PhysicalNames`, and emit an `$ElementData` view called
+   `<label>_region_id` where each tet carries its 1-based region index.
+   Standalone GMSH renders each region a different color by default.
 
 Usage:
 
@@ -173,8 +168,8 @@ data from your solver (Radia B-field, NGSolve potential, etc.). Keep the
 tag / data order consistent with `node_tags` from `getNodes()`.
 
 For model-based data referencing mesh entity tags directly (rather than
-node coords), use `dataType="ElementData"` or `"ElementNodeData"` with
-element tags from `gmsh.model.mesh.getElements()`.
+node coords), write an `$ElementData` block keyed by the element tags read
+from the exported `.msh`.
 
 ### Replay / inspect via mcp-server
 
@@ -183,8 +178,8 @@ After a run, the `.json` record is a compact summary; the `.brep` +
 
 - `mcp-server-build123d`: `inspect_geometry("runs/<label>.brep")` for CAD
   quality warnings (micro-edges, non-valid shapes, face/edge histograms).
-- `mcp-server-gmsh`: `gmsh_reference("python_api_postproc")` for the full
-  post-processing API surface (view / plugin / I/O).
+- `mcp-server-gmsh`: `gmsh_usage("workflow")` and `gmsh_reference("msh_format")`
+  for display-file conventions and the GMSH data-block format.
 
 ## Known limitations / TODO
 
