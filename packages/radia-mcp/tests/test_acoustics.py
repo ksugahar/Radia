@@ -16,6 +16,7 @@ from radia_mcp.radia_ngsolve.acoustics import (
     acoustic_boundary_power_summary,
     acoustic_dtn_from_impedance,
     acoustic_impedance_reflection_summary,
+    acoustic_impedance_radiation_pressure_summary,
     acoustic_impedance_from_dtn,
     baffled_circular_piston_radiation,
     helmholtz_green_3d,
@@ -351,6 +352,53 @@ def test_acoustic_impedance_reflection_reactive_and_oblique_limits():
         acoustic_impedance_reflection_summary(complex(float("inf"), 0.0))
     with pytest.raises(ValueError):
         acoustic_impedance_reflection_summary(z0, amplitude="complex")
+
+
+def test_acoustic_impedance_radiation_pressure_absorber_reflector_limits():
+    rho, c = 1.2041, 343.0
+    z0 = rho * c
+    incident_pressure = 2.0
+    area = 0.5
+    incident_intensity = incident_pressure * incident_pressure / (2.0 * z0)
+
+    matched = acoustic_impedance_radiation_pressure_summary(
+        z0,
+        area=area,
+        incident_pressure=incident_pressure,
+        rho=rho,
+        c=c,
+    )
+    twice = acoustic_impedance_radiation_pressure_summary(
+        2.0 * z0,
+        area=area,
+        incident_pressure=incident_pressure,
+        rho=rho,
+        c=c,
+    )
+    reactive = acoustic_impedance_radiation_pressure_summary(
+        1j * z0,
+        area=area,
+        incident_pressure=incident_pressure,
+        rho=rho,
+        c=c,
+    )
+
+    assert matched["power_reflection_coefficient"] == pytest.approx(0.0)
+    assert matched["normal_momentum_pressure_Pa"] == pytest.approx(incident_intensity / c)
+    assert matched["normal_force_N"] == pytest.approx(area * incident_intensity / c)
+    assert abs(matched["force_balance_residual_N"]) < 1.0e-18
+
+    assert twice["power_reflection_coefficient"] == pytest.approx(1.0 / 9.0)
+    assert twice["absorption_coefficient"] == pytest.approx(8.0 / 9.0)
+    assert twice["normal_momentum_pressure_Pa"] == pytest.approx((10.0 / 9.0) * incident_intensity / c)
+    assert twice["normal_force_N"] == pytest.approx(twice["force_from_absorptance_reflectance_N"])
+
+    assert reactive["power_reflection_coefficient"] == pytest.approx(1.0)
+    assert reactive["absorption_coefficient"] == pytest.approx(0.0)
+    assert reactive["normal_momentum_pressure_Pa"] == pytest.approx(2.0 * incident_intensity / c)
+
+    with pytest.raises(ValueError):
+        acoustic_impedance_radiation_pressure_summary(z0, area=-1.0)
 
 
 def test_baffled_circular_piston_impedance_scaling_and_power():
