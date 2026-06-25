@@ -11,6 +11,7 @@ Usage:
 """
 
 import importlib
+import shutil
 import sys
 
 from mcp.server.fastmcp import FastMCP
@@ -134,6 +135,132 @@ def radia_mcp_health() -> dict:
     }
 
 
+@mcp.tool()
+def radia_mcp_golden_gate(check_path: bool = False) -> dict:
+    """Machine-readable golden-quality gate for the radia-mcp server fleet.
+
+    This is intentionally lightweight: it audits catalog, discovery, related
+    links, external-MCP boundaries, and optional entry-point visibility without
+    launching every server selftest. For the full gate, run the commands
+    returned under ``full_gate_commands``.
+    """
+    servers = catalog.list_all()
+    catalog_names = set(catalog.CATALOG)
+    external_names = set(catalog.EXTERNAL_PACKAGES)
+    checks: list[dict] = []
+
+    def add(name: str, ok: bool, detail: str, evidence: dict | None = None) -> None:
+        row = {"name": name, "ok": bool(ok), "detail": detail}
+        if evidence is not None:
+            row["evidence"] = evidence
+        checks.append(row)
+
+    missing_required = []
+    missing_selftest = []
+    bad_entrypoints = []
+    for entry in servers:
+        name = entry["name"]
+        for key in ("subpackage", "entry_point", "description", "primary_tools", "tags"):
+            if key not in entry or entry[key] in ("", [], None):
+                missing_required.append(f"{name}.{key}")
+        entry_point = entry.get("entry_point", "")
+        if not str(entry_point).startswith("mcp-server-"):
+            bad_entrypoints.append(f"{name}: {entry_point}")
+        expected_selftest = f"{entry_point} --selftest"
+        if entry.get("selftest_command") != expected_selftest:
+            missing_selftest.append(f"{name}: {entry.get('selftest_command')}")
+
+    add(
+        "catalog_required_fields",
+        not missing_required,
+        "Every cataloged server declares subpackage, entry point, description, tools, and tags.",
+        {"missing": missing_required[:10], "n_missing": len(missing_required)},
+    )
+    add(
+        "entrypoint_naming",
+        not bad_entrypoints,
+        "Every public radia-mcp server uses the mcp-server-* console-script convention.",
+        {"bad": bad_entrypoints[:10], "n_bad": len(bad_entrypoints)},
+    )
+    add(
+        "selftest_command_coverage",
+        not missing_selftest,
+        "Every catalog entry exposes a lightweight --selftest command.",
+        {"bad": missing_selftest[:10], "n_bad": len(missing_selftest)},
+    )
+
+    missing_related = []
+    asymmetric = []
+    for name, info in catalog.CATALOG.items():
+        related = set(info.get("related", []))
+        for other in related:
+            if other not in catalog_names and other not in external_names:
+                missing_related.append(f"{name} -> {other}")
+            elif other in catalog_names and name not in set(catalog.CATALOG[other].get("related", [])):
+                asymmetric.append(f"{name} -> {other}")
+    add(
+        "related_links_resolve",
+        not missing_related,
+        "All related links point to a cataloged server or declared external MCP package.",
+        {"missing": missing_related[:10], "n_missing": len(missing_related)},
+    )
+    add(
+        "internal_related_links_bidirectional",
+        not asymmetric,
+        "Internal related links are bidirectional for reliable agent navigation.",
+        {"asymmetric": asymmetric[:10], "n_asymmetric": len(asymmetric)},
+    )
+
+    external_entrypoints = {
+        name: info.get("entry_point", "")
+        for name, info in catalog.EXTERNAL_PACKAGES.items()
+    }
+    add(
+        "optuna_external_boundary",
+        "optuna" not in catalog_names and "optuna-mcp" in external_names,
+        "Optuna Study/Trial operation stays in the official external optuna-mcp server.",
+        {
+            "catalog_has_optuna": "optuna" in catalog_names,
+            "external_has_optuna_mcp": "optuna-mcp" in external_names,
+            "optuna_entry_point": external_entrypoints.get("optuna-mcp"),
+        },
+    )
+
+    if check_path:
+        missing_cli = [
+            entry["entry_point"]
+            for entry in servers
+            if shutil.which(entry["entry_point"]) is None
+        ]
+        add(
+            "entrypoints_on_path",
+            not missing_cli,
+            "All cataloged console scripts are visible on PATH in this environment.",
+            {"missing": missing_cli[:10], "n_missing": len(missing_cli)},
+        )
+    else:
+        add(
+            "entrypoints_on_path",
+            True,
+            "Skipped PATH probing; pass check_path=True for local editable-install verification.",
+            {"skipped": True},
+        )
+
+    all_passed = all(row["ok"] for row in checks)
+    return {
+        "level": "golden" if all_passed else "needs_attention",
+        "all_passed": all_passed,
+        "n_servers": len(servers),
+        "n_external_packages": len(external_names),
+        "checks": checks,
+        "full_gate_commands": [
+            "python tools/policy_lint.py --tracked-only",
+            "python scripts/gen_tools_doc.py --check",
+            "pytest tests/test_meta_health.py tests/test_each_server_selftest.py tests/test_policy_lint.py",
+        ],
+    }
+
+
 # ============================================================
 # Bug-pattern catalog -- learned anti-patterns the lab has hit
 # (call BEFORE writing new code in the affected area).
@@ -235,6 +362,9 @@ def main():
         # Related query
         rel = radia_mcp_related("bayesian-opt")
         print(f"  related to bayesian-opt: {[r['name'] for r in rel['related']]}")
+        gate = radia_mcp_golden_gate()
+        print(f"  golden gate: {gate['level']} ({len(gate['checks'])} checks)")
+        assert gate["all_passed"], gate
         print("  PASSED")
         return
 
