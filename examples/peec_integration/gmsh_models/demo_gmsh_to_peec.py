@@ -25,6 +25,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia')
 import numpy as np
 from pathlib import Path
 
+GMSH_MODELS = Path(__file__).resolve().parent
+from gmsh_ascii_reader import read_gmsh_ascii
+
 print("=" * 70)
 print("PEEC Analysis from GMSH Mesh")
 print("Using Radia PEEC Solver (FastMaxwell-based)")
@@ -40,7 +43,7 @@ except ImportError:
     sys.exit(1)
 
 # Check mesh file
-mesh_file = Path(__file__).parent / "gmsh_models" / "circular_coil.msh"
+mesh_file = GMSH_MODELS / "circular_coil.msh"
 
 if not mesh_file.exists():
     print(f"\nERROR: Mesh file not found: {mesh_file}")
@@ -49,27 +52,18 @@ if not mesh_file.exists():
     print('  "<Coreform Cubit 2025.8+>/bin/python3/python.exe" generate_coil_cubit.py')
     sys.exit(1)
 
-print(f"\n[1] Loading GMSH mesh: {mesh_file.name}")
+print(f"\n[1] Reading GMSH mesh fixture: {mesh_file.name}")
 
-# Load mesh using GMSH Python API
-try:
-    import gmsh
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 0)
-    gmsh.open(str(mesh_file))
-except Exception as e:
-    print(f"ERROR: {e}")
-    sys.exit(1)
+mesh = read_gmsh_ascii(mesh_file)
 
-# Get nodes
-node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
+node_tags = mesh.node_tags
 n_nodes = len(node_tags)
-coords = node_coords.reshape(-1, 3) * 1e-3  # mm to m
+coords = mesh.coords * 1e-3  # mm to m
 
 print(f"    Nodes: {n_nodes}")
 
 # Get triangles
-elem_types, elem_tags, elem_node_tags = gmsh.model.mesh.getElements()
+elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
 
 triangles = []
 for i, elem_type in enumerate(elem_types):
@@ -241,5 +235,3 @@ print(f"  Error: {error:.1f}%")
 print(f"\nMethod: FastMaxwell Loop-Star decomposition")
 print(f"  - Mesh edges -> PEEC segments")
 print(f"  - Darwin approximation G(r) = 1/(4*pi*r)")
-
-gmsh.finalize()

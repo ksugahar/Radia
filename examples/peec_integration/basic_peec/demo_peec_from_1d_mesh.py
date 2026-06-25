@@ -24,6 +24,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia')
 import numpy as np
 from pathlib import Path
 
+GMSH_MODELS = Path(__file__).resolve().parents[1] / "gmsh_models"
+sys.path.insert(0, str(GMSH_MODELS))
+from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+
 print("=" * 70)
 print("PEEC Analysis from 1D Line Mesh")
 print("Using Radia PEEC Solver (FastMaxwell-based)")
@@ -39,7 +43,7 @@ except ImportError:
     sys.exit(1)
 
 # Check mesh file
-mesh_file = Path(__file__).parent / "gmsh_models" / "circular_coil_1d.msh"
+mesh_file = GMSH_MODELS / "circular_coil_1d.msh"
 
 if not mesh_file.exists():
     print(f"\nERROR: Mesh file not found: {mesh_file}")
@@ -48,27 +52,18 @@ if not mesh_file.exists():
     print('  "<Coreform Cubit 2025.8+>/bin/python3/python.exe" generate_1d_coil_mesh.py')
     sys.exit(1)
 
-print(f"\n[1] Loading 1D line mesh: {mesh_file.name}")
+print(f"\n[1] Reading 1D line mesh fixture: {mesh_file.name}")
 
-# Load mesh using GMSH Python API
-try:
-    import gmsh
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 0)
-    gmsh.open(str(mesh_file))
-except Exception as e:
-    print(f"ERROR: {e}")
-    sys.exit(1)
+mesh = read_gmsh_ascii(mesh_file)
 
-# Get nodes
-node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
+node_tags = mesh.node_tags
 n_nodes = len(node_tags)
-coords = node_coords.reshape(-1, 3) * 1e-3  # mm to m
+coords = mesh.coords * 1e-3  # mm to m
 
 print(f"    Nodes: {n_nodes}")
 
 # Get edge elements (type 1 = 2-node line)
-elem_types, elem_tags, elem_node_tags = gmsh.model.mesh.getElements()
+elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
 
 edges = []
 for i, elem_type in enumerate(elem_types):
@@ -265,5 +260,3 @@ print(f"  Nodes: {n_nodes}, Edges: {n_edges}")
 print(f"  R_dc: {R_dc*1e3:.4f} mOhm (error {error_R:.1f}%)")
 print(f"  L: {L_total*1e6:.3f} uH (error {error_L:.1f}%)")
 print(f"  Method: 1D line mesh -> PEEC segments")
-
-gmsh.finalize()
