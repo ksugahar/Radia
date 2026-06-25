@@ -25,6 +25,10 @@ from pathlib import Path
 from scipy import sparse
 from scipy.sparse.linalg import splu
 
+GMSH_MODELS = Path(__file__).resolve().parents[1] / "gmsh_models"
+sys.path.insert(0, str(GMSH_MODELS))
+from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+
 print("=" * 70)
 print("Corrected DC PEEC Analysis (Neumann Integral)")
 print("=" * 70)
@@ -42,7 +46,7 @@ print(f"    Conductivity: {SIGMA:.2e} S/m")
 print(f"    Resistivity: {RHO:.2e} Ohm*m")
 
 # Check mesh file
-mesh_file = Path(__file__).parent / "gmsh_models" / "circular_coil_with_ports.msh"
+mesh_file = GMSH_MODELS / "circular_coil_with_ports.msh"
 
 if not mesh_file.exists():
     print(f"\nERROR: Mesh file not found: {mesh_file}")
@@ -51,25 +55,17 @@ if not mesh_file.exists():
     print('  "<Coreform Cubit 2025.8+>/bin/python3/python.exe" generate_coil_with_ports.py')
     sys.exit(1)
 
-print(f"\n[2] Loading mesh: {mesh_file.name}")
+print(f"\n[2] Reading mesh fixture: {mesh_file.name}")
 
-try:
-    import gmsh
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 0)
-    gmsh.open(str(mesh_file))
-    print("    OK Mesh loaded")
-except Exception as e:
-    print(f"ERROR: {e}")
-    sys.exit(1)
+mesh = read_gmsh_ascii(mesh_file)
+print("    OK Mesh read")
 
-# Get nodes
-node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
+node_tags = mesh.node_tags
 n_nodes = len(node_tags)
-coords = node_coords.reshape(-1, 3) * 1e-3  # mm to m
+coords = mesh.coords * 1e-3  # mm to m
 
 # Get triangles
-elem_types, elem_tags, elem_node_tags = gmsh.model.mesh.getElements()
+elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
 
 triangles = []
 for i, elem_type in enumerate(elem_types):
@@ -265,5 +261,3 @@ else:
 print("\n" + "=" * 70)
 print("OK Corrected DC PEEC Analysis Completed!")
 print("=" * 70)
-
-gmsh.finalize()
