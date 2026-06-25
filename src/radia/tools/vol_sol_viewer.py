@@ -40,11 +40,17 @@ Usage:
     python vol_sol_viewer.py path/to/file.vol
     python vol_sol_viewer.py path/to/field.sol
 
-Register as Windows file handler:
+Legacy/helper registration as Windows file handler:
     python tools/vol_sol_viewer.py --register
 
 Restore default Netgen association:
     python tools/vol_sol_viewer.py --unregister
+
+Policy note:
+    For notebook-panel input/output, .vol and .sol should double-click
+    into the plain Netgen viewer (`netgen.exe "%1"`).  This helper is
+    retained for cases that explicitly need Radia's .sol companion-mesh
+    inference, not as the default notebook IO association.
 """
 
 import sys
