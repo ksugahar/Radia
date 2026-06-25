@@ -1,0 +1,242 @@
+{
+  "checks": {
+    "ac_rms_over_mean": 0.0291547594742265,
+    "ac_rms_torque_Nm": 0.291547594742265,
+    "dominant_harmonic": 6,
+    "dominant_harmonic_amplitude_Nm": 0.4,
+    "max_abs_error": 2.914335439641036e-15,
+    "mean_torque_Nm": 10.0,
+    "samples": 720,
+    "sixth_variance_fraction": 0.9411764705882357,
+    "status": "ok",
+    "twelfth_variance_fraction": 0.05882352941176179
+  },
+  "errors": {
+    "ac_rms_error_Nm": 5.551115123125783e-17,
+    "mean_error_Nm": 0.0,
+    "sixth_amplitude_error_Nm": 0.0,
+    "sixth_variance_fraction_error": 4.440892098500626e-16,
+    "twelfth_amplitude_error_Nm": 2.4980018054066022e-15,
+    "twelfth_variance_fraction_error": 2.914335439641036e-15
+  },
+  "health": {
+    "ac_rms_over_mean": 0.0291547594742265,
+    "ac_rms_torque_Nm": 0.291547594742265,
+    "checks": {
+      "ac_rms_over_mean": true,
+      "dominant_harmonic": true,
+      "mean_abs_torque": true,
+      "peak_to_peak_over_mean": true
+    },
+    "dominant_harmonic": 6,
+    "dominant_harmonic_amplitude_Nm": 0.4,
+    "dominant_harmonic_over_mean": 0.04,
+    "issues": [],
+    "limits": {
+      "allowed_dominant_harmonics": [
+        6
+      ],
+      "max_ac_rms_over_mean": 0.04,
+      "max_peak_to_peak_over_mean": null,
+      "min_mean_abs_torque_Nm": 9.0
+    },
+    "mean_torque_Nm": 10.0,
+    "n_samples": 720,
+    "peak_to_peak_over_mean": 0.08806904624695341,
+    "peak_to_peak_torque_Nm": 0.8806904624695342,
+    "policy": "torque_angle_sweep_harmonic_health",
+    "status": "ok",
+    "summary": {
+      "ac_rms_over_mean": 0.0291547594742265,
+      "ac_rms_torque_Nm": 0.291547594742265,
+      "dominant_harmonic": 6,
+      "dominant_harmonic_amplitude_Nm": 0.4,
+      "dominant_harmonic_over_mean": 0.04,
+      "harmonic_rows": [
+        {
+          "amplitude_Nm": 1.3374303349693506e-15,
+          "amplitude_over_mean": 1.3374303349693507e-16,
+          "cos_coefficient_Nm": -1.080617077301819e-15,
+          "order": 1,
+          "phase_rad": 2.5115121648490915,
+          "sin_coefficient_Nm": -7.880270510203975e-16
+        },
+        {
+          "amplitude_Nm": 1.5301726428877272e-15,
+          "amplitude_over_mean": 1.5301726428877271e-16,
+          "cos_coefficient_Nm": -4.786294817272897e-16,
+          "order": 2,
+          "phase_rad": -1.8889300011204546,
+          "sin_coefficient_Nm": 1.4533898775839462e-15
+        },
+        {
+          "amplitude_Nm": 5.261368685560953e-15,
+          "amplitude_over_mean": 5.261368685560953e-16,
+          "cos_coefficient_Nm": -6.908054375445419e-17,
+          "order": 3,
+          "phase_rad": 1.5839264708401364,
+          "sin_coefficient_Nm": -5.260915160300152e-15
+        },
+        {
+          "amplitude_Nm": 2.2690280310156814e-15,
+          "amplitude_over_mean": 2.2690280310156816e-16,
+          "cos_coefficient_Nm": -1.973729821555834e-15,
+          "order": 4,
+          "phase_rad": -2.625708606736804,
+          "sin_coefficient_Nm": 1.1193206855213904e-15
+        },
+        {
+          "amplitude_Nm": 1.0456218529958986e-15,
+          "amplitude_over_mean": 1.0456218529958985e-16,
+          "cos_coefficient_Nm": -1.0411424808707024e-15,
+          "order": 5,
+          "phase_rad": 3.0489968284078524,
+          "sin_coefficient_Nm": -9.668192172777405e-17
+        },
+        {
+          "amplitude_Nm": 0.4,
+          "amplitude_over_mean": 0.04,
+          "cos_coefficient_Nm": 0.4,
+          "order": 6,
+          "phase_rad": 7.825530347184262e-15,
+          "sin_coefficient_Nm": -3.130212138873705e-15
+        },
+        {
+          "amplitude_Nm": 1.7052676757967921e-15,
+          "amplitude_over_mean": 1.7052676757967921e-16,
+          "cos_coefficient_Nm": 1.2335811384723962e-16,
+          "order": 7,
+          "phase_rad": -1.498393642759329,
+          "sin_coefficient_Nm": 1.7007999946688162e-15
+        },
+        {
+          "amplitude_Nm": 2.1250835220954082e-15,
+          "amplitude_over_mean": 2.1250835220954082e-16,
+          "cos_coefficient_Nm": -1.2927930331190711e-15,
+          "order": 8,
+          "phase_rad": -2.224775398806044,
+          "sin_coefficient_Nm": 1.6866138115763836e-15
+        },
+        {
+          "amplitude_Nm": 8.451413399319512e-16,
+          "amplitude_over_mean": 8.451413399319512e-17,
+          "cos_coefficient_Nm": -5.871846219128606e-16,
+          "order": 9,
+          "phase_rad": -2.3389058903136357,
+          "sin_coefficient_Nm": 6.078471059822732e-16
+        },
+        {
+          "amplitude_Nm": 2.1263826919787096e-15,
+          "amplitude_over_mean": 2.1263826919787095e-16,
+          "cos_coefficient_Nm": -2.008270093433061e-15,
+          "order": 10,
+          "phase_rad": -2.8067247890200595,
+          "sin_coefficient_Nm": 6.988237149446124e-16
+        },
+        {
+          "amplitude_Nm": 2.480506401097925e-15,
+          "amplitude_over_mean": 2.480506401097925e-16,
+          "cos_coefficient_Nm": -2.4276876805136757e-15,
+          "order": 11,
+          "phase_rad": -2.9348584073877246,
+          "sin_coefficient_Nm": 5.091606149044815e-16
+        },
+        {
+          "amplitude_Nm": 0.09999999999999751,
+          "amplitude_over_mean": 0.00999999999999975,
+          "cos_coefficient_Nm": -2.1711028037114172e-16,
+          "order": 12,
+          "phase_rad": -1.5707963267948988,
+          "sin_coefficient_Nm": 0.09999999999999751
+        },
+        {
+          "amplitude_Nm": 1.3691618418355243e-15,
+          "amplitude_over_mean": 1.3691618418355244e-16,
+          "cos_coefficient_Nm": 1.2730557349035128e-15,
+          "order": 13,
+          "phase_rad": 0.37690927032482097,
+          "sin_coefficient_Nm": -5.039178950659738e-16
+        },
+        {
+          "amplitude_Nm": 1.1498782762034128e-15,
+          "amplitude_over_mean": 1.149878276203413e-16,
+          "cos_coefficient_Nm": -1.0559454545323711e-15,
+          "order": 14,
+          "phase_rad": -2.7345878967910076,
+          "sin_coefficient_Nm": 4.551914400963141e-16
+        },
+        {
+          "amplitude_Nm": 1.2716876910989126e-15,
+          "amplitude_over_mean": 1.2716876910989127e-16,
+          "cos_coefficient_Nm": -1.1151573491790461e-15,
+          "order": 15,
+          "phase_rad": -2.640194374828182,
+          "sin_coefficient_Nm": 6.112394541130723e-16
+        },
+        {
+          "amplitude_Nm": 2.997887704077895e-16,
+          "amplitude_over_mean": 2.997887704077895e-17,
+          "cos_coefficient_Nm": 7.401486830834377e-17,
+          "order": 16,
+          "phase_rad": 1.3213266758970719,
+          "sin_coefficient_Nm": -2.905083581102493e-16
+        },
+        {
+          "amplitude_Nm": 9.771980859272557e-15,
+          "amplitude_over_mean": 9.771980859272556e-16,
+          "cos_coefficient_Nm": 9.03474825817183e-15,
+          "order": 17,
+          "phase_rad": 0.39092632958504325,
+          "sin_coefficient_Nm": -3.723564666478928e-15
+        },
+        {
+          "amplitude_Nm": 8.157105997064313e-16,
+          "amplitude_over_mean": 8.157105997064313e-17,
+          "cos_coefficient_Nm": -2.516505522483688e-16,
+          "order": 18,
+          "phase_rad": 1.884416979011595,
+          "sin_coefficient_Nm": -7.759225360991372e-16
+        }
+      ],
+      "max_harmonic": 18,
+      "max_torque_Nm": 10.440345231234767,
+      "mean_torque_Nm": 10.0,
+      "min_torque_Nm": 9.559654768765233,
+      "n_samples": 720,
+      "peak_to_peak_over_mean": 0.08806904624695341,
+      "peak_to_peak_torque_Nm": 0.8806904624695342
+    },
+    "top_harmonic_rows": [
+      {
+        "ac_variance_fraction": 0.9411764705882357,
+        "amplitude_Nm": 0.4,
+        "amplitude_over_mean": 0.04,
+        "cos_coefficient_Nm": 0.4,
+        "order": 6,
+        "rms_contribution_Nm": 0.282842712474619,
+        "sin_coefficient_Nm": -3.130212138873705e-15
+      },
+      {
+        "ac_variance_fraction": 0.05882352941176179,
+        "amplitude_Nm": 0.09999999999999751,
+        "amplitude_over_mean": 0.00999999999999975,
+        "cos_coefficient_Nm": -2.1711028037114172e-16,
+        "order": 12,
+        "rms_contribution_Nm": 0.07071067811865299,
+        "sin_coefficient_Nm": 0.09999999999999751
+      },
+      {
+        "ac_variance_fraction": 5.617153524352309e-28,
+        "amplitude_Nm": 9.771980859272557e-15,
+        "amplitude_over_mean": 9.771980859272556e-16,
+        "cos_coefficient_Nm": 9.03474825817183e-15,
+        "order": 17,
+        "rms_contribution_Nm": 6.9098339312167704e-15,
+        "sin_coefficient_Nm": -3.723564666478928e-15
+      }
+    ]
+  },
+  "kind": "torque_waveform_health_validation",
+  "learning_theme": "torque-angle tables should separate mean torque, RMS ripple, dominant harmonic order, and harmonic variance budget",
+  "validation_class": true
+}
