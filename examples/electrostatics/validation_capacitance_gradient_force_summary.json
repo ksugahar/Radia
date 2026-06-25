@@ -1,0 +1,65 @@
+{
+  "force_learning": "fixed-voltage electrostatic force is +0.5 V^2 dC/dx along the chosen coordinate",
+  "kind": "capacitance_gradient_force_validation",
+  "parallel_plate": {
+    "area_m2": 0.0002,
+    "checks": {
+      "closing_force_matches_pressure_force_N": 2.710505431213761e-20,
+      "fixed_voltage_charge_route_abs_error_N": 0.0,
+      "gap_force_matches_minus_pressure_force_N": 2.710505431213761e-20
+    },
+    "closed_form": {
+      "C": 8.8541878128e-12,
+      "electric_field_V_per_m": 240000.0,
+      "energy": 6.375015225216001e-08,
+      "energy_density_J_per_m3": 0.6375015225216,
+      "force": 0.00012750030450432,
+      "pressure_Pa": 0.6375015225216
+    },
+    "closing_coordinate_force": {
+      "capacitance_F": 8.8541878128e-12,
+      "charge_C": 1.0625025375360001e-09,
+      "charge_consistency_error_C": 0.0,
+      "charge_for_voltage_C": 1.0625025375360001e-09,
+      "dCdx_F_per_m": 1.7708375625600002e-08,
+      "fixed_charge_energy_force_N": 0.00012750030450432002,
+      "fixed_charge_force_N": 0.00012750030450432002,
+      "fixed_voltage_coenergy_gradient_N": 0.00012750030450432002,
+      "fixed_voltage_force_N": 0.00012750030450432002,
+      "voltage_V": 120.0
+    },
+    "dCdgap_F_per_m": -1.7708375625600002e-08,
+    "eps_r": 2.5,
+    "gap_coordinate_force": {
+      "capacitance_F": 8.8541878128e-12,
+      "charge_C": 1.0625025375360001e-09,
+      "charge_consistency_error_C": 0.0,
+      "charge_for_voltage_C": 1.0625025375360001e-09,
+      "dCdx_F_per_m": -1.7708375625600002e-08,
+      "fixed_charge_energy_force_N": -0.00012750030450432002,
+      "fixed_charge_force_N": -0.00012750030450432002,
+      "fixed_voltage_coenergy_gradient_N": -0.00012750030450432002,
+      "fixed_voltage_force_N": -0.00012750030450432002,
+      "voltage_V": 120.0
+    },
+    "gap_m": 0.0005,
+    "voltage_V": 120.0
+  },
+  "sphere_ground_plane": {
+    "attractive_force_magnitude_N": 1.9333909340444622e-07,
+    "capacitance_F": 1.4921302753806263e-12,
+    "dCdh_F_per_m": -2.6852651861728643e-11,
+    "height_coordinate_force": {
+      "capacitance_F": 1.4921302753806263e-12,
+      "dCdx_F_per_m": -2.6852651861728643e-11,
+      "fixed_voltage_coenergy_gradient_N": -1.9333909340444622e-07,
+      "fixed_voltage_force_N": -1.9333909340444622e-07,
+      "voltage_V": 120.0
+    },
+    "height_m": 0.02,
+    "radius_m": 0.01,
+    "step_m": 2.0000000000000002e-07,
+    "voltage_V": 120.0
+  },
+  "validation_class": true
+}

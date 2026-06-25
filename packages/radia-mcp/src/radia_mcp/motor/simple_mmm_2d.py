@@ -1,8 +1,8 @@
 """Small 2D magnetic-circuit / MMM-like motor quick checks.
 
 The routines here are intentionally lightweight. They are not a replacement
-for NGSolve AGE, JMAG, or ELF/MAGIC. They provide public-safe first-order
-anchors that help an MCP client decide whether a deck or AGE solve is
+for NGSolve AGE, JMAG, or external motor-deck solvers. They provide public-safe
+first-order anchors that help an MCP client decide whether a deck or AGE solve is
 physically plausible before spending solver time.
 """
 
@@ -161,7 +161,7 @@ def evaluate_mmm_quick_check(inp: MmmQuickInput) -> dict[str, Any]:
         "warnings": warnings,
         "public_boundary": (
             "This evaluator is an open, approximate magnetic-circuit quick check. "
-            "It does not call ELF/MAGIC, JMAG, or any commercial solver, and it "
+            "It does not call commercial or external deck solvers, and it "
             "does not encode private benchmark numbers."
         ),
     }
@@ -200,36 +200,36 @@ def format_mmm_quick_check(result: dict[str, Any]) -> str:
 
 
 def route_motor_validation(goal: str) -> dict[str, Any]:
-    """Route a motor prompt to ELF deck, MMM quick check, and AGE validation."""
+    """Route a motor prompt to a public deck, MMM quick check, and AGE validation."""
     g = goal.lower()
     if any(term in g for term in ("induction", " cage", " im ", "slip", "deep bar")):
         family = "induction"
-        elf_hint = "application/motor/emdlab_induction_bar_10"
+        deck_hint = "application/motor/emdlab_induction_bar_10"
         mmm = "motor_mmm_quick_check(motor_type='induction', slip_hz=...)"
         age = ("induction_machine", "airgap_eddy_machine", "deep_bar")
     elif any(term in g for term in ("srm", "switched reluctance", "sr motor")):
         family = "srm"
-        elf_hint = "application/motor/emdlab_srm_pole_variants_10"
+        deck_hint = "application/motor/emdlab_srm_pole_variants_10"
         mmm = "motor_mmm_quick_check(motor_type='srm', electrical_angle_deg=...)"
         age = ("reluctance_torque", "saturating_inductance")
     elif any(term in g for term in ("synrm", "reluctance motor")):
         family = "synrm"
-        elf_hint = "application/motor/emdlab_synrm_flux_barrier_10"
+        deck_hint = "application/motor/emdlab_synrm_flux_barrier_10"
         mmm = "motor_mmm_quick_check(motor_type='synrm', saliency_ratio_lq_over_ld=...)"
         age = ("synchronous_power_angle", "mtpa", "cross_saturation")
     elif any(term in g for term in ("ipm", "interior", "hairpin")):
         family = "ipm"
-        elf_hint = "application/motor/emdlab_ipm_hairpin_10"
+        deck_hint = "application/motor/emdlab_ipm_hairpin_10"
         mmm = "motor_mmm_quick_check(motor_type='ipm', electrical_angle_deg=...)"
         age = ("ld_lq", "mtpa", "field_weakening", "demag_margin")
     elif "hysteresis" in g:
         family = "hysteresis"
-        elf_hint = "application/motor/hysteresis_motor_10"
+        deck_hint = "application/motor/hysteresis_motor_10"
         mmm = "motor_mmm_quick_check(motor_type='hysteresis')"
         age = ("hysteresis_motor_loss", "hysteresis_play")
     else:
         family = "spm"
-        elf_hint = "application/motor/spm_surface_pm_10"
+        deck_hint = "application/motor/spm_surface_pm_10"
         mmm = "motor_mmm_quick_check(motor_type='spm', electrical_angle_deg=...)"
         age = ("back_emf", "cogging_torque", "ld_lq", "mtpa")
 
@@ -237,15 +237,15 @@ def route_motor_validation(goal: str) -> dict[str, Any]:
         "schema_version": "radia-motor-validation-router/v1",
         "goal": goal,
         "family": family,
-        "elf_deck_hint": elf_hint,
+        "deck_hint": deck_hint,
         "mmm_quick_check": mmm,
         "age_validation_targets": list(age),
         "workflow": [
-            "Use ELF-mcp-server to select and inspect a public .mai/.meg deck.",
+            "Select and inspect a public motor input deck.",
             "Run motor_mmm_quick_check for a first-order sign/scale sanity check.",
             "Call motor_age_validation_plan(goal) to select the public AGE quality gates.",
             "Use NGSolve AGE / radia-ngsolve for the independent validation anchor.",
-            "Only after the reduced quantities agree, move to local ELF/MAGIC product runs.",
+            "Only after the reduced quantities agree, move to local product runs.",
         ],
     }
 
@@ -258,7 +258,7 @@ def format_motor_validation_route(route: dict[str, Any]) -> str:
         f"- schema: `{route['schema_version']}`",
         f"- goal: {route['goal']}",
         f"- inferred family: `{route['family']}`",
-        f"- ELF deck hint: `{route['elf_deck_hint']}`",
+        f"- public deck hint: `{route['deck_hint']}`",
         f"- MMM quick check: `{route['mmm_quick_check']}`",
         "",
         "## AGE Validation Targets",

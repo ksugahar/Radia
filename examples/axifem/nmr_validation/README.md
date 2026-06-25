@@ -1,8 +1,8 @@
-# axifem — NMR axisymmetric validation vs FEMM
+# axifem — NMR axisymmetric stored-reference validation
 
 Reproduce a permanent-magnet NMR axisymmetric problem with the
 Henrotte / Meeker P1-triangle pure-Python prototype, sample
-`B_z(r)` along the symmetry plane, and **compare against an FEMM
+`B_z(r)` along the symmetry plane, and **compare against a stored
 reference and an NGSolve mixed-formulation reference at p=2** to
 confirm the formulation tracks accepted axisymmetric solvers.
 
@@ -56,7 +56,7 @@ The numerical comparison at sample points should look like
      60.00  -8.274e-02   -8.274e-02     -8.277e-02     1.000
 ```
 
-`B_z FEMM ≈ B_z mixed ≈ B_z axifem` within ~0.3 % across r ∈ [0, 70 mm]
+`B_z stored ≈ B_z mixed ≈ B_z axifem` within ~0.3 % across r ∈ [0, 70 mm]
 **except at r = 40 mm**, where all three solvers see the magnet edge
 discontinuity in M_z and the P1-triangle axifem result diverges by
 ~27 %.  This is expected — high-order interpolation (Q2 quad) closes

@@ -31,7 +31,7 @@ missed:
 
 - AFTER any non-trivial edit to `src/radia/radia_*.py`
 - AS PART OF the `publish-panel` release checklist
-- BEFORE cutting a release (`release-triple` Phase 0)
+- BEFORE cutting a release (`release-qud` Phase 0)
 - WHEN a user reports a panel bug that "should not exist" (silent-default,
   silent UI selection ignored, panel-launches-then-dies)
 

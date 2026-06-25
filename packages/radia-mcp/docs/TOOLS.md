@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **331 tools** across 38 MCP servers.
+Total: **336 tools** across 38 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 44 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 45 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 10 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 40 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
@@ -42,7 +42,7 @@ Total: **331 tools** across 38 MCP servers.
 | [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 12 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
-| [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 8 |
+| [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 9 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 3 |
 
 ## `mcp-server-cubit`
@@ -54,6 +54,7 @@ Module: `radia_mcp.cubit.server`
 | Tool | Description |
 |---|---|
 | `cubit_ask` | One-shot search across every Cubit knowledge surface we have. |
+| `cubit_audit_summary` | Return a machine-readable Cubit export-lint audit summary. |
 | `cubit_batch_try` | Dry-run a recipe in a fresh headless Cubit subprocess. |
 | `cubit_checkpoint` | Save the current Cubit session state as a named checkpoint. |
 | `cubit_cpp_sdk_guide` | Get documentation on building Cubit C++ SDK plugins. |
@@ -145,7 +146,10 @@ Module: `radia_mcp.gmsh.server`
 | Tool | Description |
 |---|---|
 | `get_gmsh_lint_rules` | List all available GMSH lint rules with descriptions. |
+| `gmsh_audit_summary` | Return a machine-readable GMSH lint audit summary. |
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |
+| `gmsh_mesh_generation_remediation_plan` | List scripts that still use GMSH as a mesh generator. |
+| `gmsh_numsubedges_remediation_plan` | List scripts that need high-order GMSH display settings. |
 | `gmsh_reference` | Get GMSH technical reference (options, algorithms, fields, formats). |
 | `gmsh_status` | (no description) |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
@@ -162,7 +166,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 |---|---|
 | `airgap_motor_workflow` | Get AGE rotating machine workflow documentation -- nonlinear iron + AGE coupling. |
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
-| `axifem_documentation` | Get radia-core axifem documentation: Henrotte axisymmetric FE |
+| `axifem_documentation` | Get radia-core axifem documentation: Henrotte axisymmetric Q-element FE |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
 | `bem_cln` | Get BEM-CLN (per-element multipole CLN with Schur-F termination) |
 | `cln_3d` | Get 3D Cauer Ladder Network (CLN) / Kameari-Tanimoto iteration |
@@ -177,7 +181,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
-| `install_deploy` | Radia install / deploy policy and recipes — 3-tier configuration |
+| `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
@@ -194,7 +198,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
 | `radia_ngsolve_status` | (no description) |
 | `radia_usage` | Get Radia C++ library usage documentation. |
-| `release_workflow` | Triple-package release workflow for the Radia monorepo |
+| `release_workflow` | Release-QUD workflow for the Radia monorepo |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
@@ -318,7 +322,7 @@ Module: `radia_mcp.electromagnet.server`
 | Tool | Description |
 |---|---|
 | `electromagnet_status` | (no description) |
-| `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 14 topics. |
+| `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |
 | `electromagnet_usage` | Get accelerator electromagnet analysis documentation. |
 
 ## `mcp-server-motor`
@@ -333,7 +337,7 @@ Module: `radia_mcp.motor.server`
 | `motor_age_validation_plan` | Route a motor prompt to the required NGSolve AGE quality gates. |
 | `motor_bibliography` | Search the motor analysis bibliography catalog. |
 | `motor_darwin_model` | Darwin-model time-domain formulation (capacitive + inductive coupling). |
-| `motor_elf_magic_bridge` | Public-safe ELF/MAGIC motor corpus bridge for radia-motor. |
+| `motor_deck_bridge` | Public-safe motor deck corpus bridge for radia-motor. |
 | `motor_em_force_extras` | Forward to `differential_forms_em_force_extras` -- advanced EM force |
 | `motor_em_force_recipe` | Practical NGSolve EM-force recipe for motor analysis. |
 | `motor_femm_transient` | FEMM newbuild transient solver — Lange-Henrotte-Hameyer 2009 |
@@ -345,7 +349,7 @@ Module: `radia_mcp.motor.server`
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
 | `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
-| `motor_validation_router` | Route a motor prompt to ELF deck, MMM quick check, and NGSolve AGE validation. |
+| `motor_validation_router` | Route a motor prompt to a public deck, MMM quick check, and NGSolve AGE validation. |
 
 ## `mcp-server-accelerator`
 
@@ -701,6 +705,7 @@ Module: `radia_mcp.meta.server`
 | `bug_patterns_stats` | Counts of catalogued bug patterns by severity + topic. |
 | `radia_mcp_by_tag` | Servers tagged with `tag`. |
 | `radia_mcp_get` | Look up one server by short name (e.g. 'bayesian-opt', 'ih', 'kelvin'). |
+| `radia_mcp_golden_gate` | Machine-readable golden-quality gate for the radia-mcp server fleet. |
 | `radia_mcp_health` | Probe importability of every radia_mcp.* subpackage. |
 | `radia_mcp_overview` | Authoritative catalog of all radia_mcp.* servers. |
 | `radia_mcp_related` | Servers that pair well with `name` (e.g. radia_mcp_related('bayesian-opt') |

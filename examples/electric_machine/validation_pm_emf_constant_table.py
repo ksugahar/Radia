@@ -1,6 +1,6 @@
 """Validation-class PM back-EMF / torque-constant table.
 
-This JMAG-style teaching example turns PM flux linkage into the constants that
+This PM-machine teaching example turns PM flux linkage into the constants that
 normally appear in motor reports:
 
 * phase-peak, phase-RMS, and line-line-RMS back-EMF constants;

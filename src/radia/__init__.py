@@ -9,7 +9,7 @@
 # pybind11 Migration Complete (2026-01):
 # All bindings now use pybind11 exclusively.
 
-__version__ = "4.94.0"
+__version__ = "4.95.2"
 
 # Compatibility window with the cubit-mesh-export package. The .ccm/.pyd
 # plugin binaries built there must match this radia minor series. The
@@ -178,13 +178,13 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# Demag backend: BOTH the moment-yano surface-charge MSC path and the FEEC HDiv-VIM
-# (radia.vim) are kept.  They are complementary -- moment-yano is the canonical
+# Demag backend: BOTH the multipole-moment MMM surface-charge MSC path and the FEEC HDiv-VIM
+# (radia.vim) are kept.  They are complementary -- multipole-moment MMM is the canonical
 # mesh-less C++ path for hex/wedge/pyramid soft iron; HDiv-VIM is the mesh-backed
 # FEEC path with loop-free convergence.
 #
 # DEFAULT = "auto" (API-split): the API you use selects the method.
-#   - mesh-LESS soft iron (ObjHexahedron/ObjWedge + MatLin/MatSatIsoTab + rad.Solve) -> yano-MSC (C++).
+#   - mesh-LESS soft iron (ObjHexahedron/ObjWedge + MatLin/MatSatIsoTab + rad.Solve) -> surface-charge MSC (C++).
 #   - mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=) + rad.Solve) -> HDiv-VIM.
 #   - tetrahedron (MMM) and permanent-magnet solves -> C++ solver (unchanged).
 # set_demag_backend("yano"|"hdiv") OVERRIDES the auto split (a soft_iron_from_mesh container carries both
@@ -195,7 +195,7 @@ _demag_backend = None   # None/"auto" = API-split default; "yano" or "hdiv" = fo
 
 
 def set_demag_backend(name):
-    """Select the soft-iron demag backend.  "yano" = moment-yano surface-charge MSC; "hdiv" = FEEC
+    """Select the soft-iron demag backend.  "yano" = multipole-moment MMM surface-charge MSC; "hdiv" = FEEC
     HDiv-VIM; "auto"/None = API-split default (mesh-less -> yano, soft_iron_from_mesh -> HDiv).
     The choice is consulted by rad.Solve.  Returns the effective backend string."""
     global _demag_backend
@@ -240,8 +240,8 @@ if "Solve" in globals():
     def Solve(*args, **kwargs):   # noqa: F811  (thin wrapper: pick the soft-iron demag backend)
         """Radia relaxation solve with the API-split demag backend (see set_demag_backend):
           - mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh) -> FEEC HDiv-VIM (default), or
-            yano-MSC if demag_backend='yano';
-          - mesh-LESS hex/wedge/pyramid soft iron -> moment-yano MSC (C++);
+            surface-charge MSC if demag_backend='yano';
+          - mesh-LESS hex/wedge/pyramid soft iron -> multipole-moment MMM MSC (C++);
           - tetrahedron (MMM) and permanent magnets -> C++ solver.
         A per-call demag_backend=('yano'|'hdiv'|'auto') overrides the global set_demag_backend choice."""
         backend = kwargs.pop("demag_backend", None) or _demag_backend   # per-call > global > auto
@@ -255,7 +255,7 @@ if "Solve" in globals():
                 registered = False
         if registered:
             if backend == "yano":
-                return _cpp_Solve(*args, **kwargs)          # yano-MSC on the mesh-built elements
+                return _cpp_Solve(*args, **kwargs)          # surface-charge MSC on the mesh-built elements
             from radia.vim import _radsolve                 # auto/hdiv -> FEEC HDiv-VIM
             return _radsolve.dispatch(*args, **kwargs)
         if backend == "hdiv":
@@ -263,7 +263,7 @@ if "Solve" in globals():
                 "demag_backend='hdiv' needs a mesh-backed soft iron built via "
                 "radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=); this body is mesh-less.  "
                 "Build it via soft_iron_from_mesh, or use the yano backend (the default for mesh-less iron).")
-        return _cpp_Solve(*args, **kwargs)                  # mesh-less -> yano-MSC (or MMM/PM)
+        return _cpp_Solve(*args, **kwargs)                  # mesh-less -> surface-charge MSC (or MMM/PM)
 
 
 if "SolverConfig" in globals():
@@ -294,6 +294,6 @@ if "UtiDelAll" in globals():
 
 
 # Intent-based user-facing API (2-layer API; see CLAUDE.md "Reduce Proprietary API Surface").
-# radia.SoftIron("yoke.vol", mu_r=) unifies the yano-MSC and HDiv-VIM soft-iron paths behind one
+# radia.SoftIron("yoke.vol", mu_r=) unifies the surface-charge MSC and HDiv-VIM soft-iron paths behind one
 # .vol-driven object; the ObjHexahedron/... primitives become an internal representation detail.
 from .soft_iron import SoftIron  # noqa: E402,F401

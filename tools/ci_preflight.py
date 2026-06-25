@@ -52,7 +52,7 @@ import sys
 # NEVER use Path.resolve() here: on the LAB box the repo lives on an S:
 # drive mapped to \\192.168.11.100\..., and resolve() canonicalises to the
 # UNC form, which Python's open() then rejects with OSError [Errno 22]
-# (this is exactly what broke `release_triple.py preflight`).  os.path
+# (this is exactly what broke the old release preflight).  os.path
 # joins keep the drive letter the script was invoked with.
 _THIS = os.path.abspath(__file__)
 REPO = os.path.dirname(os.path.dirname(_THIS))

@@ -170,7 +170,7 @@ class TestMaterialApplication:
         assert result is not None
 
     def test_hexahedron_soft_iron_solve_yano(self):
-        """A hex soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the moment-yano
+        """A hex soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the multipole-moment MMM
         MSC demag.  With no applied field M stays 0 --
         this just locks that the mesh-less hex path SOLVES (no raise).  The yano physics (cube demag
         ~1/3) is locked in tests/test_demag_backend.py."""
@@ -182,7 +182,7 @@ class TestMaterialApplication:
         ]
         hex_obj = rad.ObjHexahedron(vertices, [0, 0, 0])
         rad.MatApl(hex_obj, rad.MatLin(1000))
-        rad.Solve(hex_obj, 0.0001, 100, 0)        # yano-MSC; no Error203
+        rad.Solve(hex_obj, 0.0001, 100, 0)        # surface-charge MSC; no Error203
         M = rad.ObjM(hex_obj)["magnetization"]
         assert abs(M[0]) + abs(M[1]) + abs(M[2]) < 1e-6   # no source -> M stays 0
 

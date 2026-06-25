@@ -1,12 +1,12 @@
 """Gate-2: rad.Solve dispatches the FEEC HDiv-VIM backend (demag_backend='hdiv').
 
-Previously rad.Solve only ran the legacy yano-type MSC; selecting 'hdiv' raised
+Previously rad.Solve only ran the legacy six-face surface-charge MSC; selecting 'hdiv' raised
 NotImplementedError.  This locks the wiring (radia.vim.soft_iron_from_mesh +
 radia.vim._radsolve.dispatch): a soft-iron container built from an NGSolve mesh, solved
 via rad.Solve(demag_backend='hdiv'), reproduces a direct radia.vim.hdiv_demag_solve to
 machine precision and writes the per-element M back so rad.ObjM/rad.Fld reflect it.
 
-This is the prerequisite for sealing (deleting) the yano-type C++: with hdiv wired in,
+This is the prerequisite for sealing (deleting) the six-face surface-charge C++: with hdiv wired in,
 rad.Solve keeps a working hex/wedge soft-iron demag path through the HDiv-VIM.
 (tet-first: build_demag's volume self-energy is tet-only, so the dispatch requires a tet mesh.)
 """
@@ -83,8 +83,8 @@ def test_radsolve_hdiv_image_passed_through():
 def test_meshless_hex_soft_iron_not_registered_uses_yano():
     """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin, NOT via soft_iron_from_mesh) has
     no mesh association, so rad.Solve does NOT route it to the HDiv-VIM -- it falls through to the C++
-    solver, which now solves it with the yano-type MSC (the Error203 guard was removed 2026-06-19).
-    The full yano-MSC physics (cube demag ~1/3) is locked by tests/test_demag_backend.py."""
+    solver, which now solves it with the six-face surface-charge MSC (the Error203 guard was removed 2026-06-19).
+    The full surface-charge MSC physics (cube demag ~1/3) is locked by tests/test_demag_backend.py."""
     from radia.vim import _radsolve
     rad.set_demag_backend("auto")
     rad.UtiDelAll()
@@ -94,6 +94,6 @@ def test_meshless_hex_soft_iron_not_registered_uses_yano():
     rad.MatApl(obj, rad.MatLin(1000.0))
     cont = rad.ObjCnt([obj])
     assert not _radsolve.is_registered(cont)        # mesh-less -> not HDiv-registered
-    rad.Solve(cont, 1e-6, 100, 0)                   # no Error203; yano-MSC solves (M stays 0, no source)
+    rad.Solve(cont, 1e-6, 100, 0)                   # no Error203; surface-charge MSC solves (M stays 0, no source)
     rad.UtiDelAll()
     rad.set_demag_backend("auto")

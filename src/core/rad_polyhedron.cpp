@@ -2568,12 +2568,12 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 }
 
 //-------------------------------------------------------------------------
-// moment-yano method-2 routing flag (set by SolveGen).
+// multipole-moment MMM method-2 routing flag (set by SolveGen).
 //-------------------------------------------------------------------------
 
-bool g_yano_moment_hacapk = false;   // moment linear step via the HACApK H-matrix + BiCGSTAB (method 2 / scalable storage); set by SolveGen for moment-eligible + method 2 (else dense LU)
-// NOTE: the surface-charge demag is UNCONDITIONALLY moment-yano (hex 6-DOF + wedge/pyramid 5-DOF, method 0/1/2).
-// The EIEM2 collocation kernel + its g_yano_moment / eval-point / pyramid-cloud opt-outs were fully
+bool g_multipole_moment_hacapk = false;   // moment linear step via the HACApK H-matrix + BiCGSTAB (method 2 / scalable storage); set by SolveGen for moment-eligible + method 2 (else dense LU)
+// NOTE: the surface-charge demag is UNCONDITIONALLY multipole-moment MMM (hex 6-DOF + wedge/pyramid 5-DOF, method 0/1/2).
+// The EIEM2 collocation kernel + its old moment / eval-point / pyramid-cloud opt-outs were fully
 // removed in Phase 3b; mixed tet+MSC is rejected fail-loud (Error204) in MakeAutoRelax.
 
 

@@ -216,6 +216,202 @@ def p1_surface_triangle_constant_load(vertices, source=1.0):
     return [float(source) * area / 3.0] * 3
 
 
+def _matrix_triplets_1based(matrix):
+    return [
+        {"row": i + 1, "col": j + 1, "value": float(matrix[i][j])}
+        for i in range(len(matrix))
+        for j in range(len(matrix[i]))
+    ]
+
+
+def p1_surface_triangle_element_summary(
+    vertices,
+    density=1.0,
+    coeff=1.0,
+    source=1.0,
+):
+    """Readable P1 boundary-triangle element block for teaching assembly.
+
+    The returned JSON-friendly record groups the geometry, tangential
+    gradients, surface stiffness, consistent mass, and constant-load vector.
+    It also includes one-based sparse triplets so the same local block can be
+    copied directly into compact teaching assembly code.
+    """
+
+    geom = p1_surface_triangle_geometry(vertices)
+    stiffness = p1_surface_triangle_stiffness(vertices, coeff=coeff)
+    mass = p1_surface_triangle_mass(vertices, density=density)
+    load = p1_surface_triangle_constant_load(vertices, source=source)
+    area = geom["area"]
+    mass_row_sums = [sum(row) for row in mass]
+    stiffness_row_sums = [sum(row) for row in stiffness]
+    gradient_sum = tuple(
+        sum(geom["gradients"][local][axis] for local in range(3))
+        for axis in range(3)
+    )
+    return {
+        "policy": "p1_surface_triangle_element_teaching_block",
+        "vertices": [tuple(float(value) for value in point) for point in vertices],
+        "area": area,
+        "area_vector": geom["area_vector"],
+        "unit_normal": geom["unit_normal"],
+        "gradients": geom["gradients"],
+        "gradient_partition_sum": gradient_sum,
+        "gradient_partition_residual": _norm(gradient_sum),
+        "density": float(density),
+        "coeff": float(coeff),
+        "source": float(source),
+        "stiffness_matrix": stiffness,
+        "stiffness_triplets_1based": _matrix_triplets_1based(stiffness),
+        "stiffness_row_sums": stiffness_row_sums,
+        "stiffness_nullspace_residual": max(abs(value) for value in stiffness_row_sums),
+        "mass_matrix": mass,
+        "mass_triplets_1based": _matrix_triplets_1based(mass),
+        "mass_row_sums": mass_row_sums,
+        "mass_integral_of_one": sum(mass_row_sums),
+        "expected_mass_integral_of_one": float(density) * area,
+        "constant_load_vector": load,
+        "constant_load_integral": sum(load),
+        "expected_constant_load_integral": float(source) * area,
+        "local_node_ids_1based": [1, 2, 3],
+    }
+
+
+def p1_tetrahedron_face_trace_summary(vertices, nodal_values, face_local_nodes):
+    """Project a volume P1 tetrahedron field onto one P1 boundary face.
+
+    ``face_local_nodes`` gives the three zero-based tetrahedron node ids on the
+    face.  The trace nodal values are therefore just the corresponding entries
+    of ``nodal_values``; the useful FEM/BEM bookkeeping is the surface mass
+    projection
+
+        b_j = int_face u_h N_j dS
+
+    and the surface ``L2`` trace energy ``int_face u_h^2 dS``.  The formulas are
+    intentionally explicit so they can be copied into a short MATLAB/Gypsilab
+    teaching script that shares `.vol` node ids between volume H1 and boundary
+    BEM unknowns.
+    """
+
+    verts = [tuple(float(x) for x in point) for point in vertices]
+    if len(verts) != 4 or any(len(point) != 3 for point in verts):
+        raise ValueError("a tetrahedron needs exactly four 3D vertices")
+    values = [float(value) for value in nodal_values]
+    if len(values) != 4:
+        raise ValueError("nodal_values must contain four values")
+    face = tuple(int(node) for node in face_local_nodes)
+    if len(face) != 3 or len(set(face)) != 3:
+        raise ValueError("face_local_nodes must contain three distinct local ids")
+    if any(node < 0 or node > 3 for node in face):
+        raise ValueError("face_local_nodes must be zero-based ids in 0..3")
+
+    face_vertices = [verts[node] for node in face]
+    trace_values = [values[node] for node in face]
+    geom = p1_surface_triangle_geometry(face_vertices)
+    mass = p1_surface_triangle_mass(face_vertices)
+    projected_load = [
+        sum(mass[i][j] * trace_values[i] for i in range(3))
+        for j in range(3)
+    ]
+    l2_trace = sum(
+        trace_values[i] * mass[i][j] * trace_values[j]
+        for i in range(3)
+        for j in range(3)
+    )
+    integral = sum(projected_load)
+    return {
+        "face_local_nodes": face,
+        "face_vertices": face_vertices,
+        "trace_nodal_values": trace_values,
+        "area": geom["area"],
+        "unit_normal": geom["unit_normal"],
+        "surface_mass_matrix": mass,
+        "projected_trace_load": projected_load,
+        "trace_integral": integral,
+        "trace_mean": integral / geom["area"],
+        "trace_l2_norm_squared": l2_trace,
+        "policy": "p1_volume_h1_trace_to_p1_boundary_mass_projection",
+    }
+
+
+def p1_surface_triangle_density_moments(vertices, nodal_density):
+    """Exact P1 surface-density moments on one triangle.
+
+    This is the small BEM bookkeeping block behind a readable single-layer
+    assembly.  For a P1 density ``sigma = sum_i sigma_i N_i`` it returns
+
+        Q = int_T sigma dS,
+        m = int_T sigma x dS.
+
+    The first moment uses only the surface mass matrix:
+    ``m = sum_j x_j sum_i sigma_i int_T N_i N_j dS``.  That makes the formula
+    short enough to mirror directly in MATLAB/Gypsilab-style teaching code.
+    """
+
+    sigma = [float(value) for value in nodal_density]
+    if len(sigma) != 3:
+        raise ValueError("nodal_density must contain three values")
+    verts = [tuple(float(x) for x in point) for point in vertices]
+    if len(verts) != 3 or any(len(point) != 3 for point in verts):
+        raise ValueError("surface triangle vertices must be 3D points")
+    geom = p1_surface_triangle_geometry(verts)
+    mass = p1_surface_triangle_mass(verts)
+    vertex_weights = [
+        sum(sigma[i] * mass[i][j] for i in range(3))
+        for j in range(3)
+    ]
+    first_moment = tuple(
+        sum(vertex_weights[j] * verts[j][axis] for j in range(3))
+        for axis in range(3)
+    )
+    total = sum(vertex_weights)
+    return {
+        "area": geom["area"],
+        "centroid": tuple(sum(point[axis] for point in verts) / 3.0 for axis in range(3)),
+        "nodal_density": sigma,
+        "vertex_moment_weights": vertex_weights,
+        "total_source": total,
+        "first_moment": first_moment,
+    }
+
+
+def laplace_single_layer_far_potential(observation_point, total_source, first_moment):
+    """Monopole+dipole far-field of a Laplace single-layer density.
+
+    For ``|x|`` larger than the source support,
+
+        int sigma(y) / (4 pi |x-y|) dS_y
+        = Q/(4 pi r) + (xhat . m)/(4 pi r^2) + O(r^-3),
+
+    where ``Q = int sigma dS`` and ``m = int sigma y dS``.  This is not a near
+    singular quadrature rule; it is a readable far-field moment gate.
+    """
+
+    x = tuple(float(value) for value in observation_point)
+    m = tuple(float(value) for value in first_moment)
+    if len(x) != 3:
+        raise ValueError("observation_point must be a 3D point")
+    if len(m) != 3:
+        raise ValueError("first_moment must have length 3")
+    r = _norm(x)
+    if r <= 0.0:
+        raise ValueError("observation_point must be away from the origin")
+    q = float(total_source)
+    xhat = tuple(value / r for value in x)
+    monopole = q / (4.0 * math.pi * r)
+    dipole = _dot(xhat, m) / (4.0 * math.pi * r * r)
+    return {
+        "observation_point": x,
+        "radius": r,
+        "direction": xhat,
+        "total_source": q,
+        "first_moment": m,
+        "monopole_potential": monopole,
+        "dipole_potential": dipole,
+        "far_potential": monopole + dipole,
+    }
+
+
 def assemble_p1_tet_robin_system(points, tetrahedra, surface_triangles,
                                   volume_coeff=1.0, source=0.0,
                                   robin_coeff=0.0, boundary_flux=0.0):

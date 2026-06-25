@@ -3,6 +3,7 @@
  * this file supplies only the HDiv kernel hooks (coordinates = face centroids, entry = the
  * charge-cluster Coulomb sum N[i][j] = sum_a sum_b B[a][i] G[a][b] B[b][j]). */
 #include "rad_hacapk_hdiv.h"
+#include "rad_parallel.h"
 #include <cmath>
 #include <utility>
 #include <algorithm>
@@ -843,7 +844,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const int n_charge = (int)B_indptr.size() - 1;     // B is n_charge x n_face (CSR over charges)
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): keep the pool up across
     // the whole CG loop so the Gram H-matvec is parallel without a caller `with TaskManager()`.
-    ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
     // A x = inv_chi*(M_mass x) + B^T (G (B x)), with G applied as the charge-Gram H-matvec.
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
     auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
@@ -907,7 +908,7 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
 {
     const int n_charge = (int)B_indptr.size() - 1;
     // Stand up (or reuse the caller's) TaskManager pool so the HACApK H-matvec runs multi-threaded.
-    ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 
     // A x = inv_chi*(M_mass x) - B^T (G (B x))  -- symmetric INDEFINITE -> MINRES.
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
@@ -1000,7 +1001,7 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
     const int n_charge = (int)B_indptr.size() - 1;
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
     // whole Picard loop (inner CG matvecs) -> parallel without a caller `with TaskManager()`.
-    ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
     auto mmass_apply = [&](const std::vector<double>& x, std::vector<double>& y) {  // y = M_mass x
         y.assign((size_t)n_face, 0.0);
         ngcore::ParallelFor(ngcore::IntRange((int)mV.size()), [&](size_t k) {

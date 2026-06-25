@@ -3,6 +3,7 @@
 fixtures -- independent of the live repo's current state, so CI stays green
 while any real violation is remediated separately."""
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -120,3 +121,28 @@ def test_optuna_import_scan_accepts_utf8_bom_python_files(tmp_path):
     _make_repo(tmp_path, {"mcp-server-motor": "radia_mcp.motor.server:main"},
                token_files={"motor/bom_ok.py": "\ufeff# UTF-8 BOM is allowed\nx = 1\n"})
     assert _run(tmp_path) == 0
+
+
+def test_tracked_only_provenance_scan_for_repo_root(tmp_path):
+    examples = tmp_path / "examples"
+    examples.mkdir()
+    tracked = examples / "public_leak.py"
+    tracked.write_text(r'PATH = r"W:\00_CAE\COMSOL\_crossval\case.py"' + "\n",
+                       encoding="utf-8")
+    untracked = examples / "private_scratch.py"
+    untracked.write_text(r'PATH = r"S:\ELF_MAGIC\_crossval\case.meg"' + "\n",
+                         encoding="utf-8")
+
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True,
+                   stdout=subprocess.DEVNULL)
+    subprocess.run(["git", "add", "examples/public_leak.py"], cwd=tmp_path,
+                   check=True, stdout=subprocess.DEVNULL)
+
+    tracked_findings = policy_lint.scan_text_tree(tmp_path, tracked_only=True)
+    assert [item[0] for item in tracked_findings] == ["examples\\public_leak.py"]
+
+    all_findings = policy_lint.scan_text_tree(tmp_path)
+    assert {item[0] for item in all_findings} == {
+        "examples\\public_leak.py",
+        "examples\\private_scratch.py",
+    }

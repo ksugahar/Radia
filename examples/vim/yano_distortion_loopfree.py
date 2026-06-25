@@ -1,4 +1,4 @@
-"""Can a COLLOCATION (yano-MSC) be distortion-robust (accuracy holds on skewed hexes), loop-free, AND
+"""Can a COLLOCATION (surface-charge MSC) be distortion-robust (accuracy holds on skewed hexes), loop-free, AND
 well-conditioned at high mu_r?  Answer: YES -- loop deflation alone does it, once the loop basis is
 COMPLETE.  The field-null of N is EXACTLY the cell-graph cycle space (no mysterious extra modes):
 dim(ker N) == graph nullity (= n_internal_faces - n_cells + 1) to machine precision.
@@ -18,7 +18,7 @@ matching had KEY COLLISIONS that silently undercounted the cycles (307 of 325 at
 The cause was pinned exactly (undercount == hash-collision count == missed-internal-face count) and fixed
 (bucketed face matching); GetLoopBasis now returns the full cycle count, so loop deflation alone suffices.
 
-So "distortion-robust + loop-free + well-conditioned collocation" = yano-MSC collocation (accuracy)
+So "distortion-robust + loop-free + well-conditioned collocation" = surface-charge MSC collocation (accuracy)
 + deflate the cell-graph loop space (which IS the full field-null).  No div(B)=0 / no SVD needed.
 """
 import json

@@ -27,7 +27,7 @@ RESULT (2026-06-07) -- TWO artifacts found, both fixed, the true picture is HONE
 
   Corrected, honest result (Jacobi MINRES == full GMRES):
     mu_r (1e2->1e4): iters FLAT -- regular 8/8/8, distorted ~80/76/69 (NOT growing, slightly
-      DECREASING).  The yano-type high-mu BREAKDOWN IS ABSENT: loops are EXACTLY field-null
+      DECREASING).  The six-face surface-charge high-mu BREAKDOWN IS ABSENT: loops are EXACTLY field-null
       (||N.loop||/||N|| ~ 4e-16) so they sit at exactly eigenvalue 1/chi and never pollute.
       => plain Jacobi gives mu_r-INDEPENDENT convergence.  NO explicit loop-star, NO H-ILU
          needed for the high-mu regime -- the user's "Jacobi de sumu" hope HOLDS for mu_r.
@@ -225,7 +225,7 @@ if __name__ == "__main__":
                       "mu_min": float(d["mu"][0]), "loop_res": float(d["loop_res"])})
     res["distortion_sweep_mur1e4"] = sweep
     print("  => iters FLAT in mu_r (above) but GROW with distortion -> a mesh-conditioning effect,")
-    print("     NOT the yano-type high-mu breakdown (which grows with mu_r). loops stay field-null.")
+    print("     NOT the six-face surface-charge high-mu breakdown (which grows with mu_r). loops stay field-null.")
     with open(os.path.join(HERE, "hdiv_demag_quad_self.json"), "w") as f:
         json.dump({k: v for k, v in res.items() if k in ("c_cube", "c_sq", "regular", "distorted")}, f, indent=2)
     print("\nsaved", os.path.join(HERE, "hdiv_demag_quad_self.json"))

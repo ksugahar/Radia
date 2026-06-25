@@ -85,12 +85,24 @@ struct NonlinearContext {
 	// Convergence tracking
 	double B_sat;               // Saturation B for relative convergence check
 	double max_B_rel_change;    // Maximum relative B change this iteration
+	double nonlinear_tol;       // Outer nonlinear convergence tolerance
+	bool last_solve_was_moment_hacapk;  // True when the last linear step used the moment method-2 path
+	double last_moment_linear_tol;      // Effective tolerance used by the last moment Krylov solve
+	int last_moment_krylov_solver;      // 0=BiCGSTAB, 1=GMRES
 
 	// Under-relaxation parameter (0 = full step, 0.5 = 50% damping)
 	double relax_param;
 
 	// Base matrix for linear system (geometric part without chi)
 	std::vector<double> BaseMatrix;
+
+#ifdef RADIA_USE_HACAPK
+	// Multipole-moment method-2 reusable chi-free geometry H-matrix.  The nonlinear Picard loop updates
+	// row scaling / RHS / preconditioner, not this geometry kernel.
+	std::shared_ptr<RadHACApKMomentSystem> MomentKernelHMatrix;
+	std::vector<double> MomentLocalLBlock;  // chi-independent 6x6 local moment blocks, one per moment element
+	std::vector<double> MomentDiagKBlock;   // chi-free diagonal K_geometry blocks, one per moment element
+#endif
 
 	// Newton-Raphson fields
 	bool use_newton;                           // True to use differential chi
@@ -108,6 +120,13 @@ struct NonlinearContext {
 	bool use_b_input;                          // True for B-input Newton solver
 	std::vector<std::vector<TVector3d>> saved_hys_states;  // Per-element saved Jk states
 
+	// Multipole-moment outer acceleration history (safeguarded Anderson depth 1).
+	bool moment_anderson_have_prev;
+	std::vector<double> MomentAndersonPrevResidual;
+	std::vector<double> MomentAndersonPrevImage;
+	int moment_anderson_accepted;
+	int moment_anderson_rejected;
+
 	// Constructor
 	NonlinearContext()
 		: totalDOF(0)
@@ -118,6 +137,10 @@ struct NonlinearContext {
 		, all_materials_linear(true)
 		, B_sat(1.0)
 		, max_B_rel_change(0.0)
+		, nonlinear_tol(0.0)
+		, last_solve_was_moment_hacapk(false)
+		, last_moment_linear_tol(0.0)
+		, last_moment_krylov_solver(0)
 		, relax_param(0.0)
 		, use_newton(false)
 		, newton_damping_enabled(false)
@@ -125,6 +148,9 @@ struct NonlinearContext {
 		, newton_ls_min_omega(0.01)
 		, total_ls_backtracks(0)
 		, use_b_input(false)
+		, moment_anderson_have_prev(false)
+		, moment_anderson_accepted(0)
+		, moment_anderson_rejected(0)
 	{}
 };
 
@@ -311,7 +337,7 @@ protected:
 	// Override: LU direct solver for linear step
 	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
 
-	// Override: when the moment H-matrix path (g_yano_moment_hacapk) drives this LU/Picard driver, the
+	// Override: when the moment H-matrix path (g_multipole_moment_hacapk) drives this LU/Picard driver, the
 	// linear step solves via the scalable H-BiCGSTAB and the convergence scaffold uses H=M/chi -- so no
 	// dense interaction/base matrix is needed (Phase 2 Increment 4 storage decoupling).  Returns true for
 	// the genuine dense LU / B-input Newton-Hantila paths (which DO read the dense BaseMatrix).
@@ -367,6 +393,10 @@ public:
 protected:
 	// Override: BiCGSTAB iterative solver for linear step
 	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
+
+	// Moment method-1 builds the parameter-free moment dense matrix inside
+	// SolveLinearStep, so it does not need the legacy FlatInteract matrix.
+	bool NeedsDenseMatrix() const override;
 
 private:
 	// Variable DOF version of BiCGSTAB

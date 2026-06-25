@@ -24,16 +24,21 @@ of the methods below, with an analytic sanity check available.
 |---|---|---|
 | Body in air, global 2D/3D force | Weighted Maxwell stress | ``force.eggshell_force*`` |
 | Rotating machine torque from field solution | Weighted Maxwell stress torque | ``force.eggshell_torque*`` |
+| 2D sector torque to whole-machine torque | Stack/symmetry scaling | ``machine_scaling.MachineScaling``, ``machine_scaling.torque_scaling_summary`` |
 | Simple closed integration surface in air | Maxwell surface stress | ``force.maxwell_surface_force*`` |
 | One surface patch / sign convention teaching | Local Maxwell traction | ``force.maxwell_stress_tensor_air`` / ``force.maxwell_traction_summary`` |
-| Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d`` |
+| First-order `.vol` boundary triangle force trace | P1 triangle traction load / Maxwell traction / boundary pressure/vector-traction rows | ``force.surface_triangle_constant_traction_load_summary``, ``force.surface_triangle_maxwell_traction_summary``, ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows``, ``NetgenTriTetVolMesh.boundary_traction_force_moment_rows`` |
+| CAD-side analytic box face loads | build123d face pressure / vector traction rows | ``build123d.modeling.box_face_pressure_moment_rows``, ``build123d.modeling.box_face_traction_moment_rows`` |
+| Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d``, ``force.planar_lorentz_force_summary``, ``force.parallel_wire_lorentz_force_summary`` |
+| Discrete force rows to net force/torque | Resultant and pivot moment sum | ``force.force_moment_resultant_summary`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
-| Uniform cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*`` |
-| Energy/inductance-derived checks | Field energy | ``force.magnetic_energy*``, ``force.inductance_*`` |
+| Uniform / sampled cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*``, ``force.air_gap_shear_torque_from_angle_samples`` |
+| RF beam / waveguide radiation pressure | Time-averaged Poynting momentum flux | ``force.radiation_pressure_*``, ``force.poynting_patch_force_summary``, ``force.time_average_maxwell_*`` |
+| Energy/inductance-derived checks | Field energy / virtual work | ``force.magnetic_energy*``, ``force.inductance_*``, ``force.virtual_work_force_*`` |
 | dq motor operating torque | Lumped dq model | ``solve.dq_torque`` and companions |
 | Synchronous/induction machine torque curves | Circuit-level machine model | ``solve.synchronous_power_angle_torque`` / ``solve.induction_machine_torque`` |
-| MEMS/electrostatic force | Electric weighted stress | ``force.electrostatic_eggshell_force*`` |
+| MEMS/electrostatic force | Electric Maxwell stress / capacitance gradient / weighted stress | ``electrostatics.parallel_plate_capacitor_energy_force``, ``electrostatics.capacitance_gradient_force_summary``, ``force.electrostatic_traction_summary``, ``force.electrostatic_eggshell_force*`` |
 
 ## Core identities
 
@@ -65,6 +70,52 @@ For 2D out-of-plane current ``Jz`` and in-plane ``B=(Bx, By)``:
 ``Fx = -int Jz By dA`` and ``Fy = int Jz Bx dA``.  Pass the total field; the
 self-field integrates to zero by symmetry for the net conductor force.
 
+For two long parallel wires, put wire 1 at the origin and wire 2 at separation
+vector ``r`` in the xy plane.  With positive current along ``+z``:
+
+```text
+B_1(r) = mu0 I1 / (2 pi |r|) (zhat x rhat)
+F_2/L = I2 zhat x B_1 = -mu0 I1 I2 / (2 pi |r|) rhat
+```
+
+Like currents attract, so the right-hand wire feels a force back toward wire 1.
+This is the signed/directional gate behind
+``force.parallel_wire_lorentz_force_summary`` and the scalar
+``solve.two_wire_force_per_length``.
+
+Discrete force rows to force/torque:
+
+```text
+F = sum_i F_i
+M_p = sum_i (r_i - p) x F_i
+```
+
+This is the final common reduction for force rows from Maxwell-stress patches,
+Lorentz elements, pressure faces, and nodal loads.  A force couple has zero net
+force and a pivot-independent moment.
+
+P1 constant surface traction load:
+
+```text
+F_e = A t,      f_i = F_e / 3
+```
+
+The equal nodal load preserves force and moment because the centroid of a
+linear triangle is the mean of its three vertices.  Use this as the readable
+boundary-load gate before replacing ``t`` with Maxwell traction on `.vol`
+surface triangles.
+
+Planar CAD face vector traction:
+
+```text
+F_face = A_face t,      M_p = (c_face - p) x F_face
+```
+
+Use this when checking a mesh or CAD handoff before the traction is generated
+from fields.  Scalar pressure is tied to the oriented normal
+(``F = p n A``); vector traction is already a global vector, so it does not
+change direction when it is applied to another box face.
+
 Uniform air-gap pressure:
 
 ```text
@@ -74,24 +125,112 @@ p = B_gap^2 / (2 mu0),     F = p A
 This is the fast sanity check for solenoids, relays, magnetic circuits, and
 pole-face holding force.  It is the local Maxwell stress evaluated in the gap.
 
+Sampled cylindrical air-gap torque:
+
+```text
+tau(theta) = Br(theta) Bt(theta) / mu0
+T = r^2 L integral tau(theta) dtheta
+```
+
+This is the machine-torque post-processing path for exported air-gap samples.
+The uniform helper is a closed-form special case; the sampled helper integrates
+segment contributions so sector scaling and harmonic signs stay visible.
+
+2D sector-to-machine torque scaling:
+
+```text
+T_whole = T_2d * length_unit_m^2 * stack_length_m * symmetry_factor
+```
+
+Use ``machine_scaling.torque_scaling_summary`` when a 2D torque is per unit
+axial depth and was solved on a rotational sector.  The helper makes the mesh
+unit, active stack length, and modelled-sector multiplier visible in the JSON
+record, which prevents comparing a sector N/m value against a whole-machine
+N m target by accident.
+
+Electrostatic normal pressure:
+
+```text
+E = V / d
+p = 0.5 eps |E|^2
+F = p A = 0.5 eps A V^2 / d^2 = W / d
+fixed voltage coordinate force: F_x = 0.5 V^2 dC/dx
+fixed charge coordinate force:  F_x = 0.5 Q^2 C^-2 dC/dx
+```
+
+This is the electric Maxwell-stress twin of magnetic air-gap pressure.  Use the
+parallel-plate identity as the first MEMS/electrostatic force gate, then compare
+the same pressure against ``force.electrostatic_traction_summary``.  For shape
+or displacement sweeps, use ``electrostatics.capacitance_gradient_force_summary``:
+if the coordinate is a gap/height, ``dC/dx`` is usually negative and the signed
+force points toward smaller gap.  Then move to a full electric weighted-stress
+extraction.
+
+RF/time-harmonic radiation pressure at normal incidence:
+
+```text
+p = (A + 2 R) I / c,     F = (A + 2 R) P / c
+one-sided scattering:    F = (1 + R - T) P_inc / c
+```
+
+where ``I`` is time-average Poynting intensity, ``P`` is integrated incident
+power, ``A`` is absorptance, ``R`` is reflectance, and ``T`` is transmittance.
+The two factors are identical because ``A = 1 - R - T``.  Use this for absorber,
+short, mirror, transmitted through-line, and waveguide-port force sanity checks
+before attempting a full time-averaged Maxwell-stress surface integral.
+
+For a vector Poynting patch calculation with propagation direction ``k`` and
+surface normal ``n`` pointing out of the illuminated side:
+
+```text
+P_inc = |S| A_patch max(0, -k.n)
+F_abs = absorptance * P_inc k / c
+F_ref = -2 reflectance * P_inc max(0, -k.n) n / c
+```
+
+This reproduces the oblique-incidence ``cos^2(theta)`` normal force and the
+absorbed tangential momentum term.
+
+Complex phasor Maxwell stress:
+
+```text
+<T_ij> = q Re(eps E_i E_j* + mu H_i H_j*)
+         - q/2 (eps |E|^2 + mu |H|^2) delta_ij
+q = 1/2 for peak phasors, q = 1 for RMS phasors
+```
+
+For a normally incident plane wave, ``<T> n = -(I/c) n`` on a control surface
+whose normal points along propagation.  The receiving surface force is the
+opposite sign, with the reflected field doubling the pressure for an ideal
+mirror.
+
 Energy/coenergy:
 
 ```text
 constant current:      F = dW_co/dx
+fixed flux/field:      F = -dW/dx
 linear energy check:   L = 2 W / I^2
 ```
 
 For nonlinear B-H force, prefer a weighted-stress or coenergy virtual-work
-method.  Finite-difference energy is useful as an independent check, but it
-requires a stable geometry perturbation and matched meshes or careful remeshing.
+method.  ``force.virtual_work_force_from_displacement_samples`` is the readable
+post-processor for displacement sweeps: use ``energy_kind="coenergy"`` for
+fixed-current samples and ``energy_kind="stored_energy"`` for the negative
+stored-energy derivative.  Finite-difference energy is useful as an independent
+check, but it requires a stable geometry perturbation and matched meshes or
+careful remeshing.
 
 ## Validation anchors to remember
 
 - Uniform magnetized sphere: average interior ``B`` should approach ``2 Br / 3``.
 - Two long parallel wires: ``F/L = mu0 I1 I2 / (2 pi d)``.
+- Force couple: two opposite tangential forces at radius ``r`` give
+  ``T = 2 r F`` and zero net force.
 - Wire above high-permeability plane: image-current limit gives
   ``F/L = mu0 I^2 / (4 pi h)``.
 - Uniform air gap: ``p(1 T) = 1 / (2 mu0) = 397887.35772973835 Pa``.
+- RF normal incidence: perfect absorber ``F = P/c``; perfect reflector
+  ``F = 2 P/c``.
 - Round-wire internal inductance at DC: ``L_int = mu0 / (8 pi)`` per length.
 - dq PM torque: ``T = (3/2) p (lambda_m iq + (Ld-Lq) id iq)``.
 
@@ -114,6 +253,41 @@ requires a stable geometry perturbation and matched meshes or careful remeshing.
 
 - ``ngsolve_usage("lorentz_force")``: conductor force, image force, busbars.
 - ``ngsolve_usage("air_gap_force")``: magnetic-circuit holding force.
+- ``examples/fem_readable/validation_surface_maxwell_force_trace.py``:
+  first-order `.vol` boundary triangles to Maxwell traction and P1 nodal force loads.
+- ``examples/fem_readable/validation_surface_triangle_constant_traction_load.py``:
+  constant P1 surface-triangle traction to equivalent nodal loads, with
+  force/moment preservation.
+- ``examples/cubit_mesh_export/validation_vol_boundary_pressure_moment.py``:
+  named `.vol` sidesets to pressure force/moment rows and generic resultant reduction.
+- ``examples/cubit_mesh_export/validation_vol_boundary_traction_moment.py``:
+  named `.vol` sidesets to constant vector-traction force/moment rows and
+  generic resultant reduction.
+- ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:
+  build123d analytic box pressure moments checked against named `.vol` rows.
+- ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_traction_moment.py``:
+  build123d analytic box vector-traction moments checked against named `.vol`
+  rows.
+- ``examples/electric_machine/validation_planar_lorentz_block_force.py``:
+  planar ``Jz x B`` block force checked against the directional two-wire
+  Lorentz summary.
+- ``examples/electric_machine/validation_machine_torque_scaling.py``:
+  2D sector torque to whole-machine N m scaling with stack length, mesh unit,
+  and symmetry factor visible.
+- ``examples/electric_machine/validation_virtual_work_force_displacement_sweep.py``:
+  displacement energy/coenergy samples to force, including the fixed-current
+  versus fixed-flux sign gate.
+- ``examples/electric_machine/validation_sampled_air_gap_shear_torque.py``:
+  sampled cylindrical air-gap ``Br``/``Bt`` to torque, including uniform and
+  harmonic analytic gates.
+- ``examples/electrostatics/validation_parallel_plate_electrostatic_force.py``:
+  capacitance-energy, Maxwell-pressure, and traction-equivalence gate.
+- ``examples/electrostatics/validation_capacitance_gradient_force.py``:
+  fixed-voltage / fixed-charge capacitance-gradient force with signed
+  gap/closing coordinates.
+- ``examples/rf_waveguide/validation_scattering_radiation_force.py``:
+  one-sided normal-incidence scattering force from reflectance/transmittance,
+  equivalent to the absorber/reflector radiation-pressure factor.
 - ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.
 - ``ngsolve_usage("electrostatic_force")``: MEMS electric force.
 - ``force_validation("cross_validation")``: stored regression-reference cases.

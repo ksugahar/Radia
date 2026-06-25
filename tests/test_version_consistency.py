@@ -53,5 +53,5 @@ def test_pyproject_matches_init(label, pyproject, init):
     assert v_init is not None, f"{label}: no __version__ in {init}"
     assert v_pyproject == v_init, (
         f"{label}: VERSION MISMATCH -- {pyproject} says {v_pyproject!r} but "
-        f"{init} says {v_init!r}.  Bump BOTH in lockstep (release-triple "
+        f"{init} says {v_init!r}.  Bump BOTH in lockstep (release-qud "
         f"Phase 2).")

@@ -420,6 +420,418 @@ def acoustic_impedance_from_dtn(frequency, dtn_eigenvalue, rho=1.2041):
     }
 
 
+def acoustic_boundary_power_summary(
+    pressure,
+    normal_velocity,
+    area=1.0,
+    amplitude="peak",
+):
+    r"""Active/reactive acoustic power from boundary pressure and normal velocity.
+
+    For complex pressure ``p`` and outward normal velocity ``v_n`` on a boundary
+    patch, the complex normal intensity is
+
+        I_n = alpha p conj(v_n),
+
+    where ``alpha=0.5`` for peak phasors and ``alpha=1`` for RMS phasors.  The
+    real part is active outward power density and the imaginary part is the
+    reactive near-field exchange.  This is the mesh-postprocessing scalar that
+    acoustic FEM/BEM models use after solving for pressure and boundary
+    velocity traces.
+    """
+
+    p = complex(pressure)
+    v = complex(normal_velocity)
+    if not (
+        math.isfinite(p.real)
+        and math.isfinite(p.imag)
+        and math.isfinite(v.real)
+        and math.isfinite(v.imag)
+    ):
+        raise ValueError("pressure and normal_velocity must be finite")
+    patch_area = float(area)
+    if patch_area < 0.0:
+        raise ValueError("area must be >= 0")
+    if amplitude == "peak":
+        factor = 0.5
+    elif amplitude == "rms":
+        factor = 1.0
+    else:
+        raise ValueError("amplitude must be 'peak' or 'rms'")
+
+    intensity = factor * p * v.conjugate()
+    return {
+        "pressure": p,
+        "normal_velocity": v,
+        "area": patch_area,
+        "amplitude": amplitude,
+        "phasor_average_factor": factor,
+        "complex_intensity": intensity,
+        "active_intensity": intensity.real,
+        "reactive_intensity": intensity.imag,
+        "active_power": patch_area * intensity.real,
+        "reactive_power": patch_area * intensity.imag,
+        "apparent_intensity": abs(intensity),
+        "apparent_power": patch_area * abs(intensity),
+        "specific_impedance": None if v == 0.0 else p / v,
+        "specific_admittance": None if p == 0.0 else v / p,
+        "policy": "outward_active_power_positive_for_pressure_times_conjugate_normal_velocity",
+    }
+
+
+def acoustic_impedance_reflection_summary(
+    specific_impedance,
+    incidence_angle_rad=0.0,
+    incident_pressure=1.0,
+    rho=1.2041,
+    c=343.0,
+    amplitude="peak",
+):
+    r"""Plane-wave reflection and absorption at a local acoustic impedance load.
+
+    This is the one-port companion to :func:`acoustic_boundary_power_summary`.
+    A propagating plane wave is incident on a locally reacting boundary whose
+    load impedance is measured with velocity positive *into* the load.  The
+    pressure reflection coefficient is
+
+        Gamma = (z_load - z_n) / (z_load + z_n),
+
+    where ``z_n = rho*c/cos(theta)`` is the plane-wave normal impedance.  The
+    active absorption coefficient is ``1 - |Gamma|^2``.  Peak phasors use the
+    0.5 time-average factor; RMS phasors use 1.0.
+
+    The return dictionary includes a direct power balance:
+
+        incident_intensity - reflected_intensity == absorbed_intensity
+
+    and the same absorbed complex intensity computed from total boundary
+    pressure and load normal velocity.  This is a compact sign/conjugation
+    check for acoustic FEM/BEM impedance boundaries.
+    """
+
+    rrho = float(rho)
+    cc = float(c)
+    theta = float(incidence_angle_rad)
+    if rrho <= 0.0:
+        raise ValueError("rho must be > 0")
+    if cc <= 0.0:
+        raise ValueError("c must be > 0")
+    if abs(theta) >= 0.5 * math.pi:
+        raise ValueError("incidence_angle_rad must be strictly between -pi/2 and pi/2")
+    if amplitude == "peak":
+        factor = 0.5
+    elif amplitude == "rms":
+        factor = 1.0
+    else:
+        raise ValueError("amplitude must be 'peak' or 'rms'")
+
+    z_load = complex(specific_impedance)
+    if not (
+        math.isfinite(z_load.real)
+        and math.isfinite(z_load.imag)
+    ):
+        raise ValueError("specific_impedance must be finite")
+    if z_load == 0.0:
+        gamma = -1.0 + 0.0j
+    else:
+        z_normal = rrho * cc / math.cos(theta)
+        denom = z_load + z_normal
+        if denom == 0.0:
+            raise ValueError("specific_impedance + characteristic normal impedance must be nonzero")
+        gamma = (z_load - z_normal) / denom
+
+    z_normal = rrho * cc / math.cos(theta)
+    p_inc = complex(incident_pressure)
+    if not (math.isfinite(p_inc.real) and math.isfinite(p_inc.imag)):
+        raise ValueError("incident_pressure must be finite")
+    p_ref = gamma * p_inc
+    p_total = p_inc + p_ref
+    velocity_into_load = (p_inc - p_ref) / z_normal
+    boundary_intensity = factor * p_total * velocity_into_load.conjugate()
+    incident_intensity = factor * abs(p_inc) ** 2 / z_normal
+    reflected_intensity = factor * abs(p_ref) ** 2 / z_normal
+    absorbed_intensity = incident_intensity - reflected_intensity
+    absorption = 1.0 - abs(gamma) ** 2
+
+    return {
+        "rho": rrho,
+        "c": cc,
+        "incidence_angle_rad": theta,
+        "amplitude": amplitude,
+        "phasor_average_factor": factor,
+        "characteristic_normal_impedance": z_normal,
+        "specific_impedance": z_load,
+        "normalized_impedance": z_load / z_normal,
+        "incident_pressure": p_inc,
+        "reflected_pressure": p_ref,
+        "total_boundary_pressure": p_total,
+        "normal_velocity_into_load": velocity_into_load,
+        "pressure_reflection_coefficient": gamma,
+        "velocity_reflection_coefficient": -gamma,
+        "power_reflection_coefficient": abs(gamma) ** 2,
+        "absorption_coefficient": absorption,
+        "incident_intensity": incident_intensity,
+        "reflected_intensity": reflected_intensity,
+        "absorbed_intensity": absorbed_intensity,
+        "boundary_complex_intensity_into_load": boundary_intensity,
+        "boundary_active_intensity_into_load": boundary_intensity.real,
+        "boundary_reactive_intensity_into_load": boundary_intensity.imag,
+        "power_balance_residual": incident_intensity - reflected_intensity - boundary_intensity.real,
+        "policy": "velocity_positive_into_load_pressure_reflection_gamma_zload_minus_zn_over_zload_plus_zn",
+    }
+
+
+def acoustic_impedance_radiation_pressure_summary(
+    specific_impedance,
+    area=1.0,
+    incidence_angle_rad=0.0,
+    incident_pressure=1.0,
+    rho=1.2041,
+    c=343.0,
+    amplitude="peak",
+):
+    r"""Normal acoustic momentum pressure from an impedance reflection summary.
+
+    The incident intensity returned by :func:`acoustic_impedance_reflection_summary`
+    is the normal energy flux into the boundary.  The corresponding normal
+    momentum transfer to the load is
+
+        pressure = (1 + R) I_inc / c = (A + 2 R) I_inc / c,
+
+    where ``R=|Gamma|^2`` and ``A=1-R`` for a passive one-port load.  Thus a
+    matched absorber gives ``I/c`` and a lossless reflector gives ``2 I/c``.
+    """
+
+    patch_area = float(area)
+    if patch_area < 0.0:
+        raise ValueError("area must be >= 0")
+    reflection = acoustic_impedance_reflection_summary(
+        specific_impedance,
+        incidence_angle_rad=incidence_angle_rad,
+        incident_pressure=incident_pressure,
+        rho=rho,
+        c=c,
+        amplitude=amplitude,
+    )
+    speed = float(reflection["c"])
+    incident_intensity = float(reflection["incident_intensity"])
+    reflectance = float(reflection["power_reflection_coefficient"])
+    absorption = float(reflection["absorption_coefficient"])
+    pressure = (1.0 + reflectance) * incident_intensity / speed
+    equivalent_pressure = (absorption + 2.0 * reflectance) * incident_intensity / speed
+    absorbed_pressure = absorption * incident_intensity / speed
+    reflected_pressure = 2.0 * reflectance * incident_intensity / speed
+    return {
+        "area": patch_area,
+        "reflection": reflection,
+        "incident_normal_intensity": incident_intensity,
+        "power_reflection_coefficient": reflectance,
+        "absorption_coefficient": absorption,
+        "momentum_transfer_factor": 1.0 + reflectance,
+        "absorber_reflector_equivalent_factor": absorption + 2.0 * reflectance,
+        "absorbed_momentum_pressure_Pa": absorbed_pressure,
+        "reflected_momentum_pressure_Pa": reflected_pressure,
+        "normal_momentum_pressure_Pa": pressure,
+        "normal_momentum_pressure_equivalent_Pa": equivalent_pressure,
+        "normal_force_N": patch_area * pressure,
+        "force_from_absorptance_reflectance_N": patch_area * equivalent_pressure,
+        "force_balance_residual_N": patch_area * (pressure - equivalent_pressure),
+        "passive_one_port": absorption >= -1.0e-12,
+        "policy": "acoustic_impedance_momentum_pressure_from_absorptance_and_reflectance",
+    }
+
+
+def acoustic_impedance_reflection_sweep_summary(
+    frequency_Hz,
+    specific_impedance_values,
+    area=1.0,
+    incidence_angle_rad=0.0,
+    incident_pressure=1.0,
+    rho=1.2041,
+    c=343.0,
+    amplitude="peak",
+    passivity_tolerance=1.0e-12,
+):
+    """Audit acoustic impedance reflection and momentum pressure over a sweep."""
+
+    frequencies = [float(value) for value in frequency_Hz]
+    impedances = [complex(value) for value in specific_impedance_values]
+    if len(frequencies) != len(impedances):
+        raise ValueError("frequency_Hz and specific_impedance_values must have the same length")
+    if not frequencies:
+        raise ValueError("at least one frequency sample is required")
+    tolerance = float(passivity_tolerance)
+    if tolerance < 0.0:
+        raise ValueError("passivity_tolerance must be >= 0")
+
+    rows = []
+    violation_rows = []
+    for idx, (frequency, impedance) in enumerate(zip(frequencies, impedances)):
+        if not math.isfinite(frequency) or frequency < 0.0:
+            raise ValueError("frequency samples must be finite and >= 0")
+        if not math.isfinite(impedance.real) or not math.isfinite(impedance.imag):
+            raise ValueError("specific impedance values must be finite")
+        pressure = acoustic_impedance_radiation_pressure_summary(
+            impedance,
+            area=area,
+            incidence_angle_rad=incidence_angle_rad,
+            incident_pressure=incident_pressure,
+            rho=rho,
+            c=c,
+            amplitude=amplitude,
+        )
+        reflection = pressure["reflection"]
+        gamma = complex(reflection["pressure_reflection_coefficient"])
+        absorption = float(pressure["absorption_coefficient"])
+        row = {
+            "index": idx,
+            "frequency_Hz": frequency,
+            "specific_impedance_real": impedance.real,
+            "specific_impedance_imag": impedance.imag,
+            "normalized_impedance_real": complex(reflection["normalized_impedance"]).real,
+            "normalized_impedance_imag": complex(reflection["normalized_impedance"]).imag,
+            "pressure_reflection_real": gamma.real,
+            "pressure_reflection_imag": gamma.imag,
+            "pressure_reflection_magnitude": abs(gamma),
+            "pressure_reflection_phase_rad": math.atan2(gamma.imag, gamma.real),
+            "power_reflection_coefficient": float(pressure["power_reflection_coefficient"]),
+            "absorption_coefficient": absorption,
+            "momentum_transfer_factor": float(pressure["momentum_transfer_factor"]),
+            "incident_normal_intensity": float(pressure["incident_normal_intensity"]),
+            "normal_momentum_pressure_Pa": float(pressure["normal_momentum_pressure_Pa"]),
+            "normal_force_N": float(pressure["normal_force_N"]),
+            "passivity_excess_absorption": max(0.0, -absorption),
+            "passivity_ok": absorption >= -tolerance,
+        }
+        rows.append(row)
+        if not row["passivity_ok"]:
+            violation_rows.append(row)
+
+    max_absorption_row = max(rows, key=lambda row: row["absorption_coefficient"])
+    min_absorption_row = min(rows, key=lambda row: row["absorption_coefficient"])
+    max_force_row = max(rows, key=lambda row: row["normal_force_N"])
+    min_force_row = min(rows, key=lambda row: row["normal_force_N"])
+    monotonic = all(
+        frequencies[idx] < frequencies[idx + 1]
+        for idx in range(len(frequencies) - 1)
+    )
+
+    return {
+        "policy": "acoustic_impedance_reflection_sweep_momentum_audit",
+        "n_points": len(rows),
+        "frequency_min_Hz": min(frequencies),
+        "frequency_max_Hz": max(frequencies),
+        "frequency_monotonic_increasing": monotonic,
+        "area": float(area),
+        "incidence_angle_rad": float(incidence_angle_rad),
+        "rho": float(rho),
+        "c": float(c),
+        "amplitude": amplitude,
+        "passivity_tolerance": tolerance,
+        "passivity_ok": not violation_rows,
+        "passivity_violation_count": len(violation_rows),
+        "max_passivity_excess_absorption": max(row["passivity_excess_absorption"] for row in rows),
+        "mean_absorption_coefficient": sum(row["absorption_coefficient"] for row in rows) / len(rows),
+        "max_absorption_coefficient": max_absorption_row["absorption_coefficient"],
+        "max_absorption_frequency_Hz": max_absorption_row["frequency_Hz"],
+        "min_absorption_coefficient": min_absorption_row["absorption_coefficient"],
+        "min_absorption_frequency_Hz": min_absorption_row["frequency_Hz"],
+        "mean_normal_force_N": sum(row["normal_force_N"] for row in rows) / len(rows),
+        "max_normal_force_N": max_force_row["normal_force_N"],
+        "max_force_frequency_Hz": max_force_row["frequency_Hz"],
+        "min_normal_force_N": min_force_row["normal_force_N"],
+        "min_force_frequency_Hz": min_force_row["frequency_Hz"],
+        "force_span_N": max_force_row["normal_force_N"] - min_force_row["normal_force_N"],
+        "max_force_row": max_force_row,
+        "min_force_row": min_force_row,
+        "max_absorption_row": max_absorption_row,
+        "passivity_violation_rows": violation_rows,
+        "status": "ok" if not violation_rows else "needs_attention",
+        "rows": rows,
+    }
+
+
+def _bessel_j1_fallback(x):
+    """Small dependency-free J1 approximation for acoustic piston gates."""
+
+    value = float(x)
+    ax = abs(value)
+    if ax == 0.0:
+        return 0.0
+    if ax <= 20.0:
+        term = value / 2.0
+        total = term
+        x2_over4 = value * value / 4.0
+        for k in range(1, 80):
+            term *= -x2_over4 / (k * (k + 1.0))
+            total += term
+            if abs(term) <= max(1.0e-18, 1.0e-16 * abs(total)):
+                break
+        return total
+
+    phase = ax - 0.75 * math.pi
+    root = math.sqrt(2.0 / (math.pi * ax))
+    approx = root * (
+        math.cos(phase)
+        - 3.0 * math.sin(phase) / (8.0 * ax)
+        + 15.0 * math.cos(phase) / (128.0 * ax * ax)
+    )
+    return -approx if value < 0.0 else approx
+
+
+def _struve_h1_fallback(x):
+    """Small dependency-free H1 approximation for acoustic piston gates."""
+
+    value = float(x)
+    ax = abs(value)
+    if ax == 0.0:
+        return 0.0
+    if ax <= 20.0:
+        term = 2.0 * ax * ax / (3.0 * math.pi)
+        total = term
+        x2_over4 = ax * ax / 4.0
+        for k in range(80):
+            term *= -x2_over4 / ((k + 1.5) * (k + 2.5))
+            total += term
+            if abs(term) <= max(1.0e-18, 1.0e-16 * abs(total)):
+                break
+        return total
+
+    # H1(x) approaches Y1(x) + 2/pi.  This is sufficient for the high-ka
+    # sanity gate where the piston resistance tends to rho*c and the reactance
+    # is small compared with the plane-wave resistance.
+    phase = ax - 0.75 * math.pi
+    root = math.sqrt(2.0 / (math.pi * ax))
+    y1 = root * (
+        math.sin(phase)
+        + 3.0 * math.cos(phase) / (8.0 * ax)
+        - 15.0 * math.sin(phase) / (128.0 * ax * ax)
+    )
+    return 2.0 / math.pi + y1
+
+
+def _baffled_piston_resistance_reactance_ratios(ka, prefer_scipy=True):
+    """Return piston resistance/reactance ratios, with SciPy optional."""
+
+    value = float(ka)
+    if value <= 0.0:
+        raise ValueError("ka must be > 0")
+    x = 2.0 * value
+    if prefer_scipy:
+        try:
+            from scipy.special import j1, struve
+
+            return 1.0 - float(j1(x)) / value, float(struve(1, x)) / value, "scipy"
+        except ModuleNotFoundError:
+            pass
+
+    return (
+        1.0 - _bessel_j1_fallback(x) / value,
+        _struve_h1_fallback(x) / value,
+        "fallback",
+    )
+
+
 def baffled_circular_piston_radiation(
     radius,
     frequency,
@@ -455,15 +867,14 @@ def baffled_circular_piston_radiation(
     if cc <= 0.0:
         raise ValueError("c must be > 0")
 
-    from scipy.special import j1, struve
-
     velocity = complex(surface_velocity)
     omega = 2.0 * math.pi * f
     k = omega / cc
     ka = k * a
     area = math.pi * a * a
-    resistance_ratio = 1.0 - float(j1(2.0 * ka)) / ka
-    reactance_ratio = float(struve(1, 2.0 * ka)) / ka
+    resistance_ratio, reactance_ratio, special_function_source = (
+        _baffled_piston_resistance_reactance_ratios(ka)
+    )
     z_specific = rrho * cc * complex(resistance_ratio, reactance_ratio)
     volume_velocity = area * velocity
     z_volume_velocity = z_specific / area
@@ -478,6 +889,7 @@ def baffled_circular_piston_radiation(
         "c": cc,
         "surface_area": area,
         "surface_velocity": velocity,
+        "special_function_source": special_function_source,
         "volume_velocity": volume_velocity,
         "specific_impedance": z_specific,
         "specific_resistance": z_specific.real,
