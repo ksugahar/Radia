@@ -149,6 +149,8 @@ radia = [
     "panels/samples/*.py",
     "panels/samples/em_sample_bh.txt",
     "panels/*.json",
+    "panels/notebooks/*.ipynb",
+    "panels/notebooks/*.json",
     "CONVENTIONS.md",
 ]
 
