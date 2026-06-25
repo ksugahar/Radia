@@ -704,6 +704,100 @@ def torque_angle_sweep_summary(torque_Nm, max_harmonic=None):
     }
 
 
+def torque_angle_sweep_comparison_summary(
+    reference_torque_Nm,
+    candidate_torque_Nm,
+    max_harmonic=None,
+    reference_label="reference",
+    candidate_label="candidate",
+):
+    """Compare two uniformly sampled periodic torque-angle sweeps.
+
+    This is a solver-neutral post-processing helper for angle/time sweep
+    studies.  It keeps the comparison readable by reporting three views:
+    absolute metrics for the reference and candidate, sample-wise candidate
+    minus reference deltas, and per-harmonic amplitude/coefficient deltas.
+    """
+
+    reference_values = [float(value) for value in reference_torque_Nm]
+    candidate_values = [float(value) for value in candidate_torque_Nm]
+    if len(reference_values) != len(candidate_values):
+        raise ValueError("reference and candidate sweeps must have the same sample count")
+
+    reference = torque_angle_sweep_summary(reference_values, max_harmonic=max_harmonic)
+    candidate = torque_angle_sweep_summary(candidate_values, max_harmonic=max_harmonic)
+    hmax = reference["max_harmonic"]
+    deltas = [candidate - reference for reference, candidate in zip(reference_values, candidate_values)]
+    delta_summary = torque_angle_sweep_summary(deltas, max_harmonic=hmax)
+
+    def ratio(numerator, denominator):
+        if denominator == 0.0:
+            return 0.0 if numerator == 0.0 else math.inf
+        return numerator / denominator
+
+    reference_rows = {row["order"]: row for row in reference["harmonic_rows"]}
+    candidate_rows = {row["order"]: row for row in candidate["harmonic_rows"]}
+    delta_rows = {row["order"]: row for row in delta_summary["harmonic_rows"]}
+    harmonic_delta_rows = []
+    for order in range(1, hmax + 1):
+        ref_row = reference_rows[order]
+        cand_row = candidate_rows[order]
+        delta_row = delta_rows[order]
+        amplitude_delta = cand_row["amplitude_Nm"] - ref_row["amplitude_Nm"]
+        harmonic_delta_rows.append({
+            "order": order,
+            "reference_amplitude_Nm": ref_row["amplitude_Nm"],
+            "candidate_amplitude_Nm": cand_row["amplitude_Nm"],
+            "amplitude_delta_Nm": amplitude_delta,
+            "amplitude_abs_delta_Nm": abs(amplitude_delta),
+            "amplitude_ratio_candidate_over_reference": ratio(
+                cand_row["amplitude_Nm"],
+                ref_row["amplitude_Nm"],
+            ),
+            "cos_coefficient_delta_Nm": cand_row["cos_coefficient_Nm"] - ref_row["cos_coefficient_Nm"],
+            "sin_coefficient_delta_Nm": cand_row["sin_coefficient_Nm"] - ref_row["sin_coefficient_Nm"],
+            "delta_waveform_amplitude_Nm": delta_row["amplitude_Nm"],
+        })
+    worst = max(harmonic_delta_rows, key=lambda row: row["amplitude_abs_delta_Nm"]) if harmonic_delta_rows else None
+    sample_delta_rms = math.sqrt(sum(value * value for value in deltas) / len(deltas))
+    max_sample_abs_delta = max(abs(value) for value in deltas)
+
+    return {
+        "reference_label": str(reference_label),
+        "candidate_label": str(candidate_label),
+        "n_samples": reference["n_samples"],
+        "max_harmonic": hmax,
+        "reference_summary": reference,
+        "candidate_summary": candidate,
+        "difference_summary": delta_summary,
+        "mean_delta_Nm": candidate["mean_torque_Nm"] - reference["mean_torque_Nm"],
+        "mean_delta_over_reference": ratio(
+            candidate["mean_torque_Nm"] - reference["mean_torque_Nm"],
+            reference["mean_torque_Nm"],
+        ),
+        "ac_rms_delta_Nm": candidate["ac_rms_torque_Nm"] - reference["ac_rms_torque_Nm"],
+        "ac_rms_delta_over_reference": ratio(
+            candidate["ac_rms_torque_Nm"] - reference["ac_rms_torque_Nm"],
+            reference["ac_rms_torque_Nm"],
+        ),
+        "peak_to_peak_delta_Nm": (
+            candidate["peak_to_peak_torque_Nm"] - reference["peak_to_peak_torque_Nm"]
+        ),
+        "sample_delta_rms_Nm": sample_delta_rms,
+        "max_sample_abs_delta_Nm": max_sample_abs_delta,
+        "dominant_harmonic_changed": (
+            candidate["dominant_harmonic"] != reference["dominant_harmonic"]
+        ),
+        "reference_dominant_harmonic": reference["dominant_harmonic"],
+        "candidate_dominant_harmonic": candidate["dominant_harmonic"],
+        "worst_harmonic_order": None if worst is None else worst["order"],
+        "max_harmonic_amplitude_abs_delta_Nm": (
+            0.0 if worst is None else worst["amplitude_abs_delta_Nm"]
+        ),
+        "harmonic_delta_rows": harmonic_delta_rows,
+    }
+
+
 def mtpa_operating_point(lambda_m, Ld, Lq, current, pole_pairs):
     """MAXIMUM-TORQUE-PER-AMPERE operating point of a salient PM synchronous
     machine at stator current magnitude ``current``.
