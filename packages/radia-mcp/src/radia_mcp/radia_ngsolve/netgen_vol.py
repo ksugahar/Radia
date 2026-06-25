@@ -1506,6 +1506,82 @@ class NetgenTriTetVolMesh:
             "policy": "first_order_h1_p1_hcurl_nedelec0_bem_p1_rwg_only",
         }
 
+    def boundary_oriented_edge_summary(self) -> dict[str, object]:
+        """Return one row per oriented boundary-triangle edge.
+
+        This is a teaching-friendly expansion of the RWG part of
+        :meth:`first_order_fem_bem_topology`: each surface triangle contributes
+        three local oriented edges, each linked to the compact boundary edge id,
+        the global volume-node edge, the sign relative to the sorted global edge,
+        and the matching HCurl edge id when the boundary edge is a closed RWG
+        degree of freedom.
+        """
+
+        topology = self.first_order_fem_bem_topology()
+        trace_nodes = tuple(topology["scalar_bem"]["global_node_ids"])
+        rwg = topology["rwg"]
+        surface_edges_global = tuple(tuple(edge) for edge in rwg["edges_global"])
+        hcurl_by_rwg_edge = {
+            int(rwg_edge_id): int(hcurl_edge_id)
+            for rwg_edge_id, hcurl_edge_id in zip(rwg["dof_edge_ids"], rwg["hcurl_edge_ids"])
+        }
+        dof_edge_ids = set(hcurl_by_rwg_edge)
+
+        rows: list[dict[str, object]] = []
+        sign_counts = {-1: 0, 1: 0}
+        for tri_index, tri in enumerate(self.surface_triangles, start=1):
+            for local_edge_index, (edge_id, sign) in enumerate(
+                zip(rwg["tri_edges"][tri_index - 1], rwg["tri_edge_signs"][tri_index - 1]),
+                start=1,
+            ):
+                edge_id = int(edge_id)
+                sign = int(sign)
+                sign_counts[sign] = sign_counts.get(sign, 0) + 1
+                edge_global = surface_edges_global[edge_id - 1]
+                oriented_edge = edge_global if sign > 0 else tuple(reversed(edge_global))
+                adjacent = [int(value) for value in rwg["edge_triangles"][edge_id - 1] if int(value) != 0]
+                opposites_local = [
+                    int(value)
+                    for value in rwg["opposite_vertices_local"][edge_id - 1]
+                    if int(value) != 0
+                ]
+                opposites_global = [int(trace_nodes[value - 1]) for value in opposites_local]
+                p0, p1 = (self.points[node - 1] for node in edge_global)
+                rows.append({
+                    "surface_triangle": tri_index,
+                    "local_edge": local_edge_index,
+                    "boundary_number": tri.bcnr,
+                    "name": self.boundary_names.get(tri.bcnr, f"boundary_{tri.bcnr}"),
+                    "triangle_nodes_global": list(tri.nodes),
+                    "rwg_edge_id": edge_id,
+                    "is_rwg_dof": edge_id in dof_edge_ids,
+                    "hcurl_edge_id": hcurl_by_rwg_edge.get(edge_id),
+                    "edge_nodes_global": list(edge_global),
+                    "oriented_edge_nodes_global": list(oriented_edge),
+                    "orientation_sign": sign,
+                    "edge_length_m": _norm(_sub(p1, p0)),
+                    "adjacent_surface_triangles": adjacent,
+                    "adjacent_surface_triangle_count": len(adjacent),
+                    "opposite_vertices_global": opposites_global,
+                })
+
+        manifold = self.surface_edge_manifold_summary()
+        return {
+            "policy": "boundary_triangle_oriented_edges_for_first_order_rwg_trace",
+            "surface_triangles": len(self.surface_triangles),
+            "oriented_edge_rows": len(rows),
+            "surface_edges": len(surface_edges_global),
+            "rwg_dof_edges": len(dof_edge_ids),
+            "hcurl_trace_edges": len(hcurl_by_rwg_edge),
+            "open_edges": manifold["open_edges"],
+            "closed_edges": manifold["closed_edges"],
+            "is_closed_manifold": manifold["is_closed_manifold"],
+            "orientation_sign_counts": {str(key): value for key, value in sorted(sign_counts.items())},
+            "max_edge_length_m": max((float(row["edge_length_m"]) for row in rows), default=0.0),
+            "min_edge_length_m": min((float(row["edge_length_m"]) for row in rows), default=0.0),
+            "rows": rows,
+        }
+
 
 def read_netgen_tri_tet_vol(path: str | Path) -> NetgenTriTetVolMesh:
     """Read a tri/tet Netgen ``.vol`` file from disk."""
