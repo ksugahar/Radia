@@ -753,6 +753,25 @@ def test_first_order_topology_compacts_boundary_nodes_with_interior_node():
     assert topology["rwg"]["hcurl_edge_ids"] == [1, 2, 3, 5, 6, 8]
 
 
+def test_p1_trace_matrix_summary_is_boolean_gather_for_one_based_sparse():
+    trace = parse_netgen_tri_tet_vol(FOUR_TET_WITH_INTERIOR_NODE_VOL).p1_fem_bem_trace_matrix_summary()
+
+    assert trace["policy"] == "p1_h1_to_scalar_bem_trace_is_boolean_gather"
+    assert trace["matrix_shape"] == [4, 5]
+    assert trace["nnz"] == 4
+    assert trace["rows"] == [1, 2, 3, 4]
+    assert trace["cols"] == [1, 2, 3, 4]
+    assert trace["values"] == [1.0, 1.0, 1.0, 1.0]
+    assert trace["trace_node_ids"] == [1, 2, 3, 4]
+    assert trace["interior_node_ids"] == [5]
+    assert trace["is_boolean_gather"] is True
+    assert trace["row_nnz_min"] == 1
+    assert trace["row_nnz_max"] == 1
+    assert trace["interior_column_nnz_max"] == 0
+    assert all(5 not in tri for tri in trace["surface_triangles_local"])
+    assert any(5 in tet.nodes for tet in parse_netgen_tri_tet_vol(FOUR_TET_WITH_INTERIOR_NODE_VOL).tetrahedra)
+
+
 def test_first_order_topology_balances_rwg_orientation_with_hcurl_trace():
     topology = parse_netgen_tri_tet_vol(FOUR_TET_WITH_INTERIOR_NODE_VOL).first_order_fem_bem_topology()
 
