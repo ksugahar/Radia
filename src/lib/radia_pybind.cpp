@@ -921,6 +921,12 @@ py::dict GetSolveStats() {
     if (n >= 10) {
         result["deflation_alpha"] = stats[9];
     }
+    if (n >= 11) {
+        result["t_moment_fieldgrad"] = stats[10];
+    }
+    if (n >= 12) {
+        result["t_moment_system_build"] = stats[11];
+    }
 
     return result;
 }

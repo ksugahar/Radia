@@ -106,6 +106,8 @@ public:
 
 	// Solve statistics (always available)
 	double m_solve_t_matrix_build;   // Interaction matrix build time [s]
+	double m_solve_t_moment_fieldgrad;      // Dense moment centroid field/gradient build time [s]
+	double m_solve_t_moment_system_build;   // Dense moment system assembly time [s]
 	double m_solve_t_lu_decomp;      // LU decomposition time [s] (Method 0 only)
 	double m_solve_t_linear_solve;   // Total linear solver time [s]
 	int m_solve_linear_iterations;   // Total linear iterations (BiCGSTAB only)
@@ -183,6 +185,8 @@ public:
 
 		// Solve statistics init
 		m_solve_t_matrix_build = 0.0;
+		m_solve_t_moment_fieldgrad = 0.0;
+		m_solve_t_moment_system_build = 0.0;
 		m_solve_t_lu_decomp = 0.0;
 		m_solve_t_linear_solve = 0.0;
 		m_solve_linear_iterations = 0;

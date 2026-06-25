@@ -254,6 +254,8 @@ class radTInteraction : public radTg {
 	std::vector<double> m_flatExternFieldArray;  // Size: m_totalDOF
 	std::vector<double> m_flatMagnArray;         // Size: m_totalDOF (M or sigma values)
 	std::vector<double> m_flatFieldArray;        // Size: m_totalDOF
+	mutable double m_lastMomentFieldGradTime;    // Last BuildMomentSystemCore centroid field/gradient time [s]
+	mutable double m_lastMomentSystemBuildTime;  // Last BuildMomentSystemCore total assembly time [s]
 
 	//-------------------------------------------------------------------------
 	// Pre-computed tetrahedron geometry for fast 3x3 block computation
@@ -521,12 +523,16 @@ public:
 	// The reusable single-(target,source) kernel shared by BuildCentroidFieldGrad and MomentSystemEntry.
 	void CentroidFieldGradFromFace(const double ce3[3], const double V4[4][3], const double srcCenter[3],
 	                               bool isSelf, double area, double Hout[3], double gHout[6]) const;
+	// O(N) geometry/sample cache for the HACApK moment callback path.  This is the multipole-moment
+	// counterpart of the old yano-type PrecomputeHexaGeometry + cached 6x6 block path.
+	void PrecomputeMomentGeometry() const;
 	// On-demand UN-normalized moment system entry A_raw[rowGlobal][colDOF] (the H-matrix entry; see
 	// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  rowGlobal = 6*hpos + t over the valid 6-face hexes
 	// (t: 0,1,2 dipole; 3 monopole; 4,5 diagonal-quadrupole); colDOF = global face DOF.  Computed ONLY from
 	// the row element's local geometry + the on-demand centroid field/grad from face colDOF -- no full-system
 	// build, no row normalization (the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
 	double MomentSystemEntry(int rowGlobal, int colDOF, const double* chiPerHex) const;
+	void MomentSystemBlock6x6(int rowHexPos, int colHexPos, const double* chiPerHex, double* block) const;
 	// multipole-moment MMM system matrix (parameter-free replacement for EIEM2): per moment element assemble
 	// 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
 	// (global field/grad from BuildCentroidFieldGrad, local moments from the element geometry).  Rows 2-norm
@@ -536,6 +542,8 @@ public:
 	// Per-element chi + per-element external field (at moment-element centroid, HextPerHex[h*3+k]); A column = face DOF
 	// so dgesv's solution is sigma in DOF order.  The solve path uses this (coil sources are not uniform).
 	void BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex, std::vector<double>& A, std::vector<double>& rhs, bool normalize = true) const;
+	double LastMomentFieldGradTime() const { return m_lastMomentFieldGradTime; }
+	double LastMomentSystemBuildTime() const { return m_lastMomentSystemBuildTime; }
 	// EIEM2 surface-charge block kernels (Compute6x6BlockFast / Compute5x5BlockFast /
 	// ComputeMixedBlockFast) retired Phase 3b -- multipole-moment MMM (BuildMomentSystemCore) is the sole
 	// surface-charge demag. Method-2 surface-charge solves use RadHACApKMomentSystem; the legacy HACApK

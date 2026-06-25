@@ -1163,10 +1163,62 @@ void RadHACApKMomentSystem::ExtractCoordinates()
     else m_chiv.assign((size_t)(nHex > 0 ? nHex : 1), m_chi);
 }
 
+void RadHACApKMomentSystem::OnBeforeBuild()
+{
+    if (!m_interaction) return;
+    RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, 6);
+    m_interaction->PrecomputeMomentGeometry();
+}
+
 double RadHACApKMomentSystem::GetInteractionMatrixElement(int dof_i, int dof_j) const
 {
     if (!m_interaction || m_chiv.empty()) return 0.0;
-    return m_interaction->MomentSystemEntry(dof_i, dof_j, m_chiv.data());
+    if (dof_i < 0 || dof_j < 0 || dof_i >= m_ndof || dof_j >= m_ndof) return 0.0;
+    int elem_i = dof_i / 6, elem_j = dof_j / 6;
+    int local_i = dof_i - 6 * elem_i, local_j = dof_j - 6 * elem_j;
+
+    static constexpr int TL_HASH_SIZE_MOMENT6 = 1024;
+    static constexpr int TL_HASH_MASK_MOMENT6 = TL_HASH_SIZE_MOMENT6 - 1;
+    static thread_local uint64_t tl_cached_generation = 0;
+    static thread_local int tl_single_elem_i = -1;
+    static thread_local int tl_single_elem_j = -1;
+    static thread_local double tl_single_block[36];
+    static thread_local int tl_cache_elem_i[TL_HASH_SIZE_MOMENT6];
+    static thread_local int tl_cache_elem_j[TL_HASH_SIZE_MOMENT6];
+    static thread_local double tl_cache_block[TL_HASH_SIZE_MOMENT6][36];
+    static thread_local bool tl_initialized = false;
+
+    uint64_t current_gen = RadHACApKCallback::GetGeneration();
+    if (tl_cached_generation != current_gen || !tl_initialized) {
+        tl_single_elem_i = -1;
+        tl_single_elem_j = -1;
+        for (int i = 0; i < TL_HASH_SIZE_MOMENT6; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+        }
+        tl_cached_generation = current_gen;
+        tl_initialized = true;
+    }
+
+    if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
+        return tl_single_block[local_i * 6 + local_j];
+    }
+
+    unsigned int hash_idx = (((unsigned int)elem_i * 73856093u) ^ ((unsigned int)elem_j * 19349663u)) & TL_HASH_MASK_MOMENT6;
+    if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
+        std::memcpy(tl_single_block, tl_cache_block[hash_idx], 36 * sizeof(double));
+        tl_single_elem_i = elem_i;
+        tl_single_elem_j = elem_j;
+        return tl_single_block[local_i * 6 + local_j];
+    }
+
+    m_interaction->MomentSystemBlock6x6(elem_i, elem_j, m_chiv.data(), tl_single_block);
+    tl_single_elem_i = elem_i;
+    tl_single_elem_j = elem_j;
+    tl_cache_elem_i[hash_idx] = elem_i;
+    tl_cache_elem_j[hash_idx] = elem_j;
+    std::memcpy(tl_cache_block[hash_idx], tl_single_block, 36 * sizeof(double));
+    return tl_single_block[local_i * 6 + local_j];
 }
 
 //=========================================================================

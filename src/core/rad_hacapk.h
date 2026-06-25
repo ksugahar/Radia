@@ -362,7 +362,7 @@ public:
 
 protected:
     void ExtractCoordinates() override;   // cluster tree = hex centroids; ndof = 6*nHex
-    void OnBeforeBuild() override {}
+    void OnBeforeBuild() override;
     void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }   // chi folded into A_raw
     bool IsVariableDOF() const override { return false; }
     int  GetUniformNFFC() const override { return 6; }                    // 6 DOF per hex
