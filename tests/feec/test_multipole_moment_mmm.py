@@ -83,6 +83,39 @@ def test_method1_matrix_free_multihex_external_field():
     assert rel < 1e-5, f"method1 matrix-free external B != method0 (rel {rel:.2e})"
 
 
+def test_method1_parallel_hotpath_12hex_matches_method0():
+    """method 1 with nHex>8 (2x2x3=12 hex) exercises the PARALLEL MomentKernelMatVec6x6 branch.
+
+    The pure-hex method-1 matvec runs serially only for nHex<=8 and otherwise parallelizes over rows
+    (rad_interaction.cpp MomentKernelMatVec6x6).  The 4-hex test above only reaches the serial path; this
+    12-hex case forces the parallel hot path, which must still match method 0 (dense LU) externally.
+    """
+    MU0 = 4e-7 * np.pi; mu_r = 200.0; L = 0.01
+
+    def solve_extB(method):
+        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-10)
+        objs = []
+        for ix in range(2):
+            for iy in range(2):
+                for iz in range(3):
+                    x0, y0, z0 = ix * L, iy * L, iz * L
+                    v = [[x0, y0, z0], [x0 + L, y0, z0], [x0 + L, y0 + L, z0], [x0, y0 + L, z0],
+                         [x0, y0, z0 + L], [x0 + L, y0, z0 + L], [x0 + L, y0 + L, z0 + L], [x0, y0 + L, z0 + L]]
+                    h = rad.ObjHexahedron(v, [0, 0, 0]); rad.MatApl(h, rad.MatLin(mu_r)); objs.append(h)
+        assert len(objs) == 12  # > 8 -> MomentKernelMatVec6x6 takes the ParallelFor branch
+        cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * 1e3])])
+        rad.Solve(cont, 1e-8, 4000, method)
+        B = np.asarray([rad.Fld(cont, "b", p) for p in
+                        ([0.06, 0.01, 0.015], [0.0, 0.06, 0.015], [0.01, 0.01, 0.07])], float)
+        rad.UtiDelAll()
+        return B
+
+    B0 = solve_extB(0)
+    B1 = solve_extB(1)
+    rel = np.linalg.norm(B1 - B0) / max(np.linalg.norm(B0), 1e-30)
+    assert rel < 1e-5, f"method1 (12 hex, parallel hot path) external B != method0 (rel {rel:.2e})"
+
+
 def test_method2_hacapk_solves_via_hmatrix():
     """method 2 (HACApK H-matrix + block-Jacobi BiCGSTAB, Phase-2 Increment 3) now SOLVES the moment system
     (no longer raises Error204) and == method 0 (dense LU).  Single cube: the 6x6 block-Jacobi is the exact
