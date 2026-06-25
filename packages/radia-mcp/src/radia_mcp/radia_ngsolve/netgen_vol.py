@@ -318,6 +318,44 @@ class NetgenTriTetVolMesh:
             "max_angle_deg": max(max_angles),
         }
 
+    def worst_tetrahedra_by_quality(self, limit: int = 5) -> tuple[dict[str, object], ...]:
+        """Return the lowest-quality tetrahedra first.
+
+        The ordering is intentionally simple and teachable: radius-ratio
+        quality first, corner-Jacobian quality second, then edge ratio as a
+        tie-breaker.  These rows make a large exported mesh debuggable without
+        dumping every element.
+        """
+
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        rows = sorted(
+            self.tetrahedron_quality_rows(),
+            key=lambda row: (
+                float(row["radius_ratio_quality"]),
+                float(row["min_normalized_corner_jacobian"]),
+                -float(row["edge_ratio"]),
+                int(row["tetrahedron"]),
+            ),
+        )
+        return tuple(rows[:limit])
+
+    def worst_surface_triangles_by_quality(self, limit: int = 5) -> tuple[dict[str, object], ...]:
+        """Return the lowest-quality boundary triangles first."""
+
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        rows = sorted(
+            self.surface_triangle_quality_rows(),
+            key=lambda row: (
+                float(row["radius_ratio_quality"]),
+                float(row["min_angle_deg"]),
+                -float(row["edge_ratio"]),
+                int(row["surface_triangle"]),
+            ),
+        )
+        return tuple(rows[:limit])
+
     def total_surface_area(self) -> float:
         """Return the sum of boundary triangle areas."""
 
@@ -1028,6 +1066,120 @@ class NetgenTriTetVolMesh:
             "open_edges": open_edges,
             "is_closed_manifold": open_edges == 0 and closed_edges == len(surface_edges),
             "euler_characteristic": len(trace_nodes) - len(surface_edges) + len(self.surface_triangles),
+        }
+
+    def mesh_health_summary(
+        self,
+        *,
+        min_surface_triangle_quality: float = 1.0e-8,
+        min_tetrahedron_quality: float = 1.0e-8,
+        closure_relative_tolerance: float = 1.0e-9,
+        worst_limit: int = 5,
+    ) -> dict[str, object]:
+        """Return a readable go/no-go report for first-order FEM/BEM use.
+
+        This bundles the checks that matter before a Cubit/Coreform Netgen
+        ``.vol`` export is used as a shared FEM/BEM trace: volume tets exist,
+        boundary triangles exist, the surface closes, boundary triangles match
+        tetrahedron faces, and the worst shape-quality rows are easy to find.
+        """
+
+        if min_surface_triangle_quality < 0.0:
+            raise ValueError("min_surface_triangle_quality must be non-negative")
+        if min_tetrahedron_quality < 0.0:
+            raise ValueError("min_tetrahedron_quality must be non-negative")
+        if closure_relative_tolerance < 0.0:
+            raise ValueError("closure_relative_tolerance must be non-negative")
+        if worst_limit < 0:
+            raise ValueError("worst_limit must be non-negative")
+
+        inventory = self.summary()
+        surface_quality = self.surface_triangle_quality_summary()
+        tet_quality = self.tetrahedron_quality_summary()
+        closure = self.surface_closure_summary()
+        manifold = self.surface_edge_manifold_summary()
+        incidence_full = self.boundary_tet_face_incidence_summary()
+        incidence = {
+            key: value
+            for key, value in incidence_full.items()
+            if key != "rows"
+        }
+
+        surface_min_quality = surface_quality["min_radius_ratio_quality"]
+        tet_min_quality = tet_quality["min_radius_ratio_quality"]
+        closure_rel_error = closure["surface_abs_volume_rel_error"]
+        vector_area_rel = closure["surface_vector_area_norm_over_area"]
+
+        checks: dict[str, bool] = {}
+        issues: list[str] = []
+
+        def add_check(name: str, ok: bool, issue: str) -> None:
+            checks[name] = ok
+            if not ok:
+                issues.append(issue)
+
+        add_check("has_points", inventory["points"] > 0, "mesh has no points")
+        add_check(
+            "has_surface_triangles",
+            inventory["surface_triangles"] > 0,
+            "mesh has no boundary triangles",
+        )
+        add_check(
+            "has_tetrahedra",
+            inventory["tetrahedra"] > 0,
+            "mesh has no volume tetrahedra",
+        )
+        add_check(
+            "surface_is_closed_manifold",
+            bool(manifold["is_closed_manifold"]),
+            "boundary triangles are not a closed edge manifold",
+        )
+        add_check(
+            "surface_vector_area_closes",
+            vector_area_rel is not None and float(vector_area_rel) <= closure_relative_tolerance,
+            "oriented boundary vector area does not close",
+        )
+        add_check(
+            "surface_volume_matches_tetrahedra",
+            closure_rel_error is not None and float(closure_rel_error) <= closure_relative_tolerance,
+            "boundary-triangle enclosed volume does not match tetrahedron volume",
+        )
+        add_check(
+            "boundary_faces_match_tetrahedra",
+            bool(incidence["is_volume_boundary_consistent"]),
+            "at least one boundary triangle is orphaned, overconnected, or material-mismatched",
+        )
+        add_check(
+            "surface_triangle_quality_above_threshold",
+            surface_min_quality is not None and float(surface_min_quality) >= min_surface_triangle_quality,
+            "at least one boundary triangle is below the surface quality threshold",
+        )
+        add_check(
+            "tetrahedron_quality_above_threshold",
+            tet_min_quality is not None and float(tet_min_quality) >= min_tetrahedron_quality,
+            "at least one tetrahedron is below the volume quality threshold",
+        )
+
+        ok = all(checks.values())
+        return {
+            "policy": "netgen_vol_tri_tet_first_order_fem_bem_mesh_health",
+            "status": "ok" if ok else "needs_attention",
+            "ok_for_first_order_fem_bem": ok,
+            "inventory": inventory,
+            "thresholds": {
+                "min_surface_triangle_quality": min_surface_triangle_quality,
+                "min_tetrahedron_quality": min_tetrahedron_quality,
+                "closure_relative_tolerance": closure_relative_tolerance,
+            },
+            "checks": checks,
+            "issues": issues,
+            "surface_triangle_quality": surface_quality,
+            "tetrahedron_quality": tet_quality,
+            "closure": closure,
+            "manifold": manifold,
+            "boundary_tet_face_incidence": incidence,
+            "worst_surface_triangles": self.worst_surface_triangles_by_quality(worst_limit),
+            "worst_tetrahedra": self.worst_tetrahedra_by_quality(worst_limit),
         }
 
     def surface_connected_components(self) -> tuple[dict[str, object], ...]:
