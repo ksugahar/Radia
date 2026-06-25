@@ -21,9 +21,9 @@ Read this when:
   stuck.
 
 The MCP server exposes this via release_workflow(topic=...). Topics:
-overview, phases, preflight_gates, ci_failure_modes, recovery,
-patch_bump_protocol, lab_lock_release, monorepo_lockstep,
-ci_monitor_skill.
+overview, phases, preflight_gates, mcp_quality_review,
+ci_failure_modes, recovery, patch_bump_protocol, lab_lock_release,
+monorepo_lockstep, ci_monitor_skill.
 """
 
 RELEASE_WORKFLOW = """\
@@ -32,9 +32,9 @@ RELEASE_WORKFLOW = """\
 This document is the AI-readable canonical reference for the Radia
 release flow.  Its canonical local orchestrator is
 `tools/release_qud.py`; the former triple-machine workflow is retired.
-Topics: overview, phases, preflight_gates, ci_failure_modes,
-recovery, patch_bump_protocol, lab_lock_release, monorepo_lockstep,
-ci_monitor_skill.
+Topics: overview, phases, preflight_gates, mcp_quality_review,
+ci_failure_modes, recovery, patch_bump_protocol, lab_lock_release,
+monorepo_lockstep, ci_monitor_skill.
 
 ## ===
 ## overview — what gets released and why atomically
@@ -168,6 +168,43 @@ Every server must print OK.  Subpackages no longer in the codebase
 must NOT be in the .yml matrix.
 
 **Only proceed to Phase 3 once all four gates above are green.**
+
+## ===
+## mcp_quality_review — how to interpret a green radia-mcp matrix
+## ===
+
+As of the 2026-06-26 release-candidate review, the radia-mcp public
+surface is considered **healthy and practical** when these gates are
+green:
+
+* radia-mcp pytest matrix passes (review evidence: 229 passed).
+* policy lint passes.
+* version consistency passes.
+* generated `packages/radia-mcp/docs/TOOLS.md` has no drift.
+* top-level pytest collection has no import drift.
+
+This is strong evidence for:
+
+* tool definition and inventory consistency,
+* docs / policy baseline consistency,
+* radia-mcp package test health,
+* package version management,
+* consolidation into `packages/radia-mcp` instead of the old
+  `S:/mcp-server` layout.
+
+However, do **not** call the release perfect or fully operational yet.
+Those claims require the deployment gates:
+
+* PyPI install smoke for MCP entry points,
+* release-QUD Phase 8/9 checks on LAB, 100号機, mdx, and hibino
+  (mdx intentionally reports `radia-mcp` as N/A),
+* at least one GUI panel / notebook / MCP knowledge round-trip,
+* heavy validation and benchmark evidence kept outside fast `tests/`
+  but recorded as release evidence.
+
+Machine-readable public-safe evidence lives under
+`packages/radia-mcp/validation/mcp_quality/`, including
+`release_candidate_review_2026-06-26.json`.
 
 ## ===
 ## ci_failure_modes — known historical CI failures + cause + fix
@@ -315,6 +352,7 @@ _TOPICS = (
     "overview",
     "phases",
     "preflight_gates",
+    "mcp_quality_review",
     "ci_failure_modes",
     "recovery",
     "patch_bump_protocol",
