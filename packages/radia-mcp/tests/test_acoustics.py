@@ -16,6 +16,7 @@ from radia_mcp.radia_ngsolve.acoustics import (
     acoustic_boundary_power_summary,
     acoustic_dtn_from_impedance,
     acoustic_impedance_reflection_summary,
+    acoustic_impedance_reflection_sweep_summary,
     acoustic_impedance_radiation_pressure_summary,
     acoustic_impedance_from_dtn,
     baffled_circular_piston_radiation,
@@ -399,6 +400,49 @@ def test_acoustic_impedance_radiation_pressure_absorber_reflector_limits():
 
     with pytest.raises(ValueError):
         acoustic_impedance_radiation_pressure_summary(z0, area=-1.0)
+
+
+def test_acoustic_impedance_reflection_sweep_tracks_absorption_force_and_passivity():
+    rho = 1.2
+    c = 340.0
+    z0 = rho * c
+    area = 0.25
+    incident_pressure = 2.0
+    frequencies = [100.0, 200.0, 300.0]
+    sweep = acoustic_impedance_reflection_sweep_summary(
+        frequencies,
+        [z0, 2.0 * z0, 1j * z0],
+        area=area,
+        incident_pressure=incident_pressure,
+        rho=rho,
+        c=c,
+    )
+
+    incident_intensity = 0.5 * incident_pressure * incident_pressure / z0
+    assert sweep["n_points"] == 3
+    assert sweep["frequency_monotonic_increasing"] is True
+    assert sweep["status"] == "ok"
+    assert sweep["max_absorption_frequency_Hz"] == pytest.approx(100.0)
+    assert sweep["min_absorption_frequency_Hz"] == pytest.approx(300.0)
+    assert sweep["max_force_frequency_Hz"] == pytest.approx(300.0)
+    assert sweep["min_force_frequency_Hz"] == pytest.approx(100.0)
+    assert sweep["rows"][0]["absorption_coefficient"] == pytest.approx(1.0)
+    assert sweep["rows"][1]["power_reflection_coefficient"] == pytest.approx(1.0 / 9.0)
+    assert sweep["rows"][1]["absorption_coefficient"] == pytest.approx(8.0 / 9.0)
+    assert sweep["rows"][2]["power_reflection_coefficient"] == pytest.approx(1.0)
+    assert sweep["max_normal_force_N"] == pytest.approx(area * 2.0 * incident_intensity / c)
+
+    active = acoustic_impedance_reflection_sweep_summary(
+        [400.0],
+        [-2.0 * z0],
+        rho=rho,
+        c=c,
+        passivity_tolerance=1.0e-6,
+    )
+    assert active["status"] == "needs_attention"
+    assert active["passivity_violation_count"] == 1
+    assert active["max_passivity_excess_absorption"] == pytest.approx(8.0)
+    assert active["passivity_violation_rows"][0]["absorption_coefficient"] == pytest.approx(-8.0)
 
 
 def test_baffled_circular_piston_impedance_scaling_and_power():

@@ -641,6 +641,116 @@ def acoustic_impedance_radiation_pressure_summary(
     }
 
 
+def acoustic_impedance_reflection_sweep_summary(
+    frequency_Hz,
+    specific_impedance_values,
+    area=1.0,
+    incidence_angle_rad=0.0,
+    incident_pressure=1.0,
+    rho=1.2041,
+    c=343.0,
+    amplitude="peak",
+    passivity_tolerance=1.0e-12,
+):
+    """Audit acoustic impedance reflection and momentum pressure over a sweep."""
+
+    frequencies = [float(value) for value in frequency_Hz]
+    impedances = [complex(value) for value in specific_impedance_values]
+    if len(frequencies) != len(impedances):
+        raise ValueError("frequency_Hz and specific_impedance_values must have the same length")
+    if not frequencies:
+        raise ValueError("at least one frequency sample is required")
+    tolerance = float(passivity_tolerance)
+    if tolerance < 0.0:
+        raise ValueError("passivity_tolerance must be >= 0")
+
+    rows = []
+    violation_rows = []
+    for idx, (frequency, impedance) in enumerate(zip(frequencies, impedances)):
+        if not math.isfinite(frequency) or frequency < 0.0:
+            raise ValueError("frequency samples must be finite and >= 0")
+        if not math.isfinite(impedance.real) or not math.isfinite(impedance.imag):
+            raise ValueError("specific impedance values must be finite")
+        pressure = acoustic_impedance_radiation_pressure_summary(
+            impedance,
+            area=area,
+            incidence_angle_rad=incidence_angle_rad,
+            incident_pressure=incident_pressure,
+            rho=rho,
+            c=c,
+            amplitude=amplitude,
+        )
+        reflection = pressure["reflection"]
+        gamma = complex(reflection["pressure_reflection_coefficient"])
+        absorption = float(pressure["absorption_coefficient"])
+        row = {
+            "index": idx,
+            "frequency_Hz": frequency,
+            "specific_impedance_real": impedance.real,
+            "specific_impedance_imag": impedance.imag,
+            "normalized_impedance_real": complex(reflection["normalized_impedance"]).real,
+            "normalized_impedance_imag": complex(reflection["normalized_impedance"]).imag,
+            "pressure_reflection_real": gamma.real,
+            "pressure_reflection_imag": gamma.imag,
+            "pressure_reflection_magnitude": abs(gamma),
+            "pressure_reflection_phase_rad": math.atan2(gamma.imag, gamma.real),
+            "power_reflection_coefficient": float(pressure["power_reflection_coefficient"]),
+            "absorption_coefficient": absorption,
+            "momentum_transfer_factor": float(pressure["momentum_transfer_factor"]),
+            "incident_normal_intensity": float(pressure["incident_normal_intensity"]),
+            "normal_momentum_pressure_Pa": float(pressure["normal_momentum_pressure_Pa"]),
+            "normal_force_N": float(pressure["normal_force_N"]),
+            "passivity_excess_absorption": max(0.0, -absorption),
+            "passivity_ok": absorption >= -tolerance,
+        }
+        rows.append(row)
+        if not row["passivity_ok"]:
+            violation_rows.append(row)
+
+    max_absorption_row = max(rows, key=lambda row: row["absorption_coefficient"])
+    min_absorption_row = min(rows, key=lambda row: row["absorption_coefficient"])
+    max_force_row = max(rows, key=lambda row: row["normal_force_N"])
+    min_force_row = min(rows, key=lambda row: row["normal_force_N"])
+    monotonic = all(
+        frequencies[idx] < frequencies[idx + 1]
+        for idx in range(len(frequencies) - 1)
+    )
+
+    return {
+        "policy": "acoustic_impedance_reflection_sweep_momentum_audit",
+        "n_points": len(rows),
+        "frequency_min_Hz": min(frequencies),
+        "frequency_max_Hz": max(frequencies),
+        "frequency_monotonic_increasing": monotonic,
+        "area": float(area),
+        "incidence_angle_rad": float(incidence_angle_rad),
+        "rho": float(rho),
+        "c": float(c),
+        "amplitude": amplitude,
+        "passivity_tolerance": tolerance,
+        "passivity_ok": not violation_rows,
+        "passivity_violation_count": len(violation_rows),
+        "max_passivity_excess_absorption": max(row["passivity_excess_absorption"] for row in rows),
+        "mean_absorption_coefficient": sum(row["absorption_coefficient"] for row in rows) / len(rows),
+        "max_absorption_coefficient": max_absorption_row["absorption_coefficient"],
+        "max_absorption_frequency_Hz": max_absorption_row["frequency_Hz"],
+        "min_absorption_coefficient": min_absorption_row["absorption_coefficient"],
+        "min_absorption_frequency_Hz": min_absorption_row["frequency_Hz"],
+        "mean_normal_force_N": sum(row["normal_force_N"] for row in rows) / len(rows),
+        "max_normal_force_N": max_force_row["normal_force_N"],
+        "max_force_frequency_Hz": max_force_row["frequency_Hz"],
+        "min_normal_force_N": min_force_row["normal_force_N"],
+        "min_force_frequency_Hz": min_force_row["frequency_Hz"],
+        "force_span_N": max_force_row["normal_force_N"] - min_force_row["normal_force_N"],
+        "max_force_row": max_force_row,
+        "min_force_row": min_force_row,
+        "max_absorption_row": max_absorption_row,
+        "passivity_violation_rows": violation_rows,
+        "status": "ok" if not violation_rows else "needs_attention",
+        "rows": rows,
+    }
+
+
 def _bessel_j1_fallback(x):
     """Small dependency-free J1 approximation for acoustic piston gates."""
 
