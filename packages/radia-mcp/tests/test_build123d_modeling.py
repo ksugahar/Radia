@@ -30,6 +30,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_measurement_inventory_summary,
                                           worst_shape_measurement_comparison_rows,
                                           shape_measurement_health_summary,
+                                          shape_bbox_pair_clearance_summary,
                                           shape_parameter_sweep_summary)
 from build123d import Box, Compound, Pos
 
@@ -164,6 +165,32 @@ def test_shape_measurement_inventory_summary_reports_assembly_fractions():
     fractions = {row["name"]: row for row in summary["volume_fraction_rows"]}
     assert fractions["left"]["volume_fraction"] == pytest.approx(8.0 / 12.0)
     assert fractions["right"]["volume_fraction"] == pytest.approx(4.0 / 12.0)
+
+
+def test_shape_bbox_pair_clearance_summary_flags_overlap_for_precise_check():
+    left = Box(1, 1, 1).solid()
+    left.label = "left"
+    right = (Pos(2.0, 0, 0) * Box(1, 1, 1)).solid()
+    right.label = "right"
+    overlap = (Pos(0.4, 0, 0) * Box(1, 1, 1)).solid()
+    overlap.label = "overlap"
+    rows = shape_measurement_rows(assembly(left, right, overlap, label="three_region"))
+
+    summary = shape_bbox_pair_clearance_summary(rows)
+    pairs = {row["pair"]: row for row in summary["pair_rows"]}
+
+    assert summary["status"] == "needs_attention"
+    assert summary["n_pairs"] == 3
+    assert summary["separated_pair_count"] == 2
+    assert summary["bbox_overlap_pair_count"] == 1
+    assert summary["touching_pair_count"] == 0
+    assert summary["min_positive_gap"] == pytest.approx(0.6)
+
+    assert pairs["left::right"]["status"] == "separated"
+    assert pairs["left::right"]["axis_gaps"]["x"] == pytest.approx(1.0)
+    assert pairs["left::overlap"]["status"] == "bbox_overlap_needs_precise_check"
+    assert pairs["left::overlap"]["bbox_intersection_volume"] == pytest.approx(0.6)
+    assert pairs["left::overlap"]["axis_overlaps"]["x"] == pytest.approx(0.6)
 
 
 def test_shape_parameter_sweep_summary_tracks_monotonic_metrics_and_limits():

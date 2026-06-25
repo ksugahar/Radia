@@ -38,7 +38,8 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            "shape_measurement_inventory_summary", "worst_shape_measurement_comparison_rows",
-           "shape_measurement_health_summary", "shape_parameter_sweep_summary",
+           "shape_measurement_health_summary", "shape_bbox_pair_clearance_summary",
+           "shape_parameter_sweep_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
            "swept", "revolved", "lofted", "coil", "helix_centerline_length",
            "round_wire_helix_metrics", "strut", "thicken", "draft_extrude",
@@ -894,6 +895,123 @@ def shape_measurement_inventory_summary(rows):
         "volume_fraction_rows": volume_fraction_rows,
         "largest_volume_name": by_volume[-1]["name"],
         "smallest_volume_name": by_volume[0]["name"],
+    }
+
+
+def _bbox_pair_clearance_row(row_a, box_a, row_b, box_b, tolerance):
+    axes = ("x", "y", "z")
+    axis_gaps = {}
+    axis_overlaps = {}
+    separated_axes = []
+    touching_axes = []
+    for axis, label in enumerate(axes):
+        lo_a = float(box_a["min"][axis])
+        hi_a = float(box_a["max"][axis])
+        lo_b = float(box_b["min"][axis])
+        hi_b = float(box_b["max"][axis])
+        if hi_a < lo_b:
+            gap = lo_b - hi_a
+        elif hi_b < lo_a:
+            gap = lo_a - hi_b
+        else:
+            gap = 0.0
+        overlap = min(hi_a, hi_b) - max(lo_a, lo_b)
+        if gap > tolerance:
+            separated_axes.append(label)
+        elif abs(overlap) <= tolerance:
+            touching_axes.append(label)
+        axis_gaps[label] = float(gap if gap > 0.0 else 0.0)
+        axis_overlaps[label] = float(overlap if overlap > 0.0 else 0.0)
+
+    bbox_separated = bool(separated_axes)
+    if bbox_separated:
+        status = "separated"
+    elif touching_axes:
+        status = "touching_bbox"
+    else:
+        status = "bbox_overlap_needs_precise_check"
+    intersection_size = [axis_overlaps[label] for label in axes]
+    intersection_volume = (
+        intersection_size[0] * intersection_size[1] * intersection_size[2]
+        if not bbox_separated else 0.0
+    )
+    positive_gaps = [value for value in axis_gaps.values() if value > tolerance]
+    center_distance = math.sqrt(sum(
+        (float(box_a["center"][axis]) - float(box_b["center"][axis])) ** 2
+        for axis in range(3)
+    ))
+    name_a = str(row_a.get("name", "shape_a"))
+    name_b = str(row_b.get("name", "shape_b"))
+    return {
+        "pair": f"{name_a}::{name_b}",
+        "name_a": name_a,
+        "name_b": name_b,
+        "status": status,
+        "bbox_separated": bbox_separated,
+        "bbox_intersects_or_touches": not bbox_separated,
+        "separated_axes": separated_axes,
+        "touching_axes": touching_axes,
+        "axis_gaps": axis_gaps,
+        "axis_overlaps": axis_overlaps,
+        "separation_distance": min(positive_gaps) if positive_gaps else 0.0,
+        "center_distance": float(center_distance),
+        "bbox_intersection_size": intersection_size,
+        "bbox_intersection_volume": float(intersection_volume),
+    }
+
+
+def shape_bbox_pair_clearance_summary(rows, clearance_tolerance=1.0e-12):
+    """Audit pairwise bounding-box clearances from measurement rows.
+
+    A positive gap on any one axis is a cheap proof that two shapes are
+    separated before STEP/mesh export.  If all three bbox intervals overlap the
+    pair is not declared intersecting; it is marked for precise geometry or
+    boolean checking.
+    """
+
+    rows = list(rows)
+    tolerance = float(clearance_tolerance)
+    if tolerance < 0.0:
+        raise ValueError("clearance_tolerance must be >= 0")
+    complete = []
+    missing = []
+    for index, row in enumerate(rows, start=1):
+        box = _row_bounding_box(row)
+        if box is None:
+            missing.append(str(row.get("name", f"shape_{index}") if isinstance(row, dict) else f"shape_{index}"))
+        else:
+            complete.append((row, box))
+
+    pair_rows = []
+    for i, (row_a, box_a) in enumerate(complete):
+        for row_b, box_b in complete[i + 1:]:
+            pair_rows.append(_bbox_pair_clearance_row(row_a, box_a, row_b, box_b, tolerance))
+
+    separated_count = sum(1 for row in pair_rows if row["status"] == "separated")
+    touching_count = sum(1 for row in pair_rows if row["status"] == "touching_bbox")
+    overlap_count = sum(1 for row in pair_rows if row["status"] == "bbox_overlap_needs_precise_check")
+    gaps = [row["separation_distance"] for row in pair_rows if row["separation_distance"] > tolerance]
+    overlap_volumes = [
+        row["bbox_intersection_volume"]
+        for row in pair_rows
+        if row["status"] == "bbox_overlap_needs_precise_check"
+    ]
+    ok = not missing and touching_count == 0 and overlap_count == 0
+    return {
+        "policy": "build123d_bbox_pair_clearance_pre_mesh_audit",
+        "status": "ok" if ok else "needs_attention",
+        "ok_for_bbox_clearance": ok,
+        "clearance_tolerance": tolerance,
+        "n_shapes": len(rows),
+        "n_complete_bbox_rows": len(complete),
+        "missing_bbox_names": missing,
+        "n_pairs": len(pair_rows),
+        "separated_pair_count": separated_count,
+        "touching_pair_count": touching_count,
+        "bbox_overlap_pair_count": overlap_count,
+        "min_positive_gap": min(gaps) if gaps else None,
+        "max_bbox_intersection_volume": max(overlap_volumes) if overlap_volumes else 0.0,
+        "pair_rows": pair_rows,
     }
 
 
