@@ -26,7 +26,10 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           box_face_traction_moment_rows,
                                           compare_boundary_vector_area_rows,
                                           compare_shape_measurement_rows,
-                                          shape_measurement_comparison_summary)
+                                          shape_measurement_comparison_summary,
+                                          shape_measurement_inventory_summary,
+                                          worst_shape_measurement_comparison_rows,
+                                          shape_measurement_health_summary)
 from build123d import Box, Compound, Pos
 
 
@@ -136,6 +139,30 @@ def test_shape_measurement_rows_follow_assembly_children():
     assert [row["name"] for row in rows] == ["left", "right"]
     assert [row["volume"] for row in rows] == pytest.approx([6.0, 4.0])
     assert [row["area"] for row in rows] == pytest.approx([22.0, 16.0])
+
+
+def test_shape_measurement_inventory_summary_reports_assembly_fractions():
+    left = (Pos(-2, 0, 0) * Box(2, 2, 2)).solid()
+    left.label = "left"
+    right = (Pos(2, 0, 0) * Box(1, 2, 2)).solid()
+    right.label = "right"
+    rows = shape_measurement_rows(assembly(left, right, label="two_region"))
+
+    summary = shape_measurement_inventory_summary(rows)
+
+    assert summary["n_shapes"] == 2
+    assert summary["n_valid"] == 2
+    assert summary["total_volume"] == pytest.approx(12.0)
+    assert summary["total_area"] == pytest.approx(40.0)
+    assert summary["bounding_box"]["min"] == pytest.approx([-3.0, -1.0, -1.0])
+    assert summary["bounding_box"]["max"] == pytest.approx([2.5, 1.0, 1.0])
+    assert summary["bbox_volume"] == pytest.approx(22.0)
+    assert summary["bbox_fill_fraction"] == pytest.approx(12.0 / 22.0)
+    assert summary["largest_volume_name"] == "left"
+    assert summary["smallest_volume_name"] == "right"
+    fractions = {row["name"]: row for row in summary["volume_fraction_rows"]}
+    assert fractions["left"]["volume_fraction"] == pytest.approx(8.0 / 12.0)
+    assert fractions["right"]["volume_fraction"] == pytest.approx(4.0 / 12.0)
 
 
 def test_box_face_vector_area_rows_match_centered_box():
@@ -415,6 +442,36 @@ def test_shape_measurement_comparison_summary_compacts_errors():
     assert summary["max_volume_rel_error"] == pytest.approx(0.0)
     assert summary["max_area_rel_error"] == pytest.approx(0.0)
     assert summary["max_bbox_abs_error"] == pytest.approx(0.0)
+
+
+def test_shape_measurement_health_summary_reports_worst_mismatches():
+    reference = [
+        {"name": "ok", "volume": 10.0, "area": 20.0, "is_valid": True},
+        {"name": "bad", "volume": 10.0, "area": 20.0, "is_valid": True},
+        {"name": "missing", "volume": 1.0, "area": 2.0, "is_valid": True},
+    ]
+    measured = [
+        {"name": "ok", "volume": 10.000001, "area": 20.000001},
+        {"name": "bad", "volume": 10.2, "area": 20.0},
+    ]
+
+    health = shape_measurement_health_summary(
+        reference,
+        measured,
+        rtol=1.0e-4,
+        measured_label="external",
+        worst_limit=2,
+    )
+
+    assert health["status"] == "needs_attention"
+    assert health["ok_for_geometry_roundtrip"] is False
+    assert health["checks"]["all_reference_shapes_valid"] is True
+    assert health["checks"]["all_measurements_present_and_within_tolerance"] is False
+    assert health["comparison_summary"]["n_passed"] == 1
+    assert [row["name"] for row in health["worst_comparisons"]] == ["missing", "bad"]
+    assert worst_shape_measurement_comparison_rows([], limit=0) == []
+    with pytest.raises(ValueError, match="limit must be non-negative"):
+        worst_shape_measurement_comparison_rows([], limit=-1)
 
 
 def test_segment_meshes_in_netgen():
