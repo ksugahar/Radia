@@ -16,6 +16,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     ETA0,
     oblique_radiation_pressure_summary,
     one_port_reflection_momentum_force_summary,
+    one_port_reflection_sweep_momentum_force_summary,
     plane_wave_intensity_from_electric_field,
     poynting_patch_force_summary,
     radiation_force_from_normal_scattering,
@@ -162,6 +163,42 @@ def test_one_port_reflection_momentum_force_from_s11():
     assert opposite_phase["force_N"] == pytest.approx(partial["force_N"])
 
 
+def test_one_port_reflection_sweep_momentum_force_finds_extrema_and_passivity():
+    power = 3.0
+    frequencies = [1.0e9, 2.0e9, 3.0e9, 4.0e9]
+    s11 = [0.0j, 0.5j, -1.0 + 0.0j, 0.2 + 0.0j]
+
+    sweep = one_port_reflection_sweep_momentum_force_summary(
+        frequencies,
+        s11,
+        power_incident_W=power,
+        incident_direction=(0.0, 0.0, 2.0),
+    )
+
+    factors = [1.0, 1.25, 2.0, 1.04]
+    assert sweep["n_points"] == 4
+    assert sweep["frequency_monotonic_increasing"] is True
+    assert sweep["passivity_ok"] is True
+    assert sweep["max_force_frequency_Hz"] == pytest.approx(3.0e9)
+    assert sweep["min_force_frequency_Hz"] == pytest.approx(1.0e9)
+    assert sweep["max_force_magnitude_N"] == pytest.approx(2.0 * power / C0)
+    assert sweep["mean_force_magnitude_N"] == pytest.approx(
+        sum(factors) * power / (len(factors) * C0)
+    )
+    assert sweep["max_force_row"]["force_N"] == pytest.approx([0.0, 0.0, 2.0 * power / C0])
+
+    active = one_port_reflection_sweep_momentum_force_summary(
+        [1.0e9],
+        [1.001 + 0.0j],
+        power_incident_W=power,
+        passivity_tolerance=1.0e-6,
+    )
+    assert active["passivity_ok"] is False
+    assert active["passivity_violation_count"] == 1
+    assert active["max_passivity_excess_magnitude"] == pytest.approx(0.001)
+    assert active["passivity_violation_rows"][0]["reflectance"] == pytest.approx(1.001 * 1.001)
+
+
 def test_oblique_radiation_pressure_reduces_to_normal_incidence():
     intensity = 7.0
     area = 0.25
@@ -261,6 +298,14 @@ def test_radiation_pressure_rejects_invalid_inputs():
     with pytest.raises(ValueError):
         one_port_reflection_momentum_force_summary(1.0, complex(float("nan"), 0.0))
     with pytest.raises(ValueError):
+        one_port_reflection_sweep_momentum_force_summary([1.0, 2.0], [0.0j])
+    with pytest.raises(ValueError):
+        one_port_reflection_sweep_momentum_force_summary([], [])
+    with pytest.raises(ValueError):
+        one_port_reflection_sweep_momentum_force_summary([float("nan")], [0.0j])
+    with pytest.raises(ValueError):
+        one_port_reflection_sweep_momentum_force_summary([1.0], [complex(float("nan"), 0.0)])
+    with pytest.raises(ValueError):
         radiation_pressure_summary(1.0, area_m2=-1.0)
     with pytest.raises(ValueError):
         radiation_pressure_from_intensity(1.0, absorptance=0.6, reflectance=0.5)
@@ -283,6 +328,7 @@ if __name__ == "__main__":
     test_radiation_force_from_normal_scattering_matches_momentum_balance()
     test_two_port_scattering_momentum_force_vector()
     test_one_port_reflection_momentum_force_from_s11()
+    test_one_port_reflection_sweep_momentum_force_finds_extrema_and_passivity()
     test_oblique_radiation_pressure_reduces_to_normal_incidence()
     test_oblique_radiation_pressure_splits_absorbed_tangential_momentum()
     test_poynting_patch_force_vector_matches_oblique_summary()
