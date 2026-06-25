@@ -126,6 +126,21 @@ is still recommended for clarity.
 
 ## Releasing (maintainer notes)
 
+Before publishing, treat a green matrix as a release candidate, not as
+operational completion.  The minimum pre-push health evidence is:
+
+- radia-mcp pytest matrix green (latest review evidence: 229 passed)
+- package policy lint green
+- package version consistency green
+- generated `docs/TOOLS.md` drift check green
+- top-level pytest collection green
+
+After PyPI upload, the release is not "done" until wheel-installed MCP
+entry points smoke and the release-QUD deploy checks pass on their
+intended machines.  See
+`release_workflow(topic="mcp_quality_review")` and
+`validation/mcp_quality/release_candidate_review_2026-06-26.json`.
+
 ```bash
 cd packages/radia-mcp
 rm -rf build/ dist/radia_mcp-*
@@ -135,9 +150,11 @@ PYTHONIOENCODING=utf-8 \
   twine upload --disable-progress-bar dist/radia_mcp-X.Y.Z*
 ```
 
-After upload, deploy to LAB and 100号機 via wheel-unpack (PyPI
-sometimes lags ~1 min; wheel-unpack avoids the .exe-launcher lock
-issue when MCP servers are running).
+After upload, follow the monorepo release-QUD deployment policy:
+LAB and 100号機 remain editable installs, mdx is a PyPI consumer for
+`radia` / `cubit-mesh-export` without `radia-mcp`, and hibino is the
+PyPI MCP consumer.  Do not claim operational release quality until the
+PyPI entry-point smoke and Phase 8/9 machine checks are green.
 
 ## License
 

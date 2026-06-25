@@ -172,6 +172,20 @@ non-standard.
 
 ---
 
+## Release Quality Stance
+
+`radia-mcp` treats a green test matrix as release-candidate evidence,
+not as the final operational claim.  The public MCP surface is healthy
+when the matrix, policy lint, version consistency, generated
+`docs/TOOLS.md` drift check, and top-level pytest collection all pass.
+
+Operational quality is claimed only after PyPI-installed MCP entry
+points smoke successfully and the release-QUD machine checks pass on
+the lab deployment roles.  Public-safe quality records live in
+[`validation/mcp_quality/`](validation/mcp_quality/).
+
+---
+
 ## ★ Discovery — start here
 
 Before calling any specific server, ask **`mcp-server-radia-meta`** which
