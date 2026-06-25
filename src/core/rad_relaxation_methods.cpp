@@ -3254,7 +3254,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 		if(pureHexMatrixFree)
 		{
-			const bool serialElementOps = (nHex <= 128);
+			const bool serialElementOps = (nHex <= 8);
 			std::vector<double> RHS((size_t)totalDOF, 0.0);
 			if(serialElementOps)
 			{
@@ -3333,32 +3333,20 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			for(int i = 0; i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];
 
 			auto matvec = [&](const double* x, double* y) {
-				auto applyRow = [&](size_t hh) {
+				IntrctPtr->MomentKernelMatVec6x6(x, chiPerHex.data(), y);
+				auto applyLocalRow = [&](size_t hh) {
 					const int h = (int)hh;
-					double acc[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-					double block[36];
-					for(int g = 0; g < nHex; g++)
-					{
-						IntrctPtr->MomentSystemBlock6x6(h, g, nullptr, block, true);
-						const double* xg = &x[(size_t)6 * g];
-						for(int i = 0; i < 6; i++)
-						{
-							const double* Brow = &block[i * 6];
-							for(int j = 0; j < 6; j++) acc[i] += chiPerHex[h] * Brow[j] * xg[j];
-						}
-					}
 					const double* Lh = &localLBlock[(size_t)h * 36];
 					const double* xh = &x[(size_t)6 * h];
+					double* yh = &y[(size_t)6 * h];
 					for(int i = 0; i < 6; i++)
 					{
 						const double* Li = &Lh[(size_t)i * 6];
-						for(int j = 0; j < 6; j++) acc[i] += Li[j] * xh[j];
+						for(int j = 0; j < 6; j++) yh[i] += Li[j] * xh[j];
 					}
-					double* yh = &y[(size_t)6 * h];
-					for(int i = 0; i < 6; i++) yh[i] = acc[i];
 				};
-				if(serialElementOps) { for(int h = 0; h < nHex; h++) applyRow((size_t)h); }
-				else { ngcore::ParallelFor(ngcore::IntRange(nHex), applyRow); }
+				if(serialElementOps) { for(int h = 0; h < nHex; h++) applyLocalRow((size_t)h); }
+				else { ngcore::ParallelFor(ngcore::IntRange(nHex), applyLocalRow); }
 			};
 			auto precond = [&](const double* x, double* y) {
 				auto applyBlock = [&](size_t hh) {
@@ -3403,7 +3391,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			return result.iterations;
 		}
 
-		const bool serialMomentOps = (nMom <= 128);
+		const bool serialMomentOps = (nMom <= 8);
 		std::vector<int> momDof((size_t)nMom), momOff((size_t)nMom);
 		for(int h = 0; h < nMom; h++)
 		{
