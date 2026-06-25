@@ -15,6 +15,7 @@ from radia_mcp.radia_ngsolve.acoustics import (
     _baffled_piston_resistance_reactance_ratios,
     acoustic_boundary_power_summary,
     acoustic_dtn_from_impedance,
+    acoustic_impedance_reflection_summary,
     acoustic_impedance_from_dtn,
     baffled_circular_piston_radiation,
     helmholtz_green_3d,
@@ -304,6 +305,52 @@ def test_acoustic_boundary_power_summary_reactive_trace_and_validation():
         acoustic_boundary_power_summary(1.0, 1.0, amplitude="phasor")
     with pytest.raises(ValueError):
         acoustic_boundary_power_summary(complex(float("nan"), 0.0), 1.0)
+
+
+def test_acoustic_impedance_reflection_matched_and_mismatched_loads():
+    rho, c = 1.2041, 343.0
+    z0 = rho * c
+    matched = acoustic_impedance_reflection_summary(z0, incident_pressure=2.0, rho=rho, c=c)
+    assert matched["pressure_reflection_coefficient"] == pytest.approx(0.0)
+    assert matched["absorption_coefficient"] == pytest.approx(1.0)
+    assert matched["incident_intensity"] == pytest.approx(2.0 * 2.0 / (2.0 * z0))
+    assert matched["absorbed_intensity"] == pytest.approx(matched["incident_intensity"])
+    assert abs(matched["power_balance_residual"]) < 1.0e-15
+
+    twice = acoustic_impedance_reflection_summary(2.0 * z0, rho=rho, c=c)
+    assert twice["pressure_reflection_coefficient"] == pytest.approx(1.0 / 3.0)
+    assert twice["power_reflection_coefficient"] == pytest.approx(1.0 / 9.0)
+    assert twice["absorption_coefficient"] == pytest.approx(8.0 / 9.0)
+    assert twice["boundary_active_intensity_into_load"] == pytest.approx(twice["absorbed_intensity"])
+
+
+def test_acoustic_impedance_reflection_reactive_and_oblique_limits():
+    rho, c = 1.2, 340.0
+    z0 = rho * c
+    reactive = acoustic_impedance_reflection_summary(1j * z0, rho=rho, c=c)
+    assert abs(reactive["pressure_reflection_coefficient"]) == pytest.approx(1.0)
+    assert reactive["absorption_coefficient"] == pytest.approx(0.0)
+    assert reactive["absorbed_intensity"] == pytest.approx(0.0)
+    assert reactive["boundary_reactive_intensity_into_load"] != pytest.approx(0.0)
+
+    pressure_release = acoustic_impedance_reflection_summary(0.0, rho=rho, c=c)
+    assert pressure_release["pressure_reflection_coefficient"] == pytest.approx(-1.0)
+    assert pressure_release["total_boundary_pressure"] == pytest.approx(0.0)
+    assert pressure_release["absorption_coefficient"] == pytest.approx(0.0)
+
+    theta = math.radians(60.0)
+    z_normal = z0 / math.cos(theta)
+    oblique_matched = acoustic_impedance_reflection_summary(z_normal, incidence_angle_rad=theta, rho=rho, c=c)
+    assert oblique_matched["characteristic_normal_impedance"] == pytest.approx(z_normal)
+    assert oblique_matched["pressure_reflection_coefficient"] == pytest.approx(0.0)
+    assert oblique_matched["absorption_coefficient"] == pytest.approx(1.0)
+
+    with pytest.raises(ValueError):
+        acoustic_impedance_reflection_summary(z0, incidence_angle_rad=0.5 * math.pi)
+    with pytest.raises(ValueError):
+        acoustic_impedance_reflection_summary(complex(float("inf"), 0.0))
+    with pytest.raises(ValueError):
+        acoustic_impedance_reflection_summary(z0, amplitude="complex")
 
 
 def test_baffled_circular_piston_impedance_scaling_and_power():
