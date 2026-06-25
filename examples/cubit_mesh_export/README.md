@@ -27,6 +27,7 @@ Example scripts for the radia Cubit C++ plugin (`cubit_mesh_export.ccm`), organi
 | [`validation_vol_boundary_pressure_resultant.py`](validation_vol_boundary_pressure_resultant.py) | Netgen `.vol` boundary pressure resultant summary: closed-surface pressure cancellation and one-sided pressure force/moment |
 | [`validation_vol_boundary_traction_moment.py`](validation_vol_boundary_traction_moment.py) | Netgen `.vol` boundary vector-traction force/moment rows: constant global traction over named sidesets |
 | [`validation_vol_boundary_inventory.py`](validation_vol_boundary_inventory.py) | Netgen `.vol` named-boundary inventory for Cubit/Coreform sidesets: per-boundary area, triangle count, and trace-node ids |
+| [`validation_vol_boundary_edge_inventory.py`](validation_vol_boundary_edge_inventory.py) | Netgen `.vol` boundary-local edge inventory: separates sideset perimeter edges from triangulation diagonals |
 | [`validation_vol_boundary_condition_assignment.py`](validation_vol_boundary_condition_assignment.py) | Netgen `.vol` boundary-condition assignment audit: map condition labels by boundary number/name and catch missing or unknown keys |
 | [`validation_vol_material_interface.py`](validation_vol_material_interface.py) | Netgen `.vol` material/interface inventory: material volumes, exterior/interface areas, and `domin/domout` boundary incidence |
 | [`validation_vol_boundary_tet_face_incidence.py`](validation_vol_boundary_tet_face_incidence.py) | Netgen `.vol` boundary triangle to tetrahedron face incidence: exterior/interface adjacency, orphan detection, and `domin/domout` material consistency |
@@ -45,6 +46,7 @@ python validation_vol_boundary_pressure_moment.py
 python validation_vol_boundary_pressure_resultant.py
 python validation_vol_boundary_traction_moment.py
 python validation_vol_boundary_inventory.py
+python validation_vol_boundary_edge_inventory.py
 python validation_vol_boundary_condition_assignment.py
 python validation_vol_material_interface.py
 python validation_vol_boundary_tet_face_incidence.py
