@@ -6732,6 +6732,7 @@ repo.
 | build123d to mesh/CAD checks | `examples/build123d_netgen_gmsh_flow/validation_*_summary.json` | CAD face pressure/traction rows, area/volume consistency |
 | Electromagnetic force and torque | `examples/electric_machine/validation_*_summary.json` | `force_validation("method_map")`, `force_validation("cross_validation")` |
 | RF/waveguide momentum | `examples/rf_waveguide/validation_*_summary.json` | radiation pressure, S-parameter momentum, TE/TM cutoff gates |
+| MCP server fleet quality | `validation/mcp_quality/golden_gate_*.json` | `radia_mcp_golden_gate()`, per-server `--selftest`, docs drift, publish-boundary lint |
 | Readable first-order FEM | `test_p1_*`, `test_surface_triangle_*`, `test_tetrahedron_lorentz_force.py` | P1 triangle/tet energy, flux, HCurl/RWG trace teaching primitives |
 | FEM/BEM open boundary | `test_fem_bem_coupling.py`, `fem_bem_schur("api")` | dense reference Schur coupling and Kelvin/BEM DtN comparisons |
 
@@ -6748,6 +6749,7 @@ force_validation("cross_validation")        -> stored neutral regression cases
 fem_bem_schur("api")                        -> exact-open-boundary Schur recipe
 ngsolve_usage("readable_fem")               -> P1 tri/tet educational primitives
 standalone_panels("vol_sources")            -> .vol sources for non-Cubit users
+radia_mcp_golden_gate()                     -> public MCP fleet quality gate
 ```
 
 When a loop slot produces only a one-off note, it is not finished.  Promote the
