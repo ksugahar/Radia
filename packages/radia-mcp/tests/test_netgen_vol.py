@@ -431,6 +431,31 @@ def test_boundary_summary_rows_for_named_box_faces():
     assert mesh.total_volume() == pytest.approx(30.0)
 
 
+def test_boundary_edge_inventory_rows_separate_perimeter_and_diagonal_edges():
+    mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
+    summary = mesh.boundary_edge_inventory_summary()
+    rows = {row["name"]: row for row in summary["rows"]}
+
+    assert summary["policy"] == "netgen_vol_boundary_local_edge_inventory"
+    assert summary["boundary_count"] == 6
+    assert summary["surface_triangles"] == 12
+    assert summary["unique_boundary_edges_total"] == 30
+    assert summary["perimeter_edges_total"] == 24
+    assert summary["shared_diagonal_edges_total"] == 6
+    assert summary["overused_edges_total"] == 0
+    assert summary["has_overused_boundary_edges"] is False
+
+    zmax = rows["zmax"]
+    assert zmax["surface_triangles"] == 2
+    assert zmax["surface_area"] == pytest.approx(6.0)
+    assert zmax["unique_boundary_edges"] == 5
+    assert zmax["perimeter_edges"] == 4
+    assert zmax["shared_diagonal_edges"] == 1
+    assert zmax["perimeter_edge_length_sum_m"] == pytest.approx(10.0)
+    assert zmax["shared_diagonal_edge_length_sum_m"] == pytest.approx(13**0.5)
+    assert zmax["shared_diagonal_edge_nodes"] == [[5, 7]]
+
+
 def test_boundary_condition_assignment_summary_detects_missing_and_unknown_keys():
     mesh = parse_netgen_tri_tet_vol(BOX_SIX_BOUNDARY_VOL)
     summary = mesh.boundary_condition_assignment_summary(
