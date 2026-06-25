@@ -797,6 +797,99 @@ class NetgenTriTetVolMesh:
             })
         return tuple(rows)
 
+    def boundary_condition_assignment_summary(
+        self,
+        condition_by_boundary: dict[int | str, str],
+        default_condition: str | None = None,
+    ) -> dict[str, object]:
+        """Audit boundary-condition labels against named `.vol` boundaries.
+
+        Keys in ``condition_by_boundary`` may be Netgen boundary numbers or
+        boundary names.  Values are intentionally plain labels, not solver
+        objects.  The summary catches missing boundary assignments and unknown
+        keys before a readable FEM/BEM script turns the labels into Dirichlet,
+        Neumann, impedance, or coupling operators.
+        """
+
+        known_numbers = {int(row["boundary_number"]) for row in self.boundary_summary_rows()}
+        known_names = {str(row["name"]) for row in self.boundary_summary_rows()}
+        unknown_keys: list[int | str] = []
+        for key in condition_by_boundary:
+            if isinstance(key, int):
+                if key not in known_numbers:
+                    unknown_keys.append(key)
+            elif isinstance(key, str):
+                if key not in known_names:
+                    unknown_keys.append(key)
+            else:
+                raise TypeError("boundary condition keys must be boundary numbers or names")
+
+        incidence_by_bcnr: dict[int, list[dict[str, object]]] = {}
+        for row in self.domain_boundary_incidence_rows():
+            incidence_by_bcnr.setdefault(int(row["boundary_number"]), []).append(row)
+
+        rows: list[dict[str, object]] = []
+        condition_counts: dict[str, int] = {}
+        missing = 0
+        for boundary in self.boundary_summary_rows():
+            bcnr = int(boundary["boundary_number"])
+            name = str(boundary["name"])
+            if bcnr in condition_by_boundary:
+                condition = str(condition_by_boundary[bcnr])
+                source = "boundary_number"
+            elif name in condition_by_boundary:
+                condition = str(condition_by_boundary[name])
+                source = "boundary_name"
+            elif default_condition is not None:
+                condition = str(default_condition)
+                source = "default"
+            else:
+                condition = None
+                source = "missing"
+                missing += 1
+            if condition is not None:
+                condition_counts[condition] = condition_counts.get(condition, 0) + 1
+
+            incidence_rows = incidence_by_bcnr.get(bcnr, [])
+            rows.append({
+                "boundary_number": bcnr,
+                "name": name,
+                "condition": condition,
+                "condition_source": source,
+                "surface_triangles": boundary["surface_triangles"],
+                "surface_area": boundary["surface_area"],
+                "trace_node_count": boundary["trace_node_count"],
+                "trace_node_ids": boundary["trace_node_ids"],
+                "incidence_kinds": sorted({str(row["kind"]) for row in incidence_rows}),
+                "adjacent_material_numbers": sorted({
+                    int(domain)
+                    for row in incidence_rows
+                    for domain in (int(row["domin"]), int(row["domout"]))
+                    if domain != 0
+                }),
+                "adjacent_material_names": sorted({
+                    str(row["domin_material"])
+                    for row in incidence_rows
+                    if row["domin_material"] is not None
+                } | {
+                    str(row["domout_material"])
+                    for row in incidence_rows
+                    if row["domout_material"] is not None
+                }),
+            })
+
+        return {
+            "policy": "netgen_vol_boundary_conditions_are_assigned_by_number_or_name",
+            "boundary_count": len(rows),
+            "assigned_boundary_count": len(rows) - missing,
+            "missing_boundary_count": missing,
+            "unknown_condition_keys": unknown_keys,
+            "unknown_condition_key_count": len(unknown_keys),
+            "condition_counts": dict(sorted(condition_counts.items())),
+            "ok": missing == 0 and not unknown_keys,
+            "rows": tuple(rows),
+        }
+
     def boundary_tet_face_incidence_rows(self) -> tuple[dict[str, object], ...]:
         """Match each boundary triangle to adjacent tetrahedron faces.
 
