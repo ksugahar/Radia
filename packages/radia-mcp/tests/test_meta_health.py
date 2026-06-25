@@ -7,6 +7,9 @@ This is the canonical "is the package healthy" test — run on every PR
   - catalog.py drift from actual subpackage list
 """
 
+import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -67,6 +70,54 @@ def test_meta_overview_returns_expected_shape():
         for k in ("name", "subpackage", "entry_point",
                    "description", "primary_tools", "tags"):
             assert k in srv, f"{srv.get('name','?')} missing key {k}"
+
+
+def test_meta_golden_gate_passes_catalog_contracts():
+    """Meta server should expose a compact machine-readable golden gate."""
+    from radia_mcp.meta.server import radia_mcp_golden_gate
+
+    gate = radia_mcp_golden_gate()
+    assert gate["level"] == "golden", gate
+    assert gate["all_passed"] is True
+    assert gate["n_servers"] >= 30
+    assert any(c["name"] == "optuna_external_boundary" and c["ok"]
+               for c in gate["checks"])
+    assert "python scripts/gen_tools_doc.py --check" in gate["full_gate_commands"]
+
+
+def test_generated_tools_inventory_is_current():
+    """docs/TOOLS.md must stay synchronized with the live MCP tool registry."""
+    pkg_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "scripts/gen_tools_doc.py", "--check"],
+        cwd=pkg_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
+    assert result.returncode == 0, (
+        "docs/TOOLS.md is stale; run `python scripts/gen_tools_doc.py`.\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+
+
+def test_readme_mcp_entrypoints_are_cataloged_or_external():
+    """README discovery snippets must not advertise removed server commands."""
+    from radia_mcp.meta import catalog
+
+    pkg_root = Path(__file__).resolve().parents[1]
+    readme = (pkg_root / "README.md").read_text(encoding="utf-8")
+    mentioned = set(re.findall(r"\bmcp-server-[a-z0-9-]+\b", readme))
+    allowed = {info["entry_point"] for info in catalog.CATALOG.values()}
+    allowed.update(
+        str(info.get("entry_point", ""))
+        for info in catalog.EXTERNAL_PACKAGES.values()
+        if str(info.get("entry_point", "")).startswith("mcp-server-")
+    )
+    unknown = sorted(mentioned - allowed)
+    assert not unknown, f"README advertises unknown MCP entry points: {unknown}"
 
 
 def test_meta_by_tag_optimization_finds_at_least_4():
