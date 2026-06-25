@@ -20,12 +20,15 @@ Three modes:
   --mode step               merge the multi-piece loft-chain STEP file
                             from `demo_sf_to_peec_gx.py --with-peec`.
 
-Per CLAUDE.md: GMSH is used for VISUALISATION only, via the pip-gmsh
-Python API (NOT external gmsh.exe), with blocking gmsh.fltk.run().
+Per Radia policy: GMSH is used for VISUALISATION only.  This script writes
+display files and optionally opens them with a standalone gmsh executable;
+it does not import the pip gmsh Python runtime.
 
 Run:  python view_sf_coil_gx_gmsh.py [--mode contours|chain|step] [--no-gui]
 """
 import argparse
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -35,39 +38,63 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "src"))
 
 
-def _force_window_on_primary_monitor():
-    """Override saved window geometry so the GMSH window can't open on a
-    phantom off-screen monitor (saved from a previously-connected 2nd
-    display).  Every option call is BEFORE fltk.run() so it takes effect.
+def _gmsh_executable():
+    """Prefer the lab standalone gmsh.exe; fall back to PATH if needed."""
+    preferred = Path(r"C:\gmsh.exe")
+    if preferred.exists():
+        return str(preferred)
+    return shutil.which("gmsh.exe") or shutil.which("gmsh")
 
-    GMSH 4.x option names (verified against gmsh-py 4.13): Width/Height,
-    NOT SizeX/SizeY -- the latter were never valid and raise
-    ``Could not set option`` immediately."""
-    import gmsh
-    gmsh.option.setNumber("General.GraphicsPositionX", 100)
-    gmsh.option.setNumber("General.GraphicsPositionY", 100)
-    gmsh.option.setNumber("General.GraphicsWidth", 1280)
-    gmsh.option.setNumber("General.GraphicsHeight", 800)
-    gmsh.option.setNumber("General.MenuPositionX", 100)
-    gmsh.option.setNumber("General.MenuPositionY", 100)
+
+def _open_standalone_gmsh(display_geo):
+    """Open a .geo display companion with standalone GMSH."""
+    exe = _gmsh_executable()
+    if exe is None:
+        print(f"standalone gmsh executable not found; open manually: {display_geo}")
+        return
+    subprocess.run([exe, "-noconfig", str(display_geo)], check=False)
+
+
+def _display_geo_path(source_path):
+    source_path = Path(source_path)
+    return source_path.with_name(f"{source_path.stem}_gmsh_display.geo")
+
+
+def _write_display_geo(display_geo, merge_paths, option_lines):
+    display_geo = Path(display_geo)
+    lines = [
+        f"// Open with: gmsh {display_geo.name}",
+        "Mesh.NumSubEdges = 4;",
+        "General.GraphicsPositionX = 100;",
+        "General.GraphicsPositionY = 100;",
+        "General.GraphicsWidth = 1280;",
+        "General.GraphicsHeight = 800;",
+        "General.MenuPositionX = 100;",
+        "General.MenuPositionY = 100;",
+    ]
+    for path in merge_paths:
+        lines.append(f'Merge "{Path(path).name.replace("\\\\", "/")}";')
+    lines.extend(option_lines)
+    display_geo.write_text("\n".join(lines) + "\n", encoding="ascii")
+    print(f"wrote display companion {display_geo}")
+    return display_geo
 
 
 def view_step(step_path, show_gui=True):
-    """Merge a STEP file into GMSH and display it."""
-    import gmsh
-    gmsh.initialize(["-noconfig"])    # skip %APPDATA%\gmsh-options stale geom
-    gmsh.option.setNumber("General.Terminal", 0)
-    _force_window_on_primary_monitor()
-    gmsh.model.add("sf_coil_gx_step")
-    gmsh.merge(str(step_path))
-    n_solids = len(gmsh.model.getEntities(3))
-    n_faces = len(gmsh.model.getEntities(2))
-    print(f"merged {step_path.name}: {n_solids} solid(s), {n_faces} face(s)")
-    gmsh.option.setNumber("Geometry.Surfaces", 1)
-    gmsh.option.setNumber("Geometry.SurfaceLabels", 0)
+    """Write a STEP display companion and optionally open standalone GMSH."""
+    step_path = Path(step_path)
+    display_geo = _display_geo_path(step_path)
+    _write_display_geo(
+        display_geo,
+        [step_path],
+        [
+            "Geometry.Surfaces = 1;",
+            "Geometry.SurfaceLabels = 0;",
+        ],
+    )
+    print(f"STEP display source: {step_path}")
     if show_gui:
-        gmsh.fltk.run()
-    gmsh.finalize()
+        _open_standalone_gmsh(display_geo)
 
 
 def _sf_design():
@@ -394,20 +421,22 @@ def build_chain_msh(out_msh, show_cylinder=True):
 
 
 def view_msh(msh_path, show_gui=True):
-    """Open a .msh file in GMSH."""
-    import gmsh
-    gmsh.initialize(["-noconfig"])    # skip %APPDATA%\gmsh-options stale geom
-    gmsh.option.setNumber("General.Terminal", 0)
-    _force_window_on_primary_monitor()
-    gmsh.merge(str(msh_path))
-    gmsh.option.setNumber("Mesh.Lines", 1)
-    gmsh.option.setNumber("Mesh.LineWidth", 2.0)
-    gmsh.option.setNumber("Mesh.SurfaceFaces", 1)
-    gmsh.option.setNumber("Mesh.SurfaceEdges", 0)
-    gmsh.option.setNumber("Mesh.ColorCarousel", 0)   # color by physical
+    """Write a .msh display companion and optionally open standalone GMSH."""
+    msh_path = Path(msh_path)
+    display_geo = _display_geo_path(msh_path)
+    _write_display_geo(
+        display_geo,
+        [msh_path],
+        [
+            "Mesh.Lines = 1;",
+            "Mesh.LineWidth = 2.0;",
+            "Mesh.SurfaceFaces = 1;",
+            "Mesh.SurfaceEdges = 0;",
+            "Mesh.ColorCarousel = 0;",
+        ],
+    )
     if show_gui:
-        gmsh.fltk.run()
-    gmsh.finalize()
+        _open_standalone_gmsh(display_geo)
 
 
 def main():
@@ -445,8 +474,7 @@ def main():
         build_contours_msh(msh_out, show_cylinder=not args.no_cylinder)
     else:  # chain
         build_chain_msh(msh_out, show_cylinder=not args.no_cylinder)
-    if not args.no_gui:
-        view_msh(msh_out, show_gui=True)
+    view_msh(msh_out, show_gui=not args.no_gui)
 
 
 if __name__ == "__main__":
