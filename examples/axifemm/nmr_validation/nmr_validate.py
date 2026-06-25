@@ -93,7 +93,7 @@ def boundary_node_indices(nodes, tol=1e-6):
 
 
 def main():
-    print("=== Phase 1a: Triangle P1 axifemm vs FEMM NMR ===")
+    print("=== Phase 1a: Triangle P1 axifemm NMR stored-reference check ===")
 
     # Mesh
     print("\n[1] Building mesh...")

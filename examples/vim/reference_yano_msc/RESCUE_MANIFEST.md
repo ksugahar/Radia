@@ -15,7 +15,7 @@ extracted here as the **surface-charge MSC reference corpus for the CEFC 2026 pa
 | `tests/test_hex_demag_convergence.py` | `9facc2e7` "hdiv-vim: gate removed yano demag path" | 2026-06-19 | `9facc2e7^` |
 
 Model lineage: `examples/c_type_electromagnet` is a direct port of the
-**ELF_MAGIC CEFC-2020 C-Type model** (`S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type\Cubit`,
+**ELF_MAGIC CEFC-2020 C-Type model** (private C-Type Cubit archive,
 Trelis.jou, 1x1x1 / 3x3x3 / 6x6x6 hex). Quarter model + Image symmetry
 `+x-z`, racetrack coil, C-type yoke. Verified against ELF_MAGIC.
 
