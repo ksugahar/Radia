@@ -181,6 +181,23 @@ def test_gmsh_numsubedges_rule_respects_directory_display_companion(tmp_path):
     assert check_numsubedges_missing(str(script), lines) == []
 
 
+def test_gmsh_numsubedges_rule_respects_ancestor_display_companion(tmp_path):
+    from radia_mcp.gmsh.rules import check_numsubedges_missing
+
+    examples = tmp_path / "examples"
+    nested = examples / "nested" / "case"
+    nested.mkdir(parents=True)
+    script = nested / "curved.py"
+    lines = ["mesh.Curve(3)\n"]
+    assert check_numsubedges_missing(str(script), lines)
+
+    (examples / "_gmsh_display.geo").write_text(
+        "Mesh.NumSubEdges = 4;\n",
+        encoding="utf-8",
+    )
+    assert check_numsubedges_missing(str(script), lines) == []
+
+
 def test_gmsh_mesh_generation_remediation_plan(monkeypatch, tmp_path):
     from radia_mcp.gmsh import server
 
