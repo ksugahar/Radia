@@ -17,6 +17,7 @@ from radia_mcp.radia_ngsolve.solve import (
     three_phase_torque_ripple_harmonics,
     three_phase_torque_ripple_pair_table,
     torque_angle_sweep_comparison_summary,
+    torque_angle_sweep_health_summary,
     torque_angle_sweep_summary,
 )
 
@@ -119,6 +120,45 @@ def test_torque_angle_sweep_summary_extracts_ripple_harmonics():
     assert math.isclose(by_order[12]["amplitude_Nm"], ripple12, abs_tol=1.0e-14)
 
 
+def test_torque_angle_sweep_health_summary_flags_ripple_limits():
+    samples = 720
+    mean = 10.0
+    ripple6 = 0.4
+    ripple12 = 0.1
+    torque = [
+        mean
+        + ripple6 * math.cos(6 * 2.0 * math.pi * idx / samples)
+        + ripple12 * math.sin(12 * 2.0 * math.pi * idx / samples)
+        for idx in range(samples)
+    ]
+
+    health = torque_angle_sweep_health_summary(
+        torque,
+        max_harmonic=18,
+        max_ac_rms_over_mean=0.04,
+        allowed_dominant_harmonics=[6],
+        min_mean_abs_torque_Nm=9.0,
+        top_harmonics=2,
+    )
+
+    assert health["status"] == "ok"
+    assert health["dominant_harmonic"] == 6
+    assert health["top_harmonic_rows"][0]["order"] == 6
+    assert health["top_harmonic_rows"][1]["order"] == 12
+    assert math.isclose(health["ac_rms_over_mean"], math.sqrt((ripple6 * ripple6 + ripple12 * ripple12) / 2.0) / mean, rel_tol=1.0e-12)
+    assert math.isclose(health["top_harmonic_rows"][0]["ac_variance_fraction"], (ripple6 * ripple6) / (ripple6 * ripple6 + ripple12 * ripple12), rel_tol=1.0e-12)
+
+    bad = torque_angle_sweep_health_summary(
+        torque,
+        max_harmonic=18,
+        max_ac_rms_over_mean=0.02,
+        allowed_dominant_harmonics=[12],
+    )
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["ac_rms_over_mean"] is False
+    assert bad["checks"]["dominant_harmonic"] is False
+
+
 def test_torque_angle_sweep_comparison_summary_tracks_mean_and_ripple_deltas():
     samples = 720
     reference = []
@@ -179,6 +219,12 @@ def test_invalid_inputs():
             pass
         else:
             raise AssertionError("invalid torque sweep input accepted")
+    try:
+        torque_angle_sweep_health_summary([1.0, 2.0, 3.0], top_harmonics=-1)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid torque health input accepted")
     try:
         torque_angle_sweep_comparison_summary([1.0, 2.0, 3.0], [1.0, 2.0])
     except ValueError:

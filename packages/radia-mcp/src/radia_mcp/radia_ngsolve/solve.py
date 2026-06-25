@@ -704,6 +704,111 @@ def torque_angle_sweep_summary(torque_Nm, max_harmonic=None):
     }
 
 
+def torque_angle_sweep_health_summary(
+    torque_Nm,
+    max_harmonic=None,
+    max_ac_rms_over_mean=None,
+    max_peak_to_peak_over_mean=None,
+    allowed_dominant_harmonics=None,
+    min_mean_abs_torque_Nm=None,
+    top_harmonics=5,
+):
+    """Turn a periodic torque-angle table into a compact health report.
+
+    The lower-level :func:`torque_angle_sweep_summary` exposes all Fourier
+    rows.  This wrapper adds design-style checks and a ripple budget, making it
+    easier to explain whether a table is limited by mean torque, RMS ripple, or
+    a particular dominant harmonic.
+    """
+
+    summary = torque_angle_sweep_summary(torque_Nm, max_harmonic=max_harmonic)
+    limit = int(top_harmonics)
+    if limit < 0:
+        raise ValueError("top_harmonics must be non-negative")
+    issues = []
+    checks = {
+        "mean_abs_torque": True,
+        "ac_rms_over_mean": True,
+        "peak_to_peak_over_mean": True,
+        "dominant_harmonic": True,
+    }
+
+    if min_mean_abs_torque_Nm is not None:
+        threshold = float(min_mean_abs_torque_Nm)
+        if threshold < 0.0:
+            raise ValueError("min_mean_abs_torque_Nm must be >= 0")
+        checks["mean_abs_torque"] = abs(summary["mean_torque_Nm"]) >= threshold
+        if not checks["mean_abs_torque"]:
+            issues.append("mean torque magnitude is below the requested minimum")
+
+    if max_ac_rms_over_mean is not None:
+        threshold = float(max_ac_rms_over_mean)
+        if threshold < 0.0:
+            raise ValueError("max_ac_rms_over_mean must be >= 0")
+        checks["ac_rms_over_mean"] = summary["ac_rms_over_mean"] <= threshold
+        if not checks["ac_rms_over_mean"]:
+            issues.append("AC RMS torque ripple exceeds the requested ratio")
+
+    if max_peak_to_peak_over_mean is not None:
+        threshold = float(max_peak_to_peak_over_mean)
+        if threshold < 0.0:
+            raise ValueError("max_peak_to_peak_over_mean must be >= 0")
+        checks["peak_to_peak_over_mean"] = summary["peak_to_peak_over_mean"] <= threshold
+        if not checks["peak_to_peak_over_mean"]:
+            issues.append("peak-to-peak torque ripple exceeds the requested ratio")
+
+    allowed = None
+    if allowed_dominant_harmonics is not None:
+        allowed = sorted({int(order) for order in allowed_dominant_harmonics})
+        if any(order <= 0 for order in allowed):
+            raise ValueError("allowed_dominant_harmonics must be positive")
+        checks["dominant_harmonic"] = summary["dominant_harmonic"] in allowed
+        if not checks["dominant_harmonic"]:
+            issues.append("dominant torque harmonic is outside the allowed set")
+
+    ac_variance = summary["ac_rms_torque_Nm"] * summary["ac_rms_torque_Nm"]
+    top_rows = []
+    for row in sorted(summary["harmonic_rows"], key=lambda item: item["amplitude_Nm"], reverse=True)[:limit]:
+        variance = 0.5 * row["amplitude_Nm"] * row["amplitude_Nm"]
+        top_rows.append({
+            "order": row["order"],
+            "amplitude_Nm": row["amplitude_Nm"],
+            "amplitude_over_mean": row["amplitude_over_mean"],
+            "cos_coefficient_Nm": row["cos_coefficient_Nm"],
+            "sin_coefficient_Nm": row["sin_coefficient_Nm"],
+            "rms_contribution_Nm": row["amplitude_Nm"] / math.sqrt(2.0),
+            "ac_variance_fraction": 0.0 if ac_variance == 0.0 else variance / ac_variance,
+        })
+
+    return {
+        "policy": "torque_angle_sweep_harmonic_health",
+        "status": "ok" if not issues else "needs_attention",
+        "issues": issues,
+        "checks": checks,
+        "limits": {
+            "max_ac_rms_over_mean": None if max_ac_rms_over_mean is None else float(max_ac_rms_over_mean),
+            "max_peak_to_peak_over_mean": (
+                None if max_peak_to_peak_over_mean is None else float(max_peak_to_peak_over_mean)
+            ),
+            "allowed_dominant_harmonics": allowed,
+            "min_mean_abs_torque_Nm": (
+                None if min_mean_abs_torque_Nm is None else float(min_mean_abs_torque_Nm)
+            ),
+        },
+        "n_samples": summary["n_samples"],
+        "mean_torque_Nm": summary["mean_torque_Nm"],
+        "peak_to_peak_torque_Nm": summary["peak_to_peak_torque_Nm"],
+        "peak_to_peak_over_mean": summary["peak_to_peak_over_mean"],
+        "ac_rms_torque_Nm": summary["ac_rms_torque_Nm"],
+        "ac_rms_over_mean": summary["ac_rms_over_mean"],
+        "dominant_harmonic": summary["dominant_harmonic"],
+        "dominant_harmonic_amplitude_Nm": summary["dominant_harmonic_amplitude_Nm"],
+        "dominant_harmonic_over_mean": summary["dominant_harmonic_over_mean"],
+        "top_harmonic_rows": top_rows,
+        "summary": summary,
+    }
+
+
 def torque_angle_sweep_comparison_summary(
     reference_torque_Nm,
     candidate_torque_Nm,
