@@ -175,6 +175,27 @@ public:
 };
 
 //-------------------------------------------------------------------------
+// RadMomentKernelConfig: opt-in switch for the multipole-moment surface-charge kernel.
+//   OFF (default): CentroidFieldGradFromFace integrates each face with a 64pt (8x8) Gauss
+//                  bilinear-quad quadrature for both the field H and the gradient gH.
+//   ON           : each face is fan-triangulated and integrated with the analytic closed form
+//                  (FieldGradFromChargedTriangleLocal) -- H = van Oosterom-Strackee, gH = its
+//                  Mathematica-verified symbolic gradient (the quadrupole field-gradient).
+//                  ~64x fewer kernel evals/face; EXACT for planar faces (a small flat-triangulation
+//                  modeling diff only on non-planar quads).  Default OFF so all goldens are unchanged.
+//-------------------------------------------------------------------------
+class RadMomentKernelConfig {
+public:
+	static std::atomic<bool> s_analyticKernel;
+	static void SetAnalytic(bool on) { s_analyticKernel.store(on, std::memory_order_release); }
+	static bool UseAnalytic() { return s_analyticKernel.load(std::memory_order_acquire); }
+};
+
+// Free-function accessors (defined in rad_interaction.cpp; forward-declared in radia_pybind.cpp)
+void RadSetMomentAnalyticKernel(bool on);
+bool RadGetMomentAnalyticKernel();
+
+//-------------------------------------------------------------------------
 
 class radTInteraction : public radTg {
 	friend class radTHMatrixACA;    // Allow H-matrix to access interaction data
