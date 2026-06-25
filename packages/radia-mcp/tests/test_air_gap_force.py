@@ -21,6 +21,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     air_gap_shear_torque_summary,
     force_moment_resultant_summary,
     maxwell_contour_force_2d,
+    maxwell_contour_segment_balance_summary_2d,
     maxwell_line_segment_force_2d,
     maxwell_stress_tensor_air,
     maxwell_traction_air,
@@ -212,6 +213,26 @@ def test_maxwell_contour_force_2d_closed_uniform_field_cancels():
     assert summary["sum_abs_normal_force_per_depth_N_per_m"] > 0.0
 
 
+def test_maxwell_contour_segment_balance_summary_reports_cancellation():
+    pressure = air_gap_maxwell_pressure(1.0)
+    contour = [(-1.0, -0.5), (1.0, -0.5), (1.0, 0.5), (-1.0, 0.5)]
+    summary = maxwell_contour_segment_balance_summary_2d(
+        contour,
+        (1.0, 0.0),
+        expected_force_per_depth_N_per_m=(0.0, 0.0),
+    )
+
+    assert summary["status"] == "ok"
+    assert summary["reference_pass"] is True
+    assert summary["orientation_consistent"] is True
+    assert summary["total_force_per_depth_N_per_m"] == pytest.approx([0.0, 0.0], abs=1.0e-9)
+    assert summary["sum_abs_normal_force_per_depth_N_per_m"] == pytest.approx(6.0 * pressure)
+    assert summary["sum_abs_tangential_force_per_depth_N_per_m"] == pytest.approx(0.0)
+    assert summary["cancellation_ratio"] == pytest.approx(0.0, abs=1.0e-14)
+    assert summary["dominant_segment_index"] == 1
+    assert [row["dominant_contribution"] for row in summary["segment_rows"]] == ["normal"] * 4
+
+
 def test_air_gap_force_scales_with_b_squared_area_and_faces():
     base = air_gap_holding_force(0.5, area_m2=2.0e-4)
     assert air_gap_holding_force(1.0, area_m2=2.0e-4) == pytest.approx(4.0 * base)
@@ -263,6 +284,12 @@ def test_air_gap_force_rejects_invalid_inputs():
     with pytest.raises(ValueError):
         maxwell_contour_force_2d([(0.0, 0.0), (1.0, 0.0)], (1.0, 0.0))
     with pytest.raises(ValueError):
+        maxwell_contour_segment_balance_summary_2d(
+            [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)],
+            (1.0, 0.0),
+            expected_force_per_depth_N_per_m=(0.0, 0.0, 0.0),
+        )
+    with pytest.raises(ValueError):
         force_moment_resultant_summary([], [])
     with pytest.raises(ValueError):
         force_moment_resultant_summary([(0.0, 0.0)], [(1.0, 0.0, 0.0)])
@@ -281,6 +308,7 @@ if __name__ == "__main__":
     test_force_moment_resultant_summary_handles_3d_single_force()
     test_maxwell_line_segment_force_2d_matches_air_gap_pressure()
     test_maxwell_contour_force_2d_closed_uniform_field_cancels()
+    test_maxwell_contour_segment_balance_summary_reports_cancellation()
     test_air_gap_force_scales_with_b_squared_area_and_faces()
     test_air_gap_force_summary_is_json_friendly_and_self_consistent()
     test_air_gap_force_rejects_invalid_inputs()
