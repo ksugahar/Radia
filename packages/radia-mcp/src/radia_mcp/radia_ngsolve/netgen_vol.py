@@ -1305,10 +1305,52 @@ class NetgenTriTetVolMesh:
             "policy": "netgen_vol_tri_tet_only_shared_one_based_nodes",
         }
 
+    def p1_fem_bem_trace_matrix_summary(self) -> dict[str, object]:
+        """Return a one-based sparse P1 H1-to-scalar-BEM trace matrix.
+
+        For first-order nodal FEM and first-order scalar BEM on the same
+        tri/tet ``.vol`` mesh, the trace operator is just a boolean gather:
+        each compact boundary node row points to exactly one volume H1 node
+        column.  The returned one-based COO arrays can be used directly as
+        ``sparse(rows, cols, values, nTraceNodes, nVolumeNodes)`` in numerical
+        environments that use one-based sparse indexing.
+        """
+
+        trace_nodes = list(self.trace_node_ids())
+        volume_nodes = list(range(1, len(self.points) + 1))
+        trace_node_set = set(trace_nodes)
+        interior_nodes = [node for node in volume_nodes if node not in trace_node_set]
+        rows = list(range(1, len(trace_nodes) + 1))
+        cols = list(trace_nodes)
+        values = [1.0 for _node in trace_nodes]
+        return {
+            "policy": "p1_h1_to_scalar_bem_trace_is_boolean_gather",
+            "sparse_coo_call": "T = sparse(rows, cols, values, nTraceNodes, nVolumeNodes)",
+            "n_volume_nodes": len(volume_nodes),
+            "n_trace_nodes": len(trace_nodes),
+            "matrix_shape": [len(trace_nodes), len(volume_nodes)],
+            "nnz": len(trace_nodes),
+            "rows": rows,
+            "cols": cols,
+            "values": values,
+            "trace_node_ids": trace_nodes,
+            "interior_node_ids": interior_nodes,
+            "is_boolean_gather": True,
+            "row_nnz_min": 1 if trace_nodes else 0,
+            "row_nnz_max": 1 if trace_nodes else 0,
+            "boundary_column_nnz_max": 1 if trace_nodes else 0,
+            "interior_column_nnz_max": 0,
+            "surface_triangles_local": [
+                [trace_nodes.index(node) + 1 for node in tri.nodes]
+                for tri in self.surface_triangles
+            ],
+            "surface_triangles_global": [list(tri.nodes) for tri in self.surface_triangles],
+        }
+
     def first_order_fem_bem_topology(self) -> dict[str, object]:
         """Return first-order H1/HCurl/P1/RWG topology with one-based ids.
 
-        This mirrors the small MATLAB prototype API: H1 uses volume nodes,
+        This mirrors a small readable prototype API: H1 uses volume nodes,
         HCurl uses first-order tetrahedron edges, scalar BEM uses compacted
         boundary nodes, and RWG uses closed-manifold boundary edges.
         """
