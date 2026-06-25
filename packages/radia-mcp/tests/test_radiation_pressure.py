@@ -25,6 +25,7 @@ from radia_mcp.radia_ngsolve.force import (  # noqa: E402
     radiation_pressure_summary,
     radiation_scattering_force_summary,
     two_port_scattering_momentum_force_summary,
+    two_port_sparameter_sweep_health_summary,
     two_port_scattering_sweep_momentum_force_summary,
 )
 
@@ -243,6 +244,46 @@ def test_two_port_scattering_sweep_momentum_force_tracks_passivity_and_extrema()
     assert active["passivity_violation_rows"][0]["absorptance"] == pytest.approx(-0.13)
 
 
+def test_two_port_sparameter_sweep_health_checks_reciprocity_and_force():
+    power = 3.0
+    frequencies = [3.0e9, 4.0e9, 5.0e9]
+    s11 = [0.05 + 0.0j, 0.20 + 0.0j, 0.45 + 0.0j]
+    s21 = [0.95 + 0.0j, 0.80 + 0.0j, 0.55 + 0.0j]
+    s12 = [0.95005 + 0.0j, 0.79995 + 0.0j, 0.55001 + 0.0j]
+    s22 = [0.05002 + 0.0j, 0.19999 + 0.0j, 0.45003 + 0.0j]
+
+    health = two_port_sparameter_sweep_health_summary(
+        frequencies,
+        s11,
+        s21,
+        s12_values=s12,
+        s22_values=s22,
+        power_incident_W=power,
+        reciprocity_tolerance=1.0e-3,
+        return_symmetry_tolerance=1.0e-3,
+    )
+
+    assert health["status"] == "ok"
+    assert health["passivity_ok"] is True
+    assert health["reciprocity_ok"] is True
+    assert health["return_symmetry_ok"] is True
+    assert health["max_s21_s12_abs_error"] == pytest.approx(5.0e-5)
+    assert health["max_s11_s22_abs_error"] == pytest.approx(3.0e-5)
+    assert health["max_force_frequency_Hz"] == pytest.approx(5.0e9)
+
+    nonreciprocal = two_port_sparameter_sweep_health_summary(
+        frequencies,
+        s11,
+        s21,
+        s12_values=[0.95 + 0.0j, 0.72 + 0.0j, 0.55 + 0.0j],
+        power_incident_W=power,
+        reciprocity_tolerance=1.0e-3,
+    )
+    assert nonreciprocal["status"] == "needs_attention"
+    assert nonreciprocal["reciprocity_ok"] is False
+    assert nonreciprocal["max_s21_s12_abs_error"] == pytest.approx(0.08)
+
+
 def test_oblique_radiation_pressure_reduces_to_normal_incidence():
     intensity = 7.0
     area = 0.25
@@ -373,6 +414,8 @@ if __name__ == "__main__":
     test_two_port_scattering_momentum_force_vector()
     test_one_port_reflection_momentum_force_from_s11()
     test_one_port_reflection_sweep_momentum_force_finds_extrema_and_passivity()
+    test_two_port_scattering_sweep_momentum_force_tracks_passivity_and_extrema()
+    test_two_port_sparameter_sweep_health_checks_reciprocity_and_force()
     test_oblique_radiation_pressure_reduces_to_normal_incidence()
     test_oblique_radiation_pressure_splits_absorbed_tangential_momentum()
     test_poynting_patch_force_vector_matches_oblique_summary()
