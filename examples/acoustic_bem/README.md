@@ -61,6 +61,12 @@ reflection coefficient, absorption coefficient, and power balance of a local
 acoustic impedance boundary. It checks matched, mismatched, purely reactive,
 pressure-release, and oblique-incidence limits.
 
+## Impedance radiation pressure
+
+`validation_acoustic_impedance_radiation_pressure.py` validates the normal
+momentum pressure from an acoustic impedance reflection summary. It checks the
+matched absorber, partial reflector, and lossless reactive reflector limits.
+
 ```powershell
 python validation_pulsating_sphere_radiation.py
 python validation_low_frequency_helmholtz_kernel.py
@@ -70,4 +76,5 @@ python validation_baffled_piston_radiation.py
 python validation_acoustic_impedance_dtn_bridge.py
 python validation_acoustic_boundary_power.py
 python validation_acoustic_impedance_reflection.py
+python validation_acoustic_impedance_radiation_pressure.py
 ```

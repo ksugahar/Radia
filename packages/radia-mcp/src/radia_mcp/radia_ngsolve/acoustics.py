@@ -581,6 +581,66 @@ def acoustic_impedance_reflection_summary(
     }
 
 
+def acoustic_impedance_radiation_pressure_summary(
+    specific_impedance,
+    area=1.0,
+    incidence_angle_rad=0.0,
+    incident_pressure=1.0,
+    rho=1.2041,
+    c=343.0,
+    amplitude="peak",
+):
+    r"""Normal acoustic momentum pressure from an impedance reflection summary.
+
+    The incident intensity returned by :func:`acoustic_impedance_reflection_summary`
+    is the normal energy flux into the boundary.  The corresponding normal
+    momentum transfer to the load is
+
+        pressure = (1 + R) I_inc / c = (A + 2 R) I_inc / c,
+
+    where ``R=|Gamma|^2`` and ``A=1-R`` for a passive one-port load.  Thus a
+    matched absorber gives ``I/c`` and a lossless reflector gives ``2 I/c``.
+    """
+
+    patch_area = float(area)
+    if patch_area < 0.0:
+        raise ValueError("area must be >= 0")
+    reflection = acoustic_impedance_reflection_summary(
+        specific_impedance,
+        incidence_angle_rad=incidence_angle_rad,
+        incident_pressure=incident_pressure,
+        rho=rho,
+        c=c,
+        amplitude=amplitude,
+    )
+    speed = float(reflection["c"])
+    incident_intensity = float(reflection["incident_intensity"])
+    reflectance = float(reflection["power_reflection_coefficient"])
+    absorption = float(reflection["absorption_coefficient"])
+    pressure = (1.0 + reflectance) * incident_intensity / speed
+    equivalent_pressure = (absorption + 2.0 * reflectance) * incident_intensity / speed
+    absorbed_pressure = absorption * incident_intensity / speed
+    reflected_pressure = 2.0 * reflectance * incident_intensity / speed
+    return {
+        "area": patch_area,
+        "reflection": reflection,
+        "incident_normal_intensity": incident_intensity,
+        "power_reflection_coefficient": reflectance,
+        "absorption_coefficient": absorption,
+        "momentum_transfer_factor": 1.0 + reflectance,
+        "absorber_reflector_equivalent_factor": absorption + 2.0 * reflectance,
+        "absorbed_momentum_pressure_Pa": absorbed_pressure,
+        "reflected_momentum_pressure_Pa": reflected_pressure,
+        "normal_momentum_pressure_Pa": pressure,
+        "normal_momentum_pressure_equivalent_Pa": equivalent_pressure,
+        "normal_force_N": patch_area * pressure,
+        "force_from_absorptance_reflectance_N": patch_area * equivalent_pressure,
+        "force_balance_residual_N": patch_area * (pressure - equivalent_pressure),
+        "passive_one_port": absorption >= -1.0e-12,
+        "policy": "acoustic_impedance_momentum_pressure_from_absorptance_and_reflectance",
+    }
+
+
 def _bessel_j1_fallback(x):
     """Small dependency-free J1 approximation for acoustic piston gates."""
 
