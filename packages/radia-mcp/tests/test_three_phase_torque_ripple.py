@@ -16,6 +16,7 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.solve import (
     three_phase_torque_ripple_harmonics,
     three_phase_torque_ripple_pair_table,
+    torque_angle_sweep_comparison_summary,
     torque_angle_sweep_summary,
 )
 
@@ -118,6 +119,44 @@ def test_torque_angle_sweep_summary_extracts_ripple_harmonics():
     assert math.isclose(by_order[12]["amplitude_Nm"], ripple12, abs_tol=1.0e-14)
 
 
+def test_torque_angle_sweep_comparison_summary_tracks_mean_and_ripple_deltas():
+    samples = 720
+    reference = []
+    candidate = []
+    for idx in range(samples):
+        theta = 2.0 * math.pi * idx / samples
+        reference.append(
+            10.0
+            + 0.4 * math.cos(6 * theta)
+            + 0.1 * math.sin(12 * theta)
+        )
+        candidate.append(
+            10.2
+            + 0.3 * math.cos(6 * theta)
+            + 0.12 * math.sin(12 * theta)
+        )
+
+    comparison = torque_angle_sweep_comparison_summary(
+        reference,
+        candidate,
+        max_harmonic=18,
+    )
+    rows = {row["order"]: row for row in comparison["harmonic_delta_rows"]}
+
+    expected_delta_rms = math.sqrt(0.2 * 0.2 + (0.1 * 0.1 + 0.02 * 0.02) / 2.0)
+    expected_delta_ac_rms = math.sqrt((0.1 * 0.1 + 0.02 * 0.02) / 2.0)
+
+    assert math.isclose(comparison["mean_delta_Nm"], 0.2, abs_tol=1.0e-13)
+    assert math.isclose(comparison["sample_delta_rms_Nm"], expected_delta_rms, abs_tol=1.0e-13)
+    assert math.isclose(comparison["difference_summary"]["ac_rms_torque_Nm"], expected_delta_ac_rms, abs_tol=1.0e-13)
+    assert comparison["dominant_harmonic_changed"] is False
+    assert comparison["worst_harmonic_order"] == 6
+    assert math.isclose(rows[6]["amplitude_delta_Nm"], -0.1, abs_tol=1.0e-13)
+    assert math.isclose(rows[6]["delta_waveform_amplitude_Nm"], 0.1, abs_tol=1.0e-13)
+    assert math.isclose(rows[12]["amplitude_delta_Nm"], 0.02, abs_tol=1.0e-13)
+    assert math.isclose(rows[12]["sin_coefficient_delta_Nm"], 0.02, abs_tol=1.0e-13)
+
+
 def test_invalid_inputs():
     for bad in ({0: 1.0}, {-1: 1.0}):
         try:
@@ -140,3 +179,9 @@ def test_invalid_inputs():
             pass
         else:
             raise AssertionError("invalid torque sweep input accepted")
+    try:
+        torque_angle_sweep_comparison_summary([1.0, 2.0, 3.0], [1.0, 2.0])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("mismatched torque sweep lengths accepted")
