@@ -37,6 +37,8 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "box_face_traction_moment_rows",
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
+           "shape_measurement_inventory_summary", "worst_shape_measurement_comparison_rows",
+           "shape_measurement_health_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
            "swept", "revolved", "lofted", "coil", "helix_centerline_length",
            "round_wire_helix_metrics", "strut", "thicken", "draft_extrude",
@@ -814,6 +816,87 @@ def _max_abs_delta(reference, measured):
     return max(abs(float(a) - float(b)) for a, b in zip(reference, measured))
 
 
+def shape_measurement_inventory_summary(rows):
+    """Return assembly-level inventory statistics from measurement rows.
+
+    ``shape_measurement_rows`` is intentionally row-oriented.  This companion
+    answers the next question a CAE user asks: how much volume each labelled
+    region contributes, how much area is present, and how tightly the labelled
+    regions fill their union bounding box.
+    """
+
+    rows = list(rows)
+    if not rows:
+        return {
+            "n_shapes": 0,
+            "n_valid": 0,
+            "total_volume": 0.0,
+            "total_area": 0.0,
+            "total_solids": 0,
+            "total_faces": 0,
+            "total_edges": 0,
+            "total_vertices": 0,
+            "bounding_box": None,
+            "bbox_volume": None,
+            "bbox_fill_fraction": None,
+            "volume_fraction_rows": [],
+            "largest_volume_name": None,
+            "smallest_volume_name": None,
+        }
+
+    total_volume = sum(float(row["volume"]) for row in rows)
+    total_area = sum(float(row["area"]) for row in rows)
+    boxes = [_row_bounding_box(row) for row in rows]
+    complete_bbox = all(box is not None for box in boxes)
+    bounding_box = None
+    bbox_volume = None
+    fill_fraction = None
+    if complete_bbox:
+        mins = [min(box["min"][axis] for box in boxes) for axis in range(3)]
+        maxs = [max(box["max"][axis] for box in boxes) for axis in range(3)]
+        size = [maxs[axis] - mins[axis] for axis in range(3)]
+        center = [(mins[axis] + maxs[axis]) / 2.0 for axis in range(3)]
+        bbox_volume = size[0] * size[1] * size[2]
+        fill_fraction = total_volume / bbox_volume if bbox_volume > 0.0 else None
+        bounding_box = {
+            "min": [float(value) for value in mins],
+            "max": [float(value) for value in maxs],
+            "center": [float(value) for value in center],
+            "size": [float(value) for value in size],
+            "diagonal": math.sqrt(sum(value * value for value in size)),
+        }
+
+    volume_fraction_rows = []
+    for row in rows:
+        volume = float(row["volume"])
+        area = float(row["area"])
+        volume_fraction_rows.append({
+            "name": str(row["name"]),
+            "volume": volume,
+            "volume_fraction": volume / total_volume if total_volume > 0.0 else None,
+            "area": area,
+            "area_fraction": area / total_area if total_area > 0.0 else None,
+        })
+
+    by_volume = sorted(volume_fraction_rows, key=lambda row: row["volume"])
+    return {
+        "n_shapes": len(rows),
+        "n_valid": sum(1 for row in rows if bool(row.get("is_valid", True))),
+        "total_volume": total_volume,
+        "total_area": total_area,
+        "total_solids": sum(int(row.get("solids", 0)) for row in rows),
+        "total_faces": sum(int(row.get("faces", 0)) for row in rows),
+        "total_edges": sum(int(row.get("edges", 0)) for row in rows),
+        "total_vertices": sum(int(row.get("vertices", 0)) for row in rows),
+        "bounding_box": bounding_box,
+        "bbox_volume": bbox_volume,
+        "bbox_fill_fraction": fill_fraction,
+        "volume_fraction_rows": volume_fraction_rows,
+        "largest_volume_name": by_volume[-1]["name"],
+        "smallest_volume_name": by_volume[0]["name"],
+    }
+
+
 def compare_shape_measurement_rows(
     reference_rows,
     measured_rows,
@@ -948,6 +1031,85 @@ def shape_measurement_comparison_summary(
         "max_area_rel_error": max(area_errors) if area_errors else 0.0,
         "max_bbox_abs_error": max(bbox_errors) if bbox_errors else 0.0,
         "rows": rows,
+    }
+
+
+def _shape_measurement_comparison_score(row):
+    if row.get("volume_rel_error") is None or row.get("area_rel_error") is None:
+        return math.inf
+    score = max(float(row["volume_rel_error"]), float(row["area_rel_error"]))
+    bbox_error = row.get("bbox_abs_error")
+    if bbox_error is not None:
+        bbox_atol = float(row.get("bbox_atol") or 0.0)
+        score = max(score, float(bbox_error) / bbox_atol if bbox_atol > 0.0 else float(bbox_error))
+    return score
+
+
+def worst_shape_measurement_comparison_rows(comparison_rows, limit=5):
+    """Return the largest measurement mismatches first."""
+
+    if limit < 0:
+        raise ValueError("limit must be non-negative")
+    rows = sorted(
+        list(comparison_rows),
+        key=lambda row: (
+            0 if bool(row.get("passed")) else 1,
+            _shape_measurement_comparison_score(row),
+            str(row.get("name", "")),
+        ),
+        reverse=True,
+    )
+    return rows[:limit]
+
+
+def shape_measurement_health_summary(
+    reference_rows,
+    measured_rows,
+    rtol=1.0e-5,
+    measured_label="measured",
+    bbox_atol=1.0e-6,
+    worst_limit=5,
+):
+    """Return a readable health report for CAD measurement cross validation."""
+
+    if worst_limit < 0:
+        raise ValueError("worst_limit must be non-negative")
+    reference_rows = list(reference_rows)
+    inventory = shape_measurement_inventory_summary(reference_rows)
+    comparison = shape_measurement_comparison_summary(
+        reference_rows,
+        measured_rows,
+        rtol=rtol,
+        measured_label=measured_label,
+        bbox_atol=bbox_atol,
+    )
+    checks = {
+        "all_reference_shapes_valid": inventory["n_valid"] == inventory["n_shapes"],
+        "all_measurements_present_and_within_tolerance": comparison["n_passed"] == comparison["n_cases"],
+    }
+    issues = []
+    if not checks["all_reference_shapes_valid"]:
+        issues.append("at least one reference build123d shape is invalid")
+    if not checks["all_measurements_present_and_within_tolerance"]:
+        issues.append("at least one external measurement is missing or outside tolerance")
+    ok = all(checks.values())
+    return {
+        "policy": "build123d_shape_measurement_volume_area_bbox_health",
+        "status": "ok" if ok else "needs_attention",
+        "ok_for_geometry_roundtrip": ok,
+        "measured_label": measured_label,
+        "checks": checks,
+        "issues": issues,
+        "inventory": inventory,
+        "comparison_summary": {
+            key: value
+            for key, value in comparison.items()
+            if key != "rows"
+        },
+        "worst_comparisons": worst_shape_measurement_comparison_rows(
+            comparison["rows"],
+            limit=worst_limit,
+        ),
     }
 
 

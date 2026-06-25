@@ -1,0 +1,743 @@
+{
+  "analytic_comparison_rows": [
+    {
+      "area_rel_error": 0.0,
+      "build123d_area": 15.5,
+      "build123d_volume": 3.75,
+      "name": "core_block",
+      "reference_area": 15.5,
+      "reference_volume": 3.75,
+      "volume_rel_error": 0.0
+    },
+    {
+      "area_rel_error": 0.0,
+      "build123d_area": 7.555530331883453,
+      "build123d_volume": 0.8168140899333461,
+      "name": "cooling_sleeve",
+      "reference_area": 7.555530331883453,
+      "reference_volume": 0.8168140899333463,
+      "volume_rel_error": 1.3592114023348361e-16
+    },
+    {
+      "build123d_volume": 0.39446622756637006,
+      "name": "sector_pole",
+      "reference_volume": 0.39446622756636834,
+      "volume_rel_error": 4.3624664620482765e-15
+    }
+  ],
+  "build123d_rows": [
+    {
+      "area": 15.5,
+      "bounding_box": {
+        "center": [
+          -3.4000000000000004,
+          0.0,
+          0.0
+        ],
+        "diagonal": 3.082207001484488,
+        "max": [
+          -2.1500000000000004,
+          0.75,
+          0.5
+        ],
+        "min": [
+          -4.65,
+          -0.75,
+          -0.5
+        ],
+        "size": [
+          2.5,
+          1.5,
+          1.0
+        ]
+      },
+      "characteristic_length": 2.5,
+      "edges": 12,
+      "faces": 6,
+      "index": 1,
+      "is_valid": true,
+      "name": "core_block",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 8,
+      "volume": 3.75
+    },
+    {
+      "area": 7.555530331883453,
+      "bounding_box": {
+        "center": [
+          -0.7,
+          0.0,
+          0.09999999999999998
+        ],
+        "diagonal": 2.0445048300260873,
+        "max": [
+          -0.24999999999999994,
+          0.45,
+          0.9
+        ],
+        "min": [
+          -1.15,
+          -0.45,
+          -0.7000000000000001
+        ],
+        "size": [
+          0.8999999999999999,
+          0.9,
+          1.6
+        ]
+      },
+      "characteristic_length": 1.6,
+      "edges": 6,
+      "faces": 4,
+      "index": 2,
+      "is_valid": true,
+      "name": "cooling_sleeve",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 4,
+      "volume": 0.8168140899333461
+    },
+    {
+      "area": 3.5102295981036566,
+      "bounding_box": {
+        "center": [
+          2.284964116699402,
+          0.6849641166994023,
+          0.0
+        ],
+        "diagonal": 1.6956786712180059,
+        "max": [
+          2.83100969126526,
+          1.2310096912652602,
+          0.35
+        ],
+        "min": [
+          1.7389185421335445,
+          0.1389185421335443,
+          -0.35
+        ],
+        "size": [
+          1.0920911491317156,
+          1.0920911491317158,
+          0.7
+        ]
+      },
+      "characteristic_length": 1.0920911491317158,
+      "edges": 12,
+      "faces": 6,
+      "index": 3,
+      "is_valid": true,
+      "name": "sector_pole",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 8,
+      "volume": 0.39446622756637006
+    },
+    {
+      "area": 15.564335920066426,
+      "bounding_box": {
+        "center": [
+          4.2,
+          0.0,
+          0.0
+        ],
+        "diagonal": 4.08686921738389,
+        "max": [
+          5.9,
+          1.1,
+          0.275
+        ],
+        "min": [
+          2.5,
+          -1.1,
+          -0.275
+        ],
+        "size": [
+          3.4000000000000004,
+          2.2,
+          0.55
+        ]
+      },
+      "characteristic_length": 3.4000000000000004,
+      "edges": 48,
+      "faces": 18,
+      "index": 4,
+      "is_valid": true,
+      "name": "racetrack_coil",
+      "solids": 1,
+      "type": "Solid",
+      "vertices": 32,
+      "volume": 1.4439203202953192
+    }
+  ],
+  "checks": {
+    "bbox_atol": 1e-06,
+    "bbox_fill_fraction": 0.1627856870390862,
+    "cubit_available": true,
+    "cubit_bin_name": "Coreform Cubit 2025.12",
+    "health_status": "ok",
+    "max_analytic_area_rel_error": 0.0,
+    "max_analytic_volume_rel_error": 4.3624664620482765e-15,
+    "max_cubit_area_rel_error": 7.92350085246136e-13,
+    "max_cubit_bbox_abs_error": 5.555556015224283e-13,
+    "max_cubit_volume_rel_error": 4.069840405282176e-06,
+    "n_analytic_rows": 3,
+    "n_cases": 4,
+    "n_cubit_passed": 4,
+    "passed": true,
+    "rtol": 1e-05,
+    "total_volume": 6.405200637795035
+  },
+  "cubit_rows": [
+    {
+      "area": 15.5,
+      "bounding_box": {
+        "center": [
+          -3.4000000000000004,
+          0.0,
+          0.0
+        ],
+        "diagonal": 3.082207001484488,
+        "max": [
+          -2.1500000000000004,
+          0.75,
+          0.5
+        ],
+        "min": [
+          -4.65,
+          -0.75,
+          -0.5
+        ],
+        "size": [
+          2.5,
+          1.5,
+          1.0
+        ]
+      },
+      "index": 1,
+      "name": "core_block",
+      "surfaces": 6,
+      "volume": 3.75,
+      "volumes": 1
+    },
+    {
+      "area": 7.555530331883453,
+      "bounding_box": {
+        "center": [
+          -0.7,
+          0.0,
+          0.09999999999999998
+        ],
+        "diagonal": 2.0445048300260873,
+        "max": [
+          -0.24999999999999994,
+          0.45,
+          0.9
+        ],
+        "min": [
+          -1.15,
+          -0.45,
+          -0.7000000000000001
+        ],
+        "size": [
+          0.8999999999999999,
+          0.9,
+          1.6
+        ]
+      },
+      "index": 2,
+      "name": "cooling_sleeve",
+      "surfaces": 4,
+      "volume": 0.8168140899333464,
+      "volumes": 1
+    },
+    {
+      "area": 3.5102295981008753,
+      "bounding_box": {
+        "center": [
+          2.2849641166990917,
+          0.6849641166994376,
+          0.0
+        ],
+        "diagonal": 1.6956786712181917,
+        "max": [
+          2.8310096912651943,
+          1.2310096912651947,
+          0.35
+        ],
+        "min": [
+          1.738918542132989,
+          0.1389185421336805,
+          -0.35
+        ],
+        "size": [
+          1.0920911491322054,
+          1.0920911491315142,
+          0.7
+        ]
+      },
+      "index": 3,
+      "name": "sector_pole",
+      "surfaces": 6,
+      "volume": 0.39446569721824326,
+      "volumes": 1
+    },
+    {
+      "area": 15.564335920066425,
+      "bounding_box": {
+        "center": [
+          4.2,
+          0.0,
+          0.0
+        ],
+        "diagonal": 4.08686921738389,
+        "max": [
+          5.9,
+          1.1,
+          0.275
+        ],
+        "min": [
+          2.5,
+          -1.1,
+          -0.275
+        ],
+        "size": [
+          3.4000000000000004,
+          2.2,
+          0.55
+        ]
+      },
+      "index": 4,
+      "name": "racetrack_coil",
+      "surfaces": 18,
+      "volume": 1.4439261968444974,
+      "volumes": 1
+    }
+  ],
+  "elapsed_seconds": 1.199,
+  "health": {
+    "checks": {
+      "all_measurements_present_and_within_tolerance": true,
+      "all_reference_shapes_valid": true
+    },
+    "comparison_summary": {
+      "bbox_atol": 1e-06,
+      "max_area_rel_error": 7.92350085246136e-13,
+      "max_bbox_abs_error": 5.555556015224283e-13,
+      "max_volume_rel_error": 4.069840405282176e-06,
+      "measured_label": "cubit",
+      "n_bbox_compared": 4,
+      "n_cases": 4,
+      "n_passed": 4,
+      "rtol": 1e-05
+    },
+    "inventory": {
+      "bbox_fill_fraction": 0.1627856870390862,
+      "bbox_volume": 39.347443588557596,
+      "bounding_box": {
+        "center": [
+          0.625,
+          0.06550484563263004,
+          0.09999999999999998
+        ],
+        "diagonal": 10.922275686905754,
+        "max": [
+          5.9,
+          1.2310096912652602,
+          0.9
+        ],
+        "min": [
+          -4.65,
+          -1.1,
+          -0.7000000000000001
+        ],
+        "size": [
+          10.55,
+          2.33100969126526,
+          1.6
+        ]
+      },
+      "largest_volume_name": "core_block",
+      "n_shapes": 4,
+      "n_valid": 4,
+      "smallest_volume_name": "sector_pole",
+      "total_area": 42.130095850053536,
+      "total_edges": 78,
+      "total_faces": 34,
+      "total_solids": 4,
+      "total_vertices": 52,
+      "total_volume": 6.405200637795035,
+      "volume_fraction_rows": [
+        {
+          "area": 15.5,
+          "area_fraction": 0.3679080165202212,
+          "name": "core_block",
+          "volume": 3.75,
+          "volume_fraction": 0.5854617539804221
+        },
+        {
+          "area": 7.555530331883453,
+          "area_fraction": 0.17933807601042645,
+          "name": "cooling_sleeve",
+          "volume": 0.8168140899333461,
+          "volume_fraction": 0.1275235759382131
+        },
+        {
+          "area": 3.5102295981036566,
+          "area_fraction": 0.08331881348186385,
+          "name": "sector_pole",
+          "volume": 0.39446622756637006,
+          "volume_fraction": 0.06158530386054597
+        },
+        {
+          "area": 15.564335920066426,
+          "area_fraction": 0.36943509398748847,
+          "name": "racetrack_coil",
+          "volume": 1.4439203202953192,
+          "volume_fraction": 0.22542936622081883
+        }
+      ]
+    },
+    "issues": [],
+    "measured_label": "cubit",
+    "ok_for_geometry_roundtrip": true,
+    "policy": "build123d_shape_measurement_volume_area_bbox_health",
+    "status": "ok",
+    "worst_comparisons": [
+      {
+        "area_rel_error": 1.1412994736961892e-16,
+        "bbox_abs_error": 0.0,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 0.0,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 0.0,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 0.0,
+        "measured_area": 15.564335920066425,
+        "measured_bounding_box": {
+          "center": [
+            4.2,
+            0.0,
+            0.0
+          ],
+          "diagonal": 4.08686921738389,
+          "max": [
+            5.9,
+            1.1,
+            0.275
+          ],
+          "min": [
+            2.5,
+            -1.1,
+            -0.275
+          ],
+          "size": [
+            3.4000000000000004,
+            2.2,
+            0.55
+          ]
+        },
+        "measured_label": "cubit",
+        "measured_volume": 1.4439261968444974,
+        "name": "racetrack_coil",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 15.564335920066426,
+        "reference_bounding_box": {
+          "center": [
+            4.2,
+            0.0,
+            0.0
+          ],
+          "diagonal": 4.08686921738389,
+          "max": [
+            5.9,
+            1.1,
+            0.275
+          ],
+          "min": [
+            2.5,
+            -1.1,
+            -0.275
+          ],
+          "size": [
+            3.4000000000000004,
+            2.2,
+            0.55
+          ]
+        },
+        "reference_volume": 1.4439203202953192,
+        "rtol": 1e-05,
+        "volume_rel_error": 4.069840405282176e-06
+      },
+      {
+        "area_rel_error": 7.92350085246136e-13,
+        "bbox_abs_error": 5.555556015224283e-13,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 3.1041835768519377e-13,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 6.572520305780927e-14,
+        "bbox_min_abs_error": 5.555556015224283e-13,
+        "bbox_size_abs_error": 4.898303984646191e-13,
+        "measured_area": 3.5102295981008753,
+        "measured_bounding_box": {
+          "center": [
+            2.2849641166990917,
+            0.6849641166994376,
+            0.0
+          ],
+          "diagonal": 1.6956786712181917,
+          "max": [
+            2.8310096912651943,
+            1.2310096912651947,
+            0.35
+          ],
+          "min": [
+            1.738918542132989,
+            0.1389185421336805,
+            -0.35
+          ],
+          "size": [
+            1.0920911491322054,
+            1.0920911491315142,
+            0.7
+          ]
+        },
+        "measured_label": "cubit",
+        "measured_volume": 0.39446569721824326,
+        "name": "sector_pole",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 3.5102295981036566,
+        "reference_bounding_box": {
+          "center": [
+            2.284964116699402,
+            0.6849641166994023,
+            0.0
+          ],
+          "diagonal": 1.6956786712180059,
+          "max": [
+            2.83100969126526,
+            1.2310096912652602,
+            0.35
+          ],
+          "min": [
+            1.7389185421335445,
+            0.1389185421335443,
+            -0.35
+          ],
+          "size": [
+            1.0920911491317156,
+            1.0920911491317158,
+            0.7
+          ]
+        },
+        "reference_volume": 0.39446622756637006,
+        "rtol": 1e-05,
+        "volume_rel_error": 1.344470298701339e-06
+      },
+      {
+        "area_rel_error": 0.0,
+        "bbox_abs_error": 0.0,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 0.0,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 0.0,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 0.0,
+        "measured_area": 7.555530331883453,
+        "measured_bounding_box": {
+          "center": [
+            -0.7,
+            0.0,
+            0.09999999999999998
+          ],
+          "diagonal": 2.0445048300260873,
+          "max": [
+            -0.24999999999999994,
+            0.45,
+            0.9
+          ],
+          "min": [
+            -1.15,
+            -0.45,
+            -0.7000000000000001
+          ],
+          "size": [
+            0.8999999999999999,
+            0.9,
+            1.6
+          ]
+        },
+        "measured_label": "cubit",
+        "measured_volume": 0.8168140899333464,
+        "name": "cooling_sleeve",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 7.555530331883453,
+        "reference_bounding_box": {
+          "center": [
+            -0.7,
+            0.0,
+            0.09999999999999998
+          ],
+          "diagonal": 2.0445048300260873,
+          "max": [
+            -0.24999999999999994,
+            0.45,
+            0.9
+          ],
+          "min": [
+            -1.15,
+            -0.45,
+            -0.7000000000000001
+          ],
+          "size": [
+            0.8999999999999999,
+            0.9,
+            1.6
+          ]
+        },
+        "reference_volume": 0.8168140899333461,
+        "rtol": 1e-05,
+        "volume_rel_error": 2.718422804669672e-16
+      },
+      {
+        "area_rel_error": 0.0,
+        "bbox_abs_error": 0.0,
+        "bbox_atol": 1e-06,
+        "bbox_center_abs_error": 0.0,
+        "bbox_compared": true,
+        "bbox_max_abs_error": 0.0,
+        "bbox_min_abs_error": 0.0,
+        "bbox_size_abs_error": 0.0,
+        "measured_area": 15.5,
+        "measured_bounding_box": {
+          "center": [
+            -3.4000000000000004,
+            0.0,
+            0.0
+          ],
+          "diagonal": 3.082207001484488,
+          "max": [
+            -2.1500000000000004,
+            0.75,
+            0.5
+          ],
+          "min": [
+            -4.65,
+            -0.75,
+            -0.5
+          ],
+          "size": [
+            2.5,
+            1.5,
+            1.0
+          ]
+        },
+        "measured_label": "cubit",
+        "measured_volume": 3.75,
+        "name": "core_block",
+        "passed": true,
+        "reason": "ok",
+        "reference_area": 15.5,
+        "reference_bounding_box": {
+          "center": [
+            -3.4000000000000004,
+            0.0,
+            0.0
+          ],
+          "diagonal": 3.082207001484488,
+          "max": [
+            -2.1500000000000004,
+            0.75,
+            0.5
+          ],
+          "min": [
+            -4.65,
+            -0.75,
+            -0.5
+          ],
+          "size": [
+            2.5,
+            1.5,
+            1.0
+          ]
+        },
+        "reference_volume": 3.75,
+        "rtol": 1e-05,
+        "volume_rel_error": 0.0
+      }
+    ]
+  },
+  "inventory": {
+    "bbox_fill_fraction": 0.1627856870390862,
+    "bbox_volume": 39.347443588557596,
+    "bounding_box": {
+      "center": [
+        0.625,
+        0.06550484563263004,
+        0.09999999999999998
+      ],
+      "diagonal": 10.922275686905754,
+      "max": [
+        5.9,
+        1.2310096912652602,
+        0.9
+      ],
+      "min": [
+        -4.65,
+        -1.1,
+        -0.7000000000000001
+      ],
+      "size": [
+        10.55,
+        2.33100969126526,
+        1.6
+      ]
+    },
+    "largest_volume_name": "core_block",
+    "n_shapes": 4,
+    "n_valid": 4,
+    "smallest_volume_name": "sector_pole",
+    "total_area": 42.130095850053536,
+    "total_edges": 78,
+    "total_faces": 34,
+    "total_solids": 4,
+    "total_vertices": 52,
+    "total_volume": 6.405200637795035,
+    "volume_fraction_rows": [
+      {
+        "area": 15.5,
+        "area_fraction": 0.3679080165202212,
+        "name": "core_block",
+        "volume": 3.75,
+        "volume_fraction": 0.5854617539804221
+      },
+      {
+        "area": 7.555530331883453,
+        "area_fraction": 0.17933807601042645,
+        "name": "cooling_sleeve",
+        "volume": 0.8168140899333461,
+        "volume_fraction": 0.1275235759382131
+      },
+      {
+        "area": 3.5102295981036566,
+        "area_fraction": 0.08331881348186385,
+        "name": "sector_pole",
+        "volume": 0.39446622756637006,
+        "volume_fraction": 0.06158530386054597
+      },
+      {
+        "area": 15.564335920066426,
+        "area_fraction": 0.36943509398748847,
+        "name": "racetrack_coil",
+        "volume": 1.4439203202953192,
+        "volume_fraction": 0.22542936622081883
+      }
+    ]
+  },
+  "kind": "build123d_measurement_health_cross_validation",
+  "validation_class": true
+}
