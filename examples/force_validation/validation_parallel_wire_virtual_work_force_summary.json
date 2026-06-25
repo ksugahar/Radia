@@ -1,0 +1,181 @@
+{
+  "cases": [
+    {
+      "expected_interaction": "attraction",
+      "label": "like_currents_horizontal_attract",
+      "summary": {
+        "analytic_radial_force_per_length_N_per_m": -3.428571428571428e-05,
+        "coenergy_center_J_per_m": 0.0,
+        "coenergy_formula": "-mu0*I1*I2/(2*pi)*log(d/d_ref) per unit length",
+        "coenergy_minus_J_per_m": 1.2000600039988353e-10,
+        "coenergy_plus_J_per_m": -1.199940003999568e-10,
+        "current1_A": 3.0,
+        "current2_A": 2.0,
+        "displacement_step_m": 3.5000000000000004e-06,
+        "force_rel_error": 3.3326681563342853e-09,
+        "force_vector_abs_error_N_per_m": 1.1426290821717547e-13,
+        "interaction": "attraction",
+        "lorentz": {
+          "current1_A": 3.0,
+          "current2_A": 2.0,
+          "field_from_wire1_at_wire2_T": [
+            0.0,
+            1.714285714285714e-05
+          ],
+          "force_magnitude_per_length_N_per_m": 3.428571428571428e-05,
+          "force_on_wire1_N_per_m": [
+            3.428571428571428e-05,
+            0.0
+          ],
+          "force_on_wire2_N_per_m": [
+            -3.428571428571428e-05,
+            0.0
+          ],
+          "interaction": "attraction",
+          "right_hand_tangent_at_wire2": [
+            0.0,
+            1.0
+          ],
+          "separation_m": 0.035,
+          "separation_xy_m": [
+            0.035,
+            0.0
+          ],
+          "signed_ampere_force_per_length_N_per_m": 3.428571428571428e-05,
+          "unit_from_wire1_to_wire2": [
+            1.0,
+            0.0
+          ]
+        },
+        "lorentz_force_on_wire2_N_per_m": [
+          -3.428571428571428e-05,
+          0.0
+        ],
+        "radial_force_abs_error_N_per_m": 1.1426290821717547e-13,
+        "reference_separation_m": 0.035,
+        "separation_m": 0.035,
+        "separation_xy_m": [
+          0.035,
+          0.0
+        ],
+        "virtual_work": {
+          "center_position_m": 0.035,
+          "denergy_dx_N": -3.4285714399977185e-05,
+          "displacement_m": 3.5000000000000004e-06,
+          "energy_center_J": 0.0,
+          "energy_kind": "coenergy",
+          "energy_minus_J": 1.2000600039988353e-10,
+          "energy_plus_J": -1.199940003999568e-10,
+          "energy_to_force_sign": 1.0,
+          "even_energy_residual_J": 5.999999963371181e-15,
+          "even_energy_residual_abs_J": 5.999999963371181e-15,
+          "force_N": -3.4285714399977185e-05,
+          "position_minus_m": 0.03499650000000001,
+          "position_plus_m": 0.0350035,
+          "stencil": "symmetric_central_pair",
+          "virtual_work_identity": "F = dW_co/dx at fixed current"
+        },
+        "virtual_work_force_on_wire2_N_per_m": [
+          -3.4285714399977185e-05,
+          0.0
+        ],
+        "virtual_work_radial_force_per_length_N_per_m": -3.4285714399977185e-05,
+        "virtual_work_units_note": "energy samples are J/m, so the differentiated force is N/m"
+      }
+    },
+    {
+      "expected_interaction": "repulsion",
+      "label": "opposite_currents_vertical_repel",
+      "summary": {
+        "analytic_radial_force_per_length_N_per_m": 3.428571428571428e-05,
+        "coenergy_center_J_per_m": 0.0,
+        "coenergy_formula": "-mu0*I1*I2/(2*pi)*log(d/d_ref) per unit length",
+        "coenergy_minus_J_per_m": -1.2000600039988353e-10,
+        "coenergy_plus_J_per_m": 1.199940003999568e-10,
+        "current1_A": 3.0,
+        "current2_A": -2.0,
+        "displacement_step_m": 3.5000000000000004e-06,
+        "force_rel_error": 3.3326681563342853e-09,
+        "force_vector_abs_error_N_per_m": 1.1426290821717547e-13,
+        "interaction": "repulsion",
+        "lorentz": {
+          "current1_A": 3.0,
+          "current2_A": -2.0,
+          "field_from_wire1_at_wire2_T": [
+            -1.714285714285714e-05,
+            0.0
+          ],
+          "force_magnitude_per_length_N_per_m": 3.428571428571428e-05,
+          "force_on_wire1_N_per_m": [
+            0.0,
+            -3.428571428571428e-05
+          ],
+          "force_on_wire2_N_per_m": [
+            0.0,
+            3.428571428571428e-05
+          ],
+          "interaction": "repulsion",
+          "right_hand_tangent_at_wire2": [
+            -1.0,
+            0.0
+          ],
+          "separation_m": 0.035,
+          "separation_xy_m": [
+            0.0,
+            0.035
+          ],
+          "signed_ampere_force_per_length_N_per_m": -3.428571428571428e-05,
+          "unit_from_wire1_to_wire2": [
+            0.0,
+            1.0
+          ]
+        },
+        "lorentz_force_on_wire2_N_per_m": [
+          0.0,
+          3.428571428571428e-05
+        ],
+        "radial_force_abs_error_N_per_m": 1.1426290821717547e-13,
+        "reference_separation_m": 0.035,
+        "separation_m": 0.035,
+        "separation_xy_m": [
+          0.0,
+          0.035
+        ],
+        "virtual_work": {
+          "center_position_m": 0.035,
+          "denergy_dx_N": 3.4285714399977185e-05,
+          "displacement_m": 3.5000000000000004e-06,
+          "energy_center_J": 0.0,
+          "energy_kind": "coenergy",
+          "energy_minus_J": -1.2000600039988353e-10,
+          "energy_plus_J": 1.199940003999568e-10,
+          "energy_to_force_sign": 1.0,
+          "even_energy_residual_J": -5.999999963371181e-15,
+          "even_energy_residual_abs_J": 5.999999963371181e-15,
+          "force_N": 3.4285714399977185e-05,
+          "position_minus_m": 0.03499650000000001,
+          "position_plus_m": 0.0350035,
+          "stencil": "symmetric_central_pair",
+          "virtual_work_identity": "F = dW_co/dx at fixed current"
+        },
+        "virtual_work_force_on_wire2_N_per_m": [
+          0.0,
+          3.4285714399977185e-05
+        ],
+        "virtual_work_radial_force_per_length_N_per_m": 3.4285714399977185e-05,
+        "virtual_work_units_note": "energy samples are J/m, so the differentiated force is N/m"
+      }
+    }
+  ],
+  "checks": {
+    "directions_ok": true,
+    "interactions_ok": true,
+    "max_force_rel_error": 3.3326681563342853e-09,
+    "max_force_vector_abs_error_N_per_m": 1.1426290821717547e-13,
+    "n_cases": 2,
+    "passed": true
+  },
+  "force_learning": "fixed-current coenergy derivative and Lorentz force give the same parallel-wire force per unit length",
+  "kind": "parallel_wire_virtual_work_force_validation",
+  "validation_class": true
+}

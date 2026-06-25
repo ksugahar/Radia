@@ -718,6 +718,98 @@ def parallel_wire_lorentz_force_summary(current1_A, current2_A, separation_xy_m)
     }
 
 
+def parallel_wire_virtual_work_force_summary(
+    current1_A,
+    current2_A,
+    separation_xy_m,
+    displacement_step_m=None,
+    reference_separation_m=None,
+):
+    """Compare two-wire Lorentz force with fixed-current virtual work.
+
+    The mutual magnetic coenergy per unit length has the separation-dependent
+    part
+
+        W'(d) = -mu0 I1 I2 / (2 pi) log(d / d_ref).
+
+    Differentiating it with respect to the scalar separation ``d`` gives the
+    radial force per unit length.  Like currents have a negative radial force
+    in the increasing-separation coordinate, which is the same attraction
+    direction reported by :func:`parallel_wire_lorentz_force_summary`.
+    """
+
+    pair = parallel_wire_lorentz_force_summary(current1_A, current2_A, separation_xy_m)
+    distance = pair["separation_m"]
+    if displacement_step_m is None:
+        h = 1.0e-4 * distance
+    else:
+        h = float(displacement_step_m)
+    if h <= 0.0:
+        raise ValueError("displacement_step_m must be > 0")
+    if h >= distance:
+        raise ValueError("displacement_step_m must be smaller than the wire separation")
+    if reference_separation_m is None:
+        d_ref = distance
+    else:
+        d_ref = float(reference_separation_m)
+        if d_ref <= 0.0:
+            raise ValueError("reference_separation_m must be > 0")
+
+    i1 = float(current1_A)
+    i2 = float(current2_A)
+    coefficient = MU0 * i1 * i2 / (2.0 * math.pi)
+
+    def coenergy_per_length(d):
+        return -coefficient * math.log(d / d_ref)
+
+    e_minus = coenergy_per_length(distance - h)
+    e_center = coenergy_per_length(distance)
+    e_plus = coenergy_per_length(distance + h)
+    virtual = virtual_work_symmetric_pair_force_summary(
+        h,
+        e_minus,
+        e_plus,
+        energy_kind="coenergy",
+        center_position_m=distance,
+        energy_center_J=e_center,
+    )
+
+    radial_force = virtual["force_N"]
+    analytic_radial = -pair["signed_ampere_force_per_length_N_per_m"]
+    unit = pair["unit_from_wire1_to_wire2"]
+    virtual_force_on_wire2 = [radial_force * unit[0], radial_force * unit[1]]
+    vector_error = [
+        virtual_force_on_wire2[axis] - pair["force_on_wire2_N_per_m"][axis]
+        for axis in range(2)
+    ]
+    vector_abs_error = math.hypot(vector_error[0], vector_error[1])
+    reference_force = max(pair["force_magnitude_per_length_N_per_m"], 1.0e-300)
+    radial_abs_error = abs(radial_force - analytic_radial)
+    return {
+        "current1_A": i1,
+        "current2_A": i2,
+        "separation_xy_m": pair["separation_xy_m"],
+        "separation_m": distance,
+        "reference_separation_m": d_ref,
+        "displacement_step_m": h,
+        "coenergy_formula": "-mu0*I1*I2/(2*pi)*log(d/d_ref) per unit length",
+        "coenergy_minus_J_per_m": e_minus,
+        "coenergy_center_J_per_m": e_center,
+        "coenergy_plus_J_per_m": e_plus,
+        "virtual_work_units_note": "energy samples are J/m, so the differentiated force is N/m",
+        "virtual_work": virtual,
+        "lorentz": pair,
+        "virtual_work_radial_force_per_length_N_per_m": radial_force,
+        "analytic_radial_force_per_length_N_per_m": analytic_radial,
+        "virtual_work_force_on_wire2_N_per_m": virtual_force_on_wire2,
+        "lorentz_force_on_wire2_N_per_m": pair["force_on_wire2_N_per_m"],
+        "force_vector_abs_error_N_per_m": vector_abs_error,
+        "radial_force_abs_error_N_per_m": radial_abs_error,
+        "force_rel_error": vector_abs_error / reference_force,
+        "interaction": pair["interaction"],
+    }
+
+
 def force_moment_resultant_summary(points_m, forces, pivot_m=None):
     """Resultant force and torque from discrete force rows.
 
