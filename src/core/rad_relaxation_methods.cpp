@@ -2114,11 +2114,14 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<double>& chiPerHex,
                              const std::vector<double>& HextPerHex,
                              double aca_eps, int leaf, double eta,
-                             double tol, int maxiter, std::vector<double>& sigma)
+                             double tol, int maxiter, std::vector<double>& sigma,
+                             double& hmatrixBuildTime, double& linearSolveTime)
 {
+	hmatrixBuildTime = 0.0;
+	linearSolveTime = 0.0;
 	int nHex = IntrctPtr->GetNumHexElements();
 	int dof = 6 * nHex;
-	sigma.assign((size_t)dof, 0.0);
+	if((int)sigma.size() != dof) sigma.assign((size_t)dof, 0.0);
 	if(dof == 0) return 0;
 
 	// TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
@@ -2129,7 +2132,17 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 
 	RadHACApKMomentSystem mgr(IntrctPtr, chiPerHex);
 	RadHACApKParams prm; prm.aca_eps = aca_eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
+	auto t_hmatrix_start = std::chrono::high_resolution_clock::now();
 	if(!mgr.BuildHMatrix(prm)) return -1;
+	auto t_hmatrix_end = std::chrono::high_resolution_clock::now();
+	hmatrixBuildTime = std::chrono::duration<double>(t_hmatrix_end - t_hmatrix_start).count();
+
+	auto t_linear_start = std::chrono::high_resolution_clock::now();
+	auto finish = [&](int code) {
+		auto t_linear_end = std::chrono::high_resolution_clock::now();
+		linearSolveTime = std::chrono::duration<double>(t_linear_end - t_linear_start).count();
+		return code;
+	};
 
 	// RHS b_raw (un-normalized): dipole rows carry chi_h*Hext_h (per-element), the rest are 0.
 	std::vector<double> b((size_t)dof, 0.0);
@@ -2144,8 +2157,10 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		std::vector<int> ipiv(6);
 		std::vector<double> work(36);
 		int six = 6, lwork = 36, info = 0;
+		double rawBlock[36];
+		IntrctPtr->MomentSystemBlock6x6((int)h, (int)h, chiPerHex.data(), rawBlock);   // row-major moment block
 		for(int i = 0; i < 6; i++) for(int j = 0; j < 6; j++)
-			blk[(size_t)j*6 + i] = IntrctPtr->MomentSystemEntry(6*(int)h+i, 6*(int)h+j, chiPerHex.data());   // col-major for LAPACK
+			blk[(size_t)j*6 + i] = rawBlock[i*6 + j];   // col-major for LAPACK
 		dgetrf_(&six, &six, blk.data(), &six, ipiv.data(), &info);
 		if(info == 0) { dgetri_(&six, blk.data(), &six, ipiv.data(), work.data(), &lwork, &info); }
 		if(info != 0) { for(int k = 0; k < 36; k++) blk[k] = 0.0; for(int k = 0; k < 6; k++) blk[(size_t)k*6+k] = 1.0; }
@@ -2169,20 +2184,25 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		return s;
 	};
 
-	// preconditioned BiCGSTAB on the H-matvec (x0 = 0 -> r0 = b)
-	double bnorm = std::sqrt(dot(b, b)); if(bnorm < 1e-300) return 0;
-	std::vector<double> x((size_t)dof, 0.0), r = b, rhat = b, v((size_t)dof, 0.0), p((size_t)dof, 0.0);
+	// preconditioned BiCGSTAB on the H-matvec.  Use the incoming sigma as a Picard warm start; yano-type
+	// method-2 solves should not throw away the previous nonlinear iterate.
+	double bnorm = std::sqrt(dot(b, b)); if(bnorm < 1e-300) return finish(0);
+	std::vector<double> x = sigma, Ax((size_t)dof, 0.0), r((size_t)dof), v((size_t)dof, 0.0), p((size_t)dof, 0.0);
+	mgr.MatVec(x, Ax);
+	ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = b[i] - Ax[i]; });
+	if(std::sqrt(dot(r, r))/bnorm < tol) { sigma = x; return finish(0); }
+	std::vector<double> rhat = r;
 	std::vector<double> phat((size_t)dof), s((size_t)dof), shat((size_t)dof), tvec((size_t)dof);
 	double rho = 1.0, alpha = 1.0, omega = 1.0;
 	int it = 0;
 	for(; it < maxiter; it++)
 	{
 		double rho_new = dot(rhat, r);
-		if(std::fabs(rho_new) < 1e-300) return -10;                 // breakdown
+		if(std::fabs(rho_new) < 1e-300) return finish(-10);                 // breakdown
 		double beta = (rho_new/rho) * (alpha/omega);
 		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { p[i] = r[i] + beta*(p[i] - omega*v[i]); });
 		applyM(p, phat); mgr.MatVec(phat, v);
-		double rhv = dot(rhat, v); if(std::fabs(rhv) < 1e-300) return -10;
+		double rhv = dot(rhat, v); if(std::fabs(rhv) < 1e-300) return finish(-10);
 		alpha = rho_new / rhv;
 		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { s[i] = r[i] - alpha*v[i]; });
 		double snorm = std::sqrt(dot(s, s));
@@ -2192,16 +2212,16 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 			break;
 		}
 		applyM(s, shat); mgr.MatVec(shat, tvec);
-		double tt = dot(tvec, tvec); if(tt < 1e-300) return -10;
+		double tt = dot(tvec, tvec); if(tt < 1e-300) return finish(-10);
 		omega = dot(tvec, s) / tt;
 		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += alpha*phat[i] + omega*shat[i]; });
 		ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = s[i] - omega*tvec[i]; });
 		if(std::sqrt(dot(r, r))/bnorm < tol) { it++; break; }
-		if(std::fabs(omega) < 1e-300) return -10;
+		if(std::fabs(omega) < 1e-300) return finish(-10);
 		rho = rho_new;
 	}
 	sigma = x;
-	return it;
+	return finish(it);
 }
 #endif
 
@@ -2270,13 +2290,20 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		extern bool g_multipole_moment_hacapk;
 		if(g_multipole_moment_hacapk && nMom > 0)
 		{
-			std::vector<double> sigma;
+			const int hacDof = 6 * IntrctPtr->GetNumHexElements();
+			std::vector<double> sigma((size_t)hacDof, 0.0);
+			for(int i = 0; i < hacDof && i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];   // Picard warm start
+			double hmatrixBuildTime = 0.0, linearSolveTime = 0.0;
 			int nit = SolveMomentHACApK(IntrctPtr, chiPerHex, HextPerHex,
 			                            rad.m_hacapk_eps, rad.m_hacapk_leaf_size, rad.m_hacapk_eta,
-			                            rad.m_bicg_tol, 10000, sigma);
+			                            rad.m_bicg_tol, 10000, sigma,
+			                            hmatrixBuildTime, linearSolveTime);
 			if(nit >= 0)
 			{
-				for(int i = 0; i < totalDOF; i++) ctx.FlatMagn[i] = sigma[i];
+				rad.m_timing_hmatrix_build += hmatrixBuildTime;
+				rad.m_solve_t_linear_solve += linearSolveTime;
+				rad.m_solve_linear_iterations += nit;
+				for(int i = 0; i < totalDOF && i < (int)sigma.size(); i++) ctx.FlatMagn[i] = sigma[i];
 				return nit;   // converged -> sigma written; skip the dense LU path
 			}
 			// nit < 0 (breakdown / build fail) -> fall through to the dense moment LU below (correct answer)
@@ -2284,6 +2311,8 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 #endif
 		if(!ensureSystemMatrix()) return -2;   // dense moment fallback (H-BiCGSTAB unavailable/broke down)
 		IntrctPtr->BuildMomentSystemCore(chiPerHex.data(), HextPerHex.data(), SystemMatrix, RHS);
+		rad.m_solve_t_moment_fieldgrad += IntrctPtr->LastMomentFieldGradTime();
+		rad.m_solve_t_moment_system_build += IntrctPtr->LastMomentSystemBuildTime();
 	}
 	else
 	{
@@ -2922,6 +2951,8 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		}
 
 		IntrctPtr->BuildMomentSystemCore(chiPerHex.data(), HextPerHex.data(), SystemMatrix, RHS);
+		rad.m_solve_t_moment_fieldgrad += IntrctPtr->LastMomentFieldGradTime();
+		rad.m_solve_t_moment_system_build += IntrctPtr->LastMomentSystemBuildTime();
 
 		std::vector<double> sigma(totalDOF);
 		for(int i = 0; i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];

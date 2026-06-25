@@ -1503,11 +1503,16 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 	// Initialize solve statistics
 	m_solve_stats_valid = false;
 	m_solve_t_matrix_build = 0.0;
+	m_solve_t_moment_fieldgrad = 0.0;
+	m_solve_t_moment_system_build = 0.0;
 	m_solve_t_linear_solve = 0.0;
 	m_solve_t_lu_decomp = 0.0;  // Reset LU decomposition time
 	m_solve_linear_iterations = 0;
 	m_solve_nonl_iterations = 0;
 	m_solve_num_threads = radia::GetMaxThreads();  // Requested TaskManager thread count
+	m_timing_hmatrix_build = 0.0;
+	m_timing_linear_solve = 0.0;
+	m_linear_iterations = 0;
 
 	try
 	{
@@ -2663,10 +2668,14 @@ void radTApplication::GetSolveStats(double* dOut, int* nOut)
 	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
 	dOut[8] = (double)m_solve_defl_nplaq;  // loop-deflation cycles installed
 	dOut[9] = m_solve_defl_alpha;          // loop-deflation shift alpha (auto-scaled)
-	*nOut = 10;
 #else
-	*nOut = 7;
+	dOut[7] = 0.0;
+	dOut[8] = 0.0;
+	dOut[9] = 0.0;
 #endif
+	dOut[10] = m_solve_t_moment_fieldgrad;
+	dOut[11] = m_solve_t_moment_system_build;
+	*nOut = 12;
 }
 
 //-------------------------------------------------------------------------
