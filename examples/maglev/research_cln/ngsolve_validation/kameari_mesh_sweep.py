@@ -6,7 +6,7 @@ discretization-limited or algorithm-structural.
 If algorithm-limited (Padé[1,1] M-average): τ_0 invariant under mesh refinement.
 If discretization-limited: τ_0 → 218.7 (Hiruma exact) as h→0.
 
-Reuses Kameari accumulation algorithm in axifemm Henrotte basis (= same
+Reuses Kameari accumulation algorithm in axifem Henrotte basis (= same
 framework as v23 Hiruma 3-term, ensuring apples-to-apples comparison).
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ from math import pi
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
-sys.path.insert(0, r"S:/Radia/01_GitHub/examples/axifemm/research/tests")
+sys.path.insert(0, r"S:/Radia/01_GitHub/examples/axifem/research/tests")
 
 import numpy as np
 import scipy.sparse as sp
@@ -128,7 +128,7 @@ def main():
                                      N_stages=4, order=2, label=lbl)
 
     print("\n" + "=" * 78, flush=True)
-    print(" Mesh refinement sweep — Kameari + axifemm Henrotte axisym",
+    print(" Mesh refinement sweep — Kameari + axifem Henrotte axisym",
           flush=True)
     print("=" * 78, flush=True)
     print(f"{'case':>15} {'ne':>6} {'ndof':>6} | "

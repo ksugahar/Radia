@@ -149,10 +149,10 @@ Makefile
 *.bsc
 *.db-wal
 *.mat
-# Bundled NMR axifemm validation references (FEMM + NGSolve mixed
-# baseline + axifemm output) — small reference data shipped with the
+# Bundled NMR axifem validation references (FEMM + NGSolve mixed
+# baseline + axifem output) — small reference data shipped with the
 # example so it runs anywhere `pip install radia` reaches.
-!examples/axifemm/nmr_validation/*.mat
+!examples/axifem/nmr_validation/*.mat
 
 # ============================================================================
 # Build Logs

@@ -6,7 +6,7 @@ Vectorized port of cylinder_vim_axisym.py:
   - axisym Green's function G with elliptic K(m), E(m) (scipy CPU fallback)
   - K matrix via GPU einsum
 
-Reference (BEM Kameari): leading tau ~ 209 us. axifemm Q1 Kameari: 207 us.
+Reference (BEM Kameari): leading tau ~ 209 us. axifem Q1 Kameari: 207 us.
 """
 from __future__ import annotations
 

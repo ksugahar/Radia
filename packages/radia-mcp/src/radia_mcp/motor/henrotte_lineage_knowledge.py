@@ -81,7 +81,7 @@ constant materials — the same property linear elements have for plane
 This `{1, r², z}` basis (also called the **Henrotte basis** in the
 modern literature) is the basis used in `radia.axifem` for the
 magnetic A_φ curl-curl problem.  See
-`docs/axifemm/FORMULATION.md` sections 5-6.
+`docs/axifem/FORMULATION.md` sections 5-6.
 
 The lab CLAUDE.md policy "Axisymmetric FE: Henrotte for Magnetic,
 Standard H1 for Scalar (FEMM-Canonical)" rests on this 1993 paper:
