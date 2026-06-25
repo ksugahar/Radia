@@ -1,0 +1,110 @@
+{
+  "schema": "radia.panel_notebook_promotion.v1",
+  "generated_at_utc": "2026-06-25T10:51:07Z",
+  "policy": "Desktop panels are legacy adapters; promoted interfaces live as notebooks under src/radia/panels/notebooks. A panel is a light notebook wrapper around app-specific calc_*.py CLI arguments mapped into DesignSpec settings. Persistent initial values live in DesignSpec(...) notebook cells, while JSON files are run artifacts with radia_result metadata. Concise domain notes and pointers to previous in-repo result artifacts are part of the notebook panel contract.",
+  "panels": [
+    {
+      "id": "radia-ih",
+      "title": "Radia IH Notebook Interface",
+      "source": "src/radia/radia_ih.py",
+      "notebook": "src/radia/panels/notebooks/radia_ih.ipynb",
+      "state": "active-local-runner",
+      "adapter": "radia.ih_notebook.IHWorkbench",
+      "status": "The IH panel is still an active desktop workflow, but this notebook is the canonical browser-native promotion target.",
+      "headless": [
+        "src/radia/ih_design.py",
+        "src/radia/ih_notebook.py",
+        "src/radia/panels/calc_inductance.py",
+        "src/radia/panels/calc_fem_kelvin.py",
+        "src/radia/panels/calc_heat.py"
+      ],
+      "cells": [
+        [
+          "markdown",
+          "# Radia IH Notebook Interface\n\nSource panel: `src/radia/radia_ih.py`\n\nThis notebook is the promoted browser-native interface for induction-heating workflows. The desktop panel remains available while IH users rely on it, but new workflow logic should move into `radia.ih_design` and `radia.ih_notebook`."
+        ],
+        [
+          "code",
+          "from radia.ih_notebook import IHWorkbench\n\nworkbench = IHWorkbench()\nworkbench.display()\n"
+        ],
+        [
+          "code",
+          "# Build the current command after editing the widgets.\n# The Run button remains disabled until required inputs are present.\ncmd = workbench.build_command()\ncmd\n"
+        ]
+      ]
+    },
+    {
+      "id": "radia-em",
+      "title": "Radia EM Notebook Interface",
+      "source": "src/radia/radia_em.py",
+      "notebook": "src/radia/panels/notebooks/radia_em.ipynb",
+      "state": "active-local-runner",
+      "adapter": "radia.em_notebook.EMWorkbench",
+      "status": "Promoted as a notebook workbench backed by radia.em_design and the existing headless calc scripts.",
+      "headless": [
+        "src/radia/em_design.py",
+        "src/radia/em_notebook.py",
+        "src/radia/panels/calc_accel_magnet.py",
+        "src/radia/panels/calc_accel_msc.py",
+        "src/radia/panels/calc_kelvin_benchmark.py"
+      ]
+    },
+    {
+      "id": "radia-pcb",
+      "title": "Radia PCB Notebook Interface",
+      "source": "src/radia/radia_pcb.py",
+      "notebook": "src/radia/panels/notebooks/radia_pcb.ipynb",
+      "state": "active-local-runner",
+      "adapter": "radia.pcb_notebook.PCBWorkbench",
+      "status": "Promoted as a notebook workbench around the FastHenry/PEEC headless CLI.",
+      "headless": [
+        "src/radia/pcb_design.py",
+        "src/radia/pcb_notebook.py",
+        "src/radia/panels/calc_pcb_peec.py"
+      ]
+    },
+    {
+      "id": "radia-motor",
+      "title": "Radia Motor Notebook Interface",
+      "source": "src/radia/radia_motor.py",
+      "notebook": "src/radia/panels/notebooks/radia_motor.ipynb",
+      "state": "active-local-runner",
+      "adapter": "radia.motor_notebook.MotorWorkbench",
+      "status": "Promoted as a notebook workbench for transient and lamination motor analyses.",
+      "headless": [
+        "src/radia/motor_design.py",
+        "src/radia/motor_notebook.py",
+        "src/radia/panels/calc_motor_transient.py",
+        "src/radia/panels/calc_motor_lamination.py"
+      ]
+    },
+    {
+      "id": "radia-streamfunction",
+      "title": "Radia Stream-Function Notebook Interface",
+      "source": "src/radia/radia_streamfunction.py",
+      "notebook": "src/radia/panels/notebooks/radia_streamfunction.ipynb",
+      "state": "active-local-runner",
+      "adapter": "radia.streamfunction_notebook.StreamFunctionWorkbench",
+      "status": "Promoted as a notebook workbench for surface and volume stream-function coil workflows.",
+      "headless": [
+        "src/radia/streamfunction_design.py",
+        "src/radia/streamfunction_notebook.py",
+        "src/radia/panels/calc_streamfunction.py",
+        "src/radia/panels/calc_streamfunction_volume.py"
+      ]
+    },
+    {
+      "id": "radia-export-menu",
+      "title": "Radia Cubit Export Notebook Interface",
+      "source": "src/radia/panels/radia_export_menu.py",
+      "notebook": "src/radia/panels/notebooks/radia_export_menu.ipynb",
+      "state": "migration-shell",
+      "adapter": null,
+      "status": "Promoted as a notebook migration shell for export settings and headless Cubit export preparation. In-Cubit toolbar behavior remains desktop-only until replaced.",
+      "headless": [
+        "src/radia/panels/calc_mesh_eval.py",
+        "src/radia/panels/check_vol_consistency.py"
+      ]
+    }
+  ]
+}

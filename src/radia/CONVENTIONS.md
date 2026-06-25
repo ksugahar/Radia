@@ -1,9 +1,32 @@
-# Radia Analysis Window Conventions
+# Radia Panel Conventions
 
-Each analysis mode is a standalone PySide6 window defined in `src/radia/radia_*.py`.
-The Cubit plugin launcher (`register_toolbar.py`) discovers these files automatically.
+The canonical Radia panel surface is now a lightweight Jupyter notebook
+under `src/radia/panels/notebooks/`.  A panel wraps an app-specific
+headless `calc_*.py` script: argparse options become `DesignSpec`
+settings, the notebook workbench launches the script, and run artifacts
+are saved as `run.log` plus `result.json`.
 
-## Module-Level Metadata (required)
+Legacy standalone PySide6 windows remain under `src/radia/radia_*.py`
+while existing Cubit desktop workflows still depend on them.  The Cubit
+plugin launcher (`register_toolbar.py`) discovers those files for
+backward compatibility, but new user-facing panel work should prefer the
+notebook route.
+
+## Notebook Panel Policy
+
+- Keep computation in headless CLI/function modules.  Notebook panels
+  map settings to CLI arguments; they do not re-implement solvers.
+- Persistent defaults live in the notebook `DesignSpec(...)` cell.
+  JSON files are run artifacts, not preset storage.
+- Use concise Markdown where it teaches the application.  For IH, that
+  includes the linear SIBC vs nonlinear ESIM choice: ESIM solves a 1-D
+  cell problem from a BH curve to update the effective surface
+  impedance `Z_s`, and the previous ESIM benchmark JSONs show
+  convergence and per-panel/scalar behavior.
+- Use `netgen.webgui` for human-facing notebook visualization and
+  durable GMSH `.msh v4.1` artifacts for LLM/headless validation.
+
+## Legacy PySide Module-Level Metadata (required while PySide remains)
 
 Every `radia_*.py` must define these module-level variables:
 
@@ -92,6 +115,31 @@ if __name__ == "__main__":
 **Responsibility boundary**:
 - We guarantee: export files (.msh/.bdf/.vtk) contain correct geometry
 - NGSolve guarantees: .vol is read correctly by `Mesh("model.vol")`
+
+## Visualization Routing
+
+Panel visualization should ride existing viewer ecosystems.
+
+- GUI / notebook route for humans: use `netgen.webgui` (`Draw(...)`,
+  browser/Jupyter scene widgets).
+- LLM / headless route for automation: use `.msh v4.1` plus `gmsh`
+  / `GmshPostExport` so screenshots, field views, and validation
+  artifacts are durable files.
+- `.vol` and `.sol` are notebook input/output files. Their
+  double-click viewer should be plain Netgen (`netgen.exe "%1"`), not
+  GMSH and not the Radia-specific viewer by default.
+
+Do not make a panel depend on a GMSH desktop window for ordinary
+interactive viewing, and do not make an LLM workflow depend on a
+transient `netgen.webgui` browser state.
+
+Implementation note: pip Netgen's command-line dispatch lives in
+`netgen.__main__`; package startup/DLL setup lives in `netgen.__init__`.
+If `.vol` double-click does not launch, add a `.vol` handler to
+`netgen.__main__` using Netgen's native `Ng_LoadMesh` sequence and keep
+the Windows association pointed at `netgen.exe "%1"`. The
+`radia-vol-viewer` association is a legacy/helper path for custom `.sol`
+companion-mesh inference, not the default notebook IO route.
 
 ## Qt Compatibility
 
