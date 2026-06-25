@@ -44,6 +44,7 @@ See `docs/research/policy/strategy.md` and `toolchain.md` for the full rationale
 | `validation_build123d_cubit_measurement.py` | Validation-class build123d STEP round-trip measured by headless Cubit API; checks volume, surface-area, and bbox parity |
 | `validation_build123d_measurement_health.py` | Validation-class build123d assembly measurement health; reports volume fractions, bbox fill fraction, and worst Cubit volume/area/bbox mismatches |
 | `validation_build123d_parameter_sweep_summary.py` | Validation-class build123d parameter sweep design table; checks monotonic volume/area trends and constraint violations before meshing |
+| `validation_build123d_bbox_clearance_audit.py` | Validation-class build123d bbox clearance audit; separates provably disjoint pairs from all-axis bbox overlap pairs that need precise geometry checks |
 | `validation_enclosure_cubit_measurement.py` | Validation-class enclosing-box/void-region STEP round-trip measured by headless Cubit API; checks bbox margin, analytic volume/area, and Cubit volume/area/bbox parity |
 | `validation_build123d_cubit_boundary_normals.py` | Validation-class box boundary normals; checks analytic build123d face vector areas, optionally against a named Netgen `.vol` boundary mesh |
 | `validation_build123d_cubit_pressure_force.py` | Validation-class box pressure force; checks analytic build123d face forces, optionally against named Netgen `.vol` pressure-force rows |
@@ -73,6 +74,7 @@ python validation_racetrack_plate_air_region.py
 python validation_build123d_cubit_measurement.py --require-cubit
 python validation_build123d_measurement_health.py --require-cubit
 python validation_build123d_parameter_sweep_summary.py
+python validation_build123d_bbox_clearance_audit.py
 python validation_enclosure_cubit_measurement.py --require-cubit
 python validation_build123d_cubit_boundary_normals.py
 python validation_build123d_cubit_boundary_normals.py --vol C:\temp\box.vol --out C:\temp\box_boundary_normals_summary.json
