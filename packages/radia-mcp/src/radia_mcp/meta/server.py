@@ -10,9 +10,11 @@ Usage:
     mcp-server-radia-meta --selftest   # self-test
 """
 
+import copy
 import importlib
 import shutil
 import sys
+import time
 
 from mcp.server.fastmcp import FastMCP
 
@@ -20,6 +22,10 @@ from . import catalog, bug_patterns
 from ..common import register_status_tool
 
 mcp = FastMCP("mcp-server-radia-meta")
+
+_HEALTH_CACHE: dict | None = None
+_HEALTH_CACHE_AT = 0.0
+_HEALTH_CACHE_TTL_S = 30.0
 
 
 # ============================================================
@@ -102,12 +108,27 @@ def radia_mcp_related(name: str) -> dict:
 # ============================================================
 
 @mcp.tool()
-def radia_mcp_health() -> dict:
+def radia_mcp_health(force_refresh: bool = False) -> dict:
     """Probe importability of every radia_mcp.* subpackage.
 
     Returns per-subpackage import_ok status. Surfaces broken installs
     (missing entry points, half-applied editable install, etc.) early.
+
+    Args:
+        force_refresh: Ignore the short in-process cache and re-import/probe all
+            cataloged subpackages. Defaults to False for fast repeated MCP calls.
     """
+    global _HEALTH_CACHE, _HEALTH_CACHE_AT
+
+    now = time.monotonic()
+    if (not force_refresh and _HEALTH_CACHE is not None
+            and now - _HEALTH_CACHE_AT <= _HEALTH_CACHE_TTL_S):
+        cached = copy.deepcopy(_HEALTH_CACHE)
+        cached["from_cache"] = True
+        cached["cache_age_s"] = round(now - _HEALTH_CACHE_AT, 6)
+        return cached
+
+    t0 = time.perf_counter()
     out = []
     for name, info in catalog.CATALOG.items():
         subpkg = info["subpackage"]
@@ -124,7 +145,7 @@ def radia_mcp_health() -> dict:
         out.append(result)
 
     healthy = sum(1 for r in out if r["import_ok"])
-    return {
+    payload = {
         "n_servers_total": len(out),
         "n_servers_healthy": healthy,
         "all_healthy": healthy == len(out),
@@ -132,7 +153,13 @@ def radia_mcp_health() -> dict:
         "python_version": (f"{sys.version_info.major}."
                             f"{sys.version_info.minor}."
                             f"{sys.version_info.micro}"),
+        "elapsed_ms": round((time.perf_counter() - t0) * 1000.0, 3),
+        "from_cache": False,
+        "cache_ttl_s": _HEALTH_CACHE_TTL_S,
     }
+    _HEALTH_CACHE = copy.deepcopy(payload)
+    _HEALTH_CACHE_AT = now
+    return payload
 
 
 @mcp.tool()
