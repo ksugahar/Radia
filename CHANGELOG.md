@@ -3,10 +3,14 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
-## 4.95.0 — Multipole-moment MMM matrix-free and HACApK acceleration
+## 4.95.1 — Multipole-moment MMM matrix-free and HACApK acceleration
 
 Released 2026-06-26.
 
+- **Release correction**: supersedes the unpublished `v4.95.0` tag.  The
+  shared BiCGSTAB helper now treats an already-satisfied initial residual
+  and zero-residual breakdowns as converged, so the matrix-free moment
+  solve does not reject a valid nonlinear Picard step.
 - **Multipole-moment MMM method 1**: replaced the dense BiCGSTAB linear
   step with matrix-free moment matvecs and element-wise block Jacobi for
   pure hexahedral and mixed hex/wedge/pyramid 5/6-DOF surface-charge

@@ -287,12 +287,19 @@ Result Solve(int n,
     double rhs_norm = blas::nrm2(n, rhs);
     if (rhs_norm < 1e-30) rhs_norm = 1.0;
 
+    result.residual = blas::nrm2(n, r.data()) / rhs_norm;
+    if (result.residual < tol) {
+        result.converged = true;
+        return result;
+    }
+
     for (int iter = 1; iter <= max_iter; ++iter) {
         T rho_old = rho;
         rho = blas::dot(n, r0.data(), r.data());
 
         if (abs_val(rho) < 1e-30) {
             result.residual = blas::nrm2(n, r.data()) / rhs_norm;
+            result.converged = result.residual < tol;
             result.iterations = iter;
             break;
         }
@@ -302,6 +309,7 @@ Result Solve(int n,
         } else {
             if (abs_val(rho_old * omega) < 1e-30) {
                 result.residual = blas::nrm2(n, r.data()) / rhs_norm;
+                result.converged = result.residual < tol;
                 result.iterations = iter;
                 break;
             }
@@ -320,6 +328,7 @@ Result Solve(int n,
         T r0_dot_v = blas::dot(n, r0.data(), v.data());
         if (abs_val(r0_dot_v) < 1e-30) {
             result.residual = blas::nrm2(n, r.data()) / rhs_norm;
+            result.converged = result.residual < tol;
             result.iterations = iter;
             break;
         }
@@ -349,6 +358,7 @@ Result Solve(int n,
         if (abs_val(t_dot_t) < 1e-30) {
             blas::axpy(n, alpha, p_hat.data(), sol);
             result.residual = s_norm / rhs_norm;
+            result.converged = result.residual < tol;
             result.iterations = iter;
             break;
         }

@@ -125,18 +125,21 @@ def test_solve():
 	print("Test 6: Relaxation Solver")
 	print("=" * 60)
 	# Create a simple magnetic system
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
-	mat = rad.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
-	rad.MatApl(block, mat)
+	try:
+		block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
+		mat = rad.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
+		rad.MatApl(block, mat)
 
-	# Solve the system
-	precision = 0.001
-	max_iter = 1000
-	result = rad.Solve(block, precision, max_iter)
-	print(f"[OK] SUCCESS: Solver completed")
-	print(f"  Result: {result}")
-	# rad.Solve returns convergence data (list), not a single int
-	assert result is not None
+		# Solve the system
+		precision = 0.001
+		max_iter = 1000
+		result = rad.Solve(block, precision, max_iter)
+		print(f"[OK] SUCCESS: Solver completed")
+		print(f"  Result: {result}")
+		# rad.Solve returns convergence data (list), not a single int
+		assert result is not None
+	finally:
+		rad.UtiDelAll()
 
 @pytest.mark.basic
 def test_transformation():
