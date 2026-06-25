@@ -216,6 +216,67 @@ def p1_surface_triangle_constant_load(vertices, source=1.0):
     return [float(source) * area / 3.0] * 3
 
 
+def _matrix_triplets_1based(matrix):
+    return [
+        {"row": i + 1, "col": j + 1, "value": float(matrix[i][j])}
+        for i in range(len(matrix))
+        for j in range(len(matrix[i]))
+    ]
+
+
+def p1_surface_triangle_element_summary(
+    vertices,
+    density=1.0,
+    coeff=1.0,
+    source=1.0,
+):
+    """Readable P1 boundary-triangle element block for teaching assembly.
+
+    The returned JSON-friendly record groups the geometry, tangential
+    gradients, surface stiffness, consistent mass, and constant-load vector.
+    It also includes one-based sparse triplets so the same local block can be
+    copied directly into compact teaching assembly code.
+    """
+
+    geom = p1_surface_triangle_geometry(vertices)
+    stiffness = p1_surface_triangle_stiffness(vertices, coeff=coeff)
+    mass = p1_surface_triangle_mass(vertices, density=density)
+    load = p1_surface_triangle_constant_load(vertices, source=source)
+    area = geom["area"]
+    mass_row_sums = [sum(row) for row in mass]
+    stiffness_row_sums = [sum(row) for row in stiffness]
+    gradient_sum = tuple(
+        sum(geom["gradients"][local][axis] for local in range(3))
+        for axis in range(3)
+    )
+    return {
+        "policy": "p1_surface_triangle_element_teaching_block",
+        "vertices": [tuple(float(value) for value in point) for point in vertices],
+        "area": area,
+        "area_vector": geom["area_vector"],
+        "unit_normal": geom["unit_normal"],
+        "gradients": geom["gradients"],
+        "gradient_partition_sum": gradient_sum,
+        "gradient_partition_residual": _norm(gradient_sum),
+        "density": float(density),
+        "coeff": float(coeff),
+        "source": float(source),
+        "stiffness_matrix": stiffness,
+        "stiffness_triplets_1based": _matrix_triplets_1based(stiffness),
+        "stiffness_row_sums": stiffness_row_sums,
+        "stiffness_nullspace_residual": max(abs(value) for value in stiffness_row_sums),
+        "mass_matrix": mass,
+        "mass_triplets_1based": _matrix_triplets_1based(mass),
+        "mass_row_sums": mass_row_sums,
+        "mass_integral_of_one": sum(mass_row_sums),
+        "expected_mass_integral_of_one": float(density) * area,
+        "constant_load_vector": load,
+        "constant_load_integral": sum(load),
+        "expected_constant_load_integral": float(source) * area,
+        "local_node_ids_1based": [1, 2, 3],
+    }
+
+
 def p1_tetrahedron_face_trace_summary(vertices, nodal_values, face_local_nodes):
     """Project a volume P1 tetrahedron field onto one P1 boundary face.
 
