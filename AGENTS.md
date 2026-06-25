@@ -180,10 +180,10 @@ buries production-ready engineering examples in tests/.
 the sample, it fails, and the panel looks broken.  One broken sample
 discredits the whole panel.  The tier discipline above prevents this.
 
-### Panel Design Workflow Policy (2026-04-23)
+### Panel Design Workflow Policy (2026-04-23, updated 2026-06-26)
 
 **POLICY**: Panels are built in **three strict stages**, each gated by
-validation of the previous stage.  Do NOT jump straight to PySide.
+validation of the previous stage.  Do NOT jump straight to a custom GUI.
 
 **Stage 1 — Enumerate the app-specific variables.**
 Write down every knob the user of this specific application might want
@@ -196,6 +196,9 @@ to change.  This is a list, not code.  Pin the solver-specific variables
 Turn the Stage-1 list into an argparse-driven Python script.
 Computation only, no GUI.  JSON on stdout.  The solver switch **must**
 also be a CLI flag so the same script can drive any supported backend.
+The CLI arguments are the canonical settings surface; the notebook panel
+should map those arguments into a small `DesignSpec` dataclass instead
+of inventing a second configuration language.
 
 Stage 2 is validated by running the panel mode end-to-end against its
 *sample* input (see "Panel Samples Quality Policy") and comparing the
@@ -210,16 +213,38 @@ Stage 2 is considered **合格 (pass)** when:
   produces JSON whose key numbers are inside the golden band
 - `tests/panels/test_<mode>_golden.py` locks the result
 
-**Stage 3 — PySide panel (`radia_ih.py` / `radia_em.py` / ... under
-`src/radia/`).**
-Wrap the **validated** Stage-2 script with a PySide `AnalysisWindow`
-widget.  The panel launches the CLI via `subprocess.Popen` (per the
-4-Layer Architecture) and is forbidden from re-implementing any
-computation.  Stage 3 ships only after Stage 2 passes its golden test.
+**Stage 3 — notebook panel (`src/radia/panels/notebooks/*.ipynb`).**
+Wrap the **validated** Stage-2 script with a lightweight notebook
+workbench (`radia.<mode>_design` + `radia.<mode>_notebook`).  In this
+repo, a "panel" means the integrated `.ipynb` surface: CLI arguments
+become editable settings, `DesignSpec(...)` cells hold persistent
+initial values, and the workbench launches the CLI in the background
+with timeout, cancel, `run.log`, and `result.json` artifacts.  The
+`result.json` artifact must record the execution timestamp, Radia
+runtime version, Python/platform context, total wall time, and up to
+four heaviest detected timing stages from the solver's own output JSON.
+The notebook is allowed to include concise Markdown cautions because it
+is also the user-facing operating surface.
 
-Only Stage-3-ready panels go into `panel_registry.json` and the
-`radia_*.py` auto-discovery under `src/radia/`.  Stage-2-only panels
-live as CLI scripts and wait for the Stage-3 promotion gate.
+Notebook panels should also carry **small domain notes** that a generic
+dialog cannot.  For example, the IH workpiece note should say that the
+linear path uses a linear SIBC/Dowell-style `Z_s`, while the nonlinear
+ESIM path first solves a 1-D cell problem from the BH curve to update
+the effective surface impedance `Z_s`, optionally per panel/DOF.  When
+previous in-repo result artifacts exist, point to them and name the
+keys to inspect (`esim_converged`, `esim_iterations`, `Z_s_wp_*`,
+`P_wp_W`) instead of turning the notebook into a large static report.
+
+The Stage-3 notebook is forbidden from re-implementing computation; it
+only maps settings to the Stage-2 CLI and displays ecosystem-native
+outputs.  Use `netgen.webgui` for human-facing notebook visualization
+and durable GMSH `.msh v4.1` artifacts for LLM/headless validation.
+
+PySide windows under `src/radia/radia_*.py` are legacy compatibility
+adapters while existing desktop workflows still need them.  New panel
+work should land in the notebook workbench and
+`src/radia/panels/notebooks/panel_notebook_manifest.json`; Stage-2-only
+modes remain CLI scripts until this promotion gate is met.
 
 **Why**:
 - Forces the hard thinking about *what is changeable* before any widget
@@ -227,16 +252,47 @@ live as CLI scripts and wait for the Stage-3 promotion gate.
 - The solver switch being a Stage-2 argument means we catch
   solver-specific bugs with the same sample + golden test; the panel
   UI does not hide them.
-- Stage-3 promotion requires a passing golden — stops the historical
-  failure mode of shipping a panel whose Run button produces a wrong
-  number that nobody notices until a user publishes it.
+- Stage-3 promotion requires a passing golden and a notebook wrapper
+  that remains thin, readable, and cheap to maintain.
 
 Related:
 - "Panel Samples Quality Policy" above — Stage 2's validation relies
   on trustworthy samples.
 - "Cubit Panel Architecture" below (§ 4-Layer) — Stage 3 corresponds
-  to Layer 3 (PySide6 window), Stage 2 corresponds to Layer 4 (headless
-  calc_*.py).
+  to the notebook panel or legacy Layer 3 compatibility window, while
+  Stage 2 corresponds to Layer 4 (headless `calc_*.py`).
+
+### Panel Visualization Routing Policy (2026-06-26)
+
+**POLICY**: Panel-facing visualization follows the existing ecosystem
+instead of custom Radia viewers.
+
+- **GUI / notebook route (human-facing)**: use `netgen.webgui`
+  (`Draw(...)`, browser/Jupyter scene widgets) for in-panel or
+  notebook visual inspection.
+- **LLM / headless route (automation-facing)**: export `.msh v4.1`
+  and use `gmsh` / `GmshPostExport` for file-based inspection,
+  screenshots, geometry/field artifacts, and scripted validation.
+- **Notebook input IO files**: `.vol` and `.sol` are user-facing
+  notebook inputs/outputs.  Double-click viewing should open the plain
+  Netgen viewer, not a Radia-specific viewer or a GMSH desktop window.
+
+Do not invert these roles. Notebook or panel UX should not depend on a
+GMSH desktop window for ordinary interactive viewing, and LLM workflows
+should not depend on a transient `netgen.webgui` browser state when a
+durable `.msh`/`.json` artifact can be produced.
+
+Windows note: the pip-installed Netgen launcher is `netgen.exe`, backed
+by the `netgen.__main__` module.  As of this memo, `netgen.__main__`
+ships file handlers for `.py`, `.geo`, `.step`, and `.stl`, but not
+`.vol`/`.sol`.  If `.vol` double-click does not open, the fix belongs
+in Netgen's Python package startup (`netgen/__main__.py`, with any DLL
+setup still handled by `netgen/__init__.py`), adding a `.vol` handler
+using Netgen's native loader (`Ng_LoadMesh`) and then associating
+`.vol`/`.sol` with `netgen.exe "%1"`.  Do not treat the old
+`radia-vol-viewer --register` association as the default notebook IO
+route; keep it only as a legacy/helper path when a custom `.sol`
+companion-mesh heuristic is explicitly needed.
 
 ### Verify-First Policy: FES inspection before physics solve (2026-04-25)
 
@@ -2218,12 +2274,13 @@ for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_i
 │  Launches Layer 3 via subprocess.Popen (detached)               │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
-│  Layer 3: Radia-NGSolve PySide6 (Python 3.12 + PySide6)        │
+│  Layer 3: Radia notebook panel (Python 3.12 + Jupyter/ipywidgets)│
 │  ─────────────────────────────────────────────────────────────  │
-│  radia_ih.py (IHWindow) — standalone PySide6 application        │
-│  Separate process from Cubit. import cubit FORBIDDEN.           │
-│  Receives .vol path as CLI argument.                            │
-│  Launches Layer 4 via subprocess for computation.               │
+│  src/radia/panels/notebooks/*.ipynb + *_design.py/*_notebook.py │
+│  Separate process/kernel from Cubit. import cubit FORBIDDEN.    │
+│  Receives .vol/.sol paths as notebook/CLI settings.             │
+│  Launches Layer 4 in background with timeout/cancel/logs.       │
+│  Legacy: radia_*.py PySide6 windows may wrap the same Layer 4.  │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 4: Computation (Python 3.12, no GUI)                     │
@@ -2254,7 +2311,9 @@ for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_i
 |------|-------|---------|
 | `RadiaComp.cpp` (.ccl) | 1 (C++ Qt5) | Export Mesh menu + Mesh Evaluation |
 | `panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + Radia-NGSolve launcher |
-| `radia_ih.py` | 3 (PySide6) | IH analysis window (PEEC+FEM / FEM) |
+| `panels/notebooks/radia_ih.ipynb` | 3 (notebook panel) | IH analysis workbench (PEEC/BEM/FEM/thermal) |
+| `ih_design.py`, `ih_notebook.py` | 3 (notebook adapter) | UI-neutral IH settings and ipywidgets command workbench |
+| `radia_ih.py` | 3 legacy (PySide6) | Compatibility IH analysis window |
 | `panels/calc_peec.py` | 4 (no GUI) | PEEC filament coil inductance |
 | `panels/calc_fem_kelvin.py` | 4 (no GUI) | FEM Kelvin + SIBC (IH workpiece) |
 | `panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA |
@@ -2390,6 +2449,17 @@ GMSH GUI:
 ```
 
 **Design principle**: Radia C++ に可視化コードを持たない。NGSolve + GMSH に任せる。少人数で最大の成果を出すため。
+
+**Panel-specific split**: when the visualization is part of a
+human-facing panel/notebook workflow, prefer `netgen.webgui`; when the
+consumer is an LLM or a headless validation run, prefer durable
+GMSH `.msh v4.1` artifacts.
+
+For notebook IO, `.vol` and `.sol` double-click behavior should be the
+plain Netgen viewer.  If double-click fails, remember that pip Netgen's
+argument dispatch is in `netgen.__main__` and may need a `.vol`/`.sol`
+file handler; `netgen.__init__` is only the package startup/DLL setup
+side.
 
 ---
 
