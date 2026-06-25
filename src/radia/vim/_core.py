@@ -21,7 +21,6 @@ from scipy.spatial import ConvexHull
 
 import ngsolve as ng
 
-ng.SetNumThreads(4)
 EPS = 1e-6
 
 # ---- self constants c = INT INT_{unit-measure shape} 1/|x-y| (sub-cell self correction) ----

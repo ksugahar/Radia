@@ -3,6 +3,18 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.95.2 — TaskManager thread-count import fix
+
+Released 2026-06-26.
+
+- **TaskManager fix**: removed the `radia.vim` import-time
+  `ngsolve.SetNumThreads(4)` side effect. Mesh-less multipole-moment MMM
+  solves still probe `radia.vim` for backend dispatch, so the old import
+  path could reset an explicitly configured mdx run to four threads before
+  `rad.Solve`. Benchmarks must configure NGSolve/RADIA thread counts through
+  the documented mechanism and verify the actual
+  `GetSolveStats()["num_threads"]` value.
+
 ## 4.95.1 — Multipole-moment MMM matrix-free and HACApK acceleration
 
 Released 2026-06-26.
