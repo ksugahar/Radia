@@ -1242,6 +1242,131 @@ def coenergy_torque_summary(
     }
 
 
+def coenergy_torque_table_consistency_summary(
+    angles_rad,
+    coenergy_J,
+    torque_Nm,
+    periodic=False,
+    period_rad=2.0 * math.pi,
+    torque_abs_tolerance_Nm=0.0,
+    torque_rel_tolerance=1.0e-6,
+    comparison_stencils=None,
+):
+    """Compare a torque-angle table with ``d(coenergy)/dtheta``.
+
+    The summary preserves the finite-difference torque inferred from coenergy,
+    the supplied torque table, selected-stencil errors, and basic angle-step
+    diagnostics.  For nonperiodic sweeps the default reference check uses only
+    central rows; for periodic sweeps it uses all ``central_periodic`` rows.
+
+    A nonzero mean torque over a full angle sweep implies that the coenergy
+    table contains a work term such as ``T_mean * theta`` and should be treated
+    as nonperiodic.  A purely periodic coenergy table has zero mean derivative
+    over its period.
+    """
+
+    angles = [float(value) for value in angles_rad]
+    values = [float(value) for value in coenergy_J]
+    references = [float(value) for value in torque_Nm]
+    if len(angles) != len(references):
+        raise ValueError("torque_Nm must have the same length as angles_rad")
+    rows = [
+        dict(row)
+        for row in coenergy_torque_from_angle_samples(
+            angles,
+            values,
+            periodic=periodic,
+            period_rad=period_rad,
+        )
+    ]
+    if comparison_stencils is None:
+        stencil_filter = {"central_periodic"} if periodic else {"central"}
+    elif isinstance(comparison_stencils, str):
+        token = comparison_stencils.lower().strip()
+        stencil_filter = None if token in ("all", "*") else {token}
+    else:
+        stencil_filter = {str(value).lower().strip() for value in comparison_stencils}
+        if "all" in stencil_filter or "*" in stencil_filter:
+            stencil_filter = None
+    if stencil_filter == set():
+        raise ValueError("comparison_stencils must not be empty")
+
+    abs_tol = float(torque_abs_tolerance_Nm)
+    rel_tol = float(torque_rel_tolerance)
+    if abs_tol < 0.0:
+        raise ValueError("torque_abs_tolerance_Nm must be >= 0")
+    if rel_tol < 0.0:
+        raise ValueError("torque_rel_tolerance must be >= 0")
+
+    selected_rows = []
+    for row, reference in zip(rows, references):
+        error = row["torque_Nm"] - reference
+        abs_error = abs(error)
+        rel_error = abs_error / max(abs(reference), 1.0e-300)
+        selected = stencil_filter is None or row["stencil"].lower() in stencil_filter
+        row["reference_torque_Nm"] = reference
+        row["torque_error_Nm"] = error
+        row["torque_abs_error_Nm"] = abs_error
+        row["torque_rel_error"] = rel_error
+        row["selected_for_reference_check"] = selected
+        if selected:
+            selected_rows.append(row)
+    if not selected_rows:
+        raise ValueError("comparison_stencils selected no rows")
+
+    step_rows = [angles[i + 1] - angles[i] for i in range(len(angles) - 1)]
+    reference_pass = all(
+        row["torque_abs_error_Nm"]
+        <= abs_tol + rel_tol * max(abs(row["reference_torque_Nm"]), 1.0e-300)
+        for row in selected_rows
+    )
+    inferred = [row["torque_Nm"] for row in rows]
+    errors = [row["torque_error_Nm"] for row in selected_rows]
+    abs_errors = [abs(value) for value in errors]
+    rel_errors = [row["torque_rel_error"] for row in selected_rows]
+    trapezoid_work = sum(
+        0.5 * (references[i] + references[i + 1]) * step_rows[i]
+        for i in range(len(step_rows))
+    )
+    coenergy_delta = values[-1] - values[0]
+    period = float(period_rad)
+    angle_span = angles[-1] - angles[0]
+    periodic_gap = period - angle_span if periodic else None
+    return {
+        "policy": "coenergy_torque_angle_table_consistency",
+        "n_samples": len(rows),
+        "periodic": bool(periodic),
+        "period_rad": period,
+        "angle_min_rad": angles[0],
+        "angle_max_rad": angles[-1],
+        "angle_span_rad": angle_span,
+        "angle_step_min_rad": min(step_rows) if step_rows else 0.0,
+        "angle_step_max_rad": max(step_rows) if step_rows else 0.0,
+        "periodic_gap_rad": periodic_gap,
+        "coenergy_delta_J": coenergy_delta,
+        "reference_torque_trapezoid_work_J": trapezoid_work,
+        "reference_work_minus_coenergy_delta_J": trapezoid_work - coenergy_delta,
+        "comparison_stencils": (
+            "all" if stencil_filter is None else sorted(stencil_filter)
+        ),
+        "reference_checked_count": len(selected_rows),
+        "torque_abs_tolerance_Nm": abs_tol,
+        "torque_rel_tolerance": rel_tol,
+        "reference_pass": reference_pass,
+        "max_torque_abs_error_Nm": max(abs_errors),
+        "max_torque_rel_error": max(rel_errors),
+        "mean_torque_error_Nm": sum(errors) / len(errors),
+        "rms_torque_error_Nm": math.sqrt(sum(value * value for value in errors) / len(errors)),
+        "inferred_torque_min_Nm": min(inferred),
+        "inferred_torque_max_Nm": max(inferred),
+        "reference_torque_min_Nm": min(references),
+        "reference_torque_max_Nm": max(references),
+        "status": "ok" if reference_pass else "needs_attention",
+        "ok_for_torque_table": reference_pass,
+        "rows": rows,
+    }
+
+
 def _virtual_work_energy_sign(energy_kind):
     kind = str(energy_kind).lower().replace("-", "_").replace(" ", "_")
     if kind in ("coenergy", "magnetic_coenergy", "wco", "w_prime", "constant_current"):
