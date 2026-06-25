@@ -22,6 +22,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia')
 import numpy as np
 from pathlib import Path
 
+GMSH_MODELS = Path(__file__).resolve().parents[1] / "gmsh_models"
+sys.path.insert(0, str(GMSH_MODELS))
+from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+
 print("=" * 70)
 print("PEEC Analysis from Dual Mesh (Filament + Panel)")
 print("Using FastImp-style Loop-Star Decomposition")
@@ -37,7 +41,7 @@ except ImportError:
     sys.exit(1)
 
 # Check mesh file
-mesh_file = Path(__file__).parent / "gmsh_models" / "dual_mesh_filament_panel.msh"
+mesh_file = GMSH_MODELS / "dual_mesh_filament_panel.msh"
 
 if not mesh_file.exists():
     print(f"\nERROR: Mesh file not found: {mesh_file}")
@@ -47,27 +51,18 @@ if not mesh_file.exists():
           'generate_dual_mesh_filament_panel.py')
     sys.exit(1)
 
-print(f"\n[1] Loading dual mesh: {mesh_file.name}")
+print(f"\n[1] Reading dual mesh fixture: {mesh_file.name}")
 
-# Load mesh using GMSH Python API
-try:
-    import gmsh
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 0)
-    gmsh.open(str(mesh_file))
-except Exception as e:
-    print(f"ERROR: {e}")
-    sys.exit(1)
+mesh = read_gmsh_ascii(mesh_file)
 
-# Get nodes
-node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
+node_tags = mesh.node_tags
 n_nodes = len(node_tags)
-coords = node_coords.reshape(-1, 3) * 1e-3  # mm to m
+coords = mesh.coords * 1e-3  # mm to m
 
 print(f"    Nodes: {n_nodes}")
 
 # Get elements by type
-elem_types, elem_tags, elem_node_tags = gmsh.model.mesh.getElements()
+elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
 
 # Extract Filament elements (1D edges, type 1)
 filament_edges = []
@@ -226,5 +221,3 @@ print(f"\nPanel Integration:")
 print(f"  - Self-potential: Wilton analytical formula")
 print(f"  - Near-field (d < 3*sqrt(A)): 3-point Gauss quadrature")
 print(f"  - Far-field (d > 3*sqrt(A)): Centroid approximation")
-
-gmsh.finalize()
