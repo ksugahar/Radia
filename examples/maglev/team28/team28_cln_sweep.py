@@ -74,18 +74,26 @@ def main():
         print(f"  {dz_mm:4d}   {fz_full:+.4f}  {fz_cln:+.4f}  {ref:+.4f}    {err:6.2f} %")
         rows.append((dz_mm, fz_full, fz_cln, ref))
 
-    # crude equilibrium (linear interp where CLN lift crosses -weight)
+    # Physical levitation equilibrium.  The lab/repo F_z column is the verbatim
+    # TEAM 28 integral Re[B_r J_t] = 2x the physical time-averaged Lorentz force
+    # (verified ratio 1.9998); the disk floats where the PHYSICAL lift == weight,
+    # so balance 0.5*F_z against -DISK_WEIGHT (NOT F_z, which gave a spurious
+    # +4mm / 14.9mm height).  Absolute disk-bottom z = 10.8mm + dZ.
+    PHYS = 0.5
     dz = np.array([r[0] for r in rows], float)
-    fc = np.array([r[2] for r in rows], float)
+    fc = PHYS * np.array([r[2] for r in rows], float)
     tgt = -DISK_WEIGHT
     eq = None
     for i in range(len(dz) - 1):
         if (fc[i] - tgt) * (fc[i + 1] - tgt) <= 0:
             t = (tgt - fc[i]) / (fc[i + 1] - fc[i])
             eq = dz[i] + t * (dz[i + 1] - dz[i]); break
-    print(f"\n CLN levitation equilibrium (lift==weight): dZ = "
-          f"{eq:.1f} mm" if eq is not None else "\n (equilibrium not bracketed)")
-    print(" (lab full-FEM equilibrium ~ +4 mm)")
+    if eq is not None:
+        print(f"\n CLN levitation equilibrium (PHYSICAL lift==weight): dZ = "
+              f"{eq:.2f} mm  -> absolute z = {10.8 + eq:.2f} mm")
+        print(" (published measured steady-state z = 11.5 mm)")
+    else:
+        print("\n (equilibrium not bracketed)")
 
 
 if __name__ == "__main__":

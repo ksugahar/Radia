@@ -9,6 +9,7 @@
   },
   "cln_stages": 6,
   "disk_weight_N": 1.055,
+  "force_note": "fz_*_N are the verbatim TEAM 28 integral Re[B_r J_t] = 2x the physical time-averaged Lorentz force; equilibrium uses F_z/2 (PHYS) == weight",
   "dZ_mm": [
     -7,
     -6,
@@ -118,8 +119,18 @@
     0.0447
   ],
   "equilibrium_dZ_mm": {
-    "cln": 4.0551433636026735,
-    "lab": 4.054715997915581
+    "cln": 0.2385951717095344,
+    "lab": 0.23937554206418094
+  },
+  "equilibrium_abs_height_mm": {
+    "cln": 11.038595171709535,
+    "disk_bottom_at_dz0": 10.8
+  },
+  "published_ref": {
+    "authors": "Karl-Fetzer-Kurz-Lehner-Rucker",
+    "rest_mm": 3.8,
+    "levitation_height_mm": 11.5,
+    "agreement_percent": 4.012215898177961
   },
   "max_abs_cln_minus_lab_N": 0.00046566481791993075
 }

@@ -263,34 +263,45 @@ Recent work (~2022-2024) combines CLN with machine-learning-
 enhanced reduced order models for magnetic bearings.  The CLN
 provides the physics-based skeleton; ML corrects the residual.
 
-## 4. TEAM 28 electrodynamic levitation force (lab, verified 2026-06-04)
+## 4. TEAM 28 levitation force (open reproduction + published validation, 2026-06-20)
 
-The first CLN reduction carried through to the actual TEAM Problem 28
-LEVITATION FORCE.  (Prior CLN-on-TEAM28 work extracted only the decay
-spectrum R_n / L_n on a generic test disk under a uniform field; this
-closes the gap to the coil-driven levitation force vs height.)
+An OPEN, pip-installable, NGSolve + golden-tested reproduction of the lab's
+PUBLISHED CLN-on-TEAM-28 levitation (NOT a first -- see prior art below),
+validated against the PUBLISHED measured levitation height.
 
-Setup (axisymmetric): Al disk R=65mm, t=3mm, sigma=3.4e7; two
-counter-wound coils (960 turns / +20 A at r=41mm, 576 turns / -20 A at
-r=87.5mm) at 50 Hz.  The coil-driven eddy problem is `(K + s*N) X = F`
-(K = s-independent magnetostatic mixed phi-B operator, N = conductivity
-term `v*sigma*u/r`, F = coil source `v*Jz`).  The CLN / Cauer reduction is
-the Krylov subspace generated from the COIL SOURCE:
+Setup (axisymmetric): Al disk R=65mm, t=3mm, sigma=3.4e7; two counter-wound
+coils (960 turns / +20 A at r=41mm, 576 turns / -20 A at r=87.5mm) at 50 Hz.
+The coil-driven eddy problem is `(K + s*N) X = F` (K = s-independent
+magnetostatic mixed phi-B operator, N = conductivity term `v*sigma*u/r`,
+F = coil source `v*Jz`).  The CLN / Cauer reduction is the Krylov subspace
+generated from the COIL SOURCE:
     V_0     = K^{-1} F
     V_{k+1} = orthonormalise( K^{-1} (N V_k) )
-and the levitation Lorentz force is evaluated from the N-stage reduced
-field at 50 Hz.
+and the levitation Lorentz force is evaluated from the N-stage reduced field.
 
-Result: a 6-stage CLN reproduces the full-FEM levitation force vs height
-to < 0.1%, and recovers the levitation equilibrium dZ = +4.1 mm (lift ==
-disk weight ~1.055 N; lab full-FEM ~ +4 mm).  Fast convergence: stage 1
-= 97.8% err (DC, no eddy), stage 3 = 0.14%, stage 5 = 0.000%.
+Result: a 6-stage CLN reproduces the full-FEM levitation force vs height to
+max |CLN-full| = 5e-4 N (stage 1 = 97.8% err DC, stage 3 = 0.14%, stage 5 =
+0.000%).  The PHYSICAL levitation equilibrium (lift == disk weight 1.055 N,
+using F_z/2 -- the verbatim TEAM 28 surface integral Re[B_r J_t] is exactly 2x
+the physical time-averaged force) lands at absolute disk-bottom z = 11.0 mm,
+matching the PUBLISHED measured steady-state levitation height z = 11.5 mm
+(Karl-Fetzer-Kurz-Lehner-Rucker, official TEAM 28 definition) to 4%.
+(Balancing the 2x integral against the 1x weight gave a spurious 14.9 mm --
+fixed 2026-06-20; the published 11.5 mm caught it.)
 
-Code: `examples/maglev/team28/` (`team28_axisym_fem.py`
-full-FEM baseline, 0.01% vs the lab ground truth; `team28_cln_force.py`
-convergence; `team28_cln_sweep.py` force-vs-height + equilibrium).  This
-is the worked example behind the `radia_mcp.maglev` `cln_mor_control`
-topic and the CLAUDE.md "Maglev Analysis: Radia + NGSolve" policy.
+Prior art (this REPRODUCES it, NOT a first): K. Sugahara, N. Tanimoto,
+Y. Takahashi, T. Matsuo, "Cauer Ladder Network Representation with Constant
+Basis Functions for Eddy Current Problems Involving Conductor Movement",
+COMPUMAG 2023 (Paper ID 324) -- the full motion-coupled transient levitation
+height z(t) vs measurement + the conventional method, 4-stage CLN, ~7 s vs
+~8 h; it introduced the constant-basis `A_s(zgap) = sum_n a_2n i_2n` expansion.
+
+Code: `examples/maglev/team28/` (`team28_axisym_fem.py` full-FEM baseline,
+0.01% vs lab ground truth; `team28_cln_force.py` convergence;
+`team28_cln_sweep_full.py` force-vs-height + physical equilibrium + published
+comparison; golden `tests/test_team28_cln_golden.py`).  Worked example behind
+`radia_mcp.maglev` `cln_mor_control` and the CLAUDE.md "Maglev Analysis: Radia
++ NGSolve" policy.
 
 ## 5. Connection to PEEC
 
