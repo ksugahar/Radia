@@ -113,10 +113,14 @@ def _has_numsubedges_companion(filepath: str) -> bool:
         p.with_name(f"{p.stem}_display.geo"),
         p.with_suffix(".msh.opt"),
         p.with_name(f"{p.stem}_display.msh.opt"),
-        p.parent / "_gmsh_display.geo",
-        p.parent / "_gmsh_display.msh.opt",
     ]
-    for candidate in candidates:
+    for parent in p.parents:
+        candidates.extend([
+            parent / "_gmsh_display.geo",
+            parent / "_gmsh_display.msh.opt",
+        ])
+
+    for candidate in dict.fromkeys(candidates):
         try:
             text = candidate.read_text(encoding="utf-8", errors="replace")
         except OSError:
