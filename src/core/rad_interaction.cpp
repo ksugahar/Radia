@@ -67,6 +67,7 @@ struct MomentGeomFaceCache {
 	double nf[3] = {0.0, 0.0, 0.0};
 	double d[3] = {0.0, 0.0, 0.0};
 	double area = 0.0;
+	double V4[4][3] = {};                  // face corners (degenerate quad for a tri face) for the analytic kernel
 	double P[MOM_NS][3] = {};
 	double W[MOM_NS] = {};
 };
@@ -123,6 +124,11 @@ std::atomic<int> RadIMAFieldContext::s_symmetry{0};
 std::atomic<int> RadIMAFieldContext::s_signX{1};
 std::atomic<int> RadIMAFieldContext::s_signY{1};
 std::atomic<int> RadIMAFieldContext::s_signZ{1};
+
+// Opt-in analytic moment kernel (closed-form triangle H + gradient vs 64pt Gauss); see rad_interaction.h
+std::atomic<bool> RadMomentKernelConfig::s_analyticKernel{false};
+void RadSetMomentAnalyticKernel(bool on) { RadMomentKernelConfig::SetAnalytic(on); }
+bool RadGetMomentAnalyticKernel() { return RadMomentKernelConfig::UseAnalytic(); }
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -1611,6 +1617,143 @@ static void FieldFromChargedTriangleLocal(const double* obs,
 }
 
 //=========================================================================
+// FieldGradFromChargedTriangleLocal: analytic H field AND its gradient gH = grad_obs(H) (the moment
+// formulation's quadrupole field-gradient, = the Hessian -grad grad I0 of the single-layer potential)
+// from a UNIFORMLY charged FLAT triangle.  H reproduces FieldFromChargedTriangleLocal exactly; gH is the
+// CLOSED FORM obtained by symbolic differentiation of that H (Mathematica-verified vs the 64pt-Gauss
+// moment kernel: gH rel ~ Gauss accuracy, symmetric + traceless to machine eps; derivation .wls under
+// docs/multipole_moment_mmm/).  gH is assembled from ONLY the tangential (log-term HH1/HH2) derivatives
+// plus tracelessness (Gzz = -(Gxx+Gyy)) and symmetry (Gxz = dHH1/de3, Gyz = dHH2/de3) -> NO atan
+// derivative -> well-conditioned near the source plane.  Returns field+grad WITHOUT the 1/4pi factor
+// (caller applies it, as for FieldFromChargedTriangleLocal).  gH order: (xx,yy,zz,xy,xz,yz).
+// A degenerate (zero-area) triangle contributes nothing (c_len guard) -- so a fan-triangulated quad
+// with a collapsed edge integrates the triangle automatically.
+//=========================================================================
+static void FieldGradFromChargedTriangleLocal(const double* obs,
+                                              const double* v0, const double* v1, const double* v2,
+                                              double sigma, double* H_out, double* gH_out)
+{
+	H_out[0] = H_out[1] = H_out[2] = 0.0;
+	for(int k = 0; k < 6; k++) gH_out[k] = 0.0;
+
+	const double EPS = 1.0e-20;
+
+	double e1[3] = {v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]};
+	double e2[3] = {v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]};
+	double e1_len = sqrt(e1[0]*e1[0] + e1[1]*e1[1] + e1[2]*e1[2]);
+	if(e1_len < EPS) return;
+	double basis_a[3] = {e1[0]/e1_len, e1[1]/e1_len, e1[2]/e1_len};
+	double c[3] = {e1[1]*e2[2] - e1[2]*e2[1],
+	               e1[2]*e2[0] - e1[0]*e2[2],
+	               e1[0]*e2[1] - e1[1]*e2[0]};
+	double c_len = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+	if(c_len < EPS) return;                            // degenerate (zero-area) triangle
+	double basis_c[3] = {c[0]/c_len, c[1]/c_len, c[2]/c_len};
+	double basis_b[3] = {basis_c[1]*basis_a[2] - basis_c[2]*basis_a[1],
+	                     basis_c[2]*basis_a[0] - basis_c[0]*basis_a[2],
+	                     basis_c[0]*basis_a[1] - basis_c[1]*basis_a[0]};
+
+	double xy2_x = e2[0]*basis_a[0] + e2[1]*basis_a[1] + e2[2]*basis_a[2];
+	double xy2_y = e2[0]*basis_b[0] + e2[1]*basis_b[1] + e2[2]*basis_b[2];
+	double XY[3][2] = {{0.0, 0.0}, {e1_len, 0.0}, {xy2_x, xy2_y}};
+	double DS[3], AM[3], XD[3], YD[3], EPSG = 0.0;
+	for(int j = 0; j < 3; j++)
+	{
+		int l = (j + 1) % 3;
+		double dx = XY[l][0] - XY[j][0];
+		double dy = XY[l][1] - XY[j][1];
+		if(fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
+		DS[j] = sqrt(dx*dx + dy*dy);
+		AM[j] = dy / dx;
+		XD[j] = -dx / DS[j];
+		YD[j] =  dy / DS[j];
+		if(DS[j] > EPSG) EPSG = DS[j];
+	}
+	EPSG *= 1.0e-12;
+
+	double d[3] = {obs[0]-v0[0], obs[1]-v0[1], obs[2]-v0[2]};
+	double EE1 = d[0]*basis_a[0] + d[1]*basis_a[1] + d[2]*basis_a[2];
+	double EE2 = d[0]*basis_b[0] + d[1]*basis_b[1] + d[2]*basis_b[2];
+	double EE3 = d[0]*basis_c[0] + d[1]*basis_c[1] + d[2]*basis_c[2];
+
+	double X[3], Y[3], Hh[3], E[3], R[3];
+	for(int j = 0; j < 3; j++)
+	{
+		X[j] = EE1 - XY[j][0];
+		Y[j] = EE2 - XY[j][1];
+		Hh[j] = Y[j] * X[j];
+		E[j] = EE3*EE3 + X[j]*X[j];
+		R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
+	}
+	double Z = EE3;
+	double RM[3], RP[3], RR[3], AL[3];
+	for(int j = 0; j < 3; j++)
+	{
+		int jp1 = (j + 1) % 3;
+		RM[j] = R[j] + R[jp1] - DS[j];
+		RP[j] = R[j] + R[jp1] + DS[j];
+		RR[j] = (RM[j] / RP[j] > EPS) ? (RM[j] / RP[j]) : EPS;
+		AL[j] = log(RR[j]);
+	}
+	double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
+	double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
+	double HH3 = 0.0;
+	if(fabs(Z) > EPSG)
+	{
+		double AT[3], BT[3];
+		for(int j = 0; j < 3; j++)
+		{
+			int jp1 = (j + 1) % 3;
+			AT[j] = (AM[j]*E[j]   - Hh[j])   / (Z*R[j]);
+			BT[j] = (AM[j]*E[jp1] - Hh[jp1]) / (Z*R[jp1]);
+		}
+		HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
+		               +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
+	}
+	H_out[0] = HH1*basis_a[0] + HH2*basis_b[0] + HH3*basis_c[0];
+	H_out[1] = HH1*basis_a[1] + HH2*basis_b[1] + HH3*basis_c[1];
+	H_out[2] = HH1*basis_a[2] + HH2*basis_b[2] + HH3*basis_c[2];
+
+	// ---- local-frame gradient G (Mathematica-verified closed form, log-term derivatives only) ----
+	// dR[j]/dEE = (X[j]/R[j], Y[j]/R[j], EE3/R[j]);  AL[j] = log(RM[j]/RP[j]) with
+	// dRM[j]/dEE_k = dRP[j]/dEE_k = (dR[j]+dR[jp1])_k  ->  dAL[j]/dEE_k = (dR[j]+dR[jp1])_k*(1/RM-1/RP).
+	double Gxx = 0.0, Gyy = 0.0, Gxy1 = 0.0, Gxy2 = 0.0, Gxz = 0.0, Gyz = 0.0;
+	for(int j = 0; j < 3; j++)
+	{
+		int jp1 = (j + 1) % 3;
+		double invRj = 1.0/R[j], invRjp = 1.0/R[jp1];
+		double dR1 = X[j]*invRj + X[jp1]*invRjp;        // d(R[j]+R[jp1])/dEE1
+		double dR2 = Y[j]*invRj + Y[jp1]*invRjp;        // /dEE2
+		double dR3 = EE3*invRj + EE3*invRjp;            // /dEE3
+		double diff = 1.0/RM[j] - 1.0/RP[j];
+		double dAL1 = dR1*diff, dAL2 = dR2*diff, dAL3 = dR3*diff;
+		Gxx  += -YD[j]*dAL1;     // dHH1/dEE1
+		Gyy  += -XD[j]*dAL2;     // dHH2/dEE2
+		Gxy1 += -YD[j]*dAL2;     // dHH1/dEE2
+		Gxy2 += -XD[j]*dAL1;     // dHH2/dEE1  (== Gxy1 analytically; averaged for exact symmetry)
+		Gxz  += -YD[j]*dAL3;     // dHH1/dEE3  (== dHH3/dEE1 by symmetry)
+		Gyz  += -XD[j]*dAL3;     // dHH2/dEE3  (== dHH3/dEE2 by symmetry)
+	}
+	Gxx *= sigma; Gyy *= sigma; Gxy1 *= sigma; Gxy2 *= sigma; Gxz *= sigma; Gyz *= sigma;
+	double Gxy = 0.5*(Gxy1 + Gxy2);
+	double Gzz = -(Gxx + Gyy);                          // tracelessness (div H = 0 off source)
+	double gl[3][3] = {{Gxx, Gxy, Gxz}, {Gxy, Gyy, Gyz}, {Gxz, Gyz, Gzz}};
+	// global tensor = B * gl * B^T,  B columns = (basis_a, basis_b, basis_c)
+	double B[3][3] = {{basis_a[0], basis_b[0], basis_c[0]},
+	                  {basis_a[1], basis_b[1], basis_c[1]},
+	                  {basis_a[2], basis_b[2], basis_c[2]}};
+	double Gg[3][3];
+	for(int i = 0; i < 3; i++) for(int jj = 0; jj < 3; jj++)
+	{
+		double s = 0.0;
+		for(int a = 0; a < 3; a++) for(int b = 0; b < 3; b++) s += B[i][a]*gl[a][b]*B[jj][b];
+		Gg[i][jj] = s;
+	}
+	gH_out[0] = Gg[0][0]; gH_out[1] = Gg[1][1]; gH_out[2] = Gg[2][2];
+	gH_out[3] = Gg[0][1]; gH_out[4] = Gg[0][2]; gH_out[5] = Gg[1][2];
+}
+
+//=========================================================================
 // Compute3x3BlockFast: Fast 3x3 interaction block for tetrahedra
 // Uses pre-computed geometry (no B_comp overhead)
 // Reference: ELF-style optimization (same as RadHACApKMMMManager::Compute3x3BlockFast)
@@ -2218,6 +2361,19 @@ void radTInteraction::CentroidFieldGradFromFace(const double ce3[3], const doubl
 	// rank-2 gradient transform under the reflection automatically -- sgn only carries the BC charge sign.
 	auto accumQG = [&](const double Vq[4][3], bool withCenter, const double cen[3], double sgn)
 	{
+		if(RadMomentKernelConfig::UseAnalytic())          // opt-in: analytic closed-form triangle kernel (vs 64pt Gauss)
+		{
+			const double* tri[2][3] = { {Vq[0], Vq[1], Vq[2]}, {Vq[0], Vq[2], Vq[3]} };  // fan-triangulate the (degenerate-)quad
+			for(int t = 0; t < 2; t++)
+			{
+				double Ht[3], Gt[6];
+				FieldGradFromChargedTriangleLocal(ce3, tri[t][0], tri[t][1], tri[t][2], 1.0, Ht, Gt);
+				Hout[0] += sgn*Ht[0]; Hout[1] += sgn*Ht[1]; Hout[2] += sgn*Ht[2];
+				for(int k = 0; k < 6; k++) gHout[k] += sgn*Gt[k];
+			}
+		}
+		else
+		{
 		for(int iu = 0; iu < MOM_NG; iu++) for(int iv = 0; iv < MOM_NG; iv++)
 		{
 			double u = MOM_GP[iu], v = MOM_GP[iv], wuv = MOM_GW[iu]*MOM_GW[iv];
@@ -2240,6 +2396,7 @@ void radTInteraction::CentroidFieldGradFromFace(const double ce3[3], const doubl
 			Hout[0] += dx*c3; Hout[1] += dy*c3; Hout[2] += dz*c3;
 			gHout[0] += c3 - 3.0*dx*dx*c5; gHout[1] += c3 - 3.0*dy*dy*c5; gHout[2] += c3 - 3.0*dz*dz*c5;
 			gHout[3] += -3.0*dx*dy*c5;     gHout[4] += -3.0*dx*dz*c5;     gHout[5] += -3.0*dy*dz*c5;
+		}
 		}
 		if(withCenter)
 		{
@@ -2476,6 +2633,13 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 			if(!fr.valid) continue;
 			double H[3], gH[6];
 			H[0] = H[1] = H[2] = 0.0; for(int k = 0; k < 6; k++) gH[k] = 0.0;
+			if(RadMomentKernelConfig::UseAnalytic())          // opt-in: closed-form triangle kernel (vs precomputed 64 samples; same IMA + center handling)
+			{
+				const double srcEC3[3] = {fr.srcEC.x, fr.srcEC.y, fr.srcEC.z};
+				CentroidFieldGradFromFace(ce3, fr.V, srcEC3, fr.srcElem == elemIdx, fr.area, H, gH);
+			}
+			else
+			{
 			auto addPoint = [&](double px, double py, double pz, double q)
 			{
 				double dx = ce3[0]-px, dy = ce3[1]-py, dz = ce3[2]-pz;
@@ -2516,6 +2680,7 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 				if(hX && hZ) addSamples(IMA_XZ, true, (double)m_imaSignX*m_imaSignZ);
 				if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
 				if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
+			}
 			}
 			Cflat[base + 0*m_totalDOF + g] = H[0]*INV4PI;
 			Cflat[base + 1*m_totalDOF + g] = H[1]*INV4PI;
@@ -2752,6 +2917,7 @@ void radTInteraction::PrecomputeMomentGeometry() const
 			double V4[4][3];
 			MomentGeomFaceCache& gf = ge.face[f];
 			momentFaceGeom(poly, f, ce, V4, gf.fc, gf.nf, gf.area, gf.d);
+			for(int v = 0; v < 4; v++) for(int k = 0; k < 3; k++) gf.V4[v][k] = V4[v][k];   // cache corners for the analytic kernel
 			momentPrecomputeFaceSamples(V4, gf.P, gf.W);
 			Ae[f] = gf.area;
 			for(int k = 0; k < 3; k++) { d[f][k] = gf.d[k]; nf[f][k] = gf.nf[k]; }
@@ -2856,6 +3022,12 @@ void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const d
 		const MomentGeomFaceCache& src = col.face[f];
 		double H[3] = {0.0, 0.0, 0.0};
 		double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+		if(RadMomentKernelConfig::UseAnalytic())          // opt-in: closed-form triangle kernel (vs cached 64 samples)
+		{
+			CentroidFieldGradFromFace(row.ce, src.V4, col.ce, selfBlock, src.area, H, G);
+		}
+		else
+		{
 		auto addPoint = [&](double px, double py, double pz, double q)
 		{
 			double dx = row.ce[0]-px, dy = row.ce[1]-py, dz = row.ce[2]-pz;
@@ -2896,6 +3068,7 @@ void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const d
 			if(hX && hZ) addSamples(IMA_XZ, true, (double)m_imaSignX*m_imaSignZ);
 			if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
 			if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
+		}
 		}
 		for(int k = 0; k < 3; k++)
 		{
@@ -2953,6 +3126,15 @@ void radTInteraction::MomentKernelMatVec6x6(const double* x, const double* chiPe
 				const MomentGeomFaceCache& src = col.face[f];
 				double H[3] = {0.0, 0.0, 0.0};
 				double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+				if(RadMomentKernelConfig::UseAnalytic())          // opt-in: closed-form triangle kernel (vs cached 64 samples)
+				{
+					double Hu[3], Gu[6];
+					CentroidFieldGradFromFace(row.ce, src.V4, col.ce, selfBlock, src.area, Hu, Gu);
+					for(int k = 0; k < 3; k++) H[k] = xf * Hu[k];
+					for(int k = 0; k < 6; k++) G[k] = xf * Gu[k];
+				}
+				else
+				{
 
 				auto addPoint = [&](double px, double py, double pz, double q)
 				{
@@ -2999,6 +3181,7 @@ void radTInteraction::MomentKernelMatVec6x6(const double* x, const double* chiPe
 					if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
 				}
 
+				}
 				for(int k = 0; k < 3; k++) acc[k] -= chiScale * H[k];
 				for(int qq = 0; qq < 2; qq++)
 				{
@@ -3057,6 +3240,7 @@ void radTInteraction::PrecomputeMomentAnyGeometry() const
 			double V4[4][3];
 			MomentGeomFaceCache& gf = ge.face[f];
 			momentFaceGeom(poly, f, ce, V4, gf.fc, gf.nf, gf.area, gf.d);
+			for(int v = 0; v < 4; v++) for(int k = 0; k < 3; k++) gf.V4[v][k] = V4[v][k];   // cache corners for the analytic kernel
 			momentPrecomputeFaceSamples(V4, gf.P, gf.W);
 			Ae[f] = gf.area;
 			ge.localMono[f] = gf.area;
@@ -3170,6 +3354,12 @@ void radTInteraction::MomentSystemBlockAny(int rowMomPos, int colMomPos, const d
 		const MomentGeomFaceCache& src = col.face[f];
 		double H[3] = {0.0, 0.0, 0.0};
 		double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+		if(RadMomentKernelConfig::UseAnalytic())          // opt-in: closed-form triangle kernel (vs cached 64 samples)
+		{
+			CentroidFieldGradFromFace(row.ce, src.V4, col.ce, selfBlock, src.area, H, G);
+		}
+		else
+		{
 		auto addPoint = [&](double px, double py, double pz, double q)
 		{
 			double dx = row.ce[0]-px, dy = row.ce[1]-py, dz = row.ce[2]-pz;
@@ -3210,6 +3400,7 @@ void radTInteraction::MomentSystemBlockAny(int rowMomPos, int colMomPos, const d
 			if(hX && hZ) addSamples(IMA_XZ, true, (double)m_imaSignX*m_imaSignZ);
 			if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
 			if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
+		}
 		}
 		for(int k = 0; k < 3; k++)
 		{
