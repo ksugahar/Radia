@@ -111,6 +111,12 @@ void GetHACApKStats( double*, int* );
 void GetSolveStats( double*, int* );
 void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
+void SetMomentKrylovSolver( int );
+int GetMomentKrylovSolver();
+void SetMomentGMRESRestart( int );
+int GetMomentGMRESRestart();
+void SetMomentAndersonDepth( int );
+int GetMomentAndersonDepth();
 void SetRelaxParam( double );
 double GetRelaxParam();
 void SetKeepMagnetization( bool );
@@ -1481,6 +1487,47 @@ int CALL RadGetBiCGSTABTol(double* tol)
 
 //-------------------------------------------------------------------------
 
+int CALL RadSetMomentKrylovSolver(int* n, int solver)
+{
+	SetMomentKrylovSolver(solver);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetMomentKrylovSolver(int* solver)
+{
+	*solver = GetMomentKrylovSolver();
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetMomentGMRESRestart(int* n, int restart)
+{
+	SetMomentGMRESRestart(restart);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetMomentGMRESRestart(int* restart)
+{
+	*restart = GetMomentGMRESRestart();
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetMomentAndersonDepth(int* n, int depth)
+{
+	SetMomentAndersonDepth(depth);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetMomentAndersonDepth(int* depth)
+{
+	*depth = GetMomentAndersonDepth();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
 int CALL RadSetRelaxParam(int* n, double relax)
 {
 	SetRelaxParam(relax);
@@ -1630,5 +1677,3 @@ int CALL RadFldA(double* A_out, int n_points, double* points, int container_hand
 }
 
 //-------------------------------------------------------------------------
-
-

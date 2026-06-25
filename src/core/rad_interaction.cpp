@@ -74,6 +74,7 @@ struct MomentGeomFaceCache {
 struct MomentGeomElemCache {
 	int elemIdx = -1;
 	int valid = 0;
+	int nFace = 0;
 	double ce[3] = {0.0, 0.0, 0.0};
 	double Ve = 0.0;
 	double localDip[3][6] = {};
@@ -87,6 +88,7 @@ struct MomentGeomCache {
 	int dof = 0;
 	int nElem = 0;
 	int nHex = 0;
+	int nMom = 0;
 	uint64_t generation = 0;
 	std::shared_ptr<std::vector<MomentGeomElemCache>> elem;
 };
@@ -95,6 +97,7 @@ std::mutex g_momentCflatCacheMutex;
 std::unordered_map<const radTInteraction*, MomentCflatCache> g_momentCflatCache;
 std::mutex g_momentGeomCacheMutex;
 std::unordered_map<const radTInteraction*, MomentGeomCache> g_momentGeomCache;
+std::unordered_map<const radTInteraction*, MomentGeomCache> g_momentAnyGeomCache;
 std::atomic<uint64_t> g_momentGeomGeneration{0};
 
 void ClearMomentCflatCache(const radTInteraction* interaction)
@@ -106,6 +109,7 @@ void ClearMomentCflatCache(const radTInteraction* interaction)
 	{
 		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
 		g_momentGeomCache.erase(interaction);
+		g_momentAnyGeomCache.erase(interaction);
 	}
 	g_momentGeomGeneration.fetch_add(1, std::memory_order_release);
 }
@@ -2715,13 +2719,18 @@ void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
 void radTInteraction::PrecomputeMomentGeometry() const
 {
 	const int nHex = (int)m_hexaElemIndices.size();
+	const uint64_t currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
 	{
 		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
 		auto it = g_momentGeomCache.find(this);
 		if(it != g_momentGeomCache.end())
 		{
-			const MomentGeomCache& c = it->second;
-			if(c.elem && c.dof == m_totalDOF && c.nElem == AmOfMainElem && c.nHex == nHex) return;
+			MomentGeomCache& c = it->second;
+			if(c.elem && c.dof == m_totalDOF && c.nElem == AmOfMainElem && c.nHex == nHex)
+			{
+				c.generation = currentGen;
+				return;
+			}
 		}
 	}
 
@@ -2731,6 +2740,7 @@ void radTInteraction::PrecomputeMomentGeometry() const
 		int elemIdx = m_hexaElemIndices[h];
 		MomentGeomElemCache& ge = (*elems)[h];
 		ge.elemIdx = elemIdx;
+		ge.nFace = 6;
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
 		if(!poly || poly->AmOfFaces != 6 || m_elemDOFOffset[elemIdx] != 6*h) continue;
 		const TVector3d ce = poly->CentrPoint;
@@ -2782,20 +2792,20 @@ void radTInteraction::PrecomputeMomentGeometry() const
 	cache.dof = m_totalDOF;
 	cache.nElem = AmOfMainElem;
 	cache.nHex = nHex;
-	cache.generation = g_momentGeomGeneration.load(std::memory_order_acquire);
+	cache.nMom = nHex;
+	cache.generation = currentGen;
 	cache.elem = elems;
 	std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
 	g_momentGeomCache[this] = cache;
 }
 
-void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const double* chiPerHex, double* block) const
+void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const double* chiPerHex, double* block, bool kernelOnly) const
 {
 	if(!block) return;
 	std::fill(block, block + 36, 0.0);
 	int nHex = (int)m_hexaElemIndices.size();
-	if(!chiPerHex || rowHexPos < 0 || rowHexPos >= nHex || colHexPos < 0 || colHexPos >= nHex) return;
+	if((!chiPerHex && !kernelOnly) || rowHexPos < 0 || rowHexPos >= nHex || colHexPos < 0 || colHexPos >= nHex) return;
 
-	PrecomputeMomentGeometry();
 	static thread_local const radTInteraction* tl_geom_owner = nullptr;
 	static thread_local int tl_geom_dof = 0;
 	static thread_local int tl_geom_nElem = 0;
@@ -2803,12 +2813,14 @@ void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const d
 	static thread_local uint64_t tl_geom_generation = 0;
 	static thread_local std::shared_ptr<std::vector<MomentGeomElemCache>> tl_geom_elems;
 	std::shared_ptr<std::vector<MomentGeomElemCache>> elems = tl_geom_elems;
-	const uint64_t currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
+	uint64_t currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
 	const bool tlValid =
 		elems && tl_geom_owner == this && tl_geom_dof == m_totalDOF && tl_geom_nElem == AmOfMainElem &&
 		tl_geom_nHex == nHex && tl_geom_generation == currentGen;
 	if(!tlValid)
 	{
+		PrecomputeMomentGeometry();
+		currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
 		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
 		auto it = g_momentGeomCache.find(this);
 		if(it == g_momentGeomCache.end() || !it->second.elem || it->second.nHex != nHex) return;
@@ -2817,31 +2829,42 @@ void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const d
 		tl_geom_dof = it->second.dof;
 		tl_geom_nElem = it->second.nElem;
 		tl_geom_nHex = it->second.nHex;
-		tl_geom_generation = it->second.generation;
+		tl_geom_generation = currentGen;
 		tl_geom_elems = elems;
 	}
 	const MomentGeomElemCache& row = (*elems)[rowHexPos];
 	const MomentGeomElemCache& col = (*elems)[colHexPos];
 	if(!row.valid || !col.valid) return;
 
-	const double chiH = chiPerHex[rowHexPos];
+	const double chiH = kernelOnly ? 1.0 : chiPerHex[rowHexPos];
 	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
+	const double chiScale = chiH*INV4PI;
 	const bool selfBlock = (row.elemIdx == col.elemIdx);
-	double Hface[6][3], Gface[6][6];
+	if(!kernelOnly && std::abs(chiH) < 1.0e-300)
+	{
+		if(!selfBlock) return;
+		for(int f = 0; f < 6; f++)
+		{
+			for(int k = 0; k < 3; k++) block[k*6 + f] = row.localDip[k][f];
+			block[3*6 + f] = row.localMono[f];
+			for(int qq = 0; qq < 2; qq++) block[(4+qq)*6 + f] = row.localQuad[qq][f];
+		}
+		return;
+	}
 	for(int f = 0; f < 6; f++)
 	{
 		const MomentGeomFaceCache& src = col.face[f];
-		for(int k = 0; k < 3; k++) Hface[f][k] = 0.0;
-		for(int k = 0; k < 6; k++) Gface[f][k] = 0.0;
+		double H[3] = {0.0, 0.0, 0.0};
+		double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 		auto addPoint = [&](double px, double py, double pz, double q)
 		{
 			double dx = row.ce[0]-px, dy = row.ce[1]-py, dz = row.ce[2]-pz;
 			double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
 			double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
-			Hface[f][0] += q*dx*inv_r3; Hface[f][1] += q*dy*inv_r3; Hface[f][2] += q*dz*inv_r3;
-			Gface[f][0] += q*(inv_r3-3.0*dx*dx*inv_r5); Gface[f][1] += q*(inv_r3-3.0*dy*dy*inv_r5);
-			Gface[f][2] += q*(inv_r3-3.0*dz*dz*inv_r5); Gface[f][3] += q*(-3.0*dx*dy*inv_r5);
-			Gface[f][4] += q*(-3.0*dx*dz*inv_r5);       Gface[f][5] += q*(-3.0*dy*dz*inv_r5);
+			H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
+			G[0] += q*(inv_r3-3.0*dx*dx*inv_r5); G[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
+			G[2] += q*(inv_r3-3.0*dz*dz*inv_r5); G[3] += q*(-3.0*dx*dy*inv_r5);
+			G[4] += q*(-3.0*dx*dz*inv_r5);       G[5] += q*(-3.0*dy*dz*inv_r5);
 		};
 		auto addSamples = [&](int ax, bool withCenter, double sgn)
 		{
@@ -2874,25 +2897,229 @@ void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const d
 			if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
 			if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
 		}
-		for(int k = 0; k < 3; k++) Hface[f][k] *= INV4PI;
-		for(int k = 0; k < 6; k++) Gface[f][k] *= INV4PI;
-	}
-
-	for(int f = 0; f < 6; f++)
-	{
 		for(int k = 0; k < 3; k++)
 		{
-			double val = -chiH*Hface[f][k];
-			if(selfBlock) val += row.localDip[k][f];
+			double val = -chiScale*H[k];
+			if(selfBlock && !kernelOnly) val += row.localDip[k][f];
 			block[k*6 + f] = val;
 		}
-		block[3*6 + f] = selfBlock ? row.localMono[f] : 0.0;
+		block[3*6 + f] = (selfBlock && !kernelOnly) ? row.localMono[f] : 0.0;
 		for(int qq = 0; qq < 2; qq++)
 		{
-			double val = selfBlock ? row.localQuad[qq][f] : 0.0;
+			double val = (selfBlock && !kernelOnly) ? row.localQuad[qq][f] : 0.0;
 			const double* Dv = row.DvecQ[qq];
-			for(int m = 0; m < 6; m++) val -= chiH*Dv[m]*Gface[f][m];
+			for(int m = 0; m < 6; m++) val -= chiScale*Dv[m]*G[m];
 			block[(4+qq)*6 + f] = val;
+		}
+	}
+}
+
+void radTInteraction::PrecomputeMomentAnyGeometry() const
+{
+	std::vector<int> melem;
+	CollectMomentElems(melem);
+	const int nMom = (int)melem.size();
+	const uint64_t currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
+	{
+		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
+		auto it = g_momentAnyGeomCache.find(this);
+		if(it != g_momentAnyGeomCache.end())
+		{
+			MomentGeomCache& c = it->second;
+			if(c.elem && c.dof == m_totalDOF && c.nElem == AmOfMainElem && c.nMom == nMom)
+			{
+				c.generation = currentGen;
+				return;
+			}
+		}
+	}
+
+	auto elems = std::make_shared<std::vector<MomentGeomElemCache>>((size_t)nMom);
+	for(int h = 0; h < nMom; h++)
+	{
+		const int elemIdx = melem[h];
+		MomentGeomElemCache& ge = (*elems)[h];
+		ge.elemIdx = elemIdx;
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
+		if(!poly || (poly->AmOfFaces != 6 && poly->AmOfFaces != 5)) continue;
+		const int nF = poly->AmOfFaces;
+		ge.nFace = nF;
+		const TVector3d ce = poly->CentrPoint;
+		ge.ce[0] = ce.x; ge.ce[1] = ce.y; ge.ce[2] = ce.z;
+
+		double Ae[6] = {0,0,0,0,0,0}, d[6][3] = {}, nf[6][3] = {};
+		for(int f = 0; f < nF; f++)
+		{
+			double V4[4][3];
+			MomentGeomFaceCache& gf = ge.face[f];
+			momentFaceGeom(poly, f, ce, V4, gf.fc, gf.nf, gf.area, gf.d);
+			momentPrecomputeFaceSamples(V4, gf.P, gf.W);
+			Ae[f] = gf.area;
+			ge.localMono[f] = gf.area;
+			for(int k = 0; k < 3; k++) { d[f][k] = gf.d[k]; nf[f][k] = gf.nf[k]; }
+		}
+
+		double Ve = 0.0;
+		for(int f = 0; f < nF; f++)
+			Ve += Ae[f]*(ge.face[f].fc[0]*nf[f][0]+ge.face[f].fc[1]*nf[f][1]+ge.face[f].fc[2]*nf[f][2]);
+		Ve *= (1.0/3.0);
+		ge.Ve = Ve;
+		if(std::abs(Ve) < 1.0e-300) continue;
+		for(int k = 0; k < 3; k++) for(int f = 0; f < nF; f++) ge.localDip[k][f] = Ae[f]*d[f][k]/Ve;
+
+		double phiQ[6][6];
+		momentResidualEigenmodes(Ae, d, nF, phiQ);
+		for(int qq = 0; qq < nF - 4; qq++)
+		{
+			double Bm[6];
+			for(int f = 0; f < nF; f++) Bm[f] = (Ae[f] > 1.0e-300) ? phiQ[qq][f]/Ae[f] : 0.0;
+			double cm[3] = {0,0,0};
+			for(int f = 0; f < nF; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
+			for(int f = 0; f < nF; f++)
+			{
+				const double cd = cm[0]*d[f][0]+cm[1]*d[f][1]+cm[2]*d[f][2];
+				ge.localQuad[qq][f] = Ae[f]*Bm[f] - Ae[f]*cd/Ve;
+			}
+			double Dm[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+			for(int f = 0; f < nF; f++) for(int ii = 0; ii < 3; ii++) for(int jj = 0; jj < 3; jj++)
+				Dm[ii][jj] += Ae[f]*d[f][jj]*nf[f][ii]*Bm[f];
+			ge.DvecQ[qq][0] = Dm[0][0]; ge.DvecQ[qq][1] = Dm[1][1]; ge.DvecQ[qq][2] = Dm[2][2];
+			ge.DvecQ[qq][3] = Dm[0][1]+Dm[1][0]; ge.DvecQ[qq][4] = Dm[0][2]+Dm[2][0]; ge.DvecQ[qq][5] = Dm[1][2]+Dm[2][1];
+		}
+		ge.valid = 1;
+	}
+
+	MomentGeomCache cache;
+	cache.dof = m_totalDOF;
+	cache.nElem = AmOfMainElem;
+	cache.nHex = (int)m_hexaElemIndices.size();
+	cache.nMom = nMom;
+	cache.generation = currentGen;
+	cache.elem = elems;
+	std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
+	g_momentAnyGeomCache[this] = cache;
+}
+
+void radTInteraction::MomentSystemBlockAny(int rowMomPos, int colMomPos, const double* chiPerMom, double* block, bool kernelOnly) const
+{
+	if(!block) return;
+	std::fill(block, block + 36, 0.0);
+	if(!chiPerMom && !kernelOnly) return;
+
+	std::vector<int> melem;
+	CollectMomentElems(melem);
+	const int nMom = (int)melem.size();
+	if(rowMomPos < 0 || rowMomPos >= nMom || colMomPos < 0 || colMomPos >= nMom) return;
+
+	static thread_local const radTInteraction* tl_owner = nullptr;
+	static thread_local int tl_dof = 0;
+	static thread_local int tl_nElem = 0;
+	static thread_local int tl_nMom = 0;
+	static thread_local uint64_t tl_generation = 0;
+	static thread_local std::shared_ptr<std::vector<MomentGeomElemCache>> tl_elems;
+	std::shared_ptr<std::vector<MomentGeomElemCache>> elems = tl_elems;
+	uint64_t currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
+	const bool tlValid =
+		elems && tl_owner == this && tl_dof == m_totalDOF && tl_nElem == AmOfMainElem &&
+		tl_nMom == nMom && tl_generation == currentGen;
+	if(!tlValid)
+	{
+		PrecomputeMomentAnyGeometry();
+		currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
+		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
+		auto it = g_momentAnyGeomCache.find(this);
+		if(it == g_momentAnyGeomCache.end() || !it->second.elem || it->second.nMom != nMom) return;
+		elems = it->second.elem;
+		tl_owner = this;
+		tl_dof = it->second.dof;
+		tl_nElem = it->second.nElem;
+		tl_nMom = it->second.nMom;
+		tl_generation = currentGen;
+		tl_elems = elems;
+	}
+
+	const MomentGeomElemCache& row = (*elems)[rowMomPos];
+	const MomentGeomElemCache& col = (*elems)[colMomPos];
+	if(!row.valid || !col.valid || row.nFace < 5 || col.nFace < 5) return;
+
+	const int rdof = row.nFace;
+	const int cdof = col.nFace;
+	const int rq = rdof - 4;
+	const double chiH = kernelOnly ? 1.0 : chiPerMom[rowMomPos];
+	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
+	const double chiScale = chiH * INV4PI;
+	const bool selfBlock = (row.elemIdx == col.elemIdx);
+	if(!kernelOnly && std::abs(chiH) < 1.0e-300)
+	{
+		if(!selfBlock) return;
+		for(int f = 0; f < cdof; f++)
+		{
+			for(int k = 0; k < 3; k++) block[k * 6 + f] = row.localDip[k][f];
+			block[3 * 6 + f] = row.localMono[f];
+			for(int qq = 0; qq < rq; qq++) block[(4 + qq) * 6 + f] = row.localQuad[qq][f];
+		}
+		return;
+	}
+
+	for(int f = 0; f < cdof; f++)
+	{
+		const MomentGeomFaceCache& src = col.face[f];
+		double H[3] = {0.0, 0.0, 0.0};
+		double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+		auto addPoint = [&](double px, double py, double pz, double q)
+		{
+			double dx = row.ce[0]-px, dy = row.ce[1]-py, dz = row.ce[2]-pz;
+			double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
+			double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
+			H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
+			G[0] += q*(inv_r3-3.0*dx*dx*inv_r5); G[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
+			G[2] += q*(inv_r3-3.0*dz*dz*inv_r5); G[3] += q*(-3.0*dx*dy*inv_r5);
+			G[4] += q*(-3.0*dx*dz*inv_r5);       G[5] += q*(-3.0*dy*dz*inv_r5);
+		};
+		auto addSamples = [&](int ax, bool withCenter, double sgn)
+		{
+			for(int s = 0; s < MOM_NS; s++)
+			{
+				double px = src.P[s][0], py = src.P[s][1], pz = src.P[s][2];
+				if(ax & IMA_X) px = -px;
+				if(ax & IMA_Y) py = -py;
+				if(ax & IMA_Z) pz = -pz;
+				addPoint(px, py, pz, src.W[s]*sgn);
+			}
+			if(withCenter)
+			{
+				double cx = col.ce[0], cy = col.ce[1], cz = col.ce[2];
+				if(ax & IMA_X) cx = -cx;
+				if(ax & IMA_Y) cy = -cy;
+				if(ax & IMA_Z) cz = -cz;
+				addPoint(cx, cy, cz, -src.area*sgn);
+			}
+		};
+		addSamples(0, !selfBlock, 1.0);
+		if(m_imaEnabled)
+		{
+			bool hX = (m_imaSymmetry & IMA_X) != 0, hY = (m_imaSymmetry & IMA_Y) != 0, hZ = (m_imaSymmetry & IMA_Z) != 0;
+			if(hX) addSamples(IMA_X, true, (double)m_imaSignX);
+			if(hY) addSamples(IMA_Y, true, (double)m_imaSignY);
+			if(hZ) addSamples(IMA_Z, true, (double)m_imaSignZ);
+			if(hX && hY) addSamples(IMA_XY, true, (double)m_imaSignX*m_imaSignY);
+			if(hX && hZ) addSamples(IMA_XZ, true, (double)m_imaSignX*m_imaSignZ);
+			if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
+			if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
+		}
+		for(int k = 0; k < 3; k++)
+		{
+			double val = -chiScale*H[k];
+			if(selfBlock && !kernelOnly) val += row.localDip[k][f];
+			block[k * 6 + f] = val;
+		}
+		block[3 * 6 + f] = (selfBlock && !kernelOnly) ? row.localMono[f] : 0.0;
+		for(int qq = 0; qq < rq; qq++)
+		{
+			double val = (selfBlock && !kernelOnly) ? row.localQuad[qq][f] : 0.0;
+			const double* Dv = row.DvecQ[qq];
+			for(int m = 0; m < 6; m++) val -= chiScale * Dv[m] * G[m];
+			block[(4 + qq) * 6 + f] = val;
 		}
 	}
 }
