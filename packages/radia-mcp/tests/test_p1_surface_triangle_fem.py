@@ -12,6 +12,7 @@ if _SRC not in sys.path:
 
 from radia_mcp.radia_ngsolve.scalar_fem3d import (
     laplace_single_layer_far_potential,
+    p1_surface_triangle_element_summary,
     p1_surface_triangle_constant_load,
     p1_surface_triangle_density_moments,
     p1_surface_triangle_geometry,
@@ -64,6 +65,27 @@ def test_surface_mass_and_constant_load_integrals():
     F = p1_surface_triangle_constant_load(tri, source=5.0)
     assert F == pytest.approx([5.0 * area / 3.0] * 3)
     assert sum(F) == pytest.approx(5.0 * area)
+
+
+def test_surface_triangle_element_summary_exposes_one_based_sparse_blocks():
+    tri = [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 1.0, 0.0)]
+    summary = p1_surface_triangle_element_summary(
+        tri,
+        density=3.0,
+        coeff=2.0,
+        source=5.0,
+    )
+
+    assert summary["area"] == pytest.approx(1.0)
+    assert summary["unit_normal"] == pytest.approx((0.0, 0.0, 1.0))
+    assert summary["mass_row_sums"] == pytest.approx([1.0, 1.0, 1.0])
+    assert summary["mass_integral_of_one"] == pytest.approx(3.0)
+    assert summary["constant_load_vector"] == pytest.approx([5.0 / 3.0] * 3)
+    assert summary["constant_load_integral"] == pytest.approx(5.0)
+    assert summary["stiffness_nullspace_residual"] < 1.0e-15
+    assert summary["gradient_partition_residual"] < 1.0e-15
+    assert len(summary["mass_triplets_1based"]) == 9
+    assert summary["mass_triplets_1based"][0] == {"row": 1, "col": 1, "value": 0.5}
 
 
 def test_surface_density_moments_for_single_layer_bem_gate():
