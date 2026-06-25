@@ -1,8 +1,10 @@
 // axi_henrotte_fespace.hpp — FESpace returning AxiHenrotteFE elements.
 //
-// Phase 2-A: stub (registration, basic Update/GetDofNrs). Real GetFE that
-// dispatches between Q1 axis-aligned and P1 triangle based on the mesh
-// element type lands in Phase 2-C.
+// order=1 dispatches to P1 triangles or Q1 axis-aligned quads.
+// order=2 dispatches to P2 triangles or Q2 axis-aligned quads.  The P2
+// triangle path is curved-mesh aware through NGSolve's element
+// transformation; the Q2 quad path is the straight axis-aligned closed-form
+// element.
 
 #ifndef RADIA_AXIFEMM_AXI_HENROTTE_FESPACE_HPP
 #define RADIA_AXIFEMM_AXI_HENROTTE_FESPACE_HPP
@@ -15,8 +17,7 @@ using namespace ngcomp;
 
 class AxiHenrotteFESpace : public FESpace {
 public:
-    int axi_order = 1;   // 1 = Q1/P1 (vertex DOFs), 2 = Q2 (vertex+edge+face)
-    bool curved_quad = false;  // order=2 quads: sample 9 curved nodes (Q2_Curved) vs axis-aligned
+    int axi_order = 1;   // 1 = P1/Q1, 2 = P2/Q2
 
     AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & flags);
 
@@ -26,9 +27,11 @@ public:
         doc.long_docu =
             "FESpace whose nodal shape functions are linear in {1, r^2, z, ...} "
             "on physical (r, z) coordinates instead of the reference element.\n"
-            "  order=1 (default): 3 DOFs/triangle, 4 DOFs/quad (vertex DOFs only)\n"
-            "  order=2          : 9 DOFs/quad (vertex + edge midnode + face center;\n"
-            "                     all-quad meshes only).";
+            "  order=1 (default): P1 triangle (3 DOFs) or Q1 quad (4 DOFs),\n"
+            "                     vertex DOFs only\n"
+            "  order=2          : P2 triangle (6 DOFs; curved-mesh aware) or\n"
+            "                     Q2 axis-aligned quad (9 DOFs: vertex + edge\n"
+            "                     midnode + face center).";
         return doc;
     }
 

@@ -1,8 +1,8 @@
 // axifem.cpp — pybind11 module entry.
 //
-// Phase 2-A bootstrap: minimum viable build, exports version() and hello()
-// only. The custom FiniteElement / FESpace implementations are gated behind
-// RADIA_AXIFEMM_PHASE_2B (off by default for the bootstrap build).
+// The Radia build defines RADIA_AXIFEMM_PHASE_2B and exports the custom
+// FiniteElement / FESpace / BFI implementation.  The version() and hello()
+// helpers are kept as low-cost import smoke tests.
 
 #include <comp.hpp>
 #include <python_comp.hpp>
