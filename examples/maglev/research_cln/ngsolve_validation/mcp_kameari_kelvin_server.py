@@ -1,7 +1,7 @@
 """MCP server: Hiruma 3-term Cauer Ladder Network with Kelvin truncation.
 
 REPOSITORY POLICY (2026-05-05): Hiruma 3-term recurrence is the SOLE
-CLN extraction method exposed. The COMSOL-style accumulator-CLN
+CLN extraction method exposed. The accumulator-CLN
 (Sugahara-Tanimoto J-side Schmidt with running A_pot accumulator) has
 been DROPPED because in finite-dimensional FE space its A modes are
 not exactly (1/μ)-orthogonal: per-stage L_dot vs L_B2 disagree by

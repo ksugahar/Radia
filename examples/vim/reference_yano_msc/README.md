@@ -17,7 +17,7 @@ provenance.
 
 C-type yoke (quarter model + Image symmetry `+x-z`, racetrack coil), a direct
 port of the **ELF_MAGIC CEFC-2020 C-Type model**
-(`S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type`, Trelis.jou, 1/3/6 hex
+(private CEFC-2020 C-Type archive, Trelis.jou, 1/3/6 hex
 intervals). Nonlinear BH (`BH.txt`), 6-DOF/face hexahedral surface charge.
 Recovered from git history (commit `20cc1696`, deleted 2026-06-17) — see
 [`RESCUE_MANIFEST.md`](RESCUE_MANIFEST.md). Geometry generator:
