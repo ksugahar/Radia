@@ -7,7 +7,7 @@ Rotating Magnet with Copper Plate Eddy Current (Transient Analysis - T-Omega Met
 - ソルバー: BDDC+CG法（A-Phi法と同様）
 - 出力フォルダ: output_magnet1_with_eddy_current_CF_approach
 
-モデルパラメータ（S:\ELF_MAGIC\2025_11_06_回転磁石\渦電流込\Sample3.mai より）:
+モデルパラメータ（private rotating-magnet reference model より）:
 - 磁石サイズ: 1mm x 1mm x 1mm
 - 移動範囲: X方向 -6mm -> 4mm (合計10mm)
 - Y位置: 2mm (固定)
