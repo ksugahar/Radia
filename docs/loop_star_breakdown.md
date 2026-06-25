@@ -91,7 +91,7 @@ and in both the loop-pinning term vanishes in the limit.
 
 ---
 
-## 4. Why the loops must be EXACTLY field-null — yano-type vs HDiv-type element
+## 4. Why the loops must be EXACTLY field-null — six-face surface-charge vs HDiv-type element
 
 Loop-Star only works if the **discrete** loops are exactly in the null space
 (`S J_loop = 0`; `N M_loop = 0`). For RWG on a flat triangulation this is
@@ -105,7 +105,7 @@ automatic — the RWG loop functions are exactly solenoidal. For the magnetostat
 
 Two ways to restore exactly field-null loops on distorted elements:
 
-- **yano-type** — engineer the element shape functions so the loop component
+- **six-face surface-charge** — engineer the element shape functions so the loop component
   produces no field (Yano's distortion-handling MMM/MSC elements).
 - **HDiv-type** — use the NGSolve **H(div) (FEEC)** basis, where the loops
   `= curl(interior H(curl))` are charge-free (`div = 0` **and** `M·n = 0`) **by
@@ -159,7 +159,7 @@ the loops were removed**:
 HDiv-type star-block iteration count under **Jacobi** vs `μ_r` and mesh size. If
 Jacobi keeps it bounded for `μ_r ≤ 1e4` at moderate meshes, the HDiv-type needs
 **no H-matrix factor** — which would make it not only correctness-equivalent but
-*cheaper* than the yano-type + H-ILU, i.e. a genuine **compute-time superset**
+*cheaper* than the six-face surface-charge + H-ILU, i.e. a genuine **compute-time superset**
 (the switch criterion). If a weak-demag continuum survives even with exact loops
 (thin/elongated geometry, very fine meshes), a stronger rung is needed.
 

@@ -1,0 +1,253 @@
+{
+  "cases": {
+    "closed_uniform_rectangle": {
+      "closed": true,
+      "contour_length_m": 6.0,
+      "n_segments": 4,
+      "normal_side": "right",
+      "orientation": "ccw",
+      "polygon_signed_area_m2": 2.0,
+      "segments": [
+        {
+          "B_T": [
+            1.0,
+            0.0
+          ],
+          "force_per_depth_N_per_m": [
+            0.0,
+            795774.7154594767
+          ],
+          "index": 1,
+          "length_m": 2.0,
+          "midpoint": [
+            0.0,
+            -0.5
+          ],
+          "normal_force_per_depth_N_per_m": -795774.7154594767,
+          "normal_side": "right",
+          "p0": [
+            -1.0,
+            -0.5
+          ],
+          "p1": [
+            1.0,
+            -0.5
+          ],
+          "tangent": [
+            1.0,
+            0.0
+          ],
+          "tangential_force_per_depth_N_per_m": [
+            0.0,
+            0.0
+          ],
+          "traction_N_per_m2": [
+            0.0,
+            397887.35772973835
+          ],
+          "unit_normal": [
+            0.0,
+            -1.0
+          ]
+        },
+        {
+          "B_T": [
+            1.0,
+            0.0
+          ],
+          "force_per_depth_N_per_m": [
+            397887.35772973835,
+            0.0
+          ],
+          "index": 2,
+          "length_m": 1.0,
+          "midpoint": [
+            1.0,
+            0.0
+          ],
+          "normal_force_per_depth_N_per_m": 397887.35772973835,
+          "normal_side": "right",
+          "p0": [
+            1.0,
+            -0.5
+          ],
+          "p1": [
+            1.0,
+            0.5
+          ],
+          "tangent": [
+            0.0,
+            1.0
+          ],
+          "tangential_force_per_depth_N_per_m": [
+            0.0,
+            0.0
+          ],
+          "traction_N_per_m2": [
+            397887.35772973835,
+            0.0
+          ],
+          "unit_normal": [
+            1.0,
+            -0.0
+          ]
+        },
+        {
+          "B_T": [
+            1.0,
+            0.0
+          ],
+          "force_per_depth_N_per_m": [
+            0.0,
+            -795774.7154594767
+          ],
+          "index": 3,
+          "length_m": 2.0,
+          "midpoint": [
+            0.0,
+            0.5
+          ],
+          "normal_force_per_depth_N_per_m": -795774.7154594767,
+          "normal_side": "right",
+          "p0": [
+            1.0,
+            0.5
+          ],
+          "p1": [
+            -1.0,
+            0.5
+          ],
+          "tangent": [
+            -1.0,
+            0.0
+          ],
+          "tangential_force_per_depth_N_per_m": [
+            0.0,
+            0.0
+          ],
+          "traction_N_per_m2": [
+            0.0,
+            -397887.35772973835
+          ],
+          "unit_normal": [
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "B_T": [
+            1.0,
+            0.0
+          ],
+          "force_per_depth_N_per_m": [
+            -397887.35772973835,
+            0.0
+          ],
+          "index": 4,
+          "length_m": 1.0,
+          "midpoint": [
+            -1.0,
+            0.0
+          ],
+          "normal_force_per_depth_N_per_m": 397887.35772973835,
+          "normal_side": "right",
+          "p0": [
+            -1.0,
+            0.5
+          ],
+          "p1": [
+            -1.0,
+            -0.5
+          ],
+          "tangent": [
+            0.0,
+            -1.0
+          ],
+          "tangential_force_per_depth_N_per_m": [
+            0.0,
+            0.0
+          ],
+          "traction_N_per_m2": [
+            -397887.35772973835,
+            0.0
+          ],
+          "unit_normal": [
+            -1.0,
+            -0.0
+          ]
+        }
+      ],
+      "sum_abs_normal_force_per_depth_N_per_m": 2387324.14637843,
+      "sum_abs_tangential_force_per_depth_N_per_m": 0.0,
+      "total_force_magnitude_per_depth_N_per_m": 0.0,
+      "total_force_per_depth_N_per_m": [
+        0.0,
+        0.0
+      ]
+    },
+    "pole_face": {
+      "B_T": [
+        1.0,
+        0.0
+      ],
+      "force_per_depth_N_per_m": [
+        397887.35772973835,
+        0.0
+      ],
+      "length_m": 1.0,
+      "midpoint": [
+        0.0,
+        0.0
+      ],
+      "normal_force_per_depth_N_per_m": 397887.35772973835,
+      "normal_side": "right",
+      "p0": [
+        0.0,
+        -0.5
+      ],
+      "p1": [
+        0.0,
+        0.5
+      ],
+      "tangent": [
+        0.0,
+        1.0
+      ],
+      "tangential_force_per_depth_N_per_m": [
+        0.0,
+        0.0
+      ],
+      "traction_N_per_m2": [
+        397887.35772973835,
+        0.0
+      ],
+      "unit_normal": [
+        1.0,
+        -0.0
+      ]
+    }
+  },
+  "checks": {
+    "closed_contour_signed_area_m2": 2.0,
+    "closed_contour_sum_abs_normal_force_per_depth_N_per_m": 2387324.14637843,
+    "closed_contour_total_force_magnitude_per_depth_N_per_m": 0.0,
+    "closed_contour_total_force_per_depth_N_per_m": [
+      0.0,
+      0.0
+    ],
+    "mu0": 1.2566370614359173e-06,
+    "pole_face_expected_force_per_depth_N_per_m": [
+      397887.35772973835,
+      0.0
+    ],
+    "pole_face_force_abs_error": 0.0,
+    "pole_face_force_per_depth_N_per_m": [
+      397887.35772973835,
+      0.0
+    ],
+    "pressure_at_1T_Pa": 397887.35772973835
+  },
+  "force_learning": "2D contour Maxwell stress integrates T n ds as force per unit depth",
+  "kind": "planar_maxwell_contour_force",
+  "validation_class": true
+}

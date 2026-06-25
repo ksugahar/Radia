@@ -6702,6 +6702,75 @@ baffled-piston radiation.
 """
 
 
+NGSOLVE_CROSS_VALIDATION_REGISTRY = r"""
+# Cross-validation registry -- what was recovered and how MCP uses it
+
+The loop output is useful only when it lands in reusable artifacts.  For
+radia-ngsolve, a completed validation item should leave three public-safe
+breadcrumbs:
+
+1. a runnable `examples/.../validation_*.py` script,
+2. a machine-readable `examples/.../validation_*_summary.json`, and
+3. a knowledge/API hook that explains how the number guards future FEM/BEM,
+   force, mesh, CAD, wave, or readable-MATLAB work.
+
+Private lab campaign notes may also exist, but public MCP knowledge should not
+depend on those paths or on commercial-tool provenance.  In public text, keep
+the reusable math, API shape, tolerances, and failure modes; leave private
+solver names, internal paths, and licensed benchmark attribution out of the
+repo.
+
+## Reusable validation families already harvested
+
+| Family | Reusable artifacts | MCP topic/API that learned from it |
+|---|---|---|
+| Acoustic FEM/BEM | `examples/acoustic_bem/validation_*_summary.json` | `ngsolve_usage("acoustic")`, `radia_ngsolve.acoustics` |
+| Low-frequency Helmholtz kernel | `validation_low_frequency_helmholtz_kernel_summary.json` | stable singular-plus-regular BEM kernel split |
+| Spherical/planar DtN | `validation_spherical_dtn_modes_summary.json`, `validation_planar_dtn_symbol_summary.json` | exact radiation Robin/DtN sign gates |
+| Baffled piston and boundary power | `validation_baffled_piston_radiation_summary.json`, `validation_acoustic_boundary_power_summary.json` | acoustic power and impedance conventions |
+| Netgen `.vol` tri/tet mesh | `examples/cubit_mesh_export/validation_vol_*_summary.json` | `.vol` tri/tet parser, boundary inventory, incidence, quality |
+| build123d to mesh/CAD checks | `examples/build123d_netgen_gmsh_flow/validation_*_summary.json` | CAD face pressure/traction rows, area/volume consistency |
+| Electromagnetic force and torque | `examples/electric_machine/validation_*_summary.json` | `force_validation("method_map")`, `force_validation("cross_validation")` |
+| RF/waveguide momentum | `examples/rf_waveguide/validation_*_summary.json` | radiation pressure, S-parameter momentum, TE/TM cutoff gates |
+| MCP server fleet quality | `validation/mcp_quality/golden_gate_*.json` | `radia_mcp_golden_gate()`, per-server `--selftest`, docs drift, publish-boundary lint |
+| Readable first-order FEM | `test_p1_*`, `test_surface_triangle_*`, `test_tetrahedron_lorentz_force.py` | P1 triangle/tet energy, flux, HCurl/RWG trace teaching primitives |
+| FEM/BEM open boundary | `test_fem_bem_coupling.py`, `fem_bem_schur("api")` | dense reference Schur coupling and Kelvin/BEM DtN comparisons |
+
+## What "MCP became smarter" means here
+
+The target is not to grow a private solver wrapper inside radia-mcp.  The target
+is that future agents can ask the public MCP for the right gate before coding:
+
+```text
+ngsolve_usage("cross_validation_registry")  -> where reusable artifacts live
+ngsolve_usage("acoustic")                   -> acoustic FEM/BEM sign gates
+force_validation("method_map")              -> force/torque method selection
+force_validation("cross_validation")        -> stored neutral regression cases
+fem_bem_schur("api")                        -> exact-open-boundary Schur recipe
+ngsolve_usage("readable_fem")               -> P1 tri/tet educational primitives
+standalone_panels("vol_sources")            -> .vol sources for non-Cubit users
+radia_mcp_golden_gate()                     -> public MCP fleet quality gate
+```
+
+When a loop slot produces only a one-off note, it is not finished.  Promote the
+lesson into one of the rows above, or add a new row with a summary JSON and a
+knowledge topic.
+
+## Optuna boundary
+
+The old in-package Optuna MCP path is retired.  There must be no
+`radia_mcp.optuna` package, no `mcp-server-optuna` console script, and no Optuna
+runtime dependency in radia-mcp.  Study/trial/dashboard operation belongs to the
+official external `optuna/optuna-mcp` package.  radia-mcp may keep CAE objective
+helpers, analytic gates, and example scripts that are optional/plain-Python, but
+the MCP server itself stays external.
+
+The policy guard in `packages/radia-mcp/tools/policy_lint.py` enforces this
+boundary with synthetic tests for server entry points, dependencies, source
+imports, and a returned `radia_mcp.optuna` package.
+"""
+
+
 NGSOLVE_WAVEGUIDE = r"""
 # Waveguide / cavity cutoff modes -- the 2D Helmholtz EIGENVALUE problem
 
@@ -7240,6 +7309,12 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "acoustic_impedance": NGSOLVE_ACOUSTIC_BEM,
         "impedance_dtn": NGSOLVE_ACOUSTIC_BEM,
         "radiation_impedance": NGSOLVE_ACOUSTIC_BEM,
+        "cross_validation": NGSOLVE_CROSS_VALIDATION_REGISTRY,
+        "cross_validation_registry": NGSOLVE_CROSS_VALIDATION_REGISTRY,
+        "validation_registry": NGSOLVE_CROSS_VALIDATION_REGISTRY,
+        "xval_registry": NGSOLVE_CROSS_VALIDATION_REGISTRY,
+        "loop_learning": NGSOLVE_CROSS_VALIDATION_REGISTRY,
+        "optuna_policy": NGSOLVE_CROSS_VALIDATION_REGISTRY,
         "force": NGSOLVE_ELECTROMAGNETIC_FORCE,
         "forces": NGSOLVE_ELECTROMAGNETIC_FORCE,
         "electromagnetic_force": NGSOLVE_ELECTROMAGNETIC_FORCE,

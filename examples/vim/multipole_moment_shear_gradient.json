@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-06-22T08:43:36.659911",
+  "hostname": "lab",
+  "benchmark": "multipole_moment_shear_gradient",
+  "eiem2_normal_rank": 3,
+  "eiem2_fullvector_rank": 6,
+  "moment_rank": 6,
+  "eiem2_constrains": [
+    "xx",
+    "yy",
+    "zz"
+  ],
+  "eiem2_blind_to": [
+    "xy",
+    "yz",
+    "zx"
+  ],
+  "pure_shear_eiem2_norm": 0.0,
+  "reality_check": {
+    "asymmetry": 6.735641332436955e-06,
+    "diag": [
+      183180.11176256277,
+      51584.43094307131,
+      -234763.23756050988
+    ],
+    "shear": [
+      -96444.18456018457,
+      269425.934676758,
+      254531.6815811043
+    ],
+    "shear_over_diag": 1.267292296986321
+  },
+  "eiem2_blind_to_shear": true,
+  "conclusion": "gradH is a symmetric 6-component tensor.  EIEM2's offset eval point + face-NORMAL projection measures only n.gradH.n = the 3 DIAGONAL components {xx,yy,zz} (rank 3); the 3 SHEAR components {xy,yz,zx} are in its null space -- no alpha recovers them, because the offset is along the normal and the transverse (shear-carrying) field components are discarded by the normal projection.  The same offset KEEPING the full vector would be rank 6, proving the loss is the projection, not the offset.  The moment formulation matches all 6 gradH components, so it captures the shear -- real extra content, NOT a re-encoding of a single alpha DOF.  This refutes 'alpha-offset == gradient' and 'moment ~ EIEM2(alpha*)'.  A real config has ||shear||/||diag|| = O(1), so the missing shear is physically significant; the shear (off-diagonal 1/r^3) functionals are simultaneously moment's accuracy advantage (sheared/distorted fields) and its ~5x non-normality penalty vs EIEM2."
+}

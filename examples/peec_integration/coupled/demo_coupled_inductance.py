@@ -20,12 +20,12 @@ import sys
 import os
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src'))
 
 import radia as rad
-from peec_matrices import PEECBuilder
-from peec_coupled import CoupledPEECSolver
-from fasthenry_parser import FastHenryParser
+from radia.fasthenry_parser import FastHenryParser
+from radia.peec_coupled import CoupledPEECSolver
+from radia.peec_matrices import PEECBuilder
 
 MU_0 = 4e-7 * np.pi
 
@@ -47,7 +47,7 @@ def demo_python_api():
     builder.add_port(n1, n2)
     topo = builder.build_topology()
 
-    from peec_topology import PEECCircuitSolver
+    from radia.peec_topology import PEECCircuitSolver
     solver_air = PEECCircuitSolver(topo)
     Z_air = solver_air.compute_port_impedance(1e6)
     L_air = np.imag(Z_air) / (2 * np.pi * 1e6)
@@ -118,7 +118,7 @@ def demo_mu_r_sweep():
 
         if mu_r <= 1:
             # No magnetic material - air-core only
-            from peec_topology import PEECCircuitSolver
+            from radia.peec_topology import PEECCircuitSolver
             solver = PEECCircuitSolver(topo)
             Z = solver.compute_port_impedance(1e6)
             L = np.imag(Z) / (2 * np.pi * 1e6)
@@ -283,144 +283,58 @@ E1 N1 N2 w=1e-3 h=1e-3 sigma=5.8e7
     print()
 
 
-def demo_gmsh_mesh():
-    """Demo 5: Magnetic core from GMSH mesh file."""
+def demo_vol_mesh():
+    """Demo 5: Magnetic core from a Netgen .vol-style tri/tet mesh."""
     print("=" * 60)
-    print("Demo 5: Magnetic core from GMSH .msh file")
+    print("Demo 5: Magnetic core from Netgen .vol tri/tet mesh")
     print("=" * 60)
     print()
 
-    # --- Generate a simple hex mesh using GMSH Python API ---
-    mesh_file = os.path.join(os.path.dirname(__file__),
-                             'gmsh_models', 'ferrite_core_hex.msh')
-    _generate_ferrite_core_mesh(mesh_file)
+    try:
+        from netgen.occ import Box, OCCGeometry, Pnt
+        from ngsolve import BND, CF, Integrate, Mesh
+    except ImportError as exc:
+        print(f"  SKIPPED: Netgen/NGSolve unavailable ({exc}).")
+        print()
+        return 0.0, 0.0
 
-    # NOTE: gmsh_mesh_import is removed. Use .vol path instead:
+    # Same ferrite block as Demos 1-4:
+    # 60 mm x 10 mm x 10 mm, centered near the straight conductor.
+    x0, y0, z0 = 0.02, 0.005, -0.005
+    dx, dy, dz = 0.06, 0.01, 0.01
+    core_shape = Box(Pnt(x0, y0, z0), Pnt(x0 + dx, y0 + dy, z0 + dz))
+
+    ngmesh = OCCGeometry(core_shape).GenerateMesh(maxh=0.004)
+    mesh = Mesh(ngmesh)
+
+    volume = float(Integrate(CF(1.0), mesh))
+    boundary_area = float(Integrate(CF(1.0), mesh, BND))
+    exact_volume = dx * dy * dz
+    exact_area = 2.0 * (dx * dy + dx * dz + dy * dz)
+
+    rel_volume = abs(volume - exact_volume) / exact_volume
+    rel_area = abs(boundary_area - exact_area) / exact_area
+
+    print("  Geometry: ferrite block 60mm x 10mm x 10mm")
+    print(f"  Mesh: {mesh.ne} tetrahedra, "
+          f"{sum(1 for _ in mesh.Elements(BND))} boundary triangles, "
+          f"{mesh.nv} vertices")
+    print(f"  Volume:       {volume:.8e} m^3  "
+          f"(exact {exact_volume:.8e}, rel err {rel_volume:.3e})")
+    print(f"  Surface area: {boundary_area:.8e} m^2  "
+          f"(exact {exact_area:.8e}, rel err {rel_area:.3e})")
+    print()
+
+    L = volume
+    Delta_L = boundary_area
+
+    # To use an exported mesh, keep the same contract:
     #   from ngsolve import Mesh
-    #   mesh = Mesh("model.vol")
+    #   mesh = Mesh("ferrite_core.vol")
     #   from netgen_mesh_import import netgen_mesh_to_radia
-    #   core = netgen_mesh_to_radia(mesh, material={'magnetization': [0,0,0]})
-    print("  SKIPPED: gmsh_mesh_import removed. Use .vol + netgen_mesh_to_radia.")
-    print()
-    L = 0.0
-    Delta_L = 0.0
-
-    # NOTE: FastHenry .magnetic type=mesh also used gmsh_mesh_import (removed).
-    # Use .vol + netgen_mesh_to_radia() for magnetic core import.
+    #   core = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]})
 
     return L, Delta_L
-
-
-def _generate_ferrite_core_mesh(filename):
-    """Generate a simple hex mesh for ferrite core using GMSH API."""
-    try:
-        import gmsh
-    except ImportError:
-        # Fallback: write a minimal GMSH 2.2 ASCII file manually
-        _write_simple_hex_mesh(filename)
-        return
-
-    gmsh.initialize()
-    gmsh.option.setNumber('General.Terminal', 0)
-    gmsh.model.add('ferrite_core')
-
-    # Create box: 60mm x 10mm x 10mm, centered at (0.05, 0.01, 0)
-    # This matches the box in Demo 1-4
-    x0, y0, z0 = 0.02, 0.005, -0.005
-    dx, dy, dz = 0.06, 0.01, 0.01
-
-    gmsh.model.occ.addBox(x0, y0, z0, dx, dy, dz)
-    gmsh.model.occ.synchronize()
-
-    # Use transfinite meshing for structured hex
-    volumes = gmsh.model.getEntities(3)
-    surfaces = gmsh.model.getEntities(2)
-    curves = gmsh.model.getEntities(1)
-
-    # Set number of elements along each edge
-    for c in curves:
-        length = gmsh.model.occ.getMass(1, c[1])
-        if abs(length - dx) < 1e-6:
-            n_div = 6  # 6 along x (60mm)
-        elif abs(length - dy) < 1e-6:
-            n_div = 2  # 2 along y (10mm)
-        elif abs(length - dz) < 1e-6:
-            n_div = 2  # 2 along z (10mm)
-        else:
-            n_div = 2
-        gmsh.model.mesh.setTransfiniteCurve(c[1], n_div + 1)
-
-    for s in surfaces:
-        gmsh.model.mesh.setTransfiniteSurface(s[1])
-        gmsh.model.mesh.setRecombine(2, s[1])
-
-    for v in volumes:
-        gmsh.model.mesh.setTransfiniteVolume(v[1])
-
-    gmsh.model.mesh.generate(3)
-
-    # Save as GMSH 2.2 ASCII
-    gmsh.option.setNumber('Mesh.MshFileVersion', 2.2)
-    gmsh.option.setNumber('Mesh.Binary', 0)
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-    gmsh.write(filename)
-    gmsh.finalize()
-
-
-def _write_simple_hex_mesh(filename):
-    """Write a minimal GMSH v4.1 hex mesh (2x1x1 = 2 hex elements) as fallback."""
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-
-    # 2 hex elements along x-axis
-    # Core: 60mm x 10mm x 10mm, from (0.02, 0.005, -0.005) to (0.08, 0.015, 0.005)
-    x0, y0, z0 = 0.02, 0.005, -0.005
-    dx, dy, dz = 0.06, 0.01, 0.01
-    nx = 2
-
-    nodes = []
-    nid = 1
-    for ix in range(nx + 1):
-        x = x0 + ix * dx / nx
-        for iy in range(2):
-            y = y0 + iy * dy
-            for iz in range(2):
-                z = z0 + iz * dz
-                nodes.append((nid, x, y, z))
-                nid += 1
-
-    # Build hex elements: node ordering matches GMSH convention
-    elements = []
-    eid = 1
-    for ix in range(nx):
-        # Bottom-layer node indices (iy=0, iz=0 and iz=1)
-        # Node numbering: ix varies slowest, then iy, then iz
-        n = lambda iix, iiy, iiz: 1 + iix * 4 + iiy * 2 + iiz
-        e_nodes = [
-            n(ix, 0, 0), n(ix+1, 0, 0), n(ix+1, 1, 0), n(ix, 1, 0),
-            n(ix, 0, 1), n(ix+1, 0, 1), n(ix+1, 1, 1), n(ix, 1, 1),
-        ]
-        elements.append((eid, e_nodes))
-        eid += 1
-
-    with open(filename, 'w') as f:
-        f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
-        # Single entity: 3D volume, tag=1, no physical group
-        f.write('$Entities\n0 0 0 1\n1 0 0 0 0 0 0 0 0\n$EndEntities\n')
-        # $Nodes: one block (dim=3, entityTag=1, parametric=0, numNodes)
-        f.write(f'$Nodes\n1 {len(nodes)} 1 {len(nodes)}\n')
-        f.write(f'3 1 0 {len(nodes)}\n')
-        for nid, _x, _y, _z in nodes:
-            f.write(f'{nid}\n')
-        for _nid, x, y, z in nodes:
-            f.write(f'{x:.10g} {y:.10g} {z:.10g}\n')
-        f.write('$EndNodes\n')
-        # $Elements: one block (dim=3, entityTag=1, type=5 Hex8, count)
-        f.write(f'$Elements\n1 {len(elements)} 1 {len(elements)}\n')
-        f.write(f'3 1 5 {len(elements)}\n')
-        for eid, enodes in elements:
-            node_str = ' '.join(str(n) for n in enodes)
-            f.write(f'{eid} {node_str}\n')
-        f.write('$EndElements\n')
 
 
 if __name__ == '__main__':
@@ -433,6 +347,6 @@ if __name__ == '__main__':
     demo_mu_r_sweep()
     demo_distance_sweep()
     demo_fasthenry_input()
-    demo_gmsh_mesh()
+    demo_vol_mesh()
 
     print("All demos completed.")

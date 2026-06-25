@@ -318,6 +318,44 @@ class NetgenTriTetVolMesh:
             "max_angle_deg": max(max_angles),
         }
 
+    def worst_tetrahedra_by_quality(self, limit: int = 5) -> tuple[dict[str, object], ...]:
+        """Return the lowest-quality tetrahedra first.
+
+        The ordering is intentionally simple and teachable: radius-ratio
+        quality first, corner-Jacobian quality second, then edge ratio as a
+        tie-breaker.  These rows make a large exported mesh debuggable without
+        dumping every element.
+        """
+
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        rows = sorted(
+            self.tetrahedron_quality_rows(),
+            key=lambda row: (
+                float(row["radius_ratio_quality"]),
+                float(row["min_normalized_corner_jacobian"]),
+                -float(row["edge_ratio"]),
+                int(row["tetrahedron"]),
+            ),
+        )
+        return tuple(rows[:limit])
+
+    def worst_surface_triangles_by_quality(self, limit: int = 5) -> tuple[dict[str, object], ...]:
+        """Return the lowest-quality boundary triangles first."""
+
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
+        rows = sorted(
+            self.surface_triangle_quality_rows(),
+            key=lambda row: (
+                float(row["radius_ratio_quality"]),
+                float(row["min_angle_deg"]),
+                -float(row["edge_ratio"]),
+                int(row["surface_triangle"]),
+            ),
+        )
+        return tuple(rows[:limit])
+
     def total_surface_area(self) -> float:
         """Return the sum of boundary triangle areas."""
 
@@ -330,6 +368,370 @@ class NetgenTriTetVolMesh:
         for tri, area in zip(self.surface_triangles, self.surface_triangle_areas()):
             areas[tri.bcnr] = areas.get(tri.bcnr, 0.0) + area
         return areas
+
+    def surface_vector_area_by_boundary_number(self) -> dict[int, tuple[float, float, float]]:
+        """Return oriented boundary area vectors grouped by boundary number.
+
+        For a planar sideset with consistently oriented triangles, the vector
+        norm equals the scalar area and the unit vector is the sideset normal.
+        This is the compact `.vol`-side gate needed before Maxwell-stress force
+        integration over named Cubit/Coreform sidesets.
+        """
+
+        vectors: dict[int, tuple[float, float, float]] = {}
+        for tri, vector in zip(self.surface_triangles, self.surface_triangle_area_vectors()):
+            vectors[tri.bcnr] = _add(vectors.get(tri.bcnr, (0.0, 0.0, 0.0)), vector)
+        return vectors
+
+    def boundary_normal_summary_rows(self) -> tuple[dict[str, object], ...]:
+        """Return per-boundary oriented area vector and normal summaries."""
+
+        areas = self.surface_area_by_boundary_number()
+        vectors = self.surface_vector_area_by_boundary_number()
+        triangle_counts: dict[int, int] = {}
+        for tri in self.surface_triangles:
+            triangle_counts[tri.bcnr] = triangle_counts.get(tri.bcnr, 0) + 1
+        boundary_numbers = sorted(set(self.boundary_names) | set(areas) | set(vectors) | set(triangle_counts))
+        rows: list[dict[str, object]] = []
+        for bcnr in boundary_numbers:
+            vector = vectors.get(bcnr, (0.0, 0.0, 0.0))
+            vector_norm = _norm(vector)
+            scalar_area = areas.get(bcnr, 0.0)
+            unit_normal = (
+                tuple(component / vector_norm for component in vector)
+                if vector_norm > 0.0
+                else None
+            )
+            rows.append({
+                "boundary_number": bcnr,
+                "name": self.boundary_names.get(bcnr, f"boundary_{bcnr}"),
+                "surface_triangles": triangle_counts.get(bcnr, 0),
+                "surface_area": scalar_area,
+                "vector_area": vector,
+                "vector_area_norm": vector_norm,
+                "vector_area_norm_over_area": (
+                    vector_norm / scalar_area if scalar_area > 0.0 else None
+                ),
+                "unit_normal": unit_normal,
+            })
+        return tuple(rows)
+
+    def _boundary_pressure_value(
+        self,
+        normal_row: dict[str, object],
+        pressure_by_boundary: dict[int | str, float],
+        default_pressure: float | None,
+    ) -> tuple[float, str]:
+        bcnr = int(normal_row["boundary_number"])
+        name = str(normal_row["name"])
+        if bcnr in pressure_by_boundary:
+            return float(pressure_by_boundary[bcnr]), "boundary_number"
+        if name in pressure_by_boundary:
+            return float(pressure_by_boundary[name]), "name"
+        if default_pressure is not None:
+            return float(default_pressure), "default"
+        raise KeyError(f"missing pressure for boundary {bcnr} ({name})")
+
+    def _boundary_vector_value(
+        self,
+        normal_row: dict[str, object],
+        vector_by_boundary: dict[int | str, tuple[float, float, float]],
+        default_vector: tuple[float, float, float] | None,
+        value_name: str,
+    ) -> tuple[tuple[float, float, float], str]:
+        bcnr = int(normal_row["boundary_number"])
+        name = str(normal_row["name"])
+        if bcnr in vector_by_boundary:
+            value = vector_by_boundary[bcnr]
+            source = "boundary_number"
+        elif name in vector_by_boundary:
+            value = vector_by_boundary[name]
+            source = "name"
+        elif default_vector is not None:
+            value = default_vector
+            source = "default"
+        else:
+            raise KeyError(f"missing {value_name} for boundary {bcnr} ({name})")
+        vector = tuple(float(component) for component in value)
+        if len(vector) != 3:
+            raise ValueError(f"{value_name} values must have three components")
+        return vector, source
+
+    def boundary_pressure_force_rows(
+        self,
+        pressure_by_boundary: dict[int | str, float],
+        default_pressure: float | None = 0.0,
+    ) -> tuple[dict[str, object], ...]:
+        """Return per-boundary force rows from scalar pressure and vector area.
+
+        Pressure is positive along the boundary's oriented outward normal:
+        ``force = pressure * vector_area``.  Keys may be Netgen boundary numbers
+        or boundary names.  Set ``default_pressure=None`` to require every
+        boundary to be explicitly present.
+        """
+
+        rows: list[dict[str, object]] = []
+        for normal_row in self.boundary_normal_summary_rows():
+            bcnr = int(normal_row["boundary_number"])
+            name = str(normal_row["name"])
+            pressure, source = self._boundary_pressure_value(
+                normal_row,
+                pressure_by_boundary,
+                default_pressure,
+            )
+            vector = tuple(float(value) for value in normal_row["vector_area"])
+            force = tuple(pressure * value for value in vector)
+            rows.append({
+                "boundary_number": bcnr,
+                "name": name,
+                "pressure_Pa": pressure,
+                "pressure_source": source,
+                "surface_area": normal_row["surface_area"],
+                "vector_area": vector,
+                "unit_normal": normal_row["unit_normal"],
+                "force_N": force,
+                "force_magnitude_N": _norm(force),
+            })
+        return tuple(rows)
+
+    def boundary_traction_force_moment_rows(
+        self,
+        traction_by_boundary: dict[int | str, tuple[float, float, float]],
+        default_traction: tuple[float, float, float] | None = (0.0, 0.0, 0.0),
+        pivot_m: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    ) -> tuple[dict[str, object], ...]:
+        """Return per-boundary vector-traction resultant force and moment rows.
+
+        The traction vector is a constant global vector [N/m2] on each named
+        boundary.  Each triangle contributes ``area * traction`` and
+        ``(centroid - pivot) x dF``.  This is the vector-load companion to
+        scalar pressure rows and is useful for readable FEM/BEM examples,
+        imported sidesets, and field-postprocessing checks where the traction
+        direction is already known.
+        """
+
+        pivot = tuple(float(value) for value in pivot_m)
+        if len(pivot) != 3:
+            raise ValueError("pivot_m must have three components")
+
+        normal_rows = {
+            int(row["boundary_number"]): row
+            for row in self.boundary_normal_summary_rows()
+        }
+        accum: dict[int, dict[str, object]] = {}
+        for bcnr, normal_row in normal_rows.items():
+            traction, source = self._boundary_vector_value(
+                normal_row,
+                traction_by_boundary,
+                default_traction,
+                "traction",
+            )
+            accum[bcnr] = {
+                "boundary_number": bcnr,
+                "name": str(normal_row["name"]),
+                "traction_N_per_m2": traction,
+                "traction_source": source,
+                "surface_area": float(normal_row["surface_area"]),
+                "vector_area": tuple(float(value) for value in normal_row["vector_area"]),
+                "unit_normal": normal_row["unit_normal"],
+                "_force": (0.0, 0.0, 0.0),
+                "_moment": (0.0, 0.0, 0.0),
+                "_centroid_weight": (0.0, 0.0, 0.0),
+            }
+
+        for tri, area_vector in zip(self.surface_triangles, self.surface_triangle_area_vectors()):
+            row = accum[tri.bcnr]
+            traction = tuple(float(value) for value in row["traction_N_per_m2"])
+            area = _norm(area_vector)
+            force = _scale(traction, area)
+            a, b, c = (self.points[node - 1] for node in tri.nodes)
+            centroid = (
+                (a[0] + b[0] + c[0]) / 3.0,
+                (a[1] + b[1] + c[1]) / 3.0,
+                (a[2] + b[2] + c[2]) / 3.0,
+            )
+            moment = _cross(_sub(centroid, pivot), force)
+            row["_force"] = _add(row["_force"], force)
+            row["_moment"] = _add(row["_moment"], moment)
+            row["_centroid_weight"] = _add(row["_centroid_weight"], _scale(centroid, area))
+
+        rows: list[dict[str, object]] = []
+        for bcnr in sorted(accum):
+            row = accum[bcnr]
+            force = tuple(float(value) for value in row["_force"])
+            moment = tuple(float(value) for value in row["_moment"])
+            area = float(row["surface_area"])
+            centroid = (
+                _scale(row["_centroid_weight"], 1.0 / area)
+                if area > 0.0
+                else None
+            )
+            rows.append({
+                "boundary_number": row["boundary_number"],
+                "name": row["name"],
+                "traction_N_per_m2": row["traction_N_per_m2"],
+                "traction_source": row["traction_source"],
+                "surface_area": area,
+                "vector_area": row["vector_area"],
+                "unit_normal": row["unit_normal"],
+                "centroid_m": centroid,
+                "force_N": force,
+                "force_magnitude_N": _norm(force),
+                "pivot_m": pivot,
+                "moment_about_pivot_Nm": moment,
+                "moment_magnitude_Nm": _norm(moment),
+            })
+        return tuple(rows)
+
+    def boundary_pressure_force_moment_rows(
+        self,
+        pressure_by_boundary: dict[int | str, float],
+        default_pressure: float | None = 0.0,
+        pivot_m: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    ) -> tuple[dict[str, object], ...]:
+        """Return per-boundary pressure resultant force and moment rows.
+
+        Pressure is constant on each named boundary and positive along the
+        oriented outward normal.  Force is integrated from each triangle's
+        area vector; moment is integrated as ``sum((centroid - pivot) x dF)``.
+        This makes the rows suitable for Maxwell-pressure, electrostatic
+        pressure, radiation-pressure, and acoustic-pressure teaching examples.
+        """
+
+        pivot = tuple(float(value) for value in pivot_m)
+        if len(pivot) != 3:
+            raise ValueError("pivot_m must have three components")
+
+        normal_rows = {
+            int(row["boundary_number"]): row
+            for row in self.boundary_normal_summary_rows()
+        }
+        accum: dict[int, dict[str, object]] = {}
+        for bcnr, normal_row in normal_rows.items():
+            pressure, source = self._boundary_pressure_value(
+                normal_row,
+                pressure_by_boundary,
+                default_pressure,
+            )
+            accum[bcnr] = {
+                "boundary_number": bcnr,
+                "name": str(normal_row["name"]),
+                "pressure_Pa": pressure,
+                "pressure_source": source,
+                "surface_area": float(normal_row["surface_area"]),
+                "vector_area": tuple(float(value) for value in normal_row["vector_area"]),
+                "unit_normal": normal_row["unit_normal"],
+                "_force": (0.0, 0.0, 0.0),
+                "_moment": (0.0, 0.0, 0.0),
+                "_centroid_weight": (0.0, 0.0, 0.0),
+            }
+
+        for tri, area_vector in zip(self.surface_triangles, self.surface_triangle_area_vectors()):
+            row = accum[tri.bcnr]
+            pressure = float(row["pressure_Pa"])
+            force = _scale(area_vector, pressure)
+            a, b, c = (self.points[node - 1] for node in tri.nodes)
+            centroid = (
+                (a[0] + b[0] + c[0]) / 3.0,
+                (a[1] + b[1] + c[1]) / 3.0,
+                (a[2] + b[2] + c[2]) / 3.0,
+            )
+            area = _norm(area_vector)
+            moment = _cross(_sub(centroid, pivot), force)
+            row["_force"] = _add(row["_force"], force)
+            row["_moment"] = _add(row["_moment"], moment)
+            row["_centroid_weight"] = _add(row["_centroid_weight"], _scale(centroid, area))
+
+        rows: list[dict[str, object]] = []
+        for bcnr in sorted(accum):
+            row = accum[bcnr]
+            force = tuple(float(value) for value in row["_force"])
+            moment = tuple(float(value) for value in row["_moment"])
+            area = float(row["surface_area"])
+            centroid = (
+                _scale(row["_centroid_weight"], 1.0 / area)
+                if area > 0.0
+                else None
+            )
+            rows.append({
+                "boundary_number": row["boundary_number"],
+                "name": row["name"],
+                "pressure_Pa": row["pressure_Pa"],
+                "pressure_source": row["pressure_source"],
+                "surface_area": area,
+                "vector_area": row["vector_area"],
+                "unit_normal": row["unit_normal"],
+                "centroid_m": centroid,
+                "force_N": force,
+                "force_magnitude_N": _norm(force),
+                "pivot_m": pivot,
+                "moment_about_pivot_Nm": moment,
+                "moment_magnitude_Nm": _norm(moment),
+            })
+        return tuple(rows)
+
+    def boundary_pressure_resultant_summary(
+        self,
+        pressure_by_boundary: dict[int | str, float],
+        default_pressure: float | None = 0.0,
+        pivot_m: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    ) -> dict[str, object]:
+        """Return pressure rows plus net force/moment balance metrics.
+
+        This is the compact final reduction after importing named
+        Cubit/Coreform sidesets from a tri/tet Netgen ``.vol`` mesh.  A uniform
+        pressure over a closed, consistently oriented surface should have
+        near-zero total force and moment; a one-sided pressure load should
+        reduce to ``pressure * oriented vector area`` and the corresponding
+        pivot moment.
+        """
+
+        rows = self.boundary_pressure_force_moment_rows(
+            pressure_by_boundary,
+            default_pressure=default_pressure,
+            pivot_m=pivot_m,
+        )
+        total_force = tuple(
+            sum(float(row["force_N"][axis]) for row in rows)
+            for axis in range(3)
+        )
+        total_moment = tuple(
+            sum(float(row["moment_about_pivot_Nm"][axis]) for row in rows)
+            for axis in range(3)
+        )
+        total_force_norm = _norm(total_force)
+        total_moment_norm = _norm(total_moment)
+        absolute_force_sum = sum(float(row["force_magnitude_N"]) for row in rows)
+        absolute_moment_sum = sum(float(row["moment_magnitude_Nm"]) for row in rows)
+        surface_vector_area = self.surface_vector_area()
+        total_area = self.total_surface_area()
+
+        return {
+            "boundary_count": len(rows),
+            "rows": rows,
+            "pivot_m": tuple(float(value) for value in pivot_m),
+            "total_force_N": total_force,
+            "total_force_magnitude_N": total_force_norm,
+            "total_moment_about_pivot_Nm": total_moment,
+            "total_moment_magnitude_Nm": total_moment_norm,
+            "absolute_force_sum_N": absolute_force_sum,
+            "absolute_moment_sum_Nm": absolute_moment_sum,
+            "force_balance_ratio": (
+                total_force_norm / absolute_force_sum
+                if absolute_force_sum > 0.0
+                else 0.0
+            ),
+            "moment_balance_ratio": (
+                total_moment_norm / absolute_moment_sum
+                if absolute_moment_sum > 0.0
+                else 0.0
+            ),
+            "surface_vector_area": surface_vector_area,
+            "surface_vector_area_norm": _norm(surface_vector_area),
+            "surface_vector_area_norm_over_area": (
+                _norm(surface_vector_area) / total_area if total_area > 0.0 else None
+            ),
+        }
 
     def boundary_summary_rows(self) -> tuple[dict[str, object], ...]:
         """Return named boundary inventory rows for FEM/BEM conditions.
@@ -361,6 +763,77 @@ class NetgenTriTetVolMesh:
                 "trace_node_ids": list(trace_nodes),
             })
         return tuple(rows)
+
+    def boundary_edge_inventory_rows(self) -> tuple[dict[str, object], ...]:
+        """Return boundary-local edge inventory rows.
+
+        A named boundary made from triangles has perimeter edges used by one
+        triangle in that boundary and split/diagonal edges used by two triangles
+        in that same boundary.  Keeping these separate is useful when auditing
+        sidesets exported from a CAD/mesh tool: the perimeter is the physical
+        boundary curve, while the shared edges are triangulation details.
+        """
+
+        groups: dict[int, list[NetgenSurfaceTriangle]] = {}
+        area_by_boundary: dict[int, float] = {}
+        for tri, area in zip(self.surface_triangles, self.surface_triangle_areas()):
+            groups.setdefault(tri.bcnr, []).append(tri)
+            area_by_boundary[tri.bcnr] = area_by_boundary.get(tri.bcnr, 0.0) + area
+
+        rows: list[dict[str, object]] = []
+        for bcnr in sorted(set(self.boundary_names) | set(groups)):
+            edge_counts: dict[tuple[int, int], int] = {}
+            for tri in groups.get(bcnr, []):
+                n0, n1, n2 = tri.nodes
+                for edge in ((n0, n1), (n1, n2), (n2, n0)):
+                    key = tuple(sorted(edge))
+                    edge_counts[key] = edge_counts.get(key, 0) + 1
+
+            edge_lengths = {
+                edge: _norm(_sub(self.points[edge[1] - 1], self.points[edge[0] - 1]))
+                for edge in edge_counts
+            }
+            perimeter_edges = [edge for edge, count in edge_counts.items() if count == 1]
+            shared_edges = [edge for edge, count in edge_counts.items() if count == 2]
+            overused_edges = [edge for edge, count in edge_counts.items() if count > 2]
+            rows.append({
+                "boundary_number": bcnr,
+                "name": self.boundary_names.get(bcnr, f"boundary_{bcnr}"),
+                "surface_triangles": len(groups.get(bcnr, [])),
+                "surface_area": area_by_boundary.get(bcnr, 0.0),
+                "unique_boundary_edges": len(edge_counts),
+                "perimeter_edges": len(perimeter_edges),
+                "shared_diagonal_edges": len(shared_edges),
+                "overused_edges": len(overused_edges),
+                "perimeter_edge_length_sum_m": sum(edge_lengths[edge] for edge in perimeter_edges),
+                "shared_diagonal_edge_length_sum_m": sum(edge_lengths[edge] for edge in shared_edges),
+                "total_unique_edge_length_sum_m": sum(edge_lengths.values()),
+                "min_edge_length_m": min(edge_lengths.values()) if edge_lengths else None,
+                "max_edge_length_m": max(edge_lengths.values()) if edge_lengths else None,
+                "perimeter_edge_nodes": [list(edge) for edge in sorted(perimeter_edges)],
+                "shared_diagonal_edge_nodes": [list(edge) for edge in sorted(shared_edges)],
+                "overused_edge_nodes": [list(edge) for edge in sorted(overused_edges)],
+            })
+        return tuple(rows)
+
+    def boundary_edge_inventory_summary(self) -> dict[str, object]:
+        """Return compact boundary-local edge inventory totals."""
+
+        rows = self.boundary_edge_inventory_rows()
+        overused = [row for row in rows if int(row["overused_edges"]) > 0]
+        return {
+            "policy": "netgen_vol_boundary_local_edge_inventory",
+            "boundary_count": len(rows),
+            "surface_triangles": len(self.surface_triangles),
+            "unique_boundary_edges_total": sum(int(row["unique_boundary_edges"]) for row in rows),
+            "perimeter_edges_total": sum(int(row["perimeter_edges"]) for row in rows),
+            "shared_diagonal_edges_total": sum(int(row["shared_diagonal_edges"]) for row in rows),
+            "overused_edges_total": sum(int(row["overused_edges"]) for row in rows),
+            "has_overused_boundary_edges": bool(overused),
+            "total_perimeter_edge_length_m": sum(float(row["perimeter_edge_length_sum_m"]) for row in rows),
+            "total_shared_diagonal_edge_length_m": sum(float(row["shared_diagonal_edge_length_sum_m"]) for row in rows),
+            "rows": rows,
+        }
 
     def domain_boundary_incidence_rows(self) -> tuple[dict[str, object], ...]:
         """Return boundary rows grouped by adjacent volume domains.
@@ -394,6 +867,192 @@ class NetgenTriTetVolMesh:
                 "trace_node_ids": node_ids,
             })
         return tuple(rows)
+
+    def boundary_condition_assignment_summary(
+        self,
+        condition_by_boundary: dict[int | str, str],
+        default_condition: str | None = None,
+    ) -> dict[str, object]:
+        """Audit boundary-condition labels against named `.vol` boundaries.
+
+        Keys in ``condition_by_boundary`` may be Netgen boundary numbers or
+        boundary names.  Values are intentionally plain labels, not solver
+        objects.  The summary catches missing boundary assignments and unknown
+        keys before a readable FEM/BEM script turns the labels into Dirichlet,
+        Neumann, impedance, or coupling operators.
+        """
+
+        known_numbers = {int(row["boundary_number"]) for row in self.boundary_summary_rows()}
+        known_names = {str(row["name"]) for row in self.boundary_summary_rows()}
+        unknown_keys: list[int | str] = []
+        for key in condition_by_boundary:
+            if isinstance(key, int):
+                if key not in known_numbers:
+                    unknown_keys.append(key)
+            elif isinstance(key, str):
+                if key not in known_names:
+                    unknown_keys.append(key)
+            else:
+                raise TypeError("boundary condition keys must be boundary numbers or names")
+
+        incidence_by_bcnr: dict[int, list[dict[str, object]]] = {}
+        for row in self.domain_boundary_incidence_rows():
+            incidence_by_bcnr.setdefault(int(row["boundary_number"]), []).append(row)
+
+        rows: list[dict[str, object]] = []
+        condition_counts: dict[str, int] = {}
+        missing = 0
+        for boundary in self.boundary_summary_rows():
+            bcnr = int(boundary["boundary_number"])
+            name = str(boundary["name"])
+            if bcnr in condition_by_boundary:
+                condition = str(condition_by_boundary[bcnr])
+                source = "boundary_number"
+            elif name in condition_by_boundary:
+                condition = str(condition_by_boundary[name])
+                source = "boundary_name"
+            elif default_condition is not None:
+                condition = str(default_condition)
+                source = "default"
+            else:
+                condition = None
+                source = "missing"
+                missing += 1
+            if condition is not None:
+                condition_counts[condition] = condition_counts.get(condition, 0) + 1
+
+            incidence_rows = incidence_by_bcnr.get(bcnr, [])
+            rows.append({
+                "boundary_number": bcnr,
+                "name": name,
+                "condition": condition,
+                "condition_source": source,
+                "surface_triangles": boundary["surface_triangles"],
+                "surface_area": boundary["surface_area"],
+                "trace_node_count": boundary["trace_node_count"],
+                "trace_node_ids": boundary["trace_node_ids"],
+                "incidence_kinds": sorted({str(row["kind"]) for row in incidence_rows}),
+                "adjacent_material_numbers": sorted({
+                    int(domain)
+                    for row in incidence_rows
+                    for domain in (int(row["domin"]), int(row["domout"]))
+                    if domain != 0
+                }),
+                "adjacent_material_names": sorted({
+                    str(row["domin_material"])
+                    for row in incidence_rows
+                    if row["domin_material"] is not None
+                } | {
+                    str(row["domout_material"])
+                    for row in incidence_rows
+                    if row["domout_material"] is not None
+                }),
+            })
+
+        return {
+            "policy": "netgen_vol_boundary_conditions_are_assigned_by_number_or_name",
+            "boundary_count": len(rows),
+            "assigned_boundary_count": len(rows) - missing,
+            "missing_boundary_count": missing,
+            "unknown_condition_keys": unknown_keys,
+            "unknown_condition_key_count": len(unknown_keys),
+            "condition_counts": dict(sorted(condition_counts.items())),
+            "ok": missing == 0 and not unknown_keys,
+            "rows": tuple(rows),
+        }
+
+    def boundary_tet_face_incidence_rows(self) -> tuple[dict[str, object], ...]:
+        """Match each boundary triangle to adjacent tetrahedron faces.
+
+        This is a `.vol` export sanity gate for FEM/BEM coupling: every
+        exterior surface triangle should match exactly one volume tetrahedron
+        face, while a material interface triangle should match two.  The rows
+        also compare the matched tetrahedron material numbers with the
+        ``domin/domout`` domain ids stored by Netgen/Coreform export.
+        """
+
+        tet_faces: dict[tuple[int, int, int], list[dict[str, object]]] = {}
+        local_faces = ((1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1))
+        for tet_index, tet in enumerate(self.tetrahedra, start=1):
+            for opposite, local in enumerate(local_faces):
+                nodes = tuple(tet.nodes[i] for i in local)
+                key = tuple(sorted(nodes))
+                tet_faces.setdefault(key, []).append({
+                    "tetrahedron": tet_index,
+                    "material_number": tet.matnr,
+                    "material_name": self.materials.get(tet.matnr, f"material_{tet.matnr}"),
+                    "opposite_local_node": opposite,
+                    "face_local_nodes": list(local),
+                    "face_nodes": list(nodes),
+                })
+
+        rows: list[dict[str, object]] = []
+        for tri_index, tri in enumerate(self.surface_triangles, start=1):
+            key = tuple(sorted(tri.nodes))
+            adjacent = tet_faces.get(key, [])
+            adjacent_materials = sorted({int(item["material_number"]) for item in adjacent})
+            declared_domains = sorted(domain for domain in (tri.domin, tri.domout) if domain != 0)
+            if len(adjacent) == 0:
+                kind = "orphan"
+            elif len(adjacent) == 1:
+                kind = "exterior"
+            elif len(adjacent) == 2:
+                kind = "interface"
+            else:
+                kind = "overconnected"
+            rows.append({
+                "surface_triangle": tri_index,
+                "boundary_number": tri.bcnr,
+                "name": self.boundary_names.get(tri.bcnr, f"boundary_{tri.bcnr}"),
+                "nodes": list(tri.nodes),
+                "domin": tri.domin,
+                "domout": tri.domout,
+                "declared_domain_numbers": declared_domains,
+                "declared_domain_names": [
+                    self.materials.get(domain, f"material_{domain}")
+                    for domain in declared_domains
+                ],
+                "adjacent_tetrahedron_faces": adjacent,
+                "adjacent_tetrahedron_count": len(adjacent),
+                "adjacent_material_numbers": adjacent_materials,
+                "adjacent_material_names": [
+                    self.materials.get(matnr, f"material_{matnr}")
+                    for matnr in adjacent_materials
+                ],
+                "domain_material_match": declared_domains == adjacent_materials,
+                "kind": kind,
+            })
+        return tuple(rows)
+
+    def boundary_tet_face_incidence_summary(self) -> dict[str, object]:
+        """Return compact counts for boundary-triangle to tetra-face incidence."""
+
+        rows = self.boundary_tet_face_incidence_rows()
+        kind_counts: dict[str, int] = {}
+        for row in rows:
+            kind = str(row["kind"])
+            kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        mismatches = [row for row in rows if not bool(row["domain_material_match"])]
+        return {
+            "surface_triangles": len(rows),
+            "tetrahedra": len(self.tetrahedra),
+            "exterior_surface_triangles": kind_counts.get("exterior", 0),
+            "interface_surface_triangles": kind_counts.get("interface", 0),
+            "orphan_surface_triangles": kind_counts.get("orphan", 0),
+            "overconnected_surface_triangles": kind_counts.get("overconnected", 0),
+            "domain_material_mismatch_count": len(mismatches),
+            "max_adjacent_tetrahedra": max(
+                (int(row["adjacent_tetrahedron_count"]) for row in rows),
+                default=0,
+            ),
+            "is_volume_boundary_consistent": (
+                kind_counts.get("orphan", 0) == 0
+                and kind_counts.get("overconnected", 0) == 0
+                and not mismatches
+            ),
+            "rows": rows,
+            "policy": "surface_triangles_match_volume_tet_faces_for_tri_tet_vol",
+        }
 
     def material_summary_rows(self) -> tuple[dict[str, object], ...]:
         """Return volume/material inventory with boundary incidence.
@@ -573,6 +1232,120 @@ class NetgenTriTetVolMesh:
             "euler_characteristic": len(trace_nodes) - len(surface_edges) + len(self.surface_triangles),
         }
 
+    def mesh_health_summary(
+        self,
+        *,
+        min_surface_triangle_quality: float = 1.0e-8,
+        min_tetrahedron_quality: float = 1.0e-8,
+        closure_relative_tolerance: float = 1.0e-9,
+        worst_limit: int = 5,
+    ) -> dict[str, object]:
+        """Return a readable go/no-go report for first-order FEM/BEM use.
+
+        This bundles the checks that matter before a Cubit/Coreform Netgen
+        ``.vol`` export is used as a shared FEM/BEM trace: volume tets exist,
+        boundary triangles exist, the surface closes, boundary triangles match
+        tetrahedron faces, and the worst shape-quality rows are easy to find.
+        """
+
+        if min_surface_triangle_quality < 0.0:
+            raise ValueError("min_surface_triangle_quality must be non-negative")
+        if min_tetrahedron_quality < 0.0:
+            raise ValueError("min_tetrahedron_quality must be non-negative")
+        if closure_relative_tolerance < 0.0:
+            raise ValueError("closure_relative_tolerance must be non-negative")
+        if worst_limit < 0:
+            raise ValueError("worst_limit must be non-negative")
+
+        inventory = self.summary()
+        surface_quality = self.surface_triangle_quality_summary()
+        tet_quality = self.tetrahedron_quality_summary()
+        closure = self.surface_closure_summary()
+        manifold = self.surface_edge_manifold_summary()
+        incidence_full = self.boundary_tet_face_incidence_summary()
+        incidence = {
+            key: value
+            for key, value in incidence_full.items()
+            if key != "rows"
+        }
+
+        surface_min_quality = surface_quality["min_radius_ratio_quality"]
+        tet_min_quality = tet_quality["min_radius_ratio_quality"]
+        closure_rel_error = closure["surface_abs_volume_rel_error"]
+        vector_area_rel = closure["surface_vector_area_norm_over_area"]
+
+        checks: dict[str, bool] = {}
+        issues: list[str] = []
+
+        def add_check(name: str, ok: bool, issue: str) -> None:
+            checks[name] = ok
+            if not ok:
+                issues.append(issue)
+
+        add_check("has_points", inventory["points"] > 0, "mesh has no points")
+        add_check(
+            "has_surface_triangles",
+            inventory["surface_triangles"] > 0,
+            "mesh has no boundary triangles",
+        )
+        add_check(
+            "has_tetrahedra",
+            inventory["tetrahedra"] > 0,
+            "mesh has no volume tetrahedra",
+        )
+        add_check(
+            "surface_is_closed_manifold",
+            bool(manifold["is_closed_manifold"]),
+            "boundary triangles are not a closed edge manifold",
+        )
+        add_check(
+            "surface_vector_area_closes",
+            vector_area_rel is not None and float(vector_area_rel) <= closure_relative_tolerance,
+            "oriented boundary vector area does not close",
+        )
+        add_check(
+            "surface_volume_matches_tetrahedra",
+            closure_rel_error is not None and float(closure_rel_error) <= closure_relative_tolerance,
+            "boundary-triangle enclosed volume does not match tetrahedron volume",
+        )
+        add_check(
+            "boundary_faces_match_tetrahedra",
+            bool(incidence["is_volume_boundary_consistent"]),
+            "at least one boundary triangle is orphaned, overconnected, or material-mismatched",
+        )
+        add_check(
+            "surface_triangle_quality_above_threshold",
+            surface_min_quality is not None and float(surface_min_quality) >= min_surface_triangle_quality,
+            "at least one boundary triangle is below the surface quality threshold",
+        )
+        add_check(
+            "tetrahedron_quality_above_threshold",
+            tet_min_quality is not None and float(tet_min_quality) >= min_tetrahedron_quality,
+            "at least one tetrahedron is below the volume quality threshold",
+        )
+
+        ok = all(checks.values())
+        return {
+            "policy": "netgen_vol_tri_tet_first_order_fem_bem_mesh_health",
+            "status": "ok" if ok else "needs_attention",
+            "ok_for_first_order_fem_bem": ok,
+            "inventory": inventory,
+            "thresholds": {
+                "min_surface_triangle_quality": min_surface_triangle_quality,
+                "min_tetrahedron_quality": min_tetrahedron_quality,
+                "closure_relative_tolerance": closure_relative_tolerance,
+            },
+            "checks": checks,
+            "issues": issues,
+            "surface_triangle_quality": surface_quality,
+            "tetrahedron_quality": tet_quality,
+            "closure": closure,
+            "manifold": manifold,
+            "boundary_tet_face_incidence": incidence,
+            "worst_surface_triangles": self.worst_surface_triangles_by_quality(worst_limit),
+            "worst_tetrahedra": self.worst_tetrahedra_by_quality(worst_limit),
+        }
+
     def surface_connected_components(self) -> tuple[dict[str, object], ...]:
         """Return connected boundary-triangle components for BEM block setup.
 
@@ -696,10 +1469,52 @@ class NetgenTriTetVolMesh:
             "policy": "netgen_vol_tri_tet_only_shared_one_based_nodes",
         }
 
+    def p1_fem_bem_trace_matrix_summary(self) -> dict[str, object]:
+        """Return a one-based sparse P1 H1-to-scalar-BEM trace matrix.
+
+        For first-order nodal FEM and first-order scalar BEM on the same
+        tri/tet ``.vol`` mesh, the trace operator is just a boolean gather:
+        each compact boundary node row points to exactly one volume H1 node
+        column.  The returned one-based COO arrays can be used directly as
+        ``sparse(rows, cols, values, nTraceNodes, nVolumeNodes)`` in numerical
+        environments that use one-based sparse indexing.
+        """
+
+        trace_nodes = list(self.trace_node_ids())
+        volume_nodes = list(range(1, len(self.points) + 1))
+        trace_node_set = set(trace_nodes)
+        interior_nodes = [node for node in volume_nodes if node not in trace_node_set]
+        rows = list(range(1, len(trace_nodes) + 1))
+        cols = list(trace_nodes)
+        values = [1.0 for _node in trace_nodes]
+        return {
+            "policy": "p1_h1_to_scalar_bem_trace_is_boolean_gather",
+            "sparse_coo_call": "T = sparse(rows, cols, values, nTraceNodes, nVolumeNodes)",
+            "n_volume_nodes": len(volume_nodes),
+            "n_trace_nodes": len(trace_nodes),
+            "matrix_shape": [len(trace_nodes), len(volume_nodes)],
+            "nnz": len(trace_nodes),
+            "rows": rows,
+            "cols": cols,
+            "values": values,
+            "trace_node_ids": trace_nodes,
+            "interior_node_ids": interior_nodes,
+            "is_boolean_gather": True,
+            "row_nnz_min": 1 if trace_nodes else 0,
+            "row_nnz_max": 1 if trace_nodes else 0,
+            "boundary_column_nnz_max": 1 if trace_nodes else 0,
+            "interior_column_nnz_max": 0,
+            "surface_triangles_local": [
+                [trace_nodes.index(node) + 1 for node in tri.nodes]
+                for tri in self.surface_triangles
+            ],
+            "surface_triangles_global": [list(tri.nodes) for tri in self.surface_triangles],
+        }
+
     def first_order_fem_bem_topology(self) -> dict[str, object]:
         """Return first-order H1/HCurl/P1/RWG topology with one-based ids.
 
-        This mirrors the small MATLAB prototype API: H1 uses volume nodes,
+        This mirrors a small readable prototype API: H1 uses volume nodes,
         HCurl uses first-order tetrahedron edges, scalar BEM uses compacted
         boundary nodes, and RWG uses closed-manifold boundary edges.
         """
@@ -760,6 +1575,82 @@ class NetgenTriTetVolMesh:
                 "rwg_to_hcurl_edge_ids": list(rwg_to_hcurl_edge_ids),
             },
             "policy": "first_order_h1_p1_hcurl_nedelec0_bem_p1_rwg_only",
+        }
+
+    def boundary_oriented_edge_summary(self) -> dict[str, object]:
+        """Return one row per oriented boundary-triangle edge.
+
+        This is a teaching-friendly expansion of the RWG part of
+        :meth:`first_order_fem_bem_topology`: each surface triangle contributes
+        three local oriented edges, each linked to the compact boundary edge id,
+        the global volume-node edge, the sign relative to the sorted global edge,
+        and the matching HCurl edge id when the boundary edge is a closed RWG
+        degree of freedom.
+        """
+
+        topology = self.first_order_fem_bem_topology()
+        trace_nodes = tuple(topology["scalar_bem"]["global_node_ids"])
+        rwg = topology["rwg"]
+        surface_edges_global = tuple(tuple(edge) for edge in rwg["edges_global"])
+        hcurl_by_rwg_edge = {
+            int(rwg_edge_id): int(hcurl_edge_id)
+            for rwg_edge_id, hcurl_edge_id in zip(rwg["dof_edge_ids"], rwg["hcurl_edge_ids"])
+        }
+        dof_edge_ids = set(hcurl_by_rwg_edge)
+
+        rows: list[dict[str, object]] = []
+        sign_counts = {-1: 0, 1: 0}
+        for tri_index, tri in enumerate(self.surface_triangles, start=1):
+            for local_edge_index, (edge_id, sign) in enumerate(
+                zip(rwg["tri_edges"][tri_index - 1], rwg["tri_edge_signs"][tri_index - 1]),
+                start=1,
+            ):
+                edge_id = int(edge_id)
+                sign = int(sign)
+                sign_counts[sign] = sign_counts.get(sign, 0) + 1
+                edge_global = surface_edges_global[edge_id - 1]
+                oriented_edge = edge_global if sign > 0 else tuple(reversed(edge_global))
+                adjacent = [int(value) for value in rwg["edge_triangles"][edge_id - 1] if int(value) != 0]
+                opposites_local = [
+                    int(value)
+                    for value in rwg["opposite_vertices_local"][edge_id - 1]
+                    if int(value) != 0
+                ]
+                opposites_global = [int(trace_nodes[value - 1]) for value in opposites_local]
+                p0, p1 = (self.points[node - 1] for node in edge_global)
+                rows.append({
+                    "surface_triangle": tri_index,
+                    "local_edge": local_edge_index,
+                    "boundary_number": tri.bcnr,
+                    "name": self.boundary_names.get(tri.bcnr, f"boundary_{tri.bcnr}"),
+                    "triangle_nodes_global": list(tri.nodes),
+                    "rwg_edge_id": edge_id,
+                    "is_rwg_dof": edge_id in dof_edge_ids,
+                    "hcurl_edge_id": hcurl_by_rwg_edge.get(edge_id),
+                    "edge_nodes_global": list(edge_global),
+                    "oriented_edge_nodes_global": list(oriented_edge),
+                    "orientation_sign": sign,
+                    "edge_length_m": _norm(_sub(p1, p0)),
+                    "adjacent_surface_triangles": adjacent,
+                    "adjacent_surface_triangle_count": len(adjacent),
+                    "opposite_vertices_global": opposites_global,
+                })
+
+        manifold = self.surface_edge_manifold_summary()
+        return {
+            "policy": "boundary_triangle_oriented_edges_for_first_order_rwg_trace",
+            "surface_triangles": len(self.surface_triangles),
+            "oriented_edge_rows": len(rows),
+            "surface_edges": len(surface_edges_global),
+            "rwg_dof_edges": len(dof_edge_ids),
+            "hcurl_trace_edges": len(hcurl_by_rwg_edge),
+            "open_edges": manifold["open_edges"],
+            "closed_edges": manifold["closed_edges"],
+            "is_closed_manifold": manifold["is_closed_manifold"],
+            "orientation_sign_counts": {str(key): value for key, value in sorted(sign_counts.items())},
+            "max_edge_length_m": max((float(row["edge_length_m"]) for row in rows), default=0.0),
+            "min_edge_length_m": min((float(row["edge_length_m"]) for row in rows), default=0.0),
+            "rows": rows,
         }
 
 

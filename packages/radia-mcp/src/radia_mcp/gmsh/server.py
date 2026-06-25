@@ -13,9 +13,13 @@ not mesh generation. Mesh generation uses Netgen or Cubit.
 Usage:
     mcp-server-gmsh              # Start MCP server (stdio transport)
     mcp-server-gmsh --selftest   # Run self-test
+    mcp-server-gmsh --selftest --audit-examples
+                                  # Run self-test plus repo-wide examples audit
 """
 
+from collections import Counter
 import os
+import errno
 import sys
 from pathlib import Path
 
@@ -26,6 +30,21 @@ from .rules import ALL_RULES
 from .gmsh_knowledge import get_gmsh_documentation
 from .gmsh_reference import get_gmsh_reference
 from .gmsh_examples import get_gmsh_examples
+
+_RULE_REMEDIATIONS = {
+    "numsubedges-missing": (
+        "For high-order curved display, add a companion .geo with "
+        "Mesh.NumSubEdges = 4 or launch gmsh with -numsubedges 4."
+    ),
+    "gmsh-mesh-generation": (
+        "Keep GMSH as visualization/post-processing only. Generate meshes with "
+        "Netgen or Cubit, then open/export files for display."
+    ),
+    "pip-gmsh-import": (
+        "Avoid the pip gmsh runtime in public examples. Prefer standalone "
+        "gmsh.exe via subprocess or file-based visualization workflows."
+    ),
+}
 
 # Create MCP server
 mcp = FastMCP("gmsh-lint")
@@ -65,6 +84,100 @@ def _format_findings(filepath: str, findings: list[dict]) -> str:
             f"  L{f['line']:>4d} [{f['severity']}] {f['rule']}: {f['message']}"
         )
     return '\n'.join(lines)
+
+
+def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dict:
+    """Machine-readable directory lint summary for loop/audit bookkeeping."""
+    d = Path(directory)
+    if not d.is_absolute():
+        d = PROJECT_ROOT / d
+    if not d.exists():
+        return {
+            "ok": False,
+            "error": f"Directory not found: {d}",
+            "directory": str(d),
+        }
+
+    py_files = sorted(d.rglob("*.py"))
+    limit = max(0, min(int(top_n), 50))
+    by_severity = Counter({"CRITICAL": 0, "HIGH": 0, "MODERATE": 0, "LOW": 0})
+    by_rule: Counter[str] = Counter()
+    top_files = []
+    total_findings = 0
+
+    for py_file in py_files:
+        findings = _lint_file(str(py_file))
+        if not findings:
+            continue
+        total_findings += len(findings)
+        try:
+            rel_path = str(py_file.relative_to(PROJECT_ROOT))
+        except ValueError:
+            rel_path = str(py_file)
+        top_files.append({"path": rel_path, "findings": len(findings)})
+        for finding in findings:
+            by_severity[str(finding.get("severity", "UNKNOWN"))] += 1
+            by_rule[str(finding.get("rule", "unknown"))] += 1
+
+    top_rules = [
+        {
+            "rule": rule,
+            "count": count,
+            "action": _RULE_REMEDIATIONS.get(
+                rule,
+                "Inspect representative findings and add a specific remediation note.",
+            ),
+        }
+        for rule, count in sorted(by_rule.items(), key=lambda item: (-item[1], item[0]))[:limit]
+    ]
+
+    return {
+        "ok": True,
+        "directory": str(d),
+        "files_scanned": len(py_files),
+        "files_with_findings": len(top_files),
+        "total_findings": total_findings,
+        "clean": total_findings == 0,
+        "by_severity": dict(by_severity),
+        "top_rules": top_rules,
+        "dominant_rule": top_rules[0] if top_rules else None,
+        "top_files": sorted(top_files, key=lambda item: (-item["findings"], item["path"]))[:limit],
+    }
+
+
+def _relative_to_project(path: Path) -> str:
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _numsubedges_triggers(lines: list[str]) -> list[str]:
+    triggers = []
+    if any("mesh.Curve(" in line or "Curve(" in line.split("#")[0] for line in lines):
+        triggers.append("high_order_curve")
+    if any("GmshPostExport" in line for line in lines):
+        triggers.append("gmsh_post_export")
+    return triggers
+
+
+def _directory_numsubedges_companion(directory: str) -> dict:
+    companion = str(Path(directory) / "_gmsh_display.geo")
+    return {
+        "geo_companion": companion,
+        "geo_template": (
+            f"// Shared GMSH display companion for {directory}\n"
+            "// Use with any high-order .msh output from this directory.\n"
+            "Mesh.NumSubEdges = 4;\n"
+            "// Merge \"<result>.msh\";\n"
+        ),
+    }
+
+
+def _line_excerpt(lines: list[str], line_number: int) -> str:
+    if line_number <= 0 or line_number > len(lines):
+        return ""
+    return lines[line_number - 1].strip()
 
 
 # ============================================================
@@ -144,6 +257,175 @@ def lint_gmsh_directory(directory: str = "examples") -> str:
 
 
 @mcp.tool()
+def gmsh_audit_summary(directory: str = "examples", top_n: int = 10) -> dict:
+    """
+    Return a machine-readable GMSH lint audit summary.
+
+    Use this for learning-loop bookkeeping and dashboards. It reports files
+    scanned, total findings, severity counts, top rule counts, and top files
+    without printing the long per-file audit body.
+    """
+    return _lint_directory_summary(directory, top_n)
+
+
+@mcp.tool()
+def gmsh_numsubedges_remediation_plan(directory: str = "examples",
+                                      limit: int = 20) -> dict:
+    """
+    List scripts that need high-order GMSH display settings.
+
+    This is the actionable companion to the `numsubedges-missing` audit rule.
+    It does not edit files; it returns a bounded list of affected scripts,
+    trigger reasons, CLI hints, and a companion `.geo` template.
+    """
+    d = Path(directory)
+    if not d.is_absolute():
+        d = PROJECT_ROOT / d
+    if not d.exists():
+        return {
+            "ok": False,
+            "error": f"Directory not found: {d}",
+            "directory": str(d),
+        }
+
+    max_items = max(0, min(int(limit), 200))
+    affected = []
+    by_directory: Counter[str] = Counter()
+    total = 0
+    for py_file in sorted(d.rglob("*.py")):
+        findings = _lint_file(str(py_file))
+        if not any(f.get("rule") == "numsubedges-missing" for f in findings):
+            continue
+        total += 1
+        rel_for_group = _relative_to_project(py_file)
+        by_directory[str(Path(rel_for_group).parent)] += 1
+        if len(affected) >= max_items:
+            continue
+        try:
+            lines = py_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            lines = []
+        rel = rel_for_group
+        geo_name = f"{py_file.stem}_display.geo"
+        affected.append({
+            "script": rel,
+            "triggers": _numsubedges_triggers(lines),
+            "cli_hint": "gmsh <result>.msh -numsubedges 4",
+            "geo_companion": str(Path(rel).with_name(geo_name)),
+            "geo_template": (
+                f"// Display companion for outputs from {rel}\n"
+                "Mesh.NumSubEdges = 4;\n"
+                "// Merge \"<result>.msh\";\n"
+            ),
+        })
+
+    return {
+        "ok": True,
+        "directory": str(d),
+        "rule": "numsubedges-missing",
+        "total_affected": total,
+        "returned": len(affected),
+        "truncated": total > len(affected),
+        "action": _RULE_REMEDIATIONS["numsubedges-missing"],
+        "directory_groups": [
+            {
+                "directory": directory,
+                "count": count,
+                "directory_companion": _directory_numsubedges_companion(directory),
+            }
+            for directory, count in sorted(
+                by_directory.items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+        ],
+        "affected": affected,
+    }
+
+
+@mcp.tool()
+def gmsh_mesh_generation_remediation_plan(directory: str = "examples",
+                                          limit: int = 20) -> dict:
+    """
+    List scripts that still use GMSH as a mesh generator.
+
+    This is the actionable companion to the `gmsh-mesh-generation` audit rule.
+    It reports affected files, line snippets, directory grouping, and a
+    public-safe migration hint toward Netgen/Cubit `.vol` mesh generation plus
+    GMSH-only visualization.
+    """
+    d = Path(directory)
+    if not d.is_absolute():
+        d = PROJECT_ROOT / d
+    if not d.exists():
+        return {
+            "ok": False,
+            "error": f"Directory not found: {d}",
+            "directory": str(d),
+        }
+
+    max_items = max(0, min(int(limit), 200))
+    affected = []
+    by_directory: Counter[str] = Counter()
+    total = 0
+    total_findings = 0
+
+    for py_file in sorted(d.rglob("*.py")):
+        findings = [
+            finding
+            for finding in _lint_file(str(py_file))
+            if finding.get("rule") == "gmsh-mesh-generation"
+        ]
+        if not findings:
+            continue
+        total += 1
+        total_findings += len(findings)
+        rel = _relative_to_project(py_file)
+        by_directory[str(Path(rel).parent)] += len(findings)
+        if len(affected) >= max_items:
+            continue
+        try:
+            lines = py_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            lines = []
+        affected.append({
+            "script": rel,
+            "findings": [
+                {
+                    "line": finding.get("line", 0),
+                    "message": finding.get("message", ""),
+                    "snippet": _line_excerpt(lines, int(finding.get("line", 0))),
+                }
+                for finding in findings
+            ],
+            "migration_hint": (
+                "Replace GMSH geometry/mesh generation with Netgen OCC or "
+                "Cubit/Coreform export netgen .vol. Keep GMSH only for opening "
+                "or post-processing existing .msh/.geo visualization files."
+            ),
+            "mesh_output_hint": "Prefer Mesh('model.vol') for NGSolve inputs.",
+        })
+
+    return {
+        "ok": True,
+        "directory": str(d),
+        "rule": "gmsh-mesh-generation",
+        "total_affected": total,
+        "total_findings": total_findings,
+        "returned": len(affected),
+        "truncated": total > len(affected),
+        "action": _RULE_REMEDIATIONS["gmsh-mesh-generation"],
+        "directory_groups": [
+            {"directory": directory, "findings": count}
+            for directory, count in sorted(
+                by_directory.items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+        ],
+        "affected": affected,
+    }
+
+
+@mcp.tool()
 def gmsh_usage(topic: str = "all") -> str:
     """
     Get GMSH documentation for visualization and post-processing.
@@ -209,8 +491,8 @@ def get_gmsh_lint_rules() -> str:
 # Self-Test
 # ============================================================
 
-def _selftest():
-    """Run lint on fixtures and optionally examples/."""
+def _selftest(audit_examples: bool = False):
+    """Run fixture self-test; optionally run the repo-wide examples audit."""
     print("=" * 70)
     print("GMSH Lint Self-Test")
     print("=" * 70)
@@ -252,11 +534,17 @@ def _selftest():
         print("  fixture validation: PASSED")
         print()
 
-    # --- Examples scan ---
+    # --- Examples audit ---
     examples_dir = PROJECT_ROOT / "examples"
     if not examples_dir.exists():
         if not fixtures_dir.exists():
             print(f"Examples directory not found: {examples_dir}")
+        print("PASSED")
+        return
+
+    if not audit_examples:
+        print("  examples audit: SKIPPED (run --selftest --audit-examples)")
+        print("PASSED")
         return
 
     py_files = sorted(examples_dir.rglob("*.py"))
@@ -277,6 +565,7 @@ def _selftest():
     print()
     print(f"Scanned: {total} files")
     print(f"GMSH issues: {issues}")
+    print("PASSED")
 
 
 
@@ -288,15 +577,29 @@ register_status_tool(
     subpackage='radia_mcp.gmsh',
     related_servers=["cubit"],
     optional_deps=["gmsh"],
+    audit_command="mcp-server-gmsh --selftest --audit-examples",
 )
+
+
+def _is_closed_stdout_error(exc: BaseException) -> bool:
+    """Windows raises EINVAL when a downstream PowerShell pipe closes early."""
+    return isinstance(exc, BrokenPipeError) or (
+        isinstance(exc, OSError)
+        and getattr(exc, "errno", None) in {errno.EPIPE, errno.EINVAL}
+    )
 
 
 def main():
     """Entry point for mcp-server-gmsh console script."""
-    if len(sys.argv) > 1 and sys.argv[1] == '--selftest':
+    if '--selftest' in sys.argv[1:]:
         from radia_mcp.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()
-        _selftest()
+        try:
+            _selftest(audit_examples='--audit-examples' in sys.argv[1:])
+        except (BrokenPipeError, OSError) as exc:
+            if _is_closed_stdout_error(exc):
+                return
+            raise
     else:
         mcp.run(transport="stdio")
 

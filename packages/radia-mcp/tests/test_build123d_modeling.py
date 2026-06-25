@@ -19,8 +19,19 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_envelope_row, enclosing_box,
                                           enclosure_clearance_row, enclosure_difference_region,
                                           shape_measurement_row, shape_measurement_rows,
+                                          box_face_vector_area_rows,
+                                          box_face_pressure_force_rows,
+                                          box_face_pressure_moment_rows,
+                                          box_face_pressure_resultant_summary,
+                                          box_face_traction_moment_rows,
+                                          compare_boundary_vector_area_rows,
                                           compare_shape_measurement_rows,
-                                          shape_measurement_comparison_summary)
+                                          shape_measurement_comparison_summary,
+                                          shape_measurement_inventory_summary,
+                                          worst_shape_measurement_comparison_rows,
+                                          shape_measurement_health_summary,
+                                          shape_bbox_pair_clearance_summary,
+                                          shape_parameter_sweep_summary)
 from build123d import Box, Compound, Pos
 
 
@@ -130,6 +141,254 @@ def test_shape_measurement_rows_follow_assembly_children():
     assert [row["name"] for row in rows] == ["left", "right"]
     assert [row["volume"] for row in rows] == pytest.approx([6.0, 4.0])
     assert [row["area"] for row in rows] == pytest.approx([22.0, 16.0])
+
+
+def test_shape_measurement_inventory_summary_reports_assembly_fractions():
+    left = (Pos(-2, 0, 0) * Box(2, 2, 2)).solid()
+    left.label = "left"
+    right = (Pos(2, 0, 0) * Box(1, 2, 2)).solid()
+    right.label = "right"
+    rows = shape_measurement_rows(assembly(left, right, label="two_region"))
+
+    summary = shape_measurement_inventory_summary(rows)
+
+    assert summary["n_shapes"] == 2
+    assert summary["n_valid"] == 2
+    assert summary["total_volume"] == pytest.approx(12.0)
+    assert summary["total_area"] == pytest.approx(40.0)
+    assert summary["bounding_box"]["min"] == pytest.approx([-3.0, -1.0, -1.0])
+    assert summary["bounding_box"]["max"] == pytest.approx([2.5, 1.0, 1.0])
+    assert summary["bbox_volume"] == pytest.approx(22.0)
+    assert summary["bbox_fill_fraction"] == pytest.approx(12.0 / 22.0)
+    assert summary["largest_volume_name"] == "left"
+    assert summary["smallest_volume_name"] == "right"
+    fractions = {row["name"]: row for row in summary["volume_fraction_rows"]}
+    assert fractions["left"]["volume_fraction"] == pytest.approx(8.0 / 12.0)
+    assert fractions["right"]["volume_fraction"] == pytest.approx(4.0 / 12.0)
+
+
+def test_shape_bbox_pair_clearance_summary_flags_overlap_for_precise_check():
+    left = Box(1, 1, 1).solid()
+    left.label = "left"
+    right = (Pos(2.0, 0, 0) * Box(1, 1, 1)).solid()
+    right.label = "right"
+    overlap = (Pos(0.4, 0, 0) * Box(1, 1, 1)).solid()
+    overlap.label = "overlap"
+    rows = shape_measurement_rows(assembly(left, right, overlap, label="three_region"))
+
+    summary = shape_bbox_pair_clearance_summary(rows)
+    pairs = {row["pair"]: row for row in summary["pair_rows"]}
+
+    assert summary["status"] == "needs_attention"
+    assert summary["n_pairs"] == 3
+    assert summary["separated_pair_count"] == 2
+    assert summary["bbox_overlap_pair_count"] == 1
+    assert summary["touching_pair_count"] == 0
+    assert summary["min_positive_gap"] == pytest.approx(0.6)
+
+    assert pairs["left::right"]["status"] == "separated"
+    assert pairs["left::right"]["axis_gaps"]["x"] == pytest.approx(1.0)
+    assert pairs["left::overlap"]["status"] == "bbox_overlap_needs_precise_check"
+    assert pairs["left::overlap"]["bbox_intersection_volume"] == pytest.approx(0.6)
+    assert pairs["left::overlap"]["axis_overlaps"]["x"] == pytest.approx(0.6)
+
+
+def test_shape_parameter_sweep_summary_tracks_monotonic_metrics_and_limits():
+    rows = []
+    for height in [1.0, 2.0, 3.0, 4.0]:
+        box = Box(2.0, 3.0, height).solid()
+        row = shape_measurement_row(box, name=f"h_{height:g}")
+        row["height"] = height
+        rows.append(row)
+
+    summary = shape_parameter_sweep_summary(
+        rows,
+        "height",
+        metric_keys=("volume", "area"),
+        limits_by_metric={"volume": {"min": 12.0, "max": 24.0}},
+    )
+    metrics = {row["metric"]: row for row in summary["metric_rows"]}
+
+    assert summary["parameter_values"] == [1.0, 2.0, 3.0, 4.0]
+    assert summary["parameter_strictly_increasing"] is True
+    assert summary["status"] == "needs_attention"
+    assert summary["constraint_violation_count"] == 1
+    assert summary["constraint_violations"][0]["kind"] == "below_min"
+    assert metrics["volume"]["min"] == pytest.approx(6.0)
+    assert metrics["volume"]["max"] == pytest.approx(24.0)
+    assert metrics["volume"]["monotonic_non_decreasing"] is True
+    assert metrics["volume"]["min_step_delta"] == pytest.approx(6.0)
+    assert metrics["area"]["first"] == pytest.approx(22.0)
+    assert metrics["area"]["last"] == pytest.approx(52.0)
+    assert metrics["area"]["monotonic_non_decreasing"] is True
+
+    clean = shape_parameter_sweep_summary(rows, "height", metric_keys=("volume",))
+    assert clean["status"] == "ok"
+    assert clean["ok_for_design_table"] is True
+
+    duplicate = shape_parameter_sweep_summary(rows + [dict(rows[-1])], "height", metric_keys=("volume",))
+    assert duplicate["duplicate_parameter_values"] is True
+    assert duplicate["status"] == "needs_attention"
+
+
+def test_box_face_vector_area_rows_match_centered_box():
+    box = Box(2, 3, 5).solid()
+    measurement = shape_measurement_row(box)
+    rows = box_face_vector_area_rows(measurement["bounding_box"]["size"])
+    by_name = {row["name"]: row for row in rows}
+
+    assert sum(row["surface_area"] for row in rows) == pytest.approx(measurement["area"])
+    assert by_name["xmin"]["vector_area"] == pytest.approx((-15.0, 0.0, 0.0))
+    assert by_name["xmax"]["vector_area"] == pytest.approx((15.0, 0.0, 0.0))
+    assert by_name["ymin"]["vector_area"] == pytest.approx((0.0, -10.0, 0.0))
+    assert by_name["ymax"]["vector_area"] == pytest.approx((0.0, 10.0, 0.0))
+    assert by_name["zmin"]["vector_area"] == pytest.approx((0.0, 0.0, -6.0))
+    assert by_name["zmax"]["vector_area"] == pytest.approx((0.0, 0.0, 6.0))
+    assert all(row["vector_area_norm_over_area"] == pytest.approx(1.0) for row in rows)
+
+
+def test_compare_boundary_vector_area_rows_marks_direction_mismatch():
+    reference = box_face_vector_area_rows((2, 3, 5))
+    measured = [dict(row) for row in reference]
+    measured[0]["vector_area"] = (15.0, 0.0, 0.0)
+    measured[0]["unit_normal"] = (1.0, 0.0, 0.0)
+
+    rows = compare_boundary_vector_area_rows(reference, measured, vector_atol=1.0e-12)
+    by_name = {row["name"]: row for row in rows}
+
+    assert not by_name["xmin"]["passed"]
+    assert by_name["xmin"]["vector_abs_error"] == pytest.approx(30.0)
+    assert by_name["xmin"]["unit_normal_abs_error"] == pytest.approx(2.0)
+    assert by_name["xmax"]["passed"]
+
+
+def test_box_face_pressure_force_rows_integrate_pressure_loads():
+    uniform = box_face_pressure_force_rows(
+        (2, 3, 5),
+        {"xmin": 2.0, "xmax": 2.0, "ymin": 2.0, "ymax": 2.0, "zmin": 2.0, "zmax": 2.0},
+    )
+    total = [sum(row["force_N"][axis] for row in uniform) for axis in range(3)]
+    assert total == pytest.approx([0.0, 0.0, 0.0])
+
+    zmax = box_face_pressure_force_rows((2, 3, 5), {"zmax": 2.0}, default_pressure=0.0)
+    by_name = {row["name"]: row for row in zmax}
+    assert by_name["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert by_name["zmax"]["force_magnitude_N"] == pytest.approx(12.0)
+    assert by_name["zmax"]["pressure_source"] == "name"
+    assert by_name["xmin"]["pressure_source"] == "default"
+
+    by_index = box_face_pressure_force_rows((2, 3, 5), {6: 3.0}, default_pressure=0.0)
+    assert {row["name"]: row for row in by_index}["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 18.0))
+
+    with pytest.raises(KeyError):
+        box_face_pressure_force_rows((2, 3, 5), {"zmax": 2.0}, default_pressure=None)
+
+
+def test_box_face_pressure_moment_rows_integrate_pivot_moments():
+    uniform = box_face_pressure_moment_rows(
+        (2, 3, 5),
+        {"xmin": 2.0, "xmax": 2.0, "ymin": 2.0, "ymax": 2.0, "zmin": 2.0, "zmax": 2.0},
+        center=(1.0, 1.5, 2.5),
+    )
+    total_force = [sum(row["force_N"][axis] for row in uniform) for axis in range(3)]
+    total_moment = [sum(row["moment_about_pivot_Nm"][axis] for row in uniform) for axis in range(3)]
+    assert total_force == pytest.approx((0.0, 0.0, 0.0))
+    assert total_moment == pytest.approx((0.0, 0.0, 0.0))
+
+    zmax = box_face_pressure_moment_rows(
+        (2, 3, 5),
+        {"zmax": 2.0},
+        center=(1.0, 1.5, 2.5),
+        default_pressure=0.0,
+    )
+    by_name = {row["name"]: row for row in zmax}
+    assert by_name["zmax"]["face_center"] == pytest.approx((1.0, 1.5, 5.0))
+    assert by_name["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert by_name["zmax"]["moment_about_pivot_Nm"] == pytest.approx((18.0, -12.0, 0.0))
+
+    shifted = box_face_pressure_moment_rows(
+        (2, 3, 5),
+        {"zmax": 2.0},
+        center=(1.0, 1.5, 2.5),
+        default_pressure=0.0,
+        pivot_m=(1.0, 1.5, 0.0),
+    )
+    assert {row["name"]: row for row in shifted}["zmax"]["moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    with pytest.raises(KeyError):
+        box_face_pressure_moment_rows((2, 3, 5), {"zmax": 2.0}, default_pressure=None)
+
+
+def test_box_face_pressure_resultant_summary_matches_closed_box_balance():
+    box = (Pos(1.0, 1.5, 2.5) * Box(2, 3, 5)).solid()
+    measurement = shape_measurement_row(box)
+    size = measurement["bounding_box"]["size"]
+    center = measurement["bounding_box"]["center"]
+
+    uniform = box_face_pressure_resultant_summary(size, {}, center=center, default_pressure=2.0)
+    assert uniform["boundary_count"] == 6
+    assert uniform["box_size"] == pytest.approx((2.0, 3.0, 5.0))
+    assert uniform["box_center"] == pytest.approx((1.0, 1.5, 2.5))
+    assert uniform["total_force_N"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["total_moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+    assert uniform["absolute_force_sum_N"] == pytest.approx(124.0)
+    assert uniform["force_balance_ratio"] == pytest.approx(0.0)
+    assert uniform["surface_vector_area"] == pytest.approx((0.0, 0.0, 0.0))
+
+    zmax = box_face_pressure_resultant_summary(
+        size,
+        {"zmax": 2.0},
+        center=center,
+        default_pressure=0.0,
+    )
+    assert zmax["total_force_N"] == pytest.approx((0.0, 0.0, 12.0))
+    assert zmax["total_moment_about_pivot_Nm"] == pytest.approx((18.0, -12.0, 0.0))
+    assert zmax["force_balance_ratio"] == pytest.approx(1.0)
+
+    shifted = box_face_pressure_resultant_summary(
+        size,
+        {"zmax": 2.0},
+        center=center,
+        default_pressure=0.0,
+        pivot_m=(1.0, 1.5, 0.0),
+    )
+    assert shifted["total_moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    with pytest.raises(KeyError):
+        box_face_pressure_resultant_summary(size, {"zmax": 2.0}, default_pressure=None)
+
+
+def test_box_face_traction_moment_rows_integrate_vector_tractions():
+    rows = box_face_traction_moment_rows(
+        (2, 3, 5),
+        {"zmax": (1.0, -2.0, 3.0)},
+        center=(1.0, 1.5, 2.5),
+        default_traction=(0.0, 0.0, 0.0),
+    )
+    by_name = {row["name"]: row for row in rows}
+    assert by_name["zmax"]["face_center"] == pytest.approx((1.0, 1.5, 5.0))
+    assert by_name["zmax"]["traction_N_per_m2"] == pytest.approx((1.0, -2.0, 3.0))
+    assert by_name["zmax"]["force_N"] == pytest.approx((6.0, -12.0, 18.0))
+    assert by_name["zmax"]["moment_about_pivot_Nm"] == pytest.approx((87.0, 12.0, -21.0))
+    assert by_name["zmax"]["traction_source"] == "name"
+    assert by_name["xmin"]["traction_source"] == "default"
+
+    shifted = box_face_traction_moment_rows(
+        (2, 3, 5),
+        {"zmax": (1.0, -2.0, 3.0)},
+        center=(1.0, 1.5, 2.5),
+        default_traction=(0.0, 0.0, 0.0),
+        pivot_m=(1.0, 1.5, 5.0),
+    )
+    assert {row["name"]: row for row in shifted}["zmax"]["moment_about_pivot_Nm"] == pytest.approx((0.0, 0.0, 0.0))
+
+    by_index = box_face_traction_moment_rows((2, 3, 5), {6: (0.0, 0.0, 2.0)}, default_traction=(0.0, 0.0, 0.0))
+    assert {row["name"]: row for row in by_index}["zmax"]["force_N"] == pytest.approx((0.0, 0.0, 12.0))
+
+    with pytest.raises(KeyError):
+        box_face_traction_moment_rows((2, 3, 5), {"zmax": (1.0, -2.0, 3.0)}, default_traction=None)
+    with pytest.raises(ValueError):
+        box_face_traction_moment_rows((2, 3, 5), {"zmax": (1.0, -2.0)}, default_traction=(0.0, 0.0, 0.0))
 
 
 def test_shape_envelope_row_and_enclosing_box_use_union_bbox_margin():
@@ -249,6 +508,36 @@ def test_shape_measurement_comparison_summary_compacts_errors():
     assert summary["max_volume_rel_error"] == pytest.approx(0.0)
     assert summary["max_area_rel_error"] == pytest.approx(0.0)
     assert summary["max_bbox_abs_error"] == pytest.approx(0.0)
+
+
+def test_shape_measurement_health_summary_reports_worst_mismatches():
+    reference = [
+        {"name": "ok", "volume": 10.0, "area": 20.0, "is_valid": True},
+        {"name": "bad", "volume": 10.0, "area": 20.0, "is_valid": True},
+        {"name": "missing", "volume": 1.0, "area": 2.0, "is_valid": True},
+    ]
+    measured = [
+        {"name": "ok", "volume": 10.000001, "area": 20.000001},
+        {"name": "bad", "volume": 10.2, "area": 20.0},
+    ]
+
+    health = shape_measurement_health_summary(
+        reference,
+        measured,
+        rtol=1.0e-4,
+        measured_label="external",
+        worst_limit=2,
+    )
+
+    assert health["status"] == "needs_attention"
+    assert health["ok_for_geometry_roundtrip"] is False
+    assert health["checks"]["all_reference_shapes_valid"] is True
+    assert health["checks"]["all_measurements_present_and_within_tolerance"] is False
+    assert health["comparison_summary"]["n_passed"] == 1
+    assert [row["name"] for row in health["worst_comparisons"]] == ["missing", "bad"]
+    assert worst_shape_measurement_comparison_rows([], limit=0) == []
+    with pytest.raises(ValueError, match="limit must be non-negative"):
+        worst_shape_measurement_comparison_rows([], limit=-1)
 
 
 def test_segment_meshes_in_netgen():

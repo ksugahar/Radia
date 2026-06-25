@@ -1,12 +1,10 @@
 """Build the ELF CEFC-2020 C-type yoke as Cubit CAD volumes.
 
-Each of the 13 hex elements in
-S:/ELF_MAGIC/2020_03_07_CEFC_2020/model_C-Type/mu=1000/
-  ELF_MMB8T_EIEM2_1x1x1/quater/ELF_magic.meg
-becomes ONE Cubit CAD volume.  4 of the 13 (hex 6, 7, 8, 9) have
-slanted faces at the pole-tip bevel; the rest are axis-aligned
-bricks.  Coordinates are mm; we scale to meters when emitting
-`create vertex` commands.
+Each of the 13 hex elements in a private CEFC-2020 C-type .meg
+reference becomes ONE Cubit CAD volume.  4 of the 13 (hex 6, 7, 8, 9)
+have slanted faces at the pole-tip bevel; the rest are axis-aligned
+bricks.  Coordinates are mm; we scale to meters when emitting `create
+vertex` commands.
 
 After the volumes are created they are added to block "yoke" and
 each is meshed with curve interval = 1 to produce exactly 1 hex per
@@ -20,9 +18,7 @@ import os
 import cubit
 
 
-# ELF reference path (LAB).  Override via env var if elsewhere.
-_DEFAULT_MEG = r"S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type\mu=1000\ELF_MMB8T_EIEM2_1x1x1\quater\ELF_magic.meg"
-ELF_MEG = os.environ.get("ELF_MEG_PATH", _DEFAULT_MEG)
+ELF_MEG = os.environ.get("ELF_MEG_PATH", "")
 
 MM_TO_M = 0.001
 
@@ -52,9 +48,9 @@ def _read_meg(path):
 
 
 def _build_yoke():
-    if not os.path.isfile(ELF_MEG):
+    if not ELF_MEG or not os.path.isfile(ELF_MEG):
         print(f"ERROR: ELF_MEG not found: {ELF_MEG}")
-        print("Set ELF_MEG_PATH env var to override.")
+        print("Set ELF_MEG_PATH env var to the private .meg reference file.")
         return
 
     nodes, elements = _read_meg(ELF_MEG)

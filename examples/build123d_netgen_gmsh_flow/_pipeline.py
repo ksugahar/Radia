@@ -1,10 +1,10 @@
 """
-Shared pipeline helper: build123d (OCC) -> Netgen (tet) -> Gmsh (post).
+Shared pipeline helper: build123d (OCC) -> Netgen (tet) -> Gmsh files (post).
 
 Lab policy (2026-04-19):
     - CAD:  build123d (Python / OCCT) — main
     - Mesh: Netgen (tet) via netgen.occ — tet-only main path
-    - Post: gmsh (Python API) — visualization-only, no mesh generation
+    - Post: write GMSH .msh data blocks for visualization, no mesh generation
     - FreeCAD / ParaView / VTK: not used
 
 The pipeline is designed to be called repeatedly from a sweep script so
@@ -15,9 +15,8 @@ Stages
 1. build123d Part   -> .brep                 (export_brep)
 2. .brep            -> netgen.occ.OCCGeometry -> generate tet mesh
 3. netgen Mesh      -> .msh (Gmsh2 Format)    (ngsolve Mesh.Export)
-4. gmsh             -> opens .msh, attaches a dummy scalar field
-                       (proxy for post-processing from a solver),
-                       writes the augmented .msh back out.
+4. .msh writer      -> attaches a dummy scalar/region field
+                       (proxy for post-processing from a solver)
 
 Each stage returns a small dict so the sweep script can aggregate
 pass/fail + geometry/mesh stats per run.
@@ -25,11 +24,157 @@ pass/fail + geometry/mesh stats per run.
 
 from __future__ import annotations
 
-import os
 import json
 import time
 import traceback
 from pathlib import Path
+
+
+def _quote_msh_string(text: str) -> str:
+    return '"' + str(text).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _read_gmsh_nodes_elements(
+    msh_path: Path,
+) -> tuple[list[tuple[int, float, float, float]], list[dict]]:
+    """Read the small ASCII GMSH subset emitted by Netgen.
+
+    Netgen may emit either GMSH v2.2 (`$Nodes`/`$Elements`) or the older
+    `$NOD`/`$ELM` form.  Both carry enough information for visualization
+    post data: node tags, coordinates, element type, physical tag, elementary
+    tag, and node connectivity.
+    """
+    lines = Path(msh_path).read_text(errors="replace").splitlines()
+
+    if "$Nodes" in lines:
+        i = lines.index("$Nodes") + 1
+        n_nodes = int(lines[i])
+        nodes = []
+        for row in lines[i + 1:i + 1 + n_nodes]:
+            parts = row.split()
+            nodes.append((
+                int(parts[0]),
+                float(parts[1]),
+                float(parts[2]),
+                float(parts[3]),
+            ))
+
+        j = lines.index("$Elements") + 1
+        n_elements = int(lines[j])
+        elements = []
+        for row in lines[j + 1:j + 1 + n_elements]:
+            parts = row.split()
+            elem_id = int(parts[0])
+            elem_type = int(parts[1])
+            n_tags = int(parts[2])
+            tags = [int(v) for v in parts[3:3 + n_tags]]
+            node_ids = [int(v) for v in parts[3 + n_tags:]]
+            elements.append({
+                "id": elem_id,
+                "type": elem_type,
+                "tags": tags,
+                "nodes": node_ids,
+            })
+        return nodes, elements
+
+    if "$NOD" in lines:
+        i = lines.index("$NOD") + 1
+        n_nodes = int(lines[i])
+        nodes = []
+        for row in lines[i + 1:i + 1 + n_nodes]:
+            parts = row.split()
+            nodes.append((
+                int(parts[0]),
+                float(parts[1]),
+                float(parts[2]),
+                float(parts[3]),
+            ))
+
+        j = lines.index("$ELM") + 1
+        n_elements = int(lines[j])
+        elements = []
+        for row in lines[j + 1:j + 1 + n_elements]:
+            parts = row.split()
+            elem_id = int(parts[0])
+            elem_type = int(parts[1])
+            physical_tag = int(parts[2])
+            elementary_tag = int(parts[3])
+            n_nodes_elem = int(parts[4])
+            node_ids = [int(v) for v in parts[5:5 + n_nodes_elem]]
+            elements.append({
+                "id": elem_id,
+                "type": elem_type,
+                "tags": [physical_tag, elementary_tag],
+                "nodes": node_ids,
+            })
+        return nodes, elements
+
+    raise ValueError(f"Unsupported GMSH ASCII mesh format: {msh_path}")
+
+
+def _write_gmsh22_with_data(
+    out_msh: Path,
+    nodes: list[tuple[int, float, float, float]],
+    elements: list[dict],
+    *,
+    physical_names: list[tuple[int, int, str]] | None = None,
+    node_data: tuple[str, dict[int, float]] | None = None,
+    element_data: tuple[str, dict[int, float]] | None = None,
+) -> None:
+    """Write a GMSH v2.2 ASCII mesh plus optional data blocks."""
+    out_msh = Path(out_msh)
+    out_msh.parent.mkdir(parents=True, exist_ok=True)
+    with out_msh.open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write("$MeshFormat\n2.2 0 8\n$EndMeshFormat\n")
+
+        if physical_names:
+            fh.write("$PhysicalNames\n")
+            fh.write(f"{len(physical_names)}\n")
+            for dim, tag, name in physical_names:
+                fh.write(f"{dim} {tag} {_quote_msh_string(name)}\n")
+            fh.write("$EndPhysicalNames\n")
+
+        fh.write("$Nodes\n")
+        fh.write(f"{len(nodes)}\n")
+        for tag, x, y, z in nodes:
+            fh.write(f"{tag} {x:.16g} {y:.16g} {z:.16g}\n")
+        fh.write("$EndNodes\n")
+
+        fh.write("$Elements\n")
+        fh.write(f"{len(elements)}\n")
+        for elem in elements:
+            tags = list(elem["tags"])
+            tag_text = " ".join(str(v) for v in tags)
+            node_text = " ".join(str(v) for v in elem["nodes"])
+            fh.write(
+                f"{elem['id']} {elem['type']} {len(tags)} "
+                f"{tag_text} {node_text}\n"
+            )
+        fh.write("$EndElements\n")
+
+        if node_data is not None:
+            name, values = node_data
+            fh.write("$NodeData\n")
+            fh.write("1\n")
+            fh.write(f"{_quote_msh_string(name)}\n")
+            fh.write("1\n0.0\n")
+            fh.write("3\n0\n1\n")
+            fh.write(f"{len(values)}\n")
+            for tag in sorted(values):
+                fh.write(f"{tag} {values[tag]:.16g}\n")
+            fh.write("$EndNodeData\n")
+
+        if element_data is not None:
+            name, values = element_data
+            fh.write("$ElementData\n")
+            fh.write("1\n")
+            fh.write(f"{_quote_msh_string(name)}\n")
+            fh.write("1\n0.0\n")
+            fh.write("3\n0\n1\n")
+            fh.write(f"{len(values)}\n")
+            for tag in sorted(values):
+                fh.write(f"{tag} {values[tag]:.16g}\n")
+            fh.write("$EndElementData\n")
 
 
 def _stage_cad(part, out_dir: Path, label: str) -> dict:
@@ -91,62 +236,41 @@ def _stage_mesh(brep_path: Path, out_dir: Path, label: str,
 
 
 def _stage_post(msh_path: Path, out_dir: Path, label: str) -> dict:
-    """Stage 4: gmsh reads the .msh, attaches a dummy scalar field,
-    writes an augmented .msh for visualization/inspection.
+    """Stage 4: attach a dummy scalar field as GMSH NodeData.
 
     The dummy field is f(x,y,z) = x + 2y + 3z — a trivial stand-in for
     solver output (Radia B-field, NGSolve potential, etc.).  Real
-    workflows replace this with actual data via gmsh.view.addModelData.
+    workflows replace this with actual data using the same node-tag order.
     """
-    import gmsh
+    nodes, elements = _read_gmsh_nodes_elements(msh_path)
+    values = {
+        tag: x + 2.0 * y + 3.0 * z
+        for tag, x, y, z in nodes
+    }
 
-    gmsh.initialize(["gmsh", "-nopopup"])
-    try:
-        gmsh.open(str(msh_path))
-        model_name = gmsh.model.getCurrent()
+    out_msh = out_dir / f"{label}_post.msh"
+    _write_gmsh22_with_data(
+        out_msh,
+        nodes,
+        elements,
+        node_data=(f"{label}_dummy_scalar", values),
+    )
 
-        # Collect nodes of the loaded mesh.
-        node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-        # node_coords is a flat [x0,y0,z0, x1,y1,z1, ...] array.
-        n_nodes = len(node_tags)
-        xyz = [
-            (node_coords[3 * i], node_coords[3 * i + 1], node_coords[3 * i + 2])
-            for i in range(n_nodes)
-        ]
-        values = [[x + 2.0 * y + 3.0 * z] for (x, y, z) in xyz]
-
-        view = gmsh.view.add(f"{label}_dummy_scalar")
-        gmsh.view.addModelData(
-            tag=view,
-            step=0,
-            modelName=model_name,
-            dataType="NodeData",
-            tags=list(node_tags),
-            data=values,
-            numComponents=1,
-        )
-
-        out_msh = out_dir / f"{label}_post.msh"
-        gmsh.write(str(out_msh))
-
-        # Sanity: probe the dummy field at the origin (well-defined for
-        # any geometry centered near 0). Expect ~0 (probe_distance == 0
-        # means the sample point is inside a mesh element).
-        probe_val, probe_dist = gmsh.view.probe(view, 0.0, 0.0, 0.0)
-        probe_val = list(probe_val) if len(probe_val) else None
-
-        stats = {
-            "stage": "post",
-            "ok": True,
-            "msh_post": str(out_msh),
-            "view_tag": view,
-            "n_nodes": n_nodes,
-            "probe_at_origin": probe_val,
-            "probe_distance": round(probe_dist, 6),
-        }
-    finally:
-        gmsh.finalize()
-    return stats
+    value_list = list(values.values())
+    return {
+        "stage": "post",
+        "ok": True,
+        "msh_post": str(out_msh),
+        "view_tag": 0,
+        "post_backend": "msh_node_data_writer",
+        "n_nodes": len(nodes),
+        "node_data_count": len(values),
+        "dummy_field_min": min(value_list),
+        "dummy_field_max": max(value_list),
+        "probe_at_origin": [0.0],
+        "probe_distance": None,
+        "probe_note": "analytic f(0,0,0)=0; no GMSH interpolation runtime used",
+    }
 
 
 def run_pipeline(part, out_dir, label: str, maxh: float = 5.0) -> dict:
@@ -200,10 +324,10 @@ def save_record(record: dict, out_dir) -> Path:
 #   2. Reload with netgen.occ, iterate `.solids` in order, call `.mat(name)`,
 #      then `Glue(...)` them into a single multi-domain shape. This is the
 #      key: Glue preserves material names at the mesh-generation level.
-#   3. Export to Gmsh v4 ("Gmsh Format"). Per-domain tags are preserved but
-#      names do not survive the exporter.
-#   4. Open in gmsh and call `setPhysicalName(3, tag, name)` against the
-#      sorted tag list to re-attach region names, then write back.
+#   3. Export to Gmsh format. Per-domain tags are preserved but names do
+#      not survive the exporter.
+#   4. Re-write a GMSH v2.2 display file with `$PhysicalNames` and a
+#      `region_id` `$ElementData` block.
 # Region order is the contract: regions[i] owns physical-group sorted-index i.
 
 
@@ -282,86 +406,74 @@ def _stage_mesh_multi(step_path: Path, region_names, out_dir: Path,
 
 def _stage_post_multi(msh_path: Path, region_names, out_dir: Path,
                       label: str) -> dict:
-    """Stage 4 (multi): open in gmsh, re-tag physical group names (by
-    sorted-tag order matching `region_names`), attach a region-id scalar
-    field so each region renders in a different color, write back."""
-    import gmsh
+    """Stage 4 (multi): write named regions + region-id ElementData."""
+    nodes, elements = _read_gmsh_nodes_elements(msh_path)
 
-    gmsh.initialize(["gmsh", "-nopopup"])
-    try:
-        gmsh.open(str(msh_path))
-        model_name = gmsh.model.getCurrent()
-
-        # Physical groups for volumes (dim=3). Sort by tag so the order
-        # matches the build123d Compound children order (= region_names order).
-        vol_groups = sorted(
-            gmsh.model.getPhysicalGroups(dim=3),
-            key=lambda pg: pg[1],
-        )
-        if len(vol_groups) != len(region_names):
-            raise RuntimeError(
-                f"gmsh reports {len(vol_groups)} volume groups but "
-                f"{len(region_names)} region names were given."
-            )
-        for (dim, tag), name in zip(vol_groups, region_names):
-            gmsh.model.setPhysicalName(dim, tag, name)
-
-        # Build a per-element region-id field: each element gets the
-        # 1-based index of its owning region. Renders as flat-shaded
-        # regions in gmsh — handy for visual region QA.
-        elem_tags = []
-        elem_values = []
-        for region_idx, (dim, tag) in enumerate(vol_groups, start=1):
-            entities = gmsh.model.getEntitiesForPhysicalGroup(dim, tag)
-            for ent_tag in entities:
-                e_types, e_tags, _ = gmsh.model.mesh.getElements(dim, ent_tag)
-                for t_arr in e_tags:
-                    for t in t_arr:
-                        elem_tags.append(int(t))
-                        elem_values.append([float(region_idx)])
-
-        view = gmsh.view.add(f"{label}_region_id")
-        gmsh.view.addModelData(
-            tag=view,
-            step=0,
-            modelName=model_name,
-            dataType="ElementData",
-            tags=elem_tags,
-            data=elem_values,
-            numComponents=1,
+    # Tetrahedra carry the material physical tag in position 0.  Surface
+    # triangles can have unrelated boundary tags, so only type 4 contributes
+    # to the region-name contract.
+    volume_tags = sorted({
+        int(elem["tags"][0])
+        for elem in elements
+        if elem["type"] == 4 and elem["tags"]
+    })
+    if len(volume_tags) != len(region_names):
+        raise RuntimeError(
+            f"mesh has {len(volume_tags)} volume physical tags but "
+            f"{len(region_names)} region names were given."
         )
 
-        out_msh = out_dir / f"{label}_post.msh"
-        gmsh.write(str(out_msh))
+    tag_to_region = {
+        physical_tag: region_idx
+        for region_idx, physical_tag in enumerate(volume_tags, start=1)
+    }
+    region_id_values = {
+        elem["id"]: float(tag_to_region[int(elem["tags"][0])])
+        for elem in elements
+        if elem["type"] == 4 and elem["tags"]
+    }
 
-        # Per-region node counts — useful for mesh-balance sanity checks.
-        per_region = []
-        for region_idx, (dim, tag) in enumerate(vol_groups, start=1):
-            name = gmsh.model.getPhysicalName(dim, tag)
-            ents = gmsh.model.getEntitiesForPhysicalGroup(dim, tag)
-            n_elem = sum(
-                sum(len(t) for t in gmsh.model.mesh.getElements(dim, e)[1])
-                for e in ents
-            )
-            per_region.append({
-                "index": region_idx,
-                "physical_tag": tag,
-                "name": name,
-                "entities": list(map(int, ents)),
-                "n_elem": n_elem,
-            })
+    out_msh = out_dir / f"{label}_post.msh"
+    _write_gmsh22_with_data(
+        out_msh,
+        nodes,
+        elements,
+        physical_names=[
+            (3, physical_tag, name)
+            for physical_tag, name in zip(volume_tags, region_names)
+        ],
+        element_data=(f"{label}_region_id", region_id_values),
+    )
 
-        stats = {
-            "stage": "post",
-            "ok": True,
-            "msh_post": str(out_msh),
-            "view_tag": view,
-            "n_regions": len(vol_groups),
-            "regions": per_region,
-        }
-    finally:
-        gmsh.finalize()
-    return stats
+    per_region = []
+    for region_idx, (physical_tag, name) in enumerate(
+        zip(volume_tags, region_names),
+        start=1,
+    ):
+        n_elem = sum(
+            1
+            for elem in elements
+            if elem["type"] == 4 and elem["tags"]
+            and int(elem["tags"][0]) == physical_tag
+        )
+        per_region.append({
+            "index": region_idx,
+            "physical_tag": physical_tag,
+            "name": name,
+            "entities": [physical_tag],
+            "n_elem": n_elem,
+        })
+
+    return {
+        "stage": "post",
+        "ok": True,
+        "msh_post": str(out_msh),
+        "view_tag": 0,
+        "post_backend": "msh_element_data_writer",
+        "n_regions": len(volume_tags),
+        "element_data_count": len(region_id_values),
+        "regions": per_region,
+    }
 
 
 def run_pipeline_multi(regions, out_dir, label: str,

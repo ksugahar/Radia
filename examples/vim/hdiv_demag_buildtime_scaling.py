@@ -1,9 +1,9 @@
 """hdiv_demag_buildtime_scaling.py -- HDiv-VIM analytic charge-Gram H-matrix BUILD time vs N.
 
-The wall-clock head-to-head vs yano-type (Radia MMM/MSC) on the C-type electromagnet has two phases:
+The wall-clock head-to-head vs six-face surface-charge (Radia MMM/MSC) on the C-type electromagnet has two phases:
 the one-time H-matrix BUILD and the iterative SOLVE.  The SOLVE is the clear HDiv-VIM win (5-6 Newton
 iters vs yano's 214 -- loops field-null by construction).  This benchmark measures the BUILD, the
-dominant remaining unknown ("is the H-matrix build slow?"; the saved yano-type C-type electromagnet
+dominant remaining unknown ("is the H-matrix build slow?"; the saved six-face surface-charge C-type electromagnet
 build = 582 s @ 165600 DOF).
 
 KELVIN-LESS by construction: the HDiv-VIM is a VOLUME INTEGRAL method (like MMM/MSC) -- the 1/r charge

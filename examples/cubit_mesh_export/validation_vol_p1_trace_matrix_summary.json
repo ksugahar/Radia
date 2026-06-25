@@ -1,0 +1,157 @@
+{
+  "checks": {
+    "cols": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "interior_node_ids": [
+      5
+    ],
+    "matrix_shape": [
+      4,
+      5
+    ],
+    "n_trace_nodes": 4,
+    "n_volume_nodes": 5,
+    "nnz": 4,
+    "rows": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "surface_triangles_local": [
+      [
+        1,
+        2,
+        3
+      ],
+      [
+        1,
+        4,
+        2
+      ],
+      [
+        1,
+        3,
+        4
+      ],
+      [
+        2,
+        4,
+        3
+      ]
+    ],
+    "topology_trace_cols": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "topology_trace_rows": [
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "kind": "vol_p1_fem_bem_trace_matrix_validation",
+  "learning_theme": "for first-order shared tri/tet meshes, the scalar FEM-to-BEM trace is a one-based boolean gather matrix",
+  "mesh_summary": {
+    "boundary_names": 1,
+    "materials": 1,
+    "points": 5,
+    "surface_triangles": 4,
+    "tetrahedra": 4
+  },
+  "trace_matrix": {
+    "boundary_column_nnz_max": 1,
+    "cols": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "interior_column_nnz_max": 0,
+    "interior_node_ids": [
+      5
+    ],
+    "is_boolean_gather": true,
+    "matrix_shape": [
+      4,
+      5
+    ],
+    "n_trace_nodes": 4,
+    "n_volume_nodes": 5,
+    "nnz": 4,
+    "policy": "p1_h1_to_scalar_bem_trace_is_boolean_gather",
+    "row_nnz_max": 1,
+    "row_nnz_min": 1,
+    "rows": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "sparse_coo_call": "T = sparse(rows, cols, values, nTraceNodes, nVolumeNodes)",
+    "surface_triangles_global": [
+      [
+        1,
+        2,
+        3
+      ],
+      [
+        1,
+        4,
+        2
+      ],
+      [
+        1,
+        3,
+        4
+      ],
+      [
+        2,
+        4,
+        3
+      ]
+    ],
+    "surface_triangles_local": [
+      [
+        1,
+        2,
+        3
+      ],
+      [
+        1,
+        4,
+        2
+      ],
+      [
+        1,
+        3,
+        4
+      ],
+      [
+        2,
+        4,
+        3
+      ]
+    ],
+    "trace_node_ids": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "values": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "validation_class": true
+}

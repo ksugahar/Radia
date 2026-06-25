@@ -1,0 +1,381 @@
+{
+  "checks": {
+    "domain_material_mismatch_count": 0,
+    "exterior_row_count": 6,
+    "exterior_surface_triangles": 6,
+    "interface_adjacent_material_numbers": [
+      1,
+      2
+    ],
+    "interface_declared_domain_numbers": [
+      1,
+      2
+    ],
+    "interface_row_count": 1,
+    "interface_surface_triangles": 1,
+    "is_volume_boundary_consistent": true,
+    "max_adjacent_tetrahedra": 2,
+    "orphan_surface_triangles": 0,
+    "overconnected_surface_triangles": 0,
+    "surface_triangles": 7,
+    "tetrahedra": 2
+  },
+  "incidence_summary": {
+    "domain_material_mismatch_count": 0,
+    "exterior_surface_triangles": 6,
+    "interface_surface_triangles": 1,
+    "is_volume_boundary_consistent": true,
+    "max_adjacent_tetrahedra": 2,
+    "orphan_surface_triangles": 0,
+    "overconnected_surface_triangles": 0,
+    "policy": "surface_triangles_match_volume_tet_faces_for_tri_tet_vol",
+    "rows": [
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "adjacent_tetrahedron_count": 1,
+        "adjacent_tetrahedron_faces": [
+          {
+            "face_local_nodes": [
+              0,
+              1,
+              3
+            ],
+            "face_nodes": [
+              1,
+              2,
+              4
+            ],
+            "material_name": "air",
+            "material_number": 1,
+            "opposite_local_node": 2,
+            "tetrahedron": 1
+          }
+        ],
+        "boundary_number": 1,
+        "declared_domain_names": [
+          "air"
+        ],
+        "declared_domain_numbers": [
+          1
+        ],
+        "domain_material_match": true,
+        "domin": 1,
+        "domout": 0,
+        "kind": "exterior",
+        "name": "air_outer",
+        "nodes": [
+          1,
+          4,
+          2
+        ],
+        "surface_triangle": 1
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "adjacent_tetrahedron_count": 1,
+        "adjacent_tetrahedron_faces": [
+          {
+            "face_local_nodes": [
+              1,
+              2,
+              3
+            ],
+            "face_nodes": [
+              2,
+              3,
+              4
+            ],
+            "material_name": "air",
+            "material_number": 1,
+            "opposite_local_node": 0,
+            "tetrahedron": 1
+          }
+        ],
+        "boundary_number": 1,
+        "declared_domain_names": [
+          "air"
+        ],
+        "declared_domain_numbers": [
+          1
+        ],
+        "domain_material_match": true,
+        "domin": 1,
+        "domout": 0,
+        "kind": "exterior",
+        "name": "air_outer",
+        "nodes": [
+          2,
+          4,
+          3
+        ],
+        "surface_triangle": 2
+      },
+      {
+        "adjacent_material_names": [
+          "air"
+        ],
+        "adjacent_material_numbers": [
+          1
+        ],
+        "adjacent_tetrahedron_count": 1,
+        "adjacent_tetrahedron_faces": [
+          {
+            "face_local_nodes": [
+              0,
+              3,
+              2
+            ],
+            "face_nodes": [
+              1,
+              4,
+              3
+            ],
+            "material_name": "air",
+            "material_number": 1,
+            "opposite_local_node": 1,
+            "tetrahedron": 1
+          }
+        ],
+        "boundary_number": 1,
+        "declared_domain_names": [
+          "air"
+        ],
+        "declared_domain_numbers": [
+          1
+        ],
+        "domain_material_match": true,
+        "domin": 1,
+        "domout": 0,
+        "kind": "exterior",
+        "name": "air_outer",
+        "nodes": [
+          3,
+          4,
+          1
+        ],
+        "surface_triangle": 3
+      },
+      {
+        "adjacent_material_names": [
+          "core"
+        ],
+        "adjacent_material_numbers": [
+          2
+        ],
+        "adjacent_tetrahedron_count": 1,
+        "adjacent_tetrahedron_faces": [
+          {
+            "face_local_nodes": [
+              0,
+              3,
+              2
+            ],
+            "face_nodes": [
+              1,
+              5,
+              2
+            ],
+            "material_name": "core",
+            "material_number": 2,
+            "opposite_local_node": 1,
+            "tetrahedron": 2
+          }
+        ],
+        "boundary_number": 2,
+        "declared_domain_names": [
+          "core"
+        ],
+        "declared_domain_numbers": [
+          2
+        ],
+        "domain_material_match": true,
+        "domin": 2,
+        "domout": 0,
+        "kind": "exterior",
+        "name": "core_outer",
+        "nodes": [
+          1,
+          2,
+          5
+        ],
+        "surface_triangle": 4
+      },
+      {
+        "adjacent_material_names": [
+          "core"
+        ],
+        "adjacent_material_numbers": [
+          2
+        ],
+        "adjacent_tetrahedron_count": 1,
+        "adjacent_tetrahedron_faces": [
+          {
+            "face_local_nodes": [
+              1,
+              2,
+              3
+            ],
+            "face_nodes": [
+              3,
+              2,
+              5
+            ],
+            "material_name": "core",
+            "material_number": 2,
+            "opposite_local_node": 0,
+            "tetrahedron": 2
+          }
+        ],
+        "boundary_number": 2,
+        "declared_domain_names": [
+          "core"
+        ],
+        "declared_domain_numbers": [
+          2
+        ],
+        "domain_material_match": true,
+        "domin": 2,
+        "domout": 0,
+        "kind": "exterior",
+        "name": "core_outer",
+        "nodes": [
+          2,
+          3,
+          5
+        ],
+        "surface_triangle": 5
+      },
+      {
+        "adjacent_material_names": [
+          "core"
+        ],
+        "adjacent_material_numbers": [
+          2
+        ],
+        "adjacent_tetrahedron_count": 1,
+        "adjacent_tetrahedron_faces": [
+          {
+            "face_local_nodes": [
+              0,
+              1,
+              3
+            ],
+            "face_nodes": [
+              1,
+              3,
+              5
+            ],
+            "material_name": "core",
+            "material_number": 2,
+            "opposite_local_node": 2,
+            "tetrahedron": 2
+          }
+        ],
+        "boundary_number": 2,
+        "declared_domain_names": [
+          "core"
+        ],
+        "declared_domain_numbers": [
+          2
+        ],
+        "domain_material_match": true,
+        "domin": 2,
+        "domout": 0,
+        "kind": "exterior",
+        "name": "core_outer",
+        "nodes": [
+          3,
+          1,
+          5
+        ],
+        "surface_triangle": 6
+      },
+      {
+        "adjacent_material_names": [
+          "air",
+          "core"
+        ],
+        "adjacent_material_numbers": [
+          1,
+          2
+        ],
+        "adjacent_tetrahedron_count": 2,
+        "adjacent_tetrahedron_faces": [
+          {
+            "face_local_nodes": [
+              0,
+              2,
+              1
+            ],
+            "face_nodes": [
+              1,
+              3,
+              2
+            ],
+            "material_name": "air",
+            "material_number": 1,
+            "opposite_local_node": 3,
+            "tetrahedron": 1
+          },
+          {
+            "face_local_nodes": [
+              0,
+              2,
+              1
+            ],
+            "face_nodes": [
+              1,
+              2,
+              3
+            ],
+            "material_name": "core",
+            "material_number": 2,
+            "opposite_local_node": 3,
+            "tetrahedron": 2
+          }
+        ],
+        "boundary_number": 3,
+        "declared_domain_names": [
+          "air",
+          "core"
+        ],
+        "declared_domain_numbers": [
+          1,
+          2
+        ],
+        "domain_material_match": true,
+        "domin": 1,
+        "domout": 2,
+        "kind": "interface",
+        "name": "air_core_interface",
+        "nodes": [
+          1,
+          2,
+          3
+        ],
+        "surface_triangle": 7
+      }
+    ],
+    "surface_triangles": 7,
+    "tetrahedra": 2
+  },
+  "kind": "vol_boundary_tet_face_incidence_validation",
+  "mesh_summary": {
+    "boundary_names": 3,
+    "materials": 2,
+    "points": 5,
+    "surface_triangles": 7,
+    "tetrahedra": 2
+  },
+  "validation_class": true
+}

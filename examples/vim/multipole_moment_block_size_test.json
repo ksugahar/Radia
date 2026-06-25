@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-06-22T00:44:36.749708",
+  "hostname": "lab",
+  "benchmark": "multipole_moment_block_size_test",
+  "nxy": 16,
+  "n_el": 180,
+  "dof": 1080,
+  "mu_r": 1000.0,
+  "results": [
+    {
+      "g": 1,
+      "max_elems_per_block": 1,
+      "max_block_dof": 6,
+      "n_blocks": 180,
+      "gmres_iters": 174,
+      "gmres_info": 0
+    },
+    {
+      "g": 2,
+      "max_elems_per_block": 4,
+      "max_block_dof": 24,
+      "n_blocks": 56,
+      "gmres_iters": 219,
+      "gmres_info": 0
+    },
+    {
+      "g": 3,
+      "max_elems_per_block": 9,
+      "max_block_dof": 54,
+      "n_blocks": 30,
+      "gmres_iters": 224,
+      "gmres_info": 0
+    },
+    {
+      "g": 4,
+      "max_elems_per_block": 15,
+      "max_block_dof": 90,
+      "n_blocks": 16,
+      "gmres_iters": 128,
+      "gmres_info": 0
+    },
+    {
+      "g": 6,
+      "max_elems_per_block": 27,
+      "max_block_dof": 162,
+      "n_blocks": 10,
+      "gmres_iters": 132,
+      "gmres_info": 0
+    },
+    {
+      "g": 8,
+      "max_elems_per_block": 39,
+      "max_block_dof": 234,
+      "n_blocks": 8,
+      "gmres_iters": 104,
+      "gmres_info": 0
+    },
+    {
+      "g": 16,
+      "max_elems_per_block": 90,
+      "max_block_dof": 540,
+      "n_blocks": 2,
+      "gmres_iters": 66,
+      "gmres_info": 0
+    }
+  ],
+  "iters_g1": 174,
+  "iters_g2": 219,
+  "iters_g3": 224,
+  "iters_biggest": 66,
+  "biggest_block_elems": 90,
+  "loop_range_helps": false,
+  "conclusion": "Enlarging the block-Jacobi block to LOOP RANGE does NOT help -- it makes iters WORSE: per-element g=1 174, but g=2 219 and g=3 224 (both > 174). Modest blocks capture some mutual coupling but mis-align with the stiff GLOBAL mode and, on this strongly non-normal demag operator, worsen the M^-1 A spectrum. iters only fall once the block spans a LARGE fraction of the mesh (g>=4), and even a full-z-layer block (90 elems, ~half the mesh) reaches only 66 -- still not bounded. So the stiff mode is the demag flux-path mode that spans the WHOLE C-yoke: a fixed 'loop-range' block is the wrong lever (it can hurt). The reach has to be GLOBAL, delivered HIERARCHICALLY (H-LU on the cluster tree) or via a COARSE SPACE (deflate the few global demag/flux-path modes -- those that have zero net-charge and large |eig(M^-1 R)|), added on top of the cheap local block-Jacobi (two-level). Direction (non-local reach) was right; the realization is coarse/hierarchical, NOT bigger local blocks."
+}

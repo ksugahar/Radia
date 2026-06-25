@@ -1006,7 +1006,7 @@ int radTApplication::GetInteractMatrix(int InteractElemKey, double* pMatrix, int
 
 int radTApplication::GetLoopBasis(int InteractElemKey, double* pL, int* pNLoop, int* pDOF)
 {
-	// yano-MSC cell-graph cycle (loop) basis L (m_totalDOF x nLoop, ROW-MAJOR).  Two-call pattern:
+	// surface-charge MSC cell-graph cycle (loop) basis L (m_totalDOF x nLoop, ROW-MAJOR).  Two-call pattern:
 	// pass pL=nullptr to read back nLoop+dof, then allocate and call again to fill.
 	try
 	{
@@ -1103,7 +1103,7 @@ int radTApplication::GetCentroidFieldGrad(int InteractElemKey, double* pC, int* 
 
 int radTApplication::BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF)
 {
-	// Moment-yano system matrix A (dof x dof, ROW-MAJOR) + rhs (dof) for uniform linear chi + uniform Happ.
+	// Multipole-moment MMM system matrix A (dof x dof, ROW-MAJOR) + rhs (dof) for uniform linear chi + uniform Happ.
 	// Two-call pattern: pA=nullptr -> read back dof; then allocate dof*dof + dof and call again to fill.
 	try
 	{
@@ -1266,7 +1266,7 @@ int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* p
 			}
 			// TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): keep the pool up
 			// across the densify loop (totalDOF H-matvecs) without a caller `with TaskManager()`.
-			ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+			ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 			std::vector<double> x((size_t)totalDOF, 0.0), y((size_t)totalDOF, 0.0);
 			for(int j = 0; j < totalDOF; j++)
 			{
@@ -1503,11 +1503,16 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 	// Initialize solve statistics
 	m_solve_stats_valid = false;
 	m_solve_t_matrix_build = 0.0;
+	m_solve_t_moment_fieldgrad = 0.0;
+	m_solve_t_moment_system_build = 0.0;
 	m_solve_t_linear_solve = 0.0;
 	m_solve_t_lu_decomp = 0.0;  // Reset LU decomposition time
 	m_solve_linear_iterations = 0;
 	m_solve_nonl_iterations = 0;
-	m_solve_num_threads = radia::GetNumThreads();  // Record while TaskManager is active
+	m_solve_num_threads = radia::GetMaxThreads();  // Requested TaskManager thread count
+	m_timing_hmatrix_build = 0.0;
+	m_timing_linear_solve = 0.0;
+	m_linear_iterations = 0;
 
 	try
 	{
@@ -1554,7 +1559,7 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 
 			//int ActualIterNum = 0;
 
-			// EIEM2 retirement (Phase 3b): the parameter-free moment-yano formulation
+			// EIEM2 retirement (Phase 3b): the parameter-free multipole-moment MMM formulation
 			// (BuildMomentSystemCore) is the SOLE surface-charge (MSC) demag solver.  The retired EIEM2
 			// collocation kernel used to cover two element-composition cases that moment does NOT
 			// represent; both are now rejected fail-loud (No Fallbacks -- a silent wrong number is worse
@@ -1737,7 +1742,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		SendingIsRequired = 0;
 
 		// For HACApK (method 2), skip the dense interaction matrix N: method 2 builds its own H-matrix --
-		// either the EIEM2 HACApK kernel (radTRelaxationMethNo_2) OR, for moment-yano on pure 6-DOF hex, the
+		// either the EIEM2 HACApK kernel (radTRelaxationMethNo_2) OR, for multipole-moment MMM on pure 6-DOF hex, the
 		// scalable moment H-BiCGSTAB (SolveMomentHACApK).  In both cases the dense N is never read, and the
 		// moment Picard scaffold (ComputeActualHFieldFromSigma etc.) uses the constitutive H=M/chi -- so we
 		// skip the O(N^2) dense build (Phase 2 Increment 4 storage decoupling).  EXCEPTION: the B-input
@@ -1841,18 +1846,18 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		SendingIsRequired = PrevSendingIsRequired;
 
 		// Mesh-less surface-charge soft iron (ObjHexahedron/ObjWedge/ObjPyramid + MatLin/MatSatIsoTab
-		// + rad.Solve) is solved by the canonical moment-yano MSC path here.  Mesh-BACKED soft iron
+		// + rad.Solve) is solved by the canonical multipole-moment MMM MSC path here.  Mesh-BACKED soft iron
 		// (radia.vim.soft_iron_from_mesh) is routed to FEEC HDiv-VIM by the Python rad.Solve wrapper before
-		// reaching this C++ path, unless demag_backend='yano' forces the C++ moment-yano representation.
+		// reaching this C++ path, unless demag_backend='yano' forces the C++ multipole-moment MMM representation.
 		// Tet (MMM) and permanent magnets are unaffected.
 
-		// MOMENT-yano dispatch (UNCONDITIONAL since Phase 3b-1): the parameter-free MOMENT formula
+		// multipole-moment MMM dispatch (UNCONDITIONAL since Phase 3b-1): the parameter-free MOMENT formula
 		// (BuildMomentSystemCore) is the SOLE solver for surface-charge soft iron -- hex (6 DOF) AND wedge/pyramid (5 DOF,
 		// Phase 3a: 3 dipole + 1 monopole + 1 axial quad).  Solver method:
 		//   - method 0 (LU)       -> dense direct moment solve (hex / wedge / mixed).
-		//   - method 1 (BiCGSTAB) -> reroute to LU (dense moment direct solve; medium N).
+		//   - method 1 (BiCGSTAB) -> matrix-free moment BiCGSTAB + element-block Jacobi (hex/wedge/mixed 5/6 DOF).
 		//   - method 2 (HACApK)   -> the moment H-matrix + block-Jacobi BiCGSTAB (scalable storage; no dense
-		//     interaction/base matrix, Increment 4), set g_yano_moment_hacapk and route to the LU/Picard driver
+		//     interaction/base matrix, Increment 4), set g_multipole_moment_hacapk and route to the LU/Picard driver
 		//     whose linear step picks the H-BiCGSTAB.  HEX-ONLY for now (the H-matrix assumes uniform 6 DOF);
 		//     wedge/mixed method-2 routes to the dense moment LU until the variable-DOF H-matrix (Phase 3a-2).
 		//     PER-ELEMENT chi: the nonlinear Picard loop re-solves each iteration with the current chi (Inc 4).
@@ -1860,10 +1865,10 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// MMM) keeps the dipole MMM path; mixed tet+MSC is rejected fail-loud (Error204) in MakeAutoRelax.  The
 		// EIEM2 surface-charge collocation kernel was fully removed in Phase 3b.
 		{
-			extern bool g_yano_moment_hacapk;
-			g_yano_moment_hacapk = false;
-			// moment-yano is UNCONDITIONAL for surface-charge polyhedra.  The allMoment check below routes pure
-			// hex/wedge/pyramid to the LU/Picard moment driver (method 2 + pure-hex also sets g_yano_moment_hacapk); a
+			extern bool g_multipole_moment_hacapk;
+			g_multipole_moment_hacapk = false;
+			// multipole-moment MMM is UNCONDITIONAL for surface-charge polyhedra.  The allMoment check below routes pure
+			// hex/wedge/pyramid to the LU/Picard moment driver (method 2 + pure-hex also sets g_multipole_moment_hacapk); a
 			// tet present -> not allMoment -> tet keeps the MMM dipole path, and mixed tet+MSC is rejected
 			// fail-loud (Error204), since no production case mixes surface-charge + dipole soft iron.
 			{
@@ -1887,9 +1892,14 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 							// uniform 6 DOF); wedge/mixed moment uses the dense LU/Picard moment path (Phase 3a-1).
 							// The variable-DOF moment H-matrix for wedge/mixed method-2 is Phase 3a-2.
 							if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && allHex6)
-								g_yano_moment_hacapk = true;    // moment linear step via H-matrix + BiCGSTAB (hex-only)
-							if(MethNo != RadSolverMethod::LU)
-								MethNo = RadSolverMethod::LU;   // route moment (hex/wedge/pyramid) to the Picard/LU driver
+							{
+								g_multipole_moment_hacapk = true;    // moment linear step via H-matrix + BiCGSTAB (hex-only)
+								MethNo = RadSolverMethod::LU;   // route through the Picard driver; the linear step sees the flag
+							}
+							else if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
+							{
+								MethNo = RadSolverMethod::LU;   // method-2 wedge/mixed explicit dense-LU route until variable-DOF H-matrix
+							}
 						}
 					}
 				}
@@ -1901,12 +1911,12 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 			ActualIterNum = MakeAutoRelax(InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
 			// Store matrix build time (MakeAutoRelax resets m_solve_t_matrix_build to 0)
 			m_solve_t_matrix_build = t_matrix_build;
-			{ extern bool g_yano_moment_hacapk; g_yano_moment_hacapk = false; }   // reset the per-solve moment H-matrix flag
+			{ extern bool g_multipole_moment_hacapk; g_multipole_moment_hacapk = false; }   // reset the per-solve moment H-matrix flag
 		}
 		catch(...)
 		{
 			SendingIsRequired = 0;
-			{ extern bool g_yano_moment_hacapk; g_yano_moment_hacapk = false; }
+			{ extern bool g_multipole_moment_hacapk; g_multipole_moment_hacapk = false; }
 			// Don't delete cached interaction on error - keep for potential retry
 			throw 0;
 		}
@@ -2658,10 +2668,14 @@ void radTApplication::GetSolveStats(double* dOut, int* nOut)
 	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
 	dOut[8] = (double)m_solve_defl_nplaq;  // loop-deflation cycles installed
 	dOut[9] = m_solve_defl_alpha;          // loop-deflation shift alpha (auto-scaled)
-	*nOut = 10;
 #else
-	*nOut = 7;
+	dOut[7] = 0.0;
+	dOut[8] = 0.0;
+	dOut[9] = 0.0;
 #endif
+	dOut[10] = m_solve_t_moment_fieldgrad;
+	dOut[11] = m_solve_t_moment_system_build;
+	*nOut = 12;
 }
 
 //-------------------------------------------------------------------------

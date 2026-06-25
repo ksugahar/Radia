@@ -1,0 +1,171 @@
+{
+  "cases": {
+    "shifted_pivot_force_couple": {
+      "dimension": 2,
+      "n_rows": 2,
+      "pivot_m": [
+        0.2,
+        -0.1
+      ],
+      "rows": [
+        {
+          "force": [
+            0.0,
+            10.0
+          ],
+          "index": 1,
+          "lever_arm_m": [
+            -0.15000000000000002,
+            0.1
+          ],
+          "moment_z": -1.5000000000000002,
+          "point_m": [
+            0.05,
+            0.0
+          ]
+        },
+        {
+          "force": [
+            0.0,
+            -10.0
+          ],
+          "index": 2,
+          "lever_arm_m": [
+            -0.25,
+            0.1
+          ],
+          "moment_z": 2.5,
+          "point_m": [
+            -0.05,
+            0.0
+          ]
+        }
+      ],
+      "total_force": [
+        0.0,
+        0.0
+      ],
+      "total_force_magnitude": 0.0,
+      "total_moment": 0.9999999999999998,
+      "total_moment_magnitude": 0.9999999999999998
+    },
+    "single_three_dimensional_force": {
+      "dimension": 3,
+      "n_rows": 1,
+      "pivot_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rows": [
+        {
+          "force": [
+            10.0,
+            0.0,
+            0.0
+          ],
+          "index": 1,
+          "lever_arm_m": [
+            0.0,
+            0.1,
+            0.0
+          ],
+          "moment": [
+            0.0,
+            0.0,
+            -1.0
+          ],
+          "point_m": [
+            0.0,
+            0.1,
+            0.0
+          ]
+        }
+      ],
+      "total_force": [
+        10.0,
+        0.0,
+        0.0
+      ],
+      "total_force_magnitude": 10.0,
+      "total_moment": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "total_moment_magnitude": 1.0
+    },
+    "two_dimensional_force_couple": {
+      "dimension": 2,
+      "n_rows": 2,
+      "pivot_m": [
+        0.0,
+        0.0
+      ],
+      "rows": [
+        {
+          "force": [
+            0.0,
+            10.0
+          ],
+          "index": 1,
+          "lever_arm_m": [
+            0.05,
+            0.0
+          ],
+          "moment_z": 0.5,
+          "point_m": [
+            0.05,
+            0.0
+          ]
+        },
+        {
+          "force": [
+            0.0,
+            -10.0
+          ],
+          "index": 2,
+          "lever_arm_m": [
+            -0.05,
+            0.0
+          ],
+          "moment_z": 0.5,
+          "point_m": [
+            -0.05,
+            0.0
+          ]
+        }
+      ],
+      "total_force": [
+        0.0,
+        0.0
+      ],
+      "total_force_magnitude": 0.0,
+      "total_moment": 1.0,
+      "total_moment_magnitude": 1.0
+    }
+  },
+  "checks": {
+    "couple_torque_abs_error": 0.0,
+    "couple_total_force": [
+      0.0,
+      0.0
+    ],
+    "couple_total_moment": 1.0,
+    "expected_couple_torque": 1.0,
+    "shifted_pivot_torque_abs_error": 2.220446049250313e-16,
+    "single_3d_mz_abs_error": 0.0,
+    "single_3d_total_moment": [
+      0.0,
+      0.0,
+      -1.0
+    ]
+  },
+  "force_learning": "discrete force rows collapse to net force and pivot torque by sum(r x F)",
+  "kind": "force_resultant_torque",
+  "parameters": {
+    "force_N": 10.0,
+    "radius_m": 0.05
+  },
+  "validation_class": true
+}

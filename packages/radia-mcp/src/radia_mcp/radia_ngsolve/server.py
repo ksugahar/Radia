@@ -484,6 +484,9 @@ def ngsolve_usage(topic: str = "all") -> str:
             "practical"        - Practical techniques: voltage source, force/torque, rotation, coupling
             "team7"            - TEAM Problem 7: eddy current benchmark (A-formulation, OCC geometry, BDDC/AMS solver)
             "multiphysics"     - COMSOL-class couplings: induction heating EM->thermal (joule_loss_density + solve_heat_steady), the scattered-field A0 gotcha
+            "cross_validation_registry"
+                               - Reusable validation scripts/summary JSONs and the
+                                 public-safe MCP knowledge hooks that learned from them
     """
     return get_ngsolve_documentation(topic)
 
@@ -828,7 +831,7 @@ def mmm_core(topic: str = "chubar_1998") -> str:
 
     Practical "how to make an MMM/MSC model" recipes: topic
     "build_msc_mmm". Matrix/system probes (MMM dense N vs current
-    moment-yano MSC system): "matrix_structure". Near-null "loop"
+    multipole-moment MMM MSC system): "matrix_structure". Near-null "loop"
     modes / conditioning / beautiful->ugly BiCGSTAB (CEFC 2026 study):
     "eigenvalue_nullspace". Heritage (Chubar 1998, Wakao 2007 ACA,
     Janet MMM+RNM, Le-Duc PEEC+MMM, Weddemann FEM-BEM): remaining
@@ -839,7 +842,7 @@ def mmm_core(topic: str = "chubar_1998") -> str:
             "build_msc_mmm"      - HOW TO BUILD an MMM/MSC model
                                    (elements, materials, solve, results)
             "matrix_structure"   - Matrix probes: GetInteractMatrix is
-                                   MMM/dense legacy; moment-yano MSC uses
+                                   MMM/dense legacy; multipole-moment MMM MSC uses
                                    BuildMomentSystem / MomentSystemDenseRaw /
                                    MomentHMatrixProbe
             "eigenvalue_nullspace" - Near-null loop modes, cond ~ mu_r,
@@ -868,7 +871,7 @@ def mmm_core(topic: str = "chubar_1998") -> str:
 def hdiv_vim(topic: str = "overview") -> str:
     """
     HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT
-    alternative/complement to the canonical moment-yano MSC kernel.  Canonical reference:
+    alternative/complement to the canonical multipole-moment MMM MSC kernel.  Canonical reference:
     docs/hdiv_vim/README.md.
 
     Key idea: SYMMETRIC demag operator N = B^T G B with the loop modes FIELD-NULL BY
@@ -1814,8 +1817,8 @@ def panel_gui_pitfalls(topic: str = "") -> str:
 @mcp.tool()
 def install_deploy(topic: str = "") -> str:
     """
-    Radia install / deploy policy and recipes — 3-tier configuration
-    (LAB / mdx / 100号機), reversible migration steps, and the
+    Radia install / deploy policy and recipes — 2-tier configuration
+    (LAB + 100号機 editable / mdx + hibino PyPI), reversible migration steps, and the
     non-obvious gotchas that cause silent breakage.
 
     Read this when:
@@ -1825,10 +1828,11 @@ def install_deploy(topic: str = "") -> str:
         "DLL load failed" on a freshly-deployed machine.
 
     Topics:
-      three_tier                  -- current 3-tier configuration (2026-05-01)
+      two_tier                    -- current LAB-editable / PyPI-consumer policy
       lab_editable                -- LAB editable install
-      mdx_editable                -- mdx editable install (full recipe + 5 gotchas)
-      hyaku_pypi                  -- 100号機 PyPI install
+      hyaku_editable              -- 100号機 NAS editable install
+      mdx_pypi                    -- mdx PyPI install
+      hibino_pypi                 -- hibino PyPI install via `ssh hibino`
       editable_to_pypi_migration  -- e.g. 100号機 NAS-editable -> PyPI
       pypi_to_editable_migration  -- e.g. mdx PyPI -> editable
       metadata_sync               -- pip metadata vs radia.__version__
@@ -1845,8 +1849,8 @@ def install_deploy(topic: str = "") -> str:
 @mcp.tool()
 def release_workflow(topic: str = "") -> str:
     """
-    Triple-package release workflow for the Radia monorepo
-    (radia + cubit-mesh-export + radia-mcp).  Documents the 9-phase
+    Release-QUD workflow for the Radia monorepo
+    (3 packages / 4 machines: LAB, 100号機, mdx, hibino). Documents the 9-phase
     pipeline, the 4 pre-flight gates added 2026-05-03, the historical
     CI failure modes + their root causes, and the patch-bump recovery
     protocol when a tag CI fails.

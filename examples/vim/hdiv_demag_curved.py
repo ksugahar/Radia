@@ -1,7 +1,7 @@
 """hdiv_demag_curved.py -- the CURVED-MESH geometry win for the HDiv-type VIM, measured vs ANALYTIC truth.
 
 HDiv (RT0) lives natively on curved (isoparametric) meshes via mesh.Curve(p) -- the Piola map carries
-the curving, and the SAME mesh.GetTrafo code path samples the exact curved surface.  yano-type flat
+the curving, and the SAME mesh.GetTrafo code path samples the exact curved surface.  six-face surface-charge flat
 ObjHexahedron / ObjTetrahedron CANNOT do this: a flat-faceted sphere has a ~6-10% geometry error at a
 coarse mesh that no amount of magnetisation accuracy can recover.  This example MEASURES the win against
 ANALYTIC truth (the exact uniform-sphere dipole / volume), NOT against Radia:

@@ -54,11 +54,20 @@ if ($CubitInstallDir) {
     Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
 }
 
-# Intel MKL (required for BLAS/LAPACK)
+# Intel MKL (required for BLAS/LAPACK).  Accept both a full oneAPI install and
+# the pip mkl-devel layout under Python's Library directory.
+$MklCandidates = @()
 if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
-    $INTEL_MKL = $env:MKLROOT
-} else {
-    $INTEL_MKL = "C:\Program Files (x86)\Intel\oneAPI\mkl\latest"
+    $MklCandidates += $env:MKLROOT
+}
+$MklCandidates += "C:\Program Files (x86)\Intel\oneAPI\mkl\latest"
+$PythonLibrary = & python -c "import pathlib, sys; print(pathlib.Path(sys.prefix) / 'Library')" 2>$null
+if ($PythonLibrary -and (Test-Path $PythonLibrary)) {
+    $MklCandidates += $PythonLibrary
+}
+$INTEL_MKL = $MklCandidates | Where-Object { Test-Path "$_\lib\mkl_rt.lib" } | Select-Object -First 1
+if (-not $INTEL_MKL) {
+    $INTEL_MKL = $MklCandidates | Select-Object -First 1
 }
 if (-not (Test-Path "$INTEL_MKL\lib\mkl_rt.lib")) {
     if ($AxiFemOnly) {
@@ -106,6 +115,17 @@ if (-not $CMAKE_EXE) {
 }
 if (-not (Test-Path $CMAKE_EXE)) {
     Write-Host "ERROR: CMake not found. Install VS workload with CMake or pip install cmake." -ForegroundColor Red
+    exit 1
+}
+
+# Ninja generator backend.  Pass the long path explicitly so stale CMake
+# short-path cache entries do not break after Python install path changes.
+$NINJA_EXE = & python -c "import shutil; print(shutil.which('ninja') or '')" 2>$null
+if (-not $NINJA_EXE) {
+    $NINJA_EXE = & where.exe ninja 2>$null | Select-Object -First 1
+}
+if (-not ($NINJA_EXE -and (Test-Path $NINJA_EXE))) {
+    Write-Host "ERROR: Ninja not found. Install with: python -m pip install ninja" -ForegroundColor Red
     exit 1
 }
 
@@ -204,6 +224,7 @@ echo   CMake Configure
 echo ========================================
 "$CMAKE_EXE" "$PROJECT_DIR" ^
     -G "Ninja" ^
+    -DCMAKE_MAKE_PROGRAM="$NINJA_EXE" ^
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
     -DCMAKE_BUILD_TYPE=Release$NGSolveCMakeArgs

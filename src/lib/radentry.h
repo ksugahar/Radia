@@ -388,7 +388,7 @@ EXP int CALL RadBuildMatrix(int* n, int ElemKey, const char* image);
 */
 EXP int CALL RadGetInteractMatrix(double* pMatrix, int* pDOF, int InteractElemKey);
 
-/** Gets the yano-MSC cell-graph cycle (loop) basis L of the interaction operator.
+/** Gets the surface-charge MSC cell-graph cycle (loop) basis L of the interaction operator.
 The loops are the field-null subspace (== HDiv ker(B)); deflating them makes the high-mu_r
 solve bounded + mu_r-independent.  Two-call pattern: pass pL=nullptr to read back nLoop+DOF,
 allocate DOF*nLoop doubles, then call again to fill (ROW-MAJOR, L[d*nLoop+col]).
@@ -1103,6 +1103,18 @@ EXP int CALL RadSetBiCGSTABTol(int* n, double tol);
 @author Radia Development Team
 */
 EXP int CALL RadGetBiCGSTABTol(double* tol);
+
+/** Select multipole-moment method-2 Krylov solver: 0=BiCGSTAB, 1=restarted GMRES. */
+EXP int CALL RadSetMomentKrylovSolver(int* n, int solver);
+EXP int CALL RadGetMomentKrylovSolver(int* solver);
+
+/** Configure restarted GMRES restart length for multipole-moment method-2. */
+EXP int CALL RadSetMomentGMRESRestart(int* n, int restart);
+EXP int CALL RadGetMomentGMRESRestart(int* restart);
+
+/** Configure safeguarded Anderson acceleration depth for multipole-moment method-2 (0=off, 1=depth-1). */
+EXP int CALL RadSetMomentAndersonDepth(int* n, int depth);
+EXP int CALL RadGetMomentAndersonDepth(int* depth);
 
 /** Sets under-relaxation coefficient for nonlinear iteration.
 @param n [out] dummy output (set to 1)

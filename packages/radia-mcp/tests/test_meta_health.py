@@ -7,6 +7,9 @@ This is the canonical "is the package healthy" test — run on every PR
   - catalog.py drift from actual subpackage list
 """
 
+import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,6 +24,46 @@ def test_meta_health_all_subpackages_import():
         f"failed to import: "
         f"{[r['name'] + ': ' + r.get('error', '?')[:80] for r in h['results'] if not r['import_ok']]}"
     )
+
+
+def test_meta_health_caches_repeated_probe_in_process():
+    """Repeated MCP health calls should not re-probe the whole fleet."""
+    from radia_mcp.meta.server import radia_mcp_health
+
+    fresh = radia_mcp_health(force_refresh=True)
+    assert fresh["from_cache"] is False
+    assert fresh["elapsed_ms"] >= 0.0
+    assert fresh["cache_ttl_s"] > 0.0
+
+    cached = radia_mcp_health()
+    assert cached["from_cache"] is True
+    assert cached["cache_age_s"] >= 0.0
+    assert cached["n_servers_total"] == fresh["n_servers_total"]
+    assert cached["n_servers_healthy"] == fresh["n_servers_healthy"]
+
+    refreshed = radia_mcp_health(force_refresh=True)
+    assert refreshed["from_cache"] is False
+
+
+def test_status_optional_dep_probe_avoids_runtime_import(monkeypatch):
+    """Status tools should use import metadata, not import heavy deps."""
+    from radia_mcp.common import status as status_mod
+
+    status_mod._probe_dep.cache_clear()
+
+    def _boom(name):
+        raise AssertionError(f"unexpected import of optional dependency {name}")
+
+    monkeypatch.setattr(status_mod.importlib, "import_module", _boom)
+    payload = status_mod.build_status_payload(
+        server_name="mcp-server-test",
+        description="test",
+        subpackage="radia_mcp.test",
+        optional_deps=["json"],
+    )
+
+    assert payload["optional_deps"]["json"]["installed"] is True
+    assert "version" in payload["optional_deps"]["json"]
 
 
 def test_meta_catalog_has_at_least_30_servers():
@@ -69,6 +112,54 @@ def test_meta_overview_returns_expected_shape():
             assert k in srv, f"{srv.get('name','?')} missing key {k}"
 
 
+def test_meta_golden_gate_passes_catalog_contracts():
+    """Meta server should expose a compact machine-readable golden gate."""
+    from radia_mcp.meta.server import radia_mcp_golden_gate
+
+    gate = radia_mcp_golden_gate()
+    assert gate["level"] == "golden", gate
+    assert gate["all_passed"] is True
+    assert gate["n_servers"] >= 30
+    assert any(c["name"] == "optuna_external_boundary" and c["ok"]
+               for c in gate["checks"])
+    assert "python scripts/gen_tools_doc.py --check" in gate["full_gate_commands"]
+
+
+def test_generated_tools_inventory_is_current():
+    """docs/TOOLS.md must stay synchronized with the live MCP tool registry."""
+    pkg_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "scripts/gen_tools_doc.py", "--check"],
+        cwd=pkg_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
+    assert result.returncode == 0, (
+        "docs/TOOLS.md is stale; run `python scripts/gen_tools_doc.py`.\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+
+
+def test_readme_mcp_entrypoints_are_cataloged_or_external():
+    """README discovery snippets must not advertise removed server commands."""
+    from radia_mcp.meta import catalog
+
+    pkg_root = Path(__file__).resolve().parents[1]
+    readme = (pkg_root / "README.md").read_text(encoding="utf-8")
+    mentioned = set(re.findall(r"\bmcp-server-[a-z0-9-]+\b", readme))
+    allowed = {info["entry_point"] for info in catalog.CATALOG.values()}
+    allowed.update(
+        str(info.get("entry_point", ""))
+        for info in catalog.EXTERNAL_PACKAGES.values()
+        if str(info.get("entry_point", "")).startswith("mcp-server-")
+    )
+    unknown = sorted(mentioned - allowed)
+    assert not unknown, f"README advertises unknown MCP entry points: {unknown}"
+
+
 def test_meta_by_tag_optimization_finds_at_least_4():
     """Sanity: at least 4 optimization servers (bayesian-opt /
     evolutionary / data-assimilation / topology-optimization)."""
@@ -89,6 +180,54 @@ def test_meta_related_to_chart2d_includes_figure():
     result = radia_mcp_related("chart2d")
     names = [r["name"] for r in result["related"]]
     assert "figure" in names, f"chart2d related: {names}"
+
+
+def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():
+    """Official optuna-mcp is external but should still be discoverable."""
+    from radia_mcp.meta.server import radia_mcp_related
+
+    from_optuna = radia_mcp_related("optuna-mcp")
+    from_optuna_names = [r["name"] for r in from_optuna["related"]]
+    assert {"bayesian-opt", "evolutionary", "topology-optimization",
+            "radia-streamfunction"}.issubset(from_optuna_names)
+
+    from_bayes = radia_mcp_related("bayesian-opt")
+    optuna = [r for r in from_bayes["related"] if r["name"] == "optuna-mcp"]
+    assert optuna, f"bayesian-opt related: {[r['name'] for r in from_bayes['related']]}"
+    assert optuna[0]["external"] is True
+    assert optuna[0]["entry_point"] == "optuna-mcp"
+
+
+def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
+    """CAD/mesh servers should point agents toward radia-ngsolve validation."""
+    from radia_mcp.meta.server import radia_mcp_related
+
+    for name in ("cubit", "build123d", "gmsh"):
+        related = radia_mcp_related(name)
+        names = [r["name"] for r in related["related"]]
+        assert "radia-ngsolve" in names, f"{name} related: {names}"
+
+    reverse = radia_mcp_related("radia-ngsolve")
+    reverse_names = [r["name"] for r in reverse["related"]]
+    for name in ("cubit", "build123d", "gmsh"):
+        assert name in reverse_names, f"radia-ngsolve related: {reverse_names}"
+
+
+def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
+    """Agents should discover lightweight health checks separately from audits."""
+    from radia_mcp.meta.server import radia_mcp_get, radia_mcp_overview
+
+    overview = radia_mcp_overview()
+    by_name = {entry["name"]: entry for entry in overview["servers"]}
+
+    for name, entry in by_name.items():
+        assert entry["selftest_command"] == f"{entry['entry_point']} --selftest", name
+
+    cubit = radia_mcp_get("cubit")
+    gmsh = radia_mcp_get("mcp-server-gmsh")
+    assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-examples"
+    assert gmsh["audit_command"] == "mcp-server-gmsh --selftest --audit-examples"
+    assert "audit_command" not in radia_mcp_get("radia-ngsolve")
 
 
 def test_all_related_links_are_bidirectional():

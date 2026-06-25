@@ -1,181 +1,94 @@
 #!/usr/bin/env python
-"""
-GMSH Surface Mesh for PEEC Conductors
+"""PEEC conductor boundary surface from a Netgen .vol mesh.
 
-CRITICAL: PEEC requires SURFACE MESH ONLY, not volume mesh.
-
-Workflow:
-    GMSH surface mesh -> .msh -> NGSolve -> Radia PEEC
-
-Key Points:
-    - Conductors: Surface elements (Tri3, Quad4) only
-    - Skin effect: Handled by SIBC (Surface Impedance Boundary Condition)
-    - No volume discretization needed for conductors
+This directory still contains historical GMSH fixtures, but new Radia examples
+should not use the GMSH Python API for analysis mesh generation.  PEEC/BEM
+workflows can use the boundary triangles of a Netgen/Cubit .vol mesh as the
+surface-current support.
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
+from __future__ import annotations
 
-import gmsh
-import numpy as np
+import argparse
+import math
+from pathlib import Path
 
 
-def create_coil_surface_mesh(radius, width, height, n_radial=8, n_axial=4):
-    """
-    Create surface mesh for rectangular cross-section coil.
+def build_rectangular_torus_boundary(radius: float = 0.05,
+                                     width: float = 0.002,
+                                     height: float = 0.002,
+                                     maxh: float = 0.002,
+                                     curve_order: int = 2,
+                                     vol_file: str | Path | None = None) -> dict:
+    from netgen.occ import WorkPlane, Axes, Axis, Pnt, Dir, OCCGeometry
+    from ngsolve import BND, CF, Integrate, Mesh, TaskManager
 
-    Args:
-        radius: Coil mean radius (m)
-        width: Cross-section width (radial direction) (m)
-        height: Cross-section height (axial direction) (m)
-        n_radial: Number of divisions in radial direction
-        n_axial: Number of divisions in axial direction
+    wp = WorkPlane(Axes(p=Pnt(radius, 0, 0),
+                        n=Dir(0, 1, 0),
+                        h=Dir(0, 0, 1)))
+    section = wp.Rectangle(width, height).Face()
+    conductor = section.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 360)
+    conductor.name = "conductor_volume"
+    for face in conductor.faces:
+        face.name = "conductor"
+        face.maxh = maxh
 
-    Returns:
-        Path to generated .msh file
-    """
+    geo = OCCGeometry(conductor)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh)
+        if vol_file:
+            ngmesh.Save(str(vol_file))
+        mesh = Mesh(ngmesh)
+        if curve_order > 1:
+            mesh.Curve(curve_order)
+        area = Integrate(CF(1.0), mesh, BND)
+
+    exact = 2.0 * (width + height) * 2.0 * math.pi * radius
+    return {
+        "volume_elements": int(mesh.ne),
+        "boundary_elements": int(mesh.GetNE(BND)),
+        "vertices": int(mesh.nv),
+        "boundary_area": float(area),
+        "analytic_area": float(exact),
+        "relative_error": float(abs(area - exact) / exact),
+        "vol_file": str(vol_file) if vol_file else None,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--write-vol", default=None,
+                        help="optional .vol output path")
+    parser.add_argument("--maxh-mm", type=float, default=2.0,
+                        help="mesh size in mm")
+    args = parser.parse_args()
+
+    print()
+    print("PEEC conductor boundary surface from .vol")
     print("=" * 60)
-    print("GMSH Surface Mesh for PEEC Conductor")
-    print("=" * 60)
-
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 1)
-    gmsh.model.add("coil_surface")
-
-    # Coil geometry parameters
-    r_inner = radius - width / 2
-    r_outer = radius + width / 2
-    z_bottom = -height / 2
-    z_top = height / 2
-
-    print(f"\n[1] Creating coil geometry:")
-    print(f"    Mean radius: {radius} m")
-    print(f"    Width (radial): {width} m")
-    print(f"    Height (axial): {height} m")
-    print(f"    Inner radius: {r_inner} m")
-    print(f"    Outer radius: {r_outer} m")
-
-    # Create rectangular cross-section surface (in XZ plane)
-    # Will be revolved around Z axis to create coil surface
-    p1 = gmsh.model.geo.addPoint(r_inner, 0, z_bottom)
-    p2 = gmsh.model.geo.addPoint(r_outer, 0, z_bottom)
-    p3 = gmsh.model.geo.addPoint(r_outer, 0, z_top)
-    p4 = gmsh.model.geo.addPoint(r_inner, 0, z_top)
-
-    l1 = gmsh.model.geo.addLine(p1, p2)
-    l2 = gmsh.model.geo.addLine(p2, p3)
-    l3 = gmsh.model.geo.addLine(p3, p4)
-    l4 = gmsh.model.geo.addLine(p4, p1)
-
-    loop = gmsh.model.geo.addCurveLoop([l1, l2, l3, l4])
-    surf = gmsh.model.geo.addPlaneSurface([loop])
-
-    # Revolve to create coil surface
-    print("\n[2] Revolving surface to create coil...")
-    axis_point = [0, 0, 0]
-    axis_direction = [0, 0, 1]  # Z axis
-    angle = 2 * np.pi  # Full revolution
-
-    gmsh.model.geo.revolve(
-        [(2, surf)],  # Surface to revolve
-        *axis_point,
-        *axis_direction,
-        angle
-    )
-
-    gmsh.model.geo.synchronize()
-
-    # Set mesh size
-    print(f"\n[3] Setting mesh parameters:")
-    print(f"    Radial divisions: {n_radial}")
-    print(f"    Axial divisions: {n_axial}")
-
-    # Characteristic length based on divisions
-    lc_radial = width / n_radial
-    lc_axial = height / n_axial
-    lc = min(lc_radial, lc_axial)
-
-    gmsh.option.setNumber("Mesh.CharacteristicLengthMin", lc)
-    gmsh.option.setNumber("Mesh.CharacteristicLengthMax", lc)
-
-    # Define physical group for PEEC (surface only!)
-    print("\n[4] Defining physical surface group...")
-    surfaces = gmsh.model.getEntities(2)
-    if surfaces:
-        surface_tags = [s[1] for s in surfaces]
-        gmsh.model.addPhysicalGroup(2, surface_tags, 1)
-        gmsh.model.setPhysicalName(2, 1, "conductor")
-        print(f"    Surfaces: {len(surface_tags)}")
-
-    # Generate SURFACE mesh only (dim=2)
-    print("\n[5] Generating surface mesh...")
-    gmsh.model.mesh.generate(2)  # 2D surface mesh, NOT 3D volume
-
-    # Get statistics
-    nodes = gmsh.model.mesh.getNodes()
-    surf_elements = gmsh.model.mesh.getElements(2)  # Surface elements
-
-    print(f"    Nodes: {len(nodes[0])}")
-    if surf_elements[1]:
-        total_surf = sum(len(e) for e in surf_elements[1])
-        print(f"    Surface elements: {total_surf}")
-        print("    [OK] Surface mesh only - correct for PEEC")
-
-    # Check for volume elements (should be ZERO for PEEC)
-    vol_elements = gmsh.model.mesh.getElements(3)
-    if vol_elements[1] and any(len(e) > 0 for e in vol_elements[1]):
-        print("    ⚠️  WARNING: Volume elements found - PEEC only needs surface!")
-    else:
-        print("    [OK] No volume elements - correct for PEEC")
-
-    # Save mesh
-    msh_file = 'coil_surface.msh'
-    gmsh.write(msh_file)
-    print(f"\n[6] Saved surface mesh: {msh_file}")
-    print("    This .msh file contains SURFACE ELEMENTS ONLY")
-    print("    Ready for PEEC conductor import")
-
-    gmsh.finalize()
-
-    return msh_file
-
-
-def main():
-    print("\nPEEC Conductor Surface Mesh Generation\n")
-    print("Key Concept:")
-    print("  - PEEC models conductors using SURFACE currents only")
-    print("  - Skin effect handled by SIBC (Surface Impedance)")
-    print("  - No volume discretization needed")
+    print("Key concept:")
+    print("  PEEC surface unknowns live on boundary triangles.")
+    print("  The conductor volume can still be meshed as .vol for robust labels.")
+    print("  GMSH is optional display only, not the mesh generator.")
     print()
 
-    # Create surface mesh for coil
-    msh_file = create_coil_surface_mesh(
-        radius=0.05,     # 50mm mean radius
-        width=0.002,     # 2mm width
-        height=0.002,    # 2mm height
-        n_radial=4,      # 4 divisions radially
-        n_axial=4        # 4 divisions axially
+    result = build_rectangular_torus_boundary(
+        maxh=args.maxh_mm / 1000.0,
+        vol_file=args.write_vol,
     )
+    for key in ("volume_elements", "boundary_elements", "vertices"):
+        print(f"{key:>18s}: {result[key]}")
+    print(f"{'boundary_area':>18s}: {result['boundary_area']:.8e}")
+    print(f"{'analytic_area':>18s}: {result['analytic_area']:.8e}")
+    print(f"{'relative_error':>18s}: {result['relative_error']:.3e}")
+    if result["vol_file"]:
+        print(f"{'vol_file':>18s}: {result['vol_file']}")
 
-    print("\n" + "=" * 60)
-    print("Next Steps")
-    print("=" * 60)
-    print("\n1. View in GMSH:")
-    print(f"   gmsh {msh_file}")
-
-    print("\n2. Import to NGSolve:")
-    print(f"   from ngsolve import Mesh")
-    print(f"   mesh = Mesh('{msh_file}')")
-
-    print("\n3. Convert to Radia PEEC (planned API):")
-    print(f"   from peec_mesh_import import surface_mesh_to_peec")
-    print(f"   conductor = surface_mesh_to_peec(mesh, sigma=5.8e7)")
-
-    print("\n4. Alternative - Use CndLoop for simple geometry:")
-    print("   coil = rad.CndLoop([0,0,0], 0.05, [0,0,1], 'r',")
-    print("                       0.002, 0.002, 5.8e7, 8, 36)")
+    if result["relative_error"] > 0.05:
+        raise SystemExit("FAIL: boundary area error exceeds 5%")
+    print()
+    print("Overall: PASS")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -285,7 +285,7 @@ def solve_msc(coil_script="", vol_file="",
     # 1/2,1/4,1/8 model) is supported via the image-charge Gram (currently the DENSE analytic path).
     if demag_backend != "hdiv":
         return {"error": "demag_backend=%r is not available in this panel. Use demag_backend='hdiv' "
-                         "(the FEEC HDiv-VIM). Mesh-less moment-yano MSC remains available through "
+                         "(the FEEC HDiv-VIM). Mesh-less multipole-moment MMM MSC remains available through "
                          "rad.Solve on ObjHexahedron/ObjWedge/ObjPyramid models."
                          % (demag_backend,)}
     from ngsolve import VOL as _VOL, TaskManager as _TM

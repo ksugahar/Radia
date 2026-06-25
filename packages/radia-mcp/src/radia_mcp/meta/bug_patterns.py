@@ -325,10 +325,10 @@ PATTERNS: list[dict] = [
                      "consistency in the 'Verify wheel' step.  "
                      "Catches at PUBLISH time, not at commit time.",
         "prevention": "Always bump BOTH files in lockstep.  release-"
-                      "triple skill's Phase 2 lists them explicitly.  "
+                      "qud Phase 2 lists them explicitly.  "
                       "Could add a pre-commit hook or a "
                       "test_version_consistency.py to catch earlier.",
-        "related": ["tools/release_triple.py: Phase 2"],
+        "related": ["tools/release_qud.py: Phase 2"],
     },
     {
         "id": "lab-editable-drift-after-pip-force-reinstall",
@@ -338,7 +338,7 @@ PATTERNS: list[dict] = [
         "severity": "medium",
         "first_seen": "2026-04-28",
         "last_seen": "2026-06-01",
-        "what": "After release-triple Phase 8, LAB's "
+        "what": "After release-qud Phase 8, LAB's "
                 "`pip show radia` no longer says "
                 "'Editable project location: S:\\Radia\\01_GitHub'.  "
                 "Source edits no longer flow to runtime; dev loop is "
@@ -347,14 +347,14 @@ PATTERNS: list[dict] = [
                       ".pth pointer with a regular install.  Easy "
                       "trap when Phase 8 deploy commands accidentally "
                       "run on LAB.",
-        "detection": "tools/release_triple.py done's LAB-editable "
+        "detection": "tools/release_qud.py done's LAB-editable "
                      "gate (POLICY 2026-05-27).",
-        "prevention": "Phase 8 deploy commands are for 100号機 + mdx "
-                      "ONLY -- never run them locally on LAB.  After "
-                      "any release, run `release_triple done` and "
+        "prevention": "Phase 8 deploy commands keep LAB + 100号機 editable, "
+                      "deploy hibino from PyPI, and leave mdx to phase8e.  "
+                      "After any release, run `python tools/release_qud.py done` and "
                       "fix any DRIFT it reports.",
         "related": ["memory/project_ci_radia_mcp_editable_drift_fix.md",
-                    "tools/release_triple.py: cmd_done"],
+                    "tools/release_qud.py: cmd_done"],
     },
     {
         "id": "ninja-stale-obj-after-netgen-upgrade",
@@ -422,7 +422,7 @@ PATTERNS: list[dict] = [
     },
     {
         "id": "release-smoke-admin-license-fail-nonblocking",
-        "title": "release_triple phase8 reports FAIL because cubit-smoke "
+        "title": "release_qud phase8 reports FAIL because cubit-smoke "
                  "over SSH runs as Administrator (no license) -- but the "
                  "deploy itself is verified OK.",
         "topics": ["release", "ci", "cubit", "license", "smoke"],
@@ -443,7 +443,7 @@ PATTERNS: list[dict] = [
         "detection": "cubit.log 'License Error: No license found' under "
                      "the smoke temp dir; --verify-only is green.",
         "prevention": "NON-BLOCKING: real lab users have their own "
-                      "licenses.  `release_triple done` (preflight + "
+                      "licenses.  `python tools/release_qud.py done` (preflight + "
                       "verify-editable + phase9) has NO smoke, so it "
                       "passes -- use it as the release gate, not phase8's "
                       "smoke.  Don't burn a Learn seat activating the "
@@ -462,7 +462,7 @@ PATTERNS: list[dict] = [
         "what": "After renaming the Cubit plugin "
                 "(radia_cubit.*->cubit_mesh_export.*/cubit_mesh_curver) + "
                 "the command verb (radia_export->export, nastran-> "
-                "jmag_nastran), the deploy/release-triple/build skills "
+                "jmag_nastran), the deploy/release-qud/build skills "
                 "still listed the OLD cmake targets (radia_cubit_ccm), "
                 "binary names, and radia_export commands -- they would "
                 "fail if run verbatim.",
@@ -475,7 +475,7 @@ PATTERNS: list[dict] = [
         "prevention": "On ANY binary/command/cmake-target rename, grep "
                       ".claude/skills for the old token and sweep "
                       "(byte-level rename).  7 skills needed it this "
-                      "time: deploy, release-triple, build, radia-plugin-"
+                      "time: deploy, release-qud, build, radia-plugin-"
                       "check, cubit-license, cubit-run, pyside6-health.",
         "related": ["memory/project_tier2_cme_sole_plugin_shipper_2026_06_01.md"],
     },
@@ -629,7 +629,7 @@ PATTERNS: list[dict] = [
         "severity": "medium",
         "first_seen": "2026-06-02",
         "last_seen": "2026-06-02",
-        "what": "release_triple phase8e reported radia not importable on "
+        "what": "release_qud phase8e reported radia not importable on "
                 "mdx (ModuleNotFoundError) even though pip 'Successfully "
                 "installed' earlier; cubit-smoke 'Cannot locate "
                 "ih_bem_sample.jou -- install the radia package'.",

@@ -1,15 +1,15 @@
 """Executable electromagnetic force / energy extractors for the radia-ngsolve
 A-formulation FEM path.
 
-These are the COMSOL-cross-validated methods, as RUNNABLE code (not just the
-theory in ``differential_forms``). Each function takes ``B`` -- the magnetic
+These are analytic- and regression-validated methods as RUNNABLE code (not just
+the theory in ``differential_forms``). Each function takes ``B`` -- the magnetic
 flux density CoefficientFunction, ``B = curl(gfu)`` for an HCurl GridFunction
 ``gfu`` -- plus the NGSolve mesh, and returns an SI quantity (force [N],
 energy [J], inductance [H]).
 
-Validated against COMSOL (LiveLink) and analytics; see the ``force_validation``
-MCP tool for the agreement table (sphere 0.11 %, coil+iron force ~3 %,
-self-inductance 0.01 %, ...). The regression tests in
+Validated against independent references and analytics; see the
+``force_validation`` MCP tool for the agreement table (sphere 0.11 %,
+coil+iron force ~3 %, self-inductance 0.01 %, ...). The regression tests in
 ``validation/force/validate_force_xval.py`` assert these keep matching.
 
 #25 lesson baked in: for a HIGH-permeability body do NOT carve a separate nested
@@ -23,12 +23,23 @@ import math
 from ngsolve import (CoefficientFunction, InnerProduct, sqrt, dx, ds, Integrate,
                      IfPos, specialcf, Conj, x, y, z)
 
+from .scalar_fem3d import p1_surface_triangle_geometry, p1_tetrahedron_geometry
+
 MU0 = 4.0e-7 * math.pi
 EPS0 = 8.8541878128e-12
+C0 = 299792458.0
+ETA0 = MU0 * C0
 
 
 def _float_vector(values, name):
     vec = [float(value) for value in values]
+    if len(vec) not in (2, 3):
+        raise ValueError(f"{name} must have length 2 or 3")
+    return vec
+
+
+def _complex_vector(values, name):
+    vec = [complex(value) for value in values]
     if len(vec) not in (2, 3):
         raise ValueError(f"{name} must have length 2 or 3")
     return vec
@@ -40,6 +51,21 @@ def _unit_vector(values, name):
     if norm <= 0.0:
         raise ValueError(f"{name} must be nonzero")
     return [value / norm for value in vec]
+
+
+def _xy_point(values, name):
+    point = [float(value) for value in values]
+    if len(point) != 2:
+        raise ValueError(f"{name} must have length 2")
+    return point
+
+
+def _phasor_average_factor(amplitude):
+    if amplitude == "peak":
+        return 0.5
+    if amplitude == "rms":
+        return 1.0
+    raise ValueError("amplitude must be 'peak' or 'rms'")
 
 
 def maxwell_stress_tensor_air(B, mu=MU0):
@@ -135,6 +161,845 @@ def maxwell_traction_summary(B, normal, area_m2=1.0, mu=MU0):
             sum(value * value for value in tangential_traction)
         ),
         "force_N": [area * value for value in traction],
+    }
+
+
+def electrostatic_stress_tensor(E, eps=EPS0):
+    """Pointwise electrostatic Maxwell stress tensor.
+
+    ``E`` is a 2- or 3-component electric-field vector [V/m].  The returned
+    tensor is
+
+        T_ij = eps (E_i E_j - 0.5 |E|^2 delta_ij)
+
+    in pascals, the electric counterpart of
+    :func:`maxwell_stress_tensor_air`.
+    """
+
+    eps = float(eps)
+    if eps <= 0.0:
+        raise ValueError("eps must be > 0")
+    e = _float_vector(E, "E")
+    e2 = sum(value * value for value in e)
+    dim = len(e)
+    return [
+        [
+            eps * (e[i] * e[j] - (0.5 * e2 if i == j else 0.0))
+            for j in range(dim)
+        ]
+        for i in range(dim)
+    ]
+
+
+def electrostatic_traction(E, normal, eps=EPS0):
+    """Electrostatic Maxwell traction vector ``T n`` for a unit normal."""
+
+    e = _float_vector(E, "E")
+    n = _unit_vector(normal, "normal")
+    if len(e) != len(n):
+        raise ValueError("E and normal must have the same length")
+    tensor = electrostatic_stress_tensor(e, eps=eps)
+    return [
+        sum(tensor[i][j] * n[j] for j in range(len(n)))
+        for i in range(len(n))
+    ]
+
+
+def electrostatic_traction_summary(E, normal, area_m2=1.0, eps=EPS0):
+    """JSON-friendly electrostatic Maxwell traction decomposition."""
+
+    area = float(area_m2)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    e = _float_vector(E, "E")
+    n = _unit_vector(normal, "normal")
+    if len(e) != len(n):
+        raise ValueError("E and normal must have the same length")
+    traction = electrostatic_traction(e, n, eps=eps)
+    e_normal = sum(ei * ni for ei, ni in zip(e, n))
+    e2 = sum(ei * ei for ei in e)
+    e_tangent2 = max(0.0, e2 - e_normal * e_normal)
+    normal_traction = sum(ti * ni for ti, ni in zip(traction, n))
+    tangential_traction = [
+        ti - normal_traction * ni
+        for ti, ni in zip(traction, n)
+    ]
+    return {
+        "E_V_per_m": e,
+        "normal": n,
+        "eps": float(eps),
+        "area_m2": area,
+        "E_normal_V_per_m": e_normal,
+        "E_tangent_V_per_m": math.sqrt(e_tangent2),
+        "traction_Pa": traction,
+        "normal_traction_Pa": normal_traction,
+        "normal_traction_identity_Pa": float(eps) * (e_normal * e_normal - e_tangent2) / 2.0,
+        "tangential_traction_Pa": tangential_traction,
+        "tangential_traction_magnitude_Pa": math.sqrt(
+            sum(value * value for value in tangential_traction)
+        ),
+        "force_N": [area * value for value in traction],
+    }
+
+
+def maxwell_line_segment_force_2d(p0, p1, B, mu=MU0, normal_side="right"):
+    """Maxwell-stress force on one 2D contour segment, per unit depth.
+
+    ``p0`` and ``p1`` are the segment endpoints in the planar model.  ``B`` is
+    the local 2D flux density in tesla.  The returned force has units ``N/m``:
+    a Maxwell traction ``T n`` [N/m^2] integrated over contour length ``ds``
+    and one metre of out-of-plane depth.
+
+    For a counter-clockwise contour around a body, the outward normal is on the
+    segment's right side.  For a clockwise contour, use ``normal_side="left"``.
+    """
+
+    a = _xy_point(p0, "p0")
+    b = _xy_point(p1, "p1")
+    dx_seg = b[0] - a[0]
+    dy_seg = b[1] - a[1]
+    length = math.hypot(dx_seg, dy_seg)
+    if length <= 0.0:
+        raise ValueError("contour segment length must be > 0")
+    tangent = [dx_seg / length, dy_seg / length]
+    if normal_side == "right":
+        normal = [tangent[1], -tangent[0]]
+    elif normal_side == "left":
+        normal = [-tangent[1], tangent[0]]
+    else:
+        raise ValueError("normal_side must be 'right' or 'left'")
+    field = _float_vector(B, "B")
+    if len(field) != 2:
+        raise ValueError("B must have length 2 for a 2D contour segment")
+    traction = maxwell_traction_air(field, normal, mu=mu)
+    force = [length * value for value in traction]
+    normal_force = sum(value * normal[i] for i, value in enumerate(force))
+    tangential_force = [
+        force[i] - normal_force * normal[i]
+        for i in range(2)
+    ]
+    return {
+        "p0": a,
+        "p1": b,
+        "midpoint": [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5],
+        "length_m": length,
+        "tangent": tangent,
+        "normal_side": normal_side,
+        "unit_normal": normal,
+        "B_T": field,
+        "traction_N_per_m2": traction,
+        "force_per_depth_N_per_m": force,
+        "normal_force_per_depth_N_per_m": normal_force,
+        "tangential_force_per_depth_N_per_m": tangential_force,
+    }
+
+
+def _try_float_vector(values):
+    try:
+        vector = [float(value) for value in values]
+    except (TypeError, ValueError):
+        return None
+    return vector if len(vector) in (2, 3) else None
+
+
+def _contour_field_at(B, index, midpoint, n_segments):
+    if callable(B):
+        return B(midpoint)
+    values = list(B)
+    vector = _try_float_vector(values)
+    if vector is not None:
+        return vector
+    if len(values) != n_segments:
+        raise ValueError("B must be a constant vector, a callable, or one vector per segment")
+    return values[index]
+
+
+def _polygon_signed_area(points):
+    if len(points) < 3:
+        return 0.0
+    return 0.5 * sum(
+        points[i][0] * points[(i + 1) % len(points)][1]
+        - points[(i + 1) % len(points)][0] * points[i][1]
+        for i in range(len(points))
+    )
+
+
+def maxwell_contour_force_2d(vertices, B, mu=MU0, orientation="ccw", closed=True):
+    """Integrate 2D Maxwell stress around a polyline contour.
+
+    The result is a JSON-friendly summary of ``integral T n ds`` in ``N/m``
+    (force per out-of-plane depth).  ``B`` can be a constant 2-vector, a
+    callable taking a segment midpoint, or a list of one 2-vector per segment.
+
+    ``orientation="ccw"`` means the body is on the left as the vertices are
+    traversed, so the outward normal is the segment's right normal.  Set
+    ``orientation="cw"`` for clockwise vertex order.
+    """
+
+    points = [_xy_point(point, f"vertices[{index}]") for index, point in enumerate(vertices)]
+    if closed and len(points) >= 2 and points[0] == points[-1]:
+        points = points[:-1]
+    min_points = 3 if closed else 2
+    if len(points) < min_points:
+        raise ValueError(f"contour needs at least {min_points} vertices")
+    if orientation == "ccw":
+        normal_side = "right"
+    elif orientation == "cw":
+        normal_side = "left"
+    else:
+        raise ValueError("orientation must be 'ccw' or 'cw'")
+
+    pairs = [
+        (points[i], points[(i + 1) % len(points)])
+        for i in range(len(points) if closed else len(points) - 1)
+    ]
+    segments = []
+    for index, (p_start, p_end) in enumerate(pairs):
+        midpoint = [(p_start[0] + p_end[0]) * 0.5, (p_start[1] + p_end[1]) * 0.5]
+        field = _contour_field_at(B, index, midpoint, len(pairs))
+        row = maxwell_line_segment_force_2d(
+            p_start,
+            p_end,
+            field,
+            mu=mu,
+            normal_side=normal_side,
+        )
+        row["index"] = index + 1
+        segments.append(row)
+
+    total = [
+        sum(row["force_per_depth_N_per_m"][axis] for row in segments)
+        for axis in range(2)
+    ]
+    scalar_length = sum(row["length_m"] for row in segments)
+    normal_abs = sum(abs(row["normal_force_per_depth_N_per_m"]) for row in segments)
+    tangential_abs = sum(
+        math.hypot(*row["tangential_force_per_depth_N_per_m"])
+        for row in segments
+    )
+    return {
+        "closed": bool(closed),
+        "orientation": orientation,
+        "normal_side": normal_side,
+        "n_segments": len(segments),
+        "contour_length_m": scalar_length,
+        "polygon_signed_area_m2": _polygon_signed_area(points) if closed else None,
+        "segments": segments,
+        "total_force_per_depth_N_per_m": total,
+        "total_force_magnitude_per_depth_N_per_m": math.hypot(total[0], total[1]),
+        "sum_abs_normal_force_per_depth_N_per_m": normal_abs,
+        "sum_abs_tangential_force_per_depth_N_per_m": tangential_abs,
+    }
+
+
+def maxwell_contour_segment_balance_summary_2d(
+    vertices,
+    B,
+    mu=MU0,
+    orientation="ccw",
+    closed=True,
+    expected_force_per_depth_N_per_m=None,
+    force_abs_tolerance_N_per_m=1.0e-9,
+):
+    """Return a teaching-oriented balance audit for a 2D stress contour.
+
+    The underlying contour integral is :func:`maxwell_contour_force_2d`.  This
+    wrapper keeps the per-segment rows but adds a compact reference comparison,
+    cancellation ratio, and orientation check so rectangular sanity cases can
+    be read as a table rather than only as a net force.
+    """
+
+    tolerance = float(force_abs_tolerance_N_per_m)
+    if tolerance < 0.0:
+        raise ValueError("force_abs_tolerance_N_per_m must be >= 0")
+    contour = maxwell_contour_force_2d(
+        vertices,
+        B,
+        mu=mu,
+        orientation=orientation,
+        closed=closed,
+    )
+    segment_rows = []
+    for row in contour["segments"]:
+        tangent_force = row["tangential_force_per_depth_N_per_m"]
+        tangent_magnitude = math.hypot(tangent_force[0], tangent_force[1])
+        force = row["force_per_depth_N_per_m"]
+        force_magnitude = math.hypot(force[0], force[1])
+        normal_force = float(row["normal_force_per_depth_N_per_m"])
+        segment_rows.append({
+            "index": row["index"],
+            "p0": row["p0"],
+            "p1": row["p1"],
+            "midpoint": row["midpoint"],
+            "length_m": row["length_m"],
+            "unit_normal": row["unit_normal"],
+            "B_T": row["B_T"],
+            "force_per_depth_N_per_m": force,
+            "force_magnitude_per_depth_N_per_m": force_magnitude,
+            "normal_force_per_depth_N_per_m": normal_force,
+            "tangential_force_per_depth_N_per_m": tangent_force,
+            "tangential_force_magnitude_per_depth_N_per_m": tangent_magnitude,
+            "dominant_contribution": "normal" if abs(normal_force) >= tangent_magnitude else "tangential",
+        })
+
+    total = contour["total_force_per_depth_N_per_m"]
+    total_magnitude = contour["total_force_magnitude_per_depth_N_per_m"]
+    contribution_scale = (
+        contour["sum_abs_normal_force_per_depth_N_per_m"]
+        + contour["sum_abs_tangential_force_per_depth_N_per_m"]
+    )
+    cancellation_ratio = total_magnitude / contribution_scale if contribution_scale > 0.0 else 0.0
+
+    expected = None
+    abs_error = None
+    max_abs_error = None
+    reference_pass = None
+    if expected_force_per_depth_N_per_m is not None:
+        expected = _float_vector(expected_force_per_depth_N_per_m, "expected_force_per_depth_N_per_m")
+        if len(expected) != 2:
+            raise ValueError("expected_force_per_depth_N_per_m must have length 2")
+        abs_error = [abs(total[i] - expected[i]) for i in range(2)]
+        max_abs_error = max(abs_error)
+        reference_pass = max_abs_error <= tolerance
+
+    signed_area = contour["polygon_signed_area_m2"]
+    orientation_consistent = None
+    if closed and signed_area is not None:
+        if orientation == "ccw":
+            orientation_consistent = signed_area > tolerance
+        else:
+            orientation_consistent = signed_area < -tolerance
+
+    issues = []
+    if reference_pass is False:
+        issues.append("net contour force differs from the supplied reference")
+    if orientation_consistent is False:
+        issues.append("vertex order sign does not match the requested orientation")
+
+    dominant = max(
+        segment_rows,
+        key=lambda row: row["force_magnitude_per_depth_N_per_m"],
+        default=None,
+    )
+    return {
+        "policy": "maxwell_contour_segment_balance_2d",
+        "status": "ok" if not issues else "needs_attention",
+        "issues": issues,
+        "closed": contour["closed"],
+        "orientation": contour["orientation"],
+        "orientation_consistent": orientation_consistent,
+        "normal_side": contour["normal_side"],
+        "n_segments": contour["n_segments"],
+        "contour_length_m": contour["contour_length_m"],
+        "polygon_signed_area_m2": signed_area,
+        "total_force_per_depth_N_per_m": total,
+        "total_force_magnitude_per_depth_N_per_m": total_magnitude,
+        "sum_abs_normal_force_per_depth_N_per_m": contour["sum_abs_normal_force_per_depth_N_per_m"],
+        "sum_abs_tangential_force_per_depth_N_per_m": contour["sum_abs_tangential_force_per_depth_N_per_m"],
+        "cancellation_ratio": cancellation_ratio,
+        "expected_force_per_depth_N_per_m": expected,
+        "force_abs_tolerance_N_per_m": tolerance,
+        "reference_force_abs_error_N_per_m": abs_error,
+        "max_reference_force_abs_error_N_per_m": max_abs_error,
+        "reference_pass": reference_pass,
+        "dominant_segment_index": None if dominant is None else dominant["index"],
+        "segment_rows": segment_rows,
+    }
+
+
+def time_average_maxwell_stress_tensor(E, H, eps=EPS0, mu=MU0, amplitude="peak"):
+    """Time-average Maxwell stress tensor [Pa] for complex harmonic phasors.
+
+    For peak phasors, the average dyadic factor is ``1/2``:
+
+        <T_ij> = 1/2 Re(eps E_i E_j* + mu H_i H_j*)
+                 - 1/4 (eps |E|^2 + mu |H|^2) delta_ij
+
+    For RMS phasors, set ``amplitude="rms"`` and the dyadic factor becomes
+    one.  The function returns a real nested list in pascals.  It is the local
+    time-harmonic counterpart of :func:`maxwell_stress_tensor_air`.
+    """
+
+    eps = float(eps)
+    mu = float(mu)
+    if eps <= 0.0:
+        raise ValueError("eps must be > 0")
+    if mu <= 0.0:
+        raise ValueError("mu must be > 0")
+    e = _complex_vector(E, "E")
+    h = _complex_vector(H, "H")
+    if len(e) != len(h):
+        raise ValueError("E and H must have the same length")
+    factor = _phasor_average_factor(amplitude)
+    e2 = sum(abs(value) ** 2 for value in e)
+    h2 = sum(abs(value) ** 2 for value in h)
+    scalar = 0.5 * (eps * e2 + mu * h2)
+    dim = len(e)
+    return [
+        [
+            factor * (
+                eps * (e[i] * e[j].conjugate()).real
+                + mu * (h[i] * h[j].conjugate()).real
+                - (scalar if i == j else 0.0)
+            )
+            for j in range(dim)
+        ]
+        for i in range(dim)
+    ]
+
+
+def time_average_maxwell_traction(E, H, normal, eps=EPS0, mu=MU0, amplitude="peak"):
+    """Time-average Maxwell traction vector ``<T> n`` for harmonic fields."""
+
+    e = _complex_vector(E, "E")
+    h = _complex_vector(H, "H")
+    n = _unit_vector(normal, "normal")
+    if len(e) != len(n) or len(h) != len(n):
+        raise ValueError("E, H, and normal must have the same length")
+    tensor = time_average_maxwell_stress_tensor(e, h, eps=eps, mu=mu, amplitude=amplitude)
+    return [
+        sum(tensor[i][j] * n[j] for j in range(len(n)))
+        for i in range(len(n))
+    ]
+
+
+def time_average_maxwell_traction_summary(
+    E,
+    H,
+    normal,
+    area_m2=1.0,
+    eps=EPS0,
+    mu=MU0,
+    amplitude="peak",
+):
+    """JSON-friendly time-harmonic Maxwell traction summary for one patch."""
+
+    area = float(area_m2)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    n = _unit_vector(normal, "normal")
+    e = _complex_vector(E, "E")
+    h = _complex_vector(H, "H")
+    if len(e) != len(n) or len(h) != len(n):
+        raise ValueError("E, H, and normal must have the same length")
+    factor = _phasor_average_factor(amplitude)
+    tensor = time_average_maxwell_stress_tensor(e, h, eps=eps, mu=mu, amplitude=amplitude)
+    traction = [sum(tensor[i][j] * n[j] for j in range(len(n))) for i in range(len(n))]
+    normal_traction = sum(ti * ni for ti, ni in zip(traction, n))
+    tangential_traction = [ti - normal_traction * ni for ti, ni in zip(traction, n)]
+    energy_density = factor * 0.5 * (
+        float(eps) * sum(abs(value) ** 2 for value in e)
+        + float(mu) * sum(abs(value) ** 2 for value in h)
+    )
+    return {
+        "E": [[value.real, value.imag] for value in e],
+        "H": [[value.real, value.imag] for value in h],
+        "normal": n,
+        "eps": float(eps),
+        "mu": float(mu),
+        "amplitude": amplitude,
+        "area_m2": area,
+        "stress_tensor_Pa": tensor,
+        "traction_Pa": traction,
+        "normal_traction_Pa": normal_traction,
+        "tangential_traction_Pa": tangential_traction,
+        "tangential_traction_magnitude_Pa": math.sqrt(
+            sum(value * value for value in tangential_traction)
+        ),
+        "force_N": [area * value for value in traction],
+        "average_energy_density_J_per_m3": energy_density,
+    }
+
+
+def surface_triangle_constant_traction_load_summary(vertices, traction_N_per_m2, pivot_m=None):
+    """P1 equivalent nodal loads for a constant vector traction on a triangle.
+
+    This is the tiny readable FEM/BEM boundary-load block: for one flat P1
+    surface triangle with area ``A`` and constant traction ``t`` [N/m2],
+
+        F_e = A t,        f_i = F_e / 3  for i=1,2,3.
+
+    The equal nodal distribution preserves both the integrated force and the
+    moment of the constant traction, because the triangle centroid is the mean
+    of its vertices.  That makes this helper a clean bridge between MATLAB
+    teaching scripts, `.vol` boundary triangles, and the Maxwell-traction
+    special cases below.
+    """
+
+    verts = [_float_vector(vertex, f"vertices[{index}]") for index, vertex in enumerate(vertices)]
+    if len(verts) != 3:
+        raise ValueError("a surface triangle needs exactly three vertices")
+    if any(len(vertex) != 3 for vertex in verts):
+        raise ValueError("surface triangle vertices must be 3D points")
+    traction = _float_vector(traction_N_per_m2, "traction_N_per_m2")
+    if len(traction) != 3:
+        raise ValueError("traction_N_per_m2 must have length 3")
+
+    geom = p1_surface_triangle_geometry(verts)
+    area = geom["area"]
+    centroid = [
+        sum(vertex[axis] for vertex in verts) / 3.0
+        for axis in range(3)
+    ]
+    integrated_force = [area * value for value in traction]
+    nodal_loads = [[value / 3.0 for value in integrated_force] for _ in range(3)]
+    patch_resultant = force_moment_resultant_summary(
+        [centroid],
+        [integrated_force],
+        pivot_m=pivot_m,
+    )
+    nodal_resultant = force_moment_resultant_summary(
+        verts,
+        nodal_loads,
+        pivot_m=pivot_m,
+    )
+    moment_errors = [
+        abs(nodal_resultant["total_moment"][axis] - patch_resultant["total_moment"][axis])
+        for axis in range(3)
+    ]
+    force_errors = [
+        abs(nodal_resultant["total_force"][axis] - integrated_force[axis])
+        for axis in range(3)
+    ]
+    return {
+        "area": area,
+        "centroid_m": centroid,
+        "unit_normal": list(geom["unit_normal"]),
+        "area_vector": list(geom["area_vector"]),
+        "traction_N_per_m2": traction,
+        "integrated_force_N": integrated_force,
+        "nodal_force_loads_N": nodal_loads,
+        "p1_shape_function_integral_m2": area / 3.0,
+        "pivot_m": patch_resultant["pivot_m"],
+        "patch_resultant": patch_resultant,
+        "nodal_resultant": nodal_resultant,
+        "force_preservation_abs_errors_N": force_errors,
+        "moment_preservation_abs_errors_Nm": moment_errors,
+    }
+
+
+def surface_triangle_maxwell_traction_summary(vertices, B, mu=MU0):
+    """P1 surface-triangle Maxwell traction and equivalent nodal force load.
+
+    ``vertices`` is one 3D boundary triangle, using its stored orientation.
+    The returned force is ``area * (T n)`` for the triangle unit normal.  The
+    constant traction is also distributed as a P1 equivalent nodal load:
+    each of the three nodes receives one third of the integrated force.
+
+    This is intentionally small and explicit so the same block can be mirrored
+    in first-order teaching scripts before using a full FEM surface
+    integral over a curved or high-order mesh.
+    """
+
+    geom = p1_surface_triangle_geometry(vertices)
+    traction = maxwell_traction_air(B, geom["unit_normal"], mu=mu)
+    force = [geom["area"] * value for value in traction]
+    return {
+        "area": geom["area"],
+        "unit_normal": list(geom["unit_normal"]),
+        "area_vector": list(geom["area_vector"]),
+        "B": _float_vector(B, "B"),
+        "mu": float(mu),
+        "traction_Pa": traction,
+        "integrated_force_N": force,
+        "nodal_force_loads_N": [[value / 3.0 for value in force] for _ in range(3)],
+    }
+
+
+def tetrahedron_lorentz_force_summary(vertices, current_density, B):
+    """P1 tetrahedron equivalent nodal load for constant Lorentz force density.
+
+    ``current_density`` is ``J`` [A/m2] and ``B`` is flux density [T].  For a
+    constant field over a first-order tetrahedron,
+
+        f = J x B,    F_e = volume * f
+
+    and the consistent P1 body-force load gives one quarter of ``F_e`` to each
+    vertex.  This is the volume counterpart of
+    :func:`surface_triangle_maxwell_traction_summary`.
+    """
+
+    geom = p1_tetrahedron_geometry(vertices)
+    volume = geom["volume"]
+    j = _float_vector(current_density, "current_density")
+    b = _float_vector(B, "B")
+    if len(j) != 3 or len(b) != 3:
+        raise ValueError("current_density and B must have length 3")
+    force_density = [
+        j[1] * b[2] - j[2] * b[1],
+        j[2] * b[0] - j[0] * b[2],
+        j[0] * b[1] - j[1] * b[0],
+    ]
+    force = [volume * value for value in force_density]
+    return {
+        "volume_m3": volume,
+        "current_density_A_per_m2": j,
+        "B_T": b,
+        "force_density_N_per_m3": force_density,
+        "integrated_force_N": force,
+        "nodal_force_loads_N": [[value / 4.0 for value in force] for _ in range(4)],
+        "p1_shape_function_integral_m3": volume / 4.0,
+    }
+
+
+def planar_lorentz_force_summary(Jz_A_per_m2, B_xy_T, area_m2=1.0):
+    """2D planar Lorentz force from uniform out-of-plane current density.
+
+    For magnetostatic ``A_z`` formulations and planar block integrals,
+    ``J = (0, 0, Jz)`` and ``B = (Bx, By, 0)``.  The body-force density is
+
+        J x B = (-Jz * By, Jz * Bx, 0).
+
+    Integrating over cross-section area gives force per out-of-plane depth
+    [N/m].  This dependency-free helper mirrors the local integrand of
+    :func:`lorentz_force_2d`.
+    """
+
+    jz = float(Jz_A_per_m2)
+    b = _float_vector(B_xy_T, "B_xy_T")
+    if len(b) != 2:
+        raise ValueError("B_xy_T must have length 2")
+    area = float(area_m2)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    force_density = [-jz * b[1], jz * b[0]]
+    force = [area * value for value in force_density]
+    return {
+        "Jz_A_per_m2": jz,
+        "B_xy_T": b,
+        "area_m2": area,
+        "current_A": jz * area,
+        "force_density_N_per_m3": force_density,
+        "force_per_depth_N_per_m": force,
+        "force_magnitude_per_depth_N_per_m": math.hypot(force[0], force[1]),
+    }
+
+
+def _xy_separation_vector(separation_xy_m):
+    try:
+        values = [float(value) for value in separation_xy_m]
+    except TypeError:
+        distance = float(separation_xy_m)
+        if distance <= 0.0:
+            raise ValueError("scalar separation must be > 0")
+        values = [distance, 0.0]
+    if len(values) != 2:
+        raise ValueError("separation_xy_m must be a scalar distance or a 2D vector")
+    distance = math.hypot(values[0], values[1])
+    if distance <= 0.0:
+        raise ValueError("separation_xy_m must be nonzero")
+    return values, distance
+
+
+def parallel_wire_lorentz_force_summary(current1_A, current2_A, separation_xy_m):
+    """Ampere two-wire force as a signed 2D Lorentz-force summary.
+
+    Wire 1 is at the origin, wire 2 is displaced by ``separation_xy_m``, and
+    positive current flows along ``+z``.  The magnetic field from wire 1 at wire
+    2 is evaluated with the right-hand rule, then the force on wire 2 is
+    ``I2 zhat x B1``.  Like currents attract, so for a scalar positive
+    separation the force on wire 2 points in ``-x``.
+    """
+
+    i1 = float(current1_A)
+    i2 = float(current2_A)
+    separation, distance = _xy_separation_vector(separation_xy_m)
+    unit = [separation[0] / distance, separation[1] / distance]
+    tangent = [-unit[1], unit[0]]
+    b_mag = MU0 * i1 / (2.0 * math.pi * distance)
+    field_at_wire2 = [b_mag * tangent[0], b_mag * tangent[1]]
+    signed_ampere_force = MU0 * i1 * i2 / (2.0 * math.pi * distance)
+    force_on_wire2 = [-signed_ampere_force * unit[0], -signed_ampere_force * unit[1]]
+    force_on_wire1 = [signed_ampere_force * unit[0], signed_ampere_force * unit[1]]
+    if signed_ampere_force > 0.0:
+        interaction = "attraction"
+    elif signed_ampere_force < 0.0:
+        interaction = "repulsion"
+    else:
+        interaction = "zero"
+    return {
+        "current1_A": i1,
+        "current2_A": i2,
+        "separation_xy_m": separation,
+        "separation_m": distance,
+        "unit_from_wire1_to_wire2": unit,
+        "right_hand_tangent_at_wire2": tangent,
+        "field_from_wire1_at_wire2_T": field_at_wire2,
+        "signed_ampere_force_per_length_N_per_m": signed_ampere_force,
+        "force_magnitude_per_length_N_per_m": abs(signed_ampere_force),
+        "force_on_wire1_N_per_m": force_on_wire1,
+        "force_on_wire2_N_per_m": force_on_wire2,
+        "interaction": interaction,
+    }
+
+
+def parallel_wire_virtual_work_force_summary(
+    current1_A,
+    current2_A,
+    separation_xy_m,
+    displacement_step_m=None,
+    reference_separation_m=None,
+):
+    """Compare two-wire Lorentz force with fixed-current virtual work.
+
+    The mutual magnetic coenergy per unit length has the separation-dependent
+    part
+
+        W'(d) = -mu0 I1 I2 / (2 pi) log(d / d_ref).
+
+    Differentiating it with respect to the scalar separation ``d`` gives the
+    radial force per unit length.  Like currents have a negative radial force
+    in the increasing-separation coordinate, which is the same attraction
+    direction reported by :func:`parallel_wire_lorentz_force_summary`.
+    """
+
+    pair = parallel_wire_lorentz_force_summary(current1_A, current2_A, separation_xy_m)
+    distance = pair["separation_m"]
+    if displacement_step_m is None:
+        h = 1.0e-4 * distance
+    else:
+        h = float(displacement_step_m)
+    if h <= 0.0:
+        raise ValueError("displacement_step_m must be > 0")
+    if h >= distance:
+        raise ValueError("displacement_step_m must be smaller than the wire separation")
+    if reference_separation_m is None:
+        d_ref = distance
+    else:
+        d_ref = float(reference_separation_m)
+        if d_ref <= 0.0:
+            raise ValueError("reference_separation_m must be > 0")
+
+    i1 = float(current1_A)
+    i2 = float(current2_A)
+    coefficient = MU0 * i1 * i2 / (2.0 * math.pi)
+
+    def coenergy_per_length(d):
+        return -coefficient * math.log(d / d_ref)
+
+    e_minus = coenergy_per_length(distance - h)
+    e_center = coenergy_per_length(distance)
+    e_plus = coenergy_per_length(distance + h)
+    virtual = virtual_work_symmetric_pair_force_summary(
+        h,
+        e_minus,
+        e_plus,
+        energy_kind="coenergy",
+        center_position_m=distance,
+        energy_center_J=e_center,
+    )
+
+    radial_force = virtual["force_N"]
+    analytic_radial = -pair["signed_ampere_force_per_length_N_per_m"]
+    unit = pair["unit_from_wire1_to_wire2"]
+    virtual_force_on_wire2 = [radial_force * unit[0], radial_force * unit[1]]
+    vector_error = [
+        virtual_force_on_wire2[axis] - pair["force_on_wire2_N_per_m"][axis]
+        for axis in range(2)
+    ]
+    vector_abs_error = math.hypot(vector_error[0], vector_error[1])
+    reference_force = max(pair["force_magnitude_per_length_N_per_m"], 1.0e-300)
+    radial_abs_error = abs(radial_force - analytic_radial)
+    return {
+        "current1_A": i1,
+        "current2_A": i2,
+        "separation_xy_m": pair["separation_xy_m"],
+        "separation_m": distance,
+        "reference_separation_m": d_ref,
+        "displacement_step_m": h,
+        "coenergy_formula": "-mu0*I1*I2/(2*pi)*log(d/d_ref) per unit length",
+        "coenergy_minus_J_per_m": e_minus,
+        "coenergy_center_J_per_m": e_center,
+        "coenergy_plus_J_per_m": e_plus,
+        "virtual_work_units_note": "energy samples are J/m, so the differentiated force is N/m",
+        "virtual_work": virtual,
+        "lorentz": pair,
+        "virtual_work_radial_force_per_length_N_per_m": radial_force,
+        "analytic_radial_force_per_length_N_per_m": analytic_radial,
+        "virtual_work_force_on_wire2_N_per_m": virtual_force_on_wire2,
+        "lorentz_force_on_wire2_N_per_m": pair["force_on_wire2_N_per_m"],
+        "force_vector_abs_error_N_per_m": vector_abs_error,
+        "radial_force_abs_error_N_per_m": radial_abs_error,
+        "force_rel_error": vector_abs_error / reference_force,
+        "interaction": pair["interaction"],
+    }
+
+
+def force_moment_resultant_summary(points_m, forces, pivot_m=None):
+    """Resultant force and torque from discrete force rows.
+
+    ``points_m`` and ``forces`` are matching 2D or 3D vectors.  The returned
+    moment is
+
+        M_p = sum_i (r_i - p) x F_i
+
+    about ``pivot_m``.  For 2D inputs the cross product is the scalar out-of-
+    plane moment ``Mz``; for 3D inputs it is a 3-vector.  This dependency-free
+    helper is the common final post-processing step for Maxwell-stress patches,
+    Lorentz body-force elements, nodal loads, and mesh boundary pressure rows.
+    """
+
+    points = [_float_vector(point, f"points_m[{index}]") for index, point in enumerate(points_m)]
+    force_rows = [_float_vector(force, f"forces[{index}]") for index, force in enumerate(forces)]
+    if not points:
+        raise ValueError("at least one force row is required")
+    if len(points) != len(force_rows):
+        raise ValueError("points_m and forces must have the same length")
+    dim = len(points[0])
+    if dim not in (2, 3):
+        raise ValueError("force rows must be 2D or 3D")
+    if any(len(point) != dim for point in points):
+        raise ValueError("all points_m rows must have the same dimension")
+    if any(len(force) != dim for force in force_rows):
+        raise ValueError("all forces rows must match the point dimension")
+    pivot = [0.0] * dim if pivot_m is None else _float_vector(pivot_m, "pivot_m")
+    if len(pivot) != dim:
+        raise ValueError("pivot_m must match the point dimension")
+
+    total_force = [sum(force[axis] for force in force_rows) for axis in range(dim)]
+    rows = []
+    if dim == 2:
+        total_moment = 0.0
+        for index, (point, force) in enumerate(zip(points, force_rows), start=1):
+            lever = [point[0] - pivot[0], point[1] - pivot[1]]
+            moment = lever[0] * force[1] - lever[1] * force[0]
+            total_moment += moment
+            rows.append({
+                "index": index,
+                "point_m": point,
+                "force": force,
+                "lever_arm_m": lever,
+                "moment_z": moment,
+            })
+        moment_magnitude = abs(total_moment)
+    else:
+        total_moment = [0.0, 0.0, 0.0]
+        for index, (point, force) in enumerate(zip(points, force_rows), start=1):
+            lever = [point[axis] - pivot[axis] for axis in range(3)]
+            moment = [
+                lever[1] * force[2] - lever[2] * force[1],
+                lever[2] * force[0] - lever[0] * force[2],
+                lever[0] * force[1] - lever[1] * force[0],
+            ]
+            total_moment = [total_moment[axis] + moment[axis] for axis in range(3)]
+            rows.append({
+                "index": index,
+                "point_m": point,
+                "force": force,
+                "lever_arm_m": lever,
+                "moment": moment,
+            })
+        moment_magnitude = math.sqrt(sum(value * value for value in total_moment))
+
+    return {
+        "dimension": dim,
+        "n_rows": len(rows),
+        "pivot_m": pivot,
+        "rows": rows,
+        "total_force": total_force,
+        "total_force_magnitude": math.sqrt(sum(value * value for value in total_force)),
+        "total_moment": total_moment,
+        "total_moment_magnitude": moment_magnitude,
     }
 
 
@@ -277,6 +1142,1505 @@ def air_gap_shear_torque_summary(
         "tangential_force_N": force,
         "torque_Nm": torque,
         "torque_per_axial_length_N": torque / length if length > 0.0 else math.inf,
+    }
+
+
+def air_gap_shear_torque_from_angle_samples(
+    angles_rad,
+    B_radial_T,
+    B_tangential_T,
+    radius_m,
+    axial_length_m=1.0,
+    periodic=True,
+    period_rad=2.0 * math.pi,
+    mu=MU0,
+):
+    """Integrate sampled air-gap Maxwell shear stress into machine torque.
+
+    Electric-machine solvers often export air-gap samples around a cylindrical
+    contour.  For each angle sample,
+
+        tau(theta) = Br(theta) Bt(theta) / mu
+
+    and the torque is
+
+        T = r^2 L integral tau(theta) dtheta.
+
+    If ``periodic=True`` the last segment wraps from the last sample to the
+    first sample plus ``period_rad``; omit a duplicate endpoint.  If
+    ``periodic=False`` only the provided angular span is integrated.  The
+    returned rows are segment contributions, useful for teaching and for
+    checking sector-model scaling before comparing whole-machine torque.
+    """
+
+    angles = [float(value) for value in angles_rad]
+    br = [float(value) for value in B_radial_T]
+    bt = [float(value) for value in B_tangential_T]
+    if len(angles) != len(br) or len(angles) != len(bt):
+        raise ValueError("angles_rad, B_radial_T, and B_tangential_T must have the same length")
+    if len(angles) < 2:
+        raise ValueError("at least two angle samples are required")
+    if any(angles[i + 1] <= angles[i] for i in range(len(angles) - 1)):
+        raise ValueError("angles_rad must be strictly increasing")
+    radius = float(radius_m)
+    length = float(axial_length_m)
+    if radius < 0.0:
+        raise ValueError("radius_m must be >= 0")
+    if length < 0.0:
+        raise ValueError("axial_length_m must be >= 0")
+    mu = float(mu)
+    if mu <= 0.0:
+        raise ValueError("mu must be > 0")
+    period = float(period_rad)
+    if periodic and period <= 0.0:
+        raise ValueError("period_rad must be > 0")
+
+    shear = [
+        air_gap_shear_stress(bri, bti, mu=mu)
+        for bri, bti in zip(br, bt)
+    ]
+    n = len(angles)
+    segment_count = n if periodic else n - 1
+    rows = []
+    integral_shear = 0.0
+    for i in range(segment_count):
+        j = (i + 1) % n
+        theta0 = angles[i]
+        theta1 = angles[j]
+        if periodic and j == 0:
+            theta1 += period
+        dtheta = theta1 - theta0
+        if dtheta <= 0.0:
+            raise ValueError("angle segment width must be > 0")
+        shear_avg = 0.5 * (shear[i] + shear[j])
+        tangential_force = shear_avg * radius * length * dtheta
+        torque = tangential_force * radius
+        integral_shear += shear_avg * dtheta
+        rows.append({
+            "segment_index": i + 1,
+            "angle_start_rad": theta0,
+            "angle_end_rad": theta1,
+            "angle_width_rad": dtheta,
+            "B_radial_start_T": br[i],
+            "B_radial_end_T": br[j],
+            "B_tangential_start_T": bt[i],
+            "B_tangential_end_T": bt[j],
+            "shear_start_Pa": shear[i],
+            "shear_end_Pa": shear[j],
+            "shear_average_Pa": shear_avg,
+            "tangential_force_N": tangential_force,
+            "torque_Nm": torque,
+        })
+
+    torque_total = radius * radius * length * integral_shear
+    force_total = radius * length * integral_shear
+    integrated_angle = sum(row["angle_width_rad"] for row in rows)
+    return {
+        "n_samples": n,
+        "n_segments": len(rows),
+        "periodic": bool(periodic),
+        "period_rad": period,
+        "radius_m": radius,
+        "axial_length_m": length,
+        "mu": mu,
+        "integrated_angle_rad": integrated_angle,
+        "integral_shear_dtheta_Pa_rad": integral_shear,
+        "average_shear_stress_Pa": integral_shear / integrated_angle if integrated_angle > 0.0 else math.nan,
+        "tangential_force_N": force_total,
+        "torque_Nm": torque_total,
+        "torque_per_axial_length_N": torque_total / length if length > 0.0 else math.inf,
+        "rows": rows,
+    }
+
+
+def coenergy_torque_from_angle_samples(
+    angles_rad,
+    coenergy_J,
+    periodic=False,
+    period_rad=2.0 * math.pi,
+):
+    """Differentiate a coenergy-vs-angle table into torque samples.
+
+    For fixed currents, the virtual-work torque is
+
+        T(theta) = dW'(theta) / dtheta
+
+    where ``W'`` is magnetic coenergy.  This helper turns an angle sweep into a
+    readable finite-difference table, matching the way motor solvers often
+    report torque from a sequence of rotor-position solves.
+
+    If ``periodic=True``, the first and last samples are wrapped across
+    ``period_rad``; provide one sample per angle and omit the duplicate endpoint.
+    """
+
+    angles = [float(value) for value in angles_rad]
+    values = [float(value) for value in coenergy_J]
+    if len(angles) != len(values):
+        raise ValueError("angles_rad and coenergy_J must have the same length")
+    if len(angles) < 3:
+        raise ValueError("at least three samples are required")
+    if any(angles[i + 1] <= angles[i] for i in range(len(angles) - 1)):
+        raise ValueError("angles_rad must be strictly increasing")
+    period = float(period_rad)
+    if periodic and period <= 0.0:
+        raise ValueError("period_rad must be > 0")
+
+    rows = []
+    n = len(angles)
+    for i, (angle, value) in enumerate(zip(angles, values)):
+        if periodic:
+            im = (i - 1) % n
+            ip = (i + 1) % n
+            angle_minus = angles[im]
+            angle_plus = angles[ip]
+            if im > i:
+                angle_minus -= period
+            if ip < i:
+                angle_plus += period
+            stencil = "central_periodic"
+        elif i == 0:
+            im, ip = 0, 1
+            angle_minus = angles[im]
+            angle_plus = angles[ip]
+            stencil = "forward"
+        elif i == n - 1:
+            im, ip = n - 2, n - 1
+            angle_minus = angles[im]
+            angle_plus = angles[ip]
+            stencil = "backward"
+        else:
+            im, ip = i - 1, i + 1
+            angle_minus = angles[im]
+            angle_plus = angles[ip]
+            stencil = "central"
+
+        denom = angle_plus - angle_minus
+        if denom <= 0.0:
+            raise ValueError("finite-difference angle denominator must be > 0")
+        torque = (values[ip] - values[im]) / denom
+        rows.append({
+            "index": i + 1,
+            "angle_rad": angle,
+            "coenergy_J": value,
+            "torque_Nm": torque,
+            "stencil": stencil,
+            "angle_minus_rad": angle_minus,
+            "angle_plus_rad": angle_plus,
+        })
+    return tuple(rows)
+
+
+def coenergy_torque_summary(
+    angles_rad,
+    coenergy_J,
+    periodic=False,
+    period_rad=2.0 * math.pi,
+):
+    """JSON-friendly summary for coenergy-derived torque samples."""
+
+    rows = list(coenergy_torque_from_angle_samples(
+        angles_rad,
+        coenergy_J,
+        periodic=periodic,
+        period_rad=period_rad,
+    ))
+    torques = [row["torque_Nm"] for row in rows]
+    return {
+        "n_samples": len(rows),
+        "periodic": bool(periodic),
+        "period_rad": float(period_rad),
+        "torque_min_Nm": min(torques),
+        "torque_max_Nm": max(torques),
+        "torque_peak_abs_Nm": max(abs(value) for value in torques),
+        "torque_mean_Nm": sum(torques) / len(torques),
+        "rows": rows,
+    }
+
+
+def coenergy_torque_table_consistency_summary(
+    angles_rad,
+    coenergy_J,
+    torque_Nm,
+    periodic=False,
+    period_rad=2.0 * math.pi,
+    torque_abs_tolerance_Nm=0.0,
+    torque_rel_tolerance=1.0e-6,
+    comparison_stencils=None,
+):
+    """Compare a torque-angle table with ``d(coenergy)/dtheta``.
+
+    The summary preserves the finite-difference torque inferred from coenergy,
+    the supplied torque table, selected-stencil errors, and basic angle-step
+    diagnostics.  For nonperiodic sweeps the default reference check uses only
+    central rows; for periodic sweeps it uses all ``central_periodic`` rows.
+
+    A nonzero mean torque over a full angle sweep implies that the coenergy
+    table contains a work term such as ``T_mean * theta`` and should be treated
+    as nonperiodic.  A purely periodic coenergy table has zero mean derivative
+    over its period.
+    """
+
+    angles = [float(value) for value in angles_rad]
+    values = [float(value) for value in coenergy_J]
+    references = [float(value) for value in torque_Nm]
+    if len(angles) != len(references):
+        raise ValueError("torque_Nm must have the same length as angles_rad")
+    rows = [
+        dict(row)
+        for row in coenergy_torque_from_angle_samples(
+            angles,
+            values,
+            periodic=periodic,
+            period_rad=period_rad,
+        )
+    ]
+    if comparison_stencils is None:
+        stencil_filter = {"central_periodic"} if periodic else {"central"}
+    elif isinstance(comparison_stencils, str):
+        token = comparison_stencils.lower().strip()
+        stencil_filter = None if token in ("all", "*") else {token}
+    else:
+        stencil_filter = {str(value).lower().strip() for value in comparison_stencils}
+        if "all" in stencil_filter or "*" in stencil_filter:
+            stencil_filter = None
+    if stencil_filter == set():
+        raise ValueError("comparison_stencils must not be empty")
+
+    abs_tol = float(torque_abs_tolerance_Nm)
+    rel_tol = float(torque_rel_tolerance)
+    if abs_tol < 0.0:
+        raise ValueError("torque_abs_tolerance_Nm must be >= 0")
+    if rel_tol < 0.0:
+        raise ValueError("torque_rel_tolerance must be >= 0")
+
+    selected_rows = []
+    for row, reference in zip(rows, references):
+        error = row["torque_Nm"] - reference
+        abs_error = abs(error)
+        rel_error = abs_error / max(abs(reference), 1.0e-300)
+        selected = stencil_filter is None or row["stencil"].lower() in stencil_filter
+        row["reference_torque_Nm"] = reference
+        row["torque_error_Nm"] = error
+        row["torque_abs_error_Nm"] = abs_error
+        row["torque_rel_error"] = rel_error
+        row["selected_for_reference_check"] = selected
+        if selected:
+            selected_rows.append(row)
+    if not selected_rows:
+        raise ValueError("comparison_stencils selected no rows")
+
+    step_rows = [angles[i + 1] - angles[i] for i in range(len(angles) - 1)]
+    reference_pass = all(
+        row["torque_abs_error_Nm"]
+        <= abs_tol + rel_tol * max(abs(row["reference_torque_Nm"]), 1.0e-300)
+        for row in selected_rows
+    )
+    inferred = [row["torque_Nm"] for row in rows]
+    errors = [row["torque_error_Nm"] for row in selected_rows]
+    abs_errors = [abs(value) for value in errors]
+    rel_errors = [row["torque_rel_error"] for row in selected_rows]
+    trapezoid_work = sum(
+        0.5 * (references[i] + references[i + 1]) * step_rows[i]
+        for i in range(len(step_rows))
+    )
+    coenergy_delta = values[-1] - values[0]
+    period = float(period_rad)
+    angle_span = angles[-1] - angles[0]
+    periodic_gap = period - angle_span if periodic else None
+    return {
+        "policy": "coenergy_torque_angle_table_consistency",
+        "n_samples": len(rows),
+        "periodic": bool(periodic),
+        "period_rad": period,
+        "angle_min_rad": angles[0],
+        "angle_max_rad": angles[-1],
+        "angle_span_rad": angle_span,
+        "angle_step_min_rad": min(step_rows) if step_rows else 0.0,
+        "angle_step_max_rad": max(step_rows) if step_rows else 0.0,
+        "periodic_gap_rad": periodic_gap,
+        "coenergy_delta_J": coenergy_delta,
+        "reference_torque_trapezoid_work_J": trapezoid_work,
+        "reference_work_minus_coenergy_delta_J": trapezoid_work - coenergy_delta,
+        "comparison_stencils": (
+            "all" if stencil_filter is None else sorted(stencil_filter)
+        ),
+        "reference_checked_count": len(selected_rows),
+        "torque_abs_tolerance_Nm": abs_tol,
+        "torque_rel_tolerance": rel_tol,
+        "reference_pass": reference_pass,
+        "max_torque_abs_error_Nm": max(abs_errors),
+        "max_torque_rel_error": max(rel_errors),
+        "mean_torque_error_Nm": sum(errors) / len(errors),
+        "rms_torque_error_Nm": math.sqrt(sum(value * value for value in errors) / len(errors)),
+        "inferred_torque_min_Nm": min(inferred),
+        "inferred_torque_max_Nm": max(inferred),
+        "reference_torque_min_Nm": min(references),
+        "reference_torque_max_Nm": max(references),
+        "status": "ok" if reference_pass else "needs_attention",
+        "ok_for_torque_table": reference_pass,
+        "rows": rows,
+    }
+
+
+def _virtual_work_energy_sign(energy_kind):
+    kind = str(energy_kind).lower().replace("-", "_").replace(" ", "_")
+    if kind in ("coenergy", "magnetic_coenergy", "wco", "w_prime", "constant_current"):
+        return "coenergy", 1.0, "F = dW_co/dx at fixed current"
+    if kind in ("stored_energy", "field_energy", "energy", "magnetic_energy", "constant_flux"):
+        return "stored_energy", -1.0, "F = -dW/dx at fixed flux/source-free displacement"
+    raise ValueError(
+        "energy_kind must be 'coenergy'/'constant_current' or "
+        "'stored_energy'/'field_energy'"
+    )
+
+
+def virtual_work_force_from_displacement_samples(
+    positions_m,
+    energy_J,
+    energy_kind="coenergy",
+):
+    """Differentiate an energy/coenergy-vs-displacement table into force samples.
+
+    This is the straight-line counterpart of
+    :func:`coenergy_torque_from_angle_samples`.  It makes the sign convention
+    explicit for validation sweeps and solver cross-checks:
+
+    * fixed current / magnetic coenergy: ``F = dW_co/dx``
+    * stored field energy at fixed flux: ``F = -dW/dx``
+
+    The derivative is reported in newtons because ``J/m = N``.  End points use
+    one-sided differences; interior rows use central differences.  Use matched
+    meshes or a deliberately stable remeshing recipe when the samples come from
+    separate FEM solves.
+    """
+
+    positions = [float(value) for value in positions_m]
+    values = [float(value) for value in energy_J]
+    if len(positions) != len(values):
+        raise ValueError("positions_m and energy_J must have the same length")
+    if len(positions) < 3:
+        raise ValueError("at least three samples are required")
+    if any(positions[i + 1] <= positions[i] for i in range(len(positions) - 1)):
+        raise ValueError("positions_m must be strictly increasing")
+    normalized_kind, sign, identity = _virtual_work_energy_sign(energy_kind)
+
+    rows = []
+    n = len(positions)
+    for i, (position, value) in enumerate(zip(positions, values)):
+        if i == 0:
+            im, ip = 0, 1
+            stencil = "forward"
+        elif i == n - 1:
+            im, ip = n - 2, n - 1
+            stencil = "backward"
+        else:
+            im, ip = i - 1, i + 1
+            stencil = "central"
+
+        denom = positions[ip] - positions[im]
+        if denom <= 0.0:
+            raise ValueError("finite-difference displacement denominator must be > 0")
+        derivative = (values[ip] - values[im]) / denom
+        force = sign * derivative
+        rows.append({
+            "index": i + 1,
+            "position_m": position,
+            "energy_J": value,
+            "energy_kind": normalized_kind,
+            "virtual_work_identity": identity,
+            "denergy_dx_N": derivative,
+            "force_N": force,
+            "stencil": stencil,
+            "position_minus_m": positions[im],
+            "position_plus_m": positions[ip],
+        })
+    return tuple(rows)
+
+
+def virtual_work_force_summary(
+    positions_m,
+    energy_J,
+    energy_kind="coenergy",
+):
+    """JSON-friendly summary for virtual-work force samples."""
+
+    normalized_kind, sign, identity = _virtual_work_energy_sign(energy_kind)
+    rows = list(virtual_work_force_from_displacement_samples(
+        positions_m,
+        energy_J,
+        energy_kind=normalized_kind,
+    ))
+    forces = [row["force_N"] for row in rows]
+    return {
+        "n_samples": len(rows),
+        "energy_kind": normalized_kind,
+        "energy_to_force_sign": sign,
+        "virtual_work_identity": identity,
+        "force_min_N": min(forces),
+        "force_max_N": max(forces),
+        "force_peak_abs_N": max(abs(value) for value in forces),
+        "force_mean_N": sum(forces) / len(forces),
+        "rows": rows,
+    }
+
+
+def virtual_work_force_sweep_audit_summary(
+    positions_m,
+    energy_J,
+    energy_kind="coenergy",
+    reference_force_N=None,
+    force_abs_tolerance_N=0.0,
+    force_rel_tolerance=1.0e-6,
+    comparison_stencils=("central",),
+):
+    """Audit a virtual-work force sweep against an optional reference table.
+
+    This wraps :func:`virtual_work_force_from_displacement_samples` with the
+    extra bookkeeping needed for validation-class sweeps: second differences
+    of the energy table, force-gradient estimates, optional reference-force
+    errors, and pass/fail tolerances.  By default only central-difference rows
+    are used for the reference check, because endpoint one-sided derivatives
+    are expected to be lower order.
+    """
+
+    positions = [float(value) for value in positions_m]
+    values = [float(value) for value in energy_J]
+    normalized_kind, sign, identity = _virtual_work_energy_sign(energy_kind)
+    rows = [
+        dict(row)
+        for row in virtual_work_force_from_displacement_samples(
+            positions,
+            values,
+            energy_kind=normalized_kind,
+        )
+    ]
+    n = len(rows)
+    for i, row in enumerate(rows):
+        if 0 < i < n - 1:
+            dx_left = positions[i] - positions[i - 1]
+            dx_right = positions[i + 1] - positions[i]
+            left_slope = (values[i] - values[i - 1]) / dx_left
+            right_slope = (values[i + 1] - values[i]) / dx_right
+            second = 2.0 * (right_slope - left_slope) / (positions[i + 1] - positions[i - 1])
+            row["energy_second_derivative_J_per_m2"] = second
+            row["force_gradient_N_per_m"] = sign * second
+        else:
+            row["energy_second_derivative_J_per_m2"] = None
+            row["force_gradient_N_per_m"] = None
+
+    if comparison_stencils is None:
+        stencil_filter = None
+    elif isinstance(comparison_stencils, str):
+        token = comparison_stencils.lower().strip()
+        stencil_filter = None if token in ("all", "*") else {token}
+    else:
+        stencil_filter = {str(value).lower().strip() for value in comparison_stencils}
+        if "all" in stencil_filter or "*" in stencil_filter:
+            stencil_filter = None
+    if stencil_filter == set():
+        raise ValueError("comparison_stencils must not be empty")
+
+    abs_tol = float(force_abs_tolerance_N)
+    rel_tol = float(force_rel_tolerance)
+    if abs_tol < 0.0:
+        raise ValueError("force_abs_tolerance_N must be >= 0")
+    if rel_tol < 0.0:
+        raise ValueError("force_rel_tolerance must be >= 0")
+
+    reference_pass = None
+    reference_checked_count = 0
+    selected_error_rows = []
+    if reference_force_N is not None:
+        references = [float(value) for value in reference_force_N]
+        if len(references) != n:
+            raise ValueError("reference_force_N must have the same length as positions_m")
+        for row, reference in zip(rows, references):
+            error = row["force_N"] - reference
+            abs_error = abs(error)
+            rel_error = abs_error / max(abs(reference), 1.0e-300)
+            row["reference_force_N"] = reference
+            row["force_error_N"] = error
+            row["force_abs_error_N"] = abs_error
+            row["force_rel_error"] = rel_error
+            selected = stencil_filter is None or row["stencil"].lower() in stencil_filter
+            row["selected_for_reference_check"] = selected
+            if selected:
+                selected_error_rows.append(row)
+        if not selected_error_rows:
+            raise ValueError("comparison_stencils selected no rows")
+        reference_checked_count = len(selected_error_rows)
+        reference_pass = all(
+            row["force_abs_error_N"]
+            <= abs_tol + rel_tol * max(abs(row["reference_force_N"]), 1.0e-300)
+            for row in selected_error_rows
+        )
+    else:
+        for row in rows:
+            row["selected_for_reference_check"] = False
+
+    forces = [row["force_N"] for row in rows]
+    gradients = [
+        row["force_gradient_N_per_m"]
+        for row in rows
+        if row["force_gradient_N_per_m"] is not None
+    ]
+    selected_abs_errors = [row["force_abs_error_N"] for row in selected_error_rows]
+    selected_rel_errors = [row["force_rel_error"] for row in selected_error_rows]
+    ok = True if reference_pass is None else bool(reference_pass)
+    return {
+        "policy": "virtual_work_force_sweep_energy_table_audit",
+        "n_samples": n,
+        "energy_kind": normalized_kind,
+        "energy_to_force_sign": sign,
+        "virtual_work_identity": identity,
+        "force_min_N": min(forces),
+        "force_max_N": max(forces),
+        "force_peak_abs_N": max(abs(value) for value in forces),
+        "force_span_N": max(forces) - min(forces),
+        "force_mean_N": sum(forces) / n,
+        "max_abs_force_gradient_N_per_m": (
+            max(abs(value) for value in gradients) if gradients else 0.0
+        ),
+        "reference_compared": reference_force_N is not None,
+        "reference_checked_count": reference_checked_count,
+        "comparison_stencils": (
+            "all" if stencil_filter is None else sorted(stencil_filter)
+        ),
+        "force_abs_tolerance_N": abs_tol,
+        "force_rel_tolerance": rel_tol,
+        "reference_pass": reference_pass,
+        "max_reference_force_abs_error_N": (
+            max(selected_abs_errors) if selected_abs_errors else None
+        ),
+        "max_reference_force_rel_error": (
+            max(selected_rel_errors) if selected_rel_errors else None
+        ),
+        "status": "ok" if ok else "needs_attention",
+        "ok_for_force_sweep": ok,
+        "rows": rows,
+    }
+
+
+def virtual_work_symmetric_pair_force_summary(
+    displacement_m,
+    energy_minus_J,
+    energy_plus_J,
+    energy_kind="coenergy",
+    center_position_m=0.0,
+    energy_center_J=None,
+):
+    """Virtual-work force from a matched ``x0 +/- h`` energy pair.
+
+    This is the compact two-solve central-difference gate often used for
+    magnetostatic force sweeps when the displaced geometries are deliberately
+    paired:
+
+        F = +/- (E(x0 + h) - E(x0 - h)) / (2 h)
+
+    The sign is positive for fixed-current coenergy and negative for fixed-flux
+    stored energy, matching :func:`virtual_work_force_summary`.  If
+    ``energy_center_J`` is supplied, the even residual
+    ``0.5 * (E_+ + E_-) - E_0`` is reported as a curvature/noise indicator.
+    """
+
+    h = float(displacement_m)
+    if h <= 0.0:
+        raise ValueError("displacement_m must be > 0")
+    normalized_kind, sign, identity = _virtual_work_energy_sign(energy_kind)
+    e_minus = float(energy_minus_J)
+    e_plus = float(energy_plus_J)
+    derivative = (e_plus - e_minus) / (2.0 * h)
+    force = sign * derivative
+    center = float(center_position_m)
+    even_residual = None
+    if energy_center_J is not None:
+        even_residual = 0.5 * (e_plus + e_minus) - float(energy_center_J)
+
+    return {
+        "stencil": "symmetric_central_pair",
+        "center_position_m": center,
+        "displacement_m": h,
+        "position_minus_m": center - h,
+        "position_plus_m": center + h,
+        "energy_minus_J": e_minus,
+        "energy_plus_J": e_plus,
+        "energy_center_J": None if energy_center_J is None else float(energy_center_J),
+        "energy_kind": normalized_kind,
+        "energy_to_force_sign": sign,
+        "virtual_work_identity": identity,
+        "denergy_dx_N": derivative,
+        "force_N": force,
+        "even_energy_residual_J": even_residual,
+        "even_energy_residual_abs_J": None if even_residual is None else abs(even_residual),
+    }
+
+
+def _validate_optical_coefficients(absorptance, reflectance):
+    absorptance = float(absorptance)
+    reflectance = float(reflectance)
+    if absorptance < 0.0:
+        raise ValueError("absorptance must be >= 0")
+    if reflectance < 0.0:
+        raise ValueError("reflectance must be >= 0")
+    if absorptance + reflectance > 1.0 + 1e-15:
+        raise ValueError("absorptance + reflectance must be <= 1")
+    return absorptance, reflectance
+
+
+def _validate_reflectance_transmittance(reflectance, transmittance):
+    reflectance = float(reflectance)
+    transmittance = float(transmittance)
+    if reflectance < 0.0:
+        raise ValueError("reflectance must be >= 0")
+    if transmittance < 0.0:
+        raise ValueError("transmittance must be >= 0")
+    if reflectance + transmittance > 1.0 + 1e-15:
+        raise ValueError("reflectance + transmittance must be <= 1")
+    absorptance = max(0.0, 1.0 - reflectance - transmittance)
+    return reflectance, transmittance, absorptance
+
+
+def plane_wave_intensity_from_electric_field(
+    electric_field_V_per_m,
+    impedance_ohm=ETA0,
+    amplitude="rms",
+):
+    """Time-average plane-wave intensity [W/m2] from electric-field amplitude.
+
+    ``amplitude="rms"`` uses ``I = E_rms^2 / eta``.  ``amplitude="peak"`` uses
+    ``I = E_peak^2 / (2 eta)``.  This small helper makes RF power-flow examples
+    use the same RMS/peak convention before converting Poynting flux to force.
+    """
+
+    field = float(electric_field_V_per_m)
+    impedance = float(impedance_ohm)
+    if impedance <= 0.0:
+        raise ValueError("impedance_ohm must be > 0")
+    if field < 0.0:
+        raise ValueError("electric_field_V_per_m must be >= 0")
+    if amplitude == "rms":
+        return field * field / impedance
+    if amplitude == "peak":
+        return field * field / (2.0 * impedance)
+    raise ValueError("amplitude must be 'rms' or 'peak'")
+
+
+def radiation_pressure_from_intensity(
+    intensity_W_per_m2,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """Normal-incidence radiation pressure [Pa] from time-average intensity.
+
+    For a normally incident wave with intensity ``I``, the normal momentum flux
+    is ``I / c``.  A perfectly absorbing surface takes one unit of photon
+    momentum, while a perfect mirror reverses it:
+
+        p = (absorptance + 2 reflectance) I / c
+
+    The remaining fraction is transmitted and contributes no force on the
+    surface.  This is the RF/time-harmonic counterpart of the static Maxwell
+    stress helpers above.
+    """
+
+    intensity = float(intensity_W_per_m2)
+    speed = float(speed)
+    if intensity < 0.0:
+        raise ValueError("intensity_W_per_m2 must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    absorptance, reflectance = _validate_optical_coefficients(absorptance, reflectance)
+    return (absorptance + 2.0 * reflectance) * intensity / speed
+
+
+def radiation_force_from_power(
+    power_W,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """Normal force [N] from normally incident time-average RF/optical power."""
+
+    power = float(power_W)
+    speed = float(speed)
+    if power < 0.0:
+        raise ValueError("power_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    absorptance, reflectance = _validate_optical_coefficients(absorptance, reflectance)
+    return (absorptance + 2.0 * reflectance) * power / speed
+
+
+def radiation_force_from_normal_scattering(
+    power_incident_W,
+    reflectance,
+    transmittance=0.0,
+    speed=C0,
+):
+    """Normal force [N] from one-sided normal-incidence scattering powers.
+
+    Use ``reflectance=|S11|^2`` and ``transmittance=|S21|^2`` when the input and
+    output ports have the same power normalization.  The momentum balance on the
+    scatterer is
+
+        F = (1 + R - T) P_inc / c
+
+    which is identical to ``(A + 2R) P_inc/c`` with
+    ``A = 1 - R - T``.  The limits are: absorber ``P/c``, mirror ``2P/c``,
+    and transparent through-line ``0``.
+    """
+
+    power = float(power_incident_W)
+    speed = float(speed)
+    if power < 0.0:
+        raise ValueError("power_incident_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    reflectance, transmittance, _absorptance = _validate_reflectance_transmittance(
+        reflectance,
+        transmittance,
+    )
+    return (1.0 + reflectance - transmittance) * power / speed
+
+
+def radiation_scattering_force_summary(
+    power_incident_W,
+    reflectance,
+    transmittance=0.0,
+    speed=C0,
+):
+    """JSON-friendly normal-incidence scattering radiation-force summary."""
+
+    power = float(power_incident_W)
+    speed = float(speed)
+    if power < 0.0:
+        raise ValueError("power_incident_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    reflectance, transmittance, absorptance = _validate_reflectance_transmittance(
+        reflectance,
+        transmittance,
+    )
+    factor = 1.0 + reflectance - transmittance
+    force = factor * power / speed
+    return {
+        "power_incident_W": power,
+        "reflectance": reflectance,
+        "transmittance": transmittance,
+        "absorptance": absorptance,
+        "power_reflected_W": reflectance * power,
+        "power_transmitted_W": transmittance * power,
+        "power_absorbed_W": absorptance * power,
+        "speed_m_per_s": speed,
+        "momentum_transfer_factor": factor,
+        "absorber_reflector_equivalent_factor": absorptance + 2.0 * reflectance,
+        "force_N": force,
+        "force_from_absorptance_reflectance_N": radiation_force_from_power(
+            power,
+            absorptance=absorptance,
+            reflectance=reflectance,
+            speed=speed,
+        ),
+    }
+
+
+def two_port_scattering_momentum_force_summary(
+    power_incident_W,
+    incident_direction,
+    reflectance,
+    transmittance=0.0,
+    transmitted_direction=None,
+    speed=C0,
+):
+    """Vector force [N] from a one-sided two-port scattering momentum balance.
+
+    ``incident_direction`` and ``transmitted_direction`` are propagation
+    directions of the incident and transmitted power flows.  Reflection is
+    assumed to leave back toward the source along ``-incident_direction``.
+    The force on the scatterer is the incoming field momentum minus outgoing
+    field momentum:
+
+        F = P/c * ((1 + R) k_inc - T k_out)
+
+    For a straight through-line ``k_out = k_inc`` this reduces to
+    :func:`radiation_force_from_normal_scattering`.  For a lossless 90-degree
+    bend with no reflection it gives ``P/c * (k_inc - k_out)``, the readable
+    vector gate for RF waveguide momentum bookkeeping.
+    """
+
+    power = float(power_incident_W)
+    speed = float(speed)
+    if power < 0.0:
+        raise ValueError("power_incident_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    inc = _unit_vector(incident_direction, "incident_direction")
+    if transmitted_direction is None:
+        out = list(inc)
+    else:
+        out = _unit_vector(transmitted_direction, "transmitted_direction")
+        if len(out) != len(inc):
+            raise ValueError("incident_direction and transmitted_direction must have the same length")
+    reflectance, transmittance, absorptance = _validate_reflectance_transmittance(
+        reflectance,
+        transmittance,
+    )
+
+    momentum_scale = power / speed
+    incident_momentum = [momentum_scale * value for value in inc]
+    reflected_momentum = [-reflectance * momentum_scale * value for value in inc]
+    transmitted_momentum = [transmittance * momentum_scale * value for value in out]
+    force = [
+        incident_momentum[i] - reflected_momentum[i] - transmitted_momentum[i]
+        for i in range(len(inc))
+    ]
+    axial_force = sum(fi * ki for fi, ki in zip(force, inc))
+    return {
+        "power_incident_W": power,
+        "reflectance": reflectance,
+        "transmittance": transmittance,
+        "absorptance": absorptance,
+        "power_reflected_W": reflectance * power,
+        "power_transmitted_W": transmittance * power,
+        "power_absorbed_W": absorptance * power,
+        "speed_m_per_s": speed,
+        "incident_direction": inc,
+        "transmitted_direction": out,
+        "incident_momentum_flow_N": incident_momentum,
+        "reflected_momentum_flow_N": reflected_momentum,
+        "transmitted_momentum_flow_N": transmitted_momentum,
+        "force_N": force,
+        "force_magnitude_N": math.sqrt(sum(value * value for value in force)),
+        "axial_force_along_incident_direction_N": axial_force,
+        "straight_through_equivalent_force_N": radiation_force_from_normal_scattering(
+            power,
+            reflectance,
+            transmittance,
+            speed=speed,
+        ),
+    }
+
+
+def two_port_scattering_sweep_momentum_force_summary(
+    frequency_Hz,
+    s11_values,
+    s21_values,
+    power_incident_W=1.0,
+    incident_direction=(1.0, 0.0, 0.0),
+    transmitted_direction=None,
+    speed=C0,
+    passivity_tolerance=1.0e-12,
+):
+    """Summarize two-port scattering momentum force over a frequency sweep.
+
+    The sweep assumes port-1 excitation with power-normalized S-parameters:
+    ``R = |S11|^2`` and ``T = |S21|^2``.  Unlike the single-point helper, rows
+    with ``R + T > 1`` are retained and flagged as passivity violations.  This
+    is useful for measured, interpolated, or lightly noisy solver data where the
+    diagnostic table is more useful than an immediate exception.
+    """
+
+    frequencies = [float(value) for value in frequency_Hz]
+    s11 = [complex(value) for value in s11_values]
+    s21 = [complex(value) for value in s21_values]
+    if len(frequencies) != len(s11) or len(frequencies) != len(s21):
+        raise ValueError("frequency_Hz, s11_values, and s21_values must have the same length")
+    if not frequencies:
+        raise ValueError("at least one frequency sample is required")
+    power = float(power_incident_W)
+    speed = float(speed)
+    tolerance = float(passivity_tolerance)
+    if power < 0.0:
+        raise ValueError("power_incident_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    if tolerance < 0.0:
+        raise ValueError("passivity_tolerance must be >= 0")
+    inc = _unit_vector(incident_direction, "incident_direction")
+    if transmitted_direction is None:
+        out = list(inc)
+    else:
+        out = _unit_vector(transmitted_direction, "transmitted_direction")
+        if len(out) != len(inc):
+            raise ValueError("incident_direction and transmitted_direction must have the same length")
+
+    rows = []
+    violation_rows = []
+    momentum_scale = power / speed
+    for idx, (frequency, gamma, tau) in enumerate(zip(frequencies, s11, s21)):
+        if not math.isfinite(frequency) or frequency < 0.0:
+            raise ValueError("frequency samples must be finite and >= 0")
+        if not math.isfinite(gamma.real) or not math.isfinite(gamma.imag):
+            raise ValueError("s11 values must be finite")
+        if not math.isfinite(tau.real) or not math.isfinite(tau.imag):
+            raise ValueError("s21 values must be finite")
+        s11_mag = abs(gamma)
+        s21_mag = abs(tau)
+        reflectance = s11_mag * s11_mag
+        transmittance = s21_mag * s21_mag
+        outgoing_fraction = reflectance + transmittance
+        absorptance = 1.0 - outgoing_fraction
+        force = [
+            momentum_scale * ((1.0 + reflectance) * inc[axis] - transmittance * out[axis])
+            for axis in range(len(inc))
+        ]
+        axial_force = sum(value * axis for value, axis in zip(force, inc))
+        row = {
+            "index": idx,
+            "frequency_Hz": frequency,
+            "s11_real": gamma.real,
+            "s11_imag": gamma.imag,
+            "s11_magnitude": s11_mag,
+            "s11_phase_rad": math.atan2(gamma.imag, gamma.real),
+            "s11_phase_deg": math.degrees(math.atan2(gamma.imag, gamma.real)),
+            "s21_real": tau.real,
+            "s21_imag": tau.imag,
+            "s21_magnitude": s21_mag,
+            "s21_phase_rad": math.atan2(tau.imag, tau.real),
+            "s21_phase_deg": math.degrees(math.atan2(tau.imag, tau.real)),
+            "reflectance": reflectance,
+            "transmittance": transmittance,
+            "absorptance": absorptance,
+            "outgoing_power_fraction": outgoing_fraction,
+            "power_reflected_W": reflectance * power,
+            "power_transmitted_W": transmittance * power,
+            "power_absorbed_W": absorptance * power,
+            "force_N": force,
+            "force_magnitude_N": math.sqrt(sum(value * value for value in force)),
+            "axial_force_along_incident_direction_N": axial_force,
+            "passivity_excess_power_fraction": max(0.0, outgoing_fraction - 1.0),
+            "passivity_ok": outgoing_fraction <= 1.0 + tolerance,
+        }
+        rows.append(row)
+        if not row["passivity_ok"]:
+            violation_rows.append(row)
+
+    max_force_row = max(rows, key=lambda row: row["force_magnitude_N"])
+    min_force_row = min(rows, key=lambda row: row["force_magnitude_N"])
+    max_outgoing_row = max(rows, key=lambda row: row["outgoing_power_fraction"])
+    mean_force = sum(row["force_magnitude_N"] for row in rows) / len(rows)
+    mean_axial = sum(row["axial_force_along_incident_direction_N"] for row in rows) / len(rows)
+    monotonic = all(
+        frequencies[idx] < frequencies[idx + 1]
+        for idx in range(len(frequencies) - 1)
+    )
+
+    return {
+        "policy": "two_port_scattering_sweep_momentum_force_audit",
+        "n_points": len(rows),
+        "frequency_min_Hz": min(frequencies),
+        "frequency_max_Hz": max(frequencies),
+        "frequency_monotonic_increasing": monotonic,
+        "power_incident_W": power,
+        "speed_m_per_s": speed,
+        "incident_direction": inc,
+        "transmitted_direction": out,
+        "passivity_tolerance": tolerance,
+        "passivity_ok": not violation_rows,
+        "passivity_violation_count": len(violation_rows),
+        "max_outgoing_power_fraction": max_outgoing_row["outgoing_power_fraction"],
+        "max_outgoing_power_frequency_Hz": max_outgoing_row["frequency_Hz"],
+        "max_passivity_excess_power_fraction": max(
+            row["passivity_excess_power_fraction"] for row in rows
+        ),
+        "mean_reflectance": sum(row["reflectance"] for row in rows) / len(rows),
+        "mean_transmittance": sum(row["transmittance"] for row in rows) / len(rows),
+        "mean_absorptance": sum(row["absorptance"] for row in rows) / len(rows),
+        "mean_force_magnitude_N": mean_force,
+        "mean_axial_force_N": mean_axial,
+        "max_force_magnitude_N": max_force_row["force_magnitude_N"],
+        "max_force_frequency_Hz": max_force_row["frequency_Hz"],
+        "min_force_magnitude_N": min_force_row["force_magnitude_N"],
+        "min_force_frequency_Hz": min_force_row["frequency_Hz"],
+        "force_span_N": max_force_row["force_magnitude_N"] - min_force_row["force_magnitude_N"],
+        "max_force_row": max_force_row,
+        "min_force_row": min_force_row,
+        "passivity_violation_rows": violation_rows,
+        "status": "ok" if not violation_rows else "needs_attention",
+        "rows": rows,
+        "two_port_sweep_force_formula": "F=P/c*((1+|S11|^2)k_in-|S21|^2 k_out)",
+    }
+
+
+def two_port_sparameter_sweep_health_summary(
+    frequency_Hz,
+    s11_values,
+    s21_values,
+    s12_values=None,
+    s22_values=None,
+    power_incident_W=1.0,
+    incident_direction=(1.0, 0.0, 0.0),
+    transmitted_direction=None,
+    speed=C0,
+    passivity_tolerance=1.0e-12,
+    reciprocity_tolerance=1.0e-6,
+    return_symmetry_tolerance=None,
+):
+    """Audit a two-port S-parameter sweep for RF force post-processing.
+
+    The base force/passivity table is computed from port-1 excitation using
+    ``S11`` and ``S21``.  If ``S12`` is supplied, the summary also checks
+    reciprocity as ``max |S21-S12|``.  If ``S22`` is supplied, return symmetry
+    can be checked as ``max |S11-S22|``.
+    """
+
+    sweep = two_port_scattering_sweep_momentum_force_summary(
+        frequency_Hz,
+        s11_values,
+        s21_values,
+        power_incident_W=power_incident_W,
+        incident_direction=incident_direction,
+        transmitted_direction=transmitted_direction,
+        speed=speed,
+        passivity_tolerance=passivity_tolerance,
+    )
+    frequencies = [float(value) for value in frequency_Hz]
+    s11 = [complex(value) for value in s11_values]
+    s21 = [complex(value) for value in s21_values]
+    reciprocity_tol = float(reciprocity_tolerance)
+    if reciprocity_tol < 0.0:
+        raise ValueError("reciprocity_tolerance must be >= 0")
+
+    reciprocity_rows = []
+    max_reciprocity_error = None
+    max_reciprocity_frequency = None
+    reciprocity_ok = None
+    if s12_values is not None:
+        s12 = [complex(value) for value in s12_values]
+        if len(s12) != len(frequencies):
+            raise ValueError("s12_values must have the same length as frequency_Hz")
+        for frequency, forward, reverse in zip(frequencies, s21, s12):
+            if not math.isfinite(reverse.real) or not math.isfinite(reverse.imag):
+                raise ValueError("s12 values must be finite")
+            error = abs(forward - reverse)
+            reciprocity_rows.append({
+                "frequency_Hz": frequency,
+                "s21_real": forward.real,
+                "s21_imag": forward.imag,
+                "s12_real": reverse.real,
+                "s12_imag": reverse.imag,
+                "s21_s12_abs_error": error,
+                "reciprocity_ok": error <= reciprocity_tol,
+            })
+        worst = max(reciprocity_rows, key=lambda row: row["s21_s12_abs_error"])
+        max_reciprocity_error = worst["s21_s12_abs_error"]
+        max_reciprocity_frequency = worst["frequency_Hz"]
+        reciprocity_ok = max_reciprocity_error <= reciprocity_tol
+
+    return_symmetry_tol = (
+        None if return_symmetry_tolerance is None else float(return_symmetry_tolerance)
+    )
+    if return_symmetry_tol is not None and return_symmetry_tol < 0.0:
+        raise ValueError("return_symmetry_tolerance must be >= 0")
+    effective_return_symmetry_tol = return_symmetry_tol
+    return_symmetry_rows = []
+    max_return_symmetry_error = None
+    max_return_symmetry_frequency = None
+    return_symmetry_ok = None
+    if s22_values is not None:
+        s22 = [complex(value) for value in s22_values]
+        if len(s22) != len(frequencies):
+            raise ValueError("s22_values must have the same length as frequency_Hz")
+        effective_return_symmetry_tol = (
+            reciprocity_tol if return_symmetry_tol is None else return_symmetry_tol
+        )
+        for frequency, port1, port2 in zip(frequencies, s11, s22):
+            if not math.isfinite(port2.real) or not math.isfinite(port2.imag):
+                raise ValueError("s22 values must be finite")
+            error = abs(port1 - port2)
+            return_symmetry_rows.append({
+                "frequency_Hz": frequency,
+                "s11_real": port1.real,
+                "s11_imag": port1.imag,
+                "s22_real": port2.real,
+                "s22_imag": port2.imag,
+                "s11_s22_abs_error": error,
+                "return_symmetry_ok": error <= effective_return_symmetry_tol,
+            })
+        worst = max(return_symmetry_rows, key=lambda row: row["s11_s22_abs_error"])
+        max_return_symmetry_error = worst["s11_s22_abs_error"]
+        max_return_symmetry_frequency = worst["frequency_Hz"]
+        return_symmetry_ok = max_return_symmetry_error <= effective_return_symmetry_tol
+
+    issues = []
+    if not sweep["passivity_ok"]:
+        issues.append("passivity violation in port-1 outgoing power")
+    if reciprocity_ok is False:
+        issues.append("S21/S12 reciprocity error exceeds tolerance")
+    if return_symmetry_ok is False:
+        issues.append("S11/S22 return symmetry error exceeds tolerance")
+
+    return {
+        "policy": "two_port_sparameter_sweep_health",
+        "status": "ok" if not issues else "needs_attention",
+        "issues": issues,
+        "n_points": sweep["n_points"],
+        "frequency_monotonic_increasing": sweep["frequency_monotonic_increasing"],
+        "passivity_ok": sweep["passivity_ok"],
+        "passivity_violation_count": sweep["passivity_violation_count"],
+        "max_passivity_excess_power_fraction": sweep["max_passivity_excess_power_fraction"],
+        "reciprocity_checked": s12_values is not None,
+        "reciprocity_tolerance": reciprocity_tol,
+        "reciprocity_ok": reciprocity_ok,
+        "max_s21_s12_abs_error": max_reciprocity_error,
+        "max_s21_s12_error_frequency_Hz": max_reciprocity_frequency,
+        "return_symmetry_checked": s22_values is not None,
+        "return_symmetry_tolerance": effective_return_symmetry_tol,
+        "return_symmetry_ok": return_symmetry_ok,
+        "max_s11_s22_abs_error": max_return_symmetry_error,
+        "max_s11_s22_error_frequency_Hz": max_return_symmetry_frequency,
+        "mean_reflectance": sweep["mean_reflectance"],
+        "mean_transmittance": sweep["mean_transmittance"],
+        "mean_absorptance": sweep["mean_absorptance"],
+        "mean_force_magnitude_N": sweep["mean_force_magnitude_N"],
+        "max_force_magnitude_N": sweep["max_force_magnitude_N"],
+        "max_force_frequency_Hz": sweep["max_force_frequency_Hz"],
+        "min_force_magnitude_N": sweep["min_force_magnitude_N"],
+        "min_force_frequency_Hz": sweep["min_force_frequency_Hz"],
+        "reciprocity_rows": reciprocity_rows,
+        "return_symmetry_rows": return_symmetry_rows,
+        "sweep": sweep,
+    }
+
+
+def one_port_reflection_momentum_force_summary(
+    power_incident_W,
+    s11,
+    incident_direction=(1.0, 0.0, 0.0),
+    speed=C0,
+):
+    """Vector force [N] from one-port reflection coefficient ``S11``.
+
+    This is the common VNA/RF-solver one-port specialization of
+    :func:`two_port_scattering_momentum_force_summary`: reflected power is
+    ``|S11|^2 P_inc`` and there is no transmitted output port.  The phase of
+    ``S11`` is still reported for bookkeeping, but the time-average momentum
+    force depends on its magnitude only:
+
+        F = (1 + |S11|^2) P_inc k_inc / c
+
+    The matched-load and perfect-short limits are therefore ``P/c`` and
+    ``2P/c`` along the incident propagation direction.
+    """
+
+    gamma = complex(s11)
+    if not math.isfinite(gamma.real) or not math.isfinite(gamma.imag):
+        raise ValueError("s11 must be finite")
+    magnitude = abs(gamma)
+    reflectance = magnitude * magnitude
+    summary = two_port_scattering_momentum_force_summary(
+        power_incident_W,
+        incident_direction,
+        reflectance=reflectance,
+        transmittance=0.0,
+        speed=speed,
+    )
+    return_loss = None if magnitude == 0.0 else max(0.0, -20.0 * math.log10(magnitude))
+    power_delivered = summary["power_absorbed_W"]
+    delivered_fraction = summary["absorptance"]
+    mismatch_loss = None if delivered_fraction == 0.0 else max(
+        0.0,
+        -10.0 * math.log10(delivered_fraction),
+    )
+    summary.update({
+        "s11_real": gamma.real,
+        "s11_imag": gamma.imag,
+        "s11_magnitude": magnitude,
+        "s11_phase_rad": math.atan2(gamma.imag, gamma.real),
+        "s11_phase_deg": math.degrees(math.atan2(gamma.imag, gamma.real)),
+        "return_loss_dB": return_loss,
+        "return_loss_is_infinite": magnitude == 0.0,
+        "power_delivered_to_one_port_W": power_delivered,
+        "mismatch_loss_dB": mismatch_loss,
+        "mismatch_loss_is_infinite": delivered_fraction == 0.0,
+        "one_port_force_formula": "F=(1+|S11|^2)P_inc k_inc/c",
+    })
+    return summary
+
+
+def one_port_reflection_sweep_momentum_force_summary(
+    frequency_Hz,
+    s11_values,
+    power_incident_W=1.0,
+    incident_direction=(1.0, 0.0, 0.0),
+    speed=C0,
+    passivity_tolerance=1.0e-12,
+):
+    """Summarize one-port reflection momentum force over a frequency sweep.
+
+    ``frequency_Hz`` and ``s11_values`` are paired samples from a one-port
+    reflection sweep.  The force model is the same as
+    :func:`one_port_reflection_momentum_force_summary`:
+
+        F = (1 + |S11|^2) P_inc k_inc / c
+
+    Unlike the single-point helper, this sweep audit records passivity
+    violations instead of failing immediately, so measured/simulated data with a
+    small ``|S11| > 1`` overshoot can still be diagnosed.
+    """
+
+    frequencies = [float(value) for value in frequency_Hz]
+    gammas = [complex(value) for value in s11_values]
+    if len(frequencies) != len(gammas):
+        raise ValueError("frequency_Hz and s11_values must have the same length")
+    if not frequencies:
+        raise ValueError("at least one frequency sample is required")
+    power = float(power_incident_W)
+    speed = float(speed)
+    tolerance = float(passivity_tolerance)
+    if power < 0.0:
+        raise ValueError("power_incident_W must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    if tolerance < 0.0:
+        raise ValueError("passivity_tolerance must be >= 0")
+    inc = _unit_vector(incident_direction, "incident_direction")
+
+    rows = []
+    violation_rows = []
+    momentum_scale = power / speed
+    for idx, (frequency, gamma) in enumerate(zip(frequencies, gammas)):
+        if not math.isfinite(frequency) or frequency < 0.0:
+            raise ValueError("frequency samples must be finite and >= 0")
+        if not math.isfinite(gamma.real) or not math.isfinite(gamma.imag):
+            raise ValueError("s11 values must be finite")
+        magnitude = abs(gamma)
+        reflectance = magnitude * magnitude
+        factor = 1.0 + reflectance
+        axial_force = factor * momentum_scale
+        row = {
+            "index": idx,
+            "frequency_Hz": frequency,
+            "s11_real": gamma.real,
+            "s11_imag": gamma.imag,
+            "s11_magnitude": magnitude,
+            "s11_phase_rad": math.atan2(gamma.imag, gamma.real),
+            "s11_phase_deg": math.degrees(math.atan2(gamma.imag, gamma.real)),
+            "reflectance": reflectance,
+            "absorptance_one_port": 1.0 - reflectance,
+            "return_loss_dB": None if magnitude == 0.0 else max(0.0, -20.0 * math.log10(magnitude)),
+            "return_loss_is_infinite": magnitude == 0.0,
+            "momentum_transfer_factor": factor,
+            "axial_force_along_incident_direction_N": axial_force,
+            "force_magnitude_N": abs(axial_force),
+            "force_N": [axial_force * value for value in inc],
+            "power_reflected_W": reflectance * power,
+            "power_delivered_to_one_port_W": (1.0 - reflectance) * power,
+            "passivity_excess_magnitude": max(0.0, magnitude - 1.0),
+            "passivity_excess_reflectance": max(0.0, reflectance - 1.0),
+            "passivity_ok": magnitude <= 1.0 + tolerance,
+        }
+        rows.append(row)
+        if not row["passivity_ok"]:
+            violation_rows.append(row)
+
+    max_force_row = max(rows, key=lambda row: row["force_magnitude_N"])
+    min_force_row = min(rows, key=lambda row: row["force_magnitude_N"])
+    max_reflectance_row = max(rows, key=lambda row: row["reflectance"])
+    mean_force = sum(row["force_magnitude_N"] for row in rows) / len(rows)
+    mean_reflectance = sum(row["reflectance"] for row in rows) / len(rows)
+    monotonic = all(
+        frequencies[idx] < frequencies[idx + 1]
+        for idx in range(len(frequencies) - 1)
+    )
+
+    return {
+        "n_points": len(rows),
+        "frequency_min_Hz": min(frequencies),
+        "frequency_max_Hz": max(frequencies),
+        "frequency_monotonic_increasing": monotonic,
+        "power_incident_W": power,
+        "speed_m_per_s": speed,
+        "incident_direction": inc,
+        "passivity_tolerance": tolerance,
+        "passivity_ok": not violation_rows,
+        "passivity_violation_count": len(violation_rows),
+        "max_s11_magnitude": max_reflectance_row["s11_magnitude"],
+        "max_reflectance": max_reflectance_row["reflectance"],
+        "max_reflectance_frequency_Hz": max_reflectance_row["frequency_Hz"],
+        "max_passivity_excess_magnitude": max(row["passivity_excess_magnitude"] for row in rows),
+        "max_passivity_excess_reflectance": max(row["passivity_excess_reflectance"] for row in rows),
+        "mean_reflectance": mean_reflectance,
+        "mean_force_magnitude_N": mean_force,
+        "max_force_magnitude_N": max_force_row["force_magnitude_N"],
+        "max_force_frequency_Hz": max_force_row["frequency_Hz"],
+        "min_force_magnitude_N": min_force_row["force_magnitude_N"],
+        "min_force_frequency_Hz": min_force_row["frequency_Hz"],
+        "force_span_N": max_force_row["force_magnitude_N"] - min_force_row["force_magnitude_N"],
+        "max_force_row": max_force_row,
+        "min_force_row": min_force_row,
+        "passivity_violation_rows": violation_rows,
+        "rows": rows,
+        "one_port_sweep_force_formula": "F=(1+|S11|^2)P_inc k_inc/c",
+    }
+
+
+def radiation_pressure_summary(
+    intensity_W_per_m2,
+    area_m2=1.0,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """JSON-friendly radiation-pressure and force summary for a flat patch."""
+
+    intensity = float(intensity_W_per_m2)
+    area = float(area_m2)
+    if intensity < 0.0:
+        raise ValueError("intensity_W_per_m2 must be >= 0")
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    pressure = radiation_pressure_from_intensity(
+        intensity,
+        absorptance=absorptance,
+        reflectance=reflectance,
+        speed=speed,
+    )
+    return {
+        "intensity_W_per_m2": intensity,
+        "area_m2": area,
+        "absorptance": float(absorptance),
+        "reflectance": float(reflectance),
+        "transmittance": 1.0 - float(absorptance) - float(reflectance),
+        "speed_m_per_s": float(speed),
+        "momentum_transfer_factor": float(absorptance) + 2.0 * float(reflectance),
+        "incident_power_W": intensity * area,
+        "pressure_Pa": pressure,
+        "force_N": pressure * area,
+    }
+
+
+def oblique_radiation_pressure_summary(
+    intensity_W_per_m2,
+    incidence_angle_rad,
+    area_m2=1.0,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """Radiation force on a flat patch for oblique plane-wave incidence.
+
+    ``incidence_angle_rad`` is measured from the surface normal: zero is normal
+    incidence and ``pi/2`` is grazing.  The normal force scales with
+    ``cos(angle)^2`` because both intercepted power and normal momentum carry a
+    cosine factor.  Absorption also transfers tangential momentum; specular
+    reflection reverses only the normal momentum component.
+    """
+
+    intensity = float(intensity_W_per_m2)
+    angle = float(incidence_angle_rad)
+    area = float(area_m2)
+    speed = float(speed)
+    if intensity < 0.0:
+        raise ValueError("intensity_W_per_m2 must be >= 0")
+    if angle < 0.0 or angle > 0.5 * math.pi:
+        raise ValueError("incidence_angle_rad must be in [0, pi/2]")
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    absorptance, reflectance = _validate_optical_coefficients(absorptance, reflectance)
+    c = math.cos(angle)
+    s = math.sin(angle)
+    incident_power = intensity * area * c
+    normal_pressure = (absorptance + 2.0 * reflectance) * intensity * c * c / speed
+    tangential_pressure = absorptance * intensity * s * c / speed
+    return {
+        "intensity_W_per_m2": intensity,
+        "incidence_angle_rad": angle,
+        "incidence_angle_deg": math.degrees(angle),
+        "area_m2": area,
+        "absorptance": absorptance,
+        "reflectance": reflectance,
+        "transmittance": 1.0 - absorptance - reflectance,
+        "speed_m_per_s": speed,
+        "incident_power_on_patch_W": incident_power,
+        "normal_pressure_Pa": normal_pressure,
+        "tangential_pressure_Pa": tangential_pressure,
+        "normal_force_N": normal_pressure * area,
+        "tangential_force_N": tangential_pressure * area,
+        "force_components_N": {
+            "tangent": tangential_pressure * area,
+            "normal": normal_pressure * area,
+        },
+        "normal_momentum_factor": absorptance + 2.0 * reflectance,
+        "tangential_momentum_factor": absorptance,
+    }
+
+
+def poynting_patch_force_summary(
+    poynting_W_per_m2,
+    surface_normal,
+    area_m2=1.0,
+    absorptance=1.0,
+    reflectance=0.0,
+    speed=C0,
+):
+    """Vector radiation force on a flat patch from a Poynting vector.
+
+    ``poynting_W_per_m2`` points along propagation.  ``surface_normal`` points
+    out of the illuminated side of the patch, so an incident wave has
+    ``dot(k, normal) < 0``.  The intercepted power is
+
+        P_inc = |S| area max(0, -k.n).
+
+    Absorption transfers momentum along ``k``; specular reflection reverses the
+    normal component.  The returned force vector is in newtons.
+    """
+
+    s_vec = _float_vector(poynting_W_per_m2, "poynting_W_per_m2")
+    normal = _unit_vector(surface_normal, "surface_normal")
+    if len(s_vec) != len(normal):
+        raise ValueError("poynting_W_per_m2 and surface_normal must have the same length")
+    area = float(area_m2)
+    speed = float(speed)
+    if area < 0.0:
+        raise ValueError("area_m2 must be >= 0")
+    if speed <= 0.0:
+        raise ValueError("speed must be > 0")
+    absorptance, reflectance = _validate_optical_coefficients(absorptance, reflectance)
+
+    s_mag = math.sqrt(sum(value * value for value in s_vec))
+    if s_mag > 0.0:
+        k = [value / s_mag for value in s_vec]
+        cos_incidence = max(0.0, -sum(ki * ni for ki, ni in zip(k, normal)))
+    else:
+        k = [0.0 for _ in s_vec]
+        cos_incidence = 0.0
+    incident_intensity = s_mag * cos_incidence
+    incident_power = incident_intensity * area
+    absorption_scale = absorptance * incident_power / speed
+    reflection_scale = -2.0 * reflectance * incident_power * cos_incidence / speed
+    force = [
+        absorption_scale * k[i] + reflection_scale * normal[i]
+        for i in range(len(s_vec))
+    ]
+    normal_force_into_surface = -sum(fi * ni for fi, ni in zip(force, normal))
+    tangential_force = [
+        force[i] + normal_force_into_surface * normal[i]
+        for i in range(len(force))
+    ]
+    return {
+        "poynting_W_per_m2": s_vec,
+        "poynting_magnitude_W_per_m2": s_mag,
+        "propagation_direction": k,
+        "surface_normal": normal,
+        "area_m2": area,
+        "absorptance": absorptance,
+        "reflectance": reflectance,
+        "transmittance": 1.0 - absorptance - reflectance,
+        "speed_m_per_s": speed,
+        "cos_incidence": cos_incidence,
+        "incident_intensity_W_per_m2": incident_intensity,
+        "incident_power_on_patch_W": incident_power,
+        "force_N": force,
+        "force_magnitude_N": math.sqrt(sum(value * value for value in force)),
+        "normal_force_into_surface_N": normal_force_into_surface,
+        "tangential_force_N": tangential_force,
+        "tangential_force_magnitude_N": math.sqrt(
+            sum(value * value for value in tangential_force)
+        ),
     }
 
 
@@ -516,7 +2880,7 @@ def maxwell_surface_force_harmonic(B, mesh, surface):
     ``calc_fem_kelvin`` (the workpiece is a HOLE, so the only force handle is the
     Maxwell stress over its surface; ``B = curl(gfu)`` from the SIBC A-solve).
     Returns (Fx, Fy, Fz) in newtons.  Validated by reduction to the
-    COMSOL-cross-validated :func:`maxwell_surface_force` (tests/test_maxwell_surface_harmonic.py).
+    static :func:`maxwell_surface_force` reference (tests/test_maxwell_surface_harmonic.py).
     """
     n = specialcf.normal(mesh.dim)
     Bn = sum(B[k] * n[k] for k in range(3))                  # B . n  (n real)

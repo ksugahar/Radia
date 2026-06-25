@@ -47,6 +47,32 @@ between acoustic specific impedance/admittance and Helmholtz DtN/Robin
 coefficients. It checks planar and spherical radiation modes and a baffled
 piston average impedance round trip.
 
+## Boundary power
+
+`validation_acoustic_boundary_power.py` validates active/reactive acoustic
+boundary power from complex pressure and outward normal velocity phasors. It
+checks peak/RMS conventions, a plane-wave resistive load, a purely reactive
+near-field load, and a mixed impedance boundary.
+
+## Impedance reflection and absorption
+
+`validation_acoustic_impedance_reflection.py` validates the plane-wave
+reflection coefficient, absorption coefficient, and power balance of a local
+acoustic impedance boundary. It checks matched, mismatched, purely reactive,
+pressure-release, and oblique-incidence limits.
+
+## Impedance radiation pressure
+
+`validation_acoustic_impedance_radiation_pressure.py` validates the normal
+momentum pressure from an acoustic impedance reflection summary. It checks the
+matched absorber, partial reflector, and lossless reactive reflector limits.
+
+## Impedance sweep
+
+`validation_acoustic_impedance_sweep.py` validates a frequency-indexed acoustic
+impedance table. It records reflection, absorption, normal momentum pressure,
+and passive-load diagnostics in the same sweep summary.
+
 ```powershell
 python validation_pulsating_sphere_radiation.py
 python validation_low_frequency_helmholtz_kernel.py
@@ -54,4 +80,8 @@ python validation_spherical_dtn_modes.py
 python validation_planar_dtn_symbol.py
 python validation_baffled_piston_radiation.py
 python validation_acoustic_impedance_dtn_bridge.py
+python validation_acoustic_boundary_power.py
+python validation_acoustic_impedance_reflection.py
+python validation_acoustic_impedance_radiation_pressure.py
+python validation_acoustic_impedance_sweep.py
 ```

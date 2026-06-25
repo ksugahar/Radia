@@ -1,5 +1,5 @@
 """hdiv_cyoke_headtohead.py -- wall-clock head-to-head: the SCALABLE HDiv-VIM (now dense-N^2-FREE) on the
-C-yoke vs the yano-type distortion-element reference (numbers embedded below for reproducibility; the
+C-yoke vs the six-face surface-charge distortion-element reference (numbers embedded below for reproducibility; the
 source JSONs are now committed under reference_yano_msc/ -- rescued from git history, see its README).
 
 The scalable HDiv-VIM path is dense-N^2-free as of 2026-06-09:
@@ -8,7 +8,7 @@ The scalable HDiv-VIM path is dense-N^2-free as of 2026-06-09:
   - SOLVE: tensor-tangent damped Newton.  The HDiv loops are ker(B) -- FIELD-NULL BY CONSTRUCTION (de Rham;
     no loop-star, no cohomology), so the tangent is well-conditioned and mu_r-independent -> 5-6 Newton iters.
 
-yano-type reference (distortion elements + loop-star; LAB machine, saved analysis times):
+six-face surface-charge reference (distortion elements + loop-star; LAB machine, saved analysis times):
   18900  DOF: 174 nonlinear iters, 99 s total
   165600 DOF: 214 nonlinear iters, 2607 s total = 582 s H-matrix build + 1953 s linear solve (2686 lin iters)
 
@@ -45,10 +45,10 @@ from radia.vim import _nonlinear as nl                       # noqa: E402
 ng.SetNumThreads(4)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# yano-type distortion-element solver reference (committed under reference_yano_msc/golden/; embedded here
+# six-face surface-charge distortion-element solver reference (committed under reference_yano_msc/golden/; embedded here
 # for reproducibility -- the LU/BiCGSTAB/HACApK x DOF matrix is the superset of the two points below).
 YANO_REF = {
-    "method": "yano-type distortion elements + loop-star (LAB machine, saved)",
+    "method": "six-face surface-charge distortion elements + loop-star (LAB machine, saved)",
     "points": [
         {"ndof": 18900, "nonlinear_iters": 174, "t_total_s": 99.0},
         {"ndof": 165600, "nonlinear_iters": 214, "t_total_s": 2607.0,
@@ -87,11 +87,11 @@ if __name__ == "__main__":
                                  "(the rows above). SCALE CAVEAT: the INNER +N GMRES solve does NOT yet "
                                  "scale past ~20-40k ndof (at ndof~44k Newton's warmstart fails in 1000 "
                                  "inner iters) -- but this is NOT a fundamental wall. CORRECTED COMPARISON: "
-                                 "the yano-type reference is NO-loop-star + BLOCK JACOBI (NOT H-ILU; H-ILU "
+                                 "the six-face surface-charge reference is NO-loop-star + BLOCK JACOBI (NOT H-ILU; H-ILU "
                                  "is the separate loop-star A_SS solver), which ALSO needs growing inner "
                                  "iters (2686 lin @165600) absorbed by its Picard/修正反復法 outer loop. "
                                  "The FAIR head-to-head is SAME solver (Picard + Block Jacobi) for both, "
-                                 "where HDiv's de-Rham field-null loops should beat yano-type distortion "
+                                 "where HDiv's de-Rham field-null loops should beat six-face surface-charge distortion "
                                  "loops -- NOT YET RUN. Do NOT read this as a 165600-DOF result.")}
     with open(os.path.join(HERE, "hdiv_cyoke_headtohead.json"), "w") as f:
         json.dump(out, f, indent=2)

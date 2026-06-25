@@ -1,0 +1,69 @@
+{
+  "schema": "radia-mcp.mcp_quality_golden_gate.v1",
+  "date": "2026-06-25",
+  "scope": "radia-mcp public MCP server fleet",
+  "server_count": 38,
+  "external_package_count": 4,
+  "golden_gate": {
+    "level": "golden",
+    "all_passed": true,
+    "checks": [
+      "catalog_required_fields",
+      "entrypoint_naming",
+      "selftest_command_coverage",
+      "related_links_resolve",
+      "internal_related_links_bidirectional",
+      "optuna_external_boundary",
+      "entrypoints_on_path"
+    ]
+  },
+  "commands": [
+    {
+      "command": "python -m pytest tests/test_meta_health.py -q",
+      "result": "pass",
+      "passed": 15,
+      "elapsed_s": 6.07
+    },
+    {
+      "command": "python tools/policy_lint.py --tracked-only",
+      "cwd": "packages/radia-mcp",
+      "result": "pass"
+    },
+    {
+      "command": "python tools/policy_lint.py --tracked-only",
+      "cwd": "repo root",
+      "result": "pass"
+    },
+    {
+      "command": "python -m pytest tests/test_each_server_selftest.py tests/test_policy_lint.py tests/test_selftest_audit_modes.py -q",
+      "result": "pass",
+      "passed": 60,
+      "elapsed_s": 77.16
+    },
+    {
+      "command": "python -m pytest tests/test_cross_validation_registry.py tests/test_build123d_modeling.py tests/test_coreform_webinars.py tests/test_netgen_vol.py -q",
+      "result": "pass",
+      "passed": 99,
+      "elapsed_s": 0.78
+    },
+    {
+      "command": "python -m pytest tests/mcp_server/test_selftest.py -q",
+      "cwd": "repo root",
+      "result": "pass",
+      "passed": 15,
+      "elapsed_s": 5.79
+    }
+  ],
+  "artifacts": [
+    "radia_mcp.meta.server:radia_mcp_golden_gate",
+    "tests/test_meta_health.py::test_meta_golden_gate_passes_catalog_contracts",
+    "tests/test_meta_health.py::test_generated_tools_inventory_is_current",
+    "tests/test_meta_health.py::test_readme_mcp_entrypoints_are_cataloged_or_external",
+    "docs/TOOLS.md"
+  ],
+  "notes": [
+    "README discovery snippets no longer advertise removed MCP entry points.",
+    "docs/TOOLS.md is generated from the live FastMCP tool registry and checked in tests.",
+    "Optuna operation remains external to radia-mcp through the official optuna-mcp package."
+  ]
+}

@@ -27,7 +27,7 @@ Requirements:
 - cubit_mesh_export module (via radia package)
 - NGSolve / Netgen
 
-Reference: S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type\Cubit\6x6x6\Trelis.jou
+Reference: private CEFC-2020 C-Type Cubit journal, 6x6x6 case.
 """
 
 import sys
@@ -113,7 +113,7 @@ print()
 # Step 1: Create C-type yoke geometry and hex mesh in Cubit
 # ============================================================
 # Direct translation from:
-# S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type\Cubit\6x6x6\Trelis.jou
+# private CEFC-2020 C-Type Cubit journal, 6x6x6 case.
 print("Step 1: Create C-type yoke geometry and hex mesh in Cubit")
 
 cubit.init(['cubit', '-nojournal', '-batch'])

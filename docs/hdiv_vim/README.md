@@ -3,9 +3,14 @@
 **One sentence:** the magnetization "loop" modes that break the constant-M MMM/MSC integral
 equation on distorted meshes (see [`../loop_star_breakdown.md`](../loop_star_breakdown.md)) are
 **field-null by construction** when the magnetization lives in NGSolve's H(div) (RT) finite-element
-space — so the **HDiv-type VIM** complements the canonical **moment-yano** MSC backend with a
+space — so the **HDiv-type VIM** complements the canonical **multipole-moment MMM** MSC backend with a
 de-Rham-exact operator for **curved geometry, polynomial high order, and symmetry models** that flat
 surface-charge elements cannot represent.
+
+The tradeoff is deliberate: HDiv-VIM gives a symmetric Galerkin matrix and high-order extensibility,
+but the charge-Coulomb Gram integrals dominate matrix construction.  Multipole-moment MMM gives up
+that full Galerkin symmetry and instead uses Mathematica-derived moment rows, so the 3-DOF and
+surface-charge MMM systems keep cheap local element functionals and scalable H-matrix matvecs.
 
 This is the canonical technical reference. The runnable examples + their numbers live in
 [`examples/vim/README.md`](../../examples/vim/README.md); the decision/narrative record is
@@ -33,7 +38,7 @@ N = Bᵀ G B
 cut for symmetry). The contravariant Piola map preserves both `div` and the normal trace (the de Rham
 commuting diagram), so distortion cannot break it. This is the strong (everywhere) field-null property,
 versus the constant-M basis's fragile (collocation-only) field-null that breaks under distortion and
-forces the cohomology-aware `installCycle` loop-star construction in moment-yano MSC.
+forces the cohomology-aware `installCycle` loop-star construction in multipole-moment MMM MSC.
 
 ## 2. The Gram — three layers, pick by problem
 
@@ -93,9 +98,9 @@ in **6 Newton iters** and matches Radia to `<1%`.
   field-parallel mirror keeps sign, field-perpendicular flips) reconstructs the full sphere. The
   reduced models reproduce the full demag from ~1/N the DOF (1/2 +0.08%, 1/4 +0.11%, 1/8 −0.32%).
 
-## 6. HDiv-type vs moment-yano
+## 6. HDiv-type vs multipole-moment MMM
 
-| Capability | moment-yano MSC | HDiv-type VIM |
+| Capability | multipole-moment MMM MSC | HDiv-type VIM |
 |---|---|---|
 | Linear demag (sphere/spheroid/triaxial) | ✓ | ✓ exact vs analytic |
 | Nonlinear (cube / C-yoke) | ✓ | ✓ `<1%` vs Radia, 6 iters |
@@ -112,7 +117,7 @@ in **6 Newton iters** and matches Radia to `<1%`.
 
 The HDiv-type VIM is a **validated research prototype** (Python + NGSolve) with a quantified
 accuracy-per-DOF win over the shipped flat solver on curved problems, and parity on the flat cases. The
-remaining lift to make it a **production backend alongside moment-yano MSC**:
+remaining lift to make it a **production backend alongside multipole-moment MMM MSC**:
 
 1. **C++ productionization** — the charge Gram (Wilton surface / `phi_tet` volume / `ngsolve.bem`
    single-layer) + the Newton loop in C++ behind a Radia API. This also enables a fair **wall-clock**
