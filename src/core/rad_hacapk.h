@@ -345,18 +345,23 @@ private:
  * A_raw[i][j] is computed ON DEMAND by radTInteraction::MomentSystemEntry (no dense build, no row
  * normalization -- the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
  * A_raw is NON-symmetric (rows = moment functionals, cols = charges) -- ACA+ compresses it anyway.
- * ComputeSystemEntry stores A_raw directly (no -N/+1/chi flip); the H-LU (cHACApK_hlu_*) factors it
- * (Increment 3).  HEX-ONLY; assumes m_elemDOFOffset[m_hexaElemIndices[h]] == 6*h (pure-hex moment). */
+ * The method-2 solve normally builds the chi-free K_geometry mode once and applies
+ * A(chi)x = Lx + diag_row(chi)Kx outside HACApK; the A_raw mode is retained for diagnostics/gates.
+ * HEX-ONLY; assumes m_elemDOFOffset[m_hexaElemIndices[h]] == 6*h (pure-hex moment). */
 class RadHACApKMomentSystem : public RadHACApKBase {
 public:
     RadHACApKMomentSystem(radTInteraction* interaction, double chi);                            // uniform chi
     RadHACApKMomentSystem(radTInteraction* interaction, const std::vector<double>& chiPerHex);  // per-element chi (Increment 4)
+    RadHACApKMomentSystem(radTInteraction* interaction, bool kernelOnly);                       // chi-free K_geometry
     ~RadHACApKMomentSystem() override {}
 
     radTInteraction* GetInteraction() const { return m_interaction; }
 
     // A_raw[i][j] on demand (the un-normalized moment system entry; rows 6*h+t, cols = face DOF).
     double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
+    // Block-level callback unit used behind the scalar HACApK callback.  HACApK's current C API still asks
+    // for scalar entries, but any future leaf-fill/batched API should call this 6x6 unit directly.
+    void GetInteractionBlock6x6(int elem_i, int elem_j, double* block) const;
     // The H-matrix stores A_raw directly (no MSC sign flip / 1-chi shift).
     double ComputeSystemEntry(int dof_i, int dof_j) const override { return GetInteractionMatrixElement(dof_i, dof_j); }
 
@@ -372,6 +377,7 @@ private:
     double m_chi;                     // uniform chi (fallback when m_chi_in is empty)
     std::vector<double> m_chi_in;     // per-element chi supplied by the ctor (Increment 4); empty -> uniform m_chi
     std::vector<double> m_chiv;       // chi per hex, resolved in ExtractCoordinates, for MomentSystemEntry
+    bool m_kernel_only;               // true => H-matrix stores chi-free K_geometry only (no local L block)
 };
 
 //-------------------------------------------------------------------------

@@ -63,6 +63,12 @@ public:
 	// Can be set via Python API: rad.SolverPar("bicg_tol", value)
 	double m_bicg_tol;
 
+	// Multipole-moment method-2 linear/nonlinear acceleration controls.
+	// moment_krylov_solver: 0 = BiCGSTAB, 1 = restarted GMRES.
+	int m_moment_krylov_solver;
+	int m_moment_gmres_restart;
+	int m_moment_anderson_depth;
+
 	// Relaxation coefficient for nonlinear iteration (default: 0.0 = full step)
 	// 0.0 = full step (no under-relaxation)
 	// 0.0-1.0 = under-relaxation: chi_new = chi_new*(1-relax) + chi_old*relax
@@ -166,6 +172,9 @@ public:
 		MemAllocForIntrctMatrTotAtOnce = 0;
 		NonlinearMethod = 1;  // Default: mucal2 (B-change/Newton) for faster convergence
 		m_bicg_tol = 1.0e-4;  // Default: 1e-4 (ELF-compatible)
+		m_moment_krylov_solver = 0;
+		m_moment_gmres_restart = 40;
+		m_moment_anderson_depth = 0;
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 		m_keep_magnetization = false; // Default: reset M to zero before each Solve
 		m_use_newton = false; // Default: Picard iteration (backward compatible)

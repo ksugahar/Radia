@@ -3,6 +3,27 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.95.0 — Multipole-moment MMM matrix-free and HACApK acceleration
+
+Released 2026-06-26.
+
+- **Multipole-moment MMM method 1**: replaced the dense BiCGSTAB linear
+  step with matrix-free moment matvecs and element-wise block Jacobi for
+  pure hexahedral and mixed hex/wedge/pyramid 5/6-DOF surface-charge
+  systems.  The path now uses the same moment blocks on demand instead of
+  building a full dense matrix.
+- **Multipole-moment MMM method 2**: the nonlinear HACApK path now reuses a
+  chi-free geometry H-matrix across Picard iterations and applies the
+  current per-element susceptibility as `Lx + diag(chi) Kx`, rebuilding
+  only the local block-Jacobi preconditioner and RHS each outer iteration.
+  The default Krylov solver remains BiCGSTAB; restarted GMRES is exposed as
+  an explicit comparison path.
+- **Fail-loud cleanup**: removed the inexact BiCGSTAB and two-level coarse
+  preconditioner experiments from the runtime API.  Passing their old
+  `SolverConfig` keys now raises instead of silently selecting a different
+  path.  The failed branches are recorded in
+  `docs/multipole_moment_mmm/MEMORY.md`.
+
 ## 4.89.1 — radia-ih hardening + stream_function Tikhonov/Pareto
 
 Released 2026-06-02.
