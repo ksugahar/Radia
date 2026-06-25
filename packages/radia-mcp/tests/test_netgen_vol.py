@@ -785,6 +785,30 @@ def test_first_order_fem_bem_topology_for_unit_tetrahedron():
     assert topology["trace"]["rwg_to_hcurl_edge_ids"] == [1, 2, 3, 4, 5, 6]
 
 
+def test_boundary_oriented_edge_summary_expands_rwg_trace_rows():
+    summary = parse_netgen_tri_tet_vol(TET_VOL).boundary_oriented_edge_summary()
+    rows = summary["rows"]
+
+    assert summary["policy"] == "boundary_triangle_oriented_edges_for_first_order_rwg_trace"
+    assert summary["surface_triangles"] == 4
+    assert summary["surface_edges"] == 6
+    assert summary["rwg_dof_edges"] == 6
+    assert summary["oriented_edge_rows"] == 12
+    assert summary["open_edges"] == 0
+    assert summary["is_closed_manifold"] is True
+    assert summary["orientation_sign_counts"] == {"-1": 6, "1": 6}
+
+    first_face = rows[:3]
+    assert [row["oriented_edge_nodes_global"] for row in first_face] == [[1, 2], [2, 3], [3, 1]]
+    assert [row["edge_nodes_global"] for row in first_face] == [[1, 2], [2, 3], [1, 3]]
+    assert [row["orientation_sign"] for row in first_face] == [1, 1, -1]
+    assert all(row["is_rwg_dof"] for row in rows)
+    assert all(row["adjacent_surface_triangle_count"] == 2 for row in rows)
+    assert {row["hcurl_edge_id"] for row in rows} == {1, 2, 3, 4, 5, 6}
+    assert summary["min_edge_length_m"] == pytest.approx(1.0)
+    assert summary["max_edge_length_m"] == pytest.approx(2**0.5)
+
+
 def test_first_order_topology_compacts_boundary_nodes_with_interior_node():
     topology = parse_netgen_tri_tet_vol(FOUR_TET_WITH_INTERIOR_NODE_VOL).first_order_fem_bem_topology()
 
