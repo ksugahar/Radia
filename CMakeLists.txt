@@ -139,8 +139,30 @@ else()
 endif()
 
 if(WIN32)
-	# Intel oneAPI MKL (required)
-	set(MKL_DIR "C:/Program Files (x86)/Intel/oneAPI/mkl/latest")
+	# Intel oneAPI MKL (required).  Support both full oneAPI installs and
+	# pip mkl-devel installs under Python's Library directory.
+	set(_MKL_CANDIDATES)
+	if(DEFINED ENV{MKLROOT})
+		list(APPEND _MKL_CANDIDATES "$ENV{MKLROOT}")
+	endif()
+	list(APPEND _MKL_CANDIDATES "C:/Program Files (x86)/Intel/oneAPI/mkl/latest")
+	execute_process(
+		COMMAND ${Python3_EXECUTABLE} -c "import pathlib, sys; print(pathlib.Path(sys.prefix) / 'Library')"
+		OUTPUT_VARIABLE _PYTHON_MKL_ROOT
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		ERROR_QUIET
+	)
+	if(_PYTHON_MKL_ROOT)
+		list(APPEND _MKL_CANDIDATES "${_PYTHON_MKL_ROOT}")
+	endif()
+	set(MKL_DIR "")
+	foreach(_MKL_CANDIDATE IN LISTS _MKL_CANDIDATES)
+		file(TO_CMAKE_PATH "${_MKL_CANDIDATE}" _MKL_CANDIDATE_NORM)
+		if(EXISTS "${_MKL_CANDIDATE_NORM}/lib/mkl_rt.lib")
+			set(MKL_DIR "${_MKL_CANDIDATE_NORM}")
+			break()
+		endif()
+	endforeach()
 	set(MKL_INCLUDE_DIR "${MKL_DIR}/include")
 	set(MKL_LIB_DIR "${MKL_DIR}/lib")
 	set(MKL_BIN_DIR "${MKL_DIR}/bin")
@@ -157,7 +179,7 @@ if(WIN32)
 		set(BLAS_INCLUDE_DIR ${MKL_INCLUDE_DIR})
 		set(USE_MKL_FOUND TRUE)
 	else()
-		message(FATAL_ERROR "Intel MKL not found. Please install Intel oneAPI Base Toolkit.")
+		message(FATAL_ERROR "Intel MKL not found. Install Intel oneAPI Base Toolkit or pip package mkl-devel.")
 	endif()
 endif()
 

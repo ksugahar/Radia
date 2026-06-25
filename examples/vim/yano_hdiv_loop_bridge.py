@@ -1,24 +1,24 @@
-"""yano-MSC <-> HDiv-VIM loop duality: the SAME loop space, two backends.
+"""surface-charge MSC <-> HDiv-VIM loop duality: the SAME loop space, two backends.
 
 Radia keeps BOTH soft-iron demag backends (decision 2026-06-19): the collocation surface-charge
-yano-type MSC (6 sigma DOF / hex, the scalable HACApK demag) and the FEEC HDiv-VIM (RT0 face flux,
+six-face surface-charge MSC (6 sigma DOF / hex, the scalable HACApK demag) and the FEEC HDiv-VIM (RT0 face flux,
 loop-free by construction).  This example shows -- on one regular and one affine-sheared hex grid --
 that they share the SAME loop structure, and that a star projection re-conditions the collocation
 matrix the way the HDiv-VIM is conditioned by construction.
 
 The structural fact (verified below, all cases exact):
 
-  cell-adjacency cycle space  ==  HDiv-VIM ker(B)  ==  yano-MSC collocation near-null
+  cell-adjacency cycle space  ==  HDiv-VIM ker(B)  ==  surface-charge MSC collocation near-null
   cycle = n_internal_faces - (n_cells - 1)   (first Betti number of the cell graph)
 
   (1) HDiv-VIM  N = B^T G B : the loops are ker(B), so N.loop = 0 EXACTLY (loop_res ~ 1e-16).
       This is why the HDiv-VIM nonlinear (Newton) iteration is mesh/mu_r-independent: the loop
       modes never enter the operator.
-  (2) yano-MSC  collocation : the 6-sigma/hex matrix carries those same loops as a LATENT near-null
+  (2) surface-charge MSC  collocation : the 6-sigma/hex matrix carries those same loops as a LATENT near-null
       subspace -> condition number ~1e16-1e17.  The loop SOURCE field cancels (element-common
       compensation), but the loop COEFFICIENTS remain unknowns, so an iterative solve can grow them.
   (3) star projection : restrict the unknowns to the non-loop (internal-flux) subspace -- the dense
-      research form of the sparse q_internal = B^T a.  Drops the yano-MSC condition number from
+      research form of the sparse q_internal = B^T a.  Drops the surface-charge MSC condition number from
       ~1e16 to ~40-65, i.e. into the HDiv-VIM regime, with an O(n_face) sparse projector (NOT a heavy
       Galerkin re-assembly).
 
@@ -27,7 +27,7 @@ is a topological invariant (shear-independent), so n_loop == cycle holds regardl
 exercises the yano collocation kernel on non-axis-aligned hexes.
 
 Reference: H. Yano and K. Sugahara, "Magnetic Moment Method with the Idea of Magnetic Surface Charge
-Method", J. Magn. Soc. Jpn. 47(2), 52-56, 2023 (the yano-type MSC).  The loop / de Rham structure is
+Method", J. Magn. Soc. Jpn. 47(2), 52-56, 2023 (the six-face surface-charge MSC).  The loop / de Rham structure is
 the FEEC RT0 reading of the same surface-charge discretization.
 """
 import os
@@ -69,7 +69,7 @@ def hex_grid_cells(nx, ny, nz, shear=0.0):
 
 
 def yano_matrix(cells, mu_r=1000.0):
-    """Radia yano-MSC collocation interaction matrix (6 surface-charge DOF / hex) via the public
+    """Radia surface-charge MSC collocation interaction matrix (6 surface-charge DOF / hex) via the public
     BuildMatrix / GetInteractMatrix accessors."""
     rad.UtiDelAll()
     objs = []
@@ -114,7 +114,7 @@ def report(nx, ny, nz, shear=0.0):
     Nn = np.linalg.norm(N) or 1.0
     loop_res = (max(np.linalg.norm(N @ loops[k]) for k in range(n_loop)) / Nn) if n_loop else 0.0
 
-    # (2) yano-MSC: collocation matrix + latent near-null (the loops) + conditioning
+    # (2) surface-charge MSC: collocation matrix + latent near-null (the loops) + conditioning
     A, dof = yano_matrix(cells)
     U, sv, Vt = np.linalg.svd(A)
     smax, smin = sv[0], sv[-1]
@@ -131,7 +131,7 @@ def report(nx, ny, nz, shear=0.0):
     print(f"\n=== {tag} : n_cells={n_cells}  n_internal_faces={n_internal}  cycle(loops)={cycle} ===")
     print(f"  [HDiv-VIM ] ndof(RT0)={d['ndof']:4d}  n_loop={n_loop:4d}  "
           f"loop_res(max||N loop||/||N||)={loop_res:.2e}")
-    print(f"  [yano-MSC ] dof(6/hex)={dof:4d}  cond2={cond:.3e}  near_null(<1e-9 smax)={near_null}")
+    print(f"  [surface-charge MSC ] dof(6/hex)={dof:4d}  cond2={cond:.3e}  near_null(<1e-9 smax)={near_null}")
     print(f"  [star-proj] keep={n_keep} (drop {cycle} loops)  cond2_star={cond_star:.3e}  "
           f"-> {cond / cond_star:.1e}x better")
     print(f"  [bridge   ] local_face_dof=6*ncell={6 * n_cells}=2*int+bnd ({2 * n_internal}+{n_boundary})")
@@ -147,9 +147,9 @@ def report(nx, ny, nz, shear=0.0):
 def mur_sweep(nx, ny, nz, mur_list=(10, 100, 1000, 1e4, 1e5)):
     """The latent loops are REGULARIZED by the 1/chi diagonal of the system matrix A = -N + (1/chi)I
     (N is geometry-only; chi = mu_r - 1).  So they bite only at HIGH mu_r (1/chi -> 0): cond(A) grows
-    ~mu_r and the iterative solve slows -- exactly the yano-MSC mesh/mu_r-dependence (the HDiv-VIM is
+    ~mu_r and the iterative solve slows -- exactly the surface-charge MSC mesh/mu_r-dependence (the HDiv-VIM is
     mu_r-INDEPENDENT because the loops are in ker(B)).  Star-projecting the loops out of A makes the
-    yano-MSC condition number mu_r-INDEPENDENT too."""
+    surface-charge MSC condition number mu_r-INDEPENDENT too."""
     cells, n_internal = hex_grid_cells(nx, ny, nz, shear=0.5)
     n_cells = len(cells)
     cycle = n_internal - (n_cells - 1)

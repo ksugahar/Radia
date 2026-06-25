@@ -21,12 +21,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia')
 import numpy as np
 from pathlib import Path
 
+GMSH_MODELS = Path(__file__).resolve().parents[1] / "gmsh_models"
+sys.path.insert(0, str(GMSH_MODELS))
+from gmsh_ascii_reader import read_gmsh_ascii  # noqa: E402
+
 print("=" * 70)
 print("PEEC Port Extraction from GMSH Mesh")
 print("=" * 70)
 
 # Check if mesh file with ports exists
-mesh_file = Path(__file__).parent / "gmsh_models" / "circular_coil_with_ports.msh"
+mesh_file = GMSH_MODELS / "circular_coil_with_ports.msh"
 
 if not mesh_file.exists():
     print(f"\nERROR: Mesh file not found: {mesh_file}")
@@ -45,44 +49,30 @@ if not mesh_file.exists():
 print(f"\n[1] Loading mesh file: {mesh_file.name}")
 print(f"    Path: {mesh_file}")
 
-# Load mesh using GMSH Python API
-try:
-    import gmsh
-
-    print("\n[2] Reading GMSH file with GMSH Python API...")
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 0)
-    gmsh.open(str(mesh_file))
-    print("    OK Mesh loaded successfully")
-
-except ImportError:
-    print("\nERROR: GMSH Python API not installed")
-    print("    Install: pip install gmsh")
-    sys.exit(1)
-except Exception as e:
-    print(f"\nERROR: ERROR loading mesh: {e}")
-    sys.exit(1)
+print("\n[2] Reading GMSH ASCII fixture directly...")
+mesh = read_gmsh_ascii(mesh_file)
+print("    OK Mesh read successfully")
 
 # Get mesh information
-node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
+node_tags = mesh.node_tags
 n_nodes = len(node_tags)
-coords = node_coords.reshape(-1, 3)
+coords = mesh.coords
 
 print(f"\n[3] Mesh Information:")
 print(f"    Vertices: {n_nodes}")
 
 # Get all elements
-elem_types, elem_tags, elem_node_tags = gmsh.model.mesh.getElements()
+elem_types, elem_tags, elem_node_tags = mesh.grouped_elements()
 n_elements_total = sum(len(tags) for tags in elem_tags)
 print(f"    Total elements: {n_elements_total}")
 
 # Extract physical groups
 print("\n[4] Physical Groups (Ports):")
-phys_groups = gmsh.model.getPhysicalGroups()
+phys_groups = mesh.physical_groups()
 
 port_groups = {}
 for dim, tag in phys_groups:
-    name = gmsh.model.getPhysicalName(dim, tag)
+    name = mesh.physical_name(dim, tag)
     print(f"    Dimension {dim}, Tag {tag}: {name}")
 
     # Store port groups
@@ -96,26 +86,14 @@ for port_name, port_info in port_groups.items():
     dim = port_info['dim']
     tag = port_info['tag']
 
-    # Get entities (surfaces) in this physical group
-    entities = gmsh.model.getEntitiesForPhysicalGroup(dim, tag)
-
     print(f"\n  Port: {port_name}")
     print(f"    Physical tag: {tag}")
-    print(f"    Entities (surfaces): {entities}")
 
-    # Get elements for each entity
-    port_elements = []
-    for entity in entities:
-        # Get triangles on this surface
-        elem_types_ent, elem_tags_ent, elem_node_tags_ent = \
-            gmsh.model.mesh.getElements(dim, entity)
-
-        if len(elem_tags_ent) > 0:
-            # Element type 2 = triangle
-            for i, elem_type in enumerate(elem_types_ent):
-                if elem_type == 2:  # Triangle
-                    n_elems = len(elem_tags_ent[i])
-                    port_elements.extend(elem_tags_ent[i])
+    port_elements = [
+        elem.tag
+        for elem in mesh.elements_for_physical_group(dim, tag)
+        if elem.element_type == 2
+    ]
 
     print(f"    Elements in port: {len(port_elements)}")
 
@@ -134,7 +112,8 @@ for port_name, port_info in port_groups.items():
 
     for elem_tag in port_elements:
         # Get nodes for this element
-        elem_type, elem_nodes = gmsh.model.mesh.getElement(elem_tag)
+        elem = mesh.element(elem_tag)
+        elem_nodes = elem.nodes
 
         # Triangle has 3 edges: (n0,n1), (n1,n2), (n2,n0)
         n0, n1, n2 = elem_nodes
@@ -217,6 +196,3 @@ print("5. Schur complement for port impedance Z(f)")
 print("\n" + "=" * 70)
 print("OK Port extraction completed!")
 print("=" * 70)
-
-# Clean up GMSH
-gmsh.finalize()

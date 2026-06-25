@@ -63,6 +63,12 @@ public:
 	// Can be set via Python API: rad.SolverPar("bicg_tol", value)
 	double m_bicg_tol;
 
+	// Multipole-moment method-2 linear/nonlinear acceleration controls.
+	// moment_krylov_solver: 0 = BiCGSTAB, 1 = restarted GMRES.
+	int m_moment_krylov_solver;
+	int m_moment_gmres_restart;
+	int m_moment_anderson_depth;
+
 	// Relaxation coefficient for nonlinear iteration (default: 0.0 = full step)
 	// 0.0 = full step (no under-relaxation)
 	// 0.0-1.0 = under-relaxation: chi_new = chi_new*(1-relax) + chi_old*relax
@@ -106,6 +112,8 @@ public:
 
 	// Solve statistics (always available)
 	double m_solve_t_matrix_build;   // Interaction matrix build time [s]
+	double m_solve_t_moment_fieldgrad;      // Dense moment centroid field/gradient build time [s]
+	double m_solve_t_moment_system_build;   // Dense moment system assembly time [s]
 	double m_solve_t_lu_decomp;      // LU decomposition time [s] (Method 0 only)
 	double m_solve_t_linear_solve;   // Total linear solver time [s]
 	int m_solve_linear_iterations;   // Total linear iterations (BiCGSTAB only)
@@ -164,6 +172,9 @@ public:
 		MemAllocForIntrctMatrTotAtOnce = 0;
 		NonlinearMethod = 1;  // Default: mucal2 (B-change/Newton) for faster convergence
 		m_bicg_tol = 1.0e-4;  // Default: 1e-4 (ELF-compatible)
+		m_moment_krylov_solver = 0;
+		m_moment_gmres_restart = 40;
+		m_moment_anderson_depth = 0;
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 		m_keep_magnetization = false; // Default: reset M to zero before each Solve
 		m_use_newton = false; // Default: Picard iteration (backward compatible)
@@ -183,6 +194,8 @@ public:
 
 		// Solve statistics init
 		m_solve_t_matrix_build = 0.0;
+		m_solve_t_moment_fieldgrad = 0.0;
+		m_solve_t_moment_system_build = 0.0;
 		m_solve_t_lu_decomp = 0.0;
 		m_solve_t_linear_solve = 0.0;
 		m_solve_linear_iterations = 0;
@@ -345,10 +358,10 @@ public:
 	void ShowInteractMatrix(int InteractElemKey);
 	int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF);
 	int HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF);  // Densify actual HACApK ACA+ operator (validation)
-	int GetLoopBasis(int InteractElemKey, double* pL, int* pNLoop, int* pDOF);  // yano-MSC cell-graph cycle (loop) basis
+	int GetLoopBasis(int InteractElemKey, double* pL, int* pNLoop, int* pDOF);  // surface-charge MSC cell-graph cycle (loop) basis
 	int GetFaceGeom(int InteractElemKey, double* pG, int* pDOF);  // per-DOF hex face geometry (area/centroid/normal/elem-center)
 	int GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF);  // per moment-element centroid demag field+gradient functionals
-	int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF);  // moment-yano system matrix + rhs (Step-1 verification of the EIEM2->moment upgrade)
+	int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF);  // multipole-moment MMM system matrix + rhs (Step-1 verification of the EIEM2->moment upgrade)
 	int MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF);  // dense UN-normalized A_raw built ENTRY-BY-ENTRY via MomentSystemEntry (ACA H-matrix entry validation, Phase 2)
 	int MomentHMatrixProbe(int InteractElemKey, double chi, double eps, int leaf, double eta, double* out);  // build A_raw as a HACApK H-matrix + probe H-matvec vs dense; out[8] (Phase 2 Increment 2)
 	double HLUTestOnHACApK(int InteractElemKey);  // Phase 4: H-LU smoke test on real HACApK tree (returns max rel err vs MatVec round-trip)

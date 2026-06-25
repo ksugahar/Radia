@@ -35,6 +35,9 @@ CI-enforceable guard. Run it before any public commit / push / publish.
 Usage:
   python tools/policy_lint.py [--root <radia-mcp dir>] [--strict] [--selftest]
       (default: run BOTH guards on the real package; exit 1 on any finding.)
+  python tools/policy_lint.py --root <repo-root> --tracked-only
+      (provenance-scan tracked src/examples/tests files from a public repo root;
+       untracked private scratch files are ignored.)
   python tools/policy_lint.py --selftest
       (self-test the provenance patterns on crafted strings; no repo needed.)
 """
@@ -43,6 +46,7 @@ from __future__ import annotations
 import argparse
 import ast
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -301,11 +305,18 @@ PROVENANCE_RULES: list[tuple[re.Pattern, str]] = [
     # here -- that broader lab-path cleanup is out of this guard's scope.
     (re.compile(r"[SW]:[\\/](?:FEMM|JMAG|COMSOL|CST)\b", re.IGNORECASE),
      "internal commercial-tool drive path (S:/W: \\<tool>)"),
+    (re.compile(r"[SW]:[\\/](?:ELF_MAGIC|ELF)\b", re.IGNORECASE),
+     "internal ELF/MAGIC drive path"),
     (re.compile(r"W:[\\/]00_CAE[\\/](?:FEMM|JMAG|COMSOL|CST)\b", re.IGNORECASE),
      "internal commercial-tool path (W:\\00_CAE\\<tool>)"),
+    (re.compile(r"W:[\\/]00_CAE[\\/](?:ELF_MAGIC|ELF)\b", re.IGNORECASE),
+     "internal ELF/MAGIC path"),
     (re.compile(r"[SW]:[\\/][^\n\"']*[\\/](?:FEMM|JMAG|COMSOL|CST)[\\/]",
                 re.IGNORECASE),
      "internal path with a commercial-tool directory component"),
+    (re.compile(r"[SW]:[\\/][^\n\"']*[\\/](?:ELF_MAGIC|ELF)[\\/]",
+                re.IGNORECASE),
+     "internal path with an ELF/MAGIC directory component"),
     (re.compile(r"\b_crossval\b", re.IGNORECASE),
      "internal cross-validation path token (_crossval)"),
     (re.compile(r"\bcomsol_xval\b", re.IGNORECASE),
@@ -367,10 +378,65 @@ def scan_file(path: Path, root: Path | None = None) -> list[tuple[str, int, str]
     return scan_text(text, label)
 
 
-def scan_text_tree(root: Path) -> list[tuple[str, int, str]]:
+def _git_tracked_files(root: Path) -> list[Path] | None:
+    """Return tracked files under the current git worktree, or None outside git."""
+    try:
+        top = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        out = subprocess.check_output(
+            ["git", "-C", top, "ls-files"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+    top_path = Path(top)
+    tracked: list[Path] = []
+    try:
+        root_resolved = root.resolve()
+    except OSError:
+        root_resolved = root
+    for rel in out.splitlines():
+        candidate = (top_path / rel).resolve()
+        try:
+            candidate.relative_to(root_resolved)
+        except ValueError:
+            continue
+        tracked.append(candidate)
+    return tracked
+
+
+def scan_text_tree(root: Path, *, tracked_only: bool = False) -> list[tuple[str, int, str]]:
     """Scan src/ + examples/ + tests/ (*.py, *.md) for provenance findings."""
     findings: list[tuple[str, int, str]] = []
     seen: set[Path] = set()
+    try:
+        scan_root = root.resolve()
+    except OSError:
+        scan_root = root
+    tracked = _git_tracked_files(root) if tracked_only else None
+
+    if tracked_only and tracked is not None:
+        scan_bases = [
+            (scan_root / sub).resolve()
+            for sub in _SCAN_DIRS
+            if (scan_root / sub).is_dir()
+        ]
+        for f in sorted(tracked):
+            if "__pycache__" in f.parts or f.suffix not in {".py", ".md"}:
+                continue
+            if not any(_is_relative_to(f, base) for base in scan_bases):
+                continue
+            if f in seen:
+                continue
+            seen.add(f)
+            findings.extend(scan_file(f, scan_root))
+        return findings
+
     for sub in _SCAN_DIRS:
         base = root / sub
         if not base.is_dir():
@@ -382,6 +448,14 @@ def scan_text_tree(root: Path) -> list[tuple[str, int, str]]:
                 seen.add(f)
                 findings.extend(scan_file(f, root))
     return findings
+
+
+def _is_relative_to(path: Path, base: Path) -> bool:
+    try:
+        path.relative_to(base)
+    except ValueError:
+        return False
+    return True
 
 
 # ===========================================================================
@@ -408,6 +482,8 @@ def selftest() -> int:
         "the proposed method matches CST to 0.5 %",
         "validated against REAL CST Studio Suite",
         r"the lab's CST corpus (S:\CST).",                        # CST internal path
+        r"private validation mesh at S:\ELF_MAGIC\_crossval\case.meg",
+        r"licensed reference path W:\00_CAE\ELF_MAGIC\_crossval\run.json",
         # design / capability reference (no number) -- the leak class this guard now catches:
         'The CST-modeller "rotate with copies" verb',            # <tool>-modeller
         "a CST-style near-field equivalent source",              # <tool>-style
@@ -448,6 +524,7 @@ def selftest() -> int:
         "licensed under the COMSOL Software License Agreement 6.2.",
         "matches FEMM 4.2 production",
         "Created in CST Studio Suite 2026.0",                    # CST version, not a benchmark
+        "ELF/MAGIC product documentation server is public-safe when solver data is absent",
         "EMF is at the EED/CST London, UK, e-mail 10016.3130",   # quoted paper affiliation (allowlisted)
         "high-frequency tools (HFSS, FEKO) exist",               # competitor landscape (not in _TOOL)
         # FEMM design-references are ALLOWED (FEMM-parity is the stated open goal):
@@ -486,6 +563,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="radia-mcp package dir (contains pyproject.toml)")
     ap.add_argument("--strict", action="store_true",
                     help="promote structure warnings to errors")
+    ap.add_argument("--tracked-only", action="store_true",
+                    help="provenance-scan only files tracked by git under root")
     ap.add_argument("--selftest", action="store_true",
                     help="run the provenance pattern self-test and exit")
     args = ap.parse_args(argv if argv is not None else None)
@@ -499,15 +578,16 @@ def main(argv: list[str] | None = None) -> int:
     errors, warns = check_packaging(root)
 
     # --- B. provenance guard ---
-    findings = scan_text_tree(root)
+    findings = scan_text_tree(root, tracked_only=args.tracked_only)
 
     print("=" * 70)
     print("radia-mcp publish-boundary lint (CLAUDE.md 公開境界)")
     print("=" * 70)
 
     # report provenance findings (file:line: reason)
+    suffix = " (git-tracked only)" if args.tracked_only else ""
     print(f"\nPROVENANCE (commercial-tool attribution / internal paths) in "
-          f"src+examples+tests:")
+          f"src+examples+tests{suffix}:")
     if findings:
         for label, lineno, reason in findings:
             print(f"  {label}:{lineno}: {reason}")

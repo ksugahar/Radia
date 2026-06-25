@@ -4,7 +4,7 @@
 
 This document describes the implementation of Image symmetry for MSC hexahedra in Radia.
 
-**Status (updated 2026-06-23):** this is a historical design note for the pre-moment-yano
+**Status (updated 2026-06-23):** this is a historical design note for the pre-multipole-moment MMM
 surface-charge kernel. The EIEM2 `Compute6x6BlockFast` / `Compute5x5BlockFast` kernels were removed;
 current surface-charge IMA is handled by `BuildMomentSystemCore` /
 `CentroidFieldGradFromFace`, while tetrahedral MMM still uses `Compute3x3BlockFast`.

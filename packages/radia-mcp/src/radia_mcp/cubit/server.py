@@ -10,10 +10,14 @@ Provides tools for:
 
 Usage:
     python server.py              # Start MCP server (stdio transport)
-    python server.py --selftest   # Run self-test on examples/
+    python server.py --selftest   # Run lightweight self-test
+    python server.py --selftest --audit-examples
+                                  # Run self-test plus repo-wide examples audit
 """
 
+from collections import Counter
 import json
+import errno
 import os
 import sys
 import time
@@ -48,6 +52,37 @@ mcp = FastMCP("cubit-export")
 
 # Project root (current working directory for pip-installed package)
 PROJECT_ROOT = Path.cwd()
+
+_RULE_REMEDIATIONS = {
+	"non-ascii-byte": (
+		"ASCII-sanitize Cubit-facing scripts. Keep Japanese/Greek/math symbols "
+		"in docs or data files, not in Python that may run under Cubit's cp932 "
+		"console."
+	),
+	"hardcoded-absolute-path": (
+		"Replace machine-specific absolute paths with Path(__file__)-relative "
+		"paths, parameters, or environment variables."
+	),
+	"wrong-connectivity-2nd-order": (
+		"Use the canonical second-order Netgen/Cubit connectivity mapping; do "
+		"not hand-roll node permutations."
+	),
+	"missing-block-registration": (
+		"Register material/volume/sideset blocks before export so downstream "
+		"solvers can recover domains and boundaries."
+	),
+	"missing-cubit-init": (
+		"Initialize/import Cubit explicitly in headless scripts before issuing "
+		"cubit.cmd calls."
+	),
+	"missing-boundary-block": (
+		"Create explicit boundary blocks/sidesets for solver-facing surfaces."
+	),
+	"ambiguous-face-block": (
+		"Disambiguate face/surface block selection; avoid broad selectors that "
+		"can bind the wrong boundary."
+	),
+}
 
 
 # ============================================================
@@ -84,6 +119,66 @@ def _format_findings(filepath: str, findings: list[dict]) -> str:
 			f"  L{f['line']:>4d} [{f['severity']}] {f['rule']}: {f['message']}"
 		)
 	return '\n'.join(lines)
+
+
+def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dict:
+	"""Machine-readable directory lint summary for loop/audit bookkeeping."""
+	d = Path(directory)
+	if not d.is_absolute():
+		d = PROJECT_ROOT / d
+
+	if not d.exists():
+		return {
+			"ok": False,
+			"error": f"Directory not found: {d}",
+			"directory": str(d),
+		}
+
+	py_files = sorted(d.rglob("*.py"))
+	limit = max(0, min(int(top_n), 50))
+	by_severity = Counter({"CRITICAL": 0, "HIGH": 0, "MODERATE": 0, "LOW": 0})
+	by_rule: Counter[str] = Counter()
+	top_files = []
+	total_findings = 0
+
+	for py_file in py_files:
+		findings = _lint_file(str(py_file))
+		if not findings:
+			continue
+		total_findings += len(findings)
+		try:
+			rel_path = str(py_file.relative_to(PROJECT_ROOT))
+		except ValueError:
+			rel_path = str(py_file)
+		top_files.append({"path": rel_path, "findings": len(findings)})
+		for finding in findings:
+			by_severity[str(finding.get("severity", "UNKNOWN"))] += 1
+			by_rule[str(finding.get("rule", "unknown"))] += 1
+
+	top_rules = [
+		{
+			"rule": rule,
+			"count": count,
+			"action": _RULE_REMEDIATIONS.get(
+				rule,
+				"Inspect representative findings and add a specific remediation note.",
+			),
+		}
+		for rule, count in sorted(by_rule.items(), key=lambda item: (-item[1], item[0]))[:limit]
+	]
+
+	return {
+		"ok": True,
+		"directory": str(d),
+		"files_scanned": len(py_files),
+		"files_with_findings": len(top_files),
+		"total_findings": total_findings,
+		"clean": total_findings == 0,
+		"by_severity": dict(by_severity),
+		"top_rules": top_rules,
+		"dominant_rule": top_rules[0] if top_rules else None,
+		"top_files": sorted(top_files, key=lambda item: (-item["findings"], item["path"]))[:limit],
+	}
 
 
 # ============================================================
@@ -706,6 +801,18 @@ def lint_cubit_directory(directory: str = "examples") -> str:
 		output_parts.append("All files passed!")
 
 	return '\n'.join(output_parts)
+
+
+@mcp.tool()
+def cubit_audit_summary(directory: str = "examples", top_n: int = 10) -> dict:
+	"""
+	Return a machine-readable Cubit export-lint audit summary.
+
+	Use this for learning-loop bookkeeping and dashboards. It reports files
+	scanned, total findings, severity counts, top rule counts, and top files
+	without printing the long per-file audit body.
+	"""
+	return _lint_directory_summary(directory, top_n)
 
 
 # ============================================================
@@ -4733,49 +4840,56 @@ def cubit_diagnostics_guide(topic: str = "overview") -> str:
 # Self-test
 # ============================================================
 
-def _selftest():
-	"""Run lint on fixtures and optionally examples/."""
-	print("=" * 70)
-	print("Cubit Export Lint Self-Test")
-	print("=" * 70)
-	print()
+def _selftest(audit_examples: bool = False):
+    """Run fixture self-test; optionally run the repo-wide examples audit."""
+    print("=" * 70)
+    print("Cubit Export Lint Self-Test")
+    print("=" * 70)
+    print()
 
-	# --- Fixtures validation ---
-	fixtures_dir = (
-		Path(__file__).parent.parent.parent.parent.parent / "tests"
-		/ "mcp_server" / "fixtures"
-	)
-	if not fixtures_dir.exists():
-		fixtures_dir = Path(__file__).parent / "fixtures"
+    # --- Fixtures validation ---
+    fixtures_dir = (
+        Path(__file__).parent.parent.parent.parent.parent / "tests"
+        / "mcp_server" / "fixtures"
+    )
+    if not fixtures_dir.exists():
+        fixtures_dir = Path(__file__).parent / "fixtures"
 
-	if fixtures_dir.exists():
-		bad_file = fixtures_dir / "bad_cubit_script.py"
-		clean_file = fixtures_dir / "clean_cubit_script.py"
-		if bad_file.exists():
-			findings = _lint_file(str(bad_file))
-			print(f"  bad_cubit_script.py: {len(findings)} finding(s)")
-			if not findings:
-				print("  WARNING: bad_cubit_script.py has no findings")
-		if clean_file.exists():
-			findings = _lint_file(str(clean_file))
-			print(f"  clean_cubit_script.py: {len(findings)} finding(s)")
-			if findings:
-				for f in findings:
-					print(f"    L{f['line']} [{f['severity']}] {f['rule']}: {f['message']}")
-				print("  FAIL: clean script should have zero findings")
-				sys.exit(1)
-		print("  fixture validation: PASSED")
-		print()
+    if fixtures_dir.exists():
+        bad_file = fixtures_dir / "bad_cubit_script.py"
+        clean_file = fixtures_dir / "clean_cubit_script.py"
+        if bad_file.exists():
+            findings = _lint_file(str(bad_file))
+            print(f"  bad_cubit_script.py: {len(findings)} finding(s)")
+            if not findings:
+                print("  WARNING: bad_cubit_script.py has no findings")
+        if clean_file.exists():
+            findings = _lint_file(str(clean_file))
+            print(f"  clean_cubit_script.py: {len(findings)} finding(s)")
+            if findings:
+                for f in findings:
+                    print(f"    L{f['line']} [{f['severity']}] {f['rule']}: {f['message']}")
+                print("  FAIL: clean script should have zero findings")
+                sys.exit(1)
+        print("  fixture validation: PASSED")
+        print()
 
-	# --- Examples scan ---
-	examples_dir = PROJECT_ROOT / "examples"
-	if not examples_dir.exists():
-		if not fixtures_dir.exists():
-			print(f"SKIP: No fixtures or examples/ found")
-		return
+    # --- Examples audit ---
+    examples_dir = PROJECT_ROOT / "examples"
+    if not examples_dir.exists():
+        if not fixtures_dir.exists():
+            print("SKIP: No fixtures or examples/ found")
+        print("PASSED")
+        return
 
-	result = lint_cubit_directory("examples")
-	print(result)
+    if not audit_examples:
+        print("  examples audit: SKIPPED (run --selftest --audit-examples)")
+        print("PASSED")
+        return
+
+    result = lint_cubit_directory("examples")
+    print(result)
+    print("PASSED")
 
 
 
@@ -4786,15 +4900,29 @@ register_status_tool(
     description='Cubit mesh scripting, hex/tet workflow, export formats',
     subpackage='radia_mcp.cubit',
     related_servers=["build123d"],
+    audit_command="mcp-server-cubit --selftest --audit-examples",
 )
+
+
+def _is_closed_stdout_error(exc: BaseException) -> bool:
+    """Windows raises EINVAL when a downstream PowerShell pipe closes early."""
+    return isinstance(exc, BrokenPipeError) or (
+        isinstance(exc, OSError)
+        and getattr(exc, "errno", None) in {errno.EPIPE, errno.EINVAL}
+    )
 
 
 def main():
 	"""Entry point for mcp-server-cubit command."""
-	if len(sys.argv) > 1 and sys.argv[1] == '--selftest':
+	if '--selftest' in sys.argv[1:]:
 		from radia_mcp.common.utf8_stdout import use_utf8_stdout
 		use_utf8_stdout()
-		_selftest()
+		try:
+			_selftest(audit_examples='--audit-examples' in sys.argv[1:])
+		except (BrokenPipeError, OSError) as exc:
+			if _is_closed_stdout_error(exc):
+				return
+			raise
 	else:
 		mcp.run(transport="stdio")
 

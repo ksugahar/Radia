@@ -455,7 +455,7 @@ int ObjWedge(py::list vertices, py::array_t<double> magnetization) {
  * @brief Create pyramid element from 5 vertices
  *
  * Square-base pyramid: 1 quadrilateral base + 4 triangular sides.
- * 5 faces total -> 5 surface-charge DOF for the moment-yano MSC method.  The single quadrupole row is
+ * 5 faces total -> 5 surface-charge DOF for the multipole-moment MMM MSC method.  The single quadrupole row is
  * the per-element RESIDUAL EIGENMODE (the in-plane dx^2-dy^2-type mode for a symmetric pyramid -- DISTINCT
  * from the wedge's axial mode; both are derived/verified in examples/vim/eigenmode_quadrupole_derivation.wls),
  * so the pyramid solves through the same moment path as hex (6) and wedge (5) with no extra kernel.
@@ -921,6 +921,12 @@ py::dict GetSolveStats() {
     if (n >= 10) {
         result["deflation_alpha"] = stats[9];
     }
+    if (n >= 11) {
+        result["t_moment_fieldgrad"] = stats[10];
+    }
+    if (n >= 12) {
+        result["t_moment_system_build"] = stats[11];
+    }
 
     return result;
 }
@@ -981,7 +987,7 @@ py::tuple GetInteractMatrix(int intrc_handle) {
 }
 
 /**
- * @brief Get the yano-MSC cell-graph cycle (loop) basis as a numpy array
+ * @brief Get the surface-charge MSC cell-graph cycle (loop) basis as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
  * @return Tuple (L as 2D numpy array (dof x nLoop), nLoop)
  */
@@ -1058,8 +1064,8 @@ py::array_t<double> GetCentroidFieldGrad(int intrc_handle) {
     return result;
 }
 
-// Moment-yano system matrix A (dof x dof, row-major) + rhs (dof) for uniform linear chi + uniform applied
-// field (hx,hy,hz).  Step-1 verification of the EIEM2 -> moment-yano upgrade (vs examples/vim prototype).
+// Multipole-moment MMM system matrix A (dof x dof, row-major) + rhs (dof) for uniform linear chi + uniform applied
+// field (hx,hy,hz).  Step-1 verification of the EIEM2 -> multipole-moment MMM upgrade (vs examples/vim prototype).
 py::tuple BuildMomentSystem(int intrc_handle, double chi, double hx, double hy, double hz) {
     double Happ[3] = {hx, hy, hz};
     int dof = 0;
@@ -1943,6 +1949,53 @@ double GetBiCGSTABTol() {
     return tol;
 }
 
+void SetMomentKrylovSolverByName(const std::string& name) {
+    int solver = -1;
+    if (name == "bicgstab") solver = 0;
+    else if (name == "gmres") solver = 1;
+    else throw std::invalid_argument("moment_krylov must be 'bicgstab' or 'gmres'");
+    int n = 0;
+    int err = RadSetMomentKrylovSolver(&n, solver);
+    check_error(err);
+}
+
+std::string GetMomentKrylovSolverName() {
+    int solver = 0;
+    int err = RadGetMomentKrylovSolver(&solver);
+    check_error(err);
+    if (solver == 0) return "bicgstab";
+    if (solver == 1) return "gmres";
+    return "invalid";
+}
+
+void SetMomentGMRESRestart(int restart) {
+    if (restart < 2) throw std::invalid_argument("moment_gmres_restart must be >= 2");
+    int n = 0;
+    int err = RadSetMomentGMRESRestart(&n, restart);
+    check_error(err);
+}
+
+int GetMomentGMRESRestart() {
+    int restart = 0;
+    int err = RadGetMomentGMRESRestart(&restart);
+    check_error(err);
+    return restart;
+}
+
+void SetMomentAndersonDepth(int depth) {
+    if (depth != 0 && depth != 1) throw std::invalid_argument("moment_anderson_depth currently supports 0 or 1");
+    int n = 0;
+    int err = RadSetMomentAndersonDepth(&n, depth);
+    check_error(err);
+}
+
+int GetMomentAndersonDepth() {
+    int depth = 0;
+    int err = RadGetMomentAndersonDepth(&depth);
+    check_error(err);
+    return depth;
+}
+
 void SetRelaxParam(double relax) {
     int n = 0;
     int err = RadSetRelaxParam(&n, relax);
@@ -2060,6 +2113,13 @@ double GetHantilaRelax() {
 // ---- Unified SolverConfig / GetSolverConfig ----
 
 void SolverConfig(py::kwargs kwargs) {
+    if (kwargs.contains("moment_inexact_bicgstab")) {
+        throw std::invalid_argument("moment_inexact_bicgstab was removed; use fixed bicgstab_tol and documented preconditioner options instead");
+    }
+    if (kwargs.contains("moment_two_level_precond")) {
+        throw std::invalid_argument("moment_two_level_precond was removed after the two-stage benchmark showed no iteration reduction; use the default element-block Jacobi path");
+    }
+
     // HACApK parameters
     if (kwargs.contains("hacapk_eps") || kwargs.contains("hacapk_leaf") || kwargs.contains("hacapk_eta")) {
         double eps = kwargs.contains("hacapk_eps") ? kwargs["hacapk_eps"].cast<double>() : -1;
@@ -2085,6 +2145,18 @@ void SolverConfig(py::kwargs kwargs) {
 
     if (kwargs.contains("bicgstab_tol")) {
         SetBiCGSTABTol(kwargs["bicgstab_tol"].cast<double>());
+    }
+
+    if (kwargs.contains("moment_krylov")) {
+        SetMomentKrylovSolverByName(kwargs["moment_krylov"].cast<std::string>());
+    }
+
+    if (kwargs.contains("moment_gmres_restart")) {
+        SetMomentGMRESRestart(kwargs["moment_gmres_restart"].cast<int>());
+    }
+
+    if (kwargs.contains("moment_anderson_depth")) {
+        SetMomentAndersonDepth(kwargs["moment_anderson_depth"].cast<int>());
     }
 
     if (kwargs.contains("relax_param")) {
@@ -2122,7 +2194,7 @@ void SolverConfig(py::kwargs kwargs) {
         SetKeepMagnetization(kwargs["keep_magnetization"].cast<bool>());
     }
 
-    // (the yano_moment=False opt-out was REMOVED in Phase 3b-1: moment is the sole surface-charge demag.)
+    // (the old EIEM2/moment opt-out was REMOVED in Phase 3b-1: moment is the sole surface-charge demag.)
 }
 
 py::dict GetSolverConfig() {
@@ -2132,6 +2204,10 @@ py::dict GetSolverConfig() {
     { double tol = 1e-4;
       RadGetBiCGSTABTol(&tol);
       config["bicgstab_tol"] = tol; }
+
+    config["moment_krylov"] = GetMomentKrylovSolverName();
+    config["moment_gmres_restart"] = GetMomentGMRESRestart();
+    config["moment_anderson_depth"] = GetMomentAndersonDepth();
 
     // Relaxation parameter
     { double relax = 0.0;
@@ -3502,7 +3578,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Create pyramid element from 5 vertices.
 
               Square-base pyramid: 1 quadrilateral base + 4 triangular sides (5 faces total).
-              5 DOF for the moment-yano MSC method; the single quadrupole row is the per-element
+              5 DOF for the multipole-moment MMM MSC method; the single quadrupole row is the per-element
               residual eigenmode (same moment path as hex/wedge -- no extra kernel).
 
               Vertex convention (matches netgen_mesh_import.PYRAMID_FACES):
@@ -3711,12 +3787,12 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("GetLoopBasis", &radia_solver::GetLoopBasis,
           py::arg("intrc_handle"),
           R"pbdoc(
-              Get the historical yano-MSC cell-graph cycle (loop) basis L of an interaction matrix.
+              Get the historical surface-charge MSC cell-graph cycle (loop) basis L of an interaction matrix.
 
               The loops are the field-null subspace of the retired EIEM2 surface-charge
               collocation operator N (== HDiv ker(B), the cell/internal-face cycle space).
               Runtime deflation/gauge machinery was removed; current surface-charge soft
-              iron uses moment-yano, and HDiv-VIM is the loop-free FEEC complement.  Built
+              iron uses multipole-moment MMM, and HDiv-VIM is the loop-free FEEC complement.  Built
               geometry-only (no SVD): face-center matching -> cell adjacency -> fundamental cycles.
 
               Args:
@@ -3750,9 +3826,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
           py::arg("intrc_handle"),
           R"pbdoc(
               Per moment-element centroid demag field + gradient functionals -- the kernel of the
-              parameter-free yano-MSC moment formulation (replaces the eval-point alpha and
+              parameter-free surface-charge MSC moment formulation (replaces the eval-point alpha and
               the finite-difference conditioning noise; see examples/vim/
-              yano_moment_analytic_selfterm.py).
+              multipole_moment_analytic_selfterm.py).
 
               For each moment element, the demag field H and gradient gradH at the element
               CENTROID as linear functionals of every source DOF charge:
@@ -3774,11 +3850,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("BuildMomentSystem", &radia_solver::BuildMomentSystem,
           py::arg("intrc_handle"), py::arg("chi"), py::arg("hx"), py::arg("hy"), py::arg("hz"),
           R"pbdoc(
-              Parameter-free MOMENT-yano system matrix A (dof x dof, row-major) + rhs (dof) for a
+              Parameter-free multipole-moment MMM system matrix A (dof x dof, row-major) + rhs (dof) for a
               UNIFORM linear material (chi) in a UNIFORM applied field (hx,hy,hz).  Per moment
               element: 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched
               to chi*{H,gradH}(centroid) via GetCentroidFieldGrad.  Step-1 verification of the
-              EIEM2 -> moment-yano upgrade (matches examples/vim/yano_moment_iter_scaling.py::build).
+              EIEM2 -> multipole-moment MMM upgrade (matches examples/vim/multipole_moment_iter_scaling.py::build).
 
               Returns: (A, rhs, dof) -- A is (dof, dof), rhs is (dof,).
           )pbdoc");
@@ -3809,7 +3885,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Builds the MMM H-matrix for the interaction handle and applies it
               to unit vectors, returning the dense A = -N + diag(1/chi) in the
-              original DOF ordering. Current moment-yano MSC H-matrix validation uses
+              original DOF ordering. Current multipole-moment MMM MSC H-matrix validation uses
               MomentHMatrixProbe instead.
 
               Args:
@@ -4592,6 +4668,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   hacapk_eta (float): H-matrix admissibility parameter (default: 2.0)
                   hmatrix_eps (float): H-matrix field evaluation epsilon
                   bicgstab_tol (float): BiCGSTAB convergence tolerance (default: 1e-4)
+                  moment_krylov (str): Moment method-2 Krylov solver, "bicgstab" or "gmres"
+                  moment_gmres_restart (int): Restart length for moment GMRES (default: 40)
+                  moment_anderson_depth (int): Safeguarded moment Anderson acceleration depth, 0 or 1
                   relax_param (float): Under-relaxation (0=full step, <1=damped)
                   newton_method (bool): True=Newton-Raphson, False=Picard (default)
                   newton_damping (bool): Enable Newton line search damping
@@ -4605,6 +4684,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Example:
                   rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
                   rad.SolverConfig(bicgstab_tol=1e-6, relax_param=0.3)
+                  rad.SolverConfig(moment_krylov="gmres", moment_gmres_restart=40)
+                  rad.SolverConfig(moment_anderson_depth=1)
                   rad.SolverConfig(newton_method=True, newton_damping=True)
                   rad.SolverConfig(b_input_newton=True)  # For energy-based hysteresis
                   rad.SolverConfig(b_input_hantila=True)  # Hantila polarization (faster)
@@ -4616,7 +4697,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   Dictionary with all solver parameters:
-                  - bicgstab_tol, relax_param, newton_method, b_input_newton, b_input_hantila
+                  - bicgstab_tol, moment_krylov, moment_gmres_restart
+                  - moment_anderson_depth, relax_param, newton_method, b_input_newton, b_input_hantila
                   - newton_damping, newton_damping_max_iter, newton_damping_min_omega
                   - hacapk_stats (if H-matrix solve has been performed)
           )pbdoc");

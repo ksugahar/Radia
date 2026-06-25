@@ -1,0 +1,63 @@
+{
+  "cases": {
+    "full_model_same_2d_value": {
+      "label": "full_model_same_2d_value",
+      "length_unit_m": 0.001,
+      "mesh_unit_torque_scale": 1e-06,
+      "sector_fraction": 1.0,
+      "stack_length_m": 0.08,
+      "symmetry_factor": 1.0,
+      "torque_2d_per_depth": 2500000.0,
+      "torque_one_model_sector_Nm": 0.2,
+      "total_scaling_factor": 8e-08,
+      "whole_machine_torque_Nm": 0.2,
+      "whole_over_sector": 1.0
+    },
+    "negative_torque": {
+      "label": "negative_torque_preserves_sign",
+      "length_unit_m": 0.001,
+      "mesh_unit_torque_scale": 1e-06,
+      "sector_fraction": 0.16666666666666666,
+      "stack_length_m": 0.08,
+      "symmetry_factor": 6.0,
+      "torque_2d_per_depth": -2500000.0,
+      "torque_one_model_sector_Nm": -0.2,
+      "total_scaling_factor": 4.800000000000001e-07,
+      "whole_machine_torque_Nm": -1.2,
+      "whole_over_sector": 5.999999999999999
+    },
+    "one_sixth_sector": {
+      "label": "one_sixth_sector",
+      "length_unit_m": 0.001,
+      "mesh_unit_torque_scale": 1e-06,
+      "sector_fraction": 0.16666666666666666,
+      "stack_length_m": 0.08,
+      "symmetry_factor": 6.0,
+      "torque_2d_per_depth": 2500000.0,
+      "torque_one_model_sector_Nm": 0.2,
+      "total_scaling_factor": 4.800000000000001e-07,
+      "whole_machine_torque_Nm": 1.2,
+      "whole_over_sector": 5.999999999999999
+    }
+  },
+  "checks": {
+    "direct_machine_scaling_torque_Nm": 1.2,
+    "expected_sector_torque_Nm": 0.2,
+    "expected_whole_machine_torque_Nm": 1.2,
+    "full_model_same_2d_value_torque_Nm": 0.2,
+    "negative_torque_Nm": -1.2,
+    "sector_scaled_over_full_model": 5.999999999999999,
+    "sector_to_whole_ratio": 5.999999999999999,
+    "summary_minus_direct_abs_error_Nm": 0.0,
+    "summary_whole_machine_torque_Nm": 1.2
+  },
+  "force_learning": "2D per-depth sector torque scales by length_unit^2, stack length, and symmetry factor",
+  "kind": "machine_torque_scaling",
+  "parameters": {
+    "length_unit_m": 0.001,
+    "stack_length_m": 0.08,
+    "symmetry_factor": 6.0,
+    "torque_2d_per_depth": 2500000.0
+  },
+  "validation_class": true
+}

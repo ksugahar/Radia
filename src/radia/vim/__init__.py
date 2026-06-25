@@ -1,6 +1,6 @@
 """radia.vim -- HDiv-type VIM demag operator.
 
-The FEEC H(div) RT alternative/complement to the canonical moment-yano MSC kernel: a SYMMETRIC demag
+The FEEC H(div) RT alternative/complement to the canonical multipole-moment MMM MSC kernel: a SYMMETRIC demag
 operator N = B^T G B whose loop modes are field-null by construction (de Rham), giving mu_r-independent
 convergence with no hand-crafted loop-star.
 

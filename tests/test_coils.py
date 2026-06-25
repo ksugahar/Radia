@@ -1,7 +1,6 @@
 """Filament current-loop helpers (radia.coils): circular_loop / helmholtz_pair,
 validated against the single-loop and Helmholtz on-axis closed forms. Run via
-PowerShell (radia C-ext needs the pwsh launch). The same machinery reproduces an
-independent Biot-Savart reference (ELF/MAGIC) to ~2e-12 (internal cross-check)."""
+PowerShell (radia C-ext needs the pwsh launch)."""
 import math
 import os
 import sys
@@ -51,8 +50,7 @@ def main():
     print(f"  x-axis loop centre Bx={bx:.6e}  err={ex:.2e}")
     assert ex < 5e-4, f"x-axis loop off by {ex:.2e}"
 
-    # 4) finite solenoid on-axis vs the thin finite-solenoid closed form (also a
-    #    COMSOL mf 3-way at W:\\00_CAE\\COMSOL\\_crossval\\cc_mf_solenoid.py, ~1-2%)
+    # 4) finite solenoid on-axis vs the thin finite-solenoid closed form.
     Rs, Ls, Nt, Is = 0.02, 0.04, 100, 1.0
     sol = coils.solenoid([0, 0, 0], Rs, Ls, Is, Nt, axis="z", nseg=48)
     worst_s = 0.0

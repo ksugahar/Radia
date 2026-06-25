@@ -1,4 +1,4 @@
-"""Phase-3a verification: moment-yano extended to 5-face WEDGE (triangular-prism) elements.
+"""Phase-3a verification: multipole-moment MMM extended to 5-face WEDGE (triangular-prism) elements.
 
 A wedge has 5 surface-charge DOF, so the moment system per element is 3 dipole + 1 monopole + 1 quadrupole
 = 5 rows.  The single quad MUST be the AXIAL quadrupole 3*(d.a)^2-|d|^2 about the prism axis a (the direction

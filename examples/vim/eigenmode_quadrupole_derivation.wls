@@ -4,7 +4,7 @@
 (* ----------------------------------------------------------------------------------------------------
    eigenmode_quadrupole_derivation.wls
 
-   Moment-yano surface-charge demag: derive the RESIDUAL QUADRUPOLE EIGENMODES of an element and the
+   Multipole-moment MMM surface-charge demag: derive the RESIDUAL QUADRUPOLE EIGENMODES of an element and the
    magnetic field each eigenmode creates -- the "suppress the eigenmode with the field it produces"
    closure that replaces the hand-picked quadratic forms (dx^2-dy^2 / axial).
 

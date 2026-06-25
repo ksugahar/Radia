@@ -733,9 +733,9 @@ PANEL_REVIEW_WORKFLOW = """
    panel got the corresponding widget?
 3. **panel-smoke** — does the affected scenario still pass?
 
-## Before a release-triple
+## Before a release-qud
 
-`release-triple` skill Phase 0 should include:
+`release-qud` Phase 0 should include:
 
 ```bash
 python tests/panels/check_panel_cli.py --strict

@@ -640,6 +640,269 @@ def three_phase_torque_ripple_pair_table(emf_harmonics, current_peak=1.0, mechan
     return rows
 
 
+def torque_angle_sweep_summary(torque_Nm, max_harmonic=None):
+    """Fourier summary of one periodic torque-angle sweep.
+
+    ``torque_Nm`` is one uniformly sampled mechanical/electrical period without
+    repeating the endpoint.  The helper is intentionally solver-neutral: it
+    turns a rotor-position torque table into mean torque, peak-to-peak ripple,
+    AC RMS, harmonic amplitudes, and the dominant ripple order.
+    """
+
+    values = [float(value) for value in torque_Nm]
+    n = len(values)
+    if n < 3:
+        raise ValueError("at least three torque samples are required")
+    mean = sum(values) / n
+    ac = [value - mean for value in values]
+    ac_rms = math.sqrt(sum(value * value for value in ac) / n)
+    peak_to_peak = max(values) - min(values)
+    if max_harmonic is None:
+        hmax = n // 2
+    else:
+        hmax = int(max_harmonic)
+        if hmax <= 0:
+            raise ValueError("max_harmonic must be positive")
+        hmax = min(hmax, n // 2)
+
+    harmonic_rows = []
+    for order in range(1, hmax + 1):
+        coeff = sum(
+            values[idx] * complex(
+                math.cos(-2.0 * math.pi * order * idx / n),
+                math.sin(-2.0 * math.pi * order * idx / n),
+            )
+            for idx in range(n)
+        ) / n
+        amplitude = 2.0 * abs(coeff)
+        harmonic_rows.append({
+            "order": order,
+            "cos_coefficient_Nm": 2.0 * coeff.real,
+            "sin_coefficient_Nm": -2.0 * coeff.imag,
+            "amplitude_Nm": amplitude,
+            "phase_rad": math.atan2(coeff.imag, coeff.real),
+            "amplitude_over_mean": math.inf if mean == 0.0 else amplitude / abs(mean),
+        })
+    dominant = max(harmonic_rows, key=lambda row: row["amplitude_Nm"]) if harmonic_rows else None
+    return {
+        "n_samples": n,
+        "mean_torque_Nm": mean,
+        "min_torque_Nm": min(values),
+        "max_torque_Nm": max(values),
+        "peak_to_peak_torque_Nm": peak_to_peak,
+        "peak_to_peak_over_mean": math.inf if mean == 0.0 else peak_to_peak / abs(mean),
+        "ac_rms_torque_Nm": ac_rms,
+        "ac_rms_over_mean": math.inf if mean == 0.0 else ac_rms / abs(mean),
+        "max_harmonic": hmax,
+        "harmonic_rows": harmonic_rows,
+        "dominant_harmonic": None if dominant is None else dominant["order"],
+        "dominant_harmonic_amplitude_Nm": 0.0 if dominant is None else dominant["amplitude_Nm"],
+        "dominant_harmonic_over_mean": (
+            math.inf if mean == 0.0 and dominant is not None
+            else (0.0 if dominant is None else dominant["amplitude_Nm"] / abs(mean))
+        ),
+    }
+
+
+def torque_angle_sweep_health_summary(
+    torque_Nm,
+    max_harmonic=None,
+    max_ac_rms_over_mean=None,
+    max_peak_to_peak_over_mean=None,
+    allowed_dominant_harmonics=None,
+    min_mean_abs_torque_Nm=None,
+    top_harmonics=5,
+):
+    """Turn a periodic torque-angle table into a compact health report.
+
+    The lower-level :func:`torque_angle_sweep_summary` exposes all Fourier
+    rows.  This wrapper adds design-style checks and a ripple budget, making it
+    easier to explain whether a table is limited by mean torque, RMS ripple, or
+    a particular dominant harmonic.
+    """
+
+    summary = torque_angle_sweep_summary(torque_Nm, max_harmonic=max_harmonic)
+    limit = int(top_harmonics)
+    if limit < 0:
+        raise ValueError("top_harmonics must be non-negative")
+    issues = []
+    checks = {
+        "mean_abs_torque": True,
+        "ac_rms_over_mean": True,
+        "peak_to_peak_over_mean": True,
+        "dominant_harmonic": True,
+    }
+
+    if min_mean_abs_torque_Nm is not None:
+        threshold = float(min_mean_abs_torque_Nm)
+        if threshold < 0.0:
+            raise ValueError("min_mean_abs_torque_Nm must be >= 0")
+        checks["mean_abs_torque"] = abs(summary["mean_torque_Nm"]) >= threshold
+        if not checks["mean_abs_torque"]:
+            issues.append("mean torque magnitude is below the requested minimum")
+
+    if max_ac_rms_over_mean is not None:
+        threshold = float(max_ac_rms_over_mean)
+        if threshold < 0.0:
+            raise ValueError("max_ac_rms_over_mean must be >= 0")
+        checks["ac_rms_over_mean"] = summary["ac_rms_over_mean"] <= threshold
+        if not checks["ac_rms_over_mean"]:
+            issues.append("AC RMS torque ripple exceeds the requested ratio")
+
+    if max_peak_to_peak_over_mean is not None:
+        threshold = float(max_peak_to_peak_over_mean)
+        if threshold < 0.0:
+            raise ValueError("max_peak_to_peak_over_mean must be >= 0")
+        checks["peak_to_peak_over_mean"] = summary["peak_to_peak_over_mean"] <= threshold
+        if not checks["peak_to_peak_over_mean"]:
+            issues.append("peak-to-peak torque ripple exceeds the requested ratio")
+
+    allowed = None
+    if allowed_dominant_harmonics is not None:
+        allowed = sorted({int(order) for order in allowed_dominant_harmonics})
+        if any(order <= 0 for order in allowed):
+            raise ValueError("allowed_dominant_harmonics must be positive")
+        checks["dominant_harmonic"] = summary["dominant_harmonic"] in allowed
+        if not checks["dominant_harmonic"]:
+            issues.append("dominant torque harmonic is outside the allowed set")
+
+    ac_variance = summary["ac_rms_torque_Nm"] * summary["ac_rms_torque_Nm"]
+    top_rows = []
+    for row in sorted(summary["harmonic_rows"], key=lambda item: item["amplitude_Nm"], reverse=True)[:limit]:
+        variance = 0.5 * row["amplitude_Nm"] * row["amplitude_Nm"]
+        top_rows.append({
+            "order": row["order"],
+            "amplitude_Nm": row["amplitude_Nm"],
+            "amplitude_over_mean": row["amplitude_over_mean"],
+            "cos_coefficient_Nm": row["cos_coefficient_Nm"],
+            "sin_coefficient_Nm": row["sin_coefficient_Nm"],
+            "rms_contribution_Nm": row["amplitude_Nm"] / math.sqrt(2.0),
+            "ac_variance_fraction": 0.0 if ac_variance == 0.0 else variance / ac_variance,
+        })
+
+    return {
+        "policy": "torque_angle_sweep_harmonic_health",
+        "status": "ok" if not issues else "needs_attention",
+        "issues": issues,
+        "checks": checks,
+        "limits": {
+            "max_ac_rms_over_mean": None if max_ac_rms_over_mean is None else float(max_ac_rms_over_mean),
+            "max_peak_to_peak_over_mean": (
+                None if max_peak_to_peak_over_mean is None else float(max_peak_to_peak_over_mean)
+            ),
+            "allowed_dominant_harmonics": allowed,
+            "min_mean_abs_torque_Nm": (
+                None if min_mean_abs_torque_Nm is None else float(min_mean_abs_torque_Nm)
+            ),
+        },
+        "n_samples": summary["n_samples"],
+        "mean_torque_Nm": summary["mean_torque_Nm"],
+        "peak_to_peak_torque_Nm": summary["peak_to_peak_torque_Nm"],
+        "peak_to_peak_over_mean": summary["peak_to_peak_over_mean"],
+        "ac_rms_torque_Nm": summary["ac_rms_torque_Nm"],
+        "ac_rms_over_mean": summary["ac_rms_over_mean"],
+        "dominant_harmonic": summary["dominant_harmonic"],
+        "dominant_harmonic_amplitude_Nm": summary["dominant_harmonic_amplitude_Nm"],
+        "dominant_harmonic_over_mean": summary["dominant_harmonic_over_mean"],
+        "top_harmonic_rows": top_rows,
+        "summary": summary,
+    }
+
+
+def torque_angle_sweep_comparison_summary(
+    reference_torque_Nm,
+    candidate_torque_Nm,
+    max_harmonic=None,
+    reference_label="reference",
+    candidate_label="candidate",
+):
+    """Compare two uniformly sampled periodic torque-angle sweeps.
+
+    This is a solver-neutral post-processing helper for angle/time sweep
+    studies.  It keeps the comparison readable by reporting three views:
+    absolute metrics for the reference and candidate, sample-wise candidate
+    minus reference deltas, and per-harmonic amplitude/coefficient deltas.
+    """
+
+    reference_values = [float(value) for value in reference_torque_Nm]
+    candidate_values = [float(value) for value in candidate_torque_Nm]
+    if len(reference_values) != len(candidate_values):
+        raise ValueError("reference and candidate sweeps must have the same sample count")
+
+    reference = torque_angle_sweep_summary(reference_values, max_harmonic=max_harmonic)
+    candidate = torque_angle_sweep_summary(candidate_values, max_harmonic=max_harmonic)
+    hmax = reference["max_harmonic"]
+    deltas = [candidate - reference for reference, candidate in zip(reference_values, candidate_values)]
+    delta_summary = torque_angle_sweep_summary(deltas, max_harmonic=hmax)
+
+    def ratio(numerator, denominator):
+        if denominator == 0.0:
+            return 0.0 if numerator == 0.0 else math.inf
+        return numerator / denominator
+
+    reference_rows = {row["order"]: row for row in reference["harmonic_rows"]}
+    candidate_rows = {row["order"]: row for row in candidate["harmonic_rows"]}
+    delta_rows = {row["order"]: row for row in delta_summary["harmonic_rows"]}
+    harmonic_delta_rows = []
+    for order in range(1, hmax + 1):
+        ref_row = reference_rows[order]
+        cand_row = candidate_rows[order]
+        delta_row = delta_rows[order]
+        amplitude_delta = cand_row["amplitude_Nm"] - ref_row["amplitude_Nm"]
+        harmonic_delta_rows.append({
+            "order": order,
+            "reference_amplitude_Nm": ref_row["amplitude_Nm"],
+            "candidate_amplitude_Nm": cand_row["amplitude_Nm"],
+            "amplitude_delta_Nm": amplitude_delta,
+            "amplitude_abs_delta_Nm": abs(amplitude_delta),
+            "amplitude_ratio_candidate_over_reference": ratio(
+                cand_row["amplitude_Nm"],
+                ref_row["amplitude_Nm"],
+            ),
+            "cos_coefficient_delta_Nm": cand_row["cos_coefficient_Nm"] - ref_row["cos_coefficient_Nm"],
+            "sin_coefficient_delta_Nm": cand_row["sin_coefficient_Nm"] - ref_row["sin_coefficient_Nm"],
+            "delta_waveform_amplitude_Nm": delta_row["amplitude_Nm"],
+        })
+    worst = max(harmonic_delta_rows, key=lambda row: row["amplitude_abs_delta_Nm"]) if harmonic_delta_rows else None
+    sample_delta_rms = math.sqrt(sum(value * value for value in deltas) / len(deltas))
+    max_sample_abs_delta = max(abs(value) for value in deltas)
+
+    return {
+        "reference_label": str(reference_label),
+        "candidate_label": str(candidate_label),
+        "n_samples": reference["n_samples"],
+        "max_harmonic": hmax,
+        "reference_summary": reference,
+        "candidate_summary": candidate,
+        "difference_summary": delta_summary,
+        "mean_delta_Nm": candidate["mean_torque_Nm"] - reference["mean_torque_Nm"],
+        "mean_delta_over_reference": ratio(
+            candidate["mean_torque_Nm"] - reference["mean_torque_Nm"],
+            reference["mean_torque_Nm"],
+        ),
+        "ac_rms_delta_Nm": candidate["ac_rms_torque_Nm"] - reference["ac_rms_torque_Nm"],
+        "ac_rms_delta_over_reference": ratio(
+            candidate["ac_rms_torque_Nm"] - reference["ac_rms_torque_Nm"],
+            reference["ac_rms_torque_Nm"],
+        ),
+        "peak_to_peak_delta_Nm": (
+            candidate["peak_to_peak_torque_Nm"] - reference["peak_to_peak_torque_Nm"]
+        ),
+        "sample_delta_rms_Nm": sample_delta_rms,
+        "max_sample_abs_delta_Nm": max_sample_abs_delta,
+        "dominant_harmonic_changed": (
+            candidate["dominant_harmonic"] != reference["dominant_harmonic"]
+        ),
+        "reference_dominant_harmonic": reference["dominant_harmonic"],
+        "candidate_dominant_harmonic": candidate["dominant_harmonic"],
+        "worst_harmonic_order": None if worst is None else worst["order"],
+        "max_harmonic_amplitude_abs_delta_Nm": (
+            0.0 if worst is None else worst["amplitude_abs_delta_Nm"]
+        ),
+        "harmonic_delta_rows": harmonic_delta_rows,
+    }
+
+
 def mtpa_operating_point(lambda_m, Ld, Lq, current, pole_pairs):
     """MAXIMUM-TORQUE-PER-AMPERE operating point of a salient PM synchronous
     machine at stator current magnitude ``current``.

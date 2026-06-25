@@ -12,7 +12,7 @@ Reproducible scripts: `examples/mmm_eigenvalue_study/`.
 > alpha-free loop-star gauge (`SolveLoopStar`, the `A_SS = S^T A S` star block),
 > and the Helmholtz-Hodge loop projection (`SetLoopProjection`) -- was REMOVED
 > from the solver.** The live surface-charge MSC backend has since consolidated on
-> **moment-yano** (hex/wedge/pyramid), while **HDiv-VIM** remains the FEEC
+> **multipole-moment MMM** (hex/wedge/pyramid), while **HDiv-VIM** remains the FEEC
 > complementary backend: its charge map `B` makes the loop space exactly `ker(B)`,
 > field-null BY CONSTRUCTION via the de Rham complex, `mu_r`-independent, with no
 > runtime deflation / gauge / projection. The null-space THEORY and conditioning

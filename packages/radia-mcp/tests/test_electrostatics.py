@@ -19,8 +19,10 @@ from radia_mcp.radia_ngsolve.electrostatics import (
     isolated_disk_capacitance,
     spreading_resistance_disk,
     coaxial_shell_resistance,
+    coaxial_capacitor_energy_force,
     layered_parallel_plate_capacitance,
     parallel_plate_capacitor_energy_force,
+    capacitance_gradient_force_summary,
     dielectric_sphere_polarizability,
     dielectric_sphere_uniform_field,
     uniformly_polarized_sphere_field,
@@ -28,6 +30,7 @@ from radia_mcp.radia_ngsolve.electrostatics import (
     sphere_above_plane_capacitance,
     dielectrophoresis_force,
 )
+from radia_mcp.radia_ngsolve.force import electrostatic_traction_summary
 
 
 def test_isolated_disk_capacitance():
@@ -66,6 +69,44 @@ def test_coaxial_shell_resistance():
         coaxial_shell_resistance(rho, 0.02, 0.01, L)   # r_outer < r_inner
 
 
+def test_coaxial_capacitor_energy_force():
+    er, a, b, length, voltage = 2.5, 0.01, 0.03, 0.2, 120.0
+    out = coaxial_capacitor_energy_force(er, a, b, length, voltage)
+    eps = EPS0 * er
+    log_ratio = math.log(b / a)
+    capacitance = 2.0 * math.pi * eps * length / log_ratio
+    e_inner = voltage / (a * log_ratio)
+    e_outer = voltage / (b * log_ratio)
+
+    assert out["C"] == pytest.approx(capacitance)
+    assert out["energy"] == pytest.approx(0.5 * capacitance * voltage * voltage)
+    assert out["electric_field_inner_V_per_m"] == pytest.approx(e_inner)
+    assert out["electric_field_outer_V_per_m"] == pytest.approx(e_outer)
+    assert out["pressure_inner_Pa"] == pytest.approx(0.5 * eps * e_inner * e_inner)
+    assert out["pressure_outer_Pa"] == pytest.approx(0.5 * eps * e_outer * e_outer)
+    assert out["inner_radius_force_N"] == pytest.approx(out["inner_pressure_area_force_N"])
+    assert out["outer_radius_force_N"] == pytest.approx(out["outer_pressure_area_force_N"])
+
+    inner_gradient = capacitance_gradient_force_summary(
+        out["C"],
+        out["dCdr_inner_F_per_m"],
+        voltage_V=voltage,
+    )
+    outer_gradient = capacitance_gradient_force_summary(
+        out["C"],
+        out["dCdr_outer_F_per_m"],
+        voltage_V=voltage,
+    )
+    assert inner_gradient["fixed_voltage_force_N"] == pytest.approx(out["inner_radius_force_N"])
+    assert outer_gradient["fixed_voltage_force_N"] == pytest.approx(out["outer_radius_force_N"])
+    assert out["inner_radius_force_N"] > 0.0
+    assert out["outer_radius_force_N"] < 0.0
+    assert out["pressure_inner_Pa"] / out["pressure_outer_Pa"] == pytest.approx((b / a) ** 2)
+
+    with pytest.raises(ValueError):
+        coaxial_capacitor_energy_force(er, b, a, length, voltage)
+
+
 def test_layered_parallel_plate_capacitance():
     area, d = 1e-4, 1e-3
     # single layer must reduce to the plain slab C = eps0 eps_r A / d
@@ -88,15 +129,56 @@ def test_parallel_plate_capacitor_energy_force():
     eps_r, area, gap, V = 1.0, 1e-3, 1e-3, 100.0
     out = parallel_plate_capacitor_energy_force(eps_r, area, gap, V)
     C = EPS0 * eps_r * area / gap
+    E = V / gap
+    pressure = 0.5 * EPS0 * eps_r * E * E
     assert math.isclose(out["C"], C, rel_tol=1e-12)
     assert math.isclose(out["energy"], 0.5 * C * V * V, rel_tol=1e-12)
+    assert math.isclose(out["electric_field_V_per_m"], E, rel_tol=1e-12)
+    assert math.isclose(out["pressure_Pa"], pressure, rel_tol=1e-12)
+    assert math.isclose(out["energy_density_J_per_m3"], pressure, rel_tol=1e-12)
     # GATE: identity |F| == energy/gap (force = energy density * area)
     assert math.isclose(out["force"], out["energy"] / gap, rel_tol=1e-12)
+    assert math.isclose(out["force"], pressure * area, rel_tol=1e-12)
+    # GATE: same pressure from the electrostatic Maxwell-stress traction helper
+    traction = electrostatic_traction_summary(
+        (0.0, 0.0, E),
+        (0.0, 0.0, 1.0),
+        area_m2=area,
+        eps=EPS0 * eps_r,
+    )
+    assert math.isclose(traction["normal_traction_Pa"], out["pressure_Pa"], rel_tol=1e-12)
+    assert math.isclose(traction["force_N"][2], out["force"], rel_tol=1e-12)
     # GATE: 1/gap^2 scaling -- halving the gap quadruples the force
     out2 = parallel_plate_capacitor_energy_force(eps_r, area, gap / 2.0, V)
     assert math.isclose(out2["force"], 4.0 * out["force"], rel_tol=1e-12)
     with pytest.raises(ValueError):
         parallel_plate_capacitor_energy_force(eps_r, area, 0.0, V)
+
+
+def test_capacitance_gradient_force_matches_parallel_plate_gap_force():
+    eps_r, area, gap, voltage = 2.5, 2.0e-4, 5.0e-4, 120.0
+    plate = parallel_plate_capacitor_energy_force(eps_r, area, gap, voltage)
+    dcdgap = -plate["C"] / gap
+    charge = plate["C"] * voltage
+    summary = capacitance_gradient_force_summary(
+        plate["C"],
+        dcdgap,
+        voltage_V=voltage,
+        charge_C=charge,
+    )
+
+    assert summary["fixed_voltage_force_N"] == pytest.approx(-plate["force"])
+    assert summary["fixed_charge_force_N"] == pytest.approx(-plate["force"])
+    assert summary["fixed_voltage_force_N"] == pytest.approx(-plate["energy"] / gap)
+    assert summary["charge_for_voltage_C"] == pytest.approx(charge)
+    assert summary["charge_consistency_error_C"] == pytest.approx(0.0)
+
+
+def test_capacitance_gradient_force_rejects_bad_inputs():
+    with pytest.raises(ValueError):
+        capacitance_gradient_force_summary(0.0, 1.0, voltage_V=1.0)
+    with pytest.raises(ValueError):
+        capacitance_gradient_force_summary(1.0, 1.0)
 
 
 def test_dielectric_sphere_polarizability():

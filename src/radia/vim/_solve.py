@@ -3,7 +3,7 @@
 `hdiv_demag_solve(mesh, mu_r=.., H_ext=..)`           -- LINEAR soft iron (scalar mu_r), and
 `hdiv_demag_solve(mesh, bh_table=.., H_ext=..)`       -- NONLINEAR soft iron (real BH table),
 
-the FEEC/HDiv counterpart to the moment-yano MSC hex/wedge/pyramid soft-iron demag in `rad.Solve`.
+the FEEC/HDiv counterpart to the multipole-moment MMM MSC hex/wedge/pyramid soft-iron demag in `rad.Solve`.
 Both modes take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunction -- e.g. a coil's
 Biot-Savart field `rad.RadiaField(coil,'h')`, the C-type electromagnet driver) and return per-element M.
 
@@ -51,7 +51,7 @@ Per-region soft iron, LINEAR (`mu_r` scalar or `{material: mu_r}` dict) AND NONL
 [[H,B]] table or `{material: [[H,B]]}` dict).  N = B^T G B is geometry-only, so multi-grade iron enters
 ONLY through the (1/chi)-weighted HDiv mass (linear) / the per-element constitutive law (nonlinear).
 Mixed PM+iron (fixed-M source regions) + the 165k-DOF-scale preconditioner + the M0 parity gate are the
-remaining productionization steps (docs/hdiv_vim/PRODUCTIONIZATION.md).  Until they land, moment-yano MSC
+remaining productionization steps (docs/hdiv_vim/PRODUCTIONIZATION.md).  Until they land, multipole-moment MMM MSC
 stays the `rad.Solve` default demag backend (`radia.set_demag_backend`); this entry does not touch it.
 
 Per CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT" -- this library helper does NOT

@@ -1,7 +1,7 @@
 # HDiv-type VIM — productionization roadmap
 
 The HDiv-type VIM method is validated (see [README.md](README.md), feec suite 85/85). This document is
-the roadmap to make it a **shipped production solver alongside the canonical moment-yano MSC backend**:
+the roadmap to make it a **shipped production solver alongside the canonical multipole-moment MMM MSC backend**:
 a clean Radia API for the FEEC H(div) operator, plus parity and speed evidence on the cases where flat
 MSC is already strong and a clear win on curved/high-order cases. Honest scope, milestone-based, with a
 hard **definition-of-done** (the parity gate).
@@ -29,7 +29,7 @@ Progress (2026-06-08): **M2 DONE** (the accurate analytic charge Gram is in the 
 golden-locked; the scalable nonlinear Newton rewired onto it). **M3 DONE** (the warranted C++ work:
 SolveLinearMaterial Jacobi-PCG + SolveNonlinearPicard scalar-χ nonlinear; the per-element tensor-tangent
 Newton is **measured-not-warranted** — the production Newton converges in 5–6 iters so a C++ port buys
-little). The remaining gap to seal the moment-yano/HDiv pairing: the M4 production pieces + the broader **speed** parity
+little). The remaining gap to seal the multipole-moment MMM/HDiv pairing: the M4 production pieces + the broader **speed** parity
 matrix (M0; the nonlinear-Newton case is now measured — 5–6 iters, orchestration negligible).
 
 Progress (2026-06-17): **`rad.Solve(demag_backend='hdiv')` now dispatches the HDiv-VIM** via
@@ -71,7 +71,7 @@ production-representative numbers). This sizes the C++ lift and fixes the "done"
 level: HDiv-VIM's loops are ker(B), FIELD-NULL BY CONSTRUCTION (de Rham / Piola) — no loop-star, no
 cohomology, μr-INDEPENDENT iterations. In the conventional MMM/MSC path the loops are NOT field-null,
 so they are the OBSTRUCTION: they need explicit loop-star handling, which on the solver side becomes
-the A_SS "star block" that must be H-LU/H-ILU-preconditioned. (Keep the layers distinct: moment-yano is
+the A_SS "star block" that must be H-LU/H-ILU-preconditioned. (Keep the layers distinct: multipole-moment MMM is
 the surface-charge element formulation; A_SS is the loop-star SOLVER block — do not conflate them.) The
 payoff to MEASURE (M0): because the HDiv-VIM tangent stays well-conditioned, Newton-Raphson should
 converge in far fewer iterations than the conventional path whose loops can ill-condition / stall the
@@ -88,7 +88,7 @@ ACA works on it. Benchmark: `examples/vim/hdiv_demag_hacapk_scaling.py` (+ `.jso
 shown to n~3560 (build_demag's dense-G reference is O(N²) and caps N); the trend is clear + favorable;
 larger-N (10k+) confirmation needs a dense-G-free charge extraction — the remaining M0 scalability item.
 
-**Head-to-head target — the saved moment-yano C-type benchmarks (M0).** The saved
+**Head-to-head target — the saved multipole-moment MMM C-type benchmarks (M0).** The saved
 C-type electromagnet (nonlinear, quarter-model, HACApK) benchmarks record the SHIPPED Radia MMM/MSC
 (HACApK, nonlinear Newton) on the
 C-type electromagnet: at **165600 DOF, 214 nonlinear iterations, t_solve = 2607 s** (= 582 s H-matrix
@@ -206,20 +206,20 @@ instrumented diagnosis (per-iter ‖F‖/λ/Mavg trajectory) found:
        (~star-space), so the lever there is a **STAR-space preconditioner** (NOT the loops) or a larger
        restart — but no auxiliary-space machinery is needed at ≤ ~100k.
 
-     - **CORRECTED COMPARISON (2026-06-09): the moment-yano reference is NO-loop-star + BLOCK JACOBI, NOT
+     - **CORRECTED COMPARISON (2026-06-09): the multipole-moment MMM reference is NO-loop-star + BLOCK JACOBI, NOT
        H-ILU.** H-ILU is the SEPARATE loop-star `A_SS` "star block" solver (the former
        `RadHACApKMSCManager` mode 2; the live class is now `RadHACApKMMMManager` for MMM)
-       — conflating it with moment-yano is the exact mistake this doc earlier warned against. moment-yano
+       — conflating it with multipole-moment MMM is the exact mistake this doc earlier warned against. multipole-moment MMM
        scaled to 165600 at 2686 linear iters with **Block Jacobi** + the robust **修正反復法 / Picard**
        outer loop, which TOLERATES a loose inner solve (it does not need the inner solve to converge
        tightly). So my earlier "HDiv Newton + M_mass⁻¹ vs yano + H-ILU" comparison was apples-to-oranges
        on BOTH axes (outer method Newton-vs-Picard AND preconditioner M⁻¹-vs-Block-Jacobi — and H-ILU was
        the wrong solver anyway). A growing inner-iter count is EXPECTED for a simple preconditioner —
-       moment-yano has it too (2686 @ 165600); it just absorbs it via Picard. HDiv-VIM's Newton is LESS
+       multipole-moment MMM has it too (2686 @ 165600); it just absorbs it via Picard. HDiv-VIM's Newton is LESS
        forgiving (the warmstart needs a converged inner solve), which together with my too-low maxiter
        cap (1000) is why it stalled at ndof~44k — NOT a fundamental wall. **The FAIR head-to-head is the
        SAME solver — 修正反復法/Picard + Block Jacobi for both — where HDiv-VIM's de-Rham loops (EXACTLY
-       field-null on ANY mesh, ker B) should beat moment-yano's distortion-element loops (field-null only
+       field-null on ANY mesh, ker B) should beat multipole-moment MMM's distortion-element loops (field-null only
        on affine hexes; they carry field on distorted ones).** That comparison has NOT been run yet; it
        is the right next experiment.
 
@@ -287,7 +287,7 @@ ndof toward the 165600 scale.** The head-to-head JSON is honest at the measured 
   > `factor_solve_hldlt` pybind, `tests/feec/test_hldlt_*.py` (feec 94 → 81), the hldlt examples.
   > **H-LU / H-ILU were NOT touched** — they are the SAME `cHACApK_hlu_*` subsystem (the rk-truncation
   > tol switches accurate-H-LU ↔ incomplete-H-ILU), load-bearing as the MMM/MSC solver's A_SS
-  > preconditioner (a separate solver layer from the moment-yano element formulation).
+  > preconditioner (a separate solver layer from the multipole-moment MMM element formulation).
 - **M4 — curved/high-order + symmetry production + the curved-nonlinear-volume gap.** Wire the
   `ngsolve.bem` single-layer (curved Gram) + the symmetry image method + a true reduced-DOF symmetry-BC
   solve into the API. Build the genuine method gap: the curved nonlinear **volume** charge (`phi_tet` on

@@ -82,6 +82,72 @@ def coaxial_shell_resistance(resistivity_rho, r_inner, r_outer, length_L):
     return {"R": resistivity_rho * math.log(r_outer / r_inner) / (2.0 * math.pi * length_L)}
 
 
+def coaxial_capacitor_energy_force(eps_r, r_inner, r_outer, length_L, voltage):
+    r"""Capacitance, energy, field pressure, and radial force of a coaxial capacitor.
+
+    For a coaxial capacitor with inner radius ``a``, outer radius ``b``,
+    length ``L``, dielectric ``eps = eps0 eps_r``, and voltage ``V``:
+
+        C = 2 pi eps L / ln(b/a),
+        E(r) = V / (r ln(b/a)),
+        p(r) = 1/2 eps E(r)^2.
+
+    The fixed-voltage generalized force for increasing the inner radius is
+    positive and equals the Maxwell pressure integrated over the inner
+    conductor surface:
+
+        F_a = 1/2 V^2 dC/da = p(a) 2 pi a L.
+
+    Increasing the outer radius lowers capacitance, so ``F_b`` is negative in
+    the ``+b`` coordinate and ``|F_b| = p(b) 2 pi b L``.  A complete coax has
+    zero net vector force by angular symmetry; these are radial coordinate
+    forces / surface pressures for validation and actuator-style sweeps.
+    """
+
+    if eps_r <= 0:
+        raise ValueError("eps_r must be > 0")
+    if length_L <= 0:
+        raise ValueError("length_L must be > 0")
+    if not (r_outer > r_inner > 0):
+        raise ValueError("require r_outer > r_inner > 0")
+    eps = EPS0 * float(eps_r)
+    a = float(r_inner)
+    b = float(r_outer)
+    length = float(length_L)
+    v = float(voltage)
+    log_ratio = math.log(b / a)
+    capacitance = 2.0 * math.pi * eps * length / log_ratio
+    energy = 0.5 * capacitance * v * v
+    e_inner = v / (a * log_ratio)
+    e_outer = v / (b * log_ratio)
+    p_inner = 0.5 * eps * e_inner * e_inner
+    p_outer = 0.5 * eps * e_outer * e_outer
+    dC_da = 2.0 * math.pi * eps * length / (a * log_ratio * log_ratio)
+    dC_db = -2.0 * math.pi * eps * length / (b * log_ratio * log_ratio)
+    force_inner = 0.5 * v * v * dC_da
+    force_outer = 0.5 * v * v * dC_db
+    return {
+        "C": capacitance,
+        "energy": energy,
+        "eps_r": float(eps_r),
+        "r_inner": a,
+        "r_outer": b,
+        "length_L": length,
+        "voltage": v,
+        "log_radius_ratio": log_ratio,
+        "electric_field_inner_V_per_m": e_inner,
+        "electric_field_outer_V_per_m": e_outer,
+        "pressure_inner_Pa": p_inner,
+        "pressure_outer_Pa": p_outer,
+        "dCdr_inner_F_per_m": dC_da,
+        "dCdr_outer_F_per_m": dC_db,
+        "inner_radius_force_N": force_inner,
+        "outer_radius_force_N": force_outer,
+        "inner_pressure_area_force_N": p_inner * 2.0 * math.pi * a * length,
+        "outer_pressure_area_force_N": -p_outer * 2.0 * math.pi * b * length,
+    }
+
+
 def layered_parallel_plate_capacitance(area, thicknesses, eps_r_layers):
     r"""Capacitance of a parallel-plate stack of dielectric layers normal to the
     plates (layers in SERIES on the field line):
@@ -119,11 +185,15 @@ def parallel_plate_capacitor_energy_force(eps_r, area, gap, voltage):
 
         C = eps0 eps_r area / d ,
         W = 1/2 C V^2 ,
-        |F| = 1/2 eps0 eps_r area V^2 / d^2 = W / d .
+        E = V / d ,
+        p = 1/2 eps0 eps_r E^2 ,
+        |F| = p area = 1/2 eps0 eps_r area V^2 / d^2 = W / d .
 
     At fixed voltage the attractive force equals the energy density times the
-    plate area, i.e. |F| = W/d, and scales as 1/d^2.  Returns
-    ``{"C": ..., "energy": ..., "force": ...}``.  (Griffiths.)
+    plate area, i.e. |F| = W/d, and scales as 1/d^2.  The pressure is the
+    normal electrostatic Maxwell traction for a field normal to the plate.
+    Returns ``{"C": ..., "energy": ..., "force": ...}`` plus explicit field,
+    pressure, and energy-density entries.  (Griffiths.)
     """
     if eps_r <= 0:
         raise ValueError("eps_r must be > 0")
@@ -131,10 +201,75 @@ def parallel_plate_capacitor_energy_force(eps_r, area, gap, voltage):
         raise ValueError("area must be > 0")
     if gap <= 0:
         raise ValueError("gap must be > 0")
+    field = voltage / gap
     C = EPS0 * eps_r * area / gap
+    energy_density = 0.5 * EPS0 * eps_r * field * field
     energy = 0.5 * C * voltage * voltage
-    force = 0.5 * EPS0 * eps_r * area * voltage * voltage / (gap * gap)
-    return {"C": C, "energy": energy, "force": force}
+    force = energy_density * area
+    return {
+        "C": C,
+        "energy": energy,
+        "force": force,
+        "electric_field_V_per_m": field,
+        "pressure_Pa": energy_density,
+        "energy_density_J_per_m3": energy_density,
+    }
+
+
+def capacitance_gradient_force_summary(
+    capacitance_F,
+    dCdx_F_per_m,
+    voltage_V=None,
+    charge_C=None,
+):
+    r"""Electrostatic force from a capacitance gradient.
+
+    For a generalized displacement coordinate ``x`` and capacitance ``C(x)``,
+    the signed force along increasing ``x`` is
+
+        fixed voltage:  F_x = 1/2 V^2 dC/dx ,
+        fixed charge:   F_x = 1/2 Q^2 C^-2 dC/dx .
+
+    The fixed-voltage expression is the coenergy/source-inclusive result; it is
+    the sign convention used in MEMS capacitance-gradient actuators.  If ``x``
+    is a gap or height, ``dC/dx`` is usually negative, so the returned force is
+    negative (attractive, toward smaller gap).  Provide ``voltage_V``,
+    ``charge_C``, or both.  Returns a JSON-friendly summary with whichever
+    force routes were requested.
+    """
+
+    capacitance = float(capacitance_F)
+    gradient = float(dCdx_F_per_m)
+    if capacitance <= 0.0:
+        raise ValueError("capacitance_F must be > 0")
+    if voltage_V is None and charge_C is None:
+        raise ValueError("provide voltage_V, charge_C, or both")
+
+    out = {
+        "capacitance_F": capacitance,
+        "dCdx_F_per_m": gradient,
+    }
+    if voltage_V is not None:
+        voltage = float(voltage_V)
+        force = 0.5 * voltage * voltage * gradient
+        out.update({
+            "voltage_V": voltage,
+            "fixed_voltage_force_N": force,
+            "fixed_voltage_coenergy_gradient_N": force,
+        })
+    if charge_C is not None:
+        charge = float(charge_C)
+        force = 0.5 * charge * charge * gradient / (capacitance * capacitance)
+        out.update({
+            "charge_C": charge,
+            "fixed_charge_force_N": force,
+            "fixed_charge_energy_force_N": force,
+        })
+    if voltage_V is not None and charge_C is not None:
+        consistent_charge = capacitance * float(voltage_V)
+        out["charge_for_voltage_C"] = consistent_charge
+        out["charge_consistency_error_C"] = float(charge_C) - consistent_charge
+    return out
 
 
 def dielectric_sphere_polarizability(radius_a, eps_r):

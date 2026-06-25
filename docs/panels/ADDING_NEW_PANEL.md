@@ -310,7 +310,7 @@ Once you have the 3 files, the user gets all of these for free:
 | Open-GMSH button auto-enable | `AnalysisWindow._on_finished` matches `gmsh_file` / `field_gmsh_file` / `msh_output` / `msh_file` in result |
 | Compute-time table in summary | `AnalysisWindow._append_standard_summary` matches every `t_*_s` key |
 | Temperature mean/max/min table | Same helper matches `T_mean_C` / `T_max_C` / `T_min_C` |
-| Cross-machine deploy hooks | `release_triple.py phase8` deploys `calc_<topic>.py` like any other panel file |
+| Cross-machine deploy hooks | `release_qud.py phase8` deploys `calc_<topic>.py` like any other panel file |
 | Layer-3 standalone launch | `python -m radia.radia_<topic> model.vol` (handled by `run_app()`) |
 
 ## Reference implementations

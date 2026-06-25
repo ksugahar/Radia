@@ -1,8 +1,8 @@
 """Validation-class air-gap Maxwell pressure / holding-force sweep.
 
-This is a lightweight FEMM-style teaching example: solve a readable series
-magnetic circuit for the gap flux density, then convert that field to a pole
-face pressure and holding force using Maxwell stress,
+This is a lightweight magnetic-circuit teaching example: solve a readable
+series circuit for the gap flux density, then convert that field to a pole face
+pressure and holding force using Maxwell stress,
 
     p = B^2 / (2 mu0),   F = p A n_faces.
 

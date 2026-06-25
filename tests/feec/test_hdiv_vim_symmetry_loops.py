@@ -1,7 +1,7 @@
 """Golden test: the HDiv-VIM loop machinery is AUTOMATIC on symmetry-reduced (cut) meshes -- 1/2, 1/4,
 1/8 models (verify-first, 2026-06-08).
 
-The painful part of symmetry models in MSC/yano-type is the LOOP handling: the loop-star basis must be
+The painful part of symmetry models in MSC/six-face surface-charge is the LOOP handling: the loop-star basis must be
 constructed with a cohomology-aware `installCycle` on the cut domain (the symmetry planes introduce new
 cycles).  In the HDiv-VIM the loops are simply ker(B) (B = charge map), so on ANY cut/reduced mesh they
 are field-null BY CONSTRUCTION (N = B^T G B => N.loop = 0 for loop in ker B) with NO hand-crafted basis

@@ -254,6 +254,8 @@ class radTInteraction : public radTg {
 	std::vector<double> m_flatExternFieldArray;  // Size: m_totalDOF
 	std::vector<double> m_flatMagnArray;         // Size: m_totalDOF (M or sigma values)
 	std::vector<double> m_flatFieldArray;        // Size: m_totalDOF
+	mutable double m_lastMomentFieldGradTime;    // Last BuildMomentSystemCore centroid field/gradient time [s]
+	mutable double m_lastMomentSystemBuildTime;  // Last BuildMomentSystemCore total assembly time [s]
 
 	//-------------------------------------------------------------------------
 	// Pre-computed tetrahedron geometry for fast 3x3 block computation
@@ -349,7 +351,7 @@ public:
 	// (Matches NETGEN_FACES in radia_pybind.cpp)
 	//
 	// IMA mirror contributions are computed inline in the active kernels:
-	//   moment-yano centroid field/grad: scalar IMA sign (MSC surface charge is scalar)
+	//   multipole-moment MMM centroid field/grad: scalar IMA sign (MSC surface charge is scalar)
 	//   Compute3x3BlockFast: component sign matrix S[beta] (MMM magnetization is pseudovector)
 	// No DOF permutation matrices are needed.
 
@@ -394,7 +396,7 @@ public:
 	radTg3dRelax* GetElement(int idx) { return g3dRelaxPtrVect[idx]; }
 
 	// True if any RELAXABLE element is a surface-charge (Use6DOF_MSC) polyhedron -- hex (6 faces) or
-	// 5-face wedge/pyramid.  These are solved by the canonical moment-yano path. Defined in
+	// 5-face wedge/pyramid.  These are solved by the canonical multipole-moment MMM path. Defined in
 	// rad_interaction.cpp (needs the full radTPolyhedron type). Tet (MMM) / PM elements -> false.
 	bool HasSurfaceChargeElements() const;
 
@@ -497,7 +499,7 @@ public:
 	//-------------------------------------------------------------------------
 	void PrecomputeHexaGeometry();  // Pre-compute face triangles/normals/eval points
 	void PrecomputeHexaTriangleData();  // Pre-compute triangle local coordinate systems
-	// Cell-graph cycle (loop) basis = field-null subspace of the yano-MSC operator (== HDiv ker(B)).
+	// Cell-graph cycle (loop) basis = field-null subspace of the surface-charge MSC operator (== HDiv ker(B)).
 	// Geometry-only (no SVD); Lflat is ROW-MAJOR (m_totalDOF x nLoop): Lflat[d*nLoop+col].  See .cpp.
 	void BuildLoopBasis(std::vector<double>& Lflat, int& nLoop) const;
 	// Per-DOF hex face geometry in the matrix DOF order (for div(B)=0 / RHS / moment studies in Python).
@@ -521,13 +523,27 @@ public:
 	// The reusable single-(target,source) kernel shared by BuildCentroidFieldGrad and MomentSystemEntry.
 	void CentroidFieldGradFromFace(const double ce3[3], const double V4[4][3], const double srcCenter[3],
 	                               bool isSelf, double area, double Hout[3], double gHout[6]) const;
+	// O(N) geometry/sample cache for the HACApK moment callback path.  This is the multipole-moment
+	// counterpart of the legacy 6-DoF PrecomputeHexaGeometry + cached 6x6 block path.
+	void PrecomputeMomentGeometry() const;
+	// O(N) geometry/sample cache for 5/6-DOF moment elements in CollectMomentElems order.
+	void PrecomputeMomentAnyGeometry() const;
 	// On-demand UN-normalized moment system entry A_raw[rowGlobal][colDOF] (the H-matrix entry; see
-	// docs/moment_yano/ACA_MOMENT_DESIGN.md).  rowGlobal = 6*hpos + t over the valid 6-face hexes
+	// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  rowGlobal = 6*hpos + t over the valid 6-face hexes
 	// (t: 0,1,2 dipole; 3 monopole; 4,5 diagonal-quadrupole); colDOF = global face DOF.  Computed ONLY from
 	// the row element's local geometry + the on-demand centroid field/grad from face colDOF -- no full-system
 	// build, no row normalization (the row 2-norm is a diagonal scaling that leaves the direct solve invariant).
 	double MomentSystemEntry(int rowGlobal, int colDOF, const double* chiPerHex) const;
-	// MOMENT-yano system matrix (parameter-free replacement for EIEM2): per moment element assemble
+	void MomentSystemBlock6x6(int rowHexPos, int colHexPos, const double* chiPerHex, double* block, bool kernelOnly = false) const;
+	// Pure-hex hot path for method-1 matrix-free BiCGSTAB.  Computes
+	// y = diag(chi) * K_geometry * x using the same moment quadrature as
+	// MomentSystemBlock6x6(..., kernelOnly=true), but without materializing a
+	// temporary 6x6 block for every element pair.
+	void MomentKernelMatVec6x6(const double* x, const double* chiPerHex, double* y) const;
+	// Padded 6x6 on-demand moment block in CollectMomentElems order.  The active block is
+	// row_dof x col_dof, where row/col dof are 5 or 6 from the corresponding moment elements.
+	void MomentSystemBlockAny(int rowMomPos, int colMomPos, const double* chiPerMom, double* block, bool kernelOnly = false) const;
+	// multipole-moment MMM system matrix (parameter-free replacement for EIEM2): per moment element assemble
 	// 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
 	// (global field/grad from BuildCentroidFieldGrad, local moments from the element geometry).  Rows 2-norm
 	// normalized.  A row-major (dof x dof), rhs length dof.  Uniform linear chi + uniform applied field Happ
@@ -536,8 +552,10 @@ public:
 	// Per-element chi + per-element external field (at moment-element centroid, HextPerHex[h*3+k]); A column = face DOF
 	// so dgesv's solution is sigma in DOF order.  The solve path uses this (coil sources are not uniform).
 	void BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex, std::vector<double>& A, std::vector<double>& rhs, bool normalize = true) const;
+	double LastMomentFieldGradTime() const { return m_lastMomentFieldGradTime; }
+	double LastMomentSystemBuildTime() const { return m_lastMomentSystemBuildTime; }
 	// EIEM2 surface-charge block kernels (Compute6x6BlockFast / Compute5x5BlockFast /
-	// ComputeMixedBlockFast) retired Phase 3b -- moment-yano (BuildMomentSystemCore) is the sole
+	// ComputeMixedBlockFast) retired Phase 3b -- multipole-moment MMM (BuildMomentSystemCore) is the sole
 	// surface-charge demag. Method-2 surface-charge solves use RadHACApKMomentSystem; the legacy HACApK
 	// manager is now MMM-only (3x3 tet).
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
@@ -571,7 +589,7 @@ public:
 
 	// Legacy IMA functions removed (2026-03-31): ApplyDOFPermutation, ApplyRowPermutation,
 	// Compute6x6BlockIMA, Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget
-	// IMA mirror logic is now inline in the moment-yano centroid field/grad path and Compute3x3BlockFast.
+	// IMA mirror logic is now inline in the multipole-moment MMM centroid field/grad path and Compute3x3BlockFast.
 
 	// IMA accessors
 	bool IsIMAEnabled() const { return m_imaEnabled; }

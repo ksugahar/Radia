@@ -15,6 +15,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from radia_mcp.radia_ngsolve.machine_scaling import (MachineScaling,
+                                                     torque_scaling_summary,
                                                      winding_resistance_onelab)
 
 
@@ -44,6 +45,36 @@ def test_global_scale_is_axial_times_symmetry():
     scmm = MachineScaling(stack_length=0.02, length_unit_m=1e-3)
     assert math.isclose(scmm.force(5.0), 5.0 * 1e-3 * 0.02)
     assert math.isclose(scmm.torque(5.0), 5.0 * 1e-6 * 0.02)
+
+
+def test_torque_scaling_summary_spells_out_sector_to_whole_machine():
+    row = torque_scaling_summary(
+        2.5e6,
+        stack_length_m=0.08,
+        symmetry_factor=6.0,
+        length_unit_m=1.0e-3,
+        label="sixth_sector",
+    )
+    assert row["label"] == "sixth_sector"
+    assert math.isclose(row["mesh_unit_torque_scale"], 1.0e-6)
+    assert math.isclose(row["torque_one_model_sector_Nm"], 0.2)
+    assert math.isclose(row["whole_machine_torque_Nm"], 1.2)
+    assert math.isclose(row["whole_over_sector"], 6.0)
+    assert math.isclose(row["total_scaling_factor"], 4.8e-7)
+
+    braking = torque_scaling_summary(-2.5e6, 0.08, symmetry_factor=6.0, length_unit_m=1.0e-3)
+    assert math.isclose(braking["whole_machine_torque_Nm"], -1.2)
+
+    for kwargs in (
+        {"stack_length_m": 0.0},
+        {"stack_length_m": 0.08, "symmetry_factor": 0.0},
+        {"stack_length_m": 0.08, "length_unit_m": 0.0},
+    ):
+        try:
+            torque_scaling_summary(1.0, **kwargs)
+            assert False, f"expected ValueError for {kwargs}"
+        except ValueError:
+            pass
 
 
 def test_winding_resistance_replicates_onelab_Rb():

@@ -1,6 +1,6 @@
 /* rad_hdiv_vim.h -- Symmetric HDiv-type VIM (Volume Integral Method) demag operator.
  *
- * The HDiv-type VIM is the Galerkin complement to the moment-yano MSC kernel: a SYMMETRIC
+ * The HDiv-type VIM is the Galerkin complement to the multipole-moment MMM MSC kernel: a SYMMETRIC
  * demag operator N = B^T G B with
  *   B = charge map   M |-> (rho = -div M per cell [P0],  sigma = M.n per boundary face [P0])
  *   G = Coulomb Gram (charge-charge interaction; symmetric since 1/r is symmetric)

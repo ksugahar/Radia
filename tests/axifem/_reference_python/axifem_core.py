@@ -152,7 +152,7 @@ def magnetization_rhs(rn, zn, M_dir_deg: float, H_c: float):
         k = (j + 1) % 3
         r_mid = (rn[j] + rn[k]) / 2.0
         # In SI: K = -mu0 * r_mid * H_c * (cos*(r_k - r_j) + sin*(z_k - z_j))
-        # FEMM uses 0.0001 (cm units); we drop that and absorb mu0 elsewhere.
+        # The legacy cm-unit source uses 0.0001; pure SI absorbs mu0 elsewhere.
         K = -r_mid * H_c * (cos_t * (rn[k] - rn[j]) + sin_t * (zn[k] - zn[j]))
         be[j] += K
         be[k] += K
