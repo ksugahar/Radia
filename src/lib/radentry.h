@@ -1104,6 +1104,18 @@ EXP int CALL RadSetBiCGSTABTol(int* n, double tol);
 */
 EXP int CALL RadGetBiCGSTABTol(double* tol);
 
+/** Select multipole-moment method-2 Krylov solver: 0=BiCGSTAB, 1=restarted GMRES. */
+EXP int CALL RadSetMomentKrylovSolver(int* n, int solver);
+EXP int CALL RadGetMomentKrylovSolver(int* solver);
+
+/** Configure restarted GMRES restart length for multipole-moment method-2. */
+EXP int CALL RadSetMomentGMRESRestart(int* n, int restart);
+EXP int CALL RadGetMomentGMRESRestart(int* restart);
+
+/** Configure safeguarded Anderson acceleration depth for multipole-moment method-2 (0=off, 1=depth-1). */
+EXP int CALL RadSetMomentAndersonDepth(int* n, int depth);
+EXP int CALL RadGetMomentAndersonDepth(int* depth);
+
 /** Sets under-relaxation coefficient for nonlinear iteration.
 @param n [out] dummy output (set to 1)
 @param relax [in] relaxation coefficient (0.0 = full step, 0.0-1.0 = under-relaxation)
