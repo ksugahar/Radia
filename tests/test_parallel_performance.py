@@ -80,32 +80,34 @@ def test_relaxation_performance():
 	"""Test relaxation solver performance with multiple elements"""
 	rad.UtiDelAll()
 	start_time = time.perf_counter()
+	try:
+		# Create a nonlinear material (required for relaxation solver)
+		mat = rad.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
 
-	# Create a nonlinear material (required for relaxation solver)
-	mat = rad.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
+		# Create multiple magnetic elements (grid of 10x10, spacing 10 mm = 0.010 m)
+		elements = []
+		for i in range(10):
+			for j in range(10):
+				x = -0.050 + i * 0.010
+				y = -0.050 + j * 0.010
+				mag = rad.ObjRecMag([x, y, 0], [0.008, 0.008, 0.010], [0, 0, 0])
+				rad.MatApl(mag, mat)  # Apply material for relaxation
+				elements.append(mag)
 
-	# Create multiple magnetic elements (grid of 10x10, spacing 10 mm = 0.010 m)
-	elements = []
-	for i in range(10):
-		for j in range(10):
-			x = -0.050 + i * 0.010
-			y = -0.050 + j * 0.010
-			mag = rad.ObjRecMag([x, y, 0], [0.008, 0.008, 0.010], [0, 0, 0])
-			rad.MatApl(mag, mat)  # Apply material for relaxation
-			elements.append(mag)
+		# Create container
+		container = rad.ObjCnt(elements)
 
-	# Create container
-	container = rad.ObjCnt(elements)
+		# Create interaction
+		result = rad.Solve(container, 0.0001, 1000)
 
-	# Create interaction
-	result = rad.Solve(container, 0.0001, 1000)
+		end_time = time.perf_counter()
+		elapsed_time = end_time - start_time
 
-	end_time = time.perf_counter()
-	elapsed_time = end_time - start_time
-
-	# Test passes if solver completes (rad.Solve returns convergence data)
-	assert result is not None
-	assert elapsed_time > 0
+		# Test passes if solver completes (rad.Solve returns convergence data)
+		assert result is not None
+		assert elapsed_time > 0
+	finally:
+		rad.UtiDelAll()
 
 def set_thread_count(num_threads):
 	"""Set the number of threads for parallel computation.
