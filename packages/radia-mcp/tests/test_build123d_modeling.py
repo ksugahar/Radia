@@ -29,7 +29,8 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_measurement_comparison_summary,
                                           shape_measurement_inventory_summary,
                                           worst_shape_measurement_comparison_rows,
-                                          shape_measurement_health_summary)
+                                          shape_measurement_health_summary,
+                                          shape_parameter_sweep_summary)
 from build123d import Box, Compound, Pos
 
 
@@ -163,6 +164,44 @@ def test_shape_measurement_inventory_summary_reports_assembly_fractions():
     fractions = {row["name"]: row for row in summary["volume_fraction_rows"]}
     assert fractions["left"]["volume_fraction"] == pytest.approx(8.0 / 12.0)
     assert fractions["right"]["volume_fraction"] == pytest.approx(4.0 / 12.0)
+
+
+def test_shape_parameter_sweep_summary_tracks_monotonic_metrics_and_limits():
+    rows = []
+    for height in [1.0, 2.0, 3.0, 4.0]:
+        box = Box(2.0, 3.0, height).solid()
+        row = shape_measurement_row(box, name=f"h_{height:g}")
+        row["height"] = height
+        rows.append(row)
+
+    summary = shape_parameter_sweep_summary(
+        rows,
+        "height",
+        metric_keys=("volume", "area"),
+        limits_by_metric={"volume": {"min": 12.0, "max": 24.0}},
+    )
+    metrics = {row["metric"]: row for row in summary["metric_rows"]}
+
+    assert summary["parameter_values"] == [1.0, 2.0, 3.0, 4.0]
+    assert summary["parameter_strictly_increasing"] is True
+    assert summary["status"] == "needs_attention"
+    assert summary["constraint_violation_count"] == 1
+    assert summary["constraint_violations"][0]["kind"] == "below_min"
+    assert metrics["volume"]["min"] == pytest.approx(6.0)
+    assert metrics["volume"]["max"] == pytest.approx(24.0)
+    assert metrics["volume"]["monotonic_non_decreasing"] is True
+    assert metrics["volume"]["min_step_delta"] == pytest.approx(6.0)
+    assert metrics["area"]["first"] == pytest.approx(22.0)
+    assert metrics["area"]["last"] == pytest.approx(52.0)
+    assert metrics["area"]["monotonic_non_decreasing"] is True
+
+    clean = shape_parameter_sweep_summary(rows, "height", metric_keys=("volume",))
+    assert clean["status"] == "ok"
+    assert clean["ok_for_design_table"] is True
+
+    duplicate = shape_parameter_sweep_summary(rows + [dict(rows[-1])], "height", metric_keys=("volume",))
+    assert duplicate["duplicate_parameter_values"] is True
+    assert duplicate["status"] == "needs_attention"
 
 
 def test_box_face_vector_area_rows_match_centered_box():

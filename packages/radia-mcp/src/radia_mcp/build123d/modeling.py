@@ -38,7 +38,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            "shape_measurement_inventory_summary", "worst_shape_measurement_comparison_rows",
-           "shape_measurement_health_summary",
+           "shape_measurement_health_summary", "shape_parameter_sweep_summary",
            # generic solid-modelling operations (constructors / local mods / arrays)
            "swept", "revolved", "lofted", "coil", "helix_centerline_length",
            "round_wire_helix_metrics", "strut", "thicken", "draft_extrude",
@@ -1110,6 +1110,137 @@ def shape_measurement_health_summary(
             comparison["rows"],
             limit=worst_limit,
         ),
+    }
+
+
+def shape_parameter_sweep_summary(
+    rows,
+    parameter_key,
+    metric_keys=("volume", "area"),
+    limits_by_metric=None,
+    monotonic_tolerance=1.0e-12,
+):
+    """Summarize a CAD parameter sweep from measurement rows.
+
+    Each row should contain ``parameter_key`` and the requested metric keys
+    (for example ``volume`` and ``area`` from :func:`shape_measurement_row`).
+    The summary sorts by the parameter value and reports monotonicity, extrema,
+    spans, and optional min/max constraint violations for each metric.  It is a
+    small pre-mesh design table before geometry rows are sent to meshing,
+    validation, or optimization.
+    """
+
+    rows = [dict(row) for row in rows]
+    if not rows:
+        raise ValueError("rows must not be empty")
+    tolerance = float(monotonic_tolerance)
+    if tolerance < 0.0:
+        raise ValueError("monotonic_tolerance must be >= 0")
+    metric_keys = tuple(str(key) for key in metric_keys)
+    if not metric_keys:
+        raise ValueError("metric_keys must not be empty")
+    limits_by_metric = limits_by_metric or {}
+
+    for row in rows:
+        if parameter_key not in row:
+            raise KeyError(f"missing parameter {parameter_key!r}")
+        row[parameter_key] = float(row[parameter_key])
+        if not math.isfinite(row[parameter_key]):
+            raise ValueError("parameter values must be finite")
+        for key in metric_keys:
+            if key not in row:
+                raise KeyError(f"missing metric {key!r}")
+            row[key] = float(row[key])
+            if not math.isfinite(row[key]):
+                raise ValueError("metric values must be finite")
+
+    rows.sort(key=lambda row: row[parameter_key])
+    parameter_values = [row[parameter_key] for row in rows]
+    duplicate_parameters = len(set(parameter_values)) != len(parameter_values)
+    parameter_strict = all(parameter_values[i] < parameter_values[i + 1] for i in range(len(rows) - 1))
+    metric_rows = []
+    violations = []
+
+    for key in metric_keys:
+        values = [row[key] for row in rows]
+        deltas = [values[i + 1] - values[i] for i in range(len(values) - 1)]
+        min_index = min(range(len(values)), key=lambda i: values[i])
+        max_index = max(range(len(values)), key=lambda i: values[i])
+        limits = limits_by_metric.get(key, {})
+        lower = limits.get("min") if isinstance(limits, dict) else None
+        upper = limits.get("max") if isinstance(limits, dict) else None
+        lower = None if lower is None else float(lower)
+        upper = None if upper is None else float(upper)
+        if lower is not None and not math.isfinite(lower):
+            raise ValueError(f"lower limit for metric {key!r} must be finite")
+        if upper is not None and not math.isfinite(upper):
+            raise ValueError(f"upper limit for metric {key!r} must be finite")
+        metric_violations = []
+        for row, value in zip(rows, values):
+            if lower is not None and value < lower - tolerance:
+                metric_violations.append({
+                    "parameter": row[parameter_key],
+                    "metric": key,
+                    "value": value,
+                    "limit": lower,
+                    "kind": "below_min",
+                })
+            if upper is not None and value > upper + tolerance:
+                metric_violations.append({
+                    "parameter": row[parameter_key],
+                    "metric": key,
+                    "value": value,
+                    "limit": upper,
+                    "kind": "above_max",
+                })
+        violations.extend(metric_violations)
+        min_value = values[min_index]
+        max_value = values[max_index]
+        metric_rows.append({
+            "metric": key,
+            "min": min_value,
+            "min_parameter": parameter_values[min_index],
+            "max": max_value,
+            "max_parameter": parameter_values[max_index],
+            "span": max_value - min_value,
+            "relative_span": (
+                (max_value - min_value) / abs(min_value)
+                if min_value != 0.0
+                else (0.0 if max_value == 0.0 else math.inf)
+            ),
+            "first": values[0],
+            "last": values[-1],
+            "delta_first_to_last": values[-1] - values[0],
+            "monotonic_non_decreasing": all(delta >= -tolerance for delta in deltas),
+            "monotonic_non_increasing": all(delta <= tolerance for delta in deltas),
+            "min_step_delta": min(deltas) if deltas else 0.0,
+            "max_step_delta": max(deltas) if deltas else 0.0,
+            "limits": {"min": lower, "max": upper},
+            "constraint_violation_count": len(metric_violations),
+        })
+
+    ok = not duplicate_parameters and not violations
+    issues = []
+    if duplicate_parameters:
+        issues.append("duplicate parameter values")
+    if violations:
+        issues.append("at least one metric is outside requested limits")
+    return {
+        "policy": "build123d_parameter_sweep_measurements_are_sorted_and_audited",
+        "parameter_key": str(parameter_key),
+        "n_cases": len(rows),
+        "parameter_values": parameter_values,
+        "parameter_min": parameter_values[0],
+        "parameter_max": parameter_values[-1],
+        "parameter_strictly_increasing": parameter_strict,
+        "duplicate_parameter_values": duplicate_parameters,
+        "metric_rows": metric_rows,
+        "constraint_violations": violations,
+        "constraint_violation_count": len(violations),
+        "status": "ok" if ok else "needs_attention",
+        "ok_for_design_table": ok,
+        "issues": issues,
+        "rows": rows,
     }
 
 
