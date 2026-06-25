@@ -20,6 +20,8 @@
 
 #include <core/taskmanager.hpp>    // ParallelFor, ParallelForRange, ParallelJob
 #include <core/utils.hpp>          // AtomicAdd, AtomicMax, AtomicMin, SuspendTaskManager
+#include <algorithm>
+#include <cstdlib>
 
 #ifdef HAVE_LAPACK
 #include "mkl_service.h"           // mkl_set_num_threads, mkl_get_max_threads
@@ -54,8 +56,24 @@ public:
 };
 #endif
 
-// Convenience wrappers
-inline int GetNumThreads() { return TaskManager::GetNumThreads(); }
+// Convenience wrappers.  RADIA_NUM_THREADS is intentionally read on demand so
+// benchmark drivers can set it before calling rad.Solve without rebuilding or
+// relying on the host Python's NGSolve default.
+inline int GetMaxThreads()
+{
+    if(const char* env = std::getenv("RADIA_NUM_THREADS"))
+    {
+        int n = std::atoi(env);
+        if(n > 0) return n;
+    }
+    return std::max(1, TaskManager::GetMaxThreads());
+}
+
+inline int GetNumThreads()
+{
+    int n = TaskManager::GetNumThreads();
+    return (n > 0) ? n : GetMaxThreads();
+}
 inline int GetThreadId()   { return TaskManager::GetThreadId(); }
 
 } // namespace radia

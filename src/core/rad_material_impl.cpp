@@ -1266,7 +1266,7 @@ int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* p
 			}
 			// TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): keep the pool up
 			// across the densify loop (totalDOF H-matvecs) without a caller `with TaskManager()`.
-			ngcore::RegionTaskManager rtm(std::max(1, ngcore::TaskManager::GetMaxThreads()));
+			ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 			std::vector<double> x((size_t)totalDOF, 0.0), y((size_t)totalDOF, 0.0);
 			for(int j = 0; j < totalDOF; j++)
 			{
@@ -1507,7 +1507,7 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 	m_solve_t_lu_decomp = 0.0;  // Reset LU decomposition time
 	m_solve_linear_iterations = 0;
 	m_solve_nonl_iterations = 0;
-	m_solve_num_threads = radia::GetNumThreads();  // Record while TaskManager is active
+	m_solve_num_threads = radia::GetMaxThreads();  // Requested TaskManager thread count
 
 	try
 	{
@@ -1850,7 +1850,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// (BuildMomentSystemCore) is the SOLE solver for surface-charge soft iron -- hex (6 DOF) AND wedge/pyramid (5 DOF,
 		// Phase 3a: 3 dipole + 1 monopole + 1 axial quad).  Solver method:
 		//   - method 0 (LU)       -> dense direct moment solve (hex / wedge / mixed).
-		//   - method 1 (BiCGSTAB) -> reroute to LU (dense moment direct solve; medium N).
+		//   - method 1 (BiCGSTAB) -> dense moment matrix + BiCGSTAB linear step.
 		//   - method 2 (HACApK)   -> the moment H-matrix + block-Jacobi BiCGSTAB (scalable storage; no dense
 		//     interaction/base matrix, Increment 4), set g_multipole_moment_hacapk and route to the LU/Picard driver
 		//     whose linear step picks the H-BiCGSTAB.  HEX-ONLY for now (the H-matrix assumes uniform 6 DOF);
@@ -1887,9 +1887,14 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 							// uniform 6 DOF); wedge/mixed moment uses the dense LU/Picard moment path (Phase 3a-1).
 							// The variable-DOF moment H-matrix for wedge/mixed method-2 is Phase 3a-2.
 							if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && allHex6)
+							{
 								g_multipole_moment_hacapk = true;    // moment linear step via H-matrix + BiCGSTAB (hex-only)
-							if(MethNo != RadSolverMethod::LU)
-								MethNo = RadSolverMethod::LU;   // route moment (hex/wedge/pyramid) to the Picard/LU driver
+								MethNo = RadSolverMethod::LU;   // route through the Picard driver; the linear step sees the flag
+							}
+							else if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
+							{
+								MethNo = RadSolverMethod::LU;   // method-2 wedge/mixed dense fallback until variable-DOF H-matrix
+							}
 						}
 					}
 				}
