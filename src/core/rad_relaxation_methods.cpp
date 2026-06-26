@@ -3520,6 +3520,38 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			fprintf(stderr, "[BiCG] Error: matrix-free moment block-Jacobi requires LAPACK; scalar/identity substitute is disabled.\n");
 			return -11;
 #endif
+
+			// BUILD-ONCE dense geometry interaction (Sugahara 2026-06-27): the matrix-free
+			// MomentKernelMatVec6x6 RE-evaluates the full O(nHex^2) kernel on EVERY matvec, so a
+			// BiCGSTAB solve (~tens of matvecs) repeats ~N matrix builds (each matvec ~ one build).
+			// Instead build the chi-INDEPENDENT geometry block matrix K ONCE
+			// (K[h][g] = MomentSystemBlock6x6(h,g,kernelOnly=true), incl. INV4PI + IMA images); the
+			// matvec then applies y = diag(chi)(K x) + L_local x as a cheap dense GEMV, and a nonlinear
+			// Picard loop reuses K, updating only chi (the block diagonal).  O(N^2) storage (= method 0);
+			// for very large N use method 2 (HACApK, O(N log N)).
+			const size_t momentDenseElems = (size_t)totalDOF * (size_t)totalDOF;
+			if((double)momentDenseElems * 8.0 > 24.0e9)
+			{
+				fprintf(stderr, "[BiCG] Error: method-1 build-once dense needs %.1f GB (DOF=%d); use method 2 (HACApK) for this size.\n",
+				        (double)momentDenseElems * 8.0 / 1.0e9, totalDOF);
+				return -16;
+			}
+			std::vector<double> momentKdense(momentDenseElems, 0.0);
+			auto buildKdenseRow = [&](size_t hh) {
+				const int h = (int)hh;
+				double Kblk[36];
+				for(int g = 0; g < nHex; g++)
+				{
+					IntrctPtr->MomentSystemBlock6x6(h, g, nullptr, Kblk, true);   // chi-independent geometry block (incl. images)
+					for(int i = 0; i < 6; i++)
+						for(int j = 0; j < 6; j++)
+							momentKdense[(size_t)(6*h+i) * (size_t)totalDOF + (size_t)(6*g+j)] = Kblk[i*6+j];
+				}
+			};
+			if(serialElementOps) { for(int h = 0; h < nHex; h++) buildKdenseRow((size_t)h); }
+			else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildKdenseRow); }
+			std::vector<double> momentKx((size_t)totalDOF, 0.0);
+
 			auto t_setup_end = std::chrono::high_resolution_clock::now();
 			rad.m_solve_t_moment_system_build += std::chrono::duration<double>(t_setup_end - t_setup_start).count();
 
@@ -3527,20 +3559,26 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			for(int i = 0; i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];
 
 			auto matvec = [&](const double* x, double* y) {
-				IntrctPtr->MomentKernelMatVec6x6(x, chiPerHex.data(), y);
-				auto applyLocalRow = [&](size_t hh) {
+				// build-once: y = diag(chi)(Kdense x) + L_local x  -- cheap dense GEMV, NO kernel recompute
+				cblas_dgemv(CblasRowMajor, CblasNoTrans, totalDOF, totalDOF, 1.0,
+				            momentKdense.data(), totalDOF, x, 1, 0.0, momentKx.data(), 1);
+				auto applyRow = [&](size_t hh) {
 					const int h = (int)hh;
+					const double chih = chiPerHex[h];
 					const double* Lh = &localLBlock[(size_t)h * 36];
 					const double* xh = &x[(size_t)6 * h];
+					const double* Kxh = &momentKx[(size_t)6 * h];
 					double* yh = &y[(size_t)6 * h];
 					for(int i = 0; i < 6; i++)
 					{
+						double s = chih * Kxh[i];
 						const double* Li = &Lh[(size_t)i * 6];
-						for(int j = 0; j < 6; j++) yh[i] += Li[j] * xh[j];
+						for(int j = 0; j < 6; j++) s += Li[j] * xh[j];
+						yh[i] = s;
 					}
 				};
-				if(serialElementOps) { for(int h = 0; h < nHex; h++) applyLocalRow((size_t)h); }
-				else { ngcore::ParallelFor(ngcore::IntRange(nHex), applyLocalRow); }
+				if(serialElementOps) { for(int h = 0; h < nHex; h++) applyRow((size_t)h); }
+				else { ngcore::ParallelFor(ngcore::IntRange(nHex), applyRow); }
 			};
 			auto precond = [&](const double* x, double* y) {
 				auto applyBlock = [&](size_t hh) {
