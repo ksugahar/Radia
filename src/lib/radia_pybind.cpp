@@ -1080,7 +1080,7 @@ py::tuple BuildMomentSystem(int intrc_handle, double chi, double hx, double hy, 
 }
 
 // Dense UN-normalized moment system A_raw built ENTRY-BY-ENTRY via radTInteraction::MomentSystemEntry --
-// the validation harness for the on-demand HACApK H-matrix entry (Phase 2; ACA_MOMENT_DESIGN.md).
+// the validation harness for the on-demand HACApK H-matrix entry (Phase 2; ACA_MOMENT_DESIGN.ipynb).
 py::tuple MomentSystemDenseRaw(int intrc_handle, double chi) {
     int dof = 0;
     int err = RadMomentSystemDenseRaw(chi, nullptr, &dof, intrc_handle);
@@ -1093,7 +1093,7 @@ py::tuple MomentSystemDenseRaw(int intrc_handle, double chi) {
 }
 
 // Build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem) and probe the H-matvec
-// against the dense A_raw (entry-by-entry).  Phase-2 Increment-2 gate (ACA_MOMENT_DESIGN.md).
+// against the dense A_raw (entry-by-entry).  Phase-2 Increment-2 gate (ACA_MOMENT_DESIGN.ipynb).
 py::dict MomentHMatrixProbe(int intrc_handle, double chi, double eps, int leaf, double eta) {
     double out[9] = {0,0,0,0,0,0,0,0,0};
     int err = RadMomentHMatrixProbe(chi, eps, leaf, eta, out, intrc_handle);
@@ -1887,6 +1887,8 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 // Opt-in analytic moment kernel toggle (defined in src/core/rad_interaction.cpp)
 void RadSetMomentAnalyticKernel(bool on);
 bool RadGetMomentAnalyticKernel();
+void RadSetMomentHLUPrecond(bool on);   // multipole-moment method-2 H-LU preconditioner toggle (rad_relaxation_methods.cpp)
+bool RadGetMomentHLUPrecond();
 
 namespace radia_solver_ext {
 
@@ -2166,6 +2168,10 @@ void SolverConfig(py::kwargs kwargs) {
         ::RadSetMomentAnalyticKernel(kwargs["moment_analytic_kernel"].cast<bool>());
     }
 
+    if (kwargs.contains("hacapk_hlu_precond")) {
+        ::RadSetMomentHLUPrecond(kwargs["hacapk_hlu_precond"].cast<bool>());
+    }
+
     if (kwargs.contains("relax_param")) {
         SetRelaxParam(kwargs["relax_param"].cast<double>());
     }
@@ -2216,6 +2222,7 @@ py::dict GetSolverConfig() {
     config["moment_gmres_restart"] = GetMomentGMRESRestart();
     config["moment_anderson_depth"] = GetMomentAndersonDepth();
     config["moment_analytic_kernel"] = ::RadGetMomentAnalyticKernel();
+    config["hacapk_hlu_precond"] = ::RadGetMomentHLUPrecond();
 
     // Relaxation parameter
     { double relax = 0.0;
@@ -3871,7 +3878,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
           py::arg("intrc_handle"), py::arg("chi"),
           R"pbdoc(
               Dense UN-normalized moment system A_raw built ENTRY-BY-ENTRY via the on-demand
-              MomentSystemEntry (the HACApK H-matrix entry; ACA_MOMENT_DESIGN.md Phase 2).  Validation
+              MomentSystemEntry (the HACApK H-matrix entry; ACA_MOMENT_DESIGN.ipynb Phase 2).  Validation
               harness: re-normalizing A_raw's rows must reproduce BuildMomentSystem's A; and A_raw solves
               to the SAME magnetization as the normalized system (row-norm = diagonal scaling, invariant).
               Returns: (A_raw, dof).
@@ -3881,7 +3888,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
           py::arg("intrc_handle"), py::arg("chi"), py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
           R"pbdoc(
               Build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem) and probe the
-              O(N log N) H-matvec against the dense A_raw built entry-by-entry (ACA_MOMENT_DESIGN.md
+              O(N log N) H-matvec against the dense A_raw built entry-by-entry (ACA_MOMENT_DESIGN.ipynb
               Phase 2 Increment 2).  Returns a dict: ok, matvec_relerr (vs dense), ndof, n_lowrank,
               n_dense, max_rank, compression, build_time.
           )pbdoc");
