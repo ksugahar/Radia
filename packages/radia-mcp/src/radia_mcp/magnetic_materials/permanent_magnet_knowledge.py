@@ -112,7 +112,7 @@ M_x = 1.2 / (4 * math.pi * 1e-7)   # M = Br / mu_0 in A/m = 954930
 pm_obj = rad.ObjHexahedron(verts, [M_x, 0, 0])
 ```
 
-For demag analysis (need MatMagCurve, not yet fully implemented):
+For demag analysis (full PM demag not yet implemented; the MatMagCurve skeleton was removed 2026-06-26):
 - Currently approximate as MatLin(mu_recoil) plus initial M
 - Full demag would track local H trajectory and detect knee crossing
 
