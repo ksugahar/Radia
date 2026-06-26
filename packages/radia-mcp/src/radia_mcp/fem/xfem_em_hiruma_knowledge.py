@@ -27,13 +27,13 @@ Differences from solid-mechanics XFEM (Belytschko-Black 1999):
     physics, not jumps or singularities.
 
 Lab files (Sugahara research line, beta-1 Phase 1-4 benchmark):
-    S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/
-        phase1_cfem_cylinder_baseline.py        - CFEM baseline vs Bessel
-        phase2_xfem_hiruma_enrichment.py        - NGSolve EM-XFEM impl.
-        phase3_sqrt_s_schur_comparison.py       - Pade-based (deprecated)
-        phase3b_krylov_galerkin.py              - Galerkin-Krylov ROM
-        phase4_xfem_hankel_conditioning.py      - XFEM-CLN stacking test
-        STATUS.md                                - full Phase 1-4 report
+    S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb
+        (one consolidated notebook; sections:)
+        phase1 - CFEM baseline vs Bessel
+        phase2 - NGSolve EM-XFEM impl.
+        phase3 - Pade-based Schur (deprecated predecessor)
+        phase3b - Galerkin-Krylov ROM
+        phase4 - XFEM-CLN stacking test (Hankel conditioning)
 
 All text is ASCII (cp932-safe) and in English.
 """
@@ -46,13 +46,12 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 
 LAB_FILES = {
-    "benchmark_dir":  r"S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/",
-    "phase1_baseline": r"S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/phase1_cfem_cylinder_baseline.py",
-    "phase2_xfem":     r"S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/phase2_xfem_hiruma_enrichment.py",
-    "phase3b_krylov":  r"S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/phase3b_krylov_galerkin.py",
-    "phase4_hankel":   r"S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.py",
-    "status_report":   r"S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/STATUS.md",
-    "phase2_fig":      r"S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.pdf",
+    # Promoted 2026-06-26: the per-phase scripts are now SECTIONS of one notebook.
+    "notebook":       r"S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb",
+    "benchmark_dir":  r"S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/",
+    "phase1_results": r"S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/results_phase1.json",
+    "phase4_results": r"S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/phase4_xfem_hankel_results.json",
+    "phase4_fig":     r"S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.png",
 }
 
 
@@ -124,7 +123,7 @@ Do NOT use EM-XFEM if:
   - `radia_mcp.radia_ngsolve.cln_sibc_orthogonal`:
        decision framework: when XFEM vs SIBC vs augmented CLN
        (topic 'xfem_vs_sibc')
-  - examples/hiruma_xfem_comparison/:
+  - docs/hiruma_xfem_comparison/:
        reproducible benchmark (Phase 1-4)
 
 ## Three XFEM variants — do not confuse
@@ -367,9 +366,9 @@ upstream NGSolve features (no ngsxfem add-on).
 
 ## Reproducer
 
-    cd S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/
-    python phase2_xfem_hiruma_enrichment.py
-    # ~30-90 seconds depending on omega sweep granularity
+    cd S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/
+    jupyter nbconvert --to notebook --execute --inplace hiruma_xfem_comparison.ipynb
+    # the Phase 2 XFEM enrichment section runs in ~30-90 s (omega sweep)
     # output: STATUS.md table, results_phase2.npz
 """
 
@@ -539,9 +538,9 @@ XFEM's role is now precisely circumscribed:
 
 ## Files
 
-    examples/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.py
-    examples/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.pdf
-    examples/hiruma_xfem_comparison/phase4_xfem_hankel_results.json
+    docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb   (Phase 4 section)
+    docs/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.png
+    docs/hiruma_xfem_comparison/phase4_xfem_hankel_results.json
     memory/project_xfem_cln_hankel_no_improvement.md
 """
 
@@ -678,7 +677,7 @@ COMPOUND finite-element space:
 with the (u_std, u_enr) pair representing
 ``u_total(x) = u_std(x) + psi(x) * u_enr(x)``.  This is **vanilla
 NGSolve, no ngsxfem dependency**.  This is exactly what
-``phase2_xfem_hiruma_enrichment.py`` uses.
+the phase2 section of the notebook uses.
 
 ## Could ngsxfem reproduce Hiruma EM-XFEM?
 
@@ -818,15 +817,14 @@ REPRODUCTION = r"""
 ## Files
 
 ```
-S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/
-    phase1_cfem_cylinder_baseline.py        - CFEM coarse + fine baseline
-    phase2_xfem_hiruma_enrichment.py        - Hiruma XFEM enrichment
-    phase3_sqrt_s_schur_comparison.py       - Pade-based (deprecated)
-    phase3b_krylov_galerkin.py              - Galerkin-Krylov + augmented CLN
-    phase4_xfem_hankel_conditioning.py      - XFEM-CLN stacking test
-    STATUS.md                                - full Phase 1-4 report
-    phase4_xfem_hankel_conditioning.{pdf,png} - Phase 4 figure
-    results_phase{1,2,3}.npz                 - numerical outputs
+S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/
+    hiruma_xfem_comparison.ipynb            - consolidated Phase 1-4 notebook
+        (sections: phase1 CFEM baseline; phase2 Hiruma XFEM enrichment;
+         phase3 sqrt(s) Schur [deprecated Pade predecessor]; phase3b
+         Galerkin-Krylov augmented CLN; phase4 XFEM-CLN Hankel conditioning)
+    results_phase1.json                     - Phase 1 numerical output
+    phase4_xfem_hankel_results.json         - Phase 4 numerical output
+    phase4_xfem_hankel_conditioning.png     - Phase 4 figure
 ```
 
 ## Dependencies
@@ -842,25 +840,13 @@ gradients.
 ## Run order
 
 ```bash
-cd S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/
+cd S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/
 
-# Phase 1: CFEM baseline vs Bessel
-python phase1_cfem_cylinder_baseline.py
-# -> ~60s
-
-# Phase 2: Hiruma EM-XFEM enrichment
-python phase2_xfem_hiruma_enrichment.py
-# -> ~120s
-
-# Phase 3b: Augmented CLN via Galerkin-Krylov
-python phase3b_krylov_galerkin.py
-# -> ~30s
-# (Phase 3 was a Pade-based predecessor, kept for cautionary tale)
-
-# Phase 4: XFEM-CLN Hankel conditioning experiment
-python phase4_xfem_hankel_conditioning.py
-# -> ~30s
-# -> phase4_xfem_hankel_conditioning.{pdf,png,results.json}
+# Run all Phase 1-4 sections (consolidated notebook, ~19 s total)
+jupyter nbconvert --to notebook --execute --inplace hiruma_xfem_comparison.ipynb
+# sections: phase1 CFEM baseline vs Bessel; phase2 Hiruma EM-XFEM enrichment;
+# phase3b augmented CLN Galerkin-Krylov (phase3 = deprecated Pade predecessor);
+# phase4 XFEM-CLN Hankel conditioning -> phase4_xfem_hankel_conditioning.png + .json
 ```
 
 ## Expected outputs
@@ -907,7 +893,7 @@ TOPICS = {
 def _lab_files_block() -> str:
     """Render LAB_FILES as a markdown table for display via the MCP tool."""
     lines = [
-        "# Lab files (S:/Radia/01_GitHub/examples/hiruma_xfem_comparison/)",
+        "# Lab files (S:/Radia/01_GitHub/docs/hiruma_xfem_comparison/)",
         "",
         "| Key | Path |",
         "|-----|------|",
@@ -917,7 +903,7 @@ def _lab_files_block() -> str:
     lines.append("")
     lines.append("Use these via:")
     lines.append("    from radia_mcp.fem.xfem_em_hiruma_knowledge import LAB_FILES")
-    lines.append("    p = LAB_FILES['phase2_xfem']")
+    lines.append("    p = LAB_FILES['notebook']")
     return "\n".join(lines)
 
 

@@ -615,7 +615,7 @@ hybrid is
                    residual
 ```
 
-Phase 3 of the β-1 benchmark (`examples/hiruma_xfem_comparison/`)
+Phase 3 of the β-1 benchmark (`docs/hiruma_xfem_comparison/`)
 verified that:
   - Hiruma XFEM at 88 DOF gives 0.14% error at r/δ=15 on the
     volume-source cylinder — confirms FE-level cure of the high-f
@@ -631,8 +631,8 @@ SPICE-export ambitions.
 
 | Method | Implementation | Status |
 |--------|----------------|--------|
-| Hiruma XFEM ψ = exp(-γξ) on cylinder | `examples/hiruma_xfem_comparison/phase2_xfem_hiruma_enrichment.py` (NGSolve compound H1×H1 + manual product-rule grad + bonus_intorder=10) | ✓ 0.14% at r/δ=15, 88 DOF |
-| Augmented CLN Galerkin-Krylov | `examples/hiruma_xfem_comparison/phase3b_krylov_galerkin.py` | ✓ d = 4.78×10⁴ rad/s (4% from analytical wall band); ✗ r(f) → 1 fails for volume-source |
+| Hiruma XFEM ψ = exp(-γξ) on cylinder | the phase2 section of `docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb` (NGSolve compound H1×H1 + manual product-rule grad + bonus_intorder=10) | ✓ 0.14% at r/δ=15, 88 DOF |
+| Augmented CLN Galerkin-Krylov | the phase3b section of `docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb` | ✓ d = 4.78×10⁴ rad/s (4% from analytical wall band); ✗ r(f) → 1 fails for volume-source |
 | Classical SIBC Robin BC | `src/radia/panels/calc_fem_kelvin.py` | production-grade for port-driven |
 
 ## Key lesson (port-driven scope)
@@ -657,7 +657,7 @@ after Theorem 1; Paper 1 §VIII routes volume-source problems to XFEM.
   - Sugahara 2026 Paper I, Theorem 1 — uniqueness of single-DOF Schur
     augmentation, port-driven scope.
   - β-1 Phase 1-3 benchmark (2026-05-25):
-      examples/hiruma_xfem_comparison/STATUS.md
+      docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb
       memory/project_augmented_cln_scope_port_driven.md
 """
 
