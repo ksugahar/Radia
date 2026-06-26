@@ -30,7 +30,7 @@ nseg = 20
 j = 10e6           # 10 A/mm^2 = 10e6 A/m^2
 
 # Create arc with current
-g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
+g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, 'man', 'z', j)
 
 # Create two hexahedral magnets with magnetization
 # Note: Radia magnetization unit is Tesla (T), not A/m

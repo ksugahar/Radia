@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path("S:/Radia/01_GitHub/examples/hierarchical_cauer_sibc/mixed_galerkin").resolve()))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _references.cube3d_foster import K_SIBC_cube3d, Y_DC_cube3d
 
 from ngsolve import (
