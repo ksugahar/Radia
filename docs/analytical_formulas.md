@@ -52,7 +52,7 @@ priority is correctness and traceability, not raw speed.
 | [`induction_heating`](../src/radia/analytical_formulas/induction_heating.py) | `cylinder_axial_eddy_loss` (full Bessel form), `cylinder_axial_eddy_loss_small_ka` (Faraday eddy limit), `cylinder_axial_eddy_loss_thin_skin` (planar surface-impedance limit) | Smythe §11.07, Landau-Lifshitz §59, Jackson §5.18 |
 
 Tests live in [`tests/analytical_formulas/`](../tests/analytical_formulas/);
-runnable demonstrations in [`examples/analytical_formulas/`](../examples/analytical_formulas/).
+runnable demonstrations in the notebook [`docs/analytical_formulas/analytical_formulas.ipynb`](analytical_formulas/analytical_formulas.ipynb).
 
 ## ellipsoid — rotational ellipsoid demag and torque
 
@@ -452,5 +452,5 @@ please:
    restates the formula in unambiguous notation, and
 3. cross-link the corresponding test file under
    [`tests/analytical_formulas/`](../tests/analytical_formulas/) and the
-   demonstration script under
-   [`examples/analytical_formulas/`](../examples/analytical_formulas/).
+   demonstration notebook
+   [`docs/analytical_formulas/analytical_formulas.ipynb`](analytical_formulas/analytical_formulas.ipynb).

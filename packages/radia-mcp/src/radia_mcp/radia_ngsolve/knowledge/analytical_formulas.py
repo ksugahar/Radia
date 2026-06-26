@@ -21,7 +21,7 @@ _OVERVIEW = """
 
 Source: ``src/radia/analytical_formulas/`` (9 modules, ~30 functions).
 Tests: ``tests/analytical_formulas/`` (145 + ; pytest in < 1 s).
-Examples: ``examples/analytical_formulas/`` (10 runnable scripts).
+Examples: ``docs/analytical_formulas/analytical_formulas.ipynb`` (12 runnable demos).
 Docs: ``docs/analytical_formulas.md`` (PDF -> code cross-reference).
 
 ## Module index
@@ -250,7 +250,7 @@ The returned ``A_z`` is in T m, ``B`` in Tesla.
 
 * 2D quick-check of 3D Radia ``CuboidMagnet`` results in the limit
   of a long bar (verified by example
-  ``examples/analytical_formulas/cross_validation_3d_vs_2d.py``).
+  the cross_validation_3d_vs_2d section of ``docs/analytical_formulas/analytical_formulas.ipynb``).
 * Sanity-check a 2D NGSolve magnetostatic solve of a rectangular
   permanent magnet.
 """
@@ -311,7 +311,7 @@ B_z = solenoid_axial_field(z, a1, a2, b, J)          # B_z(0, z), closed form
   produced by a stacked set of ``radia.analytical_magnet.CurrentLoop``
   rings must converge to ``solenoid_axial_field`` at midpoint-rule
   ``O(h**2)`` rate (verified in
-  ``examples/analytical_formulas/cross_validation_solenoid_currentloop.py``;
+  the cross_validation_solenoid_currentloop section of ``docs/analytical_formulas/analytical_formulas.ipynb``;
   4x error reduction per grid halving).
 """
 
@@ -486,8 +486,7 @@ practical mapping from "what kind of analysis am I running" to
   - high-mu_r spherical shielding asymptote
   - solenoid_axial_field -> stacked CurrentLoop midpoint rule (O(h**2),
     convergence ratio = 4 per halving)
-* ``examples/analytical_formulas/cross_validation_3d_vs_2d.py``
-* ``examples/analytical_formulas/cross_validation_solenoid_currentloop.py``
+* ``docs/analytical_formulas/analytical_formulas.ipynb`` (cross_validation_3d_vs_2d + cross_validation_solenoid_currentloop sections)
 
 ## NGSolve (FEM) cross-validation suite -- validation/force/validate_force_xval.py
 
