@@ -285,6 +285,9 @@ careful remeshing.
 - ``examples/electrostatics/validation_capacitance_gradient_force.py``:
   fixed-voltage / fixed-charge capacitance-gradient force with signed
   gap/closing coordinates.
+- SHOWCASE NOTEBOOK ``docs/electrostatics/electrostatics.ipynb``: the five
+  electrostatic identities above, executed and rendered (parallel-plate,
+  coaxial, capacitance-gradient, sphere-over-plane, Maxwell traction).
 - ``examples/rf_waveguide/validation_scattering_radiation_force.py``:
   one-sided normal-incidence scattering force from reflectance/transmittance,
   equivalent to the absorber/reflector radiation-pressure factor.
