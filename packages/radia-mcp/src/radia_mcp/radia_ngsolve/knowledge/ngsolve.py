@@ -4078,12 +4078,16 @@ Fx = -(W_plus - W_minus) / (2 * delta)
 # For torque: use tangential virtual displacement instead
 ```
 
-**Verified**: Wire + iron cylinder benchmark (2D, linear, mu_r=1000):
-- MST and nodal force agree within 0.001% (both use same FEM field)
-- Both match analytical to 0.01% (with mesh.Curve(3))
-- Without mesh.Curve(): ~9% systematic error for BOTH methods equally
-- Accuracy difference between methods: none (linear problem)
-See `Radia/examples/nodal_force/demo_nodal_force_2d.py`.
+**Verified**: Wire + iron cylinder benchmark (2D, linear, mu_r=1000;
+I=1000 A, R_cyl=0.05 m, d=0.3 m; analytic F_x = -1.90096e-02 N/m):
+- nodal force matches analytical to ~0.01% even on the COARSEST mesh
+  (685 elems, +0.01%), where MST still has +0.28% error
+- at the finest mesh MST and nodal force agree within ~6e-4%
+- both match analytical to ~0.01% (with mesh.Curve(3))
+- without mesh.Curve(): ~9% systematic error for BOTH methods equally
+See the self-contained notebook
+`docs/nodal_force/nodal_force.ipynb` (code + nodal_force_results.json +
+nodal_force_convergence.png).
 
 **When to choose which method:**
 | Situation | Recommended | Reason |
