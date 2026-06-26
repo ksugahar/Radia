@@ -525,8 +525,9 @@ for the canonical pattern: hand-build with `netgen.meshing.MeshPoint
 + Element2D + Element1D` on a regular `(NR, NZ)` lattice).  P1/P2
 triangle support exists for unstructured meshes on the magnetic side
 (`AxiHenrotteFE_P{1,2}_Triangle` + `AxiHenrotteStiffnessBFI`); the heat
-BFIs are quad-only as of radia 4.32.0.  A true curved Q2 quad BFI is not
-shipped; use P2 curved triangles for curved magnetic boundaries.
+BFIs are quad-only as of radia 4.32.0.  Magnetic curved Q2 quads are
+available through `H1Henrotte(mesh, order=2, curvedquad=True)`, but the
+heat-specific BFIs remain for structured axis-aligned quads.
 
 ## 11. Cross-validation
 
@@ -535,12 +536,14 @@ independent paths:
 
 1. **Pure-Python reference** — `tests/axifem/_reference_python/`
    (axifem_core for P1 triangle, axifem_quad for Q1 quad,
-   axifem_quad_q2 for Q2 quad with Gauss 8×8 numerical quadrature,
-   axifem_quad_q2_curved for curved Q2 quads).
+   axifem_quad_q2 for Q2 quad with Gauss 8×8 numerical quadrature).
    Test `tests/axifem/test_python_reference_consistency.py` asserts
-   the C++ stiffness eigenvalues match the Python prototype at
-   machine precision for a single quad and smoke-tests the shipped
-   P2 curved triangle assembly path.
+   the C++ stiffness eigenvalues match the Python references and
+   smoke-tests the shipped P2 curved triangle assembly path.  The
+   historical curved-Q2 Python prototype remains under
+   `examples/maglev/research_cln/axifem/axifem_quad_q2_curved.py`;
+   the production C++ curved-Q2 gate is
+   `tests/axifem/test_q2_curved.py`.
 
 2. **Mathematica derivation** —
    `examples/axifem/research/validate_q2_codegen.py` runs the
