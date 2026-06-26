@@ -745,107 +745,6 @@ def cubit_hex_to_radia(hex_elements, magnetization=None, mu_r=None, combine=True
         return polyhedra
 
 
-def create_hex_mesh_grid(center, size, divisions, magnetization=None, mu_r=None,
-                          combine=True, verbose=True):
-    """
-    Create a structured hexahedral mesh grid for CplMag testing.
-
-    This function creates a regular grid of hexahedral elements, useful for
-    testing CplMag solver without requiring Cubit.
-
-    Parameters
-    ----------
-    center : list
-        Center position [cx, cy, cz] in meters
-
-    size : list
-        Total size [Lx, Ly, Lz] in meters
-
-    divisions : list
-        Number of divisions [nx, ny, nz] along each axis
-
-    magnetization : list, optional
-        Initial magnetization vector [Mx, My, Mz] in A/m.
-        Default: [0, 0, 0]
-
-    mu_r : float, optional
-        Relative permeability. If provided, applies MatLin(mu_r) to all elements.
-
-    combine : bool, default=True
-        If True, return container. If False, return list of object IDs.
-
-    verbose : bool, default=True
-        If True, print progress information.
-
-    Returns
-    -------
-    int or list
-        Radia container or list of object IDs
-
-    Examples
-    --------
-    Create a 3x3x3 mesh core:
-
-    >>> import radia as rad
-    >>> from netgen_mesh_import import create_hex_mesh_grid
-    >>>
-    >>> # Radia always uses meters
-    >>>
-    >>> # 30mm cube with 3x3x3 = 27 elements
-    >>> core = create_hex_mesh_grid(
-    ...     center=[0, 0, 0],
-    ...     size=[0.03, 0.03, 0.03],
-    ...     divisions=[3, 3, 3],
-    ...     mu_r=1000
-    ... )
-    """
-    cx, cy, cz = center
-    Lx, Ly, Lz = size
-    nx, ny, nz = divisions
-
-    # Element sizes
-    dx = Lx / nx
-    dy = Ly / ny
-    dz = Lz / nz
-
-    # Starting corner
-    x0 = cx - Lx / 2
-    y0 = cy - Ly / 2
-    z0 = cz - Lz / 2
-
-    hex_elements = []
-
-    for iz in range(nz):
-        for iy in range(ny):
-            for ix in range(nx):
-                # Corners of this element
-                x_lo = x0 + ix * dx
-                x_hi = x0 + (ix + 1) * dx
-                y_lo = y0 + iy * dy
-                y_hi = y0 + (iy + 1) * dy
-                z_lo = z0 + iz * dz
-                z_hi = z0 + (iz + 1) * dz
-
-                # 8 vertices in standard hexahedron order
-                vertices = [
-                    [x_lo, y_lo, z_lo],
-                    [x_hi, y_lo, z_lo],
-                    [x_hi, y_hi, z_lo],
-                    [x_lo, y_hi, z_lo],
-                    [x_lo, y_lo, z_hi],
-                    [x_hi, y_lo, z_hi],
-                    [x_hi, y_hi, z_hi],
-                    [x_lo, y_hi, z_hi],
-                ]
-                hex_elements.append(vertices)
-
-    if verbose:
-        print(f"[Hex Grid] Creating {nx}x{ny}x{nz} = {len(hex_elements)} elements")
-
-    return cubit_hex_to_radia(hex_elements, magnetization=magnetization, mu_r=mu_r,
-                              combine=combine, verbose=verbose)
-
-
 # Module-level constants for external use
 __version__ = '0.3.0'
 __all__ = [
@@ -856,7 +755,6 @@ __all__ = [
     'create_radia_hexahedron',
     'create_radia_wedge',
     'cubit_hex_to_radia',
-    'create_hex_mesh_grid',
     'TETRA_FACES',
     'HEX_FACES',
     'WEDGE_FACES',

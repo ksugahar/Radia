@@ -1562,44 +1562,6 @@ int MatPM(double Br, double Hc, py::array_t<double> easy_axis) {
     return handle;
 }
 
-int MatMagFixed(py::array_t<double> magnetization) {
-    auto m = magnetization.unchecked<1>();
-    double M[3] = {m(0), m(1), m(2)};
-
-    int handle = 0;
-    int err = RadMatMagFixed(&handle, M);
-    check_error(err);
-    return handle;
-}
-
-int MatMagLinear(double Br, double Hc, py::array_t<double> easy_axis) {
-    auto ea = easy_axis.unchecked<1>();
-    double EA[3] = {ea(0), ea(1), ea(2)};
-
-    int handle = 0;
-    int err = RadMatMagLinear(&handle, Br, Hc, EA);
-    check_error(err);
-    return handle;
-}
-
-int MatMagCurve(py::list bh_data, py::array_t<double> easy_axis) {
-    std::vector<double> flat_data;
-    for (const auto& pair : bh_data) {
-        auto p = pair.cast<py::list>();
-        flat_data.push_back(p[0].cast<double>());
-        flat_data.push_back(p[1].cast<double>());
-    }
-    int np = static_cast<int>(bh_data.size());
-
-    auto ea = easy_axis.unchecked<1>();
-    double EA[3] = {ea(0), ea(1), ea(2)};
-
-    int handle = 0;
-    int err = RadMatMagCurve(&handle, flat_data.data(), np, EA);
-    check_error(err);
-    return handle;
-}
-
 int MatSatIsoFrm(py::list params) {
     double KsiMs1[2] = {0, 0};
     double KsiMs2[2] = {0, 0};
@@ -4428,44 +4390,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Material handle
           )pbdoc");
 
-    m.def("MatMagFixed", &radia_material_ext::MatMagFixed,
-          py::arg("magnetization"),
-          R"pbdoc(
-              Create fixed magnetization material.
-
-              Args:
-                  magnetization: Fixed magnetization [Mx, My, Mz] in A/m
-
-              Returns:
-                  Material handle
-          )pbdoc");
-
-    m.def("MatMagLinear", &radia_material_ext::MatMagLinear,
-          py::arg("Br"), py::arg("Hc"), py::arg("easy_axis"),
-          R"pbdoc(
-              Create linear demagnetization permanent magnet material.
-
-              Args:
-                  Br: Remanent field [T]
-                  Hc: Coercive force [A/m]
-                  easy_axis: Easy axis direction [ex, ey, ez]
-
-              Returns:
-                  Material handle
-          )pbdoc");
-
-    m.def("MatMagCurve", &radia_material_ext::MatMagCurve,
-          py::arg("bh_data"), py::arg("easy_axis"),
-          R"pbdoc(
-              Create permanent magnet material with B-H demagnetization curve.
-
-              Args:
-                  bh_data: List of [H, B] pairs (second quadrant)
-                  easy_axis: Easy axis direction [ex, ey, ez]
-
-              Returns:
-                  Material handle
-          )pbdoc");
 
     m.def("MatSatIsoFrm", &radia_material_ext::MatSatIsoFrm,
           py::arg("params"),
