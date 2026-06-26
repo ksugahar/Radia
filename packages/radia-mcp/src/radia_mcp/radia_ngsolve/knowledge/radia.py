@@ -2458,6 +2458,8 @@ imported soft iron contains tetrahedra together with MSC elements, do not run on
 soft-iron solve on the mixed container; use all-MSC/all-MMM geometry, split the solve, or
 build a mesh-backed HDiv-VIM soft iron.
 **Example**: `examples/ngsolve_integration/mesh_magnetization_import/`
+**Showcase notebook** (B=curl(A) check, RadiaField->HDiv projection, batch
+evaluation, executed + rendered): `docs/ngsolve_integration/integration_basics.ipynb`
 
 ---
 
