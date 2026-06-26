@@ -1,4 +1,4 @@
-"""Magnetic levitation knowledge (incl. the lab's Radia-IEM + CLN maglev research).
+"""Magnetic levitation knowledge.
 
 Scope: MAGNETIC LEVITATION, unified -- both the maglev SYSTEMS (EMS/EDS
 trains, SCMaglev, Halbach/Inductrack, magnetic wheels, PM/SC bearings)
@@ -9,16 +9,10 @@ former linear-drive (LIM/LSM, end-effect) material was removed.  (The
 force-physics half was previously a separate radia_mcp.levitation server;
 it was consolidated into this one server.)
 
-The lab's own maglev research line (CAE-AI Lab, Yano Takaaki + Sugahara)
-is the headline content -- two topics, `radia_iem_fem` and
-`cln_mor_control`, distilled from:
   - Yano & Sugahara, conf. digest E-3-1 "Construction of an IEM-FEM
     hybrid computation method toward high-accuracy magnetic levitation
     analysis" (CAE-AI Lab) -- Radia IEM (MMM/MSC) <-> reduced-potential
     FEM weak coupling for moving-magnet eddy-current levitation force.
-  - Yano, master poster "Implementation of a 3D Multiport Cauer Ladder
-    Network method for accelerating control-coupled analysis" -- CLN
-    model-order reduction for real-time control-coupled maglev (TEAM 28).
 
 Distilled from the lab archive (W:/.../99_applications/07_magnetic-levitation/;
 folder/file names below are English translations of the Japanese originals)
@@ -62,16 +56,16 @@ NOT read on this pass (size budget):
 Sections marked "(open literature)" are textbook-level summaries
 included so the knowledge file is self-contained; cross-check
 against the unread lab PDFs when those become accessible.
+
+References (retained):
+  - T. Matsuo, "Cauer Ladder Network Representation with Constant Basis Functions for Eddy Current Problems Involving Conductor Movement", COMPUMAG 2023 (Paper
 """
 
 
 # Authoritative topic enum for the dispatcher tool (wired into
 # `maglev_topics()` via common.register_topics_tool).
 TOPICS: dict[str, str] = {
-    "overview": "Magnetic levitation -- systems (EMS/EDS/PM/SC/Halbach) + force physics (induction/EML/AMB/SC/diamagnetic/Earnshaw) + the lab's Radia-IEM / CLN research line",
-    # -- maglev systems + the lab's Radia/CLN research --
     "radia_iem_fem": "Radia IEM (MMM/MSC) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi (A_ext) / T-Omega (B_ext); no re-mesh on magnet motion; rotating-magnet-over-plate cross-validation tightens to ~0.1% at order=2; the Lorentz-force HDiv(J=curl T) function-space pitfall + verified NGSolve recipe (Yano bachelor, lab research)",
-    "cln_mor_control": "Cauer Ladder Network (CLN) model-order reduction for real-time control-coupled maglev: ~1/500 speedup, multiport matrix-CLN, 3D gauge A-phi/T-Omega/A-T, TEAM 28 (Yano master, lab research)",
     "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; Kameari+Kelvin accumulation BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
     "eddy_current_maglev": "Eddy-current EDS: Arago-disk physics, magnetic wheels (Fujii/Kansai 2D model), Inductrack",
@@ -95,14 +89,12 @@ TOPICS: dict[str, str] = {
 OVERVIEW = r"""
 # Magnetic levitation landscape
 
-> **POLICY (analysis method)**: solve maglev with **Radia (IEM) +
-> NGSolve (FEM) weak coupling**, NOT standalone FEM.  Pure FEM must mesh
-> the large PM<->conductor air gap and RE-MESH on every magnet move;
-> Radia supplies the open-boundary external field analytically (no air
-> mesh) and NGSolve reduced-potential FEM solves only the eddy reaction
-> field.  See topics `radia_iem_fem` (the weak coupling) and
-> `cln_mor_control` (CLN MOR for real-time control).  Mirrors the project
-> CLAUDE.md policy "Maglev Analysis: Radia + NGSolve, Not FEM Alone".
+> **POLICY (analysis method)**: solve maglev with **Radia (IEM) + > NGSolve
+(FEM) weak coupling**, NOT standalone FEM. Pure FEM must mesh > the large
+PM<->conductor air gap and RE-MESH on every magnet move; > Radia supplies the
+open-boundary external field analytically (no air > mesh) and NGSolve reduced-
+potential FEM solves only the eddy reaction > field. Mirrors the project >
+CLAUDE.md policy "Maglev Analysis: Radia + NGSolve, Not FEM Alone".
 
 ## Levitation principles
 
@@ -126,7 +118,6 @@ conductor** -- with two complementary methods built on Radia + NGSolve:
 | Topic | What | Why it matters for maglev |
 |-------|------|----------------------------|
 | `radia_iem_fem`   | Radia IEM (MMM/MSC) computes the open-boundary external field; reduced-potential FEM computes only the eddy reaction field; weak-coupled, fed back to demagnetisation | The magnet MOVES -> only the external field updates, **no re-mesh** of the air gap; IEM removes the air-region discretisation error |
-| `cln_mor_control` | Cauer Ladder Network (CLN) model-order reduction turns the 3D eddy-current FEM into a compact equivalent circuit | Real-time control-in-the-loop maglev design at **~1/500** of full-FEM time; TEAM 28 benchmark |
 
 These are validated on the standard eddy-current benchmarks: the
 eddy-current FORCE/loss solver against TEAM Problem 7 (the canonical
@@ -138,11 +129,17 @@ electrodynamic levitation device).
 
 - **Radia-IEM + FEM weak coupling** for moving-magnet eddy-current force
   (Yano & Sugahara) -- topic `radia_iem_fem`
-- **CLN model-order reduction** for control-coupled maglev (Yano) --
-  topic `cln_mor_control`
 - **Magnetic-wheel EDS** -- Kansai-Univ collaboration (Saiki et al. 2021)
 - **PM axial bearings** -- Sumitomo Heavy lineage (heavy-industrial)
 - **Bearingless motor + WPT** (cross-link `radia_mcp.motor`, `radia_mcp.pcb`)
+
+## Showcase notebook
+
+`docs/maglev/maglev_showcase.ipynb` -- consolidated rendered view of the
+`examples/maglev/` tier: mixed-Galerkin `alpha(s)` sweep, validated sphere
+levitation force, shape-anisotropic ellipsoid tensor, the moving-magnet
+magnetic-Reynolds (`Rm`) crossover, and the TEAM 28 benchmark (committed
+figures + headline JSON; golden corpus kept in `examples/maglev/`).
 
 ## Levitation FORCE physics (also in this server)
 
@@ -161,7 +158,6 @@ industrial / laboratory uses:
 
 ## Cross-references
 
-- `radia_mcp.mor` (mor_cln) -- the CLN / Cauer ladder MOR theory
 - `radia_mcp.fem` (potential_formulations) -- A-phi / T-Omega / A-T gauges
 - `radia_mcp.team_benchmark.force_motion.problem_28` -- TEAM 28 Electrodynamic Levitation benchmark
 - `radia_mcp.motor` -- analogous rotary motor analysis
@@ -362,8 +358,6 @@ Fixes that WORK (all in the matured runs):
 
 ## The magnetic-Reynolds crossover: do you even NEED the eddy FEM?
 
-Before reaching for the FEM (or a CLN reduction of it), check the magnetic
-Reynolds number of the conductor:
 
 ```
   Rm = mu0 * sigma * omega * L^2      (L = conductor size, omega = field-change rate)
@@ -377,31 +371,15 @@ Three regimes (verified on the rotating-magnet plate,
 | Rm | reaction vs source | what to compute J / force / loss with |
 |----|--------------------|----------------------------------------|
 | `<~ 0.1` | negligible (<~1%) | **kinematic source-only**: `J = -sigma dA_s/dt` straight from the Radia analytic field -- NO per-step FEM at all |
-| `~ 0.1 .. 1` | a few % | full-FEM or CLN if you need that accuracy |
-| `>~ 1` | significant (>%-level) | the reaction matters -- full-FEM, and CLN to make it fast |
 
-**Yano's actual rotating-magnet case is Rm ~ 0.016** (1 mm magnet, ~1 Hz,
-0.5 mm Cu plate; skin depth ~66 mm >> 0.5 mm).  Measured: the source-only
-`J = -sigma dA_s/dt` reproduces the full-FEM Lorentz force to **0.035%** --
-so the entire per-step eddy FEM (which Yano's study ran) computes a ~0.03%
-correction.  **The dramatic speed-up for that problem is simply to drop the
-FEM and evaluate J / F / P from the analytic Radia source.**  The crossover
-script sweeps the motion speed to push Rm from 0.016 to 16: source-only
-Lorentz-force error grows 0.035% -> 20%, while the CLN (next topic)
-reproduces the full-FEM to <~ 0.3% across the whole range (1e-6 at low Rm,
-0.25% at Rm ~ 16) -- but the CLN only *earns its keep* above
-Rm ~ 1 (faster motion, thicker / more conductive rails, kHz drive, the
-TEAM 28 Al disk).  Do NOT present a CLN reduction of a low-Rm problem as a
-dynamic-reduction success -- there the outputs are source-determined and any
-faithful reduction looks "exact" for the wrong reason.
+**Yano's actual rotating-magnet case is Rm ~ 0.016** (1 mm magnet, ~1 Hz, 0.5
+mm Cu plate; skin depth ~66 mm >> 0.5 mm). Measured: the source-only `J =
+-sigma dA_s/dt` reproduces the full-FEM Lorentz force to **0.035%** -- so the
+entire per-step eddy FEM (which Yano's study ran) computes a ~0.03%
+correction.
 
-**The real high-Rm anchor at the other end of this crossover is TEAM 28**
-(`Rm ~ 57` at the in-plane current-loop scale; the lift IS the eddy reaction).
-There the CLN genuinely earns its keep: a 6-stage CLN reproduces the full-FEM
-levitation force and the equilibrium height matches the **published measured
-11.5 mm to 4%** -- see `cln_mor_control` ("External-benchmark validation").  So
-the crossover has two REAL anchors: low-Rm Yano (kinematic, no CLN) and
-high-Rm TEAM 28 (CLN essential, validated against the published benchmark).
+**The real high-Rm anchor at the other end of this crossover is TEAM 28** (`Rm
+~ 57` at the in-plane current-loop scale; the lift IS the eddy reaction).
 
 ## Mapping to the Radia / NGSolve stack
 
@@ -426,233 +404,25 @@ high-Rm TEAM 28 (CLN essential, validated against the published benchmark).
 - `radia_mcp.fem` (potential_formulations) -- A-phi / T-Omega / A-T gauges
 - `radia_mcp.radia_ngsolve` -- Radia field -> NGSolve coupling
 - `radia_mcp.team_benchmark.force_motion.problem_28` -- TEAM 28 validation
-- topic `cln_mor_control` -- speeding the SAME eddy-current FEM up for control
 - topic `eddy_current_maglev` -- the moving-magnet-over-plate physics
 - Refs: Chadebec et al. 2006 (IEM open boundary); Biro 2000 (reduced
   potential A-phi / T-Omega); Yano & Sugahara digest E-3-1.
 """
 
 
-CLN_MOR_CONTROL = r"""
-# Cauer Ladder Network (CLN) model-order reduction for control-coupled maglev
-*(Lab research: Yano, CAE-AI Lab master thesis, "Implementation of a 3D
-Multiport Cauer Ladder Network method for accelerating control-coupled
-analysis".)*
-
-Magnetic levitation is OPEN-LOOP UNSTABLE, so it needs real-time feedback
-control.  Designing and tuning that controller requires an
-electromagnetic model running INSIDE the control loop -- and a full 3D
-eddy-current FEM is far too slow for that.  The lab's answer is
-model-order reduction (MOR) via the **Cauer Ladder Network**.
-
-## The Cauer ladder equivalent circuit
-
-CLN replaces the 3D eddy-current FEM model with a continued-fraction
-(Cauer ladder) equivalent circuit whose port impedance is:
-
-```
-  Z(s) = V(s)/I(s)
-       = R0 + 1 / ( 1/(s*L1) + 1 / ( R2 + 1 / ( 1/(s*L3) + ... ) ) )
-```
-
-The CLN basis is generated by an alternating recurrence (Kameari et al.
-2018, IEEE TMag 54(3):7201804) that produces orthogonal current/field modes directly from the FEM
-operators; truncating at N ladder stages gives an N-th-order reduced
-model, and the error decreases MONOTONICALLY with the number of stages.
-CLN is closely tied to matrix continued fractions.
-
-## Result: TEAM 28, ~1/500 the time
-
-The 1-axis (vertical, Z) control-coupled simulation of TEAM Workshop
-Problem 28 (the electrodynamic levitation device) was completed with CLN:
-dt = 0.1 ms, 20000 steps, at about **1/500** of the wall-clock time of a
-conventional full eddy-current analysis -- fast enough for desktop
-control design.  (Sugahara et al. 2023 extended CLN to problems with
-CONDUCTOR MOVEMENT using constant basis functions, which is what makes
-the moving-magnet maglev tractable.)
-
-## Verified in-repo: CLN levitation FORCE + EXTERNAL benchmark (2026-06-20)
-
-A worked, verified example lives in `examples/maglev/team28/`.  The
-coil-driven axisymmetric eddy problem is `(K + s*N) X = F` (K = s-independent
-magnetostatic operator, N = conductivity term, F = coil source); the CLN/Cauer
-reduction is the Krylov subspace built from the COIL SOURCE
-(`V0 = K^-1 F`, `V_{k+1} = orthonormalise(K^-1 (N V_k))`).  A **6-stage CLN
-reproduces the full-FEM levitation force vs height** to max |CLN-full| = 5e-4 N
-(stage 3 = 0.14%, stage 5 = 0.000%); the repo full-FEM matches the lab
-axisymmetric ground truth to 0.01%.
-
-**External-benchmark validation (the honest high-Rm anchor).**  TEAM 28 is a
-genuinely HIGH-Rm levitation problem -- `Rm ~ 57` at the in-plane
-current-loop scale (disk R=65mm; the through-thickness Rm is only ~0.12) -- so
-the lift IS the eddy reaction, exactly the regime where the CLN earns its keep
-(contrast the LOW-Rm rotating-magnet plate in `radia_iem_fem`, Rm ~ 0.016,
-where the reaction is a ~0.03% correction and a CLN buys nothing).  The
-physically-correct levitation equilibrium (where the time-averaged lift ==
-disk weight 1.055 N) lands at absolute disk-bottom height **z = 11.0 mm**,
-matching the **published measured steady-state levitation height z = 11.5 mm**
-(Karl-Fetzer-Kurz-Lehner-Rucker, the official TEAM 28 definition; laser
-triangulation, 4-measurement average) to **4%**.
-
-**Prior art -- this is an OPEN REPRODUCTION, not a first.**  The lab already
-published CLN-on-TEAM-28 levitation: K. Sugahara, N. Tanimoto, Y. Takahashi,
-T. Matsuo, "Cauer Ladder Network Representation with Constant Basis Functions
-for Eddy Current Problems Involving Conductor Movement", COMPUMAG 2023 (Paper
-ID 324).  That work did MORE: the full motion-coupled transient levitation
-height `z(t)` (Matlab/Simulink, 20000 steps) vs measurement + the conventional
-method, 4-stage CLN, ~7 s vs ~8 h.  It also introduced the constant-basis
-`As(zgap) = sum_n a_2n i_2n` expansion that the moving-source CLN (below /
-`radia_iem_fem`) builds on -- and it explicitly flagged that motion in more
-than one parameter needs the multiport matrix-CLN (Matsuo 2018).  The radia
-`examples/maglev/team28/` is the OPEN, pip-installable, NGSolve +
-golden-tested reproduction of (a frequency-domain slice of) that published
-result -- reproducible-open value, NOT novelty.
-
-**Force-convention gotcha (caught by the published 11.5 mm).**  The TEAM 28
-surface force integral `Re[B_r J_t]` (and the lab .mat `Fz1`) is EXACTLY 2x the
-physical time-averaged Lorentz force `<f_z> = -(1/2) Re[J_t conj(B_r)]`
-(verified ratio 1.9998; the Im*Im cross term ~6e-5).  The disk floats where the
-PHYSICAL lift == weight, i.e. `F_z/2 == 1.055 N`.  Balancing the 2x integral
-against the 1x weight gives a spurious equilibrium 14.9 mm -- ABOVE the
-measured 11.5 mm, which is the unphysical tell -- so use `F_z/2`.  The
-CLN-vs-full convergence is convention-independent (golden locks
-`F_z(dZ=0) = -2.1928 N`).  See `radia_mcp.mor` mor_cln (applications) for the
-same example from the CLN-theory side.
-
-## Multiport CLN (matrix Cauer ladder) -- for multi-axis maglev
-
-A real maglev needs more than the vertical axis: lateral (XY) guidance
-must be co-simulated.  CLN extends to a MATRIX continued fraction
-(multiport), with admittance:
-
-```
-  Y(s) = ( G0^-1 + ( (s*L1)^-1 + ( G2^-1 + (s*L3)^-1 + ... )^-1 )^-1 )^-1
-```
-
-The multiport Cauer ladder is realised in Simulink; the extracted
-Y-matrix converges monotonically to the truth value as ladder stages are
-added (8-stage CLN taken as reference).  Two enabling steps:
-- **CLN 3-dimensionalisation** (3D formulation)
-- **CLN multiport-isation** (matrix CLN)
-
-## Moving-SOURCE constant-basis CLN (a 2-parameter generalization)
-
-The constant-basis moving-source CLN is **Sugahara-Tanimoto-Takahashi-Matsuo,
-COMPUMAG 2023** ("Cauer Ladder Network Representation with Constant Basis
-Functions for Eddy Current Problems Involving Conductor Movement"): for
-SINGLE-parameter motion (the gap `z_gap`) the source field `A_s(z_gap)` stays
-inside the span of a few CLN test functions (`A_s = sum_n a_2n i_2n`), so 2-4
-stages suffice and the motion enters only the RHS expansion coefficients.  For a source whose spatial pattern moves over
-the conductor in MORE than one parameter (e.g. a magnet that translates AND
-rotates over a plate -- `radia_iem_fem`), the single-seed CLN basis no
-longer spans the source variation.  The paper itself flags this ("if the
-expansion is not a good approximation, the space must be expanded with an
-additional set of basis functions").  The generalization, verified in
-`examples/maglev/rotating_magnet_eddy.py`:
-1. **SVD-pre-evaluate the source rank**: POD the source field over the
-   conductor across the trajectory -> M dominant spatial modes (M ~ 16 for
-   the rotating magnet over a 12 mm plate; the moving localized hot-spot is
-   the reason it is not rank-3).
-2. **Block-Krylov over the TRANSIENT iteration matrix** `A_sys^-1 M`
-   (`A_sys = M_sigma + dt*K`, NOT `K^-1 M` -- in the A-phi system K is
-   singular on the phi block): seeds `A_sys^-1 g_m`, stages
-   `(A_sys^-1 M)^p`.  This is the reachable subspace of the time-stepped
-   solution; deflate/orthonormalize (the conductor modes are SHARED across
-   the M seeds, so the reduced state is ~16-25, NOT M x stages).
-3. Galerkin-project: `M_r = V^T M V`, `A_r = V^T A_sys V`; the reduced
-   transient is an M x M solve per step (~1000x less than the full back-sub).
-
-**HONEST status of this block-Krylov variant (do NOT over-claim).**  The
-established route for the multi-parameter case is the **multiport matrix-CLN**
-(Matsuo-Kameari-Sugahara-Shindo 2018), which the COMPUMAG 2023 paper already
-names.  The `A_sys^-1 M` block-Krylov construction above is ONE realization of
-that idea, and it is (a) demonstrated ONLY on the LOW-Rm rotating-magnet plate
-(`Rm ~ 0.016`), where -- per the crossover -- the CLN buys nothing because the
-output is source-determined, and (b) cross-checked only against our OWN
-full-FEM, NOT against an external reference.  So it is a plausible construction,
-NOT a validated novelty; treat it as exploratory until it is exercised at high
-Rm against an external benchmark.
-
-## When the CLN actually earns its keep: high Rm only
-
-The CLN reduces the eddy REACTION.  If the conductor's magnetic Reynolds
-number `Rm = mu0 sigma omega L^2` is `<< 1` (low-Rm, e.g. the rotating-magnet
-plate at Rm ~ 0.016), the reaction is a ~0.03% correction and the outputs
-(force, loss) are SOURCE-determined -- a CLN there reproduces them to ~1e-6,
-but that is the source being exact, NOT a dynamic-reduction win (the reduced
-reaction field is itself ~100% wrong and it does not matter).  **Do not claim
-a CLN dynamic-reduction success on a low-Rm problem.**  The CLN is the right,
-necessary tool at `Rm >~ 1` -- TEAM 28 (Al disk, 34 MS/m), faster motion,
-thicker / more conductive rails, kHz drive -- where the reaction is
-significant and there is real eddy dynamics to compress.  See
-`radia_mcp.maglev` `radia_iem_fem` ("magnetic-Reynolds crossover") for the
-low-Rm kinematic shortcut (`J = -sigma dA_s/dt`, no FEM).
-
-## 3D formulation: the gauge choice matters
-
-In 3D, B = curl A leaves A non-unique (gauge freedom); a Coulomb gauge
-(div A = 0) is imposed to reduce DOF.  Yano compared three Coulomb-gauged
-formulations -- **A-phi, T-Omega, and A-T** -- for the CLN circuit
-constants of a square-prism conductor against an accuracy-guaranteed
-analytic solution.  The **A-T method matched the analytic solution best**
-(Tanimoto, Yano, Sugahara & Nagamine 2025).  Picking the right gauge is
-what makes the 3D multiport CLN accurate.
-
-## Mapping to the Radia / NGSolve stack
-
-| Role | Tool |
-|------|------|
-| CLN / Cauer ladder MOR theory | `radia_mcp.mor` (mor_cln, mor_cln_multiport) |
-| Radia transient / reduced-order core | radia `cln_core`, `lanczos_reduction` (PRIMA) |
-| eddy-current FEM the CLN reduces | A-phi / T-Omega / A-T -- topic `radia_iem_fem` |
-| gauge formulations | `radia_mcp.fem` (potential_formulations) |
-| benchmark | TEAM 28 (`radia_mcp.team_benchmark.force_motion.problem_28`) |
-
-## Cross-references
-
-- `radia_mcp.mor` (mor_cln / mor_cln_multiport) -- the CLN MOR theory
-- topic `radia_iem_fem` -- the eddy-current FEM that CLN compresses
-- `radia_mcp.fem` (potential_formulations) -- A-phi / T-Omega / A-T
-- `radia_mcp.team_benchmark.force_motion.problem_28` -- TEAM 28
-- Refs: Kameari, Ebrahimi, Sugahara, Shindo & Matsuo 2018 (CLN
-  representation of eddy-current fields, IEEE TMag 54(3):7201804);
-  Sugahara, Tanimoto, Takahashi & Matsuo 2023 (CLN with constant basis
-  for conductor movement); Matsuo, Fujiwara, Kuriyama & Shindo 2019
-  (multiport matrix CLN); Tanimoto, Yano, Sugahara & Nagamine 2025 (3D
-  CLN gauge comparison).  (See `radia_mcp.mor` mor_cln for the canonical
-  CLN paper list.)
-"""
 
 
 PHYSICAL_TENSOR_ROM = r"""
-# Physical polarizability tensor alpha(s) as a passive, stable LTI
-*(Lab research: radia.levitation, the "physical Stoll spectrum -> CLN/LTI"
-route; src/radia/levitation/mixed_galerkin/rom_fit.py, 2026-06-20.)*
 
 The maglev FORCE on a moving conductor is F ~ Re[alpha(s)] grad(B^2); the
 conductor is fully described, per direction, by its eddy-current
-polarizability alpha_i(s).  For control-in-the-loop simulation we want
-alpha(s) as a PASSIVE, STABLE state-space LTI (drops into Simulink /
-SPICE), NOT a per-frequency solve.  This is the maglev counterpart of the
-IH/port CLN ladder (topic `cln_mor_control`): there the object is a port
-admittance Z(s); here it is the open-boundary polarizability TENSOR
-alpha_ij(s) of an isolated body in free space.
+polarizability alpha_i(s). For control-in-the-loop simulation we want alpha(s)
+as a PASSIVE, STABLE state-space LTI (drops into Simulink / SPICE), NOT a per-
+frequency solve.
 
 ## The honest obstacle: Kameari + Kelvin accumulation BREAKS DOWN here
 
-The natural idea -- get the physical (exterior-matched, free-decay /
-Stoll) eddy spectrum by a Kameari A-T accumulation with a Kelvin open
-boundary, then read off a Cauer ladder -- DOES NOT WORK for a general 3D
-isolated-conductor-in-vacuum body.  The lab's own canonical script
-`examples/maglev/research_cln/ngsolve_validation/
-cuboid_521_kameari_kelvin_v15_canonical.py` is a documented BREAKDOWN demo:
-even with the two known bug fixes applied, the iteration sign-flips L_1 at
-stage 1 and the Schmidt energy norm grows x15.  This is structural for the
-HCurl + vacuum-coupled BC class (the A_ext gauge is unbounded at infinity;
-see `radia_mcp.radia_ngsolve` cln_3d).  Kameari accumulation reaches the
-Stoll Cauer ladder to 0.000% ONLY for the SPHERE (the special
-chi-susceptibility case) and for AXISYM bodies -- NOT for the general 3D
-tensor.  So the physical-tensor LTI is NOT obtained by eigen-accumulation.
+So the physical-tensor LTI is NOT obtained by eigen-accumulation.
 
 ## The verified route: AAA + NNLS sample fit of the per-frequency tensor
 
@@ -739,9 +509,6 @@ MIMO LTI).
   poles are an approximation basis, NOT individually physical.
 - The fit is only as accurate as the per-frequency FEM data it consumes
   (~2-3% for a general body; the analytic sphere is the exact anchor).
-- These are FOSTER poles tau_n, not Cauer rungs tau_pair[k] (systematic
-  ~-6-8% offset; compare like-with-like -- `radia_mcp.radia_ngsolve`
-  cln_3d POLICY).
 - This is the EXTERIOR-MATCHED physical tensor.  The mixed-Galerkin bulk
   Foster (bulk_foster_via_eigen / bulk_foster_vector_via_eigen) uses the
   INTERIOR-PEC eigenmodes -- a different, interior model; a SIBC tail
@@ -751,12 +518,7 @@ MIMO LTI).
   (gauge + singular-M + open boundary).  The sample fit is the robust route.
 
 ## Cross-references
-- topic `cln_mor_control` -- the port-CLN ladder this mirrors for the
-  open-boundary polarizability tensor
 - topic `force_computation` -- F ~ Re[alpha] grad(B^2) the LTI feeds
-- `radia_mcp.radia_ngsolve` cln_3d -- 3D Kameari + the Kelvin-accumulation
-  open problem (why the eigen route is avoided here)
-- `radia_mcp.mor` mor_cln / mor_cln_multiport -- CLN MOR + matrix-CLN theory
 - Refs: Landau-Lifshitz ECM sec. 59 (sphere alpha = 4 pi a^3 G(x));
   Stoll 1974 (Bessel eddy spectrum); Nakata-Berthier / Gustavsen 1999
   (vector fitting context); AAA = Nakatsukasa-Sete-Trefethen 2018.
@@ -1973,26 +1735,6 @@ H(x) before committing to a coil-geometry optimisation.
 def get_knowledge(topic: str = "overview") -> str:
     """Dispatch magnetic-levitation topics.
 
-    Topics:
-        overview                  - Magnetic levitation landscape + lab research (DEFAULT)
-        radia_iem_fem             - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
-        cln_mor_control           - Cauer Ladder Network MOR for control-coupled maglev (Yano)
-        physical_tensor_rom       - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS)
-        pm_maglev_zero_power      - Passive PM levitation, Maxwell-Earnshaw
-        eddy_current_maglev       - Eddy-current EDS, Kansai 2D model, Arago
-        sumitomo_heavy_industrial - JP 7-327337 PM bearing + JP 2007-215264 planar mover
-        kansai_research           - Saiki/Fujii magnetic-wheel lineage
-        scmaglev_eds              - SCMaglev (Chuo Shinkansen) -- SC-EDS levitation
-        halbach_arrays            - Halbach + Inductrack
-        induction_levitation      - Eddy-current (AC) lift: jumping/Thomson ring
-        eml_melting               - Electromagnetic levitation melting (ties to IH)
-        magnetic_bearings         - AMB force-current-displacement, neg. stiffness
-        superconducting           - Meissner vs flux pinning, HTS bulk, frozen image
-        diamagnetic               - grad(B^2) levitation, graphite/water-frog
-        earnshaw_stability        - Earnshaw's theorem + its 5 loopholes
-        force_computation         - Maxwell stress / virtual work / time-avg J x B
-        benchmarks                - TEAM 28, jumping-ring analytic, EML lift coeff
-        all                       - Everything
     """
     topic = topic.lower().strip()
 
@@ -2003,9 +1745,6 @@ def get_knowledge(topic: str = "overview") -> str:
                  "rotating_magnet", "t_omega", "a_phi", "aphi", "tomega",
                  "lorentz_force", "lorentz_pitfall"):
         return RADIA_IEM_FEM
-    if topic in ("cln_mor_control", "cln", "cauer", "cauer_ladder", "mor",
-                 "model_order_reduction", "multiport_cln", "control_coupled"):
-        return CLN_MOR_CONTROL
     if topic in ("physical_tensor_rom", "tensor_rom", "polarizability_rom",
                  "alpha_rom", "rom_fit", "aaa_nnls", "foster_rom",
                  "stoll_rom", "physical_tensor"):
@@ -2055,7 +1794,6 @@ def get_knowledge(topic: str = "overview") -> str:
         return "\n\n".join([
             OVERVIEW,
             RADIA_IEM_FEM,
-            CLN_MOR_CONTROL,
             PHYSICAL_TENSOR_ROM,
             PM_MAGLEV_ZERO_POWER,
             EDDY_CURRENT_MAGLEV,

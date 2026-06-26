@@ -1,5 +1,5 @@
 """Golden test: the magnetic-Reynolds crossover for a moving magnet over a
-plate -- locks examples/levitation/rotating_magnet_eddy.py.
+plate -- locks examples/maglev/rotating_magnet_eddy.py.
 
 The eddy current J / Joule / Lorentz force can be obtained three ways:
 kinematic source-only (J = -sigma dA_s/dt, NO eddy FEM), full-FEM A-phi
@@ -27,7 +27,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_SCRIPT = os.path.join(_HERE, "..", "examples", "levitation", "rotating_magnet_eddy.py")
+_SCRIPT = os.path.join(_HERE, "..", "examples", "maglev", "rotating_magnet_eddy.py")
 
 
 @pytest.fixture(scope="module")
