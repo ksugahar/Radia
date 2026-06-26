@@ -46,7 +46,7 @@ vertices = [
 	[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
 ]
 cube = rd.ObjHexahedron(vertices, [0, 0, 0])
-mat = rd.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+mat = rd.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
 rd.MatApl(cube, mat)
 print(f"  Created {size/mm:.0f}x{size/mm:.0f}x{size/mm:.0f} mm cube with MatSatIsoFrm (nonlinear)")
 
@@ -81,9 +81,9 @@ print("-" * 80)
 
 print("  Solving...")
 solve_result = rd.Solve(container, 1e-5, 5000)
-max_abs_M = solve_result[3]
-max_abs_H = solve_result[4]
-print(f"  Solve result: max|dM|={max_abs_M:.2e}, max|dH|={max_abs_H:.2e}")
+max_abs_M = solve_result[0]  # convergence residual (max |dM|)
+n_iter = int(solve_result[3])  # iteration count
+print(f"  Solve result: residual={max_abs_M:.2e}, iterations={n_iter}")
 if max_abs_M < 1e-5:
 	print("  [OK] Solution converged")
 else:
