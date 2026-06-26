@@ -186,6 +186,9 @@ workpiece as a meshed volume.
 **Files**:
 - `src/radia/panels/calc_fem_kelvin.py --formulation scattered`
 - `examples/eddy_current_analytical_validation/sphere_uniform_field.py`
+- SHOWCASE NOTEBOOK `docs/eddy_current_analytical_validation/validation_suite.ipynb`
+  (live Dodd-Deeds rod impedance + frequency sweep, plus the documented Smythe
+  sphere FEM-scattered<3% / FEM-total~34% / BEM cross-validation table).
 
 Decomposition: A = A_inc + A_scat.  A_inc is known (analytical CF or
 free-space FEM solve). Solve for A_scat with Robin BC.
