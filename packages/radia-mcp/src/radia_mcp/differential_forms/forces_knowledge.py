@@ -883,8 +883,8 @@ schedule.  Expected speedup: 3-5x in iteration count on
 saturable-iron problems.
 
 Implementation status: not yet ported to Radia's `hantila_solver`.
-Worth a half-day project to test against the existing
-`examples/hantila_polarization/` benchmark suite.
+Worth a half-day project to test against a Radia hantila benchmark
+(see `examples/hantila_solver/`).
 """
 
 SEO_CHOI_CONTACT = """\
