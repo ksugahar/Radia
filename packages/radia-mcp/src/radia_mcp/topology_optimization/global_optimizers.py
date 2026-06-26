@@ -5,6 +5,11 @@ solvers (:mod:`linear_inverse`). Use it when the objective is MULTIMODAL / non-c
 minima) so a descent method started anywhere would stall -- e.g. magnet/coil layout objectives
 with competing harmonics, or any boxed design space.
 
+SHOWCASE NOTEBOOK: ``docs/optimization/optimization.ipynb`` -- constrained CAE optimization
+worked examples (Optuna TPE + analytic-guess enqueue + feasibility-aware selection) on RF
+waveguide slab-matching and Bragg-filter design, executed live. Corpus + drift-reference JSON
+at ``examples/optimization/``.
+
 DE/rand/1/bin: for each member x_i form a mutant v = a + F (b - c) from three distinct random
 members, binomially cross v with x_i (rate CR, at least one gene forced), and keep the trial only
 if it lowers the objective. The population drifts to the global basin without gradients.
