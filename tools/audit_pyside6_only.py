@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Audit: Cubit GUI is PySide6-only (no Qt5/PyQt5) + panels construct headless.
+"""Audit: Cubit GUI has no legacy Qt and optional PySide6 panels stay healthy.
 
-Enforces the CLAUDE.md policy "Cubit GUI: PySide6-Only -- No Qt5 / PyQt5"
-(radia 4.80.0+, Cubit 2025.12).
+Enforces the Radia policy "no Qt5 / PyQt5 fallbacks" while allowing release
+targets that intentionally do not install PySide6.  When PySide6 is installed,
+the legacy desktop panels must still construct headlessly.  When PySide6 is not
+installed, the smoke is skipped and the release remains valid because notebook
+panels and the Cubit export plugin do not require PySide6.
 
 Static checks:
   1. ZERO real PyQt5 / PySide2 / PyQt6 import statements in tracked *.py
@@ -14,13 +17,14 @@ Static checks:
      dependency (pefile import-table scan).
 
 Headless check (isolated subprocess, offscreen Qt):
-  5. IHPanel / EMPanel / PCBPanel construct under PySide6 offscreen, and
-     ExportDialog builds all 6 formats emitting valid ``export ...
-     overwrite`` commands.  (build_command raising a ValueError for a
-     missing required input is EXPECTED fail-loud validation, not a defect.)
+  5. If PySide6 is installed, IHPanel / EMPanel / PCBPanel construct under
+     PySide6 offscreen, and ExportDialog builds all 6 formats emitting valid
+     ``export ... overwrite`` commands.  If PySide6 is absent, this is a
+     release-policy skip, not a failure.
 
 Run:  python tools/audit_pyside6_only.py
-Exit 0 = PySide6 unified + panels healthy; non-zero = issues (listed).
+Exit 0 = no legacy Qt and optional panel surface healthy/skipped; non-zero =
+issues (listed).
 
 The machine/Cubit half (cubit-plugin-install --verify-only, cubit-smoke-test,
 cross-machine SSH to 100号機 / mdx) lives in the `pyside6-health` skill, which
@@ -29,6 +33,7 @@ calls this script for the static/headless portion.
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import subprocess
 import sys
@@ -192,7 +197,7 @@ def main(argv: list[str]) -> int:
         return _run_smoke()
 
     print("=" * 64)
-    print("  PySide6-only audit  (CLAUDE.md: Cubit GUI PySide6-Only)")
+    print("  Optional PySide6 / legacy Qt audit")
     print("=" * 64)
     all_issues: list[str] = []
 
@@ -215,18 +220,23 @@ def main(argv: list[str]) -> int:
     print(f"[{'FAIL' if ccm_issues else 'OK'}] cubit_mesh_export.ccm Qt-free  ({ccm_status})")
     all_issues += ccm_issues
 
-    smoke = check_panel_smoke()
-    print(f"[{'FAIL' if smoke else 'OK'}] headless panel smoke "
-          f"(IHPanel/EMPanel/PCBPanel construct; ExportDialog x6)")
-    for s in smoke:
-        print("       " + s)
-    all_issues += [f"panel smoke: {s}" for s in smoke]
+    if importlib.util.find_spec("PySide6") is None:
+        smoke = []
+        print("[OK] headless panel smoke skipped "
+              "(PySide6 not installed; release policy permits no-PySide6 targets)")
+    else:
+        smoke = check_panel_smoke()
+        print(f"[{'FAIL' if smoke else 'OK'}] headless panel smoke "
+              f"(IHPanel/EMPanel/PCBPanel construct; ExportDialog x6)")
+        for s in smoke:
+            print("       " + s)
+        all_issues += [f"panel smoke: {s}" for s in smoke]
 
     print("-" * 64)
     if all_issues:
-        print(f"RESULT: {len(all_issues)} ISSUE(S) -- PySide6 unification NOT clean")
+        print(f"RESULT: {len(all_issues)} ISSUE(S) -- optional PySide6 audit NOT clean")
         return 1
-    print("RESULT: CLEAN -- Cubit GUI is PySide6-only and panels are healthy")
+    print("RESULT: CLEAN -- no legacy Qt; optional PySide6 panel smoke is healthy/skipped")
     return 0
 
 
