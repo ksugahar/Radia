@@ -35,6 +35,23 @@ Key operators:
 For inductance extraction at DC to ~1 MHz, **LaplaceSL is sufficient**
 (MQS/Darwin regime). No Helmholtz kernel needed.
 
+### CAVEAT: closed-surface LaplaceSL inductance is rank-deficient on dense meshes (verified)
+
+The `L = 1/(e^T L^{-1} e)` total-inductance extraction on a **closed** conductor
+surface (e.g. a torus) is **numerically unreliable as the surface mesh is refined**:
+the `LaplaceSL` Gram matrix becomes rank-deficient on dense closed-surface meshes
+(ngbem surface-integration on closed surfaces), and the inductance error blows up.
+Measured on circular loops (Neumann reference `L = mu_0 R (ln(8R/a) - 2)`):
+coarse mesh (`curvaturesafety=0.5`, ~89 tris) gave ~+15%, but refined meshes hit
+"Rank-deficient matrix (714/715)" and errors of **-9% to -66%**. **Do NOT fix this
+by refining the triangulation** -- it makes it worse. Mitigations: keep the mesh
+coarse, use **p-refinement** (`order>0`) or **quad elements** (from Cubit), or --
+preferred for inductance -- use the **Radia PEEC filament/panel extractor**
+(`radia.peec_*`, Neumann-formula based) which does not have this closed-surface
+rank-deficiency. (Verified 2026-06-27 via `examples/bem_extractor/verify_inductance.py`;
+rendered in `docs/bem_extractor/bem_inductance_limitations.ipynb`. This is a
+negative/limitation result, kept as knowledge.)
+
 ## When to Use ngsolve.bem
 
 | Task | Use ngsolve.bem? | Alternative |
