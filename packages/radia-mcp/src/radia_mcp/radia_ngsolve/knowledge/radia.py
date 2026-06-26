@@ -1535,7 +1535,7 @@ PEEC+BEM results verified by independent NGSolve FEM (A-formulation):
 | Analytical L_air | 97.96 nH | -- | FEM: -1.4%, PEEC: +2.8% |
 
 Shield effect is frequency-dependent (100 Hz - 100 kHz).
-See docs/NGBEM_INTEGRATION_DESIGN.md for full frequency sweep results.
+See docs/solver/NGBEM_INTEGRATION_DESIGN.md for full frequency sweep results.
 
 ## Physical Checklist
 
@@ -1744,7 +1744,7 @@ RADIA_FEM_VERIFICATION = """
 # NGSolve FEM Verification Reference
 
 NGSolve FEM was used to verify PEEC+BEM results for a circular coil with
-ferrite core and aluminum shield. Full results in `docs/NGBEM_INTEGRATION_DESIGN.md`.
+ferrite core and aluminum shield. Full results in `docs/solver/NGBEM_INTEGRATION_DESIGN.md`.
 
 ## Summary: ALL 6 CHECKS PASS
 
@@ -3194,7 +3194,7 @@ dJ_k/dt ~ exp(-Delta_U_k / (k_B * T))
 ```
 
 Applications: post-magnetization relaxation, long-term PM stability, temperature
-demagnetization. See `docs/MAGNETIC_AFTEREFFECT_RESEARCH.md`.
+demagnetization.
 
 ---
 
