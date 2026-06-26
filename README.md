@@ -54,9 +54,9 @@ No mesh, no artificial boundary, no solver setup: the field is an **analytic obj
 
 | Permanent-magnet field | Solenoid axial field | Three-phase line field |
 |:--:|:--:|:--:|
-| ![Rectangular magnet 2D field](examples/analytical_formulas/rect_magnet_2d_field.png) | ![Solenoid axial field](examples/analytical_formulas/solenoid_axial_field.png) | ![Three-phase line field](examples/analytical_formulas/three_phase_line_field.png) |
+| ![Rectangular magnet 2D field](docs/analytical_formulas/rect_magnet_2d_field.png) | ![Solenoid axial field](docs/analytical_formulas/solenoid_axial_field.png) | ![Three-phase line field](docs/analytical_formulas/three_phase_line_field.png) |
 
-Every plot above is reproduced by a self-contained script in [`examples/analytical_formulas/`](examples/analytical_formulas/) and checked against a closed-form reference. More worked examples — Halbach arrays, eddy-current shielding, induction heating, accelerator magnets — live throughout [`examples/`](examples/).
+Every plot above is reproduced by the self-contained notebook [`docs/analytical_formulas/analytical_formulas.ipynb`](docs/analytical_formulas/analytical_formulas.ipynb) and checked against a closed-form reference. More worked examples — Halbach arrays, eddy-current shielding, induction heating, accelerator magnets — live throughout [`examples/`](examples/).
 
 ## 👤 Who is this for?
 

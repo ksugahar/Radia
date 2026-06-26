@@ -1172,7 +1172,7 @@ def analytical_formulas(topic: str = "all") -> str:
     Sources:
         - src/radia/analytical_formulas/   (Python modules, ~40 functions across Part 1-9)
         - tests/analytical_formulas/       (170+ pytest tests, < 1 s)
-        - examples/analytical_formulas/    (11 runnable scripts + PNGs)
+        - docs/analytical_formulas/        (analytical_formulas.ipynb: 12 demos + PNGs)
         - docs/analytical_formulas.md      (PDF -> code cross-reference)
         - PDFs themselves: lab-internal, not redistributed with the repo.
     """
