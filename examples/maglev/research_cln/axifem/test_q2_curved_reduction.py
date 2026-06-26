@@ -1,4 +1,9 @@
-"""test_q2_curved_reduction.py — Phase B5 reduction & element-level tests.
+"""test_q2_curved_reduction.py — historical Phase B5 reduction tests.
+
+These tests belong to the Python prototype retained in this research corpus.
+The production C++ curved-Q2 path now ships as ``AxiHenrotteFE_Q2_Curved`` via
+``H1Henrotte(mesh, order=2, curvedquad=True)``; the current regression gate is
+``tests/axifem/test_q2_curved.py``.
 
 Tests the AxifemQuadQ2Curved (curved 9-node Q2) against:
   1. axifem_quad_q2.py axis-aligned Gauss reference (must agree to machine
@@ -244,7 +249,7 @@ def test_curved_sphere_segment():
 
 def main():
     print("=" * 70)
-    print("axifem Q2 curved element — Phase B5 element-level tests")
+    print("axifem Q2 curved element — historical Phase B5 element-level tests")
     print("=" * 70)
     print()
     test_axis_aligned_reduction()
@@ -256,7 +261,7 @@ def main():
     test_curved_element_basic()
     test_curved_sphere_segment()
     print()
-    print("All Phase B5 element-level tests passed.")
+    print("All historical Phase B5 element-level tests passed.")
 
 
 if __name__ == "__main__":
