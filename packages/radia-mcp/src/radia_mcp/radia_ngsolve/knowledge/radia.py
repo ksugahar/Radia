@@ -2318,7 +2318,7 @@ B = rad.Fld(mag, 'b', [0, 0, 0.03])  # No Solve() needed!
 rad.UtiDelAll()
 ```
 
-**Example**: `examples/simple_problems/cubic_polyhedron_magnet.py`
+**Example**: the cubic_polyhedron_magnet section of `docs/simple_problems/simple_problems.ipynb`
 
 ---
 

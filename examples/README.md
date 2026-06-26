@@ -9,8 +9,7 @@ Comprehensive collection of Radia examples demonstrating magnetic field computat
 ## Quick Start
 
 ```bash
-cd examples/simple_problems
-python arc_current_with_magnet.py
+jupyter notebook docs/simple_problems/simple_problems.ipynb
 ```
 
 ---
