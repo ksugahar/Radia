@@ -18,7 +18,7 @@ For every ``src/radia/panels/calc_*.py``:
       cheap so panels can introspect it without paying the NGSolve cost).
   C6. No function uses ``TaskManager`` BEFORE importing it (the late-
       import UnboundLocalError trap -- keiko 100号機 2026-05-30).
-      Already covered by tests/panels/test_taskmanager_scoping.py; we
+      Already covered by validation_test/panels/test_taskmanager_scoping.py; we
       re-run it here so this script is a complete one-stop audit.
 
 For every ``src/radia/radia_*.py`` panel module:
@@ -108,7 +108,7 @@ def _function_late_imports_taskmanager(fn: ast.FunctionDef
                                       ) -> tuple[int, int] | None:
     """C6: Returns (first_use_line, first_import_line) if fn uses
     `TaskManager` BEFORE importing it.  Mirror of the test in
-    tests/panels/test_taskmanager_scoping.py."""
+    validation_test/panels/test_taskmanager_scoping.py."""
     first_use = None
     first_imp = None
     for node in ast.walk(fn):
