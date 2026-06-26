@@ -1,4 +1,9 @@
-"""axifem_quad_q2_curved.py — Phase B5 curved Q2 Henrotte element (Python prototype).
+"""axifem_quad_q2_curved.py — historical curved Q2 Henrotte Python prototype.
+
+This file is retained as the Phase B5 derivation/reference artifact.  The
+production C++ port now ships as ``AxiHenrotteFE_Q2_Curved`` and is selected
+with ``H1Henrotte(mesh, order=2, curvedquad=True)``.  The current production
+gate is ``tests/axifem/test_q2_curved.py``.
 
 9-node general quadrilateral in physical (r, z) for the axisymmetric FEMM-
 Henrotte formulation, with biquadratic isoparametric geometric mapping.
@@ -35,9 +40,6 @@ FEMM-Henrotte bilinear forms (V_i = A_phi at node i):
     b[i]    = pi B_0 r_i ∫_T psi_i r dr dz       (uniform A_s = B_0 r / 2)
 
 Axis-touching elements (some r_i = 0) decouple automatically via the r_i factor.
-
-Phase B5 status: Python prototype + element-level tests. C++ port (NGSolve
-AxiHenrotteQ2FESpace) deferred to Phase B6.
 """
 from __future__ import annotations
 

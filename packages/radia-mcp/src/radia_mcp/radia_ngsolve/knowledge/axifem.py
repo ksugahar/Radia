@@ -5,11 +5,11 @@ radia-core axifem knowledge base for the Radia + NGSolve MCP server.
 `axihenrotte`) that adds a Henrotte axisymmetric finite-element family which
 NGSolve does not ship out of the box: polynomial basis in `s = r²` (not `r`)
 representing the flux function `ψ = 2π r A_φ` (not `A_φ` itself). It ships
-P1/P2 triangles and Q1/Q2 axis-aligned quads. P2 triangles are curved-mesh
-aware via `mesh.Curve(2)`; true curved Q2 quads remain a Python prototype, not
-the production C++ path. On the Cu-disk eddy-current benchmark the `p=2`
-Q-element matches BEM-Foster to 0.27 % with ~6× fewer DOFs than NGSolve
-`H1 order=3`.
+P1/P2 triangles, Q1/Q2 axis-aligned quads, curved P2 triangles via
+`mesh.Curve(2)`, and opt-in curved Q2 quads via
+`H1Henrotte(mesh, order=2, curvedquad=True)`. On the Cu-disk eddy-current
+benchmark the `p=2` Q-element matches BEM-Foster to 0.27 % with ~6× fewer
+DOFs than NGSolve `H1 order=3`.
 
 Read this when:
 * Setting up an axisymmetric eddy-current / magnetostatic FEM problem with
@@ -38,8 +38,10 @@ AXIFEM_OVERVIEW = """\
 
 The same FESpace also supports P1/P2 triangles.  The P2 triangle path is
 curved-mesh aware after `mesh.Curve(2)` and is the production choice for
-curved OCC/Kelvin boundaries.  The Q2 quad path is straight and axis-aligned;
-true curved Q2 quads are not production C++.
+curved OCC/Kelvin boundaries.  The default Q2 quad path is straight and
+axis-aligned; opt into the 9-node curved Q2 quad with
+`H1Henrotte(mesh, order=2, curvedquad=True)` when the quadrilateral geometry
+is genuinely skewed or curved.
 
 ## Key idea (why this is "an NGSolve feature NGSolve does not have")
 
@@ -82,7 +84,7 @@ AXIFEM_SUPPORT_MATRIX = """\
 | Triangle P2 | `order=2` | straight or `mesh.Curve(2)` curved triangle | 3 vertex + 3 edge | shipping; NGSolve element transformation supplies the curved mid-edge coordinates |
 | Quad Q1 | `order=1` | straight axis-aligned rectangle in `(r, z)` | 4 vertex | shipping; closed-form matrices |
 | Quad Q2 | `order=2` | straight axis-aligned rectangle in `(r, z)` | 4 vertex + 4 edge + 1 face | shipping; closed-form matrices with the `s`-midpoint convention |
-| Quad Q2 curved | n/a | true 9-node biquadratic curved quad | 9 | Python prototype only; not wired into `AxiHenrotteFESpace` |
+| Quad Q2 curved | `order=2, curvedquad=True` | true 9-node biquadratic curved quad | 9 | shipping opt-in; curved `ElementTransformation` + quadrature BFI |
 
 Dispatch rule:
 `H1Henrotte(mesh, order=1)` returns P1 triangles or Q1 quads by mesh element
@@ -91,9 +93,9 @@ element type.
 
 Important boundary:
 Calling `mesh.Curve(2)` on a triangular OCC mesh is supported by the P2
-triangle path.  Calling `mesh.Curve(2)` on a quadrilateral mesh does not turn
-the shipped Q2 quad into a curved Q2 quad; the C++ Q2 quad reads only the four
-corner coordinates and assumes an axis-aligned rectangle.
+triangle path.  Calling `mesh.Curve(2)` on a quadrilateral mesh keeps the
+default straight axis-aligned Q2 path unless the caller also passes
+`curvedquad=True`.
 """
 
 AXIFEM_API = """\
@@ -134,9 +136,9 @@ exported.
 * **Mesh dispatch:** `order=1` supports P1 triangles and Q1 axis-aligned
   quads. `order=2` supports P2 triangles and Q2 axis-aligned quads.  P2
   triangles are curved-mesh aware after `mesh.Curve(2)`.
-* **Q2 quad geometry:** the production Q2 quad is straight and axis-aligned.
-  True curved Q2 quads are not wired into C++; use P2 curved triangles for
-  curved boundaries.
+* **Q2 quad geometry:** the default production Q2 quad is straight and
+  axis-aligned.  Use `curvedquad=True` for the production 9-node curved Q2
+  quadrature path on curved or skewed quadrilateral maps.
 * **Dirichlet:** users MUST set `dirichlet="axis|..."` for any axis-touching
   geometry. The axis-restricted basis already produces zero rows / columns
   on the axis-side DOFs, so without an explicit Dirichlet flag the global
@@ -159,8 +161,8 @@ AXIFEM_TASKMANAGER = """\
 * The closed-form BFIs are `const` element integrators; per-call scratch lives
   in `LocalHeap`, and quadrature tables are immutable.
 
-This covers the shipping paths: P1/P2 triangles, curved P2 triangles, and
-Q1/Q2 straight axis-aligned quads. True curved Q2 quads remain prototype-only.
+This covers the shipping paths: P1/P2 triangles, curved P2 triangles,
+Q1/Q2 straight axis-aligned quads, and opt-in curved Q2 quads.
 The regression gate is `tests/axifem/test_taskmanager_race.py`, which assembles
 both the order-1 V-DOF custom-BFI path and the order-2 symbolic DiffOp/GetFE
 path at `SetNumThreads(1)` and `SetNumThreads(4)` and compares a deterministic
@@ -296,13 +298,14 @@ M_V = T · V⁻ᵀ · M_sigma_phi · V⁻¹ · T
 with `V⁻¹` the (cached) per-element inverse Vandermonde of the
 monomial basis at the 9 nodes (6 for axis case).
 
-## What is not shipped
+## Curved Q2 opt-in
 
-A true curved Q2 quad is not part of the production C++ implementation.  The
-prototype lives at
-`examples/maglev/research_cln/axifem/axifem_quad_q2_curved.py`; the shipped
-Q2 path is `AxiHenrotteFE_Q2_AxisAligned` and reads only the four corner
-coordinates.
+The default Q2 path is still `AxiHenrotteFE_Q2_AxisAligned`: it reads the four
+corner coordinates and assumes an axis-aligned rectangle.  The production
+curved path is `AxiHenrotteFE_Q2_Curved`, selected by
+`H1Henrotte(mesh, order=2, curvedquad=True)`.  It samples 9 curved node
+positions from the curved `ElementTransformation` and uses quadrature over the
+biquadratic map.
 """
 
 AXIFEM_CURVED_GEOMETRY = """\
@@ -321,7 +324,7 @@ Use this for:
 * z-offset Kelvin half-discs,
 * any OCC-generated curved boundary where a triangular mesh is natural.
 
-## Production but straight only
+## Production default: straight quads
 
 **Q1/Q2 quads are axis-aligned straight rectangles.**  They are the fast
 closed-form path for structured disks, cylinders, and rectangular workpieces.
@@ -332,13 +335,14 @@ s_m = (s_a + s_b) / 2
 r_m = sqrt((r_a^2 + r_b^2) / 2)
 ```
 
-## Prototype only
+## Production opt-in: curved Q2 quads
 
-**Curved Q2 quads are not production C++.**  The Python prototype
-`examples/maglev/research_cln/axifem/axifem_quad_q2_curved.py` verifies the
-element-level idea, but `AxiHenrotteFESpace` does not dispatch to it.  Do not
-document or depend on `mesh.Curve(2)` turning a quad mesh into a curved Q2
-Henrotte quad.
+**Curved Q2 quads are production C++ behind an explicit flag.**
+`H1Henrotte(mesh, order=2, curvedquad=True)` dispatches to
+`AxiHenrotteFE_Q2_Curved`, using 9 curved node positions from
+`mesh.Curve(2)` and a quadrature BFI.  Use this for annular-sector or mapped
+quad studies.  Without `curvedquad=True`, quads intentionally keep the
+straight closed-form path for backward-compatible disk/cylinder benchmarks.
 """
 
 AXIFEM_VS_STANDARD_H1 = """\
@@ -757,10 +761,10 @@ resolution; reserve `Curve(2)` for coarse-mesh production runs where the
 geometric error dominates the FE-basis error.
 
 A true **curved Q2 quad** element (basis space still in even powers of r, but
-on a biquadratic isoparametric mapping) is not production C++.  It is currently
-a Python prototype at
-`examples/maglev/research_cln/axifem/axifem_quad_q2_curved.py`; the shipped
-Q2 quad path remains straight and axis-aligned.
+on a biquadratic isoparametric mapping) is production C++ behind the explicit
+`curvedquad=True` flag.  Keep the default straight axis-aligned Q2 path for
+structured disk/cylinder benchmarks; use the curved path for annular-sector
+or mapped-quad studies.
 
 ### Geometry pre-requisites for `add_kelvin_2d_axisym`
 Before calling the helper, the user-built interior must have:
@@ -926,7 +930,7 @@ def get_axifem_documentation(topic: str = "all") -> str:
       "taskmanager"     - NGSolve-native parallel execution contract
       "basis_p1"        - order=1 P1 triangle + Q1 quad basis details
       "basis_p2"        - order=2 P2 triangle + Q2 quad basis details
-      "curved_geometry" - P2 curved triangle shipped; Q2 curved quad prototype-only
+      "curved_geometry" - P2 curved triangle and opt-in Q2 curved quad support
       "vs_standard_h1"  - 6-property table comparing axihenrotte p=2 vs NGSolve H1 order=2
       "validation"      - Cross-validation references and Hessian-of-W convention
       "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
