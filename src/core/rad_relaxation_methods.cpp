@@ -2247,7 +2247,6 @@ extern "C" {
 	int   cHACApK_hlu_get_accum_cap(void);
 }
 
-#ifdef RADIA_USE_HACAPK
 //-------------------------------------------------------------------------
 // SolveMomentHACApK: the SCALABLE-storage moment linear step (Phase 2 Increments 3-4,
 // docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb).  Solves A_raw sigma = b_raw with the chi-free
@@ -2600,7 +2599,6 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	sigma = x;
 	return finish(it);
 }
-#endif
 
 //-------------------------------------------------------------------------
 // LU Solver: SolveLinearStep override
@@ -2664,7 +2662,6 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			HextPerHex[(size_t)h*3+0] = He.x; HextPerHex[(size_t)h*3+1] = He.y; HextPerHex[(size_t)h*3+2] = He.z;
 			radTPolyhedron* poly = ctx.polyCache[e]; if(poly && poly->Use6DOF_MSC) poly->CurrentChi = chi_abs;
 		}
-#ifdef RADIA_USE_HACAPK
 		// method 2 (scalable storage): solve the moment system via the HACApK H-matrix + block-Jacobi BiCGSTAB
 		// (O(N log N) matvec) instead of the dense O(N^3) LU.  PER-ELEMENT chi (Increment 4): the nonlinear
 		// Picard outer loop calls this each iteration with the current chiPerHex (no uniform-chi restriction);
@@ -2699,7 +2696,6 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			fprintf(stderr, "Radia::Solve> HACApK moment method2 failed with code %d; not falling back to dense LU.\n", nit);
 			return nit;
 		}
-#endif
 		if(!ensureSystemMatrix()) return -2;   // dense moment method-0 path
 		IntrctPtr->BuildMomentSystemCore(chiPerHex.data(), HextPerHex.data(), SystemMatrix, RHS);
 		rad.m_solve_t_moment_fieldgrad += IntrctPtr->LastMomentFieldGradTime();
@@ -3659,10 +3655,8 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 //=========================================================================
 // Method 2: BiCGSTAB with H-matrix (HACApK ACA+)
-// Conditionally compiled when RADIA_USE_HACAPK is defined
 //=========================================================================
 
-#ifdef RADIA_USE_HACAPK
 
 double radTRelaxationMethNo_2::Dot(const std::vector<double>& a, const std::vector<double>& b, int n)
 {
@@ -4656,4 +4650,3 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	return outerIter;
 }
 
-#endif // RADIA_USE_HACAPK
