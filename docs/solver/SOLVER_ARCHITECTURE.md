@@ -135,7 +135,7 @@ Z = solver.compute_port_impedance(freq=1e6)
 - `MatSatIsoTab(BH_data)`: **Nonlinear** (B-H curve)
 - `MatPlayHysteresis(K, eta, f_k_tables)`: **Vector hysteresis** (B-input Play, recommended)
 - `MatEnergyHysteresis(K, eta, f_k_tables, eps)`: **Vector hysteresis** (energy-based Play)
-- `MatMagFixed(M)`: Permanent magnet (fixed M)
+- `MatPM(Br, Hc, axis)` or direct M via `ObjHexahedron(verts, M)`: Permanent magnet
 
 **Key advantage**: **Only Radia can handle nonlinear materials** in the integral equation framework.
 This includes **vector hysteresis** with Play operators -- a novel capability
@@ -323,7 +323,7 @@ For power electronics and WPT, **PEEC + SIBC is the optimal choice**:
 | **Transformer** | PEEC + SIBC | MMM (MatSatIsoTab) | CoupledPEECSolver |
 | **WPT coil** | PEEC + SIBC | MMM (MatLin) | CoupledPEECSolver |
 | **Induction heating** | PEEC + SIBC | MMM + ESIM (mu_eff) | CoupledPEECSolver |
-| **PM motor** | - | MMM (MatMagFixed + MatLin) | Radia Solve() |
+| **PM motor** | - | MMM (direct M / MatPM + MatLin) | Radia Solve() |
 | **EMC shielding** | PEEC | - (or MMM for mu-metal) | CoupledPEECSolver |
 | **PCB trace** | PEEC + SIBC | - | - |
 

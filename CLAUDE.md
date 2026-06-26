@@ -2306,7 +2306,6 @@ Path B: OCC (recommended for tet)
 | Module | Function | Purpose |
 |--------|----------|---------|
 | `netgen_mesh_import` | `netgen_mesh_to_radia(mesh, ...)` | NGSolve mesh -> Radia (recommended) |
-| `netgen_mesh_import` | `create_hex_mesh_grid(...)` | Structured hex grid (no external tool) |
 
 ### Cubit Mesh Export (cubit-mesh-export)
 
@@ -2355,7 +2354,6 @@ From `src/radia/netgen_mesh_import.py`:
 - `extract_elements()` -- Extract element data for custom processing
 - `compute_element_centroid()` -- Centroid from vertex list
 - `create_radia_tetrahedron()` / `create_radia_hexahedron()` -- Single elements
-- `create_hex_mesh_grid()` -- Structured hex grid (no external tool)
 - Constants: `TETRA_FACES`, `HEX_FACES`, `WEDGE_FACES`, `PYRAMID_FACES` (1-indexed face topology)
 
 ---
@@ -2888,7 +2886,7 @@ B = rad.Fld(pm, 'b', [0, 0, 0.1])
 
 Call `Solve()` only when soft iron is present alongside permanent magnets.
 
-PM material classes (`MatMagFixed`, `MatMagLinear`, `MatMagCurve`) are available but currently all behave as fixed magnetization. Full demagnetization is planned.
+Permanent magnets are specified by direct magnetization (`ObjHexahedron(verts, [Mx, My, Mz])`) or `MatPM(Br, Hc, axis)`. (The `MatMagFixed` / `MatMagLinear` / `MatMagCurve` skeleton trio was removed 2026-06-26 -- it duplicated direct-M / MatPM and never implemented real demagnetization; full PM demagnetization is planned via `MatPM`.)
 
 See `docs/ELF_CONVENTIONS.md` for detailed unit system documentation.
 
