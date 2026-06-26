@@ -24,6 +24,11 @@ Coverage:
                         = multipole field-strength ratio; aspect-ratio (not size)
                         sets the iteration count; distortion only rotates the
                         quadrupole (Sugahara-lab study 2026-06-22)
+  multipole_modes_viz — How to SEE each mode within the element: build the 6
+                        face-charge basis (momentResidualEigenmodes), evaluate the
+                        field with the EXACT van Oosterom-Strackee analytic kernel
+                        (not Gauss), render GMSH 3D streamlines, and emit a
+                        double-clickable .msh (+.msh.opt camera) of each mode
   chubar_1998         — The original Radia paper (Chubar-Elleaume-Chavanne)
   takahashi_2007_aca  — Large-scale MMM + ACA H-matrix (Wakao group,
                         Sugahara lineage — see also CLAUDE.md HACApK)
@@ -899,11 +904,74 @@ and there the moment system's condition number is actually NOT worse than EIEM2'
   "eigenvalue_nullspace".
 """
 
+MULTIPOLE_MODES_VIZ = """\
+## Visualizing the 6 moment modes within the element (GMSH 3D streamlines + double-click .msh)
+
+(Companion to "multipole_modes", which PROVES what the modes are. This is the
+reusable recipe to SEE each mode's field. Reproducible notebook:
+`docs/multipole_moment_mmm/MOMENT_MODE_STREAMLINES.ipynb`. Sugahara-lab 2026-06-26.)
+
+### Build the 6 modes as face-charge vectors (== momentResidualEigenmodes)
+
+The 6 DOF live in the 6-D face-charge space R^6 (one uniform sigma per hex face).
+The orthonormal mode basis is exactly the C++ `momentResidualEigenmodes`
+construction (rad_interaction.cpp): monopole functional Ae[f] (face area), 3 dipole
+functionals Ae[f]*d_f[k] (d_f = face_center - element_center), Gram-Schmidt
+orthonormalised; then extend with the standard basis e_0..e_5 -> the 2 residual
+eigenmodes ARE the quadrupole modes. For the unit cube (faces [+x,-x,+y,-y,+z,-z]):
+
+    monopole      (1,1,1,1,1,1)/sqrt(6)
+    dipole x/y/z  +-1/sqrt(2) on the opposite-face pair
+    quadrupole-1  (2,2,-1,-1,-1,-1)/sqrt(12)    # ~ 3x^2-r^2, axial along x
+    quadrupole-2  (0,0,1,1,-1,-1)/2             # ~ y^2-z^2
+
+Distortion only ROTATES the quadrupole pair (off-diagonal/shear functional is
+linear in the shear; octupole rank 0) -- see "multipole_modes".
+
+### Evaluate each mode's field with the EXACT analytic kernel (not Gauss quadrature)
+
+A mode's field = (1/4pi) sum_f sigma_f * (field of the uniformly charged square
+face); split each square into 2 triangles and use the lab analytic closed form
+`FieldFromChargedTriangleLocal` (van Oosterom-Strackee 1983 solid-angle/arctan
+normal term + log edge terms; Wilton et al. 1984; rad_interaction.cpp:1495; the C++
+returns the field WITHOUT the 1/4pi factor). This is EXACT:
+- matches radia `rad.Fld(hex_with_uniform_M, 'h', p)` externally to ~1.4e-14
+  (the dipole-x charge pattern sigma = M.n reproduces a uniform-M=e_x hex);
+- REMOVES the ~1e-4 near-surface error of a 16x16 Gauss quadrature -- the |H| peak
+  next to a face is finite, not the Gauss over-estimate (cube demo: peak 0.68 Gauss
+  -> 0.37 analytic). Use the analytic kernel for anything near the element surface.
+
+### GMSH 3D streamlines of a mode
+
+Sample H on a structured grid around the element and write a .msh with a unit-field
+view U = H/|H| (so StreamLines integrates uniform arc-length despite the huge
+near/far |H| range) plus a |H| scalar view. Run `Plugin(StreamLines)` seeded on the
+3 coordinate planes, FORWARD and BACKWARD (DT > 0 then DT < 0), View = U,
+OtherView = |H| -> 3D field lines coloured by |H|. (A flat 2D look just means the
+seed plane was viewed head-on; the polylines are genuinely 3D.)
+
+### Double-click .msh recipe (Windows: .msh -> gmsh.bat opens GMSH)
+
+GOTCHA: `gmsh.view.write()` of a LIST-based (StreamLines) view to a .msh falls back
+to MSH 2.2 ("Mesh-based export of list-based datasets not available with MSH 4.1")
+-- do NOT ship that. Instead EXTRACT the polylines and re-emit a clean MSH v4.1:
+1. `gmsh.view.getListData(tag)` -> "SL" entries = [x0,x1,y0,y1,z0,z1,v0,v1] per segment.
+2. Emit a v4.1 mesh of Line2 (gmsh_type 1) elements + a `$NodeData "|H|"`; add the
+   element edges as Line2 pinned to |H|_max so the cube box is visible.
+3. Write a companion `<file>.msh.opt` (GMSH AUTO-LOADS `<file>.msh.opt` on open):
+   `General.RotationX/Y/Z`, `General.Orthographic=0`, `View[0].ColormapNumber`,
+   `Mesh.Lines=0` -> double-clicking the .msh opens straight to the 3D view.
+On Windows the `.msh` extension maps to `GMSH.MeshFile = gmsh.bat "%1"`, so a
+double-click launches GMSH with the file (verified end-to-end). The reusable
+`PayloadV41` emitter lives in `radia.gmsh_post_export`.
+"""
+
 SECTIONS = {
     "build_msc_mmm": BUILD_MSC_MMM,
     "matrix_structure": MATRIX_STRUCTURE,
     "eigenvalue_nullspace": EIGENVALUE_NULLSPACE,
     "multipole_modes": MULTIPOLE_MODES,
+    "multipole_modes_viz": MULTIPOLE_MODES_VIZ,
     "chubar_1998": CHUBAR_1998,
     "takahashi_2007_aca": TAKAHASHI_2007_ACA,
     "pradhan_2007": PRADHAN_2007,
