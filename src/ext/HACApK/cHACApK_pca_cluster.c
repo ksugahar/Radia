@@ -42,7 +42,7 @@
 /* Static global flag controlling whether PCA split is used. Default OFF for
  * backward-compatible behaviour. Switched on via cHACApK_set_cluster_strategy.
  * Static-global avoids touching the public struct layouts for now (Option A
- * port plan; see docs/research/h-lu/H2LIB_TO_HACAPK_MAPPING.md). */
+ * port plan; see docs/research/h-lu/H2LIB_TO_HACAPK_MAPPING.ipynb). */
 static int g_cluster_strategy = CHACAPK_CLUSTER_BBOX;
 
 void cHACApK_set_cluster_strategy(int strategy)

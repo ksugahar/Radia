@@ -14,8 +14,8 @@ The companion documents are:
 - [`docs/esim/CROSS_VALIDATION.md`](CROSS_VALIDATION.md) — analytical / internal-consistency / external 2-D axisymmetric validation matrix with concrete numerical data (IGTE-grade tables).
 - [`docs/esim/SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md) — why scalar BIE + curved Tri6 + per-element ESIM is the right combination (vs vector BEM-A / FEM-Kelvin / FEM-coilmesh), with the error-order match argument and the per-iteration Karl cost comparison.
 - [`docs/esim/R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) — focused diagnosis of why PEEC and BEM-A produce different coil R values.
-- [`docs/research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.md`](../research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.md) — research-WIP notes.
-- [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md) — wide-band nonlocal extension (deferred).
+- [`docs/research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.ipynb`](../research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.ipynb) — research-WIP notes.
+- [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb) — wide-band nonlocal extension (deferred).
 
 ---
 
@@ -306,7 +306,7 @@ a full FE machinery because:
 
 For higher-dimensional problems (the planned 2-D nonlocal SIBC
 extension to capture finite-coil-aperture wide-band effects, see
-[`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md)),
+[`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb)),
 a proper FE discretisation would be preferred.
 
 ---
@@ -1452,7 +1452,7 @@ error or whether per-element under-shoots equally.
 | **Formal pytest for linear Bessel match** | 1 day | Locks § 5.1 numerically. |
 | **Stoll 1974 nonlinear-envelope cross-check** | 1 week | Closes § 5.3 third row. |
 | **Lavers–Biringer 2-sided plate cross-check** | 1 week | Closes § 5.3 fourth row. |
-| **Nonlocal SIBC (Bilicz–Badics–Pávó 2023) extension to DC** | 5–7 days | Wide-band capability for low-frequency WPT; see [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md). |
+| **Nonlocal SIBC (Bilicz–Badics–Pávó 2023) extension to DC** | 5–7 days | Wide-band capability for low-frequency WPT; see [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb). |
 
 ---
 

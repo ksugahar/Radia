@@ -1133,7 +1133,7 @@ int radTApplication::BuildMomentSystem(int InteractElemKey, double chi, const do
 int radTApplication::MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF)
 {
 	// Build the UN-normalized moment system A_raw ENTRY-BY-ENTRY via radTInteraction::MomentSystemEntry --
-	// the validation harness for the on-demand HACApK H-matrix entry (Phase 2, ACA_MOMENT_DESIGN.md).
+	// the validation harness for the on-demand HACApK H-matrix entry (Phase 2, ACA_MOMENT_DESIGN.ipynb).
 	// Two-call: pA=nullptr -> read back dof; allocate dof*dof + call again.  Uniform chi.
 	try
 	{
@@ -1168,7 +1168,7 @@ int radTApplication::MomentHMatrixProbe(int InteractElemKey, double chi, double 
 {
 	// Phase-2 Increment-2 gate: build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem)
 	// and probe the H-matvec against the dense A_raw (entry-by-entry).  out[8] = {ok, matvec_relerr, ndof,
-	// n_lowrank, n_dense, max_rank, compression, build_time}.  See ACA_MOMENT_DESIGN.md.
+	// n_lowrank, n_dense, max_rank, compression, build_time}.  See ACA_MOMENT_DESIGN.ipynb.
 	if(out) for(int k = 0; k < 9; k++) out[k] = 0.0;
 #ifdef RADIA_USE_HACAPK
 	try
