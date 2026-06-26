@@ -124,6 +124,10 @@ survive and recover H exactly.
 `packages/radia-mcp/.../fem/equivalence_source_knowledge.py`
 (this file) is the theory + recipe reference.
 
+SHOWCASE NOTEBOOK: `docs/equivalence_source/demos.ipynb` -- phase1 +
+null-field property executed live, phase2/phase3 (Cubit e2e) + the C++
+extraction-kernel benchmark shown from committed JSON.
+
 `examples/equivalence_source/` has two end-to-end demos:
 
     phase1_static_coil.py    -- coil at Z=0.6 m, 0.9 m sphere extract,
