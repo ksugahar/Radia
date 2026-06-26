@@ -1851,6 +1851,8 @@ void RadSetMomentAnalyticKernel(bool on);
 bool RadGetMomentAnalyticKernel();
 void RadSetMomentHLUPrecond(bool on);   // multipole-moment method-2 H-LU preconditioner toggle (rad_relaxation_methods.cpp)
 bool RadGetMomentHLUPrecond();
+void RadSetMomentDeflate(bool on);      // multipole-moment method-2 two-sided deflated block-Jacobi toggle
+bool RadGetMomentDeflate();
 
 namespace radia_solver_ext {
 
@@ -2133,6 +2135,9 @@ void SolverConfig(py::kwargs kwargs) {
     if (kwargs.contains("hacapk_hlu_precond")) {
         ::RadSetMomentHLUPrecond(kwargs["hacapk_hlu_precond"].cast<bool>());
     }
+    if (kwargs.contains("moment_deflation")) {
+        ::RadSetMomentDeflate(kwargs["moment_deflation"].cast<bool>());
+    }
 
     if (kwargs.contains("relax_param")) {
         SetRelaxParam(kwargs["relax_param"].cast<double>());
@@ -2185,6 +2190,7 @@ py::dict GetSolverConfig() {
     config["moment_anderson_depth"] = GetMomentAndersonDepth();
     config["moment_analytic_kernel"] = ::RadGetMomentAnalyticKernel();
     config["hacapk_hlu_precond"] = ::RadGetMomentHLUPrecond();
+    config["moment_deflation"] = ::RadGetMomentDeflate();
 
     // Relaxation parameter
     { double relax = 0.0;
