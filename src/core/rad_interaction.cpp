@@ -3421,7 +3421,7 @@ void radTInteraction::MomentSystemBlockAny(int rowMomPos, int colMomPos, const d
 
 //=========================================================================
 // MomentSystemEntry: the ON-DEMAND un-normalized moment system entry A_raw[rowGlobal][colDOF] (the HACApK
-// H-matrix entry; see docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  Reproduces BuildMomentSystemCore's row math
+// H-matrix entry; see docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb).  Reproduces BuildMomentSystemCore's row math
 // for a SINGLE (row,col) WITHOUT building the full system or normalizing -- the row 2-norm is a diagonal
 // scaling that leaves the direct solve invariant, so the H-LU path uses A_raw.  HEX-ONLY; assumes all
 // m_hexaElemIndices are valid 6-face hexes (rowGlobal = 6*h + t).

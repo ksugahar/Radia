@@ -6,7 +6,7 @@
 // Write debug messages to a file since we're in DllMain context
 static void dbg(const char* msg)
 {
-    FILE* f = fopen("C:/tmp/ccm_dllmain.log", "a");
+    FILE* f = fopen("C:/temp/ccm_dllmain.log", "a");
     if (f) {
         fprintf(f, "%s\n", msg);
         fflush(f);

@@ -142,7 +142,7 @@ def test_start_hint_from_step_labels_freecad_fixture():
     import os
     from radia.coil_from_cad import _start_hint_from_step_labels
 
-    fc_step = r"C:\tmp\fc_xcaf.step"
+    fc_step = r"C:\temp\fc_xcaf.step"
     if not os.path.exists(fc_step):
         pytest.skip("FreeCAD fixture not available (see docs/peec)")
 
