@@ -277,6 +277,38 @@ re-deriving the dead end. A clean tree where every tracked file is the canonical
 one — with the rationale for each removed branch preserved in memory — is the
 bonsai actually being tended.
 
+### Research-Heavy Work: Run in C:\temp, Promote Knowledge to docs/ipynb or API to src/ (2026-06-27)
+
+**POLICY** (Sugahara): exploratory, research-heavy work (eigenvalue studies,
+spectrum scans, formulation trials, "does this even work" probes — the
+`mmm_eigenvalue_study` class) is **run in `C:\temp`, NOT committed to the tracked
+tree**. The tracked repo receives only the *outcome*, via one of two promotions:
+
+1. **Consolidated knowledge worth showing users, or knowledge that informs a future
+   feature extension → promote to a `docs/<topic>/*.ipynb`** (self-contained:
+   code + committed JSON/figures + rendered results; strengthen the matching
+   `radia_mcp.<domain>` knowledge in the same step).
+2. **It becomes an API / reusable method → store it in `src/`** (a core method in
+   `src/core` / `src/radia`, or a `radia.<domain>` application), built + tested +
+   golden-locked like any shipped code.
+
+If a research effort yields **neither** (a dead end / superseded approach), it
+stays in `C:\temp` and the *lesson* is distilled to `memory/` — it is **never**
+left as a tracked `examples/` corpus. **`docs/<topic>/` MAY contain `.py` helper
+modules** that the notebook (and `radia_mcp`, for mcp-server integration) import —
+this is allowed/encouraged (see "File Placement Policy"); do not inline-duplicate
+shared logic across notebooks.
+
+This is why `mmm_eigenvalue_study` was removed (2026-06-27): it was a research
+exploration of the now-closed loop-deflation direction (MMMM is the official MMM
+H-matrix route), so it had no business persisting as a tracked `examples/` corpus —
+the nullspace *theory* it produced is kept in `docs/solver/MSC_NULLSPACE_DEFLATION.md`,
+the *lesson* in `memory/`, and nothing else. **Decision rule for new research:**
+run it in `C:\temp`; promote to `docs/ipynb` (knowledge) or `src/` (API) only when
+it has crossed that bar; otherwise distill to `memory/` and leave the tracked tree
+clean. This is the research-lifecycle complement to the "Sample Promotion Ladder"
+(tests → examples → panels) and "No Development Cruft" policies above.
+
 ### Green's Function: Laplace Kernel Only (MQS/Darwin)
 
 **POLICY**: Radia uses **Laplace kernel only**: $G(r) = 1/(4\pi r)$. Target regime is MQS (Magneto-Quasi-Static) to Darwin approximation.
