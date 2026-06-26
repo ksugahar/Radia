@@ -13,11 +13,13 @@ Measured (loop-heavy C-yoke): plain block-Jacobi 167 / 397 / 2917 iters (mu_r 1e
 
 NOTE: this is a MEDIUM-N (<=~15k) constant-factor speedup over dense LU, NOT asymptotically scalable -- the
 loop space is O(N)-dimensional so the coarse factor is O(N^3) / O(N^2)-storage (a true scalable loop-heavy
-solver needs a multilevel/non-symmetric-AMS coarse solve, or the symmetric HDiv-VIM).  Opt-in, default OFF,
-exclusive with the H-LU precond.
+solver needs a multilevel/non-symmetric-AMS coarse solve, or the symmetric HDiv-VIM).  DEFAULT ON (Sugahara
+2026-06-27): the target workload is loop-heavy accelerator electromagnets (C-yokes), where deflation is a
+large win; set moment_deflation=False for a non-loop-heavy solve like a benchmark cube (the O(N^3) coarse
+setup then costs more than it saves).  Exclusive with the H-LU precond.
 
-Locks: (a) the flag round-trips + defaults OFF; (b) deflated method-2 matches method-0 dense LU AND uses
-fewer iters than plain block-Jacobi on a loop-heavy C-yoke.
+Locks: (a) the flag round-trips + defaults ON (verified in a fresh process); (b) deflated method-2 matches
+method-0 dense LU AND uses fewer iters than plain block-Jacobi on a loop-heavy C-yoke.
 """
 import numpy as np
 import pytest
@@ -30,7 +32,7 @@ MU0 = 4e-7 * np.pi
 def _clean():
     rad.UtiDelAll(); rad.set_demag_backend("auto")
     yield
-    rad.SolverConfig(moment_deflation=False, hacapk_hlu_precond=False)
+    rad.SolverConfig(moment_deflation=True, hacapk_hlu_precond=False)   # restore the default (ON)
     rad.set_demag_backend("auto"); rad.UtiDelAll()
 
 
@@ -65,8 +67,18 @@ def _solve(nxy, nz, mu_r, method, deflate):
     return M, it
 
 
-def test_deflation_config_roundtrip_and_default_off():
-    assert rad.GetSolverConfig()["moment_deflation"] is False
+def test_deflation_default_on_in_fresh_process():
+    """The C++ default is moment_deflation=ON -- target workload = loop-heavy accelerator electromagnets.
+    Checked in a FRESH process: the autouse fixture mutates the flag in-process, so the pristine default must
+    be read before any SolverConfig call."""
+    import subprocess, sys
+    out = subprocess.run([sys.executable, "-c",
+                          "import radia as rad; print(rad.GetSolverConfig()['moment_deflation'])"],
+                         capture_output=True, text=True)
+    assert out.stdout.strip() == "True", f"default not ON: stdout={out.stdout!r} stderr={out.stderr[-200:]!r}"
+
+
+def test_deflation_config_roundtrip():
     rad.SolverConfig(moment_deflation=True)
     assert rad.GetSolverConfig()["moment_deflation"] is True
     rad.SolverConfig(moment_deflation=False)
