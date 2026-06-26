@@ -1371,8 +1371,134 @@ def check_coil_scalar_potential_as_lift(filepath: str, lines: List[str]) -> List
     return findings
 
 
+# ── Radia API-drift / example-bitrot rules (2026-06, examples->docs sweep) ──
+# Mirrors the bug_patterns catalog entries radia-magnetization-tesla-not-apm,
+# rad-solve-return-4-tuple, radia-constructor-arity-drift.
+
+def check_solve_result_bad_index(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: rad.Solve returns a 4-tuple [residual, _, _, iterations]."""
+    findings = []
+    solve_vars = set()
+    for line in lines:
+        if line.strip().startswith('#'):
+            continue
+        m = re.search(r'(\w+)\s*=\s*(?:rad|rd)?\.?Solve\s*\(', line)
+        if m:
+            solve_vars.add(m.group(1))
+    if not solve_vars:
+        return findings
+    # only [4] is always wrong (out of range); [3] is the legitimate iteration count
+    idx_pat = re.compile(r'(\w+)\s*\[\s*4\s*\]')
+    for i, line in enumerate(lines, 1):
+        if line.strip().startswith('#'):
+            continue
+        for m in idx_pat.finditer(line):
+            if m.group(1) in solve_vars:
+                findings.append({
+                    'line': i, 'severity': 'HIGH', 'rule': 'solve-result-bad-index',
+                    'message': (
+                        'rad.Solve returns a 4-tuple [residual, _, _, iterations] '
+                        '(indices 0-3). Index [4] is out of range. Use [0] for the '
+                        'convergence residual and [3] for the iteration count.'
+                    ),
+                })
+    return findings
+
+
+def check_objarccur_missing_axis(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: ObjArcCur needs 8 args incl. man_auto + axis ('man','z')."""
+    findings = []
+    for i, line in enumerate(lines, 1):
+        s = line.strip()
+        if s.startswith('#') or 'ObjArcCur(' not in s:
+            continue
+        # only judge COMPLETE single-line calls (the call closes on this line);
+        # multi-line calls may carry 'man','z' on a later line -> skip them
+        tail = s[s.index('ObjArcCur(') + len('ObjArcCur('):]
+        if ')' not in tail:
+            continue
+        # a correct call carries a quoted axis ('x'/'y'/'z')
+        if not re.search(r"""['"][xyz]['"]""", s):
+            findings.append({
+                'line': i, 'severity': 'HIGH', 'rule': 'objarccur-missing-axis',
+                'message': (
+                    "ObjArcCur takes 8 args: (center, radii, phi, h, nseg, "
+                    "man_auto, axis, j). Old 6-arg calls omit man_auto + axis -> "
+                    "TypeError. Add e.g. 'man','z' before the current density."
+                ),
+            })
+    return findings
+
+
+def check_matsatisofrm_multiple_lists(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: MatSatIsoFrm takes ONE nested list, not 3 positional lists."""
+    findings = []
+    pat = re.compile(r'MatSatIsoFrm\(\s*\[[^\[\]]*\]\s*,\s*\[')
+    for i, line in enumerate(lines, 1):
+        if not line.strip().startswith('#') and pat.search(line):
+            findings.append({
+                'line': i, 'severity': 'HIGH', 'rule': 'matsatisofrm-multiple-lists',
+                'message': (
+                    'MatSatIsoFrm takes a SINGLE nested list '
+                    '[[ksi1,ms1],[ksi2,ms2],...], not 3 positional lists -> '
+                    'TypeError. Wrap them: MatSatIsoFrm([[..],[..],[..]]).'
+                ),
+            })
+    return findings
+
+
+def check_magnetization_looks_tesla(filepath: str, lines: List[str]) -> List[Dict]:
+    """LOW: magnetization vector looks like Br (Tesla); Radia uses A/m."""
+    findings = []
+    ctor = re.compile(r'Obj(?:CylMag|Hexahedron|Wedge|RecMag)\s*\(')
+    vec = re.compile(r'\[\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*\]')
+    for i, line in enumerate(lines, 1):
+        s = line.strip()
+        if s.startswith('#') or not ctor.search(s):
+            continue
+        for m in vec.finditer(s):
+            comps = [abs(float(m.group(k))) for k in (1, 2, 3)]
+            nonzero = [c for c in comps if c > 0]
+            # one nonzero component in the typical remanence band 0.8-1.6 T
+            if len(nonzero) == 1 and 0.8 <= nonzero[0] <= 1.6:
+                findings.append({
+                    'line': i, 'severity': 'LOW', 'rule': 'magnetization-looks-tesla',
+                    'message': (
+                        'Magnetization {} looks like Br in Tesla. Radia uses M in '
+                        'A/m: M = Br/mu_0 (Br=1.0 T -> 7.96e5 A/m). Verify (a '
+                        'Tesla value gives ~zero field).'.format(m.group(0))
+                    ),
+                })
+    return findings
+
+
+def check_cp932_stdout_rewrap(filepath: str, lines: List[str]) -> List[Dict]:
+    """LOW: codecs.getwriter(sys.stdout.buffer) breaks Jupyter / is unneeded."""
+    findings = []
+    for i, line in enumerate(lines, 1):
+        s = line.strip()
+        if s.startswith('#'):
+            continue
+        if 'codecs.getwriter' in s and re.search(r'sys\.std(?:out|err)\.buffer', s):
+            findings.append({
+                'line': i, 'severity': 'LOW', 'rule': 'cp932-stdout-rewrap',
+                'message': (
+                    'Re-wrapping sys.stdout via codecs.getwriter(...buffer) breaks '
+                    'in Jupyter (OutStream has no .buffer) and is an unneeded cp932 '
+                    'workaround. Remove it; keep output ASCII instead.'
+                ),
+            })
+    return findings
+
+
 # All rules in execution order
 ALL_RULES = [
+    # Radia API-drift / example-bitrot
+    check_solve_result_bad_index,
+    check_objarccur_missing_axis,
+    check_matsatisofrm_multiple_lists,
+    check_magnetization_looks_tesla,
+    check_cp932_stdout_rewrap,
     # NGSolve FEM rules
     check_hcurl_missing_nograds,
     check_ngsolve_precond_after_assemble,
