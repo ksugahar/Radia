@@ -479,6 +479,11 @@ PLAY_MODEL = r"""
 
 `rad.MatPlayHysteresis(K, eta, f_k_tables)` — B-input play model.
 
+SHOWCASE NOTEBOOK: `docs/hysteresis/hysteresis_validation.ipynb` — the committed
+validation gallery (BQM circular/ellipsoid/B-input, Play<->Energy agreement,
+Egger inverse, C++ kernel vs Play, coenergy feasibility). Corpus + npz fixture
+kept at `examples/hysteresis/`.
+
 ## Formulation (Bobbio et al. 1997 / Bertotti 1998 / Henrotte 2014)
 
 Decompose H(B) into K play operators in parallel:
