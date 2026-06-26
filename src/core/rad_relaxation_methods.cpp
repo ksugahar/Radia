@@ -2260,6 +2260,15 @@ static constexpr double RAD_MOMENT_HLU_RT_MAX = 1.0e3;
 static std::atomic<bool> g_moment_hlu_precond{false};
 void RadSetMomentHLUPrecond(bool on) { g_moment_hlu_precond.store(on); }
 bool RadGetMomentHLUPrecond() { return g_moment_hlu_precond.load(); }
+// Two-sided deflated block-Jacobi preconditioner (rad.SolverConfig(moment_deflation=True)).  A is NON-symmetric
+// so its right near-null (= the surface-charge loops, GetLoopBasis) and left near-null (= "co-loops" =
+// orthonorm(A@loops)) are DISTINCT spaces; deflating BOTH conditions the complement (cond ~chi -> ~20), so the
+// block-Jacobi smoother bounds the iters far below plain block-Jacobi on loop-heavy geometry.  Setup is O(N^3)
+// (the loop space is O(N)-dim, the coarse operator is dense) -> a medium-N (<=~15k) constant-factor speedup
+// over dense LU, NOT asymptotically scalable; opt-in, exclusive with the H-LU precond.
+static std::atomic<bool> g_moment_deflate{false};
+void RadSetMomentDeflate(bool on) { g_moment_deflate.store(on); }
+bool RadGetMomentDeflate() { return g_moment_deflate.load(); }
 extern "C" {
 	void* cHACApK_hlu_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc);
 	int   cHACApK_hlu_apply(void* root_void, void* control_void, const double* r, double* z, int nd);
@@ -2467,6 +2476,50 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		return s;
 	};
 
+	// --- Tier-A two-sided deflated block-Jacobi setup (opt-in, exclusive with the H-LU precond) ---
+	// W = orthonorm(loop basis) (right near-null); Yco = orthonorm(A@W) (left near-null = co-loops).  The coarse
+	// operator E = Yco^T A W = R (the R factor of A@W's QR, since Yco^T (A W) = R).  applyM's coarse correction
+	// zc = W R^-1 Yco^T r removes BOTH near-null spaces.  Build via LAPACK QR (dgeqrf/dorgqr) + nLoop H-matvecs;
+	// all O(N^3) total (loop space O(N)-dim).  No fallback: a QR failure drops to plain block-Jacobi (nLoop=0).
+	int nLoop = 0;
+	std::vector<double> defW, defYco, defR;   // defW,defYco: dof x nLoop col-major; defR: nLoop x nLoop col-major (upper)
+	if(g_moment_deflate.load() && !hluGuard.root)
+	{
+		std::vector<double> Lflat; int nL = 0;
+		IntrctPtr->BuildLoopBasis(Lflat, nL);   // Lflat: dof x nL ROW-MAJOR [d*nL + c]
+		if(nL > 0 && nL < dof)
+		{
+			nLoop = nL;
+			int mdof = dof, nl = nLoop, info = 0, lwork = -1;
+			defW.assign((size_t)dof * nLoop, 0.0);
+			for(int d = 0; d < dof; d++) for(int c = 0; c < nLoop; c++) defW[(size_t)c*dof + d] = Lflat[(size_t)d*nLoop + c];
+			std::vector<double> tau((size_t)nLoop), wq(1);
+			dgeqrf_(&mdof, &nl, defW.data(), &mdof, tau.data(), wq.data(), &lwork, &info);   // workspace query
+			lwork = (info == 0) ? (int)wq[0] : (4*nLoop); if(lwork < 1) lwork = 1;
+			std::vector<double> work((size_t)lwork);
+			dgeqrf_(&mdof, &nl, defW.data(), &mdof, tau.data(), work.data(), &lwork, &info);
+			if(info == 0) dorgqr_(&mdof, &nl, &nl, defW.data(), &mdof, tau.data(), work.data(), &lwork, &info);
+			// AW = A @ W  (nLoop H-matvecs)
+			defYco.assign((size_t)dof * nLoop, 0.0);
+			std::vector<double> col((size_t)dof), acol((size_t)dof);
+			for(int c = 0; info == 0 && c < nLoop; c++)
+			{
+				for(int d = 0; d < dof; d++) col[(size_t)d] = defW[(size_t)c*dof + d];
+				matvecA(col, acol);
+				for(int d = 0; d < dof; d++) defYco[(size_t)c*dof + d] = acol[(size_t)d];
+			}
+			// QR(AW): defR = R (= the coarse operator E = Yco^T A W), Yco = Q.  Extract R BEFORE dorgqr overwrites.
+			std::vector<double> tau2((size_t)nLoop);
+			lwork = -1; if(info == 0) dgeqrf_(&mdof, &nl, defYco.data(), &mdof, tau2.data(), wq.data(), &lwork, &info);
+			lwork = (info == 0) ? (int)wq[0] : (4*nLoop); if(lwork < 1) lwork = 1; work.assign((size_t)lwork, 0.0);
+			if(info == 0) dgeqrf_(&mdof, &nl, defYco.data(), &mdof, tau2.data(), work.data(), &lwork, &info);
+			defR.assign((size_t)nLoop * nLoop, 0.0);
+			for(int j = 0; info == 0 && j < nLoop; j++) for(int i = 0; i <= j; i++) defR[(size_t)j*nLoop + i] = defYco[(size_t)j*dof + i];
+			if(info == 0) dorgqr_(&mdof, &nl, &nl, defYco.data(), &mdof, tau2.data(), work.data(), &lwork, &info);
+			if(info != 0) { nLoop = 0; defW.clear(); defYco.clear(); defR.clear(); }   // QR failed -> plain block-Jacobi
+		}
+	}
+
 	void* hluRoot = hluGuard.root;
 	void* hluControl = precondMgr ? precondMgr->GetLcontrol() : nullptr;
 	auto applyM = [&](const std::vector<double>& r, std::vector<double>& z)
@@ -2475,6 +2528,18 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		{
 			if((int)z.size() != dof) z.resize((size_t)dof);
 			cHACApK_hlu_apply(hluRoot, hluControl, r.data(), z.data(), dof);
+		}
+		else if(nLoop > 0)   // two-sided deflated block-Jacobi: zc = W R^-1 Yco^T r; z = blockJacobi(r - A zc) + zc
+		{
+			if((int)z.size() != dof) z.resize((size_t)dof);
+			std::vector<double> ycor((size_t)nLoop, 0.0), zc((size_t)dof, 0.0), Azc((size_t)dof), tmp((size_t)dof);
+			cblas_dgemv(CblasColMajor, CblasTrans, dof, nLoop, 1.0, defYco.data(), dof, r.data(), 1, 0.0, ycor.data(), 1);
+			cblas_dtrsv(CblasColMajor, CblasUpper, CblasNoTrans, CblasNonUnit, nLoop, defR.data(), nLoop, ycor.data(), 1);
+			cblas_dgemv(CblasColMajor, CblasNoTrans, dof, nLoop, 1.0, defW.data(), dof, ycor.data(), 1, 0.0, zc.data(), 1);
+			matvecA(zc, Azc);
+			for(int i = 0; i < dof; i++) tmp[(size_t)i] = r[(size_t)i] - Azc[(size_t)i];
+			applyBlockJacobi(tmp, z);
+			for(int i = 0; i < dof; i++) z[(size_t)i] += zc[(size_t)i];
 		}
 		else
 		{
