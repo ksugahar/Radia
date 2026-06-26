@@ -777,6 +777,131 @@ PATTERNS: list[dict] = [
         "related": ["tests/known_flaky.md",
                     ".github/workflows/build-test.yml"],
     },
+    # =====================================================
+    # EXAMPLE BITROT / RADIA API DRIFT / NOTEBOOK PROMOTION
+    # (surfaced during the examples/ -> docs/ consolidation, 2026-06)
+    # =====================================================
+    {
+        "id": "radia-magnetization-tesla-not-apm",
+        "title": "Magnetization passed as Tesla, but Radia uses A/m "
+                 "(M = Br/mu_0) -> ~zero field, silent wrong result.",
+        "topics": ["radia", "units", "magnetization", "example", "bitrot"],
+        "severity": "high",
+        "first_seen": "2026-06-26",
+        "last_seen": "2026-06-26",
+        "what": "ObjCylMag/ObjHexahedron/ObjWedge given mag like [0,0,1] "
+                "('1 T') return |B| ~ 1e-4 mT (microtesla) instead of "
+                "hundreds of mT; or a magpylib cross-check disagrees 100%.",
+        "root_cause": "Radia magnetization is A/m, NOT Tesla. [0,0,1] = "
+                      "1 A/m ~ 0. A permanent magnet needs M = Br/mu_0 "
+                      "(Br=1.0 T -> 7.96e5; 1.05 T -> 8.36e5; 1.2 T -> "
+                      "954930 A/m). magpylib uses polarization J in Tesla, "
+                      "so M_radia = J/mu_0 for a cross-check to pass.",
+        "detection": "Sanity-check the probe |B| is in mT-T, not micro-T. "
+                     "Real sites: smco_array, simple_problems/compare_magpylib, "
+                     "background_fields, chamfered_pole_piece.",
+        "prevention": "Always M = Br/mu_0 in A/m. Never copy Br (Tesla) "
+                      "straight into a mag vector. See CLAUDE.md "
+                      "'Magnetization Units: A/m (NOT Tesla)'.",
+        "related": ["docs/smco_magnet_array/smco_magnet_array.ipynb",
+                    "packages/radia-mcp/src/radia_mcp/magnetic_materials/permanent_magnet_knowledge.py"],
+    },
+    {
+        "id": "rad-solve-return-4-tuple",
+        "title": "rad.Solve returns a 4-tuple [residual, _, _, iterations]; "
+                 "indexing [3]/[4] for max|dM|/max|dH| is wrong.",
+        "topics": ["radia", "solve", "api", "example", "bitrot"],
+        "severity": "medium",
+        "first_seen": "2026-06-26",
+        "last_seen": "2026-06-26",
+        "what": "Script crashes with IndexError on solve_result[4], or "
+                "reads a wrong convergence value from [3].",
+        "root_cause": "radia_pybind.cpp Solve returns make_tuple(D[0..3]) = "
+                      "[residual, _, _, iterations] (4 elements, indices "
+                      "0-3). Old scripts assumed [3]=max|dM|, [4]=max|dH|.",
+        "detection": "grep example scripts for solve_result[3]/[4]. Real "
+                     "site: background_fields/{quadrupole_analytical,"
+                     "sphere_in_quadrupole,permeability_comparison}.py.",
+        "prevention": "Use solve_result[0] (residual) for convergence and "
+                      "int(solve_result[3]) for iteration count.",
+        "related": ["src/lib/radia_pybind.cpp"],
+    },
+    {
+        "id": "radia-constructor-arity-drift",
+        "title": "Old example calls miss required Radia constructor args "
+                 "(ObjArcCur 8-arg, ObjHexahedron/Wedge mag, MatSatIsoFrm list).",
+        "topics": ["radia", "api", "arity", "example", "bitrot"],
+        "severity": "high",
+        "first_seen": "2026-06-26",
+        "last_seen": "2026-06-26",
+        "what": "TypeError: incompatible function arguments, or "
+                "'Failed to generate ...', when running an older example.",
+        "root_cause": "API signatures tightened: ObjArcCur needs 8 args "
+                      "(center, radii, phi, h, nseg, man_auto, axis, j) -- "
+                      "old 6-arg calls omit 'man','z'. ObjHexahedron/ObjWedge "
+                      "now REQUIRE a magnetization arg (and the meshed-disk "
+                      "core ring is a WEDGE, not a hex). MatSatIsoFrm takes a "
+                      "SINGLE nested list [[ksi,ms],...], not 3 positional "
+                      "lists.",
+        "detection": "Run the example; check rad.<Ctor>.__doc__ for the "
+                     "current signature. Sites: simple_problems/arc_current_*, "
+                     "smco_array, background_fields/*.",
+        "prevention": "Read the pybind __doc__ signature before porting an "
+                      "old script; ObjArcCur('man','z'); ObjWedge(verts,[0,0,0]); "
+                      "MatSatIsoFrm([[...],[...],[...]]).",
+        "related": ["src/lib/radia_pybind.cpp",
+                    "packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/radia.py"],
+    },
+    {
+        "id": "objmltextrtg-nonplanar-faces",
+        "title": "ObjMltExtRtg fails when stacked rectangles change in BOTH "
+                 "in-plane dims (non-planar side faces).",
+        "topics": ["radia", "geometry", "objmltextrtg", "example", "bitrot"],
+        "severity": "medium",
+        "first_seen": "2026-06-26",
+        "last_seen": "2026-06-26",
+        "what": "'Failed to generate convex polyhedron(s)' or 'vertex points "
+                "... do not belong to one plane' from ObjMltExtRtg.",
+        "root_cause": "ObjMltExtRtg connects consecutive axis-aligned "
+                      "rectangles with quad side faces that must be PLANAR. "
+                      "Chamfering both width AND thickness (or offset centers) "
+                      "makes a doubly-ruled non-planar quad.",
+        "detection": "Real site: simple_problems/chamfered_pole_piece.py "
+                     "(dropped). See memory reference_objmltextrtg_planar_faces.",
+        "prevention": "Taper only ONE in-plane dim per slice transition (or "
+                      "keep centers aligned + similar rectangles); for a "
+                      "both-dim chamfer use ObjPolyhdr with explicit planar "
+                      "faces.",
+        "related": ["packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/radia.py"],
+    },
+    {
+        "id": "example-to-notebook-promotion-breakers",
+        "title": "Embedding an example script in a docs notebook breaks on "
+                 "__file__, cp932 stdout rewrap, or lab-private deps.",
+        "topics": ["promotion", "notebook", "example", "consolidation", "cp932"],
+        "severity": "medium",
+        "first_seen": "2026-06-26",
+        "last_seen": "2026-06-27",
+        "what": "nbconvert --execute errors: NameError on __file__; "
+                "AttributeError 'OutStream' has no attribute 'buffer'; "
+                "ModuleNotFoundError (mcp_server_document / magpylib / a "
+                "deleted sibling).",
+        "root_cause": "Notebooks have no __file__ (sys.path / output_dir / "
+                      "HERE built from it break). The cp932 console rewrap "
+                      "`sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)` "
+                      "fails (Jupyter OutStream has no .buffer). LAB-private "
+                      "styling (mcp_server_document) + optional libs aren't in "
+                      "a clean env.",
+        "prevention": "When folding a script into docs/<topic>/*.ipynb: "
+                      "repoint __file__-derived paths to os.getcwd() (or the "
+                      "kept corpus dir for sibling imports); strip the "
+                      "codecs/stdout rewrap; strip Japanese (Repository "
+                      "Language); for lab-private-styled plots, DISPLAY the "
+                      "committed figures instead of re-running. Verify with "
+                      "`jupyter nbconvert --execute` + an error-cell + "
+                      "non-ASCII scan.",
+        "related": ["docs/examples_consolidation/PLAN_2026-06-26.md"],
+    },
 ]
 
 
