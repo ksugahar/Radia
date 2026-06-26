@@ -10,8 +10,8 @@
       "maxh_shim": 0.1,
       "order": 2,
       "n_dof": 643,
-      "field_at_center": 0.04036792084766199,
-      "t_solve_sec": 0.01595783233642578
+      "field_at_center": 0.040367920847662955,
+      "t_solve_sec": 0.014960527420043945
     },
     {
       "label": "uniform",
@@ -19,8 +19,8 @@
       "maxh_shim": 0.05,
       "order": 2,
       "n_dof": 2324,
-      "field_at_center": 0.04094737471337469,
-      "t_solve_sec": 0.041887760162353516
+      "field_at_center": 0.04094737471337438,
+      "t_solve_sec": 0.232377290725708
     },
     {
       "label": "uniform",
@@ -28,8 +28,8 @@
       "maxh_shim": 0.025,
       "order": 2,
       "n_dof": 9156,
-      "field_at_center": 0.040967742994323625,
-      "t_solve_sec": 0.16758036613464355
+      "field_at_center": 0.04096774299432297,
+      "t_solve_sec": 0.35305333137512207
     }
   ]
 }
