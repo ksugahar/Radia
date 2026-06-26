@@ -2230,10 +2230,27 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 #endif
 }
 
+// Multipole-moment method-2 H-LU preconditioner toggle (rad.SolverConfig(hacapk_hlu_precond=True)).
+// When on, SolveMomentHACApK uses a factored full-A(chi) moment H-matrix as the BiCGSTAB preconditioner
+// instead of element block-Jacobi: accum_cap=0 keeps the non-symmetric Schur-update factors accurate (the
+// default cap=64 deferred path gives ~5.38 round-trip error), so the linear iters collapse to single/low-
+// double digits with the identical field.  Free functions forward-declared in radia_pybind.cpp; the
+// factor-once / apply-many / free H-LU bridge lives in src/ext/HACApK/cHACApK_harith.c.
+static std::atomic<bool> g_moment_hlu_precond{false};
+void RadSetMomentHLUPrecond(bool on) { g_moment_hlu_precond.store(on); }
+bool RadGetMomentHLUPrecond() { return g_moment_hlu_precond.load(); }
+extern "C" {
+	void* cHACApK_hlu_factor_leafmtxp(void* leafmtxp_void, void* control_void, int nffc);
+	int   cHACApK_hlu_apply(void* root_void, void* control_void, const double* r, double* z, int nd);
+	void  cHACApK_hlu_free_factors(void* root_void);
+	void  cHACApK_hlu_set_accum_cap(int c);
+	int   cHACApK_hlu_get_accum_cap(void);
+}
+
 #ifdef RADIA_USE_HACAPK
 //-------------------------------------------------------------------------
 // SolveMomentHACApK: the SCALABLE-storage moment linear step (Phase 2 Increments 3-4,
-// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  Solves A_raw sigma = b_raw with the chi-free
+// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb).  Solves A_raw sigma = b_raw with the chi-free
 // moment geometry kernel K stored as a reusable HACApK H-matrix plus the exact O(N) local block L:
 // A(chi)x = Lx + diag_row(chi) Kx.  This mirrors the legacy 6-DoF nonlinear optimization: the H-matrix
 // is built once per nonlinear solve and Picard iterations update only chi, RHS, and the block-Jacobi blocks.
@@ -2358,6 +2375,31 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		        bj_bad_elem.load(), bj_bad_info.load());
 		return finish(-11);
 	}
+
+	// Optional H-LU preconditioner M_H = full A(chi) moment H-matrix, factored ONCE (separate instance from the
+	// matvec kernelMgr).  accum_cap=0 keeps the non-symmetric Schur-update factors accurate.  No fallback: a
+	// factor failure fails loud (return -12), per "No Fallbacks -- Fail Fast".  hluGuard frees the tree on any
+	// return path; declared AFTER precondMgr so it destructs FIRST (tree built from precondMgr's leafmtxp).
+	std::shared_ptr<RadHACApKMomentSystem> precondMgr;
+	struct HLUGuard { void* root = nullptr; ~HLUGuard() { if(root) cHACApK_hlu_free_factors(root); } } hluGuard;
+	if(g_moment_hlu_precond.load())
+	{
+		precondMgr = std::make_shared<RadHACApKMomentSystem>(IntrctPtr, chiPerHex);   // full A(chi)
+		RadHACApKParams pp; pp.aca_eps = aca_eps; pp.leaf_size = leaf; pp.eta = eta; pp.print_level = 0;
+		if(precondMgr->BuildHMatrix(pp))
+		{
+			const int oldCap = cHACApK_hlu_get_accum_cap();
+			cHACApK_hlu_set_accum_cap(0);   // immediate recompression -> accurate factor on non-symmetric A(chi)
+			hluGuard.root = cHACApK_hlu_factor_leafmtxp(precondMgr->GetLeafmtxp(), precondMgr->GetLcontrol(), 6);
+			cHACApK_hlu_set_accum_cap(oldCap);
+		}
+		if(!hluGuard.root)
+		{
+			fprintf(stderr, "Radia::Solve> moment H-LU preconditioner factor failed; not falling back to block-Jacobi.\n");
+			return finish(-12);
+		}
+	}
+
 	auto applyBlockJacobi = [&](const std::vector<double>& r, std::vector<double>& z)
 	{
 		if((int)z.size() != dof) z.resize((size_t)dof);
@@ -2405,9 +2447,19 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		return s;
 	};
 
+	void* hluRoot = hluGuard.root;
+	void* hluControl = precondMgr ? precondMgr->GetLcontrol() : nullptr;
 	auto applyM = [&](const std::vector<double>& r, std::vector<double>& z)
 	{
-		applyBlockJacobi(r, z);
+		if(hluRoot)   // H-LU preconditioner: z = M_H^-1 r (permute + forward/back solve + un-permute)
+		{
+			if((int)z.size() != dof) z.resize((size_t)dof);
+			cHACApK_hlu_apply(hluRoot, hluControl, r.data(), z.data(), dof);
+		}
+		else
+		{
+			applyBlockJacobi(r, z);
+		}
 	};
 
 	// preconditioned BiCGSTAB on the H-matvec.  Use the incoming sigma as a Picard warm start; legacy 6-DoF
