@@ -29,6 +29,15 @@ custom `BilinearFormIntegrator`s).
 
 ## Status
 
+### Result-bearing evidence
+
+The executed proof artifact is
+[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](AXIFEM_ELEMENT_EVIDENCE.ipynb), backed by
+[`axifem_element_evidence.json`](axifem_element_evidence.json).  It records
+the current `radia` runtime version, execution date, pytest output, and an
+evidence matrix for all six shipping paths: P1, Q1, P2, Q2, P2 curved, and
+Q2 curved.
+
 ### Implementation support matrix
 
 | Mesh element | API order | Geometry support | Local DOFs | Status |
@@ -37,14 +46,16 @@ custom `BilinearFormIntegrator`s).
 | Triangle P2 | `order=2` | straight or `mesh.Curve(2)` curved triangle | 3 vertex + 3 edge | shipping; uses NGSolve's element transformation to read curved mid-edge coordinates |
 | Quad Q1 | `order=1` | straight axis-aligned rectangle in `(r, z)` | 4 vertex | shipping; closed-form matrices |
 | Quad Q2 | `order=2` | straight axis-aligned rectangle in `(r, z)` | 4 vertex + 4 edge + 1 face | shipping; closed-form matrices with the `s`-midpoint convention |
-| Quad Q2 curved | n/a | true 9-node biquadratic curved quad | 9 | Python prototype only; not wired into the production C++ `AxiHenrotteFESpace` |
+| Quad Q2 curved | `order=2, curvedquad=True` | true 9-node biquadratic curved quad | 9 | shipping opt-in; uses the curved `ElementTransformation` and quadrature BFI |
 
 `H1Henrotte(mesh, order=2)` dispatches by element type: triangles get the
 P2 curved-aware path, while quads get the straight axis-aligned Q2 path.
-Calling `mesh.Curve(2)` on a quadrilateral mesh does **not** enable a curved
-Q2 quad element; the shipped Q2 quad still builds its element from the four
-corner coordinates.  Use P2 triangles for curved OCC/Kelvin boundaries, or
-structured straight quads for disks, cylinders, and rectangular workpieces.
+Calling `mesh.Curve(2)` on a quadrilateral mesh keeps the straight
+axis-aligned Q2 path by default for backward-compatible disk/cylinder
+benchmarks.  Pass `curvedquad=True` when the quad geometry is genuinely
+curved or skewed.  Use P2 triangles for OCC/Kelvin curved boundaries when
+triangulation is simpler, structured straight Q2 quads for rectangular
+workpieces, and Q2 curved quads for annular-sector or mapped-quad studies.
 
 ### Benchmark status
 
@@ -279,16 +290,19 @@ with `K_phi` provided in *closed form* by the Mathematica derivation
 
 ### Q2 curved quad status
 
-The production Q2 quad is intentionally the straight, axis-aligned closed-form
-element.  It does not consume curved quad edge/face nodes from `mesh.Curve(2)`;
-`AxiHenrotteFESpace::GetFE` reads the four corner coordinates and constructs
-`AxiHenrotteFE_Q2_AxisAligned`.
+The default production Q2 quad remains the straight, axis-aligned closed-form
+element.  `AxiHenrotteFESpace::GetFE` reads the four corner coordinates and
+constructs `AxiHenrotteFE_Q2_AxisAligned` unless the caller opts into the
+curved path.
 
-A true 9-node curved Q2 quad element exists only as a Python prototype in
-`examples/maglev/research_cln/axifem/axifem_quad_q2_curved.py` and its
-element-level tests.  Porting that prototype would require a different BFI
-path with quadrature over the biquadratic map; it is not the shipped C++
-implementation.
+The true 9-node curved Q2 quad is now also shipped as
+`AxiHenrotteFE_Q2_Curved`, selected by `H1Henrotte(mesh, order=2,
+curvedquad=True)`.  It samples 9 curved node positions from the
+`mesh.Curve(2)` element transformation and uses a quadrature BFI over the
+biquadratic map.  Regression coverage lives in
+`tests/axifem/test_q2_curved.py`: the curved path reproduces the
+axis-aligned closed form on straight quads and converges on skewed annular
+quads.
 
 ### Convention: Hessian-of-W
 
@@ -333,12 +347,22 @@ tests/axifem/                            # public test surface
   conftest.py                             # adds _reference_python/ to sys.path
   test_element_matrices.py                # P1 triangle symmetry + axis cases
   test_python_reference_consistency.py    # Q1 quad C++ vs Python ref + P2 curved smoke
+  test_q1_vdof.py                         # Q1 V-DOF uniform-field gate
+  test_p2_axis_eddy.py                    # P2 triangle full-rank eddy gate
+  test_p2_curved_magsta.py                # P2 curved geometry + total-flux gate
+  test_q2_curved.py                       # Q2 curved straight equivalence + skewed convergence
   test_taskmanager_race.py                # 1-vs-4 thread race-free assembly gate
+  test_docs_notebook_evidence.py          # result-bearing docs artifact guard
   _reference_python/                      # pure-Python prototype (test fixture)
     axifem_core.py                       #   P1 triangle Henrotte ref
     axifem_quad.py                       #   Q1 axis-aligned quad ref
     axifem_quad_q2.py                    #   Q2 quad with Gauss 8x8 ref
     sigma_mass.py                         #   σ-mass operator ref
+
+docs/axifem/
+  README.ipynb                            # notebook index
+  AXIFEM_ELEMENT_EVIDENCE.ipynb           # executed P1/Q1/P2/Q2/P2-curved/Q2-curved proof
+  axifem_element_evidence.json            # version-stamped result JSON consumed by notebook
 
 examples/axifem/                         # research-tier examples
   disk_convergence/                       # Cu disk τ_1 vs BEM-Foster ref

@@ -2,11 +2,17 @@
 pure-Python reference implementation in `_reference_python/`.
 
 The pure-Python prototype (axifem_core.py: P1 triangle, axifem_quad.py:
-Q1 quad, axifem_quad_q2.py: Q2 quad) is the Henrotte/Meeker formulation
-ported directly from FEMM's prob3big.cpp StaticAxisymmetric().  The C++
-side under src/ext/axifem/ ships the same formulation as an
+Q1 sigma mass, axifem_quad_q2.py: Q2 quad) is the Henrotte/Meeker
+formulation ported directly from FEMM's prob3big.cpp StaticAxisymmetric().
+The C++ side under src/ext/axifem/ ships the same formulation as an
 NGSolve FESpace (AxiHenrotteFESpace) with assembly bilinear-form
 integrators (AxiHenrotteStiffnessBFI / AxiHenrotteSigmaMassBFI).
+
+Q1 stiffness is the one deliberate exception to the historical prototype:
+production C++ uses the V-DOF stiffness operator that reproduces a uniform
+axial B field at order 1.  The old A=psi closed form is kept as background
+reference, but this test compares stiffness against an explicit Python
+V-DOF quadrature reference with the same nodal convention.
 
 For a single-element mesh, the global stiffness/mass should equal the
 element matrix from the pure-Python prototype (modulo DOF ordering).
@@ -25,6 +31,56 @@ from netgen.occ import OCCGeometry, MoveTo
 from ngsolve import (
     BilinearForm, CoefficientFunction, Mesh, TaskManager,
 )
+
+_GL4_X = np.array([
+    -0.8611363115940526, -0.3399810435848563,
+     0.3399810435848563,  0.8611363115940526,
+])
+_GL4_W = np.array([
+    0.3478548451374538, 0.6521451548625461,
+    0.6521451548625461, 0.3478548451374538,
+])
+
+
+def _q1_inverse_vandermonde(ra, rb, za, zb):
+    sa, sb = ra * ra, rb * rb
+    V = np.array([
+        [1.0, sa, za, sa * za],
+        [1.0, sb, za, sb * za],
+        [1.0, sb, zb, sb * zb],
+        [1.0, sa, zb, sa * zb],
+    ])
+    return np.linalg.inv(V)
+
+
+def _python_q1_quad_vdof_stiffness(ra, rb, za, zb, mu):
+    """Reference for production Q1StiffnessVDof.
+
+    K_ij = (2 pi / mu) r_i r_j int grad(psi_i).grad(psi_j) / r dr dz,
+    where psi is bilinear in (s=r^2, z).  This is intentionally distinct
+    from the older A=psi energy form because it preserves a uniform axial
+    B field at order 1.
+    """
+    inv_V = _q1_inverse_vandermonde(ra, rb, za, zb)
+    r_nodes = np.array([ra, rb, rb, ra], dtype=float)
+    Ke = np.zeros((4, 4))
+    for x, wx in zip(_GL4_X, _GL4_W):
+        rq = 0.5 * (ra + rb) + 0.5 * (rb - ra) * x
+        if rq <= 1.0e-14:
+            continue
+        for y, wy in zip(_GL4_X, _GL4_W):
+            zq = 0.5 * (za + zb) + 0.5 * (zb - za) * y
+            w = wx * wy * 0.25 * (rb - ra) * (zb - za)
+            s = rq * rq
+            dpr = np.zeros(4)
+            dpz = np.zeros(4)
+            for i in range(4):
+                b, c, d = inv_V[1, i], inv_V[2, i], inv_V[3, i]
+                dpr[i] = 2.0 * rq * (b + d * zq)
+                dpz[i] = c + d * s
+            Ke += (w / rq) * (np.outer(dpr, dpr) + np.outer(dpz, dpz))
+    K = (2.0 * pi / mu) * np.outer(r_nodes, r_nodes) * Ke
+    return 0.5 * (K + K.T)
 
 
 def _cpp_q1_quad_matrices(ra, rb, za, zb, mu, sigma):
@@ -64,13 +120,11 @@ def _cpp_q1_quad_matrices(ra, rb, za, zb, mu, sigma):
 def _python_q1_quad_matrices(ra, rb, za, zb, mu, sigma):
     """Assemble Python ref K, M for the same Q1 quad.
 
-    `element_matrices_quad` returns `(M_e, Mr, Mz)` where M_e is the
-    full stiffness (= Mr + Mz, isotropic mu).  We compare against
-    the C++ Stiffness BFI which assembles the same isotropic-mu sum.
+    Stiffness uses the V-DOF reference above, matching production C++.
+    Sigma mass reuses axifem_quad.py's closed-form expression.
     """
-    from axifem_quad import element_matrices_quad, element_sigma_mass_quad
-    M_e, Mr, Mz = element_matrices_quad(ra, rb, za, zb, mu, mu)
-    K = M_e
+    from axifem_quad import element_sigma_mass_quad
+    K = _python_q1_quad_vdof_stiffness(ra, rb, za, zb, mu)
     M = element_sigma_mass_quad(ra, rb, za, zb, sigma)
     return K, M
 
@@ -90,7 +144,7 @@ def _python_q1_quad_matrices(ra, rb, za, zb, mu, sigma):
     ],
 )
 def test_q1_quad_cpp_vs_python(ra, rb, za, zb, label):
-    """C++ AxiHenrotteFE_Q1_AxisAligned matches axifem_quad.py prototype
+    """C++ AxiHenrotteFE_Q1_AxisAligned matches the Python V-DOF reference
     for a single quad, in both stiffness (K) and sigma-mass (M).
 
     Compared via permutation-invariant spectrum (eigvals) — the local
@@ -147,8 +201,8 @@ def test_p2_triangle_curved_mesh_assembles():
     """C++ order=2 triangle path assembles on a curved OCC mesh.
 
     This pins the public `radia.axifem` import surface and the production
-    P2-triangle/mesh.Curve(2) path.  Q2 curved quads are not exercised here:
-    the shipped Q2 quad is the straight, axis-aligned closed-form element.
+    P2-triangle/mesh.Curve(2) path.  Q2 curved quads are exercised separately
+    in test_q2_curved.py.
     """
     axifem = pytest.importorskip("radia.axifem")
     from netgen.geom2d import SplineGeometry
