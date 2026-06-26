@@ -241,6 +241,11 @@ coil.write_step("beam_steering.step")
 
 The `tilt` parameter rotates the cross-section around the current direction, enabling 3D coil paths that twist out of plane.
 
+This 8-segment coil is built, assembled, and field-mapped end-to-end in the
+runnable showcase notebook
+[`docs/complex_coil_geometry/complex_coil.ipynb`](../complex_coil_geometry/complex_coil.ipynb)
+(reproducible source kept at `examples/complex_coil_geometry/`).
+
 ## Architecture
 
 ```
