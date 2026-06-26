@@ -1,5 +1,7 @@
 """HDiv-type VIM (Volume Integral Method) demag operator -- knowledge module.
 
+SHOWCASE NOTEBOOK: docs/hdiv_vim/hdiv_curved_showcase.ipynb -- curved-geometry accuracy win: stray-field ~30-40x, nonlinear ~23x, beats shipped solver.
+
 The HDiv-type VIM is the lab's FEEC (H(div) RT) alternative/complement to the canonical multipole-moment MMM MSC
 kernel: a SYMMETRIC demag operator N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving
 mu_r-INDEPENDENT convergence with no hand-crafted loop-star.  Validated on: linear demag
