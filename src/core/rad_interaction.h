@@ -550,7 +550,7 @@ public:
 	// O(N) geometry/sample cache for 5/6-DOF moment elements in CollectMomentElems order.
 	void PrecomputeMomentAnyGeometry() const;
 	// On-demand UN-normalized moment system entry A_raw[rowGlobal][colDOF] (the H-matrix entry; see
-	// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).  rowGlobal = 6*hpos + t over the valid 6-face hexes
+	// docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb).  rowGlobal = 6*hpos + t over the valid 6-face hexes
 	// (t: 0,1,2 dipole; 3 monopole; 4,5 diagonal-quadrupole); colDOF = global face DOF.  Computed ONLY from
 	// the row element's local geometry + the on-demand centroid field/grad from face colDOF -- no full-system
 	// build, no row normalization (the row 2-norm is a diagonal scaling that leaves the direct solve invariant).

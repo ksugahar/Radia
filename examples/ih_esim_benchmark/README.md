@@ -287,4 +287,4 @@ been updated to the corrected `-38.5 %` value.
 See also:
 
 - [`docs/esim/MATHEMATICAL_ANALYSIS.md`](../../docs/esim/MATHEMATICAL_ANALYSIS.md) — implementation audit, math, roadmap.
-- [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md`](../../docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md) — wide-band extension (DC-to-resonance).
+- [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb`](../../docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb) — wide-band extension (DC-to-resonance).

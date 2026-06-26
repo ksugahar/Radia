@@ -107,7 +107,7 @@ bool NetgenCurver::build(const MeshData &md, int order)
 
   // Dump detailed reject CSV only when RADIA_NETGEN_REJECT_DUMP env var is
   // set (to avoid noisy writes in production builds). Value is used as the
-  // output path. Typical debug usage: RADIA_NETGEN_REJECT_DUMP=C:\tmp\netgen_reject_log.csv
+  // output path. Typical debug usage: RADIA_NETGEN_REJECT_DUMP=C:\temp\netgen_reject_log.csv
   if (!project_reject_log_entries_.empty()) {
     const char * dump_path = std::getenv("RADIA_NETGEN_REJECT_DUMP");
     if (dump_path && *dump_path) {

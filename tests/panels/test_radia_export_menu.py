@@ -459,10 +459,10 @@ class TestSettingsRoundTrip(unittest.TestCase):
 
     def test_save_then_load(self):
         rem._save_settings({"netgen_vol": {"order": 4,
-                                            "dir": "C:/tmp"}})
+                                            "dir": "C:/temp"}})
         got = rem._load_settings()
         self.assertEqual(got["netgen_vol"]["order"], 4)
-        self.assertEqual(got["netgen_vol"]["dir"], "C:/tmp")
+        self.assertEqual(got["netgen_vol"]["dir"], "C:/temp")
 
     def test_load_corrupt_returns_empty(self):
         with open(os.path.join(self._tmp, "export_settings.json"),

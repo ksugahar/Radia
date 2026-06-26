@@ -334,7 +334,7 @@ private:
 
 //-------------------------------------------------------------------------
 // RadHACApKMomentSystem: the parameter-free multipole-moment MMM system A_raw as a HACApK
-// H-matrix (Phase 2 of the EIEM2 full-deletion track; docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md).
+// H-matrix (Phase 2 of the EIEM2 full-deletion track; docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb).
 //-------------------------------------------------------------------------
 
 /* The moment system A_raw = L(block-diag local moment) - chi*C(centroid field/grad coupling).
