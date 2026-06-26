@@ -1,0 +1,52 @@
+{
+  "phase": 2,
+  "description": "Nitsche-mortar 2D Poisson, independent H1 per side",
+  "method": "Symmetric Interior Penalty Galerkin variant of Nitsche",
+  "exact_solution": "u = sin(pi x) sin(pi y) / (2 pi^2)",
+  "results": [
+    {
+      "maxh": 0.2,
+      "order": 2,
+      "gamma_factor": 10.0,
+      "n_dof": 175,
+      "l2_err_left": 5.568149442828619e-05,
+      "l2_err_right": 7.802447160442787e-05,
+      "l2_err_total": 9.585534409159167e-05,
+      "interface_jump": 1.7335081498808846e-06,
+      "t_solve_sec": 2.9088540077209473
+    },
+    {
+      "maxh": 0.1,
+      "order": 2,
+      "gamma_factor": 10.0,
+      "n_dof": 637,
+      "l2_err_left": 7.1694945811556485e-06,
+      "l2_err_right": 6.731875690452037e-06,
+      "l2_err_total": 9.834622659813608e-06,
+      "interface_jump": 7.191585709948208e-07,
+      "t_solve_sec": 0.1186823844909668
+    },
+    {
+      "maxh": 0.05,
+      "order": 2,
+      "gamma_factor": 10.0,
+      "n_dof": 2457,
+      "l2_err_left": 7.325694878840017e-07,
+      "l2_err_right": 8.054227633540233e-07,
+      "l2_err_total": 1.0887441767042704e-06,
+      "interface_jump": 7.884216329648688e-08,
+      "t_solve_sec": 0.8257856369018555
+    },
+    {
+      "maxh": 0.025,
+      "order": 2,
+      "gamma_factor": 10.0,
+      "n_dof": 9612,
+      "l2_err_left": 9.176426329897758e-08,
+      "l2_err_right": 8.980535456806719e-08,
+      "l2_err_total": 1.2839657989175704e-07,
+      "interface_jump": 7.620054869459794e-09,
+      "t_solve_sec": 0.41639137268066406
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "phase": 3,
+  "description": "2D TM Maxwell (A_z), Nitsche coil-air interface coupling",
+  "method": "Symmetric Interior Penalty Galerkin (Nitsche-mortar)",
+  "physical_quantities": {
+    "primary_var": "A_z (out-of-plane vector potential)",
+    "weak_form": "int nu grad(A) . grad(v) dx + int j*omega*sigma*A*v dx",
+    "interface": "Nitsche penalty on (A_coil - A_air)"
+  },
+  "exact_solution": "A_z = sin(pi x) sin(pi y) / (2 pi^2)",
+  "results": [
+    {
+      "maxh": 0.15,
+      "order": 2,
+      "n_dof": 291,
+      "l2_err_coil": 1.4332927947705146e-05,
+      "l2_err_air": 3.286203638092654e-05,
+      "l2_err_total": 3.5851726020589953e-05,
+      "interface_jump": 3.698640463447405e-05,
+      "t_solve_sec": 0.047872066497802734
+    },
+    {
+      "maxh": 0.075,
+      "order": 2,
+      "n_dof": 1015,
+      "l2_err_coil": 7.0194070457391185e-06,
+      "l2_err_air": 4.281680973298522e-06,
+      "l2_err_total": 8.222217902176915e-06,
+      "interface_jump": 2.2181550077053538e-05,
+      "t_solve_sec": 0.024933338165283203
+    },
+    {
+      "maxh": 0.0375,
+      "order": 2,
+      "n_dof": 4238,
+      "l2_err_coil": 3.198002706814351e-06,
+      "l2_err_air": 4.4777608090893684e-07,
+      "l2_err_total": 3.2291987754590273e-06,
+      "interface_jump": 1.0082192091452866e-05,
+      "t_solve_sec": 0.14162039756774902
+    },
+    {
+      "maxh": 0.01875,
+      "order": 2,
+      "n_dof": 16374,
+      "l2_err_coil": 1.6779939191355218e-06,
+      "l2_err_air": 6.357935169720447e-08,
+      "l2_err_total": 1.6791980010165642e-06,
+      "interface_jump": 5.281149680775637e-06,
+      "t_solve_sec": 0.39095115661621094
+    }
+  ]
+}
