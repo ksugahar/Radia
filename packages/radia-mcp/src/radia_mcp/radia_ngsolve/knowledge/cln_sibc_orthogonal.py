@@ -8,7 +8,11 @@ Warburg-Schur code was hard-deleted from the repo on 2026-06-12; see
 history.  This knowledge module is kept for context but its
 "Warburg-block closure" approach is deprecated.  New work should
 reference `examples/mixed_galerkin/` and use the s-dependent HOIBC
-envelope, not the rational K √s/(s+d) Warburg block.
+envelope, not the rational K √s/(s+d) Warburg block.  A runnable,
+VERIFIED results showcase (cylinder Senior tower 0.04% -> 1e-5%; sphere
+gamma_1 0.11% -> 0.001%, 102x) is at
+`docs/mixed_galerkin/mixed_galerkin_results.ipynb` (it imports the kept
+corpus's `_references/`).
 
 Knowledge module for the new CLN theory established in IGTE 2026 work
 (Sugahara session 2026-05-16): N stages of Cauer ladder + SIBC analytical
