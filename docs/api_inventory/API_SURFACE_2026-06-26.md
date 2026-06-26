@@ -6,6 +6,33 @@ Decision rule: *"Does netgen/ngsolve (or MKL/OCC/GMSH/Cubit) already provide thi
 This is a READ-ONLY inventory. No files were edited. Counts are per API FAMILY, not per function.
 Generated 2026-06-26 by the `api-inventory` skill (`.agents/skills/api-inventory/inventory_workflow.js`).
 
+## Update 2026-06-26: caller verification + Phase 0 executed
+
+Caller analysis (grep across src / examples / tests) was run before any deletion
+-- the inventory is advisory; callers decide. Corrections + actions:
+
+- **`Trf*` (TrfTrsl/TrfRot/TrfInv/TrfCmbL/TrfOrnt) -> RECLASSIFIED to method-keep,
+  NOT plumbing-delete.** `TrfOrnt(obj, trf)` adds a SYMMETRY COPY that contributes
+  to the field (not mere CAD placement), and the family is covered by
+  `tests/test_transformations.py` + `test_group_operations.py` (23 tests pass).
+  OCC/.vol does not replace field-contributing symmetry replication. The original
+  "delete Trf*" row below is SUPERSEDED -- keep them. (`TrfMlt` was already removed
+  earlier in favor of IMA symmetry.)
+- **`create_hex_mesh_grid` -> REMOVED.** Dead CplMag-era helper (CplMag itself is
+  removed), zero callers. (`netgen_mesh_import.py`)
+- **`MatMagFixed` / `MatMagLinear` / `MatMagCurve` -> REMOVED** (pybind surface;
+  rebuilt + verified). Unused skeleton trio (all behaved as fixed M); use `MatPM`
+  / direct `ObjHexahedron(..., M)`. The radentry C-API `RadMatMag*` is left in
+  place. (`src/lib/radia_pybind.cpp`)
+- **`create_sphere_mesh` / `create_box_mesh` (dielectric_solver) -> DEFERRED.**
+  Real caller `examples/peec_integration/applications/demo_dielectric.py`; migrate
+  to `ngsolve.occ` before deletion.
+- **`esim_vtk_export` -> DEFERRED.** Real caller `tests/test_esim_integration.py`;
+  migrate the test off `ESIMVTKOutput` (to NGSolve VTKOutput) before deletion.
+
+The body tables below are the original synthesis; this section is the
+authoritative delta. Re-run the `api-inventory` skill to refresh.
+
 ## Executive summary
 
 The radia surface is overwhelmingly **method-keep**: it exists to provide what NGSolve cannot -- analytic open-boundary field (rad.Fld), MMM/MSC + yano-MSC, HDiv-VIM (the sole VIM), axifem Henrotte basis, DtN/FEM-Kelvin open boundary, PEEC, BEM, sparsesolv preconditioners, CLN/PRIMA MOR, the analytical_formulas reference layer, stream-function coil design, and the maglev/ECB application. Mass deletion is the wrong frame.
