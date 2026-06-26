@@ -294,6 +294,9 @@ careful remeshing.
 - ``ngsolve_usage("dq_torque")`` / ``ngsolve_usage("mtpa")``: machine torque maps.
 - ``ngsolve_usage("electrostatic_force")``: MEMS electric force.
 - ``force_validation("cross_validation")``: stored regression-reference cases.
+- SHOWCASE NOTEBOOK ``docs/force_validation/force_validation.ipynb``: the
+  coenergy/torque, Maxwell-contour, two-wire Lorentz, torque-waveform, and
+  virtual-work force identities, executed and rendered.
 """
 
 # --------------------------------------------------------------------------
