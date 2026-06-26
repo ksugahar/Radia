@@ -1,4 +1,6 @@
 r"""Universal Relaxation Network (URN) -- causal/passive rational fitting of a
+
+SHOWCASE NOTEBOOK: docs/universal_relaxation_network/urn_showcase.ipynb -- 4 verified paper figures (URN-vs-VF ~22.8%, NASA/TDK fits, attention ablation).
 frequency response, with direct time-domain (relaxation-network / SPICE / ADE)
 synthesis.
 
