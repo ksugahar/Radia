@@ -198,6 +198,85 @@ on its own. Re-ask: "is X good for the repository?" If yes, do it for that
 reason. If the only argument for X is the paper, deprioritize it in favor of
 work that genuinely improves the code.
 
+### No Development Cruft in SOURCE — Distill the Lesson to memory/ (2026-06-26)
+
+**POLICY**: Development-in-progress iterations MUST NOT accumulate in the
+tracked SOURCE tree. The SOURCE keeps only the **final / canonical** version of
+a given piece of code; superseded snapshots, abandoned formulations, and debug
+stepping-stones are removed once they are superseded. The **lesson** (so the
+same rut is not re-walked) is distilled into the memory system — a
+`memory/<topic>.md` file plus a one-line `MEMORY.md` index entry — NOT left as
+dead code. This is the operational reading of "Repository First, Not Papers"
+point 3 ("a negative or partial result is a real result — keep it in the repo
+(memory/, tests/), do not launder it") and of the bonsai metaphor: pruning a
+dead branch and recording *why* it died is good tending; leaving the dead branch
+on the tree is not.
+
+**Concrete rules**:
+
+1. **Canonical-only in SOURCE.** "Canonical" = the single version reachable
+   from the current committed tree that the build / tests / goldens exercise.
+   Superseded iteration snapshots identified by ad-hoc suffixes
+   (`_v2`/`_v3`/`_v9`/`_old`/`_new`/`_corrected`/`_fixed`/`_tmp`/`_backup`/`_wip`
+   or duplicate-with-numeral filenames) are NOT canonical and do not belong in
+   the tracked tree once the canonical version lands.
+
+2. **Distill, then delete — in that order.** When retiring a superseded
+   iteration, FIRST write the lesson to `memory/<topic>.md` and add a one-line
+   `MEMORY.md` index entry (per "Promotion-After-Verify Policy"; keep the index
+   line under ~200 chars — `MEMORY.md` is already over its length limit, so push
+   detail into the topic file). THEN remove the dead snapshot. The knowledge
+   must survive the deletion. Recover the old code from git history if ever
+   needed — it is not lost, only un-tracked.
+
+3. **Removal targets dead implementation code only.** In scope: renamed
+   snapshots (`rad_*_v2.cpp`, `calc_*_old.py`), abandoned-formulation source,
+   and debug stepping-stone modules that no live path imports. A negative result
+   that warrants a minimal reproducing test/fixture keeps that test (Repository
+   First point 3 keeps results "in the repo (memory/, tests/)") — prune the dead
+   snapshot, not the test that documents why the approach failed.
+
+4. **Genuinely co-valid alternatives are NOT iteration snapshots.** Two
+   implementations that are BOTH live and user-selectable (e.g. yano-MSC AND the
+   HDiv-VIM per "KEEP BOTH", or `--coil-solver peec|bem-a`) are separate
+   canonical artifacts. Do not delete one as "superseded" — neither superseded
+   the other.
+
+**Exceptions** (this policy prunes superseded ITERATION CODE only — it NEVER
+deletes protected data, assets, or fixtures):
+
+- **Golden test fixtures** under `tests/**/fixtures/` and golden-band lock files
+  are protected (per "Sample Promotion Ladder"). Distinct tier artifacts of one
+  geometry (a `tests/` fixture vs an `examples/` demo vs a `panels/samples/`
+  `.jou`) are SEPARATE canonical artifacts, not duplicate snapshots — keep all.
+- A **single, explicitly-named frozen reference baseline** (e.g. a
+  `panels/samples/*` loft baseline kept deliberately for regression comparison)
+  is a protected canonical artifact, not cruft — keep it even though a newer
+  variant exists.
+- **Committed figure/table/published-result-backing data** (`.json`/`.csv`/
+  `.png`/`.pdf` next to its script or figure, per "Data Persistence Policy") is
+  a protected result, NEVER an iteration snapshot. Deleting it would re-create
+  the incident that policy exists to prevent (the figure becomes
+  non-regenerable).
+- **Tracked mesh definitions and mesh-gen assets** — mesh files
+  (`.bdf`/`.nas`/`.msh`/`.vtk`), tracked pre-generated meshes under
+  `examples/**/gmsh_models/*.msh`, Cubit `.jou` journals, and
+  **mesh-generation scripts** — are protected by "Mesh File Preservation" and
+  are NEVER deleted by this policy, even when a `_v2`/`_old` name makes them look
+  like an iteration. A file that is BOTH a `_v2`-named snapshot AND a protected
+  asset is governed by the preservation policy, not this one.
+- **LAB-local, non-committed authoring references** (e.g. a `.nb` kept beside its
+  canonical `.wls`) are out of scope — this policy governs the TRACKED source
+  tree only.
+
+**Why**: dead snapshot code rots — it gets imported by accident, copied as a
+template, or mistaken for the live path, producing wrong numbers nobody can
+trace (the same failure class as silent fallbacks). The lesson, by contrast,
+compounds when it lives in `memory/` where the next session reads it before
+re-deriving the dead end. A clean tree where every tracked file is the canonical
+one — with the rationale for each removed branch preserved in memory — is the
+bonsai actually being tended.
+
 ### Green's Function: Laplace Kernel Only (MQS/Darwin)
 
 **POLICY**: Radia uses **Laplace kernel only**: $G(r) = 1/(4\pi r)$. Target regime is MQS (Magneto-Quasi-Static) to Darwin approximation.
