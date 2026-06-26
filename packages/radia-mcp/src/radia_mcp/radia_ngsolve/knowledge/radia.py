@@ -116,6 +116,10 @@ def gradient_field(p):
 ext = rad.ObjBckg(gradient_field)
 ```
 
+SHOWCASE NOTEBOOK: `docs/background_fields/background_fields.ipynb` -- a
+spatially-varying quadrupole `ObjBckg` callback driving a nonlinear soft-iron
+cube / sphere, plus a permeability sweep (executed + rendered).
+
 ## Containers
 
 ```python
