@@ -6,7 +6,7 @@ Usage:
   pytest tests/ -m basic            # Run only basic tests
   pytest tests/ -m "not slow"       # Skip slow tests
   pytest tests/ -m "not slow and not golden"  # Fast CI/simple gate
-  pytest tests/ -m golden           # Golden/reference checks
+  pytest validation_test/           # Heavy validation / golden / GUI / Cubit checks
 """
 
 import sys
@@ -182,6 +182,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "golden: Golden/reference tests separated from the simple CI gate")
     config.addinivalue_line("markers", "benchmark: Performance benchmarks")
     config.addinivalue_line("markers", "ngsolve: Tests requiring NGSolve")
+    config.addinivalue_line("markers", "validation: Heavy validation_test suite")
 
 
 # ---------------------------------------------------------------
