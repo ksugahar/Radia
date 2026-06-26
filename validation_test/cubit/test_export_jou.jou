@@ -1,0 +1,36 @@
+## Test export via APREPRO commands (.ccm path)
+## Creates sphere, exports order=1 and order=2 GMSH, verifies file creation
+reset
+create sphere radius 0.05
+volume 1 scheme tetmesh
+volume 1 size 0.015
+mesh volume 1
+block 1 add tet all
+block 1 name "sphere"
+
+## Order 1
+export gmsh "S:/Radia/01_GitHub/validation_test/cubit/ho_area_test/jou_sphere_o1.msh" order 1 overwrite
+
+## Order 2
+export gmsh "S:/Radia/01_GitHub/validation_test/cubit/ho_area_test/jou_sphere_o2.msh" order 2 overwrite
+
+## GMSH v4.1
+export gmsh "S:/Radia/01_GitHub/validation_test/cubit/ho_area_test/jou_sphere_v41_o2.msh" order 2 overwrite
+
+## Nastran
+export jmag_nastran "S:/Radia/01_GitHub/validation_test/cubit/ho_area_test/jou_sphere_o2.bdf" order 2 dimension 3 overwrite
+
+## VTK
+export vtk "S:/Radia/01_GitHub/validation_test/cubit/ho_area_test/jou_sphere_o2.vtk" order 2 dimension 3 overwrite
+
+## 2D circle test
+reset
+create surface circle radius 0.05 zplane
+surface 1 scheme trimesh
+surface 1 size 0.012
+mesh surface 1
+block 1 add tri all
+block 1 name "circle"
+
+export gmsh "S:/Radia/01_GitHub/validation_test/cubit/ho_area_test/jou_circle_o1.msh" order 1 dimension 2 overwrite
+export gmsh "S:/Radia/01_GitHub/validation_test/cubit/ho_area_test/jou_circle_o2.msh" order 2 dimension 2 overwrite

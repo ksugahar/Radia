@@ -492,7 +492,7 @@ def test_detect_lead_bars_radius_spread_pinned_at_0_1():
         "loosening admits unrelated cylinders (terminal sleeves, fillets) "
         "and tightening rejects real leads with slight CAD imperfections. "
         "Any change must be paired with regression on the 3turncoil "
-        "lead-aware-chain fixture (tests/panels/test_lead_aware_chain.py).")
+        "lead-aware-chain fixture (validation_test/panels/test_lead_aware_chain.py).")
 
 
 def test_detect_lead_bars_length_factor_pinned_at_5_0():

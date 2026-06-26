@@ -1,0 +1,35 @@
+{
+  "description": "Standalone golden for calc_heat_axisym.py (Cubit-free, uniform-q).  Locks the 2D-axisymmetric thermal solver and its 2*pi*r surface integral INDEPENDENTLY of the EM chain.  test_heat_chain_golden.py's axisym leg exercises the cross-mesh spatial projection, but it SKIPS when the coil STEP sample (ih_peec_bem_coarse_coil.step) is absent -- so the axisym solver had no CI-runnable golden until this one.",
+  "fixture": "validation_test/panels/fixtures/heat_workpiece_cylinder_R25_H25_axisym.vol",
+  "fixture_generator": "validation_test/panels/fixtures/generate_heat_cylinder_axisym.py",
+  "cli": {
+    "surface_label": "outer",
+    "material": "steel",
+    "q_uniform_Wm2": 1.0e4,
+    "h_conv_Wm2K": 10.0,
+    "t_ext_C": 20.0,
+    "t_initial_C": 20.0,
+    "dt_s": 0.5,
+    "t_end_s": 5.0,
+    "probe_point_rz": [0.025, 0.0]
+  },
+  "expected": {
+    "T_max_C": 22.248610,
+    "T_min_C": 20.175550,
+    "q_surf_int_W": 39.269908,
+    "surface_area_m2": 0.0039269908,
+    "ne": 81,
+    "ndof": 100,
+    "tolerance_temp_K": 1.0e-3,
+    "tolerance_rel_pct": 0.5
+  },
+  "cross_check": "q_surf_int_W == q_uniform_Wm2 * surface_area_m2 (analytic: uniform flux over the 2*pi*r-weighted lateral surface).  Locks the axisym surface integral to <1e-6 relative.",
+  "captured_at": "2026-06-02",
+  "captured_commit": "radia-ih-june task #2 (standalone axisym golden)",
+  "notes": [
+    "Cubit-free: --q-uniform short-circuits the cross-mesh projection so no EM reference run / coil STEP is needed; runs in CI in ~4s on a 81-element / 100-DOF mesh.",
+    "Complements test_heat_chain_golden.py, whose axisym leg covers the cross-mesh spatial projection but skips without ih_peec_bem_coarse_coil.step.",
+    "surface_area 0.0039270 m2 = 2*pi*R*H lateral area of the R=0.025 H=0.025 cylinder; q_surf_int = 1e4 * that = 39.27 W.",
+    "Solve is a direct sparsecholesky on a fixed committed mesh, so values are reproducible to ~machine precision; the 1e-3 K / 0.5% bands absorb cross-platform float noise."
+  ]
+}

@@ -4,7 +4,7 @@ Default is "auto" (API-split): mesh-LESS hex/wedge/pyramid soft iron is
 solved by the multipole-moment MMM MSC demag; mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
 is solved by the FEEC HDiv-VIM.  set_demag_backend("yano"|"hdiv") overrides; "auto"/None restores the
 split.  Tet (MMM) and permanent-magnet solves are unaffected.  The mesh-backed HDiv routing is locked
-by tests/feec/test_hdiv_radsolve_dispatch.py."""
+by validation_test/feec/test_hdiv_radsolve_dispatch.py."""
 import math
 
 import pytest
