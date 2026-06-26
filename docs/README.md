@@ -34,7 +34,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 ## Multipole-Moment MMM
 
-- [multipole_moment_mmm/ACA_MOMENT_DESIGN.md](multipole_moment_mmm/ACA_MOMENT_DESIGN.md) - The production moment formulation for MMM/MSC. It should not be described with the old Yano-centered label: the contribution is the symbolic multipole-moment derivation that closes 3-DOF MMM and 5/6-DOF surface-charge elements by monopole, dipole, and residual-quadrupole conditions. This keeps matrix entries local and cheap compared with the HDiv Galerkin charge-Gram route, while retaining the open-boundary MMM workflow.
+- [multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb](multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb) - The production moment formulation for MMM/MSC. It should not be described with the old Yano-centered label: the contribution is the symbolic multipole-moment derivation that closes 3-DOF MMM and 5/6-DOF surface-charge elements by monopole, dipole, and residual-quadrupole conditions. This keeps matrix entries local and cheap compared with the HDiv Galerkin charge-Gram route, while retaining the open-boundary MMM workflow.
 
 ## FEEC / HDiv-type VIM (multipole-moment MMM complement)
 

@@ -1044,8 +1044,9 @@ def axifem_documentation(topic: str = "all") -> str:
     Canonical API: ``FESpace("axihenrotte", mesh, order=k)`` or
     ``H1Henrotte(mesh, order=k)``.  order=1 dispatches to P1 triangles
     or Q1 quads; order=2 dispatches to P2 triangles or Q2 quads.  P2
-    triangles are curved-mesh aware after ``mesh.Curve(2)``.  True
-    curved Q2 quads are prototype-only, not production C++.
+    triangles are curved-mesh aware after ``mesh.Curve(2)``.  Curved Q2
+    quads are production opt-in via ``H1Henrotte(mesh, order=2,
+    curvedquad=True)``.
 
     Args:
         topic: Documentation section. Options:
@@ -1053,10 +1054,12 @@ def axifem_documentation(topic: str = "all") -> str:
             "overview"        - what it is and why NGSolve doesn't already have it
             "support_matrix"  - exact P1/P2/P2 curved/Q1/Q2/Q2 curved status
             "api"             - FESpace("axihenrotte", mesh, order=k) usage
+            "hodge_geometry"  - differential-geometry/Hodge view of Henrotte
+                                axisymmetric reduction
             "taskmanager"     - NGSolve-native parallel execution contract
             "basis_p1"        - order=1 P1 triangle + Q1 quad basis details
             "basis_p2"        - order=2 P2 triangle + Q2 quad basis details
-            "curved_geometry" - P2 curved triangle shipped; Q2 curved quad prototype-only
+            "curved_geometry" - P2 curved triangle and opt-in Q2 curved quad support
             "vs_standard_h1"  - 6-property comparison table vs H1 order=2
             "validation"      - cross-validation references; Hessian-of-W convention
             "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,

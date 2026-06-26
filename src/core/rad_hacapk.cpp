@@ -1125,7 +1125,7 @@ double RadHACApKMMMManager::GetGenericElement(int elem_i, int elem_j, int local_
 
 //=========================================================================
 // RadHACApKMomentSystem: the multipole-moment MMM system A_raw as a HACApK H-matrix
-// (docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md, Phase 2 Increment 2).
+// (docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb, Phase 2 Increment 2).
 //=========================================================================
 
 RadHACApKMomentSystem::RadHACApKMomentSystem(radTInteraction* interaction, double chi)

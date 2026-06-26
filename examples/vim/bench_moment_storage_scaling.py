@@ -1,4 +1,4 @@
-"""Phase-2 Increment-4 storage gate (docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.md): show that multipole-moment MMM method 2
+"""Phase-2 Increment-4 storage gate (docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb): show that multipole-moment MMM method 2
 (HACApK H-matrix + block-Jacobi BiCGSTAB) has SUB-QUADRATIC peak memory, while method 0 (dense LU) is O(N^2).
 
 The Increment-4 decoupling removes ALL three O(N^2) buffers from the method-2 path: the dense interaction

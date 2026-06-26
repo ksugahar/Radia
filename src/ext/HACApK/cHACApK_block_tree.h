@@ -22,7 +22,7 @@
  * The cluster tree (st_clt) MUST outlive the block-tree.
  *
  * Phase 0.7 of the H-LU project (Tasks #30 onward). See
- * docs/research/h-lu/H2LIB_TO_HACAPK_MAPPING.md.
+ * docs/research/h-lu/H2LIB_TO_HACAPK_MAPPING.ipynb.
  */
 
 #ifndef CHACAPK_BLOCK_TREE_H_INCLUDED

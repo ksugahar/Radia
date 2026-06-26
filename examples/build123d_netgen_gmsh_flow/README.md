@@ -26,7 +26,7 @@ build123d (OCCT)  →  Netgen (tet via netgen.occ)  →  Gmsh .msh/.geo files
 - **Mesh generation through Gmsh is forbidden** (covered by the
   `mcp-server-gmsh` lint rules).
 
-See `docs/research/policy/strategy.md` and `toolchain.md` for the full rationale.
+See `docs/research/policy/strategy.ipynb` and `toolchain.ipynb` for the full rationale.
 
 ## Files
 

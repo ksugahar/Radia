@@ -21,8 +21,9 @@ Read this when:
   weak form integrated in closed form rather than by Gauss quadrature.
 
 The MCP server exposes this via axifem_documentation(topic=...). Topics:
-overview, support_matrix, api, basis_p1, basis_p2, curved_geometry,
-taskmanager, vs_standard_h1, validation, kelvin, file_layout, why_dropped_p3.
+overview, support_matrix, api, hodge_geometry, basis_p1, basis_p2,
+curved_geometry, taskmanager, vs_standard_h1, validation, kelvin, file_layout,
+why_dropped_p3.
 """
 
 AXIFEM_OVERVIEW = """\
@@ -146,6 +147,70 @@ exported.
 * **Boundary 1D segments:** in `order=2` mode, a boundary segment exposes
   2 vertex DOFs and 1 edge midnode DOF, so `dirichlet="…"` on a boundary
   marks all three.
+"""
+
+AXIFEM_HODGE_GEOMETRY = """\
+# Differential-geometry / Hodge view of Henrotte axisymmetry
+
+Henrotte / Meeker axisymmetry is best understood as a **dimensionally reduced
+Hodge problem**, not as an arbitrary special basis.
+
+Start from the 3D cylindrical metric
+
+```text
+g = dr^2 + dz^2 + r^2 dphi^2
+```
+
+and restrict to rotationally symmetric fields with toroidal vector potential
+`A = A_phi e_phi`.  The natural reduced unknown is not the point value
+`A_phi`; it is the S1-fiber circulation of the magnetic vector-potential
+1-form:
+
+```text
+psi(r,z) = integral_{S1_r} A_flat = 2*pi*r*A_phi(r,z)
+```
+
+So `psi` is a scalar 0-form on the meridional base `(r,z)`, while `dpsi` is
+the metric-free exterior derivative on that base.  The poloidal magnetic flux
+is the Hodge-rotated gradient with the fiber radius in the Hodge weight:
+
+```text
+B_z =  (1/(2*pi*r)) * dpsi/dr
+B_r = -(1/(2*pi*r)) * dpsi/dz
+```
+
+Equivalently, up to the conventional `2*pi` factor, `B` is the base Hodge
+dual of `dpsi` with the `1/r` fiber metric included.  This is the reason the
+singular-looking axisymmetric factors should be treated as **metric/Hodge
+weights**, while the differential part remains the ordinary exterior
+derivative `d`.
+
+The Henrotte basis then chooses `psi` to be polynomial in
+
+```text
+s = r^2
+```
+
+instead of polynomial in `r`.  In Hodge language this makes the reduced
+0-form regular at the axis and moves the cylindrical metric singularity into
+closed-form weighted integrals.  That is why `{1, s, z}` and
+`{1, s, z, s^2, s*z, z^2}` behave better near `r=0` than standard H1
+polynomials in `(r,z)`.
+
+Practical translation for MCP/code review:
+
+* `H1Henrotte` is a reduced scalar 0-form space for `psi = 2*pi*r*A_phi`.
+* `AxiHenrotteStiffnessBFI` is the constitutive Hodge/stiffness operator for
+  the reduced magnetic energy; the awkward `r` and `1/r` factors belong here.
+* `AxiHenrotteSigmaMassBFI` is the conductive/storage Hodge/mass operator in
+  the same reduced coordinates.
+* Boundary conditions on the symmetry axis are not cosmetic: `psi=0`
+  follows from the collapsed S1 fiber, and the user-facing `A_phi` DOF must
+  be constrained consistently.
+
+This is the same mental model used elsewhere in radia-ngsolve: topology and
+exterior derivative are metric-free; material coefficients, Kelvin warps,
+axisymmetric Jacobians, and `1/r` factors live in the Hodge operator.
 """
 
 AXIFEM_TASKMANAGER = """\
@@ -927,6 +992,8 @@ def get_axifem_documentation(topic: str = "all") -> str:
       "overview"        - What it is and why NGSolve doesn't already have it
       "support_matrix"  - Exact implementation status for P1/P2/P2 curved/Q1/Q2/Q2 curved
       "api"             - FESpace("axihenrotte", mesh, order=k) canonical usage
+      "hodge_geometry"  - Differential-geometry/Hodge interpretation of the
+                          Henrotte reduced axisymmetric space
       "taskmanager"     - NGSolve-native parallel execution contract
       "basis_p1"        - order=1 P1 triangle + Q1 quad basis details
       "basis_p2"        - order=2 P2 triangle + Q2 quad basis details
@@ -945,6 +1012,7 @@ def get_axifem_documentation(topic: str = "all") -> str:
         "overview":       AXIFEM_OVERVIEW,
         "support_matrix": AXIFEM_SUPPORT_MATRIX,
         "api":            AXIFEM_API,
+        "hodge_geometry": AXIFEM_HODGE_GEOMETRY,
         "taskmanager":    AXIFEM_TASKMANAGER,
         "basis_p1":       AXIFEM_BASIS_P1,
         "basis_p2":       AXIFEM_BASIS_P2,
@@ -959,7 +1027,7 @@ def get_axifem_documentation(topic: str = "all") -> str:
     if topic == "all":
         return "\n\n".join(sections[k] for k in [
             "overview", "support_matrix", "api", "taskmanager",
-            "basis_p1", "basis_p2", "curved_geometry",
+            "hodge_geometry", "basis_p1", "basis_p2", "curved_geometry",
             "vs_standard_h1", "validation", "kelvin", "magnet",
             "file_layout", "why_dropped_p3"
         ])
