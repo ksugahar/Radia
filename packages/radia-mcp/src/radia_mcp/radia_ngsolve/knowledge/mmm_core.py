@@ -702,7 +702,9 @@ EIGENVALUE_NULLSPACE = """\
 ## Near-null "loop" modes of the MSC operator (conditioning + solver behavior)
 
 (CEFC 2026 full-paper study; reproducible scripts in
-`examples/mmm_eigenvalue_study/`.)
+`examples/mmm_eigenvalue_study/`; SHOWCASE NOTEBOOK -- spectrum, nullspace-dim
+scan, topological belt-loop deficit, and the beautiful/ugly mode figures,
+executed + rendered -- `docs/solver/mmm_eigenvalue_study.ipynb`.)
 
 ### The null space = cycle space of the element graph
 
