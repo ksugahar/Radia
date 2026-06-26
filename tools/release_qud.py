@@ -1088,19 +1088,19 @@ def cmd_ci_verify(args):
 
 
 def _run_pyside6_health_audit():
-    """Layer A pyside6-health audit (gated in `done` since 2026-05-30).
+    """Layer A optional-PySide6 audit (gated in `done` since 2026-05-30).
 
     Runs tools/audit_pyside6_only.py which checks:
       1. zero real PyQt5 / PySide2 / PyQt6 imports in tracked *.py
-      2. core GUI modules import PySide6
-      3. radia pyproject declares PySide6, no PyQt5 dependency
+      2. core GUI modules keep their optional PySide6 imports
+      3. radia pyproject declares optional PySide6, no PyQt5 dependency
       4. cubit_mesh_export.ccm has no Qt5 DLL dependency
-      5. headless panel smoke (IH/EM/PCB construct + ExportDialog
-         builds all 6 formats) in an isolated offscreen subprocess
+      5. headless panel smoke when PySide6 is installed; a no-PySide6
+         release target skips this smoke
 
     Returns the audit script's exit code (0 = CLEAN).
     """
-    step("pyside6-health audit (Layer A: static + headless smoke)")
+    step("optional PySide6 audit (Layer A: static + optional headless smoke)")
     audit = REPO / "tools" / "audit_pyside6_only.py"
     if not audit.exists():
         fail(f"audit script missing: {audit}")
@@ -1115,20 +1115,22 @@ def _run_pyside6_health_audit():
     if result.stderr:
         print(result.stderr.rstrip())
     if result.returncode == 0:
-        ok("pyside6-health: CLEAN (PySide6-only + panels construct).")
+        ok("optional PySide6 audit: CLEAN (no legacy Qt; panel smoke healthy/skipped).")
     return result.returncode
 
 
 def cmd_done(args):
-    """Definition-of-done check: preflight + editable verify + phase9 + pyside6-health.
+    """Definition-of-done check: preflight + editable verify + phase9 + optional PySide6 audit.
 
     Read-only. Exit 0 means the release is consistent across LAB / 100号機 /
     mdx / hibino, the repo is release-ready, the editable tier is intact, AND the
-    panel GUI is PySide6-only with every panel window constructible
-    headlessly. Exit non-zero means do NOT tell the user "release done" yet.
+    tree has no legacy Qt fallback.  If PySide6 is installed, legacy desktop
+    panels must construct headlessly; if PySide6 is absent, release remains
+    valid under the no-PySide6 target policy. Exit non-zero means do NOT tell
+    the user "release done" yet.
     """
     step("Definition-of-done check "
-         "(preflight + editable tier + phase9 + pyside6-health)")
+         "(preflight + editable tier + phase9 + optional PySide6 audit)")
     rc = cmd_preflight(args)
     if rc != 0:
         fail("preflight failed — repo state not release-ready.")
@@ -1149,14 +1151,14 @@ def cmd_done(args):
 
     rc = _run_pyside6_health_audit()
     if rc != 0:
-        fail("pyside6-health audit failed -- a Qt5/PyQt5 reference or "
+        fail("optional PySide6 audit failed -- a legacy Qt reference or "
              "panel construction regression slipped in. Fix per the audit "
              "output, then re-run `release_qud done`.")
         return rc
 
     print("")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx / hibino, the editable tier is intact, and the panel GUI is PySide6-only.")
+       "mdx / hibino, the editable tier is intact, and no legacy Qt fallback remains.")
     return 0
 
 
@@ -1189,7 +1191,7 @@ def main():
                     help="Phase 5.5: gh-free CI-green gate (run after push main, before tag)")
     sub.add_parser("done",
                     help="definition-of-done: preflight + editable-tier + "
-                         "phase9 (read-only)")
+                         "phase9 + optional PySide6 audit (read-only)")
 
     args = p.parse_args()
     handler = {
