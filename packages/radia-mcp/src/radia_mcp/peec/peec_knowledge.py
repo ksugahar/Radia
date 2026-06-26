@@ -76,6 +76,15 @@ topo = builder.build_topology()
 # topo contains: L, R, P, M_LS, segment_nodes, ports, etc.
 ```
 
+### Benchmarks
+
+SHOWCASE NOTEBOOK `docs/solver_benchmarks/peec_solver_benchmarks.ipynb`:
+dense Ruehli L vs HACApK H-matrix (ACA+ compression + scaling) and the MNA
+dense-vs-HACApK crossover, read live from the committed benchmark JSON; the
+extracted |Z11| matches the dense reference. Corpus + JSON +
+`findings_peec_mna_crossover.md` / `comparison_peec_dense_vs_hacapk.md` at
+`examples/solver_benchmarks/`.
+
 ### References
 
 - A. E. Ruehli, "Equivalent Circuit Models...", IEEE MTT, 1974
