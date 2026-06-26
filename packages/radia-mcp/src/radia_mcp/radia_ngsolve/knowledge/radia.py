@@ -2405,7 +2405,7 @@ BH = [[0,0], [100,0.1], [500,0.8], [1000,1.2],
 mat_nl = rad.MatSatIsoTab(BH)
 
 # Or functional form: MatSatIsoFrm
-# mat_nl = rad.MatSatIsoFrm([ksi1, ms1], [ksi2, ms2], [ksi3, ms3])
+# mat_nl = rad.MatSatIsoFrm([[ksi1, ms1], [ksi2, ms2], [ksi3, ms3]])
 
 iron = rad.ObjRecMag([0, 0, 0], [0.02, 0.02, 0.02], [0, 0, 0])
 rad.MatApl(iron, mat_nl)
