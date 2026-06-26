@@ -1,344 +1,117 @@
-# Radia Test Suite
+# Radia Lightweight Test Suite
 
-Automated tests for the Radia Python 3.12 module.
+`tests/` is the fast developer and CI gate for the Radia Python 3.12
+module.  It should stay small enough to run during ordinary debugging and
+pre-push checks.
 
-## Directory Structure
+Heavy solver studies, Cubit export checks, GUI/panel goldens, benchmarks,
+and cross-validation cases live under `validation_test/`.
 
-```
-tests/
-├── __init__.py                      # Test package initialization
-├── test_simple.py                   # Basic functionality tests (quick)
-├── test_radia.py                    # Comprehensive test suite
-├── test_advanced.py                 # Advanced features and edge cases
-├── test_parallel_performance.py     # TaskManager parallelization tests
-├── test_radia_ngsolve.py              # NGSolve integration tests (RadiaField is now in main radia module)
-├── test_magpylib_comparison.py      # Comparison with magpylib library
-├── conftest.py                      # pytest configuration
-├── test_utils.py                    # Shared path utilities
-├── benchmarks/                      # Performance benchmarks
-│   ├── benchmark_parallel.py        # TaskManager scaling tests
-│   ├── benchmark_correct.py        # Correctness vs performance
-│   ├── benchmark_heavy.py          # Heavy computation tests
-│   └── benchmark_threads.py        # Thread scaling tests
-├── fixtures/                        # Test data and helper functions
-└── README.md                        # This file
-```
+## Two-Stage Test Layout
 
-## Running Tests
+| Directory | Purpose | Typical command |
+| --- | --- | --- |
+| `tests/` | Lightweight debug and CI tests | `python -m pytest tests/` |
+| `validation_test/` | Heavy validation, benchmarks, GUI, Cubit, golden checks | `python -m pytest validation_test/` |
 
-### Prerequisites
+The default `pytest` configuration discovers only `tests/`.  Run
+`validation_test/` explicitly when doing release validation or research-grade
+checks.
 
-```bash
-# Ensure radia module is built and available
-cd S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia
-powershell.exe -ExecutionPolicy Bypass -File Build.ps1
+## Running Lightweight Tests
 
-# Install test dependencies (optional)
-pip install pytest pytest-cov
+```powershell
+python -m pytest tests/
+python -m pytest tests/ -m "not slow and not golden"
+python tools/ci_preflight.py --only toplevel-collect
 ```
 
-### Quick Test (Recommended for CI/CD)
+Useful single-file checks:
 
-```bash
-# Run basic functionality test (fastest)
+```powershell
 python tests/test_simple.py
-```
-
-**Expected output:**
-```
-============================================================
-[OK] ALL TESTS PASSED!
-============================================================
-```
-
-### Comprehensive Test Suite
-
-```bash
-# Run all functional tests
 python tests/test_radia.py
-```
-
-**Expected output:**
-```
-*** ALL TESTS PASSED! ***
-Total: 7/7 tests passed (100.0%)
-```
-
-### Advanced Tests
-
-```bash
-# Run advanced feature tests
 python tests/test_advanced.py
-```
-
-### Performance Tests
-
-```bash
-# Test TaskManager parallelization performance
 python tests/test_parallel_performance.py
-```
-
-### NGSolve Integration Test
-
-```bash
-# Test RadiaField NGSolve integration (requires NGSolve)
 python tests/test_radia_ngsolve.py
 ```
 
-**Note:** This test requires NGSolve to be installed. If NGSolve is not available, the test will be skipped. Since v2.5.0, `RadiaField` is integrated into the main `radia` module and accessed as `rad.RadiaField()`.
-
-**Expected output:**
-```
-[OK] ALL TESTS PASSED!
-```
-
-### Comparison Test with magpylib
-
-Compare Radia results with magpylib (another magnetic field library):
-
-```bash
-# Requires: pip install magpylib
-python tests/test_magpylib_comparison.py
-```
-
-**Note**: This test validates Radia's magnetic field calculations by comparing with magpylib (an independent library). Key points:
-- Both libraries use **SI units (Tesla)** for magnetization/polarization and field output
-- For permanent magnets: M = Br (remanence)
-- Agreement: **~0.5%** with 32 subdivisions (default setting)
-
-**Subdivision convergence** (azimuthal segments):
-- 16 segments: ~2% error
-- 32 segments: ~0.5% error (current default)
-- 64 segments: ~0.1% error
-- 128 segments: ~0.03% error
-
-This validates the accuracy of Radia's electromagnetic field calculations and demonstrates
-second-order convergence with mesh refinement.
-
-## Using pytest (Optional)
-
-If you have pytest installed:
-
-```bash
-# Run all tests
-pytest tests/
-
-# Run with verbose output
-pytest -v tests/
-
-# Run specific test file
-pytest tests/test_simple.py
-
-# Run with coverage report
-pytest --cov=radia tests/
-
-# Run only tests matching pattern
-pytest -k "material" tests/
-```
+`test_radia_ngsolve.py` requires NGSolve.  If NGSolve is unavailable, the
+test is skipped.
 
 ## Benchmarks
 
-Performance benchmarking scripts are in `tests/benchmarks/`:
+Benchmark scripts are validation artifacts and live in
+`validation_test/benchmarks/`:
 
-### Parallel Scaling Benchmark
-
-```bash
-python tests/benchmarks/benchmark_parallel.py
-```
-
-Tests field calculation performance with different thread counts (1, 2, 4, 8 cores).
-
-**Expected speedup (8-core system):**
-- Simple geometry: 1.8x
-- Complex geometry: 2.7x
-
-### Other Benchmarks
-
-```bash
-# Correctness validation
-python tests/benchmarks/benchmark_correct.py
-
-# Heavy computation benchmark
-python tests/benchmarks/benchmark_heavy.py
-
-# Thread scaling analysis
-python tests/benchmarks/benchmark_threads.py
+```powershell
+python validation_test/benchmarks/benchmark_parallel.py
+python validation_test/benchmarks/benchmark_correct.py
+python validation_test/benchmarks/benchmark_heavy.py
+python validation_test/benchmarks/benchmark_threads.py
 ```
 
 ## Test Categories
 
-### 1. Basic Functionality (`test_simple.py`)
+- Basic smoke tests: import, version, geometry creation, field evaluation.
+- Functional tests: materials, transformations, relaxation, memory handling.
+- Lightweight integration tests: optional-package tests that skip cleanly when
+  the dependency is missing.
+- Performance smoke tests: TaskManager sanity checks that are still short
+  enough for local debugging.
 
-Fast smoke tests covering:
-- Module import
-- Version checking
-- Basic geometry creation
-- Magnetization setting
-- Field calculation
-- Object deletion
-
-**Duration**: ~1 second
-
-### 2. Comprehensive Suite (`test_radia.py`)
-
-Complete functional test suite:
-- Module import and version
-- Geometry creation (rectangles, polygons)
-- Material definition (Steel37, NdFeB, etc.)
-- Field calculations (B, H, A)
-- Relaxation solver
-- Geometric transformations
-- Memory management
-
-**Duration**: ~5-10 seconds
-
-### 3. Advanced Features (`test_advanced.py`)
-
-Edge cases and advanced functionality:
-- Complex geometries
-- Subdivision algorithms
-- Non-linear materials
-- Multiple object interactions
-- VTK export functionality
-
-**Duration**: ~30-60 seconds
-
-### 4. Parallel Performance (`test_parallel_performance.py`)
-
-TaskManager parallelization validation:
-- Single-threaded baseline
-- Multi-threaded scaling
-- Performance regression detection
-- Numerical consistency check
-
-**Duration**: ~2-5 minutes
+Long p-convergence, Cubit 2025.12 export, panel GUI, benchmark, and solver
+cross-validation cases belong in `validation_test/`.
 
 ## Continuous Integration
 
-### Minimal CI Configuration
-
-For fast CI/CD pipelines, run only basic tests:
+CI runs the lightweight gate by default:
 
 ```yaml
-# .github/workflows/test.yml (example)
-- name: Run basic tests
-  run: python tests/test_simple.py
+- name: Run lightweight tests
+  run: python -m pytest tests/ -m "not slow and not golden"
 ```
 
-### Full CI Configuration
-
-For comprehensive validation:
+Manual release validation can add:
 
 ```yaml
-- name: Run all tests
-  run: |
-	python tests/test_simple.py
-	python tests/test_radia.py
-	python tests/test_parallel_performance.py
+- name: Run validation tests
+  run: python -m pytest validation_test/ -m "not slow"
 ```
+
+Use `full_slow=true` in the GitHub workflow dispatch when the slow validation
+set is intentionally required.
 
 ## Test Data
 
-Test fixtures and helper data should be placed in `tests/fixtures/`:
-
-```python
-# Example usage
-from tests.fixtures.geometries import create_test_magnet
-
-magnet = create_test_magnet()
-```
+Small fixtures for lightweight tests belong in `tests/fixtures/`.  Validation
+fixtures belong next to their validation tests under `validation_test/`.
 
 ## Writing New Tests
 
-### Test File Naming Convention
+- `test_*.py`: pytest-discovered tests.
+- `benchmark_*.py`: manual benchmark scripts under `validation_test/benchmarks/`.
+- Mark long-running tests with `@pytest.mark.slow`.
+- Mark reference/golden checks with `@pytest.mark.golden`.
 
-- `test_*.py`: Functional tests (auto-discovered by pytest)
-- `benchmark_*.py`: Performance benchmarks (manual execution)
-
-### Test Function Naming
-
-```python
-def test_feature_name():
-	"""Test description"""
-	# Arrange
-	# Act
-	# Assert
-```
-
-### Example Test
-
-```python
-def test_magnet_field_calculation():
-	"""Test that rectangular magnet produces correct field"""
-	import sys
-	sys.path.insert(0, 'build/lib/Release')
-	import radia as rad
-
-	# Create hexahedral magnet (10x10x10 mm) using ObjHexahedron
-	vertices = [[-5,-5,-5], [5,-5,-5], [5,5,-5], [-5,5,-5],
-	            [-5,-5,5], [5,-5,5], [5,5,5], [-5,5,5]]
-	mag = rad.ObjHexahedron(vertices, [0, 0, 1000])
-
-	# Calculate field
-	field = rad.Fld(mag, 'b', [0,0,20])
-
-	# Verify
-	assert field[2] > 0, "Field should be positive in Z direction"
-	assert abs(field[0]) < 0.01, "Bx should be near zero"
-	assert abs(field[1]) < 0.01, "By should be near zero"
-```
+Keep the first version of a new regression test in `tests/` only if it is fast,
+deterministic, and useful during ordinary debugging.  Promote heavier checks to
+`validation_test/`.
 
 ## Troubleshooting
 
-### Module Import Fails
+If `import radia` fails, rebuild the module first:
 
-```python
-# Error: No module named 'radia'
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File Build.ps1
+python -m pytest tests/test_simple.py
 ```
 
-**Solution**: Ensure module is built and in correct location:
-```bash
-ls build/lib/Release/radia.pyd  # Should exist
-```
-
-### Tests Fail After Code Changes
-
-1. Rebuild module: `powershell.exe -ExecutionPolicy Bypass -File Build.ps1`
-2. Clear Python cache: `find . -name "*.pyc" -delete`
-3. Re-run tests
-
-### Performance Tests Show Regression
-
-Check:
-- Build configuration (should be Release, not Debug)
-- TaskManager enabled: Check CMakeLists.txt
-- System load: Close other applications
-- Thread count: TaskManager uses NGSolve's thread pool configuration
-
-## Test Coverage Goals
-
-- **Unit tests**: >80% code coverage
-- **Integration tests**: All major API functions
-- **Performance tests**: No regression >10%
-- **Memory tests**: No leaks detected
-
-## Reporting Issues
-
-If tests fail, please report with:
-1. Test output (full error message)
-2. System info: OS, Python version, compiler
-3. Build configuration: Debug/Release
-4. Steps to reproduce
+If a validation test fails after this split, check whether it still references
+an old `tests/...` fixture path.  Runtime fixture paths should point at the new
+`validation_test/...` location.
 
 ## References
 
 - pytest documentation: https://docs.pytest.org/
-- Radia documentation: See `docs/` directory
-
-- Security fixes: `SECURITY_FIXES.md`
-
----
-
-**Last Updated**: 2025-10-30
-**Radia Version**: 4.32
-**Python Version**: 3.12
+- Radia documentation: `docs/`

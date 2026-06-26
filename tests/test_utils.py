@@ -37,7 +37,7 @@ def setup_radia_import():
 	This works from anywhere:
 	- Project root
 	- tests/ directory
-	- tests/benchmarks/ directory
+	- validation_test/benchmarks/ directory
 
 	Returns:
 	    Path: Path to project root

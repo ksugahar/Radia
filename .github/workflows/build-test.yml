@@ -15,12 +15,17 @@ on:
   workflow_dispatch:
     inputs:
       run_golden:
-        description: 'Run @pytest.mark.golden tests (manual golden gate)'
+        description: 'Compatibility alias: run validation_test/ without @pytest.mark.slow'
+        required: false
+        default: false
+        type: boolean
+      run_validation_test:
+        description: 'Run validation_test/ (manual heavy validation gate)'
         required: false
         default: false
         type: boolean
       full_slow:
-        description: 'Run @pytest.mark.slow tests too (implies golden)'
+        description: 'Run @pytest.mark.slow validation tests too'
         required: false
         default: false
         type: boolean
@@ -81,11 +86,12 @@ jobs:
       # CUBIT_INSTALL_DIR to pin a specific install on the self-hosted
       # runner if needed.
       CUBIT_PATH: ''
-      # Full slow/golden tests are an explicit manual gate. Main, PR, and
+      # Heavy validation tests are an explicit manual gate. Main, PR, and
       # release-tag CI stay fast by default so the self-hosted runner does
       # not spend hours revalidating the same SHA.
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
       RUN_GOLDEN_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_golden == true || inputs.full_slow == true) }}
+      RUN_VALIDATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_validation_test == true || inputs.run_golden == true || inputs.full_slow == true) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -417,7 +423,7 @@ jobs:
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\radia-mcp\src'
         run: |
-          Write-Host "Running simple pytest gate (excluding cubit + OCC-dependent + golden tests)..."
+          Write-Host "Running lightweight pytest gate from tests/..."
           # --reruns 2: retry transient failures up to 2x.  Commit
           # a61cecdf added pytest-rerunfailures as a dependency
           # specifically for test_omega_reduced_omega flakiness but
@@ -441,16 +447,7 @@ jobs:
             '--durations=50',
             '--durations-min=1.0',
             '--reruns', '2',
-            '--reruns-delay', '1',
-            '--ignore=tests/cubit',
-            '--ignore=tests/panels',
-            '--ignore=tests/test_far_field_accuracy.py',
-            '--ignore=tests/test_rad_ngsolve_function.py',
-            '--ignore=tests/test_tetrahedral_solver.py',
-            '--ignore=tests/test_batch_evaluation.py',
-            '--ignore=tests/test_curlA_equals_B.py',
-            '--ignore=tests/test_mesh_import.py',
-            '--ignore=tests/test_scalar_bie_sibc.py'
+            '--reruns-delay', '1'
           )
           $markerExpr = 'not golden'
           if ($env:RUN_SLOW_TESTS -ne 'true') {
@@ -473,16 +470,16 @@ jobs:
             exit $rc
           }
 
-      - name: Run golden tests
-        if: success() && env.RUN_GOLDEN_TESTS == 'true'
+      - name: Run validation tests
+        if: success() && env.RUN_VALIDATION_TESTS == 'true'
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\radia-mcp\src'
         run: |
-          Write-Host "Running golden pytest gate (excluding cubit + OCC-dependent tests)..."
+          Write-Host "Running validation_test pytest gate..."
           $pytestArgs = @(
-            'tests/',
+            'validation_test/',
             '-v',
             '--tb=short',
             '-r', 'aR',
@@ -490,45 +487,37 @@ jobs:
             '--durations=50',
             '--durations-min=1.0',
             '--reruns', '2',
-            '--reruns-delay', '1',
-            '--ignore=tests/cubit',
-            '--ignore=tests/panels',
-            '--ignore=tests/test_far_field_accuracy.py',
-            '--ignore=tests/test_rad_ngsolve_function.py',
-            '--ignore=tests/test_tetrahedral_solver.py',
-            '--ignore=tests/test_batch_evaluation.py',
-            '--ignore=tests/test_curlA_equals_B.py',
-            '--ignore=tests/test_mesh_import.py',
-            '--ignore=tests/test_scalar_bie_sibc.py'
+            '--reruns-delay', '1'
           )
-          $markerExpr = 'golden'
+          $markerExpr = 'not slow'
           if ($env:RUN_SLOW_TESTS -ne 'true') {
-            $markerExpr = 'golden and not slow'
-            Write-Host "Manual golden gate -- excluding @pytest.mark.slow golden tests. Use full_slow=true for the full golden set."
+            Write-Host "Manual validation gate -- excluding @pytest.mark.slow tests. Use full_slow=true for the full validation set."
           } else {
-            Write-Host "Manual full gate -- running all golden tests, including @pytest.mark.slow."
+            $markerExpr = ''
+            Write-Host "Manual full validation gate -- running all validation_test tests, including @pytest.mark.slow."
           }
-          $pytestArgs += @('-m', $markerExpr)
+          if ($markerExpr) { $pytestArgs += @('-m', $markerExpr) }
           python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath pytest-golden-stdout.log
           $rc = $LASTEXITCODE
-          Write-Host "pytest golden exit=$rc"
+          Write-Host "pytest validation exit=$rc"
           if ($rc -ne 0) {
-            Write-Host "::error::Golden tests failed (rc=$rc) -- see Annotate step for the test list"
+            Write-Host "::error::Validation tests failed (rc=$rc) -- see Annotate step for the test list"
             "$rc" | Out-File -Encoding ascii pytest-golden-exit.txt
             exit $rc
           }
 
       # ----------------------------------------------------------------
       # Panel tests (NGSolve + PySide6, no Cubit).  Runs:
-      #   tests/panels/test_motor_transient_golden.py     (3 tests)
-      #   tests/panels/test_motor_lamination_golden.py    (4 tests)
-      #   tests/panels/test_panel_output_health.py        (5 tests)
-      #   tests/panels/test_combo_wheel_guard.py          (6 tests, parametrized)
+      #   validation_test/panels/test_motor_transient_golden.py     (3 tests)
+      #   validation_test/panels/test_motor_lamination_golden.py    (4 tests)
+      #   validation_test/panels/test_panel_output_health.py        (5 tests)
+      #   validation_test/panels/test_combo_wheel_guard.py          (6 tests, parametrized)
       # PySide6 tests added 2026-05-30 once the Qt6 DLL preload in
       # tests/conftest.py made `from PySide6.QtCore import ...` survive
       # the MKL bin add_dll_directory (was 0xc0000139 on LAB pytest).
       # ----------------------------------------------------------------
       - name: Run panel smoke tests
+        if: success() && env.RUN_VALIDATION_TESTS == 'true'
         # Panel smoke tests: UX/output health only. Motor golden tests
         # are separated into the manual golden gate below.
         # Re-enabled 2026-05-28: the tests pass `--linear-solver sparsecholesky`
@@ -545,12 +534,18 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: |
           Write-Host "Running motor panel smoke tests..."
+          python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('PySide6') else 2)"
+          if ($LASTEXITCODE -eq 2) {
+            Write-Host "PySide6 is not installed; skipping legacy Qt panel smoke tests."
+            exit 0
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Ensure C:\temp exists for the test fixtures
           New-Item -ItemType Directory -Force -Path C:\temp | Out-Null
           # L0+L1 (2026-05-30): -r aR + Tee to stdout file, same
           # pattern as "Run simple tests" above.  See note there.
-          python -m pytest tests/panels/test_panel_output_health.py `
-                            tests/panels/test_combo_wheel_guard.py `
+          python -m pytest validation_test/panels/test_panel_output_health.py `
+                            validation_test/panels/test_combo_wheel_guard.py `
             -v --tb=short -r aR `
             --junitxml=panel-test-results.xml `
             --durations=25 --durations-min=0.5 `
@@ -574,8 +569,8 @@ jobs:
         run: |
           Write-Host "Running motor panel golden tests..."
           New-Item -ItemType Directory -Force -Path C:\temp | Out-Null
-          python -m pytest tests/panels/test_motor_transient_golden.py `
-                            tests/panels/test_motor_lamination_golden.py `
+          python -m pytest validation_test/panels/test_motor_transient_golden.py `
+                            validation_test/panels/test_motor_lamination_golden.py `
             -v --tb=short -r aR `
             --junitxml=panel-golden-test-results.xml `
             --durations=25 --durations-min=0.5 `

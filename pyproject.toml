@@ -193,6 +193,7 @@ markers = [
     "performance: Performance and scaling tests",
     "slow: Tests that take more than 10 seconds",
     "benchmark: Performance benchmarks (not run by default)",
+    "validation: Heavy validation_test suite (manual / release validation)",
 ]
 minversion = "7.0"
 norecursedirs = [

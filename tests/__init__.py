@@ -8,7 +8,7 @@ Test Categories:
 - test_radia.py: Comprehensive test suite
 - test_advanced.py: Advanced features and edge cases
 - test_parallel_performance.py: TaskManager parallelization tests
-- benchmarks/: Performance benchmarking scripts
+- validation_test/benchmarks/: Performance benchmarking scripts
 
 Usage:
 	# Run all tests
@@ -21,7 +21,7 @@ Usage:
 	pytest -v tests/
 
 	# Run benchmarks
-	python tests/benchmarks/benchmark_parallel.py
+	python validation_test/benchmarks/benchmark_parallel.py
 """
 
 __version__ = "4.32"

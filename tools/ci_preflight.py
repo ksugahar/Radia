@@ -27,15 +27,19 @@ Gates:
                            ubuntu matrix actually runs -- this is the gate
                            that catches heavy-import collection errors
                            (ngsolve/netgen imported at module level)
-  5. toplevel-collect   -- `pytest tests/ --collect-only` with the CI
-                           ignore-set: catches import errors that break
-                           the self-hosted "Run basic tests" at collection
-  6. toplevel-run       -- (only with --full) actually run top-level
-                           tests/ with the CI ignore-set + reruns
+  5. toplevel-collect   -- `pytest tests/ --collect-only` for the lightweight
+                           debug/CI suite
+  6. toplevel-run       -- (only with --full) actually run the lightweight
+                           tests/ suite with reruns
+  7. validation-collect -- (only with --validation) collect the heavy
+                           validation_test/ suite
+  8. validation-run     -- (only with --validation --full) run the heavy
+                           validation_test/ suite
 
 Usage:
     python tools/ci_preflight.py            # gates 1-5 (~2 min)
-    python tools/ci_preflight.py --full     # also gate 6 (slow: FEM solves)
+    python tools/ci_preflight.py --full     # also run lightweight tests/
+    python tools/ci_preflight.py --validation  # also collect validation_test/
     python tools/ci_preflight.py --fix      # auto-regenerate TOOLS.md on drift
     python tools/ci_preflight.py --only policy,tools-md
 
@@ -68,17 +72,9 @@ if "192.168.11.100" in _norm and _anchor in _norm:
     REPO = "S:" + _norm[_norm.index(_anchor):]
 MCP = os.path.join(REPO, "packages", "radia-mcp")
 
-# CI ignore-set for the self-hosted "Run basic tests" step
-# (mirror .github/workflows/build-test.yml).
+# The lightweight tests/ gate should not require directory or file ignores.
+# Validation-class tests belong in validation_test/.
 TOPLEVEL_IGNORES = [
-    "tests/cubit", "tests/panels",
-    "tests/test_far_field_accuracy.py",
-    "tests/test_rad_ngsolve_function.py",
-    "tests/test_tetrahedral_solver.py",
-    "tests/test_batch_evaluation.py",
-    "tests/test_curlA_equals_B.py",
-    "tests/test_mesh_import.py",
-    "tests/test_scalar_bie_sibc.py",
 ]
 
 GREEN, RED, YEL, DIM, RST = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m"
@@ -265,7 +261,7 @@ def gate_toplevel_collect():
 
 
 # ======================================================================
-# Gate 6: top-level run  (--full only; slow FEM solves)
+# Gate 6: top-level run  (--full only; lightweight tests/)
 # ======================================================================
 def gate_toplevel_run():
     cmd = [sys.executable, "-m", "pytest", "tests/", "-q", "--no-header",
@@ -281,6 +277,37 @@ def gate_toplevel_run():
     return True, tail
 
 
+# ======================================================================
+# Gate 7: validation collect  (manual heavy validation_test/ import check)
+# ======================================================================
+def gate_validation_collect():
+    cmd = [sys.executable, "-m", "pytest", "validation_test/",
+           "--collect-only", "-q", "-p", "no:cacheprovider"]
+    rc, out = _sh(cmd)
+    if rc != 0:
+        errs = [l for l in out.splitlines()
+                if "error" in l.lower() or "Interrupted" in l][:8]
+        return False, "validation collection FAILED:\n      " + "\n      ".join(errs)
+    last = next((l for l in reversed(out.splitlines()) if "collected" in l), out.strip()[-120:])
+    return True, last.strip()
+
+
+# ======================================================================
+# Gate 8: validation run  (manual heavy validation_test/ run)
+# ======================================================================
+def gate_validation_run():
+    cmd = [sys.executable, "-m", "pytest", "validation_test/", "-q",
+           "--no-header", "-p", "no:cacheprovider",
+           "--reruns", "1", "--reruns-delay", "1"]
+    rc, out = _sh(cmd, timeout=7200)
+    tail = out.strip().splitlines()[-1] if out.strip() else "(no output)"
+    if rc != 0:
+        fails = [l for l in out.splitlines() if "FAILED" in l][:12]
+        return False, "validation pytest FAILED: " + tail + (
+            "\n      " + "\n      ".join(fails) if fails else "")
+    return True, tail
+
+
 ALL_GATES = [
     ("policy",          "Policy Lint (7 static policies)",        gate_policy_lint),
     ("version",         "Version consistency (pyproject==init)",  gate_version_consistency),
@@ -289,7 +316,13 @@ ALL_GATES = [
     ("toplevel-collect","Top-level collect-only (import check)",  gate_toplevel_collect),
 ]
 FULL_GATES = [
-    ("toplevel-run",    "Top-level pytest (full, slow)",          gate_toplevel_run),
+    ("toplevel-run",    "Top-level pytest (full lightweight)",    gate_toplevel_run),
+]
+VALIDATION_GATES = [
+    ("validation-collect", "Validation collect-only (heavy suite)", gate_validation_collect),
+]
+VALIDATION_FULL_GATES = [
+    ("validation-run",     "Validation pytest (full, very slow)",   gate_validation_run),
 ]
 
 
@@ -318,7 +351,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--full", action="store_true",
-                    help="also run the full top-level pytest (slow FEM solves)")
+                    help="also run the lightweight tests/ pytest")
+    ap.add_argument("--validation", action="store_true",
+                    help="also collect validation_test/; with --full, run it")
     ap.add_argument("--fix", action="store_true",
                     help="auto-regenerate TOOLS.md if drifted (stage it yourself)")
     ap.add_argument("--only", default="",
@@ -331,6 +366,10 @@ def main(argv=None):
     gates = list(ALL_GATES)
     if args.full:
         gates += FULL_GATES
+    if args.validation:
+        gates += VALIDATION_GATES
+        if args.full:
+            gates += VALIDATION_FULL_GATES
     if args.since:
         changed = _changed_since(args.since)
         if changed is None:
@@ -345,7 +384,8 @@ def main(argv=None):
                   f"-> {len(gates)} gate(s){RST}")
     if args.only:
         keys = {k.strip() for k in args.only.split(",")}
-        gates = [g for g in (ALL_GATES + FULL_GATES) if g[0] in keys]
+        gates = [g for g in (ALL_GATES + FULL_GATES + VALIDATION_GATES + VALIDATION_FULL_GATES)
+                 if g[0] in keys]
 
     print(f"{DIM}repo: {REPO}{RST}")
     print(f"CI preflight: {len(gates)} gate(s)\n")
