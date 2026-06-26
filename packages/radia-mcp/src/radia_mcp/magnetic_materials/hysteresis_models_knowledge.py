@@ -321,7 +321,7 @@ Need: magnetic hysteresis in FE solver
 │       (NOT a true hysteresis model — see iron_loss_models topic)
 │
 ├── Permanent magnet demagnetization (PM rotor at high T)?
-│   ├── Use MatMagCurve (skeleton in Radia; full demag = TODO)
+│   ├── Full PM demag = TODO (planned via MatPM; MatMagCurve skeleton removed 2026-06-26)
 │   ├── Linear approximation: MatLin(mu_recoil) + Br offset
 │   └── Reference: 99 永久磁石/FORC解析と永久磁石材料への適用.pdf
 │

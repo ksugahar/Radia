@@ -19,9 +19,7 @@ OVERVIEW = r"""
 | `rad.MatSatIsoTab(BH_data)` | ◎ production | Nonlinear DC BH curve | C++ |
 | `rad.MatPlayHysteresis(K, eta, f_k)` | ◎ production | B-input Play hysteresis (alternative) | C++ |
 | **`rad.MatEnergyHysteresis(K, eta, f_k, eps)`** | **★ production CORE** | **B-input Stop + Energy (lab primary)** | C++ |
-| `rad.MatMagFixed` | △ skeleton | Permanent magnet fixed M | C++ |
-| `rad.MatMagLinear` | △ skeleton | PM with recoil μ | C++ |
-| `rad.MatMagCurve` | △ skeleton | PM full demag with knee | C++ TODO |
+| `rad.MatPM(Br, Hc, axis)` / direct `ObjHexahedron(verts, M)` | ◎ production | Permanent magnet (fixed M) | C++ |
 
 ## State management (Play / Energy)
 
@@ -109,7 +107,7 @@ Scenario
 │
 ├── Permanent magnet + demagnetization knee
 │   ├── Approximation: rad.MatLin(mu_recoil) + offset M
-│   └── Full: rad.MatMagCurve (TODO)
+│   └── Full: TODO (planned via MatPM; the MatMagCurve skeleton was removed 2026-06-26)
 │
 ├── Effective material for laminated stack (μ_eff complex per freq)
 │   └── radia.calc_motor_lamination (Hollaus MSFEM, see motor_hollaus_eddy)
@@ -145,7 +143,7 @@ TODO_LIST = r"""
 ## Medium priority
 4. **Preisach with Everett interpolation** — for PM FORC analysis
 5. **Vector Preisach (Mayergoyz)** — full 2D rotational hysteresis
-6. **MatMagCurve full demag** — knee detection + irreversible demag tracking
+6. **PM full demag (via MatPM)** — knee detection + irreversible demag tracking (MatMagCurve skeleton removed 2026-06-26)
 7. **Thermal extension wrapper** — wrap any Mat with T-dependent params
 
 ## Low priority
