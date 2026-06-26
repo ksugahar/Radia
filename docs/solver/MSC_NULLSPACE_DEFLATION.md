@@ -5,7 +5,11 @@ operator, why the discrete solution is contaminated by spurious "loop"
 modes at high permeability, and how those modes can be removed. It is the
 solver-side foundation of the CEFC 2026 eigenvalue study.
 
-Reproducible scripts: `examples/mmm_eigenvalue_study/`.
+Reproducible scripts: REMOVED 2026-06-27. The `examples/mmm_eigenvalue_study/`
+corpus (and its docs notebook) was deleted: the loop-deflation runtime API is
+gone and **MMMM is the official MMM H-matrix route**, so the loop-deflation
+exploration has no forward value to ship. This note is retained as the theory
+record only; the inline `Script: *.py` references below are historical.
 
 > **Status (updated 2026-06-23): the RUNTIME loop-mode handling once described here
 > -- matrix-free deflation (`SetHACApKDeflation` / `SetDeflateNullspace`), the
