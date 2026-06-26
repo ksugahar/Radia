@@ -911,7 +911,41 @@ MULTIPOLE_MODES_VIZ = """\
 reusable recipe to SEE each mode's field. Reproducible notebook:
 `docs/multipole_moment_mmm/MOMENT_MODE_STREAMLINES.ipynb`. Sugahara-lab 2026-06-26.)
 
-### Build the 6 modes as face-charge vectors (== momentResidualEigenmodes)
+### Two senses of "mode" -- do NOT conflate (2026-06-26)
+
+(1) The MMMM **moment basis** -- `momentResidualEigenmodes` (rad_interaction.cpp): the
+    solver's per-element DOF = monopole + 3 dipole + (nF-4) quadrupole, the COMMON
+    N-FACE implementation (hex 6 / wedge 5 / pyramid 5; ONE kernel, no element-specific
+    code -- pyramid was added with NO new kernel; `CollectMomentElems` takes DOF 5 or 6;
+    6-face ceiling). The recipe below BUILDS this basis.
+(2) The **field eigenmodes** -- SVD/eig of the element's field-interaction operator
+    ("what field each mode radiates, ranked by strength"; topic "multipole_modes").
+
+They are NOT the same in general. On the CUBE the field eigenvalues are DEGENERATE
+(3 dipole equal, 2 quadrupole equal) -> the eigenmodes are an arbitrary basis of those
+subspaces, and the moment basis is just a symmetry-adapted representative (this is WHY
+the cube's moment-basis pictures look like clean axis-aligned multipoles -- it is a
+choice, not forced). DISTORT the hex (shear / non-cubic) and the degeneracy SPLITS: the
+6 field eigenvalues become distinct -> the eigenmodes are UNIQUE and the quadrupole pair
+ROTATES (still exactly mono + 3 dip + 2 quad, NO octupole -- the shear-quad functional is
+linear in the shear). Demo: a 1.5:1:0.8 box + 0.4 xy-shear gives eigenvalues
+[0.700, 0.050, 0.031, 0.023, 0.0044, 0.0024] (all distinct) with the quad axes tilted
++176/+66 deg vs the cube's axis-aligned pair.
+
+**TET is the exception:** a tetrahedron is NOT in the face-charge moment path
+(`CollectMomentElems` excludes DOF 3). It is the classic 3-DOF DIPOLE MMM, so its modes
+are the 3 principal axes of its 3x3 demag tensor (`rad.GetInteractMatrix`): isotropic
+(1/3,1/3,1/3) for a regular tet, three DISTINCT eigenvalues (e.g. 0.087/0.289/0.624) for
+an irregular tet -- principal-axis dipoles, NOT x/y/z and NOT a "moment basis".
+
+**API caveat (2026-06-26):** `rad.GetInteractMatrix` now returns ALL ZEROS for the
+face-charge MSC elements (hex/pyramid/wedge) -- the EIEM2 dense blocks were removed -- so
+the lab `examples/vim/multipole_moment_svd_multipole.py` SVD-of-N path is STALE for them
+(it still works for the 3-DOF tet demag tensor). For hex/pyramid/wedge field eigenmodes,
+build a field-energy Gram `G_ij = <H_i, H_j>` (H_i = field of unit charge on face i, via
+the van Oosterom-Strackee analytic kernel) and `eig()` that instead.
+
+### Build the 6 modes as face-charge vectors (== momentResidualEigenmodes, the moment basis)
 
 The 6 DOF live in the 6-D face-charge space R^6 (one uniform sigma per hex face).
 The orthonormal mode basis is exactly the C++ `momentResidualEigenmodes`
