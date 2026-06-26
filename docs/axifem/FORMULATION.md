@@ -4,6 +4,8 @@ A self-contained derivation of the Henrotte / Meeker axisymmetric finite-
 element formulation that `radia.axifem` implements.  Read this
 before reading the C++ source under `src/ext/axifem/`.  Companion doc
 [`AXIFEM.md`](AXIFEM.md) covers usage, API, and validation results.
+The executed P1/Q1/P2/Q2/P2-curved/Q2-curved proof artifact is
+[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](AXIFEM_ELEMENT_EVIDENCE.ipynb).
 
 ## 1. Problem class
 
@@ -321,14 +323,22 @@ path for spheres, Kelvin half-discs, and OCC-generated regions; Q2 straight
 quads remain the preferred structured-mesh path for disks, cylinders, and
 rectangular workpieces.
 
-### Q2 curved quads are not production C++
+### Q2 curved quads are opt-in production C++
 
-The shipped `AxiHenrotteFE_Q2_AxisAligned` is a straight, axis-aligned
-closed-form quad.  It constructs the element from the four corner
-coordinates; it does not consume curved quad edge/face nodes from
-`mesh.Curve(2)`.  A true 9-node curved Q2 quad exists only as the Python
-prototype `examples/maglev/research_cln/axifem/axifem_quad_q2_curved.py`.
-Porting it requires a separate quadrature-over-biquadratic-map BFI path.
+The default `AxiHenrotteFE_Q2_AxisAligned` is still the straight,
+axis-aligned closed-form quad.  It constructs the element from the four
+corner coordinates and is the preferred path for structured rectangular
+workpieces.
+
+The true 9-node curved Q2 quad is available as an opt-in production path:
+`H1Henrotte(mesh, order=2, curvedquad=True)` selects
+`AxiHenrotteFE_Q2_Curved`.  This element consumes the 9 curved node
+positions from `mesh.Curve(2)` and uses a quadrature-over-biquadratic-map
+BFI for stiffness and sigma mass.  The Python prototype
+`examples/maglev/research_cln/axifem/axifem_quad_q2_curved.py` remains the
+derivation/reference, while `tests/axifem/test_q2_curved.py` locks the C++
+behavior: curved Q2 reproduces the axis-aligned closed form on straight
+quads and converges on skewed annular quads.
 
 ## 9. Boundary conditions
 
@@ -525,7 +535,8 @@ independent paths:
 
 1. **Pure-Python reference** — `tests/axifem/_reference_python/`
    (axifem_core for P1 triangle, axifem_quad for Q1 quad,
-   axifem_quad_q2 for Q2 quad with Gauss 8×8 numerical quadrature).
+   axifem_quad_q2 for Q2 quad with Gauss 8×8 numerical quadrature,
+   axifem_quad_q2_curved for curved Q2 quads).
    Test `tests/axifem/test_python_reference_consistency.py` asserts
    the C++ stiffness eigenvalues match the Python prototype at
    machine precision for a single quad and smoke-tests the shipped

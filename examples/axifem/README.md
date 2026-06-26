@@ -9,6 +9,13 @@ The C++ implementation lives at `src/ext/axifem/` and ships in the
 radia wheel as `src/radia/axifem.pyd`.  Element-matrix unit
 tests live at `tests/axifem/`.
 
+Result-bearing reader documentation has been promoted to
+[`docs/axifem/`](../../docs/axifem/).  In particular,
+[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](../../docs/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb)
+records the executed proof for P1, Q1, P2, Q2, P2 curved, and Q2 curved
+with a version-stamped result JSON.  This directory remains the raw
+reproducibility input surface.
+
 ## Examples
 
 | Directory | What it shows |
