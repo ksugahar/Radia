@@ -2236,6 +2236,27 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 // default cap=64 deferred path gives ~5.38 round-trip error), so the linear iters collapse to single/low-
 // double digits with the identical field.  Free functions forward-declared in radia_pybind.cpp; the
 // factor-once / apply-many / free H-LU bridge lives in src/ext/HACApK/cHACApK_harith.c.
+// True-residual safety slack for the moment method-2 solve (see the guards at the GMRES/BiCGSTAB exits).
+// The solve is accepted only if the RECOMPUTED true rel residual ||b-Ax||/||b|| is within this factor of
+// tol.  Generous enough to ignore recursive-vs-true residual drift in a healthy solve, tight enough to
+// catch the gross false-convergence (true residual O(1)) that a non-symmetric H-LU factor produces as it
+// degrades with N (the documented "171-iter converged but |M| 13x too large" silent-wrong at >~4000 DoF).
+static constexpr double RAD_MOMENT_TRUERES_SLACK = 10.0;
+// Early-divergence bailout: if the recursive BiCGSTAB residual (or a GMRES restart's true residual) blows
+// past this factor of the initial ||b|| -- or goes non-finite -- the H-LU factor on the loop-heavy
+// non-symmetric A has gone unstable.  Stop iterating immediately (fail FAST) and let the true-residual guard
+// convert it to a loud failure, instead of grinding all 10000 iterations toward a ~1e99 residual.
+static constexpr double RAD_MOMENT_DIVERGE_FACTOR = 1.0e10;
+// H-LU factor usability bar: reject the factored preconditioner up front if its broad-probe round-trip
+// ||A(chi) M_H^-1 p - p||/||p|| exceeds this.  Calibrated (2026-06-26) on cube vs loop-heavy C-yoke: a
+// USABLE factor (incl. rough high-mu_r ones that Krylov still converges) round-trips <= ~5 (0.17 @ mu_r1e3,
+// 2.7 @ 5e3, 5.3 @ 1e4 -- it scales modestly with mu_r); a no-pivot block H-LU that went UNSTABLE on the
+// loop-heavy non-symmetric A(chi) round-trips ~1e6-1e7 (catastrophic amplification of the loop-charge near-
+// null space).  The two are separated by >5 orders of magnitude, so 1e3 passes every usable factor (200x
+// margin) and rejects every unstable one (>2700x margin).  Without this, a residual-based Krylov "converges"
+// the H-matrix residual onto a loop-polluted field the residual cannot see (GMRES measured returning a tol-
+// "converged" |M| 3x-47x too large).
+static constexpr double RAD_MOMENT_HLU_RT_MAX = 1.0e3;
 static std::atomic<bool> g_moment_hlu_precond{false};
 void RadSetMomentHLUPrecond(bool on) { g_moment_hlu_precond.store(on); }
 bool RadGetMomentHLUPrecond() { return g_moment_hlu_precond.load(); }
@@ -2470,6 +2491,34 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = b[i] - Ax[i]; }); }
 	if(std::sqrt(dot(r, r))/bnorm < tol) { sigma = x; return finish(0); }
 
+	// H-LU factor self-test (PROBE = a deterministic pseudo-random vector, NOT b).  A no-pivot block H-LU on
+	// the loop-heavy NON-SYMMETRIC A(chi) can produce a GARBAGE factor (round-trip O(1e2), memory
+	// mmmm-preconditioner #11/#12) whose near-null direction is the LOOP-charge space.  A residual-based
+	// Krylov then "converges" the H-matrix residual onto a loop-polluted solution the residual CANNOT see
+	// (GMRES was measured returning a tol-"converged" |M| 3x-47x too large).  The RHS b lies in the dipole
+	// rows and is ~orthogonal to that loop space, so a b-round-trip MISSES the instability -- a broad-support
+	// probe excites every direction (loops included).  Check the FACTOR directly: z = M_H^-1 p, w = A(chi) z;
+	// a usable preconditioner returns w ~ p.  Reject a garbage factor up front (fail loud, No Fallbacks) for
+	// BOTH BiCGSTAB and GMRES -- before it pollutes the solve.
+	if(hluRoot)
+	{
+		std::vector<double> pts((size_t)dof), zts((size_t)dof, 0.0), wts((size_t)dof, 0.0);
+		unsigned int seed = 2463534242u;   // xorshift32, fixed seed -> deterministic / resume-safe
+		for(int i = 0; i < dof; i++) { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; pts[(size_t)i] = ((double)seed / 4294967296.0) - 0.5; }
+		const double pn = std::sqrt(dot(pts, pts));
+		applyM(pts, zts);       // zts = M_H^-1 pts
+		matvecA(zts, wts);      // wts = A(chi) zts  (~ pts for a usable factor)
+		double diff2 = 0.0;
+		if(serialVectorOps) { for(int i = 0; i < dof; i++) { double d = wts[(size_t)i]-pts[(size_t)i]; diff2 += d*d; } }
+		else { ngcore::ParallelForRange(ngcore::IntRange(dof), [&](ngcore::IntRange rr){ double loc=0.0; for(auto i : rr){ double d = wts[(size_t)i]-pts[(size_t)i]; loc += d*d; } ngcore::AtomicAdd(diff2, loc); }); }
+		const double rt = (pn > 1e-300) ? std::sqrt(diff2) / pn : 0.0;
+		if(!std::isfinite(rt) || rt > RAD_MOMENT_HLU_RT_MAX)
+		{
+			fprintf(stderr, "Radia::Solve> moment H-LU factor unusable: round-trip ||A M_H^-1 p - p||/||p|| = %.3e (> %.3e) on a broad probe; the no-pivot block H-LU went unstable on the loop-heavy non-symmetric A. Not running a Krylov solve that would 'converge' onto a loop-polluted field.\n", rt, RAD_MOMENT_HLU_RT_MAX);
+			return finish(-14);
+		}
+	}
+
 	if(krylovSolver == 1)
 	{
 		const int restart = gmresRestart > 1 ? gmresRestart : 40;
@@ -2553,8 +2602,21 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 			betaNorm = std::sqrt(dot(r, r));
 			if(betaNorm / bnorm < tol) { sigma = x; return finish(totalIt); }
 			if(betaNorm <= 1.0e-300) { sigma = x; return finish(totalIt); }
+			if(!std::isfinite(betaNorm) || betaNorm > RAD_MOMENT_DIVERGE_FACTOR * bnorm) break;   // diverging -> true-residual guard fails loud
 		}
+		// True-residual guard at the maxiter exit.  GMRES verifies the true residual at every restart
+		// boundary (betaNorm = ||b-Ax|| from the last cycle), so the success returns above are safe; but
+		// the maxiter-exhausted path would otherwise return a positive iteration count the caller reads as
+		// "converged".  Never report success when tol was not met -- a non-symmetric H-LU factor degrades
+		// with N and can leave the field grossly wrong (No Fallbacks: a wrong field claiming convergence
+		// is the worst failure class).
 		sigma = x;
+		if(betaNorm / bnorm >= tol * RAD_MOMENT_TRUERES_SLACK)
+		{
+			fprintf(stderr, "Radia::Solve> moment GMRES did NOT converge: true rel residual %.3e >= tol %.3e after %d iters; not returning a silently-wrong field.\n",
+			        betaNorm / bnorm, tol, totalIt);
+			return finish(-13);
+		}
 		return finish(totalIt);
 	}
 	if(krylovSolver != 0)
@@ -2579,6 +2641,7 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		if(serialVectorOps) { for(int i = 0; i < dof; i++) s[(size_t)i] = r[(size_t)i] - alpha*v[(size_t)i]; }
 		else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { s[i] = r[i] - alpha*v[i]; }); }
 		double snorm = std::sqrt(dot(s, s));
+		if(!std::isfinite(snorm) || snorm > RAD_MOMENT_DIVERGE_FACTOR * bnorm) break;   // diverging -> true-residual guard fails loud
 		if(snorm/bnorm < tol) {
 			if(serialVectorOps) { for(int i = 0; i < dof; i++) x[(size_t)i] += alpha*phat[(size_t)i]; }
 			else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += alpha*phat[i]; }); }
@@ -2592,11 +2655,29 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { x[i] += alpha*phat[i] + omega*shat[i]; }); }
 		if(serialVectorOps) { for(int i = 0; i < dof; i++) r[(size_t)i] = s[(size_t)i] - omega*tvec[(size_t)i]; }
 		else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = s[i] - omega*tvec[i]; }); }
-		if(std::sqrt(dot(r, r))/bnorm < tol) { it++; break; }
+		const double rnorm = std::sqrt(dot(r, r));
+		if(rnorm/bnorm < tol) { it++; break; }
+		if(!std::isfinite(rnorm) || rnorm > RAD_MOMENT_DIVERGE_FACTOR * bnorm) { it++; break; }   // diverging -> true-residual guard fails loud
 		if(std::fabs(omega) < 1e-300) return finish(-10);
 		rho = rho_new;
 	}
+	// True-residual guard.  BiCGSTAB iterates a RECURSIVE residual (r = s - omega*t) that can drift far from
+	// the true residual b-Ax: the documented silent-wrong is exactly a recursive residual driven below tol
+	// while ||b-Ax|| stays O(1), returning a |M| 13x-too-large field as "converged" (lin=171 at 6156 DoF).
+	// Recompute the TRUE residual once (one H-matvec, cheap vs the whole solve) -- this covers both the
+	// early-converged breaks and the maxiter exit -- and fail loud if it does not meet tol.  No Fallbacks:
+	// never return a silently-wrong field.
+	matvecA(x, Ax);
+	if(serialVectorOps) { for(int i = 0; i < dof; i++) r[(size_t)i] = b[(size_t)i] - Ax[(size_t)i]; }
+	else { ngcore::ParallelFor(ngcore::IntRange(dof), [&](size_t i) { r[i] = b[i] - Ax[i]; }); }
 	sigma = x;
+	const double trueRel = std::sqrt(dot(r, r)) / bnorm;
+	if(trueRel >= tol * RAD_MOMENT_TRUERES_SLACK)
+	{
+		fprintf(stderr, "Radia::Solve> moment BiCGSTAB did NOT converge: true rel residual %.3e >= tol %.3e after %d iters; not returning a silently-wrong field.\n",
+		        trueRel, tol, it);
+		return finish(-13);
+	}
 	return finish(it);
 }
 
