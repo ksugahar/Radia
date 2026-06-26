@@ -584,7 +584,8 @@ src/radia/
 examples/
   ih_esim_benchmark/          # benchmark.py + analytical_bessel_baseline.py + results.json
   induction_heating/          # esim_demo.py / esim_induction_heating_demo.py
-  effective_surface_impedance/  # esim_conductor_model.py / esim_correct_implementation.py
+  # (canonical ESIM lives in src/radia/esim_cell_problem.py; the old
+  #  examples/effective_surface_impedance research scripts were removed 2026-06-27)
 
 tests/
   test_esim_integration.py    # cell-problem + ESI table + coupled solver tests
