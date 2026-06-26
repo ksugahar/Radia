@@ -2397,10 +2397,20 @@ symmetrization questions were resolved):
 
 2. **HDiv-VIM (`RadHACApKChargeGram` / `RadHACApKHDivManager` /
    `RadHACApKHDivSystemTet`) is the official SYMMETRIC version** (Galerkin
-   N=BᵀGB, ‖N−Nᵀ‖~3e-16 → MINRES + Compact-AMS). It already exists and is
-   KEPT (per "KEEP BOTH"), BUT it is SLOW, so **its H-matrix path is NOT a
-   current development priority** — do not invest in scaling the HDiv
-   H-matrix now. Symmetric formulation = HDiv-VIM; fast H-matrix route =
+   N=BᵀGB, ‖N−Nᵀ‖~3e-16 → MINRES + Compact-AMS), and **its HACApK H-matrix
+   IS the canonical path — do NOT delete it.** The C++ charge-Gram H-matrix
+   (`RadHACApKChargeGram` / `_ChargeGramHMatrix`) is the **SOLE demag
+   operator** for production HDiv-VIM: the dense O(N²) Python Gram (G, the
+   SVD loop basis, dense N=BᵀGB, analytic/image/Wilton builders) was
+   **deliberately removed 2026-06-23 (commit 21e4d910) because the
+   charge-Gram H-matrix is FASTER at matrix generation than dense.** So
+   HDiv-VIM has NO non-HACApK operator — cutting HACApK from HDiv would leave
+   it unable to solve. (Decision 2026-06-26, Sugahara: "消さない。むしろそれを
+   正のパスにする" — keep it, make it the canonical HDiv path.) "Off H-matrix
+   **development** priority" means only that **MMMM is the H-matrix
+   SCALABILITY-dev focus** (do not invest in further *scaling* the HDiv
+   H-matrix now); it does NOT mean the HDiv H-matrix is disposable. Symmetric
+   formulation = HDiv-VIM (on its charge-Gram H-matrix); fast general route =
    MMMM. The two are complementary, not competing.
 
 3. **The H-LU-vs-H-ILU question for MMMM is the open scalability follow-on.**
