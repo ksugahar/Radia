@@ -369,6 +369,13 @@ the **ship/release coupling** that previously forced lockstep releases.
 - Do NOT place generated files at the repository root
 - `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
 - Build output goes to `build*/` or `dist/` (both gitignored)
+- `docs/<topic>/` MAY contain `.py` **helper modules** that the topic's `*.ipynb`
+  imports (and that `radia_mcp` may import for mcp-server integration). This is
+  ENCOURAGED over duplicating the same logic inline in every notebook: factor the
+  shared compute/plot helper into a `docs/<topic>/*.py`, import it from the notebook
+  AND from the relevant `radia_mcp.<domain>` knowledge so the two stay in sync.
+  (A promoted showcase notebook may still embed a short demo verbatim; the helper-
+  module pattern is for logic shared by the notebook and the MCP server.)
 
 ### Sample Promotion Ladder: tests → examples → panels (2026-05-02)
 
@@ -2391,7 +2398,15 @@ symmetrization questions were resolved):
    preconditioner (`rad.SolverConfig(hacapk_hlu_precond=True)`, accum_cap=0,
    factor-once full `A(χ)`) bounds method-2 BiCGSTAB to tens of iters (vs
    block-Jacobi's 1641–5710 from field-null/solenoidal-mode pollution) at
-   identical field (~1e-10). **This is the route to invest in.**
+   identical field (~1e-10). **This is the route to invest in.** The
+   **loop-deflation R&D direction is CLOSED**: the matrix-free deflation runtime
+   API (`SetHACApKDeflation` / `SetDeflateNullspace`) was removed 2026-06-09, and
+   the `examples/mmm_eigenvalue_study/` corpus + its docs showcase notebook were
+   removed 2026-06-27 (no forward value to ship now that MMMM is the official MMM
+   H-matrix route and HDiv-VIM is the loop-free symmetric route). The nullspace
+   THEORY (why the MSC operator has loop modes — the justification for MMMM /
+   HDiv-VIM) is retained as the historical record in
+   `docs/solver/MSC_NULLSPACE_DEFLATION.md`; do not re-add the example.
 
 2. **HDiv-VIM (`RadHACApKChargeGram` / `RadHACApKHDivManager` /
    `RadHACApKHDivSystemTet`) is the official SYMMETRIC version** (Galerkin

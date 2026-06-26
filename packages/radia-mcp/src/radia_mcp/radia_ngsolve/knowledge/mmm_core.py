@@ -701,10 +701,13 @@ See "eigenvalue_nullspace" for why the spectrum of A matters, and
 EIGENVALUE_NULLSPACE = """\
 ## Near-null "loop" modes of the MSC operator (conditioning + solver behavior)
 
-(CEFC 2026 full-paper study; reproducible scripts in
-`examples/mmm_eigenvalue_study/`; SHOWCASE NOTEBOOK -- spectrum, nullspace-dim
-scan, topological belt-loop deficit, and the beautiful/ugly mode figures,
-executed + rendered -- `docs/solver/mmm_eigenvalue_study.ipynb`.)
+(CEFC 2026 full-paper study. The reproduction example
+`examples/mmm_eigenvalue_study/` and its showcase notebook were REMOVED
+2026-06-27: the loop-deflation runtime API is gone and **MMMM is the official
+MMM H-matrix route**, so the loop-deflation exploration has no forward value to
+ship. This section is retained as the theory record only; the inline
+`*.py` script names below are historical (no longer in the tree). See the
+CLAUDE.md "H-Matrix Route Policy" and `docs/solver/MSC_NULLSPACE_DEFLATION.md`.)
 
 ### The null space = cycle space of the element graph
 
