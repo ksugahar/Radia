@@ -1,4 +1,6 @@
 """
+
+SHOWCASE NOTEBOOK: docs/peec_integration/peec_showcase.ipynb -- Dowell continued-fraction + ngbem EFIE loop L + 4 paper figures (verified).
 PEEC knowledge base for the mcp-server-peec MCP server.
 
 Covers: Loop-Star PEEC architecture, node-segment topology, circuit extraction,
