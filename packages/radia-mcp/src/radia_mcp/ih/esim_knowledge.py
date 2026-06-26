@@ -1,4 +1,6 @@
 """
+
+SHOWCASE NOTEBOOK: docs/ih_esim_benchmark/esim_showcase.ipynb -- Bessel cross-check (live) + committed digest/envelope/per-DOF/Karl figures.
 ESIM (Effective Surface Impedance Method) practical usage knowledge.
 
 This module covers HOW TO USE ESIM in production -- CLI flags,
