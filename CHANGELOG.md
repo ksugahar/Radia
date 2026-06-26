@@ -3,6 +3,20 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## Unreleased
+
+- **API surface reduction (Phase 0)** — per the "Reduce Proprietary API Surface"
+  stock-take (`docs/api_inventory/API_SURFACE_2026-06-26.md`), removed unused
+  proprietary APIs:
+  - removed `MatMagFixed` / `MatMagLinear` / `MatMagCurve` (pybind) — an unused
+    skeleton trio that all behaved as fixed M; use `MatPM` or direct
+    `ObjHexahedron(..., M)`. The radentry C-API `RadMatMag*` is retained.
+  - removed `netgen_mesh_import.create_hex_mesh_grid` — dead CplMag-era helper,
+    no callers; use NGSolve `MakeStructured3DMesh` / OCC / Cubit then `.vol`.
+  - `Trf*` (TrfTrsl/TrfRot/TrfInv/TrfCmbL/TrfOrnt) verified KEPT — they perform
+    field-contributing symmetry replication (the stock-take's delete suggestion
+    was corrected after caller verification; 23 transformation tests pass).
+
 ## 4.95.2 — TaskManager thread-count import fix
 
 Released 2026-06-26.
