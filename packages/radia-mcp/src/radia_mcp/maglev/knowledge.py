@@ -144,6 +144,14 @@ electrodynamic levitation device).
 - **PM axial bearings** -- Sumitomo Heavy lineage (heavy-industrial)
 - **Bearingless motor + WPT** (cross-link `radia_mcp.motor`, `radia_mcp.pcb`)
 
+## Showcase notebook
+
+`docs/maglev/maglev_showcase.ipynb` -- consolidated rendered view of the
+`examples/maglev/` tier: mixed-Galerkin `alpha(s)` sweep, validated sphere
+levitation force, shape-anisotropic ellipsoid tensor, the moving-magnet
+magnetic-Reynolds (`Rm`) crossover, and the TEAM 28 benchmark (committed
+figures + headline JSON; golden corpus kept in `examples/maglev/`).
+
 ## Levitation FORCE physics (also in this server)
 
 Beyond the maglev systems above, this server also covers the levitation
