@@ -309,6 +309,40 @@ it has crossed that bar; otherwise distill to `memory/` and leave the tracked tr
 clean. This is the research-lifecycle complement to the "Sample Promotion Ladder"
 (tests → examples → panels) and "No Development Cruft" policies above.
 
+### Documentation Format: Markdown for Dev Docs, ipynb for Method/Implementation Explanations (2026-06-27)
+
+**POLICY** (Sugahara): pick the documentation format by **what the document is**:
+
+- **Development documents -> Markdown (`.md`).** Plans, design notes, architecture,
+  policies, API references, READMEs, handoffs, inventories, changelogs, decision
+  records -- anything whose job is to *describe / decide / index* rather than to
+  *demonstrate a computation*. These stay `.md` (diffable, fast to read, no kernel).
+- **Explanations of a METHOD or an IMPLEMENTATION -> Jupyter notebook (`.ipynb`).**
+  A document whose job is to *explain how a method works* or *how an implementation
+  works* should be an **executable, self-contained notebook**: prose + math + the
+  actual code, executed so the outputs (numbers / figures / tables) are embedded and
+  visible on open. A method/implementation explanation is only trustworthy when it
+  **runs and shows its result** -- a static `.md` that merely asserts how something
+  works is weaker than a notebook that demonstrates it (ties to "self-contained
+  ipynb shows results" + the examples -> docs/ipynb promotion program).
+
+**Discriminator** (when a doc has both math and code): is the document's PURPOSE to
+explain *how the method/implementation works* (-> `.ipynb`, make it run) or to
+*record a design/decision/plan/reference/theory-survey* (-> `.md`)? A `FORMULATION`
+or `DESIGN` note that derives equations but ships no runnable demonstration stays
+`.md`; the moment it is meant to *show the method working*, it is an `.ipynb`.
+
+**How to apply:**
+- New method/implementation write-ups are authored as `docs/<topic>/*.ipynb`
+  (executed via `jupyter nbconvert --execute` so outputs embed), NOT as `.md`.
+- `docs/<topic>/` MAY hold `.py` helper modules the ipynb (and `radia_mcp`) import
+  (see "File Placement Policy").
+- Do NOT mass-convert existing `.md`: convert an existing method/implementation
+  `.md` to `.ipynb` opportunistically (when you touch it, or when it would clearly
+  benefit from being runnable). Pure dev docs stay `.md`.
+- The public showcase / examples-consolidation program already follows this: methods
+  land as executed `docs/<topic>/*.ipynb`; the surrounding plans/policies are `.md`.
+
 ### Green's Function: Laplace Kernel Only (MQS/Darwin)
 
 **POLICY**: Radia uses **Laplace kernel only**: $G(r) = 1/(4\pi r)$. Target regime is MQS (Magneto-Quasi-Static) to Darwin approximation.
