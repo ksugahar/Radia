@@ -2260,13 +2260,17 @@ static constexpr double RAD_MOMENT_HLU_RT_MAX = 1.0e3;
 static std::atomic<bool> g_moment_hlu_precond{false};
 void RadSetMomentHLUPrecond(bool on) { g_moment_hlu_precond.store(on); }
 bool RadGetMomentHLUPrecond() { return g_moment_hlu_precond.load(); }
-// Two-sided deflated block-Jacobi preconditioner (rad.SolverConfig(moment_deflation=True)).  A is NON-symmetric
+// Two-sided deflated block-Jacobi preconditioner (rad.SolverConfig(moment_deflation=...)).  A is NON-symmetric
 // so its right near-null (= the surface-charge loops, GetLoopBasis) and left near-null (= "co-loops" =
 // orthonorm(A@loops)) are DISTINCT spaces; deflating BOTH conditions the complement (cond ~chi -> ~20), so the
 // block-Jacobi smoother bounds the iters far below plain block-Jacobi on loop-heavy geometry.  Setup is O(N^3)
 // (the loop space is O(N)-dim, the coarse operator is dense) -> a medium-N (<=~15k) constant-factor speedup
-// over dense LU, NOT asymptotically scalable; opt-in, exclusive with the H-LU precond.
-static std::atomic<bool> g_moment_deflate{false};
+// over dense LU, NOT asymptotically scalable; exclusive with the H-LU precond.
+// DEFAULT ON (Sugahara 2026-06-27): the TARGET workload is accelerator electromagnets (C-type yokes, dipole/
+// quadrupole iron) -- closed flux paths through iron = LOOP-HEAVY, where deflation is a large win (C-yoke
+// block-Jacobi 167-2917 iters -> deflated 41-114).  A non-loop-heavy solve (e.g. a benchmark cube / solid
+// block) instead pays the O(N^3) coarse setup for little gain -> set moment_deflation=False for those.
+static std::atomic<bool> g_moment_deflate{true};
 void RadSetMomentDeflate(bool on) { g_moment_deflate.store(on); }
 bool RadGetMomentDeflate() { return g_moment_deflate.load(); }
 extern "C" {
