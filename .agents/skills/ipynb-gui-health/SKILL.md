@@ -27,8 +27,9 @@ The migration state lives in
 `src/radia/panels/notebooks/panel_notebook_manifest.json`:
 **5 panels are `active-local-runner`** (radia-ih, radia-em, radia-pcb,
 radia-motor, radia-streamfunction); **radia-export-menu is `migration-shell`**
-(its in-Cubit toolbar is still desktop-only -- that part stays under
-`pyside6-health`, see "What stays under pyside6-health" below).
+(its in-Cubit export toolbar is a Cubit plugin surface, checked by
+`cubit-plugin-install --verify-only` and `cubit-smoke-test`; it is not a reason
+to install PySide6 into normal Radia Python).
 
 This skill answers three questions end to end:
 
