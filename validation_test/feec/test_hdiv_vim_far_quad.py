@@ -84,6 +84,36 @@ def test_far_quad_polytope_hex_reproduces_exact():
     assert abs(df["demag"] - fq["demag"]) < 5e-4, "default hex CG path should use the far_quad fast build"
 
 
+def _bh_saturating(chi0=1000.0, Bsat=2.0, n=50):
+    """Saturating BH table [[H,B]] (A/m, T): M(H)=chi0 H/(1+chi0|H|/Msat), B=mu0(H+M)."""
+    mu0 = 4e-7 * np.pi
+    H = np.concatenate([[0.0], np.geomspace(1.0, 1e7, n)])
+    M = chi0 * H / (1.0 + chi0 * np.abs(H) / (Bsat / mu0))
+    return np.column_stack([H, mu0 * (H + M)]).tolist()
+
+
+def test_far_quad_nonlinear_reproduces_exact():
+    """NONLINEAR Newton far_quad: the Gram N=B^T G B is geometry-only, so the precision-preserving fast
+    build reproduces the all-analytic nonlinear answer too (the Newton uses GMRES, asymmetry-tolerant).
+    Locks: far_quad == exact on demag, volume-average Mz, AND the Newton iteration count -- the fast build
+    must not perturb either the solution or the convergence; and the DEFAULT nonlinear path uses it."""
+    mesh = _tet_cube(0.4)
+    BH = _bh_saturating()
+    Hdrive = ng.CoefficientFunction((0, 0, 1.5e5))   # drives mild saturation
+    with ng.TaskManager():
+        ex = hdiv_demag_solve(mesh, bh_table=BH, H_ext=Hdrive, near_factor=1e30, nl_tol=1e-7)
+        fq = hdiv_demag_solve(mesh, bh_table=BH, H_ext=Hdrive, near_factor=2.0, far_quad=4, nl_tol=1e-7)
+        df = hdiv_demag_solve(mesh, bh_table=BH, H_ext=Hdrive, nl_tol=1e-7)  # default (no nf/fq given)
+    assert ex["nonlinear"] and fq["nonlinear"] and df["nonlinear"]
+    assert abs(fq["demag"] - ex["demag"]) < 5e-4, f"nl far_quad demag {fq['demag']} vs exact {ex['demag']}"
+    rel_mz = abs(fq["M_avg"][2] - ex["M_avg"][2]) / abs(ex["M_avg"][2])
+    assert rel_mz < 1e-3, f"nl far_quad Mz rel {rel_mz:.2e} vs exact"
+    assert fq["iters"] == ex["iters"], f"nl far_quad Newton iters {fq['iters']} != exact {ex['iters']}"
+    # the DEFAULT nonlinear path (no near_factor/far_quad) IS the fast far_quad build (same Gram)
+    assert abs(df["demag"] - fq["demag"]) < 5e-4, "default nonlinear path should use the far_quad fast build"
+    assert abs(df["M_avg"][2] - fq["M_avg"][2]) / abs(fq["M_avg"][2]) < 1e-3
+
+
 def test_far_quad_only_applies_to_near_far_split():
     """far_quad is a FAR-pair option: with near_factor=1e30 (all pairs NEAR) it is a no-op -> identical to
     the plain all-analytic Gram (guards against far_quad accidentally touching the exact path)."""
