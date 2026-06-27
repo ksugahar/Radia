@@ -2,6 +2,8 @@
 
 A法（ベクトルポテンシャル法）の解に対する平衡誤差推定において、Ω法を直接法で完全に解く代わりに、**CG法を少数回で打ち切る**ことで計算コストを大幅に削減できる。
 
+> **実行可能デモ（method showcase）**: 本書の主張を実際に走らせて結果（CG反復数 vs 推定量の収束表・CG残差曲線・要素ごとの誤差相関）を確認できる、出力埋め込み済みのノートブックがあります → [`cg_smoother_demo.ipynb`](cg_smoother_demo.ipynb)（`nbconvert --execute` で実行済み。本書の数値表をそのまま再現）。
+
 ---
 
 ## 目次
@@ -288,5 +290,6 @@ Prager-Synge の定理は、A法とΩ法の両方向で成り立つ：
 
 ## 関連ファイル
 
+- [cg_smoother_demo.ipynb](cg_smoother_demo.ipynb) - 実行可能デモ（method showcase, `nbconvert` 実行済み・出力埋め込み）
 - [ErrorEstimator.md](ErrorEstimator.md) - 平衡誤差推定の理論
-- [test_cg_smoother_equilibration.py](test_cg_smoother_equilibration.py) - 数値実験コード
+- [experiment_cg_smoother_equilibration.py](experiment_cg_smoother_equilibration.py) - 数値実験コード（ノートブックの元スクリプト）
