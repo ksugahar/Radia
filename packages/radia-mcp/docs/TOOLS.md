@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **563 tools** across 43 MCP servers.
+Total: **564 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 45 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 46 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 10 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 41 |
@@ -95,6 +95,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_status` | (no description) |
 | `cubit_suggest_next` | Suggest concrete next Cubit commands based on the current state. |
 | `cubit_toolbar_guide` | Get documentation on building custom in-Cubit PySide6 toolbars. |
+| `cubit_vol_inventory` | Return semantic element inventory for a Netgen `.vol` export. |
 | `cubit_web_docs` | Fetch live Cubit documentation and grep for `query`. |
 | `generate_cubit_script` | Generate a template Cubit Python script for common workflows. |
 | `get_lint_rules` | List all available Cubit export lint rules with descriptions. |
