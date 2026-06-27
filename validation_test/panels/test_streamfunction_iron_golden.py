@@ -5,8 +5,9 @@ Savart operator gets the iron reaction field added (reduced scalar potential on
 a Kelvin open-boundary FE mesh, ``A = A_free + A_react``), so a coil designed
 near an iron yoke/shield/core hits the target IN the iron system.
 
-Verified mechanism: docs/kelvin/kelvin_dtn_spectrum_archive.ipynb demo_oo /
-demo_sp1 (material-aware design HITS, free-space design MISSES).  Here the same
+Verified mechanism:
+`validation_test/kelvin_dtn_spectrum/act8_03_general_iron_design.py`
+(material-aware design HITS, free-space design MISSES).  Here the same
 operator is exercised end-to-end through the production CLI on a spherical iron
 shell enclosing the canonical cylinder coil + DSV.
 
