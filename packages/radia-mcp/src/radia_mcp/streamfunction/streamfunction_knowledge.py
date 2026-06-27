@@ -138,9 +138,8 @@ DOCS + DEMOS
     docs/stream_function/deformation.ipynb     -- run_deformation_search live:
        penalty form (--minimize-reg) + NSGA-II Pareto front (--pareto);
        cost-vs-trial + (RMS, psi^T S psi) front; flat/accuracy/reg-min table
-    docs/stream_function/stream_function_examples_archive.ipynb -- executed
-       source/result archive for all 41 examples/stream_function Python
-       scripts, synchronized with stream_function_examples_archive_results.json.
+    examples/stream_function/demo_*.py -- runnable companions for the maintained
+       docs notebooks; obsolete source-preservation ledgers have been retired.
     (these are the runnable companions to the .md twins; the .md keeps the
     prose/derivations, the .ipynb embeds the produced numbers + figures)
   examples/stream_function/demo_*.py  -- incl. the Pareto + sheet-metal

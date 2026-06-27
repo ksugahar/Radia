@@ -9,10 +9,8 @@ hodograph"** mode shipped in the `radia-electromagnet` panel
 > via the A–φ duality + reduced potential) is in
 > [`docs/clebsch_hodograph/DESIGN_METHODOLOGY.md`](../../docs/clebsch_hodograph/DESIGN_METHODOLOGY.md).
 
-Docs promotion: the result-saved archive
-[`docs/clebsch_hodograph/clebsch_hodograph_examples_archive.ipynb`](../../docs/clebsch_hodograph/clebsch_hodograph_examples_archive.ipynb)
-collects all 46 Python scripts, full source, SHA-256 hashes, existing JSON
-payloads, and result media hashes. The scripts remain protected for now because
+The maintained theory surfaces are the Markdown documents in
+`docs/clebsch_hodograph/`. The scripts remain protected for now because
 `validation_test/feec/test_clebsch_hodograph_research.py`, docs, and MCP
 knowledge cite this corpus directly; prune only after named references are
 migrated to `docs/`, `src/`, or `validation_test/`.

@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T22:16:43Z",
+  "generated_at_utc": "2026-06-27T22:49:41Z",
   "notebook": "docs/bem_extractor/bem_inductance_limitations.ipynb",
-  "notebook_sha256": "90a92c96031186c4f9cacf1424d4c8510fe16345301bc3e9268b5c94da9c5edf",
+  "notebook_sha256": "3f89301b5ffc886177da364a33061c49f65fb90554899289860676424784c5d5",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

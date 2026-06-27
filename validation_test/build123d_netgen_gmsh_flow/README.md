@@ -18,5 +18,5 @@ python validation_test/build123d_netgen_gmsh_flow/validation_halbach_region_swee
 python validation_test/build123d_netgen_gmsh_flow/validation_racetrack_plate_air_region.py --quick
 ```
 
-The rendered docs archive is kept in `docs/build123d_netgen_gmsh_flow/` with
-synchronized JSON result records.
+The old docs-layer source archive has been retired. Use this directory for the
+validation corpus and `radia_mcp.build123d.pipeline` for the reusable API.
