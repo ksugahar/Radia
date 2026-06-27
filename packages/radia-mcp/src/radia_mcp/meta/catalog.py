@@ -452,8 +452,16 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["figure_style_guide", "figure_size_for_target",
                             "paper_figure_profiles", "paper_figure_recipe",
                             "paper_figure_quality_rules"],
-        "related": ["mathematica", "literature-index", "chart2d",
-                      "md2html"],
+        "related": [
+            "mathematica",
+            "literature-index",
+            "chart2d",
+            "md2html",
+            "paper-writing",
+            "grant-writing",
+            "presentation",
+            "poster",
+        ],
         # 'meta' tag = cross-cutting utility usable by any paper /
         # digest, not bound to a single solver domain.
         "tags": ["meta"],
@@ -473,6 +481,73 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["chart2d_catalog", "chart2d_line", "chart2d_bode",
                             "chart2d_scatter", "chart2d_contourf"],
         "related": ["figure"],
+        "tags": ["meta"],
+    },
+    "paper-writing": {
+        "subpackage": "radia_mcp.paper_writing",
+        "entry_point": "mcp-server-paper-writing",
+        "description": "Journal paper / digest writing helpers: IMRaD, "
+                       "abstract, citation, figure, equation, PDF layout, "
+                       "and reviewer-trigger lints.",
+        "primary_tools": ["paper_writing_usage",
+                            "paper_writing_health_report",
+                            "paper_writing_em_submission_gate"],
+        "related": [
+            "figure",
+            "grant-writing",
+            "presentation",
+            "poster",
+            "document-meta",
+        ],
+        "tags": ["meta"],
+    },
+    "grant-writing": {
+        "subpackage": "radia_mcp.grant_writing",
+        "entry_point": "mcp-server-grant-writing",
+        "description": "Grant proposal helpers: Japanese technical-prose "
+                       "lint, section coverage, budget alignment, "
+                       "recommendation-letter template, and KDDI Digital "
+                       "Innovation social-implementation checks.",
+        "primary_tools": ["grant_writing_usage",
+                            "grant_writing_health_report",
+                            "grant_writing_kddi_digital_check",
+                            "grant_writing_recommendation_letter_template"],
+        "related": ["paper-writing", "figure", "presentation",
+                      "document-meta"],
+        "tags": ["meta"],
+    },
+    "presentation": {
+        "subpackage": "radia_mcp.presentation",
+        "entry_point": "mcp-server-presentation",
+        "description": "Research-talk slide lint + PPTX tools: density, "
+                       "bullets, speaking time, title/body alignment, "
+                       "figure/equation/result-slide checks.",
+        "primary_tools": ["presentation_usage",
+                            "presentation_health_report",
+                            "presentation_extract_pptx_text"],
+        "related": [
+            "paper-writing",
+            "grant-writing",
+            "figure",
+            "poster",
+            "document-meta",
+        ],
+        "tags": ["meta"],
+    },
+    "poster": {
+        "subpackage": "radia_mcp.poster",
+        "entry_point": "mcp-server-poster",
+        "description": "Conference poster generation and lint: templates, "
+                       "viewing-distance font size, color contrast, zone "
+                       "balance, QR audit, and print readiness.",
+        "primary_tools": ["poster_usage", "poster_lint",
+                            "poster_health_report"],
+        "related": [
+            "presentation",
+            "paper-writing",
+            "figure",
+            "document-meta",
+        ],
         "tags": ["meta"],
     },
     "literature-index": {
@@ -500,7 +575,13 @@ CATALOG: dict[str, dict[str, Any]] = {
             "document_meta_panel_layout_audit",
             "document_meta_lint_all",
         ],
-        "related": ["meta"],
+        "related": [
+            "meta",
+            "paper-writing",
+            "grant-writing",
+            "presentation",
+            "poster",
+        ],
         "tags": ["meta"],
     },
 

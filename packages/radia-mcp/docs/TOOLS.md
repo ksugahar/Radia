@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **346 tools** across 39 MCP servers.
+Total: **561 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -41,6 +41,10 @@ Total: **346 tools** across 39 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 12 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 95 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 17 |
+| [`mcp-server-presentation`](#mcp-server-presentation) | `radia_mcp.presentation` | 71 |
+| [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 10 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 9 |
@@ -675,6 +679,257 @@ Module: `radia_mcp.chart2d.server`
 | `chart2d_step` | Stair-step plot.  PWM / discrete-time / step histogram. |
 | `chart2d_streamplot` | Field lines of a 2D vector field on a REGULAR grid. |
 | `chart2d_violin` | Violin plot (KDE-as-fill). |
+
+## `mcp-server-paper-writing`
+
+_Journal paper / digest writing helpers: IMRaD, abstract, citation, figure, equation, PDF layout, and reviewer-trigger lints._
+
+Module: `radia_mcp.paper_writing.server`
+
+| Tool | Description |
+|---|---|
+| `paper_writing_abstract_strength` | Abstract の強度を 4 要素 (problem / method / result-with-number / impact) |
+| `paper_writing_acronym_usage_audit` | 略語の使用頻度監査 (grant_writing 実装の re-export)。 |
+| `paper_writing_adaptive_health_report` | paper T8 health_report の severity 判定を context で adjust。 |
+| `paper_writing_analyze_sentences` | 文長分析 (和文)。journal では長文を避けて読みやすさ重視。 |
+| `paper_writing_arxiv_extract_equations` | Extract all displayed equations from a LaTeX source. |
+| `paper_writing_arxiv_fetch_latex_source` | Fetch the LaTeX source of an arXiv preprint. |
+| `paper_writing_arxiv_search` | Search arXiv via the official Atom XML API. |
+| `paper_writing_check_abstract_background_ratio` | Abstract 内で background (導入文) が占める割合を推定。 |
+| `paper_writing_check_abstract_no_math_no_citation` | Abstract 内に数式 (math), citation, domain acronym が混入していないか検出。 |
+| `paper_writing_check_citation_usage` | TeX 本文中の \cite{} キーと bib file の entries を突合。 |
+| `paper_writing_check_digest_human_review_triggers` | Detect one-page digest issues learned from Sugahara human review. |
+| `paper_writing_check_english_redflags` | 英文論文の典型的 red flag を検出 (冠詞、時制、自動詞/他動詞 の混同)。 |
+| `paper_writing_check_equation_numbering` | 方程式番号 (1), (2), ... の連番欠落 / 重複をチェック。 |
+| `paper_writing_check_figure_caption_showing` | Figure caption が showing (describe) 形か telling (claim) 形か判定。 |
+| `paper_writing_check_figure_forward_reference` | 図/表の \label と \ref の整合チェック (孤立ラベル / 未解決参照)。 |
+| `paper_writing_check_figure_uses_pdf` | `\includegraphics` paths must be vector (.pdf / .eps), not raster. |
+| `paper_writing_check_floats_far_from_reference` | Detect figures whose \ref{} appears far from the actual float. |
+| `paper_writing_check_imrad_balance` | IMRAD 各セクションの字数バランスを検証する。 |
+| `paper_writing_check_kanji_ratio` | 漢字比率 check (本多『日本語の作文技術』第四章 re-export)。 |
+| `paper_writing_check_misuse_japanese` | 『問題な日本語』由来の現代誤用検出 (re-export)。 |
+| `paper_writing_check_notation_variants` | 和文表記ゆれ検出 (grant_writing 実装の re-export)。 |
+| `paper_writing_check_overfull_hbox` | LaTeX ログ中の Overfull \hbox 警告をカウント。journal では許容ゼロ。 |
+| `paper_writing_check_paragraph_length` | 段落の字数/語数が適正範囲内か検出。 |
+| `paper_writing_check_paragraph_opener` | Introduction/Abstract の段落冒頭が禁断フレーズで始まるか検出。 |
+| `paper_writing_check_passive_voice_ratio` | 英文の受動態比率を推定。Wallwork §8: Methods は passive 可、 |
+| `paper_writing_check_pdf_advanced_anomalies` | 論文 PDF を実際に読んで、reviewer-2 が刺してくる高頻度の体裁 |
+| `paper_writing_check_pdf_edge_overflow` | 論文 PDF を実際に読んで、本文/数式/図表が紙面の端からはみ出して |
+| `paper_writing_check_pdf_obvious_errors` | 論文 PDF を実際に開いて「明らかな体裁エラー」を 6 種類スキャン。 |
+| `paper_writing_check_prose_density` | Detect compression-induced prose-density anti-patterns. |
+| `paper_writing_check_self_citation_ratio` | 自己引用率を算出。Wallwork: <20% 推奨。 |
+| `paper_writing_check_sentence_ending_variety` | 文末表現の単調さ / 連続を検出 (中島・塚本 §1.3.2)。 |
+| `paper_writing_check_strong_adjective_budget` | 強調副詞/形容詞の過剰使用を検出。 |
+| `paper_writing_check_subject_predicate_distance` | 主述直結原則 (本多 p.22) — 「は、」「が、」 主題マーカーの |
+| `paper_writing_check_tense_consistency` | Discussion の 3-part tense (hypothesis=現在, result=過去, background=現在完了) 混在検出。 |
+| `paper_writing_check_typography_hacks` | Detect typography hacks used to cram content past a page limit. |
+| `paper_writing_check_undefined_variables` | Detect math symbols that are used but never defined. |
+| `paper_writing_check_word_repetition` | 同一単語の近接障害を検出する (中島・塚本『知的な科学・技術文章の書き方』§1.3.5)。 |
+| `paper_writing_citation_health_4_axes` | 論文 reference の 4 軸 health 診断。 |
+| `paper_writing_citation_workflow_recipe` | Return the lab's mandatory citation-verification workflow recipe. |
+| `paper_writing_claim_quantification` | Unquantified hype claims を検出。 |
+| `paper_writing_classify_reviewer_comment` | Reviewer コメントを佐藤 Q40 の 4-tier に自動分類。 |
+| `paper_writing_contribution_clarity_score` | Introduction 末尾の Contribution リスト/段落の明確度診断。 |
+| `paper_writing_count_underlines` | TeX/LaTeX 内の下線コマンドを実測。論文では原則ゼロを目指す。 |
+| `paper_writing_count_weak_expressions` | 弱気修飾語の出現数。journal 論文では conclusion / contribution で |
+| `paper_writing_detect_overlapping_text_blocks` | Detect text-on-text overlap (block-vs-block IoU on every page). |
+| `paper_writing_detect_page_whitespace_anomalies` | Flag pages that are mostly whitespace (sign of bad float placement). |
+| `paper_writing_detect_text_image_overlap` | Detect text blocks overlapping with images on every page. |
+| `paper_writing_detect_text_overflow_page` | Detect text blocks extending past the page CropBox / MediaBox. |
+| `paper_writing_discussion_structure_4_elements` | Discussion section の 4 要素 (interpretation / limitations / |
+| `paper_writing_doi_to_bibtex` | Generate a BibTeX entry for a DOI via Crossref metadata. |
+| `paper_writing_em_paper_style` | EM-domain-specific style/notation/convention knowledge. |
+| `paper_writing_em_submission_gate` | One-shot EM-paper pre-submission gate. |
+| `paper_writing_emerald_download_pdf` | Download an Emerald Publishing PDF (e.g. COMPEL journal). |
+| `paper_writing_external_sources_recipe` | Return the GitHub-survey writeup + decision tree + credits. |
+| `paper_writing_extract_abstract` | Extract the abstract body from a .tex file. |
+| `paper_writing_fetch_and_cite` | One-shot: download IEEE PDF + generate BibTeX entry from a DOI. |
+| `paper_writing_figure_referencing_coverage` | Every \label{fig:X}/\label{tab:X} が本文で \ref される回数を集計。 |
+| `paper_writing_find_undefined_acronyms` | Latin 略語の初出定義 check (grant_writing 実装の re-export)。 |
+| `paper_writing_generate_cover_letter` | 投稿 cover letter の skeleton を生成。 |
+| `paper_writing_generate_response_letter` | Reviewer コメントへの応答文テンプレ (佐藤 Q40 "agree first, pivot")。 |
+| `paper_writing_given_new_ordering` | Wallwork §3.4-3.6: Given-New 情報配置ルールの heuristic 評価。 |
+| `paper_writing_health_report` | paper_writing Plan B の全 T1-T7 を束ねた統合レポート。 |
+| `paper_writing_ieee_doi_to_arnumber` | Resolve an IEEE DOI to its IEEE Xplore arnumber. |
+| `paper_writing_ieee_download_pdf` | Download an IEEE Xplore PDF via cookie-seeded curl-like session. |
+| `paper_writing_journal_fit_assessment` | target journal の aims & scope と論文の fit を診断。 |
+| `paper_writing_layout_thumbnail_strip` | Render every page as a thumbnail tile into ONE composite PNG. |
+| `paper_writing_layout_visual_recipe` | Return the lab recipe for image-based PDF layout verification. |
+| `paper_writing_limitation_statement_presence` | Discussion 内で limitation/caveat 段落の有無・位置・充実度を検査。 |
+| `paper_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 の bedrock 診断 (re-export)。 |
+| `paper_writing_lint_reference_format` | .bib の reference エントリーの完全性と形式を検証。 |
+| `paper_writing_next_5_actions` | paper health_report の priority_issues を impact / effort で再 sort、 |
+| `paper_writing_pdf_overlap_recipe` | Return the recipe for PDF overlap/overflow detection. |
+| `paper_writing_related_work_density` | Introduction 内の \cite 密度・自己引用比率・年度分布を診断。 |
+| `paper_writing_render_pages_to_png` | Render PDF pages to PNG files for visual inspection. |
+| `paper_writing_reproducibility_open_science_check` | Reproducibility & Open Science の 6 軸を一括診断。 |
+| `paper_writing_resolve_doi` | Look up a DOI's metadata via the Crossref public API. |
+| `paper_writing_resolve_input_chain` | MCP tool wrapper for resolve_input_chain(). |
+| `paper_writing_reviewer_2_trigger_summary` | 悪意ある reviewer-2 が最も突いてくるポイントを weighted union で列挙。 |
+| `paper_writing_rewrite_suggest` | paper 用 rewrite candidate 生成 (11 target × 3-5 candidate)。 |
+| `paper_writing_root_cause_diagnosis` | health_report 結果を横断 pattern matching し、論文の根本原因を診断。 |
+| `paper_writing_run_full_workflow` | paper 用 Phase 1-5 を 1 コール chain 実行。 |
+| `paper_writing_sciencedirect_download_pdf` | Download an Elsevier ScienceDirect PDF. |
+| `paper_writing_semantic_scholar_citations` | List the papers CITING a given paper. |
+| `paper_writing_semantic_scholar_lookup` | Look up a paper via Semantic Scholar API. |
+| `paper_writing_semantic_scholar_references` | List the references CITED BY a given paper. |
+| `paper_writing_statistical_reporting_compliance` | 各 p 値の周辺で effect size / CI / sample size の有無を診断。 |
+| `paper_writing_status` | (no description) |
+| `paper_writing_suggest_concept_drops` | Suggest specific concepts to drop when prose is over the |
+| `paper_writing_suggest_redundancy_fixes` | 冗長表現 25 パターンの置換候補提示 (re-export)。 |
+| `paper_writing_tex_figure_placement` | LaTeX figure placement knowledge: float specifiers, placeins, |
+| `paper_writing_title_abstract_conclusion_triangle` | Title / Abstract / Conclusion の三角形整合性を診断。 |
+| `paper_writing_usage` | Journal 論文 (IEEE / IEEJ / APS / Elsevier 等) の作文技術ガイド全体。 |
+| `paper_writing_validate_abstract_length` | Abstract 字数 / 語数が制限内か検証。言語を自動判定。 |
+| `paper_writing_validate_pdf_pages` | PDF のページ数が投稿制限内か検証。pymupdf が必要。 |
+| `paper_writing_verify_citation` | Verify a citation BEFORE inserting it into the paper. |
+
+## `mcp-server-grant-writing`
+
+_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, recommendation-letter template, and KDDI Digital Innovation social-implementation checks._
+
+Module: `radia_mcp.grant_writing.server`
+
+| Tool | Description |
+|---|---|
+| `grant_writing_acronym_usage_audit` | 略語の使用頻度と初出形式を監査し、3 段階の推奨を返す。 |
+| `grant_writing_analyze_sentences` | Analyze Japanese sentence length for grant proposals. |
+| `grant_writing_budget_alignment_check` | Check that budget items are tied to verification and implementation. |
+| `grant_writing_check_kanji_ratio` | 漢字比率の偏りを検出。本多『日本語の作文技術』第四章に基づく。 |
+| `grant_writing_check_misuse_japanese` | 『問題な日本語』由来の現代誤用 15 パターン検出。 |
+| `grant_writing_check_notation_variants` | 同一テキスト内で同じ概念が複数の表記で書かれていないかを検出。 |
+| `grant_writing_check_subject_predicate_distance` | 主述の直結原則 (本多 p.22): 主語と述語の間の距離が遠い文を検出。 |
+| `grant_writing_count_weak_expressions` | Count hedges and grant-specific non-commitment phrases. |
+| `grant_writing_find_undefined_acronyms` | Latin 略語の初出で定義 (〜 or 〜の略) が近くに無いものを検出。 |
+| `grant_writing_health_report` | Integrated grant-writing health report. |
+| `grant_writing_kddi_digital_check` | KDDI Foundation Digital Innovation / social implementation check. |
+| `grant_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 による和文技術文章 bedrock 診断。 |
+| `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
+| `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
+| `grant_writing_status` | (no description) |
+| `grant_writing_suggest_redundancy_fixes` | 和文の典型的冗長表現 25 パターンを検出し置換候補を示す。 |
+| `grant_writing_usage` | Return the grant-writing guide. |
+
+## `mcp-server-presentation`
+
+_Research-talk slide lint + PPTX tools: density, bullets, speaking time, title/body alignment, figure/equation/result-slide checks._
+
+Module: `radia_mcp.presentation.server`
+
+| Tool | Description |
+|---|---|
+| `presentation_acronym_usage_audit` | 略語使用頻度監査 (re-export)。 |
+| `presentation_adaptive_health_report` | pptx health_report の severity を venue で adjust。 |
+| `presentation_add_citation_footer` | Add a small citation footnote textbox along the BOTTOM of one |
+| `presentation_analyze_sentences` | 文長分析。スライドは短文指向。 |
+| `presentation_arrow_usage` | 矢印 shape (line connector with arrow) の過剰使用検出。 |
+| `presentation_chart_simplification_check` | Chart 簡素化 (Cole Knaflic style) の 5 軸診断。 |
+| `presentation_check_bullet_count_per_slide` | 1 slide の bullet 数が上限超過を検出 (Miller 7±2). |
+| `presentation_check_bullet_ending_style` | bullet 末尾の「。」有無が統一されているか. |
+| `presentation_check_color_accessibility` | R+G 近接色ペアを検出 (protanopia/deuteranopia で区別困難). |
+| `presentation_check_color_count_per_slide` | 宮野『研究発表のためのスライドデザイン』S12: 3 色使い原則の検査 (v0.9.0)。 |
+| `presentation_check_hedge_on_key_slides` | pptx で Result / Conclusion / Summary スライドに弱気修飾語が |
+| `presentation_check_image_text_ratio` | 1 slide の image 面積比が min 未満を検出 (Zen style). |
+| `presentation_check_kanji_ratio` | スライド台本の漢字比率 check (re-export)。 |
+| `presentation_check_logo_on_every_slide` | 全スライドに同じロゴ画像が繰り返し配置されているかを検出。 |
+| `presentation_check_misuse_japanese` | 台本の現代誤用検出 (re-export)。 |
+| `presentation_check_notation_variants` | スライドテキストの表記ゆれ検出 (re-export)。 |
+| `presentation_check_over_politeness` | 学会発表で過剰に丁寧な言い回しを検出。木下 p.235。 |
+| `presentation_check_overfull_hbox` | beamer ログ中の Overfull \hbox をカウント。スライドでは致命的。 |
+| `presentation_check_pie_3d_charts` | pptx 内の chart shape を走査し、pie / doughnut / 3D chart を NG 検出。 |
+| `presentation_check_pptx_font_size` | pptx font size < 下限を検出。 |
+| `presentation_check_progress_indicator` | outline / section-header slides for progress indication を検出。 |
+| `presentation_check_qa_backup_slides` | pptx に Q&A backup slide (hidden or named) が N 枚以上あるか確認. |
+| `presentation_check_script_paragraph_length` | 発表原稿の 1 パラグラフが 200-300 字目安から大きく外れていないか。 |
+| `presentation_check_slide_density` | 1 スライドあたりの文字密度チェック (テキストを直接渡す)。 |
+| `presentation_check_slide_line_count` | pptx の各 slide で text 行数が木下推奨の範囲内か検証。 |
+| `presentation_check_slide_title_verb` | 各 slide の title が claim 形式か名詞句止まりか。 |
+| `presentation_check_takehome_slide` | pptx 最終 3 枚以内に Take-home / Summary / まとめ slide があるか確認。 |
+| `presentation_check_time_13_rule` | 木下 1/3 則 — 前半で全員わかる話、中盤で大半が分かった気、 |
+| `presentation_check_time_14_rule` | 木下 1/4 則 — 10 分講演を 4 等分 (intro/method/result/discussion) した |
+| `presentation_check_underline_in_pptx` | pptx runs の font.underline を走査して下線密度を診断する。 |
+| `presentation_citation_audit` | Check numeric ``[N]`` citations on the slides against the |
+| `presentation_cite_format` | Format ONE reference into the styles used on talk slides. |
+| `presentation_count_slides` | スライド数を count。beamer (.tex) の \begin{frame} か、 |
+| `presentation_count_underlines` | beamer ソース内の下線コマンドを実測。 |
+| `presentation_count_weak_expressions` | 弱気修飾語の出現。presentation では key slide 上で使うと信頼感低下。 |
+| `presentation_equation_slide_compliance` | 数式 slide の理系プレゼン compliance を診断。 |
+| `presentation_estimate_per_slide_time` | 原稿を slide 境界で分割し、各 slide の発表時間を推定. |
+| `presentation_estimate_speaking_time` | 原稿テキストから発表時間を推定。 |
+| `presentation_extract_pptx_text` | pptx の各 slide のテキストを抽出。密度チェックや文字起こしに。 |
+| `presentation_figure_slide_compliance` | Figure / chart slide の理系プレゼン compliance を診断。 |
+| `presentation_find_undefined_acronyms` | スライド内略語の初出定義 check (re-export)。 |
+| `presentation_font_consistency` | deck 内で使用されているフォントファミリーの数を集計。 |
+| `presentation_health_report` | presentation Plan B の全 T1-T11 を束ねた統合レポート。 |
+| `presentation_lint_bedrock` | 台本・スライド注釈の bedrock lint (木下 10 原則、re-export)。 |
+| `presentation_mini_imrad_structure_check` | 理系プレゼンの mini-IMRAD 構造 (7 phases) 充足度を診断。 |
+| `presentation_next_5_actions` | (no description) |
+| `presentation_opening_hook_strength` | First 2 slides' text hook 強度診断。 |
+| `presentation_qa_anticipation_list` | slide 内容から予想 Q&A 質問 list を生成。 |
+| `presentation_qa_from_history` | ★ Q&A REHEARSAL: surface the real (or anticipated) questions asked |
+| `presentation_references_slide` | Build a "References" slide from a list of full citation lines. |
+| `presentation_results_slide_statistical_evidence` | Results slide の統計報告 4 要素 compliance を診断 (paper T12 の plot 版)。 |
+| `presentation_rewrite_suggest` | (no description) |
+| `presentation_rikei_minimalism_score` | 理系プレゼンの minimalism 5 軸を per slide 診断。 |
+| `presentation_root_cause_diagnosis` | pptx の health_report を横断 pattern matching、根本原因診断。 |
+| `presentation_run_full_workflow` | pptx を 1 コール chain 実行。 |
+| `presentation_script_vs_slide_coverage` | 台本 (speaker_note) が slide 内容を網羅しているかを per slide 診断。 |
+| `presentation_single_message_per_slide_semantic` | 1 主張 vs 複数テーマ slide を意味単位で診断。 |
+| `presentation_slide_density_balance` | deck 内の char-count 分布の不均衡を Gini-like 指標で評価。 |
+| `presentation_slide_titles_outline_coherence` | 全 slide のタイトルだけ並べて outline 化し、論理整合を診断。 |
+| `presentation_speaker_note_ratio` | slide.notes_slide の speaker note 長 vs slide text 長の比率を検査。 |
+| `presentation_speaking_pace_estimate` | speaker_note の文字数から WPM (日本語は文字数/分) で発表時間を推定。 |
+| `presentation_status` | (no description) |
+| `presentation_suggest_redundancy_fixes` | 冗長表現 25 パターンの置換候補 (re-export)。 |
+| `presentation_takehome_strength` | 最終スライド or last-3-slides の Take-home 品質診断。 |
+| `presentation_talk_feedback_lookup` | Query the learned conference-talk field-note catalog. |
+| `presentation_talk_feedback_stats` | Counts of the conference-talk field-note catalog (by venue / status |
+| `presentation_text_density_per_slide_western_style` | 欧米式 text-heavy slide を検出し、日本理系向けに修正提案。 |
+| `presentation_title_body_alignment_check` | Title が body の主張を要約しているかを per slide 診断。 |
+| `presentation_usage` | 学会発表スライド (IEEJ SA / IEEE conference / セミナー) の作文技術ガイド全体。 |
+| `presentation_validate_pdf_pages` | スライド PDF のページ数を実測。発表時間 / slot との整合を検証。 |
+| `presentation_visual_text_ratio_score` | per-slide visual/text ratio の distribution を score 化。 |
+
+## `mcp-server-poster`
+
+_Conference poster generation and lint: templates, viewing-distance font size, color contrast, zone balance, QR audit, and print readiness._
+
+Module: `radia_mcp.poster.server`
+
+| Tool | Description |
+|---|---|
+| `poster_adaptive_health_report` | Health report tuned for a target conference's review culture. |
+| `poster_betterposter_billboard_lint` | Lint the central billboard text for plain-language compliance. |
+| `poster_caption_self_contained` | Score each ``\caption`` / ``\captionof{figure}`` for self-sufficiency. |
+| `poster_color_contrast_wcag` | Check WCAG 2.1 AA contrast for *actually-paired* text/bg combinations. |
+| `poster_color_count_321` | Count unique colors and warn if the palette violates the 3-color rule. |
+| `poster_colorblind_hint` | Simulate deuteranopia and flag pairs that collapse to similar colors. |
+| `poster_compile` | Compile a poster .tex to PDF. |
+| `poster_elevator_pitch_generate` | Render a 3-minute speakable script from the poster source. |
+| `poster_figures_audit` | Check that every ``\includegraphics{path}`` resolves to a file. |
+| `poster_font_embed_check` | Run ``pdffonts`` and report any non-embedded font. |
+| `poster_fontsize_by_distance` | Verify that ``\fontsize{X}`` values are large enough for their role. |
+| `poster_from_paper_tex` | Convert a paper .tex into a Kelvin-style poster skeleton. |
+| `poster_from_pptx` | Convert a PowerPoint poster draft to a Kelvin-style A1 .tex. |
+| `poster_health_report` | Run Tier 1-2 lints and produce a weighted health score. |
+| `poster_jp_font_check` | Inspect Japanese font family declarations in a poster .tex. |
+| `poster_line_length` | Flag sentences that are too long for poster reading. |
+| `poster_lint` | Lint a poster .tex against poster-specific (not slide) criteria. |
+| `poster_next_5_actions` | Return the top 5 actions ranked by (impact - 0.5*effort). |
+| `poster_print_readiness_audit` | Audit a poster for print-readiness: paper size + figure DPI. |
+| `poster_qa_anticipation_list` | Anticipate likely poster Q&A and tag each with reviewer-type motivation. |
+| `poster_qr_audit` | Audit QR code(s) in a poster for prominence + labeling + URL reachability. |
+| `poster_qr_inject` | Inject a labeled QR code into a poster .tex. |
+| `poster_rewrite_suggest` | Return 3-4 candidate phrasings for a target poster element. |
+| `poster_root_cause_diagnosis` | Diagnose which of the 5 typical poster failure patterns apply. |
+| `poster_run_full_workflow` | Chain the Intelligence Layer phases into one call. |
+| `poster_skill_doc` | Return the poster sub-skill's ``skill.md`` documentation as text. |
+| `poster_status` | (no description) |
+| `poster_template_betterposter` | Return (or write) the A0-landscape #betterposter template. |
+| `poster_template_kelvin` | Return (or write) the A1-portrait Japanese poster template. |
+| `poster_typography_lints` | Run cheap regex-based typography hygiene checks. |
+| `poster_word_count` | Lint a poster's word budget against Purrington's ≤1000-word target. |
+| `poster_zone_balance_check` | Check that minipage column widths approximate 0.25 / 0.50 / 0.25. |
 
 ## `mcp-server-literature-index`
 

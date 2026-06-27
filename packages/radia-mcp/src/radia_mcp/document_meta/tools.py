@@ -294,11 +294,10 @@ def document_meta_template_loader(kind: str = "",
 # lint_all -- redesigned 2026-06-02 for radia-mcp.
 #
 # The LAB-private original hard-imported grant_writing.tools for the "common"
-# checks AND the "grant" domain.  grant_writing stays private, so radia-mcp
-# must not depend on it.  Here lint_all is a DECLARATIVE REGISTRY of lint tools
-# that all live inside radia-mcp (presentation / paper_writing / poster),
-# dispatched by lazy import.  A "grant" file still gets the generic checks plus
-# a pointer to the private server; radia-mcp never imports grant_writing.
+# checks AND the "grant" domain.  grant_writing is now a first-class public
+# radia-mcp subpackage, so lint_all is a DECLARATIVE REGISTRY over the document
+# family (grant_writing / presentation / paper_writing / poster), dispatched by
+# lazy import.
 # ---------------------------------------------------------------------------
 
 # (module, function, input-kind) -- input-kind is "text" or "path".
@@ -320,13 +319,11 @@ _DOMAIN_LINTS = {
     "poster": [
         ("radia_mcp.poster.tools", "poster_lint", "path"),
     ],
-    # "grant" intentionally absent: grant_writing lint is LAB-private.
-}
-# Domains whose dedicated linter ships only in the private mcp-server-document.
-_PRIVATE_DOMAIN_NOTE = {
-    "grant": ("grant_writing lint is LAB-private (mcp-server-document) and is "
-              "not shipped in radia-mcp; only the generic/common checks above "
-              "were run."),
+    "grant": [
+        ("radia_mcp.grant_writing.tools", "grant_writing_section_presence", "text"),
+        ("radia_mcp.grant_writing.tools", "grant_writing_budget_alignment_check", "text"),
+        ("radia_mcp.grant_writing.tools", "grant_writing_health_report", "text"),
+    ],
 }
 
 
@@ -353,10 +350,8 @@ def document_meta_lint_all(path: str,
     """Run every applicable radia-mcp lint over one text / TeX file.
 
     Declarative registry (``_COMMON_LINTS`` + ``_DOMAIN_LINTS``) of lints that
-    all live inside radia-mcp (presentation / paper_writing / poster),
-    dispatched by lazy import -- so this has NO dependency on the LAB-private
-    grant_writing.  A "grant" file still gets the generic checks plus a pointer
-    to the private server.
+    all live inside radia-mcp (grant_writing / presentation / paper_writing /
+    poster), dispatched by lazy import.
 
     Args:
         path: .tex / .md / .txt file.
@@ -403,9 +398,6 @@ def document_meta_lint_all(path: str,
         except Exception as exc:  # the lint ran but errored on this input
             findings[f"error_{fname}"] = str(exc)
 
-    if domain in _PRIVATE_DOMAIN_NOTE:
-        findings["note"] = _PRIVATE_DOMAIN_NOTE[domain]
-
     # Optional PDF page-limit check -- self-contained via PyMuPDF.
     if page_limit > 0:
         pdf_path = p.with_suffix(".pdf")
@@ -425,6 +417,12 @@ def document_meta_lint_all(path: str,
             if val.get("undefined_count", 0) > 0:
                 problems += 1
             if val.get("weak_count", 0) > 0:
+                problems += 1
+            if val.get("total_weak_expressions", 0) > 0:
+                problems += 1
+            if val.get("missing_count", 0) > 0:
+                problems += 1
+            if val.get("missing_required_count", 0) > 0:
                 problems += 1
             if val.get("deviations"):
                 problems += 1
