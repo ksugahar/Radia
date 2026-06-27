@@ -1,0 +1,257 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:29Z",
+  "notebook": "docs/peec_integration/peec_showcase.ipynb",
+  "notebook_sha256": "56278b3092a22b8898bcac7b7d2af98962feb5d7781e14fc5457d6aad173af77",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/peec_integration/peec_showcase.ipynb",
+    "cells": 9,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 17,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "64fc79c3c20c8e3844c5da5c3b8395c399bfd633ff8f19a08613cacac31f7c7b",
+      "source_preview": "\"\"\"\nDowell F_R(s) and F_L(s) - Continued Fraction via Viskovatov Algorithm\n\nViskovatov (or quotient-difference) algorithm converts a power series\nto a continued fraction.\n\nGiven: f(x) = c0 + c1*x + c2*x^2 + c3*x^3 + ...\nFind:  f(x) = b0 + a1*x / (1 + a2*x / (1 + a3*x / (1 + ...)))\n\"\"\"\n\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nMU_0 = 4 * np.pi * 1e-7\n\nprint(\"=\"*70)\nprint(\"Viskovatov Algorithm for Continued Fraction Expansion\")\nprint(\"=\"*70)\n\n# ============================================================\n# Exact Dowell formulas\n# ============================================================\n\ndef dowell_F_R_exact(Delta):\n    \"\"\"Exact Dowell F_R\"\"\"\n    if Delta < 1e-10:\n        return 1.0\n    z = (1 + 1j) * Delta\n    coth_z = 1 / np.tanh(z)\n    return np.real(z * coth_z)\n\ndef dowell_F_L_exact(Delta):\n    \"\"\"Exact Dowell F_L\"\"\"\n    if Delta < 1e-10:\n        return 1.0\n    z = (1 + 1j) * Delta\n    coth_z = 1 / np.tanh(z)\n    return 1.5 * np.imag(z * coth_z) / Delta**2\n\n# ==========",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 6250,
+          "text_sha256": "b4e8955236d924b8baec9f260777bdcaa8ab69d0bdaa3227744942f099b554be",
+          "text_preview": "======================================================================\nViskovatov Algorithm for Continued Fraction Expansion\n======================================================================\n\n======================================================================\nTaylor Series of z*coth(z)\n======================================================================\n\nz*coth(z) = 1 + z^2/3 - z^4/45 + 2*z^6/945 - z^8/4725 + 2*z^10/93555 - ...\n\nThe coefficients are related to Bernoulli numbers:\n  z*coth(z) = sum_{n=0}^inf (2^(2n) * B_{2n} / (2n)!) * z^(2n)\n\nwhere B_0 = 1, B_2 = 1/6, B_4 = -1/30, B_6 = 1/42, ...\n\n\nTaylor coefficients of z*coth(z):\n  z^0: 1.0000000000\n  z^2: 0.3333333333\n  z^4: -0.0222222222\n  z^6: 0.0021164021\n  z^8: -0.0002116402\n  z^10: 0.0000213778\n  z^12: -0.0000021644\n\n======================================================================\nViskovatov Algorithm\n======================================================================\n\nFor a power series: f(x) = c0 + c1*x + c2*x^2 + ...\n\nThe algorithm computes continued fraction:\n  f(x) = b0 + a1*x / (1 + a2*x / (1 + a3*x / ...))\n\nStep 1: b0 = c0, then work with (f(x) - c0) / x\nStep 2: Invert: x / (f(x) - c0) = 1 / (c1 + c2*x + ...)\nStep 3: Repeat...\n\nFor z*coth(z), we have a series in z^2:\n  z*coth(z) = 1 + (1/3)*w - (1/45)*w^2 + (2/945)*w^3 - ...\n  where w = z^2\n\nSo we expand in w and get a continued fraction in w.\n\n\nApplying Viskovatov to z*coth(z) (in w = z^2):\n  b0 = 1.0\n  a1 = 3.0000000000\n  a2 = 5.0000000000\n  a3 = 7.0000000000\n  a4 = 9.0000000000\n  a5 = 11.0000000000\n  a6 = 13.0000000000\n\n======================================================================\nAnalytical Continued Fraction of z*coth(z)\n======================================================================\n\nThe well-known continued fraction for z*coth(z) is:\n\nz*coth(z) = 1 + z^2/(3 + z^2/(5 + z^2/(7 + z^2/(9 + ...))))\n\nThis is a J-fraction (Jacobi continued fraction).\n\nIn the form: b0 + w/(b1 + w/(b2 + w/(b3 + ...)))\nwhere w = z^2:\n  b0 = 1, b1 = 3, b2 = 5, b3 = 7, b4 = 9, ...\n  b_n = 2n + 1\n\nThis is NOT the same form as Viskovatov's S-fraction!\n\n\nVerification of J-fraction:\n         w          Exact      J-frac(5)     J-frac(10)\n-------------------------------------------------------\n      0.01     1.00000778     1.00333111     1.00333111\n      0.10     1.00077741     1.03311321     1.03311321\n      1.00     1.07435035     1.31303529     1.31303529\n      4.00     1.78711731     2.07463065     2.07462944\n     10.00     3.14513585     3.17373979     3.17363010\n\n======================================================================\nJ-fraction to PRIMA Ladder Network\n======================================================================\n\nJ-fraction: f(w) = 1 + w/(3 + w/(5 + w/(7 + ...)))\n\nwhere w = tau*s = d^2*mu*sigma*s/2\n\nFor impedance Z(s) = R_dc * F_R + s*L_dc * F_L:\n\nAt s = j*omega:\n  w = j*tau*omega\n\nThe impedance can be written as a ladder network:\n  Z(s) = R_dc + s*L_dc * f(tau*s)\n\nThe J-fraction in w naturally corresponds to:\n  Stage 1: Series R, Shunt L\n  Stage 2: Series R, Shunt L\n  ...\n\nBut the exact correspondence depends on the impedance formula structure.\n\n\n======================================================================\nPRIMA I Parameters (from 1D diffusion eigenvalue expansion)\n======================================================================\n\nThe PRIMA I form comes from eigenvalue expansion of 1D diffusion:\n\nR[n] = (4n-5) * 4 / (sigma*d)  for n >= 2, R[1] ~ 0\nL[n] = d*mu / (4n-3)\n\nThe continued fraction for PRIMA I is different from z*coth(z).\n\nPRIMA I represents:\n  Z_prima(s) = sL[1] + R[1] || (sL[2] + R[2] || (sL[3] + R[3] || ...))\n\nwhich matches the 1D diffusion equation solution:\n  Z_diff(s) = s*mu*(2/(k*d))*tan(k*d/2)*d\n\nNOT Dowell's formula: Z_dowell = R_dc*F_R + s*L_dc*F_L\n\nSo:\n- PRIMA I matches 1D Diffusion (exact)\n- PRIMA I does NOT match Dowell (different model)\n- Dowell has its own continued fraction (J-fraction)\n\n\nPRIMA I parameters for d = 0.1 mm, sigma = 5.",
+          "text_truncated": true
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 38,
+          "text_sha256": "4b4230c522593d5830e614d3c7afa1fcea15d4c0bfdd3f5deb5f95494394a3e1",
+          "text_preview": "Saved: derive_dowell_cf_algorithm.png\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "4e48c10d551b33f481906f459dc3ce90a0134d03af7fa53306345ab66bb6cddd",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image(\"derive_dowell_cf_algorithm.png\"))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 277244,
+              "sha256": "17c3f81f94ae06e974469e808eade0a2579cd815f57f69a10cfa08f5eb80d317"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "4d197d85e303a08baf073f69e78f7bef261def8c5c11b2ca213f1a1de28c70c6",
+      "source_preview": "\"\"\"\nCompute loop inductance of rectangular frame using ngsbem EFIE.\n\nUses the EXACT ngsbem patterns from the official demos:\n  V1 = HelmholtzSL(u.Trace()*ds, kappa) * v.Trace() * ds   [vector SL = V_A]\n  V2 = HelmholtzSL(div(u.Trace())*ds, kappa) * div(v.Trace()) * ds  [scalar SL = V_Phi]\n  V_EFIE = kappa * V1 - (1/kappa) * V2\n\nFor div-free harmonic c_h: V_Phi(c_h) = 0, so V_A(c_h) = V1(c_h).\nL = mu_0 * c_h^T * V1 * c_h / I^2\n\nReference: FastHenry L ~ 21.6 nH (3D cross-section), Grover ~24 nH (single filament)\n\"\"\"\nimport numpy as np\nfrom scipy.linalg import null_space\n\nMU_0 = 4.0 * np.pi * 1e-7\nWIDTH = 0.01\nTRACE_W = 1e-3\nhw = TRACE_W / 2.0\nSIGMA = 5.8e7\nTHICKNESS = 35e-6\n\n\ndef extract_dense(mat, n):\n    ei = mat.CreateColVector()\n    col = mat.CreateColVector()\n    M = np.zeros((n, n), dtype=complex)\n    for i in range(n):\n        ei[:] = 0; ei[i] = 1.0\n        mat.Mult(ei, col)\n        for j in range(n):\n            M[j, i] = col[j]\n    return M\n\n\ndef extract_rect(mat, nrow, ncol):\n ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 300,
+          "text_sha256": "afca5df88491224dc69f6dc9b18feadadc648d709f0f8a7f09b15a4eed167cb1",
+          "text_preview": "\n============================================================\nmaxh = 1.0 mm\n============================================================\n  80 el, 80 vert, 160 edges, 80 faces\n  ||D*c_h|| = 1.1e-15\n  ||C^T*M*c_h|| = 1.0e-15\n  energy = 3.404227e-01\n\n  --- V_A via HelmholtzSL (ngsbem demo pattern) ---\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "81910a202a6e0cb952683535193b21f4c8514fdb396fa43f7dd5d22b8b2b0b63",
+          "text_preview": "  V_A (HelmholtzSL, k=0.01) = 1.716425e-04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 326,
+          "text_sha256": "77d255e100274b8763aa5a3f45bb2231afea41748b35cc81132ca1599e3036d9",
+          "text_preview": "  V_Phi check = 1.710587e-14 (should be ~0)\n  V_EFIE proj = 1.716424e-06\n  V_EFIE/kappa = 1.716424e-04 (should = V_A)\n\n  --- Results ---\n  R_sheet = 0.0005 Ohm/sq\n  R_loop = 19.70 mOhm\n  L/R = 1.2862 us\n  L = 25.34 nH\n  FastHenry: L=21.6 nH, R=19.2 mOhm (3D cross-section)\n  Grover: L~24 nH (single filament, same GMD)\n\nDone.\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "487c8ced9deb93f40be2dfbc9f065c741221daf754a5553b9ee9970ca88682e0",
+      "source_preview": "\"\"\"\nPaper Figures Generation for PEEC/PRIMA Implementation\n\nGenerates publication-quality figures for:\n1. PEEC Loop-Star matrix verification\n2. PRIMA model order reduction accuracy\n3. Adaptive MSC/dipole error analysis\n4. WPT coil impedance characteristics at 85 kHz\n\nOutput: PDF figures suitable for journal submission\n\"\"\"\n\nimport sys\nimport os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom matplotlib import rcParams\n\n# Add Radia to path\nsys.path.insert(0, os.path.join(os.getcwd(), '..', '..', 'src', 'radia'))\n\nimport radia as rad\n\ntry:\n    from peec_matrices import PEECBuilder\n    print(\"Using C++ PEEC implementation\")\nexcept ImportError:\n    print(\"C++ PEEC module not available, using Python fallback\")\n    from radia.peec_matrices import PEECBuilder\n\nfrom lanczos_reduction import LanczosReducer\n\n# Physical constants\nMU_0 = 4 * np.pi * 1e-7\nSIGMA_COPPER = 5.8e7\n\nmm = 1e-3  # 1 mm in meters\n\n# Matplotlib settings for publication quality\nrcParams['font.family'] = 'serif'\nrcParam",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 423,
+          "text_sha256": "8bb41738355ed8008dd9f4370c6da17cc81d1003378133c00ae17be57be6b907",
+          "text_preview": "Using C++ PEEC implementation\n======================================================================\nPaper Figures Generation\n======================================================================\n\nOutput directory: S:\\Radia\\01_GitHub\\docs\\peec_integration\\figures\n\n============================================================\nFigure 1: PEEC Matrix Verification\n============================================================\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text_chars": 174,
+          "text_sha256": "da38f603d06343152f044aff8c606530bfafc3ba791de04e9a135b74afd01bc7",
+          "text_preview": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\ipykernel_35328\\3236306384.py:126: UserWarning: Data has no positive values, and therefore cannot be log-scaled.\n  ax2 = ax.twinx()\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 249,
+          "text_sha256": "3fc9771564357ce2bacd4471635c9d8d334795233d52808b5597ec1ebf770768",
+          "text_preview": "Saved: S:\\Radia\\01_GitHub\\docs\\peec_integration\\figures\\fig1_peec_matrix_verification.pdf\n\n============================================================\nFigure 2: PRIMA Accuracy Comparison\n============================================================\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 239,
+          "text_sha256": "7fc1d20241823d49c497890a7f73147852789b2f63c50e14408ced5505185d2c",
+          "text_preview": "Saved: S:\\Radia\\01_GitHub\\docs\\peec_integration\\figures\\fig2_prima_accuracy.pdf\n\n============================================================\nFigure 3: Adaptive MSC/Dipole Error\n============================================================\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 236,
+          "text_sha256": "83aae02f832ddaea5972de8af62f46014f47744fc4e9c8fa7f6e16fca83facd5",
+          "text_preview": "Saved: S:\\Radia\\01_GitHub\\docs\\peec_integration\\figures\\fig3_adaptive_msc_error.pdf\n\n============================================================\nFigure 4: WPT Coil at 85 kHz\n============================================================\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 431,
+          "text_sha256": "fe5296214667b5e254020d63a1f1b1eb970f800f00175ea98e67a73f53e36827",
+          "text_preview": "Saved: S:\\Radia\\01_GitHub\\docs\\peec_integration\\figures\\fig4_wpt_coil_85khz.pdf\n\n============================================================\nSummary\n============================================================\n\nGenerated 4 figures:\n  - fig1_peec_matrix_verification.pdf\n  - fig2_prima_accuracy.pdf\n  - fig3_adaptive_msc_error.pdf\n  - fig4_wpt_coil_85khz.pdf\n\nAll figures saved to: S:\\Radia\\01_GitHub\\docs\\peec_integration\\figures\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 4,
+          "text_plain_sha256": "3cbc87c7681f34db4617feaa2c8801931bc5e42d8d0f560e756dd4cd92885f18",
+          "text_plain_preview": "True",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 5,
+      "source_sha256": "d0090c4d0131d6b9d58e8e26ea29a5248e75bae1e57aee3c50a0f69e88363bbc",
+      "source_preview": "from IPython.display import Image, display\nfor f in [\"figures/fig1_peec_matrix_verification.png\", \"figures/fig2_prima_accuracy.png\",\n          \"figures/fig3_adaptive_msc_error.png\", \"figures/fig4_wpt_coil_85khz.png\"]:\n    try:\n        display(Image(f))\n    except Exception as e:\n        print(f\"({f}: {e})\")",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 290520,
+              "sha256": "9bd22250aa7f9c2a655a39abd9090597ad6568564fd2e956a1f3cddefac83bb7"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 343696,
+              "sha256": "12ea50ddf08863508d17adb5f411637026be4332882e45af8b5d96cf8d170156"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 365816,
+              "sha256": "32b655b778014f34fbf751d5fe3088d142b36b2e4c26021da58d03a6193cce24"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 260876,
+              "sha256": "7026de27c7e1c78a14db4128b5487eb97fa064082b55780c4dc824405dd246ee"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

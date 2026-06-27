@@ -1,0 +1,74 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:29Z",
+  "notebook": "docs/open_boundary/open_boundary_demo.ipynb",
+  "notebook_sha256": "8f60364abd0ca6389116f5689990a34257345bbd2b581780e31bbc8b789fc509",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/open_boundary/open_boundary_demo.ipynb",
+    "cells": 2,
+    "code_cells": 1,
+    "executed_code_cells": 1,
+    "code_cells_with_outputs": 1,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "eb9ea74b606ad6293deb6c52d6781fd19545faecfc5f1bd4bff8efabbd156020",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n# -*- coding: utf-8 -*-\nr\"\"\"demo_dtn_cln_usage.py -- using radia.open_boundary (the Zs-DtN-CLN open boundary)\n================================================================================\nThe PRODUCTION-API counterpart of the research demos\nexamples/kelvin_transformation/DtN_spectrum/act6_02_cln_dtn_cauer.py (inline math).\nHere the verified operator ships as `radia.open_boundary`; this shows how to use it.\n\nWHAT it gives you, for a SEPARABLE (spherical) MQS truncation:\n  * the EXACT exterior eddy/diffusion DtN eigenvalue per multipole n,\n  * its Cauer Ladder Network (CLN) realisation -- EXACT at n+1 stages, well-conditioned,\n  * the companion auxiliary-ODE poles (Re<0) for a transient passive Robin boundary.\n\nSCOPE (honest): this WINS over a CFS-PML only on its island -- compact / quasi-spherical\nMQS problems wanting an exact, DC-well-conditioned boundary + a compact passive circuit\nROM.  Elongated/arbitrary geometry -> a box CFS-PML hugs bett",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1465,
+          "text_sha256": "fedc07ab1b51ca20d12686424d86b818fe07730cedbe81fc1e4798723e66db52",
+          "text_preview": "==============================================================================\n radia.open_boundary : exact Zs-DtN-CLN open boundary -- usage\n==============================================================================\n\n[1] exact eddy/diffusion DtN per multipole (sphere R0=0.03 m):\n    n=1: G_n(i*5e4) = -41.5082-40.4838j\n    n=2: G_n(i*5e4) = -41.5329-40.4597j\n    n=3: G_n(i*5e4) = -41.5699-40.4236j\n\n[2] Cauer ladder is EXACT at n+1 stages and reproduces the symbol:\n    n=1: stages=2 (= n+1)   ladder-vs-symbol NRMSE=1.6e-16\n    n=2: stages=3 (= n+1)   ladder-vs-symbol NRMSE=1.4e-16\n    n=3: stages=4 (= n+1)   ladder-vs-symbol NRMSE=1.7e-16\n    n=4: stages=5 (= n+1)   ladder-vs-symbol NRMSE=1.6e-16\n    n=5: stages=6 (= n+1)   ladder-vs-symbol NRMSE=1.3e-16\n    n=6: stages=7 (= n+1)   ladder-vs-symbol NRMSE=1.4e-16\n\n[3] transient Robin realisation: one auxiliary ODE per companion pole (Re<0):\n    n=1: 1 poles, max Re = -1.000  => passive / unconditionally stable (Grote-Keller form)\n    n=2: 2 poles, max Re = -1.500  => passive / unconditionally stable (Grote-Keller form)\n    n=3: 3 poles, max Re = -1.839  => passive / unconditionally stable (Grote-Keller form)\n\n[4] sqrt(s) diffusion-memory element as a finite passive ladder:\n    K=12: NRMSE=7.77e-03, all poles -p<0 (stable), passive (g>=0): True\n\n[5] Kelvin BUILDS the DtN (material-aware / non-separable companion):\n    a radial Kelvin-FEM reproduces the closed-form eddy DtN with NO DC floor\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 61,
+          "text_sha256": "5e3ce9b0f68602200ea8f7bc9e5434ad0712d5dba64c68b239e5c42d2011b792",
+          "text_preview": "    n=1: Kelvin-FEM build vs closed-form, band NRMSE=3.9e-03\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 61,
+          "text_sha256": "64cf32ba18fca65b5abda7651c9db3923735ff5c3569bcc28cddb44215c8e776",
+          "text_preview": "    n=2: Kelvin-FEM build vs closed-form, band NRMSE=5.4e-04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 349,
+          "text_sha256": "715d938e77651613a32dfaa59e078a0b9f0afebf908853720ebc385163b20776",
+          "text_preview": "    n=3: Kelvin-FEM build vs closed-form, band NRMSE=2.7e-04\n    (the arbitrary-shape / iron-exterior path = ob.kelvin_dtn_matrix + ob.steklov_spectrum,\n     verified O_h-split on a cube -- needs NGSolve; see tests/open_boundary/test_kelvin_dtn.py.\n     NOTE: material-in-exterior Kelvin is CLASSICAL (Freeman-Lowther 1988/89).)\n\nALL CHECKS PASSED.\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

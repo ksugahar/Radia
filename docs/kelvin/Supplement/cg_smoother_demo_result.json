@@ -1,0 +1,213 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "notebook": "docs/kelvin/Supplement/cg_smoother_demo.ipynb",
+  "notebook_sha256": "1a8e5bfd79c6f42c36a46c39bd220c5fca4ffa1395dfc2fe9d535613c5c23c1b",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/kelvin/Supplement/cg_smoother_demo.ipynb",
+    "cells": 17,
+    "code_cells": 8,
+    "executed_code_cells": 8,
+    "code_cells_with_outputs": 8,
+    "output_count": 11,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "1b38dacac652edfdb37d390cfd48060554a732acdd93e46aee4719ef217f1f95",
+      "source_preview": "import time\nimport numpy as np\nfrom numpy import pi, sqrt\n\nimport matplotlib\nimport matplotlib.pyplot as plt\nmatplotlib.rc(\"mathtext\", rm=\"serif\", it=\"serif:italic\", bf=\"serif:bold\", fontset=\"cm\")\n\nfrom IPython.display import display\n\nfrom ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,\n                     CoefficientFunction, InnerProduct, grad, dx, x,\n                     IfPos, Integrate, TaskManager)\nfrom ngsolve.krylovspace import CGSolver\nfrom netgen.occ import WorkPlane, MoveTo, Glue, OCCGeometry\n\nimport ngsolve\nprint(\"NGSolve\", ngsolve.__version__)",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 17,
+          "text_sha256": "aa551429fe44706bf5cb0062c74bd410b504574398b6617d13a945db72496257",
+          "text_preview": "NGSolve 6.2.2604\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "c84e962cc2d8c35807fe7ce0b5c09588adb07519839bf1e6d2c7c915aec72cc2",
+      "source_preview": "R_sphere, a, maxh, fe_order = 0.5, 1.0, 0.05, 2\n\nmu0 = 4 * pi * 1e-7      # vacuum permeability [H/m]\nnu0 = 1 / mu0           # vacuum reluctivity [m/H]\nmu_r = 100              # relative permeability of the sphere\nH0 = 1.0               # applied field [A/m]\nB0 = mu0 * H0          # applied flux density [T]\n\nHz_int_analytical = 3.0 / (mu_r + 2) * H0\nprint(f\"Analytical interior H_z = {Hz_int_analytical:.6f} A/m\")\n\nwp1 = WorkPlane(); domain = wp1.Circle(a).Face(); domain.name = \"air\"\nwp2 = WorkPlane(); sphere = wp2.Circle(R_sphere).Face()\nsphere.name = \"iron\"; sphere.maxh = maxh / 2\n\ncutter = MoveTo(-a - 0.1, -a - 0.1).Rectangle(a + 0.1, 2 * a + 0.2).Face()\ndomain_half = domain - cutter\nsphere_half = sphere - cutter\nair_half = domain_half - sphere_half\nair_half.name = \"air\"\n\nfor edge in air_half.edges:\n    edge.name = \"axis\" if edge.center.x < 0.01 else \"outer\"\nfor edge in sphere_half.edges:\n    edge.name = \"axis\" if edge.center.x < 0.01 else \"interface\"\n\nshape = Glue([air_half, sphere_",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 39,
+          "text_sha256": "96a94f7534ad1877547b74d09817e0b3a9f50eead4d0a3104fc930d35469cf68",
+          "text_preview": "Analytical interior H_z = 0.029412 A/m\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 42,
+          "text_sha256": "33f91bcd0639c9ba0ec6d3f53ef3c874a9cb3ec00ddaef912101c4c14dc3cb8a",
+          "text_preview": "Elements: 2661\nMaterials: ('air', 'iron')\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "d7d6193487f4b866e245d58e813dda59628ce07149c1be310fdab43edde432b3",
+      "source_preview": "r = IfPos(x - 1e-10, x, 1e-10)\nnu_cf = CoefficientFunction([nu0 if m == \"air\" else nu0 / mu_r\n                             for m in mesh.GetMaterials()])\n\nwith TaskManager():\n    fes_A = H1(mesh, order=fe_order, dirichlet=\"axis\")\n    u, v = fes_A.TnT()\n\n    a_form = BilinearForm(fes_A)\n    a_form += nu_cf / r * grad(u) * grad(v) * dx\n    a_form.Assemble()\n\n    nu_diff = CoefficientFunction([0 if m == \"air\" else (nu0 - nu0 / mu_r)\n                                   for m in mesh.GetMaterials()])\n    grad_us = CoefficientFunction((B0 * x, 0))   # source-potential gradient\n\n    f_A = LinearForm(fes_A)\n    f_A += nu_diff / r * InnerProduct(grad_us, grad(v)) * dx(\"iron\")\n    f_A.Assemble()\n\n    gf_u = GridFunction(fes_A)\n    t0 = time.time()\n    gf_u.vec.data = a_form.mat.Inverse(fes_A.FreeDofs(),\n                                       inverse=\"sparsecholesky\") * f_A.vec\n    t_A = time.time() - t0\n\ngrad_u_r = grad(gf_u)\nBr_cf = -(1 / r) * grad_u_r[1]\nBz_cf = B0 + (1 / r) * grad_u_r[0]\nH_A =",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 49,
+          "text_sha256": "3264defe075fe0e6bd265dcacd3f4fb4ca64ae61cc022c4978537ba694f1fbfa",
+          "text_preview": "A-formulation solved in 2.9696 s; H_A recovered.\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "260abb35b933f5c02cb6bd6852facf91f463ae91652d005fc32947e2afb2a453",
+      "source_preview": "with TaskManager():\n    fes_O = H1(mesh, order=fe_order, dirichlet=\"outer\")\n    Om, psi = fes_O.TnT()\n\n    a_O = BilinearForm(fes_O)\n    a_O += r * grad(Om) * grad(psi) * dx\n    a_O.Assemble()\n\n    f_O = LinearForm(fes_O)\n    f_O += r * H_A * grad(psi) * dx\n    f_O.Assemble()\n\n    gf_dir = GridFunction(fes_O)\n    t0 = time.time()\n    gf_dir.vec.data = a_O.mat.Inverse(fes_O.FreeDofs(),\n                                      inverse=\"sparsecholesky\") * f_O.vec\n    t_direct = time.time() - t0\n\n    H_eq_dir = grad(gf_dir)\n    err_direct = sqrt(Integrate(\n        r * InnerProduct(H_A - H_eq_dir, H_A - H_eq_dir) * dx, mesh))\n\nprint(f\"Direct solve: {t_direct:.4f} s\")\nprint(f\"Reference estimator ||H_A - H_eq||_direct = {err_direct:.6e}\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 80,
+          "text_sha256": "baa61bf5fe79a3a9ed240bf625df39dab986ae5efc1fcf93ed333ef453d2e134",
+          "text_preview": "Direct solve: 1.4357 s\nReference estimator ||H_A - H_eq||_direct = 8.162377e-01\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "c8f8a37c34411645adb9c2dac40752d9374d9d57e7f1e41093c907065fa3d804",
+      "source_preview": "with TaskManager():\n    pre = a_O.mat.CreateSmoother(fes_O.FreeDofs())\n\n    n_iter_list = [1, 2, 5, 10, 20, 50, 100]\n    cg_results = []\n    for n_iter in n_iter_list:\n        gf = GridFunction(fes_O); gf.vec[:] = 0\n        t0 = time.time()\n        inv = CGSolver(a_O.mat, pre, maxiter=n_iter, tol=1e-16, printrates=False)\n        gf.vec.data = inv * f_O.vec\n        t_cg = time.time() - t0\n        H_eq = grad(gf)\n        err = sqrt(Integrate(\n            r * InnerProduct(H_A - H_eq, H_A - H_eq) * dx, mesh))\n        rel = abs(err - err_direct) / err_direct * 100\n        cg_results.append((n_iter, t_cg, err, rel))\n\nprint(f\"{'n_iter':>7} {'time [s]':>10} {'eta':>14} {'rel% vs direct':>16}\")\nprint(\"-\" * 50)\nfor n_iter, t_cg, err, rel in cg_results:\n    print(f\"{n_iter:>7d} {t_cg:>10.4f} {err:>14.6e} {rel:>15.2f}%\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 459,
+          "text_sha256": "7f18955d99d2c5e55a04cc945cb2ed8177f880d709d25810b03d91e8ae31607f",
+          "text_preview": " n_iter   time [s]            eta   rel% vs direct\n--------------------------------------------------\n      1     0.0010   9.658891e-01           18.33%\n      2     0.0000   9.562884e-01           17.16%\n      5     0.0000   9.284126e-01           13.74%\n     10     0.0010   8.851379e-01            8.44%\n     20     0.0020   8.264023e-01            1.25%\n     50     0.0060   8.162381e-01            0.00%\n    100     0.0130   8.162377e-01            0.00%\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
+      "execution_count": 6,
+      "source_sha256": "4b79a42a5a5cd4941ed3233f20436c326307bad2cba28a05a8004b4c914acbcf",
+      "source_preview": "n_vals = [c[0] for c in cg_results]\nerr_vals = [c[2] for c in cg_results]\n\nfig1, ax = plt.subplots(figsize=(6.4, 4.2))\nax.plot(n_vals, err_vals, \"bo-\", lw=2, ms=7, label=\"CG (truncated)\")\nax.axhline(err_direct, color=\"r\", ls=\"--\", lw=2, label=\"direct solve\")\nax.set_xlabel(\"number of CG iterations\")\nax.set_ylabel(r\"$\\|\\mathbf{H}_A - \\mathbf{H}_{eq}\\|$\")\nax.set_title(\"Equilibrated estimator vs CG truncation\")\nax.legend(); ax.grid(True, alpha=0.3)\nfig1.tight_layout()\ndisplay(fig1)\nplt.close(fig1)",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "290e9f66b139a5ef999a020b58c40c2cc0a0c318d77e75f28893fbd33728a5d7",
+          "text_plain_preview": "<Figure size 640x420 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 37868,
+              "sha256": "b4b3fdff571cd235752b9f1dc0a081b67a16beaaaf14a35ce738f7d41d7f1662"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 13,
+      "execution_count": 7,
+      "source_sha256": "772e8df8fc0f3bce55852a0c38d3869385e741fc8844d792d79499ce5d2889bc",
+      "source_preview": "with TaskManager():\n    gf_conv = GridFunction(fes_O); gf_conv.vec[:] = 0\n    inv_conv = CGSolver(a_O.mat, pre, maxiter=400, tol=1e-10, printrates=False)\n    gf_conv.vec.data = inv_conv * f_O.vec\n\nresiduals = np.array(inv_conv.errors)\nprint(f\"CG converged in {inv_conv.iterations} iterations \"\n      f\"(tol=1e-10), {len(residuals)} residual samples.\")\n\nfig2, ax = plt.subplots(figsize=(6.4, 4.2))\nax.semilogy(np.arange(1, len(residuals) + 1), residuals, \"g-\", lw=1.8)\nfor n_mark in (10, 20):\n    if n_mark <= len(residuals):\n        ax.axvline(n_mark, color=\"gray\", ls=\":\", lw=1)\n        ax.text(n_mark, residuals[0], f\" {n_mark}\", color=\"gray\",\n                va=\"top\", ha=\"left\", fontsize=9)\nax.set_xlabel(\"CG iteration\")\nax.set_ylabel(\"preconditioned residual norm\")\nax.set_title(\"CG smoother residual on the equilibration system\")\nax.grid(True, which=\"both\", alpha=0.3)\nfig2.tight_layout()\ndisplay(fig2)\nplt.close(fig2)",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 66,
+          "text_sha256": "e6d77e7e059732a99b9e2047e6164847334573e3c598ab5b6ac12fc26b24a0b2",
+          "text_preview": "CG converged in 179 iterations (tol=1e-10), 179 residual samples.\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "290e9f66b139a5ef999a020b58c40c2cc0a0c318d77e75f28893fbd33728a5d7",
+          "text_plain_preview": "<Figure size 640x420 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 43508,
+              "sha256": "7659d8beaba8557033a3ee2950b1c002110d762f550ea04794c9c563e88816cc"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 15,
+      "execution_count": 8,
+      "source_sha256": "b88312f54cb31a8ab5d322349b62c9c0c421dc832247c7f7cc20d41e96236b9a",
+      "source_preview": "with TaskManager():\n    gf20 = GridFunction(fes_O); gf20.vec[:] = 0\n    inv20 = CGSolver(a_O.mat, pre, maxiter=20, tol=1e-16, printrates=False)\n    gf20.vec.data = inv20 * f_O.vec\n    H_eq20 = grad(gf20)\n\n    ed = Integrate(r * InnerProduct(H_A - H_eq_dir, H_A - H_eq_dir) * dx,\n                   mesh, element_wise=True)\n    ec = Integrate(r * InnerProduct(H_A - H_eq20, H_A - H_eq20) * dx,\n                   mesh, element_wise=True)\n\neta_d = np.sqrt(np.array([ed[i] for i in range(mesh.ne)]))\neta_c = np.sqrt(np.array([ec[i] for i in range(mesh.ne)]))\n\ncorrelation = np.corrcoef(eta_d, eta_c)[0, 1]\nn_refine = mesh.ne // 10\ntop_d = set(np.argsort(eta_d)[-n_refine:])\ntop_c = set(np.argsort(eta_c)[-n_refine:])\noverlap = len(top_d & top_c)\n\nprint(f\"Element-wise correlation (direct vs CG-20): {correlation:.4f}\")\nprint(f\"Top-10% refinement overlap: {overlap}/{n_refine} \"\n      f\"= {overlap / n_refine * 100:.1f}%\")\n\nfig3, ax = plt.subplots(figsize=(5.2, 5.0))\nax.scatter(eta_d, eta_c, s=14, alpha",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 95,
+          "text_sha256": "8892e905f184025e9f444b0673ad1bd498d919efc01371efef27cc83567d8e94",
+          "text_preview": "Element-wise correlation (direct vs CG-20): 0.9756\nTop-10% refinement overlap: 260/266 = 97.7%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "48a0d32df3e10ecf59fea01c05b92d8e4e63623de90d51d9947df7735294f1b9",
+          "text_plain_preview": "<Figure size 520x500 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 72532,
+              "sha256": "86707879648fad9c0b7736b997563e985de1c3bdef36afec48baca2fd0406bca"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

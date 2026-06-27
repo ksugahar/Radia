@@ -1,0 +1,90 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "notebook": "docs/hdiv_vim/hdiv_curved_showcase.ipynb",
+  "notebook_sha256": "0dd8619268d8fac72aa5be113d25bf2f3797e44642cab0d3391139ccf2ad4078",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/hdiv_vim/hdiv_curved_showcase.ipynb",
+    "cells": 7,
+    "code_cells": 3,
+    "executed_code_cells": 3,
+    "code_cells_with_outputs": 3,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "33745ea65f885d466bb6a01b9e01c60e525e26b70a94a8410bced91c1f339b4d",
+      "source_preview": "\"\"\"hdiv_demag_curved.py -- the CURVED-MESH geometry win for the HDiv-type VIM, measured vs ANALYTIC truth.\n\nHDiv (RT0) lives natively on curved (isoparametric) meshes via mesh.Curve(p) -- the Piola map carries\nthe curving, and the SAME mesh.GetTrafo code path samples the exact curved surface.  six-face surface-charge flat\nObjHexahedron / ObjTetrahedron CANNOT do this: a flat-faceted sphere has a ~6-10% geometry error at a\ncoarse mesh that no amount of magnetisation accuracy can recover.  This example MEASURES the win against\nANALYTIC truth (the exact uniform-sphere dipole / volume), NOT against Radia:\n\n  GEOMETRY:  a coarse FLAT sphere has volume ~10% low and area ~6% low; mesh.Curve(3) at the SAME ndof\n             fixes both to <0.5% (the isoparametric geometry is exact to the polynomial order).\n\n  EXTERNAL FIELD  (the discriminator):  the external field of a uniform-M sphere is the EXACT point\n             dipole  phi(r) = (1/4pi) V cos(theta)/r^2.  This is a surface-charge integral",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 969,
+          "text_sha256": "9e6f46d5f43af0c39f26fe47d8345261ba5b66d9d5d01ac792afd4d6d7a54ef2",
+          "text_preview": "analytic sphere:  V=4.18879  area=12.56637  D_z=1/3  ext_phi(0,0,2)=1/12=0.08333\n====================================================================================================\n    h     mesh  n_bnd      V err   area err      D_z   D_z err  ext field err vs dipole\n  0.8     FLAT    108    -10.25%     -5.69%   0.3277    -1.68%                 -10.00%\n  0.8    curve    108      0.02%     -0.42%   0.3238    -2.87%                  -0.26%\n  0.5     FLAT    126     -8.52%     -4.76%   0.3263    -2.12%                  -8.28%\n  0.5    curve    126      0.01%     -0.35%   0.3251    -2.48%                  -0.25%\n====================================================================================================\nWIN: curved external field error is ~30-40x smaller than flat at the SAME ndof (vs analytic\ndipole truth).  The demag FACTOR does NOT discriminate (near-isotropic ratio) -- see docstring.\nsaved S:\\Radia\\01_GitHub\\docs\\hdiv_vim\\hdiv_demag_curved.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "6ed90c7913d788a6e75268f025af4293f542aba2e8251667d306a97a06bb906a",
+      "source_preview": "\"\"\"hdiv_curved_nonlinear_field.py -- (A) the FIELD output of a CURVED x NONLINEAR body: where the curved\nwin is LARGE (~9x), unlike the magnetization (modest ~0.3%, see test_hdiv_vim_curved_nonlinear.py).\n\nA nonlinear soft-iron sphere in a uniform field magnetizes UNIFORMLY (for ANY M-H law), so M is the\nscalar fixed point  M = M(H_ext - D M)  with the curved demag D = 1/3.  The EXTERNAL H field is then the\nEXACT point dipole, m = M V.  The curved win lives HERE: the flat faceted sphere's volume is ~9% low, so\nits dipole moment -- hence the WHOLE external field -- is ~9% WRONG; mesh.Curve(3) at the SAME ndof is\n<0.4% at every external point.  This is the engineering deliverable (the stray field around a nonlinear\nsoft-iron part) being ~9% off with flat elements (six-face surface-charge) and EXACT with curved (HDiv-VIM).\n\nH(r) = (1/4pi) INT_S sigma(r') (r-r')/|r-r'|^3 dS',  sigma = M.n  (the surface-charge stray field; no\nsingular quadrature at an EXTERNAL point -> the only error is the",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 526,
+          "text_sha256": "dc1d0185c8187bcc5bb360076e8ebfb5afbf80d2683962b5e33b06eca30ef4d4",
+          "text_preview": "nonlinear soft-iron sphere: M_s = 29981.7 A/m (H_ext=1e+04); dipole m = 125586.9\nexternal H-field error vs the ANALYTIC dipole (5 points; geometry-only error):\n  FLAT    : max +8.85%   per-point +8.85% +8.80% +8.76% +8.54% +8.85%\n  Curve(3): max +0.39%   per-point +0.29% +0.34% +0.31% +0.32% +0.39%\n=> the curved field win is ~23x: the stray field of a nonlinear soft-iron part is ~9% wrong with FLAT elements (six-face surface-charge)\n   and <0.4% with curved -- THIS is where curved x nonlinear matters (the field, not M).\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 72,
+          "text_sha256": "5582fbde46e1035577382d27951c49e2cfa641afd579eebb38e4d41fb9b275b1",
+          "text_preview": "saved S:\\Radia\\01_GitHub\\docs\\hdiv_vim\\hdiv_curved_nonlinear_field.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "184f0d0f816502fd6faced1e350bf34853d37cf72879e285f39bf6db18f2fa4d",
+      "source_preview": "\"\"\"compare_curved_vs_radia_field.py -- (B) head-to-head: external field accuracy-per-resolution,\nthe SHIPPED Radia solver (FLAT tets) vs HDiv-VIM (CURVED single-layer surface charge), vs the ANALYTIC\ndipole of a uniform-M sphere.\n\nThis is the quantitative basis for the curved accuracy-per-DOF win against the PRODUCTION code.  Radia's\nObjTetrahedron are FLAT -- the accessible stand-in for the six-face surface-charge distortion elements, which are also\nflat.  At the SAME mesh parameter h, the HDiv curved field is ~10-30x more accurate; and curved at the\nCOARSEST mesh beats shipped-Radia-flat at the FINEST.\n\nHONEST SCOPE: this measures ACCURACY-PER-RESOLUTION (geometry-driven, fair across implementations), NOT\nwall-clock.  The HDiv-VIM here is a Python prototype (dense surface-charge sum), not time-optimized; a\nfair speed comparison needs the C++ productionization (not done).  Radia cannot referee curved geometry\n(it facets), so the reference is the ANALYTIC dipole.  The uniform-M sphere ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 736,
+          "text_sha256": "201b9ddcdc41339dbbbc0097d313523086a514fd8f7c60cdf50f562d389fc37c",
+          "text_preview": "external field accuracy vs analytic dipole -- shipped Radia (FLAT) vs HDiv-VIM (CURVED):\n      h | Radia tets   flat err |  HDiv tris  curved err\n    0.6 |        114      8.92% |        120      0.386%\n    0.4 |        260      5.87% |        192      0.229%\n    0.3 |        477      3.48% |        318      0.147%\n    0.2 |       2042      1.71% |        658      0.072%\n\n=> shipped Radia FLAT at finest h=0.2 (2042 tets): 1.71%  vs  HDiv CURVED at coarsest h=0.6 (120 tris): 0.386%\n   curved-coarsest beats flat-finest = the accuracy-per-resolution win vs the production\n   solver (vs analytic truth).  ACCURACY-PER-DOF; wall-clock = the C++ lift, not done.\nsaved S:\\Radia\\01_GitHub\\docs\\hdiv_vim\\compare_curved_vs_radia_field.json\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

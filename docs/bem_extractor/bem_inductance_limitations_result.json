@@ -1,0 +1,74 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:26Z",
+  "notebook": "docs/bem_extractor/bem_inductance_limitations.ipynb",
+  "notebook_sha256": "18bde5a840dae75466df9cd4802acb797ddbee521ea9a30271735f9d3aa0291d",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/bem_extractor/bem_inductance_limitations.ipynb",
+    "cells": 3,
+    "code_cells": 1,
+    "executed_code_cells": 1,
+    "code_cells_with_outputs": 1,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "5ecb616449524b65260224cc46d15a08e2a36b578420dc42c23892f5b9543e95",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"\nverify_inductance.py\n\nVerify BEM inductance calculation against analytical formula\nfor a circular loop (torus).\n\nAnalytical self-inductance (Neumann formula):\n    L = mu_0 * R * (ln(8R/a) - 2)\n\nwhere R = loop radius, a = wire radius.\n\nThis script:\n  1. Creates a torus surface mesh using Netgen OCC\n  2. Assembles the BEM inductance matrix L via ngsolve.bem.LaplaceSL\n  3. Computes total inductance via uniform excitation: L = 1/(e^T L^{-1} e)\n  4. Compares with analytical formula\n\nKnown limitation:\n  - Dense surface meshes (curvaturesafety >= 1.0) may have rank-deficient\n    BEM matrices due to ngbem surface integration issues on closed surfaces.\n  - Use curvaturesafety=0.5 (coarse mesh) for reliable results.\n  - For higher accuracy, use p-refinement (order > 0) or quad elements\n    from Cubit, NOT finer triangulation.\n\nUsage:\n    python verify_inductance.py\n\nPart of Radia project\n\"\"\"\n\nimport sys\nimport os\nimport numpy as np\nimport time\n\n# Add R",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 352,
+          "text_sha256": "a66af497b7ee339487c710d9f844ef7de210f1f8d207a35d09efdfcb5fef6f47",
+          "text_preview": "============================================================\nBEM Inductance Verification (ngsolve.bem)\n  Circular Loop: L = mu_0*R*(ln(8R/a) - 2)\n============================================================\n\n--- R=50mm, a=5mm (R/a=10) ---\n  Analytical L = 149.6671 nH\n  Creating mesh (curvaturesafety=0.5)...\n  Surface elements: 89\n  Assembling BEM...\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 275,
+          "text_sha256": "2d8581ad9e48ea04004666f3fd867d7f39d64421148b73b919a9977c8d1a483c",
+          "text_preview": "  BEM L        = 172.3134 nH\n  Analytical L = 149.6671 nH\n  Error        = +15.13%\n  DOFs         = 269\n  Time         = 1.373 s\n\n--- R=50mm, a=2mm (R/a=25) ---\n  Analytical L = 207.2394 nH\n  Creating mesh (curvaturesafety=0.5)...\n  Surface elements: 239\n  Assembling BEM...\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 418,
+          "text_sha256": "82b1b1efde403ba116741be393935bef05760f8a6ee9104ce5da5370c08b091a",
+          "text_preview": "  WARNING: Rank-deficient matrix (714/715)\n  This occurs on dense surface meshes. Use coarser mesh.\n  WARNING: L matrix singular, using lstsq\n  BEM L        = 187.7431 nH\n  Analytical L = 207.2394 nH\n  Error        = -9.41%\n  DOFs         = 715\n  Time         = 18.258 s\n\n--- R=100mm, a=5mm (R/a=20) ---\n  Analytical L = 386.4377 nH\n  Creating mesh (curvaturesafety=0.5)...\n  Surface elements: 181\n  Assembling BEM...\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 928,
+          "text_sha256": "5b381f29d34e361ba039d7fe0e1f13ceb44d3c82d9a3ab45cf546366cc5791a9",
+          "text_preview": "  BEM L        = 131.1401 nH\n  Analytical L = 386.4377 nH\n  Error        = -66.06%\n  DOFs         = 545\n  Time         = 11.159 s\n\n============================================================\nSummary\n============================================================\nCase                            L_ref[nH]  L_bem[nH]    Error   DOFs\n----------------------------------------------------------------------\nR=50mm, a=5mm (R/a=10)           149.6671   172.3134  +15.13%    269\nR=50mm, a=2mm (R/a=25)           207.2394   187.7431   -9.41%    715\nR=100mm, a=5mm (R/a=20)          386.4377   131.1401  -66.06%    545\n\nNOTE: BEM with uniform excitation (e=ones/n) and coarse mesh\ngives ~15-25% error. For higher accuracy:\n  - Use higher-order elements (order > 0 with proper excitation)\n  - Use quad elements from Cubit (better geometry on curves)\n  - Do NOT simply refine mesh (rank-deficiency issue on closed surfaces)\n\nSome cases FAIL\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

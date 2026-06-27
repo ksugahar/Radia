@@ -1,0 +1,51 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:28Z",
+  "notebook": "docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb",
+  "notebook_sha256": "45ec1919b809ec6f5b64a0c3fa7423e5de25443d91bd350929b23aa46d6a1564",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb",
+    "cells": 3,
+    "code_cells": 1,
+    "executed_code_cells": 1,
+    "code_cells_with_outputs": 1,
+    "output_count": 1,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info",
+      "radia"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "fdd0bb667dfce54a7d8d9764fd4ef7c037c8e2e656bf8efac0649a06532dd442",
+      "source_preview": "# Version stamp for embedded results\nimport json, platform, sys\ntry:\n    import radia\n    radia_version = getattr(radia, '__version__', 'unknown')\nexcept Exception as exc:\n    radia_version = f'not-importable: {exc}'\nversion_stamp = {\n    'generated_at_utc': '2026-06-25T07:18:58Z',\n    'generator_python': '3.12.10',\n    'generator_platform': 'Windows-2022Server-10.0.20348-SP0',\n    'generator_radia_version': '4.94.0',\n    'generator_git_commit': '9bc4b2bb',\n    'runtime_python': sys.version.split()[0],\n    'runtime_platform': platform.platform(),\n    'runtime_radia_version': radia_version,\n}\nprint(json.dumps(version_stamp, indent=2, ensure_ascii=False))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 347,
+          "text_sha256": "80e8d8d4f1ee334304cf0234df90151b011fdbeaa9dbc38504388e9c683b14a3",
+          "text_preview": "{\n  \"generated_at_utc\": \"2026-06-25T07:18:58Z\",\n  \"generator_python\": \"3.12.10\",\n  \"generator_platform\": \"Windows-2022Server-10.0.20348-SP0\",\n  \"generator_radia_version\": \"4.94.0\",\n  \"generator_git_commit\": \"9bc4b2bb\",\n  \"runtime_python\": \"3.12.10\",\n  \"runtime_platform\": \"Windows-2022Server-10.0.20348-SP0\",\n  \"runtime_radia_version\": \"4.94.0\"\n}\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

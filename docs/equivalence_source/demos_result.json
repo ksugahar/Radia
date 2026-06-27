@@ -1,0 +1,106 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "notebook": "docs/equivalence_source/demos.ipynb",
+  "notebook_sha256": "d4899c94f69f129455477ea8cce539fe87de3005f0fbb7188eb2ce1b0bf69843",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/equivalence_source/demos.ipynb",
+    "cells": 8,
+    "code_cells": 3,
+    "executed_code_cells": 3,
+    "code_cells_with_outputs": 3,
+    "output_count": 6,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "ac46e6d56db4e7a1cd9ff7577e24d4a25772deb0fa5d91d08982323bfa7f7869",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Phase 1 -- equivalence-theorem reconstruction vs Biot-Savart (static).\n\nMagnetostatic verification: a circular current loop produces a known\nH field via the standard elliptic-integral Biot-Savart closed form.\nWe sample H on a sphere enclosing the loop, build a NearFieldSource,\nand evaluate the Stratton-Chu surface integral at external points.\n\nAcceptance: max relative error <= 0.5 % across 8 observation points\nfrom r = 1 m to 5 m.  This reproduces the Sugahara Lab 2008 axi\nslide 5-6 verification (analytic dots overlaid on numerical curves).\n\nRun:\n    python phase1_static_coil.py\n\nOutput:\n    results_phase1.json\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport math\nimport sys\nimport time\nfrom pathlib import Path\n\nimport numpy as np\nfrom scipy.special import ellipk, ellipe\n\n# Ensure we use the src checkout\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nsys.path.insert(0, str(HERE.parents[1] / \"src\"))\n\nfrom radi",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 359,
+          "text_sha256": "2762601d98e96500b9928129cb4ee5ec099c52535f7dc5df7106aa8ac2f99a2d",
+          "text_preview": "==============================================================================\nPhase 1: equivalence-theorem reconstruction vs Biot-Savart (static)\nDate: 2026-06-27 07:12\n==============================================================================\nSource: circular loop a = 0.2 m, z = 0.6 m, I = 1.0 A\n        dipole moment m_z = pi a^2 I = 1.2566e-01 A*m^2\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 80,
+          "text_sha256": "39fb5389f2d69f6b2f84513eec31c04823dbae87153099eb139122e49614ba96",
+          "text_preview": "Extraction sphere: R = 0.9 m, 14160 faces, area = 10.1729 m^2 (exact = 10.1788)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 985,
+          "text_sha256": "7980fd2551c0cd059a286e950627039ee99408a61f94221f700d2ff929f2be0c",
+          "text_preview": "Saved + loaded: phase1_artifact.nfs.json (3118 KB)\n\nReconstruction (Stratton-Chu surface integral, 6.0 ms):\n               obs (m)   |H_rec| (A/m)   |H_ana| (A/m)   rel_err\n------------------------------------------------------------------------------\n  ( +0.0, +0.0, +1.0)    2.224150e-01    2.236068e-01   0.533%\n  ( +0.0, +0.0, -1.0)    4.761088e-03    4.770567e-03   0.199%\n  ( +0.0, +0.0, +2.0)    7.061785e-03    7.071068e-03   0.131%\n  ( +0.0, +0.0, +5.0)    2.331915e-04    2.340601e-04   0.371%\n  ( +1.5, +0.0, +0.6)    3.023499e-03    3.023340e-03   0.242%\n  ( +2.0, +1.5, +0.0)    6.398753e-04    6.387357e-04   0.398%\n  ( +3.0, -2.0, +1.0)    2.137087e-04    2.139751e-04   0.595%\n  ( +5.0, +0.0, +0.0)    8.025338e-05    8.009246e-05   0.828%\n------------------------------------------------------------------------------\nMax relative error: 0.828% (threshold 2.0%)  --  PASS\nWrote: \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\equivalence_source\\results_phase1.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "c9a0c442754539b2911a9b520d70ff54f6206f2e23c8be1552493c89baa413d0",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Null-field property check -- the defining test of the equivalence theorem.\n\nVerifies the two-sided behaviour of a NearFieldSource constructed from\nanalytical source data on a closed surface:\n\n  * EXTERIOR (obs outside the surface): reconstructs the TRUE source\n    field, to within the surface-integral discretisation error.\n\n  * INTERIOR (obs inside the surface, but NOT at the source itself):\n    reconstructs ~zero (the \"null-field\" property).  This is what\n    makes the equivalence theorem useful: the equivalent surface\n    sources cancel the real source contribution everywhere inside,\n    so the surface IS equivalent to the source as seen from outside.\n\nSource: magnetic dipole at the origin, m = m_z * z-hat.\nExtraction surface: sphere of radius R = 0.30 m around the dipole.\n\nAcceptance:\n  - Exterior obs (|r| >= 0.6 m): max rel err <= 1.5 %.\n  - Interior obs (|r| <= 0.20 m, away from origin): |H_rec| / |H_true|\n    <= 1 % (the null-field ampli",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 67,
+          "text_sha256": "892e75bd34547092ca93efec6b08d90e110e10ffe6cf3584911da218d4522e5b",
+          "text_preview": "Building NearFieldSource on sphere R=0.3 m, 40x80=2*3200 panels...\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 2378,
+          "text_sha256": "710b9d77de56020d0884d91b319899e0f1a726b91427ee9ea5eca74ca49026ff",
+          "text_preview": "  -> 6240 panels\n\n=== EXTERIOR reconstruction (must match dipole field) ===\n  7 obs points at |r| = ['0.60', '0.60', '0.60', '0.64', '0.72', '1.20', '1.50']\n  reconstruction time: 1.5 ms (C++ kernel, 6240 panels x 7 obs)\n    r=(np.float64(0.6), np.float64(0.0), np.float64(0.0)) |H_true|=3.6841e-01  |H_rec|=3.6872e-01  rel_err=0.083%\n    r=(np.float64(0.0), np.float64(0.6), np.float64(0.0)) |H_true|=3.6841e-01  |H_rec|=3.6872e-01  rel_err=0.083%\n    r=(np.float64(0.0), np.float64(0.0), np.float64(0.6)) |H_true|=7.3683e-01  |H_rec|=7.3732e-01  rel_err=0.066%\n    r=(np.float64(0.45), np.float64(0.45), np.float64(0.0)) |H_true|=3.0875e-01  |H_rec|=3.0901e-01  rel_err=0.083%\n    r=(np.float64(0.6), np.float64(0.0), np.float64(0.4)) |H_true|=2.9430e-01  |H_rec|=2.9454e-01  rel_err=0.084%\n    r=(np.float64(1.2), np.float64(0.0), np.float64(0.0)) |H_true|=4.6052e-02  |H_rec|=4.6090e-02  rel_err=0.083%\n    r=(np.float64(0.0), np.float64(0.0), np.float64(1.5)) |H_true|=4.7157e-02  |H_rec|=4.7195e-02  rel_err=0.081%\n  -> MAX exterior rel err = 0.084%  (acceptance: <= 1.5%)\n\n=== INTERIOR null-field check (must reconstruct ~ 0) ===\n  6 obs points at |r| = ['0.10', '0.15', '0.20', '0.15', '0.18', '0.15']\n    r=(np.float64(0.1), np.float64(0.0), np.float64(0.0)) |H_true|=7.9577e+01  |H_rec|=2.4903e-03  |H_rec|/|H_true|=0.003%\n    r=(np.float64(0.0), np.float64(0.15), np.float64(0.0)) |H_true|=2.3579e+01  |H_rec|=2.2674e-03  |H_rec|/|H_true|=0.010%\n    r=(np.float64(0.0), np.float64(0.0), np.float64(0.2)) |H_true|=1.9894e+01  |H_rec|=6.9767e-03  |H_rec|/|H_true|=0.035%\n    r=(np.float64(0.1), np.float64(0.05), np.float64(0.1)) |H_true|=3.6017e+01  |H_rec|=2.7989e-03  |H_rec|/|H_true|=0.008%\n    r=(np.float64(0.18), np.float64(0.0), np.float64(0.0)) |H_true|=1.3645e+01  |H_rec|=2.1157e-03  |H_rec|/|H_true|=0.016%\n    r=(np.float64(-0.12), np.float64(0.08), np.float64(0.05)) |H_true|=2.5725e+01  |H_rec|=2.3680e-03  |H_rec|/|H_true|=0.009%\n  -> MAX interior |H_rec|/|H_true| = 0.035%  (acceptance: <= 1.0%)\n\n============================================================\n  EXTERIOR reconstruction: PASS  (0.084% <= 1.5%)\n  INTERIOR null field:     PASS  (0.035% <= 1.0%)\n  Overall:                 PASS\n============================================================\n\nSaved: \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\equivalence_source\\results_null_field.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "7f1f1d6413b9349699482e33f0bf0dd644a846eb20f6e13267e50140b5796472",
+      "source_preview": "\nimport json, os\nREL = \"../../examples/equivalence_source\"\n\ndef show(fn, keys):\n    d = json.load(open(os.path.join(REL, fn)))\n    print(\"=\" * 70)\n    print(d.get(\"phase\", fn), \"--\", d.get(\"description\", \"\"))\n    print(\"=\" * 70)\n    for k in keys:\n        if k in d:\n            v = d[k]\n            print(f\"\\n[{k}]\")\n            if isinstance(v, dict):\n                for kk, vv in v.items():\n                    print(f\"  {kk}: {vv}\")\n            else:\n                print(f\"  {v}\")\n\n# Phase 2: 1 MHz parallel-plate WPT harmonic (Cubit-coupled e2e -> committed result)\nshow(\"results_phase2.json\", [\"source\", \"reconstruction\", \"obs_results\"])\nprint()\n# Phase 3: end-to-end Cubit -> .vol -> NearFieldSource -> .sol (committed result)\nshow(\"results_phase3.json\", [\"mesh_source_kind\", \"cli_result\", \"projection\", \"verification\"])\nprint()\n# C++ kernel benchmark\nshow(\"results_bench_static.json\", [\"acceptance\", \"results\"])\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 6708,
+          "text_sha256": "77fdb6ac7daac0dc159b5f9eeb3f1300965752b4d64d3dc4783506c5ce247b8c",
+          "text_preview": "======================================================================\n2 -- Equivalence-theorem time-harmonic reconstruction vs Hertzian dipole analytical\n======================================================================\n\n[source]\n  kind: hertzian_dipole_z\n  Il_phasor_re: 1.0\n  Il_phasor_im: 0.0\n  frequency_Hz: 1000000.0\n  omega_rad_per_s: 6283185.307179586\n  k_rad_per_m: 0.020958450213811725\n  wavelength_m: 299.7924580816064\n\n[reconstruction]\n  method: Stratton-Chu time-harmonic\n  n_obs: 4\n  max_E_rel_err: 0.666474777805835\n  max_H_rel_err: inf\n  t_recon_ms: 10.95128059387207\n  accept_threshold: 0.02\n  status: KNOWN_LIMITATION\n\n[obs_results]\n  [{'obs': [0.0, 0.0, 10.0], 'E_rec_re': [-1.9288429134083014e-18, 6.151593323046607e-19, -0.0029320146426082064], 'E_rec_im': [-5.399496225567263e-16, 3.7840858105406966e-16, -0.974925965784158], 'H_rec_re': [-1.2426610265292252e-19, 2.968668500391561e-19, -9.97447601926521e-21], 'H_rec_im': [5.998907672690624e-21, -4.6885217504965023e-20, 2.064444445424065e-21], 'E_ana_re': [0.0, 0.0, -0.008740552961058022], 'E_ana_im': [0.0, 0.0, -2.9229701403550665], 'H_ana_re': [-0.0, 0.0, 0.0], 'H_ana_im': [0.0, 0.0, 0.0], 'E_rel_err': 0.6664604943528403, 'H_rel_err': inf}, {'obs': [0.0, 0.0, -10.0], 'E_rec_re': [1.3804916504570985e-18, -2.4751973623608013e-19, -0.0029320146426083833], 'E_rec_im': [1.857001152242438e-16, 3.1353072773383697e-16, -0.9749259657841459], 'H_rec_re': [2.73406508602292e-19, 1.5071892505206207e-19, -9.687764185727698e-21], 'H_rec_im': [8.61210047471635e-21, -6.861732014826444e-20, 2.063827288979363e-21], 'E_ana_re': [4.7077550948303585e-21, 0.0, -0.008740552961058022], 'E_ana_im': [5.294146005029607e-16, 0.0, -2.9229701403550665], 'H_ana_re': [0.0, 9.957122109358468e-20, 0.0], 'H_ana_im': [0.0, -2.977476640455786e-22, 0.0], 'E_rel_err': 0.6664604943528444, 'H_rel_err': 2.879511117754977}, {'obs': [10.0, 0.0, 0.0], 'E_rec_re': [2.886412998534798e-17, -6.642498133226921e-20, -0.002901549204614812], 'E_rec_im': [4.318377253009764e-16, 2.2495090731595882e-17, 0.46694470112572123], 'H_rec_re': [-5.345437573713146e-20, 0.0002714827373098369, -1.0442812729009589e-20], 'H_rec_im': [-4.426954316110164e-20, -8.151349721208142e-07, 2.054167619635236e-21], 'E_ana_re': [-2.3538775474130607e-21, 0.0, -0.008702111223423126], 'E_ana_im': [-2.647073002514803e-16, 0.0, 1.4000281385900117], 'H_ana_re': [0.0, 0.0008130607221846335, 0.0], 'H_ana_im': [0.0, -2.431294184191603e-06, 0.0], 'E_rel_err': 0.666474777805835, 'H_rel_err': 0.6660978204682872}, {'obs': [0.0, 0.0, 100.0], 'E_rec_re': [-1.0473191815885e-17, 3.977612126385766e-18, -0.0018300969907104636], 'E_rec_im': [-4.337232206415645e-18, -1.8289046061608697e-18, -0.0012509902987669246], 'H_rec_re': [1.0541415242965324e-20, -1.0630304847072097e-20, 4.954811094105107e-22], 'H_rec_im': [1.7139444017214424e-20, -3.0926835537285737e-20, 8.608119050811613e-22], 'E_ana_re': [0.0, 0.0, -0.005480922129141687], 'E_ana_im': [0.0, 0.0, -0.0037542014530806103], 'H_ana_re': [0.0, 0.0, 0.0], 'H_ana_im': [0.0, 0.0, 0.0], 'E_rel_err': 0.6663138048108248, 'H_rel_err': inf}]\n\n======================================================================\n3 -- End-to-end Cubit -> .vol -> CLI -> NFS -> CF -> projected GridFunction -> .sol\n======================================================================\n\n[mesh_source_kind]\n  occ_fallback\n\n[cli_result]\n  status: OK\n  vol: C:\\temp\\nfs_e2e\\nfs_e2e_inner.vol\n  sol: C:\\temp\\nfs_e2e\\H_inner.sol\n  surface_label: nfs_surface\n  n_faces: 1106\n  omega: 0.0\n  artifact: C:\\temp\\nfs_e2e\\nfs.json\n  artifact_bytes: 244405\n\n[projection]\n  outer_mesh_kind: OCC sphere shell R=0.6 to R=3.0\n  outer_sol: C:\\temp\\nfs_e2e\\H_outer_reconstructed.sol\n  outer_sol_bytes: 362736\n\n[verification]\n  n_obs: 8\n  max_rel_err: 0.08343791936391899\n  accept_threshold: 0.2\n  status: PASS\n  obs: [{'obs': [0.0, 0.0, 0.7], 'H_recon': [0.0004087473748442447, 0.0021111932466302023, 0.5026647250512533], 'H_ana': [0.0, 0.0, 0.46400858044284365], 'rel_er",
+          "text_truncated": true
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

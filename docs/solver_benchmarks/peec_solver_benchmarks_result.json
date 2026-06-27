@@ -1,0 +1,92 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:31Z",
+  "notebook": "docs/solver_benchmarks/peec_solver_benchmarks.ipynb",
+  "notebook_sha256": "e162bdc2a3affc6d2105c5618451195b326fb816d54a7756eef9e5795240fa7b",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/solver_benchmarks/peec_solver_benchmarks.ipynb",
+    "cells": 3,
+    "code_cells": 1,
+    "executed_code_cells": 1,
+    "code_cells_with_outputs": 1,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "44119c7282acab77857c6685c5eeb729344ba63fdaa38eef6ce200ffd8ef9005",
+      "source_preview": "\nimport json, os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom IPython.display import display\n\nREL = \"../../examples/solver_benchmarks\"\ndef load(fn): return json.load(open(os.path.join(REL, fn)))[\"results\"]\n\ndense = load(\"results_bench_peec_dense.json\")\nhac   = load(\"results_bench_peec_hacapk.json\")\ncross = load(\"results_bench_peec_mna_crossover.json\")\n\n# ---- 1. PEEC L: dense Ruehli vs HACApK H-matrix (compression + scaling) ----\nprint(\"PEEC partial-inductance L: dense Ruehli vs HACApK (H-matrix), 10 kHz coil\")\nprint(f\"{'n_fil':>7} {'dense_L_MB':>11} {'hmat_MB':>9} {'compress':>9} \"\n      f\"{'t_solve_dense':>14} {'t_solve_hac':>12} {'|Z11|_d':>10} {'|Z11|_h':>10}\")\nprint(\"-\" * 92)\ndmap = {d[\"n_fil\"]: d for d in dense}\nfor h in hac:\n    n = h[\"n_fil\"]; d = dmap.get(n)\n    td = f\"{d['t_solve']:14.3f}\" if d else f\"{'--':>14}\"\n    zd = f\"{d['abs_Z11']:10.4f}\" if d else f\"{'--':>10}\"\n    print(f\"{n:>7} {h.get('dense_L_mb', float('nan')):11.1f} {h['hmatrix_mb']:9.1f} \"\n          f",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 887,
+          "text_sha256": "18d5cc5f8e11fce1531d3669b6b1692bdfe876a4a387a34f1473d62f14a9eda1",
+          "text_preview": "PEEC partial-inductance L: dense Ruehli vs HACApK (H-matrix), 10 kHz coil\n  n_fil  dense_L_MB   hmat_MB  compress  t_solve_dense  t_solve_hac    |Z11|_d    |Z11|_h\n--------------------------------------------------------------------------------------------\n    500         1.9       1.9     1.000          0.067        0.003     1.4746     1.4076\n   2000        30.5      27.5     0.900          1.645        0.235     1.4631     5.3479\n   4500       154.5      77.2     0.500         16.128        0.843     1.4588    12.1889\n   8000       488.3      64.1     0.131         83.851        1.089     1.4570    20.3469\n  12500      1192.1      79.6     0.067        348.719        1.369     1.4562    31.9448\n  18000      2471.9      89.5     0.036             --        1.769         --    45.0056\n  24500      4579.5     156.8     0.034             --        3.050         --    61.3312\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "9de5b84e39f20b0f61f85a0ee962c3d295203efd4a71e84558d7774ba8ecdb04",
+          "text_plain_preview": "<Figure size 1100x400 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 57188,
+              "sha256": "56c752739e984eaaef3be79e061fd0777bf844afcc1810e17b4cbe478071ba57"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "8b0dc3de0aec11b69119b813cfe8f55929423b9a79b7786211db54fa3183fb1f",
+          "text_plain_preview": "<Figure size 600x400 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 39116,
+              "sha256": "ce359fed7de764961b04dd0eeac4f06a69b757b48e0e966187528153eb08f882"
+            }
+          }
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 363,
+          "text_sha256": "e50fab877f399833afc1c6f228d3bf5bce751da4feab4caa817c4dec618920ca",
+          "text_preview": "\n|Z11| consistency (dense vs HACApK) at matched n_fil:\n  n_fil=  500: dense=1.47464  hac=1.40765  rel diff=4.54e-02\n  n_fil= 2000: dense=1.46310  hac=5.34786  rel diff=2.66e+00\n  n_fil= 4500: dense=1.45876  hac=12.18893  rel diff=7.36e+00\n  n_fil= 8000: dense=1.45701  hac=20.34686  rel diff=1.30e+01\n  n_fil=12500: dense=1.45623  hac=31.94480  rel diff=2.09e+01\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
