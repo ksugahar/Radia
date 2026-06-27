@@ -72,3 +72,28 @@ def test_demagoperator_mat_composes_with_ngsolve():
         sol = GMRes(A=A, b=rhs, freedofs=fes.FreeDofs(), tol=1e-8, maxsteps=300, printrates=False)
         res = (A * sol - rhs).Evaluate()
         assert np.linalg.norm(res.FV().NumPy()) < 1e-5 * np.linalg.norm(rhs.FV().NumPy()), "GMRes did not converge"
+
+
+@pytest.mark.parametrize("p", [0, 1, 2])
+def test_demagoperator_gauss_backend_matches_analytic(p):
+    """DemagOperator(gram_backend='gauss') -- the Gauss POINT operator (P^T K_point P + near correction)
+    plugged into the SAME .mat path -- matches the analytic Gram DemagFactor to <1e-3 at p=0,1,2, and its
+    .mat is a real NGSolve BaseMatrix that composes into (M + N) for a GMRes solve."""
+    mesh = _cube(0.8)
+    Mcf = ng.CF((0, 0, ng.z))   # non-uniform -> exercises the volume charge (div M != 0)
+    with ng.TaskManager():
+        fes = ng.HDiv(mesh, order=p)
+        D_analytic = DemagOperator(fes, eps=1e-7).DemagFactor(Mcf)
+        Ng = DemagOperator(fes, gram_backend="gauss", qpts=3, gauss_near_factor=1.0)
+        D_gauss = Ng.DemagFactor(Mcf)
+        assert Ng.gram_backend == "gauss"
+        assert abs(D_gauss - D_analytic) / abs(D_analytic) < 1e-3
+        # the gauss .mat composes with NGSolve just like the analytic one
+        u, v = fes.TnT()
+        M = ng.BilinearForm(u * v * ng.dx).Assemble()
+        gfu = ng.GridFunction(fes); gfu.Set(Mcf)
+        A = M.mat + Ng.mat
+        rhs = (M.mat * gfu.vec).Evaluate()
+        sol = GMRes(A=A, b=rhs, freedofs=fes.FreeDofs(), tol=1e-8, maxsteps=300, printrates=False)
+        res = (A * sol - rhs).Evaluate()
+        assert np.linalg.norm(res.FV().NumPy()) < 1e-5 * np.linalg.norm(rhs.FV().NumPy())
