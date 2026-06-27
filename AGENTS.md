@@ -80,6 +80,16 @@ next to the script, and record the actual run numbers in the internal `_crossval
 notes. A validation-class example may be too slow for pytest and still be
 mandatory learning material.
 
+When a validation-class example is being promoted, the executable verification
+lane is the repository's actual `validation_test/` directory, not `docs/`
+(and not a differently named `tests_validation/` tree).  A result-bearing
+`docs/<topic>/*.ipynb` may render the theory,
+tables, and plots for humans, but it does not replace the runnable validation
+surface.  If the example already has `validation_*.py`, `validate_*.py`,
+`*_summary.json`, or references from `validation_test/`, classify it first as
+`validation_test` / protected-validation-corpus material; add a docs notebook
+only as the synchronized showcase layer.
+
 ### Publish Boundary: No Validation Provenance in Public Artifacts (2026-06-24)
 
 Public artifacts (this repo, PyPI packages, public docs) **lead with analytic

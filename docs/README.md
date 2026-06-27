@@ -45,6 +45,12 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 - [KELVIN_TRANSFORMATION.md](kelvin/KELVIN_TRANSFORMATION.md) - Theory, API, workflow, and references for open boundary magnetostatics
 - [DTN_SPECTRUM_COARSE_MESH.md](kelvin/DTN_SPECTRUM_COARSE_MESH.md) - **Coarse-mesh accuracy as a DtN-spectrum property** (Kameari's coarse-mesh demonstration, reframed). The exterior Dirichlet-to-Neumann operator `Λ_ext` has the closed-form eigenvalue ladder `−(n+1)/R` (3D) / `−n/R` (2D); the discrete `Λ_h` already lands the low multipoles on that ladder on the coarsest mesh (dipole 0.07%), and the **isolated** Kelvin open-boundary error (~0.1%) sits ~45× below the interior FEM error — readable off the operator before any solve, and separated from the interior discretisation a field-refinement study conflates. Includes the BEM `Λ_h` spectrum, the Kelvin polynomial-image / order-threshold mechanism (mode `n` exact iff FEM order `≥ n`), the 2D static-apparatus / rotating-machine cross-section, and the real two-sphere periodic-Kelvin validation. Runnable layer: `dtn_coarse_mesh(topic=...)`.
+- [kelvin/kelvin_examples_migration.ipynb](kelvin/kelvin_examples_migration.ipynb) - Result-bearing initial migration ledger for the 226 Kelvin example Python files, with JSON classification into docs / validation_test / src-api / memory lanes.
+- [kelvin/kelvin_classic_demos.ipynb](kelvin/kelvin_classic_demos.ipynb) - Result-bearing source map for 37 classic Kelvin formulation demos pruned from `examples/`, including representative excerpts and synchronized full-source JSON.
+- [kelvin/kelvin_adaptive_mesh_archive.ipynb](kelvin/kelvin_adaptive_mesh_archive.ipynb) - Result-bearing archive of AdaptiveMesh source snapshots before pruning/distillation.
+- [kelvin/kelvin_dtn_spectrum_archive.ipynb](kelvin/kelvin_dtn_spectrum_archive.ipynb) - Result-bearing archive of DtN-spectrum/open-boundary source snapshots before src/API or validation_test promotion.
+- [kelvin/kelvin_adaptive_mesh_archive.ipynb](kelvin/kelvin_adaptive_mesh_archive.ipynb) - Result-bearing full-source archive for 59 AdaptiveMesh scripts; the first 45 repetitive `order=*` runners were pruned after JSON/source-hash preservation.
+- [kelvin/kelvin_dtn_spectrum_archive.ipynb](kelvin/kelvin_dtn_spectrum_archive.ipynb) - Result-bearing full-source archive for 122 DtN-spectrum scripts, separating API/validation-locked scripts before any future pruning.
 
 ## PEEC (Partial Element Equivalent Circuit)
 
@@ -81,6 +87,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 ## Visualization
 
 - [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows (Cubit + Netgen)
+- [gmsh_animation/gmsh_animation.ipynb](gmsh_animation/gmsh_animation.ipynb) - Result-bearing GMSH v4.1 `$NodeData` displacement-animation artifact inspection, with synchronized JSON results.
 
 ## Cubit Mesh Export
 
@@ -94,6 +101,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 - [export_meg.md](cubit/export_meg.md) - MEG export (Gifu Univ. FEM mesh format)
 - [export_femeem.md](cubit/export_femeem.md) - FEMEEM format export (Gifu Univ.)
 - [export_exodus.md](cubit/export_exodus.md) - Exodus II export (Cubit native)
+- [ngsolve_user_meeting/volume_area_convergence.ipynb](ngsolve_user_meeting/volume_area_convergence.ipynb) - Result-bearing OCC `mesh.Curve(p)` sphere volume/area p-convergence companion, with JSON results.
 
 ## Removed (historical reference)
 

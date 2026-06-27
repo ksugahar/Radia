@@ -74,6 +74,8 @@ All shapes tested with ACIS CallbackGeometry + edge snapping:
 | Box with hole | 7 | 14 | +0.004% | -0.001% | +0.000003% | +0.000003% |
 
 Key: p=5 achieves 10^-5 to 10^-6 % error for ALL shapes, matching OCC native accuracy.
+Runnable OCC-native companion (no Cubit dependency): `docs/ngsolve_user_meeting/volume_area_convergence.ipynb`,
+with durable numeric results in `docs/ngsolve_user_meeting/volume_area_convergence_results.json`.
 
 | Method | p=2 Error | p=5 Error | Max Order | Complexity |
 |--------|-----------|-----------|-----------|------------|

@@ -68,8 +68,9 @@ def add_kelvin_exterior_domain(
     sub-shapes (for the caller to feed to GenerateMesh)."""
 ```
 
-Encapsulates the boilerplate currently in
-`Coil_3D_A_HCurl_with_Kelvin.py` lines 70-120. A single call replaces
+Encapsulates the boilerplate preserved in archived classic source
+`Coil_3D_A_HCurl_with_Kelvin.py` inside
+`docs/kelvin/kelvin_classic_demos_results.json`. A single call replaces
 ~50 lines of Glue + Identify + GND-vertex logic.
 
 ### L2 -- mesh-aware coefficient functions (`src/radia/kelvin_material.py`,
@@ -183,9 +184,9 @@ debugging detour 2026-04-15.
 ### 3.4 Compatibility with existing examples
 
 The new helpers MUST allow rewriting:
-- `Coil_3D_A_HCurl_with_Kelvin.py` (full-A volume-J baseline)
+- archived `Coil_3D_A_HCurl_with_Kelvin.py` (full-A volume-J baseline)
 - `validate_radia_HB_kelvin.py` (reduced-A external A_s)
-- `Coil_3D_A_HCurl_PEEC_source.py` (filament A_s when filament dev
+- archived `Coil_3D_A_HCurl_PEEC_source.py` (filament A_s when filament dev
   matures)
 
 into <50 lines each, using the layered API.
@@ -197,12 +198,12 @@ into <50 lines each, using the layered API.
 - `src/radia/kelvin_material.py` with `make_kelvin_nu_cf`
 - Extend `src/radia/kelvin_source.py` with
   `make_kelvin_aware_A_s_cf`
-- Smoke test: rebuild `Coil_3D_A_HCurl_with_Kelvin.py` baseline
+- Smoke test: rebuild the archived `Coil_3D_A_HCurl_with_Kelvin.py` baseline
   geometry via the helpers, verify mesh statistics match.
 
 ### M2 -- L3 FEM drivers (~ 1 day)
 - `src/radia/kelvin_solver.py` with the two solve functions
-- Refactor `Coil_3D_A_HCurl_with_Kelvin.py` to use the driver:
+- Refactor the archived `Coil_3D_A_HCurl_with_Kelvin.py` pattern to use the driver:
   call must reproduce L = 89.44 nH within 0.1%.
 - Refactor `validate_radia_HB_kelvin.py` similarly.
 

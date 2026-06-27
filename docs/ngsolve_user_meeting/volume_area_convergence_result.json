@@ -1,0 +1,75 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T03:54:52Z",
+  "notebook": "docs/ngsolve_user_meeting/volume_area_convergence.ipynb",
+  "notebook_sha256": "c63d5126d61aadf9301af7234e850f81571f741b12265cdc9079737b13c3ca6a",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/ngsolve_user_meeting/volume_area_convergence.ipynb",
+    "cells": 4,
+    "code_cells": 2,
+    "executed_code_cells": 2,
+    "code_cells_with_outputs": 2,
+    "output_count": 2,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "f418af12cb2a39900d5bce54a7e3a4b64130038395803c185fb91fa10b8a8292",
+      "source_preview": "from pathlib import Path\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'volume_area_convergence.py').exists():\n    NOTEBOOK_DIR = Path('docs/ngsolve_user_meeting').resolve()\nsys.path.insert(0, str(NOTEBOOK_DIR))\n\nfrom volume_area_convergence import run_occ_convergence, write_results_json, format_rows\n\nresult = run_occ_convergence()\njson_path = write_results_json(result, NOTEBOOK_DIR / 'volume_area_convergence_results.json')\nprint(format_rows(result['rows']))\nprint(f'\\nwrote {json_path.relative_to(NOTEBOOK_DIR)}')",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 671,
+          "text_sha256": "43f2fca02e0e2b386a1ea72a08dd7b5c37854b9ad2e146ab61335d65f06ee64c",
+          "text_preview": "case      p      ne    V err (%)    A err (%)  curve (s)\ncoarse    1     402    -3.544753    -1.972965     0.0000\ncoarse    2     402    -0.025361    -0.016795     0.0014\ncoarse    3     402    +0.002410    +0.001642     0.0091\ncoarse    4     402    +0.000040    +0.000027     0.0117\ncoarse    5     402    -0.000001    -0.000003     0.0148\nfine      1    4931    -1.013835    -0.561583     0.0000\nfine      2    4931    -0.002064    -0.001373     0.0051\nfine      3    4931    +0.000203    +0.000136     0.0344\nfine      4    4931    +0.000001    +0.000001     0.0421\nfine      5    4931    -0.000000    -0.000000     0.0522\n\nwrote volume_area_convergence_results.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 2,
+      "execution_count": 2,
+      "source_sha256": "c1f501100b59a1ffb6286c33050acd566086ee5987f93b2d45b698293cd6061b",
+      "source_preview": "import matplotlib.pyplot as plt\n\nfig, axes = plt.subplots(1, 2, figsize=(9, 3.6), sharex=True)\nfor case in sorted({row['case'] for row in result['rows']}):\n    rows = [row for row in result['rows'] if row['case'] == case]\n    orders = [row['order'] for row in rows]\n    axes[0].semilogy(orders, [abs(row['volume_error_percent']) for row in rows], marker='o', label=case)\n    axes[1].semilogy(orders, [abs(row['area_error_percent']) for row in rows], marker='o', label=case)\n\naxes[0].set_xlabel('Geometry order p')\naxes[0].set_ylabel('|volume error| (%)')\naxes[1].set_xlabel('Geometry order p')\naxes[1].set_ylabel('|area error| (%)')\nfor ax in axes:\n    ax.grid(True, which='both', alpha=0.3)\n    ax.legend()\nfig.tight_layout()\nplt.show()",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "7a1aabffe36887582a2d13885f3977f99024342bc280d0d483175867bc0215e2",
+          "text_plain_preview": "<Figure size 900x360 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 69748,
+              "sha256": "bdc8b6a2e9bf1491dced5d2c2fe0347bf7dcffe74aa970fee51512460b921658"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

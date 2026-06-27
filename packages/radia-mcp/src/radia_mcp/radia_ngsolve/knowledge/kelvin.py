@@ -2,7 +2,10 @@
 Kelvin transformation knowledge base for Radia MCP server.
 
 Covers the Kelvin inversion technique for open boundary FEM problems
-using NGSolve, as implemented in examples/kelvin_transformation/.
+using NGSolve. Historical standalone demos from
+examples/kelvin_transformation/ are archived in docs/kelvin notebooks;
+the examples tree now keeps validation/API candidates that still need
+promotion.
 
 Canonical convention (Nagamine, Yamaguchi, Sugahara, CEFC 2026, id 350,
 "A Pullback-Based Formulation of Kelvin Transformation in EM Field
@@ -32,6 +35,19 @@ Reference docs (consolidated 2026-05-04):
     - §2: 1-form / 2-form pullback derivation
     - §7: Reduced potential formulations + Kelvin
       including the (nu - nu_0) form pitfall (CRITICAL)
+  docs/kelvin/kelvin_examples_migration.ipynb (executed initial migration
+    ledger: 226 example .py files classified into docs / validation_test /
+    src-api / memory lanes, synchronized with JSON)
+  docs/kelvin/kelvin_classic_demos.ipynb (executed source map for the 37
+    classic A/H/Omega/Radia-IEM demos pruned from examples/, with
+    representative excerpts plus full source text and SHA-256 hashes in the
+    synchronized JSON)
+  docs/kelvin/kelvin_adaptive_mesh_archive.ipynb (executed full-source archive
+    for 59 AdaptiveMesh scripts; 45 repetitive order=* runners pruned after
+    source-hash preservation)
+  docs/kelvin/kelvin_dtn_spectrum_archive.ipynb (executed full-source archive
+    for 122 DtN-spectrum scripts; use before moving scripts into src API or
+    validation_test)
 """
 
 KELVIN_OVERVIEW = """

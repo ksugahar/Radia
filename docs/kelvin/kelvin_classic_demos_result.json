@@ -1,0 +1,198 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T04:02:21Z",
+  "notebook": "docs/kelvin/kelvin_classic_demos.ipynb",
+  "notebook_sha256": "601b2c2a13079538b8666be66883d1be95fa1a30f2ab79d16dcfe33911d21030",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/kelvin/kelvin_classic_demos.ipynb",
+    "cells": 6,
+    "code_cells": 3,
+    "executed_code_cells": 3,
+    "code_cells_with_outputs": 3,
+    "output_count": 13,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "131d625f0d02e01fc63af2ef8307b27c07465ccfbafe837140d747aa8f3e57f0",
+      "source_preview": "from pathlib import Path\nimport datetime as dt\nimport json\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'kelvin_examples_migration.py').exists():\n    NOTEBOOK_DIR = Path('docs/kelvin').resolve()\nsys.path.insert(0, str(NOTEBOOK_DIR))\n\nfrom kelvin_examples_migration import (\n    build_migration_report,\n    build_source_archive,\n    markdown_table,\n    package_versions,\n    write_report_json,\n)\n\narchive_path = NOTEBOOK_DIR / 'kelvin_classic_demos_results.json'\nmigration = build_migration_report()\nfresh_archive = build_source_archive(\n    migration,\n    lanes=['docs_classic_demo_candidate'],\n    include_source=True,\n)\narchive = fresh_archive\nif archive_path.exists():\n    existing = json.loads(archive_path.read_text(encoding='utf-8'))\n    existing_archive = existing.get('source_archive') if isinstance(existing, dict) else None\n    existing_count = existing_archive.get('summary', {}).get('archived_files', 0) if isinstance(existing_archive, dict) else 0\n    if existing_count >",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 401,
+          "text_sha256": "57f820c464da16e62256e77b857303ce2bc7a1ce9059b3791f56df015fddbcba",
+          "text_preview": "loaded existing classic archive to preserve deleted source snapshots\n{\n  \"classic_demo_python_files\": 37,\n  \"archived_lines\": 15663,\n  \"archived_bytes\": 628228,\n  \"groups\": {\n    \"H-formulation\": 15,\n    \"A-formulation\": 13,\n    \"Omega_ReducedOmega\": 8,\n    \"radia_iem_vs_fem_sphere.py\": 1\n  },\n  \"selected_source_excerpts\": 4,\n  \"full_source_archive\": true\n}\n\nwrote kelvin_classic_demos_results.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "39da8af019a4bcfb65a44a711afc94dbac6bc334ffb3a5332ba5a46f477f3c86",
+      "source_preview": "from IPython.display import Markdown, display\n\ndisplay(Markdown('## Classic demo files by group'))\ngroup_rows = [{'group': group, 'python_files': len(rows)} for group, rows in classic_by_group.items()]\ndisplay(Markdown(markdown_table(group_rows, ['group', 'python_files'], max_rows=20)))\n\ndisplay(Markdown('## Classic demo file list'))\nfile_rows = [\n    {\n        'path': row['path'],\n        'group': row['top_group'],\n        'bytes': row['source']['bytes'],\n        'lines': row['source']['line_count'],\n        'sha256': row['source']['sha256'][:12],\n        'artifacts': ', '.join(row['sibling_artifacts'][:4]),\n    }\n    for row in classic\n]\ndisplay(Markdown(markdown_table(file_rows, ['path', 'group', 'bytes', 'lines', 'sha256', 'artifacts'], max_rows=45)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 3,
+      "source_sha256": "ebc2394213cf3eb16e13087d56404f7ad576e97a23a9def5879e9a2521fdb4cb",
+      "source_preview": "for item in excerpts:\n    display(Markdown(f\"## Source excerpt: `{item['path']}`\"))\n    display(Markdown('```python\\n' + item['excerpt'] + '\\n```'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

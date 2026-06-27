@@ -515,11 +515,46 @@ def _is_git_ignored(path: pathlib.Path, repo_root: pathlib.Path) -> bool:
         return False
 
 
+def _git_tracked_paths(repo_root: pathlib.Path,
+                       pathspecs: list[str]) -> set[str] | None:
+    """Return tracked paths matching pathspecs, or None outside a git checkout."""
+    if not (repo_root / ".git").exists():
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--", *pathspecs],
+            cwd=str(repo_root),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    return {line.strip().replace("\\", "/") for line in result.stdout.splitlines() if line.strip()}
+
+
+def _tracked_notebook_set(repo_root: pathlib.Path,
+                          scan_root: pathlib.Path) -> set[str] | None:
+    scan_rel = _rel(scan_root, repo_root).rstrip("/")
+    if scan_rel in {"", "."}:
+        pathspecs = ["*.ipynb", "**/*.ipynb"]
+    else:
+        pathspecs = [f"{scan_rel}/*.ipynb", f"{scan_rel}/**/*.ipynb"]
+    return _git_tracked_paths(repo_root, pathspecs)
+
+
 def _iter_notebooks(scan_root: pathlib.Path,
                     repo_root: pathlib.Path,
-                    include_gitignored: bool):
+                    include_gitignored: bool,
+                    tracked_only: bool = False):
+    tracked = _tracked_notebook_set(repo_root, scan_root) if tracked_only else None
     for p in sorted(scan_root.rglob("*.ipynb")):
         if {part.lower() for part in p.parts} & _AUDIT_SKIP_PARTS:
+            continue
+        if tracked is not None and _rel(p, repo_root) not in tracked:
             continue
         if not include_gitignored and _is_git_ignored(p, repo_root):
             continue
@@ -839,6 +874,7 @@ def document_meta_write_docs_notebook_result_jsons(repo_root: str = "",
                                                      dry_run: bool = False,
                                                      max_notebooks: int = 0,
                                                      include_gitignored: bool = False,
+                                                     tracked_only: bool = True,
                                                      include_output_text: bool = True,
                                                      max_output_chars: int = 4000) -> dict:
     """Batch-write synchronized result JSON sidecars for executed docs notebooks.
@@ -859,6 +895,8 @@ def document_meta_write_docs_notebook_result_jsons(repo_root: str = "",
         include_gitignored: Include notebooks ignored by git. Defaults false so
             public docs policy batches do not create ignored sidecars under
             LAB-local research trees.
+        tracked_only: In a git checkout, touch only tracked notebooks by default.
+            Set false for an explicit WIP migration batch.
         include_output_text: Store stdout/text/plain previews in sidecars.
         max_output_chars: Per-output text preview limit.
 
@@ -872,7 +910,12 @@ def document_meta_write_docs_notebook_result_jsons(repo_root: str = "",
     if not scan_root.exists():
         return {"error": f"notebook_root not found: {scan_root}", "repo_root": str(root)}
 
-    notebooks = list(_iter_notebooks(scan_root, root, include_gitignored))
+    notebooks = list(_iter_notebooks(
+        scan_root,
+        root,
+        include_gitignored,
+        tracked_only=tracked_only,
+    ))
     written: list[dict] = []
     skipped: list[dict] = []
     errors: list[dict] = []
@@ -922,6 +965,7 @@ def document_meta_write_docs_notebook_result_jsons(repo_root: str = "",
         },
         "repo_root": str(root),
         "scan_root": _rel(scan_root, root),
+        "tracked_only": tracked_only,
         "dry_run": dry_run,
         "summary": {
             "notebooks_scanned": len(notebooks),
@@ -940,6 +984,7 @@ def document_meta_notebook_result_audit(repo_root: str = "",
                                           notebook_root: str = "",
                                           require_json: bool = True,
                                           include_gitignored: bool = False,
+                                          tracked_only: bool = True,
                                           max_items: int = 50) -> dict:
     """Audit docs notebooks for saved results and synchronized result JSON.
 
@@ -964,6 +1009,8 @@ def document_meta_notebook_result_audit(repo_root: str = "",
         include_gitignored: Include notebooks ignored by git (LAB-local docs,
             work-in-progress notebook galleries).  Defaults false for public
             repo policy checks.
+        tracked_only: In a git checkout, scan only tracked notebooks by default.
+            Set false for a deliberate WIP-tree audit.
         max_items: Maximum detailed gap rows to include.
 
     Returns:
@@ -981,7 +1028,12 @@ def document_meta_notebook_result_audit(repo_root: str = "",
     if not scan_root.exists():
         return {"error": f"notebook_root not found: {scan_root}", "repo_root": str(root)}
 
-    notebooks = list(_iter_notebooks(scan_root, root, include_gitignored))
+    notebooks = list(_iter_notebooks(
+        scan_root,
+        root,
+        include_gitignored,
+        tracked_only=tracked_only,
+    ))
     rows: list[dict] = []
     gaps: list[dict] = []
     for nb in sorted(notebooks):
@@ -1046,6 +1098,7 @@ def document_meta_notebook_result_audit(repo_root: str = "",
             "notebook": "docs ipynb files should store executed outputs",
             "json": "computed docs results should have adjacent JSON with generated_at_utc and version/runtime metadata",
             "sync": "the JSON must include notebook_sha256 matching the current result-bearing ipynb",
+            "tracked_only_default": "true; set tracked_only=false for explicit WIP-tree audits",
         },
         "summary": summary,
         "gaps": gaps,
@@ -1058,36 +1111,112 @@ def document_meta_notebook_result_audit(repo_root: str = "",
 def _find_topic_notebooks(repo_root: pathlib.Path, topic: str) -> list[pathlib.Path]:
     docs = repo_root / "docs"
     matches: list[pathlib.Path] = []
-    direct = docs / topic
-    if direct.exists():
-        matches.extend(p for p in direct.rglob("*.ipynb") if p.is_file())
-    from_examples = docs / "notebooks" / "from_examples" / topic
-    if from_examples.exists():
-        matches.extend(p for p in from_examples.rglob("*.ipynb") if p.is_file())
+    topic_aliases = {
+        "kelvin_transformation": ["kelvin"],
+    }
+    topic_names = [topic, *topic_aliases.get(topic, [])]
+    for topic_name in topic_names:
+        direct = docs / topic_name
+        if direct.exists():
+            matches.extend(p for p in direct.rglob("*.ipynb") if p.is_file())
+        from_examples = docs / "notebooks" / "from_examples" / topic_name
+        if from_examples.exists():
+            matches.extend(p for p in from_examples.rglob("*.ipynb") if p.is_file())
 
     # Some historic notebooks use a broader docs directory while retaining the
     # topic token in the filename/path.  Keep this conservative to avoid
     # accidentally claiming unrelated notebooks.
-    token = topic.lower().replace("_", "-")
+    tokens = [name.lower().replace("_", "-") for name in topic_names]
     for p in docs.rglob("*.ipynb"):
         rel = _rel(p, repo_root).lower().replace("_", "-")
-        if token in rel and p not in matches:
+        if any(token in rel for token in tokens) and p not in matches:
             matches.append(p)
     return sorted(matches)
+
+
+def _topic_reference_hits(root: pathlib.Path,
+                          topic: str,
+                          scan_roots: list[pathlib.Path],
+                          max_hits: int = 20) -> list[dict]:
+    needles = [
+        f"examples/{topic}",
+        f"examples\\{topic}",
+        f"examples.{topic}",
+    ]
+    hits: list[dict] = []
+    for base in scan_roots:
+        if not base.exists():
+            continue
+        paths = [base] if base.is_file() else list(_iter_files(base, _AUDIT_TEXT_SUFFIXES))
+        for p in paths:
+            try:
+                text = p.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                try:
+                    text = p.read_text(encoding="cp932")
+                except Exception:
+                    continue
+            except Exception:
+                continue
+            for lineno, line in enumerate(text.splitlines(), start=1):
+                if any(n in line for n in needles):
+                    hits.append({
+                        "path": _rel(p, root),
+                        "line": lineno,
+                        "text": line.strip()[:240],
+                    })
+                    if len(hits) >= max_hits:
+                        return hits
+    return hits
+
+
+def _is_validation_named_artifact(path: pathlib.Path) -> bool:
+    name = path.name.lower()
+    stem = path.stem.lower()
+    parts = {part.lower() for part in path.parts}
+    return (
+        name.startswith(("validation_", "validate_"))
+        or stem.endswith(("_validation", "_cross_validation"))
+        or "validation" in parts
+        or name.endswith("_summary.json")
+    )
+
+
+def _promotion_lane(validation_class: bool,
+                    docs_notebooks: int,
+                    result_saved_notebooks: int,
+                    py_count: int) -> str:
+    if validation_class and docs_notebooks and result_saved_notebooks == docs_notebooks:
+        return "validation_test_plus_docs_showcase"
+    if validation_class and docs_notebooks:
+        return "validation_test_plus_fix_docs_outputs"
+    if validation_class:
+        return "validation_test_or_keep_validation_corpus"
+    if docs_notebooks and result_saved_notebooks == docs_notebooks:
+        return "docs_result_notebook_done"
+    if docs_notebooks:
+        return "docs_result_notebook_needs_execution"
+    if py_count:
+        return "docs_result_notebook_candidate"
+    return "review_readme_or_data_only"
 
 
 def document_meta_examples_notebook_audit(repo_root: str = "",
                                             topic: str = "",
                                             max_items: int = 30) -> dict:
-    """Audit examples -> docs/ipynb promotion state for the Radia repo.
+    """Audit examples -> docs/ipynb or validation_test promotion state.
 
-    The audit enforces two project documentation rules:
+    The audit enforces three project migration rules:
 
     * notebooks promoted from examples should be result-saving artifacts
       (executed code cells with saved outputs and no saved error outputs);
     * Python tightly coupled to a notebook should live beside it under
       ``docs/<topic>/`` as a helper, while reusable behavior should be
       promoted into a ``src/`` API instead of remaining as a loose example.
+    * validation-class corpora should be promoted to the repository's actual
+      ``validation_test/`` directory, or explicitly kept as protected validation
+      examples; docs notebooks may render them but should not replace the
+      executable validation surface.
 
     Args:
         repo_root: Radia repository root.  Empty means auto-detect from cwd.
@@ -1095,8 +1224,8 @@ def document_meta_examples_notebook_audit(repo_root: str = "",
         max_items: Maximum number of detailed problem rows to include.
 
     Returns:
-        A dict with per-topic status, result-saving notebook summaries, and
-        Python placement recommendations.
+        A dict with per-topic status, promotion lane, result-saving notebook
+        summaries, validation-test references, and Python placement guidance.
     """
     root = _resolve_repo_root(repo_root)
     examples = root / "examples"
@@ -1116,6 +1245,7 @@ def document_meta_examples_notebook_audit(repo_root: str = "",
     needs_notebook: list[dict] = []
     notebooks_without_results: list[dict] = []
     python_reviews: list[dict] = []
+    validation_reviews: list[dict] = []
 
     for topic_dir in topic_dirs:
         if not topic_dir.is_dir():
@@ -1131,6 +1261,13 @@ def document_meta_examples_notebook_audit(repo_root: str = "",
             p for p in topic_dir.rglob("*.py")
             if "__pycache__" not in {part.lower() for part in p.parts}
         )
+        all_topic_files = sorted(
+            p for p in topic_dir.rglob("*")
+            if p.is_file() and "__pycache__" not in {part.lower() for part in p.parts}
+        )
+        validation_named = [
+            p for p in all_topic_files if _is_validation_named_artifact(p)
+        ]
         example_ipynbs = sorted(topic_dir.rglob("*.ipynb"))
         notebooks = _find_topic_notebooks(root, name)
         notebook_summaries = [
@@ -1139,6 +1276,25 @@ def document_meta_examples_notebook_audit(repo_root: str = "",
         result_saved_count = sum(1 for s in notebook_summaries if s.get("result_saved"))
         docs_helper_dir = docs / name
         docs_py = sorted(docs_helper_dir.rglob("*.py")) if docs_helper_dir.exists() else []
+        validation_test_hits = _topic_reference_hits(
+            root,
+            name,
+            [root / "validation_test"],
+            max_hits=10,
+        )
+        test_lock_hits = _topic_reference_hits(
+            root,
+            name,
+            [root / "tests", root / "packages" / "radia-mcp" / "tests"],
+            max_hits=10,
+        )
+        validation_class = bool(validation_named or validation_test_hits)
+        lane = _promotion_lane(
+            validation_class,
+            len(notebooks),
+            result_saved_count,
+            len(py_files),
+        )
 
         if not notebooks:
             status = "needs_result_saving_notebook" if py_files else "readme_or_data_only"
@@ -1168,9 +1324,17 @@ def document_meta_examples_notebook_audit(repo_root: str = "",
             "docs_notebook_count": len(notebooks),
             "result_saved_notebook_count": result_saved_count,
             "docs_helper_py_count": len(docs_py),
+            "validation_class": validation_class,
+            "promotion_lane": lane,
+            "validation_named_artifact_count": len(validation_named),
+            "validation_test_reference_count": len(validation_test_hits),
+            "test_lock_reference_count": len(test_lock_hits),
             "python_policy": py_policy,
             "sample_example_py": [_rel(p, root) for p in py_files[:5]],
             "sample_docs_helper_py": [_rel(p, root) for p in docs_py[:5]],
+            "sample_validation_artifacts": [_rel(p, root) for p in validation_named[:5]],
+            "sample_validation_test_refs": validation_test_hits[:5],
+            "sample_test_lock_refs": test_lock_hits[:5],
             "notebooks": notebook_summaries,
         }
         rows.append(row)
@@ -1198,6 +1362,17 @@ def document_meta_examples_notebook_audit(repo_root: str = "",
                 "example_py_count": len(py_files),
                 "sample_example_py": row["sample_example_py"],
             })
+        if validation_class and len(validation_reviews) < max_items:
+            validation_reviews.append({
+                "topic": name,
+                "promotion_lane": lane,
+                "validation_named_artifact_count": len(validation_named),
+                "validation_test_reference_count": len(validation_test_hits),
+                "test_lock_reference_count": len(test_lock_hits),
+                "sample_validation_artifacts": row["sample_validation_artifacts"],
+                "sample_validation_test_refs": row["sample_validation_test_refs"],
+                "sample_test_lock_refs": row["sample_test_lock_refs"],
+            })
 
     summary = {
         "repo_root": str(root),
@@ -1222,19 +1397,28 @@ def document_meta_examples_notebook_audit(repo_root: str = "",
                 "promote_to_result_saving_notebook_before_prune",
             }
         ),
+        "validation_class_topics": sum(1 for r in rows if r.get("validation_class")),
+        "topics_with_validation_test_refs": sum(
+            1 for r in rows if r.get("validation_test_reference_count", 0) > 0
+        ),
+        "topics_with_test_lock_refs": sum(
+            1 for r in rows if r.get("test_lock_reference_count", 0) > 0
+        ),
     }
     return {
         "policy": {
-            "scope": "docs/<topic> result-bearing method/showcase notebooks",
+            "scope": "examples/<topic> promotion to docs/<topic> result notebooks or validation_test/",
             "notebook": "docs notebooks must be result-saving: executed cells with saved outputs, no saved error outputs",
             "json": "computed results should have adjacent JSON with generated_at_utc and version/runtime metadata",
             "sync": "the JSON sidecar and result-bearing ipynb are committed as a synchronized pair",
             "python": "notebook-coupled .py goes under docs/<topic>/; reusable behavior is promoted to src/ API",
+            "validation": "validation-class examples promote to the actual validation_test/ directory or remain explicitly protected; docs notebooks can be the rendered showcase but do not replace validation tests",
         },
         "summary": summary,
         "needs_result_saving_notebook": needs_notebook,
         "notebooks_without_saved_results": notebooks_without_results,
         "python_placement_reviews": python_reviews,
+        "validation_reviews": validation_reviews,
         "topics": rows if topic else rows[:max_items],
         "topics_truncated": (not topic and len(rows) > max_items),
     }
