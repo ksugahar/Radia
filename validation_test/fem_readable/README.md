@@ -4,11 +4,9 @@ Small validation-class FEM checks written to be easy to translate into
 first-order teaching scripts.  The focus is readability and explicit assembly
 steps rather than production solver performance.
 
-Docs surface: the result-saved notebook
-[`docs/fem_readable/fem_readable_validation_archive.ipynb`](../../docs/fem_readable/fem_readable_validation_archive.ipynb)
-collects the 12 scripts, their existing summary JSON payloads, full source, and
-SHA-256 hashes. The executable lane is this `validation_test/fem_readable`
-directory; the notebook is the human-facing rendered archive.
+The executable lane is this `validation_test/fem_readable` directory. Each
+script keeps its adjacent summary JSON payload, so the public source tree no
+longer needs a separate docs-layer source archive.
 
 | Example | Shows | Capabilities used |
 |---|---|---|

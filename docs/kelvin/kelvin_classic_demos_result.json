@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T04:02:21Z",
+  "generated_at_utc": "2026-06-27T22:39:24Z",
   "notebook": "docs/kelvin/kelvin_classic_demos.ipynb",
-  "notebook_sha256": "601b2c2a13079538b8666be66883d1be95fa1a30f2ab79d16dcfe33911d21030",
+  "notebook_sha256": "6f899963bce2e61ba4481ef71c306712265f398cf3c10e1c5a5d9827c5d58235",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

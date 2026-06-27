@@ -863,8 +863,8 @@ accelerator("sector_saturation")
 Repository anchors:
 
 - `docs/clebsch_hodograph/DESIGN_METHODOLOGY.md`
-- `docs/clebsch_hodograph/clebsch_hodograph_examples_archive.ipynb`
-  (executed source/result archive: 46 scripts + JSON/media hashes)
+- `docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md`
+- `docs/clebsch_hodograph/HDIV_VIM_CLEBSCH_BRIDGE.md`
 - `examples/clebsch_hodograph/`
 - `tests/feec/test_clebsch_hodograph_research.py`
 """

@@ -5,9 +5,8 @@ machine topology.  These scripts are meant as readable checks before moving
 the same force identities into FEM, BEM, or CAD/mesh workflows.
 
 The human-facing, result-saved notebook layer is
-`docs/force_validation/force_validation.ipynb` plus the source archive
-`docs/force_validation/force_validation_examples_archive.ipynb`.  This
-directory is the executable validation surface; each script refreshes its
+`docs/force_validation/force_validation.ipynb`. This directory is the
+executable validation surface; each script refreshes its
 adjacent JSON summary with timestamp and runtime version metadata.
 
 | Example | Shows |

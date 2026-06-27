@@ -258,10 +258,10 @@ careful remeshing.
 - ``validation_test/fem_readable/validation_surface_triangle_constant_traction_load.py``:
   constant P1 surface-triangle traction to equivalent nodal loads, with
   force/moment preservation.
-- SHOWCASE NOTEBOOK ``docs/fem_readable/fem_readable_validation_archive.ipynb``:
-  the 12 readable FEM validation scripts, their summary JSON payloads, full
-  source, and SHA-256 hashes, executed and synchronized with
-  ``docs/fem_readable/fem_readable_validation_archive_results.json``.
+- ``validation_test/fem_readable/README.md``: the 12 readable FEM validation
+  scripts and their adjacent summary JSON payloads. This validation corpus is
+  the executable public surface; no separate docs-layer source archive is
+  required.
 - ``validation_test/cubit_mesh_export/validation_vol_boundary_pressure_moment.py``:
   named `.vol` sidesets to pressure force/moment rows and generic resultant reduction.
 - ``validation_test/cubit_mesh_export/validation_vol_boundary_traction_moment.py``:
