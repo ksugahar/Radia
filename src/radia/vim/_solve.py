@@ -35,12 +35,14 @@ Si-steel C-type at 3000 AT converges relF 0.55 -> 8e-7 in ~24 iters, gap B withi
 de-Rham loops sit in ker(N) and are carried by M_mass (no loop-star), and the scalable C++ charge-Gram
 H-matvec is the only O(N log N) cost.
 
-## Preconditioner -- the FULL HDiv mass inverse (mesh + mu_r robust)
-Every +N / constant-LHS solve is GMRES preconditioned with `M_mass^{-1}` (a one-time sparse LU of the
-local RT0 HDiv mass), which DEFLATES the de-Rham loops (ker B) -> the iteration count stays bounded as
-the mesh refines AND as mu_r grows (the de-Rham structural advantage: no loop-star, distortion-robust).
-A Jacobi diagonal is NOT mesh-robust (the +N count blew past 5000 iters at 7224 faces -- measured).
-GMRES (not CG/MINRES) absorbs the residual ACA asymmetry of the charge-Gram H-matvec.
+## Linear solve dispatch -- C++ first for uniform materials
+For the common scalar-mu_r case, `linear_solver="auto"` keeps Python as orchestration only: the sparse
+B map, charge-Gram H-matvec, HDiv mass apply, exact Jacobi diagonal, and Krylov loop run in C++
+(`_ChargeGramHMatrix.solve_linear_material_auto_prec`).  `linear_solver="hlu"` is an opt-in tet-only
+system-A H-LU path that builds/factors `A = M_mass + chi*N` directly on face DOFs.  The legacy Python
+GMRES + full `M_mass^{-1}` sparse LU remains available as `linear_solver="python"` and is still used for
+per-region chi / PM-mixed / nonlinear Newton paths until their material-specific operators move to C++.
+The long-term target is a symmetric HDiv preconditioner (AMS/H-LU) rather than Python Krylov glue.
 
 KELVIN-LESS: the 1/r charge Gram IS the open boundary (a volume integral method like MMM/MSC); only
 the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the analytic charge Gram
@@ -72,11 +74,198 @@ from ._nonlinear import _bh_table_funcs, _table_tensor_tangent, _table_tensor_ta
 _MU0 = 4e-7 * _PI
 # scipy renamed the Krylov tolerance kwarg 'tol' -> 'rtol' (scipy >= 1.12); detect once.
 _GMRES_TOL = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "tol"
+_LINEAR_SOLVERS = {"auto", "python", "cpp-cg", "hlu"}
+_GRAM_BACKENDS = {"analytic", "gauss"}
+
+
+def _build_charge_gram(d, all_tet, gram_eps, leaf, eta, near_factor, image_masks, image_signs):
+    """Build the C++ charge-Gram H-matrix for the fallback / nonlinear demag path."""
+    if all_tet:
+        return _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
+                                      n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta,
+                                      near_factor=near_factor, image_masks=image_masks,
+                                      image_signs=image_signs)
+    # HEX/WEDGE: the polytope triangle-soup charge Gram (build_demag emits d["poly"] for non-tet).
+    p = d["poly"]
+    return _rp._ChargeGramHMatrix(
+        cell_tris=list(p["cell_tris"]), cell_troff=list(p["cell_troff"]),
+        cell_cent=list(p["cell_cent"]), cell_meas=list(p["cell_meas"]),
+        face_tris=list(p["face_tris"]), face_troff=list(p["face_troff"]),
+        face_cent=list(p["face_cent"]), face_meas=list(p["face_meas"]),
+        n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta, near_factor=near_factor,
+        image_masks=image_masks, image_signs=image_signs)
+
+
+def _tet_gauss_point_cloud(d):
+    """Low-order Gauss point cloud for G ~= P^T K_point P on tet/tri charge hosts."""
+    cell_verts = np.asarray(d["cell_verts"], float).reshape(-1, 4, 3)
+    face_verts = np.asarray(d["face_verts"], float).reshape(-1, 3, 3)
+    point_coords = []
+    point_charge = []
+    point_weight = []
+    # Symmetric degree-2 tetra rule: 4 points, weights sum to volume.
+    a = 0.5854101966249685
+    b = 0.1381966011250105
+    tet_lam = np.array([[a, b, b, b], [b, a, b, b], [b, b, a, b], [b, b, b, a]], float)
+    # Symmetric degree-2 triangle rule: 3 points, weights sum to area.
+    tri_lam = np.array([[2/3, 1/6, 1/6], [1/6, 2/3, 1/6], [1/6, 1/6, 2/3]], float)
+    sizes = np.zeros(int(d["n_charge"]), float)
+    for c, V in enumerate(cell_verts):
+        vol = abs(np.linalg.det(V[1:] - V[0])) / 6.0
+        sizes[c] = np.cbrt(vol)
+        pts = tet_lam @ V
+        point_coords.extend(pts.ravel())
+        point_charge.extend([c] * len(pts))
+        point_weight.extend([vol / len(pts)] * len(pts))
+    off = int(d["n_el"])
+    for f, V in enumerate(face_verts):
+        area = 0.5 * np.linalg.norm(np.cross(V[1] - V[0], V[2] - V[0]))
+        sizes[off + f] = np.sqrt(area)
+        pts = tri_lam @ V
+        point_coords.extend(pts.ravel())
+        point_charge.extend([off + f] * len(pts))
+        point_weight.extend([area / len(pts)] * len(pts))
+    return (np.asarray(point_coords, float), np.asarray(point_charge, np.int32),
+            np.asarray(point_weight, float), sizes)
+
+
+def _point_direct_entry(point_coords, point_charge, point_weight, a, b):
+    pa = np.flatnonzero(point_charge == a)
+    pb = np.flatnonzero(point_charge == b)
+    if len(pa) == 0 or len(pb) == 0:
+        return 0.0
+    A = point_coords.reshape(-1, 3)[pa]
+    Bp = point_coords.reshape(-1, 3)[pb]
+    WA = point_weight[pa]
+    WB = point_weight[pb]
+    s = 0.0
+    inv4pi = 1.0 / (4.0 * _PI)
+    for i, x in enumerate(A):
+        r = np.linalg.norm(x[None, :] - Bp, axis=1)
+        mask = r > 1e-300
+        if np.any(mask):
+            s += WA[i] * float(np.sum(WB[mask] * inv4pi / r[mask]))
+    return s
+
+
+def _near_charge_pairs(cent, sizes, near_factor):
+    """Sparse near/self pair set for exact-minus-point Gram correction."""
+    from scipy.spatial import cKDTree
+    cent = np.asarray(cent, float)
+    sizes = np.asarray(sizes, float)
+    max_size = float(np.max(sizes)) if len(sizes) else 0.0
+    tree = cKDTree(cent)
+    pairs = []
+    for a, c in enumerate(cent):
+        cand = tree.query_ball_point(c, float(near_factor) * (sizes[a] + max_size))
+        for b in cand:
+            if b < a:
+                continue
+            r = float(np.linalg.norm(c - cent[b]))
+            if a == b or r <= float(near_factor) * (sizes[a] + sizes[b]):
+                pairs.append((a, b))
+    return pairs
+
+
+def _analytic_entry_oracle(d):
+    """Geometry-only analytic charge-Gram (build=False): a cheap exact-entry oracle for the Gauss near
+    correction.  .entry(a,b) is the EXACT analytic charge Gram (the ctor sets up the per-charge outer
+    quadrature / centroids / sizes), but the O(N log N) H-matrix is NOT built -- so sampling the few
+    near pairs costs O(near) analytic entries instead of a full analytic H-matrix build (which would
+    defeat the whole point of the Gauss path, namely AVOIDING that analytic cost).
+
+    near_factor=1e30 (all-analytic): the oracle must return the TRUE analytic entry for every near pair
+    it is queried on (the near correction's exact reference), independent of the far-field near_factor
+    used for the analytic backend's own build.  Querying is restricted to the near set by the caller."""
+    return _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
+                                  n_el=int(d["n_el"]), near_factor=1e30, build=False)
+
+
+def _build_charge_gauss_gram(d, all_tet, gram_eps, leaf, eta, near_factor,
+                             image_masks, image_signs, gauss_near_factor):
+    """Build G ~= P^T K_point P + near correction.  First production slice: tet/tri, no IMA."""
+    if not all_tet:
+        raise ValueError("hdiv_demag_solve: gram_backend='gauss' currently supports tet/triangle meshes only")
+    if image_masks or image_signs:
+        raise ValueError("hdiv_demag_solve: gram_backend='gauss' does not yet support image symmetry")
+    point_coords, point_charge, point_weight, sizes = _tet_gauss_point_cloud(d)
+    # Exact analytic near entries via a geometry-only oracle (no full H-matrix build) -- the Gauss path
+    # must NOT build the analytic Gram it exists to avoid; we only need .entry() on the near pairs.
+    exact = _analytic_entry_oracle(d)
+    corr_i, corr_j, corr_v = [], [], []
+    for a, b in _near_charge_pairs(d["cent"], sizes, gauss_near_factor):
+        exact_ab = float(exact.entry(int(a), int(b)))
+        approx_ab = _point_direct_entry(point_coords, point_charge, point_weight, int(a), int(b))
+        delta = exact_ab - approx_ab
+        corr_i.append(int(a)); corr_j.append(int(b)); corr_v.append(float(delta))
+        if a != b:
+            corr_i.append(int(b)); corr_j.append(int(a)); corr_v.append(float(delta))
+    return _rp._ChargeGaussHMatrix(
+        point_coords=list(map(float, point_coords)), point_charge=list(map(int, point_charge)),
+        point_weight=list(map(float, point_weight)), n_charge=int(d["n_charge"]),
+        corr_i=corr_i, corr_j=corr_j, corr_v=corr_v,
+        eps=gram_eps, leaf=leaf, eta=eta)
+
+
+def _tet_hlu_solver_args(d, chi):
+    """Convert build_demag output into the compact C++ system-A H-LU constructor surface."""
+    Mm = sp.coo_matrix(d["M_mass"])
+    Bc = d["B_csr"].tocsc()
+    cent = np.asarray(d["cent"], float)
+    ndof = int(d["ndof"])
+    face_charge = np.full(ndof * 2, -1, np.int32)
+    face_coef = np.zeros(ndof * 2, float)
+    face_cent = np.zeros((ndof, 3), float)
+    for i in range(ndof):
+        s, e = Bc.indptr[i], Bc.indptr[i + 1]
+        ids = Bc.indices[s:e]
+        vals = Bc.data[s:e]
+        if len(ids) > 2:
+            raise RuntimeError("hdiv_demag_solve: C++ H-LU expects <=2 charge supports per RT0 face "
+                               "(face %d has %d)" % (i, len(ids)))
+        for p, (a, v) in enumerate(zip(ids, vals)):
+            face_charge[i * 2 + p] = int(a)
+            face_coef[i * 2 + p] = float(v)
+        if len(ids):
+            face_cent[i] = cent[ids].mean(0)
+    return dict(
+        face_centroids=face_cent.ravel().tolist(), chi=float(chi),
+        face_charge=face_charge.tolist(), face_coef=face_coef.tolist(),
+        mI=list(map(int, Mm.row)), mJ=list(map(int, Mm.col)), mV=list(map(float, Mm.data)),
+        cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]), n_el=int(d["n_el"]),
+    )
+
+
+def _solve_linear_cpp_cg(H, B, Mm, n_face, h_ext, chi, tol, maxit):
+    """Uniform-chi linear solve through the C++ charge-Gram Krylov kernel."""
+    inv_chi = 1.0 / float(chi)
+    rhs = np.asarray(Mm @ h_ext).ravel()
+    B = B.tocsr()
+    Mm_coo = sp.coo_matrix(Mm)
+    if hasattr(H, "solve_linear_material_auto_prec"):
+        res = H.solve_linear_material_auto_prec(
+            list(map(int, B.indptr)), list(map(int, B.indices)), list(map(float, B.data)),
+            int(n_face), list(map(int, Mm_coo.row)), list(map(int, Mm_coo.col)),
+            list(map(float, Mm_coo.data)), inv_chi, list(map(float, rhs)), tol, int(maxit))
+    else:
+        # Compatibility for an older local binary during editable development. Wheels built from this
+        # source use the C++ auto-preconditioner above.
+        prec = inv_chi * np.asarray(Mm.diagonal(), float)
+        floor = max(float(np.max(np.abs(prec))) * 1e-12, 1e-300)
+        prec = np.maximum(prec, floor)
+        res = H.solve_linear_material(
+            list(map(int, B.indptr)), list(map(int, B.indices)), list(map(float, B.data)),
+            int(n_face), list(map(int, Mm_coo.row)), list(map(int, Mm_coo.col)),
+            list(map(float, Mm_coo.data)), inv_chi, list(map(float, prec)),
+            list(map(float, rhs)), tol, int(maxit))
+    return np.asarray(res["m"], float), int(res["iters"])
 
 
 def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                      image=None, gram_eps=1e-10, leaf=32, eta=2.0, near_factor=1e30, tol=1e-8,
-                     maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6):
+                     maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6,
+                     linear_solver="auto", hlu_trunc_tol=1e-8,
+                     gram_backend="analytic", gauss_near_factor=2.0):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     Soft-iron spec (EXACTLY ONE, unless every region is a permanent magnet -> both may be omitted):
@@ -102,6 +291,12 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     """
     if H_ext is None:
         raise ValueError("hdiv_demag_solve: H_ext (applied-field CoefficientFunction) is required")
+    if linear_solver not in _LINEAR_SOLVERS:
+        raise ValueError("hdiv_demag_solve: linear_solver must be one of %s (got %r)"
+                         % (sorted(_LINEAR_SOLVERS), linear_solver))
+    if gram_backend not in _GRAM_BACKENDS:
+        raise ValueError("hdiv_demag_solve: gram_backend must be one of %s (got %r)"
+                         % (sorted(_GRAM_BACKENDS), gram_backend))
     if pm_M is None:
         if (mu_r is None) == (bh_table is None):
             raise ValueError("hdiv_demag_solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
@@ -110,12 +305,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
             raise ValueError("hdiv_demag_solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
                              "bh_table (nonlinear), not both")
 
-    # ---- demag operator N: ALWAYS the scalable C++ charge-Gram H-matrix (_ChargeGramHMatrix) ----
-    # The C++ kernel handles tet (cell_verts/face_verts) AND hex/wedge (the polytope triangle-soup ctor),
-    # and folds IMA mirror symmetry as image charges (image_masks/image_signs) so the reduced (1/2,1/4,1/8)
-    # model reproduces the full one -- validated == the dense IMA Gram to ~1e-10.  The `scalable` knob + the
-    # dense O(N^2) Python Gram path were REMOVED (the dense path was ~70x slower at ~1000 elements;
-    # No-Fallbacks: one supported C++ path).
+    # ---- sparse HDiv geometry + applied field projection ----
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
     image_masks, image_signs = [], []
     if image is not None:
@@ -124,51 +314,107 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
             image_signs.append(float(sign))
     d = _tet.build_demag(mesh)
     Mm, B = d["M_mass"], d["B_csr"]
-    if all_tet:
-        H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
-                                   n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta,
-                                   near_factor=near_factor, image_masks=image_masks, image_signs=image_signs)
-    else:
-        # HEX/WEDGE: the polytope triangle-soup charge Gram (build_demag emits d["poly"] for non-tet).
-        p = d["poly"]
-        H = _rp._ChargeGramHMatrix(
-            cell_tris=list(p["cell_tris"]), cell_troff=list(p["cell_troff"]),
-            cell_cent=list(p["cell_cent"]), cell_meas=list(p["cell_meas"]),
-            face_tris=list(p["face_tris"]), face_troff=list(p["face_troff"]),
-            face_cent=list(p["face_cent"]), face_meas=list(p["face_meas"]),
-            n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta, near_factor=near_factor,
-            image_masks=image_masks, image_signs=image_signs)
-
-    def N_apply(v):
-        v = np.asarray(v, float)
-        return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
-
     n_face, n_el = int(d["ndof"]), int(d["n_el"])
     mu = d["m_unit"]
-    Mfac = spla.splu(sp.csc_matrix(Mm))
-    Mprec = spla.LinearOperator((n_face, n_face), matvec=lambda v: Mfac.solve(np.asarray(v, float)))
-
-    # ---- applied field projected onto RT0 ----
     fes = ng.HDiv(mesh, order=0)
     gfHext = ng.GridFunction(fes); gfHext.Set(H_ext)
     h_ext = gfHext.vec.FV().NumPy().copy()
     denom = float(mu @ np.asarray(Mm @ mu).ravel())
-    D = float((mu @ N_apply(mu)) / denom)
 
-    if pm_M is not None and bh_table is not None:
-        m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
-                                    n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window,
-                                    pm_M=pm_M)
-    elif pm_M is not None:
-        M_chi, b_pm = _build_mixed_pm(mesh, fes, mu_r, pm_M, Mm, n_face)
-        m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit,
-                                 gmres_restart, b_extra=b_pm)
-    elif mu_r is not None:
-        M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
-        m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit, gmres_restart)
-    else:
-        m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
-                                    n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window)
+    # ---- linear scalar material: move the whole Krylov / H-LU loop to C++ when possible ----
+    solver_used = "python-gmres"
+    hmat_stats = None
+    m = None
+    iters = None
+    D = None
+    uniform_linear = pm_M is None and bh_table is None and mu_r is not None and not isinstance(mu_r, dict)
+    chi_uniform = None
+    if gram_backend == "gauss" and not uniform_linear:
+        raise ValueError("hdiv_demag_solve: gram_backend='gauss' is currently enabled only for "
+                         "uniform linear mu_r solves")
+    if gram_backend == "gauss" and linear_solver == "hlu":
+        raise ValueError("hdiv_demag_solve: gram_backend='gauss' is a charge-operator path; "
+                         "linear_solver='hlu' currently factors the analytic tet system-A operator")
+    if uniform_linear:
+        chi_uniform = float(mu_r) - 1.0
+        if chi_uniform <= 0.0:
+            raise ValueError("hdiv_demag_solve: mu_r must be > 1 (got %r)" % (mu_r,))
+        can_hlu = all_tet and image is None and hasattr(_rp, "_HDivVimTetSolver")
+        if linear_solver == "hlu" and not can_hlu:
+            raise ValueError("hdiv_demag_solve: linear_solver='hlu' currently requires a tet mesh, "
+                             "no image symmetry, and a HACApK-enabled _HDivVimTetSolver")
+        if linear_solver == "hlu" and can_hlu:
+            args = _tet_hlu_solver_args(d, chi_uniform)
+            solver = _rp._HDivVimTetSolver(eps=gram_eps, leaf=leaf, eta=eta,
+                                           trunc_tol=hlu_trunc_tol, gram_near_factor=near_factor,
+                                           **args)
+            rhs = chi_uniform * np.asarray(Mm @ h_ext).ravel()
+            m = np.asarray(solver.solve(list(map(float, rhs))), float)
+            H_for_d = _build_charge_gram(d, all_tet, gram_eps, leaf, eta, near_factor,
+                                         image_masks, image_signs)
+            Nmu = B.T @ np.asarray(H_for_d.matvec((B @ mu).tolist()), float)
+            D = float((mu @ Nmu) / denom)
+            iters = 1
+            solver_used = "cpp-hlu"
+            if hasattr(solver, "stats"):
+                hmat_stats = dict(solver.stats())
+
+    if m is None:
+        # ---- demag operator N: scalable C++ charge-Gram H-matrix (_ChargeGramHMatrix) ----
+        # The C++ kernel handles tet (cell_verts/face_verts) AND hex/wedge (polytope triangle soup),
+        # and folds IMA mirror symmetry as image charges.  The fallback path keeps Python only as
+        # orchestration; uniform linear solves use H.solve_linear_material* so the Krylov loop is C++.
+        if gram_backend == "gauss":
+            H = _build_charge_gauss_gram(d, all_tet, gram_eps, leaf, eta, near_factor,
+                                         image_masks, image_signs, gauss_near_factor)
+        else:
+            H = _build_charge_gram(d, all_tet, gram_eps, leaf, eta, near_factor, image_masks, image_signs)
+
+        def N_apply(v):
+            v = np.asarray(v, float)
+            return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
+
+        Mfac = spla.splu(sp.csc_matrix(Mm))
+        Mprec = spla.LinearOperator((n_face, n_face), matvec=lambda v: Mfac.solve(np.asarray(v, float)))
+        D = float((mu @ N_apply(mu)) / denom)
+        if hasattr(H, "stats"):
+            hmat_stats = dict(H.stats())
+
+        if pm_M is not None and bh_table is not None:
+            if linear_solver in ("cpp-cg", "hlu"):
+                raise ValueError("hdiv_demag_solve: linear_solver=%r applies only to linear mu_r solves"
+                                 % (linear_solver,))
+            m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
+                                        n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window,
+                                        pm_M=pm_M)
+        elif pm_M is not None:
+            if linear_solver in ("cpp-cg", "hlu"):
+                raise ValueError("hdiv_demag_solve: linear_solver=%r does not yet support PM-mixed solves"
+                                 % (linear_solver,))
+            M_chi, b_pm = _build_mixed_pm(mesh, fes, mu_r, pm_M, Mm, n_face)
+            m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit,
+                                     gmres_restart, b_extra=b_pm)
+        elif mu_r is not None:
+            if isinstance(mu_r, dict):
+                if linear_solver in ("cpp-cg", "hlu"):
+                    raise ValueError("hdiv_demag_solve: linear_solver=%r does not yet support "
+                                     "per-region mu_r" % (linear_solver,))
+                M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
+                m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit,
+                                         gmres_restart)
+            elif linear_solver in ("auto", "cpp-cg"):
+                m, iters = _solve_linear_cpp_cg(H, B, Mm, n_face, h_ext, chi_uniform, tol, maxit)
+                solver_used = "cpp-cg"
+            else:
+                M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
+                m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit,
+                                         gmres_restart)
+        else:
+            if linear_solver in ("cpp-cg", "hlu"):
+                raise ValueError("hdiv_demag_solve: linear_solver=%r applies only to linear mu_r solves"
+                                 % (linear_solver,))
+            m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
+                                        n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window)
 
     # ---- per-element M (VectorL2(0) projection; component-major DOFs -> (n_el,3)) + averages ----
     gfM = ng.GridFunction(fes); gfM.vec.FV().NumPy()[:] = m
@@ -177,8 +423,12 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     vol = ng.Integrate(ng.CoefficientFunction(1.0), mesh)
     M_avg = np.array([ng.Integrate(gfM[i], mesh) for i in range(3)]) / vol
 
-    return dict(M=M_el, M_avg=M_avg, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
-                n_charge=int(d["n_charge"]), nonlinear=(bh_table is not None))
+    out = dict(M=M_el, M_avg=M_avg, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
+               n_charge=int(d["n_charge"]), nonlinear=(bh_table is not None),
+               linear_solver=solver_used, gram_backend=gram_backend)
+    if hmat_stats is not None:
+        out["hmat_stats"] = hmat_stats
+    return out
 
 
 def _build_chi_mass(mesh, fes, mu_r, Mm, n_face):

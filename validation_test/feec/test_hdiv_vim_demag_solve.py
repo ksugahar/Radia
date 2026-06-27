@@ -37,6 +37,8 @@ def test_sphere_linear_matches_analytic(mu_r):
     mesh = _sphere()
     with ng.TaskManager():
         res = hdiv_demag_solve(mesh, mu_r, _HEXT)
+    assert res["linear_solver"] in {"cpp-hlu", "cpp-cg"}
+    assert "hmat_stats" in res
     chi = mu_r - 1.0
     D = res["demag"]
     M_analytic = chi / (1.0 + chi * D) * H0
@@ -59,6 +61,16 @@ def test_per_element_M_uniform_and_aligned():
     assert mz.mean() > 0 and np.std(mz) / abs(mz.mean()) < 0.1, \
         f"per-element Mz not uniform: mean {mz.mean():.1f}, std {np.std(mz):.1f}"
     assert np.abs(M[:, :2]).mean() < 0.05 * abs(mz.mean()), "spurious transverse per-element M"
+
+
+def test_explicit_hlu_linear_solver():
+    """The opt-in system-A H-LU path solves the production linear entry and reports its C++ solver."""
+    mesh = _sphere(h=0.6)
+    with ng.TaskManager():
+        res = hdiv_demag_solve(mesh, 100.0, _HEXT, linear_solver="hlu", gram_eps=1e-8)
+    assert res["linear_solver"] == "cpp-hlu"
+    assert abs(res["demag"] - 1.0 / 3.0) < 7e-3
+    assert res["iters"] == 1
 
 
 def test_fail_loud_on_nonmagnetic():
