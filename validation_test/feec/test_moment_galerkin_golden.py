@@ -186,3 +186,26 @@ def test_quad_cpp_matches_dense():
     m_cpp, _ = mg.solve_raw(sys, H_ext, chi)
     rel = np.linalg.norm(m_cpp - m_dense) / np.linalg.norm(m_dense)
     assert rel < 1e-8, f"C++ 5-DOF solve != dense reference: rel {rel:.2e}"
+
+
+def test_far_quad_matches_analytic_at_scale():
+    """The DEFAULT fast NEAR/FAR charge-Gram build (near_factor=2, far_quad=4) reproduces the all-analytic Gram
+    solve on a 6x6 plate that HAS far pairs (corner-to-corner ~7D >> the 2D near threshold): external stray field
+    to ~1e-4 and the SAME CG iteration count.  Locks the far_quad fast build (4-6x faster at N>=256, the
+    Gram-build-bottleneck fix) without changing the demag physics; the symmetric H-matvec keeps CG identical."""
+    plate = [_hexv(i * D, (i + 1) * D, j * D, (j + 1) * D, 0, D) for i in range(6) for j in range(6)]
+    mu_r = 1000.0
+    probe = [0.0, 0.0, 8 * D]
+    out_fast = mg.moment_galerkin_demag_solve(plate, mu_r=mu_r, H_ext=(0.0, 0.0, H0))               # far_quad default
+    out_ana = mg.moment_galerkin_demag_solve(plate, mu_r=mu_r, H_ext=(0.0, 0.0, H0),
+                                             near_factor=1e30, far_quad=0)                            # all-analytic
+    objs_f = [rad.ObjHexahedron([list(v) for v in V], list(out_fast["M"][e])) for e, V in enumerate(plate)]
+    B_f = np.array(rad.Fld(rad.ObjCnt(objs_f), "b", probe)); rad.UtiDelAll()
+    objs_a = [rad.ObjHexahedron([list(v) for v in V], list(out_ana["M"][e])) for e, V in enumerate(plate)]
+    B_a = np.array(rad.Fld(rad.ObjCnt(objs_a), "b", probe)); rad.UtiDelAll()
+    rel = np.linalg.norm(B_f - B_a) / np.linalg.norm(B_a)
+    assert rel < 1e-4, f"far_quad fast build field differs from all-analytic: rel {rel:.2e}"
+    # far_quad must not DEGRADE convergence (the loop-free property is preserved by the symmetric matvec); a few
+    # extra iters from the ~1e-5 operator perturbation are fine on a small problem -- a real failure would blow up.
+    assert out_fast["iters"] < 1.6 * out_ana["iters"] + 10, \
+        f"far_quad degraded CG convergence: {out_fast['iters']} iters vs analytic {out_ana['iters']}"

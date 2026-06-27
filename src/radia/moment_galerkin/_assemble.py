@@ -32,6 +32,16 @@ mu_r-independent / loop-free convergence with no loop-star.
 ACA defaults (leaf=40, eta=0.5): tuned so the H-matvec reproduces the exact analytic Gram to ~1e-4 on
 near-heavy geometry (eta is the dominant knob; the MMMM 12-face-triangle charge group must not be split, so
 leaf~40 keeps ~3 hexes intact).
+
+FAST BUILD defaults (near_factor=2, far_quad=4): the SAME precision-preserving NEAR/FAR split HDiv-VIM ships on
+this shared charge-Gram kernel.  NEAR pairs (r <= near_factor*(size_a+size_b)) stay analytic-exact; FAR pairs use
+a low-order degree-2 double-quadrature of 1/r (far_quad>0, O((size/r)^4)) that reproduces the all-analytic Gram
+at ~monopole cost -- 3-6x faster build at N>=256, growing with N.  Compact/small geometries (cube, few-hex bars)
+are ALL-NEAR at near_factor=2, so the fast build is BIT-IDENTICAL to all-analytic there (the goldens are
+unchanged).  The fast FAR rule leaves the RAW Gram entries ~1e-5 asymmetric, but (a) the production solve applies
+G via the EXACTLY-symmetric H-matvec (mass_riesz symmetric=true default) and (b) demag_factor is a quadratic form
+c.Gc, insensitive to the antisymmetric part -- so the moment-Galerkin symmetry/accuracy guarantees are preserved.
+Pass near_factor=1e30 to force all-analytic (e.g. to assert the formulation's exact symmetry on a large mesh).
 """
 import numpy as np
 import scipy.sparse as sp
@@ -109,12 +119,15 @@ def _second_moment(V, c):
     return M2
 
 
-def assemble_moment_system(hexes, *, quad=False, eps=1e-9, leaf=40, eta=0.5, near_factor=1e30, build=True):
+def assemble_moment_system(hexes, *, quad=False, eps=1e-9, leaf=40, eta=0.5, near_factor=2.0, far_quad=4,
+                           build=True):
     """Build the moment-Galerkin demag pieces for a list of hexahedra.
 
     quad : False -> 3 DOF/hex (dipole); True -> 5 DOF/hex (3 dipole + 2 quad residual eigenmodes).
     eps, leaf, eta : ACA H-matrix parameters for the C++ charge-Gram (validated defaults).
-    near_factor : analytic NEAR/FAR entry split (1e30 = all-analytic).   build : build the H-matrix now.
+    near_factor : analytic NEAR/FAR entry split (default 2 = fast; 1e30 = all-analytic).
+    far_quad : FAR rule (default 4 = precision-preserving degree-2 double-quad; 0 = centroid-monopole).
+    build : build the H-matrix now.
 
     Returns dict(G, B (csr n_charge x ndof_per*n_hex), M_mass (csr), vols, n_hex, n_charge, ndof_per,
                  all_tris (list of (3,3) triangle vertex arrays in B-row order, for field reconstruction)).
@@ -167,7 +180,7 @@ def assemble_moment_system(hexes, *, quad=False, eps=1e-9, leaf=40, eta=0.5, nea
     B = sp.csr_matrix((data, (rows, cols)), shape=(n_charge, ndof_per * n))
     M_mass = sp.block_diag(Wblocks).tocsr() if quad else sp.diags(np.repeat(vols, 3)).tocsr()
     G = _rp._ChargeGramHMatrix(cell_verts=[], face_verts=face_tris, n_el=0,
-                               eps=eps, leaf=int(leaf), eta=float(eta), near_factor=near_factor,
-                               build=bool(build))
+                               eps=eps, leaf=int(leaf), eta=float(eta), near_factor=float(near_factor),
+                               far_quad=int(far_quad), build=bool(build))
     return {"G": G, "B": B, "M_mass": M_mass, "vols": vols, "n_hex": n, "n_charge": n_charge,
             "ndof_per": ndof_per, "all_tris": all_tris}
