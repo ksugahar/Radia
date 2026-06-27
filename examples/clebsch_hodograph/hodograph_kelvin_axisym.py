@@ -7,11 +7,12 @@ error.  This script replaces that truncation with the lab's verified
 axisymmetric Kelvin transformation (open boundary), so the field is exact
 and the hodograph is computed on an exact field.
 
-It reuses the verified Omega-Reduced-Omega + Kelvin solve from
-``docs/kelvin/legacy_assets/kelvin_transformation/Omega_ReducedOmega/Sphere/`` (interior
-physical half-disk + exterior Kelvin half-disk offset in z, periodic
-kelvin_int <-> kelvin_ext, mu_ext = mu0 (R/rho')^2) and ADDS the hodograph
-post-processing on the physical region (air_inner):
+It reuses the verified Omega-Reduced-Omega + Kelvin pattern captured in
+``docs/kelvin/kelvin_classic_demos.ipynb`` and implemented through
+``radia.kelvin_source`` helpers (interior physical half-disk + exterior
+Kelvin half-disk offset in z, periodic kelvin_int <-> kelvin_ext,
+mu_ext = mu0 (R/rho')^2), then ADDS the hodograph post-processing on the
+physical region (air_inner):
 
   scalar potential Phi  : ALGEBRAIC,  Phi = H0 z + Omega_r  (H = grad Phi);
   flux function psi      : axisym Stokes,  grad(psi) = r (B_z, -B_r),

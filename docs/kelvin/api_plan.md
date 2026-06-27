@@ -1,11 +1,10 @@
 # Kelvin Transformation Helper API: Design Plan
 
-A staged plan for refactoring the archived
-`docs/kelvin/legacy_assets/kelvin_transformation/A-formulation/` validation
+A staged plan for refactoring the former A-formulation Kelvin validation
 notes into a
 reusable helper API in `src/radia/kelvin_*.py`. The standalone scripts were
-removed from `examples`; their full source is preserved in
-`docs/kelvin/kelvin_remaining_examples_archive_results.json`. Now that the
+removed from `examples`; recover old scratch sources from git history only if a
+forensic comparison is needed. Now that the
 1-form A and 2-form B pullbacks have been derived and unit-tested
 (`pullback_derivation_3D.md`, `tests/test_kelvin_source.py`), the math
 foundation is solid enough to design a general-purpose API on top.
@@ -71,9 +70,8 @@ def add_kelvin_exterior_domain(
     sub-shapes (for the caller to feed to GenerateMesh)."""
 ```
 
-Encapsulates the boilerplate preserved in archived classic source
-`Coil_3D_A_HCurl_with_Kelvin.py` inside
-`docs/kelvin/kelvin_classic_demos_results.json`. A single call replaces
+Encapsulates the former classic-demo boilerplate from
+`Coil_3D_A_HCurl_with_Kelvin.py`. A single call replaces
 ~50 lines of Glue + Identify + GND-vertex logic.
 
 ### L2 -- mesh-aware coefficient functions (`src/radia/kelvin_material.py`,
@@ -86,7 +84,7 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0, kelvin_mats=("kelvin",)):
     Canonical Nagamine CEFC 2026 / Sugahara 2022 convention:
         nu_kelvin = (rho'/R)^2 * nu_0   (3D spherical conformal)
     Derived from pullback of 1-form basis + bilinear energy functional.
-    See docs/kelvin/legacy_assets/kelvin_transformation/CONVENTION.md.
+    See docs/kelvin/CONVENTION.md.
     """
 
 def make_kelvin_aware_A_s_cf(

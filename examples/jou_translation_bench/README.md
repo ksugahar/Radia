@@ -38,7 +38,8 @@ For each fixture:
 The benchmark writer produces:
 
 - `out/NN_<fixture>.py` — generated build123d, or a stub with the skip
-  reason if translation was refused.
+  reason if translation was refused. These generated outputs are not canonical
+  examples; the 2026-06-27 generated set was pruned from `examples/`.
 - `out/report.md` — per-fixture rubric scoring + list of mcp-server
   knowledge gaps observed.
 
@@ -48,3 +49,7 @@ This benchmark is normally driven by the parent Claude Code session
 spawning a sub-agent with Read/Write access and the knowledge base
 files available. The sub-agent is told explicitly to use the lab
 knowledge, not generic training-data knowledge, and to flag the gaps.
+
+The `.jou` fixtures stay here. Generated Python outputs should be regenerated
+outside the tracked examples tree unless they are promoted into a tested
+translator fixture.
