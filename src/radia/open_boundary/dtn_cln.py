@@ -22,7 +22,7 @@ SCOPE -- read this; it is the boundary of where this is the RIGHT tool.
       / NGSolve);
     * for a NON-separable body the per-mode exactness becomes a convergent BAND
       approximation (build the DtN via Kelvin-FEM / Schur first;
-      examples/kelvin_transformation/DtN_spectrum/act6_06.. , research-stage).
+      archived act6_06.. sources in docs/kelvin/kelvin_dtn_spectrum_archive_results.json).
   See docs/open_boundary/OPEN_BOUNDARY_MAP.md for the full selector.
 
 NOT NOVEL (cite, do not claim).  The exact rational radiation DtN + local
@@ -34,7 +34,7 @@ MOR is Kameari-Ebrahimi-Sugahara-Shindo-Matsuo, IEEE T-Magn 54(3):7201804 (2018)
 This module is the VERIFIED, reusable operator -- not a novelty claim.
 
 VERIFIED (tests/open_boundary/test_dtn_cln.py, ported from the research demos
-examples/kelvin_transformation/DtN_spectrum/act6_02_cln_dtn_cauer.py +
+archived `act6_02_cln_dtn_cauer.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) +
 act6_11_exact_dtn_fetd.py):
   - the eddy DtN is EXACTLY rational in q=sqrt(s); the Cauer-in-q ladder is exact
     at n+1 stages (NRMSE ~1e-15) for n=1..6, well-conditioned (coeff spread <1e3),
@@ -163,7 +163,7 @@ def companion_poles(n):
         g(t)      = -du/dt - u + sum_j psi_j ,   u = field trace at the truncation,
         dpsi_j/dt =  lambda_j ( psi_j + u ) ,    one first-order ODE per pole.
     (Verified reflectionless in a 1-D radial FETD solve in
-    examples/kelvin_transformation/DtN_spectrum/act6_11_exact_dtn_fetd.py.)"""
+    archived `act6_11_exact_dtn_fetd.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`).)"""
     return reverse_bessel_roots(n)
 
 

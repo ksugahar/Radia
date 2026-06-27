@@ -5,7 +5,8 @@ The (static) infinite element (IE) closes an exterior Laplace problem on a trunc
 expanding the decaying exterior field as (surface FE) x (radial decay basis) and adding the radial
 levels as EXTRA surface DOFs that NGSolve assembles + solves monolithically with the interior FE
 system.  On a SPHERE this is identical to the Kelvin transformation (same exterior polynomial space;
-see ``examples/kelvin_transformation/DtN_spectrum/act7_28_ie_vs_kelvin_fair_dtn.py``).
+see archived `act7_28_ie_vs_kelvin_fair_dtn.py`, full source in
+`docs/kelvin/kelvin_dtn_spectrum_archive_results.json`).
 
 DESIGN (NGSolve-native -- "complement NGSolve, do not reimplement"):
   * the radial decay operators are tiny (P x P) and live in numpy here (the well-conditioned vertex +

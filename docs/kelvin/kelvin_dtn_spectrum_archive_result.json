@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T04:02:21Z",
+  "generated_at_utc": "2026-06-27T05:16:36Z",
   "notebook": "docs/kelvin/kelvin_dtn_spectrum_archive.ipynb",
-  "notebook_sha256": "f7389b8f707e55ef5a194ad9df1ee8859f40dbd308e788ec4a6eb9eccfe78190",
+  "notebook_sha256": "b14a723d1fca7f8b8bde509c5897cbf78f17524513af7128e44503b997c45c31",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -12,7 +12,7 @@
   },
   "summary": {
     "path": "docs/kelvin/kelvin_dtn_spectrum_archive.ipynb",
-    "cells": 4,
+    "cells": 8,
     "code_cells": 2,
     "executed_code_cells": 2,
     "code_cells_with_outputs": 2,
@@ -26,23 +26,23 @@
   },
   "outputs": [
     {
-      "cell_index": 1,
+      "cell_index": 5,
       "execution_count": 1,
-      "source_sha256": "90a05e7d658900c440f03f6fc3dd673990ec2fedb2b609cb691d9ced0de66e3c",
-      "source_preview": "from pathlib import Path\nimport json\nimport re\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'kelvin_examples_migration.py').exists():\n    NOTEBOOK_DIR = Path('docs/kelvin').resolve()\nsys.path.insert(0, str(NOTEBOOK_DIR))\n\nfrom kelvin_examples_migration import build_migration_report, build_source_archive, markdown_table, write_report_json\n\narchive_path = NOTEBOOK_DIR / 'kelvin_dtn_spectrum_archive_results.json'\nreport = build_migration_report()\narchive = build_source_archive(\n    report,\n    lanes=['open_boundary_src_api_or_validation', 'validation_test_or_src_api_locked', 'validation_test_candidate'],\n    path_contains='examples/kelvin_transformation/DtN_spectrum/',\n    include_source=True,\n)\nfor row in archive['files']:\n    name = Path(row['path']).name\n    m = re.match(r'act(\\d+)_', name)\n    row['act_group'] = f'act{m.group(1)}' if m else 'misc'\narchive['summary']['by_act_group'] = {}\nfor row in archive['files']:\n    archive['summary']['by_act_group'][row['act_group'",
+      "source_sha256": "cd10adf557aeafcc2957916a083bb32f875a37f4068b86d99c8bc8cc9e571186",
+      "source_preview": "from pathlib import Path\nimport json\nimport re\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'kelvin_examples_migration.py').exists():\n    NOTEBOOK_DIR = Path('docs/kelvin').resolve()\nsys.path.insert(0, str(NOTEBOOK_DIR))\n\nfrom kelvin_examples_migration import build_migration_report, build_source_archive, markdown_table, write_report_json\n\narchive_path = NOTEBOOK_DIR / 'kelvin_dtn_spectrum_archive_results.json'\nreport = build_migration_report()\nfresh_archive = build_source_archive(\n    report,\n    lanes=['open_boundary_src_api_or_validation', 'validation_test_or_src_api_locked', 'validation_test_candidate'],\n    path_contains='examples/kelvin_transformation/DtN_spectrum/',\n    include_source=True,\n)\narchive = fresh_archive\nif archive_path.exists():\n    existing = json.loads(archive_path.read_text(encoding='utf-8'))\n    existing_count = existing.get('summary', {}).get('archived_files', 0) if isinstance(existing, dict) else 0\n    if existing_count > fresh_archive['summary'",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 503,
-          "text_sha256": "b52f5babb16684164447a753a94a3222edc0217cdafa3d40d5498bcb95fc38b8",
-          "text_preview": "{\n  \"archived_files\": 122,\n  \"archived_lines\": 18927,\n  \"archived_bytes\": 1050293,\n  \"by_lane\": {\n    \"open_boundary_src_api_or_validation\": 104,\n    \"validation_test_or_src_api_locked\": 16,\n    \"validation_test_candidate\": 2\n  },\n  \"by_group\": {\n    \"DtN_spectrum\": 122\n  },\n  \"by_act_group\": {\n    \"act0\": 6,\n    \"act1\": 7,\n    \"act2\": 15,\n    \"act3\": 7,\n    \"act4\": 7,\n    \"act5\": 9,\n    \"act6\": 13,\n    \"act7\": 40,\n    \"act8\": 17,\n    \"misc\": 1\n  }\n}\n\nwrote kelvin_dtn_spectrum_archive_results.json\n",
+          "text_chars": 567,
+          "text_sha256": "cd57a41f62a5abcd29125fbbfe7f2d9cbc4032c2a718d04b02ace299b985496c",
+          "text_preview": "loaded existing DtN archive to preserve deleted source snapshots\n{\n  \"archived_files\": 122,\n  \"archived_lines\": 18927,\n  \"archived_bytes\": 1050293,\n  \"by_lane\": {\n    \"open_boundary_src_api_or_validation\": 119,\n    \"validation_test_candidate\": 2,\n    \"validation_test_or_src_api_locked\": 1\n  },\n  \"by_group\": {\n    \"DtN_spectrum\": 122\n  },\n  \"by_act_group\": {\n    \"act0\": 6,\n    \"act1\": 7,\n    \"act2\": 15,\n    \"act3\": 7,\n    \"act4\": 7,\n    \"act5\": 9,\n    \"act6\": 13,\n    \"act7\": 40,\n    \"act8\": 17,\n    \"misc\": 1\n  }\n}\n\nwrote kelvin_dtn_spectrum_archive_results.json\n",
           "text_truncated": false
         }
       ]
     },
     {
-      "cell_index": 2,
+      "cell_index": 6,
       "execution_count": 2,
       "source_sha256": "1060485615668bc75e1a23b79e25f805700ea814147eb5491c5fa12a337d9273",
       "source_preview": "from IPython.display import Markdown, display\n\ndisplay(Markdown('## DtN scripts by act group'))\ndisplay(Markdown(markdown_table([\n    {'act_group': k, 'files': v} for k, v in sorted(archive['summary']['by_act_group'].items())\n], ['act_group', 'files'], max_rows=20)))\n\ndisplay(Markdown('## Referenced / locked DtN scripts'))\nlocked = [row for row in archive['files'] if row['reference_hit_count_reported'] or row['validation_named']]\ndisplay(Markdown(markdown_table([\n    {\n        'path': row['path'],\n        'lane': row['migration_lane'],\n        'refs': row['reference_hit_count_reported'],\n        'validation': row['validation_named'],\n        'sha256': row['source']['sha256'][:12],\n    }\n    for row in locked\n], ['path', 'lane', 'refs', 'validation', 'sha256'], max_rows=80)))\nprint(f'locked scripts shown: {len(locked)}')",
@@ -94,9 +94,9 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 25,
-          "text_sha256": "ebb157bef6abf9f2ac81355cc18b366a7bbdba519e5b5574953d64ea5f40a2a8",
-          "text_preview": "locked scripts shown: 18\n",
+          "text_chars": 24,
+          "text_sha256": "00061ce9efe6f5d4a9772f9c5c776a0e84ac2cbe263a022db69cbd819db2a9a4",
+          "text_preview": "locked scripts shown: 3\n",
           "text_truncated": false
         }
       ]

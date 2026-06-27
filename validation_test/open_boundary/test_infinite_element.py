@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Golden tests for radia.infinite_element -- the NGSolve-native static infinite-element open boundary
-(the port of the Python prototypes examples/kelvin_transformation/DtN_spectrum/act7_32 = assembly +
+(the port of the archived Python prototypes act7_32 = assembly +
 Steklov spectrum, act7_33 = coupled BVP).  On a sphere the IE == Kelvin (act7_28).
 
 Tiers:

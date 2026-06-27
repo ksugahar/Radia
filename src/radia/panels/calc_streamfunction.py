@@ -343,7 +343,7 @@ def _assemble_iron_reaction(fes, n, obs_pts, comps, iron_vol, mu_r,
     SAME units (Tesla) and row order (``pt*len(comps)+comp``) as
     ``_assemble_biot_savart`` so the caller can do ``Ac += A_react``.
 
-    Verified mechanism: ``examples/kelvin_transformation/DtN_spectrum``
+    Verified mechanism: ``docs/kelvin/kelvin_dtn_spectrum_archive.ipynb``
     ``demo_oo``/``demo_sp1`` (M = M_free + M_react; material-aware design HITS,
     free-space design MISSES).  Source quality: the DEFAULT is the P1-nodal
     injection of B_s on the iron vertices (cheap); ``exact_source=True``

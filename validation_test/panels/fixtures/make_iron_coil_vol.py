@@ -11,7 +11,7 @@ Writes three .vol meshes (gitignored) into argv[1]:
                        This is the --iron-vol the material-aware kernel consumes.
 
 The iron Kelvin geometry mirrors the VERIFIED demo_oo /
-examples/kelvin_transformation/DtN_spectrum reduced-potential model (the coil at
+docs/kelvin/kelvin_dtn_spectrum_archive.ipynb reduced-potential model (the coil at
 r~0.29 fits inside the r=0.35 iron inner radius; the DSV r=0.05 sits inside).
 
 Run inside a SUBPROCESS (the golden test does this) so NGSolve/Netgen stays out

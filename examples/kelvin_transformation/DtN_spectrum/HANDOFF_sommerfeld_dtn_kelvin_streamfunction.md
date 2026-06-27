@@ -42,7 +42,7 @@ layered/**Sommerfeld** Green function; **arbitrary** iron -> NO closed-form Gree
 integral equation revives the dense volume unknown). The clean "psi x kernel" structure is lost. The
 Kelvin-FEM restores it: it meshes any iron geometry and condenses to M, no Green function.
 
-## What is ALREADY done (verified, committed; run from `examples/kelvin_transformation/DtN_spectrum/`)
+## What is ALREADY done (verified, committed; archived in `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`)
 See `PATHWAY_streamfunction_with_iron.md` for the full table. The load-bearing demos for THIS task:
 - `demo_v_assemble_dtn_matrix.py` — assemble the material-loaded exterior DtN matrix M = Schur complement
   of the sparse Kelvin-FEM; spectrum matches analytic.
