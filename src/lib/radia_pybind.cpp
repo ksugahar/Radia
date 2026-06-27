@@ -3315,24 +3315,27 @@ PYBIND11_MODULE(_radia_pybind, m) {
 #endif
 
     py::class_<RadHACApKChargeGaussOperator>(m, "_ChargeGaussHMatrix")
-        .def(py::init([](std::vector<double> point_coords, std::vector<int> point_charge,
-                         std::vector<double> point_weight, int n_charge,
+        .def(py::init([](std::vector<double> point_coords, std::vector<int> P_pt,
+                         std::vector<int> P_chg, std::vector<double> P_coef, int n_charge,
                          std::vector<int> corr_i, std::vector<int> corr_j, std::vector<double> corr_v,
                          double eps, int leaf, double eta) {
                  auto op = std::unique_ptr<RadHACApKChargeGaussOperator>(
-                     new RadHACApKChargeGaussOperator(std::move(point_coords), std::move(point_charge),
-                         std::move(point_weight), n_charge, std::move(corr_i), std::move(corr_j),
+                     new RadHACApKChargeGaussOperator(std::move(point_coords), std::move(P_pt),
+                         std::move(P_chg), std::move(P_coef), n_charge, std::move(corr_i), std::move(corr_j),
                          std::move(corr_v)));
                  RadHACApKParams p;
                  p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
                  if (!op->BuildHMatrix(p)) throw std::runtime_error("charge Gauss-point H-matrix build failed");
                  return op;
              }),
-             py::arg("point_coords"), py::arg("point_charge"), py::arg("point_weight"), py::arg("n_charge"),
+             py::arg("point_coords"), py::arg("P_pt"), py::arg("P_chg"), py::arg("P_coef"), py::arg("n_charge"),
              py::arg("corr_i"), py::arg("corr_j"), py::arg("corr_v"),
              py::arg("eps") = 1e-5, py::arg("leaf") = 64, py::arg("eta") = 2.0,
              "Build K_point as a HACApK H-matrix over quadrature/Gauss points and expose the charge-Gram "
-             "apply G ~= P^T K_point P + sparse near correction.")
+             "apply G ~= P^T K_point P + sparse near correction.  P is the GENERAL sparse scatter as a COO "
+             "triple (P_pt[k] <- charge P_chg[k], coefficient P_coef[k]); order-0 callers pass the trivial P "
+             "(P_pt = 0..n_point-1, P_chg = owner charge, P_coef = quadrature weight), high-order callers pass "
+             "coef = weight_p * monomial_a(x_p) so a point scatters from every charge on its host.")
         .def("ncharge", &RadHACApKChargeGaussOperator::GetNCharge)
         .def("npoint", &RadHACApKChargeGaussOperator::GetNPoint)
         .def("matvec", [](RadHACApKChargeGaussOperator& s, const std::vector<double>& x) {
@@ -3484,7 +3487,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          double ho_far_factor,
                          std::vector<double> ref_tet_pts_in, std::vector<double> ref_tet_w_in,
                          std::vector<double> ref_tri_pts_in, std::vector<double> ref_tri_w_in,
-                         double eps, int leaf, double eta) {
+                         double eps, int leaf, double eta, bool build) {
                  auto mgr = std::unique_ptr<RadHACApKChargeGram>(
                      new RadHACApKChargeGram(std::move(cell_verts), std::move(face_verts), n_el,
                                              std::move(charge_host), std::move(charge_kind),
@@ -3494,9 +3497,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
                                              std::move(ref_tri_pts_lo), std::move(ref_tri_w_lo), ho_far_factor,
                                              std::move(ref_tet_pts_in), std::move(ref_tet_w_in),
                                              std::move(ref_tri_pts_in), std::move(ref_tri_w_in)));
-                 RadHACApKParams p;
-                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("high-order charge Gram H-matrix build failed");
+                 if (build) {
+                     RadHACApKParams p;
+                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("high-order charge Gram H-matrix build failed");
+                 }
+                 // build=False -> geometry-only ENTRY ORACLE (.entry() only): the high-order Gauss near
+                 // correction samples exact analytic high-order entries WITHOUT the full H-matrix build.
                  return mgr;
              }),
              py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
@@ -3507,7 +3514,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("ho_far_factor") = 1e30,
              py::arg("ref_tet_pts_in") = std::vector<double>{}, py::arg("ref_tet_w_in") = std::vector<double>{},
              py::arg("ref_tri_pts_in") = std::vector<double>{}, py::arg("ref_tri_w_in") = std::vector<double>{},
-             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
              "HIGH-ORDER (order-p) mode: POLYNOMIAL charges (monomial basis per host). charge_host[c]/"
              "charge_kind[c] (0=cell,1=face)/charge_expo[3c] define each charge; ref_tet_pts[nqt*3]/ref_tet_w "
              "(sum 1/6) + ref_tri_pts[nqr*2]/ref_tri_w (sum 1/2) are the reference Gauss-Duffy rules. Entry = "

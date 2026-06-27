@@ -311,16 +311,22 @@ private:
 //-------------------------------------------------------------------------
 // RadHACApKPointKernel / RadHACApKChargeGaussOperator
 //
-// Experimental productionization path for fast ChargeGram applies:
+// Productionization path for fast ChargeGram applies:
 //
 //   G_charge ~= P^T K_point P + G_near_correction
 //
 // K_point is a HACApK H-matrix over quadrature / Gauss points with the cheap
-// Laplace kernel 1/(4*pi*r).  P scatters one charge coefficient onto weighted
-// quadrature point sources and gathers target-point potentials back to charge
-// DOFs.  Near/self pairs are corrected by a sparse charge-charge COO carrying
-// exact - point-quadrature entries, so the expensive analytic Gram is used only
-// where the singularity or element shape needs it.
+// Laplace kernel 1/(4*pi*r).  P is a GENERAL sparse SCATTER (point <- charges):
+// each entry (P_pt[k], P_chg[k], P_coef[k]) scatters charge P_chg[k] onto point
+// P_pt[k] with coefficient P_coef[k], and gathers the target-point potential back
+// the same way (P^T).  This is the HIGH-ORDER generalization: a point belongs to
+// ONE host element shared by ALL the polynomial charges on that host, so a point
+// receives MANY charges (coef = quad_weight_p * monomial_a(x_p)).  The order-0
+// (RT0) case is the trivial P -- one entry per point (P_pt=p, P_chg=owner,
+// P_coef=weight).  Near/self pairs are corrected by a sparse charge-charge COO
+// carrying (exact analytic - point-quadrature) entries, so the expensive analytic
+// Gram entry is used ONLY on the O(N) near pairs where the singularity / element
+// shape needs it; the far field is the cheap point H-matrix.
 //-------------------------------------------------------------------------
 
 class RadHACApKPointKernel : public RadHACApKBase {
@@ -343,9 +349,14 @@ private:
 
 class RadHACApKChargeGaussOperator {
 public:
+    // GENERAL P-scatter: the scatter is the COO triple (P_pt[k] <- P_chg[k], coefficient P_coef[k]); n_point
+    // is inferred from point_coords (= point_coords.size()/3).  The ctor builds BOTH CSR orientations of P:
+    // per-point (for the lock-free scatter) and per-charge (for the lock-free gather + PointDirectEntry).
+    // Order-0 (RT0) callers pass the trivial P (P_pt = 0..n_point-1, P_chg = owner, P_coef = weight).
     RadHACApKChargeGaussOperator(std::vector<double> point_coords,
-                                 std::vector<int> point_charge,
-                                 std::vector<double> point_weight,
+                                 std::vector<int> P_pt,
+                                 std::vector<int> P_chg,
+                                 std::vector<double> P_coef,
                                  int n_charge,
                                  std::vector<int> corr_i,
                                  std::vector<int> corr_j,
@@ -356,7 +367,7 @@ public:
     double GetChargeEntry(int a, int b) const;
     const RadHACApKStats& GetStats() const { return m_kernel->GetStats(); }
     int GetNCharge() const { return m_ncharge; }
-    int GetNPoint() const { return (int)m_point_weight.size(); }
+    int GetNPoint() const { return m_npoint; }
 
     std::vector<double> SolveLinearMaterial(
         const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
@@ -369,10 +380,16 @@ private:
     double PointDirectEntry(int a, int b) const;
 
     int m_ncharge = 0;
+    int m_npoint = 0;
     std::vector<double> m_point_coords;   // [n_point*3]
-    std::vector<int>    m_point_charge;   // [n_point] owner charge
-    std::vector<double> m_point_weight;   // [n_point] quadrature measure weight
-    std::vector<std::vector<int>> m_charge_points;
+    // per-point CSR (scatter): point p -> its (charge, coef) entries
+    std::vector<int>    m_pt_indptr;      // [n_point+1]
+    std::vector<int>    m_pt_charge;      // [nnz]
+    std::vector<double> m_pt_coef;        // [nnz]
+    // per-charge CSR (gather + PointDirectEntry): charge a -> its (point, coef) entries
+    std::vector<int>    m_chg_indptr;     // [n_charge+1]
+    std::vector<int>    m_chg_point;      // [nnz]
+    std::vector<double> m_chg_coef;       // [nnz]
     std::vector<int>    m_corr_i, m_corr_j;
     std::vector<double> m_corr_v;
     std::unordered_map<long long, double> m_corr_map;
