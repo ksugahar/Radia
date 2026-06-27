@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """Golden tests for radia.open_boundary.kelvin_dtn (the Kelvin-built material-aware /
-non-separable DtN -> CLN), ported from the verified research demos
-archived `act6_01_kelvin_fem_eddy_dtn.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) +
-act6_07_cube_eddy_dtn_to_cln.py.
+non-separable DtN -> CLN), ported from the verified Kelvin DtN research demos
+and now maintained as the executable public validation surface.
 
 Two tiers:
   * PURE-NUMPY (always run): the radial Kelvin (R/rho')^2-weighted FEM BUILDS the

@@ -40,8 +40,9 @@ crystallized as its own package.
   materials + interior source + interior/closure error separation; Kelvin's
   `defect_n` is a *discretisation* error (→0) vs PML/Robin's *model* floor;
   "formulation-independent" qualifies the operator eigenvalue, not the
-  discrete defect. The 8 verified experiments moved into
-  `docs/kelvin/kelvin_dtn_spectrum_archive_results.json::`.
+  discrete defect. The 8 verified experiments are now routed through
+  `docs/kelvin/ARCHIVE_RETIREMENT.md` to the maintained docs/API/validation
+  surfaces.
 - **radia-ngsolve**: new `dtn_coarse_mesh` tool + `bem_integral` /
   `fem_bem_coupling` measurements that reframe Kameari's coarse-mesh
   accuracy of the Kelvin transformation as a **DtN-matrix spectral
