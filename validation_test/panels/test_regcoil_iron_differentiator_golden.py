@@ -1,9 +1,9 @@
 """Golden (b): the IRON differentiator -- free-space design MISSES, material-aware HITS.
 
 NESCOIL/REGCOIL/FOCUS design coils with the FREE-SPACE Biot-Savart kernel; they
-cannot see magnetic material.  Archived DtN-spectrum prototypes in
-docs/kelvin/kelvin_dtn_spectrum_archive_results.json
-act8_03_general_iron_design.py SCENARIO B shows why that is a real limit: with
+cannot see magnetic material.  The maintained DtN-spectrum validation
+`validation_test/kelvin_dtn_spectrum/act8_03_general_iron_design.py` scenario B
+shows why that is a real limit: with
 NON-CONCENTRIC iron (no closed-form Green function) the Kelvin-FEM material-aware
 transfer M is the correct design kernel.
 
