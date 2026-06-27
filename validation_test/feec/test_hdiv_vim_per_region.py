@@ -63,6 +63,23 @@ def test_per_region_equal_mu_matches_scalar():
     assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-8, atol=1e-5)
 
 
+def test_per_region_default_is_cpp_symmetric_cg():
+    """Per-region linear now defaults to the all-C++ SYMMETRIC mass-Riesz CG on the Galerkin system
+    (M_{1/chi} + N) m = M_mass h_ext (W = the 1/chi-weighted HDiv mass).  For EQUAL mu the symmetric form
+    and the form-1 GMRES cross-check are the SAME operator, so the two agree to the Krylov tolerance --
+    locking that the C++ per-region path is wired and correct."""
+    mesh = _two_region_mesh()
+    with ng.TaskManager():
+        cg = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,
+                              tol=1e-11, gram_eps=1e-12, near_factor=1e30)
+        gm = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT, linear_solver="gmres",
+                              tol=1e-11, gram_eps=1e-12, near_factor=1e30)
+    assert cg["linear_solver"] == "mass-riesz-cg"     # default per-region = C++ symmetric CG
+    assert gm["linear_solver"] == "mass-riesz-gmres"  # explicit opt-in = form-1 GMRES
+    assert np.allclose(cg["M_avg"], gm["M_avg"], rtol=1e-6, atol=1e-4), \
+        f"per-region CG {cg['M_avg']} vs GMRES {gm['M_avg']}"
+
+
 def test_per_region_different_mu_physics():
     """Different mu per region: the global M_avg_z lies strictly between the all-low and all-high scalar
     runs (monotone response to per-region mu), the mixed run is genuinely distinct from both, and the
