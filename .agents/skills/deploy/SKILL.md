@@ -277,19 +277,20 @@ Radia の配布 wheel には bridge.py, cubit_netgen_bridge.py, cub5_to_vol.py �
 | **radia** | `pip install -e .` | `pip install 'radia[cubit,gui]==X.Y.Z'` |
 | **cubit-mesh-export** | `pip install -e packages/cubit-mesh-export` | (`radia[cubit]` 経由で auto-install) |
 | **radia-mcp** | `pip install -e packages/radia-mcp` | `pip install radia-mcp==X.Y.Z` |
-| **PySide6** | (任意; LAB でも開発時に必要) | (`radia[gui]` 経由で auto-install) |
+| **PySide6** | 通常 Radia Python には入れない | Cubit 同梱の PySide6 は保護対象 (削除禁止) |
 | **Cubit plugin** | (LAB Build.ps1 出力 = src/radia/ に直接) | `cubit-plugin-install --all-users` (regular-file copy from PyPI wheel) |
 
-### `[cubit,gui]` extras MANDATORY for production
+### Notebook migration: `[gui]` is NOT part of production deploy
 
-`pip install radia[cubit]` 単独は PySide6 を pull しない.  Standalone
-panel (radia_ih / radia_em / radia_pcb / radia_heat) は PySide6 を
-直接 import するため、`[cubit,gui]` extras を必ず指定する.  欠落時の
-症状: panel 起動 subprocess が `ModuleNotFoundError: No module named
-'PySide6'` で死亡 → Cubit Solve menu からの "Open Panel" が無音失敗.
+Since the panel operating surfaces moved to Jupyter notebook workbenches,
+production installs should not add `radia[gui]` just to get PySide6.  Use
+`pip install radia[cubit]` for the Cubit/plugin path and verify notebooks via
+`ipynb-gui-health`.
 
-mdx で 2026-05-02 検証時に発見した gap.  100号機 は他経由で PySide6 が
-入っていたため気付かれなかった.
+Do **not** uninstall or delete Coreform Cubit's bundled PySide6 under
+`C:/Program Files/Coreform Cubit*/bin/python3/lib/site-packages`; Cubit owns
+that embedded runtime.  The no-PySide target applies to the normal Radia Python
+environment on LAB / 100号機 / mdx / hibino, not to Cubit's private Python.
 
 ### 100号機 / mdx PyPI install の詳細
 

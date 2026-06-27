@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 r"""demo_dtn_cln_usage.py -- using radia.open_boundary (the Zs-DtN-CLN open boundary)
 ================================================================================
-The PRODUCTION-API counterpart of the research demos
-archived `act6_02_cln_dtn_cauer.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) (inline math).
+The PRODUCTION-API counterpart of the retired research demos, now maintained
+through `radia.open_boundary` and `validation_test/open_boundary/test_dtn_cln.py`.
 Here the verified operator ships as `radia.open_boundary`; this shows how to use it.
 
 WHAT it gives you, for a SEPARABLE (spherical) MQS truncation:

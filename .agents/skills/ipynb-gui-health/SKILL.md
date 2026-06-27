@@ -1,6 +1,6 @@
 ---
 name: ipynb-gui-health
-description: Thoroughly verify the Radia panel GUI -- promoted (2026-06-25) from PySide6 desktop panels to Jupyter notebook workbenches (src/radia/panels/notebooks/radia_*.ipynb + radia.*_notebook CommandWorkbench backed by radia.*_design DesignSpec) -- is healthy end to end. Confirms the notebooks do NOT backslide to PySide6/PyQt, that DesignSpec dataclasses are the canonical initial-value store (NOT JSON presets), that each workbench builds the correct calc_*.py and runs headless producing a radia_result.v2 artifact with timing, and that webgui/GMSH visualization is wired. Run after any change to *_notebook.py / *_design.py / radia_*.ipynb / notebook_workbench.py / panel_notebook_manifest.json, or when a notebook panel "does not run / shows no result". This is the notebook-GUI analog of `pyside6-health` (which now covers ONLY the un-migrated in-Cubit export toolbar + the C++ plugin deploy).
+description: Thoroughly verify the Radia panel GUI -- promoted (2026-06-25) from PySide6 desktop panels to Jupyter notebook workbenches (src/radia/panels/notebooks/radia_*.ipynb + radia.*_notebook CommandWorkbench backed by radia.*_design DesignSpec) -- is healthy end to end. Confirms the notebooks do NOT backslide to PySide6/PyQt, that DesignSpec dataclasses are the canonical initial-value store (NOT JSON presets), that each workbench builds the correct calc_*.py and runs headless producing a radia_result.v2 artifact with timing, and that webgui/GMSH visualization is wired. Run after any change to *_notebook.py / *_design.py / radia_*.ipynb / notebook_workbench.py / panel_notebook_manifest.json, or when a notebook panel "does not run / shows no result". This replaces the old `pyside6-health` panel gate; Cubit deploy is checked separately by `cubit-plugin-install --verify-only` and `cubit-smoke-test`.
 ---
 
 # ipynb-gui-health
@@ -166,26 +166,18 @@ python -m pytest tests/panels/ -q -k "golden or notebook"
 - Layer C: panel golden + notebook tests pass; each DesignSpec builds a runnable
   `calc_*.py` argv; webgui + GMSH notes present.
 
-## What stays under `pyside6-health` (do NOT migrate these here)
+## What Changed From `pyside6-health`
 
-The notebook promotion does **not** cover the whole desktop surface yet:
-
-- **The in-Cubit export toolbar** (`radia-export-menu`, manifest state
-  `migration-shell`): `panels/radia_export_menu.py` + `register_toolbar.py` are
-  still **PySide6 Layer-2** inside Cubit 2025.12 -- `pyside6-health` Layer A/B
-  remains the checker until it migrates.
-- **The C++ Cubit plugin deploy** (`cubit_mesh_export.ccm` + `.pyd` + netgen
-  DLLs, `cubit-plugin-install --verify-only`, `cubit-smoke-test`,
-  cross-machine 100号機/mdx/hibino): wholly independent of the GUI paradigm --
-  stays `pyside6-health` Layer B/C.
-
-So: panel-GUI *paradigm* health -> **ipynb-gui-health** (this skill);
-remaining desktop toolbar + plugin-deploy health -> **pyside6-health**.
+The notebook promotion is the active panel contract.  `pyside6-health` is now
+retired/guard-only: normal Radia Python environments should not require
+PySide6, while Coreform Cubit's bundled PySide6 is protected and must not be
+deleted.  Cubit deploy health is checked separately with
+`cubit-plugin-install --verify-only` and `cubit-smoke-test`.
 
 ## Related skills / tools
 
 - `tests/panels/test_notebook_workbench.py` -- the committed Layer-A contract.
-- `pyside6-health` -- the (now narrowed) desktop-toolbar + plugin-deploy checker.
+- `pyside6-health` -- retired/guard-only notes for the old PySide6 panel era.
 - `panel-cli-diff` -- calc_*.py CLI <-> caller flag matching (the calc side of Layer C).
 - `panel-review` -- deeper review of remaining desktop panels / adapters.
 - `verify-deploy` -- "are my src/radia edits actually loaded?".
