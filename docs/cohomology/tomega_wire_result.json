@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T08:35:37Z",
+  "generated_at_utc": "2026-06-27T22:49:41Z",
   "notebook": "docs/cohomology/tomega_wire.ipynb",
-  "notebook_sha256": "022e5f46daa6a5eabfc561449d159b2453a83d5fa3147696ed31c67f7a42eb7a",
+  "notebook_sha256": "08a09755a84f470979e16b93d6e8971c08a61853e471b80c111b2c2f72dc0351",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

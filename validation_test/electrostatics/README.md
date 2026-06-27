@@ -4,8 +4,7 @@ Closed-form validation scripts for capacitance, image charges, dielectric
 response, and electrostatic force identities.
 
 The human-facing, result-saved notebook layer is
-`docs/electrostatics/electrostatics.ipynb` plus the source archive
-`docs/electrostatics/electrostatics_examples_archive.ipynb`.  This directory is
+`docs/electrostatics/electrostatics.ipynb`. This directory is
 the executable validation surface; each script refreshes its adjacent JSON
 summary with timestamp and runtime version metadata.
 

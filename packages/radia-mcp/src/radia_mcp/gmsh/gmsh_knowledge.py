@@ -864,8 +864,9 @@ For simple tri/tet display examples, it is OK to write a GMSH v2.2 ASCII
 mesh generation. Keep the script free of `import gmsh` and `gmsh.model.*`;
 write `.vol` for the solver path and `.msh`/`.pos`/`.geo` only for display.
 
-Reference example:
-`examples/visualization/demo_gmsh_workflow.py`
+Reference workflow:
+`docs/visualization/MESH_GUIDE.md`, plus `docs/visualization/_gmsh_display.geo`
+for the minimal standalone display companion.
 
 ## 3. Geometry + Field Overlay
 
