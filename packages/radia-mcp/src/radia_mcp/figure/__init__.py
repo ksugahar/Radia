@@ -51,6 +51,7 @@ from .tools import (  # noqa: F401
     lab_figsize,
     apply_lab_style,
     lab_savefig,
+    check_min_font,
     tighten_margins,
     label_curve_endpoints,
     add_slope_guide,

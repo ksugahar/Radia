@@ -3140,8 +3140,8 @@ satisfies.
   Nothing else supplies hex.
 - **.jou with `block` / `sideset` / `nodeset` tagging**: these have
   no direct build123d equivalent. In the build123d pipeline, use
-  `part.label` + `Compound(children=[...])` + the `run_pipeline_multi`
-  helper (`examples/build123d_netgen_gmsh_flow/`) which bridges labels
+  `part.label` + `Compound(children=[...])` +
+  `radia_mcp.build123d.pipeline.run_pipeline_multi`, which bridges labels
   to Gmsh physical groups downstream.
 - **Mesh directives** (`mesh volume N`, `scheme tetmesh`, `size`): in
   build123d pipeline these live in Netgen: `OCCGeometry(...).GenerateMesh(maxh=...)`.
@@ -3282,7 +3282,7 @@ design.
 
 If the `.jou` is purely CAD primitives + booleans + sweep/revolve,
 translation is straightforward and the output plugs into the Netgen
-tet pipeline (`examples/build123d_netgen_gmsh_flow/`).
+tet pipeline (`radia_mcp.build123d.pipeline`).
 """
 
 
@@ -3362,8 +3362,7 @@ hole = Cylinder(radius=3, height=12)
 part = brick - hole
 part.label = "brick_with_hole"
 
-# hand to the standard flow helper (examples/build123d_netgen_gmsh_flow/)
-# or do inline:
+# hand to radia_mcp.build123d.pipeline, or do inline:
 from build123d import export_brep
 export_brep(part, "brick.brep")
 geo = OCCGeometry("brick.brep")

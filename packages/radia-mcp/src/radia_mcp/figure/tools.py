@@ -786,6 +786,46 @@ def lab_savefig(fig, path: str, dpi: int = 300, **kwargs) -> None:
         fig.savefig(p, **common)
 
 
+def check_min_font(fig, min_pt: float = 8.0,
+                   embed_scale: float = 1.0) -> list[dict]:
+    """Return visible text objects whose on-page font is below ``min_pt``.
+
+    ``apply_lab_style`` authors figures at a known render size, but some
+    manuscripts intentionally embed the saved figure at a smaller width.
+    This helper applies that LaTeX embed scale to every visible matplotlib
+    ``Text`` object and reports the ones that would print too small.
+
+    Args:
+        fig: matplotlib Figure to audit.
+        min_pt: Minimum allowed on-page point size.
+        embed_scale: ``includegraphics width / authored figure width``.
+
+    Returns:
+        List of dictionaries with ``kind``, ``text``, ``render_pt`` and
+        ``visible_pt``.  Empty list means the figure passes the threshold.
+    """
+    import matplotlib.text as mtext
+
+    fig.canvas.draw()
+    bad: list[dict] = []
+    for txt in fig.findobj(match=mtext.Text):
+        if not txt.get_visible():
+            continue
+        s = txt.get_text()
+        if s is None or str(s).strip() == "":
+            continue
+        render_pt = float(txt.get_fontsize())
+        visible_pt = render_pt * float(embed_scale)
+        if visible_pt + 1e-9 < float(min_pt):
+            bad.append({
+                "kind": txt.__class__.__name__,
+                "text": str(s),
+                "render_pt": round(render_pt, 3),
+                "visible_pt": round(visible_pt, 3),
+            })
+    return bad
+
+
 _TIGHTEN_PRESETS = {
     # IGTE'26 digest (2 panels side-by-side, 8 cm embed, no inset legend).
     # Verified to give ~20% more axes width than matplotlib's default

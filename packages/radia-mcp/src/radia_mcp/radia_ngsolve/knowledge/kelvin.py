@@ -1898,8 +1898,11 @@ dirichlet = "GND"     # GND vertex at kelvin_center (image of infinity)
                        # Do NOT add iron_surf as Dirichlet (kills demag)
 ```
 
-See `examples/kelvin_transformation/Omega_ReducedOmega/test_solver_integration.py`
-for a complete working example with mesh construction.
+The historical `Omega_ReducedOmega/test_solver_integration.py` source is no
+longer kept as a standalone example; it is preserved with full source and
+SHA-256 in `docs/kelvin/kelvin_remaining_examples_archive_results.json`.
+Maintained behavior should be exercised through `src/radia` APIs or a
+dedicated `validation_test/` regression.
 
 ## Method Details
 
@@ -1941,9 +1944,11 @@ the terminals and Omega_s is uncontrolled near the cut surface.  The
 12% x-axis error at gap=5 deg is a formulation limitation, not
 a discretization issue.
 
-Scripts:
-  `validate_omega_coil_source_v2.py` (3D Omega + Kelvin)
-  `reference_2d_axisym.py` (2D axisym A_phi reference)
+Archived scripts:
+  `validate_omega_coil_source_v2.py` (3D Omega + Kelvin) is preserved in
+  `docs/kelvin/kelvin_remaining_examples_archive_results.json`.
+  `reference_2d_axisym.py` remains the intended 2D axisym A_phi reference
+  pattern when a maintained regression is promoted.
 
 ## Recipe (Radia + NGSolve)
 
@@ -2042,7 +2047,8 @@ Workarounds for a current-driven coil source:
 1. **Line-integration of rad.Fld('h')**: compute Omega_s(p) =
    integral_ref^p H_s . dl on a voxel grid. Choose reference point
    below iron; straight path must not cross coil cut surface. Build
-   VoxelCoefficient. See `validate_omega_coil_source_v2.py` for the
+   VoxelCoefficient. See the archived `validate_omega_coil_source_v2.py`
+   record in `docs/kelvin/kelvin_remaining_examples_archive_results.json` for the
    working implementation.
 
 2. **Path-integration helper**:

@@ -882,9 +882,10 @@ same constant-LHS factorization, but with a smarter α update
 schedule.  Expected speedup: 3-5x in iteration count on
 saturable-iron problems.
 
-Implementation status: not yet ported to Radia's `hantila_solver`.
-Worth a half-day project to test against a Radia hantila benchmark
-(see `examples/hantila_solver/`).
+Implementation status: not yet ported to Radia's Hantila benchmark lane.
+Worth a half-day project to test against the Radia validation benchmark
+(`validation_test/hysteresis/test_binput_cpp.py`; archived for humans in
+`docs/examples_consolidation/examples_next_100_batch_09_examples_archive.ipynb`).
 """
 
 SEO_CHOI_CONTACT = """\

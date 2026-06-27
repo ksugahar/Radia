@@ -29,6 +29,7 @@ servers:
 - `grant_writing_health_report(text_or_path, program="generic")`
 - `grant_writing_section_presence(text, program="generic")`
 - `grant_writing_kddi_digital_check(text)`
+- `grant_writing_kddi_power_electronics_focus_check(text)`
 - `grant_writing_budget_alignment_check(text)`
 - `grant_writing_analyze_sentences(text)`
 - `grant_writing_count_weak_expressions(text)`
@@ -38,3 +39,11 @@ servers:
 For KDDI Foundation Digital Innovation / social implementation proposals,
 use `program="kddi_digital"` so the report checks social issue, digital use,
 PoC, schedule, budget, feasibility, and implementation outcomes.
+
+For the power-electronics-board CAE-AI proposal, also use
+`grant_writing_kddi_power_electronics_focus_check(text)`.  It checks that the
+main subject is the power-electronics-board circuit / electromagnetic /
+thermal CAE-AI environment, while companies below 1000 employees are kept as
+the first users and implementation field.  It also warns when commercial CAE
+is framed as an adversarial replacement instead of a powerful but hard-to-access
+tool category for which AI/MCP provides an entry point.
