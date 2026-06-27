@@ -1,6 +1,6 @@
 """Golden: reduced-potential Clebsch hodograph, FEM (path B increment 1).
 
-Runs examples/clebsch_legendre/reduced_clebsch_hodograph_fem.py and asserts:
+Runs validation_test/clebsch_legendre/reduced_clebsch_hodograph_fem.py and asserts:
   - the reduced scalar potential is SOLVED by FEM and matches the exact 2-D cylinder;
   - the air field B = H_s - grad(phi) matches the exact 2-D dipole;
   - the hodograph's two coordinates are consistent: B(flux psi) == B(potential Phi),
@@ -13,7 +13,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "clebsch_legendre")
+EXDIR = os.path.join(HERE, "..", "clebsch_legendre")
 
 
 @pytest.mark.slow
