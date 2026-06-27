@@ -1578,6 +1578,21 @@ it with `shape_measurement_row(part)` via `shape_measurement_health_summary`.
 This catches boolean direction mistakes, unit mistakes, and accidental
 off-center holes before meshing.
 
+## Build123d CAD crosscheck: volume as the common currency
+
+After the analytic gate, export STEP and ask Cubit or another CAD kernel for
+the same body volumes.  The common exchange row is intentionally tiny:
+`{"name": "body_label", "volume": value}`.  Feed build123d rows and one or
+more external CAD row sets to `shape_volume_crosscheck_summary(...)` or the
+MCP tool `build123d_volume_crosscheck(...)`.  This is the right first gate
+for Cubit/CAD round trips because volume catches unit-scale mistakes, missing
+booleans, and dropped bodies without requiring identical face topology.
+
+Use the full `shape_measurement_health_summary(...)` only when the other CAD
+side also supplies area and bounding boxes.  Keep private tool provenance in
+the private lane; public artifacts should describe this as an external CAD
+volume check.
+
 ## Related topics
 - `cubit_rosetta` — verb-by-verb mapping Cubit ↔ build123d
 - `examples_intro` — 36 build123d patterns from upstream docs

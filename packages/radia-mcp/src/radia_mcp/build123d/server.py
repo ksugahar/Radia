@@ -115,6 +115,49 @@ def build123d_usage(topic: str = "overview") -> str:
 
 
 @mcp.tool()
+def build123d_volume_crosscheck(
+    reference_rows_json: str,
+    measured_sets_json: str,
+    rtol: float = 1.0e-5,
+) -> str:
+    """Compare build123d reference volumes with Cubit or external-CAD volumes.
+
+    This is the lowest-friction CAD round-trip gate: both sides only need rows
+    shaped like ``{"name": "...", "volume": 123.0}``.  ``measured_sets_json``
+    may be a mapping such as ``{"cubit": [...], "external_cad": [...]}`` or a
+    list of ``{"source": label, "rows": [...]}`` objects.  Use this before
+    spending solver time on STEP files that may have imported at the wrong unit
+    scale or lost a boolean feature.
+    """
+
+    try:
+        reference_rows = json.loads(reference_rows_json)
+        measured_sets = json.loads(measured_sets_json)
+    except json.JSONDecodeError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "parse_json",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    try:
+        from .modeling import shape_volume_crosscheck_summary
+        summary = shape_volume_crosscheck_summary(
+            reference_rows,
+            measured_sets,
+            rtol=rtol,
+        )
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "status": "error",
+            "stage": "volume_crosscheck",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
 async def execute_build123d(
     script: str,
     export_dir: str = "",
