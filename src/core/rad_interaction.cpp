@@ -2536,6 +2536,152 @@ static int momentResidualEigenmodes(const double Ae[], const double d[][3], int 
 }
 
 //=========================================================================
+// RadMomentGalerkinAssembleHex: parallel C++ assembly of the SYMMETRIC moment-Galerkin MMMM moment basis for a
+// list of hexahedra -- the C++ port of the former radia.moment_galerkin._assemble per-hex Python loop (same
+// math; reuses momentResidualEigenmodes so the quad eigenmodes match the collocation MMMM bit-for-bit).  Per
+// hex it builds: the face geometry (outward unit normal, area, centroid, d=fc-c, volume Ve via divergence
+// theorem), the moment->face-charge columns col[f][a] (3 dipole = n_f, +2 quad = residual eigenmodes phi), the
+// 12 boundary sub-triangles, and (quad) the 5x5 magnetization mass block We (diag Ve + the quad Gram
+// Dm_q:M2:Dm_r).  All outputs are written at FIXED per-hex offsets -> ParallelFor is race-free.  Outputs:
+//   B_{rows,cols,data}: COO of B (n_charge x ndof_per*n_hex), length n_hex*12*ndof_per (zeros INCLUDED; the
+//                       Python wrapper filters them to recover the exact sparsity).
+//   vols      : n_hex element volumes.   face_tris: n_hex*12*9 (the charge geometry for the Gram).
+//   Wblocks   : quad only -- n_hex*25 (the 5x5 mass block); empty for dipole (M_mass = diag(Ve) built in Python).
+// Degenerate (zero-area) faces yield NaN volumes, which the Python wrapper detects and rejects (fail-loud).
+//=========================================================================
+static inline void rmg_cross3(const double a[3], const double b[3], double o[3])
+{
+	o[0] = a[1]*b[2] - a[2]*b[1]; o[1] = a[2]*b[0] - a[0]*b[2]; o[2] = a[0]*b[1] - a[1]*b[0];
+}
+static inline double rmg_det3(const double M[3][3])
+{
+	return M[0][0]*(M[1][1]*M[2][2] - M[1][2]*M[2][1])
+	     - M[0][1]*(M[1][0]*M[2][2] - M[1][2]*M[2][0])
+	     + M[0][2]*(M[1][0]*M[2][1] - M[1][1]*M[2][0]);
+}
+
+void RadMomentGalerkinAssembleHex(
+	const double* hexverts, int n_hex, bool quad,
+	std::vector<int>& B_rows, std::vector<int>& B_cols, std::vector<double>& B_data,
+	std::vector<double>& vols, std::vector<double>& face_tris, std::vector<double>& Wblocks,
+	int& n_charge, int& ndof_per)
+{
+	static const int FACES[6][4] = {{0,1,2,3},{4,5,6,7},{0,1,5,4},{3,2,6,7},{0,3,7,4},{1,2,6,5}};
+	ndof_per = quad ? 5 : 3;
+	n_charge = 12 * n_hex;
+	const int dpe = ndof_per;
+	B_rows.assign((size_t)n_hex*12*dpe, 0);
+	B_cols.assign((size_t)n_hex*12*dpe, 0);
+	B_data.assign((size_t)n_hex*12*dpe, 0.0);
+	vols.assign((size_t)n_hex, 0.0);
+	face_tris.assign((size_t)n_hex*12*9, 0.0);
+	Wblocks.assign(quad ? (size_t)n_hex*25 : 0, 0.0);
+
+	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+	ngcore::ParallelFor(ngcore::IntRange(n_hex), [&](size_t e)
+	{
+		const double* Vp = hexverts + e*24;
+		double V[8][3];
+		for(int i = 0; i < 8; i++) { V[i][0]=Vp[i*3]; V[i][1]=Vp[i*3+1]; V[i][2]=Vp[i*3+2]; }
+		double c[3] = {0,0,0};
+		for(int i = 0; i < 8; i++) { c[0]+=V[i][0]; c[1]+=V[i][1]; c[2]+=V[i][2]; }
+		c[0]/=8.0; c[1]/=8.0; c[2]/=8.0;
+		double fc[6][3], nf[6][3], Ae[6], d[6][3];
+		for(int f = 0; f < 6; f++)
+		{
+			const double* P0=V[FACES[f][0]]; const double* P1=V[FACES[f][1]];
+			const double* P2=V[FACES[f][2]]; const double* P3=V[FACES[f][3]];
+			double fcen[3]; for(int k=0;k<3;k++) fcen[k]=(P0[k]+P1[k]+P2[k]+P3[k])/4.0;
+			double a1[3],a2[3],a3[3];
+			for(int k=0;k<3;k++){ a1[k]=P1[k]-P0[k]; a2[k]=P2[k]-P0[k]; a3[k]=P3[k]-P0[k]; }
+			double cc1[3], cc2[3]; rmg_cross3(a1,a2,cc1); rmg_cross3(a2,a3,cc2);
+			double nv[3] = {cc1[0]+cc2[0], cc1[1]+cc2[1], cc1[2]+cc2[2]};
+			double nrm = std::sqrt(nv[0]*nv[0]+nv[1]*nv[1]+nv[2]*nv[2]);
+			nv[0]/=nrm; nv[1]/=nrm; nv[2]/=nrm;   // nrm==0 (degenerate) -> NaN, caught in Python
+			double dotc = nv[0]*(fcen[0]-c[0])+nv[1]*(fcen[1]-c[1])+nv[2]*(fcen[2]-c[2]);
+			if(dotc < 0.0){ nv[0]=-nv[0]; nv[1]=-nv[1]; nv[2]=-nv[2]; }
+			double area = 0.5*std::sqrt(cc1[0]*cc1[0]+cc1[1]*cc1[1]+cc1[2]*cc1[2])
+			            + 0.5*std::sqrt(cc2[0]*cc2[0]+cc2[1]*cc2[1]+cc2[2]*cc2[2]);
+			for(int k=0;k<3;k++){ fc[f][k]=fcen[k]; nf[f][k]=nv[k]; d[f][k]=fcen[k]-c[k]; }
+			Ae[f]=area;
+		}
+		double Ve = 0.0;
+		for(int f=0;f<6;f++) Ve += Ae[f]*(fc[f][0]*nf[f][0]+fc[f][1]*nf[f][1]+fc[f][2]*nf[f][2]);
+		Ve /= 3.0; vols[e]=Ve;
+		double col[6][5];
+		for(int f=0;f<6;f++){ col[f][0]=nf[f][0]; col[f][1]=nf[f][1]; col[f][2]=nf[f][2]; }
+		double phi[6][6];
+		if(quad)
+		{
+			momentResidualEigenmodes(Ae, d, 6, phi);
+			for(int f=0;f<6;f++){ col[f][3]=phi[0][f]; col[f][4]=phi[1][f]; }
+		}
+		size_t cb = (size_t)12*e, db = (size_t)dpe*e, ob = (size_t)e*12*dpe, ftb = (size_t)e*12*9;
+		for(int f=0; f<6; f++)
+		{
+			const double* P[4] = {V[FACES[f][0]], V[FACES[f][1]], V[FACES[f][2]], V[FACES[f][3]]};
+			const double* tri[2][3] = {{P[0],P[1],P[2]},{P[0],P[2],P[3]}};
+			for(int tl=0; tl<2; tl++)
+			{
+				int t = 2*f+tl;
+				size_t fto = ftb + (size_t)t*9;
+				for(int vtx=0; vtx<3; vtx++) for(int k=0;k<3;k++) face_tris[fto + vtx*3 + k] = tri[tl][vtx][k];
+				for(int a=0; a<dpe; a++)
+				{
+					size_t oi = ob + (size_t)t*dpe + a;
+					B_rows[oi] = (int)(cb + t); B_cols[oi] = (int)(db + a); B_data[oi] = col[f][a];
+				}
+			}
+		}
+		if(quad)
+		{
+			double M2[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+			const double g = 1.0/std::sqrt(3.0);
+			static const int sgn[8][3] = {{-1,-1,-1},{1,-1,-1},{1,1,-1},{-1,1,-1},{-1,-1,1},{1,-1,1},{1,1,1},{-1,1,1}};
+			for(int qn=0; qn<8; qn++)
+			{
+				double xi=sgn[qn][0]*g, et=sgn[qn][1]*g, ze=sgn[qn][2]*g;
+				double Nsh[8], dN[8][3];
+				for(int i=0;i<8;i++)
+				{
+					double sx=sgn[i][0], sy=sgn[i][1], sz=sgn[i][2];
+					Nsh[i]=(1+sx*xi)*(1+sy*et)*(1+sz*ze)/8.0;
+					dN[i][0]=sx*(1+sy*et)*(1+sz*ze)/8.0;
+					dN[i][1]=sy*(1+sx*xi)*(1+sz*ze)/8.0;
+					dN[i][2]=sz*(1+sx*xi)*(1+sy*et)/8.0;
+				}
+				double xq[3]={0,0,0}; for(int i=0;i<8;i++) for(int k=0;k<3;k++) xq[k]+=Nsh[i]*V[i][k];
+				double J[3][3]={{0,0,0},{0,0,0},{0,0,0}};
+				for(int i=0;i<8;i++) for(int k=0;k<3;k++) for(int m=0;m<3;m++) J[k][m]+=dN[i][k]*V[i][m];
+				double detJ = std::fabs(rmg_det3(J));
+				double r[3]={xq[0]-c[0], xq[1]-c[1], xq[2]-c[2]};
+				for(int i2=0;i2<3;i2++) for(int j2=0;j2<3;j2++) M2[i2][j2]+=r[i2]*r[j2]*detJ;
+			}
+			double Dm[2][3][3];
+			for(int qn=0;qn<2;qn++) for(int i2=0;i2<3;i2++) for(int j2=0;j2<3;j2++)
+			{
+				double s=0.0; for(int f=0;f<6;f++) s += phi[qn][f]*nf[f][i2]*d[f][j2];
+				Dm[qn][i2][j2]=s;
+			}
+			double We[5][5]; for(int i2=0;i2<5;i2++) for(int j2=0;j2<5;j2++) We[i2][j2]=0.0;
+			We[0][0]=Ve; We[1][1]=Ve; We[2][2]=Ve;
+			for(int qn=0;qn<2;qn++) for(int rn=0;rn<2;rn++)
+			{
+				double s=0.0;
+				for(int i2=0;i2<3;i2++) for(int j2=0;j2<3;j2++)
+				{
+					double dm_m2=0.0; for(int k=0;k<3;k++) dm_m2 += Dm[qn][i2][k]*M2[k][j2];
+					s += dm_m2 * Dm[rn][i2][j2];
+				}
+				We[3+qn][3+rn]=s;
+			}
+			size_t wb=(size_t)25*e;
+			for(int i2=0;i2<5;i2++) for(int j2=0;j2<5;j2++) Wblocks[wb + i2*5 + j2]=We[i2][j2];
+		}
+	});
+}
+
+//=========================================================================
 // CollectMomentElems: e-ordered list of MOMENT elements (the surface-charge polyhedra: hex with 6 DOF +
 // wedge with 5 DOF).  For a pure-hex model this equals m_hexaElemIndices order, so the moment Cflat / row
 // layout is unchanged (hex stays bit-identical).  THE single source of element ordering for the moment
