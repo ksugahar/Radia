@@ -74,9 +74,9 @@ scale), so the >50k regime is out of HDiv's lane.
 The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 47 s all-analytic vs a
 ~0.3 s mass-riesz solve; nonlinear sphere nf=9403 = 200 s exact build vs ~1 s/Newton-step solve).  Because
 N = B^T G B is GEOMETRY-ONLY (material-independent), the PRECISION-PRESERVING fast build is the default for
-the analytic-Gram material paths: uniform-linear `auto` GMRES and `cpp-cg` (the already-validated tight-Gram
-fast path), plus per-region linear, PM-mixed, AND the nonlinear Newton (all GMRES/Newton,
-asymmetry-tolerant; TET and polytope HEX/WEDGE).
+the analytic-Gram material paths: uniform-linear `auto` / `cpp-cg` (symmetric mass-Riesz CG, already
+validated at tight Gram eps), plus per-region linear, PM-mixed, AND the nonlinear Newton (the latter
+paths stay on the GMRES/Newton asymmetry-tolerant formulations where needed; TET and polytope HEX/WEDGE).
 `near_factor=2` (near pairs = exact analytic) + `far_quad=4` (far pairs = a low-order double-quadrature of
 1/r, O((size/r)^4) -- degree-2 4-pt tet / 3-pt tri, or, for hex/wedge, the same degree-2 rule on the
 centroid-fan sub-tets / sub-triangles).  This REPRODUCES the all-analytic Gram (uniform-linear sphere
@@ -534,9 +534,9 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
             v = np.asarray(v, float)
             return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
 
-        # M_mass^{-1} sparse LU is built LAZILY: the default 'auto' (mass-riesz GMRES) and the per-region /
-        # PM-mixed / nonlinear Newton paths build their own splu; the all-C++ 'cpp-cg' (mass-riesz CG)
-        # factors the mass inside the kernel (PARDISO).  This cache serves the Python orchestration paths.
+        # M_mass^{-1} sparse LU is built LAZILY: the default 'auto' and 'cpp-cg' symmetric CG paths factor
+        # the mass inside the kernel (PARDISO), while GMRES / PM-mixed / nonlinear Newton paths need this
+        # Python-side sparse-LU cache for their orchestration.
         _mcache = {}
 
         def _get_Mfac():
