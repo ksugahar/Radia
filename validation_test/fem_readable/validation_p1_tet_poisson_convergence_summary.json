@@ -1,0 +1,67 @@
+{
+  "kind": "p1_tet_poisson_convergence_validation",
+  "validation_class": true,
+  "manufactured_solution": "sin(pi*x)*sin(pi*y)*sin(pi*z)",
+  "mesh_divisions": [
+    4,
+    6,
+    8
+  ],
+  "rows": [
+    {
+      "n": 4,
+      "h": 0.25,
+      "n_points": 125,
+      "n_tets": 384,
+      "n_free_dofs": 27,
+      "l2_error": 0.08470328824032093,
+      "h1_seminorm_error": 0.9126171634514001
+    },
+    {
+      "n": 6,
+      "h": 0.16666666666666666,
+      "n_points": 343,
+      "n_tets": 1296,
+      "n_free_dofs": 125,
+      "l2_error": 0.041203288164758246,
+      "h1_seminorm_error": 0.6308227278234809
+    },
+    {
+      "n": 8,
+      "h": 0.125,
+      "n_points": 729,
+      "n_tets": 3072,
+      "n_free_dofs": 343,
+      "l2_error": 0.023972073821856014,
+      "h1_seminorm_error": 0.47934433888122824
+    }
+  ],
+  "checks": {
+    "l2_error_ratio_first_over_last": 3.533415125857595,
+    "h1_error_ratio_first_over_last": 1.903886391109603,
+    "last_l2_rate": 1.8827328942829442,
+    "last_h1_rate": 0.9545456649211786,
+    "rates": [
+      {
+        "from_n": 4,
+        "to_n": 6,
+        "l2_rate": 1.777307950051536,
+        "h1_rate": 0.9107851293116964
+      },
+      {
+        "from_n": 6,
+        "to_n": 8,
+        "l2_rate": 1.8827328942829442,
+        "h1_rate": 0.9545456649211786
+      }
+    ]
+  },
+  "schema": "radia.validation.fem_readable.validation_p1_tet_poisson_convergence.v1",
+  "generated_at_utc": "2026-06-27T08:58:35Z",
+  "versions": {
+    "python_version": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  }
+}

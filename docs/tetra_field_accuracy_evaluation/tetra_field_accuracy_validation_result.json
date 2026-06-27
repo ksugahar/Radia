@@ -1,0 +1,101 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T15:54:04Z",
+  "notebook": "docs/tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb",
+  "notebook_sha256": "7c18a8ede51e5ca22f07a2741eb0b9f08e857eb5b769a6bb254b9229a95663d0",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb",
+    "cells": 6,
+    "code_cells": 4,
+    "executed_code_cells": 4,
+    "code_cells_with_outputs": 4,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "a3d5d77bfbf4ba47d25c48abb8d467b876bf25695d966b3e72d6ca234f9cfeee",
+      "source_preview": "from pathlib import Path\nimport datetime as _dt\nimport hashlib\nimport importlib.metadata as _metadata\nimport json\nimport platform\nimport sys\n\nROOT = Path.cwd()\nif not (ROOT / 'validation_test' / 'tetra_field_accuracy_evaluation').exists():\n    ROOT = Path('S:/Radia/01_GitHub')\nVALIDATION = ROOT / 'validation_test' / 'tetra_field_accuracy_evaluation'\nDOCS = ROOT / 'docs' / 'tetra_field_accuracy_evaluation'\nprint(f'validation={VALIDATION.relative_to(ROOT)}')",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 59,
+          "text_sha256": "4250f5db7eaaa1c5189378164475c0f61e7657b33737b0d9ac9000c8e0526607",
+          "text_preview": "validation=validation_test\\tetra_field_accuracy_evaluation\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "afb0afa001faae2dd86cd9186dcb3e941b6836a608c33494abeb35c7095543b3",
+      "source_preview": "summary = json.loads((VALIDATION / 'comparison_summary.json').read_text(encoding='utf-8'))\nassert summary['overall_status'] == 'PASS_WITH_KNOWN_ISSUES', summary['overall_status']\nassert summary['checks']['analytical_reference_pass']\nassert summary['checks']['radia_solver_comparison_pass']\nassert summary['checks']['legacy_ngsolve_extraction_known_issue_recorded']\nprint('overall=' + summary['overall_status'])\nprint('analytical_avg_percent={:.6g}'.format(summary['analytical_reference']['avg_percent']))\nprint('solver_avg_percent={:.6g}'.format(summary['radia_solver_comparison']['avg_percent']))\nprint('legacy_ngsolve_avg_percent={:.6g}'.format(summary['legacy_ngsolve_extraction']['avg_percent']))\nprint('ngsolve_finite_vectors={}/{}'.format(summary['ngsolve_reference']['finite_vectors'], summary['ngsolve_reference']['vectors']))",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 157,
+          "text_sha256": "3cc596e34a6fd790ec085efadb17cf98030097678d06d4136b0537aeceb401db",
+          "text_preview": "overall=PASS_WITH_KNOWN_ISSUES\nanalytical_avg_percent=1.49257e-12\nsolver_avg_percent=0.857542\nlegacy_ngsolve_avg_percent=295.634\nngsolve_finite_vectors=0/15\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 3,
+      "source_sha256": "fd11fa72ed1ac9111cfc45e120a5792a12aaba722917f07f6c1e52789c6e90b1",
+      "source_preview": "from IPython.display import Markdown, display\n\nrows = [\n    '| lane | status | avg error [%] | max error [%] |',\n    '|---|---:|---:|---:|',\n]\nfor key, label in [\n    ('analytical_reference', 'tetra MSC vs hexa uniform M'),\n    ('radia_solver_comparison', 'Radia tetra solver vs hexa solver'),\n    ('legacy_ngsolve_extraction', 'legacy NGSolve extraction diagnostic'),\n]:\n    item = summary[key]\n    status = item.get('status', 'pass')\n    rows.append(f\"| {label} | {status} | {item.get('avg_percent')} | {item.get('max_percent')} |\")\ndisplay(Markdown('\\n'.join(rows)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 4,
+      "source_sha256": "a096946b28b44a3c66d5a4ebae581effb529cf76f75f7ad9276467cc63bf93a9",
+      "source_preview": "\ndef _version(name):\n    try:\n        return _metadata.version(name)\n    except Exception:\n        return None\n\ndef _sha256(path):\n    return hashlib.sha256(path.read_bytes()).hexdigest()\n\njson_files = sorted(VALIDATION.glob('*.json'))\npy_files = sorted(VALIDATION.glob('*.py'))\nresult = {\n    'schema': 'radia.docs.tetra_field_accuracy.validation.v1',\n    'generated_at_utc': _dt.datetime.now(_dt.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),\n    'versions': {\n        'python_version': sys.version.split()[0],\n        'python_executable': sys.executable,\n        'platform': platform.platform(),\n        'radia_version': _version('radia'),\n        'ngsolve_version': _version('ngsolve'),\n        'numpy_version': _version('numpy'),\n    },\n    'validation_dir': 'validation_test/tetra_field_accuracy_evaluation',\n    'summary': summary,\n    'json_hashes': {p.name: {'sha256': _sha256(p), 'bytes': p.stat().st_size} for p in json_files},\n    'source_hashes': {p.name: _sha256(p)",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 79,
+          "text_sha256": "8a163062469a5e21743264eab42c9625afcab9e0419cc2ff7b119a774155e141",
+          "text_preview": "wrote tetra_field_accuracy_validation_results.json\njson_files=5 source_files=5\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

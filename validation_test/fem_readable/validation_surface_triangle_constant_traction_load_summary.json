@@ -1,0 +1,448 @@
+{
+  "centroid_pivot_summary": {
+    "area": 3.0,
+    "area_vector": [
+      3.0,
+      0.0,
+      0.0
+    ],
+    "centroid_m": [
+      1.0,
+      0.6666666666666666,
+      1.0
+    ],
+    "force_preservation_abs_errors_N": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "integrated_force_N": [
+      6.0,
+      -3.0,
+      12.0
+    ],
+    "moment_preservation_abs_errors_Nm": [
+      8.881784197001252e-16,
+      0.0,
+      4.440892098500626e-16
+    ],
+    "nodal_force_loads_N": [
+      [
+        2.0,
+        -1.0,
+        4.0
+      ],
+      [
+        2.0,
+        -1.0,
+        4.0
+      ],
+      [
+        2.0,
+        -1.0,
+        4.0
+      ]
+    ],
+    "nodal_resultant": {
+      "dimension": 3,
+      "n_rows": 3,
+      "pivot_m": [
+        1.0,
+        0.6666666666666666,
+        1.0
+      ],
+      "rows": [
+        {
+          "force": [
+            2.0,
+            -1.0,
+            4.0
+          ],
+          "index": 1,
+          "lever_arm_m": [
+            0.0,
+            -0.6666666666666666,
+            -1.0
+          ],
+          "moment": [
+            -3.6666666666666665,
+            -2.0,
+            1.3333333333333333
+          ],
+          "point_m": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "force": [
+            2.0,
+            -1.0,
+            4.0
+          ],
+          "index": 2,
+          "lever_arm_m": [
+            0.0,
+            1.3333333333333335,
+            -1.0
+          ],
+          "moment": [
+            4.333333333333334,
+            -2.0,
+            -2.666666666666667
+          ],
+          "point_m": [
+            1.0,
+            2.0,
+            0.0
+          ]
+        },
+        {
+          "force": [
+            2.0,
+            -1.0,
+            4.0
+          ],
+          "index": 3,
+          "lever_arm_m": [
+            0.0,
+            -0.6666666666666666,
+            2.0
+          ],
+          "moment": [
+            -0.6666666666666665,
+            4.0,
+            1.3333333333333333
+          ],
+          "point_m": [
+            1.0,
+            0.0,
+            3.0
+          ]
+        }
+      ],
+      "total_force": [
+        6.0,
+        -3.0,
+        12.0
+      ],
+      "total_force_magnitude": 13.74772708486752,
+      "total_moment": [
+        8.881784197001252e-16,
+        0.0,
+        -4.440892098500626e-16
+      ],
+      "total_moment_magnitude": 9.930136612989092e-16
+    },
+    "p1_shape_function_integral_m2": 1.0,
+    "patch_resultant": {
+      "dimension": 3,
+      "n_rows": 1,
+      "pivot_m": [
+        1.0,
+        0.6666666666666666,
+        1.0
+      ],
+      "rows": [
+        {
+          "force": [
+            6.0,
+            -3.0,
+            12.0
+          ],
+          "index": 1,
+          "lever_arm_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "moment": [
+            0.0,
+            0.0,
+            -0.0
+          ],
+          "point_m": [
+            1.0,
+            0.6666666666666666,
+            1.0
+          ]
+        }
+      ],
+      "total_force": [
+        6.0,
+        -3.0,
+        12.0
+      ],
+      "total_force_magnitude": 13.74772708486752,
+      "total_moment": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "total_moment_magnitude": 0.0
+    },
+    "pivot_m": [
+      1.0,
+      0.6666666666666666,
+      1.0
+    ],
+    "traction_N_per_m2": [
+      2.0,
+      -1.0,
+      4.0
+    ],
+    "unit_normal": [
+      1.0,
+      0.0,
+      0.0
+    ]
+  },
+  "checks": {
+    "expected_area_m2": 3.0,
+    "expected_integrated_force_N": [
+      6.0,
+      -3.0,
+      12.0
+    ],
+    "expected_moment_about_origin_Nm": [
+      11.0,
+      -6.0,
+      -7.0
+    ],
+    "max_force_preservation_abs_error_N": 0.0,
+    "max_moment_preservation_abs_error_Nm": 0.0
+  },
+  "force_learning": "constant P1 boundary traction load preserves resultant force and moment",
+  "generated_at_utc": "2026-06-27T08:58:38Z",
+  "kind": "p1_surface_triangle_constant_traction_load",
+  "schema": "radia.validation.fem_readable.validation_surface_triangle_constant_traction_load.v1",
+  "summary": {
+    "area": 3.0,
+    "area_vector": [
+      3.0,
+      0.0,
+      0.0
+    ],
+    "centroid_m": [
+      1.0,
+      0.6666666666666666,
+      1.0
+    ],
+    "force_preservation_abs_errors_N": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "integrated_force_N": [
+      6.0,
+      -3.0,
+      12.0
+    ],
+    "moment_preservation_abs_errors_Nm": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "nodal_force_loads_N": [
+      [
+        2.0,
+        -1.0,
+        4.0
+      ],
+      [
+        2.0,
+        -1.0,
+        4.0
+      ],
+      [
+        2.0,
+        -1.0,
+        4.0
+      ]
+    ],
+    "nodal_resultant": {
+      "dimension": 3,
+      "n_rows": 3,
+      "pivot_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rows": [
+        {
+          "force": [
+            2.0,
+            -1.0,
+            4.0
+          ],
+          "index": 1,
+          "lever_arm_m": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "moment": [
+            0.0,
+            -4.0,
+            -1.0
+          ],
+          "point_m": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "force": [
+            2.0,
+            -1.0,
+            4.0
+          ],
+          "index": 2,
+          "lever_arm_m": [
+            1.0,
+            2.0,
+            0.0
+          ],
+          "moment": [
+            8.0,
+            -4.0,
+            -5.0
+          ],
+          "point_m": [
+            1.0,
+            2.0,
+            0.0
+          ]
+        },
+        {
+          "force": [
+            2.0,
+            -1.0,
+            4.0
+          ],
+          "index": 3,
+          "lever_arm_m": [
+            1.0,
+            0.0,
+            3.0
+          ],
+          "moment": [
+            3.0,
+            2.0,
+            -1.0
+          ],
+          "point_m": [
+            1.0,
+            0.0,
+            3.0
+          ]
+        }
+      ],
+      "total_force": [
+        6.0,
+        -3.0,
+        12.0
+      ],
+      "total_force_magnitude": 13.74772708486752,
+      "total_moment": [
+        11.0,
+        -6.0,
+        -7.0
+      ],
+      "total_moment_magnitude": 14.352700094407323
+    },
+    "p1_shape_function_integral_m2": 1.0,
+    "patch_resultant": {
+      "dimension": 3,
+      "n_rows": 1,
+      "pivot_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rows": [
+        {
+          "force": [
+            6.0,
+            -3.0,
+            12.0
+          ],
+          "index": 1,
+          "lever_arm_m": [
+            1.0,
+            0.6666666666666666,
+            1.0
+          ],
+          "moment": [
+            11.0,
+            -6.0,
+            -7.0
+          ],
+          "point_m": [
+            1.0,
+            0.6666666666666666,
+            1.0
+          ]
+        }
+      ],
+      "total_force": [
+        6.0,
+        -3.0,
+        12.0
+      ],
+      "total_force_magnitude": 13.74772708486752,
+      "total_moment": [
+        11.0,
+        -6.0,
+        -7.0
+      ],
+      "total_moment_magnitude": 14.352700094407323
+    },
+    "pivot_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "traction_N_per_m2": [
+      2.0,
+      -1.0,
+      4.0
+    ],
+    "unit_normal": [
+      1.0,
+      0.0,
+      0.0
+    ]
+  },
+  "traction_N_per_m2": [
+    2.0,
+    -1.0,
+    4.0
+  ],
+  "triangle_vertices_m": [
+    [
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      2.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      3.0
+    ]
+  ],
+  "validation_class": true,
+  "versions": {
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "python_version": "3.12.10",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  }
+}
