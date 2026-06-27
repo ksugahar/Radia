@@ -32,6 +32,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "mirrored", "assembly", "shape_envelope_row", "enclosing_box",
            "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
+           "box_through_cylinder_reference_row",
            "box_face_vector_area_rows", "box_face_pressure_force_rows",
            "box_face_pressure_moment_rows", "box_face_pressure_resultant_summary",
            "box_face_traction_moment_rows",
@@ -1228,6 +1229,58 @@ def shape_measurement_health_summary(
             comparison["rows"],
             limit=worst_limit,
         ),
+    }
+
+
+def box_through_cylinder_reference_row(x, y, z, radius, axis="z", label="box_hole"):
+    """Analytic mass-property row for a centered box with a through cylindrical hole.
+
+    This is a compact build123d slot gate: create the CAD with
+    ``Box(x, y, z) - Cylinder(radius, height > hole_length)`` and compare the
+    resulting OCCT mass properties with this closed form before meshing.  The
+    helper returns the same row shape expected by
+    :func:`compare_shape_measurement_rows`.
+    """
+
+    x = float(x)
+    y = float(y)
+    z = float(z)
+    radius = float(radius)
+    axis_key = str(axis).lower().strip()
+    dims = {"x": x, "y": y, "z": z}
+    if axis_key not in dims:
+        raise ValueError("axis must be 'x', 'y', or 'z'")
+    if x <= 0.0 or y <= 0.0 or z <= 0.0:
+        raise ValueError("box dimensions must be positive")
+    if radius <= 0.0:
+        raise ValueError("hole radius must be positive")
+    perpendicular = [value for key, value in dims.items() if key != axis_key]
+    if 2.0 * radius >= min(perpendicular):
+        raise ValueError("hole diameter must be smaller than both perpendicular box dimensions")
+
+    hole_length = dims[axis_key]
+    box_volume = x * y * z
+    box_area = 2.0 * (x * y + y * z + x * z)
+    circle_area = math.pi * radius * radius
+    lateral_area = 2.0 * math.pi * radius * hole_length
+    volume = box_volume - circle_area * hole_length
+    area = box_area - 2.0 * circle_area + lateral_area
+    bbox = {
+        "min": [-x / 2.0, -y / 2.0, -z / 2.0],
+        "max": [x / 2.0, y / 2.0, z / 2.0],
+        "center": [0.0, 0.0, 0.0],
+        "size": [x, y, z],
+        "diagonal": math.sqrt(x * x + y * y + z * z),
+    }
+    return {
+        "name": str(label),
+        "volume": volume,
+        "area": area,
+        "bounding_box": bbox,
+        "axis": axis_key,
+        "hole_radius": radius,
+        "hole_length": hole_length,
+        "policy": "analytic_box_through_cylinder_mass_property_reference",
     }
 
 
